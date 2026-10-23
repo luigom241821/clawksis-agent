@@ -14,12 +14,30 @@ import os
 
 from clawk_cli.config import clear_model_endpoint_credentials
 from clawk_cli.model_setup_flows_common import (
-    _HTTP, _activate_provider_model, _ask, _commit_model_config, _curses_choice,
-    _ensure_dict_section, _ensure_flow_api_key, _finish_model,
-    _load_config_model_section, _models_dev_merged, _oauth_gate, _persist_model, _pick_model_or_prompt,
-    _print_numbered, _prompt_auth_credentials_choice,
-    _note_setup_failure, _run_login, _say, _show_curated)
-from clawk_cli.model_setup_flows_custom import _model_flow_custom, _model_flow_named_custom
+    _HTTP,
+    _activate_provider_model,
+    _ask,
+    _commit_model_config,
+    _curses_choice,
+    _ensure_dict_section,
+    _ensure_flow_api_key,
+    _finish_model,
+    _load_config_model_section,
+    _models_dev_merged,
+    _oauth_gate,
+    _persist_model,
+    _pick_model_or_prompt,
+    _print_numbered,
+    _prompt_auth_credentials_choice,
+    _note_setup_failure,
+    _run_login,
+    _say,
+    _show_curated,
+)
+from clawk_cli.model_setup_flows_custom import (
+    _model_flow_custom,
+    _model_flow_named_custom,
+)
 from clawk_cli.model_setup_flows_azure import _model_flow_azure_foundry
 from clawk_cli.model_setup_flows_bedrock import _model_flow_bedrock
 
@@ -27,18 +45,24 @@ from clawk_cli.model_setup_flows_bedrock import _model_flow_bedrock
 def _env_base_url(base_url_env: str) -> str:
     """Base-URL override from ``.env`` then the process environment ('' when unset)."""
     from clawk_cli.config import get_env_value
+
     if not base_url_env:
         return ""
     return get_env_value(base_url_env) or os.getenv(base_url_env, "")
 
 
-def _prompt_base_url_override(effective_base: str, base_url_env: str, *, persist_env: bool = True) -> str:
+def _prompt_base_url_override(
+    effective_base: str, base_url_env: str, *, persist_env: bool = True
+) -> str:
     """Optional ``Base URL [...]`` prompt; a valid override is saved to *base_url_env*."""
     from clawk_cli.config import save_env_value
+
     override = _ask(f"Base URL [{effective_base}]: ", cancel_msg="", on_cancel="")
     if override and base_url_env:
         if not override.startswith(_HTTP):
-            print("  Invalid URL — must start with http:// or https://. Keeping current value.")
+            print(
+                "  Invalid URL — must start with http:// or https://. Keeping current value."
+            )
         else:
             if persist_env:
                 save_env_value(base_url_env, override)
@@ -57,22 +81,41 @@ def _model_flow_openrouter(config, current_model=""):
     from clawk_cli.auth import ProviderConfig, _prompt_model_selection
 
     # OpenRouter isn't in PROVIDER_REGISTRY so we synthesize a minimal pconfig.
-    pconfig = ProviderConfig(id="openrouter", name="OpenRouter", auth_type="api_key", api_key_env_vars=("OPENROUTER_API_KEY",))
+    pconfig = ProviderConfig(
+        id="openrouter",
+        name="OpenRouter",
+        auth_type="api_key",
+        api_key_env_vars=("OPENROUTER_API_KEY",),
+    )
     existing_key, _resolved, abort = _ensure_flow_api_key(
-        "openrouter", pconfig, missing_hint=("Get one at: https://openrouter.ai/keys", ""))
+        "openrouter",
+        pconfig,
+        missing_hint=("Get one at: https://openrouter.ai/keys", ""),
+    )
     if abort:
         return
 
     from clawk_cli.models import model_ids
     from clawk_cli.models_pricing import get_pricing_for_provider
+
     openrouter_models = model_ids(force_refresh=True)
     # Live pricing is non-blocking — empty dict on failure.
     pricing = get_pricing_for_provider("openrouter", force_refresh=True)
     selected = _prompt_model_selection(
-        openrouter_models, current_model=current_model, pricing=pricing, confirm_provider="openrouter",
-        confirm_base_url=OPENROUTER_BASE_URL, confirm_api_key=_resolved or existing_key)
-    _finish_model(selected, "openrouter", f"Default model set to: {selected} (via OpenRouter)",
-                  base_url=OPENROUTER_BASE_URL, api_mode="chat_completions")
+        openrouter_models,
+        current_model=current_model,
+        pricing=pricing,
+        confirm_provider="openrouter",
+        confirm_base_url=OPENROUTER_BASE_URL,
+        confirm_api_key=_resolved or existing_key,
+    )
+    _finish_model(
+        selected,
+        "openrouter",
+        f"Default model set to: {selected} (via OpenRouter)",
+        base_url=OPENROUTER_BASE_URL,
+        api_mode="chat_completions",
+    )
 
 
 def _model_flow_ai_gateway(config, current_model=""):
@@ -81,23 +124,36 @@ def _model_flow_ai_gateway(config, current_model=""):
     from clawk_cli.main_provider_setup import _prompt_api_key
     from clawk_cli.auth import PROVIDER_REGISTRY, _prompt_model_selection
     from clawk_cli.config import get_env_value
+
     pconfig = PROVIDER_REGISTRY["ai-gateway"]
     existing_key = get_env_value("AI_GATEWAY_API_KEY") or ""
     if not existing_key:
-        _say("Create API key here: https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fai-gateway&title=AI+Gateway",
-             "Add a payment method to get $5 in free credits.", "")
+        _say(
+            "Create API key here: https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fai-gateway&title=AI+Gateway",
+            "Add a payment method to get $5 in free credits.",
+            "",
+        )
     _resolved, abort = _prompt_api_key(pconfig, existing_key, provider_id="ai-gateway")
     if abort:
         return
 
     from clawk_cli.models import ai_gateway_model_ids
     from clawk_cli.models_pricing import get_pricing_for_provider
+
     models_list = ai_gateway_model_ids(force_refresh=True)
     pricing = get_pricing_for_provider("ai-gateway", force_refresh=True)
-    selected = _prompt_model_selection(models_list, current_model=current_model, pricing=pricing)
+    selected = _prompt_model_selection(
+        models_list, current_model=current_model, pricing=pricing
+    )
     # Inline credentials are deliberately left untouched here (historical behavior).
-    _finish_model(selected, "ai-gateway", f"Default model set to: {selected} (via Vercel AI Gateway)",
-                  base_url=AI_GATEWAY_BASE_URL, api_mode="chat_completions", clear_creds=False)
+    _finish_model(
+        selected,
+        "ai-gateway",
+        f"Default model set to: {selected} (via Vercel AI Gateway)",
+        base_url=AI_GATEWAY_BASE_URL,
+        api_mode="chat_completions",
+        clear_creds=False,
+    )
 
 
 def _model_flow_moa(config, current_model=""):
@@ -105,6 +161,7 @@ def _model_flow_moa(config, current_model=""):
     persist it, print the breakdown. No credential step — presets reference configured providers."""
     from clawk_cli.auth import _save_model_choice
     from clawk_cli.moa_config import normalize_moa_config
+
     moa = normalize_moa_config(config.get("moa") if isinstance(config, dict) else {})
     presets = moa.get("presets") or {}
     if not presets:
@@ -167,16 +224,26 @@ def _model_flow_moa(config, current_model=""):
 
 def _nous_login_args(args) -> argparse.Namespace:
     return argparse.Namespace(
-        portal_url=getattr(args, "portal_url", None), inference_url=getattr(args, "inference_url", None),
-        client_id=getattr(args, "client_id", None), scope=getattr(args, "scope", None),
-        no_browser=bool(getattr(args, "no_browser", False)), timeout=getattr(args, "timeout", None) or 15.0,
-        ca_bundle=getattr(args, "ca_bundle", None), insecure=bool(getattr(args, "insecure", False)))
+        portal_url=getattr(args, "portal_url", None),
+        inference_url=getattr(args, "inference_url", None),
+        client_id=getattr(args, "client_id", None),
+        scope=getattr(args, "scope", None),
+        no_browser=bool(getattr(args, "no_browser", False)),
+        timeout=getattr(args, "timeout", None) or 15.0,
+        ca_bundle=getattr(args, "ca_bundle", None),
+        insecure=bool(getattr(args, "insecure", False)),
+    )
 
 
-def _nous_model_catalog(free_tier: bool, portal_url: str, model_ids: list, pricing: dict):
+def _nous_model_catalog(
+    free_tier: bool, portal_url: str, model_ids: list, pricing: dict
+):
     """Free/paid-tier catalog for the Nous picker: ``(model_ids, pricing, unavailable_models,
     unavailable_message, policy_narrowed)`` or None (message already printed) when nothing is selectable."""
-    from clawk_cli.models_pricing import nous_policy_allowed_ids, restrict_to_nous_policy
+    from clawk_cli.models_pricing import (
+        nous_policy_allowed_ids,
+        restrict_to_nous_policy,
+    )
     from clawk_cli.models import (
         partition_nous_models_by_tier,
         union_with_nous_on_sale_models,
@@ -193,20 +260,35 @@ def _nous_model_catalog(free_tier: bool, portal_url: str, model_ids: list, prici
     _policy_allowed = nous_policy_allowed_ids()
     if free_tier:
         try:
-            from clawk_cli.nous_account import format_nous_portal_entitlement_message, get_nous_portal_account_info
+            from clawk_cli.nous_account import (
+                format_nous_portal_entitlement_message,
+                get_nous_portal_account_info,
+            )
+
             _account_info = get_nous_portal_account_info(force_fresh=True)
-            unavailable_message = format_nous_portal_entitlement_message(_account_info, capability="paid Nous models") or ""
+            unavailable_message = (
+                format_nous_portal_entitlement_message(
+                    _account_info, capability="paid Nous models"
+                )
+                or ""
+            )
         except Exception:
             unavailable_message = ""
-        model_ids, pricing = union_with_portal_free_recommendations(model_ids, pricing, portal_url)
+        model_ids, pricing = union_with_portal_free_recommendations(
+            model_ids, pricing, portal_url
+        )
     else:
-        model_ids, pricing = union_with_portal_paid_recommendations(model_ids, pricing, portal_url)
+        model_ids, pricing = union_with_portal_paid_recommendations(
+            model_ids, pricing, portal_url
+        )
         model_ids = union_with_nous_on_sale_models(model_ids, pricing)
     _before_policy = model_ids
     model_ids = restrict_to_nous_policy(model_ids, _policy_allowed, rescue_empty=True)
     _policy_narrowed = model_ids != _before_policy
     if free_tier:
-        model_ids, unavailable_models = partition_nous_models_by_tier(model_ids, pricing, free_tier=True)
+        model_ids, unavailable_models = partition_nous_models_by_tier(
+            model_ids, pricing, free_tier=True
+        )
 
     if not model_ids and not unavailable_models:
         print("No models available for Nous Portal after filtering.")
@@ -216,6 +298,7 @@ def _nous_model_catalog(free_tier: bool, portal_url: str, model_ids: list, prici
         print("No free models currently available.")
         if unavailable_models:
             from clawk_cli.auth import DEFAULT_NOUS_PORTAL_URL
+
             _url = (portal_url or DEFAULT_NOUS_PORTAL_URL).rstrip("/")
             print(unavailable_message or f"Upgrade at {_url} to access paid models.")
         return None
@@ -226,7 +309,12 @@ def _nous_verified_credentials(creds_or_none=None):
     """Resolve Nous runtime credentials; on failure print the diagnosis (re-login when the
     session expired) and return None."""
     from clawk_cli.auth import (
-        AuthError, PROVIDER_REGISTRY, _login_nous, format_auth_error, resolve_nous_runtime_credentials)
+        AuthError,
+        PROVIDER_REGISTRY,
+        _login_nous,
+        format_auth_error,
+        resolve_nous_runtime_credentials,
+    )
 
     try:
         return resolve_nous_runtime_credentials()
@@ -252,6 +340,7 @@ def _nous_persist_selection(selected: str, creds: dict) -> dict:
     OPENAI_BASE_URL / OPENAI_API_KEY. Returns the saved config."""
     from clawk_cli.auth import _save_model_choice, _update_config_for_provider
     from clawk_cli.config import get_env_value, load_config, save_config, save_env_value
+
     _save_model_choice(selected)
     inference_url = creds.get("base_url", "")
     _update_config_for_provider("nous", inference_url)
@@ -280,13 +369,24 @@ def _nous_persist_selection(selected: str, creds: dict) -> dict:
 
 def _model_flow_nous(config, current_model="", args=None):
     """Nous Portal provider: ensure logged in, then pick model."""
-    from clawk_cli.auth import get_provider_auth_state, _prompt_model_selection, _login_nous, PROVIDER_REGISTRY
+    from clawk_cli.auth import (
+        get_provider_auth_state,
+        _prompt_model_selection,
+        _login_nous,
+        PROVIDER_REGISTRY,
+    )
     from clawk_cli.config import load_config
     from clawk_cli.nous_subscription import prompt_enable_tool_gateway
+
     state = get_provider_auth_state("nous")
     from clawk_cli import anon_auth
+
     # A free tier with no inference here signs in like no account; its apps move to the account after.
-    if not state or not state.get("access_token") or anon_auth.guest_without_free_tier(state):
+    if (
+        not state
+        or not state.get("access_token")
+        or anon_auth.guest_without_free_tier(state)
+    ):
         _say("Not logged into Nous Portal. Starting login...", "")
 
         def _login_then_offer_gateway(login_args, pconfig):
@@ -296,13 +396,16 @@ def _model_flow_nous(config, current_model="", args=None):
                 prompt_enable_tool_gateway(load_config() or {})
 
         # login_nous already handles model selection + config update
-        _run_login(_login_then_offer_gateway, _nous_login_args(args), PROVIDER_REGISTRY["nous"])
+        _run_login(
+            _login_then_offer_gateway, _nous_login_args(args), PROVIDER_REGISTRY["nous"]
+        )
         return
 
     # Already logged in — the curated list (agentic models users know from OpenRouter)
     # instead of the hundreds returned by the live /models endpoint.
     from clawk_cli.models import check_nous_free_tier, get_curated_nous_model_ids
     from clawk_cli.models_pricing import get_pricing_for_provider
+
     model_ids = get_curated_nous_model_ids()
     if not model_ids:
         print("No curated models available for Nous Portal.")
@@ -318,6 +421,7 @@ def _model_flow_nous(config, current_model="", args=None):
     free_tier = check_nous_free_tier(force_fresh=True)
     if not free_tier:
         from clawk_cli.auth import resolve_nous_runtime_credentials
+
         try:
             creds = resolve_nous_runtime_credentials(force_refresh=True) or creds
         except Exception:
@@ -327,29 +431,44 @@ def _model_flow_nous(config, current_model="", args=None):
     # Portal URL is needed for upgrade links and the recommendations endpoints.
     _nous_portal_url = ""
     with contextlib.suppress(Exception):
-        _nous_portal_url = (get_provider_auth_state("nous") or {}).get("portal_base_url", "")
+        _nous_portal_url = (get_provider_auth_state("nous") or {}).get(
+            "portal_base_url", ""
+        )
 
     catalog = _nous_model_catalog(free_tier, _nous_portal_url, model_ids, pricing)
     if catalog is None:
         return
-    model_ids, pricing, unavailable_models, unavailable_message, _policy_narrowed = catalog
+    model_ids, pricing, unavailable_models, unavailable_message, _policy_narrowed = (
+        catalog
+    )
 
     from clawk_cli.nous_account import nous_policy_notice
+
     _policy_notice = nous_policy_notice(removed=_policy_narrowed)
     if _policy_notice:
         print(_policy_notice)
     from clawk_cli.model_picker_usage import featured_first, nous_picker_usage
+
     _usage = nous_picker_usage(warm=True)
     # Window plans: every model is usable; the plan's featured picks lead the list.
     if _usage is not None:
         model_ids = featured_first(model_ids, _usage.featured_model_ids)
-    print(f'Showing {len(model_ids)} curated models — use "Enter custom model name" for others.')
+    print(
+        f'Showing {len(model_ids)} curated models — use "Enter custom model name" for others.'
+    )
 
     selected = _prompt_model_selection(
-        model_ids, current_model=current_model, pricing=pricing, unavailable_models=unavailable_models,
-        portal_url=_nous_portal_url, unavailable_message=unavailable_message, confirm_provider="nous",
-        confirm_base_url=creds.get("base_url", ""), confirm_api_key=creds.get("api_key", ""),
-        usage=_usage)
+        model_ids,
+        current_model=current_model,
+        pricing=pricing,
+        unavailable_models=unavailable_models,
+        portal_url=_nous_portal_url,
+        unavailable_message=unavailable_message,
+        confirm_provider="nous",
+        confirm_base_url=creds.get("base_url", ""),
+        confirm_api_key=creds.get("api_key", ""),
+        usage=_usage,
+    )
     if not selected:
         print("No change.")
         return
@@ -357,6 +476,7 @@ def _model_flow_nous(config, current_model="", args=None):
     print(f"Default model set to: {selected} (via Nous Portal)")
     if _usage is not None:
         from clawk_cli.model_picker_usage import large_model_notice
+
         if _notice := large_model_notice(selected, "nous"):
             print(f"⚠ {_notice}")
     # Offer Tool Gateway enablement for paid subscribers
@@ -366,12 +486,22 @@ def _model_flow_nous(config, current_model="", args=None):
 def _model_flow_openai_codex(config, current_model=""):
     """OpenAI Codex provider: ensure logged in, then pick model."""
     from clawk_cli.auth import (
-        get_codex_auth_status, _prompt_model_selection, _login_openai_codex, PROVIDER_REGISTRY, DEFAULT_CODEX_BASE_URL,
+        get_codex_auth_status,
+        _prompt_model_selection,
+        _login_openai_codex,
+        PROVIDER_REGISTRY,
+        DEFAULT_CODEX_BASE_URL,
     )
     from clawk_cli.codex_models import get_codex_model_ids
+
     if not _oauth_gate(
-        bool(get_codex_auth_status().get("logged_in")), "OpenAI Codex", _login_openai_codex, argparse.Namespace(),
-        PROVIDER_REGISTRY["openai-codex"], recheck=lambda: get_codex_auth_status().get("logged_in")):
+        bool(get_codex_auth_status().get("logged_in")),
+        "OpenAI Codex",
+        _login_openai_codex,
+        argparse.Namespace(),
+        PROVIDER_REGISTRY["openai-codex"],
+        recheck=lambda: get_codex_auth_status().get("logged_in"),
+    ):
         return
 
     # Prefer the credential pool (where `clawk auth` stores device_code tokens),
@@ -382,31 +512,57 @@ def _model_flow_openai_codex(config, current_model=""):
     with contextlib.suppress(Exception):
         _codex_status = get_codex_auth_status()
         if _codex_status.get("logged_in"):
-            _codex_token, _codex_base = _codex_status.get("api_key"), _codex_status.get("base_url")
+            _codex_token, _codex_base = (
+                _codex_status.get("api_key"),
+                _codex_status.get("base_url"),
+            )
     if not _codex_token:
         with contextlib.suppress(Exception):
             from clawk_cli.auth import resolve_codex_runtime_credentials
+
             _creds = resolve_codex_runtime_credentials()
             _codex_token, _codex_base = _creds.get("api_key"), _creds.get("base_url")
 
     codex_models = get_codex_model_ids(access_token=_codex_token, base_url=_codex_base)
     selected = _prompt_model_selection(
-        codex_models, current_model=current_model, confirm_provider="openai-codex",
-        confirm_base_url=_codex_base or DEFAULT_CODEX_BASE_URL, confirm_api_key=_codex_token or "")
-    _activate_provider_model(selected, "openai-codex", DEFAULT_CODEX_BASE_URL,
-                             f"Default model set to: {selected} (via OpenAI Codex)")
+        codex_models,
+        current_model=current_model,
+        confirm_provider="openai-codex",
+        confirm_base_url=_codex_base or DEFAULT_CODEX_BASE_URL,
+        confirm_api_key=_codex_token or "",
+    )
+    _activate_provider_model(
+        selected,
+        "openai-codex",
+        DEFAULT_CODEX_BASE_URL,
+        f"Default model set to: {selected} (via OpenAI Codex)",
+    )
 
 
 def _model_flow_xai_oauth(_config, current_model="", *, args=None):
     """xAI Grok OAuth (SuperGrok / Premium+) provider: ensure logged in, then pick model."""
     from clawk_cli.auth import (
-        get_xai_oauth_auth_status, _prompt_model_selection, resolve_xai_oauth_runtime_credentials, _login_xai_oauth,
-        DEFAULT_XAI_OAUTH_BASE_URL, PROVIDER_REGISTRY)
+        get_xai_oauth_auth_status,
+        _prompt_model_selection,
+        resolve_xai_oauth_runtime_credentials,
+        _login_xai_oauth,
+        DEFAULT_XAI_OAUTH_BASE_URL,
+        PROVIDER_REGISTRY,
+    )
     from clawk_cli.models import provider_model_ids
-    login_args = argparse.Namespace(no_browser=bool(getattr(args, "no_browser", False)), timeout=getattr(args, "timeout", None))
+
+    login_args = argparse.Namespace(
+        no_browser=bool(getattr(args, "no_browser", False)),
+        timeout=getattr(args, "timeout", None),
+    )
     if not _oauth_gate(
-        bool(get_xai_oauth_auth_status().get("logged_in")), "xAI Grok OAuth (SuperGrok / Premium+)", _login_xai_oauth,
-        login_args, PROVIDER_REGISTRY["xai-oauth"], fresh_name="xAI OAuth"):
+        bool(get_xai_oauth_auth_status().get("logged_in")),
+        "xAI Grok OAuth (SuperGrok / Premium+)",
+        _login_xai_oauth,
+        login_args,
+        PROVIDER_REGISTRY["xai-oauth"],
+        fresh_name="xAI OAuth",
+    ):
         return
 
     # ``resolve_xai_oauth_runtime_credentials`` only reads the auth.json singleton, but
@@ -418,22 +574,40 @@ def _model_flow_xai_oauth(_config, current_model="", *, args=None):
         base_url = (creds.get("base_url") or "").strip().rstrip("/") or base_url
 
     models = provider_model_ids("xai-oauth")
-    selected = _prompt_model_selection(models, current_model=current_model or (models[0] if models else "grok-4.6"))
-    _activate_provider_model(selected, "xai-oauth", base_url,
-                             f"Default model set to: {selected} (via xAI Grok OAuth — SuperGrok / Premium+)")
+    selected = _prompt_model_selection(
+        models, current_model=current_model or (models[0] if models else "grok-4.6")
+    )
+    _activate_provider_model(
+        selected,
+        "xai-oauth",
+        base_url,
+        f"Default model set to: {selected} (via xAI Grok OAuth — SuperGrok / Premium+)",
+    )
 
 
 def _model_flow_qwen_oauth(_config, current_model=""):
     """Qwen OAuth provider: reuse local Qwen CLI login, then pick model."""
     from clawk_cli.main_provider_setup import _DEFAULT_QWEN_PORTAL_MODELS
     from clawk_cli.auth import (
-        get_qwen_auth_status, resolve_qwen_runtime_credentials, _prompt_model_selection, DEFAULT_QWEN_BASE_URL)
+        get_qwen_auth_status,
+        resolve_qwen_runtime_credentials,
+        _prompt_model_selection,
+        DEFAULT_QWEN_BASE_URL,
+    )
     from clawk_cli.models import fetch_api_models
+
     status = get_qwen_auth_status()
     if not status.get("logged_in"):
-        _say("Not logged into Qwen CLI OAuth.", "Run: qwen auth qwen-oauth",
-             *([f"Expected credentials file: {status.get('auth_file')}"] if status.get("auth_file") else []),
-             *([f"Error: {status.get('error')}"] if status.get("error") else []))
+        _say(
+            "Not logged into Qwen CLI OAuth.",
+            "Run: qwen auth qwen-oauth",
+            *(
+                [f"Expected credentials file: {status.get('auth_file')}"]
+                if status.get("auth_file")
+                else []
+            ),
+            *([f"Error: {status.get('error')}"] if status.get("error") else []),
+        )
         return
 
     # Try live model discovery, fall back to curated list.
@@ -445,23 +619,43 @@ def _model_flow_qwen_oauth(_config, current_model=""):
         models = list(_DEFAULT_QWEN_PORTAL_MODELS)
 
     default = current_model or (models[0] if models else "qwen3-coder-plus")
-    selected = _prompt_model_selection(models, current_model=default, confirm_provider="qwen-oauth", confirm_base_url=DEFAULT_QWEN_BASE_URL)
-    _activate_provider_model(selected, "qwen-oauth", DEFAULT_QWEN_BASE_URL, f"Default model set to: {selected} (via Qwen OAuth)")
+    selected = _prompt_model_selection(
+        models,
+        current_model=default,
+        confirm_provider="qwen-oauth",
+        confirm_base_url=DEFAULT_QWEN_BASE_URL,
+    )
+    _activate_provider_model(
+        selected,
+        "qwen-oauth",
+        DEFAULT_QWEN_BASE_URL,
+        f"Default model set to: {selected} (via Qwen OAuth)",
+    )
 
 
 def _model_flow_minimax_oauth(config, current_model="", args=None):
     """MiniMax OAuth provider: ensure logged in, then pick model."""
     from clawk_cli.auth import (
-        get_provider_auth_state, _prompt_model_selection, resolve_minimax_oauth_runtime_credentials, AuthError,
-        format_auth_error, _login_minimax_oauth, PROVIDER_REGISTRY)
+        get_provider_auth_state,
+        _prompt_model_selection,
+        resolve_minimax_oauth_runtime_credentials,
+        AuthError,
+        format_auth_error,
+        _login_minimax_oauth,
+        PROVIDER_REGISTRY,
+    )
 
     state = get_provider_auth_state("minimax-oauth")
     if not state or not state.get("access_token"):
         _say("Not logged into MiniMax. Starting OAuth login...", "")
         mock_args = argparse.Namespace(
-            region=getattr(args, "region", None) or "global", no_browser=bool(getattr(args, "no_browser", False)),
-            timeout=getattr(args, "timeout", None) or 15.0)
-        if not _run_login(_login_minimax_oauth, mock_args, PROVIDER_REGISTRY["minimax-oauth"]):
+            region=getattr(args, "region", None) or "global",
+            no_browser=bool(getattr(args, "no_browser", False)),
+            timeout=getattr(args, "timeout", None) or 15.0,
+        )
+        if not _run_login(
+            _login_minimax_oauth, mock_args, PROVIDER_REGISTRY["minimax-oauth"]
+        ):
             return
 
     try:
@@ -472,22 +666,37 @@ def _model_flow_minimax_oauth(config, current_model="", args=None):
         return
 
     from clawk_cli.models import _PROVIDER_MODELS
+
     model_ids = _PROVIDER_MODELS.get("minimax-oauth", [])
-    selected = _prompt_model_selection(model_ids, current_model, confirm_provider="minimax-oauth", confirm_base_url=creds["base_url"])
-    _activate_provider_model(selected, "minimax-oauth", creds["base_url"], f"\u2713 Using MiniMax model: {selected}", no_change=None)
+    selected = _prompt_model_selection(
+        model_ids,
+        current_model,
+        confirm_provider="minimax-oauth",
+        confirm_base_url=creds["base_url"],
+    )
+    _activate_provider_model(
+        selected,
+        "minimax-oauth",
+        creds["base_url"],
+        f"\u2713 Using MiniMax model: {selected}",
+        no_change=None,
+    )
 
 
 def _copilot_model_list(live_ids) -> list:
     """Live GitHub Copilot ids, or the curated fallback with a warning."""
     from clawk_cli.models import _PROVIDER_MODELS
+
     if live_ids:
         model_list = [model_id for model_id in live_ids if model_id]
         print(f"  Found {len(model_list)} model(s) from GitHub Copilot")
         return model_list
     model_list = _PROVIDER_MODELS.get("copilot", [])
     if model_list:
-        _say("  ⚠ Could not auto-detect models from GitHub Copilot — showing defaults.",
-             '    Use "Enter custom model name" if you do not see your model.')
+        _say(
+            "  ⚠ Could not auto-detect models from GitHub Copilot — showing defaults.",
+            '    Use "Enter custom model name" if you do not see your model.',
+        )
     return model_list
 
 
@@ -495,6 +704,7 @@ def _copilot_catalog(api_key: str):
     """``(catalog, catalog_ids, normalize)`` for a GitHub token; *normalize* canonicalizes a
     model id against the catalog (identity when unknown)."""
     from clawk_cli.models import fetch_github_model_catalog, normalize_copilot_model_id
+
     catalog = fetch_github_model_catalog(api_key)
     ids = [item.get("id", "") for item in catalog if item.get("id")] if catalog else []
 
@@ -507,18 +717,29 @@ def _copilot_catalog(api_key: str):
 def _copilot_obtain_token() -> bool:
     """No Copilot token yet: offer device-code login or manual entry. False = stop."""
     from clawk_cli.config import save_env_value
-    _say("No GitHub token configured for GitHub Copilot.", "", "  Supported token types:",
-         "    → OAuth token (gho_*)          via `copilot login` or device code flow",
-         "    → Fine-grained PAT (github_pat_*)  with Copilot Requests permission",
-         "    → GitHub App token (ghu_*)     via environment variable",
-         "    ✗ Classic PAT (ghp_*)          NOT supported by Copilot API", "", "  Options:",
-         "    1. Login with GitHub (OAuth device code flow)", "    2. Enter a token manually", "    3. Cancel", "")
+
+    _say(
+        "No GitHub token configured for GitHub Copilot.",
+        "",
+        "  Supported token types:",
+        "    → OAuth token (gho_*)          via `copilot login` or device code flow",
+        "    → Fine-grained PAT (github_pat_*)  with Copilot Requests permission",
+        "    → GitHub App token (ghu_*)     via environment variable",
+        "    ✗ Classic PAT (ghp_*)          NOT supported by Copilot API",
+        "",
+        "  Options:",
+        "    1. Login with GitHub (OAuth device code flow)",
+        "    2. Enter a token manually",
+        "    3. Cancel",
+        "",
+    )
     choice = _ask("  Choice [1-3]: ", raw=True, cancel_msg="")
     if choice is None:
         return False
     if choice == "1":
         try:
             from clawk_cli.copilot_auth import copilot_device_code_login
+
             token = copilot_device_code_login()
             if not token:
                 print("  Login cancelled or failed.")
@@ -540,6 +761,7 @@ def _copilot_obtain_token() -> bool:
         # Validate token type
         with contextlib.suppress(ImportError):
             from clawk_cli.copilot_auth import validate_copilot_token
+
             valid, msg = validate_copilot_token(new_key)
             if not valid:
                 print(f"  ✗ {msg}")
@@ -557,6 +779,7 @@ def _model_flow_copilot(config, current_model=""):
     comes from ``github_model_reasoning_efforts`` there)."""
     from clawk_cli.auth import PROVIDER_REGISTRY, resolve_api_key_provider_credentials
     from clawk_cli.models import fetch_api_models, copilot_model_api_mode
+
     provider_id = "copilot"
     pconfig = PROVIDER_REGISTRY[provider_id]
     creds = resolve_api_key_provider_credentials(provider_id)
@@ -570,9 +793,18 @@ def _model_flow_copilot(config, current_model=""):
     else:
         if source in {"GITHUB_TOKEN", "GH_TOKEN"}:
             from clawk_cli.env_loader import format_secret_source_suffix
-            _say(f"  GitHub token: {api_key[:8]}... ✓ ({source}{format_secret_source_suffix(source)})", "")
+
+            _say(
+                f"  GitHub token: {api_key[:8]}... ✓ ({source}{format_secret_source_suffix(source)})",
+                "",
+            )
         else:
-            _say("  GitHub token: ✓ (from `gh auth token`)" if source == "gh auth token" else "  GitHub token: ✓", "")
+            _say(
+                "  GitHub token: ✓ (from `gh auth token`)"
+                if source == "gh auth token"
+                else "  GitHub token: ✓",
+                "",
+            )
 
     effective_base = pconfig.inference_base_url
     catalog, live_models, _normalize = _copilot_catalog(api_key)
@@ -580,52 +812,85 @@ def _model_flow_copilot(config, current_model=""):
         live_models = fetch_api_models(api_key, effective_base)
 
     selected = _pick_model_or_prompt(
-        _copilot_model_list(live_models), "Model name: ", current_model=_normalize(current_model),
-        confirm_provider=provider_id, confirm_base_url=effective_base, confirm_api_key=api_key)
+        _copilot_model_list(live_models),
+        "Model name: ",
+        current_model=_normalize(current_model),
+        confirm_provider=provider_id,
+        confirm_base_url=effective_base,
+        confirm_api_key=api_key,
+    )
     if not selected:
         print("No change.")
         return
     selected = _normalize(selected)
-    _persist_model(selected, provider_id, base_url=effective_base,
-                   api_mode=copilot_model_api_mode(selected, catalog=catalog, api_key=api_key))
+    _persist_model(
+        selected,
+        provider_id,
+        base_url=effective_base,
+        api_mode=copilot_model_api_mode(selected, catalog=catalog, api_key=api_key),
+    )
     print(f"Default model set to: {selected} (via {pconfig.name})")
 
 
 def _model_flow_copilot_acp(config, current_model=""):
     """GitHub Copilot ACP flow using the local Copilot CLI."""
     from clawk_cli.auth import (
-        PROVIDER_REGISTRY, get_external_process_provider_status, resolve_api_key_provider_credentials,
-        resolve_external_process_provider_credentials)
+        PROVIDER_REGISTRY,
+        get_external_process_provider_status,
+        resolve_api_key_provider_credentials,
+        resolve_external_process_provider_credentials,
+    )
 
     del config
     provider_id = "copilot-acp"
     pconfig = PROVIDER_REGISTRY[provider_id]
     status = get_external_process_provider_status(provider_id)
-    resolved_command = status.get("resolved_command") or status.get("command") or "copilot"
+    resolved_command = (
+        status.get("resolved_command") or status.get("command") or "copilot"
+    )
     effective_base = status.get("base_url") or pconfig.inference_base_url
 
-    _say("  GitHub Copilot ACP delegates Clawksis turns to `copilot --acp`.",
-         "  Clawksis currently starts its own ACP subprocess for each request.",
-         "  Clawksis uses your selected model as a hint for the Copilot ACP session.",
-         f"  Command: {resolved_command}", f"  Backend marker: {effective_base}", "")
+    _say(
+        "  GitHub Copilot ACP delegates Clawksis turns to `copilot --acp`.",
+        "  Clawksis currently starts its own ACP subprocess for each request.",
+        "  Clawksis uses your selected model as a hint for the Copilot ACP session.",
+        f"  Command: {resolved_command}",
+        f"  Backend marker: {effective_base}",
+        "",
+    )
     try:
         creds = resolve_external_process_provider_credentials(provider_id)
     except Exception as exc:
-        _say(f"  ⚠ {exc}", "  Set CLAWK_COPILOT_ACP_COMMAND or COPILOT_CLI_PATH if Copilot CLI is installed elsewhere.")
+        _say(
+            f"  ⚠ {exc}",
+            "  Set CLAWK_COPILOT_ACP_COMMAND or COPILOT_CLI_PATH if Copilot CLI is installed elsewhere.",
+        )
         return
     effective_base = creds.get("base_url") or effective_base
 
     catalog_api_key = ""
     with contextlib.suppress(Exception):
-        catalog_api_key = resolve_api_key_provider_credentials("copilot").get("api_key", "")
+        catalog_api_key = resolve_api_key_provider_credentials("copilot").get(
+            "api_key", ""
+        )
     _catalog, catalog_ids, _normalize = _copilot_catalog(catalog_api_key)
     selected = _pick_model_or_prompt(
-        _copilot_model_list(catalog_ids), "Model name: ", current_model=_normalize(current_model),
-        confirm_provider=provider_id, confirm_base_url=effective_base, confirm_api_key=catalog_api_key)
+        _copilot_model_list(catalog_ids),
+        "Model name: ",
+        current_model=_normalize(current_model),
+        confirm_provider=provider_id,
+        confirm_base_url=effective_base,
+        confirm_api_key=catalog_api_key,
+    )
     if selected:
         selected = _normalize(selected)
-    _finish_model(selected, provider_id, f"Default model set to: {selected} (via {pconfig.name})",
-                  base_url=effective_base, api_mode="chat_completions")
+    _finish_model(
+        selected,
+        provider_id,
+        f"Default model set to: {selected} (via {pconfig.name})",
+        base_url=effective_base,
+        api_mode="chat_completions",
+    )
 
 
 def _model_flow_kimi(config, current_model=""):
@@ -634,6 +899,7 @@ def _model_flow_kimi(config, current_model=""):
     from clawk_cli.auth import PROVIDER_REGISTRY, KIMI_CODE_BASE_URL
     from clawk_cli.config import get_env_value, save_env_value
     from clawk_cli.models import _PROVIDER_MODELS
+
     provider_id = "kimi-coding"
     pconfig = PROVIDER_REGISTRY[provider_id]
     base_url_env = pconfig.base_url_env_var or ""
@@ -654,21 +920,38 @@ def _model_flow_kimi(config, current_model=""):
         save_env_value(base_url_env, "")
     print()
 
-    model_list = _PROVIDER_MODELS.get("kimi-coding" if is_coding_plan else "moonshot", [])
+    model_list = _PROVIDER_MODELS.get(
+        "kimi-coding" if is_coding_plan else "moonshot", []
+    )
     selected = _pick_model_or_prompt(
-        model_list, "Enter model name: ", current_model=current_model, confirm_provider=provider_id,
-        confirm_base_url=effective_base, confirm_api_key=existing_key)
+        model_list,
+        "Enter model name: ",
+        current_model=current_model,
+        confirm_provider=provider_id,
+        confirm_base_url=effective_base,
+        confirm_api_key=existing_key,
+    )
     # api_mode is dropped so the runtime auto-detects it from the URL.
-    _finish_model(selected, provider_id, f"Default model set to: {selected} (via {'Kimi Coding' if is_coding_plan else 'Moonshot'})",
-                  base_url=effective_base, drop_api_mode=True)
+    _finish_model(
+        selected,
+        provider_id,
+        f"Default model set to: {selected} (via {'Kimi Coding' if is_coding_plan else 'Moonshot'})",
+        base_url=effective_base,
+        drop_api_mode=True,
+    )
 
 
 def _model_flow_stepfun(config, current_model=""):
     """StepFun Step Plan flow with region-specific endpoints."""
-    from clawk_cli.main_provider_setup import _infer_stepfun_region, _prompt_provider_choice, _stepfun_base_url_for_region
+    from clawk_cli.main_provider_setup import (
+        _infer_stepfun_region,
+        _prompt_provider_choice,
+        _stepfun_base_url_for_region,
+    )
     from clawk_cli.auth import PROVIDER_REGISTRY
     from clawk_cli.config import save_env_value
     from clawk_cli.models import _PROVIDER_MODELS, fetch_api_models, provider_model_ids
+
     provider_id = "stepfun"
     pconfig = PROVIDER_REGISTRY[provider_id]
     base_url_env = pconfig.base_url_env_var or ""
@@ -684,11 +967,20 @@ def _model_flow_stepfun(config, current_model=""):
             current_base = str(model_cfg.get("base_url") or "").strip()
     current_region = _infer_stepfun_region(current_base or pconfig.inference_base_url)
 
-    regions = [(key, f"{name} ({_stepfun_base_url_for_region(key)})") for key, name in
-               (("international", "International"), ("china", "China"))]
+    regions = [
+        (key, f"{name} ({_stepfun_base_url_for_region(key)})")
+        for key, name in (("international", "International"), ("china", "China"))
+    ]
     # Active region first, marked; then the other; then Cancel.
-    ordered_regions = ([(k, f"{label}  ← currently active") for k, label in regions if k == current_region]
-                       + [(k, label) for k, label in regions if k != current_region] + [("cancel", "Cancel")])
+    ordered_regions = (
+        [
+            (k, f"{label}  ← currently active")
+            for k, label in regions
+            if k == current_region
+        ]
+        + [(k, label) for k, label in regions if k != current_region]
+        + [("cancel", "Cancel")]
+    )
 
     region_idx = _prompt_provider_choice([label for _, label in ordered_regions])
     if region_idx is None or ordered_regions[region_idx][0] == "cancel":
@@ -700,19 +992,33 @@ def _model_flow_stepfun(config, current_model=""):
 
     # Same live+curated merge as the picker (``_stepfun_catalog``): Step Plan /models omits
     # Standard-API-only models, so the wizard must offer the same list /model shows (#41147).
-    model_list = provider_model_ids(provider_id) or fetch_api_models(existing_key, effective_base)
+    model_list = provider_model_ids(provider_id) or fetch_api_models(
+        existing_key, effective_base
+    )
     if model_list:
         print(f"  Found {len(model_list)} model(s) from {pconfig.name} API")
     else:
         model_list = _PROVIDER_MODELS.get(provider_id, [])
         if model_list:
-            print(f"  Could not auto-detect models from {pconfig.name} API — showing Step Plan fallback catalog.")
+            print(
+                f"  Could not auto-detect models from {pconfig.name} API — showing Step Plan fallback catalog."
+            )
 
     selected = _pick_model_or_prompt(
-        model_list, "Model name: ", current_model=current_model, confirm_provider=provider_id,
-        confirm_base_url=effective_base, confirm_api_key=existing_key)
-    model = _finish_model(selected, provider_id, f"Default model set to: {selected} (via {pconfig.name})",
-                          base_url=effective_base, drop_api_mode=True)
+        model_list,
+        "Model name: ",
+        current_model=current_model,
+        confirm_provider=provider_id,
+        confirm_base_url=effective_base,
+        confirm_api_key=existing_key,
+    )
+    model = _finish_model(
+        selected,
+        provider_id,
+        f"Default model set to: {selected} (via {pconfig.name})",
+        base_url=effective_base,
+        drop_api_mode=True,
+    )
     if model is not None:
         # Sync the caller's config dict so the setup wizard's final save_config(config) preserves our model
         # settings. Without this, the wizard overwrites model.provider/base_url with the stale values from
@@ -729,14 +1035,20 @@ def _model_flow_vertex(config, current_model=""):
     from clawk_cli.models import _PROVIDER_MODELS
 
     # 1. Credential source detection (fast, no network / no google-auth import).
-    sa_path = (get_env_value("VERTEX_CREDENTIALS_PATH") or get_env_value("GOOGLE_APPLICATION_CREDENTIALS") or "").strip()
+    sa_path = (
+        get_env_value("VERTEX_CREDENTIALS_PATH")
+        or get_env_value("GOOGLE_APPLICATION_CREDENTIALS")
+        or ""
+    ).strip()
     if sa_path:
         print(f"  Vertex credentials: service account JSON ({sa_path}) ✓")
     else:
-        _say("  Vertex credentials: Application Default Credentials (ADC)",
-             "    Vertex uses OAuth2, not a static API key. Either:",
-             "      • run 'gcloud auth application-default login', or",
-             "      • set VERTEX_CREDENTIALS_PATH in ~/.clawksis/.env to a service account JSON")
+        _say(
+            "  Vertex credentials: Application Default Credentials (ADC)",
+            "    Vertex uses OAuth2, not a static API key. Either:",
+            "      • run 'gcloud auth application-default login', or",
+            "      • set VERTEX_CREDENTIALS_PATH in ~/.clawksis/.env to a service account JSON",
+        )
     print()
 
     vertex_cfg = load_config().get("vertex")
@@ -745,7 +1057,9 @@ def _model_flow_vertex(config, current_model=""):
 
     # 2. Project ID (optional — falls back to the project embedded in creds).
     current_project = str(vertex_cfg.get("project_id") or "").strip()
-    project_input = _ask(f"  GCP project ID [{current_project or 'from credentials'}]: ", cancel_msg="")
+    project_input = _ask(
+        f"  GCP project ID [{current_project or 'from credentials'}]: ", cancel_msg=""
+    )
     if project_input is None:
         return
     project_id = project_input or current_project
@@ -758,10 +1072,22 @@ def _model_flow_vertex(config, current_model=""):
     region = region_input or current_region
 
     # 4. Model selection (curated list — Vertex has no /models listing route).
-    model_list = _PROVIDER_MODELS.get("vertex", []) or ["google/gemini-3-pro-preview", "google/gemini-3-flash-preview"]
-    host = "aiplatform.googleapis.com" if region == "global" else f"{region}-aiplatform.googleapis.com"
+    model_list = _PROVIDER_MODELS.get("vertex", []) or [
+        "google/gemini-3-pro-preview",
+        "google/gemini-3-flash-preview",
+    ]
+    host = (
+        "aiplatform.googleapis.com"
+        if region == "global"
+        else f"{region}-aiplatform.googleapis.com"
+    )
     base_url_preview = f"https://{host}/v1beta1/projects/<project>/locations/{region}/endpoints/openapi"
-    selected = _prompt_model_selection(model_list, current_model=current_model, confirm_provider="vertex", confirm_base_url=base_url_preview)
+    selected = _prompt_model_selection(
+        model_list,
+        current_model=current_model,
+        confirm_provider="vertex",
+        confirm_base_url=base_url_preview,
+    )
 
     def _finish(cfg, _model):
         vcfg = _ensure_dict_section(cfg, "vertex")
@@ -770,8 +1096,15 @@ def _model_flow_vertex(config, current_model=""):
 
     # base_url is computed at runtime from project+region; do not pin it.
     # api_mode is dropped: chat_completions is the profile default.
-    _finish_model(selected, "vertex", f"  Default model set to: {selected} (via Google Vertex AI, {region})", no_change="  No change.",
-                  drop_base_url=True, drop_api_mode=True, finish=_finish)
+    _finish_model(
+        selected,
+        "vertex",
+        f"  Default model set to: {selected} (via Google Vertex AI, {region})",
+        no_change="  No change.",
+        drop_base_url=True,
+        drop_api_mode=True,
+        finish=_finish,
+    )
 
 
 def _select_zai_endpoint(current_base: str) -> str:
@@ -780,14 +1113,23 @@ def _select_zai_endpoint(current_base: str) -> str:
     *current_base* on cancel/error."""
     from clawk_cli.main_provider_setup import _prompt_provider_choice
     from clawk_cli.auth import ZAI_ENDPOINTS
+
     options = [(label, url) for _, url, _, label in ZAI_ENDPOINTS]
     normalized_current = (current_base or "").strip().rstrip("/")
 
     # Default to the active endpoint when known; a custom URL defaults to "Custom proxy".
-    default_idx = next((idx for idx, (_, url) in enumerate(options) if normalized_current == url.rstrip("/")),
-                       len(options) if normalized_current else 0)
+    default_idx = next(
+        (
+            idx
+            for idx, (_, url) in enumerate(options)
+            if normalized_current == url.rstrip("/")
+        ),
+        len(options) if normalized_current else 0,
+    )
     choices = [f"{label} ({url})" for label, url in options] + ["Custom proxy URL"]
-    selected = _prompt_provider_choice(choices, default=default_idx, title="Select Z.AI / GLM endpoint:")
+    selected = _prompt_provider_choice(
+        choices, default=default_idx, title="Select Z.AI / GLM endpoint:"
+    )
     if selected is None:
         return current_base
     if selected != len(options):
@@ -796,20 +1138,27 @@ def _select_zai_endpoint(current_base: str) -> str:
     if not override:
         return current_base
     if not override.startswith(_HTTP):
-        print("  Invalid URL — must start with http:// or https://. Keeping current value.")
+        print(
+            "  Invalid URL — must start with http:// or https://. Keeping current value."
+        )
         return current_base
     return override.rstrip("/")
 
 
 _GEMINI_FREE_TIER_NOTICE = (
-    "", "❌ This Google API key is on the free tier (<= 250 requests/day for gemini-2.5-flash).",
+    "",
+    "❌ This Google API key is on the free tier (<= 250 requests/day for gemini-2.5-flash).",
     "   Clawksis typically makes 3-10 API calls per user turn (tool iterations + auxiliary tasks),",
     "   so the free tier is exhausted after a handful of messages and cannot sustain",
-    "   an agent session.", "",
+    "   an agent session.",
+    "",
     "   To use Gemini with Clawksis, enable billing on your Google Cloud project and regenerate",
-    "   the key in a billing-enabled project: https://aistudio.google.com/apikey", "",
-    "   Alternatives with workable free usage: DeepSeek, OpenRouter (free models), Groq, Nous.", "",
-    "Not saving Gemini as the default provider.")
+    "   the key in a billing-enabled project: https://aistudio.google.com/apikey",
+    "",
+    "   Alternatives with workable free usage: DeepSeek, OpenRouter (free models), Groq, Nous.",
+    "",
+    "Not saving Gemini as the default provider.",
+)
 
 
 def _gemini_tier_ok(existing_key: str, pconfig, base_url_env: str) -> bool:
@@ -821,13 +1170,20 @@ def _gemini_tier_ok(existing_key: str, pconfig, base_url_env: str) -> bool:
     except Exception:
         return True
     print("  Checking Gemini API tier...")
-    tier = probe_gemini_tier(existing_key, _env_base_url(base_url_env) or pconfig.inference_base_url)
+    tier = probe_gemini_tier(
+        existing_key, _env_base_url(base_url_env) or pconfig.inference_base_url
+    )
     if tier == "free":
         _say(*_GEMINI_FREE_TIER_NOTICE)
         return False
     # "unknown" (network/auth/unexpected response): don't block; the runtime 429 handler
     # surfaces free-tier guidance if needed.
-    _say("  Tier check: paid ✓" if tier == "paid" else "  Tier check: could not verify (proceeding anyway).", "")
+    _say(
+        "  Tier check: paid ✓"
+        if tier == "paid"
+        else "  Tier check: could not verify (proceeding anyway).",
+        "",
+    )
     return True
 
 
@@ -835,10 +1191,14 @@ def _lmstudio_models(pconfig, curated, api_key, base_url):
     """LM Studio: live /api/v1/models probe only."""
     from clawk_cli.auth import AuthError
     from clawk_cli.models_local import fetch_lmstudio_models
+
     try:
         model_list = fetch_lmstudio_models(api_key=api_key, base_url=base_url)
     except AuthError as exc:
-        _say(f"  LM Studio rejected the request: {exc}", "  Set LM_API_KEY (or update it) to match the server's bearer token.")
+        _say(
+            f"  LM Studio rejected the request: {exc}",
+            "  Set LM_API_KEY (or update it) to match the server's bearer token.",
+        )
         model_list = []
     _report_live_models(model_list, "LM Studio")
     return model_list
@@ -848,7 +1208,10 @@ def _ollama_cloud_models(pconfig, curated, api_key, base_url):
     """Ollama Cloud: forced live refresh so newly released models appear the moment the user
     enters their key, not when the disk cache TTL expires."""
     from clawk_cli.models import fetch_ollama_cloud_models
-    model_list = fetch_ollama_cloud_models(api_key=api_key, base_url=base_url, force_refresh=True)
+
+    model_list = fetch_ollama_cloud_models(
+        api_key=api_key, base_url=base_url, force_refresh=True
+    )
     _report_live_models(model_list, "Ollama Cloud")
     return model_list
 
@@ -856,6 +1219,7 @@ def _ollama_cloud_models(pconfig, curated, api_key, base_url):
 def _novita_models(pconfig, curated, api_key, base_url):
     """Novita: live first, then models.dev, then curated."""
     from clawk_cli.models import fetch_api_models
+
     live_models = fetch_api_models(api_key, base_url)
     if live_models:
         _report_live_models(live_models, f"{pconfig.name} API")
@@ -872,17 +1236,25 @@ def _novita_models(pconfig, curated, api_key, base_url):
 _SPECIAL_MODEL_LISTS = {
     "lmstudio": _lmstudio_models,
     "ollama-cloud": _ollama_cloud_models,
-    "novita": _novita_models}
+    "novita": _novita_models,
+}
 
 
-def _api_key_provider_model_list(provider_id: str, pconfig, existing_key: str, key_env: str, effective_base: str) -> list:
+def _api_key_provider_model_list(
+    provider_id: str, pconfig, existing_key: str, key_env: str, effective_base: str
+) -> list:
     """Model list for an API-key provider: models.dev registry (cached, agentic/tool-capable filter)
     → curated static list (offline insurance) → provider-owned catalog (``ProviderProfile.fetch_models``
     merged with ``fallback_models`` exactly like the ``/model`` picker's
     ``models._profile_live_catalog``; generic /models probe for unregistered providers).
     Providers in ``_SPECIAL_MODEL_LISTS`` have their own resolution."""
     from clawk_cli.config import get_env_value
-    from clawk_cli.models import _PROVIDER_MODELS, fetch_api_models, probe_profile_catalog
+    from clawk_cli.models import (
+        _PROVIDER_MODELS,
+        fetch_api_models,
+        probe_profile_catalog,
+    )
+
     curated = _PROVIDER_MODELS.get(provider_id, [])
     api_key_for_probe = existing_key or (get_env_value(key_env) if key_env else "")
 
@@ -900,12 +1272,15 @@ def _api_key_provider_model_list(provider_id: str, pconfig, existing_key: str, k
         _show_curated(curated)
         return curated
     from providers import get_provider_profile
+
     profile = get_provider_profile(provider_id)
     if profile is not None:
         # The profile owns endpoint (models_url), headers and response shape. Same probe as the
         # ``/model`` picker; when neither live nor fallback_models yields rows, the curated
         # ``_PROVIDER_MODELS`` row still applies (built-in providers with a short curated list).
-        model_list = probe_profile_catalog(provider_id, profile, api_key_for_probe, effective_base)
+        model_list = probe_profile_catalog(
+            provider_id, profile, api_key_for_probe, effective_base
+        )
         if model_list:
             _report_live_models(model_list, f"{pconfig.name} catalog")
             return model_list
@@ -924,6 +1299,7 @@ def _model_flow_api_key_provider(config, provider_id, current_model=""):
     from clawk_cli.auth import PROVIDER_REGISTRY
     from clawk_cli.config import save_env_value, load_config
     from clawk_cli.models import opencode_model_api_mode, normalize_opencode_model_id
+
     pconfig = PROVIDER_REGISTRY[provider_id]
     key_env = pconfig.api_key_env_vars[0] if pconfig.api_key_env_vars else ""
     base_url_env = pconfig.base_url_env_var or ""
@@ -932,7 +1308,11 @@ def _model_flow_api_key_provider(config, provider_id, current_model=""):
     _, existing_key, abort = _ensure_flow_api_key(provider_id, pconfig)
     if abort:
         return
-    if provider_id == "gemini" and existing_key and not _gemini_tier_ok(existing_key, pconfig, base_url_env):
+    if (
+        provider_id == "gemini"
+        and existing_key
+        and not _gemini_tier_ok(existing_key, pconfig, base_url_env)
+    ):
         return
 
     # Optional base URL override. Precedence: env var → config.yaml model.base_url → registry
@@ -948,9 +1328,15 @@ def _model_flow_api_key_provider(config, provider_id, current_model=""):
 
     if provider_id == "actual":
         from clawk_cli.providers import normalize_provider
+
         model_cfg = config.get("model") or {}
-        if isinstance(model_cfg, dict) and normalize_provider(str(model_cfg.get("provider") or "")) == provider_id:
-            effective_base = str(model_cfg.get("base_url") or "").strip() or effective_base
+        if (
+            isinstance(model_cfg, dict)
+            and normalize_provider(str(model_cfg.get("provider") or "")) == provider_id
+        ):
+            effective_base = (
+                str(model_cfg.get("base_url") or "").strip() or effective_base
+            )
 
     if provider_id == "zai":
         # Four official endpoints with separate billing paths — a picker lets users match
@@ -960,11 +1346,17 @@ def _model_flow_api_key_provider(config, provider_id, current_model=""):
             save_env_value(base_url_env, chosen_base)
         effective_base = chosen_base
     else:
-        effective_base = _prompt_base_url_override(effective_base, base_url_env, persist_env=provider_id != "actual")
+        effective_base = _prompt_base_url_override(
+            effective_base, base_url_env, persist_env=provider_id != "actual"
+        )
 
-    model_list = _api_key_provider_model_list(provider_id, pconfig, existing_key, key_env, effective_base)
+    model_list = _api_key_provider_model_list(
+        provider_id, pconfig, existing_key, key_env, effective_base
+    )
     if is_opencode:
-        model_list = [normalize_opencode_model_id(provider_id, mid) for mid in model_list]
+        model_list = [
+            normalize_opencode_model_id(provider_id, mid) for mid in model_list
+        ]
         current_model = normalize_opencode_model_id(provider_id, current_model)
         model_list = list(dict.fromkeys(mid for mid in model_list if mid))
 
@@ -974,27 +1366,48 @@ def _model_flow_api_key_provider(config, provider_id, current_model=""):
     if model_list:
         try:
             from clawk_cli.models_pricing import get_pricing_for_provider
+
             pricing = get_pricing_for_provider(provider_id) or {}
         except Exception:
             pricing = {}
     selected = _pick_model_or_prompt(
-        model_list, "Model name: ", current_model=current_model, pricing=pricing, confirm_provider=provider_id,
-        confirm_base_url=effective_base, confirm_api_key=existing_key)
+        model_list,
+        "Model name: ",
+        current_model=current_model,
+        pricing=pricing,
+        confirm_provider=provider_id,
+        confirm_base_url=effective_base,
+        confirm_api_key=existing_key,
+    )
     if selected and is_opencode:
         selected = normalize_opencode_model_id(provider_id, selected)
     # OpenCode pins its api_mode; everyone else drops it so the runtime auto-detects.
     _finish_model(
-        selected, provider_id, f"Default model set to: {selected} (via {pconfig.name})", base_url=effective_base,
-        api_mode=opencode_model_api_mode(provider_id, selected) if selected and is_opencode else None,
-        drop_api_mode=not is_opencode)
+        selected,
+        provider_id,
+        f"Default model set to: {selected} (via {pconfig.name})",
+        base_url=effective_base,
+        api_mode=opencode_model_api_mode(provider_id, selected)
+        if selected and is_opencode
+        else None,
+        drop_api_mode=not is_opencode,
+    )
 
 
 def _anthropic_authenticate() -> bool:
     """Interactive Anthropic auth (OAuth subscription or API key). False = flow must stop."""
     from clawk_cli.main_provider_setup import _run_anthropic_oauth_flow
     from clawk_cli.config import save_env_value, save_anthropic_api_key
-    _say("", "  Choose authentication method:", "", "    1. Claude Pro/Max subscription (OAuth login)",
-         "    2. Anthropic API key (pay-per-token)", "    3. Cancel", "")
+
+    _say(
+        "",
+        "  Choose authentication method:",
+        "",
+        "    1. Claude Pro/Max subscription (OAuth login)",
+        "    2. Anthropic API key (pay-per-token)",
+        "    3. Cancel",
+        "",
+    )
     choice = _ask("  Choice [1/2/3]: ", raw=True, cancel_msg="")
     if choice is None:
         return False
@@ -1024,14 +1437,21 @@ def _model_flow_anthropic(config, current_model=""):
     existing_key = get_anthropic_key()
     cc_available = False
     with contextlib.suppress(Exception):
-        from agent.anthropic_credentials import read_claude_code_credentials, is_claude_code_token_valid, _is_oauth_token
+        from agent.anthropic_credentials import (
+            read_claude_code_credentials,
+            is_claude_code_token_valid,
+            _is_oauth_token,
+        )
+
         cc_creds = read_claude_code_credentials()
         if cc_creds and is_claude_code_token_valid(cc_creds):
             cc_available = True
 
     # Stale-OAuth guard: an expired OAuth token with no valid cc_creds fallback is treated
     # as missing so the re-auth path is offered.
-    existing_is_stale_oauth = bool(existing_key and _is_oauth_token(existing_key) and not cc_available)
+    existing_is_stale_oauth = bool(
+        existing_key and _is_oauth_token(existing_key) and not cc_available
+    )
     has_creds = (bool(existing_key) and not existing_is_stale_oauth) or cc_available
     needs_auth = not has_creds
 
@@ -1063,11 +1483,20 @@ def _model_flow_anthropic(config, current_model=""):
     print()
 
     selected = _pick_model_or_prompt(
-        _PROVIDER_MODELS.get("anthropic", []), "Model name (e.g., claude-sonnet-4-20250514): ",
-        current_model=current_model, confirm_provider="anthropic")
+        _PROVIDER_MODELS.get("anthropic", []),
+        "Model name (e.g., claude-sonnet-4-20250514): ",
+        current_model=current_model,
+        confirm_provider="anthropic",
+    )
     # Clear base_url: resolve_runtime_provider() always hardcodes Anthropic's URL, and a
     # stale value can contaminate other providers on a later switch.
-    _finish_model(selected, "anthropic", f"Default model set to: {selected} (via Anthropic)", drop_base_url=True, drop_api_mode=True)
+    _finish_model(
+        selected,
+        "anthropic",
+        f"Default model set to: {selected} (via Anthropic)",
+        drop_base_url=True,
+        drop_api_mode=True,
+    )
 
 
 # ── Generic flow for plugin providers without a bespoke `_model_flow_*` ────────────────────────────
@@ -1075,6 +1504,7 @@ def _model_flow_anthropic(config, current_model=""):
 # None when the picker must stop (the helper already printed why). ``api_key`` providers keep
 # ``_model_flow_api_key_provider``; ``clawk_cli.main`` routes every registered profile missing
 # from ``_PROVIDER_MODEL_FLOWS`` here, so an admitted plugin is never a silent no-op.
+
 
 def _external_process_login_gate(profile, status) -> bool:
     """Logged in → say so (with plan). Logged out → run the CLI's own login on a TTY (it is
@@ -1091,7 +1521,11 @@ def _external_process_login_gate(profile, status) -> bool:
     if not login or not sys.stdin.isatty():
         _say(f"  ✗ {status['detail']}")
         return False
-    _say(f"  {status['detail'].split('.')[0]}.", f"  Starting `{shlex.join(login[-2:])}` (press Ctrl-C to cancel)...", "")
+    _say(
+        f"  {status['detail'].split('.')[0]}.",
+        f"  Starting `{shlex.join(login[-2:])}` (press Ctrl-C to cancel)...",
+        "",
+    )
     try:
         subprocess.run(login, check=False)
     except (KeyboardInterrupt, OSError):
@@ -1106,11 +1540,18 @@ def _external_process_login_gate(profile, status) -> bool:
 
 
 def _plugin_flow_external_process(provider_id: str, profile) -> tuple[str, str] | None:
-    from clawk_cli.auth import get_external_process_provider_status, resolve_external_process_provider_credentials
+    from clawk_cli.auth import (
+        get_external_process_provider_status,
+        resolve_external_process_provider_credentials,
+    )
+
     status = get_external_process_provider_status(provider_id)
-    _say(f"  {profile.display_name or provider_id} delegates Clawksis turns to a local `{status.get('command') or profile.process_command}` process.",
-         f"  Command: {status.get('resolved_command') or status.get('command') or '(not found)'}",
-         f"  Backend marker: {status.get('base_url') or profile.base_url}", "")
+    _say(
+        f"  {profile.display_name or provider_id} delegates Clawksis turns to a local `{status.get('command') or profile.process_command}` process.",
+        f"  Command: {status.get('resolved_command') or status.get('command') or '(not found)'}",
+        f"  Backend marker: {status.get('base_url') or profile.base_url}",
+        "",
+    )
     try:
         creds = resolve_external_process_provider_credentials(provider_id)
     except Exception as exc:
@@ -1130,15 +1571,24 @@ def _plugin_flow_external_process(provider_id: str, profile) -> tuple[str, str] 
 def _plugin_flow_oauth(provider_id: str, profile) -> tuple[str, str] | None:
     from clawk_cli.auth import get_auth_status
     from clawk_cli.auth_plugin_providers import plugin_missing_auth_handler_error
+
     status = get_auth_status(provider_id)
     if not status.get("logged_in"):
         missing = plugin_missing_auth_handler_error(provider_id, "add")
-        _say(f"  ⚠ Not signed in to {profile.display_name or provider_id}.",
-             f"  {missing.code if missing else status.get('hint') or f'Run `clawk auth add {provider_id}` to sign in.'}")
+        _say(
+            f"  ⚠ Not signed in to {profile.display_name or provider_id}.",
+            f"  {missing.code if missing else status.get('hint') or f'Run `clawk auth add {provider_id}` to sign in.'}",
+        )
         return None
     from agent.credential_pool import load_pool
+
     entry = load_pool(provider_id).select()
-    base_url = (entry.runtime_base_url if entry else "") or status.get("base_url") or profile.base_url or ""
+    base_url = (
+        (entry.runtime_base_url if entry else "")
+        or status.get("base_url")
+        or profile.base_url
+        or ""
+    )
     return str(base_url), (entry.runtime_api_key if entry else "") or ""
 
 
@@ -1152,18 +1602,26 @@ _PLUGIN_FLOW_CREDENTIALS = {
 def _is_profile_plugin_flow_provider(provider_id: str) -> bool:
     """True when *provider_id* is a registered profile whose auth_type the generic plugin flow handles."""
     from clawk_cli.auth_plugin_providers import plugin_profile
+
     profile = plugin_profile(provider_id)
     return profile is not None and profile.auth_type in _PLUGIN_FLOW_CREDENTIALS
 
 
-def _plugin_flow_live_rows(profile, api_key: str, base_url: str) -> tuple[list[str] | None, dict[str, str]]:
+def _plugin_flow_live_rows(
+    profile, api_key: str, base_url: str
+) -> tuple[list[str] | None, dict[str, str]]:
     """``(live ids, {id: note})``. ``discover_models()`` (the account's own annotated picker, e.g.
     ``usage credits``) wins when the profile implements it; otherwise the plain ``fetch_models()``."""
     with contextlib.suppress(Exception):
         rows = profile.discover_models()
         if rows:
-            _say(f"  Models below come from your {profile.display_name or profile.name} account.", "")
-            return [r["id"] for r in rows], {r["id"]: r["note"] for r in rows if r.get("note")}
+            _say(
+                f"  Models below come from your {profile.display_name or profile.name} account.",
+                "",
+            )
+            return [r["id"] for r in rows], {
+                r["id"]: r["note"] for r in rows if r.get("note")
+            }
     live = None
     with contextlib.suppress(Exception):
         live = profile.fetch_models(api_key=api_key or None, base_url=base_url or None)
@@ -1175,6 +1633,7 @@ def _model_flow_plugin_provider(config, provider_id, current_model=""):
     catalog via ``merge_profile_catalog`` (live ``fetch_models()`` ⊕ ``fallback_models``), persist."""
     from clawk_cli.auth_plugin_providers import plugin_profile
     from clawk_cli.models import merge_profile_catalog
+
     del config
     profile = plugin_profile(provider_id)
     creds = _PLUGIN_FLOW_CREDENTIALS[profile.auth_type](provider_id, profile)
@@ -1184,7 +1643,18 @@ def _model_flow_plugin_provider(config, provider_id, current_model=""):
     live, notes = _plugin_flow_live_rows(profile, api_key, base_url)
     model_list = merge_profile_catalog(provider_id, profile, live) or []
     selected = _pick_model_or_prompt(
-        model_list, "Model name: ", current_model=current_model, confirm_provider=provider_id,
-        confirm_base_url=base_url, confirm_api_key=api_key, notes=notes)
-    _finish_model(selected, provider_id, f"Default model set to: {selected} (via {profile.display_name or provider_id})",
-                  base_url=base_url or None, api_mode=profile.api_mode or None)
+        model_list,
+        "Model name: ",
+        current_model=current_model,
+        confirm_provider=provider_id,
+        confirm_base_url=base_url,
+        confirm_api_key=api_key,
+        notes=notes,
+    )
+    _finish_model(
+        selected,
+        provider_id,
+        f"Default model set to: {selected} (via {profile.display_name or provider_id})",
+        base_url=base_url or None,
+        api_mode=profile.api_mode or None,
+    )

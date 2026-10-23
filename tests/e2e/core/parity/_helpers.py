@@ -30,7 +30,12 @@ from typing import Any, Callable, Iterable
 
 import clawk_yaml as yaml
 
-from tests.fakes.fake_llm_provider import FakeLLMServer, Text, ToolCall, write_clawk_home
+from tests.fakes.fake_llm_provider import (
+    FakeLLMServer,
+    Text,
+    ToolCall,
+    write_clawk_home,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 FIXTURE_MCP_SERVER = Path(__file__).with_name("fixture_mcp_server.py")
@@ -43,10 +48,25 @@ PLUGIN_NAME = "parity-plugin"
 DISABLED_TOOLSET = "todo"
 
 _SECRET_ENV_SUFFIXES = ("_API_KEY", "_TOKEN", "_SECRET", "_ACCESS_KEY")
-_PASSTHROUGH_ENV = frozenset({
-    "PATH", "LANG", "LANGUAGE", "USER", "LOGNAME", "SHELL", "TMPDIR", "TZ",
-    "SYSTEMROOT", "SystemRoot", "COMSPEC", "PATHEXT", "WINDIR", "TEMP", "TMP",
-})
+_PASSTHROUGH_ENV = frozenset(
+    {
+        "PATH",
+        "LANG",
+        "LANGUAGE",
+        "USER",
+        "LOGNAME",
+        "SHELL",
+        "TMPDIR",
+        "TZ",
+        "SYSTEMROOT",
+        "SystemRoot",
+        "COMSPEC",
+        "PATHEXT",
+        "WINDIR",
+        "TEMP",
+        "TMP",
+    }
+)
 
 
 TURN_TIMEOUT = 240.0
@@ -88,30 +108,36 @@ class ParityHome:
         real_root = Path(pwd.getpwuid(os.getuid()).pw_dir, ".clawk").resolve()
         fixture = self.clawk_home.resolve()
         assert fixture != real_root and fixture.parent != real_root / "profiles", (
-            f"fixture CLAWK_HOME {self.clawk_home} is the real install's live home")
+            f"fixture CLAWK_HOME {self.clawk_home} is the real install's live home"
+        )
         assert fixture == (self.home / ".clawksis").resolve(), (
-            f"fixture CLAWK_HOME {self.clawk_home} is not <fixture HOME>/.clawk")
+            f"fixture CLAWK_HOME {self.clawk_home} is not <fixture HOME>/.clawk"
+        )
         # Allowlist, not denylist: the runner may itself be a Clawksis process whose
         # TERMINAL_CWD / CLAWK_* / credential env would silently reroute the child.
         env = {
-            k: v for k, v in os.environ.items()
-            if (k in _PASSTHROUGH_ENV or k.startswith("LC_")) and not k.endswith(_SECRET_ENV_SUFFIXES)
+            k: v
+            for k, v in os.environ.items()
+            if (k in _PASSTHROUGH_ENV or k.startswith("LC_"))
+            and not k.endswith(_SECRET_ENV_SUFFIXES)
         }
-        env.update({
-            "HOME": str(self.home),
-            "CLAWK_HOME": str(self.clawk_home),
-            "PYTHONPATH": str(REPO_ROOT),
-            "PYTHONUNBUFFERED": "1",
-            "NO_COLOR": "1",
-            "TERM": "dumb",
-            # Orphan-scan tag: every process in the spawned tree inherits it.
-            "PARITY_TREE_TAG": self.tag,
-            # The child's HOME is the fixture home, so its ``~/.clawksis/state.db`` IS
-            # the tmp CLAWK_HOME's db; under a pytest ancestor the live-DB guard
-            # (clawk_state_guard) would refuse it. This is the guard's documented
-            # child-process escape hatch; the path is tmp_path by construction.
-            "CLAWK_STATE_DB_GUARD_BYPASS": "1",
-        })
+        env.update(
+            {
+                "HOME": str(self.home),
+                "CLAWK_HOME": str(self.clawk_home),
+                "PYTHONPATH": str(REPO_ROOT),
+                "PYTHONUNBUFFERED": "1",
+                "NO_COLOR": "1",
+                "TERM": "dumb",
+                # Orphan-scan tag: every process in the spawned tree inherits it.
+                "PARITY_TREE_TAG": self.tag,
+                # The child's HOME is the fixture home, so its ``~/.clawksis/state.db`` IS
+                # the tmp CLAWK_HOME's db; under a pytest ancestor the live-DB guard
+                # (clawk_state_guard) would refuse it. This is the guard's documented
+                # child-process escape hatch; the path is tmp_path by construction.
+                "CLAWK_STATE_DB_GUARD_BYPASS": "1",
+            }
+        )
         env.update(extra or {})
         return env
 
@@ -124,11 +150,21 @@ class ParityHome:
 
     def pin_terminal_cwd(self) -> None:
         """Documented cwd channel for daemon surfaces (gateway, api_server): ``terminal.cwd``."""
-        self.update_config(lambda cfg: cfg.setdefault("terminal", {}).__setitem__("cwd", str(self.project)))
+        self.update_config(
+            lambda cfg: cfg.setdefault("terminal", {}).__setitem__(
+                "cwd", str(self.project)
+            )
+        )
 
 
-def build_parity_home(root: Path, base_url: str, *, grandchild: bool = True,
-                      death_tool: bool = False, mcp_timeout: int = 60) -> ParityHome:
+def build_parity_home(
+    root: Path,
+    base_url: str,
+    *,
+    grandchild: bool = True,
+    death_tool: bool = False,
+    mcp_timeout: int = 60,
+) -> ParityHome:
     """Write the full fixture home under ``root`` (a tmp_path)."""
     home = root / "home"
     clawk_home = home / ".clawksis"
@@ -137,36 +173,52 @@ def build_parity_home(root: Path, base_url: str, *, grandchild: bool = True,
     for d in (clawk_home, project, markers):
         d.mkdir(parents=True, exist_ok=True)
     tag = uuid.uuid4().hex
-    c = {name: f"{name.upper()}-{uuid.uuid4().hex[:12]}" for name in (
-        "context", "skill", "memory", "shell_hook", "plugin_hook", "mcp")}
-    ph = ParityHome(root=root, home=home, clawk_home=clawk_home, project=project,
-                    markers=markers, pid_log=root / "mcp_pids.log", tag=tag, canaries=c)
+    c = {
+        name: f"{name.upper()}-{uuid.uuid4().hex[:12]}"
+        for name in ("context", "skill", "memory", "shell_hook", "plugin_hook", "mcp")
+    }
+    ph = ParityHome(
+        root=root,
+        home=home,
+        clawk_home=clawk_home,
+        project=project,
+        markers=markers,
+        pid_log=root / "mcp_pids.log",
+        tag=tag,
+        canaries=c,
+    )
 
     write_clawk_home(clawk_home, base_url)
     cfg = yaml.safe_load((clawk_home / "config.yaml").read_text(encoding="utf-8"))
     cfg["agent"]["disabled_toolsets"] = [DISABLED_TOOLSET]
-    cfg["hooks"] = {"pre_llm_call": [{
-        "command": f"{sys.executable} {clawk_home / 'agent-hooks' / 'shell_hook.py'}",
-        "timeout": 30,
-    }]}
+    cfg["hooks"] = {
+        "pre_llm_call": [
+            {
+                "command": f"{sys.executable} {clawk_home / 'agent-hooks' / 'shell_hook.py'}",
+                "timeout": 30,
+            }
+        ]
+    }
     cfg["hooks_auto_accept"] = True
     cfg["plugins"] = {"enabled": [PLUGIN_NAME]}
-    cfg["mcp_servers"] = {MCP_SERVER_NAME: {
-        "command": sys.executable,
-        "args": [str(FIXTURE_MCP_SERVER)],
-        "env": {
-            "PARITY_MCP_CANARY": c["mcp"],
-            "PARITY_MCP_PID_LOG": str(ph.pid_log),
-            "PARITY_MCP_SPAWN_GRANDCHILD": "1" if grandchild else "0",
-            "PARITY_MCP_DEATH_TOOL": "1" if death_tool else "0",
-            "PARITY_TREE_TAG": tag,
-            # Only the MCP server and its descendants carry this one.
-            "PARITY_MCP_TREE_TAG": tag,
-            "PYTHONPATH": str(REPO_ROOT),
-        },
-        "connect_timeout": 60,
-        "timeout": mcp_timeout,
-    }}
+    cfg["mcp_servers"] = {
+        MCP_SERVER_NAME: {
+            "command": sys.executable,
+            "args": [str(FIXTURE_MCP_SERVER)],
+            "env": {
+                "PARITY_MCP_CANARY": c["mcp"],
+                "PARITY_MCP_PID_LOG": str(ph.pid_log),
+                "PARITY_MCP_SPAWN_GRANDCHILD": "1" if grandchild else "0",
+                "PARITY_MCP_DEATH_TOOL": "1" if death_tool else "0",
+                "PARITY_TREE_TAG": tag,
+                # Only the MCP server and its descendants carry this one.
+                "PARITY_MCP_TREE_TAG": tag,
+                "PYTHONPATH": str(REPO_ROOT),
+            },
+            "connect_timeout": 60,
+            "timeout": mcp_timeout,
+        }
+    }
     # Interactive surfaces wait only ~1.5 s (mcp_discovery_timeout) for MCP discovery
     # before the first agent build, BY DESIGN (a slow server must not block the
     # shell; late tools arrive via refresh). Under a loaded box the fixture server's
@@ -177,7 +229,9 @@ def build_parity_home(root: Path, base_url: str, *, grandchild: bool = True,
     # Keep turns hermetic and short: no title/aux model chatter decides anything here.
     cfg.setdefault("display", {})["compact"] = True
     cfg["updates"] = {"check": False}  # offline: no GitHub round-trip or git lazy fetch
-    (clawk_home / "config.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")
+    (clawk_home / "config.yaml").write_text(
+        yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8"
+    )
 
     hooks_dir = clawk_home / "agent-hooks"
     hooks_dir.mkdir()
@@ -220,17 +274,23 @@ def build_parity_home(root: Path, base_url: str, *, grandchild: bool = True,
 
     mem_dir = clawk_home / "memories"
     mem_dir.mkdir()
-    (mem_dir / "MEMORY.md").write_text(f"The parity memory canary is {c['memory']}.", encoding="utf-8")
+    (mem_dir / "MEMORY.md").write_text(
+        f"The parity memory canary is {c['memory']}.", encoding="utf-8"
+    )
 
     (project / "AGENTS.md").write_text(
-        f"# Project rules\n\nThe parity context canary is {c['context']}.\n", encoding="utf-8")
+        f"# Project rules\n\nThe parity context canary is {c['context']}.\n",
+        encoding="utf-8",
+    )
     return ph
 
 
 # Scripted provider -----------------------------------------------------------
 
 
-def parity_responder(nonce: str, tool: str = MCP_TOOL_NAME) -> Callable[[dict[str, Any]], Any]:
+def parity_responder(
+    nonce: str, tool: str = MCP_TOOL_NAME
+) -> Callable[[dict[str, Any]], Any]:
     """Stateless script: call the MCP tool until a tool result exists, then answer.
 
     Stateless so a retried request (or a second concurrent entrypoint request)
@@ -268,7 +328,10 @@ def _text(content: Any) -> str:
 
 
 def _tool_names(body: dict[str, Any]) -> set[str]:
-    return {(t.get("function") or {}).get("name") or t.get("name") for t in body.get("tools") or []}
+    return {
+        (t.get("function") or {}).get("name") or t.get("name")
+        for t in body.get("tools") or []
+    }
 
 
 _CATALOG_LINE = re.compile(r"^- ([A-Za-z0-9_.:-]+): ", re.MULTILINE)
@@ -301,24 +364,37 @@ class Observation:
 def _read_jsonl(path: Path) -> list[dict]:
     if not path.exists():
         return []
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    return [
+        json.loads(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
 
 
-def collect_observation(entrypoint: str, ph: ParityHome, srv: FakeLLMServer,
-                        final_text: str | None = None) -> Observation:
+def collect_observation(
+    entrypoint: str, ph: ParityHome, srv: FakeLLMServer, final_text: str | None = None
+) -> Observation:
     mains = srv.main_requests()
     assert mains, f"{entrypoint}: no main-turn request reached the provider"
     first = mains[0]
     msgs = first.get("messages") or []
-    system = "\n".join(_text(m.get("content")) for m in msgs if m.get("role") == "system")
+    system = "\n".join(
+        _text(m.get("content")) for m in msgs if m.get("role") == "system"
+    )
     users = [_text(m.get("content")) for m in msgs if m.get("role") == "user"]
     tool_results = [
-        _text(m.get("content")) for body in mains for m in body.get("messages") or []
+        _text(m.get("content"))
+        for body in mains
+        for m in body.get("messages") or []
         if m.get("role") == "tool"
     ]
     return Observation(
-        entrypoint=entrypoint, system=system, first_user=users[-1] if users else "",
-        tool_names=offered_tool_names(first), tool_results=tool_results, main_requests=len(mains),
+        entrypoint=entrypoint,
+        system=system,
+        first_user=users[-1] if users else "",
+        tool_names=offered_tool_names(first),
+        tool_results=tool_results,
+        main_requests=len(mains),
         shell_hook_events=_read_jsonl(ph.markers / "shell_hook.log"),
         plugin_hook_events=_read_jsonl(ph.markers / "plugin_hook.log"),
         final_text=final_text,
@@ -332,8 +408,16 @@ def disabled_tool_names() -> set[str]:
 
 
 # Agent features every surface must carry when its documented toolset includes them.
-_FEATURE_TOOLS = ("terminal", "read_file", "write_file", "patch", "search_files", "memory",
-                  "skills_list", "skill_view")
+_FEATURE_TOOLS = (
+    "terminal",
+    "read_file",
+    "write_file",
+    "patch",
+    "search_files",
+    "memory",
+    "skills_list",
+    "skill_view",
+)
 
 
 def required_tool_names(toolset: str) -> set[str]:
@@ -344,8 +428,13 @@ def required_tool_names(toolset: str) -> set[str]:
     return {t for t in _FEATURE_TOOLS if t in promised} | {MCP_TOOL_NAME}
 
 
-def check_invariants(obs: Observation, ph: ParityHome, *, toolset: str = "clawk-cli",
-                     context_file: bool = True) -> dict[str, bool]:
+def check_invariants(
+    obs: Observation,
+    ph: ParityHome,
+    *,
+    toolset: str = "clawk-cli",
+    context_file: bool = True,
+) -> dict[str, bool]:
     """Evaluate every parity invariant; returns {cell: ok} (all must be True)."""
     c = ph.canaries
     cells = {
@@ -399,7 +488,9 @@ def mcp_pids(ph: ParityHome) -> dict[str, list[int]]:
     return out
 
 
-def wait_until(pred: Callable[[], Any], timeout: float, what: str, interval: float = 0.05):
+def wait_until(
+    pred: Callable[[], Any], timeout: float, what: str, interval: float = 0.05
+):
     deadline = time.monotonic() + timeout
     while True:
         value = pred()
@@ -410,7 +501,9 @@ def wait_until(pred: Callable[[], Any], timeout: float, what: str, interval: flo
         time.sleep(interval)
 
 
-def wait_no_orphans(ph: ParityHome, timeout: float = 30.0, *, mcp_only: bool = True) -> set[int]:
+def wait_no_orphans(
+    ph: ParityHome, timeout: float = 30.0, *, mcp_only: bool = True
+) -> set[int]:
     """Poll until no MCP-tree process (or, ``mcp_only=False``, no tagged process at all)
     survives; returns the survivors (empty = clean)."""
     var = "PARITY_MCP_TREE_TAG" if mcp_only else "PARITY_TREE_TAG"
@@ -471,10 +564,18 @@ def stop_profile_gateway(ph: ParityHome, timeout: float = STOP_TIMEOUT) -> bool:
     none was running, e.g. a client that never reached the daemon).
     """
     proc = subprocess.run(
-        clawk_argv("gateway", "stop"), cwd=ph.project, env=ph.env(), capture_output=True, text=True,
-        timeout=timeout, stdin=subprocess.DEVNULL, check=False
+        clawk_argv("gateway", "stop"),
+        cwd=ph.project,
+        env=ph.env(),
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        stdin=subprocess.DEVNULL,
+        check=False,
     )
-    assert proc.returncode == 0, f"clawk gateway stop exited {proc.returncode}: {proc.stderr[-2000:]}"
+    assert proc.returncode == 0, (
+        f"clawk gateway stop exited {proc.returncode}: {proc.stderr[-2000:]}"
+    )
     return "Stopped gateway" in proc.stdout
 
 
@@ -484,7 +585,11 @@ def format_cells(results: Iterable[tuple[str, dict[str, bool]]]) -> str:
     head = "| entrypoint | " + " | ".join(cols) + " |"
     sep = "|---" * (len(cols) + 1) + "|"
     body = [
-        f"| {ep} | " + " | ".join(("✅" if cells.get(k) else ("—" if k not in cells else "❌")) for k in cols) + " |"
+        f"| {ep} | "
+        + " | ".join(
+            ("✅" if cells.get(k) else ("—" if k not in cells else "❌")) for k in cols
+        )
+        + " |"
         for ep, cells in rows
     ]
     return "\n".join([head, sep, *body])

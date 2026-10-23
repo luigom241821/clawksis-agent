@@ -23,10 +23,16 @@ _ABS_PATH_PREFIX_PATTERN = r"(?:[A-Za-z]:[/\\]|/|\\\\)"
 _ABS_PATH_PREFIX_RE = re.compile(r"^" + _ABS_PATH_PREFIX_PATTERN)
 _CAPTURE_BASENAME_PATTERN = r"computer_use_[0-9a-f]{32}\.(?:png|jpe?g)"
 
-_COMPUTER_USE_CAPTURE_BASENAME_RE = re.compile(r"^" + _CAPTURE_BASENAME_PATTERN + r"$", re.IGNORECASE)
+_COMPUTER_USE_CAPTURE_BASENAME_RE = re.compile(
+    r"^" + _CAPTURE_BASENAME_PATTERN + r"$", re.IGNORECASE
+)
 _COMPUTER_USE_CAPTURE_SUMMARY_RE = re.compile(
     r"\(shareable screenshot saved to "
-    r"(?P<path>" + _ABS_PATH_PREFIX_PATTERN + r"[^\r\n]*?" + _CAPTURE_BASENAME_PATTERN + r")\)",
+    r"(?P<path>"
+    + _ABS_PATH_PREFIX_PATTERN
+    + r"[^\r\n]*?"
+    + _CAPTURE_BASENAME_PATTERN
+    + r")\)",
     re.IGNORECASE,
 )
 
@@ -39,7 +45,9 @@ def tool_name_by_call_id(messages: list[dict[str, Any]]) -> dict[str, str]:
             continue
         for call in msg.get("tool_calls") or []:
             call_id = call.get("id") or call.get("call_id")
-            name = str((call.get("function") or {}).get("name") or call.get("name") or "")
+            name = str(
+                (call.get("function") or {}).get("name") or call.get("name") or ""
+            )
             if call_id and name:
                 mapping[str(call_id)] = name
     return mapping
@@ -48,7 +56,11 @@ def tool_name_by_call_id(messages: list[dict[str, Any]]) -> dict[str, str]:
 def _computer_use_capture_basename(path: Any) -> str:
     """Canonical (lowercased) capture basename for either separator style, or ''."""
     basename = re.split(r"[/\\]", str(path or "").strip().strip("`\"'"))[-1]
-    return basename.lower() if _COMPUTER_USE_CAPTURE_BASENAME_RE.fullmatch(basename) else ""
+    return (
+        basename.lower()
+        if _COMPUTER_USE_CAPTURE_BASENAME_RE.fullmatch(basename)
+        else ""
+    )
 
 
 def _iter_computer_use_capture_paths(content: Any) -> Iterator[str]:
@@ -85,7 +97,9 @@ def _iter_computer_use_capture_paths(content: Any) -> Iterator[str]:
                 yield from _iter_computer_use_capture_paths(nested)
 
 
-def _current_turn_messages(messages: list[dict[str, Any]], history_offset: int) -> list[dict[str, Any]]:
+def _current_turn_messages(
+    messages: list[dict[str, Any]], history_offset: int
+) -> list[dict[str, Any]]:
     if not history_offset or len(messages) >= history_offset:
         return messages[history_offset:]
     # Compression can invalidate the slice boundary: recover the turn from its last user
@@ -97,12 +111,16 @@ def _current_turn_messages(messages: list[dict[str, Any]], history_offset: int) 
     return []
 
 
-def repair_explicit_computer_use_media_paths(response: str, messages: list[dict[str, Any]], history_offset: int = 0) -> str:
+def repair_explicit_computer_use_media_paths(
+    response: str, messages: list[dict[str, Any]], history_offset: int = 0
+) -> str:
     """Recover model-mangled paths in explicit ``MEDIA:`` directives whose basename
     matches (case-insensitively) a canonical screenshot path from this turn.
     Fail-open: the repair is cosmetic, so any error returns the response unchanged."""
     try:
-        return _repair_explicit_computer_use_media_paths_inner(response, messages, history_offset)
+        return _repair_explicit_computer_use_media_paths_inner(
+            response, messages, history_offset
+        )
     except Exception:
         logger.debug("computer_use media path repair failed", exc_info=True)
         return response
@@ -116,7 +134,15 @@ def _canonical_capture_paths(turn_messages: list[dict[str, Any]]) -> dict[str, s
         if msg.get("role") not in {"tool", "function"}:
             continue
         call_id = str(msg.get("tool_call_id") or msg.get("call_id") or "")
-        if str(msg.get("name") or msg.get("tool_name") or call_id_names.get(call_id) or "") != "computer_use":
+        if (
+            str(
+                msg.get("name")
+                or msg.get("tool_name")
+                or call_id_names.get(call_id)
+                or ""
+            )
+            != "computer_use"
+        ):
             continue
         for path in _iter_computer_use_capture_paths(msg.get("content")):
             basename = _computer_use_capture_basename(path)
@@ -125,10 +151,14 @@ def _canonical_capture_paths(turn_messages: list[dict[str, Any]]) -> dict[str, s
     return canonical
 
 
-def _repair_explicit_computer_use_media_paths_inner(response: str, messages: list[dict[str, Any]], history_offset: int = 0) -> str:
+def _repair_explicit_computer_use_media_paths_inner(
+    response: str, messages: list[dict[str, Any]], history_offset: int = 0
+) -> str:
     if "MEDIA:" not in response:
         return response
-    canonical_by_basename = _canonical_capture_paths(_current_turn_messages(messages, history_offset))
+    canonical_by_basename = _canonical_capture_paths(
+        _current_turn_messages(messages, history_offset)
+    )
     if not canonical_by_basename:
         return response
 
@@ -137,7 +167,9 @@ def _repair_explicit_computer_use_media_paths_inner(response: str, messages: lis
 
     repaired = response
     for emitted_path, _is_voice in BasePlatformAdapter.extract_media(response)[0]:
-        canonical = canonical_by_basename.get(_computer_use_capture_basename(emitted_path))
+        canonical = canonical_by_basename.get(
+            _computer_use_capture_basename(emitted_path)
+        )
         if canonical and emitted_path != canonical:
             repaired = repaired.replace(emitted_path, canonical)
     return repaired

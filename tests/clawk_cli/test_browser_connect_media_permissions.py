@@ -9,6 +9,7 @@ media. These tests pin the creation contract: 0700 dirs at creation time, a 0600
 stderr log, and 0600 media files, with managed (NixOS) installs deliberately left to
 the configured umask/setgid.
 """
+
 import os
 import stat
 
@@ -53,7 +54,9 @@ def test_chrome_debug_data_dir_reconciles_legacy_world_readable(tmp_path, monkey
     assert _mode(profile) == 0o700
 
 
-def test_chrome_debug_data_dir_managed_install_leaves_mode_to_umask(tmp_path, monkeypatch):
+def test_chrome_debug_data_dir_managed_install_leaves_mode_to_umask(
+    tmp_path, monkeypatch
+):
     """Managed (NixOS) installs share $CLAWK_HOME group-wise by design; the profile
     is not pre-created by tmpfiles rules, so the creation mode must stay with the
     configured umask/setgid rather than a hardcoded 0700."""
@@ -137,13 +140,23 @@ def test_computer_use_cache_files_owner_only(tmp_path, monkeypatch):
     assert _mode(path) == 0o600
 
 
-@pytest.mark.parametrize("getter_name", ["get_image_cache_dir", "get_video_cache_dir",
-                                         "get_audio_cache_dir", "get_document_cache_dir",
-                                         "get_screenshot_cache_dir"])
-def test_gateway_media_cache_dirs_created_owner_only(tmp_path, monkeypatch, getter_name):
+@pytest.mark.parametrize(
+    "getter_name",
+    [
+        "get_image_cache_dir",
+        "get_video_cache_dir",
+        "get_audio_cache_dir",
+        "get_document_cache_dir",
+        "get_screenshot_cache_dir",
+    ],
+)
+def test_gateway_media_cache_dirs_created_owner_only(
+    tmp_path, monkeypatch, getter_name
+):
     """The gateway's inbound-media caches (photos/voice notes/documents users sent)
     land 0700 at creation and heal a legacy 0755 dir."""
     import gateway.platforms.base as gw
+
     home = tmp_path / "hh"
     _no_managed(monkeypatch, home)
     monkeypatch.setattr(gw, "get_clawk_dir", lambda new, old: home / new)
@@ -158,6 +171,7 @@ def test_gateway_media_cache_dirs_created_owner_only(tmp_path, monkeypatch, gett
 def test_gateway_media_cache_files_owner_only(tmp_path, monkeypatch):
     """Inbound media bytes written into the gateway cache land 0600."""
     import gateway.platforms.base as gw
+
     home = tmp_path / "hh"
     _no_managed(monkeypatch, home)
     monkeypatch.setattr(gw, "get_clawk_dir", lambda new, old: home / new)

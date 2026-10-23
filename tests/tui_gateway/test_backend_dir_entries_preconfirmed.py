@@ -24,8 +24,6 @@ def _fake_terminal_tool(seen, output="src/\nREADME.md\n", exit_code=0):
     return _capture
 
 
-
-
 def test_backend_dir_entries_preconfirms_internal_listing(monkeypatch):
     """The listing is Clawksis-owned plumbing: it must skip the approval gate, not consult it."""
     seen = {}
@@ -44,10 +42,13 @@ def test_backend_dir_entries_keeps_session_routing(monkeypatch):
     assert seen["kwargs"]["task_id"] == "sess-42"
 
 
-@pytest.mark.parametrize("payload", [
-    {"output": "boom", "exit_code": 1},
-    {"error": "backend unreachable"},
-])
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"output": "boom", "exit_code": 1},
+        {"error": "backend unreachable"},
+    ],
+)
 def test_backend_dir_entries_swallows_failed_listings(monkeypatch, payload):
     def _raw(command, **kwargs):
         return json.dumps(payload)

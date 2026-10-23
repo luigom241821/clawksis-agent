@@ -19,6 +19,7 @@ name leaves it exactly like a deleted one, so identity must survive it for the r
 With no live multiplexer nothing else holds the store and the durable rewrite is safe here.
 Checkpoint project state has no live in-memory owner and is rekeyed locally after the directory move.
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -42,7 +43,13 @@ def migrate_profile_identity(old_name: str, new_name: str) -> bool:
     when all applicable identity was migrated, False when any durable migration failed or a live
     gateway would not accept the routing migration.
     """
-    from clawk_cli.profiles import _canon_valid, _live_default_multiplexer, _unknown_profile_error, get_profile_dir
+    from clawk_cli.profiles import (
+        _canon_valid,
+        _live_default_multiplexer,
+        _unknown_profile_error,
+        get_profile_dir,
+    )
+
     old_canon = _canon_valid(old_name)
     new_canon = _canon_valid(new_name)
     if "default" in (old_canon, new_canon):
@@ -74,14 +81,20 @@ def purge_profile_identity(profile: str) -> bool:
     Idempotent: purging an already-purged profile succeeds. Returns False only when the identity was
     not settled — by this process or by the live gateway.
     """
-    from clawk_cli.profiles import _canon_valid, _live_default_multiplexer, profile_exists
+    from clawk_cli.profiles import (
+        _canon_valid,
+        _live_default_multiplexer,
+        profile_exists,
+    )
+
     canon = _canon_valid(profile)
     if canon == "default":
         raise ValueError("Identity purge applies to named profiles only.")
     if profile_exists(canon):
         raise ValueError(
             f"Profile '{canon}' exists; purge-identity only settles the identity of a delete that "
-            "has already completed.")
+            "has already completed."
+        )
     return _purge_profile_identity(canon, _live_default_multiplexer())
 
 
@@ -94,9 +107,11 @@ def _purge_profile_identity(canon: str, live_mux: bool) -> bool:
     """
     if live_mux:
         from clawk_constants import get_default_clawk_root
+
         root = get_default_clawk_root()
         try:
             from gateway.control_socket import purge_gateway_profile_identity
+
             answer = purge_gateway_profile_identity(root, canon)
         except Exception as exc:
             reason = f"{type(exc).__name__}: {exc}"
@@ -105,18 +120,22 @@ def _purge_profile_identity(canon: str, live_mux: bool) -> bool:
                 return True
             reason = _control_answer_failure(answer)
             if answer is None and _gateway_accepts_profile_identity_verb(root):
-                reason += (" — the gateway is running but does not implement "
-                           "'purge-profile-identity' (an older process than this CLI)")
+                reason += (
+                    " — the gateway is running but does not implement "
+                    "'purge-profile-identity' (an older process than this CLI)"
+                )
         print(
             "⚠ Profile was deleted, but the live gateway could not purge its session identity"
             f" ({reason}). Restart the gateway, then run:\n"
             f"    clawk profile purge-identity {canon}",
-            file=sys.stderr)
+            file=sys.stderr,
+        )
         return False
 
     from clawk_cli.profiles import get_profile_dir
     from clawk_constants import get_default_clawk_root
     from clawk_state_registry import acquire, release_or_close
+
     root = get_default_clawk_root()
     purged = True
     for db_path in (root / "state.db", get_profile_dir(canon) / "state.db"):
@@ -131,7 +150,8 @@ def _purge_profile_identity(canon: str, live_mux: bool) -> bool:
             print(
                 f"⚠ Profile was deleted, but identity purge failed for {db_path}: "
                 f"{type(exc).__name__}: {exc}",
-                file=sys.stderr)
+                file=sys.stderr,
+            )
         finally:
             if db is not None:
                 with contextlib.suppress(Exception):
@@ -156,6 +176,7 @@ def _gateway_accepts_profile_identity_verb(root: Path) -> bool:
     migration verb caused by an older gateway process from one caused by no gateway at all."""
     try:
         from gateway.control_socket import identify_gateway
+
         return identify_gateway(root) is not None
     except Exception:
         return False
@@ -164,7 +185,9 @@ def _gateway_accepts_profile_identity_verb(root: Path) -> bool:
 def _migrate_checkpoint_identity(old_canon: str, new_canon: str) -> bool:
     """Rekey checkpoint projects whose absolute workdirs moved with the profile directory."""
     from clawk_cli.profiles import get_profile_dir
-    from tools.checkpoint_manager_profile_rename import migrate_profile_checkpoint_projects
+    from tools.checkpoint_manager_profile_rename import (
+        migrate_profile_checkpoint_projects,
+    )
 
     old_dir = get_profile_dir(old_canon)
     new_dir = get_profile_dir(new_canon)
@@ -194,9 +217,11 @@ def _migrate_profile_identity(old_canon: str, new_canon: str, live_mux: bool) ->
 
     if live_mux:
         from clawk_constants import get_default_clawk_root
+
         root = get_default_clawk_root()
         try:
             from gateway.control_socket import migrate_gateway_profile_identity
+
             answer = migrate_gateway_profile_identity(root, old_canon, new_canon)
         except Exception as exc:
             reason = f"{type(exc).__name__}: {exc}"
@@ -205,18 +230,22 @@ def _migrate_profile_identity(old_canon: str, new_canon: str, live_mux: bool) ->
                 return checkpoint_migrated
             reason = _control_answer_failure(answer)
             if answer is None and _gateway_accepts_profile_identity_verb(root):
-                reason += (" — the gateway is running but does not implement "
-                           "'migrate-profile-identity' (an older process than this CLI)")
+                reason += (
+                    " — the gateway is running but does not implement "
+                    "'migrate-profile-identity' (an older process than this CLI)"
+                )
         print(
             "⚠ Profile was renamed, but the live gateway could not migrate session identity"
             f" ({reason}). Restart the gateway, then run:\n"
             f"    clawk profile migrate-identity {old_canon} {new_canon}",
-            file=sys.stderr)
+            file=sys.stderr,
+        )
         return False
 
     from clawk_cli.profiles import get_profile_dir
     from clawk_state_registry import acquire, release_or_close
     from clawk_constants import get_default_clawk_root
+
     root = get_default_clawk_root()
     migrated = checkpoint_migrated
     for db_path in (root / "state.db", get_profile_dir(new_canon) / "state.db"):
@@ -231,7 +260,8 @@ def _migrate_profile_identity(old_canon: str, new_canon: str, live_mux: bool) ->
             print(
                 f"⚠ Profile was renamed, but identity migration failed for {db_path}: "
                 f"{type(exc).__name__}: {exc}",
-                file=sys.stderr)
+                file=sys.stderr,
+            )
         finally:
             if db is not None:
                 with contextlib.suppress(Exception):

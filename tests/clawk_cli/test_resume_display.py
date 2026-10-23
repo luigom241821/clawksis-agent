@@ -10,8 +10,6 @@ from unittest.mock import MagicMock, patch
 from agent.i18n import t
 
 
-
-
 def _make_cli(config_overrides=None, env_overrides=None, **kwargs):
     """Create a ClawksisCLI instance with minimal mocking."""
     import cli as _cli_mod
@@ -29,7 +27,11 @@ def _make_cli(config_overrides=None, env_overrides=None, **kwargs):
     }
     if config_overrides:
         for k, v in config_overrides.items():
-            if isinstance(v, dict) and k in _clean_config and isinstance(_clean_config[k], dict):
+            if (
+                isinstance(v, dict)
+                and k in _clean_config
+                and isinstance(_clean_config[k], dict)
+            ):
                 _clean_config[k].update(v)
             else:
                 _clean_config[k] = v
@@ -53,7 +55,10 @@ def _simple_history():
     return [
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": "What is Python?"},
-        {"role": "assistant", "content": "Python is a high-level programming language."},
+        {
+            "role": "assistant",
+            "content": "Python is a high-level programming language.",
+        },
         {"role": "user", "content": "How do I install it?"},
         {"role": "assistant", "content": "You can install Python from python.org."},
     ]
@@ -71,18 +76,27 @@ def _tool_call_history():
                 {
                     "id": "call_1",
                     "type": "function",
-                    "function": {"name": "web_search", "arguments": '{"query":"python tutorials"}'},
+                    "function": {
+                        "name": "web_search",
+                        "arguments": '{"query":"python tutorials"}',
+                    },
                 },
                 {
                     "id": "call_2",
                     "type": "function",
-                    "function": {"name": "web_extract", "arguments": '{"urls":["https://example.com"]}'},
+                    "function": {
+                        "name": "web_extract",
+                        "arguments": '{"urls":["https://example.com"]}',
+                    },
                 },
             ],
         },
         {"role": "tool", "tool_call_id": "call_1", "content": "Found 5 results..."},
         {"role": "tool", "tool_call_id": "call_2", "content": "Page content..."},
-        {"role": "assistant", "content": "Here are some great Python tutorials I found."},
+        {
+            "role": "assistant",
+            "content": "Here are some great Python tutorials I found.",
+        },
     ]
 
 
@@ -90,8 +104,12 @@ def _large_history(n_exchanges=15):
     """Build a history with many exchanges to test truncation."""
     msgs = [{"role": "system", "content": "system prompt"}]
     for i in range(n_exchanges):
-        msgs.append({"role": "user", "content": f"Question #{i + 1}: What is item {i + 1}?"})
-        msgs.append({"role": "assistant", "content": f"Answer #{i + 1}: Item {i + 1} is great."})
+        msgs.append(
+            {"role": "user", "content": f"Question #{i + 1}: What is item {i + 1}?"}
+        )
+        msgs.append(
+            {"role": "assistant", "content": f"Answer #{i + 1}: Item {i + 1} is great."}
+        )
     return msgs
 
 
@@ -103,7 +121,10 @@ def _multimodal_history():
             "role": "user",
             "content": [
                 {"type": "text", "text": "What's in this image?"},
-                {"type": "image_url", "image_url": {"url": "https://example.com/cat.jpg"}},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": "https://example.com/cat.jpg"},
+                },
             ],
         },
         {"role": "assistant", "content": "I see a cat in the image."},
@@ -134,13 +155,24 @@ class TestDisplayResumedHistory:
         assert "Python is a high-level programming language." in output
         assert "How do I install it?" in output
 
-
     def test_timeline_markers_render_as_events_not_user_input(self):
         cli = _make_cli()
         cli.conversation_history = [
-            {"role": "user", "content": "opaque model context", "display_kind": "model_switch"},
-            {"role": "user", "content": "opaque delegation context", "display_kind": "async_delegation_complete"},
-            {"role": "user", "content": "opaque hidden context", "display_kind": "hidden"},
+            {
+                "role": "user",
+                "content": "opaque model context",
+                "display_kind": "model_switch",
+            },
+            {
+                "role": "user",
+                "content": "opaque delegation context",
+                "display_kind": "async_delegation_complete",
+            },
+            {
+                "role": "user",
+                "content": "opaque hidden context",
+                "display_kind": "hidden",
+            },
         ]
 
         output = self._capture_display(cli)
@@ -149,8 +181,6 @@ class TestDisplayResumedHistory:
         assert "◈ background delegation completed" in output
         assert "You:" not in output
         assert "opaque" not in output
-
-
 
     def test_tool_only_message_skipped_by_default(self):
         """Assistant messages with only tool_calls (no text) are skipped when
@@ -164,14 +194,6 @@ class TestDisplayResumedHistory:
         assert "2 tool calls" not in output
         # The final text reply should still appear
         assert "Here are some great Python tutorials" in output
-
-
-
-
-
-
-
-
 
     def test_empty_message_content_does_not_crash(self):
         """Regression: _display_resumed_history IndexError when a message has empty text.
@@ -213,11 +235,6 @@ class TestDisplayResumedHistory:
 
         assert output.strip() == ""
 
-
-
-
-
-
     def test_pure_reasoning_message_skipped(self):
         """Assistant messages that are only reasoning should be skipped."""
         cli = _make_cli()
@@ -233,10 +250,6 @@ class TestDisplayResumedHistory:
 
         assert "Just thinking" not in output
         assert "Hi there!" in output
-
-
-
-
 
     def test_unclosed_think_tag_stripped(self):
         """Unclosed <think> (truncated generation) should not leak reasoning."""
@@ -255,9 +268,6 @@ class TestDisplayResumedHistory:
         assert "Some text before" in output
 
 
-
-
-
 # ── Tests for _preload_resumed_session ──────────────────────────────
 
 
@@ -267,7 +277,6 @@ class TestPreloadResumedSession:
     def test_returns_false_when_not_resumed(self):
         cli = _make_cli()
         assert cli._preload_resumed_session() is False
-
 
     def test_returns_false_when_session_not_found(self):
         cli = _make_cli(resume="nonexistent_session")
@@ -281,9 +290,10 @@ class TestPreloadResumedSession:
 
         assert result is False
         output = buf.getvalue()
-        assert t("cli.resume.session_not_found", session_id="nonexistent_session") in output
-
-
+        assert (
+            t("cli.resume.session_not_found", session_id="nonexistent_session")
+            in output
+        )
 
     def test_reopens_session_in_db(self):
         cli = _make_cli(resume="reopen_session")
@@ -325,8 +335,6 @@ class TestPreloadResumedSession:
         mock_db.get_resume_conversations.assert_not_called()
 
 
-
-
 # ── Tests for _handle_resume_command recap display ───────────────────
 
 
@@ -339,14 +347,20 @@ class TestHandleResumeCommandRecap:
         messages = _simple_history()
 
         mock_db = MagicMock()
-        mock_db.get_session.return_value = {"id": "target_session", "title": "Test Session"}
+        mock_db.get_session.return_value = {
+            "id": "target_session",
+            "title": "Test Session",
+        }
         mock_db.get_resume_conversations.return_value = (messages, messages)
         # resolve_resume_session_id passes the id through when no compression chain.
         mock_db.resolve_resume_session_id.return_value = "target_session"
         cli._session_db = mock_db
 
         with (
-            patch("clawk_cli.main._resolve_session_by_name_or_id", return_value="target_session"),
+            patch(
+                "clawk_cli.main._resolve_session_by_name_or_id",
+                return_value="target_session",
+            ),
             patch.object(cli, "_display_resumed_history") as display_mock,
         ):
             cli._handle_resume_command("/resume test session")
@@ -357,7 +371,6 @@ class TestHandleResumeCommandRecap:
         mock_db.end_session.assert_called_once_with("current_session", "resumed_other")
         mock_db.reopen_session.assert_called_once_with("target_session")
         display_mock.assert_called_once_with()
-
 
     def test_resume_command_replaces_stale_display_history(self):
         """In-session /resume B after startup --resume A must show B's recap,
@@ -378,7 +391,10 @@ class TestHandleResumeCommandRecap:
         cli._session_db = mock_db
 
         with (
-            patch("clawk_cli.main._resolve_session_by_name_or_id", return_value="session_b"),
+            patch(
+                "clawk_cli.main._resolve_session_by_name_or_id",
+                return_value="session_b",
+            ),
             patch.object(cli, "_display_resumed_history") as display_mock,
         ):
             cli._handle_resume_command("/resume session_b")
@@ -418,9 +434,6 @@ class TestInitAgentSkipsPreloaded:
 
 
 # ── Config default tests ─────────────────────────────────────────────
-
-
-
 
 
 class TestResumeDisplaySanitization:

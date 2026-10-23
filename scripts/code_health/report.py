@@ -38,7 +38,9 @@ def apply_allows(findings: list[Finding], head: dict[str, FileMeasure]) -> None:
                 finding.allowed_reason = match.group(2).strip()
                 break
             if _ALLOW_BARE.search(text) and finding.rule in text:
-                finding.detail += f"  [allow comment ignored: it needs a reason, {ALLOW_SYNTAX}]"
+                finding.detail += (
+                    f"  [allow comment ignored: it needs a reason, {ALLOW_SYNTAX}]"
+                )
 
 
 def _fix_text(rule_id: str) -> str:
@@ -61,7 +63,9 @@ def format_findings(findings: list[Finding]) -> str:
         out.append("")
         out.append("Allowed by comment (reviewers: check the reasons):")
         for f in allowed:
-            out.append(f"  {f.path}:{f.line}  {f.rule}  {f.scope}  -- {f.allowed_reason}")
+            out.append(
+                f"  {f.path}:{f.line}  {f.rule}  {f.scope}  -- {f.allowed_reason}"
+            )
     return "\n".join(out)
 
 
@@ -90,13 +94,17 @@ def summarize_tree(measures: dict[str, FileMeasure]) -> str:
     lines = ["Over target (units that are baselined at their current value):"]
     for metric, target in TARGETS.items():
         value, where = worst.get(metric, (0, "-"))
-        lines.append(f"  {metric:<11} target {target:<5} over: {over[metric]:<5} worst: {value} {where}")
+        lines.append(
+            f"  {metric:<11} target {target:<5} over: {over[metric]:<5} worst: {value} {where}"
+        )
     lines.append("Pattern hits (existing ones are baselined; new ones fail):")
     for rule_id, count in sorted(hits.items(), key=lambda kv: -kv[1]):
         lines.append(f"  {rule_id:<9} {count:>6}  {RULES_BY_ID[rule_id].title}")
     return "\n".join(lines)
 
 
-def _track(worst: dict[str, tuple[int, str]], metric: str, value: int, where: str) -> None:
+def _track(
+    worst: dict[str, tuple[int, str]], metric: str, value: int, where: str
+) -> None:
     if value > worst.get(metric, (0, ""))[0]:
         worst[metric] = (value, where)

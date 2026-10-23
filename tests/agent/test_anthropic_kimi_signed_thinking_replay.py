@@ -17,7 +17,9 @@ def _thinking_on_replay(base_url, signature=SIG, model="k3"):
     and return its thinking blocks."""
     response = SimpleNamespace(
         content=[
-            SimpleNamespace(type="thinking", thinking="five: 5 11 27 63 88", signature=signature),
+            SimpleNamespace(
+                type="thinking", thinking="five: 5 11 27 63 88", signature=signature
+            ),
             SimpleNamespace(type="text", text="5 27 88"),
         ],
         stop_reason="end_turn",
@@ -36,18 +38,16 @@ def _thinking_on_replay(base_url, signature=SIG, model="k3"):
     ]
     _sys, out = convert_messages_to_anthropic(messages, base_url=base_url, model=model)
     assistant = next(m for m in out if m.get("role") == "assistant")
-    return [b for b in assistant["content"] if isinstance(b, dict) and b.get("type") == "thinking"]
-
-
-
-
+    return [
+        b
+        for b in assistant["content"]
+        if isinstance(b, dict) and b.get("type") == "thinking"
+    ]
 
 
 def test_moonshot_keeps_signed_thinking():
     thinking = _thinking_on_replay(MOONSHOT)
     assert thinking and thinking[0].get("signature") == SIG
-
-
 
 
 def test_kimi_model_name_on_foreign_gateway_keeps_thinking():
@@ -59,8 +59,6 @@ def test_kimi_model_name_on_foreign_gateway_keeps_thinking():
         assert _thinking_on_replay(DEEPSEEK, model=model), model
 
 
-
-
 def test_orphan_tool_turn_demotes_and_leaks_no_internal_marker():
     """Signed thinking + parallel tool batch interrupted mid-flight (one orphan):
     the internal _thinking_signature_invalidated marker must be popped —
@@ -69,8 +67,12 @@ def test_orphan_tool_turn_demotes_and_leaks_no_internal_marker():
     response = SimpleNamespace(
         content=[
             SimpleNamespace(type="thinking", thinking="plan both reads", signature=SIG),
-            SimpleNamespace(type="tool_use", id="toolu_1", name="read_file", input={"path": "a.py"}),
-            SimpleNamespace(type="tool_use", id="toolu_2", name="read_file", input={"path": "b.py"}),
+            SimpleNamespace(
+                type="tool_use", id="toolu_1", name="read_file", input={"path": "a.py"}
+            ),
+            SimpleNamespace(
+                type="tool_use", id="toolu_2", name="read_file", input={"path": "b.py"}
+            ),
         ],
         stop_reason="tool_use",
         usage=None,
@@ -82,7 +84,11 @@ def test_orphan_tool_turn_demotes_and_leaks_no_internal_marker():
         "content": normalized.content or "",
         "reasoning_details": provider_data.get("reasoning_details"),
         "tool_calls": [
-            {"id": tc.id, "type": "function", "function": {"name": tc.name, "arguments": tc.arguments}}
+            {
+                "id": tc.id,
+                "type": "function",
+                "function": {"name": tc.name, "arguments": tc.arguments},
+            }
             for tc in (normalized.tool_calls or [])
         ],
     }

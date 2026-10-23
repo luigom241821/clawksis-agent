@@ -11,7 +11,9 @@ from gateway import rich_sent_store
 
 @pytest.fixture
 def isolated_store(tmp_path, monkeypatch):
-    monkeypatch.setattr(rich_sent_store, "_store_path", lambda: str(tmp_path / "rich_sent.json"))
+    monkeypatch.setattr(
+        rich_sent_store, "_store_path", lambda: str(tmp_path / "rich_sent.json")
+    )
 
 
 def test_record_async_runs_off_the_loop_thread(isolated_store, monkeypatch):

@@ -81,13 +81,21 @@ def test_host_timeout_stamp_is_durable_inside_persist_window(session):
     _mid_compression_durable_stamp(session.agent, session.db, session.session_id)
 
     _report_compression_timeout(
-        session.agent, idle=30.0, waited=30.0, since_progress=30.0, total_ceiling=60.0,
-        total_exhausted=False, progress_observed=False,
+        session.agent,
+        idle=30.0,
+        waited=30.0,
+        since_progress=30.0,
+        total_ceiling=60.0,
+        total_exhausted=False,
+        progress_observed=False,
     )
 
     row = session.db.get_session(session.session_id)
     assert row["last_activity_description"] != "context compression in progress"
-    assert row["last_activity_provenance"] == ActivityProvenance.AGENT_COMPRESSION_TIMEOUT.value
+    assert (
+        row["last_activity_provenance"]
+        == ActivityProvenance.AGENT_COMPRESSION_TIMEOUT.value
+    )
 
 
 def test_stall_interrupted_cooldown_stamp_is_durable_inside_persist_window(session):
@@ -102,7 +110,10 @@ def test_stall_interrupted_cooldown_stamp_is_durable_inside_persist_window(sessi
 
     row = session.db.get_session(session.session_id)
     assert row["last_activity_description"] != "context compression in progress"
-    assert row["last_activity_provenance"] == ActivityProvenance.AGENT_COMPRESSION_COOLDOWN.value
+    assert (
+        row["last_activity_provenance"]
+        == ActivityProvenance.AGENT_COMPRESSION_COOLDOWN.value
+    )
 
 
 @pytest.mark.parametrize(
@@ -120,12 +131,18 @@ def test_gateway_hygiene_terminal_stamps_are_durable(session, provenance_name, d
     _mid_compression_durable_stamp(session.agent, session.db, session.session_id)
 
     _stamp_hygiene_compression_provenance(
-        session.agent, desc, getattr(ActivityProvenance, provenance_name), "test stamp failed",
+        session.agent,
+        desc,
+        getattr(ActivityProvenance, provenance_name),
+        "test stamp failed",
     )
 
     row = session.db.get_session(session.session_id)
     assert row["last_activity_description"] == desc
-    assert row["last_activity_provenance"] == getattr(ActivityProvenance, provenance_name).value
+    assert (
+        row["last_activity_provenance"]
+        == getattr(ActivityProvenance, provenance_name).value
+    )
 
 
 def test_reconnect_reader_sees_terminal_state_not_in_progress(session):
@@ -134,14 +151,22 @@ def test_reconnect_reader_sees_terminal_state_not_in_progress(session):
 
     _mid_compression_durable_stamp(session.agent, session.db, session.session_id)
     _report_compression_timeout(
-        session.agent, idle=30.0, waited=90.0, since_progress=30.0, total_ceiling=90.0,
-        total_exhausted=True, progress_observed=False,
+        session.agent,
+        idle=30.0,
+        waited=90.0,
+        since_progress=30.0,
+        total_ceiling=90.0,
+        total_exhausted=True,
+        progress_observed=False,
     )
 
     reconnected = SessionDB(db_path=session.db.db_path)
     row = reconnected.get_session(session.session_id)
     assert row["last_activity_description"] != "context compression in progress"
-    assert row["last_activity_provenance"] == ActivityProvenance.AGENT_COMPRESSION_TIMEOUT.value
+    assert (
+        row["last_activity_provenance"]
+        == ActivityProvenance.AGENT_COMPRESSION_TIMEOUT.value
+    )
 
 
 def test_orphan_reap_converges_terminated_compression_row(session):
@@ -150,8 +175,13 @@ def test_orphan_reap_converges_terminated_compression_row(session):
 
     _mid_compression_durable_stamp(session.agent, session.db, session.session_id)
     _report_compression_timeout(
-        session.agent, idle=30.0, waited=30.0, since_progress=30.0, total_ceiling=60.0,
-        total_exhausted=False, progress_observed=False,
+        session.agent,
+        idle=30.0,
+        waited=30.0,
+        since_progress=30.0,
+        total_ceiling=60.0,
+        total_exhausted=False,
+        progress_observed=False,
     )
     # Age the row past the sweep window (the host process is gone; nothing will clear labels).
     old = time.time() - 86_400
@@ -161,7 +191,9 @@ def test_orphan_reap_converges_terminated_compression_row(session):
     )
 
     reaped = session.db.sweep_orphaned_sessions(
-        max_idle_seconds=3600, sources=("tui",), respect_gateway_heartbeats=False,
+        max_idle_seconds=3600,
+        sources=("tui",),
+        respect_gateway_heartbeats=False,
     )
 
     assert session.session_id in reaped

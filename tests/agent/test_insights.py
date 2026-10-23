@@ -14,6 +14,7 @@ from agent.usage_pricing import (
     has_known_pricing as _has_known_pricing,
 )
 
+
 @pytest.fixture()
 def db(tmp_path):
     """Create a SessionDB with a temp database file."""
@@ -21,6 +22,7 @@ def db(tmp_path):
     session_db = SessionDB(db_path=db_path)
     yield session_db
     session_db.close()
+
 
 @pytest.fixture()
 def populated_db(db):
@@ -30,83 +32,157 @@ def populated_db(db):
 
     # Session 1: CLI, claude-sonnet, ended, 2 days ago
     db.create_session(
-        session_id="s1", source="cli",
-        model="anthropic/claude-sonnet-4-20250514", user_id="user1",
+        session_id="s1",
+        source="cli",
+        model="anthropic/claude-sonnet-4-20250514",
+        user_id="user1",
     )
     # Backdate the started_at
-    db._conn.execute("UPDATE sessions SET started_at = ? WHERE id = 's1'", (now - 2 * day,))
+    db._conn.execute(
+        "UPDATE sessions SET started_at = ? WHERE id = 's1'", (now - 2 * day,)
+    )
     db.end_session("s1", end_reason="user_exit")
-    db._conn.execute("UPDATE sessions SET ended_at = ? WHERE id = 's1'", (now - 2 * day + 3600,))
+    db._conn.execute(
+        "UPDATE sessions SET ended_at = ? WHERE id = 's1'", (now - 2 * day + 3600,)
+    )
     db.update_token_counts("s1", input_tokens=50000, output_tokens=15000)
     db.append_message("s1", role="user", content="Hello, help me fix a bug")
     db.append_message("s1", role="assistant", content="Sure, let me look into that.")
-    db.append_message("s1", role="assistant", content="Let me search the files.",
-                      tool_calls=[{"function": {"name": "search_files"}}])
-    db.append_message("s1", role="tool", content="Found 3 matches", tool_name="search_files")
-    db.append_message("s1", role="assistant", content="Let me read the file.",
-                      tool_calls=[{"function": {"name": "read_file"}}])
-    db.append_message("s1", role="tool", content="file contents...", tool_name="read_file")
-    db.append_message("s1", role="assistant", content="I found the bug. Let me fix it.",
-                      tool_calls=[{"function": {"name": "patch"}}])
-    db.append_message("s1", role="tool", content="patched successfully", tool_name="patch")
+    db.append_message(
+        "s1",
+        role="assistant",
+        content="Let me search the files.",
+        tool_calls=[{"function": {"name": "search_files"}}],
+    )
+    db.append_message(
+        "s1", role="tool", content="Found 3 matches", tool_name="search_files"
+    )
+    db.append_message(
+        "s1",
+        role="assistant",
+        content="Let me read the file.",
+        tool_calls=[{"function": {"name": "read_file"}}],
+    )
+    db.append_message(
+        "s1", role="tool", content="file contents...", tool_name="read_file"
+    )
+    db.append_message(
+        "s1",
+        role="assistant",
+        content="I found the bug. Let me fix it.",
+        tool_calls=[{"function": {"name": "patch"}}],
+    )
+    db.append_message(
+        "s1", role="tool", content="patched successfully", tool_name="patch"
+    )
     db.append_message(
         "s1",
         role="assistant",
         content="Let me load the PR workflow skill.",
-        tool_calls=[{"function": {"name": "skill_view", "arguments": '{"name":"github-pr-workflow"}'}}],
+        tool_calls=[
+            {
+                "function": {
+                    "name": "skill_view",
+                    "arguments": '{"name":"github-pr-workflow"}',
+                }
+            }
+        ],
     )
     db.append_message("s1", role="user", content="Thanks!")
     db.append_message("s1", role="assistant", content="You're welcome!")
 
     # Session 2: Telegram, gpt-4o, ended, 5 days ago
     db.create_session(
-        session_id="s2", source="telegram",
-        model="gpt-4o", user_id="user1",
+        session_id="s2",
+        source="telegram",
+        model="gpt-4o",
+        user_id="user1",
     )
-    db._conn.execute("UPDATE sessions SET started_at = ? WHERE id = 's2'", (now - 5 * day,))
+    db._conn.execute(
+        "UPDATE sessions SET started_at = ? WHERE id = 's2'", (now - 5 * day,)
+    )
     db.end_session("s2", end_reason="timeout")
-    db._conn.execute("UPDATE sessions SET ended_at = ? WHERE id = 's2'", (now - 5 * day + 1800,))
+    db._conn.execute(
+        "UPDATE sessions SET ended_at = ? WHERE id = 's2'", (now - 5 * day + 1800,)
+    )
     db.update_token_counts("s2", input_tokens=20000, output_tokens=8000)
     db.append_message("s2", role="user", content="Search the web for something")
-    db.append_message("s2", role="assistant", content="Searching...",
-                      tool_calls=[{"function": {"name": "web_search"}}])
+    db.append_message(
+        "s2",
+        role="assistant",
+        content="Searching...",
+        tool_calls=[{"function": {"name": "web_search"}}],
+    )
     db.append_message("s2", role="tool", content="results...", tool_name="web_search")
     db.append_message("s2", role="assistant", content="Here's what I found")
 
     # Session 3: CLI, deepseek-chat, ended, 10 days ago
     db.create_session(
-        session_id="s3", source="cli",
-        model="deepseek-chat", user_id="user1",
+        session_id="s3",
+        source="cli",
+        model="deepseek-chat",
+        user_id="user1",
     )
-    db._conn.execute("UPDATE sessions SET started_at = ? WHERE id = 's3'", (now - 10 * day,))
+    db._conn.execute(
+        "UPDATE sessions SET started_at = ? WHERE id = 's3'", (now - 10 * day,)
+    )
     db.end_session("s3", end_reason="user_exit")
-    db._conn.execute("UPDATE sessions SET ended_at = ? WHERE id = 's3'", (now - 10 * day + 7200,))
+    db._conn.execute(
+        "UPDATE sessions SET ended_at = ? WHERE id = 's3'", (now - 10 * day + 7200,)
+    )
     db.update_token_counts("s3", input_tokens=100000, output_tokens=40000)
     db.append_message("s3", role="user", content="Run this terminal command")
-    db.append_message("s3", role="assistant", content="Running...",
-                      tool_calls=[{"function": {"name": "terminal"}}])
+    db.append_message(
+        "s3",
+        role="assistant",
+        content="Running...",
+        tool_calls=[{"function": {"name": "terminal"}}],
+    )
     db.append_message("s3", role="tool", content="output...", tool_name="terminal")
-    db.append_message("s3", role="assistant", content="Let me run another",
-                      tool_calls=[{"function": {"name": "terminal"}}])
+    db.append_message(
+        "s3",
+        role="assistant",
+        content="Let me run another",
+        tool_calls=[{"function": {"name": "terminal"}}],
+    )
     db.append_message("s3", role="tool", content="more output...", tool_name="terminal")
-    db.append_message("s3", role="assistant", content="And search files",
-                      tool_calls=[{"function": {"name": "search_files"}}])
-    db.append_message("s3", role="tool", content="found stuff", tool_name="search_files")
+    db.append_message(
+        "s3",
+        role="assistant",
+        content="And search files",
+        tool_calls=[{"function": {"name": "search_files"}}],
+    )
+    db.append_message(
+        "s3", role="tool", content="found stuff", tool_name="search_files"
+    )
     db.append_message(
         "s3",
         role="assistant",
         content="Load the debugging skill.",
-        tool_calls=[{"function": {"name": "skill_view", "arguments": '{"name":"systematic-debugging"}'}}],
+        tool_calls=[
+            {
+                "function": {
+                    "name": "skill_view",
+                    "arguments": '{"name":"systematic-debugging"}',
+                }
+            }
+        ],
     )
 
     # Session 4: Discord, same model as s1, ended, 1 day ago
     db.create_session(
-        session_id="s4", source="discord",
-        model="anthropic/claude-sonnet-4-20250514", user_id="user2",
+        session_id="s4",
+        source="discord",
+        model="anthropic/claude-sonnet-4-20250514",
+        user_id="user2",
     )
-    db._conn.execute("UPDATE sessions SET started_at = ? WHERE id = 's4'", (now - 1 * day,))
+    db._conn.execute(
+        "UPDATE sessions SET started_at = ? WHERE id = 's4'", (now - 1 * day,)
+    )
     db.end_session("s4", end_reason="user_exit")
-    db._conn.execute("UPDATE sessions SET ended_at = ? WHERE id = 's4'", (now - 1 * day + 900,))
+    db._conn.execute(
+        "UPDATE sessions SET ended_at = ? WHERE id = 's4'", (now - 1 * day + 900,)
+    )
     db.update_token_counts("s4", input_tokens=10000, output_tokens=5000)
     db.append_message("s4", role="user", content="Quick question")
     db.append_message("s4", role="assistant", content="Sure, go ahead")
@@ -115,19 +191,35 @@ def populated_db(db):
         role="assistant",
         content="Load and update GitHub skills.",
         tool_calls=[
-            {"function": {"name": "skill_view", "arguments": '{"name":"github-pr-workflow"}'}},
-            {"function": {"name": "skill_manage", "arguments": '{"name":"github-code-review"}'}},
+            {
+                "function": {
+                    "name": "skill_view",
+                    "arguments": '{"name":"github-pr-workflow"}',
+                }
+            },
+            {
+                "function": {
+                    "name": "skill_manage",
+                    "arguments": '{"name":"github-code-review"}',
+                }
+            },
         ],
     )
 
     # Session 5: Old session, 45 days ago (should be excluded from 30-day window)
     db.create_session(
-        session_id="s_old", source="cli",
-        model="gpt-4o-mini", user_id="user1",
+        session_id="s_old",
+        source="cli",
+        model="gpt-4o-mini",
+        user_id="user1",
     )
-    db._conn.execute("UPDATE sessions SET started_at = ? WHERE id = 's_old'", (now - 45 * day,))
+    db._conn.execute(
+        "UPDATE sessions SET started_at = ? WHERE id = 's_old'", (now - 45 * day,)
+    )
     db.end_session("s_old", end_reason="user_exit")
-    db._conn.execute("UPDATE sessions SET ended_at = ? WHERE id = 's_old'", (now - 45 * day + 600,))
+    db._conn.execute(
+        "UPDATE sessions SET ended_at = ? WHERE id = 's_old'", (now - 45 * day + 600,)
+    )
     db.update_token_counts("s_old", input_tokens=5000, output_tokens=2000)
     db.append_message("s_old", role="user", content="old message")
     db.append_message("s_old", role="assistant", content="old reply")
@@ -135,8 +227,8 @@ def populated_db(db):
     db._conn.commit()
     return db
 
-class TestHasKnownPricing:
 
+class TestHasKnownPricing:
     def test_unknown_custom_model(self):
         assert _has_known_pricing("FP16_Hermes_4.5") is False
         assert _has_known_pricing("my-custom-model") is False
@@ -148,8 +240,8 @@ class TestHasKnownPricing:
         assert _has_known_pricing("some-opus-model") is False
         assert _has_known_pricing("future-sonnet-v2") is False
 
-class TestEstimateCost:
 
+class TestEstimateCost:
     def test_cache_aware_usage(self):
         cost, status = _estimate_cost(
             "anthropic/claude-sonnet-4-20250514",
@@ -163,9 +255,11 @@ class TestEstimateCost:
         expected = (1000 * 3.0 + 500 * 15.0 + 2000 * 0.30 + 400 * 3.75) / 1_000_000
         assert cost == pytest.approx(expected, abs=0.0001)
 
+
 # =========================================================================
 # Format helpers
 # =========================================================================
+
 
 class TestFormatDuration:
     def test_seconds(self):
@@ -175,21 +269,24 @@ class TestFormatDuration:
         result = _format_duration(5400)  # 1.5 hours
         assert result == "1h 30m"
 
+
 class TestBarChart:
     def test_basic_bars(self):
         bars = _bar_chart([10, 5, 0, 20], max_width=10)
         assert len(bars) == 4
         assert len(bars[3]) == 10  # max value gets full width
-        assert len(bars[0]) == 5   # half of max
-        assert bars[2] == ""       # zero gets empty
+        assert len(bars[0]) == 5  # half of max
+        assert bars[2] == ""  # zero gets empty
 
     def test_all_zeros(self):
         bars = _bar_chart([0, 0, 0], max_width=10)
         assert all(b == "" for b in bars)
 
+
 # =========================================================================
 # InsightsEngine — empty DB
 # =========================================================================
+
 
 class TestInsightsEmpty:
     def test_empty_db_returns_empty_report(self, db):
@@ -201,12 +298,13 @@ class TestInsightsEmpty:
         assert engine.format_terminal(report)
         assert engine.format_gateway(report)
 
+
 # =========================================================================
 # InsightsEngine — populated DB
 # =========================================================================
 
-class TestInsightsPopulated:
 
+class TestInsightsPopulated:
     def test_overview_token_totals(self, populated_db):
         engine = InsightsEngine(populated_db)
         report = engine.generate(days=30)
@@ -222,16 +320,27 @@ class TestInsightsPopulated:
         """A session that switches models mid-flight is split across both
         models in the breakdown, not dumped on the initial model (#51607).
         """
-        db.create_session(session_id="sw", source="cli",
-                          model="deepseek/deepseek-v4-pro")
+        db.create_session(
+            session_id="sw", source="cli", model="deepseek/deepseek-v4-pro"
+        )
         # 40k tokens on deepseek, then switch and 50k on opus.
-        db.update_token_counts("sw", input_tokens=40000, output_tokens=8000,
-                               model="deepseek/deepseek-v4-pro",
-                               billing_provider="deepseek", api_call_count=2)
+        db.update_token_counts(
+            "sw",
+            input_tokens=40000,
+            output_tokens=8000,
+            model="deepseek/deepseek-v4-pro",
+            billing_provider="deepseek",
+            api_call_count=2,
+        )
         db.update_session_model("sw", "anthropic/claude-opus-4.8")
-        db.update_token_counts("sw", input_tokens=50000, output_tokens=4000,
-                               model="anthropic/claude-opus-4.8",
-                               billing_provider="openrouter", api_call_count=3)
+        db.update_token_counts(
+            "sw",
+            input_tokens=50000,
+            output_tokens=4000,
+            model="anthropic/claude-opus-4.8",
+            billing_provider="openrouter",
+            api_call_count=3,
+        )
         db._conn.commit()
 
         report = InsightsEngine(db).generate(days=30)
@@ -249,16 +358,28 @@ class TestInsightsPopulated:
     def test_overview_cost_matches_per_model_stored_cost(self, db):
         db.create_session(session_id="cost", source="cli", model="model-a")
         db.update_token_counts(
-            "cost", input_tokens=10, model="model-a", billing_provider="custom",
-            estimated_cost_usd=1.25, actual_cost_usd=1.0,
-            cost_status="estimated", cost_source="provider", api_call_count=1,
+            "cost",
+            input_tokens=10,
+            model="model-a",
+            billing_provider="custom",
+            estimated_cost_usd=1.25,
+            actual_cost_usd=1.0,
+            cost_status="estimated",
+            cost_source="provider",
+            api_call_count=1,
         )
         db.update_session_model("cost", "model-b")
         db.update_session_billing_route("cost", provider="custom-b", base_url=None)
         db.update_token_counts(
-            "cost", input_tokens=20, model="model-b", billing_provider="custom-b",
-            estimated_cost_usd=2.5, actual_cost_usd=2.0,
-            cost_status="estimated", cost_source="provider", api_call_count=1,
+            "cost",
+            input_tokens=20,
+            model="model-b",
+            billing_provider="custom-b",
+            estimated_cost_usd=2.5,
+            actual_cost_usd=2.0,
+            cost_status="estimated",
+            cost_source="provider",
+            api_call_count=1,
         )
 
         report = InsightsEngine(db).generate(days=30)
@@ -272,11 +393,19 @@ class TestInsightsPopulated:
         db.create_session(session_id="gw", source="gateway", model="m")
         db.append_message("gw", role="tool", content="r", tool_name="search_files")
         db.create_session(session_id="cli", source="cli", model="m")
-        db.append_message("cli", role="assistant", content="x",
-                          tool_calls=[{"function": {"name": "search_files", "arguments": "{}"}}])
+        db.append_message(
+            "cli",
+            role="assistant",
+            content="x",
+            tool_calls=[{"function": {"name": "search_files", "arguments": "{}"}}],
+        )
         db.create_session(session_id="both", source="cli", model="m")
-        db.append_message("both", role="assistant", content="x",
-                          tool_calls=[{"function": {"name": "search_files", "arguments": "{}"}}])
+        db.append_message(
+            "both",
+            role="assistant",
+            content="x",
+            tool_calls=[{"function": {"name": "search_files", "arguments": "{}"}}],
+        )
         db.append_message("both", role="tool", content="r", tool_name="search_files")
         db._conn.commit()
 
@@ -328,7 +457,10 @@ class TestInsightsPopulated:
     _INDEX = "idx_messages_assistant_calls_by_session"
     _PINNED_QUERIES = (
         ("_GET_TOOL_CALLS_ALL", (0.0,)),
-        ("_GET_TOOL_CALLS_WITH_SOURCE", (0.0, "cli", "cli")),  # label, then created_source of a local row
+        (
+            "_GET_TOOL_CALLS_WITH_SOURCE",
+            (0.0, "cli", "cli"),
+        ),  # label, then created_source of a local row
         ("_GET_SKILL_CALLS_ALL", (0.0,)),
         ("_GET_SKILL_CALLS_WITH_SOURCE", (0.0, "cli", "cli")),
     )
@@ -369,21 +501,24 @@ class TestInsightsPopulated:
         the index is a pure optimization — for both the unfiltered and
         source-filtered scopes.
         """
-        assert populated_db._conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?",
-            (self._INDEX,),
-        ).fetchone() is not None
+        assert (
+            populated_db._conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?",
+                (self._INDEX,),
+            ).fetchone()
+            is not None
+        )
 
         for attr, params in self._PINNED_QUERIES:
             pinned_sql = getattr(InsightsEngine, attr)
             unpinned_sql = pinned_sql.replace(f" INDEXED BY {self._INDEX}", "")
             pinned = [
-                tuple(r) for r in
-                populated_db._conn.execute(pinned_sql, params).fetchall()
+                tuple(r)
+                for r in populated_db._conn.execute(pinned_sql, params).fetchall()
             ]
             unpinned = [
-                tuple(r) for r in
-                populated_db._conn.execute(unpinned_sql, params).fetchall()
+                tuple(r)
+                for r in populated_db._conn.execute(unpinned_sql, params).fetchall()
             ]
             assert sorted(pinned) == sorted(unpinned), attr
 
@@ -433,19 +568,22 @@ class TestInsightsPopulated:
             "sx",
             role="assistant",
             content="Just using read_file.",
-            tool_calls=[{"function": {"name": "read_file", "arguments": '{"path":"/tmp/x"}'}}],
+            tool_calls=[
+                {"function": {"name": "read_file", "arguments": '{"path":"/tmp/x"}'}}
+            ],
         )
         db._conn.commit()
         focused = InsightsEngine(db).get_usage_breakdown(days=30)["skills"]
         assert focused["summary"]["total_skill_actions"] == 0
         assert focused["top_skills"] == []
 
+
 # =========================================================================
 # Formatting
 # =========================================================================
 
-class TestTerminalFormatting:
 
+class TestTerminalFormatting:
     def test_terminal_format_unknown_bucket_for_custom_models(self, db):
         """Custom models with no pricing surface as the Unknown bucket (#77223)."""
         db.create_session(session_id="s1", source="cli", model="my-custom-model")
@@ -461,6 +599,7 @@ class TestTerminalFormatting:
         # Unknown bucket rather than silently reporting $0.
         assert "Unknown" in text
 
+
 class TestGatewayFormatting:
     def test_gateway_format_is_shorter(self, populated_db):
         engine = InsightsEngine(populated_db)
@@ -470,12 +609,13 @@ class TestGatewayFormatting:
 
         assert len(gateway_text) < len(terminal_text)
 
+
 # =========================================================================
 # Edge cases
 # =========================================================================
 
-class TestEdgeCases:
 
+class TestEdgeCases:
     def test_session_with_no_model(self, db):
         """Sessions with NULL model should not crash."""
         db.create_session(session_id="s1", source="cli")
@@ -493,7 +633,9 @@ class TestEdgeCases:
 
     def test_mixed_commercial_and_custom_models(self, db):
         """Mix of commercial and custom models: only commercial ones get costs."""
-        db.create_session(session_id="s1", source="cli", model="anthropic/claude-sonnet-4-20250514")
+        db.create_session(
+            session_id="s1", source="cli", model="anthropic/claude-sonnet-4-20250514"
+        )
         db.update_token_counts(
             "s1",
             input_tokens=10000,
@@ -510,11 +652,15 @@ class TestEdgeCases:
         # Cost should only come from gpt-4o, not from the custom model
         overview = report["overview"]
         assert overview["estimated_cost"] > 0
-        assert "claude-sonnet-4-20250514" in overview["models_with_pricing"]  # list now, not set
+        assert (
+            "claude-sonnet-4-20250514" in overview["models_with_pricing"]
+        )  # list now, not set
         assert "my-local-llama" in overview["models_without_pricing"]
 
         # Verify individual model entries
-        claude = next(m for m in report["models"] if m["model"] == "claude-sonnet-4-20250514")
+        claude = next(
+            m for m in report["models"] if m["model"] == "claude-sonnet-4-20250514"
+        )
         assert claude["has_pricing"] is True
         assert claude["cost"] > 0
 
@@ -542,18 +688,28 @@ class TestEdgeCases:
         # Estimated cost session
         db.create_session(session_id="est", source="cli", model="model-a")
         db.update_token_counts(
-            "est", input_tokens=100, model="model-a",
+            "est",
+            input_tokens=100,
+            model="model-a",
             billing_provider="custom",
-            estimated_cost_usd=1.50, actual_cost_usd=1.0,
-            cost_status="estimated", cost_source="provider", api_call_count=1,
+            estimated_cost_usd=1.50,
+            actual_cost_usd=1.0,
+            cost_status="estimated",
+            cost_source="provider",
+            api_call_count=1,
         )
         # Included cost session (subscription)
         db.create_session(session_id="inc", source="cli", model="gpt-5.4-mini")
         db.update_token_counts(
-            "inc", input_tokens=200, model="gpt-5.4-mini",
+            "inc",
+            input_tokens=200,
+            model="gpt-5.4-mini",
             billing_provider="openai-codex",
-            estimated_cost_usd=0.0, actual_cost_usd=0.0,
-            cost_status="included", cost_source="none", api_call_count=1,
+            estimated_cost_usd=0.0,
+            actual_cost_usd=0.0,
+            cost_status="included",
+            cost_source="none",
+            api_call_count=1,
         )
 
         engine = InsightsEngine(db)
@@ -574,10 +730,15 @@ class TestEdgeCases:
         """
         db.create_session(session_id="est", source="cli", model="model-a")
         db.update_token_counts(
-            "est", input_tokens=100, model="model-a",
+            "est",
+            input_tokens=100,
+            model="model-a",
             billing_provider="custom",
-            estimated_cost_usd=0.0046, actual_cost_usd=0.0,
-            cost_status="estimated", cost_source="provider", api_call_count=1,
+            estimated_cost_usd=0.0046,
+            actual_cost_usd=0.0,
+            cost_status="estimated",
+            cost_source="provider",
+            api_call_count=1,
         )
 
         engine = InsightsEngine(db)
@@ -594,7 +755,10 @@ class TestEdgeCases:
 def _label(db, session_id, source, created_source):
     db.create_session(session_id=session_id, source=source, model="model-a")
     db.append_message(session_id, role="user", content="hi")
-    db._conn.execute("UPDATE sessions SET created_source = ? WHERE id = ?", (created_source, session_id))
+    db._conn.execute(
+        "UPDATE sessions SET created_source = ? WHERE id = ?",
+        (created_source, session_id),
+    )
     db._conn.commit()
 
 
@@ -608,7 +772,9 @@ def test_source_filter_includes_gateway_local_rows_that_surface_created(db):
     engine = InsightsEngine(db)
     assert engine.generate(days=30, source="cli")["overview"]["total_sessions"] == 2
     assert engine.generate(days=30, source="tui")["overview"]["total_sessions"] == 1
-    assert engine.generate(days=30, source="telegram")["overview"]["total_sessions"] == 1
+    assert (
+        engine.generate(days=30, source="telegram")["overview"]["total_sessions"] == 1
+    )
 
 
 def test_source_filter_on_a_db_without_created_source(db):
@@ -618,4 +784,7 @@ def test_source_filter_on_a_db_without_created_source(db):
     db._conn.execute("DROP INDEX IF EXISTS idx_sessions_local_created_started")
     db._conn.execute("ALTER TABLE sessions DROP COLUMN created_source")
     db._conn.commit()
-    assert InsightsEngine(db).generate(days=30, source="cli")["overview"]["total_sessions"] == 1
+    assert (
+        InsightsEngine(db).generate(days=30, source="cli")["overview"]["total_sessions"]
+        == 1
+    )

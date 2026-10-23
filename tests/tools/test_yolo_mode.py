@@ -5,7 +5,15 @@ import pytest
 import tools.approval as approval_module
 from tools import approval_context
 
-from tools.approval import check_all_command_guards, check_dangerous_command, detect_dangerous_command, disable_session_yolo, enable_session_yolo, is_approval_bypass_active_for_session, is_session_yolo_enabled
+from tools.approval import (
+    check_all_command_guards,
+    check_dangerous_command,
+    detect_dangerous_command,
+    disable_session_yolo,
+    enable_session_yolo,
+    is_approval_bypass_active_for_session,
+    is_session_yolo_enabled,
+)
 from tools.approval_context import reset_current_session_key, set_current_session_key
 
 
@@ -41,8 +49,9 @@ class TestYoloMode:
 
         # In interactive mode without yolo, it would prompt (we can't test
         # the interactive prompt here, but we can verify detection works)
-        result = check_dangerous_command("rm -rf /tmp/stuff", "local",
-                                         approval_callback=lambda *a: "deny")
+        result = check_dangerous_command(
+            "rm -rf /tmp/stuff", "local", approval_callback=lambda *a: "deny"
+        )
         assert not result["approved"]
 
     def test_dangerous_command_approved_in_yolo_mode(self, monkeypatch):
@@ -89,10 +98,10 @@ class TestYoloMode:
         assert result["approved"]
         assert result["message"] is None
 
-
-
     @pytest.mark.parametrize("value", ["false", "False", "0", "off", "no"])
-    def test_false_like_yolo_values_do_not_bypass_dangerous_command(self, monkeypatch, value):
+    def test_false_like_yolo_values_do_not_bypass_dangerous_command(
+        self, monkeypatch, value
+    ):
         """False-like env strings must not silently enable YOLO bypass."""
         monkeypatch.setenv("CLAWK_YOLO_MODE", value)
         monkeypatch.setenv("CLAWK_INTERACTIVE", "1")
@@ -106,7 +115,9 @@ class TestYoloMode:
         assert not result["approved"]
 
     @pytest.mark.parametrize("value", ["false", "False", "0", "off", "no"])
-    def test_false_like_yolo_values_do_not_bypass_combined_guard(self, monkeypatch, value):
+    def test_false_like_yolo_values_do_not_bypass_combined_guard(
+        self, monkeypatch, value
+    ):
         """Combined guard must treat false-like YOLO env strings as disabled."""
         monkeypatch.setenv("CLAWK_YOLO_MODE", value)
         monkeypatch.setenv("CLAWK_INTERACTIVE", "1")
@@ -159,7 +170,9 @@ class TestYoloMode:
         assert is_approval_bypass_active_for_session("session-a") is True
         assert is_approval_bypass_active_for_session("session-b") is False
 
-    def test_session_scoped_yolo_bypasses_combined_guard_only_for_current_session(self, monkeypatch):
+    def test_session_scoped_yolo_bypasses_combined_guard_only_for_current_session(
+        self, monkeypatch
+    ):
         """Combined guard should honor session-scoped YOLO without affecting others."""
         monkeypatch.delenv("CLAWK_YOLO_MODE", raising=False)
         monkeypatch.setenv("CLAWK_INTERACTIVE", "1")

@@ -26,7 +26,17 @@ from unittest.mock import patch
 
 import clawk_state
 import clawk_state_repair
-from clawk_state_repair import _MAX_MALFORMED_BACKUPS, _MAX_PERSISTENT_REPAIR_ATTEMPTS, _backup_db_file, _existing_malformed_backups, _persistent_repair_attempts_exhausted, _prune_malformed_backups, _record_repair_outcome, _repair_ledger_path, repair_state_db_schema
+from clawk_state_repair import (
+    _MAX_MALFORMED_BACKUPS,
+    _MAX_PERSISTENT_REPAIR_ATTEMPTS,
+    _backup_db_file,
+    _existing_malformed_backups,
+    _persistent_repair_attempts_exhausted,
+    _prune_malformed_backups,
+    _record_repair_outcome,
+    _repair_ledger_path,
+    repair_state_db_schema,
+)
 
 
 def _make_unrepairable_db(tmp_path: Path) -> Path:
@@ -67,7 +77,9 @@ class TestPersistentAttemptCap:
         # Budget burned: the next call must refuse WITHOUT running surgery
         # (and without taking another backup).
         backups_before = len(_existing_malformed_backups(db))
-        with patch.object(clawk_state_repair, "_repair_state_db_schema_locked") as surgery:
+        with patch.object(
+            clawk_state_repair, "_repair_state_db_schema_locked"
+        ) as surgery:
             report = repair_state_db_schema(db)
         surgery.assert_not_called()
         assert report["repaired"] is False
@@ -147,9 +159,9 @@ class TestBackupDedupeAndCap:
         assert names == sorted(names, reverse=True)
         # Sidecars of pruned backups are gone too.
         leftover_sidecars = [
-            p for p in tmp_path.iterdir()
-            if p.name.endswith("-wal")
-            and p.with_name(p.name[:-4]) not in remaining
+            p
+            for p in tmp_path.iterdir()
+            if p.name.endswith("-wal") and p.with_name(p.name[:-4]) not in remaining
         ]
         assert leftover_sidecars == []
 

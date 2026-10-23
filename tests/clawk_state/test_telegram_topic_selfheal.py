@@ -70,21 +70,39 @@ def test_topic_reads_selfheal_pre_v3_tables(tmp_path: Path):
     # Reads on the un-migrated v2 tables return the legacy rows instead of
     # silently reading as empty, and land them in the 'default' namespace.
     assert db.is_telegram_topic_mode_enabled(
-        chat_id=CHAT, user_id=CHAT, profile_name="default",
+        chat_id=CHAT,
+        user_id=CHAT,
+        profile_name="default",
     )
-    binding = db.get_telegram_topic_binding(chat_id=CHAT, thread_id="99", profile_name="default")
+    binding = db.get_telegram_topic_binding(
+        chat_id=CHAT, thread_id="99", profile_name="default"
+    )
     assert binding is not None
     assert binding["session_id"] == "legacy-sess"
     # The orphan row is dropped (a v2/v3 CASCADE would have removed it) and the stranded scratch table is gone.
-    rows = db.list_telegram_topic_bindings_for_chat(chat_id=CHAT, profile_name="default")
+    rows = db.list_telegram_topic_bindings_for_chat(
+        chat_id=CHAT, profile_name="default"
+    )
     assert [row["session_id"] for row in rows] == ["legacy-sess"]
-    assert db.get_telegram_topic_binding(chat_id=CHAT, thread_id="7", profile_name="default") is None
+    assert (
+        db.get_telegram_topic_binding(
+            chat_id=CHAT, thread_id="7", profile_name="default"
+        )
+        is None
+    )
     assert db.get_meta("telegram_dm_topic_schema_version") == "3"
     # Profile isolation still holds after the heal.
     assert not db.is_telegram_topic_mode_enabled(
-        chat_id=CHAT, user_id=CHAT, profile_name="coder",
+        chat_id=CHAT,
+        user_id=CHAT,
+        profile_name="coder",
     )
-    assert db.get_telegram_topic_binding(chat_id=CHAT, thread_id="99", profile_name="coder") is None
+    assert (
+        db.get_telegram_topic_binding(
+            chat_id=CHAT, thread_id="99", profile_name="coder"
+        )
+        is None
+    )
     db.close()
 
 
@@ -119,7 +137,9 @@ def test_heal_rebuild_rolls_back_atomically(tmp_path: Path):
     try:
         # The guarded read degrades to "off" instead of raising...
         assert not db.is_telegram_topic_mode_enabled(
-            chat_id=CHAT, user_id=CHAT, profile_name="default",
+            chat_id=CHAT,
+            user_id=CHAT,
+            profile_name="default",
         )
     finally:
         db._conn.set_authorizer(None)
@@ -130,6 +150,8 @@ def test_heal_rebuild_rolls_back_atomically(tmp_path: Path):
     # Idempotent under retry (the _execute_write contract): the next clean
     # read heals and keeps the legacy rows.
     assert db.is_telegram_topic_mode_enabled(
-        chat_id=CHAT, user_id=CHAT, profile_name="default",
+        chat_id=CHAT,
+        user_id=CHAT,
+        profile_name="default",
     )
     db.close()

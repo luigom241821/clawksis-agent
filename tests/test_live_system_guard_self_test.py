@@ -17,6 +17,7 @@ Every primitive that can deliver a signal to a foreign process or mutate
 the live systemd unit MUST be exercised below. Adding a new primitive to
 the guard? Add a test here too.
 """
+
 from __future__ import annotations
 
 import os
@@ -96,8 +97,6 @@ def test_fail_closed_probe_reports_guard_active():
     assert _live_system_guard_is_active() is True
 
 
-
-
 # ──────────────────── kill primitives ─────────────────────────
 
 
@@ -130,7 +129,9 @@ def test_subprocess_run_systemctl_restart_blocked():
 def test_subprocess_run_full_path_systemctl_blocked():
     """``/usr/bin/systemctl`` (full path) must be blocked too."""
     with pytest.raises(RuntimeError, match="live-system guard"):
-        subprocess.run(["/usr/bin/systemctl", "--user", "stop", "clawk-gateway"], check=False)
+        subprocess.run(
+            ["/usr/bin/systemctl", "--user", "stop", "clawk-gateway"], check=False
+        )
 
 
 def test_subprocess_run_sudo_systemctl_blocked():
@@ -142,15 +143,17 @@ def test_subprocess_run_sudo_systemctl_blocked():
 def test_subprocess_run_env_systemctl_blocked():
     """``env systemctl ...`` similarly defeated the old head check."""
     with pytest.raises(RuntimeError, match="live-system guard"):
-        subprocess.run(["env", "systemctl", "--user", "restart", "clawk-gateway"], check=False)
+        subprocess.run(
+            ["env", "systemctl", "--user", "restart", "clawk-gateway"], check=False
+        )
 
 
 def test_subprocess_run_bash_c_systemctl_blocked():
     """``bash -c "systemctl ..."`` must also be caught."""
     with pytest.raises(RuntimeError, match="live-system guard"):
-        subprocess.run(["bash", "-c", "systemctl --user restart clawk-gateway"], check=False)
-
-
+        subprocess.run(
+            ["bash", "-c", "systemctl --user restart clawk-gateway"], check=False
+        )
 
 
 @pytest.mark.parametrize(
@@ -159,7 +162,13 @@ def test_subprocess_run_bash_c_systemctl_blocked():
         ["systemctl", "--user", "restart", "clawksis-dashboard.service"],
         ["systemctl", "--user", "restart", "clawksis-dashboard-work.service"],
         ["systemctl", "--user", "stop", "clawk-serve"],
-        ["/usr/bin/systemctl", "--user", "--no-ask-password", "restart", "clawk-serve-work.service"],
+        [
+            "/usr/bin/systemctl",
+            "--user",
+            "--no-ask-password",
+            "restart",
+            "clawk-serve-work.service",
+        ],
         ["bash", "-c", "systemctl --user restart clawksis-dashboard.service"],
         "systemctl --user restart clawksis-dashboard-work.service",
         'bash -c "systemctl --user restart clawk-serve.service"',
@@ -175,7 +184,13 @@ def test_subprocess_run_systemctl_mutating_any_clawk_unit_blocked(cmd):
 @pytest.mark.parametrize(
     "cmd",
     [
-        ["systemctl", "--user", "show", "clawksis-dashboard.service", "--property=MainPID"],
+        [
+            "systemctl",
+            "--user",
+            "show",
+            "clawksis-dashboard.service",
+            "--property=MainPID",
+        ],
         ["systemctl", "--user", "status", "clawksis-dashboard"],
         ["systemctl", "--user", "is-active", "clawk-serve.service"],
         ["systemctl", "--user", "restart", "nginx.service"],
@@ -209,11 +224,21 @@ def test_a_test_owned_unit_can_be_cleaned_up_but_no_other(request):
     owned = "clawk-worker-kanban-t_selftest-run-1.scope"
     request.node.live_system_guard_owned_units = {owned}
     with pytest.raises(FileNotFoundError):
-        subprocess.run(["systemctl", "--user", "stop", owned], env={"PATH": "/nonexistent"}, check=False)
+        subprocess.run(
+            ["systemctl", "--user", "stop", owned],
+            env={"PATH": "/nonexistent"},
+            check=False,
+        )
     with pytest.raises(RuntimeError, match="live-system guard"):
-        subprocess.run(["systemctl", "--user", "stop", owned, "clawksis-dashboard.service"], check=False)
+        subprocess.run(
+            ["systemctl", "--user", "stop", owned, "clawksis-dashboard.service"],
+            check=False,
+        )
     with pytest.raises(RuntimeError, match="live-system guard"):
-        subprocess.run(["systemctl", "--user", "stop", "clawk-worker-kanban-other-run-1.scope"], check=False)
+        subprocess.run(
+            ["systemctl", "--user", "stop", "clawk-worker-kanban-other-run-1.scope"],
+            check=False,
+        )
 
 
 def test_subprocess_run_setsid_systemctl_blocked():
@@ -226,7 +251,16 @@ def test_host_gateway_start_blocked_but_container_exec_allowed():
     a container via ``docker exec`` stay inside it and are the Docker harness's business."""
     with pytest.raises(RuntimeError, match="REAL clawk gateway runtime"):
         subprocess.run(["clawk", "-p", "p", "gateway", "start"], check=False)
-    argv = ["docker", "exec", "-u", "clawk", "clawk-test-x", "sh", "-c", "clawk -p p gateway start"]
+    argv = [
+        "docker",
+        "exec",
+        "-u",
+        "clawk",
+        "clawk-test-x",
+        "sh",
+        "-c",
+        "clawk -p p gateway start",
+    ]
     # Past the guard the call reaches the real subprocess.run; a missing binary is fine here.
     with pytest.raises(FileNotFoundError):
         subprocess.run(argv, env={"PATH": "/nonexistent"}, check=False)
@@ -290,6 +324,7 @@ def test_os_popen_systemctl_blocked():
 @pytest.mark.platforms("linux")
 def test_pty_spawn_systemctl_blocked():
     import pty
+
     with pytest.raises(RuntimeError, match="live-system guard"):
         pty.spawn(["systemctl", "--user", "restart", "clawk-gateway"])
 
@@ -313,9 +348,7 @@ def test_asyncio_create_subprocess_shell_systemctl_blocked():
     import asyncio
 
     async def _attempt():
-        await asyncio.create_subprocess_shell(
-            "systemctl --user restart clawk-gateway"
-        )
+        await asyncio.create_subprocess_shell("systemctl --user restart clawk-gateway")
 
     with pytest.raises(RuntimeError, match="live-system guard"):
         asyncio.run(_attempt())
@@ -327,8 +360,6 @@ def test_asyncio_create_subprocess_shell_systemctl_blocked():
 def test_subprocess_pkill_clawk_blocked():
     with pytest.raises(RuntimeError, match="live-system guard"):
         subprocess.run(["pkill", "-f", "clawk"], check=False)
-
-
 
 
 def test_subprocess_pkill_python_dash_f_blocked():
@@ -343,20 +374,6 @@ def test_subprocess_killall_clawk_blocked():
 
 
 # ──────────────────── pass-through cases (must NOT raise) ──────
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 # ──────────────────── real gateway runtime spawn ─────────────────
@@ -381,8 +398,17 @@ def test_subprocess_popen_inline_source_restart_watcher_blocked():
     120s deadline and leaves a real detached gateway squatting the webhook port."""
     with pytest.raises(RuntimeError, match="live-system guard"):
         subprocess.Popen(
-            [sys.executable, "-c", "import time; time.sleep(1)", "4242",
-             sys.executable, "-m", "clawk_cli.main", "gateway", "run"],
+            [
+                sys.executable,
+                "-c",
+                "import time; time.sleep(1)",
+                "4242",
+                sys.executable,
+                "-m",
+                "clawk_cli.main",
+                "gateway",
+                "run",
+            ],
             start_new_session=True,
         )
 
@@ -392,8 +418,17 @@ def test_subprocess_run_gateway_status_passes_through():
     read-only subcommand) must still spawn — via the canonical matcher, not an
     argv substring."""
     result = subprocess.run(
-        [sys.executable, "-c", "import sys; print(sys.argv[1:])", "-m", "clawk_cli.main", "gateway", "status"],
-        capture_output=True, text=True,
+        [
+            sys.executable,
+            "-c",
+            "import sys; print(sys.argv[1:])",
+            "-m",
+            "clawk_cli.main",
+            "gateway",
+            "status",
+        ],
+        capture_output=True,
+        text=True,
         check=False,
     )
     assert result.returncode == 0

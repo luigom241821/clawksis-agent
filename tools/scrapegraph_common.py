@@ -208,43 +208,45 @@ def clamp_timeout(raw_timeout: Any) -> int | None:
 # structurally parse a page. It rarely raises — it answers with a sentinel
 # like ``"NA"`` / ``"N/A"`` or ``{"content": "NA"}`` instead, which callers
 # must recognise or the agent burns a turn reading garbage.
-_EMPTY_RESULT_SENTINELS = frozenset({
-    "",
-    "na",
-    "n/a",
-    "n.a.",
-    "none",
-    "null",
-    "nan",
-    "{}",
-    # Common LLM "I couldn't extract anything" phrasings (v1.9).
-    "no content",
-    "no data",
-    "no result",
-    "no results",
-    "no text",
-    "nothing",
-    "not found",
-    "empty",
-    "nil",
-    "undefined",
-    # v1.10: placeholder family — LLMs answer with a dash/dot/ellipsis or a
-    # "not available" phrasing when they could not find the field at all
-    # (common in table/listing extractions: {"price": "-"}). A whole result
-    # made of these carries no usable content; partial extractions that mix
-    # them with real values are still kept (see looks_like_empty_result).
-    "-",
-    "–",
-    "—",
-    ".",
-    "..",
-    "...",
-    "…",
-    "not available",
-    "no info",
-    "no information",
-    "no value",
-})
+_EMPTY_RESULT_SENTINELS = frozenset(
+    {
+        "",
+        "na",
+        "n/a",
+        "n.a.",
+        "none",
+        "null",
+        "nan",
+        "{}",
+        # Common LLM "I couldn't extract anything" phrasings (v1.9).
+        "no content",
+        "no data",
+        "no result",
+        "no results",
+        "no text",
+        "nothing",
+        "not found",
+        "empty",
+        "nil",
+        "undefined",
+        # v1.10: placeholder family — LLMs answer with a dash/dot/ellipsis or a
+        # "not available" phrasing when they could not find the field at all
+        # (common in table/listing extractions: {"price": "-"}). A whole result
+        # made of these carries no usable content; partial extractions that mix
+        # them with real values are still kept (see looks_like_empty_result).
+        "-",
+        "–",
+        "—",
+        ".",
+        "..",
+        "...",
+        "…",
+        "not available",
+        "no info",
+        "no information",
+        "no value",
+    }
+)
 
 
 def looks_like_empty_result(data: Any) -> bool:

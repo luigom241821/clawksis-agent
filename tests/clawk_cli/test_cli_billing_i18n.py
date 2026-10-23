@@ -31,7 +31,8 @@ def overlay_locales(tmp_path, monkeypatch):
     shutil.copy(i18n._locales_dir() / "en.yaml", fake / "en.yaml")
     (fake / "zh.yaml").write_text(
         "cli:\n  billing:\n    choice_add_funds: 充值\n    charge_failed_card_declined: 卡被拒绝\n",
-        encoding="utf-8")
+        encoding="utf-8",
+    )
     monkeypatch.setattr(i18n, "_locales_dir", lambda: fake)
     monkeypatch.delenv("CLAWK_LANGUAGE", raising=False)
     i18n.reset_language_cache()
@@ -53,10 +54,18 @@ def test_menu_choices_follow_language_switch_after_import(overlay_locales, monke
     assert en_label == i18n.t("cli.billing.choice_add_funds", lang="en")
     assert zh_label != en_label
     # Choice VALUES are identifiers and never move with the language.
-    assert [c[0] for c in bm._topup_menu_choices()] == ["buy", "auto", "limit", "portal", "cancel"]
+    assert [c[0] for c in bm._topup_menu_choices()] == [
+        "buy",
+        "auto",
+        "limit",
+        "portal",
+        "cancel",
+    ]
 
 
-def test_charge_failed_copy_resolves_per_reason_at_call_time(cli, overlay_locales, monkeypatch, capsys):
+def test_charge_failed_copy_resolves_per_reason_at_call_time(
+    cli, overlay_locales, monkeypatch, capsys
+):
     class _State:
         portal_url = ""
 
@@ -66,17 +75,25 @@ def test_charge_failed_copy_resolves_per_reason_at_call_time(cli, overlay_locale
     assert "卡被拒绝" in out
     # A zh miss falls back to the English line for the same reason.
     cli._billing_render_charge_failed(_State(), "payment_method_expired")
-    assert i18n.t("cli.billing.charge_failed_payment_method_expired", lang="en") in capsys.readouterr().out
+    assert (
+        i18n.t("cli.billing.charge_failed_payment_method_expired", lang="en")
+        in capsys.readouterr().out
+    )
     # Unknown reasons use the generic template carrying the raw reason.
     cli._billing_render_charge_failed(_State(), "weird_reason")
-    assert i18n.t("cli.billing.charge_failed_generic", reason="weird_reason") in capsys.readouterr().out
+    assert (
+        i18n.t("cli.billing.charge_failed_generic", reason="weird_reason")
+        in capsys.readouterr().out
+    )
 
 
 def test_logged_out_block_uses_catalog(cli, capsys):
     class _State:
         error = ""
 
-    cli._print_logged_out(_State(), i18n.t("cli.subscription.load_failed_label"), "/subscription")
+    cli._print_logged_out(
+        _State(), i18n.t("cli.subscription.load_failed_label"), "/subscription"
+    )
     out = capsys.readouterr().out
     assert i18n.t("cli.billing.not_logged_in") in out
     assert i18n.t("cli.billing.run_portal_then", cmd="/subscription") in out

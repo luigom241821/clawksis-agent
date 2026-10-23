@@ -14,8 +14,9 @@ from typing import Any, Optional, Tuple
 from clawk_cli.local_runtime.endpoint import LLAMACPP_ALIASES
 
 
-def bare_llamacpp_endpoint(provider: Optional[str], base_url: Optional[str],
-                           api_key: Any) -> Optional[tuple[str, Any]]:
+def bare_llamacpp_endpoint(
+    provider: Optional[str], base_url: Optional[str], api_key: Any
+) -> Optional[tuple[str, Any]]:
     """``(base_url, api_key)`` of the profile's local llama.cpp server for a bare alias.
 
     ``base_url`` is ``""`` when nothing is serving. ``None`` when the request is not a bare alias:
@@ -28,8 +29,11 @@ def bare_llamacpp_endpoint(provider: Optional[str], base_url: Optional[str],
     from clawk_cli.config import load_config
     from clawk_cli.local_runtime.endpoint import resolve_llamacpp_endpoint
     from clawk_cli.runtime_provider import _get_named_custom_provider
+
     if _get_named_custom_provider(alias):
         return None
     endpoint = resolve_llamacpp_endpoint(config=load_config()) or {}
-    return (str(endpoint.get("base_url") or "").strip(),
-            api_key or endpoint.get("api_key") or "no-key-required")
+    return (
+        str(endpoint.get("base_url") or "").strip(),
+        api_key or endpoint.get("api_key") or "no-key-required",
+    )

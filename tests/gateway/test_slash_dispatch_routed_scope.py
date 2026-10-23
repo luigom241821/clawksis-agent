@@ -37,24 +37,38 @@ def _runner(routed_home):
 
 
 def _event(text):
-    source = SessionSource(platform=Platform.TELEGRAM, user_id="u", user_name="u",
-                           chat_id="c", chat_type="dm", profile="beta")
-    return MessageEvent(text=text, message_type=MessageType.TEXT, source=source, message_id="m")
+    source = SessionSource(
+        platform=Platform.TELEGRAM,
+        user_id="u",
+        user_name="u",
+        chat_id="c",
+        chat_type="dm",
+        profile="beta",
+    )
+    return MessageEvent(
+        text=text, message_type=MessageType.TEXT, source=source, message_id="m"
+    )
 
 
 @pytest.mark.asyncio
 async def test_idle_dispatch_runs_table_handlers_under_the_routed_runtime(homes):
     launch, routed = homes
     with _profile_runtime_scope(routed):
-        staged = wa.stage_write(wa.MEMORY, {"action": "add", "target": "memory", "content": "beta"},
-                                summary="beta-only", origin="foreground")
+        staged = wa.stage_write(
+            wa.MEMORY,
+            {"action": "add", "target": "memory", "content": "beta"},
+            summary="beta-only",
+            origin="foreground",
+        )
     runner = _runner(routed)
     event = _event("/memory pending")
 
     # Ambient scope is the LAUNCH home (what the receiving bot's handler binds); the dispatcher
     # must still resolve the routed runtime for the handler.
     with _profile_runtime_scope(launch):
-        handled, reply = await runner._hm_dispatch_canonical_command(event, event.source, "k", "memory")
+        handled, reply = await runner._hm_dispatch_canonical_command(
+            event, event.source, "k", "memory"
+        )
         assert get_clawk_home() == launch  # scope restored after dispatch
 
     assert handled and staged["id"] in reply
@@ -65,6 +79,7 @@ async def test_idle_dispatch_runs_table_handlers_under_the_routed_runtime(homes)
 async def test_busy_dispatch_binds_the_same_runtime_scope(homes):
     launch, routed = homes
     from clawk_cli.commands import resolve_command
+
     seen = {}
 
     async def _probe(_event):
@@ -75,6 +90,10 @@ async def test_busy_dispatch_binds_the_same_runtime_scope(homes):
     runner._handle_restart_command = _probe
     event = _event("/restart")
     with _profile_runtime_scope(launch):
-        assert await runner._dispatch_busy_slash_command(
-            event, resolve_command("restart"), "k", event.source) == "ok"
+        assert (
+            await runner._dispatch_busy_slash_command(
+                event, resolve_command("restart"), "k", event.source
+            )
+            == "ok"
+        )
     assert seen["home"] == routed

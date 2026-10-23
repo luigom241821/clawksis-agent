@@ -29,7 +29,8 @@ from typing import Iterable
 _SNAPSHOT_EXCLUDED_ENV_REGEX = (
     "^declare -x (CLAWK_SESSION_|CLAWK_UI_SESSION_ID|CLAWK_CRON_AUTO_DELIVER_|"
     "CLAWK_CRON_SESSION|CLAWK_BROWSER_CONTROL_|CLAWK_DELEGATED_CHILD_CONTEXT|"
-    "CLAWK_RPC_|CLAWK_KERNEL_DIR)")
+    "CLAWK_RPC_|CLAWK_KERNEL_DIR)"
+)
 _SHELL_ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 # mktemp template suffix + the shell variable holding the allocated temp path.
@@ -47,7 +48,9 @@ def _cwd_marker_printf(marker: str) -> str:
     return f"printf '\\n{marker}%s{marker}\\n' \"$(pwd -P)\""
 
 
-def _export_dump_excluding_session_vars(tmp_path: str, excluded_names: Iterable[str] = ()) -> str:
+def _export_dump_excluding_session_vars(
+    tmp_path: str, excluded_names: Iterable[str] = ()
+) -> str:
     """Shell snippet dumping ``export -p`` to *tmp_path* minus the per-session bridged vars (see
     ``_SNAPSHOT_EXCLUDED_ENV_REGEX``) and *excluded_names*. The vars are ``unset`` in a subshell
     BEFORE ``export -p``: a line-based ``grep -vE`` is unsafe because bash 3.2 prints a value
@@ -83,11 +86,17 @@ def _export_dump_excluding_session_vars(tmp_path: str, excluded_names: Iterable[
         "${!CLAWK_RPC_*} CLAWK_KERNEL_DIR "
         f"CLAWK_UI_SESSION_ID{extra_unset} 2>/dev/null; "
         "export -p; ) || true; } "
-        f"> {tmp_path}")
+        f"> {tmp_path}"
+    )
 
 
 def _snapshot_bootstrap_script(
-    *, quoted_cwd: str, quoted_snap: str, snap_tmp_template: str, excluded_names: Iterable[str], cwd_marker: str,
+    *,
+    quoted_cwd: str,
+    quoted_snap: str,
+    snap_tmp_template: str,
+    excluded_names: Iterable[str],
+    cwd_marker: str,
 ) -> str:
     """Login-shell bootstrap that captures env/functions/aliases into the snapshot. Atomic publish:
     assemble in a ``mktemp`` file, then ``mv`` over the final path so a concurrent ``source`` never
@@ -102,7 +111,7 @@ def _snapshot_bootstrap_script(
         f"__clawk_snap_tmp=$(mktemp {snap_tmp_template}) || exit 1\n"
         f"{_export_dump_excluding_session_vars(_SNAP_TMP, excluded_names)}\n"
         "__clawk_fns=$(declare -F | awk '{print $3}' | grep -vE '^_[^_]') || true\n"
-        f"[ -n \"$__clawk_fns\" ] && declare -f $__clawk_fns >> {_SNAP_TMP} 2>/dev/null || true\n"
+        f'[ -n "$__clawk_fns" ] && declare -f $__clawk_fns >> {_SNAP_TMP} 2>/dev/null || true\n'
         f"alias -p >> {_SNAP_TMP}\n"
         f"echo 'shopt -s expand_aliases' >> {_SNAP_TMP}\n"
         f"echo 'set +e' >> {_SNAP_TMP}\n"
@@ -110,7 +119,8 @@ def _snapshot_bootstrap_script(
         # Publish only if assembly succeeded; otherwise drop the partial temp.
         f"mv -f {_SNAP_TMP} {quoted_snap} || rm -f {_SNAP_TMP}\n"
         f"builtin cd -- {quoted_cwd} 2>/dev/null || true\n"
-        f"{_cwd_marker_printf(cwd_marker)}\n")
+        f"{_cwd_marker_printf(cwd_marker)}\n"
+    )
 
 
 def _passthrough_save_restore(names: Iterable[str]) -> tuple[list[str], list[str]]:
@@ -125,14 +135,22 @@ def _passthrough_save_restore(names: Iterable[str]) -> tuple[list[str], list[str
         save += [f"{present}=${{{name}+x}}", f"{value}=${{{name}-}}"]
         restore += [
             f'if [ "${present}" = x ]; then export {name}="${value}"; else unset {name}; fi',
-            f"unset {present} {value}"]
+            f"unset {present} {value}",
+        ]
     return save, restore
 
 
 def _wrap_command_script(
-    command: str, *, quoted_cwd: str, quoted_snap: str, snap_tmp_template: str,
-    passthrough_names: Iterable[str], snapshot_ready: bool, cwd_marker: str,
-    persist_env: bool = True) -> str:
+    command: str,
+    *,
+    quoted_cwd: str,
+    quoted_snap: str,
+    snap_tmp_template: str,
+    passthrough_names: Iterable[str],
+    snapshot_ready: bool,
+    cwd_marker: str,
+    persist_env: bool = True,
+) -> str:
     """Per-command bash script: source snapshot, cd, run, re-dump env, emit CWD marker.
     ``persist_env=False`` skips the re-dump, so every command starts from the login-time
     snapshot and exports from one command never reach the next (the CWD marker still runs).
@@ -158,13 +176,15 @@ def _wrap_command_script(
         f"builtin cd -- {quoted_cwd} || exit 126",
         f"eval '{escaped}'",
         "__clawk_ec=$?",
-        "umask 077"]
+        "umask 077",
+    ]
     if snapshot_ready and persist_env:
         parts.append(
             f"__clawk_snap_tmp=$(mktemp {snap_tmp_template}) && "
             f"{{ {_export_dump_excluding_session_vars(_SNAP_TMP, passthrough_names)} "
             f"&& mv -f {_SNAP_TMP} {quoted_snap}; }} "
-            f"2>/dev/null || rm -f {_SNAP_TMP} 2>/dev/null || true")
+            f"2>/dev/null || rm -f {_SNAP_TMP} 2>/dev/null || true"
+        )
     parts += [_cwd_marker_printf(cwd_marker), "exit $__clawk_ec"]
     return "\n".join(parts)
 

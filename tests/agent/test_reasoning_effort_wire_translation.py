@@ -36,7 +36,6 @@ class TestUltraEffortWireTranslation:
             )
             assert out == {"enabled": True, "effort": "max"}, model
 
-
     def test_wire_native_levels_pass_through_untouched(self):
         for level in ("none", "minimal", "low", "medium", "high", "xhigh", "max"):
             cfg = {"enabled": True, "effort": level}

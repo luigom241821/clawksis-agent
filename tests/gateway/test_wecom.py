@@ -12,10 +12,6 @@ import pytest
 from gateway.config import PlatformConfig
 
 
-
-
-
-
 class TestWeComInboundImageExtension:
     def test_octet_stream_falls_through_to_magic_bytes(self):
         """WeCom's CDN serves images as application/octet-stream; the cached file must get the
@@ -24,12 +20,21 @@ class TestWeComInboundImageExtension:
 
         jpeg = b"\xff\xd8\xff\xe0" + b"\x00" * 16
         ext = WeComAdapter._guess_extension(
-            "https://wwcdn.weixin.qq.com/img?aeskey=abc", "application/octet-stream",
-            fallback=WeComAdapter._detect_image_ext(jpeg))
+            "https://wwcdn.weixin.qq.com/img?aeskey=abc",
+            "application/octet-stream",
+            fallback=WeComAdapter._detect_image_ext(jpeg),
+        )
         assert ext == ".jpg"
-        assert WeComAdapter._guess_extension("https://x/y.png", "image/png", fallback=".jpg") == ".png"
+        assert (
+            WeComAdapter._guess_extension(
+                "https://x/y.png", "image/png", fallback=".jpg"
+            )
+            == ".png"
+        )
 
-    def test_encoded_aeskey_and_octet_stream_image_cached_as_real_image(self, monkeypatch):
+    def test_encoded_aeskey_and_octet_stream_image_cached_as_real_image(
+        self, monkeypatch
+    ):
         """End to end through `_cache_media`: a percent-encoded, unpadded `aeskey` decrypts, and an
         octet-stream-labelled PNG is stored with an image MIME, not application/octet-stream."""
         from urllib.parse import quote
@@ -57,7 +62,11 @@ class TestWeComInboundImageExtension:
         monkeypatch.setattr(adapter, "_download_remote_bytes", _download)
         monkeypatch.setattr(wecom_media, "cache_image_from_bytes_async", _cache)
 
-        result = asyncio.run(adapter._cache_media("image", {"url": "https://cdn/x", "aeskey": encoded_key}))
+        result = asyncio.run(
+            adapter._cache_media(
+                "image", {"url": "https://cdn/x", "aeskey": encoded_key}
+            )
+        )
 
         assert result == ("/tmp/img.png", "image/png")
         assert stored["raw"] == png
@@ -79,7 +88,9 @@ class TestWeComAdapterAuthzScope:
         finally:
             secret_scope.set_multiplex_active(previous)
 
-    def test_scoped_construction_reads_authz_from_scope_not_environ(self, multiplex_on, monkeypatch):
+    def test_scoped_construction_reads_authz_from_scope_not_environ(
+        self, multiplex_on, monkeypatch
+    ):
         from agent import secret_scope
         from plugins.platforms.wecom.adapter import WeComAdapter
 
@@ -95,7 +106,9 @@ class TestWeComAdapterAuthzScope:
         assert adapter._dm_policy == "allowlist"
         assert adapter._allow_from == ["scoped-user"]
 
-    def test_scoped_miss_does_not_admit_default_profiles_allowlist(self, multiplex_on, monkeypatch):
+    def test_scoped_miss_does_not_admit_default_profiles_allowlist(
+        self, multiplex_on, monkeypatch
+    ):
         from agent import secret_scope
         from plugins.platforms.wecom.adapter import WeComAdapter
 
@@ -109,7 +122,9 @@ class TestWeComAdapterAuthzScope:
         assert adapter._dm_policy == "pairing"
         assert adapter._allow_from == []
 
-    def test_scoped_construction_reads_bot_id_from_scope_not_environ(self, multiplex_on, monkeypatch):
+    def test_scoped_construction_reads_bot_id_from_scope_not_environ(
+        self, multiplex_on, monkeypatch
+    ):
         """bot_id must honor the same scope as its neighboring _secret read
         (both are read on adjacent lines in __init__) -- a secondary profile's
         own bot_id must never fall back to the default profile's os.environ
@@ -129,7 +144,9 @@ class TestWeComAdapterAuthzScope:
         assert adapter._bot_id == "scoped-bot-id"
         assert adapter._secret == "scoped-secret"
 
-    def test_scoped_miss_does_not_leak_default_profiles_bot_id(self, multiplex_on, monkeypatch):
+    def test_scoped_miss_does_not_leak_default_profiles_bot_id(
+        self, multiplex_on, monkeypatch
+    ):
         from agent import secret_scope
         from plugins.platforms.wecom.adapter import DEFAULT_WS_URL, WeComAdapter
 
@@ -145,7 +162,6 @@ class TestWeComAdapterAuthzScope:
 
 
 class TestWeComConnect:
-
     @pytest.mark.asyncio
     async def test_connect_records_handshake_failure_details(self, monkeypatch):
         import plugins.platforms.wecom.adapter as wecom_module
@@ -164,9 +180,13 @@ class TestWeComConnect:
         )
 
         adapter = WeComAdapter(
-            PlatformConfig(enabled=True, extra={"bot_id": "bot-1", "secret": "secret-1"})
+            PlatformConfig(
+                enabled=True, extra={"bot_id": "bot-1", "secret": "secret-1"}
+            )
         )
-        adapter._open_connection = AsyncMock(side_effect=RuntimeError("invalid secret (errcode=40013)"))
+        adapter._open_connection = AsyncMock(
+            side_effect=RuntimeError("invalid secret (errcode=40013)")
+        )
 
         success = await adapter.connect()
 
@@ -176,12 +196,11 @@ class TestWeComConnect:
         assert "invalid secret" in (adapter.fatal_error_message or "")
 
 
-
-
 class TestWeComReplyMode:
-
     @pytest.mark.asyncio
-    async def test_send_image_file_uses_passive_reply_media_when_reply_context_exists(self):
+    async def test_send_image_file_uses_passive_reply_media_when_reply_context_exists(
+        self,
+    ):
         from plugins.platforms.wecom.adapter import WeComAdapter
 
         adapter = WeComAdapter(PlatformConfig(enabled=True))
@@ -199,12 +218,16 @@ class TestWeComReplyMode:
                 "downgrade_note": None,
             }
         )
-        adapter._upload_media_bytes = AsyncMock(return_value={"media_id": "media-1", "type": "image"})
+        adapter._upload_media_bytes = AsyncMock(
+            return_value={"media_id": "media-1", "type": "image"}
+        )
         adapter._send_reply_request = AsyncMock(
             return_value={"headers": {"req_id": "req-1"}, "errcode": 0}
         )
 
-        result = await adapter.send_image_file("chat-123", "/tmp/demo.png", reply_to="msg-1")
+        result = await adapter.send_image_file(
+            "chat-123", "/tmp/demo.png", reply_to="msg-1"
+        )
 
         assert result.success is True
         adapter._send_reply_request.assert_awaited_once()
@@ -214,7 +237,6 @@ class TestWeComReplyMode:
 
 
 class TestExtractText:
-
     def test_extracts_mixed_text(self):
         from plugins.platforms.wecom.adapter import WeComAdapter
 
@@ -241,13 +263,14 @@ class TestCallbackDispatch:
         adapter = WeComAdapter(PlatformConfig(enabled=True))
         adapter._on_message = AsyncMock()
 
-        await adapter._dispatch_payload({"cmd": cmd, "headers": {"req_id": "req-1"}, "body": {}})
+        await adapter._dispatch_payload(
+            {"cmd": cmd, "headers": {"req_id": "req-1"}, "body": {}}
+        )
 
         adapter._on_message.assert_awaited_once()
 
 
 class TestPolicyHelpers:
-
     def test_dm_allowlist_honors_env_only_allowed_users(self, monkeypatch):
         """Env-only setup (WECOM_DM_POLICY + WECOM_ALLOWED_USERS, no config
         ``extra``) must populate the DM allowlist. Otherwise ``dm_policy:
@@ -265,7 +288,6 @@ class TestPolicyHelpers:
         assert adapter._is_dm_allowed("user-1") is True
         assert adapter._is_dm_allowed("user-2") is True
         assert adapter._is_dm_allowed("stranger") is False
-
 
     def test_pairing_group_policy_blocks_without_explicit_group_allow_from(self):
         from plugins.platforms.wecom.adapter import WeComAdapter
@@ -297,8 +319,6 @@ class TestMediaHelpers:
 
 
 class TestMediaUpload:
-
-
     @pytest.mark.asyncio
     async def test_download_remote_bytes_blocks_connect_time_rebind(self, monkeypatch):
         import httpcore
@@ -320,9 +340,7 @@ class TestMediaUpload:
 
         def fake_getaddrinfo(_host, port, *_args, **_kwargs):
             ip = next(answers)
-            return [
-                (socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, port or 0))
-            ]
+            return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, port or 0))]
 
         connect_attempts = []
 
@@ -350,10 +368,6 @@ class TestMediaUpload:
 
 
 class TestSend:
-
-
-
-
     @pytest.mark.asyncio
     async def test_approval_confirmation_uses_proactive_send(self):
         """Regression: force_proactive_send=True must use APP_CMD_SEND to avoid
@@ -364,7 +378,9 @@ class TestSend:
         adapter = WeComAdapter(PlatformConfig(enabled=True))
         # Simulate a cached req_id from the user's /approve message
         adapter._last_chat_req_ids["chat-123"] = "req-approve"
-        adapter._send_request = AsyncMock(return_value={"headers": {"req_id": "req-approve"}, "errcode": 0})
+        adapter._send_request = AsyncMock(
+            return_value={"headers": {"req_id": "req-approve"}, "errcode": 0}
+        )
         adapter._send_reply_request = AsyncMock(
             return_value={"headers": {"req_id": "req-approve"}, "errcode": 0}
         )
@@ -411,7 +427,6 @@ class TestSend:
         # Should use passive reply (preserving req_id for group delivery)
         adapter._send_reply_request.assert_awaited_once()
         adapter._send_request.assert_not_awaited()
-
 
     @pytest.mark.asyncio
     async def test_force_proactive_falls_back_to_passive_for_groups(self):
@@ -473,7 +488,9 @@ class TestInboundMessages:
         )
         adapter._text_batch_delay_seconds = 0  # disable batching for tests
         adapter.handle_message = AsyncMock()
-        adapter._extract_media = AsyncMock(return_value=(["/tmp/test.png"], ["image/png"]))
+        adapter._extract_media = AsyncMock(
+            return_value=(["/tmp/test.png"], ["image/png"])
+        )
 
         payload = {
             "cmd": "aibot_msg_callback",
@@ -501,7 +518,6 @@ class TestInboundMessages:
 
 class TestWeComZombieSessionFix:
     """Tests for PR #11572 — device_id, markdown reply, group req_id fallback."""
-
 
     @pytest.mark.asyncio
     async def test_on_message_does_not_cache_blocked_sender_req_id(self):
@@ -544,7 +560,6 @@ class TestWeComZombieSessionFix:
         # The most recently remembered chat must still be present.
         latest = f"chat-{DEDUP_MAX_SIZE + 49}"
         assert adapter._last_chat_req_ids[latest] == f"req-{DEDUP_MAX_SIZE + 49}"
-
 
     @pytest.mark.asyncio
     async def test_proactive_group_send_falls_back_to_cached_req_id(self):
@@ -823,9 +838,7 @@ class TestAttachmentTextMerge:
         assert event.message_type == MessageType.TEXT
 
 
-
 # === NATIVE STREAMING (msgtype: stream) ===
-
 
 
 # === STREAM TESTS PLACEHOLDER ===
@@ -882,12 +895,16 @@ class TestSendStreamFrame:
         """
         sent_frames = []
 
-        async def mock_send_reply_queued(reply_req_id, body, *, is_final=False, skip_if_pending=False):
-            sent_frames.append({
-                "req_id": reply_req_id,
-                "body": body,
-                "is_final": is_final,
-            })
+        async def mock_send_reply_queued(
+            reply_req_id, body, *, is_final=False, skip_if_pending=False
+        ):
+            sent_frames.append(
+                {
+                    "req_id": reply_req_id,
+                    "body": body,
+                    "is_final": is_final,
+                }
+            )
             return {"errcode": 0, "errmsg": "ok"}
 
         adapter._send_reply_queued = AsyncMock(side_effect=mock_send_reply_queued)
@@ -979,7 +996,6 @@ class TestSendStreamFrame:
         turn = next(iter(adapter._stream_turns.values()))
         assert turn.accumulated_text == "alpha beta"
 
-
     @pytest.mark.asyncio
     async def test_finalize_sends_finish_true_and_resets_state(self):
         """Finalize frame waits for pending ack, sends finish=true, cleans up turn."""
@@ -1000,7 +1016,10 @@ class TestSendStreamFrame:
         assert turn.stream_id is not None
 
         ok = await adapter.send_stream_frame(
-            "partial final", chat_id="chat-1", finalize=True, turn_id=turn_id,
+            "partial final",
+            chat_id="chat-1",
+            finalize=True,
+            turn_id=turn_id,
         )
 
         assert ok is True
@@ -1009,11 +1028,13 @@ class TestSendStreamFrame:
         # Finalize goes through _send_reply_queued (mocked).
         # Find the finalize frame (is_final=True)
         finalize_frames = [
-            f for f in adapter._sent_frames
+            f
+            for f in adapter._sent_frames
             if f["body"].get("stream", {}).get("finish") is True
         ]
         assert len(finalize_frames) == 1
         assert finalize_frames[0]["body"]["stream"]["content"] == "partial final"
+
 
 # === FAILURE TESTS PLACEHOLDER ===
 
@@ -1057,7 +1078,9 @@ class TestSendStreamFrameFailures:
         adapter._ws = MagicMock(closed=False)
 
         # Mock _send_reply_queued: intermediate succeeds, final returns 846608
-        async def mock_queued(reply_req_id, body, *, is_final=False, skip_if_pending=False):
+        async def mock_queued(
+            reply_req_id, body, *, is_final=False, skip_if_pending=False
+        ):
             if is_final:
                 return {"errcode": STREAM_EXPIRED_ERRCODE, "errmsg": "stream expired"}
             return {"errcode": 0, "errmsg": "ok"}
@@ -1068,7 +1091,9 @@ class TestSendStreamFrameFailures:
         turn_id = "test-turn-2"
         await adapter.send_stream_frame("hello", chat_id="chat-1", turn_id=turn_id)
         # Now try to finalize — ack returns 846608.
-        ok = await adapter.send_stream_frame("hello final", chat_id="chat-1", finalize=True, turn_id=turn_id)
+        ok = await adapter.send_stream_frame(
+            "hello final", chat_id="chat-1", finalize=True, turn_id=turn_id
+        )
 
         assert ok is False
         assert "chat-1" in adapter._stream_expired_chats
@@ -1133,7 +1158,6 @@ class TestSendTypingTriggersThinking:
         assert len(adapter._stream_turns) == 0
 
 
-
 class TestStreamContentTruncation:
     """Bytes (not codepoints) are truncated to MAX_STREAM_CONTENT_LENGTH."""
 
@@ -1163,9 +1187,6 @@ class TestStreamContentTruncation:
         assert "�" not in out
 
 
-
-
-
 class TestFireAndForgetFrameFlow:
     """Integration: send_stream_frame pushes each distinct cumulative payload
     immediately (pure identity-dedup), with no sentence/min-chars buffering."""
@@ -1175,16 +1196,17 @@ class TestFireAndForgetFrameFlow:
 
         async def mock_send(reply_req_id, body, **kwargs):
             is_final = kwargs.get("is_final", False)
-            sent_frames.append({
-                "req_id": reply_req_id,
-                "body": body,
-                "is_final": is_final,
-            })
+            sent_frames.append(
+                {
+                    "req_id": reply_req_id,
+                    "body": body,
+                    "is_final": is_final,
+                }
+            )
             return {"errcode": 0, "errmsg": "ok"}
 
         adapter._send_reply_queued = AsyncMock(side_effect=mock_send)
         adapter._sent_frames = sent_frames
-
 
     @pytest.mark.asyncio
     async def test_finalize_sends_accumulated_tail(self):
@@ -1204,7 +1226,9 @@ class TestFireAndForgetFrameFlow:
         # 2: finalize with the same text. Content equals last_sent_content, so
         # the adapter appends a zero-width space to force a distinct final frame.
         ok = await adapter.send_stream_frame(
-            "Short.", chat_id="chat-1", finalize=True,
+            "Short.",
+            chat_id="chat-1",
+            finalize=True,
         )
         assert ok is True
         # seed + content + finalize = 3 frames.
@@ -1256,7 +1280,10 @@ class TestFinalFrameAckTimeoutSemantics:
 
         response = await adapter._send_reply_queued(
             "req-1",
-            {"msgtype": "stream", "stream": {"id": "stream_x", "content": "final", "finish": True}},
+            {
+                "msgtype": "stream",
+                "stream": {"id": "stream_x", "content": "final", "finish": True},
+            },
             is_final=True,
         )
 
@@ -1282,10 +1309,12 @@ class TestFinalFrameAckTimeoutSemantics:
         with pytest.raises(RuntimeError, match="ws closed"):
             await adapter._send_reply_queued(
                 "req-1",
-                {"msgtype": "stream", "stream": {"id": "stream_x", "content": "x", "finish": True}},
+                {
+                    "msgtype": "stream",
+                    "stream": {"id": "stream_x", "content": "x", "finish": True},
+                },
                 is_final=True,
             )
-
 
 
 @pytest.mark.asyncio
@@ -1309,7 +1338,9 @@ async def test_oversized_cron_output_is_sent_as_successive_markdown_replies():
     adapter._send_reply_request = _reply
     adapter._send_request = AsyncMock()
     content = "\n\n".join(f"line {i} " + "x" * 200 for i in range(60))
-    payload = DeliveryRouter(GatewayConfig())._cap_oversized_output(adapter, content, "job")
+    payload = DeliveryRouter(GatewayConfig())._cap_oversized_output(
+        adapter, content, "job"
+    )
     result = await adapter.send("group-1", payload)
 
     assert result.success

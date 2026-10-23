@@ -1,4 +1,5 @@
 """Steer requeue/drain semantics and the ``_is_openai_client_closed`` truth table."""
+
 from __future__ import annotations
 
 import threading
@@ -62,10 +63,19 @@ def _duck(outer=None, inner=None, *, has_outer=True, has_inner=True):
         # the reviewer's 4 combos: duck outer is_closed True/False, with/without _client
         (_duck(True, has_inner=False), True),
         (_duck(False, has_inner=False), False),
-        (_duck(True, _Inner(False)), True),  # outer says closed => closed, inner not consulted
-        (_duck(False, _Inner(True)), True),  # outer open, inner closed => inner is the answer
+        (
+            _duck(True, _Inner(False)),
+            True,
+        ),  # outer says closed => closed, inner not consulted
+        (
+            _duck(False, _Inner(True)),
+            True,
+        ),  # outer open, inner closed => inner is the answer
         (_duck(False, _Inner(False)), False),
-        (_duck(lambda: True, _Inner(False)), True),  # openai.OpenAI.is_closed() method form
+        (
+            _duck(lambda: True, _Inner(False)),
+            True,
+        ),  # openai.OpenAI.is_closed() method form
         (_duck(lambda: False, _Inner(True)), True),
         (_duck(lambda: False, _Inner(False)), False),
         (_duck(lambda: False, has_inner=False), False),

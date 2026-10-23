@@ -29,7 +29,10 @@ from .shared_metrics_contract import (
     client_resource_is_valid,
     counter_dimensions_are_valid,
 )
-from .shared_metrics_drift import conform_counter_dimensions, counter_dimensions_shape_is_known
+from .shared_metrics_drift import (
+    conform_counter_dimensions,
+    counter_dimensions_shape_is_known,
+)
 
 
 _PACKAGE_SCHEMA_VERSION = "clawk.shared_metrics.v4"
@@ -200,7 +203,9 @@ class SharedMetricsStore:
         self._deferred_lock = threading.Lock()
         self._drain_at_exit = False
 
-    def record_model_call(self, dimensions: dict[str, str], resource: dict[str, str]) -> None:
+    def record_model_call(
+        self, dimensions: dict[str, str], resource: dict[str, str]
+    ) -> None:
         """Increment the terminal model-call counter for the current UTC day."""
         self.record_counter(MODEL_ROUTE_METRIC, dimensions, resource)
 
@@ -210,7 +215,9 @@ class SharedMetricsStore:
             _ACTIVE_INSTALL_STATE_KEY, CLIENT_ACTIVE_METRIC, {}, resource
         )
 
-    def record_install_snapshot(self, dimensions: dict[str, str], resource: dict[str, str]) -> bool:
+    def record_install_snapshot(
+        self, dimensions: dict[str, str], resource: dict[str, str]
+    ) -> bool:
         """Record the configuration snapshot at most once in any rolling 24-hour window."""
         return self._record_once_per_interval(
             _INSTALL_SNAPSHOT_STATE_KEY, INSTALL_SNAPSHOT_METRIC, dimensions, resource
@@ -220,14 +227,18 @@ class SharedMetricsStore:
         """Cheap read so the producer skips collecting a snapshot the latch would drop."""
         with self._connection() as connection:
             row = connection.execute(
-                "SELECT value FROM telemetry_state WHERE key = ?", (_INSTALL_SNAPSHOT_STATE_KEY,)
+                "SELECT value FROM telemetry_state WHERE key = ?",
+                (_INSTALL_SNAPSHOT_STATE_KEY,),
             ).fetchone()
         last = self._parse_state_timestamp(row["value"]) if row is not None else None
         now = _utc_now()
         return last is None or last > now or now >= last + _ACTIVE_INSTALL_INTERVAL
 
     def _record_once_per_interval(
-        self, state_key: str, metric_name: str, dimensions: dict[str, str],
+        self,
+        state_key: str,
+        metric_name: str,
+        dimensions: dict[str, str],
         resource: dict[str, str],
     ) -> bool:
         """Transactional compare-and-set latch shared by concurrent Clawksis processes."""
@@ -237,7 +248,9 @@ class SharedMetricsStore:
             row = connection.execute(
                 "SELECT value FROM telemetry_state WHERE key = ?", (state_key,)
             ).fetchone()
-            last_recorded = self._parse_state_timestamp(row["value"]) if row is not None else None
+            last_recorded = (
+                self._parse_state_timestamp(row["value"]) if row is not None else None
+            )
             if last_recorded is not None and last_recorded > now:
                 # A wall-clock correction must not suppress activity until the stale future
                 # timestamp plus another full interval.
@@ -246,7 +259,10 @@ class SharedMetricsStore:
                     (_isoformat(now), state_key),
                 )
                 return False
-            if last_recorded is not None and now < last_recorded + _ACTIVE_INSTALL_INTERVAL:
+            if (
+                last_recorded is not None
+                and now < last_recorded + _ACTIVE_INSTALL_INTERVAL
+            ):
                 return False
             self._install_id(connection)
             self._record_counter_in_transaction(
@@ -260,34 +276,53 @@ class SharedMetricsStore:
         return True
 
     def record_counter(
-        self, metric_name: str, dimensions: dict[str, str], resource: dict[str, str],
+        self,
+        metric_name: str,
+        dimensions: dict[str, str],
+        resource: dict[str, str],
         amount: int = 1,
     ) -> None:
         """Add ``amount`` (1 for event counters, a token count for sums) for the current UTC day."""
         self._validate_counter(metric_name, dimensions, resource)
-        if isinstance(amount, bool) or not isinstance(amount, int) or amount < 1 or (
-            amount != 1 and metric_name not in SUM_METRICS
+        if (
+            isinstance(amount, bool)
+            or not isinstance(amount, int)
+            or amount < 1
+            or (amount != 1 and metric_name not in SUM_METRICS)
         ):
             raise ValueError(f"Unsupported amount for shared metric: {metric_name}")
         period_start = _utc_now().date().isoformat()
-        self._write_or_defer(lambda connection: self._record_counter_in_transaction(
-            connection, metric_name, dimensions, resource, period_start, amount
-        ))
+        self._write_or_defer(
+            lambda connection: self._record_counter_in_transaction(
+                connection, metric_name, dimensions, resource, period_start, amount
+            )
+        )
 
     def update_rollup_state(
-        self, state_key: str,
-        update: Callable[[dict[str, Any] | None], tuple[dict[str, Any], list[tuple[str, dict, dict, str]]]],
+        self,
+        state_key: str,
+        update: Callable[
+            [dict[str, Any] | None],
+            tuple[dict[str, Any], list[tuple[str, dict, dict, str]]],
+        ],
     ) -> None:
         """Read-modify-write one JSON rollup state and record the ``(metric, dimensions, resource,
         period_start)`` rows ``update`` closes, in one write transaction: every process of the profile
         serializes here, so a closed period is emitted exactly once. Rows the contract rejects are
         dropped (never retried) so one bad row cannot wedge the rollup. A busy store defers the update
         to the next write (it then runs with that write's clock)."""
-        self._write_or_defer(lambda connection: self._update_rollup_state(connection, state_key, update))
+        self._write_or_defer(
+            lambda connection: self._update_rollup_state(connection, state_key, update)
+        )
 
     def _update_rollup_state(
-        self, connection: sqlite3.Connection, state_key: str,
-        update: Callable[[dict[str, Any] | None], tuple[dict[str, Any], list[tuple[str, dict, dict, str]]]],
+        self,
+        connection: sqlite3.Connection,
+        state_key: str,
+        update: Callable[
+            [dict[str, Any] | None],
+            tuple[dict[str, Any], list[tuple[str, dict, dict, str]]],
+        ],
     ) -> None:
         row = connection.execute(
             "SELECT value FROM telemetry_state WHERE key = ?", (state_key,)
@@ -298,13 +333,17 @@ class SharedMetricsStore:
             state = None
         new_state, rows = update(state if isinstance(state, dict) else None)
         valid = [
-            r for r in rows
-            if counter_dimensions_are_valid(r[0], r[1]) and client_resource_is_valid(r[2])
+            r
+            for r in rows
+            if counter_dimensions_are_valid(r[0], r[1])
+            and client_resource_is_valid(r[2])
         ]
         if valid:
             self._install_id(connection)
         for metric_name, dimensions, resource, period_start in valid:
-            self._record_counter_in_transaction(connection, metric_name, dimensions, resource, period_start)
+            self._record_counter_in_transaction(
+                connection, metric_name, dimensions, resource, period_start
+            )
         connection.execute(
             "INSERT INTO telemetry_state(key, value) VALUES (?, ?)"
             " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
@@ -314,28 +353,45 @@ class SharedMetricsStore:
     def recorded_milestones(self) -> frozenset[str]:
         return self._latched(_MILESTONE_STATE_PREFIX)
 
-    def record_milestone(self, milestone: str, install_age_bucket: str, resource: dict[str, str]) -> bool:
+    def record_milestone(
+        self, milestone: str, install_age_bucket: str, resource: dict[str, str]
+    ) -> bool:
         """Record an install milestone at most once, ever (compare-and-set across processes)."""
         dimensions = {"install_age_bucket": install_age_bucket, "milestone": milestone}
-        return self._record_once_ever(f"{_MILESTONE_STATE_PREFIX}{milestone}", MILESTONE_METRIC, dimensions, resource)
+        return self._record_once_ever(
+            f"{_MILESTONE_STATE_PREFIX}{milestone}",
+            MILESTONE_METRIC,
+            dimensions,
+            resource,
+        )
 
     # ---- v5 signals ----
     def recorded_features(self) -> frozenset[str]:
         return self._latched(_FEATURE_STATE_PREFIX)
 
-    def record_feature_adoption(self, feature: str, days_bucket: str, resource: dict[str, str]) -> bool:
+    def record_feature_adoption(
+        self, feature: str, days_bucket: str, resource: dict[str, str]
+    ) -> bool:
         """Record a feature's first use at most once per install, ever (same latch as milestones)."""
         dimensions = {"days_since_install_bucket": days_bucket, "feature": feature}
-        return self._record_once_ever(f"{_FEATURE_STATE_PREFIX}{feature}", FEATURE_ADOPTION_METRIC, dimensions, resource)
+        return self._record_once_ever(
+            f"{_FEATURE_STATE_PREFIX}{feature}",
+            FEATURE_ADOPTION_METRIC,
+            dimensions,
+            resource,
+        )
 
-    def record_counter_once_per_day(self, metric_name: str, dimensions: dict[str, str], resource: dict[str, str]) -> bool:
+    def record_counter_once_per_day(
+        self, metric_name: str, dimensions: dict[str, str], resource: dict[str, str]
+    ) -> bool:
         """Count at most once per UTC day per dimension set, whatever the surface (``surface`` is
         attribution of the first one that day). One state row per dimension set, overwritten daily."""
         self._validate_counter(metric_name, dimensions, resource)
         now = _utc_now()
         today = now.date().isoformat()
         key = f"{_DAILY_ONCE_STATE_PREFIX}{metric_name}:" + _compact_json(
-            {k: v for k, v in dimensions.items() if k != "surface"})
+            {k: v for k, v in dimensions.items() if k != "surface"}
+        )
         with self._write() as connection:
             changed = connection.execute(
                 "INSERT INTO telemetry_state(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE"
@@ -345,8 +401,11 @@ class SharedMetricsStore:
             if not changed:
                 return False
             self._install_id(connection)
-            self._record_counter_in_transaction(connection, metric_name, dimensions, resource, today)
+            self._record_counter_in_transaction(
+                connection, metric_name, dimensions, resource, today
+            )
         return True
+
     # ---- end v5 signals ----
 
     def _latched(self, prefix: str) -> frozenset[str]:
@@ -354,10 +413,14 @@ class SharedMetricsStore:
             rows = connection.execute(
                 "SELECT key FROM telemetry_state WHERE key LIKE ?", (f"{prefix}%",)
             ).fetchall()
-        return frozenset(row["key"][len(prefix):] for row in rows)
+        return frozenset(row["key"][len(prefix) :] for row in rows)
 
     def _record_once_ever(
-        self, state_key: str, metric_name: str, dimensions: dict[str, str], resource: dict[str, str],
+        self,
+        state_key: str,
+        metric_name: str,
+        dimensions: dict[str, str],
+        resource: dict[str, str],
     ) -> bool:
         self._validate_counter(metric_name, dimensions, resource)
         now = _utc_now()
@@ -397,8 +460,11 @@ class SharedMetricsStore:
         connection.execute(
             _INCREMENT_COUNTER_SQL,
             (
-                period_start, metric_name, *(resource[column] for column in _RESOURCE_COLUMNS),
-                _compact_json(dimensions), amount,
+                period_start,
+                metric_name,
+                *(resource[column] for column in _RESOURCE_COLUMNS),
+                _compact_json(dimensions),
+                amount,
             ),
         )
 
@@ -425,7 +491,10 @@ class SharedMetricsStore:
             busy = "locked" in str(exc) or "busy" in str(exc)
             with self._deferred_lock:
                 # A failure that is not contention drops only this write: the earlier ones stay queued.
-                self._deferred = [*(pending if busy else pending[:-1]), *self._deferred][-_DEFERRED_WRITES_MAX:]
+                self._deferred = [
+                    *(pending if busy else pending[:-1]),
+                    *self._deferred,
+                ][-_DEFERRED_WRITES_MAX:]
                 register, self._drain_at_exit = not self._drain_at_exit, True
             if register:
                 atexit.register(self.drain_deferred)
@@ -443,7 +512,11 @@ class SharedMetricsStore:
                 for item in pending:
                     item(connection)
         except Exception:
-            logger.warning("Unable to write %d deferred shared-metrics updates", len(pending), exc_info=True)
+            logger.warning(
+                "Unable to write %d deferred shared-metrics updates",
+                len(pending),
+                exc_info=True,
+            )
 
     def create_and_export_package_if_due(self) -> list[Path]:
         """Create pending packages at most once per UTC day, then export them."""
@@ -456,7 +529,9 @@ class SharedMetricsStore:
         try:
             self._prune_expired_history()
         except Exception:
-            logger.warning("Unable to prune expired shared-metrics history", exc_info=True)
+            logger.warning(
+                "Unable to prune expired shared-metrics history", exc_info=True
+            )
         return exported
 
     def counter_snapshot(self) -> list[dict[str, Any]]:
@@ -473,9 +548,12 @@ class SharedMetricsStore:
             ).fetchall()
         return [
             {
-                "period_start": row["period_start"], "metric_name": row["metric_name"],
-                "resource": _row_resource(row), "dimensions": json.loads(row["dimensions_json"]),
-                "value": row["value"], "packaged_value": row["packaged_value"],
+                "period_start": row["period_start"],
+                "metric_name": row["metric_name"],
+                "resource": _row_resource(row),
+                "dimensions": json.loads(row["dimensions_json"]),
+                "value": row["value"],
+                "packaged_value": row["packaged_value"],
             }
             for row in rows
         ]
@@ -494,7 +572,9 @@ class SharedMetricsStore:
             connection.close()
 
     @contextmanager
-    def _write(self, *, busy_timeout_ms: int = _BUSY_TIMEOUT_MS) -> Iterator[sqlite3.Connection]:
+    def _write(
+        self, *, busy_timeout_ms: int = _BUSY_TIMEOUT_MS
+    ) -> Iterator[sqlite3.Connection]:
         """A connection inside one write transaction."""
         with self._connection(busy_timeout_ms=busy_timeout_ms) as connection:
             with write_txn(connection):
@@ -507,7 +587,9 @@ class SharedMetricsStore:
             schema_row = connection.execute(
                 "SELECT value FROM telemetry_state WHERE key = 'schema_version'"
             ).fetchone()
-            schema_version = str(schema_row["value"]) if schema_row is not None else None
+            schema_version = (
+                str(schema_row["value"]) if schema_row is not None else None
+            )
             if schema_version == "1":
                 for statement in _MIGRATE_V1_SQL:
                     connection.execute(statement)
@@ -528,7 +610,9 @@ class SharedMetricsStore:
             }
             for column, declaration in _SEND_COLUMNS:
                 if column not in existing:
-                    add_column_if_missing(connection, "package_outbox", column, f"{column} {declaration}")
+                    add_column_if_missing(
+                        connection, "package_outbox", column, f"{column} {declaration}"
+                    )
             for statement in _CREATE_CONSENT_TABLES_SQL:
                 connection.execute(statement)
             connection.execute(
@@ -622,8 +706,11 @@ class SharedMetricsStore:
             "INSERT INTO package_outbox( package_id, period_start, period_end, payload_json,"
             " created_at ) VALUES (?, ?, ?, ?, ?)",
             (
-                payload["package_id"], payload["period_start"], payload["period_end"],
-                _compact_json(payload), payload["generated_at"],
+                payload["package_id"],
+                payload["period_start"],
+                payload["period_end"],
+                _compact_json(payload),
+                payload["generated_at"],
             ),
         )
         # Advance the data high-water mark. This is the ONLY writer of the 'data' mark:
@@ -639,7 +726,10 @@ class SharedMetricsStore:
 
     @staticmethod
     def _mark_packaged(
-        connection: sqlite3.Connection, rows: list[sqlite3.Row], period_value: str, resource_values: tuple,
+        connection: sqlite3.Connection,
+        rows: list[sqlite3.Row],
+        period_value: str,
+        resource_values: tuple,
     ) -> None:
         for row in rows:
             connection.execute(
@@ -649,7 +739,12 @@ class SharedMetricsStore:
                       AND os_family = ? AND architecture = ? AND install_method = ?
                       AND dimensions_json = ?
                     """,
-                (period_value, row["metric_name"], *resource_values, row["dimensions_json"]),
+                (
+                    period_value,
+                    row["metric_name"],
+                    *resource_values,
+                    row["dimensions_json"],
+                ),
             )
 
     @classmethod
@@ -675,20 +770,29 @@ class SharedMetricsStore:
         # shape whose values fell out of the contract was recorded by an earlier build or catalog
         # (#133017): re-bucket it inside the closed enum, or leave the row out when its field has no
         # bucket, rather than abort the whole period's package. Either way no stale value leaves.
-        if not isinstance(dimensions, dict) or not counter_dimensions_shape_is_known(metric_name, dimensions):
+        if not isinstance(dimensions, dict) or not counter_dimensions_shape_is_known(
+            metric_name, dimensions
+        ):
             raise ValueError(f"Unsupported dimensions for shared metric: {metric_name}")
         if not counter_dimensions_are_valid(metric_name, dimensions):
             conformed = conform_counter_dimensions(metric_name, dimensions)
             if conformed is None:
-                logger.info("Shared-metric %s row holds a retired value with no bucket; not packaged", metric_name)
+                logger.info(
+                    "Shared-metric %s row holds a retired value with no bucket; not packaged",
+                    metric_name,
+                )
                 return None
             logger.info(
                 "Shared-metric %s row drifted out of the contract since it was recorded; "
-                "packaged with bucketed dimensions %s", metric_name, _compact_json(conformed),
+                "packaged with bucketed dimensions %s",
+                metric_name,
+                _compact_json(conformed),
             )
             dimensions = conformed
         return {
-            "name": metric_name, "type": "counter", "dimensions": dimensions,
+            "name": metric_name,
+            "type": "counter",
+            "dimensions": dimensions,
             "value": row["value"] - row["packaged_value"],
         }
 
@@ -704,8 +808,12 @@ class SharedMetricsStore:
             package_id = str(row["package_id"])
             path = self.outbox_directory / f"{package_id}.json"
             atomic_json_write(
-                path, json.loads(row["payload_json"]), indent=None, separators=(",", ":"),
-                sort_keys=True, mode=0o600,
+                path,
+                json.loads(row["payload_json"]),
+                indent=None,
+                separators=(",", ":"),
+                sort_keys=True,
+                mode=0o600,
             )
             with self._connection() as connection:
                 connection.execute(
@@ -736,7 +844,9 @@ class SharedMetricsStore:
                 removable_package_ids.append(package_id)
             except OSError:
                 logger.warning(
-                    "Unable to prune expired shared-metrics package %s", package_id, exc_info=True
+                    "Unable to prune expired shared-metrics package %s",
+                    package_id,
+                    exc_info=True,
                 )
 
         with self._write() as connection:

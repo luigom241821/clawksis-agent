@@ -4,6 +4,7 @@ On a multiplexed gateway every served profile's turns run in one process, so any
 module keeps at module or class level is shared by all of them. These tests drive the real
 sequential and concurrent dispatch helpers with real ``MemoryManager`` instances.
 """
+
 import json
 import threading
 from types import SimpleNamespace
@@ -40,7 +41,13 @@ class _ProcessWideProvider(MemoryProvider):
         type(self).binding = kwargs["clawk_home"]
 
     def get_tool_schemas(self):
-        return [{"name": _TOOL, "description": "remember", "parameters": {"type": "object", "properties": {}}}]
+        return [
+            {
+                "name": _TOOL,
+                "description": "remember",
+                "parameters": {"type": "object", "properties": {}},
+            }
+        ]
 
     def handle_tool_call(self, tool_name, args, **kwargs):
         type(self).calls.append(kwargs)
@@ -81,15 +88,22 @@ def _agent(home, gsk, provider_cls=_ProcessWideProvider, *, initialize=True):
     with _Scope(home):
         manager.add_provider(provider_cls())
         if initialize:
-            manager.initialize_all(session_id=f"s-{home.name}", platform="api_server", clawk_home=str(home))
+            manager.initialize_all(
+                session_id=f"s-{home.name}", platform="api_server", clawk_home=str(home)
+            )
     return SimpleNamespace(
-        _memory_manager=manager, _context_engine_tool_names=set(), _gateway_session_key=gsk,
-        _should_emit_quiet_tool_messages=lambda: False, _should_start_quiet_spinner=lambda: False,
+        _memory_manager=manager,
+        _context_engine_tool_names=set(),
+        _gateway_session_key=gsk,
+        _should_emit_quiet_tool_messages=lambda: False,
+        _should_start_quiet_spinner=lambda: False,
     )
 
 
 def _sequential(agent, content):
-    ref = _ToolCallRef(name=_TOOL, args={"content": content}, task_id="t", call_id="c", trace=[])
+    ref = _ToolCallRef(
+        name=_TOOL, args={"content": content}, task_id="t", call_id="c", trace=[]
+    )
     return _resolve_sequential_dispatch(agent, ref, []).execute({"content": content})
 
 
@@ -111,7 +125,9 @@ def homes(tmp_path):
 def test_interleaved_turns_of_two_profiles_write_to_their_own_stores(homes):
     alpha_home, beta_home = homes
     alpha = _agent(alpha_home, "agent:alpha:api_server:dm:1")
-    beta = _agent(beta_home, "agent:beta:api_server:dm:2")  # initialized last: owns the process-wide binding
+    beta = _agent(
+        beta_home, "agent:beta:api_server:dm:2"
+    )  # initialized last: owns the process-wide binding
     barrier, errors = threading.Barrier(2), []
 
     def turn(agent, home, label):
@@ -119,24 +135,34 @@ def test_interleaved_turns_of_two_profiles_write_to_their_own_stores(homes):
             with _Scope(home):
                 barrier.wait(timeout=5)
                 for i in range(20):
-                    result = (_sequential if i % 2 else _concurrent)(agent, f"{label}-{i}")
+                    result = (_sequential if i % 2 else _concurrent)(
+                        agent, f"{label}-{i}"
+                    )
                     assert json.loads(result) == {"ok": True}, result
         except Exception as exc:  # surfaced below; a thread can't fail the test itself
             errors.append(exc)
 
-    threads = [threading.Thread(target=turn, args=(alpha, alpha_home, "alpha")),
-               threading.Thread(target=turn, args=(beta, beta_home, "beta"))]
+    threads = [
+        threading.Thread(target=turn, args=(alpha, alpha_home, "alpha")),
+        threading.Thread(target=turn, args=(beta, beta_home, "beta")),
+    ]
     for thread in threads:
         thread.start()
     for thread in threads:
         thread.join(timeout=10)
     assert not errors, errors
     stores = _ProcessWideProvider.stores
-    assert sorted(stores.get(str(alpha_home), [])) == sorted(f"alpha-{i}" for i in range(20)), stores
-    assert sorted(stores.get(str(beta_home), [])) == sorted(f"beta-{i}" for i in range(20)), stores
+    assert sorted(stores.get(str(alpha_home), [])) == sorted(
+        f"alpha-{i}" for i in range(20)
+    ), stores
+    assert sorted(stores.get(str(beta_home), [])) == sorted(
+        f"beta-{i}" for i in range(20)
+    ), stores
     # The caller's gateway session key still travels with each call.
     assert {call["caller_gsk"] for call in _ProcessWideProvider.calls} == {
-        "agent:alpha:api_server:dm:1", "agent:beta:api_server:dm:2"}
+        "agent:alpha:api_server:dm:1",
+        "agent:beta:api_server:dm:2",
+    }
 
 
 _REFUSAL_CODE = "memory_caller_profile_unresolved"
@@ -147,8 +173,12 @@ def _assert_generic_refusal(result, caplog, *homes):
     too on a gateway); the log keeps the check's code and the homes."""
     error = result.get("error", "")
     assert "refused" in error and "clawk logs errors" in error, result
-    assert _REFUSAL_CODE not in error and not any(str(home) in error for home in homes), result
-    logged = "\n".join(r.getMessage() for r in caplog.records if r.name == "agent.memory_caller_scope")
+    assert _REFUSAL_CODE not in error and not any(
+        str(home) in error for home in homes
+    ), result
+    logged = "\n".join(
+        r.getMessage() for r in caplog.records if r.name == "agent.memory_caller_scope"
+    )
     assert _REFUSAL_CODE in logged, logged
     assert all(str(home) in logged for home in homes), logged
 
@@ -156,6 +186,7 @@ def _assert_generic_refusal(result, caplog, *homes):
 @pytest.fixture
 def multiplexed():
     from agent.secret_scope import reset_multiplex_context, set_multiplex_context
+
     token = set_multiplex_context(True)
     yield
     reset_multiplex_context(token)
@@ -165,7 +196,9 @@ def test_call_from_another_profiles_scope_is_refused(homes, caplog):
     alpha_home, beta_home = homes
     alpha = _agent(alpha_home, "agent:alpha:api_server:dm:1")
     for dispatch in (_sequential, _concurrent):
-        with _Scope(beta_home):  # the turn's scope names a profile this manager never served
+        with _Scope(
+            beta_home
+        ):  # the turn's scope names a profile this manager never served
             result = json.loads(dispatch(alpha, "stray"))
         _assert_generic_refusal(result, caplog, alpha_home, beta_home)
     assert _ProcessWideProvider.stores == {}
@@ -181,7 +214,8 @@ def test_multiplexed_call_with_no_known_profile_is_refused(homes, multiplexed, c
 
 
 def test_multiplexed_call_without_a_caller_scope_is_refused_even_for_the_process_profile(
-        homes, multiplexed, monkeypatch, caplog):
+    homes, multiplexed, monkeypatch, caplog
+):
     # The manager serves the process's own (launch) profile, but on a multiplexed process a call that
     # names no profile is not proof it came from that profile's turn.
     alpha_home, _ = homes
@@ -240,10 +274,17 @@ class _InstanceScopedProvider(MemoryProvider):
 
     def _record(self, what):
         from clawk_constants import get_clawk_home
+
         type(self).events.append((what, self._home, str(get_clawk_home())))
 
     def get_tool_schemas(self):
-        return [{"name": _HOOK_TOOL, "description": "remember", "parameters": {"type": "object", "properties": {}}}]
+        return [
+            {
+                "name": _HOOK_TOOL,
+                "description": "remember",
+                "parameters": {"type": "object", "properties": {}},
+            }
+        ]
 
     def handle_tool_call(self, tool_name, args, **kwargs):
         assert kwargs["clawk_home"] == self._home, (kwargs, self._home)
@@ -290,7 +331,9 @@ def _manager(home, provider=None):
     manager = MemoryManager()
     with _Scope(home):
         manager.add_provider(provider or _InstanceScopedProvider())
-        manager.initialize_all(session_id=f"s-{home.name}", platform="api_server", clawk_home=str(home))
+        manager.initialize_all(
+            session_id=f"s-{home.name}", platform="api_server", clawk_home=str(home)
+        )
     return manager
 
 
@@ -300,13 +343,22 @@ def _drain(manager):
 
 # hook name -> drives it through the manager the way the agent does (background ones are drained)
 _HOOKS = {
-    "sync_turn": lambda m: (m.sync_all("what did we decide", "the plan", session_id="s"), _drain(m)),
-    "queue_prefetch": lambda m: (m.queue_prefetch_all("what did we decide", session_id="s"), _drain(m)),
+    "sync_turn": lambda m: (
+        m.sync_all("what did we decide", "the plan", session_id="s"),
+        _drain(m),
+    ),
+    "queue_prefetch": lambda m: (
+        m.queue_prefetch_all("what did we decide", session_id="s"),
+        _drain(m),
+    ),
     "prefetch": lambda m: m.prefetch_all("what did we decide", session_id="s"),
     "on_turn_start": lambda m: m.on_turn_start(1, "what did we decide"),
     "on_session_end": lambda m: m.on_session_end([]),
     "on_session_switch": lambda m: m.on_session_switch("s2"),
-    "session_boundary": lambda m: (m.commit_session_boundary_async([], new_session_id="s3"), _drain(m)),
+    "session_boundary": lambda m: (
+        m.commit_session_boundary_async([], new_session_id="s3"),
+        _drain(m),
+    ),
     "on_pre_compress": lambda m: m.on_pre_compress([{"role": "user", "content": "x"}]),
     "on_memory_write": lambda m: m.on_memory_write("add", "memory", "a fact"),
     "on_delegation": lambda m: m.on_delegation("task", "result"),
@@ -314,8 +366,11 @@ _HOOKS = {
 
 
 def _refused_hooks(caplog) -> set:
-    return {r.args[0].removeprefix("hook ") for r in caplog.records
-            if r.name == "agent.memory_caller_scope" and _REFUSAL_CODE in r.getMessage()}
+    return {
+        r.args[0].removeprefix("hook ")
+        for r in caplog.records
+        if r.name == "agent.memory_caller_scope" and _REFUSAL_CODE in r.getMessage()
+    }
 
 
 def test_lifecycle_hooks_from_another_profiles_scope_are_refused(homes, caplog):
@@ -327,10 +382,16 @@ def test_lifecycle_hooks_from_another_profiles_scope_are_refused(homes, caplog):
             hook(alpha)
     assert _InstanceScopedProvider.events == []
     assert _refused_hooks(caplog) == set(_HOOKS)
-    assert all(str(beta_home) in r.getMessage() for r in caplog.records if r.name == "agent.memory_caller_scope")
+    assert all(
+        str(beta_home) in r.getMessage()
+        for r in caplog.records
+        if r.name == "agent.memory_caller_scope"
+    )
 
 
-def test_multiplexed_lifecycle_hooks_without_a_caller_scope_are_refused(homes, multiplexed, monkeypatch, caplog):
+def test_multiplexed_lifecycle_hooks_without_a_caller_scope_are_refused(
+    homes, multiplexed, monkeypatch, caplog
+):
     alpha_home, _ = homes
     monkeypatch.setenv("CLAWK_HOME", str(alpha_home))
     alpha = _manager(alpha_home)
@@ -344,12 +405,24 @@ def test_tool_calls_reuse_what_initialize_bound(homes, monkeypatch):
     # Per call, only the caller's home is resolved: the bound home's key and the provider's
     # handle_tool_call signature are worked out once per manager, not on every call.
     from agent import memory_caller_scope, memory_manager
+
     alpha_home, _ = homes
     alpha = _manager(alpha_home)
     keys, signatures = [], []
-    real_key, real_signature = memory_caller_scope._home_key, memory_manager._signature_params
-    monkeypatch.setattr(memory_caller_scope, "_home_key", lambda home: keys.append(home) or real_key(home))
-    monkeypatch.setattr(memory_manager, "_signature_params", lambda fn: signatures.append(fn) or real_signature(fn))
+    real_key, real_signature = (
+        memory_caller_scope._home_key,
+        memory_manager._signature_params,
+    )
+    monkeypatch.setattr(
+        memory_caller_scope,
+        "_home_key",
+        lambda home: keys.append(home) or real_key(home),
+    )
+    monkeypatch.setattr(
+        memory_manager,
+        "_signature_params",
+        lambda fn: signatures.append(fn) or real_signature(fn),
+    )
     with _Scope(alpha_home):
         for _ in range(3):
             assert json.loads(alpha.handle_tool_call(_HOOK_TOOL, {})) == {"ok": True}
@@ -361,7 +434,9 @@ def test_refused_checkpoint_compression_fails_closed(homes):
     alpha_home, beta_home = homes
     alpha = _manager(alpha_home)
     with _Scope(beta_home), pytest.raises(RuntimeError, match="clawk logs errors"):
-        alpha.on_pre_compress([{"role": "user", "content": "x"}], require_checkpoint=True)
+        alpha.on_pre_compress(
+            [{"role": "user", "content": "x"}], require_checkpoint=True
+        )
 
 
 def test_refusals_are_written_to_gateway_log():
@@ -370,7 +445,16 @@ def test_refusals_are_written_to_gateway_log():
 
     from agent import memory_caller_scope
     from clawk_logging import COMPONENT_PREFIXES, _ComponentFilter
-    record = logging.LogRecord(memory_caller_scope.logger.name, logging.WARNING, __file__, 1, "refused", (), None)
+
+    record = logging.LogRecord(
+        memory_caller_scope.logger.name,
+        logging.WARNING,
+        __file__,
+        1,
+        "refused",
+        (),
+        None,
+    )
     assert _ComponentFilter(COMPONENT_PREFIXES["gateway"]).filter(record)
 
 
@@ -378,6 +462,7 @@ def test_background_hook_runs_under_the_owning_profile_explicitly(homes, multipl
     # The turn proves its profile through the secret scope alone (no CLAWK_HOME override): the
     # background worker must still run the provider under the owner's home, not the process's.
     from agent.secret_scope import reset_secret_scope, set_secret_scope
+
     alpha_home, _ = homes
     alpha = _manager(alpha_home)
     token = set_secret_scope({}, profile_home=str(alpha_home))
@@ -386,10 +471,14 @@ def test_background_hook_runs_under_the_owning_profile_explicitly(homes, multipl
         _drain(alpha)
     finally:
         reset_secret_scope(token)
-    assert _InstanceScopedProvider.events == [("sync_turn", str(alpha_home), str(alpha_home))]
+    assert _InstanceScopedProvider.events == [
+        ("sync_turn", str(alpha_home), str(alpha_home))
+    ]
 
 
-def test_two_profiles_interleaving_tool_calls_and_hooks_stay_in_their_own_stores(homes, multiplexed):
+def test_two_profiles_interleaving_tool_calls_and_hooks_stay_in_their_own_stores(
+    homes, multiplexed
+):
     alpha_home, beta_home = homes
     managers = {alpha_home: _manager(alpha_home), beta_home: _manager(beta_home)}
     barrier, errors = threading.Barrier(2), []
@@ -397,25 +486,39 @@ def test_two_profiles_interleaving_tool_calls_and_hooks_stay_in_their_own_stores
     def turns(home):
         manager = managers[home]
         agent = SimpleNamespace(
-            _memory_manager=manager, _context_engine_tool_names=set(), _gateway_session_key=f"agent:{home.name}:dm",
-            _should_emit_quiet_tool_messages=lambda: False, _should_start_quiet_spinner=lambda: False)
+            _memory_manager=manager,
+            _context_engine_tool_names=set(),
+            _gateway_session_key=f"agent:{home.name}:dm",
+            _should_emit_quiet_tool_messages=lambda: False,
+            _should_start_quiet_spinner=lambda: False,
+        )
         try:
             assert is_multiplex_active(), "the worker lost the multiplexed mode"
             with _Scope(home):
                 barrier.wait(timeout=5)
                 for i in range(10):
-                    ref = _ToolCallRef(name=_HOOK_TOOL, args={}, task_id="t", call_id="c", trace=[])
+                    ref = _ToolCallRef(
+                        name=_HOOK_TOOL, args={}, task_id="t", call_id="c", trace=[]
+                    )
                     if i % 2:
-                        assert json.loads(_resolve_sequential_dispatch(agent, ref, []).execute({})) == {"ok": True}
+                        assert json.loads(
+                            _resolve_sequential_dispatch(agent, ref, []).execute({})
+                        ) == {"ok": True}
                     else:
-                        assert json.loads(resolve_invoke_tool_executor(agent, _HOOK_TOOL)(agent, {}, SimpleNamespace())) == {"ok": True}
+                        assert json.loads(
+                            resolve_invoke_tool_executor(agent, _HOOK_TOOL)(
+                                agent, {}, SimpleNamespace()
+                            )
+                        ) == {"ok": True}
                     for hook in sorted(_HOOKS):
                         _HOOKS[hook](manager)
         except Exception as exc:  # surfaced below
             errors.append(exc)
 
     # Each worker runs under its own copy of this context, so it inherits the multiplexed mode.
-    threads = [threading.Thread(target=ctx_bound(turns), args=(home,)) for home in managers]
+    threads = [
+        threading.Thread(target=ctx_bound(turns), args=(home,)) for home in managers
+    ]
     for thread in threads:
         thread.start()
     for thread in threads:
@@ -424,12 +527,19 @@ def test_two_profiles_interleaving_tool_calls_and_hooks_stay_in_their_own_stores
     events = _InstanceScopedProvider.events
     for home in managers:
         mine = [e for e in events if e[1] == str(home)]
-        assert {e[0] for e in mine} >= {"tool", *{h for h in _HOOKS if h != "session_boundary"}}, mine
+        assert {e[0] for e in mine} >= {
+            "tool",
+            *{h for h in _HOOKS if h != "session_boundary"},
+        }, mine
         assert all(ambient == str(home) for _, _, ambient in mine), mine
-    assert len(events) == sum(1 for e in events if e[1] in {str(alpha_home), str(beta_home)})
+    assert len(events) == sum(
+        1 for e in events if e[1] in {str(alpha_home), str(beta_home)}
+    )
 
 
-def test_one_provider_instance_is_never_served_to_a_second_profile(homes, multiplexed, caplog):
+def test_one_provider_instance_is_never_served_to_a_second_profile(
+    homes, multiplexed, caplog
+):
     # A plugin that hands every agent the SAME instance keeps one binding for the whole process.
     # It stays with the profile that initialized it; another profile's manager refuses it.
     alpha_home, beta_home = homes
@@ -441,33 +551,55 @@ def test_one_provider_instance_is_never_served_to_a_second_profile(homes, multip
     with _Scope(alpha_home):
         assert json.loads(alpha.handle_tool_call(_HOOK_TOOL, {})) == {"ok": True}
     assert [e[1] for e in _InstanceScopedProvider.events] == [str(alpha_home)]
-    logged = "\n".join(r.getMessage() for r in caplog.records if r.name == "agent.memory_caller_scope")
-    assert "memory_provider_instance_shared" in logged and str(beta_home) in logged, logged
+    logged = "\n".join(
+        r.getMessage() for r in caplog.records if r.name == "agent.memory_caller_scope"
+    )
+    assert "memory_provider_instance_shared" in logged and str(beta_home) in logged, (
+        logged
+    )
 
 
-def test_agent_whose_provider_instance_is_refused_is_told_and_runs_without_it(homes, multiplexed, monkeypatch, caplog):
+def test_agent_whose_provider_instance_is_refused_is_told_and_runs_without_it(
+    homes, multiplexed, monkeypatch, caplog
+):
     # The real agent-build path: the refused provider is dropped, the user sees a startup warning, and
     # nothing claims the provider "activated".
     import logging
 
     from agent import agent_init
     from tests.agent.test_memory_migration_notifications import StartupAgent
+
     alpha_home, beta_home = homes
     shared = _InstanceScopedProvider()
     _manager(alpha_home, shared)
     monkeypatch.setattr("plugins.memory.load_memory_provider", lambda name: shared)
-    monkeypatch.setattr(agent_init, "_memory_provider_init_kwargs", lambda agent, platform: {
-        "session_id": "s-beta", "platform": platform, "clawk_home": str(beta_home)})
+    monkeypatch.setattr(
+        agent_init,
+        "_memory_provider_init_kwargs",
+        lambda agent, platform: {
+            "session_id": "s-beta",
+            "platform": platform,
+            "clawk_home": str(beta_home),
+        },
+    )
     agent = StartupAgent("api_server")
     with _Scope(beta_home), caplog.at_level(logging.DEBUG):
-        agent_init._init_memory(agent, {"memory": {"provider": "instancescoped"}}, False, "api_server")
+        agent_init._init_memory(
+            agent, {"memory": {"provider": "instancescoped"}}, False, "api_server"
+        )
     assert agent._memory_manager is None
     assert not any("activated" in r.getMessage() for r in caplog.records)
     notices = []
     agent.notice_callback = notices.append
     agent._replay_startup_warnings()
-    assert len(notices) == 1 and notices[0].level == "warn" and "instancescoped" in notices[0].text, notices
-    assert str(alpha_home) not in notices[0].text and str(beta_home) not in notices[0].text
+    assert (
+        len(notices) == 1
+        and notices[0].level == "warn"
+        and "instancescoped" in notices[0].text
+    ), notices
+    assert (
+        str(alpha_home) not in notices[0].text and str(beta_home) not in notices[0].text
+    )
 
 
 class _UnhashableProvider(_InstanceScopedProvider):

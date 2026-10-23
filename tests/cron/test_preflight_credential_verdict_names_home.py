@@ -10,7 +10,12 @@ import pytest
 from cron.scheduler_preflight import _preflight_check_provider_key
 from cron.scheduler_provider import _profile_cron_scope
 
-JOB = {"id": "7a6ae427c1d8", "name": "radar", "provider": "openai-codex", "model": "gpt-5.6-sol"}
+JOB = {
+    "id": "7a6ae427c1d8",
+    "name": "radar",
+    "provider": "openai-codex",
+    "model": "gpt-5.6-sol",
+}
 
 
 @pytest.fixture
@@ -19,7 +24,9 @@ def two_homes(tmp_path, monkeypatch):
     alpha = root / "profiles" / "alpha"
     alpha.mkdir(parents=True)
     for home in (root, alpha):
-        (home / "config.yaml").write_text("model:\n  default: gpt-5.6-sol\n  provider: openai-codex\n")
+        (home / "config.yaml").write_text(
+            "model:\n  default: gpt-5.6-sol\n  provider: openai-codex\n"
+        )
     (root / "auth.json").write_text(json.dumps({"version": 1, "providers": {}}))
     monkeypatch.setenv("CLAWK_HOME", str(root))
     monkeypatch.setenv("HOME", str(tmp_path / "home"))

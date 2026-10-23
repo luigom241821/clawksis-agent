@@ -41,7 +41,14 @@ class StreamJsonEmitter:
         self._session_id = session_id
         self._start = time.time()
         self._tool_started: dict[str, float] = {}
-        self._emit({"type": "system", "subtype": "init", "model": model, "session_id": session_id})
+        self._emit(
+            {
+                "type": "system",
+                "subtype": "init",
+                "model": model,
+                "session_id": session_id,
+            }
+        )
 
     def attach(self, agent) -> StreamJsonEmitter:
         """Route the agent's streaming/tool callbacks into this emitter (``init`` was already written at
@@ -61,8 +68,14 @@ class StreamJsonEmitter:
         if text:
             self._emit({"type": "text", "text": str(text)})
 
-    def on_tool_progress(self, event_type: str, tool_name: str | None = None, preview: Any = None, args: Any = None,
-                         **kwargs: Any) -> None:
+    def on_tool_progress(
+        self,
+        event_type: str,
+        tool_name: str | None = None,
+        preview: Any = None,
+        args: Any = None,
+        **kwargs: Any,
+    ) -> None:
         """``tool.started`` → ``tool_use`` (with ``input`` when the args are a dict); ``tool.completed`` →
         ``tool_result``. Other progress events (reasoning, output risk) are not part of the protocol."""
         name = tool_name or "unknown"
@@ -77,35 +90,65 @@ class StreamJsonEmitter:
                 payload["input"] = args
             self._emit(payload)
         elif event_type == "tool.completed":
-            duration = kwargs.get("duration") or (time.time() - self._tool_started.pop(key, time.time()))
+            duration = kwargs.get("duration") or (
+                time.time() - self._tool_started.pop(key, time.time())
+            )
             output = str(kwargs.get("result") or "")
-            self._emit({"type": "tool_result", "name": name,
-                        **({"tool_call_id": kwargs["tool_call_id"]} if kwargs.get("tool_call_id") else {}),
-                        "output": output if len(output) <= _TOOL_OUTPUT_CAP else output[:_TOOL_OUTPUT_CAP] + "...",
-                        "duration_ms": int(float(duration) * 1000), "is_error": bool(kwargs.get("is_error", False))})
+            self._emit(
+                {
+                    "type": "tool_result",
+                    "name": name,
+                    **(
+                        {"tool_call_id": kwargs["tool_call_id"]}
+                        if kwargs.get("tool_call_id")
+                        else {}
+                    ),
+                    "output": output
+                    if len(output) <= _TOOL_OUTPUT_CAP
+                    else output[:_TOOL_OUTPUT_CAP] + "...",
+                    "duration_ms": int(float(duration) * 1000),
+                    "is_error": bool(kwargs.get("is_error", False)),
+                }
+            )
 
     def emit_result(self, result: Any, session_id: str = "", exit_code: int = 0) -> int:
         """Write the terminal ``result`` record (once) and return the process exit code it reports."""
-        data = result if isinstance(result, dict) else {"final_response": "" if result is None else str(result)}
+        data = (
+            result
+            if isinstance(result, dict)
+            else {"final_response": "" if result is None else str(result)}
+        )
         exit_code = exit_code or (1 if data.get("failed") else 0)
-        payload = {"type": "result", "session_id": session_id or self._session_id, "exit_code": exit_code,
-                   "text": data.get("final_response") or "",
-                   "tokens": {"input": data.get("input_tokens") or 0, "output": data.get("output_tokens") or 0,
-                              "total": data.get("total_tokens") or 0, "cache_read": data.get("cache_read_tokens") or 0,
-                              "cache_write": data.get("cache_write_tokens") or 0},
-                   "duration_ms": int((time.time() - self._start) * 1000)}
+        payload = {
+            "type": "result",
+            "session_id": session_id or self._session_id,
+            "exit_code": exit_code,
+            "text": data.get("final_response") or "",
+            "tokens": {
+                "input": data.get("input_tokens") or 0,
+                "output": data.get("output_tokens") or 0,
+                "total": data.get("total_tokens") or 0,
+                "cache_read": data.get("cache_read_tokens") or 0,
+                "cache_write": data.get("cache_write_tokens") or 0,
+            },
+            "duration_ms": int((time.time() - self._start) * 1000),
+        }
         if data.get("error"):
             payload["error"] = str(data["error"])
         if data.get("replay_gap"):
             # The viewer fell behind and re-attached: ``text`` events stopped there; ``text`` is the whole reply.
             payload["replay_gap"] = True
         self._emit(payload)
-        print(f"\nsession_id: {session_id or self._session_id}", file=sys.stderr)  # same stderr contract as -Q
+        print(
+            f"\nsession_id: {session_id or self._session_id}", file=sys.stderr
+        )  # same stderr contract as -Q
         return exit_code
 
     def _emit(self, obj: dict) -> None:
         try:
-            sys.stdout.write(json.dumps({**obj, "timestamp": _now_ms()}, ensure_ascii=False) + "\n")
+            sys.stdout.write(
+                json.dumps({**obj, "timestamp": _now_ms()}, ensure_ascii=False) + "\n"
+            )
             sys.stdout.flush()
         except (BrokenPipeError, OSError):
             pass  # consumer closed the pipe — nothing left to report to

@@ -52,7 +52,12 @@ def _image_msg():
 
 
 def _plain_history():
-    return [_msg("user", "start"), _msg("assistant", "hello"), _msg("user", "do the thing"), _msg("assistant", "done")]
+    return [
+        _msg("user", "start"),
+        _msg("assistant", "hello"),
+        _msg("user", "do the thing"),
+        _msg("assistant", "done"),
+    ]
 
 
 def _history_with_images(n_images=10):
@@ -145,7 +150,9 @@ class TestAnchorInvalidation:
             _msg("user", "new follow-up"),
             dict(messages[-1]),
         ]
-        compacted.append(_msg("user", "post-anchor text must not be added to the stale base"))
+        compacted.append(
+            _msg("user", "post-anchor text must not be added to the stale base")
+        )
         assert anchored_context_tokens(compacted, anchor) is None
 
     def test_reloaded_transcript_with_same_content_still_matches(self):
@@ -172,16 +179,27 @@ class TestAnchorInvalidation:
         for m in messages:
             db.append_message(sid, m["role"], m["content"])
         durable = db.get_messages_as_conversation(sid)
-        live = SimpleNamespace(session_id=sid, _session_db=db, _persist_disabled=False, _usage_anchor=None)
+        live = SimpleNamespace(
+            session_id=sid, _session_db=db, _persist_disabled=False, _usage_anchor=None
+        )
         set_usage_anchor(live, capture_usage_anchor(10_000, 20, durable))
 
-        fresh = SimpleNamespace(session_id=sid, _session_db=db, _persist_disabled=False, _usage_anchor=None)
+        fresh = SimpleNamespace(
+            session_id=sid, _session_db=db, _persist_disabled=False, _usage_anchor=None
+        )
         restore_usage_anchor(fresh, db.get_messages_as_conversation(sid))
         assert fresh._usage_anchor is not None
-        assert anchored_context_tokens(db.get_messages_as_conversation(sid), fresh._usage_anchor) == 10_020
+        assert (
+            anchored_context_tokens(
+                db.get_messages_as_conversation(sid), fresh._usage_anchor
+            )
+            == 10_020
+        )
 
         set_usage_anchor(live, None)  # compaction / reset clears the row too
-        stale = SimpleNamespace(session_id=sid, _session_db=db, _persist_disabled=False, _usage_anchor=None)
+        stale = SimpleNamespace(
+            session_id=sid, _session_db=db, _persist_disabled=False, _usage_anchor=None
+        )
         restore_usage_anchor(stale, durable)
         assert stale._usage_anchor is None
         db.close()
@@ -226,12 +244,8 @@ class TestPreflightConsumer:
         messages.append(_msg("assistant", "reply"))
         messages.append(_msg("user", "ok"))
 
-        anchored_result = _preflight_request_tokens(
-            self._agent(anchor), messages, ""
-        )
-        sabotaged_result = _preflight_request_tokens(
-            self._agent(None), messages, ""
-        )
+        anchored_result = _preflight_request_tokens(self._agent(anchor), messages, "")
+        sabotaged_result = _preflight_request_tokens(self._agent(None), messages, "")
         assert sabotaged_result - anchored_result > 2_800
 
 

@@ -240,8 +240,13 @@ def test_cleanup_age_comes_from_filename_not_mtime(tmp_path):
 
 
 def test_quarantine_stamp_ms_parses_and_rejects():
-    assert main_install_repair._quarantine_stamp_ms(Path("clawk.exe.old.1787020473885")) == 1787020473885
-    assert main_install_repair._quarantine_stamp_ms(Path("clawk.exe.old.backup")) is None
+    assert (
+        main_install_repair._quarantine_stamp_ms(Path("clawk.exe.old.1787020473885"))
+        == 1787020473885
+    )
+    assert (
+        main_install_repair._quarantine_stamp_ms(Path("clawk.exe.old.backup")) is None
+    )
     assert main_install_repair._quarantine_stamp_ms(Path("clawk.exe")) is None
 
 

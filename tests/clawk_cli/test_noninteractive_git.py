@@ -48,8 +48,10 @@ class TestNoninteractiveGitEnv:
         assert env["CLAWK_TEST_SENTINEL"] == "xyz"
         assert env["GIT_TERMINAL_PROMPT"] == "0"
         # Never mutates the live process environment.
-        assert "GCM_INTERACTIVE" not in os.environ or os.environ["GCM_INTERACTIVE"] == env["GCM_INTERACTIVE"]
-
+        assert (
+            "GCM_INTERACTIVE" not in os.environ
+            or os.environ["GCM_INTERACTIVE"] == env["GCM_INTERACTIVE"]
+        )
 
     def test_overrides_explicit_prompt_enable(self):
         env = noninteractive_git_env({"GIT_TERMINAL_PROMPT": "1"})
@@ -97,7 +99,9 @@ class TestNoninteractiveGitEnv:
         assert values["diff.external"] == ""
 
     @pytest.mark.real_safe_directory
-    def test_safe_directory_preserves_git_ordering_and_reset_markers(self, tmp_path, monkeypatch):
+    def test_safe_directory_preserves_git_ordering_and_reset_markers(
+        self, tmp_path, monkeypatch
+    ):
         """The user's effective trust policy is replayed verbatim, resets included.
 
         ``safe.directory`` is an ordered multi-valued setting where an empty value resets every
@@ -138,12 +142,19 @@ class TestNoninteractiveGitEnv:
         # git's own effective view of the same two files, lowest-precedence scope first.
         expected = subprocess.run(
             ["git", "config", "-z", "--get-all", "safe.directory"],
-            capture_output=True, text=True, check=True,
-            env={**os.environ, "GIT_CONFIG_SYSTEM": str(system_config),
-                 "GIT_CONFIG_GLOBAL": str(global_config)},
+            capture_output=True,
+            text=True,
+            check=True,
+            env={
+                **os.environ,
+                "GIT_CONFIG_SYSTEM": str(system_config),
+                "GIT_CONFIG_GLOBAL": str(global_config),
+            },
         ).stdout.split("\0")[:-1]
 
-        assert expected == ["*", "", "/trusted/only"], "git's documented reset shape changed"
+        assert expected == ["*", "", "/trusted/only"], (
+            "git's documented reset shape changed"
+        )
         assert injected == expected
 
     @pytest.mark.real_safe_directory
@@ -163,9 +174,20 @@ class TestNoninteractiveGitEnv:
             path.mkdir()
             subprocess.run(["git", "init", "-q"], cwd=path, check=True)
             subprocess.run(
-                ["git", "-c", "user.email=t@t", "-c", "user.name=t",
-                 "commit", "-q", "--allow-empty", "-m", "x"],
-                cwd=path, check=True,
+                [
+                    "git",
+                    "-c",
+                    "user.email=t@t",
+                    "-c",
+                    "user.name=t",
+                    "commit",
+                    "-q",
+                    "--allow-empty",
+                    "-m",
+                    "x",
+                ],
+                cwd=path,
+                check=True,
             )
             return path
 
@@ -180,8 +202,11 @@ class TestNoninteractiveGitEnv:
         )
 
         env = noninteractive_git_env(
-            {**os.environ, "GIT_CONFIG_SYSTEM": str(system_config),
-             "GIT_CONFIG_GLOBAL": str(global_config)}
+            {
+                **os.environ,
+                "GIT_CONFIG_SYSTEM": str(system_config),
+                "GIT_CONFIG_GLOBAL": str(global_config),
+            }
         )
         # Force the ownership check that safe.directory governs; without it git trusts the repo
         # because the test process owns the checkout it just created.
@@ -190,7 +215,10 @@ class TestNoninteractiveGitEnv:
         def _rev_parse(repo: Path) -> int:
             return subprocess.run(
                 ["git", "-C", str(repo), "rev-parse", "HEAD"],
-                capture_output=True, text=True, env=env, stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                env=env,
+                stdin=subprocess.DEVNULL,
                 check=False,
             ).returncode
 
@@ -217,7 +245,10 @@ class TestNoninteractiveGitEnv:
         # Config-layer pin only: GIT_SSH_COMMAND is never set or overridden here, so a user's
         # explicit env var still takes precedence over core.sshCommand.
         override = "ssh -i custom-key -o BatchMode=no"
-        assert noninteractive_git_env({"GIT_SSH_COMMAND": override})["GIT_SSH_COMMAND"] == override
+        assert (
+            noninteractive_git_env({"GIT_SSH_COMMAND": override})["GIT_SSH_COMMAND"]
+            == override
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -253,13 +284,22 @@ def test_git_clone_against_auth_remote_fails_fast(tmp_path: Path):
         # asserts the no-helper fail-fast path, so strip them — otherwise a
         # dev shell's VS Code askpass helper (GIT_ASKPASS=...askpass.sh)
         # blocks waiting on the editor and the clone times out locally.
-        for var in ("GIT_ASKPASS", "SSH_ASKPASS", "VSCODE_GIT_ASKPASS_NODE",
-                    "VSCODE_GIT_ASKPASS_MAIN", "VSCODE_GIT_ASKPASS_EXTRA_ARGS",
-                    "VSCODE_GIT_IPC_HANDLE"):
+        for var in (
+            "GIT_ASKPASS",
+            "SSH_ASKPASS",
+            "VSCODE_GIT_ASKPASS_NODE",
+            "VSCODE_GIT_ASKPASS_MAIN",
+            "VSCODE_GIT_ASKPASS_EXTRA_ARGS",
+            "VSCODE_GIT_IPC_HANDLE",
+        ):
             env.pop(var, None)
         proc = subprocess.run(
-            ["git", "clone", f"http://127.0.0.1:{port}/private.git",
-             str(tmp_path / "dest")],
+            [
+                "git",
+                "clone",
+                f"http://127.0.0.1:{port}/private.git",
+                str(tmp_path / "dest"),
+            ],
             capture_output=True,
             text=True,
             timeout=30,
@@ -273,8 +313,7 @@ def test_git_clone_against_auth_remote_fails_fast(tmp_path: Path):
         # instead of blocking on a prompt.
         stderr = proc.stderr.lower()
         assert (
-            "terminal prompts disabled" in stderr
-            or "authentication failed" in stderr
+            "terminal prompts disabled" in stderr or "authentication failed" in stderr
         ), f"unexpected git error: {proc.stderr!r}"
         # Fail-fast, not a hang-until-timeout.
         assert elapsed < 20
@@ -310,12 +349,6 @@ def _assert_noninteractive(call: dict):
     assert call.get("stdin") is subprocess.DEVNULL or "input" in call, call["argv"]
     env = call.get("env")
     assert env is not None and env.get("GIT_TERMINAL_PROMPT") == "0", call["argv"]
-
-
-
-
-
-
 
 
 def test_mcp_catalog_git_install_runs_noninteractively(monkeypatch, tmp_path):

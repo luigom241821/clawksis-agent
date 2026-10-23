@@ -48,9 +48,13 @@ def _install_v1_trigram(db: SessionDB) -> None:
 
 def _install_raw_messages_base(db: SessionDB) -> None:
     """The pre-v3 base index: external-content over raw ``messages`` (realigned on the next open)."""
-    names = [r[0] for r in db._conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='trigger' AND name IN "
-        "('messages_fts_insert','messages_fts_delete','messages_fts_update')")]
+    names = [
+        r[0]
+        for r in db._conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='trigger' AND name IN "
+            "('messages_fts_insert','messages_fts_delete','messages_fts_update')"
+        )
+    ]
     db._conn.executescript(
         "".join(f"DROP TRIGGER {n};" for n in names)
         + """
@@ -66,7 +70,9 @@ def _install_raw_messages_base(db: SessionDB) -> None:
 def _stamp(db_path: pathlib.Path):
     conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
     try:
-        row = conn.execute("SELECT value FROM state_meta WHERE key = 'fts_storage_version'").fetchone()
+        row = conn.execute(
+            "SELECT value FROM state_meta WHERE key = 'fts_storage_version'"
+        ).fetchone()
         return row[0] if row else None
     finally:
         conn.close()
@@ -76,8 +82,16 @@ def _seed(db: SessionDB) -> None:
     db.create_session("cli", source="cli")
     db.append_message("cli", role="user", content="deploy the payment service")
     db.append_message(
-        "cli", role="assistant", content="running",
-        tool_calls=[{"id": "c1", "type": "function", "function": {"name": "terminal", "arguments": "{}"}}],
+        "cli",
+        role="assistant",
+        content="running",
+        tool_calls=[
+            {
+                "id": "c1",
+                "type": "function",
+                "function": {"name": "terminal", "arguments": "{}"},
+            }
+        ],
     )
 
 
@@ -90,10 +104,14 @@ def v1_trigram_db(tmp_path):
     _seed(db)
     _install_v1_trigram(db)
     _install_raw_messages_base(db)
-    db._conn.execute("UPDATE state_meta SET value = '1' WHERE key = 'fts_storage_version'")
+    db._conn.execute(
+        "UPDATE state_meta SET value = '1' WHERE key = 'fts_storage_version'"
+    )
     db._conn.commit()
     db.close()
-    SessionDB(db_path=db_path).close()  # the gateway/CLI open that realigns only the base index
+    SessionDB(
+        db_path=db_path
+    ).close()  # the gateway/CLI open that realigns only the base index
     return db_path
 
 
@@ -111,7 +129,9 @@ def test_doctor_offers_optimize_storage_for_a_stale_trigram(v1_trigram_db, monke
     assert any("clawk sessions optimize-storage" in detail for _, _, detail in rows)
 
 
-def test_fresh_store_is_stamped_on_creation_and_doctor_stays_quiet(tmp_path, monkeypatch):
+def test_fresh_store_is_stamped_on_creation_and_doctor_stays_quiet(
+    tmp_path, monkeypatch
+):
     from clawk_cli import doctor_state
     from clawk_state_dbfile import collect_state_db_stats
 
@@ -136,8 +156,20 @@ def _notice_for(db_path: pathlib.Path, monkeypatch) -> str:
     def _big(path, *args, **kwargs):
         st = real_stat(path, *args, **kwargs)
         if path.name == "state.db":
-            return os.stat_result((st.st_mode, st.st_ino, st.st_dev, st.st_nlink, st.st_uid, st.st_gid,
-                                   10 * 1024 ** 3, st.st_atime, st.st_mtime, st.st_ctime))
+            return os.stat_result(
+                (
+                    st.st_mode,
+                    st.st_ino,
+                    st.st_dev,
+                    st.st_nlink,
+                    st.st_uid,
+                    st.st_gid,
+                    10 * 1024**3,
+                    st.st_atime,
+                    st.st_mtime,
+                    st.st_ctime,
+                )
+            )
         return st
 
     monkeypatch.setattr(pathlib.Path, "stat", _big)
@@ -147,20 +179,28 @@ def _notice_for(db_path: pathlib.Path, monkeypatch) -> str:
     return buf.getvalue()
 
 
-def test_notice_for_a_stale_trigram_does_not_claim_the_legacy_reclaim(v1_trigram_db, monkeypatch):
+def test_notice_for_a_stale_trigram_does_not_claim_the_legacy_reclaim(
+    v1_trigram_db, monkeypatch
+):
     out = _notice_for(v1_trigram_db, monkeypatch)
     assert "clawk sessions optimize-storage" in out
     assert "60%" not in out and "old storage layout" not in out.lower()
 
 
-def test_notice_for_a_legacy_inline_store_keeps_the_reclaim_estimate(tmp_path, monkeypatch):
+def test_notice_for_a_legacy_inline_store_keeps_the_reclaim_estimate(
+    tmp_path, monkeypatch
+):
     from clawk_state_common import LEGACY_FTS_SQL
 
     db_path = tmp_path / "state.db"
     db = SessionDB(db_path=db_path)
     _seed(db)
-    names = [r[0] for r in db._conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'messages_fts%'")]
+    names = [
+        r[0]
+        for r in db._conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'messages_fts%'"
+        )
+    ]
     db._conn.executescript(
         "".join(f"DROP TRIGGER {n};" for n in names)
         + "DROP TABLE IF EXISTS messages_fts_cjk; DROP TABLE IF EXISTS messages_fts_trigram;"
@@ -172,7 +212,9 @@ def test_notice_for_a_legacy_inline_store_keeps_the_reclaim_estimate(tmp_path, m
     assert "60%" in _notice_for(db_path, monkeypatch)
 
 
-def test_a_base_index_the_next_open_realigns_is_not_offered_as_opt_in_work(tmp_path, monkeypatch):
+def test_a_base_index_the_next_open_realigns_is_not_offered_as_opt_in_work(
+    tmp_path, monkeypatch
+):
     """A raw-``messages`` base index with a current trigram is realigned automatically on the next read-write
     open, so the update notice (read-only, before that open) must not send the user to optimize-storage."""
     import clawk_state_fts
@@ -182,7 +224,9 @@ def test_a_base_index_the_next_open_realigns_is_not_offered_as_opt_in_work(tmp_p
     _require_trigram(db)
     _seed(db)
     _install_raw_messages_base(db)
-    db._conn.execute("UPDATE state_meta SET value = '2' WHERE key = 'fts_storage_version'")
+    db._conn.execute(
+        "UPDATE state_meta SET value = '2' WHERE key = 'fts_storage_version'"
+    )
     db._conn.commit()
     db.close()
 
@@ -196,7 +240,9 @@ def test_a_base_index_the_next_open_realigns_is_not_offered_as_opt_in_work(tmp_p
     assert _stamp(db_path) == str(clawk_state_common.FTS_STORAGE_VERSION)
 
 
-def test_a_layout_change_the_code_has_not_shipped_yet_is_reported_as_drift(tmp_path, monkeypatch):
+def test_a_layout_change_the_code_has_not_shipped_yet_is_reported_as_drift(
+    tmp_path, monkeypatch
+):
     """After a DDL change appends its new form to the registry, stores on the previous form are drift."""
     db_path = tmp_path / "state.db"
     db = SessionDB(db_path=db_path)
@@ -205,12 +251,19 @@ def test_a_layout_change_the_code_has_not_shipped_yet_is_reported_as_drift(tmp_p
     assert _stamp(db_path) == str(clawk_state_common.FTS_STORAGE_VERSION)
 
     import clawk_state_fts
+
     bumped = clawk_state_common.FTS_SQL.replace(
-        "content_rowid='id'\n);", "content_rowid='id',\n    tokenize='porter unicode61'\n);", 1)
+        "content_rowid='id'\n);",
+        "content_rowid='id',\n    tokenize='porter unicode61'\n);",
+        1,
+    )
     assert bumped != clawk_state_common.FTS_SQL
     monkeypatch.setattr(clawk_state_fts, "FTS_SQL", bumped)
     layouts = dict(clawk_state_fts.FTS_VTABLE_LAYOUTS)
-    layouts["messages_fts"] = (*layouts["messages_fts"], clawk_state_fts._expected_vtable_sql(bumped, "messages_fts"))
+    layouts["messages_fts"] = (
+        *layouts["messages_fts"],
+        clawk_state_fts._expected_vtable_sql(bumped, "messages_fts"),
+    )
     monkeypatch.setattr(clawk_state_fts, "FTS_VTABLE_LAYOUTS", layouts)
 
     conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
@@ -224,37 +277,63 @@ def test_a_layout_change_the_code_has_not_shipped_yet_is_reported_as_drift(tmp_p
 def test_the_layout_registry_ends_with_the_shipping_ddl():
     """A change to the FTS DDL must append its stored form, keeping the previous one recognisable as old."""
     import clawk_state_fts
-    from clawk_state_common import FTS_SQL, FTS_TRIGRAM_SQL, LEGACY_FTS_SQL, LEGACY_FTS_TRIGRAM_SQL
+    from clawk_state_common import (
+        FTS_SQL,
+        FTS_TRIGRAM_SQL,
+        LEGACY_FTS_SQL,
+        LEGACY_FTS_TRIGRAM_SQL,
+    )
 
     layouts = clawk_state_fts.FTS_VTABLE_LAYOUTS
-    assert layouts["messages_fts"][-1] == clawk_state_fts._expected_vtable_sql(FTS_SQL, "messages_fts")
+    assert layouts["messages_fts"][-1] == clawk_state_fts._expected_vtable_sql(
+        FTS_SQL, "messages_fts"
+    )
     assert layouts["messages_fts_trigram"][-1] == clawk_state_fts._expected_vtable_sql(
-        FTS_TRIGRAM_SQL, "messages_fts_trigram")
-    assert clawk_state_fts._expected_vtable_sql(LEGACY_FTS_SQL, "messages_fts") in layouts["messages_fts"][:-1]
-    assert clawk_state_fts._expected_vtable_sql(
-        LEGACY_FTS_TRIGRAM_SQL, "messages_fts_trigram") in layouts["messages_fts_trigram"][:-1]
+        FTS_TRIGRAM_SQL, "messages_fts_trigram"
+    )
+    assert (
+        clawk_state_fts._expected_vtable_sql(LEGACY_FTS_SQL, "messages_fts")
+        in layouts["messages_fts"][:-1]
+    )
+    assert (
+        clawk_state_fts._expected_vtable_sql(
+            LEGACY_FTS_TRIGRAM_SQL, "messages_fts_trigram"
+        )
+        in layouts["messages_fts_trigram"][:-1]
+    )
 
 
 def _install_newer_base_layout(db: SessionDB) -> str:
     """A base-index definition this code does not recognise (a newer release's), stamped with a newer version."""
     from clawk_state_common import FTS_SQL, FTS_STORAGE_VERSION
 
-    sql = db._conn.execute("SELECT sql FROM sqlite_master WHERE name = 'messages_fts'").fetchone()[0]
+    sql = db._conn.execute(
+        "SELECT sql FROM sqlite_master WHERE name = 'messages_fts'"
+    ).fetchone()[0]
     db._conn.executescript(
         "DROP TRIGGER messages_fts_insert; DROP TRIGGER messages_fts_delete; DROP TRIGGER messages_fts_update;"
-        "DROP TABLE messages_fts;")
-    newer = sql.replace("content_rowid='id'", "content_rowid='id', tokenize='porter unicode61'")
+        "DROP TABLE messages_fts;"
+    )
+    newer = sql.replace(
+        "content_rowid='id'", "content_rowid='id', tokenize='porter unicode61'"
+    )
     db._conn.execute(newer)
     db._conn.executescript(FTS_SQL)
     db._conn.execute("INSERT INTO messages_fts(messages_fts) VALUES('rebuild')")
-    db._conn.execute("UPDATE state_meta SET value = ? WHERE key = 'fts_storage_version'", (str(FTS_STORAGE_VERSION + 1),))
+    db._conn.execute(
+        "UPDATE state_meta SET value = ? WHERE key = 'fts_storage_version'",
+        (str(FTS_STORAGE_VERSION + 1),),
+    )
     db._conn.commit()
     return newer
 
 
 def _forbid_demote(db: SessionDB, monkeypatch) -> None:
     def _demote():
-        pytest.fail("optimize-storage demoted an index it does not recognise as an old layout")
+        pytest.fail(
+            "optimize-storage demoted an index it does not recognise as an old layout"
+        )
+
     monkeypatch.setattr(db, "_demote_legacy_fts_to_trash", _demote)
 
 
@@ -278,7 +357,9 @@ def test_a_layout_from_a_newer_release_is_left_alone(tmp_path, monkeypatch):
     assert _stamp(db_path) == str(FTS_STORAGE_VERSION + 1)
 
 
-def test_a_quoted_table_name_in_the_stored_definition_is_still_current(tmp_path, monkeypatch):
+def test_a_quoted_table_name_in_the_stored_definition_is_still_current(
+    tmp_path, monkeypatch
+):
     """ALTER TABLE ... RENAME round trips store the name quoted; the layout is unchanged and must not be rebuilt."""
     db_path = tmp_path / "state.db"
     db = SessionDB(db_path=db_path)
@@ -286,7 +367,9 @@ def test_a_quoted_table_name_in_the_stored_definition_is_still_current(tmp_path,
     _seed(db)
     db._conn.execute("ALTER TABLE messages_fts_trigram RENAME TO renamed_trigram")
     db._conn.execute("ALTER TABLE renamed_trigram RENAME TO messages_fts_trigram")
-    stored = db._conn.execute("SELECT sql FROM sqlite_master WHERE name = 'messages_fts_trigram'").fetchone()[0]
+    stored = db._conn.execute(
+        "SELECT sql FROM sqlite_master WHERE name = 'messages_fts_trigram'"
+    ).fetchone()[0]
     assert '"messages_fts_trigram"' in stored
     db._conn.execute("DELETE FROM state_meta WHERE key = 'fts_storage_version'")
     db._conn.commit()
@@ -332,10 +415,18 @@ def test_a_stale_base_source_view_is_replaced_before_the_store_is_stamped(tmp_pa
     db_path = tmp_path / "state.db"
     db = SessionDB(db_path=db_path)
     _seed(db)
-    db.append_message("cli", role="tool", content="x" * FTS_TOOL_CONTENT_PREFIX_CHARS + " trailingneedle")
-    current_view = db._conn.execute("SELECT sql FROM sqlite_master WHERE name = 'messages_fts_src'").fetchone()[0]
+    db.append_message(
+        "cli",
+        role="tool",
+        content="x" * FTS_TOOL_CONTENT_PREFIX_CHARS + " trailingneedle",
+    )
+    current_view = db._conn.execute(
+        "SELECT sql FROM sqlite_master WHERE name = 'messages_fts_src'"
+    ).fetchone()[0]
     db._conn.execute("DROP VIEW messages_fts_src")
-    db._conn.execute("CREATE VIEW messages_fts_src AS SELECT id, content, tool_name, tool_calls FROM messages")
+    db._conn.execute(
+        "CREATE VIEW messages_fts_src AS SELECT id, content, tool_name, tool_calls FROM messages"
+    )
     db._conn.execute("INSERT INTO messages_fts(messages_fts) VALUES('rebuild')")
     db._conn.execute("DELETE FROM state_meta WHERE key = 'fts_storage_version'")
     db._conn.commit()
@@ -343,10 +434,14 @@ def test_a_stale_base_source_view_is_replaced_before_the_store_is_stamped(tmp_pa
 
     db = SessionDB(db_path=db_path)
     try:
-        view = db._conn.execute("SELECT sql FROM sqlite_master WHERE name = 'messages_fts_src'").fetchone()[0]
+        view = db._conn.execute(
+            "SELECT sql FROM sqlite_master WHERE name = 'messages_fts_src'"
+        ).fetchone()[0]
         assert " ".join(view.split()) == " ".join(current_view.split())
         assert db.search_messages("trailingneedle") == []
-        db._conn.execute("INSERT INTO messages_fts(messages_fts, rank) VALUES('integrity-check', 1)")
+        db._conn.execute(
+            "INSERT INTO messages_fts(messages_fts, rank) VALUES('integrity-check', 1)"
+        )
     finally:
         db.close()
     assert _stamp(db_path) == str(FTS_STORAGE_VERSION)
@@ -365,10 +460,14 @@ def _interrupted_raw_base_backfill(db_path: pathlib.Path) -> int:
     db._conn.execute("DELETE FROM messages_fts")
     db._conn.execute(
         "INSERT INTO messages_fts(rowid, content, tool_name, tool_calls) "
-        "SELECT id, content, tool_name, tool_calls FROM messages WHERE id = ?", (first_id,))
+        "SELECT id, content, tool_name, tool_calls FROM messages WHERE id = ?",
+        (first_id,),
+    )
     db._conn.execute(
         "INSERT INTO messages_fts_trigram(rowid, content, tool_name) "
-        "SELECT id, content, tool_name FROM messages WHERE id = ?", (first_id,))
+        "SELECT id, content, tool_name FROM messages WHERE id = ?",
+        (first_id,),
+    )
     db.set_meta("fts_storage_version", "2")
     db.set_meta("fts_rebuild_high_water", str(last_id))
     db.set_meta("fts_rebuild_progress", str(first_id))
@@ -391,7 +490,10 @@ def test_the_base_realign_finishes_a_pending_trigram_backfill(tmp_path):
 class _NoTrigramTokenizerCursor(sqlite3.Cursor):
     """A SQLite build without the trigram tokenizer opening a store whose trigram table already exists."""
 
-    _TRIGRAM = re.compile(r"\b(?:FROM|INTO)\s+messages_fts_trigram\b(?!_)|tokenize='trigram'", re.IGNORECASE)
+    _TRIGRAM = re.compile(
+        r"\b(?:FROM|INTO)\s+messages_fts_trigram\b(?!_)|tokenize='trigram'",
+        re.IGNORECASE,
+    )
 
     def execute(self, sql, parameters=()):
         if self._TRIGRAM.search(sql):
@@ -409,7 +511,9 @@ class _NoTrigramTokenizerConnection(sqlite3.Connection):
         return super().cursor(factory or _NoTrigramTokenizerCursor)
 
 
-def test_the_base_realign_without_the_trigram_tokenizer_keeps_the_store_open_and_resumes_later(tmp_path, monkeypatch):
+def test_the_base_realign_without_the_trigram_tokenizer_keeps_the_store_open_and_resumes_later(
+    tmp_path, monkeypatch
+):
     """Without the tokenizer the realign still opens the store with base search; the trigram index is rebuilt by the
     first open that has the tokenizer."""
     db_path = tmp_path / "state.db"
@@ -444,20 +548,29 @@ def test_a_stale_source_view_does_not_replace_a_newer_base_index(tmp_path):
     _seed(db)
     newer = _install_newer_base_layout(db)
     db._conn.execute("DROP VIEW messages_fts_src")
-    db._conn.execute("CREATE VIEW messages_fts_src AS SELECT id, content, tool_name, tool_calls FROM messages")
+    db._conn.execute(
+        "CREATE VIEW messages_fts_src AS SELECT id, content, tool_name, tool_calls FROM messages"
+    )
     db._conn.commit()
     db.close()
 
     SessionDB(db_path=db_path).close()
     conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
     try:
-        assert conn.execute("SELECT sql FROM sqlite_master WHERE name = 'messages_fts'").fetchone()[0] == newer
+        assert (
+            conn.execute(
+                "SELECT sql FROM sqlite_master WHERE name = 'messages_fts'"
+            ).fetchone()[0]
+            == newer
+        )
     finally:
         conn.close()
     assert _stamp(db_path) == str(FTS_STORAGE_VERSION + 1)
 
 
-def test_optimize_storage_on_a_newer_layout_finishes_its_work_without_restamping(tmp_path):
+def test_optimize_storage_on_a_newer_layout_finishes_its_work_without_restamping(
+    tmp_path,
+):
     """Leftover old-index tables on a downgraded store are torn down and reported as done; the stamp stays."""
     from clawk_state_common import FTS_STORAGE_VERSION
 
@@ -465,7 +578,9 @@ def test_optimize_storage_on_a_newer_layout_finishes_its_work_without_restamping
     db = SessionDB(db_path=db_path)
     _seed(db)
     _install_newer_base_layout(db)
-    db._conn.execute("CREATE TABLE fts_v22_trash_messages_fts_data (docid INTEGER PRIMARY KEY, block BLOB)")
+    db._conn.execute(
+        "CREATE TABLE fts_v22_trash_messages_fts_data (docid INTEGER PRIMARY KEY, block BLOB)"
+    )
     db._conn.commit()
     db.close()
 
@@ -500,12 +615,21 @@ def test_doctor_offers_the_resume_after_backfill_before_teardown(tmp_path, monke
     assert any("clawk sessions optimize-storage" in detail for _, _, detail in rows)
 
 
-@pytest.mark.parametrize("mode, heading", [("advise", "Search index update available"),
-                                           ("require", "required by your notice policy")])
-def test_the_follow_up_notice_makes_no_size_or_effort_claim(v1_trigram_db, monkeypatch, mode, heading):
+@pytest.mark.parametrize(
+    "mode, heading",
+    [
+        ("advise", "Search index update available"),
+        ("require", "required by your notice policy"),
+    ],
+)
+def test_the_follow_up_notice_makes_no_size_or_effort_claim(
+    v1_trigram_db, monkeypatch, mode, heading
+):
     from clawk_cli import config as clawk_config
 
-    monkeypatch.setattr(clawk_config, "load_config", lambda: {"sessions": {"fts_optimize_notice": mode}})
+    monkeypatch.setattr(
+        clawk_config, "load_config", lambda: {"sessions": {"fts_optimize_notice": mode}}
+    )
     out = _notice_for(v1_trigram_db, monkeypatch)
     assert heading in out
     assert "%" not in out and "smaller" not in out.lower()

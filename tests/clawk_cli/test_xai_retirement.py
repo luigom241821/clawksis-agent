@@ -1,4 +1,5 @@
 """Unit tests for clawk_cli.xai_retirement (May 15, 2026 model retirement)."""
+
 from __future__ import annotations
 
 
@@ -22,41 +23,50 @@ def test_apply_migration_preserves_long_double_quoted_scalar(tmp_path, monkeypat
     cfg = tmp_path / "config.yaml"
     cfg.write_text(
         'model:\n  provider: xai\n  model: grok-3\napprovals:\n  smart_policy: "'
-        + value.replace("\\", "\\\\") + '"\n',
+        + value.replace("\\", "\\\\")
+        + '"\n',
         encoding="utf-8",
     )
 
-    apply_migration(cfg, [RetirementIssue("model.model", "grok-3", "grok-4")], backup=False)
+    apply_migration(
+        cfg, [RetirementIssue("model.model", "grok-3", "grok-4")], backup=False
+    )
 
     loaded = yaml.safe_load(cfg.read_text(encoding="utf-8"))
     assert loaded["model"]["model"] == "grok-4"
     assert loaded["approvals"]["smart_policy"] == value
 
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _paths(issues):
     return [i.config_path for i in issues]
+
 
 # ---------------------------------------------------------------------------
 # _normalize / _looks_like_xai
 # ---------------------------------------------------------------------------
 
+
 class TestNormalize:
     def test_strips_x_ai_prefix(self):
         assert _normalize("x-ai/grok-4") == "grok-4"
 
-class TestLooksLikeXai:
 
+class TestLooksLikeXai:
     def test_non_grok_returns_false(self):
         assert not _looks_like_xai("gpt-4")
         assert not _looks_like_xai("claude-sonnet-4-6")
         assert not _looks_like_xai("openrouter/openai/gpt-4")
 
+
 # ---------------------------------------------------------------------------
 # find_retired_xai_refs — config scanning
 # ---------------------------------------------------------------------------
+
 
 class TestFindRetiredEdgeCases:
     def test_empty_config_no_issues(self):
@@ -74,6 +84,7 @@ class TestFindRetiredEdgeCases:
         }
         assert find_retired_xai_refs(cfg) == []
 
+
 class TestFindRetiredPerSlot:
     def test_principal_retired(self):
         cfg = {"principal": {"model": "grok-code-fast-1"}}
@@ -84,12 +95,13 @@ class TestFindRetiredPerSlot:
         assert issues[0].replacement == "grok-4.3"
         assert issues[0].reasoning_effort is None
 
+
 # ---------------------------------------------------------------------------
 # Migration semantics
 # ---------------------------------------------------------------------------
 
-class TestMigrationSemantics:
 
+class TestMigrationSemantics:
     def test_imagine_pro_maps_to_imagine_quality(self):
         cfg = {"plugins": {"image_gen": {"xai": {"model": "grok-imagine-image-pro"}}}}
         issue = find_retired_xai_refs(cfg)[0]
@@ -98,6 +110,7 @@ class TestMigrationSemantics:
     def test_all_retired_have_replacement(self):
         for name, entry in _RETIRED_MODELS.items():
             assert entry.get("replacement"), f"{name} has no replacement"
+
 
 # ---------------------------------------------------------------------------
 # format_issue

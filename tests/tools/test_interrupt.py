@@ -12,11 +12,13 @@ import pytest
 # Unit tests: shared interrupt module
 # ---------------------------------------------------------------------------
 
+
 class TestInterruptModule:
     """Tests for tools/interrupt.py"""
 
     def test_set_and_check(self):
         from tools.interrupt import set_interrupt, is_interrupted
+
         set_interrupt(False)
         assert not is_interrupted()
 
@@ -28,8 +30,13 @@ class TestInterruptModule:
 
     def test_is_thread_interrupted_checks_target_tid_not_caller(self):
         from tools.interrupt import (
-            set_interrupt, is_interrupted, is_thread_interrupted, _interrupted_threads, _lock,
+            set_interrupt,
+            is_interrupted,
+            is_thread_interrupted,
+            _interrupted_threads,
+            _lock,
         )
+
         with _lock:
             _interrupted_threads.clear()
         other_tid = threading.get_ident() + 1
@@ -40,13 +47,16 @@ class TestInterruptModule:
         set_interrupt(False, thread_id=other_tid)
         assert not is_thread_interrupted(other_tid)
 
-
     def test_clear_current_thread_interrupt_leaves_other_threads(self):
         """clear_current_thread_interrupt only touches the calling thread."""
         from tools.interrupt import (
-            set_interrupt, is_interrupted, clear_current_thread_interrupt,
-            _interrupted_threads, _lock,
+            set_interrupt,
+            is_interrupted,
+            clear_current_thread_interrupt,
+            _interrupted_threads,
+            _lock,
         )
+
         with _lock:
             _interrupted_threads.clear()
         other_tid = threading.get_ident() + 1  # an ident that isn't us
@@ -165,6 +175,7 @@ class TestInterruptModule:
 # Unit tests: pre-tool interrupt check
 # ---------------------------------------------------------------------------
 
+
 class TestPreToolCheck:
     """Verify that _execute_tool_calls skips all tools when interrupted."""
 
@@ -207,16 +218,24 @@ class TestPreToolCheck:
         # Import and call the method
         import types
         from run_agent import AIAgent
+
         # Bind the real methods to our mock so dispatch works correctly
-        agent._execute_tool_calls_sequential = types.MethodType(AIAgent._execute_tool_calls_sequential, agent)
-        agent._execute_tool_calls_concurrent = types.MethodType(AIAgent._execute_tool_calls_concurrent, agent)
+        agent._execute_tool_calls_sequential = types.MethodType(
+            AIAgent._execute_tool_calls_sequential, agent
+        )
+        agent._execute_tool_calls_concurrent = types.MethodType(
+            AIAgent._execute_tool_calls_concurrent, agent
+        )
         AIAgent._execute_tool_calls(agent, assistant_msg, messages, "default")
 
         # All 3 should be skipped
         assert len(messages) == 3
         for msg in messages:
             assert msg["role"] == "tool"
-            assert "cancelled" in msg["content"].lower() or "interrupted" in msg["content"].lower()
+            assert (
+                "cancelled" in msg["content"].lower()
+                or "interrupted" in msg["content"].lower()
+            )
 
         # No actual tool handlers should have been called
         # (handle_function_call should NOT have been invoked)
@@ -227,18 +246,15 @@ class TestPreToolCheck:
 # ---------------------------------------------------------------------------
 
 
-
 # ---------------------------------------------------------------------------
 # Integration tests (require local terminal)
 # ---------------------------------------------------------------------------
 
+
 class TestSIGKILLEscalation:
     """Test that SIGTERM-resistant processes get SIGKILL'd."""
 
-    @pytest.mark.skipif(
-        not __import__("shutil").which("bash"),
-        reason="Requires bash"
-    )
+    @pytest.mark.skipif(not __import__("shutil").which("bash"), reason="Requires bash")
     @pytest.mark.platforms("posix")
     def test_sigterm_trap_killed_within_2s(self, tmp_path):
         """A process that traps SIGTERM should be SIGKILL'd after 1s grace."""
@@ -275,6 +291,7 @@ class TestSIGKILLEscalation:
 # Regression: _run_tool cleanup on BaseException (issue #35309)
 # ---------------------------------------------------------------------------
 
+
 class TestRunToolCleanupOnBaseException:
     """Verify that _run_tool cleans up _interrupted_threads even when
     _invoke_tool raises a BaseException (e.g. CancelledError).
@@ -303,13 +320,17 @@ class TestRunToolCleanupOnBaseException:
         # _set_interrupt delegates to the real module
         def _mock_set_interrupt(active, tid=None):
             set_interrupt(active, tid)
+
         agent._set_interrupt = _mock_set_interrupt
 
         # _invoke_tool raises BaseException (simulating CancelledError)
-        agent._invoke_tool = MagicMock(side_effect=BaseException("simulated CancelledError"))
+        agent._invoke_tool = MagicMock(
+            side_effect=BaseException("simulated CancelledError")
+        )
 
         # Bind the real concurrent method so we get _run_tool
         from run_agent import AIAgent
+
         agent._execute_tool_calls_concurrent = types.MethodType(
             AIAgent._execute_tool_calls_concurrent, agent
         )

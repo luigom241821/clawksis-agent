@@ -31,15 +31,27 @@ def _get_jwk_client(jwks_url: str) -> Any:
         client = _JWK_CLIENTS.get(jwks_url)
         if client is None:
             from jwt import PyJWKClient
+
             # Explicit Accept + User-Agent: the portal WAF 403s the default urllib fingerprint.
             client = PyJWKClient(
-                jwks_url, headers={"Accept": "application/json", "User-Agent": "ClawksisAgent/1.0"})
+                jwks_url,
+                headers={
+                    "Accept": "application/json",
+                    "User-Agent": "ClawksisAgent/1.0",
+                },
+            )
             _JWK_CLIENTS[jwks_url] = client
         return client
 
 
-def verify_nas_fire_token(*, token: str, expected_audience: str, jwks_or_key: Optional[str] = None,
-                          issuer: Optional[str] = None, leeway_seconds: int = 30) -> Optional[dict[str, Any]]:
+def verify_nas_fire_token(
+    *,
+    token: str,
+    expected_audience: str,
+    jwks_or_key: Optional[str] = None,
+    issuer: Optional[str] = None,
+    leeway_seconds: int = 30,
+) -> Optional[dict[str, Any]]:
     """Verify a NAS-minted cron-fire JWT; return decoded claims or None (never raises, so the
     handler answers 401 without leaking which check failed). Checks asymmetric signature (JWKS
     URL or inline PEM; symmetric rejected), ``aud``, ``exp``/``nbf`` with leeway, ``iss`` when
@@ -51,13 +63,21 @@ def verify_nas_fire_token(*, token: str, expected_audience: str, jwks_or_key: Op
         return None
     try:
         import jwt
+
         if jwks_or_key.startswith(("http://", "https://")):
-            signing_key = _get_jwk_client(jwks_or_key).get_signing_key_from_jwt(token).key
+            signing_key = (
+                _get_jwk_client(jwks_or_key).get_signing_key_from_jwt(token).key
+            )
         else:
-            signing_key = jwks_or_key  # inline PEM public key (test / pinned-key deployments)
+            signing_key = (
+                jwks_or_key  # inline PEM public key (test / pinned-key deployments)
+            )
         decode_kwargs: dict[str, Any] = dict(
-            algorithms=["RS256", "RS384", "RS512", "ES256", "ES384"], audience=expected_audience,
-            leeway=leeway_seconds, options={"require": ["exp", "aud"]})
+            algorithms=["RS256", "RS384", "RS512", "ES256", "ES384"],
+            audience=expected_audience,
+            leeway=leeway_seconds,
+            options={"require": ["exp", "aud"]},
+        )
         if issuer:
             decode_kwargs["issuer"] = issuer
         claims = jwt.decode(token, signing_key, **decode_kwargs)

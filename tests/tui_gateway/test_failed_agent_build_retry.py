@@ -46,12 +46,13 @@ def test_restart_clears_failed_generation_and_rebuilds(tmp_path, monkeypatch):
     failed_ready = session["agent_ready"]
 
     rebuilt = []
-    monkeypatch.setattr(server, "_start_agent_build",
-                        lambda s, sess: rebuilt.append(s))
+    monkeypatch.setattr(server, "_start_agent_build", lambda s, sess: rebuilt.append(s))
 
     try:
-        assert server._restart_completed_failed_agent_build(
-            sid, session, failed_ready) is True
+        assert (
+            server._restart_completed_failed_agent_build(sid, session, failed_ready)
+            is True
+        )
 
         # The failed generation is gone: error cleared, fresh unset ready
         # event, build flag dropped — the next build starts from zero.
@@ -69,32 +70,30 @@ def test_restart_declines_every_non_failure_state(tmp_path, monkeypatch):
     completed failure: healthy agent, build still in flight, or no error."""
     sid = "healthy-session"
     session = failed_session(tmp_path, sid)
-    monkeypatch.setattr(server, "_start_agent_build",
-                        lambda s, sess: None)
+    monkeypatch.setattr(server, "_start_agent_build", lambda s, sess: None)
 
     try:
         # Build still in flight: ready not set.
         in_flight = threading.Event()
         session["agent_ready"] = in_flight
-        assert server._restart_completed_failed_agent_build(
-            sid, session, in_flight) is False
+        assert (
+            server._restart_completed_failed_agent_build(sid, session, in_flight)
+            is False
+        )
 
         # No error recorded.
         done = threading.Event()
         done.set()
         session["agent_ready"] = done
         session["agent_error"] = None
-        assert server._restart_completed_failed_agent_build(
-            sid, session, done) is False
+        assert server._restart_completed_failed_agent_build(sid, session, done) is False
 
         # Agent actually built.
         session["agent_error"] = "stale text"
         session["agent"] = object()
-        assert server._restart_completed_failed_agent_build(
-            sid, session, done) is False
+        assert server._restart_completed_failed_agent_build(sid, session, done) is False
 
         # No ready event at all.
-        assert server._restart_completed_failed_agent_build(
-            sid, session, None) is False
+        assert server._restart_completed_failed_agent_build(sid, session, None) is False
     finally:
         server._sessions.pop(sid, None)

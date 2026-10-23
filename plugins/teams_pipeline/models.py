@@ -24,7 +24,11 @@ def _parse_datetime(value: Any) -> datetime | None:
 
 
 def _serialize_datetime(value: datetime | None) -> str | None:
-    return None if value is None else value.astimezone(UTC).isoformat().replace("+00:00", "Z")
+    return (
+        None
+        if value is None
+        else value.astimezone(UTC).isoformat().replace("+00:00", "Z")
+    )
 
 
 def _camel(name: str) -> str:
@@ -34,13 +38,15 @@ def _camel(name: str) -> str:
 
 def _pick(payload: dict[str, Any], *keys: str) -> Any:
     """``payload.get(k1) or payload.get(k2) or ...`` (returns the last value when all are falsy)."""
-    return next((payload.get(key) for key in keys if payload.get(key)), payload.get(keys[-1]))
+    return next(
+        (payload.get(key) for key in keys if payload.get(key)), payload.get(keys[-1])
+    )
 
 
 _str = lambda value: str(value or "").strip()
 _list = lambda value: list(value or [])
 _dict = lambda value: dict(value or {})
-_nested = lambda model: (lambda value: model.from_dict(value) if value else None)
+_nested = lambda model: lambda value: model.from_dict(value) if value else None
 
 
 def _serialize_value(value: Any) -> Any:
@@ -48,7 +54,9 @@ def _serialize_value(value: Any) -> Any:
     if isinstance(value, datetime):
         return _serialize_datetime(value)
     if isinstance(value, list):
-        return [item.to_dict() if isinstance(item, _Model) else item for item in value] or None
+        return [
+            item.to_dict() if isinstance(item, _Model) else item for item in value
+        ] or None
     if isinstance(value, dict):
         return value or None
     return value.to_dict() if isinstance(value, _Model) else value
@@ -66,13 +74,23 @@ class _Model:
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]):
-        return cls(**{
-            spec.name: cls._CONVERT.get(spec.name, lambda v: v)(_pick(payload, *cls._ALIASES.get(spec.name, (spec.name, _camel(spec.name)))))
-            for spec in fields(cls)
-        })
+        return cls(
+            **{
+                spec.name: cls._CONVERT.get(spec.name, lambda v: v)(
+                    _pick(
+                        payload,
+                        *cls._ALIASES.get(spec.name, (spec.name, _camel(spec.name))),
+                    )
+                )
+                for spec in fields(cls)
+            }
+        )
 
     def to_dict(self) -> dict[str, Any]:
-        out = {spec.name: _serialize_value(getattr(self, spec.name)) for spec in fields(self)}
+        out = {
+            spec.name: _serialize_value(getattr(self, spec.name))
+            for spec in fields(self)
+        }
         return {key: value for key, value in out.items() if value is not None}
 
     def __post_init__(self) -> None:
@@ -94,7 +112,10 @@ class GraphSubscription(_Model):
     latest_renewal_at: datetime | None = None
     status: str | None = None
 
-    _ALIASES = {"subscription_id": ("subscription_id", "id"), "expiration_datetime": ("expiration_datetime", "expirationDateTime")}
+    _ALIASES = {
+        "subscription_id": ("subscription_id", "id"),
+        "expiration_datetime": ("expiration_datetime", "expirationDateTime"),
+    }
     _REQUIRED = ("subscription_id", "resource", "change_type", "notification_url")
     _CONVERT = dict.fromkeys(_REQUIRED, _str)
     _DATETIMES = ("expiration_datetime", "latest_renewal_at")
@@ -134,9 +155,12 @@ class MeetingArtifact(_Model):
     metadata: dict[str, Any] = field(default_factory=dict)
 
     _ALIASES = {
-        "artifact_id": ("artifact_id", "id"), "display_name": ("display_name", "displayName", "name"),
-        "source_url": ("source_url", "sourceUrl", "webUrl"), "download_url": ("download_url", "downloadUrl", "@microsoft.graph.downloadUrl"),
-        "created_at": ("created_at", "createdDateTime"), "available_at": ("available_at", "availableDateTime", "lastModifiedDateTime"),
+        "artifact_id": ("artifact_id", "id"),
+        "display_name": ("display_name", "displayName", "name"),
+        "source_url": ("source_url", "sourceUrl", "webUrl"),
+        "download_url": ("download_url", "downloadUrl", "@microsoft.graph.downloadUrl"),
+        "created_at": ("created_at", "createdDateTime"),
+        "available_at": ("available_at", "availableDateTime", "lastModifiedDateTime"),
         "size_bytes": ("size_bytes", "size"),
     }
     _CONVERT = {"artifact_id": _str, "metadata": _dict}
@@ -145,7 +169,9 @@ class MeetingArtifact(_Model):
 
     def __post_init__(self) -> None:
         if self.artifact_type not in {"transcript", "recording", "call_record"}:
-            raise ValueError("MeetingArtifact.artifact_type must be transcript, recording, or call_record.")
+            raise ValueError(
+                "MeetingArtifact.artifact_type must be transcript, recording, or call_record."
+            )
         super().__post_init__()
         if self.size_bytes is not None:
             self.size_bytes = int(self.size_bytes)
@@ -172,10 +198,19 @@ class TeamsMeetingSummaryPayload(_Model):
     teams_target: str | None = None
 
     # Nested payloads are only read from their snake_case keys.
-    _ALIASES = {"meeting_ref": ("meeting_ref",), "source_artifacts": ("source_artifacts",)}
+    _ALIASES = {
+        "meeting_ref": ("meeting_ref",),
+        "source_artifacts": ("source_artifacts",),
+    }
     _CONVERT = {
-        **dict.fromkeys(("participants", "key_decisions", "action_items", "risks"), _list), "call_metrics": _dict,
-        "meeting_ref": TeamsMeetingRef.from_dict, "source_artifacts": lambda value: [MeetingArtifact.from_dict(item) for item in value or []],
+        **dict.fromkeys(
+            ("participants", "key_decisions", "action_items", "risks"), _list
+        ),
+        "call_metrics": _dict,
+        "meeting_ref": TeamsMeetingRef.from_dict,
+        "source_artifacts": lambda value: [
+            MeetingArtifact.from_dict(item) for item in value or []
+        ],
     }
     _DATETIMES = ("start_time", "end_time")
 
@@ -202,8 +237,11 @@ class TeamsMeetingPipelineJob(_Model):
 
     _REQUIRED = ("job_id", "event_id", "source_event_type", "dedupe_key", "status")
     _CONVERT = {
-        **dict.fromkeys(_REQUIRED, _str), "retry_count": lambda value: value or 0, "error_info": _dict,
-        "meeting_ref": _nested(TeamsMeetingRef), "summary_payload": _nested(TeamsMeetingSummaryPayload),
+        **dict.fromkeys(_REQUIRED, _str),
+        "retry_count": lambda value: value or 0,
+        "error_info": _dict,
+        "meeting_ref": _nested(TeamsMeetingRef),
+        "summary_payload": _nested(TeamsMeetingSummaryPayload),
     }
     _DATETIMES = ("created_at", "updated_at")
 
@@ -212,4 +250,11 @@ class TeamsMeetingPipelineJob(_Model):
         self.retry_count = int(self.retry_count)
 
 
-__all__ = ["ArtifactType", "GraphSubscription", "MeetingArtifact", "TeamsMeetingPipelineJob", "TeamsMeetingRef", "TeamsMeetingSummaryPayload"]
+__all__ = [
+    "ArtifactType",
+    "GraphSubscription",
+    "MeetingArtifact",
+    "TeamsMeetingPipelineJob",
+    "TeamsMeetingRef",
+    "TeamsMeetingSummaryPayload",
+]

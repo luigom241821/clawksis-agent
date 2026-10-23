@@ -42,7 +42,6 @@ class TestAdvertiseAgentEnv:
         assert os.environ["CLAWK_AGENT"] == "true"
 
 
-
 class TestWrapCommandAdvertisesHarness:
     """The shell-level export in BaseEnvironment._wrap_command."""
 
@@ -57,25 +56,30 @@ class TestWrapCommandAdvertisesHarness:
         env._snapshot_passthrough_names = set()
         return env._wrap_command(command, "/tmp")
 
-
-
     def test_shell_sets_default_and_preserves_outer(self):
         """Run the wrapped script through real bash both ways."""
         wrapped = self._wrap('echo "AI=$AI_AGENT CLAWKSIS=$CLAWK_AGENT"')
 
-        clean_env = {k: v for k, v in os.environ.items()
-                     if k not in ("AI_AGENT", "CLAWK_AGENT")}
+        clean_env = {
+            k: v for k, v in os.environ.items() if k not in ("AI_AGENT", "CLAWK_AGENT")
+        }
         out = subprocess.run(
-            ["bash", "-c", wrapped], capture_output=True, text=True,
-            env=clean_env, timeout=30,
+            ["bash", "-c", wrapped],
+            capture_output=True,
+            text=True,
+            env=clean_env,
+            timeout=30,
             check=False,
         )
         assert f"AI={HARNESS_ID} CLAWKSIS=true" in out.stdout
 
         outer_env = dict(clean_env, AI_AGENT="pi", CLAWK_AGENT="false")
         out = subprocess.run(
-            ["bash", "-c", wrapped], capture_output=True, text=True,
-            env=outer_env, timeout=30,
+            ["bash", "-c", wrapped],
+            capture_output=True,
+            text=True,
+            env=outer_env,
+            timeout=30,
             check=False,
         )
         assert "AI=pi CLAWKSIS=false" in out.stdout

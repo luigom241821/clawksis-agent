@@ -51,10 +51,14 @@ class _FakeStreamer:
 
 
 def _patch_provider(monkeypatch, streamer, cap=4000):
-    monkeypatch.setattr("tools.tts_streaming.resolve_streaming_provider", lambda cfg: streamer)
+    monkeypatch.setattr(
+        "tools.tts_streaming.resolve_streaming_provider", lambda cfg: streamer
+    )
     monkeypatch.setattr("tools.tts_tool._load_tts_config", dict)
     monkeypatch.setattr("tools.tts_tool._get_provider", lambda cfg: "fake")
-    monkeypatch.setattr("tools.tts_tool._resolve_max_text_length", lambda provider, cfg: cap)
+    monkeypatch.setattr(
+        "tools.tts_tool._resolve_max_text_length", lambda provider, cfg: cap
+    )
 
 
 class _RateLearningStreamer(_FakeStreamer):
@@ -66,13 +70,19 @@ class _RateLearningStreamer(_FakeStreamer):
         yield from super().stream(text)
 
 
-def test_start_frame_carries_rate_learned_during_first_stream(stream_client, monkeypatch):
+def test_start_frame_carries_rate_learned_during_first_stream(
+    stream_client, monkeypatch
+):
     streamer = _RateLearningStreamer([b"\x01\x02"])
     _patch_provider(monkeypatch, streamer)
 
     with stream_client.websocket_connect(_url()) as conn:
         conn.send_text(json.dumps({"text": "Hello there.", "done": True}))
-        assert conn.receive_json() == {"type": "start", "sample_rate": 44100, "channels": 1}
+        assert conn.receive_json() == {
+            "type": "start",
+            "sample_rate": 44100,
+            "channels": 1,
+        }
         assert conn.receive_bytes() == b"\x01\x02"
         assert conn.receive_json() == {"type": "end"}
 
@@ -93,15 +103,26 @@ def test_streams_pcm_frames_then_end(stream_client, monkeypatch):
     assert streamer.requests == ["Hello there."]
 
 
-def test_short_cjk_opener_is_synthesized_alone_with_configured_min_len(stream_client, monkeypatch):
+def test_short_cjk_opener_is_synthesized_alone_with_configured_min_len(
+    stream_client, monkeypatch
+):
     """speak_stream_ws cuts with the requesting profile's tts.streaming.min_len (#96927): a 7-char
     CJK opener gets its own provider request instead of riding behind the second sentence."""
     streamer = _FakeStreamer([b"\x00\x00"])
     _patch_provider(monkeypatch, streamer)
-    monkeypatch.setattr("tools.tts_tool._load_tts_config", lambda: {"streaming": {"min_len": 6}})
+    monkeypatch.setattr(
+        "tools.tts_tool._load_tts_config", lambda: {"streaming": {"min_len": 6}}
+    )
 
     with stream_client.websocket_connect(_url()) as conn:
-        conn.send_text(json.dumps({"text": "记得，叫团团. 然后我们再说第二句话，这一句要长一些才行. ", "done": True}))
+        conn.send_text(
+            json.dumps(
+                {
+                    "text": "记得，叫团团. 然后我们再说第二句话，这一句要长一些才行. ",
+                    "done": True,
+                }
+            )
+        )
         # The start frame is deferred until the first PCM chunk (rate learned from the endpoint).
         assert conn.receive_json()["type"] == "start"
         while True:
@@ -113,12 +134,6 @@ def test_short_cjk_opener_is_synthesized_alone_with_configured_min_len(stream_cl
     assert streamer.requests[0] == "记得，叫团团.", streamer.requests
 
 
-
-
-
-
-
-
 def test_long_text_is_split_across_provider_requests(stream_client, monkeypatch):
     streamer = _FakeStreamer([b"\x00\x00"])
     _patch_provider(monkeypatch, streamer, cap=24)
@@ -126,7 +141,10 @@ def test_long_text_is_split_across_provider_requests(stream_client, monkeypatch)
     with stream_client.websocket_connect(_url()) as conn:
         conn.send_text(
             json.dumps(
-                {"text": "First sentence here. Second sentence here. Third one.", "done": True}
+                {
+                    "text": "First sentence here. Second sentence here. Third one.",
+                    "done": True,
+                }
             )
         )
         assert conn.receive_json()["type"] == "start"
@@ -190,16 +208,22 @@ def test_edge_speak_stream_speaks_each_sentence_instead_of_whole_text_fallback(
         assert "s16le" in args and "pipe:1" in args
         return subprocess.CompletedProcess(args, 0, stdout=pcm_for[path], stderr=b"")
 
-    monkeypatch.setattr("tools.tts_streaming.resolve_streaming_provider", lambda cfg: None)
+    monkeypatch.setattr(
+        "tools.tts_streaming.resolve_streaming_provider", lambda cfg: None
+    )
     monkeypatch.setattr(
         "tools.tts_tool._load_tts_config",
         lambda: {"provider": "edge", "streaming": {"min_len": 6}},
     )
     monkeypatch.setattr("tools.tts_tool._get_provider", lambda cfg: "edge")
-    monkeypatch.setattr("tools.tts_tool._resolve_max_text_length", lambda provider, cfg: 4000)
+    monkeypatch.setattr(
+        "tools.tts_tool._resolve_max_text_length", lambda provider, cfg: 4000
+    )
     monkeypatch.setattr("tools.tts_tool.text_to_speech_tool", fake_tts)
     monkeypatch.setattr("tools.tts_tool_delivery._ffmpeg_run", fake_ffmpeg)
-    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/ffmpeg" if name == "ffmpeg" else None)
+    monkeypatch.setattr(
+        "shutil.which", lambda name: "/usr/bin/ffmpeg" if name == "ffmpeg" else None
+    )
 
     with stream_client.websocket_connect(_url()) as conn:
         conn.send_text(json.dumps({"text": reply, "done": True}))
@@ -221,5 +245,3 @@ def test_edge_speak_stream_speaks_each_sentence_instead_of_whole_text_fallback(
     assert first in calls[0] and second not in calls[0]
     assert second in calls[1] and first not in calls[1]
     assert reply not in calls
-
-

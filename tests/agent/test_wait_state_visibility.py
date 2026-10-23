@@ -18,6 +18,7 @@ sys.modules.setdefault("fire", types.SimpleNamespace(Fire=lambda *a, **k: None))
 sys.modules.setdefault("firecrawl", types.SimpleNamespace(Firecrawl=object))
 sys.modules.setdefault("fal_client", types.SimpleNamespace())
 
+
 def _make_agent(tmp_path, monkeypatch, **kwargs):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     (tmp_path / ".env").write_text("", encoding="utf-8")
@@ -34,6 +35,7 @@ def _make_agent(tmp_path, monkeypatch, **kwargs):
         platform="cli",
         **kwargs,
     )
+
 
 def test_emit_wait_notice_updates_spinner_and_activity(tmp_path, monkeypatch):
     """The notice reaches the live display callback AND the activity tracker."""

@@ -38,7 +38,11 @@ def format_graph_error(error: Any) -> str | None:
     if not isinstance(error, dict):
         return None
     code, message = error.get("code"), error.get("message")
-    return f"{code}: {message}" if code and message else (str(message) if message else None)
+    return (
+        f"{code}: {message}"
+        if code and message
+        else (str(message) if message else None)
+    )
 
 
 @dataclass(frozen=True)
@@ -56,16 +60,25 @@ class GraphCredentials:
         return f"{self.authority_url.rstrip('/')}/{self.tenant_id.strip().strip('/')}/oauth2/v2.0/token"
 
     @classmethod
-    def from_env(cls, environ: dict[str, str] | None = None, *, required: bool = True) -> GraphCredentials | None:
+    def from_env(
+        cls, environ: dict[str, str] | None = None, *, required: bool = True
+    ) -> GraphCredentials | None:
         env = environ if environ is not None else os.environ
         values = [(env.get(name) or "").strip() for name in _REQUIRED_ENV]
         missing = [name for name, value in zip(_REQUIRED_ENV, values) if not value]
         if missing and not required:
             return None
         if missing:
-            raise MicrosoftGraphConfigError(f"Missing Microsoft Graph configuration: {', '.join(missing)}")
-        return cls(*values, scope=(env.get("MSGRAPH_SCOPE") or DEFAULT_GRAPH_SCOPE).strip(),
-                   authority_url=(env.get("MSGRAPH_AUTHORITY_URL") or DEFAULT_GRAPH_AUTHORITY_URL).strip())
+            raise MicrosoftGraphConfigError(
+                f"Missing Microsoft Graph configuration: {', '.join(missing)}"
+            )
+        return cls(
+            *values,
+            scope=(env.get("MSGRAPH_SCOPE") or DEFAULT_GRAPH_SCOPE).strip(),
+            authority_url=(
+                env.get("MSGRAPH_AUTHORITY_URL") or DEFAULT_GRAPH_AUTHORITY_URL
+            ).strip(),
+        )
 
 
 @dataclass
@@ -87,16 +100,27 @@ class CachedAccessToken:
 class MicrosoftGraphTokenProvider:
     """Acquire and cache Microsoft Graph app-only access tokens."""
 
-    def __init__(self, credentials: GraphCredentials, *, timeout: float = 20.0,
-                 skew_seconds: int = DEFAULT_TOKEN_SKEW_SECONDS,
-                 transport: httpx.AsyncBaseTransport | None = None) -> None:
-        self.credentials, self.timeout, self.skew_seconds = credentials, timeout, max(0, int(skew_seconds))
+    def __init__(
+        self,
+        credentials: GraphCredentials,
+        *,
+        timeout: float = 20.0,
+        skew_seconds: int = DEFAULT_TOKEN_SKEW_SECONDS,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
+        self.credentials, self.timeout, self.skew_seconds = (
+            credentials,
+            timeout,
+            max(0, int(skew_seconds)),
+        )
         self._transport = transport
         self._cached_token: CachedAccessToken | None = None
         self._lock = asyncio.Lock()
 
     @classmethod
-    def from_env(cls, environ: dict[str, str] | None = None, **kwargs: Any) -> MicrosoftGraphTokenProvider:
+    def from_env(
+        cls, environ: dict[str, str] | None = None, **kwargs: Any
+    ) -> MicrosoftGraphTokenProvider:
         return cls(GraphCredentials.from_env(environ), **kwargs)
 
     def clear_cache(self) -> None:
@@ -104,16 +128,27 @@ class MicrosoftGraphTokenProvider:
 
     def inspect_token_health(self) -> dict[str, Any]:
         cached, creds = self._cached_token, self.credentials
-        return {"configured": True, "tenant_id": creds.tenant_id, "client_id": creds.client_id,
-                "scope": creds.scope, "authority_url": creds.authority_url, "token_url": creds.token_url,
-                "cached": bool(cached), "expires_in_seconds": cached.expires_in_seconds if cached else None,
-                "is_expired": cached.is_expired(skew_seconds=0) if cached else None,
-                "refresh_skew_seconds": self.skew_seconds}
+        return {
+            "configured": True,
+            "tenant_id": creds.tenant_id,
+            "client_id": creds.client_id,
+            "scope": creds.scope,
+            "authority_url": creds.authority_url,
+            "token_url": creds.token_url,
+            "cached": bool(cached),
+            "expires_in_seconds": cached.expires_in_seconds if cached else None,
+            "is_expired": cached.is_expired(skew_seconds=0) if cached else None,
+            "refresh_skew_seconds": self.skew_seconds,
+        }
 
     def _fresh_cached(self) -> CachedAccessToken | None:
         """The cached token unless it expires within ``skew_seconds``."""
         cached = self._cached_token
-        return cached if cached and not cached.is_expired(skew_seconds=self.skew_seconds) else None
+        return (
+            cached
+            if cached and not cached.is_expired(skew_seconds=self.skew_seconds)
+            else None
+        )
 
     async def get_access_token(self, *, force_refresh: bool = False) -> str:
         # Double-checked under the lock so concurrent callers share one fetch.
@@ -126,28 +161,47 @@ class MicrosoftGraphTokenProvider:
             return self._cached_token.access_token
 
     async def _fetch_access_token(self) -> CachedAccessToken:
-        data = {"grant_type": "client_credentials", "client_id": self.credentials.client_id,
-                "client_secret": self.credentials.client_secret, "scope": self.credentials.scope}
-        async with httpx.AsyncClient(timeout=httpx.Timeout(self.timeout), transport=self._transport) as client:
-            response = await client.post(self.credentials.token_url, data=data,
-                                         headers={"Content-Type": "application/x-www-form-urlencoded"})
+        data = {
+            "grant_type": "client_credentials",
+            "client_id": self.credentials.client_id,
+            "client_secret": self.credentials.client_secret,
+            "scope": self.credentials.scope,
+        }
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(self.timeout), transport=self._transport
+        ) as client:
+            response = await client.post(
+                self.credentials.token_url,
+                data=data,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
         if response.status_code >= 400:
-            raise MicrosoftGraphTokenError("Microsoft Graph token request failed with HTTP "
-                                           f"{response.status_code}: {_extract_error_detail(response)}")
+            raise MicrosoftGraphTokenError(
+                "Microsoft Graph token request failed with HTTP "
+                f"{response.status_code}: {_extract_error_detail(response)}"
+            )
         try:
             payload = response.json()
         except ValueError as exc:
-            raise MicrosoftGraphTokenError("Microsoft Graph token response was not valid JSON.") from exc
+            raise MicrosoftGraphTokenError(
+                "Microsoft Graph token response was not valid JSON."
+            ) from exc
         access_token = str(payload.get("access_token") or "").strip()
         if not access_token:
-            raise MicrosoftGraphTokenError("Microsoft Graph token response did not include access_token.")
+            raise MicrosoftGraphTokenError(
+                "Microsoft Graph token response did not include access_token."
+            )
         try:
             expires_in_seconds = int(payload.get("expires_in"))
         except (TypeError, ValueError) as exc:
             raise MicrosoftGraphTokenError(
-                "Microsoft Graph token response did not include a valid expires_in.") from exc
-        return CachedAccessToken(access_token, time.time() + max(0, expires_in_seconds),
-                                 str(payload.get("token_type") or "Bearer").strip() or "Bearer")
+                "Microsoft Graph token response did not include a valid expires_in."
+            ) from exc
+        return CachedAccessToken(
+            access_token,
+            time.time() + max(0, expires_in_seconds),
+            str(payload.get("token_type") or "Bearer").strip() or "Bearer",
+        )
 
 
 def _extract_error_detail(response: httpx.Response) -> str:
@@ -165,4 +219,8 @@ def _extract_error_detail(response: httpx.Response) -> str:
     detail = format_graph_error(error)
     if detail is not None:
         return detail
-    return str(error["code"]) if isinstance(error, dict) and error.get("code") else str(payload)
+    return (
+        str(error["code"])
+        if isinstance(error, dict) and error.get("code")
+        else str(payload)
+    )

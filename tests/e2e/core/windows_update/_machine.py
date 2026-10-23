@@ -84,7 +84,8 @@ REAL_GIT = shutil.which("git")
 # literally in its own ``pytestmark`` (scripts/ci/list_os_marked_tests.py reads the file text).
 REQUIRES_OPT_IN = pytest.mark.skipif(
     os.environ.get(OPT_IN_ENV) != "1",
-    reason=f"mutates HKCU PATH and downloads a toolchain; set {OPT_IN_ENV}=1 (CI does)")
+    reason=f"mutates HKCU PATH and downloads a toolchain; set {OPT_IN_ENV}=1 (CI does)",
+)
 
 
 def _strip_path(path: str, drop: Iterable[str]) -> str:
@@ -99,17 +100,29 @@ def _strip_path(path: str, drop: Iterable[str]) -> str:
     return os.pathsep.join(kept)
 
 
-def harness_git(*args: str, cwd: Path | None = None, env: dict[str, str] | None = None,
-                timeout: float = 600.0) -> str:
+def harness_git(
+    *args: str,
+    cwd: Path | None = None,
+    env: dict[str, str] | None = None,
+    timeout: float = 600.0,
+) -> str:
     """The driver's own git (never the product's). Raises on failure: it is plumbing."""
     assert REAL_GIT, "harness needs git on PATH to stage serve.git"
     base = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
     base.update(env or {})
-    res = subprocess.run([REAL_GIT, "-c", "safe.directory=*", *args], cwd=cwd, env=base,
-                         capture_output=True, timeout=timeout, check=False)
+    res = subprocess.run(
+        [REAL_GIT, "-c", "safe.directory=*", *args],
+        cwd=cwd,
+        env=base,
+        capture_output=True,
+        timeout=timeout,
+        check=False,
+    )
     out, err = _decode(res.stdout), _decode(res.stderr)
     if res.returncode:
-        raise RuntimeError(f"harness git {' '.join(args)} failed rc={res.returncode}: {err[-2000:]}")
+        raise RuntimeError(
+            f"harness git {' '.join(args)} failed rc={res.returncode}: {err[-2000:]}"
+        )
     return out.strip()
 
 
@@ -117,7 +130,9 @@ def _hkcu_path() -> tuple[str, int] | None:
     import winreg
 
     try:
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment", 0, winreg.KEY_READ) as key:
+        with winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER, "Environment", 0, winreg.KEY_READ
+        ) as key:
             value, kind = winreg.QueryValueEx(key, "Path")
             return str(value), int(kind)
     except OSError:
@@ -127,7 +142,9 @@ def _hkcu_path() -> tuple[str, int] | None:
 def _restore_hkcu_path(saved: tuple[str, int] | None) -> None:
     import winreg
 
-    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment", 0, winreg.KEY_SET_VALUE) as key:
+    with winreg.OpenKey(
+        winreg.HKEY_CURRENT_USER, "Environment", 0, winreg.KEY_SET_VALUE
+    ) as key:
         if saved is None:
             try:
                 winreg.DeleteValue(key, "Path")
@@ -195,25 +212,34 @@ class Machine:
 
     # -- environment ----------------------------------------------------------
 
-    def env(self, extra: dict[str, str] | None = None, *, as_user: bool = False) -> dict[str, str]:
-        env = {k: v for k, v in os.environ.items()
-               if k in _PASSTHROUGH_ENV and not k.upper().endswith(_SECRET_SUFFIXES)}
+    def env(
+        self, extra: dict[str, str] | None = None, *, as_user: bool = False
+    ) -> dict[str, str]:
+        env = {
+            k: v
+            for k, v in os.environ.items()
+            if k in _PASSTHROUGH_ENV and not k.upper().endswith(_SECRET_SUFFIXES)
+        }
         roaming = self.profile / "AppData" / "Roaming"
         self.local.mkdir(parents=True, exist_ok=True)
         roaming.mkdir(parents=True, exist_ok=True)
-        drop = ("python.exe", "python3.exe", "uv.exe") + (() if self.system_git else ("git.exe",))
+        drop = ("python.exe", "python3.exe", "uv.exe") + (
+            () if self.system_git else ("git.exe",)
+        )
         path = _strip_path(os.environ.get("PATH", ""), drop)
-        env.update({
-            "PATH": os.pathsep.join([*self.path_prepend, path]),
-            "USERPROFILE": str(self.profile),
-            "HOME": str(self.profile),
-            "LOCALAPPDATA": str(self.local),
-            "APPDATA": str(roaming),
-            "GIT_CONFIG_GLOBAL": str(self.root / "e2e-gitconfig"),
-            "NO_COLOR": "1",
-            # state.db lives under tmp; under a pytest ancestor the live-DB guard would refuse it.
-            "CLAWK_STATE_DB_GUARD_BYPASS": "1",
-        })
+        env.update(
+            {
+                "PATH": os.pathsep.join([*self.path_prepend, path]),
+                "USERPROFILE": str(self.profile),
+                "HOME": str(self.profile),
+                "LOCALAPPDATA": str(self.local),
+                "APPDATA": str(roaming),
+                "GIT_CONFIG_GLOBAL": str(self.root / "e2e-gitconfig"),
+                "NO_COLOR": "1",
+                # state.db lives under tmp; under a pytest ancestor the live-DB guard would refuse it.
+                "CLAWK_STATE_DB_GUARD_BYPASS": "1",
+            }
+        )
         if as_user:
             # The runner's own %TEMP% belongs to the elevated session; a user's is in their profile.
             temp = self.local / "Temp"
@@ -227,16 +253,27 @@ class Machine:
     def stage(self) -> None:
         """serve.git at HEAD (+ NEXT in its object store), the URL redirect, a seeded home."""
         self.root.mkdir(parents=True, exist_ok=True)
-        self.head = harness_git("-C", str(REPO_ROOT), "rev-parse", f"{self.base_ref}^{{commit}}" if self.base_ref else "HEAD")
+        self.head = harness_git(
+            "-C",
+            str(REPO_ROOT),
+            "rev-parse",
+            f"{self.base_ref}^{{commit}}" if self.base_ref else "HEAD",
+        )
         harness_git("clone", "--bare", "--quiet", str(REPO_ROOT), str(self.serve))
         harness_git("-C", str(self.serve), "update-ref", "refs/heads/main", self.head)
         harness_git("-C", str(self.serve), "symbolic-ref", "HEAD", "refs/heads/main")
         for key in ("uploadpack.allowAnySHA1InWant", "uploadpack.allowFilter"):
             harness_git("-C", str(self.serve), "config", key, "true")
-        self.next = (harness_git("-C", str(REPO_ROOT), "rev-parse", "HEAD") if self.base_ref else self._mint_next())
+        self.next = (
+            harness_git("-C", str(REPO_ROOT), "rev-parse", "HEAD")
+            if self.base_ref
+            else self._mint_next()
+        )
         file_url = "file:///" + str(self.serve).replace("\\", "/")
         rewrites = "".join(f"\tinsteadOf = {url}\n" for url in CANONICAL_URLS)
-        (self.root / "e2e-gitconfig").write_text(f'[url "{file_url}"]\n{rewrites}', encoding="utf-8")
+        (self.root / "e2e-gitconfig").write_text(
+            f'[url "{file_url}"]\n{rewrites}', encoding="utf-8"
+        )
         # What the user's config would hold after choosing a provider: the loopback mock.
         # install.ps1 keeps an existing config.yaml/.env.
         write_clawk_home(self.clawk_home, self.base_url)
@@ -251,20 +288,45 @@ class Machine:
         """NEXT: HEAD plus a root marker and a nested one (a new subtree for the treeless
         clone to fetch). Lives only in serve.git until ``advance()`` points main at it."""
         blob_src = self.root / "next-marker.txt"
-        blob_src.write_text("synthetic NEXT commit for the Windows install/update E2E\n", encoding="utf-8")
-        blob = harness_git("-C", str(self.serve), "hash-object", "-w", "--no-filters", str(blob_src))
+        blob_src.write_text(
+            "synthetic NEXT commit for the Windows install/update E2E\n",
+            encoding="utf-8",
+        )
+        blob = harness_git(
+            "-C", str(self.serve), "hash-object", "-w", "--no-filters", str(blob_src)
+        )
         index = self.root / "next.index"
-        env = {"GIT_INDEX_FILE": str(index),
-               "GIT_AUTHOR_NAME": "Clawksis E2E", "GIT_AUTHOR_EMAIL": "e2e@clawk.invalid",
-               "GIT_COMMITTER_NAME": "Clawksis E2E", "GIT_COMMITTER_EMAIL": "e2e@clawk.invalid"}
+        env = {
+            "GIT_INDEX_FILE": str(index),
+            "GIT_AUTHOR_NAME": "Clawksis E2E",
+            "GIT_AUTHOR_EMAIL": "e2e@clawk.invalid",
+            "GIT_COMMITTER_NAME": "Clawksis E2E",
+            "GIT_COMMITTER_EMAIL": "e2e@clawk.invalid",
+        }
         harness_git("-C", str(self.serve), "read-tree", self.head, env=env)
         for path in (NEXT_MARKER, f"tests/e2e/{NEXT_MARKER}"):
-            harness_git("-C", str(self.serve), "update-index", "--add", "--cacheinfo",
-                        f"100644,{blob},{path}", env=env)
+            harness_git(
+                "-C",
+                str(self.serve),
+                "update-index",
+                "--add",
+                "--cacheinfo",
+                f"100644,{blob},{path}",
+                env=env,
+            )
         tree = harness_git("-C", str(self.serve), "write-tree", env=env)
         index.unlink(missing_ok=True)
-        return harness_git("-C", str(self.serve), "commit-tree", tree, "-p", self.head,
-                           "-m", "e2e: synthetic next commit", env=env)
+        return harness_git(
+            "-C",
+            str(self.serve),
+            "commit-tree",
+            tree,
+            "-p",
+            self.head,
+            "-m",
+            "e2e: synthetic next commit",
+            env=env,
+        )
 
     def advance(self) -> None:
         """Publish NEXT on main: an update becomes available the way it does for a user."""
@@ -277,46 +339,103 @@ class Machine:
         statement naming ``tag``, so a checkout torn between ``parent`` and the child differs
         from both commits in bytes the next launch actually runs, not only in a marker file."""
         blob_src = self.root / f"{tag}-marker.txt"
-        blob_src.write_text(f"synthetic {tag} commit for the Windows update E2E\n", encoding="utf-8")
-        blob = harness_git("-C", str(self.serve), "hash-object", "-w", "--no-filters", str(blob_src))
+        blob_src.write_text(
+            f"synthetic {tag} commit for the Windows update E2E\n", encoding="utf-8"
+        )
+        blob = harness_git(
+            "-C", str(self.serve), "hash-object", "-w", "--no-filters", str(blob_src)
+        )
         index = self.root / f"{tag}.index"
-        env = {"GIT_INDEX_FILE": str(index),
-               "GIT_AUTHOR_NAME": "Clawksis E2E", "GIT_AUTHOR_EMAIL": "e2e@clawk.invalid",
-               "GIT_COMMITTER_NAME": "Clawksis E2E", "GIT_COMMITTER_EMAIL": "e2e@clawk.invalid"}
+        env = {
+            "GIT_INDEX_FILE": str(index),
+            "GIT_AUTHOR_NAME": "Clawksis E2E",
+            "GIT_AUTHOR_EMAIL": "e2e@clawk.invalid",
+            "GIT_COMMITTER_NAME": "Clawksis E2E",
+            "GIT_COMMITTER_EMAIL": "e2e@clawk.invalid",
+        }
         harness_git("-C", str(self.serve), "read-tree", parent, env=env)
-        harness_git("-C", str(self.serve), "update-index", "--add", "--cacheinfo",
-                    f"100644,{blob},.clawk-e2e-{tag}", env=env)
+        harness_git(
+            "-C",
+            str(self.serve),
+            "update-index",
+            "--add",
+            "--cacheinfo",
+            f"100644,{blob},.clawk-e2e-{tag}",
+            env=env,
+        )
         for n, rel in enumerate(runtime_files):
-            mode = harness_git("-C", str(self.serve), "ls-tree", parent, "--", rel).split(" ", 1)[0]
-            old = subprocess.run([REAL_GIT, "-C", str(self.serve), "cat-file", "blob", f"{parent}:{rel}"],
-                                 env={k: v for k, v in os.environ.items() if not k.startswith("GIT_")},
-                                 capture_output=True, timeout=120, check=True).stdout
+            mode = harness_git(
+                "-C", str(self.serve), "ls-tree", parent, "--", rel
+            ).split(" ", 1)[0]
+            old = subprocess.run(
+                [
+                    REAL_GIT,
+                    "-C",
+                    str(self.serve),
+                    "cat-file",
+                    "blob",
+                    f"{parent}:{rel}",
+                ],
+                env={k: v for k, v in os.environ.items() if not k.startswith("GIT_")},
+                capture_output=True,
+                timeout=120,
+                check=True,
+            ).stdout
             edited = self.root / f"{tag}-runtime-{n}"
-            edited.write_bytes(old.rstrip(b"\n") + f'\n_E2E_UPDATE_TARGET = "{tag}"\n'.encode())
-            sha = harness_git("-C", str(self.serve), "hash-object", "-w", "--no-filters", str(edited))
-            harness_git("-C", str(self.serve), "update-index", "--cacheinfo", f"{mode},{sha},{rel}", env=env)
+            edited.write_bytes(
+                old.rstrip(b"\n") + f'\n_E2E_UPDATE_TARGET = "{tag}"\n'.encode()
+            )
+            sha = harness_git(
+                "-C", str(self.serve), "hash-object", "-w", "--no-filters", str(edited)
+            )
+            harness_git(
+                "-C",
+                str(self.serve),
+                "update-index",
+                "--cacheinfo",
+                f"{mode},{sha},{rel}",
+                env=env,
+            )
         tree = harness_git("-C", str(self.serve), "write-tree", env=env)
         index.unlink(missing_ok=True)
-        return harness_git("-C", str(self.serve), "commit-tree", tree, "-p", parent,
-                           "-m", f"e2e: synthetic {tag} commit", env=env)
+        return harness_git(
+            "-C",
+            str(self.serve),
+            "commit-tree",
+            tree,
+            "-p",
+            parent,
+            "-m",
+            f"e2e: synthetic {tag} commit",
+            env=env,
+        )
 
     def publish(self, sha: str) -> None:
         harness_git("-C", str(self.serve), "update-ref", "refs/heads/main", sha)
 
-    def spawn_logged(self, argv: list[str], label: str, *,
-                     env_extra: dict[str, str] | None = None) -> subprocess.Popen:
+    def spawn_logged(
+        self, argv: list[str], label: str, *, env_extra: dict[str, str] | None = None
+    ) -> subprocess.Popen:
         """Start ``argv`` with its transcript streaming to disk; the caller ends it
         (``taskkill_tree``) or waits. The crash cells kill updates mid-flight."""
         self._seq += 1
         log = self.logs / f"{self._seq:02d}-{label}.log"
         started = time.monotonic()
-        proc = subprocess.Popen(argv, cwd=self.profile, env=self.env(env_extra),
-                                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        proc = subprocess.Popen(
+            argv,
+            cwd=self.profile,
+            env=self.env(env_extra),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
 
         def pump() -> None:
             with log.open("w", encoding="utf-8") as fh:
                 for raw in iter(proc.stdout.readline, b""):
-                    fh.write(f"[{time.monotonic() - started:7.1f}s] {_decode(raw).rstrip()}\n")
+                    fh.write(
+                        f"[{time.monotonic() - started:7.1f}s] {_decode(raw).rstrip()}\n"
+                    )
                     fh.flush()
 
         threading.Thread(target=pump, name=f"pump-{label}", daemon=True).start()
@@ -324,11 +443,18 @@ class Machine:
         proc.transcript = log  # type: ignore[attr-defined]
         return proc
 
-
     # -- running --------------------------------------------------------------
 
-    def _run_logged(self, argv: list[str], label: str, *, timeout: float, cwd: Path | None = None,
-                    env_extra: dict[str, str] | None = None, as_user: bool = False) -> Run:
+    def _run_logged(
+        self,
+        argv: list[str],
+        label: str,
+        *,
+        timeout: float,
+        cwd: Path | None = None,
+        env_extra: dict[str, str] | None = None,
+        as_user: bool = False,
+    ) -> Run:
         """Run to completion with the full transcript on disk (survives a timeout).
 
         ``as_user``: under a standard-user token (``_tokens.StandardUserProcess``), as a
@@ -339,22 +465,38 @@ class Machine:
         if as_user:
             from tests.e2e.core.windows_update._tokens import StandardUserProcess
 
-            proc = StandardUserProcess(argv, cwd=cwd or self.profile, env=self.env(env_extra, as_user=True),
-                                       log=log, creationflags=subprocess.CREATE_NO_WINDOW)
+            proc = StandardUserProcess(
+                argv,
+                cwd=cwd or self.profile,
+                env=self.env(env_extra, as_user=True),
+                log=log,
+                creationflags=subprocess.CREATE_NO_WINDOW,
+            )
             self._spawned.append(proc)  # type: ignore[arg-type]
             try:
                 code = proc.wait(timeout=timeout)
                 self.timings.append((label, round(time.monotonic() - started, 1)))
             except subprocess.TimeoutExpired:
-                subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True, timeout=60,
-                               check=False)
+                subprocess.run(
+                    ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+                    capture_output=True,
+                    timeout=60,
+                    check=False,
+                )
                 raise AssertionError(
                     f"{label} (standard user) did not finish within {timeout:.0f}s\n{self._tail(log)}\n"
-                    f"{self.evidence()}") from None
+                    f"{self.evidence()}"
+                ) from None
             return Run(code, _decode(log.read_bytes()), "")
         chunks: list[bytes] = []
-        proc = subprocess.Popen(argv, cwd=cwd or self.profile, env=self.env(env_extra),
-                                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        proc = subprocess.Popen(
+            argv,
+            cwd=cwd or self.profile,
+            env=self.env(env_extra),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
 
         def pump() -> None:
             # Every transcript line carries its offset: install.ps1 prints no timestamps, and
@@ -363,7 +505,9 @@ class Machine:
             with log.open("w", encoding="utf-8") as fh:
                 for raw in iter(proc.stdout.readline, b""):
                     chunks.append(raw)
-                    fh.write(f"[{time.monotonic() - started:7.1f}s] {_decode(raw).rstrip()}\n")
+                    fh.write(
+                        f"[{time.monotonic() - started:7.1f}s] {_decode(raw).rstrip()}\n"
+                    )
                     fh.flush()
 
         reader = threading.Thread(target=pump, name=f"pump-{label}", daemon=True)
@@ -372,11 +516,17 @@ class Machine:
             code = proc.wait(timeout=timeout)
             self.timings.append((label, round(time.monotonic() - started, 1)))
         except subprocess.TimeoutExpired:
-            subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True, timeout=60, check=False)
+            subprocess.run(
+                ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+                capture_output=True,
+                timeout=60,
+                check=False,
+            )
             proc.wait(timeout=60)
             reader.join(timeout=10)
             raise AssertionError(
-                f"{label} did not finish within {timeout:.0f}s\n{self._tail(log)}\n{self.evidence()}") from None
+                f"{label} did not finish within {timeout:.0f}s\n{self._tail(log)}\n{self.evidence()}"
+            ) from None
         reader.join(timeout=20)
         return Run(code, _decode(b"".join(chunks)), "")
 
@@ -394,36 +544,86 @@ class Machine:
         With ``base_ref`` set it is that commit's install.ps1, the script that user downloaded then."""
         script = self.root / "install.ps1"
         if self.base_ref:
-            raw = subprocess.run([REAL_GIT, "-C", str(self.serve), "show", f"{self.head}:scripts/install.ps1"],
-                                 env={k: v for k, v in os.environ.items() if not k.startswith("GIT_")},
-                                 capture_output=True, timeout=120, check=True).stdout
+            raw = subprocess.run(
+                [
+                    REAL_GIT,
+                    "-C",
+                    str(self.serve),
+                    "show",
+                    f"{self.head}:scripts/install.ps1",
+                ],
+                env={k: v for k, v in os.environ.items() if not k.startswith("GIT_")},
+                capture_output=True,
+                timeout=120,
+                check=True,
+            ).stdout
             script.write_bytes(raw)
         else:
             shutil.copyfile(REPO_ROOT / "scripts" / "install.ps1", script)
         cwd = self.root / "install-cwd"
         cwd.mkdir(parents=True, exist_ok=True)
         run = self._run_logged(
-            ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script), "-NonInteractive"],
-            "install", timeout=INSTALL_TIMEOUT, cwd=cwd,
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(script),
+                "-NonInteractive",
+            ],
+            "install",
+            timeout=INSTALL_TIMEOUT,
+            cwd=cwd,
             # serve.git carries this checkout's release tags; install main, not the latest release.
-            env_extra={"CLAWK_INSTALL_CHANNEL": "main"}, as_user=as_user)
+            env_extra={"CLAWK_INSTALL_CHANNEL": "main"},
+            as_user=as_user,
+        )
         if run.returncode == 0 and self.clawk_exe.is_file():
             # advance() lands NEXT on main and publishes no release: follow main, not the stable
             # default an official-origin checkout gets (channel resolution has its own suites).
-            pin = self.clawk("update", "--set-channel", "main", label="pin-main-channel", as_user=as_user)
-            assert pin.returncode == 0, f"could not pin the main channel\n{self.evidence()}"
+            pin = self.clawk(
+                "update",
+                "--set-channel",
+                "main",
+                label="pin-main-channel",
+                as_user=as_user,
+            )
+            assert pin.returncode == 0, (
+                f"could not pin the main channel\n{self.evidence()}"
+            )
         return run
 
-    def clawk(self, *args: str, label: str | None = None, timeout: float = CMD_TIMEOUT,
-               env_extra: dict[str, str] | None = None, as_user: bool = False) -> Run:
-        assert self.clawk_exe.is_file(), f"installer published no {self.clawk_exe}\n{self.evidence()}"
+    def clawk(
+        self,
+        *args: str,
+        label: str | None = None,
+        timeout: float = CMD_TIMEOUT,
+        env_extra: dict[str, str] | None = None,
+        as_user: bool = False,
+    ) -> Run:
+        assert self.clawk_exe.is_file(), (
+            f"installer published no {self.clawk_exe}\n{self.evidence()}"
+        )
         name = label or "clawk-" + "-".join(a.strip("-") for a in args[:2] if a)
-        return self._run_logged([str(self.clawk_exe), *args], name, timeout=timeout, env_extra=env_extra,
-                                as_user=as_user)
+        return self._run_logged(
+            [str(self.clawk_exe), *args],
+            name,
+            timeout=timeout,
+            env_extra=env_extra,
+            as_user=as_user,
+        )
 
     def update(self, *extra: str, label: str = "update", as_user: bool = False) -> Run:
         with self.gateway_phase():
-            return self.clawk("update", "--yes", *extra, label=label, timeout=UPDATE_TIMEOUT, as_user=as_user)
+            return self.clawk(
+                "update",
+                "--yes",
+                *extra,
+                label=label,
+                timeout=UPDATE_TIMEOUT,
+                as_user=as_user,
+            )
 
     @contextlib.contextmanager
     def gateway_phase(self):
@@ -438,7 +638,9 @@ class Machine:
             return
         import msvcrt
 
-        lock_dir = Path(os.environ.get("CLAWK_E2E_MACHINE_ROOT") or tempfile.gettempdir())
+        lock_dir = Path(
+            os.environ.get("CLAWK_E2E_MACHINE_ROOT") or tempfile.gettempdir()
+        )
         lock_dir.mkdir(parents=True, exist_ok=True)
         waited = time.monotonic()
         with (lock_dir / "gateway-phase.lock").open("a+b") as fh:
@@ -449,9 +651,13 @@ class Machine:
                     break
                 except OSError:
                     if time.monotonic() - waited > 1800:
-                        raise RuntimeError("harness: gateway-phase lock not acquired within 30 min") from None
+                        raise RuntimeError(
+                            "harness: gateway-phase lock not acquired within 30 min"
+                        ) from None
                     time.sleep(0.5)
-            self.timings.append(("(waited for gateway phase)", round(time.monotonic() - waited, 1)))
+            self.timings.append(
+                ("(waited for gateway phase)", round(time.monotonic() - waited, 1))
+            )
             self._lock_depth = 1
             try:
                 yield
@@ -476,34 +682,53 @@ class Machine:
 
     def gateway_state(self) -> dict:
         try:
-            return json.loads((self.clawk_home / "gateway_state.json").read_text(encoding="utf-8-sig"))
+            return json.loads(
+                (self.clawk_home / "gateway_state.json").read_text(encoding="utf-8-sig")
+            )
         except (OSError, ValueError):
             return {}
 
-    def spawn_gateway(self, env_extra: dict[str, str] | None = None, *, as_user: bool = False) -> subprocess.Popen:
+    def spawn_gateway(
+        self, env_extra: dict[str, str] | None = None, *, as_user: bool = False
+    ) -> subprocess.Popen:
         """``clawk gateway run`` through the published launcher, windowless and detached from
         this console: the shape the Desktop / login item uses to host a gateway.
 
         ``as_user``: under a standard-user token, as a non-elevated login item / Desktop starts it."""
         self._seq += 1
-        log = self.logs / f"{self._seq:02d}-gateway-run{'-as-user' if as_user else ''}.log"
+        log = (
+            self.logs
+            / f"{self._seq:02d}-gateway-run{'-as-user' if as_user else ''}.log"
+        )
         flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
         if as_user:
             from tests.e2e.core.windows_update._tokens import StandardUserProcess
 
-            proc = StandardUserProcess([str(self.clawk_exe), "gateway", "run"], cwd=self.profile,
-                                       env=self.env(env_extra, as_user=True), log=log, creationflags=flags)
+            proc = StandardUserProcess(
+                [str(self.clawk_exe), "gateway", "run"],
+                cwd=self.profile,
+                env=self.env(env_extra, as_user=True),
+                log=log,
+                creationflags=flags,
+            )
             self._spawned.append(proc)  # type: ignore[arg-type]
             return proc  # type: ignore[return-value]
         with log.open("wb") as fh:
-            proc = subprocess.Popen([str(self.clawk_exe), "gateway", "run"], cwd=self.profile,
-                                    env=self.env(env_extra), stdin=subprocess.DEVNULL, stdout=fh,
-                                    stderr=subprocess.STDOUT, creationflags=flags)
+            proc = subprocess.Popen(
+                [str(self.clawk_exe), "gateway", "run"],
+                cwd=self.profile,
+                env=self.env(env_extra),
+                stdin=subprocess.DEVNULL,
+                stdout=fh,
+                stderr=subprocess.STDOUT,
+                creationflags=flags,
+            )
         self._spawned.append(proc)
         return proc
 
-    def wait_gateway_running(self, *, not_pid: int | None = None,
-                             timeout: float = GATEWAY_READY_TIMEOUT) -> dict:
+    def wait_gateway_running(
+        self, *, not_pid: int | None = None, timeout: float = GATEWAY_READY_TIMEOUT
+    ) -> dict:
         """The gateway's own record says ``running`` for a live pid (optionally a new one)."""
         import psutil
 
@@ -515,7 +740,12 @@ class Machine:
             return state if psutil.pid_exists(int(pid)) else None
 
         try:
-            return wait_until(ready, timeout, "gateway_state.json to report a live running gateway", interval=0.5)
+            return wait_until(
+                ready,
+                timeout,
+                "gateway_state.json to report a live running gateway",
+                interval=0.5,
+            )
         except AssertionError as exc:
             raise AssertionError(f"{exc}\n{self.evidence()}") from None
 
@@ -525,7 +755,10 @@ class Machine:
         """Live processes of this machine: exe/cwd/argv under its root, or its CLAWK_HOME."""
         import psutil
 
-        roots = {os.path.normcase(os.path.normpath(str(p))) for p in (self.root, self.profile)}
+        roots = {
+            os.path.normcase(os.path.normpath(str(p)))
+            for p in (self.root, self.profile)
+        }
         home = os.path.normcase(os.path.normpath(str(self.clawk_home)))
         me = os.getpid()
         owned = []
@@ -534,8 +767,12 @@ class Machine:
                 if proc.pid == me or proc.create_time() < self.started - 1.0:
                     continue
                 env = {k.upper(): v for k, v in proc.environ().items()}
-                hh = os.path.normcase(os.path.normpath(env.get("CLAWK_HOME", "") or "-"))
-                blob = os.path.normcase(" ".join([proc.exe() or "", proc.cwd() or "", *proc.cmdline()]))
+                hh = os.path.normcase(
+                    os.path.normpath(env.get("CLAWK_HOME", "") or "-")
+                )
+                blob = os.path.normcase(
+                    " ".join([proc.exe() or "", proc.cwd() or "", *proc.cmdline()])
+                )
             except (psutil.Error, OSError):
                 continue
             if hh == home or any(root in blob for root in roots):
@@ -544,20 +781,36 @@ class Machine:
 
     def evidence(self) -> str:
         """Receipts, logs and the process table: what a failure message must carry."""
-        parts = [f"machine root: {self.root}", f"profile: {self.profile}", f"HEAD={self.head} NEXT={self.next}",
-                 f"installed checkout: {self.installed_head()}", f"timings (s): {self.timings}"]
+        parts = [
+            f"machine root: {self.root}",
+            f"profile: {self.profile}",
+            f"HEAD={self.head} NEXT={self.next}",
+            f"installed checkout: {self.installed_head()}",
+            f"timings (s): {self.timings}",
+        ]
         receipt = self.clawk_home / "logs" / "update_receipts" / "latest.json"
         if receipt.is_file():
             parts.append(self._tail(receipt, 4000))
         parts.append(f"gateway_state.json: {self.gateway_state()}")
-        parts.append(f"gateway.pid present: {(self.clawk_home / 'gateway.pid').exists()}")
+        parts.append(
+            f"gateway.pid present: {(self.clawk_home / 'gateway.pid').exists()}"
+        )
         logs = self.clawk_home / "logs"
-        for name in ("gateway.log", "gateway-stdio.log", "errors.log", "agent.log", "update.log",
-                     "desktop-update-handoff.log"):
+        for name in (
+            "gateway.log",
+            "gateway-stdio.log",
+            "errors.log",
+            "agent.log",
+            "update.log",
+            "desktop-update-handoff.log",
+        ):
             if (logs / name).is_file():
                 parts.append(self._tail(logs / name, 3000))
         try:
-            parts.append("owned processes:\n  " + "\n  ".join(describe(self.owned_processes()) or ["<none>"]))
+            parts.append(
+                "owned processes:\n  "
+                + "\n  ".join(describe(self.owned_processes()) or ["<none>"])
+            )
         except Exception as exc:  # diagnostics must never mask the real failure
             parts.append(f"process table unavailable: {exc}")
         return "\n".join(parts)
@@ -567,7 +820,12 @@ class Machine:
         kill_tree(self.owned_processes())
         for proc in self._spawned:
             if proc.poll() is None:
-                subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True, timeout=60, check=False)
+                subprocess.run(
+                    ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+                    capture_output=True,
+                    timeout=60,
+                    check=False,
+                )
 
     def teardown(self) -> None:
         self.kill_owned()
@@ -583,20 +841,34 @@ class Machine:
                 for sub in ("logs",):
                     src = self.clawk_home / sub
                     if src.is_dir():
-                        shutil.copytree(src, dest / sub, dirs_exist_ok=True,
-                                        ignore=shutil.ignore_patterns("*.db", "*.db-*"))
-                (dest / "evidence.txt").write_text(self.evidence(), encoding="utf-8", errors="replace")
-                (dest / "timings.json").write_text(json.dumps(self.timings, indent=1), encoding="utf-8")
+                        shutil.copytree(
+                            src,
+                            dest / sub,
+                            dirs_exist_ok=True,
+                            ignore=shutil.ignore_patterns("*.db", "*.db-*"),
+                        )
+                (dest / "evidence.txt").write_text(
+                    self.evidence(), encoding="utf-8", errors="replace"
+                )
+                (dest / "timings.json").write_text(
+                    json.dumps(self.timings, indent=1), encoding="utf-8"
+                )
         finally:
             # Every machine is a full install (checkout, venv with every extra, PM tools, caches) on
             # the runner's only drive; kept, they add up past its free space before the last file
             # runs. A failed artifact copy (a full disk) must not keep the install. The transcripts
             # stay (small, and the only record when no artifacts dir is set).
-            leftovers = [note for tree in (self.profile, self.serve) if (note := _remove_tree(tree))]
+            leftovers = [
+                note
+                for tree in (self.profile, self.serve)
+                if (note := _remove_tree(tree))
+            ]
             if leftovers:  # the job's "No machine install left behind" step names these
                 dest = Path(artifacts) / self.root.name if artifacts else self.logs
                 dest.mkdir(parents=True, exist_ok=True)
-                (dest / "teardown-leftovers.txt").write_text("\n".join(leftovers) + "\n", encoding="utf-8")
+                (dest / "teardown-leftovers.txt").write_text(
+                    "\n".join(leftovers) + "\n", encoding="utf-8"
+                )
 
 
 def _remove_tree(path: Path) -> str | None:
@@ -618,8 +890,15 @@ def _remove_tree(path: Path) -> str | None:
     return None if not path.exists() else f"{path}: {error}"
 
 
-def new_machine(tmp_root: Path, base_url: str, *, label: str, person: str = "",
-                system_git: bool = False, base_ref: str = "") -> Machine:
+def new_machine(
+    tmp_root: Path,
+    base_url: str,
+    *,
+    label: str,
+    person: str = "",
+    system_git: bool = False,
+    base_ref: str = "",
+) -> Machine:
     """A staged machine. Its work dir (serve.git, transcripts) lives under
     ``CLAWK_E2E_MACHINE_ROOT`` (else ``tmp_root``); its user profile under
     ``CLAWK_E2E_PROFILES_ROOT`` (CI: ``C:\\Users``), named ``[<person> ]clawk-e2e-<id>``."""
@@ -627,8 +906,14 @@ def new_machine(tmp_root: Path, base_url: str, *, label: str, person: str = "",
     base = Path(os.environ.get("CLAWK_E2E_MACHINE_ROOT") or tmp_root)
     profiles = os.environ.get("CLAWK_E2E_PROFILES_ROOT")
     name = f"{person} clawk-e2e-{sfx}" if person else f"clawk-e2e-{sfx}"
-    machine = Machine(root=base / f"{label}-{sfx}", profile_name=name, base_url=base_url,
-                      profiles_root=Path(profiles) if profiles else None, system_git=system_git, base_ref=base_ref)
+    machine = Machine(
+        root=base / f"{label}-{sfx}",
+        profile_name=name,
+        base_url=base_url,
+        profiles_root=Path(profiles) if profiles else None,
+        system_git=system_git,
+        base_ref=base_ref,
+    )
     machine.stage()
     return machine
 
@@ -652,17 +937,23 @@ class Journey:
         return self.results[name]
 
     def ok(self, name: str) -> bool:
-        return name in self.results and not isinstance(self.results[name], BaseException)
+        return name in self.results and not isinstance(
+            self.results[name], BaseException
+        )
 
     def __getitem__(self, name: str) -> Any:
         if name not in self.results:
-            raise RuntimeError(f"journey step {name!r} never ran\n{self.machine.evidence()}")
+            raise RuntimeError(
+                f"journey step {name!r} never ran\n{self.machine.evidence()}"
+            )
         value = self.results[name]
         if isinstance(value, BaseException):
             raise RuntimeError(f"journey step {name!r} failed: {value}") from value
         return value
 
-    def require(self, name: str, ok: bool, message: str, run: Run | None = None) -> None:
+    def require(
+        self, name: str, ok: bool, message: str, run: Run | None = None
+    ) -> None:
         """A prerequisite of later steps: raise (recorded by ``step``) when it does not hold."""
         if not ok:
             raise RuntimeError(fail_with(self.machine, f"{name}: {message}", run))
@@ -678,9 +969,18 @@ def failure_line(run: Run) -> str:
 
 def fail_with(machine: Machine, message: str, run: Run | None = None) -> str:
     """Assertion text: the claim first (gates match on it), then the transcript and evidence."""
-    with contextlib.suppress(OSError), (machine.logs / "claims.txt").open("a", encoding="utf-8") as fh:
-        fh.write(message.splitlines()[0] + "\n")  # CI prints no reason for a passing file's xfails
-    tail = f"\n--- transcript rc={run.returncode} ---\n{run.stdout[-6000:]}" if run is not None else ""
+    with (
+        contextlib.suppress(OSError),
+        (machine.logs / "claims.txt").open("a", encoding="utf-8") as fh,
+    ):
+        fh.write(
+            message.splitlines()[0] + "\n"
+        )  # CI prints no reason for a passing file's xfails
+    tail = (
+        f"\n--- transcript rc={run.returncode} ---\n{run.stdout[-6000:]}"
+        if run is not None
+        else ""
+    )
     return f"{message}{tail}\n{machine.evidence()}"
 
 
@@ -692,28 +992,43 @@ class Turn:
 
     @property
     def ok(self) -> bool:
-        return self.run.returncode == 0 and self.reply_id in self.run.stdout and self.reached_wire
+        return (
+            self.run.returncode == 0
+            and self.reply_id in self.run.stdout
+            and self.reached_wire
+        )
 
 
-def one_shot_turn(machine: Machine, srv: Any, label: str, *, as_user: bool = False) -> Turn:
+def one_shot_turn(
+    machine: Machine, srv: Any, label: str, *, as_user: bool = False
+) -> Turn:
     """``clawk chat -q ... -Q`` through the published launcher against the loopback provider."""
     from tests.e2e.core.windows._helpers import last_user
     from tests.fakes.fake_llm_provider import Text
 
-    prompt_id, reply_id = f"PROMPT-{uuid.uuid4().hex[:8]}", f"REPLY-{uuid.uuid4().hex[:8]}"
+    prompt_id, reply_id = (
+        f"PROMPT-{uuid.uuid4().hex[:8]}",
+        f"REPLY-{uuid.uuid4().hex[:8]}",
+    )
     # A reply an earlier refused launch never consumed would answer THIS prompt (the script is
     # FIFO) and fail every later cell of the shared machine with another cell's reply id.
     srv.drop_unconsumed()
     before = len(srv.main_requests())
     srv.push(Text(f"The answer is {reply_id}."))
-    res = machine.clawk("chat", "-q", f"Say the code {prompt_id}", "-Q", label=label, as_user=as_user)
+    res = machine.clawk(
+        "chat", "-q", f"Say the code {prompt_id}", "-Q", label=label, as_user=as_user
+    )
     wired = any(prompt_id in last_user(body) for body in srv.main_requests()[before:])
     return Turn(res, reply_id, wired)
 
 
 # Printed only when a launch detours through source-update completion instead of running
 # the requested command (clawk_cli/venv_sync.py, clawk_cli/source_build.py, update_cmd).
-SOURCE_COMPLETION_MARKERS = ("completing source-update", "Preparing Node dependencies", "Update complete")
+SOURCE_COMPLETION_MARKERS = (
+    "completing source-update",
+    "Preparing Node dependencies",
+    "Update complete",
+)
 
 
 def source_completion_detour(run: Run) -> str | None:
@@ -735,4 +1050,9 @@ def taskkill_tree(pid: int) -> subprocess.CompletedProcess:
 
     rc 0 means every process in the tree was terminated. rc 128 can still mean ``pid`` itself was
     killed (a job member died with it mid-walk): read stdout, see ``_kill_delivered``."""
-    return subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True, timeout=60, check=False)
+    return subprocess.run(
+        ["taskkill", "/PID", str(pid), "/T", "/F"],
+        capture_output=True,
+        timeout=60,
+        check=False,
+    )

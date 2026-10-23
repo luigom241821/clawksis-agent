@@ -1,4 +1,5 @@
 """Superseded and aborted PM runtime generations are collected; running workers are not."""
+
 import json
 import os
 from pathlib import Path
@@ -10,13 +11,17 @@ import pytest
 from pm.runtime import collect_runtime_generations
 
 
-def _generation(root: Path, name: str, *, published: bool = True, leased: bool = True) -> Path:
+def _generation(
+    root: Path, name: str, *, published: bool = True, leased: bool = True
+) -> Path:
     generation = root / "generations" / name
     generation.mkdir(parents=True)
     if leased:
         (generation / ".lease-managed").touch()
     if published:
-        (generation / "pm-runtime.json").write_text(json.dumps({"inputs": name}), encoding="utf-8")
+        (generation / "pm-runtime.json").write_text(
+            json.dumps({"inputs": name}), encoding="utf-8"
+        )
     return generation
 
 
@@ -29,7 +34,9 @@ def test_collector_keeps_selected_leased_and_pre_lease_generations(tmp_path):
     idle = _generation(root, "idle")
     legacy = _generation(root, "legacy", leased=False)
     aborted = _generation(root, "aborted", published=False)
-    (root / "selected.json").write_text(json.dumps({"generation": "generations/selected"}), encoding="utf-8")
+    (root / "selected.json").write_text(
+        json.dumps({"generation": "generations/selected"}), encoding="utf-8"
+    )
     release = lease_directory(busy)
     lease_directory(idle)()
 
@@ -67,7 +74,9 @@ from clawk_cli.runtime_state import lease_directory
 lease_directory(Path(sys.argv[1]))
 os._exit(0)
 """
-    subprocess.run([sys.executable, "-c", code, str(generation)], check=True, env=dict(os.environ))
+    subprocess.run(
+        [sys.executable, "-c", code, str(generation)], check=True, env=dict(os.environ)
+    )
     leases = generation / ".leases"
     stale = list(leases.iterdir())
     assert len(stale) == 1
@@ -83,7 +92,9 @@ os._exit(0)
     assert list(leases.iterdir()) == []
 
 
-@pytest.mark.skipif(getattr(os, "geteuid", lambda: 1)() == 0, reason="root opens mode-0 files")
+@pytest.mark.skipif(
+    getattr(os, "geteuid", lambda: 1)() == 0, reason="root opens mode-0 files"
+)
 def test_prune_keeps_unopenable_sibling_lease(tmp_path):
     """A lease this user cannot open (root-owned, `sudo clawk` on the same checkout) is HELD:
     boot never raises and GC never collects."""

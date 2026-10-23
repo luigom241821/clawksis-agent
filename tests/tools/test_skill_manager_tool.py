@@ -36,8 +36,10 @@ from agent.skill_utils import (
 def _skill_dir(tmp_path):
     """Patch both SKILLS_DIR and get_all_skills_dirs so _find_skill searches
     only the temp directory — not the real ~/.clawksis/skills/."""
-    with patch("tools.skill_manager_tool.SKILLS_DIR", tmp_path), \
-         patch("agent.skill_utils.get_all_skills_dirs", return_value=[tmp_path]):
+    with (
+        patch("tools.skill_manager_tool.SKILLS_DIR", tmp_path),
+        patch("agent.skill_utils.get_all_skills_dirs", return_value=[tmp_path]),
+    ):
         yield
 
 
@@ -144,7 +146,6 @@ class TestValidateFilePath:
     def test_path_traversal_blocked(self):
         assert _validate_file_path("references/../../../etc/passwd") is not None
 
-
     def test_skill_md_traversal_still_rejected(self):
         # The SKILL.md exception must not weaken the traversal guard.
         assert _validate_file_path("../SKILL.md") is not None
@@ -178,7 +179,9 @@ class TestCreateSkill:
         assert result["success"] is False
         assert "already exists" in result["error"]
 
-    def test_create_rejects_name_colliding_with_existing_frontmatter_name(self, tmp_path):
+    def test_create_rejects_name_colliding_with_existing_frontmatter_name(
+        self, tmp_path
+    ):
         """A new skill's directory name must not collide with an existing
         skill's displayed (frontmatter) name — skills_list dedups by that
         name, so the new skill would be silently hidden."""
@@ -192,15 +195,24 @@ class TestCreateSkill:
         skills_dir = tmp_path / "skills"
         skills_dir.mkdir()
 
-        with patch("tools.skill_manager_tool.SKILLS_DIR", skills_dir), \
-             patch("agent.skill_utils.get_all_skills_dirs", return_value=[skills_dir]):
-            result = _create_skill("my-skill", VALID_SKILL_CONTENT, category="../escape")
+        with (
+            patch("tools.skill_manager_tool.SKILLS_DIR", skills_dir),
+            patch("agent.skill_utils.get_all_skills_dirs", return_value=[skills_dir]),
+        ):
+            result = _create_skill(
+                "my-skill", VALID_SKILL_CONTENT, category="../escape"
+            )
 
         assert result["success"] is False
         assert not (tmp_path / "escape").exists()
 
     def test_occupied_directory_is_preserved_when_scan_blocks(self, tmp_path):
-        with _skill_dir(tmp_path), patch("tools.skill_manager_tool._security_scan_skill", return_value="blocked"):
+        with (
+            _skill_dir(tmp_path),
+            patch(
+                "tools.skill_manager_tool._security_scan_skill", return_value="blocked"
+            ),
+        ):
             target = tmp_path / "new-skill"
             target.mkdir()
             data = target / "data.bin"
@@ -223,7 +235,9 @@ class TestCreateSkill:
                 unreadable.mkdir()
                 unreadable.chmod(0)
                 try:
-                    unreadable_result = _create_skill("unreadable-skill", VALID_SKILL_CONTENT)
+                    unreadable_result = _create_skill(
+                        "unreadable-skill", VALID_SKILL_CONTENT
+                    )
                 finally:
                     unreadable.chmod(0o700)
 
@@ -245,7 +259,10 @@ class TestCreateSkill:
             assert not (unreadable / "SKILL.md").exists()
 
     def test_occupied_directory_is_refused_and_empty_leftover_is_reused(self, tmp_path):
-        with _skill_dir(tmp_path), patch("tools.skill_manager_tool._security_scan_skill", return_value=None):
+        with (
+            _skill_dir(tmp_path),
+            patch("tools.skill_manager_tool._security_scan_skill", return_value=None),
+        ):
             category = tmp_path / "category"
             category.mkdir()
             nested = category / "nested-skill.md"
@@ -286,7 +303,6 @@ class TestEditSkill:
         content = (tmp_path / "my-skill" / "SKILL.md").read_text()
         assert "Updated description" in content
 
-
     def test_edit_existing_skill_by_categorized_path(self, tmp_path):
         """Categorized names (``category/skill``) must resolve in skill_manage.
 
@@ -299,10 +315,14 @@ class TestEditSkill:
         finding). Resolution parity with skill_view is the fix.
         """
         with _skill_dir(tmp_path):
-            _create_skill("my-skill", VALID_SKILL_CONTENT, category="software-development")
+            _create_skill(
+                "my-skill", VALID_SKILL_CONTENT, category="software-development"
+            )
             result = _edit_skill("software-development/my-skill", VALID_SKILL_CONTENT_2)
         assert result["success"] is True, result.get("error")
-        content = (tmp_path / "software-development" / "my-skill" / "SKILL.md").read_text()
+        content = (
+            tmp_path / "software-development" / "my-skill" / "SKILL.md"
+        ).read_text()
         assert "Updated description" in content
 
     def test_find_skill_accepts_categorized_path(self, tmp_path):
@@ -343,7 +363,9 @@ class TestEditSkill:
             )
             result = _edit_skill("keeta-eng-conduct", VALID_SKILL_CONTENT_2)
         assert result["success"] is True, result.get("error")
-        content = (tmp_path / "example-category" / "eng-conduct" / "SKILL.md").read_text()
+        content = (
+            tmp_path / "example-category" / "eng-conduct" / "SKILL.md"
+        ).read_text()
         assert "Updated description" in content
 
     def test_find_skill_directory_name_wins_over_foreign_frontmatter(self, tmp_path):
@@ -382,7 +404,8 @@ class TestEditSkill:
         unique = tmp_path / "gamma-solo"
         unique.mkdir()
         (unique / "SKILL.md").write_text(
-            MISMATCHED_NAME_CONTENT.replace("keeta-eng-conduct", "solo-display"))
+            MISMATCHED_NAME_CONTENT.replace("keeta-eng-conduct", "solo-display")
+        )
         with _skill_dir(tmp_path):
             assert _find_skill("keeta-eng-conduct") is None
             assert _find_skill("solo-display")["path"] == unique
@@ -401,6 +424,7 @@ class TestEditSkill:
         content = (tmp_path / "my-skill" / "SKILL.md").read_text()
         assert "A test skill" in content
 
+
 class TestPatchSkill:
     def test_patch_unique_match(self, tmp_path):
         with _skill_dir(tmp_path):
@@ -410,20 +434,27 @@ class TestPatchSkill:
         content = (tmp_path / "my-skill" / "SKILL.md").read_text()
         assert "Do the new thing." in content
 
-    def test_patch_surfaces_oversized_body_finding_and_stays_quiet_when_clean(self, tmp_path):
+    def test_patch_surfaces_oversized_body_finding_and_stays_quiet_when_clean(
+        self, tmp_path
+    ):
         # SKILL.md grows by patches; the write that crosses the body budget carries the advisory
         # finding, a small clean patch attaches no lint keys at all.
         from tools.skill_linter import _BODY_SOFT_BUDGET_CHARS
-        filler = "- Prefer the native tool; the shell path loses the structured result.\n"
+
+        filler = (
+            "- Prefer the native tool; the shell path loses the structured result.\n"
+        )
         with _skill_dir(tmp_path):
             _create_skill("my-skill", VALID_SKILL_CONTENT)
             quiet = _patch_skill("my-skill", "Do the thing.", "Do the new thing.")
-            grown = _patch_skill("my-skill", "Do the new thing.",
-                                 filler * (_BODY_SOFT_BUDGET_CHARS // len(filler) + 1))
+            grown = _patch_skill(
+                "my-skill",
+                "Do the new thing.",
+                filler * (_BODY_SOFT_BUDGET_CHARS // len(filler) + 1),
+            )
         assert quiet["success"] is True and "lint_warnings" not in quiet
         assert grown["success"] is True
         assert "oversized-body" in {w["rule"] for w in grown["lint_warnings"]}
-
 
     def test_patch_ambiguous_match_rejected(self, tmp_path):
         content = """\
@@ -442,11 +473,6 @@ word word
         assert result["success"] is False
         assert "match" in result["error"].lower()
 
-
-
-
-
-
     def test_patch_supporting_file_symlink_escape_blocked(self, tmp_path):
         outside_file = tmp_path / "outside.txt"
         outside_file.write_text("old text here")
@@ -460,7 +486,9 @@ word word
             except OSError:
                 pytest.skip("Symlinks not supported")
 
-            result = _patch_skill("my-skill", "old text", "new text", file_path="references/evil.md")
+            result = _patch_skill(
+                "my-skill", "old text", "new text", file_path="references/evil.md"
+            )
 
         assert result["success"] is False
         assert "escapes" in result["error"].lower()
@@ -493,18 +521,31 @@ class TestSkillMutationLock:
             return real_replace(*args, **kwargs)
 
         def run_patch(old, new):
-            results.append(json.loads(skill_manage(
-                action="patch", name="my-skill", old_string=old, new_string=new)))
+            results.append(
+                json.loads(
+                    skill_manage(
+                        action="patch", name="my-skill", old_string=old, new_string=new
+                    )
+                )
+            )
 
         with _skill_dir(tmp_path):
             _create_skill("my-skill", VALID_SKILL_CONTENT)
-            with patch("tools.fuzzy_match.fuzzy_find_and_replace", side_effect=delayed_replace):
-                first = threading.Thread(target=run_patch, args=("# Test Skill", "# Test Skill Updated"))
-                second = threading.Thread(target=run_patch, args=("Step 1:", "Step 1 Updated:"))
+            with patch(
+                "tools.fuzzy_match.fuzzy_find_and_replace", side_effect=delayed_replace
+            ):
+                first = threading.Thread(
+                    target=run_patch, args=("# Test Skill", "# Test Skill Updated")
+                )
+                second = threading.Thread(
+                    target=run_patch, args=("Step 1:", "Step 1 Updated:")
+                )
                 first.start()
                 assert first_entered.wait(timeout=2)
                 second.start()
-                assert not second_entered.wait(timeout=0.15), "second writer entered before first committed"
+                assert not second_entered.wait(timeout=0.15), (
+                    "second writer entered before first committed"
+                )
                 release_first.set()
                 first.join(timeout=2)
                 second.join(timeout=2)
@@ -520,7 +561,9 @@ class TestSkillMutationLock:
         name yields the create handler's JSON error (never OSError/ValueError from the lock
         path) and leaves nothing behind in ``<skills>/.locks/``."""
         with _skill_dir(tmp_path):
-            result = json.loads(skill_manage(action="create", name=name, content=VALID_SKILL_CONTENT))
+            result = json.loads(
+                skill_manage(action="create", name=name, content=VALID_SKILL_CONTENT)
+            )
         assert result["success"] is False
         assert result["error"] == _validate_name(name)
         assert not (tmp_path / ".locks").exists()
@@ -541,13 +584,13 @@ class TestDeleteSkill:
             _delete_skill("my-skill")
         assert not (tmp_path / "devops").exists()
 
-
     def test_delete_with_absorbed_into_equals_self_rejected(self, tmp_path):
         with _skill_dir(tmp_path):
             _create_skill("narrow", VALID_SKILL_CONTENT)
             result = _delete_skill("narrow", absorbed_into="narrow")
         assert result["success"] is False
         assert (tmp_path / "narrow").exists()
+
 
 # ---------------------------------------------------------------------------
 # write_file / remove_file
@@ -558,7 +601,9 @@ class TestWriteFile:
     def test_write_reference_file(self, tmp_path):
         with _skill_dir(tmp_path):
             _create_skill("my-skill", VALID_SKILL_CONTENT)
-            result = _write_file("my-skill", "references/api.md", "# API\nEndpoint docs.")
+            result = _write_file(
+                "my-skill", "references/api.md", "# API\nEndpoint docs."
+            )
         assert result["success"] is True
         assert (tmp_path / "my-skill" / "references" / "api.md").exists()
 
@@ -619,14 +664,29 @@ class TestRemoveFile:
 
 
 class TestSkillManageDispatcher:
-
-    @pytest.mark.parametrize("op, stray_key, destination", [
-        ({"action": "create", "file_content": VALID_SKILL_CONTENT}, "file_content", "'content'"),
-        ({"action": "create", "new_string": VALID_SKILL_CONTENT}, "new_string", "'content'"),
-        ({"action": "patch", "file_content": "body"}, "file_content", "old_string/new_string"),
-    ])
-    def test_misplaced_text_slot_error_names_the_key_it_arrived_in(self, tmp_path, op, stray_key,
-                                                                    destination):
+    @pytest.mark.parametrize(
+        "op, stray_key, destination",
+        [
+            (
+                {"action": "create", "file_content": VALID_SKILL_CONTENT},
+                "file_content",
+                "'content'",
+            ),
+            (
+                {"action": "create", "new_string": VALID_SKILL_CONTENT},
+                "new_string",
+                "'content'",
+            ),
+            (
+                {"action": "patch", "file_content": "body"},
+                "file_content",
+                "old_string/new_string",
+            ),
+        ],
+    )
+    def test_misplaced_text_slot_error_names_the_key_it_arrived_in(
+        self, tmp_path, op, stray_key, destination
+    ):
         """#112677 — a batch op whose SKILL.md text sits in another action's key must be told
         WHICH key it used and where to move it; the bare "X is required" error made a local
         model replay the identical payload until the tool-loop guardrail tripped. The misfiled
@@ -634,11 +694,27 @@ class TestSkillManageDispatcher:
         missing-content op gets no note."""
         with _skill_dir(tmp_path):
             _create_skill("my-skill", VALID_SKILL_CONTENT)
-            result = json.loads(skill_manage(action="", name="", operations=[
-                {"name": "sibling", "action": "create", "content": VALID_SKILL_CONTENT},
-                {"name": "my-skill", **op}]))
-            bare = json.loads(skill_manage(action="", name="",
-                                           operations=[{"name": "other", "action": "create"}]))
+            result = json.loads(
+                skill_manage(
+                    action="",
+                    name="",
+                    operations=[
+                        {
+                            "name": "sibling",
+                            "action": "create",
+                            "content": VALID_SKILL_CONTENT,
+                        },
+                        {"name": "my-skill", **op},
+                    ],
+                )
+            )
+            bare = json.loads(
+                skill_manage(
+                    action="",
+                    name="",
+                    operations=[{"name": "other", "action": "create"}],
+                )
+            )
             sibling_created = _find_skill("sibling") is not None
 
         assert result["success"] is False
@@ -647,36 +723,67 @@ class TestSkillManageDispatcher:
         assert "rolled back" not in result["error"] and not sibling_created
         assert bare["success"] is False and "file_content" not in bare["error"]
 
-    @pytest.mark.parametrize("op", [
-        {"action": "patch", "old_string": "body"},
-        {"action": "patch", "old_string": "body", "new_string": "x", "content": "# whole"},
-    ])
-    def test_patch_shape_misses_are_rejected_before_any_sibling_applies(self, tmp_path, op):
+    @pytest.mark.parametrize(
+        "op",
+        [
+            {"action": "patch", "old_string": "body"},
+            {
+                "action": "patch",
+                "old_string": "body",
+                "new_string": "x",
+                "content": "# whole",
+            },
+        ],
+    )
+    def test_patch_shape_misses_are_rejected_before_any_sibling_applies(
+        self, tmp_path, op
+    ):
         """A patch missing new_string, or mixing content with old_string/new_string, is a shape
         miss like the misfiled text slot: decided in _validate_batch_ops, so op[0] is never
         created and rolled back."""
         with _skill_dir(tmp_path):
             _create_skill("my-skill", VALID_SKILL_CONTENT)
-            result = json.loads(skill_manage(action="", name="", operations=[
-                {"name": "sibling", "action": "create", "content": VALID_SKILL_CONTENT},
-                {"name": "my-skill", **op}]))
+            result = json.loads(
+                skill_manage(
+                    action="",
+                    name="",
+                    operations=[
+                        {
+                            "name": "sibling",
+                            "action": "create",
+                            "content": VALID_SKILL_CONTENT,
+                        },
+                        {"name": "my-skill", **op},
+                    ],
+                )
+            )
             sibling_created = _find_skill("sibling") is not None
 
         assert result["success"] is False
         assert "operations[1]" in result["error"]
         assert "rolled back" not in result["error"] and not sibling_created
 
-
-
     def test_write_file_given_content_names_the_reverse_misplacement(self, tmp_path):
         """#112677 — the reverse direction: create's `content` sent to write_file. Checked on the
         legacy flat call shape so both entry points share the one hint chokepoint."""
         with _skill_dir(tmp_path):
             _create_skill("my-skill", VALID_SKILL_CONTENT)
-            crossed = json.loads(skill_manage(action="write_file", name="my-skill",
-                                              file_path="references/a.md", content="hello"))
-            ok = json.loads(skill_manage(action="write_file", name="my-skill",
-                                         file_path="references/a.md", file_content="hello"))
+            crossed = json.loads(
+                skill_manage(
+                    action="write_file",
+                    name="my-skill",
+                    file_path="references/a.md",
+                    content="hello",
+                )
+            )
+            ok = json.loads(
+                skill_manage(
+                    action="write_file",
+                    name="my-skill",
+                    file_path="references/a.md",
+                    file_content="hello",
+                )
+            )
 
         assert crossed["success"] is False
         assert "'content'" in crossed["error"] and "'file_content'" in crossed["error"]
@@ -691,8 +798,11 @@ class TestSkillManageDispatcher:
         or prune it).
         """
         with _skill_dir(tmp_path):
-            raw = skill_manage(action="create", name="test-skill", content=VALID_SKILL_CONTENT)
+            raw = skill_manage(
+                action="create", name="test-skill", content=VALID_SKILL_CONTENT
+            )
             from tools.skill_usage import load_usage
+
             usage = load_usage()
         result = json.loads(raw)
         assert result["success"] is True
@@ -702,10 +812,9 @@ class TestSkillManageDispatcher:
         rec = usage.get("test-skill") or {}
         assert rec.get("created_by") in {"learn", None, "", False}
 
-
-
-
-    def test_background_review_delete_refuses_bundled_even_with_absorbed_into(self, tmp_path):
+    def test_background_review_delete_refuses_bundled_even_with_absorbed_into(
+        self, tmp_path
+    ):
         from tools.skill_provenance import (
             BACKGROUND_REVIEW,
             reset_current_write_origin,
@@ -714,13 +823,21 @@ class TestSkillManageDispatcher:
 
         token = set_current_write_origin(BACKGROUND_REVIEW)
         try:
-            with _skill_dir(tmp_path), \
-                 patch("tools.skill_usage.is_protected_builtin", return_value=False), \
-                 patch("tools.skill_usage.is_hub_installed", return_value=False), \
-                 patch("tools.skill_usage.is_bundled",
-                       side_effect=lambda skill_name: skill_name == "bundled"):
-                skill_manage(action="create", name="umbrella", content=VALID_SKILL_CONTENT)
-                skill_manage(action="create", name="bundled", content=VALID_SKILL_CONTENT)
+            with (
+                _skill_dir(tmp_path),
+                patch("tools.skill_usage.is_protected_builtin", return_value=False),
+                patch("tools.skill_usage.is_hub_installed", return_value=False),
+                patch(
+                    "tools.skill_usage.is_bundled",
+                    side_effect=lambda skill_name: skill_name == "bundled",
+                ),
+            ):
+                skill_manage(
+                    action="create", name="umbrella", content=VALID_SKILL_CONTENT
+                )
+                skill_manage(
+                    action="create", name="bundled", content=VALID_SKILL_CONTENT
+                )
                 raw = skill_manage(
                     action="delete",
                     name="bundled",
@@ -761,8 +878,11 @@ Step 2: Do the other thing.
             _create_skill("my-skill", self.CONTENT)
 
             # The half-formed call that used to dead-end.
-            bad = json.loads(skill_manage(action="patch", name="my-skill",
-                                          new_string="Step 1: Do it better."))
+            bad = json.loads(
+                skill_manage(
+                    action="patch", name="my-skill", new_string="Step 1: Do it better."
+                )
+            )
             assert bad["success"] is False
             assert "read" in bad["error"].lower()
 
@@ -770,9 +890,14 @@ Step 2: Do the other thing.
             on_disk = (tmp_path / "my-skill" / "SKILL.md").read_text()
             snippet = "Step 1: Do the thing."
             assert snippet in on_disk
-            good = json.loads(skill_manage(action="patch", name="my-skill",
-                                           old_string=snippet,
-                                           new_string="Step 1: Do it better."))
+            good = json.loads(
+                skill_manage(
+                    action="patch",
+                    name="my-skill",
+                    old_string=snippet,
+                    new_string="Step 1: Do it better.",
+                )
+            )
 
         assert good["success"] is True, f"guided retry must succeed, got {good}"
         after = (tmp_path / "my-skill" / "SKILL.md").read_text()
@@ -782,12 +907,17 @@ Step 2: Do the other thing.
         assert "Step 2: Do the other thing." in after, "unrelated content lost"
         assert after.startswith("---"), "frontmatter destroyed"
 
-
-    @pytest.mark.parametrize("kwargs", [
-        {"old_string": None, "new_string": "x"},
-        {"old_string": "", "new_string": "x"},
-        {"old_string": "Step 1: Do the thing.", "new_string": "Step 1: Do the thing."},
-    ])
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {"old_string": None, "new_string": "x"},
+            {"old_string": "", "new_string": "x"},
+            {
+                "old_string": "Step 1: Do the thing.",
+                "new_string": "Step 1: Do the thing.",
+            },
+        ],
+    )
     def test_rejected_patch_leaves_file_byte_identical(self, tmp_path, kwargs):
         """A rejected patch must not partially mutate the skill."""
         with _skill_dir(tmp_path):
@@ -799,14 +929,18 @@ Step 2: Do the other thing.
         assert result["success"] is False
         assert before == after, "rejected patch mutated the file"
 
-
     def test_empty_new_string_still_deletes(self, tmp_path):
         """new_string='' is legal (delete matched text) and must NOT be rejected."""
         with _skill_dir(tmp_path):
             _create_skill("my-skill", self.CONTENT)
-            result = json.loads(skill_manage(action="patch", name="my-skill",
-                                             old_string="Step 2: Do the other thing.\n",
-                                             new_string=""))
+            result = json.loads(
+                skill_manage(
+                    action="patch",
+                    name="my-skill",
+                    old_string="Step 2: Do the other thing.\n",
+                    new_string="",
+                )
+            )
             after = (tmp_path / "my-skill" / "SKILL.md").read_text()
 
         assert result["success"] is True, f"empty new_string wrongly rejected: {result}"
@@ -816,8 +950,11 @@ Step 2: Do the other thing.
         """The dispatcher also guarded new_string; _patch_skill must still catch it."""
         with _skill_dir(tmp_path):
             _create_skill("my-skill", self.CONTENT)
-            result = json.loads(skill_manage(action="patch", name="my-skill",
-                                             old_string="Step 1: Do the thing."))
+            result = json.loads(
+                skill_manage(
+                    action="patch", name="my-skill", old_string="Step 1: Do the thing."
+                )
+            )
         assert result["success"] is False
         assert "new_string" in result["error"]
 
@@ -829,8 +966,13 @@ class TestSecurityScanGate:
         """Default config (flag off) short-circuits before running scan_skill."""
         from tools.skill_manager_tool import _security_scan_skill
 
-        with patch("tools.skill_manager_tool._guard_agent_created_enabled", return_value=False), \
-             patch("tools.skill_manager_tool.scan_skill") as mock_scan:
+        with (
+            patch(
+                "tools.skill_manager_tool._guard_agent_created_enabled",
+                return_value=False,
+            ),
+            patch("tools.skill_manager_tool.scan_skill") as mock_scan,
+        ):
             result = _security_scan_skill(tmp_path)
 
         assert result is None
@@ -842,8 +984,13 @@ class TestSecurityScanGate:
         from tools.skills_guard import ScanResult, Finding
 
         finding = Finding(
-            pattern_id="test", severity="critical", category="exfiltration",
-            file="SKILL.md", line=1, match="curl $TOKEN", description="test",
+            pattern_id="test",
+            severity="critical",
+            category="exfiltration",
+            file="SKILL.md",
+            line=1,
+            match="curl $TOKEN",
+            description="test",
         )
         fake_result = ScanResult(
             skill_name="test",
@@ -853,8 +1000,13 @@ class TestSecurityScanGate:
             findings=[finding],
             summary="dangerous",
         )
-        with patch("tools.skill_manager_tool._guard_agent_created_enabled", return_value=True), \
-             patch("tools.skill_manager_tool.scan_skill", return_value=fake_result):
+        with (
+            patch(
+                "tools.skill_manager_tool._guard_agent_created_enabled",
+                return_value=True,
+            ),
+            patch("tools.skill_manager_tool.scan_skill", return_value=fake_result),
+        ):
             result = _security_scan_skill(tmp_path)
 
         assert result is not None
@@ -871,10 +1023,13 @@ class TestSecurityScanGate:
         from tools.skill_manager_tool import _guard_agent_created_enabled
 
         for quoted in ("false", "False", "0", "no", "off"):
-            with patch("clawk_cli.config.load_config",
-                       return_value={"skills": {"guard_agent_created": quoted}}):
-                assert _guard_agent_created_enabled() is False, \
+            with patch(
+                "clawk_cli.config.load_config",
+                return_value={"skills": {"guard_agent_created": quoted}},
+            ):
+                assert _guard_agent_created_enabled() is False, (
                     f"guard_agent_created={quoted!r} must coerce to False"
+                )
 
 
 # ---------------------------------------------------------------------------
@@ -886,9 +1041,13 @@ class TestSecurityScanGate:
 def _two_roots(local_dir: Path, external_dir: Path):
     """Patch the skill manager so local SKILLS_DIR = local_dir and
     get_all_skills_dirs() returns [local_dir, external_dir] in order."""
-    with patch("tools.skill_manager_tool.SKILLS_DIR", local_dir), \
-         patch("agent.skill_utils.get_all_skills_dirs",
-               return_value=[local_dir, external_dir]):
+    with (
+        patch("tools.skill_manager_tool.SKILLS_DIR", local_dir),
+        patch(
+            "agent.skill_utils.get_all_skills_dirs",
+            return_value=[local_dir, external_dir],
+        ),
+    ):
         yield
 
 
@@ -915,7 +1074,8 @@ class TestExternalSkillMutations:
     def test_patch_external_skill_writes_in_place(self, tmp_path):
         local = tmp_path / "local"
         external = tmp_path / "vault"
-        local.mkdir(); external.mkdir()
+        local.mkdir()
+        external.mkdir()
         skill_dir = _write_external_skill(external)
 
         with _two_roots(local, external):
@@ -926,8 +1086,9 @@ class TestExternalSkillMutations:
         # No duplicate in local
         assert not (local / "ext-skill").exists()
 
-
-    def test_background_review_improves_any_skill_but_deletes_only_managed_ones(self, tmp_path):
+    def test_background_review_improves_any_skill_but_deletes_only_managed_ones(
+        self, tmp_path
+    ):
         """#134289: the review fork improves every skill it learns from (user-owned with no usage
         record, pinned, bundled, hub-installed), while delete keeps the ownership/pin guard."""
         from tools.skill_manager_guards import mark_background_review_skill_read
@@ -937,35 +1098,53 @@ class TestExternalSkillMutations:
             set_current_write_origin,
         )
 
-        with _skill_dir(tmp_path), \
-             patch("tools.skill_usage.load_usage", return_value={}), \
-             patch("tools.skill_usage.get_record", return_value={"pinned": True}), \
-             patch("tools.skill_usage.is_bundled", return_value=True), \
-             patch("tools.skill_usage.is_hub_installed", return_value=True):
+        with (
+            _skill_dir(tmp_path),
+            patch("tools.skill_usage.load_usage", return_value={}),
+            patch("tools.skill_usage.get_record", return_value={"pinned": True}),
+            patch("tools.skill_usage.is_bundled", return_value=True),
+            patch("tools.skill_usage.is_hub_installed", return_value=True),
+        ):
             _create_skill("my-skill", VALID_SKILL_CONTENT)
             token = set_current_write_origin(BACKGROUND_REVIEW)
             try:
                 mark_background_review_skill_read(tmp_path / "my-skill" / "SKILL.md")
-                patched = json.loads(skill_manage(
-                    action="patch", name="my-skill",
-                    old_string="Do the thing.", new_string="Do the new thing."))
-                written = json.loads(skill_manage(
-                    action="write_file", name="my-skill",
-                    file_path="references/lesson.md", file_content="# Lesson\n"))
-                deleted = json.loads(skill_manage(
-                    action="delete", name="my-skill", absorbed_into="my-skill"))
+                patched = json.loads(
+                    skill_manage(
+                        action="patch",
+                        name="my-skill",
+                        old_string="Do the thing.",
+                        new_string="Do the new thing.",
+                    )
+                )
+                written = json.loads(
+                    skill_manage(
+                        action="write_file",
+                        name="my-skill",
+                        file_path="references/lesson.md",
+                        file_content="# Lesson\n",
+                    )
+                )
+                deleted = json.loads(
+                    skill_manage(
+                        action="delete", name="my-skill", absorbed_into="my-skill"
+                    )
+                )
             finally:
                 reset_current_write_origin(token)
 
         assert patched["success"] is True, patched
         assert written["success"] is True, written
-        assert "Do the new thing." in (tmp_path / "my-skill" / "SKILL.md").read_text(encoding="utf-8")
+        assert "Do the new thing." in (tmp_path / "my-skill" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
         assert deleted["success"] is False
         assert "Refusing background curator delete" in deleted["error"]
         assert (tmp_path / "my-skill" / "SKILL.md").exists()
 
-
-    def test_background_review_fails_closed_when_ownership_lookup_errors(self, tmp_path):
+    def test_background_review_fails_closed_when_ownership_lookup_errors(
+        self, tmp_path
+    ):
         from tools.skill_provenance import (
             BACKGROUND_REVIEW,
             reset_current_write_origin,
@@ -981,7 +1160,9 @@ class TestExternalSkillMutations:
                     side_effect=ValueError("corrupt usage data"),
                 ):
                     raw = skill_manage(
-                        action="delete", name="manual-skill", absorbed_into="manual-skill",
+                        action="delete",
+                        name="manual-skill",
+                        absorbed_into="manual-skill",
                     )
             finally:
                 reset_current_write_origin(token)
@@ -989,9 +1170,10 @@ class TestExternalSkillMutations:
         result = json.loads(raw)
         assert result["success"] is False
         assert "ownership" in result["error"].lower()
-        assert "Do the thing." in (
-            tmp_path / "manual-skill" / "SKILL.md"
-        ).read_text(encoding="utf-8")
+        assert "Do the thing." in (tmp_path / "manual-skill" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+
 
 class TestBackgroundOwnershipPolicyConsistency:
     """The autonomous delete policy must not depend on its own side effects.
@@ -1012,11 +1194,15 @@ class TestBackgroundOwnershipPolicyConsistency:
 
         token = set_current_write_origin(BACKGROUND_REVIEW)
         try:
-            return json.loads(skill_manage(action="delete", name=name, absorbed_into="umbrella"))
+            return json.loads(
+                skill_manage(action="delete", name=name, absorbed_into="umbrella")
+            )
         finally:
             reset_current_write_origin(token)
 
-    def test_repeated_identical_delete_gets_the_same_answer(self, tmp_path, monkeypatch):
+    def test_repeated_identical_delete_gets_the_same_answer(
+        self, tmp_path, monkeypatch
+    ):
         """No stubbing of load_usage: telemetry side effects are live. Both attempts agree."""
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
         (tmp_path / ".clawk" / "skills").mkdir(parents=True, exist_ok=True)
@@ -1029,17 +1215,23 @@ class TestBackgroundOwnershipPolicyConsistency:
         assert "not curator-managed" in first["error"]
         assert "not curator-managed" in second["error"]
 
-    def test_foreground_write_to_unmanaged_skill_still_allowed(self, tmp_path, monkeypatch):
+    def test_foreground_write_to_unmanaged_skill_still_allowed(
+        self, tmp_path, monkeypatch
+    ):
         """Fail-closed applies to AUTONOMOUS writes only. A user-directed
         foreground edit to their own skill must keep working."""
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
         with _skill_dir(tmp_path):
             _create_skill("no-record", VALID_SKILL_CONTENT)
             with patch("tools.skill_usage.load_usage", return_value={}):
-                res = json.loads(skill_manage(
-                    action="patch", name="no-record",
-                    old_string="Do the thing.", new_string="Do the new thing.",
-                ))
+                res = json.loads(
+                    skill_manage(
+                        action="patch",
+                        name="no-record",
+                        old_string="Do the thing.",
+                        new_string="Do the new thing.",
+                    )
+                )
         assert res["success"] is True
 
     def test_adoption_lifts_the_autonomous_delete_refusal(self, tmp_path, monkeypatch):
@@ -1049,12 +1241,15 @@ class TestBackgroundOwnershipPolicyConsistency:
             _create_skill("adopt-me", VALID_SKILL_CONTENT)
             with patch("tools.skill_usage.load_usage", return_value={}):
                 before = self._bg_delete("adopt-me")
-            with patch(
-                "tools.skill_usage.load_usage",
-                return_value={"adopt-me": {"created_by": "agent"}},
-            ), patch(
-                "tools.skill_usage.get_record",
-                side_effect=lambda n: {"created_by": "agent", "pinned": False},
+            with (
+                patch(
+                    "tools.skill_usage.load_usage",
+                    return_value={"adopt-me": {"created_by": "agent"}},
+                ),
+                patch(
+                    "tools.skill_usage.get_record",
+                    side_effect=lambda n: {"created_by": "agent", "pinned": False},
+                ),
             ):
                 after = self._bg_delete("adopt-me")
 
@@ -1068,14 +1263,17 @@ class TestBackgroundOwnershipPolicyConsistency:
 # come up. The user unpins via `clawk curator unpin <name>` to delete.
 # ---------------------------------------------------------------------------
 
+
 class TestPinnedGuard:
     """Delete is refused on pinned skills; patch/edit/write_file/remove_file are allowed."""
 
     @staticmethod
     def _pin(name: str):
         """Return a patch context that marks *name* as pinned in skill_usage."""
+
         def _fake_get_record(skill_name, _name=name):
             return {"pinned": True} if skill_name == _name else {"pinned": False}
+
         return patch("tools.skill_usage.get_record", side_effect=_fake_get_record)
 
     def test_edit_allowed_when_pinned(self, tmp_path):
@@ -1108,8 +1306,10 @@ class TestPinnedGuard:
         """
         with _skill_dir(tmp_path):
             _create_skill("my-skill", VALID_SKILL_CONTENT)
-            with patch("tools.skill_usage.get_record",
-                       side_effect=RuntimeError("sidecar broken")):
+            with patch(
+                "tools.skill_usage.get_record",
+                side_effect=RuntimeError("sidecar broken"),
+            ):
                 result = _delete_skill("my-skill")
         assert result["success"] is True
 
@@ -1145,18 +1345,21 @@ class TestDeleteSkillRmtreeGuard:
         evil = skills / "evil-skill"
         evil.symlink_to(victim, target_is_directory=True)
         try:
-            with patch("tools.skill_manager_tool.SKILLS_DIR", skills), \
-                 patch("agent.skill_utils.get_all_skills_dirs", return_value=[skills]), \
-                 patch("tools.skill_manager_tool._find_skill",
-                       return_value={"path": evil}):
+            with (
+                patch("tools.skill_manager_tool.SKILLS_DIR", skills),
+                patch("agent.skill_utils.get_all_skills_dirs", return_value=[skills]),
+                patch(
+                    "tools.skill_manager_tool._find_skill", return_value={"path": evil}
+                ),
+            ):
                 result = _delete_skill("evil-skill", absorbed_into="")
             assert result["success"] is False
             assert "symlink" in result["error"].lower()
             assert (victim / "important.txt").exists()
         finally:
             import shutil as _sh
-            _sh.rmtree(victim, ignore_errors=True)
 
+            _sh.rmtree(victim, ignore_errors=True)
 
     def test_out_of_tree_path_refused(self, tmp_path):
         """A path that resolves outside every known skills root is refused."""
@@ -1165,10 +1368,13 @@ class TestDeleteSkillRmtreeGuard:
         outside = tmp_path / "outside_skill"
         outside.mkdir()
         (outside / "SKILL.md").write_text("x")
-        with patch("tools.skill_manager_tool.SKILLS_DIR", skills), \
-             patch("agent.skill_utils.get_all_skills_dirs", return_value=[skills]), \
-             patch("tools.skill_manager_tool._find_skill",
-                   return_value={"path": outside}):
+        with (
+            patch("tools.skill_manager_tool.SKILLS_DIR", skills),
+            patch("agent.skill_utils.get_all_skills_dirs", return_value=[skills]),
+            patch(
+                "tools.skill_manager_tool._find_skill", return_value={"path": outside}
+            ),
+        ):
             result = _delete_skill("outside", absorbed_into="")
         assert result["success"] is False
         assert "skills root" in result["error"].lower()
@@ -1202,11 +1408,13 @@ def _curator_pass(tmp_path, *, monkeypatch):
     skills_root = clawk_home / "skills"
     skills_root.mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
-    with patch("tools.skill_manager_tool.SKILLS_DIR", skills_root), \
-         patch("tools.skills_tool.SKILLS_DIR", skills_root), \
-         patch("agent.skill_utils.get_all_skills_dirs", return_value=[skills_root]), \
-         patch("tools.skill_usage._is_curator_managed_record", return_value=True), \
-         patch("tools.skill_provenance.is_background_review", return_value=True):
+    with (
+        patch("tools.skill_manager_tool.SKILLS_DIR", skills_root),
+        patch("tools.skills_tool.SKILLS_DIR", skills_root),
+        patch("agent.skill_utils.get_all_skills_dirs", return_value=[skills_root]),
+        patch("tools.skill_usage._is_curator_managed_record", return_value=True),
+        patch("tools.skill_provenance.is_background_review", return_value=True),
+    ):
         yield skills_root
 
 
@@ -1225,6 +1433,7 @@ def _skill_content(name: str) -> str:
         f"# {name}\n\n"
         "Step 1: Do the thing.\n"
     )
+
 
 def _create_curator_skill(name: str, content: str):
     """Create a skill and record the agent ownership a real curator create has."""
@@ -1312,7 +1521,9 @@ class TestCuratorConsolidationDeleteGuard:
 
         _reset_background_review_read_marks()
 
-    def test_background_review_support_file_overwrite_requires_that_file_read(self, tmp_path, monkeypatch):
+    def test_background_review_support_file_overwrite_requires_that_file_read(
+        self, tmp_path, monkeypatch
+    ):
         from tools.skills_tool import skill_view
         from tools.skill_manager_guards import _reset_background_review_read_marks
 
@@ -1325,22 +1536,29 @@ class TestCuratorConsolidationDeleteGuard:
 
             # Reading SKILL.md does not authorize overwriting a linked file.
             assert json.loads(skill_view("reviewed"))["success"] is True
-            blocked = json.loads(skill_manage(
-                action="write_file",
-                name="reviewed",
-                file_path="references/workflow.md",
-                file_content="new workflow\n",
-            ))
+            blocked = json.loads(
+                skill_manage(
+                    action="write_file",
+                    name="reviewed",
+                    file_path="references/workflow.md",
+                    file_content="new workflow\n",
+                )
+            )
             assert blocked["success"] is False
             assert blocked.get("_read_before_write_required") is True
 
-            assert json.loads(skill_view("reviewed", "references/workflow.md"))["success"] is True
-            allowed = json.loads(skill_manage(
-                action="write_file",
-                name="reviewed",
-                file_path="references/workflow.md",
-                file_content="new workflow\n",
-            ))
+            assert (
+                json.loads(skill_view("reviewed", "references/workflow.md"))["success"]
+                is True
+            )
+            allowed = json.loads(
+                skill_manage(
+                    action="write_file",
+                    name="reviewed",
+                    file_path="references/workflow.md",
+                    file_content="new workflow\n",
+                )
+            )
             assert allowed["success"] is True, allowed
 
         _reset_background_review_read_marks()

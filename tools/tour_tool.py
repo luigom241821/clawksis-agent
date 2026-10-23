@@ -22,10 +22,18 @@ SIDES = ("top", "right", "bottom", "left")
 PRESETS = tuple(TourPreset)
 
 
-def tour_tool(action: str = "", surface: Optional[str] = None, selector: Optional[str] = None,
-              title: Optional[str] = None, text: Optional[str] = None, side: Optional[str] = None,
-              steps: Optional[list] = None, step_index: Optional[int] = None,
-              preset: Optional[str] = None, callback: Optional[Callable] = None) -> str:
+def tour_tool(
+    action: str = "",
+    surface: Optional[str] = None,
+    selector: Optional[str] = None,
+    title: Optional[str] = None,
+    text: Optional[str] = None,
+    side: Optional[str] = None,
+    steps: Optional[list] = None,
+    step_index: Optional[int] = None,
+    preset: Optional[str] = None,
+    callback: Optional[Callable] = None,
+) -> str:
     """Dispatch one tour action to the desktop renderer and return its outcome."""
     if callback is None:
         return tool_error("tour is only available in the Clawksis desktop app.")
@@ -40,30 +48,47 @@ def tour_tool(action: str = "", surface: Optional[str] = None, selector: Optiona
     if preset is not None and preset not in PRESETS:
         return tool_error(f"preset must be one of: {', '.join(PRESETS)}.")
     if preset is not None and steps is not None:
-        return tool_error("preset picks a built-in tour; pass steps or preset, not both.")
+        return tool_error(
+            "preset picks a built-in tour; pass steps or preset, not both."
+        )
     # Every highlighted moment needs something to point at or something to say.
     if verb == "show" and not (selector or title or text):
         return tool_error("show needs a selector (and/or title/text for the popover).")
     # start without steps is the app's built-in tour, which only exists on the app surface.
     if verb == "start" and steps is None and where != "app":
-        return tool_error("The built-in tour runs on surface='app'; pass steps for a preview tour.")
+        return tool_error(
+            "The built-in tour runs on surface='app'; pass steps for a preview tour."
+        )
     if verb == "start" and steps is not None:
         if not isinstance(steps, list) or not steps:
-            return tool_error("start needs a non-empty steps array, or no steps for the built-in tour.")
+            return tool_error(
+                "start needs a non-empty steps array, or no steps for the built-in tour."
+            )
         for i, step in enumerate(steps):
             if not isinstance(step, dict):
                 return tool_error(f"steps[{i}] must be an object.")
             if not (step.get("selector") or step.get("title") or step.get("text")):
                 return tool_error(f"steps[{i}] needs a selector and/or title/text.")
-    fields = {"action": verb, "surface": where, "selector": selector, "title": title,
-              "text": text, "side": side, "steps": steps, "step_index": step_index, "preset": preset}
+    fields = {
+        "action": verb,
+        "surface": where,
+        "selector": selector,
+        "title": title,
+        "text": text,
+        "side": side,
+        "steps": steps,
+        "step_index": step_index,
+        "preset": preset,
+    }
     try:
         raw = callback({key: val for key, val in fields.items() if val is not None})
     except Exception as exc:
         return tool_error(f"Tour action failed: {exc}")
     if not raw:
-        return tool_error("The tour request timed out, or no GUI window answered. "
-                          "For surface='preview' open a page in the preview pane first.")
+        return tool_error(
+            "The tour request timed out, or no GUI window answered. "
+            "For surface='preview' open a page in the preview pane first."
+        )
     # The renderer answers with a JSON object; pass it through, else wrap it.
     try:
         return json.dumps(json.loads(raw), ensure_ascii=False)
@@ -157,9 +182,26 @@ def check_tours_enabled() -> bool:
 
 
 registry.register(
-    name="gui_tour", toolset="desktop_ui", schema=TOUR_SCHEMA, check_fn=check_tours_enabled,
+    name="gui_tour",
+    toolset="desktop_ui",
+    schema=TOUR_SCHEMA,
+    check_fn=check_tours_enabled,
     handler=lambda args, **kw: tour_tool(
-        action=args.get("action", ""), callback=kw.get("callback"),
-        **{k: args.get(k) for k in ("surface", "selector", "title", "text", "side", "steps",
-                                    "step_index", "preset")}),
-    emoji="🧭")
+        action=args.get("action", ""),
+        callback=kw.get("callback"),
+        **{
+            k: args.get(k)
+            for k in (
+                "surface",
+                "selector",
+                "title",
+                "text",
+                "side",
+                "steps",
+                "step_index",
+                "preset",
+            )
+        },
+    ),
+    emoji="🧭",
+)

@@ -89,9 +89,10 @@ def test_reopen_orphaned_compression_session_ignores_non_continuation_children(
         model_config={"_delegate_from": "parent-with-non-continuation-children"},
     )
 
-    assert db.reopen_orphaned_compression_session(
-        "parent-with-non-continuation-children"
-    ) is True
+    assert (
+        db.reopen_orphaned_compression_session("parent-with-non-continuation-children")
+        is True
+    )
 
 
 def test_reopen_fails_closed_when_continuation_inherits_foreign_markers(
@@ -181,9 +182,9 @@ def test_reopen_orphaned_compression_session_reclaims_expired_lease(
     db._conn.commit()
 
     assert db.reopen_orphaned_compression_session("expired-lease-parent") is True
-    assert db.refresh_compression_lock(
-        "expired-lease-parent", "old-compressor"
-    ) is False
+    assert (
+        db.refresh_compression_lock("expired-lease-parent", "old-compressor") is False
+    )
     assert db.get_compression_lock_holder("expired-lease-parent") is None
 
 
@@ -199,9 +200,9 @@ def test_reopen_orphaned_compression_session_loses_to_expired_lease_refresh(
     )
     db._conn.commit()
 
-    assert db.refresh_compression_lock(
-        "refreshed-lease-parent", "live-compressor"
-    ) is True
+    assert (
+        db.refresh_compression_lock("refreshed-lease-parent", "live-compressor") is True
+    )
     assert db.reopen_orphaned_compression_session("refreshed-lease-parent") is False
     assert db.get_session("refreshed-lease-parent")["end_reason"] == "compression"
 
@@ -231,14 +232,19 @@ def test_find_live_compression_child_ignores_non_continuation_children(
     assert child["id"] == "canonical"
 
 
-def test_reset_fork_is_not_a_compression_continuation_for_recovery(db: SessionDB) -> None:
+def test_reset_fork_is_not_a_compression_continuation_for_recovery(
+    db: SessionDB,
+) -> None:
     """A reset fork (``model_config._reset_from`` bound to the parent) is its own conversation:
     stale-agent recovery must neither recover to it nor let it block the real continuation or a
     reopen of a parent that has no continuation (#114271)."""
     _compression_parent(db)
     db.create_session("canonical", source="webui", parent_session_id="parent")
     db.create_session(
-        "reset", source="webui", parent_session_id="parent", model_config={"_reset_from": "parent"},
+        "reset",
+        source="webui",
+        parent_session_id="parent",
+        model_config={"_reset_from": "parent"},
     )
 
     child = db.find_live_compression_child("parent")
@@ -249,7 +255,10 @@ def test_reset_fork_is_not_a_compression_continuation_for_recovery(db: SessionDB
 
     _compression_parent(db, "orphan")
     db.create_session(
-        "orphan-reset", source="webui", parent_session_id="orphan", model_config={"_reset_from": "orphan"},
+        "orphan-reset",
+        source="webui",
+        parent_session_id="orphan",
+        model_config={"_reset_from": "orphan"},
     )
     assert db.reopen_orphaned_compression_session("orphan") is True
 

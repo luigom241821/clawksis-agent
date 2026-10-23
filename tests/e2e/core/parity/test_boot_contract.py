@@ -37,7 +37,12 @@ from tests.e2e.core.parity._drive_rpc import (
     spawn_serve,
     spawn_tui_gateway,
 )
-from tests.e2e.core.parity._helpers import build_parity_home, kill_tagged, start_provider, terminate
+from tests.e2e.core.parity._helpers import (
+    build_parity_home,
+    kill_tagged,
+    start_provider,
+    terminate,
+)
 
 # Linux-only (/proc process-tree scans). The live-system guard bypass is needed
 # ONLY for teardown: orphans reparented to init (the exact failure this suite
@@ -45,7 +50,9 @@ from tests.e2e.core.parity._helpers import build_parity_home, kill_tagged, start
 # PIDs carrying this run's unique PARITY_TREE_TAG. Children run with a tmp
 # HOME/CLAWK_HOME (asserted in ParityHome.env), so no real state is reachable.
 pytestmark = [
-    pytest.mark.skipif(not sys.platform.startswith("linux"), reason="process-tree cleanup uses /proc"),
+    pytest.mark.skipif(
+        not sys.platform.startswith("linux"), reason="process-tree cleanup uses /proc"
+    ),
     pytest.mark.live_system_guard_bypass,
 ]
 
@@ -63,7 +70,9 @@ def boot_home(tmp_path: Path):
         srv.stop()
 
 
-def test_serve_ready_sentinel_is_first_stdout_line_and_names_the_live_port(tmp_path: Path) -> None:
+def test_serve_ready_sentinel_is_first_stdout_line_and_names_the_live_port(
+    tmp_path: Path,
+) -> None:
     require_node()
     with boot_home(tmp_path) as home:
         _check_serve_ready(home)
@@ -78,11 +87,14 @@ def _check_serve_ready(home) -> None:
         verdict = desktop_parse(first)
         assert "port" in verdict, (
             f"first stdout line is not a READY sentinel the Desktop accepts: {first!r} -> {verdict}\n"
-            f"(stdout must carry nothing before READY)\nstderr tail:\n{sp.cap.stderr[-1500:]}")
+            f"(stdout must carry nothing before READY)\nstderr tail:\n{sp.cap.stderr[-1500:]}"
+        )
         port = int(verdict["port"])
 
-        req = urllib.request.Request(f"http://127.0.0.1:{port}/api/status",
-                                     headers={"X-Clawksis-Session-Token": sp.token})
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{port}/api/status",
+            headers={"X-Clawksis-Session-Token": sp.token},
+        )
         with urllib.request.urlopen(req, timeout=30) as resp:
             assert resp.status == 200, resp.status
             json.loads(resp.read())
@@ -90,7 +102,9 @@ def _check_serve_ready(home) -> None:
         terminate(sp.proc, timeout=60)
 
 
-def test_tui_gateway_first_stdout_frame_is_contract_valid_gateway_ready(tmp_path: Path) -> None:
+def test_tui_gateway_first_stdout_frame_is_contract_valid_gateway_ready(
+    tmp_path: Path,
+) -> None:
     with boot_home(tmp_path) as home:
         _check_tui_gateway_ready(home)
 
@@ -102,17 +116,25 @@ def _check_tui_gateway_ready(home) -> None:
     try:
         deadline = time.monotonic() + READY_TIMEOUT
         while not cap.stdout_seen:
-            assert proc.poll() is None, f"tui_gateway exited {proc.returncode}\n{cap.stderr[-2000:]}"
-            assert time.monotonic() < deadline, f"no stdout frame within {READY_TIMEOUT}s\n{cap.stderr[-2000:]}"
+            assert proc.poll() is None, (
+                f"tui_gateway exited {proc.returncode}\n{cap.stderr[-2000:]}"
+            )
+            assert time.monotonic() < deadline, (
+                f"no stdout frame within {READY_TIMEOUT}s\n{cap.stderr[-2000:]}"
+            )
             time.sleep(0.05)
         first = cap.stdout_seen[0]
         try:
             frame = json.loads(first)
         except ValueError:
             frame = None
-        assert isinstance(frame, dict), f"first stdout line of tui_gateway is not JSON-RPC: {first!r}"
+        assert isinstance(frame, dict), (
+            f"first stdout line of tui_gateway is not JSON-RPC: {first!r}"
+        )
         params = frame.get("params") or {}
-        assert frame.get("method") == "event" and params.get("type") == "gateway.ready", frame
+        assert (
+            frame.get("method") == "event" and params.get("type") == "gateway.ready"
+        ), frame
         ready = EVENTS["gateway.ready"]
         if ready.payload is not None:
             ready.payload.model_validate(params.get("payload") or {})

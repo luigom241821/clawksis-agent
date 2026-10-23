@@ -37,8 +37,13 @@ class PinFixture(Package):
 
 
 def _decision(package, version):
-    return Resolved(package.name, "1.0", package.version_style,
-                    version=version, per_target={current_target(): version})
+    return Resolved(
+        package.name,
+        "1.0",
+        package.version_style,
+        version=version,
+        per_target={current_target(): version},
+    )
 
 
 def prepare(tmp_path, monkeypatch):
@@ -64,8 +69,11 @@ def prepare(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "_pin_artifacts", pin_artifacts_or_raise)
     monkeypatch.setattr(cli, "_install_names", lambda names: None)
     # Like the real sync, the venv step finalizes an `ok` receipt as latest.
-    monkeypatch.setattr(cli, "_sync_venv_step",
-                        lambda: receipt.finalize("ok", 0, token=receipt.begin("sync")) and True)
+    monkeypatch.setattr(
+        cli,
+        "_sync_venv_step",
+        lambda: receipt.finalize("ok", 0, token=receipt.begin("sync")) and True,
+    )
     return lock, broken, healthy
 
 
@@ -94,4 +102,3 @@ def test_all_pins_failing_leaves_lockfile_untouched(tmp_path, monkeypatch, capsy
     assert "✗ broken-pin pin failed" in out
     assert "every pin failed; lockfile untouched" in out
     assert lock.path.read_bytes() == before
-

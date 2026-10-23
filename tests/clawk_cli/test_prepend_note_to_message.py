@@ -12,14 +12,8 @@ def test_string_message_gets_note_prepended():
     assert _prepend_note_to_message("hello", "NOTE") == "NOTE\n\nhello"
 
 
-
-
 def test_note_is_stripped():
     assert _prepend_note_to_message("hello", "  NOTE  ") == "NOTE\n\nhello"
-
-
-
-
 
 
 def test_list_message_folds_note_into_first_text_part():
@@ -43,8 +37,6 @@ def test_image_only_list_gets_leading_text_part():
 
     assert result[0] == {"type": "text", "text": "NOTE"}
     assert result[1]["type"] == "image_url"
-
-
 
 
 def test_unknown_shape_returned_unchanged():

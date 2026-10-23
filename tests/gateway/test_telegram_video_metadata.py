@@ -17,6 +17,7 @@ These tests confirm:
   3. the temporary thumbnail is removed after the send,
   4. on a real file, the helpers report the true geometry and a same-aspect thumbnail.
 """
+
 import contextlib
 import os
 import shutil
@@ -43,9 +44,13 @@ async def test_send_video_forwards_geometry_and_thumbnail(monkeypatch, tmp_path)
     thumb = tmp_path / "thumb.jpg"
     thumb.write_bytes(b"\xff\xd8\xff\xe0" + b"\x00" * 32)
     monkeypatch.setattr(
-        telegram_mod, "_probe_video_geometry",
-        lambda _p: {"width": 2560, "height": 1440, "duration": 98})
-    monkeypatch.setattr(telegram_mod, "_video_thumbnail_jpeg", lambda _p, _d: str(thumb))
+        telegram_mod,
+        "_probe_video_geometry",
+        lambda _p: {"width": 2560, "height": 1440, "duration": 98},
+    )
+    monkeypatch.setattr(
+        telegram_mod, "_video_thumbnail_jpeg", lambda _p, _d: str(thumb)
+    )
     video = tmp_path / "clip.mp4"
     video.write_bytes(b"\x00" * 64)
 
@@ -84,9 +89,22 @@ def test_video_helpers_read_real_geometry(tmp_path):
     """On a real 16:9 clip the helpers report the true size and a 16:9 thumbnail."""
     clip = tmp_path / "clip.mp4"
     subprocess.run(
-        ["ffmpeg", "-y", "-f", "lavfi", "-i", "testsrc=size=640x360:rate=10:duration=2",
-         "-c:v", "libx264", "-pix_fmt", "yuv420p", str(clip)],
-        capture_output=True, check=True)
+        [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc=size=640x360:rate=10:duration=2",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            str(clip),
+        ],
+        capture_output=True,
+        check=True,
+    )
 
     geometry = telegram_mod._probe_video_geometry(str(clip))
     assert (geometry["width"], geometry["height"]) == (640, 360)
@@ -96,9 +114,22 @@ def test_video_helpers_read_real_geometry(tmp_path):
     assert thumb is not None
     try:
         probe = subprocess.run(
-            ["ffprobe", "-v", "error", "-select_streams", "v:0",
-             "-show_entries", "stream=width,height", "-of", "csv=p=0", thumb],
-            capture_output=True, text=True, check=True).stdout.strip()
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=width,height",
+                "-of",
+                "csv=p=0",
+                thumb,
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
         assert probe == "320,180", "thumbnails keep the source aspect ratio"
     finally:
         with contextlib.suppress(OSError):

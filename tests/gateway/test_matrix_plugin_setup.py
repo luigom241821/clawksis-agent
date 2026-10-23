@@ -7,6 +7,7 @@ The interactive_setup wizard lazy-imports its CLI helpers from
 the wizard runs without provisioning dependencies. Covers the home-channel
 clear-on-blank behavior added in the follow-up to PR #58421.
 """
+
 import clawk_cli.config as config_mod
 import clawk_cli.cli_output as cli_output_mod
 import pm as pm_mod
@@ -38,9 +39,9 @@ def _patch_setup_io(monkeypatch, prompts, yes_no_responses, saved, removed, exis
 # Homeserver, token are still text prompts before E2EE.
 _PROMPTS_NONEMPTY = [
     "https://matrix.example.org",  # homeserver
-    "syt_test_token_value",        # access token (password)
-    "@bot:matrix.example.org",     # user_id (optional)
-    "",                            # allowed_users
+    "syt_test_token_value",  # access token (password)
+    "@bot:matrix.example.org",  # user_id (optional)
+    "",  # allowed_users
     "!AbCdEfGhIjKlMn:matrix.example.org",  # home room
 ]
 _PROMPTS_BLANK = [
@@ -78,5 +79,3 @@ class TestMatrixHomeChannelClear:
         interactive_setup()
         assert "MATRIX_HOME_ROOM" in removed
         assert "MATRIX_HOME_ROOM" not in saved
-
-

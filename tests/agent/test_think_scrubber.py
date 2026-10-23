@@ -28,7 +28,6 @@ class TestClosedPairs:
         s = StreamingThinkScrubber()
         assert _drive(s, ["<think>reasoning</think>Hello world"]) == "Hello world"
 
-
     @pytest.mark.parametrize(
         "tag",
         ["think", "thinking", "reasoning", "thought", "REASONING_SCRATCHPAD"],
@@ -39,15 +38,12 @@ class TestClosedPairs:
         assert _drive(s, [delta]) == "Hello"
 
 
-
 class TestUnterminatedOpen:
     """Unterminated open tag discards all subsequent content to end of stream."""
 
     def test_open_at_stream_start(self) -> None:
         s = StreamingThinkScrubber()
         assert _drive(s, ["<think>reasoning text with no close"]) == ""
-
-
 
     def test_prose_mentioning_tag_not_stripped(self) -> None:
         """Mid-line '<think>' in prose is preserved (no boundary)."""
@@ -64,8 +60,6 @@ class TestOrphanClose:
         assert _drive(s, ["Hello</think>world"]) == "Helloworld"
 
 
-
-
 class TestPartialTagsAcrossDeltas:
     """Partial tags at delta boundaries must be held back, not emitted raw."""
 
@@ -73,10 +67,7 @@ class TestPartialTagsAcrossDeltas:
         """'<' arrives alone, 'think>' completes it on next delta."""
         s = StreamingThinkScrubber()
         # At stream start, last_emitted_ended_newline=True, so <think> at 0 is boundary
-        assert (
-            _drive(s, ["<", "think>reasoning</think>done"])
-            == "done"
-        )
+        assert _drive(s, ["<", "think>reasoning</think>done"]) == "done"
 
     def test_split_open_tag_not_at_boundary(self) -> None:
         """Mid-line split '<' + 'think>X</think>' is a closed pair.
@@ -90,8 +81,6 @@ class TestPartialTagsAcrossDeltas:
         assert out == "wordmore"
 
 
-
-
 class TestTheMiniMaxScenario:
     """The exact pattern run_agent per-delta regex strip breaks."""
 
@@ -100,7 +89,6 @@ class TestTheMiniMaxScenario:
         s = StreamingThinkScrubber()
         out = _drive(s, ["<think>", "Let me check their config", "</think>", "done"])
         assert out == "done"
-
 
     def test_minimax_unterminated_reasoning_at_end(self) -> None:
         """Unclosed reasoning at stream end is dropped entirely."""
@@ -125,9 +113,6 @@ class TestResetAndReentry:
 
 
 class TestFlushBehaviour:
-
-
-
     def test_flush_restores_stream_start_boundary(self) -> None:
         """End-of-stream flush must re-arm block-boundary gating.
 
@@ -159,7 +144,6 @@ class TestRealisticStreaming:
         s = StreamingThinkScrubber()
         deltas = list("<think>x</think>Hello world")
         assert _drive(s, deltas) == "Hello world"
-
 
     def test_reasoning_then_real_response_first_word_preserved(self) -> None:
         """Regression: the first word of the final response must NOT be eaten.
@@ -195,7 +179,9 @@ class TestChineseReasoningTags:
     def test_final_response_strip_hides_chinese_tags(self) -> None:
         from agent.agent_runtime_helpers import strip_think_blocks
 
-        out = strip_think_blocks(None, "<反思>内部推理</反思>最终答案\n<推理>未闭合的推理")
+        out = strip_think_blocks(
+            None, "<反思>内部推理</反思>最终答案\n<推理>未闭合的推理"
+        )
         assert "内部推理" not in out and "未闭合" not in out
         assert "最终答案" in out
 

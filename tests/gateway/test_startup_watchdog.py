@@ -85,12 +85,11 @@ class TestContracts:
         assert SERVICE_RESTART_EXIT_CODE == GATEWAY_SERVICE_RESTART_EXIT_CODE
 
 
-
-
-
 class TestConfigResolution:
     def test_default_timeout(self):
-        assert resolve_startup_watchdog_timeout() == sw.DEFAULT_STARTUP_WATCHDOG_TIMEOUT_S
+        assert (
+            resolve_startup_watchdog_timeout() == sw.DEFAULT_STARTUP_WATCHDOG_TIMEOUT_S
+        )
 
     def test_env_override(self, monkeypatch):
         monkeypatch.setenv(sw.ENV_STARTUP_WATCHDOG_TIMEOUT_S, "120")
@@ -102,11 +101,15 @@ class TestConfigResolution:
 
     def test_garbage_env_falls_back_to_default(self, monkeypatch):
         monkeypatch.setenv(sw.ENV_STARTUP_WATCHDOG_TIMEOUT_S, "soon")
-        assert resolve_startup_watchdog_timeout() == sw.DEFAULT_STARTUP_WATCHDOG_TIMEOUT_S
+        assert (
+            resolve_startup_watchdog_timeout() == sw.DEFAULT_STARTUP_WATCHDOG_TIMEOUT_S
+        )
 
     def test_nonpositive_env_falls_back_to_default(self, monkeypatch):
         monkeypatch.setenv(sw.ENV_STARTUP_WATCHDOG_TIMEOUT_S, "-1")
-        assert resolve_startup_watchdog_timeout() == sw.DEFAULT_STARTUP_WATCHDOG_TIMEOUT_S
+        assert (
+            resolve_startup_watchdog_timeout() == sw.DEFAULT_STARTUP_WATCHDOG_TIMEOUT_S
+        )
 
     @pytest.mark.parametrize("raw", ["0", "false", "no", "off", "FALSE", "Off"])
     def test_disabled_values(self, monkeypatch, raw):
@@ -162,7 +165,9 @@ class TestArmDisarm:
         assert second.is_alive()
         disarm_startup_watchdog()
 
-    def test_disarm_after_deadline_expiry_wins_over_fire(self, exit_capture, monkeypatch):
+    def test_disarm_after_deadline_expiry_wins_over_fire(
+        self, exit_capture, monkeypatch
+    ):
         """The P2 race from review: deadline expires, but disarm lands before
         the fire transition claims the state — the disarm must win. We force
         the interleaving by blocking the watchdog thread inside the CPU probe
@@ -358,8 +363,6 @@ class TestProgressLease:
         assert record["last_lease_phase"] == "brief_phase"
 
 
-
-
 class TestFire:
     def test_fires_after_deadline_with_restart_code(self, exit_capture):
         handle = arm_startup_watchdog(timeout_s=0.1)
@@ -396,9 +399,7 @@ class TestFire:
             StartupWatchdogHandle, "_exit", staticmethod(lambda code: None)
         )
 
-        StartupWatchdogHandle(
-            timeout_s=60, exit_code=SERVICE_RESTART_EXIT_CODE
-        )._fire()
+        StartupWatchdogHandle(timeout_s=60, exit_code=SERVICE_RESTART_EXIT_CODE)._fire()
 
         assert writes[:2] == ["file", "stderr"]
 
@@ -509,11 +510,11 @@ class TestBoundedExit:
         assert exit_capture.codes == [SERVICE_RESTART_EXIT_CODE]
 
 
-
 class TestDumpPath:
-
     def test_dump_write_failure_is_swallowed(self, monkeypatch):
         monkeypatch.setattr(
-            sw, "get_startup_watchdog_dump_path", lambda home=None: Path("/dev/null/nope")
+            sw,
+            "get_startup_watchdog_dump_path",
+            lambda home=None: Path("/dev/null/nope"),
         )
         sw._write_dump_record({"tag": "x"})

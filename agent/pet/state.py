@@ -16,7 +16,9 @@ def todos_all_done(todos: Iterable[Any] | None) -> bool:
     """True iff ≥1 todo and all completed/cancelled (the ``JUMP`` celebrate beat; mirrors the TUI's ``isTodoDone``)."""
     items = list(todos or [])
     return bool(items) and all(
-        (t.get("status") if isinstance(t, dict) else getattr(t, "status", None)) in ("completed", "cancelled") for t in items
+        (t.get("status") if isinstance(t, dict) else getattr(t, "status", None))
+        in ("completed", "cancelled")
+        for t in items
     )
 
 

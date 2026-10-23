@@ -30,6 +30,7 @@ def _set_dm_role_auth_guild(monkeypatch, guild_id=None):
     # Patch the attribute ``clawk_cli.config.read_raw_config`` — that's
     # what ``_read_dm_role_auth_guild`` imports at call time.
     import clawk_cli.config as _cfg_mod
+
     monkeypatch.setattr(_cfg_mod, "read_raw_config", lambda: cfg, raising=True)
 
 
@@ -94,10 +95,7 @@ def test_dm_rejects_role_held_in_other_guild(monkeypatch):
     )
 
     # DM from user 42: role check must NOT scan other guilds.
-    assert (
-        adapter._is_allowed_user("42", author=None, guild=None, is_dm=True)
-        is False
-    )
+    assert adapter._is_allowed_user("42", author=None, guild=None, is_dm=True) is False
 
 
 # ---------------------------------------------------------------------------
@@ -144,9 +142,7 @@ def test_user_id_allowlist_works_in_guild():
     adapter = _make_adapter(allowed_users=["42"])
     some_guild = SimpleNamespace(id=111, get_member=lambda uid: None)
     assert (
-        adapter._is_allowed_user(
-            "42", author=None, guild=some_guild, is_dm=False
-        )
+        adapter._is_allowed_user("42", author=None, guild=some_guild, is_dm=False)
         is True
     )
 
@@ -178,6 +174,7 @@ def test_slash_authorization_rejects_cross_guild_role_dm(monkeypatch):
     """Slash interaction in a DM must not be authorized by a role held in
     any mutual guild (parallel to the on_message cross-guild bypass)."""
     import discord as _discord  # type: ignore
+
     _set_dm_role_auth_guild(monkeypatch)
 
     public_guild, _ = _guild_with_member(
@@ -202,5 +199,3 @@ def test_slash_authorization_rejects_cross_guild_role_dm(monkeypatch):
     allowed, reason = adapter._evaluate_slash_authorization(interaction)
     assert allowed is False
     assert "ALLOWED" in (reason or "")
-
-

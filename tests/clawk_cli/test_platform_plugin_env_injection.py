@@ -13,17 +13,33 @@ def _manifest(path, text):
     (path / "plugin.yaml").write_text(text, encoding="utf-8")
 
 
-def test_user_platform_plugins_inject_env_metadata_but_non_platforms_do_not(monkeypatch, tmp_path):
+def test_user_platform_plugins_inject_env_metadata_but_non_platforms_do_not(
+    monkeypatch, tmp_path
+):
     home = tmp_path / "clawk-home"
-    _manifest(home / "plugins" / "demo-platform", (
-        "name: demo-platform\nkind: platform\nlabel: Demo Platform\n"
-        "requires_env:\n  - name: DEMO_PLATFORM_TOKEN\n    description: Token for the demo platform\n"
-        "    prompt: Demo token\n    url: https://example.invalid/demo\n"
-        "optional_env:\n  - name: DEMO_PLATFORM_ROOM\n    password: false\n"))
-    _manifest(home / "plugins" / "platforms" / "nested-platform", (
-        "name: nested-platform\nrequires_env:\n  - NESTED_PLATFORM_SECRET\n"))
-    _manifest(home / "plugins" / "ignore-me", "name: ignore-me\nkind: backend\nrequires_env:\n  - IGNORE_ME_TOKEN\n")
-    keys = ["DEMO_PLATFORM_TOKEN", "DEMO_PLATFORM_ROOM", "NESTED_PLATFORM_SECRET", "IGNORE_ME_TOKEN"]
+    _manifest(
+        home / "plugins" / "demo-platform",
+        (
+            "name: demo-platform\nkind: platform\nlabel: Demo Platform\n"
+            "requires_env:\n  - name: DEMO_PLATFORM_TOKEN\n    description: Token for the demo platform\n"
+            "    prompt: Demo token\n    url: https://example.invalid/demo\n"
+            "optional_env:\n  - name: DEMO_PLATFORM_ROOM\n    password: false\n"
+        ),
+    )
+    _manifest(
+        home / "plugins" / "platforms" / "nested-platform",
+        ("name: nested-platform\nrequires_env:\n  - NESTED_PLATFORM_SECRET\n"),
+    )
+    _manifest(
+        home / "plugins" / "ignore-me",
+        "name: ignore-me\nkind: backend\nrequires_env:\n  - IGNORE_ME_TOKEN\n",
+    )
+    keys = [
+        "DEMO_PLATFORM_TOKEN",
+        "DEMO_PLATFORM_ROOM",
+        "NESTED_PLATFORM_SECRET",
+        "IGNORE_ME_TOKEN",
+    ]
     monkeypatch.setattr(config_mod, "get_clawk_home", lambda: home)
     for key in keys:
         monkeypatch.delitem(config_mod.OPTIONAL_ENV_VARS, key, raising=False)
@@ -32,10 +48,16 @@ def test_user_platform_plugins_inject_env_metadata_but_non_platforms_do_not(monk
 
     try:
         assert config_mod.OPTIONAL_ENV_VARS["DEMO_PLATFORM_TOKEN"] == {
-            "description": "Token for the demo platform", "prompt": "Demo token",
-            "url": "https://example.invalid/demo", "password": True, "category": "messaging"}
+            "description": "Token for the demo platform",
+            "prompt": "Demo token",
+            "url": "https://example.invalid/demo",
+            "password": True,
+            "category": "messaging",
+        }
         assert config_mod.OPTIONAL_ENV_VARS["DEMO_PLATFORM_ROOM"]["password"] is False
-        assert config_mod.OPTIONAL_ENV_VARS["NESTED_PLATFORM_SECRET"]["password"] is True  # category dir needs no kind
+        assert (
+            config_mod.OPTIONAL_ENV_VARS["NESTED_PLATFORM_SECRET"]["password"] is True
+        )  # category dir needs no kind
         assert "IGNORE_ME_TOKEN" not in config_mod.OPTIONAL_ENV_VARS
     finally:
         for key in keys:

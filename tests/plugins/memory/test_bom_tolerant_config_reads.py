@@ -15,22 +15,36 @@ import pytest
 
 def _write_bom_json(path: Path, payload: dict) -> Path:
     path.write_text(json.dumps(payload), encoding="utf-8-sig")
-    assert path.read_bytes().startswith(b"\xef\xbb\xbf")  # the BOM must really be on disk
+    assert path.read_bytes().startswith(
+        b"\xef\xbb\xbf"
+    )  # the BOM must really be on disk
     return path
 
 
 def _via_shared_reader(p: Path, monkeypatch) -> dict:
     from utils import read_json_or_empty  # mem0 reads through this
+
     return read_json_or_empty(p)
 
 
-@pytest.mark.parametrize("filename, loader", [
-    ("mem0.json", _via_shared_reader),
-])
+@pytest.mark.parametrize(
+    "filename, loader",
+    [
+        ("mem0.json", _via_shared_reader),
+    ],
+)
 def test_plugin_config_json_tolerates_bom(tmp_path, monkeypatch, filename, loader):
     target = tmp_path / filename
     target.parent.mkdir(parents=True, exist_ok=True)
-    _write_bom_json(target, {"workspace": "bom-ws", "container_tag": "bom-tag", "enabled": True, "mode": "local_embedded"})
+    _write_bom_json(
+        target,
+        {
+            "workspace": "bom-ws",
+            "container_tag": "bom-tag",
+            "enabled": True,
+            "mode": "local_embedded",
+        },
+    )
     loaded = loader(target, monkeypatch)
     assert "bom" in str(loaded.get("workspace") or loaded.get("container_tag"))
 
@@ -38,6 +52,9 @@ def test_plugin_config_json_tolerates_bom(tmp_path, monkeypatch, filename, loade
 def test_qwen_cli_tokens_tolerate_bom(tmp_path, monkeypatch):
     import clawk_cli.auth as auth_mod
 
-    creds = _write_bom_json(tmp_path / "oauth_creds.json", {"access_token": "tok", "expiry_date": 4102444800000})
+    creds = _write_bom_json(
+        tmp_path / "oauth_creds.json",
+        {"access_token": "tok", "expiry_date": 4102444800000},
+    )
     monkeypatch.setattr(auth_mod, "_qwen_cli_auth_path", lambda: creds)
     assert auth_mod._read_qwen_cli_tokens()["access_token"] == "tok"

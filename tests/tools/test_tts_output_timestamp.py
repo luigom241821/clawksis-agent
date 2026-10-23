@@ -12,10 +12,12 @@ from tools import tts_tool
 
 
 def test_default_output_paths_differ_within_the_same_second(tmp_path, monkeypatch):
-    stamps = iter([
-        real_datetime.datetime(2026, 9, 23, 12, 0, 0, 1000),
-        real_datetime.datetime(2026, 9, 23, 12, 0, 0, 2000),
-    ])
+    stamps = iter(
+        [
+            real_datetime.datetime(2026, 9, 23, 12, 0, 0, 1000),
+            real_datetime.datetime(2026, 9, 23, 12, 0, 0, 2000),
+        ]
+    )
 
     class _FrozenDateTime:
         @staticmethod
@@ -30,4 +32,6 @@ def test_default_output_paths_differ_within_the_same_second(tmp_path, monkeypatc
 
     assert err1 is None and err2 is None
     assert first.parent == tmp_path and second.parent == tmp_path
-    assert first != second, "same-second TTS calls must not share an output file (#43911)"
+    assert first != second, (
+        "same-second TTS calls must not share an output file (#43911)"
+    )

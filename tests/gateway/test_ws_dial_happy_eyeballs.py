@@ -50,7 +50,9 @@ async def test_yuanbao_dial_races_ipv6_ipv4():
     adapter._ws_url = "wss://test.example.com/ws"
     cm = ConnectionManager(adapter)
     rec = _Recorder()
-    with patch("plugins.platforms.yuanbao.adapter.websockets.connect", rec), pytest.raises(ConnectionRefusedError):
+    with (
+        patch("plugins.platforms.yuanbao.adapter.websockets.connect", rec),
+        pytest.raises(ConnectionRefusedError),
+    ):
         await cm._dial({"bot_id": "b", "token": "t"})
     assert rec.kwargs["happy_eyeballs_delay"] == EXPECTED_DELAY
-

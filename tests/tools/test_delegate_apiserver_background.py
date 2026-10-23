@@ -83,15 +83,25 @@ def _patch_delegate(monkeypatch):
 
     def fast_child(task_index, goal, child=None, parent_agent=None, **kw):
         return {
-            "task_index": 0, "status": "completed", "summary": f"done: {goal}",
-            "api_calls": 1, "duration_seconds": 0.1, "model": "m",
+            "task_index": 0,
+            "status": "completed",
+            "summary": f"done: {goal}",
+            "api_calls": 1,
+            "duration_seconds": 0.1,
+            "model": "m",
             "exit_reason": "completed",
         }
 
     creds = {
-        "model": "m", "provider": None, "base_url": None, "api_key": None,
-        "api_mode": None, "command": None, "args": None,
+        "model": "m",
+        "provider": None,
+        "base_url": None,
+        "api_key": None,
+        "api_mode": None,
+        "command": None,
+        "args": None,
     }
+
     def clobbering_build_child(**kw):
         # Reproduce what the real _build_child_agent -> AIAgent -> agent_init
         # path does: it synchronizes the child's internal session id into the
@@ -124,8 +134,10 @@ def test_apiserver_session_with_id_dispatches_background(monkeypatch):
     )
 
     out = dt.delegate_task(
-        goal="bg on api_server", context="ctx",
-        background=True, parent_agent=_fake_parent(),
+        goal="bg on api_server",
+        context="ctx",
+        background=True,
+        parent_agent=_fake_parent(),
     )
     parsed = json.loads(out)
     assert parsed["status"] == "dispatched", parsed
@@ -160,8 +172,10 @@ def test_apiserver_session_without_id_stays_synchronous(monkeypatch):
     )
 
     out = dt.delegate_task(
-        goal="one-shot", context="ctx",
-        background=True, parent_agent=_fake_parent(),
+        goal="one-shot",
+        context="ctx",
+        background=True,
+        parent_agent=_fake_parent(),
     )
     parsed = json.loads(out)
     assert parsed.get("status") != "dispatched", parsed

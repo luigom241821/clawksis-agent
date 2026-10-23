@@ -43,7 +43,9 @@ def _claude_lines():
         ),
         # tool_result echoed back as a user message — must NOT become a turn
         msg("user", [{"type": "tool_result", "tool_use_id": "t1", "content": "ok"}]),
-        msg("assistant", [{"type": "text", "text": "Fixed — the sleep was too short."}]),
+        msg(
+            "assistant", [{"type": "text", "text": "Fixed — the sleep was too short."}]
+        ),
         msg("user", "Great, thanks!"),
         msg("assistant", [{"type": "text", "text": "Anytime."}]),
     ]
@@ -62,10 +64,16 @@ def _write_claude_fixture(tmp_path, extra_lines=None):
 
 def _codex_lines():
     def item(payload):
-        return {"timestamp": "2026-08-15T21:35:28Z", "type": "response_item", "payload": payload}
+        return {
+            "timestamp": "2026-08-15T21:35:28Z",
+            "type": "response_item",
+            "payload": payload,
+        }
 
     def message(role, kind, text):
-        return item({"type": "message", "role": role, "content": [{"type": kind, "text": text}]})
+        return item(
+            {"type": "message", "role": role, "content": [{"type": kind, "text": text}]}
+        )
 
     return [
         {
@@ -78,7 +86,9 @@ def _codex_lines():
         message("user", "input_text", "Summarize the transcripts please."),
         message("assistant", "output_text", "Reading them one at a time."),
         item({"type": "custom_tool_call", "name": "shell", "call_id": "c1"}),
-        item({"type": "custom_tool_call_output", "call_id": "c1", "output": "big output"}),
+        item(
+            {"type": "custom_tool_call_output", "call_id": "c1", "output": "big output"}
+        ),
         message("assistant", "output_text", "Done — here is the summary."),
         message("user", "input_text", "Now write it to a file."),
         message("assistant", "output_text", "Written to summary.md."),
@@ -126,7 +136,9 @@ def test_parse_claude_session(tmp_path):
     assert parsed["title_guess"] == "Fix the flaky test"
     assert parsed["session_id"] == "abc-123"
     # tool_use flattened to a bracketed summary, merged with adjacent text
-    joined_assistant = "\n".join(t["content"] for t in turns if t["role"] == "assistant")
+    joined_assistant = "\n".join(
+        t["content"] for t in turns if t["role"] == "assistant"
+    )
     assert "[ran tool: Bash]" in joined_assistant
     # no fabricated tool_call structures
     assert all(set(t) == {"role", "content"} for t in turns)
@@ -161,7 +173,9 @@ def test_malformed_lines_are_skipped(tmp_path):
     parsed = parse_claude_session(f)
     assert len(parsed["turns"]) == 4  # good lines still parse
 
-    g = _write_codex_fixture(tmp_path, extra_lines=["not json", json.dumps({"type": "response_item"})])
+    g = _write_codex_fixture(
+        tmp_path, extra_lines=["not json", json.dumps({"type": "response_item"})]
+    )
     parsed_codex = parse_codex_session(g)
     assert len(parsed_codex["turns"]) == 4
 
@@ -195,7 +209,9 @@ def test_env_overrides_relocate_default_roots(tmp_path, monkeypatch):
     """CLAUDE_CONFIG_DIR / CODEX_HOME relocate discovery (ported from cline/cline#13827)."""
     claude_cfg = tmp_path / "relocated-claude"
     codex_home = tmp_path / "relocated-codex"
-    _write_claude_fixture(tmp_path)  # writes under tmp_path/.claude — becomes the store root below
+    _write_claude_fixture(
+        tmp_path
+    )  # writes under tmp_path/.claude — becomes the store root below
     (tmp_path / ".claude").rename(claude_cfg)
     _write_codex_fixture(tmp_path)
     (tmp_path / ".codex").rename(codex_home)
@@ -276,7 +292,9 @@ def test_leading_assistant_gets_single_stub(tmp_path):
                 "payload": {
                     "type": "message",
                     "role": "assistant",
-                    "content": [{"type": "output_text", "text": "Continuing from before."}],
+                    "content": [
+                        {"type": "output_text", "text": "Continuing from before."}
+                    ],
                 },
             }
         )
@@ -295,9 +313,21 @@ def test_whitespace_only_user_turn_does_not_break_discovery(tmp_path):
     project.mkdir(parents=True)
     f = project / "blank.jsonl"
     lines = [
-        {"type": "user", "sessionId": "w", "message": {"role": "user", "content": "   \n  "}},
-        {"type": "assistant", "sessionId": "w", "message": {"role": "assistant", "content": "hi"}},
-        {"type": "user", "sessionId": "w", "message": {"role": "user", "content": "real question"}},
+        {
+            "type": "user",
+            "sessionId": "w",
+            "message": {"role": "user", "content": "   \n  "},
+        },
+        {
+            "type": "assistant",
+            "sessionId": "w",
+            "message": {"role": "assistant", "content": "hi"},
+        },
+        {
+            "type": "user",
+            "sessionId": "w",
+            "message": {"role": "user", "content": "real question"},
+        },
     ]
     f.write_text("\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8")
     listed = _list_sessions("claude", project.parent)

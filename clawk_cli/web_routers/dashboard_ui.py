@@ -16,12 +16,22 @@ from clawk_cli.web_deps import LateState, late
 from clawk_cli.config import cfg_get
 from clawk_cli.web_routers._common import config_scoped_to_thread
 from clawk_cli.web_server_dashboard import (
-    _BUILTIN_DASHBOARD_THEMES, _discover_user_themes, _invalidate_plugins_hub_cache, _merged_plugins_hub,
+    _BUILTIN_DASHBOARD_THEMES,
+    _discover_user_themes,
+    _invalidate_plugins_hub_cache,
+    _merged_plugins_hub,
     _plugin_consent_withheld,
 )
-from clawk_cli.web_server_memory import _normalize_memory_provider_name, _require_memory_provider_ready
+from clawk_cli.web_server_memory import (
+    _normalize_memory_provider_name,
+    _require_memory_provider_ready,
+)
 from clawk_cli.web_models import (
-    FontSetBody, ThemeSetBody, _AgentPluginInstallBody, _PluginProvidersPutBody, _PluginVisibilityBody,
+    FontSetBody,
+    ThemeSetBody,
+    _AgentPluginInstallBody,
+    _PluginProvidersPutBody,
+    _PluginVisibilityBody,
 )
 
 _log = logging.getLogger("clawk_cli.web_server")
@@ -54,6 +64,7 @@ async def get_dashboard_themes(profile: Optional[str] = None):
     """Available themes + the active one. Built-ins ship name/label/description only
     (the frontend owns their definitions in `web/src/themes/presets.ts`); user themes
     from `~/.clawksis/dashboard-themes/*.yaml` ship their normalised `definition`."""
+
     def _run():
         config = load_config()
         # Same default as config_defaults (dashboard.theme: midnight).
@@ -63,7 +74,14 @@ async def get_dashboard_themes(profile: Optional[str] = None):
         for t in _discover_user_themes():
             if t["name"] in seen:
                 continue
-            themes.append({"name": t["name"], "label": t["label"], "description": t["description"], "definition": t})
+            themes.append(
+                {
+                    "name": t["name"],
+                    "label": t["label"],
+                    "description": t["description"],
+                    "definition": t,
+                }
+            )
             seen.add(t["name"])
         return {"themes": themes, "active": active}
 
@@ -81,17 +99,30 @@ async def set_dashboard_theme(body: ThemeSetBody, profile: Optional[str] = None)
 # frontend owns the stacks + webfont URLs; the backend only needs the id allow-list to reject
 # anything unvetted (the webfont URL is injected as a <link>, so never accept arbitrary ids/URLs).
 _FONT_DEFAULT_ID = "theme"
-_FONT_CHOICES = frozenset({
-    "system-sans", "system-serif", "system-mono",
-    "inter", "ibm-plex-sans", "work-sans", "atkinson-hyperlegible", "dm-sans",
-    "spectral", "fraunces", "source-serif",
-    "jetbrains-mono", "ibm-plex-mono", "space-mono",
-})
+_FONT_CHOICES = frozenset(
+    {
+        "system-sans",
+        "system-serif",
+        "system-mono",
+        "inter",
+        "ibm-plex-sans",
+        "work-sans",
+        "atkinson-hyperlegible",
+        "dm-sans",
+        "spectral",
+        "fraunces",
+        "source-serif",
+        "jetbrains-mono",
+        "ibm-plex-mono",
+        "space-mono",
+    }
+)
 
 
 @router.get("/api/dashboard/font")
 async def get_dashboard_font(profile: Optional[str] = None):
     """Return the active font override (``"theme"`` = use the theme's font)."""
+
     def _run():
         font = cfg_get(load_config(), "dashboard", "font", default=_FONT_DEFAULT_ID)
         return {"font": font if font in _FONT_CHOICES else _FONT_DEFAULT_ID}
@@ -111,21 +142,31 @@ async def set_dashboard_font(body: FontSetBody, profile: Optional[str] = None):
 @router.get("/api/dashboard/plugins")
 async def get_dashboard_plugins(profile: Optional[str] = None):
     """Return discovered dashboard plugins (excludes user-hidden and non-enabled ones)."""
+
     def _run():
-        hidden: list = cfg_get(load_config(), "dashboard", "hidden_plugins", default=[]) or []
+        hidden: list = (
+            cfg_get(load_config(), "dashboard", "hidden_plugins", default=[]) or []
+        )
         # The consent the asset route and the API gates apply, so no listed tab fails to load.
-        return [p for p in _get_dashboard_plugins()
-                if p.get("name", "") not in hidden and not _plugin_consent_withheld(p)]
+        return [
+            p
+            for p in _get_dashboard_plugins()
+            if p.get("name", "") not in hidden and not _plugin_consent_withheld(p)
+        ]
 
     # Strip internal fields before sending to frontend.
-    return [{k: v for k, v in p.items() if not k.startswith("_")}
-            for p in await config_scoped_to_thread(profile, _run)]
+    return [
+        {k: v for k, v in p.items() if not k.startswith("_")}
+        for p in await config_scoped_to_thread(profile, _run)
+    ]
 
 
 @router.get("/api/dashboard/plugins/rescan")
 async def rescan_dashboard_plugins(profile: Optional[str] = None):
     """Force re-scan of the selected profile's dashboard plugins (its own cache, PLG-3)."""
-    plugins = await config_scoped_to_thread(profile, lambda: _get_dashboard_plugins(force_rescan=True))
+    plugins = await config_scoped_to_thread(
+        profile, lambda: _get_dashboard_plugins(force_rescan=True)
+    )
     return {"ok": True, "count": len(plugins)}
 
 
@@ -139,11 +180,18 @@ async def get_plugins_hub(request: Request, profile: Optional[str] = None):
         raise  # an unknown ?profile= is the scope's 404, not a hub failure
     except Exception as exc:
         _log.warning("plugins/hub failed: %s", exc)
-        raise HTTPException(status_code=500, detail="Failed to build plugins hub.") from exc
+        raise HTTPException(
+            status_code=500, detail="Failed to build plugins hub."
+        ) from exc
 
 
-def _plugin_action(result: dict, fallback_error: str, *, rescan: bool,
-                   client_decides: tuple[str, ...] = ("consent_required",)) -> dict:
+def _plugin_action(
+    result: dict,
+    fallback_error: str,
+    *,
+    rescan: bool,
+    client_decides: tuple[str, ...] = ("consent_required",),
+) -> dict:
     """Common tail of agent-plugin mutations: 400 on ``ok=False``, then invalidate caches
     (rescanning discovery when files changed on disk). An answer flagged by one of *client_decides*
     is not a failure: nothing changed, the client shows it (the capability delta, the scan findings)
@@ -151,7 +199,9 @@ def _plugin_action(result: dict, fallback_error: str, *, rescan: bool,
     if any(result.get(flag) for flag in client_decides):
         return result
     if not result.get("ok"):
-        raise HTTPException(status_code=400, detail=result.get("error") or fallback_error)
+        raise HTTPException(
+            status_code=400, detail=result.get("error") or fallback_error
+        )
     if rescan:
         _get_dashboard_plugins(force_rescan=True)
     _invalidate_plugins_hub_cache()
@@ -164,14 +214,22 @@ async def get_plugins_catalog(request: Request):
     _require_token(request)
 
     def _run():
-        from clawk_cli.plugins_cmd import _discover_all_plugins, _get_disabled_set, _get_enabled_set
+        from clawk_cli.plugins_cmd import (
+            _discover_all_plugins,
+            _get_disabled_set,
+            _get_enabled_set,
+        )
         from clawk_cli.plugins_cmd_catalog import installed_catalog_state
         from clawk_cli.web_server_dashboard import _plugin_runtime_status
+
         enabled, disabled = _get_enabled_set(), _get_disabled_set()
         installed = {}
         for name, _v, _d, _s, dir_str, key in _discover_all_plugins():
             aliases = {name, key} - {""}
-            info = {"dir": dir_str, "runtime_status": _plugin_runtime_status(aliases, enabled, disabled)}
+            info = {
+                "dir": dir_str,
+                "runtime_status": _plugin_runtime_status(aliases, enabled, disabled),
+            }
             installed.update({alias: info for alias in aliases})
         return installed_catalog_state(installed)
 
@@ -179,7 +237,9 @@ async def get_plugins_catalog(request: Request):
         return await asyncio.to_thread(_run)
     except Exception as exc:
         _log.warning("plugins/catalog failed: %s", exc)
-        raise HTTPException(status_code=500, detail="Failed to build plugins catalog.") from exc
+        raise HTTPException(
+            status_code=500, detail="Failed to build plugins catalog."
+        ) from exc
 
 
 async def _plugin_mutation(fn: Callable[[], dict]) -> dict:
@@ -192,6 +252,7 @@ async def _plugin_mutation(fn: Callable[[], dict]) -> dict:
     directory. ``_config_profile_scope`` not ``_profile_scope``: the latter holds the process-wide
     skills lock for the whole (network-bound) body.
     """
+
     def _run():
         with _config_profile_scope(None):
             return fn()
@@ -207,12 +268,22 @@ async def post_agent_plugin_install(request: Request, body: _AgentPluginInstallB
     catalog_name = (body.catalog_name or "").strip()
     identifier = body.identifier.strip()
     if not identifier and not catalog_name:
-        raise HTTPException(status_code=400, detail="Provide an identifier or a catalog_name.")
-    result = await _plugin_mutation(lambda: _plugin_action(
-        dashboard_install_plugin(
-            identifier, force=body.force, enable=body.enable, catalog_name=catalog_name or None,
-            ref=body.ref),
-        "Install failed.", rescan=True))
+        raise HTTPException(
+            status_code=400, detail="Provide an identifier or a catalog_name."
+        )
+    result = await _plugin_mutation(
+        lambda: _plugin_action(
+            dashboard_install_plugin(
+                identifier,
+                force=body.force,
+                enable=body.enable,
+                catalog_name=catalog_name or None,
+                ref=body.ref,
+            ),
+            "Install failed.",
+            rescan=True,
+        )
+    )
     # Strip internal paths from the response
     result.pop("after_install_path", None)
     return result
@@ -226,30 +297,56 @@ def _validate_plugin_name(name: str) -> str:
     return name
 
 
-async def _named_plugin_action(request: Request, name: str, action: Callable[[str], dict], fallback_error: str, *,
-                               rescan: bool, client_decides: tuple[str, ...] = ("consent_required",)) -> dict:
+async def _named_plugin_action(
+    request: Request,
+    name: str,
+    action: Callable[[str], dict],
+    fallback_error: str,
+    *,
+    rescan: bool,
+    client_decides: tuple[str, ...] = ("consent_required",),
+) -> dict:
     _require_token(request)
-    return await _plugin_mutation(lambda: _plugin_action(
-        action(_validate_plugin_name(name)), fallback_error, rescan=rescan, client_decides=client_decides))
+    return await _plugin_mutation(
+        lambda: _plugin_action(
+            action(_validate_plugin_name(name)),
+            fallback_error,
+            rescan=rescan,
+            client_decides=client_decides,
+        )
+    )
 
 
 @router.post("/api/dashboard/agent-plugins/{name:path}/enable")
 async def post_agent_plugin_enable(request: Request, name: str):
     from clawk_cli.plugins_cmd import dashboard_set_agent_plugin_enabled
-    return await _named_plugin_action(request, name, lambda n: dashboard_set_agent_plugin_enabled(n, enabled=True),
-                                      "Enable failed.", rescan=False)
+
+    return await _named_plugin_action(
+        request,
+        name,
+        lambda n: dashboard_set_agent_plugin_enabled(n, enabled=True),
+        "Enable failed.",
+        rescan=False,
+    )
 
 
 @router.post("/api/dashboard/agent-plugins/{name:path}/disable")
 async def post_agent_plugin_disable(request: Request, name: str):
     from clawk_cli.plugins_cmd import dashboard_set_agent_plugin_enabled
-    return await _named_plugin_action(request, name, lambda n: dashboard_set_agent_plugin_enabled(n, enabled=False),
-                                      "Disable failed.", rescan=False)
+
+    return await _named_plugin_action(
+        request,
+        name,
+        lambda n: dashboard_set_agent_plugin_enabled(n, enabled=False),
+        "Disable failed.",
+        rescan=False,
+    )
 
 
 @router.post("/api/dashboard/agent-plugins/{name:path}/update")
 async def post_agent_plugin_update(request: Request, name: str):
     from clawk_cli.plugins_cmd import dashboard_update_user_plugin
+
     # Body is optional: ``{"accept_capabilities": true}`` applies a re-pin the user confirmed after a
     # ``consent_required`` answer; ``{"force": true}`` applies an update whose scan returned caution
     # after the user saw the ``scan_findings``.
@@ -260,14 +357,24 @@ async def post_agent_plugin_update(request: Request, name: str):
     body = body if isinstance(body, dict) else {}
     accept, force = body.get("accept_capabilities") is True, body.get("force") is True
     return await _named_plugin_action(
-        request, name, lambda n: dashboard_update_user_plugin(n, accept_capabilities=accept, force=force),
-        "Update failed.", rescan=True, client_decides=("consent_required", "scan_blocked"))
+        request,
+        name,
+        lambda n: dashboard_update_user_plugin(
+            n, accept_capabilities=accept, force=force
+        ),
+        "Update failed.",
+        rescan=True,
+        client_decides=("consent_required", "scan_blocked"),
+    )
 
 
 @router.delete("/api/dashboard/agent-plugins/{name:path}")
 async def delete_agent_plugin(request: Request, name: str):
     from clawk_cli.plugins_cmd import dashboard_remove_user_plugin
-    return await _named_plugin_action(request, name, dashboard_remove_user_plugin, "Remove failed.", rescan=True)
+
+    return await _named_plugin_action(
+        request, name, dashboard_remove_user_plugin, "Remove failed.", rescan=True
+    )
 
 
 @router.post("/api/dashboard/agent-plugins/activate")
@@ -282,6 +389,7 @@ async def post_agent_plugin_activate(request: Request):
         body = {}
     name = _validate_plugin_name(str((body or {}).get("name") or ""))
     from clawk_constants import get_clawk_home, clawk_home_key, profile_name_for_home
+
     home = Path(str((body or {}).get("home") or "")).expanduser()
     profile = profile_name_for_home(home) if str(home) not in ("", ".") else None
     if profile is None:
@@ -291,15 +399,18 @@ async def post_agent_plugin_activate(request: Request):
     def _run():
         with _config_profile_scope(None if profile == "default" else profile):
             if clawk_home_key(get_clawk_home()) != clawk_home_key(home):
-                raise HTTPException(status_code=400, detail="Home is not served by this backend.")
+                raise HTTPException(
+                    status_code=400, detail="Home is not served by this backend."
+                )
             return {"ok": True, "activation": load_and_go_live(name)}
 
     return await asyncio.to_thread(_run)
 
 
 @router.put("/api/dashboard/plugin-providers")
-async def put_plugin_providers(request: Request, body: _PluginProvidersPutBody,
-                               profile: Optional[str] = None):
+async def put_plugin_providers(
+    request: Request, body: _PluginProvidersPutBody, profile: Optional[str] = None
+):
     """Persist memory provider / context engine selection (writes config.yaml)."""
     _require_token(request)
     from clawk_cli.plugins_cmd import _save_context_engine, _save_memory_provider
@@ -326,8 +437,12 @@ async def put_plugin_providers(request: Request, body: _PluginProvidersPutBody,
 
 
 @router.post("/api/dashboard/plugins/{name:path}/visibility")
-async def post_plugin_visibility(request: Request, name: str, body: _PluginVisibilityBody,
-                                 profile: Optional[str] = None):
+async def post_plugin_visibility(
+    request: Request,
+    name: str,
+    body: _PluginVisibilityBody,
+    profile: Optional[str] = None,
+):
     """Toggle a plugin's sidebar visibility (persists to config.yaml dashboard.hidden_plugins)."""
     _require_token(request)
     name = _validate_plugin_name(name)
@@ -335,7 +450,9 @@ async def post_plugin_visibility(request: Request, name: str, body: _PluginVisib
     def _run():
         with _config_profile_scope(profile), _CONFIG_MUTATION_LOCK:
             config = load_config()
-            if "dashboard" not in config or not isinstance(config.get("dashboard"), dict):
+            if "dashboard" not in config or not isinstance(
+                config.get("dashboard"), dict
+            ):
                 config["dashboard"] = {}
             hidden_list: list = config["dashboard"].get("hidden_plugins") or []
             if not isinstance(hidden_list, list):
@@ -355,15 +472,29 @@ async def post_plugin_visibility(request: Request, name: str, body: _PluginVisib
 # Browser-asset suffix allowlist. Everything else is 404'd so we never leak ``.py`` backend
 # sources, READMEs, ``.env.example`` etc. Extend deliberately; do NOT add a fallback.
 _PLUGIN_ASSET_CONTENT_TYPES = {
-    ".js": "application/javascript", ".mjs": "application/javascript", ".css": "text/css",
-    ".json": "application/json", ".html": "text/html", ".svg": "image/svg+xml",
-    ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif",
-    ".webp": "image/webp", ".ico": "image/x-icon", ".woff2": "font/woff2", ".woff": "font/woff",
-    ".ttf": "font/ttf", ".otf": "font/otf", ".map": "application/json",
+    ".js": "application/javascript",
+    ".mjs": "application/javascript",
+    ".css": "text/css",
+    ".json": "application/json",
+    ".html": "text/html",
+    ".svg": "image/svg+xml",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".ico": "image/x-icon",
+    ".woff2": "font/woff2",
+    ".woff": "font/woff",
+    ".ttf": "font/ttf",
+    ".otf": "font/otf",
+    ".map": "application/json",
 }
 
 
-@router.get("/dashboard-plugins/@{profile}/{plugin_name}/{file_path:path}")  # before the unscoped route
+@router.get(
+    "/dashboard-plugins/@{profile}/{plugin_name}/{file_path:path}"
+)  # before the unscoped route
 async def serve_profile_plugin_asset(profile: str, plugin_name: str, file_path: str):
     """``serve_plugin_asset`` with the profile as a path segment (PLG-3): URLs relative to a stylesheet
     or bundle (``url("./icon.svg")``, chunk imports) drop a query string but keep this prefix."""
@@ -371,7 +502,9 @@ async def serve_profile_plugin_asset(profile: str, plugin_name: str, file_path: 
 
 
 @router.get("/dashboard-plugins/{plugin_name}/{file_path:path}")
-async def serve_plugin_asset(plugin_name: str, file_path: str, profile: Optional[str] = None):
+async def serve_plugin_asset(
+    plugin_name: str, file_path: str, profile: Optional[str] = None
+):
     """Serve static assets from a dashboard plugin's ``dashboard/`` directory.
 
     Unauthenticated on purpose: the SPA loads plugin JS via ``<script src>`` and CSS
@@ -385,8 +518,11 @@ async def serve_plugin_asset(plugin_name: str, file_path: str, profile: Optional
 
     See #46435.
     """
+
     def _consented() -> Optional[dict]:
-        plugin = next((p for p in _get_dashboard_plugins() if p["name"] == plugin_name), None)
+        plugin = next(
+            (p for p in _get_dashboard_plugins() if p["name"] == plugin_name), None
+        )
         return None if not plugin or _plugin_consent_withheld(plugin) else plugin
 
     try:
@@ -407,4 +543,8 @@ async def serve_plugin_asset(plugin_name: str, file_path: str, profile: Optional
     media_type = _PLUGIN_ASSET_CONTENT_TYPES.get(target.suffix.lower())
     if media_type is None:
         raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(target, media_type=media_type, headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
+    return FileResponse(
+        target,
+        media_type=media_type,
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
+    )

@@ -49,7 +49,7 @@ def find_stable_prefix(content: str) -> Optional[str]:
         for prefix in _prefixes:
             if (
                 content.startswith(prefix)
-                and content[len(prefix):].strip()
+                and content[len(prefix) :].strip()
                 and (best is None or len(prefix) > len(best))
             ):
                 best = prefix

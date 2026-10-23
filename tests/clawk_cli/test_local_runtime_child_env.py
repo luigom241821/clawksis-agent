@@ -16,7 +16,9 @@ from clawk_cli.local_runtime import supervisor
 from clawk_cli.local_runtime.processes import server_child_env, spawn_server
 
 
-def test_supervisor_spawns_llama_server_without_credentials_but_keeps_runtime_env(tmp_path, monkeypatch):
+def test_supervisor_spawns_llama_server_without_credentials_but_keeps_runtime_env(
+    tmp_path, monkeypatch
+):
     monkeypatch.setenv("FIRECRAWL_API_KEY", "fc-secret")
     monkeypatch.setenv("SOME_TOKEN", "t")
     monkeypatch.setenv("DB_PASSWORD", "p")
@@ -25,10 +27,17 @@ def test_supervisor_spawns_llama_server_without_credentials_but_keeps_runtime_en
     monkeypatch.setattr(supervisor, "runtimes_root", lambda: tmp_path / "runtime")
     monkeypatch.setattr(supervisor, "_direct_io_args", lambda exe: [])
     spawns = []
-    monkeypatch.setattr(supervisor, "spawn_server", lambda argv, **kwargs: (
-        spawns.append(kwargs) or SimpleNamespace(pid=123, poll=lambda: 0), None,
-    ))
-    sup = supervisor.LlamaServerSupervisor(tmp_path / "engine" / "llama-server", tmp_path / "models", port=19002)
+    monkeypatch.setattr(
+        supervisor,
+        "spawn_server",
+        lambda argv, **kwargs: (
+            spawns.append(kwargs) or SimpleNamespace(pid=123, poll=lambda: 0),
+            None,
+        ),
+    )
+    sup = supervisor.LlamaServerSupervisor(
+        tmp_path / "engine" / "llama-server", tmp_path / "models", port=19002
+    )
     monkeypatch.setattr(sup, "_write_state", lambda: None)
     try:
         sup._spawn()
@@ -46,12 +55,21 @@ def test_supervisor_spawns_llama_server_without_credentials_but_keeps_runtime_en
 def test_spawn_server_keeps_the_callers_environment(monkeypatch):
     """The generic spawner (bounded_probe_run's git/PowerShell probes) must pass an explicit
     ``env=`` through untouched: a gh-backed credential helper needs GITHUB_TOKEN."""
-    monkeypatch.setattr(subprocess, "Popen", lambda cmd, **kwargs: SimpleNamespace(kwargs=kwargs))
-    proc, _job = spawn_server(["git", "fetch"], env={"GITHUB_TOKEN": "g", "PATH": "/bin"})
+    monkeypatch.setattr(
+        subprocess, "Popen", lambda cmd, **kwargs: SimpleNamespace(kwargs=kwargs)
+    )
+    proc, _job = spawn_server(
+        ["git", "fetch"], env={"GITHUB_TOKEN": "g", "PATH": "/bin"}
+    )
     assert proc.kwargs["env"] == {"GITHUB_TOKEN": "g", "PATH": "/bin"}
 
 
 def test_server_child_env_is_case_insensitive_and_pure():
-    base = {"openai_api_key": "k", "Path": "C:\\x", "GITHUB_TOKEN": "g", "HSA_OVERRIDE_GFX_VERSION": "11"}
+    base = {
+        "openai_api_key": "k",
+        "Path": "C:\\x",
+        "GITHUB_TOKEN": "g",
+        "HSA_OVERRIDE_GFX_VERSION": "11",
+    }
     assert server_child_env(base) == {"Path": "C:\\x", "HSA_OVERRIDE_GFX_VERSION": "11"}
     assert base["openai_api_key"] == "k"  # input untouched

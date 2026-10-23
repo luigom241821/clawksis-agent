@@ -68,16 +68,18 @@ def test_config_reads_legacy_config_namespace_until_canonical_value_is_set(
     path = isolated_home / "config.yaml"
     path.parent.mkdir(parents=True)
     path.write_text(
-        yaml.safe_dump({
-            "plugins": {
-                "entries": {
-                    "fixture-plugin": {
-                        "config": {"endpoint": "legacy", "legacy_only": 7},
-                        "settings": {"endpoint": "canonical"},
+        yaml.safe_dump(
+            {
+                "plugins": {
+                    "entries": {
+                        "fixture-plugin": {
+                            "config": {"endpoint": "legacy", "legacy_only": 7},
+                            "settings": {"endpoint": "canonical"},
+                        }
                     }
                 }
             }
-        }),
+        ),
         encoding="utf-8",
     )
     ctx = _context()

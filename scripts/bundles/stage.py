@@ -1,4 +1,5 @@
 """Select complete frontend products and stage the runnable native agent."""
+
 from __future__ import annotations
 
 import argparse
@@ -39,15 +40,46 @@ def main(argv=None) -> int:
         source = products / "source"
         from scripts.bundles.payload import snapshot
         from scripts.build.icon_environment import prepare_icon_environment
+
         snapshot(ROOT, args.ref, source)
         # The staging interpreter need not be a Clawksis runtime; render icons on one.
-        icon_python = prepare_icon_environment(source, products / "icon-environment", args.cache)
+        icon_python = prepare_icon_environment(
+            source, products / "icon-environment", args.cache
+        )
         env = {**os.environ, "CLAWK_PYTHON": str(icon_python)}
         commands = [
-            ["scripts/build/node-deps.mjs", "--source", str(source), "--workspace", "ui-tui", "--workspace", "web"],
-            ["scripts/generate-icons.mjs", "--source", str(source), "--out", str(products / "icons")],
-            ["scripts/build/tui.mjs", "--source", str(source), "--out", str(products / "tui")],
-            ["scripts/build/web.mjs", "--source", str(source), "--icons", str(products / "icons"), "--out", str(products / "web")],
+            [
+                "scripts/build/node-deps.mjs",
+                "--source",
+                str(source),
+                "--workspace",
+                "ui-tui",
+                "--workspace",
+                "web",
+            ],
+            [
+                "scripts/generate-icons.mjs",
+                "--source",
+                str(source),
+                "--out",
+                str(products / "icons"),
+            ],
+            [
+                "scripts/build/tui.mjs",
+                "--source",
+                str(source),
+                "--out",
+                str(products / "tui"),
+            ],
+            [
+                "scripts/build/web.mjs",
+                "--source",
+                str(source),
+                "--icons",
+                str(products / "icons"),
+                "--out",
+                str(products / "web"),
+            ],
         ]
         for command in commands:
             subprocess.run([node, *command], cwd=ROOT, env=env, check=True)

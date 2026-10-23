@@ -23,8 +23,11 @@ def register_cli(subparser: argparse.ArgumentParser) -> None:
     app = sp.add_parser("approve", help="Register a remote node on the gateway.")
     for arg in ("name", "url", "token"):
         app.add_argument(arg)
-    for name, help_ in (("remove", "Forget a registered node."), ("status", "Ping a registered node."),
-                        ("ping", "Alias for status.")):
+    for name, help_ in (
+        ("remove", "Forget a registered node."),
+        ("status", "Ping a registered node."),
+        ("ping", "Alias for status."),
+    ):
         sp.add_parser(name, help=help_).add_argument("name")
     for p in sp.choices.values():
         p.set_defaults(func=node_command)
@@ -33,10 +36,12 @@ def register_cli(subparser: argparse.ArgumentParser) -> None:
 def _cmd_run(args: argparse.Namespace, reg: NodeRegistry) -> int:
     server = NodeServer(host=args.host, port=args.port, display_name=args.display_name)
     token = server.ensure_token()
-    print(f"[meet-node] display_name={server.display_name}\n"
-          f"[meet-node] listening on ws://{args.host}:{args.port}\n"
-          f"[meet-node] token (copy to gateway): {token}\n[meet-node] approve with:\n"
-          f"             clawk meet node approve <name> ws://<host>:{args.port} {token}")
+    print(
+        f"[meet-node] display_name={server.display_name}\n"
+        f"[meet-node] listening on ws://{args.host}:{args.port}\n"
+        f"[meet-node] token (copy to gateway): {token}\n[meet-node] approve with:\n"
+        f"             clawk meet node approve <name> ws://<host>:{args.port} {token}"
+    )
     try:
         asyncio.run(server.serve())
     except KeyboardInterrupt:
@@ -88,7 +93,8 @@ _COMMANDS = {
     "approve": _cmd_approve,
     "remove": _cmd_remove,
     "status": _cmd_ping,
-    "ping": _cmd_ping}
+    "ping": _cmd_ping,
+}
 
 
 def node_command(args: argparse.Namespace) -> int:

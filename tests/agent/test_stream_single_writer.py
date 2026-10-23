@@ -7,6 +7,7 @@ persisted transcript is two coherent responses interleaved token-by-token.
 These tests exercise the real ``AIAgent`` guard helpers and the streaming
 consume-loop, asserting that exactly one writer ever reaches the turn.
 """
+
 import threading
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -31,7 +32,9 @@ def _make_agent():
 
 
 def _chunk(content=None, finish_reason=None, model=None):
-    delta = SimpleNamespace(content=content, tool_calls=None, reasoning_content=None, reasoning=None)
+    delta = SimpleNamespace(
+        content=content, tool_calls=None, reasoning_content=None, reasoning=None
+    )
     choice = SimpleNamespace(index=0, delta=delta, finish_reason=finish_reason)
     return SimpleNamespace(choices=[choice], model=model, usage=None)
 
@@ -171,17 +174,24 @@ class TestCodexSingleWriter:
 
         def event_gen():
             yield self._codex_event(
-                "response.output_text.delta", delta="first", item_id="i1",
+                "response.output_text.delta",
+                delta="first",
+                item_id="i1",
             )
             # A concurrent retry supersedes this stream between events.
             agent._claim_stream_writer()
             yield self._codex_event(
-                "response.output_text.delta", delta="-stale-tail", item_id="i1",
+                "response.output_text.delta",
+                delta="-stale-tail",
+                item_id="i1",
             )
             yield self._codex_event(
                 "response.completed",
                 response=SimpleNamespace(
-                    id="r1", status="completed", output=[], usage=None,
+                    id="r1",
+                    status="completed",
+                    output=[],
+                    usage=None,
                 ),
             )
 
@@ -192,7 +202,6 @@ class TestCodexSingleWriter:
 
         assert "".join(delivered) == "first"
         assert "-stale-tail" not in "".join(delivered)
-
 
     def test_codex_interrupt_closes_stream_without_draining_provider(self):
         from agent.codex_runtime import run_codex_stream

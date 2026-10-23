@@ -21,28 +21,57 @@ DbPath = Path | str
 
 
 def identifier(
-    value: Any, *, label: str, error: type[Exception], max_chars: int = 128,
-    pattern: re.Pattern[str] | None = IDENTIFIER_RE, invalid: str | None = None) -> str:
+    value: Any,
+    *,
+    label: str,
+    error: type[Exception],
+    max_chars: int = 128,
+    pattern: re.Pattern[str] | None = IDENTIFIER_RE,
+    invalid: str | None = None,
+) -> str:
     """Strip and validate a bounded string; ``pattern=None`` skips the shape check."""
     if not isinstance(value, str):
         raise error(f"{label} must be a string")
     value = value.strip()
-    if not value or len(value) > max_chars or (pattern is not None and not pattern.fullmatch(value)):
+    if (
+        not value
+        or len(value) > max_chars
+        or (pattern is not None and not pattern.fullmatch(value))
+    ):
         raise error(invalid or f"invalid {label}")
     return value
 
 
-def bounded_int(value: Any, *, error: type[Exception], message: str, low: int = 0, high: int | None = None) -> int:
+def bounded_int(
+    value: Any,
+    *,
+    error: type[Exception],
+    message: str,
+    low: int = 0,
+    high: int | None = None,
+) -> int:
     """Reject bools, non-ints and values outside ``[low, high]`` (``message`` is the exact text)."""
-    if isinstance(value, bool) or not isinstance(value, int) or value < low or (high is not None and value > high):
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int)
+        or value < low
+        or (high is not None and value > high)
+    ):
         raise error(message)
     return value
 
 
 def exact_fields(
-    value: Any, *, label: str, required: frozenset[str] | set[str], optional: frozenset[str] | set[str] = frozenset(),
-    error: type[Exception], not_object: str | None = None, missing_fmt: str = "{label} is missing fields: {fields}",
-    unknown_fmt: str = "{label} has unknown fields: {fields}") -> Mapping[str, Any]:
+    value: Any,
+    *,
+    label: str,
+    required: frozenset[str] | set[str],
+    optional: frozenset[str] | set[str] = frozenset(),
+    error: type[Exception],
+    not_object: str | None = None,
+    missing_fmt: str = "{label} is missing fields: {fields}",
+    unknown_fmt: str = "{label} has unknown fields: {fields}",
+) -> Mapping[str, Any]:
     """Require exactly ``required`` (+ any ``optional``) keys; formats name the offenders sorted."""
     if not isinstance(value, Mapping):
         raise error(not_object or f"{label} must be an object")
@@ -56,7 +85,14 @@ def exact_fields(
     return value
 
 
-def text(value: Any, *, error: type[Exception], label: str, max_bytes: int, strip: bool = True) -> str:
+def text(
+    value: Any,
+    *,
+    error: type[Exception],
+    label: str,
+    max_bytes: int,
+    strip: bool = True,
+) -> str:
     """Non-blank string bounded by ``max_bytes`` of UTF-8; ``strip=False`` keeps and measures the raw text."""
     if not isinstance(value, str):
         raise error(f"{label} must be a string")
@@ -71,10 +107,19 @@ def text(value: Any, *, error: type[Exception], label: str, max_bytes: int, stri
 
 def compact_json(value: Any, *, ensure_ascii: bool = True) -> str:
     """Sorted-key, separator-free JSON (the digest/storage canonical form)."""
-    return json.dumps(value, ensure_ascii=ensure_ascii, sort_keys=True, separators=(",", ":"))
+    return json.dumps(
+        value, ensure_ascii=ensure_ascii, sort_keys=True, separators=(",", ":")
+    )
 
 
-def canonical_json(value: Any, *, error: type[Exception], label: str, max_bytes: int, ensure_ascii: bool) -> str:
+def canonical_json(
+    value: Any,
+    *,
+    error: type[Exception],
+    label: str,
+    max_bytes: int,
+    ensure_ascii: bool,
+) -> str:
     """``compact_json`` bounded by ``max_bytes`` of UTF-8; unserializable input raises ``error``."""
     try:
         encoded = compact_json(value, ensure_ascii=ensure_ascii)
@@ -98,19 +143,30 @@ def open_sqlite(path: DbPath, *, timeout: float = 10) -> sqlite3.Connection:
     """Row-factory connection with foreign keys on; no journal or schema work (steady-state readers)."""
     from clawk_cli.sqlite_util import open_db
 
-    return open_db(path, db_label="shared-state.db", busy_timeout_ms=int(timeout * 1000), wal=False,
-                   foreign_keys=True)
+    return open_db(
+        path,
+        db_label="shared-state.db",
+        busy_timeout_ms=int(timeout * 1000),
+        wal=False,
+        foreign_keys=True,
+    )
 
 
 def connect(
-    db_path: DbPath, *, db_label: str, ready: Callable[[sqlite3.Connection], bool],
-    initialize: Callable[[sqlite3.Connection], None], lock_retries: int = 1) -> sqlite3.Connection:
+    db_path: DbPath,
+    *,
+    db_label: str,
+    ready: Callable[[sqlite3.Connection], bool],
+    initialize: Callable[[sqlite3.Connection], None],
+    lock_retries: int = 1,
+) -> sqlite3.Connection:
     """Open the shared root store: WAL, foreign keys, then ``initialize`` in one IMMEDIATE txn if not ``ready``.
 
     Multiple profile gateways share this database, so every draft-schema transition
     is serialized in SQLite itself: a crash rolls back the whole DDL/data migration and
     another process can safely retry it.
     """
+
     def _initialize(conn: sqlite3.Connection) -> None:
         if not ready(conn):
             try:
@@ -120,21 +176,32 @@ def connect(
             except Exception:
                 conn.rollback()
                 raise
+
     # Late import: a gateway that outlives an on-disk upgrade has the OLD sqlite_util cached.
     from clawk_cli.sqlite_util import open_db
 
-    return open_db(db_path, db_label=db_label, busy_timeout_ms=10_000, foreign_keys=True,
-                   wal_lock_retries=lock_retries, initialize=_initialize)
+    return open_db(
+        db_path,
+        db_label=db_label,
+        busy_timeout_ms=10_000,
+        foreign_keys=True,
+        wal_lock_retries=lock_retries,
+        initialize=_initialize,
+    )
 
 
-def fenced_update(conn: sqlite3.Connection, sql: str, params: tuple, error: Exception) -> None:
+def fenced_update(
+    conn: sqlite3.Connection, sql: str, params: tuple, error: Exception
+) -> None:
     """Run a compare-and-swap UPDATE; anything but exactly one row means the fence was lost."""
     if conn.execute(sql, params).rowcount != 1:
         raise error
 
 
 def table_exists(conn: sqlite3.Connection, table: str) -> bool:
-    row = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone()
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)
+    ).fetchone()
     return row is not None
 
 

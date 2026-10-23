@@ -16,7 +16,11 @@ class GatewaySessionEndMixin:
     """Bounded off-loop ``finalize_session`` plus out-of-band delivery of what plugins return."""
 
     async def _deliver_session_end_messages(
-        self, messages: list[str], *, source: Any = None, session_key: Optional[str] = None,
+        self,
+        messages: list[str],
+        *,
+        source: Any = None,
+        session_key: Optional[str] = None,
     ) -> None:
         """Send plugin ``on_session_finalize`` text to the chat that owns the session — a plain adapter send,
         never an agent turn. No resolvable chat (or no adapter) → logged and dropped."""
@@ -27,34 +31,61 @@ class GatewaySessionEndMixin:
             source = target[0] if target else None
         adapter = self._delivery_adapter_for(source) if source is not None else None
         if adapter is None:
-            logger.info("Session-end plugin message(s) dropped: no chat for session %s", session_key)
+            logger.info(
+                "Session-end plugin message(s) dropped: no chat for session %s",
+                session_key,
+            )
             return
         metadata = self._thread_metadata_for_source(source)
         for message in messages:
             await self._send_notice_logged(
-                adapter, str(source.chat_id), message, source.platform.value if source.platform else "",
-                "Failed to send session-end plugin message to %s:%s: %s", metadata=metadata)
+                adapter,
+                str(source.chat_id),
+                message,
+                source.platform.value if source.platform else "",
+                "Failed to send session-end plugin message to %s:%s: %s",
+                metadata=metadata,
+            )
 
-    async def _reset_session_off_loop(self, *, session_key: Optional[str] = None, **kwargs: Any) -> None:
+    async def _reset_session_off_loop(
+        self, *, session_key: Optional[str] = None, **kwargs: Any
+    ) -> None:
         """Plugin ``on_session_reset`` off-loop under the profile owning ``session_key``, bounded like
         finalize: a viewer's ``/new`` resets its conversation on the owner (gateway/session_viewer_close)."""
+
         def _call() -> None:
             from clawk_cli.lifecycle import invoke_hook
+
             invoke_hook("on_session_reset", **kwargs)
 
         try:
             await asyncio.wait_for(
-                self._run_housekeeping_in_executor(self._run_release_in_profile_scope, _call, (), session_key),
+                self._run_housekeeping_in_executor(
+                    self._run_release_in_profile_scope, _call, (), session_key
+                ),
                 timeout=self._FINALIZE_TIMEOUT_S,
             )
         except TimeoutError:
-            logger.warning("Session reset hooks (%s) exceeded %ss; proceeding without blocking the event loop.",
-                           kwargs.get("old_session_id"), self._FINALIZE_TIMEOUT_S)
+            logger.warning(
+                "Session reset hooks (%s) exceeded %ss; proceeding without blocking the event loop.",
+                kwargs.get("old_session_id"),
+                self._FINALIZE_TIMEOUT_S,
+            )
         except Exception:
-            logger.debug("Session reset hooks (%s) failed", kwargs.get("old_session_id"), exc_info=True)
+            logger.debug(
+                "Session reset hooks (%s) failed",
+                kwargs.get("old_session_id"),
+                exc_info=True,
+            )
 
     async def _finalize_session_off_loop(
-        self, *, session_id: Any, platform: str, reason: str, session_key: Optional[str] = None, **extra: Any,
+        self,
+        *,
+        session_id: Any,
+        platform: str,
+        reason: str,
+        session_key: Optional[str] = None,
+        **extra: Any,
     ) -> list[str]:
         """Run clawk_cli.lifecycle.finalize_session off-loop, bounded; on timeout the worker is left alone.
         ``session_key`` lets an unscoped caller (shutdown) enter the owning profile's scope: plugin
@@ -64,19 +95,35 @@ class GatewaySessionEndMixin:
 
         def _call() -> None:
             from clawk_cli.lifecycle import finalize_session, session_end_messages
-            messages.extend(session_end_messages(
-                finalize_session(session_id=session_id, platform=platform, reason=reason, **extra)))
+
+            messages.extend(
+                session_end_messages(
+                    finalize_session(
+                        session_id=session_id, platform=platform, reason=reason, **extra
+                    )
+                )
+            )
 
         try:
             await asyncio.wait_for(
-                self._run_housekeeping_in_executor(self._run_release_in_profile_scope, _call, (), session_key),
+                self._run_housekeeping_in_executor(
+                    self._run_release_in_profile_scope, _call, (), session_key
+                ),
                 timeout=self._FINALIZE_TIMEOUT_S,
             )
         except TimeoutError:
             logger.warning(
                 "Session finalize hooks (%s, reason=%s) exceeded %ss; proceeding without blocking the event loop "
-                "(the worker thread is left to finish on its own).", session_id, reason, self._FINALIZE_TIMEOUT_S,
+                "(the worker thread is left to finish on its own).",
+                session_id,
+                reason,
+                self._FINALIZE_TIMEOUT_S,
             )
         except Exception:
-            logger.debug("Session finalize hooks (%s, reason=%s) failed", session_id, reason, exc_info=True)
+            logger.debug(
+                "Session finalize hooks (%s, reason=%s) failed",
+                session_id,
+                reason,
+                exc_info=True,
+            )
         return list(messages)

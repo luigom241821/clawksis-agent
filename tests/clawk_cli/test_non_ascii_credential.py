@@ -9,6 +9,7 @@ import os
 
 from clawk_cli.config import _check_non_ascii_credential
 
+
 class TestCheckNonAsciiCredential:
     """Tests for _check_non_ascii_credential()."""
 
@@ -33,6 +34,7 @@ class TestCheckNonAsciiCredential:
         assert result == "sk-proj-abcd"
         captured = capsys.readouterr()
         assert "U+028B" in captured.err  # reports the char
+
 
 class TestEnvLoaderSanitization:
     """Tests for _sanitize_loaded_credentials in env_loader."""

@@ -30,8 +30,10 @@ def clawk_home(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(home))
     for key in list(os.environ):
         if key.endswith("_API_KEY") or key in (
-            "BWS_ACCESS_TOKEN", "ANTHROPIC_API_KEY",
-            "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY",
+            "BWS_ACCESS_TOKEN",
+            "ANTHROPIC_API_KEY",
+            "AWS_ACCESS_KEY_ID",
+            "AWS_SECRET_ACCESS_KEY",
         ):
             monkeypatch.delenv(key, raising=False)
     return home
@@ -60,6 +62,7 @@ def _args(**overrides):
 def test_cmd_install_failure_returns_1(clawk_home, monkeypatch):
     def boom(**kw):
         raise RuntimeError("download failed")
+
     monkeypatch.setattr(ip, "install_iron_proxy", boom)
     rc = proxy_cli.cmd_install(_args())
     assert rc == 1
@@ -88,7 +91,8 @@ def test_cmd_setup_from_bitwarden_refuses_on_empty_vault(clawk_home, monkeypatch
     monkeypatch.setattr(ip, "find_iron_proxy", lambda **kw: clawk_home / "iron-proxy")
     monkeypatch.setattr(ip, "iron_proxy_version", lambda b: "test")
     monkeypatch.setattr(
-        ip, "ensure_ca_cert",
+        ip,
+        "ensure_ca_cert",
         lambda **kw: (clawk_home / "ca.crt", clawk_home / "ca.key"),
     )
 
@@ -97,6 +101,7 @@ def test_cmd_setup_from_bitwarden_refuses_on_empty_vault(clawk_home, monkeypatch
     fake_bw.fetch_bitwarden_secrets = lambda **kw: ({}, [])
     monkeypatch.setattr("agent.secret_sources.bitwarden", fake_bw, raising=False)
     import sys
+
     sys.modules["agent.secret_sources.bitwarden"] = fake_bw
 
     rc = proxy_cli.cmd_setup(_args(from_bitwarden=True))
@@ -104,13 +109,15 @@ def test_cmd_setup_from_bitwarden_refuses_on_empty_vault(clawk_home, monkeypatch
 
 
 def test_cmd_start_passes_bitwarden_refresh_flag_when_credential_source_is_bitwarden(
-    clawk_home, monkeypatch,
+    clawk_home,
+    monkeypatch,
 ):
     """When credential_source=bitwarden, cmd_start must wire
     refresh_secrets_from_bitwarden=True into start_proxy.  That's what
     delivers the rotation promise the docs make."""
 
     from clawk_cli.config import load_config, save_config
+
     cfg = load_config()
     cfg.setdefault("proxy", {})["enabled"] = True
     cfg["proxy"]["credential_source"] = "bitwarden"
@@ -126,6 +133,7 @@ def test_cmd_start_passes_bitwarden_refresh_flag_when_credential_source_is_bitwa
     monkeypatch.setenv("BWS_ACCESS_TOKEN", "bwsk-test-access-token")
 
     captured: dict = {}
+
     def fake_start_proxy(**kw):
         captured.update(kw)
         s = ip.ProxyStatus()
@@ -133,6 +141,7 @@ def test_cmd_start_passes_bitwarden_refresh_flag_when_credential_source_is_bitwa
         s.listening = True
         s.tunnel_port = 9090
         return s
+
     monkeypatch.setattr(ip, "start_proxy", fake_start_proxy)
     monkeypatch.setattr(ip, "discover_uncovered_providers", lambda **kw: [])
 
@@ -148,7 +157,8 @@ def test_cmd_start_passes_bitwarden_refresh_flag_when_credential_source_is_bitwa
 
 
 def test_cmd_disable_uses_public_status_pid_not_private_read_pid(
-    clawk_home, monkeypatch,
+    clawk_home,
+    monkeypatch,
 ):
     """cmd_disable must read status.pid (which incorporates the _pid_alive
     check) — NOT ip._read_pid() directly (which would fire a spurious
@@ -173,9 +183,11 @@ def test_cmd_disable_uses_public_status_pid_not_private_read_pid(
     # API.  Sentinel: confirm _read_pid is NOT called from cmd_disable.
     read_pid_calls = []
     real_read_pid = ip._read_pid
+
     def tracked_read_pid(*a, **kw):
         read_pid_calls.append((a, kw))
         return real_read_pid(*a, **kw)
+
     monkeypatch.setattr(ip, "_read_pid", tracked_read_pid)
 
     rc = proxy_cli.cmd_disable(_args())
@@ -187,6 +199,7 @@ def test_cmd_disable_uses_public_status_pid_not_private_read_pid(
     # pidfile.  That's covered by inspecting return code + config
     # mutation only.
     from clawk_cli.config import load_config as _lc
+
     cfg2 = _lc()
     assert cfg2["proxy"]["enabled"] is False
 
@@ -203,6 +216,7 @@ def test_cmd_start_refuses_when_bitwarden_mode_but_disabled(clawk_home, monkeypa
     host env (the silent-degrade class strict mode is meant to close)."""
 
     from clawk_cli.config import load_config, save_config
+
     cfg = load_config()
     cfg.setdefault("proxy", {})["enabled"] = True
     cfg["proxy"]["credential_source"] = "bitwarden"
@@ -211,6 +225,7 @@ def test_cmd_start_refuses_when_bitwarden_mode_but_disabled(clawk_home, monkeypa
 
     def must_not_call(**kw):
         pytest.fail("start_proxy must not run when bitwarden mode is broken")
+
     monkeypatch.setattr(ip, "start_proxy", must_not_call)
     monkeypatch.setattr(ip, "discover_uncovered_providers", lambda **kw: [])
 
@@ -223,17 +238,22 @@ def test_cmd_setup_audit_log_failure_is_warning_not_abort(clawk_home, monkeypatc
     pre-create failure must not abort the wizard."""
 
     monkeypatch.setattr(ip, "find_iron_proxy", lambda **kw: clawk_home / "iron-proxy")
-    monkeypatch.setattr(ip, "discover_provider_mappings", lambda **kw: [
-        ip.TokenMapping(
-            proxy_token="clawk-proxy-deadbeef",
-            real_env_name="OPENROUTER_API_KEY",
-            upstream_hosts=("openrouter.ai",),
-        ),
-    ])
+    monkeypatch.setattr(
+        ip,
+        "discover_provider_mappings",
+        lambda **kw: [
+            ip.TokenMapping(
+                proxy_token="clawk-proxy-deadbeef",
+                real_env_name="OPENROUTER_API_KEY",
+                upstream_hosts=("openrouter.ai",),
+            ),
+        ],
+    )
     monkeypatch.setattr(ip, "discover_uncovered_providers", lambda **kw: [])
 
     def boom(path):
         raise RuntimeError("could not pre-create audit log (synthetic)")
+
     monkeypatch.setattr(ip, "ensure_audit_log", boom)
 
     rc = proxy_cli.cmd_setup(_args())

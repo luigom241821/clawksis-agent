@@ -25,7 +25,11 @@ def url_origin(url: str) -> tuple[str, str, int | None]:
     # ``parsed.port`` raises ValueError on malformed ports — let that fail the
     # request closed instead of collapsing it to a default.
     port = parsed.port
-    return scheme, (parsed.hostname or "").lower().rstrip("."), port if port is not None else _DEFAULT_PORTS.get(scheme)
+    return (
+        scheme,
+        (parsed.hostname or "").lower().rstrip("."),
+        port if port is not None else _DEFAULT_PORTS.get(scheme),
+    )
 
 
 def _strip_headers(request, keep: frozenset[str]) -> None:
@@ -39,10 +43,15 @@ class SafeCredentialRedirectHandler(urllib.request.HTTPRedirectHandler):
     """Preserve request headers only while redirects stay on one origin."""
 
     def __init__(
-        self, original_url: str, *, cross_origin_safe_headers: Iterable[str] = _CROSS_ORIGIN_SAFE_HEADERS
+        self,
+        original_url: str,
+        *,
+        cross_origin_safe_headers: Iterable[str] = _CROSS_ORIGIN_SAFE_HEADERS,
     ) -> None:
         self._original_origin = url_origin(original_url)
-        self._cross_origin_safe_headers = frozenset(str(name).lower() for name in cross_origin_safe_headers)
+        self._cross_origin_safe_headers = frozenset(
+            str(name).lower() for name in cross_origin_safe_headers
+        )
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         # Let urllib enforce status/method semantics first (notably 307/308).
@@ -52,7 +61,10 @@ class SafeCredentialRedirectHandler(urllib.request.HTTPRedirectHandler):
 
         # Allowlist rather than guessing credential header names: normalize_extra_headers
         # permits arbitrary secret-bearing names.
-        if url_origin(urllib.parse.urljoin(req.full_url, newurl)) != self._original_origin:
+        if (
+            url_origin(urllib.parse.urljoin(req.full_url, newurl))
+            != self._original_origin
+        ):
             _strip_headers(redirected, self._cross_origin_safe_headers)
         return redirected
 
@@ -103,7 +115,9 @@ def _secure_opener_from_installed_policy(original_url: str, *, ssl_context=None)
     installed = getattr(urllib.request, "_opener", None)
     if installed is None:
         context = _resolved_https_context()
-        installed = urllib.request.build_opener(*([] if context is None else [urllib.request.HTTPSHandler(context=context)]))
+        installed = urllib.request.build_opener(
+            *([] if context is None else [urllib.request.HTTPSHandler(context=context)])
+        )
 
     _https_handler_cls = getattr(urllib.request, "HTTPSHandler", None)
     replace_https = ssl_context is not None and _https_handler_cls is not None
@@ -146,7 +160,9 @@ def open_credentialed_url(
     (``agent.ssl_verify.install_truststore``).
     """
     if opener_factory is None:
-        opener = _secure_opener_from_installed_policy(request.full_url, ssl_context=ssl_context)
+        opener = _secure_opener_from_installed_policy(
+            request.full_url, ssl_context=ssl_context
+        )
         for name, value in getattr(opener, "_clawk_initial_addheaders", ()):
             if not request.has_header(name):
                 request.add_header(name, value)

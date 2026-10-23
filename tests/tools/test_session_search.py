@@ -8,6 +8,7 @@ Four calling shapes:
 
 All run zero LLM calls.
 """
+
 import json
 import time
 from datetime import datetime, timezone, UTC
@@ -34,30 +35,66 @@ def _seed_modpack_sessions(db):
     now = int(time.time())
     # Older session — modpack origin
     db.create_session("s_oldest", source="cli")
-    db._conn.execute("UPDATE sessions SET started_at = ?, title = ? WHERE id = ?",
-                     (now - 30000, "Building the Modpack", "s_oldest"))
-    db.append_message("s_oldest", role="user", content="Let's build a Minecraft modpack")
-    db.append_message("s_oldest", role="assistant", content="Great. Let me scaffold the modpack repo.")
+    db._conn.execute(
+        "UPDATE sessions SET started_at = ?, title = ? WHERE id = ?",
+        (now - 30000, "Building the Modpack", "s_oldest"),
+    )
+    db.append_message(
+        "s_oldest", role="user", content="Let's build a Minecraft modpack"
+    )
+    db.append_message(
+        "s_oldest", role="assistant", content="Great. Let me scaffold the modpack repo."
+    )
     db.append_message("s_oldest", role="user", content="Use NeoForge 1.21.1")
-    db.append_message("s_oldest", role="assistant", content="Done. Modpack repo created with NeoForge 1.21.1.")
-    db.append_message("s_oldest", role="assistant", content="Tier-0 mods installed; modpack smoke test passes.")
+    db.append_message(
+        "s_oldest",
+        role="assistant",
+        content="Done. Modpack repo created with NeoForge 1.21.1.",
+    )
+    db.append_message(
+        "s_oldest",
+        role="assistant",
+        content="Tier-0 mods installed; modpack smoke test passes.",
+    )
 
     # Middle session — modpack quest coverage
     db.create_session("s_middle", source="cli")
-    db._conn.execute("UPDATE sessions SET started_at = ?, title = ? WHERE id = ?",
-                     (now - 15000, "Modpack Quest Coverage", "s_middle"))
-    db.append_message("s_middle", role="user", content="Deep-dive every modpack reference quest guide")
-    db.append_message("s_middle", role="assistant", content="Surveying ATM10 questbook for modpack inspiration.")
+    db._conn.execute(
+        "UPDATE sessions SET started_at = ?, title = ? WHERE id = ?",
+        (now - 15000, "Modpack Quest Coverage", "s_middle"),
+    )
+    db.append_message(
+        "s_middle", role="user", content="Deep-dive every modpack reference quest guide"
+    )
+    db.append_message(
+        "s_middle",
+        role="assistant",
+        content="Surveying ATM10 questbook for modpack inspiration.",
+    )
     db.append_message("s_middle", role="user", content="Update the modpack version too")
-    db.append_message("s_middle", role="assistant", content="Modpack version bumped 0.4 → 0.8.5; quest coverage page added.")
+    db.append_message(
+        "s_middle",
+        role="assistant",
+        content="Modpack version bumped 0.4 → 0.8.5; quest coverage page added.",
+    )
 
     # Newest session — modpack mob spawn fix
     db.create_session("s_newest", source="cli")
-    db._conn.execute("UPDATE sessions SET started_at = ?, title = ? WHERE id = ?",
-                     (now - 1000, "Modpack Mob Spawn Fix", "s_newest"))
+    db._conn.execute(
+        "UPDATE sessions SET started_at = ?, title = ? WHERE id = ?",
+        (now - 1000, "Modpack Mob Spawn Fix", "s_newest"),
+    )
     db.append_message("s_newest", role="user", content="Fix the modpack mob spawning")
-    db.append_message("s_newest", role="assistant", content="Investigating elite mob gating in the modpack KubeJS.")
-    db.append_message("s_newest", role="assistant", content="Shipped commit b850442. Modpack alternator nerfed too.")
+    db.append_message(
+        "s_newest",
+        role="assistant",
+        content="Investigating elite mob gating in the modpack KubeJS.",
+    )
+    db.append_message(
+        "s_newest",
+        role="assistant",
+        content="Shipped commit b850442. Modpack alternator nerfed too.",
+    )
     db._conn.commit()
 
 
@@ -76,6 +113,7 @@ class TestFormatTimestamp:
 # =========================================================================
 # Browse shape (no args)
 # =========================================================================
+
 
 class TestBrowseShape:
     def test_browse_uses_bounded_recent_path(self):
@@ -170,13 +208,13 @@ class TestBrowseShape:
 # Discovery shape (with query)
 # =========================================================================
 
-class TestDiscoveryShape:
 
+class TestDiscoveryShape:
     def test_full_detail_returns_bookends_and_window_for_every_hit(self, db):
         _seed_modpack_sessions(db)
-        result = json.loads(session_search(
-            query="modpack", limit=3, detail="full", db=db
-        ))
+        result = json.loads(
+            session_search(query="modpack", limit=3, detail="full", db=db)
+        )
         assert result["success"] is True
         assert result["mode"] == "discover"
         assert result["detail"] == "full"
@@ -243,9 +281,7 @@ class TestDiscoveryShape:
         db._conn.commit()
 
         adaptive_json = session_search(query="payloadneedle", limit=3, db=db)
-        full_json = session_search(
-            query="payloadneedle", limit=3, detail="full", db=db
-        )
+        full_json = session_search(query="payloadneedle", limit=3, detail="full", db=db)
         adaptive = json.loads(adaptive_json)
         full = json.loads(full_json)
 
@@ -257,10 +293,11 @@ class TestDiscoveryShape:
         ]
         assert len(adaptive_json.encode("utf-8")) < len(full_json.encode("utf-8")) * 0.6
 
-
     def test_current_session_filtered_out(self, db):
         _seed_modpack_sessions(db)
-        result = json.loads(session_search(query="modpack", db=db, current_session_id="s_newest"))
+        result = json.loads(
+            session_search(query="modpack", db=db, current_session_id="s_newest")
+        )
         sids = [r["session_id"] for r in result["results"]]
         assert "s_newest" not in sids
 
@@ -268,14 +305,20 @@ class TestDiscoveryShape:
 class TestDiscoverySort:
     def test_sort_newest_orders_by_recency(self, db):
         _seed_modpack_sessions(db)
-        result = json.loads(session_search(query="modpack", limit=3, sort="newest", db=db))
+        result = json.loads(
+            session_search(query="modpack", limit=3, sort="newest", db=db)
+        )
         # First result should be the most recent session
         first = result["results"][0]
-        assert first["session_id"] == "s_newest" or "Newest" in (first.get("title") or "")
+        assert first["session_id"] == "s_newest" or "Newest" in (
+            first.get("title") or ""
+        )
 
     def test_sort_oldest_orders_by_age(self, db):
         _seed_modpack_sessions(db)
-        result = json.loads(session_search(query="modpack", limit=3, sort="oldest", db=db))
+        result = json.loads(
+            session_search(query="modpack", limit=3, sort="oldest", db=db)
+        )
         first = result["results"][0]
         assert first["session_id"] == "s_oldest"
 
@@ -283,6 +326,7 @@ class TestDiscoverySort:
 # =========================================================================
 # Scroll shape (session_id + around_message_id)
 # =========================================================================
+
 
 class TestScrollShape:
     def test_scroll_returns_anchored_window_without_bookends(self, db):
@@ -293,9 +337,11 @@ class TestScrollShape:
         anchor_mid = disc["results"][0]["match_message_id"]
 
         # Now scroll
-        result = json.loads(session_search(
-            session_id=anchor_sid, around_message_id=anchor_mid, window=2, db=db
-        ))
+        result = json.loads(
+            session_search(
+                session_id=anchor_sid, around_message_id=anchor_mid, window=2, db=db
+            )
+        )
         assert result["success"] is True
         assert result["mode"] == "scroll"
         # Scroll shape has no bookends
@@ -311,11 +357,12 @@ class TestScrollShape:
         disc = json.loads(session_search(query="modpack", limit=1, db=db))
         anchor_sid = disc["results"][0]["session_id"]
         anchor_mid = disc["results"][0]["match_message_id"]
-        result = json.loads(session_search(
-            session_id=anchor_sid, around_message_id=anchor_mid, window=999, db=db
-        ))
+        result = json.loads(
+            session_search(
+                session_id=anchor_sid, around_message_id=anchor_mid, window=999, db=db
+            )
+        )
         assert result["window"] == 20
-
 
     def test_scroll_rejects_active_delegation_child_in_current_lineage(self, db):
         db.create_session("s_current", source="cli")
@@ -326,10 +373,14 @@ class TestScrollShape:
             "s_delegate", role="assistant", content="live delegated result"
         )
 
-        result = json.loads(session_search(
-            session_id="s_delegate", around_message_id=mid, db=db,
-            current_session_id="s_current",
-        ))
+        result = json.loads(
+            session_search(
+                session_id="s_delegate",
+                around_message_id=mid,
+                db=db,
+                current_session_id="s_current",
+            )
+        )
 
         assert result["success"] is False
         assert "current session" in result.get("error", "").lower()
@@ -343,18 +394,29 @@ class TestScrollPattern:
         db.create_session("s_long", source="cli")
         ids = []
         for i in range(20):
-            ids.append(db.append_message("s_long", role="user" if i % 2 == 0 else "assistant",
-                                         content=f"long session msg {i}"))
+            ids.append(
+                db.append_message(
+                    "s_long",
+                    role="user" if i % 2 == 0 else "assistant",
+                    content=f"long session msg {i}",
+                )
+            )
 
-        v1 = json.loads(session_search(
-            session_id="s_long", around_message_id=ids[5], window=3, db=db
-        ))
+        v1 = json.loads(
+            session_search(
+                session_id="s_long", around_message_id=ids[5], window=3, db=db
+            )
+        )
         last_id = v1["messages"][-1]["id"]
-        v2 = json.loads(session_search(
-            session_id="s_long", around_message_id=last_id, window=3, db=db
-        ))
+        v2 = json.loads(
+            session_search(
+                session_id="s_long", around_message_id=last_id, window=3, db=db
+            )
+        )
         # Forward scroll: v2 should reach further than v1
-        assert max(m["id"] for m in v2["messages"]) > max(m["id"] for m in v1["messages"])
+        assert max(m["id"] for m in v2["messages"]) > max(
+            m["id"] for m in v1["messages"]
+        )
         # Boundary id appears in both
         assert last_id in [m["id"] for m in v1["messages"]]
         assert last_id in [m["id"] for m in v2["messages"]]
@@ -364,6 +426,7 @@ class TestScrollPattern:
 # Shape precedence
 # =========================================================================
 
+
 class TestShapePrecedence:
     def test_scroll_args_beat_query(self, db):
         _seed_modpack_sessions(db)
@@ -371,12 +434,15 @@ class TestShapePrecedence:
         anchor_sid = disc["results"][0]["session_id"]
         anchor_mid = disc["results"][0]["match_message_id"]
         # Pass both query and scroll args — scroll should win
-        result = json.loads(session_search(
-            query="modpack",  # would normally trigger discovery
-            session_id=anchor_sid, around_message_id=anchor_mid, db=db,
-        ))
+        result = json.loads(
+            session_search(
+                query="modpack",  # would normally trigger discovery
+                session_id=anchor_sid,
+                around_message_id=anchor_mid,
+                db=db,
+            )
+        )
         assert result["mode"] == "scroll"
-
 
     def test_session_id_without_anchor_reads(self, db):
         _seed_modpack_sessions(db)
@@ -388,6 +454,7 @@ class TestShapePrecedence:
 # =========================================================================
 # Read shape — dump a whole session by id (serves @session links)
 # =========================================================================
+
 
 class TestReadShape:
     def test_read_returns_full_session(self, db):
@@ -417,7 +484,9 @@ class TestReadShape:
     def test_read_truncates_large_session(self, db):
         db.create_session("s_big", source="cli")
         for i in range(50):
-            db.append_message("s_big", role="user" if i % 2 == 0 else "assistant", content=f"m{i}")
+            db.append_message(
+                "s_big", role="user" if i % 2 == 0 else "assistant", content=f"m{i}"
+            )
         db._conn.commit()
         result = json.loads(session_search(session_id="s_big", db=db))
         assert result["mode"] == "read"
@@ -445,24 +514,33 @@ class TestReadShape:
         """A session-title match is a discovery entry: bookends 1200, window 4000, same as FTS hits."""
         db.create_session("s_titled", source="cli")
         db.set_session_title("s_titled", "quasar ledger reconciliation")
-        db.append_message("s_titled", role="user", content="reconcile the quasar ledger")
+        db.append_message(
+            "s_titled", role="user", content="reconcile the quasar ledger"
+        )
         db.append_message("s_titled", role="tool", content="y" * 80_000)
         db.end_session("s_titled", "cli_exit")
-        result = json.loads(session_search(query="quasar ledger reconciliation", db=db, detail="full"))
-        entry = next(r for r in result["results"] if r["matched_role"] == "session_title")
+        result = json.loads(
+            session_search(query="quasar ledger reconciliation", db=db, detail="full")
+        )
+        entry = next(
+            r for r in result["results"] if r["matched_role"] == "session_title"
+        )
         shaped = entry["bookend_start"] + entry["messages"] + entry["bookend_end"]
         big = [m for m in shaped if m.get("original_content_chars") == 80_000]
-        assert big and all(m["content_truncated"] and len(m["content"]) <= 4001 for m in big)
+        assert big and all(
+            m["content_truncated"] and len(m["content"]) <= 4001 for m in big
+        )
 
 
 # =========================================================================
 # Session links — the value the agent writes to point the user at a session
 # =========================================================================
 
+
 def _linked_session_id(link: str) -> str:
     """Recover the session id from an `@session:[<profile>/]<id>` value."""
     assert link.startswith("@session:"), link
-    value = link[len("@session:"):]
+    value = link[len("@session:") :]
 
     return value.rsplit("/", 1)[-1]
 
@@ -470,7 +548,6 @@ def _linked_session_id(link: str) -> str:
 class TestSessionLink:
     def test_link_carries_the_named_profile(self):
         assert _session_link("s_oldest", "work") == "@session:work/s_oldest"
-
 
     def test_every_discovery_result_links_to_its_own_session(self, db):
         _seed_modpack_sessions(db)
@@ -485,15 +562,19 @@ class TestSessionLink:
 # Cross-profile read — `profile` swaps in another profile's DB (read-only)
 # =========================================================================
 
+
 class TestCrossProfileRead:
     def _patch_profiles(self, monkeypatch, home, exists=True):
         from clawk_cli import profiles as profiles_mod
+
         monkeypatch.setattr(profiles_mod, "normalize_profile_name", lambda n: n)
         monkeypatch.setattr(profiles_mod, "validate_profile_name", lambda n: None)
         monkeypatch.setattr(profiles_mod, "profile_exists", lambda n: exists)
         monkeypatch.setattr(profiles_mod, "get_profile_dir", lambda n: home)
 
-    def test_bare_id_never_reads_another_profiles_store(self, db, tmp_path, monkeypatch):
+    def test_bare_id_never_reads_another_profiles_store(
+        self, db, tmp_path, monkeypatch
+    ):
         # #106761: profiles are isolated islands. A bare id that misses the caller's
         # store must NOT be located by scanning every other profile's state.db.
         other_home = tmp_path / "asdf_home"
@@ -505,9 +586,14 @@ class TestCrossProfileRead:
 
         from collections import namedtuple
         from clawk_cli import profiles as profiles_mod
+
         Info = namedtuple("Info", "name path")
-        monkeypatch.setattr(profiles_mod, "get_profile_dir", lambda n: tmp_path / "default_home")
-        monkeypatch.setattr(profiles_mod, "list_profiles", lambda: [Info("asdf", other_home)])
+        monkeypatch.setattr(
+            profiles_mod, "get_profile_dir", lambda n: tmp_path / "default_home"
+        )
+        monkeypatch.setattr(
+            profiles_mod, "list_profiles", lambda: [Info("asdf", other_home)]
+        )
 
         result = json.loads(session_search(session_id="s_far", db=db))
         assert result["success"] is False
@@ -532,9 +618,9 @@ class TestCrossProfileRead:
 
         # Every permutation the model might send must resolve to (asdf, s_other).
         for kwargs in (
-            {"session_id": "asdf/s_other"},                    # full value, no profile
+            {"session_id": "asdf/s_other"},  # full value, no profile
             {"session_id": "asdf/s_other", "profile": "asdf"},  # full value AND profile
-            {"session_id": "s_other", "profile": "asdf"},       # bare id + profile
+            {"session_id": "s_other", "profile": "asdf"},  # bare id + profile
         ):
             result = json.loads(session_search(db=db, **kwargs))
             assert result["success"] is True, kwargs
@@ -546,6 +632,7 @@ class TestCrossProfileRead:
 # Cron demotion in discover ranking (#19434)
 # =========================================================================
 
+
 class TestCronDemotion:
     def _seed_cron_and_interactive(self, db):
         """One interactive (telegram) session and several cron sessions, all
@@ -556,18 +643,30 @@ class TestCronDemotion:
         now = int(time.time())
         # Interactive user session — older, so it loses on bare recency too.
         db.create_session("s_user", source="telegram")
-        db._conn.execute("UPDATE sessions SET started_at = ? WHERE id = ?",
-                         (now - 90000, "s_user"))
-        db.append_message("s_user", role="user", content="how is the venom project going")
-        db.append_message("s_user", role="assistant", content="The venom project shipped its first milestone.")
+        db._conn.execute(
+            "UPDATE sessions SET started_at = ? WHERE id = ?", (now - 90000, "s_user")
+        )
+        db.append_message(
+            "s_user", role="user", content="how is the venom project going"
+        )
+        db.append_message(
+            "s_user",
+            role="assistant",
+            content="The venom project shipped its first milestone.",
+        )
         # Several cron sessions, all newer and all stuffed with the same terms.
         for i in range(8):
             sid = f"cron_{i}"
             db.create_session(sid, source="cron")
-            db._conn.execute("UPDATE sessions SET started_at = ? WHERE id = ?",
-                             (now - 1000 - i, sid))
+            db._conn.execute(
+                "UPDATE sessions SET started_at = ? WHERE id = ?", (now - 1000 - i, sid)
+            )
             db.append_message(sid, role="user", content="venom project daily status")
-            db.append_message(sid, role="assistant", content="venom project venom project venom summary")
+            db.append_message(
+                sid,
+                role="assistant",
+                content="venom project venom project venom summary",
+            )
         db._conn.commit()
 
     def test_interactive_session_surfaces_above_cron(self, db):
@@ -585,10 +684,13 @@ class TestCronDemotion:
         comes back."""
         now = int(time.time())
         db.create_session("cron_only", source="cron")
-        db._conn.execute("UPDATE sessions SET started_at = ? WHERE id = ?",
-                         (now - 500, "cron_only"))
+        db._conn.execute(
+            "UPDATE sessions SET started_at = ? WHERE id = ?", (now - 500, "cron_only")
+        )
         db.append_message("cron_only", role="user", content="quarterly archive sweep")
-        db.append_message("cron_only", role="assistant", content="Archive sweep complete.")
+        db.append_message(
+            "cron_only", role="assistant", content="Archive sweep complete."
+        )
         db._conn.commit()
         result = json.loads(session_search(query="archive sweep", db=db))
         assert result["success"] is True
@@ -600,11 +702,13 @@ class TestCronDemotion:
 # Compaction summary filtering (#43175)
 # =========================================================================
 
+
 class TestCompactionSummaryFiltering:
     """session_search discovery must exclude compaction handoffs from bookends."""
 
     def test_is_compaction_summary_detects_prefix(self):
         from tools.session_search_tool import _is_compaction_summary
+
         assert _is_compaction_summary("[CONTEXT COMPACTION — REFERENCE ONLY] foo")
         assert _is_compaction_summary("[CONTEXT SUMMARY]: old summary")
         assert not _is_compaction_summary("Hello, how can I help?")
@@ -615,25 +719,40 @@ class TestCompactionSummaryFiltering:
         """Compaction handoff in bookend_start position must be filtered out."""
         db.create_session("s_compact", source="cli")
         # First message: a compaction handoff (should be filtered)
-        db.append_message("s_compact", role="user",
-                          content="[CONTEXT COMPACTION — REFERENCE ONLY] "
-                                  "Earlier turns were compacted into the summary below. " + "x" * 50000)
+        db.append_message(
+            "s_compact",
+            role="user",
+            content="[CONTEXT COMPACTION — REFERENCE ONLY] "
+            "Earlier turns were compacted into the summary below. " + "x" * 50000,
+        )
         # Second message: normal user message
-        db.append_message("s_compact", role="user", content="Fix the zorgblat rendering bug")
+        db.append_message(
+            "s_compact", role="user", content="Fix the zorgblat rendering bug"
+        )
         # Padding messages to push window away from session start (so bookend has room)
         for i in range(10):
             db.append_message("s_compact", role="user", content=f"setup step {i}")
             db.append_message("s_compact", role="assistant", content=f"setup done {i}")
         # Match target: uses a unique term so FTS5 anchors here, not at the start
-        db.append_message("s_compact", role="user", content="investigate the frobnitz mob spawning in KubeJS")
-        db.append_message("s_compact", role="assistant", content="I'll look into the frobnitz mob spawning issue.")
+        db.append_message(
+            "s_compact",
+            role="user",
+            content="investigate the frobnitz mob spawning in KubeJS",
+        )
+        db.append_message(
+            "s_compact",
+            role="assistant",
+            content="I'll look into the frobnitz mob spawning issue.",
+        )
         # Tail messages
         for i in range(5):
             db.append_message("s_compact", role="user", content=f"tail {i}")
             db.append_message("s_compact", role="assistant", content=f"done tail {i}")
         db._conn.commit()
 
-        result = json.loads(session_search(query="frobnitz mob spawning", db=db, limit=1))
+        result = json.loads(
+            session_search(query="frobnitz mob spawning", db=db, limit=1)
+        )
         assert result["success"] is True
         assert len(result["results"]) >= 1
         entry = result["results"][0]
@@ -641,7 +760,9 @@ class TestCompactionSummaryFiltering:
         for msg in entry.get("bookend_start", []):
             assert "[CONTEXT COMPACTION" not in (msg.get("content") or "")
         # The normal message should still be present in bookend_start
-        bookend_contents = [m.get("content", "") for m in entry.get("bookend_start", [])]
+        bookend_contents = [
+            m.get("content", "") for m in entry.get("bookend_start", [])
+        ]
         assert any("zorgblat" in c for c in bookend_contents)
 
 
@@ -655,6 +776,7 @@ class TestCompactionSummaryFiltering:
 # excluded — their content is still visible to the parent agent.
 # =========================================================================
 
+
 class TestResolveToParent:
     """Unit tests for _resolve_to_parent's compression-aware tuple return."""
 
@@ -666,7 +788,6 @@ class TestResolveToParent:
         root, has_compression = _resolve_to_parent(db, "s_child")
         assert root == "s_parent"
         assert has_compression is True
-
 
     def test_chain_with_mixed_edges(self, db):
         """Compression grandparent → parent → child (no end_reason on parent)."""
@@ -691,9 +812,12 @@ class TestIsCompactedMessage:
     def test_compacted_message_returns_true(self, db):
         db.create_session("s1", source="cli")
         mid = db.append_message("s1", role="user", content="archived content")
-        db.archive_and_compact("s1", [
-            {"role": "assistant", "content": "compacted summary"},
-        ])
+        db.archive_and_compact(
+            "s1",
+            [
+                {"role": "assistant", "content": "compacted summary"},
+            ],
+        )
         # mid is now active=0, compacted=1
         assert _is_compacted_message(db, mid) is True
 
@@ -706,18 +830,31 @@ class TestInPlaceCompactionDiscovery:
         """The core regression: pre-compaction content on the current session
         must surface in discovery even though raw_sid == current_session_id."""
         db.create_session("s_compact", source="cli")
-        db.append_message("s_compact", role="user",
-                          content="The spectral phoenix only spawns during full moons")
-        db.append_message("s_compact", role="assistant",
-                          content="Spectral phoenix requires moonstone bait")
-        db.archive_and_compact("s_compact", [
-            {"role": "user", "content": "Summary: spectral phoenix discussed"},
-            {"role": "assistant", "content": "Acknowledged spectral phoenix info"},
-        ])
+        db.append_message(
+            "s_compact",
+            role="user",
+            content="The spectral phoenix only spawns during full moons",
+        )
+        db.append_message(
+            "s_compact",
+            role="assistant",
+            content="Spectral phoenix requires moonstone bait",
+        )
+        db.archive_and_compact(
+            "s_compact",
+            [
+                {"role": "user", "content": "Summary: spectral phoenix discussed"},
+                {"role": "assistant", "content": "Acknowledged spectral phoenix info"},
+            ],
+        )
 
-        result = json.loads(session_search(
-            query="spectral phoenix", db=db, current_session_id="s_compact",
-        ))
+        result = json.loads(
+            session_search(
+                query="spectral phoenix",
+                db=db,
+                current_session_id="s_compact",
+            )
+        )
         assert result["success"] is True
         assert result["count"] >= 1
         # The hit should be from the same session (archived rows)
@@ -728,9 +865,13 @@ class TestInPlaceCompactionDiscovery:
         """Non-compacted (active) content on the current session stays filtered."""
         db.create_session("s_live", source="cli")
         db.append_message("s_live", role="user", content="crystal golem farming route")
-        result = json.loads(session_search(
-            query="crystal golem", db=db, current_session_id="s_live",
-        ))
+        result = json.loads(
+            session_search(
+                query="crystal golem",
+                db=db,
+                current_session_id="s_live",
+            )
+        )
         assert result["count"] == 0
 
 
@@ -741,18 +882,28 @@ class TestLegacyRotationDiscovery:
 
     def test_compression_parent_discoverable_from_child(self, db):
         db.create_session("s_parent", source="cli")
-        db.append_message("s_parent", role="user",
-                          content="The void crystal mining requires diamond pickaxe")
-        db.append_message("s_parent", role="assistant",
-                          content="Void crystal found in the deep caverns")
+        db.append_message(
+            "s_parent",
+            role="user",
+            content="The void crystal mining requires diamond pickaxe",
+        )
+        db.append_message(
+            "s_parent",
+            role="assistant",
+            content="Void crystal found in the deep caverns",
+        )
         db.end_session("s_parent", "compression")
 
         db.create_session("s_child", source="cli", parent_session_id="s_parent")
         db.append_message("s_child", role="user", content="Continue void crystal work")
 
-        result = json.loads(session_search(
-            query="void crystal", db=db, current_session_id="s_child",
-        ))
+        result = json.loads(
+            session_search(
+                query="void crystal",
+                db=db,
+                current_session_id="s_child",
+            )
+        )
         assert result["success"] is True
         assert result["count"] >= 1
         sids = [r["session_id"] for r in result["results"]]
@@ -768,18 +919,27 @@ class TestDelegationExclusion:
         """Child can see its own content but parent's live content stays
         excluded (it's in context via delegation)."""
         db.create_session("s_parent", source="cli")
-        db.append_message("s_parent", role="user",
-                          content="nebula deployment infrastructure setup")
-        db.append_message("s_parent", role="assistant",
-                          content="Nebula deployment configured successfully")
+        db.append_message(
+            "s_parent", role="user", content="nebula deployment infrastructure setup"
+        )
+        db.append_message(
+            "s_parent",
+            role="assistant",
+            content="Nebula deployment configured successfully",
+        )
 
         db.create_session("s_child", source="cli", parent_session_id="s_parent")
-        db.append_message("s_child", role="user",
-                          content="delegated nebula deployment subtask")
+        db.append_message(
+            "s_child", role="user", content="delegated nebula deployment subtask"
+        )
 
-        result = json.loads(session_search(
-            query="nebula deployment", db=db, current_session_id="s_child",
-        ))
+        result = json.loads(
+            session_search(
+                query="nebula deployment",
+                db=db,
+                current_session_id="s_child",
+            )
+        )
         assert result["count"] == 0
 
 
@@ -796,6 +956,7 @@ class TestDelegationExclusion:
 # exactly where bookend_end is sampled.
 # =========================================================================
 
+
 class TestCompactionDiscoveryBothLayers:
     """Compacted-session content is discoverable AND its bookends still
     exclude compaction summaries / cap content length."""
@@ -803,38 +964,61 @@ class TestCompactionDiscoveryBothLayers:
     def _seed_compacted_session(self, db):
         db.create_session("s_both", source="cli")
         # Long normal opening — exercises the 1200-char bookend cap.
-        db.append_message("s_both", role="user",
-                          content="Kick off the obsidian gateway migration. " + "o" * 5000)
-        db.append_message("s_both", role="assistant",
-                          content="Starting the obsidian gateway migration plan.")
+        db.append_message(
+            "s_both",
+            role="user",
+            content="Kick off the obsidian gateway migration. " + "o" * 5000,
+        )
+        db.append_message(
+            "s_both",
+            role="assistant",
+            content="Starting the obsidian gateway migration plan.",
+        )
         # Padding so the anchored window doesn't swallow the bookends.
         for i in range(10):
             db.append_message("s_both", role="user", content=f"migration step {i}")
-            db.append_message("s_both", role="assistant", content=f"migration step {i} done")
+            db.append_message(
+                "s_both", role="assistant", content=f"migration step {i} done"
+            )
         # The FTS match target — will be archived by compaction below.
-        db.append_message("s_both", role="user",
-                          content="the obsidian gateway needs a quartz keystone to activate")
-        db.append_message("s_both", role="assistant",
-                          content="Noted: quartz keystone required for the obsidian gateway.")
+        db.append_message(
+            "s_both",
+            role="user",
+            content="the obsidian gateway needs a quartz keystone to activate",
+        )
+        db.append_message(
+            "s_both",
+            role="assistant",
+            content="Noted: quartz keystone required for the obsidian gateway.",
+        )
         for i in range(5):
             db.append_message("s_both", role="user", content=f"wrap-up {i}")
             db.append_message("s_both", role="assistant", content=f"wrapped {i}")
         # Compact in place: everything above becomes active=0/compacted=1 and
         # the handoff summary is inserted as the new live tail.
-        db.archive_and_compact("s_both", [
-            {"role": "user",
-             "content": "[CONTEXT COMPACTION — REFERENCE ONLY] "
-                        "Earlier turns were compacted into this summary. " + "s" * 50000},
-            {"role": "assistant", "content": "Continuing after compaction."},
-        ])
+        db.archive_and_compact(
+            "s_both",
+            [
+                {
+                    "role": "user",
+                    "content": "[CONTEXT COMPACTION — REFERENCE ONLY] "
+                    "Earlier turns were compacted into this summary. " + "s" * 50000,
+                },
+                {"role": "assistant", "content": "Continuing after compaction."},
+            ],
+        )
         db._conn.commit()
 
     def test_archived_hit_surfaces_with_bounded_summary_free_bookends(self, db):
         self._seed_compacted_session(db)
 
-        result = json.loads(session_search(
-            query="quartz keystone", db=db, current_session_id="s_both",
-        ))
+        result = json.loads(
+            session_search(
+                query="quartz keystone",
+                db=db,
+                current_session_id="s_both",
+            )
+        )
 
         # Layer 1 — discovery scope: the archived (active=0, compacted=1)
         # content on the CURRENT session must surface.
@@ -856,13 +1040,16 @@ class TestCompactionDiscoveryBothLayers:
             assert len(msg.get("content") or "") <= 4010
 
         # The long-but-legitimate opening survives (capped, not dropped).
-        bookend_contents = [m.get("content") or "" for m in entry.get("bookend_start", [])]
+        bookend_contents = [
+            m.get("content") or "" for m in entry.get("bookend_start", [])
+        ]
         assert any("obsidian gateway migration" in c for c in bookend_contents)
 
 
 # =========================================================================
 # Teknium review round 2: rewind exclusion + delegation-under-compression
 # =========================================================================
+
 
 class TestRewindExclusion:
     """Rewind/undo rows (active=0, compacted=0) must STAY hidden — only
@@ -872,14 +1059,19 @@ class TestRewindExclusion:
         """On the same session: compacted rows surface, rewind rows don't."""
         db.create_session("s_mixed", source="cli")
         # Message that will be compacted
-        db.append_message("s_mixed", role="user",
-                          content="compaction archived content beta")
-        db.archive_and_compact("s_mixed", [
-            {"role": "assistant", "content": "Summary of beta"},
-        ])
+        db.append_message(
+            "s_mixed", role="user", content="compaction archived content beta"
+        )
+        db.archive_and_compact(
+            "s_mixed",
+            [
+                {"role": "assistant", "content": "Summary of beta"},
+            ],
+        )
         # Now add a post-compaction message and rewind it
-        mid2 = db.append_message("s_mixed", role="user",
-                                 content="rewound content gamma")
+        mid2 = db.append_message(
+            "s_mixed", role="user", content="rewound content gamma"
+        )
         db._conn.execute(
             "UPDATE messages SET active = 0, compacted = 0 WHERE id = ?",
             (mid2,),
@@ -887,19 +1079,25 @@ class TestRewindExclusion:
         db._conn.commit()
 
         # Compacted content should be discoverable
-        result_compact = json.loads(session_search(
-            query="compaction archived content beta", db=db,
-            current_session_id="s_mixed",
-        ))
+        result_compact = json.loads(
+            session_search(
+                query="compaction archived content beta",
+                db=db,
+                current_session_id="s_mixed",
+            )
+        )
         assert result_compact["count"] >= 1
 
         # Rewound content should NOT be discoverable. The OR-relaxed zero-result
         # retry may legitimately surface OTHER active rows sharing the common term
         # "content"; the invariant is that the rewound row itself never comes back.
-        result_rewind = json.loads(session_search(
-            query="rewound content gamma", db=db,
-            current_session_id="s_mixed",
-        ))
+        result_rewind = json.loads(
+            session_search(
+                query="rewound content gamma",
+                db=db,
+                current_session_id="s_mixed",
+            )
+        )
         for entry in result_rewind["results"]:
             assert entry["match_message_id"] != mid2
             assert "gamma" not in (entry.get("snippet") or "").lower()
@@ -917,14 +1115,16 @@ class TestLegacyContinuationPlusDelegation:
         content but NOT the delegation grandchild's content."""
         # Grandparent: compression-ended, has searchable content
         db.create_session("s_gp", source="cli")
-        db.append_message("s_gp", role="user",
-                          content="grandparent cosmic anomaly research data")
+        db.append_message(
+            "s_gp", role="user", content="grandparent cosmic anomaly research data"
+        )
         db.end_session("s_gp", "compression")
 
         # Parent: compression-ended continuation
         db.create_session("s_p", source="cli", parent_session_id="s_gp")
-        db.append_message("s_p", role="user",
-                          content="parent cosmic anomaly follow-up notes")
+        db.append_message(
+            "s_p", role="user", content="parent cosmic anomaly follow-up notes"
+        )
         db.end_session("s_p", "compression")
 
         # Current session: active child
@@ -932,13 +1132,19 @@ class TestLegacyContinuationPlusDelegation:
 
         # Delegation child under s_p (not compression-ended)
         db.create_session("s_delegate", source="cli", parent_session_id="s_p")
-        db.append_message("s_delegate", role="assistant",
-                          content="delegated cosmic anomaly subtask results")
+        db.append_message(
+            "s_delegate",
+            role="assistant",
+            content="delegated cosmic anomaly subtask results",
+        )
 
-        result = json.loads(session_search(
-            query="cosmic anomaly", db=db,
-            current_session_id="s_current",
-        ))
+        result = json.loads(
+            session_search(
+                query="cosmic anomaly",
+                db=db,
+                current_session_id="s_current",
+            )
+        )
 
         # Compression-ended ancestors should be discoverable
         sids = [r["session_id"] for r in result["results"]]
@@ -959,16 +1165,20 @@ class TestLegacyContinuationPlusDelegation:
 # Delegation children (live parent, no end_reason) must stay excluded.
 # =========================================================================
 
+
 def _seed_gateway_new_reset_chain(db, *, needle="ibuprofen night-dose protocol"):
     """A → B → C gateway /new chain. C is the empty current session."""
     db.create_session(
-        "s_aug12", source="telegram", session_key="tg:user:1",
+        "s_aug12",
+        source="telegram",
+        session_key="tg:user:1",
     )
     db.append_message("s_aug12", role="user", content="older unrelated chat")
     db.end_session("s_aug12", "session_reset")
 
     db.create_session(
-        "s_night", source="telegram",
+        "s_night",
+        source="telegram",
         parent_session_id="s_aug12",
         session_key="tg:user:1",
         model_config={"_reset_from": "s_aug12"},
@@ -979,12 +1189,15 @@ def _seed_gateway_new_reset_chain(db, *, needle="ibuprofen night-dose protocol")
     )
     db.append_message("s_night", role="user", content=f"Remember the {needle}")
     db.append_message(
-        "s_night", role="assistant", content=f"Noted {needle} at 21:00",
+        "s_night",
+        role="assistant",
+        content=f"Noted {needle} at 21:00",
     )
     db.end_session("s_night", "session_reset")
 
     db.create_session(
-        "s_today", source="telegram",
+        "s_today",
+        source="telegram",
         parent_session_id="s_night",
         session_key="tg:user:1",
         model_config={"_reset_from": "s_night"},
@@ -998,9 +1211,13 @@ class TestNewResetLineageDiscovery:
 
     def test_session_reset_parent_discoverable_from_child(self, db):
         _seed_gateway_new_reset_chain(db)
-        result = json.loads(session_search(
-            query="ibuprofen", db=db, current_session_id="s_today",
-        ))
+        result = json.loads(
+            session_search(
+                query="ibuprofen",
+                db=db,
+                current_session_id="s_today",
+            )
+        )
         assert result["success"] is True
         assert result["count"] >= 1
         sids = [r["session_id"] for r in result["results"]]
@@ -1011,19 +1228,25 @@ class TestNewResetLineageDiscovery:
     def test_cli_new_session_parent_discoverable_from_child(self, db):
         db.create_session("s_cli_old", source="cli")
         db.append_message(
-            "s_cli_old", role="user",
+            "s_cli_old",
+            role="user",
             content="quartz lantern wiring diagram from yesterday",
         )
         db.end_session("s_cli_old", "new_session")
         db.create_session(
-            "s_cli_new", source="cli", parent_session_id="s_cli_old",
+            "s_cli_new",
+            source="cli",
+            parent_session_id="s_cli_old",
         )
-        result = json.loads(session_search(
-            query="quartz lantern", db=db, current_session_id="s_cli_new",
-        ))
+        result = json.loads(
+            session_search(
+                query="quartz lantern",
+                db=db,
+                current_session_id="s_cli_new",
+            )
+        )
         assert result["count"] >= 1
         assert "s_cli_old" in [r["session_id"] for r in result["results"]]
-
 
     def test_branched_parent_still_excluded(self, db):
         """/branch verbatim-copies the transcript into the child, so the
@@ -1031,45 +1254,66 @@ class TestNewResetLineageDiscovery:
         surface as a same-lineage recall hit (unlike /new-reset parents)."""
         db.create_session("s_p", source="cli")
         db.append_message(
-            "s_p", role="user", content="zephyr crystal cache design",
+            "s_p",
+            role="user",
+            content="zephyr crystal cache design",
         )
         db.end_session("s_p", "branched")
         db.create_session(
-            "s_q", source="cli", parent_session_id="s_p",
+            "s_q",
+            source="cli",
+            parent_session_id="s_p",
             model_config={"_branched_from": "s_p"},
         )
         # /branch copies history into the child
         db.append_message(
-            "s_q", role="user", content="zephyr crystal cache design",
+            "s_q",
+            role="user",
+            content="zephyr crystal cache design",
         )
-        result = json.loads(session_search(
-            query="zephyr crystal", db=db, current_session_id="s_q",
-        ))
+        result = json.loads(
+            session_search(
+                query="zephyr crystal",
+                db=db,
+                current_session_id="s_q",
+            )
+        )
         sids = [r["session_id"] for r in result.get("results", [])]
         assert "s_p" not in sids
 
     def test_title_match_reset_parent_not_dropped(self, db):
         _seed_gateway_new_reset_chain(db)
-        result = json.loads(session_search(
-            query="Night ibuprofen plan", db=db, current_session_id="s_today",
-        ))
+        result = json.loads(
+            session_search(
+                query="Night ibuprofen plan",
+                db=db,
+                current_session_id="s_today",
+            )
+        )
         assert result["count"] >= 1
         sids = [r["session_id"] for r in result["results"]]
         assert "s_night" in sids
 
     def test_scroll_into_reset_parent_is_allowed(self, db):
         _seed_gateway_new_reset_chain(db)
-        disc = json.loads(session_search(
-            query="ibuprofen", db=db, current_session_id="s_today", limit=1,
-        ))
+        disc = json.loads(
+            session_search(
+                query="ibuprofen",
+                db=db,
+                current_session_id="s_today",
+                limit=1,
+            )
+        )
         assert disc["count"] >= 1
         hit = disc["results"][0]
-        scrolled = json.loads(session_search(
-            session_id=hit["session_id"],
-            around_message_id=hit["match_message_id"],
-            db=db,
-            current_session_id="s_today",
-        ))
+        scrolled = json.loads(
+            session_search(
+                session_id=hit["session_id"],
+                around_message_id=hit["match_message_id"],
+                db=db,
+                current_session_id="s_today",
+            )
+        )
         assert scrolled["success"] is True
         assert scrolled["mode"] == "scroll"
         contents = " ".join(m.get("content") or "" for m in scrolled["messages"])
@@ -1091,7 +1335,9 @@ class TestNewResetLineageBrowse:
         db.create_session("s_main", source="cli")
         db.append_message("s_main", role="user", content="parent work")
         db.create_session(
-            "s_delegate", source="cli", parent_session_id="s_main",
+            "s_delegate",
+            source="cli",
+            parent_session_id="s_main",
         )
         db.append_message("s_delegate", role="assistant", content="subagent work")
         result = json.loads(session_search(db=db, current_session_id="s_other"))
@@ -1110,8 +1356,10 @@ class TestNewResetLineageBrowse:
         # Legacy child: parent link + same session_key, NO _reset_from marker,
         # still live (end_reason=None).
         db.create_session(
-            "s_legacy_child", source="telegram",
-            parent_session_id="s_old", session_key="tg:legacy:1",
+            "s_legacy_child",
+            source="telegram",
+            parent_session_id="s_old",
+            session_key="tg:legacy:1",
         )
         db.append_message("s_legacy_child", role="user", content="current era chat")
         result = json.loads(session_search(db=db, current_session_id="s_other"))
@@ -1130,18 +1378,34 @@ def _set_started(db, **started_at_by_sid):
 
 
 class TestDiscoveryTemporalNarrowing:
-    @pytest.mark.parametrize("value, expected", [
-        ("24h", 86400), ("1d", 86400), ("2w", 2 * 604800), ("7D", 7 * 86400), (" 3 d ", 3 * 86400),
-        ("2026-06-01", _unix(2026, 6, 1)), ("2026-06-01T12:00:00Z", _unix(2026, 6, 1) + 43200),
-        (None, None), ("", None), ("7x", ValueError), ("not-a-date", ValueError),
-    ])
+    @pytest.mark.parametrize(
+        "value, expected",
+        [
+            ("24h", 86400),
+            ("1d", 86400),
+            ("2w", 2 * 604800),
+            ("7D", 7 * 86400),
+            (" 3 d ", 3 * 86400),
+            ("2026-06-01", _unix(2026, 6, 1)),
+            ("2026-06-01T12:00:00Z", _unix(2026, 6, 1) + 43200),
+            (None, None),
+            ("", None),
+            ("7x", ValueError),
+            ("not-a-date", ValueError),
+        ],
+    )
     def test_parse_bound(self, value, expected):
         """Relative durations are now-minus-N (checked as an offset); ISO is absolute UTC."""
         from tools.session_search_tool import _parse_iso_bound
+
         if expected is ValueError:
             with pytest.raises(ValueError):
                 _parse_iso_bound(value)
-        elif isinstance(value, str) and value.strip() and value.strip()[-1].lower() in "hdw":
+        elif (
+            isinstance(value, str)
+            and value.strip()
+            and value.strip()[-1].lower() in "hdw"
+        ):
             assert abs((int(time.time()) - _parse_iso_bound(value)) - expected) < 5
         else:
             assert _parse_iso_bound(value) == expected
@@ -1154,7 +1418,9 @@ class TestDiscoveryTemporalNarrowing:
         for i in range(4):
             sid = f"s_aug_{i}"
             db.create_session(sid, source="cli")
-            db.append_message(sid, role="user", content="modpack modpack modpack modpack")
+            db.append_message(
+                sid, role="user", content="modpack modpack modpack modpack"
+            )
             db.append_message(sid, role="assistant", content="modpack details " * 20)
             _set_started(db, **{sid: _unix(2026, 8, 10)})
         db.create_session("s_june", source="cli")
@@ -1162,11 +1428,19 @@ class TestDiscoveryTemporalNarrowing:
         db.append_message("s_june", role="assistant", content="ok")
         _set_started(db, s_june=_unix(2026, 6, 15))
 
-        result = json.loads(session_search(
-            query="modpack", limit=5, after="2026-06-01", before="2026-07-01", db=db))
+        result = json.loads(
+            session_search(
+                query="modpack", limit=5, after="2026-06-01", before="2026-07-01", db=db
+            )
+        )
         assert result["success"] is True
         assert [r["session_id"] for r in result["results"]] == ["s_june"]
-        assert json.loads(session_search(query="modpack", after="not-a-date", db=db))["success"] is False
+        assert (
+            json.loads(session_search(query="modpack", after="not-a-date", db=db))[
+                "success"
+            ]
+            is False
+        )
 
     def test_relative_bounds_reach_the_tool_through_the_inline_executor(self, db):
         """after="7d" keeps the last week, before="7d" keeps everything older — and both must
@@ -1178,13 +1452,23 @@ class TestDiscoveryTemporalNarrowing:
 
         _seed_modpack_sessions(db)
         now = int(time.time())
-        _set_started(db, s_newest=now - 2 * 86400, s_middle=now - 30 * 86400, s_oldest=now - 60 * 86400)
-        agent = SimpleNamespace(_get_session_db_for_recall=lambda: db, session_id="current")
+        _set_started(
+            db,
+            s_newest=now - 2 * 86400,
+            s_middle=now - 30 * 86400,
+            s_oldest=now - 60 * 86400,
+        )
+        agent = SimpleNamespace(
+            _get_session_db_for_recall=lambda: db, session_id="current"
+        )
         ctx = InlineToolContext(effective_task_id="task-1", tool_call_id="call-1")
 
         def run(**args):
-            out = json.loads(INLINE_TOOL_EXECUTORS["session_search"](
-                agent, {"query": "modpack", "limit": 5, **args}, ctx))
+            out = json.loads(
+                INLINE_TOOL_EXECUTORS["session_search"](
+                    agent, {"query": "modpack", "limit": 5, **args}, ctx
+                )
+            )
             assert out["success"] is True
             return {r["session_id"] for r in out["results"]}
 
@@ -1197,14 +1481,31 @@ class TestDiscoverySessionExclusion:
     def test_exclude_session_ids_drops_whole_lineage(self, db):
         db.create_session("s_root", source="cli")
         db.append_message("s_root", role="user", content="unique lineage token alpha")
-        db.append_message("s_root", role="assistant", content="noted unique lineage token alpha")
+        db.append_message(
+            "s_root", role="assistant", content="noted unique lineage token alpha"
+        )
         db.create_session("s_child", source="cli", parent_session_id="s_root")
-        db.append_message("s_child", role="user", content="follow-up unique lineage token alpha")
-        db.append_message("s_child", role="assistant", content="child unique lineage token alpha")
+        db.append_message(
+            "s_child", role="user", content="follow-up unique lineage token alpha"
+        )
+        db.append_message(
+            "s_child", role="assistant", content="child unique lineage token alpha"
+        )
         _set_started(db, s_root=_unix(2026, 6, 1), s_child=_unix(2026, 6, 2))
 
-        found = json.loads(session_search(query="unique lineage token alpha", limit=5, db=db))
+        found = json.loads(
+            session_search(query="unique lineage token alpha", limit=5, db=db)
+        )
         assert {r["session_id"] for r in found["results"]} & {"s_root", "s_child"}
-        excluded = json.loads(session_search(
-            query="unique lineage token alpha", limit=5, exclude_session_ids=["s_child"], db=db))
-        assert not {r["session_id"] for r in excluded["results"]} & {"s_root", "s_child"}
+        excluded = json.loads(
+            session_search(
+                query="unique lineage token alpha",
+                limit=5,
+                exclude_session_ids=["s_child"],
+                db=db,
+            )
+        )
+        assert not {r["session_id"] for r in excluded["results"]} & {
+            "s_root",
+            "s_child",
+        }

@@ -3,6 +3,7 @@
 Vision capability probes, non-vision text fallbacks (cached ``vision_analyze`` descriptions), tool-result
 image stripping, and provider quirks (Anthropic dot preservation, Qwen portal message shaping).
 """
+
 import logging
 import asyncio
 import base64
@@ -15,7 +16,10 @@ from pathlib import Path
 from typing import Any, List, Optional
 
 from agent.lazy_forward import forward_static as _forward_static
-from agent.tool_dispatch_helpers import _is_multimodal_tool_result, _multimodal_text_summary
+from agent.tool_dispatch_helpers import (
+    _is_multimodal_tool_result,
+    _multimodal_text_summary,
+)
 from utils import base_url_host_matches, base_url_hostname
 
 # Same logger name as the origin module so log records / caplog filters are unchanged.
@@ -24,7 +28,11 @@ logger = logging.getLogger("run_agent")
 _IMAGE_PART_TYPES = {"image_url", "input_image"}
 _TEXT_PART_TYPES = {"text", "input_text"}
 _DATA_URL_SUFFIXES = {
-    "image/png": ".png", "image/gif": ".gif", "image/webp": ".webp", "image/jpeg": ".jpg", "image/jpg": ".jpg"
+    "image/png": ".png",
+    "image/gif": ".gif",
+    "image/webp": ".webp",
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
 }
 
 
@@ -39,7 +47,9 @@ def _salvage_text_parts(content: list, *, any_dict_text: bool) -> list[str]:
     for part in content:
         if isinstance(part, str):
             text = part.strip()
-        elif isinstance(part, dict) and (any_dict_text or part.get("type") in _TEXT_PART_TYPES):
+        elif isinstance(part, dict) and (
+            any_dict_text or part.get("type") in _TEXT_PART_TYPES
+        ):
             text = str(part.get("text", "") or "").strip()
         else:
             continue
@@ -62,7 +72,9 @@ class VisionMessagePrepMixin:
 
     @staticmethod
     def _content_has_image_parts(content: Any) -> bool:
-        return isinstance(content, list) and any(_is_image_part(part) for part in content)
+        return isinstance(content, list) and any(
+            _is_image_part(part) for part in content
+        )
 
     # 20 MB base64 ≈ 15 MB decoded — prevents OOM from an oversized data: URL in a shared gateway process.
     _MAX_DATA_URL_BASE64_BYTES = 20 * 1024 * 1024
@@ -73,9 +85,17 @@ class VisionMessagePrepMixin:
         if len(data) > VisionMessagePrepMixin._MAX_DATA_URL_BASE64_BYTES:
             logger.warning("data-URL payload too large (%d bytes), skipping", len(data))
             return "", None
-        mime = header[len("data:"):].split(";", 1)[0].strip() if header.startswith("data:") else ""
-        suffix = _DATA_URL_SUFFIXES.get(mime if mime.startswith("image/") else "image/jpeg", ".jpg")
-        tmp = tempfile.NamedTemporaryFile(prefix="anthropic_image_", suffix=suffix, delete=False)
+        mime = (
+            header[len("data:") :].split(";", 1)[0].strip()
+            if header.startswith("data:")
+            else ""
+        )
+        suffix = _DATA_URL_SUFFIXES.get(
+            mime if mime.startswith("image/") else "image/jpeg", ".jpg"
+        )
+        tmp = tempfile.NamedTemporaryFile(
+            prefix="anthropic_image_", suffix=suffix, delete=False
+        )
         try:
             with tmp:
                 tmp.write(base64.b64decode(data))
@@ -106,12 +126,18 @@ class VisionMessagePrepMixin:
         is_data_url = vision_source.startswith("data:")
         cleanup_path: Optional[Path] = None
         if is_data_url:
-            vision_source, cleanup_path = self._materialize_data_url_for_vision(vision_source)
+            vision_source, cleanup_path = self._materialize_data_url_for_vision(
+                vision_source
+            )
 
         try:
             from tools.vision_tools import vision_analyze_tool
 
-            result_json = asyncio.run(vision_analyze_tool(image_url=vision_source, user_prompt=analysis_prompt))
+            result_json = asyncio.run(
+                vision_analyze_tool(
+                    image_url=vision_source, user_prompt=analysis_prompt
+                )
+            )
             result = json.loads(result_json) if isinstance(result_json, str) else {}
             description = (result.get("analysis") or "").strip()
         except Exception as e:
@@ -136,6 +162,7 @@ class VisionMessagePrepMixin:
         try:
             from clawk_cli.config import load_config
             from agent.image_routing import _lookup_supports_vision
+
             provider = (getattr(self, "provider", "") or "").strip()
             model = (getattr(self, "model", "") or "").strip()
             return _lookup_supports_vision(provider, model, load_config()) is True
@@ -147,6 +174,7 @@ class VisionMessagePrepMixin:
         multimodal user messages but 400 on list-type tool content; profile ``supports_vision_tool_messages``)."""
         try:
             from providers import routed_model_rejects_vision_tool_messages
+
             return not routed_model_rejects_vision_tool_messages(
                 (getattr(self, "provider", "") or "").strip(),
                 (getattr(self, "model", "") or "").strip(),
@@ -162,9 +190,14 @@ class VisionMessagePrepMixin:
         image_notes: list[str] = []
         for part in filter(_is_image_part, content):
             image_data = part.get("image_url", {})
-            image_url = image_data.get("url", "") if isinstance(image_data, dict) else str(image_data or "")
+            image_url = (
+                image_data.get("url", "")
+                if isinstance(image_data, dict)
+                else str(image_data or "")
+            )
             image_notes.append(
-                self._describe_image_for_anthropic_fallback(image_url, role) if image_url
+                self._describe_image_for_anthropic_fallback(image_url, role)
+                if image_url
                 else "[An image was attached but no image source was available.]"
             )
         # Text parts and unknown dict types both contribute their ``text``.
@@ -172,7 +205,11 @@ class VisionMessagePrepMixin:
         suffix = "\n".join(_salvage_text_parts(content, any_dict_text=True)).strip()
         if prefix and suffix:
             return f"{prefix}\n\n{suffix}"
-        return prefix or suffix or "[A multimodal message was converted to text for Anthropic compatibility.]"
+        return (
+            prefix
+            or suffix
+            or "[A multimodal message was converted to text for Anthropic compatibility.]"
+        )
 
     def _get_transport(self, api_mode: str | None = None):
         """Return the cached transport for the given (or current) api_mode (lazy; None if unregistered)."""
@@ -182,15 +219,21 @@ class VisionMessagePrepMixin:
             cache = self._transport_cache = {}
         if cache.get(mode) is None:
             from agent.transports import get_transport
+
             cache[mode] = get_transport(mode)
         return cache[mode]
 
     def _prepare_messages_for_non_vision_model(self, api_messages: list) -> list:
         """Replace native image parts with cached vision_analyze text when the active model lacks vision;
         vision-capable models pass through unchanged (the provider adapter handles image parts natively)."""
-        if not any(
-            isinstance(msg, dict) and self._content_has_image_parts(msg.get("content")) for msg in api_messages
-        ) or self._model_supports_vision():
+        if (
+            not any(
+                isinstance(msg, dict)
+                and self._content_has_image_parts(msg.get("content"))
+                for msg in api_messages
+            )
+            or self._model_supports_vision()
+        ):
             return api_messages
 
         transformed = copy.deepcopy(api_messages)
@@ -221,7 +264,8 @@ class VisionMessagePrepMixin:
                 logger.debug(
                     "Tool %s: provider %s does not accept list-type tool "
                     "content — sending text summary",
-                    tool_name, getattr(self, "provider", ""),
+                    tool_name,
+                    getattr(self, "provider", ""),
                 )
                 return _multimodal_text_summary(result)
             key = _provider_model_key(self)
@@ -229,31 +273,39 @@ class VisionMessagePrepMixin:
                 logger.debug(
                     "Tool %s: model %s/%s known to reject list-type tool "
                     "content this session — sending text summary",
-                    tool_name, key[0], key[1],
+                    tool_name,
+                    key[0],
+                    key[1],
                 )
                 return _multimodal_text_summary(result)
             return content
 
         summary = _multimodal_text_summary(result)
         if tool_name == "computer_use":
-            return json.dumps({
-                "error": (
-                    "computer_use returned screenshot/image content, but the active "
-                    "model/provider does not support image input. Switch to a "
-                    "vision-capable model for desktop computer use, or use browser "
-                    "tools for browser tasks."
-                ),
-                "text_summary": summary,
-            })
+            return json.dumps(
+                {
+                    "error": (
+                        "computer_use returned screenshot/image content, but the active "
+                        "model/provider does not support image input. Switch to a "
+                        "vision-capable model for desktop computer use, or use browser "
+                        "tools for browser tasks."
+                    ),
+                    "text_summary": summary,
+                }
+            )
 
         logger.warning(
             "Tool %s returned image content for non-vision model %s/%s; "
             "falling back to text summary",
-            tool_name, self.provider, self.model,
+            tool_name,
+            self.provider,
+            self.model,
         )
         return summary
 
-    _try_shrink_image_parts_in_messages = _forward_static("agent.conversation_compression", "try_shrink_image_parts_in_messages")
+    _try_shrink_image_parts_in_messages = _forward_static(
+        "agent.conversation_compression", "try_shrink_image_parts_in_messages"
+    )
 
     def _try_strip_image_parts_from_tool_messages(
         self, api_messages: list, *, remember_model: bool = True
@@ -285,7 +337,9 @@ class VisionMessagePrepMixin:
                 continue
 
             # Salvage any text parts so the model still sees some signal.
-            msg["content"] = "\n\n".join(_salvage_text_parts(content, any_dict_text=False)) or (
+            msg["content"] = "\n\n".join(
+                _salvage_text_parts(content, any_dict_text=False)
+            ) or (
                 "[image content removed — provider does not accept "
                 "list-type tool message content]"
             )
@@ -304,7 +358,15 @@ class VisionMessagePrepMixin:
         #5211
         """
         if (getattr(self, "provider", "") or "").lower() in {
-            "alibaba", "minimax", "minimax-cn", "opencode-go", "opencode-zen", "zai", "bedrock", "xiaomi", "vertex",
+            "alibaba",
+            "minimax",
+            "minimax-cn",
+            "opencode-go",
+            "opencode-zen",
+            "zai",
+            "bedrock",
+            "xiaomi",
+            "vertex",
         }:
             return True
         base = (getattr(self, "base_url", "") or "").lower()
@@ -346,7 +408,8 @@ class VisionMessagePrepMixin:
             elif isinstance(content, list):
                 normalized_parts = [
                     {"type": "text", "text": part} if isinstance(part, str) else part
-                    for part in content if isinstance(part, (str, dict))
+                    for part in content
+                    if isinstance(part, (str, dict))
                 ]
                 if normalized_parts:
                     msg["content"] = normalized_parts
@@ -354,6 +417,10 @@ class VisionMessagePrepMixin:
         for msg in messages:
             if isinstance(msg, dict) and msg.get("role") == "system":
                 content = msg.get("content")
-                if isinstance(content, list) and content and isinstance(content[-1], dict):
+                if (
+                    isinstance(content, list)
+                    and content
+                    and isinstance(content[-1], dict)
+                ):
                     content[-1]["cache_control"] = {"type": "ephemeral"}
                 break

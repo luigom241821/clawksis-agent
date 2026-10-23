@@ -1,4 +1,5 @@
 """Tests for CLI /status command behavior."""
+
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -26,12 +27,6 @@ def _make_cli():
     return cli_obj
 
 
-
-
-
-
-
-
 def test_process_command_egress_prints_proxy_status(monkeypatch):
     cli_obj = _make_cli()
     monkeypatch.setattr(
@@ -42,10 +37,10 @@ def test_process_command_egress_prints_proxy_status(monkeypatch):
     assert cli_obj.process_command("/egress") is True
 
     cli_obj.console.print.assert_called()
-    printed = "\n".join(str(call.args[0]) for call in cli_obj.console.print.call_args_list)
+    printed = "\n".join(
+        str(call.args[0]) for call in cli_obj.console.print.call_args_list
+    )
     assert "Egress proxy status" in printed
-
-
 
 
 def test_status_prefix_prefers_status_command_over_statusbar_toggle():
@@ -72,7 +67,9 @@ def test_show_session_status_prints_gateway_style_summary():
     with patch("clawk_constants.display_clawk_home", return_value="~/.clawksis"):
         cli_obj._show_session_status()
 
-    printed = "\n".join(str(call.args[0]) for call in cli_obj.console.print.call_args_list)
+    printed = "\n".join(
+        str(call.args[0]) for call in cli_obj.console.print.call_args_list
+    )
     assert t("cli.session.status_title") in printed
     assert "Session ID: session-123" in printed
     assert "Path: ~/.clawksis" in printed
@@ -83,8 +80,6 @@ def test_show_session_status_prints_gateway_style_summary():
     _, kwargs = cli_obj.console.print.call_args
     assert kwargs.get("highlight") is False
     assert kwargs.get("markup") is False
-
-
 
 
 def test_profile_command_reports_custom_root_profile(monkeypatch, tmp_path, capsys):

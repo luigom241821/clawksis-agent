@@ -74,7 +74,10 @@ def bulky(*labels: str) -> list[Step]:
     keeps user messages verbatim, so bulk in user text would not compress)."""
     steps: list[Step] = []
     for label in labels:
-        steps += [("script", [Text(big(f"answer-{label}"))]), ("turn", f"tell me about {label}")]
+        steps += [
+            ("script", [Text(big(f"answer-{label}"))]),
+            ("turn", f"tell me about {label}"),
+        ]
     return steps
 
 
@@ -84,6 +87,7 @@ def _steer_then(tool: ToolCall, text: str, script: Script) -> Callable[[dict], A
         assert script.session.agent.steer(text)
         script.steered.append(text)
         return tool
+
     return act
 
 
@@ -94,6 +98,7 @@ def _interrupt_during_request(script: Script) -> Callable[[dict], Any]:
 
         threading.Thread(target=script.session.agent.interrupt, daemon=True).start()
         return Hang(seconds=INTERRUPT_HANG_S)
+
     return act
 
 
@@ -101,59 +106,144 @@ def scenario(name: str, script: Script) -> list[Step]:
     """Steps: ("turn", text) / ("compress", args) / ("script", [actions for the next turn])."""
     s = script
     if name == "plain":
-        return [("turn", "hello there"),
-                ("script", [Text("thinking out loud answer", reasoning="private chain of thought")]),
-                ("turn", "second question"), ("turn", "third question"), ("turn", "fourth question")]
+        return [
+            ("turn", "hello there"),
+            (
+                "script",
+                [
+                    Text(
+                        "thinking out loud answer", reasoning="private chain of thought"
+                    )
+                ],
+            ),
+            ("turn", "second question"),
+            ("turn", "third question"),
+            ("turn", "fourth question"),
+        ]
     if name == "tool_batches":
-        return [("script", [ToolCall("terminal", {"command": "echo single-1"}), Text("single done")]),
-                ("turn", "run one tool"),
-                ("script", [ToolCall("terminal", {"command": "echo par-a"},
-                                     parallel=[("terminal", {"command": "echo par-b"}),
-                                               ("terminal", {"command": "echo par-c"})]),
-                            ToolCall("terminal", {"command": "echo chained"}), Text("batch done")]),
-                ("turn", "run a parallel batch then one more"),
-                ("turn", "and a plain follow-up")]
+        return [
+            (
+                "script",
+                [
+                    ToolCall("terminal", {"command": "echo single-1"}),
+                    Text("single done"),
+                ],
+            ),
+            ("turn", "run one tool"),
+            (
+                "script",
+                [
+                    ToolCall(
+                        "terminal",
+                        {"command": "echo par-a"},
+                        parallel=[
+                            ("terminal", {"command": "echo par-b"}),
+                            ("terminal", {"command": "echo par-c"}),
+                        ],
+                    ),
+                    ToolCall("terminal", {"command": "echo chained"}),
+                    Text("batch done"),
+                ],
+            ),
+            ("turn", "run a parallel batch then one more"),
+            ("turn", "and a plain follow-up"),
+        ]
     if name == "steer":
-        return [("turn", "warm up"),
-                ("script", [_steer_then(ToolCall("terminal", {"command": "echo steered-tool"}),
-                                        STEER_TEXT, s), Text("steer seen")]),
-                ("turn", "do a tool while I steer"),
-                ("turn", "after the steer")]
+        return [
+            ("turn", "warm up"),
+            (
+                "script",
+                [
+                    _steer_then(
+                        ToolCall("terminal", {"command": "echo steered-tool"}),
+                        STEER_TEXT,
+                        s,
+                    ),
+                    Text("steer seen"),
+                ],
+            ),
+            ("turn", "do a tool while I steer"),
+            ("turn", "after the steer"),
+        ]
     if name == "interrupt":
-        return [("turn", "warm up"),
-                ("script", [_interrupt_during_request(s)]),
-                ("turn", INTERRUPTED_TURN),
-                ("turn", "the follow-up after the interrupt"),
-                ("turn", "one more")]
+        return [
+            ("turn", "warm up"),
+            ("script", [_interrupt_during_request(s)]),
+            ("turn", INTERRUPTED_TURN),
+            ("turn", "the follow-up after the interrupt"),
+            ("turn", "one more"),
+        ]
     if name == "stream_faults":
-        return [("turn", "warm up"),
-                ("script", [DropMidStream("a partial reply that the network cut", after_chars=18),
-                            Text("recovered after the drop")]),
-                ("turn", "stream this and drop"),
-                ("script", [Error(500, "scripted outage", retry_after=0.2), Text("recovered after a 500")]),
-                ("turn", "this one hits a 500 first"),
-                ("turn", "and a clean one")]
+        return [
+            ("turn", "warm up"),
+            (
+                "script",
+                [
+                    DropMidStream(
+                        "a partial reply that the network cut", after_chars=18
+                    ),
+                    Text("recovered after the drop"),
+                ],
+            ),
+            ("turn", "stream this and drop"),
+            (
+                "script",
+                [
+                    Error(500, "scripted outage", retry_after=0.2),
+                    Text("recovered after a 500"),
+                ],
+            ),
+            ("turn", "this one hits a 500 first"),
+            ("turn", "and a clean one"),
+        ]
     if name == "manual_compress":
-        return [*bulky("alpha", "bravo", "charlie", "delta", "echo", "foxtrot"), ("compress", ""),
-                ("turn", "first turn past full compress"), ("turn", "next turn past full compress")]
+        return [
+            *bulky("alpha", "bravo", "charlie", "delta", "echo", "foxtrot"),
+            ("compress", ""),
+            ("turn", "first turn past full compress"),
+            ("turn", "next turn past full compress"),
+        ]
     if name == "compress_here":
-        return [*bulky("golf", "hotel", "india", "juliet", "kilo", "lima"), ("compress", "here 1"),
-                ("turn", "first turn past compress here"), ("turn", "next turn past compress here")]
+        return [
+            *bulky("golf", "hotel", "india", "juliet", "kilo", "lima"),
+            ("compress", "here 1"),
+            ("turn", "first turn past compress here"),
+            ("turn", "next turn past compress here"),
+        ]
     if name == "auto_compaction":
         # The provider reports a prompt over the compaction threshold; the NEXT turn must compact
         # before it is sent, and nothing the user saw may be lost from the durable transcript.
-        return [*bulky("mike", "november", "oscar", "papa", "quebec"),
-                ("script", [Text("reply under pressure", prompt_tokens=120_000, completion_tokens=9)]),
-                ("turn", "this reply reports context pressure"),
-                ("turn", "the turn that must compact first"), ("turn", "a turn past auto compaction")]
+        return [
+            *bulky("mike", "november", "oscar", "papa", "quebec"),
+            (
+                "script",
+                [
+                    Text(
+                        "reply under pressure",
+                        prompt_tokens=120_000,
+                        completion_tokens=9,
+                    )
+                ],
+            ),
+            ("turn", "this reply reports context pressure"),
+            ("turn", "the turn that must compact first"),
+            ("turn", "a turn past auto compaction"),
+        ]
     if name == "micro_compaction":
         # Opt-in rolling micro-compaction folds the oldest exchange (tool rows included) into a
         # summary after every turn; summarized rows must stay in the durable archive.
         steps: list[Step] = []
         for label in ("romeo", "sierra", "tango", "uniform", "victor", "whiskey"):
-            steps += [("script", [ToolCall("terminal", {"command": f"echo tool-{label}"}),
-                                  Text(big(f"answer-{label}", 6000))]),
-                      ("turn", f"run a tool about {label}")]
+            steps += [
+                (
+                    "script",
+                    [
+                        ToolCall("terminal", {"command": f"echo tool-{label}"}),
+                        Text(big(f"answer-{label}", 6000)),
+                    ],
+                ),
+                ("turn", f"run a tool about {label}"),
+            ]
         return steps
     raise AssertionError(name)
 
@@ -162,8 +252,17 @@ SCENARIO_CONFIG = {
     "micro_compaction": "compression:\n  micro_compact: true\n  micro_compact_every_n_turns: 1\n",
 }
 
-SCENARIOS = ["plain", "tool_batches", "steer", "interrupt", "stream_faults",
-             "manual_compress", "compress_here", "auto_compaction", "micro_compaction"]
+SCENARIOS = [
+    "plain",
+    "tool_batches",
+    "steer",
+    "interrupt",
+    "stream_faults",
+    "manual_compress",
+    "compress_here",
+    "auto_compaction",
+    "micro_compaction",
+]
 COMPACTING = {"manual_compress", "compress_here", "auto_compaction", "micro_compaction"}
 
 
@@ -184,10 +283,18 @@ def world(tmp_path, monkeypatch):
     script = Script()
     spawned = Spawned()
     with FakeLLMServer(script) as srv:
-        write_clawk_home(clawk_home, srv.base_url, extra_config=OFFLINE_CONFIG + NO_BACKGROUND_REVIEW)
+        write_clawk_home(
+            clawk_home, srv.base_url, extra_config=OFFLINE_CONFIG + NO_BACKGROUND_REVIEW
+        )
         monkeypatch.setenv("OPENAI_API_KEY", "sk-fake-e2e")
-        yield {"srv": srv, "script": script, "home": home, "clawk_home": clawk_home,
-               "workdir": workdir, "spawned": spawned}
+        yield {
+            "srv": srv,
+            "script": script,
+            "home": home,
+            "clawk_home": clawk_home,
+            "workdir": workdir,
+            "spawned": spawned,
+        }
         leaked = spawned.reap()
         assert not leaked, f"subprocesses outlived the test: {leaked}"
 
@@ -196,10 +303,15 @@ def world(tmp_path, monkeypatch):
 def test_transcript_ledger(world, name):
     srv, script, clawk_home = world["srv"], world["script"], world["clawk_home"]
     if name in SCENARIO_CONFIG:
-        write_clawk_home(clawk_home, srv.base_url,
-                          extra_config=OFFLINE_CONFIG + NO_BACKGROUND_REVIEW + SCENARIO_CONFIG[name])
+        write_clawk_home(
+            clawk_home,
+            srv.base_url,
+            extra_config=OFFLINE_CONFIG + NO_BACKGROUND_REVIEW + SCENARIO_CONFIG[name],
+        )
     typed = [arg for kind, arg in scenario(name, Script()) if kind == "turn"]
-    assert not [(a, b) for a in typed for b in typed if a != b and a in b], "scenario inputs must be unique"
+    assert not [(a, b) for a in typed for b in typed if a != b and a in b], (
+        "scenario inputs must be unique"
+    )
     session = InProcessSession(srv.base_url, clawk_home, f"ledger-{name}")
     script.session = session
     ledger = Ledger(srv, clawk_home)
@@ -216,25 +328,39 @@ def test_transcript_ledger(world, name):
                 script.raise_errors(label)
                 ledger.inputs += [x for x in script.steered if x not in ledger.inputs]
                 if arg == INTERRUPTED_TURN:
-                    assert result.get("interrupted") is True and took < INTERRUPT_DEADLINE_S, (
+                    assert (
+                        result.get("interrupted") is True
+                        and took < INTERRUPT_DEADLINE_S
+                    ), (
                         f"{label}: interrupt did not end the hung request (interrupted="
-                        f"{result.get('interrupted')!r} after {took:.1f}s)")
+                        f"{result.get('interrupted')!r} after {took:.1f}s)"
+                    )
                 else:
-                    assert result.get("final_response") is not None, f"{label}: {result}"
+                    assert result.get("final_response") is not None, (
+                        f"{label}: {result}"
+                    )
                 compaction = name == "micro_compaction" or (
-                    name == "auto_compaction" and arg == "the turn that must compact first")
+                    name == "auto_compaction"
+                    and arg == "the turn that must compact first"
+                )
                 ledger.step(session.sid, label, compaction=compaction)
             elif kind == "compress":
                 res = session.compress(arg)
-                flags = {k: res.summary.get(k) for k in ("noop", "aborted", "fallback_used", "refused_would_grow")}
+                flags = {
+                    k: res.summary.get(k)
+                    for k in ("noop", "aborted", "fallback_used", "refused_would_grow")
+                }
                 assert res.status == "compressed" and not any(flags.values()), (
                     f"{label}: /compress {arg!r} did not compact: {res.status} {flags} "
-                    f"{res.before_tokens}->{res.after_tokens} tokens")
+                    f"{res.before_tokens}->{res.after_tokens} tokens"
+                )
                 ledger.step(session.sid, label, compaction=True, turn=False)
         sid = session.sid
         if name == "steer":
             # The ledger's inputs check then requires the steer row shown exactly once.
-            assert script.steered == [STEER_TEXT], f"the steer never landed: {script.steered}"
+            assert script.steered == [STEER_TEXT], (
+                f"the steer never landed: {script.steered}"
+            )
     finally:
         session.close()
     assert not script.actions, f"scripted responses never consumed: {script.actions}"
@@ -245,17 +371,26 @@ def test_transcript_ledger(world, name):
     breaks = prefix_breaks(main)
     allowed = set(ledger.compaction_request_idx)
     unexpected = [(i, why) for i, why in breaks if i not in allowed]
-    assert not unexpected, "prompt-cache prefix broke outside compaction:\n" + "\n".join(
-        f"  request {i}: {why}" for i, why in unexpected)
+    assert not unexpected, (
+        "prompt-cache prefix broke outside compaction:\n"
+        + "\n".join(f"  request {i}: {why}" for i, why in unexpected)
+    )
     if name in COMPACTING:
-        assert len(breaks) == (len(breaks) if name == "micro_compaction" else 1) and breaks, (
+        assert (
+            len(breaks) == (len(breaks) if name == "micro_compaction" else 1) and breaks
+        ), (
             f"expected the compaction boundary to break the prefix (exactly once for one-shot compaction), "
-            f"got {breaks} (declared at {sorted(allowed)})")
+            f"got {breaks} (declared at {sorted(allowed)})"
+        )
         model, _ = views(clawk_home, sid)
-        assert any(is_summary(m) for m in model), "compaction left no summary in the model view"
+        assert any(is_summary(m) for m in model), (
+            "compaction left no summary in the model view"
+        )
 
     # (f) usage: what the provider billed == what state.db accounts for the whole lineage.
-    assert_usage_matches(clawk_home, lineage(clawk_home, sid), srv.requests, f"scenario {name}")
+    assert_usage_matches(
+        clawk_home, lineage(clawk_home, sid), srv.requests, f"scenario {name}"
+    )
     integrity_ok(clawk_home)
 
     # (d) resume in a FRESH `clawk chat --resume` process: its first request replays the persisted
@@ -265,26 +400,43 @@ def test_transcript_ledger(world, name):
     persisted, _ = views(clawk_home, sid)
     n_before = len(main)
     env = child_env(world["home"], clawk_home, world["workdir"])
-    _out, resumed_sid = run_oneshot(env, world["workdir"], f"resume check for {name}", world["spawned"], resume=sid)
-    assert resumed_sid == sid, f"--resume {sid} continued a different session {resumed_sid}"
+    _out, resumed_sid = run_oneshot(
+        env, world["workdir"], f"resume check for {name}", world["spawned"], resume=sid
+    )
+    assert resumed_sid == sid, (
+        f"--resume {sid} continued a different session {resumed_sid}"
+    )
     after = srv.main_requests()
     assert len(after) > n_before, "the resumed process sent no request"
     first, last = after[n_before], main[-1]
     assert_replay_equals_persisted(first, persisted, f"fresh-process resume of {name}")
-    if name != "micro_compaction":  # a post-turn micro pass legitimately rewrote history after `last`
+    if (
+        name != "micro_compaction"
+    ):  # a post-turn micro pass legitimately rewrote history after `last`
         for j, (a, b) in enumerate(zip(last["messages"], first["messages"])):
             assert canon(a) == canon(b), (
                 f"fresh-process resume changed messages[{j}] ({a.get('role')}): "
-                f"{first_divergence(canon(a), canon(b))}")
+                f"{first_divergence(canon(a), canon(b))}"
+            )
         assert len(first["messages"]) > len(last["messages"])
     ledger.step(sid, "fresh-process resume", compaction=name == "micro_compaction")
-    assert_usage_matches(clawk_home, lineage(clawk_home, sid), srv.requests, f"scenario {name} after resume")
+    assert_usage_matches(
+        clawk_home,
+        lineage(clawk_home, sid),
+        srv.requests,
+        f"scenario {name} after resume",
+    )
 
 
 def test_micro_compaction_resumed_display_shows_each_input_once(world):
     srv, script, clawk_home = world["srv"], world["script"], world["clawk_home"]
-    write_clawk_home(clawk_home, srv.base_url,
-                      extra_config=OFFLINE_CONFIG + NO_BACKGROUND_REVIEW + SCENARIO_CONFIG["micro_compaction"])
+    write_clawk_home(
+        clawk_home,
+        srv.base_url,
+        extra_config=OFFLINE_CONFIG
+        + NO_BACKGROUND_REVIEW
+        + SCENARIO_CONFIG["micro_compaction"],
+    )
     session = InProcessSession(srv.base_url, clawk_home, "ledger-micro-display")
     inputs: list[str] = []
     try:

@@ -33,8 +33,7 @@ def test_guest_barriers_apply_configured_synchronous(monkeypatch, tmp_path):
         assert conn.execute("PRAGMA synchronous").fetchone()[0] == 2
         # And the journal mode was NOT touched — that is the whole contract.
         assert (
-            str(conn.execute("PRAGMA journal_mode").fetchone()[0]).lower()
-            == "delete"
+            str(conn.execute("PRAGMA journal_mode").fetchone()[0]).lower() == "delete"
         )
     finally:
         conn.close()

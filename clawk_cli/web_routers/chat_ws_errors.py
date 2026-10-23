@@ -27,7 +27,12 @@ CHAT_START_FAILED = "Chat could not start: {detail} Check the server log (`clawk
 
 def _node_missing(exc: BaseException) -> bool:
     text = str(exc)
-    return isinstance(exc, SystemExit) or "'node'" in text or "'npm'" in text or "Node.js" in text
+    return (
+        isinstance(exc, SystemExit)
+        or "'node'" in text
+        or "'npm'" in text
+        or "Node.js" in text
+    )
 
 
 def chat_start_failure_message(exc: BaseException) -> str:

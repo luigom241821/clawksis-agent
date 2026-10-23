@@ -4,8 +4,14 @@ Covers the fix for issue #6843 — systems with ASCII locale (LANG=C)
 that can't encode non-ASCII characters in API request payloads.
 """
 
-
-from agent.message_sanitization import _strip_non_ascii, _sanitize_messages_non_ascii, _sanitize_structure_non_ascii, _sanitize_tools_non_ascii, _sanitize_messages_surrogates, sanitize_outbound_kwargs
+from agent.message_sanitization import (
+    _strip_non_ascii,
+    _sanitize_messages_non_ascii,
+    _sanitize_structure_non_ascii,
+    _sanitize_tools_non_ascii,
+    _sanitize_messages_surrogates,
+    sanitize_outbound_kwargs,
+)
 
 
 class TestStripNonAscii:
@@ -13,11 +19,6 @@ class TestStripNonAscii:
 
     def test_ascii_only(self):
         assert _strip_non_ascii("hello world") == "hello world"
-
-
-
-
-
 
 
 class TestSanitizeMessagesNonAscii:
@@ -28,14 +29,8 @@ class TestSanitizeMessagesNonAscii:
         assert _sanitize_messages_non_ascii(messages) is False
         assert messages[0]["content"] == "hello"
 
-
-
-
-
-
     def test_empty_messages(self):
         assert _sanitize_messages_non_ascii([]) is False
-
 
 
 class TestSurrogateVsAsciiSanitization:
@@ -50,19 +45,23 @@ class TestSurrogateVsAsciiSanitization:
         assert "\ufffd" in messages[0]["content"]
 
     def test_surrogates_in_name_and_tool_calls_are_sanitized(self):
-        messages = [{
-            "role": "assistant",
-            "name": "bad\ud800name",
-            "content": None,
-            "tool_calls": [{
-                "id": "call_\ud800",
-                "type": "function",
-                "function": {
-                    "name": "read\ud800_file",
-                    "arguments": '{"path": "bad\ud800.txt"}'
-                }
-            }],
-        }]
+        messages = [
+            {
+                "role": "assistant",
+                "name": "bad\ud800name",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "call_\ud800",
+                        "type": "function",
+                        "function": {
+                            "name": "read\ud800_file",
+                            "arguments": '{"path": "bad\ud800.txt"}',
+                        },
+                    }
+                ],
+            }
+        ]
         assert _sanitize_messages_surrogates(messages) is True
         assert "\ud800" not in messages[0]["name"]
         assert "\ud800" not in messages[0]["tool_calls"][0]["id"]
@@ -96,7 +95,6 @@ class TestApiKeyNonAsciiSanitization:
         assert _strip_non_ascii(key) == "sk-proj-abcdef"
 
 
-
 class TestSanitizeToolsNonAscii:
     """Tests for _sanitize_tools_non_ascii."""
 
@@ -121,9 +119,14 @@ class TestSanitizeToolsNonAscii:
         ]
 
         assert _sanitize_tools_non_ascii(tools) is True
-        assert tools[0]["function"]["description"] == "Print structured output  with emoji "
-        assert tools[0]["function"]["parameters"]["properties"]["path"]["description"] == "File path  with unicode"
-
+        assert (
+            tools[0]["function"]["description"]
+            == "Print structured output  with emoji "
+        )
+        assert (
+            tools[0]["function"]["parameters"]["properties"]["path"]["description"]
+            == "File path  with unicode"
+        )
 
 
 class TestSanitizeStructureNonAscii:
@@ -137,8 +140,6 @@ class TestSanitizeStructureNonAscii:
         assert _sanitize_structure_non_ascii(payload) is True
         assert payload["default_headers"]["X-Title"] == "Clawksis  Agent"
         assert payload["default_headers"]["User-Agent"] == "Clawksis/1.0 "
-
-
 
 
 class TestApiMessagesAndApiKwargsSanitized:
@@ -184,7 +185,6 @@ class TestApiMessagesAndApiKwargsSanitized:
         assert found is True
         assert "\u2192" not in api_kwargs["extra_body"]["system"]
 
-
     def test_reasoning_field_in_canonical_messages_is_sanitized(self):
         """The canonical messages list stores reasoning as 'reasoning', not
         'reasoning_content'.  The extra-fields loop must catch it."""
@@ -214,7 +214,6 @@ class TestSanitizeMessagesPersistMarker:
         assert "\ud800" not in msg["content"]
         assert _DB_PERSISTED_MARKER not in msg
 
-
     def test_unchanged_dict_keeps_marker(self):
         from agent.context_compressor import _DB_PERSISTED_MARKER
 
@@ -222,30 +221,40 @@ class TestSanitizeMessagesPersistMarker:
         assert _sanitize_messages_non_ascii([msg]) is False
         assert msg[_DB_PERSISTED_MARKER] is True
 
-    def test_ascii_recovery_sanitizes_detached_request_not_canonical_history(self, monkeypatch):
+    def test_ascii_recovery_sanitizes_detached_request_not_canonical_history(
+        self, monkeypatch
+    ):
         from agent.context_compressor import _DB_PERSISTED_MARKER
         from agent.turn_recovery import _recover_unicode_encode_error
 
-        monkeypatch.setattr("agent.turn_recovery._runtime_uses_ascii_encoding", lambda: True)
+        monkeypatch.setattr(
+            "agent.turn_recovery._runtime_uses_ascii_encoding", lambda: True
+        )
 
         canonical = [{"role": "user", "content": "olá ☕", _DB_PERSISTED_MARKER: True}]
         api_messages = [{"role": "user", "content": "olá ☕"}]
         prefill = [{"role": "assistant", "content": "prefill ☕"}]
-        tools = [{"type": "function", "function": {"name": "read", "description": "desc ☕"}}]
-        agent = type("Agent", (), {
-            "_unicode_sanitization_passes": 0,
-            "_force_ascii_payload": False,
-            "api_key": "ascii-key",
-            "_client_kwargs": {},
-            "client": None,
-            "prefill_messages": prefill,
-            "tools": tools,
-            "_cached_system_prompt": "cached ☕",
-            "ephemeral_system_prompt": "ephemeral ☕",
-            "log_prefix": "",
-            "_buffer_vprint": lambda self, *args, **kwargs: None,
-            "_vprint": lambda self, *args, **kwargs: None,
-        })()
+        tools = [
+            {"type": "function", "function": {"name": "read", "description": "desc ☕"}}
+        ]
+        agent = type(
+            "Agent",
+            (),
+            {
+                "_unicode_sanitization_passes": 0,
+                "_force_ascii_payload": False,
+                "api_key": "ascii-key",
+                "_client_kwargs": {},
+                "client": None,
+                "prefill_messages": prefill,
+                "tools": tools,
+                "_cached_system_prompt": "cached ☕",
+                "ephemeral_system_prompt": "ephemeral ☕",
+                "log_prefix": "",
+                "_buffer_vprint": lambda self, *args, **kwargs: None,
+                "_vprint": lambda self, *args, **kwargs: None,
+            },
+        )()
         api_kwargs = {"tools": agent.tools, "extra_body": {"note": "request ☕"}}
 
         canonical_before = repr(canonical)
@@ -253,8 +262,12 @@ class TestSanitizeMessagesPersistMarker:
         tools_before = repr(tools)
 
         recovered, sanitized_prompt = _recover_unicode_encode_error(
-            agent, UnicodeEncodeError("ascii", "☕", 0, 1, "ordinal not in range"),
-            canonical, api_messages, api_kwargs, "active ☕",
+            agent,
+            UnicodeEncodeError("ascii", "☕", 0, 1, "ordinal not in range"),
+            canonical,
+            api_messages,
+            api_kwargs,
+            "active ☕",
         )
 
         assert recovered is True
@@ -281,27 +294,37 @@ class TestSanitizeMessagesPersistMarker:
     def test_ascii_word_in_error_does_not_strip_utf8_request_copy(self, monkeypatch):
         from agent.turn_recovery import _recover_unicode_encode_error
 
-        monkeypatch.setattr("agent.turn_recovery._runtime_uses_ascii_encoding", lambda: False)
+        monkeypatch.setattr(
+            "agent.turn_recovery._runtime_uses_ascii_encoding", lambda: False
+        )
         canonical = [{"role": "user", "content": "olá ☕"}]
         api_messages = [{"role": "user", "content": "olá ☕"}]
-        agent = type("Agent", (), {
-            "_unicode_sanitization_passes": 0,
-            "_force_ascii_payload": False,
-            "api_key": "ascii-key",
-            "_client_kwargs": {},
-            "client": None,
-            "prefill_messages": None,
-            "tools": [],
-            "_cached_system_prompt": "system ☕",
-            "ephemeral_system_prompt": None,
-            "log_prefix": "",
-            "_buffer_vprint": lambda self, *args, **kwargs: None,
-            "_vprint": lambda self, *args, **kwargs: None,
-        })()
+        agent = type(
+            "Agent",
+            (),
+            {
+                "_unicode_sanitization_passes": 0,
+                "_force_ascii_payload": False,
+                "api_key": "ascii-key",
+                "_client_kwargs": {},
+                "client": None,
+                "prefill_messages": None,
+                "tools": [],
+                "_cached_system_prompt": "system ☕",
+                "ephemeral_system_prompt": None,
+                "log_prefix": "",
+                "_buffer_vprint": lambda self, *args, **kwargs: None,
+                "_vprint": lambda self, *args, **kwargs: None,
+            },
+        )()
 
         recovered, _ = _recover_unicode_encode_error(
-            agent, UnicodeEncodeError("ascii", "☕", 0, 1, "ordinal not in range"),
-            canonical, api_messages, {}, "system ☕",
+            agent,
+            UnicodeEncodeError("ascii", "☕", 0, 1, "ordinal not in range"),
+            canonical,
+            api_messages,
+            {},
+            "system ☕",
         )
 
         # Nothing was repaired, so an identical retry cannot help: the error must

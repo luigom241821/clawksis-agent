@@ -24,16 +24,21 @@ from tests.e2e.core.kanban._helpers import Board, wait_until
 from tests.fakes.fake_llm_provider import FakeLLMServer, Text, ToolCall
 
 pytestmark = [
-    pytest.mark.skipif(not sys.platform.startswith("linux"), reason="/proc worker liveness"),
+    pytest.mark.skipif(
+        not sys.platform.startswith("linux"), reason="/proc worker liveness"
+    ),
     pytest.mark.live_system_guard_bypass,  # teardown SIGKILLs this board's reparented workers
 ]
 
 KNOWN: dict[str, tuple[str, str]] = {
-    "outside": (r"card done with its declared outside-workspace artifact never attached",
-                "#120647 kanban_complete artifact outside the workspace is silently never attached"),
+    "outside": (
+        r"card done with its declared outside-workspace artifact never attached",
+        "#120647 kanban_complete artifact outside the workspace is silently never attached",
+    ),
     "test_worker_with_unresolvable_pinned_skill_still_starts_its_session": (
         r"worker died before its session \(exits=",
-        "#119619 dispatcher-owned worker with a stale --skill pin exits rc=1 before its session"),
+        "#119619 dispatcher-owned worker with a stale --skill pin exits rc=1 before its session",
+    ),
 }
 
 _TASK_RE = re.compile(r"work kanban task (t_[0-9a-f]+)")
@@ -67,8 +72,10 @@ def _run_one_card(board: Board, tid: str) -> None:
 
 def _artifact_location(board: Board, tid: str, where: str) -> Path:
     workspace = board.clawk_home / "kanban" / "workspaces" / tid
-    return {"inside": workspace / "report.md",
-            "outside": board.clawk_home / "scripts" / f"{tid}-deliverable.md"}[where]
+    return {
+        "inside": workspace / "report.md",
+        "outside": board.clawk_home / "scripts" / f"{tid}-deliverable.md",
+    }[where]
 
 
 @pytest.mark.parametrize("where", ["inside", "outside"])
@@ -83,13 +90,19 @@ def test_declared_artifact_is_attached_or_reported(tmp_path, where: str) -> None
             # A refused completion is answered the way a careful worker would: park the card.
             if '"error"' in str(last.get("content")) and not blocked.get("sent"):
                 blocked["sent"] = True
-                return ToolCall("kanban_block", {"reason": "artifact could not be delivered"})
+                return ToolCall(
+                    "kanban_block", {"reason": "artifact could not be delivered"}
+                )
             return Text("delivered")
         tid = _task_id(rec)
         path = _artifact_location(board_ref["b"], tid, where)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(payload, encoding="utf-8")  # the file exists before the call declares it
-        return ToolCall("kanban_complete", {"summary": "report written", "artifacts": [str(path)]})
+        path.write_text(
+            payload, encoding="utf-8"
+        )  # the file exists before the call declares it
+        return ToolCall(
+            "kanban_complete", {"summary": "report written", "artifacts": [str(path)]}
+        )
 
     with FakeLLMServer(responder) as srv:
         board = board_ref["b"] = Board(tmp_path, srv.base_url)
@@ -97,37 +110,62 @@ def test_declared_artifact_is_attached_or_reported(tmp_path, where: str) -> None
             tid = board.create(f"artifact card ({where})")
             _run_one_card(board, tid)
             status = board.task(tid)["status"]
-            attached = board._q("SELECT * FROM task_attachments WHERE task_id = ?", (tid,))
+            attached = board._q(
+                "SELECT * FROM task_attachments WHERE task_id = ?", (tid,)
+            )
             stored = [Path(a["stored_path"]) for a in attached]
             with known_gate(KNOWN, where, raises=KnownGap):
                 if status == "done" and not attached:
-                    raise KnownGap(f"card done with its declared {where}-workspace artifact never attached\n"
-                                   f"{board.diag(tid)}")
+                    raise KnownGap(
+                        f"card done with its declared {where}-workspace artifact never attached\n"
+                        f"{board.diag(tid)}"
+                    )
             assert status == "done" or where == "outside", board.diag(tid)
             if status != "done":
-                _assert_visible_refusal(board, srv, tid, _artifact_location(board, tid, where))
+                _assert_visible_refusal(
+                    board, srv, tid, _artifact_location(board, tid, where)
+                )
             if attached:
-                assert len(attached) == 1 and stored[0].read_text(encoding="utf-8") == payload, attached
-                assert not stored[0].is_relative_to(board.clawk_home / "kanban" / "workspaces"), stored
+                assert (
+                    len(attached) == 1
+                    and stored[0].read_text(encoding="utf-8") == payload
+                ), attached
+                assert not stored[0].is_relative_to(
+                    board.clawk_home / "kanban" / "workspaces"
+                ), stored
         finally:
             board.kill_workers()
 
 
-def _assert_visible_refusal(board: Board, srv: FakeLLMServer, tid: str, artifact: Path) -> None:
+def _assert_visible_refusal(
+    board: Board, srv: FakeLLMServer, tid: str, artifact: Path
+) -> None:
     """A completion that did not land must say why, naming the artifact, somewhere a human or the
     worker sees it; and the refusal must not turn into a crash loop."""
     board.dispatch("--max", "0")  # reap the exited worker so its run is booked
     name = artifact.name
-    tool_errors = [str(m.get("content")) for body in srv.main_requests() for m in body["messages"]
-                   if m.get("role") == "tool" and '"error"' in str(m.get("content"))]
+    tool_errors = [
+        str(m.get("content"))
+        for body in srv.main_requests()
+        for m in body["messages"]
+        if m.get("role") == "tool" and '"error"' in str(m.get("content"))
+    ]
     traces = [c for c in tool_errors if name in c]
-    traces += [e["kind"] for e in board.events(tid)
-               if _REFUSAL_KIND_RE.search(e["kind"]) and name in json.dumps(e["payload"])]
+    traces += [
+        e["kind"]
+        for e in board.events(tid)
+        if _REFUSAL_KIND_RE.search(e["kind"]) and name in json.dumps(e["payload"])
+    ]
     traces += [r["error"] for r in board.runs(tid) if name in (r["error"] or "")]
-    assert traces, f"card left {board.task(tid)['status']} with no refusal naming {name}\n{board.diag(tid)}"
+    assert traces, (
+        f"card left {board.task(tid)['status']} with no refusal naming {name}\n{board.diag(tid)}"
+    )
     runs = board.runs(tid)
     assert len(runs) == 1 and runs[0]["outcome"] != "crashed", board.diag(tid)
-    assert not board.events(tid, "gave_up") and board.task(tid)["consecutive_failures"] <= 1, board.diag(tid)
+    assert (
+        not board.events(tid, "gave_up")
+        and board.task(tid)["consecutive_failures"] <= 1
+    ), board.diag(tid)
 
 
 # pinned skills --------------------------------------------------------------------------------
@@ -138,7 +176,9 @@ def _seed_skill(board: Board, name: str) -> None:
     skill.mkdir(parents=True, exist_ok=True)
     (skill / "SKILL.md").write_text(
         f"---\nname: {name}\ndescription: Use when running the kanban e2e pin probe.\n---\n\n"
-        f"# {name}\n\nAlways follow {SKILL_MARK}.\n", encoding="utf-8")
+        f"# {name}\n\nAlways follow {SKILL_MARK}.\n",
+        encoding="utf-8",
+    )
 
 
 def _completing_responder(rec: dict):
@@ -155,7 +195,9 @@ def test_worker_with_resolvable_pinned_skill_sees_it_on_first_request(tmp_path) 
             tid = board.create("pinned skill card", "--skill", "e2e-pinned")
             _run_one_card(board, tid)
             first = srv.main_requests()[0]
-            assert SKILL_MARK in str(first["messages"]), "pinned skill body never reached the model"
+            assert SKILL_MARK in str(first["messages"]), (
+                "pinned skill body never reached the model"
+            )
             assert board.task(tid)["status"] == "done", board.diag(tid)
             # The terminal call is the first answer; at most one closing turn follows it.
             assert 1 <= len(srv.main_requests()) <= 2, len(srv.main_requests())
@@ -163,7 +205,9 @@ def test_worker_with_resolvable_pinned_skill_sees_it_on_first_request(tmp_path) 
             board.kill_workers()
 
 
-def test_worker_with_unresolvable_pinned_skill_still_starts_its_session(tmp_path) -> None:
+def test_worker_with_unresolvable_pinned_skill_still_starts_its_session(
+    tmp_path,
+) -> None:
     with FakeLLMServer(_completing_responder) as srv:
         board = Board(tmp_path, srv.base_url)
         try:
@@ -176,11 +220,20 @@ def test_worker_with_unresolvable_pinned_skill_still_starts_its_session(tmp_path
             exits = [int(rc) for rc in _EXIT_RE.findall(log)]
             # The bug's own signature: no model call at all, and the worker died of the stale pin
             # (nonzero exit trailer, or its log names the missing skill). Anything else stays red.
-            with known_gate(KNOWN, "test_worker_with_unresolvable_pinned_skill_still_starts_its_session",
-                            raises=KnownGap):
-                if not srv.main_requests() and ((exits and exits[-1] != 0) or "e2e-archived" in log):
-                    raise KnownGap(f"worker died before its session (exits={exits}); board:\n{board.diag(tid)}")
-            assert SKILL_MARK not in str(srv.main_requests()[0]["messages"]), "removed skill still loaded"
+            with known_gate(
+                KNOWN,
+                "test_worker_with_unresolvable_pinned_skill_still_starts_its_session",
+                raises=KnownGap,
+            ):
+                if not srv.main_requests() and (
+                    (exits and exits[-1] != 0) or "e2e-archived" in log
+                ):
+                    raise KnownGap(
+                        f"worker died before its session (exits={exits}); board:\n{board.diag(tid)}"
+                    )
+            assert SKILL_MARK not in str(srv.main_requests()[0]["messages"]), (
+                "removed skill still loaded"
+            )
             assert board.task(tid)["status"] == "done", board.diag(tid)
         finally:
             board.kill_workers()

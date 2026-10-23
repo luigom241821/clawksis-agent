@@ -55,15 +55,24 @@ def _detect_container() -> bool:
         os.path.exists("/.dockerenv")
         or os.path.exists("/run/.containerenv")
         or os.environ.get("KUBERNETES_SERVICE_HOST")
-        or _proc_file_has_marker("/proc/1/cgroup", ("docker", "podman", "/lxc/", "kubepods", "containerd", "crio"))
+        or _proc_file_has_marker(
+            "/proc/1/cgroup",
+            ("docker", "podman", "/lxc/", "kubepods", "containerd", "crio"),
+        )
     ):
         return True
     # Under cgroup v2, only the root mount identifies this process's container.
     # Scanning all mountinfo lines misclassifies hosts that run containers (#58135).
-    return _root_mount_has_marker("/proc/self/mountinfo", ("kubepods", "containerd", "crio"))
+    return _root_mount_has_marker(
+        "/proc/self/mountinfo", ("kubepods", "containerd", "crio")
+    )
 
 
 def _root_mount_has_marker(path: str, markers: tuple[str, ...]) -> bool:
     """Return whether the root mount contains any marker."""
-    root_lines = [line for line in _read_proc(path).splitlines() if len(f := line.split()) >= 5 and f[4] == "/"]
+    root_lines = [
+        line
+        for line in _read_proc(path).splitlines()
+        if len(f := line.split()) >= 5 and f[4] == "/"
+    ]
     return any(marker in line for line in root_lines for marker in markers)

@@ -23,7 +23,9 @@ _COMPUTE_HOST_COMPRESS_WAIT_CAP_SECS = 630.0
 def _turn_isolation_enabled(cfg: dict | None = None) -> bool:
     if os.environ.get("CLAWK_COMPUTE_HOST_CHILD") == "1":
         return False
-    return bool((cfg or _load_dashboard_process_isolation_config()).get("turn_isolation"))
+    return bool(
+        (cfg or _load_dashboard_process_isolation_config()).get("turn_isolation")
+    )
 
 
 def _session_uses_compute_host(session: dict, cfg: dict | None = None) -> bool:
@@ -31,7 +33,8 @@ def _session_uses_compute_host(session: dict, cfg: dict | None = None) -> bool:
     # sessions keep the in-process path unless a prior isolated turn marked host ownership.
     return _turn_isolation_enabled(cfg) and (
         bool(session.get("_compute_host_active"))
-        or (session.get("agent") is None and session.get("agent_ready") is not None))
+        or (session.get("agent") is None and session.get("agent_ready") is not None)
+    )
 
 
 def _get_compute_host_supervisor(cfg: dict | None = None):
@@ -40,27 +43,46 @@ def _get_compute_host_supervisor(cfg: dict | None = None):
     with _compute_host_supervisor_lock:
         if _compute_host_supervisor is None:
             from tui_gateway.host_supervisor import HostSupervisor
+
             _compute_host_supervisor = HostSupervisor(
                 rpc_sink=_relay_compute_host_rpc,
-                heartbeat_secs=int(isolation_cfg.get("compute_host_heartbeat_secs") or 15),
-                respawn_max=int(isolation_cfg.get("compute_host_respawn_max") or 3))
+                heartbeat_secs=int(
+                    isolation_cfg.get("compute_host_heartbeat_secs") or 15
+                ),
+                respawn_max=int(isolation_cfg.get("compute_host_respawn_max") or 3),
+            )
         return _compute_host_supervisor
 
 
 def _compute_host_turn_frame(
-    rid: str, sid: str, session: dict, text: Any, image_paths: list[str] | None = None,
-    queued_prompt_generation: int | None = None, display_kind: str | None = None,
-    display_metadata: dict | None = None) -> dict:
+    rid: str,
+    sid: str,
+    session: dict,
+    text: Any,
+    image_paths: list[str] | None = None,
+    queued_prompt_generation: int | None = None,
+    display_kind: str | None = None,
+    display_metadata: dict | None = None,
+) -> dict:
     with session["history_lock"]:
         history = list(session.get("history", []))
         history_version = int(session.get("history_version", 0))
-        attached_images = list(image_paths if image_paths is not None else session.get("attached_images", []))
+        attached_images = list(
+            image_paths
+            if image_paths is not None
+            else session.get("attached_images", [])
+        )
     return {
-        "type": "turn.start", "sid": sid, "request_id": rid,
-        "session_key": session.get("session_key") or sid, "text": text,
-        **({"display_kind": display_kind} if display_kind else {}), "history": history,
+        "type": "turn.start",
+        "sid": sid,
+        "request_id": rid,
+        "session_key": session.get("session_key") or sid,
+        "text": text,
+        **({"display_kind": display_kind} if display_kind else {}),
+        "history": history,
         **({"display_metadata": display_metadata} if display_metadata else {}),
-        "history_version": history_version, "cols": int(session.get("cols", 80) or 80),
+        "history_version": history_version,
+        "cols": int(session.get("cols", 80) or 80),
         "cwd": _session_cwd(session),
         # Workspace provenance rides with the cwd: a sandbox backend registers an unpicked host cwd as nothing.
         "explicit_cwd": bool(session.get("explicit_cwd")),
@@ -76,14 +98,16 @@ def _compute_host_turn_frame(
         "pending_model_switch": session.get("pending_model_switch"),
         "reasoning_config_override": session.get("create_reasoning_override"),
         "service_tier_override": session.get("create_service_tier_override"),
-        "source": _session_source(session), "attached_images": attached_images,
+        "source": _session_source(session),
+        "attached_images": attached_images,
         "auth_user_id": _session_auth_user_id(session),
         "queued_prompt_generation": queued_prompt_generation,
         # #101416: vouch that this process already holds the registry lease for this session, so
         # the child adopts it as an inert token instead of re-claiming and being fenced out by
         # our own entry ("Session ... already has a live owner"). No lease held = no vouch, and
         # the child keeps its legacy self-claim path (fail-closed refusal on conflict).
-        "active_session_lease": _active_session_lease_vouch(session)}
+        "active_session_lease": _active_session_lease_vouch(session),
+    }
 
 
 def _active_session_lease_vouch(session: dict) -> dict | None:
@@ -91,7 +115,11 @@ def _active_session_lease_vouch(session: dict) -> dict | None:
     current stored id, else None. Qualified, not a bare bool: after a compression rotation a lease
     still keyed on the old id must not let a (replacement) child borrow the continuation."""
     lease = session.get("active_session_lease")
-    if lease is None or getattr(lease, "released", False) or not getattr(lease, "enabled", False):
+    if (
+        lease is None
+        or getattr(lease, "released", False)
+        or not getattr(lease, "enabled", False)
+    ):
         return None
     if str(lease.session_id) != str(session.get("session_key") or ""):
         return None
@@ -115,14 +143,22 @@ def _compute_host_adopt_frame_meta(session: dict, frame: dict) -> None:
     by its owner — never claimed from the child pid (authority stays singular, #103737 review)."""
     new_key = str(frame.get("session_key") or "")
     if new_key and new_key != str(session.get("session_key") or ""):
-        if not _transfer_active_session_slot(str(frame.get("sid") or ""), session, new_session_id=new_key):
-            logger.warning("Compression session lease did not re-anchor: sid=%s old_session_id=%s new_session_id=%s",
-                           frame.get("sid"), session.get("session_key"), new_key)
+        if not _transfer_active_session_slot(
+            str(frame.get("sid") or ""), session, new_session_id=new_key
+        ):
+            logger.warning(
+                "Compression session lease did not re-anchor: sid=%s old_session_id=%s new_session_id=%s",
+                frame.get("sid"),
+                session.get("session_key"),
+                new_key,
+            )
         session["session_key"] = new_key
     if frame.get("history_version") is not None:
         with contextlib.suppress(Exception):
-            session["history_version"] = max(int(session.get("history_version", 0)),
-                                             int(frame.get("history_version") or 0))
+            session["history_version"] = max(
+                int(session.get("history_version", 0)),
+                int(frame.get("history_version") or 0),
+            )
 
 
 def _relay_compute_host_rpc(message: dict) -> bool:
@@ -134,23 +170,41 @@ def _relay_compute_host_rpc(message: dict) -> bool:
             session = _sessions.get(str(params.get("session_id") or ""))
             if session is not None:
                 with _history_lock(session):
-                    if (session.get("running") and params.get("turn_id")
-                            and session.get("_compute_host_turn_id") == params["turn_id"]):
+                    if (
+                        session.get("running")
+                        and params.get("turn_id")
+                        and session.get("_compute_host_turn_id") == params["turn_id"]
+                    ):
                         session["_compute_host_activity_ns"] = params.get("activity_ns")
         return True  # Internal observation, not a client event or replay entry.
-    if (isinstance(message, dict) and message.get("method") == "event" and isinstance(params, dict)
-            and not params.get("session_id")):
+    if (
+        isinstance(message, dict)
+        and message.get("method") == "event"
+        and isinstance(params, dict)
+        and not params.get("session_id")
+    ):
         # A session-less (global) event the child could not deliver itself: ``write_json`` would drop it
         # on this process's stdio; fan it out to every connected client like a local broadcast.
         _broadcast_global_event(str(params.get("type") or ""), params.get("payload"))
         return True
-    if isinstance(message, dict) and isinstance(message.get("id"), str) and message.get("method") not in (None, "event"):
+    if (
+        isinstance(message, dict)
+        and isinstance(message.get("id"), str)
+        and message.get("method") not in (None, "event")
+    ):
         # A server request minted by the child: remember it against its session until it is answered/withdrawn.
-        session = _sessions.get(str((params or {}).get("session_id") or "")) if isinstance(params, dict) else None
+        session = (
+            _sessions.get(str((params or {}).get("session_id") or ""))
+            if isinstance(params, dict)
+            else None
+        )
         if session is not None:
             with _history_lock(session):
                 session["_compute_host_open_request"] = {
-                    "id": message["id"], "method": message["method"], "params": dict(params)}
+                    "id": message["id"],
+                    "method": message["method"],
+                    "params": dict(params),
+                }
     elif isinstance(params, dict) and params.get("type") == "request.cancel":
         session = _sessions.get(str(params.get("session_id") or ""))
         payload = params.get("payload")
@@ -201,6 +255,7 @@ def _cancel_session_requests(sid: str, reason: str, *, method: str) -> None:
     child that minted them (the parent holds only a mirror, so a local cancel never reaches that wait).
     The child's ``request.cancel`` comes back through ``_relay_compute_host_rpc``, which drops the mirror."""
     from tui_gateway import server_requests
+
     server_requests.cancel(sid, reason, method=method)
     session = _sessions.get(sid)
     if session is None:
@@ -211,12 +266,21 @@ def _cancel_session_requests(sid: str, reason: str, *, method: str) -> None:
     if not hosted or not _session_uses_compute_host(session):
         return
     try:
-        _get_compute_host_supervisor().respond(sid, {"cancel": {"method": method, "reason": reason}})
+        _get_compute_host_supervisor().respond(
+            sid, {"cancel": {"method": method, "reason": reason}}
+        )
     except Exception:  # health: allow BLE001 -- the bridge raises transport-specific errors unknown here; the child's own deadline still ends the wait
-        logger.warning("compute-host request cancel failed sid=%s method=%s", sid, method, exc_info=True)
+        logger.warning(
+            "compute-host request cancel failed sid=%s method=%s",
+            sid,
+            method,
+            exc_info=True,
+        )
 
 
-def _lock_compute_host_clarify(rid: str, request_id: str, question_id: str, answer: str | None) -> dict | None:
+def _lock_compute_host_clarify(
+    rid: str, request_id: str, question_id: str, answer: str | None
+) -> dict | None:
     """Proxy a batch-clarify lock into the child that owns the request; keeps the parent mirror's locked
     answers current for reconnect snapshots. None when the request is not host-owned."""
     located = _compute_host_request_session(request_id)
@@ -225,17 +289,31 @@ def _lock_compute_host_clarify(rid: str, request_id: str, question_id: str, answ
     sid, session = located
     try:
         ack = _get_compute_host_supervisor().respond(
-            sid, {"lock": {"request_id": request_id, "question_id": question_id, "answer": answer}})
+            sid,
+            {
+                "lock": {
+                    "request_id": request_id,
+                    "question_id": question_id,
+                    "answer": answer,
+                }
+            },
+        )
     except Exception as exc:
         return _err(rid, 5019, f"compute-host clarify lock failed: {exc}")
     if ack.get("type") == "respond.error":
-        return _err(rid, 5019, str(ack.get("message") or "compute-host clarify lock failed"))
+        return _err(
+            rid, 5019, str(ack.get("message") or "compute-host clarify lock failed")
+        )
     response = ack.get("response")
     if not isinstance(response, dict):
         return _err(rid, 5019, "compute-host clarify lock returned an invalid response")
     if "error" in response:
         error = response["error"] if isinstance(response["error"], dict) else {}
-        return _err(rid, int(error.get("code") or 5000), str(error.get("message") or "clarify lock failed"))
+        return _err(
+            rid,
+            int(error.get("code") or 5000),
+            str(error.get("message") or "clarify lock failed"),
+        )
     result = response.get("result") if isinstance(response.get("result"), dict) else {}
     with _history_lock(session):
         if _open_request_matches(session, request_id):
@@ -243,7 +321,10 @@ def _lock_compute_host_clarify(rid: str, request_id: str, question_id: str, answ
             if result.get("status") == "expired" or result.get("remaining") == []:
                 session.pop("_compute_host_open_request", None)
             else:
-                mirrored["params"]["answers"] = {**(mirrored["params"].get("answers") or {}), question_id: answer}
+                mirrored["params"]["answers"] = {
+                    **(mirrored["params"].get("answers") or {}),
+                    question_id: answer,
+                }
     return _ok(rid, result)
 
 
@@ -256,7 +337,9 @@ def _apply_compute_host_metadata_mirror(session: dict, frame: dict | None) -> No
         _compute_host_adopt_frame_meta(session, frame)
         if frame.get("message_count") is not None:
             with contextlib.suppress(Exception):
-                session["_metadata_message_count"] = int(frame.get("message_count") or 0)
+                session["_metadata_message_count"] = int(
+                    frame.get("message_count") or 0
+                )
     info = frame.get("session_info")
     if isinstance(info, dict):
         session["_metadata_mirror"] = {**_metadata_mirror(session), **info}
@@ -288,13 +371,26 @@ def _on_compute_host_turn_done(rid: str, sid: str, session: dict, frame: dict) -
 
 
 def _submit_prompt_to_compute_host(
-    rid: str, sid: str, session: dict, text: Any, image_paths: list[str] | None = None,
-    queued_prompt_generation: int | None = None, display_kind: str | None = None,
-    display_metadata: dict | None = None) -> dict:
+    rid: str,
+    sid: str,
+    session: dict,
+    text: Any,
+    image_paths: list[str] | None = None,
+    queued_prompt_generation: int | None = None,
+    display_kind: str | None = None,
+    display_metadata: dict | None = None,
+) -> dict:
     cfg = _load_dashboard_process_isolation_config()
-    frame = _compute_host_turn_frame(rid, sid, session, text, image_paths=image_paths,
-                                     queued_prompt_generation=queued_prompt_generation,
-                                     display_kind=display_kind, display_metadata=display_metadata)
+    frame = _compute_host_turn_frame(
+        rid,
+        sid,
+        session,
+        text,
+        image_paths=image_paths,
+        queued_prompt_generation=queued_prompt_generation,
+        display_kind=display_kind,
+        display_metadata=display_metadata,
+    )
     # Caller JSON-RPC ids may repeat across sockets and turns. Use an opaque
     # dispatch lifetime token, installed before a fast child can send activity.
     turn_id = frame["turn_id"] = frame["request_id"] = uuid.uuid4().hex
@@ -312,6 +408,7 @@ def _submit_prompt_to_compute_host(
                 session.pop("_compute_host_turn_id", None)
                 session.pop("_compute_host_activity_ns", None)
             _on_compute_host_turn_done(rid, sid, session, done)
+
     try:
         _get_compute_host_supervisor(cfg).submit_turn(frame, on_complete=_complete)
     except Exception as exc:
@@ -328,14 +425,26 @@ def _submit_prompt_to_compute_host(
 
 
 def _send_compute_host_control(
-    sid: str, *, route_name: str, command: str = "", payload: dict | None = None,
-    wait: bool = True, timeout: float = 30.0, on_late_ack=None) -> dict:
+    sid: str,
+    *,
+    route_name: str,
+    command: str = "",
+    payload: dict | None = None,
+    wait: bool = True,
+    timeout: float = 30.0,
+    on_late_ack=None,
+) -> dict:
     frame = dict(payload or {})
     frame.setdefault("type", "control")
     frame.setdefault("command", command)
     return _get_compute_host_supervisor().control(
-        sid, route_name=route_name, payload=frame, wait=wait, timeout=timeout,
-        on_late_ack=on_late_ack)
+        sid,
+        route_name=route_name,
+        payload=frame,
+        wait=wait,
+        timeout=timeout,
+        on_late_ack=on_late_ack,
+    )
 
 
 def _compute_host_ack_error(rid, ack: dict, code: int, default: str):
@@ -353,8 +462,11 @@ def _compute_host_compress_wait_seconds(cfg: dict | None = None) -> float:
     See #97948.
     """
     from agent.conversation_compression import resolve_context_compression_timeouts
+
     try:
-        compression_cfg = (cfg if cfg is not None else _load_cfg()).get("compression", {})
+        compression_cfg = (cfg if cfg is not None else _load_cfg()).get(
+            "compression", {}
+        )
     except Exception:
         compression_cfg = {}
     if not isinstance(compression_cfg, dict):
@@ -363,7 +475,9 @@ def _compute_host_compress_wait_seconds(cfg: dict | None = None) -> float:
     return float(min(max(ceiling + 30.0, 120.0), _COMPUTE_HOST_COMPRESS_WAIT_CAP_SECS))
 
 
-def _adopt_late_compute_host_compress_ack(sid: str, session: dict, ack: dict, *, route_name: str) -> None:
+def _adopt_late_compute_host_compress_ack(
+    sid: str, session: dict, ack: dict, *, route_name: str
+) -> None:
     """Adopt a compress ack that arrived after its RPC waiter answered ``pending``: the only place
     the rotated session_key / history_version / mirror can land and the client's only signal
     (the same ``session.info`` + ``compacted`` edges the in-process /compress path emits). A late

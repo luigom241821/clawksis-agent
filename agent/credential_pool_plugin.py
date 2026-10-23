@@ -42,10 +42,15 @@ def plugin_row_is_expiring(entry: PooledCredential) -> bool:
     The token endpoint's ``expires_in`` is the only clock: many providers issue opaque bearers (Google's
     ``ya29.*``) with no JWT ``exp`` to decode, so without this a long session sends the dead bearer.
     """
-    return entry.expires_at_ms is not None and int(entry.expires_at_ms) <= int(time.time() * 1000) + _EXPIRY_SKEW_MS
+    return (
+        entry.expires_at_ms is not None
+        and int(entry.expires_at_ms) <= int(time.time() * 1000) + _EXPIRY_SKEW_MS
+    )
 
 
-def apply_plugin_refresh_result(entry: PooledCredential, result: Any) -> PooledCredential:
+def apply_plugin_refresh_result(
+    entry: PooledCredential, result: Any
+) -> PooledCredential:
     """Merge a ``refresh_credential`` return value into *entry*.
 
     Field names go through ``dataclasses.replace``; everything else is merged into ``extra``
@@ -58,7 +63,9 @@ def apply_plugin_refresh_result(entry: PooledCredential, result: Any) -> PooledC
     mapping: Mapping[str, Any] = dict(result)
     field_names = {f.name for f in fields(type(entry))} - {"provider", "extra"}
     field_updates = {k: v for k, v in mapping.items() if k in field_names}
-    extra_updates = {k: v for k, v in mapping.items() if k not in field_names and k != "provider"}
+    extra_updates = {
+        k: v for k, v in mapping.items() if k not in field_names and k != "provider"
+    }
     if extra_updates:
         field_updates["extra"] = {**entry.extra, **extra_updates}
     return replace(entry, **field_updates) if field_updates else entry
@@ -78,7 +85,9 @@ def is_terminal_plugin_refresh_error(exc: BaseException) -> bool:
 
 
 def recover_failed_plugin_refresh(
-    pool: CredentialPool, entry: PooledCredential, exc: Exception,
+    pool: CredentialPool,
+    entry: PooledCredential,
+    exc: Exception,
 ) -> tuple[bool, Optional[PooledCredential]]:
     """Recovery for a plugin hook that raised: adopt a peer's rotation, or quarantine a dead grant.
 
@@ -89,8 +98,14 @@ def recover_failed_plugin_refresh(
     from agent.credential_pool import _MARK_OK
 
     synced = pool._sync_entry_from_pool_store(entry)
-    if synced.refresh_token != entry.refresh_token and (synced.access_token or "").strip():
-        logger.debug("%s refresh failed but the pool store has newer tokens — adopting", pool.provider)
+    if (
+        synced.refresh_token != entry.refresh_token
+        and (synced.access_token or "").strip()
+    ):
+        logger.debug(
+            "%s refresh failed but the pool store has newer tokens — adopting",
+            pool.provider,
+        )
         return True, pool._adopt(synced, **_MARK_OK)
     if is_terminal_plugin_refresh_error(exc):
         # WARNING, not debug: this is the moment a login is lost. Benching for a TTL would replay
@@ -98,7 +113,10 @@ def recover_failed_plugin_refresh(
         logger.warning(
             "%s refresh token for %s is terminally invalid (%s); the credential leaves rotation. "
             "Re-run 'clawk auth add %s' to sign in again.",
-            pool.provider, entry.label or entry.id[:8], exc, pool.provider,
+            pool.provider,
+            entry.label or entry.id[:8],
+            exc,
+            pool.provider,
         )
         pool._mark_dead_refresh_grant(entry, exc)
         return True, None

@@ -19,10 +19,18 @@ pytestmark = pytest.mark.skipif(
 
 def _git(repo, *args):
     subprocess.run(
-        ["git", *args], cwd=repo, check=True, capture_output=True,
-        env={"HOME": str(repo), "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
-             "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
-             "PATH": __import__("os").environ["PATH"]},
+        ["git", *args],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        env={
+            "HOME": str(repo),
+            "GIT_AUTHOR_NAME": "t",
+            "GIT_AUTHOR_EMAIL": "t@t",
+            "GIT_COMMITTER_NAME": "t",
+            "GIT_COMMITTER_EMAIL": "t@t",
+            "PATH": __import__("os").environ["PATH"],
+        },
     )
 
 
@@ -58,8 +66,6 @@ def test_unknown_mode_rejected(repo):
     result = collect_working_diff(str(repo), mode="bogus")
     assert result["success"] is False
     assert "bogus" in result["error"]
-
-
 
 
 def test_non_ascii_untracked_file_does_not_raise(repo):

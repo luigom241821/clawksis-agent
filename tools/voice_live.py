@@ -38,8 +38,20 @@ DEFAULT_LIVE_BASE_URL = "https://api.openai.com/v1"
 # Voices the vendor lists for gpt-live-1 (live-conversations guide) plus the realtime defaults it
 # accepts; free text stays allowed for custom voices.
 GPT_LIVE_VOICES = (
-    "marin", "cedar", "quartz", "ripple", "vesper", "willow", "stone", "gleam", "meridian",
-    "bossa", "tempo", "beacon", "delta", "cinder",
+    "marin",
+    "cedar",
+    "quartz",
+    "ripple",
+    "vesper",
+    "willow",
+    "stone",
+    "gleam",
+    "meridian",
+    "bossa",
+    "tempo",
+    "beacon",
+    "delta",
+    "cinder",
 )
 
 # Persona for the voice layer. Short on purpose: the live model has a small context window and
@@ -87,12 +99,15 @@ def voice_live_turn_note(context: str = "") -> str:
     context = context.strip()
     if not context:
         return VOICE_LIVE_TURN_NOTE
-    return f"{VOICE_LIVE_TURN_NOTE}\n[Recent spoken conversation, newest last:\n{context}]"
+    return (
+        f"{VOICE_LIVE_TURN_NOTE}\n[Recent spoken conversation, newest last:\n{context}]"
+    )
 
 
 def _voice_section() -> dict[str, Any]:
     try:
         from clawk_cli.config import load_config
+
         voice = load_config().get("voice")
     except Exception:
         return {}
@@ -118,13 +133,16 @@ def _resolve_credentials(live: dict[str, Any]) -> tuple[str, str]:
     The Nous-managed audio proxy does not carry ``/live/sessions``; this mode is direct-key only.
     """
     from tools.tool_backend_helpers import resolve_openai_audio_api_key
+
     api_key = str(live.get("api_key") or "").strip() or resolve_openai_audio_api_key()
     base_url = str(live.get("base_url") or DEFAULT_LIVE_BASE_URL).strip().rstrip("/")
     return api_key, base_url
 
 
 def live_instructions(live: Optional[dict[str, Any]] = None) -> str:
-    extra = str((live if live is not None else _live_section()).get("instructions") or "").strip()
+    extra = str(
+        (live if live is not None else _live_section()).get("instructions") or ""
+    ).strip()
     return f"{LIVE_PERSONA}\n\n{extra}" if extra else LIVE_PERSONA
 
 
@@ -138,7 +156,9 @@ def resolve_gpt_live_status() -> dict[str, Any]:
     return {
         "mode": mode,
         "available": bool(api_key),
-        "reason": None if api_key else "no OpenAI API key (set OPENAI_API_KEY or voice.gpt_live.api_key)",
+        "reason": None
+        if api_key
+        else "no OpenAI API key (set OPENAI_API_KEY or voice.gpt_live.api_key)",
         "model": str(live.get("model") or DEFAULT_LIVE_MODEL),
         "voice": str(live.get("voice") or DEFAULT_LIVE_VOICE),
     }
@@ -159,7 +179,9 @@ def build_session_config(history: Optional[list] = None) -> dict[str, Any]:
     return config
 
 
-def create_webrtc_session(sdp_offer: str, history: Optional[list] = None) -> dict[str, Any]:
+def create_webrtc_session(
+    sdp_offer: str, history: Optional[list] = None
+) -> dict[str, Any]:
     """Exchange the renderer's SDP offer for the Live session answer.
 
     Returns the vendor response ``{"session": {"id": ...}, "transport": {"type": "webrtc",
@@ -169,18 +191,30 @@ def create_webrtc_session(sdp_offer: str, history: Optional[list] = None) -> dic
     live = _live_section()
     api_key, base_url = _resolve_credentials(live)
     if not api_key:
-        raise ValueError("GPT-Live needs an OpenAI API key (OPENAI_API_KEY or voice.gpt_live.api_key)")
-    body = json.dumps({
-        "session": build_session_config(history),
-        "transport": {"type": "webrtc", "sdp": sdp_offer},
-    }).encode("utf-8")
+        raise ValueError(
+            "GPT-Live needs an OpenAI API key (OPENAI_API_KEY or voice.gpt_live.api_key)"
+        )
+    body = json.dumps(
+        {
+            "session": build_session_config(history),
+            "transport": {"type": "webrtc", "sdp": sdp_offer},
+        }
+    ).encode("utf-8")
     req = urllib.request.Request(
-        f"{base_url}/live/sessions", data=body, method="POST",
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"})
+        f"{base_url}/live/sessions",
+        data=body,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+    )
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             return json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", "replace")[:600]
         logger.warning("GPT-Live session creation failed: %s %s", exc.code, detail)
-        raise RuntimeError(f"GPT-Live session creation failed ({exc.code}): {detail}") from exc
+        raise RuntimeError(
+            f"GPT-Live session creation failed ({exc.code}): {detail}"
+        ) from exc

@@ -1,4 +1,5 @@
 """Transport-only RPC client. Closing a viewer never stops its authority."""
+
 from __future__ import annotations
 
 import asyncio
@@ -17,8 +18,10 @@ GATEWAY_WS_TICKET_PREFIX = "clawk-gateway-ticket."
 # legitimately runs long passes its own budget (``rpc(..., _timeout=...)``).
 DEFAULT_RPC_TIMEOUT = 30
 # A typed ``--api-key`` on a resume that the owner does not bind (``rebind_launch_key``): every CLI says this.
-RESUME_KEY_MISMATCH = ("--api-key on resume must be the key this session was launched with "
-                       "(a session launched without --api-key keeps its profile credentials).")
+RESUME_KEY_MISMATCH = (
+    "--api-key on resume must be the key this session was launched with "
+    "(a session launched without --api-key keeps its profile credentials)."
+)
 # Canonical ``/compress`` answers only after the summary call(s) and the commit: a long session's
 # summary routinely takes more than 30 s (``auxiliary.compression.timeout`` defaults to 120 s per
 # request, ``compression.context_total_ceiling_seconds`` to 600 s). Same budget as Desktop's
@@ -39,7 +42,10 @@ def gateway_ws_target(endpoint, ticket):
 
     The owner accepts exactly one ticket subprotocol beside ``GATEWAY_WS_PROTOCOL`` and echoes the
     latter; callers check ``ws.subprotocol == GATEWAY_WS_PROTOCOL`` after the upgrade."""
-    url = endpoint.api_origin.replace("https:", "wss:").replace("http:", "ws:") + "/api/ws"
+    url = (
+        endpoint.api_origin.replace("https:", "wss:").replace("http:", "ws:")
+        + "/api/ws"
+    )
     return url, [GATEWAY_WS_PROTOCOL, GATEWAY_WS_TICKET_PREFIX + ticket]
 
 
@@ -60,14 +66,26 @@ class GatewayRPCError(GatewayClientError):
 
 
 def _bounded_reason(value):
-    return value if isinstance(value, str) and value.replace("_", "").isalnum() and len(value) <= 80 else None
+    return (
+        value
+        if isinstance(value, str)
+        and value.replace("_", "").isalnum()
+        and len(value) <= 80
+        else None
+    )
 
 
 def _bounded_error_data(data):
     """At most 16 short keys whose values are bool/int/None, short strings or short lists of them;
     anything else (nested objects, raw remote diagnostics) is dropped, never forwarded."""
+
     def scalar(value):
-        return value is None or isinstance(value, (bool, int)) or (isinstance(value, str) and len(value) <= 200)
+        return (
+            value is None
+            or isinstance(value, (bool, int))
+            or (isinstance(value, str) and len(value) <= 200)
+        )
+
     if not isinstance(data, dict):
         return {}
     out = {}
@@ -76,7 +94,11 @@ def _bounded_error_data(data):
             continue
         if scalar(value):
             out[key] = value
-        elif isinstance(value, list) and len(value) <= 16 and all(scalar(item) for item in value):
+        elif (
+            isinstance(value, list)
+            and len(value) <= 16
+            and all(scalar(item) for item in value)
+        ):
             out[key] = list(value)
     return out
 
@@ -88,9 +110,14 @@ def rpc_error(error):
     error = error if isinstance(error, dict) else {}
     data = _bounded_error_data(error.get("data"))
     code = error.get("code")
-    reason = _bounded_reason(error.get("message", "request_failed")) or _bounded_reason(data.get("reason"))
-    return GatewayRPCError(reason or "request_failed",
-                           code if isinstance(code, int) and not isinstance(code, bool) else None, data)
+    reason = _bounded_reason(error.get("message", "request_failed")) or _bounded_reason(
+        data.get("reason")
+    )
+    return GatewayRPCError(
+        reason or "request_failed",
+        code if isinstance(code, int) and not isinstance(code, bool) else None,
+        data,
+    )
 
 
 class GatewayUnavailableError(GatewayClientError):
@@ -110,7 +137,9 @@ class EventQueue(asyncio.Queue):
         super().__init__(maxsize)
         self.overflow = deque()  # (size, item)
         self.overflow_bytes = 0
-        self.moved = asyncio.Event()  # an item left the overflow (or an RPC started waiting)
+        self.moved = (
+            asyncio.Event()
+        )  # an item left the overflow (or an RPC started waiting)
 
     def _get(self):
         item = super()._get()
@@ -154,8 +183,10 @@ class GatewayClient:
         held frames (its waiter may be the queue's only consumer) and the overflow has room."""
         events = self.events
         return not events.overflow or (
-            len(events.overflow) < EVENT_OVERFLOW_FRAMES and events.overflow_bytes < EVENT_OVERFLOW_BYTES
-            and any(not future.done() for future in self.pending.values()))
+            len(events.overflow) < EVENT_OVERFLOW_FRAMES
+            and events.overflow_bytes < EVENT_OVERFLOW_BYTES
+            and any(not future.done() for future in self.pending.values())
+        )
 
     async def _deliver(self, frame, size):
         self.events.hold(frame, size)
@@ -180,6 +211,7 @@ class GatewayClient:
 
     async def _read(self):
         from websockets.exceptions import ConnectionClosed
+
         try:
             async for raw in self.websocket:
                 frame = json.loads(raw)
@@ -194,8 +226,10 @@ class GatewayClient:
         except (ConnectionClosed, OSError, ValueError, TimeoutError):
             pass
         finally:
-            error = GatewayClientError("Gateway disconnected; turn outcome is unknown. "
-                "Resume the printed session ID to check whether it completed or was interrupted; do not resend the work.")
+            error = GatewayClientError(
+                "Gateway disconnected; turn outcome is unknown. "
+                "Resume the printed session ID to check whether it completed or was interrupted; do not resend the work."
+            )
             for future in self.pending.values():
                 if not future.done():
                     future.set_exception(error)
@@ -215,26 +249,49 @@ class GatewayClient:
         self.pending[rid] = future
         self.events.moved.set()  # a reader waiting on the consumer reads on toward this answer
         try:
-            await self.websocket.send(json.dumps({"jsonrpc": "2.0", "id": rid, "method": method, "params": params}))
+            await self.websocket.send(
+                json.dumps(
+                    {"jsonrpc": "2.0", "id": rid, "method": method, "params": params}
+                )
+            )
             budget = DEFAULT_RPC_TIMEOUT if _timeout is None else _timeout
-            return await asyncio.wait_for(future, None if budget == float("inf") else budget)
+            return await asyncio.wait_for(
+                future, None if budget == float("inf") else budget
+            )
         finally:
             self.pending.pop(rid, None)
 
 
-def _session_ticket(home: Path, endpoint, *, purpose="interactive", scope=None, subject=None) -> str:
+def _session_ticket(
+    home: Path, endpoint, *, purpose="interactive", scope=None, subject=None
+) -> str:
     from clawk_cli.gateway_runtime import control_home_for
     from clawk_cli.gateway_runtime_discovery import connect_private, _identify_response
+
     # A served secondary's ticket is minted by the multiplexer's socket, bound to the secondary.
     home = control_home_for(home, endpoint)
     # ``subject`` names the principal a same-user caller acts for (the standalone dashboard's
     # authenticated user) instead of the socket UID; the owner's peer gate stays the boundary.
-    request = json.dumps({"protocol": 1, "id": 1, "verb": "session-ticket", "params": {
-        "profile_id": endpoint.profile_id, "instance_id": endpoint.instance_id, "purpose": purpose,
-        **({"scope": scope} if scope else {}), **({"subject": subject} if subject else {}),
-    }}).encode() + b"\n"
+    request = (
+        json.dumps(
+            {
+                "protocol": 1,
+                "id": 1,
+                "verb": "session-ticket",
+                "params": {
+                    "profile_id": endpoint.profile_id,
+                    "instance_id": endpoint.instance_id,
+                    "purpose": purpose,
+                    **({"scope": scope} if scope else {}),
+                    **({"subject": subject} if subject else {}),
+                },
+            }
+        ).encode()
+        + b"\n"
+    )
     if os.name == "nt":
         from gateway.runtime_bootstrap_windows import query_runtime_control
+
         data = query_runtime_control(home, request, 5)
     else:
         deadline = time.monotonic() + 5
@@ -251,9 +308,18 @@ def _session_ticket(home: Path, endpoint, *, purpose="interactive", scope=None, 
                     raise GatewayClientError("Invalid gateway bootstrap response")
                 data.extend(chunk)
     grant = _identify_response(bytes(data))
-    if any(grant.get(k) != v for k, v in {
-        "profile_id": endpoint.profile_id, "instance_id": endpoint.instance_id, "runtime_protocol": 1,
-    }.items()) or not isinstance(grant.get("ticket"), str) or not grant["ticket"]:
+    if (
+        any(
+            grant.get(k) != v
+            for k, v in {
+                "profile_id": endpoint.profile_id,
+                "instance_id": endpoint.instance_id,
+                "runtime_protocol": 1,
+            }.items()
+        )
+        or not isinstance(grant.get("ticket"), str)
+        or not grant["ticket"]
+    ):
         raise GatewayClientError("Gateway bootstrap identity changed; retry launch")
     return grant["ticket"]
 
@@ -266,19 +332,33 @@ async def connect_gateway(endpoint=None, subject=None):
     rather than the socket identity; only a peer the owner already trusts may name one."""
     from websockets.asyncio.client import connect
     from clawk_constants import get_clawk_home
-    from clawk_cli.gateway_runtime import attachable, ensure_gateway_runtime, gateway_profile_home
+    from clawk_cli.gateway_runtime import (
+        attachable,
+        ensure_gateway_runtime,
+        gateway_profile_home,
+    )
     from urllib.parse import urlsplit
 
-    remote = "" if endpoint is not None else os.environ.get("CLAWK_TUI_GATEWAY_URL", "").strip()
+    remote = (
+        ""
+        if endpoint is not None
+        else os.environ.get("CLAWK_TUI_GATEWAY_URL", "").strip()
+    )
     protocols = None
     if endpoint is not None:
-        ticket = await asyncio.to_thread(_session_ticket, gateway_profile_home(get_clawk_home()), endpoint,
-                                         subject=subject)
+        ticket = await asyncio.to_thread(
+            _session_ticket,
+            gateway_profile_home(get_clawk_home()),
+            endpoint,
+            subject=subject,
+        )
         url, protocols = gateway_ws_target(endpoint, ticket)
     elif remote:
         parsed = urlsplit(remote)
         if parsed.scheme not in {"ws", "wss"} or not parsed.hostname:
-            raise GatewayClientError("Invalid explicit gateway WebSocket URL; no local fallback")
+            raise GatewayClientError(
+                "Invalid explicit gateway WebSocket URL; no local fallback"
+            )
         url = remote
     else:
         # A per-task overlay home is served by the profile its symlinked lock names (#138949).
@@ -290,10 +370,14 @@ async def connect_gateway(endpoint=None, subject=None):
             detail = getattr(result, "detail", None)
             if result.reason_code == "runtime_exited" and detail:
                 # A multi-line startup report (redacted traceback tail + where the full log is).
-                raise GatewayUnavailableError(f"Gateway could not start: {detail}", result.state)
+                raise GatewayUnavailableError(
+                    f"Gateway could not start: {detail}", result.state
+                )
             detail = f" ({detail})" if detail else ""
-            raise GatewayUnavailableError(f"Gateway {result.state}: {result.reason_code or 'not_ready'}{detail}",
-                                          result.state)
+            raise GatewayUnavailableError(
+                f"Gateway {result.state}: {result.reason_code or 'not_ready'}{detail}",
+                result.state,
+            )
         endpoint = result.endpoint
         ticket = await asyncio.to_thread(_session_ticket, home, endpoint)
         url, protocols = gateway_ws_target(endpoint, ticket)
@@ -301,13 +385,22 @@ async def connect_gateway(endpoint=None, subject=None):
         # The gateway is a loopback (or explicitly named) peer, never something to route through the
         # user's HTTP(S) proxy; websockets>=14 reads HTTP_PROXY/HTTPS_PROXY by default and a proxy that
         # cannot reach 127.0.0.1 turns every launch into a 10 s open timeout.
-        async with connect(url, subprotocols=protocols, open_timeout=10, max_size=8 * 1024 * 1024,
-                           proxy=None) as ws:
+        async with connect(
+            url,
+            subprotocols=protocols,
+            open_timeout=10,
+            max_size=8 * 1024 * 1024,
+            proxy=None,
+        ) as ws:
             if protocols and ws.subprotocol != GATEWAY_WS_PROTOCOL:
-                raise GatewayClientError("Gateway protocol mismatch; update/restart required")
+                raise GatewayClientError(
+                    "Gateway protocol mismatch; update/restart required"
+                )
             async with GatewayClient(ws) as client:
                 yield client
     except GatewayClientError:
         raise
     except (OSError, TimeoutError) as exc:
-        raise GatewayClientError("Gateway connection failed; no local fallback") from exc
+        raise GatewayClientError(
+            "Gateway connection failed; no local fallback"
+        ) from exc

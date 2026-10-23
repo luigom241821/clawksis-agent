@@ -14,7 +14,9 @@ def _clean():
 
 
 def _op(session="s1"):
-    return op.ConnectionOperation([op.Target("gmail", "connector", "connect")], session_key=session)
+    return op.ConnectionOperation(
+        [op.Target("gmail", "connector", "connect")], session_key=session
+    )
 
 
 def test_open_then_get_by_session_and_op_id():

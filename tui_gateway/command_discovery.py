@@ -3,13 +3,16 @@
 Transport wrappers own authentication and profile binding before calling these
 builders. Keep the legacy catalog and completion semantics identical here.
 """
+
 import contextlib
 from importlib import import_module
 import logging
 
 logger = logging.getLogger(__name__)
 
-_TUI_HIDDEN: frozenset[str] = frozenset({"sethome", "set-home", "commands", "approve", "deny"})
+_TUI_HIDDEN: frozenset[str] = frozenset(
+    {"sethome", "set-home", "commands", "approve", "deny"}
+)
 
 _TUI_EXTRA: list[tuple[str, str, str]] = [
     ("/density", "Toggle compact display mode", "TUI"),
@@ -19,13 +22,19 @@ _TUI_EXTRA: list[tuple[str, str, str]] = [
 ]
 
 _SLASH_EXTRAS = [
-    ("/density", "Toggle compact display mode"), ("/details", "Control agent detail visibility"),
+    ("/density", "Toggle compact display mode"),
+    ("/details", "Control agent detail visibility"),
     ("/logs", "Show recent gateway log lines"),
-    ("/mouse", "Set mouse tracking preset [on|off|toggle|wheel|buttons|all]")]
+    ("/mouse", "Set mouse tracking preset [on|off|toggle|wheel|buttons|all]"),
+]
 
 
 def _item(text: str, meta: str, display: str | None = None) -> dict:
-    return {"text": text, "display": display if display is not None else text, "meta": meta}
+    return {
+        "text": text,
+        "display": display if display is not None else text,
+        "meta": meta,
+    }
 
 
 def _skill_usage_lookup():
@@ -33,8 +42,17 @@ def _skill_usage_lookup():
     "hub" / "bundled" / "local" (``/api/skills`` ``provenance``, "local" spelled "agent"). Failure → 0 / "local"."""
     try:
         from tools.skill_usage import (
-            _read_bundled_names, _read_hub_installed_names, activity_count, load_usage)
-        records, bundled, hub = load_usage(), _read_bundled_names(), _read_hub_installed_names()
+            _read_bundled_names,
+            _read_hub_installed_names,
+            activity_count,
+            load_usage,
+        )
+
+        records, bundled, hub = (
+            load_usage(),
+            _read_bundled_names(),
+            _read_hub_installed_names(),
+        )
     except Exception as e:
         logger.debug("skill usage lookup unavailable: %s", e)
         return (lambda _name: 0), (lambda _name: "local")
@@ -46,30 +64,50 @@ def _skill_usage_lookup():
 
     def origin(name: str) -> str:
         return "hub" if name in hub else "bundled" if name in bundled else "local"
+
     return usage, origin
 
 
 _SLASH_COMPLETION_LIMIT = 30
 
 
-def _rank_slash_completions(items: list[dict], usage, origin_of, *, browsing: bool, score_of=None,
-                            registry_command_names: frozenset[str] | None = None) -> list[dict]:
+def _rank_slash_completions(
+    items: list[dict],
+    usage,
+    origin_of,
+    *,
+    browsing: bool,
+    score_of=None,
+    registry_command_names: frozenset[str] | None = None,
+) -> list[dict]:
     """Registry commands keep their order; only skills reorder: fuzzy ``score_of`` first, then most-used, then
     A-Z. The limit is spent PER KIND (a flat cut on a large install offered no skill at all). ``browsing``
     (bare ``/``) drops never-used bundled skills as noise; a typed query is SEARCHING — nothing pruned, only reordered.
     While browsing, only names in ``registry_command_names`` (default ``GATEWAY_KNOWN_COMMANDS``) skip the cap:
     plugin-registered commands are also ``kind != "skill"`` but unbounded, so they stay capped like skills."""
+
     def name_of(item: dict) -> str:
         return str(item.get("text", "")).strip().lstrip("/").lower()
+
     commands = [item for item in items if item.get("kind") != "skill"]
     skills = [item for item in items if item.get("kind") == "skill"]
     if browsing:
-        skills = [item for item in skills if origin_of(name_of(item)) != "bundled" or usage(name_of(item)) > 0]
-    skills.sort(key=lambda item: (
-        *(() if score_of is None else (score_of(item),)), -usage(name_of(item)), name_of(item)))
+        skills = [
+            item
+            for item in skills
+            if origin_of(name_of(item)) != "bundled" or usage(name_of(item)) > 0
+        ]
+    skills.sort(
+        key=lambda item: (
+            *(() if score_of is None else (score_of(item),)),
+            -usage(name_of(item)),
+            name_of(item),
+        )
+    )
     if browsing:
         if registry_command_names is None:
             from clawk_cli.commands import GATEWAY_KNOWN_COMMANDS
+
             registry_command_names = GATEWAY_KNOWN_COMMANDS
         fixed = [c for c in commands if name_of(c) in registry_command_names]
         other = [c for c in commands if name_of(c) not in registry_command_names]
@@ -105,19 +143,28 @@ def _details_completions(text: str) -> list[dict] | None:
         return [_item(f"{lead}{c}", _details_root_meta(c)) for c in root_candidates]
     if len(parts) == 1 and not trailing:
         prefix = parts[0].lower()
-        return [_item(c, _details_root_meta(c)) for c in root_candidates if c.startswith(prefix) and c != prefix]
+        return [
+            _item(c, _details_root_meta(c))
+            for c in root_candidates
+            if c.startswith(prefix) and c != prefix
+        ]
     section = parts[0].lower() if parts else ""
     if section not in _DETAILS_SECTIONS:
         return []
 
     def section_meta(candidate: str) -> str:
         return f"clear {section} override" if candidate == "reset" else f"set {section}"
+
     mode_candidates = (*_DETAILS_MODES, "reset")
     if len(parts) == 1:  # trailing space after the section
         return [_item(c, section_meta(c)) for c in mode_candidates]
     if len(parts) == 2 and not trailing:
         prefix = parts[1].lower()
-        return [_item(c, section_meta(c)) for c in mode_candidates if c.startswith(prefix) and c != prefix]
+        return [
+            _item(c, section_meta(c))
+            for c in mode_candidates
+            if c.startswith(prefix) and c != prefix
+        ]
     return []
 
 
@@ -129,8 +176,12 @@ class _Catalog:
         self.pairs: list[list[str]] = []
         self.canon: dict[str, str] = {}
         self.commands: dict[str, dict[str, str | None]] = {}
-        self.cat_map: dict[str, list[list[str]]] = {}  # insertion order = category order
-        self.plugin_commands: dict[str, str] = {}  # every plugin command, also those a display row hides
+        self.cat_map: dict[
+            str, list[list[str]]
+        ] = {}  # insertion order = category order
+        self.plugin_commands: dict[
+            str, str
+        ] = {}  # every plugin command, also those a display row hides
 
     def add(self, key: str, desc: str, cat: str) -> None:
         self.canon[key.lower()] = key
@@ -158,13 +209,20 @@ def _catalog_quick_commands(cat: _Catalog, load_cfg) -> None:
     qcmds = load_cfg().get("quick_commands", {}) or {}
     if not (isinstance(qcmds, dict) and qcmds):
         return
-    cat.cat_map.setdefault("User commands", [])  # category exists even when every entry is malformed
+    cat.cat_map.setdefault(
+        "User commands", []
+    )  # category exists even when every entry is malformed
     for qname, qc in sorted(qcmds.items()):
         if not isinstance(qc, dict):
             continue
         qtype = qc.get("type", "")
-        default_desc = {"exec": f"exec: {qc.get('command', '')}", "alias": f"alias → {qc.get('target', '')}"}
-        desc = str(qc.get("description") or default_desc.get(qtype, qtype or "quick command"))
+        default_desc = {
+            "exec": f"exec: {qc.get('command', '')}",
+            "alias": f"alias → {qc.get('target', '')}",
+        }
+        desc = str(
+            qc.get("description") or default_desc.get(qtype, qtype or "quick command")
+        )
         cat.add(f"/{qname}", desc, "User commands")
 
 
@@ -199,7 +257,9 @@ def _catalog_skills(cat: _Catalog, skills: dict[str, dict], module_loader) -> st
     collision_note = getattr(sc, "skill_command_collision_note", None)
     if collision_note is None:
         return ""
-    names = sorted(s["name"] for s in module_loader("tools.skills_tool").find_all_skills())
+    names = sorted(
+        s["name"] for s in module_loader("tools.skills_tool").find_all_skills()
+    )
     return "; ".join(filter(None, map(collision_note, names)))
 
 
@@ -216,6 +276,7 @@ def command_catalog(load_cfg=None, module_loader=import_module, scope=None) -> d
     raises out of here — the caller maps it to 4064 like ``complete.slash`` (#124651)."""
     if load_cfg is None:
         from clawk_cli.config import load_config_readonly
+
         load_cfg = load_config_readonly
     cat = _Catalog()
     _catalog_registry(cat, module_loader)
@@ -236,18 +297,27 @@ def command_catalog(load_cfg=None, module_loader=import_module, scope=None) -> d
             plugin_error = str(e) or type(e).__name__
             warning = warning or f"plugin command discovery unavailable: {e}"
         try:
-            collision_note = _catalog_skills(cat, skills, module_loader)  # always runs: skills must list even when a loader failed
+            collision_note = _catalog_skills(
+                cat, skills, module_loader
+            )  # always runs: skills must list even when a loader failed
             warning = warning or collision_note
         except Exception as e:
             logger.debug("skill discovery failed", exc_info=True)
             warning = f"skill discovery unavailable: {e}"
     return {
-        "pairs": cat.pairs, "sub": {k: v[:] for k, v in module_loader("clawk_cli.commands").SUBCOMMANDS.items()},
+        "pairs": cat.pairs,
+        "sub": {
+            k: v[:] for k, v in module_loader("clawk_cli.commands").SUBCOMMANDS.items()
+        },
         "canon": cat.canon,
         "commands": cat.commands,
         "categories": [{"name": c, "pairs": rows} for c, rows in cat.cat_map.items()],
-        "skills": skills, "skill_count": len(skills), "warning": warning, "plugin_discovery_error": plugin_error,
-        "plugin_commands": cat.plugin_commands}
+        "skills": skills,
+        "skill_count": len(skills),
+        "warning": warning,
+        "plugin_discovery_error": plugin_error,
+        "plugin_commands": cat.plugin_commands,
+    }
 
 
 def slash_completions(text: str = "", scope=None) -> dict:
@@ -261,10 +331,16 @@ def slash_completions(text: str = "", scope=None) -> dict:
     from prompt_toolkit.formatted_text import to_plain_text
     from agent.skill_commands import get_interactive_skill_commands
     from agent.skill_bundles import get_skill_bundles
+
     with scope if scope is not None else contextlib.nullcontext():
-        skill_commands, skill_bundles = dict(get_interactive_skill_commands()), dict(get_skill_bundles())
+        skill_commands, skill_bundles = (
+            dict(get_interactive_skill_commands()),
+            dict(get_skill_bundles()),
+        )
     completer = SlashCommandCompleter(
-        skill_commands_provider=lambda: skill_commands, skill_bundles_provider=lambda: skill_bundles)
+        skill_commands_provider=lambda: skill_commands,
+        skill_bundles_provider=lambda: skill_bundles,
+    )
     # `kind` reaches the TUI as data (from the providers, not sniffed from ⚡/▣ glyphs):
     # skills/bundles are the only completions for an inline `/skill` typed mid-message.
     skill_names = {key.lstrip("/").lower() for key in (*skill_commands, *skill_bundles)}
@@ -274,10 +350,16 @@ def slash_completions(text: str = "", scope=None) -> dict:
         # (the raw list trips Ink's row layout into 1-char truncation).
         return [
             {
-                "text": c.text, "display": to_plain_text(c.display) if c.display else c.text,
+                "text": c.text,
+                "display": to_plain_text(c.display) if c.display else c.text,
                 "meta": to_plain_text(c.display_meta) if c.display_meta else "",
-                "kind": "skill" if c.text.strip().lstrip("/").lower() in skill_names else "command"}
-            for c in completer.get_completions(doc, None)]
+                "kind": "skill"
+                if c.text.strip().lstrip("/").lower() in skill_names
+                else "command",
+            }
+            for c in completer.get_completions(doc, None)
+        ]
+
     items = to_items(Document(text, len(text)))
     # Rank + bound while a `/token` is under the cursor (the one stage skills are
     # offered at); an argument stage (`/personality `) keeps its command's order.
@@ -286,17 +368,29 @@ def slash_completions(text: str = "", scope=None) -> dict:
         # Command-token stage: the completer only emits name-prefix matches, so merge in
         # catalog entries whose name SUBSTRING or DESCRIPTION words match (name outranks description).
         if " " not in text and len(text) > 1:
-            from tui_gateway.slash_fuzzy import fuzzy_rank_slash_items, normalize_slash_search_query
+            from tui_gateway.slash_fuzzy import (
+                fuzzy_rank_slash_items,
+                normalize_slash_search_query,
+            )
+
             items, score_of = fuzzy_rank_slash_items(
-                items, to_items(Document("/", 1)), normalize_slash_search_query(text))
+                items, to_items(Document("/", 1)), normalize_slash_search_query(text)
+            )
         usage, origin_of = _skill_usage_lookup()
-        items = _rank_slash_completions(items, usage, origin_of, browsing=text == "/", score_of=score_of)
+        items = _rank_slash_completions(
+            items, usage, origin_of, browsing=text == "/", score_of=score_of
+        )
     else:
         items = items[:_SLASH_COMPLETION_LIMIT]
     text_lower = text.lower()
     for extra_text, extra_meta in _SLASH_EXTRAS:
-        if extra_text.startswith(text_lower) and not any(item["text"] == extra_text for item in items):
+        if extra_text.startswith(text_lower) and not any(
+            item["text"] == extra_text for item in items
+        ):
             items.append({**_item(extra_text, extra_meta), "kind": "command"})
     if (details_items := _details_completions(text)) is not None:
-        return {"items": details_items, "replace_from": text.rfind(" ") + 1 if " " in text else len(text)}
+        return {
+            "items": details_items,
+            "replace_from": text.rfind(" ") + 1 if " " in text else len(text),
+        }
     return {"items": items, "replace_from": text.rfind(" ") + 1 if " " in text else 1}

@@ -1,6 +1,7 @@
 """The desktop's onboarding chat on the unified gateway: the window resumes the chat that
 ``onboarding.start`` opened.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -42,48 +43,92 @@ async def _desktop(tmp_path, monkeypatch, turns):
     monkeypatch.setattr(server, "_db", None)
     monkeypatch.setattr("agent.onboarding_facts.read_facts", lambda **kw: FACTS)
     (home / ".env").write_text("OPENROUTER_API_KEY=sk-or-test\n", encoding="utf-8")
-    (home / "config.yaml").write_text("model:\n  provider: openrouter\n  default: anthropic/claude-sonnet-4\n",
-                                      encoding="utf-8")
+    (home / "config.yaml").write_text(
+        "model:\n  provider: openrouter\n  default: anthropic/claude-sonnet-4\n",
+        encoding="utf-8",
+    )
 
     async def answer(event):
         turns.append(event)
         return "ok"
 
     store = SessionStore(home / "sessions", GatewayConfig())
-    runner = SimpleNamespace(_session_db=store._db, session_store=store, _draining=False, adapters={},
-                             _handle_message=answer, _evict_cached_agent=lambda route: None,
-                             _cached_agent_for=lambda route: None, _peek_session_state=lambda key: None)
+    runner = SimpleNamespace(
+        _session_db=store._db,
+        session_store=store,
+        _draining=False,
+        adapters={},
+        _handle_message=answer,
+        _evict_cached_agent=lambda route: None,
+        _cached_agent_for=lambda route: None,
+        _peek_session_state=lambda key: None,
+    )
     runner._adapter_for_source = lambda source: runner.adapters.get(source.platform)
-    authority = await initialize_session_authority(runner, profile_id=str(home), instance_id="owner")
+    authority = await initialize_session_authority(
+        runner, profile_id=str(home), instance_id="owner"
+    )
     transport = _Transport()
-    identity = {"user_id": "uid:1", "provider": "local", "profile_id": str(home), "instance_id": "owner",
-                "native_bootstrap": True}
-    transport.desktop_local = True  # the Desktop's accepted ``client.capabilities {desktop_local}``
+    identity = {
+        "user_id": "uid:1",
+        "provider": "local",
+        "profile_id": str(home),
+        "instance_id": "owner",
+        "native_bootstrap": True,
+    }
+    transport.desktop_local = (
+        True  # the Desktop's accepted ``client.capabilities {desktop_local}``
+    )
     connection = AuthorityConnection(authority, transport, identity)
     from gateway.session_local_migration import bind_native_transport
+
     bind_native_transport(authority, connection.actor, identity)
-    return SimpleNamespace(authority=authority, connection=connection, transport=transport, db=store._db)
+    return SimpleNamespace(
+        authority=authority, connection=connection, transport=transport, db=store._db
+    )
 
 
 async def _request(desktop, rid, method, params):
     from tui_gateway.ws import _dispatch_request
-    reply = await _dispatch_request(desktop.connection, {"jsonrpc": "2.0", "id": rid, "method": method,
-                                                         "params": params}, method, desktop.transport)
+
+    reply = await _dispatch_request(
+        desktop.connection,
+        {"jsonrpc": "2.0", "id": rid, "method": method, "params": params},
+        method,
+        desktop.transport,
+    )
     if reply is None:
+
         def written():
-            return next((f for f in desktop.transport.frames if isinstance(f, dict) and f.get("id") == rid), None)
+            return next(
+                (
+                    f
+                    for f in desktop.transport.frames
+                    if isinstance(f, dict) and f.get("id") == rid
+                ),
+                None,
+            )
+
         await async_wait_until(written, timeout=20)
         reply = written()
     return reply
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("start", [{"rerun": True}, {"fresh_launch": True}], ids=["rerun", "launch"])
-async def test_the_window_resumes_the_chat_onboarding_start_opened(tmp_path, monkeypatch, start):
+@pytest.mark.parametrize(
+    "start", [{"rerun": True}, {"fresh_launch": True}], ids=["rerun", "launch"]
+)
+async def test_the_window_resumes_the_chat_onboarding_start_opened(
+    tmp_path, monkeypatch, start
+):
     turns = []
     desktop = await _desktop(tmp_path, monkeypatch, turns)
     try:
-        started = await _request(desktop, 1, "onboarding.start", {"facts_source": "local", "locale": "en", **start})
+        started = await _request(
+            desktop,
+            1,
+            "onboarding.start",
+            {"facts_source": "local", "locale": "en", **start},
+        )
         assert "result" in started, started
         stored = started["result"]["stored_session_id"]
 
@@ -99,14 +144,21 @@ async def test_the_window_resumes_the_chat_onboarding_start_opened(tmp_path, mon
 
 
 @pytest.mark.asyncio
-async def test_a_rerun_replaces_the_open_run_and_skip_ends_the_new_one(tmp_path, monkeypatch):
+async def test_a_rerun_replaces_the_open_run_and_skip_ends_the_new_one(
+    tmp_path, monkeypatch
+):
     from agent import onboarding_record
     from gateway.session_server_requests import ask_viewer_result, waiting
+
     turns = []
     desktop = await _desktop(tmp_path, monkeypatch, turns)
     try:
-        first = (await _request(desktop, 1, "onboarding.start", {"rerun": True}))["result"]["stored_session_id"]
-        second = (await _request(desktop, 2, "onboarding.start", {"rerun": True}))["result"]["stored_session_id"]
+        first = (await _request(desktop, 1, "onboarding.start", {"rerun": True}))[
+            "result"
+        ]["stored_session_id"]
+        second = (await _request(desktop, 2, "onboarding.start", {"rerun": True}))[
+            "result"
+        ]["stored_session_id"]
         assert second != first
         assert onboarding_record.load(desktop.db, first)["phase"] != "onboarding"
         assert onboarding_record.load(desktop.db, second)["phase"] == "onboarding"
@@ -114,9 +166,15 @@ async def test_a_rerun_replaces_the_open_run_and_skip_ends_the_new_one(tmp_path,
         assert again["stored_session_id"] == second and again["resumed"] is True
 
         live = desktop.authority.sessions[second]
-        answer = asyncio.get_running_loop().run_in_executor(None, lambda: ask_viewer_result(
-            live.event_stream, second, "setup_beat", {"beat": "name"}, timeout=10))
-        await async_wait_until(lambda: waiting(live.event_stream, second, "setup_beat"), timeout=5)
+        answer = asyncio.get_running_loop().run_in_executor(
+            None,
+            lambda: ask_viewer_result(
+                live.event_stream, second, "setup_beat", {"beat": "name"}, timeout=10
+            ),
+        )
+        await async_wait_until(
+            lambda: waiting(live.event_stream, second, "setup_beat"), timeout=5
+        )
         skipped = await _request(desktop, 4, "onboarding.skip", {"session_id": second})
         assert skipped["result"] == {"skipped": True}, skipped
         assert await answer is None
@@ -149,6 +207,7 @@ def test_an_onboarding_chat_folds_in_setup_beat_for_its_whole_life(tmp_path):
     from agent.onboarding_flow import End
     from agent.onboarding_session import onboarding_chat_toolsets
     from clawk_state import SessionDB
+
     db = SessionDB(db_path=tmp_path / "state.db")
     try:
         db.create_session("onb", source="local")
@@ -163,22 +222,40 @@ def test_an_onboarding_chat_folds_in_setup_beat_for_its_whole_life(tmp_path):
         db.close()
 
 
-def test_the_authority_turn_plays_the_opening_and_skips_the_note_while_a_card_waits(tmp_path):
+def test_the_authority_turn_plays_the_opening_and_skips_the_note_while_a_card_waits(
+    tmp_path,
+):
     from agent import onboarding_record
     from agent.onboarding_text import GREETING
     from gateway.session_onboarding import arm_onboarding_turn
     from gateway.session_server_requests import _Pending, _lock, _open
     from clawk_state import SessionDB
+
     db = SessionDB(db_path=tmp_path / "state.db")
     try:
         db.create_session("onb", source="local")
         onboarding_record.start(db, "onb", FACTS)
         stream = object()
-        owner = (SimpleNamespace(sessions={"onb": SimpleNamespace(event_stream=stream)}), "onb", 1)
-        agent = SimpleNamespace(_session_db=db, session_id="onb", valid_tool_names={"setup_beat"},
-                                _gateway_turn_context_notes="")
-        assert list(arm_onboarding_turn(agent, owner, [])) == [(GREETING, "setup_beat", {"beat": "name"})]
-        assert arm_onboarding_turn(SimpleNamespace(valid_tool_names={"terminal"}), owner, []) is None
+        owner = (
+            SimpleNamespace(sessions={"onb": SimpleNamespace(event_stream=stream)}),
+            "onb",
+            1,
+        )
+        agent = SimpleNamespace(
+            _session_db=db,
+            session_id="onb",
+            valid_tool_names={"setup_beat"},
+            _gateway_turn_context_notes="",
+        )
+        assert list(arm_onboarding_turn(agent, owner, [])) == [
+            (GREETING, "setup_beat", {"beat": "name"})
+        ]
+        assert (
+            arm_onboarding_turn(
+                SimpleNamespace(valid_tool_names={"terminal"}), owner, []
+            )
+            is None
+        )
         assert arm_onboarding_turn(agent, None, []) is None
         with _lock:
             _open["srq-test"] = _Pending("onb", events=stream, method="setup_beat")
@@ -194,14 +271,18 @@ def test_the_authority_turn_plays_the_opening_and_skips_the_note_while_a_card_wa
 
 async def _settled(desktop, session_id):
     """The opening turn's lease released: a delete is not refused as a write in flight."""
+
     def idle():
         with desktop.db._read_ctx() as conn:
             return not desktop.db._guarded_ids(conn, [session_id])
+
     await async_wait_until(idle, timeout=10)
 
 
 @pytest.mark.asyncio
-async def test_start_from_a_secondary_profile_claims_in_the_default_home(tmp_path, monkeypatch):
+async def test_start_from_a_secondary_profile_claims_in_the_default_home(
+    tmp_path, monkeypatch
+):
     """Multiplexed host socket on a secondary profile: onboarding runs in ``default``, so the trial claim,
     the provider check and the chat's policy read the default home, never the asking connection's."""
     from gateway.session_authorities import SessionAuthorities
@@ -209,31 +290,49 @@ async def test_start_from_a_secondary_profile_claims_in_the_default_home(tmp_pat
     from gateway.session_controls import AuthorityConnection
     from clawk_constants import get_clawk_home
     from clawk_state import SessionDB
+
     desktop = await _desktop(tmp_path, monkeypatch, [])
     home = tmp_path / ".clawk"
     work = home / "profiles" / "work"
     work.mkdir(parents=True)
-    (work / "config.yaml").write_text("{}\n", encoding="utf-8")  # nothing to run on in the asking profile
+    (work / "config.yaml").write_text(
+        "{}\n", encoding="utf-8"
+    )  # nothing to run on in the asking profile
     claims = []
 
     def claim(*, assume_fresh):
         claims.append(Path(get_clawk_home()))
+
     monkeypatch.setattr("clawk_cli.welcome_trial.claim_desktop_free_tier", claim)
     runner = desktop.authority.runner
     runner.config = SimpleNamespace(multiplex_profiles=True)
     work_db = SessionDB(db_path=work / "state.db")
-    secondary = await initialize_session_authority(runner, profile_id=str(work), instance_id="owner", db=work_db,
-                                                   register=False)
+    secondary = await initialize_session_authority(
+        runner, profile_id=str(work), instance_id="owner", db=work_db, register=False
+    )
     runner.session_authorities = SessionAuthorities(home, multiplexed=True)
     runner.session_authorities.add(home, desktop.authority, name="default")
     runner.session_authorities.add(work, secondary, name="work")
-    connection = AuthorityConnection(secondary, desktop.transport, {
-        "user_id": "uid:1", "provider": "local", "profile_id": str(work), "instance_id": "owner",
-        "profile_scope": "host"})
+    connection = AuthorityConnection(
+        secondary,
+        desktop.transport,
+        {
+            "user_id": "uid:1",
+            "provider": "local",
+            "profile_id": str(work),
+            "instance_id": "owner",
+            "profile_scope": "host",
+        },
+    )
     try:
         from clawk_cli.process_identity import serving_local_desktop
-        with serving_local_desktop(True):  # what ws._dispatch_request binds for the declared Desktop socket
-            started = await connection.dispatch({"jsonrpc": "2.0", "id": 1, "method": "onboarding.start", "params": {}})
+
+        with serving_local_desktop(
+            True
+        ):  # what ws._dispatch_request binds for the declared Desktop socket
+            started = await connection.dispatch(
+                {"jsonrpc": "2.0", "id": 1, "method": "onboarding.start", "params": {}}
+            )
         assert "result" in started, started
         assert claims == [home]
         assert started["result"]["stored_session_id"] in desktop.authority.sessions
@@ -247,23 +346,32 @@ async def test_start_from_a_secondary_profile_claims_in_the_default_home(tmp_pat
 async def test_skip_accepts_the_profile_the_desktop_names(tmp_path, monkeypatch):
     desktop = await _desktop(tmp_path, monkeypatch, [])
     try:
-        stored = (await _request(desktop, 1, "onboarding.start", {"rerun": True}))["result"]["stored_session_id"]
-        skipped = await _request(desktop, 2, "onboarding.skip", {"session_id": stored, "profile": "default"})
+        stored = (await _request(desktop, 1, "onboarding.start", {"rerun": True}))[
+            "result"
+        ]["stored_session_id"]
+        skipped = await _request(
+            desktop, 2, "onboarding.skip", {"session_id": stored, "profile": "default"}
+        )
         assert skipped.get("result") == {"skipped": True}, skipped
     finally:
         await desktop.connection.close()
 
 
 @pytest.mark.asyncio
-async def test_deleting_the_onboarding_chat_from_the_sidebar_ends_the_run(tmp_path, monkeypatch):
+async def test_deleting_the_onboarding_chat_from_the_sidebar_ends_the_run(
+    tmp_path, monkeypatch
+):
     from agent import onboarding_record
     from clawk_cli.onboarding_run import _root_config
     from clawk_cli.config import read_user_config_raw
+
     turns, ended = [], []
     desktop = await _desktop(tmp_path, monkeypatch, turns)
     onboarding_record.on_ended(ended.append)
     try:
-        stored = (await _request(desktop, 1, "onboarding.start", {"rerun": True}))["result"]["stored_session_id"]
+        stored = (await _request(desktop, 1, "onboarding.start", {"rerun": True}))[
+            "result"
+        ]["stored_session_id"]
         await async_wait_until(lambda: turns, timeout=10)
         await _settled(desktop, stored)
         replies = []
@@ -272,17 +380,34 @@ async def test_deleting_the_onboarding_chat_from_the_sidebar_ends_the_run(tmp_pa
             # The settlement can still bump the revision after the lease releases; the Desktop
             # re-reads and resends on a conflict, so the test does too.
             row = desktop.db.get_session(stored)
-            replies.append(await _request(desktop, 2 + len(replies), "session.mutate", {
-                "session_id": stored, "request_id": f"delete-onboarding-{len(replies)}",
-                "expected_revision": row["runtime_revision"], "expected_generation": row["runtime_generation"],
-                "operation": "delete", "payload": {}}))
-            return "result" in replies[-1] or replies[-1].get("error", {}).get("data", {}).get("reason") != "revision_conflict"
+            replies.append(
+                await _request(
+                    desktop,
+                    2 + len(replies),
+                    "session.mutate",
+                    {
+                        "session_id": stored,
+                        "request_id": f"delete-onboarding-{len(replies)}",
+                        "expected_revision": row["runtime_revision"],
+                        "expected_generation": row["runtime_generation"],
+                        "operation": "delete",
+                        "payload": {},
+                    },
+                )
+            )
+            return (
+                "result" in replies[-1]
+                or replies[-1].get("error", {}).get("data", {}).get("reason")
+                != "revision_conflict"
+            )
 
         for _ in range(5):
             if await delete_at_the_current_revision():
                 break
         assert "result" in replies[-1], replies
-        assert [e["outcome"] for e in ended if e["stored_session_id"] == stored] == ["deleted"]
+        assert [e["outcome"] for e in ended if e["stored_session_id"] == stored] == [
+            "deleted"
+        ]
         assert read_user_config_raw(_root_config())["onboarding"]["run"] is False
     finally:
         onboarding_record._ended_listeners.remove(ended.append)
@@ -290,23 +415,36 @@ async def test_deleting_the_onboarding_chat_from_the_sidebar_ends_the_run(tmp_pa
 
 
 @pytest.mark.asyncio
-async def test_a_fresh_launch_deletes_the_chat_the_last_launch_left_with_no_viewer(tmp_path, monkeypatch):
+async def test_a_fresh_launch_deletes_the_chat_the_last_launch_left_with_no_viewer(
+    tmp_path, monkeypatch
+):
     """The previous launch's chat is still mounted (a backend that outlived the app, or local recovery),
     but no window watches it and no turn runs in it: the new launch's start deletes it and drops it
     from the authority."""
     from gateway.session_controls import AuthorityConnection
+
     turns = []
     desktop = await _desktop(tmp_path, monkeypatch, turns)
-    first = (await _request(desktop, 1, "onboarding.start", {"rerun": True}))["result"]["stored_session_id"]
+    first = (await _request(desktop, 1, "onboarding.start", {"rerun": True}))["result"][
+        "stored_session_id"
+    ]
     await async_wait_until(lambda: turns, timeout=10)
     await _settled(desktop, first)
     await desktop.connection.close()  # the app quits
     assert first in desktop.authority.sessions
-    identity = {"user_id": "uid:1", "provider": "local", "profile_id": desktop.authority.profile_id,
-                "instance_id": "owner"}
-    desktop.connection = AuthorityConnection(desktop.authority, desktop.transport, identity)
+    identity = {
+        "user_id": "uid:1",
+        "provider": "local",
+        "profile_id": desktop.authority.profile_id,
+        "instance_id": "owner",
+    }
+    desktop.connection = AuthorityConnection(
+        desktop.authority, desktop.transport, identity
+    )
     try:
-        second = (await _request(desktop, 2, "onboarding.start", {"fresh_launch": True}))["result"]
+        second = (
+            await _request(desktop, 2, "onboarding.start", {"fresh_launch": True})
+        )["result"]
         assert second["stored_session_id"] != first
         assert desktop.db.get_session(first) is None
         assert first not in desktop.authority.sessions
@@ -315,14 +453,19 @@ async def test_a_fresh_launch_deletes_the_chat_the_last_launch_left_with_no_view
 
 
 @pytest.mark.asyncio
-async def test_onboarding_start_from_a_client_that_is_not_the_local_desktop_changes_nothing(tmp_path, monkeypatch):
+async def test_onboarding_start_from_a_client_that_is_not_the_local_desktop_changes_nothing(
+    tmp_path, monkeypatch
+):
     """A CLI or TUI holds a native ticket too. Its ``onboarding.start`` is refused before the install
     flag is written, so it never schedules first-run onboarding for the Desktop."""
     from clawk_cli.onboarding_run import _explicit_run
+
     desktop = await _desktop(tmp_path, monkeypatch, [])
     desktop.transport.desktop_local = False
     try:
-        refused = await _request(desktop, 1, "onboarding.start", {"facts_source": "local", "locale": "en"})
+        refused = await _request(
+            desktop, 1, "onboarding.start", {"facts_source": "local", "locale": "en"}
+        )
         assert "error" in refused, refused
         assert _explicit_run() is None
         assert desktop.authority.sessions == {}
@@ -331,37 +474,69 @@ async def test_onboarding_start_from_a_client_that_is_not_the_local_desktop_chan
 
 
 @pytest.mark.asyncio
-async def test_a_window_that_reopens_the_old_chat_while_a_fresh_launch_starts_keeps_it(tmp_path, monkeypatch):
+async def test_a_window_that_reopens_the_old_chat_while_a_fresh_launch_starts_keeps_it(
+    tmp_path, monkeypatch
+):
     """The start decided the old chat had no viewer, then another window resumed it before the delete
     ran: the chat stays with its messages, and its run ends as replaced."""
     from agent import onboarding_record
     from gateway.session_controls import AuthorityConnection
+
     turns = []
     desktop = await _desktop(tmp_path, monkeypatch, turns)
-    first = (await _request(desktop, 1, "onboarding.start", {"rerun": True}))["result"]["stored_session_id"]
+    first = (await _request(desktop, 1, "onboarding.start", {"rerun": True}))["result"][
+        "stored_session_id"
+    ]
     await async_wait_until(lambda: turns, timeout=10)
     await _settled(desktop, first)
-    desktop.db.append_message(first, "user", "Call me Sid.")  # the answer the user gave the name card
+    desktop.db.append_message(
+        first, "user", "Call me Sid."
+    )  # the answer the user gave the name card
     messages = desktop.db.get_messages(first)
     await desktop.connection.close()
-    identity = {"user_id": "uid:1", "provider": "local", "profile_id": desktop.authority.profile_id,
-                "instance_id": "owner"}
-    desktop.connection = AuthorityConnection(desktop.authority, desktop.transport, identity)
+    identity = {
+        "user_id": "uid:1",
+        "provider": "local",
+        "profile_id": desktop.authority.profile_id,
+        "instance_id": "owner",
+    }
+    desktop.connection = AuthorityConnection(
+        desktop.authority, desktop.transport, identity
+    )
     other = AuthorityConnection(desktop.authority, _Transport(), identity)
-    loop, resumed, record_new_run = asyncio.get_running_loop(), [], onboarding_record.start
+    loop, resumed, record_new_run = (
+        asyncio.get_running_loop(),
+        [],
+        onboarding_record.start,
+    )
 
     def new_run_then_another_window_resumes(db, stored, facts):
         record_new_run(db, stored, facts)
-        resumed.append(asyncio.run_coroutine_threadsafe(other.dispatch({
-            "jsonrpc": "2.0", "id": 9, "method": "session.resume", "params": {"session_id": first}}),
-            loop).result(timeout=20))
+        resumed.append(
+            asyncio.run_coroutine_threadsafe(
+                other.dispatch(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 9,
+                        "method": "session.resume",
+                        "params": {"session_id": first},
+                    }
+                ),
+                loop,
+            ).result(timeout=20)
+        )
+
     monkeypatch.setattr(onboarding_record, "start", new_run_then_another_window_resumes)
     try:
-        second = (await _request(desktop, 2, "onboarding.start", {"fresh_launch": True}))["result"]
+        second = (
+            await _request(desktop, 2, "onboarding.start", {"fresh_launch": True})
+        )["result"]
         assert second["stored_session_id"] != first
         assert "result" in resumed[0], resumed
         assert desktop.db.get_messages(first) == messages
-        assert (onboarding_record.load(desktop.db, first) or {}).get("ended_by") == "replaced"
+        assert (onboarding_record.load(desktop.db, first) or {}).get(
+            "ended_by"
+        ) == "replaced"
         assert first in desktop.authority.sessions
     finally:
         await other.close()
@@ -369,7 +544,9 @@ async def test_a_window_that_reopens_the_old_chat_while_a_fresh_launch_starts_ke
 
 
 @pytest.mark.asyncio
-async def test_a_window_whose_resume_reads_history_while_a_fresh_launch_claims_the_chat_keeps_it(tmp_path, monkeypatch):
+async def test_a_window_whose_resume_reads_history_while_a_fresh_launch_claims_the_chat_keeps_it(
+    tmp_path, monkeypatch
+):
     """Another window's resume was reading the old chat's history when the fresh launch's start found
     the chat unwatched and claimed it; the resume finished before the delete ran. The chat stays with its
     messages, and its run ends as replaced."""
@@ -377,19 +554,32 @@ async def test_a_window_whose_resume_reads_history_while_a_fresh_launch_claims_t
     from agent import onboarding_record
     from gateway import session_local_recovery
     from gateway.session_controls import AuthorityConnection
+
     turns = []
     desktop = await _desktop(tmp_path, monkeypatch, turns)
-    first = (await _request(desktop, 1, "onboarding.start", {"rerun": True}))["result"]["stored_session_id"]
+    first = (await _request(desktop, 1, "onboarding.start", {"rerun": True}))["result"][
+        "stored_session_id"
+    ]
     await async_wait_until(lambda: turns, timeout=10)
     await _settled(desktop, first)
     desktop.db.append_message(first, "user", "Call me Sid.")
     messages = desktop.db.get_messages(first)
     await desktop.connection.close()
-    identity = {"user_id": "uid:1", "provider": "local", "profile_id": desktop.authority.profile_id,
-                "instance_id": "owner"}
-    desktop.connection = AuthorityConnection(desktop.authority, desktop.transport, identity)
+    identity = {
+        "user_id": "uid:1",
+        "provider": "local",
+        "profile_id": desktop.authority.profile_id,
+        "instance_id": "owner",
+    }
+    desktop.connection = AuthorityConnection(
+        desktop.authority, desktop.transport, identity
+    )
     other = AuthorityConnection(desktop.authority, _Transport(), identity)
-    reading, release, resume_done = threading.Event(), threading.Event(), threading.Event()
+    reading, release, resume_done = (
+        threading.Event(),
+        threading.Event(),
+        threading.Event(),
+    )
     read_rows = session_local_recovery.display_rows
 
     def history_read_held_open(db, target):
@@ -406,17 +596,31 @@ async def test_a_window_whose_resume_reads_history_while_a_fresh_launch_claims_t
         assert resume_done.wait(timeout=20), "the resume never finished"
 
     monkeypatch.setattr(session_local_recovery, "display_rows", history_read_held_open)
-    resume = asyncio.ensure_future(other.dispatch({
-        "jsonrpc": "2.0", "id": 9, "method": "session.resume", "params": {"session_id": first}}))
+    resume = asyncio.ensure_future(
+        other.dispatch(
+            {
+                "jsonrpc": "2.0",
+                "id": 9,
+                "method": "session.resume",
+                "params": {"session_id": first},
+            }
+        )
+    )
     resume.add_done_callback(lambda _: resume_done.set())
     try:
         await async_wait_until(reading.is_set, timeout=10)
-        monkeypatch.setattr(onboarding_record, "start", new_run_then_the_resume_finishes)
-        second = (await _request(desktop, 2, "onboarding.start", {"fresh_launch": True}))["result"]
+        monkeypatch.setattr(
+            onboarding_record, "start", new_run_then_the_resume_finishes
+        )
+        second = (
+            await _request(desktop, 2, "onboarding.start", {"fresh_launch": True})
+        )["result"]
         assert second["stored_session_id"] != first
         assert "result" in (await resume), resume.result()
         assert desktop.db.get_messages(first) == messages
-        assert (onboarding_record.load(desktop.db, first) or {}).get("ended_by") == "replaced"
+        assert (onboarding_record.load(desktop.db, first) or {}).get(
+            "ended_by"
+        ) == "replaced"
         assert first in desktop.authority.sessions
     finally:
         release.set()

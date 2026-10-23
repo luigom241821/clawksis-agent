@@ -5,6 +5,7 @@ gets more than N workers running at once even if the global
 ``max_in_progress`` cap would allow it. Prevents one profile's local
 model / API quota / browser pool from being overwhelmed by a fan-out.
 """
+
 from __future__ import annotations
 
 import os
@@ -24,10 +25,15 @@ def isolated_kanban_home_with_profiles(monkeypatch):
             fh.write("{}\n")  # identity marker: a bare dir is not a profile
     monkeypatch.setenv("CLAWK_HOME", test_home)
     for mod in list(sys.modules.keys()):
-        if mod.startswith("clawk_cli") or mod.startswith("clawk_state") or mod == "clawk_constants":
+        if (
+            mod.startswith("clawk_cli")
+            or mod.startswith("clawk_state")
+            or mod == "clawk_constants"
+        ):
             del sys.modules[mod]
     from clawk_cli import kanban_db
     from clawk_cli import kanban_db_dispatch
+
     # The module purge above discards the conftest's memory-sample neutralizer;
     # re-apply it so the host's live memory pressure cannot cap this tick.
     monkeypatch.setattr(kanban_db_dispatch, "_system_memory_sample", dict)
@@ -38,14 +44,13 @@ def _fake_spawn(*args, **kwargs):
     return 12345
 
 
-
-
 def test_cap_2_balances_two_profiles(isolated_kanban_home_with_profiles):
     """With cap=2: 2 alpha + 2 beta dispatched; remaining 3 alpha + 1 beta
     deferred to skipped_per_profile_capped."""
     kb = isolated_kanban_home_with_profiles
     from clawk_cli import kanban_db_connect as kbc
     from clawk_cli import kanban_db_dispatch as kbd
+
     with kbc.connect_closing() as conn:
         kb.create_board(slug="default", name="Test")
         for i in range(5):
@@ -54,7 +59,9 @@ def test_cap_2_balances_two_profiles(isolated_kanban_home_with_profiles):
             kb.create_task(conn, title=f"b{i}", assignee="beta")
     with kbc.connect_closing() as conn:
         res = kbd.dispatch_once(
-            conn, spawn_fn=_fake_spawn, dry_run=True,
+            conn,
+            spawn_fn=_fake_spawn,
+            dry_run=True,
             max_in_progress_per_profile=2,
         )
     spawn_assignees = [s[1] for s in res.spawned]
@@ -65,8 +72,6 @@ def test_cap_2_balances_two_profiles(isolated_kanban_home_with_profiles):
     assert capped_assignees.count("beta") == 1
 
 
-
-
 def test_capped_tasks_dispatched_on_subsequent_tick(isolated_kanban_home_with_profiles):
     """A task deferred this tick because its profile was at cap should be
     eligible for dispatch on the next tick (after running tasks complete).
@@ -74,6 +79,7 @@ def test_capped_tasks_dispatched_on_subsequent_tick(isolated_kanban_home_with_pr
     kb = isolated_kanban_home_with_profiles
     from clawk_cli import kanban_db_connect as kbc
     from clawk_cli import kanban_db_dispatch as kbd
+
     with kbc.connect_closing() as conn:
         kb.create_board(slug="default", name="Test")
         [kb.create_task(conn, title=f"a{i}", assignee="alpha") for i in range(3)]
@@ -81,7 +87,9 @@ def test_capped_tasks_dispatched_on_subsequent_tick(isolated_kanban_home_with_pr
     # First tick: cap=1, only 1 alpha dispatched
     with kbc.connect_closing() as conn:
         res1 = kbd.dispatch_once(
-            conn, spawn_fn=_fake_spawn, dry_run=False,
+            conn,
+            spawn_fn=_fake_spawn,
+            dry_run=False,
             max_in_progress_per_profile=1,
         )
     assert len(res1.spawned) == 1
@@ -100,11 +108,11 @@ def test_capped_tasks_dispatched_on_subsequent_tick(isolated_kanban_home_with_pr
     # Second tick: 1 more alpha should now dispatch
     with kbc.connect_closing() as conn:
         res2 = kbd.dispatch_once(
-            conn, spawn_fn=_fake_spawn, dry_run=False,
+            conn,
+            spawn_fn=_fake_spawn,
+            dry_run=False,
             max_in_progress_per_profile=1,
         )
     assert len(res2.spawned) == 1
     assert len(res2.skipped_per_profile_capped) == 1
     assert res2.spawned[0][0] != spawned_id  # different task this time
-
-

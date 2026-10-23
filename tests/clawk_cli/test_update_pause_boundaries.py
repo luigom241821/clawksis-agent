@@ -1,4 +1,5 @@
 """Real-process pause/consume/recovery contracts, not native Windows SCM evidence."""
+
 from __future__ import annotations
 
 import json
@@ -28,17 +29,26 @@ def cell(tmp_path):
     # An unchanged copy owns its private checkout lock/root; never the live install's.
     root = tmp_path / "checkout"
     (root / "clawk_cli").mkdir(parents=True)
-    shutil.copyfile(REPO / "clawk_cli/update_pause_record.py", root / "clawk_cli/update_pause_record.py")
+    shutil.copyfile(
+        REPO / "clawk_cli/update_pause_record.py",
+        root / "clawk_cli/update_pause_record.py",
+    )
     home = tmp_path / "home"
     (home / ".clawksis").mkdir(parents=True)
-    env = {**os.environ, "HOME": str(home), "USERPROFILE": str(home),
-           "CLAWK_HOME": str(home / ".clawksis"), "PYTHONPATH": str(REPO),
-           "PYTHONDONTWRITEBYTECODE": "1"}
+    env = {
+        **os.environ,
+        "HOME": str(home),
+        "USERPROFILE": str(home),
+        "CLAWK_HOME": str(home / ".clawksis"),
+        "PYTHONPATH": str(REPO),
+        "PYTHONDONTWRITEBYTECODE": "1",
+    }
     children = []
 
     def launch(code, *args):
         script = tmp_path / f"child-{len(children)}.py"
-        script.write_text(textwrap.dedent('''
+        script.write_text(
+            textwrap.dedent("""
             import importlib.util, json, os, sys, time
             from pathlib import Path
             root = Path(sys.argv[1])
@@ -46,10 +56,19 @@ def cell(tmp_path):
             r = importlib.util.module_from_spec(spec)
             sys.modules[spec.name] = r
             spec.loader.exec_module(r)
-        ''') + textwrap.dedent(code), encoding="utf-8")
-        proc = subprocess.Popen([sys.executable, str(script), str(root), *map(str, args)],
-                                cwd=tmp_path, env=env, stdin=subprocess.DEVNULL,
-                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        """)
+            + textwrap.dedent(code),
+            encoding="utf-8",
+        )
+        proc = subprocess.Popen(
+            [sys.executable, str(script), str(root), *map(str, args)],
+            cwd=tmp_path,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
         children.append(proc)
         return proc
 
@@ -67,18 +86,26 @@ def _result(proc):
 
 
 @pytest.mark.parametrize("claim_first", [False, True])
-def test_consumption_checkpoints_debt_before_unlink_and_producer_death(cell, claim_first):
+def test_consumption_checkpoints_debt_before_unlink_and_producer_death(
+    cell, claim_first
+):
     base, home, launch = cell
-    consumer = launch('''
+    consumer = launch(
+        """
         from gateway.status import consume_planned_stop_marker_for_self
         Path(sys.argv[2]).write_text(str(os.getpid()), encoding="utf-8")
         while not Path(sys.argv[3]).exists(): time.sleep(.01)
         accepted = consume_planned_stop_marker_for_self()
         Path(sys.argv[4]).write_text(json.dumps(accepted), encoding="utf-8")
         while True: time.sleep(.05)
-    ''', base / "ready", base / "consume", base / "consumed")
+    """,
+        base / "ready",
+        base / "consume",
+        base / "consumed",
+    )
     _wait(base / "ready", consumer)
-    owner = launch('''
+    owner = launch(
+        """
         from clawk_cli import update_cmd_windows as w
         from types import SimpleNamespace
         pid = int(sys.argv[2])
@@ -94,20 +121,27 @@ def test_consumption_checkpoints_debt_before_unlink_and_producer_death(cell, cla
             while True: time.sleep(.05)
         w._request_socket_pauses([pid], {pid: SimpleNamespace(profile="default", path=home)},
                                  set(), on_request=on_request)
-    ''', consumer.pid, base / "published")
+    """,
+        consumer.pid,
+        base / "published",
+    )
     _wait(base / "published", owner)
     recovery = None
     if claim_first:
         owner.kill()
         owner.communicate(timeout=10)
-        recovery = launch('''
+        recovery = launch(
+            """
             won = r.claim(r.record_path())
             assert won is not None
             Path(sys.argv[2]).touch()
             while not Path(sys.argv[3]).exists(): time.sleep(.01)
             r._resume_claimed(*won)
             print(json.dumps([body["token"] for _, body in r.orphans()]))
-        ''', base / "claimed", base / "recover")
+        """,
+            base / "claimed",
+            base / "recover",
+        )
         _wait(base / "claimed", recovery)
     (base / "consume").touch()
     _wait(base / "consumed", consumer)
@@ -120,19 +154,22 @@ def test_consumption_checkpoints_debt_before_unlink_and_producer_death(cell, cla
     if recovery is not None:
         (base / "recover").touch()
     else:
-        recovery = launch('''
+        recovery = launch("""
             r.recover(["status"])
             print(json.dumps([body["token"] for _, body in r.orphans()]))
-        ''')
+        """)
     after = _result(recovery)
     assert len(after) == 1, "consumed request lost all durable restart debt"
     assert after[0]["profiles"] == {"default": consumer.pid}
     assert after[0]["stop_sent"] == [str(consumer.pid)]
 
 
-def test_failed_consumer_checkpoint_keeps_request_and_user_stop_is_not_update_debt(cell):
+def test_failed_consumer_checkpoint_keeps_request_and_user_stop_is_not_update_debt(
+    cell,
+):
     _, _, launch = cell
-    result = _result(launch('''
+    result = _result(
+        launch("""
         from gateway import status
         from clawk_cli.update_cmd_windows import _write_update_planned_stop_marker
         pid = os.getpid()
@@ -161,22 +198,35 @@ def test_failed_consumer_checkpoint_keeps_request_and_user_stop_is_not_update_de
         print(json.dumps({"planned": planned, "retained": retained, "user_consumed": user_consumed,
                           "user_debt": user_debt, "accepted": accepted, "sent": r.read()["token"]["stop_sent"],
                           "pid": pid}))
-    '''))
-    assert result == {"planned": True, "retained": True, "user_consumed": True, "user_debt": [],
-                      "accepted": True, "sent": [str(result["pid"])], "pid": result["pid"]}
+    """)
+    )
+    assert result == {
+        "planned": True,
+        "retained": True,
+        "user_consumed": True,
+        "user_debt": [],
+        "accepted": True,
+        "sent": [str(result["pid"])],
+        "pid": result["pid"],
+    }
 
 
 def test_a_busy_pause_mutex_never_turns_a_planned_stop_into_an_unplanned_one(cell):
     base, _, launch = cell
-    holder = launch('''
+    holder = launch(
+        """
         r.write({"pause_id": "busy", "resume_needed": True})  # a pause on disk: the consume needs the mutex
         with r._mutex():
             Path(sys.argv[2]).touch()
             while not Path(sys.argv[3]).exists(): time.sleep(.05)
-    ''', base / "held", base / "release")
+    """,
+        base / "held",
+        base / "release",
+    )
     _wait(base / "held", holder)
     try:
-        result = _result(launch('''
+        result = _result(
+            launch("""
             from gateway import status
             from clawk_cli.update_cmd_windows import _write_update_planned_stop_marker
             pid = os.getpid()
@@ -189,16 +239,20 @@ def test_a_busy_pause_mutex_never_turns_a_planned_stop_into_an_unplanned_one(cel
                 planned = type(exc).__name__
             print(json.dumps({"planned": planned, "seconds": time.monotonic() - started,
                               "retained": (home / ".gateway-planned-stop.json").exists()}))
-        '''))
+        """)
+        )
     finally:
         (base / "release").touch()
     assert result["planned"] is True and result["retained"], result
-    assert result["seconds"] < 5, f"the gateway's shutdown blocked {result['seconds']:.1f}s on the pause mutex"
+    assert result["seconds"] < 5, (
+        f"the gateway's shutdown blocked {result['seconds']:.1f}s on the pause mutex"
+    )
 
 
 def test_recovery_only_accepts_markers_the_live_consumer_accepts(cell):
     _, _, launch = cell
-    result = _result(launch('''
+    result = _result(
+        launch("""
         from datetime import datetime, timedelta, timezone
         from gateway import status
         pid = os.getpid()
@@ -221,7 +275,8 @@ def test_recovery_only_accepts_markers_the_live_consumer_accepts(cell):
             consumed = status.consume_planned_stop_marker_for_self()
             out[name] = {"kept": bool(kept["profiles"]), "consumed": consumed}
         print(json.dumps(out))
-    '''))
+    """)
+    )
     assert result["valid"] == {"kept": True, "consumed": True}
     for name in ("expired", "wrong_incarnation", "malformed"):
         assert result[name] == {"kept": False, "consumed": False}, (name, result)
@@ -229,26 +284,35 @@ def test_recovery_only_accepts_markers_the_live_consumer_accepts(cell):
 
 def test_orphan_adoption_preserves_cold_start_generation_and_current_precedence(cell):
     _, _, launch = cell
-    _result(launch('''
+    _result(
+        launch("""
         token = {"resume_needed": True, "profiles": {}, "cold_start_if_installed": True,
                  "attested_generation": "old-active", "cold_start_profiles": {"beta": "old-beta", "gamma": "old-gamma"}}
         r.write(r.stamp_tree(token), owner=r.UNOWNED)
         print(json.dumps(r.read()["token"]))
-    '''))
-    adopted = _result(launch('''
+    """)
+    )
+    adopted = _result(
+        launch("""
         adopted, claims = r.adopt_orphans()
         token = {"resume_needed": True, "profiles": {}, "cold_start_profiles": {"beta": "current-beta"}}
         r.record_pause(token, adopted, claims)
         print(json.dumps(r.read()["token"]))
-    '''))
+    """)
+    )
     assert adopted.get("cold_start_if_installed") is True
     assert adopted.get("attested_generation") == "old-active"
-    assert adopted.get("cold_start_profiles") == {"beta": "current-beta", "gamma": "old-gamma"}
-    again = _result(launch('''
+    assert adopted.get("cold_start_profiles") == {
+        "beta": "current-beta",
+        "gamma": "old-gamma",
+    }
+    again = _result(
+        launch("""
         adopted, claims = r.adopt_orphans()
         r.record_pause({"resume_needed": True, "profiles": {}, "cold_start_if_installed": True,
                         "attested_generation": "current-active"}, adopted, claims)
         print(json.dumps(r.read()["token"]))
-    '''))
+    """)
+    )
     assert again["attested_generation"] == "current-active"
     assert again["cold_start_profiles"] == adopted["cold_start_profiles"]

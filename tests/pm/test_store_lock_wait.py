@@ -1,4 +1,5 @@
 """A writer queued behind the store lock says so instead of blocking silently."""
+
 import os
 import threading
 import time

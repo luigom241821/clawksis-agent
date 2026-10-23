@@ -26,7 +26,9 @@ with fts_rebuild_admission(Path(sys.argv[1]), timeout_seconds=0) as acquired:
 def _trigram_supported() -> bool:
     conn = sqlite3.connect(":memory:")
     try:
-        conn.execute("CREATE VIRTUAL TABLE trigram_probe USING fts5(content, tokenize='trigram')")
+        conn.execute(
+            "CREATE VIRTUAL TABLE trigram_probe USING fts5(content, tokenize='trigram')"
+        )
     except sqlite3.OperationalError:
         return False
     finally:
@@ -34,7 +36,9 @@ def _trigram_supported() -> bool:
     return True
 
 
-def test_fresh_fts_bootstrap_does_not_publish_schema_without_admission(tmp_path, monkeypatch):
+def test_fresh_fts_bootstrap_does_not_publish_schema_without_admission(
+    tmp_path, monkeypatch
+):
     """A fresh opener that loses admission leaves no partially initialized FTS surface."""
     db_path = tmp_path / "state.db"
     proc = subprocess.Popen(
@@ -46,15 +50,20 @@ def test_fresh_fts_bootstrap_does_not_publish_schema_without_admission(tmp_path,
     try:
         assert proc.stdout is not None
         assert proc.stdout.readline().strip() == "locked"
-        monkeypatch.setattr(clawk_state_common, "_FTS_REBUILD_LOCK_TIMEOUT_SECONDS", 0.1)
+        monkeypatch.setattr(
+            clawk_state_common, "_FTS_REBUILD_LOCK_TIMEOUT_SECONDS", 0.1
+        )
 
         deferred = SessionDB(db_path=db_path)
         try:
             assert deferred._fts_stale is True
             assert deferred._fts_enabled is False
-            assert deferred._conn.execute(
-                "SELECT 1 FROM sqlite_master WHERE name = 'messages_fts'"
-            ).fetchone() is None
+            assert (
+                deferred._conn.execute(
+                    "SELECT 1 FROM sqlite_master WHERE name = 'messages_fts'"
+                ).fetchone()
+                is None
+            )
         finally:
             deferred.close()
     finally:
@@ -67,9 +76,12 @@ def test_fresh_fts_bootstrap_does_not_publish_schema_without_admission(tmp_path,
         assert recovered._fts_enabled is True
         if _trigram_supported():
             assert recovered._trigram_available is True
-            assert recovered._conn.execute(
-                "SELECT 1 FROM sqlite_master WHERE name = 'messages_fts_trigram'"
-            ).fetchone() is not None
+            assert (
+                recovered._conn.execute(
+                    "SELECT 1 FROM sqlite_master WHERE name = 'messages_fts_trigram'"
+                ).fetchone()
+                is not None
+            )
         recovered.create_session("s1", source="test")
         recovered.append_message("s1", "user", "fresh bootstrap recovered")
         assert recovered.search_messages("recovered")

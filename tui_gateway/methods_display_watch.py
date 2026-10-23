@@ -32,6 +32,7 @@ _runtime_marks: dict[str, tuple] = {}
 def _lease_event_payload(profile_key: str, lease) -> dict:
     # Same shape and the same redaction (viewer_hash, never the raw id) as the in-process broadcast.
     from tools.bot_desktop.lease import public_view
+
     return {"profile_key": profile_key, "lease": public_view(lease)}
 
 
@@ -57,39 +58,63 @@ def _notify_agents_of_screen_change(profile_key: str, payload: dict) -> None:
     ``payload`` is the just-broadcast display.status snapshot (``running``/``display`` and the
     lease's public view), already read under the profile's home override."""
     from clawk_constants import clawk_home_key
+
     try:
         from agent.prompt_builder import bot_screen_note
-        lease_view = payload.get("lease") if isinstance(payload.get("lease"), dict) else {}
-        line = bot_screen_note(bool(payload.get("running")), payload.get("display"),
-                               str(lease_view.get("holder") or ""))
+
+        lease_view = (
+            payload.get("lease") if isinstance(payload.get("lease"), dict) else {}
+        )
+        line = bot_screen_note(
+            bool(payload.get("running")),
+            payload.get("display"),
+            str(lease_view.get("holder") or ""),
+        )
     except Exception:
         return
     if not line:
         return
     with _sessions_lock:
-        sids = [sid for sid, sess in _sessions.items() if isinstance(sess, dict) and sess.get("agent") is not None
-                and clawk_home_key(sess.get("profile_home") or get_process_clawk_home()) == profile_key]
+        sids = [
+            sid
+            for sid, sess in _sessions.items()
+            if isinstance(sess, dict)
+            and sess.get("agent") is not None
+            and clawk_home_key(sess.get("profile_home") or get_process_clawk_home())
+            == profile_key
+        ]
     for sid in sids:
         agent = _sessions[sid]["agent"]
         try:
             prior = getattr(agent, "_gateway_turn_context_notes", "") or ""
             agent._gateway_turn_context_notes = f"{prior}\n\n{line}" if prior else line
         except Exception:
-            logger.debug("could not stage Bot Screen note on session %s", sid, exc_info=True)
+            logger.debug(
+                "could not stage Bot Screen note on session %s", sid, exc_info=True
+            )
 
 
 def _poll_runtime_files() -> None:
     """Broadcast ``display.status`` when a home's screen started/stopped outside this process — a
     file move (start/stop by the CLI or gateway) or the launcher dying without touching its files
     (Xvnc crash: env and launcher.pid stay put, only the pid stops being live)."""
-    from clawk_constants import clawk_home_key, reset_clawk_home_override, set_clawk_home_override
+    from clawk_constants import (
+        clawk_home_key,
+        reset_clawk_home_override,
+        set_clawk_home_override,
+    )
     from tools.bot_desktop import runtime as _bd_runtime
+
     for home in _watched_lease_homes():
         key = clawk_home_key(home)
         sd = home / "bot-desktop"
         token = set_clawk_home_override(home)
         try:
-            mark = (_mtime(sd / "env"), _mtime(sd / "launcher.pid"), _bd_runtime._launcher_pid() is not None)
+            mark = (
+                _mtime(sd / "env"),
+                _mtime(sd / "launcher.pid"),
+                _bd_runtime._launcher_pid() is not None,
+            )
             first = key not in _runtime_marks
             if _runtime_marks.get(key) == mark:
                 continue
@@ -116,6 +141,7 @@ def _poll_idle_screens() -> None:
     _last_idle_check = time.monotonic()
     from clawk_constants import reset_clawk_home_override, set_clawk_home_override
     from tools.bot_desktop import runtime as _bd_runtime
+
     for home in _watched_lease_homes():
         token = set_clawk_home_override(home)
         try:
@@ -128,6 +154,7 @@ def _poll_lease_files() -> None:
     """One pass: read a home's lease only when its file mtime moved; broadcast when the epoch did."""
     from clawk_constants import clawk_home_key
     from tools.bot_desktop import lease as _bd_lease
+
     for home in _watched_lease_homes():
         key = clawk_home_key(home)
         try:
@@ -138,7 +165,9 @@ def _poll_lease_files() -> None:
             continue
         _lease_mtimes[key] = mtime
         lease = _bd_lease.get(str(home))
-        if key not in _lease_epochs:  # first sighting seeds silently: display.status carries it
+        if (
+            key not in _lease_epochs
+        ):  # first sighting seeds silently: display.status carries it
             _lease_epochs[key] = lease.epoch
             continue
         if lease.epoch == _lease_epochs[key]:
@@ -160,6 +189,7 @@ def _ensure_lease_watcher() -> None:
         # move ours to skip. Before display.status installed it, the poll below carries them.
         if _lease_listener_installed.is_set():
             _lease_epochs[profile_key] = lease.epoch
+
     _bd_lease.on_change(_seen_locally)
 
     def _loop() -> None:
@@ -171,6 +201,7 @@ def _ensure_lease_watcher() -> None:
             except Exception:
                 logger.debug("lease watcher poll failed", exc_info=True)
             time.sleep(_LEASE_POLL_S)
+
     threading.Thread(target=_loop, name="clawk-lease-watcher", daemon=True).start()
 
 

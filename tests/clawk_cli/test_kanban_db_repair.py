@@ -18,6 +18,7 @@ from clawk_cli import kanban_db_dispatch as kbd
 # Fixture helpers
 # ---------------------------------------------------------------------------
 
+
 def _build_board_db(db_path: Path, tasks: int = 12) -> None:
     """Create a real board DB with data so indexes have entries."""
     kb._INITIALIZED_PATHS.discard(str(db_path.resolve()))
@@ -46,9 +47,7 @@ def _corrupt_index(db_path: Path, index_name: str) -> None:
     ).fetchone()[0]
     lie = original_sql + " WHERE 0"
     conn.execute("PRAGMA writable_schema=ON")
-    conn.execute(
-        "UPDATE sqlite_master SET sql = ? WHERE name = ?", (lie, index_name)
-    )
+    conn.execute("UPDATE sqlite_master SET sql = ? WHERE name = ?", (lie, index_name))
     conn.execute("PRAGMA writable_schema=OFF")
     conn.close()
     # New connection so the rewritten schema is what REINDEX parses.
@@ -88,10 +87,10 @@ def _integrity_messages(db_path: Path) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
-
 # ---------------------------------------------------------------------------
 # Narrow auto-repair in the connect-time guard
 # ---------------------------------------------------------------------------
+
 
 def test_connect_auto_repairs_index_only_corruption(tmp_path):
     """Index-only integrity errors are REINDEXed and connect proceeds."""
@@ -123,15 +122,10 @@ def test_connect_auto_repairs_index_only_corruption(tmp_path):
     assert any(m.startswith("wrong # of entries in index") for m in pre)
 
 
-
-
-
-
-
-
 # ---------------------------------------------------------------------------
 # Corrupt-backup retention cap
 # ---------------------------------------------------------------------------
+
 
 def test_corrupt_backup_retention_cap_prunes_oldest(tmp_path, monkeypatch):
     """Mutating corruption can't accumulate quarantine files forever.
@@ -167,13 +161,10 @@ def test_corrupt_backup_retention_cap_prunes_oldest(tmp_path, monkeypatch):
     assert minted[-1] in remaining
 
 
-
-
-
-
 # ---------------------------------------------------------------------------
 # Periodic WAL checkpoint on the dispatcher tick path
 # ---------------------------------------------------------------------------
+
 
 class _ConnProxy:
     """Delegating wrapper so tests can observe/deny wal_checkpoint PRAGMAs.
@@ -220,9 +211,7 @@ def test_dispatch_tick_runs_wal_checkpoint_at_interval(tmp_path, monkeypatch):
 
         # Age the per-path timestamp past the interval → next tick fires.
         key = str(db_path.resolve())
-        kbc._LAST_WAL_CHECKPOINT[key] -= (
-            kbc._WAL_CHECKPOINT_INTERVAL_SECONDS + 1.0
-        )
+        kbc._LAST_WAL_CHECKPOINT[key] -= kbc._WAL_CHECKPOINT_INTERVAL_SECONDS + 1.0
         kbd.dispatch_once(proxy, spawn_fn=lambda *a, **k: None, dry_run=True)
         assert len(executed) == 2, "tick after the interval should checkpoint"
         # PASSIVE, not TRUNCATE: CLI kanban commands in other processes write
@@ -234,13 +223,10 @@ def test_dispatch_tick_runs_wal_checkpoint_at_interval(tmp_path, monkeypatch):
         conn.close()
 
 
-
-
-
-
 # ---------------------------------------------------------------------------
 # repair_db() API + `clawk kanban repair` CLI verb
 # ---------------------------------------------------------------------------
+
 
 def _run_kanban_cli(argv: list[str]) -> int:
     """Drive the real argparse surface exactly like `clawk kanban …`."""
@@ -265,12 +251,6 @@ def cli_home(tmp_path, monkeypatch):
     return home
 
 
-
-
-
-
-
-
 def test_cli_repair_json_shape(cli_home, capsys):
     db_path = kb.kanban_db_path()
     _build_board_db(db_path)
@@ -283,5 +263,3 @@ def test_cli_repair_json_shape(cli_home, capsys):
     assert payload["reindexed"] == ["idx_tasks_status"]
     assert payload["backup_path"]
     assert Path(payload["backup_path"]).exists()
-
-

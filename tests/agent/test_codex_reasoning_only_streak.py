@@ -54,12 +54,16 @@ def test_reasoning_only_streak_reaches_fallback_with_one_grace_call(monkeypatch)
     agent.max_iterations = 3
     agent.iteration_budget = run_agent.IterationBudget(3)
     calls = _spy_fallback(agent, monkeypatch)
-    api_calls = _drive(agent, monkeypatch, [
-        _codex_reasoning_only_response(encrypted_content="enc_a"),
-        _codex_reasoning_only_response(encrypted_content="enc_b"),
-        _codex_reasoning_only_response(encrypted_content="enc_c"),
-        _codex_message_response("Fallback answered."),
-    ])
+    api_calls = _drive(
+        agent,
+        monkeypatch,
+        [
+            _codex_reasoning_only_response(encrypted_content="enc_a"),
+            _codex_reasoning_only_response(encrypted_content="enc_b"),
+            _codex_reasoning_only_response(encrypted_content="enc_c"),
+            _codex_message_response("Fallback answered."),
+        ],
+    )
 
     result = agent.run_conversation("keep thinking")
 
@@ -76,13 +80,17 @@ def test_visible_partial_resets_reasoning_only_streak(monkeypatch):
     agent.max_iterations = 6
     agent.iteration_budget = run_agent.IterationBudget(6)
     calls = _spy_fallback(agent, monkeypatch)
-    _drive(agent, monkeypatch, [
-        _codex_incomplete_message_response("Partial visible progress."),
-        _codex_reasoning_only_response(encrypted_content="enc_a"),
-        _codex_reasoning_only_response(encrypted_content="enc_b"),
-        _codex_reasoning_only_response(encrypted_content="enc_c"),
-        _codex_message_response("Recovered."),
-    ])
+    _drive(
+        agent,
+        monkeypatch,
+        [
+            _codex_incomplete_message_response("Partial visible progress."),
+            _codex_reasoning_only_response(encrypted_content="enc_a"),
+            _codex_reasoning_only_response(encrypted_content="enc_b"),
+            _codex_reasoning_only_response(encrypted_content="enc_c"),
+            _codex_message_response("Recovered."),
+        ],
+    )
 
     result = agent.run_conversation("partial then stall")
 
@@ -100,14 +108,21 @@ def test_cross_protocol_fallback_wire_drops_codex_nudge_and_replay_state(monkeyp
 
     def _flip_to_chat(reason=None):
         agent.api_mode = "chat_completions"
-        agent._disable_streaming = True  # the stub answer is a plain object, not a stream
+        agent._disable_streaming = (
+            True  # the stub answer is a plain object, not a stream
+        )
         return True
 
     monkeypatch.setattr(agent, "_try_activate_fallback", _flip_to_chat)
     chat_answer = SimpleNamespace(
-        choices=[SimpleNamespace(message=SimpleNamespace(content="Fallback answered.", tool_calls=None),
-                                 finish_reason="stop")],
-        model="fallback/model", usage=None,
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(content="Fallback answered.", tool_calls=None),
+                finish_reason="stop",
+            )
+        ],
+        model="fallback/model",
+        usage=None,
     )
     responses = [
         _codex_reasoning_only_response(encrypted_content="enc_a"),
@@ -128,8 +143,12 @@ def test_cross_protocol_fallback_wire_drops_codex_nudge_and_replay_state(monkeyp
     assert result["final_response"] == "Fallback answered."
     assert [mode for mode, _ in wires] == ["codex_responses"] * 3 + ["chat_completions"]
     # The pre-fallback transcript did carry the nudge (replay + nudge before the third stall).
-    assert any(m.get("content") == _CODEX_INCOMPLETE_NUDGE for m in agent._session_messages)
-    wire = [m for m in wires[-1][1]["messages"] if m["role"] not in ("system", "developer")]
+    assert any(
+        m.get("content") == _CODEX_INCOMPLETE_NUDGE for m in agent._session_messages
+    )
+    wire = [
+        m for m in wires[-1][1]["messages"] if m["role"] not in ("system", "developer")
+    ]
     # Thinking-only rows are dropped and adjacent users merged, so the nudge would
     # survive as a fragment of the merged user row rather than as its own row.
     assert not any(_CODEX_INCOMPLETE_NUDGE in str(m.get("content") or "") for m in wire)

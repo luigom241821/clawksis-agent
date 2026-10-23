@@ -12,6 +12,7 @@ Per transcript:
 
 Usage: codex_arm.py <lineage_json> <questions_json> <workdir> <out_json>
 """
+
 import glob
 import json
 import os
@@ -52,12 +53,14 @@ def prepare_chunks() -> int:
         size += len(c)
         if size > 150_000:
             (WORKDIR / f"transcript_{idx:02d}.txt").write_text(
-                "\n".join(chunk), encoding="utf-8")
+                "\n".join(chunk), encoding="utf-8"
+            )
             chunk, size = [], 0
             idx += 1
     if chunk:
         (WORKDIR / f"transcript_{idx:02d}.txt").write_text(
-            "\n".join(chunk), encoding="utf-8")
+            "\n".join(chunk), encoding="utf-8"
+        )
         idx += 1
     return idx
 
@@ -115,7 +118,10 @@ def rollout_stats(path: str) -> dict:
 def codex(args: list, prompt: str, timeout: int = 3600) -> str:
     proc = subprocess.run(
         ["codex", "exec", *args, "--skip-git-repo-check", prompt],
-        cwd=str(WORKDIR), capture_output=True, text=True, timeout=timeout,
+        cwd=str(WORKDIR),
+        capture_output=True,
+        text=True,
+        timeout=timeout,
         check=False,
     )
     return proc.stdout + proc.stderr
@@ -125,9 +131,16 @@ def judge(question: str, gold: str, answer: str) -> dict:
     from agent.auxiliary_client import call_llm
 
     resp = call_llm(
-        messages=[{"role": "user", "content": JUDGE_PROMPT.format(
-            question=question, gold=gold, answer=answer)}],
-        task="compression", max_tokens=300,
+        messages=[
+            {
+                "role": "user",
+                "content": JUDGE_PROMPT.format(
+                    question=question, gold=gold, answer=answer
+                ),
+            }
+        ],
+        task="compression",
+        max_tokens=300,
     )
     text = resp.choices[0].message.content if hasattr(resp, "choices") else str(resp)
     m = re.search(r"\{.*\}", text, re.DOTALL)
@@ -143,7 +156,7 @@ def main():
     t0 = time.time()
     codex(
         ["-s", "read-only"],
-        f"This directory contains transcript_00.txt through transcript_{n-1:02d}.txt. "
+        f"This directory contains transcript_00.txt through transcript_{n - 1:02d}.txt. "
         "Read EVERY file COMPLETELY one at a time using 'cat transcript_NN.txt' "
         "(full file, do not use head/tail/grep). After each file, write a 2-3 "
         "sentence summary of what happened in that portion. Do not skip any file.",
@@ -157,7 +170,10 @@ def main():
     passes = 0
     while stats["compaction_events"] == 0 and passes < 3:
         passes += 1
-        print(f"[codex-arm] no compaction yet (peak={stats['peak_context_tokens']:,}) — re-read pass {passes}", flush=True)
+        print(
+            f"[codex-arm] no compaction yet (peak={stats['peak_context_tokens']:,}) — re-read pass {passes}",
+            flush=True,
+        )
         codex(
             ["resume", session_id],
             "Re-read ALL transcript files again completely with 'cat', one at a "
@@ -171,7 +187,7 @@ def main():
         print("[codex-arm] WARNING: compaction never fired — arm invalid", flush=True)
 
     questions = json.loads(Path(QUESTIONS).read_text(encoding="utf-8"))
-    qlist = "\n".join(f"{i+1}. {q['q']}" for i, q in enumerate(questions))
+    qlist = "\n".join(f"{i + 1}. {q['q']}" for i, q in enumerate(questions))
     codex(
         ["resume", session_id],
         "Based on everything you learned from the transcript files earlier in "
@@ -183,8 +199,11 @@ def main():
     quiz_text = last_agent_message(rollout)
     print(f"[codex-arm] quiz reply: {len(quiz_text)} chars", flush=True)
     answers = {}
-    for m in re.finditer(r"(?m)^\s*\**(\d{1,2})[.)]\**\s+(.+?)(?=^\s*\**\d{1,2}[.)]\**\s|\Z)",
-                         quiz_text, re.DOTALL):
+    for m in re.finditer(
+        r"(?m)^\s*\**(\d{1,2})[.)]\**\s+(.+?)(?=^\s*\**\d{1,2}[.)]\**\s|\Z)",
+        quiz_text,
+        re.DOTALL,
+    ):
         answers[int(m.group(1))] = m.group(2).strip()[:600]
 
     results = []
@@ -192,7 +211,7 @@ def main():
         ans = answers.get(i + 1, "(no answer parsed)")
         verdict = judge(q["q"], q["gold"], ans)
         results.append({"q": q["q"], "gold": q["gold"], "answer": ans, **verdict})
-        print(f"  Q{i+1}: {verdict['score']}", flush=True)
+        print(f"  Q{i + 1}: {verdict['score']}", flush=True)
 
     scored = [r["score"] for r in results]
     summary = {
@@ -203,8 +222,9 @@ def main():
         **stats,
         "rollout": rollout,
     }
-    Path(OUT).write_text(json.dumps({"summary": summary, "results": results}, indent=1),
-                         encoding="utf-8")
+    Path(OUT).write_text(
+        json.dumps({"summary": summary, "results": results}, indent=1), encoding="utf-8"
+    )
     print(json.dumps(summary, indent=1), flush=True)
 
 

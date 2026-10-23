@@ -57,7 +57,9 @@ def _make_event(text: str, chat_id: str = "12345") -> MessageEvent:
     return MessageEvent(
         text=text,
         message_type=MessageType.TEXT,
-        source=SessionSource(platform=Platform.TELEGRAM, chat_id=chat_id, chat_type="dm"),
+        source=SessionSource(
+            platform=Platform.TELEGRAM, chat_id=chat_id, chat_type="dm"
+        ),
     )
 
 
@@ -99,10 +101,10 @@ class TestTextBatching:
         assert "part one" in dispatched.text
         assert "split by Telegram" in dispatched.text
 
-
-
     @pytest.mark.asyncio
-    async def test_disconnected_adapter_drops_pending_media_group_flush_before_dispatch(self):
+    async def test_disconnected_adapter_drops_pending_media_group_flush_before_dispatch(
+        self,
+    ):
         """A pending media group should not dispatch after disconnect starts."""
         from plugins.platforms.telegram.adapter import TelegramAdapter
 
@@ -119,7 +121,6 @@ class TestTextBatching:
         adapter.handle_message.assert_not_called()
         assert adapter._media_group_events == {}
         assert adapter._media_group_tasks == {}
-
 
     @pytest.mark.asyncio
     async def test_disconnect_cancels_all_pending_delivery_task_maps(self):
@@ -192,7 +193,9 @@ class TestHoldInboundAcrossReconnect:
         await task
 
         adapter.handle_message.assert_called_once()
-        assert adapter.handle_message.call_args[0][0].text == "should survive disconnect"
+        assert (
+            adapter.handle_message.call_args[0][0].text == "should survive disconnect"
+        )
         assert adapter._held_inbound_events == []
 
     @pytest.mark.asyncio
@@ -211,9 +214,13 @@ class TestHoldInboundAcrossReconnect:
         await new._held_inbound_redispatch_task
 
         old.handle_message.assert_not_called()
-        assert [c.args[0].text for c in new.handle_message.call_args_list] == ["late-salvage"]
+        assert [c.args[0].text for c in new.handle_message.call_args_list] == [
+            "late-salvage"
+        ]
         assert old._held_inbound_events == []
-        assert old._update_admission.get().accepted  # receipt recorded: no replay after restart
+        assert (
+            old._update_admission.get().accepted
+        )  # receipt recorded: no replay after restart
 
     @pytest.mark.asyncio
     async def test_flush_during_disconnect_holds_popped_event(self):
@@ -440,9 +447,7 @@ class TestHoldInboundAcrossReconnect:
         adapter._mark_connected()
         await adapter._held_inbound_redispatch_task
         adapter.handle_message.assert_called_once()
-        assert (
-            adapter.handle_message.call_args[0][0].text == "survives-network-fatal"
-        )
+        assert adapter.handle_message.call_args[0][0].text == "survives-network-fatal"
 
     @pytest.mark.asyncio
     async def test_production_text_handler_terminal_step_holds_when_disconnected(self):
@@ -456,7 +461,9 @@ class TestHoldInboundAcrossReconnect:
         # Terminal step of _handle_text_message after event construction.
         adapter._enqueue_text_event(_make_event("acked-by-ptb-then-held"))
         adapter.handle_message.assert_not_called()
-        assert [e.text for e in adapter._held_inbound_events] == ["acked-by-ptb-then-held"]
+        assert [e.text for e in adapter._held_inbound_events] == [
+            "acked-by-ptb-then-held"
+        ]
 
         adapter._mark_connected()
         await adapter._held_inbound_redispatch_task

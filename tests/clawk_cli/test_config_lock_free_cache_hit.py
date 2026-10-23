@@ -84,7 +84,9 @@ def test_cached_read_completes_while_another_thread_holds_the_config_lock(config
     )
 
 
-def test_cached_raw_read_completes_while_another_thread_holds_the_config_lock(config_home):
+def test_cached_raw_read_completes_while_another_thread_holds_the_config_lock(
+    config_home,
+):
     """Twin of the load_config test for the sibling ``read_raw_config`` fast path."""
     from clawk_cli import config as cfgmod
 

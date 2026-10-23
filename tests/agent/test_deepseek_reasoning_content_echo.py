@@ -79,11 +79,6 @@ class TestNeedsDeepSeekToolReasoning:
         assert agent._needs_deepseek_tool_reasoning() is True
 
 
-
-
-
-
-
 class TestCopyReasoningContentForApi:
     """_copy_reasoning_content_for_api pads reasoning_content for DeepSeek tool-calls."""
 
@@ -98,9 +93,6 @@ class TestCopyReasoningContentForApi:
         api_msg: dict = {}
         agent._copy_reasoning_content_for_api(source, api_msg)
         assert api_msg.get("reasoning_content") == " "
-
-
-
 
     def test_non_thinking_provider_strips_empty_reasoning_content(self) -> None:
         """Strict OpenAI-compatible providers (Mistral, Cerebras, …) reject ANY
@@ -123,18 +115,12 @@ class TestCopyReasoningContentForApi:
         assert "reasoning_content" not in api_msg
 
 
-
-
-
-
-
-
-
-
 class TestBuildAssistantMessageDeepSeekReasoningContent:
     """_build_assistant_message pins replay-safe DeepSeek tool-call state."""
 
-    def test_deepseek_tool_call_reasoning_is_backfilled_into_reasoning_content(self) -> None:
+    def test_deepseek_tool_call_reasoning_is_backfilled_into_reasoning_content(
+        self,
+    ) -> None:
         agent = _make_agent(provider="deepseek", model="deepseek-v4-flash")
         assistant_message = SimpleNamespace(
             content=None,
@@ -160,8 +146,6 @@ class TestBuildAssistantMessageDeepSeekReasoningContent:
         assert msg["tool_calls"][0]["id"] == "call_1"
 
 
-
-
 class TestBuildAssistantMessagePadsStrictProviders:
     """Regression for #17400: _build_assistant_message must pin reasoning_content
     on tool-call turns when the active provider enforces echo-back, regardless
@@ -178,34 +162,54 @@ class TestBuildAssistantMessagePadsStrictProviders:
         "provider,model,base_url,sdk_reasoning_content,expected",
         [
             pytest.param(
-                "deepseek", "deepseek-v4-pro", "",
-                None, " ",
+                "deepseek",
+                "deepseek-v4-pro",
+                "",
+                None,
+                " ",
                 id="deepseek-attr-none",
             ),
             pytest.param(
-                "deepseek", "deepseek-v4-pro", "",
-                _ATTR_ABSENT, " ",
+                "deepseek",
+                "deepseek-v4-pro",
+                "",
+                _ATTR_ABSENT,
+                " ",
                 id="deepseek-attr-absent",
             ),
             pytest.param(
-                "kimi-coding", "kimi-k2.6", "",
-                None, " ",
+                "kimi-coding",
+                "kimi-k2.6",
+                "",
+                None,
+                " ",
                 id="kimi-attr-none",
             ),
             pytest.param(
-                "custom", "kimi-k2", "https://api.moonshot.ai/v1",
-                _ATTR_ABSENT, " ",
+                "custom",
+                "kimi-k2",
+                "https://api.moonshot.ai/v1",
+                _ATTR_ABSENT,
+                " ",
                 id="moonshot-base-url",
             ),
             pytest.param(
-                "openrouter", "anthropic/claude-sonnet-4.6", "https://openrouter.ai/api/v1",
-                _ATTR_ABSENT, _EXPECT_NOT_PRESENT,
+                "openrouter",
+                "anthropic/claude-sonnet-4.6",
+                "https://openrouter.ai/api/v1",
+                _ATTR_ABSENT,
+                _EXPECT_NOT_PRESENT,
                 id="openrouter-no-pad",
             ),
         ],
     )
     def test_tool_call_reasoning_content_pad(
-        self, provider, model, base_url, sdk_reasoning_content, expected,
+        self,
+        provider,
+        model,
+        base_url,
+        sdk_reasoning_content,
+        expected,
     ) -> None:
         agent = _make_agent(provider=provider, model=model, base_url=base_url)
         msg_in = _build_sdk_message(
@@ -237,7 +241,6 @@ class TestBuildAssistantMessagePadsStrictProviders:
         assert "reasoning_content" not in msg
 
 
-
 class TestNeedsKimiToolReasoning:
     """The extracted _needs_kimi_tool_reasoning() helper keeps Kimi behavior intact."""
 
@@ -254,7 +257,6 @@ class TestNeedsKimiToolReasoning:
     def test_kimi_signals(self, provider: str, base_url: str) -> None:
         agent = _make_agent(provider=provider, model="kimi-k2", base_url=base_url)
         assert agent._needs_kimi_tool_reasoning() is True
-
 
 
 class TestReapplyReasoningEchoForProviderSwitch:
@@ -300,7 +302,11 @@ class TestReapplyReasoningEchoForProviderSwitch:
         msgs = self._codex_built_history()
         padded = reapply_reasoning_echo_for_provider(agent, msgs)
         assert padded == 1
-        bare = [m for m in msgs if m.get("role") == "assistant" and not m.get("reasoning_content")]
+        bare = [
+            m
+            for m in msgs
+            if m.get("role") == "assistant" and not m.get("reasoning_content")
+        ]
         assert bare == []
         # existing summary preserved verbatim, not clobbered with the pad
         assert msgs[2]["reasoning_content"] == "summary from codex"
@@ -319,7 +325,9 @@ class TestReapplyReasoningEchoForProviderSwitch:
             model="gpt-5.5",
             base_url="https://chatgpt.com/backend-api/codex",
         )
-        agent.api_mode = "codex_responses"  # the Responses wire never reads reasoning_content
+        agent.api_mode = (
+            "codex_responses"  # the Responses wire never reads reasoning_content
+        )
         msgs = self._codex_built_history()
         changed = reapply_reasoning_echo_for_provider(agent, msgs)
         # msgs[2] carried "summary from codex" — must be stripped for the
@@ -327,8 +335,6 @@ class TestReapplyReasoningEchoForProviderSwitch:
         assert changed == 1
         assert "reasoning_content" not in msgs[2]
         assert "reasoning_content" not in msgs[4]
-
-
 
 
 class TestReasoningPrimaryToStrictFallback:
@@ -353,13 +359,19 @@ class TestReasoningPrimaryToStrictFallback:
         return [
             {"role": "system", "content": "sys"},
             {"role": "user", "content": "u1"},
-            {"role": "assistant", "reasoning_content": " ",
-             "tool_calls": [{"id": "a", "function": {"name": "terminal"}}]},
+            {
+                "role": "assistant",
+                "reasoning_content": " ",
+                "tool_calls": [{"id": "a", "function": {"name": "terminal"}}],
+            },
             {"role": "tool", "tool_call_id": "a", "content": "ok"},
             {"role": "assistant", "content": "done"},
             {"role": "user", "content": "u2"},
-            {"role": "assistant", "reasoning_content": " ",
-             "tool_calls": [{"id": "b", "function": {"name": "terminal"}}]},
+            {
+                "role": "assistant",
+                "reasoning_content": " ",
+                "tool_calls": [{"id": "b", "function": {"name": "terminal"}}],
+            },
             {"role": "tool", "tool_call_id": "b", "content": "ok"},
         ]
 
@@ -384,7 +396,8 @@ class TestReasoningPrimaryToStrictFallback:
 
         msgs = self._deepseek_built_history()
         mistral = _make_agent(
-            provider="mistral", model="mistral-small-latest",
+            provider="mistral",
+            model="mistral-small-latest",
             base_url="https://api.mistral.ai/v1",
         )
         reapply_reasoning_echo_for_provider(mistral, msgs)
@@ -397,11 +410,15 @@ class TestReasoningPrimaryToStrictFallback:
         """copy_reasoning_content_for_api strips the " " pad on the rebuild
         path too (covers fresh api_messages built under the strict provider)."""
         mistral = _make_agent(
-            provider="mistral", model="mistral-small-latest",
+            provider="mistral",
+            model="mistral-small-latest",
             base_url="https://api.mistral.ai/v1",
         )
-        source = {"role": "assistant", "reasoning_content": " ",
-                  "tool_calls": [{"id": "a"}]}
+        source = {
+            "role": "assistant",
+            "reasoning_content": " ",
+            "tool_calls": [{"id": "a"}],
+        }
         api_msg: dict = {"role": "assistant", "tool_calls": [{"id": "a"}]}
         mistral._copy_reasoning_content_for_api(source, api_msg)
         assert "reasoning_content" not in api_msg

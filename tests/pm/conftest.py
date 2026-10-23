@@ -1,4 +1,5 @@
 """Shared fixtures for the PM suite."""
+
 from pathlib import Path
 
 import pytest
@@ -6,7 +7,9 @@ import pytest
 
 def pytest_configure(config):
     config.addinivalue_line(
-        "markers", "real_machine_home: keep Path.home() intact (a subprocess or stage_runtime needs the real one)")
+        "markers",
+        "real_machine_home: keep Path.home() intact (a subprocess or stage_runtime needs the real one)",
+    )
 
 
 @pytest.fixture(autouse=True)

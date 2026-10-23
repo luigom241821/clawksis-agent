@@ -42,7 +42,10 @@ class TestGitTrampolineLive:
         # Healthy PATH git on the runner: probe must report False and the
         # probe itself must actually run git (sanity: git exists here).
         version = subprocess.run(
-            ["git", "--version"], capture_output=True, text=True, timeout=30,
+            ["git", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=30,
             check=False,
         )
         assert version.returncode == 0, version.stderr
@@ -64,7 +67,10 @@ class TestGitTrampolineLive:
         assert real.exists()
         assert real.name == "git.exe"
         probe = subprocess.run(
-            [str(real), "--version"], capture_output=True, text=True, timeout=30,
+            [str(real), "--version"],
+            capture_output=True,
+            text=True,
+            timeout=30,
             check=False,
         )
         assert probe.returncode == 0
@@ -83,7 +89,10 @@ class TestGitTrampolineLive:
         assert real.exists() and real.name == "git.exe"
         # The healed command must actually work.
         result = subprocess.run(
-            healed[:1] + ["--version"], capture_output=True, text=True, timeout=30,
+            healed[:1] + ["--version"],
+            capture_output=True,
+            text=True,
+            timeout=30,
             check=False,
         )
         assert result.returncode == 0

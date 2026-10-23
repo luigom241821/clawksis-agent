@@ -3,6 +3,7 @@
 Run with the checkout's Python. --step drives the native Windows hand-off
 watchdog fixture; otherwise print a live before/after JSON receipt.
 """
+
 import argparse
 import io
 import json
@@ -24,23 +25,33 @@ def run_child(mode):
     else:
         for _ in range(24):
             os.write(1, b"build-progress ")
-            time.sleep(.5)
+            time.sleep(0.5)
     return 7
 
 
 def step(mode):
-    from clawk_cli.main_dashboard import _install_hangup_protection, _finalize_update_output
+    from clawk_cli.main_dashboard import (
+        _install_hangup_protection,
+        _finalize_update_output,
+    )
     from clawk_cli.main import _run_logged_subprocess
+
     state = _install_hangup_protection(gateway_mode=True)
     try:
-        return _run_logged_subprocess([sys.executable, __file__, "--child", mode]).returncode
+        return _run_logged_subprocess(
+            [sys.executable, __file__, "--child", mode]
+        ).returncode
     finally:
         _finalize_update_output(state)
 
 
 def probe():
-    from clawk_cli.main_dashboard import _install_hangup_protection, _finalize_update_output
+    from clawk_cli.main_dashboard import (
+        _install_hangup_protection,
+        _finalize_update_output,
+    )
     from clawk_cli.main import _run_logged_subprocess
+
     receipts = []
     for gateway in (False, True):
         with tempfile.TemporaryDirectory(prefix="update-output-") as temp:
@@ -52,15 +63,20 @@ def probe():
             state = _install_hangup_protection(gateway_mode=gateway)
             result = []
             started = time.monotonic()
-            thread = threading.Thread(target=lambda: result.append(_run_logged_subprocess(
-                [sys.executable, __file__, "--child", "progress"])))
+            thread = threading.Thread(
+                target=lambda: result.append(
+                    _run_logged_subprocess(
+                        [sys.executable, __file__, "--child", "progress"]
+                    )
+                )
+            )
             thread.start()
             log = Path(temp) / "logs" / "update.log"
             while time.monotonic() - started < 5:
                 text = log.read_text(encoding="utf-8") if log.exists() else ""
                 if "build-progress" in text:
                     break
-                time.sleep(.02)
+                time.sleep(0.02)
             early = "build-progress" in text
             observed = time.monotonic() - started
             alive = thread.is_alive()
@@ -68,11 +84,19 @@ def probe():
             _finalize_update_output(state)
             sys.stdout = original
             assert not thread.is_alive()
-            receipts.append(dict(gateway=gateway, progress_before_exit=early,
-                observed_seconds=round(observed, 3), alive_at_observation=alive,
-                exit_code=result[0].returncode, captured_progress=result[0].stdout.count("build-progress"),
-                screen_bytes=len(screen.getvalue()), log_bytes=log.stat().st_size if log.exists() else 0))
-    print(json.dumps({"platform":sys.platform,"rows":receipts}, indent=2))
+            receipts.append(
+                dict(
+                    gateway=gateway,
+                    progress_before_exit=early,
+                    observed_seconds=round(observed, 3),
+                    alive_at_observation=alive,
+                    exit_code=result[0].returncode,
+                    captured_progress=result[0].stdout.count("build-progress"),
+                    screen_bytes=len(screen.getvalue()),
+                    log_bytes=log.stat().st_size if log.exists() else 0,
+                )
+            )
+    print(json.dumps({"platform": sys.platform, "rows": receipts}, indent=2))
 
 
 if __name__ == "__main__":

@@ -49,8 +49,16 @@ def _fresh_db(tmp_path, monkeypatch):
     yield
 
 
-_COLUMNS = ("obligation_id", "session_key", "state", "attempts", "last_error", "content", "chat_id",
-            "platform")
+_COLUMNS = (
+    "obligation_id",
+    "session_key",
+    "state",
+    "attempts",
+    "last_error",
+    "content",
+    "chat_id",
+    "platform",
+)
 
 
 def _rows():
@@ -62,30 +70,42 @@ def _rows():
 def _source(*, chat_id=CHAT, thread_id=None, chat_type="dm"):
     # parent_chat_id is a real SessionSource field; the queued-followup path reads it to pin the
     # channel inputs, so the stub carries it like every real source does.
-    return SimpleNamespace(platform=Platform.TELEGRAM, chat_id=chat_id, thread_id=thread_id,
-                           chat_type=chat_type, parent_chat_id=None)
+    return SimpleNamespace(
+        platform=Platform.TELEGRAM,
+        chat_id=chat_id,
+        thread_id=thread_id,
+        chat_type=chat_type,
+        parent_chat_id=None,
+    )
 
 
 def _telegram_adapter(send_result=None):
     """A real Telegram adapter (the base contract) whose transport send is a mock."""
     from plugins.platforms.telegram.adapter import TelegramAdapter
 
-    adapter = TelegramAdapter(PlatformConfig(enabled=True, token="test-token", extra={}))
+    adapter = TelegramAdapter(
+        PlatformConfig(enabled=True, token="test-token", extra={})
+    )
     runner = MagicMock()
     runner._delivery_adapter_for = MagicMock(return_value=adapter)
     runner._schedule_flood_redelivery = MagicMock(return_value=187.0)
     adapter.gateway_runner = runner
-    adapter.send = AsyncMock(return_value=send_result or SendResult(success=True, message_id="900"))
+    adapter.send = AsyncMock(
+        return_value=send_result or SendResult(success=True, message_id="900")
+    )
     adapter.edit_message = AsyncMock(
-        return_value=SendResult(success=False, error="message to edit not found"))
+        return_value=SendResult(success=False, error="message to edit not found")
+    )
     return adapter
 
 
 def _plain_adapter():
     """A relay-style double without the base contract: only ``send`` and the media helpers."""
     return SimpleNamespace(
-        name="relay", extract_media=BasePlatformAdapter.extract_media,
-        send=AsyncMock(return_value=SendResult(success=True, message_id="p1")))
+        name="relay",
+        extract_media=BasePlatformAdapter.extract_media,
+        send=AsyncMock(return_value=SendResult(success=True, message_id="p1")),
+    )
 
 
 def _runner():
@@ -94,19 +114,38 @@ def _runner():
     return object.__new__(GatewayRunner)
 
 
-async def _deliver(adapter, *, session_key=SESSION_KEY, stream_consumer=None, metadata=None,
-                   text=TEXT, source=None, anchor=INBOUND_ID, inbound_id=INBOUND_ID):
+async def _deliver(
+    adapter,
+    *,
+    session_key=SESSION_KEY,
+    stream_consumer=None,
+    metadata=None,
+    text=TEXT,
+    source=None,
+    anchor=INBOUND_ID,
+    inbound_id=INBOUND_ID,
+):
     from gateway.run import GatewayRunner
 
     await GatewayRunner._deliver_queued_first_response(
-        _runner(), text, source=source or _source(), adapter=adapter, metadata=metadata,
-        event_message_id=anchor, text_already_delivered=False, deliver_media=False,
-        stream_consumer=stream_consumer, session_key=session_key, inbound_message_id=inbound_id)
+        _runner(),
+        text,
+        source=source or _source(),
+        adapter=adapter,
+        metadata=metadata,
+        event_message_id=anchor,
+        text_already_delivered=False,
+        deliver_media=False,
+        stream_consumer=stream_consumer,
+        session_key=session_key,
+        inbound_message_id=inbound_id,
+    )
 
 
 # ---------------------------------------------------------------------------
 # The bracket: record before the send, finalize from the result.
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_a_delivered_queued_final_is_recorded_and_marked_delivered():
@@ -131,14 +170,28 @@ async def test_forum_topic_turns_are_identified_by_their_inbound_id_not_the_repl
     adapter = _telegram_adapter()
     topic = _source(chat_id="-1001", thread_id="7", chat_type="supergroup")
 
-    await _deliver(adapter, session_key=TOPIC_SESSION_KEY, source=topic, anchor=None,
-                   inbound_id="5301")
-    await _deliver(adapter, session_key=TOPIC_SESSION_KEY, source=topic, anchor=None,
-                   inbound_id="5302")
+    await _deliver(
+        adapter,
+        session_key=TOPIC_SESSION_KEY,
+        source=topic,
+        anchor=None,
+        inbound_id="5301",
+    )
+    await _deliver(
+        adapter,
+        session_key=TOPIC_SESSION_KEY,
+        source=topic,
+        anchor=None,
+        inbound_id="5302",
+    )
 
     ids = sorted(r["obligation_id"] for r in _rows())
-    assert ids == sorted([dl.compute_obligation_id(TOPIC_SESSION_KEY, "5301", TEXT),
-                          dl.compute_obligation_id(TOPIC_SESSION_KEY, "5302", TEXT)])
+    assert ids == sorted(
+        [
+            dl.compute_obligation_id(TOPIC_SESSION_KEY, "5301", TEXT),
+            dl.compute_obligation_id(TOPIC_SESSION_KEY, "5302", TEXT),
+        ]
+    )
     assert [c.kwargs["reply_to"] for c in adapter.send.await_args_list] == [None, None]
 
 
@@ -171,12 +224,15 @@ async def test_the_queued_final_is_sent_like_the_normal_final():
     assert kwargs["reply_to"] == INBOUND_ID
     assert kwargs["metadata"]["notify"] is True
     assert kwargs["metadata"]["thread_id"] == "topic-7"
-    assert metadata == {"thread_id": "topic-7"}  # the caller's dict is cloned, not mutated
+    assert metadata == {
+        "thread_id": "topic-7"
+    }  # the caller's dict is cloned, not mutated
 
 
 # ---------------------------------------------------------------------------
 # What is unchanged: reconcile-by-edit, plain adapters, no session key.
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_an_adapter_without_the_base_contract_keeps_the_plain_send():
@@ -192,6 +248,7 @@ async def test_an_adapter_without_the_base_contract_keeps_the_plain_send():
 # The call site hands the session key and the raw inbound id over.
 # ---------------------------------------------------------------------------
 
+
 def _chain_runner_and_ctx(followup_return):
     """A runner whose recursive ``_run_agent`` returns ``followup_return``, plus a topic turn."""
     from gateway.run import GatewayRunner
@@ -202,18 +259,33 @@ def _chain_runner_and_ctx(followup_return):
     runner._run_agent_deliver_first_response = AsyncMock()
     runner._is_goal_continuation_event = MagicMock(return_value=False)
     runner._session_key_for_source = MagicMock(return_value=TOPIC_SESSION_KEY)
-    runner._prepare_profile_scoped_inbound_message_text = AsyncMock(return_value="the follow-up")
+    runner._prepare_profile_scoped_inbound_message_text = AsyncMock(
+        return_value="the follow-up"
+    )
     runner._reply_anchor_for_event = MagicMock(return_value=None)
     runner._delivery_adapter_for = MagicMock(return_value=None)
     runner._refresh_agent_cache_message_count = AsyncMock()
     topic = _source(chat_id="-1001", thread_id="7", chat_type="supergroup")
     turn_ctx = SimpleNamespace(
-        source=topic, session_id="sid", session_key=TOPIC_SESSION_KEY, run_generation=1,
-        _interrupt_depth=0, history=[], _status_thread_metadata={"thread_id": "7"},
-        context_prompt=None, result_holder=[None])
+        source=topic,
+        session_id="sid",
+        session_key=TOPIC_SESSION_KEY,
+        run_generation=1,
+        _interrupt_depth=0,
+        history=[],
+        _status_thread_metadata={"thread_id": "7"},
+        context_prompt=None,
+        result_holder=[None],
+    )
     pending_event = SimpleNamespace(
-        source=topic, message_id="6002", channel_prompt=None, message_type=None,
-        internal=False, metadata={}, reply_expected=None)
+        source=topic,
+        message_id="6002",
+        channel_prompt=None,
+        message_type=None,
+        internal=False,
+        metadata={},
+        reply_expected=None,
+    )
     return GatewayRunner, runner, turn_ctx, pending_event
 
 
@@ -226,26 +298,52 @@ async def test_a_chained_queued_turn_carries_its_own_inbound_id():
 
     runner = _runner()
     runner._MAX_INTERRUPT_DEPTH = 8
-    runner._run_agent = AsyncMock(return_value={"final_response": "done", "messages": []})
+    runner._run_agent = AsyncMock(
+        return_value={"final_response": "done", "messages": []}
+    )
     runner._run_agent_deliver_first_response = AsyncMock()
     runner._is_goal_continuation_event = MagicMock(return_value=False)
     runner._session_key_for_source = MagicMock(return_value=TOPIC_SESSION_KEY)
-    runner._prepare_profile_scoped_inbound_message_text = AsyncMock(return_value="the follow-up")
-    runner._reply_anchor_for_event = MagicMock(return_value=None)   # forum topic: no anchor
+    runner._prepare_profile_scoped_inbound_message_text = AsyncMock(
+        return_value="the follow-up"
+    )
+    runner._reply_anchor_for_event = MagicMock(
+        return_value=None
+    )  # forum topic: no anchor
     runner._delivery_adapter_for = MagicMock(return_value=None)
     runner._refresh_agent_cache_message_count = AsyncMock()
     topic = _source(chat_id="-1001", thread_id="7", chat_type="supergroup")
     turn_ctx = SimpleNamespace(
-        source=topic, session_id="sid", session_key=TOPIC_SESSION_KEY, run_generation=1,
-        _interrupt_depth=0, history=[], _status_thread_metadata={"thread_id": "7"},
-        context_prompt=None, result_holder=[None])
+        source=topic,
+        session_id="sid",
+        session_key=TOPIC_SESSION_KEY,
+        run_generation=1,
+        _interrupt_depth=0,
+        history=[],
+        _status_thread_metadata={"thread_id": "7"},
+        context_prompt=None,
+        result_holder=[None],
+    )
     pending_event = SimpleNamespace(
-        source=topic, message_id="6002", channel_prompt=None, message_type=None,
-        internal=False, metadata={}, reply_expected=None)
+        source=topic,
+        message_id="6002",
+        channel_prompt=None,
+        message_type=None,
+        internal=False,
+        metadata={},
+        reply_expected=None,
+    )
 
     await GatewayRunner._run_agent_queued_followup(
-        runner, turn_ctx, adapter=None, pending="hi again", pending_event=pending_event,
-        response="resp", result={"interrupted": True, "messages": []}, stream_task=None)
+        runner,
+        turn_ctx,
+        adapter=None,
+        pending="hi again",
+        pending_event=pending_event,
+        response="resp",
+        result={"interrupted": True, "messages": []},
+        stream_task=None,
+    )
 
     runner._run_agent.assert_awaited_once()
     assert runner._run_agent.await_args.kwargs["inbound_message_id"] == "6002"
@@ -255,6 +353,7 @@ async def test_a_chained_queued_turn_carries_its_own_inbound_id():
 # ---------------------------------------------------------------------------
 # A chain's terminal reply must not overwrite an earlier turn's row.
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_the_terminal_turn_of_a_chain_is_ledgered_under_its_own_inbound_id():
@@ -273,7 +372,8 @@ async def test_the_terminal_turn_of_a_chain_is_ledgered_under_its_own_inbound_id
     adapter = _telegram_adapter()
     # Turn A (inbound 101): its queued final is refused by flood control and stays outstanding.
     adapter._send_with_retry = AsyncMock(
-        return_value=SendResult(success=False, error="flood_control:30.0"))
+        return_value=SendResult(success=False, error="flood_control:30.0")
+    )
     await _deliver(adapter, text=same_text, anchor="101", inbound_id="101")
 
     first = _rows()
@@ -283,16 +383,25 @@ async def test_the_terminal_turn_of_a_chain_is_ledgered_under_its_own_inbound_id
 
     # Turn B is the chain's TERMINAL turn (inbound 102). The adapter still holds turn A's event, so
     # only the ledger override distinguishes the row.
-    adapter._send_with_retry = AsyncMock(return_value=SendResult(success=True, message_id="901"))
-    event = MessageEvent(text="hi again", source=_source(), message_id="101",
-                         ledger_message_id="102")
-    await adapter._send_final_text(event, SESSION_KEY, same_text, {}, False, 0, lambda _r: None)
+    adapter._send_with_retry = AsyncMock(
+        return_value=SendResult(success=True, message_id="901")
+    )
+    event = MessageEvent(
+        text="hi again", source=_source(), message_id="101", ledger_message_id="102"
+    )
+    await adapter._send_final_text(
+        event, SESSION_KEY, same_text, {}, False, 0, lambda _r: None
+    )
 
     rows = {r["obligation_id"]: r for r in _rows()}
     assert len(rows) == 2, "the terminal reply reused the earlier turn's obligation id"
-    assert rows[turn_a_id]["state"] == "failed", \
+    assert rows[turn_a_id]["state"] == "failed", (
         "turn A's refused reply was overwritten and would never be redelivered"
-    assert rows[dl.compute_obligation_id(SESSION_KEY, "102", same_text)]["state"] == "delivered"
+    )
+    assert (
+        rows[dl.compute_obligation_id(SESSION_KEY, "102", same_text)]["state"]
+        == "delivered"
+    )
 
 
 @pytest.mark.asyncio
@@ -300,11 +409,19 @@ async def test_a_deeper_chain_keeps_the_innermost_inbound_id():
     """Chained follow-ups nest, and the LAST message answered owns the ledger identity, so an id
     already set by a deeper recursion must not be overwritten on the way out."""
     GatewayRunner, runner, turn_ctx, pending_event = _chain_runner_and_ctx(
-        {"final_response": "done", "messages": [], "queued_terminal_inbound_id": "6003"})
+        {"final_response": "done", "messages": [], "queued_terminal_inbound_id": "6003"}
+    )
 
     merged = await GatewayRunner._run_agent_queued_followup(
-        runner, turn_ctx, adapter=None, pending="hi again", pending_event=pending_event,
-        response="resp", result={"interrupted": True, "messages": []}, stream_task=None)
+        runner,
+        turn_ctx,
+        adapter=None,
+        pending="hi again",
+        pending_event=pending_event,
+        response="resp",
+        result={"interrupted": True, "messages": []},
+        stream_task=None,
+    )
 
     assert merged["queued_terminal_inbound_id"] == "6003"
 
@@ -313,8 +430,11 @@ async def test_a_deeper_chain_keeps_the_innermost_inbound_id():
 # The adapter that sent the final owns its message id: the ephemeral delete goes there.
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
-async def test_ephemeral_delete_targets_the_adapter_that_sent_the_final(tmp_path, monkeypatch):
+async def test_ephemeral_delete_targets_the_adapter_that_sent_the_final(
+    tmp_path, monkeypatch
+):
     """A reconnect between the send and the delete swaps the runner's live adapter; the delete
     must still go to the transport that produced ``result.message_id``."""
     from gateway.platforms.event import MessageEvent
@@ -325,7 +445,9 @@ async def test_ephemeral_delete_targets_the_adapter_that_sent_the_final(tmp_path
     sender._schedule_ephemeral_delete = MagicMock()
     replacement._schedule_ephemeral_delete = MagicMock()
     live = {"adapter": sender}
-    sender.gateway_runner._delivery_adapter_for = MagicMock(side_effect=lambda _s: live["adapter"])
+    sender.gateway_runner._delivery_adapter_for = MagicMock(
+        side_effect=lambda _s: live["adapter"]
+    )
 
     async def swap_then_send(*args, **kwargs):
         live["adapter"] = replacement  # reconnect lands while the send is in flight
@@ -333,7 +455,9 @@ async def test_ephemeral_delete_targets_the_adapter_that_sent_the_final(tmp_path
 
     sender.send = AsyncMock(side_effect=swap_then_send)
     event = MessageEvent(text="hi", source=_source(), message_id=INBOUND_ID)
-    await sender._send_final_text(event, SESSION_KEY, TEXT, {}, False, 30, lambda _r: None)
+    await sender._send_final_text(
+        event, SESSION_KEY, TEXT, {}, False, 30, lambda _r: None
+    )
 
     sender._schedule_ephemeral_delete.assert_called_once_with(CHAT, "900", 30)
     replacement._schedule_ephemeral_delete.assert_not_called()

@@ -30,11 +30,13 @@ Two subtleties this pins:
   and disables compaction on a healthy session.
   ``test_no_false_positive_under_tokenizer_skew``.
 """
+
 import time
 
 import pytest
 
 from agent.context_compressor import ContextCompressor
+
 
 def _compressor(threshold_tokens: int) -> ContextCompressor:
     cc = ContextCompressor(
@@ -50,12 +52,14 @@ def _compressor(threshold_tokens: int) -> ContextCompressor:
     cc._generate_summary = lambda *a, **k: "Summary of earlier turns."
     return cc
 
+
 def _messages(n: int, size: int = 1500) -> list:
     msgs = [{"role": "system", "content": "sys"}]
     for i in range(n):
         role = "user" if i % 2 == 0 else "assistant"
         msgs.append({"role": role, "content": f"m{i} " + "z" * size})
     return msgs
+
 
 def _turn(cc, msgs, real_prompt_tokens):
     """One agent turn as conversation_loop drives it.
@@ -72,6 +76,7 @@ def _turn(cc, msgs, real_prompt_tokens):
     cc._verify_compaction_cleared_threshold = True
     cc.update_from_response({"prompt_tokens": real_prompt_tokens})
     return msgs, True
+
 
 class TestSavingsBasis:
     def test_savings_does_not_depend_on_current_tokens(self):
@@ -101,6 +106,7 @@ class TestSavingsBasis:
         msgs = _messages(4, size=10)  # below the minimum compressible size
         cc.compress(msgs, current_tokens=100_000)
         assert cc._last_compression_savings_pct < 50
+
 
 class TestFutilityGuard:
     def test_stops_when_floor_alone_meets_threshold(self):
@@ -175,6 +181,7 @@ class TestFutilityGuard:
         assert cc._fallback_compression_streak == 0
         assert db.get_compression_fallback_streak("s1") == 0
 
+
 class TestMinimumMessagesBranch:
     def test_too_few_messages_defers_via_structural_backoff(self):
         """A structurally impossible compaction must not strike the breaker.
@@ -199,6 +206,7 @@ class TestMinimumMessagesBranch:
             "structural no-op must arm the retry backoff"
         )
         assert cc._compression_block_reason().startswith("structural_backoff")
+
 
 class TestRejectedCompactionStrike:
     """#88568 — a would-grow refusal must count as an ineffective strike.

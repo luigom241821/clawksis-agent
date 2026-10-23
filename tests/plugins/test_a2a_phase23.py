@@ -13,6 +13,7 @@ Tests cover:
 - Capability-based routing with fan-out (a2a_orchestrate)
 - SSRF protection for push callback URLs
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -59,8 +60,10 @@ def _post_sse(url, body):
     (data_payloads, event_names).  Unwraps the JSON-RPC envelope from
     each data frame so callers see bare StreamResponse objects."""
     req = urllib.request.Request(
-        url, data=json.dumps(body).encode(),
-        headers={"Content-Type": "application/json"}, method="POST",
+        url,
+        data=json.dumps(body).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
     )
     with urllib.request.urlopen(req, timeout=15) as r:
         raw = r.read().decode("utf-8")
@@ -68,9 +71,9 @@ def _post_sse(url, body):
     for block in raw.split("\n\n"):
         for line in block.splitlines():
             if line.startswith("event: "):
-                events.append(line[len("event:"):].strip())
+                events.append(line[len("event:") :].strip())
             elif line.startswith("data: "):
-                data = line[len("data: "):].strip()
+                data = line[len("data: ") :].strip()
                 if data:
                     obj = json.loads(data)
                     # Unwrap JSON-RPC envelope: {"jsonrpc":"2.0","id":...,"result":{...}}
@@ -84,8 +87,10 @@ def _post_sse(url, body):
 
 def _post_json(url, body, headers=None):
     req = urllib.request.Request(
-        url, data=json.dumps(body).encode(),
-        headers={"Content-Type": "application/json", **(headers or {})}, method="POST",
+        url,
+        data=json.dumps(body).encode(),
+        headers={"Content-Type": "application/json", **(headers or {})},
+        method="POST",
     )
     with urllib.request.urlopen(req, timeout=15) as r:
         return json.loads(r.read().decode())
@@ -93,8 +98,12 @@ def _post_json(url, body, headers=None):
 
 def _send_body(text, ctx="", method="message/send"):
     return {
-        "jsonrpc": "2.0", "id": "1", "method": method,
-        "params": {"message": protocol.text_message(protocol.ROLE_USER, text, context_id=ctx)},
+        "jsonrpc": "2.0",
+        "id": "1",
+        "method": method,
+        "params": {
+            "message": protocol.text_message(protocol.ROLE_USER, text, context_id=ctx)
+        },
     }
 
 
@@ -114,7 +123,9 @@ class TestStreamResponseFormat:
         assert "kind" not in su and "final" not in su
 
     def test_status_update_with_message(self):
-        ev = protocol.status_update("t", "c", protocol.STATE_INPUT_REQUIRED, "which one?")
+        ev = protocol.status_update(
+            "t", "c", protocol.STATE_INPUT_REQUIRED, "which one?"
+        )
         msg = ev["statusUpdate"]["status"]["message"]
         assert msg["role"] == "ROLE_AGENT"
         assert protocol.extract_text(msg) == "which one?"
@@ -140,7 +151,7 @@ class TestStreamResponseFormat:
         provided.  Bare StreamResponse (REST binding) breaks a2a-sdk clients."""
         chunk = protocol.sse_data({"statusUpdate": {"taskId": "t"}}, req_id="42")
         assert chunk.startswith("data: ")
-        obj = json.loads(chunk[len("data: "):].strip())
+        obj = json.loads(chunk[len("data: ") :].strip())
         assert obj["jsonrpc"] == "2.0"
         assert obj["id"] == "42"
         assert "result" in obj
@@ -149,7 +160,7 @@ class TestStreamResponseFormat:
     def test_sse_data_no_envelope_without_req_id(self):
         """Without req_id, sse_data falls back to bare payload for legacy callers."""
         chunk = protocol.sse_data({"statusUpdate": {"taskId": "t"}})
-        obj = json.loads(chunk[len("data: "):].strip())
+        obj = json.loads(chunk[len("data: ") :].strip())
         assert "jsonrpc" not in obj
         assert obj["statusUpdate"]["taskId"] == "t"
 
@@ -173,19 +184,28 @@ class TestStreamingEndToEnd:
         async def run():
             assert await adapter.connect() is True
             payloads, events = await asyncio.to_thread(
-                _post_sse, base + "/", _send_body("stream me", method="message/stream"))
+                _post_sse, base + "/", _send_body("stream me", method="message/stream")
+            )
 
             # Discrimination is by member name; every payload is a StreamResponse.
             # v1.0 streaming begins with the current Task (or a direct Message),
             # followed by status/artifact updates until terminal closure.
             for p in payloads:
-                assert set(p.keys()) <= {"task", "message", "statusUpdate", "artifactUpdate"}
+                assert set(p.keys()) <= {
+                    "task",
+                    "message",
+                    "statusUpdate",
+                    "artifactUpdate",
+                }
                 assert "kind" not in json.dumps(p)
             assert "task" in payloads[0]
             assert payloads[0]["task"]["status"]["state"] == "TASK_STATE_SUBMITTED"
 
-            states = [p["statusUpdate"]["status"]["state"]
-                      for p in payloads if "statusUpdate" in p]
+            states = [
+                p["statusUpdate"]["status"]["state"]
+                for p in payloads
+                if "statusUpdate" in p
+            ]
             assert states[0] == "TASK_STATE_WORKING"
             assert "TASK_STATE_WORKING" in states
             assert states[-1] == "TASK_STATE_COMPLETED"
@@ -196,7 +216,9 @@ class TestStreamingEndToEnd:
             assert len(artifacts) == 1
             assert "ECHO:" in protocol.extract_text(artifacts[0]["artifact"])
 
-            assert events == []  # v1.0: stream closure is the terminal signal, no event frame
+            assert (
+                events == []
+            )  # v1.0: stream closure is the terminal signal, no event frame
             await adapter.disconnect()
 
         asyncio.run(run())
@@ -211,17 +233,29 @@ class TestStreamingEndToEnd:
             resp = await asyncio.to_thread(_post_json, base + "/", _send_body("hello"))
             task = resp["result"]
 
-            payloads, events = await asyncio.to_thread(_post_sse, base + "/", {
-                "jsonrpc": "2.0", "id": "2", "method": "tasks/subscribe",
-                "params": {"taskId": task["id"]},
-            })
-            states = [p["statusUpdate"]["status"]["state"]
-                      for p in payloads if "statusUpdate" in p]
+            payloads, events = await asyncio.to_thread(
+                _post_sse,
+                base + "/",
+                {
+                    "jsonrpc": "2.0",
+                    "id": "2",
+                    "method": "tasks/subscribe",
+                    "params": {"taskId": task["id"]},
+                },
+            )
+            states = [
+                p["statusUpdate"]["status"]["state"]
+                for p in payloads
+                if "statusUpdate" in p
+            ]
             assert "TASK_STATE_COMPLETED" in states
             artifacts = [p for p in payloads if "artifactUpdate" in p]
             assert artifacts and "ECHO:" in protocol.extract_text(
-                artifacts[0]["artifactUpdate"]["artifact"])
-            assert events == []  # v1.0: stream closure is the terminal signal, no event frame
+                artifacts[0]["artifactUpdate"]["artifact"]
+            )
+            assert (
+                events == []
+            )  # v1.0: stream closure is the terminal signal, no event frame
             await adapter.disconnect()
 
         asyncio.run(run())
@@ -233,15 +267,20 @@ class TestStreamingEndToEnd:
 
         async def run():
             assert await adapter.connect() is True
-            resp = await asyncio.to_thread(_post_json, base + "/", {
-                "jsonrpc": "2.0", "id": "2", "method": "tasks/subscribe",
-                "params": {"taskId": "ghost"},
-            })
+            resp = await asyncio.to_thread(
+                _post_json,
+                base + "/",
+                {
+                    "jsonrpc": "2.0",
+                    "id": "2",
+                    "method": "tasks/subscribe",
+                    "params": {"taskId": "ghost"},
+                },
+            )
             assert resp["error"]["code"] == protocol.ERR_TASK_NOT_FOUND
             await adapter.disconnect()
 
         asyncio.run(run())
-
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -257,6 +296,7 @@ class TestPushSigning:
         assert sig
         import hashlib
         import hmac as hmac_mod
+
         expected = hmac_mod.new(
             b"test-secret-123",
             json.dumps(payload, sort_keys=True, ensure_ascii=False).encode(),
@@ -295,7 +335,6 @@ class TestAntiLoopProtection:
         turns.reset("c1")
         assert turns.track("c1") == 1
 
-
     def test_max_pingpong_turns_env_override(self, monkeypatch):
         monkeypatch.setenv("A2A_MAX_PINGPONG_TURNS", "10")
         assert protocol.max_pingpong_turns() == 10
@@ -317,7 +356,8 @@ class TestAntiLoopProtection:
             states = []
             for _ in range(3):
                 resp = await asyncio.to_thread(
-                    _post_json, base + "/", _send_body("ping", ctx="ctx-pingpong"))
+                    _post_json, base + "/", _send_body("ping", ctx="ctx-pingpong")
+                )
                 states.append(resp["result"]["status"]["state"])
             assert states[0] == "TASK_STATE_COMPLETED"
             assert states[1] == "TASK_STATE_COMPLETED"
@@ -333,7 +373,6 @@ class TestAntiLoopProtection:
 
 
 class TestRateLimiting:
-
     def test_blocks_over_limit(self, monkeypatch):
         monkeypatch.setenv("A2A_RATE_LIMIT", "3")
         rl = protocol.RateLimiter()
@@ -387,7 +426,6 @@ class TestRateLimiting:
 
 
 class TestMetrics:
-
     def test_record_latency_updates_average(self):
         m = protocol.Metrics()
         m.record_latency(0.1)
@@ -424,8 +462,6 @@ class TestMetrics:
 
 
 class TestTaskStore:
-
-
     def test_complete_is_idempotent(self):
         store = protocol.TaskStore()
         store.create("t1", "c1", "p")
@@ -467,38 +503,61 @@ class TestTaskStore:
         monkeypatch.setenv("A2A_REPLY_TIMEOUT", "600")
         adapter, _base = _make_live_adapter(monkeypatch)
         now = time.time()
-        for task_id, age in (("t-live", 700), ("t-orphan", 700), ("t-within-reply-window", 400)):
+        for task_id, age in (
+            ("t-live", 700),
+            ("t-orphan", 700),
+            ("t-within-reply-window", 400),
+        ):
             adapter.tasks.create(task_id, "c1", "p")
             adapter.tasks.set_state(task_id, protocol.STATE_WORKING)
             adapter.tasks._tasks[task_id]["created_at"] = now - age
 
         adapter._add_pending("t-live", "c1")
-        agent = {"slug": "dev", "tenant": "dev", "profile": "dev", "local": False, "timeout": 900}
+        agent = {
+            "slug": "dev",
+            "tenant": "dev",
+            "profile": "dev",
+            "local": False,
+            "timeout": 900,
+        }
 
         def fake_forward(*_args, **_kwargs):
-            forwarded_id = next(tid for tid in adapter.tasks._tasks if tid not in {
-                "t-live", "t-orphan", "t-within-reply-window"
-            })
+            forwarded_id = next(
+                tid
+                for tid in adapter.tasks._tasks
+                if tid not in {"t-live", "t-orphan", "t-within-reply-window"}
+            )
             adapter.tasks._tasks[forwarded_id]["created_at"] = now - 700
             assert adapter._fail_orphans_once() == ["t-orphan"]
             return "forwarded reply", protocol.STATE_COMPLETED
 
         monkeypatch.setattr(adapter, "_forward_to_profile", fake_forward)
         terminal, pending = adapter._prepare_task(
-            {"message": protocol.text_message(protocol.ROLE_USER, "hello", context_id="forwarded")},
-            "peer", agent=agent,
+            {
+                "message": protocol.text_message(
+                    protocol.ROLE_USER, "hello", context_id="forwarded"
+                )
+            },
+            "peer",
+            agent=agent,
         )
 
         assert pending is None
         assert adapter.tasks.get(terminal["id"])["state"] == protocol.STATE_COMPLETED
         assert adapter.tasks.get("t-live")["state"] == protocol.STATE_WORKING
-        assert adapter.tasks.get("t-within-reply-window")["state"] == protocol.STATE_WORKING
+        assert (
+            adapter.tasks.get("t-within-reply-window")["state"]
+            == protocol.STATE_WORKING
+        )
 
         adapter._pop_pending("t-live")
         assert adapter._fail_orphans_once() == ["t-live"]
 
-    def test_orphan_timeout_is_bounded_and_disconnect_clears_active_tasks(self, monkeypatch):
+    def test_orphan_timeout_is_bounded_and_disconnect_clears_active_tasks(
+        self, monkeypatch
+    ):
         from plugins.platforms.a2a import adapter as mod
+
         monkeypatch.setenv("A2A_REPLY_TIMEOUT", "1e18")
         assert mod._orphan_timeout() == mod._MAX_ORPHAN_TIMEOUT
 
@@ -515,8 +574,12 @@ class TestTaskStore:
         future = adapter._add_pending("t-live", "c1")
         future.set_result((protocol.STATE_COMPLETED, "reply"))
         pending = {
-            "task_id": "t-live", "context_id": "c1", "peer": "peer",
-            "future": future, "created_iso": rec["created_iso"], "started": time.time(),
+            "task_id": "t-live",
+            "context_id": "c1",
+            "peer": "peer",
+            "future": future,
+            "created_iso": rec["created_iso"],
+            "started": time.time(),
         }
 
         original_redact = security.redact_outbound
@@ -531,7 +594,9 @@ class TestTaskStore:
 
         monkeypatch.setattr(security, "redact_outbound", pause_while_finalizing)
         thread = threading.Thread(
-            target=lambda: result.append(adapter._finalize_task(pending, *adapter._await_reply(pending)))
+            target=lambda: result.append(
+                adapter._finalize_task(pending, *adapter._await_reply(pending))
+            )
         )
         thread.start()
         assert finalizing.wait(timeout=1)
@@ -550,11 +615,16 @@ class TestTaskStore:
         rec = adapter.tasks.create("t-live", "c1", "peer")
         adapter.tasks.set_state("t-live", protocol.STATE_WORKING)
         pending = {
-            "task_id": "t-live", "context_id": "c1", "peer": "peer",
+            "task_id": "t-live",
+            "context_id": "c1",
+            "peer": "peer",
             "future": adapter._add_pending("t-live", "c1"),
-            "created_iso": rec["created_iso"], "started": time.time(),
+            "created_iso": rec["created_iso"],
+            "started": time.time(),
         }
-        monkeypatch.setattr(adapter, "_prepare_task", lambda *_args, **_kwargs: (None, pending))
+        monkeypatch.setattr(
+            adapter, "_prepare_task", lambda *_args, **_kwargs: (None, pending)
+        )
 
         class BrokenWriter:
             def write(self, _chunk):
@@ -614,10 +684,14 @@ class TestDynamicAgentCards:
         from gateway.config import PlatformConfig
         from plugins.platforms.a2a.adapter import A2AAdapter
 
-        monkeypatch.setattr(registry, "get_registered_toolset_names",
-                            lambda: ["webz", "termz"])
-        monkeypatch.setattr(registry, "get_tool_names_for_toolset",
-                            lambda ts: {"webz": ["web_search"], "termz": ["terminal"]}[ts])
+        monkeypatch.setattr(
+            registry, "get_registered_toolset_names", lambda: ["webz", "termz"]
+        )
+        monkeypatch.setattr(
+            registry,
+            "get_tool_names_for_toolset",
+            lambda ts: {"webz": ["web_search"], "termz": ["terminal"]}[ts],
+        )
 
         adapter = A2AAdapter(PlatformConfig(enabled=True))
         card = adapter._build_card()
@@ -630,8 +704,11 @@ class TestDynamicAgentCards:
         from gateway.config import PlatformConfig
         from plugins.platforms.a2a.adapter import A2AAdapter
 
-        monkeypatch.setattr(registry, "get_registered_toolset_names",
-                            lambda: ["webz", "termz", "secretz"])
+        monkeypatch.setattr(
+            registry,
+            "get_registered_toolset_names",
+            lambda: ["webz", "termz", "secretz"],
+        )
         monkeypatch.setattr(registry, "get_tool_names_for_toolset", lambda ts: [])
         monkeypatch.setenv("A2A_ADVERTISED_TOOLSETS", "webz")
 
@@ -649,7 +726,10 @@ _TWO_PEERS = {
     "a2a_agents": {
         "researcher": {"url": "http://localhost:9991", "capabilities": ["research"]},
         "coder": {"url": "http://localhost:9992", "capabilities": ["code"]},
-        "generalist": {"url": "http://localhost:9993", "capabilities": ["research", "code"]},
+        "generalist": {
+            "url": "http://localhost:9993",
+            "capabilities": ["research", "code"],
+        },
     }
 }
 
@@ -659,7 +739,6 @@ class TestA2AOrchestrate:
         assert "capability" in tools.a2a_orchestrate({"message": "do something"})
         assert "message" in tools.a2a_orchestrate({"capability": "research"})
 
-
     def test_match_peers_by_capability(self, monkeypatch):
         monkeypatch.setattr(tools, "_load_config", lambda: _TWO_PEERS)
         matches = tools._match_peers_by_capability("research")
@@ -668,8 +747,11 @@ class TestA2AOrchestrate:
 
     def test_all_mode_returns_every_reply(self, monkeypatch):
         monkeypatch.setattr(tools, "_load_config", lambda: _TWO_PEERS)
-        monkeypatch.setattr(tools, "_call_peer_sync",
-                            lambda name, entry, msg, ctx="": (name, f"reply from {name}"))
+        monkeypatch.setattr(
+            tools,
+            "_call_peer_sync",
+            lambda name, entry, msg, ctx="": (name, f"reply from {name}"),
+        )
         out = tools.a2a_orchestrate({"capability": "research", "message": "go"})
         assert "reply from researcher" in out
         assert "reply from generalist" in out
@@ -680,9 +762,14 @@ class TestA2AOrchestrate:
             "researcher": "short",
             "generalist": "a much longer and more detailed reply",
         }
-        monkeypatch.setattr(tools, "_call_peer_sync",
-                            lambda name, entry, msg, ctx="": (name, replies[name]))
-        out = tools.a2a_orchestrate({"capability": "research", "message": "go", "mode": "best"})
+        monkeypatch.setattr(
+            tools,
+            "_call_peer_sync",
+            lambda name, entry, msg, ctx="": (name, replies[name]),
+        )
+        out = tools.a2a_orchestrate(
+            {"capability": "research", "message": "go", "mode": "best"}
+        )
         assert out.startswith("[best: generalist]")
 
     def test_best_mode_ignores_error_replies(self, monkeypatch):
@@ -692,9 +779,14 @@ class TestA2AOrchestrate:
             "researcher": "ok",
             "generalist": "Error: " + "x" * 500,
         }
-        monkeypatch.setattr(tools, "_call_peer_sync",
-                            lambda name, entry, msg, ctx="": (name, replies[name]))
-        out = tools.a2a_orchestrate({"capability": "research", "message": "go", "mode": "best"})
+        monkeypatch.setattr(
+            tools,
+            "_call_peer_sync",
+            lambda name, entry, msg, ctx="": (name, replies[name]),
+        )
+        out = tools.a2a_orchestrate(
+            {"capability": "research", "message": "go", "mode": "best"}
+        )
         assert out.startswith("[best: researcher]")
         assert "ok" in out
 
@@ -702,24 +794,39 @@ class TestA2AOrchestrate:
         """All-error edge: report the failures instead of returning one error
         with a misleading [best: ...] header."""
         monkeypatch.setattr(tools, "_load_config", lambda: _TWO_PEERS)
-        monkeypatch.setattr(tools, "_call_peer_sync",
-                            lambda name, entry, msg, ctx="": (name, "Error: connection refused"))
-        out = tools.a2a_orchestrate({"capability": "research", "message": "go", "mode": "best"})
+        monkeypatch.setattr(
+            tools,
+            "_call_peer_sync",
+            lambda name, entry, msg, ctx="": (name, "Error: connection refused"),
+        )
+        out = tools.a2a_orchestrate(
+            {"capability": "research", "message": "go", "mode": "best"}
+        )
         assert out.startswith("All peers failed:")
         assert "[best:" not in out
 
     def test_first_mode_all_errors_reports_failure(self, monkeypatch):
         monkeypatch.setattr(tools, "_load_config", lambda: _TWO_PEERS)
-        monkeypatch.setattr(tools, "_call_peer_sync",
-                            lambda name, entry, msg, ctx="": (name, "Error: nope"))
-        out = tools.a2a_orchestrate({"capability": "code", "message": "go", "mode": "first"})
+        monkeypatch.setattr(
+            tools,
+            "_call_peer_sync",
+            lambda name, entry, msg, ctx="": (name, "Error: nope"),
+        )
+        out = tools.a2a_orchestrate(
+            {"capability": "code", "message": "go", "mode": "first"}
+        )
         assert out.startswith("All peers failed:")
 
     def test_first_mode_returns_a_success(self, monkeypatch):
         monkeypatch.setattr(tools, "_load_config", lambda: _TWO_PEERS)
-        monkeypatch.setattr(tools, "_call_peer_sync",
-                            lambda name, entry, msg, ctx="": (name, f"win {name}"))
-        out = tools.a2a_orchestrate({"capability": "code", "message": "go", "mode": "first"})
+        monkeypatch.setattr(
+            tools,
+            "_call_peer_sync",
+            lambda name, entry, msg, ctx="": (name, f"win {name}"),
+        )
+        out = tools.a2a_orchestrate(
+            {"capability": "code", "message": "go", "mode": "first"}
+        )
         assert out.startswith("[first: ")
         assert "win" in out
 
@@ -747,7 +854,10 @@ class TestSSRFProtection:
 
     def test_aws_metadata_blocked(self, monkeypatch):
         monkeypatch.setenv("A2A_BEARER_TOKEN", "tok")
-        assert security.is_safe_callback_url("http://169.254.169.254/latest/meta-data/") is False
+        assert (
+            security.is_safe_callback_url("http://169.254.169.254/latest/meta-data/")
+            is False
+        )
 
     def test_private_ranges_blocked(self, monkeypatch):
         monkeypatch.setenv("A2A_BEARER_TOKEN", "tok")

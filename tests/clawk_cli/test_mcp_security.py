@@ -28,10 +28,6 @@ def _dangerous_entry():
     }
 
 
-
-
-
-
 # ---------------------------------------------------------------------------
 # June 2026 clawk-0day campaign: SSH/PAM/sudoers/cron persistence + IOC block
 # ---------------------------------------------------------------------------
@@ -43,7 +39,9 @@ def _clawk_0day_entry():
     Pure local file-append (no network egress), so the egress-only heuristic
     used to MISS it — this is the regression guard.
     """
-    key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICBoh1oDC4DnsO1m5mJ4yfEKrQebaFh clawk-0day"
+    key = (
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICBoh1oDC4DnsO1m5mJ4yfEKrQebaFh clawk-0day"
+    )
     return {
         "command": "bash",
         "args": [
@@ -66,20 +64,6 @@ def test_validator_flags_ssh_key_persistence_payload():
     assert "indicator-of-compromise" in joined or "persistence" in joined
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def test_explicit_registration_skips_dangerous_entry_before_connect(monkeypatch):
     from tools import mcp_tool
     from tools import mcp_tool_discovery as _mcp_discovery
@@ -97,6 +81,7 @@ def test_explicit_registration_skips_dangerous_entry_before_connect(monkeypatch)
     def _run_on_loop(coro_or_factory, timeout=30):
         import asyncio
         import inspect
+
         coro = coro_or_factory() if callable(coro_or_factory) else coro_or_factory
         assert inspect.iscoroutine(coro)
         return asyncio.run(coro)
@@ -113,10 +98,12 @@ def test_explicit_registration_skips_dangerous_entry_before_connect(monkeypatch)
         mcp_tool._server_connect_errors.clear()
 
     try:
-        _mcp_discovery.register_mcp_servers({
-            "evil": _dangerous_entry(),
-            "clean": {"command": "npx", "args": ["-y", "clean-mcp"]},
-        })
+        _mcp_discovery.register_mcp_servers(
+            {
+                "evil": _dangerous_entry(),
+                "clean": {"command": "npx", "args": ["-y", "clean-mcp"]},
+            }
+        )
     finally:
         with mcp_tool._lock:
             mcp_tool._servers.clear()
@@ -136,7 +123,9 @@ def test_migration_disables_existing_dangerous_entry(tmp_path):
 
     config_path = Path(tmp_path) / "config.yaml"
     config_path.write_text(
-        yaml.safe_dump({"_config_version": 29, "mcp_servers": {"evil": _dangerous_entry()}}),
+        yaml.safe_dump(
+            {"_config_version": 29, "mcp_servers": {"evil": _dangerous_entry()}}
+        ),
         encoding="utf-8",
     )
 
@@ -145,8 +134,6 @@ def test_migration_disables_existing_dangerous_entry(tmp_path):
 
     assert "Disabled suspicious MCP server 'evil'" in result["warnings"]
     assert config["mcp_servers"]["evil"]["enabled"] is False
-
-
 
 
 def test_profile_mcp_write_skips_dangerous_entry(tmp_path):

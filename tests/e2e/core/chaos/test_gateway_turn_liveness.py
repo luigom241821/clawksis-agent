@@ -40,7 +40,11 @@ from typing import Any, Callable
 
 import pytest
 
-from tests.e2e.core.chaos._gateway_harness import SHUTDOWN_DEADLINE_S, Event, GatewayProc
+from tests.e2e.core.chaos._gateway_harness import (
+    SHUTDOWN_DEADLINE_S,
+    Event,
+    GatewayProc,
+)
 from tests.e2e.core.chaos._helpers import (
     INTERRUPT_DEADLINE_S,
     LONG_TIMEOUT_S,
@@ -70,7 +74,9 @@ from tests.fakes.fake_llm_provider import (
 )
 
 pytestmark = [
-    pytest.mark.skipif(sys.platform != "linux", reason="orphan scan reads /proc; POSIX gateway signals"),
+    pytest.mark.skipif(
+        sys.platform != "linux", reason="orphan scan reads /proc; POSIX gateway signals"
+    ),
 ]
 
 # The adapter ticks every 100 ms on the gateway loop. Healthy gaps are ~0.11 s, worst seen
@@ -92,7 +98,9 @@ def _text_of(content: Any) -> str:
     if isinstance(content, str):
         return content
     if isinstance(content, list):
-        return " ".join(str(p.get("text", "")) if isinstance(p, dict) else str(p) for p in content)
+        return " ".join(
+            str(p.get("text", "")) if isinstance(p, dict) else str(p) for p in content
+        )
     return str(content or "")
 
 
@@ -119,11 +127,15 @@ def _tools_then_text(first: Callable[[str], ToolCall]) -> Callable[[list, str], 
         if messages and messages[-1].get("role") == "tool":
             return Text(f"tools settled {nonce}")
         return first(nonce)
+
     return respond
 
 
 def _parallel_batch(nonce: str) -> ToolCall:
-    calls = [("terminal", {"command": f"echo {_token(nonce, i)}"}) for i in range(PARALLEL_CALLS)]
+    calls = [
+        ("terminal", {"command": f"echo {_token(nonce, i)}"})
+        for i in range(PARALLEL_CALLS)
+    ]
     return ToolCall(calls[0][0], calls[0][1], parallel=calls[1:])
 
 
@@ -135,9 +147,15 @@ FAULTS: dict[str, Callable[[list, str], Any]] = {
     "drop": lambda _m, _n: DropMidStream(),
     "parallel": _tools_then_text(_parallel_batch),
     "toolhang": _tools_then_text(
-        lambda _n: ToolCall("terminal", {"command": HUNG_COMMAND, "timeout": TOOL_TIMEOUT_S})),
+        lambda _n: ToolCall(
+            "terminal", {"command": HUNG_COMMAND, "timeout": TOOL_TIMEOUT_S}
+        )
+    ),
     "toolhang_long": _tools_then_text(
-        lambda _n: ToolCall("terminal", {"command": HUNG_COMMAND, "timeout": LONG_TIMEOUT_S})),
+        lambda _n: ToolCall(
+            "terminal", {"command": HUNG_COMMAND, "timeout": LONG_TIMEOUT_S}
+        )
+    ),
 }
 
 
@@ -153,8 +171,10 @@ def responder(record: dict[str, Any]):
 
 def _main_requests_for(srv: FakeLLMServer, needle: str) -> list[dict[str, Any]]:
     return [
-        r["body"] for r in list(srv.requests)
-        if r["kind"] == "main" and needle in _last_user_text(r["body"].get("messages") or [])
+        r["body"]
+        for r in list(srv.requests)
+        if r["kind"] == "main"
+        and needle in _last_user_text(r["body"].get("messages") or [])
     ]
 
 
@@ -186,21 +206,41 @@ class Scenario:
 SCENARIOS = [
     Scenario("provider_hang", "hang"),
     # Reasoning slug: the explicit stale_timeout_seconds must beat its reasoning floor.
-    Scenario("provider_stall_reasoning_model", "stall", model=REASONING_MODEL, may_trip_stale_breaker=True),
+    Scenario(
+        "provider_stall_reasoning_model",
+        "stall",
+        model=REASONING_MODEL,
+        may_trip_stale_breaker=True,
+    ),
     Scenario("provider_500_forever", "err500"),
     Scenario("provider_429_forever", "err429"),
     Scenario("provider_drop_mid_stream", "drop"),
     Scenario("parallel_8_terminal_calls", "parallel"),
     Scenario("tool_hang_past_timeout", "toolhang", reaps_hung_tool=True),
     Scenario("stop_during_provider_hang", "hang", long_timeouts=True, ender="stop"),
-    Scenario("stop_during_hung_tool", "toolhang_long", long_timeouts=True, ender="stop", when="tool",
-             reaps_hung_tool=True),
+    Scenario(
+        "stop_during_hung_tool",
+        "toolhang_long",
+        long_timeouts=True,
+        ender="stop",
+        when="tool",
+        reaps_hung_tool=True,
+    ),
     # busy_input_mode interrupt: the follow-up must preempt a turn that would hang 600 s.
-    Scenario("busy_interrupt_during_provider_hang", "hang", long_timeouts=True, ender="busy",
-             busy_mode="interrupt"),
+    Scenario(
+        "busy_interrupt_during_provider_hang",
+        "hang",
+        long_timeouts=True,
+        ender="busy",
+        busy_mode="interrupt",
+    ),
     # busy_input_mode queue: the follow-up waits for the faulted turn to fail, then is answered.
-    Scenario("busy_queue_during_provider_hang", "hang", ender="busy", busy_mode="queue"),
-    Scenario("sigterm_during_provider_hang", "hang", long_timeouts=True, ender="sigterm"),
+    Scenario(
+        "busy_queue_during_provider_hang", "hang", ender="busy", busy_mode="queue"
+    ),
+    Scenario(
+        "sigterm_during_provider_hang", "hang", long_timeouts=True, ender="sigterm"
+    ),
 ]
 
 
@@ -208,7 +248,12 @@ def _hung_tool_pids(tag: str) -> list[int]:
     out = []
     for pid in tagged_pids(tag):
         try:
-            cmd = Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace")
+            cmd = (
+                Path(f"/proc/{pid}/cmdline")
+                .read_bytes()
+                .replace(b"\0", b" ")
+                .decode(errors="replace")
+            )
         except OSError:
             continue
         if HUNG_COMMAND in cmd:
@@ -230,7 +275,8 @@ def _session_with(state_db: Path, needle: str) -> str | None:
     try:
         row = conn.execute(
             "SELECT session_id FROM messages WHERE role = 'user' AND content LIKE ? ORDER BY id DESC LIMIT 1",
-            (f"%{needle}%",)).fetchone()
+            (f"%{needle}%",),
+        ).fetchone()
     finally:
         conn.close()
     return row[0] if row else None
@@ -243,7 +289,8 @@ def _persisted(state_db: Path, session_id: str) -> list[dict[str, Any]]:
         rows = conn.execute(
             "SELECT role, content, tool_call_id, tool_calls FROM messages "
             "WHERE session_id = ? AND active = 1 AND role IN ('user', 'assistant', 'tool') ORDER BY id",
-            (session_id,)).fetchall()
+            (session_id,),
+        ).fetchall()
     finally:
         conn.close()
     out = []
@@ -257,7 +304,9 @@ def _persisted(state_db: Path, session_id: str) -> list[dict[str, Any]]:
     return out
 
 
-def _assert_parallel_results(messages: list[dict[str, Any]], nonce: str, where: str) -> None:
+def _assert_parallel_results(
+    messages: list[dict[str, Any]], nonce: str, where: str
+) -> None:
     results = tool_results_by_id(messages)
     seen = 0
     for msg in messages:
@@ -270,14 +319,20 @@ def _assert_parallel_results(messages: list[dict[str, Any]], nonce: str, where: 
             assert token.startswith(f"tok{nonce}"), (where, args)
             body = results.get(call["id"], "")
             assert token in body and "Result unavailable" not in body, (
-                f"{where}: tool_call {call['id']} ({token}) got {body[:200]!r}")
+                f"{where}: tool_call {call['id']} ({token}) got {body[:200]!r}"
+            )
             seen += 1
-    assert seen == PARALLEL_CALLS, f"{where}: {seen} tool calls, expected {PARALLEL_CALLS}"
+    assert seen == PARALLEL_CALLS, (
+        f"{where}: {seen} tool calls, expected {PARALLEL_CALLS}"
+    )
 
 
 def _is_send(chat: str, needle: str | None = None) -> Callable[[Event], bool]:
-    return lambda e: e.ev == "send" and e.data.get("chat") == chat and (
-        needle is None or needle in (e.data.get("text") or ""))
+    return lambda e: (
+        e.ev == "send"
+        and e.data.get("chat") == chat
+        and (needle is None or needle in (e.data.get("text") or ""))
+    )
 
 
 def _is_complete(msg_id: str) -> Callable[[Event], bool]:
@@ -291,24 +346,36 @@ def _settle(gw: GatewayProc, msg_id: str, since: int, what: str) -> Event:
     restore is still running is parked (an early processing-complete) and replayed later."""
     done = gw.wait_for(_is_complete(msg_id), TURN_DEADLINE_S, what, since=since)
     assert done is not None, f"{what}: processing never completed{gw.log_tail()}"
-    idle = gw.wait_for(lambda e: e.ev == "hb" and not e.data.get("busy"), TURN_DEADLINE_S, what,
-                       since=done.idx)
+    idle = gw.wait_for(
+        lambda e: e.ev == "hb" and not e.data.get("busy"),
+        TURN_DEADLINE_S,
+        what,
+        since=done.idx,
+    )
     assert idle is not None, f"{what}: session guard never released{gw.log_tail()}"
     return done
 
 
-def _probe(gw: GatewayProc, nonce: str, n: int, chat: str, deadline: float, what: str) -> tuple[str, int, float]:
+def _probe(
+    gw: GatewayProc, nonce: str, n: int, chat: str, deadline: float, what: str
+) -> tuple[str, int, float]:
     start = gw.mark()
     t0 = time.monotonic()
     msg_id = gw.send_user(f"are you there [[probe:{nonce}:{n}]]", chat=chat)
     got = gw.wait_for(_is_send(chat, _alive(nonce, n)), deadline, what, since=start)
     assert got is not None, (
-        f"{what}: no answer within {deadline}s; sends={gw.sends_since(start)}{gw.log_tail()}")
+        f"{what}: no answer within {deadline}s; sends={gw.sends_since(start)}{gw.log_tail()}"
+    )
     return msg_id, got.idx, time.monotonic() - t0
 
 
-def _follow_up_through_breaker(gw: GatewayProc, srv: FakeLLMServer, scn: Scenario, nonce: str,
-                               stats: dict[str, Any]) -> tuple[int, bool]:
+def _follow_up_through_breaker(
+    gw: GatewayProc,
+    srv: FakeLLMServer,
+    scn: Scenario,
+    nonce: str,
+    stats: dict[str, Any],
+) -> tuple[int, bool]:
     """Follow-up for a scenario that may trip the stale breaker. Returns (probe n that was
     answered, whether that probe ran in the faulted session)."""
     start = gw.mark()
@@ -323,12 +390,15 @@ def _follow_up_through_breaker(gw: GatewayProc, srv: FakeLLMServer, scn: Scenari
     # Refused: it must be a surfaced, provider-free refusal (not a silent drop, not a storm).
     assert gw.sends_since(start), f"{scn.id}: follow-up refused silently"
     assert not _main_requests_for(srv, f"[[probe:{nonce}:2]]"), (
-        f"{scn.id}: follow-up neither answered nor short-circuited")
+        f"{scn.id}: follow-up neither answered nor short-circuited"
+    )
     stats["stale_breaker_tripped"] = True
     reset_start = gw.mark()
     reset_id = gw.send_user("/new", chat=CHAT)
     _settle(gw, reset_id, reset_start, f"{scn.id}: /new")
-    probe_id, probe_answer, probe_s = _probe(gw, nonce, 3, CHAT, TURN_DEADLINE_S, f"{scn.id}: probe after /new")
+    probe_id, probe_answer, probe_s = _probe(
+        gw, nonce, 3, CHAT, TURN_DEADLINE_S, f"{scn.id}: probe after /new"
+    )
     stats["probe_after_new_s"] = round(probe_s, 2)
     _settle(gw, probe_id, probe_answer, f"{scn.id}: probe after /new")
     return 3, False
@@ -350,7 +420,9 @@ def run_scenario(scn: Scenario, srv: FakeLLMServer, root: Path) -> dict[str, Any
         # Warm-up turn: the first inbound after boot waits for startup restore and builds the
         # agent cold; the scenario starts only once that turn is answered and settled.
         warm_mark = gw.mark()
-        warm_id, warm_answer, _ = _probe(gw, nonce, 0, CHAT, TURN_DEADLINE_S, f"{scn.id}: warm-up")
+        warm_id, warm_answer, _ = _probe(
+            gw, nonce, 0, CHAT, TURN_DEADLINE_S, f"{scn.id}: warm-up"
+        )
         _settle(gw, warm_id, warm_answer, f"{scn.id}: warm-up")
         stats["boot_s"] = round(time.monotonic() - t_boot, 1)
 
@@ -363,25 +435,41 @@ def run_scenario(scn: Scenario, srv: FakeLLMServer, root: Path) -> dict[str, Any
         if scn.ender:
             if scn.when == "tool":
                 assert _wait_until(lambda: _hung_tool_pids(tag), TURN_DEADLINE_S), (
-                    f"{scn.id}: hung tool process never spawned{gw.log_tail()}")
+                    f"{scn.id}: hung tool process never spawned{gw.log_tail()}"
+                )
             else:
-                assert _wait_until(lambda: _main_requests_for(srv, marker), TURN_DEADLINE_S), (
-                    f"{scn.id}: provider never saw the turn{gw.log_tail()}")
+                assert _wait_until(
+                    lambda: _main_requests_for(srv, marker), TURN_DEADLINE_S
+                ), f"{scn.id}: provider never saw the turn{gw.log_tail()}"
             # Let the fault sit so the heartbeat samples the wedged gateway.
             gw.wait_for(lambda e: e.ev == "hb", TURN_DEADLINE_S, "hb", since=gw.mark())
             gw.wait_for(lambda e: e.ev == "hb", TURN_DEADLINE_S, "hb", since=gw.mark())
             if scn.ender == "stop":
                 # A wedged chat must not wedge the gateway: another chat is served meanwhile.
-                _, _, other_s = _probe(gw, nonce, 7, OTHER_CHAT, TURN_DEADLINE_S,
-                                       f"{scn.id}: other chat while wedged")
+                _, _, other_s = _probe(
+                    gw,
+                    nonce,
+                    7,
+                    OTHER_CHAT,
+                    TURN_DEADLINE_S,
+                    f"{scn.id}: other chat while wedged",
+                )
                 stats["other_chat_s"] = round(other_s, 2)
                 t0, deadline = time.monotonic(), INTERRUPT_DEADLINE_S
                 gw.send_user("/stop", chat=CHAT)
             elif scn.ender == "busy":
-                busy_deadline = INTERRUPT_DEADLINE_S if scn.long_timeouts else TURN_DEADLINE_S
+                busy_deadline = (
+                    INTERRUPT_DEADLINE_S if scn.long_timeouts else TURN_DEADLINE_S
+                )
                 t_busy = time.monotonic()
-                _, _, busy_s = _probe(gw, nonce, 1, CHAT, busy_deadline,
-                                      f"{scn.id}: follow-up sent while the turn hangs")
+                _, _, busy_s = _probe(
+                    gw,
+                    nonce,
+                    1,
+                    CHAT,
+                    busy_deadline,
+                    f"{scn.id}: follow-up sent while the turn hangs",
+                )
                 stats["busy_answer_s"] = round(busy_s, 2)
                 t0 = t_busy
                 deadline = busy_deadline
@@ -390,32 +478,49 @@ def run_scenario(scn: Scenario, srv: FakeLLMServer, root: Path) -> dict[str, Any
                 stats["shutdown_s"] = gw.shutdown_s and round(gw.shutdown_s, 2)
                 assert gw.shutdown_s is not None, (
                     f"{scn.id}: gateway ignored SIGTERM for {SHUTDOWN_DEADLINE_S}s during a hung turn"
-                    f"{gw.log_tail()}")
+                    f"{gw.log_tail()}"
+                )
                 assert gw.exit_code is not None and gw.exit_code >= 0, (
-                    f"{scn.id}: gateway died by signal {gw.exit_code}{gw.log_tail()}")
+                    f"{scn.id}: gateway died by signal {gw.exit_code}{gw.log_tail()}"
+                )
 
         if scn.ender != "sigterm":
-            done = gw.wait_for(_is_complete(fault_id), max(0.0, deadline - (time.monotonic() - t0)),
-                               "fault turn", since=start)
+            done = gw.wait_for(
+                _is_complete(fault_id),
+                max(0.0, deadline - (time.monotonic() - t0)),
+                "fault turn",
+                since=start,
+            )
             turn_s = time.monotonic() - t0
             assert done is not None, (
                 f"{scn.id}: faulted turn still running after {deadline}s; "
-                f"sends={gw.sends_since(start)}{gw.log_tail()}")
+                f"sends={gw.sends_since(start)}{gw.log_tail()}"
+            )
             stats["turn_s"] = round(turn_s, 2)
-            surfaced = [e for e in gw.events_between(start, done.idx) if _is_send(CHAT)(e)]
-            assert surfaced, f"{scn.id}: the turn ended without telling the user anything{gw.log_tail()}"
+            surfaced = [
+                e for e in gw.events_between(start, done.idx) if _is_send(CHAT)(e)
+            ]
+            assert surfaced, (
+                f"{scn.id}: the turn ended without telling the user anything{gw.log_tail()}"
+            )
             _settle(gw, fault_id, start, f"{scn.id}: faulted turn")
             if scn.fault in ("parallel", "toolhang"):
-                assert gw.wait_for(_is_send(CHAT, f"tools settled {nonce}"), 0.1, "answer", since=start), (
-                    f"{scn.id}: final answer after the tool batch never delivered: {gw.sends_since(start)}")
+                assert gw.wait_for(
+                    _is_send(CHAT, f"tools settled {nonce}"), 0.1, "answer", since=start
+                ), (
+                    f"{scn.id}: final answer after the tool batch never delivered: {gw.sends_since(start)}"
+                )
 
         calls = len(_main_requests_for(srv, marker))
         stats["provider_calls"] = calls
-        assert 1 <= calls <= MAX_PROVIDER_CALLS_PER_FAILED_TURN, f"{scn.id}: {calls} provider calls"
+        assert 1 <= calls <= MAX_PROVIDER_CALLS_PER_FAILED_TURN, (
+            f"{scn.id}: {calls} provider calls"
+        )
 
         if scn.reaps_hung_tool:
             assert _wait_until(lambda: not _hung_tool_pids(tag), PROCESS_REAP_S), (
-                f"{scn.id}: hung tool survived its turn: {describe_pids(_hung_tool_pids(tag))}")
+                f"{scn.id}: hung tool survived its turn: {describe_pids(_hung_tool_pids(tag))}"
+            )
 
         state_db = gw.state_db
         if scn.ender != "sigterm":
@@ -425,30 +530,54 @@ def run_scenario(scn: Scenario, srv: FakeLLMServer, root: Path) -> dict[str, Any
             if scn.may_trip_stale_breaker:
                 n, history_kept = _follow_up_through_breaker(gw, srv, scn, nonce, stats)
             else:
-                probe_id, probe_answer, probe_s = _probe(gw, nonce, n, CHAT, TURN_DEADLINE_S,
-                                                         f"{scn.id}: follow-up after the fault")
+                probe_id, probe_answer, probe_s = _probe(
+                    gw,
+                    nonce,
+                    n,
+                    CHAT,
+                    TURN_DEADLINE_S,
+                    f"{scn.id}: follow-up after the fault",
+                )
                 stats["probe_s"] = round(probe_s, 2)
                 _settle(gw, probe_id, probe_answer, f"{scn.id}: follow-up")
             answers = [t for t in gw.sends_since(warm_mark) if _alive(nonce, n) in t]
-            assert len(answers) == 1, f"{scn.id}: follow-up answered {len(answers)} times"
+            assert len(answers) == 1, (
+                f"{scn.id}: follow-up answered {len(answers)} times"
+            )
 
-            gap = max((float(e.data.get("max_gap") or 0) for e in gw.events_between(hb_from) if e.ev == "hb"),
-                      default=0.0)
+            gap = max(
+                (
+                    float(e.data.get("max_gap") or 0)
+                    for e in gw.events_between(hb_from)
+                    if e.ev == "hb"
+                ),
+                default=0.0,
+            )
             stats["heartbeat_max_gap_s"] = gap
-            assert gap < HEARTBEAT_MAX_GAP_S, f"{scn.id}: gateway event loop froze for {gap}s"
+            assert gap < HEARTBEAT_MAX_GAP_S, (
+                f"{scn.id}: gateway event loop froze for {gap}s"
+            )
 
             probe_reqs = _main_requests_for(srv, f"[[probe:{nonce}:{n}]]")
             assert probe_reqs, f"{scn.id}: follow-up never reached the provider"
             sent = probe_reqs[-1]["messages"]
             if history_kept:
-                assert any(m.get("role") == "user" and marker in _text_of(m.get("content")) for m in sent), (
-                    f"{scn.id}: follow-up ran without the faulted turn in its history (not the same session)")
-            assert unanswered_tool_calls(sent) == [], f"{scn.id}: model was sent unanswered tool_calls"
+                assert any(
+                    m.get("role") == "user" and marker in _text_of(m.get("content"))
+                    for m in sent
+                ), (
+                    f"{scn.id}: follow-up ran without the faulted turn in its history (not the same session)"
+                )
+            assert unanswered_tool_calls(sent) == [], (
+                f"{scn.id}: model was sent unanswered tool_calls"
+            )
 
             session_id = _session_with(state_db, marker)
             assert session_id, f"{scn.id}: faulted user message never persisted"
             persisted = _persisted(state_db, session_id)
-            assert unanswered_tool_calls(persisted) == [], f"{scn.id}: state.db has unanswered tool_calls"
+            assert unanswered_tool_calls(persisted) == [], (
+                f"{scn.id}: state.db has unanswered tool_calls"
+            )
             if scn.fault == "parallel":
                 _assert_parallel_results(persisted, nonce, "state.db")
                 _assert_parallel_results(sent, nonce, "provider request")
@@ -456,16 +585,21 @@ def run_scenario(scn: Scenario, srv: FakeLLMServer, root: Path) -> dict[str, Any
             # ── SIGTERM: the gateway leaves on its own and takes every child with it ──
             gw.stop()
             stats["shutdown_s"] = gw.shutdown_s and round(gw.shutdown_s, 2)
-            assert gw.shutdown_s is not None, f"{scn.id}: gateway ignored SIGTERM{gw.log_tail()}"
+            assert gw.shutdown_s is not None, (
+                f"{scn.id}: gateway ignored SIGTERM{gw.log_tail()}"
+            )
             assert gw.exit_code is not None and gw.exit_code >= 0, (
-                f"{scn.id}: gateway died by signal {gw.exit_code}{gw.log_tail()}")
+                f"{scn.id}: gateway died by signal {gw.exit_code}{gw.log_tail()}"
+            )
         else:
             session_id = _session_with(state_db, marker)
             if session_id:
                 assert unanswered_tool_calls(_persisted(state_db, session_id)) == []
 
         survivors = wait_no_tagged(tag)
-        assert survivors == [], f"{scn.id}: orphans after exit: {describe_pids(survivors)}"
+        assert survivors == [], (
+            f"{scn.id}: orphans after exit: {describe_pids(survivors)}"
+        )
         assert integrity_ok(state_db) == "ok"
         return stats
     finally:
@@ -477,17 +611,25 @@ def run_scenario(scn: Scenario, srv: FakeLLMServer, root: Path) -> dict[str, Any
 
 
 @pytest.fixture(scope="module")
-def scenario_futures(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory):
+def scenario_futures(
+    request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory
+):
     # Only the scenarios selected for this session (-k) are started.
     selected = {
-        item.callspec.params["scn"].id for item in request.session.items
+        item.callspec.params["scn"].id
+        for item in request.session.items
         if getattr(item, "callspec", None) is not None and "scn" in item.callspec.params
     }
-    with FakeLLMServer(responder) as srv, ThreadPoolExecutor(
-            max_workers=SCENARIO_WORKERS, thread_name_prefix="chaos-gw") as pool:
+    with (
+        FakeLLMServer(responder) as srv,
+        ThreadPoolExecutor(
+            max_workers=SCENARIO_WORKERS, thread_name_prefix="chaos-gw"
+        ) as pool,
+    ):
         futures: dict[str, Future] = {
             scn.id: pool.submit(run_scenario, scn, srv, tmp_path_factory.mktemp(scn.id))
-            for scn in SCENARIOS if scn.id in selected
+            for scn in SCENARIOS
+            if scn.id in selected
         }
         yield futures
         for fut in futures.values():
@@ -496,5 +638,7 @@ def scenario_futures(request: pytest.FixtureRequest, tmp_path_factory: pytest.Te
 
 @pytest.mark.parametrize("scn", SCENARIOS, ids=[s.id for s in SCENARIOS])
 def test_gateway_turn_stays_live_under_fault(scn: Scenario, scenario_futures) -> None:
-    stats = scenario_futures[scn.id].result(timeout=len(SCENARIOS) * (TURN_DEADLINE_S * 2 + 60))
+    stats = scenario_futures[scn.id].result(
+        timeout=len(SCENARIOS) * (TURN_DEADLINE_S * 2 + 60)
+    )
     print(json.dumps(stats))

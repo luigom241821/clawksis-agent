@@ -41,8 +41,9 @@ def finalize_hook(monkeypatch):
 def test_session_end_messages_accepts_str_and_message_dict_only():
     from clawk_cli.lifecycle import session_end_messages
 
-    assert session_end_messages(["  hi  ", {"message": "there"}, {"context": "x"}, {"message": 3}, "", None, 7]) == [
-        "hi", "there"]
+    assert session_end_messages(
+        ["  hi  ", {"message": "there"}, {"context": "x"}, {"message": 3}, "", None, 7]
+    ) == ["hi", "there"]
 
 
 # ── CLI ──────────────────────────────────────────────────────────────────────────────────────────
@@ -59,7 +60,9 @@ def test_cli_new_prints_finalize_message(finalize_hook, capsys):
     assert DIGEST in capsys.readouterr().out
 
 
-def test_cli_exit_prints_finalize_message_after_screen_clear(finalize_hook, capsys, monkeypatch):
+def test_cli_exit_prints_finalize_message_after_screen_clear(
+    finalize_hook, capsys, monkeypatch
+):
     agent = MagicMock()
     agent.session_id = "exit-session"
     monkeypatch.setattr(cli_mod, "_active_agent_ref", agent)
@@ -79,7 +82,9 @@ def test_one_shot_prints_finalize_message_to_stderr(finalize_hook, capsys, monke
     monkeypatch.setattr(cli_mod, "_single_query_finalize_attempted_session_ids", set())
     agent = SimpleNamespace(session_id="oneshot-session", platform="cli")
 
-    cli_mod._notify_single_query_session_finalize(SimpleNamespace(agent=agent, session_id="oneshot-session"))
+    cli_mod._notify_single_query_session_finalize(
+        SimpleNamespace(agent=agent, session_id="oneshot-session")
+    )
 
     out = capsys.readouterr()
     assert DIGEST in out.err
@@ -95,11 +100,17 @@ def test_tui_session_close_returns_finalize_message(finalize_hook, monkeypatch):
     monkeypatch.setattr(server, "_emit", lambda *a, **k: None)
     monkeypatch.setattr(server, "_TURN_SETTLE_BEFORE_CLOSE_SECONDS", 0.0)
     server._sessions["close-sid"] = {
-        "agent": None, "session_key": "close-key", "history": [], "history_lock": threading.Lock(),
-        "running": False, "slash_worker": None}
+        "agent": None,
+        "session_key": "close-key",
+        "history": [],
+        "history_lock": threading.Lock(),
+        "running": False,
+        "slash_worker": None,
+    }
 
     reply = server.handle_request(
-        {"id": "1", "method": "session.close", "params": {"session_id": "close-sid"}})
+        {"id": "1", "method": "session.close", "params": {"session_id": "close-sid"}}
+    )
 
     assert reply["result"] == {"closed": True, "messages": [DIGEST]}
     assert finalize_hook[0]["session_id"] == "close-key"
@@ -113,9 +124,17 @@ def _gateway_runner():
     from gateway.run import GatewayRunner
     from gateway.session import SessionEntry, SessionSource, build_session_key
 
-    source = SessionSource(platform=Platform.TELEGRAM, user_id="u1", chat_id="c1", user_name="t", chat_type="dm")
+    source = SessionSource(
+        platform=Platform.TELEGRAM,
+        user_id="u1",
+        chat_id="c1",
+        user_name="t",
+        chat_type="dm",
+    )
     runner = object.__new__(GatewayRunner)
-    runner.config = GatewayConfig(platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="***")})
+    runner.config = GatewayConfig(
+        platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="***")}
+    )
     adapter = MagicMock()
     adapter.send = AsyncMock()
     runner.adapters = {Platform.TELEGRAM: adapter}
@@ -124,14 +143,25 @@ def _gateway_runner():
     runner._session_model_overrides, runner._session_reasoning_overrides = {}, {}
     runner._pending_model_notes, runner._background_tasks = {}, set()
     key = build_session_key(source)
-    entry = SessionEntry(session_key=key, session_id="sess-1", created_at=datetime.now(),
-                         updated_at=datetime.now(), platform=Platform.TELEGRAM, chat_type="dm", origin=source)
+    entry = SessionEntry(
+        session_key=key,
+        session_id="sess-1",
+        created_at=datetime.now(),
+        updated_at=datetime.now(),
+        platform=Platform.TELEGRAM,
+        chat_type="dm",
+        origin=source,
+    )
     runner.session_store = MagicMock()
     runner.session_store.get_or_create_session.return_value = entry
     runner.session_store.reset_session.return_value = entry
     runner.session_store._entries = {key: entry}
     runner.session_store._generate_session_key.return_value = key
-    runner._running_agents, runner._pending_messages, runner._pending_approvals = {}, {}, {}
+    runner._running_agents, runner._pending_messages, runner._pending_approvals = (
+        {},
+        {},
+        {},
+    )
     runner._session_db = None
     runner._agent_cache_lock = None
     runner._is_user_authorized = lambda _source: True
@@ -149,12 +179,18 @@ async def test_gateway_new_sends_finalize_message_to_owning_chat(finalize_hook):
 
     runner, adapter, source, _key = _gateway_runner()
 
-    reply = await runner._handle_reset_command(MessageEvent(text="/new", source=source, message_id="m1"))
+    reply = await runner._handle_reset_command(
+        MessageEvent(text="/new", source=source, message_id="m1")
+    )
 
     assert finalize_hook[0]["session_id"] == "sess-1"
     assert DIGEST in _sent_texts(adapter)
-    assert adapter.send.await_args_list[_sent_texts(adapter).index(DIGEST)].args[0] == "c1"
-    assert DIGEST not in str(reply)  # a separate notice, not folded into the /new banner
+    assert (
+        adapter.send.await_args_list[_sent_texts(adapter).index(DIGEST)].args[0] == "c1"
+    )
+    assert DIGEST not in str(
+        reply
+    )  # a separate notice, not folded into the /new banner
 
 
 @pytest.mark.asyncio

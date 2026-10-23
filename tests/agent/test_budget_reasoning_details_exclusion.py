@@ -80,9 +80,20 @@ class TestBudgetExcludesReasoningDetailsEnvelope:
         from agent.model_metadata import estimate_messages_tokens_rough
 
         base = {"role": "assistant", "content": "hi"}
-        loaded = dict(base, codex_reasoning_items=[{"type": "reasoning", "encrypted_content": "e" * 20_000}])
-        assert _estimate_msg_budget_tokens(loaded) - _estimate_msg_budget_tokens(base) < 50
-        assert estimate_messages_tokens_rough([loaded]) - estimate_messages_tokens_rough([base]) < 50
+        loaded = dict(
+            base,
+            codex_reasoning_items=[
+                {"type": "reasoning", "encrypted_content": "e" * 20_000}
+            ],
+        )
+        assert (
+            _estimate_msg_budget_tokens(loaded) - _estimate_msg_budget_tokens(base) < 50
+        )
+        assert (
+            estimate_messages_tokens_rough([loaded])
+            - estimate_messages_tokens_rough([base])
+            < 50
+        )
 
 
 class TestReasoningDetailsTextChars:

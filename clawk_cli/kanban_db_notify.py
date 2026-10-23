@@ -32,11 +32,15 @@ _SCALAR_TYPES = (str, int, float, bool)
 _SUB_KEY_WHERE = "WHERE task_id = ? AND platform = ? AND chat_id = ? AND thread_id = ?"
 
 
-def _sub_key(task_id: str, platform: str, chat_id: str, thread_id: Optional[str]) -> tuple:
+def _sub_key(
+    task_id: str, platform: str, chat_id: str, thread_id: Optional[str]
+) -> tuple:
     return (task_id, platform, chat_id, thread_id or "")
 
 
-def _encode_notify_delivery_metadata(metadata: Optional[Mapping[str, Any]]) -> Optional[str]:
+def _encode_notify_delivery_metadata(
+    metadata: Optional[Mapping[str, Any]],
+) -> Optional[str]:
     """Serialize platform send metadata stored on notification subscriptions."""
     if not isinstance(metadata, Mapping):
         return None
@@ -61,7 +65,11 @@ def _decode_notify_delivery_metadata(raw: Any) -> dict[str, Any]:
         return {}
     if not isinstance(data, dict):
         return {}
-    return {str(key): value for key, value in data.items() if isinstance(value, _SCALAR_TYPES)}
+    return {
+        str(key): value
+        for key, value in data.items()
+        if isinstance(value, _SCALAR_TYPES)
+    }
 
 
 def add_notify_sub(
@@ -95,18 +103,28 @@ def add_notify_sub(
     # api_server is stateless: the adapter has no send(), the wake self-post IS
     # the delivery. A plain 'notify' default would leave those subs with no
     # delivery mechanism at all. Explicit modes still win.
-    insert_mode = valid_mode or ("notify+wake" if platform == "api_server" else "notify")
+    insert_mode = valid_mode or (
+        "notify+wake" if platform == "api_server" else "notify"
+    )
     key = _sub_key(task_id, platform, chat_id, thread_id)
     with _kb.write_txn(conn):
         existing = conn.execute(
             "SELECT delivery_metadata FROM kanban_notify_subs " + _SUB_KEY_WHERE,
             key,
         ).fetchone()
-        existing_metadata = _decode_notify_delivery_metadata(existing["delivery_metadata"]) if existing else {}
+        existing_metadata = (
+            _decode_notify_delivery_metadata(existing["delivery_metadata"])
+            if existing
+            else {}
+        )
         merged_metadata = dict(existing_metadata)
         if delivery_metadata:
             merged_metadata.update(delivery_metadata)
-        metadata_json = _encode_notify_delivery_metadata(merged_metadata) if merged_metadata else None
+        metadata_json = (
+            _encode_notify_delivery_metadata(merged_metadata)
+            if merged_metadata
+            else None
+        )
         conn.execute(
             """
             INSERT OR IGNORE INTO kanban_notify_subs
@@ -117,8 +135,15 @@ def add_notify_sub(
                     COALESCE((SELECT MAX(id) FROM task_events WHERE task_id = ?), 0))
             """,
             (
-                *key, user_id, user_id_alt, chat_type or "dm", notifier_profile,
-                insert_mode, metadata_json, int(time.time()), task_id,
+                *key,
+                user_id,
+                user_id_alt,
+                chat_type or "dm",
+                notifier_profile,
+                insert_mode,
+                metadata_json,
+                int(time.time()),
+                task_id,
             ),
         )
         # chat_type / delivery_mode are last-write-wins; delivery metadata
@@ -177,7 +202,8 @@ def list_notify_subs(
     ``include_unowned`` (dispatch owner) covers legacy rows without a stamp.
     """
     owner_where, owner_params = _notify_profile_filter(
-        notifier_profiles, include_unowned=include_unowned,
+        notifier_profiles,
+        include_unowned=include_unowned,
     )
     where: list[str] = []
     params: list[Any] = []
@@ -194,7 +220,9 @@ def list_notify_subs(
     for row in conn.execute(sql, params).fetchall():
         item = dict(row)
         if "delivery_metadata" in item:
-            item["delivery_metadata"] = _decode_notify_delivery_metadata(item.get("delivery_metadata"))
+            item["delivery_metadata"] = _decode_notify_delivery_metadata(
+                item.get("delivery_metadata")
+            )
         out.append(item)
     return out
 
@@ -221,7 +249,8 @@ def count_notify_subs(
     if not path.exists():
         return 0
     owner_where, owner_params = _notify_profile_filter(
-        notifier_profiles, include_unowned=include_unowned,
+        notifier_profiles,
+        include_unowned=include_unowned,
     )
     clauses: list[str] = []
     params: list[Any] = []
@@ -268,7 +297,9 @@ def remove_notify_sub(
     return cur.rowcount > 0
 
 
-def purge_stale_done_notify_subs(conn: sqlite3.Connection, *, max_age_days: int = 30) -> int:
+def purge_stale_done_notify_subs(
+    conn: sqlite3.Connection, *, max_age_days: int = 30
+) -> int:
     """Delete notify subs whose task sat in ``done``/``blocked`` untouched for
     longer than ``max_age_days`` (``<= 0`` disables); returns rows deleted.
 
@@ -309,7 +340,11 @@ def purge_stale_done_notify_subs(conn: sqlite3.Connection, *, max_age_days: int 
 
 
 def _notify_cursor(
-    conn: sqlite3.Connection, task_id: str, platform: str, chat_id: str, thread_id: Optional[str],
+    conn: sqlite3.Connection,
+    task_id: str,
+    platform: str,
+    chat_id: str,
+    thread_id: Optional[str],
 ) -> Optional[int]:
     """``last_event_id`` of one subscription row, or ``None`` when unsubscribed."""
     row = conn.execute(
@@ -372,19 +407,32 @@ def claim_unseen_events_for_sub(
         if old_cursor is None:
             return 0, 0, []
         new_cursor, events = unseen_events_for_sub(
-            conn, task_id=task_id, platform=platform, chat_id=chat_id,
-            thread_id=thread_id, kinds=kinds,
+            conn,
+            task_id=task_id,
+            platform=platform,
+            chat_id=chat_id,
+            thread_id=thread_id,
+            kinds=kinds,
         )
         if not events:
             return old_cursor, old_cursor, []
-        _cas_cursor(conn, _sub_key(task_id, platform, chat_id, thread_id), new_cursor, old_cursor)
+        _cas_cursor(
+            conn,
+            _sub_key(task_id, platform, chat_id, thread_id),
+            new_cursor,
+            old_cursor,
+        )
         return old_cursor, new_cursor, events
 
 
-def _cas_cursor(conn: sqlite3.Connection, key: tuple, new_cursor: int, expected: int) -> sqlite3.Cursor:
+def _cas_cursor(
+    conn: sqlite3.Connection, key: tuple, new_cursor: int, expected: int
+) -> sqlite3.Cursor:
     """Move ``last_event_id`` only if it still equals ``expected``."""
     return conn.execute(
-        "UPDATE kanban_notify_subs SET last_event_id = ? " + _SUB_KEY_WHERE + " AND last_event_id = ?",
+        "UPDATE kanban_notify_subs SET last_event_id = ? "
+        + _SUB_KEY_WHERE
+        + " AND last_event_id = ?",
         (int(new_cursor), *key, int(expected)),
     )
 
@@ -406,8 +454,13 @@ def advance_notify_cursor(
 
 
 def record_notify_ping(
-    conn: sqlite3.Connection, *, task_id: str, platform: str, chat_id: str,
-    thread_id: Optional[str] = None, event_id: int,
+    conn: sqlite3.Connection,
+    *,
+    task_id: str,
+    platform: str,
+    chat_id: str,
+    thread_id: Optional[str] = None,
+    event_id: int,
 ) -> None:
     """Checkpoint a sent ping independently of the retryable wake cursor."""
     with _kb.write_txn(conn):
@@ -432,7 +485,12 @@ def rewind_notify_cursor(
     notifier advanced the row, so retries never clobber newer progress.
     """
     with _kb.write_txn(conn):
-        cur = _cas_cursor(conn, _sub_key(task_id, platform, chat_id, thread_id), old_cursor, claimed_cursor)
+        cur = _cas_cursor(
+            conn,
+            _sub_key(task_id, platform, chat_id, thread_id),
+            old_cursor,
+            claimed_cursor,
+        )
     return cur.rowcount > 0
 
 

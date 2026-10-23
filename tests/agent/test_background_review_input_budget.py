@@ -79,7 +79,9 @@ def _make_loop_agent():
         patch("model_tools.check_toolset_requirements", return_value={}),
         patch("agent.process_bootstrap.OpenAI"),
         patch("agent.model_metadata.get_model_context_length", return_value=256_000),
-        patch("agent.context_compressor.get_model_context_length", return_value=256_000),
+        patch(
+            "agent.context_compressor.get_model_context_length", return_value=256_000
+        ),
     ):
         agent = AIAgent(
             api_key="test-key-1234567890",
@@ -243,10 +245,15 @@ def test_review_input_token_budget_default_tracks_forks_context_window():
     from agent.background_review import _review_input_token_budget
 
     def fork(window):
-        return SimpleNamespace(context_compressor=SimpleNamespace(context_length=window))
+        return SimpleNamespace(
+            context_compressor=SimpleNamespace(context_length=window)
+        )
 
     assert _review_input_token_budget({}, fork(65_536)) == 49_152
-    assert _review_input_token_budget({"max_input_tokens": "not-a-number"}, fork(65_536)) == 49_152
+    assert (
+        _review_input_token_budget({"max_input_tokens": "not-a-number"}, fork(65_536))
+        == 49_152
+    )
     assert _review_input_token_budget({}, fork(2_000_000)) == 600_000
     assert _review_input_token_budget({}, fork(None)) == 120_000
     assert _review_input_token_budget({}, None) == 120_000

@@ -36,13 +36,29 @@ def _run(path: Path, provider: str, *, model: str | None = None):
     uploads: list = []
 
     def handler(file_path, model_name, **_kw):
-        uploads.append({"suffix": Path(file_path).suffix, "bytes": Path(file_path).stat().st_size,
-                        "seconds": _probe_audio_duration(file_path), "model": model_name})
-        return {"success": True, "transcript": f"part{len(uploads)}", "provider": provider}
+        uploads.append(
+            {
+                "suffix": Path(file_path).suffix,
+                "bytes": Path(file_path).stat().st_size,
+                "seconds": _probe_audio_duration(file_path),
+                "model": model_name,
+            }
+        )
+        return {
+            "success": True,
+            "transcript": f"part{len(uploads)}",
+            "provider": provider,
+        }
 
-    with patch.object(tt, "_load_stt_config", return_value={"provider": provider, "cloud_trim_silence": False}), \
-         patch.object(tt, "_get_provider", return_value=provider), \
-         patch.object(tt, f"_transcribe_{provider}", side_effect=handler):
+    with (
+        patch.object(
+            tt,
+            "_load_stt_config",
+            return_value={"provider": provider, "cloud_trim_silence": False},
+        ),
+        patch.object(tt, "_get_provider", return_value=provider),
+        patch.object(tt, f"_transcribe_{provider}", side_effect=handler),
+    ):
         return tt.transcribe_audio(str(path), model=model), uploads
 
 
@@ -53,7 +69,11 @@ def test_oversized_wav_is_reencoded_into_one_upload(tmp_path, monkeypatch):
     _tone_with_pauses(wav, 20)  # 640 KB of PCM, ~80 KB as 32 kbps AAC
     result, uploads = _run(wav, "groq")
     assert result == {"success": True, "transcript": "part1", "provider": "groq"}
-    assert len(uploads) == 1 and uploads[0]["suffix"] == ".m4a" and uploads[0]["bytes"] < 400_000
+    assert (
+        len(uploads) == 1
+        and uploads[0]["suffix"] == ".m4a"
+        and uploads[0]["bytes"] < 400_000
+    )
 
 
 def test_over_duration_cap_splits_in_order_under_the_cap(tmp_path, monkeypatch):
@@ -64,6 +84,10 @@ def test_over_duration_cap_splits_in_order_under_the_cap(tmp_path, monkeypatch):
     result, uploads = _run(wav, "openai", model="gpt-4o-transcribe")
     assert result["success"] is True
     assert result["segments"] == len(uploads) >= 3
-    assert result["transcript"] == " ".join(f"part{i}" for i in range(1, len(uploads) + 1))
-    assert all(u["model"] == "gpt-4o-transcribe" and u["seconds"] <= 10.0 for u in uploads)
+    assert result["transcript"] == " ".join(
+        f"part{i}" for i in range(1, len(uploads) + 1)
+    )
+    assert all(
+        u["model"] == "gpt-4o-transcribe" and u["seconds"] <= 10.0 for u in uploads
+    )
     assert sum(u["seconds"] for u in uploads) == pytest.approx(30.0, abs=0.5)

@@ -1,4 +1,5 @@
 """The image's non-root runtime uses its staged tools and generated assets."""
+
 from __future__ import annotations
 
 import subprocess
@@ -21,15 +22,31 @@ import clawk_yaml as yaml
 print('PM interpreter and application dependencies load as clawk')
 """
     result = subprocess.run(
-        ["docker", "run", "--rm", "--network", "none", "--user", "clawk",
-         "--entrypoint", "/opt/clawksis/.venv/bin/python", built_image, "-c", probe],
-        capture_output=True, text=True, timeout=60,
+        [
+            "docker",
+            "run",
+            "--rm",
+            "--network",
+            "none",
+            "--user",
+            "clawk",
+            "--entrypoint",
+            "/opt/clawksis/.venv/bin/python",
+            built_image,
+            "-c",
+            probe,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-def test_dashboard_ships_generated_icon_without_build_environment(built_image: str) -> None:
+def test_dashboard_ships_generated_icon_without_build_environment(
+    built_image: str,
+) -> None:
     probe = """
 from pathlib import Path
 from PIL import Image
@@ -42,9 +59,23 @@ assert not Path('/opt/clawksis/node_modules/esbuild').exists()
 assert Path('/opt/clawksis/node_modules/typescript/bin/tsc').is_file()
 """
     result = subprocess.run(
-        ["docker", "run", "--rm", "--network", "none", "--user", "clawk",
-         "--entrypoint", "/opt/clawksis/.venv/bin/python", built_image, "-c", probe],
-        capture_output=True, text=True, timeout=60,
+        [
+            "docker",
+            "run",
+            "--rm",
+            "--network",
+            "none",
+            "--user",
+            "clawk",
+            "--entrypoint",
+            "/opt/clawksis/.venv/bin/python",
+            built_image,
+            "-c",
+            probe,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr

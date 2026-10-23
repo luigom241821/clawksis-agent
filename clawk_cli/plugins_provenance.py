@@ -37,8 +37,8 @@ class Provenance:
     name: str
     klass: ProvenanceClass
     path: Path
-    row: Optional[dict] = None          # the sidecar row, when present
-    origin_url: Optional[str] = None    # self-cloned: the .git remote
+    row: Optional[dict] = None  # the sidecar row, when present
+    origin_url: Optional[str] = None  # self-cloned: the .git remote
     saved_update_url: Optional[str] = None  # the row's saved feed tag
 
 
@@ -69,7 +69,9 @@ def _git_origin_url(plugin_dir: Path) -> Optional[str]:
             proc = subprocess.run(
                 [git, "-C", str(plugin_dir), "remote", "get-url", "origin"],
                 capture_output=True,
-                text=True, encoding="utf-8", errors="replace",
+                text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=10,
                 check=False,
             )
@@ -136,7 +138,9 @@ def plugins_provenance(plugins_dir: Path) -> list[Provenance]:
                 klass=klass,
                 path=plugin_dir,
                 row=row,
-                origin_url=_git_origin_url(plugin_dir) if klass is ProvenanceClass.SELF_CLONED else None,
+                origin_url=_git_origin_url(plugin_dir)
+                if klass is ProvenanceClass.SELF_CLONED
+                else None,
                 saved_update_url=(row or {}).get("update_url") or None,
             )
         )

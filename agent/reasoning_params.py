@@ -4,6 +4,7 @@ When ``reasoning`` extra_body is safe to send, LM Studio / Ollama / GitHub Model
 ``reasoning_content`` echo families, and strict-API tool-call sanitising.
 Extracted from ``run_agent.py``; every method resolves through ``AIAgent``'s MRO unchanged.
 """
+
 import time
 
 from agent.lazy_forward import forward as _forward, forward_static as _forward_static
@@ -12,8 +13,15 @@ from utils import base_url_host_matches
 
 # Static OpenRouter fallback when the live /v1/models capability cache is cold.
 _OPENROUTER_REASONING_PREFIXES = (
-    "deepseek/", "anthropic/", "openai/", "x-ai/", "google/gemini-2", "google/gemma-4",
-    "qwen/qwen3", "tencent/hy", "xiaomi/",
+    "deepseek/",
+    "anthropic/",
+    "openai/",
+    "x-ai/",
+    "google/gemini-2",
+    "google/gemma-4",
+    "qwen/qwen3",
+    "tencent/hy",
+    "xiaomi/",
 )
 
 # Probe results cache per (model, base_url). Definitive values cache permanently; an
@@ -62,7 +70,9 @@ def unset_reasoning_default(agent) -> dict | None:
         from providers import get_provider_profile
 
         profile = get_provider_profile(provider)
-        default = profile.default_reasoning_config(model) if profile is not None else None
+        default = (
+            profile.default_reasoning_config(model) if profile is not None else None
+        )
     except Exception:
         return None
     if not default:
@@ -77,7 +87,10 @@ def unset_reasoning_default(agent) -> dict | None:
         return None
     # ``_ollama_num_ctx`` is only ever set for a server detected as Ollama (agent_init); Ollama
     # 400s ``reasoning_effort`` on a model pulled without the thinking capability.
-    if getattr(agent, "_ollama_num_ctx", None) and not agent._ollama_supports_thinking_cached():
+    if (
+        getattr(agent, "_ollama_num_ctx", None)
+        and not agent._ollama_supports_thinking_cached()
+    ):
         return None
     return dict(default)
 
@@ -89,9 +102,13 @@ class ReasoningParamsMixin:
         """True when reasoning extra_body is safe to send: OpenRouter forwards unknown extra_body upstream and
         some routes 400 on ``reasoning``, so gate to known reasoning-capable families and direct Nous Portal."""
         url = self._base_url_lower
-        if base_url_host_matches(url, "nousresearch.com") or base_url_host_matches(url, "ai-gateway.vercel.sh"):
+        if base_url_host_matches(url, "nousresearch.com") or base_url_host_matches(
+            url, "ai-gateway.vercel.sh"
+        ):
             return True
-        if base_url_host_matches(url, "models.github.ai") or base_url_host_matches(url, "githubcopilot.com"):
+        if base_url_host_matches(url, "models.github.ai") or base_url_host_matches(
+            url, "githubcopilot.com"
+        ):
             try:
                 from clawk_cli.models import github_model_reasoning_efforts
 
@@ -100,16 +117,25 @@ class ReasoningParamsMixin:
                 return False
         if (self.provider or "").strip().lower() == "lmstudio":
             # "off-only" (or absent) means no real reasoning capability.
-            return any(opt and opt != "off" for opt in self._lmstudio_reasoning_options_cached())
+            return any(
+                opt and opt != "off"
+                for opt in self._lmstudio_reasoning_options_cached()
+            )
         if base_url_host_matches(url, "ollama.com"):
             # Ollama Cloud: /api/show capabilities are authoritative.
             return self._ollama_supports_thinking_cached()
-        if not self._is_openrouter_url() or base_url_host_matches(url, "api.mistral.ai"):
+        if not self._is_openrouter_url() or base_url_host_matches(
+            url, "api.mistral.ai"
+        ):
             return False
         # Live-catalog metadata first (OpenRouter /v1/models supported_parameters) — the static prefix
         # allowlist repeatedly went stale one vendor at a time. Unknown falls back to the static list.
         try:
-            from clawk_cli.models_reasoning_caps import openrouter_model_reasoning_capabilities, warm_openrouter_reasoning_caps_async
+            from clawk_cli.models_reasoning_caps import (
+                openrouter_model_reasoning_capabilities,
+                warm_openrouter_reasoning_caps_async,
+            )
+
             caps = openrouter_model_reasoning_capabilities(self.model)
             if caps is None:
                 warm_openrouter_reasoning_caps_async()  # cache cold — warm in the background, never block
@@ -118,7 +144,9 @@ class ReasoningParamsMixin:
         if caps is not None:
             return bool(caps.get("supports_reasoning"))
         model = (self.model or "").lower()
-        return any(model.startswith(prefix) for prefix in _OPENROUTER_REASONING_PREFIXES)
+        return any(
+            model.startswith(prefix) for prefix in _OPENROUTER_REASONING_PREFIXES
+        )
 
     def _lmstudio_reasoning_options_cached(self) -> list[str]:
         """LM Studio's published reasoning ``allowed_options`` (gate + clamp so toggle models don't 400 on ``high``)."""
@@ -126,7 +154,9 @@ class ReasoningParamsMixin:
             from clawk_cli.models_local import lmstudio_model_reasoning_options
         except Exception:
             return []
-        return _cached_probe(self, "_lm_reasoning_opts_cache", lmstudio_model_reasoning_options, [], bool)
+        return _cached_probe(
+            self, "_lm_reasoning_opts_cache", lmstudio_model_reasoning_options, [], bool
+        )
 
     def _ollama_supports_thinking_cached(self) -> bool:
         """True only if Ollama's ``/api/show`` declares the ``thinking`` capability."""
@@ -134,12 +164,23 @@ class ReasoningParamsMixin:
             from clawk_cli.models_local import ollama_model_supports_thinking
         except Exception:
             return False
-        return bool(_cached_probe(self, "_ollama_thinking_cache", ollama_model_supports_thinking, None, lambda v: v is not None))
+        return bool(
+            _cached_probe(
+                self,
+                "_ollama_thinking_cache",
+                ollama_model_supports_thinking,
+                None,
+                lambda v: v is not None,
+            )
+        )
 
     def _github_models_reasoning_extra_body(self) -> dict | None:
         """Format reasoning payload for GitHub Models/OpenAI-compatible routes."""
         try:
-            from clawk_cli.models import clamp_github_reasoning_effort, github_model_reasoning_efforts
+            from clawk_cli.models import (
+                clamp_github_reasoning_effort,
+                github_model_reasoning_efforts,
+            )
         except Exception:
             return None
 
@@ -152,7 +193,9 @@ class ReasoningParamsMixin:
             return None
         return {"effort": clamp_github_reasoning_effort(cfg.get("effort"), supported)}
 
-    _build_assistant_message = _forward("agent.chat_completion_helpers", "build_assistant_message")
+    _build_assistant_message = _forward(
+        "agent.chat_completion_helpers", "build_assistant_message"
+    )
 
     def _reasoning_replay_route(self):
         """Reasoning replay decision for the active route (``message_sanitization.reasoning_replay_route``).
@@ -161,16 +204,31 @@ class ReasoningParamsMixin:
         per turn — and recomputed after ``switch_model()`` / fallback activation or a recorded
         field rejection, the only events allowed to change the replayed bytes mid-session.
         """
-        from agent.message_sanitization import reasoning_replay_route, rejected_reasoning_carriers
+        from agent.message_sanitization import (
+            reasoning_replay_route,
+            rejected_reasoning_carriers,
+        )
 
         rejected = rejected_reasoning_carriers(self)
-        key = (getattr(self, "api_mode", None), self.provider, self.model, getattr(self, "_base_url_lower", self.base_url),
-               self._reasoning_echo_opt_in(), rejected)
+        key = (
+            getattr(self, "api_mode", None),
+            self.provider,
+            self.model,
+            getattr(self, "_base_url_lower", self.base_url),
+            self._reasoning_echo_opt_in(),
+            rejected,
+        )
         cached = getattr(self, "_reasoning_route_cache", None)
         if cached is not None and cached[0] == key:
             return cached[1]
-        route = reasoning_replay_route(key[0], self.provider, self.model, self.base_url,
-                                       echo_opt_in=key[4], rejected=rejected)
+        route = reasoning_replay_route(
+            key[0],
+            self.provider,
+            self.model,
+            self.base_url,
+            echo_opt_in=key[4],
+            rejected=rejected,
+        )
         self._reasoning_route_cache = (key, route)
         return route
 
@@ -191,7 +249,10 @@ class ReasoningParamsMixin:
         """Read ``model.reasoning_echo`` from config; False on any error."""
         try:
             from clawk_cli.config import load_config_readonly
-            return bool((load_config_readonly().get("model") or {}).get("reasoning_echo"))
+
+            return bool(
+                (load_config_readonly().get("model") or {}).get("reasoning_echo")
+            )
         except Exception:
             return False
 
@@ -208,19 +269,32 @@ class ReasoningParamsMixin:
         DeepSeek V4 thinking mode requires ``reasoning_content`` on every assistant tool-call turn; omitting
         it causes HTTP 400 when the message is replayed in a subsequent API request (#15250).
         """
-        return matches_reasoning_echo_family("deepseek", (self.provider or "").lower(), self.model, self.base_url)
+        return matches_reasoning_echo_family(
+            "deepseek", (self.provider or "").lower(), self.model, self.base_url
+        )
 
     def _needs_mimo_tool_reasoning(self) -> bool:
         """True when the current provider is Xiaomi MiMo thinking mode."""
-        return matches_reasoning_echo_family("mimo", (self.provider or "").lower(), self.model, self.base_url)
+        return matches_reasoning_echo_family(
+            "mimo", (self.provider or "").lower(), self.model, self.base_url
+        )
 
-    _copy_reasoning_content_for_api = _forward("agent.agent_runtime_helpers", "copy_reasoning_content_for_api")
+    _copy_reasoning_content_for_api = _forward(
+        "agent.agent_runtime_helpers", "copy_reasoning_content_for_api"
+    )
 
-    _reapply_reasoning_echo_for_provider = _forward("agent.agent_runtime_helpers", "reapply_reasoning_echo_for_provider")
+    _reapply_reasoning_echo_for_provider = _forward(
+        "agent.agent_runtime_helpers", "reapply_reasoning_echo_for_provider"
+    )
 
     @staticmethod
-    def _sanitize_tool_calls_for_strict_api(api_msg: dict, model: str | None = None, *, base_url: str | None = None,
-                                            provider: str | None = None) -> dict:
+    def _sanitize_tool_calls_for_strict_api(
+        api_msg: dict,
+        model: str | None = None,
+        *,
+        base_url: str | None = None,
+        provider: str | None = None,
+    ) -> dict:
         """Strip Codex Responses fields from tool_calls for strict Chat Completions APIs (Mistral, Fireworks
         400/422 on unknown fields). ``extra_content`` (Gemini thought_signature) is kept only on Gemini routes
         (model family, Gemini host or provider). Builds new dicts so the internal history keeps the Codex
@@ -229,13 +303,22 @@ class ReasoningParamsMixin:
         if not isinstance(tool_calls, list):
             return api_msg
         from agent.transports.chat_completions import _model_consumes_thought_signature
+
         keep_signature = _model_consumes_thought_signature(model, base_url, provider)
-        strip = {"call_id", "response_item_id"} | (set() if keep_signature else {"extra_content"})
-        api_msg["tool_calls"] = [{k: v for k, v in tc.items() if k not in strip} if isinstance(tc, dict) else tc
-                                 for tc in tool_calls]
+        strip = {"call_id", "response_item_id"} | (
+            set() if keep_signature else {"extra_content"}
+        )
+        api_msg["tool_calls"] = [
+            {k: v for k, v in tc.items() if k not in strip}
+            if isinstance(tc, dict)
+            else tc
+            for tc in tool_calls
+        ]
         return api_msg
 
-    _sanitize_tool_call_arguments = _forward_static("agent.agent_runtime_helpers", "sanitize_tool_call_arguments")
+    _sanitize_tool_call_arguments = _forward_static(
+        "agent.agent_runtime_helpers", "sanitize_tool_call_arguments"
+    )
 
     def _should_sanitize_tool_calls(self) -> bool:
         """True for every non-Codex API: Codex Responses fields are not Chat Completions schema and 400 elsewhere."""

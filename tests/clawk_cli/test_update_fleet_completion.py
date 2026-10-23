@@ -4,33 +4,56 @@ import json
 
 import pytest
 
-from clawk_cli import update_cmd, update_cmd_fleet, update_cmd_fleet_verify as fleet_verify, update_cmd_maint, update_receipt
+from clawk_cli import (
+    update_cmd,
+    update_cmd_fleet,
+    update_cmd_fleet_verify as fleet_verify,
+    update_cmd_maint,
+    update_receipt,
+)
 from clawk_constants import get_clawk_home
 
 
 @pytest.mark.parametrize(
     "update_complete,state",
-    [(True, "current"), (False, "current"), (True, "stale"), (True, "down"), (True, None)],
+    [
+        (True, "current"),
+        (False, "current"),
+        (True, "stale"),
+        (True, "down"),
+        (True, None),
+    ],
 )
 def test_fleet_completion_preserves_runtime_verdict_and_restart_obligation(
-    update_complete, state, monkeypatch,
+    update_complete,
+    state,
+    monkeypatch,
 ):
     refreshed, migrated = [], []
     snapshot = [{"profile": "default", "pid": 1234, "state": state}] if state else []
     restart = update_cmd_fleet._GatewayRestartOutcome(
-        incomplete=False, phase_errors=[], pre_restart_gateway_pids=[1234],
-        restarted_services=["clawk-gateway"], failed_or_stale_units=[],
-        relaunched_profiles=[], externally_supervised_profiles=[], killed_pids=set(),
+        incomplete=False,
+        phase_errors=[],
+        pre_restart_gateway_pids=[1234],
+        restarted_services=["clawk-gateway"],
+        failed_or_stale_units=[],
+        relaunched_profiles=[],
+        externally_supervised_profiles=[],
+        killed_pids=set(),
     )
     monkeypatch.setattr(fleet_verify, "_print_legacy_units_warning", lambda: None)
-    monkeypatch.setattr(update_cmd, "_surviving_pre_update_serve_runtimes", lambda plan: [])
     monkeypatch.setattr(
-        update_cmd_maint, "_refresh_dashboard_after_update",
+        update_cmd, "_surviving_pre_update_serve_runtimes", lambda plan: []
+    )
+    monkeypatch.setattr(
+        update_cmd_maint,
+        "_refresh_dashboard_after_update",
         lambda **kwargs: refreshed.append(kwargs),
     )
     monkeypatch.setattr(update_receipt, "_code_identity", lambda **kwargs: {})
     monkeypatch.setattr(
-        "clawk_cli.gateway_migrate.maybe_auto_migrate_after_update", lambda: migrated.append(True),
+        "clawk_cli.gateway_migrate.maybe_auto_migrate_after_update",
+        lambda: migrated.append(True),
     )
 
     def collect(outcome, rows_expected):
@@ -46,14 +69,20 @@ def test_fleet_completion_preserves_runtime_verdict_and_restart_obligation(
         update_receipt.begin_update_receipt()
         # Contract C3: neither verdict fails the committed update any more (was SystemExit(1)).
         fleet_verify._verify_fleet_after_update(
-            restart, _pre_update_plan=None, _windows_gateway_resume=None,
+            restart,
+            _pre_update_plan=None,
+            _windows_gateway_resume=None,
             update_complete=update_complete,
         )
 
-    receipt = json.loads((get_clawk_home() / "logs/update_receipts/latest.json").read_text())
+    receipt = json.loads(
+        (get_clawk_home() / "logs/update_receipts/latest.json").read_text()
+    )
     # Was "partial" when not healthy: the run is a success; an owed fleet restart is a follow-up.
     assert receipt["outcome"] == "success"
-    assert [f["step"] for f in receipt.get("followups", [])] == ([] if state == "current" else ["gateway_restart"])
+    assert [f["step"] for f in receipt.get("followups", [])] == (
+        [] if state == "current" else ["gateway_restart"]
+    )
     assert receipt["fleet"] == snapshot
     # The two verdicts stay independent: only the fleet keeps the restart obligation armed.
     assert restart.incomplete is (state != "current")

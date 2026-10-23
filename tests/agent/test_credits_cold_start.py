@@ -6,6 +6,7 @@ at session open, not only after the first inference header. These tests assert t
 notice policy fires correctly for a seed-shaped CreditsState with the warn90 latch
 primed the way conversation_loop does it.
 """
+
 import time
 
 from agent.credits_tracker import CreditsState, evaluate_credits_notices
@@ -29,22 +30,15 @@ def _state(**kw) -> CreditsState:
 
 def test_cold_start_healthy_no_notice():
     s = _state(
-        remaining_micros=30_340_000, subscription_micros=18_000_000,
-        subscription_limit_micros=20_000_000, subscription_limit_usd="20.00",
-        denominator_kind="subscription_cap", paid_access=True,
+        remaining_micros=30_340_000,
+        subscription_micros=18_000_000,
+        subscription_limit_micros=20_000_000,
+        subscription_limit_usd="20.00",
+        denominator_kind="subscription_cap",
+        paid_access=True,
     )
     assert abs(s.used_fraction - 0.1) < 1e-9
     assert _cold_start_notices(s) == []
-
-
-
-
-
-
-
-
-
-
 
 
 def test_dev_fixtures_drive_cold_start():
@@ -78,7 +72,9 @@ class _FakeAgent:
     the real policy against the latch (mirroring run_agent._emit_credits_notices,
     including the free-model suppression flag)."""
 
-    def __init__(self, provider="nous", model="", base_url="", session_id="session-1"):  # session_id may be None
+    def __init__(
+        self, provider="nous", model="", base_url="", session_id="session-1"
+    ):  # session_id may be None
         from agent.credits_tracker import evaluate_credits_notices, is_free_tier_model
 
         self.provider = provider
@@ -87,11 +83,16 @@ class _FakeAgent:
         self.session_id = session_id
         self._credits_state = None
         self._credits_session_start_micros = None
-        self._credits_latch = {"active": set(), "seen_below_90": False, "usage_band": None}
+        self._credits_latch = {
+            "active": set(),
+            "seen_below_90": False,
+            "usage_band": None,
+        }
         self.emitted: list = []
         self._eval = evaluate_credits_notices
         self._is_free = is_free_tier_model
         from agent.credits_tracker import _remember_shown_band
+
         self._remember_band = _remember_shown_band
 
     def _emit_credits_notices(self):
@@ -122,16 +123,6 @@ def _seed(agent, fixture):
         os.environ.pop("CLAWK_DEV_CREDITS", None)
 
 
-
-
-
-
-
-
-
-
-
-
 def test_live_crossing_after_seed_still_fires_grant_spent():
     """The gate opens when the session observes the grant NOT yet spent — a healthy
     seed followed by a grant-exhausted header is a real in-session crossing and must
@@ -139,11 +130,17 @@ def test_live_crossing_after_seed_still_fires_grant_spent():
     a = _FakeAgent()
     assert _seed(a, "healthy") is True
     a.emitted = []
-    a._credits_state = _state(  # the grant_exhausted shape, as a live header would carry it
-        remaining_micros=12_340_000, subscription_micros=0,
-        subscription_limit_micros=20_000_000, subscription_limit_usd="20.00",
-        purchased_micros=12_340_000, purchased_usd="12.34",
-        denominator_kind="subscription_cap", paid_access=True,
+    a._credits_state = (
+        _state(  # the grant_exhausted shape, as a live header would carry it
+            remaining_micros=12_340_000,
+            subscription_micros=0,
+            subscription_limit_micros=20_000_000,
+            subscription_limit_usd="20.00",
+            purchased_micros=12_340_000,
+            purchased_usd="12.34",
+            denominator_kind="subscription_cap",
+            paid_access=True,
+        )
     )
     a._emit_credits_notices()
     assert a.emitted == [(["credits.grant_spent"], [])]
@@ -180,8 +177,10 @@ def _band_state(used_fraction_of_cap: float) -> CreditsState:
     return _state(
         remaining_micros=int(cap * (1 - used_fraction_of_cap)),
         subscription_micros=int(cap * (1 - used_fraction_of_cap)),
-        subscription_limit_micros=cap, subscription_limit_usd="20.00",
-        denominator_kind="subscription_cap", paid_access=True,
+        subscription_limit_micros=cap,
+        subscription_limit_usd="20.00",
+        denominator_kind="subscription_cap",
+        paid_access=True,
     )
 
 
@@ -259,7 +258,9 @@ _NOUS_BASE = "https://inference-api.nousresearch.com/v1"
 _SUBSCRIPTION_CATALOG = {
     "https://inference-api.nousresearch.com": {
         "openai/gpt-5.6-luna": {
-            "prompt": "0.0000002000", "completion": "0.0000012000", "billing_mode": "subscription",
+            "prompt": "0.0000002000",
+            "completion": "0.0000012000",
+            "billing_mode": "subscription",
         },
     }
 }
@@ -313,10 +314,16 @@ def _run_bg_seed(monkeypatch, agent, *, warm):
         spawned.append(thread)
         return thread
 
-    monkeypatch.delenv("CLAWK_DEV_CREDITS", raising=False)  # fixtures would take the sync path
+    monkeypatch.delenv(
+        "CLAWK_DEV_CREDITS", raising=False
+    )  # fixtures would take the sync path
     monkeypatch.setattr(credits_tracker, "_warm_nous_pricing_cache", _gated_warm)
     monkeypatch.setattr(memory_provider, "spawn_context_thread", _capture_spawn)
-    monkeypatch.setattr(nous_account, "get_nous_portal_account_info", lambda *a, **kw: _DepletedAccount())
+    monkeypatch.setattr(
+        nous_account,
+        "get_nous_portal_account_info",
+        lambda *a, **kw: _DepletedAccount(),
+    )
     result = credits_tracker.seed_credits_at_session_start(agent)
     try:
         assert len(spawned) == 1
@@ -337,10 +344,17 @@ def test_bg_seed_warms_pricing_so_a_subscription_model_escapes_the_banner(monkey
     models_pricing = _cold_pricing_cache(monkeypatch)
     agent = _FakeAgent(model="openai/gpt-5.6-luna", base_url=_NOUS_BASE)
 
-    assert _run_bg_seed(
-        monkeypatch, agent, warm=lambda: models_pricing._pricing_cache.update(_SUBSCRIPTION_CATALOG)
-    ) is True
-    assert agent._credits_state.depleted is True  # the account really is out of credits...
+    assert (
+        _run_bg_seed(
+            monkeypatch,
+            agent,
+            warm=lambda: models_pricing._pricing_cache.update(_SUBSCRIPTION_CATALOG),
+        )
+        is True
+    )
+    assert (
+        agent._credits_state.depleted is True
+    )  # the account really is out of credits...
     assert agent.emitted == [([], [])]  # ...and the session says nothing about it
 
 
@@ -369,7 +383,10 @@ def test_bg_seed_reruns_the_policy_when_a_header_beat_it(monkeypatch):
     _run_bg_seed(monkeypatch, agent, warm=_warm)
     assert agent._credits_state is header_state  # the seed never clobbers a live header
     assert agent.emitted[0] == (["credits.depleted"], [])  # cold: shown
-    assert agent.emitted[-1] == ([], ["credits.depleted"])  # warm re-run: cleared, no "restored"
+    assert agent.emitted[-1] == (
+        [],
+        ["credits.depleted"],
+    )  # warm re-run: cleared, no "restored"
 
 
 # ── inference-header path: the catalog goes cold again after the Nous TTL ────
@@ -411,14 +428,21 @@ def test_header_after_ttl_expiry_rewarms_instead_of_flashing_the_banner(monkeypa
     models_pricing = _cold_pricing_cache(monkeypatch)
     models_pricing._cache_catalog(
         _NOUS_BASE[:-3] + models_pricing._PRICING_AUTH_KEY_PREFIX + "abc",
-        _SUBSCRIPTION_CATALOG[_NOUS_BASE[:-3]], models_pricing._NOUS_CATALOG_TTL_SECONDS)
+        _SUBSCRIPTION_CATALOG[_NOUS_BASE[:-3]],
+        models_pricing._NOUS_CATALOG_TTL_SECONDS,
+    )
     agent = _mixin_agent()
     agent._emit_credits_notices()
     assert agent.shown == []  # warm catalog: suppressed
     models_pricing._pricing_cache_retry_after = {  # ...then the TTL passes
-        k: v - models_pricing._NOUS_CATALOG_TTL_SECONDS - 1 for k, v in models_pricing._pricing_cache_retry_after.items()}
-    monkeypatch.setattr(credits_tracker, "_warm_nous_pricing_cache",
-                        lambda: models_pricing._pricing_cache.update(_SUBSCRIPTION_CATALOG))
+        k: v - models_pricing._NOUS_CATALOG_TTL_SECONDS - 1
+        for k, v in models_pricing._pricing_cache_retry_after.items()
+    }
+    monkeypatch.setattr(
+        credits_tracker,
+        "_warm_nous_pricing_cache",
+        lambda: models_pricing._pricing_cache.update(_SUBSCRIPTION_CATALOG),
+    )
 
     agent._emit_credits_notices()  # the next inference header
     _join_pricing_warm(agent)
@@ -437,7 +461,9 @@ def test_header_on_a_cold_catalog_still_warns_when_the_warm_fails(monkeypatch):
 
     def _failed_fetch():
         warms.append(1)
-        models_pricing._cache_catalog(_NOUS_BASE[:-3] + models_pricing._PRICING_AUTH_KEY_PREFIX + "abc", {})
+        models_pricing._cache_catalog(
+            _NOUS_BASE[:-3] + models_pricing._PRICING_AUTH_KEY_PREFIX + "abc", {}
+        )
 
     monkeypatch.setattr(credits_tracker, "_warm_nous_pricing_cache", _failed_fetch)
     agent = _mixin_agent()

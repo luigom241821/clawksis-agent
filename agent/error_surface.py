@@ -35,10 +35,19 @@ LAYER_DISK = "disk"
 # (cut-off output, empty or broken reply) stay on the provider layer, where the
 # clients' per-code copy names the real fix (`continue`, smaller steps, /retry).
 _REASON_TO_LAYER = {
-    "auth": LAYER_AUTH, "auth_permanent": LAYER_AUTH, "billing": LAYER_BILLING, "billing_unverified": LAYER_BILLING,
-    "loop_error": LAYER_GATEWAY, "interpreter_shutdown": LAYER_GATEWAY, "session_busy": LAYER_GATEWAY,
-    "gateway_connection": LAYER_GATEWAY, "host_error": LAYER_GATEWAY, "workspace_unavailable": LAYER_GATEWAY,
-    "truncated": LAYER_PROVIDER, "empty_response": LAYER_PROVIDER, "invalid_response": LAYER_PROVIDER,
+    "auth": LAYER_AUTH,
+    "auth_permanent": LAYER_AUTH,
+    "billing": LAYER_BILLING,
+    "billing_unverified": LAYER_BILLING,
+    "loop_error": LAYER_GATEWAY,
+    "interpreter_shutdown": LAYER_GATEWAY,
+    "session_busy": LAYER_GATEWAY,
+    "gateway_connection": LAYER_GATEWAY,
+    "host_error": LAYER_GATEWAY,
+    "workspace_unavailable": LAYER_GATEWAY,
+    "truncated": LAYER_PROVIDER,
+    "empty_response": LAYER_PROVIDER,
+    "invalid_response": LAYER_PROVIDER,
     "context_overflow": LAYER_PROVIDER,  # a bigger-window model IS the fix, so Switch provider applies
 }
 
@@ -53,27 +62,61 @@ _FREE_TIER_RETRYABLE_KINDS = {"rate_limited", "at_capacity", "outage"}
 # only: current backends stamp the classifier's verdict in ``failure_retryable``.
 # Kept in sync with ``classify_api_error``'s retryable=False verdicts.
 _NON_RETRYABLE_REASONS = {
-    "auth", "auth_permanent", "billing", "billing_unverified", "content_policy_blocked",
-    "provider_policy_blocked", "data_policy_denied", "model_not_found", "format_error", "ssl_cert_verification",
-    "context_overflow", "interpreter_shutdown", "upstream_blocked",
+    "auth",
+    "auth_permanent",
+    "billing",
+    "billing_unverified",
+    "content_policy_blocked",
+    "provider_policy_blocked",
+    "data_policy_denied",
+    "model_not_found",
+    "format_error",
+    "ssl_cert_verification",
+    "context_overflow",
+    "interpreter_shutdown",
+    "upstream_blocked",
 }
 
 # Providers whose base_url is user-supplied rather than a known vendor.
-_CUSTOM_ENDPOINT_PROVIDERS = {"custom", "local", "llama.cpp", "llamacpp", "ollama", "lmstudio", "vllm"}
+_CUSTOM_ENDPOINT_PROVIDERS = {
+    "custom",
+    "local",
+    "llama.cpp",
+    "llamacpp",
+    "ollama",
+    "lmstudio",
+    "vllm",
+}
 
 # Mid-stream drop markers. Deliberately narrow: our own retry-exhaustion
 # summaries plus the OpenAI SDK's stream-abort errors.
 _STREAM_DROP_FRAGMENTS = (
-    "stream connection", "peer closed connection", "incomplete chunked read",
-    "connection broken", "stream ended prematurely", "sse", "mid-stream",
+    "stream connection",
+    "peer closed connection",
+    "incomplete chunked read",
+    "connection broken",
+    "stream ended prematurely",
+    "sse",
+    "mid-stream",
 )
 
 # Exception top-level modules that mean "API/transport call failed" (vs. a bug
 # in our dispatcher = gateway layer): every SDK family our adapters raise from
 # plus raw transports.
 _API_EXC_MODULE_PREFIXES = (
-    "openai", "httpx", "httpcore", "anthropic", "botocore", "boto3", "google",
-    "grpc", "requests", "aiohttp", "ssl", "socket", "urllib",
+    "openai",
+    "httpx",
+    "httpcore",
+    "anthropic",
+    "botocore",
+    "boto3",
+    "google",
+    "grpc",
+    "requests",
+    "aiohttp",
+    "ssl",
+    "socket",
+    "urllib",
 )
 
 
@@ -86,7 +129,9 @@ def _looks_like_stream_drop(message: str) -> bool:
     return any(fragment in message.lower() for fragment in _STREAM_DROP_FRAGMENTS)
 
 
-def _surface(layer: str, code: str, retryable: bool, provider: str = "", model: str = "") -> dict:
+def _surface(
+    layer: str, code: str, retryable: bool, provider: str = "", model: str = ""
+) -> dict:
     # Identity captured at classification time, so clients report the session
     # that actually failed — not whatever the composer points at later.
     identity = {k: v for k, v in (("provider", provider), ("model", model)) if v}
@@ -110,7 +155,11 @@ def _api_key_env(provider: str) -> str:
         from clawk_cli.provider_catalog import provider_catalog_by_slug
 
         descriptor = provider_catalog_by_slug().get(provider.strip().lower())
-        return descriptor.api_key_env_vars[0] if descriptor and descriptor.api_key_env_vars else ""
+        return (
+            descriptor.api_key_env_vars[0]
+            if descriptor and descriptor.api_key_env_vars
+            else ""
+        )
     except Exception:  # pragma: no cover — advisory only
         return ""
 
@@ -131,7 +180,11 @@ def auth_kind(provider: Optional[str]) -> str:
         from clawk_cli.provider_catalog import provider_catalog_by_slug
 
         descriptor = provider_catalog_by_slug().get((provider or "").strip().lower())
-        return "oauth" if descriptor is not None and descriptor.tab == "accounts" else "api_key"
+        return (
+            "oauth"
+            if descriptor is not None and descriptor.tab == "accounts"
+            else "api_key"
+        )
     except Exception:  # pragma: no cover — advisory only
         return "api_key"
 
@@ -153,7 +206,9 @@ def _result_layer(reason: str, error_text: str, provider: str) -> str:
     return LAYER_STREAMING if _looks_like_stream_drop(error_text) else LAYER_PROVIDER
 
 
-def build_error_surface_from_result(result: Any, provider: str = "", model: str = "") -> Optional[dict]:
+def build_error_surface_from_result(
+    result: Any, provider: str = "", model: str = ""
+) -> Optional[dict]:
     """Descriptor for a returned-error turn result (``failed=True`` dicts).
 
     Uses the stamped ``failure_reason`` plus error text. None when the result
@@ -176,7 +231,9 @@ def build_error_surface_from_result(result: Any, provider: str = "", model: str 
                 # Retry is the natural next click once Keep going / a top-up is on, and at the reset.
                 surface = _surface(LAYER_BILLING, "usage_window", True, provider, model)
                 surface["message"] = window_message
-                if isinstance(resets_at := result.get("failure_resets_at"), (int, float)) and not isinstance(resets_at, bool):
+                if isinstance(
+                    resets_at := result.get("failure_resets_at"), (int, float)
+                ) and not isinstance(resets_at, bool):
                     surface["resets_at"] = float(resets_at)
                 if isinstance(limit := result.get("usage_limit"), dict):
                     # What ran out, the plan's recommended models that still work, and the credits
@@ -187,25 +244,47 @@ def build_error_surface_from_result(result: Any, provider: str = "", model: str 
         # The Nous free tier refused or could not serve the turn (``agent/turn_recovery.py``
         # stamps ``free_tier``): its own code, so a client offers the free sign-in rather than an
         # OAuth re-login, and the chat sentence rides along as the card body.
-        if isinstance(free_tier := result.get("free_tier"), dict) and free_tier.get("kind"):
+        if isinstance(free_tier := result.get("free_tier"), dict) and free_tier.get(
+            "kind"
+        ):
             kind = str(free_tier["kind"])
-            surface = _surface(LAYER_PROVIDER, f"free_tier_{kind}", kind in _FREE_TIER_RETRYABLE_KINDS, provider, model)
+            surface = _surface(
+                LAYER_PROVIDER,
+                f"free_tier_{kind}",
+                kind in _FREE_TIER_RETRYABLE_KINDS,
+                provider,
+                model,
+            )
             if message := str(free_tier.get("message") or ""):
                 surface["message"] = message
             return surface
         if not reason:  # failed result without a classified reason (legacy paths)
             drop = _looks_like_stream_drop(error_text)
-            return _surface(LAYER_STREAMING if drop else LAYER_PROVIDER, "stream_drop" if drop else "unknown", True, provider, model)
+            return _surface(
+                LAYER_STREAMING if drop else LAYER_PROVIDER,
+                "stream_drop" if drop else "unknown",
+                True,
+                provider,
+                model,
+            )
         # Prefer the classifier's own verdict (``failure_retryable``); the
         # reason-set fallback covers older results.
         retryable = result.get("failure_retryable")
         if not isinstance(retryable, bool):
             retryable = reason not in _NON_RETRYABLE_REASONS
-        surface = _surface(_result_layer(reason, error_text, provider), reason, retryable, provider, model)
+        surface = _surface(
+            _result_layer(reason, error_text, provider),
+            reason,
+            retryable,
+            provider,
+            model,
+        )
         # When the provider named the moment its limit lifts (Retry-After / ``resets_at``,
         # ``agent/turn_recovery.py::_stamp_limit_reset``) the card can say "Limit resets at HH:mm"
         # next to Retry instead of leaving the user to guess (#98852). Epoch seconds.
-        if isinstance(resets_at := result.get("failure_resets_at"), (int, float)) and not isinstance(resets_at, bool):
+        if isinstance(
+            resets_at := result.get("failure_resets_at"), (int, float)
+        ) and not isinstance(resets_at, bool):
             surface["resets_at"] = float(resets_at)
         return surface
     except Exception:  # pragma: no cover — never break the error path
@@ -214,7 +293,10 @@ def build_error_surface_from_result(result: Any, provider: str = "", model: str 
 
 
 def build_error_surface_from_exception(
-    exc: BaseException, provider: str = "", model: str = "", api_key: Any = None,
+    exc: BaseException,
+    provider: str = "",
+    model: str = "",
+    api_key: Any = None,
 ) -> Optional[dict]:
     """Descriptor for an exception that escaped the turn dispatcher.
 
@@ -225,20 +307,33 @@ def build_error_surface_from_exception(
         message = str(exc) or type(exc).__name__
         if _disk_full(exc):
             return _surface(LAYER_DISK, "disk_full", False, provider, model)
-        api_like = (type(exc).__module__ or "").split(".")[0] in _API_EXC_MODULE_PREFIXES or hasattr(exc, "status_code")
+        api_like = (type(exc).__module__ or "").split(".")[
+            0
+        ] in _API_EXC_MODULE_PREFIXES or hasattr(exc, "status_code")
         if not api_like or not isinstance(exc, Exception):
             return _surface(LAYER_GATEWAY, type(exc).__name__, True, provider, model)
 
         from agent.error_classifier import classify_api_error
 
-        classified = classify_api_error(exc, provider=provider, model=model, api_key=api_key)
-        synthetic = {"error": classified.message or message, "failure_reason": classified.reason.value}
+        classified = classify_api_error(
+            exc, provider=provider, model=model, api_key=api_key
+        )
+        synthetic = {
+            "error": classified.message or message,
+            "failure_reason": classified.reason.value,
+        }
         from agent.agent_runtime_helpers import extract_api_error_context
         from agent.credential_pool import _parse_absolute_timestamp
 
-        if (resets_at := _parse_absolute_timestamp(extract_api_error_context(exc).get("reset_at"))) is not None:
+        if (
+            resets_at := _parse_absolute_timestamp(
+                extract_api_error_context(exc).get("reset_at")
+            )
+        ) is not None:
             synthetic["failure_resets_at"] = resets_at
-        surface = build_error_surface_from_result(synthetic, provider=provider, model=model)
+        surface = build_error_surface_from_result(
+            synthetic, provider=provider, model=model
+        )
         if surface is not None:
             surface["retryable"] = bool(classified.retryable)
         return surface

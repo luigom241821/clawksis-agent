@@ -279,7 +279,10 @@ async def _run_turn(monkeypatch, tmp_path, *, consumer_cls=None, session_id):
     (tmp_path / "config.yaml").write_text(
         yaml.safe_dump(
             {
-                "display": {"tool_progress": "off", "interim_assistant_messages": False},
+                "display": {
+                    "tool_progress": "off",
+                    "interim_assistant_messages": False,
+                },
                 "streaming": {
                     "enabled": True,
                     "edit_interval": 0.01,
@@ -301,9 +304,7 @@ async def _run_turn(monkeypatch, tmp_path, *, consumer_cls=None, session_id):
     gateway_run = importlib.import_module("gateway.run")
     if consumer_cls is not None:
         stream_consumer_mod = importlib.import_module("gateway.stream_consumer")
-        monkeypatch.setattr(
-            stream_consumer_mod, "GatewayStreamConsumer", consumer_cls
-        )
+        monkeypatch.setattr(stream_consumer_mod, "GatewayStreamConsumer", consumer_cls)
     monkeypatch.setattr(gateway_run, "_clawk_home", tmp_path)
     monkeypatch.setattr(
         gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"}
@@ -412,9 +413,7 @@ class TestDiscordTransportClassification:
     def test_connection_error_is_transport(self):
         mod = self._adapter_module()
         assert mod._is_discord_transport_error(ConnectionError("websocket closed"))
-        assert mod._is_discord_transport_error(
-            RuntimeError("Session is closed")
-        )
+        assert mod._is_discord_transport_error(RuntimeError("Session is closed"))
         assert mod._is_discord_transport_error(OSError(104, "Connection reset"))
 
     def test_http_and_timeout_errors_are_not_transport(self):

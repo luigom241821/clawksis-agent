@@ -4,6 +4,7 @@ Memory-tool pattern: several ops on ONE skill, atomically — create + N
 supporting files, or SKILL.md + the script it references, in one call.
 Any failure rolls the skill directory back to its pre-batch state.
 """
+
 import json
 import os
 import shutil
@@ -30,6 +31,7 @@ class TestSkillManageBatch(unittest.TestCase):
         import importlib
 
         import tools.skill_manager_tool as smt
+
         importlib.reload(smt)
         self.smt = smt
 
@@ -44,11 +46,22 @@ class TestSkillManageBatch(unittest.TestCase):
         return json.loads(self.smt.skill_manage(action="", name="", operations=ops))
 
     def test_create_plus_files_atomic(self):
-        r = self._call("probe", [
-            {"action": "create", "content": SK.format(n="probe")},
-            {"action": "write_file", "file_path": "references/a.md", "file_content": "a"},
-            {"action": "write_file", "file_path": "scripts/r.py", "file_content": "pass"},
-        ])
+        r = self._call(
+            "probe",
+            [
+                {"action": "create", "content": SK.format(n="probe")},
+                {
+                    "action": "write_file",
+                    "file_path": "references/a.md",
+                    "file_content": "a",
+                },
+                {
+                    "action": "write_file",
+                    "file_path": "scripts/r.py",
+                    "file_content": "pass",
+                },
+            ],
+        )
         self.assertTrue(r["success"], r)
         self.assertEqual(r["operations_applied"], 3)
         base = os.path.join(self.home, "skills", "probe")
@@ -59,30 +72,54 @@ class TestSkillManageBatch(unittest.TestCase):
         # operations[] is the only call shape, so a finding the per-op handler attaches must
         # survive into the batch row or the linter is silent for every model call.
         from tools.skill_linter import _BODY_SOFT_BUDGET_CHARS
+
         self._call("probe", [{"action": "create", "content": SK.format(n="probe")}])
-        r = self._call("probe", [{"action": "patch", "old_string": "Step 1.",
-                                  "new_string": "- rule; why.\n" * (_BODY_SOFT_BUDGET_CHARS // 12 + 1)}])
+        r = self._call(
+            "probe",
+            [
+                {
+                    "action": "patch",
+                    "old_string": "Step 1.",
+                    "new_string": "- rule; why.\n"
+                    * (_BODY_SOFT_BUDGET_CHARS // 12 + 1),
+                }
+            ],
+        )
         self.assertTrue(r["success"], r)
         rules = {w["rule"] for w in r["results"][0]["lint_warnings"]}
         self.assertIn("oversized-body", rules)
 
     def test_midbatch_failure_rolls_back_existing_skill(self):
         self._call("probe", [{"action": "create", "content": SK.format(n="probe")}])
-        r = self._call("probe", [
-            {"action": "patch", "old_string": "Step 1.", "new_string": "Step ONE."},
-            {"action": "write_file", "file_path": "bad/nope.md", "file_content": "x"},
-        ])
+        r = self._call(
+            "probe",
+            [
+                {"action": "patch", "old_string": "Step 1.", "new_string": "Step ONE."},
+                {
+                    "action": "write_file",
+                    "file_path": "bad/nope.md",
+                    "file_content": "x",
+                },
+            ],
+        )
         self.assertFalse(r["success"])
         self.assertEqual(r["failed_index"], 1)
         content = open(os.path.join(self.home, "skills", "probe", "SKILL.md")).read()
-        self.assertIn("Step 1.", content)       # patch undone
+        self.assertIn("Step 1.", content)  # patch undone
         self.assertNotIn("Step ONE.", content)
 
     def test_failed_create_batch_removes_partial_skill(self):
-        r = self._call("fresh", [
-            {"action": "create", "content": SK.format(n="fresh")},
-            {"action": "write_file", "file_path": "../escape.md", "file_content": "x"},
-        ])
+        r = self._call(
+            "fresh",
+            [
+                {"action": "create", "content": SK.format(n="fresh")},
+                {
+                    "action": "write_file",
+                    "file_path": "../escape.md",
+                    "file_content": "x",
+                },
+            ],
+        )
         self.assertFalse(r["success"])
         self.assertFalse(os.path.exists(os.path.join(self.home, "skills", "fresh")))
 
@@ -94,23 +131,38 @@ class TestSkillManageBatch(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(self.home, "skills", "probe")))
         # delete mixed with other ops rejected
         self._call("probe", [{"action": "create", "content": SK.format(n="probe")}])
-        r = self._call("probe", [
-            {"action": "patch", "old_string": "Step 1.", "new_string": "X."},
-            {"action": "delete"},
-        ])
+        r = self._call(
+            "probe",
+            [
+                {"action": "patch", "old_string": "Step 1.", "new_string": "X."},
+                {"action": "delete"},
+            ],
+        )
         self.assertFalse(r["success"])
         self.assertIn("SOLE", r["error"])
         # create must be first
-        r = self._call("x", [
-            {"action": "write_file", "file_path": "references/a.md", "file_content": "a"},
-            {"action": "create", "content": SK.format(n="x")},
-        ])
+        r = self._call(
+            "x",
+            [
+                {
+                    "action": "write_file",
+                    "file_path": "references/a.md",
+                    "file_content": "a",
+                },
+                {"action": "create", "content": SK.format(n="x")},
+            ],
+        )
         self.assertFalse(r["success"])
         # a non-string create category is a JSON error (never a TypeError) and, rejected
         # pre-effect, leaves no skill_batch_ snapshot tempdir behind.
-        with tempfile.TemporaryDirectory(prefix="skmbatch_tmp_") as tmp, \
-                patch.dict(os.environ, {"TMPDIR": tmp}), patch.object(tempfile, "tempdir", None):
-            r = self._call("x", [{"action": "create", "content": SK.format(n="x"), "category": 5}])
+        with (
+            tempfile.TemporaryDirectory(prefix="skmbatch_tmp_") as tmp,
+            patch.dict(os.environ, {"TMPDIR": tmp}),
+            patch.object(tempfile, "tempdir", None),
+        ):
+            r = self._call(
+                "x", [{"action": "create", "content": SK.format(n="x"), "category": 5}]
+            )
             self.assertFalse(r["success"])
             self.assertIn("Category must be a string", r["error"])
             self.assertEqual(os.listdir(tmp), [])
@@ -129,21 +181,71 @@ class TestSkillManageBatch(unittest.TestCase):
         # destructive op on an already-touched file: rejected — double
         # write, write+remove, patch-then-write, patch-then-remove, and a
         # path-spelling variant of the same file.
-        self._call("probe", [{"action": "write_file",
-                              "file_path": "references/c.md", "file_content": "seed"}])
+        self._call(
+            "probe",
+            [
+                {
+                    "action": "write_file",
+                    "file_path": "references/c.md",
+                    "file_content": "seed",
+                }
+            ],
+        )
         for ops in (
-            [{"action": "write_file", "file_path": "references/a.md", "file_content": "1"},
-             {"action": "write_file", "file_path": "references/a.md", "file_content": "2"}],
-            [{"action": "write_file", "file_path": "references/b.md", "file_content": "x"},
-             {"action": "remove_file", "file_path": "references/b.md"}],
-            [{"action": "patch", "file_path": "references/c.md",
-              "old_string": "seed", "new_string": "edited"},
-             {"action": "write_file", "file_path": "references/c.md", "file_content": "CLOB"}],
-            [{"action": "patch", "file_path": "references/c.md",
-              "old_string": "seed", "new_string": "edited"},
-             {"action": "remove_file", "file_path": "references/c.md"}],
-            [{"action": "write_file", "file_path": "references/d.md", "file_content": "1"},
-             {"action": "write_file", "file_path": "./references//d.md", "file_content": "2"}],
+            [
+                {
+                    "action": "write_file",
+                    "file_path": "references/a.md",
+                    "file_content": "1",
+                },
+                {
+                    "action": "write_file",
+                    "file_path": "references/a.md",
+                    "file_content": "2",
+                },
+            ],
+            [
+                {
+                    "action": "write_file",
+                    "file_path": "references/b.md",
+                    "file_content": "x",
+                },
+                {"action": "remove_file", "file_path": "references/b.md"},
+            ],
+            [
+                {
+                    "action": "patch",
+                    "file_path": "references/c.md",
+                    "old_string": "seed",
+                    "new_string": "edited",
+                },
+                {
+                    "action": "write_file",
+                    "file_path": "references/c.md",
+                    "file_content": "CLOB",
+                },
+            ],
+            [
+                {
+                    "action": "patch",
+                    "file_path": "references/c.md",
+                    "old_string": "seed",
+                    "new_string": "edited",
+                },
+                {"action": "remove_file", "file_path": "references/c.md"},
+            ],
+            [
+                {
+                    "action": "write_file",
+                    "file_path": "references/d.md",
+                    "file_content": "1",
+                },
+                {
+                    "action": "write_file",
+                    "file_path": "./references//d.md",
+                    "file_content": "2",
+                },
+            ],
         ):
             r = self._call("probe", ops)
             self.assertFalse(r["success"], ops)
@@ -152,29 +254,52 @@ class TestSkillManageBatch(unittest.TestCase):
         c_md = os.path.join(self.home, "skills", "probe", "references", "c.md")
         self.assertEqual(open(c_md).read(), "seed")
         # write-then-patch on one supporting file stays legal (additive).
-        r = self._call("probe", [
-            {"action": "write_file", "file_path": "references/e.md", "file_content": "base"},
-            {"action": "patch", "file_path": "references/e.md",
-             "old_string": "base", "new_string": "base+"},
-        ])
+        r = self._call(
+            "probe",
+            [
+                {
+                    "action": "write_file",
+                    "file_path": "references/e.md",
+                    "file_content": "base",
+                },
+                {
+                    "action": "patch",
+                    "file_path": "references/e.md",
+                    "old_string": "base",
+                    "new_string": "base+",
+                },
+            ],
+        )
         self.assertTrue(r["success"], r)
         # patch then full rewrite: rejected; rewrite-first: allowed
-        r = self._call("probe", [
-            {"action": "patch", "old_string": "Step 1.", "new_string": "P."},
-            {"action": "patch", "content": SK.format(n="probe")},
-        ])
+        r = self._call(
+            "probe",
+            [
+                {"action": "patch", "old_string": "Step 1.", "new_string": "P."},
+                {"action": "patch", "content": SK.format(n="probe")},
+            ],
+        )
         self.assertFalse(r["success"])
         self.assertIn("rewrite", r["error"])
-        r = self._call("probe", [
-            {"action": "patch", "content": SK.format(n="probe").replace("Step 1.", "F.")},
-            {"action": "patch", "old_string": "F.", "new_string": "G."},
-        ])
+        r = self._call(
+            "probe",
+            [
+                {
+                    "action": "patch",
+                    "content": SK.format(n="probe").replace("Step 1.", "F."),
+                },
+                {"action": "patch", "old_string": "F.", "new_string": "G."},
+            ],
+        )
         self.assertTrue(r["success"], r)
         # patch chains stay legal
-        r = self._call("probe", [
-            {"action": "patch", "old_string": "G.", "new_string": "H."},
-            {"action": "patch", "old_string": "H.", "new_string": "I."},
-        ])
+        r = self._call(
+            "probe",
+            [
+                {"action": "patch", "old_string": "G.", "new_string": "H."},
+                {"action": "patch", "old_string": "H.", "new_string": "I."},
+            ],
+        )
         self.assertTrue(r["success"], r)
 
     def test_cross_skill_batch_and_rollback(self):
@@ -189,25 +314,57 @@ class TestSkillManageBatch(unittest.TestCase):
 
         def drop_file_before_failing_op(payload, **kw):
             if payload.get("action") == "write_file":  # something lands mid-batch
-                with open(os.path.join(gamma, "dropped.txt"), "w", encoding="utf-8") as fh:
+                with open(
+                    os.path.join(gamma, "dropped.txt"), "w", encoding="utf-8"
+                ) as fh:
                     fh.write("keep me")
             return real_from(payload, **kw)
 
-        with patch.object(self.smt, "_skill_manage_from", side_effect=drop_file_before_failing_op):
-            r = json.loads(self.smt.skill_manage(action="", name="", operations=[
-                {"name": "alpha", "action": "patch",
-                 "old_string": "Step 1.", "new_string": "Step A."},
-                {"name": "beta", "action": "create", "content": SK.format(n="beta")},
-                {"name": "gamma", "action": "create", "content": SK.format(n="gamma")},
-                {"name": "gamma", "action": "write_file",
-                 "file_path": "references/a.md", "file_content": "a"},
-                {"name": "beta", "action": "write_file",
-                 "file_path": "bad/nope.md", "file_content": "x"},
-            ]))
+        with patch.object(
+            self.smt, "_skill_manage_from", side_effect=drop_file_before_failing_op
+        ):
+            r = json.loads(
+                self.smt.skill_manage(
+                    action="",
+                    name="",
+                    operations=[
+                        {
+                            "name": "alpha",
+                            "action": "patch",
+                            "old_string": "Step 1.",
+                            "new_string": "Step A.",
+                        },
+                        {
+                            "name": "beta",
+                            "action": "create",
+                            "content": SK.format(n="beta"),
+                        },
+                        {
+                            "name": "gamma",
+                            "action": "create",
+                            "content": SK.format(n="gamma"),
+                        },
+                        {
+                            "name": "gamma",
+                            "action": "write_file",
+                            "file_path": "references/a.md",
+                            "file_content": "a",
+                        },
+                        {
+                            "name": "beta",
+                            "action": "write_file",
+                            "file_path": "bad/nope.md",
+                            "file_content": "x",
+                        },
+                    ],
+                )
+            )
         self.assertFalse(r["success"])
         self.assertEqual(r["failed_index"], 4)
         # alpha's patch undone; beta (batch-created) removed entirely.
-        with open(os.path.join(self.home, "skills", "alpha", "SKILL.md"), encoding="utf-8") as fh:
+        with open(
+            os.path.join(self.home, "skills", "alpha", "SKILL.md"), encoding="utf-8"
+        ) as fh:
             content = fh.read()
         self.assertIn("Step 1.", content)
         self.assertNotIn("Step A.", content)
@@ -222,11 +379,22 @@ class TestSkillManageBatch(unittest.TestCase):
         # so a retry create is not refused as "occupied".
         delta = os.path.join(self.home, "skills", "delta")
         os.mkdir(delta)
-        r = self._call("delta", [
-            {"action": "create", "content": SK.format(n="delta")},
-            {"action": "write_file", "file_path": "references/a.md", "file_content": "a"},
-            {"action": "write_file", "file_path": "bad/nope.md", "file_content": "x"},
-        ])
+        r = self._call(
+            "delta",
+            [
+                {"action": "create", "content": SK.format(n="delta")},
+                {
+                    "action": "write_file",
+                    "file_path": "references/a.md",
+                    "file_content": "a",
+                },
+                {
+                    "action": "write_file",
+                    "file_path": "bad/nope.md",
+                    "file_content": "x",
+                },
+            ],
+        )
         self.assertFalse(r["success"])
         self.assertFalse(os.path.exists(delta))
         r = self._call("delta", [{"action": "create", "content": SK.format(n="delta")}])
@@ -253,12 +421,21 @@ class TestSkillManageBatch(unittest.TestCase):
             return real_copytree(src, dst, *a, **k)
 
         with _patch("shutil.copytree", side_effect=flaky_copytree):
-            r = self._call("probe", [
-                {"action": "patch",
-                 "old_string": "Step 1.", "new_string": "Step ONE."},
-                {"action": "write_file",
-                 "file_path": "bad/nope.md", "file_content": "x"},
-            ])
+            r = self._call(
+                "probe",
+                [
+                    {
+                        "action": "patch",
+                        "old_string": "Step 1.",
+                        "new_string": "Step ONE.",
+                    },
+                    {
+                        "action": "write_file",
+                        "file_path": "bad/nope.md",
+                        "file_content": "x",
+                    },
+                ],
+            )
         self.assertFalse(r["success"], r)
         self.assertIn("ROLLBACK FAILED", r["error"])
         # The skill directory was NOT destroyed by the failed rollback:
@@ -271,8 +448,10 @@ class TestSkillManageBatch(unittest.TestCase):
     def test_single_op_path_unchanged(self):
         self._call("probe", [{"action": "create", "content": SK.format(n="probe")}])
         raw = self.smt.skill_manage(
-            action="patch", name="probe",
-            old_string="Step 1.", new_string="Step 1 (single).",
+            action="patch",
+            name="probe",
+            old_string="Step 1.",
+            new_string="Step 1 (single).",
         )
         self.assertTrue(json.loads(raw)["success"])
 
@@ -294,13 +473,21 @@ class TestSkillManageBatch(unittest.TestCase):
 
         import tools.write_approval as wa
 
-        with _patch.object(wa, "evaluate_gate", return_value=_Decision()), \
-             _patch.object(wa, "stage_write", side_effect=fake_stage_write):
-            r = self._call("probe", [
-                {"action": "create", "content": SK.format(n="probe")},
-                {"action": "write_file", "file_path": "references/a.md",
-                 "file_content": "a"},
-            ])
+        with (
+            _patch.object(wa, "evaluate_gate", return_value=_Decision()),
+            _patch.object(wa, "stage_write", side_effect=fake_stage_write),
+        ):
+            r = self._call(
+                "probe",
+                [
+                    {"action": "create", "content": SK.format(n="probe")},
+                    {
+                        "action": "write_file",
+                        "file_path": "references/a.md",
+                        "file_content": "a",
+                    },
+                ],
+            )
         self.assertTrue(r.get("staged"), r)
         self.assertEqual(staged["payload"]["action"], "batch")
         self.assertEqual(len(staged["payload"]["operations"]), 2)

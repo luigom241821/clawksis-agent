@@ -20,12 +20,19 @@ def stale_fleet_survivor_pids(fleet: list, already_signalled: set) -> list[int]:
     pids: list[int] = []
     for row in fleet or []:
         pid = row.get("pid") if isinstance(row, dict) else None
-        if row.get("state") == "stale" and isinstance(pid, int) and pid > 0 and pid not in already_signalled:
+        if (
+            row.get("state") == "stale"
+            and isinstance(pid, int)
+            and pid > 0
+            and pid not in already_signalled
+        ):
             pids.append(pid)
     return pids
 
 
-def signal_stale_fleet_survivors(fleet: list, restart, drain_budget: float) -> list[int]:
+def signal_stale_fleet_survivors(
+    fleet: list, restart, drain_budget: float
+) -> list[int]:
     """Drain-first restart every proven-stale gateway; returns the PIDs signalled.
 
     Bookkeeping lands in ``restart.killed_pids`` so the receipt and the survivor sweep see them.
@@ -38,12 +45,19 @@ def signal_stale_fleet_survivors(fleet: list, restart, drain_budget: float) -> l
         return []
     try:
         from clawk_cli.gateway import _get_service_pids
+
         service_pids = set(_get_service_pids(all_profiles=True))
     except Exception:
         service_pids = set()
-    labels = {row.get("pid"): str(row.get("profile") or "gateway") for row in fleet if isinstance(row, dict)}
+    labels = {
+        row.get("pid"): str(row.get("profile") or "gateway")
+        for row in fleet
+        if isinstance(row, dict)
+    }
     print()
-    print(f"  ⚠ {len(pids)} gateway process(es) still run the pre-update code — requesting a restart")
+    print(
+        f"  ⚠ {len(pids)} gateway process(es) still run the pre-update code — requesting a restart"
+    )
     signalled: list[int] = []
     manual: list[int] = []
     for pid in pids:
@@ -63,7 +77,9 @@ def signal_stale_fleet_survivors(fleet: list, restart, drain_budget: float) -> l
         stopped = getattr(restart, "stopped_unmapped_pids", None)
         if isinstance(stopped, set):
             stopped.update(manual)
-        print(f"  → Stopped {len(manual)} manual gateway process(es) that had no supervisor to respawn them")
+        print(
+            f"  → Stopped {len(manual)} manual gateway process(es) that had no supervisor to respawn them"
+        )
         print("    Restart manually: clawk gateway run")
         if len(manual) > 1:
             print("    (or: clawk -p <profile> gateway run  for each profile)")

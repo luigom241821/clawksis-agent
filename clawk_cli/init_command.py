@@ -27,7 +27,9 @@ from noise):
   "Pitfalls"). Flat and scannable — no deep nesting."""
 
 
-def build_init_prompt(cwd: str, existing_file: str | None = None, extra: str = "") -> str:
+def build_init_prompt(
+    cwd: str, existing_file: str | None = None, extra: str = ""
+) -> str:
     """Build the ``/init`` prompt; ``existing_file`` (current AGENTS.md) switches to merge discipline,
     ``extra`` is the user's free text after ``/init``."""
     extra = (extra or "").strip()
@@ -50,7 +52,11 @@ def build_init_prompt(cwd: str, existing_file: str | None = None, extra: str = "
         "don't guess them.\n"
         "2. Write the file to "
         f"{cwd.rstrip('/')}/AGENTS.md with `write_file`"
-        + (" — but this is an UPDATE, so follow the merge discipline below." if update else ".")
+        + (
+            " — but this is an UPDATE, so follow the merge discipline below."
+            if update
+            else "."
+        )
         + "\n"
         "3. Confirm to the user the exact path you wrote and summarize in one "
         "or two lines what the file covers.\n",
@@ -98,7 +104,11 @@ def _resolve_session_cwd(session_key: str | None) -> str:
         from gateway.session_context import get_session_env
         from tools.terminal_tool import get_session_cwd
 
-        key = session_key if session_key is not None else get_session_env("CLAWK_SESSION_KEY", "")
+        key = (
+            session_key
+            if session_key is not None
+            else get_session_env("CLAWK_SESSION_KEY", "")
+        )
         recorded = get_session_cwd(key)
         if recorded and os.path.isdir(recorded):
             return recorded
@@ -112,15 +122,18 @@ def _resolve_session_cwd(session_key: str | None) -> str:
         return os.getcwd()
 
 
-def build_init_prompt_for_cwd(cwd: str | None = None, extra: str = "",
-                              session_key: str | None = None) -> str:
+def build_init_prompt_for_cwd(
+    cwd: str | None = None, extra: str = "", session_key: str | None = None
+) -> str:
     """Convenience wrapper used by the dispatch surfaces.
 
     An explicit ``cwd`` wins while it still exists; a stale one (deleted project, removed
     worktree) falls through to :func:`_resolve_session_cwd` — the guard lives here so every
     dispatch surface shares it rather than each one validating its own record.
     """
-    resolved = os.path.abspath(cwd if cwd and os.path.isdir(cwd) else _resolve_session_cwd(session_key))
+    resolved = os.path.abspath(
+        cwd if cwd and os.path.isdir(cwd) else _resolve_session_cwd(session_key)
+    )
     existing: str | None = None
     agents_path = os.path.join(resolved, "AGENTS.md")
     try:

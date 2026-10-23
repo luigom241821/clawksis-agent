@@ -32,20 +32,49 @@ def session_context_engaged() -> bool:
 # * MESSAGE_ID: reply anchor keeping notifications inside the originating Telegram topic.
 # * CRON_SESSION: tri-state — _UNSET = legacy env fallback; "1" = cron; "" = non-cron, masks env.
 _SESSION_VARS = (
-    _SESSION_PLATFORM, _SESSION_SOURCE, _SESSION_CHAT_ID, _SESSION_CHAT_TYPE,
-    _SESSION_CHAT_NAME, _SESSION_THREAD_ID, _SESSION_USER_ID, _SESSION_USER_ID_ALT,
-    _SESSION_USER_NAME, _SESSION_SCOPE_ID, _SESSION_KEY, _SESSION_ID,
-    _SESSION_UI_SESSION_ID, _SESSION_MESSAGE_ID, _SESSION_PROFILE,
-    _BROWSER_CONTROL_PRINCIPAL, _BROWSER_CONTROL_TRANSPORT_FAMILY, _CRON_SESSION, _SESSION_PARENT_CHAT_ID,
-) = tuple(ContextVar(name, default=_UNSET) for name in (
-    "CLAWK_SESSION_PLATFORM", "CLAWK_SESSION_SOURCE", "CLAWK_SESSION_CHAT_ID",
-    "CLAWK_SESSION_CHAT_TYPE", "CLAWK_SESSION_CHAT_NAME", "CLAWK_SESSION_THREAD_ID",
-    "CLAWK_SESSION_USER_ID", "CLAWK_SESSION_USER_ID_ALT", "CLAWK_SESSION_USER_NAME",
-    "CLAWK_SESSION_SCOPE_ID", "CLAWK_SESSION_KEY", "CLAWK_SESSION_ID",
-    "CLAWK_UI_SESSION_ID", "CLAWK_SESSION_MESSAGE_ID", "CLAWK_SESSION_PROFILE",
-    "CLAWK_BROWSER_CONTROL_PRINCIPAL", "CLAWK_BROWSER_CONTROL_TRANSPORT_FAMILY",
-    "CLAWK_CRON_SESSION", "CLAWK_SESSION_PARENT_CHAT_ID",
-))
+    _SESSION_PLATFORM,
+    _SESSION_SOURCE,
+    _SESSION_CHAT_ID,
+    _SESSION_CHAT_TYPE,
+    _SESSION_CHAT_NAME,
+    _SESSION_THREAD_ID,
+    _SESSION_USER_ID,
+    _SESSION_USER_ID_ALT,
+    _SESSION_USER_NAME,
+    _SESSION_SCOPE_ID,
+    _SESSION_KEY,
+    _SESSION_ID,
+    _SESSION_UI_SESSION_ID,
+    _SESSION_MESSAGE_ID,
+    _SESSION_PROFILE,
+    _BROWSER_CONTROL_PRINCIPAL,
+    _BROWSER_CONTROL_TRANSPORT_FAMILY,
+    _CRON_SESSION,
+    _SESSION_PARENT_CHAT_ID,
+) = tuple(
+    ContextVar(name, default=_UNSET)
+    for name in (
+        "CLAWK_SESSION_PLATFORM",
+        "CLAWK_SESSION_SOURCE",
+        "CLAWK_SESSION_CHAT_ID",
+        "CLAWK_SESSION_CHAT_TYPE",
+        "CLAWK_SESSION_CHAT_NAME",
+        "CLAWK_SESSION_THREAD_ID",
+        "CLAWK_SESSION_USER_ID",
+        "CLAWK_SESSION_USER_ID_ALT",
+        "CLAWK_SESSION_USER_NAME",
+        "CLAWK_SESSION_SCOPE_ID",
+        "CLAWK_SESSION_KEY",
+        "CLAWK_SESSION_ID",
+        "CLAWK_UI_SESSION_ID",
+        "CLAWK_SESSION_MESSAGE_ID",
+        "CLAWK_SESSION_PROFILE",
+        "CLAWK_BROWSER_CONTROL_PRINCIPAL",
+        "CLAWK_BROWSER_CONTROL_TRANSPORT_FAMILY",
+        "CLAWK_CRON_SESSION",
+        "CLAWK_SESSION_PARENT_CHAT_ID",
+    )
+)
 
 # Whether this channel can route an ASYNC completion back AFTER the turn ends (see
 # ``async_delivery_supported()``).  _UNSET => supported (CLI, contextvar-unaware paths); stateless
@@ -57,22 +86,34 @@ _SESSION_ASYNC_DELIVERY = ContextVar("CLAWK_SESSION_ASYNC_DELIVERY", default=_UN
 _SESSION_HISTORY_DELIVERY = ContextVar("CLAWK_SESSION_HISTORY_DELIVERY", default=_UNSET)
 
 # Cron auto-delivery vars, set per-job in run_job() so concurrent jobs don't clobber.
-_CRON_AUTO_DELIVER_PLATFORM = ContextVar("CLAWK_CRON_AUTO_DELIVER_PLATFORM", default=_UNSET)
-_CRON_AUTO_DELIVER_CHAT_ID = ContextVar("CLAWK_CRON_AUTO_DELIVER_CHAT_ID", default=_UNSET)
-_CRON_AUTO_DELIVER_THREAD_ID = ContextVar("CLAWK_CRON_AUTO_DELIVER_THREAD_ID", default=_UNSET)
+_CRON_AUTO_DELIVER_PLATFORM = ContextVar(
+    "CLAWK_CRON_AUTO_DELIVER_PLATFORM", default=_UNSET
+)
+_CRON_AUTO_DELIVER_CHAT_ID = ContextVar(
+    "CLAWK_CRON_AUTO_DELIVER_CHAT_ID", default=_UNSET
+)
+_CRON_AUTO_DELIVER_THREAD_ID = ContextVar(
+    "CLAWK_CRON_AUTO_DELIVER_THREAD_ID", default=_UNSET
+)
 
 # Legacy env-var name -> ContextVar for get_session_env (_SESSION_ASYNC_DELIVERY deliberately
 # absent: it is a bool capability, read via async_delivery_supported).
-_VAR_MAP = {var.name: var for var in (
-    *_SESSION_VARS, _CRON_AUTO_DELIVER_PLATFORM, _CRON_AUTO_DELIVER_CHAT_ID,
-    _CRON_AUTO_DELIVER_THREAD_ID,
-)}
+_VAR_MAP = {
+    var.name: var
+    for var in (
+        *_SESSION_VARS,
+        _CRON_AUTO_DELIVER_PLATFORM,
+        _CRON_AUTO_DELIVER_CHAT_ID,
+        _CRON_AUTO_DELIVER_THREAD_ID,
+    )
+}
 
 
 def _runtime_cwd(func: str, *args: Any) -> None:
     """Best-effort call of ``agent.runtime_cwd.<func>``; import/runtime failures are ignored."""
     try:
         from agent import runtime_cwd
+
         getattr(runtime_cwd, func)(*args)
     except Exception:
         pass
@@ -85,6 +126,7 @@ def set_current_session_id(session_id: str) -> None:
     _SESSION_ID.set(session_id)
     try:
         from agent.delegation_context import is_delegated_child_context
+
         if is_delegated_child_context():
             return
     except Exception:
@@ -125,18 +167,36 @@ def bound_session_key() -> str:
 
 def source_route_metadata(source: Any, metadata: dict | None) -> dict | None:
     """Keep inbound route anchors for durable deliveries after the source is gone."""
-    anchors = {key: str(value) for key in ("scope_id", "parent_chat_id")
-               if (value := getattr(source, key, None))}
+    anchors = {
+        key: str(value)
+        for key in ("scope_id", "parent_chat_id")
+        if (value := getattr(source, key, None))
+    }
     return {**(metadata or {}), **anchors} if anchors else metadata
 
 
 def set_session_vars(
-    platform: str = "", source: str = "", chat_id: str = "", chat_type: str = "",
-    chat_name: str = "", thread_id: str = "", user_id: str = "", user_id_alt: str = "",
-    user_name: str = "", scope_id: str = "", session_key: str = "", session_id: str = "",
-    message_id: str = "", profile: str = "", browser_control_principal: str = "",
-    browser_control_transport_family: str = "", cwd: str = "", async_delivery: bool = True,
-    ui_session_id: str = "", cron_session: Any = _UNSET, parent_chat_id: str = "",
+    platform: str = "",
+    source: str = "",
+    chat_id: str = "",
+    chat_type: str = "",
+    chat_name: str = "",
+    thread_id: str = "",
+    user_id: str = "",
+    user_id_alt: str = "",
+    user_name: str = "",
+    scope_id: str = "",
+    session_key: str = "",
+    session_id: str = "",
+    message_id: str = "",
+    profile: str = "",
+    browser_control_principal: str = "",
+    browser_control_transport_family: str = "",
+    cwd: str = "",
+    async_delivery: bool = True,
+    ui_session_id: str = "",
+    cron_session: Any = _UNSET,
+    parent_chat_id: str = "",
     session_history_delivery: str | None = None,
 ) -> list:
     """Set all session context variables and return reset tokens.  Call
@@ -151,13 +211,33 @@ def set_session_vars(
     global _session_context_engaged
     _session_context_engaged = True
     values = (
-        platform, source, chat_id, chat_type, chat_name, thread_id, user_id, user_id_alt,
-        user_name, scope_id, session_key, session_id, ui_session_id, message_id, profile,
-        browser_control_principal, browser_control_transport_family, cron_session, parent_chat_id,
+        platform,
+        source,
+        chat_id,
+        chat_type,
+        chat_name,
+        thread_id,
+        user_id,
+        user_id_alt,
+        user_name,
+        scope_id,
+        session_key,
+        session_id,
+        ui_session_id,
+        message_id,
+        profile,
+        browser_control_principal,
+        browser_control_transport_family,
+        cron_session,
+        parent_chat_id,
     )
     tokens = [var.set(value) for var, value in zip(_SESSION_VARS, values)]
     tokens.append(_SESSION_ASYNC_DELIVERY.set(bool(async_delivery)))
-    tokens.append(_SESSION_HISTORY_DELIVERY.set(_UNSET if session_history_delivery is None else session_history_delivery))
+    tokens.append(
+        _SESSION_HISTORY_DELIVERY.set(
+            _UNSET if session_history_delivery is None else session_history_delivery
+        )
+    )
     _runtime_cwd("set_session_cwd", cwd)
     return tokens
 
@@ -200,19 +280,35 @@ def get_session_env(name: str, default: str = "") -> str:
 # Surfaces that are not a human chat channel (gateway binds CLAWK_SESSION_PLATFORM, CLI/TUI/
 # desktop bind CLAWK_SESSION_SOURCE, so both are consulted).  Default-deny: an unrecognized
 # identity counts as messaging.  Mirrors LOCAL_SESSION_SOURCE_IDS in apps/desktop session-source.ts.
-NON_MESSAGING_SESSION_SURFACES = frozenset({
-    "", "api_server", "cli", "codex", "desktop", "gateway", "kanban", "local",
-    "msgraph_webhook", "tool", "tui", "webhook",
-})
+NON_MESSAGING_SESSION_SURFACES = frozenset(
+    {
+        "",
+        "api_server",
+        "cli",
+        "codex",
+        "desktop",
+        "gateway",
+        "kanban",
+        "local",
+        "msgraph_webhook",
+        "tool",
+        "tui",
+        "webhook",
+    }
+)
 
 
 def session_is_messaging_surface() -> bool:
     """Whether this turn is delivered over a human messaging channel (checks
     ``CLAWK_PLATFORM``, then the session platform, then the session source)."""
-    platform = os.getenv("CLAWK_PLATFORM") or get_session_env("CLAWK_SESSION_PLATFORM", "")
+    platform = os.getenv("CLAWK_PLATFORM") or get_session_env(
+        "CLAWK_SESSION_PLATFORM", ""
+    )
     idents = (platform, get_session_env("CLAWK_SESSION_SOURCE", ""))
     idents = (str(v or "").strip().lower() for v in idents)
-    return any(ident and ident not in NON_MESSAGING_SESSION_SURFACES for ident in idents)
+    return any(
+        ident and ident not in NON_MESSAGING_SESSION_SURFACES for ident in idents
+    )
 
 
 def declare_stateless_channel() -> None:
@@ -232,6 +328,7 @@ def async_delivery_supported() -> bool:
     registered worker processes: a managed worker exits at its turn boundary, so detached work
     it scheduled would be lost (recovered ``unknown``) and its completion queue has no reader."""
     from agent.runtime_session_store import is_worker_process
+
     if os.environ.get("CLAWK_KANBAN_TASK") or is_worker_process():
         return False
     value = _SESSION_ASYNC_DELIVERY.get()

@@ -27,7 +27,9 @@ def _runner(store, adapter):
 
 
 def _source(user_id="stranger"):
-    return SessionSource(platform=Platform.TELEGRAM, chat_id="1", chat_type="dm", user_id=user_id)
+    return SessionSource(
+        platform=Platform.TELEGRAM, chat_id="1", chat_type="dm", user_id=user_id
+    )
 
 
 class _OtherProcessHoldsTheLock:
@@ -61,8 +63,12 @@ class _OtherProcessHoldsTheLock:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("handler", ["_hm_offer_pairing_code", "_hm_send_unauthorized_decline"])
-async def test_waiting_on_the_pairing_lock_does_not_stall_the_event_loop(monkeypatch, handler):
+@pytest.mark.parametrize(
+    "handler", ["_hm_offer_pairing_code", "_hm_send_unauthorized_decline"]
+)
+async def test_waiting_on_the_pairing_lock_does_not_stall_the_event_loop(
+    monkeypatch, handler
+):
     """While the pairing edit waits on another process's lock, the handler is parked at an await
     and this coroutine keeps running on the same loop. Inline, the handler's first step would
     hold the loop until the lock wait timed out, and be done by the time this coroutine resumes."""
@@ -72,7 +78,9 @@ async def test_waiting_on_the_pairing_lock_does_not_stall_the_event_loop(monkeyp
 
     with _OtherProcessHoldsTheLock() as holder:
         task = asyncio.create_task(getattr(runner, handler)(_source()))
-        assert await asyncio.to_thread(contended.wait, 15), "the pairing edit never reached the lock"
+        assert await asyncio.to_thread(contended.wait, 15), (
+            "the pairing edit never reached the lock"
+        )
         assert not task.done(), "the handler ran the lock wait on the event loop"
         holder.release()
         await asyncio.wait_for(task, 15)
@@ -81,10 +89,13 @@ async def test_waiting_on_the_pairing_lock_does_not_stall_the_event_loop(monkeyp
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("handler, method", [
-    ("_hm_offer_pairing_code", "generate_code"),
-    ("_hm_send_unauthorized_decline", "record_decline"),
-])
+@pytest.mark.parametrize(
+    "handler, method",
+    [
+        ("_hm_offer_pairing_code", "generate_code"),
+        ("_hm_send_unauthorized_decline", "record_decline"),
+    ],
+)
 async def test_a_pairing_lock_timeout_stays_silent(monkeypatch, handler, method):
     store = PairingStore()
 
@@ -99,7 +110,9 @@ async def test_a_pairing_lock_timeout_stays_silent(monkeypatch, handler, method)
     adapter.send.assert_not_awaited()
 
 
-def test_an_approval_check_does_not_wait_behind_an_edit_blocked_on_the_file_lock(monkeypatch):
+def test_an_approval_check_does_not_wait_behind_an_edit_blocked_on_the_file_lock(
+    monkeypatch,
+):
     """Message admission calls ``is_approved`` on the event loop. A pairing edit offloaded to a worker
     that is still waiting for another process's file lock must not hold the store's thread lock
     meanwhile, or that synchronous check stalls the loop for the whole wait."""
@@ -108,10 +121,16 @@ def test_an_approval_check_does_not_wait_behind_an_edit_blocked_on_the_file_lock
     checked = threading.Event()
 
     with _OtherProcessHoldsTheLock():
-        worker = threading.Thread(target=store.generate_code, args=("telegram", "stranger"))
+        worker = threading.Thread(
+            target=store.generate_code, args=("telegram", "stranger")
+        )
         worker.start()
         assert contended.wait(15), "the pairing edit never reached the lock"
-        checker = threading.Thread(target=lambda: store.is_approved("telegram", "someone-else") or checked.set())
+        checker = threading.Thread(
+            target=lambda: (
+                store.is_approved("telegram", "someone-else") or checked.set()
+            )
+        )
         checker.start()
         # The holder never lets go before this answer: behind the edit's thread lock it never comes.
         answered = checked.wait(10)

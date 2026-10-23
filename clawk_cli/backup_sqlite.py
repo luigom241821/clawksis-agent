@@ -3,6 +3,7 @@
 Desktop invokes this file before stopping its backend, even when application
 imports cannot load. Full and quick backups use the same SQLite copy operation.
 """
+
 import json
 import logging
 import os
@@ -52,7 +53,9 @@ def _safe_copy_db(src: Path, dst: Path, *, timeout_seconds: float = 10.0) -> boo
                 os.close(secure_fd)
         # timeout=0.0 disables sqlite3's implicit busy wait so the progress callback owns the
         # full locked-source deadline instead of adding the default timeout before each callback.
-        conn = sqlite3.connect(f"{src.resolve().as_uri()}?mode=ro", uri=True, timeout=0.0)
+        conn = sqlite3.connect(
+            f"{src.resolve().as_uri()}?mode=ro", uri=True, timeout=0.0
+        )
         backup_conn = sqlite3.connect(str(dst))
         busy_deadline = time.monotonic() + max(0.0, timeout_seconds)
 
@@ -61,7 +64,9 @@ def _safe_copy_db(src: Path, dst: Path, *, timeout_seconds: float = 10.0) -> boo
             now = time.monotonic()
             if status in (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED):
                 if now >= busy_deadline:
-                    raise _SQLiteBackupTimeout(f"database remained locked for {timeout_seconds:g} seconds")
+                    raise _SQLiteBackupTimeout(
+                        f"database remained locked for {timeout_seconds:g} seconds"
+                    )
             else:
                 busy_deadline = now + max(0.0, timeout_seconds)
 
@@ -93,7 +98,9 @@ def preflight_state_db(home: Path) -> dict:
     staged = Path(name)
     try:
         if not _safe_copy_db(source, staged):
-            raise RuntimeError("SQLite safe copy failed; previous emergency snapshots were retained")
+            raise RuntimeError(
+                "SQLite safe copy failed; previous emergency snapshots were retained"
+            )
         connection = sqlite3.connect(str(staged))
         try:
             result = connection.execute("PRAGMA quick_check").fetchall()

@@ -17,16 +17,22 @@ from __future__ import annotations
 
 from typing import Callable
 
-_INPUT_TYPES = {4, 5, 6, 251, 255}  # KeyEvent, PointerEvent, ClientCutText, SetDesktopSize, QEMU Extended KeyEvent
+_INPUT_TYPES = {
+    4,
+    5,
+    6,
+    251,
+    255,
+}  # KeyEvent, PointerEvent, ClientCutText, SetDesktopSize, QEMU Extended KeyEvent
 
 # Fixed-length client messages: type -> total length including the type byte.
 _FIXED = {
-    0: 20,   # SetPixelFormat
-    3: 10,   # FramebufferUpdateRequest
-    4: 8,    # KeyEvent
-    5: 6,    # PointerEvent
-    150: 10, # EnableContinuousUpdates
-    255: 12, # QEMU client message; sub-type 0 = Extended KeyEvent (the only one noVNC sends)
+    0: 20,  # SetPixelFormat
+    3: 10,  # FramebufferUpdateRequest
+    4: 8,  # KeyEvent
+    5: 6,  # PointerEvent
+    150: 10,  # EnableContinuousUpdates
+    255: 12,  # QEMU client message; sub-type 0 = Extended KeyEvent (the only one noVNC sends)
 }
 _SET_ENCODINGS = 2
 _CLIENT_CUT_TEXT = 6
@@ -49,7 +55,9 @@ class RfbClientFilter:
     def __init__(self, allow_input: Callable[[], bool]) -> None:
         self._allow_input = allow_input
         self._buf = bytearray()
-        self._handshake_left = 12 + 1 + 1  # version + security type + ClientInit(shared flag)
+        self._handshake_left = (
+            12 + 1 + 1
+        )  # version + security type + ClientInit(shared flag)
 
     def feed(self, chunk: bytes) -> bytes:
         self._buf += chunk

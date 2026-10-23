@@ -15,8 +15,16 @@ from tools.connectors.gateway.errors import (
     ToolGatewayError,
     parse_gateway_error,
 )
-from tools.connectors.gateway.wire import ConnectorAccount, ConnectorAccountsResponse, RemovedConnectorAccount
-from tools.connectors.portal.errors import InvalidConnectorSlug, PortalConnectorUnavailable, PortalToolsUnavailable
+from tools.connectors.gateway.wire import (
+    ConnectorAccount,
+    ConnectorAccountsResponse,
+    RemovedConnectorAccount,
+)
+from tools.connectors.portal.errors import (
+    InvalidConnectorSlug,
+    PortalConnectorUnavailable,
+    PortalToolsUnavailable,
+)
 from tools.connectors.portal.wire import (
     ConnectorCatalogResponse,
     ConnectorPolicyResponse,
@@ -24,7 +32,11 @@ from tools.connectors.portal.wire import (
     ConnectorToolsListing,
 )
 from tools.managed_gateway_auth import read_nous_access_token
-from tools.managed_gateway_identity import connector_headers, log_connector_outcome, response_request_id
+from tools.managed_gateway_identity import (
+    connector_headers,
+    log_connector_outcome,
+    response_request_id,
+)
 
 
 DEFAULT_TIMEOUT_SECONDS = 30.0
@@ -63,11 +75,14 @@ def _default_endpoint_resolver() -> str:
 
 def _default_header_provider(_url: str) -> dict[str, str]:
     token = read_nous_access_token()
-    return {"Authorization": f"Bearer {token}"} if isinstance(token, str) and token.strip() else {}
+    return (
+        {"Authorization": f"Bearer {token}"}
+        if isinstance(token, str) and token.strip()
+        else {}
+    )
 
 
 class PortalConnectorClient:
-
     def __init__(
         self,
         *,
@@ -92,19 +107,38 @@ class PortalConnectorClient:
         scheme, _, token = authorization.partition(" ")
         return token.strip() if scheme.lower() == "bearer" and token.strip() else None
 
-    def _authorized_headers(self, url: str, extra: dict[str, str] | None = None) -> dict[str, str]:
-        headers = {"Accept": "application/json", **(extra or {}), **connector_headers(), **self._header_provider(url)}
-        if not isinstance(headers.get("Authorization"), str) or not headers["Authorization"].strip():
-            raise GatewayAuthError("portal authorization required", code="NO_TOKEN", status=401)
+    def _authorized_headers(
+        self, url: str, extra: dict[str, str] | None = None
+    ) -> dict[str, str]:
+        headers = {
+            "Accept": "application/json",
+            **(extra or {}),
+            **connector_headers(),
+            **self._header_provider(url),
+        }
+        if (
+            not isinstance(headers.get("Authorization"), str)
+            or not headers["Authorization"].strip()
+        ):
+            raise GatewayAuthError(
+                "portal authorization required", code="NO_TOKEN", status=401
+            )
         return headers
 
-    def tools(self, slug: str, *, if_none_match: str | None = None) -> ConnectorToolsListing | NotModified:
+    def tools(
+        self, slug: str, *, if_none_match: str | None = None
+    ) -> ConnectorToolsListing | NotModified:
         validate_slug(slug)
         headers = {"If-None-Match": if_none_match} if if_none_match else None
         try:
-            response, status, route = self._request("GET", f"/api/v1/connectors/{slug}/tools", headers=headers)
+            response, status, route = self._request(
+                "GET", f"/api/v1/connectors/{slug}/tools", headers=headers
+            )
         except ToolGatewayError as exc:
-            missing_route = isinstance(exc, GatewayUnavailable) and exc.code != "connector_not_found"
+            missing_route = (
+                isinstance(exc, GatewayUnavailable)
+                and exc.code != "connector_not_found"
+            )
             if type(exc) is not ToolGatewayError and not missing_route:
                 raise
             raise PortalToolsUnavailable(
@@ -116,44 +150,108 @@ class PortalConnectorClient:
             ) from exc
         if status == 304:
             return NotModified()
-        listing = self._parse(ConnectorToolsListing, response, status, route, PortalToolsUnavailable, "portal tools unavailable")
+        listing = self._parse(
+            ConnectorToolsListing,
+            response,
+            status,
+            route,
+            PortalToolsUnavailable,
+            "portal tools unavailable",
+        )
         etag = getattr(response, "headers", {}).get("etag")
-        return listing.model_copy(update={"etag": etag}) if isinstance(etag, str) and etag else listing
+        return (
+            listing.model_copy(update={"etag": etag})
+            if isinstance(etag, str) and etag
+            else listing
+        )
 
     def catalog(self) -> ConnectorCatalogResponse:
         response, status, route = self._request("GET", "/api/v1/connectors/catalog")
-        return self._parse(ConnectorCatalogResponse, response, status, route, PortalConnectorUnavailable, "portal catalog unavailable")
+        return self._parse(
+            ConnectorCatalogResponse,
+            response,
+            status,
+            route,
+            PortalConnectorUnavailable,
+            "portal catalog unavailable",
+        )
 
     def public_catalog(self) -> ConnectorCatalogResponse:
         """The catalog a new guest would get, for a caller with no token yet. Sent without a bearer so
         every caller gets the one cached answer."""
-        response, status, route = self._request("GET", "/api/v1/connectors/catalog/public", public=True)
-        return self._parse(ConnectorCatalogResponse, response, status, route, PortalConnectorUnavailable, "portal catalog unavailable")
+        response, status, route = self._request(
+            "GET", "/api/v1/connectors/catalog/public", public=True
+        )
+        return self._parse(
+            ConnectorCatalogResponse,
+            response,
+            status,
+            route,
+            PortalConnectorUnavailable,
+            "portal catalog unavailable",
+        )
 
     def list_accounts(self) -> list[dict[str, Any]]:
         response, status, route = self._request("GET", "/api/v1/connectors/accounts")
-        inventory = self._parse(ConnectorAccountsResponse, response, status, route, PortalConnectorUnavailable, "portal accounts unavailable")
+        inventory = self._parse(
+            ConnectorAccountsResponse,
+            response,
+            status,
+            route,
+            PortalConnectorUnavailable,
+            "portal accounts unavailable",
+        )
         return [account.model_dump(by_alias=True) for account in inventory.accounts]
 
     def rename_account(self, connection_id: str, alias: str) -> dict[str, Any]:
         path = f"/api/v1/connectors/accounts/{quote(connection_id, safe='')}"
         response, status, route = self._request("PATCH", path, {"alias": alias})
-        account = self._parse(ConnectorAccount, response, status, route, PortalConnectorUnavailable, "portal accounts unavailable")
+        account = self._parse(
+            ConnectorAccount,
+            response,
+            status,
+            route,
+            PortalConnectorUnavailable,
+            "portal accounts unavailable",
+        )
         return account.model_dump(by_alias=True)
 
     def delete_account(self, connection_id: str) -> dict[str, Any]:
         path = f"/api/v1/connectors/accounts/{quote(connection_id, safe='')}"
         response, status, route = self._request("DELETE", path)
-        removed = self._parse(RemovedConnectorAccount, response, status, route, PortalConnectorUnavailable, "portal accounts unavailable")
+        removed = self._parse(
+            RemovedConnectorAccount,
+            response,
+            status,
+            route,
+            PortalConnectorUnavailable,
+            "portal accounts unavailable",
+        )
         return removed.model_dump(by_alias=True)
 
     def policy(self) -> ConnectorPolicyResponse:
         response, status, route = self._request("GET", "/api/v1/connectors/policy")
-        return self._parse(ConnectorPolicyResponse, response, status, route, PortalConnectorUnavailable, "portal policy unavailable")
+        return self._parse(
+            ConnectorPolicyResponse,
+            response,
+            status,
+            route,
+            PortalConnectorUnavailable,
+            "portal policy unavailable",
+        )
 
     def set_policy(self, body: dict[str, Any]) -> ConnectorPolicyWriteResponse:
-        response, status, route = self._request("PUT", "/api/v1/connectors/policy", body)
-        return self._parse(ConnectorPolicyWriteResponse, response, status, route, PortalConnectorUnavailable, "portal policy unavailable")
+        response, status, route = self._request(
+            "PUT", "/api/v1/connectors/policy", body
+        )
+        return self._parse(
+            ConnectorPolicyWriteResponse,
+            response,
+            status,
+            route,
+            PortalConnectorUnavailable,
+            "portal policy unavailable",
+        )
 
     def _request(
         self,
@@ -168,20 +266,34 @@ class PortalConnectorClient:
         logged by ``_parse`` once its body is checked. ``public`` routes get no Authorization."""
         url = f"{self.origin()}{path}"
         if public:
-            headers = {"Accept": "application/json", **(headers or {}), **connector_headers()}
+            headers = {
+                "Accept": "application/json",
+                **(headers or {}),
+                **connector_headers(),
+            }
         else:
             headers = self._authorized_headers(url, headers)
         try:
-            response = self._transport.request(method, url, headers=headers, json=body, timeout=DEFAULT_TIMEOUT_SECONDS)
+            response = self._transport.request(
+                method, url, headers=headers, json=body, timeout=DEFAULT_TIMEOUT_SECONDS
+            )
         except Exception as exc:
             log_connector_outcome(_route_key(path), None, code="TRANSPORT_ERROR")
-            raise PortalConnectorUnavailable("portal connector metadata unavailable", code="TRANSPORT_ERROR", retryable=True) from exc
+            raise PortalConnectorUnavailable(
+                "portal connector metadata unavailable",
+                code="TRANSPORT_ERROR",
+                retryable=True,
+            ) from exc
         status = int(getattr(response, "status_code", 0))
         request_id = response_request_id(response)
         if not 200 <= status < 300 and status != 304:
-            error = parse_gateway_error(status, _safe_json(response), getattr(response, "headers", None))
+            error = parse_gateway_error(
+                status, _safe_json(response), getattr(response, "headers", None)
+            )
             error.request_id = error.request_id or request_id
-            log_connector_outcome(_route_key(path), status, code=error.code, request_id=error.request_id)
+            log_connector_outcome(
+                _route_key(path), status, code=error.code, request_id=error.request_id
+            )
             raise error
         if status == 304:
             log_connector_outcome(_route_key(path), status, request_id=request_id)
@@ -196,8 +308,12 @@ class PortalConnectorClient:
                 raise ValueError("response must be an object")
             parsed = model.model_validate(payload)
         except (AttributeError, TypeError, ValueError, ValidationError) as exc:
-            log_connector_outcome(route, status, code="INVALID_RESPONSE", request_id=request_id)
-            raise error_type(message, code="INVALID_RESPONSE", status=status, request_id=request_id) from exc
+            log_connector_outcome(
+                route, status, code="INVALID_RESPONSE", request_id=request_id
+            )
+            raise error_type(
+                message, code="INVALID_RESPONSE", status=status, request_id=request_id
+            ) from exc
         log_connector_outcome(route, status, request_id=request_id)
         return parsed
 
@@ -209,7 +325,9 @@ def _route_key(path: str) -> str:
     return ".".join(["portal", *named]) or "portal"
 
 
-_PORTAL_ROUTE_WORDS = frozenset({"connectors", "tools", "catalog", "public", "accounts", "policy"})
+_PORTAL_ROUTE_WORDS = frozenset(
+    {"connectors", "tools", "catalog", "public", "accounts", "policy"}
+)
 
 
 def _safe_json(response: Any) -> Any:

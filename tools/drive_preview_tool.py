@@ -13,7 +13,18 @@ from typing import Callable, Optional
 from tools.desktop_ui import passthrough_json
 from tools.registry import registry, tool_error
 
-ACTIONS = ("elements", "click", "hover", "type", "scroll", "press", "strobe", "back", "forward", "reload")
+ACTIONS = (
+    "elements",
+    "click",
+    "hover",
+    "type",
+    "scroll",
+    "press",
+    "strobe",
+    "back",
+    "forward",
+    "reload",
+)
 SCROLL_TO = ("top", "bottom")
 
 # Verbs that need something to act on — a ref from the last inventory, or a
@@ -22,19 +33,31 @@ NEEDS_TARGET = ("click", "hover", "type", "press")
 
 
 def drive_preview_tool(
-    action: str = "", ref: Optional[str] = None, selector: Optional[str] = None, text: Optional[str] = None,
-    key: Optional[str] = None, submit: Optional[bool] = None, amount: Optional[int] = None,
-    to: Optional[str] = None, limit: Optional[int] = None, full: Optional[bool] = None,
+    action: str = "",
+    ref: Optional[str] = None,
+    selector: Optional[str] = None,
+    text: Optional[str] = None,
+    key: Optional[str] = None,
+    submit: Optional[bool] = None,
+    amount: Optional[int] = None,
+    to: Optional[str] = None,
+    limit: Optional[int] = None,
+    full: Optional[bool] = None,
     allow_shortcut: Optional[bool] = None,
-    callback: Optional[Callable] = None) -> str:
+    callback: Optional[Callable] = None,
+) -> str:
     """Dispatch one interaction to the desktop renderer and return its outcome."""
     if callback is None:
-        return tool_error("drive_preview is only available in the Clawksis desktop app.")
+        return tool_error(
+            "drive_preview is only available in the Clawksis desktop app."
+        )
     verb = (action or "").strip().lower()
     if verb not in ACTIONS:
         return tool_error(f"action must be one of: {', '.join(ACTIONS)}.")
     if verb in NEEDS_TARGET and not (ref or selector):
-        return tool_error(f"{verb} needs a ref from action='elements' (e.g. 'btn-sign-in') or a CSS selector.")
+        return tool_error(
+            f"{verb} needs a ref from action='elements' (e.g. 'btn-sign-in') or a CSS selector."
+        )
     if verb == "type" and text is None:
         return tool_error("type needs the text to enter.")
     if verb == "press" and not key:
@@ -43,9 +66,17 @@ def drive_preview_tool(
         return tool_error(f"to must be one of: {', '.join(SCROLL_TO)}.")
     try:
         fields = (
-            ("action", verb), ("ref", ref), ("selector", selector), ("text", text), ("key", key),
-            ("submit", submit), ("full", full), ("to", to), ("allow_shortcut", allow_shortcut),
-            ("amount", None if amount is None else int(amount)), ("max", None if limit is None else int(limit)),
+            ("action", verb),
+            ("ref", ref),
+            ("selector", selector),
+            ("text", text),
+            ("key", key),
+            ("submit", submit),
+            ("full", full),
+            ("to", to),
+            ("allow_shortcut", allow_shortcut),
+            ("amount", None if amount is None else int(amount)),
+            ("max", None if limit is None else int(limit)),
         )
     except (TypeError, ValueError):
         return tool_error("amount and max must be integers.")
@@ -57,7 +88,8 @@ def drive_preview_tool(
         return tool_error(
             "No GUI window answered with a page: no preview tab is open. "
             "Open a page with open_preview first. If the pane IS open, the desktop app "
-            "may be older than this backend — its bridge-unavailable error names that case.")
+            "may be older than this backend — its bridge-unavailable error names that case."
+        )
     return passthrough_json(raw)
 
 
@@ -145,8 +177,23 @@ registry.register(
     toolset="desktop_ui",
     schema=ACT_PREVIEW_SCHEMA,
     handler=lambda args, **kw: drive_preview_tool(
-        action=args.get("action", ""), limit=args.get("max"), callback=kw.get("callback"),
-        **{k: args.get(k) for k in (
-            "ref", "selector", "text", "key", "submit", "amount", "to", "full", "allow_shortcut")},
+        action=args.get("action", ""),
+        limit=args.get("max"),
+        callback=kw.get("callback"),
+        **{
+            k: args.get(k)
+            for k in (
+                "ref",
+                "selector",
+                "text",
+                "key",
+                "submit",
+                "amount",
+                "to",
+                "full",
+                "allow_shortcut",
+            )
+        },
     ),
-    emoji="🖱️")
+    emoji="🖱️",
+)

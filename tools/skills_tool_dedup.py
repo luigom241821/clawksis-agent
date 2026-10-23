@@ -19,16 +19,22 @@ _SKILL_VIEW_DEDUP_MESSAGE = (
     "Skill content unchanged since it was loaded earlier in this "
     "conversation — refer to the earlier skill_view result; it is still "
     "current and complete. (Re-issued after context compression, this "
-    "returns the full content again.)")
+    "returns the full content again.)"
+)
 
 
-def dedup_skill_view(task_id, name, file_path, payload: dict, result: str) -> str | None:
+def dedup_skill_view(
+    task_id, name, file_path, payload: dict, result: str
+) -> str | None:
     """The "unchanged" stub when this task was already served exactly ``result`` for this skill
     file; otherwise record ``result``'s digest and return None (serve the full result)."""
     # Never dedup setup-needed views: readiness depends on config/env state that
     # changes without the file changing; the model must see the refreshed status.
-    if (not task_id or payload.get("setup_needed")
-            or payload.get("readiness_status") == "setup_needed"):
+    if (
+        not task_id
+        or payload.get("setup_needed")
+        or payload.get("readiness_status") == "setup_needed"
+    ):
         return None
     resolved = str(payload.get("name") or name)
     key = (resolved, file_path or "")
@@ -36,11 +42,21 @@ def dedup_skill_view(task_id, name, file_path, payload: dict, result: str) -> st
     with _skill_view_tracker_lock:
         cache = _skill_view_tracker.setdefault(str(task_id), {})
         if cache.get(key) == digest:
-            return json.dumps({
-                "success": True, "status": "unchanged", "name": resolved,
-                "file": file_path or "SKILL.md", "dedup": True, "content_returned": False,
-                "message": _SKILL_VIEW_DEDUP_MESSAGE}, ensure_ascii=False)
-        cache.pop(key, None)  # re-insert at the end: FIFO eviction keeps the recently served
+            return json.dumps(
+                {
+                    "success": True,
+                    "status": "unchanged",
+                    "name": resolved,
+                    "file": file_path or "SKILL.md",
+                    "dedup": True,
+                    "content_returned": False,
+                    "message": _SKILL_VIEW_DEDUP_MESSAGE,
+                },
+                ensure_ascii=False,
+            )
+        cache.pop(
+            key, None
+        )  # re-insert at the end: FIFO eviction keeps the recently served
         cache[key] = digest
         while len(cache) > _SKILL_VIEW_DEDUP_CAP:  # FIFO eviction
             del cache[next(iter(cache))]

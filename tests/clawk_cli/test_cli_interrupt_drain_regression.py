@@ -45,7 +45,6 @@ def _make_cli():
 class TestInterruptQueueDrain:
     """``_drain_interrupt_queue_to_pending_input`` re-queues stray messages."""
 
-
     def test_preserves_order_when_draining_multiple_messages(self):
         cli = _make_cli()
         for msg in ("first", "second", "third"):
@@ -58,7 +57,6 @@ class TestInterruptQueueDrain:
         while not cli._pending_input.empty():
             drained.append(cli._pending_input.get_nowait())
         assert drained == ["first", "second", "third"]
-
 
     def test_skips_falsy_messages(self):
         cli = _make_cli()

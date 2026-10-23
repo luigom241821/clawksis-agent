@@ -48,9 +48,20 @@ _RELAYED = frozenset({"message.start", "message.complete"})
 #: pending publication AFTER the commit (``SessionAuthority._admitted``), so they are never listed.
 #: ``not_found`` can follow the commit too, when the session is deleted meanwhile (``_handle``), but a
 #: session row is deleted only with its admissions (``ON DELETE RESTRICT``), so that one never runs.
-_REFUSED_BEFORE_COMMIT = frozenset({
-    "invalid_params", "runtime_draining", "runtime_retired", "profile_mismatch", "permission_denied",
-    "not_found", "session_superseded", "stale_epoch", "admission_conflict", "queue_full"})
+_REFUSED_BEFORE_COMMIT = frozenset(
+    {
+        "invalid_params",
+        "runtime_draining",
+        "runtime_retired",
+        "profile_mismatch",
+        "permission_denied",
+        "not_found",
+        "session_superseded",
+        "stale_epoch",
+        "admission_conflict",
+        "queue_full",
+    }
+)
 
 
 class OwnerUnavailable(RuntimeError):
@@ -69,6 +80,7 @@ class OwnerUnconfirmed(OwnerUnavailable):
 def discover_owner(home: Path):
     """The ready gateway endpoint serving ``home``. Discovery only: never starts one."""
     from clawk_cli.gateway_runtime import discover_gateway_endpoint
+
     discovery = discover_gateway_endpoint(home, timeout=5)
     if discovery.state != "ready" or discovery.endpoint is None:
         raise OwnerNotRunning(f"the gateway that owns it is {discovery.state}")
@@ -78,7 +90,12 @@ def discover_owner(home: Path):
 @contextlib.asynccontextmanager
 async def connect_owner(home: Path, endpoint):
     """A ``GatewayClient`` on ``endpoint``, the ready gateway serving ``home``."""
-    from clawk_cli.gateway_client import GATEWAY_WS_PROTOCOL, GatewayClient, _session_ticket, gateway_ws_target
+    from clawk_cli.gateway_client import (
+        GATEWAY_WS_PROTOCOL,
+        GatewayClient,
+        _session_ticket,
+        gateway_ws_target,
+    )
     from websockets.asyncio.client import connect
 
     ticket = await asyncio.to_thread(_session_ticket, home, endpoint)
@@ -95,31 +112,58 @@ def forwardable(refusal: Any, session: dict, text: Any, params: dict) -> bool:
     """Whether a ledger refusal of this ``prompt.submit`` can go to the owner instead."""
     if getattr(refusal, "ledger_status", None) not in FORWARDABLE_LEDGER_STATES:
         return False
-    return (isinstance(text, str) and bool(text.strip()) and not session.get("attached_images")
-            and not any(params.get(key) is not None for key in (
-                "truncate_before_user_ordinal", "truncate_before_row_id", "truncate_before_message_id")))
+    return (
+        isinstance(text, str)
+        and bool(text.strip())
+        and not session.get("attached_images")
+        and not any(
+            params.get(key) is not None
+            for key in (
+                "truncate_before_user_ordinal",
+                "truncate_before_row_id",
+                "truncate_before_message_id",
+            )
+        )
+    )
 
 
 def _payload_for(event_type: str, payload: Any) -> dict | None:
     """The owner payload projected onto this wire's contract for ``event_type`` (None: drop it)."""
     from tui_gateway.contracts.registry import EVENTS
+
     contract = EVENTS.get(event_type)
     if contract is None or contract.payload is None or not isinstance(payload, dict):
         return None
-    shaped = {key: value for key, value in payload.items() if key in contract.payload.model_fields}
+    shaped = {
+        key: value
+        for key, value in payload.items()
+        if key in contract.payload.model_fields
+    }
     from pydantic import ValidationError
+
     try:
         contract.payload.model_validate(shaped)
     except ValidationError:
         if event_type != "message.complete":
             return None
-        shaped = {"text": payload.get("text") if isinstance(payload.get("text"), str) else ""}
+        shaped = {
+            "text": payload.get("text") if isinstance(payload.get("text"), str) else ""
+        }
     return shaped
 
 
 class _Relay:
-    def __init__(self, sid: str, session: dict, key: str, home: Path, endpoint, text: str, emit):
-        self.sid, self.session, self.key, self.home, self.text, self.emit = sid, session, key, home, text, emit
+    def __init__(
+        self, sid: str, session: dict, key: str, home: Path, endpoint, text: str, emit
+    ):
+        self.sid, self.session, self.key, self.home, self.text, self.emit = (
+            sid,
+            session,
+            key,
+            home,
+            text,
+            emit,
+        )
         self.endpoint, self.listed = endpoint, None
         self.admitted: Future = Future()
         self.request_id = "desktop-forward-" + uuid.uuid4().hex
@@ -131,7 +175,9 @@ class _Relay:
             if not self.admitted.done():
                 self.admitted.set_exception(exc)
             else:
-                logger.warning("owner relay for %s ended: %s", self.key, exc, exc_info=True)
+                logger.warning(
+                    "owner relay for %s ended: %s", self.key, exc, exc_info=True
+                )
 
     async def _run(self) -> None:
         async with connect_owner(self.home, self.endpoint) as client:
@@ -144,11 +190,18 @@ class _Relay:
                 self.admitted.set_result(receipt)
                 return
             admission_id = receipt.get("admission_id")
-            if not isinstance(admission_id, str) or receipt.get("status") not in ("queued", "started", "terminal"):
+            if not isinstance(admission_id, str) or receipt.get("status") not in (
+                "queued",
+                "started",
+                "terminal",
+            ):
                 raise OwnerUnavailable("the gateway did not admit it")
             self.admitted.set_result(receipt)
-            logger.info("forwarded Desktop prompt for %s to the owner FIFO: admission=%s",
-                        self.key, admission_id)
+            logger.info(
+                "forwarded Desktop prompt for %s to the owner FIFO: admission=%s",
+                self.key,
+                admission_id,
+            )
             await self._relay(client, admission_id)
 
     async def _submit(self, client, target: str) -> dict:
@@ -158,12 +211,21 @@ class _Relay:
         commit (a gateway restart mid-forward, a storage error publishing the pending list), so it is
         unconfirmed, never "nothing was sent" (a resend would run a second copy)."""
         from clawk_cli.gateway_client import GatewayRPCError
+
         try:
-            return await client.rpc("prompt.submit", session_id=target, text=self.text,
-                                    submission_id=self.request_id)
+            return await client.rpc(
+                "prompt.submit",
+                session_id=target,
+                text=self.text,
+                submission_id=self.request_id,
+            )
         except Exception as exc:
             # The owner names its refusal in ``data.reason``; ``message`` may be a display string.
-            reason = exc.data.get("reason", str(exc)) if isinstance(exc, GatewayRPCError) else None
+            reason = (
+                exc.data.get("reason", str(exc))
+                if isinstance(exc, GatewayRPCError)
+                else None
+            )
             if isinstance(reason, str) and reason in _REFUSED_BEFORE_COMMIT:
                 raise
             raise OwnerUnconfirmed("the gateway did not confirm it") from exc
@@ -174,12 +236,25 @@ class _Relay:
         rows = (params.get("payload") or {}).get("pending")
         if not isinstance(rows, list):
             return
-        listed = [{"admission_id": admission_id, "status": "queued", "user": self.text, "input_id": self.request_id}
-                  for row in rows if isinstance(row, dict) and row.get("admission_id") == admission_id
-                  and row.get("status") == "queued"]
+        listed = [
+            {
+                "admission_id": admission_id,
+                "status": "queued",
+                "user": self.text,
+                "input_id": self.request_id,
+            }
+            for row in rows
+            if isinstance(row, dict)
+            and row.get("admission_id") == admission_id
+            and row.get("status") == "queued"
+        ]
         if listed != self.listed:
             self.listed = listed
-            self.emit("session.info", self.sid, {"stored_session_id": self.key, "pending_submissions": listed})
+            self.emit(
+                "session.info",
+                self.sid,
+                {"stored_session_id": self.key, "pending_submissions": listed},
+            )
 
     async def _relay(self, client, admission_id: str) -> None:
         settled = False
@@ -216,19 +291,25 @@ class _Relay:
                 self.emit("message.complete", self.sid, {"text": ""})
 
 
-def forward_prompt(sid: str, session: dict, text: str, *, emit=None, home: Path | None = None) -> dict:
+def forward_prompt(
+    sid: str, session: dict, text: str, *, emit=None, home: Path | None = None
+) -> dict:
     """Admit ``text`` into the owner's FIFO for this session; the owner's receipt.
 
     Raises ``OwnerNotRunning`` when no gateway serves the home, ``OwnerUnavailable`` (or the
     client's refusal) when the owner did not take it, and ``OwnerUnconfirmed`` when the prompt may
     be queued there: the receipt timed out, or the owner was lost or failed after the request was sent."""
     from tui_gateway import server
+
     key = str(session.get("session_key") or "")
     if not key:
         raise OwnerUnavailable("the chat has no stored session yet")
     home = Path(home or session.get("profile_home") or server._clawk_home).resolve()
-    relay = _Relay(sid, session, key, home, discover_owner(home), text, emit or server._emit)
+    relay = _Relay(
+        sid, session, key, home, discover_owner(home), text, emit or server._emit
+    )
     from agent.memory_provider import spawn_context_thread
+
     spawn_context_thread(relay.run, name=f"owner-forward-{key[:24]}").start()
     try:
         return relay.admitted.result(timeout=ADMIT_TIMEOUT_S)

@@ -19,8 +19,15 @@ def _run_probe(monkeypatch, status: int, base_url_in_env: bool):
 
     def _post(url, headers=None, params=None, json=None, timeout=None):
         calls.append(("POST", url, headers, params, json))
-        return httpx.Response(status, json={"type": "error", "error": {"type": "invalid_request_error", "message": "x"}}
-                              if status == 400 else {"id": "msg_1"})
+        return httpx.Response(
+            status,
+            json={
+                "type": "error",
+                "error": {"type": "invalid_request_error", "message": "x"},
+            }
+            if status == 400
+            else {"id": "msg_1"},
+        )
 
     def _get(url, headers=None, timeout=None):
         calls.append(("GET", url, headers, None, None))
@@ -33,9 +40,22 @@ def _run_probe(monkeypatch, status: int, base_url_in_env: bool):
         monkeypatch.setenv("AZURE_FOUNDRY_BASE_URL", _AZURE_BASE)
     else:
         monkeypatch.delenv("AZURE_FOUNDRY_BASE_URL", raising=False)
-    monkeypatch.setattr(dc, "_model_cfg", lambda: {"provider": "azure-foundry", "base_url": _AZURE_BASE, "default": "claude-sonnet-5"})
-    res = dc._probe_apikey_provider("Azure Foundry", ("AZURE_FOUNDRY_API_KEY", "AZURE_FOUNDRY_BASE_URL"), None,
-                                    "AZURE_FOUNDRY_BASE_URL", True)
+    monkeypatch.setattr(
+        dc,
+        "_model_cfg",
+        lambda: {
+            "provider": "azure-foundry",
+            "base_url": _AZURE_BASE,
+            "default": "claude-sonnet-5",
+        },
+    )
+    res = dc._probe_apikey_provider(
+        "Azure Foundry",
+        ("AZURE_FOUNDRY_API_KEY", "AZURE_FOUNDRY_BASE_URL"),
+        None,
+        "AZURE_FOUNDRY_BASE_URL",
+        True,
+    )
     return res, calls
 
 

@@ -20,8 +20,12 @@ def test_bundled_tui_pack_mirrors_tui_key_export(lang: str):
     pack = i18n_layers.parse_locale_file(LOCALES_DIR / f"{lang}.tui.yaml")
     missing = TUI_KEYS - set(pack)
     extra = set(pack) - TUI_KEYS
-    assert not missing, f"{lang}.tui.yaml missing {len(missing)} keys, e.g. {sorted(missing)[:5]}"
-    assert not extra, f"{lang}.tui.yaml has {len(extra)} keys absent from _keys.tui.json, e.g. {sorted(extra)[:5]}"
+    assert not missing, (
+        f"{lang}.tui.yaml missing {len(missing)} keys, e.g. {sorted(missing)[:5]}"
+    )
+    assert not extra, (
+        f"{lang}.tui.yaml has {len(extra)} keys absent from _keys.tui.json, e.g. {sorted(extra)[:5]}"
+    )
 
 
 @pytest.fixture
@@ -45,11 +49,15 @@ def test_tui_surface_serves_bundled_pack_under_overlay(home):
     assert served[key] == bundled[key]
     assert set(served) >= set(bundled)
 
-    (home / "locales" / "de.tui.yaml").write_text(yaml.safe_dump({key: "Overlay"}), encoding="utf-8")
+    (home / "locales" / "de.tui.yaml").write_text(
+        yaml.safe_dump({key: "Overlay"}), encoding="utf-8"
+    )
     i18n.reset_language_cache()
     served = i18n.surface_catalog("de", "tui")
     assert served[key] == "Overlay"
-    assert len(served) == len(bundled)  # overlay is partial; the rest still comes from the bundled pack
+    assert len(served) == len(
+        bundled
+    )  # overlay is partial; the rest still comes from the bundled pack
 
 
 def test_core_surface_never_ships_bundled_python_strings(home):

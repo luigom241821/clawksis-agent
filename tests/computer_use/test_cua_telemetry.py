@@ -19,18 +19,17 @@ _VAR = "CUA_DRIVER_RS_TELEMETRY_ENABLED"
 
 
 class TestTelemetryDisabledFlag:
-
     def test_explicit_false_disables(self):
-        with patch("clawk_cli.config.load_config",
-                   return_value={"computer_use": {"cua_telemetry": False}}):
+        with patch(
+            "clawk_cli.config.load_config",
+            return_value={"computer_use": {"cua_telemetry": False}},
+        ):
             assert cua_backend._cua_telemetry_disabled() is True
-
 
     def test_config_load_failure_fails_safe(self):
         # Unreadable config => default to disabling telemetry (privacy-safe).
         with patch("clawk_cli.config.load_config", side_effect=RuntimeError("boom")):
             assert cua_backend._cua_telemetry_disabled() is True
-
 
 
 class TestChildEnv:
@@ -41,12 +40,9 @@ class TestChildEnv:
             # base env is preserved
             assert env["PATH"] == "/usr/bin"
 
-
-
     def test_disabled_overrides_inherited_enabled(self):
         # Even if the parent process had telemetry enabled, the default policy
         # forces it off in the child.
         with patch.object(cua_backend, "_cua_telemetry_disabled", return_value=True):
             env = cua_backend.cua_driver_child_env({_VAR: "1"})
             assert env[_VAR] == "0"
-

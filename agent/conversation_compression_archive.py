@@ -30,10 +30,17 @@ OWN_ROW = "_own_row"
 
 def retired_row_payload(message: dict[str, Any]) -> dict[str, Any]:
     """The fields the commit matches a retired id-less row by."""
-    payload: dict[str, Any] = {"role": message.get("role"), "content": message.get("content")}
+    payload: dict[str, Any] = {
+        "role": message.get("role"),
+        "content": message.get("content"),
+    }
     if message.get("tool_call_id"):
         payload["tool_call_id"] = message["tool_call_id"]
-    calls = [call.get("id") for call in message.get("tool_calls") or () if isinstance(call, dict)]
+    calls = [
+        call.get("id")
+        for call in message.get("tool_calls") or ()
+        if isinstance(call, dict)
+    ]
     if calls:
         payload["tool_call_ids"] = calls
     return payload
@@ -46,7 +53,8 @@ def _positive_id(value: Any) -> Optional[int]:
 
 
 def held_archive_coverage(
-    messages: Sequence[Any], verbatim_tail: Optional[Sequence[Any]] = None,
+    messages: Sequence[Any],
+    verbatim_tail: Optional[Sequence[Any]] = None,
 ) -> tuple[list[int], list[dict[str, Any]]]:
     """``(covered ids, unresolved dicts)`` from the history the compressor was handed.
 
@@ -74,7 +82,8 @@ def held_archive_coverage(
 
 
 def newest_exact_held_id(
-    messages: Sequence[Any], verbatim_tail: Optional[Sequence[Any]] = None,
+    messages: Sequence[Any],
+    verbatim_tail: Optional[Sequence[Any]] = None,
 ) -> Optional[int]:
     """Newest held id that still names the row the compressor saw.
 
@@ -99,7 +108,9 @@ def newest_exact_held_id(
 
 
 def coverage_for_commit(
-    session_db: Any, session_id: str, messages: Sequence[Any],
+    session_db: Any,
+    session_id: str,
+    messages: Sequence[Any],
     verbatim_tail: Optional[Sequence[Any]] = None,
 ) -> tuple[Optional[list[int]], Optional[list[dict[str, Any]]]]:
     """Coverage to pass into ``archive_and_compact``, or ``(None, None)`` to keep the watermark.
@@ -122,13 +133,22 @@ def coverage_for_commit(
     covered, unresolved = held_archive_coverage(messages, verbatim_tail)
     retired: list[dict[str, Any]] = []
     for message in unresolved:
-        named = [row for row in message.get(RETIRED_DURABLE_ROWS) or () if isinstance(row, dict)]
-        if int(message.get(UNNAMED_DURABLE_ROWS) or 0) > sum(1 for row in named if not row.get(OWN_ROW)):
+        named = [
+            row
+            for row in message.get(RETIRED_DURABLE_ROWS) or ()
+            if isinstance(row, dict)
+        ]
+        if int(message.get(UNNAMED_DURABLE_ROWS) or 0) > sum(
+            1 for row in named if not row.get(OWN_ROW)
+        ):
             return None, None
-        retired.extend({**row, _DB_PERSISTED_MARKER: True, RETIRED_ROW: True} for row in named)
+        retired.extend(
+            {**row, _DB_PERSISTED_MARKER: True, RETIRED_ROW: True} for row in named
+        )
     unresolved = [*unresolved, *retired]
     marked = [
-        message for message in unresolved
+        message
+        for message in unresolved
         if isinstance(message, dict) and message.get(_DB_PERSISTED_MARKER)
     ]
     if not covered and not marked:

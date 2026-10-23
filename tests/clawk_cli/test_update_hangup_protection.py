@@ -13,8 +13,16 @@ import signal
 import sys
 
 
-from clawk_cli.main_dashboard import _UpdateOutputStream, _finalize_update_output, _install_hangup_protection
-from clawk_cli.update_cmd import _log_only_write, _print_update_completion, _run_logged_subprocess
+from clawk_cli.main_dashboard import (
+    _UpdateOutputStream,
+    _finalize_update_output,
+    _install_hangup_protection,
+)
+from clawk_cli.update_cmd import (
+    _log_only_write,
+    _print_update_completion,
+    _run_logged_subprocess,
+)
 
 
 def test_update_completion_includes_bounded_action_identity(monkeypatch, capsys):
@@ -47,7 +55,6 @@ def test_update_completion_rejects_untrusted_action_identity(monkeypatch, capsys
 
 
 class TestUpdateOutputStream:
-
     def test_write_continues_after_broken_original(self):
         """When the terminal disconnects, original.write raises BrokenPipeError.
 
@@ -74,22 +81,17 @@ class TestUpdateOutputStream:
         assert stream._original_broken is True
 
 
-
-
-
-
 # -----------------------------------------------------------------------------
 # _install_hangup_protection
 # -----------------------------------------------------------------------------
 
 
 class TestInstallHangupProtection:
-
-
     def test_wraps_stdout_and_stderr_with_mirror(self, tmp_path, monkeypatch):
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         # Nuke any cached home path
         import clawk_cli.config as _cfg
+
         if hasattr(_cfg, "_CLAWK_HOME_CACHE"):
             _cfg._CLAWK_HOME_CACHE = None  # type: ignore[attr-defined]
 
@@ -115,7 +117,6 @@ class TestInstallHangupProtection:
             # Sanity-check restoration
             assert sys.stdout is prev_out
             assert sys.stderr is prev_err
-
 
     def test_non_fatal_if_log_setup_fails(self, monkeypatch):
         """If the root-home lookup raises, stdio must be left untouched but SIGHUP still handled."""
@@ -154,8 +155,6 @@ class TestInstallHangupProtection:
 
 
 class TestFinalizeUpdateOutput:
-
-
     def test_skipped_install_leaves_stdio_alone(self):
         """When install failed (state['installed']=False) finalize should not
         touch sys.stdout / sys.stderr (they were never wrapped)."""
@@ -181,14 +180,12 @@ class TestFinalizeUpdateOutput:
 
 
 class TestLogOnlyWrite:
-
     def test_plain_stdout_keeps_build_output_off_screen(self, monkeypatch):
         """An unwrapped stdout must not receive log-only build output."""
         plain = io.StringIO()
         monkeypatch.setattr(sys, "stdout", plain)
         _log_only_write("something")  # should not raise
         assert plain.getvalue() == ""
-
 
 
 class TestRunLoggedSubprocess:
@@ -205,4 +202,3 @@ class TestRunLoggedSubprocess:
         assert "LOUD BUILD OUTPUT" in (result.stdout or "")
         assert terminal.getvalue() == ""  # not echoed to terminal
         assert "LOUD BUILD OUTPUT" in log.getvalue()  # but kept in the log
-

@@ -20,9 +20,14 @@ def voice_home(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(home))
     # Hermetic: no ambient provider keys may leak into resolution.
     for var in (
-        "GROQ_API_KEY", "OPENAI_API_KEY", "VOICE_TOOLS_OPENAI_KEY",
-        "MISTRAL_API_KEY", "XAI_API_KEY", "ELEVENLABS_API_KEY",
-        "DEEPINFRA_API_KEY", "CLAWK_LOCAL_STT_LANGUAGE",
+        "GROQ_API_KEY",
+        "OPENAI_API_KEY",
+        "VOICE_TOOLS_OPENAI_KEY",
+        "MISTRAL_API_KEY",
+        "XAI_API_KEY",
+        "ELEVENLABS_API_KEY",
+        "DEEPINFRA_API_KEY",
+        "CLAWK_LOCAL_STT_LANGUAGE",
     ):
         monkeypatch.delenv(var, raising=False)
 
@@ -49,9 +54,11 @@ def _resolve():
 
 
 def test_groq_stt_resolves_direct_with_config_key(voice_home):
-    voice_home({
-        "stt": {"provider": "groq", "groq": {"api_key": "gsk_test123"}},
-    })
+    voice_home(
+        {
+            "stt": {"provider": "groq", "groq": {"api_key": "gsk_test123"}},
+        }
+    )
     # Key in the stt.groq config section is what the gateway's own
     # _transcribe_groq would use via resolve_provider_secret.
     result = _resolve()
@@ -106,11 +113,13 @@ def test_missing_credentials_relay(voice_home):
 
 
 def test_client_direct_gate_forces_relay(voice_home, monkeypatch):
-    voice_home({
-        "voice": {"client_direct": False},
-        "stt": {"provider": "groq"},
-        "tts": {"provider": "openai"},
-    })
+    voice_home(
+        {
+            "voice": {"client_direct": False},
+            "stt": {"provider": "groq"},
+            "tts": {"provider": "openai"},
+        }
+    )
     monkeypatch.setenv("GROQ_API_KEY", "gsk_env456")
     monkeypatch.setenv("OPENAI_API_KEY", "sk_test")
     result = _resolve()
@@ -142,19 +151,29 @@ def test_edge_tts_relays_openai_goes_direct(voice_home, monkeypatch):
     # Unset tts.openai extras stay off the wire; set ones ride the direct config verbatim.
     assert tts["extra_body"] == {}
 
-    voice_home({"tts": {"provider": "openai",
-                        "openai": {"voice": "nova", "consent_attestation": "I own this voice"}}})
-    assert _resolve()["tts"]["extra_body"] == {"consent_attestation": "I own this voice"}
+    voice_home(
+        {
+            "tts": {
+                "provider": "openai",
+                "openai": {"voice": "nova", "consent_attestation": "I own this voice"},
+            }
+        }
+    )
+    assert _resolve()["tts"]["extra_body"] == {
+        "consent_attestation": "I own this voice"
+    }
 
 
 def test_elevenlabs_tts_direct_carries_voice_and_model(voice_home, monkeypatch):
-    voice_home({
-        "tts": {
-            "provider": "elevenlabs",
-            "elevenlabs": {"voice_id": "voice123", "model_id": "eleven_turbo_v2"},
-            "streaming": {"min_len": 6},
-        },
-    })
+    voice_home(
+        {
+            "tts": {
+                "provider": "elevenlabs",
+                "elevenlabs": {"voice_id": "voice123", "model_id": "eleven_turbo_v2"},
+                "streaming": {"min_len": 6},
+            },
+        }
+    )
     monkeypatch.setenv("ELEVENLABS_API_KEY", "el_key")
     tts = _resolve()["tts"]
     assert tts["mode"] == "direct"
@@ -167,12 +186,16 @@ def test_elevenlabs_tts_direct_carries_voice_and_model(voice_home, monkeypatch):
 
 
 def test_command_provider_relays(voice_home, monkeypatch):
-    voice_home({
-        "stt": {
-            "provider": "my-whisper",
-            "providers": {"my-whisper": {"type": "command", "command": "whisper {input_path}"}},
-        },
-    })
+    voice_home(
+        {
+            "stt": {
+                "provider": "my-whisper",
+                "providers": {
+                    "my-whisper": {"type": "command", "command": "whisper {input_path}"}
+                },
+            },
+        }
+    )
     assert _resolve()["stt"]["mode"] == "relay"
 
 
@@ -195,7 +218,9 @@ def test_xai_env_key_goes_direct(voice_home, monkeypatch):
 
 
 def test_xai_config_model_reaches_client(voice_home, monkeypatch):
-    voice_home({"stt": {"provider": "xai", "xai": {"model": "grok-voice-transcribe-1.0"}}})
+    voice_home(
+        {"stt": {"provider": "xai", "xai": {"model": "grok-voice-transcribe-1.0"}}}
+    )
     monkeypatch.setenv("XAI_API_KEY", "xai_key1")
     assert _resolve()["stt"]["model"] == "grok-voice-transcribe-1.0"
 

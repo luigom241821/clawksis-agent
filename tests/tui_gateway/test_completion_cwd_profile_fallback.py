@@ -57,12 +57,9 @@ def test_named_profile_explicit_pick_still_wins(monkeypatch, tmp_path):
     explicit.mkdir()
 
     monkeypatch.setattr(server, "_profile_home", lambda name: home if name else None)
-    assert (
-        server._completion_cwd(
-            {"profile": "beta", "cwd": str(explicit), "cwd_explicit": True}
-        )
-        == str(explicit)
-    )
+    assert server._completion_cwd(
+        {"profile": "beta", "cwd": str(explicit), "cwd_explicit": True}
+    ) == str(explicit)
 
 
 def test_named_profile_configured_cwd_still_wins(monkeypatch, tmp_path):
@@ -80,7 +77,9 @@ def test_named_profile_configured_cwd_still_wins(monkeypatch, tmp_path):
     assert server._completion_cwd({"profile": "dev"}) == str(profile_ws)
 
 
-def test_terminal_task_cwd_named_profile_placeholder_uses_own_home(monkeypatch, tmp_path):
+def test_terminal_task_cwd_named_profile_placeholder_uses_own_home(
+    monkeypatch, tmp_path
+):
     """The sibling consumer: ``_terminal_task_cwd_with_source``'s TERMINAL_CWD
     fallback must not leak the launch profile's workspace into a named
     profile's placeholder session either (its cwd comes from _completion_cwd's
@@ -96,5 +95,7 @@ def test_terminal_task_cwd_named_profile_placeholder_uses_own_home(monkeypatch, 
     cwd = server._completion_cwd({"profile": "beta"})
     assert cwd == str(home)
     # And a session dict carrying that cwd is what terminal tools use.
-    task_cwd = server._terminal_task_cwd({"cwd": cwd, "profile_home": home, "explicit_cwd": False})
+    task_cwd = server._terminal_task_cwd(
+        {"cwd": cwd, "profile_home": home, "explicit_cwd": False}
+    )
     assert task_cwd == str(home)

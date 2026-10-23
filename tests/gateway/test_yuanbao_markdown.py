@@ -14,13 +14,14 @@ import os
 import unittest
 
 # Ensure project root is on the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from gateway.platforms import helpers as _mdchunk
 from plugins.platforms.yuanbao.adapter import MarkdownProcessor
 
 
 # ============ has_unclosed_fence ============
+
 
 class TestHasUnclosedFence(unittest.TestCase):
     def test_unclosed_fence(self):
@@ -29,11 +30,6 @@ class TestHasUnclosedFence(unittest.TestCase):
     def test_closed_fence(self):
         self.assertFalse(_mdchunk.text_has_unclosed_fence("```python\ncode\n```"))
 
-
-
-
-
-
     def test_inline_backtick_ignored(self):
         text = "`inline code` is fine"
         self.assertFalse(_mdchunk.text_has_unclosed_fence(text))
@@ -41,24 +37,21 @@ class TestHasUnclosedFence(unittest.TestCase):
 
 # ============ ends_with_table_row ============
 
+
 class TestEndsWithTableRow(unittest.TestCase):
     def test_simple_table_row(self):
         self.assertTrue(_mdchunk.text_ends_with_table_row("| col1 | col2 |"))
-
 
     def test_table_row_in_middle(self):
         text = "| col1 | col2 |\nsome other text"
         self.assertFalse(_mdchunk.text_ends_with_table_row(text))
 
-
-
-
     def test_table_separator_row(self):
         self.assertTrue(_mdchunk.text_ends_with_table_row("| --- | --- |"))
 
 
-
 # ============ split_at_paragraph_boundary ============
+
 
 class TestSplitAtParagraphBoundary(unittest.TestCase):
     def test_split_at_empty_line(self):
@@ -73,8 +66,6 @@ class TestSplitAtParagraphBoundary(unittest.TestCase):
         self.assertLessEqual(len(head), 25)
         self.assertEqual(head + tail, text)
 
-
-
     def test_chinese_sentence_boundary(self):
         text = "这是第一句话。\n这是第二句话。\n这是第三句话。"
         head, tail = _mdchunk.split_at_paragraph_boundary(text, 15)
@@ -84,26 +75,21 @@ class TestSplitAtParagraphBoundary(unittest.TestCase):
 
 # ============ chunk_markdown_text ============
 
-class TestChunkMarkdownText(unittest.TestCase):
 
+class TestChunkMarkdownText(unittest.TestCase):
     def test_short_text_no_split(self):
         text = "hello world"
         self.assertEqual(MarkdownProcessor.chunk_markdown_text(text, 3000), [text])
 
-
-
-
-
-
-
     def test_multiple_paragraphs(self):
         """多段落文本应在段落边界切割"""
-        paragraphs = ["This is paragraph number " + str(i) + ". " * 50
-                      for i in range(10)]
+        paragraphs = [
+            "This is paragraph number " + str(i) + ". " * 50 for i in range(10)
+        ]
         text = "\n\n".join(paragraphs)
         result = MarkdownProcessor.chunk_markdown_text(text, 500)
         self.assertGreater(len(result), 1)
-        total_content = ''.join(result)
+        total_content = "".join(result)
         self.assertGreaterEqual(len(total_content), len(text) * 0.95)
 
     def test_single_long_line(self):
@@ -115,27 +101,14 @@ class TestChunkMarkdownText(unittest.TestCase):
             self.assertLessEqual(len(c), 3000)
 
 
-
-
 # ============ Acceptance criteria ============
 
 
-
-
-
-
-
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main(verbosity=2)
 
 
 # ============ pytest-style function tests (task specification) ============
-
-
-
-
-
 
 
 def test_large_fence_kept_whole():
@@ -146,15 +119,3 @@ def test_large_fence_kept_whole():
     fence_chunks = [c for c in chunks if "```python" in c]
     for c in fence_chunks:
         assert not _mdchunk.text_has_unclosed_fence(c)
-
-
-
-
-
-
-
-
-
-
-
-

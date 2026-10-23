@@ -135,9 +135,7 @@ def test_exact_lookup_recovers_tail_row_next_to_damaged_high_edge(
     source = tmp_path / "tail-damaged.db"
     output = tmp_path / "tail-recovered.db"
     message_count = 320
-    messages_root, count_index_root = _make_page_spanning_source(
-        source, message_count
-    )
+    messages_root, count_index_root = _make_page_spanning_source(source, message_count)
 
     _, leaf_pages = _btree_leaf_pages(source, messages_root)
     assert len(leaf_pages) >= 3
@@ -163,13 +161,13 @@ def test_exact_lookup_recovers_tail_row_next_to_damaged_high_edge(
     # Premise check: the high edge probe really failed; the bound came from the aggregate
     # (#98050) or, when that fails too, the synthetic-domain fallback.
     assert any("high rowid" in error for error in bounds["errors"]), bounds
-    assert "high" in bounds["fallback_edges"] or "high" in bounds.get("aggregate_edges", ())
+    assert "high" in bounds["fallback_edges"] or "high" in bounds.get(
+        "aggregate_edges", ()
+    )
 
     conn = sqlite3.connect(str(output))
     try:
-        recovered_ids = {
-            int(row[0]) for row in conn.execute("SELECT id FROM messages")
-        }
+        recovered_ids = {int(row[0]) for row in conn.execute("SELECT id FROM messages")}
     finally:
         conn.close()
 
@@ -273,8 +271,7 @@ def test_lost_and_found_lane_recovers_schema_unreadable_source(
     assert report["installed"] is False
     assert report["unreadable_schemas"] == ["sessions", "messages"]
     assert any(
-        "BEST-EFFORT" in warning
-        for warning in report["verification"]["warnings"]
+        "BEST-EFFORT" in warning for warning in report["verification"]["warnings"]
     )
 
     conn = sqlite3.connect(str(output))
@@ -308,12 +305,13 @@ def test_lost_and_found_lane_recovers_schema_unreadable_source(
         recovered_db.close()
 
 
-
 @pytest.mark.skipif(
     not HAVE_SQLITE3_CLI,
     reason="sqlite3 CLI not on PATH; .recover is a shell-only feature",
 )
-def test_lost_and_found_lane_recovers_page1_header_damaged_source(tmp_path: Path) -> None:
+def test_lost_and_found_lane_recovers_page1_header_damaged_source(
+    tmp_path: Path,
+) -> None:
     """#106667: a garbage page-1 header makes SQLite (and the shell's .recover) refuse the file
     with 'file is not a database' although every data page survives. The lane must still
     salvage the rows, and must do it on its snapshot — the user's file stays byte-identical."""
@@ -325,7 +323,9 @@ def test_lost_and_found_lane_recovers_page1_header_damaged_source(tmp_path: Path
             session_id = f"hdr-session-{session_number}"
             db.create_session(session_id, "cli", cwd="/tmp/hdr")
             for message_number in range(9):
-                db.append_message(session_id, "user", f"payload {session_number} {message_number}")
+                db.append_message(
+                    session_id, "user", f"payload {session_number} {message_number}"
+                )
     finally:
         db.close()
     conn = sqlite3.connect(str(source), isolation_level=None)
@@ -340,13 +340,19 @@ def test_lost_and_found_lane_recovers_page1_header_damaged_source(tmp_path: Path
     damaged_bytes = source.read_bytes()
 
     with pytest.raises(sqlite3.DatabaseError, match="not a database"):
-        sqlite3.connect(str(source)).execute("SELECT count(*) FROM sqlite_master").fetchone()
+        sqlite3.connect(str(source)).execute(
+            "SELECT count(*) FROM sqlite_master"
+        ).fetchone()
 
-    report = recover_session_database(source, output, work_dir=tmp_path, allow_partial=True)
+    report = recover_session_database(
+        source, output, work_dir=tmp_path, allow_partial=True
+    )
 
     assert report["mode"] == "lost_and_found_salvage"
     assert report["sqlite3_cli"]["header_zeroed"] is True
-    assert any("header salvage" in warning for warning in report["verification"]["warnings"])
+    assert any(
+        "header salvage" in warning for warning in report["verification"]["warnings"]
+    )
     assert source.read_bytes() == damaged_bytes
     conn = sqlite3.connect(str(output))
     try:
@@ -405,9 +411,15 @@ def _make_synthetic_lost_and_found(
         def session_row(session_id: str, ncols: int) -> list:
             # Historical records predate the two authority columns; they are
             # not prefixes of a freshly created runtime schema.
-            columns = sessions_columns if ncols == current_width else [
-                c for c in sessions_columns if c not in {"runtime_revision", "runtime_generation"}
-            ]
+            columns = (
+                sessions_columns
+                if ncols == current_width
+                else [
+                    c
+                    for c in sessions_columns
+                    if c not in {"runtime_revision", "runtime_generation"}
+                ]
+            )
             base = {
                 "id": session_id,
                 "source": "telegram",
@@ -484,9 +496,7 @@ def _make_synthetic_lost_and_found(
 
 def test_classify_lost_and_found_row_sentinels() -> None:
     assert (
-        classify_lost_and_found_row(
-            23, (None, "20260101_010101_aaa001", "user", "hi")
-        )
+        classify_lost_and_found_row(23, (None, "20260101_010101_aaa001", "user", "hi"))
         == "messages"
     )
     assert (
@@ -519,9 +529,7 @@ def test_classify_lost_and_found_row_sentinels() -> None:
         classify_lost_and_found_row(55, ("not-a-session-id", "cli") + (None,) * 53)
         is None
     )
-    assert (
-        classify_lost_and_found_row(23, (None, "sess", "not-a-role", "x")) is None
-    )
+    assert classify_lost_and_found_row(23, (None, "sess", "not-a-role", "x")) is None
     assert classify_lost_and_found_row(0, ()) is None
 
 
@@ -537,13 +545,20 @@ def test_store_created_at_runtime_schema_maps_source_by_name(tmp_path: Path) -> 
     try:
         columns = [str(r[1]) for r in dest.execute("PRAGMA table_info(sessions)")]
         assert columns[:4] == ["id", "runtime_revision", "runtime_generation", "source"]
-        row = {"id": "20260909_090909_fff006", "runtime_revision": 0, "runtime_generation": 0,
-               "source": "telegram", "started_at": 1_754_000_000.0, "title": "fresh runtime store"}
+        row = {
+            "id": "20260909_090909_fff006",
+            "runtime_revision": 0,
+            "runtime_generation": 0,
+            "source": "telegram",
+            "started_at": 1_754_000_000.0,
+            "title": "fresh runtime store",
+        }
         cells = tuple(row.get(c) for c in columns)
         assert classify_lost_and_found_row(len(cells), cells) == "sessions"
         lf.execute(
             "CREATE TABLE lost_and_found (rootpgno INTEGER, pgno INTEGER, nfield INTEGER, id INTEGER, "
-            + ", ".join(f"c{i}" for i in range(len(cells))) + ")"
+            + ", ".join(f"c{i}" for i in range(len(cells)))
+            + ")"
         )
         lf.execute(
             f"INSERT INTO lost_and_found VALUES ({', '.join('?' for _ in range(4 + len(cells)))})",
@@ -553,8 +568,9 @@ def test_store_created_at_runtime_schema_maps_source_by_name(tmp_path: Path) -> 
         report = map_lost_and_found_rows(lf, dest)
         assert report["mapped"]["sessions"] == 1
         assert report["unrecognized_layout_rows"] == 0
-        assert dest.execute("SELECT source, title FROM sessions WHERE id = ?", (row["id"],)).fetchone() == (
-            "telegram", "fresh runtime store")
+        assert dest.execute(
+            "SELECT source, title FROM sessions WHERE id = ?", (row["id"],)
+        ).fetchone() == ("telegram", "fresh runtime store")
     finally:
         lf.close()
         dest.close()
@@ -584,8 +600,7 @@ def test_mapper_rebuilds_sessiondb_from_synthetic_lost_and_found(
         assert mapping["mapped"]["sessions"] == expected["sessions"]
         assert mapping["mapped"]["messages"] == expected["messages"]
         assert (
-            mapping["mapped"]["session_model_usage"]
-            == expected["session_model_usage"]
+            mapping["mapped"]["session_model_usage"] == expected["session_model_usage"]
         )
         assert mapping["legacy_minimal_sessions"] == 1
         assert mapping["unmapped_rows"] == expected["junk"]
@@ -647,9 +662,13 @@ def test_fingerprint_error_enumerates_parent_cli_session(
     source = tmp_path / "busy.db"
     SessionDB(db_path=source).close()
 
-    fingerprints = iter([{"main": {"size": 1, "mtime_ns": 1}},
-                         {"main": {"size": 2, "mtime_ns": 2}},
-                         {"main": {"size": 3, "mtime_ns": 3}}])
+    fingerprints = iter(
+        [
+            {"main": {"size": 1, "mtime_ns": 1}},
+            {"main": {"size": 2, "mtime_ns": 2}},
+            {"main": {"size": 3, "mtime_ns": 3}},
+        ]
+    )
     monkeypatch.setattr(
         session_recovery,
         "_source_fingerprint",
@@ -728,9 +747,7 @@ def _map_salvage_rows(
                 "chat_type": "dm",
                 "model": "gpt-4.1",
                 "model_config": "{}",
-                "started_at": None
-                if blank_session_started_at
-                else 1_754_000_000.0,
+                "started_at": None if blank_session_started_at else 1_754_000_000.0,
                 "ended_at": 1_754_000_600.0,
                 "end_reason": "completed",
                 "message_count": 2,
@@ -794,9 +811,12 @@ def test_plausibility_gate_flags_positional_mis_mapping(
     try:
         # The mapper happily inserted every row; structural checks pass.
         assert conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0] == 3
-        assert conn.execute(
-            "SELECT COUNT(*) FROM sessions WHERE started_at = 0.0"
-        ).fetchone()[0] == 3
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) FROM sessions WHERE started_at = 0.0"
+            ).fetchone()[0]
+            == 3
+        )
 
         errors = session_recovery._lost_and_found_plausibility_errors(conn)
         assert len(errors) == 1
@@ -864,15 +884,21 @@ def _rebuild_with_started_at_appended(conn: sqlite3.Connection) -> None:
             parts.append(f"DEFAULT {dflt}")
         return " ".join(parts)
 
-    reordered = [r for r in info if r[1] != "started_at"] + [r for r in info if r[1] == "started_at"]
+    reordered = [r for r in info if r[1] != "started_at"] + [
+        r for r in info if r[1] == "started_at"
+    ]
     cols = ", ".join(f'"{c}"' for c in declared)
     # ``messages_fts_trigram_src`` joins sessions; SQLite refuses to rename a
     # table a view references unless legacy_alter_table is on (the view's
     # body is text, so it re-resolves ``sessions`` after the swap).
     conn.executescript("PRAGMA foreign_keys=OFF; PRAGMA legacy_alter_table=ON;")
-    conn.execute("CREATE TABLE sessions_new (" + ", ".join(coldef(r) for r in reordered) + ")")
+    conn.execute(
+        "CREATE TABLE sessions_new (" + ", ".join(coldef(r) for r in reordered) + ")"
+    )
     conn.execute(f"INSERT INTO sessions_new({cols}) SELECT {cols} FROM sessions")
-    conn.executescript("DROP TABLE sessions; ALTER TABLE sessions_new RENAME TO sessions;")
+    conn.executescript(
+        "DROP TABLE sessions; ALTER TABLE sessions_new RENAME TO sessions;"
+    )
 
 
 @pytest.mark.skipif(
@@ -895,7 +921,9 @@ def test_lost_and_found_lane_refuses_to_verify_a_physically_shifted_source(
             db.create_session(sid, "cli", cwd=f"/tmp/shift-{n}")
             db.set_session_title(sid, f"shift {n}")
             for m in range(4):
-                db.append_message(sid, "user" if m % 2 == 0 else "assistant", f"payload {n} {m}")
+                db.append_message(
+                    sid, "user" if m % 2 == 0 else "assistant", f"payload {n} {m}"
+                )
     finally:
         db.close()
     conn = sqlite3.connect(str(source), isolation_level=None)
@@ -914,7 +942,9 @@ def test_lost_and_found_lane_refuses_to_verify_a_physically_shifted_source(
     with open(source, "r+b") as fh:
         fh.write(b"\0" * _page_size(source.read_bytes()))
 
-    report = recover_session_database(source, output, work_dir=tmp_path, allow_partial=True)
+    report = recover_session_database(
+        source, output, work_dir=tmp_path, allow_partial=True
+    )
 
     assert report["mode"] == "lost_and_found_salvage"
     # Mis-mapped rows that trip a NOT NULL / type constraint are stubbed, not
@@ -922,7 +952,10 @@ def test_lost_and_found_lane_refuses_to_verify_a_physically_shifted_source(
     assert report["lost_and_found"]["mapped"]["sessions"] >= 1
     assert report["verification"]["healthy"] is False
     assert report["verified"] is False
-    assert any("sessions.started_at is implausible" in e for e in report["verification"]["errors"])
+    assert any(
+        "sessions.started_at is implausible" in e
+        for e in report["verification"]["errors"]
+    )
     out = sqlite3.connect(str(output))
     try:
         # The mis-mapping the gate caught: every mapped (non-stub) session got
@@ -941,39 +974,110 @@ def test_lost_and_found_lane_refuses_to_verify_a_physically_shifted_source(
 # read back from the production layout table) so the regression pins the
 # reported layout, not whatever the mapper believes today.
 _UPGRADED_SESSIONS_PHYSICAL = (
-    "id", "source", "user_id", "model", "model_config", "system_prompt",
-    "parent_session_id", "started_at", "ended_at", "end_reason",
-    "message_count", "tool_call_count", "input_tokens", "output_tokens",
-    "cache_read_tokens", "cache_write_tokens", "reasoning_tokens",
-    "billing_provider", "billing_base_url", "billing_mode",
-    "estimated_cost_usd", "actual_cost_usd", "cost_status", "cost_source",
-    "pricing_version", "title", "api_call_count", "handoff_state",
-    "handoff_platform", "handoff_error", "cwd", "rewind_count", "archived",
-    "session_key", "chat_id", "chat_type", "thread_id", "git_branch",
-    "git_repo_root", "compression_failure_cooldown_until",
-    "compression_failure_error", "display_name", "origin_json",
-    "expiry_finalized", "compression_fallback_streak", "profile_name",
-    "compression_ineffective_count", "pinned", "system_prompt_hash",
-    "last_activity_at", "last_activity_description",
-    "last_activity_provenance", "git_metadata_generation", "title_source",
-    "hidden", "last_read_at",
+    "id",
+    "source",
+    "user_id",
+    "model",
+    "model_config",
+    "system_prompt",
+    "parent_session_id",
+    "started_at",
+    "ended_at",
+    "end_reason",
+    "message_count",
+    "tool_call_count",
+    "input_tokens",
+    "output_tokens",
+    "cache_read_tokens",
+    "cache_write_tokens",
+    "reasoning_tokens",
+    "billing_provider",
+    "billing_base_url",
+    "billing_mode",
+    "estimated_cost_usd",
+    "actual_cost_usd",
+    "cost_status",
+    "cost_source",
+    "pricing_version",
+    "title",
+    "api_call_count",
+    "handoff_state",
+    "handoff_platform",
+    "handoff_error",
+    "cwd",
+    "rewind_count",
+    "archived",
+    "session_key",
+    "chat_id",
+    "chat_type",
+    "thread_id",
+    "git_branch",
+    "git_repo_root",
+    "compression_failure_cooldown_until",
+    "compression_failure_error",
+    "display_name",
+    "origin_json",
+    "expiry_finalized",
+    "compression_fallback_streak",
+    "profile_name",
+    "compression_ineffective_count",
+    "pinned",
+    "system_prompt_hash",
+    "last_activity_at",
+    "last_activity_description",
+    "last_activity_provenance",
+    "git_metadata_generation",
+    "title_source",
+    "hidden",
+    "last_read_at",
 )
 
 _UPGRADED_MESSAGES_PHYSICAL = (
-    "id", "session_id", "role", "content", "tool_call_id", "tool_calls",
-    "tool_name", "timestamp", "token_count", "finish_reason", "reasoning",
-    "reasoning_content", "reasoning_details", "codex_reasoning_items",
-    "codex_message_items", "platform_message_id", "observed", "active",
-    "compacted", "effect_disposition", "api_content", "display_kind",
-    "display_metadata", "_compressed_summary",
+    "id",
+    "session_id",
+    "role",
+    "content",
+    "tool_call_id",
+    "tool_calls",
+    "tool_name",
+    "timestamp",
+    "token_count",
+    "finish_reason",
+    "reasoning",
+    "reasoning_content",
+    "reasoning_details",
+    "codex_reasoning_items",
+    "codex_message_items",
+    "platform_message_id",
+    "observed",
+    "active",
+    "compacted",
+    "effect_disposition",
+    "api_content",
+    "display_kind",
+    "display_metadata",
+    "_compressed_summary",
 )
 
 _UPGRADED_USAGE_PHYSICAL = (
-    "session_id", "model", "billing_provider", "billing_base_url",
-    "api_call_count", "input_tokens", "output_tokens", "cache_read_tokens",
-    "cache_write_tokens", "reasoning_tokens", "estimated_cost_usd",
-    "first_seen", "last_seen", "billing_mode", "actual_cost_usd",
-    "cost_status", "cost_source", "task",
+    "session_id",
+    "model",
+    "billing_provider",
+    "billing_base_url",
+    "api_call_count",
+    "input_tokens",
+    "output_tokens",
+    "cache_read_tokens",
+    "cache_write_tokens",
+    "reasoning_tokens",
+    "estimated_cost_usd",
+    "first_seen",
+    "last_seen",
+    "billing_mode",
+    "actual_cost_usd",
+    "cost_status",
+    "cost_source",
+    "task",
 )
 
 
@@ -1083,14 +1187,23 @@ def test_upgraded_physical_layout_maps_cells_by_name(tmp_path: Path) -> None:
         dest.execute("PRAGMA foreign_keys=OFF")
         report = map_lost_and_found_rows(lf_conn, dest)
         assert report["mapped"] == {
-            "sessions": 1, "messages": 1, "session_model_usage": 1,
+            "sessions": 1,
+            "messages": 1,
+            "session_model_usage": 1,
         }
         assert report["unrecognized_layout_rows"] == 0
 
         session = dict(
             zip(
-                ("started_at", "title", "model", "message_count", "source",
-                 "cwd", "title_source"),
+                (
+                    "started_at",
+                    "title",
+                    "model",
+                    "message_count",
+                    "source",
+                    "cwd",
+                    "title_source",
+                ),
                 dest.execute(
                     "SELECT started_at, title, model, message_count, source, "
                     "cwd, title_source FROM sessions WHERE id = ?",
@@ -1148,7 +1261,12 @@ def test_plausibility_gate_ignores_stub_only_sessions(tmp_path: Path) -> None:
         now = 1_750_000_000.0
         conn.execute(
             "INSERT INTO sessions (id, source, started_at, title) VALUES (?, ?, ?, ?)",
-            ("20260812_140000_aaa000", "recovered", 0.0, "[best-effort recovered 1] session metadata was unreadable"),
+            (
+                "20260812_140000_aaa000",
+                "recovered",
+                0.0,
+                "[best-effort recovered 1] session metadata was unreadable",
+            ),
         )
         conn.execute(
             "INSERT INTO messages (session_id, role, content, timestamp) VALUES (?, ?, ?, ?)",
@@ -1165,7 +1283,9 @@ def test_plausibility_gate_ignores_stub_only_sessions(tmp_path: Path) -> None:
         assert session_recovery._lost_and_found_plausibility_errors(conn) == []
         # ...and a mapped row at 0.0 with a NULL title (the mis-mapped shape:
         # blank titles) is still counted as mapped, not as a stub.
-        conn.execute("UPDATE sessions SET started_at = 0.0 WHERE id = '20260812_140001_aaa001'")
+        conn.execute(
+            "UPDATE sessions SET started_at = 0.0 WHERE id = '20260812_140001_aaa001'"
+        )
         conn.commit()
         errors = session_recovery._lost_and_found_plausibility_errors(conn)
         assert len(errors) == 1 and "sessions.started_at" in errors[0]
@@ -1213,18 +1333,25 @@ def test_recovery_lane_refuses_to_verify_when_rows_matched_no_layout(
     with open(source, "r+b") as fh:
         fh.write(b"\0" * _page_size(source.read_bytes()))
 
-    report = recover_session_database(source, output, work_dir=tmp_path, allow_partial=True)
+    report = recover_session_database(
+        source, output, work_dir=tmp_path, allow_partial=True
+    )
     assert report["mode"] == "lost_and_found_salvage"
     assert report["lost_and_found"]["unrecognized_layout_rows"] == 2
     assert report["verified"] is False
-    assert any("matched no known physical column layout" in e for e in report["verification"]["errors"])
+    assert any(
+        "matched no known physical column layout" in e
+        for e in report["verification"]["errors"]
+    )
 
 
 # ── .recover stderr pipe must be drained while the child runs ──────────────
 
 
 @pytest.mark.platforms("posix")  # stub sqlite3 is a /bin/sh script
-def test_recover_attempts_survive_dump_stderr_beyond_pipe_buffer(tmp_path: Path) -> None:
+def test_recover_attempts_survive_dump_stderr_beyond_pipe_buffer(
+    tmp_path: Path,
+) -> None:
     """A heavily damaged source makes ``.recover`` emit per-page diagnostics on
     stderr. Past the OS pipe buffer (~64KB) an undrained stderr blocks the dump
     child, its stdout never reaches EOF, and ``load.communicate()`` burns the

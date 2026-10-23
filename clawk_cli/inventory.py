@@ -27,13 +27,19 @@ class ConfigContext:
     excluded_providers: list = None
 
     def with_overrides(
-        self, *, current_provider: Optional[str] = None, current_model: Optional[str] = None,
+        self,
+        *,
+        current_provider: Optional[str] = None,
+        current_model: Optional[str] = None,
         current_base_url: Optional[str] = None,
     ) -> ConfigContext:
         """Copy with TRUTHY overrides applied: the TUI reads agent attributes that may be empty strings
         before an agent is spawned — empties must not clobber the disk-config values."""
-        overrides = (("current_provider", current_provider), ("current_model", current_model),
-                     ("current_base_url", current_base_url))
+        overrides = (
+            ("current_provider", current_provider),
+            ("current_model", current_model),
+            ("current_base_url", current_base_url),
+        )
         kw = {k: v for k, v in overrides if v}
         return replace(self, **kw) if kw else self
 
@@ -41,8 +47,12 @@ class ConfigContext:
 def load_picker_context() -> ConfigContext:
     """Load the disk-config snapshot every consumer needs."""
     from clawk_cli.config import (
-        coerce_provider_id, get_compatible_custom_providers, load_config, stringify_provider_map,
+        coerce_provider_id,
+        get_compatible_custom_providers,
+        load_config,
+        stringify_provider_map,
     )
+
     cfg = load_config()
     model_cfg = cfg.get("model", {})
     if isinstance(model_cfg, dict):
@@ -52,10 +62,16 @@ def load_picker_context() -> ConfigContext:
         current_provider = coerce_provider_id(model_cfg.get("provider", ""))
         current_base_url = str(model_cfg.get("base_url", "") or "")
     else:  # config.model can be a bare string in older configs
-        current_model, current_provider, current_base_url = (str(model_cfg) if model_cfg else ""), "", ""
+        current_model, current_provider, current_base_url = (
+            (str(model_cfg) if model_cfg else ""),
+            "",
+            "",
+        )
     excluded = cfg.get("model_catalog", {}).get("excluded_providers") or []
     return ConfigContext(
-        current_provider=current_provider, current_model=current_model, current_base_url=current_base_url,
+        current_provider=current_provider,
+        current_model=current_model,
+        current_base_url=current_base_url,
         user_providers=stringify_provider_map(cfg.get("providers")),
         custom_providers=get_compatible_custom_providers(cfg),
         excluded_providers=excluded if isinstance(excluded, list) else [],
@@ -74,12 +90,23 @@ def _without_slug(rows: list[dict], slug: str) -> list[dict]:
 
 
 def build_models_payload(
-    ctx: ConfigContext, *, explicit_only: bool = False, include_unconfigured: bool = False,
-    picker_hints: bool = False, canonical_order: bool = False, pricing: bool = False,
+    ctx: ConfigContext,
+    *,
+    explicit_only: bool = False,
+    include_unconfigured: bool = False,
+    picker_hints: bool = False,
+    canonical_order: bool = False,
+    pricing: bool = False,
     pricing_cache_only: bool = False,
-    capabilities: bool = False, featured: bool = False, force_fresh_nous_tier: bool = False,
-    refresh: bool = False, probe_custom_providers: bool = True, probe_current_custom_provider: bool = False,
-    for_picker: bool = False, max_models: int | None = None, non_blocking_catalogs: bool = False,
+    capabilities: bool = False,
+    featured: bool = False,
+    force_fresh_nous_tier: bool = False,
+    refresh: bool = False,
+    probe_custom_providers: bool = True,
+    probe_current_custom_provider: bool = False,
+    for_picker: bool = False,
+    max_models: int | None = None,
+    non_blocking_catalogs: bool = False,
     fast_custom_probe: bool | None = None,
 ) -> dict:
     """Build the ``{providers, model, provider}`` shape every consumer needs. ``explicit_only`` keeps
@@ -93,13 +120,20 @@ def build_models_payload(
     from clawk_cli.model_switch import list_authenticated_providers
 
     rows = list_authenticated_providers(
-        current_provider=ctx.current_provider, current_base_url=ctx.current_base_url,
-        current_model=ctx.current_model, user_providers=ctx.user_providers,
-        custom_providers=ctx.custom_providers, force_fresh_nous_tier=force_fresh_nous_tier,
-        max_models=max_models, refresh=refresh, probe_custom_providers=probe_custom_providers,
-        probe_current_custom_provider=probe_current_custom_provider, for_picker=for_picker,
+        current_provider=ctx.current_provider,
+        current_base_url=ctx.current_base_url,
+        current_model=ctx.current_model,
+        user_providers=ctx.user_providers,
+        custom_providers=ctx.custom_providers,
+        force_fresh_nous_tier=force_fresh_nous_tier,
+        max_models=max_models,
+        refresh=refresh,
+        probe_custom_providers=probe_custom_providers,
+        probe_current_custom_provider=probe_current_custom_provider,
+        for_picker=for_picker,
         excluded_providers=ctx.excluded_providers or [],
-        non_blocking_catalogs=non_blocking_catalogs, fast_custom_probe=fast_custom_probe,
+        non_blocking_catalogs=non_blocking_catalogs,
+        fast_custom_probe=fast_custom_probe,
     )
 
     # Managed local runtime: staged GGUFs are selectable like any provider's models, but
@@ -130,8 +164,11 @@ def build_models_payload(
         # that one row so the UI shows the saved selection + a re-auth affordance instead of appearing
         # to jump providers. Exception: a "custom" current on the managed local server is already
         # represented by the Local row — the skeleton would resurrect the duplicate removed above.
-        _local_owns_current = bool(local_row and local_row.get("is_current")
-                                   and (ctx.current_provider or "").lower() == "custom")
+        _local_owns_current = bool(
+            local_row
+            and local_row.get("is_current")
+            and (ctx.current_provider or "").lower() == "custom"
+        )
         if not _local_owns_current:
             rows = list(rows) + _append_unconfigured_rows(rows, ctx, current_only=True)
 
@@ -146,7 +183,11 @@ def build_models_payload(
     if canonical_order:
         rows = _reorder_canonical(rows)
     if pricing:
-        _apply_pricing(rows, force_fresh_nous_tier=force_fresh_nous_tier, cached_only=pricing_cache_only)
+        _apply_pricing(
+            rows,
+            force_fresh_nous_tier=force_fresh_nous_tier,
+            cached_only=pricing_cache_only,
+        )
     # Both metadata decorators consult ``model_overrides``.  Snapshot the
     # read-only config once for this payload rather than letting each model
     # lookup reopen config.yaml through models_dev._cfg_get().
@@ -167,7 +208,11 @@ def build_models_payload(
 
     drop_unofferable_model_ids(rows)
 
-    return {"providers": rows, "model": ctx.current_model, "provider": ctx.current_provider}
+    return {
+        "providers": rows,
+        "model": ctx.current_model,
+        "provider": ctx.current_provider,
+    }
 
 
 def _strip_aggregator_overlaps(rows: list[dict]) -> None:
@@ -181,7 +226,8 @@ def _strip_aggregator_overlaps(rows: list[dict]) -> None:
         return
 
     builtin_aggregators = {
-        _slug(row) for row in rows
+        _slug(row)
+        for row in rows
         if not row.get("is_user_defined") and is_routing_aggregator(_slug(row))
     }
 
@@ -225,7 +271,10 @@ def _strip_aggregator_overlaps(rows: list[dict]) -> None:
 
 
 def build_model_options_payload(
-    ctx: ConfigContext, *, explicit_only: bool = False, include_unconfigured: bool = False,
+    ctx: ConfigContext,
+    *,
+    explicit_only: bool = False,
+    include_unconfigured: bool = False,
     refresh: bool = False,
 ) -> dict:
     """Shared API-server/dashboard/TUI payload. Normal open probes only the current custom provider so
@@ -242,17 +291,30 @@ def build_model_options_payload(
     keeps the live probe of the current custom endpoint on its full 5s discovery budget."""
     refresh = bool(refresh)
     payload = build_models_payload(
-        ctx, explicit_only=bool(explicit_only), include_unconfigured=bool(include_unconfigured),
-        picker_hints=True, canonical_order=True, pricing=True, pricing_cache_only=not refresh,
-        capabilities=True, featured=True, for_picker=True, fast_custom_probe=False,
-        refresh=refresh, probe_custom_providers=refresh, probe_current_custom_provider=not refresh,
+        ctx,
+        explicit_only=bool(explicit_only),
+        include_unconfigured=bool(include_unconfigured),
+        picker_hints=True,
+        canonical_order=True,
+        pricing=True,
+        pricing_cache_only=not refresh,
+        capabilities=True,
+        featured=True,
+        for_picker=True,
+        fast_custom_probe=False,
+        refresh=refresh,
+        probe_custom_providers=refresh,
+        probe_current_custom_provider=not refresh,
         non_blocking_catalogs=not refresh,
     )
     _apply_limits(payload["providers"])
     _apply_usage(payload["providers"])
     if not refresh:
-        _prewarm_pricing_async(payload["providers"], current_provider=ctx.current_provider,
-                               current_base_url=ctx.current_base_url)
+        _prewarm_pricing_async(
+            payload["providers"],
+            current_provider=ctx.current_provider,
+            current_base_url=ctx.current_base_url,
+        )
     return payload
 
 
@@ -279,14 +341,19 @@ def _apply_limits(rows: list[dict]) -> None:
         try:
             state = load_pool(slug).limit_state(row.get("models") or [])
         except Exception:  # an unreadable pool must not fail the whole catalog
-            logging.getLogger(__name__).debug("Pool limit read failed for %s", slug, exc_info=True)
+            logging.getLogger(__name__).debug(
+                "Pool limit read failed for %s", slug, exc_info=True
+            )
             continue
         if state is None:
             continue
         if state["scope"] == "account":
             row["limit"] = {"scope": "account", "resets_at": iso(state["resets_at"])}
         else:
-            row["limit"] = {"scope": "models", "models": {m: iso(at) for m, at in state["models"].items()}}
+            row["limit"] = {
+                "scope": "models",
+                "models": {m: iso(at) for m, at in state["models"].items()},
+            }
 
 
 def _apply_usage(rows: list[dict]) -> None:
@@ -301,17 +368,24 @@ def _apply_usage(rows: list[dict]) -> None:
     staleness bound renders ``unknown``/``unavailable``, never a confident stale gauge. Nothing here
     mutates the pool or disables routing: telemetry never benches a credential."""
     from agent.account_usage_cache import (
-        cached_account_usage, has_account_usage, refresh_account_usage_async,
-        refresh_account_usage_entries_async, snapshot_is_stale,
+        cached_account_usage,
+        has_account_usage,
+        refresh_account_usage_async,
+        refresh_account_usage_entries_async,
+        snapshot_is_stale,
     )
     from clawk_cli.auth import read_credential_pool
 
     def _wire_windows(snapshot) -> list[dict]:
         return [
-            {"label": w.label, "used_percent": float(w.used_percent),
-             "resets_at": w.reset_at.isoformat() if w.reset_at else None,
-             "scope": w.scope}
-            for w in (snapshot.windows if snapshot else ()) if w.used_percent is not None
+            {
+                "label": w.label,
+                "used_percent": float(w.used_percent),
+                "resets_at": w.reset_at.isoformat() if w.reset_at else None,
+                "scope": w.scope,
+            }
+            for w in (snapshot.windows if snapshot else ())
+            if w.used_percent is not None
         ]
 
     def _account_resets_at(snapshot, live_cooldown_until: float | None) -> str | None:
@@ -322,8 +396,12 @@ def _apply_usage(rows: list[dict]) -> None:
         resets: list[str] = []
         if live_cooldown_until:
             resets.append(_iso_from_epoch(live_cooldown_until))
-        for window in (snapshot.windows if snapshot else ()):
-            if window.scope != "account" or window.used_percent is None or window.reset_at is None:
+        for window in snapshot.windows if snapshot else ():
+            if (
+                window.scope != "account"
+                or window.used_percent is None
+                or window.reset_at is None
+            ):
                 continue
             if float(window.used_percent) >= _EXHAUSTED_WINDOW_PERCENT:
                 resets.append(window.reset_at.isoformat())
@@ -331,7 +409,11 @@ def _apply_usage(rows: list[dict]) -> None:
 
     wanted: list[str] = []
     entry_requests: list[dict] = []
-    pooled_sizes = {slug: len(entries) for slug, entries in read_credential_pool().items() if entries}
+    pooled_sizes = {
+        slug: len(entries)
+        for slug, entries in read_credential_pool().items()
+        if entries
+    }
     for row in rows:
         slug = str(row.get("slug") or "")
         if not slug or row.get("is_user_defined") or row.get("authenticated") is False:
@@ -351,7 +433,9 @@ def _apply_usage(rows: list[dict]) -> None:
             continue
         if supports_usage:
             wanted.append(slug)
-        accounts = _pool_usage_accounts(slug, _wire_windows, _account_resets_at, entry_requests)
+        accounts = _pool_usage_accounts(
+            slug, _wire_windows, _account_resets_at, entry_requests
+        )
         if accounts is not None:
             row["usage"] = {"accounts": accounts}
     refresh_account_usage_async(wanted)
@@ -368,8 +452,9 @@ def _iso_from_epoch(epoch: float) -> str:
     return datetime.fromtimestamp(float(epoch), UTC).isoformat()
 
 
-def _pool_usage_accounts(slug: str, wire_windows, account_resets_at,
-                         entry_requests: list[dict]) -> Optional[list[dict]]:
+def _pool_usage_accounts(
+    slug: str, wire_windows, account_resets_at, entry_requests: list[dict]
+) -> Optional[list[dict]]:
     """Per-account usage rows for one pooled provider, or None when the pool cannot be read.
 
     Read-only: entries are inspected via ``load_pool(slug)`` properties (no select/rotate/refresh).
@@ -382,14 +467,21 @@ def _pool_usage_accounts(slug: str, wire_windows, account_resets_at,
     import logging
     import time
 
-    from agent.account_usage_cache import _identity_id_for, cached_account_usage, has_account_usage, snapshot_is_stale
+    from agent.account_usage_cache import (
+        _identity_id_for,
+        cached_account_usage,
+        has_account_usage,
+        snapshot_is_stale,
+    )
     from agent.credential_pool import STATUS_DEAD, _exhausted_until, load_pool
 
     try:
         pool = load_pool(slug)
         entries = list(pool.entries())
     except Exception:  # an unreadable pool must not fail the whole catalog
-        logging.getLogger(__name__).debug("Pool usage read failed for %s", slug, exc_info=True)
+        logging.getLogger(__name__).debug(
+            "Pool usage read failed for %s", slug, exc_info=True
+        )
         return None
     if not entries:
         return None
@@ -404,17 +496,27 @@ def _pool_usage_accounts(slug: str, wire_windows, account_resets_at,
         host = _pool_entry_host(slug, entry)
         dedupe_key = (slug, host, identity_id)
         is_dead = entry.last_status == STATUS_DEAD
-        snapshot = (cached_account_usage(slug, identity_id=identity_id)
-                    if supports_usage and not is_dead else None)
+        snapshot = (
+            cached_account_usage(slug, identity_id=identity_id)
+            if supports_usage and not is_dead
+            else None
+        )
         stale = snapshot_is_stale(snapshot)
         windows = wire_windows(snapshot) if not stale else []
         # 'limited' only when a live credential-wide cooldown benches this account or its
         # account-scoped quota windows are exhausted — telemetry alone never benches anything.
-        cooldown_until = None if is_dead else _exhausted_until(entry, sole_credential=sole)
-        live_cooldown = cooldown_until if cooldown_until and cooldown_until > now else None
+        cooldown_until = (
+            None if is_dead else _exhausted_until(entry, sole_credential=sole)
+        )
+        live_cooldown = (
+            cooldown_until if cooldown_until and cooldown_until > now else None
+        )
         quota_exhausted = bool(windows) and any(
-            w.get("scope") == "account" and w.get("used_percent") is not None
-            and float(w["used_percent"]) >= _EXHAUSTED_WINDOW_PERCENT for w in windows)
+            w.get("scope") == "account"
+            and w.get("used_percent") is not None
+            and float(w["used_percent"]) >= _EXHAUSTED_WINDOW_PERCENT
+            for w in windows
+        )
         if is_dead:
             state = "unavailable"
         elif live_cooldown is not None or quota_exhausted:
@@ -426,8 +528,11 @@ def _pool_usage_accounts(slug: str, wire_windows, account_resets_at,
         else:
             state = "ready"
         account_row = {
-            "id": identity_id, "label": str(entry.label or ""), "windows": windows,
-            "state": state, "resets_at": account_resets_at(snapshot, live_cooldown),
+            "id": identity_id,
+            "label": str(entry.label or ""),
+            "windows": windows,
+            "state": state,
+            "resets_at": account_resets_at(snapshot, live_cooldown),
         }
         if dedupe_key in seen:
             # Same account under a second credential: keep the row that says more (state rank
@@ -441,10 +546,14 @@ def _pool_usage_accounts(slug: str, wire_windows, account_resets_at,
         seen[dedupe_key] = account_row
         accounts.append(account_row)
         if supports_usage and not is_dead:
-            entry_requests.append({
-                "provider": slug, "identity_id": identity_id,
-                "base_url": _pool_entry_route_base_url(slug, entry), "api_key": entry.runtime_api_key,
-            })
+            entry_requests.append(
+                {
+                    "provider": slug,
+                    "identity_id": identity_id,
+                    "base_url": _pool_entry_route_base_url(slug, entry),
+                    "api_key": entry.runtime_api_key,
+                }
+            )
     return accounts or None
 
 
@@ -472,7 +581,10 @@ def _pool_entry_route_base_url(slug: str, entry) -> Optional[str]:
 
 
 def build_aux_picker_rows(
-    *, current_provider: str = "", current_model: str = "", current_base_url: str = "",
+    *,
+    current_provider: str = "",
+    current_model: str = "",
+    current_base_url: str = "",
     max_models: int | None = None,
 ) -> list[dict]:
     """Provider rows for any auxiliary-task picker (vision, compression, …). Honours
@@ -488,17 +600,25 @@ def build_aux_picker_rows(
     default that a new caller cannot forget:
     """
     ctx = load_picker_context().with_overrides(
-        current_provider=current_provider, current_model=current_model, current_base_url=current_base_url,
+        current_provider=current_provider,
+        current_model=current_model,
+        current_base_url=current_base_url,
     )
     rows = build_models_payload(
-        ctx, for_picker=True, probe_custom_providers=False, probe_current_custom_provider=True,
+        ctx,
+        for_picker=True,
+        probe_custom_providers=False,
+        probe_current_custom_provider=True,
         max_models=max_models,
     )["providers"]
     return _without_slug(rows, "moa")
 
 
 def format_aux_picker_entries(
-    rows: list[dict], *, current_provider: str = "", current_base_url: str = "",
+    rows: list[dict],
+    *,
+    current_provider: str = "",
+    current_base_url: str = "",
 ) -> list[tuple[str, str, list[str]]]:
     """Render aux-picker rows as ``(slug, label, models)``. A raw ``base_url`` custom endpoint is
     "current" only through that URL, never a slug — so with ``current_base_url`` set no row is marked."""
@@ -510,8 +630,14 @@ def format_aux_picker_entries(
         name = row.get("name") or slug
         total = row.get("total_models") or len(row.get("models") or [])
         model_hint = f" — {total} models" if total else ""
-        marker = "  ← current" if slug.lower() == current_slug and current_slug and not has_base_url else ""
-        entries.append((slug, f"{name}{model_hint}{marker}", list(row.get("models") or [])))
+        marker = (
+            "  ← current"
+            if slug.lower() == current_slug and current_slug and not has_base_url
+            else ""
+        )
+        entries.append(
+            (slug, f"{name}{model_hint}{marker}", list(row.get("models") or []))
+        )
     return entries
 
 
@@ -530,7 +656,10 @@ def _reasoning_catalog_reader(slug: str):
 
     readers = {
         "nous": (warm_nous_reasoning_caps_async, nous_model_reasoning_capabilities),
-        "openrouter": (warm_openrouter_reasoning_caps_async, openrouter_model_reasoning_capabilities),
+        "openrouter": (
+            warm_openrouter_reasoning_caps_async,
+            openrouter_model_reasoning_capabilities,
+        ),
     }
     if slug not in readers:
         return None
@@ -539,7 +668,9 @@ def _reasoning_catalog_reader(slug: str):
     return read
 
 
-def _apply_capabilities(rows: list[dict], *, metadata_config: dict | None = None) -> None:
+def _apply_capabilities(
+    rows: list[dict], *, metadata_config: dict | None = None
+) -> None:
     """Attach ``{model: {fast, reasoning, ...}}`` per row. ``reasoning`` defaults True when the catalog is
     silent (the dial is a no-op on models that ignore it; hiding it from a capable model is worse). A
     serving aggregator's detail overrides models.dev (adds ``can_disable_reasoning``). ``supported_efforts``
@@ -566,11 +697,18 @@ def _apply_capabilities(rows: list[dict], *, metadata_config: dict | None = None
                 except Exception:
                     reasoning = True
 
-            fast = resolve_fast_mode_overrides(
-                model, provider=slug, base_url=row.get("api_url")) is not None
+            fast = (
+                resolve_fast_mode_overrides(
+                    model, provider=slug, base_url=row.get("api_url")
+                )
+                is not None
+            )
             entry: dict[str, Any] = {"fast": fast, "reasoning": reasoning}
-            if fast and model_supports_ultrafast(model) and ultrafast_offered(
-                    model, provider=slug, base_url=row.get("api_url")):
+            if (
+                fast
+                and model_supports_ultrafast(model)
+                and ultrafast_offered(model, provider=slug, base_url=row.get("api_url"))
+            ):
                 entry["ultrafast"] = True
 
             if reasoning and read_reasoning_catalog is not None:
@@ -619,20 +757,27 @@ def _apply_featured(rows: list[dict], *, metadata_config: dict | None = None) ->
         slug = str(row.get("slug") or "").strip().lower()
         models = row.get("models") or []
 
-        if row.get("is_user_defined") or not (is_routing_aggregator and is_routing_aggregator(slug)):
+        if row.get("is_user_defined") or not (
+            is_routing_aggregator and is_routing_aggregator(slug)
+        ):
             row["featured_models"] = []
             continue
 
-        by_lab: dict[str, list[tuple[int, str, str]]] = {}  # only multi-lab aggregators get a shortlist
+        by_lab: dict[
+            str, list[tuple[int, str, str]]
+        ] = {}  # only multi-lab aggregators get a shortlist
         for pos, model in enumerate(models):
             lab = model.split("/", 1)[0] if "/" in model else ""
-            if not lab:  # no vendor prefix → single-namespace provider, not an aggregator
+            if (
+                not lab
+            ):  # no vendor prefix → single-namespace provider, not an aggregator
                 by_lab = {}
                 break
             date = ""
             if get_model_info is not None:
-                info = (get_model_info(slug, model, config=metadata_config)
-                        or get_model_info("openrouter", model, config=metadata_config))
+                info = get_model_info(
+                    slug, model, config=metadata_config
+                ) or get_model_info("openrouter", model, config=metadata_config)
                 date = getattr(info, "release_date", "") if info else ""
             by_lab.setdefault(lab, []).append((pos, date, model))
 
@@ -645,7 +790,9 @@ def _apply_featured(rows: list[dict], *, metadata_config: dict | None = None) ->
             # Newest release_date first; earlier list position breaks ties (sole key when undated).
             ranked = sorted(entries, key=lambda e: (e[1], -e[0]), reverse=True)
             featured.extend(model for _pos, _date, model in ranked[:_FEATURED_PER_LAB])
-        order = {m: i for i, m in enumerate(models)}  # keep the row's model order for stable rendering
+        order = {
+            m: i for i, m in enumerate(models)
+        }  # keep the row's model order for stable rendering
         row["featured_models"] = sorted(featured, key=lambda m: order[m])
 
 
@@ -664,7 +811,10 @@ def _apply_custom_aliases(rows: list[dict]) -> None:
             continue
         try:
             row["aliases"] = sorted(
-                custom_provider_aliases(str(row.get("name", "")), str(row.get("slug", ""))))
+                custom_provider_aliases(
+                    str(row.get("name", "")), str(row.get("slug", ""))
+                )
+            )
         except Exception:
             continue
 
@@ -683,17 +833,31 @@ def _provider_auth_hint(slug: str) -> tuple[str, str]:
 
 
 def _row(slug: str, name: str, is_current: bool, **extra: Any) -> dict:
-    return {"slug": slug, "name": name, "is_current": is_current, "is_user_defined": False, **extra}
+    return {
+        "slug": slug,
+        "name": name,
+        "is_current": is_current,
+        "is_user_defined": False,
+        **extra,
+    }
 
 
 def _canonical_row(entry, cur: str, **extra: Any) -> dict:
     from clawk_cli.models import _PROVIDER_LABELS
 
-    return _row(entry.slug, _PROVIDER_LABELS.get(entry.slug, entry.label), entry.slug.lower() == cur, **extra)
+    return _row(
+        entry.slug,
+        _PROVIDER_LABELS.get(entry.slug, entry.label),
+        entry.slug.lower() == cur,
+        **extra,
+    )
 
 
 def _append_unconfigured_rows(
-    rows: list[dict], ctx: ConfigContext, *, current_only: bool = False,
+    rows: list[dict],
+    ctx: ConfigContext,
+    *,
+    current_only: bool = False,
 ) -> list[dict]:
     """Empty setup skeletons for canonical providers missing from ``rows`` — except the *current* one:
     if config.yaml still points at it but credentials are gone, keep a row carrying the saved model so
@@ -722,24 +886,39 @@ def _append_unconfigured_rows(
         if current_only and entry.slug.lower() != cur:
             continue
         if entry.slug.lower() == cur:
-            saved_model = "" if _model_requires_account_discovery(entry.slug, cur_model) else cur_model
+            saved_model = (
+                ""
+                if _model_requires_account_discovery(entry.slug, cur_model)
+                else cur_model
+            )
             auth_type, key_env = _provider_auth_hint(entry.slug)
             tail = (
                 "Astra requires successful account-scoped model discovery."
-                if cur_model and not saved_model else "Showing the saved model only."
+                if cur_model and not saved_model
+                else "Showing the saved model only."
             )
             warning = (
                 f"Configured provider missing usable credentials; paste {key_env} to reactivate. {tail}"
                 if auth_type == "api_key" and key_env
                 else f"Configured provider is not authenticated; run `clawk model` to reactivate. {tail}"
             )
-            extras.append(_canonical_row(
-                entry, cur, models=[saved_model] if saved_model else [], total_models=1 if saved_model else 0,
-                source="configured-current", authenticated=False, auth_type=auth_type, key_env=key_env,
-                warning=warning,
-            ))
+            extras.append(
+                _canonical_row(
+                    entry,
+                    cur,
+                    models=[saved_model] if saved_model else [],
+                    total_models=1 if saved_model else 0,
+                    source="configured-current",
+                    authenticated=False,
+                    auth_type=auth_type,
+                    key_env=key_env,
+                    warning=warning,
+                )
+            )
             continue
-        extras.append(_canonical_row(entry, cur, models=[], total_models=0, source="canonical"))
+        extras.append(
+            _canonical_row(entry, cur, models=[], total_models=0, source="canonical")
+        )
     return extras
 
 
@@ -747,7 +926,10 @@ def _anthropic_oauth_credentials_present() -> bool:
     """True when the user explicitly authenticated Anthropic via OAuth (Clawksis device flow or Claude Code
     login) — those leave no trace in active_provider / model.provider / API-key env vars."""
     try:
-        from agent.anthropic_credentials import read_claude_code_credentials, read_clawk_oauth_credentials
+        from agent.anthropic_credentials import (
+            read_claude_code_credentials,
+            read_clawk_oauth_credentials,
+        )
 
         readers = (read_clawk_oauth_credentials, read_claude_code_credentials)
         if any((read() or {}).get("accessToken") for read in readers):
@@ -762,8 +944,11 @@ def _anthropic_oauth_credentials_present() -> bool:
         from clawk_cli.auth import read_credential_pool
 
         for entry in read_credential_pool("anthropic"):
-            if (isinstance(entry, dict) and entry.get("auth_type") == AUTH_TYPE_OAUTH
-                    and str(entry.get("access_token") or "").strip()):
+            if (
+                isinstance(entry, dict)
+                and entry.get("auth_type") == AUTH_TYPE_OAUTH
+                and str(entry.get("access_token") or "").strip()
+            ):
                 return True
     except Exception:
         pass
@@ -781,8 +966,11 @@ def _filter_explicit_provider_rows(rows: list[dict], ctx: ConfigContext) -> list
         # Managed local models are explicit configuration by existence (gigabytes downloaded into the
         # machine-scoped dir); there is deliberately no config credential, so without the source clause
         # the row would only survive on the profile where Use was last clicked.
-        if (row.get("is_user_defined") or (current_slug and slug == current_slug)
-                or row.get("source") == "local-runtime"):
+        if (
+            row.get("is_user_defined")
+            or (current_slug and slug == current_slug)
+            or row.get("source") == "local-runtime"
+        ):
             return True
         if slug == "moa":
             # Virtual routing mode, not a configured provider: hide unless current (above) or the user
@@ -796,17 +984,28 @@ def _filter_explicit_provider_rows(rows: list[dict], ctx: ConfigContext) -> list
             or is_provider_explicitly_configured(slug)
         )
 
-    return [row for row in rows
-            if (slug := str(row.get("slug", "")).strip().lower()) and _is_explicit(row, slug)]
+    return [
+        row
+        for row in rows
+        if (slug := str(row.get("slug", "")).strip().lower())
+        and _is_explicit(row, slug)
+    ]
 
 
 def _external_process_signed_in(slug: str) -> bool:
     """True when an external-process provider has verified CLI credentials."""
     try:
-        from clawk_cli.auth import PROVIDER_REGISTRY, get_external_process_provider_status
+        from clawk_cli.auth import (
+            PROVIDER_REGISTRY,
+            get_external_process_provider_status,
+        )
+
         pconfig = PROVIDER_REGISTRY.get(slug)
-        return bool(pconfig and pconfig.auth_type == "external_process"
-                    and get_external_process_provider_status(slug).get("auth_verified"))
+        return bool(
+            pconfig
+            and pconfig.auth_type == "external_process"
+            and get_external_process_provider_status(slug).get("auth_verified")
+        )
     except Exception:
         return False
 
@@ -829,11 +1028,19 @@ def _raw_config_has_enabled_moa_preset() -> bool:
     if isinstance(presets, dict):
         return any(
             not isinstance(preset, dict) or preset.get("enabled", True)
-            for name, preset in presets.items() if str(name or "").strip()
+            for name, preset in presets.items()
+            if str(name or "").strip()
         )
 
-    legacy_keys = {"reference_models", "aggregator", "reference_temperature", "aggregator_temperature",
-                   "max_tokens", "reference_max_tokens", "fanout"}
+    legacy_keys = {
+        "reference_models",
+        "aggregator",
+        "reference_temperature",
+        "aggregator_temperature",
+        "max_tokens",
+        "reference_max_tokens",
+        "fanout",
+    }
     return any(key in moa for key in legacy_keys) and bool(moa.get("enabled", True))
 
 
@@ -850,8 +1057,11 @@ def _apply_picker_hints(rows: list[dict]) -> None:
         auth_type, key_env = _provider_auth_hint(row["slug"])
         row["auth_type"] = auth_type
         row["key_env"] = key_env
-        row["warning"] = (f"paste {key_env} to activate" if auth_type == "api_key" and key_env
-                          else f"run `clawk model` to configure ({auth_type})")
+        row["warning"] = (
+            f"paste {key_env} to activate"
+            if auth_type == "api_key" and key_env
+            else f"run `clawk model` to configure ({auth_type})"
+        )
 
 
 def _reorder_canonical(rows: list[dict]) -> list[dict]:
@@ -860,7 +1070,9 @@ def _reorder_canonical(rows: list[dict]) -> list[dict]:
     from clawk_cli.models import CANONICAL_PROVIDERS
 
     order = {e.slug: i for i, e in enumerate(CANONICAL_PROVIDERS)}
-    canon = sorted((r for r in rows if r["slug"] in order), key=lambda r: order[r["slug"]])
+    canon = sorted(
+        (r for r in rows if r["slug"] in order), key=lambda r: order[r["slug"]]
+    )
     extras = [r for r in rows if r["slug"] not in order]
     return canon + extras
 
@@ -871,6 +1083,7 @@ def _attach_nous_plan_usage(row: dict, *, warm: bool):
     by the time someone opens the composer menu. Accounts without a window plan get nothing."""
     try:
         from clawk_cli.model_picker_usage import nous_picker_usage
+
         usage = nous_picker_usage(warm=warm, any_age=not warm)
     except Exception:
         logging.getLogger(__name__).debug("Nous plan usage unavailable", exc_info=True)
@@ -881,7 +1094,11 @@ def _attach_nous_plan_usage(row: dict, *, warm: bool):
         # plan, so it warns near a limit in the existing slot. Once an allowance is full the picker's limit
         # line says it (with what happens next), so the chip would only repeat it; paused plans say so in
         # the plan line.
-        if not usage.paused_reason and not row.get("usage") and not any(g.left_fraction <= 0.0 for g in usage.gauges):
+        if (
+            not usage.paused_reason
+            and not row.get("usage")
+            and not any(g.left_fraction <= 0.0 for g in usage.gauges)
+        ):
             windows = [_plan_usage_window(g) for g in usage.gauges if g.resets_at_ms]
             if windows:
                 row["usage"] = {"windows": windows}
@@ -893,6 +1110,7 @@ def _plan_usage_window(g) -> dict:
     (``Today``), like the other providers' English window labels."""
     from datetime import datetime
     from agent.usage_gauges import WindowGauge, gauge_title
+
     return {
         "label": gauge_title(WindowGauge(g.label, g.scope, g.title or g.label, 0)),
         "used_percent": round(g.used_fraction * 100.0, 2),
@@ -902,7 +1120,9 @@ def _plan_usage_window(g) -> dict:
 
 
 # health: allow CC -- usage-window plans: one branch attaches plan usage to the Nous row (built in _attach_nous_plan_usage); over target on main
-def _apply_pricing(rows: list[dict], *, force_fresh_nous_tier: bool = False, cached_only: bool = False) -> None:
+def _apply_pricing(
+    rows: list[dict], *, force_fresh_nous_tier: bool = False, cached_only: bool = False
+) -> None:
     """Set ``row["pricing"] = {model_id: {input, output, cache | None, free}}``; for Nous also
     ``free_tier`` (account is free-tier) and ``unavailable_models`` (paid models a free user can't pick).
     ``cached_only`` never hits the network: unknown Nous entitlement fails closed (``free_tier_pending``,
@@ -918,7 +1138,9 @@ def _apply_pricing(rows: list[dict], *, force_fresh_nous_tier: bool = False, cac
         partition_nous_models_by_tier,
     )
 
-    nous_free_tier: Optional[bool] = None  # resolved once (cached in models.py for the TTL window)
+    nous_free_tier: Optional[bool] = (
+        None  # resolved once (cached in models.py for the TTL window)
+    )
 
     for row in rows:
         slug = str(row.get("slug", "")).lower()
@@ -937,7 +1159,11 @@ def _apply_pricing(rows: list[dict], *, force_fresh_nous_tier: bool = False, cac
         except Exception:
             raw_pricing = {}
         cached_nous_tier: Optional[bool] = None
-        plan_usage = _attach_nous_plan_usage(row, warm=not cached_only) if slug == "nous" else None
+        plan_usage = (
+            _attach_nous_plan_usage(row, warm=not cached_only)
+            if slug == "nous"
+            else None
+        )
         if slug == "nous" and cached_only:
             cached_nous_tier = get_cached_nous_free_tier()
             if cached_nous_tier is None:
@@ -946,8 +1172,10 @@ def _apply_pricing(rows: list[dict], *, force_fresh_nous_tier: bool = False, cac
                 row["free_tier_pending"] = True
                 row["unavailable_models"] = list(models)
                 if not row.get("warning"):  # say why every model renders locked
-                    row["warning"] = ("Checking Nous plan entitlement… models unlock on the "
-                                      "next picker open or refresh.")
+                    row["warning"] = (
+                        "Checking Nous plan entitlement… models unlock on the "
+                        "next picker open or refresh."
+                    )
                 continue
         if not raw_pricing:
             if slug == "nous":
@@ -966,9 +1194,11 @@ def _apply_pricing(rows: list[dict], *, force_fresh_nous_tier: bool = False, cac
             inp = _format_price_per_mtok(inp_raw) if inp_raw != "" else ""
             out = _format_price_per_mtok(out_raw) if out_raw != "" else ""
             entry: dict = {
-                "input": inp, "output": out,
+                "input": inp,
+                "output": out,
                 "cache": _format_price_per_mtok(cache_raw) if cache_raw else None,
-                "free": inp == "free" and out in ("free", ""),  # both input and output cost nothing
+                "free": inp == "free"
+                and out in ("free", ""),  # both input and output cost nothing
             }
             # Sale chrome is Nous Portal-only (other catalogs' nested pricing.original is ignored); free
             # models get flat -100% chrome, was_* only when the gateway served an original.
@@ -977,7 +1207,10 @@ def _apply_pricing(rows: list[dict], *, force_fresh_nous_tier: bool = False, cac
                 if sale is not None:
                     discount_percent, was_prompt_raw, was_out_raw = sale
                     entry["discount_percent"] = discount_percent
-                    for key, was_raw in (("was_input", was_prompt_raw), ("was_output", was_out_raw)):
+                    for key, was_raw in (
+                        ("was_input", was_prompt_raw),
+                        ("was_output", was_out_raw),
+                    ):
                         if was_raw != "":
                             entry[key] = _format_price_per_mtok(was_raw)
             formatted[mid] = entry
@@ -988,21 +1221,31 @@ def _apply_pricing(rows: list[dict], *, force_fresh_nous_tier: bool = False, cac
         if slug == "nous":
             try:
                 if nous_free_tier is None:
-                    nous_free_tier = (cached_nous_tier if cached_only
-                                      else check_nous_free_tier(force_fresh=force_fresh_nous_tier))
+                    nous_free_tier = (
+                        cached_nous_tier
+                        if cached_only
+                        else check_nous_free_tier(force_fresh=force_fresh_nous_tier)
+                    )
                 row["free_tier"] = bool(nous_free_tier)
                 row["unavailable_models"] = (
-                    partition_nous_models_by_tier(list(models), raw_pricing, free_tier=True)[1]
-                    if nous_free_tier else [])
+                    partition_nous_models_by_tier(
+                        list(models), raw_pricing, free_tier=True
+                    )[1]
+                    if nous_free_tier
+                    else []
+                )
             except Exception:  # tier detection failed — fail open (no gating)
                 row["free_tier"] = False
                 row["unavailable_models"] = []
             if plan_usage is not None:
                 from clawk_cli.model_picker_usage import usage_levels
+
                 # The gateway's per-plan word per model (free / low / medium / top_tier).
                 row["usage_levels"] = usage_levels(list(models), raw_pricing)
                 # Top-tier marks from the gateway (it decides, not the client).
-                row["plan_usage"] = plan_usage.with_pricing({m: raw_pricing.get(m) for m in models}).to_payload()
+                row["plan_usage"] = plan_usage.with_pricing(
+                    {m: raw_pricing.get(m) for m in models}
+                ).to_payload()
                 # Window plans: the picker shows the usage word, not per-token prices.
                 row.pop("pricing", None)
 
@@ -1027,19 +1270,34 @@ def _local_runtime_row(ctx: ConfigContext) -> dict | None:
                 from clawk_cli.local_runtime.endpoint import _state_endpoint
 
                 managed = _state_endpoint()
-                current = bool(managed and (ctx.current_base_url or "").strip().rstrip("/")
-                               == managed["base_url"].rstrip("/"))
+                current = bool(
+                    managed
+                    and (ctx.current_base_url or "").strip().rstrip("/")
+                    == managed["base_url"].rstrip("/")
+                )
             except Exception:
                 current = False
         # Bare "Local" user-facing (engine name is an implementation detail); authenticated = reachability.
-        return _row(LLAMACPP_PROVIDER_ID, "Local", current, models=staged, total_models=len(staged),
-                    source="local-runtime", authenticated=True, auth_type="local", warning=None)
+        return _row(
+            LLAMACPP_PROVIDER_ID,
+            "Local",
+            current,
+            models=staged,
+            total_models=len(staged),
+            source="local-runtime",
+            authenticated=True,
+            auth_type="local",
+            warning=None,
+        )
     except Exception:
         return None
 
 
 def _prewarm_pricing_async(
-    rows: list[dict], *, current_provider: str = "", current_base_url: str = "",
+    rows: list[dict],
+    *,
+    current_provider: str = "",
+    current_base_url: str = "",
 ) -> Optional[Thread]:
     """Warm picker pricing caches without delaying the current payload (one worker per
     profile + endpoint scope; a live worker is reused)."""
@@ -1049,15 +1307,27 @@ def _prewarm_pricing_async(
     slugs = {
         (
             str(row.get("slug") or "").lower(),
-            str(row.get("api_url") or "") if str(row.get("slug") or "").lower().startswith("custom:") else "",
+            str(row.get("api_url") or "")
+            if str(row.get("slug") or "").lower().startswith("custom:")
+            else "",
         )
-        for row in rows if row.get("slug")
+        for row in rows
+        if row.get("slug")
     }
-    endpoint_scope = tuple(sorted(
-        (slug, pricing_cache_scope(
-            slug, base_url=base_url, current_provider=current_provider, current_base_url=current_base_url,
-        ))
-        for slug, base_url in slugs))
+    endpoint_scope = tuple(
+        sorted(
+            (
+                slug,
+                pricing_cache_scope(
+                    slug,
+                    base_url=base_url,
+                    current_provider=current_provider,
+                    current_base_url=current_base_url,
+                ),
+            )
+            for slug, base_url in slugs
+        )
+    )
     prewarm_key = (clawk_home_key(), endpoint_scope)
 
     with _pricing_prewarm_lock:
@@ -1075,8 +1345,12 @@ def _prewarm_pricing_async(
                     if _pricing_prewarm_threads.get(prewarm_key) is current_thread():
                         _pricing_prewarm_threads.pop(prewarm_key, None)
 
-        thread = Thread(target=copy_context().run, args=(_worker,),
-                        name="clawk-picker-pricing-prewarm", daemon=True)
+        thread = Thread(
+            target=copy_context().run,
+            args=(_worker,),
+            name="clawk-picker-pricing-prewarm",
+            daemon=True,
+        )
         _pricing_prewarm_threads[prewarm_key] = thread
         thread.start()
         return thread
@@ -1101,8 +1375,15 @@ def _moa_provider_row(current_provider: str = "") -> dict | None:
         if not models:
             return None
         return _row(
-            "moa", "Mixture of Agents", (current_provider or "").lower() == "moa", models=models,
-            total_models=len(models), source="virtual", authenticated=True, auth_type="virtual",
-            warning="Aggregator is the acting model billed for the run; references only advise once per user turn by default.")
+            "moa",
+            "Mixture of Agents",
+            (current_provider or "").lower() == "moa",
+            models=models,
+            total_models=len(models),
+            source="virtual",
+            authenticated=True,
+            auth_type="virtual",
+            warning="Aggregator is the acting model billed for the run; references only advise once per user turn by default.",
+        )
     except Exception:
         return None

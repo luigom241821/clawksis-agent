@@ -14,6 +14,7 @@ next turn): checks still running are tracked per session (:func:`track_pending`)
 final answer is accepted :func:`settle_for_agent` waits for them (bounded) and returns every verdict
 still undelivered, which ``agent.turn_stop_gates`` hands to the model as a new message.
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -24,7 +25,9 @@ from dataclasses import dataclass
 from typing import Any, Iterator, Optional
 
 _OWNER: ContextVar[Optional[str]] = ContextVar("clawk_lsp_deferred_owner", default=None)
-_MAX_OWNERS = 64  # sessions that never drain (a one-shot caller) must not grow this forever
+_MAX_OWNERS = (
+    64  # sessions that never drain (a one-shot caller) must not grow this forever
+)
 _MAX_PER_OWNER = 32
 _LOCK = threading.Lock()
 _SETTLED = threading.Condition(_LOCK)
@@ -123,18 +126,25 @@ def settled(owner: str, token: object) -> None:
 
 
 def _owners(agent: Any) -> tuple[Optional[str], ...]:
-    owners = (getattr(agent, "session_id", None), getattr(agent, "_current_task_id", None))
+    owners = (
+        getattr(agent, "session_id", None),
+        getattr(agent, "_current_task_id", None),
+    )
     return tuple(o if isinstance(o, str) else None for o in owners)
 
 
-def settle_for_agent(agent: Any, timeout: float = TURN_END_WAIT) -> list[tuple[str, str]]:
+def settle_for_agent(
+    agent: Any, timeout: float = TURN_END_WAIT
+) -> list[tuple[str, str]]:
     """Turn end: wait up to ``timeout`` for ``agent``'s running checks, then pop every undelivered
     ``(path, text)`` verdict.  Returns at once when nothing is running."""
     owners = [o for o in dict.fromkeys(_owners(agent)) if o]
     if not owners:
         return []
     with _SETTLED:
-        _SETTLED.wait_for(lambda: not any(_PENDING.get(o) for o in owners), timeout=timeout)
+        _SETTLED.wait_for(
+            lambda: not any(_PENDING.get(o) for o in owners), timeout=timeout
+        )
     return pop_notes(*owners)
 
 
@@ -145,9 +155,21 @@ def forward_to_agent(agent: Any) -> None:
     if not notes:
         return
     from agent.plugin_live_notes import queue_plugin_notice
+
     for path, text in notes:
         queue_plugin_notice(agent, f"lsp:{path}", text)
 
 
-__all__ = ["TURN_END_WAIT", "bind_owner", "current_owner", "forward_to_agent", "pop_notes", "post", "restore",
-           "settle_for_agent", "settled", "take", "track_pending"]
+__all__ = [
+    "TURN_END_WAIT",
+    "bind_owner",
+    "current_owner",
+    "forward_to_agent",
+    "pop_notes",
+    "post",
+    "restore",
+    "settle_for_agent",
+    "settled",
+    "take",
+    "track_pending",
+]

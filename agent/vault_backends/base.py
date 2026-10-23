@@ -26,9 +26,9 @@ class UnlockRequired(Exception):
 
 
 class LoginBackend(ABC):
-    name: str                # config key: local | onepassword | bitwarden
-    display_name: str        # user-facing
-    prefix: str              # handle prefix ("vault_", "op:", "bw:")
+    name: str  # config key: local | onepassword | bitwarden
+    display_name: str  # user-facing
+    prefix: str  # handle prefix ("vault_", "op:", "bw:")
     needs_unlock: bool = False
 
     def owns(self, handle: str) -> bool:
@@ -59,29 +59,53 @@ class LoginBackend(ABC):
         return {"password": self.resolve_password(handle)}
 
 
-def run_with_stdin_secret(argv: Sequence[str], *, env: dict[str, str], secret: str, timeout: float,
-                          label: str) -> subprocess.CompletedProcess:
+def run_with_stdin_secret(
+    argv: Sequence[str], *, env: dict[str, str], secret: str, timeout: float, label: str
+) -> subprocess.CompletedProcess:
     """Run a manager CLI feeding *secret* on stdin (never argv, never env). Spawn/timeout → RuntimeError."""
     try:
         return subprocess.run(
-            list(argv), env=env, input=secret + "\n", capture_output=True, text=True,
-            encoding="utf-8", errors="replace", timeout=timeout, check=False)
+            list(argv),
+            env=env,
+            input=secret + "\n",
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            check=False,
+        )
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError(f"{label} unlock timed out after {timeout:.0f}s") from exc
     except OSError as exc:
         raise RuntimeError(f"failed to invoke {label}: {exc}") from exc
 
 
-def run_with_secret_env(argv: Sequence[str], *, env: dict[str, str], secret_env: str, secret: str, timeout: float,
-                        label: str) -> subprocess.CompletedProcess:
+def run_with_secret_env(
+    argv: Sequence[str],
+    *,
+    env: dict[str, str],
+    secret_env: str,
+    secret: str,
+    timeout: float,
+    label: str,
+) -> subprocess.CompletedProcess:
     """Run a manager CLI whose non-interactive contract reads the secret from a named env var.
     The variable is set on the child's environment only (never argv, never our process)."""
     child_env = dict(env)
     child_env[secret_env] = secret
     try:
         return subprocess.run(
-            list(argv), env=child_env, stdin=subprocess.DEVNULL, capture_output=True, text=True,
-            encoding="utf-8", errors="replace", timeout=timeout, check=False)
+            list(argv),
+            env=child_env,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            check=False,
+        )
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError(f"{label} unlock timed out after {timeout:.0f}s") from exc
     except OSError as exc:
@@ -90,6 +114,7 @@ def run_with_secret_env(argv: Sequence[str], *, env: dict[str, str], secret_env:
 
 def _cfg() -> dict:
     from clawk_cli.config import load_config_readonly
+
     cfg = load_config_readonly().get("vault") or {}
     return cfg if isinstance(cfg, dict) else {}
 
@@ -97,18 +122,23 @@ def _cfg() -> dict:
 def external_backend_classes():
     from agent.vault_backends.bitwarden import BitwardenLoginBackend
     from agent.vault_backends.onepassword import OnePasswordLoginBackend
+
     return (OnePasswordLoginBackend, BitwardenLoginBackend)
 
 
 def is_installed(name: str) -> bool:
     """Is the manager CLI reachable — honouring a configured ``binary_path`` over PATH."""
     import shutil
+
     section = _cfg().get(name) or {}
-    explicit = str(section.get("binary_path") or "") if isinstance(section, dict) else ""
+    explicit = (
+        str(section.get("binary_path") or "") if isinstance(section, dict) else ""
+    )
     if explicit:
         return Path(explicit).is_file()
     if name == "onepassword":
         from agent.secret_sources.onepassword import find_op
+
         return find_op() is not None
     return shutil.which("bw") is not None
 

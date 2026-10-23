@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Run Docker boot-time config migrations safely."""
+
 from __future__ import annotations
 
 import shutil
@@ -13,7 +14,10 @@ from clawk_cli.config import (
     get_env_path,
     migrate_config,
 )
-from clawk_cli.config_version_stamp import check_config_version, read_config_version_stamp
+from clawk_cli.config_version_stamp import (
+    check_config_version,
+    read_config_version_stamp,
+)
 from clawk_cli.config_backups import backup_config, list_config_backups
 from clawk_cli.config_migrations import (
     SUPPORT_FLOOR_VERSION,
@@ -27,7 +31,8 @@ def _backup_existing(paths: Iterable[Path]) -> dict[Path, Path]:
     backups: dict[Path, Path] = {}
     for path in paths:
         dest = backup_config(path, "pre-docker-migrate") or next(
-            iter(list_config_backups(path, "pre-docker-migrate")), None)
+            iter(list_config_backups(path, "pre-docker-migrate")), None
+        )
         if dest is not None:
             backups[path] = dest
     return backups
@@ -45,7 +50,9 @@ def _restore_backups(backups: dict[Path, Path]) -> list[Path]:
 
 def main() -> int:
     if env_var_enabled("CLAWK_SKIP_CONFIG_MIGRATION"):
-        print("[config-migrate] CLAWK_SKIP_CONFIG_MIGRATION is set; skipping config migration")
+        print(
+            "[config-migrate] CLAWK_SKIP_CONFIG_MIGRATION is set; skipping config migration"
+        )
         return 0
 
     # Strict read: malformed YAML or a non-mapping root is left alone with a warning and the
@@ -54,7 +61,10 @@ def main() -> int:
     try:
         stamp, latest_ver = read_config_version_stamp(raise_on_parse_error=True)
     except InvalidUserConfigError as exc:
-        print(f"[config-migrate] WARNING: {exc}; leaving config.yaml untouched", file=sys.stderr)
+        print(
+            f"[config-migrate] WARNING: {exc}; leaving config.yaml untouched",
+            file=sys.stderr,
+        )
         return 0
     current_ver = 0 if stamp is None else stamp
     if current_ver >= latest_ver:
@@ -74,7 +84,9 @@ def main() -> int:
         return 0
 
     backups = _backup_existing((get_config_path(), get_env_path()))
-    backup_text = ", ".join(str(path) for path in backups.values()) if backups else "none"
+    backup_text = (
+        ", ".join(str(path) for path in backups.values()) if backups else "none"
+    )
     print(
         f"[config-migrate] Migrating config schema {current_ver} -> {latest_ver}; "
         f"backups: {backup_text}"
@@ -93,7 +105,9 @@ def main() -> int:
     post_ver, _ = check_config_version()
     if post_ver < latest_ver:
         restored = _restore_backups(backups)
-        restored_text = ", ".join(str(path) for path in restored) if restored else "none"
+        restored_text = (
+            ", ".join(str(path) for path in restored) if restored else "none"
+        )
         raise RuntimeError(
             f"migration did not advance config version to {latest_ver} "
             f"(still {post_ver}); restored: {restored_text}"

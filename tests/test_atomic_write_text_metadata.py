@@ -105,9 +105,7 @@ class TestPreserveMode:
 
         chown_calls: list[tuple] = []
         monkeypatch.setattr("utils._preserve_file_owner", lambda _p: (123, 456))
-        monkeypatch.setattr(
-            "utils.os.chown", lambda *a: chown_calls.append(a)
-        )
+        monkeypatch.setattr("utils.os.chown", lambda *a: chown_calls.append(a))
 
         atomic_write_text(target, "new\n")
 
@@ -119,9 +117,7 @@ class TestCreateMode:
         target = tmp_path / "SOUL.md"
         assert not target.exists()
 
-        atomic_write_text(
-            target, "# Persona\n", preserve_mode=True, create_mode=0o644
-        )
+        atomic_write_text(target, "# Persona\n", preserve_mode=True, create_mode=0o644)
 
         assert stat.S_IMODE(target.stat().st_mode) == 0o644
 
@@ -130,15 +126,11 @@ class TestCreateMode:
         target.write_text("old\n", encoding="utf-8")
         os.chmod(target, 0o600)
 
-        atomic_write_text(
-            target, "new\n", preserve_mode=True, create_mode=0o644
-        )
+        atomic_write_text(target, "new\n", preserve_mode=True, create_mode=0o644)
 
         assert stat.S_IMODE(target.stat().st_mode) == 0o600
 
-    def test_create_mode_never_rewrites_an_existing_file(
-        self, tmp_path: Path
-    ) -> None:
+    def test_create_mode_never_rewrites_an_existing_file(self, tmp_path: Path) -> None:
         """create_mode without preserve_mode must not chmod an existing file."""
         target = tmp_path / "notes.md"
         target.write_text("old\n", encoding="utf-8")

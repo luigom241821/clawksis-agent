@@ -44,7 +44,9 @@ _ONESHOT_INSTRUCTIONS = (
 _ROLE_LABELS = {"user": "USER", "assistant": "ASSISTANT", "tool": "TOOL RESULT"}
 
 
-def trim_snapshot_for_fork(history: Optional[list[dict[str, Any]]]) -> list[dict[str, Any]]:
+def trim_snapshot_for_fork(
+    history: Optional[list[dict[str, Any]]],
+) -> list[dict[str, Any]]:
     """Drop trailing messages until the snapshot ends with a completed assistant text.
 
     A mid-turn tail (unresolved ``tool_calls``, tool result, in-flight user message) breaks
@@ -53,13 +55,19 @@ def trim_snapshot_for_fork(history: Optional[list[dict[str, Any]]]) -> list[dict
     msgs = list(history or [])
     while msgs:
         last = msgs[-1]
-        if isinstance(last, dict) and last.get("role") == "assistant" and not last.get("tool_calls"):
+        if (
+            isinstance(last, dict)
+            and last.get("role") == "assistant"
+            and not last.get("tool_calls")
+        ):
             break
         msgs.pop()
     return msgs
 
 
-def render_history_for_side_question(history: Optional[list[dict[str, Any]]], char_budget: int = _TRANSCRIPT_CHAR_BUDGET) -> str:
+def render_history_for_side_question(
+    history: Optional[list[dict[str, Any]]], char_budget: int = _TRANSCRIPT_CHAR_BUDGET
+) -> str:
     """Plain-text transcript for the fallback path: newest-biased fit to ``char_budget``,
     tool calls summarized by name, tool results truncated, system prompt skipped."""
     lines: list[str] = []
@@ -69,7 +77,11 @@ def render_history_for_side_question(history: Optional[list[dict[str, Any]]], ch
         role = msg.get("role")
         text = _msg_text(msg)
         if role == "assistant" and msg.get("tool_calls"):
-            names = [(tc.get("function") or {}).get("name", "?") for tc in msg["tool_calls"] if isinstance(tc, dict)]
+            names = [
+                (tc.get("function") or {}).get("name", "?")
+                for tc in msg["tool_calls"]
+                if isinstance(tc, dict)
+            ]
             lines.append(f"ASSISTANT [called tools: {', '.join(names)}]")
         label = _ROLE_LABELS.get(role)
         if label and text:
@@ -92,6 +104,7 @@ def _side_question_task_config() -> dict[str, Any]:
     """Return ``auxiliary.side_question`` from config (or ``{}``)."""
     try:
         from clawk_cli.config import load_config_readonly
+
         aux = load_config_readonly().get("auxiliary")
     except Exception:
         return {}
@@ -99,8 +112,12 @@ def _side_question_task_config() -> dict[str, Any]:
     return task if isinstance(task, dict) else {}
 
 
-def _answer_via_fork(parent_agent: Any, question: str, history: Optional[list[dict[str, Any]]],
-                     on_fork: Optional[Callable[[Any], None]] = None) -> str:
+def _answer_via_fork(
+    parent_agent: Any,
+    question: str,
+    history: Optional[list[dict[str, Any]]],
+    on_fork: Optional[Callable[[Any], None]] = None,
+) -> str:
     """Answer via a cache-parity fork of ``parent_agent`` on the calling thread.
 
     An empty thread-scoped tool whitelist denies every tool call at dispatch: ``tools[]``
@@ -109,21 +126,34 @@ def _answer_via_fork(parent_agent: Any, question: str, history: Optional[list[di
     ``on_fork(None)`` follows its teardown.
     """
     from agent.background_review import (
-        _digest_history, _record_review_usage_to_parent, _snapshot_review_usage, build_cache_parity_fork,
+        _digest_history,
+        _record_review_usage_to_parent,
+        _snapshot_review_usage,
+        build_cache_parity_fork,
     )
     from clawk_cli.plugins import clear_thread_tool_whitelist, set_thread_tool_whitelist
 
-    fork, _rt, routed = build_cache_parity_fork(parent_agent, _side_question_task_config(),
-                                                max_iterations=_FORK_MAX_ITERATIONS, write_origin="side_question")
+    fork, _rt, routed = build_cache_parity_fork(
+        parent_agent,
+        _side_question_task_config(),
+        max_iterations=_FORK_MAX_ITERATIONS,
+        write_origin="side_question",
+    )
     if on_fork is not None:
         on_fork(fork)
     try:
-        set_thread_tool_whitelist(set(), deny_msg_fmt=(
-            "Side question (/btw) denied tool call: {tool_name}. "
-            "Tools are disabled here — answer directly from the conversation context."))
+        set_thread_tool_whitelist(
+            set(),
+            deny_msg_fmt=(
+                "Side question (/btw) denied tool call: {tool_name}. "
+                "Tools are disabled here — answer directly from the conversation context."
+            ),
+        )
         snapshot = trim_snapshot_for_fork(history)
-        result = fork.run_conversation(user_message=f"{_FORK_PROMPT}\n\nSide question: {question}",
-                                       conversation_history=_digest_history(snapshot) if routed else snapshot)
+        result = fork.run_conversation(
+            user_message=f"{_FORK_PROMPT}\n\nSide question: {question}",
+            conversation_history=_digest_history(snapshot) if routed else snapshot,
+        )
         answer = (result or {}).get("final_response", "") or ""
         if not answer and result and result.get("error"):
             raise RuntimeError(str(result["error"]))
@@ -131,8 +161,13 @@ def _answer_via_fork(parent_agent: Any, question: str, history: Optional[list[di
     finally:
         clear_thread_tool_whitelist()
         # Attribute the fork's usage to the parent session; teardown never raises.
-        for step in (lambda: _record_review_usage_to_parent(parent_agent, _snapshot_review_usage(fork)),
-                     fork.shutdown_memory_provider, fork.close):
+        for step in (
+            lambda: _record_review_usage_to_parent(
+                parent_agent, _snapshot_review_usage(fork)
+            ),
+            fork.shutdown_memory_provider,
+            fork.close,
+        ):
             try:
                 step()
             except Exception:
@@ -141,7 +176,9 @@ def _answer_via_fork(parent_agent: Any, question: str, history: Optional[list[di
             on_fork(None)
 
 
-def _answer_via_oneshot(question: str, history: Optional[list[dict[str, Any]]], **run_kwargs: Any) -> str:
+def _answer_via_oneshot(
+    question: str, history: Optional[list[dict[str, Any]]], **run_kwargs: Any
+) -> str:
     """Fallback: answer from a rendered transcript digest in one aux call."""
     from agent.oneshot import run_oneshot
 
@@ -149,13 +186,24 @@ def _answer_via_oneshot(question: str, history: Optional[list[dict[str, Any]]], 
         f"Conversation transcript (snapshot):\n-----\n{render_history_for_side_question(history)}\n-----\n\n"
         f"Side question: {question}"
     )
-    return run_oneshot(instructions=_ONESHOT_INSTRUCTIONS, user_input=user_input, task=SIDE_QUESTION_TASK, **run_kwargs)
+    return run_oneshot(
+        instructions=_ONESHOT_INSTRUCTIONS,
+        user_input=user_input,
+        task=SIDE_QUESTION_TASK,
+        **run_kwargs,
+    )
 
 
 def answer_side_question(
-    question: str, history: Optional[list[dict[str, Any]]], *, parent_agent: Any = None,
-    main_runtime: Optional[dict[str, Any]] = None, max_tokens: int = 2048, temperature: Optional[float] = 0.3,
-    timeout: float = 180.0, on_fork: Optional[Callable[[Any], None]] = None,
+    question: str,
+    history: Optional[list[dict[str, Any]]],
+    *,
+    parent_agent: Any = None,
+    main_runtime: Optional[dict[str, Any]] = None,
+    max_tokens: int = 2048,
+    temperature: Optional[float] = 0.3,
+    timeout: float = 180.0,
+    on_fork: Optional[Callable[[Any], None]] = None,
     should_stop: Optional[Callable[[], bool]] = None,
 ) -> str:
     """Fork when ``parent_agent`` is live, else (or on empty answer / failure) the one-shot
@@ -169,15 +217,28 @@ def answer_side_question(
 
     if parent_agent is not None:
         try:
-            answer = (_answer_via_fork(parent_agent, question, history, on_fork) if on_fork is not None
-                      else _answer_via_fork(parent_agent, question, history))
+            answer = (
+                _answer_via_fork(parent_agent, question, history, on_fork)
+                if on_fork is not None
+                else _answer_via_fork(parent_agent, question, history)
+            )
             if answer:
                 return answer
-            logger.warning("/btw fork returned an empty answer; falling back to one-shot")
+            logger.warning(
+                "/btw fork returned an empty answer; falling back to one-shot"
+            )
         except Exception:
-            logger.warning("/btw cache-parity fork failed; falling back to one-shot", exc_info=True)
+            logger.warning(
+                "/btw cache-parity fork failed; falling back to one-shot", exc_info=True
+            )
     if should_stop is not None and should_stop():
         raise RuntimeError("side question stopped")
 
-    return _answer_via_oneshot(question, history, main_runtime=main_runtime, max_tokens=max_tokens,
-                               temperature=temperature, timeout=timeout)
+    return _answer_via_oneshot(
+        question,
+        history,
+        main_runtime=main_runtime,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        timeout=timeout,
+    )

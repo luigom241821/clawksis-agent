@@ -23,11 +23,9 @@ EXTRA = "When tabular output would help, invoke the table_formatting skill."
 
 
 class TestResolvePlatformHint:
-
     def test_missing_attr_returns_default(self):
         a = types.SimpleNamespace()  # no _platform_hint_overrides at all
         assert _resolve_platform_hint(a, "whatsapp", DEFAULT) == DEFAULT
-
 
     def test_append_dict(self):
         a = _agent({"whatsapp": {"append": EXTRA}})
@@ -41,20 +39,10 @@ class TestResolvePlatformHint:
         assert out == EXTRA
         assert DEFAULT not in out
 
-
-
     def test_other_platform_unaffected(self):
         """An override for whatsapp must not change telegram's hint."""
         a = _agent({"whatsapp": {"append": EXTRA}})
         tg_default = "You are on Telegram. Markdown works."
         assert _resolve_platform_hint(a, "telegram", tg_default) == tg_default
 
-
     # --- defensive / malformed input: never break prompt assembly ---
-
-
-
-
-
-
-

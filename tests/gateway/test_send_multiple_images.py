@@ -50,6 +50,7 @@ class _StubAdapter(BasePlatformAdapter):
 
     async def send(self, chat_id, content, reply_to=None, **kwargs):
         from gateway.platforms.base import SendResult
+
         return SendResult(success=True)
 
     async def get_chat_info(self, chat_id):
@@ -57,16 +58,19 @@ class _StubAdapter(BasePlatformAdapter):
 
     async def send_image(self, chat_id, image_url, caption=None, **kwargs):
         from gateway.platforms.base import SendResult
+
         self.sent_images.append((chat_id, image_url, caption))
         return SendResult(success=True, message_id=str(len(self.sent_images)))
 
     async def send_animation(self, chat_id, animation_url, caption=None, **kwargs):
         from gateway.platforms.base import SendResult
+
         self.sent_animations.append((chat_id, animation_url, caption))
         return SendResult(success=True, message_id=str(len(self.sent_animations)))
 
     async def send_image_file(self, chat_id, image_path, caption=None, **kwargs):
         from gateway.platforms.base import SendResult
+
         self.sent_files.append((chat_id, image_path, caption))
         return SendResult(success=True, message_id=str(len(self.sent_files)))
 
@@ -104,9 +108,12 @@ class TestTelegramMultiImage:
     def test_single_batch_under_10_calls_send_media_group_once(self, adapter):
         """3 photos → one send_media_group call with 3 items."""
         import telegram
+
         images = [(f"https://x.com/{i}.png", f"alt{i}") for i in range(3)]
         # Make InputMediaPhoto a concrete class that records its args
-        telegram.InputMediaPhoto = MagicMock(side_effect=lambda media, caption=None: {"media": media, "caption": caption})
+        telegram.InputMediaPhoto = MagicMock(
+            side_effect=lambda media, caption=None: {"media": media, "caption": caption}
+        )
 
         _run(adapter.send_multiple_images("12345", images))
 
@@ -118,13 +125,19 @@ class TestTelegramMultiImage:
     def test_batch_over_10_chunks(self, adapter):
         """15 photos → two send_media_group calls (10 + 5)."""
         import telegram
+
         images = [(f"https://x.com/{i}.png", "") for i in range(15)]
-        telegram.InputMediaPhoto = MagicMock(side_effect=lambda media, caption=None: {"media": media})
+        telegram.InputMediaPhoto = MagicMock(
+            side_effect=lambda media, caption=None: {"media": media}
+        )
 
         _run(adapter.send_multiple_images("12345", images))
 
         assert adapter._bot.send_media_group.await_count == 2
-        sizes = [len(c.kwargs["media"]) for c in adapter._bot.send_media_group.await_args_list]
+        sizes = [
+            len(c.kwargs["media"])
+            for c in adapter._bot.send_media_group.await_args_list
+        ]
         assert sizes == [10, 5]
 
 
@@ -157,8 +170,9 @@ class TestDiscordMultiImage:
         a._client = MagicMock()
         return a
 
-
-    def test_url_batch_follows_safe_redirect_location_header(self, adapter, monkeypatch):
+    def test_url_batch_follows_safe_redirect_location_header(
+        self, adapter, monkeypatch
+    ):
         """Redirect handling preserves aiohttp's case-insensitive Location behavior."""
         import plugins.platforms.discord.adapter as discord_adapter
 
@@ -283,10 +297,15 @@ def _ensure_slack_mock():
         return
     slack_mod = MagicMock()
     for name in (
-        "slack_bolt", "slack_bolt.app", "slack_bolt.app.async_app",
-        "slack_bolt.adapter", "slack_bolt.adapter.socket_mode",
+        "slack_bolt",
+        "slack_bolt.app",
+        "slack_bolt.app.async_app",
+        "slack_bolt.adapter",
+        "slack_bolt.adapter.socket_mode",
         "slack_bolt.adapter.socket_mode.async_handler",
-        "slack_sdk", "slack_sdk.web", "slack_sdk.web.async_client",
+        "slack_sdk",
+        "slack_sdk.web",
+        "slack_sdk.web.async_client",
         "slack_sdk.errors",
     ):
         sys.modules.setdefault(name, slack_mod)
@@ -344,7 +363,9 @@ class TestMattermostMultiImage:
         a._session = MagicMock()
         a._reply_mode = "thread"
         a._api_post = AsyncMock(return_value={"id": "post123"})
-        a._upload_file = AsyncMock(side_effect=lambda *args, **kwargs: f"fid_{a._upload_file.await_count}")
+        a._upload_file = AsyncMock(
+            side_effect=lambda *args, **kwargs: f"fid_{a._upload_file.await_count}"
+        )
         return a
 
     def test_local_files_uploaded_and_single_post(self, adapter, tmp_path):
@@ -404,5 +425,3 @@ class TestEmailMultiImage:
         assert to_addr == "user@example.com"
         assert len(file_paths) == 3
         assert "alt 0" in body
-
-

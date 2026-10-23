@@ -114,7 +114,9 @@ def test_session_read_handlers_run_sessiondb_work_off_event_loop(monkeypatch, ca
     assert all(thread_id != loop_thread for thread_id in db_threads)
 
 
-def test_session_rename_runs_writer_open_and_update_off_event_loop(monkeypatch, tmp_path):
+def test_session_rename_runs_writer_open_and_update_off_event_loop(
+    monkeypatch, tmp_path
+):
     """Main's rename fix (1769024ca3b) ported to the unified runtime: the PATCH still opens no
     second SessionDB writer (the owning authority applies the ``sidebar`` mutation), and that
     authority's SQLite transaction runs off the event loop thread."""
@@ -138,19 +140,36 @@ def test_session_rename_runs_writer_open_and_update_off_event_loop(monkeypatch, 
 
     with SessionDB(db_path=tmp_path / "state.db") as db:
         db.create_session("sess-1", source="cli")
-        authority = SessionAuthority(SimpleNamespace(_draining=False), profile_id="p", instance_id="owner",
-                                     db=db, epoch=begin_runtime_epoch(db, instance_id="owner"))
+        authority = SessionAuthority(
+            SimpleNamespace(_draining=False),
+            profile_id="p",
+            instance_id="owner",
+            db=db,
+            epoch=begin_runtime_epoch(db, instance_id="owner"),
+        )
         authority.sessions["sess-1"] = LiveSession(None, "route")
         actor = Principal("owner", "p", frozenset({"session:control"}), "http")
-        monkeypatch.setattr(_web_server_sessions, "_open_session_db_for_profile", _open_db)
-        monkeypatch.setattr(_web_server_sessions, "_session_mutation_context", lambda request, profile: (authority, actor))
+        monkeypatch.setattr(
+            _web_server_sessions, "_open_session_db_for_profile", _open_db
+        )
+        monkeypatch.setattr(
+            _web_server_sessions,
+            "_session_mutation_context",
+            lambda request, profile: (authority, actor),
+        )
         monkeypatch.setattr(_mutations, "mutate_runtime_session", _recording_commit)
 
         async def _rename():
-            body = _web_models.SessionRename(title="renamed", request_id="req-1", expected_revision=0)
-            return threading.get_ident(), await _rt_sessions.rename_session_endpoint("sess-1", body, request=object())
+            body = _web_models.SessionRename(
+                title="renamed", request_id="req-1", expected_revision=0
+            )
+            return threading.get_ident(), await _rt_sessions.rename_session_endpoint(
+                "sess-1", body, request=object()
+            )
 
         loop_thread, result = asyncio.run(_rename())
         assert result["ok"] is True and result["title"] == "renamed"
         assert db.get_session("sess-1")["title"] == "renamed"
-    assert write_threads and all(thread_id != loop_thread for thread_id in write_threads)
+    assert write_threads and all(
+        thread_id != loop_thread for thread_id in write_threads
+    )

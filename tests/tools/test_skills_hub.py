@@ -12,12 +12,24 @@ import pytest
 from tools.skills_hub import HubLockFile, TapsManager, append_audit_log
 from tools.skills_hub_github import GitHubAuth, GitHubSource
 from tools.skills_hub_install import (
-    bundle_content_hash, check_for_skill_updates, install_from_quarantine, quarantine_bundle,
+    bundle_content_hash,
+    check_for_skill_updates,
+    install_from_quarantine,
+    quarantine_bundle,
 )
-from tools.skills_hub_models import SkillBundle, SkillMeta, SkillSource, _referenced_support_paths
+from tools.skills_hub_models import (
+    SkillBundle,
+    SkillMeta,
+    SkillSource,
+    _referenced_support_paths,
+)
 from tools.skills_hub_official import OptionalSkillSource
 from tools.skills_hub_search import (
-    CLAWK_INDEX_TTL, _load_clawk_index, create_source_router, parallel_search_sources, unified_search,
+    CLAWK_INDEX_TTL,
+    _load_clawk_index,
+    create_source_router,
+    parallel_search_sources,
+    unified_search,
 )
 from tools.skills_hub_skillssh import SkillsShSource
 from tools.skills_hub_sources import LobeHubSource, UrlSource, WellKnownSkillSource
@@ -26,6 +38,7 @@ from tools.skills_hub_sources import LobeHubSource, UrlSource, WellKnownSkillSou
 # GitHubSource._parse_frontmatter_quick
 # ---------------------------------------------------------------------------
 
+
 class TestParseFrontmatterQuick:
     def test_valid_frontmatter_including_nested_yaml(self):
         content = "---\nname: test-skill\ndescription: A test.\n---\n\n# Body\n"
@@ -33,22 +46,28 @@ class TestParseFrontmatterQuick:
         assert fm["name"] == "test-skill"
         assert fm["description"] == "A test."
 
-        nested = "---\nname: test\nmetadata:\n  clawk:\n    tags: [a, b]\n---\n\nBody.\n"
-        assert GitHubSource._parse_frontmatter_quick(nested)["metadata"]["clawk"]["tags"] == ["a", "b"]
+        nested = (
+            "---\nname: test\nmetadata:\n  clawk:\n    tags: [a, b]\n---\n\nBody.\n"
+        )
+        assert GitHubSource._parse_frontmatter_quick(nested)["metadata"]["clawk"][
+            "tags"
+        ] == ["a", "b"]
 
     def test_degenerate_frontmatter_returns_empty(self):
         for content in (
-            "# Just a heading\nSome body text.\n",     # no frontmatter at all
-            "---\nname: test\nno closing here\n",      # unterminated block
-            "",                                         # empty document
-            "---\n: : : invalid{{\n---\n\nBody.\n",     # unparseable YAML
+            "# Just a heading\nSome body text.\n",  # no frontmatter at all
+            "---\nname: test\nno closing here\n",  # unterminated block
+            "",  # empty document
+            "---\n: : : invalid{{\n---\n\nBody.\n",  # unparseable YAML
             "---\n- just a list\n- of items\n---\n\nBody.\n",  # non-dict YAML
         ):
             assert GitHubSource._parse_frontmatter_quick(content) == {}, repr(content)
 
+
 # ---------------------------------------------------------------------------
 # GitHubSource skills.sh.json grouping sidecar (category support)
 # ---------------------------------------------------------------------------
+
 
 class TestSkillsShGroupings:
     """Parsing + stamping of the skills.sh.json grouping sidecar.
@@ -60,13 +79,18 @@ class TestSkillsShGroupings:
     """
 
     def test_parse_basic_groupings(self):
-        content = json.dumps({
-            "$schema": "https://skills.sh/schemas/skills.sh.schema.json",
-            "groupings": [
-                {"title": "Inference AI", "skills": ["dynamo-router", "dynamo-recipe"]},
-                {"title": "Decision Optimization", "skills": ["cuopt-developer"]},
-            ],
-        })
+        content = json.dumps(
+            {
+                "$schema": "https://skills.sh/schemas/skills.sh.schema.json",
+                "groupings": [
+                    {
+                        "title": "Inference AI",
+                        "skills": ["dynamo-router", "dynamo-recipe"],
+                    },
+                    {"title": "Decision Optimization", "skills": ["cuopt-developer"]},
+                ],
+            }
+        )
         mapping = GitHubSource._parse_skillsh_groupings(content)
         assert mapping == {
             "dynamo-router": "Inference AI",
@@ -79,17 +103,24 @@ class TestSkillsShGroupings:
         # grouping — how several repos share one hub category (e.g. science).
         src = GitHubSource(auth=MagicMock())
         meta = SkillMeta(
-            name="rdkit", description="d", source="github",
-            identifier="K-Dense-AI/scientific-agent-skills/skills/rdkit", trust_level="community",
+            name="rdkit",
+            description="d",
+            source="github",
+            identifier="K-Dense-AI/scientific-agent-skills/skills/rdkit",
+            trust_level="community",
         )
         resp = MagicMock(status_code=200)
         resp.json.return_value = [{"type": "dir", "name": "rdkit"}]
-        with patch("tools.skills_hub_github._cached_metas", return_value=None), \
-             patch("tools.skills_hub_github._cache_metas"), \
-             patch.object(src, "_get_skillsh_groupings", return_value=None), \
-             patch.object(src, "inspect", return_value=meta), \
-             patch.object(src, "_github_get", return_value=resp):
-            skills = src._list_skills_in_repo("K-Dense-AI/scientific-agent-skills", "skills/", "science")
+        with (
+            patch("tools.skills_hub_github._cached_metas", return_value=None),
+            patch("tools.skills_hub_github._cache_metas"),
+            patch.object(src, "_get_skillsh_groupings", return_value=None),
+            patch.object(src, "inspect", return_value=meta),
+            patch.object(src, "_github_get", return_value=resp),
+        ):
+            skills = src._list_skills_in_repo(
+                "K-Dense-AI/scientific-agent-skills", "skills/", "science"
+            )
 
         assert len(skills) == 1
         assert skills[0].extra["category"] == "science"
@@ -97,24 +128,34 @@ class TestSkillsShGroupings:
     def test_list_skills_sidecar_grouping_wins_over_bucket(self):
         src = GitHubSource(auth=MagicMock())
         meta = SkillMeta(
-            name="cuopt-developer", description="d", source="github",
-            identifier="NVIDIA/skills/skills/cuopt-developer", trust_level="trusted",
+            name="cuopt-developer",
+            description="d",
+            source="github",
+            identifier="NVIDIA/skills/skills/cuopt-developer",
+            trust_level="trusted",
         )
         resp = MagicMock(status_code=200)
         resp.json.return_value = [{"type": "dir", "name": "cuopt-developer"}]
-        with patch("tools.skills_hub_github._cached_metas", return_value=None), \
-             patch("tools.skills_hub_github._cache_metas"), \
-             patch.object(src, "_get_skillsh_groupings",
-                          return_value={"cuopt-developer": "Decision Optimization"}), \
-             patch.object(src, "inspect", return_value=meta), \
-             patch.object(src, "_github_get", return_value=resp):
+        with (
+            patch("tools.skills_hub_github._cached_metas", return_value=None),
+            patch("tools.skills_hub_github._cache_metas"),
+            patch.object(
+                src,
+                "_get_skillsh_groupings",
+                return_value={"cuopt-developer": "Decision Optimization"},
+            ),
+            patch.object(src, "inspect", return_value=meta),
+            patch.object(src, "_github_get", return_value=resp),
+        ):
             skills = src._list_skills_in_repo("NVIDIA/skills", "skills/", "science")
 
         assert skills[0].extra["category"] == "Decision Optimization"
 
+
 # ---------------------------------------------------------------------------
 # GitHubSource.trust_level_for
 # ---------------------------------------------------------------------------
+
 
 class TestTrustLevelFor:
     def _source(self):
@@ -125,6 +166,7 @@ class TestTrustLevelFor:
         src = self._source()
         # TRUSTED_REPOS is imported from skills_guard, test with known trusted repo
         from tools.skills_guard import TRUSTED_REPOS
+
         if TRUSTED_REPOS:
             repo = next(iter(TRUSTED_REPOS))
             assert src.trust_level_for(f"{repo}/some-skill") == "trusted"
@@ -144,6 +186,7 @@ class TestTrustLevelFor:
                 "browsable via `clawk skills browse`."
             )
 
+
 class TestGitHubSourceFileFetch:
     def test_quotes_decoded_support_path_before_contents_api_fetch(self):
         src = GitHubSource(auth=MagicMock(spec=GitHubAuth))
@@ -157,9 +200,12 @@ class TestGitHubSourceFileFetch:
         )
 
     @pytest.mark.parametrize("gh_token", ["gh-live", "gh-dead"])
-    def test_rejected_token_falls_through_to_next_credential(self, monkeypatch, gh_token):
+    def test_rejected_token_falls_through_to_next_credential(
+        self, monkeypatch, gh_token
+    ):
         """A 401 on the .env token retries with `gh auth token`, then anonymously (#98725)."""
         import tools.skills_hub as hub
+
         auth = GitHubAuth()
         monkeypatch.setattr(auth, "_try_pat", lambda: "pat-dead")
         monkeypatch.setattr(auth, "_try_gh_cli", lambda: gh_token)
@@ -173,37 +219,50 @@ class TestGitHubSourceFileFetch:
 
         monkeypatch.setattr(hub, "_skills_hub_http_get", fake_get)
         assert GitHubSource(auth)._fetch_file_bytes("o/r", "s/SKILL.md") == b"body"
-        expected = ["token pat-dead", "token gh-live"] if gh_token == "gh-live" else [
-            "token pat-dead", "token gh-dead", None]
+        expected = (
+            ["token pat-dead", "token gh-live"]
+            if gh_token == "gh-live"
+            else ["token pat-dead", "token gh-dead", None]
+        )
         assert [h.get("Authorization") for h in sent] == expected
         assert sent[-1]["Accept"] == "application/vnd.github.v3.raw"
         assert auth.rejected[0] == "GITHUB_TOKEN/GH_TOKEN"
 
+
 # ---------------------------------------------------------------------------
 # SkillsShSource
 # ---------------------------------------------------------------------------
+
 
 class TestSkillsShSource:
     def _source(self):
         auth = MagicMock(spec=GitHubAuth)
         return SkillsShSource(auth=auth)
 
-    def test_sitemap_fetches_go_through_guarded_get_and_ask_for_gzip_only(self, monkeypatch):
+    def test_sitemap_fetches_go_through_guarded_get_and_ask_for_gzip_only(
+        self, monkeypatch
+    ):
         """Sitemap hops use the hub's guarded GET *and* keep the explicit
         ``Accept-Encoding: gzip`` pin: skills.sh serves sitemaps brotli-compressed and
         httpx's optional brotlicffi backend has a streaming-decode bug on them, so the
         default ``gzip, deflate, br`` negotiation must never reach the server."""
         monkeypatch.setattr("tools.skills_hub.is_safe_url", lambda _url: True)
         monkeypatch.setattr("tools.skills_hub.check_website_access", lambda _url: None)
-        monkeypatch.setattr("tools.skills_hub_skillssh._cached_metas", lambda _key: None)
-        monkeypatch.setattr("tools.skills_hub_skillssh._cache_metas", lambda _key, _metas: None)
+        monkeypatch.setattr(
+            "tools.skills_hub_skillssh._cached_metas", lambda _key: None
+        )
+        monkeypatch.setattr(
+            "tools.skills_hub_skillssh._cache_metas", lambda _key, _metas: None
+        )
         calls = []
 
         def fake_get(url, *, timeout, headers=None):
             calls.append((url, headers))
-            body = ("<sitemapindex><sitemap><loc>https://www.skills.sh/sitemap-skills-0.xml</loc></sitemap></sitemapindex>"
-                    if url.endswith("/sitemap.xml") else
-                    "<urlset><url><loc>https://skills.sh/acme/repo/my-skill</loc></url></urlset>")
+            body = (
+                "<sitemapindex><sitemap><loc>https://www.skills.sh/sitemap-skills-0.xml</loc></sitemap></sitemapindex>"
+                if url.endswith("/sitemap.xml")
+                else "<urlset><url><loc>https://skills.sh/acme/repo/my-skill</loc></url></urlset>"
+            )
             return MagicMock(status_code=200, headers={}, text=body)
 
         monkeypatch.setattr("tools.skills_hub._ssrf_safe_http_get", fake_get)
@@ -211,13 +270,18 @@ class TestSkillsShSource:
         results = self._source()._sitemap_catalog(limit=5)
 
         assert [r.identifier for r in results] == ["skills-sh/acme/repo/my-skill"]
-        assert [u for u, _ in calls] == ["https://www.skills.sh/sitemap.xml", "https://www.skills.sh/sitemap-skills-0.xml"]
+        assert [u for u, _ in calls] == [
+            "https://www.skills.sh/sitemap.xml",
+            "https://www.skills.sh/sitemap-skills-0.xml",
+        ]
         assert all(h == {"Accept-Encoding": "gzip"} for _, h in calls), calls
 
     @patch("tools.skills_hub._write_index_cache")
     @patch("tools.skills_hub._read_index_cache", return_value=None)
     @patch("tools.skills_hub.httpx.get")
-    def test_search_maps_skills_sh_results_to_prefixed_identifiers(self, mock_get, _mock_read_cache, _mock_write_cache):
+    def test_search_maps_skills_sh_results_to_prefixed_identifiers(
+        self, mock_get, _mock_read_cache, _mock_write_cache
+    ):
         mock_get.return_value = MagicMock(
             status_code=200,
             json=lambda: {
@@ -237,7 +301,10 @@ class TestSkillsShSource:
 
         assert len(results) == 1
         assert results[0].source == "skills.sh"
-        assert results[0].identifier == "skills-sh/vercel-labs/agent-skills/vercel-react-best-practices"
+        assert (
+            results[0].identifier
+            == "skills-sh/vercel-labs/agent-skills/vercel-react-best-practices"
+        )
         assert results[0].repo == "vercel-labs/agent-skills"
         assert results[0].path == "vercel-react-best-practices"
         assert results[0].extra["installs"] == 207679
@@ -246,17 +313,29 @@ class TestSkillsShSource:
     @patch("tools.skills_hub._write_index_cache")
     @patch("tools.skills_hub._read_index_cache", return_value=None)
     def test_sitemap_catalog_retries_failed_shard_and_never_caches_partial(
-        self, _mock_read_cache, mock_write_cache, _mock_sleep, monkeypatch,
+        self,
+        _mock_read_cache,
+        mock_write_cache,
+        _mock_sleep,
+        monkeypatch,
     ):
         """A per-skill sitemap shard that keeps failing is a hole in the catalog, not an
         empty shard: retry it, and never publish the partial slice to the shared cache."""
         monkeypatch.setattr("tools.skills_hub.is_safe_url", lambda _url: True)
         monkeypatch.setattr("tools.skills_hub.check_website_access", lambda _url: None)
-        monkeypatch.setattr("tools.skills_hub_skillssh._cached_metas", lambda _key: None)
-        monkeypatch.setattr("tools.skills_hub_skillssh._cache_metas", lambda _key, _metas: None)
-        index = ("<sitemapindex><sitemap><loc>https://www.skills.sh/sitemap-skills-0.xml</loc></sitemap>"
-                 "<sitemap><loc>https://www.skills.sh/sitemap-skills-1.xml</loc></sitemap></sitemapindex>")
-        shard0 = "<urlset><url><loc>https://www.skills.sh/o/r/skill-a</loc></url></urlset>"
+        monkeypatch.setattr(
+            "tools.skills_hub_skillssh._cached_metas", lambda _key: None
+        )
+        monkeypatch.setattr(
+            "tools.skills_hub_skillssh._cache_metas", lambda _key, _metas: None
+        )
+        index = (
+            "<sitemapindex><sitemap><loc>https://www.skills.sh/sitemap-skills-0.xml</loc></sitemap>"
+            "<sitemap><loc>https://www.skills.sh/sitemap-skills-1.xml</loc></sitemap></sitemapindex>"
+        )
+        shard0 = (
+            "<urlset><url><loc>https://www.skills.sh/o/r/skill-a</loc></url></urlset>"
+        )
         calls: list[str] = []
 
         def fake_get(url, *, timeout, headers=None):
@@ -271,7 +350,10 @@ class TestSkillsShSource:
         results = self._source()._sitemap_catalog(0)
 
         assert [m.identifier for m in results] == ["skills-sh/o/r/skill-a"]
-        assert calls.count("https://www.skills.sh/sitemap-skills-1.xml") == SkillSource.CATALOG_PAGE_RETRIES
+        assert (
+            calls.count("https://www.skills.sh/sitemap-skills-1.xml")
+            == SkillSource.CATALOG_PAGE_RETRIES
+        )
         mock_write_cache.assert_not_called()
 
     @patch("tools.skills_hub._write_index_cache")
@@ -279,14 +361,24 @@ class TestSkillsShSource:
     @patch("tools.skills_hub.httpx.get")
     @patch.object(GitHubSource, "fetch")
     def test_fetch_falls_back_to_tree_search_for_deeply_nested_skills(
-        self, mock_fetch, mock_get, _mock_read_cache, _mock_write_cache,
+        self,
+        mock_fetch,
+        mock_get,
+        _mock_read_cache,
+        _mock_write_cache,
     ):
         """Skills in deeply nested dirs (e.g. cli-tool/components/skills/dev/my-skill/)
         are found via the GitHub Trees API when candidate paths and shallow scan fail."""
         tree_entries = [
             {"path": "README.md", "type": "blob"},
-            {"path": "cli-tool/components/skills/development/my-skill/SKILL.md", "type": "blob"},
-            {"path": "cli-tool/components/skills/development/other-skill/SKILL.md", "type": "blob"},
+            {
+                "path": "cli-tool/components/skills/development/my-skill/SKILL.md",
+                "type": "blob",
+            },
+            {
+                "path": "cli-tool/components/skills/development/other-skill/SKILL.md",
+                "type": "blob",
+            },
         ]
 
         def _httpx_get_side_effect(url, **kwargs):
@@ -326,7 +418,9 @@ class TestSkillsShSource:
             identifier="owner/repo/cli-tool/components/skills/development/my-skill",
             trust_level="community",
         )
-        mock_fetch.side_effect = lambda ident: resolved_bundle if "cli-tool/components" in ident else None
+        mock_fetch.side_effect = lambda ident: (
+            resolved_bundle if "cli-tool/components" in ident else None
+        )
 
         bundle = self._source().fetch("skills-sh/owner/repo/my-skill")
 
@@ -334,7 +428,10 @@ class TestSkillsShSource:
         assert bundle.source == "skills.sh"
         assert bundle.files["SKILL.md"] == "# My Skill"
         # Verify the tree-resolved identifier was used for the final GitHub fetch
-        mock_fetch.assert_any_call("owner/repo/cli-tool/components/skills/development/my-skill")
+        mock_fetch.assert_any_call(
+            "owner/repo/cli-tool/components/skills/development/my-skill"
+        )
+
 
 class TestFindSkillInRepoTree:
     """Tests for GitHubSource._find_skill_in_repo_tree."""
@@ -348,8 +445,14 @@ class TestFindSkillInRepoTree:
     def test_finds_deeply_nested_skill(self, mock_get):
         tree_entries = [
             {"path": "README.md", "type": "blob"},
-            {"path": "cli-tool/components/skills/development/senior-backend/SKILL.md", "type": "blob"},
-            {"path": "cli-tool/components/skills/development/other/SKILL.md", "type": "blob"},
+            {
+                "path": "cli-tool/components/skills/development/senior-backend/SKILL.md",
+                "type": "blob",
+            },
+            {
+                "path": "cli-tool/components/skills/development/other/SKILL.md",
+                "type": "blob",
+            },
         ]
 
         def _side_effect(url, **kwargs):
@@ -366,14 +469,20 @@ class TestFindSkillInRepoTree:
 
         mock_get.side_effect = _side_effect
 
-        result = self._source()._find_skill_in_repo_tree("davila7/claude-code-templates", "senior-backend")
-        assert result == "davila7/claude-code-templates/cli-tool/components/skills/development/senior-backend"
+        result = self._source()._find_skill_in_repo_tree(
+            "davila7/claude-code-templates", "senior-backend"
+        )
+        assert (
+            result
+            == "davila7/claude-code-templates/cli-tool/components/skills/development/senior-backend"
+        )
 
     @patch("tools.skills_hub.httpx.get")
     def test_returns_none_when_repo_api_fails(self, mock_get):
         mock_get.return_value = MagicMock(status_code=404)
         result = self._source()._find_skill_in_repo_tree("owner/repo", "my-skill")
         assert result is None
+
 
 class TestRepoRootSkillLayout:
     """Regression for #115028: skills.sh repos whose SKILL.md sits at the repo ROOT (no skill
@@ -402,6 +511,7 @@ class TestRepoRootSkillLayout:
     def _github_stub(self, tree):
         """Minimal GitHub API: repo info, one git tree, and root-level file contents only —
         every candidate ``<repo>/<base>/<skill>/SKILL.md`` path 404s, as in the real repo."""
+
         def _side_effect(url, **kwargs):
             resp = MagicMock()
             resp.status_code = 404
@@ -414,17 +524,22 @@ class TestRepoRootSkillLayout:
                 resp.status_code, resp.content = 200, self.SKILL_MD.encode()
             elif url.endswith("/contents/references/free_tools.md"):
                 resp.status_code, resp.content = 200, b"# Free tools\n"
-            elif url.endswith("/contents/LICENSE") or url.endswith("/contents/README.md"):
+            elif url.endswith("/contents/LICENSE") or url.endswith(
+                "/contents/README.md"
+            ):
                 # Every blob in the pinned tree must fetch, or the bundle is "incomplete" and
                 # deliberately left unpinned (empty revision) for the next update check to fill.
                 resp.status_code, resp.content = 200, b"root-level file\n"
             return resp
+
         return _side_effect
 
     @patch("tools.skills_hub._write_index_cache")
     @patch("tools.skills_hub._read_index_cache", return_value=None)
     @patch("tools.skills_hub.httpx.get")
-    def test_inspect_resolves_skill_md_at_repo_root(self, mock_get, _mock_read_cache, _mock_write_cache):
+    def test_inspect_resolves_skill_md_at_repo_root(
+        self, mock_get, _mock_read_cache, _mock_write_cache
+    ):
         mock_get.side_effect = self._github_stub(self.ROOT_TREE)
 
         meta = self._source().inspect(self.IDENTIFIER)
@@ -437,7 +552,9 @@ class TestRepoRootSkillLayout:
     @patch("tools.skills_hub._write_index_cache")
     @patch("tools.skills_hub._read_index_cache", return_value=None)
     @patch("tools.skills_hub.httpx.get")
-    def test_fetch_resolves_and_names_bundle_for_repo_root_skill(self, mock_get, _mock_read_cache, _mock_write_cache):
+    def test_fetch_resolves_and_names_bundle_for_repo_root_skill(
+        self, mock_get, _mock_read_cache, _mock_write_cache
+    ):
         mock_get.side_effect = self._github_stub(self.ROOT_TREE)
 
         bundle = self._source().fetch(self.IDENTIFIER)
@@ -449,16 +566,24 @@ class TestRepoRootSkillLayout:
         # Support files sit directly under the repo root, so the root is the skill directory.
         assert bundle.files["references/free_tools.md"] == b"# Free tools\n"
         assert bundle.identifier == self.IDENTIFIER
-        assert bundle.metadata["source_url"] == f"https://github.com/{self.REPO}/tree/{'b' * 40}"
+        assert (
+            bundle.metadata["source_url"]
+            == f"https://github.com/{self.REPO}/tree/{'b' * 40}"
+        )
 
     @patch("tools.skills_hub._write_index_cache")
     @patch("tools.skills_hub._read_index_cache", return_value=None)
     @patch("tools.skills_hub.httpx.get")
-    def test_root_layout_does_not_resolve_as_a_multi_skill_repo(self, mock_get, _mock_read_cache, _mock_write_cache):
+    def test_root_layout_does_not_resolve_as_a_multi_skill_repo(
+        self, mock_get, _mock_read_cache, _mock_write_cache
+    ):
         """A repo with a root SKILL.md AND another skill dir is not a root-layout single skill."""
-        mock_get.side_effect = self._github_stub(self.ROOT_TREE + [{"path": "skills/other/SKILL.md", "type": "blob"}])
+        mock_get.side_effect = self._github_stub(
+            self.ROOT_TREE + [{"path": "skills/other/SKILL.md", "type": "blob"}]
+        )
 
         assert self._source().inspect(self.IDENTIFIER) is None
+
 
 class TestWellKnownSkillSource:
     @pytest.fixture(autouse=True)
@@ -472,18 +597,30 @@ class TestWellKnownSkillSource:
     @patch("tools.skills_hub._write_index_cache")
     @patch("tools.skills_hub._read_index_cache", return_value=None)
     @patch("tools.skills_hub._ssrf_safe_http_get")
-    def test_search_reads_index_from_well_known_url(self, mock_get, _mock_read_cache, _mock_write_cache):
+    def test_search_reads_index_from_well_known_url(
+        self, mock_get, _mock_read_cache, _mock_write_cache
+    ):
         mock_get.return_value = MagicMock(
             status_code=200,
             json=lambda: {
                 "skills": [
-                    {"name": "git-workflow", "description": "Git rules", "files": ["SKILL.md"]},
-                    {"name": "code-review", "description": "Review code", "files": ["SKILL.md", "references/checklist.md"]},
+                    {
+                        "name": "git-workflow",
+                        "description": "Git rules",
+                        "files": ["SKILL.md"],
+                    },
+                    {
+                        "name": "code-review",
+                        "description": "Review code",
+                        "files": ["SKILL.md", "references/checklist.md"],
+                    },
                 ]
             },
         )
 
-        results = self._source().search("https://example.com/.well-known/skills/index.json", limit=10)
+        results = self._source().search(
+            "https://example.com/.well-known/skills/index.json", limit=10
+        )
 
         assert [r.identifier for r in results] == [
             "well-known:https://example.com/.well-known/skills/git-workflow",
@@ -494,25 +631,35 @@ class TestWellKnownSkillSource:
     @patch("tools.skills_hub._write_index_cache")
     @patch("tools.skills_hub._read_index_cache", return_value=None)
     @patch("tools.skills_hub.httpx.get")
-    def test_fetch_rejects_unsafe_file_paths_from_well_known_endpoint(self, mock_get, _mock_read_cache, _mock_write_cache):
+    def test_fetch_rejects_unsafe_file_paths_from_well_known_endpoint(
+        self, mock_get, _mock_read_cache, _mock_write_cache
+    ):
         def fake_get(url, *args, **kwargs):
             if url.endswith("/index.json"):
-                return MagicMock(status_code=200, json=lambda: {
-                    "skills": [{
-                        "name": "code-review",
-                        "description": "Review code",
-                        "files": ["SKILL.md", "../../../escape.txt"],
-                    }]
-                })
+                return MagicMock(
+                    status_code=200,
+                    json=lambda: {
+                        "skills": [
+                            {
+                                "name": "code-review",
+                                "description": "Review code",
+                                "files": ["SKILL.md", "../../../escape.txt"],
+                            }
+                        ]
+                    },
+                )
             if url.endswith("/code-review/SKILL.md"):
                 return MagicMock(status_code=200, text="# Code Review\n")
             raise AssertionError(url)
 
         mock_get.side_effect = fake_get
 
-        bundle = self._source().fetch("well-known:https://example.com/.well-known/skills/code-review")
+        bundle = self._source().fetch(
+            "well-known:https://example.com/.well-known/skills/code-review"
+        )
 
         assert bundle is None
+
 
 class TestUrlSource:
     @pytest.fixture(autouse=True)
@@ -539,9 +686,7 @@ class TestUrlSource:
             "references/%5Bab%5D.md",
         ],
     )
-    def test_support_path_extraction_ignores_glob_shaped_prose(
-        self, glob_reference
-    ):
+    def test_support_path_extraction_ignores_glob_shaped_prose(self, glob_reference):
         skill_md = f"""
 See [the web reference](references/web.md) for details.
 Complex cases are documented under `{glob_reference}`.
@@ -575,12 +720,16 @@ Complex cases are documented under `{glob_reference}`.
 
     def test_rejects_well_known_url(self):
         # Leave these for WellKnownSkillSource.
-        assert self._source()._matches(
-            "https://example.com/.well-known/skills/git-workflow/SKILL.md"
-        ) is False
-        assert self._source()._matches(
-            "https://example.com/.well-known/skills/index.json"
-        ) is False
+        assert (
+            self._source()._matches(
+                "https://example.com/.well-known/skills/git-workflow/SKILL.md"
+            )
+            is False
+        )
+        assert (
+            self._source()._matches("https://example.com/.well-known/skills/index.json")
+            is False
+        )
 
     # ── inspect ─────────────────────────────────────────────────────────
 
@@ -628,7 +777,9 @@ Complex cases are documented under `{glob_reference}`.
     @patch("tools.skills_hub._ssrf_safe_http_get")
     @patch("tools.skills_hub.check_website_access", return_value=None)
     @patch("tools.skills_hub.is_safe_url", side_effect=[True, False])
-    def test_fetch_blocks_redirect_to_private_url(self, _mock_safe, _mock_policy, mock_get):
+    def test_fetch_blocks_redirect_to_private_url(
+        self, _mock_safe, _mock_policy, mock_get
+    ):
         redirect = MagicMock(status_code=302)
         redirect.headers = {"location": "http://127.0.0.1/private/SKILL.md"}
         mock_get.return_value = redirect
@@ -646,14 +797,26 @@ Complex cases are documented under `{glob_reference}`.
     def test_is_valid_skill_name_rejects_sentinel_and_garbage(self):
         invalid = [
             "",
-            "SKILL", "skill", "README", "readme", "INDEX", "index",
+            "SKILL",
+            "skill",
+            "README",
+            "readme",
+            "INDEX",
+            "index",
             "unnamed-skill",
-            "../evil", "a/b", "has space", "has.dot",
-            "-leading-dash", "1-leading-digit",
-            None, 123, ["list"],
+            "../evil",
+            "a/b",
+            "has space",
+            "has.dot",
+            "-leading-dash",
+            "1-leading-digit",
+            None,
+            123,
+            ["list"],
         ]
         for name in invalid:
             assert not UrlSource._is_valid_skill_name(name), f"should reject {name!r}"
+
 
 class TestCheckForSkillUpdates:
     def test_bundle_content_hash_matches_installed_content_hash(self, tmp_path):
@@ -679,18 +842,21 @@ class TestCheckForSkillUpdates:
 
     def test_reports_update_when_remote_hash_differs(self, tmp_path, monkeypatch):
         import tools.skills_hub as hub
+
         skills_dir = tmp_path / "skills"
         (skills_dir / "demo-skill").mkdir(parents=True)
         monkeypatch.setattr(hub, "SKILLS_DIR", skills_dir)
 
         lock = MagicMock()
-        lock.list_installed.return_value = [{
-            "name": "demo-skill",
-            "source": "github",
-            "identifier": "owner/repo/demo-skill",
-            "content_hash": "oldhash",
-            "install_path": "demo-skill",
-        }]
+        lock.list_installed.return_value = [
+            {
+                "name": "demo-skill",
+                "source": "github",
+                "identifier": "owner/repo/demo-skill",
+                "content_hash": "oldhash",
+                "install_path": "demo-skill",
+            }
+        ]
 
         source = MagicMock()
         source.source_id.return_value = "github"
@@ -708,11 +874,16 @@ class TestCheckForSkillUpdates:
         assert results[0]["name"] == "demo-skill"
         assert results[0]["status"] == "update_available"
 
-    @pytest.mark.parametrize("path_kind", ["missing", "regular_file", "unsafe", "corrupt"])
-    def test_unusable_entry_reported_without_remote_fetch(self, tmp_path, monkeypatch, path_kind):
+    @pytest.mark.parametrize(
+        "path_kind", ["missing", "regular_file", "unsafe", "corrupt"]
+    )
+    def test_unusable_entry_reported_without_remote_fetch(
+        self, tmp_path, monkeypatch, path_kind
+    ):
         """A lock-file entry whose install directory no longer exists is
         reported ``orphaned`` without paying the remote fetch cost (#104291)."""
         import tools.skills_hub as hub
+
         skills_dir = tmp_path / "skills"
         skills_dir.mkdir()
         if path_kind == "regular_file":
@@ -720,13 +891,17 @@ class TestCheckForSkillUpdates:
         monkeypatch.setattr(hub, "SKILLS_DIR", skills_dir)
 
         lock = MagicMock()
-        lock.list_installed.return_value = [{
-            "name": "demo-skill",
-            "source": "github",
-            "identifier": "owner/repo/demo-skill",
-            "content_hash": "hash",
-            "install_path": {"unsafe": "../outside", "corrupt": ["bad"]}.get(path_kind, "demo-skill"),
-        }]
+        lock.list_installed.return_value = [
+            {
+                "name": "demo-skill",
+                "source": "github",
+                "identifier": "owner/repo/demo-skill",
+                "content_hash": "hash",
+                "install_path": {"unsafe": "../outside", "corrupt": ["bad"]}.get(
+                    path_kind, "demo-skill"
+                ),
+            }
+        ]
 
         source = MagicMock()
         source.source_id.return_value = "github"
@@ -734,7 +909,9 @@ class TestCheckForSkillUpdates:
         results = check_for_skill_updates(lock=lock, sources=[source])
 
         assert len(results) == 1
-        expected = "invalid_install" if path_kind in {"unsafe", "corrupt"} else "orphaned"
+        expected = (
+            "invalid_install" if path_kind in {"unsafe", "corrupt"} else "orphaned"
+        )
         assert results[0]["status"] == expected
         assert "bundle" not in results[0]
         source.fetch.assert_not_called()
@@ -744,33 +921,50 @@ class TestCheckForSkillUpdates:
         """Real ``GitHubSource`` whose API is stubbed: one tree at ``tree_sha`` holding SKILL.md
         plus two support blobs; every file GET is counted in ``calls``."""
         src = GitHubSource(auth=MagicMock())
-        entries = [{"path": f"demo-skill/{p}", "type": "blob", "sha": f"sha-{p}", "size": 3}
-                   for p in ("SKILL.md", "scripts/run.sh", "references/notes.md")]
-        api = {"/repos/owner/repo": {"default_branch": "main"},
-               "/repos/owner/repo/git/trees/main": {"sha": tree_sha, "tree": entries}}
+        entries = [
+            {"path": f"demo-skill/{p}", "type": "blob", "sha": f"sha-{p}", "size": 3}
+            for p in ("SKILL.md", "scripts/run.sh", "references/notes.md")
+        ]
+        api = {
+            "/repos/owner/repo": {"default_branch": "main"},
+            "/repos/owner/repo/git/trees/main": {"sha": tree_sha, "tree": entries},
+        }
         src._github_json = lambda url, **kw: api[url.split("api.github.com", 1)[1]]
+
         def _file(repo, path, **kw):
             calls["files"] = calls.get("files", 0) + 1
             return "---\nname: demo-skill\n---\nSee scripts/run.sh and references/notes.md\n"
+
         src._fetch_file_content = _file
-        src._fetch_file_bytes = lambda repo, path, **kw: _file(repo, path, **kw).encode()
+        src._fetch_file_bytes = lambda repo, path, **kw: _file(
+            repo, path, **kw
+        ).encode()
         return src
 
-    @pytest.mark.parametrize("recorded, expected_status, expected_gets",
-                             [("a" * 40, "up_to_date", 0), ("b" * 40, "update_available", 3)])
+    @pytest.mark.parametrize(
+        "recorded, expected_status, expected_gets",
+        [("a" * 40, "up_to_date", 0), ("b" * 40, "update_available", 3)],
+    )
     def test_unchanged_upstream_revision_skips_bundle_download(
-            self, tmp_path, monkeypatch, recorded, expected_status, expected_gets):
+        self, tmp_path, monkeypatch, recorded, expected_status, expected_gets
+    ):
         """A lock entry whose recorded ``source_revision`` still matches the upstream tree
         sha is reported ``up_to_date`` with zero file GETs; a moved tree pays the full fetch (#101454)."""
         import tools.skills_hub as hub
+
         (tmp_path / "skills" / "demo-skill").mkdir(parents=True)
         monkeypatch.setattr(hub, "SKILLS_DIR", tmp_path / "skills")
         lock = MagicMock()
-        lock.list_installed.return_value = [{
-            "name": "demo-skill", "source": "github", "identifier": "owner/repo/demo-skill",
-            "content_hash": "installed-hash", "install_path": "demo-skill",
-            "metadata": {"source_revision": recorded},
-        }]
+        lock.list_installed.return_value = [
+            {
+                "name": "demo-skill",
+                "source": "github",
+                "identifier": "owner/repo/demo-skill",
+                "content_hash": "installed-hash",
+                "install_path": "demo-skill",
+                "metadata": {"source_revision": recorded},
+            }
+        ]
         calls: dict = {}
         source = self._github_source_with_tree("a" * 40, calls)
 
@@ -780,7 +974,11 @@ class TestCheckForSkillUpdates:
         assert calls.get("files", 0) == expected_gets
         assert ("bundle" in results[0]) == (expected_status == "update_available")
         if expected_status == "up_to_date":
-            assert results[0]["current_hash"] == results[0]["latest_hash"] == "installed-hash"
+            assert (
+                results[0]["current_hash"]
+                == results[0]["latest_hash"]
+                == "installed-hash"
+            )
 
     def test_bundle_with_a_failed_blob_fetch_records_no_revision(self):
         """A transient blob failure installs with a gap; the lock must NOT carry the tree sha, or the
@@ -788,8 +986,9 @@ class TestCheckForSkillUpdates:
         calls: dict = {}
         source = self._github_source_with_tree("a" * 40, calls)
         good_bytes = source._fetch_file_bytes
-        source._fetch_file_bytes = (
-            lambda repo, path, **kw: None if path.endswith("notes.md") else good_bytes(repo, path, **kw))
+        source._fetch_file_bytes = lambda repo, path, **kw: (
+            None if path.endswith("notes.md") else good_bytes(repo, path, **kw)
+        )
 
         bundle = source.fetch("owner/repo/demo-skill")
 
@@ -797,23 +996,29 @@ class TestCheckForSkillUpdates:
         assert bundle.metadata["source_revision"] == ""
         # and a clean fetch of the same tree does record it
         source._fetch_file_bytes = good_bytes
-        assert source.fetch("owner/repo/demo-skill").metadata["source_revision"] == "a" * 40
+        assert (
+            source.fetch("owner/repo/demo-skill").metadata["source_revision"]
+            == "a" * 40
+        )
+
 
 class TestCreateSourceRouter:
-
     def test_url_source_runs_before_github_source(self):
         # UrlSource must win over GitHubSource when both could claim a URL.
         sources = create_source_router(auth=MagicMock(spec=GitHubAuth))
         url_idx = next(i for i, src in enumerate(sources) if isinstance(src, UrlSource))
-        gh_idx = next(i for i, src in enumerate(sources) if isinstance(src, GitHubSource))
+        gh_idx = next(
+            i for i, src in enumerate(sources) if isinstance(src, GitHubSource)
+        )
         assert url_idx < gh_idx
+
 
 # ---------------------------------------------------------------------------
 # HubLockFile
 # ---------------------------------------------------------------------------
 
-class TestHubLockFile:
 
+class TestHubLockFile:
     def test_load_corrupt_json(self, tmp_path):
         lock_file = tmp_path / "lock.json"
         lock_file.write_text("not json{{{")
@@ -824,26 +1029,37 @@ class TestHubLockFile:
     def test_list_installed(self, tmp_path):
         lock = HubLockFile(path=tmp_path / "lock.json")
         lock.record_install(
-            name="s1", source="github", identifier="x",
-            trust_level="trusted", scan_verdict="pass",
-            skill_hash="h1", install_path="s1", files=["SKILL.md"],
+            name="s1",
+            source="github",
+            identifier="x",
+            trust_level="trusted",
+            scan_verdict="pass",
+            skill_hash="h1",
+            install_path="s1",
+            files=["SKILL.md"],
         )
         lock.record_install(
-            name="s2", source="clawhub", identifier="y",
-            trust_level="community", scan_verdict="pass",
-            skill_hash="h2", install_path="s2", files=["SKILL.md"],
+            name="s2",
+            source="clawhub",
+            identifier="y",
+            trust_level="community",
+            scan_verdict="pass",
+            skill_hash="h2",
+            install_path="s2",
+            files=["SKILL.md"],
         )
         installed = lock.list_installed()
         assert len(installed) == 2
         names = {e["name"] for e in installed}
         assert names == {"s1", "s2"}
 
+
 # ---------------------------------------------------------------------------
 # TapsManager
 # ---------------------------------------------------------------------------
 
-class TestTapsManager:
 
+class TestTapsManager:
     def test_load_corrupt_json(self, tmp_path):
         taps_file = tmp_path / "taps.json"
         taps_file.write_text("bad json")
@@ -856,9 +1072,11 @@ class TestTapsManager:
         assert mgr.remove("owner/repo") is True
         assert mgr.load() == []
 
+
 # ---------------------------------------------------------------------------
 # LobeHubSource._convert_to_skill_md
 # ---------------------------------------------------------------------------
+
 
 class TestConvertToSkillMd:
     def test_basic_conversion(self):
@@ -881,9 +1099,11 @@ class TestConvertToSkillMd:
         assert "# Test Agent" in result
         assert "You are a helpful test agent." in result
 
+
 # ---------------------------------------------------------------------------
 # unified_search — dedup logic
 # ---------------------------------------------------------------------------
+
 
 class TestUnifiedSearchDedup:
     def _make_source(self, source_id, results):
@@ -895,10 +1115,20 @@ class TestUnifiedSearchDedup:
 
     def test_dedup_keeps_first_seen(self):
         # Same identifier from two sources — only the first (community) is kept when equal trust.
-        s1 = SkillMeta(name="skill", description="from A", source="a",
-                        identifier="shared/skill", trust_level="community")
-        s2 = SkillMeta(name="skill", description="from B", source="b",
-                        identifier="shared/skill", trust_level="community")
+        s1 = SkillMeta(
+            name="skill",
+            description="from A",
+            source="a",
+            identifier="shared/skill",
+            trust_level="community",
+        )
+        s2 = SkillMeta(
+            name="skill",
+            description="from B",
+            source="b",
+            identifier="shared/skill",
+            trust_level="community",
+        )
         src_a = self._make_source("a", [s1])
         src_b = self._make_source("b", [s2])
         results = unified_search("skill", [src_a, src_b])
@@ -907,10 +1137,20 @@ class TestUnifiedSearchDedup:
 
     def test_dedup_prefers_builtin_over_trusted(self):
         """Regression: builtin must not be overwritten by trusted."""
-        builtin = SkillMeta(name="skill", description="builtin", source="a",
-                             identifier="shared/skill", trust_level="builtin")
-        trusted = SkillMeta(name="skill", description="trusted", source="b",
-                             identifier="shared/skill", trust_level="trusted")
+        builtin = SkillMeta(
+            name="skill",
+            description="builtin",
+            source="a",
+            identifier="shared/skill",
+            trust_level="builtin",
+        )
+        trusted = SkillMeta(
+            name="skill",
+            description="trusted",
+            source="b",
+            identifier="shared/skill",
+            trust_level="trusted",
+        )
         src_a = self._make_source("a", [builtin])
         src_b = self._make_source("b", [trusted])
         results = unified_search("skill", [src_a, src_b])
@@ -921,19 +1161,28 @@ class TestUnifiedSearchDedup:
         failing = MagicMock()
         failing.source_id.return_value = "fail"
         failing.search.side_effect = RuntimeError("boom")
-        ok = self._make_source("ok", [
-            SkillMeta(name="s1", description="d", source="ok",
-                       identifier="x", trust_level="community")
-        ])
+        ok = self._make_source(
+            "ok",
+            [
+                SkillMeta(
+                    name="s1",
+                    description="d",
+                    source="ok",
+                    identifier="x",
+                    trust_level="community",
+                )
+            ],
+        )
         results = unified_search("query", [failing, ok])
         assert len(results) == 1
+
 
 # ---------------------------------------------------------------------------
 # GitHub tap provider labeling + index search/filter
 # ---------------------------------------------------------------------------
 
-class TestGithubProviderLabeling:
 
+class TestGithubProviderLabeling:
     def test_inspect_stamps_provider_in_extra(self):
         gs = GitHubSource(auth=GitHubAuth())
         skill_md = (
@@ -948,13 +1197,16 @@ class TestGithubProviderLabeling:
         # ... but the per-tap provider label rides along in extra
         assert meta.extra.get("provider") == "NVIDIA"
 
+
 def _make_index_source(skills):
     """Build a ClawksisIndexSource pre-loaded with a fixed skill list."""
     from tools.skills_hub_official import ClawksisIndexSource
+
     src = ClawksisIndexSource(auth=GitHubAuth())
     src._index = {"skills": skills}
     src._loaded = True
     return src
+
 
 class TestClawksisIndexSearch:
     def test_search_matches_identifier_and_provider(self):
@@ -984,16 +1236,35 @@ class TestClawksisIndexSearch:
         assert "NVIDIA/skills/skills/accelerated-computing-cudf" in ids
         assert "clawhub/unrelated" not in ids
 
+
 class TestProviderFilter:
     def test_filter_results_by_provider_narrows_exactly(self):
         from tools.skills_hub_github import _filter_results_by_provider
+
         results = [
-            SkillMeta(name="a", description="", source="github", identifier="NVIDIA/skills/a",
-                      trust_level="trusted", extra={"provider": "NVIDIA"}),
-            SkillMeta(name="b", description="", source="github", identifier="openai/skills/b",
-                      trust_level="trusted", extra={"provider": "OpenAI"}),
-            SkillMeta(name="c", description="", source="official", identifier="official/c",
-                      trust_level="builtin"),
+            SkillMeta(
+                name="a",
+                description="",
+                source="github",
+                identifier="NVIDIA/skills/a",
+                trust_level="trusted",
+                extra={"provider": "NVIDIA"},
+            ),
+            SkillMeta(
+                name="b",
+                description="",
+                source="github",
+                identifier="openai/skills/b",
+                trust_level="trusted",
+                extra={"provider": "OpenAI"},
+            ),
+            SkillMeta(
+                name="c",
+                description="",
+                source="official",
+                identifier="official/c",
+                trust_level="builtin",
+            ),
         ]
         nv = _filter_results_by_provider(results, "nvidia")
         assert [r.identifier for r in nv] == ["NVIDIA/skills/a"]
@@ -1004,11 +1275,21 @@ class TestProviderFilter:
         # A provider filter must NOT be treated as a real source id (which would
         # exclude every source and return nothing). It selects sources like
         # "all", then narrows the merged results by provider.
-        nv = SkillMeta(name="cuda", description="gpu", source="github",
-                       identifier="NVIDIA/skills/cuda", trust_level="trusted",
-                       extra={"provider": "NVIDIA"})
-        other = SkillMeta(name="cuda-clone", description="gpu", source="clawhub",
-                          identifier="clawhub/cuda-clone", trust_level="community")
+        nv = SkillMeta(
+            name="cuda",
+            description="gpu",
+            source="github",
+            identifier="NVIDIA/skills/cuda",
+            trust_level="trusted",
+            extra={"provider": "NVIDIA"},
+        )
+        other = SkillMeta(
+            name="cuda-clone",
+            description="gpu",
+            source="clawhub",
+            identifier="clawhub/cuda-clone",
+            trust_level="community",
+        )
         src = MagicMock()
         src.source_id.return_value = "clawk-index"
         src.is_available = True
@@ -1016,9 +1297,11 @@ class TestProviderFilter:
         results = unified_search("cuda", [src], source_filter="nvidia", limit=25)
         assert [r.identifier for r in results] == ["NVIDIA/skills/cuda"]
 
+
 # ---------------------------------------------------------------------------
 # append_audit_log
 # ---------------------------------------------------------------------------
+
 
 class TestAppendAuditLog:
     def test_creates_log_entry(self, tmp_path):
@@ -1029,9 +1312,11 @@ class TestAppendAuditLog:
         assert "INSTALL" in content
         assert "test-skill" in content
 
+
 # ---------------------------------------------------------------------------
 # Official skills / binary assets
 # ---------------------------------------------------------------------------
+
 
 class TestOptionalSkillSourceMetadata:
     def test_scan_all_emits_repo_root_relative_metadata(self, tmp_path):
@@ -1052,7 +1337,9 @@ class TestOptionalSkillSourceMetadata:
         assert meta.repo == "samuelgradientai-sys/clawksis-agent"
         assert meta.path == "optional-skills/finance/3-statement-model"
 
-    def test_scan_all_accepts_install_prefix_but_rejects_nested_support_skills(self, tmp_path):
+    def test_scan_all_accepts_install_prefix_but_rejects_nested_support_skills(
+        self, tmp_path
+    ):
         optional_root = tmp_path / "venv" / "lib" / "site-packages" / "optional-skills"
         real = optional_root / "research" / "real-skill"
         nested = real / "references" / "archived-skill"
@@ -1070,6 +1357,7 @@ class TestOptionalSkillSourceMetadata:
         assert [meta.name for meta in src._scan_all()] == ["real-skill"]
         assert src._find_skill_dir("archived-skill") is None
 
+
 class TestOptionalSkillSourceBinaryAssets:
     def test_fetch_preserves_binary_assets(self, tmp_path):
         optional_root = tmp_path / "optional-skills"
@@ -1086,7 +1374,9 @@ class TestOptionalSkillSourceBinaryAssets:
         (skill_dir / "assets" / "neutts-cli" / "samples" / "jo.txt").write_bytes(
             b"hello\n"
         )
-        pycache_dir = skill_dir / "assets" / "neutts-cli" / "src" / "neutts_cli" / "__pycache__"
+        pycache_dir = (
+            skill_dir / "assets" / "neutts-cli" / "src" / "neutts_cli" / "__pycache__"
+        )
         pycache_dir.mkdir(parents=True)
         (pycache_dir / "cli.cpython-312.pyc").write_bytes(b"junk")
 
@@ -1096,9 +1386,18 @@ class TestOptionalSkillSourceBinaryAssets:
         bundle = src.fetch("official/mlops/models/neutts")
 
         assert bundle is not None
-        assert bundle.files[os.path.join("assets", "neutts-cli", "samples", "jo.wav")] == wav_bytes
-        assert bundle.files[os.path.join("assets", "neutts-cli", "samples", "jo.txt")] == b"hello\n"
-        assert "assets/neutts-cli/src/neutts_cli/__pycache__/cli.cpython-312.pyc" not in bundle.files
+        assert (
+            bundle.files[os.path.join("assets", "neutts-cli", "samples", "jo.wav")]
+            == wav_bytes
+        )
+        assert (
+            bundle.files[os.path.join("assets", "neutts-cli", "samples", "jo.txt")]
+            == b"hello\n"
+        )
+        assert (
+            "assets/neutts-cli/src/neutts_cli/__pycache__/cli.cpython-312.pyc"
+            not in bundle.files
+        )
 
     def test_fetch_rejects_sibling_directory_traversal(self, tmp_path):
         optional_root = tmp_path / "optional-skills"
@@ -1116,6 +1415,7 @@ class TestOptionalSkillSourceBinaryAssets:
         bundle = src.fetch("official/../optional-skills-escape/pwned")
 
         assert bundle is None
+
 
 class TestOptionalSkillSourceLiveRepoFallback:
     """Skills merged to main after the local install was cut must still be
@@ -1138,7 +1438,9 @@ class TestOptionalSkillSourceLiveRepoFallback:
         for rel_dir in remote_dirs:
             p = f"optional-skills/{rel_dir}/SKILL.md"
             entries.append({"type": "blob", "path": p, "mode": "100644"})
-            contents[p] = b"---\nname: " + rel_dir.rsplit("/", 1)[-1].encode() + b"\n---\nBody"
+            contents[p] = (
+                b"---\nname: " + rel_dir.rsplit("/", 1)[-1].encode() + b"\n---\nBody"
+            )
         for rel_path, data in extra_files:
             entries.append({"type": "blob", "path": rel_path, "mode": "100644"})
             contents[rel_path] = data
@@ -1152,7 +1454,10 @@ class TestOptionalSkillSourceLiveRepoFallback:
         src._github = self._fake_github_with_tree(
             ["software-development/ast-grep"],
             extra_files=[
-                ("optional-skills/software-development/ast-grep/install.sh", b"#!/bin/sh\n"),
+                (
+                    "optional-skills/software-development/ast-grep/install.sh",
+                    b"#!/bin/sh\n",
+                ),
                 ("optional-skills/software-development/ast-grep/LICENSE", b"MIT"),
             ],
         )
@@ -1178,9 +1483,7 @@ class TestOptionalSkillSourceLiveRepoFallback:
         assert bundle.identifier == "official/software-development/ast-grep"
 
     def test_fetch_ambiguous_bare_name_refuses(self, tmp_path):
-        src = self._make_source(
-            tmp_path, ["security/scanner", "devops/scanner"]
-        )
+        src = self._make_source(tmp_path, ["security/scanner", "devops/scanner"])
         fake_github = MagicMock()
         src._github = fake_github
 
@@ -1239,18 +1542,21 @@ class TestOptionalSkillSourceLiveRepoFallback:
         assert src.fetch("official/never-heard-of-it") is None
         assert src.search("never-heard-of-it") == []
 
+
 class TestQuarantineBundleBinaryAssets:
     def test_quarantine_bundle_writes_binary_files(self, tmp_path):
         import tools.skills_hub as hub
 
         hub_dir = tmp_path / "skills" / ".hub"
-        with patch.object(hub, "SKILLS_DIR", tmp_path / "skills"), \
-             patch.object(hub, "HUB_DIR", hub_dir), \
-             patch.object(hub, "LOCK_FILE", hub_dir / "lock.json"), \
-             patch.object(hub, "QUARANTINE_DIR", hub_dir / "quarantine"), \
-             patch.object(hub, "AUDIT_LOG", hub_dir / "audit.log"), \
-             patch.object(hub, "TAPS_FILE", hub_dir / "taps.json"), \
-             patch.object(hub, "INDEX_CACHE_DIR", hub_dir / "index-cache"):
+        with (
+            patch.object(hub, "SKILLS_DIR", tmp_path / "skills"),
+            patch.object(hub, "HUB_DIR", hub_dir),
+            patch.object(hub, "LOCK_FILE", hub_dir / "lock.json"),
+            patch.object(hub, "QUARANTINE_DIR", hub_dir / "quarantine"),
+            patch.object(hub, "AUDIT_LOG", hub_dir / "audit.log"),
+            patch.object(hub, "TAPS_FILE", hub_dir / "taps.json"),
+            patch.object(hub, "INDEX_CACHE_DIR", hub_dir / "index-cache"),
+        ):
             bundle = SkillBundle(
                 name="neutts",
                 files={
@@ -1265,7 +1571,9 @@ class TestQuarantineBundleBinaryAssets:
             q_path = quarantine_bundle(bundle)
 
         assert (q_path / "SKILL.md").read_text(encoding="utf-8").startswith("---")
-        assert (q_path / "assets" / "neutts-cli" / "samples" / "jo.wav").read_bytes() == b"RIFF\x00\x01fakewav"
+        assert (
+            q_path / "assets" / "neutts-cli" / "samples" / "jo.wav"
+        ).read_bytes() == b"RIFF\x00\x01fakewav"
 
     @pytest.mark.platforms("windows")
     def test_quarantine_bundle_hash_matches_bundle_on_windows(self, tmp_path):
@@ -1274,16 +1582,20 @@ class TestQuarantineBundleBinaryAssets:
         from tools.skills_guard import content_hash
 
         hub_dir = tmp_path / "skills" / ".hub"
-        with patch.object(hub, "SKILLS_DIR", tmp_path / "skills"), \
-             patch.object(hub, "HUB_DIR", hub_dir), \
-             patch.object(hub, "LOCK_FILE", hub_dir / "lock.json"), \
-             patch.object(hub, "QUARANTINE_DIR", hub_dir / "quarantine"), \
-             patch.object(hub, "AUDIT_LOG", hub_dir / "audit.log"), \
-             patch.object(hub, "TAPS_FILE", hub_dir / "taps.json"), \
-             patch.object(hub, "INDEX_CACHE_DIR", hub_dir / "index-cache"):
+        with (
+            patch.object(hub, "SKILLS_DIR", tmp_path / "skills"),
+            patch.object(hub, "HUB_DIR", hub_dir),
+            patch.object(hub, "LOCK_FILE", hub_dir / "lock.json"),
+            patch.object(hub, "QUARANTINE_DIR", hub_dir / "quarantine"),
+            patch.object(hub, "AUDIT_LOG", hub_dir / "audit.log"),
+            patch.object(hub, "TAPS_FILE", hub_dir / "taps.json"),
+            patch.object(hub, "INDEX_CACHE_DIR", hub_dir / "index-cache"),
+        ):
             bundle = SkillBundle(
                 name="crlfskill",
-                files={"SKILL.md": "---\nname: crlfskill\n---\n\nBody line one.\nBody line two.\n"},
+                files={
+                    "SKILL.md": "---\nname: crlfskill\n---\n\nBody line one.\nBody line two.\n"
+                },
                 source="official",
                 identifier="official/mlops/models/crlfskill",
                 trust_level="builtin",
@@ -1297,13 +1609,15 @@ class TestQuarantineBundleBinaryAssets:
         import tools.skills_hub as hub
 
         hub_dir = tmp_path / "skills" / ".hub"
-        with patch.object(hub, "SKILLS_DIR", tmp_path / "skills"), \
-             patch.object(hub, "HUB_DIR", hub_dir), \
-             patch.object(hub, "LOCK_FILE", hub_dir / "lock.json"), \
-             patch.object(hub, "QUARANTINE_DIR", hub_dir / "quarantine"), \
-             patch.object(hub, "AUDIT_LOG", hub_dir / "audit.log"), \
-             patch.object(hub, "TAPS_FILE", hub_dir / "taps.json"), \
-             patch.object(hub, "INDEX_CACHE_DIR", hub_dir / "index-cache"):
+        with (
+            patch.object(hub, "SKILLS_DIR", tmp_path / "skills"),
+            patch.object(hub, "HUB_DIR", hub_dir),
+            patch.object(hub, "LOCK_FILE", hub_dir / "lock.json"),
+            patch.object(hub, "QUARANTINE_DIR", hub_dir / "quarantine"),
+            patch.object(hub, "AUDIT_LOG", hub_dir / "audit.log"),
+            patch.object(hub, "TAPS_FILE", hub_dir / "taps.json"),
+            patch.object(hub, "INDEX_CACHE_DIR", hub_dir / "index-cache"),
+        ):
             bundle = SkillBundle(
                 name="demo",
                 files={
@@ -1325,13 +1639,15 @@ class TestQuarantineBundleBinaryAssets:
 
         hub_dir = tmp_path / "skills" / ".hub"
         absolute_target = tmp_path / "outside.txt"
-        with patch.object(hub, "SKILLS_DIR", tmp_path / "skills"), \
-             patch.object(hub, "HUB_DIR", hub_dir), \
-             patch.object(hub, "LOCK_FILE", hub_dir / "lock.json"), \
-             patch.object(hub, "QUARANTINE_DIR", hub_dir / "quarantine"), \
-             patch.object(hub, "AUDIT_LOG", hub_dir / "audit.log"), \
-             patch.object(hub, "TAPS_FILE", hub_dir / "taps.json"), \
-             patch.object(hub, "INDEX_CACHE_DIR", hub_dir / "index-cache"):
+        with (
+            patch.object(hub, "SKILLS_DIR", tmp_path / "skills"),
+            patch.object(hub, "HUB_DIR", hub_dir),
+            patch.object(hub, "LOCK_FILE", hub_dir / "lock.json"),
+            patch.object(hub, "QUARANTINE_DIR", hub_dir / "quarantine"),
+            patch.object(hub, "AUDIT_LOG", hub_dir / "audit.log"),
+            patch.object(hub, "TAPS_FILE", hub_dir / "taps.json"),
+            patch.object(hub, "INDEX_CACHE_DIR", hub_dir / "index-cache"),
+        ):
             bundle = SkillBundle(
                 name="demo",
                 files={
@@ -1356,13 +1672,15 @@ class TestQuarantineBundleBinaryAssets:
         import tools.skills_hub as hub
 
         hub_dir = tmp_path / "skills" / ".hub"
-        with patch.object(hub, "SKILLS_DIR", tmp_path / "skills"), \
-             patch.object(hub, "HUB_DIR", hub_dir), \
-             patch.object(hub, "LOCK_FILE", hub_dir / "lock.json"), \
-             patch.object(hub, "QUARANTINE_DIR", hub_dir / "quarantine"), \
-             patch.object(hub, "AUDIT_LOG", hub_dir / "audit.log"), \
-             patch.object(hub, "TAPS_FILE", hub_dir / "taps.json"), \
-             patch.object(hub, "INDEX_CACHE_DIR", hub_dir / "index-cache"):
+        with (
+            patch.object(hub, "SKILLS_DIR", tmp_path / "skills"),
+            patch.object(hub, "HUB_DIR", hub_dir),
+            patch.object(hub, "LOCK_FILE", hub_dir / "lock.json"),
+            patch.object(hub, "QUARANTINE_DIR", hub_dir / "quarantine"),
+            patch.object(hub, "AUDIT_LOG", hub_dir / "audit.log"),
+            patch.object(hub, "TAPS_FILE", hub_dir / "taps.json"),
+            patch.object(hub, "INDEX_CACHE_DIR", hub_dir / "index-cache"),
+        ):
             bundle = SkillBundle(
                 name="demo",
                 files={
@@ -1386,28 +1704,40 @@ class TestQuarantineBundleBinaryAssets:
         from tools.skills_hub_models import _normalize_bundle_path
 
         rejected = (
-            "scripts/helper.py:payload",   # trailing-component ADS marker
-            "scripts/a:b.py",              # mid-component colon
-            "a:b/scripts/helper.py",       # leading-component colon
-            "scripts/helper.py:",          # empty stream name
-            "C:",                          # bare Windows drive letter
-            "C:/Windows/System32",         # drive-qualified absolute-ish path
+            "scripts/helper.py:payload",  # trailing-component ADS marker
+            "scripts/a:b.py",  # mid-component colon
+            "a:b/scripts/helper.py",  # leading-component colon
+            "scripts/helper.py:",  # empty stream name
+            "C:",  # bare Windows drive letter
+            "C:/Windows/System32",  # drive-qualified absolute-ish path
         )
         for bad in rejected:
             with pytest.raises(ValueError, match="Unsafe bundle file path"):
-                _normalize_bundle_path(bad, field_name="bundle file path", allow_nested=True)
+                _normalize_bundle_path(
+                    bad, field_name="bundle file path", allow_nested=True
+                )
 
         # Legitimate portable paths are unaffected.
-        assert _normalize_bundle_path(
-            "scripts/helper.py", field_name="bundle file path", allow_nested=True
-        ) == "scripts/helper.py"
-        assert _normalize_bundle_path(
-            "assets/data/sample.wav", field_name="bundle file path", allow_nested=True
-        ) == "assets/data/sample.wav"
+        assert (
+            _normalize_bundle_path(
+                "scripts/helper.py", field_name="bundle file path", allow_nested=True
+            )
+            == "scripts/helper.py"
+        )
+        assert (
+            _normalize_bundle_path(
+                "assets/data/sample.wav",
+                field_name="bundle file path",
+                allow_nested=True,
+            )
+            == "assets/data/sample.wav"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Install-path safety (lock-file → uninstall rmtree boundary)
 # ---------------------------------------------------------------------------
+
 
 class TestInstallPathSafety:
     """Guard the lock-file → ``uninstall_skill`` rmtree path.
@@ -1449,8 +1779,10 @@ class TestInstallPathSafety:
         definition time, so monkeypatching the module-level LOCK_FILE doesn't
         affect later HubLockFile() calls. Patch __defaults__ instead.
         """
+
         def _apply(lock_path):
             monkeypatch.setattr(HubLockFile.__init__, "__defaults__", (lock_path,))
+
         return _apply
 
     def test_record_install_rejects_unsafe_paths(self, tmp_path):
@@ -1477,7 +1809,9 @@ class TestInstallPathSafety:
                     files=["SKILL.md"],
                 )
 
-    def test_uninstall_rejects_poisoned_absolute_path(self, tmp_path, isolated_skills_dir, patch_lock_file):
+    def test_uninstall_rejects_poisoned_absolute_path(
+        self, tmp_path, isolated_skills_dir, patch_lock_file
+    ):
         """Hand-edited lock.json with absolute install_path must not delete anything."""
         from tools.skills_hub_install import uninstall_skill
 
@@ -1487,22 +1821,26 @@ class TestInstallPathSafety:
         (target / "file.txt").write_text("important")
 
         # Bypass record_install's validator to simulate a poisoned lock file.
-        lock_path.write_text(json.dumps({
-            "installed": {
-                "evil": {
-                    "source": "github",
-                    "identifier": "x",
-                    "trust_level": "trusted",
-                    "scan_verdict": "pass",
-                    "content_hash": "h",
-                    "install_path": str(target),
-                    "files": [],
-                    "metadata": {},
-                    "installed_at": "now",
-                    "updated_at": "now",
+        lock_path.write_text(
+            json.dumps(
+                {
+                    "installed": {
+                        "evil": {
+                            "source": "github",
+                            "identifier": "x",
+                            "trust_level": "trusted",
+                            "scan_verdict": "pass",
+                            "content_hash": "h",
+                            "install_path": str(target),
+                            "files": [],
+                            "metadata": {},
+                            "installed_at": "now",
+                            "updated_at": "now",
+                        }
+                    }
                 }
-            }
-        }))
+            )
+        )
 
         patch_lock_file(lock_path)
         ok, msg = uninstall_skill("evil")
@@ -1511,7 +1849,9 @@ class TestInstallPathSafety:
         assert target.exists()
         assert (target / "file.txt").read_text() == "important"
 
-    def test_uninstall_rejects_traversal(self, tmp_path, isolated_skills_dir, patch_lock_file):
+    def test_uninstall_rejects_traversal(
+        self, tmp_path, isolated_skills_dir, patch_lock_file
+    ):
         from tools.skills_hub_install import uninstall_skill
 
         lock_path = tmp_path / "lock.json"
@@ -1519,18 +1859,26 @@ class TestInstallPathSafety:
         sibling.mkdir()
         (sibling / "data").write_text("nope")
 
-        lock_path.write_text(json.dumps({
-            "installed": {
-                "evil": {
-                    "source": "github", "identifier": "x",
-                    "trust_level": "trusted", "scan_verdict": "pass",
-                    "content_hash": "h",
-                    "install_path": "../sibling",
-                    "files": [], "metadata": {},
-                    "installed_at": "now", "updated_at": "now",
+        lock_path.write_text(
+            json.dumps(
+                {
+                    "installed": {
+                        "evil": {
+                            "source": "github",
+                            "identifier": "x",
+                            "trust_level": "trusted",
+                            "scan_verdict": "pass",
+                            "content_hash": "h",
+                            "install_path": "../sibling",
+                            "files": [],
+                            "metadata": {},
+                            "installed_at": "now",
+                            "updated_at": "now",
+                        }
+                    }
                 }
-            }
-        }))
+            )
+        )
 
         patch_lock_file(lock_path)
         ok, _msg = uninstall_skill("evil")
@@ -1538,7 +1886,9 @@ class TestInstallPathSafety:
         assert sibling.exists()
         assert (sibling / "data").read_text() == "nope"
 
-    def test_uninstall_rejects_empty_install_path(self, tmp_path, isolated_skills_dir, patch_lock_file):
+    def test_uninstall_rejects_empty_install_path(
+        self, tmp_path, isolated_skills_dir, patch_lock_file
+    ):
         """Empty install_path resolves to SKILLS_DIR itself — must be refused."""
         from tools.skills_hub_install import uninstall_skill
 
@@ -1547,18 +1897,26 @@ class TestInstallPathSafety:
         (isolated_skills_dir / "bystander" / "SKILL.md").write_text("safe")
 
         lock_path = tmp_path / "lock.json"
-        lock_path.write_text(json.dumps({
-            "installed": {
-                "evil": {
-                    "source": "github", "identifier": "x",
-                    "trust_level": "trusted", "scan_verdict": "pass",
-                    "content_hash": "h",
-                    "install_path": "",
-                    "files": [], "metadata": {},
-                    "installed_at": "now", "updated_at": "now",
+        lock_path.write_text(
+            json.dumps(
+                {
+                    "installed": {
+                        "evil": {
+                            "source": "github",
+                            "identifier": "x",
+                            "trust_level": "trusted",
+                            "scan_verdict": "pass",
+                            "content_hash": "h",
+                            "install_path": "",
+                            "files": [],
+                            "metadata": {},
+                            "installed_at": "now",
+                            "updated_at": "now",
+                        }
+                    }
                 }
-            }
-        }))
+            )
+        )
 
         patch_lock_file(lock_path)
         ok, _msg = uninstall_skill("evil")
@@ -1602,12 +1960,18 @@ class TestInstallPathSafety:
             verdict="safe",
         )
 
-        with patch.object(hub, "SKILLS_DIR", skills_dir), \
-             patch.object(hub, "QUARANTINE_DIR", quarantine_root), \
-             patch("tools.skill_usage.record_installed") as record_installed:
+        with (
+            patch.object(hub, "SKILLS_DIR", skills_dir),
+            patch.object(hub, "QUARANTINE_DIR", quarantine_root),
+            patch("tools.skill_usage.record_installed") as record_installed,
+        ):
             with pytest.raises(ValueError, match="symlink"):
                 install_from_quarantine(
-                    q_dir, "bad-skill", "", bundle, scan_result,
+                    q_dir,
+                    "bad-skill",
+                    "",
+                    bundle,
+                    scan_result,
                 )
 
         record_installed.assert_not_called()
@@ -1656,11 +2020,19 @@ class TestInstallPathSafety:
             verdict="safe",
         )
 
-        with patch.object(hub, "SKILLS_DIR", skills_dir), \
-             patch.object(hub, "QUARANTINE_DIR", quarantine_root):
-            with pytest.raises(ValueError, match="Refusing to overwrite category directory"):
+        with (
+            patch.object(hub, "SKILLS_DIR", skills_dir),
+            patch.object(hub, "QUARANTINE_DIR", quarantine_root),
+        ):
+            with pytest.raises(
+                ValueError, match="Refusing to overwrite category directory"
+            ):
                 install_from_quarantine(
-                    q_dir, "research", "", bundle, scan_result,
+                    q_dir,
+                    "research",
+                    "",
+                    bundle,
+                    scan_result,
                 )
 
         # Verify the category bucket and its skills are intact.
@@ -1708,15 +2080,23 @@ class TestInstallPathSafety:
             verdict="safe",
         )
 
-        with patch.object(hub, "SKILLS_DIR", skills_dir), \
-             patch.object(hub, "QUARANTINE_DIR", quarantine_root):
+        with (
+            patch.object(hub, "SKILLS_DIR", skills_dir),
+            patch.object(hub, "QUARANTINE_DIR", quarantine_root),
+        ):
             installed = install_from_quarantine(
-                q_dir, "my-skill", "", bundle, scan_result,
+                q_dir,
+                "my-skill",
+                "",
+                bundle,
+                scan_result,
             )
 
         # The old directory was replaced by the new one.
         assert installed.exists()
-        assert (installed / "SKILL.md").read_text().strip() == "---\nname: my-skill\n---\nnew"
+        assert (
+            installed / "SKILL.md"
+        ).read_text().strip() == "---\nname: my-skill\n---\nnew"
 
     def test_install_from_quarantine_allows_empty_category_dir(self, tmp_path):
         """Installing into an existing but empty category directory is allowed
@@ -1752,10 +2132,16 @@ class TestInstallPathSafety:
             verdict="safe",
         )
 
-        with patch.object(hub, "SKILLS_DIR", skills_dir), \
-             patch.object(hub, "QUARANTINE_DIR", quarantine_root):
+        with (
+            patch.object(hub, "SKILLS_DIR", skills_dir),
+            patch.object(hub, "QUARANTINE_DIR", quarantine_root),
+        ):
             installed = install_from_quarantine(
-                q_dir, "research", "", bundle, scan_result,
+                q_dir,
+                "research",
+                "",
+                bundle,
+                scan_result,
             )
 
         assert installed.exists()
@@ -1796,11 +2182,17 @@ class TestInstallPathSafety:
             verdict="safe",
         )
 
-        with patch.object(hub, "SKILLS_DIR", skills_dir), \
-             patch.object(hub, "QUARANTINE_DIR", quarantine_root):
+        with (
+            patch.object(hub, "SKILLS_DIR", skills_dir),
+            patch.object(hub, "QUARANTINE_DIR", quarantine_root),
+        ):
             with pytest.raises(ValueError, match="category directory"):
                 install_from_quarantine(
-                    q_dir, "mlops", "", bundle, scan_result,
+                    q_dir,
+                    "mlops",
+                    "",
+                    bundle,
+                    scan_result,
                 )
 
         # Every nested skill must survive.
@@ -1841,11 +2233,17 @@ class TestInstallPathSafety:
             verdict="safe",
         )
 
-        with patch.object(hub, "SKILLS_DIR", skills_dir), \
-             patch.object(hub, "QUARANTINE_DIR", quarantine_root):
+        with (
+            patch.object(hub, "SKILLS_DIR", skills_dir),
+            patch.object(hub, "QUARANTINE_DIR", quarantine_root),
+        ):
             with pytest.raises(ValueError, match="existing skill directory"):
                 install_from_quarantine(
-                    q_dir, "docker", "devops", bundle, scan_result,
+                    q_dir,
+                    "docker",
+                    "devops",
+                    bundle,
+                    scan_result,
                 )
 
         # The outer skill is untouched and no hybrid child was created.
@@ -1882,11 +2280,17 @@ class TestInstallPathSafety:
             verdict="safe",
         )
 
-        with patch.object(hub, "SKILLS_DIR", skills_dir), \
-             patch.object(hub, "QUARANTINE_DIR", quarantine_root):
+        with (
+            patch.object(hub, "SKILLS_DIR", skills_dir),
+            patch.object(hub, "QUARANTINE_DIR", quarantine_root),
+        ):
             with pytest.raises(ValueError, match="not a directory"):
                 install_from_quarantine(
-                    q_dir, "notes", "", bundle, scan_result,
+                    q_dir,
+                    "notes",
+                    "",
+                    bundle,
+                    scan_result,
                 )
 
         assert (skills_dir / "notes").read_text() == "not a directory"
@@ -1915,9 +2319,11 @@ class TestInstallPathSafety:
             verdict="safe",
         )
 
-        with patch.object(hub, "SKILLS_DIR", skills_dir), \
-             patch.object(hub, "QUARANTINE_DIR", quarantine_root), \
-             patch("tools.skill_usage.record_installed") as record_installed:
+        with (
+            patch.object(hub, "SKILLS_DIR", skills_dir),
+            patch.object(hub, "QUARANTINE_DIR", quarantine_root),
+            patch("tools.skill_usage.record_installed") as record_installed,
+        ):
             installed = install_from_quarantine(
                 q_dir,
                 "good-skill",
@@ -1930,12 +2336,14 @@ class TestInstallPathSafety:
         assert installed.is_dir()
         record_installed.assert_called_once_with("good-skill")
 
+
 # ---------------------------------------------------------------------------
 # parallel_search_sources — overall_timeout must be honoured even when a
 # source blocks for far longer than the budget (regression: the executor used
 # `with ... as pool`, whose __exit__ calls shutdown(wait=True) and blocked the
 # caller on the slow worker, making overall_timeout a no-op).
 # ---------------------------------------------------------------------------
+
 
 class _FakeSource(SkillSource):
     def __init__(self, sid: str, sleep: float = 0.0, results=None):
@@ -1959,6 +2367,7 @@ class _FakeSource(SkillSource):
     def inspect(self, identifier: str) -> Optional[SkillMeta]:
         return None
 
+
 class TestParallelSearchSourcesTimeout:
     def _meta(self, sid: str) -> SkillMeta:
         return SkillMeta(
@@ -1979,7 +2388,9 @@ class TestParallelSearchSourcesTimeout:
 
         start = time.monotonic()
         all_results, source_counts, timed_out_ids = parallel_search_sources(
-            [fast, slow], query="q", overall_timeout=0.05,
+            [fast, slow],
+            query="q",
+            overall_timeout=0.05,
         )
         elapsed = time.monotonic() - start
 
@@ -1991,6 +2402,7 @@ class TestParallelSearchSourcesTimeout:
         assert "fast" not in timed_out_ids
         assert any(r.source == "fast" for r in all_results)
 
+
 class TestIndexMissFallback:
     """An available clawk-index stands in for the external registries; when it
     has no match for a query the registries it displaced must still be asked
@@ -1998,8 +2410,13 @@ class TestIndexMissFallback:
     results on every surface)."""
 
     def _meta(self, sid: str) -> SkillMeta:
-        return SkillMeta(name="humanizar", description="x", source=sid,
-                         identifier=f"{sid}/humanizar", trust_level="community")
+        return SkillMeta(
+            name="humanizar",
+            description="x",
+            source=sid,
+            identifier=f"{sid}/humanizar",
+            trust_level="community",
+        )
 
     def _sources(self, index_results):
         index = _FakeSource("clawk-index", results=index_results)
@@ -2012,23 +2429,29 @@ class TestIndexMissFallback:
         index, skills_sh, github = self._sources([])
 
         results, source_counts, timed_out = parallel_search_sources(
-            [index, skills_sh, github], query="humanizar", overall_timeout=5.0)
+            [index, skills_sh, github], query="humanizar", overall_timeout=5.0
+        )
 
         assert [r.identifier for r in results] == ["skills-sh/humanizar"]
         assert source_counts == {"clawk-index": 0, "skills-sh": 1}
         assert timed_out == []
-        assert github.calls == 0  # one miss must not spend the unauthenticated GitHub budget
+        assert (
+            github.calls == 0
+        )  # one miss must not spend the unauthenticated GitHub budget
 
         # A browse (empty query) with an empty index is not a miss: no fan-out.
         index, skills_sh, github = self._sources([])
-        results, _, _ = parallel_search_sources([index, skills_sh, github], query="", overall_timeout=5.0)
+        results, _, _ = parallel_search_sources(
+            [index, skills_sh, github], query="", overall_timeout=5.0
+        )
         assert results == [] and skills_sh.calls == 0
 
     def test_index_hit_leaves_registries_untouched(self):
         index, skills_sh, github = self._sources([self._meta("clawk-index")])
 
         results, source_counts, _ = parallel_search_sources(
-            [index, skills_sh, github], query="humanizar", overall_timeout=5.0)
+            [index, skills_sh, github], query="humanizar", overall_timeout=5.0
+        )
 
         assert [r.identifier for r in results] == ["clawk-index/humanizar"]
         assert source_counts == {"clawk-index": 1}
@@ -2042,7 +2465,11 @@ class TestIndexMissFallback:
 
         started = time.monotonic()
         results, source_counts, timed_out = parallel_search_sources(
-            [index, skills_sh, clawhub, github], query="foo", source_filter="nvidia", overall_timeout=5.0)
+            [index, skills_sh, clawhub, github],
+            query="foo",
+            source_filter="nvidia",
+            overall_timeout=5.0,
+        )
 
         assert time.monotonic() - started < 1.0
         assert results == [] and timed_out == []
@@ -2052,22 +2479,27 @@ class TestIndexMissFallback:
     def test_fallback_pass_has_its_own_short_budget(self, monkeypatch):
         # A slow registry (ClawHub takes minutes) must not stall a miss for the
         # callers' full 30 s overall_timeout when the index answered instantly.
-        monkeypatch.setattr("tools.skills_hub_search._INDEX_MISS_FALLBACK_BUDGET", 0.3, raising=False)
+        monkeypatch.setattr(
+            "tools.skills_hub_search._INDEX_MISS_FALLBACK_BUDGET", 0.3, raising=False
+        )
         index, skills_sh, github = self._sources([])
         clawhub = _FakeSource("clawhub", sleep=5)
 
         started = time.monotonic()
         results, source_counts, timed_out = parallel_search_sources(
-            [index, skills_sh, clawhub, github], query="humanizar", overall_timeout=30.0)
+            [index, skills_sh, clawhub, github], query="humanizar", overall_timeout=30.0
+        )
 
         assert time.monotonic() - started < 2.0
         assert [r.identifier for r in results] == ["skills-sh/humanizar"]
         assert source_counts == {"clawk-index": 0, "skills-sh": 1}
         assert timed_out == ["clawhub"]
 
+
 # ---------------------------------------------------------------------------
 # _load_clawk_index — centralized index fetch (Browse-hub landing / search)
 # ---------------------------------------------------------------------------
+
 
 class TestLoadClawksisIndex:
     """Regression coverage for the Skills-Hub index fetch.
@@ -2084,7 +2516,9 @@ class TestLoadClawksisIndex:
     def _isolate_cache(monkeypatch, tmp_path):
         """Point the on-disk cache at an empty tmp dir so no real cache leaks in."""
         cache_file = tmp_path / "clawk-index.json"
-        monkeypatch.setattr("tools.skills_hub_search._clawk_index_cache_file", lambda: cache_file)
+        monkeypatch.setattr(
+            "tools.skills_hub_search._clawk_index_cache_file", lambda: cache_file
+        )
         return cache_file
 
     def test_fetch_does_not_request_brotli(self, monkeypatch, tmp_path):
@@ -2134,10 +2568,12 @@ class TestLoadClawksisIndex:
         data = _load_clawk_index()
         assert data == {"skills": [{"name": "stale"}]}
 
+
 # ---------------------------------------------------------------------------
 # Referenced-path extraction & missing support files (regression: a prose
 # glob or a repo-only dev tool referenced in SKILL.md must not abort install)
 # ---------------------------------------------------------------------------
+
 
 class TestReferencedSupportPaths:
     def test_ignores_globs_placeholders_and_truncated_tokens(self):
@@ -2159,6 +2595,7 @@ class TestReferencedSupportPaths:
             "references/guide.md",
         }
 
+
 class TestGitHubSourceFetchMissingReferencedFile:
     def _source(self):
         auth = MagicMock(spec=GitHubAuth)
@@ -2170,12 +2607,18 @@ class TestGitHubSourceFetchMissingReferencedFile:
             "See [guide](references/guide.md) and `references/missing.md`.\n"
         )
         tree_entries = [
-            {"path": "skills/demo/references/guide.md", "type": "blob", "mode": "100644"},
+            {
+                "path": "skills/demo/references/guide.md",
+                "type": "blob",
+                "mode": "100644",
+            },
         ]
         source = self._source()
-        with patch.object(source, "_fetch_file_content", return_value=md), \
-             patch.object(source, "_get_repo_tree", return_value=("main", tree_entries)), \
-             patch.object(source, "_fetch_file_bytes", return_value=b"# guide"):
+        with (
+            patch.object(source, "_fetch_file_content", return_value=md),
+            patch.object(source, "_get_repo_tree", return_value=("main", tree_entries)),
+            patch.object(source, "_fetch_file_bytes", return_value=b"# guide"),
+        ):
             bundle = source.fetch("owner/repo/skills/demo")
 
         assert bundle is not None

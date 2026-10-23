@@ -45,8 +45,11 @@ def _captured_context_cwd(agent):
     captured = {}
 
     def fake_context_files(
-        cwd=None, skip_soul=False, context_length=None,
-        allow_install_tree_fallback=False, home_override=None,
+        cwd=None,
+        skip_soul=False,
+        context_length=None,
+        allow_install_tree_fallback=False,
+        home_override=None,
     ):
         captured["cwd"] = cwd
         return ""
@@ -54,14 +57,19 @@ def _captured_context_cwd(agent):
     with (
         patch("agent.prompt_builder.load_soul_md", return_value=""),
         patch("agent.prompt_builder.build_environment_hints", return_value=""),
-        patch("agent.prompt_builder.build_context_files_prompt", side_effect=fake_context_files),
+        patch(
+            "agent.prompt_builder.build_context_files_prompt",
+            side_effect=fake_context_files,
+        ),
     ):
         build_system_prompt_parts(agent)
     return captured["cwd"]
 
 
 @pytest.mark.parametrize("task_id, expected", [(None, False), ("t_worker", True)])
-def test_kanban_guidance_requires_worker_task_at_agent_init(monkeypatch, task_id, expected):
+def test_kanban_guidance_requires_worker_task_at_agent_init(
+    monkeypatch, task_id, expected
+):
     """A profile can expose kanban tools without making the session a worker."""
     from agent.agent_init import _load_tools
     from agent.prompt_builder import KANBAN_GUIDANCE
@@ -84,12 +92,21 @@ def test_kanban_guidance_requires_worker_task_at_agent_init(monkeypatch, task_id
     assert (agent._kanban_worker_guidance == KANBAN_GUIDANCE) is expected
 
 
-@pytest.mark.parametrize("task_id, owner, expected", [
-    (None, True, False),        # interactive session with the kanban toolset enabled
-    ("t_worker", True, True),   # the dispatcher-owned worker
-    ("t_worker", False, False), # cron run / delegate child inheriting the worker's env
-])
-def test_kanban_guidance_fallback_requires_owned_worker_task(monkeypatch, task_id, owner, expected):
+@pytest.mark.parametrize(
+    "task_id, owner, expected",
+    [
+        (None, True, False),  # interactive session with the kanban toolset enabled
+        ("t_worker", True, True),  # the dispatcher-owned worker
+        (
+            "t_worker",
+            False,
+            False,
+        ),  # cron run / delegate child inheriting the worker's env
+    ],
+)
+def test_kanban_guidance_fallback_requires_owned_worker_task(
+    monkeypatch, task_id, owner, expected
+):
     """Prompt fallback preserves the worker boundary when init was bypassed: tool access
     is not identity, and an inherited CLAWK_KANBAN_TASK is not ownership (#112486)."""
     from contextlib import nullcontext
@@ -109,15 +126,28 @@ def test_kanban_guidance_fallback_requires_owned_worker_task(monkeypatch, task_i
         assert (_tool_guidance_block(agent) == KANBAN_GUIDANCE) is expected
 
 
-@pytest.mark.parametrize("stores", [(True, True), (False, True), (True, False), (False, False)])
-@pytest.mark.parametrize("names", [
-    set(), {"memory"}, {"memory", "skill_view", "skills_list"},
-    {"memory", "skill_view", "skills_list", "skill_manage"},
-])
-def test_memory_guidance_respects_available_writes(stores, names, monkeypatch, tmp_path):
+@pytest.mark.parametrize(
+    "stores", [(True, True), (False, True), (True, False), (False, False)]
+)
+@pytest.mark.parametrize(
+    "names",
+    [
+        set(),
+        {"memory"},
+        {"memory", "skill_view", "skills_list"},
+        {"memory", "skill_view", "skills_list", "skill_manage"},
+    ],
+)
+def test_memory_guidance_respects_available_writes(
+    stores, names, monkeypatch, tmp_path
+):
     monkeypatch.chdir(tmp_path)
-    agent = _make_agent(valid_tool_names=names, skip_context_files=True,
-                        _memory_enabled=stores[0], _user_profile_enabled=stores[1])
+    agent = _make_agent(
+        valid_tool_names=names,
+        skip_context_files=True,
+        _memory_enabled=stores[0],
+        _user_profile_enabled=stores[1],
+    )
     prompt = build_system_prompt(agent)
     enabled = "memory" in names and any(stores)
     assert ("Memory is the narrow exception" in prompt) == enabled
@@ -279,7 +309,9 @@ def test_shared_project_context_precedes_worktree_bytes(monkeypatch, tmp_path):
         agent = _make_agent(platform="cli")
         parts = build_system_prompt_parts(agent)
         full = "\n\n".join(parts.values())
-        assert full.index("Shared project instructions.") < full.index("Current working directory:")
+        assert full.index("Shared project instructions.") < full.index(
+            "Current working directory:"
+        )
         assert str(cwd) not in parts["stable"]
         assert full == "\n\n".join(build_system_prompt_parts(agent).values())
         prompts.append(full)
@@ -296,10 +328,16 @@ def test_stored_prompt_cwd_ignores_project_host_decoys(monkeypatch, tmp_path):
     monkeypatch.setenv("TERMINAL_CWD", str(cwd))
     decoy = "# Clawksis runtime environment\n\nHost: Example\nUser home directory: /example\nCurrent working directory: /example\n"
     (cwd / "AGENTS.md").write_text(decoy)
-    monkeypatch.setenv("CLAWK_ENVIRONMENT_HINT", decoy + "\nModel: decoy\nProvider: decoy\nPlatform: decoy")
+    monkeypatch.setenv(
+        "CLAWK_ENVIRONMENT_HINT",
+        decoy + "\nModel: decoy\nProvider: decoy\nPlatform: decoy",
+    )
     agent = _make_agent(
-        platform="cli", model="test-model", provider="test-provider",
-        _memory_enabled=True, _user_profile_enabled=False,
+        platform="cli",
+        model="test-model",
+        provider="test-provider",
+        _memory_enabled=True,
+        _user_profile_enabled=False,
         _memory_store=SimpleNamespace(format_for_system_prompt=lambda _: decoy),
     )
     parts = build_system_prompt_parts(agent)
@@ -314,17 +352,28 @@ def test_stored_prompt_cwd_ignores_project_host_decoys(monkeypatch, tmp_path):
     assert _stored_prompt_matches_runtime(agent, legacy)
 
 
-def test_stored_prompt_stamped_for_another_session_is_not_restored(monkeypatch, tmp_path):
+def test_stored_prompt_stamped_for_another_session_is_not_restored(
+    monkeypatch, tmp_path
+):
     """With the Session ID trailer on, a prompt persisted for another session (a /branch child
     copies its parent's bytes) must rebuild instead of telling the model the parent's id."""
     from agent.conversation_loop import _stored_prompt_matches_runtime
 
     monkeypatch.setenv("TERMINAL_ENV", "local")
     monkeypatch.setenv("TERMINAL_CWD", str(tmp_path))
-    fields = dict(platform="cli", model="test-model", provider="test-provider", pass_session_id=True)
+    fields = dict(
+        platform="cli",
+        model="test-model",
+        provider="test-provider",
+        pass_session_id=True,
+    )
     parent_prompt = build_system_prompt(_make_agent(session_id="parent-sid", **fields))
-    assert _stored_prompt_matches_runtime(_make_agent(session_id="parent-sid", **fields), parent_prompt)
-    assert not _stored_prompt_matches_runtime(_make_agent(session_id="child-sid", **fields), parent_prompt)
+    assert _stored_prompt_matches_runtime(
+        _make_agent(session_id="parent-sid", **fields), parent_prompt
+    )
+    assert not _stored_prompt_matches_runtime(
+        _make_agent(session_id="child-sid", **fields), parent_prompt
+    )
 
 
 class TestExecutionGuidanceInjection:
@@ -338,9 +387,14 @@ class TestExecutionGuidanceInjection:
     of tool_use_enforcement and defaults to a broader family list.
     """
 
-    def _prompt(self, model, execution_guidance="auto", *,
-                tool_use_enforcement=False,
-                valid_tool_names=("terminal", "read_file")):
+    def _prompt(
+        self,
+        model,
+        execution_guidance="auto",
+        *,
+        tool_use_enforcement=False,
+        valid_tool_names=("terminal", "read_file"),
+    ):
         agent = _make_agent(
             valid_tool_names=list(valid_tool_names),
             model=model,
@@ -354,44 +408,43 @@ class TestExecutionGuidanceInjection:
         assert "Execution discipline" in stable
         assert "<external_state_verification>" in stable
 
-
-
-
-
     def test_independent_of_tool_use_enforcement(self):
         # The gate must not require tool-use enforcement to be on.
-        stable = self._prompt("deepseek/deepseek-v4-flash",
-                              tool_use_enforcement=False)
+        stable = self._prompt("deepseek/deepseek-v4-flash", tool_use_enforcement=False)
         assert "Execution discipline" in stable
         assert "Tool-use enforcement" not in stable
 
     def test_claude_does_not_get_guidance_by_default(self):
-        assert "Execution discipline" not in self._prompt(
-            "anthropic/claude-opus-4.8")
-
+        assert "Execution discipline" not in self._prompt("anthropic/claude-opus-4.8")
 
     def test_config_false_suppresses(self):
         assert "Execution discipline" not in self._prompt(
-            "openai/gpt-5.5", execution_guidance=False)
+            "openai/gpt-5.5", execution_guidance=False
+        )
         assert "Execution discipline" not in self._prompt(
-            "deepseek/deepseek-v4-pro", execution_guidance="off")
+            "deepseek/deepseek-v4-pro", execution_guidance="off"
+        )
 
     def test_config_true_forces_for_any_model(self):
         assert "Execution discipline" in self._prompt(
-            "anthropic/claude-opus-4.8", execution_guidance=True)
+            "anthropic/claude-opus-4.8", execution_guidance=True
+        )
 
     def test_config_list_matches_substring(self):
-        stable = self._prompt("mycorp/custom-llm-7b",
-                              execution_guidance=["custom-llm", "gpt"])
+        stable = self._prompt(
+            "mycorp/custom-llm-7b", execution_guidance=["custom-llm", "gpt"]
+        )
         assert "Execution discipline" in stable
 
     def test_config_list_non_match_suppresses(self):
         assert "Execution discipline" not in self._prompt(
-            "openai/gpt-5.5", execution_guidance=["deepseek"])
+            "openai/gpt-5.5", execution_guidance=["deepseek"]
+        )
 
     def test_no_tools_no_guidance(self):
         assert "Execution discipline" not in self._prompt(
-            "deepseek/deepseek-v4-pro", valid_tool_names=())
+            "deepseek/deepseek-v4-pro", valid_tool_names=()
+        )
 
 
 class TestNamedProfileHintIntegration:
@@ -480,12 +533,14 @@ def test_build_system_prompt_records_stable_prefix():
     with (
         patch("agent.prompt_builder.load_soul_md", return_value=""),
         patch("agent.prompt_builder.build_environment_hints", return_value=""),
-        patch("agent.prompt_builder.build_context_files_prompt", return_value="context"),
+        patch(
+            "agent.prompt_builder.build_context_files_prompt", return_value="context"
+        ),
     ):
         prompt = build_system_prompt(agent)
 
     assert prompt.startswith(agent._cached_system_prompt_static)
-    assert prompt[len(agent._cached_system_prompt_static):].startswith("\n\ncontext")
+    assert prompt[len(agent._cached_system_prompt_static) :].startswith("\n\ncontext")
 
 
 def test_coding_prompt_orders_shared_context_before_workspace(monkeypatch):
@@ -513,23 +568,28 @@ def test_coding_prompt_orders_shared_context_before_workspace(monkeypatch):
         "this one. Do not modify another profile's skills/plugins/cron/memories "
         "unless the user explicitly directs you to."
     )
-    expected = "\n\n".join((
-        "IDENTITY",
-        "HELP",
-        "STEER",
-        "CODING_STABLE",
-        "SYSTEM_MESSAGE",
-        "CONTEXT_FILES",
-        "WORKSPACE",
-        "Operator instructions (from config):\nOPERATOR",
-        expected_profile,
-        "Conversation started: Friday, January 02, 2026",
-    ))
+    expected = "\n\n".join(
+        (
+            "IDENTITY",
+            "HELP",
+            "STEER",
+            "CODING_STABLE",
+            "SYSTEM_MESSAGE",
+            "CONTEXT_FILES",
+            "WORKSPACE",
+            "Operator instructions (from config):\nOPERATOR",
+            expected_profile,
+            "Conversation started: Friday, January 02, 2026",
+        )
+    )
 
     with (
         patch("agent.prompt_builder.load_soul_md", return_value=""),
         patch("agent.prompt_builder.build_environment_hints", return_value=""),
-        patch("agent.prompt_builder.build_context_files_prompt", return_value="CONTEXT_FILES"),
+        patch(
+            "agent.prompt_builder.build_context_files_prompt",
+            return_value="CONTEXT_FILES",
+        ),
         patch(
             "agent.coding_context.coding_system_prompt_parts",
             return_value=(
@@ -555,7 +615,9 @@ class TestTelegramRichMessagesHint:
         agent = _make_agent(platform="telegram")
         with patch("clawk_cli.config.load_config_readonly") as mock_cfg:
             mock_cfg.return_value = {
-                "gateway": {"platforms": {"telegram": {"extra": {"rich_messages": False}}}}
+                "gateway": {
+                    "platforms": {"telegram": {"extra": {"rich_messages": False}}}
+                }
             }
             stable = _stable_prompt(agent)
         assert "Standard Markdown auto-converts" in stable
@@ -568,7 +630,9 @@ class TestTelegramRichMessagesHint:
         agent = _make_agent(platform="telegram")
         with patch("clawk_cli.config.load_config_readonly") as mock_cfg:
             mock_cfg.return_value = {
-                "gateway": {"platforms": {"telegram": {"extra": {"rich_messages": True}}}}
+                "gateway": {
+                    "platforms": {"telegram": {"extra": {"rich_messages": True}}}
+                }
             }
             stable = _stable_prompt(agent)
         assert "lean into it" in stable
@@ -593,7 +657,9 @@ class TestTelegramRichMessagesHint:
         agent = _make_agent(platform="telegram")
         with patch("clawk_cli.config.load_config_readonly") as mock_cfg:
             mock_cfg.return_value = {
-                "gateway": {"platforms": {"telegram": {"extra": {"rich_messages": False}}}},
+                "gateway": {
+                    "platforms": {"telegram": {"extra": {"rich_messages": False}}}
+                },
                 "platforms": {"telegram": {"extra": {"rich_messages": True}}},
             }
             stable = _stable_prompt(agent)
@@ -605,15 +671,19 @@ class TestTelegramRichMessagesHint:
         agent = _make_agent(platform="telegram")
         with patch("clawk_cli.config.load_config_readonly") as mock_cfg:
             mock_cfg.return_value = {
-                "gateway": {"platforms": {"telegram": {"extra": {"disable_link_previews": True}}}},
+                "gateway": {
+                    "platforms": {
+                        "telegram": {"extra": {"disable_link_previews": True}}
+                    }
+                },
                 "platforms": {"telegram": {"extra": {"rich_messages": True}}},
             }
             stable = _stable_prompt(agent)
         assert "lean into it" in stable
 
-
-
-    def test_gateway_rich_messages_integration_via_real_config(self, tmp_path, monkeypatch):
+    def test_gateway_rich_messages_integration_via_real_config(
+        self, tmp_path, monkeypatch
+    ):
         """End-to-end through the real config-resolution chain: a config.yaml
         under CLAWK_HOME with ``gateway.platforms.telegram.extra.rich_messages``
         must activate the rich hint. ``load_config_readonly`` is NOT mocked here,
@@ -634,6 +704,7 @@ class TestTelegramRichMessagesHint:
         # Point config resolution at the temp file without mocking the loader:
         # mirror the pattern used in test_config_env_expansion.py.
         from clawk_cli import config as _cfgmod
+
         monkeypatch.setattr(_cfgmod, "get_config_path", lambda: home / "config.yaml")
 
         agent = _make_agent(platform="telegram")
@@ -706,6 +777,7 @@ class TestMemoryProviderSystemPromptGating:
         """Build a MemoryManager-like object exposing only what
         ``build_system_prompt_parts`` touches."""
         from unittest.mock import MagicMock
+
         mgr = MagicMock()
         mgr.build_system_prompt.return_value = prompt_block
         return mgr
@@ -725,8 +797,12 @@ class TestMemoryProviderSystemPromptGating:
             disabled_toolsets=None,
             prompt_block=block,
         )
-        full = _build(build_system_prompt, _memory_manager=agent._memory_manager,
-                      enabled_toolsets=["memory"], disabled_toolsets=None)
+        full = _build(
+            build_system_prompt,
+            _memory_manager=agent._memory_manager,
+            enabled_toolsets=["memory"],
+            disabled_toolsets=None,
+        )
         assert block in full
 
     def test_block_dropped_when_memory_toolset_disabled(self):
@@ -736,8 +812,12 @@ class TestMemoryProviderSystemPromptGating:
             disabled_toolsets=["memory"],
             prompt_block=block,
         )
-        full = _build(build_system_prompt, _memory_manager=agent._memory_manager,
-                      enabled_toolsets=None, disabled_toolsets=["memory"])
+        full = _build(
+            build_system_prompt,
+            _memory_manager=agent._memory_manager,
+            enabled_toolsets=None,
+            disabled_toolsets=["memory"],
+        )
         assert block not in full
 
     def test_block_dropped_when_memory_not_in_enabled_toolsets(self):
@@ -747,8 +827,12 @@ class TestMemoryProviderSystemPromptGating:
             disabled_toolsets=None,
             prompt_block=block,
         )
-        full = _build(build_system_prompt, _memory_manager=agent._memory_manager,
-                      enabled_toolsets=["web_search"], disabled_toolsets=None)
+        full = _build(
+            build_system_prompt,
+            _memory_manager=agent._memory_manager,
+            enabled_toolsets=["web_search"],
+            disabled_toolsets=None,
+        )
         assert block not in full
 
 
@@ -829,7 +913,9 @@ class TestSessionStartLike:
         from agent.system_prompt import _session_start_like
 
         now = datetime(2026, 1, 2, 9, 0, tzinfo=ZoneInfo("UTC"))
-        agent = SimpleNamespace(session_id="", session_start=datetime(2026, 1, 1, 12, 0))
+        agent = SimpleNamespace(
+            session_id="", session_start=datetime(2026, 1, 1, 12, 0)
+        )
         start = _session_start_like(agent, now)
         assert start.strftime("%Y-%m-%d") == "2026-01-01"
 
@@ -850,7 +936,9 @@ class TestSessionStartLike:
         start = _session_start_like(agent, now)
         assert start.strftime("%Y-%m-%d") == "2026-01-01"
 
-    @pytest.mark.skipif(not hasattr(time, "tzset"), reason="needs a POSIX process timezone switch")
+    @pytest.mark.skipif(
+        not hasattr(time, "tzset"), reason="needs a POSIX process timezone switch"
+    )
     def test_stamp_from_other_dst_half_keeps_its_own_offset(self):
         """A naive stamp takes the UTC offset in force at that stamp, not today's:
         a January 00:30 London session read on a summer day rendered as January 14.
@@ -863,8 +951,16 @@ class TestSessionStartLike:
             os.environ["TZ"] = "Europe/London"
             time.tzset()
             for sid, now, expected in (
-                ("20260115_003000_jan", datetime(2026, 7, 16, 9, 0, tzinfo=london), "2026-01-15T00:30:00+00:00"),
-                ("20260715_003000_jul", datetime(2026, 12, 16, 9, 0, tzinfo=london), "2026-07-15T00:30:00+01:00"),
+                (
+                    "20260115_003000_jan",
+                    datetime(2026, 7, 16, 9, 0, tzinfo=london),
+                    "2026-01-15T00:30:00+00:00",
+                ),
+                (
+                    "20260715_003000_jul",
+                    datetime(2026, 12, 16, 9, 0, tzinfo=london),
+                    "2026-07-15T00:30:00+01:00",
+                ),
             ):
                 start = _session_start_like(SimpleNamespace(session_id=sid), now)
                 assert start.isoformat() == expected
@@ -896,7 +992,10 @@ def test_conversation_start_uses_session_start_not_build_time(monkeypatch):
     with (
         patch("agent.prompt_builder.load_soul_md", return_value=""),
         patch("agent.prompt_builder.build_environment_hints", return_value=""),
-        patch("agent.prompt_builder.build_context_files_prompt", return_value="CONTEXT_FILES"),
+        patch(
+            "agent.prompt_builder.build_context_files_prompt",
+            return_value="CONTEXT_FILES",
+        ),
         patch(
             "agent.coding_context.coding_system_prompt_parts",
             return_value=([], [], []),
@@ -910,6 +1009,7 @@ def test_conversation_start_uses_session_start_not_build_time(monkeypatch):
     assert "Conversation started: Thursday, January 01, 2026" in prompt
     assert "Conversation started: Friday" not in prompt
 
+
 class TestConversationStartedTwoLine:
     """Maintainer design on top of #96224's anchor: long-lived sessions get a
     second 'as of the last context rebuild' line so a model in a forever-chat
@@ -918,12 +1018,14 @@ class TestConversationStartedTwoLine:
 
     def _agent(self, session_id):
         return _make_agent(
-            session_id=session_id, session_start=None,
+            session_id=session_id,
+            session_start=None,
             _bot_chat_timeless_prompt=False,
         )
 
     def _volatile(self, agent):
         import agent.system_prompt as sp
+
         parts = sp.build_system_prompt_parts(agent)
         return parts["volatile"]
 
@@ -934,6 +1036,7 @@ class TestConversationStartedTwoLine:
 
     def test_same_day_session_keeps_single_line(self):
         from clawk_time import now as clawk_now
+
         sid = clawk_now().strftime("%Y%m%d_%H%M%S_fresh")
         vol = self._volatile(self._agent(sid))
         assert "Conversation started:" in vol
@@ -942,7 +1045,17 @@ class TestConversationStartedTwoLine:
     def test_surrogate_zone_name_does_not_abort_prompt(self):
         # Windows cp1252 zone name decoded under a UTF-8 LC_CTYPE; strftime("%Z") raised (#102910).
         from datetime import timedelta, timezone
-        current = datetime(2026, 7, 14, 13, 5, tzinfo=timezone(timedelta(hours=2), "Paris, Madrid (heure d'\udce9t\udce9)"))
+
+        current = datetime(
+            2026,
+            7,
+            14,
+            13,
+            5,
+            tzinfo=timezone(
+                timedelta(hours=2), "Paris, Madrid (heure d'\udce9t\udce9)"
+            ),
+        )
         with patch("clawk_time.now", return_value=current):
             vol = self._volatile(self._agent("20260714_090000_fresh"))
 

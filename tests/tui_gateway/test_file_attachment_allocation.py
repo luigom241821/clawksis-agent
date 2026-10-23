@@ -27,16 +27,22 @@ def sessions(tmp_path, monkeypatch):
 
 
 def upload(session_id, name, payload):
-    return server._methods["file.attach"](1, {
-        "session_id": session_id,
-        "name": name,
-        "data_url": "data:text/plain;base64," + base64.b64encode(payload).decode(),
-    })
+    return server._methods["file.attach"](
+        1,
+        {
+            "session_id": session_id,
+            "name": name,
+            "data_url": "data:text/plain;base64," + base64.b64encode(payload).decode(),
+        },
+    )
 
 
 @pytest.mark.parametrize("same_session", [True, False])
 def test_concurrent_same_name_uploads_keep_distinct_bytes_and_refs(
-    sessions, tmp_path, monkeypatch, same_session,
+    sessions,
+    tmp_path,
+    monkeypatch,
+    same_session,
 ):
     target = tmp_path / "profile" / "attachments" / "report (notes).txt"
     ready = threading.Barrier(2)
@@ -52,8 +58,10 @@ def test_concurrent_same_name_uploads_keep_distinct_bytes_and_refs(
     payloads = (b"first distinct upload", b"second distinct upload")
     owners = ("first", "first" if same_session else "second")
     with ThreadPoolExecutor(max_workers=2) as pool:
-        futures = [pool.submit(upload, owner, target.name, data)
-                   for owner, data in zip(owners, payloads)]
+        futures = [
+            pool.submit(upload, owner, target.name, data)
+            for owner, data in zip(owners, payloads)
+        ]
         responses = [future.result(timeout=10) for future in futures]
 
     paths = []
@@ -126,16 +134,19 @@ def test_cross_session_attached_images_allocate_unique_paths(sessions, tmp_path)
     img_bytes_a = b"SESSION_A_IMAGE_PNG"
     img_bytes_b = b"SESSION_B_IMAGE_PNG"
 
-    path_a = server._queue_attached_image(session_a, img_bytes_a, ".png", prefix="upload")
+    path_a = server._queue_attached_image(
+        session_a, img_bytes_a, ".png", prefix="upload"
+    )
     # Reset image_counter in session_b to 0 to simulate concurrent/fresh session in same profile
     session_b["image_counter"] = 0
-    path_b = server._queue_attached_image(session_b, img_bytes_b, ".png", prefix="upload")
+    path_b = server._queue_attached_image(
+        session_b, img_bytes_b, ".png", prefix="upload"
+    )
 
     assert path_a != path_b
     assert path_a.read_bytes() == img_bytes_a
     assert path_b.read_bytes() == img_bytes_b
     assert path_a.exists() and path_b.exists()
-
 
 
 def test_upload_never_writes_through_a_planted_symlink(sessions, tmp_path):

@@ -23,6 +23,7 @@ import pytest
 
 from tools.cronjob_tools import _manual_run_delivery_note
 
+
 @pytest.fixture(autouse=True)
 def _clean_state():
     """Reset the shared async-delegation world around each test.
@@ -61,6 +62,7 @@ def _clean_state():
     while not process_registry.completion_queue.empty():
         process_registry.completion_queue.get_nowait()
 
+
 def _job(job_id, deliver):
     """Per-test job dict with a UNIQUE id.
 
@@ -76,6 +78,7 @@ def _job(job_id, deliver):
         "deliver": deliver,
     }
 
+
 @contextlib.contextmanager
 def _bound_session_key(key):
     """Bind the approval session key contextvar (background dispatch gate)."""
@@ -86,6 +89,7 @@ def _bound_session_key(key):
         yield
     finally:
         _approval_session_key.reset(token)
+
 
 def _dispatch_diag(res) -> str:
     """Failure renderer for the wiring tests' dispatch asserts: the result
@@ -98,6 +102,7 @@ def _dispatch_diag(res) -> str:
     except Exception as e:  # pragma: no cover - diagnostic only
         running = f"<unavailable: {e}>"
     return f"dispatch result: {res!r}; running: {running}"
+
 
 def _drain_completion_event(delegation_id):
     """Wait (bounded) for this delegation's completion event; requeue others.
@@ -119,6 +124,7 @@ def _drain_completion_event(delegation_id):
         time.sleep(0.05)
     return None
 
+
 class TestDeliveryNote:
     """``_manual_run_delivery_note`` — the summary-line wording contract."""
 
@@ -138,6 +144,7 @@ class TestDeliveryNote:
         note = _manual_run_delivery_note(" ", {"last_delivery_error": "no target"})
         assert "delivery FAILED" in note
         assert "no target" in note
+
 
 class TestRunnerSummaryWiring:
     """The completion event the calling agent actually sees must follow the

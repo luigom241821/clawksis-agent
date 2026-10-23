@@ -80,7 +80,10 @@ class XAIGrokAdapter(UpstreamAdapter):
             retry_cred = self._credential_from_entry(refreshed)
             if retry_cred.bearer == failed_credential.bearer:
                 return None
-            logger.info("proxy: xAI upstream returned %s; retrying with rotated pool credential", status_code)
+            logger.info(
+                "proxy: xAI upstream returned %s; retrying with rotated pool credential",
+                status_code,
+            )
             return retry_cred
 
     def _load_pool(self) -> Optional[CredentialPool]:
@@ -91,17 +94,27 @@ class XAIGrokAdapter(UpstreamAdapter):
             return None
 
     def _credential_from_entry(self, entry: PooledCredential) -> UpstreamCredential:
-        bearer = str(getattr(entry, "runtime_api_key", None) or entry.access_token or "").strip()
+        bearer = str(
+            getattr(entry, "runtime_api_key", None) or entry.access_token or ""
+        ).strip()
         if not bearer:
             raise RuntimeError(
                 "xAI OAuth credential pool entry did not contain an access token. "
                 "Re-authenticate with `clawk auth add xai-oauth --type oauth`."
             )
-        base_url = str(
-            getattr(entry, "runtime_base_url", None) or entry.base_url or DEFAULT_XAI_OAUTH_BASE_URL
-        ).strip().rstrip("/")
+        base_url = (
+            str(
+                getattr(entry, "runtime_base_url", None)
+                or entry.base_url
+                or DEFAULT_XAI_OAUTH_BASE_URL
+            )
+            .strip()
+            .rstrip("/")
+        )
         return UpstreamCredential(
-            bearer=bearer, base_url=base_url or DEFAULT_XAI_OAUTH_BASE_URL, expires_at=entry.expires_at
+            bearer=bearer,
+            base_url=base_url or DEFAULT_XAI_OAUTH_BASE_URL,
+            expires_at=entry.expires_at,
         )
 
 

@@ -49,9 +49,15 @@ MANAGE_CATALOG_SCHEMA = {
         "type": "object",
         "properties": {
             "action": {"type": "string", "enum": list(ACTIONS)},
-            "kind": {"type": "string", "enum": list(ITEM_KINDS),
-                     "description": "search only: limit results to plugins or skills."},
-            "query": {"type": "string", "description": "search only: words to match; empty lists plugins."},
+            "kind": {
+                "type": "string",
+                "enum": list(ITEM_KINDS),
+                "description": "search only: limit results to plugins or skills.",
+            },
+            "query": {
+                "type": "string",
+                "description": "search only: words to match; empty lists plugins.",
+            },
             "items": {
                 "type": "array",
                 "description": "install only: the catalog items to offer, one card row each.",
@@ -59,13 +65,19 @@ MANAGE_CATALOG_SCHEMA = {
                     "type": "object",
                     "properties": {
                         "kind": {"type": "string", "enum": list(ITEM_KINDS)},
-                        "id": {"type": "string", "description": "Catalog id as 'search' returns it."},
+                        "id": {
+                            "type": "string",
+                            "description": "Catalog id as 'search' returns it.",
+                        },
                     },
                     "required": ["kind", "id"],
                     "additionalProperties": False,
                 },
             },
-            "reason": {"type": "string", "description": "install only: one line on why these are offered."},
+            "reason": {
+                "type": "string",
+                "description": "install only: one line on why these are offered.",
+            },
         },
         "required": ["action"],
         "additionalProperties": False,
@@ -76,8 +88,10 @@ MANAGE_CATALOG_SCHEMA = {
 def _check_args(args: dict[str, Any]) -> Optional[str]:
     unknown = sorted(set(args) - _TOP_KEYS)
     if unknown:
-        return (f"unknown parameter(s) {', '.join(unknown)}: manage_catalog takes action, kind, query, "
-                "items and reason. The host decides source, version, profile and settings.")
+        return (
+            f"unknown parameter(s) {', '.join(unknown)}: manage_catalog takes action, kind, query, "
+            "items and reason. The host decides source, version, profile and settings."
+        )
     if args.get("action") not in ACTIONS:
         return f"action must be one of {', '.join(ACTIONS)}."
     if args.get("kind") not in (None, *ITEM_KINDS):
@@ -86,14 +100,18 @@ def _check_args(args: dict[str, Any]) -> Optional[str]:
         return None
     items = args.get("items")
     if not isinstance(items, list) or not items:
-        return "install needs 'items': [{\"kind\": \"plugin\", \"id\": \"<catalog id>\"}, ...]."
+        return (
+            'install needs \'items\': [{"kind": "plugin", "id": "<catalog id>"}, ...].'
+        )
     for item in items:
         if not isinstance(item, dict):
             return "every item is an object {kind, id}."
         extra = sorted(set(item) - _ITEM_KEYS)
         if extra:
-            return (f"unknown item field(s) {', '.join(extra)}: an item is {{kind, id}}. The host decides "
-                    "source, version, profile and settings.")
+            return (
+                f"unknown item field(s) {', '.join(extra)}: an item is {{kind, id}}. The host decides "
+                "source, version, profile and settings."
+            )
         if item.get("kind") not in ITEM_KINDS or not str(item.get("id") or "").strip():
             return "every item needs kind (plugin or skill) and a non-empty id."
     return None
@@ -115,14 +133,27 @@ def manage_catalog(
     if connection_callback is None or not card_surface:
         return tool_error(NOT_HERE)
     if args["action"] == "search":
-        return json.dumps(search(str(args.get("query") or ""), args.get("kind"), installer=installer),
-                          ensure_ascii=False)
-    return install(args["items"], session_id=session_id, tool_call_id=tool_call_id,
-                   connection_callback=connection_callback, installer=installer)
+        return json.dumps(
+            search(str(args.get("query") or ""), args.get("kind"), installer=installer),
+            ensure_ascii=False,
+        )
+    return install(
+        args["items"],
+        session_id=session_id,
+        tool_call_id=tool_call_id,
+        connection_callback=connection_callback,
+        installer=installer,
+    )
 
 
-def install(items: list[dict[str, str]], *, session_id: Optional[str], tool_call_id: Optional[str],
-            connection_callback: Callable[[dict[str, Any]], Optional[str]], installer: Any = None) -> str:
+def install(
+    items: list[dict[str, str]],
+    *,
+    session_id: Optional[str],
+    tool_call_id: Optional[str],
+    connection_callback: Callable[[dict[str, Any]], Optional[str]],
+    installer: Any = None,
+) -> str:
     from tools.connectors.catalog import open_runner
     from tools.connectors.gateway.config import operation_session_key
     from tools.connectors.operation import Target
@@ -137,9 +168,12 @@ def install(items: list[dict[str, str]], *, session_id: Optional[str], tool_call
     runner = open_runner(installer)
     try:
         return run_operation(
-            targets, Kind(prepare=runner.prepare, observe=runner.observe, note=NOTE),
-            session_key=operation_session_key(session_id), tool_call_id=tool_call_id,
-            connection_callback=connection_callback, with_urls_in_result=False,
+            targets,
+            Kind(prepare=runner.prepare, observe=runner.observe, note=NOTE),
+            session_key=operation_session_key(session_id),
+            tool_call_id=tool_call_id,
+            connection_callback=connection_callback,
+            with_urls_in_result=False,
         )
     finally:
         runner.close()
@@ -164,13 +198,26 @@ def _plugin_rows(query: str) -> list[dict[str, Any]]:
     from tools.connectors.catalog import _display
 
     try:
-        installed = {str(rec["catalog"]["name"]) for rec in _read_install_metadata().values()
-                     if isinstance(rec, dict) and isinstance(rec.get("catalog"), dict) and rec["catalog"].get("name")}
+        installed = {
+            str(rec["catalog"]["name"])
+            for rec in _read_install_metadata().values()
+            if isinstance(rec, dict)
+            and isinstance(rec.get("catalog"), dict)
+            and rec["catalog"].get("name")
+        }
     except PluginOperationError:
         installed = set()
-    return [{"id": e.name, "kind": "plugin", "display": _display(e.name), "tier": e.tier,
-             "platforms": list(e.platforms), "installed": e.name in installed}
-            for e in filter_entries(load_catalog_live(), query)[:SEARCH_LIMIT]]
+    return [
+        {
+            "id": e.name,
+            "kind": "plugin",
+            "display": _display(e.name),
+            "tier": e.tier,
+            "platforms": list(e.platforms),
+            "installed": e.name in installed,
+        }
+        for e in filter_entries(load_catalog_live(), query)[:SEARCH_LIMIT]
+    ]
 
 
 def _skill_rows(query: str) -> list[dict[str, Any]]:
@@ -179,7 +226,16 @@ def _skill_rows(query: str) -> list[dict[str, Any]]:
     from tools.skills_hub_search import create_source_router, unified_search
 
     installed = {str(e.get("identifier")) for e in HubLockFile().list_installed()}
-    return [{"id": r.identifier, "kind": "skill", "display": r.name,
-             "tier": "official" if r.source == "official" else "community", "platforms": [],
-             "installed": r.identifier in installed}
-            for r in unified_search(query, create_source_router(GitHubAuth()), limit=SEARCH_LIMIT)]
+    return [
+        {
+            "id": r.identifier,
+            "kind": "skill",
+            "display": r.name,
+            "tier": "official" if r.source == "official" else "community",
+            "platforms": [],
+            "installed": r.identifier in installed,
+        }
+        for r in unified_search(
+            query, create_source_router(GitHubAuth()), limit=SEARCH_LIMIT
+        )
+    ]

@@ -78,7 +78,9 @@ def summarize_manual_compression(
     if (noop and after_tokens == before_tokens) or refused_would_grow:
         token_line = f"Approx request size: ~{before_tokens:,} tokens (unchanged)"
     else:
-        token_line = f"Approx request size: ~{before_tokens:,} → ~{after_tokens:,} tokens"
+        token_line = (
+            f"Approx request size: ~{before_tokens:,} → ~{after_tokens:,} tokens"
+        )
 
     if failure_reason and (aborted or fallback_used):
         # Crosses a user-facing UI boundary: never let a disabled global redaction

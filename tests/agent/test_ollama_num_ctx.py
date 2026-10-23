@@ -41,11 +41,16 @@ class TestQueryOllamaNumCtx:
         }
         mock_ctx, _ = _mock_httpx_client(show_data)
 
-        with patch("agent.model_metadata.detect_local_server_type", return_value="ollama"):
+        with patch(
+            "agent.model_metadata.detect_local_server_type", return_value="ollama"
+        ):
             # httpx is imported inside the function — patch the module import
             import httpx
+
             with patch.object(httpx, "Client", return_value=mock_ctx):
-                result = query_ollama_num_ctx("llama3.1:8b", "http://localhost:11434/v1")
+                result = query_ollama_num_ctx(
+                    "llama3.1:8b", "http://localhost:11434/v1"
+                )
 
         assert result == 131072
 
@@ -57,15 +62,15 @@ class TestQueryOllamaNumCtx:
         }
         mock_ctx, _ = _mock_httpx_client(show_data)
 
-        with patch("agent.model_metadata.detect_local_server_type", return_value="ollama"):
+        with patch(
+            "agent.model_metadata.detect_local_server_type", return_value="ollama"
+        ):
             import httpx
+
             with patch.object(httpx, "Client", return_value=mock_ctx):
                 result = query_ollama_num_ctx("custom-model", "http://localhost:11434")
 
         assert result == 32768
-
-
-
 
     def test_strips_provider_prefix(self):
         """Should strip 'local:' prefix from model name before querying."""
@@ -75,17 +80,20 @@ class TestQueryOllamaNumCtx:
         }
         mock_ctx, mock_client = _mock_httpx_client(show_data)
 
-        with patch("agent.model_metadata.detect_local_server_type", return_value="ollama"):
+        with patch(
+            "agent.model_metadata.detect_local_server_type", return_value="ollama"
+        ):
             import httpx
+
             with patch.object(httpx, "Client", return_value=mock_ctx):
-                result = query_ollama_num_ctx("local:qwen2.5:7b", "http://localhost:11434/v1")
+                result = query_ollama_num_ctx(
+                    "local:qwen2.5:7b", "http://localhost:11434/v1"
+                )
 
         # Verify the post was called with stripped name (no "local:" prefix)
         call_args = mock_client.post.call_args
         assert call_args.kwargs["json"]["name"] == "qwen2.5:7b"
         assert result == 32768
-
-
 
 
 class TestQueryOllamaSupportsVision:
@@ -95,27 +103,36 @@ class TestQueryOllamaSupportsVision:
         show_data = {"capabilities": ["completion", "vision"]}
         mock_ctx, _ = _mock_httpx_client(show_data)
 
-        with patch("agent.model_metadata.detect_local_server_type", return_value="ollama"):
+        with patch(
+            "agent.model_metadata.detect_local_server_type", return_value="ollama"
+        ):
             import httpx
+
             with patch.object(httpx, "Client", return_value=mock_ctx):
-                result = query_ollama_supports_vision("gemma4:e2b", "http://localhost:11434/v1")
+                result = query_ollama_supports_vision(
+                    "gemma4:e2b", "http://localhost:11434/v1"
+                )
 
         assert result is True
-
 
     def test_falls_back_to_model_info_vision_block_count(self):
         show_data = {"model_info": {"gemma3.vision.block_count": 27}}
         mock_ctx, _ = _mock_httpx_client(show_data)
 
-        with patch("agent.model_metadata.detect_local_server_type", return_value="ollama"):
+        with patch(
+            "agent.model_metadata.detect_local_server_type", return_value="ollama"
+        ):
             import httpx
+
             with patch.object(httpx, "Client", return_value=mock_ctx):
                 result = query_ollama_supports_vision("llava", "http://localhost:11434")
 
         assert result is True
 
     def test_returns_none_for_non_ollama_server(self):
-        with patch("agent.model_metadata.detect_local_server_type", return_value="vllm"):
+        with patch(
+            "agent.model_metadata.detect_local_server_type", return_value="vllm"
+        ):
             result = query_ollama_supports_vision("llava", "http://localhost:8000/v1")
         assert result is None
 
@@ -128,6 +145,7 @@ class TestQueryOllamaSupportsVision:
 
 def _build_agent(cfg, probed_ctx, base_url="http://localhost:11434/v1"):
     import agent.context_compressor as cc_mod
+
     with (
         patch("model_tools.get_tool_definitions", return_value=[]),
         patch("model_tools.check_toolset_requirements", return_value={}),
@@ -139,10 +157,13 @@ def _build_agent(cfg, probed_ctx, base_url="http://localhost:11434/v1"):
             return_value=probed_ctx,
         ),
         patch.object(
-            cc_mod, "get_model_context_length", return_value=probed_ctx,
+            cc_mod,
+            "get_model_context_length",
+            return_value=probed_ctx,
         ),
     ):
         from run_agent import AIAgent
+
         return AIAgent(
             model="gemma3:27b",
             api_key="ollama",
@@ -184,15 +205,22 @@ class TestServedNumCtxSatisfiesTheFloor:
     construction must succeed; the compressor still targets the smaller probed window."""
 
     def test_explicit_num_ctx_above_the_floor_admits_a_small_metadata_window(self):
-        agent = _build_agent({"agent": {}, "model": {"ollama_num_ctx": 65536}}, probed_ctx=40960)
+        agent = _build_agent(
+            {"agent": {}, "model": {"ollama_num_ctx": 65536}}, probed_ctx=40960
+        )
         assert agent._ollama_num_ctx == 65536
-        assert agent.context_compressor.context_length == 40960  # one-directional clamp unchanged
+        assert (
+            agent.context_compressor.context_length == 40960
+        )  # one-directional clamp unchanged
 
     def test_served_window_counts_only_for_a_local_endpoint(self):
         """Only a local server honours num_ctx; a stale override must not admit a hosted 40K model."""
         with pytest.raises(ValueError, match="below the minimum"):
-            _build_agent({"agent": {}, "model": {"ollama_num_ctx": 65536}}, probed_ctx=40960,
-                         base_url="https://openrouter.ai/api/v1")
+            _build_agent(
+                {"agent": {}, "model": {"ollama_num_ctx": 65536}},
+                probed_ctx=40960,
+                base_url="https://openrouter.ai/api/v1",
+            )
 
 
 class TestFloorRefusalNamesTheLocalServerHonestly:
@@ -202,11 +230,19 @@ class TestFloorRefusalNamesTheLocalServerHonestly:
 
     def test_local_refusal_names_server_flag_and_num_ctx_key(self):
         with pytest.raises(ValueError) as exc:
-            _build_agent({"agent": {}, "model": {}}, probed_ctx=32768, base_url="http://127.0.0.1:8422/v1")
+            _build_agent(
+                {"agent": {}, "model": {}},
+                probed_ctx=32768,
+                base_url="http://127.0.0.1:8422/v1",
+            )
         msg = str(exc.value)
         assert "model.ollama_num_ctx" in msg
 
     def test_hosted_refusal_keeps_context_length_advice(self):
         with pytest.raises(ValueError, match="model.context_length") as exc:
-            _build_agent({"agent": {}, "model": {}}, probed_ctx=32768, base_url="https://openrouter.ai/api/v1")
+            _build_agent(
+                {"agent": {}, "model": {}},
+                probed_ctx=32768,
+                base_url="https://openrouter.ai/api/v1",
+            )
         assert "ollama_num_ctx" not in str(exc.value)

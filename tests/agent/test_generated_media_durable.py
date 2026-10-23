@@ -43,7 +43,10 @@ def _backdate_hours(path, hours: float = 25.0) -> None:
 
 @pytest.mark.parametrize(
     "save, sweeper",
-    [(save_b64_image, base.cleanup_image_cache), (save_b64_video, base.cleanup_video_cache)],
+    [
+        (save_b64_image, base.cleanup_image_cache),
+        (save_b64_video, base.cleanup_video_cache),
+    ],
     ids=["image", "video"],
 )
 def test_old_generated_media_is_not_swept(tmp_path, monkeypatch, save, sweeper):
@@ -57,7 +60,9 @@ def test_old_generated_media_is_not_swept(tmp_path, monkeypatch, save, sweeper):
     path = save(base64.b64encode(PNG_1PX).decode(), prefix="red_test")
     _backdate_hours(path)
     removed = sweeper(max_age_hours=24)
-    assert path.exists(), f"25h-old generated media was swept ({removed} removed): {path}"
+    assert path.exists(), (
+        f"25h-old generated media was swept ({removed} removed): {path}"
+    )
 
     # Still deliverable on a strict gateway with recency trust off: only the
     # cache allowlist can vouch for a day-old file.
@@ -74,4 +79,6 @@ def test_generated_dir_is_mounted_from_the_writers_location(tmp_path, monkeypatc
     path = save_b64_image(base64.b64encode(PNG_1PX).decode(), prefix="red_test")
     mounts = {m["container_path"]: m["host_path"] for m in get_cache_directory_mounts()}
     assert "/root/.clawksis/cache/generated" in mounts, sorted(mounts)
-    assert path.is_relative_to(Path(mounts["/root/.clawksis/cache/generated"]).resolve())
+    assert path.is_relative_to(
+        Path(mounts["/root/.clawksis/cache/generated"]).resolve()
+    )

@@ -20,16 +20,12 @@ from tools.computer_use import cua_backend_driver
 
 
 class TestNoOverlayFlag:
-
-
-
-
-
     def test_explicit_true_overrides(self):
-        with patch("clawk_cli.config.load_config",
-                   return_value={"computer_use": {"no_overlay": True}}):
+        with patch(
+            "clawk_cli.config.load_config",
+            return_value={"computer_use": {"no_overlay": True}},
+        ):
             assert cua_backend._cua_no_overlay() is True
-
 
     @pytest.mark.platforms("macos")
     def test_config_load_failure_falls_through_to_auto_detect_macos(self):
@@ -38,8 +34,7 @@ class TestNoOverlayFlag:
         macOS-only: the auto-detect verdict IS ``sys.platform == "darwin"``,
         so a patched platform would only re-assert the patch.
         """
-        with patch("clawk_cli.config.load_config",
-                   side_effect=RuntimeError("boom")):
+        with patch("clawk_cli.config.load_config", side_effect=RuntimeError("boom")):
             assert cua_backend._cua_no_overlay() is True
 
     @pytest.mark.platforms("linux")
@@ -50,8 +45,7 @@ class TestNoOverlayFlag:
         ``/proc/version``, neither of which exists to be probed elsewhere.
         """
         monkeypatch.delenv("DISPLAY", raising=False)
-        with patch("clawk_cli.config.load_config",
-                   side_effect=RuntimeError("boom")):
+        with patch("clawk_cli.config.load_config", side_effect=RuntimeError("boom")):
             assert cua_backend._cua_no_overlay() is True
 
     @pytest.mark.platforms("linux")
@@ -96,11 +90,11 @@ class TestNoOverlayFlag:
         monkeypatch.setenv("DISPLAY", ":0")
         monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
         monkeypatch.delenv("XDG_SESSION_TYPE", raising=False)
-        with patch("clawk_cli.config.load_config",
-                   return_value={"computer_use": {"no_overlay": False}}):
+        with patch(
+            "clawk_cli.config.load_config",
+            return_value={"computer_use": {"no_overlay": False}},
+        ):
             assert cua_backend._cua_no_overlay() is False
-
-
 
 
 class TestDriverSupportsNoOverlay:
@@ -109,9 +103,9 @@ class TestDriverSupportsNoOverlay:
         with patch("subprocess.run") as mock_run:
             mock_run.return_value.stdout = fake_help
             mock_run.return_value.stderr = ""
-            assert cua_backend_driver._cua_driver_supports_no_overlay("cua-driver") is True
-
-
+            assert (
+                cua_backend_driver._cua_driver_supports_no_overlay("cua-driver") is True
+            )
 
     def test_help_probe_passes_sanitized_env(self):
         """The ``--help`` subprocess must not leak provider credentials
@@ -119,6 +113,7 @@ class TestDriverSupportsNoOverlay:
         policy as the manifest probe and MCP spawn).
         """
         from unittest.mock import MagicMock
+
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(stdout="--no-overlay in help", stderr="")
             cua_backend_driver._cua_driver_supports_no_overlay.cache_clear()
@@ -148,11 +143,13 @@ class TestMcpInvocationUsesResolvedCommand:
     @staticmethod
     def _fake_run(stdout: str = "", returncode: int = 0):
         from unittest.mock import MagicMock
+
         def _run(*args, **kwargs):
             proc = MagicMock()
             proc.stdout = stdout
             proc.returncode = returncode
             return proc
+
         return _run
 
     def test_manifest_command_drives_support_probe(self):
@@ -164,15 +161,17 @@ class TestMcpInvocationUsesResolvedCommand:
         from tools.computer_use.cua_backend_driver import _resolve_mcp_invocation
 
         manifest = (
-            '{"mcp_invocation":'
-            '{"command":"/opt/relocated/cua-driver","args":["mcp"]}}'
+            '{"mcp_invocation":{"command":"/opt/relocated/cua-driver","args":["mcp"]}}'
         )
-        with patch("subprocess.run", new=self._fake_run(stdout=manifest)), \
-             patch.object(cua_backend, "_cua_no_overlay", return_value=True), \
-             patch.object(
-                 cua_backend_driver, "_cua_driver_supports_no_overlay",
-                 return_value=True,
-             ) as mock_probe:
+        with (
+            patch("subprocess.run", new=self._fake_run(stdout=manifest)),
+            patch.object(cua_backend, "_cua_no_overlay", return_value=True),
+            patch.object(
+                cua_backend_driver,
+                "_cua_driver_supports_no_overlay",
+                return_value=True,
+            ) as mock_probe,
+        ):
             cua_backend_driver._cua_driver_supports_no_overlay.cache_clear()
             cmd, _args = _resolve_mcp_invocation("/usr/bin/cua-driver")
         assert cmd == "/opt/relocated/cua-driver"
@@ -180,47 +179,62 @@ class TestMcpInvocationUsesResolvedCommand:
         # command, not the input driver_cmd argument.
         mock_probe.assert_called_with("/opt/relocated/cua-driver")
 
-
     def test_probe_distinguishes_support_between_binaries(self):
         """Different binaries must produce independent support verdicts.
         The cache is keyed on ``driver_cmd``; the same cached result
         must not leak between the system binary and a manifest-relocated
         one.
         """
-        with patch.object(cua_backend, "_cua_no_overlay", return_value=True), \
-             patch.object(
-                 cua_backend_driver, "_cua_driver_supports_no_overlay",
-                 side_effect=lambda cmd: cmd == "/opt/relocated/cua-driver",
-             ):
+        with (
+            patch.object(cua_backend, "_cua_no_overlay", return_value=True),
+            patch.object(
+                cua_backend_driver,
+                "_cua_driver_supports_no_overlay",
+                side_effect=lambda cmd: cmd == "/opt/relocated/cua-driver",
+            ),
+        ):
             # System binary does NOT support, manifest binary DOES.
             args = cua_backend_driver._mcp_args_with_overlay_flag(
-                ["mcp"], driver_cmd="/usr/bin/cua-driver",
+                ["mcp"],
+                driver_cmd="/usr/bin/cua-driver",
             )
             assert "--no-overlay" not in args
             args = cua_backend_driver._mcp_args_with_overlay_flag(
-                ["mcp"], driver_cmd="/opt/relocated/cua-driver",
+                ["mcp"],
+                driver_cmd="/opt/relocated/cua-driver",
             )
             assert "--no-overlay" in args
 
 
 class TestMcpArgsOverlayFlag:
     def test_appended_when_enabled_and_supported(self):
-        with patch.object(cua_backend, "_cua_no_overlay", return_value=True), \
-             patch.object(cua_backend_driver, "_cua_driver_supports_no_overlay", return_value=True):
+        with (
+            patch.object(cua_backend, "_cua_no_overlay", return_value=True),
+            patch.object(
+                cua_backend_driver, "_cua_driver_supports_no_overlay", return_value=True
+            ),
+        ):
             result = cua_backend_driver._mcp_args_with_overlay_flag(["mcp"])
             assert result == ["mcp", "--no-overlay"]
 
     def test_not_appended_when_disabled(self):
-        with patch.object(cua_backend, "_cua_no_overlay", return_value=False), \
-             patch.object(cua_backend_driver, "_cua_driver_supports_no_overlay", return_value=True):
+        with (
+            patch.object(cua_backend, "_cua_no_overlay", return_value=False),
+            patch.object(
+                cua_backend_driver, "_cua_driver_supports_no_overlay", return_value=True
+            ),
+        ):
             result = cua_backend_driver._mcp_args_with_overlay_flag(["mcp"])
             assert result == ["mcp"]
 
-
     def test_does_not_mutate_original_list(self):
         original = ["mcp"]
-        with patch.object(cua_backend, "_cua_no_overlay", return_value=True), \
-             patch.object(cua_backend_driver, "_cua_driver_supports_no_overlay", return_value=True):
+        with (
+            patch.object(cua_backend, "_cua_no_overlay", return_value=True),
+            patch.object(
+                cua_backend_driver, "_cua_driver_supports_no_overlay", return_value=True
+            ),
+        ):
             result = cua_backend_driver._mcp_args_with_overlay_flag(original)
             assert "--no-overlay" in result
             assert "--no-overlay" not in original
@@ -236,19 +250,34 @@ class TestEmbeddedDaemonOverlayFlag:
         process.poll.return_value = None
         status = MagicMock(returncode=0)
 
-        with patch.object(
-            cua_backend_driver,
-            "_resolve_mcp_invocation",
-            return_value=("/usr/bin/cua-driver", ["mcp"]),
-        ), patch.object(
-            cua_backend, "_cua_no_overlay", return_value=True,
-        ), patch.object(
-            cua_backend_driver, "_cua_driver_supports_no_overlay", return_value=True,
-        ), patch.object(
-            cua_backend.subprocess, "Popen", return_value=process,
-        ) as popen, patch.object(
-            cua_backend.subprocess, "run", return_value=status,
-        ), patch.object(cua_backend_daemon.threading, "Thread"):
+        with (
+            patch.object(
+                cua_backend_driver,
+                "_resolve_mcp_invocation",
+                return_value=("/usr/bin/cua-driver", ["mcp"]),
+            ),
+            patch.object(
+                cua_backend,
+                "_cua_no_overlay",
+                return_value=True,
+            ),
+            patch.object(
+                cua_backend_driver,
+                "_cua_driver_supports_no_overlay",
+                return_value=True,
+            ),
+            patch.object(
+                cua_backend.subprocess,
+                "Popen",
+                return_value=process,
+            ) as popen,
+            patch.object(
+                cua_backend.subprocess,
+                "run",
+                return_value=status,
+            ),
+            patch.object(cua_backend_daemon.threading, "Thread"),
+        ):
             daemon.start()
 
         command = popen.call_args.args[0]

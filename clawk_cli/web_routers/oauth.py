@@ -21,7 +21,11 @@ from fastapi import APIRouter, HTTPException, Request
 from clawk_cli.auth_constants import _codex_err
 from clawk_cli.web_deps import LateState, late
 from clawk_cli.web_server_oauth import (
-    _external_process_cli_command, _oauth_profile_name, _oauth_sessions, _oauth_sessions_lock, _truncate_token,
+    _external_process_cli_command,
+    _oauth_profile_name,
+    _oauth_sessions,
+    _oauth_sessions_lock,
+    _truncate_token,
 )
 from clawk_cli.web_models import OAuthSubmitBody
 from clawk_cli.web_routers._common import config_scoped_to_thread, scoped_to_thread
@@ -33,9 +37,13 @@ router = APIRouter()
 _profile_scope = late("_profile_scope", "clawk_cli.web_server_profiles")
 _require_token = late("_require_token")
 _resolve_profile_dir = late("_resolve_profile_dir", "clawk_cli.web_server_profiles")
-_OAUTH_PROVIDER_CATALOG = LateState("_OAUTH_PROVIDER_CATALOG", "clawk_cli.web_server_oauth")
+_OAUTH_PROVIDER_CATALOG = LateState(
+    "_OAUTH_PROVIDER_CATALOG", "clawk_cli.web_server_oauth"
+)
 # Unlisted (BYOK: Nous) providers: never in the listing, still startable/disconnectable by id.
-_DORMANT_OAUTH_PROVIDERS = LateState("_DORMANT_OAUTH_PROVIDERS", "clawk_cli.web_server_oauth")
+_DORMANT_OAUTH_PROVIDERS = LateState(
+    "_DORMANT_OAUTH_PROVIDERS", "clawk_cli.web_server_oauth"
+)
 # Pollers are late-bound: they run on a background thread AFTER the route returns, so a
 # test's monkeypatch on web_server_oauth must win at spawn time, not router-import time.
 # A direct import here made those mocks no-ops — the real poller then hit the network
@@ -60,10 +68,20 @@ def _http_response_error_detail(resp: Any) -> str:
     if isinstance(payload, dict):
         error = payload.get("error")
         if isinstance(error, dict):
-            parts = [s for s in (str(error.get(k, "")).strip() for k in ("message", "error_description", "code", "type")) if s]
+            parts = [
+                s
+                for s in (
+                    str(error.get(k, "")).strip()
+                    for k in ("message", "error_description", "code", "type")
+                )
+                if s
+            ]
             if parts:
                 return ": ".join(parts)
-        for value in (error, *(payload.get(k) for k in ("detail", "message", "error_description"))):
+        for value in (
+            error,
+            *(payload.get(k) for k in ("detail", "message", "error_description")),
+        ):
             if isinstance(value, str) and value.strip():
                 return value.strip()
     return str(getattr(resp, "text", "") or "").strip()[:500]
@@ -86,14 +104,23 @@ def _codex_device_code_start_error(resp: Any) -> str:
             "OpenAI rejected the device-code login request. Please try Login "
             "again from the dashboard after checking your OpenAI account settings."
         )
-    return f"{message} (HTTP {status}: {detail})" if detail else f"{message} (HTTP {status})"
+    return (
+        f"{message} (HTTP {status}: {detail})"
+        if detail
+        else f"{message} (HTTP {status})"
+    )
 
 
-def _new_oauth_session(provider_id: str, flow: str, profile: Optional[str] = None) -> tuple[str, dict[str, Any]]:
+def _new_oauth_session(
+    provider_id: str, flow: str, profile: Optional[str] = None
+) -> tuple[str, dict[str, Any]]:
     """Create + register a new OAuth session, return (session_id, session_dict)."""
     sid = secrets.token_urlsafe(16)
     sess = {
-        "session_id": sid, "provider": provider_id, "flow": flow, "profile": _oauth_profile_name(profile),
+        "session_id": sid,
+        "provider": provider_id,
+        "flow": flow,
+        "profile": _oauth_profile_name(profile),
         "created_at": time.time(),
         "status": "pending",  # pending | approved | denied | expired | error
         "error_message": None,
@@ -118,20 +145,26 @@ def _start_poller(target, sid: str, prefix: str = "oauth-poll") -> None:
             target(sid)
         finally:  # the session's status is final once its poller returns
             from clawk_cli.observability.shared_metrics_setup import settle_oauth_setup
+
             settle_oauth_setup(sess)
 
     # The poller saves credentials under ``_profile_scope(sess['profile'])``; an implicit
     # selector (None) must resolve in the REQUEST's home (a secondary-profile native ticket's
     # override), so the thread runs in a copy of the starting request's context.
     context = contextvars.copy_context()
-    threading.Thread(target=context.run, args=(run,), daemon=True, name=f"{prefix}-{sid[:6]}").start()
+    threading.Thread(
+        target=context.run, args=(run,), daemon=True, name=f"{prefix}-{sid[:6]}"
+    ).start()
 
 
 def _track_oauth_setup(flow, session_id: str) -> None:
     """Hand the setup flow to its session; settle it now if the poller already ended."""
     from clawk_cli.observability.shared_metrics_setup import (
-        attach_oauth_setup, finish_provider_setup, settle_oauth_setup,
+        attach_oauth_setup,
+        finish_provider_setup,
+        settle_oauth_setup,
     )
+
     with _oauth_sessions_lock:
         sess = _oauth_sessions.get(session_id)
     if sess is None:  # cancelled before the start response even returned
@@ -142,26 +175,40 @@ def _track_oauth_setup(flow, session_id: str) -> None:
 
 
 def _device_session_started(
-    provider_id: str, profile: Optional[str], poller, fields: dict[str, Any],
-    user_code, verification_url, expires_in: int, poll_interval: int,
+    provider_id: str,
+    profile: Optional[str],
+    poller,
+    fields: dict[str, Any],
+    user_code,
+    verification_url,
+    expires_in: int,
+    poll_interval: int,
 ) -> dict[str, Any]:
     """Register a device-code session carrying ``fields``, start its poller, return the /start body."""
     sid, sess = _new_oauth_session(provider_id, "device_code", profile=profile)
     sess.update(fields)
     _start_poller(poller, sid)
     return {
-        "session_id": sid, "flow": "device_code", "user_code": user_code,
-        "verification_url": verification_url, "expires_in": expires_in, "poll_interval": poll_interval,
+        "session_id": sid,
+        "flow": "device_code",
+        "user_code": user_code,
+        "verification_url": verification_url,
+        "expires_in": expires_in,
+        "poll_interval": poll_interval,
     }
 
 
-async def _httpx_call(fn: Callable[[Any], Any], timeout: float = 15.0, **client_kwargs) -> Any:
+async def _httpx_call(
+    fn: Callable[[Any], Any], timeout: float = 15.0, **client_kwargs
+) -> Any:
     """Run ``fn(client)`` off-loop with a short-lived JSON-accepting ``httpx.Client``."""
     import httpx
 
     def _call():
         with httpx.Client(
-            timeout=httpx.Timeout(timeout), headers={"Accept": "application/json"}, **client_kwargs
+            timeout=httpx.Timeout(timeout),
+            headers={"Accept": "application/json"},
+            **client_kwargs,
         ) as client:
             return fn(client)
 
@@ -178,7 +225,9 @@ async def _httpx_call(fn: Callable[[Any], Any], timeout: float = 15.0, **client_
 def _codex_cancelled(sess: dict[str, Any], session_id: str, stage: str = "") -> bool:
     if not sess.get("cancelled"):
         return False
-    _log.info("oauth/device: openai-codex login cancelled%s (session=%s)", stage, session_id)
+    _log.info(
+        "oauth/device: openai-codex login cancelled%s (session=%s)", stage, session_id
+    )
     return True
 
 
@@ -190,7 +239,10 @@ def _codex_client(httpx) -> Any:
     """
     from clawk_cli.auth_codex import _cap_codex_response_body
 
-    return httpx.Client(timeout=httpx.Timeout(15.0), event_hooks={"response": [_cap_codex_response_body]})
+    return httpx.Client(
+        timeout=httpx.Timeout(15.0),
+        event_hooks={"response": [_cap_codex_response_body]},
+    )
 
 
 def _codex_post(httpx, url: str, **kwargs: Any) -> Any:
@@ -227,7 +279,9 @@ def _codex_request_user_code(httpx) -> dict[str, Any]:
     from clawk_cli.auth import CODEX_OAUTH_CLIENT_ID
 
     resp = _codex_post(
-        httpx, f"{_CODEX_ISSUER}/api/accounts/deviceauth/usercode", json={"client_id": CODEX_OAUTH_CLIENT_ID},
+        httpx,
+        f"{_CODEX_ISSUER}/api/accounts/deviceauth/usercode",
+        json={"client_id": CODEX_OAUTH_CLIENT_ID},
         headers=_JSON_HEADERS,
     )
     if resp.status_code != 200:
@@ -245,7 +299,9 @@ def _codex_poll_authorization(httpx, sess: dict[str, Any], session_id: str) -> A
 
     deadline = time.monotonic() + sess["expires_in"]
     payload = {"device_auth_id": sess["device_auth_id"], "user_code": sess["user_code"]}
-    max_consecutive_blips = 6  # same cap as the CLI poll loop: survives drops, fails fast on a dead network
+    max_consecutive_blips = (
+        6  # same cap as the CLI poll loop: survives drops, fails fast on a dead network
+    )
     consecutive_blips = 0
     with _codex_client(httpx) as client:
         while time.monotonic() < deadline:
@@ -256,7 +312,10 @@ def _codex_poll_authorization(httpx, sess: dict[str, Any], session_id: str) -> A
                 return _CANCELLED
             try:
                 poll = client.post(
-                    f"{_CODEX_ISSUER}/api/accounts/deviceauth/token", json=payload, headers=_JSON_HEADERS)
+                    f"{_CODEX_ISSUER}/api/accounts/deviceauth/token",
+                    json=payload,
+                    headers=_JSON_HEADERS,
+                )
             except Exception as exc:
                 if not _is_transient_transport_error(exc):
                     raise
@@ -264,8 +323,12 @@ def _codex_poll_authorization(httpx, sess: dict[str, Any], session_id: str) -> A
                 if consecutive_blips >= max_consecutive_blips:
                     raise RuntimeError(
                         f"deviceauth/token poll failed after {consecutive_blips} consecutive"
-                        f" transport errors: {exc}") from exc
-                _log.info("oauth/device: openai-codex poll transport blip, retrying (session=%s)", session_id)
+                        f" transport errors: {exc}"
+                    ) from exc
+                _log.info(
+                    "oauth/device: openai-codex poll transport blip, retrying (session=%s)",
+                    session_id,
+                )
                 continue
             consecutive_blips = 0
             if poll.status_code == 200:
@@ -283,22 +346,32 @@ def _codex_exchange_tokens(httpx, code_resp: dict[str, Any]) -> dict[str, str]:
     authorization_code = code_resp.get("authorization_code", "")
     code_verifier = code_resp.get("code_verifier", "")
     if not authorization_code or not code_verifier:
-        raise RuntimeError("device-auth response missing authorization_code/code_verifier")
+        raise RuntimeError(
+            "device-auth response missing authorization_code/code_verifier"
+        )
     token_resp = _codex_post(
-        httpx, CODEX_OAUTH_TOKEN_URL,
+        httpx,
+        CODEX_OAUTH_TOKEN_URL,
         data={
-            "grant_type": "authorization_code", "code": authorization_code,
+            "grant_type": "authorization_code",
+            "code": authorization_code,
             "redirect_uri": f"{_CODEX_ISSUER}/deviceauth/callback",
-            "client_id": CODEX_OAUTH_CLIENT_ID, "code_verifier": code_verifier,
+            "client_id": CODEX_OAUTH_CLIENT_ID,
+            "code_verifier": code_verifier,
         },
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
     if token_resp.status_code != 200:
-        raise _codex_http_error(token_resp.status_code)(f"token exchange returned {token_resp.status_code}")
+        raise _codex_http_error(token_resp.status_code)(
+            f"token exchange returned {token_resp.status_code}"
+        )
     tokens = token_resp.json()
     if not tokens.get("access_token"):
         raise RuntimeError("token exchange did not return access_token")
-    return {"access_token": tokens.get("access_token", ""), "refresh_token": tokens.get("refresh_token", "")}
+    return {
+        "access_token": tokens.get("access_token", ""),
+        "refresh_token": tokens.get("refresh_token", ""),
+    }
 
 
 def _codex_full_login_worker(session_id: str) -> None:
@@ -312,9 +385,12 @@ def _codex_full_login_worker(session_id: str) -> None:
             if not sess:
                 return
             sess.update(
-                user_code=device_data["user_code"], verification_url=f"{_CODEX_ISSUER}/codex/device",
-                device_auth_id=device_data["device_auth_id"], interval=device_data["interval"],
-                expires_in=_CODEX_EXPIRES_IN, expires_at=time.time() + _CODEX_EXPIRES_IN,
+                user_code=device_data["user_code"],
+                verification_url=f"{_CODEX_ISSUER}/codex/device",
+                device_auth_id=device_data["device_auth_id"],
+                interval=device_data["interval"],
+                expires_in=_CODEX_EXPIRES_IN,
+                expires_at=time.time() + _CODEX_EXPIRES_IN,
             )
             # Captured now (not re-derived after cancel pops the session) so a
             # cancelled session can never fall back to the caller's current
@@ -327,7 +403,9 @@ def _codex_full_login_worker(session_id: str) -> None:
                 sess["status"] = "expired"
                 sess["error_message"] = "Device code expired before approval"
             return
-        if code_resp is _CANCELLED or _codex_cancelled(sess, session_id, " before token exchange"):
+        if code_resp is _CANCELLED or _codex_cancelled(
+            sess, session_id, " before token exchange"
+        ):
             return
 
         tokens = _codex_exchange_tokens(httpx, code_resp)
@@ -347,6 +425,7 @@ def _codex_full_login_worker(session_id: str) -> None:
         _log.info("oauth/device: openai-codex login completed (session=%s)", session_id)
     except Exception as e:
         from clawk_cli.observability.shared_metrics_setup import note_oauth_failure
+
         _log.warning("codex device-code worker failed (session=%s): %s", session_id, e)
         with _oauth_sessions_lock:
             s = _oauth_sessions.get(session_id)
@@ -360,11 +439,21 @@ _OMIT: Any = object()
 
 
 def _status_card(
-    raw: dict, source, source_label, token_preview, expires_at, has_refresh_token, last_refresh=_OMIT
+    raw: dict,
+    source,
+    source_label,
+    token_preview,
+    expires_at,
+    has_refresh_token,
+    last_refresh=_OMIT,
 ) -> dict[str, Any]:
     card = {
-        "logged_in": bool(raw.get("logged_in")), "source": source, "source_label": source_label,
-        "token_preview": token_preview, "expires_at": expires_at, "has_refresh_token": has_refresh_token,
+        "logged_in": bool(raw.get("logged_in")),
+        "source": source,
+        "source_label": source_label,
+        "token_preview": token_preview,
+        "expires_at": expires_at,
+        "has_refresh_token": has_refresh_token,
     }
     if last_refresh is not _OMIT:
         card["last_refresh"] = last_refresh
@@ -382,25 +471,67 @@ def _epoch_ms_to_iso(value: Any) -> Optional[str]:
 # refresh. xai: source_label is a human-readable origin (auth-store path /
 # credential source), not the internal auth_mode string ("oauth_pkce").
 _PROVIDER_STATUS: dict[str, tuple[str, Callable[[dict], dict]]] = {
-    "nous": ("get_nous_auth_status_local", lambda r: {**_status_card(
-        r, "nous_portal", r.get("portal_base_url") or "Nous Portal",
-        _truncate_token(r.get("access_token")), r.get("access_expires_at"), bool(r.get("has_refresh_token")),
-    ), "free_tier": bool(r.get("free_tier")), "account_tier": r.get("account_tier")}),
-    "openai-codex": ("get_codex_auth_status", lambda r: _status_card(
-        r, r.get("source") or "openai_codex", r.get("auth_mode") or "OpenAI Codex",
-        _truncate_token(r.get("api_key")), None, False, r.get("last_refresh"),
-    )),
-    "qwen-oauth": ("get_qwen_auth_status", lambda r: _status_card(
-        r, "qwen_cli", r.get("auth_file") or "Qwen CLI",
-        _truncate_token(r.get("api_key")), _epoch_ms_to_iso(r.get("expires_at_ms")), bool(r.get("has_refresh_token")),
-    )),
-    "minimax-oauth": ("get_minimax_oauth_auth_status", lambda r: _status_card(
-        r, "minimax_oauth", f"MiniMax ({r.get('region', 'global')})", None, r.get("expires_at"), True,
-    )),
-    "xai-oauth": ("get_xai_oauth_auth_status", lambda r: _status_card(
-        r, r.get("source") or "xai_oauth", r.get("auth_store") or r.get("source") or "xAI Grok OAuth",
-        _truncate_token(r.get("api_key")), None, True, r.get("last_refresh"),
-    )),
+    "nous": (
+        "get_nous_auth_status_local",
+        lambda r: {
+            **_status_card(
+                r,
+                "nous_portal",
+                r.get("portal_base_url") or "Nous Portal",
+                _truncate_token(r.get("access_token")),
+                r.get("access_expires_at"),
+                bool(r.get("has_refresh_token")),
+            ),
+            "free_tier": bool(r.get("free_tier")),
+            "account_tier": r.get("account_tier"),
+        },
+    ),
+    "openai-codex": (
+        "get_codex_auth_status",
+        lambda r: _status_card(
+            r,
+            r.get("source") or "openai_codex",
+            r.get("auth_mode") or "OpenAI Codex",
+            _truncate_token(r.get("api_key")),
+            None,
+            False,
+            r.get("last_refresh"),
+        ),
+    ),
+    "qwen-oauth": (
+        "get_qwen_auth_status",
+        lambda r: _status_card(
+            r,
+            "qwen_cli",
+            r.get("auth_file") or "Qwen CLI",
+            _truncate_token(r.get("api_key")),
+            _epoch_ms_to_iso(r.get("expires_at_ms")),
+            bool(r.get("has_refresh_token")),
+        ),
+    ),
+    "minimax-oauth": (
+        "get_minimax_oauth_auth_status",
+        lambda r: _status_card(
+            r,
+            "minimax_oauth",
+            f"MiniMax ({r.get('region', 'global')})",
+            None,
+            r.get("expires_at"),
+            True,
+        ),
+    ),
+    "xai-oauth": (
+        "get_xai_oauth_auth_status",
+        lambda r: _status_card(
+            r,
+            r.get("source") or "xai_oauth",
+            r.get("auth_store") or r.get("source") or "xAI Grok OAuth",
+            _truncate_token(r.get("api_key")),
+            None,
+            True,
+            r.get("last_refresh"),
+        ),
+    ),
 }
 
 
@@ -410,6 +541,7 @@ def _resolve_provider_status(provider_id: str, status_fn) -> dict[str, Any]:
         if status_fn is not None:
             return status_fn()
         from clawk_cli import auth as hauth
+
         entry = _PROVIDER_STATUS.get(provider_id)
         if entry is not None:
             getter, shape = entry
@@ -422,8 +554,12 @@ def _resolve_provider_status(provider_id: str, status_fn) -> dict[str, Any]:
             return _status_card(
                 raw,
                 raw.get("source") or raw.get("provider") or provider_id,
-                raw.get("source_label") or raw.get("auth_store") or raw.get("auth_store_path")
-                or raw.get("base_url") or raw.get("name") or "",
+                raw.get("source_label")
+                or raw.get("auth_store")
+                or raw.get("auth_store_path")
+                or raw.get("base_url")
+                or raw.get("name")
+                or "",
                 _truncate_token(raw.get("access_token") or raw.get("api_key")),
                 raw.get("expires_at") or raw.get("access_expires_at"),
                 bool(raw.get("has_refresh_token")),
@@ -441,9 +577,12 @@ async def _start_nous_device_code(profile: Optional[str]) -> dict[str, Any]:
     from clawk_cli import anon_auth
     from clawk_cli.auth import PROVIDER_REGISTRY
     from clawk_cli.web_server_profiles import _config_profile_scope
+
     pconfig = PROVIDER_REGISTRY["nous"]
     portal_base_url = (
-        os.getenv("CLAWK_PORTAL_BASE_URL") or os.getenv("NOUS_PORTAL_BASE_URL") or pconfig.portal_base_url
+        os.getenv("CLAWK_PORTAL_BASE_URL")
+        or os.getenv("NOUS_PORTAL_BASE_URL")
+        or pconfig.portal_base_url
     ).rstrip("/")
 
     # The session is registered BEFORE the generator exists, so a cancel landing in the start
@@ -481,21 +620,35 @@ async def _start_nous_device_code(profile: Optional[str]) -> dict[str, Any]:
             gen.close()
         _drop_oauth_session(sid)
         raise
-    if getattr(first, "kind", "") != "code":     # the store was unreadable or the code request failed
+    if (
+        getattr(first, "kind", "") != "code"
+    ):  # the store was unreadable or the code request failed
         with contextlib.suppress(Exception):
             gen.close()
         _drop_oauth_session(sid)
         raise HTTPException(400, detail=first.copy_terminal)
     with _oauth_sessions_lock:
         # ``device_code`` stays present because other routes read it; the generator owns the real one.
-        sess.update(dict(
-            portal_base_url=portal_base_url, client_id=pconfig.client_id, scope=pconfig.scope,
-            device_code="", interval=first.interval,
-            expires_at=time.time() + first.expires_in, _sign_in=gen))
-    _start_poller(_nous_sign_in_poller, sid)   # last: nothing observes `sess` before it is complete
+        sess.update(
+            dict(
+                portal_base_url=portal_base_url,
+                client_id=pconfig.client_id,
+                scope=pconfig.scope,
+                device_code="",
+                interval=first.interval,
+                expires_at=time.time() + first.expires_in,
+                _sign_in=gen,
+            )
+        )
+    _start_poller(
+        _nous_sign_in_poller, sid
+    )  # last: nothing observes `sess` before it is complete
     return {
-        "session_id": sid, "flow": "device_code", "user_code": first.code,
-        "verification_url": first.link, "expires_in": first.expires_in,
+        "session_id": sid,
+        "flow": "device_code",
+        "user_code": first.code,
+        "verification_url": first.link,
+        "expires_in": first.expires_in,
         "poll_interval": first.interval,
     }
 
@@ -517,14 +670,25 @@ async def _start_codex_device_code(profile: Optional[str]) -> dict[str, Any]:
         s = _oauth_sessions.get(sid, {})
     if s.get("status") == "error":
         from clawk_cli.observability.shared_metrics_setup import _OAUTH_FAILURE_KEY
-        err = HTTPException(status_code=500, detail=s.get("error_message") or "device-auth failed")
-        err.setup_failure_class = s.get(_OAUTH_FAILURE_KEY) or "other"  # the worker's class, not "500"
+
+        err = HTTPException(
+            status_code=500, detail=s.get("error_message") or "device-auth failed"
+        )
+        err.setup_failure_class = (
+            s.get(_OAUTH_FAILURE_KEY) or "other"
+        )  # the worker's class, not "500"
         raise err
     if not s.get("user_code"):
-        raise HTTPException(status_code=504, detail="device-auth timed out before returning a user code")
+        raise HTTPException(
+            status_code=504, detail="device-auth timed out before returning a user code"
+        )
     return {
-        "session_id": sid, "flow": "device_code", "user_code": s["user_code"], "verification_url": s["verification_url"],
-        "expires_in": int(s.get("expires_in") or 900), "poll_interval": int(s.get("interval") or 5),
+        "session_id": sid,
+        "flow": "device_code",
+        "user_code": s["user_code"],
+        "verification_url": s["verification_url"],
+        "expires_in": int(s.get("expires_in") or 900),
+        "poll_interval": int(s.get("interval") or 5),
     }
 
 
@@ -532,14 +696,26 @@ async def _start_minimax_device_code(profile: Optional[str]) -> dict[str, Any]:
     # Device-code flow with a PKCE extension: verifier + challenge from
     # _minimax_pkce_pair bind the token exchange to the original session.
     from clawk_cli.auth import (
-        MINIMAX_OAUTH_CLIENT_ID, MINIMAX_OAUTH_GLOBAL_BASE, _minimax_pkce_pair, _minimax_request_user_code,
+        MINIMAX_OAUTH_CLIENT_ID,
+        MINIMAX_OAUTH_GLOBAL_BASE,
+        _minimax_pkce_pair,
+        _minimax_request_user_code,
     )
+
     verifier, challenge, state = _minimax_pkce_pair()
-    portal_base_url = (os.getenv("MINIMAX_PORTAL_BASE_URL") or MINIMAX_OAUTH_GLOBAL_BASE).rstrip("/")
-    device_data = await _httpx_call(lambda client: _minimax_request_user_code(
-        client=client, portal_base_url=portal_base_url, client_id=MINIMAX_OAUTH_CLIENT_ID,
-        code_challenge=challenge, state=state,
-    ), follow_redirects=True)
+    portal_base_url = (
+        os.getenv("MINIMAX_PORTAL_BASE_URL") or MINIMAX_OAUTH_GLOBAL_BASE
+    ).rstrip("/")
+    device_data = await _httpx_call(
+        lambda client: _minimax_request_user_code(
+            client=client,
+            portal_base_url=portal_base_url,
+            client_id=MINIMAX_OAUTH_CLIENT_ID,
+            code_challenge=challenge,
+            state=state,
+        ),
+        follow_redirects=True,
+    )
     # MiniMax's `interval` is in milliseconds (defensive default 2000ms in _minimax_poll_token).
     interval_raw = device_data.get("interval")
     interval_ms = int(interval_raw) if interval_raw is not None else None
@@ -554,43 +730,68 @@ async def _start_minimax_device_code(profile: Optional[str]) -> dict[str, Any]:
         expires_at_ts = time.time() + expired_in_raw
         expires_in_seconds = expired_in_raw
     return _device_session_started(
-        "minimax-oauth", profile, _minimax_poller,
+        "minimax-oauth",
+        profile,
+        _minimax_poller,
         dict(
-            interval_ms=interval_ms, user_code=str(device_data["user_code"]), code_verifier=verifier, state=state,
-            portal_base_url=portal_base_url, client_id=MINIMAX_OAUTH_CLIENT_ID, region="global",
-            expired_in_raw=expired_in_raw, expires_at=expires_at_ts,
+            interval_ms=interval_ms,
+            user_code=str(device_data["user_code"]),
+            code_verifier=verifier,
+            state=state,
+            portal_base_url=portal_base_url,
+            client_id=MINIMAX_OAUTH_CLIENT_ID,
+            region="global",
+            expired_in_raw=expired_in_raw,
+            expires_at=expires_at_ts,
         ),
-        str(device_data["user_code"]), str(device_data["verification_uri"]), expires_in_seconds,
+        str(device_data["user_code"]),
+        str(device_data["verification_uri"]),
+        expires_in_seconds,
         max(2, (interval_ms or 2000) // 1000),
     )
 
 
 async def _start_xai_device_code(profile: Optional[str]) -> dict[str, Any]:
     from clawk_cli.auth import _xai_oauth_request_device_code
+
     device_data = await _httpx_call(_xai_oauth_request_device_code, timeout=20.0)
     return _device_session_started(
-        "xai-oauth", profile, _xai_device_poller,
+        "xai-oauth",
+        profile,
+        _xai_device_poller,
         dict(
-            device_code=str(device_data["device_code"]), interval=int(device_data["interval"]),
+            device_code=str(device_data["device_code"]),
+            interval=int(device_data["interval"]),
             expires_at=time.time() + int(device_data["expires_in"]),
         ),
         str(device_data["user_code"]),
-        str(device_data.get("verification_uri_complete") or device_data["verification_uri"]),
-        int(device_data["expires_in"]), int(device_data["interval"]),
+        str(
+            device_data.get("verification_uri_complete")
+            or device_data["verification_uri"]
+        ),
+        int(device_data["expires_in"]),
+        int(device_data["interval"]),
     )
 
 
 _DEVICE_CODE_STARTERS = {
-    "nous": _start_nous_device_code, "openai-codex": _start_codex_device_code,
-    "minimax-oauth": _start_minimax_device_code, "xai-oauth": _start_xai_device_code,
+    "nous": _start_nous_device_code,
+    "openai-codex": _start_codex_device_code,
+    "minimax-oauth": _start_minimax_device_code,
+    "xai-oauth": _start_xai_device_code,
 }
 
 
-async def _start_device_code_flow(provider_id: str, profile: Optional[str] = None) -> dict[str, Any]:
+async def _start_device_code_flow(
+    provider_id: str, profile: Optional[str] = None
+) -> dict[str, Any]:
     """Hit the provider's device-auth endpoint, spawn its poller, return the display fields."""
     starter = _DEVICE_CODE_STARTERS.get(provider_id)
     if starter is None:
-        raise HTTPException(status_code=400, detail=f"Provider {provider_id} does not support device-code flow")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Provider {provider_id} does not support device-code flow",
+        )
     return await starter(profile)
 
 
@@ -629,7 +830,9 @@ def _oauth_provider_disconnect_command(
     return _claude_code_disconnect_command(platform or sys.platform)
 
 
-def _oauth_provider_disconnect_hint(provider: dict[str, Any], status: dict[str, Any]) -> Optional[str]:
+def _oauth_provider_disconnect_hint(
+    provider: dict[str, Any], status: dict[str, Any]
+) -> Optional[str]:
     """Return the manual disconnect path when the API cannot clear this provider."""
     # "anthropic" is flow == "external" (no in-dashboard login) but Clawksis still
     # OWNS its credential (the PKCE file ~/.clawksis/.anthropic_oauth.json and its
@@ -657,14 +860,21 @@ def _build_oauth_catalog() -> list[dict[str, Any]]:
             rows.append(dict(entry))
     try:
         from clawk_cli.provider_catalog import provider_catalog
+
         for d in provider_catalog():
             if d.tab != "accounts" or d.slug in seen:
                 continue
             seen.add(d.slug)
-            rows.append({
-                "id": d.slug, "name": d.label, "flow": "external",
-                "cli_command": f"clawk auth add {d.slug}", "docs_url": d.signup_url or "", "status_fn": None,
-            })
+            rows.append(
+                {
+                    "id": d.slug,
+                    "name": d.label,
+                    "flow": "external",
+                    "cli_command": f"clawk auth add {d.slug}",
+                    "docs_url": d.signup_url or "",
+                    "status_fn": None,
+                }
+            )
     except Exception:
         pass
     return rows
@@ -674,27 +884,41 @@ def _build_oauth_catalog() -> list[dict[str, Any]]:
 async def list_oauth_providers(profile: Optional[str] = None):
     """Every OAuth-capable provider with current status (token_preview is the last
     N chars, never the full token; disconnect_command only for external providers)."""
+
     def _run():
         providers = []
         for p in _build_oauth_catalog():
             status = _resolve_provider_status(p["id"], p.get("status_fn"))
             disconnect_hint = _oauth_provider_disconnect_hint(p, status)
-            providers.append({
-                "id": p["id"], "name": p["name"], "flow": p["flow"],
-                "cli_command": _external_process_cli_command(p["id"], p["cli_command"]),
-                "docs_url": p["docs_url"], "disconnect_hint": disconnect_hint,
-                "disconnect_command": _oauth_provider_disconnect_command(p),
-                "disconnectable": disconnect_hint is None, "status": status,
-            })
+            providers.append(
+                {
+                    "id": p["id"],
+                    "name": p["name"],
+                    "flow": p["flow"],
+                    "cli_command": _external_process_cli_command(
+                        p["id"], p["cli_command"]
+                    ),
+                    "docs_url": p["docs_url"],
+                    "disconnect_hint": disconnect_hint,
+                    "disconnect_command": _oauth_provider_disconnect_command(p),
+                    "disconnectable": disconnect_hint is None,
+                    "status": status,
+                }
+            )
         return {"providers": providers}
 
     return await scoped_to_thread(profile, _run)
 
 
-def _reject_if_not_disconnectable(provider: dict[str, Any], status: dict[str, Any]) -> None:
+def _reject_if_not_disconnectable(
+    provider: dict[str, Any], status: dict[str, Any]
+) -> None:
     disconnect_hint = _oauth_provider_disconnect_hint(provider, status)
     if disconnect_hint:
-        raise HTTPException(400, f"{provider['name']} cannot be disconnected automatically. {disconnect_hint}")
+        raise HTTPException(
+            400,
+            f"{provider['name']} cannot be disconnected automatically. {disconnect_hint}",
+        )
 
 
 def _clear_anthropic_auth() -> bool:
@@ -702,6 +926,7 @@ def _clear_anthropic_auth() -> bool:
     cleared = False
     try:
         from agent.anthropic_credentials import _get_clawk_oauth_file
+
         oauth_file = _get_clawk_oauth_file()
         if oauth_file.exists():
             oauth_file.unlink()
@@ -711,6 +936,7 @@ def _clear_anthropic_auth() -> bool:
         raise
     try:
         from clawk_cli.auth import clear_provider_auth
+
         cleared = clear_provider_auth("anthropic") or cleared
     except Exception:
         _log.exception("disconnect anthropic auth store failed")
@@ -727,18 +953,27 @@ def _disconnect_http_error(status_code: int, provider_name: str) -> HTTPExceptio
 
 
 @router.delete("/api/providers/oauth/{provider_id}")
-async def disconnect_oauth_provider(provider_id: str, request: Request, profile: Optional[str] = None):
+async def disconnect_oauth_provider(
+    provider_id: str, request: Request, profile: Optional[str] = None
+):
     """Disconnect an OAuth provider. Token-protected (matches /env/reveal)."""
     _require_token(request)
 
     def _run():
-        catalog_by_id = {p["id"]: p for p in (*_DORMANT_OAUTH_PROVIDERS, *_build_oauth_catalog())}
+        catalog_by_id = {
+            p["id"]: p for p in (*_DORMANT_OAUTH_PROVIDERS, *_build_oauth_catalog())
+        }
         provider = catalog_by_id.get(provider_id)
         if provider is None:
-            raise HTTPException(400, f"Unknown provider: {provider_id}. Available: {', '.join(sorted(catalog_by_id))}")
+            raise HTTPException(
+                400,
+                f"Unknown provider: {provider_id}. Available: {', '.join(sorted(catalog_by_id))}",
+            )
         # Flow-only rejection first so external providers never reach status resolution.
         _reject_if_not_disconnectable(provider, {})
-        _reject_if_not_disconnectable(provider, _resolve_provider_status(provider_id, provider.get("status_fn")))
+        _reject_if_not_disconnectable(
+            provider, _resolve_provider_status(provider_id, provider.get("status_fn"))
+        )
 
         if provider_id == "anthropic":
             try:
@@ -753,7 +988,11 @@ async def disconnect_oauth_provider(provider_id: str, request: Request, profile:
             _log.info("oauth/disconnect: %s", provider_id)
             return {"ok": True, "provider": provider_id}
         try:
-            from clawk_cli.auth import clear_provider_auth, invalidate_nous_auth_status_cache
+            from clawk_cli.auth import (
+                clear_provider_auth,
+                invalidate_nous_auth_status_cache,
+            )
+
             cleared = clear_provider_auth(provider_id)
             if provider_id == "nous":
                 invalidate_nous_auth_status_cache()
@@ -781,7 +1020,9 @@ async def disconnect_oauth_provider(provider_id: str, request: Request, profile:
 def _gc_oauth_sessions() -> None:
     cutoff = time.time() - _OAUTH_SESSION_TTL_SECONDS
     with _oauth_sessions_lock:
-        for sid in [sid for sid, sess in _oauth_sessions.items() if sess["created_at"] < cutoff]:
+        for sid in [
+            sid for sid, sess in _oauth_sessions.items() if sess["created_at"] < cutoff
+        ]:
             _oauth_sessions.pop(sid, None)
 
 
@@ -794,17 +1035,28 @@ def _validate_oauth_profile(profile: Optional[str]) -> str:
 
 
 @router.post("/api/providers/oauth/{provider_id}/start")
-async def start_oauth_login(provider_id: str, request: Request, profile: Optional[str] = None):
+async def start_oauth_login(
+    provider_id: str, request: Request, profile: Optional[str] = None
+):
     """Initiate an OAuth login flow. Token-protected."""
     _require_token(request)
     _gc_oauth_sessions()
     _validate_oauth_profile(profile)
     catalog_entry = next(
-        (p for p in (*_OAUTH_PROVIDER_CATALOG, *_DORMANT_OAUTH_PROVIDERS) if p["id"] == provider_id), None)
+        (
+            p
+            for p in (*_OAUTH_PROVIDER_CATALOG, *_DORMANT_OAUTH_PROVIDERS)
+            if p["id"] == provider_id
+        ),
+        None,
+    )
     if catalog_entry is None:
         raise HTTPException(status_code=400, detail=f"Unknown provider {provider_id}")
     if catalog_entry["flow"] == "external":
-        raise HTTPException(400, f"{provider_id} uses an external CLI; run `{catalog_entry['cli_command']}` manually")
+        raise HTTPException(
+            400,
+            f"{provider_id} uses an external CLI; run `{catalog_entry['cli_command']}` manually",
+        )
     if catalog_entry["flow"] != "device_code":
         raise HTTPException(status_code=400, detail="Unsupported flow")
     flow = await _begin_oauth_setup_metric(provider_id, profile)
@@ -824,7 +1076,11 @@ async def start_oauth_login(provider_id: str, request: Request, profile: Optiona
 async def _begin_oauth_setup_metric(provider_id: str, profile: Optional[str]):
     """Start the provider-setup metric off the event loop (a cold metrics runtime blocks); None when the
     owning profile does not collect. Never raises: the start route's own validation owns errors."""
-    from clawk_cli.observability.shared_metrics_setup import begin_oauth_setup, collection_enabled
+    from clawk_cli.observability.shared_metrics_setup import (
+        begin_oauth_setup,
+        collection_enabled,
+    )
+
     try:
         profile_name = _oauth_profile_name(profile)
         home = _resolve_profile_dir(profile_name) if profile_name else None
@@ -838,22 +1094,33 @@ async def _begin_oauth_setup_metric(provider_id: str, profile: Optional[str]):
 async def _end_oauth_setup_metric(flow, exc: Exception) -> None:
     if flow is None:
         return
-    from clawk_cli.observability.shared_metrics_setup import finish_provider_setup, setup_failure_class
+    from clawk_cli.observability.shared_metrics_setup import (
+        finish_provider_setup,
+        setup_failure_class,
+    )
+
     with contextlib.suppress(Exception):
         # A 401/403 from the start route is the provider refusing this account/client; a 504 is the
         # provider not answering in time.
         status = exc.status_code if isinstance(exc, HTTPException) else None
-        failure = {401: "auth", 403: "auth", 504: "network"}.get(status) or setup_failure_class(exc)
+        failure = {401: "auth", 403: "auth", 504: "network"}.get(
+            status
+        ) or setup_failure_class(exc)
         await asyncio.to_thread(finish_provider_setup, flow, "failed", failure)
 
 
 @router.post("/api/providers/oauth/{provider_id}/submit")
 async def submit_oauth_code(
-    provider_id: str, body: OAuthSubmitBody, request: Request, profile: Optional[str] = None,
+    provider_id: str,
+    body: OAuthSubmitBody,
+    request: Request,
+    profile: Optional[str] = None,
 ):
     """Submit the auth code for PKCE flows. Token-protected."""
     _require_token(request)
-    raise HTTPException(status_code=400, detail=f"submit not supported for {provider_id}")
+    raise HTTPException(
+        status_code=400, detail=f"submit not supported for {provider_id}"
+    )
 
 
 # A long-poll answers as soon as what it watches changes, and otherwise after at most this long, so
@@ -861,7 +1128,9 @@ async def submit_oauth_code(
 _LONG_POLL_CAP_SECONDS = 25.0
 
 
-async def _long_poll(read: Callable[[], Any], changed: Callable[[Any], bool], wait: float, tick: float) -> Any:
+async def _long_poll(
+    read: Callable[[], Any], changed: Callable[[Any], bool], wait: float, tick: float
+) -> Any:
     """Re-run the async *read* every *tick* seconds until *changed* holds or *wait* (capped) runs out;
     the last read is the answer. ``wait <= 0`` is one plain read."""
     deadline = time.monotonic() + min(max(wait, 0.0), _LONG_POLL_CAP_SECONDS)
@@ -873,7 +1142,9 @@ async def _long_poll(read: Callable[[], Any], changed: Callable[[Any], bool], wa
 
 
 @router.get("/api/providers/oauth/{provider_id}/poll/{session_id}")
-async def poll_oauth_session(provider_id: str, session_id: str, profile: Optional[str] = None, wait: float = 0):
+async def poll_oauth_session(
+    provider_id: str, session_id: str, profile: Optional[str] = None, wait: float = 0
+):
     """Poll a session's status (no auth — read-only state). One endpoint serves
     every device-code flow: all report progress via the worker-updated ``status``.
     With *wait* (seconds) it is a long-poll: it answers once the session leaves ``pending``."""
@@ -894,22 +1165,31 @@ async def poll_oauth_session(provider_id: str, session_id: str, profile: Optiona
     # The poller thread writes the session dict, so watching it costs no network.
     await _long_poll(_status, lambda status: status != "pending", wait, tick=0.25)
     return {
-        "session_id": session_id, "status": sess["status"],
-        "error_message": sess.get("error_message"), "expires_at": sess.get("expires_at"),
+        "session_id": session_id,
+        "status": sess["status"],
+        "error_message": sess.get("error_message"),
+        "expires_at": sess.get("expires_at"),
         # Nous: why a sign-in ended, who signed in, and the default model the completion settled on
         # (None when the config was on the user's own model).
-        "reason": sess.get("reason"), "account_email": sess.get("account_email"), "model": sess.get("model"),
+        "reason": sess.get("reason"),
+        "account_email": sess.get("account_email"),
+        "model": sess.get("model"),
         # What the replaced free tier's handoff did: one user-facing line each (moved, reconnect),
         # and the same result as fields (``guest_handoff.wire_status``; None without a handoff).
-        "handoff": sess.get("handoff"), "handoff_status": sess.get("handoff_status"),
+        "handoff": sess.get("handoff"),
+        "handoff_status": sess.get("handoff_status"),
         # Failed Nous sign-ins: can a later attempt succeed, and after how long.
-        "retryable": sess.get("retryable"), "retry_after": sess.get("retry_after"),
+        "retryable": sess.get("retryable"),
+        "retry_after": sess.get("retry_after"),
     }
 
 
 @router.get("/api/providers/oauth/nous/handoff")
 async def nous_handoff_status(
-    request: Request, profile: Optional[str] = None, since: Optional[str] = None, wait: float = 0,
+    request: Request,
+    profile: Optional[str] = None,
+    since: Optional[str] = None,
+    wait: float = 0,
 ):
     """The profile's latest free-tier handoff (``guest_handoff.wire_status``). Token-protected. A
     long-poll: given *since* (the ``updated_at`` the caller already shows) and *wait*, it answers once
@@ -919,15 +1199,21 @@ async def nous_handoff_status(
 
     def _read() -> dict[str, Any]:
         from clawk_cli.guest_handoff import handoff_status, wire_status
+
         return wire_status(handoff_status())
 
     return await _long_poll(
         lambda: config_scoped_to_thread(profile_name, _read),
-        lambda status: since is None or status.get("updated_at") != since, wait, tick=1.0)
+        lambda status: since is None or status.get("updated_at") != since,
+        wait,
+        tick=1.0,
+    )
 
 
 @router.delete("/api/providers/oauth/sessions/{session_id}")
-async def cancel_oauth_session(session_id: str, request: Request, profile: Optional[str] = None):
+async def cancel_oauth_session(
+    session_id: str, request: Request, profile: Optional[str] = None
+):
     """Cancel a pending OAuth session. Token-protected.
 
     Marks the session dict ``cancelled`` before popping it so a background
@@ -941,12 +1227,15 @@ async def cancel_oauth_session(session_id: str, request: Request, profile: Optio
         sess = _oauth_sessions.get(session_id)
         if sess is not None:
             if sess.get("profile") != requested_profile:
-                raise HTTPException(status_code=400, detail="OAuth session profile mismatch")
+                raise HTTPException(
+                    status_code=400, detail="OAuth session profile mismatch"
+                )
             sess["cancelled"] = True
             _oauth_sessions.pop(session_id, None)
     if sess is None:
         return {"ok": False, "message": "session not found"}
     # Recorded now, not when the poller next wakes: a Nous/xAI poll can block for the code's lifetime.
     from clawk_cli.observability.shared_metrics_setup import settle_oauth_setup
+
     await asyncio.to_thread(settle_oauth_setup, sess)
     return {"ok": True, "session_id": session_id}

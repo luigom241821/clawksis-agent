@@ -8,6 +8,7 @@ Covers:
 - pending-sentinel path (agent not booted yet) -> _enqueue_fifo preserves Q1
 - no-steer() path (agent lacks steer()) -> _enqueue_fifo preserves Q1
 """
+
 from __future__ import annotations
 
 import pytest

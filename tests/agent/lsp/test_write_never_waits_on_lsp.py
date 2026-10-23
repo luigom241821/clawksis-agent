@@ -6,6 +6,7 @@ The write path used to block on a pre-write baseline wait plus a post-write wait
 both to the deadline on every edit.  The servers here are held until the test releases them, so the
 assertions are about order (the tool result comes back before any verdict exists), not speed.
 """
+
 from __future__ import annotations
 
 import json
@@ -38,11 +39,17 @@ def mock_workspace(monkeypatch, tmp_path):
             monkeypatch.setenv(key, value)
         gen = _install_mock_server(monkeypatch, script, "pyright")
         next(gen)
-        svc = LSPService(enabled=True, wait_mode="document", wait_timeout=_WAIT, install_strategy="manual",
-                         trusted_workspaces=[str(repo)])
+        svc = LSPService(
+            enabled=True,
+            wait_mode="document",
+            wait_timeout=_WAIT,
+            install_strategy="manual",
+            trusted_workspaces=[str(repo)],
+        )
         monkeypatch.setattr("agent.lsp.get_service", lambda: svc)
         created.append((svc, gen, gate))
         return repo, gate
+
     yield install
     for svc, gen, gate in created:
         gate.touch()  # release any held push so shutdown is not stuck behind it
@@ -54,10 +61,16 @@ def mock_workspace(monkeypatch, tmp_path):
 
 
 def _patch(path, old, new, session="S-lsp"):
-    handle_function_call("read_file", {"path": str(path)}, task_id="t-" + session, session_id=session)
+    handle_function_call(
+        "read_file", {"path": str(path)}, task_id="t-" + session, session_id=session
+    )
     started = time.monotonic()
-    out = handle_function_call("patch", {"path": str(path), "old_string": old, "new_string": new},
-                               task_id="t-" + session, session_id=session)
+    out = handle_function_call(
+        "patch",
+        {"path": str(path), "old_string": old, "new_string": new},
+        task_id="t-" + session,
+        session_id=session,
+    )
     return json.loads(out), time.monotonic() - started
 
 
@@ -75,7 +88,9 @@ def test_silent_server_does_not_hold_the_write(mock_workspace):
     for old, new in (("x = 1", "x = 2"), ("x = 2", "x = 3")):
         result, elapsed = _patch(target, old, new)
         assert result["success"] is True, result
-        assert elapsed < _WAIT / 2, f"write blocked {elapsed:.2f}s on a silent language server"
+        assert elapsed < _WAIT / 2, (
+            f"write blocked {elapsed:.2f}s on a silent language server"
+        )
     assert target.read_text(encoding="utf-8-sig") == "x = 3\n"
 
 
@@ -87,14 +102,21 @@ def test_late_diagnostics_reach_the_session(mock_workspace):
     target.write_text("x = 1\n", encoding="utf-8")
     result, elapsed = _patch(target, "x = 1", "x = bad")
     assert result["success"] is True and "lsp_diagnostics" not in result, result
-    assert elapsed < _WAIT / 2, f"write blocked {elapsed:.2f}s on a held language server"
+    assert elapsed < _WAIT / 2, (
+        f"write blocked {elapsed:.2f}s on a held language server"
+    )
     gate.touch()
-    (path, text), = wait_until(lambda: deferred.pop_notes("S-lsp"), timeout=_WAIT,
-                               what="the late verdict reaching the session")
+    ((path, text),) = wait_until(
+        lambda: deferred.pop_notes("S-lsp"),
+        timeout=_WAIT,
+        what="the late verdict reaching the session",
+    )
     assert path == str(target) and "MOCK001" in text and "earlier edit" in text
 
 
-def test_late_verdict_reaches_the_model_before_the_turn_ends(mock_workspace, monkeypatch):
+def test_late_verdict_reaches_the_model_before_the_turn_ends(
+    mock_workspace, monkeypatch
+):
     """The turn's last edit gets a verdict after its tool result returned: the turn must not end on
     it (a one-shot run has no next turn).  The final-answer gate waits for it and hands it to the
     model as a new message, continuing the turn."""
@@ -109,16 +131,29 @@ def test_late_verdict_reaches_the_model_before_the_turn_ends(mock_workspace, mon
     result, _elapsed = _patch(target, "x = 1", "x = bad", session="S-end")
     assert result["success"] is True and "lsp_diagnostics" not in result, result
     gate.touch()
-    agent = SimpleNamespace(session_id="S-end", _current_task_id="t-S-end",
-                            _interim_content_was_streamed=lambda _text: False,
-                            _emit_interim_assistant_message=lambda _msg: None,
-                            _flush_messages_to_session_db=lambda *_a: None)
+    agent = SimpleNamespace(
+        session_id="S-end",
+        _current_task_id="t-S-end",
+        _interim_content_was_streamed=lambda _text: False,
+        _emit_interim_assistant_message=lambda _msg: None,
+        _flush_messages_to_session_db=lambda *_a: None,
+    )
     messages = [{"role": "user", "content": "edit c.py"}]
-    verdict = apply_stop_gates(agent, {"role": "assistant", "content": "done"}, final_response="done",
-                               messages=messages, conversation_history=[],
-                               pending_verification_response=None, pending_verification_response_previewed=False)
-    assert verdict.continue_turn, "the turn ended with the edit's verdict still undelivered"
-    assert messages[-1]["role"] == "user" and "MOCK001" in messages[-1]["content"], messages[-1]
+    verdict = apply_stop_gates(
+        agent,
+        {"role": "assistant", "content": "done"},
+        final_response="done",
+        messages=messages,
+        conversation_history=[],
+        pending_verification_response=None,
+        pending_verification_response_previewed=False,
+    )
+    assert verdict.continue_turn, (
+        "the turn ended with the edit's verdict still undelivered"
+    )
+    assert messages[-1]["role"] == "user" and "MOCK001" in messages[-1]["content"], (
+        messages[-1]
+    )
 
 
 def test_diagnostics_stay_with_the_session_that_made_the_edit(mock_workspace):
@@ -129,13 +164,20 @@ def test_diagnostics_stay_with_the_session_that_made_the_edit(mock_workspace):
     target.write_text("x = 1\n", encoding="utf-8")
     result_a, _ = _patch(target, "x = 1", "x = bad", session="S-A")
     result_b, _ = _patch(target, "x = bad", "x = bad\ny = 2", session="S-B")
-    assert result_a["success"] is True and result_b["success"] is True, (result_a, result_b)
+    assert result_a["success"] is True and result_b["success"] is True, (
+        result_a,
+        result_b,
+    )
     gate.touch()
-    wait_until(lambda: _settled("S-A", "S-B"), timeout=_WAIT, what="both edit checks settling")
+    wait_until(
+        lambda: _settled("S-A", "S-B"), timeout=_WAIT, what="both edit checks settling"
+    )
     notes_b = deferred.pop_notes("S-B")
     notes_a = deferred.pop_notes("S-A")
     assert not notes_b, f"session B was told about session A's error: {notes_b}"
-    assert notes_a and "MOCK001" in notes_a[0][1], f"session A never heard about its own error: {notes_a}"
+    assert notes_a and "MOCK001" in notes_a[0][1], (
+        f"session A never heard about its own error: {notes_a}"
+    )
 
 
 def test_each_session_is_checked_on_the_bytes_it_wrote(mock_workspace):
@@ -148,6 +190,7 @@ def test_each_session_is_checked_on_the_bytes_it_wrote(mock_workspace):
     target = repo / "e.py"
     target.write_text("x = 1\n", encoding="utf-8")
     from agent.lsp import get_service
+
     svc = get_service()
     held, release = threading.Event(), threading.Event()
 
@@ -162,10 +205,21 @@ def test_each_session_is_checked_on_the_bytes_it_wrote(mock_workspace):
         result_b, _ = _patch(target, "x = 2", "x = bad", session="S-B2")
     finally:
         release.set()
-    assert result_a["success"] is True and result_b["success"] is True, (result_a, result_b)
-    wait_until(lambda: _settled("S-A2", "S-B2"), timeout=_WAIT, what="both edit checks settling")
+    assert result_a["success"] is True and result_b["success"] is True, (
+        result_a,
+        result_b,
+    )
+    wait_until(
+        lambda: _settled("S-A2", "S-B2"),
+        timeout=_WAIT,
+        what="both edit checks settling",
+    )
     notes_a = deferred.pop_notes("S-A2")
     notes_b = deferred.pop_notes("S-B2")
-    assert not notes_a and "lsp_diagnostics" not in result_a, f"A was told about B's error: {notes_a or result_a}"
-    told_b = " ".join(text for _path, text in notes_b) + str(result_b.get("lsp_diagnostics") or "")
+    assert not notes_a and "lsp_diagnostics" not in result_a, (
+        f"A was told about B's error: {notes_a or result_a}"
+    )
+    told_b = " ".join(text for _path, text in notes_b) + str(
+        result_b.get("lsp_diagnostics") or ""
+    )
     assert "MOCK001" in told_b, f"session B never heard about its own error: {notes_b}"

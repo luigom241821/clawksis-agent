@@ -32,7 +32,11 @@ def _has_tty() -> bool:
 
 def worktree_state(info: dict) -> Optional[str]:
     """``"dirty"``, ``"unpushed"`` or None (clean and pushed / gone)."""
-    from clawk_cli.worktree_ops import _worktree_has_unpushed_commits, _worktree_is_dirty
+    from clawk_cli.worktree_ops import (
+        _worktree_has_unpushed_commits,
+        _worktree_is_dirty,
+    )
+
     path, repo_root = info.get("path", ""), info.get("repo_root", "")
     if not path or not os.path.isdir(path):
         return None
@@ -49,6 +53,7 @@ def _still_in_use(path: str, grace_s: float = 5.0) -> bool:
     import time
 
     from clawk_cli.worktree_sweep import live_process_pids
+
     deadline = time.monotonic() + grace_s
     while live_process_pids([path], exclude=(os.getpid(),)).get(path):
         if time.monotonic() >= deadline:
@@ -67,9 +72,13 @@ def ask_exit_choice(info: Optional[dict]) -> str:
     if _still_in_use(info["path"]):
         return KEEP  # something still runs in there; never offer to delete it
     from clawk_cli.curses_ui import curses_radiolist
+
     title = t(f"cli.worktree.exit_question_{state}", path=info["path"])
-    items = [t("cli.worktree.exit_choice_keep"), t("cli.worktree.exit_choice_archive"),
-             t("cli.worktree.exit_choice_discard")]
+    items = [
+        t("cli.worktree.exit_choice_keep"),
+        t("cli.worktree.exit_choice_archive"),
+        t("cli.worktree.exit_choice_discard"),
+    ]
     try:  # Esc / Ctrl-C / a curses failure all resolve to Keep (index 0)
         idx = curses_radiolist(title, items, selected=0, cancel_returns=0)
     except Exception:
@@ -92,28 +101,57 @@ def apply_exit_choice(info: dict, echo) -> bool:
 
         from clawk_cli.worktree_archive import ArchiveError
         from clawk_cli.worktree_sweep import archive_then_remove, sweep_settings
+
         echo(t("cli.worktree.archiving", path=path))
         try:
             ref, _kept, removed, why = archive_then_remove(
-                repo_root, path, reason="session exit", unlock=True, exclude_pids=(os.getpid(),),
-                max_untracked_mb=sweep_settings()["archive_max_file_mb"])
-        except (ArchiveError, OSError, subprocess.SubprocessError, KeyboardInterrupt) as exc:
-            echo(f"\033[31m{t('cli.worktree.archive_failed', path=path, error=str(exc) or 'interrupted')}\033[0m")
+                repo_root,
+                path,
+                reason="session exit",
+                unlock=True,
+                exclude_pids=(os.getpid(),),
+                max_untracked_mb=sweep_settings()["archive_max_file_mb"],
+            )
+        except (
+            ArchiveError,
+            OSError,
+            subprocess.SubprocessError,
+            KeyboardInterrupt,
+        ) as exc:
+            echo(
+                f"\033[31m{t('cli.worktree.archive_failed', path=path, error=str(exc) or 'interrupted')}\033[0m"
+            )
             return True
         name = ref.rsplit("/", 1)[-1]
         if removed:
             echo(f"\033[32m{t('cli.worktree.archived', path=path, ref=ref)}\033[0m")
         else:
-            echo(f"\033[33m{t('cli.worktree.archived_kept', path=path, ref=ref, reason=why or '?')}\033[0m")
+            echo(
+                f"\033[33m{t('cli.worktree.archived_kept', path=path, ref=ref, reason=why or '?')}\033[0m"
+            )
         echo(f"  {t('cli.worktree.restore_hint', name=name)}")
         return True
     from clawk_cli._subprocess_compat import noninteractive_git_env
     from clawk_cli.worktree_ops import _git_quiet, release_lsp_clients
+
     release_lsp_clients(path)
-    _git_quiet(["worktree", "unlock", path], repo_root, log="git worktree unlock failed (non-fatal)")
-    _git_quiet(["worktree", "remove", path, "--force"], repo_root, timeout=60, log="Failed to remove worktree")
+    _git_quiet(
+        ["worktree", "unlock", path],
+        repo_root,
+        log="git worktree unlock failed (non-fatal)",
+    )
+    _git_quiet(
+        ["worktree", "remove", path, "--force"],
+        repo_root,
+        timeout=60,
+        log="Failed to remove worktree",
+    )
     if branch and not os.path.isdir(path):
-        _git_quiet(["branch", "-D", branch], repo_root, log=f"Failed to delete branch {branch}",
-                   env=noninteractive_git_env())
+        _git_quiet(
+            ["branch", "-D", branch],
+            repo_root,
+            log=f"Failed to delete branch {branch}",
+            env=noninteractive_git_env(),
+        )
     echo(f"\033[33m{t('cli.worktree.discarded', path=path)}\033[0m")
     return True

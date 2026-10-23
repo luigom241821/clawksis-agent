@@ -194,7 +194,8 @@ class TestMicroCompaction:
             messages = cc._micro_compact(messages)
 
         surviving_text = "\n\n".join(
-            m["content"] for m in messages
+            m["content"]
+            for m in messages
             if m.get("role") == "user" and not m.get(COMPRESSED_SUMMARY_METADATA_KEY)
         )
         for original in originals:
@@ -219,24 +220,29 @@ class TestMicroCompaction:
         msgs = [{"role": "system", "content": "sys"}]
         for i in range(8):
             msgs.append({"role": "user", "content": f"q{i}"})
-            msgs.append({
-                "role": "assistant",
-                "content": f"a{i}",
-                "tool_calls": [
-                    {"id": f"c{i}-{j}", "type": "function",
-                     "function": {"name": "f", "arguments": "{}"}}
-                    for j in range(3)
-                ],
-            })
+            msgs.append(
+                {
+                    "role": "assistant",
+                    "content": f"a{i}",
+                    "tool_calls": [
+                        {
+                            "id": f"c{i}-{j}",
+                            "type": "function",
+                            "function": {"name": "f", "arguments": "{}"},
+                        }
+                        for j in range(3)
+                    ],
+                }
+            )
             for j in range(3):
-                msgs.append({"role": "tool", "tool_call_id": f"c{i}-{j}",
-                             "content": "T" * 500})
+                msgs.append(
+                    {"role": "tool", "tool_call_id": f"c{i}-{j}", "content": "T" * 500}
+                )
 
         for _ in range(4):
             msgs = cc._micro_compact(msgs)
             marker_idx = next(
-                i for i, m in enumerate(msgs)
-                if m.get(COMPRESSED_SUMMARY_METADATA_KEY)
+                i for i, m in enumerate(msgs) if m.get(COMPRESSED_SUMMARY_METADATA_KEY)
             )
             assert cc._micro_compact_cursor == marker_idx + 1, (
                 "cursor must sit just past the marker in the spliced list"
@@ -287,8 +293,10 @@ class TestMicroCompaction:
         result = cc._micro_compact(msgs)
         marker = _summary_markers(result)[0]
 
-        assert (cc._rolling_summary_from_marker(marker["content"])
-                == cc._micro_compact_rolling_summary)
+        assert (
+            cc._rolling_summary_from_marker(marker["content"])
+            == cc._micro_compact_rolling_summary
+        )
 
     def test_short_conversation_is_untouched(self):
         cc = _compressor()
@@ -370,7 +378,8 @@ class TestMicroCompaction:
             result = cc._micro_compact(messages)
 
         lines = [
-            r.getMessage() for r in caplog.records
+            r.getMessage()
+            for r in caplog.records
             if "micro compaction telemetry:" in r.getMessage()
         ]
         assert len(lines) == 1
@@ -385,7 +394,6 @@ class TestMicroCompaction:
         # Content-free: no transcript text may ride along in the payload.
         blob = json.dumps(payload)
         assert "answer 0" not in blob and "question 0" not in blob
-
 
     def test_emitter_never_forces_window_resolution(self, caplog):
         """The emitter reads the cached threshold, never the property.
@@ -406,8 +414,9 @@ class TestMicroCompaction:
         def explode(self):  # pragma: no cover - must never be called
             raise AssertionError("telemetry forced context-length resolution")
 
-        with patch.object(type(cc), "threshold_tokens",
-                          property(explode, lambda s, v: None)):
+        with patch.object(
+            type(cc), "threshold_tokens", property(explode, lambda s, v: None)
+        ):
             with caplog.at_level(logging.INFO, logger="agent.context_compressor"):
                 cc._emit_micro_compaction_telemetry(
                     outcome="absorbed",
@@ -417,13 +426,15 @@ class TestMicroCompaction:
                     tokens_after=400,
                 )
 
-        line = next(r.getMessage() for r in caplog.records
-                    if "micro compaction telemetry:" in r.getMessage())
+        line = next(
+            r.getMessage()
+            for r in caplog.records
+            if "micro compaction telemetry:" in r.getMessage()
+        )
         payload = json.loads(line.split("micro compaction telemetry: ", 1)[1])
 
         assert payload["occupancy_pct"] is None
         assert payload["threshold_tokens"] is None
-
 
     def test_cumulative_savings_accumulate_across_passes(self):
         """Session-total savings go positive once marker overhead is paid back.
@@ -480,13 +491,16 @@ class TestMicroCompaction:
         messages = [{"role": "system", "content": "sys"}]
         for i in range(10):
             messages.append({"role": "user", "content": f"UNIQUE-USER-PROMPT-{i}"})
-            messages.append({"role": "assistant", "content": f"answer {i} " + "z" * 400})
+            messages.append(
+                {"role": "assistant", "content": f"answer {i} " + "z" * 400}
+            )
 
         cc._micro_compact_rolling_summary = "x" * 40_000  # force defrag
         result = cc._micro_compact(list(messages))
 
         surviving = [
-            m["content"] for m in result
+            m["content"]
+            for m in result
             if m.get("role") == "user" and not m.get(COMPRESSED_SUMMARY_METADATA_KEY)
         ]
         for i in range(10):
@@ -542,7 +556,8 @@ class TestMicroCompaction:
             markers = _summary_markers(messages)
             assert len(markers) == 1, "marker destroyed by repair pass"
             polluted = [
-                m for m in messages
+                m
+                for m in messages
                 if m.get("role") == "user"
                 and not m.get(COMPRESSED_SUMMARY_METADATA_KEY)
                 and "ROLLING SUMMARY" in str(m.get("content"))
@@ -555,18 +570,24 @@ class TestMicroCompaction:
         msgs = [{"role": "system", "content": "sys"}]
         for i in range(8):
             msgs.append({"role": "user", "content": f"q{i}"})
-            msgs.append({
-                "role": "assistant",
-                "content": f"a{i}",
-                "tool_calls": [
-                    {"id": f"c{i}-{j}", "type": "function",
-                     "function": {"name": "f", "arguments": "{}"}}
-                    for j in range(2)
-                ],
-            })
+            msgs.append(
+                {
+                    "role": "assistant",
+                    "content": f"a{i}",
+                    "tool_calls": [
+                        {
+                            "id": f"c{i}-{j}",
+                            "type": "function",
+                            "function": {"name": "f", "arguments": "{}"},
+                        }
+                        for j in range(2)
+                    ],
+                }
+            )
             for j in range(2):
-                msgs.append({"role": "tool", "tool_call_id": f"c{i}-{j}",
-                             "content": "T" * 400})
+                msgs.append(
+                    {"role": "tool", "tool_call_id": f"c{i}-{j}", "content": "T" * 400}
+                )
             # Multi-iteration turn: a second assistant+tools group before the
             # next user message — the splice must absorb the WHOLE turn.
             msgs.append({"role": "assistant", "content": f"followup {i} " + "y" * 200})
@@ -613,26 +634,27 @@ class TestMicroCompaction:
             COMPRESSED_SUMMARY_METADATA_KEY: True,
         }
         micro_idx = next(
-            i for i, m in enumerate(msgs)
-            if m.get(COMPRESSED_SUMMARY_METADATA_KEY)
+            i for i, m in enumerate(msgs) if m.get(COMPRESSED_SUMMARY_METADATA_KEY)
         )
-        msgs = msgs[:micro_idx] + [batch_marker] + msgs[micro_idx + 3:]
+        msgs = msgs[:micro_idx] + [batch_marker] + msgs[micro_idx + 3 :]
 
         out = cc._micro_compact(msgs)
 
-        assert any(
-            "CRITICAL HISTORY" in str(m.get("content")) for m in out
-        ), "batch-compaction summary destroyed by micro supersede"
+        assert any("CRITICAL HISTORY" in str(m.get("content")) for m in out), (
+            "batch-compaction summary destroyed by micro supersede"
+        )
 
     def test_defrag_never_rewrites_a_batch_compaction_marker(self):
         """Defrag rewrites only micro-tagged markers, never batch markers."""
         cc = _compressor(summary="DEFRAGGED")
         msgs = [{"role": "system", "content": "sys"}]
-        msgs.append({
-            "role": "user",
-            "content": "[batch summary] CRITICAL HISTORY: exchanges 1..m",
-            COMPRESSED_SUMMARY_METADATA_KEY: True,
-        })
+        msgs.append(
+            {
+                "role": "user",
+                "content": "[batch summary] CRITICAL HISTORY: exchanges 1..m",
+                COMPRESSED_SUMMARY_METADATA_KEY: True,
+            }
+        )
         for i in range(6):
             msgs.append({"role": "user", "content": f"q{i}"})
             msgs.append({"role": "assistant", "content": f"a{i} " + "z" * 400})
@@ -661,7 +683,6 @@ class TestMicroCompaction:
         assert cc._micro_compact_rolling_summary == ""
         assert cc._micro_compact_cursor == 0
 
-
     def test_db_sync_passes_exact_carried_messages(self):
         """Micro-compaction carries a prefix and suffix around its summary marker.
 
@@ -685,13 +706,23 @@ class TestMicroCompaction:
         cc._session_db = _DB()
         cc._session_id = "sess"
         compacted = [
-            {"role": "user", "content": "prefix", "_row_id": 11, _DB_PERSISTED_MARKER: True},
+            {
+                "role": "user",
+                "content": "prefix",
+                "_row_id": 11,
+                _DB_PERSISTED_MARKER: True,
+            },
             {
                 "role": "assistant",
                 "content": "summary",
                 COMPRESSED_SUMMARY_METADATA_KEY: True,
             },
-            {"role": "user", "content": "suffix", "_row_id": 15, _DB_PERSISTED_MARKER: True},
+            {
+                "role": "user",
+                "content": "suffix",
+                "_row_id": 15,
+                _DB_PERSISTED_MARKER: True,
+            },
             # Content was rewritten in-place: the mutation contract deliberately
             # popped _DB_PERSISTED_MARKER, so its old row is NOT byte-identical.
             {"role": "assistant", "content": "rewritten", "_row_id": 16},
@@ -725,7 +756,8 @@ class TestMicroCompaction:
         result = cc._micro_compact(messages)
 
         unstamped = [
-            m for m in result
+            m
+            for m in result
             if not m.get(_DB_PERSISTED_MARKER)
             and not m.get(COMPRESSED_SUMMARY_METADATA_KEY)
         ]
@@ -773,7 +805,6 @@ class TestDefragFlushCursorInvalidation:
         messages = _conversation(exchanges=8)
         cc._micro_compact(list(messages))
         assert cc._flush_scan_cursor_invalidated is False
-
 
 
 class TestMergeAdjacentUserTurnsPersistedMarker:
@@ -834,19 +865,30 @@ def test_superseding_marker_never_shows_a_user_input_twice_in_display_history(tm
     messages = _conversation(exchanges=8)
     for i, msg in enumerate(messages):
         msg["timestamp"] = 1000.0 + i
-        msg["_row_id"] = db.append_message("s", role=msg["role"], content=msg["content"], timestamp=msg["timestamp"])
+        msg["_row_id"] = db.append_message(
+            "s", role=msg["role"], content=msg["content"], timestamp=msg["timestamp"]
+        )
         msg[_DB_PERSISTED_MARKER] = True
     cc = _compressor()
     cc._session_db, cc._session_id = db, "s"
     for _ in range(4):
         messages = cc._micro_compact(messages)
     assert len(_summary_markers(messages)) == 1
-    assert any("question 0\n\nquestion 1" in str(m.get("content")) for m in messages), "no supersede merge happened"
+    assert any("question 0\n\nquestion 1" in str(m.get("content")) for m in messages), (
+        "no supersede merge happened"
+    )
 
     def shown(msgs):
-        return sorted(t for m in msgs if m.get("role") == "user" for t in str(m["content"]).split("\n\n"))
+        return sorted(
+            t
+            for m in msgs
+            if m.get("role") == "user"
+            for t in str(m["content"]).split("\n\n")
+        )
 
-    typed = sorted(m["content"] for m in _conversation(exchanges=8) if m["role"] == "user")
+    typed = sorted(
+        m["content"] for m in _conversation(exchanges=8) if m["role"] == "user"
+    )
     model, display = db.get_resume_conversations("s")
     assert shown(display) == typed
     assert shown(model) == typed
@@ -854,11 +896,16 @@ def test_superseding_marker_never_shows_a_user_input_twice_in_display_history(tm
     timeline = [e["preview"] for e in get_session_timeline(db, "s")["entries"]]
     assert sorted(timeline) == typed
     # Legacy stores (no display index, read-only so no backfill) take the payload-bounded page.
-    db._execute_write(lambda conn: conn.execute("UPDATE messages SET display_order = NULL"))
+    db._execute_write(
+        lambda conn: conn.execute("UPDATE messages SET display_order = NULL")
+    )
     legacy = SessionDB(db_path=tmp_path / "state.db", read_only=True)
     try:
         assert shown(legacy.get_messages("s", include_compacted=True)) == typed
-        assert sorted(e["preview"] for e in get_session_timeline(legacy, "s")["entries"]) == typed
+        assert (
+            sorted(e["preview"] for e in get_session_timeline(legacy, "s")["entries"])
+            == typed
+        )
     finally:
         legacy.close()
         db.close()
@@ -875,12 +922,33 @@ def _held_session(tmp_path, mode: str):
     cc._session_db, cc._session_id = db, "s"
     if mode == "prune":
         cc.proactive_prune_tokens, cc.proactive_prune_min_result_chars = 48_000, 8_000
-        cc.proactive_prune_min_reclaim_tokens, cc.protect_first_n, cc.protect_last_n = 4_096, 2, 4
+        cc.proactive_prune_min_reclaim_tokens, cc.protect_first_n, cc.protect_last_n = (
+            4_096,
+            2,
+            4,
+        )
         history = [{"role": "user", "content": "start"}]
         for i in range(8):
-            history.append({"role": "assistant", "content": "", "tool_calls": [{
-                "id": f"call_{i}", "type": "function", "function": {"name": "terminal", "arguments": "{}"}}]})
-            history.append({"role": "tool", "tool_call_id": f"call_{i}", "content": chr(65 + i) * 24_000 if i < 3 else "ok"})
+            history.append(
+                {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [
+                        {
+                            "id": f"call_{i}",
+                            "type": "function",
+                            "function": {"name": "terminal", "arguments": "{}"},
+                        }
+                    ],
+                }
+            )
+            history.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": f"call_{i}",
+                    "content": chr(65 + i) * 24_000 if i < 3 else "ok",
+                }
+            )
     else:
         history = _conversation(exchanges=8)
     db.append_messages_batch("s", history)
@@ -894,7 +962,9 @@ def _run_pass(cc, mode: str, held: list) -> list:
 
 
 @pytest.mark.parametrize("mode", ["prune", "micro"])
-def test_a_turn_another_surface_appended_after_load_is_kept_exactly_once(tmp_path, mode):
+def test_a_turn_another_surface_appended_after_load_is_kept_exactly_once(
+    tmp_path, mode
+):
     """Prune and micro-compaction rewrite the history this process holds. A turn another surface appended to
     the same session since then (a Desktop session continued from Telegram) was archived with the rest, as
     summarized away though no summary holds it: still displayed and searchable, gone from the model's view."""
@@ -910,11 +980,19 @@ def test_a_turn_another_surface_appended_after_load_is_kept_exactly_once(tmp_pat
     assert sum(foreign in content for content in live) == 1
 
 
-@pytest.mark.parametrize("mode,race", [
-    ("prune", "before"), ("micro", "before"), ("micro", "during_summary"),
-    ("prune", "watermark_read_fails"), ("micro", "watermark_read_fails"),
-])
-def test_a_stale_generation_aborts_leaving_the_winner_the_only_live_version(tmp_path, mode, race):
+@pytest.mark.parametrize(
+    "mode,race",
+    [
+        ("prune", "before"),
+        ("micro", "before"),
+        ("micro", "during_summary"),
+        ("prune", "watermark_read_fails"),
+        ("micro", "watermark_read_fails"),
+    ],
+)
+def test_a_stale_generation_aborts_leaving_the_winner_the_only_live_version(
+    tmp_path, mode, race
+):
     """Prune and micro-compaction hold no compression lease. Once another compaction has committed (before the
     pass, or while micro-compaction waits on its summary call), the held history is a stale generation:
     publishing it archives the winner's rows and clones them back beside a second summary, and returning the
@@ -930,27 +1008,36 @@ def test_a_stale_generation_aborts_leaving_the_winner_the_only_live_version(tmp_
         {"role": "user", "content": "[from Telegram] carry on"},
     ]
     if race == "watermark_read_fails":
-        winner = [{"role": m["role"], "content": m["content"]} for m in held]  # nothing may be archived
+        winner = [
+            {"role": m["role"], "content": m["content"]} for m in held
+        ]  # nothing may be archived
 
         def _watermark_read_fails(_session_id):
             raise RuntimeError("database is locked")
+
         db.get_active_message_watermark = _watermark_read_fails
     elif race == "before":
         db.archive_and_compact("s", winner)
     else:
+
         def _summary_while_another_surface_compacts(_text):
             db.archive_and_compact("s", winner)
             return "STALE ROLLING SUMMARY"
+
         cc._micro_summarize_one = _summary_while_another_surface_compacts
     summary = cc._micro_compact_rolling_summary
 
     result = _run_pass(cc, mode, held)
-    for msg in result:  # what finalize_turn's _persist_session flush appends: every unpersisted dict
+    for msg in (
+        result
+    ):  # what finalize_turn's _persist_session flush appends: every unpersisted dict
         if not msg.get(_DB_PERSISTED_MARKER):
             db.append_message("s", msg["role"], msg.get("content"))
 
     assert result is held
-    assert cc._micro_compact_rolling_summary == summary  # the stale summary is not carried into the next pass
+    assert (
+        cc._micro_compact_rolling_summary == summary
+    )  # the stale summary is not carried into the next pass
     live = [m["content"] for m in db.get_messages_as_conversation("s")]
     assert live == [m["content"] for m in winner]  # exactly one live generation
 
@@ -965,11 +1052,16 @@ def test_a_generation_rewritten_in_place_aborts_a_lease_less_pass(tmp_path, mode
 
     db, cc, held = _held_session(tmp_path, mode)
     # Another surface commits a prune in place: same ids, same activity, different bodies.
-    rewritten = [m for m in db.get_resume_conversations("s")[0] if m.get("role") == "tool"][:1] or [
-        m for m in db.get_resume_conversations("s")[0] if m.get("role") == "assistant"][:1]
+    rewritten = [
+        m for m in db.get_resume_conversations("s")[0] if m.get("role") == "tool"
+    ][:1] or [
+        m for m in db.get_resume_conversations("s")[0] if m.get("role") == "assistant"
+    ][:1]
     assert rewritten, "fixture has no rewritable row"
     original = dict(rewritten[0])
-    db.rewrite_pruned_rows("s", [(original, {**original, "content": "[pruned by the other surface]"})])
+    db.rewrite_pruned_rows(
+        "s", [(original, {**original, "content": "[pruned by the other surface]"})]
+    )
     before = [m["content"] for m in db.get_messages_as_conversation("s")]
 
     result = _run_pass(cc, mode, held)
@@ -990,8 +1082,11 @@ def test_a_freshly_resumed_unchanged_history_is_not_a_stale_generation(tmp_path,
     unchanged history must still be reclaimed."""
     db, cc, held = _held_session(tmp_path, mode)
     # Pad a durable user row; the resume projection loads it stripped.
-    db._execute_write(lambda conn: conn.execute(
-        "UPDATE messages SET content = '  padded start \n' WHERE session_id = 's' AND role = 'user'"))
+    db._execute_write(
+        lambda conn: conn.execute(
+            "UPDATE messages SET content = '  padded start \n' WHERE session_id = 's' AND role = 'user'"
+        )
+    )
     held = db.get_resume_conversations("s")[0]
 
     result = _run_pass(cc, mode, held)
@@ -1009,11 +1104,16 @@ def test_an_unstamped_trailing_row_does_not_suppress_the_stale_check(tmp_path, m
     from agent.context_compressor import _DB_PERSISTED_MARKER
 
     db, cc, held = _held_session(tmp_path, mode)
-    rewritten = [m for m in db.get_resume_conversations("s")[0] if m.get("role") == "tool"][:1] or [
-        m for m in db.get_resume_conversations("s")[0] if m.get("role") == "assistant"][:1]
+    rewritten = [
+        m for m in db.get_resume_conversations("s")[0] if m.get("role") == "tool"
+    ][:1] or [
+        m for m in db.get_resume_conversations("s")[0] if m.get("role") == "assistant"
+    ][:1]
     assert rewritten, "fixture has no rewritable row"
     original = dict(rewritten[0])
-    db.rewrite_pruned_rows("s", [(original, {**original, "content": "[pruned by the other surface]"})])
+    db.rewrite_pruned_rows(
+        "s", [(original, {**original, "content": "[pruned by the other surface]"})]
+    )
     held = held + [{"role": "user", "content": "live turn not yet flushed"}]
     before = [m["content"] for m in db.get_messages_as_conversation("s")]
 
@@ -1040,13 +1140,23 @@ def test_a_stale_generation_held_without_row_ids_aborts_the_micro_compact(tmp_pa
     db, cc, _held = _held_session(tmp_path, "micro")
     held = db.get_messages_as_conversation("s", repair_alternation=True)
     from agent.message_metadata import DB_ROW_SNAPSHOT
+
     assert held and not any(m.get("_row_id") for m in held)
-    assert all(m.get(_DB_PERSISTED_MARKER) and isinstance(m.get(DB_ROW_SNAPSHOT), str) for m in held)
+    assert all(
+        m.get(_DB_PERSISTED_MARKER) and isinstance(m.get(DB_ROW_SNAPSHOT), str)
+        for m in held
+    )
     # Another surface commits a prune in place: same ids, same activity, different bodies.
     # Rewrite an assistant row in place (micro sessions hold plain user/assistant turns, no tool rows).
-    original = next(m for m in db.get_resume_conversations("s")[0]
-                    if m.get("role") == "assistant" and m.get("content"))
-    db.rewrite_pruned_rows("s", [(dict(original), {**original, "content": "[pruned by the other surface]"})])
+    original = next(
+        m
+        for m in db.get_resume_conversations("s")[0]
+        if m.get("role") == "assistant" and m.get("content")
+    )
+    db.rewrite_pruned_rows(
+        "s",
+        [(dict(original), {**original, "content": "[pruned by the other surface]"})],
+    )
     before = [m["content"] for m in db.get_messages_as_conversation("s")]
 
     result = cc._micro_compact(held)
@@ -1062,9 +1172,12 @@ def _uid_rows(db, uid: str):
     """Every active physical row currently sharing *uid*, oldest first (a carried or concurrent
     compaction can clone a row back beside its archived twin, so one logical message_uid may have
     several live rows; the loader's ``_active_logical_message_row`` always stamps the newest)."""
-    return db._execute_write(lambda conn: conn.execute(
-        "SELECT id, content FROM messages WHERE session_id = ? AND active = 1 AND message_uid = ? ORDER BY id",
-        ("s", uid)).fetchall())
+    return db._execute_write(
+        lambda conn: conn.execute(
+            "SELECT id, content FROM messages WHERE session_id = ? AND active = 1 AND message_uid = ? ORDER BY id",
+            ("s", uid),
+        ).fetchall()
+    )
 
 
 def test_the_uid_fence_cas_against_the_newest_active_copy(tmp_path):
@@ -1085,26 +1198,37 @@ def test_the_uid_fence_cas_against_the_newest_active_copy(tmp_path):
     # Another surface's carried compaction clones the row back beside its twin: two active rows,
     # same uid, same payload. The clone is the newest (AUTOINCREMENT id).
     newest = _uid_rows(db, uid)[-1]
-    db._execute_write(lambda conn: conn.execute(
-        "INSERT INTO messages (session_id, role, content, tool_call_id, tool_calls, tool_name, "
-        "effect_disposition, timestamp, token_count, finish_reason, reasoning, reasoning_content, "
-        "reasoning_details, codex_reasoning_items, codex_message_items, platform_message_id, observed, "
-        "_compressed_summary, active, api_content, display_kind, display_metadata, message_uid, "
-        "absorbed_message_uids, tool_call_uids, tool_call_uid) "
-        "SELECT session_id, role, content, tool_call_id, tool_calls, tool_name, effect_disposition, "
-        "timestamp, token_count, finish_reason, reasoning, reasoning_content, reasoning_details, "
-        "codex_reasoning_items, codex_message_items, platform_message_id, observed, _compressed_summary, "
-        "active, api_content, display_kind, display_metadata, message_uid, absorbed_message_uids, "
-        "tool_call_uids, tool_call_uid FROM messages WHERE id = ?", (newest["id"],)))
+    db._execute_write(
+        lambda conn: conn.execute(
+            "INSERT INTO messages (session_id, role, content, tool_call_id, tool_calls, tool_name, "
+            "effect_disposition, timestamp, token_count, finish_reason, reasoning, reasoning_content, "
+            "reasoning_details, codex_reasoning_items, codex_message_items, platform_message_id, observed, "
+            "_compressed_summary, active, api_content, display_kind, display_metadata, message_uid, "
+            "absorbed_message_uids, tool_call_uids, tool_call_uid) "
+            "SELECT session_id, role, content, tool_call_id, tool_calls, tool_name, effect_disposition, "
+            "timestamp, token_count, finish_reason, reasoning, reasoning_content, reasoning_details, "
+            "codex_reasoning_items, codex_message_items, platform_message_id, observed, _compressed_summary, "
+            "active, api_content, display_kind, display_metadata, message_uid, absorbed_message_uids, "
+            "tool_call_uids, tool_call_uid FROM messages WHERE id = ?",
+            (newest["id"],),
+        )
+    )
     original_id, clone_id = (row["id"] for row in _uid_rows(db, uid))
     assert clone_id > original_id and len(_uid_rows(db, uid)) == 2
 
     # Then that surface prunes the NEWEST copy in place (the row-addressed projection materializes
     # both active rows; its dict for the clone is the one its own pass rewrote). The older duplicate
     # still holds the payload the held dict was stamped from.
-    resume = db.get_messages_as_conversation("s", include_row_ids=True, repair_alternation=False)
-    original = next(m for m in resume if m.get("message_uid") == uid and m["_row_id"] == clone_id)
-    db.rewrite_pruned_rows("s", [(dict(original), {**original, "content": "[pruned by the other surface]"})])
+    resume = db.get_messages_as_conversation(
+        "s", include_row_ids=True, repair_alternation=False
+    )
+    original = next(
+        m for m in resume if m.get("message_uid") == uid and m["_row_id"] == clone_id
+    )
+    db.rewrite_pruned_rows(
+        "s",
+        [(dict(original), {**original, "content": "[pruned by the other surface]"})],
+    )
 
     # The fence names the newest row: the held digest is stale even though an older duplicate
     # still matches it, so publishing the held generation must be refused.
@@ -1118,7 +1242,9 @@ def test_the_uid_fence_cas_against_the_newest_active_copy(tmp_path):
     assert [m["content"] for m in db.get_messages_as_conversation("s")] == before
 
 
-def test_the_uid_fence_lets_a_held_digest_stay_current_when_only_an_older_duplicate_moved(tmp_path):
+def test_the_uid_fence_lets_a_held_digest_stay_current_when_only_an_older_duplicate_moved(
+    tmp_path,
+):
     """The newest-active rule cuts both ways: when the newest active copy still holds the payload
     the held digest was stamped from, the held generation is the live winner even if an older
     duplicate of the same uid was rewritten. The fence must report no mismatch there — resolving
@@ -1130,22 +1256,30 @@ def test_the_uid_fence_lets_a_held_digest_stay_current_when_only_an_older_duplic
     uid = target["message_uid"]
 
     newest = _uid_rows(db, uid)[-1]
-    db._execute_write(lambda conn: conn.execute(
-        "INSERT INTO messages (session_id, role, content, tool_call_id, tool_calls, tool_name, "
-        "effect_disposition, timestamp, token_count, finish_reason, reasoning, reasoning_content, "
-        "reasoning_details, codex_reasoning_items, codex_message_items, platform_message_id, observed, "
-        "_compressed_summary, active, api_content, display_kind, display_metadata, message_uid, "
-        "absorbed_message_uids, tool_call_uids, tool_call_uid) "
-        "SELECT session_id, role, content, tool_call_id, tool_calls, tool_name, effect_disposition, "
-        "timestamp, token_count, finish_reason, reasoning, reasoning_content, reasoning_details, "
-        "codex_reasoning_items, codex_message_items, platform_message_id, observed, _compressed_summary, "
-        "active, api_content, display_kind, display_metadata, message_uid, absorbed_message_uids, "
-        "tool_call_uids, tool_call_uid FROM messages WHERE id = ?", (newest["id"],)))
+    db._execute_write(
+        lambda conn: conn.execute(
+            "INSERT INTO messages (session_id, role, content, tool_call_id, tool_calls, tool_name, "
+            "effect_disposition, timestamp, token_count, finish_reason, reasoning, reasoning_content, "
+            "reasoning_details, codex_reasoning_items, codex_message_items, platform_message_id, observed, "
+            "_compressed_summary, active, api_content, display_kind, display_metadata, message_uid, "
+            "absorbed_message_uids, tool_call_uids, tool_call_uid) "
+            "SELECT session_id, role, content, tool_call_id, tool_calls, tool_name, effect_disposition, "
+            "timestamp, token_count, finish_reason, reasoning, reasoning_content, reasoning_details, "
+            "codex_reasoning_items, codex_message_items, platform_message_id, observed, _compressed_summary, "
+            "active, api_content, display_kind, display_metadata, message_uid, absorbed_message_uids, "
+            "tool_call_uids, tool_call_uid FROM messages WHERE id = ?",
+            (newest["id"],),
+        )
+    )
     original_id, _clone_id = (row["id"] for row in _uid_rows(db, uid))
 
     # Only the OLDER duplicate is rewritten in place; the newest (the one the loader stamps and the
     # fence must compare against) still holds the held payload.
-    db._execute_write(lambda conn: conn.execute(
-        "UPDATE messages SET content = ? WHERE id = ?", ("[edited in place by another writer]", original_id)))
+    db._execute_write(
+        lambda conn: conn.execute(
+            "UPDATE messages SET content = ? WHERE id = ?",
+            ("[edited in place by another writer]", original_id),
+        )
+    )
 
     assert db.rewritten_held_row_ids("s", held) == []

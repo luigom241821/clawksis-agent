@@ -59,7 +59,9 @@ def reset_browser_state():
             check=False,
         )
     else:
-        subprocess.run(["pkill", "-f", "agent-browser"], capture_output=True, check=False)
+        subprocess.run(
+            ["pkill", "-f", "agent-browser"], capture_output=True, check=False
+        )
     code = "cdp('Network.clearBrowserCookies')\nprint('cleared')\n"
     try:
         subprocess.run(

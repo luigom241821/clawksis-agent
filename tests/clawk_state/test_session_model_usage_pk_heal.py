@@ -77,9 +77,7 @@ def _make_stale_v22_db(tmp_path, usage_rows=(), sessions=("s1",)):
 
 
 def _pk_cols(db):
-    rows = db._conn.execute(
-        'PRAGMA table_info("session_model_usage")'
-    ).fetchall()
+    rows = db._conn.execute('PRAGMA table_info("session_model_usage")').fetchall()
     return sorted(r["name"] for r in rows if r["pk"])
 
 
@@ -87,9 +85,7 @@ class TestSessionModelUsagePkHeal:
     def test_stale_v22_pk_rebuilt_and_accounting_restored(self, tmp_path):
         """The broken-PK table is rebuilt on open even though schema_version
         is already current, and the usage upsert works again."""
-        db_path = _make_stale_v22_db(
-            tmp_path, usage_rows=[("s1", "m-old", 10, 20)]
-        )
+        db_path = _make_stale_v22_db(tmp_path, usage_rows=[("s1", "m-old", 10, 20)])
         db = SessionDB(db_path=db_path)
         try:
             assert "task" in _pk_cols(db)
@@ -104,8 +100,12 @@ class TestSessionModelUsagePkHeal:
             # The killed write path works again: the upsert used to abort
             # the whole transaction with an ON CONFLICT mismatch.
             db.update_token_counts(
-                "s1", input_tokens=5, output_tokens=7,
-                model="m-new", billing_provider="p", api_call_count=1,
+                "s1",
+                input_tokens=5,
+                output_tokens=7,
+                model="m-new",
+                billing_provider="p",
+                api_call_count=1,
             )
             row = db._conn.execute(
                 "SELECT input_tokens FROM session_model_usage "
@@ -141,7 +141,10 @@ class TestSessionModelUsagePkHeal:
         try:
             db.create_session("s1", "cli")
             db.update_token_counts(
-                "s1", input_tokens=3, model="m", billing_provider="p",
+                "s1",
+                input_tokens=3,
+                model="m",
+                billing_provider="p",
                 api_call_count=1,
             )
             assert "task" in _pk_cols(db)
@@ -149,8 +152,7 @@ class TestSessionModelUsagePkHeal:
             cur = db._conn.cursor()
             db._heal_session_model_usage_pk(cur)
             row = db._conn.execute(
-                "SELECT input_tokens FROM session_model_usage "
-                "WHERE session_id='s1'"
+                "SELECT input_tokens FROM session_model_usage WHERE session_id='s1'"
             ).fetchone()
             assert row is not None and row["input_tokens"] == 3
         finally:

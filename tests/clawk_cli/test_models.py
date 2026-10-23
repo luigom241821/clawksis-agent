@@ -9,9 +9,12 @@ from unittest.mock import patch, MagicMock
 
 from clawk_cli.nous_account import NousPortalAccountInfo
 from clawk_cli.models import (
-    OPENROUTER_MODELS, fetch_openrouter_models, detect_provider_for_model,
+    OPENROUTER_MODELS,
+    fetch_openrouter_models,
+    detect_provider_for_model,
     partition_nous_models_by_tier,
-    check_nous_free_tier, union_with_portal_free_recommendations,
+    check_nous_free_tier,
+    union_with_portal_free_recommendations,
     union_with_portal_paid_recommendations,
 )
 import clawk_cli.models as _models_mod
@@ -20,14 +23,20 @@ from clawk_cli import models_validate
 
 
 class TestFetchOpenRouterModels:
-
-
     def test_falls_back_to_static_snapshot_on_fetch_failure(self, monkeypatch):
         monkeypatch.setattr(_models_mod, "_openrouter_catalog_cache", None)
         # Pin the remote manifest out too — otherwise the fallback silently
         # depends on whatever the deployed catalog currently contains.
-        with patch("clawk_cli.model_catalog.get_curated_openrouter_models", return_value=None), \
-             patch("clawk_cli.models._urlopen_model_catalog_request", side_effect=OSError("boom")):
+        with (
+            patch(
+                "clawk_cli.model_catalog.get_curated_openrouter_models",
+                return_value=None,
+            ),
+            patch(
+                "clawk_cli.models._urlopen_model_catalog_request",
+                side_effect=OSError("boom"),
+            ),
+        ):
             models = fetch_openrouter_models(force_refresh=True)
 
         assert models == OPENROUTER_MODELS
@@ -39,6 +48,7 @@ class TestFetchOpenRouterModels:
         immediate runtime failures when the user selects it. Ported from
         Kilo-Org/kilocode#9068.
         """
+
         class _Resp:
             def __enter__(self):
                 return self
@@ -58,7 +68,7 @@ class TestFetchOpenRouterModels:
                     b'"supported_parameters":["temperature","response_format"]},'
                     b'{"id":"qwen/qwen3.7-max","pricing":{"prompt":"0.000000325","completion":"0.00000195"},'
                     b'"supported_parameters":["tools","temperature"]}'
-                    b']}'
+                    b"]}"
                 )
 
         # Include the image-only id in the curated list so it has a chance to be surfaced.
@@ -73,8 +83,12 @@ class TestFetchOpenRouterModels:
         )
         monkeypatch.setattr(_models_mod, "_openrouter_catalog_cache", None)
         with (
-            patch("clawk_cli.model_catalog.get_curated_openrouter_models", return_value=[]),
-            patch("clawk_cli.models._urlopen_model_catalog_request", return_value=_Resp()),
+            patch(
+                "clawk_cli.model_catalog.get_curated_openrouter_models", return_value=[]
+            ),
+            patch(
+                "clawk_cli.models._urlopen_model_catalog_request", return_value=_Resp()
+            ),
         ):
             models = fetch_openrouter_models(force_refresh=True)
 
@@ -88,29 +102,32 @@ class TestFetchOpenRouterModels:
 class TestOpenRouterToolSupportHelper:
     """Unit tests for _openrouter_model_supports_tools (Kilo port #9068)."""
 
-
     def test_empty_supported_parameters_list_drops_model(self):
         """Explicit empty list → no tools → drop."""
         from clawk_cli.models import _openrouter_model_supports_tools
-        assert _openrouter_model_supports_tools(
-            {"id": "x", "supported_parameters": []}
-        ) is False
+
+        assert (
+            _openrouter_model_supports_tools({"id": "x", "supported_parameters": []})
+            is False
+        )
 
 
 class TestDetectProviderForModel:
-
-
     def test_short_alias_resolves_to_static_model(self):
         """Short aliases (e.g. sonnet) should resolve without network lookups."""
-        with patch(
-            "clawk_cli.models.fetch_openrouter_models",
-            side_effect=AssertionError("network lookup should not run"),
-        ), patch("clawk_cli.models_detect.provider_has_credentials", return_value=True):
+        with (
+            patch(
+                "clawk_cli.models.fetch_openrouter_models",
+                side_effect=AssertionError("network lookup should not run"),
+            ),
+            patch(
+                "clawk_cli.models_detect.provider_has_credentials", return_value=True
+            ),
+        ):
             result = detect_provider_for_model("sonnet", "auto")
         assert result is not None
         assert result[0] == "anthropic"
         assert result[1].startswith("claude-sonnet")
-
 
     def test_custom_provider_not_overridden_by_static_catalog(self):
         """When current provider is custom:*, a static-catalog match must NOT
@@ -132,51 +149,91 @@ class TestPartitionNousModelsByTier:
     def test_paid_tier_all_selectable(self):
         """Paid users get all models as selectable, none unavailable."""
         models = ["anthropic/claude-opus-4.6", "xiaomi/mimo-v2-pro"]
-        pricing = {"anthropic/claude-opus-4.6": self._PAID, "xiaomi/mimo-v2-pro": self._FREE}
+        pricing = {
+            "anthropic/claude-opus-4.6": self._PAID,
+            "xiaomi/mimo-v2-pro": self._FREE,
+        }
         sel, unav = partition_nous_models_by_tier(models, pricing, free_tier=False)
         assert sel == models
         assert unav == []
 
-
     def test_subscription_billed_model_is_selectable_on_free_tier(self):
         """A row the gateway bills to a subscription costs no credits, whatever price it lists."""
         models = ["anthropic/claude-opus-4.6", "openai/gpt-5.4"]
-        pricing = {"anthropic/claude-opus-4.6": self._PAID, "openai/gpt-5.4": {**self._PAID, "billing_mode": "subscription"}}
+        pricing = {
+            "anthropic/claude-opus-4.6": self._PAID,
+            "openai/gpt-5.4": {**self._PAID, "billing_mode": "subscription"},
+        }
         sel, unav = partition_nous_models_by_tier(models, pricing, free_tier=True)
         assert (sel, unav) == (["openai/gpt-5.4"], ["anthropic/claude-opus-4.6"])
 
-    def test_free_tier_default_prefers_a_free_model_over_a_subscription_billed_one(self, monkeypatch):
+    def test_free_tier_default_prefers_a_free_model_over_a_subscription_billed_one(
+        self, monkeypatch
+    ):
         import clawk_cli.models as m
         from clawk_cli import models_pricing as mp
-        pricing = {"openai/gpt-5.4": {**self._PAID, "billing_mode": "subscription"}, "free/model": self._FREE}
+
+        pricing = {
+            "openai/gpt-5.4": {**self._PAID, "billing_mode": "subscription"},
+            "free/model": self._FREE,
+        }
         monkeypatch.setattr(m, "get_curated_nous_model_ids", lambda: list(pricing))
         monkeypatch.setattr(m, "check_nous_free_tier", lambda **kw: True)
-        monkeypatch.setattr(m, "union_with_portal_free_recommendations", lambda ids, pr, url="", **kw: (ids, pr))
-        monkeypatch.setattr(m, "get_preferred_silent_default_model", lambda provider="": "not/listed")
+        monkeypatch.setattr(
+            m,
+            "union_with_portal_free_recommendations",
+            lambda ids, pr, url="", **kw: (ids, pr),
+        )
+        monkeypatch.setattr(
+            m, "get_preferred_silent_default_model", lambda provider="": "not/listed"
+        )
         monkeypatch.setattr(mp, "get_pricing_for_provider", lambda slug, **kw: pricing)
         monkeypatch.setattr(mp, "nous_policy_allowed_ids", lambda **kw: None)
         assert m.recommended_nous_default_model()["model"] == "free/model"
         del pricing["free/model"]
         assert m.recommended_nous_default_model()["model"] == "openai/gpt-5.4"
 
-    def test_window_plan_default_is_the_plans_first_listed_recommendation(self, monkeypatch):
+    def test_window_plan_default_is_the_plans_first_listed_recommendation(
+        self, monkeypatch
+    ):
         import clawk_cli.models as m
         from clawk_cli import model_picker_usage as mpu
         from clawk_cli import models_pricing as mp
+
         ids = ["example/model-c", "example/model-b", "example/model-a"]
         monkeypatch.setattr(m, "get_curated_nous_model_ids", lambda: list(ids))
         monkeypatch.setattr(m, "check_nous_free_tier", lambda **kw: False)
-        monkeypatch.setattr(m, "union_with_portal_paid_recommendations", lambda i, pr, url="", **kw: (i, pr))
-        monkeypatch.setattr(m, "get_preferred_silent_default_model", lambda provider="": "example/model-b")
+        monkeypatch.setattr(
+            m,
+            "union_with_portal_paid_recommendations",
+            lambda i, pr, url="", **kw: (i, pr),
+        )
+        monkeypatch.setattr(
+            m,
+            "get_preferred_silent_default_model",
+            lambda provider="": "example/model-b",
+        )
         monkeypatch.setattr(mp, "get_pricing_for_provider", lambda slug, **kw: {})
         monkeypatch.setattr(mp, "nous_policy_allowed_ids", lambda **kw: None)
-        usage = mpu.PickerUsage(plan="Window Plan", gauges=(), featured_model_ids=("not/listed", "example/model-a"))
+        usage = mpu.PickerUsage(
+            plan="Window Plan",
+            gauges=(),
+            featured_model_ids=("not/listed", "example/model-a"),
+        )
         monkeypatch.setattr(mpu, "nous_picker_usage", lambda **kw: usage)
         assert m.recommended_nous_default_model()["model"] == "example/model-a"
         # A Large featured pick is never the default: the next listed recommendation is.
-        usage_c = mpu.PickerUsage(plan="Window Plan", gauges=(), featured_model_ids=("example/model-c", "example/model-a"))
+        usage_c = mpu.PickerUsage(
+            plan="Window Plan",
+            gauges=(),
+            featured_model_ids=("example/model-c", "example/model-a"),
+        )
         monkeypatch.setattr(mpu, "nous_picker_usage", lambda **kw: usage_c)
-        monkeypatch.setattr(mp, "get_pricing_for_provider", lambda slug, **kw: {"example/model-c": {"usage_level": "top_tier"}})
+        monkeypatch.setattr(
+            mp,
+            "get_pricing_for_provider",
+            lambda slug, **kw: {"example/model-c": {"usage_level": "top_tier"}},
+        )
         assert m.recommended_nous_default_model()["model"] == "example/model-a"
         # Every other account (no window plan) keeps the silent default.
         monkeypatch.setattr(mpu, "nous_picker_usage", lambda **kw: None)
@@ -228,7 +285,6 @@ class TestUnionWithPortalFreeRecommendations:
         # Existing pricing untouched
         assert p["anthropic/claude-opus-4.6"] == self._PAID
 
-
     def test_fetch_failure_returns_inputs(self):
         """Network failures don't blow up the picker."""
         curated = ["a"]
@@ -262,7 +318,6 @@ class TestUnionWithPortalPaidRecommendations:
                 {"modelName": mid, "displayName": mid} for mid in paid_models
             ],
         }
-
 
     def test_preserves_relative_order_of_new_paid_models(self):
         """Multiple new paid models are appended in payload order, after curated."""
@@ -341,7 +396,6 @@ class TestCheckNousFreeTierCache:
         assert check_in(tmp_path / "free") is True
         assert mock_account.call_count == 2
 
-
     @patch("clawk_cli.nous_account.get_nous_portal_account_info")
     def test_force_fresh_bypasses_cache(self, mock_account):
         mock_account.return_value = NousPortalAccountInfo(
@@ -385,6 +439,7 @@ class TestNousRecommendedModels:
     def _mock_urlopen(self, payload):
         """Return a context-manager mock mimicking urllib.request.urlopen()."""
         import json as _json
+
         response = MagicMock()
         response.read.return_value = _json.dumps(payload).encode()
         cm = MagicMock()
@@ -394,41 +449,57 @@ class TestNousRecommendedModels:
 
     def test_fetch_caches_per_portal_url(self):
         from clawk_cli.models import fetch_nous_recommended_models
+
         mock_cm = self._mock_urlopen(self._SAMPLE_PAYLOAD)
-        with patch("clawk_cli.models._urlopen_model_catalog_request", return_value=mock_cm) as mock_urlopen:
+        with patch(
+            "clawk_cli.models._urlopen_model_catalog_request", return_value=mock_cm
+        ) as mock_urlopen:
             a = fetch_nous_recommended_models("https://portal.example.com")
             b = fetch_nous_recommended_models("https://portal.example.com")
         assert a == self._SAMPLE_PAYLOAD
         assert b == self._SAMPLE_PAYLOAD
         assert mock_urlopen.call_count == 1  # second call served from cache
 
-
     def test_paid_tier_prefers_paid_recommendation(self):
         """Paid-tier users should get the paid model when it's populated."""
         from clawk_cli.models import get_nous_recommended_aux_model
+
         payload = {
-            "paidRecommendedCompactionModel": {"modelName": "anthropic/claude-opus-4.7"},
-            "freeRecommendedCompactionModel": {"modelName": "google/gemini-3-flash-preview"},
+            "paidRecommendedCompactionModel": {
+                "modelName": "anthropic/claude-opus-4.7"
+            },
+            "freeRecommendedCompactionModel": {
+                "modelName": "google/gemini-3-flash-preview"
+            },
             "paidRecommendedVisionModel": {"modelName": "openai/gpt-5.4"},
-            "freeRecommendedVisionModel": {"modelName": "google/gemini-3-flash-preview"},
+            "freeRecommendedVisionModel": {
+                "modelName": "google/gemini-3-flash-preview"
+            },
         }
-        with patch("clawk_cli.models.fetch_nous_recommended_models", return_value=payload):
+        with patch(
+            "clawk_cli.models.fetch_nous_recommended_models", return_value=payload
+        ):
             text = get_nous_recommended_aux_model(vision=False, free_tier=False)
             vision = get_nous_recommended_aux_model(vision=True, free_tier=False)
         assert text == "anthropic/claude-opus-4.7"
         assert vision == "openai/gpt-5.4"
 
-
     def test_tier_detection_error_defaults_to_paid(self):
         """If tier detection raises, assume paid so we don't downgrade silently."""
         from clawk_cli.models import get_nous_recommended_aux_model
+
         payload = {
             "paidRecommendedCompactionModel": {"modelName": "paid-model"},
             "freeRecommendedCompactionModel": {"modelName": "free-model"},
         }
         with (
-            patch("clawk_cli.models.fetch_nous_recommended_models", return_value=payload),
-            patch("clawk_cli.models.check_nous_free_tier", side_effect=RuntimeError("boom")),
+            patch(
+                "clawk_cli.models.fetch_nous_recommended_models", return_value=payload
+            ),
+            patch(
+                "clawk_cli.models.check_nous_free_tier",
+                side_effect=RuntimeError("boom"),
+            ),
         ):
             assert get_nous_recommended_aux_model(vision=False) == "paid-model"
 
@@ -443,14 +514,15 @@ class TestCodexSoftAcceptPlausibilityGate:
 
     def test_unrelated_name_rejected_on_openai_codex(self):
         from clawk_cli.models_validate import validate_requested_model
+
         r = validate_requested_model("qwen3.5-4b", "openai-codex")
         assert r["accepted"] is False
         assert r["persist"] is False
         assert "--provider" in (r["message"] or "")
 
-
     def test_real_catalog_model_unaffected(self):
         from clawk_cli.models_validate import validate_requested_model
+
         r = validate_requested_model("gpt-5.5", "openai-codex")
         assert r["accepted"] is True
         assert r["recognized"] is True
@@ -461,6 +533,7 @@ class TestFormatPricePerMtok:
 
     def test_standard_prices_keep_two_decimals(self):
         from clawk_cli.models_pricing import _format_price_per_mtok
+
         assert _format_price_per_mtok("0.000003") == "$3.00"
         assert _format_price_per_mtok("0.00003") == "$30.00"
         assert _format_price_per_mtok("0.00000015") == "$0.15"
@@ -468,16 +541,19 @@ class TestFormatPricePerMtok:
 
     def test_zero_is_free(self):
         from clawk_cli.models_pricing import _format_price_per_mtok
+
         assert _format_price_per_mtok("0") == "free"
         assert _format_price_per_mtok("0.0") == "free"
 
     def test_invalid_is_question_mark(self):
         from clawk_cli.models_pricing import _format_price_per_mtok
+
         assert _format_price_per_mtok("garbage") == "?"
         assert _format_price_per_mtok(None) == "?"
 
     def test_sub_cent_price_extends_precision(self):
         from clawk_cli.models_pricing import _format_price_per_mtok
+
         # DeepSeek V4 Flash 0731 promo cache-hit rate: $0.0018/Mtok.
         assert _format_price_per_mtok("0.0000000018") == "$0.0018"
         assert _format_price_per_mtok("0.000000001") == "$0.001"
@@ -488,6 +564,7 @@ class TestFormatPricePerMtok:
 
     def test_one_cent_boundary_stays_two_decimals(self):
         from clawk_cli.models_pricing import _format_price_per_mtok
+
         assert _format_price_per_mtok("0.00000001") == "$0.01"
 
 
@@ -532,7 +609,9 @@ def _start_fake_ollama_server(models=None):
     _FakeOllamaTagsHandler.paths_seen = []
     server = HTTPServer(("127.0.0.1", 0), _FakeOllamaTagsHandler)
     # Short poll interval: server.shutdown() otherwise blocks ~0.5s per test.
-    thread = Thread(target=server.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True)
+    thread = Thread(
+        target=server.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True
+    )
     thread.start()
     return server, server.server_address[1]
 
@@ -546,7 +625,9 @@ class TestLocalOllamaModelDiscovery:
         try:
             with patch(
                 "clawk_cli.config.load_config",
-                return_value={"providers": {"ollama": {"base_url": f"http://127.0.0.1:{port}"}}},
+                return_value={
+                    "providers": {"ollama": {"base_url": f"http://127.0.0.1:{port}"}}
+                },
             ):
                 assert provider_model_ids("ollama", force_refresh=True) == [
                     "qwen3:1.7b",
@@ -562,7 +643,9 @@ class TestLocalOllamaModelDiscovery:
         try:
             with patch(
                 "clawk_cli.config.load_config",
-                return_value={"providers": {"ollama": {"base_url": f"http://127.0.0.1:{port}"}}},
+                return_value={
+                    "providers": {"ollama": {"base_url": f"http://127.0.0.1:{port}"}}
+                },
             ):
                 assert provider_model_ids("ollama", force_refresh=True) == ["old-model"]
                 _FakeOllamaTagsHandler.models_payload = [{"name": "new-model"}]
@@ -585,7 +668,6 @@ class TestLocalOllamaModelDiscovery:
             assert fetch_ollama_local_models(base_url) == ["new-model"]
         finally:
             server.shutdown()
-
 
     def test_fetch_ollama_models_accepts_base_url_without_scheme(self):
         """OLLAMA_HOST commonly omits http://; discovery should normalize it."""
@@ -616,12 +698,18 @@ class TestLocalOllamaModelDiscovery:
         from clawk_cli.models import _get_ollama_base_url
         from clawk_cli.models_local import should_use_ollama_native_catalog
 
-        with patch("clawk_cli.config.load_config", side_effect=RuntimeError("bad home")), patch(
-            "clawk_cli.models_local.probe_ollama_local_models",
-            return_value=None,
+        with (
+            patch("clawk_cli.config.load_config", side_effect=RuntimeError("bad home")),
+            patch(
+                "clawk_cli.models_local.probe_ollama_local_models",
+                return_value=None,
+            ),
         ):
             assert _get_ollama_base_url() == "http://localhost:11434"
-            assert should_use_ollama_native_catalog("custom", "127.0.0.1:11434/v1") is False
+            assert (
+                should_use_ollama_native_catalog("custom", "127.0.0.1:11434/v1")
+                is False
+            )
 
     def test_probe_ollama_models_malformed_base_url_returns_none(self):
         """Malformed user-configured URLs should behave like probe failures, not crashes."""
@@ -629,32 +717,46 @@ class TestLocalOllamaModelDiscovery:
 
         assert probe_ollama_local_models("http://127.0.0.1:bad-port/v1") is None
 
-
     def test_ollama_port_detection_requires_working_api_tags(self):
         from clawk_cli.models_local import should_use_ollama_native_catalog
 
-        with patch("clawk_cli.models_local.probe_ollama_local_models", return_value=["qwen3:1.7b"]):
-            assert should_use_ollama_native_catalog("custom", "192.168.1.5:11434/v1") is True
-        with patch("clawk_cli.models_local.probe_ollama_local_models", return_value=None):
-            assert should_use_ollama_native_catalog("custom", "192.168.1.5:11434/v1") is False
+        with patch(
+            "clawk_cli.models_local.probe_ollama_local_models",
+            return_value=["qwen3:1.7b"],
+        ):
+            assert (
+                should_use_ollama_native_catalog("custom", "192.168.1.5:11434/v1")
+                is True
+            )
+        with patch(
+            "clawk_cli.models_local.probe_ollama_local_models", return_value=None
+        ):
+            assert (
+                should_use_ollama_native_catalog("custom", "192.168.1.5:11434/v1")
+                is False
+            )
 
     def test_provider_model_ids_ollama_cloud_config_uses_generic_catalog(self):
         from clawk_cli.models import provider_model_ids
 
-        with patch(
-            "clawk_cli.config.load_config",
-            return_value={
-                "providers": {
-                    "ollama": {
-                        "base_url": "https://ollama.com/v1",
-                        "api_key": "cloud-key",
+        with (
+            patch(
+                "clawk_cli.config.load_config",
+                return_value={
+                    "providers": {
+                        "ollama": {
+                            "base_url": "https://ollama.com/v1",
+                            "api_key": "cloud-key",
+                        }
                     }
-                }
-            },
-        ), patch("clawk_cli.models_local.fetch_ollama_local_models") as fetch_local, patch(
-            "clawk_cli.models.fetch_api_models",
-            return_value=["qwen3:1.7b"],
-        ) as fetch_generic:
+                },
+            ),
+            patch("clawk_cli.models_local.fetch_ollama_local_models") as fetch_local,
+            patch(
+                "clawk_cli.models.fetch_api_models",
+                return_value=["qwen3:1.7b"],
+            ) as fetch_generic,
+        ):
             assert provider_model_ids("ollama", force_refresh=True) == ["qwen3:1.7b"]
         fetch_local.assert_not_called()
         fetch_generic.assert_called_once_with(
@@ -678,9 +780,7 @@ class TestLocalOllamaModelDiscovery:
                 }
             },
         ):
-            assert _get_ollama_request_headers() == {
-                "Authorization": "Bearer env-key"
-            }
+            assert _get_ollama_request_headers() == {"Authorization": "Bearer env-key"}
 
     def test_native_ollama_catalog_uses_api_key_env_alias(self, monkeypatch):
         from clawk_cli.models_local import _get_ollama_request_headers
@@ -704,33 +804,39 @@ class TestLocalOllamaModelDiscovery:
     def test_provider_model_ids_ignores_active_non_ollama_custom_endpoint(self):
         from clawk_cli.models import provider_model_ids
 
-        with patch(
-            "clawk_cli.config.load_config",
-            return_value={
-                "model": {
-                    "provider": "custom",
-                    "base_url": "https://custom.example/v1",
-                }
-            },
-        ), patch(
-            "clawk_cli.models_local.fetch_ollama_local_models",
-            return_value=["qwen3:1.7b"],
-        ) as fetch_local:
+        with (
+            patch(
+                "clawk_cli.config.load_config",
+                return_value={
+                    "model": {
+                        "provider": "custom",
+                        "base_url": "https://custom.example/v1",
+                    }
+                },
+            ),
+            patch(
+                "clawk_cli.models_local.fetch_ollama_local_models",
+                return_value=["qwen3:1.7b"],
+            ) as fetch_local,
+        ):
             assert provider_model_ids("ollama", force_refresh=True) == ["qwen3:1.7b"]
         fetch_local.assert_called_once_with("http://localhost:11434")
 
     def test_ollama_cache_fingerprint_does_not_probe_custom_endpoint(self):
         from clawk_cli.models import _credential_fingerprint
 
-        with patch(
-            "clawk_cli.config.load_config",
-            return_value={
-                "model": {
-                    "provider": "custom",
-                    "base_url": "http://127.0.0.1:11434/v1",
-                }
-            },
-        ), patch("clawk_cli.models_local.probe_ollama_local_models") as probe_ollama:
+        with (
+            patch(
+                "clawk_cli.config.load_config",
+                return_value={
+                    "model": {
+                        "provider": "custom",
+                        "base_url": "http://127.0.0.1:11434/v1",
+                    }
+                },
+            ),
+            patch("clawk_cli.models_local.probe_ollama_local_models") as probe_ollama,
+        ):
             assert _credential_fingerprint("ollama")
         probe_ollama.assert_not_called()
 
@@ -751,7 +857,9 @@ class TestLocalOllamaModelDiscovery:
 
         assert first != second
 
-    def test_ollama_cache_fingerprint_changes_when_key_env_value_changes(self, monkeypatch):
+    def test_ollama_cache_fingerprint_changes_when_key_env_value_changes(
+        self, monkeypatch
+    ):
         from clawk_cli.models import _credential_fingerprint
 
         monkeypatch.setenv("TEST_OLLAMA_API_KEY", "ollama-key-a")
@@ -795,24 +903,37 @@ class TestLocalOllamaModelDiscovery:
             "custom": {"models": ["custom-model"]},
             "ollama": {"models": ["ollama-model"]},
         }
-        with patch.object(models, "_load_provider_models_cache", return_value=disk_cache), patch.object(
-            models, "_save_provider_models_cache"
-        ) as save:
+        with (
+            patch.object(
+                models, "_load_provider_models_cache", return_value=disk_cache
+            ),
+            patch.object(models, "_save_provider_models_cache") as save,
+        ):
             models.clear_provider_models_cache("ollama")
         save.assert_called_once_with({"custom": {"models": ["custom-model"]}})
-
 
     def test_ollama_cloud_urls_do_not_use_native_local_catalog(self):
         from clawk_cli.models_local import should_use_ollama_native_catalog
 
-        assert should_use_ollama_native_catalog("ollama-cloud", "https://ollama.com/v1") is False
-        assert should_use_ollama_native_catalog("ollama", "https://ollama.com/v1") is False
+        assert (
+            should_use_ollama_native_catalog("ollama-cloud", "https://ollama.com/v1")
+            is False
+        )
+        assert (
+            should_use_ollama_native_catalog("ollama", "https://ollama.com/v1") is False
+        )
 
     def test_non_ollama_custom_endpoint_uses_generic_catalog_path(self):
         from clawk_cli.models_local import should_use_ollama_native_catalog
 
-        assert should_use_ollama_native_catalog("custom", "https://example.test/v1") is False
-        assert should_use_ollama_native_catalog("openrouter", "http://localhost:11434/v1") is False
+        assert (
+            should_use_ollama_native_catalog("custom", "https://example.test/v1")
+            is False
+        )
+        assert (
+            should_use_ollama_native_catalog("openrouter", "http://localhost:11434/v1")
+            is False
+        )
 
     def test_picker_user_provider_row_discovers_ollama_api_tags(self):
         """providers.ollama with only base_url should still show local Ollama models."""
@@ -855,7 +976,6 @@ class TestLocalOllamaModelDiscovery:
         assert row["models"] == ["qwen3:1.7b", "llama3.2:1b"]
         assert "/api/tags" in _FakeOllamaTagsHandler.paths_seen
         assert "/v1/models" not in _FakeOllamaTagsHandler.paths_seen
-
 
     def test_picker_bare_custom_model_config_discovers_ollama_api_tags(self):
         """The documented model.provider=custom shape should use native tags."""
@@ -900,15 +1020,18 @@ class TestLocalOllamaModelDiscovery:
             return -1
 
         try:
-            with patch("clawk_cli.config.load_config", return_value=config), patch(
-                "clawk_cli.config.save_config"
-            ), patch("clawk_cli.auth._save_model_choice"), patch(
-                "clawk_cli.auth.deactivate_provider"
-            ), patch("clawk_cli.main_provider_setup._save_custom_provider"), patch(
-                "clawk_cli.curses_ui.curses_radiolist",
-                side_effect=cancel_after_capturing_models,
-            ), patch("builtins.input", return_value="manual-fallback"), patch(
-                "builtins.print"
+            with (
+                patch("clawk_cli.config.load_config", return_value=config),
+                patch("clawk_cli.config.save_config"),
+                patch("clawk_cli.auth._save_model_choice"),
+                patch("clawk_cli.auth.deactivate_provider"),
+                patch("clawk_cli.main_provider_setup._save_custom_provider"),
+                patch(
+                    "clawk_cli.curses_ui.curses_radiolist",
+                    side_effect=cancel_after_capturing_models,
+                ),
+                patch("builtins.input", return_value="manual-fallback"),
+                patch("builtins.print"),
             ):
                 _model_flow_named_custom(
                     config,
@@ -935,10 +1058,14 @@ class TestLocalOllamaModelDiscovery:
             return -1
 
         try:
-            with patch("clawk_cli.config.load_config", return_value=config), patch(
-                "clawk_cli.curses_ui.curses_radiolist",
-                side_effect=cancel_after_capturing_models,
-            ), patch("builtins.print"):
+            with (
+                patch("clawk_cli.config.load_config", return_value=config),
+                patch(
+                    "clawk_cli.curses_ui.curses_radiolist",
+                    side_effect=cancel_after_capturing_models,
+                ),
+                patch("builtins.print"),
+            ):
                 _model_flow_named_custom(
                     config,
                     {
@@ -1042,13 +1169,19 @@ class TestLocalOllamaModelDiscovery:
         """Generated custom provider slugs should not block verified :11434 /api/tags discovery."""
         from clawk_cli.model_switch import list_authenticated_providers
 
-        with patch("clawk_cli.config.load_config", return_value={"providers": {}}), patch(
-            "clawk_cli.models_local.probe_ollama_local_models",
-            return_value=["qwen3:1.7b"],
-        ), patch("clawk_cli.models.fetch_api_models", return_value=[]) as fetch_api:
+        with (
+            patch("clawk_cli.config.load_config", return_value={"providers": {}}),
+            patch(
+                "clawk_cli.models_local.probe_ollama_local_models",
+                return_value=["qwen3:1.7b"],
+            ),
+            patch("clawk_cli.models.fetch_api_models", return_value=[]) as fetch_api,
+        ):
             rows = list_authenticated_providers(
                 user_providers={},
-                custom_providers=[{"name": "Local Ollama", "base_url": "http://127.0.0.1:11434/v1"}],
+                custom_providers=[
+                    {"name": "Local Ollama", "base_url": "http://127.0.0.1:11434/v1"}
+                ],
                 max_models=10,
             )
 
@@ -1083,15 +1216,21 @@ class TestLocalOllamaModelDiscovery:
         """provider=ollama with a cloud base URL should not fall into local /api/tags."""
         from clawk_cli.models_validate import validate_requested_model
 
-        with patch(
-            "clawk_cli.config.load_config",
-            return_value={"providers": {"ollama": {"base_url": "https://ollama.com/v1"}}},
-        ), patch("clawk_cli.models_local.probe_ollama_local_models") as probe_ollama, patch(
-            "clawk_cli.models.probe_api_models",
-            return_value={
-                "models": ["qwen3:1.7b"],
-                "probed_url": "https://ollama.com/v1/models",
-            },
+        with (
+            patch(
+                "clawk_cli.config.load_config",
+                return_value={
+                    "providers": {"ollama": {"base_url": "https://ollama.com/v1"}}
+                },
+            ),
+            patch("clawk_cli.models_local.probe_ollama_local_models") as probe_ollama,
+            patch(
+                "clawk_cli.models.probe_api_models",
+                return_value={
+                    "models": ["qwen3:1.7b"],
+                    "probed_url": "https://ollama.com/v1/models",
+                },
+            ),
         ):
             result = validate_requested_model("qwen3:1.7b", "ollama")
 
@@ -1163,12 +1302,15 @@ class TestLocalOllamaModelDiscovery:
         server, port = _start_fake_ollama_server()
         base_url = f"http://127.0.0.1:{port}"
         try:
-            with patch(
-                "clawk_cli.config.load_config",
-                return_value={"providers": {"ollama": {"base_url": base_url}}},
-            ), patch(
-                "clawk_cli.model_switch.get_model_info",
-                return_value=None,
+            with (
+                patch(
+                    "clawk_cli.config.load_config",
+                    return_value={"providers": {"ollama": {"base_url": base_url}}},
+                ),
+                patch(
+                    "clawk_cli.model_switch.get_model_info",
+                    return_value=None,
+                ),
             ):
                 result = switch_model(
                     raw_input="llama3.2:1b",
@@ -1192,24 +1334,28 @@ class TestLocalOllamaModelDiscovery:
         """The Ollama base-url preservation path must not change ordinary custom endpoints."""
         from clawk_cli.model_switch import switch_model
 
-        with patch(
-            "clawk_cli.runtime_provider.resolve_runtime_provider",
-            return_value={
-                "api_key": "new-key",
-                "base_url": "https://custom.example/v1",
-                "api_mode": "chat_completions",
-            },
-        ), patch(
-            "clawk_cli.models_validate.validate_requested_model",
-            return_value={
-                "accepted": True,
-                "persist": True,
-                "recognized": True,
-                "message": None,
-            },
-        ), patch(
-            "clawk_cli.model_switch.get_model_info",
-            return_value=None,
+        with (
+            patch(
+                "clawk_cli.runtime_provider.resolve_runtime_provider",
+                return_value={
+                    "api_key": "new-key",
+                    "base_url": "https://custom.example/v1",
+                    "api_mode": "chat_completions",
+                },
+            ),
+            patch(
+                "clawk_cli.models_validate.validate_requested_model",
+                return_value={
+                    "accepted": True,
+                    "persist": True,
+                    "recognized": True,
+                    "message": None,
+                },
+            ),
+            patch(
+                "clawk_cli.model_switch.get_model_info",
+                return_value=None,
+            ),
         ):
             result = switch_model(
                 raw_input="my-model",
@@ -1225,31 +1371,38 @@ class TestLocalOllamaModelDiscovery:
         assert result.base_url == "https://custom.example/v1"
         assert result.api_key == "new-key"
 
-    def test_switch_model_ollama_precheck_runtime_error_falls_back_to_runtime_resolution(self):
+    def test_switch_model_ollama_precheck_runtime_error_falls_back_to_runtime_resolution(
+        self,
+    ):
         """A native-catalog precheck failure should not abort ordinary /model switching."""
         from clawk_cli.model_switch import switch_model
 
-        with patch(
-            "clawk_cli.models_local.should_use_ollama_native_catalog",
-            side_effect=RuntimeError("config unavailable"),
-        ), patch(
-            "clawk_cli.runtime_provider.resolve_runtime_provider",
-            return_value={
-                "api_key": "new-key",
-                "base_url": "https://custom.example/v1",
-                "api_mode": "chat_completions",
-            },
-        ), patch(
-            "clawk_cli.models_validate.validate_requested_model",
-            return_value={
-                "accepted": True,
-                "persist": True,
-                "recognized": True,
-                "message": None,
-            },
-        ), patch(
-            "clawk_cli.model_switch.get_model_info",
-            return_value=None,
+        with (
+            patch(
+                "clawk_cli.models_local.should_use_ollama_native_catalog",
+                side_effect=RuntimeError("config unavailable"),
+            ),
+            patch(
+                "clawk_cli.runtime_provider.resolve_runtime_provider",
+                return_value={
+                    "api_key": "new-key",
+                    "base_url": "https://custom.example/v1",
+                    "api_mode": "chat_completions",
+                },
+            ),
+            patch(
+                "clawk_cli.models_validate.validate_requested_model",
+                return_value={
+                    "accepted": True,
+                    "persist": True,
+                    "recognized": True,
+                    "message": None,
+                },
+            ),
+            patch(
+                "clawk_cli.model_switch.get_model_info",
+                return_value=None,
+            ),
         ):
             result = switch_model(
                 raw_input="my-model",
@@ -1268,27 +1421,43 @@ class TestLocalOllamaModelDiscovery:
     def test_ollama_root_matching_is_case_insensitive_for_hostnames(self):
         from clawk_cli.models_local import _same_ollama_native_root
 
-        assert _same_ollama_native_root(
-            "HTTP://OLLAMA.EXAMPLE:11434/v1",
-            "http://ollama.example:11434",
-        ) is True
+        assert (
+            _same_ollama_native_root(
+                "HTTP://OLLAMA.EXAMPLE:11434/v1",
+                "http://ollama.example:11434",
+            )
+            is True
+        )
 
     def test_ollama_host_environment_forms_are_normalized(self, monkeypatch):
         from clawk_cli.models import _get_ollama_base_url, _root_for_ollama_native_api
 
         monkeypatch.setenv("OLLAMA_HOST", "0.0.0.0")
-        assert _root_for_ollama_native_api(_get_ollama_base_url()) == "http://0.0.0.0:11434"
+        assert (
+            _root_for_ollama_native_api(_get_ollama_base_url())
+            == "http://0.0.0.0:11434"
+        )
         monkeypatch.setenv("OLLAMA_HOST", ":22434")
-        assert _root_for_ollama_native_api(_get_ollama_base_url()) == "http://127.0.0.1:22434"
+        assert (
+            _root_for_ollama_native_api(_get_ollama_base_url())
+            == "http://127.0.0.1:22434"
+        )
         monkeypatch.setenv("OLLAMA_HOST", "::1")
-        assert _root_for_ollama_native_api(_get_ollama_base_url()) == "http://[::1]:11434"
+        assert (
+            _root_for_ollama_native_api(_get_ollama_base_url()) == "http://[::1]:11434"
+        )
         monkeypatch.setenv("OLLAMA_HOST", "[::1]")
-        assert _root_for_ollama_native_api(_get_ollama_base_url()) == "http://[::1]:11434"
+        assert (
+            _root_for_ollama_native_api(_get_ollama_base_url()) == "http://[::1]:11434"
+        )
         monkeypatch.setenv("OLLAMA_HOST", "http://ollama.example")
         assert _get_ollama_base_url() == "http://ollama.example:11434"
         monkeypatch.setenv("OLLAMA_HOST", "http://user:pass@ollama.example")
         assert _get_ollama_base_url() == "http://user:pass@ollama.example:11434"
-        assert _root_for_ollama_native_api("http://ollama.example/api/tags") == "http://ollama.example"
+        assert (
+            _root_for_ollama_native_api("http://ollama.example/api/tags")
+            == "http://ollama.example"
+        )
 
     def test_ollama_failed_probe_is_cached_briefly(self):
         from clawk_cli import models
@@ -1299,8 +1468,12 @@ class TestLocalOllamaModelDiscovery:
             "clawk_cli.models._urlopen_model_catalog_request",
             side_effect=OSError("offline"),
         ) as request:
-            assert models_local.probe_ollama_local_models("http://127.0.0.1:19999") is None
-            assert models_local.probe_ollama_local_models("http://127.0.0.1:19999") is None
+            assert (
+                models_local.probe_ollama_local_models("http://127.0.0.1:19999") is None
+            )
+            assert (
+                models_local.probe_ollama_local_models("http://127.0.0.1:19999") is None
+            )
         request.assert_called_once()
 
     def test_empty_ollama_catalog_does_not_resurrect_stale_disk_models(self):
@@ -1310,15 +1483,22 @@ class TestLocalOllamaModelDiscovery:
         probe_key = models._ollama_probe_cache_key(base_url, None)
         models._OLLAMA_LOCAL_PROBE_REACHABLE[probe_key] = True
         try:
-            with patch.object(
-                models,
-                "_load_provider_models_cache",
-                return_value={"ollama": {"fp": "same", "at": 0, "models": ["stale:model"]}},
-            ), patch.object(models, "_save_provider_models_cache"), patch.object(
-                models, "_credential_fingerprint", return_value="same"
-            ), patch.object(models, "provider_model_ids", return_value=[]), patch.object(
-                models, "_get_ollama_base_url", return_value=base_url
-            ), patch.object(models_local, "_get_ollama_request_headers", return_value={}):
+            with (
+                patch.object(
+                    models,
+                    "_load_provider_models_cache",
+                    return_value={
+                        "ollama": {"fp": "same", "at": 0, "models": ["stale:model"]}
+                    },
+                ),
+                patch.object(models, "_save_provider_models_cache"),
+                patch.object(models, "_credential_fingerprint", return_value="same"),
+                patch.object(models, "provider_model_ids", return_value=[]),
+                patch.object(models, "_get_ollama_base_url", return_value=base_url),
+                patch.object(
+                    models_local, "_get_ollama_request_headers", return_value={}
+                ),
+            ):
                 assert models.cached_provider_model_ids("ollama") == []
         finally:
             models._OLLAMA_LOCAL_PROBE_REACHABLE.pop(probe_key, None)
@@ -1330,15 +1510,22 @@ class TestLocalOllamaModelDiscovery:
         probe_key = models._ollama_probe_cache_key(base_url, None)
         models._OLLAMA_LOCAL_PROBE_REACHABLE[probe_key] = False
         try:
-            with patch.object(
-                models,
-                "_load_provider_models_cache",
-                return_value={"ollama": {"fp": "same", "at": 0, "models": ["stale:model"]}},
-            ), patch.object(models, "_save_provider_models_cache"), patch.object(
-                models, "_credential_fingerprint", return_value="same"
-            ), patch.object(models, "provider_model_ids", return_value=[]), patch.object(
-                models, "_get_ollama_base_url", return_value=base_url
-            ), patch.object(models_local, "_get_ollama_request_headers", return_value={}):
+            with (
+                patch.object(
+                    models,
+                    "_load_provider_models_cache",
+                    return_value={
+                        "ollama": {"fp": "same", "at": 0, "models": ["stale:model"]}
+                    },
+                ),
+                patch.object(models, "_save_provider_models_cache"),
+                patch.object(models, "_credential_fingerprint", return_value="same"),
+                patch.object(models, "provider_model_ids", return_value=[]),
+                patch.object(models, "_get_ollama_base_url", return_value=base_url),
+                patch.object(
+                    models_local, "_get_ollama_request_headers", return_value={}
+                ),
+            ):
                 assert models.cached_provider_model_ids("ollama") == ["stale:model"]
         finally:
             models._OLLAMA_LOCAL_PROBE_REACHABLE.pop(probe_key, None)
@@ -1357,20 +1544,29 @@ class TestLocalOllamaModelDiscovery:
             ]
         request.assert_called_once()
 
-    def test_validation_with_nonmatching_ollama_root_does_not_forward_config_headers(self):
+    def test_validation_with_nonmatching_ollama_root_does_not_forward_config_headers(
+        self,
+    ):
 
-        with patch(
-            "clawk_cli.config.load_config",
-            return_value={
-                "providers": {
-                    "ollama": {
-                        "base_url": "https://ollama.internal/v1",
-                        "extra_headers": {"Authorization": "Bearer secret"},
+        with (
+            patch(
+                "clawk_cli.config.load_config",
+                return_value={
+                    "providers": {
+                        "ollama": {
+                            "base_url": "https://ollama.internal/v1",
+                            "extra_headers": {"Authorization": "Bearer secret"},
+                        }
                     }
-                }
-            },
-        ), patch.object(models_local, "should_use_ollama_native_catalog", return_value=True), patch.object(models_local, "probe_ollama_local_models", return_value=[]
-        ) as probe:
+                },
+            ),
+            patch.object(
+                models_local, "should_use_ollama_native_catalog", return_value=True
+            ),
+            patch.object(
+                models_local, "probe_ollama_local_models", return_value=[]
+            ) as probe,
+        ):
             models_validate.validate_requested_model(
                 "qwen3:1.7b",
                 "ollama",
@@ -1385,7 +1581,6 @@ class TestLocalOllamaModelDiscovery:
             )
             assert probe.call_args.kwargs["headers"] == {"X-Endpoint-Token": "explicit"}
 
-
     def test_switch_model_direct_ollama_alias_preserves_matching_origin_api_key(self):
         from clawk_cli import model_switch
 
@@ -1396,19 +1591,30 @@ class TestLocalOllamaModelDiscovery:
             model="qwen3:1.7b", provider="ollama", base_url=base_url
         )
         try:
-            with patch.object(model_switch, "get_model_info", return_value=None), patch(
-                "clawk_cli.models._get_provider_config_dict",
-                return_value={"base_url": base_url, "api_key": "secret"},
-            ) as config_provider, patch(
-                "clawk_cli.models_validate.validate_requested_model",
-                return_value={"accepted": True, "persist": True, "recognized": True, "message": ""},
+            with (
+                patch.object(model_switch, "get_model_info", return_value=None),
+                patch(
+                    "clawk_cli.models._get_provider_config_dict",
+                    return_value={"base_url": base_url, "api_key": "secret"},
+                ) as config_provider,
+                patch(
+                    "clawk_cli.models_validate.validate_requested_model",
+                    return_value={
+                        "accepted": True,
+                        "persist": True,
+                        "recognized": True,
+                        "message": "",
+                    },
+                ),
             ):
                 result = model_switch.switch_model(
                     raw_input="remote-qwen",
                     current_provider="openrouter",
                     current_model="old-model",
                     current_api_key="stale-other-endpoint-key",
-                    user_providers={"ollama": {"base_url": base_url, "api_key": "secret"}},
+                    user_providers={
+                        "ollama": {"base_url": base_url, "api_key": "secret"}
+                    },
                     custom_providers=[],
                 )
         finally:
@@ -1429,9 +1635,17 @@ class TestLocalOllamaModelDiscovery:
             model="qwen3:1.7b", provider="ollama", base_url="https://other.internal/v1"
         )
         try:
-            with patch.object(model_switch, "get_model_info", return_value=None), patch(
-                "clawk_cli.models_validate.validate_requested_model",
-                return_value={"accepted": True, "persist": True, "recognized": True, "message": ""},
+            with (
+                patch.object(model_switch, "get_model_info", return_value=None),
+                patch(
+                    "clawk_cli.models_validate.validate_requested_model",
+                    return_value={
+                        "accepted": True,
+                        "persist": True,
+                        "recognized": True,
+                        "message": "",
+                    },
+                ),
             ):
                 result = model_switch.switch_model(
                     raw_input="other-qwen",
@@ -1465,18 +1679,29 @@ class TestOpenRouterCatalogDiskCache:
 
     @staticmethod
     def _install_network(monkeypatch, calls):
-        payload = {"data": [{"id": "a/one", "supported_parameters": ["tools"],
-                             "pricing": {"prompt": "0", "completion": "0"}}]}
+        payload = {
+            "data": [
+                {
+                    "id": "a/one",
+                    "supported_parameters": ["tools"],
+                    "pricing": {"prompt": "0", "completion": "0"},
+                }
+            ]
+        }
 
         def fake_index(url, timeout, opener):
             calls.append(url)
             return payload["data"], {m["id"]: m for m in payload["data"]}
 
         monkeypatch.setattr(_models_mod, "_fetch_live_catalog_index", fake_index)
-        monkeypatch.setattr("clawk_cli.model_catalog.get_curated_openrouter_models",
-                            lambda: [("a/one", "")])
+        monkeypatch.setattr(
+            "clawk_cli.model_catalog.get_curated_openrouter_models",
+            lambda: [("a/one", "")],
+        )
 
-    def test_fresh_snapshot_serves_cold_process_without_network(self, monkeypatch, tmp_path):
+    def test_fresh_snapshot_serves_cold_process_without_network(
+        self, monkeypatch, tmp_path
+    ):
         calls = []
         self._install_network(monkeypatch, calls)
         first = fetch_openrouter_models()
@@ -1487,14 +1712,18 @@ class TestOpenRouterCatalogDiskCache:
         assert fetch_openrouter_models() == first
         assert calls == []
 
-    def test_expired_or_corrupt_snapshot_falls_through_to_fetch(self, monkeypatch, tmp_path):
+    def test_expired_or_corrupt_snapshot_falls_through_to_fetch(
+        self, monkeypatch, tmp_path
+    ):
         calls = []
         self._install_network(monkeypatch, calls)
         path = _models_mod._openrouter_catalog_disk_path()
         path.parent.mkdir(parents=True, exist_ok=True)
 
         stale = time.time() - _models_mod._openrouter_catalog_disk_ttl() - 1
-        path.write_text(json.dumps({"fetched_at": stale, "curated": [["old/model", ""]]}))
+        path.write_text(
+            json.dumps({"fetched_at": stale, "curated": [["old/model", ""]]})
+        )
         assert fetch_openrouter_models() == [("a/one", "free")]
         assert len(calls) == 1
 
@@ -1521,21 +1750,40 @@ class TestAzureFoundryPickerCatalog:
             seen.update(base_url=base_url, credential=credential)
             return True, ["gpt-5.4", "kimi-k2.6"]
 
-        monkeypatch.setattr("clawk_cli.runtime_provider._resolve_azure_foundry_runtime", fake_runtime)
+        monkeypatch.setattr(
+            "clawk_cli.runtime_provider._resolve_azure_foundry_runtime", fake_runtime
+        )
         monkeypatch.setattr("clawk_cli.azure_detect._probe_openai_models", fake_probe)
-        assert _models_mod.provider_model_ids("azure-foundry", force_refresh=True) == ["gpt-5.4", "kimi-k2.6"]
-        assert seen == {"base_url": "https://r.openai.azure.com/openai/v1", "credential": "k"}
+        assert _models_mod.provider_model_ids("azure-foundry", force_refresh=True) == [
+            "gpt-5.4",
+            "kimi-k2.6",
+        ]
+        assert seen == {
+            "base_url": "https://r.openai.azure.com/openai/v1",
+            "credential": "k",
+        }
 
-    def test_probe_miss_or_resolver_error_keeps_the_empty_static_catalog(self, monkeypatch):
-        monkeypatch.setattr("clawk_cli.azure_detect._probe_openai_models", lambda *a, **k: (False, []))
-        monkeypatch.setattr("clawk_cli.runtime_provider._resolve_azure_foundry_runtime",
-                            lambda **_: {"base_url": "https://r.services.ai.azure.com/anthropic", "api_key": "k"})
+    def test_probe_miss_or_resolver_error_keeps_the_empty_static_catalog(
+        self, monkeypatch
+    ):
+        monkeypatch.setattr(
+            "clawk_cli.azure_detect._probe_openai_models", lambda *a, **k: (False, [])
+        )
+        monkeypatch.setattr(
+            "clawk_cli.runtime_provider._resolve_azure_foundry_runtime",
+            lambda **_: {
+                "base_url": "https://r.services.ai.azure.com/anthropic",
+                "api_key": "k",
+            },
+        )
         assert _models_mod.provider_model_ids("azure-foundry", force_refresh=True) == []
 
         def raising(**_):
             raise RuntimeError("Azure Foundry requires a base URL")
 
-        monkeypatch.setattr("clawk_cli.runtime_provider._resolve_azure_foundry_runtime", raising)
+        monkeypatch.setattr(
+            "clawk_cli.runtime_provider._resolve_azure_foundry_runtime", raising
+        )
         assert _models_mod.provider_model_ids("azure-foundry", force_refresh=True) == []
 
     def test_disk_cache_fingerprint_tracks_the_configured_resource(self, monkeypatch):
@@ -1543,11 +1791,23 @@ class TestAzureFoundryPickerCatalog:
         serve the previous resource's catalog for the TTL window (same rule as openai's effective_base)."""
         monkeypatch.delenv("AZURE_FOUNDRY_API_KEY", raising=False)
         monkeypatch.delenv("AZURE_FOUNDRY_BASE_URL", raising=False)
-        monkeypatch.setattr(_models_mod, "_get_model_config_dict",
-                            lambda: {"provider": "azure-foundry", "base_url": "https://a.openai.azure.com/openai/v1"})
+        monkeypatch.setattr(
+            _models_mod,
+            "_get_model_config_dict",
+            lambda: {
+                "provider": "azure-foundry",
+                "base_url": "https://a.openai.azure.com/openai/v1",
+            },
+        )
         fp_a = _models_mod._credential_fingerprint("azure-foundry")
-        monkeypatch.setattr(_models_mod, "_get_model_config_dict",
-                            lambda: {"provider": "azure-foundry", "base_url": "https://b.openai.azure.com/openai/v1"})
+        monkeypatch.setattr(
+            _models_mod,
+            "_get_model_config_dict",
+            lambda: {
+                "provider": "azure-foundry",
+                "base_url": "https://b.openai.azure.com/openai/v1",
+            },
+        )
         assert _models_mod._credential_fingerprint("azure-foundry") != fp_a
 
 

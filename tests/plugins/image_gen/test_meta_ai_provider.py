@@ -65,17 +65,12 @@ def _patched_openai(fake_client: MagicMock):
 
 
 class TestMetadata:
-
-
-
-
     def test_catalog_entries_have_display_speed_strengths_price(self, provider):
         for entry in provider.list_models():
             assert entry["display"]
             assert entry["speed"]
             assert entry["strengths"]
             assert entry["price"]
-
 
 
 # ── Availability ────────────────────────────────────────────────────────────
@@ -104,7 +99,6 @@ class TestResolution:
         monkeypatch.setenv("MODEL_API_KEY", "first")
         assert meta_plugin._resolve_api_key() == "first"
 
-
     def test_base_url_override(self, monkeypatch):
         monkeypatch.setenv("META_BASE_URL", "https://proxy.internal/v1")
         assert meta_plugin._resolve_base_url() == "https://proxy.internal/v1"
@@ -112,13 +106,22 @@ class TestResolution:
     def test_base_url_follows_the_profile_secret_scope(self, monkeypatch):
         """Under multiplexing os.environ is the launch profile's: a routed profile's key must go to
         ITS base URL, and a profile without an override gets the default — never the launch URL."""
-        from agent.secret_scope import reset_secret_scope, set_multiplex_active, set_secret_scope
+        from agent.secret_scope import (
+            reset_secret_scope,
+            set_multiplex_active,
+            set_secret_scope,
+        )
 
         monkeypatch.setenv("META_BASE_URL", "https://launch.example/v1")
         set_multiplex_active(True)
         try:
-            for scope, expected in (({"META_BASE_URL": "https://profile-b.example/v1"}, "https://profile-b.example/v1"),
-                                    ({}, "https://api.meta.ai/v1")):
+            for scope, expected in (
+                (
+                    {"META_BASE_URL": "https://profile-b.example/v1"},
+                    "https://profile-b.example/v1",
+                ),
+                ({}, "https://api.meta.ai/v1"),
+            ):
                 token = set_secret_scope(scope)
                 try:
                     assert meta_plugin._resolve_base_url() == expected
@@ -132,7 +135,6 @@ class TestResolution:
 
 
 class TestModelResolution:
-
     def test_env_var_override_ignores_unknown(self, monkeypatch):
         monkeypatch.setenv("META_IMAGE_MODEL", "not-a-real-model")
         model_id, _meta = meta_plugin._resolve_model()
@@ -174,7 +176,6 @@ class TestGenerate:
         assert (
             fake_client.images.generate.call_args.kwargs["model"] == "muse-image-test"
         )
-
 
     def test_empty_prompt_rejected(self, provider):
         result = provider.generate("", aspect_ratio="square")

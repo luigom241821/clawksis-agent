@@ -20,7 +20,9 @@ import sys
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_REPO_ROOT = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
@@ -43,11 +45,14 @@ def _fake_parent(client, *, runtime=None) -> SimpleNamespace:
         disabled_toolsets=None,
         reasoning_config=None,
         _credential_pool=None,
-        _current_main_runtime=lambda: runtime or {
-            "api_key": "k",
-            "base_url": "acp://agent",
-            "api_mode": "chat_completions",
-        },
+        _current_main_runtime=lambda: (
+            runtime
+            or {
+                "api_key": "k",
+                "base_url": "acp://agent",
+                "api_mode": "chat_completions",
+            }
+        ),
         _emit_auxiliary_failure=lambda *_a, **_k: None,
         _safe_print=lambda *_a, **_k: None,
         background_review_callback=None,
@@ -89,8 +94,6 @@ def test_ordinary_providers_are_unaffected():
         pass
 
     assert _run(_fake_parent(_PlainClient())).called
-
-
 
 
 def test_an_incapable_provider_still_reviews_when_the_review_is_routed_away():

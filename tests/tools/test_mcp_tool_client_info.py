@@ -5,6 +5,7 @@ import pytest
 
 def test_session_kwargs_carry_clawk_client_identity():
     from tools.mcp_tool import MCPServerTask, _ensure_mcp_sdk
+
     if not _ensure_mcp_sdk():
         pytest.skip("mcp SDK not installed")
     from clawk_cli.version_info import get_version_info

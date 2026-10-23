@@ -74,9 +74,12 @@ def test_add_accepts_legacy_consecutive_hyphen_login(emails_dir):
     # Legacy GitHub accounts with consecutive hyphens are real (Roger--Han);
     # current signup rules forbid them but existing logins remain valid.
     assert add_contributor("roger.hanhong@gmail.com", "Roger--Han") == 0
-    assert (emails_dir / "roger.hanhong@gmail.com").read_text(
-        encoding="utf-8"
-    ).strip().endswith("Roger--Han")
+    assert (
+        (emails_dir / "roger.hanhong@gmail.com")
+        .read_text(encoding="utf-8")
+        .strip()
+        .endswith("Roger--Han")
+    )
 
 
 def test_add_strips_at_prefix(emails_dir):
@@ -99,13 +102,22 @@ def test_cli_entrypoint_end_to_end(tmp_path):
     (scripts / "releases").mkdir()
     (scripts / "releases" / "authors_legacy.py").write_text("LEGACY_AUTHOR_MAP = {}\n")
     proc = subprocess.run(
-        [sys.executable, str(scripts / "add_contributor.py"),
-         "cli@example.com", "cliperson", "via subprocess"],
-        cwd=tmp_path, capture_output=True, text=True,
+        [
+            sys.executable,
+            str(scripts / "add_contributor.py"),
+            "cli@example.com",
+            "cliperson",
+            "via subprocess",
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
         check=False,
     )
     assert proc.returncode == 0, proc.stderr
-    out = (tmp_path / "contributors" / "emails" / "cli@example.com").read_text(encoding="utf-8")
+    out = (tmp_path / "contributors" / "emails" / "cli@example.com").read_text(
+        encoding="utf-8"
+    )
     assert out.splitlines()[0] == "cliperson"
 
 

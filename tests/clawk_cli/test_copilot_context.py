@@ -67,7 +67,6 @@ class TestGetCopilotModelContext:
         assert get_copilot_model_context("claude-opus-4.6-1m") == 1_000_000
         assert get_copilot_model_context("gpt-4.1") == 128_000
 
-
     @patch("clawk_cli.models.fetch_github_model_catalog", return_value=_SAMPLE_CATALOG)
     def test_cache_expires(self, mock_fetch):
         import clawk_cli.models as mod
@@ -79,8 +78,6 @@ class TestGetCopilotModelContext:
         mod._copilot_context_cache_time = time.time() - 7200
         get_copilot_model_context("gpt-4.1")
         assert mock_fetch.call_count == 2
-
-
 
     @patch("clawk_cli.models._urlopen_model_catalog_request")
     def test_fetch_github_model_catalog_uses_short_lived_cache(self, mock_urlopen):
@@ -104,8 +101,10 @@ class TestGetCopilotModelContext:
         class _Resp:
             def __enter__(self):
                 return self
+
             def __exit__(self, *args):
                 return False
+
             def read(self):
                 return _json.dumps(payload).encode()
 
@@ -148,8 +147,10 @@ class TestGetCopilotModelContext:
         class _Resp:
             def __enter__(self):
                 return self
+
             def __exit__(self, *args):
                 return False
+
             def read(self):
                 return _json.dumps(payload).encode()
 
@@ -166,7 +167,9 @@ class TestGetCopilotModelContext:
         assert mock_urlopen.call_count == 2
 
     @patch("clawk_cli.models._urlopen_model_catalog_request")
-    def test_fetch_github_model_catalog_cache_misses_on_credential_change(self, mock_urlopen):
+    def test_fetch_github_model_catalog_cache_misses_on_credential_change(
+        self, mock_urlopen
+    ):
         import json as _json
         import clawk_cli.models as mod
 
@@ -187,8 +190,10 @@ class TestGetCopilotModelContext:
         class _Resp:
             def __enter__(self):
                 return self
+
             def __exit__(self, *args):
                 return False
+
             def read(self):
                 return _json.dumps(payload).encode()
 
@@ -214,5 +219,3 @@ class TestModelMetadataCopilotIntegration:
 
         ctx = get_model_context_length("claude-opus-4.6-1m", provider="copilot")
         assert ctx == 1_000_000
-
-

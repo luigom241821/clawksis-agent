@@ -91,9 +91,7 @@ def _source(chat_id="555001") -> SessionSource:
 
 
 def _store(tmp_path) -> SessionStore:
-    config = GatewayConfig(
-
-    )
+    config = GatewayConfig()
     return SessionStore(sessions_dir=tmp_path, config=config)
 
 
@@ -165,7 +163,9 @@ async def test_alive_session_keeps_priority_interrupt_path(tmp_path):
     cold_path = AsyncMock(return_value="COLD_PATH_REPLY")
     with (
         patch.object(GatewayRunner, "_handle_message_with_agent", cold_path),
-        patch.object(GatewayRunner, "_agent_has_active_subagents", lambda self, a: False),
+        patch.object(
+            GatewayRunner, "_agent_has_active_subagents", lambda self, a: False
+        ),
         patch.object(
             GatewayRunner,
             "_session_has_compression_in_flight",
@@ -198,7 +198,9 @@ async def test_guard_is_inert_with_stubbed_session_store(tmp_path):
     )
 
     with (
-        patch.object(GatewayRunner, "_agent_has_active_subagents", lambda self, a: False),
+        patch.object(
+            GatewayRunner, "_agent_has_active_subagents", lambda self, a: False
+        ),
         patch.object(
             GatewayRunner,
             "_session_has_compression_in_flight",

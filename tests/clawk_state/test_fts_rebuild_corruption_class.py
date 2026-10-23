@@ -56,15 +56,24 @@ def test_corruption_class_error_is_caught_and_reported(
     The call must return 0 (no progress) rather than propagate, and only a malformed-image
     error earns the offline-repair hint — an IntegrityError is not corruption."""
     monkeypatch.setattr(
-        db._conn, "execute", _corrupting_execute(lambda sql: True, error=error)(db._conn.execute)
+        db._conn,
+        "execute",
+        _corrupting_execute(lambda sql: True, error=error)(db._conn.execute),
     )
     with caplog.at_level("WARNING"):
         assert db.rebuild_fts() == 0
-    assert any("clawk sessions repair" in rec.message for rec in caplog.records) is repair_hint
+    assert (
+        any("clawk sessions repair" in rec.message for rec in caplog.records)
+        is repair_hint
+    )
 
 
-@pytest.mark.parametrize("method,command", [("rebuild_fts", "rebuild"), ("optimize_fts", "optimize")])
-def test_one_corrupt_index_does_not_stop_the_remaining_indexes(db, monkeypatch, method, command):
+@pytest.mark.parametrize(
+    "method,command", [("rebuild_fts", "rebuild"), ("optimize_fts", "optimize")]
+)
+def test_one_corrupt_index_does_not_stop_the_remaining_indexes(
+    db, monkeypatch, method, command
+):
     """Only messages_fts is corrupt; trigram/cjk must still be processed — the loop survives
     a corruption-class failure on one index. The trailing ``(`` keeps the match off
     ``messages_fts_trigram``/``_cjk``. optimize_fts() shares the per-index loop shape."""
@@ -72,8 +81,8 @@ def test_one_corrupt_index_does_not_stop_the_remaining_indexes(db, monkeypatch, 
     monkeypatch.setattr(
         db._conn,
         "execute",
-        _corrupting_execute(lambda sql: sql.startswith("INSERT INTO messages_fts("), command)(
-            db._conn.execute
-        ),
+        _corrupting_execute(
+            lambda sql: sql.startswith("INSERT INTO messages_fts("), command
+        )(db._conn.execute),
     )
     assert getattr(db, method)() == expected

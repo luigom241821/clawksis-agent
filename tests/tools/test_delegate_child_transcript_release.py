@@ -79,8 +79,6 @@ def test_bind_subagent_parent_does_not_pin_agent():
     assert probe() is None, "Context snapshot still pins the agent"
 
 
-
-
 def _fake_child(messages):
     child = MagicMock()
     child._credential_pool = None

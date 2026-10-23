@@ -42,7 +42,9 @@ def _child_env():
 
 
 class TestMultiplexedClawkHome:
-    def test_override_rewrites_stale_server_default_per_turn(self, monkeypatch, home_override, tmp_path):
+    def test_override_rewrites_stale_server_default_per_turn(
+        self, monkeypatch, home_override, tmp_path
+    ):
         """The reported bug: a child must see the ACTIVE profile's home, not the server default,
         and sequential turns for different profiles each see their own."""
         monkeypatch.setenv("CLAWK_HOME", "/machine/default/.clawk")

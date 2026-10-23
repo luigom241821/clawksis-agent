@@ -33,8 +33,6 @@ class RecordingTransport:
 
 
 class TestStreamIsMessageGating:
-
-
     @pytest.mark.asyncio
     async def test_telegram_final_is_a_real_send_not_a_seal(self):
         """The B4 probe: telegram + draft op → frames go out as drafts,

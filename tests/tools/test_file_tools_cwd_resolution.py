@@ -43,7 +43,9 @@ def _isolated_cwd(tmp_path, monkeypatch):
     return workspace, decoy
 
 
-def test_relative_terminal_cwd_anchors_to_absolute_not_process_cwd(_isolated_cwd, monkeypatch):
+def test_relative_terminal_cwd_anchors_to_absolute_not_process_cwd(
+    _isolated_cwd, monkeypatch
+):
     """TERMINAL_CWD='.' must NOT silently mean 'the agent process cwd'.
 
     A relative base is meaningless as a resolution anchor. The resolver must
@@ -91,7 +93,9 @@ def test_absolute_terminal_cwd_used_verbatim(_isolated_cwd, monkeypatch):
     assert resolved == (workspace / "target.py")
 
 
-def test_container_absolute_input_path_does_not_follow_host_symlink(tmp_path, monkeypatch):
+def test_container_absolute_input_path_does_not_follow_host_symlink(
+    tmp_path, monkeypatch
+):
     """Docker paths are sandbox-local and must not be host-dereferenced.
 
     A user may have a host symlink at a container-looking path such as
@@ -103,7 +107,9 @@ def test_container_absolute_input_path_does_not_follow_host_symlink(tmp_path, mo
     host_project.mkdir()
     container_mount = tmp_path / "workspace-projects"
     container_mount.symlink_to(host_project, target_is_directory=True)
-    monkeypatch.setattr(terminal_tool, "_get_env_config", lambda: {"env_type": "docker"})
+    monkeypatch.setattr(
+        terminal_tool, "_get_env_config", lambda: {"env_type": "docker"}
+    )
     monkeypatch.setattr(terminal_tool, "_active_environments", {})
 
     container_path = container_mount / "oilsands-sim" / "README.md"
@@ -126,7 +132,9 @@ def test_container_relative_path_keeps_container_cwd_symlink(tmp_path, monkeypat
     host_project.mkdir()
     container_mount = tmp_path / "workspace-projects"
     container_mount.symlink_to(host_project, target_is_directory=True)
-    monkeypatch.setattr(terminal_tool, "_get_env_config", lambda: {"env_type": "docker"})
+    monkeypatch.setattr(
+        terminal_tool, "_get_env_config", lambda: {"env_type": "docker"}
+    )
     monkeypatch.setattr(terminal_tool, "_active_environments", {})
     terminal_tool.record_session_cwd("default", str(container_mount))
 
@@ -159,7 +167,9 @@ def test_warning_fires_when_relative_path_escapes_workspace(_isolated_cwd, monke
     terminal_tool.record_session_cwd("default", str(workspace))
     resolved_in_decoy = decoy / "target.py"
 
-    warn = ftp._path_resolution_warning("target.py", resolved_in_decoy, task_id="default")
+    warn = ftp._path_resolution_warning(
+        "target.py", resolved_in_decoy, task_id="default"
+    )
 
     assert warn is not None
     assert str(decoy) in warn
@@ -175,7 +185,9 @@ def test_warning_fires_when_relative_path_escapes_workspace(_isolated_cwd, monke
 # anchoring + early warning.)
 
 
-def test_warning_fires_from_terminal_cwd_when_registry_empty(_isolated_cwd, monkeypatch):
+def test_warning_fires_from_terminal_cwd_when_registry_empty(
+    _isolated_cwd, monkeypatch
+):
     """Divergence warning must fire even before any terminal command runs.
 
     PR #35399's warning required a live terminal cwd; a fresh worktree session
@@ -303,20 +315,28 @@ def test_v4a_patch_applies_to_resolved_workspace_not_backend_cwd(
 
 
 @pytest.mark.platforms("posix")
-@pytest.mark.parametrize("header,safe_root,content,dest", [
-    ("*** Delete File: local.yaml", False, "shared: true\n", None),
-    # A trailing separator or "." must still name the link, not fall back to its target.
-    ("*** Delete File: local.yaml/", False, "shared: true\n", None),
-    ("*** Delete File: local.yaml/.", False, "shared: true\n", None),
-    ("*** Move File: local.yaml -> old.yaml", False, "shared: true\n", "old.yaml"),
-    ("*** Update File: local.yaml\n@@\n-shared: true\n+shared: false\n*** Move File: local.yaml -> old.yaml",
-     False, "shared: false\n", "old.yaml"),
-    # The link lives outside CLAWK_WRITE_SAFE_ROOT but points inside it: guarding
-    # only the target would let the delete remove an entry outside the root.
-    ("*** Delete File: local.yaml", True, "shared: true\n", None),
-])
+@pytest.mark.parametrize(
+    "header,safe_root,content,dest",
+    [
+        ("*** Delete File: local.yaml", False, "shared: true\n", None),
+        # A trailing separator or "." must still name the link, not fall back to its target.
+        ("*** Delete File: local.yaml/", False, "shared: true\n", None),
+        ("*** Delete File: local.yaml/.", False, "shared: true\n", None),
+        ("*** Move File: local.yaml -> old.yaml", False, "shared: true\n", "old.yaml"),
+        (
+            "*** Update File: local.yaml\n@@\n-shared: true\n+shared: false\n*** Move File: local.yaml -> old.yaml",
+            False,
+            "shared: false\n",
+            "old.yaml",
+        ),
+        # The link lives outside CLAWK_WRITE_SAFE_ROOT but points inside it: guarding
+        # only the target would let the delete remove an entry outside the root.
+        ("*** Delete File: local.yaml", True, "shared: true\n", None),
+    ],
+)
 def test_v4a_delete_and_move_act_on_a_symlink_not_its_target(
-        _isolated_cwd, monkeypatch, header, safe_root, content, dest):
+    _isolated_cwd, monkeypatch, header, safe_root, content, dest
+):
     """Delete and Move act on the directory entry. Resolving a symlinked header to its
     target deleted or renamed the real file and left the link dangling; an Update still
     edits the target's content through the link. The write guards cover the entry too."""
@@ -330,7 +350,9 @@ def test_v4a_delete_and_move_act_on_a_symlink_not_its_target(
     monkeypatch.setattr(ft, "_file_ops_cache", {})
     terminal_tool.register_task_env_overrides(task_id, {"cwd": str(workspace)})
     env = LocalEnvironment(cwd=str(workspace))
-    monkeypatch.setattr(ft, "_get_file_ops", lambda task_id="default": ShellFileOperations(env))
+    monkeypatch.setattr(
+        ft, "_get_file_ops", lambda task_id="default": ShellFileOperations(env)
+    )
     (workspace / "safe").mkdir()
     target, link = workspace / "safe" / "base.yaml", workspace / "local.yaml"
     target.write_text("shared: true\n", encoding="utf-8")
@@ -338,13 +360,20 @@ def test_v4a_delete_and_move_act_on_a_symlink_not_its_target(
     if safe_root:
         monkeypatch.setenv("CLAWK_WRITE_SAFE_ROOT", str(workspace / "safe"))
 
-    out = json.loads(registry.dispatch(
-        "patch", {"mode": "patch", "patch": f"*** Begin Patch\n{header}\n*** End Patch\n"}, task_id=task_id))
+    out = json.loads(
+        registry.dispatch(
+            "patch",
+            {"mode": "patch", "patch": f"*** Begin Patch\n{header}\n*** End Patch\n"},
+            task_id=task_id,
+        )
+    )
 
     assert target.is_file() and not target.is_symlink()
     assert target.read_text(encoding="utf-8-sig") == content
     if safe_root:
-        assert not out.get("success") and "CLAWK_WRITE_SAFE_ROOT" in json.dumps(out), out
+        assert not out.get("success") and "CLAWK_WRITE_SAFE_ROOT" in json.dumps(out), (
+            out
+        )
         assert link.is_symlink()
         return
     assert out.get("success"), out
@@ -354,14 +383,20 @@ def test_v4a_delete_and_move_act_on_a_symlink_not_its_target(
         assert os.readlink(workspace / dest) == "safe/base.yaml"
 
 
-@pytest.mark.parametrize("live_cwd", [None, "/srv/project-a"], ids=["no-env", "shared-env-moved"])
-def test_container_relative_path_without_a_recorded_cwd_uses_the_backend_cwd(_isolated_cwd, monkeypatch, live_cwd):
+@pytest.mark.parametrize(
+    "live_cwd", [None, "/srv/project-a"], ids=["no-env", "shared-env-moved"]
+)
+def test_container_relative_path_without_a_recorded_cwd_uses_the_backend_cwd(
+    _isolated_cwd, monkeypatch, live_cwd
+):
     """A container session with no recorded cwd resolves relative paths against the backend's configured cwd, the
     same place its terminal commands start: never the process cwd (a host dir such as ``/opt/data`` the sandbox
     lacks), and never a shared env's live cwd (wherever ANOTHER session last ``cd``'d)."""
     _workspace, decoy = _isolated_cwd
     monkeypatch.delenv("TERMINAL_CWD", raising=False)
-    monkeypatch.setattr(terminal_tool, "_get_env_config", lambda: {"env_type": "modal", "cwd": "/root"})
+    monkeypatch.setattr(
+        terminal_tool, "_get_env_config", lambda: {"env_type": "modal", "cwd": "/root"}
+    )
     envs = {}
     if live_cwd:
         envs["default"] = type("ModalEnvironment", (), {"cwd": live_cwd})()
@@ -369,7 +404,8 @@ def test_container_relative_path_without_a_recorded_cwd_uses_the_backend_cwd(_is
 
     resolved = ftp._resolve_path_for_task("notes/todo.md", task_id="b")
     command_cwd = terminal_tool._resolve_command_cwd(
-        workdir=None, default_cwd="/root", session_key="b", env_type="modal")
+        workdir=None, default_cwd="/root", session_key="b", env_type="modal"
+    )
 
     assert resolved == PurePosixPath("/root") / "notes" / "todo.md"
     assert resolved.parent.parent == PurePosixPath(command_cwd)

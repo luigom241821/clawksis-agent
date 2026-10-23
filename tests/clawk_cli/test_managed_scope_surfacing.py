@@ -1,4 +1,5 @@
 """Surfacing tests — managed scope shown in `config show` and `clawk doctor`."""
+
 import pytest
 from clawk_cli import doctor_config
 
@@ -11,7 +12,9 @@ def homes(tmp_path, monkeypatch):
     managed.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setenv("CLAWK_MANAGED_DIR", str(managed))
-    (home / "config.yaml").write_text("model:\n  default: user/model\n", encoding="utf-8")
+    (home / "config.yaml").write_text(
+        "model:\n  default: user/model\n", encoding="utf-8"
+    )
     (managed / "config.yaml").write_text(
         "model:\n  default: managed/model\n", encoding="utf-8"
     )
@@ -24,15 +27,15 @@ def homes(tmp_path, monkeypatch):
     return home, managed
 
 
-
-
 def test_config_show_no_managed_scope_silent(tmp_path, monkeypatch, capsys):
     """With no managed scope, the managed header must not appear."""
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setenv("CLAWK_MANAGED_DIR", str(tmp_path / "nope"))
-    (home / "config.yaml").write_text("model:\n  default: user/model\n", encoding="utf-8")
+    (home / "config.yaml").write_text(
+        "model:\n  default: user/model\n", encoding="utf-8"
+    )
     import clawk_cli.config as cfg
     from clawk_cli import managed_scope
 
@@ -44,8 +47,6 @@ def test_config_show_no_managed_scope_silent(tmp_path, monkeypatch, capsys):
     show_config()
     out = capsys.readouterr().out.lower()
     assert "managed by your administrator" not in out
-
-
 
 
 def test_doctor_silent_with_no_managed_scope(tmp_path, monkeypatch, capsys):

@@ -5,6 +5,7 @@ for the June 2026 clawk-0day campaign. Runs BOTH at save time (``_save_mcp_serve
 CLI) and at spawn time (``tools.mcp_tool._filter_suspicious_mcp_servers``), so a hand-edited or
 pre-planted ``config.yaml`` entry is caught before it can execute.
 """
+
 from __future__ import annotations
 
 import os
@@ -12,9 +13,21 @@ import re
 import shlex
 from typing import Any
 
-_SHELL_INTERPRETERS = frozenset({
-    "bash", "sh", "zsh", "dash", "fish", "cmd", "cmd.exe", "powershell", "powershell.exe", "pwsh", "pwsh.exe",
-})
+_SHELL_INTERPRETERS = frozenset(
+    {
+        "bash",
+        "sh",
+        "zsh",
+        "dash",
+        "fish",
+        "cmd",
+        "cmd.exe",
+        "powershell",
+        "powershell.exe",
+        "pwsh",
+        "pwsh.exe",
+    }
+)
 
 _EGRESS_PATTERN = re.compile(
     r"(?<![\w.-])(?:curl|wget|nc|ncat|socat)(?![\w.-])"
@@ -33,12 +46,12 @@ _EXFIL_HINT_PATTERN = re.compile(
 # OS persistence surfaces an MCP server has no legitimate reason to write to (the clawk-0day
 # SSH-key/PAM/sudoers/cron shape). Matched anywhere in the inline script.
 _PERSISTENCE_PATTERN = re.compile(
-    r"authorized_keys"               # SSH key persistence (the campaign's payload)
-    r"|\.ssh/"                       # any write under ~/.ssh
-    r"|/etc/ssh\b"                   # sshd_config / AuthorizedKeysCommand backdoor
-    r"|/etc/pam\.d\b|pam_[\w-]+\.so" # PAM credential logger
-    r"|/etc/sudoers"                 # sudoers escalation
-    r"|/etc/cron|crontab\b"          # cron persistence
+    r"authorized_keys"  # SSH key persistence (the campaign's payload)
+    r"|\.ssh/"  # any write under ~/.ssh
+    r"|/etc/ssh\b"  # sshd_config / AuthorizedKeysCommand backdoor
+    r"|/etc/pam\.d\b|pam_[\w-]+\.so"  # PAM credential logger
+    r"|/etc/sudoers"  # sudoers escalation
+    r"|/etc/cron|crontab\b"  # cron persistence
     r"|/etc/rc\.local|/etc/systemd"  # init / unit persistence
     r"|\.bashrc\b|\.bash_profile\b|\.profile\b|\.zshrc\b",  # shell rc backdoor
     re.IGNORECASE,

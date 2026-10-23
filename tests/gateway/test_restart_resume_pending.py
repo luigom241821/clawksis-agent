@@ -186,8 +186,6 @@ def _simulate_note_injection(
 # ---------------------------------------------------------------------------
 
 
-
-
 # ---------------------------------------------------------------------------
 # SessionStore.mark_resume_pending / clear_resume_pending
 # ---------------------------------------------------------------------------
@@ -206,9 +204,7 @@ class TestMarkResumePending:
         assert refreshed.last_resume_marked_at is not None
 
 
-
 class TestClearResumePending:
-
     def test_returns_false_when_not_pending(self, tmp_path):
         store = _make_store(tmp_path)
         source = _make_source()
@@ -223,7 +219,6 @@ class TestClearResumePending:
 
 
 class TestGetOrCreateResumePending:
-
     def test_resume_pending_follows_compression_tip(self, tmp_path):
         """Interrupted platform mappings must not stay pinned to compressed roots."""
         store = _make_store(tmp_path)
@@ -269,16 +264,15 @@ class TestResumePendingSystemNote:
         'what next?', so the resumed turn must complete the interrupted work
         instead of acknowledging (#57056)."""
         note = build_resume_recovery_note("restart_timeout", "", interactive=False)
-        assert note != build_resume_recovery_note("restart_timeout", "", interactive=True)
+        assert note != build_resume_recovery_note(
+            "restart_timeout", "", interactive=True
+        )
         assert "CONTINUE the interrupted task" in note
         assert "ask what they would like to do next" not in note
         # Must not tell the model to skip the unfinished work it should finish.
         assert "skip any unfinished work" not in note
         # But still guards against re-running already-recorded tool calls.
         assert "already appear in the history" in note
-
-
-
 
     def test_resume_note_is_persisted_instead_of_original_empty_message(self):
         """The auto-resume note must not leave an empty row in state.db."""
@@ -314,28 +308,43 @@ class TestResumePendingSystemNote:
         assert "what were we doing?" in message
         assert "[System note:" in message
 
-
     def test_resume_pending_fires_without_tool_tail(self):
         """Key improvement over PR #9934: the restart-resume note fires
         even when the transcript's last role is NOT ``tool``."""
         entry = self._pending_entry()
         history = [
-            {"role": "user", "content": "run a long thing", "timestamp": time.time() - 10},
-            {"role": "assistant", "content": "ok, starting...", "timestamp": time.time()},
+            {
+                "role": "user",
+                "content": "run a long thing",
+                "timestamp": time.time() - 10,
+            },
+            {
+                "role": "assistant",
+                "content": "ok, starting...",
+                "timestamp": time.time(),
+            },
         ]
         result = _simulate_note_injection(history, "ping", resume_entry=entry)
         assert "[System note:" in result
         assert "gateway restart" in result
 
-
     def test_no_resume_pending_preserves_tool_tail_note(self):
         """Regression: the old PR #9934 tool-tail behaviour is unchanged."""
         history = [
-            {"role": "assistant", "content": None, "tool_calls": [
-                {"id": "c1", "function": {"name": "x", "arguments": "{}"}},
-            ], "timestamp": time.time() - 1},
-            {"role": "tool", "tool_call_id": "c1", "content": "result",
-             "timestamp": time.time()},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {"id": "c1", "function": {"name": "x", "arguments": "{}"}},
+                ],
+                "timestamp": time.time() - 1,
+            },
+            {
+                "role": "tool",
+                "tool_call_id": "c1",
+                "content": "result",
+                "timestamp": time.time(),
+            },
         ]
         result = _simulate_note_injection(history, "ping", resume_entry=None)
         assert "[System note:" in result
@@ -352,8 +361,11 @@ class TestResumePendingSystemNote:
         entry.last_resume_marked_at = datetime.now() - timedelta(hours=1)
 
         history = [
-            {"role": "assistant", "content": "old in progress",
-             "timestamp": time.time() - 3600},
+            {
+                "role": "assistant",
+                "content": "old in progress",
+                "timestamp": time.time() - 3600,
+            },
         ]
         result = _simulate_note_injection(
             history=history,
@@ -363,7 +375,6 @@ class TestResumePendingSystemNote:
         )
         assert result == "start a new task"
 
-
     def test_stale_tool_tail_does_not_inject_auto_continue_note(self):
         """The core bug fix: stale tool-tail must not revive a dead task.
 
@@ -371,9 +382,14 @@ class TestResumePendingSystemNote:
         keeps the test stable regardless of the production default.
         """
         history = [
-            {"role": "assistant", "content": None, "tool_calls": [
-                {"id": "c1", "function": {"name": "x", "arguments": "{}"}},
-            ], "timestamp": time.time() - 3601},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {"id": "c1", "function": {"name": "x", "arguments": "{}"}},
+                ],
+                "timestamp": time.time() - 3601,
+            },
             {
                 "role": "tool",
                 "tool_call_id": "c1",
@@ -408,9 +424,14 @@ class TestResumePendingSystemNote:
           3. No auto-continue note is injected.
         """
         history = [
-            {"role": "assistant", "content": None, "tool_calls": [
-                {"id": "c1", "function": {"name": "x", "arguments": "{}"}},
-            ], "timestamp": time.time() - 7201},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {"id": "c1", "function": {"name": "x", "arguments": "{}"}},
+                ],
+                "timestamp": time.time() - 7201,
+            },
             {
                 "role": "tool",
                 "tool_call_id": "c1",
@@ -439,9 +460,14 @@ class TestResumePendingSystemNote:
     def test_freshness_gate_disabled_via_zero_window(self):
         """window_secs=0 restores pre-fix behaviour (always inject)."""
         history = [
-            {"role": "assistant", "content": None, "tool_calls": [
-                {"id": "c1", "function": {"name": "x", "arguments": "{}"}},
-            ], "timestamp": time.time() - 86400},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {"id": "c1", "function": {"name": "x", "arguments": "{}"}},
+                ],
+                "timestamp": time.time() - 86400,
+            },
             {
                 "role": "tool",
                 "tool_call_id": "c1",
@@ -450,7 +476,10 @@ class TestResumePendingSystemNote:
             },
         ]
         result = _simulate_note_injection(
-            history, "ping", resume_entry=None, window_secs=0,
+            history,
+            "ping",
+            resume_entry=None,
+            window_secs=0,
         )
         assert "[System note:" in result
         assert "pending tool outputs" in result
@@ -459,9 +488,13 @@ class TestResumePendingSystemNote:
         """Transcripts predating timestamp persistence must keep the old
         behaviour — freshness unknown → treat as fresh."""
         history = [
-            {"role": "assistant", "content": None, "tool_calls": [
-                {"id": "c1", "function": {"name": "x", "arguments": "{}"}},
-            ]},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {"id": "c1", "function": {"name": "x", "arguments": "{}"}},
+                ],
+            },
             {"role": "tool", "tool_call_id": "c1", "content": "result"},
         ]
         result = _simulate_note_injection(history, "ping", resume_entry=None)
@@ -475,13 +508,10 @@ class TestResumePendingSystemNote:
 
 
 class TestFreshnessHelpers:
-
-
     def test_coerce_iso_string(self):
         iso = "2026-04-18T12:00:00+00:00"
         expected = datetime.fromisoformat(iso).timestamp()
         assert _coerce_gateway_timestamp(iso) == pytest.approx(expected, abs=1e-3)
-
 
     def test_coerce_rejects_garbage(self):
         assert _coerce_gateway_timestamp(None) is None
@@ -491,22 +521,35 @@ class TestFreshnessHelpers:
         assert _coerce_gateway_timestamp(False) is None
         assert _coerce_gateway_timestamp([1, 2, 3]) is None
 
-
     def test_is_fresh_window_bounds(self):
         now = 1_700_000_000.0
         # 1h window, 30min old → fresh
-        assert _is_fresh_gateway_interruption(
-            now - 1800, now=now, window_secs=3600,
-        ) is True
+        assert (
+            _is_fresh_gateway_interruption(
+                now - 1800,
+                now=now,
+                window_secs=3600,
+            )
+            is True
+        )
         # 1h window, 2h old → stale
-        assert _is_fresh_gateway_interruption(
-            now - 7200, now=now, window_secs=3600,
-        ) is False
+        assert (
+            _is_fresh_gateway_interruption(
+                now - 7200,
+                now=now,
+                window_secs=3600,
+            )
+            is False
+        )
         # 1h window, exactly at boundary → fresh (<=)
-        assert _is_fresh_gateway_interruption(
-            now - 3600, now=now, window_secs=3600,
-        ) is True
-
+        assert (
+            _is_fresh_gateway_interruption(
+                now - 3600,
+                now=now,
+                window_secs=3600,
+            )
+            is True
+        )
 
     def test_last_transcript_timestamp_skips_meta(self):
         history = [
@@ -517,11 +560,9 @@ class TestFreshnessHelpers:
         ]
         assert _last_transcript_timestamp(history) == 200.0
 
-
     def test_auto_continue_freshness_window_reads_env(self, monkeypatch):
         monkeypatch.setenv("CLAWK_AUTO_CONTINUE_FRESHNESS", "7200")
         assert _auto_continue_freshness_window() == 7200.0
-
 
 
 # ---------------------------------------------------------------------------
@@ -551,8 +592,9 @@ async def test_drain_timeout_marks_resume_pending():
     session_store.mark_resume_pending = MagicMock(return_value=True)
     runner.session_store = session_store
 
-    with patch("gateway.status.remove_pid_file"), patch(
-        "gateway.status.publish_runtime_status"
+    with (
+        patch("gateway.status.remove_pid_file"),
+        patch("gateway.status.publish_runtime_status"),
     ):
         await runner.stop()
 
@@ -661,9 +703,15 @@ async def test_reconnect_reschedule_is_platform_scoped():
 
 
 @pytest.mark.asyncio
-@pytest.mark.skipif(not hasattr(time, "tzset"), reason="needs a POSIX process timezone switch")
-@pytest.mark.parametrize("aware_marker", [False, True], ids=["naive-local", "aware-utc"])
-async def test_startup_auto_resume_freshness_survives_spring_forward(monkeypatch, aware_marker):
+@pytest.mark.skipif(
+    not hasattr(time, "tzset"), reason="needs a POSIX process timezone switch"
+)
+@pytest.mark.parametrize(
+    "aware_marker", [False, True], ids=["naive-local", "aware-utc"]
+)
+async def test_startup_auto_resume_freshness_survives_spring_forward(
+    monkeypatch, aware_marker
+):
     """A session marked 20 minutes before boot is inside a 60-minute window even when a DST
     spring-forward falls between the two (naive wall-clock subtraction read it as 80 minutes)."""
     runner, adapter = make_restart_runner()
@@ -682,10 +730,16 @@ async def test_startup_auto_resume_freshness_survives_spring_forward(monkeypatch
         class _FrozenDatetime(datetime):
             @classmethod
             def now(cls, tz=None):
-                return now if tz is None else datetime.fromtimestamp(now.timestamp(), tz=tz)
+                return (
+                    now
+                    if tz is None
+                    else datetime.fromtimestamp(now.timestamp(), tz=tz)
+                )
 
         # Freeze both wall clocks the startup path could read.
-        monkeypatch.setattr("gateway.run_startup.datetime", _FrozenDatetime, raising=False)
+        monkeypatch.setattr(
+            "gateway.run_startup.datetime", _FrozenDatetime, raising=False
+        )
         monkeypatch.setattr(time, "time", lambda: now.timestamp())
         entry = SessionEntry(
             session_key="agent:main:telegram:dm:dst-chat",
@@ -725,7 +779,11 @@ async def test_served_profile_reconnect_resumes_what_boot_deferred():
     runner._profile_adapters = {"coder": {}}
     runner._profile_failed_platforms = {}
     source = SessionSource(
-        platform=Platform.TELEGRAM, chat_id="c1", chat_type="dm", user_id="u1", profile="coder"
+        platform=Platform.TELEGRAM,
+        chat_id="c1",
+        chat_type="dm",
+        user_id="u1",
+        profile="coder",
     )
     entry = SessionEntry(
         session_key="agent:coder:telegram:dm:c1",
@@ -842,9 +900,11 @@ async def test_one_raising_replay_neither_wedges_gate_nor_eats_queue(monkeypatch
     bad_source = make_restart_source(chat_id="bad-chat")
     good_source = make_restart_source(chat_id="good-chat")
     runner._queue_startup_restore_event(
-        MessageEvent(text="first", message_type=MessageType.TEXT, source=bad_source))
+        MessageEvent(text="first", message_type=MessageType.TEXT, source=bad_source)
+    )
     runner._queue_startup_restore_event(
-        MessageEvent(text="second", message_type=MessageType.TEXT, source=good_source))
+        MessageEvent(text="second", message_type=MessageType.TEXT, source=good_source)
+    )
 
     await asyncio.wait_for(runner._finish_startup_restore(), timeout=5)
 
@@ -869,16 +929,23 @@ async def test_post_drain_inbound_processes_instead_of_queueing(monkeypatch):
 
     adapter.handle_message = exploding_handle_message
     runner._queue_startup_restore_event(
-        MessageEvent(text="doomed", message_type=MessageType.TEXT,
-                     source=make_restart_source(chat_id="bad-chat")))
+        MessageEvent(
+            text="doomed",
+            message_type=MessageType.TEXT,
+            source=make_restart_source(chat_id="bad-chat"),
+        )
+    )
 
     await asyncio.wait_for(runner._finish_startup_restore(), timeout=5)
     assert runner._startup_restore_in_progress is False
 
     # The next inbound event reads the flag at run_inbound's gate; with the gate
     # open it proceeds past the queueing branch rather than appending.
-    late = MessageEvent(text="late", message_type=MessageType.TEXT,
-                        source=make_restart_source(chat_id="late-chat"))
+    late = MessageEvent(
+        text="late",
+        message_type=MessageType.TEXT,
+        source=make_restart_source(chat_id="late-chat"),
+    )
     await runner._handle_message(late)
     assert runner._startup_restore_queue == []
 
@@ -1371,4 +1438,3 @@ async def test_startup_boot_sends_still_run_when_they_finish_quickly(monkeypatch
     runner._send_restart_notification.assert_awaited_once()
     runner._claim_pending_obligations.assert_awaited_once()
     runner._redeliver_claimed_obligations.assert_awaited_once()
-

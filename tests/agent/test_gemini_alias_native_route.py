@@ -1,4 +1,5 @@
 """Provider aliases preserve the native-vs-compatible client boundary."""
+
 from types import SimpleNamespace
 
 from openai import OpenAI
@@ -16,13 +17,16 @@ def test_gemini_aliases_preserve_native_endpoint_selection():
             ("https://example.invalid/v1", OpenAI),
         ):
             agent = SimpleNamespace(
-                provider=provider, model="gemini-flash-latest",
+                provider=provider,
+                model="gemini-flash-latest",
                 _client_log_context=lambda: "test",
                 _build_keepalive_http_client=lambda *a, **k: None,
             )
             client = create_openai_client(
-                agent, {"api_key": "test-key", "base_url": base_url},
-                reason="fallback", shared=False,
+                agent,
+                {"api_key": "test-key", "base_url": base_url},
+                reason="fallback",
+                shared=False,
             )
             try:
                 assert isinstance(client, expected), (provider, base_url, type(client))

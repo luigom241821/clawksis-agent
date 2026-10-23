@@ -5,13 +5,14 @@ session row it owned; pickers then listed it as resumable. The stamp itself is t
 ``session.detach {end_reason}`` (``session_acp_lifecycle.end_idle_viewer_session``); this module only
 decides which live rows read as closed.
 """
+
 from clawk_state_local import local_receipt
 from clawk_state_runtime import RuntimeStoreError
 
 
 def _local_target(authority, session_id):
     try:
-        return local_receipt(authority.db, session_id)['entry']['session_id']
+        return local_receipt(authority.db, session_id)["entry"]["session_id"]
     except (RuntimeStoreError, KeyError, TypeError):
         return None  # not a local session (API binding, malformed receipt): nothing to read as closed
 
@@ -19,7 +20,7 @@ def _local_target(authority, session_id):
 def closed_idle_unviewed(live, execution_state, target_ended_at):
     """The verdict on facts already read: the live listings read ``target_ended_at`` for a whole batch
     in one off-loop query (``gateway/session_live_listing``)."""
-    if live is None or live.subscribers or execution_state != 'idle':
+    if live is None or live.subscribers or execution_state != "idle":
         return False
     if live.superseded:
         return True  # an old messaging conversation opened read-only: history once no one views it
@@ -29,10 +30,12 @@ def closed_idle_unviewed(live, execution_state, target_ended_at):
 def closed_and_unviewed(authority, session_id, handle):
     """A live-feed row main would list as resumable: closed, idle and with no viewer left."""
     live = authority.sessions.get(session_id)
-    if live is None or live.subscribers or handle.execution_state != 'idle':
+    if live is None or live.subscribers or handle.execution_state != "idle":
         return False
     if live.superseded:
         return True
     target = _local_target(authority, session_id)
     row = authority.db.get_session_list_row(target) if target else None
-    return closed_idle_unviewed(live, handle.execution_state, row and row.get('ended_at'))
+    return closed_idle_unviewed(
+        live, handle.execution_state, row and row.get("ended_at")
+    )

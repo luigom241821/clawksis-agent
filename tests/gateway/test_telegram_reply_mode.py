@@ -5,21 +5,32 @@ Covers the threading behavior control for multi-chunk replies:
 - "first": Only first chunk threads (default)
 - "all": All chunks thread to original message
 """
+
 import os
 from unittest.mock import MagicMock, AsyncMock, patch
 
 import pytest
 
-from gateway.config import PlatformConfig, GatewayConfig, Platform, _apply_env_overrides, load_gateway_config
+from gateway.config import (
+    PlatformConfig,
+    GatewayConfig,
+    Platform,
+    _apply_env_overrides,
+    load_gateway_config,
+)
 from plugins.platforms.telegram.adapter import TelegramAdapter
 
 
 @pytest.fixture()
 def adapter_factory():
     """Factory to create TelegramAdapter with custom reply_to_mode."""
+
     def create(reply_to_mode: str = "first"):
-        config = PlatformConfig(enabled=True, token="test-token", reply_to_mode=reply_to_mode)
+        config = PlatformConfig(
+            enabled=True, token="test-token", reply_to_mode=reply_to_mode
+        )
         return TelegramAdapter(config)
+
     return create
 
 
@@ -58,7 +69,11 @@ class TestSendWithReplyToMode:
         adapter = adapter_factory(reply_to_mode="off")
         adapter._bot = MagicMock()
         adapter._bot.send_message = AsyncMock(return_value=MagicMock(message_id=1))
-        adapter.truncate_message = lambda content, max_len, **kw: ["chunk1", "chunk2", "chunk3"]
+        adapter.truncate_message = lambda content, max_len, **kw: [
+            "chunk1",
+            "chunk2",
+            "chunk3",
+        ]
 
         await adapter.send("12345", "test content", reply_to="999")
 
@@ -70,7 +85,11 @@ class TestSendWithReplyToMode:
         adapter = adapter_factory(reply_to_mode="first")
         adapter._bot = MagicMock()
         adapter._bot.send_message = AsyncMock(return_value=MagicMock(message_id=1))
-        adapter.truncate_message = lambda content, max_len, **kw: ["chunk1", "chunk2", "chunk3"]
+        adapter.truncate_message = lambda content, max_len, **kw: [
+            "chunk1",
+            "chunk2",
+            "chunk3",
+        ]
 
         await adapter.send("12345", "test content", reply_to="999")
 
@@ -83,7 +102,6 @@ class TestSendWithReplyToMode:
 
 class TestConfigSerialization:
     """Tests for reply_to_mode serialization."""
-
 
     def test_from_dict_loads_reply_to_mode(self):
         data = {"enabled": True, "token": "test", "reply_to_mode": "off"}
@@ -121,11 +139,10 @@ class TestTelegramYamlConfigLoading:
         (clawk_home / "config.yaml").write_text(content, encoding="utf-8")
         return clawk_home
 
-
     def test_extra_reply_to_mode_off(self, tmp_path, monkeypatch):
         """telegram.extra.reply_to_mode is also honoured."""
         clawk_home = self._write_config(
-            tmp_path, "telegram:\n  extra:\n    reply_to_mode: \"off\"\n"
+            tmp_path, 'telegram:\n  extra:\n    reply_to_mode: "off"\n'
         )
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
         monkeypatch.delenv("TELEGRAM_REPLY_TO_MODE", raising=False)
@@ -134,12 +151,11 @@ class TestTelegramYamlConfigLoading:
 
         assert os.environ.get("TELEGRAM_REPLY_TO_MODE") == "off"
 
-
     def test_top_level_takes_precedence_over_extra(self, tmp_path, monkeypatch):
         """telegram.reply_to_mode wins over telegram.extra.reply_to_mode."""
         clawk_home = self._write_config(
             tmp_path,
-            "telegram:\n  reply_to_mode: all\n  extra:\n    reply_to_mode: \"off\"\n",
+            'telegram:\n  reply_to_mode: all\n  extra:\n    reply_to_mode: "off"\n',
         )
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
         monkeypatch.delenv("TELEGRAM_REPLY_TO_MODE", raising=False)
@@ -170,18 +186,28 @@ class TestSyntheticReplyAnchor:
         assert all(call.kwargs.get("reply_to_message_id") is None for call in calls)
 
     @pytest.mark.asyncio
-    async def test_synthetic_anchor_in_dm_topic_uses_the_topic_anchor(self, adapter_factory):
+    async def test_synthetic_anchor_in_dm_topic_uses_the_topic_anchor(
+        self, adapter_factory
+    ):
         adapter = adapter_factory()
         adapter._bot = MagicMock()
         adapter._bot.send_message = AsyncMock(return_value=MagicMock(message_id=1))
         adapter.truncate_message = lambda content, max_len, **kw: ["chunk1"]
-        metadata = {"thread_id": "42", "telegram_dm_topic_reply_fallback": True,
-                    "telegram_reply_to_message_id": "12345"}
+        metadata = {
+            "thread_id": "42",
+            "telegram_dm_topic_reply_fallback": True,
+            "telegram_reply_to_message_id": "12345",
+        }
 
-        result = await adapter.send("12345", "test content", reply_to=self.WAKE_ID, metadata=metadata)
+        result = await adapter.send(
+            "12345", "test content", reply_to=self.WAKE_ID, metadata=metadata
+        )
 
         assert result.success, result.error
-        assert adapter._bot.send_message.call_args.kwargs.get("reply_to_message_id") == 12345
+        assert (
+            adapter._bot.send_message.call_args.kwargs.get("reply_to_message_id")
+            == 12345
+        )
 
 
 class TestDMTopicFallbackReplyToMode:
@@ -204,15 +230,18 @@ class TestDMTopicFallbackReplyToMode:
     def test_reply_to_id_suppressed_when_off(self):
         """reply_to_mode='off' suppresses reply anchor for DM topic fallback."""
         result = TelegramAdapter._reply_to_message_id_for_send(
-            None, self.DM_TOPIC_METADATA, reply_to_mode="off",
+            None,
+            self.DM_TOPIC_METADATA,
+            reply_to_mode="off",
         )
         assert result is None
-
 
     def test_explicit_reply_to_overrides_mode(self):
         """Explicit reply_to param always wins, regardless of mode."""
         result = TelegramAdapter._reply_to_message_id_for_send(
-            "999", self.DM_TOPIC_METADATA, reply_to_mode="off",
+            "999",
+            self.DM_TOPIC_METADATA,
+            reply_to_mode="off",
         )
         assert result == 999
 
@@ -221,11 +250,13 @@ class TestDMTopicFallbackReplyToMode:
     def test_thread_kwargs_suppressed_reply_anchor_when_off(self):
         """reply_to_mode='off' returns thread_id without reply anchor."""
         result = TelegramAdapter._thread_kwargs_for_send(
-            "100", "42", self.DM_TOPIC_METADATA,
-            reply_to_message_id=None, reply_to_mode="off",
+            "100",
+            "42",
+            self.DM_TOPIC_METADATA,
+            reply_to_message_id=None,
+            reply_to_mode="off",
         )
         assert result == {"message_thread_id": 42}
-
 
     # -- send() integration test --
 
@@ -264,7 +295,10 @@ class TestDMTopicSyntheticSendRouting:
             "direct_messages_topic_id": "20189",
         }
         result = TelegramAdapter._thread_kwargs_for_send(
-            "100", "42", metadata, reply_to_message_id=None,
+            "100",
+            "42",
+            metadata,
+            reply_to_message_id=None,
         )
         assert result == {"message_thread_id": 42}
 
@@ -272,7 +306,10 @@ class TestDMTopicSyntheticSendRouting:
         """No anchor and no native DM-topic id: still route to the topic."""
         metadata = {"thread_id": "42", "telegram_dm_topic_reply_fallback": True}
         result = TelegramAdapter._thread_kwargs_for_send(
-            "100", "42", metadata, reply_to_message_id=None,
+            "100",
+            "42",
+            metadata,
+            reply_to_message_id=None,
         )
         assert result == {"message_thread_id": 42}
 
@@ -283,7 +320,10 @@ class TestDMTopicSyntheticSendRouting:
             "direct_messages_topic_id": "20189",
         }
         result = TelegramAdapter._thread_kwargs_for_send(
-            "100", None, metadata, reply_to_message_id=None,
+            "100",
+            None,
+            metadata,
+            reply_to_message_id=None,
         )
         assert result == {
             "message_thread_id": None,
@@ -294,7 +334,10 @@ class TestDMTopicSyntheticSendRouting:
         """Genuinely thread-less DM sends must not grow a thread id."""
         metadata = {"telegram_dm_topic_reply_fallback": True}
         result = TelegramAdapter._thread_kwargs_for_send(
-            "100", None, metadata, reply_to_message_id=None,
+            "100",
+            None,
+            metadata,
+            reply_to_message_id=None,
         )
         assert result == {}
 
@@ -306,7 +349,10 @@ class TestDMTopicSyntheticSendRouting:
             "direct_messages_topic_id": "20189",
         }
         result = TelegramAdapter._thread_kwargs_for_send(
-            "100", "1", metadata, reply_to_message_id=None,
+            "100",
+            "1",
+            metadata,
+            reply_to_message_id=None,
         )
         assert result == {
             "message_thread_id": None,
@@ -321,7 +367,10 @@ class TestDMTopicSyntheticSendRouting:
             "telegram_reply_to_message_id": "12345",
         }
         result = TelegramAdapter._thread_kwargs_for_send(
-            "100", "42", metadata, reply_to_message_id=12345,
+            "100",
+            "42",
+            metadata,
+            reply_to_message_id=12345,
         )
         assert result == {"message_thread_id": 42}
 

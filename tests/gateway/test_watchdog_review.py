@@ -66,8 +66,6 @@ def test_s1_contended_activity_write_gives_up_within_short_budget(tmp_path):
     assert elapsed_touch < 3.0, f"activity touch waited {elapsed_touch:.1f}s"
 
 
-
-
 def test_s1_contended_clear_gives_up_within_short_budget(tmp_path):
     db = SessionDB(db_path=tmp_path / "state.db")
     sid = "S1_CLEAR_CONTENDED"
@@ -142,6 +140,7 @@ def _runner_for_stall(adapter):
 def _pending_event(chat_id="chat-1"):
     from gateway.session import SessionSource
     from gateway.config import Platform
+
     source = SessionSource(chat_id=chat_id, thread_id=None, platform=Platform.TELEGRAM)
     return SimpleNamespace(text="follow-up", source=source, timestamp=time.time())
 

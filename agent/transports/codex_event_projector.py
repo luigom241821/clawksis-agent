@@ -66,7 +66,9 @@ class CodexEventProjector:
         # Unknown / rare items (plan, hookPrompt, ...): opaque note, no fabricated tool_call structure.
         return self._project_opaque(item, item_type)
 
-    def _assistant_message(self, content: Optional[str], **extra: Any) -> dict[str, Any]:
+    def _assistant_message(
+        self, content: Optional[str], **extra: Any
+    ) -> dict[str, Any]:
         msg: dict[str, Any] = {"role": "assistant", "content": content, **extra}
         if self._pending_reasoning:
             msg["reasoning"] = "\n".join(self._pending_reasoning)
@@ -75,31 +77,49 @@ class CodexEventProjector:
 
     def _project_agent_message(self, item: dict) -> ProjectionResult:
         text = item.get("text") or ""
-        return ProjectionResult(messages=[self._assistant_message(text)], final_text=text)
+        return ProjectionResult(
+            messages=[self._assistant_message(text)], final_text=text
+        )
 
     @staticmethod
     def _project_user_message(item: dict) -> ProjectionResult:
         # userMessage content is a list of UserInput variants; flatten text
         # fragments and drop non-text parts (Clawksis' messages store text only).
         text_parts = [
-            (fragment.get("text") or "") if fragment.get("type") == "text" else str(fragment["text"])
+            (fragment.get("text") or "")
+            if fragment.get("type") == "text"
+            else str(fragment["text"])
             for fragment in item.get("content") or []
-            if isinstance(fragment, dict) and (fragment.get("type") == "text" or "text" in fragment)
+            if isinstance(fragment, dict)
+            and (fragment.get("type") == "text" or "text" in fragment)
         ]
-        return ProjectionResult(messages=[{"role": "user", "content": "\n".join(text_parts)}])
+        return ProjectionResult(
+            messages=[{"role": "user", "content": "\n".join(text_parts)}]
+        )
 
     def _project_tool_item(
-        self, item: dict, item_id: str, spec: Callable[[dict], tuple[str, str, dict, str]]
+        self,
+        item: dict,
+        item_id: str,
+        spec: Callable[[dict], tuple[str, str, dict, str]],
     ) -> ProjectionResult:
         """Emit the (assistant tool_call, tool result) pair; ``spec(item)`` -> ``(id_type, name, args, content)``."""
         id_type, name, args, content = spec(item)
         call_id = _deterministic_call_id(id_type, item_id)
         assistant_msg = self._assistant_message(
             None,
-            tool_calls=[{"id": call_id, "type": "function", "function": {"name": name, "arguments": _format_tool_args(args)}}],
+            tool_calls=[
+                {
+                    "id": call_id,
+                    "type": "function",
+                    "function": {"name": name, "arguments": _format_tool_args(args)},
+                }
+            ],
         )
         tool_msg = {"role": "tool", "tool_call_id": call_id, "content": content}
-        return ProjectionResult(messages=[assistant_msg, tool_msg], is_tool_iteration=True)
+        return ProjectionResult(
+            messages=[assistant_msg, tool_msg], is_tool_iteration=True
+        )
 
     @staticmethod
     def _command_spec(item: dict) -> tuple[str, str, dict, str]:
@@ -108,7 +128,9 @@ class CodexEventProjector:
         exit_code = item.get("exitCode")
         if exit_code is not None:
             # Preserve executor status so successful marker-like output is not an interrupt.
-            output = json.dumps({"exit_code": exit_code, "output": output}, ensure_ascii=False)
+            output = json.dumps(
+                {"exit_code": exit_code, "output": output}, ensure_ascii=False
+            )
         # Unknown exit status keeps the legacy text shape and conservative replay handling.
         return "exec", "exec_command", args, output
 
@@ -116,7 +138,10 @@ class CodexEventProjector:
     def _file_change_spec(item: dict) -> tuple[str, str, dict, str]:
         # Per-file change kinds only — full file contents can be huge.
         changes_summary = [
-            {"kind": (change.get("kind") or {}).get("type") or "update", "path": change.get("path") or ""}
+            {
+                "kind": (change.get("kind") or {}).get("type") or "update",
+                "path": change.get("path") or "",
+            }
             for change in item.get("changes") or []
         ]
         status = item.get("status") or "unknown"
@@ -131,16 +156,26 @@ class CodexEventProjector:
         if error:
             content = f"[error] {json.dumps(error, ensure_ascii=False)[:1000]}"
         else:
-            content = json.dumps(result, ensure_ascii=False)[:4000] if result is not None else ""
+            content = (
+                json.dumps(result, ensure_ascii=False)[:4000]
+                if result is not None
+                else ""
+            )
         # Call id mirrors the native MCP name convention (mcp__server__tool).
-        return f"mcp__{server}__{tool}", f"mcp.{server}.{tool}", _dict_args(item.get("arguments")), content
+        return (
+            f"mcp__{server}__{tool}",
+            f"mcp.{server}.{tool}",
+            _dict_args(item.get("arguments")),
+            content,
+        )
 
     @staticmethod
     def _dynamic_tool_call_spec(item: dict) -> tuple[str, str, dict, str]:
         tool = item.get("tool") or "unknown"
         content_items = item.get("contentItems") or []
         content = (
-            json.dumps(content_items, ensure_ascii=False)[:4000] if isinstance(content_items, list) and content_items
+            json.dumps(content_items, ensure_ascii=False)[:4000]
+            if isinstance(content_items, list) and content_items
             else f"success={item.get('success')}"
         )
         return f"dyn_{tool}", tool, _dict_args(item.get("arguments")), content
@@ -152,7 +187,12 @@ class CodexEventProjector:
         result = {"provider": "codex"}
         if item.get("status"):
             result["status"] = item["status"]
-        return "web_search", "web_search", {"query": item.get("query") or ""}, json.dumps(result, ensure_ascii=False)
+        return (
+            "web_search",
+            "web_search",
+            {"query": item.get("query") or ""},
+            json.dumps(result, ensure_ascii=False),
+        )
 
     _TOOL_PROJECTIONS: dict[str, Callable[[dict], tuple[str, str, dict, str]]] = {
         "commandExecution": _command_spec,
@@ -168,4 +208,8 @@ class CodexEventProjector:
             payload = json.dumps(item, ensure_ascii=False)[:1500]
         except (TypeError, ValueError):
             payload = repr(item)[:1500]
-        return ProjectionResult(messages=[{"role": "assistant", "content": f"[codex {item_type}] {payload}"}])
+        return ProjectionResult(
+            messages=[
+                {"role": "assistant", "content": f"[codex {item_type}] {payload}"}
+            ]
+        )

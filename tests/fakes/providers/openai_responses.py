@@ -51,7 +51,10 @@ from openai.types.responses import (
 )
 from openai.types.responses.response_create_params import ResponseCreateParamsStreaming
 from openai.types.responses.response_reasoning_item import Summary
-from openai.types.responses.response_usage import InputTokensDetails, OutputTokensDetails
+from openai.types.responses.response_usage import (
+    InputTokensDetails,
+    OutputTokensDetails,
+)
 from pydantic import TypeAdapter
 
 MODEL_ID = "fake-responses-model"
@@ -93,7 +96,9 @@ class Turn:
     input_tokens: int = 100
     output_tokens: int = 20
     cached_tokens: int = 0
-    drop_after_events: int | None = None  # close the socket after N events (no terminal event)
+    drop_after_events: int | None = (
+        None  # close the socket after N events (no terminal event)
+    )
 
 
 @dataclass
@@ -133,11 +138,18 @@ def _apply_vendor_deviations(body: dict[str, Any]) -> dict[str, Any]:
     items = body.get("input")
     if not isinstance(items, list) or body.get("store") is not False:
         return body
-    return {**body, "input": [
-        {**i, "id": "replayed_without_id"}
-        if isinstance(i, dict) and i.get("type") in _ID_OPTIONAL_REPLAY_TYPES and "id" not in i
-        and i.get("role", "assistant") == "assistant" else i
-        for i in items]}
+    return {
+        **body,
+        "input": [
+            {**i, "id": "replayed_without_id"}
+            if isinstance(i, dict)
+            and i.get("type") in _ID_OPTIONAL_REPLAY_TYPES
+            and "id" not in i
+            and i.get("role", "assistant") == "assistant"
+            else i
+            for i in items
+        ],
+    }
 
 
 def _item_members() -> dict[str, list[Any]]:
@@ -181,9 +193,13 @@ def validate_request(body: dict[str, Any]) -> str | None:
     ``tools``) to walk every element, so a malformed nested item is reported too."""
     body = _apply_vendor_deviations(body)
     try:
-        _REQUEST_ADAPTER.dump_json(_REQUEST_ADAPTER.validate_python(body), warnings=False)
+        _REQUEST_ADAPTER.dump_json(
+            _REQUEST_ADAPTER.validate_python(body), warnings=False
+        )
     except Exception as exc:
-        detail = _explain_items(body["input"]) if isinstance(body.get("input"), list) else ""
+        detail = (
+            _explain_items(body["input"]) if isinstance(body.get("input"), list) else ""
+        )
         return (detail or str(exc))[:4000]
     return None
 
@@ -200,25 +216,53 @@ class _Seq:
         return self.n
 
 
-def _response(resp_id: str, status: str, output: list[Any], usage: ResponseUsage | None = None) -> Response:
+def _response(
+    resp_id: str, status: str, output: list[Any], usage: ResponseUsage | None = None
+) -> Response:
     return Response(
-        id=resp_id, created_at=time.time(), model=MODEL_ID, object="response", output=output,
-        parallel_tool_calls=True, tool_choice="auto", tools=[], status=status, usage=usage,
+        id=resp_id,
+        created_at=time.time(),
+        model=MODEL_ID,
+        object="response",
+        output=output,
+        parallel_tool_calls=True,
+        tool_choice="auto",
+        tools=[],
+        status=status,
+        usage=usage,
     )
 
 
 def _built_item(item: Item, idx: int) -> Any:
     if isinstance(item, Reasoning):
-        summary = [Summary(text=item.summary, type="summary_text")] if item.summary else []
-        return ResponseReasoningItem(id=f"rs_{idx}_{uuid.uuid4().hex[:8]}", summary=summary, type="reasoning",
-                                     encrypted_content=item.encrypted)
+        summary = (
+            [Summary(text=item.summary, type="summary_text")] if item.summary else []
+        )
+        return ResponseReasoningItem(
+            id=f"rs_{idx}_{uuid.uuid4().hex[:8]}",
+            summary=summary,
+            type="reasoning",
+            encrypted_content=item.encrypted,
+        )
     if isinstance(item, Message):
         return ResponseOutputMessage(
-            id=f"msg_{idx}_{uuid.uuid4().hex[:8]}", role="assistant", status="completed", type="message",
-            content=[ResponseOutputText(annotations=[], text=item.text, type="output_text")])
+            id=f"msg_{idx}_{uuid.uuid4().hex[:8]}",
+            role="assistant",
+            status="completed",
+            type="message",
+            content=[
+                ResponseOutputText(annotations=[], text=item.text, type="output_text")
+            ],
+        )
     args = item.args if isinstance(item.args, str) else json.dumps(item.args)
-    return ResponseFunctionToolCall(id=f"fc_{idx}_{uuid.uuid4().hex[:8]}", call_id=f"call_{uuid.uuid4().hex[:10]}",
-                                    name=item.name, arguments=args, type="function_call", status="completed")
+    return ResponseFunctionToolCall(
+        id=f"fc_{idx}_{uuid.uuid4().hex[:8]}",
+        call_id=f"call_{uuid.uuid4().hex[:10]}",
+        name=item.name,
+        arguments=args,
+        type="function_call",
+        status="completed",
+    )
 
 
 def _item_events(built: Any, idx: int, seq: _Seq) -> list[Any]:
@@ -229,41 +273,86 @@ def _item_events(built: Any, idx: int, seq: _Seq) -> list[Any]:
         opening = built.model_copy(update={"arguments": "", "status": "in_progress"})
     else:
         opening = built
-    events.append(ResponseOutputItemAddedEvent(item=opening, output_index=idx, sequence_number=seq(),
-                                               type="response.output_item.added"))
+    events.append(
+        ResponseOutputItemAddedEvent(
+            item=opening,
+            output_index=idx,
+            sequence_number=seq(),
+            type="response.output_item.added",
+        )
+    )
     if isinstance(built, ResponseOutputMessage):
         text = built.content[0].text
         for i in range(0, len(text), 16):
-            events.append(ResponseTextDeltaEvent(content_index=0, delta=text[i:i + 16], item_id=built.id, logprobs=[],
-                                                 output_index=idx, sequence_number=seq(),
-                                                 type="response.output_text.delta"))
+            events.append(
+                ResponseTextDeltaEvent(
+                    content_index=0,
+                    delta=text[i : i + 16],
+                    item_id=built.id,
+                    logprobs=[],
+                    output_index=idx,
+                    sequence_number=seq(),
+                    type="response.output_text.delta",
+                )
+            )
     if isinstance(built, ResponseFunctionToolCall):
-        events.append(ResponseFunctionCallArgumentsDeltaEvent(
-            delta=built.arguments, item_id=built.id or "", output_index=idx, sequence_number=seq(),
-            type="response.function_call_arguments.delta"))
-        events.append(ResponseFunctionCallArgumentsDoneEvent(
-            arguments=built.arguments, item_id=built.id or "", name=built.name, output_index=idx,
-            sequence_number=seq(), type="response.function_call_arguments.done"))
-    events.append(ResponseOutputItemDoneEvent(item=built, output_index=idx, sequence_number=seq(),
-                                              type="response.output_item.done"))
+        events.append(
+            ResponseFunctionCallArgumentsDeltaEvent(
+                delta=built.arguments,
+                item_id=built.id or "",
+                output_index=idx,
+                sequence_number=seq(),
+                type="response.function_call_arguments.delta",
+            )
+        )
+        events.append(
+            ResponseFunctionCallArgumentsDoneEvent(
+                arguments=built.arguments,
+                item_id=built.id or "",
+                name=built.name,
+                output_index=idx,
+                sequence_number=seq(),
+                type="response.function_call_arguments.done",
+            )
+        )
+    events.append(
+        ResponseOutputItemDoneEvent(
+            item=built,
+            output_index=idx,
+            sequence_number=seq(),
+            type="response.output_item.done",
+        )
+    )
     return events
 
 
 def turn_events(turn: Turn) -> list[dict[str, Any]]:
     """The full SSE event sequence for ``turn``, each event a JSON-mode dict."""
     seq, resp_id = _Seq(), f"resp_{uuid.uuid4().hex[:12]}"
-    events: list[Any] = [ResponseCreatedEvent(response=_response(resp_id, "in_progress", []),
-                                              sequence_number=seq(), type="response.created")]
+    events: list[Any] = [
+        ResponseCreatedEvent(
+            response=_response(resp_id, "in_progress", []),
+            sequence_number=seq(),
+            type="response.created",
+        )
+    ]
     built = [_built_item(item, i) for i, item in enumerate(turn.items)]
     for i, b in enumerate(built):
         events.extend(_item_events(b, i, seq))
     usage = ResponseUsage(
-        input_tokens=turn.input_tokens, output_tokens=turn.output_tokens,
+        input_tokens=turn.input_tokens,
+        output_tokens=turn.output_tokens,
         total_tokens=turn.input_tokens + turn.output_tokens,
         input_tokens_details=InputTokensDetails(cached_tokens=turn.cached_tokens),
-        output_tokens_details=OutputTokensDetails(reasoning_tokens=0))
-    events.append(ResponseCompletedEvent(response=_response(resp_id, "completed", built, usage),
-                                         sequence_number=seq(), type="response.completed"))
+        output_tokens_details=OutputTokensDetails(reasoning_tokens=0),
+    )
+    events.append(
+        ResponseCompletedEvent(
+            response=_response(resp_id, "completed", built, usage),
+            sequence_number=seq(),
+            type="response.completed",
+        )
+    )
     return [e.model_dump(mode="json", exclude_none=True) for e in events]
 
 
@@ -272,11 +361,19 @@ def soft_fail_events(fail: SoftFail) -> list[dict[str, Any]]:
     SDK's ``ResponseError.code`` literal lags the codes the vendor actually sends in this slot
     (``invalid_encrypted_content`` is observed in production and absent from the literal)."""
     seq, resp_id = _Seq(), f"resp_{uuid.uuid4().hex[:12]}"
-    created = ResponseCreatedEvent(response=_response(resp_id, "in_progress", []), sequence_number=seq(),
-                                   type="response.created")
+    created = ResponseCreatedEvent(
+        response=_response(resp_id, "in_progress", []),
+        sequence_number=seq(),
+        type="response.created",
+    )
     failed_resp = _response(resp_id, "failed", []).model_copy(
-        update={"error": ResponseError.model_construct(code=fail.code, message=fail.message)})
-    failed = ResponseFailedEvent.model_construct(response=failed_resp, sequence_number=seq(), type="response.failed")
+        update={
+            "error": ResponseError.model_construct(code=fail.code, message=fail.message)
+        }
+    )
+    failed = ResponseFailedEvent.model_construct(
+        response=failed_resp, sequence_number=seq(), type="response.failed"
+    )
     out = [created.model_dump(mode="json", exclude_none=True)]
     dumped = failed.model_dump(mode="json", exclude_none=True, warnings=False)
     dumped["response"]["error"] = {"code": fail.code, "message": fail.message}
@@ -289,8 +386,13 @@ def soft_fail_events(fail: SoftFail) -> list[dict[str, Any]]:
 class FakeResponsesServer:
     """Threaded loopback Responses provider. Use as a context manager."""
 
-    def __init__(self, script: list[Step] | Responder | None = None, *, default_text: str = "ok",
-                 api_key: str | None = None) -> None:
+    def __init__(
+        self,
+        script: list[Step] | Responder | None = None,
+        *,
+        default_text: str = "ok",
+        api_key: str | None = None,
+    ) -> None:
         self._script: list[Step] = list(script) if isinstance(script, list) else []
         self._responder: Responder | None = script if callable(script) else None
         self.default_text = default_text
@@ -303,7 +405,9 @@ class FakeResponsesServer:
         server = ThreadingHTTPServer(("127.0.0.1", 0), _handler_for(self))
         server.daemon_threads = True
         self._server = server
-        threading.Thread(target=server.serve_forever, name="fake-responses", daemon=True).start()
+        threading.Thread(
+            target=server.serve_forever, name="fake-responses", daemon=True
+        ).start()
         return self
 
     def __exit__(self, *_exc: object) -> None:
@@ -340,7 +444,12 @@ def _handler_for(server: FakeResponsesServer) -> type[BaseHTTPRequestHandler]:
         def log_message(self, *_a: object) -> None:
             pass
 
-        def _json(self, status: int, payload: dict[str, Any], headers: dict[str, str] | None = None) -> None:
+        def _json(
+            self,
+            status: int,
+            payload: dict[str, Any],
+            headers: dict[str, str] | None = None,
+        ) -> None:
             body = json.dumps(payload).encode()
             self.send_response(status)
             self.send_header("Content-Type", "application/json")
@@ -352,8 +461,19 @@ def _handler_for(server: FakeResponsesServer) -> type[BaseHTTPRequestHandler]:
 
         def do_GET(self) -> None:
             if self.path.rstrip("/").endswith("/models"):
-                self._json(200, {"object": "list", "data": [
-                    {"id": MODEL_ID, "object": "model", "context_length": 128000}]})
+                self._json(
+                    200,
+                    {
+                        "object": "list",
+                        "data": [
+                            {
+                                "id": MODEL_ID,
+                                "object": "model",
+                                "context_length": 128000,
+                            }
+                        ],
+                    },
+                )
                 return
             self._json(404, {"error": {"message": "not found"}})
 
@@ -367,14 +487,30 @@ def _handler_for(server: FakeResponsesServer) -> type[BaseHTTPRequestHandler]:
             path = self.path.rstrip("/")
             is_responses = path.endswith("/responses")
             kind = "main" if is_responses and body.get("tools") else "aux"
-            record = {"path": self.path, "kind": kind, "body": body, "t": time.time(),
-                      "headers": {k.lower(): v for k, v in self.headers.items()}}
+            record = {
+                "path": self.path,
+                "kind": kind,
+                "body": body,
+                "t": time.time(),
+                "headers": {k.lower(): v for k, v in self.headers.items()},
+            }
             if is_responses:
                 record["invalid"] = validate_request(body)
             with server._lock:
                 server.requests.append(record)
-            if server.api_key and self.headers.get("Authorization", "") != f"Bearer {server.api_key}":
-                self._json(401, {"error": {"message": "invalid api key", "type": "authentication_error"}})
+            if (
+                server.api_key
+                and self.headers.get("Authorization", "") != f"Bearer {server.api_key}"
+            ):
+                self._json(
+                    401,
+                    {
+                        "error": {
+                            "message": "invalid api key",
+                            "type": "authentication_error",
+                        }
+                    },
+                )
                 return
             if path.endswith("/chat/completions"):
                 self._aux_chat(bool(body.get("stream")))
@@ -382,15 +518,32 @@ def _handler_for(server: FakeResponsesServer) -> type[BaseHTTPRequestHandler]:
             if not is_responses:
                 self._json(404, {"error": {"message": f"unsupported path {self.path}"}})
                 return
-            step = server.next_step(record) if kind == "main" else Turn([Message("Fake title")])
+            step = (
+                server.next_step(record)
+                if kind == "main"
+                else Turn([Message("Fake title")])
+            )
             record["response"] = type(step).__name__
             self._render(step)
 
         def _render(self, step: Step) -> None:
             if isinstance(step, HttpError):
-                headers = {"Retry-After": str(step.retry_after)} if step.retry_after is not None else {}
-                self._json(step.status, {"error": {"message": step.message, "type": step.type, "code": step.code}},
-                           headers)
+                headers = (
+                    {"Retry-After": str(step.retry_after)}
+                    if step.retry_after is not None
+                    else {}
+                )
+                self._json(
+                    step.status,
+                    {
+                        "error": {
+                            "message": step.message,
+                            "type": step.type,
+                            "code": step.code,
+                        }
+                    },
+                    headers,
+                )
                 return
             if isinstance(step, SoftFail):
                 events, limit = soft_fail_events(step), None
@@ -404,7 +557,9 @@ def _handler_for(server: FakeResponsesServer) -> type[BaseHTTPRequestHandler]:
             for i, event in enumerate(events):
                 if limit is not None and i >= limit:
                     break
-                self.wfile.write(f"event: {event['type']}\ndata: {json.dumps(event)}\n\n".encode())
+                self.wfile.write(
+                    f"event: {event['type']}\ndata: {json.dumps(event)}\n\n".encode()
+                )
                 self.wfile.flush()
             self.close_connection = True
 
@@ -412,17 +567,32 @@ def _handler_for(server: FakeResponsesServer) -> type[BaseHTTPRequestHandler]:
             msg = {"role": "assistant", "content": "Fake title"}
             usage = {"prompt_tokens": 10, "completion_tokens": 2, "total_tokens": 12}
             if not stream:
-                self._json(200, {"id": "chatcmpl-aux", "object": "chat.completion", "created": int(time.time()),
-                                 "model": MODEL_ID, "usage": usage,
-                                 "choices": [{"index": 0, "message": msg, "finish_reason": "stop"}]})
+                self._json(
+                    200,
+                    {
+                        "id": "chatcmpl-aux",
+                        "object": "chat.completion",
+                        "created": int(time.time()),
+                        "model": MODEL_ID,
+                        "usage": usage,
+                        "choices": [
+                            {"index": 0, "message": msg, "finish_reason": "stop"}
+                        ],
+                    },
+                )
                 return
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Connection", "close")
             self.end_headers()
             for delta, fin in ((msg, None), ({}, "stop")):
-                chunk = {"id": "chatcmpl-aux", "object": "chat.completion.chunk", "created": int(time.time()),
-                         "model": MODEL_ID, "choices": [{"index": 0, "delta": delta, "finish_reason": fin}]}
+                chunk = {
+                    "id": "chatcmpl-aux",
+                    "object": "chat.completion.chunk",
+                    "created": int(time.time()),
+                    "model": MODEL_ID,
+                    "choices": [{"index": 0, "delta": delta, "finish_reason": fin}],
+                }
                 self.wfile.write(f"data: {json.dumps(chunk)}\n\n".encode())
             self.wfile.write(b"data: [DONE]\n\n")
             self.wfile.flush()

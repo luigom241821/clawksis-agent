@@ -54,10 +54,16 @@ def _adapter():
         extract_images=BasePlatformAdapter.extract_images,
         extract_local_files=BasePlatformAdapter.extract_local_files,
         send_voice=AsyncMock(return_value=SendResult(success=True, message_id="voice")),
-        send_document=AsyncMock(return_value=SendResult(success=True, message_id="doc")),
-        send_image_file=AsyncMock(return_value=SendResult(success=True, message_id="image")),
+        send_document=AsyncMock(
+            return_value=SendResult(success=True, message_id="doc")
+        ),
+        send_image_file=AsyncMock(
+            return_value=SendResult(success=True, message_id="image")
+        ),
         send_video=AsyncMock(return_value=SendResult(success=True, message_id="video")),
-        send_multiple_images=AsyncMock(return_value=SendResult(success=True, message_id="imgs")),
+        send_multiple_images=AsyncMock(
+            return_value=SendResult(success=True, message_id="imgs")
+        ),
     )
 
 
@@ -111,5 +117,3 @@ async def test_explicit_media_tag_still_delivers_post_stream(tmp_path, monkeypat
     images_kwargs = adapter.send_multiple_images.await_args.kwargs
     assert images_kwargs["chat_id"] == "C123CHAN"
     assert str(media_file) in unquote(images_kwargs["images"][0][0])
-
-

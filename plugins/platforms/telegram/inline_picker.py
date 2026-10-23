@@ -33,7 +33,11 @@ def collect_inline_catalog() -> list[dict[str, str]]:
             catalog.append({"name": name, "description": desc or ""})
 
     try:
-        from clawk_cli.commands_platforms import _collect_gateway_skill_entries, _sanitize_telegram_name, telegram_bot_commands
+        from clawk_cli.commands_platforms import (
+            _collect_gateway_skill_entries,
+            _sanitize_telegram_name,
+            telegram_bot_commands,
+        )
     except Exception:  # pragma: no cover - defensive
         logger.debug("inline picker: commands registry unavailable", exc_info=True)
         return catalog
@@ -44,7 +48,11 @@ def collect_inline_catalog() -> list[dict[str, str]]:
         logger.debug("inline picker: core command collection failed", exc_info=True)
     try:
         entries, _hidden = _collect_gateway_skill_entries(
-            platform="telegram", max_slots=None, reserved_names=set(seen), desc_limit=100, sanitize_name=_sanitize_telegram_name,
+            platform="telegram",
+            max_slots=None,
+            reserved_names=set(seen),
+            desc_limit=100,
+            sanitize_name=_sanitize_telegram_name,
         )
         for entry in entries:  # shape is (name, desc, cmd_key[, raw_name])
             _add(entry[0], entry[1])
@@ -62,7 +70,9 @@ def filter_catalog(catalog: list[dict[str, str]], term: str) -> list[dict[str, s
     prefix: list[dict[str, str]] = []
     name_sub: list[dict[str, str]] = []
     desc_sub: list[dict[str, str]] = []
-    norm_term = term.replace("-", "_")  # hyphens/underscores equivalent, mirroring command dispatch
+    norm_term = term.replace(
+        "-", "_"
+    )  # hyphens/underscores equivalent, mirroring command dispatch
     for item in catalog:
         norm_name = item["name"].lower().replace("-", "_")
         if norm_name.startswith(norm_term):
@@ -74,7 +84,9 @@ def filter_catalog(catalog: list[dict[str, str]], term: str) -> list[dict[str, s
     return prefix + name_sub + desc_sub
 
 
-def build_inline_results(query: str, offset: str = "", page_size: int = PAGE_SIZE) -> tuple[list[dict[str, Any]], str]:
+def build_inline_results(
+    query: str, offset: str = "", page_size: int = PAGE_SIZE
+) -> tuple[list[dict[str, Any]], str]:
     """One page of inline results for *query*: first token filters the catalog; the remainder becomes the
     command argument (``@bot plan migrate auth`` → ``/plan migrate auth``). ``next_offset == ""`` = last page."""
     parts = (query or "").strip().split(None, 1)
@@ -88,12 +100,16 @@ def build_inline_results(query: str, offset: str = "", page_size: int = PAGE_SIZ
         start = 0
     next_offset = str(start + page_size) if len(matches) > start + page_size else ""
     results: list[dict[str, Any]] = []
-    for item in matches[start:start + page_size]:
+    for item in matches[start : start + page_size]:
         message_text = f"/{item['name']}" + (f" {args}" if args else "")
-        results.append({
-            "id": f"{start}:{item['name']}"[:64],  # offset-scoped: unique across pages
-            "title": f"/{item['name']}",
-            "description": (item.get("description") or "")[:100],
-            "message_text": message_text[:4096],
-        })
+        results.append(
+            {
+                "id": f"{start}:{item['name']}"[
+                    :64
+                ],  # offset-scoped: unique across pages
+                "title": f"/{item['name']}",
+                "description": (item.get("description") or "")[:100],
+                "message_text": message_text[:4096],
+            }
+        )
     return results, next_offset

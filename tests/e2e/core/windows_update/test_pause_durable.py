@@ -29,26 +29,39 @@ from tests.e2e.core.windows_update._machine import (
 )
 from tests.fakes.fake_llm_provider import FakeLLMServer
 
-pytestmark = [pytest.mark.platforms("windows"), pytest.mark.integration,
-              pytest.mark.live_system_guard_bypass, REQUIRES_OPT_IN]
+pytestmark = [
+    pytest.mark.platforms("windows"),
+    pytest.mark.integration,
+    pytest.mark.live_system_guard_bypass,
+    REQUIRES_OPT_IN,
+]
 
 _PAUSED = "Paused gateway profile"
 _RECORD_STEM = ".clawk-update-paused-gateways"  # <stem>.<checkout key>.json, plus <record>.<pid>.<nonce>.claim
-_EARLY, _HELD = "AGENTS.md", "website/package.json"  # checkout order: the early file is written first
+_EARLY, _HELD = (
+    "AGENTS.md",
+    "website/package.json",
+)  # checkout order: the early file is written first
 _PULL_MARKER = "clawk-update-pull"  # clawk_cli._early_recovery.INTERRUPTED_PULL_MARKER, in the git dir
 _RESTORED = "Checkout restored"  # the updater's own in-place restore of git's half-written files
 
 
 def _alive(pid: int) -> bool:
     try:
-        return psutil.Process(pid).is_running() and psutil.Process(pid).status() != psutil.STATUS_ZOMBIE
+        return (
+            psutil.Process(pid).is_running()
+            and psutil.Process(pid).status() != psutil.STATUS_ZOMBIE
+        )
     except psutil.Error:
         return False
 
 
 def _record_held(machine) -> bool:
     """The paused set is still on disk (the record or a recovering launch's claim)."""
-    return any(p.suffix in (".json", ".claim") for p in machine.clawk_home.glob(_RECORD_STEM + "*"))
+    return any(
+        p.suffix in (".json", ".claim")
+        for p in machine.clawk_home.glob(_RECORD_STEM + "*")
+    )
 
 
 def _running_gateway(machine, not_pid: int, timeout: float) -> dict | None:
@@ -61,9 +74,14 @@ def _running_gateway(machine, not_pid: int, timeout: float) -> dict | None:
 def _update_killed_after_pause(machine) -> tuple[bool, str]:
     """Start ``clawk update`` and ``taskkill /F /T`` it the moment it reports the pause."""
     log = machine.logs / "update-killed.log"
-    proc = subprocess.Popen([str(machine.clawk_exe), "update", "--yes"], cwd=machine.profile,
-                            env=machine.env(), stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                            stderr=subprocess.STDOUT)
+    proc = subprocess.Popen(
+        [str(machine.clawk_exe), "update", "--yes"],
+        cwd=machine.profile,
+        env=machine.env(),
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
     seen = threading.Event()
     lines: list[str] = []
     assert proc.stdout is not None
@@ -82,7 +100,12 @@ def _update_killed_after_pause(machine) -> tuple[bool, str]:
     deadline = time.monotonic() + 600
     while not seen.is_set() and proc.poll() is None and time.monotonic() < deadline:
         time.sleep(0.05)
-    subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True, timeout=60, check=False)
+    subprocess.run(
+        ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+        capture_output=True,
+        timeout=60,
+        check=False,
+    )
     proc.wait(timeout=60)
     return seen.is_set(), "\n".join(lines[-40:])
 
@@ -91,17 +114,41 @@ def _mint_two_file_change(machine) -> str:
     """A target commit on top of the installed HEAD that rewrites two existing tracked files."""
     base = machine.installed_head()
     index = machine.root / "torn.index"
-    env = {"GIT_INDEX_FILE": str(index), "GIT_AUTHOR_NAME": "Clawksis E2E", "GIT_AUTHOR_EMAIL": "e2e@clawk.invalid",
-           "GIT_COMMITTER_NAME": "Clawksis E2E", "GIT_COMMITTER_EMAIL": "e2e@clawk.invalid"}
+    env = {
+        "GIT_INDEX_FILE": str(index),
+        "GIT_AUTHOR_NAME": "Clawksis E2E",
+        "GIT_AUTHOR_EMAIL": "e2e@clawk.invalid",
+        "GIT_COMMITTER_NAME": "Clawksis E2E",
+        "GIT_COMMITTER_EMAIL": "e2e@clawk.invalid",
+    }
     harness_git("-C", str(machine.serve), "read-tree", base, env=env)
     for path in (_EARLY, _HELD):
         src = machine.root / ("torn-" + path.replace("/", "_"))
         src.write_bytes((machine.install_dir / path).read_bytes() + b"\n")
-        blob = harness_git("-C", str(machine.serve), "hash-object", "-w", "--no-filters", str(src))
-        harness_git("-C", str(machine.serve), "update-index", "--cacheinfo", f"100644,{blob},{path}", env=env)
+        blob = harness_git(
+            "-C", str(machine.serve), "hash-object", "-w", "--no-filters", str(src)
+        )
+        harness_git(
+            "-C",
+            str(machine.serve),
+            "update-index",
+            "--cacheinfo",
+            f"100644,{blob},{path}",
+            env=env,
+        )
     tree = harness_git("-C", str(machine.serve), "write-tree", env=env)
     index.unlink(missing_ok=True)
-    target = harness_git("-C", str(machine.serve), "commit-tree", tree, "-p", base, "-m", "e2e: torn target", env=env)
+    target = harness_git(
+        "-C",
+        str(machine.serve),
+        "commit-tree",
+        tree,
+        "-p",
+        base,
+        "-m",
+        "e2e: torn target",
+        env=env,
+    )
     harness_git("-C", str(machine.serve), "update-ref", "refs/heads/main", target)
     return base
 
@@ -110,11 +157,15 @@ def _mint_two_file_change(machine) -> str:
 def journey(tmp_path_factory):
     out: dict = {}
     with FakeLLMServer() as srv:
-        machine = new_machine(tmp_path_factory.mktemp("pd"), srv.base_url, label="pd", system_git=True)
+        machine = new_machine(
+            tmp_path_factory.mktemp("pd"), srv.base_url, label="pd", system_git=True
+        )
         out["machine"] = machine
         try:
             install = machine.install()
-            assert install.returncode == 0, fail_with(machine, f"install.ps1 exited {install.returncode}", install)
+            assert install.returncode == 0, fail_with(
+                machine, f"install.ps1 exited {install.returncode}", install
+            )
             with machine.gateway_phase():
                 # (a) kill the updater right after it paused a real gateway
                 machine.spawn_gateway()
@@ -123,7 +174,9 @@ def journey(tmp_path_factory):
                 out["a_paused"], out["a_tail"] = _update_killed_after_pause(machine)
                 out["a_old_stopped"] = not _alive(old)
                 out["a_record"] = _record_held(machine)
-                out["a_launch"] = machine.clawk("gateway", "status", label="next-launch")
+                out["a_launch"] = machine.clawk(
+                    "gateway", "status", label="next-launch"
+                )
                 out["a_after"] = _running_gateway(machine, old, 120)
                 machine.kill_owned()
 
@@ -131,7 +184,9 @@ def journey(tmp_path_factory):
                 machine.spawn_gateway()
                 old = int(machine.wait_gateway_running().get("pid") or 0)
                 out["c_pre"] = machine.installed_head()
-                out["c_update"] = machine.clawk("update", "--yes", label="update-ok", timeout=900)
+                out["c_update"] = machine.clawk(
+                    "update", "--yes", label="update-ok", timeout=900
+                )
                 out["c_head"] = machine.installed_head()
                 after = _running_gateway(machine, old, 120)
                 time.sleep(30)
@@ -144,12 +199,23 @@ def journey(tmp_path_factory):
                 machine.spawn_gateway()
                 old = int(machine.wait_gateway_running().get("pid") or 0)
                 out["b_pre"] = _mint_two_file_change(machine)
-                with (machine.install_dir / _HELD).open("rb"):  # no FILE_SHARE_DELETE: git cannot replace it
-                    out["b_update"] = machine.clawk("update", "--yes", label="update-torn", timeout=900)
+                with (machine.install_dir / _HELD).open(
+                    "rb"
+                ):  # no FILE_SHARE_DELETE: git cannot replace it
+                    out["b_update"] = machine.clawk(
+                        "update", "--yes", label="update-torn", timeout=900
+                    )
                 out["b_head"] = machine.installed_head()
-                out["b_status"] = harness_git("-C", str(machine.install_dir), "status", "--porcelain",
-                                              "--untracked-files=no")
-                git_dir = harness_git("-C", str(machine.install_dir), "rev-parse", "--absolute-git-dir")
+                out["b_status"] = harness_git(
+                    "-C",
+                    str(machine.install_dir),
+                    "status",
+                    "--porcelain",
+                    "--untracked-files=no",
+                )
+                git_dir = harness_git(
+                    "-C", str(machine.install_dir), "rev-parse", "--absolute-git-dir"
+                )
                 out["b_marker"] = (Path(git_dir) / _PULL_MARKER).exists()
                 after = _running_gateway(machine, old, 60)
                 time.sleep(15 if after else 0)
@@ -165,20 +231,35 @@ def journey(tmp_path_factory):
 def test_killed_updater_gateway_resumed_by_next_launch(journey) -> None:
     m = journey["machine"]
     assert journey["a_paused"] and journey["a_old_stopped"], fail_with(
-        m, f"premise: the update never paused the gateway before the kill\n{journey['a_tail']}")
+        m,
+        f"premise: the update never paused the gateway before the kill\n{journey['a_tail']}",
+    )
     assert journey["a_after"] is not None, fail_with(
-        m, "after `taskkill /F` of an updater that paused the gateway, the next `clawk` launch left it "
-           f"stopped (pause record present after kill: {journey['a_record']})", journey["a_launch"])
+        m,
+        "after `taskkill /F` of an updater that paused the gateway, the next `clawk` launch left it "
+        f"stopped (pause record present after kill: {journey['a_record']})",
+        journey["a_launch"],
+    )
 
 
 def test_successful_update_gateway_outlives_the_updater(journey) -> None:
     m, run = journey["machine"], journey["c_update"]
     assert run.returncode == 0 and journey["c_head"] != journey["c_pre"], fail_with(
-        m, f"premise: the update did not complete (rc={run.returncode}, HEAD {journey['c_pre']} -> {journey['c_head']})", run)
-    assert journey["c_after"] is not None, fail_with(m, "the paused gateway was not restarted by a successful update", run)
+        m,
+        f"premise: the update did not complete (rc={run.returncode}, HEAD {journey['c_pre']} -> {journey['c_head']})",
+        run,
+    )
+    assert journey["c_after"] is not None, fail_with(
+        m, "the paused gateway was not restarted by a successful update", run
+    )
     assert journey["c_alive_30s"], fail_with(
-        m, f"the restarted gateway (pid {journey['c_after'].get('pid')}) died after `clawk update` exited", run)
-    assert not journey["c_record"], fail_with(m, "a fully resumed pause left its record behind", run)
+        m,
+        f"the restarted gateway (pid {journey['c_after'].get('pid')}) died after `clawk update` exited",
+        run,
+    )
+    assert not journey["c_record"], fail_with(
+        m, "a fully resumed pause left its record behind", run
+    )
 
 
 def test_failed_pull_does_not_start_gateway_on_torn_tree(journey) -> None:
@@ -187,22 +268,41 @@ def test_failed_pull_does_not_start_gateway_on_torn_tree(journey) -> None:
     head, pre, status = journey["b_head"], journey["b_pre"], journey["b_status"]
     state = f"rc={run.returncode}, HEAD={head}, pre={pre}, status={status!r}, marker={journey['b_marker']}"
     # Premise on every base: git's fast-forward really died on the held file.
-    assert run.returncode != 0 and "unable to unlink old" in out and _HELD in out, fail_with(
-        m, f"premise: the held file did not fail the pull ({state})", run)
+    assert run.returncode != 0 and "unable to unlink old" in out and _HELD in out, (
+        fail_with(m, f"premise: the held file did not fail the pull ({state})", run)
+    )
     torn = head == pre and _EARLY in status
-    restored = head == pre and not status and not journey["b_marker"] and _RESTORED in out
+    restored = (
+        head == pre and not status and not journey["b_marker"] and _RESTORED in out
+    )
     assert torn or restored, fail_with(
-        m, f"the failed pull left neither the torn tree git wrote nor the verbatim pre-update tree ({state})", run)
+        m,
+        f"the failed pull left neither the torn tree git wrote nor the verbatim pre-update tree ({state})",
+        run,
+    )
     pid = journey["b_after"].get("pid") if journey["b_after"] else None
     if torn:
         assert journey["b_after"] is None, fail_with(
-            m, f"the gateway was restarted onto a torn checkout ({status!r}) after the failed update (pid {pid})", run)
-        assert journey["b_record"], fail_with(m, "the paused set was not kept for recovery after the torn pull", run)
+            m,
+            f"the gateway was restarted onto a torn checkout ({status!r}) after the failed update (pid {pid})",
+            run,
+        )
+        assert journey["b_record"], fail_with(
+            m, "the paused set was not kept for recovery after the torn pull", run
+        )
         return
     # The updater put the pre-update tree back (HEAD, index and every file at ``pre``, no pull marker):
     # the paused gateway must not be lost to a failed update — it runs again on the old code.
     assert journey["b_after"] is not None, fail_with(
-        m, f"the updater restored the pre-update tree but left the paused gateway stopped ({state})", run)
+        m,
+        f"the updater restored the pre-update tree but left the paused gateway stopped ({state})",
+        run,
+    )
     assert journey["b_alive_15s"], fail_with(
-        m, f"the gateway restarted on the restored tree (pid {pid}) died after `clawk update` exited", run)
-    assert not journey["b_record"], fail_with(m, "a fully resumed pause left its record behind", run)
+        m,
+        f"the gateway restarted on the restored tree (pid {pid}) died after `clawk update` exited",
+        run,
+    )
+    assert not journey["b_record"], fail_with(
+        m, "a fully resumed pause left its record behind", run
+    )

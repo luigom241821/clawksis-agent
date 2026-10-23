@@ -42,14 +42,17 @@ _PRELUDE = "import json, os, sys\nsys.path.insert(0, os.getcwd())\n"
 PROBES: dict[int, tuple] = {
     # No timezone configured: the next cron occurrence kept the base time's fixed UTC offset, so a
     # 09:00 job in a DST process zone fired at 10:00 local the day after spring-forward.
-    119970: ({"TZ": "America/New_York"}, r'''
+    119970: (
+        {"TZ": "America/New_York"},
+        r"""
 from datetime import datetime
 from cron import jobs
 # what an unconfigured clock returns: the process zone's offset of the moment, as a fixed offset
 jobs._clawk_now = lambda: datetime.fromisoformat("2026-03-07T09:00:30-05:00")
 nxt = jobs.compute_next_run({"kind": "cron", "expr": "0 9 * * *"})
 print("fixed" if nxt == "2026-03-08T09:00:00-04:00" else "open")
-'''),
+""",
+    ),
 }
 
 
@@ -60,22 +63,42 @@ def gap_open(pr: int) -> bool:
     with tempfile.TemporaryDirectory(prefix=f"gap-{pr}-") as tmp:
         home = Path(tmp) / "home"
         (home / ".clawksis").mkdir(parents=True)
-        env = {k: v for k, v in os.environ.items()
-               if not k.startswith(("PYTEST_", "CLAWK_")) and not k.endswith("_API_KEY")}
-        env.update({"HOME": str(home), "CLAWK_HOME": str(home / ".clawksis"),
-                    "PYTHONPATH": str(REPO_ROOT), **extra_env})
-        proc = subprocess.run([sys.executable, "-c", _PRELUDE + script], cwd=str(REPO_ROOT), env=env,
-                              stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=120, check=False)
+        env = {
+            k: v
+            for k, v in os.environ.items()
+            if not k.startswith(("PYTEST_", "CLAWK_")) and not k.endswith("_API_KEY")
+        }
+        env.update(
+            {
+                "HOME": str(home),
+                "CLAWK_HOME": str(home / ".clawksis"),
+                "PYTHONPATH": str(REPO_ROOT),
+                **extra_env,
+            }
+        )
+        proc = subprocess.run(
+            [sys.executable, "-c", _PRELUDE + script],
+            cwd=str(REPO_ROOT),
+            env=env,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
     verdict = proc.stdout.strip().splitlines()[-1:] if proc.returncode == 0 else []
     if verdict not in (["open"], ["fixed"]):
-        raise AssertionError(f"probe for #{pr} is broken (rc={proc.returncode}): "
-                             f"{json.dumps(proc.stdout[-800:])} {proc.stderr[-2000:]}")
+        raise AssertionError(
+            f"probe for #{pr} is broken (rc={proc.returncode}): "
+            f"{json.dumps(proc.stdout[-800:])} {proc.stderr[-2000:]}"
+        )
     return verdict == ["open"]
 
 
 @contextlib.contextmanager
-def known_failure(pattern: str, reason: str,
-                  on_xfail: Optional[Callable[[], None]] = None) -> Iterator[None]:
+def known_failure(
+    pattern: str, reason: str, on_xfail: Optional[Callable[[], None]] = None
+) -> Iterator[None]:
     """Run-time xfail for a live gap without a fix PR: an ``AssertionError`` raised inside the
     block whose message matches ``pattern`` XFAILs the cell; any other failure propagates, and a
     clean pass stays a pass. Wrap only the final assertions, after every wait has settled, so a

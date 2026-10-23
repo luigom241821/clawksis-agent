@@ -18,7 +18,11 @@ from __future__ import annotations
 import pytest
 
 from tui_gateway import server
-from tools.approval import _gateway_queues, list_gateway_approvals, resolve_gateway_approval
+from tools.approval import (
+    _gateway_queues,
+    list_gateway_approvals,
+    resolve_gateway_approval,
+)
 from tools.approval_gateway_wait import _ApprovalEntry
 
 
@@ -31,7 +35,9 @@ REQUEST_ID = "req-loud-deny-1"
 def captured(monkeypatch):
     events = []
     monkeypatch.setattr(
-        server, "_broadcast_global_event", lambda ev, payload=None: events.append((ev, payload))
+        server,
+        "_broadcast_global_event",
+        lambda ev, payload=None: events.append((ev, payload)),
     )
     # Teardown's real work (finalize, agent close) is out of scope — this is
     # about what reaches the client.
@@ -68,12 +74,18 @@ def _cancelled_events(captured):
     return [(ev, payload) for ev, payload in captured if ev == "approval.cancelled"]
 
 
-def test_interrupt_with_pending_broadcasts_approval_cancelled(captured, session, pending_entry):
+def test_interrupt_with_pending_broadcasts_approval_cancelled(
+    captured, session, pending_entry
+):
     """RED on main: the deny-resolve happens, but nothing tells the client the prompt died."""
-    server._interrupt_session_turn(SID, session, request_id=f"client-gone-{SID}", orphan=True)
+    server._interrupt_session_turn(
+        SID, session, request_id=f"client-gone-{SID}", orphan=True
+    )
 
     cancelled = _cancelled_events(captured)
-    assert cancelled, "interrupt/reap must broadcast approval.cancelled when it drops a pending prompt"
+    assert cancelled, (
+        "interrupt/reap must broadcast approval.cancelled when it drops a pending prompt"
+    )
     _event, payload = cancelled[0]
     assert payload["session_id"] == SID
     assert payload["stored_session_id"] == SESSION_KEY
@@ -113,7 +125,9 @@ def test_broadcast_failure_still_deny_resolves(monkeypatch, session, pending_ent
     monkeypatch.setattr(server, "_session_uses_compute_host", lambda *_a, **_k: False)
     monkeypatch.setattr(server, "_clear_pending", lambda *_a, **_k: None)
 
-    server._interrupt_session_turn(SID, session, request_id=f"client-gone-{SID}", orphan=True)
+    server._interrupt_session_turn(
+        SID, session, request_id=f"client-gone-{SID}", orphan=True
+    )
 
     assert pending_entry.result == "deny"
     assert pending_entry.event.is_set()
@@ -129,9 +143,13 @@ def test_user_interrupt_reason_is_interrupt(captured, session, pending_entry):
     assert pending_entry.result == "deny"
 
 
-def test_orphan_kwarg_labels_ws_orphan_reap_without_client_gone_prefix(captured, session, pending_entry):
+def test_orphan_kwarg_labels_ws_orphan_reap_without_client_gone_prefix(
+    captured, session, pending_entry
+):
     """The reason comes from orphan=, not request_id prefix sniffing."""
-    server._interrupt_session_turn(SID, session, request_id="interrupt-manual", orphan=True)
+    server._interrupt_session_turn(
+        SID, session, request_id="interrupt-manual", orphan=True
+    )
 
     cancelled = _cancelled_events(captured)
     assert cancelled
@@ -139,12 +157,16 @@ def test_orphan_kwarg_labels_ws_orphan_reap_without_client_gone_prefix(captured,
     assert pending_entry.result == "deny"
 
 
-def test_teardown_with_pending_broadcasts_approval_cancelled(captured, session, pending_entry):
+def test_teardown_with_pending_broadcasts_approval_cancelled(
+    captured, session, pending_entry
+):
     """close_on_disconnect / idle reclaim can drop the queue via unregister without an interrupt."""
     server._teardown_session(session, end_reason="ws_orphan_reap")
 
     cancelled = _cancelled_events(captured)
-    assert cancelled, "teardown must broadcast approval.cancelled when it drops a pending prompt"
+    assert cancelled, (
+        "teardown must broadcast approval.cancelled when it drops a pending prompt"
+    )
     _event, payload = cancelled[0]
     assert payload["session_id"] == SID
     assert payload["stored_session_id"] == SESSION_KEY

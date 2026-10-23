@@ -41,14 +41,12 @@ class TestUnresolvedNamedCustomProviderIsNotTreatedAsStrayVendorPrefix:
 
     def test_unresolved_named_custom_provider_slug_is_preserved(self):
         with _no_custom_providers_configured():
-            assert _normalize_main_model_assignment("custom:litellm", "ollama/glm-5.2") == (
+            assert _normalize_main_model_assignment(
+                "custom:litellm", "ollama/glm-5.2"
+            ) == (
                 "custom:litellm",
                 "ollama/glm-5.2",
             )
-
-
-
-
 
 
 class TestStrayVendorPrefixFallbackStillWorks:

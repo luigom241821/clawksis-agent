@@ -50,6 +50,7 @@ def _write_active(data: dict[str, Any]) -> None:
 def _pid_alive(pid: int) -> bool:
     # Not ``os.kill(pid, 0)``: on Windows that can kill the target (bpo-14484).
     from gateway.status import _pid_exists
+
     return bool(pid) and _pid_exists(pid)
 
 
@@ -61,15 +62,30 @@ def _kill(pid: int, sig) -> None:
 _NO_ACTIVE = {"ok": False, "reason": "no active meeting"}
 
 
-def start(url: str, *, out_dir: Optional[Path] = None, headed: bool = False,
-          auth_state: Optional[str] = None, guest_name: str = "Clawksis", duration: Optional[str] = None,
-          session_id: Optional[str] = None, mode: str = "transcribe", realtime_model: Optional[str] = None,
-          realtime_voice: Optional[str] = None, realtime_instructions: Optional[str] = None,
-          realtime_api_key: Optional[str] = None) -> dict[str, Any]:
+def start(
+    url: str,
+    *,
+    out_dir: Optional[Path] = None,
+    headed: bool = False,
+    auth_state: Optional[str] = None,
+    guest_name: str = "Clawksis",
+    duration: Optional[str] = None,
+    session_id: Optional[str] = None,
+    mode: str = "transcribe",
+    realtime_model: Optional[str] = None,
+    realtime_voice: Optional[str] = None,
+    realtime_instructions: Optional[str] = None,
+    realtime_api_key: Optional[str] = None,
+) -> dict[str, Any]:
     """Spawn the meet_bot subprocess for *url*, stopping any running bot first (one active meeting)."""
     from plugins.google_meet.meet_bot import _is_safe_meet_url, _meeting_id_from_url
+
     if not _is_safe_meet_url(url):
-        return {"ok": False, "error": "refusing: only https://meet.google.com/ URLs are allowed. got: " + repr(url)}
+        return {
+            "ok": False,
+            "error": "refusing: only https://meet.google.com/ URLs are allowed. got: "
+            + repr(url),
+        }
     if _pid_alive(int((_read_active() or {}).get("pid", 0))):
         stop(reason="replaced by new meet_join")
     meeting_id = _meeting_id_from_url(url)
@@ -79,33 +95,58 @@ def start(url: str, *, out_dir: Optional[Path] = None, headed: bool = False,
     for name in ("transcript.txt", "status.json"):
         with contextlib.suppress(OSError):
             (out / name).unlink()
-    env = {**os.environ, "CLAWK_MEET_URL": url, "CLAWK_MEET_OUT_DIR": str(out),
-           "CLAWK_MEET_GUEST_NAME": guest_name}
+    env = {
+        **os.environ,
+        "CLAWK_MEET_URL": url,
+        "CLAWK_MEET_OUT_DIR": str(out),
+        "CLAWK_MEET_GUEST_NAME": guest_name,
+    }
     for value, var in (
         (headed and "1", "CLAWK_MEET_HEADED"),
         (auth_state, "CLAWK_MEET_AUTH_STATE"),
         (duration, "CLAWK_MEET_DURATION"),
-        (mode, "CLAWK_MEET_MODE"),  # bot defaults to transcribe when unset (v1 behavior)
+        (
+            mode,
+            "CLAWK_MEET_MODE",
+        ),  # bot defaults to transcribe when unset (v1 behavior)
         (realtime_model, "CLAWK_MEET_REALTIME_MODEL"),
         (realtime_voice, "CLAWK_MEET_REALTIME_VOICE"),
-        (realtime_instructions, "CLAWK_MEET_REALTIME_INSTRUCTIONS")):
+        (realtime_instructions, "CLAWK_MEET_REALTIME_INSTRUCTIONS"),
+    ):
         if value:
             env[var] = value
     # Resolve the realtime key at SPAWN time in the parent, where the profile secret scope
     # (a contextvar) is installed; the detached child inherits env, not scope.
     if not realtime_api_key:
         from agent.secret_scope import get_secret
-        realtime_api_key = get_secret("CLAWK_MEET_REALTIME_KEY") or get_secret("OPENAI_API_KEY")
+
+        realtime_api_key = get_secret("CLAWK_MEET_REALTIME_KEY") or get_secret(
+            "OPENAI_API_KEY"
+        )
     if realtime_api_key:
         env["CLAWK_MEET_REALTIME_KEY"] = realtime_api_key
     log_path = out / "bot.log"
     # Detach: stdout/stderr → log file, new session so parent signals don't propagate.
     with open(log_path, "ab", buffering=0) as log_fh:
-        proc = subprocess.Popen([sys.executable, "-m", "plugins.google_meet.meet_bot"], stdin=subprocess.DEVNULL,
-                                stdout=log_fh, stderr=subprocess.STDOUT, env=env, start_new_session=True,
-                                close_fds=True)
-    record = {"pid": proc.pid, "meeting_id": meeting_id, "out_dir": str(out), "url": url,
-              "started_at": time.time(), "session_id": session_id, "log_path": str(log_path), "mode": mode}
+        proc = subprocess.Popen(
+            [sys.executable, "-m", "plugins.google_meet.meet_bot"],
+            stdin=subprocess.DEVNULL,
+            stdout=log_fh,
+            stderr=subprocess.STDOUT,
+            env=env,
+            start_new_session=True,
+            close_fds=True,
+        )
+    record = {
+        "pid": proc.pid,
+        "meeting_id": meeting_id,
+        "out_dir": str(out),
+        "url": url,
+        "started_at": time.time(),
+        "session_id": session_id,
+        "log_path": str(log_path),
+        "mode": mode,
+    }
     _write_active(record)
     return {"ok": True, **record}
 
@@ -154,8 +195,13 @@ def transcript(last: Optional[int] = None) -> dict[str, Any]:
         }
     text = tp.read_text(encoding="utf-8-sig", errors="replace")
     all_lines = [ln for ln in text.splitlines() if ln.strip()]
-    return {"ok": True, "meetingId": active.get("meeting_id"),
-            "lines": all_lines[-last:] if last else all_lines, "total": len(all_lines), "path": str(tp)}
+    return {
+        "ok": True,
+        "meetingId": active.get("meeting_id"),
+        "lines": all_lines[-last:] if last else all_lines,
+        "total": len(all_lines),
+        "path": str(tp),
+    }
 
 
 def enqueue_say(text: str) -> dict[str, Any]:
@@ -168,8 +214,13 @@ def enqueue_say(text: str) -> dict[str, Any]:
     if not active:
         return dict(_NO_ACTIVE)
     if active.get("mode") != "realtime":
-        return {"ok": False, "reason": ("active meeting is in transcribe mode — pass mode='realtime' "
-                                        "to meet_join to enable agent speech")}
+        return {
+            "ok": False,
+            "reason": (
+                "active meeting is in transcribe mode — pass mode='realtime' "
+                "to meet_join to enable agent speech"
+            ),
+        }
     out_dir = Path(active.get("out_dir", ""))
     if not out_dir.is_dir():
         return {"ok": False, "reason": f"out_dir missing: {out_dir}"}
@@ -177,8 +228,12 @@ def enqueue_say(text: str) -> dict[str, Any]:
     entry = {"id": uuid.uuid4().hex[:12], "text": text}
     with say_queue_lock(queue_path), queue_path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(entry) + "\n")
-    return {"ok": True, "meetingId": active.get("meeting_id"), "enqueued_id": entry["id"],
-            "queue_path": str(queue_path)}
+    return {
+        "ok": True,
+        "meetingId": active.get("meeting_id"),
+        "enqueued_id": entry["id"],
+        "queue_path": str(queue_path),
+    }
 
 
 def stop(*, reason: str = "requested") -> dict[str, Any]:
@@ -195,7 +250,13 @@ def stop(*, reason: str = "requested") -> dict[str, Any]:
                 break
             time.sleep(0.5)
         else:
-            _kill(pid, signal.SIGKILL)  # windows-footgun: ok — POSIX-only plugin (google_meet registers no-op on Windows; see __init__.py)
+            _kill(
+                pid, signal.SIGKILL
+            )  # windows-footgun: ok — POSIX-only plugin (google_meet registers no-op on Windows; see __init__.py)
     _active_file().unlink(missing_ok=True)
-    return {"ok": True, "reason": reason, "meetingId": active.get("meeting_id"),
-            "transcriptPath": str(Path(out_dir) / "transcript.txt") if out_dir else None}
+    return {
+        "ok": True,
+        "reason": reason,
+        "meetingId": active.get("meeting_id"),
+        "transcriptPath": str(Path(out_dir) / "transcript.txt") if out_dir else None,
+    }

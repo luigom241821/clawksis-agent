@@ -149,7 +149,9 @@ def _cancel_silent_request(
     cancel_event.set()
     worker.join(timeout=5)
     elapsed = time.monotonic() - cancelled_at
-    assert not worker.is_alive(), "explicit cancellation did not wake the silent request"
+    assert not worker.is_alive(), (
+        "explicit cancellation did not wake the silent request"
+    )
     return result["exc"], elapsed
 
 
@@ -163,7 +165,9 @@ def _invoke_generic(client: Any) -> Any:
     )
 
 
-def test_protected_silent_provider_is_isolated_and_raises_frozen_explicit_cancel() -> None:
+def test_protected_silent_provider_is_isolated_and_raises_frozen_explicit_cancel() -> (
+    None
+):
     started = threading.Event()
     stream = _BlockingStream(started)
     client = _GenericClient(stream)
@@ -542,8 +546,9 @@ def test_isolated_provider_worker_inherits_protection_and_progress_hook() -> Non
     client = SimpleNamespace(
         chat=SimpleNamespace(completions=SimpleNamespace(create=_create))
     )
-    with aux.aux_progress_hook(lambda: progress.append("tick")), aux.aux_interrupt_protection(
-        cancel_event=cancel_event
+    with (
+        aux.aux_progress_hook(lambda: progress.append("tick")),
+        aux.aux_interrupt_protection(cancel_event=cancel_event),
     ):
         aux._relay_sync_completion(client, {"model": "test", "messages": []})
 
@@ -555,7 +560,10 @@ def test_isolated_provider_worker_inherits_protection_and_progress_hook() -> Non
 
 def test_isolated_provider_worker_inherits_caller_contextvars() -> None:
     from tools.approval import get_current_session_key
-    from tools.approval_context import reset_current_session_key, set_current_session_key
+    from tools.approval_context import (
+        reset_current_session_key,
+        set_current_session_key,
+    )
 
     arbitrary = contextvars.ContextVar("isolated-provider-test", default="missing")
     arbitrary_token = arbitrary.set("caller-value")
@@ -615,7 +623,9 @@ def test_unrelated_interrupted_error_is_not_reclassified_as_explicit_cancel() ->
     )
 
     with aux.aux_interrupt_protection(cancel_event=threading.Event()):
-        with pytest.raises(InterruptedError, match="provider syscall interrupted") as caught:
+        with pytest.raises(
+            InterruptedError, match="provider syscall interrupted"
+        ) as caught:
             aux._relay_sync_completion(client, {"model": "test", "messages": []})
 
     assert not isinstance(caught.value, aux.AuxiliaryExplicitCancellation)

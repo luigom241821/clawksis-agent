@@ -1,4 +1,5 @@
 """Recovery only targets the recorded managed router, never a process-name sweep."""
+
 from __future__ import annotations
 
 import json
@@ -23,11 +24,25 @@ def _wait_for(predicate, timeout=10):
 
 
 @pytest.mark.platforms("windows")
-@pytest.mark.parametrize("case", [
-    "modern", "legacy", "live-owner", "pid-reused", "unknown-owner", "wrong-exe",
-    "legacy-key", "legacy-models", "busy", "state-replaced", "wrong-parent",
-])
-def test_startup_preserves_trees_and_explicit_stop_checks_owner(tmp_path, monkeypatch, case):
+@pytest.mark.parametrize(
+    "case",
+    [
+        "modern",
+        "legacy",
+        "live-owner",
+        "pid-reused",
+        "unknown-owner",
+        "wrong-exe",
+        "legacy-key",
+        "legacy-models",
+        "busy",
+        "state-replaced",
+        "wrong-parent",
+    ],
+)
+def test_startup_preserves_trees_and_explicit_stop_checks_owner(
+    tmp_path, monkeypatch, case
+):
     from clawk_cli.local_runtime import bootstrap, supervisor
 
     root = tmp_path / "managed runtime"
@@ -44,7 +59,9 @@ def test_startup_preserves_trees_and_explicit_stop_checks_owner(tmp_path, monkey
     shutil.copy2(sys._base_executable, exe)
     env = os.environ.copy()
     env["PYTHONHOME"] = str(Path(sys._base_executable).parent)
-    env["PATH"] = str(Path(sys._base_executable).parent) + os.pathsep + env.get("PATH", "")
+    env["PATH"] = (
+        str(Path(sys._base_executable).parent) + os.pathsep + env.get("PATH", "")
+    )
     env["PYTHONPATH"] = os.pathsep.join(sys.path)
     mdir = tmp_path / "models"
     mdir.mkdir()
@@ -61,17 +78,33 @@ def test_startup_preserves_trees_and_explicit_stop_checks_owner(tmp_path, monkey
         " json.dump({'router': os.getpid(), 'child': child.pid, "
         "'create_time': psutil.Process().create_time()}, f)\n"
         "os.replace(sys.argv[1] + '.tmp', sys.argv[1])\n"
-        "time.sleep(60)\n", encoding="utf-8")
-    owner = subprocess.Popen([
-        sys.executable, "-c",
-        "import subprocess,sys,psutil,json,os,time; "
-        "p=subprocess.Popen(sys.argv[1:]); "
-        "print(json.dumps({'pid':os.getpid(),'create_time':psutil.Process().create_time()}),flush=True); "
-        f"time.sleep({60 if case == 'live-owner' else 1})",
-        str(exe), str(child_script), str(ready),
-        "--host", "127.0.0.1", "--port", "59999", "--api-key", "test-only",
-        "--models-dir", str(mdir),
-    ], stdout=subprocess.PIPE, text=True, env=env)
+        "time.sleep(60)\n",
+        encoding="utf-8",
+    )
+    owner = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            "import subprocess,sys,psutil,json,os,time; "
+            "p=subprocess.Popen(sys.argv[1:]); "
+            "print(json.dumps({'pid':os.getpid(),'create_time':psutil.Process().create_time()}),flush=True); "
+            f"time.sleep({60 if case == 'live-owner' else 1})",
+            str(exe),
+            str(child_script),
+            str(ready),
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "59999",
+            "--api-key",
+            "test-only",
+            "--models-dir",
+            str(mdir),
+        ],
+        stdout=subprocess.PIPE,
+        text=True,
+        env=env,
+    )
     owner_identity = json.loads(owner.stdout.readline())
     processes = []
     try:
@@ -81,12 +114,17 @@ def test_startup_preserves_trees_and_explicit_stop_checks_owner(tmp_path, monkey
         if case != "live-owner":
             owner.wait(timeout=10)
         # Retain the identity, not a still-open Popen handle keeping a dead PID visible.
-        monkeypatch.setattr(bootstrap, "staged_models", lambda: [tmp_path / "model.gguf"])
+        monkeypatch.setattr(
+            bootstrap, "staged_models", lambda: [tmp_path / "model.gguf"]
+        )
         state = {
-            "pid": record["router"], "create_time": record["create_time"],
-            "owner_pid": owner_identity["pid"], "owner_create_time": owner_identity["create_time"],
+            "pid": record["router"],
+            "create_time": record["create_time"],
+            "owner_pid": owner_identity["pid"],
+            "owner_create_time": owner_identity["create_time"],
             "executable": processes[0].exe(),
-            "base_url": "http://127.0.0.1:59999/v1", "api_key": "test-only",
+            "base_url": "http://127.0.0.1:59999/v1",
+            "api_key": "test-only",
         }
         if case.startswith("legacy"):
             state = {key: state[key] for key in ("pid", "base_url", "api_key")}
@@ -99,11 +137,14 @@ def test_startup_preserves_trees_and_explicit_stop_checks_owner(tmp_path, monkey
         if case == "legacy-key":
             state["api_key"] = "different-key"
         if case == "legacy-models":
-            monkeypatch.setattr(bootstrap, "models_dir", lambda: tmp_path / "other models")
+            monkeypatch.setattr(
+                bootstrap, "models_dir", lambda: tmp_path / "other models"
+            )
         supervisor.state_path().write_text(json.dumps(state), encoding="utf-8")
         from fastapi import HTTPException
         from clawk_cli.local_runtime import endpoint
         from clawk_cli.web_routers import local_models
+
         if case == "wrong-parent":
             state["owner_pid"] = os.getpid()
             supervisor.state_path().write_text(json.dumps(state))
@@ -112,17 +153,28 @@ def test_startup_preserves_trees_and_explicit_stop_checks_owner(tmp_path, monkey
             assert all(p.is_running() for p in processes), f"startup killed: {case}"
             assert json.loads(supervisor.state_path().read_text()) == state
         if case == "state-replaced":
-            state = {**state, "owner_pid": os.getpid(), "owner_create_time": psutil.Process().create_time()}
+            state = {
+                **state,
+                "owner_pid": os.getpid(),
+                "owner_create_time": psutil.Process().create_time(),
+            }
             supervisor.state_path().write_text(json.dumps(state))
         if case in ("modern", "legacy", "busy"):
             if case == "modern":
                 from fastapi import FastAPI
                 from fastapi.testclient import TestClient
+
                 app = FastAPI()
                 app.include_router(local_models.router)
                 disabled = []
-                monkeypatch.setattr(local_models, "_set_runtime_enabled", lambda value: disabled.append(value))
-                response = TestClient(app).post("/api/local-models/server", json={"action": "stop"})
+                monkeypatch.setattr(
+                    local_models,
+                    "_set_runtime_enabled",
+                    lambda value: disabled.append(value),
+                )
+                response = TestClient(app).post(
+                    "/api/local-models/server", json={"action": "stop"}
+                )
                 assert response.status_code == 200, response.text
                 assert disabled == [False]
             else:
@@ -160,30 +212,44 @@ def test_startup_reuses_without_activity_probe(tmp_path, monkeypatch, failure):
     state = {"base_url": "http://127.0.0.1:59999/v1", "api_key": "test-only"}
     monkeypatch.setattr(endpoint, "_state_endpoint", lambda: state)
     calls = []
+
     def probe(*args, **kwargs):
         calls.append(True)
         if failure == "truncated":
             raise http.client.IncompleteRead(b"partial", 100)
         return {"data": []}  # work arrives immediately after an idle snapshot
+
     monkeypatch.setattr(endpoint, "managed_get_json", probe)
     monkeypatch.setattr(recovery, "read_state", lambda: state)
     from types import SimpleNamespace
-    monkeypatch.setattr(recovery, "recorded_process",
-                        lambda state: SimpleNamespace(is_running=lambda: False))
+
+    monkeypatch.setattr(
+        recovery,
+        "recorded_process",
+        lambda state: SimpleNamespace(is_running=lambda: False),
+    )
     monkeypatch.setattr(recovery, "_owner_is_dead", lambda state: True)
     for _ in range(2):
-        assert bootstrap.ensure_local_runtime({"local_runtime": {"enabled": True}}) is None
+        assert (
+            bootstrap.ensure_local_runtime({"local_runtime": {"enabled": True}}) is None
+        )
     assert not calls
 
 
-def test_shutdown_during_backoff_cannot_restart_or_remove_another_server(tmp_path, monkeypatch):
+def test_shutdown_during_backoff_cannot_restart_or_remove_another_server(
+    tmp_path, monkeypatch
+):
     from types import SimpleNamespace
     from clawk_cli.local_runtime import supervisor
 
     monkeypatch.setattr(supervisor, "runtimes_root", lambda: tmp_path)
     sup = supervisor.LlamaServerSupervisor(tmp_path, tmp_path, port=59998)
     sup.proc = SimpleNamespace(pid=101, poll=lambda: 1)
-    other = {"pid": 202, "base_url": "http://127.0.0.1:59997/v1", "api_key": "test-only"}
+    other = {
+        "pid": 202,
+        "base_url": "http://127.0.0.1:59997/v1",
+        "api_key": "test-only",
+    }
     supervisor.state_path().write_text(json.dumps(other))
     spawned = []
     monkeypatch.setattr(sup, "_spawn", lambda: spawned.append(True))
@@ -192,7 +258,7 @@ def test_shutdown_during_backoff_cannot_restart_or_remove_another_server(tmp_pat
     monkeypatch.setattr(supervisor.time, "sleep", lambda *a: sup.stop())
     # A real Event.wait is independently exercised by the native lifetime tests.
     if hasattr(sup, "_stop_event"):
-        monkeypatch.setattr(sup._stop_event, "wait", lambda *a: (sup.stop() or True))
+        monkeypatch.setattr(sup._stop_event, "wait", lambda *a: sup.stop() or True)
     sup._watch()
     assert not spawned, "stop during restart backoff resurrected the runtime"
     assert json.loads(supervisor.state_path().read_text()) == other
@@ -247,12 +313,18 @@ def test_stopped_state_is_retained_without_unlink_race(tmp_path, monkeypatch):
     sup._state = {"pid": 101}
     path = supervisor.state_path()
     path.write_text(json.dumps(sup._state))
-    replacement = {"pid": os.getpid(), "base_url": "http://127.0.0.1:59997/v1", "api_key": "test-only"}
+    replacement = {
+        "pid": os.getpid(),
+        "base_url": "http://127.0.0.1:59997/v1",
+        "api_key": "test-only",
+    }
     unlink = Path.unlink
+
     def publish_before_unlink(self, *args, **kwargs):
         if self == path:
             self.write_text(json.dumps(replacement))
         return unlink(self, *args, **kwargs)
+
     with monkeypatch.context() as m:
         m.setattr(Path, "unlink", publish_before_unlink)
         sup.stop()
@@ -262,7 +334,9 @@ def test_stopped_state_is_retained_without_unlink_race(tmp_path, monkeypatch):
     assert json.loads(path.read_text()) == replacement
 
 
-@pytest.mark.parametrize("kind", ["psutil", "subprocess", "missing-psutil", "wait-error"])
+@pytest.mark.parametrize(
+    "kind", ["psutil", "subprocess", "missing-psutil", "wait-error"]
+)
 def test_terminate_tree_escalates_and_always_cleans_children(monkeypatch, kind):
     from types import SimpleNamespace
     from unittest.mock import Mock
@@ -271,14 +345,22 @@ def test_terminate_tree_escalates_and_always_cleans_children(monkeypatch, kind):
     child = Mock()
     child.is_running.return_value = True
     proc = Mock(pid=123)
-    error = (psutil.TimeoutExpired(15) if kind == "psutil" else
-             RuntimeError("wait failed") if kind == "wait-error" else
-             subprocess.TimeoutExpired("router", 15))
+    error = (
+        psutil.TimeoutExpired(15)
+        if kind == "psutil"
+        else RuntimeError("wait failed")
+        if kind == "wait-error"
+        else subprocess.TimeoutExpired("router", 15)
+    )
     proc.wait.side_effect = error
     if kind == "missing-psutil":
         monkeypatch.setitem(sys.modules, "psutil", None)
     else:
-        monkeypatch.setattr(psutil, "Process", lambda pid: SimpleNamespace(children=lambda **kw: [child]))
+        monkeypatch.setattr(
+            psutil,
+            "Process",
+            lambda pid: SimpleNamespace(children=lambda **kw: [child]),
+        )
     if kind == "wait-error":
         with pytest.raises(RuntimeError, match="wait failed"):
             LlamaServerSupervisor._terminate_tree(proc)
@@ -291,7 +373,9 @@ def test_terminate_tree_escalates_and_always_cleans_children(monkeypatch, kind):
 
 
 @pytest.mark.parametrize("reuse_at", ["before-walk", "during-walk", "never"])
-def test_explicit_stop_preserves_verified_root_incarnation(tmp_path, monkeypatch, reuse_at):
+def test_explicit_stop_preserves_verified_root_incarnation(
+    tmp_path, monkeypatch, reuse_at
+):
     from unittest.mock import Mock
     from clawk_cli.local_runtime import recovery, supervisor
 
@@ -368,14 +452,24 @@ def test_reparented_router_keeps_its_endpoint(tmp_path, monkeypatch):
     # EOF ends the test child without signaling outside the test's subtree after reparenting.
     with os.fdopen(write_fd, "wb") as control:
         try:
-            owner = subprocess.Popen([sys.executable, "-c", """
+            owner = subprocess.Popen(
+                [
+                    sys.executable,
+                    "-c",
+                    """
 import json, os, psutil, subprocess, sys
 p = subprocess.Popen([sys.executable, '-c', 'import sys; sys.stdin.buffer.read(1)'],
                      stdin=int(sys.argv[1]), stdout=subprocess.DEVNULL)
 proc = psutil.Process(p.pid)
 print(json.dumps({'pid': proc.pid, 'create_time': proc.create_time(), 'executable': proc.exe(),
                   'owner_pid': os.getpid(), 'owner_create_time': psutil.Process().create_time()}), flush=True)
-""", str(read_fd)], pass_fds=(read_fd,), stdout=subprocess.PIPE, text=True)
+""",
+                    str(read_fd),
+                ],
+                pass_fds=(read_fd,),
+                stdout=subprocess.PIPE,
+                text=True,
+            )
         finally:
             os.close(read_fd)
         state = json.loads(owner.stdout.readline())
@@ -407,10 +501,15 @@ def test_clock_step_keeps_the_recorded_router(tmp_path, monkeypatch):
         sup._write_state()
         stepped = psutil._pslinux.boot_time() + 22
         monkeypatch.setattr(psutil._pslinux, "boot_time", lambda: stepped)
-        assert endpoint._state_endpoint() == {"base_url": sup.base_url, "api_key": sup.api_key}
+        assert endpoint._state_endpoint() == {
+            "base_url": sup.base_url,
+            "api_key": sup.api_key,
+        }
 
         state = json.loads(supervisor.state_path().read_text())
-        supervisor.state_path().write_text(json.dumps({**state, "start_time": state["start_time"] - 1000}))
+        supervisor.state_path().write_text(
+            json.dumps({**state, "start_time": state["start_time"] - 1000})
+        )
         assert endpoint._state_endpoint() is None
     finally:
         proc.kill()
@@ -430,13 +529,25 @@ def test_replacement_stops_only_an_orphaned_router(tmp_path, monkeypatch, owner)
     holder = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
     router = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
     try:
-        holder_proc, router_proc = psutil.Process(holder.pid), psutil.Process(router.pid)
-        supervisor.state_path().write_text(json.dumps({
-            "base_url": "http://127.0.0.1:59997/v1", "api_key": "test-only",
-            "pid": router.pid, "create_time": router_proc.create_time(),
-            "start_time": get_process_start_time(router.pid), "executable": router_proc.exe(),
-            "owner_pid": holder.pid, "owner_create_time": holder_proc.create_time(),
-            "owner_start_time": get_process_start_time(holder.pid)}))
+        holder_proc, router_proc = (
+            psutil.Process(holder.pid),
+            psutil.Process(router.pid),
+        )
+        supervisor.state_path().write_text(
+            json.dumps(
+                {
+                    "base_url": "http://127.0.0.1:59997/v1",
+                    "api_key": "test-only",
+                    "pid": router.pid,
+                    "create_time": router_proc.create_time(),
+                    "start_time": get_process_start_time(router.pid),
+                    "executable": router_proc.exe(),
+                    "owner_pid": holder.pid,
+                    "owner_create_time": holder_proc.create_time(),
+                    "owner_start_time": get_process_start_time(holder.pid),
+                }
+            )
+        )
         if owner == "exited":
             holder.kill()
             holder.wait(timeout=5)
@@ -486,12 +597,35 @@ def test_the_process_that_boots_the_server_stops_it_on_a_clean_exit(tmp_path):
         "bootstrap._stop_at_exit()\n"
         "sys.exit(0)\n"
     )
-    subprocess.run([sys.executable, "-c", code], cwd=Path(__file__).resolve().parents[2], check=True, timeout=60)
+    subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=Path(__file__).resolve().parents[2],
+        check=True,
+        timeout=60,
+    )
     assert marker.exists()
 
 
 @pytest.mark.platforms("windows")
-@pytest.mark.parametrize("damage", ["valid", "birth", "exe", "bool-pid", "bool-birth", "nan", "inf", "owner-bool", "owner-nan", "parent", "partial", "list", "invalid", "unreadable"])
+@pytest.mark.parametrize(
+    "damage",
+    [
+        "valid",
+        "birth",
+        "exe",
+        "bool-pid",
+        "bool-birth",
+        "nan",
+        "inf",
+        "owner-bool",
+        "owner-nan",
+        "parent",
+        "partial",
+        "list",
+        "invalid",
+        "unreadable",
+    ],
+)
 def test_retained_endpoint_validates_identity(tmp_path, monkeypatch, damage):
     from clawk_cli.local_runtime import endpoint, recovery, supervisor
 
@@ -499,19 +633,37 @@ def test_retained_endpoint_validates_identity(tmp_path, monkeypatch, damage):
     proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
     try:
         real = psutil.Process(proc.pid)
-        state = {"pid": real.pid, "create_time": real.create_time(), "executable": real.exe(),
-                 "owner_pid": os.getpid(), "owner_create_time": psutil.Process().create_time(),
-                 "base_url": "http://127.0.0.1:59999/v1", "api_key": "test-only"}
-        changes = {"birth": {"create_time": real.create_time() - 10}, "exe": {"executable": str(tmp_path / "wrong.exe")},
-                   "bool-pid": {"pid": True}, "bool-birth": {"create_time": True},
-                   "nan": {"create_time": float("nan")}, "inf": {"create_time": float("inf")},
-                   "owner-bool": {"owner_create_time": True}, "owner-nan": {"owner_create_time": float("nan")},
-                   "parent": {"owner_pid": real.pid}}
+        state = {
+            "pid": real.pid,
+            "create_time": real.create_time(),
+            "executable": real.exe(),
+            "owner_pid": os.getpid(),
+            "owner_create_time": psutil.Process().create_time(),
+            "base_url": "http://127.0.0.1:59999/v1",
+            "api_key": "test-only",
+        }
+        changes = {
+            "birth": {"create_time": real.create_time() - 10},
+            "exe": {"executable": str(tmp_path / "wrong.exe")},
+            "bool-pid": {"pid": True},
+            "bool-birth": {"create_time": True},
+            "nan": {"create_time": float("nan")},
+            "inf": {"create_time": float("inf")},
+            "owner-bool": {"owner_create_time": True},
+            "owner-nan": {"owner_create_time": float("nan")},
+            "parent": {"owner_pid": real.pid},
+        }
         state.update(changes.get(damage, {}))
         if damage == "partial":
             state.pop("create_time")
         path = supervisor.state_path()
-        path.write_text("[]" if damage == "list" else "{" if damage == "invalid" else json.dumps(state))
+        path.write_text(
+            "[]"
+            if damage == "list"
+            else "{"
+            if damage == "invalid"
+            else json.dumps(state)
+        )
         if damage == "unreadable":
             path.unlink()
             path.mkdir()

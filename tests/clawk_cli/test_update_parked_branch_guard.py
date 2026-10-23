@@ -93,6 +93,7 @@ def _no_config(monkeypatch):
 # _assess_parked_branch_switch against real repos
 # ---------------------------------------------------------------------------
 
+
 def test_clean_fully_merged_branch_is_safe_to_switch(repo_pair):
     """Parked branch == ancestor of origin/main, clean tree → auto-switch."""
     safe, reason = update_cmd._assess_parked_branch_switch(
@@ -254,13 +255,19 @@ def test_treeless_cherry_failure_degrades_to_conservative_unmerged(tmp_path):
     assert reason == "unmerged:1"
 
 
-@pytest.mark.parametrize("repo_config", [
-    {},
-    # Foreground auto-GC folds each new pack away inside the same command, so the pack
-    # count alone cannot see a fetch; the Trace2 child count still does.
-    {"gc.auto": "1", "gc.autoPackLimit": "1", "gc.autoDetach": "false"},
-], ids=["plain", "foreground-gc"])
-def test_parked_branch_guard_never_lazy_fetches_from_a_live_promisor(tmp_path, monkeypatch, repo_config):
+@pytest.mark.parametrize(
+    "repo_config",
+    [
+        {},
+        # Foreground auto-GC folds each new pack away inside the same command, so the pack
+        # count alone cannot see a fetch; the Trace2 child count still does.
+        {"gc.auto": "1", "gc.autoPackLimit": "1", "gc.autoDetach": "false"},
+    ],
+    ids=["plain", "foreground-gc"],
+)
+def test_parked_branch_guard_never_lazy_fetches_from_a_live_promisor(
+    tmp_path, monkeypatch, repo_config
+):
     """Clean parked branch with a local commit on a tree:0 clone whose promisor
     remote IS reachable: ``git cherry`` would lazy-fetch a tree batch per
     upstream commit, and with nothing bounding that walk one such assessment
@@ -281,19 +288,27 @@ def test_parked_branch_guard_never_lazy_fetches_from_a_live_promisor(tmp_path, m
         GIT, clone, "old-feature", "main"
     )
     monkeypatch.delenv("GIT_TRACE2_EVENT")
-    events = [json.loads(line) for line in trace.read_text(encoding="utf-8").splitlines()]
-    fetches = [e["argv"] for e in events if e.get("event") == "child_start" and "fetch" in e.get("argv", [])]
+    events = [
+        json.loads(line) for line in trace.read_text(encoding="utf-8").splitlines()
+    ]
+    fetches = [
+        e["argv"]
+        for e in events
+        if e.get("event") == "child_start" and "fetch" in e.get("argv", [])
+    ]
     assert (safe, reason) == (True, "unmerged:1")
     assert fetches == []
     assert _pack_count(clone) == packs_before
 
 
 def test_parked_branch_guard_skips_cherry_on_a_partial_clone_when_git_ignores_no_lazy_fetch(
-        tmp_path, monkeypatch):
+    tmp_path, monkeypatch
+):
     """Git before 2.44 ignores GIT_NO_LAZY_FETCH, so the no-lazy-fetch child alone would still
     fetch without bound there (#124767, git 2.43). A partial clone must not reach cherry at all:
     with the override emptied, as old git effectively sees it, the assessment starts no fetch."""
     from clawk_cli import update_cmd_git
+
     monkeypatch.setattr(update_cmd_git, "NO_LAZY_FETCH_ENV", {})
     monkeypatch.setenv("GIT_CONFIG_GLOBAL", os.devnull)
     monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
@@ -303,11 +318,19 @@ def test_parked_branch_guard_skips_cherry_on_a_partial_clone_when_git_ignores_no
     _git(clone, "commit", "-qm", "feature work")
     trace = tmp_path / "trace2.json"
     monkeypatch.setenv("GIT_TRACE2_EVENT", str(trace))
-    safe, reason = update_cmd._assess_parked_branch_switch(GIT, clone, "old-feature", "main")
+    safe, reason = update_cmd._assess_parked_branch_switch(
+        GIT, clone, "old-feature", "main"
+    )
     monkeypatch.delenv("GIT_TRACE2_EVENT")
-    events = [json.loads(line) for line in trace.read_text(encoding="utf-8").splitlines()]
+    events = [
+        json.loads(line) for line in trace.read_text(encoding="utf-8").splitlines()
+    ]
     assert (safe, reason) == (True, "unmerged:1")
-    assert [e["argv"] for e in events if e.get("event") == "child_start" and "fetch" in e.get("argv", [])] == []
+    assert [
+        e["argv"]
+        for e in events
+        if e.get("event") == "child_start" and "fetch" in e.get("argv", [])
+    ] == []
 
 
 # ---------------------------------------------------------------------------
@@ -324,9 +347,7 @@ def test_branch_head_suffix_empty_on_non_repo(tmp_path):
     assert update_cmd._branch_head_suffix(GIT, tmp_path / "not-a-repo") == ""
 
 
-def test_print_update_completion_carries_branch_and_sha(
-    repo_pair, monkeypatch, capsys
-):
+def test_print_update_completion_carries_branch_and_sha(repo_pair, monkeypatch, capsys):
     monkeypatch.setattr(clawk_main, "PROJECT_ROOT", repo_pair)
     update_cmd._print_update_completion("✓ Update complete!")
     out = capsys.readouterr().out
@@ -338,6 +359,7 @@ def test_print_update_completion_carries_branch_and_sha(
 # ---------------------------------------------------------------------------
 # Full update flow: parked branch dirty/unmerged → SKIPPED, no false success
 # ---------------------------------------------------------------------------
+
 
 def _patch_update_flow(monkeypatch, repo, run_real_git=True):
     """Point _cmd_update_impl at the real repo and neuter the long tail.
@@ -351,7 +373,8 @@ def _patch_update_flow(monkeypatch, repo, run_real_git=True):
     monkeypatch.setattr(clawk_main, "_is_windows", lambda: False)
     monkeypatch.setattr(main_install_repair, "_is_windows", lambda: False)
     monkeypatch.setattr(
-        clawk_main, "_get_origin_url",
+        clawk_main,
+        "_get_origin_url",
         lambda *a, **k: "https://github.com/samuelgradientai-sys/clawksis-agent.git",
     )
     monkeypatch.setattr(update_cmd, "_is_fork", lambda *a, **k: False)
@@ -359,8 +382,12 @@ def _patch_update_flow(monkeypatch, repo, run_real_git=True):
     monkeypatch.setattr(update_cmd, "_discard_lockfile_churn", lambda *a, **k: None)
     monkeypatch.setattr(update_cmd, "_normalize_managed_eol", lambda *a, **k: None)
     monkeypatch.setattr(clawk_main, "_clear_bytecode_cache", lambda *a, **k: 0)
-    monkeypatch.setattr(clawk_main, "_record_bytecode_fingerprint", lambda *a, **k: None)
-    monkeypatch.setattr(main_web_build, "_record_bytecode_fingerprint", lambda *a, **k: None)
+    monkeypatch.setattr(
+        clawk_main, "_record_bytecode_fingerprint", lambda *a, **k: None
+    )
+    monkeypatch.setattr(
+        main_web_build, "_record_bytecode_fingerprint", lambda *a, **k: None
+    )
     monkeypatch.setattr(clawk_main, "_run_pre_update_backup", lambda *a, **k: None)
     monkeypatch.setattr(clawk_main, "_pause_windows_gateways_for_update", lambda: None)
     monkeypatch.setattr(
@@ -397,16 +424,15 @@ def test_update_refuses_stopped_rebase_without_moving_head(
     assert "git rebase --abort" in out
 
 
-def test_update_reports_git_am_abort_for_apply_state(
-    repo_pair, monkeypatch, capsys
-):
+def test_update_reports_git_am_abort_for_apply_state(repo_pair, monkeypatch, capsys):
     """rebase-apply is shared by rebase --apply and git am; recovery advice must match Git's owner."""
     (repo_pair / "a.txt").write_text("topic\n", encoding="utf-8")
     _git(repo_pair, "add", "a.txt")
     _git(repo_pair, "commit", "-qm", "topic")
     patch = repo_pair.parent / "upstream.patch"
     patch.write_text(
-        _git(repo_pair, "format-patch", "-1", "origin/main~1", "--stdout").stdout, encoding="utf-8"
+        _git(repo_pair, "format-patch", "-1", "origin/main~1", "--stdout").stdout,
+        encoding="utf-8",
     )
     applied = _git(repo_pair, "am", str(patch), check=False)
     assert applied.returncode != 0
@@ -427,9 +453,7 @@ def test_update_reports_git_am_abort_for_apply_state(
     assert "git am --abort" in out
 
 
-def test_update_skips_and_warns_on_dirty_parked_branch(
-    repo_pair, monkeypatch, capsys
-):
+def test_update_skips_and_warns_on_dirty_parked_branch(repo_pair, monkeypatch, capsys):
     """Tonight's incident shape: parked branch + dirty tree. The update must
     NOT print '✓ Code updated!', must warn loudly, and must exit non-zero
     with the branch named in the summary."""
@@ -483,18 +507,12 @@ def test_update_switches_unmerged_parked_branch_with_kept_notice(
     out = capsys.readouterr().out
     assert "CODE UPDATE SKIPPED" not in out
     # Ends on main, fast-forwarded.
-    assert (
-        _git(repo_pair, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
-        == "main"
-    )
+    assert _git(repo_pair, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip() == "main"
     head = _git(repo_pair, "rev-parse", "HEAD").stdout.strip()
     remote = _git(repo_pair, "rev-parse", "origin/main").stdout.strip()
     assert head == remote
     # The unmerged commit is still exactly where it was, on the branch.
-    assert (
-        _git(repo_pair, "rev-parse", "old-feature").stdout.strip()
-        == feature_sha
-    )
+    assert _git(repo_pair, "rev-parse", "old-feature").stdout.strip() == feature_sha
 
 
 def test_update_updates_unmerged_branch_in_place_when_configured(
@@ -542,13 +560,13 @@ def test_update_updates_unmerged_branch_in_place_when_configured(
     assert (repo_pair / "b.txt").exists()
     assert (repo_pair / "a.txt").read_text(encoding="utf-8-sig") == "two\n"
     # ...and the branch's own commit survived it.
-    assert (repo_pair / "feature.txt").read_text(encoding="utf-8-sig") == "unmerged work\n"
+    assert (repo_pair / "feature.txt").read_text(
+        encoding="utf-8-sig"
+    ) == "unmerged work\n"
     assert "feature work" in _git(repo_pair, "log", "--oneline").stdout
 
 
-def test_switch_branch_flag_overrides_in_place_strategy(
-    repo_pair, monkeypatch, capsys
-):
+def test_switch_branch_flag_overrides_in_place_strategy(repo_pair, monkeypatch, capsys):
     """--switch-branch overrides updates.parked_branch_strategy:
     update_in_place for one run: the unmerged branch is LEFT ALONE and the
     update runs on the target instead.
@@ -567,9 +585,7 @@ def test_switch_branch_flag_overrides_in_place_strategy(
     (repo_pair / "feature.txt").write_text("unmerged work\n", encoding="utf-8")
     _git(repo_pair, "add", "feature.txt")
     _git(repo_pair, "commit", "-qm", "feature work")
-    branch_tip_before = _git(
-        repo_pair, "rev-parse", "old-feature"
-    ).stdout.strip()
+    branch_tip_before = _git(repo_pair, "rev-parse", "old-feature").stdout.strip()
     _patch_update_flow(monkeypatch, repo_pair)
 
     class _StopFlow(Exception):
@@ -581,7 +597,10 @@ def test_switch_branch_flag_overrides_in_place_strategy(
         lambda *a, **k: (_ for _ in ()).throw(_StopFlow()),
     )
     args = SimpleNamespace(
-        branch=None, yes=False, force=False, force_venv=False,
+        branch=None,
+        yes=False,
+        force=False,
+        force_venv=False,
         switch_branch=True,
     )
 
@@ -591,15 +610,11 @@ def test_switch_branch_flag_overrides_in_place_strategy(
     out = capsys.readouterr().out
     assert "CODE UPDATE SKIPPED" not in out
     # Checkout moved to the target and picked up its code...
-    assert (
-        _git(repo_pair, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
-        == "main"
-    )
+    assert _git(repo_pair, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip() == "main"
     assert (repo_pair / "b.txt").exists()
     # ...and the feature branch was not written to at all.
     assert (
-        _git(repo_pair, "rev-parse", "old-feature").stdout.strip()
-        == branch_tip_before
+        _git(repo_pair, "rev-parse", "old-feature").stdout.strip() == branch_tip_before
     )
 
 
@@ -610,6 +625,7 @@ def test_update_auto_switches_clean_merged_parked_branch(
     say so, and STAY on main afterwards (sabotage-proven: reverting the
     guard re-parks the checkout and this test fails on the branch assert)."""
     _patch_update_flow(monkeypatch, repo_pair)
+
     # Stop the flow right after the pull/branch logic: the dependency
     # install phase begins with _abort_dependency_sync_if_self_locked.
     class _StopFlow(Exception):
@@ -628,10 +644,7 @@ def test_update_auto_switches_clean_merged_parked_branch(
     out = capsys.readouterr().out
     assert "CODE UPDATE SKIPPED" not in out
     # The checkout ends up ON main, fast-forwarded to origin/main.
-    assert (
-        _git(repo_pair, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
-        == "main"
-    )
+    assert _git(repo_pair, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip() == "main"
     head = _git(repo_pair, "rev-parse", "HEAD").stdout.strip()
     remote = _git(repo_pair, "rev-parse", "origin/main").stdout.strip()
     assert head == remote
@@ -675,9 +688,7 @@ def test_update_up_to_date_path_does_not_repark_merged_branch(tmp_path, monkeypa
         clawk_main.cmd_update(args)
 
     # The regression: old code ran `git checkout old-feature` here.
-    assert (
-        _git(clone, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip() == "main"
-    )
+    assert _git(clone, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip() == "main"
 
 
 def test_update_on_main_fast_path_unchanged(repo_pair, monkeypatch, capsys):
@@ -702,10 +713,7 @@ def test_update_on_main_fast_path_unchanged(repo_pair, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "parked on" not in out
     assert "CODE UPDATE SKIPPED" not in out
-    assert (
-        _git(repo_pair, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
-        == "main"
-    )
+    assert _git(repo_pair, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip() == "main"
     head = _git(repo_pair, "rev-parse", "HEAD").stdout.strip()
     remote = _git(repo_pair, "rev-parse", "origin/main").stdout.strip()
     assert head == remote

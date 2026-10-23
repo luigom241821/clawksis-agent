@@ -49,15 +49,27 @@ def test_claimless_complete_refuses_live_run_until_forced(conn):
         kb.complete_task(conn, tid, result="someone else says done")
 
     # Nothing moved: the worker's run is still open and it can still finish its own card.
-    run = conn.execute("SELECT ended_at FROM task_runs WHERE id = ?", (run_id,)).fetchone()
+    run = conn.execute(
+        "SELECT ended_at FROM task_runs WHERE id = ?", (run_id,)
+    ).fetchone()
     assert run["ended_at"] is None
-    assert conn.execute("SELECT status FROM tasks WHERE id = ?", (tid,)).fetchone()["status"] == "running"
-    assert kb.complete_task(conn, tid, result="worker done", expected_run_id=run_id) is True
+    assert (
+        conn.execute("SELECT status FROM tasks WHERE id = ?", (tid,)).fetchone()[
+            "status"
+        ]
+        == "running"
+    )
+    assert (
+        kb.complete_task(conn, tid, result="worker done", expected_run_id=run_id)
+        is True
+    )
 
     # Explicit operator override still closes a live run.
     tid2, run2 = _claimed_running_task(conn)
     assert kb.complete_task(conn, tid2, result="operator override", force=True) is True
-    run = conn.execute("SELECT ended_at, outcome FROM task_runs WHERE id = ?", (run2,)).fetchone()
+    run = conn.execute(
+        "SELECT ended_at, outcome FROM task_runs WHERE id = ?", (run2,)
+    ).fetchone()
     assert run["ended_at"] is not None and run["outcome"] == "completed"
 
 
@@ -66,7 +78,9 @@ def test_claimless_complete_of_claim_without_live_worker_unchanged(conn):
     library / CLI flow that claims and then completes keeps working."""
     tid, run_id = _claimed_running_task(conn, live_worker=False)
     assert kb.complete_task(conn, tid, result="done") is True
-    run = conn.execute("SELECT ended_at FROM task_runs WHERE id = ?", (run_id,)).fetchone()
+    run = conn.execute(
+        "SELECT ended_at FROM task_runs WHERE id = ?", (run_id,)
+    ).fetchone()
     assert run["ended_at"] is not None
 
 
@@ -74,7 +88,12 @@ def test_claimless_complete_of_unclaimed_card_unchanged(conn):
     """The legitimate manual flow — completing a card nobody is working on — needs no proof."""
     tid = kb.create_task(conn, title="admin", assignee="coder")
     assert kb.complete_task(conn, tid, result="done") is True
-    assert conn.execute("SELECT status FROM tasks WHERE id = ?", (tid,)).fetchone()["status"] == "done"
+    assert (
+        conn.execute("SELECT status FROM tasks WHERE id = ?", (tid,)).fetchone()[
+            "status"
+        ]
+        == "done"
+    )
 
 
 def test_request_review_shares_the_live_worker_fence(conn):

@@ -95,7 +95,6 @@ class TestBoundedJobsLock:
             release.set()
             holder.join(timeout=10)
 
-
     def test_reentrant_nesting_still_works(self):
         with _jobs_lock():
             with _jobs_lock():  # must not deadlock or re-flock

@@ -13,10 +13,18 @@ from unittest.mock import MagicMock
 import pytest
 
 from agent.secret_scope import (
-    UnscopedSecretError, build_profile_secret_scope, get_secret, reset_secret_scope, set_multiplex_active,
+    UnscopedSecretError,
+    build_profile_secret_scope,
+    get_secret,
+    reset_secret_scope,
+    set_multiplex_active,
     set_secret_scope,
 )
-from clawk_constants import get_clawk_home, reset_clawk_home_override, set_clawk_home_override
+from clawk_constants import (
+    get_clawk_home,
+    reset_clawk_home_override,
+    set_clawk_home_override,
+)
 
 
 @pytest.fixture
@@ -50,14 +58,18 @@ def test_auto_title_thread_runs_in_the_turns_profile_scope(served_home, monkeypa
 
     _a, b = served_home
     seen, done = {}, threading.Event()
-    monkeypatch.setattr(tg, "auto_title_session", lambda *args, **kwargs: _observe_scope(seen, done))
+    monkeypatch.setattr(
+        tg, "auto_title_session", lambda *args, **kwargs: _observe_scope(seen, done)
+    )
     monkeypatch.setattr(tg, "apply_instant_title", lambda *args, **kwargs: None)
     db = MagicMock()
     db.get_session_title.return_value = None
     home_token = set_clawk_home_override(str(b))
     secret_token = set_secret_scope(build_profile_secret_scope(b))
     try:
-        tg.maybe_auto_title(db, "sess-1", "hello there", [{"role": "user", "content": "hello there"}])
+        tg.maybe_auto_title(
+            db, "sess-1", "hello there", [{"role": "user", "content": "hello there"}]
+        )
     finally:
         reset_secret_scope(secret_token)
         reset_clawk_home_override(home_token)
@@ -76,12 +88,18 @@ def test_ws_orphan_reap_tears_down_under_the_sessions_profile(served_home, monke
     agent = MagicMock()
     agent._session_messages = None
     agent.session_id = "sess-b"
-    agent.commit_memory_session = lambda history: _observe_scope(seen_commit, threading.Event())
+    agent.commit_memory_session = lambda history: _observe_scope(
+        seen_commit, threading.Event()
+    )
     agent.close = lambda: _observe_scope(seen_close, done)
     sid = "ws-b"
     session = {
-        "agent": agent, "history": [{"role": "user", "content": "x"}], "history_lock": threading.Lock(),
-        "session_key": "sess-b", "profile_home": str(b), "transport": server._detached_ws_transport,
+        "agent": agent,
+        "history": [{"role": "user", "content": "x"}],
+        "history_lock": threading.Lock(),
+        "session_key": "sess-b",
+        "profile_home": str(b),
+        "transport": server._detached_ws_transport,
         "last_active": 0.0,
     }
     monkeypatch.setattr(server, "_WS_ORPHAN_REAP_GRACE_S", 0.01)

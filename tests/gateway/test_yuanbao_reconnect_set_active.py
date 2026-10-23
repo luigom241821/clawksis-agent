@@ -12,7 +12,9 @@ import os
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
-_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_REPO_ROOT = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
@@ -56,7 +58,11 @@ async def test_do_reconnect_calls_set_active_on_success():
             new_callable=AsyncMock,
             return_value={"bot_id": "test_bot", "token": "test_token"},
         ),
-        patch("plugins.platforms.yuanbao.adapter.websockets.connect", new_callable=AsyncMock, return_value=mock_ws),
+        patch(
+            "plugins.platforms.yuanbao.adapter.websockets.connect",
+            new_callable=AsyncMock,
+            return_value=mock_ws,
+        ),
         patch.object(cm, "_authenticate", new_callable=AsyncMock, return_value=True),
         patch.object(cm, "_heartbeat_loop", new_callable=AsyncMock),
         patch.object(cm, "_receive_loop", new_callable=AsyncMock),

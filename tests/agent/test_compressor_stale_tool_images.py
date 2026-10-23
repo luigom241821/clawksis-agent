@@ -69,7 +69,8 @@ class TestRetireStaleToolImagesInProtectedTail:
         msgs.append({"role": "user", "content": "compare the last few"})
 
         out, pruned = _compressor()._prune_old_tool_results(
-            msgs, protect_tail_count=20,
+            msgs,
+            protect_tail_count=20,
         )
         assert pruned >= 5 - _MAX_KEEP_TOOL_IMAGES
         kept = _image_bearing_tools(out)
@@ -80,40 +81,46 @@ class TestRetireStaleToolImagesInProtectedTail:
     def test_multimodal_envelopes_outside_keep_window_become_text(self):
         msgs: list[dict] = [{"role": "user", "content": "go"}]
         for i in range(_MAX_KEEP_TOOL_IMAGES + 1):
-            msgs.append({
-                "role": "assistant",
-                "content": None,
-                "tool_calls": [{
-                    "id": f"env_{i}",
-                    "type": "function",
-                    "function": {"name": "vision_analyze", "arguments": "{}"},
-                }],
-            })
-            msgs.append({
-                "role": "tool",
-                "tool_call_id": f"env_{i}",
-                "content": {
-                    "_multimodal": True,
-                    "content": [
-                        {"type": "text", "text": f"shot {i}"},
+            msgs.append(
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
                         {
-                            "type": "image_url",
-                            "image_url": {"url": f"data:image/png;base64,XYZ{i}"},
-                        },
+                            "id": f"env_{i}",
+                            "type": "function",
+                            "function": {"name": "vision_analyze", "arguments": "{}"},
+                        }
                     ],
-                    "text_summary": f"native shot {i}",
-                },
-            })
+                }
+            )
+            msgs.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": f"env_{i}",
+                    "content": {
+                        "_multimodal": True,
+                        "content": [
+                            {"type": "text", "text": f"shot {i}"},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/png;base64,XYZ{i}"},
+                            },
+                        ],
+                        "text_summary": f"native shot {i}",
+                    },
+                }
+            )
 
         out, _ = _compressor()._prune_old_tool_results(
-            msgs, protect_tail_count=20,
+            msgs,
+            protect_tail_count=20,
         )
         oldest = next(m for m in out if m.get("tool_call_id") == "env_0")
         assert isinstance(oldest["content"], str)
         assert "native shot 0" in oldest["content"]
         newest = next(
-            m for m in out
-            if m.get("tool_call_id") == f"env_{_MAX_KEEP_TOOL_IMAGES}"
+            m for m in out if m.get("tool_call_id") == f"env_{_MAX_KEEP_TOOL_IMAGES}"
         )
         assert _tool_content_has_images(newest["content"])
 
@@ -133,7 +140,8 @@ class TestRetireStaleToolImagesInProtectedTail:
             msgs.extend(_image_tool(i))
 
         out, _ = _compressor()._prune_old_tool_results(
-            msgs, protect_tail_count=20,
+            msgs,
+            protect_tail_count=20,
         )
         assert _content_has_images(out[0]["content"])
         assert out[0]["content"][1]["image_url"]["url"].endswith("USERUPLOAD")

@@ -23,7 +23,11 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = [pytest.mark.platforms("windows"), pytest.mark.integration, pytest.mark.live_system_guard_bypass]
+pytestmark = [
+    pytest.mark.platforms("windows"),
+    pytest.mark.integration,
+    pytest.mark.live_system_guard_bypass,
+]
 
 _REPO = Path(__file__).resolve().parents[4]
 
@@ -47,43 +51,76 @@ print("RESULT " + json.dumps(out))
 """
 
 
-def test_a_standard_user_client_gets_the_named_refusal_from_an_elevated_gateway(tmp_path):
+def test_a_standard_user_client_gets_the_named_refusal_from_an_elevated_gateway(
+    tmp_path,
+):
     from gateway import runtime_bootstrap_windows as native
     from gateway.control_socket import windows_pipe_name
     from clawk_dir_acl import process_is_elevated
-    from tests.e2e.core.windows_update._tokens import StandardUserProcess, hand_to_user, probe_token_elevation
+    from tests.e2e.core.windows_update._tokens import (
+        StandardUserProcess,
+        hand_to_user,
+        probe_token_elevation,
+    )
 
     if not process_is_elevated():
-        pytest.skip("the gateway side needs an elevated session (the Windows E2E runner's)")
+        pytest.skip(
+            "the gateway side needs an elevated session (the Windows E2E runner's)"
+        )
     home, temp = tmp_path / "home", tmp_path / "temp"
     home.mkdir()
     temp.mkdir()
     hand_to_user(tmp_path)  # the user's own home, as on a real machine
-    env = {**os.environ, "PYTHONPATH": str(_REPO), "TEMP": str(temp), "TMP": str(temp),
-           "CLAWK_HOME": str(home), "CLAWK_STATE_DB_GUARD_BYPASS": "1"}
+    env = {
+        **os.environ,
+        "PYTHONPATH": str(_REPO),
+        "TEMP": str(temp),
+        "TMP": str(temp),
+        "CLAWK_HOME": str(home),
+        "CLAWK_STATE_DB_GUARD_BYPASS": "1",
+    }
     # Harness control: the child really is a standard user (Medium, Administrators deny-only).
-    assert probe_token_elevation(tmp_path, env, tmp_path / "token.log") == "elevated=False admin=False"
+    assert (
+        probe_token_elevation(tmp_path, env, tmp_path / "token.log")
+        == "elevated=False admin=False"
+    )
 
     served = []
 
     def handler(raw, subject):
         served.append((raw, subject))
         return b'{"ok": false}\n'
+
     server = native.NativeControlServer(home, handler)
     server.start()
     try:
         log = tmp_path / "client.log"
-        child = StandardUserProcess([sys.executable, "-c", _CLIENT, str(home)], cwd=_REPO, env=env, log=log)
+        child = StandardUserProcess(
+            [sys.executable, "-c", _CLIENT, str(home)], cwd=_REPO, env=env, log=log
+        )
         rc = child.wait(120)
     finally:
         server.close()
     text = log.read_text(encoding="utf-8", errors="replace")
     assert rc == 0, text
-    result = json.loads(next(line for line in text.splitlines() if line.startswith("RESULT "))[7:])
-    assert result["pipe"] == windows_pipe_name(home), "harness: the child dialed another pipe"
+    result = json.loads(
+        next(line for line in text.splitlines() if line.startswith("RESULT "))[7:]
+    )
+    assert result["pipe"] == windows_pipe_name(home), (
+        "harness: the child dialed another pipe"
+    )
     assert result["elevated"] is False
-    remedy = native.refused_owner_remedy(native.GATEWAY_ELEVATED, os.getpid(), native._session_of(os.getpid()))
+    remedy = native.refused_owner_remedy(
+        native.GATEWAY_ELEVATED, os.getpid(), native._session_of(os.getpid())
+    )
     assert (result["outcome"], result.get("reason_code"), result.get("message")) == (
-        "refused", native.GATEWAY_ELEVATED, remedy), text
-    assert result["discovery"] == ["inaccessible", native.GATEWAY_ELEVATED, remedy], text
-    assert served == [], "a request from the standard-user client reached the elevated gateway"
+        "refused",
+        native.GATEWAY_ELEVATED,
+        remedy,
+    ), text
+    assert result["discovery"] == ["inaccessible", native.GATEWAY_ELEVATED, remedy], (
+        text
+    )
+    assert served == [], (
+        "a request from the standard-user client reached the elevated gateway"
+    )

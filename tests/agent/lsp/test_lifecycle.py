@@ -4,6 +4,7 @@ These cover the exit-cleanup behavior added to plug the language-server
 process leak — without the atexit hook, ``clawk chat`` exits while
 pyright/gopls/etc. are still alive on the host.
 """
+
 from __future__ import annotations
 
 import atexit
@@ -59,8 +60,6 @@ def test_get_service_registers_atexit_handler_once(monkeypatch):
     assert registrations[0] is lsp_module._atexit_shutdown
 
 
-
-
 def test_atexit_shutdown_swallows_exceptions(monkeypatch):
     def boom():
         raise RuntimeError("server already dead")
@@ -86,11 +85,3 @@ def test_shutdown_service_idempotent(monkeypatch):
     lsp_module.shutdown_service()  # must not raise
 
     assert fake_svc.shutdown.call_count == 1
-
-
-
-
-
-
-
-

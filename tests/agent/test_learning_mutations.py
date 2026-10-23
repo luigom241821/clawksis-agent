@@ -28,7 +28,9 @@ Body.
 def home():
     base = get_clawk_home()
     (base / "memories").mkdir(parents=True, exist_ok=True)
-    (base / "memories" / "MEMORY.md").write_text("alpha note\nline two\n§\nbeta note", encoding="utf-8")
+    (base / "memories" / "MEMORY.md").write_text(
+        "alpha note\nline two\n§\nbeta note", encoding="utf-8"
+    )
     (base / "memories" / "USER.md").write_text("user profile note", encoding="utf-8")
     skill = base / "skills" / "my-skill"
     skill.mkdir(parents=True, exist_ok=True)
@@ -42,15 +44,11 @@ def test_parse_node_kind():
     assert lm.parse_node_kind("debugging-clawk") == "skill"
 
 
-
-
-
-
-
-
 def test_edit_memory_replaces_chunk(home):
     assert lm.edit_node("memory:profile:2", "rewritten profile")["ok"]
-    assert (home / "memories" / "USER.md").read_text(encoding="utf-8").strip() == "rewritten profile"
+    assert (home / "memories" / "USER.md").read_text(
+        encoding="utf-8"
+    ).strip() == "rewritten profile"
 
 
 def test_edit_memory_refuses_an_entry_over_the_memory_tools_limit(home):
@@ -62,7 +60,9 @@ def test_edit_memory_refuses_an_entry_over_the_memory_tools_limit(home):
     result = lm.edit_node("memory:profile:2", "x" * 5000)
 
     assert not result["ok"] and "Shorten" in result["message"]
-    assert (home / "memories" / "USER.md").read_text(encoding="utf-8") == "user profile note"
+    assert (home / "memories" / "USER.md").read_text(
+        encoding="utf-8"
+    ) == "user profile note"
     assert MemoryStore().remove("user", "user profile note")["success"]
 
     # The cap gates what an edit adds, never a delete: pruning is the way out of a file that is
@@ -70,23 +70,18 @@ def test_edit_memory_refuses_an_entry_over_the_memory_tools_limit(home):
     from tools.memory_tool import ENTRY_DELIMITER
 
     path = home / "memories" / "USER.md"
-    path.write_text(ENTRY_DELIMITER.join(f"entry {i} " + "y" * 500 for i in range(4)), encoding="utf-8")
+    path.write_text(
+        ENTRY_DELIMITER.join(f"entry {i} " + "y" * 500 for i in range(4)),
+        encoding="utf-8",
+    )
     assert lm.delete_node("memory:profile:2")["ok"]
     assert len(MemoryStore._read_file(path)) == 3
-
-
-
-
-
-
 
 
 def test_skill_detail_returns_skill_md(home):
     d = lm.node_detail("my-skill")
     assert d["ok"] and d["kind"] == "skill"
     assert "name: my-skill" in d["content"]
-
-
 
 
 def test_delete_pinned_skill_refused(home):
@@ -97,10 +92,6 @@ def test_delete_pinned_skill_refused(home):
     assert not res["ok"]
     assert "pinned" in res["message"]
     assert (home / "skills" / "my-skill").exists()
-
-
-
-
 
 
 def test_memory_writes_match_memory_tool_format(home):
@@ -169,7 +160,10 @@ def test_delete_memory_keeps_concurrent_memory_tool_add(home, monkeypatch):
     assert lm.delete_node("memory:memory:0")["ok"]
     writer.join(timeout=5)
 
-    assert MemoryStore._read_file(home / "memories" / "MEMORY.md") == ["beta note", "gamma note"]
+    assert MemoryStore._read_file(home / "memories" / "MEMORY.md") == [
+        "beta note",
+        "gamma note",
+    ]
 
 
 def test_edit_memory_keeps_concurrent_memory_tool_add(home, monkeypatch):
@@ -179,12 +173,21 @@ def test_edit_memory_keeps_concurrent_memory_tool_add(home, monkeypatch):
     assert lm.edit_node("memory:memory:0", "alpha rewritten")["ok"]
     writer.join(timeout=5)
 
-    assert MemoryStore._read_file(home / "memories" / "MEMORY.md") == ["alpha rewritten", "beta note", "gamma note"]
+    assert MemoryStore._read_file(home / "memories" / "MEMORY.md") == [
+        "alpha rewritten",
+        "beta note",
+        "gamma note",
+    ]
 
 
-@pytest.mark.parametrize("mutate", [lambda: lm.delete_node("memory:memory:0"),
-                                    lambda: lm.edit_node("memory:memory:0", "alpha rewritten")],
-                         ids=["delete", "edit"])
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda: lm.delete_node("memory:memory:0"),
+        lambda: lm.edit_node("memory:memory:0", "alpha rewritten"),
+    ],
+    ids=["delete", "edit"],
+)
 def test_memory_drift_is_refused_with_backup_like_memory_tool(home, mutate):
     """Free-form text appended without § delimiters (one "entry" past the whole-store
     limit) is what the memory tool's drift guard exists for: snapshot to .bak, refuse,
@@ -226,7 +229,9 @@ def _memory_entries(home) -> list[str]:
 def _write_memory_file(home, *entries):
     from tools.memory_tool import ENTRY_DELIMITER
 
-    (home / "memories" / "MEMORY.md").write_text(ENTRY_DELIMITER.join(entries), encoding="utf-8")
+    (home / "memories" / "MEMORY.md").write_text(
+        ENTRY_DELIMITER.join(entries), encoding="utf-8"
+    )
 
 
 def _journey_id(home, label: str) -> str:
@@ -234,21 +239,31 @@ def _journey_id(home, label: str) -> str:
     from agent.learning_graph import build_learning_graph
 
     nodes = [n for n in build_learning_graph()["nodes"] if n["kind"] == "memory"]
-    index = next(i for i, entry in enumerate(_memory_entries(home)) if entry.startswith(label))
+    index = next(
+        i for i, entry in enumerate(_memory_entries(home)) if entry.startswith(label)
+    )
     return nodes[index]["id"]
 
 
 @pytest.mark.parametrize("op", ["edit", "delete"])
-def test_mutation_targets_the_clicked_card_when_the_list_shifted_before_submit(home, op):
+def test_mutation_targets_the_clicked_card_when_the_list_shifted_before_submit(
+    home, op
+):
     """The window a displayed-index identity cannot see: an earlier entry is removed AFTER the
     graph is drawn and BEFORE the edit/delete is submitted, so by the time the mutation reads the
     file that index names somebody else's card."""
     node_id = _journey_id(home, "beta")  # what Journey showed the user
     _write_memory_file(home, "beta note", "gamma note")
 
-    mutate = (lambda: lm.edit_node(node_id, "beta rewritten")) if op == "edit" else (lambda: lm.delete_node(node_id))
+    mutate = (
+        (lambda: lm.edit_node(node_id, "beta rewritten"))
+        if op == "edit"
+        else (lambda: lm.delete_node(node_id))
+    )
     assert mutate()["ok"]
-    assert _memory_entries(home) == (["beta rewritten", "gamma note"] if op == "edit" else ["gamma note"])
+    assert _memory_entries(home) == (
+        ["beta rewritten", "gamma note"] if op == "edit" else ["gamma note"]
+    )
 
     # The clicked card is gone now; its id must not fall back to whatever sits at that index.
     result = mutate()

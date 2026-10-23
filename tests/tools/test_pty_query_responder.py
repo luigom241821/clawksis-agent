@@ -133,9 +133,7 @@ def test_live_pty_subprocess_unblocked_by_cursor_report(tmp_path):
         "stty -echo -icanon; printf 'alpha\\033[6n'; "
         "dd bs=1 count=6 2>/dev/null; printf '\\nok'"
     )
-    proc = ptyprocess.PtyProcess.spawn(
-        ["/bin/sh", "-c", script], dimensions=(24, 80)
-    )
+    proc = ptyprocess.PtyProcess.spawn(["/bin/sh", "-c", script], dimensions=(24, 80))
     responder = PtyQueryResponder()
     output = b""
     deadline = time.time() + 10

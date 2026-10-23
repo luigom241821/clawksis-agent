@@ -57,7 +57,9 @@ def test_switch_applies_matched_provider_extra_body():
         request_overrides={"service_tier": "priority"},
     )
     arh._apply_switched_provider_request_overrides(a, "custom:main-think")
-    assert a.request_overrides["extra_body"] == {"chat_template_kwargs": {"enable_thinking": True}}
+    assert a.request_overrides["extra_body"] == {
+        "chat_template_kwargs": {"enable_thinking": True}
+    }
     assert a.request_overrides["service_tier"] == "priority"  # preserved
 
 
@@ -84,7 +86,9 @@ def test_switch_from_none_overrides():
         request_overrides=None,
     )
     arh._apply_switched_provider_request_overrides(a, "custom:main-plain")
-    assert a.request_overrides == {"extra_body": {"chat_template_kwargs": {"enable_thinking": False}}}
+    assert a.request_overrides == {
+        "extra_body": {"chat_template_kwargs": {"enable_thinking": False}}
+    }
 
 
 def test_switch_to_different_model_same_endpoint_does_not_inherit():
@@ -99,7 +103,9 @@ def test_switch_to_different_model_same_endpoint_does_not_inherit():
     a = _agent(
         model="plain-model",  # differs from main-think's pinned 'think-model'
         base_url="http://10.0.0.1:8000/v1",
-        request_overrides={"extra_body": {"chat_template_kwargs": {"enable_thinking": True}}},
+        request_overrides={
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": True}}
+        },
     )
     arh._apply_switched_provider_request_overrides(a, "custom:main-think")
     assert "extra_body" not in a.request_overrides  # not inherited; stale cleared
@@ -111,7 +117,9 @@ def test_switch_endpoint_mismatch_does_not_inherit():
     a = _agent(
         model="think-model",
         base_url="http://10.9.9.9:8000/v1",  # different endpoint than the entry
-        request_overrides={"extra_body": {"chat_template_kwargs": {"enable_thinking": True}}},
+        request_overrides={
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": True}}
+        },
     )
     arh._apply_switched_provider_request_overrides(a, "custom:main-think")
     assert "extra_body" not in a.request_overrides  # base_url mismatch -> cleared

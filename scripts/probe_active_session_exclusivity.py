@@ -86,7 +86,12 @@ class Gateway:
     def call(self, method: str, params: dict, timeout: float = 180.0) -> dict:
         rid = str(self._next)
         self._next += 1
-        self.proc.stdin.write(json.dumps({"jsonrpc": "2.0", "id": rid, "method": method, "params": params}) + "\n")
+        self.proc.stdin.write(
+            json.dumps(
+                {"jsonrpc": "2.0", "id": rid, "method": method, "params": params}
+            )
+            + "\n"
+        )
         self.proc.stdin.flush()
         deadline = time.time() + timeout
         while time.time() < deadline:
@@ -128,7 +133,9 @@ def main() -> int:
     failures = []
 
     def check(label: str, ok: bool, detail: str = ""):
-        print(f"  {'PASS' if ok else 'FAIL'}  {label}{(' -- ' + detail) if detail else ''}")
+        print(
+            f"  {'PASS' if ok else 'FAIL'}  {label}{(' -- ' + detail) if detail else ''}"
+        )
         if not ok:
             failures.append(label)
 
@@ -140,13 +147,21 @@ def main() -> int:
 
         # Opening a chat must not claim anything -- an idle composer is invisible
         # and a slot held by one would fence a real turn for no reason.
-        check("session.create claims nothing", registry(home) == [], f"{len(registry(home))} entries")
+        check(
+            "session.create claims nothing",
+            registry(home) == [],
+            f"{len(registry(home))} entries",
+        )
 
-        a.call("prompt.submit", {"session_id": sid_a, "text": "probe: A takes the session"})
+        a.call(
+            "prompt.submit", {"session_id": sid_a, "text": "probe: A takes the session"}
+        )
         held = registry(home)
         check("A's first turn claims a session", len(held) == 1, json.dumps(held)[:200])
         if not held:
-            raise RuntimeError("A never claimed anything; nothing further can be tested")
+            raise RuntimeError(
+                "A never claimed anything; nothing further can be tested"
+            )
 
         # The STORED key, which only materialises when a turn is first submitted --
         # and which is what the lease must be keyed on. A lease keyed on the live
@@ -154,15 +169,29 @@ def main() -> int:
         # have different runtime ids by construction.
         key = held[0].get("session_id")
         print(f"A live session {sid_a}, stored key {key}")
-        check("the lease is keyed on the STORED session, not the runtime handle",
-              bool(key) and key != sid_a, f"key={key} runtime={sid_a}")
+        check(
+            "the lease is keyed on the STORED session, not the runtime handle",
+            bool(key) and key != sid_a,
+            f"key={key} runtime={sid_a}",
+        )
 
         refused_b = subprocess.run(
-            [str(PYTHON), "-u", "-m", "tui_gateway.entry"], cwd=str(REPO),
-            env={**os.environ, "CLAWK_HOME": str(home)}, stdin=subprocess.DEVNULL,
-            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180, check=False)
-        check("B cannot start a second writer on A's home", refused_b.returncode == 1
-              and "gateway.ready" not in refused_b.stdout, (refused_b.stderr or "")[-200:])
+            [str(PYTHON), "-u", "-m", "tui_gateway.entry"],
+            cwd=str(REPO),
+            env={**os.environ, "CLAWK_HOME": str(home)},
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=180,
+            check=False,
+        )
+        check(
+            "B cannot start a second writer on A's home",
+            refused_b.returncode == 1 and "gateway.ready" not in refused_b.stdout,
+            (refused_b.stderr or "")[-200:],
+        )
 
         # A dies without releasing -- the crash case, not a clean handoff.
         a.proc.kill()
@@ -170,12 +199,20 @@ def main() -> int:
 
         b = Gateway("B", home)
         resumed = b.call("session.resume", {"session_id": key})
-        check("after A dies, B may resume", "result" in resumed,
-              json.dumps(resumed.get("error", ""))[:160])
+        check(
+            "after A dies, B may resume",
+            "result" in resumed,
+            json.dumps(resumed.get("error", ""))[:160],
+        )
         sid_b = resumed.get("result", {}).get("session_id")
-        retried = b.call("prompt.submit", {"session_id": sid_b, "text": "probe: B may write now"})
-        check("and B's submit is accepted", retried.get("error") is None,
-              json.dumps(retried.get("error", ""))[:200])
+        retried = b.call(
+            "prompt.submit", {"session_id": sid_b, "text": "probe: B may write now"}
+        )
+        check(
+            "and B's submit is accepted",
+            retried.get("error") is None,
+            json.dumps(retried.get("error", ""))[:200],
+        )
     finally:
         if b is not None:
             b.close()

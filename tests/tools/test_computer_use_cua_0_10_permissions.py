@@ -82,11 +82,12 @@ def test_mode_change_replaces_only_that_sessions_backend():
             self.stopped = True
 
     yolo = False
-    with patch(
-        "tools.approval.is_approval_bypass_active_for_session",
-        side_effect=lambda sid: yolo,
-    ), patch(
-        "tools.computer_use.cua_backend.CuaDriverBackend", _Backend
+    with (
+        patch(
+            "tools.approval.is_approval_bypass_active_for_session",
+            side_effect=lambda sid: yolo,
+        ),
+        patch("tools.computer_use.cua_backend.CuaDriverBackend", _Backend),
     ):
         standard = computer_use._get_backend("session-a")
         other = computer_use._get_backend("session-b")
@@ -119,10 +120,13 @@ def test_mode_change_is_rechecked_after_stale_backend_stops():
             nonlocal yolo
             yolo = False
 
-    with patch(
-        "tools.approval.is_approval_bypass_active_for_session",
-        side_effect=lambda sid: yolo,
-    ), patch("tools.computer_use.cua_backend.CuaDriverBackend", _Backend):
+    with (
+        patch(
+            "tools.approval.is_approval_bypass_active_for_session",
+            side_effect=lambda sid: yolo,
+        ),
+        patch("tools.computer_use.cua_backend.CuaDriverBackend", _Backend),
+    ):
         original = computer_use._get_backend("session-a")
         yolo = True
         replacement = computer_use._get_backend("session-a")
@@ -148,18 +152,23 @@ def test_unrestricted_embedded_daemon_uses_private_socket_and_two_part_ack():
     stopped = SimpleNamespace(returncode=0, stdout="", stderr="")
 
     daemon = cua_backend._EmbeddedCuaDaemon("cua-driver", "unrestricted")
-    with patch.object(
-        cua_backend_driver,
-        "_resolve_mcp_invocation",
-        return_value=("/opt/cua-driver", ["mcp"]),
-    ), patch.object(
-        # This test pins the socket/ack contract, not overlay policy. Pin the
-        # policy off so the environment-dependent auto-detect (headless CI vs
-        # Wayland dev box) can't add a `--help` capability-probe subprocess.run
-        # call that the fixed two-entry side_effect below doesn't budget for.
-        cua_backend, "_cua_no_overlay", return_value=False,
-    ), patch.object(cua_backend.subprocess, "Popen", return_value=process) as popen, patch.object(
-        cua_backend.subprocess, "run", side_effect=[status, stopped]
+    with (
+        patch.object(
+            cua_backend_driver,
+            "_resolve_mcp_invocation",
+            return_value=("/opt/cua-driver", ["mcp"]),
+        ),
+        patch.object(
+            # This test pins the socket/ack contract, not overlay policy. Pin the
+            # policy off so the environment-dependent auto-detect (headless CI vs
+            # Wayland dev box) can't add a `--help` capability-probe subprocess.run
+            # call that the fixed two-entry side_effect below doesn't budget for.
+            cua_backend,
+            "_cua_no_overlay",
+            return_value=False,
+        ),
+        patch.object(cua_backend.subprocess, "Popen", return_value=process) as popen,
+        patch.object(cua_backend.subprocess, "run", side_effect=[status, stopped]),
     ):
         daemon.start()
         command = popen.call_args.args[0]
@@ -203,19 +212,19 @@ def test_retired_browser_grant_cannot_change_standard_runtime(tmp_path, monkeypa
             captured.update(kwargs)
             return MagicMock()
 
-        with patch(
-            "tools.computer_use.cua_backend_driver.resolve_cua_driver_cmd",
-            return_value="/opt/cua-driver",
-        ), patch(
-            "tools.computer_use.cua_backend_driver._resolve_mcp_invocation",
-            return_value=("/opt/cua-driver", ["mcp"]),
-        ), patch(
-            "mcp.StdioServerParameters", side_effect=capture_params
-        ), patch(
-            "mcp.client.stdio.stdio_client"
-        ) as stdio_client, patch(
-            "mcp.ClientSession"
-        ) as client_session:
+        with (
+            patch(
+                "tools.computer_use.cua_backend_driver.resolve_cua_driver_cmd",
+                return_value="/opt/cua-driver",
+            ),
+            patch(
+                "tools.computer_use.cua_backend_driver._resolve_mcp_invocation",
+                return_value=("/opt/cua-driver", ["mcp"]),
+            ),
+            patch("mcp.StdioServerParameters", side_effect=capture_params),
+            patch("mcp.client.stdio.stdio_client") as stdio_client,
+            patch("mcp.ClientSession") as client_session,
+        ):
             stdio_client.return_value.__aenter__ = AsyncMock(
                 return_value=(MagicMock(), MagicMock())
             )

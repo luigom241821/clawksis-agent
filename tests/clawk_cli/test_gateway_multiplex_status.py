@@ -15,6 +15,7 @@ import os
 from contextlib import redirect_stdout
 from types import SimpleNamespace
 
+
 def _fake_multiplexer(monkeypatch, tmp_path, *, multiplex: bool, pid_file: bool = True):
     """A live default gateway at ``tmp_path`` whose runtime record names this process; the process passes
     the identity check because its command line reads as a gateway's. ``pid_file=False`` models a
@@ -32,15 +33,25 @@ def _fake_multiplexer(monkeypatch, tmp_path, *, multiplex: bool, pid_file: bool 
     )
     if pid_file:
         (tmp_path / "gateway.pid").write_text(str(os.getpid()))
-    (tmp_path / "gateway_state.json").write_text(json.dumps({
-        "pid": os.getpid(), "kind": "clawk-gateway", "gateway_state": "running",
-        "start_time": status._get_process_start_time(os.getpid()), "clawk_home": str(tmp_path),
-    }))
+    (tmp_path / "gateway_state.json").write_text(
+        json.dumps(
+            {
+                "pid": os.getpid(),
+                "kind": "clawk-gateway",
+                "gateway_state": "running",
+                "start_time": status._get_process_start_time(os.getpid()),
+                "clawk_home": str(tmp_path),
+            }
+        )
+    )
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "profiles" / "beta"))
     monkeypatch.setattr(clawk_constants, "_default_clawk_root_memo", None)
     monkeypatch.setattr(
-        status, "_read_process_cmdline", lambda pid: "python -m clawk_cli.main gateway run --replace"
+        status,
+        "_read_process_cmdline",
+        lambda pid: "python -m clawk_cli.main gateway run --replace",
     )
+
 
 def _run_status():
     from clawk_cli import gateway as gw
@@ -48,9 +59,12 @@ def _run_status():
     buf = io.StringIO()
     with redirect_stdout(buf):
         gw._gateway_command_inner(
-            SimpleNamespace(gateway_command="status", deep=False, full=False, system=False)
+            SimpleNamespace(
+                gateway_command="status", deep=False, full=False, system=False
+            )
         )
     return buf.getvalue().splitlines()[0]
+
 
 def test_served_named_profile_reports_running(monkeypatch, tmp_path):
     from clawk_cli.profiles import list_profiles
@@ -59,7 +73,10 @@ def test_served_named_profile_reports_running(monkeypatch, tmp_path):
 
     beta = next(p for p in list_profiles() if p.name == "beta")
     assert beta.gateway_running is True
-    assert _run_status().startswith("✓ Gateway is running via the default-profile multiplexer")
+    assert _run_status().startswith(
+        "✓ Gateway is running via the default-profile multiplexer"
+    )
+
 
 def test_unserved_named_profile_still_reports_stopped(monkeypatch, tmp_path):
     from clawk_cli.profiles import list_profiles
@@ -70,7 +87,10 @@ def test_unserved_named_profile_still_reports_stopped(monkeypatch, tmp_path):
     assert beta.gateway_running is False
     assert _run_status().startswith("✗ Gateway is not running")
 
-def test_served_named_profile_reports_running_without_default_pid_file(monkeypatch, tmp_path):
+
+def test_served_named_profile_reports_running_without_default_pid_file(
+    monkeypatch, tmp_path
+):
     """A live multiplexer whose PID file is missing still serves the profile it ticks (#110166)."""
     from clawk_cli.profiles import list_profiles
 
@@ -78,18 +98,25 @@ def test_served_named_profile_reports_running_without_default_pid_file(monkeypat
 
     beta = next(p for p in list_profiles() if p.name == "beta")
     assert beta.gateway_running is True
-    assert _run_status().startswith("✓ Gateway is running via the default-profile multiplexer")
+    assert _run_status().startswith(
+        "✓ Gateway is running via the default-profile multiplexer"
+    )
+
 
 def test_standalone_profile_status_reports_standalone_by_config(monkeypatch, tmp_path):
     """`clawk -p X gateway status` on a standalone X says so and never claims the multiplexer."""
     _fake_multiplexer(monkeypatch, tmp_path, multiplex=True)
-    (tmp_path / "profiles" / "beta" / "config.yaml").write_text("gateway:\n  standalone: true\n", encoding="utf-8")
+    (tmp_path / "profiles" / "beta" / "config.yaml").write_text(
+        "gateway:\n  standalone: true\n", encoding="utf-8"
+    )
     from clawk_cli import gateway as gw
 
     buf = io.StringIO()
     with redirect_stdout(buf):
         gw._gateway_command_inner(
-            SimpleNamespace(gateway_command="status", deep=False, full=False, system=False)
+            SimpleNamespace(
+                gateway_command="status", deep=False, full=False, system=False
+            )
         )
     out = buf.getvalue()
     assert "standalone by config (gateway.standalone: true)" in out

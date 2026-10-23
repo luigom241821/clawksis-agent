@@ -4,7 +4,13 @@ from dataclasses import dataclass
 from typing import Literal
 
 RuntimeState = Literal[
-    "absent", "starting", "ready", "draining", "incompatible", "inaccessible", "conflict"
+    "absent",
+    "starting",
+    "ready",
+    "draining",
+    "incompatible",
+    "inaccessible",
+    "conflict",
 ]
 
 

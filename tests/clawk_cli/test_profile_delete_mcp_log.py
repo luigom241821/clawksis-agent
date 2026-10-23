@@ -23,7 +23,8 @@ def test_delete_profile_after_stdio_probe(tmp_path, monkeypatch):
     monkeypatch.setattr(profiles, "_notify_multiplexer", lambda *_: None)
     profile = profiles.create_profile("mcp-probe-delete", no_alias=True)
     server = tmp_path / "stdio_server.py"
-    server.write_text('''import json
+    server.write_text(
+        """import json
 import sys
 for line in sys.stdin:
     request = json.loads(line)
@@ -39,10 +40,14 @@ for line in sys.stdin:
     else:
         result = {}
     print(json.dumps({"jsonrpc": "2.0", "id": request["id"], "result": result}), flush=True)
-''', encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
     token = set_clawk_home_override(profile)
     try:
-        assert _probe_single_server("fixture", {"command": sys.executable, "args": [str(server)]}) == [("echo", "Echo")]
+        assert _probe_single_server(
+            "fixture", {"command": sys.executable, "args": [str(server)]}
+        ) == [("echo", "Echo")]
     finally:
         reset_clawk_home_override(token)
     try:
@@ -51,5 +56,7 @@ for line in sys.stdin:
     finally:
         # Keep the pre-fix failure from leaking a Windows handle into tempdir cleanup.
         for handle in list(mcp_tool_config._mcp_stderr_log_fh.values()):
-            if getattr(handle, "name", None) == str(profile / "logs" / "mcp-stderr.log"):
+            if getattr(handle, "name", None) == str(
+                profile / "logs" / "mcp-stderr.log"
+            ):
                 handle.close()

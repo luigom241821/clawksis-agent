@@ -10,8 +10,14 @@ import pytest
 
 @pytest.mark.parametrize("manual", [False, True])
 @pytest.mark.parametrize(
-    "death", ["hard_exit", "payload_exception", "concurrent_recovery",
-              "timeout_hard_exit", "timeout_payload_exception"]
+    "death",
+    [
+        "hard_exit",
+        "payload_exception",
+        "concurrent_recovery",
+        "timeout_hard_exit",
+        "timeout_payload_exception",
+    ],
 )
 def test_adopted_worker_failure_is_visible(tmp_path, monkeypatch, manual, death):
     from cron import executions
@@ -50,7 +56,9 @@ def test_adopted_worker_failure_is_visible(tmp_path, monkeypatch, manual, death)
             monkeypatch.setattr(process, "wait", race_wait)
             return wait_body(process, **kwargs)
 
-        monkeypatch.setattr(scheduler, "_wait_for_external_cron_worker_body", timeout_after_recovery)
+        monkeypatch.setattr(
+            scheduler, "_wait_for_external_cron_worker_body", timeout_after_recovery
+        )
     delivered = []
     monkeypatch.setattr(
         scheduler, "_deliver_result", lambda *a, **k: delivered.append(True)

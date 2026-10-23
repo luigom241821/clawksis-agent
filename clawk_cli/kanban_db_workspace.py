@@ -38,6 +38,7 @@ def _path_key(path: Path | str | None) -> str:
     """
     return unicodedata.normalize("NFC", str(path)) if path is not None else ""
 
+
 # Statuses after which a task no longer needs a workspace: a child stops
 # needing its parent's handoff artifacts, and a sharer stops holding a dir.
 _TERMINAL_STATUSES_SQL = "('done', 'archived', 'failed', 'cancelled')"
@@ -49,7 +50,9 @@ _ACTIVE_CHILDREN_SQL = (
     "LIMIT 1"
 )
 
-_WORKSPACE_ROW_SQL = "SELECT workspace_kind, workspace_path, branch_name FROM tasks WHERE id = ?"
+_WORKSPACE_ROW_SQL = (
+    "SELECT workspace_kind, workspace_path, branch_name FROM tasks WHERE id = ?"
+)
 
 
 def _git(repo_root: Path, *args: str, timeout: int) -> subprocess.CompletedProcess:
@@ -58,14 +61,22 @@ def _git(repo_root: Path, *args: str, timeout: int) -> subprocess.CompletedProce
     :func:`noninteractive_repo_git_env` (GHSA-7x36-8jrh-v4pw): the dispatcher runs ``worktree add``
     unattended, which executes the repo's hooks, ``core.fsmonitor`` and smudge filters.
     """
-    from clawk_cli._subprocess_compat import FILTER_DISCOVERY_FAILED, noninteractive_repo_git_env
+    from clawk_cli._subprocess_compat import (
+        FILTER_DISCOVERY_FAILED,
+        noninteractive_repo_git_env,
+    )
+
     env = noninteractive_repo_git_env(repo_root)
     if env is None:
-        return subprocess.CompletedProcess(["git", "-C", str(repo_root), *args], 1, "", FILTER_DISCOVERY_FAILED)
+        return subprocess.CompletedProcess(
+            ["git", "-C", str(repo_root), *args], 1, "", FILTER_DISCOVERY_FAILED
+        )
     return subprocess.run(
         ["git", "-C", str(repo_root), *args],
         capture_output=True,
-        text=True, encoding='utf-8', errors='replace',
+        text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=timeout,
         check=False,
         stdin=subprocess.DEVNULL,
@@ -180,7 +191,9 @@ def _workspace_in_use_by_other(
     try:
         key = _path_key(Path(path).expanduser().resolve(strict=False))
     except OSError as exc:
-        _kb._log.warning("Cannot resolve workspace %s for task %s: %s", path, task_id, exc)
+        _kb._log.warning(
+            "Cannot resolve workspace %s for task %s: %s", path, task_id, exc
+        )
         return "unknown"
     if not key:
         return None
@@ -201,7 +214,10 @@ def _workspace_in_use_by_other(
                 return "shared"
         except (OSError, sqlite3.Error) as exc:
             _kb._log.warning(
-                "Cannot read board db %s for task %s: %s", db_file, task_id, exc,
+                "Cannot read board db %s for task %s: %s",
+                db_file,
+                task_id,
+                exc,
             )
             return "unknown"
     return None
@@ -218,17 +234,21 @@ def _defer_shared_workspace_cleanup(
         _kb._log.warning(
             "Deferring workspace cleanup for task %s: %s is still used by "
             "another non-terminal task",
-            task_id, path,
+            task_id,
+            path,
         )
     else:
         _kb._log.warning(
             "Deferring workspace cleanup for task %s: cannot tell whether "
             "another task still uses %s",
-            task_id, path,
+            task_id,
+            path,
         )
     try:
         _kb._append_event(
-            conn, task_id, "workspace_cleanup_deferred_shared",
+            conn,
+            task_id,
+            "workspace_cleanup_deferred_shared",
             {"path": str(path), "reason": reason},
         )
     except sqlite3.Error:
@@ -285,11 +305,13 @@ def _managed_scratch_path_info(p: Path) -> tuple[bool, Optional[str]]:
     ) -> None:
         root = anchor.joinpath(*parts)
         with contextlib.suppress(OSError):
-            roots.append((
-                root.resolve(strict=False),
-                (_lexical_path(root), _lexical_path(anchor_real.joinpath(*parts))),
-                board,
-            ))
+            roots.append(
+                (
+                    root.resolve(strict=False),
+                    (_lexical_path(root), _lexical_path(anchor_real.joinpath(*parts))),
+                    board,
+                )
+            )
 
     override = os.environ.get("CLAWK_KANBAN_WORKSPACES_ROOT", "").strip()
     if override:
@@ -317,7 +339,10 @@ def _managed_scratch_path_info(p: Path) -> tuple[bool, Optional[str]]:
             with contextlib.suppress(OSError):
                 if entry.is_dir():
                     _add_root(
-                        home, home_real, ("kanban", "boards", entry.name, "workspaces"), entry.name
+                        home,
+                        home_real,
+                        ("kanban", "boards", entry.name, "workspaces"),
+                        entry.name,
                     )
     for root, lexical_roots, board in roots:
         if p_abs == root:
@@ -383,7 +408,9 @@ def _cleanup_workspace(conn: sqlite3.Connection, task_id: str) -> None:
             _kb._log.debug(
                 "Deferring %s workspace cleanup for task %s: "
                 "active children still need workspace at %s",
-                kind, task_id, path,
+                kind,
+                task_id,
+                path,
             )
             return
         # Kill the (dead) tmux worker session BEFORE removing a worktree so a
@@ -411,7 +438,8 @@ def _cleanup_workspace(conn: sqlite3.Connection, task_id: str) -> None:
                     "Refusing to remove out-of-scratch workspace for task %s: %s "
                     "(workspace_kind='scratch' but path is outside any "
                     "kanban-managed workspaces root)",
-                    task_id, wp,
+                    task_id,
+                    wp,
                 )
         # Kill the owning worker's tmux session if it is now dead, then let any
         # parent whose children are all done run its deferred cleanup.
@@ -433,7 +461,10 @@ def _cleanup_worktree_workspace(
     it. The auto-generated ``wt/<task-id>`` branch is deleted with it; custom
     branches are kept. Best-effort."""
     try:
-        from clawk_cli.worktree_ops import _worktree_has_unpushed_commits, _worktree_is_dirty
+        from clawk_cli.worktree_ops import (
+            _worktree_has_unpushed_commits,
+            _worktree_is_dirty,
+        )
     except Exception:
         return  # CLI safety predicates unavailable — preserve
     try:
@@ -444,12 +475,17 @@ def _cleanup_worktree_workspace(
         if common is None or common.name != ".git":
             return  # not a linked worktree of a normal repo — never guess
         repo_root = common.parent
-        if _path_key(wp.resolve(strict=False)) == _path_key(repo_root.resolve(strict=False)):
+        if _path_key(wp.resolve(strict=False)) == _path_key(
+            repo_root.resolve(strict=False)
+        ):
             return  # never remove the main checkout
-        if _worktree_is_dirty(str(wp), str(repo_root)) or _worktree_has_unpushed_commits(str(wp)):
+        if _worktree_is_dirty(
+            str(wp), str(repo_root)
+        ) or _worktree_has_unpushed_commits(str(wp)):
             _kb._log.info(
                 "Preserving worktree for task %s: dirty or unpushed work at %s",
-                task_id, wp,
+                task_id,
+                wp,
             )
             return
         # Windows cannot delete a directory while this process has its current
@@ -470,7 +506,10 @@ def _cleanup_worktree_workspace(
             except OSError as exc:
                 _kb._log.warning(
                     "Preserving worktree for task %s: cannot leave %s for %s: %s",
-                    task_id, cwd or "<deleted cwd>", repo_root, exc,
+                    task_id,
+                    cwd or "<deleted cwd>",
+                    repo_root,
+                    exc,
                 )
                 return
         # No --force: git's own dirty guard re-verifies at removal time, so if
@@ -485,7 +524,9 @@ def _cleanup_worktree_workspace(
         if result.returncode != 0:
             _kb._log.warning(
                 "git worktree remove failed for task %s at %s: %s",
-                task_id, wp, (result.stderr or result.stdout or "").strip(),
+                task_id,
+                wp,
+                (result.stderr or result.stdout or "").strip(),
             )
             return
         _kb._log.debug("Removed worktree workspace: %s", wp)
@@ -532,7 +573,11 @@ def _try_cleanup_parent_workspaces(conn: sqlite3.Connection, task_id: str) -> No
                     continue
                 release_lsp_clients(str(wp))
                 shutil.rmtree(wp, ignore_errors=True)
-                _kb._log.debug("Deferred cleanup: removed parent %s scratch workspace: %s", parent_id, wp)
+                _kb._log.debug(
+                    "Deferred cleanup: removed parent %s scratch workspace: %s",
+                    parent_id,
+                    wp,
+                )
     except Exception:
         pass  # best-effort
 
@@ -549,11 +594,20 @@ def _cleanup_worker_tmux(conn: sqlite3.Connection, task_id: str) -> None:
         session = f"swarm-{row['assignee']}"
         out = subprocess.run(
             ["tmux", "list-panes", "-t", session, "-F", "#{pane_dead}"],
-            capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=5,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
             check=False,
         )
         if out.stdout.strip() == "1":
-            subprocess.run(["tmux", "kill-session", "-t", session], capture_output=True, timeout=5, check=False)
+            subprocess.run(
+                ["tmux", "kill-session", "-t", session],
+                capture_output=True,
+                timeout=5,
+                check=False,
+            )
             _kb._log.debug("Killed stale tmux session: %s", session)
     except Exception:
         pass  # best-effort — never block completion
@@ -608,7 +662,9 @@ def _maybe_emit_scratch_tip(
         _kb._log.warning("kanban: %s (task %s)", _SCRATCH_TIP_MESSAGE, task_id)
         with _kb.write_txn(conn):
             _kb._append_event(
-                conn, task_id, "tip_scratch_workspace",
+                conn,
+                task_id,
+                "tip_scratch_workspace",
                 {"message": _SCRATCH_TIP_MESSAGE},
             )
     except Exception:
@@ -621,6 +677,7 @@ def _maybe_emit_scratch_tip(
 # ---------------------------------------------------------------------------
 # Workspace resolution
 # ---------------------------------------------------------------------------
+
 
 def _git_toplevel(path: Path) -> Optional[Path]:
     """Return the git toplevel containing ``path``, or ``None`` if not in a repo."""
@@ -635,7 +692,9 @@ def _git_toplevel(path: Path) -> Optional[Path]:
 
 def _git_branch_exists(repo_root: Path, branch_name: str) -> bool:
     try:
-        result = _git(repo_root, "show-ref", "--verify", f"refs/heads/{branch_name}", timeout=30)
+        result = _git(
+            repo_root, "show-ref", "--verify", f"refs/heads/{branch_name}", timeout=30
+        )
     except Exception:
         return False
     return result.returncode == 0
@@ -690,7 +749,11 @@ def _ensure_git_worktree(repo_root: Path, target: Path, branch_name: str) -> Non
     """Materialize ``target`` as a linked git worktree under ``repo_root``."""
     target = target.expanduser()
     repo_common = _git_common_dir(repo_root)
-    if target.exists() and repo_common is not None and _path_key(_git_common_dir(target)) == _path_key(repo_common):
+    if (
+        target.exists()
+        and repo_common is not None
+        and _path_key(_git_common_dir(target)) == _path_key(repo_common)
+    ):
         return
     target.parent.mkdir(parents=True, exist_ok=True)
     if _git_branch_exists(repo_root, branch_name):
@@ -705,14 +768,18 @@ def _ensure_git_worktree(repo_root: Path, target: Path, branch_name: str) -> Non
         )
 
 
-def _anchored_worktree(repo_root: Path, task_id: str, branch_name: str) -> tuple[Path, str]:
+def _anchored_worktree(
+    repo_root: Path, task_id: str, branch_name: str
+) -> tuple[Path, str]:
     """Materialize the canonical ``<repo>/.worktrees/<task-id>`` worktree."""
     target = repo_root / ".worktrees" / task_id
     _ensure_git_worktree(repo_root, target, branch_name)
     return target, branch_name
 
 
-def _resolve_worktree_workspace(task: Task, *, board: Optional[str] = None) -> tuple[Path, str]:
+def _resolve_worktree_workspace(
+    task: Task, *, board: Optional[str] = None
+) -> tuple[Path, str]:
     """Resolve + materialize a linked git worktree for ``task``. With no
     ``task.workspace_path`` the anchor is the board's ``default_workdir`` so
     every worktree lands under a board-owned repo (``<repo>/.worktrees/<id>``)
@@ -721,7 +788,9 @@ def _resolve_worktree_workspace(task: Task, *, board: Optional[str] = None) -> t
     branch_name = (task.branch_name or "").strip() or f"wt/{task.id}"
     if not task.workspace_path:
         board_slug = board if board else _kb.get_current_board()
-        board_default = (_kb.read_board_metadata(board_slug).get("default_workdir") or "").strip()
+        board_default = (
+            _kb.read_board_metadata(board_slug).get("default_workdir") or ""
+        ).strip()
         if not board_default:
             raise ValueError(
                 f"task {task.id} has workspace_kind=worktree but no workspace_path, "
@@ -763,7 +832,9 @@ def _resolve_worktree_workspace(task: Task, *, board: Optional[str] = None) -> t
         fallback_root = _repo_root_for_worktree_target(requested.parent)
         if fallback_root is not None:
             fallback = fallback_root / ".worktrees" / task.id
-            if _path_key(fallback.resolve(strict=False)) != _path_key(requested_resolved):
+            if _path_key(fallback.resolve(strict=False)) != _path_key(
+                requested_resolved
+            ):
                 _ensure_git_worktree(fallback_root, fallback, branch_name)
                 return fallback.resolve(strict=False), branch_name
         # No repo to anchor a fallback on (or the occupied path IS this task's
@@ -811,7 +882,9 @@ def resolve_workspace(task: Task, *, board: Optional[str] = None) -> Path:
             )
     elif kind == "dir":
         if not task.workspace_path:
-            raise ValueError(f"task {task.id} has workspace_kind=dir but no workspace_path")
+            raise ValueError(
+                f"task {task.id} has workspace_kind=dir but no workspace_path"
+            )
         p = Path(task.workspace_path).expanduser()
         if not p.is_absolute():
             raise ValueError(
@@ -825,12 +898,16 @@ def resolve_workspace(task: Task, *, board: Optional[str] = None) -> Path:
     return p
 
 
-def _set_task_column(conn: sqlite3.Connection, task_id: str, column: str, value: str) -> None:
+def _set_task_column(
+    conn: sqlite3.Connection, task_id: str, column: str, value: str
+) -> None:
     with _kb.write_txn(conn):
         conn.execute(f"UPDATE tasks SET {column} = ? WHERE id = ?", (value, task_id))
 
 
-def set_workspace_path(conn: sqlite3.Connection, task_id: str, path: Path | str) -> None:
+def set_workspace_path(
+    conn: sqlite3.Connection, task_id: str, path: Path | str
+) -> None:
     _set_task_column(conn, task_id, "workspace_path", str(path))
 
 

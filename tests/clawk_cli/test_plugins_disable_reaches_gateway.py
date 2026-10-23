@@ -20,9 +20,15 @@ def home(tmp_path, monkeypatch):
     clawk_home = tmp_path / "clawk-home"
     plugin_dir = clawk_home / "plugins" / "probe"
     plugin_dir.mkdir(parents=True)
-    (plugin_dir / "plugin.yaml").write_text("name: probe\nversion: '1.0'\n", encoding="utf-8")
-    (plugin_dir / "__init__.py").write_text("def register(ctx):\n    pass\n", encoding="utf-8")
-    (clawk_home / "config.yaml").write_text("plugins:\n  enabled: [probe]\n  disabled: []\n", encoding="utf-8")
+    (plugin_dir / "plugin.yaml").write_text(
+        "name: probe\nversion: '1.0'\n", encoding="utf-8"
+    )
+    (plugin_dir / "__init__.py").write_text(
+        "def register(ctx):\n    pass\n", encoding="utf-8"
+    )
+    (clawk_home / "config.yaml").write_text(
+        "plugins:\n  enabled: [probe]\n  disabled: []\n", encoding="utf-8"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
     def admit(enabled, disabled, **_kwargs):
@@ -42,7 +48,9 @@ def _gateway(monkeypatch, answer, *, shared=None):
         calls.append((Path(target), profile_home))
         return answer if profile_home is None else shared
 
-    monkeypatch.setattr("gateway.control_socket.reload_gateway_plugins", reload_gateway_plugins)
+    monkeypatch.setattr(
+        "gateway.control_socket.reload_gateway_plugins", reload_gateway_plugins
+    )
     return calls
 
 
@@ -63,10 +71,15 @@ def test_the_gateways_forced_rediscovery_drops_a_disabled_plugins_hook(home):
 
     (home / "plugins" / "probe" / "__init__.py").write_text(
         "def _probe_hook(**kwargs):\n    return None\n\n"
-        "def register(ctx):\n    ctx.register_hook('on_session_start', _probe_hook)\n", encoding="utf-8")
+        "def register(ctx):\n    ctx.register_hook('on_session_start', _probe_hook)\n",
+        encoding="utf-8",
+    )
 
     def _probe_hooked() -> bool:
-        return any(cb.__name__ == "_probe_hook" for cb in plugins.iter_hook_callbacks("on_session_start"))
+        return any(
+            cb.__name__ == "_probe_hook"
+            for cb in plugins.iter_hook_callbacks("on_session_start")
+        )
 
     plugins._reset_plugin_managers_for_tests()
     try:
@@ -102,17 +115,23 @@ def shared_root(tmp_path, monkeypatch):
     return root
 
 
-def test_a_profile_without_its_own_gateway_reaches_the_shared_one(home, shared_root, monkeypatch, capsys):
+def test_a_profile_without_its_own_gateway_reaches_the_shared_one(
+    home, shared_root, monkeypatch, capsys
+):
     calls = _gateway(monkeypatch, None, shared={"reloaded": True, "plugins": []})
 
     plugins_cmd.cmd_disable("probe")
 
     assert [(t.resolve(), p and Path(str(p)).resolve()) for t, p in calls] == [
-        (home.resolve(), None), (shared_root.resolve(), home.resolve())]
+        (home.resolve(), None),
+        (shared_root.resolve(), home.resolve()),
+    ]
     assert "running gateway reloaded" in capsys.readouterr().out
 
 
-def test_a_shared_gateway_refusing_an_unserved_home_is_reported(home, shared_root, monkeypatch, capsys):
+def test_a_shared_gateway_refusing_an_unserved_home_is_reported(
+    home, shared_root, monkeypatch, capsys
+):
     calls = _gateway(monkeypatch, None, shared=_UNSERVED)
 
     plugins_cmd.cmd_disable("probe")
@@ -122,7 +141,9 @@ def test_a_shared_gateway_refusing_an_unserved_home_is_reported(home, shared_roo
     assert "saved config" in out and "No running gateway answered" not in out
 
 
-def test_disable_without_an_answering_gateway_says_a_restart_is_needed(home, monkeypatch, capsys):
+def test_disable_without_an_answering_gateway_says_a_restart_is_needed(
+    home, monkeypatch, capsys
+):
     _gateway(monkeypatch, None)
 
     plugins_cmd.cmd_disable("probe")
@@ -142,18 +163,29 @@ def test_disable_says_the_running_gateway_unloaded_it(home, monkeypatch, capsys)
     assert "running gateway reloaded its plugins and unloaded probe" in out, out
     assert "new sessions" not in out, out
     # callbacks the plugin already wired into platform adapters outlive the reload (plugin guide)
-    assert "platform hooks it already wired up stay until" in out and "clawk gateway restart" in out, out
+    assert (
+        "platform hooks it already wired up stay until" in out
+        and "clawk gateway restart" in out
+    ), out
 
 
 @pytest.mark.parametrize("reloaded", [True, False])
-def test_enable_prints_only_the_outcome_that_applies(home, monkeypatch, capsys, reloaded):
+def test_enable_prints_only_the_outcome_that_applies(
+    home, monkeypatch, capsys, reloaded
+):
     """``enable`` knows whether the running gateway took the plugin: it prints that outcome, never
     "Takes effect on next session." above a line saying it is active in the running gateway now."""
     from clawk_cli import plugins_activation
+
     save_config({**load_config(), "plugins": {"enabled": [], "disabled": ["probe"]}})
-    outcome = {"gateway_reloaded": reloaded, "restart_required": not reloaded,
-               "activation": {"activated_now": {"hooks": 1}} if reloaded else None}
-    monkeypatch.setattr(plugins_activation, "activate_plugin_now", lambda *_a, **_k: outcome)
+    outcome = {
+        "gateway_reloaded": reloaded,
+        "restart_required": not reloaded,
+        "activation": {"activated_now": {"hooks": 1}} if reloaded else None,
+    }
+    monkeypatch.setattr(
+        plugins_activation, "activate_plugin_now", lambda *_a, **_k: outcome
+    )
     # Not reloaded: a gateway runs but did not answer the reload (an older one), so it needs a restart.
     monkeypatch.setattr("gateway.status.get_running_pid", lambda *_a, **_k: 4242)
 

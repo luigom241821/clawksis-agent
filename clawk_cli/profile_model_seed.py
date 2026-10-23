@@ -19,13 +19,23 @@ def _requested_provider(model_cfg) -> str | None:
 
 # Fields name lookups match on. Runtime sees them ``${VAR}``-expanded (load_config expands the
 # whole file), so matching expands only these; copied entries stay raw and secrets stay refs.
-_ROUTING_FIELDS = ("name", "provider_key", "base_url", "baseUrl", "url", "api", "enabled")
+_ROUTING_FIELDS = (
+    "name",
+    "provider_key",
+    "base_url",
+    "baseUrl",
+    "url",
+    "api",
+    "enabled",
+)
 
 
 def _expand_routing_fields(entry):
     if not isinstance(entry, dict):
         return entry
-    return {k: _expand_env_vars(v) if k in _ROUTING_FIELDS else v for k, v in entry.items()}
+    return {
+        k: _expand_env_vars(v) if k in _ROUTING_FIELDS else v for k, v in entry.items()
+    }
 
 
 def _routing_view(cfg: dict) -> dict:
@@ -136,14 +146,18 @@ def merge_endpoint_seed(dst_cfg: dict, seed: dict) -> dict:
     dst_providers = dst_cfg.get("providers")
     if isinstance(dst_providers, dict) or seed_providers:
         kept = {
-            k: v for k, v in (dst_providers if isinstance(dst_providers, dict) else {}).items()
+            k: v
+            for k, v in (
+                dst_providers if isinstance(dst_providers, dict) else {}
+            ).items()
             if k not in seed_providers and not claimed & _aliases(v, str(k))
         }
         merged["providers"] = {**seed_providers, **kept}
     dst_custom = dst_cfg.get("custom_providers")
     if isinstance(dst_custom, list) or seed_custom:
         merged["custom_providers"] = seed_custom + [
-            e for e in (dst_custom if isinstance(dst_custom, list) else [])
+            e
+            for e in (dst_custom if isinstance(dst_custom, list) else [])
             if not claimed & _aliases(e)
         ]
     return merged

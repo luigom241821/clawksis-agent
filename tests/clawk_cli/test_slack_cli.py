@@ -76,9 +76,6 @@ class TestSlackManifestConsoleExitStatus:
 class TestSlackManifestArgparse:
     """Slack manifest messaging-experience flags wire through argparse."""
 
-
-
-
     def test_long_description_file_preserves_newlines(self, tmp_path, capsys):
         content = ("x" * 175) + "\r\n" + ("y" * 175) + "\r"
         source = tmp_path / "AGENTS.md"
@@ -91,7 +88,6 @@ class TestSlackManifestArgparse:
 
         manifest = json.loads(capsys.readouterr().out)
         assert manifest["display_information"]["long_description"] == content
-
 
     def test_long_description_file_reports_tilde_expansion_errors(
         self, monkeypatch, capsys
@@ -117,11 +113,6 @@ class TestSlackManifestArgparse:
 class TestSlackFullManifest:
     """Generated full Slack app manifest used by `clawk slack manifest`."""
 
-
-
-
-
-
     def test_assistant_features_remain_enabled(self):
         manifest = _build_full_manifest("Clawksis", "Your Clawksis agent on Slack")
 
@@ -130,9 +121,6 @@ class TestSlackFullManifest:
         assert "assistant:write" in manifest["oauth_config"]["scopes"]["bot"]
         bot_events = manifest["settings"]["event_subscriptions"]["bot_events"]
         assert "assistant_thread_started" in bot_events
-
-
-
 
     def test_no_assistant_preserves_core_surface(self):
         """Dropping assistant mode must NOT strip the regular messaging surface."""
@@ -150,7 +138,10 @@ class TestSlackFullManifest:
         for scope in ("commands", "channels:history", "groups:read", "im:history"):
             assert scope in bot_scopes
         bot_events = manifest["settings"]["event_subscriptions"]["bot_events"]
-        for event in ("message.im", "message.channels", "message.groups", "app_mention"):
+        for event in (
+            "message.im",
+            "message.channels",
+            "message.groups",
+            "app_mention",
+        ):
             assert event in bot_events
-
-

@@ -16,8 +16,7 @@ from clawk_cli import auth_codex
 from clawk_cli.auth import AuthError
 
 
-_SSL_EOF_MESSAGE = (
-    "[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1016)")
+_SSL_EOF_MESSAGE = "[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1016)"
 
 
 class _RaisingClient:
@@ -39,21 +38,26 @@ class _RaisingClient:
 def _login_post():
     return auth_codex._codex_login_post(
         "https://auth.openai.com/api/accounts/deviceauth/usercode",
-        failure=("Failed to request device code", "device_code_request_failed"))
+        failure=("Failed to request device code", "device_code_request_failed"),
+    )
 
 
 def _poll():
     return auth_codex._codex_poll_authorization_code(
-        "https://auth.openai.com", device_auth_id="da", user_code="uc", poll_interval=0)
+        "https://auth.openai.com", device_auth_id="da", user_code="uc", poll_interval=0
+    )
 
 
 @pytest.mark.parametrize(
     "call, code",
     [(_login_post, "device_code_request_failed"), (_poll, "device_code_poll_error")],
-    ids=["login_post", "poll"])
+    ids=["login_post", "poll"],
+)
 def test_ssl_transport_error_keeps_detail_and_adds_hint(monkeypatch, call, code):
     exc = ssl.SSLEOFError(8, _SSL_EOF_MESSAGE)
-    monkeypatch.setattr(auth_codex, "_codex_http_client", lambda **kw: _RaisingClient(exc))
+    monkeypatch.setattr(
+        auth_codex, "_codex_http_client", lambda **kw: _RaisingClient(exc)
+    )
     # The persistent-blip path retries before failing (see test_codex_device_login_transient_retry);
     # skip its backoff sleeps so this shape test stays instant.
     monkeypatch.setattr(auth_codex.time, "sleep", lambda *_: None)
@@ -70,7 +74,9 @@ def test_ssl_transport_error_keeps_detail_and_adds_hint(monkeypatch, call, code)
 
 def test_plain_timeout_has_no_ssl_hint(monkeypatch):
     exc = httpx.ConnectTimeout("timed out")
-    monkeypatch.setattr(auth_codex, "_codex_http_client", lambda **kw: _RaisingClient(exc))
+    monkeypatch.setattr(
+        auth_codex, "_codex_http_client", lambda **kw: _RaisingClient(exc)
+    )
     monkeypatch.setattr(auth_codex.time, "sleep", lambda *_: None)  # skip retry backoff
 
     with pytest.raises(AuthError) as excinfo:

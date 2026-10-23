@@ -32,12 +32,17 @@ async def apply_root_dm_topic_transfer(adapter: Any, event: MessageEvent) -> Non
     if transfer is None or source is None or getattr(source, "chat_type", None) != "dm":
         return
     if getattr(event, "allow_gateway_control", False):
-        coerce_plaintext_gateway_command(event)  # "restart gateway" is a lobby command too (idempotent)
+        coerce_plaintext_gateway_command(
+            event
+        )  # "restart gateway" is a lobby command too (idempotent)
     if getattr(event, "internal", False) or event.get_command():
         return
     if str((event.metadata or {}).get("gateway_session_key") or "").strip():
         return
-    if adapter._is_sender_authorized(source.user_id, source.chat_type, source.chat_id) is False:
+    if (
+        adapter._is_sender_authorized(source.user_id, source.chat_type, source.chat_id)
+        is False
+    ):
         return
     try:
         decided = await transfer(source)

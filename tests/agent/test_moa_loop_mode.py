@@ -130,7 +130,9 @@ moa:
     agent.base_url = "https://api.z.ai/api/coding/paas/v4"
     agent.api_key = "fallback-key"
     agent._client_kwargs = {"api_key": "fallback-key", "base_url": agent.base_url}
-    agent.client = SimpleNamespace(close=lambda: None, _client=SimpleNamespace(is_closed=True))
+    agent.client = SimpleNamespace(
+        close=lambda: None, _client=SimpleNamespace(is_closed=True)
+    )
 
     assert agent._restore_primary_runtime() is True
     assert agent.provider == "moa"
@@ -187,7 +189,9 @@ moa:
     agent.base_url = "https://api.z.ai/api/coding/paas/v4"
     agent.api_key = "fallback-key"
     agent._client_kwargs = {"api_key": "fallback-key", "base_url": agent.base_url}
-    agent.client = SimpleNamespace(close=lambda: None, _client=SimpleNamespace(is_closed=True))
+    agent.client = SimpleNamespace(
+        close=lambda: None, _client=SimpleNamespace(is_closed=True)
+    )
     assert agent._restore_primary_runtime() is True
 
     # The relay reads tool_progress_callback at emit time — attach a recorder
@@ -301,20 +305,6 @@ moa:
     assert "_moa_prepared_request" not in captured["api_kwargs"]
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def test_call_llm_extra_headers_reach_transport_create(monkeypatch):
     """extra_headers must reach the SDK client's create() kwargs.
 
@@ -348,7 +338,9 @@ def test_call_llm_extra_headers_reach_transport_create(monkeypatch):
             "chat_completions",
         ),
     )
-    monkeypatch.setattr(ac, "_get_cached_client", lambda *a, **k: (fake_client, "claude-sonnet-4.6"))
+    monkeypatch.setattr(
+        ac, "_get_cached_client", lambda *a, **k: (fake_client, "claude-sonnet-4.6")
+    )
     monkeypatch.setattr(ac, "_validate_llm_response", lambda resp, task, **_kw: resp)
 
     ac.call_llm(
@@ -360,7 +352,11 @@ def test_call_llm_extra_headers_reach_transport_create(monkeypatch):
 
     assert captured.get("extra_headers") == {"x-initiator": "user"}
     # And it must not leak into unrelated request fields.
-    assert "x-initiator" not in captured.get("extra_body", {}) if captured.get("extra_body") else True
+    assert (
+        "x-initiator" not in captured.get("extra_body", {})
+        if captured.get("extra_body")
+        else True
+    )
 
 
 def test_retry_same_provider_sync_preserves_extra_headers(monkeypatch):
@@ -386,7 +382,9 @@ def test_retry_same_provider_sync_preserves_extra_headers(monkeypatch):
         chat=SimpleNamespace(completions=_Completions()),
         base_url="https://api.githubcopilot.com",
     )
-    monkeypatch.setattr(ac, "_get_cached_client", lambda *a, **k: (fake_client, "claude-sonnet-4.6"))
+    monkeypatch.setattr(
+        ac, "_get_cached_client", lambda *a, **k: (fake_client, "claude-sonnet-4.6")
+    )
     monkeypatch.setattr(ac, "_validate_llm_response", lambda resp, task, **_kw: resp)
 
     ac._retry_same_provider_sync(
@@ -409,10 +407,6 @@ def test_retry_same_provider_sync_preserves_extra_headers(monkeypatch):
     )
 
     assert captured.get("extra_headers") == {"x-initiator": "user"}
-
-
-
-
 
 
 def test_reference_messages_drops_system_but_renders_tools_as_text():
@@ -460,14 +454,25 @@ def test_reference_view_keeps_the_data_use_requirement_of_a_folded_tool_result()
 
     messages = [
         {"role": "user", "content": "read my mail"},
-        {"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "function": {"name": "f", "arguments": "{}"}}]},
-        {"role": "tool", "tool_call_id": "c1", "content": "inbox", "data_use": ["no_training"]},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [{"id": "c1", "function": {"name": "f", "arguments": "{}"}}],
+        },
+        {
+            "role": "tool",
+            "tool_call_id": "c1",
+            "content": "inbox",
+            "data_use": ["no_training"],
+        },
     ]
 
     assert data_use_requirement(_reference_messages(messages)) == {"no_training"}
 
 
-def test_max_iterations_summary_keeps_the_data_use_requirement_on_every_moa_slot(monkeypatch, tmp_path):
+def test_max_iterations_summary_keeps_the_data_use_requirement_on_every_moa_slot(
+    monkeypatch, tmp_path
+):
     from agent.chat_completion_helpers import handle_max_iterations
     from agent.message_metadata import data_use_requirement
 
@@ -488,18 +493,42 @@ def test_max_iterations_summary_keeps_the_data_use_requirement_on_every_moa_slot
 
     monkeypatch.setattr("agent.moa_loop.call_llm", fake_call_llm)
     agent = AIAgent(
-        api_key="moa-virtual-provider", base_url="moa://local", model="review", provider="moa",
-        quiet_mode=True, skip_context_files=True, skip_memory=True, enabled_toolsets=["file"], max_iterations=1,
+        api_key="moa-virtual-provider",
+        base_url="moa://local",
+        model="review",
+        provider="moa",
+        quiet_mode=True,
+        skip_context_files=True,
+        skip_memory=True,
+        enabled_toolsets=["file"],
+        max_iterations=1,
     )
     messages = [
         {"role": "user", "content": "read my mail"},
-        {"role": "assistant", "content": "", "tool_calls": [
-            {"id": "c1", "type": "function", "function": {"name": "read_file", "arguments": "{}"}}]},
-        {"role": "tool", "tool_call_id": "c1", "content": "inbox", "data_use": ["no_training"]},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "c1",
+                    "type": "function",
+                    "function": {"name": "read_file", "arguments": "{}"},
+                }
+            ],
+        },
+        {
+            "role": "tool",
+            "tool_call_id": "c1",
+            "content": "inbox",
+            "data_use": ["no_training"],
+        },
     ]
 
     assert handle_max_iterations(agent, messages, 1) == "summary"
-    assert calls == [("moa_reference", {"no_training"}), ("moa_aggregator", {"no_training"})]
+    assert calls == [
+        ("moa_reference", {"no_training"}),
+        ("moa_aggregator", {"no_training"}),
+    ]
 
 
 def test_reference_messages_ends_with_user_not_assistant_prefill():
@@ -539,12 +568,6 @@ def test_reference_messages_ends_with_user_not_assistant_prefill():
     assert "q1" in joined and "a1" in joined and "q2 current" in joined
 
 
-
-
-
-
-
-
 def test_run_reference_prepends_advisory_system_prompt(monkeypatch):
     """Each reference call gets the advisory-role system prompt first.
 
@@ -572,12 +595,6 @@ def test_run_reference_prepends_advisory_system_prompt(monkeypatch):
     msgs = captured["messages"]
     assert msgs[0] == {"role": "system", "content": _REFERENCE_SYSTEM_PROMPT}
     assert msgs[-1]["role"] == "user"
-
-
-
-
-
-
 
 
 def test_references_run_in_parallel(monkeypatch):
@@ -624,8 +641,6 @@ def test_references_run_in_parallel(monkeypatch):
     assert out[3][1] == "resp-p3"
 
 
-
-
 def test_references_parallel_interrupt_aborts_wait(monkeypatch):
     """A user interrupt mid-fanout must stop the wait instead of blocking
     until every reference (including a wedged one) finishes or times out on
@@ -660,10 +675,14 @@ def test_references_parallel_interrupt_aborts_wait(monkeypatch):
     try:
         start = time.monotonic()
         out = moa_loop._run_references_parallel(
-            refs, [{"role": "user", "content": "hi"}], agent=fake_agent,
+            refs,
+            [{"role": "user", "content": "hi"}],
+            agent=fake_agent,
             # The interrupt arrives right after the fast reference is recorded,
             # while the wedged one is still in flight.
-            progress_callback=lambda done, total, label: setattr(fake_agent, "_interrupt_requested", True),
+            progress_callback=lambda done, total, label: setattr(
+                fake_agent, "_interrupt_requested", True
+            ),
         )
         elapsed = time.monotonic() - start
 
@@ -674,14 +693,6 @@ def test_references_parallel_interrupt_aborts_wait(monkeypatch):
         assert "interrupted" in out[1][1]
     finally:
         release_wedged.set()  # don't leak a blocked thread past the test
-
-
-
-
-
-
-
-
 
 
 def test_slot_runtime_anthropic_oauth_routes_through_provider_branch(monkeypatch):
@@ -717,19 +728,19 @@ def test_slot_runtime_anthropic_oauth_routes_through_provider_branch(monkeypatch
 
     # The chokepoint preserves anthropic identity despite the explicit base_url,
     # so call_llm routes through the anthropic provider branch (not custom).
-    resolved_provider, _model, _base_url, _api_key, _mode = _resolve_task_provider_model(
-        task="moa_reference",
-        provider="anthropic",
-        model="claude-opus-4-8",
-        base_url="https://resolved.example/v1",
-        api_key="resolved-key",
+    resolved_provider, _model, _base_url, _api_key, _mode = (
+        _resolve_task_provider_model(
+            task="moa_reference",
+            provider="anthropic",
+            model="claude-opus-4-8",
+            base_url="https://resolved.example/v1",
+            api_key="resolved-key",
+        )
     )
     assert resolved_provider == "anthropic"
 
     # A generic provider (openrouter) is likewise forwarded and preserved.
-    other_rt = moa_loop._slot_runtime(
-        {"provider": "openrouter", "model": "some-model"}
-    )
+    other_rt = moa_loop._slot_runtime({"provider": "openrouter", "model": "some-model"})
     assert other_rt["provider"] == "openrouter"
     assert other_rt["model"] == "some-model"
     assert other_rt["base_url"] == "https://resolved.example/v1"
@@ -770,7 +781,9 @@ def test_run_reference_captures_usage_and_cost(monkeypatch):
     )
     monkeypatch.setattr(
         "agent.usage_pricing.estimate_usage_cost",
-        lambda *a, **k: SimpleNamespace(amount_usd=0.0123, status="estimated", source="table"),
+        lambda *a, **k: SimpleNamespace(
+            amount_usd=0.0123, status="estimated", source="table"
+        ),
     )
 
     _label, text, acct = _run_reference(
@@ -788,8 +801,6 @@ def test_run_reference_captures_usage_and_cost(monkeypatch):
     assert acct.cost_usd == 0.0123
 
 
-
-
 def test_canonical_usage_add():
     """CanonicalUsage sums per bucket (used to fold advisor tokens in)."""
     from agent.usage_pricing import CanonicalUsage
@@ -802,10 +813,6 @@ def test_canonical_usage_add():
     assert total.cache_read_tokens == 5
     assert total.cache_write_tokens == 3
     assert total.request_count == 2
-
-
-
-
 
 
 def test_reference_guidance_appended_at_end_in_tool_loop():
@@ -833,8 +840,6 @@ def test_reference_guidance_appended_at_end_in_tool_loop():
     assert messages[-1]["role"] == "user"
     assert messages[-1]["content"] == "REFERENCE BLOCK"
     assert len(messages) == 5
-
-
 
 
 def test_reference_messages_flattens_cache_decorated_content():
@@ -871,17 +876,6 @@ def test_reference_messages_flattens_cache_decorated_content():
     assert view == _reference_messages(plain)
 
 
-
-
-
-
-
-
-
-
-
-
-
 def test_prepared_aggregator_preserves_reasoning_config(monkeypatch):
     """Prepared MoA requests retain the acting aggregator reasoning policy."""
     from agent import moa_loop
@@ -894,7 +888,9 @@ def test_prepared_aggregator_preserves_reasoning_config(monkeypatch):
         return _response("aggregator acted")
 
     monkeypatch.setattr(moa_loop, "call_llm", fake_call_llm)
-    monkeypatch.setattr(moa_loop, "_aggregator_reasoning_config", lambda _slot: expected_reasoning)
+    monkeypatch.setattr(
+        moa_loop, "_aggregator_reasoning_config", lambda _slot: expected_reasoning
+    )
     monkeypatch.setattr(
         moa_loop,
         "_slot_runtime",
@@ -914,12 +910,9 @@ def test_prepared_aggregator_preserves_reasoning_config(monkeypatch):
     assert captured["reasoning_config"] == expected_reasoning
 
 
-
-
-
-
-
-def test_aggregate_moa_context_sanitizes_failed_reference_and_forwards_timeout(monkeypatch):
+def test_aggregate_moa_context_sanitizes_failed_reference_and_forwards_timeout(
+    monkeypatch,
+):
     from agent import moa_loop
     from agent.usage_pricing import CanonicalUsage
 
@@ -970,10 +963,6 @@ def test_aggregate_moa_context_sanitizes_failed_reference_and_forwards_timeout(m
     assert "super-secret" not in result
 
 
-
-
-
-
 def test_aggregate_skips_aggregator_when_all_references_failed(monkeypatch):
     """When every reference returns [failed: …], the aggregator is skipped entirely."""
     from agent.moa_loop import aggregate_moa_context
@@ -1009,14 +998,6 @@ def test_aggregate_skips_aggregator_when_all_references_failed(monkeypatch):
     assert "all reference models failed" in result
     assert "Reference models unavailable" in result
     assert "super-secret" not in result
-
-
-
-
-
-
-
-
 
 
 def test_interrupted_but_completed_reference_keeps_real_accounting(monkeypatch):
@@ -1117,10 +1098,15 @@ def test_late_completing_interrupted_reference_feeds_accounting_sink(monkeypatch
     # Under load the poll loop can see the interrupt before it collects the fast slot too, so fast may
     # also arrive late and first; the contract is about the wedged slot's row, not sink ordering.
     deadline = time.monotonic() + 5
-    while not any("wedged" in label for label, _ in sink_calls) and time.monotonic() < deadline:
+    while (
+        not any("wedged" in label for label, _ in sink_calls)
+        and time.monotonic() < deadline
+    ):
         sink_seen.wait(timeout=0.2)
     wedged = [acct for label, acct in sink_calls if "wedged" in label]
-    assert wedged, f"late accounting for the wedged slot never reached the sink: {[l for l, _ in sink_calls]}"
+    assert wedged, (
+        f"late accounting for the wedged slot never reached the sink: {[l for l, _ in sink_calls]}"
+    )
     assert wedged[0].usage.input_tokens == 21
 
 
@@ -1205,8 +1191,9 @@ class _CountingCtxLen:
         return self.value
 
 
-def _trim(messages, *, window=1000, reserve=None, cache=None, counting=None,
-          monkeypatch=None):
+def _trim(
+    messages, *, window=1000, reserve=None, cache=None, counting=None, monkeypatch=None
+):
     from agent import model_metadata, moa_loop
 
     stub = counting or _CountingCtxLen(window)
@@ -1228,16 +1215,6 @@ def _advisory_view(n_pairs, chunk="x" * 400):
         msgs.append({"role": "assistant", "content": f"a{i} {chunk}"})
     msgs.append({"role": "user", "content": "judge the state above"})
     return msgs
-
-
-
-
-
-
-
-
-
-
 
 
 def test_reference_trim_context_length_cache_hits_once(monkeypatch):
@@ -1290,7 +1267,9 @@ def test_reference_trim_matches_naive_pop_loop(monkeypatch):
         pairs = rng.randint(1, 30)
         msgs = []
         if rng.random() < 0.8:
-            msgs.append({"role": "system", "content": "advisory " + "s" * rng.randint(0, 200)})
+            msgs.append(
+                {"role": "system", "content": "advisory " + "s" * rng.randint(0, 200)}
+            )
         for _i in range(pairs):
             msgs.append({"role": "user", "content": "u" * rng.randint(0, 800)})
             msgs.append({"role": "assistant", "content": "a" * rng.randint(0, 800)})
@@ -1301,15 +1280,17 @@ def test_reference_trim_matches_naive_pop_loop(monkeypatch):
 
         window = rng.choice([800, 1500, 3000, 6000])
         reserve = rng.choice([0, 50, 500])
-        reserve_eff = reserve if reserve > 0 else moa_loop._REFERENCE_DEFAULT_OUTPUT_RESERVE
-        budget = int(window * (1.0 - moa_loop._REFERENCE_TRIM_SAFETY_FRACTION)) - reserve_eff
+        reserve_eff = (
+            reserve if reserve > 0 else moa_loop._REFERENCE_DEFAULT_OUTPUT_RESERVE
+        )
+        budget = (
+            int(window * (1.0 - moa_loop._REFERENCE_TRIM_SAFETY_FRACTION)) - reserve_eff
+        )
 
         # The real function returns the messages untouched when the budget
         # is not positive; the naive loop has no such early exit.
         expected = (
-            _naive_reference_trim(list(msgs), budget)
-            if budget > 0
-            else list(msgs)
+            _naive_reference_trim(list(msgs), budget) if budget > 0 else list(msgs)
         )
         got = _trim(
             list(msgs),
@@ -1331,16 +1312,13 @@ def test_reference_trim_weighs_each_message_once(monkeypatch):
         weighed["n"] += len(msgs)
         return real(msgs)
 
-    monkeypatch.setattr(
-        model_metadata, "estimate_messages_tokens_rough", counting
-    )
+    monkeypatch.setattr(model_metadata, "estimate_messages_tokens_rough", counting)
     msgs = _advisory_view(100)
     out = _trim(list(msgs), window=3000, reserve=50, monkeypatch=monkeypatch)
     assert len(out) < len(msgs)
     # One full-list estimate plus one single-message weigh per frame: 2n.
     # The naive loop would weigh ~n^2/2 for a trim this deep.
     assert weighed["n"] <= 2 * len(msgs)
-
 
 
 def test_render_tool_calls_tolerates_namespace_shapes():

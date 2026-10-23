@@ -11,20 +11,12 @@ from agent.credential_pool import (
 )
 
 
-
-
 def test_anthropic_real_api_key_unchanged():
     entry = PooledCredential.from_dict(
         "anthropic",
         {"auth_type": "api_key", "access_token": "sk-ant-api-EXAMPLE"},
     )
     assert entry.auth_type == AUTH_TYPE_API_KEY
-
-
-
-
-
-
 
 
 def test_load_heals_legacy_row_and_exposes_it_to_resolver(tmp_path, monkeypatch):
@@ -39,19 +31,25 @@ def test_load_heals_legacy_row_and_exposes_it_to_resolver(tmp_path, monkeypatch)
     )
     token = "sk-ant-oat-legacy-manual"
     auth_file = clawk_home / "auth.json"
-    auth_file.write_text(json.dumps({
-        "version": 1,
-        "credential_pool": {
-            "anthropic": [{
-                "id": "legacy-oat",
-                "label": "Legacy setup token",
-                "auth_type": AUTH_TYPE_API_KEY,
-                "priority": 0,
-                "source": "manual",
-                "access_token": token,
-            }],
-        },
-    }))
+    auth_file.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "credential_pool": {
+                    "anthropic": [
+                        {
+                            "id": "legacy-oat",
+                            "label": "Legacy setup token",
+                            "auth_type": AUTH_TYPE_API_KEY,
+                            "priority": 0,
+                            "source": "manual",
+                            "access_token": token,
+                        }
+                    ],
+                },
+            }
+        )
+    )
 
     from agent.anthropic_credentials import resolve_anthropic_token
     from agent.credential_pool import load_pool
@@ -61,5 +59,3 @@ def test_load_heals_legacy_row_and_exposes_it_to_resolver(tmp_path, monkeypatch)
     assert entry.auth_type == AUTH_TYPE_OAUTH
     assert persisted["credential_pool"]["anthropic"][0]["auth_type"] == AUTH_TYPE_OAUTH
     assert resolve_anthropic_token() == token
-
-

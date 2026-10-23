@@ -47,7 +47,6 @@ class TestAgentSessionsApiRouting:
         )
         a._app.client.assistant_threads_setStatus.assert_not_called()
 
-
     @pytest.mark.asyncio
     async def test_stop_typing_clears_via_agent_sessions(self):
         _slack_mod._AGENT_SESSIONS_SUPPORTED = True
@@ -71,7 +70,9 @@ class TestAgentSessionsApiRouting:
         a.config.extra["assistant_thread_titles"] = True
         a._app.client.agents_sessions_rename = AsyncMock()
         a._app.client.assistant_threads_setTitle = AsyncMock()
-        await a._set_assistant_thread_title("D123", "171234.0001", "Summarize the incident")
+        await a._set_assistant_thread_title(
+            "D123", "171234.0001", "Summarize the incident"
+        )
         a._app.client.agents_sessions_rename.assert_called_once_with(
             channel_id="D123",
             thread_ts="171234.0001",

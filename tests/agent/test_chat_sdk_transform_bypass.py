@@ -17,7 +17,10 @@ sys.modules.setdefault("fal_client", types.SimpleNamespace())
 import httpx
 import openai
 
-from agent.sdk_transform_bypass import ESCAPE_HATCH_ENV, bypass_chat_sdk_request_transform
+from agent.sdk_transform_bypass import (
+    ESCAPE_HATCH_ENV,
+    bypass_chat_sdk_request_transform,
+)
 from openai.resources.chat import completions as _sdk_completions
 
 _SSE = (
@@ -34,25 +37,55 @@ def _wire_body() -> dict:
         "model": "hermes-4-70b",
         "messages": [
             {"role": "system", "content": "You are Clawksis."},
-            {"role": "user", "content": [
-                {"type": "text", "text": "look at this"},
-                {"type": "image_url", "image_url": {"url": "https://e.example/i.png", "detail": "low"}},
-            ]},
-            {"role": "assistant", "content": None, "tool_calls": [
-                {"id": "c1", "type": "function", "function": {"name": "terminal", "arguments": '{"cmd":"ls"}'}},
-            ]},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "look at this"},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": "https://e.example/i.png",
+                            "detail": "low",
+                        },
+                    },
+                ],
+            },
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "c1",
+                        "type": "function",
+                        "function": {"name": "terminal", "arguments": '{"cmd":"ls"}'},
+                    },
+                ],
+            },
             {"role": "tool", "tool_call_id": "c1", "content": "total 0"},
         ],
         "tools": [
-            {"type": "function", "function": {"name": f"tool_{i}", "description": "d",
-             "parameters": {"type": "object", "properties": {"p": {"type": "string"}}, "required": ["p"]}}}
+            {
+                "type": "function",
+                "function": {
+                    "name": f"tool_{i}",
+                    "description": "d",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"p": {"type": "string"}},
+                        "required": ["p"],
+                    },
+                },
+            }
             for i in range(3)
         ],
         "tool_choice": "auto",
         "stream": True,
         "temperature": 0.7,
         "stream_options": {"include_usage": True},
-        "extra_body": {"reasoning": {"effort": "high"}, "provider": {"order": ["nous"]}},
+        "extra_body": {
+            "reasoning": {"effort": "high"},
+            "provider": {"order": ["nous"]},
+        },
     }
 
 
@@ -62,13 +95,16 @@ class _Recorder:
     def __init__(self):
         self.content: bytes | None = None
         self.client = openai.OpenAI(
-            api_key="k", base_url="https://chat.invalid/v1",
+            api_key="k",
+            base_url="https://chat.invalid/v1",
             http_client=httpx.Client(transport=httpx.MockTransport(self._handle)),
         )
 
     def _handle(self, request: httpx.Request) -> httpx.Response:
         self.content = request.content
-        return httpx.Response(200, content=_SSE, headers={"content-type": "text/event-stream"})
+        return httpx.Response(
+            200, content=_SSE, headers={"content-type": "text/event-stream"}
+        )
 
     def send(self, kwargs: dict) -> bytes:
         for _ in self.client.chat.completions.create(**kwargs):
@@ -97,7 +133,11 @@ def test_escape_hatch_and_non_sdk_facades_keep_the_typed_path(monkeypatch):
     recorder = _Recorder()
     kwargs = _wire_body()
 
-    facade = types.SimpleNamespace(chat=types.SimpleNamespace(completions=types.SimpleNamespace(create=lambda **kw: kw)))
+    facade = types.SimpleNamespace(
+        chat=types.SimpleNamespace(
+            completions=types.SimpleNamespace(create=lambda **kw: kw)
+        )
+    )
     assert bypass_chat_sdk_request_transform(kwargs, facade) is kwargs
 
     monkeypatch.setenv(ESCAPE_HATCH_ENV, "1")
@@ -108,9 +148,21 @@ def _capture_sdk_create(monkeypatch) -> list[dict]:
     """Record the kwargs that reach the SDK's ``Completions.create`` (the transform boundary)."""
     seen: list[dict] = []
     response = types.SimpleNamespace(
-        choices=[types.SimpleNamespace(message=types.SimpleNamespace(content="ok", tool_calls=None), finish_reason="stop")],
-        usage=None, model="m", id="1")
-    monkeypatch.setattr(_sdk_completions.Completions, "create", lambda self, **kw: seen.append(kw) or response)
+        choices=[
+            types.SimpleNamespace(
+                message=types.SimpleNamespace(content="ok", tool_calls=None),
+                finish_reason="stop",
+            )
+        ],
+        usage=None,
+        model="m",
+        id="1",
+    )
+    monkeypatch.setattr(
+        _sdk_completions.Completions,
+        "create",
+        lambda self, **kw: seen.append(kw) or response,
+    )
     return seen
 
 
@@ -121,7 +173,11 @@ def test_auxiliary_completion_path_hands_the_sdk_only_the_placeholder(monkeypatc
 
     seen = _capture_sdk_create(monkeypatch)
     client = _Recorder().client
-    body = {"model": "m", "messages": [{"role": "user", "content": "x" * 4096}], "max_tokens": 8}
+    body = {
+        "model": "m",
+        "messages": [{"role": "user", "content": "x" * 4096}],
+        "max_tokens": 8,
+    }
 
     auxiliary_client._relay_sync_completion(client, dict(body))
 
@@ -137,16 +193,36 @@ def test_iteration_summary_path_hands_the_sdk_only_the_placeholder(monkeypatch):
 
     seen = _capture_sdk_create(monkeypatch)
     client = _Recorder().client
-    body = {"model": "m", "messages": [{"role": "user", "content": "x" * 4096}], "tools": _wire_body()["tools"]}
-    transport = types.SimpleNamespace(normalize_response=lambda response, **kw: types.SimpleNamespace(content="ok", tool_calls=None))
+    body = {
+        "model": "m",
+        "messages": [{"role": "user", "content": "x" * 4096}],
+        "tools": _wire_body()["tools"],
+    }
+    transport = types.SimpleNamespace(
+        normalize_response=lambda response, **kw: types.SimpleNamespace(
+            content="ok", tool_calls=None
+        )
+    )
     agent = types.SimpleNamespace(
-        provider="p", model="m", api_mode="chat_completions", _force_ascii_payload=False,
+        provider="p",
+        model="m",
+        api_mode="chat_completions",
+        _force_ascii_payload=False,
         _build_api_kwargs=lambda messages: dict(body),
-        _get_transport=lambda: transport)
-    agent._interruptible_api_call = lambda request: chat_completion_helpers._dispatch_nonstreaming_api_request(
-        agent, request, make_client=lambda *args, **kwargs: client)
+        _get_transport=lambda: transport,
+    )
+    agent._interruptible_api_call = lambda request: (
+        chat_completion_helpers._dispatch_nonstreaming_api_request(
+            agent, request, make_client=lambda *args, **kwargs: client
+        )
+    )
 
-    assert chat_completion_helpers._chat_summary_attempt(agent, body["messages"], "req-1")(0) == "ok"
+    assert (
+        chat_completion_helpers._chat_summary_attempt(agent, body["messages"], "req-1")(
+            0
+        )
+        == "ok"
+    )
     assert len(seen) == 1
     assert seen[0]["messages"] == [] and seen[0]["tools"] == []
     assert seen[0]["extra_body"]["messages"] == body["messages"]
@@ -160,7 +236,11 @@ def test_relay_stream_path_shows_relay_the_full_conversation(monkeypatch):
 
     seen = _capture_sdk_create(monkeypatch)
     client = _Recorder().client
-    body = {"model": "m", "messages": [{"role": "user", "content": "x" * 4096}], "stream": True}
+    body = {
+        "model": "m",
+        "messages": [{"role": "user", "content": "x" * 4096}],
+        "stream": True,
+    }
     relay_saw: list[dict] = []
 
     def fake_stream_current(request, provider_call, **_kw):
@@ -169,7 +249,10 @@ def test_relay_stream_path_shows_relay_the_full_conversation(monkeypatch):
 
     monkeypatch.setattr(relay_llm, "stream_current", fake_stream_current)
     monkeypatch.setattr(
-        auxiliary_client, "_relay_auxiliary_metadata", lambda **_kw: ("openrouter", "m", {}))
+        auxiliary_client,
+        "_relay_auxiliary_metadata",
+        lambda **_kw: ("openrouter", "m", {}),
+    )
 
     auxiliary_client._relay_sync_stream(client, dict(body))
 

@@ -77,7 +77,6 @@ class TestResolveUseTui:
         _patch_config(monkeypatch, "tui")
         assert m._resolve_use_tui(_args(cli=True)) is False
 
-
     def test_load_config_failure_falls_back_to_cli(self, monkeypatch):
         import clawk_cli.config as cfg
 
@@ -106,7 +105,6 @@ class TestWantsTuiEarly:
 
         return _make
 
-
     def test_config_cli_bare_argv(self, home_with_interface):
         home_with_interface("cli")
         assert m._wants_tui_early([]) is False
@@ -133,9 +131,7 @@ class TestWantsTuiEarly:
         profile_home = tmp_path / "profiles" / "coder"
         for home, interface in ((default_home, "cli"), (profile_home, "tui")):
             home.mkdir(parents=True)
-            (home / "config.yaml").write_text(
-                f"display:\n  interface: {interface}\n"
-            )
+            (home / "config.yaml").write_text(f"display:\n  interface: {interface}\n")
 
         # The import-time read, on the home the process starts in.
         _fake_tty(monkeypatch, True)
@@ -147,7 +143,6 @@ class TestWantsTuiEarly:
         monkeypatch.setenv("CLAWK_HOME", str(profile_home))
         assert m._config_default_interface_early() == "tui"
         assert m._wants_tui_early([]) is True
-
 
 
 # ---------------------------------------------------------------------------
@@ -163,7 +158,6 @@ class TestParserFlags:
     def test_top_level_cli_flag(self):
         args = self._parser().parse_args(["--cli"])
         assert args.cli is True and args.tui is False
-
 
     def test_chat_subcommand_tui_flag(self):
         args = self._parser().parse_args(["chat", "--tui"])

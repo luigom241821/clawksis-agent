@@ -15,8 +15,16 @@ from clawk_state_user_copy import describe_storage_failure, storage_failure_deta
     ("exc", "code", "command"),
     [
         (sqlite3.OperationalError("database is locked"), "storage_locked", "try again"),
-        (sqlite3.OperationalError("attempt to write a readonly database"), "storage_readonly", "clawk doctor --fix"),
-        (sqlite3.DatabaseError("database disk image is malformed"), "storage_corrupt", "clawk doctor --fix"),
+        (
+            sqlite3.OperationalError("attempt to write a readonly database"),
+            "storage_readonly",
+            "clawk doctor --fix",
+        ),
+        (
+            sqlite3.DatabaseError("database disk image is malformed"),
+            "storage_corrupt",
+            "clawk doctor --fix",
+        ),
         (OSError(28, "No space left on device"), "disk_full", "Free some disk space"),
         (None, "storage_unavailable", "clawk doctor --fix"),
     ],
@@ -27,7 +35,10 @@ def test_each_cause_has_a_stable_code_and_an_action(exc, code, command):
     assert command in failure.action
     assert failure.gloss
     # The raw sqlite wording never leaks into the user-facing gloss.
-    assert "sqlite" not in failure.gloss.lower() and "OperationalError" not in failure.gloss
+    assert (
+        "sqlite" not in failure.gloss.lower()
+        and "OperationalError" not in failure.gloss
+    )
 
 
 def test_details_line_is_flattened_and_bounded():
@@ -43,7 +54,15 @@ def test_action_command_is_pinned_to_the_failing_profile(monkeypatch, tmp_path):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk" / "profiles" / "research"))
     selector = profile_cli_selector()
     assert selector.strip()
-    for exc in (sqlite3.OperationalError("database is locked"), sqlite3.DatabaseError("malformed"), None):
+    for exc in (
+        sqlite3.OperationalError("database is locked"),
+        sqlite3.DatabaseError("malformed"),
+        None,
+    ):
         action = describe_storage_failure(exc).action
         assert "{profile_arg}" not in action
-        assert f"`clawk {selector}" in action and "`clawk doctor" not in action and "`clawk gateway" not in action
+        assert (
+            f"`clawk {selector}" in action
+            and "`clawk doctor" not in action
+            and "`clawk gateway" not in action
+        )

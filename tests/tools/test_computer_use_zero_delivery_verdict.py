@@ -43,7 +43,10 @@ def test_synthesis_budget_refusal_keeps_driver_recommendation():
             message="type_text synthesis budget exceeded",
             code="type_text_synthesis_budget_exceeded",
             meta={"delivered_chars": 0, "requested_chars": 6500},
-            escalation={"recommended": "chunk", "reason": "requested run exceeds the synthesis budget"},
+            escalation={
+                "recommended": "chunk",
+                "reason": "requested run exceeds the synthesis budget",
+            },
         )
     )
     assert verdict["decision"] == "escalate"

@@ -31,15 +31,17 @@ class TestSentenceChunker:
     def test_cuts_sentence_the_moment_its_boundary_arrives(self):
         c = ts.SentenceChunker()
         assert c.feed("This is the first full") == []
-        assert c.feed(" sentence of it all. And") == ["This is the first full sentence of it all. "]
+        assert c.feed(" sentence of it all. And") == [
+            "This is the first full sentence of it all. "
+        ]
         assert c.flush() == ["And"]
-
 
     def test_think_blocks_are_stripped_even_across_deltas(self):
         c = ts.SentenceChunker()
         assert c.feed("<think>secret reason") == []
-        assert c.feed("ing</think>The actual spoken answer. ") == ["The actual spoken answer. "]
-
+        assert c.feed("ing</think>The actual spoken answer. ") == [
+            "The actual spoken answer. "
+        ]
 
     def test_paragraph_break_is_a_boundary(self):
         c = ts.SentenceChunker()
@@ -56,7 +58,6 @@ class TestSpeechInterruptedLatch:
         ts.mark_speech_interrupted()
         assert ts.take_speech_interrupted() is True
         assert ts.take_speech_interrupted() is False  # one-shot
-
 
     def test_stale_barge_expires(self, monkeypatch):
         ts.mark_speech_interrupted()
@@ -83,8 +84,6 @@ def _register_fake(monkeypatch, name, available=True, chunks=(b"\x00\x00",)):
     return _Fake
 
 
-
-
 def test_never_swaps_provider_for_streaming(monkeypatch):
     # A registered streamer must NOT be substituted when the user picked another
     # (non-streaming) provider — that would silently change their voice.
@@ -98,7 +97,11 @@ def test_never_swaps_provider_for_streaming(monkeypatch):
 def test_elevenlabs_available_reflects_key(monkeypatch):
     # Key lookups now route through the provider-secret resolver
     # (config > env/.env > credential pool), not bare get_env_value.
-    monkeypatch.setattr(ts, "_resolve_key", lambda env, pid: "key" if env == "ELEVENLABS_API_KEY" else "")
+    monkeypatch.setattr(
+        ts,
+        "_resolve_key",
+        lambda env, pid: "key" if env == "ELEVENLABS_API_KEY" else "",
+    )
     assert ts.ElevenLabsStreamer.available() is True
     monkeypatch.setattr(ts, "_resolve_key", lambda env, pid: "")
     assert ts.ElevenLabsStreamer.available() is False
@@ -219,8 +222,6 @@ def _sd_mock():
 # ── Credential routing: resolve_provider_secret, never bare env ──────────
 
 
-
-
 def test_xai_available_uses_oauth_credential_resolver(monkeypatch):
     import sys
     import types
@@ -242,7 +243,9 @@ def test_xai_streaming_prefers_explicit_api_key(monkeypatch):
     calls = []
 
     fake = types.ModuleType("tools.xai_http")
-    fake.resolve_xai_http_credentials = lambda **kw: calls.append(kw) or {"api_key": "k"}
+    fake.resolve_xai_http_credentials = lambda **kw: (
+        calls.append(kw) or {"api_key": "k"}
+    )
     monkeypatch.setitem(sys.modules, "tools.xai_http", fake)
 
     ts.XAIStreamer.available()
@@ -279,11 +282,19 @@ def test_gemini_streamer_decodes_sse_pcm_chunks(monkeypatch):
     pcm1, pcm2 = b"\x01\x00" * 40, b"\x02\x00" * 40
 
     def _event(pcm):
-        return "data: " + _json.dumps({
-            "candidates": [{"content": {"parts": [
-                {"inlineData": {"data": base64.b64encode(pcm).decode()}}
-            ]}}]
-        })
+        return "data: " + _json.dumps(
+            {
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [
+                                {"inlineData": {"data": base64.b64encode(pcm).decode()}}
+                            ]
+                        }
+                    }
+                ]
+            }
+        )
 
     class _Resp:
         def __enter__(self):
@@ -340,12 +351,18 @@ def _fake_xai_server(handler):
 
 
 @pytest.mark.parametrize("profile", ["alpha", "beta"])
-def test_xai_stream_preserves_profile_and_delivers_before_completion(monkeypatch, tmp_path, profile):
+def test_xai_stream_preserves_profile_and_delivers_before_completion(
+    monkeypatch, tmp_path, profile
+):
     import base64
     import json
     from urllib.parse import parse_qs, urlsplit
 
-    from agent.secret_scope import build_profile_secret_scope, reset_secret_scope, set_secret_scope
+    from agent.secret_scope import (
+        build_profile_secret_scope,
+        reset_secret_scope,
+        set_secret_scope,
+    )
     from clawk_constants import reset_clawk_home_override, set_clawk_home_override
 
     home = tmp_path / profile
@@ -361,17 +378,25 @@ def test_xai_stream_preserves_profile_and_delivers_before_completion(monkeypatch
         seen["path"] = ws.request.path
         seen["auth"] = ws.request.headers.get("Authorization")
         seen["messages"] = [json.loads(ws.recv()), json.loads(ws.recv())]
-        ws.send(json.dumps({"type": "audio.delta", "delta": base64.b64encode(pcm).decode()}))
+        ws.send(
+            json.dumps({"type": "audio.delta", "delta": base64.b64encode(pcm).decode()})
+        )
         if not first_delivered.wait(timeout=10):
             return
-        ws.send(json.dumps({"type": "audio.delta", "delta": base64.b64encode(pcm).decode()}))
+        ws.send(
+            json.dumps({"type": "audio.delta", "delta": base64.b64encode(pcm).decode()})
+        )
         ws.send(json.dumps({"type": "audio.done"}))
 
     url, server = _fake_xai_server(handler)
     home_token = set_clawk_home_override(home)
     secret_token = set_secret_scope(build_profile_secret_scope(home))
     try:
-        section = {"streaming_url": url, "voice_id": "test-voice", "language": "test-language"}
+        section = {
+            "streaming_url": url,
+            "voice_id": "test-voice",
+            "language": "test-language",
+        }
         streamer = ts.XAIStreamer({}, section)
         chunks = streamer.stream("A sentence.")
         assert next(chunks) == pcm
@@ -384,7 +409,8 @@ def test_xai_stream_preserves_profile_and_delivers_before_completion(monkeypatch
         assert params["sample_rate"] == [str(streamer.sample_rate)]
         assert params["codec"] == ["pcm"]
         assert seen["messages"] == [
-            {"type": "text.delta", "delta": "A sentence."}, {"type": "text.done"},
+            {"type": "text.delta", "delta": "A sentence."},
+            {"type": "text.done"},
         ]
     finally:
         first_delivered.set()
@@ -400,7 +426,11 @@ def test_xai_stream_reports_errors_and_bounds_received_audio(monkeypatch, outcom
     from websockets.exceptions import ConnectionClosed
     import tools.xai_http
 
-    monkeypatch.setattr(tools.xai_http, "resolve_xai_http_credentials", lambda **kw: {"api_key": "test-key"})
+    monkeypatch.setattr(
+        tools.xai_http,
+        "resolve_xai_http_credentials",
+        lambda **kw: {"api_key": "test-key"},
+    )
     monkeypatch.setattr(ts, "_STREAM_SENTENCE_BYTE_CAP", 100)
     closed = threading.Event()
 
@@ -412,7 +442,14 @@ def test_xai_stream_reports_errors_and_bounds_received_audio(monkeypatch, outcom
             return
         try:
             while True:
-                ws.send(json.dumps({"type": "audio.delta", "delta": base64.b64encode(b"x" * 64).decode()}))
+                ws.send(
+                    json.dumps(
+                        {
+                            "type": "audio.delta",
+                            "delta": base64.b64encode(b"x" * 64).decode(),
+                        }
+                    )
+                )
         except ConnectionClosed:
             closed.set()
 
@@ -480,17 +517,21 @@ def test_streamer_path_handles_misaligned_pcm_chunks(monkeypatch):
         def stream(self, text):
             # Deliberately yield chunks with odd byte counts so the
             # int16 frame boundary falls between chunks.
-            yield b"\x01\x00\x02"       # 3 bytes — odd, would crash old code
-            yield b"\x00\x03\x00\x04"   # 4 bytes — even, old code OK
-            yield b"\x00\x05\x00"       # 3 bytes — odd, would crash old code
+            yield b"\x01\x00\x02"  # 3 bytes — odd, would crash old code
+            yield b"\x00\x03\x00\x04"  # 4 bytes — even, old code OK
+            yield b"\x00\x05\x00"  # 3 bytes — odd, would crash old code
 
     sd, out = _sd_mock()
     q = _drain_queue(["A complete sentence for testing."])
     stop, done = threading.Event(), threading.Event()
 
-    with patch("tools.tts_streaming.resolve_streaming_provider",
-               return_value=_OddChunkProvider({}, {})), \
-         patch.object(tts_tool, "_import_sounddevice", return_value=sd):
+    with (
+        patch(
+            "tools.tts_streaming.resolve_streaming_provider",
+            return_value=_OddChunkProvider({}, {}),
+        ),
+        patch.object(tts_tool, "_import_sounddevice", return_value=sd),
+    ):
         stream_tts_to_speaker(q, stop, done)
 
     # Every chunk must have been written — no drops from misalignment.
@@ -539,9 +580,12 @@ def test_streamer_path_survives_portaudio_write_error(monkeypatch):
     q = _drain_queue(["A complete sentence for testing."])
     stop, done = threading.Event(), threading.Event()
 
-    with patch("tools.tts_streaming.resolve_streaming_provider",
-               return_value=_Fake({}, {})), \
-         patch.object(tts_tool, "_import_sounddevice", return_value=sd):
+    with (
+        patch(
+            "tools.tts_streaming.resolve_streaming_provider", return_value=_Fake({}, {})
+        ),
+        patch.object(tts_tool, "_import_sounddevice", return_value=sd),
+    ):
         stream_tts_to_speaker(q, stop, done)
 
     assert out.write.called, "expected at least one write attempt"
@@ -589,15 +633,20 @@ def test_streamer_reinit_after_portaudio_error_plays_remaining_sentences(monkeyp
 
     sd.OutputStream.side_effect = _make_stream
 
-    q = _drain_queue([
-        "First sentence triggers PortAudio error here. ",
-        "Second sentence must still play after reinit. ",
-    ])
+    q = _drain_queue(
+        [
+            "First sentence triggers PortAudio error here. ",
+            "Second sentence must still play after reinit. ",
+        ]
+    )
     stop, done = threading.Event(), threading.Event()
 
-    with patch("tools.tts_streaming.resolve_streaming_provider",
-               return_value=_Fake({}, {})), \
-         patch.object(tts_tool, "_import_sounddevice", return_value=sd):
+    with (
+        patch(
+            "tools.tts_streaming.resolve_streaming_provider", return_value=_Fake({}, {})
+        ),
+        patch.object(tts_tool, "_import_sounddevice", return_value=sd),
+    ):
         stream_tts_to_speaker(q, stop, done)
 
     assert broken_out.write.called, "first stream should have received a write"
@@ -633,9 +682,7 @@ def test_streamer_tempfile_fallback_after_reinit_exhausted(monkeypatch):
     sd = MagicMock()
     out = MagicMock()
     sd.OutputStream.return_value = out
-    out.write.side_effect = OSError(
-        "Internal PortAudio error [PaErrorCode -9986]"
-    )
+    out.write.side_effect = OSError("Internal PortAudio error [PaErrorCode -9986]")
 
     # Patch play_audio_file so the tempfile fallback doesn't actually
     # try to play audio — just count that it was called.
@@ -644,19 +691,24 @@ def test_streamer_tempfile_fallback_after_reinit_exhausted(monkeypatch):
     def _fake_play(path):
         play_calls.append(path)
 
-    q = _drain_queue([
-        "First sentence triggers PortAudio error. ",
-        "Second sentence fails after first reinit. ",
-        "Third sentence fails after second reinit. ",
-        "Fourth sentence fails after third reinit. ",
-        "Fifth sentence plays via tempfile fallback. ",
-    ])
+    q = _drain_queue(
+        [
+            "First sentence triggers PortAudio error. ",
+            "Second sentence fails after first reinit. ",
+            "Third sentence fails after second reinit. ",
+            "Fourth sentence fails after third reinit. ",
+            "Fifth sentence plays via tempfile fallback. ",
+        ]
+    )
     stop, done = threading.Event(), threading.Event()
 
-    with patch("tools.tts_streaming.resolve_streaming_provider",
-               return_value=_Fake({}, {})), \
-         patch.object(tts_tool, "_import_sounddevice", return_value=sd), \
-         patch("tools.voice_mode.play_audio_file", side_effect=_fake_play):
+    with (
+        patch(
+            "tools.tts_streaming.resolve_streaming_provider", return_value=_Fake({}, {})
+        ),
+        patch.object(tts_tool, "_import_sounddevice", return_value=sd),
+        patch("tools.voice_mode.play_audio_file", side_effect=_fake_play),
+    ):
         stream_tts_to_speaker(q, stop, done)
 
     # The stream was created 4 times: initial + 3 reinit attempts.
@@ -671,9 +723,7 @@ def test_streamer_tempfile_fallback_after_reinit_exhausted(monkeypatch):
     )
 
 
-
 # ── Dispatch: hybrid batch-prefetch path ──────────────────────────────────
-
 
 
 @pytest.mark.skipif(
@@ -703,10 +753,16 @@ def test_speaker_honours_tts_streaming_min_len_for_short_cjk_opener(monkeypatch)
     q = _drain_queue(["记得，叫团团. ", "然后我们再说第二句话，这一句要长一些才行. "])
     stop, done = threading.Event(), threading.Event()
 
-    with patch("tools.tts_streaming.resolve_streaming_provider",
-               return_value=_Tracking({}, {})), \
-         patch.object(tts_tool, "_load_tts_config", return_value={"streaming": {"min_len": 6}}), \
-         patch.object(tts_tool, "_import_sounddevice", return_value=sd):
+    with (
+        patch(
+            "tools.tts_streaming.resolve_streaming_provider",
+            return_value=_Tracking({}, {}),
+        ),
+        patch.object(
+            tts_tool, "_load_tts_config", return_value={"streaming": {"min_len": 6}}
+        ),
+        patch.object(tts_tool, "_import_sounddevice", return_value=sd),
+    ):
         stream_tts_to_speaker(q, stop, done)
 
     assert stream_calls[0] == "记得，叫团团.", stream_calls
@@ -748,9 +804,13 @@ def test_hybrid_subsequent_sentences_prefetched_individually(monkeypatch):
     q = _drain_queue(sentences)
     stop, done = threading.Event(), threading.Event()
 
-    with patch("tools.tts_streaming.resolve_streaming_provider",
-               return_value=_Tracking({}, {})), \
-         patch.object(tts_tool, "_import_sounddevice", return_value=sd):
+    with (
+        patch(
+            "tools.tts_streaming.resolve_streaming_provider",
+            return_value=_Tracking({}, {}),
+        ),
+        patch.object(tts_tool, "_import_sounddevice", return_value=sd),
+    ):
         stream_tts_to_speaker(q, stop, done)
 
     # Exactly 4 calls: one per sentence.
@@ -764,8 +824,6 @@ def test_hybrid_subsequent_sentences_prefetched_individually(monkeypatch):
     assert "third" in stream_calls[2].lower()
     assert "fourth" in stream_calls[3].lower()
     assert done.is_set()
-
-
 
 
 @pytest.mark.skipif(
@@ -794,6 +852,7 @@ def test_hybrid_done_event_waits_for_prefetch(monkeypatch):
             # Small delay to ensure the prefetch thread is running when
             # the main loop hits end-of-text.
             import time as _time
+
             _time.sleep(0.3)
             prefetch_done.set()
 
@@ -806,9 +865,13 @@ def test_hybrid_done_event_waits_for_prefetch(monkeypatch):
     q = _drain_queue(sentences)
     stop, done = threading.Event(), threading.Event()
 
-    with patch("tools.tts_streaming.resolve_streaming_provider",
-               return_value=_Blocking({}, {})), \
-         patch.object(tts_tool, "_import_sounddevice", return_value=sd):
+    with (
+        patch(
+            "tools.tts_streaming.resolve_streaming_provider",
+            return_value=_Blocking({}, {}),
+        ),
+        patch.object(tts_tool, "_import_sounddevice", return_value=sd),
+    ):
         stream_tts_to_speaker(q, stop, done)
 
     # done.is_set() is true — but only after the prefetch joined.
@@ -846,9 +909,13 @@ def test_hybrid_single_sentence_still_works(monkeypatch):
     q = _drain_queue(["Just one complete sentence."])
     stop, done = threading.Event(), threading.Event()
 
-    with patch("tools.tts_streaming.resolve_streaming_provider",
-               return_value=_Tracking({}, {})), \
-         patch.object(tts_tool, "_import_sounddevice", return_value=sd):
+    with (
+        patch(
+            "tools.tts_streaming.resolve_streaming_provider",
+            return_value=_Tracking({}, {}),
+        ),
+        patch.object(tts_tool, "_import_sounddevice", return_value=sd),
+    ):
         stream_tts_to_speaker(q, stop, done)
 
     assert len(stream_calls) == 1, (
@@ -906,18 +973,19 @@ def test_hybrid_playback_serialized_no_overlap(monkeypatch):
     q = _drain_queue(sentences)
     stop, done = threading.Event(), threading.Event()
 
-    with patch("tools.tts_streaming.resolve_streaming_provider",
-               return_value=_Tracking({}, {})), \
-         patch.object(tts_tool, "_import_sounddevice", return_value=sd):
+    with (
+        patch(
+            "tools.tts_streaming.resolve_streaming_provider",
+            return_value=_Tracking({}, {}),
+        ),
+        patch.object(tts_tool, "_import_sounddevice", return_value=sd),
+    ):
         stream_tts_to_speaker(q, stop, done)
 
     assert done.is_set()
     assert max_concurrent[0] <= 1, (
         f"playback threads overlapped: max concurrent writes = {max_concurrent[0]}"
     )
-
-
-
 
     # No assertion on display — the point is no crash and done is set.
 
@@ -931,8 +999,15 @@ def test_hybrid_playback_serialized_no_overlap(monkeypatch):
 # isolation, and temp-file hygiene of the pipelined path.
 
 
-def _timed_sync_run(monkeypatch, sentences, *, synth_s=0.12, play_s=0.12,
-                    synth_fail_on=None, stop_after_plays=None):
+def _timed_sync_run(
+    monkeypatch,
+    sentences,
+    *,
+    synth_s=0.12,
+    play_s=0.12,
+    synth_fail_on=None,
+    stop_after_plays=None,
+):
     """Drive stream_tts_to_speaker over the sync path with timed fakes.
 
     Returns (events, stop, done): events is [(kind, sentence, t_start, t_end)]
@@ -977,8 +1052,11 @@ def _timed_sync_run(monkeypatch, sentences, *, synth_s=0.12, play_s=0.12,
 
 
 def test_sync_pipeline_overlaps_synthesis_with_playback(monkeypatch):
-    sentences = ["First full sentence here. ", "Second full sentence here. ",
-                 "Third full sentence here. "]
+    sentences = [
+        "First full sentence here. ",
+        "Second full sentence here. ",
+        "Third full sentence here. ",
+    ]
     events, _stop, done = _timed_sync_run(monkeypatch, sentences)
 
     synths = [e for e in events if e[0] == "synth"]
@@ -997,10 +1075,12 @@ def test_sync_pipeline_overlaps_synthesis_with_playback(monkeypatch):
 
 
 def test_sync_pipeline_preserves_order_and_isolates_failures(monkeypatch):
-    sentences = ["Alpha sentence spoken first. ", "Bravo sentence explodes here. ",
-                 "Charlie sentence still plays. "]
-    events, _stop, done = _timed_sync_run(monkeypatch, sentences,
-                                          synth_fail_on="Bravo")
+    sentences = [
+        "Alpha sentence spoken first. ",
+        "Bravo sentence explodes here. ",
+        "Charlie sentence still plays. ",
+    ]
+    events, _stop, done = _timed_sync_run(monkeypatch, sentences, synth_fail_on="Bravo")
 
     synths = [e[1] for e in events if e[0] == "synth"]
     plays = [e for e in events if e[0] == "play"]
@@ -1012,13 +1092,18 @@ def test_sync_pipeline_preserves_order_and_isolates_failures(monkeypatch):
 
 
 def test_sync_pipeline_stop_skips_queued_playback(monkeypatch):
-    sentences = ["First full sentence here. ", "Second full sentence here. ",
-                 "Third full sentence here. ", "Fourth full sentence here. "]
-    events, stop, done = _timed_sync_run(monkeypatch, sentences,
-                                         stop_after_plays=1)
+    sentences = [
+        "First full sentence here. ",
+        "Second full sentence here. ",
+        "Third full sentence here. ",
+        "Fourth full sentence here. ",
+    ]
+    events, stop, done = _timed_sync_run(monkeypatch, sentences, stop_after_plays=1)
 
     plays = [e for e in events if e[0] == "play"]
-    assert len(plays) == 1, f"stop after first play must skip the rest, got {len(plays)}"
+    assert len(plays) == 1, (
+        f"stop after first play must skip the rest, got {len(plays)}"
+    )
     assert stop.is_set() and done.is_set()
 
 
@@ -1034,9 +1119,9 @@ def test_sync_pipeline_cleans_temp_files(monkeypatch):
         return fd, path
 
     monkeypatch.setattr(tts_tool_speaker.tempfile, "mkstemp", tracking_mkstemp)
-    events, _stop, _done = _timed_sync_run(monkeypatch,
-                                          ["First full sentence here. ",
-                                           "Second full sentence here. "])
+    events, _stop, _done = _timed_sync_run(
+        monkeypatch, ["First full sentence here. ", "Second full sentence here. "]
+    )
     assert len([e for e in events if e[0] == "play"]) == 2
     assert created, "expected temp files to be created via mkstemp"
     leftovers = [p for p in created if os.path.exists(p)]
@@ -1044,6 +1129,7 @@ def test_sync_pipeline_cleans_temp_files(monkeypatch):
 
 
 # ── #76466: honor the endpoint-reported PCM sample rate ────────────────────
+
 
 class _FakeSpeechResponse:
     """Stand-in for the OpenAI SDK streaming response context manager."""
@@ -1076,6 +1162,7 @@ def _patch_openai_speech(monkeypatch, headers):
             self.audio = MagicMock(speech=_Speech())
 
     import openai
+
     monkeypatch.setattr(openai, "OpenAI", _Client)
     return calls
 
@@ -1086,7 +1173,9 @@ def test_openai_streamer_honors_endpoint_reported_rate_in_wav_playback(monkeypat
     import wave
     from tools import tts_tool_speaker as sp
 
-    _patch_openai_speech(monkeypatch, {"content-type": "audio/pcm", "x-audio-sample-rate": "44100"})
+    _patch_openai_speech(
+        monkeypatch, {"content-type": "audio/pcm", "x-audio-sample-rate": "44100"}
+    )
     streamer = ts.OpenAIStreamer({}, {"api_key": "sk-x", "pcm_sample_rate": "22050"})
 
     wav_rates = []
@@ -1107,8 +1196,16 @@ def test_openai_streamer_honors_endpoint_reported_rate_in_wav_playback(monkeypat
 @pytest.mark.parametrize(
     ("config", "headers", "expected"),
     [
-        ({"pcm_sample_rate": "22050"}, {}, 22050),  # validated static expectation (PR #74021)
-        ({"pcm_sample_rate": "bogus"}, {}, 24000),  # unparseable config falls back to the default
+        (
+            {"pcm_sample_rate": "22050"},
+            {},
+            22050,
+        ),  # validated static expectation (PR #74021)
+        (
+            {"pcm_sample_rate": "bogus"},
+            {},
+            24000,
+        ),  # unparseable config falls back to the default
         ({}, {"content-type": "audio/pcm", "x-audio-sample-rate": "44100"}, 44100),
         ({}, {"content-type": "audio/L16; rate=16000"}, 16000),
         ({}, {"content-type": "audio/pcm"}, None),
@@ -1120,7 +1217,9 @@ def test_openai_pcm_sample_rate_resolution(config, headers, expected):
     if headers:
         assert ts._sample_rate_from_headers(headers) == expected
     else:
-        assert ts.OpenAIStreamer({}, {"api_key": "sk-x", **config}).sample_rate == expected
+        assert (
+            ts.OpenAIStreamer({}, {"api_key": "sk-x", **config}).sample_rate == expected
+        )
 
 
 @pytest.mark.skipif(
@@ -1145,10 +1244,20 @@ def test_speaker_output_stream_opens_at_rate_learned_from_first_chunk(monkeypatc
             yield b"\x01\x00" * 50
 
     sd, out = _sd_mock()
-    q = _drain_queue(["The first sentence is long enough. ", "The second sentence is long enough too. "])
+    q = _drain_queue(
+        [
+            "The first sentence is long enough. ",
+            "The second sentence is long enough too. ",
+        ]
+    )
     stop, done = threading.Event(), threading.Event()
-    with patch("tools.tts_streaming.resolve_streaming_provider", return_value=_Learns({}, {})), \
-         patch.object(tts_tool, "_import_sounddevice", return_value=sd):
+    with (
+        patch(
+            "tools.tts_streaming.resolve_streaming_provider",
+            return_value=_Learns({}, {}),
+        ),
+        patch.object(tts_tool, "_import_sounddevice", return_value=sd),
+    ):
         stream_tts_to_speaker(q, stop, done)
     assert done.is_set()
     assert [c.kwargs["samplerate"] for c in sd.OutputStream.call_args_list] == [44100]
@@ -1168,11 +1277,13 @@ def test_sync_pipeline_plays_the_artifact_the_tool_reported(monkeypatch, tmp_pat
     def fake_synth(text, output_path):
         # The requested .mp3 stays a zero-byte mkstemp file; only the reported artifact is real.
         ogg_str = str(ogg)
-        return json.dumps({
-            "success": True,
-            "file_path": ogg_str,
-            "file_paths": [ogg_str],
-        })
+        return json.dumps(
+            {
+                "success": True,
+                "file_path": ogg_str,
+                "file_paths": [ogg_str],
+            }
+        )
 
     played = []
     fake_vm = MagicMock()

@@ -27,7 +27,9 @@ class TestGatewayPidState:
         assert isinstance(payload["argv"], list)
         assert payload["argv"]
 
-    def test_write_pid_file_is_atomic_against_concurrent_writers(self, tmp_path, monkeypatch):
+    def test_write_pid_file_is_atomic_against_concurrent_writers(
+        self, tmp_path, monkeypatch
+    ):
         """Regression: two concurrent --replace invocations must not both win.
 
         Without O_CREAT|O_EXCL, two processes racing through start_gateway()'s
@@ -51,7 +53,6 @@ class TestGatewayPidState:
         payload = json.loads((tmp_path / "gateway.pid").read_text())
         assert payload["pid"] == os.getpid()
 
-
     def test_runtime_lock_claims_and_releases_liveness(self, tmp_path, monkeypatch):
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 
@@ -63,8 +64,9 @@ class TestGatewayPidState:
 
         assert status.is_gateway_runtime_lock_active() is False
 
-
-    def test_get_running_pid_cached_invalidates_when_pid_file_changes(self, tmp_path, monkeypatch):
+    def test_get_running_pid_cached_invalidates_when_pid_file_changes(
+        self, tmp_path, monkeypatch
+    ):
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         status._clear_running_pid_cache()
 
@@ -90,7 +92,9 @@ class TestGatewayPidState:
 
         monkeypatch.setattr(status, "is_gateway_runtime_lock_active", _lock_active)
         monkeypatch.setattr(status, "_pid_exists", lambda pid: True)
-        monkeypatch.setattr(status, "_get_process_start_time", lambda pid: 123 if pid == 111 else 456)
+        monkeypatch.setattr(
+            status, "_get_process_start_time", lambda pid: 123 if pid == 111 else 456
+        )
         monkeypatch.setattr(status, "_read_process_cmdline", lambda pid: None)
 
         assert status.get_running_pid_cached(ttl_seconds=60) == 111
@@ -100,16 +104,21 @@ class TestGatewayPidState:
         assert status.get_running_pid_cached(ttl_seconds=60) == 2222
         assert calls["lock_active"] == 2
 
-
-    def test_get_running_pid_falls_back_to_live_lock_record(self, tmp_path, monkeypatch):
+    def test_get_running_pid_falls_back_to_live_lock_record(
+        self, tmp_path, monkeypatch
+    ):
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         pid_path = tmp_path / "gateway.pid"
-        pid_path.write_text(json.dumps({
-            "pid": 99999,
-            "kind": "clawk-gateway",
-            "argv": ["python", "-m", "clawk_cli.main", "gateway"],
-            "start_time": 123,
-        }))
+        pid_path.write_text(
+            json.dumps(
+                {
+                    "pid": 99999,
+                    "kind": "clawk-gateway",
+                    "argv": ["python", "-m", "clawk_cli.main", "gateway"],
+                    "start_time": 123,
+                }
+            )
+        )
 
         monkeypatch.setattr(status, "_get_process_start_time", lambda pid: 123)
         monkeypatch.setattr(status, "_read_process_cmdline", lambda pid: None)
@@ -179,7 +188,9 @@ class TestGatewayPidState:
         gateway's gateway.pid/gateway.lock (#125610, #123109)."""
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         record = {
-            "pid": 4242, "kind": "clawk-gateway", "start_time": 123,
+            "pid": 4242,
+            "kind": "clawk-gateway",
+            "start_time": 123,
             "argv": ["python", "-m", "clawk_cli.main", "gateway", "run"],
             "clawk_home": str(tmp_path.resolve()),
         }
@@ -187,10 +198,16 @@ class TestGatewayPidState:
         lock_path = tmp_path / "gateway.lock"
         pid_path.write_text(json.dumps(record), encoding="utf-8")
         lock_path.write_text(json.dumps(record), encoding="utf-8")
-        monkeypatch.setattr(status, "is_gateway_runtime_lock_active", lambda _path=None: True)
+        monkeypatch.setattr(
+            status, "is_gateway_runtime_lock_active", lambda _path=None: True
+        )
         monkeypatch.setattr(status, "_pid_exists", lambda _pid: True)
         monkeypatch.setattr(status, "_get_process_start_time", lambda _pid: 123)
-        monkeypatch.setattr(status, "_read_process_cmdline", lambda _pid: "python -m clawk_cli.main chat")
+        monkeypatch.setattr(
+            status,
+            "_read_process_cmdline",
+            lambda _pid: "python -m clawk_cli.main chat",
+        )
         monkeypatch.setattr(status, "get_runtime_status_running_pid", lambda: None)
 
         assert status.get_running_pid() is None
@@ -203,7 +220,9 @@ class TestGatewayPidState:
         on refusal (#89315); the HELD gateway.lock is the holder's and stays (#125610)."""
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         record = {
-            "pid": 4242, "kind": "clawk-gateway", "start_time": 123,
+            "pid": 4242,
+            "kind": "clawk-gateway",
+            "start_time": 123,
             "argv": ["python", "-m", "clawk_cli.main", "gateway", "run"],
             "clawk_home": str((tmp_path / "other-home").resolve()),
         }
@@ -211,10 +230,16 @@ class TestGatewayPidState:
         lock_path = tmp_path / "gateway.lock"
         pid_path.write_text(json.dumps(record), encoding="utf-8")
         lock_path.write_text("", encoding="utf-8")
-        monkeypatch.setattr(status, "is_gateway_runtime_lock_active", lambda _path=None: True)
+        monkeypatch.setattr(
+            status, "is_gateway_runtime_lock_active", lambda _path=None: True
+        )
         monkeypatch.setattr(status, "_pid_exists", lambda _pid: True)
         monkeypatch.setattr(status, "_get_process_start_time", lambda _pid: 123)
-        monkeypatch.setattr(status, "_read_process_cmdline", lambda _pid: "python -m clawk_cli.main gateway run")
+        monkeypatch.setattr(
+            status,
+            "_read_process_cmdline",
+            lambda _pid: "python -m clawk_cli.main gateway run",
+        )
         monkeypatch.setattr(status, "get_runtime_status_running_pid", lambda: None)
 
         assert status.get_running_pid() is None
@@ -251,7 +276,8 @@ class TestScopedGatewayPidQuery:
         monkeypatch.setattr(status, "_pid_exists", lambda pid: True)
         monkeypatch.setattr(status, "_get_process_start_time", lambda pid: 123)
         monkeypatch.setattr(
-            status, "_read_process_cmdline",
+            status,
+            "_read_process_cmdline",
             lambda pid: "python -m clawk_cli.main gateway --profile wiki",
         )
         assert status.get_running_pid(pid_path) == 4242
@@ -273,18 +299,22 @@ class TestScopedGatewayPidQuery:
 
 
 class TestGatewayRuntimeStatus:
-    def test_clear_profile_platforms_preserves_primary_entries(self, tmp_path, monkeypatch):
+    def test_clear_profile_platforms_preserves_primary_entries(
+        self, tmp_path, monkeypatch
+    ):
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         (tmp_path / "gateway_state.json").write_text(
-            json.dumps({
-                "platforms": {
-                    "telegram": {"state": "connected"},
-                    "reviewer:discord": {
-                        "state": "fatal",
-                        "error_code": "duplicate_credential",
-                    },
+            json.dumps(
+                {
+                    "platforms": {
+                        "telegram": {"state": "connected"},
+                        "reviewer:discord": {
+                            "state": "fatal",
+                            "error_code": "duplicate_credential",
+                        },
+                    }
                 }
-            }),
+            ),
             encoding="utf-8",
         )
 
@@ -298,12 +328,14 @@ class TestGatewayRuntimeStatus:
     ):
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         (tmp_path / "gateway_state.json").write_text(
-            json.dumps({
-                "platforms": {
-                    "old:discord": {"state": "fatal"},
-                    "telegram": {"state": "connected"},
+            json.dumps(
+                {
+                    "platforms": {
+                        "old:discord": {"state": "fatal"},
+                        "telegram": {"state": "connected"},
+                    }
                 }
-            }),
+            ),
             encoding="utf-8",
         )
 
@@ -334,9 +366,7 @@ class TestGatewayRuntimeStatus:
 
         entry = status.read_runtime_status()["platforms"]["telegram"]
         assert entry["writer_pid"] == os.getpid()
-        assert entry["writer_start_time"] == status._get_process_start_time(
-            os.getpid()
-        )
+        assert entry["writer_start_time"] == status._get_process_start_time(os.getpid())
 
     def test_clear_profile_platforms_repairs_malformed_platforms(
         self, tmp_path, monkeypatch
@@ -351,29 +381,39 @@ class TestGatewayRuntimeStatus:
 
         assert status.read_runtime_status()["platforms"] == {}
 
-
-    def test_write_runtime_status_overwrites_stale_pid_on_restart(self, tmp_path, monkeypatch):
+    def test_write_runtime_status_overwrites_stale_pid_on_restart(
+        self, tmp_path, monkeypatch
+    ):
         """Regression: setdefault() preserved stale PID from previous process (#1631)."""
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 
         # Simulate a previous gateway run that left a state file with a stale PID
         state_path = tmp_path / "gateway_state.json"
-        state_path.write_text(json.dumps({
-            "pid": 99999,
-            "start_time": 1000.0,
-            "kind": "clawk-gateway",
-            "platforms": {},
-            "updated_at": "2025-01-01T00:00:00Z",
-        }))
+        state_path.write_text(
+            json.dumps(
+                {
+                    "pid": 99999,
+                    "start_time": 1000.0,
+                    "kind": "clawk-gateway",
+                    "platforms": {},
+                    "updated_at": "2025-01-01T00:00:00Z",
+                }
+            )
+        )
 
         status.write_runtime_status(gateway_state="running")
 
         payload = status.read_runtime_status()
-        assert payload["pid"] == os.getpid(), "PID should be overwritten, not preserved via setdefault"
-        assert payload["start_time"] != 1000.0, "start_time should be overwritten on restart"
+        assert payload["pid"] == os.getpid(), (
+            "PID should be overwritten, not preserved via setdefault"
+        )
+        assert payload["start_time"] != 1000.0, (
+            "start_time should be overwritten on restart"
+        )
 
-
-    def test_runtime_status_running_pid_rejects_pid_reused_by_other_profile(self, monkeypatch):
+    def test_runtime_status_running_pid_rejects_pid_reused_by_other_profile(
+        self, monkeypatch
+    ):
         """Regression (user report): a stale profile's recycled PID must not be
         reported running just because it now hosts a DIFFERENT profile's gateway.
 
@@ -404,7 +444,9 @@ class TestGatewayRuntimeStatus:
             is None
         )
 
-    def test_runtime_status_running_pid_accepts_matching_profile_cmdline(self, monkeypatch):
+    def test_runtime_status_running_pid_accepts_matching_profile_cmdline(
+        self, monkeypatch
+    ):
         """A genuinely-live named gateway carries ``-p <profile>`` / ``--profile``
         on its command line and must be reported running for that profile."""
         payload = {
@@ -423,12 +465,13 @@ class TestGatewayRuntimeStatus:
             "/opt/clawksis/.venv/bin/clawk --profile coder gateway run --replace",
             "clawk_home=/opt/data/profiles/coder clawk gateway run --replace",
         ):
-            monkeypatch.setattr(status, "_read_process_cmdline", lambda pid, c=cmdline: c)
+            monkeypatch.setattr(
+                status, "_read_process_cmdline", lambda pid, c=cmdline: c
+            )
             assert (
                 status.get_runtime_status_running_pid(payload, expected_home=coder_home)
                 == 139
             ), cmdline
-
 
     def test_command_line_belongs_to_profile_accepts_explicit_default(self):
         """``--profile default`` names THE DEFAULT PROFILE: a hand-written launchd plist that
@@ -439,8 +482,15 @@ class TestGatewayRuntimeStatus:
             "clawk --profile default gateway run --replace --external-supervisor",
             "/opt/clawksis/.venv/bin/clawk -p default gateway run",
         ):
-            assert status._command_line_belongs_to_profile(cmdline, default_home) is True, cmdline
-        assert status._command_line_belongs_to_profile("clawk -p coder gateway run", default_home) is False
+            assert (
+                status._command_line_belongs_to_profile(cmdline, default_home) is True
+            ), cmdline
+        assert (
+            status._command_line_belongs_to_profile(
+                "clawk -p coder gateway run", default_home
+            )
+            is False
+        )
 
     def test_command_line_belongs_to_profile_normalizes_separators(self):
         """A Windows argv renders CLAWK_HOME with backslashes while the
@@ -463,9 +513,15 @@ class TestGatewayRuntimeStatus:
         ):
             assert not status._command_line_belongs_to_profile(cmdline, home), cmdline
         default_home = Path("/opt/clawksis-data")
-        assert not status._command_line_belongs_to_profile("CLAWK_HOME=/opt/clawksis-data2 clawk gateway run", default_home)
-        assert status._command_line_belongs_to_profile("CLAWK_HOME=/opt/clawksis-data clawk gateway run", default_home)
-        assert status._command_line_belongs_to_profile("clawk gateway run", default_home)
+        assert not status._command_line_belongs_to_profile(
+            "CLAWK_HOME=/opt/clawksis-data2 clawk gateway run", default_home
+        )
+        assert status._command_line_belongs_to_profile(
+            "CLAWK_HOME=/opt/clawksis-data clawk gateway run", default_home
+        )
+        assert status._command_line_belongs_to_profile(
+            "clawk gateway run", default_home
+        )
 
     def test_command_line_belongs_to_profile_matches_own_home_spellings_only(self):
         """Token-bounded value AND name: quoted values (ps/wmic re-quoting) and a trailing separator
@@ -473,22 +529,35 @@ class TestGatewayRuntimeStatus:
         embeds the name inside another token and is not an assignment."""
         home = Path("/opt/data/profiles/coder with space")
         assert status._command_line_belongs_to_profile(
-            'clawk_home="/opt/data/profiles/coder with space" clawk gateway run', home)
+            'clawk_home="/opt/data/profiles/coder with space" clawk gateway run', home
+        )
         # /proc and psutil hand argv back space-joined, so an unquoted value with a space is cut at
         # the space by the token parser; the whole-home literal match must still claim it.
         assert status._command_line_belongs_to_profile(
-            "CLAWK_HOME=/opt/data/profiles/coder with space clawk gateway run", home)
+            "CLAWK_HOME=/opt/data/profiles/coder with space clawk gateway run", home
+        )
         assert status._command_line_belongs_to_profile(
-            r"CLAWK_HOME=C:\Users\John Doe\.clawk clawk gateway run", Path(r"C:\Users\John Doe\.clawk"))
+            r"CLAWK_HOME=C:\Users\John Doe\.clawk clawk gateway run",
+            Path(r"C:\Users\John Doe\.clawk"),
+        )
         assert not status._command_line_belongs_to_profile(
-            "CLAWK_HOME=/opt/data/profiles/coder with spaces clawk gateway run", home)
+            "CLAWK_HOME=/opt/data/profiles/coder with spaces clawk gateway run", home
+        )
         home = Path("/fixture/profiles/ops")
-        assert status._command_line_belongs_to_profile("CLAWK_HOME=/fixture/profiles/ops/ clawk gateway run", home)
-        assert status._command_line_belongs_to_profile("CLAWK_HOME=/opt/clawksis-data/ clawk gateway run", Path("/opt/clawksis-data"))
-        assert not status._command_line_belongs_to_profile("FOO=clawk_home=/fixture/profiles/ops clawk gateway run", home)
+        assert status._command_line_belongs_to_profile(
+            "CLAWK_HOME=/fixture/profiles/ops/ clawk gateway run", home
+        )
+        assert status._command_line_belongs_to_profile(
+            "CLAWK_HOME=/opt/clawksis-data/ clawk gateway run",
+            Path("/opt/clawksis-data"),
+        )
+        assert not status._command_line_belongs_to_profile(
+            "FOO=clawk_home=/fixture/profiles/ops clawk gateway run", home
+        )
 
-
-    def test_write_runtime_status_explicit_none_clears_stale_fields(self, tmp_path, monkeypatch):
+    def test_write_runtime_status_explicit_none_clears_stale_fields(
+        self, tmp_path, monkeypatch
+    ):
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 
         status.write_runtime_status(
@@ -517,23 +586,40 @@ class TestGatewayRuntimeStatus:
         assert payload["platforms"]["discord"]["error_message"] is None
 
     @pytest.mark.parametrize("via", ["startup_stamp", "adapter_mark_connected"])
-    def test_connected_clears_needs_attention_from_any_writer(self, tmp_path, monkeypatch, via):
+    def test_connected_clears_needs_attention_from_any_writer(
+        self, tmp_path, monkeypatch, via
+    ):
         """The reconnect-loop escalation (needs_attention + retrying_since) must end on EVERY
         ``connected`` write, not only the watcher's. A gateway restart after an escalation stamps
         ``connected`` from the startup path / adapter, which left the flag sticky for weeks on a
         healthy Telegram record."""
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         status.write_runtime_status(
-            platform="telegram", platform_state="retrying", needs_attention=True,
+            platform="telegram",
+            platform_state="retrying",
+            needs_attention=True,
             retrying_since="2026-08-30T07:53:47+00:00",
         )
         if via == "startup_stamp":
             status.write_runtime_status(
-                platform="telegram", platform_state="connected", error_code=None, error_message=None)
+                platform="telegram",
+                platform_state="connected",
+                error_code=None,
+                error_message=None,
+            )
         else:
             from gateway.platforms.base import BasePlatformAdapter
-            adapter = object.__new__(type("_Adapter", (BasePlatformAdapter,), {
-                m: (lambda *a, **k: None) for m in ("connect", "disconnect", "get_chat_info", "send")}))
+
+            adapter = object.__new__(
+                type(
+                    "_Adapter",
+                    (BasePlatformAdapter,),
+                    {
+                        m: (lambda *a, **k: None)
+                        for m in ("connect", "disconnect", "get_chat_info", "send")
+                    },
+                )
+            )
             adapter._runtime_status_platform_key = "telegram"
             adapter._fatal_error_code = adapter._fatal_error_message = None
             adapter._fatal_error_retryable = True
@@ -602,7 +688,9 @@ class TestRuntimeStatusBackgroundWriter:
         assert final["multiplex_standalone_reason"] == "single-profile"
         assert "reviewer:slack" not in final["platforms"]
         assert final["platforms"]["telegram"]["ingress_url"].endswith("/telegram")
-        assert final["platforms"]["telegram"]["listener_base"] == "http://127.0.0.1:8080"
+        assert (
+            final["platforms"]["telegram"]["listener_base"] == "http://127.0.0.1:8080"
+        )
 
     def test_sync_write_can_bound_a_blocked_persistence_wait(
         self, tmp_path, monkeypatch
@@ -626,6 +714,7 @@ class TestRuntimeStatusBackgroundWriter:
         finally:
             release_write.set()
         assert writer.flush(timeout=2.0)
+
     def test_write_runtime_status_records_platform_metrics(self, tmp_path, monkeypatch):
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 
@@ -656,6 +745,7 @@ class TestGetProcessStartTime:
 
     def test_live_process_is_stable_int(self):
         import subprocess
+
         p = subprocess.Popen(["sleep", "20"])
         try:
             a = status._get_process_start_time(p.pid)
@@ -676,7 +766,14 @@ class TestTerminatePid:
         # returns only on Windows (it is 0 elsewhere).
         calls = []
 
-        def fake_run(cmd, capture_output=False, text=False, timeout=None, creationflags=0, **kwargs):
+        def fake_run(
+            cmd,
+            capture_output=False,
+            text=False,
+            timeout=None,
+            creationflags=0,
+            **kwargs,
+        ):
             calls.append((cmd, capture_output, text, timeout, creationflags))
             return SimpleNamespace(returncode=0, stdout="", stderr="")
 
@@ -691,13 +788,21 @@ class TestTerminatePid:
         from clawk_cli._subprocess_compat import windows_hide_flags
 
         assert calls == [
-            (["taskkill", "/PID", "123", "/T", "/F"], True, True, 10, windows_hide_flags())
+            (
+                ["taskkill", "/PID", "123", "/T", "/F"],
+                True,
+                True,
+                10,
+                windows_hide_flags(),
+            )
         ]
 
     @pytest.mark.platforms("windows")
     def test_windows_force_refuses_pid_without_start_time_guard(self, monkeypatch):
         calls = []
-        monkeypatch.setattr(status.subprocess, "run", lambda *args, **kwargs: calls.append(args))
+        monkeypatch.setattr(
+            status.subprocess, "run", lambda *args, **kwargs: calls.append(args)
+        )
 
         with pytest.raises(OSError, match="without a process start-time guard"):
             status.terminate_pid(123, force=True)
@@ -708,7 +813,9 @@ class TestTerminatePid:
     def test_windows_force_refuses_reused_pid(self, monkeypatch):
         monkeypatch.setattr(status, "_get_process_start_time", lambda pid: 999)
         calls = []
-        monkeypatch.setattr(status.subprocess, "run", lambda *args, **kwargs: calls.append(args))
+        monkeypatch.setattr(
+            status.subprocess, "run", lambda *args, **kwargs: calls.append(args)
+        )
 
         with pytest.raises(OSError, match="process identity changed"):
             status.terminate_pid(123, force=True, expected_start_time=456)
@@ -783,27 +890,37 @@ class TestScopedLocks:
         ]
         assert lock_path.read_text(encoding="utf-8") == "\n"
 
-    def test_acquire_scoped_lock_rejects_live_other_process(self, tmp_path, monkeypatch):
+    def test_acquire_scoped_lock_rejects_live_other_process(
+        self, tmp_path, monkeypatch
+    ):
         monkeypatch.setenv("CLAWK_GATEWAY_LOCK_DIR", str(tmp_path / "locks"))
         lock_path = tmp_path / "locks" / "telegram-bot-token-2bb80d537b1da3e3.lock"
         lock_path.parent.mkdir(parents=True, exist_ok=True)
-        lock_path.write_text(json.dumps({
-            "pid": 99999,
-            "start_time": 123,
-            "kind": "clawk-gateway",
-        }))
+        lock_path.write_text(
+            json.dumps(
+                {
+                    "pid": 99999,
+                    "start_time": 123,
+                    "kind": "clawk-gateway",
+                }
+            )
+        )
 
         # Post-#21561 the liveness probe routes through
         # ``gateway.status._pid_exists`` (psutil-first, safe on Windows).
         monkeypatch.setattr(status, "_pid_exists", lambda pid: True)
         monkeypatch.setattr(status, "_get_process_start_time", lambda pid: 123)
 
-        acquired, existing = status.acquire_scoped_lock("telegram-bot-token", "secret", metadata={"platform": "telegram"})
+        acquired, existing = status.acquire_scoped_lock(
+            "telegram-bot-token", "secret", metadata={"platform": "telegram"}
+        )
 
         assert acquired is False
         assert existing["pid"] == 99999
 
-    def test_acquire_scoped_lock_replaces_pid_reused_by_unrelated_process(self, tmp_path, monkeypatch):
+    def test_acquire_scoped_lock_replaces_pid_reused_by_unrelated_process(
+        self, tmp_path, monkeypatch
+    ):
         """macOS regression: PID reused by an unrelated process with start_time=None.
 
         On macOS /proc is unavailable, so both the lock record and the live
@@ -814,12 +931,21 @@ class TestScopedLocks:
         monkeypatch.setenv("CLAWK_GATEWAY_LOCK_DIR", str(tmp_path / "locks"))
         lock_path = tmp_path / "locks" / "telegram-bot-token-2bb80d537b1da3e3.lock"
         lock_path.parent.mkdir(parents=True, exist_ok=True)
-        lock_path.write_text(json.dumps({
-            "pid": 873,
-            "start_time": None,
-            "kind": "clawk-gateway",
-            "argv": ["/Users/user/.clawksis/clawksis-agent/clawk_cli/main.py", "gateway", "run", "--replace"],
-        }))
+        lock_path.write_text(
+            json.dumps(
+                {
+                    "pid": 873,
+                    "start_time": None,
+                    "kind": "clawk-gateway",
+                    "argv": [
+                        "/Users/user/.clawksis/clawksis-agent/clawk_cli/main.py",
+                        "gateway",
+                        "run",
+                        "--replace",
+                    ],
+                }
+            )
+        )
 
         # Post-#21561 the liveness probe routes through
         # ``gateway.status._pid_exists`` (psutil-first, safe on Windows),
@@ -829,9 +955,13 @@ class TestScopedLocks:
         monkeypatch.setattr(status, "_looks_like_gateway_process", lambda pid: False)
         # On macOS ``ps`` is available, so _read_process_cmdline returns the
         # unrelated process's name.  This confirms the PID was reused.
-        monkeypatch.setattr(status, "_read_process_cmdline", lambda pid: "/usr/libexec/bluetoothuserd")
+        monkeypatch.setattr(
+            status, "_read_process_cmdline", lambda pid: "/usr/libexec/bluetoothuserd"
+        )
 
-        acquired, _existing = status.acquire_scoped_lock("telegram-bot-token", "secret", metadata={"platform": "telegram"})
+        acquired, _existing = status.acquire_scoped_lock(
+            "telegram-bot-token", "secret", metadata={"platform": "telegram"}
+        )
 
         assert acquired is True
         payload = json.loads(lock_path.read_text())
@@ -851,13 +981,24 @@ class TestScopedLocks:
         monkeypatch.setenv("CLAWK_GATEWAY_LOCK_DIR", str(tmp_path / "locks"))
         lock_path = tmp_path / "locks" / "discord-bot-token-2bb80d537b1da3e3.lock"
         lock_path.parent.mkdir(parents=True, exist_ok=True)
-        lock_path.write_text(json.dumps({
-            "pid": os.getpid(),
-            "start_time": None,
-            "kind": "clawk-gateway",
-            "argv": ["clawk_cli/main.py", "--profile", "milena", "gateway", "run", "--replace"],
-            "scope": "discord-bot-token",
-        }))
+        lock_path.write_text(
+            json.dumps(
+                {
+                    "pid": os.getpid(),
+                    "start_time": None,
+                    "kind": "clawk-gateway",
+                    "argv": [
+                        "clawk_cli/main.py",
+                        "--profile",
+                        "milena",
+                        "gateway",
+                        "run",
+                        "--replace",
+                    ],
+                    "scope": "discord-bot-token",
+                }
+            )
+        )
 
         # Live process can resolve start_time; disk cannot — the mismatch
         # that previously failed the self-reacquire short-circuit.
@@ -878,16 +1019,22 @@ class TestScopedLocks:
         assert payload["start_time"] == 987654321
         assert payload["metadata"]["platform"] == "discord"
 
-    def test_release_scoped_lock_allows_null_disk_start_time(self, tmp_path, monkeypatch):
+    def test_release_scoped_lock_allows_null_disk_start_time(
+        self, tmp_path, monkeypatch
+    ):
         """#81468: release must not no-op when disk start_time is null."""
         monkeypatch.setenv("CLAWK_GATEWAY_LOCK_DIR", str(tmp_path / "locks"))
         lock_path = tmp_path / "locks" / "discord-bot-token-2bb80d537b1da3e3.lock"
         lock_path.parent.mkdir(parents=True, exist_ok=True)
-        lock_path.write_text(json.dumps({
-            "pid": os.getpid(),
-            "start_time": None,
-            "kind": "clawk-gateway",
-        }))
+        lock_path.write_text(
+            json.dumps(
+                {
+                    "pid": os.getpid(),
+                    "start_time": None,
+                    "kind": "clawk-gateway",
+                }
+            )
+        )
         monkeypatch.setattr(status, "_get_process_start_time", lambda pid: 987654321)
 
         release_scoped_lock("discord-bot-token", "secret")
@@ -906,13 +1053,17 @@ class TestScopedLocks:
         monkeypatch.setenv("CLAWK_GATEWAY_LOCK_DIR", str(tmp_path / "locks"))
         lock_path = tmp_path / "locks" / "discord-bot-token-2bb80d537b1da3e3.lock"
         lock_path.parent.mkdir(parents=True, exist_ok=True)
-        lock_path.write_text(json.dumps({
-            "pid": os.getpid(),
-            "start_time": 111,
-            "kind": "clawk-gateway",
-            "argv": ["clawk_cli/main.py", "gateway", "run", "--replace"],
-            "scope": "discord-bot-token",
-        }))
+        lock_path.write_text(
+            json.dumps(
+                {
+                    "pid": os.getpid(),
+                    "start_time": 111,
+                    "kind": "clawk-gateway",
+                    "argv": ["clawk_cli/main.py", "gateway", "run", "--replace"],
+                    "scope": "discord-bot-token",
+                }
+            )
+        )
 
         monkeypatch.setattr(status, "_get_process_start_time", lambda pid: 987654321)
 
@@ -926,7 +1077,9 @@ class TestScopedLocks:
         assert payload["pid"] == os.getpid()
         assert payload["start_time"] == 987654321
 
-    def test_acquire_scoped_lock_race_second_acquirer_loses(self, tmp_path, monkeypatch):
+    def test_acquire_scoped_lock_race_second_acquirer_loses(
+        self, tmp_path, monkeypatch
+    ):
         """Two racing starters both observe the same stale lock. The loser's
         os.replace() hits FileNotFoundError (winner already claimed the stale
         file) and the winner's FRESH lock must survive: the loser must fall
@@ -960,7 +1113,9 @@ class TestScopedLocks:
 
         monkeypatch.setattr(status.os, "replace", racing_replace)
 
-        acquired, existing = status.acquire_scoped_lock("telegram-bot-token", "secret", metadata={"platform": "telegram"})
+        acquired, existing = status.acquire_scoped_lock(
+            "telegram-bot-token", "secret", metadata={"platform": "telegram"}
+        )
 
         assert acquired is False
         assert existing is not None
@@ -968,45 +1123,59 @@ class TestScopedLocks:
         # The winner's fresh lock must be untouched on disk.
         assert json.loads(lock_path.read_text())["pid"] == 424242
 
-
     def test_acquire_scoped_lock_replaces_stale_record(self, tmp_path, monkeypatch):
         monkeypatch.setenv("CLAWK_GATEWAY_LOCK_DIR", str(tmp_path / "locks"))
         lock_path = tmp_path / "locks" / "telegram-bot-token-2bb80d537b1da3e3.lock"
         lock_path.parent.mkdir(parents=True, exist_ok=True)
-        lock_path.write_text(json.dumps({
-            "pid": 99999,
-            "start_time": 123,
-            "kind": "clawk-gateway",
-        }))
+        lock_path.write_text(
+            json.dumps(
+                {
+                    "pid": 99999,
+                    "start_time": 123,
+                    "kind": "clawk-gateway",
+                }
+            )
+        )
 
         # Post-#21561: simulate "PID gone" via _pid_exists returning False.
         monkeypatch.setattr(status, "_pid_exists", lambda pid: False)
 
-        acquired, _existing = status.acquire_scoped_lock("telegram-bot-token", "secret", metadata={"platform": "telegram"})
+        acquired, _existing = status.acquire_scoped_lock(
+            "telegram-bot-token", "secret", metadata={"platform": "telegram"}
+        )
 
         assert acquired is True
         payload = json.loads(lock_path.read_text())
         assert payload["pid"] == os.getpid()
         assert payload["metadata"]["platform"] == "telegram"
 
-
-    def test_release_all_scoped_locks_can_target_single_owner(self, tmp_path, monkeypatch):
+    def test_release_all_scoped_locks_can_target_single_owner(
+        self, tmp_path, monkeypatch
+    ):
         monkeypatch.setenv("CLAWK_GATEWAY_LOCK_DIR", str(tmp_path / "locks"))
         lock_dir = tmp_path / "locks"
         lock_dir.mkdir(parents=True, exist_ok=True)
 
         target_lock = lock_dir / "telegram-bot-token-target.lock"
         other_lock = lock_dir / "slack-app-token-other.lock"
-        target_lock.write_text(json.dumps({
-            "pid": 111,
-            "start_time": 222,
-            "kind": "clawk-gateway",
-        }))
-        other_lock.write_text(json.dumps({
-            "pid": 999,
-            "start_time": 333,
-            "kind": "clawk-gateway",
-        }))
+        target_lock.write_text(
+            json.dumps(
+                {
+                    "pid": 111,
+                    "start_time": 222,
+                    "kind": "clawk-gateway",
+                }
+            )
+        )
+        other_lock.write_text(
+            json.dumps(
+                {
+                    "pid": 999,
+                    "start_time": 333,
+                    "kind": "clawk-gateway",
+                }
+            )
+        )
 
         removed = release_all_scoped_locks(
             owner_pid=111,
@@ -1020,20 +1189,26 @@ class TestScopedLocks:
     def test_acquire_scoped_lock_stamps_profile_label(self, tmp_path, monkeypatch):
         """OOF-3: scoped locks are machine-global — record which profile owns them."""
         monkeypatch.setenv("CLAWK_GATEWAY_LOCK_DIR", str(tmp_path / "locks"))
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "profiles" / "lead-gen-outreach"))
+        monkeypatch.setenv(
+            "CLAWK_HOME", str(tmp_path / "profiles" / "lead-gen-outreach")
+        )
 
         acquired, _existing = status.acquire_scoped_lock(
             "telegram-bot-token", "secret", metadata={"platform": "telegram"}
         )
 
         assert acquired is True
-        lock_path = tmp_path / "locks" / (
-            "telegram-bot-token-" + status._scope_hash("secret") + ".lock"
+        lock_path = (
+            tmp_path
+            / "locks"
+            / ("telegram-bot-token-" + status._scope_hash("secret") + ".lock")
         )
         payload = json.loads(lock_path.read_text())
         assert payload["profile"] == "lead-gen-outreach"
 
-    def test_acquire_scoped_lock_omits_profile_when_not_inferable(self, tmp_path, monkeypatch):
+    def test_acquire_scoped_lock_omits_profile_when_not_inferable(
+        self, tmp_path, monkeypatch
+    ):
         """No label for unrecognizable custom homes — field omitted, not null."""
         monkeypatch.setenv("CLAWK_GATEWAY_LOCK_DIR", str(tmp_path / "locks"))
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "some-custom-dir"))
@@ -1042,8 +1217,10 @@ class TestScopedLocks:
         acquired, _ = status.acquire_scoped_lock("telegram-bot-token", "secret")
 
         assert acquired is True
-        lock_path = tmp_path / "locks" / (
-            "telegram-bot-token-" + status._scope_hash("secret") + ".lock"
+        lock_path = (
+            tmp_path
+            / "locks"
+            / ("telegram-bot-token-" + status._scope_hash("secret") + ".lock")
         )
         payload = json.loads(lock_path.read_text())
         assert "profile" not in payload
@@ -1058,8 +1235,7 @@ class TestScopedLockOwnerLabel:
 
     def test_profile_label_for_docker_profile_home(self):
         assert (
-            status._profile_label_for_home("/opt/data/profiles/zerocool")
-            == "zerocool"
+            status._profile_label_for_home("/opt/data/profiles/zerocool") == "zerocool"
         )
 
     def test_profile_label_for_root_home_is_default(self, monkeypatch):
@@ -1131,7 +1307,6 @@ class TestTakeoverMarker:
         assert payload["replacer_pid"] == os.getpid()
         assert "written_at" in payload
 
-
     def test_consume_returns_true_on_windows_when_start_time_unavailable(
         self, tmp_path, monkeypatch
     ):
@@ -1159,7 +1334,6 @@ class TestTakeoverMarker:
         assert result is True
         assert not (tmp_path / ".gateway-takeover.json").exists()
 
-
     def test_write_marker_records_replacer_clawk_home(self, tmp_path, monkeypatch):
         """The marker stamps the replacer's CLAWK_HOME for cross-profile guard (#29092)."""
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
@@ -1181,15 +1355,20 @@ class TestTakeoverMarker:
         monkeypatch.setattr(status, "_get_process_start_time", lambda pid: 100)
         marker_path = tmp_path / ".gateway-takeover.json"
         from datetime import datetime, timezone
+
         # Marker names OUR pid + start_time (the coincidental match the bug
         # relied on) but was written by a gateway in a different profile.
-        marker_path.write_text(json.dumps({
-            "target_pid": os.getpid(),
-            "target_start_time": 100,
-            "replacer_pid": 99999,
-            "replacer_clawk_home": str(tmp_path / "profiles" / "other"),
-            "written_at": datetime.now(UTC).isoformat(),
-        }))
+        marker_path.write_text(
+            json.dumps(
+                {
+                    "target_pid": os.getpid(),
+                    "target_start_time": 100,
+                    "replacer_pid": 99999,
+                    "replacer_clawk_home": str(tmp_path / "profiles" / "other"),
+                    "written_at": datetime.now(UTC).isoformat(),
+                }
+            )
+        )
 
         result = status.consume_takeover_marker_for_self()
 
@@ -1197,7 +1376,9 @@ class TestTakeoverMarker:
         # Left in place for the correct profile, not griefed away.
         assert marker_path.exists()
 
-    def test_consume_accepts_legacy_marker_without_clawk_home(self, tmp_path, monkeypatch):
+    def test_consume_accepts_legacy_marker_without_clawk_home(
+        self, tmp_path, monkeypatch
+    ):
         """Back-compat (#29092): markers written by older Clawksis versions have no
         ``replacer_clawk_home`` field; an absent field is treated as same-home so
         single-profile setups and mixed old/new deployments keep working.
@@ -1206,12 +1387,17 @@ class TestTakeoverMarker:
         monkeypatch.setattr(status, "_get_process_start_time", lambda pid: 100)
         marker_path = tmp_path / ".gateway-takeover.json"
         from datetime import datetime, timezone
-        marker_path.write_text(json.dumps({
-            "target_pid": os.getpid(),
-            "target_start_time": 100,
-            "replacer_pid": 99999,
-            "written_at": datetime.now(UTC).isoformat(),
-        }))
+
+        marker_path.write_text(
+            json.dumps(
+                {
+                    "target_pid": os.getpid(),
+                    "target_start_time": 100,
+                    "replacer_pid": 99999,
+                    "written_at": datetime.now(UTC).isoformat(),
+                }
+            )
+        )
 
         result = status.consume_takeover_marker_for_self()
 
@@ -1268,9 +1454,7 @@ class TestScopedLockTakeover:
 
         monkeypatch.setattr(status, "terminate_pid", terminate)
 
-        owner_pid = status.take_over_scoped_lock_holder(
-            record, graceful_attempts=1
-        )
+        owner_pid = status.take_over_scoped_lock_holder(record, graceful_attempts=1)
 
         assert owner_pid == 4242
         assert calls == [(4242, False)]
@@ -1320,7 +1504,6 @@ class TestPlannedStopMarker:
         assert payload["stopper_pid"] == os.getpid()
         assert "written_at" in payload
 
-
     def test_consume_returns_true_on_windows_when_start_time_unavailable(
         self, tmp_path, monkeypatch
     ):
@@ -1351,7 +1534,6 @@ class TestPlannedStopMarker:
         assert result is True
         assert not (tmp_path / ".gateway-planned-stop.json").exists()
 
-
     def test_consume_still_rejects_start_time_mismatch_when_both_known(
         self, tmp_path, monkeypatch
     ):
@@ -1377,20 +1559,29 @@ class TestReadProcessCmdlinePsFallback:
     """Tests for _read_process_cmdline falling back to ps on non-Linux."""
 
     def test_ps_fallback_when_proc_unavailable(self, monkeypatch):
-        monkeypatch.setattr(status.Path, "read_bytes", lambda self: (_ for _ in ()).throw(FileNotFoundError))
+        monkeypatch.setattr(
+            status.Path,
+            "read_bytes",
+            lambda self: (_ for _ in ()).throw(FileNotFoundError),
+        )
+
         # psutil sits between /proc and ps; left real, it reads whatever process holds this pid on the
         # host (CI saw `/usr/sbin/haveged` at 873) and ps is never reached.
         def _no_such_process(pid):
             raise ProcessLookupError(pid)
 
-        monkeypatch.setitem(sys.modules, "psutil", SimpleNamespace(Process=_no_such_process))
+        monkeypatch.setitem(
+            sys.modules, "psutil", SimpleNamespace(Process=_no_such_process)
+        )
         monkeypatch.setattr(
-            status.subprocess, "run",
-            lambda args, **kwargs: SimpleNamespace(returncode=0, stdout="/usr/libexec/bluetoothuserd\n"),
+            status.subprocess,
+            "run",
+            lambda args, **kwargs: SimpleNamespace(
+                returncode=0, stdout="/usr/libexec/bluetoothuserd\n"
+            ),
         )
         result = status._read_process_cmdline(873)
         assert result == "/usr/libexec/bluetoothuserd"
-
 
     def test_proc_cmdline_takes_priority_over_ps(self, monkeypatch):
         calls = []
@@ -1434,7 +1625,9 @@ class TestActiveAgentsTurnBoundaryWrite:
     only touched by lifecycle transitions — so an active_agents-only write must
     not clobber it."""
 
-    def test_active_agents_only_write_preserves_gateway_state(self, tmp_path, monkeypatch):
+    def test_active_agents_only_write_preserves_gateway_state(
+        self, tmp_path, monkeypatch
+    ):
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 
         # Lifecycle transition sets running.
@@ -1456,40 +1649,55 @@ class TestGatewayBusyDerivation:
     single shared definition both /api/status and /health/detailed consume."""
 
     def test_busy_requires_running_state_and_positive_count(self):
-        assert status.derive_gateway_busy(
-            gateway_running=True, gateway_state="running", active_agents=1
-        ) is True
-        assert status.derive_gateway_busy(
-            gateway_running=True, gateway_state="running", active_agents=0
-        ) is False
-
+        assert (
+            status.derive_gateway_busy(
+                gateway_running=True, gateway_state="running", active_agents=1
+            )
+            is True
+        )
+        assert (
+            status.derive_gateway_busy(
+                gateway_running=True, gateway_state="running", active_agents=0
+            )
+            is False
+        )
 
     def test_drainable_is_running_and_live_independent_of_count(self):
         # Idle running gateway is drainable but NOT busy.
-        assert status.derive_gateway_drainable(
-            gateway_running=True, gateway_state="running"
-        ) is True
-        assert status.derive_gateway_busy(
-            gateway_running=True, gateway_state="running", active_agents=0
-        ) is False
+        assert (
+            status.derive_gateway_drainable(
+                gateway_running=True, gateway_state="running"
+            )
+            is True
+        )
+        assert (
+            status.derive_gateway_busy(
+                gateway_running=True, gateway_state="running", active_agents=0
+            )
+            is False
+        )
 
     def test_degraded_gateway_with_work_is_busy_and_drainable(self):
         # Serving with a parked platform (#91547): in-flight turns must not look idle to NAS.
-        assert status.derive_gateway_busy(
-            gateway_running=True, gateway_state="degraded", active_agents=2
-        ) is True
-        assert status.derive_gateway_drainable(
-            gateway_running=False, gateway_state="degraded"
-        ) is False
+        assert (
+            status.derive_gateway_busy(
+                gateway_running=True, gateway_state="degraded", active_agents=2
+            )
+            is True
+        )
+        assert (
+            status.derive_gateway_drainable(
+                gateway_running=False, gateway_state="degraded"
+            )
+            is False
+        )
 
 
 class TestRespawnStormBreaker:
     def test_no_storm_under_threshold(self, tmp_path, monkeypatch):
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         for _ in range(5):
-            result = status.record_start_and_check_storm(
-                max_starts=5, window_s=120.0
-            )
+            result = status.record_start_and_check_storm(max_starts=5, window_s=120.0)
             assert result is None
 
 
@@ -1511,7 +1719,10 @@ class TestLaunchdPlistRespawnGovernance:
         """
         import re
 
-        from gateway.restart import LAUNCHD_GUI_EXIT_TIMEOUT_CLAMP_S, LAUNCHD_STOP_CLEANUP_RESERVE_S
+        from gateway.restart import (
+            LAUNCHD_GUI_EXIT_TIMEOUT_CLAMP_S,
+            LAUNCHD_STOP_CLEANUP_RESERVE_S,
+        )
         from clawk_cli.gateway import generate_launchd_plist
 
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
@@ -1519,18 +1730,26 @@ class TestLaunchdPlistRespawnGovernance:
         m = re.search(r"<key>ExitTimeOut</key>\s*<integer>(\d+)</integer>", plist)
         assert m, plist
         # Ask for the whole gui-domain clamp, and leave room for post-drain cleanup inside it.
-        assert int(m.group(1)) >= LAUNCHD_GUI_EXIT_TIMEOUT_CLAMP_S > LAUNCHD_STOP_CLEANUP_RESERVE_S
+        assert (
+            int(m.group(1))
+            >= LAUNCHD_GUI_EXIT_TIMEOUT_CLAMP_S
+            > LAUNCHD_STOP_CLEANUP_RESERVE_S
+        )
 
 
 class TestPermissionErrorOnLockFile:
     @pytest.mark.platforms("linux")
-    def test_inaccessible_lock_is_not_deleted_or_treated_as_absence(self, tmp_path, monkeypatch):
+    def test_inaccessible_lock_is_not_deleted_or_treated_as_absence(
+        self, tmp_path, monkeypatch
+    ):
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         lock = tmp_path / "gateway.lock"
         lock.write_text("existing owner")
         # The owner is live (its gateway.pid names a running process). Without one, an unreadable
         # lock is refused with the sudo recovery (test_foreign_stale_gateway_lock).
-        (tmp_path / "gateway.pid").write_text(json.dumps({"pid": os.getpid()}), encoding="utf-8")
+        (tmp_path / "gateway.pid").write_text(
+            json.dumps({"pid": os.getpid()}), encoding="utf-8"
+        )
         inode = lock.stat().st_ino
         lock.chmod(0)
         try:
@@ -1566,7 +1785,6 @@ class TestNormalizeUpdatedAt:
         assert parsed.tzinfo is not None
         assert parsed == datetime.fromtimestamp(1750000000, tz=UTC)
 
-
     def test_iso_with_z_suffix_accepted(self):
         from datetime import datetime, timezone
 
@@ -1589,7 +1807,6 @@ class TestNormalizeUpdatedAt:
     def test_offset_aware_iso_round_trips_canonically(self):
         canonical = "2026-07-21T12:00:00+00:00"
         assert status.normalize_updated_at(canonical) == canonical
-
 
     def test_epoch_before_2000_rejected(self):
         assert status.normalize_updated_at(0) is None
@@ -1650,7 +1867,6 @@ class TestResolveGatewayLiveness:
         # The authoritative rung answered: no lower rung should have run.
         assert calls == {"health": 0, "runtime_pid": 0}
 
-
     def test_probe_exception_degrades_instead_of_raising(self, tmp_path, monkeypatch):
         """A raising rung must fall through, never propagate.
 
@@ -1674,7 +1890,6 @@ class TestResolveGatewayLiveness:
         # probe_error distinguishes "down" from "couldn't tell" for callers
         # that must fail OPEN (the kanban dispatcher warning).
         assert result.probe_error is True
-
 
     def test_profile_dir_scopes_every_read_to_that_profile(self, tmp_path):
         """Gateway identity files live in the per-profile home.
@@ -1741,7 +1956,9 @@ def test_strict_gateway_identity_raises_on_malformed_active_metadata(
     pid_path.write_text("bad", encoding="utf-8")
     lock_path.write_text("bad", encoding="utf-8")
     monkeypatch.setattr(status, "_get_gateway_lock_path", lambda _path=None: lock_path)
-    monkeypatch.setattr(status, "_is_gateway_runtime_lock_active_strict", lambda _path=None: True)
+    monkeypatch.setattr(
+        status, "_is_gateway_runtime_lock_active_strict", lambda _path=None: True
+    )
 
     with pytest.raises(RuntimeError, match="malformed"):
         status.get_running_pid_identity_strict(pid_path)
@@ -1754,7 +1971,9 @@ def test_strict_gateway_identity_rejects_reused_pid(tmp_path, monkeypatch):
     pid_path.write_text(json.dumps(record), encoding="utf-8")
     lock_path.write_text(json.dumps(record), encoding="utf-8")
     monkeypatch.setattr(status, "_get_gateway_lock_path", lambda _path=None: lock_path)
-    monkeypatch.setattr(status, "_is_gateway_runtime_lock_active_strict", lambda _path=None: True)
+    monkeypatch.setattr(
+        status, "_is_gateway_runtime_lock_active_strict", lambda _path=None: True
+    )
     monkeypatch.setattr(status, "_pid_exists", lambda _pid: True)
     monkeypatch.setattr(status, "_get_process_start_time", lambda _pid: 20.0)
 
@@ -1762,20 +1981,32 @@ def test_strict_gateway_identity_rejects_reused_pid(tmp_path, monkeypatch):
         status.get_running_pid_identity_strict(pid_path)
 
 
-def test_strict_gateway_identity_adopts_held_lock_when_pid_file_is_gone(tmp_path, monkeypatch):
+def test_strict_gateway_identity_adopts_held_lock_when_pid_file_is_gone(
+    tmp_path, monkeypatch
+):
     """A held lock whose record validates against the live process IS the gateway's identity: a
     --replace relaunch (or a launch-service gateway, #110166) leaves gateway.lock without
     gateway.pid, and raising there aborted every following `clawk update` (#123430)."""
     pid_path = tmp_path / "gateway.pid"
     lock_path = tmp_path / "gateway.lock"
-    record = {"pid": 123, "start_time": 10.0, "kind": "clawk-gateway",
-              "argv": ["python", "-m", "clawk_cli.main", "gateway", "run", "--replace"]}
+    record = {
+        "pid": 123,
+        "start_time": 10.0,
+        "kind": "clawk-gateway",
+        "argv": ["python", "-m", "clawk_cli.main", "gateway", "run", "--replace"],
+    }
     lock_path.write_text(json.dumps(record), encoding="utf-8")
     monkeypatch.setattr(status, "_get_gateway_lock_path", lambda _path=None: lock_path)
-    monkeypatch.setattr(status, "_is_gateway_runtime_lock_active_strict", lambda _path=None: True)
+    monkeypatch.setattr(
+        status, "_is_gateway_runtime_lock_active_strict", lambda _path=None: True
+    )
     monkeypatch.setattr(status, "_pid_exists", lambda _pid: True)
     monkeypatch.setattr(status, "_get_process_start_time", lambda _pid: 10.0)
-    monkeypatch.setattr(status, "_read_process_cmdline", lambda _pid: "python -m clawk_cli.main gateway run --replace")
+    monkeypatch.setattr(
+        status,
+        "_read_process_cmdline",
+        lambda _pid: "python -m clawk_cli.main gateway run --replace",
+    )
     monkeypatch.setattr(status, "_IS_WINDOWS", False)
 
     assert status.get_running_pid_identity_strict(pid_path) == (123, 10.0)
@@ -1785,13 +2016,17 @@ def test_strict_gateway_identity_adopts_held_lock_when_pid_file_is_gone(tmp_path
         status.get_running_pid_identity_strict(pid_path)
 
 
-def test_pid_record_names_the_entry_point_under_an_inline_launcher(tmp_path, monkeypatch):
+def test_pid_record_names_the_entry_point_under_an_inline_launcher(
+    tmp_path, monkeypatch
+):
     """The published launcher script runs `python -I -c <script> gateway run`, so sys.argv[0] is
     "-c"; the persisted record must still read as a gateway when the live cmdline is unreadable
     (#124029, #123151)."""
     import types
 
-    entry = types.SimpleNamespace(__file__="/opt/Clawksis/clawksis-agent/clawk_cli/main.py")
+    entry = types.SimpleNamespace(
+        __file__="/opt/Clawksis/clawksis-agent/clawk_cli/main.py"
+    )
     monkeypatch.setitem(status.sys.modules, "clawk_cli.main", entry)
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     monkeypatch.setattr(status.sys, "argv", ["-c", "gateway", "run"])
@@ -1807,7 +2042,23 @@ def test_retained_gateway_state_keeps_watchdog_degraded_like_startup_failed():
     watchdog exit_reason) of a dead process is just ``stopped``."""
     watchdog = {"gateway_state": "degraded", "exit_reason": "loop_liveness_watchdog"}
     assert status.retained_gateway_state(watchdog) == "degraded"
-    assert status.retained_gateway_state({**watchdog, "exit_reason": "shutdown_watchdog"}) == "degraded"
-    assert status.retained_gateway_state({**watchdog, "desired_state": "stopped"}) == "stopped"
-    assert status.retained_gateway_state({"gateway_state": "degraded", "exit_reason": None}) == "stopped"
-    assert status.retained_gateway_state({"gateway_state": "startup_failed", "exit_reason": "x"}) == "startup_failed"
+    assert (
+        status.retained_gateway_state({**watchdog, "exit_reason": "shutdown_watchdog"})
+        == "degraded"
+    )
+    assert (
+        status.retained_gateway_state({**watchdog, "desired_state": "stopped"})
+        == "stopped"
+    )
+    assert (
+        status.retained_gateway_state(
+            {"gateway_state": "degraded", "exit_reason": None}
+        )
+        == "stopped"
+    )
+    assert (
+        status.retained_gateway_state(
+            {"gateway_state": "startup_failed", "exit_reason": "x"}
+        )
+        == "startup_failed"
+    )

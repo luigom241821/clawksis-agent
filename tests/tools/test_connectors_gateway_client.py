@@ -40,7 +40,13 @@ class FakeTransport:
 
     def request(self, method, url, *, headers=None, json=None, timeout=None):
         self.requests.append(
-            {"method": method, "url": url, "headers": dict(headers or {}), "json": json, "timeout": timeout}
+            {
+                "method": method,
+                "url": url,
+                "headers": dict(headers or {}),
+                "json": json,
+                "timeout": timeout,
+            }
         )
         outcome = self.responses.pop(0)
         if isinstance(outcome, Exception):
@@ -100,9 +106,17 @@ def test_execute_sends_one_single_call_request_per_call_with_its_own_key():
     )
     results = make_client(transport).execute(planned())
 
-    assert [r["url"] for r in transport.requests] == ["https://tool-gateway.test/v1/connectors/execute"] * 2
+    assert [r["url"] for r in transport.requests] == [
+        "https://tool-gateway.test/v1/connectors/execute"
+    ] * 2
     assert [r["json"] for r in transport.requests] == [
-        {"call": {"connector": "gmail", "tool": "GMAIL_SEND_EMAIL", "arguments": {"to": "x"}}},
+        {
+            "call": {
+                "connector": "gmail",
+                "tool": "GMAIL_SEND_EMAIL",
+                "arguments": {"to": "x"},
+            }
+        },
         {"call": {"connector": "slack", "tool": "SLACK_POST_MESSAGE", "arguments": {}}},
     ]
     keys = [r["headers"]["x-idempotency-key"] for r in transport.requests]
@@ -117,12 +131,17 @@ def test_execute_sends_one_single_call_request_per_call_with_its_own_key():
 def test_execute_result_carries_the_gateway_data_use_requirement():
     gmail = single_result("gmail", "GMAIL_FETCH_EMAILS", {"id": "m1"})
     gmail["result"]["dataUse"] = {"requires": ["no_training"]}
-    transport = FakeTransport(FakeResponse(200, gmail), FakeResponse(200, single_result("slack", "SLACK_POST_MESSAGE", "ok")))
+    transport = FakeTransport(
+        FakeResponse(200, gmail),
+        FakeResponse(200, single_result("slack", "SLACK_POST_MESSAGE", "ok")),
+    )
 
     results = make_client(transport).execute(planned())
 
-    assert results == [{"data": {"id": "m1"}, "error": None, "data_use": ["no_training"]},
-                       {"data": "ok", "error": None}]
+    assert results == [
+        {"data": {"id": "m1"}, "error": None, "data_use": ["no_training"]},
+        {"data": "ok", "error": None},
+    ]
 
 
 def test_retry_on_5xx_reuses_the_same_idempotency_key():
@@ -140,9 +159,7 @@ def test_retry_on_5xx_reuses_the_same_idempotency_key():
 
 
 def test_retry_on_transport_failure_reuses_key_then_gives_up():
-    transport = FakeTransport(
-        ConnectionError("reset"), ConnectionError("reset again")
-    )
+    transport = FakeTransport(ConnectionError("reset"), ConnectionError("reset again"))
     with pytest.raises(ToolGatewayError) as exc_info:
         make_client(transport).execute(planned(PLAN_CALLS[:1]))
     assert exc_info.value.code == "TRANSPORT_ERROR"
@@ -180,7 +197,9 @@ def test_409_raises_idempotency_conflict_and_never_retries():
 
 
 def test_404_raises_gateway_unavailable_the_dark_signal():
-    transport = FakeTransport(FakeResponse(404, {"error": {"code": "NOT_FOUND", "message": "no route"}}))
+    transport = FakeTransport(
+        FakeResponse(404, {"error": {"code": "NOT_FOUND", "message": "no route"}})
+    )
     with pytest.raises(GatewayUnavailable):
         make_client(transport).execute(planned(PLAN_CALLS[:1]))
 
@@ -233,9 +252,10 @@ def test_connection_required_409_is_a_call_entry_with_link_and_account():
 
 
 def test_search_hits_empty_on_unavailable_dark_gateway_and_names_a_real_failure():
-    assert connector_search_hits(
-        [{"use_case": "send mail"}], availability=lambda: False
-    ) == ConnectorLeg()
+    assert (
+        connector_search_hits([{"use_case": "send mail"}], availability=lambda: False)
+        == ConnectorLeg()
+    )
 
     def dark_factory():
         raise GatewayUnavailable("dark", code="NOT_FOUND", status=404)
@@ -252,26 +272,20 @@ def test_search_hits_empty_on_unavailable_dark_gateway_and_names_a_real_failure(
     def boom_factory():
         raise RuntimeError("boom")
 
-    assert (
-        connector_search_hits(
-            [{"use_case": "send mail"}],
-            availability=lambda: True,
-            client_factory=boom_factory,
-        )
-        == ConnectorLeg(failure="unreachable")
-    )
+    assert connector_search_hits(
+        [{"use_case": "send mail"}],
+        availability=lambda: True,
+        client_factory=boom_factory,
+    ) == ConnectorLeg(failure="unreachable")
 
     def rejected_factory():
         raise GatewayAuthError("token rejected", code="UNAUTHORIZED", status=401)
 
-    assert (
-        connector_search_hits(
-            [{"use_case": "send mail"}],
-            availability=lambda: True,
-            client_factory=rejected_factory,
-        )
-        == ConnectorLeg(failure="sign_in_expired")
-    )
+    assert connector_search_hits(
+        [{"use_case": "send mail"}],
+        availability=lambda: True,
+        client_factory=rejected_factory,
+    ) == ConnectorLeg(failure="sign_in_expired")
 
     def forbidden_factory():
         raise GatewayAuthError("no entitlement", code="FORBIDDEN", status=403)
@@ -343,10 +357,13 @@ def test_default_resolver_ignores_the_media_host_override():
     # TOOL_GATEWAY_URL moves the media/on-origin-vendor host only. Letting it
     # drag the connectors client along would silently point connector calls at
     # a host that does not serve them.
-    assert _resolve_with_env(
-        TOOL_GATEWAY_URL="http://127.0.0.1:3009",
-        TOOL_GATEWAY_DOMAIN="gw.example.com",
-    ) == "https://connector-gateway.gw.example.com"
+    assert (
+        _resolve_with_env(
+            TOOL_GATEWAY_URL="http://127.0.0.1:3009",
+            TOOL_GATEWAY_DOMAIN="gw.example.com",
+        )
+        == "https://connector-gateway.gw.example.com"
+    )
 
 
 def test_default_resolver_is_none_on_a_misconfigured_scheme():

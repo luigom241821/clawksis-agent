@@ -62,8 +62,6 @@ def test_cprint_app_not_running_direct_print(monkeypatch):
     assert calls == [("pt_print", "x")]
 
 
-
-
 def test_cprint_same_thread_as_app_loop_direct_print(monkeypatch):
     """App running on same thread → direct print (no scheduling)."""
     direct_prints = []
@@ -98,8 +96,6 @@ def test_cprint_same_thread_as_app_loop_direct_print(monkeypatch):
     cli._cprint("x")
 
     assert direct_prints == ["x"]
-
-
 
 
 def test_cprint_swallows_prompt_toolkit_import_error(monkeypatch):
@@ -137,10 +133,6 @@ def test_cprint_swallows_prompt_toolkit_import_error(monkeypatch):
     assert direct_prints == ["fallback2"]
 
 
-
-
-
-
 def test_replay_output_history_rerenders_callable_entries(monkeypatch):
     cli._configure_output_history(True, 10)
     widths_seen = []
@@ -159,8 +151,6 @@ def test_replay_output_history_rerenders_callable_entries(monkeypatch):
     assert widths_seen == ["called"]
     assert printed == ["top border\nbody"]
     assert list(cli._OUTPUT_HISTORY) == [_render_current_width]
-
-
 
 
 def test_chat_console_records_rich_ansi_for_resize_replay(monkeypatch):

@@ -1,4 +1,5 @@
 """Release progress logging: stderr only, grouped, and commands stay readable."""
+
 import subprocess
 
 import pytest
@@ -26,7 +27,9 @@ def test_logged_run_logs_a_failure_and_reraises(capsys):
 
 
 def test_long_arguments_are_cut_and_newlines_escaped():
-    shown = progress.describe_command(["gh", "api", "--raw-field", "body=" + "x" * 500 + "\nmore"])
+    shown = progress.describe_command(
+        ["gh", "api", "--raw-field", "body=" + "x" * 500 + "\nmore"]
+    )
     assert "…(+" in shown and "\n" not in shown
     assert len(shown) < 260
 

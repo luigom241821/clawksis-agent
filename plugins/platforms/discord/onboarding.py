@@ -46,8 +46,14 @@ class DiscordBotCheck:
     def invite_url(self) -> str:
         # integration_type=0 is a server install, so Discord skips the "add to server or to my
         # apps?" question for applications that also allow user installs.
-        query = urlencode({"client_id": self.app_id, "scope": "bot applications.commands",
-                           "permissions": INVITE_PERMISSIONS, "integration_type": 0})
+        query = urlencode(
+            {
+                "client_id": self.app_id,
+                "scope": "bot applications.commands",
+                "permissions": INVITE_PERMISSIONS,
+                "integration_type": 0,
+            }
+        )
         return f"https://discord.com/oauth2/authorize?{query}"
 
     @property
@@ -61,16 +67,26 @@ def _owners(app: dict) -> tuple[tuple[str, str], ...]:
         return tuple(
             (str(m["user"]["id"]), str(m["user"].get("username") or m["user"]["id"]))
             for m in team.get("members") or []
-            if m.get("membership_state") == _TEAM_MEMBER_ACCEPTED and m.get("user", {}).get("id")
+            if m.get("membership_state") == _TEAM_MEMBER_ACCEPTED
+            and m.get("user", {}).get("id")
         )
     owner = app.get("owner") or {}
-    return ((str(owner["id"]), str(owner.get("username") or owner["id"])),) if owner.get("id") else ()
+    return (
+        ((str(owner["id"]), str(owner.get("username") or owner["id"])),)
+        if owner.get("id")
+        else ()
+    )
 
 
 def check_bot_token(token: str) -> DiscordBotCheck:
     """Read the application behind ``token``. Raises :class:`DiscordAPIError` (401 = bad token)
     or ``OSError`` when Discord is unreachable."""
-    from tools.discord_tool import _FLAGS_GUILD_MEMBERS, _FLAGS_MESSAGE_CONTENT, _discord_request
+    from tools.discord_tool import (
+        _FLAGS_GUILD_MEMBERS,
+        _FLAGS_MESSAGE_CONTENT,
+        _discord_request,
+    )
+
     app = _discord_request("GET", "/applications/@me", token.strip(), timeout=10)
     flags = int(app.get("flags") or 0)
     bot = app.get("bot") or {}
@@ -110,15 +126,18 @@ def _discord_token_shape_error(token: str) -> Optional[str]:
     numeric, so this is a safe, narrow shape check.
     """
     if token and token.strip().isdigit():
-        return ("That looks like a numeric application ID, not a bot token. "
-                "Paste the bot token from the Discord Developer Portal (Bot page), "
-                "not the application ID (General Information page).")
+        return (
+            "That looks like a numeric application ID, not a bot token. "
+            "Paste the bot token from the Discord Developer Portal (Bot page), "
+            "not the application ID (General Information page)."
+        )
     return None
 
 
 def _prompt_discord_bot_token(prompt) -> str:
     """Prompt for the bot token, re-prompting once when the answer is a numeric app ID."""
     from clawk_cli.cli_output import print_error
+
     token = ""
     for _attempt in range(2):
         token = prompt("Discord bot token", password=True)
@@ -138,42 +157,67 @@ def _prompt_checked_token(prompt) -> tuple[str, Optional[DiscordBotCheck]]:
     from clawk_cli.cli_output import print_error, print_success, print_warning
     from clawk_cli.config import _check_non_ascii_credential
     from tools.discord_tool import DiscordAPIError
+
     for _attempt in range(3):
         # Same stripping save_env_value applies, done first: a non-ASCII paste can't go in an HTTP header.
-        token = _check_non_ascii_credential("DISCORD_BOT_TOKEN", _prompt_discord_bot_token(prompt)).strip()
+        token = _check_non_ascii_credential(
+            "DISCORD_BOT_TOKEN", _prompt_discord_bot_token(prompt)
+        ).strip()
         if not token:
             return "", None
         try:
             check = check_bot_token(token)
-        except ValueError:  # whitespace/control characters inside the paste: not a header-safe token
-            print_error("That isn't a bot token (it contains a line break). Copy it again from the Bot page.")
+        except (
+            ValueError
+        ):  # whitespace/control characters inside the paste: not a header-safe token
+            print_error(
+                "That isn't a bot token (it contains a line break). Copy it again from the Bot page."
+            )
             continue
         except DiscordAPIError as exc:
             if exc.status == 401:
-                print_error("Discord rejected that token. On the Bot page click Reset Token, "
-                            "copy the new token and paste it here.")
+                print_error(
+                    "Discord rejected that token. On the Bot page click Reset Token, "
+                    "copy the new token and paste it here."
+                )
                 continue
-            print_warning(f"Couldn't verify the token (Discord answered {exc.status}); saving it anyway.")
+            print_warning(
+                f"Couldn't verify the token (Discord answered {exc.status}); saving it anyway."
+            )
             return token, None
         except OSError as exc:
-            print_warning(f"Couldn't reach Discord to verify the token ({exc}); saving it anyway.")
+            print_warning(
+                f"Couldn't reach Discord to verify the token ({exc}); saving it anyway."
+            )
             return token, None
-        print_success(f"Token works: this is the bot \"{check.bot_name}\"")
+        print_success(f'Token works: this is the bot "{check.bot_name}"')
         return token, check
     print_error("Discord rejected three tokens in a row; nothing was saved.")
     return "", None
 
 
-def _ensure_message_content_intent(token: str, check: DiscordBotCheck, prompt) -> DiscordBotCheck:
+def _ensure_message_content_intent(
+    token: str, check: DiscordBotCheck, prompt
+) -> DiscordBotCheck:
     from clawk_cli.cli_output import print_info, print_success, print_warning
     from tools.discord_tool import DiscordAPIError
+
     for _attempt in range(5):
         if check.message_content:
             break
-        print_warning("Message Content Intent is OFF: Discord will refuse the bot's connection until it's on.")
+        print_warning(
+            "Message Content Intent is OFF: Discord will refuse the bot's connection until it's on."
+        )
         print_info(f"   Turn it on here: {check.bot_settings_url}")
-        print_info("   (Privileged Gateway Intents → Message Content Intent → Save Changes)")
-        if prompt("Press Enter once it's saved to re-check, or type 'skip'").strip().lower() == "skip":
+        print_info(
+            "   (Privileged Gateway Intents → Message Content Intent → Save Changes)"
+        )
+        if (
+            prompt("Press Enter once it's saved to re-check, or type 'skip'")
+            .strip()
+            .lower()
+            == "skip"
+        ):
             return check
         try:
             check = check_bot_token(token)
@@ -182,18 +226,25 @@ def _ensure_message_content_intent(token: str, check: DiscordBotCheck, prompt) -
     if check.message_content:
         print_success("Message Content Intent is on")
     if not check.server_members:
-        print_info("Optional: turn on Server Members Intent on the same page if you want to "
-                   "allow people by username or role instead of user ID.")
+        print_info(
+            "Optional: turn on Server Members Intent on the same page if you want to "
+            "allow people by username or role instead of user ID."
+        )
     return check
 
 
 def _print_invite(check: DiscordBotCheck) -> None:
     from clawk_cli.cli_output import print_info
+
     print()
     if check.server_count == 0:
-        print_info("📨 The bot isn't in any server yet. Open this link to add it to yours:")
+        print_info(
+            "📨 The bot isn't in any server yet. Open this link to add it to yours:"
+        )
     else:
-        print_info("📨 Invite link (adds the bot to a server with the permissions Clawksis uses):")
+        print_info(
+            "📨 Invite link (adds the bot to a server with the permissions Clawksis uses):"
+        )
     print_info(f"   {check.invite_url}")
     print_info("   Once you share a server with the bot you can also DM it directly.")
 
@@ -201,27 +252,42 @@ def _print_invite(check: DiscordBotCheck) -> None:
 def _prompt_allowlist(check: Optional[DiscordBotCheck], prompt, prompt_yes_no) -> None:
     from clawk_cli.cli_output import print_info, print_success
     from clawk_cli.config import get_env_value, save_env_value
+
     print()
     print_info("🔒 Security: only allowlisted Discord users can talk to your bot.")
     # Reconfiguring keeps whoever is already allowed; the wizard only adds.
     allowed = _clean_discord_user_ids(get_env_value("DISCORD_ALLOWED_USERS") or "")
     if allowed:
         print_info(f"   Already allowed: {', '.join(allowed)}")
-    if check and check.owners and not all(uid in allowed for uid, _name in check.owners):
+    if (
+        check
+        and check.owners
+        and not all(uid in allowed for uid, _name in check.owners)
+    ):
         who = ", ".join(f"@{name}" for _uid, name in check.owners)
-        question = (f"Allow yourself ({who}) to talk to the bot?" if len(check.owners) == 1
-                    else f"Allow your team ({who}) to talk to the bot?")
+        question = (
+            f"Allow yourself ({who}) to talk to the bot?"
+            if len(check.owners) == 1
+            else f"Allow your team ({who}) to talk to the bot?"
+        )
         if prompt_yes_no(question, True):
             allowed += [uid for uid, _name in check.owners if uid not in allowed]
-    print_info("   Others need their Discord user ID: Settings → Advanced → Developer Mode,")
+    print_info(
+        "   Others need their Discord user ID: Settings → Advanced → Developer Mode,"
+    )
     print_info("   then right-click their name → Copy User ID. Usernames work too.")
-    raw = prompt("Other allowed users (comma-separated, Enter to skip)" if allowed
-                 else "Allowed user IDs or usernames (comma-separated, leave empty for open access)")
+    raw = prompt(
+        "Other allowed users (comma-separated, Enter to skip)"
+        if allowed
+        else "Allowed user IDs or usernames (comma-separated, leave empty for open access)"
+    )
     extra = _clean_discord_user_ids(raw or "")
     allowed += [uid for uid in extra if uid not in allowed]
     if check and not check.server_members and any(not uid.isdigit() for uid in extra):
-        print_info("   Usernames are resolved when the gateway connects, which needs Server Members Intent: "
-                   f"{check.bot_settings_url}")
+        print_info(
+            "   Usernames are resolved when the gateway connects, which needs Server Members Intent: "
+            f"{check.bot_settings_url}"
+        )
     if allowed:
         save_env_value("DISCORD_ALLOWED_USERS", ",".join(allowed))
         print_success("Discord allowlist configured")
@@ -235,6 +301,7 @@ def _prompt_allowlist(check: Optional[DiscordBotCheck], prompt, prompt_yes_no) -
 
 def _check_saved_token(token: str) -> Optional[DiscordBotCheck]:
     from tools.discord_tool import DiscordAPIError
+
     try:
         return check_bot_token(token) if token else None
     except (DiscordAPIError, OSError):
@@ -244,7 +311,13 @@ def _check_saved_token(token: str) -> Optional[DiscordBotCheck]:
 def interactive_setup() -> None:
     """Guide the user through Discord bot setup: token (checked live), intents, invite link,
     allowlist (defaults to the bot's owner) and home channel. CLI imports are lazy."""
-    from clawk_cli.cli_output import print_header, print_info, print_success, prompt, prompt_yes_no
+    from clawk_cli.cli_output import (
+        print_header,
+        print_info,
+        print_success,
+        prompt,
+        prompt_yes_no,
+    )
     from clawk_cli.config import get_env_value, remove_env_value, save_env_value
     from clawk_cli.setup_platforms import declines_reconfigure
 
@@ -273,8 +346,10 @@ def interactive_setup() -> None:
     save_env_value("DISCORD_BOT_TOKEN", token)
     print_success("Discord token saved")
     if check is None:
-        print_info("Make sure Message Content Intent is on (Bot page → Privileged Gateway Intents), "
-                   "or Discord will refuse the bot's connection.")
+        print_info(
+            "Make sure Message Content Intent is on (Bot page → Privileged Gateway Intents), "
+            "or Discord will refuse the bot's connection."
+        )
     else:
         check = _ensure_message_content_intent(token, check, prompt)
         _print_invite(check)
@@ -287,7 +362,9 @@ def interactive_setup() -> None:
         "   Or paste a channel ID (Developer Mode → right-click a channel → Copy Channel ID).",
     ):
         print_info(line)
-    home_channel = prompt("Home channel ID (leave empty to set later with /set-home)").strip()
+    home_channel = prompt(
+        "Home channel ID (leave empty to set later with /set-home)"
+    ).strip()
     if home_channel:
         save_env_value("DISCORD_HOME_CHANNEL", home_channel)
     elif remove_env_value("DISCORD_HOME_CHANNEL"):

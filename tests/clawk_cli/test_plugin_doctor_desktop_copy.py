@@ -12,8 +12,12 @@ def _plugin(root: Path) -> Path:
     plugin = root / "plugins" / "uni"
     (plugin / "desktop").mkdir(parents=True)
     (plugin / "plugin.yaml").write_text("name: uni\nversion: 0.1.0\n", encoding="utf-8")
-    (plugin / "__init__.py").write_text("def register(ctx):\n    pass\n", encoding="utf-8")
-    (plugin / "desktop" / "plugin.js").write_text("export default { id: 'uni' } // v1\n", encoding="utf-8")
+    (plugin / "__init__.py").write_text(
+        "def register(ctx):\n    pass\n", encoding="utf-8"
+    )
+    (plugin / "desktop" / "plugin.js").write_text(
+        "export default { id: 'uni' } // v1\n", encoding="utf-8"
+    )
     return plugin
 
 
@@ -22,7 +26,11 @@ def _copy(home: Path, plugin: Path) -> Path:
     copy.mkdir(parents=True)
     (copy / "plugin.js").write_bytes((plugin / "desktop" / "plugin.js").read_bytes())
     (copy / ".clawk-package.json").write_text(
-        json.dumps({"package": "uni", "source": str(plugin / "desktop"), "sourceMtimeMs": 1}), encoding="utf-8")
+        json.dumps(
+            {"package": "uni", "source": str(plugin / "desktop"), "sourceMtimeMs": 1}
+        ),
+        encoding="utf-8",
+    )
     return copy
 
 
@@ -45,7 +53,9 @@ def test_doctor_warns_when_the_desktop_copy_is_stale(home: Path) -> None:
     copy = _copy(home, plugin)
     assert _stale_warnings(doctor_plugin(plugin)) == []
 
-    (plugin / "desktop" / "plugin.js").write_text("export default { id: 'uni' } // v2\n", encoding="utf-8")
+    (plugin / "desktop" / "plugin.js").write_text(
+        "export default { id: 'uni' } // v2\n", encoding="utf-8"
+    )
     report = doctor_plugin(plugin)
 
     [warning] = _stale_warnings(report)

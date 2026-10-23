@@ -67,15 +67,28 @@ def _grandchild(label):
         ("linux", _direct("ai.clawk.gateway"), 180.0),
         ("linux", _grandchild("ai.clawk.gateway"), 180.0),
     ],
-    ids=["darwin-direct", "darwin-grandchild", "darwin-direct-app", "darwin-grandchild-app",
-         "darwin-unlabelled", "linux-direct", "linux-grandchild"],
+    ids=[
+        "darwin-direct",
+        "darwin-grandchild",
+        "darwin-direct-app",
+        "darwin-grandchild-app",
+        "darwin-unlabelled",
+        "linux-direct",
+        "linux-grandchild",
+    ],
 )
-def test_launchd_reader_yields_a_budget_only_for_clawk_jobs(platform, environ, expected):
+def test_launchd_reader_yields_a_budget_only_for_clawk_jobs(
+    platform, environ, expected
+):
     """End to end from the process environment to the stop drain: the reader sizes the drain to the
     live ExitTimeOut only for an ``ai.clawk`` job on darwin, seen directly or through the wrapper's
     re-export. Platform is data, not the host (the launchctl call is faked)."""
-    fake_run = lambda *a, **k: SimpleNamespace(returncode=0, stdout="exit timeout = 60\n")
-    budget = read_launchd_exit_timeout_s(environ=environ, uid=501, run=fake_run, platform=platform)
+    fake_run = lambda *a, **k: SimpleNamespace(
+        returncode=0, stdout="exit timeout = 60\n"
+    )
+    budget = read_launchd_exit_timeout_s(
+        environ=environ, uid=501, run=fake_run, platform=platform
+    )
     assert resolve_launchd_capped_drain(180.0, budget) == expected
 
 
@@ -83,7 +96,9 @@ def test_forwarded_label_marks_grandchild_supervised_for_every_reader():
     """One seam: the restart route and the control-socket declaration see the same launchd identity
     the drain cap does, so a grandchild is not 'manual' to one reader and 'launchd' to another."""
     grandchild_env = _grandchild("ai.clawk.gateway")
-    assert launchd_service_label(grandchild_env, platform="darwin") == "ai.clawk.gateway"
+    assert (
+        launchd_service_label(grandchild_env, platform="darwin") == "ai.clawk.gateway"
+    )
     assert is_gateway_supervisor_process(grandchild_env) is True
     assert is_gateway_supervisor_process({"XPC_SERVICE_NAME": "0"}) is False
     assert is_gateway_supervisor_process(_grandchild("application.com.x.1")) is False
@@ -91,7 +106,9 @@ def test_forwarded_label_marks_grandchild_supervised_for_every_reader():
 
 def _runner(*, drain: float, launchd: float | None, by_signal: bool):
     return SimpleNamespace(
-        _restart_drain_timeout=drain, _launchd_exit_timeout_s=launchd, _stop_requested_by_signal=by_signal,
+        _restart_drain_timeout=drain,
+        _launchd_exit_timeout_s=launchd,
+        _stop_requested_by_signal=by_signal,
     )
 
 
@@ -99,16 +116,26 @@ def test_effective_drain_capped_only_for_signal_stops_under_launchd():
     signal_stop = _runner(drain=180.0, launchd=60.0, by_signal=True)
     assert effective_stop_drain_timeout(signal_stop) == 50.0
     # In-band restart (SIGUSR1 → after-turn → stop()) is not launchd-timed.
-    assert effective_stop_drain_timeout(_runner(drain=180.0, launchd=60.0, by_signal=False)) == 180.0
+    assert (
+        effective_stop_drain_timeout(
+            _runner(drain=180.0, launchd=60.0, by_signal=False)
+        )
+        == 180.0
+    )
     # Not launchd-owned (systemd, s6, foreground): configured drain stands.
-    assert effective_stop_drain_timeout(_runner(drain=180.0, launchd=None, by_signal=True)) == 180.0
+    assert (
+        effective_stop_drain_timeout(_runner(drain=180.0, launchd=None, by_signal=True))
+        == 180.0
+    )
     # The thread watchdog (drain + grace) must also fire before launchd's SIGKILL.
     leash = resolve_shutdown_watchdog_delay(effective_stop_drain_timeout(signal_stop))
     assert effective_stop_watchdog_delay(signal_stop, leash) < 60.0 < leash
 
 
 @pytest.mark.parametrize("takeover", [False, True])
-def test_sigterm_handler_marks_stop_as_signal_driven_unless_planned_takeover(monkeypatch, takeover):
+def test_sigterm_handler_marks_stop_as_signal_driven_unless_planned_takeover(
+    monkeypatch, takeover
+):
     import gateway.run as run_mod
     import gateway.shutdown_forensics as forensics
     from gateway import status

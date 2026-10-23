@@ -11,9 +11,13 @@ import clawk_state_wal as clawk_state
 
 
 def _hint_for(method):
-    with patch("clawk_cli.config.detect_install_method", return_value=method), \
-         patch("clawk_cli.config.recommended_update_command_for_method",
-               return_value=f"CMD-{method}"):
+    with (
+        patch("clawk_cli.config.detect_install_method", return_value=method),
+        patch(
+            "clawk_cli.config.recommended_update_command_for_method",
+            return_value=f"CMD-{method}",
+        ),
+    ):
         return clawk_state._wal_reset_repair_hint()
 
 
@@ -36,7 +40,8 @@ def test_nix_passes_through_recommended_command():
 
 
 def test_hint_falls_back_when_detection_fails():
-    with patch("clawk_cli.config.detect_install_method",
-               side_effect=RuntimeError("boom")):
+    with patch(
+        "clawk_cli.config.detect_install_method", side_effect=RuntimeError("boom")
+    ):
         hint = clawk_state._wal_reset_repair_hint()
     assert "SQLite 3.51.3+" in hint

@@ -20,7 +20,9 @@ logger = logging.getLogger(__name__)
 
 
 _registry: ProviderRegistry[BrowserProvider] = ProviderRegistry(
-    label="Browser", provider_cls=BrowserProvider, logger=logger,
+    label="Browser",
+    provider_cls=BrowserProvider,
+    logger=logger,
 )
 _registry.export(globals())
 
@@ -53,9 +55,11 @@ def _resolve(configured: Optional[str]) -> Optional[BrowserProvider]:
     for legacy in _LEGACY_PREFERENCE:
         provider = snapshot.get(legacy)
         if provider is not None and is_available_safe(
-            provider, logger,
+            provider,
+            logger,
             "Browser provider %s.is_available() raised %s — treating as unavailable",
-            level=logging.WARNING, exc_info=True,
+            level=logging.WARNING,
+            exc_info=True,
         ):
             return provider
     return None

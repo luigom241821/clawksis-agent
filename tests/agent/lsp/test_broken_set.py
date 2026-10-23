@@ -12,6 +12,7 @@ This module verifies:
 - ``enabled_for`` short-circuits on broken keys
 - a missing binary is broken-set'd after one snapshot attempt
 """
+
 from __future__ import annotations
 
 import time
@@ -38,12 +39,6 @@ def _make_git_workspace(tmp_path: Path) -> Path:
     (repo / ".git").mkdir()
     (repo / "pyproject.toml").write_text("[project]\nname='t'\n", encoding="utf-8")
     return repo
-
-
-
-
-
-
 
 
 def test_unrelated_project_not_affected_by_broken(tmp_path, monkeypatch):
@@ -74,8 +69,6 @@ def test_unrelated_project_not_affected_by_broken(tmp_path, monkeypatch):
         assert svc.enabled_for(str(b_src)) is True
     finally:
         svc.shutdown()
-
-
 
 
 def test_mark_broken_handles_no_workspace_silently(tmp_path):
@@ -127,7 +120,9 @@ def test_snapshot_failure_marks_broken_via_outer_timeout(tmp_path, monkeypatch):
         svc.shutdown()
 
 
-def test_skipped_request_on_broken_root_is_logged_at_info(tmp_path, monkeypatch, caplog):
+def test_skipped_request_on_broken_root_is_logged_at_info(
+    tmp_path, monkeypatch, caplog
+):
     """A request skipped because its root is broken must leave a visible trace (#116446): at default
     levels ``log_clean`` is DEBUG, so a silently skipped file was indistinguishable from a clean one."""
     from agent.lsp import eventlog
@@ -137,7 +132,9 @@ def test_skipped_request_on_broken_root_is_logged_at_info(tmp_path, monkeypatch,
     src.write_text("", encoding="utf-8")
     monkeypatch.chdir(str(repo))
     eventlog.reset_announce_caches()
-    svc = LSPService(enabled=True, wait_mode="document", wait_timeout=2.0, install_strategy="manual")
+    svc = LSPService(
+        enabled=True, wait_mode="document", wait_timeout=2.0, install_strategy="manual"
+    )
     try:
         svc._mark_broken_for_file(str(src), RuntimeError("simulated"))
         with caplog.at_level("INFO", logger=eventlog.event_log.name):
@@ -146,7 +143,9 @@ def test_skipped_request_on_broken_root_is_logged_at_info(tmp_path, monkeypatch,
     finally:
         svc.shutdown()
     skipped = [r for r in caplog.records if "marked broken" in r.getMessage()]
-    assert [r.levelname for r in skipped] == ["INFO"]  # once per root; the repeat is DEBUG
+    assert [r.levelname for r in skipped] == [
+        "INFO"
+    ]  # once per root; the repeat is DEBUG
     assert str(repo) in skipped[0].getMessage() and "x.py" in skipped[0].getMessage()
 
 
@@ -158,11 +157,18 @@ def test_broken_root_is_retried_after_broken_retry_seconds(tmp_path, monkeypatch
     monkeypatch.chdir(str(repo))
     src = repo / "x.py"
     src.write_text("", encoding="utf-8")
-    cfg = {"lsp": {"wait_timeout": 1.0, "install_strategy": "manual", "broken_retry_seconds": 0.2}}
+    cfg = {
+        "lsp": {
+            "wait_timeout": 1.0,
+            "install_strategy": "manual",
+            "broken_retry_seconds": 0.2,
+        }
+    }
     with patch("clawk_cli.config.load_config_readonly", return_value=cfg):
         svc = LSPService.create_from_config()
     assert svc is not None
     try:
+
         async def boom(*_a, **_k):
             raise RuntimeError("outer-timeout simulated")
 

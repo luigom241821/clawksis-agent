@@ -19,6 +19,7 @@ import pytest
 @pytest.fixture()
 def main_mod():
     from clawk_cli import main
+
     return main
 
 
@@ -37,9 +38,7 @@ def _args(**over):
 
 
 def _wire_common(main_mod, monkeypatch):
-    monkeypatch.setattr(
-        "clawk_cli.profiles.get_active_profile_name", lambda: "default"
-    )
+    monkeypatch.setattr("clawk_cli.profiles.get_active_profile_name", lambda: "default")
     monkeypatch.setattr(main_mod, "_sync_bundled_skills_quietly", lambda: None)
     monkeypatch.setitem(sys.modules, "fastapi", types.SimpleNamespace())
     monkeypatch.setitem(sys.modules, "uvicorn", types.SimpleNamespace())
@@ -75,7 +74,8 @@ def test_env_dist_without_index_exits(main_mod, monkeypatch, tmp_path, capsys):
     )
     builds = []
     monkeypatch.setattr(
-        "clawk_cli.main_web_build._build_web_ui", lambda *a, **k: builds.append(a) or True
+        "clawk_cli.main_web_build._build_web_ui",
+        lambda *a, **k: builds.append(a) or True,
     )
 
     with pytest.raises(SystemExit) as exc:
@@ -86,8 +86,6 @@ def test_env_dist_without_index_exits(main_mod, monkeypatch, tmp_path, capsys):
     assert builds == []  # env var set -> build skipped, validation is the gate
     out = capsys.readouterr().out
     assert "CLAWK_WEB_DIST" in out and str(empty_dist) in out
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -134,8 +132,6 @@ def test_skip_build_missing_dist_attempts_one_recovery_build(
     assert "recovery build" in out.lower()
 
 
-
-
 # ---------------------------------------------------------------------------
 # Desktop-inherited env isolation (issue #52945 / supersedes #52948, #67402)
 # ---------------------------------------------------------------------------
@@ -167,7 +163,9 @@ def test_desktop_headless_serve_keeps_packaged_renderer(main_mod, monkeypatch):
     assert os.environ["CLAWK_WEB_DIST"] == packaged
 
 
-def test_desktop_owned_fallback_dashboard_keeps_packaged_renderer(main_mod, monkeypatch):
+def test_desktop_owned_fallback_dashboard_keeps_packaged_renderer(
+    main_mod, monkeypatch
+):
     """The Desktop's own legacy `dashboard --no-open` fallback spawn (serve probe
     timed out) is not headless but carries the per-spawn session token; stripping
     its dist would send a packaged install into `_build_web_ui(fatal=True)`."""

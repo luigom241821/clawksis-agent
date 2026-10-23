@@ -119,11 +119,15 @@ def _make(extra=None):
 
 
 def test_require_mention_channels_csv_and_list():
-    assert _make({"require_mention_channels": "C1, C2"})._slack_require_mention_channels() == {
+    assert _make(
+        {"require_mention_channels": "C1, C2"}
+    )._slack_require_mention_channels() == {
         "C1",
         "C2",
     }
-    assert _make({"require_mention_channels": ["C1", "C2"]})._slack_require_mention_channels() == {
+    assert _make(
+        {"require_mention_channels": ["C1", "C2"]}
+    )._slack_require_mention_channels() == {
         "C1",
         "C2",
     }
@@ -155,5 +159,3 @@ async def test_forced_channel_wake_checks_still_apply(adapter):
     )
 
     adapter.handle_message.assert_called_once()
-
-

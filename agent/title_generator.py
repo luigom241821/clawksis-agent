@@ -34,6 +34,7 @@ def wait_for_title_upgrades(timeout: float = 10.0) -> None:
     for thread in list(_UPGRADE_THREADS):
         thread.join(max(0.0, deadline - time.monotonic()))
 
+
 # (task_name, exception) -> None; surfaces auxiliary failures so silent drops don't pile up as NULL titles.
 FailureCallback = Callable[[str, BaseException], None]
 # (title, source) -> None; source is the persisted provenance (``derived`` / ``llm``). Consumers paying a
@@ -49,7 +50,9 @@ MAX_TITLE_INPUT_CHARS = 1000
 _PASTE_PREVIEW_LABEL = "\n\nPasted content:\n"
 _ATTACHMENT_REF_RE = re.compile(r"@(?:file|folder):\S+")
 # Footers the @-reference expander appends below the typed text (agent/context_references.py).
-_CONTEXT_FOOTER_RE = re.compile(r"\n+--- (?:Context Warnings|Attached Context) ---\n.*", re.DOTALL)
+_CONTEXT_FOOTER_RE = re.compile(
+    r"\n+--- (?:Context Warnings|Attached Context) ---\n.*", re.DOTALL
+)
 # Cap on the instant derived title; a raw fragment reads worse the longer it runs.
 MAX_DERIVED_TITLE_CHARS = 48
 # Answer-shaped guard: a tiny model sometimes answers instead of titling; longer is rejected, not truncated.
@@ -112,27 +115,51 @@ _TITLE_PROMPT_TEMPLATE = (
     'Reply with JSON only: {"title": "..."}'
 )
 
-_LANGUAGE_RULE_MATCH_USER = "- Write the title in the same language as the user's message."
+_LANGUAGE_RULE_MATCH_USER = (
+    "- Write the title in the same language as the user's message."
+)
 _LANGUAGE_RULE_PINNED = "- Write the title in {language}."
 
 # Constrains the response to a single title field ("model answered instead of titling" failure class).
 _TITLE_RESPONSE_FORMAT = {
     "type": "json_schema",
-    "json_schema": {"name": "session_title", "strict": True, "schema": {
-        "type": "object", "properties": {"title": {"type": "string"}}, "required": ["title"], "additionalProperties": False}},
+    "json_schema": {
+        "name": "session_title",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {"title": {"type": "string"}},
+            "required": ["title"],
+            "additionalProperties": False,
+        },
+    },
 }
 
 # Control-tag wrappers around machine-authored content inside a nominal "user" message (Codex CLI's
 # RECOGNIZED_CONTROL_WRAPPERS): stripped, titling continues on what remains.
 _CONTROL_WRAPPERS = tuple(
     (f"<{tag}>", f"</{tag}>")
-    for tag in ("command-message", "command-name", "command-args", "local-command-caveat", "local-command-stderr",
-                "local-command-stdout", "task-notification", "system-reminder", "ide_opened_file", "ide_selection")
+    for tag in (
+        "command-message",
+        "command-name",
+        "command-args",
+        "local-command-caveat",
+        "local-command-stderr",
+        "local-command-stdout",
+        "task-notification",
+        "system-reminder",
+        "ide_opened_file",
+        "ide_selection",
+    )
 )
 
 # Clawksis' own machine-authored openers: a compaction handoff or resumed session must not be titled after them.
 _MACHINE_PREFIXES = (
-    "[CONTEXT COMPACTION", LEGACY_SUMMARY_PREFIX, "[Runtime note:", "[System note:", "[SYSTEM]",
+    "[CONTEXT COMPACTION",
+    LEGACY_SUMMARY_PREFIX,
+    "[Runtime note:",
+    "[System note:",
+    "[SYSTEM]",
     # tui_gateway.server._MODEL_SWITCH_MARKER_PREFIX (keep in sync); persisted as role="user" because
     # strict providers reject a non-first system message.
     # Model-switch marker from tui_gateway.server._append_model_switch_marker. It is persisted with
@@ -147,7 +174,10 @@ _MACHINE_PREFIXES = (
 def _title_config() -> dict:
     """``auxiliary.title_generation`` (lazy read-only import: no clawk_cli cycle, no migration writes)."""
     from clawk_cli.config import load_config_readonly
-    return ((load_config_readonly() or {}).get("auxiliary") or {}).get("title_generation") or {}
+
+    return ((load_config_readonly() or {}).get("auxiliary") or {}).get(
+        "title_generation"
+    ) or {}
 
 
 def _title_language() -> str:
@@ -161,6 +191,7 @@ def _title_language() -> str:
 def _auto_title_enabled() -> bool:
     try:
         from utils import is_truthy_value
+
         return is_truthy_value(_title_config().get("enabled"), default=True)
     except Exception:
         logger.debug("Failed to read title_generation.enabled", exc_info=True)
@@ -171,9 +202,14 @@ def _model_title_upgrade_enabled() -> bool:
     """Distinct from ``enabled``: keep the instant derived title, skip the background model call (#85194)."""
     try:
         from utils import is_truthy_value
-        return is_truthy_value(_title_config().get("model_upgrade_enabled"), default=True)
+
+        return is_truthy_value(
+            _title_config().get("model_upgrade_enabled"), default=True
+        )
     except Exception:
-        logger.debug("Failed to read title_generation.model_upgrade_enabled", exc_info=True)
+        logger.debug(
+            "Failed to read title_generation.model_upgrade_enabled", exc_info=True
+        )
         return True
 
 
@@ -196,9 +232,12 @@ def title_upgrade_must_wait_for_turn(main_runtime: Optional[dict]) -> bool:
     try:
         cfg = _title_config()
         pinned_provider = str(cfg.get("provider") or "").strip().lower()
-        main_base_url = str((main_runtime or {}).get("base_url") or "").strip().rstrip("/")
+        main_base_url = (
+            str((main_runtime or {}).get("base_url") or "").strip().rstrip("/")
+        )
         if pinned_provider not in ("", "auto") and not _title_pin_may_share_endpoint(
-                pinned_provider, provider, main_base_url):
+            pinned_provider, provider, main_base_url
+        ):
             return False
     except Exception:
         return True
@@ -212,11 +251,14 @@ def _is_self_hosted_provider(provider: str) -> bool:
     Normalised here so the main route and the title pin resolve aliases (``ollama``, ``lm-studio``…) the same way.
     """
     from clawk_cli.providers import normalize_provider
+
     provider = normalize_provider(provider)
     return provider in ("custom", "lmstudio", "local") or provider.startswith("custom:")
 
 
-def _title_pin_may_share_endpoint(pinned_provider: str, main_provider: str, main_base_url: str) -> bool:
+def _title_pin_may_share_endpoint(
+    pinned_provider: str, main_provider: str, main_base_url: str
+) -> bool:
     """A title pin that can land on the turn's own self-hosted server (only its ``base_url`` can prove otherwise).
 
     Hosted pins (``openrouter``…) multiplex and never share the slot. A pin to ``custom``/``lmstudio``/``local``/any
@@ -228,12 +270,19 @@ def _title_pin_may_share_endpoint(pinned_provider: str, main_provider: str, main
     """
     from clawk_cli.config import get_compatible_custom_providers, load_config_readonly
     from clawk_cli.providers import custom_provider_aliases, resolve_custom_provider
+
     if _is_self_hosted_provider(pinned_provider):
         return True
-    if custom_provider_aliases(pinned_provider) & custom_provider_aliases(main_provider):
+    if custom_provider_aliases(pinned_provider) & custom_provider_aliases(
+        main_provider
+    ):
         return True
-    pdef = resolve_custom_provider(pinned_provider, get_compatible_custom_providers(load_config_readonly()))
-    return bool(pdef and main_base_url and pdef.base_url.strip().rstrip("/") == main_base_url)
+    pdef = resolve_custom_provider(
+        pinned_provider, get_compatible_custom_providers(load_config_readonly())
+    )
+    return bool(
+        pdef and main_base_url and pdef.base_url.strip().rstrip("/") == main_base_url
+    )
 
 
 def start_title_upgrade(upgrade: Optional[threading.Thread]) -> None:
@@ -247,7 +296,9 @@ def start_title_upgrade(upgrade: Optional[threading.Thread]) -> None:
 def strip_control_wrappers(text: str) -> str:
     """Remove leading control wrappers (nested too) so a slash-command turn reduces to the prose the user typed."""
     current = (text or "").strip()
-    for _ in range(len(_CONTROL_WRAPPERS) * 2):  # bounded: each pass must remove a wrapper or we stop
+    for _ in range(
+        len(_CONTROL_WRAPPERS) * 2
+    ):  # bounded: each pass must remove a wrapper or we stop
         stripped = _strip_one_wrapper(current)
         if stripped == current:
             break
@@ -262,9 +313,11 @@ def _strip_one_wrapper(text: str) -> str:
             continue
         end = lowered.find(close_tag)
         if end == -1:  # unterminated wrapper: drop the opening tag and keep the body
-            return text[len(open_tag):].strip()
+            return text[len(open_tag) :].strip()
         # Prefer trailing prose; otherwise the wrapper body is all we have.
-        return (text[end + len(close_tag):].strip() or text[len(open_tag):end].strip()).strip()
+        return (
+            text[end + len(close_tag) :].strip() or text[len(open_tag) : end].strip()
+        ).strip()
     return text
 
 
@@ -298,6 +351,7 @@ def _summarize_user_message(user_message: str) -> str:
     described = None
     try:
         from agent.skill_commands import describe_skill_invocation
+
         described = describe_skill_invocation(user_message)
     except Exception:
         logger.debug("Skill-scaffolding summary failed; titling raw", exc_info=True)
@@ -332,12 +386,16 @@ def build_title_input(user_message: str, title_preview: str | None = None) -> st
 
 def is_titleable_user_message(user_message: str) -> bool:
     """False for machine-authored openers and turns that reduce to nothing once scaffolding is stripped."""
-    return (isinstance(user_message, str) and bool(user_message.strip()) and not user_message.lstrip().startswith(_MACHINE_PREFIXES)
-            and bool(_summarize_user_message(user_message).strip())
-            # An attachment-only opener (manual attach, no paste preview) is a
-            # file drop, not a request: deriving its "title" from the message
-            # names the session after the truncated file path (#92068).
-            and not _attachment_only_opener(user_message))
+    return (
+        isinstance(user_message, str)
+        and bool(user_message.strip())
+        and not user_message.lstrip().startswith(_MACHINE_PREFIXES)
+        and bool(_summarize_user_message(user_message).strip())
+        # An attachment-only opener (manual attach, no paste preview) is a
+        # file drop, not a request: deriving its "title" from the message
+        # names the session after the truncated file path (#92068).
+        and not _attachment_only_opener(user_message)
+    )
 
 
 def derive_title(user_message: str, title_preview: str | None = None) -> Optional[str]:
@@ -350,7 +408,9 @@ def derive_title(user_message: str, title_preview: str | None = None) -> Optiona
     if len(line) > MAX_DERIVED_TITLE_CHARS:
         cut = line[:MAX_DERIVED_TITLE_CHARS]
         space = cut.rfind(" ")
-        line = (cut[:space] if space > MAX_DERIVED_TITLE_CHARS // 2 else cut).rstrip(" ,.;:—-") + "…"
+        line = (cut[:space] if space > MAX_DERIVED_TITLE_CHARS // 2 else cut).rstrip(
+            " ,.;:—-"
+        ) + "…"
     return line or None
 
 
@@ -384,7 +444,9 @@ def _is_truncated_structured_output(raw: str) -> bool:
     Checked only after the JSON paths failed, and on structure alone (a JSON-shaped opener, a fence
     opener that is never closed) so quoted, *emphasized* or ``[WIP]``-prefixed prose titles are
     untouched (#83903)."""
-    return raw.startswith(('{"', '["', "[{")) or (raw.startswith("```") and raw.count("```") % 2 == 1)
+    return raw.startswith(('{"', '["', "[{")) or (
+        raw.startswith("```") and raw.count("```") % 2 == 1
+    )
 
 
 def _extract_title_text(content: str) -> str:
@@ -406,6 +468,7 @@ def _extract_title_text(content: str) -> str:
     # Prose fallback: scrub <think> blocks so reasoning can't leak into a title.
     try:
         from agent.agent_runtime_helpers import strip_think_blocks
+
         raw = strip_think_blocks(None, raw).strip()
     except Exception:
         logger.debug("strip_think_blocks unavailable for title output", exc_info=True)
@@ -427,13 +490,17 @@ def _title_from_reasoning(message: Any) -> str:
 
 def _clean_title(text: str) -> Optional[str]:
     """Normalize a model-produced title, or None when nothing usable remains."""
-    title = _strip_title_prefix(" ".join((text or "").split()).strip("\"'").strip()).rstrip(".!,;:")
+    title = _strip_title_prefix(
+        " ".join((text or "").split()).strip("\"'").strip()
+    ).rstrip(".!,;:")
     if len(title) > 80:
         title = title[:77].rstrip() + "..."
     return title or None
 
 
-def _safe_callback(callback: Optional[Callable], args: tuple, log_fmt: str, label: str) -> None:
+def _safe_callback(
+    callback: Optional[Callable], args: tuple, log_fmt: str, label: str
+) -> None:
     """Invoke an optional consumer callback, never raising."""
     try:
         if callback is not None:
@@ -442,18 +509,27 @@ def _safe_callback(callback: Optional[Callable], args: tuple, log_fmt: str, labe
         logger.debug(log_fmt, label, exc_info=True)
 
 
-def _report_failure(failure_callback: Optional[FailureCallback], exc: BaseException, label: str) -> None:
-    _safe_callback(failure_callback, ("title generation", exc), "%s failure_callback raised", label)
+def _report_failure(
+    failure_callback: Optional[FailureCallback], exc: BaseException, label: str
+) -> None:
+    _safe_callback(
+        failure_callback, ("title generation", exc), "%s failure_callback raised", label
+    )
 
 
-def _notify_title(title_callback: Optional[TitleCallback], title: str, source: str, label: str) -> None:
+def _notify_title(
+    title_callback: Optional[TitleCallback], title: str, source: str, label: str
+) -> None:
     _safe_callback(title_callback, (title, source), "%s callback failed", label)
 
 
 def _is_provisional_greeting_title(title: str) -> bool:
     """The prompt's greeting placeholder (also "Friendly greeting in chat" and quoted/bracketed variants)."""
     normalized = re.sub(r"^[\W_]+|[\W_]+$", "", title.strip(), flags=re.UNICODE).lower()
-    return normalized in (_PROVISIONAL_GREETING_TITLE, _PROVISIONAL_GREETING_TITLE + " in chat")
+    return normalized in (
+        _PROVISIONAL_GREETING_TITLE,
+        _PROVISIONAL_GREETING_TITLE + " in chat",
+    )
 
 
 def _is_prompt_example_echo(title: str) -> bool:
@@ -503,7 +579,10 @@ def generate_title(
     language = _title_language()
     # str.replace, not str.format: the prompt embeds literal JSON braces.
     prompt = _TITLE_PROMPT_TEMPLATE.replace(
-        "__LANGUAGE_RULE__", _LANGUAGE_RULE_PINNED.format(language=language) if language else _LANGUAGE_RULE_MATCH_USER,
+        "__LANGUAGE_RULE__",
+        _LANGUAGE_RULE_PINNED.format(language=language)
+        if language
+        else _LANGUAGE_RULE_MATCH_USER,
     )
     try:
         # Use the provider's default temperature instead of forcing 0.3.
@@ -513,13 +592,19 @@ def generate_title(
         # See: #72351, #51083, #51157
         response = call_llm(
             task="title_generation",
-            messages=[{"role": "system", "content": prompt}, {"role": "user", "content": user_snippet}],
+            messages=[
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": user_snippet},
+            ],
             # A title is a handful of tokens, but 64 was cut mid-JSON by fenced/prefixed replies and by
             # reasoning models whose thinking survives the disable below (#83903, #82291). A model that
             # honours the JSON contract stops after ~15 tokens regardless, so the ceiling only costs on
             # replies that would have been garbage anyway. temperature=None: omitted from the wire so
             # default-only reasoning models accept the first request (#72351).
-            max_tokens=TITLE_MAX_TOKENS, temperature=None, timeout=timeout, main_runtime=main_runtime,
+            max_tokens=TITLE_MAX_TOKENS,
+            temperature=None,
+            timeout=timeout,
+            main_runtime=main_runtime,
             extra_body={"response_format": _TITLE_RESPONSE_FORMAT},
             # The module contract above promises thinking-disabled operation,
             # but nothing enforced it: with the aux default reasoning_effort
@@ -530,7 +615,9 @@ def generate_title(
             reasoning_config={"enabled": False},
         )
         message = response.choices[0].message
-        title = _clean_title(_extract_title_text(message.content or "") or _title_from_reasoning(message))
+        title = _clean_title(
+            _extract_title_text(message.content or "") or _title_from_reasoning(message)
+        )
         # Answer-shaped output guard: titling is a 3-7 word task, so a title with many words is a model that
         # ignored the task and answered the user's message instead ("I don't have context on X — that's not
         # something I recognize..."). Truncating would store half an assistant blob as the session title,
@@ -538,7 +625,11 @@ def generate_title(
         # (maybe_auto_title retries a placeholder title through the third exchange). Port of can1357/oh-my-pi#7306.
         if title is not None and len(title.split()) > _MAX_TITLE_WORDS:
             # Answer-shaped output: reject (not truncate) so the caller retries next exchange.
-            logger.debug("Rejecting answer-shaped title output (%d words > %d)", len(title.split()), _MAX_TITLE_WORDS)
+            logger.debug(
+                "Rejecting answer-shaped title output (%d words > %d)",
+                len(title.split()),
+                _MAX_TITLE_WORDS,
+            )
             return None
         # Example-echo guard: a title that parrots one of the prompt's own
         # examples back verbatim says nothing about the session — reject it so
@@ -587,9 +678,15 @@ def _persist_session_title(session_db, session_id, title, *, source, dedupe=True
         if auto_fn is not None:
             if auto_fn(session_id, candidate, source=source):
                 return candidate
-            logger.debug("Skipping %s title: a higher-authority title already holds session %s", source, session_id)
+            logger.debug(
+                "Skipping %s title: a higher-authority title already holds session %s",
+                source,
+                session_id,
+            )
             return None
-        legacy_fn = getattr(session_db, "set_auto_title_if_empty", None)  # older store without provenance
+        legacy_fn = getattr(
+            session_db, "set_auto_title_if_empty", None
+        )  # older store without provenance
         if legacy_fn is not None:
             return candidate if legacy_fn(session_id, candidate) else None
         if session_db.set_session_title(session_id, candidate) is False:
@@ -612,14 +709,23 @@ def apply_subagent_title(session_db, session_id: str, goal: str) -> Optional[str
     ``sessions.show_subagents`` lists them (#97202). Collisions get ``#N``. Never raises."""
     try:
         derived = derive_title(goal) if is_titleable_user_message(goal) else None
-        return _persist_session_title(session_db, session_id, f"Subagent: {derived}", source="derived") if derived else None
+        return (
+            _persist_session_title(
+                session_db, session_id, f"Subagent: {derived}", source="derived"
+            )
+            if derived
+            else None
+        )
     except Exception:
         logger.debug("Subagent title failed for %s", session_id, exc_info=True)
         return None
 
 
 def apply_instant_title(
-    session_db, session_id: str, user_message: str, title_callback: Optional[TitleCallback] = None,
+    session_db,
+    session_id: str,
+    user_message: str,
+    title_callback: Optional[TitleCallback] = None,
     title_preview: str | None = None,
 ) -> Optional[str]:
     """Write the derived title inline. Returns it, or None (no usable text, or a ``derived``+ title exists). Never raises.
@@ -629,8 +735,18 @@ def apply_instant_title(
     if not session_db or not session_id:
         return None
     try:
-        title = derive_title(user_message, title_preview) if is_titleable_user_message(user_message) else None
-        persisted = _persist_session_title(session_db, session_id, title, source="derived", dedupe=False) if title else None
+        title = (
+            derive_title(user_message, title_preview)
+            if is_titleable_user_message(user_message)
+            else None
+        )
+        persisted = (
+            _persist_session_title(
+                session_db, session_id, title, source="derived", dedupe=False
+            )
+            if title
+            else None
+        )
         if persisted:
             _notify_title(title_callback, persisted, "derived", "Instant-title")
         return persisted
@@ -654,12 +770,17 @@ def auto_title_session(
     exception escape (the threading excepthook would spray a traceback into the terminal); the canonical
     trigger is the post-``clawk update`` window where lazy imports read NEW source against OLD modules."""
     try:
-        if not session_db or not session_id or _has_upgraded_title(session_db, session_id):
+        if (
+            not session_db
+            or not session_id
+            or _has_upgraded_title(session_db, session_id)
+        ):
             return
         # This thread starts AFTER the turn's ambient context was reset; republish it so the call carries
         # the same Portal ``conversation=`` tag (root-of-lineage) and bills usage to this session.
         from agent.aux_accounting import set_accounting_context
         from agent.portal_tags import set_conversation_context
+
         conversation_id = session_id
         with suppress(Exception):
             conversation_id = session_db.get_conversation_root(session_id) or session_id
@@ -667,10 +788,16 @@ def auto_title_session(
         # Same for the accounting context, so the title call's token usage is recorded against this session
         # (task='title_generation', #23270).
         set_accounting_context(session_db, session_id)
-        title, source = generate_title(
-            user_message, failure_callback=failure_callback, main_runtime=main_runtime,
-            runtime_validator=runtime_validator, title_preview=title_preview,
-        ), "llm"
+        title, source = (
+            generate_title(
+                user_message,
+                failure_callback=failure_callback,
+                main_runtime=main_runtime,
+                runtime_validator=runtime_validator,
+                title_preview=title_preview,
+            ),
+            "llm",
+        )
         if title and _is_provisional_greeting_title(title):
             source = "derived"
         if not title:  # the inline attempt declined collisions; off the critical path the lineage scan is affordable
@@ -678,7 +805,9 @@ def auto_title_session(
         if not title:
             return
         try:
-            persisted = _persist_session_title(session_db, session_id, title, source=source)
+            persisted = _persist_session_title(
+                session_db, session_id, title, source=source
+            )
         except Exception as e:
             logger.debug("Failed to set auto-generated title: %s", e)
             return
@@ -687,7 +816,10 @@ def auto_title_session(
             _notify_title(title_callback, persisted, source, "Auto-title")
     except Exception as e:
         # WARNING so operators see it in agent.log; names the likely cause.
-        logger.warning("Auto-title failed (harmless; if this started after an update, restart the running Clawksis process): %s", e)
+        logger.warning(
+            "Auto-title failed (harmless; if this started after an update, restart the running Clawksis process): %s",
+            e,
+        )
         logger.debug("Auto-title traceback", exc_info=True)
         _report_failure(failure_callback, e, "Auto-title")
 
@@ -697,7 +829,9 @@ def _is_real_user_turn(message: Any) -> bool:
     if not isinstance(message, dict) or message.get("role") != "user":
         return False
     content = message.get("content")
-    return is_titleable_user_message(content if isinstance(content, str) else flatten_message_text(content))
+    return is_titleable_user_message(
+        content if isinstance(content, str) else flatten_message_text(content)
+    )
 
 
 def _session_is_untitled(session_db, session_id: str) -> bool:
@@ -719,6 +853,7 @@ def _kanban_task_title() -> Optional[str]:
     try:
         from clawk_cli import kanban_db, kanban_db_connect
         from clawk_state import SessionDB
+
         with kanban_db_connect.connect_closing() as conn:
             task = kanban_db.get_task(conn, task_id)
         title = " ".join((task.title or "").split()) if task is not None else ""
@@ -728,7 +863,11 @@ def _kanban_task_title() -> Optional[str]:
         if len(title) > cap:
             title = title[: cap - 1].rstrip() + "…"
     except Exception:
-        logger.debug("Kanban task %s unreadable; naming the session after its id", task_id, exc_info=True)
+        logger.debug(
+            "Kanban task %s unreadable; naming the session after its id",
+            task_id,
+            exc_info=True,
+        )
         title = ""
     return title or f"Kanban task {task_id}"
 
@@ -755,7 +894,9 @@ def maybe_auto_title(
     # name is still a placeholder (instant slice, or the model's greeting title for a bare "hi") that
     # the first substantive turn should replace. Untitled sessions always get another shot; a
     # placeholder gets turns 2-3, so a failing title model costs at most three calls, not one per turn.
-    user_msg_count = sum(1 for m in (conversation_history or []) if _is_real_user_turn(m))
+    user_msg_count = sum(
+        1 for m in (conversation_history or []) if _is_real_user_turn(m)
+    )
     if user_msg_count > 1 and (
         _has_upgraded_title(session_db, session_id)
         or (user_msg_count > 3 and not _session_is_untitled(session_db, session_id))
@@ -767,34 +908,54 @@ def maybe_auto_title(
         # only competes with the worker for capacity (#111166). Final (``llm``) authority: nothing
         # upgrades it later, and a manual ``/title`` still wins inside ``set_auto_title``.
         with suppress(Exception):
-            persisted = _persist_session_title(session_db, session_id, kanban_title, source="llm")
+            persisted = _persist_session_title(
+                session_db, session_id, kanban_title, source="llm"
+            )
             if persisted:
                 _notify_title(title_callback, persisted, "llm", "Kanban task title")
         return None
     if not is_titleable_user_message(user_message):
         return None
-    if not _auto_title_enabled():  # config read after the cheap guards so the file isn't touched every turn
+    if (
+        not _auto_title_enabled()
+    ):  # config read after the cheap guards so the file isn't touched every turn
         logger.debug("Auto-title skipped: auxiliary.title_generation.enabled=false")
         return None
-    apply_instant_title(session_db, session_id, user_message, title_callback, title_preview=title_preview)
+    apply_instant_title(
+        session_db,
+        session_id,
+        user_message,
+        title_callback,
+        title_preview=title_preview,
+    )
     if not _model_title_upgrade_enabled():
-        logger.debug("Instant title persisted; model upgrade disabled by auxiliary.title_generation.model_upgrade_enabled=false")
+        logger.debug(
+            "Instant title persisted; model upgrade disabled by auxiliary.title_generation.model_upgrade_enabled=false"
+        )
         return None
     # The thread must resolve auxiliary.title_generation (config, provider key, language) for the
     # profile whose turn this is: a bare Thread starts with an empty context and lands on the launch
     # profile under multiplex, titling X's session with the default profile's model and billing its key.
     from agent.memory_provider import spawn_context_thread
-    upgrade_kwargs = dict(failure_callback=failure_callback, main_runtime=main_runtime, title_callback=title_callback,
-                          runtime_validator=runtime_validator)
+
+    upgrade_kwargs = dict(
+        failure_callback=failure_callback,
+        main_runtime=main_runtime,
+        title_callback=title_callback,
+        runtime_validator=runtime_validator,
+    )
     if isinstance(title_preview, str) and title_preview.strip():
         upgrade_kwargs["title_preview"] = title_preview
     upgrade = spawn_context_thread(
-        auto_title_session, name="auto-title",
+        auto_title_session,
+        name="auto-title",
         args=(session_db, session_id, user_message),
         kwargs=upgrade_kwargs,
     )
     if title_upgrade_must_wait_for_turn(main_runtime):
-        logger.debug("Auto-title upgrade deferred past the turn: shares the self-hosted endpoint with the main request")
+        logger.debug(
+            "Auto-title upgrade deferred past the turn: shares the self-hosted endpoint with the main request"
+        )
         return upgrade
     start_title_upgrade(upgrade)
     return upgrade

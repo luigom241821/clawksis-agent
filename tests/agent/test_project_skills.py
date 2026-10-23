@@ -178,7 +178,10 @@ class TestNonInteractiveInheritance:
 
     def test_explicit_start_beats_env(self, project_env, monkeypatch, tmp_path):
         monkeypatch.setenv("TERMINAL_CWD", str(tmp_path))
-        assert su.find_project_root(start=project_env["repo"]) == project_env["repo"].resolve()
+        assert (
+            su.find_project_root(start=project_env["repo"])
+            == project_env["repo"].resolve()
+        )
 
 
 class TestQuarantine:

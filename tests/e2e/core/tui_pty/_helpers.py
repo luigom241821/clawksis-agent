@@ -65,11 +65,18 @@ BASE_CONFIG = (
 
 def require_tui() -> None:
     """Skip (or fail in CI, where the bundle is prebuilt) when the TUI cannot run."""
-    missing = [what for what, ok in (
-        ("tmux", shutil.which("tmux") is not None),
-        ("node", shutil.which("node") is not None),
-        ("ui-tui/dist/entry.js", (REPO_ROOT / "ui-tui" / "dist" / "entry.js").is_file()),
-    ) if not ok]
+    missing = [
+        what
+        for what, ok in (
+            ("tmux", shutil.which("tmux") is not None),
+            ("node", shutil.which("node") is not None),
+            (
+                "ui-tui/dist/entry.js",
+                (REPO_ROOT / "ui-tui" / "dist" / "entry.js").is_file(),
+            ),
+        )
+        if not ok
+    ]
     if not missing:
         return
     if os.environ.get("CLAWK_E2E_REQUIRE_TUI") == "1" and missing != ["tmux"]:
@@ -91,7 +98,15 @@ def private_tui_dir(root: Path) -> Path:
     dest.parent.mkdir(parents=True, exist_ok=True)
     for _ in range(20):
         shutil.copyfile(src, dest)
-        if subprocess.run(["node", "--check", str(dest)], capture_output=True, timeout=60, check=False).returncode == 0:
+        if (
+            subprocess.run(
+                ["node", "--check", str(dest)],
+                capture_output=True,
+                timeout=60,
+                check=False,
+            ).returncode
+            == 0
+        ):
             return dest.parent.parent
         time.sleep(0.5)  # caught a rebuild mid-write; take another copy
     raise AssertionError(f"{src} never parsed (a rebuild kept rewriting it?)")
@@ -119,13 +134,21 @@ def ledger(text: str, expected: Iterable[str], pattern: str) -> dict[str, list[s
     dup = [w for w in expected if counts[w] > 1]
     firsts = [w for w in dict.fromkeys(seen) if w in set(expected)]
     order = [w for w in expected if counts[w]]
-    return {"lost": lost, "dup": dup, "misordered": [] if firsts == order else firsts[:5]}
+    return {
+        "lost": lost,
+        "dup": dup,
+        "misordered": [] if firsts == order else firsts[:5],
+    }
 
 
 def ledger_problems(text: str, expected: Iterable[str], pattern: str) -> str:
     """'' when every expected token is present exactly once and in order, else a short report."""
     report = ledger(text, expected, pattern)
-    return "; ".join(f"{k}={v[:8]}{'…' if len(v) > 8 else ''} ({len(v)})" for k, v in report.items() if v)
+    return "; ".join(
+        f"{k}={v[:8]}{'…' if len(v) > 8 else ''} ({len(v)})"
+        for k, v in report.items()
+        if v
+    )
 
 
 class CellFailed(AssertionError):
@@ -158,14 +181,24 @@ class Cells:
         fails with a message matching ``pattern`` it XFAILs; once the fix lands it passes; any
         other failure (including every harness error) stays a failure."""
         if self.error is not None:
-            raise RuntimeError(f"scenario failed before its cells could be evaluated:\n{self.error}")
+            raise RuntimeError(
+                f"scenario failed before its cells could be evaluated:\n{self.error}"
+            )
         if name in self.errors:
-            raise RuntimeError(f"cell {name!r} could not be evaluated:\n{self.errors[name]}")
+            raise RuntimeError(
+                f"cell {name!r} could not be evaluated:\n{self.errors[name]}"
+            )
         if name not in self.results:
-            raise RuntimeError(f"cell {name!r} was never evaluated (scenario ended early)")
+            raise RuntimeError(
+                f"cell {name!r} was never evaluated (scenario ended early)"
+            )
         ok, detail = self.results[name]
         entry = (known or {}).get(name)
-        guard = known_failure(*entry, raises=CellFailed) if entry else contextlib.nullcontext()
+        guard = (
+            known_failure(*entry, raises=CellFailed)
+            if entry
+            else contextlib.nullcontext()
+        )
         with guard:
             if not ok:
                 raise CellFailed(f"[{name}] {detail}")
@@ -209,8 +242,10 @@ def layout_problem(rows: list[str], cols: int, tag: str, slack: int | None = 12)
         m = clean.match(r)
         if not m:
             return f"a {tag} paragraph row is not whole words at this width: {r!r}"
-        idx = [int(w[len(tag) + 1:]) for w in m.group(1).split(" ")]
-        if (seq and idx[0] != seq[-1] + 1) or idx != list(range(idx[0], idx[0] + len(idx))):
+        idx = [int(w[len(tag) + 1 :]) for w in m.group(1).split(" ")]
+        if (seq and idx[0] != seq[-1] + 1) or idx != list(
+            range(idx[0], idx[0] + len(idx))
+        ):
             return f"{tag} paragraph rows do not read on (after {tag}w{seq[-1] if seq else -1:03d}): {r!r}"
         seq += idx
     widest = max(display_width(r) for r in para)
@@ -222,10 +257,20 @@ def layout_problem(rows: list[str], cols: int, tag: str, slack: int | None = 12)
 class TmuxTui:
     """One ``clawk --tui`` in a private tmux server."""
 
-    def __init__(self, root: Path, base_url: str, *, cols: int = 120, rows: int = 50,
-                 extra_config: str = "", args: Iterable[str] = ("--yolo",), inline: bool = False,
-                 env_extra: dict[str, str] | None = None, write_home: bool = True,
-                 tui_dir: Path | None = None) -> None:
+    def __init__(
+        self,
+        root: Path,
+        base_url: str,
+        *,
+        cols: int = 120,
+        rows: int = 50,
+        extra_config: str = "",
+        args: Iterable[str] = ("--yolo",),
+        inline: bool = False,
+        env_extra: dict[str, str] | None = None,
+        write_home: bool = True,
+        tui_dir: Path | None = None,
+    ) -> None:
         self.root = root
         self.home = root / "home"
         self.clawk_home = self.home / ".clawksis"
@@ -238,32 +283,75 @@ class TmuxTui:
             sock = Path(self._sock_dir) / "s"
         self.sock = str(sock)
         if write_home:
-            write_clawk_home(self.clawk_home, base_url, extra_config=BASE_CONFIG + extra_config)
+            write_clawk_home(
+                self.clawk_home, base_url, extra_config=BASE_CONFIG + extra_config
+            )
         for sub in ("tmp", "work"):
             (root / sub).mkdir(parents=True, exist_ok=True)
         conf = root / "tmux.conf"
         conf.write_text(
             # window-size manual must be set after the session exists (tmux 3.3 dies on it here).
             "set -g history-limit 100000\nset -g status off\nset -g remain-on-exit on\n"
-            "set -g default-terminal tmux-256color\nset -g escape-time 10\n", encoding="utf-8")
-        env = {k: v for k, v in os.environ.items()
-               if not k.startswith(("CLAWK_", "TMUX", "OPENAI_", "OPENROUTER_", "ANTHROPIC_"))}
-        env.update(HOME=str(self.home), CLAWK_HOME=str(self.clawk_home), PYTHONPATH=str(REPO_ROOT),
-                   TMPDIR=str(root / "tmp"), LANG="C.UTF-8", LC_ALL="C.UTF-8", PYTHONUNBUFFERED="1",
-                   CLAWK_STATE_DB_GUARD_BYPASS="1", CLAWK_TUI_INLINE="1" if inline else "0",
-                   CLAWK_TUI_DIR=str(tui_dir or private_tui_dir(root)))
+            "set -g default-terminal tmux-256color\nset -g escape-time 10\n",
+            encoding="utf-8",
+        )
+        env = {
+            k: v
+            for k, v in os.environ.items()
+            if not k.startswith(
+                ("CLAWK_", "TMUX", "OPENAI_", "OPENROUTER_", "ANTHROPIC_")
+            )
+        }
+        env.update(
+            HOME=str(self.home),
+            CLAWK_HOME=str(self.clawk_home),
+            PYTHONPATH=str(REPO_ROOT),
+            TMPDIR=str(root / "tmp"),
+            LANG="C.UTF-8",
+            LC_ALL="C.UTF-8",
+            PYTHONUNBUFFERED="1",
+            CLAWK_STATE_DB_GUARD_BYPASS="1",
+            CLAWK_TUI_INLINE="1" if inline else "0",
+            CLAWK_TUI_DIR=str(tui_dir or private_tui_dir(root)),
+        )
         env.update(env_extra or {})
-        self._gateway_home = env["CLAWK_HOME"]  # env_extra may point several TUIs at one home
+        self._gateway_home = env[
+            "CLAWK_HOME"
+        ]  # env_extra may point several TUIs at one home
         argv = [sys.executable, "-m", "clawk_cli.main", "--tui", *args]
-        subprocess.run(["tmux", "-S", self.sock, "-f", str(conf), "new-session", "-d", "-s", "p",
-                        "-x", str(cols), "-y", str(rows), "-c", str(root / "work"), *argv],
-                       env=env, check=True, timeout=30)
+        subprocess.run(
+            [
+                "tmux",
+                "-S",
+                self.sock,
+                "-f",
+                str(conf),
+                "new-session",
+                "-d",
+                "-s",
+                "p",
+                "-x",
+                str(cols),
+                "-y",
+                str(rows),
+                "-c",
+                str(root / "work"),
+                *argv,
+            ],
+            env=env,
+            check=True,
+            timeout=30,
+        )
         self.tmux("set", "-g", "window-size", "manual")
         # Everything the pane prints, for failure reports (the screen is blank after exit).
         self._cols, self._rows = cols, rows
         self.transcript_path = root / "pty.log"
-        self.tmux("pipe-pane", "-t", "p", f"cat >> {shlex.quote(str(self.transcript_path))}")
-        self.pane_pid = int(self.tmux("display", "-p", "-t", "p", "#{pane_pid}").strip())
+        self.tmux(
+            "pipe-pane", "-t", "p", f"cat >> {shlex.quote(str(self.transcript_path))}"
+        )
+        self.pane_pid = int(
+            self.tmux("display", "-p", "-t", "p", "#{pane_pid}").strip()
+        )
         self.pane_tty = self.tmux("display", "-p", "-t", "p", "#{pane_tty}").strip()
         self.server_pid = int(self.tmux("display", "-p", "#{pid}").strip() or 0)
         self._zombie_since = self._reap_nudged = 0.0
@@ -274,8 +362,15 @@ class TmuxTui:
 
     def tmux_run(self, *args: str) -> subprocess.CompletedProcess:
         argv = ["tmux", "-S", self.sock, *args]
-        return subprocess.run(argv, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                              timeout=30, check=False)
+        return subprocess.run(
+            argv,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+            check=False,
+        )
 
     def tmux(self, *args: str) -> str:
         return self.tmux_run(*args).stdout
@@ -334,21 +429,36 @@ class TmuxTui:
         probe = text[-12:]
         before = self.text().count(probe)
         self.type(text)
-        poll(lambda: self.text().count(probe) > before or not self.alive(), timeout=timeout,
-             what=f"echo of {text!r}")
+        poll(
+            lambda: self.text().count(probe) > before or not self.alive(),
+            timeout=timeout,
+            what=f"echo of {text!r}",
+        )
         # Input pacing, not synchronization: text and Enter in one burst is a paste.
         time.sleep(0.4)
         self.key("Enter")
 
     # -- waiting ---------------------------------------------------------------------------------
 
-    def wait_for(self, needle: str | Callable[[str], bool], timeout: float = 60.0,
-                 *, history: bool = True) -> None:
+    def wait_for(
+        self,
+        needle: str | Callable[[str], bool],
+        timeout: float = 60.0,
+        *,
+        history: bool = True,
+    ) -> None:
         test = needle if callable(needle) else (lambda t: needle in t)
-        what = getattr(needle, "__name__", None) if callable(needle) else repr(needle[:50])
+        what = (
+            getattr(needle, "__name__", None) if callable(needle) else repr(needle[:50])
+        )
         try:
-            poll(lambda: (not self.alive()) or test("\n".join(self.rows(history=history))),
-                 timeout=timeout, what=f"{what} on screen")
+            poll(
+                lambda: (
+                    (not self.alive()) or test("\n".join(self.rows(history=history)))
+                ),
+                timeout=timeout,
+                what=f"{what} on screen",
+            )
         except AssertionError as exc:
             raise AssertionError(f"{exc}\n--- screen ---\n{self.dump()}") from None
         assert self.alive(), f"clawk exited while waiting for {what}\n{self.dump()}"
@@ -357,10 +467,12 @@ class TmuxTui:
         """A settled frame: unchanged for ``idle`` seconds, ignoring what ticks on its own while a
         card waits for the human (digits of clocks, braille spinners, the status bar's rotating
         verb)."""
+
         def frame() -> str:
             self.track()
             rows = [r for r in self.rows() if not _STATUS_BAR.search(r)]
             return _SPINNER.sub("#", _DIGITS.sub("#", "\n".join(rows)))
+
         state = {"frame": frame(), "since": time.monotonic()}
 
         def settled() -> bool:
@@ -368,6 +480,7 @@ class TmuxTui:
             if cur != state["frame"]:
                 state["frame"], state["since"] = cur, now
             return now - state["since"] >= idle
+
         try:
             poll(settled, timeout=timeout, what="a settled frame", interval=0.1)
         except AssertionError as exc:
@@ -391,14 +504,18 @@ class TmuxTui:
     def wait_raw(self, timeout: float = 120.0) -> None:
         """The Ink UI owns the terminal (raw mode): keys typed from now on reach the composer."""
         try:
-            poll(lambda: not self.alive() or self._raw_mode(), timeout=timeout,
-                 what="the TUI to take the terminal (raw mode)")
+            poll(
+                lambda: not self.alive() or self._raw_mode(),
+                timeout=timeout,
+                what="the TUI to take the terminal (raw mode)",
+            )
         except AssertionError as exc:
             raise AssertionError(f"{exc}\n{self.dump()}") from None
         state = self.pane_state()
         assert state.startswith("0 "), (
             f"clawk --tui exited during startup (pane_dead pid status={state!r}, "
-            f"tmux server {'up' if state else 'gone'})\n{self.dump()}")
+            f"tmux server {'up' if state else 'gone'})\n{self.dump()}"
+        )
 
     def wait_ready(self, timeout: float = 120.0) -> None:
         """Raw mode, the startup session is live (status bar ``ready`` -- the composer accepts
@@ -406,10 +523,15 @@ class TmuxTui:
         session and loses), and the frame has settled."""
         self.wait_raw(timeout)
         try:
-            poll(lambda: not self.alive() or _READY.search("\n".join(self.rows())), timeout=timeout,
-                 what="the startup session (status bar 'ready')")
+            poll(
+                lambda: not self.alive() or _READY.search("\n".join(self.rows())),
+                timeout=timeout,
+                what="the startup session (status bar 'ready')",
+            )
         except AssertionError as exc:
-            raise AssertionError(f"{exc} (status {self.status()!r})\n{self.dump()}") from None
+            raise AssertionError(
+                f"{exc} (status {self.status()!r})\n{self.dump()}"
+            ) from None
         assert self.alive(), f"clawk --tui exited during startup\n{self.dump()}"
         self.wait_quiet(1.5, timeout=timeout)
 
@@ -445,11 +567,17 @@ class TmuxTui:
         now = time.monotonic()
         self._zombie_since = self._zombie_since or now
         # tmux's own SIGCHLD normally lands within milliseconds; nudge only a zombie it left behind.
-        if (now - self._zombie_since >= 2.0 and now - self._reap_nudged >= 1.0 and self.server_pid
-                and "tmux" in cmdline(self.server_pid)):
+        if (
+            now - self._zombie_since >= 2.0
+            and now - self._reap_nudged >= 1.0
+            and self.server_pid
+            and "tmux" in cmdline(self.server_pid)
+        ):
             self._reap_nudged, self.reap_nudges = now, self.reap_nudges + 1
             with contextlib.suppress(ProcessLookupError):
-                os.kill(self.server_pid, signal.SIGCHLD)  # windows-footgun: ok — Linux-only suite
+                os.kill(
+                    self.server_pid, signal.SIGCHLD
+                )  # windows-footgun: ok — Linux-only suite
         return None
 
     def exit_problem(self, timeout: float = 60.0) -> str:
@@ -459,36 +587,58 @@ class TmuxTui:
         t0 = time.monotonic()
         self.submit("/exit")
         try:
-            status, sig = poll(self.reap_report, timeout=timeout, what="the TUI to exit")
+            status, sig = poll(
+                self.reap_report, timeout=timeout, what="the TUI to exit"
+            )
         except AssertionError:
-            return self.exit_diagnostics(f"/exit did not exit within {timeout:.0f}s", t0, before)
+            return self.exit_diagnostics(
+                f"/exit did not exit within {timeout:.0f}s", t0, before
+            )
+
         def members() -> list[int]:
-            return [p for p in self.seen | set(session_members(self.pane_pid)) if _alive(p)]
+            return [
+                p for p in self.seen | set(session_members(self.pane_pid)) if _alive(p)
+            ]
+
         try:
             poll(lambda: not members(), timeout=15, what="the pane session to empty")
         except AssertionError:
             left = [f"{p}: {cmdline(p)}" for p in members()]
-            return self.exit_diagnostics(f"processes left after /exit: {left}", t0, before)
+            return self.exit_diagnostics(
+                f"processes left after /exit: {left}", t0, before
+            )
         if status == "0" and not sig:
             return ""
-        return self.exit_diagnostics(f"/exit ended with exit status {status or '-'} signal {sig or '-'}",
-                                     t0, before)
+        return self.exit_diagnostics(
+            f"/exit ended with exit status {status or '-'} signal {sig or '-'}",
+            t0,
+            before,
+        )
 
-    def exit_diagnostics(self, problem: str, t0: float, before: str, tail: int = 40) -> str:
+    def exit_diagnostics(
+        self, problem: str, t0: float, before: str, tail: int = 40
+    ) -> str:
         """``problem`` plus what explains it: the raw tmux answer (rc/stderr), whether the pane
         process is still alive, the elapsed time, the frame before ``/exit`` and the last lines of
         the PTY transcript (the live screen is blank once the TUI left the alternate screen)."""
-        q = self.tmux_run("display", "-p", "-t", "p",
-                          "dead=#{pane_dead} status=#{pane_dead_status} signal=#{pane_dead_signal}")
+        q = self.tmux_run(
+            "display",
+            "-p",
+            "-t",
+            "p",
+            "dead=#{pane_dead} status=#{pane_dead_status} signal=#{pane_dead_signal}",
+        )
         proc = _proc_state(self.pane_pid)
-        return (f"{problem}\n"
-                f"elapsed since /exit: {time.monotonic() - t0:.1f}s\n"
-                f"tmux: rc={q.returncode} out={q.stdout.strip()!r} err={q.stderr.strip()!r}\n"
-                f"pane pid {self.pane_pid}: {proc}\n"
-                f"tmux server {self.server_pid}: {_status_fields(self.server_pid)} "
-                f"(SIGCHLD nudges sent: {self.reap_nudges})\n"
-                f"--- frame before /exit ---\n{before}\n"
-                f"--- last {tail} lines of the PTY transcript ---\n{self.transcript_tail(tail)}")
+        return (
+            f"{problem}\n"
+            f"elapsed since /exit: {time.monotonic() - t0:.1f}s\n"
+            f"tmux: rc={q.returncode} out={q.stdout.strip()!r} err={q.stderr.strip()!r}\n"
+            f"pane pid {self.pane_pid}: {proc}\n"
+            f"tmux server {self.server_pid}: {_status_fields(self.server_pid)} "
+            f"(SIGCHLD nudges sent: {self.reap_nudges})\n"
+            f"--- frame before /exit ---\n{before}\n"
+            f"--- last {tail} lines of the PTY transcript ---\n{self.transcript_tail(tail)}"
+        )
 
     def transcript_tail(self, n: int = 40) -> str:
         """Last ``n`` rows of everything the pane printed (tmux ``pipe-pane`` log, replayed
@@ -502,7 +652,10 @@ class TmuxTui:
         lines = screen.transcript()
         while lines and not lines[-1]:
             lines.pop()
-        return "\n".join(lines[-n:]) or f"(transcript: {len(raw)} bytes, nothing printable on the main screen)"
+        return (
+            "\n".join(lines[-n:])
+            or f"(transcript: {len(raw)} bytes, nothing printable on the main screen)"
+        )
 
     def close(self) -> list[str]:
         """Kill the tmux server and every process of the pane's session; return the survivors
@@ -515,7 +668,11 @@ class TmuxTui:
         survivors = []
         deadline = time.monotonic() + 10
         while time.monotonic() < deadline:
-            left = [p for p in (set(session_members(self.pane_pid)) | self.seen) if _alive(p)]
+            left = [
+                p
+                for p in (set(session_members(self.pane_pid)) | self.seen)
+                if _alive(p)
+            ]
             if not left:
                 break
             time.sleep(0.1)
@@ -523,7 +680,9 @@ class TmuxTui:
             if _alive(pid):
                 survivors.append(f"{pid}: {cmdline(pid)}")
                 try:
-                    os.kill(pid, signal.SIGKILL)  # windows-footgun: ok — Linux-only suite
+                    os.kill(
+                        pid, signal.SIGKILL
+                    )  # windows-footgun: ok — Linux-only suite
                 except (ProcessLookupError, PermissionError):
                     pass
         # The TUI's auto-spawned gateway daemon detaches from the pane's session: stop it too, so
@@ -531,8 +690,14 @@ class TmuxTui:
         with contextlib.suppress(OSError, ValueError, KeyError, ProcessLookupError):
             lock = json.loads(Path(self._gateway_home, "gateway.lock").read_text())
             if lock["clawk_home"] == self._gateway_home:
-                os.kill(int(lock["pid"]), signal.SIGTERM)  # windows-footgun: ok — Linux-only suite
-                poll(lambda: not _alive(int(lock["pid"])), timeout=15, what="sandbox gateway exit")
+                os.kill(
+                    int(lock["pid"]), signal.SIGTERM
+                )  # windows-footgun: ok — Linux-only suite
+                poll(
+                    lambda: not _alive(int(lock["pid"])),
+                    timeout=15,
+                    what="sandbox gateway exit",
+                )
         return survivors
 
     # -- persisted state -------------------------------------------------------------------------
@@ -551,17 +716,29 @@ class TmuxTui:
 
     def messages(self) -> list[tuple[str, str, str]]:
         """(session_id, role, content) for active user/assistant rows, in insertion order."""
-        return [(str(s), str(r), str(c or "")) for s, r, c in self.db_rows(
-            "SELECT session_id, role, content FROM messages "
-            "WHERE role IN ('user','assistant') AND active = 1 ORDER BY id")]
+        return [
+            (str(s), str(r), str(c or ""))
+            for s, r, c in self.db_rows(
+                "SELECT session_id, role, content FROM messages "
+                "WHERE role IN ('user','assistant') AND active = 1 ORDER BY id"
+            )
+        ]
 
     def wait_replies(self, n: int, timeout: float = 90.0) -> None:
         """Block until state.db holds ``n`` non-empty assistant rows (turn finished)."""
+
         def done() -> bool:
             return (not self.alive()) or sum(
-                1 for _s, r, c in self.messages() if r == "assistant" and c.strip()) >= n
+                1 for _s, r, c in self.messages() if r == "assistant" and c.strip()
+            ) >= n
+
         try:
-            poll(done, timeout=timeout, what=f"{n} assistant replies persisted", interval=0.1)
+            poll(
+                done,
+                timeout=timeout,
+                what=f"{n} assistant replies persisted",
+                interval=0.1,
+            )
         except AssertionError as exc:
             raise AssertionError(f"{exc}\n{self.dump()}") from None
         assert self.alive(), f"clawk exited mid-turn\n{self.dump()}"
@@ -570,22 +747,42 @@ class TmuxTui:
 def _proc_state(pid: int) -> str:
     """'gone (reaped)', or the /proc state letter (Z = zombie not yet reaped) and cmdline."""
     try:
-        state = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8").rsplit(")", 1)[1].split()[0]
+        state = (
+            Path(f"/proc/{pid}/stat")
+            .read_text(encoding="utf-8")
+            .rsplit(")", 1)[1]
+            .split()[0]
+        )
     except OSError:
         return "gone (reaped)"
-    return (f"state {state} ({'zombie, not reaped yet' if state == 'Z' else 'still running'}): {cmdline(pid)}\n"
-            f"  {_status_fields(pid)}\n  threads: {_threads(pid)}")
+    return (
+        f"state {state} ({'zombie, not reaped yet' if state == 'Z' else 'still running'}): {cmdline(pid)}\n"
+        f"  {_status_fields(pid)}\n  threads: {_threads(pid)}"
+    )
 
 
-def _status_fields(pid: int, keys: tuple[str, ...] = ("State", "PPid", "Threads", "SigPnd", "ShdPnd", "SigBlk",
-                                                      "SigIgn", "SigCgt")) -> str:
+def _status_fields(
+    pid: int,
+    keys: tuple[str, ...] = (
+        "State",
+        "PPid",
+        "Threads",
+        "SigPnd",
+        "ShdPnd",
+        "SigBlk",
+        "SigIgn",
+        "SigCgt",
+    ),
+) -> str:
     """Selected ``/proc/<pid>/status`` lines: why a process is not reaped (a zombie leader whose
     other threads are still exiting, or a parent with SIGCHLD blocked/pending)."""
     try:
         lines = Path(f"/proc/{pid}/status").read_text(encoding="utf-8").splitlines()
     except OSError as exc:
         return f"(no status: {exc})"
-    return " ".join(line.replace("\t", "") for line in lines if line.split(":", 1)[0] in keys)
+    return " ".join(
+        line.replace("\t", "") for line in lines if line.split(":", 1)[0] in keys
+    )
 
 
 def _threads(pid: int) -> str:
@@ -602,14 +799,21 @@ def _threads(pid: int) -> str:
             wchan = Path(f"{base}/wchan").read_text(encoding="utf-8") or "-"
         except OSError:
             continue
-        out.append(f"{tid}:{stat[stat.index('(') + 1:stat.rindex(')')]}:{stat.rsplit(')', 1)[1].split()[0]}:{wchan}")
+        out.append(
+            f"{tid}:{stat[stat.index('(') + 1 : stat.rindex(')')]}:{stat.rsplit(')', 1)[1].split()[0]}:{wchan}"
+        )
     return " ".join(out)
 
 
 def _proc_letter(pid: int) -> str:
     """The ``/proc/<pid>/stat`` state letter, '' once the process is reaped."""
     try:
-        return Path(f"/proc/{pid}/stat").read_text(encoding="utf-8").rsplit(")", 1)[1].split()[0]
+        return (
+            Path(f"/proc/{pid}/stat")
+            .read_text(encoding="utf-8")
+            .rsplit(")", 1)[1]
+            .split()[0]
+        )
     except OSError:
         return ""
 

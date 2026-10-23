@@ -55,8 +55,6 @@ def test_scoped_numbered_input_handles_navigation_keys(sequence, expected):
     assert result is getattr(_NumberedNavigation, expected.upper())
 
 
-
-
 def test_prompt_model_selection_requires_expensive_confirmation(monkeypatch, capsys):
     from clawk_cli.auth import _prompt_model_selection
 

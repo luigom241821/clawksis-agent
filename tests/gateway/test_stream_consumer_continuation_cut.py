@@ -22,7 +22,9 @@ def _make_consumer() -> GatewayStreamConsumer:
     adapter.REQUIRES_EDIT_FINALIZE = False
     adapter.MAX_MESSAGE_LENGTH = 4096
     adapter.send = AsyncMock(return_value=SimpleNamespace(success=True, message_id="m"))
-    adapter.edit_message = AsyncMock(return_value=SimpleNamespace(success=True, message_id="m"))
+    adapter.edit_message = AsyncMock(
+        return_value=SimpleNamespace(success=True, message_id="m")
+    )
     return GatewayStreamConsumer(
         adapter=adapter,
         chat_id="chat",
@@ -40,7 +42,8 @@ class TestContinuationWordBoundary:
         consumer._last_sent_text = "Правлю точними живими рядкам ▉"
         final_text = "Правлю точними живими рядками (мій попередній EN-паттерн…"
         assert consumer._continuation_text(final_text) == (
-            "рядками (мій попередній EN-паттерн…")
+            "рядками (мій попередній EN-паттерн…"
+        )
 
     def test_one_long_token_keeps_original_cut(self):
         # No boundary to back up to: the original cut stands rather than
@@ -54,4 +57,7 @@ class TestContinuationWordBoundary:
         # The preview ends exactly on a word; the continuation must not repeat it.
         consumer = _make_consumer()
         consumer._last_sent_text = "Here is the answer ▉"
-        assert consumer._continuation_text("Here is the answer to your question.") == "to your question."
+        assert (
+            consumer._continuation_text("Here is the answer to your question.")
+            == "to your question."
+        )

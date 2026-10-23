@@ -24,19 +24,29 @@ logger = logging.getLogger(__name__)
 # Module-level cache. The probe result is deterministic for the lifetime of the process — Python install
 # state doesn't change mid-session in any way that would matter for the system prompt. See #67964.
 _CACHE_LOCK = threading.Lock()
-_CACHED_LINE: Optional[str] = None  # None = not probed yet; "" = probed, nothing to say.
+_CACHED_LINE: Optional[str] = (
+    None  # None = not probed yet; "" = probed, nothing to say.
+)
 _PROBE_DONE = threading.Event()
 _PROBE_THREAD: Optional[threading.Thread] = None
-_PROBE_GEN = 0  # bumped on reset so a stale worker can't publish into the fresh generation
+_PROBE_GEN = (
+    0  # bumped on reset so a stale worker can't publish into the fresh generation
+)
 _PROBE_WAIT_TIMEOUT = 10.0  # healthy runtime ~0.5s
 _WAIT_ALREADY_TIMED_OUT = False  # after one full wait, later callers only peek
 
 # Keep in sync with agent/prompt_builder.py:_REMOTE_TERMINAL_BACKENDS.
 # Duplicated rather than imported to avoid a circular import.
-_REMOTE_BACKENDS = frozenset({
-    "docker", "modal", "daytona", "ssh", "managed_modal",
-    "vercel_sandbox",
-})
+_REMOTE_BACKENDS = frozenset(
+    {
+        "docker",
+        "modal",
+        "daytona",
+        "ssh",
+        "managed_modal",
+        "vercel_sandbox",
+    }
+)
 
 
 def _plugin_backend_is_remote(backend: str) -> bool:
@@ -63,15 +73,24 @@ def _run(cmd: list[str], timeout: float = 3.0) -> tuple[int, str, str]:
         with tempfile.TemporaryFile() as out_f, tempfile.TemporaryFile() as err_f:
             try:
                 result = subprocess.run(
-                    cmd, stdout=out_f, stderr=err_f, timeout=timeout, check=False,
+                    cmd,
+                    stdout=out_f,
+                    stderr=err_f,
+                    timeout=timeout,
+                    check=False,
                     # CREATE_NO_WINDOW (0 on POSIX): pythonw hosts would flash a console
-                    stdin=subprocess.DEVNULL, creationflags=windows_hide_flags())
+                    stdin=subprocess.DEVNULL,
+                    creationflags=windows_hide_flags(),
+                )
             except subprocess.TimeoutExpired:
                 return -1, "", "timeout"
             out_f.seek(0)
             err_f.seek(0)
-            return (result.returncode, out_f.read().decode("utf-8", "replace").strip(),
-                    err_f.read().decode("utf-8", "replace").strip())
+            return (
+                result.returncode,
+                out_f.read().decode("utf-8", "replace").strip(),
+                err_f.read().decode("utf-8", "replace").strip(),
+            )
     except FileNotFoundError:
         return -1, "", "not found"
     except OSError as exc:
@@ -100,8 +119,10 @@ def _has_pip_module(binary: str) -> bool:
 def _detect_pep668(binary: str) -> bool:
     """True when ``<binary>`` is PEP-668 externally-managed (``EXTERNALLY-MANAGED``
     marker next to the stdlib, as Debian/Ubuntu ship)."""
-    code = ("import os; print('yes' if os.path.exists(os.path.join("
-            "os.path.dirname(os.__file__), 'EXTERNALLY-MANAGED')) else 'no')")
+    code = (
+        "import os; print('yes' if os.path.exists(os.path.join("
+        "os.path.dirname(os.__file__), 'EXTERNALLY-MANAGED')) else 'no')"
+    )
     return (_py_out(binary, "-c", code) or "").strip() == "yes"
 
 
@@ -139,7 +160,12 @@ def _build_probe_line() -> str:
     has_uv = shutil.which("uv") is not None
 
     mismatch = bool(pip_bound_to and py3_ver and not py3_ver.startswith(pip_bound_to))
-    if py3_ver is not None and py3_has_pip and not mismatch and (not py3_pep668 or has_uv):
+    if (
+        py3_ver is not None
+        and py3_has_pip
+        and not mismatch
+        and (not py3_pep668 or has_uv)
+    ):
         return ""
     # Compact factual summary; ONE line so it doesn't dominate the prompt.
     bits: list[str] = []
@@ -156,7 +182,9 @@ def _build_probe_line() -> str:
         if mismatch:
             bits.append(f"pip→python{pip_bound_to} (mismatch)")
         elif not py3_has_pip:
-            bits.append(f"pip→python{pip_bound_to}")  # pip script works, `-m pip` doesn't
+            bits.append(
+                f"pip→python{pip_bound_to}"
+            )  # pip script works, `-m pip` doesn't
     elif not py3_has_pip:
         # (when `pip` is off PATH but `python3 -m pip` works, say nothing)
         bits.append("pip=missing")
@@ -198,7 +226,9 @@ def get_environment_probe_line(*, force_refresh: bool = False) -> str:
             _WAIT_ALREADY_TIMED_OUT = True
             logger.warning(
                 "env_probe did not finish within %.0fs; building the system "
-                "prompt without the Python toolchain line", _PROBE_WAIT_TIMEOUT)
+                "prompt without the Python toolchain line",
+                _PROBE_WAIT_TIMEOUT,
+            )
         return ""
     return _CACHED_LINE or ""
 
@@ -222,10 +252,13 @@ def _ensure_probe_started() -> None:
     """Start the probe worker if it isn't running and hasn't finished."""
     global _PROBE_THREAD
     with _CACHE_LOCK:
-        if _PROBE_DONE.is_set() or (_PROBE_THREAD is not None and _PROBE_THREAD.is_alive()):
+        if _PROBE_DONE.is_set() or (
+            _PROBE_THREAD is not None and _PROBE_THREAD.is_alive()
+        ):
             return
         _PROBE_THREAD = threading.Thread(
-            target=_probe_worker, args=(_PROBE_GEN,), name="env-probe", daemon=True)
+            target=_probe_worker, args=(_PROBE_GEN,), name="env-probe", daemon=True
+        )
         _PROBE_THREAD.start()
 
 

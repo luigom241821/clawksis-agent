@@ -114,6 +114,8 @@ def _orphan_fts_schema(path: Path) -> None:
         conn.execute("PRAGMA writable_schema=OFF")
     finally:
         conn.close()
+
+
 def _make_page_spanning_source(
     path: Path,
     message_count: int = 320,
@@ -237,8 +239,7 @@ def _btree_leaf_pages(path: Path, root_page: int) -> tuple[int, list[int]]:
             leaf_pages.append(page_number)
             return
         assert page_type in {0x02, 0x05}, (
-            f"unexpected table b-tree page type {page_type:#x} "
-            f"on page {page_number}"
+            f"unexpected table b-tree page type {page_type:#x} on page {page_number}"
         )
 
         pointer_array = header_offset + 12
@@ -481,14 +482,6 @@ def test_partial_recovery_keeps_messages_when_sessions_are_unsalvageable(
     assert report["installed"] is False
 
 
-
-
-
-
-
-
-
-
 def test_cli_allow_partial_salvages_rows_across_a_corrupt_leaf(
     tmp_path: Path,
 ) -> None:
@@ -578,9 +571,7 @@ def test_cli_allow_partial_salvages_rows_across_a_corrupt_leaf(
 
     conn = sqlite3.connect(str(output))
     try:
-        recovered_ids = {
-            int(row[0]) for row in conn.execute("SELECT id FROM messages")
-        }
+        recovered_ids = {int(row[0]) for row in conn.execute("SELECT id FROM messages")}
         assert 1 in recovered_ids
         assert message_count in recovered_ids
         assert len(recovered_ids) == copied_messages["copied_rows"]
@@ -637,7 +628,9 @@ def test_partial_recovery_clears_only_unreadable_system_prompt_refs(
     try:
         assert conn.execute("PRAGMA integrity_check").fetchall() == [("ok",)]
         assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
-        assert conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0] == session_count
+        assert (
+            conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0] == session_count
+        )
         retained = conn.execute(
             "SELECT COUNT(*) FROM sessions WHERE system_prompt_hash IS NOT NULL"
         ).fetchone()[0]
@@ -740,7 +733,9 @@ def test_recovery_copies_delivery_obligations(tmp_path: Path) -> None:
     ]
 
 
-def test_recovery_regenerates_rather_than_copies_derived_fts_meta(tmp_path: Path) -> None:
+def test_recovery_regenerates_rather_than_copies_derived_fts_meta(
+    tmp_path: Path,
+) -> None:
     """Derived FTS markers (including the retired tool high-water key) never reach the new DB."""
 
     source = tmp_path / "state.db"
@@ -756,7 +751,11 @@ def test_recovery_regenerates_rather_than_copies_derived_fts_meta(tmp_path: Path
     finally:
         conn.close()
     assert "goal:recovery-session-0" in keys
-    assert not keys & {"fts_rebuild_high_water", "fts_rebuild_progress", "fts_tool_full_content_high_water"}
+    assert not keys & {
+        "fts_rebuild_high_water",
+        "fts_rebuild_progress",
+        "fts_tool_full_content_high_water",
+    }
 
 
 def test_recovery_without_delivery_ledger_is_not_lossy(tmp_path: Path) -> None:
@@ -771,9 +770,6 @@ def test_recovery_without_delivery_ledger_is_not_lossy(tmp_path: Path) -> None:
     assert "delivery_obligations" not in report["verification"]["table_counts"]
     assert report["complete"] is True
     assert report["verified"] is True
-
-
-
 
 
 def test_recovery_flags_delivery_obligation_count_mismatch_as_loss(
@@ -795,8 +791,38 @@ def test_recovery_flags_delivery_obligation_count_mismatch_as_loss(
     _insert_delivery_obligations(
         source,
         [
-            ("ob-a", "k", "telegram", "chat-1", None, "a", "pending", 0, now, now, None, None, None, "default"),
-            ("ob-b", "k", "telegram", "chat-1", None, "b", "pending", 0, now, now, None, None, None, "default"),
+            (
+                "ob-a",
+                "k",
+                "telegram",
+                "chat-1",
+                None,
+                "a",
+                "pending",
+                0,
+                now,
+                now,
+                None,
+                None,
+                None,
+                "default",
+            ),
+            (
+                "ob-b",
+                "k",
+                "telegram",
+                "chat-1",
+                None,
+                "b",
+                "pending",
+                0,
+                now,
+                now,
+                None,
+                None,
+                None,
+                "default",
+            ),
         ],
     )
 
@@ -822,7 +848,9 @@ def test_recovery_flags_delivery_obligation_count_mismatch_as_loss(
     )
 
 
-def test_lost_and_found_direct_copy_creates_lazy_delivery_ledger(tmp_path: Path) -> None:
+def test_lost_and_found_direct_copy_creates_lazy_delivery_ledger(
+    tmp_path: Path,
+) -> None:
     """The .recover lane copies the ledger even though SessionDB never made it."""
 
     from clawk_cli.session_lost_and_found import _copy_direct_tables
@@ -832,8 +860,38 @@ def test_lost_and_found_direct_copy_creates_lazy_delivery_ledger(tmp_path: Path)
     _insert_delivery_obligations(
         recovered_source,
         [
-            ("ob-1", "k", "telegram", "chat-1", None, "one", "pending", 0, now, now, None, None, None, "default"),
-            ("ob-2", "k", "telegram", "chat-1", None, "two", "failed", 3, now, now, None, None, "boom", "default"),
+            (
+                "ob-1",
+                "k",
+                "telegram",
+                "chat-1",
+                None,
+                "one",
+                "pending",
+                0,
+                now,
+                now,
+                None,
+                None,
+                None,
+                "default",
+            ),
+            (
+                "ob-2",
+                "k",
+                "telegram",
+                "chat-1",
+                None,
+                "two",
+                "failed",
+                3,
+                now,
+                now,
+                None,
+                None,
+                "boom",
+                "default",
+            ),
         ],
     )
     output = tmp_path / "rebuilt.db"
@@ -854,7 +912,6 @@ def test_lost_and_found_direct_copy_creates_lazy_delivery_ledger(tmp_path: Path)
         lf_conn.close()
         dest.close()
     assert rows == [("ob-1", "pending", None), ("ob-2", "failed", "boom")]
-
 
 
 def test_partial_recovery_skips_phantom_row_rejected_by_destination_schema(
@@ -883,7 +940,9 @@ def test_partial_recovery_skips_phantom_row_rejected_by_destination_schema(
         )
         assert conn.execute("SELECT count(*) FROM sessions").fetchone()[0] == 4
 
-    report = recover_session_database(source, output, work_dir=tmp_path, chunk_size=16, allow_partial=True)
+    report = recover_session_database(
+        source, output, work_dir=tmp_path, chunk_size=16, allow_partial=True
+    )
 
     copied = report["copy"]["sessions"]
     assert copied["status"] == "partial"
@@ -894,9 +953,13 @@ def test_partial_recovery_skips_phantom_row_rejected_by_destination_schema(
     ]
     assert report["verified"] is True
     with sqlite3.connect(str(output)) as conn:
-        assert conn.execute("SELECT count(*) FROM sessions WHERE id = 'phantom'").fetchone()[0] == 0
+        assert (
+            conn.execute(
+                "SELECT count(*) FROM sessions WHERE id = 'phantom'"
+            ).fetchone()[0]
+            == 0
+        )
         assert conn.execute("SELECT count(*) FROM messages").fetchone()[0] == 21
-
 
 
 def test_salvage_bounds_damaged_low_edge_from_the_aggregate_not_the_int64_domain(
@@ -919,15 +982,24 @@ def test_salvage_bounds_damaged_low_edge_from_the_aggregate_not_the_int64_domain
     conn = sqlite3.connect(str(source))
     try:
         with pytest.raises(sqlite3.DatabaseError):
-            conn.execute('SELECT rowid FROM "sessions" ORDER BY rowid ASC LIMIT 1').fetchone()
+            conn.execute(
+                'SELECT rowid FROM "sessions" ORDER BY rowid ASC LIMIT 1'
+            ).fetchone()
         bounds = session_recovery._salvage_rowid_bounds(conn, "sessions")
         assert bounds["low"] == 1 and bounds["high"] == 180
         assert bounds["fallback_edges"] == []
 
         destination = sqlite3.connect(":memory:")
-        destination.execute("CREATE TABLE sessions (id TEXT PRIMARY KEY, source TEXT, started_at REAL)")
+        destination.execute(
+            "CREATE TABLE sessions (id TEXT PRIMARY KEY, source TEXT, started_at REAL)"
+        )
         result = session_recovery._copy_table_salvage(
-            conn, destination, "sessions", chunk_size=16, progress_cb=None, source_rows=180,
+            conn,
+            destination,
+            "sessions",
+            chunk_size=16,
+            progress_cb=None,
+            source_rows=180,
         )
     finally:
         conn.close()
@@ -945,15 +1017,37 @@ def test_recover_carries_message_identity_columns(tmp_path):
     try:
         db.create_session("s", "cli", model="m")
         db.append_message(session_id="s", role="user", content="q")
-        db._conn.execute("UPDATE messages SET absorbed_message_uids = ? WHERE content = 'q'", (json.dumps(["b" * 32]),))
+        db._conn.execute(
+            "UPDATE messages SET absorbed_message_uids = ? WHERE content = 'q'",
+            (json.dumps(["b" * 32]),),
+        )
         db._conn.commit()
         db.append_message(
-            session_id="s", role="assistant", content="",
-            tool_calls=[{"id": "call_1", "type": "function", "function": {"name": "t", "arguments": "{}"}}])
-        db.append_message(session_id="s", role="tool", content="r", tool_call_id="call_1", tool_name="t")
-        expected = [dict(r) for r in db._conn.execute(
-            "SELECT role, message_uid, absorbed_message_uids, tool_call_uids, tool_call_uid "
-            "FROM messages WHERE session_id = 's' ORDER BY id")]
+            session_id="s",
+            role="assistant",
+            content="",
+            tool_calls=[
+                {
+                    "id": "call_1",
+                    "type": "function",
+                    "function": {"name": "t", "arguments": "{}"},
+                }
+            ],
+        )
+        db.append_message(
+            session_id="s",
+            role="tool",
+            content="r",
+            tool_call_id="call_1",
+            tool_name="t",
+        )
+        expected = [
+            dict(r)
+            for r in db._conn.execute(
+                "SELECT role, message_uid, absorbed_message_uids, tool_call_uids, tool_call_uid "
+                "FROM messages WHERE session_id = 's' ORDER BY id"
+            )
+        ]
     finally:
         db.close()
     assert all(len(r["message_uid"]) == 32 for r in expected)
@@ -964,12 +1058,18 @@ def test_recover_carries_message_identity_columns(tmp_path):
 
     recovered = SessionDB(db_path=output)
     try:
-        got = [dict(r) for r in recovered._conn.execute(
-            "SELECT role, message_uid, absorbed_message_uids, tool_call_uids, tool_call_uid "
-            "FROM messages WHERE session_id = 's' ORDER BY id")]
+        got = [
+            dict(r)
+            for r in recovered._conn.execute(
+                "SELECT role, message_uid, absorbed_message_uids, tool_call_uids, tool_call_uid "
+                "FROM messages WHERE session_id = 's' ORDER BY id"
+            )
+        ]
         assert got == expected
         restored = recovered.get_messages_as_conversation("s")
-        assert [m["message_uid"] for m in restored] == [r["message_uid"] for r in expected]
+        assert [m["message_uid"] for m in restored] == [
+            r["message_uid"] for r in expected
+        ]
         assert restored[0]["_absorbed_message_uids"] == ["b" * 32]
         assert restored[2]["_tool_call_uid"] == restored[1]["_tool_call_uids"]["call_1"]
     finally:

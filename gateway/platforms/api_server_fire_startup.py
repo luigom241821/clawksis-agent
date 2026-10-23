@@ -24,10 +24,15 @@ _POLL_SECONDS = 0.1
 
 def runner_is_draining(runner: Any) -> bool:
     """Whether ``runner`` refuses new work (an in-process drain, or one an external supervisor started)."""
-    return bool(getattr(runner, "_draining", False) or getattr(runner, "_external_drain_active", False))
+    return bool(
+        getattr(runner, "_draining", False)
+        or getattr(runner, "_external_drain_active", False)
+    )
 
 
-async def refuse_until_started(runner: Any, job_id: str, *, received_at: float) -> Optional[web.Response]:
+async def refuse_until_started(
+    runner: Any, job_id: str, *, received_at: float
+) -> Optional[web.Response]:
     """None once ``runner`` has finished starting (``_running``: every platform connect attempted and its
     adapters published), or when there is no runner to ask (a self-hosted api_server, a test double).
     Otherwise the retryable 503, worded like the dashboard's own "gateway unreachable" so NAS classifies
@@ -48,12 +53,19 @@ async def refuse_until_started(runner: Any, job_id: str, *, received_at: float) 
             return None
         if draining or loop.time() >= deadline:
             return web.json_response(
-                {"error": "gateway unreachable; retry", "job_id": job_id}, status=503, headers={"Retry-After": "60"})
+                {"error": "gateway unreachable; retry", "job_id": job_id},
+                status=503,
+                headers={"Retry-After": "60"},
+            )
         await asyncio.sleep(_POLL_SECONDS)
 
 
 async def live_adapters_once_started(
-        api_adapter: Any, request: web.Request, job_id: str, *, received_at: float,
+    api_adapter: Any,
+    request: web.Request,
+    job_id: str,
+    *,
+    received_at: float,
 ) -> tuple[Optional[web.Response], Any]:
     """``(refusal, adapters)`` for a fire: the startup gate's retryable 503, else the gateway's LIVE adapters
     (parity with the built-in ticker: E2EE / relay-fronted platforms have no native credential, so without
@@ -62,6 +74,7 @@ async def live_adapters_once_started(
     if runner is None:
         with suppress(Exception):
             from gateway.run import _gateway_runner_ref
+
             runner = _gateway_runner_ref()
     refusal = await refuse_until_started(runner, job_id, received_at=received_at)
     return refusal, (getattr(runner, "adapters", None) or None)

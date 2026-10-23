@@ -10,6 +10,7 @@ These tests confirm:
   2. the temporary thumbnail is removed afterwards,
   3. ``[[as_document]]`` (force_document) keeps sending as a document with no geometry kwargs.
 """
+
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -19,25 +20,40 @@ from tools.send_message_senders import _telegram_send_one_media
 
 
 def _fake_bot(**methods) -> SimpleNamespace:
-    return SimpleNamespace(**{
-        name: AsyncMock(return_value=SimpleNamespace(message_id=1)) for name in methods
-    })
+    return SimpleNamespace(
+        **{
+            name: AsyncMock(return_value=SimpleNamespace(message_id=1))
+            for name in methods
+        }
+    )
 
 
 async def _send(bot, path, *, force_document=False):
     return await _telegram_send_one_media(
-        bot, "1", str(path), False, caption=None, parse_mode=None,
-        has_html=False, thread_kwargs={}, force_document=force_document)
+        bot,
+        "1",
+        str(path),
+        False,
+        caption=None,
+        parse_mode=None,
+        has_html=False,
+        thread_kwargs={},
+        force_document=force_document,
+    )
 
 
 @pytest.mark.asyncio
 async def test_video_send_carries_geometry_and_thumbnail(monkeypatch, tmp_path):
     thumb = tmp_path / "thumb.jpg"
     thumb.write_bytes(b"\xff\xd8\xff\xe0" + b"\x00" * 16)
-    monkeypatch.setattr("plugins.platforms.telegram.adapter._probe_video_geometry",
-                        lambda _p: {"width": 720, "height": 1280, "duration": 59})
-    monkeypatch.setattr("plugins.platforms.telegram.adapter._video_thumbnail_jpeg",
-                        lambda _p, _d: str(thumb))
+    monkeypatch.setattr(
+        "plugins.platforms.telegram.adapter._probe_video_geometry",
+        lambda _p: {"width": 720, "height": 1280, "duration": 59},
+    )
+    monkeypatch.setattr(
+        "plugins.platforms.telegram.adapter._video_thumbnail_jpeg",
+        lambda _p, _d: str(thumb),
+    )
     video = tmp_path / "clip.mp4"
     video.write_bytes(b"\x00" * 32)
     bot = _fake_bot(send_video=True)
@@ -53,7 +69,9 @@ async def test_video_send_carries_geometry_and_thumbnail(monkeypatch, tmp_path):
 
 @pytest.mark.asyncio
 async def test_video_send_without_probeable_file_still_sends(monkeypatch, tmp_path):
-    monkeypatch.setattr("plugins.platforms.telegram.adapter._probe_video_geometry", lambda _p: {})
+    monkeypatch.setattr(
+        "plugins.platforms.telegram.adapter._probe_video_geometry", lambda _p: {}
+    )
     video = tmp_path / "clip.mp4"
     video.write_bytes(b"\x00" * 16)
     bot = _fake_bot(send_video=True)

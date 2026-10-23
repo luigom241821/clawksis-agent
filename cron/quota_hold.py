@@ -58,7 +58,10 @@ def hold_seconds_from_failure(exc: BaseException) -> Optional[float]:
 
 def hold_active(job: dict[str, Any], now: Optional[datetime] = None) -> bool:
     """True while the job is parked inside a provider window (an expired marker is inert)."""
-    from cron.jobs import _instant_after, _parse_aware  # late: jobs imports this module's helpers
+    from cron.jobs import (
+        _instant_after,
+        _parse_aware,
+    )  # late: jobs imports this module's helpers
 
     until = _parse_aware(job.get(STATE_KEY)) if job.get(STATE_KEY) else None
     return until is not None and _instant_after(until, now or _clawk_now())
@@ -90,7 +93,9 @@ def _window_end(hold_seconds: float) -> datetime:
 
 
 def _recovery_worthwhile(
-    job: dict[str, Any], natural_next: datetime, window_end: datetime,
+    job: dict[str, Any],
+    natural_next: datetime,
+    window_end: datetime,
 ) -> bool:
     """One off-lattice recovery fire, and only for a sparse schedule.
 
@@ -110,7 +115,10 @@ def _recovery_worthwhile(
 
 
 def plan_hold(
-    job: dict[str, Any], hold_seconds: float, *, recover_consumed_fire: bool = False,
+    job: dict[str, Any],
+    hold_seconds: float,
+    *,
+    recover_consumed_fire: bool = False,
 ) -> bool:
     """Called under the jobs lock AFTER ``_advance_after_run`` computed the schedule's natural
     ``next_run_at`` for a failed run. A scheduled sparse cron may retry its consumed fire at the
@@ -126,14 +134,20 @@ def plan_hold(
     window_end = _window_end(hold_seconds)
     natural_next = _parse_aware(job.get("next_run_at"))
     blocked = natural_next is None or _instant_before(natural_next, window_end)
-    recover = (kind == "cron" and not blocked and recover_consumed_fire
-               and _recovery_worthwhile(job, natural_next, window_end))
+    recover = (
+        kind == "cron"
+        and not blocked
+        and recover_consumed_fire
+        and _recovery_worthwhile(job, natural_next, window_end)
+    )
     if not blocked and not recover:
         clear_state(job)
         return False
     if kind == "cron" and blocked:
         # Coalesce cron occurrences inside the closed window to the first legal instant after it.
-        parked = compute_next_run(schedule, window_end.isoformat()) or window_end.isoformat()
+        parked = (
+            compute_next_run(schedule, window_end.isoformat()) or window_end.isoformat()
+        )
     else:
         parked = window_end.isoformat()
     if recover:
@@ -146,13 +160,19 @@ def plan_hold(
     logger.warning(
         "Job '%s': provider usage window closed for %.0fs — holding fires until %s instead of "
         "failing on every cadence tick",
-        job.get("name", job.get("id", "?")), float(hold_seconds), parked)
+        job.get("name", job.get("id", "?")),
+        float(hold_seconds),
+        parked,
+    )
     return True
 
 
 def hold_notice(job: dict[str, Any], hold_seconds: Optional[float]) -> str:
     """Line appended to the ONE failure alert delivered on entering the hold, else ""."""
-    if not hold_seconds or (job.get("schedule") or {}).get("kind") not in {"cron", "interval"}:
+    if not hold_seconds or (job.get("schedule") or {}).get("kind") not in {
+        "cron",
+        "interval",
+    }:
         return ""
     window_end = _window_end(hold_seconds)
     hours = float(hold_seconds) / 3600.0

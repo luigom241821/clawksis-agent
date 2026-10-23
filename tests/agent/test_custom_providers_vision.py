@@ -22,6 +22,7 @@ class TestCustomProvidersVisionOverride:
     def test_custom_providers_supports_vision_true(self):
         """custom_providers entry with supports_vision=true → native routing."""
         from agent.image_routing import _supports_vision_override
+
         cfg = {
             "custom_providers": [
                 {
@@ -30,7 +31,7 @@ class TestCustomProvidersVisionOverride:
                         "mimoanth/mimo-v2.5": {
                             "supports_vision": True,
                         }
-                    }
+                    },
                 }
             ]
         }
@@ -39,19 +40,13 @@ class TestCustomProvidersVisionOverride:
         )
         assert result is True
 
-
-
-
-
-
     def test_custom_providers_empty_list(self):
         """Empty custom_providers list → no override."""
         from agent.image_routing import _supports_vision_override
+
         cfg = {"custom_providers": []}
         result = _supports_vision_override(cfg, "any", "any")
         assert result is None
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -62,32 +57,23 @@ class TestCustomProvidersVisionOverride:
 class TestDecideImageInputMode:
     """End-to-end: custom_providers overrides should produce 'native' mode."""
 
-
-
-
     def test_providers_dict_takes_precedence(self):
         """providers.<name>.models takes precedence over custom_providers."""
         from agent.image_routing import decide_image_input_mode
+
         cfg = {
             "providers": {
-                "my-provider": {
-                    "models": {
-                        "my-model": {"supports_vision": False}
-                    }
-                }
+                "my-provider": {"models": {"my-model": {"supports_vision": False}}}
             },
             "custom_providers": [
                 {
                     "name": "my-provider",
-                    "models": {
-                        "my-model": {"supports_vision": True}
-                    }
+                    "models": {"my-model": {"supports_vision": True}},
                 }
-            ]
+            ],
         }
         result = decide_image_input_mode("my-provider", "my-model", cfg)
         assert result == "text"
-
 
     def test_cli_named_provider_explicit_false_is_not_shadowed_by_default(self):
         """A selected false override wins even when the configured default is true."""
@@ -106,12 +92,15 @@ class TestDecideImageInputMode:
                 },
             ],
         }
-        assert decide_image_input_mode(
-            "custom",
-            "shared-model",
-            cfg,
-            requested_provider="text-only-provider",
-        ) == "text"
+        assert (
+            decide_image_input_mode(
+                "custom",
+                "shared-model",
+                cfg,
+                requested_provider="text-only-provider",
+            )
+            == "text"
+        )
 
     def test_runtime_provider_identity_does_not_leak_to_another_model(self):
         """Context identity is only evidence for its exact runtime provider/model."""

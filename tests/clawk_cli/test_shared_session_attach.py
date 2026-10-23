@@ -34,18 +34,28 @@ def test_discovery_uses_exact_profile_and_owner_handshake(tmp_path):
     thread.start()
     origin = f"http://127.0.0.1:{server.server_port}"
     lease, error = try_acquire_active_session(
-        session_id="same-id", surface="desktop", config={}, registry_home=home,
+        session_id="same-id",
+        surface="desktop",
+        config={},
+        registry_home=home,
         metadata={"live_session_id": "live", "shared_runtime_url": origin},
     )
     assert error is None
-    reply.update(session_id="same-id", lease_id=lease.lease_id,
-                 profile_home=str(home.resolve()), websocket_url=origin.replace("http:", "ws:") + "/api/ws?token=real-token")
+    reply.update(
+        session_id="same-id",
+        lease_id=lease.lease_id,
+        profile_home=str(home.resolve()),
+        websocket_url=origin.replace("http:", "ws:") + "/api/ws?token=real-token",
+    )
     try:
         assert discover_attach_url("same-id", registry_home=other) is None
         assert requests == []
-        assert discover_attach_url("same-id", registry_home=home) == reply["websocket_url"]
+        assert (
+            discover_attach_url("same-id", registry_home=home) == reply["websocket_url"]
+        )
         assert len(requests) == 1
         from clawk_cli.shared_session_attach import configure_tui_attachment
+
         env = {"CLAWK_TUI_GATEWAY_URL": "   "}
         configure_tui_attachment(env, "same-id", registry_home=home)
         assert env["CLAWK_TUI_GATEWAY_URL"] == reply["websocket_url"]
@@ -63,12 +73,17 @@ def test_discovery_uses_exact_profile_and_owner_handshake(tmp_path):
         thread.join()
 
 
-def test_discovery_refuses_unsupported_owner_without_releasing_lease(tmp_path, monkeypatch):
+def test_discovery_refuses_unsupported_owner_without_releasing_lease(
+    tmp_path, monkeypatch
+):
     from clawk_cli.shared_session_attach import discover_attach_url
     from clawk_cli.active_sessions import active_session_registry_snapshot
 
     lease, error = try_acquire_active_session(
-        session_id="old", surface="desktop", config={}, registry_home=tmp_path,
+        session_id="old",
+        surface="desktop",
+        config={},
+        registry_home=tmp_path,
     )
     assert error is None
     try:
@@ -77,11 +92,14 @@ def test_discovery_refuses_unsupported_owner_without_releasing_lease(tmp_path, m
         first, details = str(caught.value).splitlines()
         assert "clawk --resume old" in first
         assert details.startswith("Details: ")
-        assert active_session_registry_snapshot(tmp_path)[0]["lease_id"] == lease.lease_id
+        assert (
+            active_session_registry_snapshot(tmp_path)[0]["lease_id"] == lease.lease_id
+        )
         registry = tmp_path / "runtime" / "active_sessions.json"
         with monkeypatch.context() as patch:
             # Our own pid is never probed (#108005), so model a FOREIGN owner whose inspection is denied.
             from clawk_cli.active_sessions import _read_entries, _write_entries
+
             entries = _read_entries(registry)
             entries[0]["pid"] = os.getpid() + 2**22
             _write_entries(registry, entries)
@@ -89,6 +107,7 @@ def test_discovery_refuses_unsupported_owner_without_releasing_lease(tmp_path, m
 
             def denied(pid):
                 raise PermissionError("process inspection denied")
+
             patch.setattr("gateway.status._pid_exists", denied)
             with pytest.raises(RuntimeError, match="liveness is unknown"):
                 discover_attach_url("old", registry_home=tmp_path)
@@ -114,7 +133,10 @@ def test_discovery_failure_message_names_state_and_resume_path(tmp_path):
     thread.start()
     origin = f"http://127.0.0.1:{server.server_port}"
     lease, error = try_acquire_active_session(
-        session_id="held", surface="desktop", config={}, registry_home=tmp_path,
+        session_id="held",
+        surface="desktop",
+        config={},
+        registry_home=tmp_path,
         metadata={"live_session_id": "live", "shared_runtime_url": origin},
     )
     assert error is None

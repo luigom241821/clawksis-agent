@@ -13,10 +13,8 @@ from gateway.config import Platform, HomeChannel
 # Low-level helpers
 # ---------------------------------------------------------------------------
 
+
 class TestHashHelpers:
-
-
-
     def test_hash_chat_id_preserves_prefix(self):
         result = _hash_chat_id("telegram:12345")
         assert result.startswith("telegram:")
@@ -26,6 +24,7 @@ class TestHashHelpers:
 # ---------------------------------------------------------------------------
 # Integration: build_session_context_prompt
 # ---------------------------------------------------------------------------
+
 
 def _make_context(
     user_id="user-123",
@@ -67,7 +66,6 @@ class TestBuildSessionContextPromptRedaction:
         # user_id should not appear when user_name is present (name takes priority)
         assert "user-123" not in prompt
 
-
     def test_home_channel_id_preserved_without_redaction(self):
         hc = {
             Platform.TELEGRAM: HomeChannel(
@@ -85,7 +83,6 @@ class TestBuildSessionContextPromptRedaction:
         prompt1 = build_session_context_prompt(ctx, redact_pii=True)
         prompt2 = build_session_context_prompt(ctx, redact_pii=True)
         assert prompt1 == prompt2
-
 
     def test_discord_ids_not_redacted_even_with_flag(self):
         """Discord needs real IDs for <@user_id> mentions."""

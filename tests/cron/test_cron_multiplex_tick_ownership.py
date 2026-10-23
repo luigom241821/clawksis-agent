@@ -81,14 +81,18 @@ class TestPerProfileYieldGate:
         home_a, home_b = _two_homes(tmp_path)
         boot, disk = "a" * 40, "b" * 40
         monkeypatch.setattr(
-            sched, "_detect_gateway_code_skew", lambda: (boot[:10], disk[:10]))
+            sched, "_detect_gateway_code_skew", lambda: (boot[:10], disk[:10])
+        )
         monkeypatch.setattr(sched, "_current_gateway_code_sha", lambda: disk)
         # A live foreign gateway holding the runtime lock, serving profile A's home only.
         from gateway import status as gateway_status
 
         monkeypatch.setattr(gateway_status, "owns_gateway_runtime_lock", lambda: False)
         monkeypatch.setattr(
-            gateway_status, "is_gateway_runtime_lock_active", lambda lock_path=None: True)
+            gateway_status,
+            "is_gateway_runtime_lock_active",
+            lambda lock_path=None: True,
+        )
         monkeypatch.setattr(gateway_status, "get_running_pid", lambda **_k: 4321)
         monkeypatch.setattr(gateway_status, "runtime_status_is_stale", lambda _r: False)
         monkeypatch.setattr(
@@ -114,7 +118,8 @@ class TestPerProfileYieldGate:
         home_a, home_b = _two_homes(tmp_path)
         boot, disk = "a" * 40, "b" * 40
         monkeypatch.setattr(
-            sched, "_detect_gateway_code_skew", lambda: (boot[:10], disk[:10]))
+            sched, "_detect_gateway_code_skew", lambda: (boot[:10], disk[:10])
+        )
         monkeypatch.setattr(sched, "_current_gateway_code_sha", lambda: disk)
         from gateway import status as gateway_status
 

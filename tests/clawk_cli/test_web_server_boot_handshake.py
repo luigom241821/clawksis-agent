@@ -27,11 +27,14 @@ SLOW_SECONDS = 1  # represents the Defender worst-case (scaled down for CI speed
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_slow_drain(seconds: float):
     """Return a _resolve_restart_drain_timeout replacement that sleeps in thread."""
+
     def _slow():
         time.sleep(seconds)
         return 180.0
+
     return _slow
 
 
@@ -55,7 +58,9 @@ def test_lifespan_warmup_is_synchronous(monkeypatch):
 
     monkeypatch.setattr(web_server_mod, "_warm_gateway_module", _record_warm)
     with TestClient(web_server_mod.app, raise_server_exceptions=False):
-        assert warm.get("done") is True, "startup completed before the gateway warmup ran"
+        assert warm.get("done") is True, (
+            "startup completed before the gateway warmup ran"
+        )
         assert warm.get("on_loop_thread") is True, (
             "gateway warmup was moved off the lifespan (executor/background) — "
             "the socket now accepts probes while the GIL-holding import runs"
@@ -90,9 +95,13 @@ def test_hosted_room_recovery_cannot_block_or_abort_backend_startup(monkeypatch)
         raise RuntimeError("state.db is locked")
 
     monkeypatch.setattr(web_server_mod, "_warm_gateway_module", lambda: None)
-    monkeypatch.setattr(methods_groups, "stop_hosted_room_service", lambda **_kwargs: True)
+    monkeypatch.setattr(
+        methods_groups, "stop_hosted_room_service", lambda **_kwargs: True
+    )
     # Warm lifespan imports first so the bound below measures the recovery hook, not cold imports.
-    monkeypatch.setattr(methods_groups, "start_hosted_room_service", lambda *a, **k: None)
+    monkeypatch.setattr(
+        methods_groups, "start_hosted_room_service", lambda *a, **k: None
+    )
     with TestClient(web_server_mod.app, raise_server_exceptions=False):
         pass
     monkeypatch.setattr(methods_groups, "start_hosted_room_service", blocked_failure)
@@ -102,6 +111,7 @@ def test_hosted_room_recovery_cannot_block_or_abort_backend_startup(monkeypatch)
         assert started.wait(timeout=1.0)
         assert time.perf_counter() - before < 1.0
         release.set()
+
 
 def test_lifespan_shutdown_joins_statedb_reconcile_worker(monkeypatch):
     """The eager state.db reconcile runs off the startup path but never outlives
@@ -119,7 +129,9 @@ def test_lifespan_shutdown_joins_statedb_reconcile_worker(monkeypatch):
         finished.set()
 
     monkeypatch.setattr(web_server_mod, "_warm_gateway_module", lambda: None)
-    monkeypatch.setattr(web_server_mod, "_eager_reconcile_own_session_db", slow_reconcile)
+    monkeypatch.setattr(
+        web_server_mod, "_eager_reconcile_own_session_db", slow_reconcile
+    )
 
     before = time.perf_counter()
     with TestClient(web_server_mod.app, raise_server_exceptions=False):
@@ -127,12 +139,16 @@ def test_lifespan_shutdown_joins_statedb_reconcile_worker(monkeypatch):
         # Off the startup path: the socket is up long before the worker is done.
         assert time.perf_counter() - before < SLOW_SECONDS * 0.8
 
-    assert finished.is_set(), "lifespan shutdown returned before the reconcile worker finished"
+    assert finished.is_set(), (
+        "lifespan shutdown returned before the reconcile worker finished"
+    )
     assert not any(t.name == "statedb-eager-reconcile" for t in threading.enumerate())
+
 
 # ---------------------------------------------------------------------------
 # Test 2 — get_status run_in_executor keeps event loop free for other requests
 # ---------------------------------------------------------------------------
+
 
 def test_get_status_does_not_block_event_loop():
     """
@@ -152,6 +168,7 @@ def test_get_status_does_not_block_event_loop():
         ) as client:
             # Fire both requests concurrently
             async with asyncio.TaskGroup() as tg:
+
                 async def _status():
                     t = time.perf_counter()
                     r = await client.get("/api/status", timeout=SLOW_SECONDS + 5)
@@ -170,7 +187,9 @@ def test_get_status_does_not_block_event_loop():
                 tg.create_task(_version())
 
     with patch.object(
-        _web_server_lifecycle, "_resolve_restart_drain_timeout", _make_slow_drain(SLOW_SECONDS)
+        _web_server_lifecycle,
+        "_resolve_restart_drain_timeout",
+        _make_slow_drain(SLOW_SECONDS),
     ):
         asyncio.run(_run())
 
@@ -191,6 +210,7 @@ def test_get_status_does_not_block_event_loop():
     assert results.get("status_code") == 200, (
         f"/api/status returned {results.get('status_code')} instead of 200"
     )
+
 
 # ---------------------------------------------------------------------------
 # Test 3 — no orphan accumulation: concurrent probes all receive 200

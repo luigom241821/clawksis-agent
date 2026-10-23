@@ -77,11 +77,11 @@ _INLINE_CODE_RE = re.compile(r"`([^`]+)`")
 _LINK_RE = re.compile(r"(?<!!)\[([^\]]+)\]\(([^()\s]+(?:\([^()]*\)[^()\s]*)*)\)")
 # Slack mrkdwn autolink: <scheme:target> or <scheme:target|label>.
 # Mentions (<@U…>, <#C…>, <!here>) have no scheme: and stay as text.
-_SLACK_LINK_RE = re.compile(
-    r"<([a-zA-Z][a-zA-Z0-9+.\-]*:[^>|]+)(?:\|([^>]+))?>"
-)
+_SLACK_LINK_RE = re.compile(r"<([a-zA-Z][a-zA-Z0-9+.\-]*:[^>|]+)(?:\|([^>]+))?>")
 _BOLD_RE = re.compile(r"(?:\*\*|__)(.+?)(?:\*\*|__)")
-_ITALIC_RE = re.compile(r"(?<![\*_])(?:\*|_)(?![\*_\s])(.+?)(?<![\*_\s])(?:\*|_)(?![\*_])")
+_ITALIC_RE = re.compile(
+    r"(?<![\*_])(?:\*|_)(?![\*_\s])(.+?)(?<![\*_\s])(?:\*|_)(?![\*_])"
+)
 _STRIKE_RE = re.compile(r"~~(.+?)~~")
 
 
@@ -110,6 +110,7 @@ def _inline_elements(text: str) -> list[dict[str, Any]]:
             emit_text(m.group(1), {**style, "code": True})
             pos = m.end()
         _walk_links(s[pos:], style)
+
     def _emit_link(url: str, text: str, style: dict[str, bool]) -> None:
         link_el: dict[str, Any] = {"type": "link", "url": url, "text": text}
         if style:
@@ -134,11 +135,16 @@ def _inline_elements(text: str) -> list[dict[str, Any]]:
             _emit_link(url, m.group(2) or url, style)
             pos = m.end()
         _walk_emphasis(s[pos:], style)
+
     def _walk_emphasis(s: str, style: dict[str, bool]) -> None:
         if not s:
             return
         # Try bold, then strike, then italic, recursing into the inner span.
-        for rx, key in ((_BOLD_RE, "bold"), (_STRIKE_RE, "strike"), (_ITALIC_RE, "italic")):
+        for rx, key in (
+            (_BOLD_RE, "bold"),
+            (_STRIKE_RE, "strike"),
+            (_ITALIC_RE, "italic"),
+        ):
             m = rx.search(s)
             if m:
                 _walk_emphasis(s[: m.start()], style)
@@ -148,6 +154,7 @@ def _inline_elements(text: str) -> list[dict[str, Any]]:
                 _walk_emphasis(s[m.end() :], style)
                 return
         emit_text(s, dict(style) if style else None)
+
     walk(text, {})
     return elements or [{"type": "text", "text": text}]
 
@@ -180,7 +187,10 @@ def _header_block(text: str) -> Optional[Block]:
         return None
     if len(clean) > MAX_HEADER_TEXT:
         clean = clean[: MAX_HEADER_TEXT - 1] + "…"
-    return {"type": "header", "text": {"type": "plain_text", "text": clean, "emoji": True}}
+    return {
+        "type": "header",
+        "text": {"type": "plain_text", "text": clean, "emoji": True},
+    }
 
 
 def _divider_block() -> Block:
@@ -190,12 +200,16 @@ def _divider_block() -> Block:
 def _rich_text_block(kind: str, children: list[dict[str, Any]]) -> Block:
     """One ``rich_text`` block wrapping a single ``kind`` element (section/quote/preformatted)."""
     return {
-        "type": "rich_text", "elements": [{"type": kind, "elements": _nonempty_elements(children)}]}
+        "type": "rich_text",
+        "elements": [{"type": kind, "elements": _nonempty_elements(children)}],
+    }
 
 
 def _preformatted_block(text: str) -> Block:
     # rich_text_preformatted renders monospace; used for code fences + tables.
-    return _rich_text_block("rich_text_preformatted", [{"type": "text", "text": text.rstrip("\n")}])
+    return _rich_text_block(
+        "rich_text_preformatted", [{"type": "text", "text": text.rstrip("\n")}]
+    )
 
 
 def _quote_block(lines: list[str]) -> Block:
@@ -219,12 +233,19 @@ def _list_block(items: list[tuple[int, bool, str]]) -> Block:
         key = (indent, ordered)
         if key != cur_key:
             cur = {
-                "type": "rich_text_list", "style": "ordered" if ordered else "bullet",
-                "indent": indent, "elements": []}
+                "type": "rich_text_list",
+                "style": "ordered" if ordered else "bullet",
+                "indent": indent,
+                "elements": [],
+            }
             elements.append(cur)
             cur_key = key
         cur["elements"].append(
-            {"type": "rich_text_section", "elements": _nonempty_elements(_inline_elements(text))})
+            {
+                "type": "rich_text_section",
+                "elements": _nonempty_elements(_inline_elements(text)),
+            }
+        )
     return {"type": "rich_text", "elements": elements}
 
 
@@ -291,7 +312,9 @@ def _table_block(rows: list[str], sep_line: str) -> Optional[Block]:
     last_non_default = max((c for c, a in enumerate(padded) if a != "left"), default=-1)
     column_settings = [{"align": a} for a in padded[: last_non_default + 1]]
     block: Block = {
-        "type": "table", "rows": [[_rich_text_cell(cell) for cell in row] for row in parsed]}
+        "type": "table",
+        "rows": [[_rich_text_cell(cell) for cell in row] for row in parsed],
+    }
     if column_settings:
         block["column_settings"] = column_settings
     return block
@@ -354,6 +377,7 @@ def render_blocks(markdown: str, mrkdwn_fn=None) -> Optional[list[Block]]:
             # Split oversized sections on the 3000-char limit.
             for chunk in _split_text(rendered, MAX_SECTION_TEXT):
                 blocks.append(_section_block(chunk))
+
         while i < n:
             line = lines[i]
 
@@ -439,7 +463,9 @@ def render_blocks(markdown: str, mrkdwn_fn=None) -> Optional[list[Block]]:
                     elif om:
                         items.append((_indent_level(om.group(1)), True, om.group(3)))
                         i += 1
-                    elif lines[i].strip() and lines[i].startswith((" ", "\t")) and items:
+                    elif (
+                        lines[i].strip() and lines[i].startswith((" ", "\t")) and items
+                    ):
                         # continuation line of the previous item
                         indent, ordered, txt = items[-1]
                         items[-1] = (indent, ordered, txt + " " + lines[i].strip())
@@ -578,7 +604,10 @@ def sanitize_blocks(blocks: Optional[list[Block]]) -> Optional[list[Block]]:
                     continue
             elif btype == "header":
                 text_obj = block.get("text")
-                if not isinstance(text_obj, dict) or not (text_obj.get("text") or "").strip():
+                if (
+                    not isinstance(text_obj, dict)
+                    or not (text_obj.get("text") or "").strip()
+                ):
                     continue
                 clamped = _clamp_text_obj(text_obj, MAX_HEADER_TEXT)
                 if clamped is not text_obj:
@@ -590,9 +619,11 @@ def sanitize_blocks(blocks: Optional[list[Block]]) -> Optional[list[Block]]:
                     continue
                 clamped_els = [
                     _clamp_text_obj(el, MAX_SECTION_TEXT)
-                    if isinstance(el, dict) and el.get("type") in ("mrkdwn", "plain_text")
+                    if isinstance(el, dict)
+                    and el.get("type") in ("mrkdwn", "plain_text")
                     else el
-                    for el in elements]
+                    for el in elements
+                ]
                 if any(c is not e for c, e in zip(clamped_els, elements)):
                     block = dict(block)
                     block["elements"] = clamped_els
@@ -603,7 +634,9 @@ def sanitize_blocks(blocks: Optional[list[Block]]) -> Optional[list[Block]]:
                 if not block.get("rows"):
                     continue
                 settings = block.get("column_settings")
-                if isinstance(settings, list) and any(not isinstance(cs, dict) for cs in settings):
+                if isinstance(settings, list) and any(
+                    not isinstance(cs, dict) for cs in settings
+                ):
                     fixed = [cs if isinstance(cs, dict) else {} for cs in settings]
                     while fixed and not fixed[-1]:
                         fixed.pop()

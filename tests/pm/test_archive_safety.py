@@ -60,7 +60,6 @@ def _add_file(
     zf.writestr(info, data)
 
 
-
 class TestPathTraversal:
     def test_zip_entries_cannot_escape_the_destination(self, tmp_path):
         archive = tmp_path / "slip.zip"
@@ -256,7 +255,9 @@ class TestTransientHolds:
     def instant_backoff(self, monkeypatch):
         from pm import filesystem
 
-        monkeypatch.setattr(filesystem, "_HELD_RETRY_DELAYS", (0,) * len(filesystem._HELD_RETRY_DELAYS))
+        monkeypatch.setattr(
+            filesystem, "_HELD_RETRY_DELAYS", (0,) * len(filesystem._HELD_RETRY_DELAYS)
+        )
 
     def _held_rename(self, monkeypatch, error: OSError, failures: float):
         calls = []
@@ -274,16 +275,28 @@ class TestTransientHolds:
 
     def test_the_hoist_waits_out_a_scanner_hold(self, tmp_path, monkeypatch):
         dest = tmp_path / "dest"
-        extract(_tar(tmp_path / "wrapped.tar.gz", {"pkg/bin/tool": b"x", "pkg/README.md": b"docs"}), dest)
-        calls = self._held_rename(monkeypatch, PermissionError(13, "Access is denied"), failures=2)
+        extract(
+            _tar(
+                tmp_path / "wrapped.tar.gz",
+                {"pkg/bin/tool": b"x", "pkg/README.md": b"docs"},
+            ),
+            dest,
+        )
+        calls = self._held_rename(
+            monkeypatch, PermissionError(13, "Access is denied"), failures=2
+        )
 
         flatten_single_dir(dest)
 
         assert len(calls) == 3
         assert (dest / "bin" / "tool").is_file() and (dest / "README.md").is_file()
 
-    @pytest.mark.parametrize("error", [PermissionError(13, "Access is denied"), OSError(18, "cross-device")])
-    def test_a_refusal_waiting_cannot_fix_still_raises(self, tmp_path, monkeypatch, error):
+    @pytest.mark.parametrize(
+        "error", [PermissionError(13, "Access is denied"), OSError(18, "cross-device")]
+    )
+    def test_a_refusal_waiting_cannot_fix_still_raises(
+        self, tmp_path, monkeypatch, error
+    ):
         dest = tmp_path / "dest"
         extract(_tar(tmp_path / "wrapped.tar.gz", {"pkg/bin/tool": b"x"}), dest)
         calls = self._held_rename(monkeypatch, error, failures=float("inf"))
@@ -292,7 +305,9 @@ class TestTransientHolds:
             flatten_single_dir(dest)
         from pm import filesystem
 
-        assert len(calls) == (1 if error.errno == 18 else len(filesystem._HELD_RETRY_DELAYS) + 1)
+        assert len(calls) == (
+            1 if error.errno == 18 else len(filesystem._HELD_RETRY_DELAYS) + 1
+        )
 
 
 class TestStoreIsolation:

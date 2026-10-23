@@ -81,7 +81,9 @@ def test_codex_stream_wire_error_event_surfaces_stream_error_event():
 
     class _ErrorCreateStream:
         def __iter__(self_inner):
-            yield SimpleNamespace(type="error", message=provider_message, code="forbidden")
+            yield SimpleNamespace(
+                type="error", message=provider_message, code="forbidden"
+            )
 
         def close(self_inner):
             pass
@@ -107,8 +109,6 @@ def test_codex_stream_wire_error_event_surfaces_stream_error_event():
 # frames collapsed to the generic "stream emitted error event" placeholder
 # and the error classifier never saw the provider's real code/message.
 # ---------------------------------------------------------------------------
-
-
 
 
 def test_codex_stream_wire_error_event_nested_envelope_attr_style():
@@ -145,16 +145,6 @@ def test_codex_stream_wire_error_event_nested_envelope_attr_style():
     assert excinfo.value.code == "rate_limit_exceeded"
 
 
-
-
-
-
-
-
-
-
-
-
 # ---------------------------------------------------------------------------
 # Fix B: friendly entitlement message
 # ---------------------------------------------------------------------------
@@ -183,16 +173,6 @@ def test_summarize_api_error_decorates_xai_entitlement_403():
     # A remediation hint is appended, including the provider-switch escape hatch.
     assert len(summary) > len(str(error))
     assert "/model" in summary
-
-
-
-
-
-
-
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -226,10 +206,6 @@ def test_classify_api_error_stream_event_grok_subscription_is_auth():
     assert result.reason == FailoverReason.auth
     assert result.retryable is False
     assert result.should_fallback is True
-
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -295,16 +271,11 @@ def test_codex_reasoning_replay_includes_encrypted_content_for_xai():
 
     # And the assistant's visible text must still be present alongside it.
     assistant_items = [
-        it for it in items
+        it
+        for it in items
         if it.get("role") == "assistant" or it.get("type") == "message"
     ]
     assert assistant_items, "assistant message must still be present"
-
-
-
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -344,8 +315,6 @@ def test_is_entitlement_failure_false_for_status_other_than_401_403():
     assert not AIAgent._is_entitlement_failure(body, 200)
 
 
-
-
 def test_recover_with_credential_pool_skips_refresh_on_entitlement_403():
     """The recovery path must NOT call pool.try_refresh_current() on entitlement 403.
 
@@ -377,7 +346,7 @@ def test_recover_with_credential_pool_skips_refresh_on_entitlement_403():
     error_context = {
         "reason": "The caller does not have permission to execute the specified operation",
         "message": "You have either run out of available resources or do not have an "
-                   "active Grok subscription. Manage at https://grok.com",
+        "active Grok subscription. Manage at https://grok.com",
     }
 
     recovered, _retried_429 = agent._recover_with_credential_pool(
@@ -388,7 +357,9 @@ def test_recover_with_credential_pool_skips_refresh_on_entitlement_403():
     )
 
     assert recovered is False, "Entitlement 403 must surface, not silently recover"
-    assert refresh_calls["n"] == 0, "try_refresh_current must NOT be called on entitlement 403"
+    assert refresh_calls["n"] == 0, (
+        "try_refresh_current must NOT be called on entitlement 403"
+    )
 
 
 def test_recover_with_credential_pool_rotates_on_xai_spending_limit_403():
@@ -460,10 +431,6 @@ def test_recover_with_credential_pool_rotates_on_xai_spending_limit_403():
     agent._swap_credential.assert_called_once_with(next_entry)
 
 
-
-
-
-
 # ---------------------------------------------------------------------------
 # Fix D-bis: bad-credentials 403 must NOT be classified as entitlement (#29344)
 #
@@ -479,31 +446,9 @@ def test_recover_with_credential_pool_rotates_on_xai_spending_limit_403():
 # ---------------------------------------------------------------------------
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # ---------------------------------------------------------------------------
 # Fix E: grok-4.3 context length must be 1M, not 256K
 # ---------------------------------------------------------------------------
-
-
-
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -519,7 +464,9 @@ def test_recover_with_credential_pool_rotates_on_xai_spending_limit_403():
 # ---------------------------------------------------------------------------
 
 
-def _stamped_assistant_msg(issuer_kind, *, text="hi", encrypted="enc_blob", rs_id="rs_001"):
+def _stamped_assistant_msg(
+    issuer_kind, *, text="hi", encrypted="enc_blob", rs_id="rs_001"
+):
     return {
         "role": "assistant",
         "content": text,
@@ -533,10 +480,6 @@ def _stamped_assistant_msg(issuer_kind, *, text="hi", encrypted="enc_blob", rs_i
             }
         ],
     }
-
-
-
-
 
 
 def test_unstamped_reasoning_is_replayed_for_backwards_compat():
@@ -562,9 +505,7 @@ def test_unstamped_reasoning_is_replayed_for_backwards_compat():
         {"role": "user", "content": "next"},
     ]
 
-    items = _chat_messages_to_responses_input(
-        msgs, current_issuer_kind="codex_backend"
-    )
+    items = _chat_messages_to_responses_input(msgs, current_issuer_kind="codex_backend")
     reasoning = [it for it in items if it.get("type") == "reasoning"]
     assert len(reasoning) == 1
     assert reasoning[0]["encrypted_content"] == "legacy_blob"
@@ -591,7 +532,9 @@ def test_normalize_codex_response_stamps_issuer_on_reasoning():
         content=[SimpleNamespace(type="output_text", text="ok")],
         id="msg_1",
     )
-    response = SimpleNamespace(output=[reasoning_item, message_item], status="completed")
+    response = SimpleNamespace(
+        output=[reasoning_item, message_item], status="completed"
+    )
 
     msg, _ = _normalize_codex_response(response, issuer_kind="xai_responses")
     assert msg.codex_reasoning_items and len(msg.codex_reasoning_items) == 1

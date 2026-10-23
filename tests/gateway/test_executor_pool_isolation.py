@@ -44,7 +44,9 @@ async def _abandon_housekeeping(runner, count, timeout):
     async def one():
         try:
             await asyncio.wait_for(
-                runner._run_housekeeping_in_executor(runner._cleanup_agent_resources, object()),
+                runner._run_housekeeping_in_executor(
+                    runner._cleanup_agent_resources, object()
+                ),
                 timeout=timeout,
             )
         except TimeoutError:
@@ -98,7 +100,9 @@ def test_shutdown_stops_the_housekeeping_pool():
         wedge.set()
 
     assert live == 1, f"wedged housekeeping worker not reported as live (got {live})"
-    assert elapsed < 5, f"drain deadline not honoured for the housekeeping pool ({elapsed:.2f}s)"
+    assert elapsed < 5, (
+        f"drain deadline not honoured for the housekeeping pool ({elapsed:.2f}s)"
+    )
     assert hk._shutdown, "housekeeping pool was left running at shutdown"
     assert runner._housekeeping_executor is None
     with pytest.raises(RuntimeError):

@@ -44,8 +44,12 @@ def _make_codex_agent(
     (tmp_path / "config.yaml").write_text("{}\n", encoding="utf-8")
     # Every test here reasons about the built-in TTFB defaults; a developer shell override
     # must not leak in (tests that need an override setenv it after this).
-    for name in ("CLAWK_CODEX_TTFB_TIMEOUT_SECONDS", "CLAWK_CODEX_TTFB_MAX_SECONDS",
-                 "CLAWK_CODEX_TTFB_DISABLE_ABOVE_TOKENS", "CLAWK_CODEX_TTFB_STRICT"):
+    for name in (
+        "CLAWK_CODEX_TTFB_TIMEOUT_SECONDS",
+        "CLAWK_CODEX_TTFB_MAX_SECONDS",
+        "CLAWK_CODEX_TTFB_DISABLE_ABOVE_TOKENS",
+        "CLAWK_CODEX_TTFB_STRICT",
+    ):
         monkeypatch.delenv(name, raising=False)
     from run_agent import AIAgent
 
@@ -114,8 +118,12 @@ def test_local_endpoint_ttfb_default_uses_local_stale_ceiling(tmp_path, monkeypa
     from agent import chat_completion_helpers as h
 
     monkeypatch.setenv("CLAWK_LOCAL_STREAM_STALE_TIMEOUT", "600")
-    local = _make_codex_agent(tmp_path, monkeypatch, provider="custom", base_url="http://127.0.0.1:11434/v1")
-    hosted = _make_codex_agent(tmp_path, monkeypatch, provider="custom", base_url="https://api.example.com/v1")
+    local = _make_codex_agent(
+        tmp_path, monkeypatch, provider="custom", base_url="http://127.0.0.1:11434/v1"
+    )
+    hosted = _make_codex_agent(
+        tmp_path, monkeypatch, provider="custom", base_url="https://api.example.com/v1"
+    )
     kwargs = {"model": "qwen3-27b", "input": "hi"}
 
     assert h._resolve_nonstream_watchdogs(local, kwargs).ttfb_timeout == 600.0
@@ -127,10 +135,17 @@ def test_local_endpoint_ttfb_explicit_env_still_wins(tmp_path, monkeypatch):
     from agent import chat_completion_helpers as h
 
     monkeypatch.setenv("CLAWK_LOCAL_STREAM_STALE_TIMEOUT", "600")
-    local = _make_codex_agent(tmp_path, monkeypatch, provider="custom", base_url="http://127.0.0.1:11434/v1")
+    local = _make_codex_agent(
+        tmp_path, monkeypatch, provider="custom", base_url="http://127.0.0.1:11434/v1"
+    )
     monkeypatch.setenv("CLAWK_CODEX_TTFB_TIMEOUT_SECONDS", "45")
 
-    assert h._resolve_nonstream_watchdogs(local, {"model": "qwen3-27b", "input": "hi"}).ttfb_timeout == 45.0
+    assert (
+        h._resolve_nonstream_watchdogs(
+            local, {"model": "qwen3-27b", "input": "hi"}
+        ).ttfb_timeout
+        == 45.0
+    )
 
 
 def test_ttfb_includes_silent_hang_hint_for_gpt_5_5(tmp_path, monkeypatch):
@@ -144,15 +159,19 @@ def test_ttfb_includes_silent_hang_hint_for_gpt_5_5(tmp_path, monkeypatch):
     closes: list = []
     statuses: list[str] = []
     dummy_client = SimpleNamespace()
-    monkeypatch.setattr(agent, "_create_request_openai_client", lambda **k: dummy_client)
+    monkeypatch.setattr(
+        agent, "_create_request_openai_client", lambda **k: dummy_client
+    )
     monkeypatch.setattr(agent, "_buffer_status", lambda msg: statuses.append(msg))
     monkeypatch.setattr(agent, "_emit_status", lambda msg: statuses.append(msg))
     monkeypatch.setattr(
-        agent, "_abort_request_openai_client",
+        agent,
+        "_abort_request_openai_client",
         lambda c, reason=None: closes.append(reason),
     )
     monkeypatch.setattr(
-        agent, "_close_request_openai_client",
+        agent,
+        "_close_request_openai_client",
         lambda c, reason=None: closes.append(reason),
     )
 
@@ -160,7 +179,11 @@ def test_ttfb_includes_silent_hang_hint_for_gpt_5_5(tmp_path, monkeypatch):
 
     def fake_hang(api_kwargs, client=None, on_first_delta=None):
         deadline = time.time() + 30
-        while time.time() < deadline and not stop["flag"] and not agent._interrupt_requested:
+        while (
+            time.time() < deadline
+            and not stop["flag"]
+            and not agent._interrupt_requested
+        ):
             time.sleep(0.02)
         raise RuntimeError("connection closed")
 
@@ -200,7 +223,9 @@ def test_ttfb_installs_and_retires_the_codex_request_token(tmp_path, monkeypatch
     closes: list = []
     seen = {"token_while_running": None}
     dummy_client = SimpleNamespace()
-    monkeypatch.setattr(agent, "_create_request_openai_client", lambda **k: dummy_client)
+    monkeypatch.setattr(
+        agent, "_create_request_openai_client", lambda **k: dummy_client
+    )
     monkeypatch.setattr(
         agent,
         "_abort_request_openai_client",
@@ -238,10 +263,6 @@ def test_ttfb_installs_and_retires_the_codex_request_token(tmp_path, monkeypatch
     assert getattr(agent, "_active_codex_stream_request_token", None) is None
 
 
-
-
-
-
 def test_ttfb_does_not_kill_when_events_flow(tmp_path, monkeypatch):
     """Once a stream event has arrived, a generation that runs past the TTFB
     cutoff is NOT killed by the watchdog — it completes normally."""
@@ -252,13 +273,17 @@ def test_ttfb_does_not_kill_when_events_flow(tmp_path, monkeypatch):
 
     closes: list = []
     dummy_client = SimpleNamespace()
-    monkeypatch.setattr(agent, "_create_request_openai_client", lambda **k: dummy_client)
     monkeypatch.setattr(
-        agent, "_abort_request_openai_client",
+        agent, "_create_request_openai_client", lambda **k: dummy_client
+    )
+    monkeypatch.setattr(
+        agent,
+        "_abort_request_openai_client",
         lambda c, reason=None: closes.append(reason),
     )
     monkeypatch.setattr(
-        agent, "_close_request_openai_client",
+        agent,
+        "_close_request_openai_client",
         lambda c, reason=None: closes.append(reason),
     )
 
@@ -286,15 +311,64 @@ def test_ttfb_does_not_kill_when_events_flow(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize(
-    ("provider", "base_url", "input_chars", "idle_env", "idle_enabled", "requires_progress"),
+    (
+        "provider",
+        "base_url",
+        "input_chars",
+        "idle_env",
+        "idle_enabled",
+        "requires_progress",
+    ),
     [
-        ("openai-codex", "https://chatgpt.com/backend-api/codex", 40_004, None, True, True),
-        ("openai-codex", "https://chatgpt.com/backend-api/codex", 40_004, "2", True, False),
-        ("openai-codex", "https://chatgpt.com/backend-api/codex", 40_000, None, True, False),
+        (
+            "openai-codex",
+            "https://chatgpt.com/backend-api/codex",
+            40_004,
+            None,
+            True,
+            True,
+        ),
+        (
+            "openai-codex",
+            "https://chatgpt.com/backend-api/codex",
+            40_004,
+            "2",
+            True,
+            False,
+        ),
+        (
+            "openai-codex",
+            "https://chatgpt.com/backend-api/codex",
+            40_000,
+            None,
+            True,
+            False,
+        ),
         ("xai-oauth", "https://api.x.ai/v1", 40_004, None, True, False),
-        ("openai-codex", "https://chatgpt.com/backend-api/codex", 40_004, "", True, True),
-        ("openai-codex", "https://chatgpt.com/backend-api/codex", 40_004, "invalid", True, True),
-        ("openai-codex", "https://chatgpt.com/backend-api/codex", 40_004, "0", False, False),
+        (
+            "openai-codex",
+            "https://chatgpt.com/backend-api/codex",
+            40_004,
+            "",
+            True,
+            True,
+        ),
+        (
+            "openai-codex",
+            "https://chatgpt.com/backend-api/codex",
+            40_004,
+            "invalid",
+            True,
+            True,
+        ),
+        (
+            "openai-codex",
+            "https://chatgpt.com/backend-api/codex",
+            40_004,
+            "0",
+            False,
+            False,
+        ),
     ],
 )
 def test_idle_phase_policy_is_narrow_and_preserves_operator_overrides(
@@ -333,21 +407,33 @@ def test_lifecycle_event_does_not_restart_first_progress_deadline():
     from agent import chat_completion_wait_notice as wn
 
     deadline = wn.codex_watchdog_deadline(
-        stale_timeout=900.0, ttfb_enabled=True, ttfb_timeout=300.0,
-        last_event_ts=280.0, last_progress_ts=None, retry_started_ts=None,
-        call_start=100.0, idle_enabled=True, idle_timeout=120.0,
-        idle_requires_progress=True, progress_timeout=300.0, elapsed=250.0,
+        stale_timeout=900.0,
+        ttfb_enabled=True,
+        ttfb_timeout=300.0,
+        last_event_ts=280.0,
+        last_progress_ts=None,
+        retry_started_ts=None,
+        call_start=100.0,
+        idle_enabled=True,
+        idle_timeout=120.0,
+        idle_requires_progress=True,
+        progress_timeout=300.0,
+        elapsed=250.0,
     )
 
     assert deadline == ("first progress", 50.0)
 
 
-def test_large_codex_lifecycle_only_stream_hits_attempt_progress_budget(tmp_path, monkeypatch):
+def test_large_codex_lifecycle_only_stream_hits_attempt_progress_budget(
+    tmp_path, monkeypatch
+):
     """Lifecycle events may change phase diagnostics, but cannot buy another full grace period."""
     from agent import chat_completion_helpers as h
 
     agent = _make_codex_agent(tmp_path, monkeypatch)
-    _shorten_implicit_idle_watchdog(monkeypatch, h, ttfb_timeout=0.9, progress_timeout=0.9)
+    _shorten_implicit_idle_watchdog(
+        monkeypatch, h, ttfb_timeout=0.9, progress_timeout=0.9
+    )
     closes = []
 
     def stream_attempt():
@@ -398,14 +484,18 @@ def test_event_stale_phase_is_scoped_to_physical_stream_attempt(
             )
             return
         if mode == "retry_no_event" and attempts["count"] == 2:
-            while getattr(agent, "_active_codex_stream_request_token", None) is not None:
+            while (
+                getattr(agent, "_active_codex_stream_request_token", None) is not None
+            ):
                 time.sleep(0.02)
             raise RuntimeError("retired zero-event retry")
         if mode == "retry_gap" and attempts["count"] == 2:
             yield SimpleNamespace(type="response.created")
             yield SimpleNamespace(type="response.in_progress")
             time.sleep(3.0)
-            yield SimpleNamespace(type="response.reasoning_text.delta", delta="retry step")
+            yield SimpleNamespace(
+                type="response.reasoning_text.delta", delta="retry step"
+            )
             yield SimpleNamespace(type="response.output_text.delta", delta="done")
             yield SimpleNamespace(
                 type="response.completed",
@@ -415,7 +505,9 @@ def test_event_stale_phase_is_scoped_to_physical_stream_attempt(
 
         yield SimpleNamespace(type="response.created")
         if mode != "retry_no_event":
-            yield SimpleNamespace(type="response.reasoning_text.delta", delta="first step")
+            yield SimpleNamespace(
+                type="response.reasoning_text.delta", delta="first step"
+            )
         if mode in {"retry_gap", "retry_no_event"}:
             raise ConnectionError("retry physical stream")
         while getattr(agent, "_active_codex_stream_request_token", None) is not None:
@@ -431,7 +523,9 @@ def test_event_stale_phase_is_scoped_to_physical_stream_attempt(
         assert response.output_text == "done"
         assert attempts["count"] == (1 if mode == "initial_gap" else 2)
     else:
-        error_match = "no parsed stream event" if mode == "retry_no_event" else "no SSE events"
+        error_match = (
+            "no parsed stream event" if mode == "retry_no_event" else "no SSE events"
+        )
         with pytest.raises(TimeoutError, match=error_match):
             h.interruptible_api_call(
                 agent, {"model": "gpt-5.6-sol", "input": "x" * 40_004}
@@ -470,10 +564,6 @@ def test_wait_notice_omits_reconnect_when_all_deadlines_are_non_finite(
     )
 
     assert recovery is None
-
-
-
-
 
 
 def test_moa_heartbeat_survives_infinite_stale_timeout(monkeypatch):
@@ -587,14 +677,6 @@ def test_wait_notice_formatting_error_does_not_abort_request(monkeypatch):
     assert result is response
 
 
-
-
-
-
-
-
-
-
 def test_large_codex_request_hard_ceiling_reclaims_silent_stall(tmp_path, monkeypatch):
     """#64507 regression: a large Codex request (TTFB watchdog disabled by the
     size gate, stale floor *raised*) that never emits a parsed event must still
@@ -613,13 +695,17 @@ def test_large_codex_request_hard_ceiling_reclaims_silent_stall(tmp_path, monkey
 
     closes: list = []
     dummy_client = SimpleNamespace()
-    monkeypatch.setattr(agent, "_create_request_openai_client", lambda **k: dummy_client)
     monkeypatch.setattr(
-        agent, "_abort_request_openai_client",
+        agent, "_create_request_openai_client", lambda **k: dummy_client
+    )
+    monkeypatch.setattr(
+        agent,
+        "_abort_request_openai_client",
         lambda c, reason=None: closes.append(reason),
     )
     monkeypatch.setattr(
-        agent, "_close_request_openai_client",
+        agent,
+        "_close_request_openai_client",
         lambda c, reason=None: closes.append(reason),
     )
 
@@ -628,7 +714,11 @@ def test_large_codex_request_hard_ceiling_reclaims_silent_stall(tmp_path, monkey
     def fake_hang(api_kwargs, client=None, on_first_delta=None):
         # No event marker AND no event ever: the exact issue-64507 stall.
         deadline = time.time() + 120
-        while time.time() < deadline and not stop["flag"] and not agent._interrupt_requested:
+        while (
+            time.time() < deadline
+            and not stop["flag"]
+            and not agent._interrupt_requested
+        ):
             time.sleep(0.02)
         raise RuntimeError("connection closed")
 
@@ -656,10 +746,14 @@ def test_large_request_keeps_scaled_ttfb_instead_of_recapping(tmp_path, monkeypa
     from agent import chat_completion_helpers as h
 
     agent = _make_codex_agent(tmp_path, monkeypatch)
-    agent.reasoning_config = {"enabled": False}  # no effort floor: isolate the cap interaction
+    agent.reasoning_config = {
+        "enabled": False
+    }  # no effort floor: isolate the cap interaction
 
     huge_input = "x" * 440_000  # ~110k estimated tokens → largest idle bucket
-    wd = h._resolve_nonstream_watchdogs(agent, {"model": "gpt-5.5", "input": huge_input})
+    wd = h._resolve_nonstream_watchdogs(
+        agent, {"model": "gpt-5.5", "input": huge_input}
+    )
 
     assert wd.est_tokens > 100_000, f"fixture too small: ~{wd.est_tokens} tokens"
     assert wd.ttfb_enabled
@@ -676,6 +770,8 @@ def test_explicit_ttfb_max_seconds_still_caps(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_CODEX_TTFB_MAX_SECONDS", "90")
 
     huge_input = "x" * 440_000
-    wd = h._resolve_nonstream_watchdogs(agent, {"model": "gpt-5.5", "input": huge_input})
+    wd = h._resolve_nonstream_watchdogs(
+        agent, {"model": "gpt-5.5", "input": huge_input}
+    )
 
     assert wd.ttfb_timeout == 90.0, f"explicit cap ignored: {wd.ttfb_timeout}"

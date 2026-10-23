@@ -17,14 +17,23 @@ from tests.e2e.core.cli_tmux import _classic
 
 _REPO = Path(__file__).resolve().parents[2]
 _TMUX_SUITES = sorted(
-    [*(_REPO / "tests" / "e2e" / "core" / "cli_tmux").glob("test_*.py"),
-     _REPO / "tests" / "e2e" / "core" / "providers" / "test_native_vertex_cli_background.py"]
+    [
+        *(_REPO / "tests" / "e2e" / "core" / "cli_tmux").glob("test_*.py"),
+        _REPO
+        / "tests"
+        / "e2e"
+        / "core"
+        / "providers"
+        / "test_native_vertex_cli_background.py",
+    ]
 )
 _BARE_SKIP = re.compile(r"skipif\(\s*shutil\.which\(\s*[\"']tmux[\"']\s*\)")
 
 
 def _no_tmux(monkeypatch, *, ci: str | None, require: str | None) -> None:
-    monkeypatch.setattr(_classic.shutil, "which", lambda name: None if name == "tmux" else "/bin/x")
+    monkeypatch.setattr(
+        _classic.shutil, "which", lambda name: None if name == "tmux" else "/bin/x"
+    )
     for name, value in (("CI", ci), ("CLAWK_E2E_REQUIRE_TUI", require)):
         if value is None:
             monkeypatch.delenv(name, raising=False)
@@ -47,16 +56,28 @@ def test_missing_tmux_skips_outside_the_ci_e2e_lane(monkeypatch, ci, require):
 
 def test_every_tmux_suite_uses_the_gate_instead_of_a_bare_skip():
     assert len(_TMUX_SUITES) >= 4, _TMUX_SUITES
-    bare = [str(p.relative_to(_REPO)) for p in _TMUX_SUITES if _BARE_SKIP.search(p.read_text(encoding="utf-8"))]
+    bare = [
+        str(p.relative_to(_REPO))
+        for p in _TMUX_SUITES
+        if _BARE_SKIP.search(p.read_text(encoding="utf-8"))
+    ]
     assert not bare, f"skip over zero coverage in the e2e lane: {bare}"
-    ungated = [str(p.relative_to(_REPO)) for p in _TMUX_SUITES if "require_tmux()" not in p.read_text(encoding="utf-8")]
+    ungated = [
+        str(p.relative_to(_REPO))
+        for p in _TMUX_SUITES
+        if "require_tmux()" not in p.read_text(encoding="utf-8")
+    ]
     assert not ungated, ungated
 
 
 def test_the_e2e_job_requires_tmux():
     yaml = pytest.importorskip("clawk_yaml")
-    job = yaml.safe_load((_REPO / ".github" / "workflows" / "tests.yml").read_text(encoding="utf-8"))["jobs"]["e2e"]
+    job = yaml.safe_load(
+        (_REPO / ".github" / "workflows" / "tests.yml").read_text(encoding="utf-8")
+    )["jobs"]["e2e"]
     run_step = next(s for s in job["steps"] if s.get("name") == "Run e2e tests")
     assert run_step["env"]["CLAWK_E2E_REQUIRE_TUI"] == "1"
-    assert any("tmux" in s.get("run", "") and "tmux -V" in s.get("run", "") for s in job["steps"]), \
-        "the e2e job must install/verify tmux before the tmux suites run"
+    assert any(
+        "tmux" in s.get("run", "") and "tmux -V" in s.get("run", "")
+        for s in job["steps"]
+    ), "the e2e job must install/verify tmux before the tmux suites run"

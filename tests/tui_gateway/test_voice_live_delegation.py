@@ -60,13 +60,30 @@ class TestSessionCreation:
             captured["url"] = req.full_url
             captured["auth"] = req.get_header("Authorization")
             captured["body"] = json.loads(req.data)
-            return _Resp(json.dumps({"session": {"id": "live_x"}, "transport": {"type": "webrtc", "sdp": "answer"}}).encode())
+            return _Resp(
+                json.dumps(
+                    {
+                        "session": {"id": "live_x"},
+                        "transport": {"type": "webrtc", "sdp": "answer"},
+                    }
+                ).encode()
+            )
 
         monkeypatch.setattr(voice_live.urllib.request, "urlopen", fake_urlopen)
-        monkeypatch.setattr(voice_live, "_live_section", lambda voice=None: {"voice": "willow", "instructions": "Speak Spanish."})
-        monkeypatch.setattr(voice_live, "_resolve_credentials", lambda live: ("sk-test", "https://api.example/v1"))
+        monkeypatch.setattr(
+            voice_live,
+            "_live_section",
+            lambda voice=None: {"voice": "willow", "instructions": "Speak Spanish."},
+        )
+        monkeypatch.setattr(
+            voice_live,
+            "_resolve_credentials",
+            lambda live: ("sk-test", "https://api.example/v1"),
+        )
 
-        result = voice_live.create_webrtc_session("v=0 offer", history=[{"type": "message", "role": "user", "content": []}])
+        result = voice_live.create_webrtc_session(
+            "v=0 offer", history=[{"type": "message", "role": "user", "content": []}]
+        )
 
         assert result["transport"]["sdp"] == "answer"
         assert captured["url"] == "https://api.example/v1/live/sessions"
@@ -80,8 +97,16 @@ class TestSessionCreation:
         assert "sk-test" not in json.dumps(result)
 
     def test_missing_key_refuses_before_any_network(self, monkeypatch):
-        monkeypatch.setattr(voice_live, "_resolve_credentials", lambda live: ("", voice_live.DEFAULT_LIVE_BASE_URL))
-        monkeypatch.setattr(voice_live.urllib.request, "urlopen", lambda *a, **k: pytest.fail("must not call the vendor"))
+        monkeypatch.setattr(
+            voice_live,
+            "_resolve_credentials",
+            lambda live: ("", voice_live.DEFAULT_LIVE_BASE_URL),
+        )
+        monkeypatch.setattr(
+            voice_live.urllib.request,
+            "urlopen",
+            lambda *a, **k: pytest.fail("must not call the vendor"),
+        )
 
         with pytest.raises(ValueError):
             voice_live.create_webrtc_session("v=0 offer")
@@ -99,8 +124,15 @@ class TestVoiceLiveTurnNote:
     def test_live_surface_recorded_and_noted_with_spoken_context(self, busy_session):
         """The persisted row is the user's words; the transcript window reaches the model only."""
         server._methods["prompt.submit"](
-            "r1", {"session_id": "sid", "text": "what's the weather", "queued": True, "surface": "voice-live",
-                   "voice_context": "Voice assistant: Hi\nUser: what's the weather"})
+            "r1",
+            {
+                "session_id": "sid",
+                "text": "what's the weather",
+                "queued": True,
+                "surface": "voice-live",
+                "voice_context": "Voice assistant: Hi\nUser: what's the weather",
+            },
+        )
 
         assert busy_session["client_surface"] == "voice-live"
         note = server._hud_surface_note(busy_session)
@@ -109,14 +141,26 @@ class TestVoiceLiveTurnNote:
 
     def test_voice_context_ignored_off_the_live_surface(self, busy_session):
         server._methods["prompt.submit"](
-            "r1", {"session_id": "sid", "text": "x", "queued": True, "voice_context": "User: smuggled"})
+            "r1",
+            {
+                "session_id": "sid",
+                "text": "x",
+                "queued": True,
+                "voice_context": "User: smuggled",
+            },
+        )
 
         assert busy_session["voice_live_context"] == ""
         assert server._hud_surface_note(busy_session) == ""
 
     def test_plain_window_submit_clears_the_live_surface(self, busy_session):
-        server._methods["prompt.submit"]("r1", {"session_id": "sid", "text": "x", "queued": True, "surface": "voice-live"})
-        server._methods["prompt.submit"]("r2", {"session_id": "sid", "text": "y", "queued": True})
+        server._methods["prompt.submit"](
+            "r1",
+            {"session_id": "sid", "text": "x", "queued": True, "surface": "voice-live"},
+        )
+        server._methods["prompt.submit"](
+            "r2", {"session_id": "sid", "text": "y", "queued": True}
+        )
 
         assert busy_session["client_surface"] == ""
         assert server._hud_surface_note(busy_session) == ""

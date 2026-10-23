@@ -25,6 +25,7 @@ This file drives the REAL `tick()` and asserts the fix's contract:
        (cron.inflight.forced_release) and the job re-fires — no gateway
        restart, no force-run needed — and 2 consecutive auto-fires work.
 """
+
 from __future__ import annotations
 
 import sys
@@ -49,6 +50,7 @@ def cron_env(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
     import cron.jobs as jobs_mod
+
     monkeypatch.setattr(jobs_mod, "CLAWK_DIR", clawk_home)
     monkeypatch.setattr(jobs_mod, "CRON_DIR", clawk_home / "cron")
     monkeypatch.setattr(jobs_mod, "JOBS_FILE", clawk_home / "cron" / "jobs.json")
@@ -61,7 +63,9 @@ def cron_env(tmp_path, monkeypatch):
         script="probe.py",
     )
     now = datetime.now(UTC)
-    jobs_mod.update_job(job["id"], {"next_run_at": (now - timedelta(minutes=1)).isoformat()})
+    jobs_mod.update_job(
+        job["id"], {"next_run_at": (now - timedelta(minutes=1)).isoformat()}
+    )
 
     script = clawk_home / "scripts" / "probe.py"
     script.write_text("print('ok')\n")
@@ -75,7 +79,9 @@ class TestStaleInflightSelfHeal:
         from cron import executions as E
 
         env = cron_env
-        monkeypatch.setattr(E, "EXECUTIONS_FILE", env["home"] / "cron" / "executions.db")
+        monkeypatch.setattr(
+            E, "EXECUTIONS_FILE", env["home"] / "cron" / "executions.db"
+        )
         monkeypatch.setattr(S, "_clawk_home", env["home"])
         return S, E, env
 
@@ -85,7 +91,6 @@ class TestStaleInflightSelfHeal:
         S, E, env = self._setup(cron_env, monkeypatch)
         job_id = env["job_id"]
         import cron.jobs as J
-
 
         # Simulate the incident leak: job id claimed with no owning future,
         # old enough to be past its allowance.
@@ -109,7 +114,6 @@ class TestStaleInflightSelfHeal:
             "wedged job must fire again without force-run"
         )
 
-
     def test_guard_stats_reported(self, cron_env, monkeypatch):
         """The guard must surface a countable forced-release signal."""
         S, _E, env = self._setup(cron_env, monkeypatch)
@@ -131,14 +135,17 @@ class TestEAGAINCreateExecutionLeak:
     in-flight claim and execution creation (create_execution / pool.submit).
     The claim must be released immediately so the next tick re-dispatches."""
 
-
-    def test_pool_submit_eagain_releases_claim_and_redispatches(self, cron_env, monkeypatch, tmp_path):
+    def test_pool_submit_eagain_releases_claim_and_redispatches(
+        self, cron_env, monkeypatch, tmp_path
+    ):
         from cron import scheduler as S
         from cron import executions as E
         import cron.jobs as J
 
         env = cron_env
-        monkeypatch.setattr(E, "EXECUTIONS_FILE", env["home"] / "cron" / "executions.db")
+        monkeypatch.setattr(
+            E, "EXECUTIONS_FILE", env["home"] / "cron" / "executions.db"
+        )
         monkeypatch.setattr(S, "_clawk_home", env["home"])
         job_id = env["job_id"]
         job = J.get_job(job_id)
@@ -151,11 +158,13 @@ class TestEAGAINCreateExecutionLeak:
         # is released and the run recorded as failed.
         real_submit = S.concurrent.futures.ThreadPoolExecutor.submit
         state = {"n": 0}
+
         def flaky(self, *a, **k):
             state["n"] += 1
             if state["n"] == 1:
                 raise OSError(11, "Resource temporarily unavailable")
             return real_submit(self, *a, **k)
+
         monkeypatch.setattr(S.concurrent.futures.ThreadPoolExecutor, "submit", flaky)
 
         with mock.patch("cron.jobs.load_jobs", return_value=[job]):

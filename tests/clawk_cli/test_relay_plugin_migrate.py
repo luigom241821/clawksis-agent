@@ -9,9 +9,15 @@ from pathlib import Path
 import pytest
 
 from clawk_cli.relay_plugin_migrate import (
-    RELAY_PLUGINS_TOML_NAME, migrate_all_profile_relay_envs, migrate_profile_relay_env,
-    validate_relay_plugin_payload)
-from clawk_cli.relay_plugin_cutover import RELAY_PLUGINS_CONFIG_ENV, configured_legacy_relay_env_vars
+    RELAY_PLUGINS_TOML_NAME,
+    migrate_all_profile_relay_envs,
+    migrate_profile_relay_env,
+    validate_relay_plugin_payload,
+)
+from clawk_cli.relay_plugin_cutover import (
+    RELAY_PLUGINS_CONFIG_ENV,
+    configured_legacy_relay_env_vars,
+)
 
 nemo_relay = pytest.importorskip("nemo_relay")
 
@@ -46,7 +52,9 @@ def profile_env(tmp_path, monkeypatch):
 
 
 def test_legacy_env_becomes_validated_toml_selected_from_env(profile_env):
-    (profile_env / ".env").write_text(LEGACY_ENV.format(home=profile_env), encoding="utf-8")
+    (profile_env / ".env").write_text(
+        LEGACY_ENV.format(home=profile_env), encoding="utf-8"
+    )
 
     result = migrate_profile_relay_env(profile_env)
 
@@ -56,7 +64,10 @@ def test_legacy_env_becomes_validated_toml_selected_from_env(profile_env):
     document = tomllib.loads(toml_path.read_text(encoding="utf-8"))
     sink = document["components"][0]["config"]["atof"]["sinks"][0]
     assert sink["type"] == "file" and sink["filename"] == "clawk-atof.jsonl"
-    assert document["components"][0]["config"]["atif"]["filename_template"] == "trajectory-{session_id}.json"
+    assert (
+        document["components"][0]["config"]["atif"]["filename_template"]
+        == "trajectory-{session_id}.json"
+    )
     # Migrated exporters never sent OTLP; Relay 0.10's env-driven auto-export must stay off.
     assert document["components"][0]["config"]["opentelemetry"]["enabled"] is False
     # Relay accepts the complete document generated from the legacy settings.
@@ -68,8 +79,13 @@ def test_legacy_env_becomes_validated_toml_selected_from_env(profile_env):
     assert env[RELAY_PLUGINS_CONFIG_ENV] == str(toml_path)
     assert env["OPENAI_API_KEY"] == "sk-test"
     assert configured_legacy_relay_env_vars(env) == ()
-    assert "# migrated to relay-plugins.toml: CLAWK_NEMO_RELAY_ATOF_ENABLED=1" in (profile_env / ".env").read_text(encoding="utf-8")
-    assert migrate_profile_relay_env(profile_env).skipped_reason == "no legacy exporter variables"
+    assert "# migrated to relay-plugins.toml: CLAWK_NEMO_RELAY_ATOF_ENABLED=1" in (
+        profile_env / ".env"
+    ).read_text(encoding="utf-8")
+    assert (
+        migrate_profile_relay_env(profile_env).skipped_reason
+        == "no legacy exporter variables"
+    )
 
 
 def test_update_migrates_every_profile_home_separately(profile_env):
@@ -84,15 +100,27 @@ def test_update_migrates_every_profile_home_separately(profile_env):
 
     results = {r.home: r for r in migrate_all_profile_relay_envs(validate=False)}
 
-    assert results[work].migrated and results[work].toml_path == work / RELAY_PLUGINS_TOML_NAME
+    assert (
+        results[work].migrated
+        and results[work].toml_path == work / RELAY_PLUGINS_TOML_NAME
+    )
     assert not results[idle].migrated and not (idle / RELAY_PLUGINS_TOML_NAME).exists()
-    assert not results[profile_env].migrated and not (profile_env / RELAY_PLUGINS_TOML_NAME).exists()
-    assert _parse_env(work / ".env")[RELAY_PLUGINS_CONFIG_ENV] == str(work / RELAY_PLUGINS_TOML_NAME)
+    assert (
+        not results[profile_env].migrated
+        and not (profile_env / RELAY_PLUGINS_TOML_NAME).exists()
+    )
+    assert _parse_env(work / ".env")[RELAY_PLUGINS_CONFIG_ENV] == str(
+        work / RELAY_PLUGINS_TOML_NAME
+    )
     assert (idle / ".env").read_text(encoding="utf-8") == "SLACK_BOT_TOKEN=y\n"
 
 
 def _relay_report(*diagnostics):
-    return {"config": {"diagnostics": list(diagnostics)}, "config_paths": [], "dynamic_plugins": []}
+    return {
+        "config": {"diagnostics": list(diagnostics)},
+        "config_paths": [],
+        "dynamic_plugins": [],
+    }
 
 
 def test_error_diagnostics_reject_the_payload_like_relay_0_8_did(monkeypatch):
@@ -100,8 +128,16 @@ def test_error_diagnostics_reject_the_payload_like_relay_0_8_did(monkeypatch):
         nemo_relay.plugin,
         "validate_exact",
         lambda _payload: _relay_report(
-            {"level": "warning", "code": "unknown_field", "message": "unknown field 'x'"},
-            {"level": "error", "code": "unsupported_value", "message": "atof.mode 'nope' is unsupported"},
+            {
+                "level": "warning",
+                "code": "unknown_field",
+                "message": "unknown field 'x'",
+            },
+            {
+                "level": "error",
+                "code": "unsupported_value",
+                "message": "atof.mode 'nope' is unsupported",
+            },
         ),
     )
 
@@ -110,19 +146,29 @@ def test_error_diagnostics_reject_the_payload_like_relay_0_8_did(monkeypatch):
 
 
 def test_warning_diagnostics_are_returned_not_raised(monkeypatch):
-    warning = {"level": "warning", "code": "unknown_field", "message": "unknown field 'x'"}
-    monkeypatch.setattr(nemo_relay.plugin, "validate_exact", lambda _payload: _relay_report(warning))
+    warning = {
+        "level": "warning",
+        "code": "unknown_field",
+        "message": "unknown field 'x'",
+    }
+    monkeypatch.setattr(
+        nemo_relay.plugin, "validate_exact", lambda _payload: _relay_report(warning)
+    )
 
     assert validate_relay_plugin_payload({"version": 1}) == [warning]
 
 
 def test_error_diagnostics_leave_env_untouched(profile_env, monkeypatch):
-    (profile_env / ".env").write_text(LEGACY_ENV.format(home=profile_env), encoding="utf-8")
+    (profile_env / ".env").write_text(
+        LEGACY_ENV.format(home=profile_env), encoding="utf-8"
+    )
     before = (profile_env / ".env").read_text(encoding="utf-8")
     monkeypatch.setattr(
         nemo_relay.plugin,
         "validate_exact",
-        lambda _payload: _relay_report({"level": "error", "code": "bad", "message": "rejected"}),
+        lambda _payload: _relay_report(
+            {"level": "error", "code": "bad", "message": "rejected"}
+        ),
     )
 
     result = migrate_profile_relay_env(profile_env)

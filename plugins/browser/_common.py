@@ -29,8 +29,12 @@ class CloudBrowserProvider(BrowserProvider):
     missing_credentials_error: str = ""
     setup_tag: Optional[str] = None  # ``None`` hides the provider from the setup picker
     setup_env_vars: list[dict[str, str]] = []
-    create_label_suffix: str = ""  # "Failed to create <label><suffix> session"; Firecrawl: " browser"
-    close_fail_fmt: Optional[str] = None  # Browserbase's close warning historically omits the vendor
+    create_label_suffix: str = (
+        ""  # "Failed to create <label><suffix> session"; Firecrawl: " browser"
+    )
+    close_fail_fmt: Optional[str] = (
+        None  # Browserbase's close warning historically omits the vendor
+    )
 
     @property
     def name(self) -> str:
@@ -65,7 +69,9 @@ class CloudBrowserProvider(BrowserProvider):
     def _release_body(self, config: dict[str, Any]) -> Optional[dict[str, object]]:
         return None
 
-    def _release(self, config: dict[str, Any], session_id: str, timeout: int) -> requests.Response:
+    def _release(
+        self, config: dict[str, Any], session_id: str, timeout: int
+    ) -> requests.Response:
         # requests resolves verify=True through a bundle path frozen at its own import,
         # which a replaced install environment leaves dangling; hand it a live one.
         kwargs: dict[str, Any] = {
@@ -84,12 +90,19 @@ class CloudBrowserProvider(BrowserProvider):
         return f"clawk_{task_id}_{uuid.uuid4().hex[:8]}"
 
     def _post_create(
-        self, url: str, headers: dict[str, str], payload: dict[str, object], *, wrap_errors: bool = True
+        self,
+        url: str,
+        headers: dict[str, str],
+        payload: dict[str, object],
+        *,
+        wrap_errors: bool = True,
     ) -> requests.Response:
         """POST the create request; network failures → RuntimeError unless the managed gateway
         caller needs the raw exception to retry."""
         try:
-            return requests.post(url, headers=headers, json=payload, timeout=30, verify=requests_verify())
+            return requests.post(
+                url, headers=headers, json=payload, timeout=30, verify=requests_verify()
+            )
         except requests.RequestException as exc:
             if not wrap_errors:
                 raise
@@ -99,38 +112,58 @@ class CloudBrowserProvider(BrowserProvider):
         if not response.ok:
             raise RuntimeError(
                 f"Failed to create {self.label}{self.create_label_suffix} session: "
-                f"{response.status_code} {response.text}")
+                f"{response.status_code} {response.text}"
+            )
 
     def close_session(self, session_id: str) -> bool:
         try:
             config = self._get_config()
         except ValueError:
-            self._log.warning("Cannot close %s session %s — missing credentials", self.label, session_id)
+            self._log.warning(
+                "Cannot close %s session %s — missing credentials",
+                self.label,
+                session_id,
+            )
             return False
         try:
             response = self._release(config, session_id, timeout=10)
             if response.status_code in _CLOSE_OK:
-                self._log.debug("Successfully closed %s session %s", self.label, session_id)
+                self._log.debug(
+                    "Successfully closed %s session %s", self.label, session_id
+                )
                 return True
             self._log.warning(
-                self.close_fail_fmt or f"Failed to close {self.label} session %s: HTTP %s - %s",
-                session_id, response.status_code, response.text[:200])
+                self.close_fail_fmt
+                or f"Failed to close {self.label} session %s: HTTP %s - %s",
+                session_id,
+                response.status_code,
+                response.text[:200],
+            )
             return False
         except Exception as e:
-            self._log.error("Exception closing %s session %s: %s", self.label, session_id, e)
+            self._log.error(
+                "Exception closing %s session %s: %s", self.label, session_id, e
+            )
             return False
 
     def emergency_cleanup(self, session_id: str) -> None:
         config = self._get_config_or_none()
         if config is None:
             self._log.warning(
-                "Cannot emergency-cleanup %s session %s — missing credentials", self.label, session_id
+                "Cannot emergency-cleanup %s session %s — missing credentials",
+                self.label,
+                session_id,
             )
             return
         try:
             self._release(config, session_id, timeout=5)
         except Exception as e:
-            self._log.debug("Emergency cleanup failed for %s session %s: %s", self.label, session_id, e)
+            self._log.debug(
+                "Emergency cleanup failed for %s session %s: %s",
+                self.label,
+                session_id,
+                e,
+            )
 
     def get_setup_schema(self) -> Optional[dict[str, Any]]:
         if self.setup_tag is None:

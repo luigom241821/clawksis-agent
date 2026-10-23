@@ -54,7 +54,9 @@ class _StubResponse:
             import httpx
 
             raise httpx.HTTPStatusError(
-                f"HTTP {self.status_code}", request=None, response=self  # type: ignore[arg-type]
+                f"HTTP {self.status_code}",
+                request=None,
+                response=self,  # type: ignore[arg-type]
             )
 
 
@@ -96,20 +98,14 @@ def _usage_payload(primary_used: float, secondary_used: float) -> dict:
 # ---------------------------------------------------------------------------
 
 
-
-
 # ---------------------------------------------------------------------------
 # _codex_usage_probe_url
 # ---------------------------------------------------------------------------
 
 
-
-
 # ---------------------------------------------------------------------------
 # _probe_codex_quota_restored
 # ---------------------------------------------------------------------------
-
-
 
 
 def test_probe_sends_chatgpt_account_id_from_jwt(monkeypatch):
@@ -182,10 +178,6 @@ def _exhausted_pool_store(now=None):
             ]
         },
     }
-
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -265,8 +257,12 @@ def test_resolver_selects_entry_with_expired_millisecond_reset(tmp_path, monkeyp
     clawk_home = tmp_path / "clawk"
     _write_auth_store(clawk_home, store)
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
-    monkeypatch.setattr(auth_mod, "_probe_codex_quota_restored", lambda token, **kw: False)
-    monkeypatch.setattr(auth_codex, "_probe_codex_quota_restored", lambda token, **kw: False)
+    monkeypatch.setattr(
+        auth_mod, "_probe_codex_quota_restored", lambda token, **kw: False
+    )
+    monkeypatch.setattr(
+        auth_codex, "_probe_codex_quota_restored", lambda token, **kw: False
+    )
 
     resolved = resolve_codex_runtime_credentials()
 
@@ -274,13 +270,9 @@ def test_resolver_selects_entry_with_expired_millisecond_reset(tmp_path, monkeyp
     assert resolved["source"] == "credential_pool"
 
 
-
-
 # ---------------------------------------------------------------------------
 # CredentialPool._available_entries — frozen entry recovers via probe
 # ---------------------------------------------------------------------------
-
-
 
 
 def test_pool_probe_not_fired_for_non_quota_exhaustion(tmp_path, monkeypatch):
@@ -309,13 +301,9 @@ def test_pool_probe_not_fired_for_non_quota_exhaustion(tmp_path, monkeypatch):
     assert probes == []
 
 
-
-
 # ---------------------------------------------------------------------------
 # /usage reset redemption clears persisted pool cooldowns
 # ---------------------------------------------------------------------------
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -353,10 +341,16 @@ def _patch_expiry_aware_httpx(monkeypatch, response):
 def _fake_refresh(monkeypatch, fresh_token, calls):
     def _refresh(access_token, refresh_token, **kw):
         calls.append(refresh_token)
-        return {"access_token": fresh_token, "refresh_token": "rf-new", "last_refresh": "now"}
+        return {
+            "access_token": fresh_token,
+            "refresh_token": "rf-new",
+            "last_refresh": "now",
+        }
 
     monkeypatch.setattr(auth_codex, "refresh_codex_oauth_pure", _refresh)
-    monkeypatch.setattr(auth_mod, "refresh_codex_oauth_pure", _refresh)  # the pool's refresh path
+    monkeypatch.setattr(
+        auth_mod, "refresh_codex_oauth_pure", _refresh
+    )  # the pool's refresh path
 
 
 def test_resolver_refreshes_expired_token_before_probe(tmp_path, monkeypatch):
@@ -370,14 +364,18 @@ def test_resolver_refreshes_expired_token_before_probe(tmp_path, monkeypatch):
     fresh = _jwt({"exp": now + 3600})
     refresh_calls: list = []
     _fake_refresh(monkeypatch, fresh, refresh_calls)
-    http_calls = _patch_expiry_aware_httpx(monkeypatch, _StubResponse(200, _usage_payload(0.0, 0.0)))
+    http_calls = _patch_expiry_aware_httpx(
+        monkeypatch, _StubResponse(200, _usage_payload(0.0, 0.0))
+    )
 
     resolved = resolve_codex_runtime_credentials()
 
     assert refresh_calls == ["rf-old"]
     assert http_calls[0]["headers"]["Authorization"] == f"Bearer {fresh}"
     assert resolved["api_key"] == fresh
-    entry = json.loads((clawk_home / "auth.json").read_text())["credential_pool"]["openai-codex"][0]
+    entry = json.loads((clawk_home / "auth.json").read_text())["credential_pool"][
+        "openai-codex"
+    ][0]
     assert entry["refresh_token"] == "rf-new"
     assert entry["last_status"] is None
 
@@ -392,43 +390,58 @@ def test_pool_selection_refreshes_expired_token_before_probe(tmp_path, monkeypat
     store = _expired_jwt_pool_store(now)
     stale = store["credential_pool"]["openai-codex"][0]
     store["providers"]["openai-codex"] = {
-        "tokens": {"access_token": stale["access_token"], "refresh_token": "rf-old"}}
+        "tokens": {"access_token": stale["access_token"], "refresh_token": "rf-old"}
+    }
     _write_auth_store(clawk_home, store)
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
     fresh = _jwt({"exp": now + 3600})
     refresh_calls: list = []
     _fake_refresh(monkeypatch, fresh, refresh_calls)
-    http_calls = _patch_expiry_aware_httpx(monkeypatch, _StubResponse(200, _usage_payload(0.0, 100.0)))
+    http_calls = _patch_expiry_aware_httpx(
+        monkeypatch, _StubResponse(200, _usage_payload(0.0, 100.0))
+    )
     from agent.credential_pool import load_pool
 
     pool = load_pool("openai-codex")
 
     assert pool.select() is None
-    assert pool.select() is None  # second pass: auth-store sync must not resurrect rf-old
+    assert (
+        pool.select() is None
+    )  # second pass: auth-store sync must not resurrect rf-old
 
     assert refresh_calls == ["rf-old"]
     assert [c["headers"]["Authorization"] for c in http_calls] == [f"Bearer {fresh}"]
     entry = pool._entries[0]
-    assert (entry.access_token, entry.refresh_token, entry.last_status) == (fresh, "rf-new", "exhausted")
+    assert (entry.access_token, entry.refresh_token, entry.last_status) == (
+        fresh,
+        "rf-new",
+        "exhausted",
+    )
     disk = json.loads((clawk_home / "auth.json").read_text())
     assert disk["credential_pool"]["openai-codex"][0]["refresh_token"] == "rf-new"
     assert disk["providers"]["openai-codex"]["tokens"]["refresh_token"] == "rf-new"
 
 
-def test_pool_selection_keeps_probe_rotated_tokens_when_quota_restored(tmp_path, monkeypatch):
+def test_pool_selection_keeps_probe_rotated_tokens_when_quota_restored(
+    tmp_path, monkeypatch
+):
     """The restored twin of the control above: the cooldown clear must build on the row the
     probe rotated, not on the selection loop's pre-probe copy, or the consumed refresh token
     goes back into the pool and the same select() replays it (``refresh_token_reused``)."""
     now = time.time()
     clawk_home = tmp_path / "clawk"
     store = _expired_jwt_pool_store(now)
-    store["credential_pool"]["openai-codex"][0]["source"] = "manual:device_code"  # no singleton re-sync
+    store["credential_pool"]["openai-codex"][0]["source"] = (
+        "manual:device_code"  # no singleton re-sync
+    )
     _write_auth_store(clawk_home, store)
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
     fresh = _jwt({"exp": now + 3600})
     refresh_calls: list = []
     _fake_refresh(monkeypatch, fresh, refresh_calls)
-    http_calls = _patch_expiry_aware_httpx(monkeypatch, _StubResponse(200, _usage_payload(0.0, 0.0)))
+    http_calls = _patch_expiry_aware_httpx(
+        monkeypatch, _StubResponse(200, _usage_payload(0.0, 0.0))
+    )
     from agent.credential_pool import load_pool
 
     pool = load_pool("openai-codex")
@@ -436,8 +449,14 @@ def test_pool_selection_keeps_probe_rotated_tokens_when_quota_restored(tmp_path,
 
     assert refresh_calls == ["rf-old"]
     assert [c["headers"]["Authorization"] for c in http_calls] == [f"Bearer {fresh}"]
-    assert (selected.access_token, selected.refresh_token, selected.last_status) == (fresh, "rf-new", "ok")
-    assert pool.entries()[0].refresh_token == "rf-new"  # the pool's own row, not just the returned copy
+    assert (selected.access_token, selected.refresh_token, selected.last_status) == (
+        fresh,
+        "rf-new",
+        "ok",
+    )
+    assert (
+        pool.entries()[0].refresh_token == "rf-new"
+    )  # the pool's own row, not just the returned copy
     disk = json.loads((clawk_home / "auth.json").read_text())
     assert disk["credential_pool"]["openai-codex"][0]["refresh_token"] == "rf-new"
 
@@ -458,7 +477,9 @@ def test_pool_selection_throttles_failing_pre_probe_refresh(tmp_path, monkeypatc
 
     monkeypatch.setattr(auth_codex, "refresh_codex_oauth_pure", _failing_refresh)
     monkeypatch.setattr(auth_mod, "refresh_codex_oauth_pure", _failing_refresh)
-    http_calls = _patch_expiry_aware_httpx(monkeypatch, _StubResponse(200, _usage_payload(0.0, 0.0)))
+    http_calls = _patch_expiry_aware_httpx(
+        monkeypatch, _StubResponse(200, _usage_payload(0.0, 0.0))
+    )
     from agent.credential_pool import load_pool
 
     pool = load_pool("openai-codex")
@@ -474,8 +495,11 @@ def test_probe_counts_additional_rate_limits(monkeypatch):
     windows being open must not report the quota as restored."""
     payload = _usage_payload(0.0, 0.0)
     payload["additional_rate_limits"] = [
-        {"limit_name": "codex_model_scoped",
-         "rate_limit": {"primary_window": {"used_percent": 100.0}}}]
+        {
+            "limit_name": "codex_model_scoped",
+            "rate_limit": {"primary_window": {"used_percent": 100.0}},
+        }
+    ]
     _patch_httpx(monkeypatch, _StubResponse(200, payload))
 
     assert _probe_codex_quota_restored(_jwt({"exp": time.time() + 3600})) is False

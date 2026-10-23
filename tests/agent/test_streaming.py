@@ -3,6 +3,7 @@
 Tests the unified streaming API call, delta callbacks, tool-call
 suppression, provider fallback, and CLI streaming display.
 """
+
 import threading
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -14,8 +15,12 @@ import pytest
 
 
 def _make_stream_chunk(
-    content=None, tool_calls=None, finish_reason=None,
-    model=None, reasoning_content=None, usage=None,
+    content=None,
+    tool_calls=None,
+    finish_reason=None,
+    model=None,
+    reasoning_content=None,
+    usage=None,
 ):
     """Build a mock streaming chunk matching OpenAI's ChatCompletionChunk shape."""
     delta = SimpleNamespace(
@@ -37,7 +42,9 @@ def _make_stream_chunk(
     return chunk
 
 
-def _make_tool_call_delta(index=0, tc_id=None, name=None, arguments=None, extra_content=None, model_extra=None):
+def _make_tool_call_delta(
+    index=0, tc_id=None, name=None, arguments=None, extra_content=None, model_extra=None
+):
     """Build a mock tool call delta."""
     func = SimpleNamespace(name=name, arguments=arguments)
     delta = SimpleNamespace(index=index, id=tc_id, function=func)
@@ -70,7 +77,9 @@ class TestStreamingAccumulator:
             _make_stream_chunk(content="Hello"),
             _make_stream_chunk(content=" world"),
             _make_stream_chunk(content="!", finish_reason="stop", model="test-model"),
-            _make_empty_chunk(usage=SimpleNamespace(prompt_tokens=10, completion_tokens=3)),
+            _make_empty_chunk(
+                usage=SimpleNamespace(prompt_tokens=10, completion_tokens=3)
+            ),
         ]
 
         mock_client = MagicMock()
@@ -198,13 +207,15 @@ class TestStreamingAccumulator:
                 self.closed = False
 
             def __iter__(self):
-                return iter([
-                    _make_stream_chunk(
-                        content="Hello",
-                        finish_reason="stop",
-                        model="test-model",
-                    )
-                ])
+                return iter(
+                    [
+                        _make_stream_chunk(
+                            content="Hello",
+                            finish_reason="stop",
+                            model="test-model",
+                        )
+                    ]
+                )
 
             def close(self):
                 self.closed = True
@@ -236,9 +247,13 @@ class TestStreamingAccumulator:
         from run_agent import AIAgent
 
         mock_client = MagicMock()
-        mock_client.chat.completions.create.return_value = iter([
-            _make_stream_chunk(content="Paris", finish_reason="stop", model="gemini"),
-        ])
+        mock_client.chat.completions.create.return_value = iter(
+            [
+                _make_stream_chunk(
+                    content="Paris", finish_reason="stop", model="gemini"
+                ),
+            ]
+        )
         mock_create.return_value = mock_client
 
         agent = AIAgent(
@@ -262,18 +277,30 @@ class TestStreamingAccumulator:
 
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
-    def test_endpoint_rejecting_stream_options_is_retried_without_it(self, mock_close, mock_create, monkeypatch):
+    def test_endpoint_rejecting_stream_options_is_retried_without_it(
+        self, mock_close, mock_create, monkeypatch
+    ):
         """Strict OpenAI-compatible endpoints (Azure AI Foundry MaaS) 422 on
         ``stream_options.include_usage``; the call is retried once without the field and
         the session remembers the rejection (#9705). The compatibility retry must not spend
         the transient-retry budget: with CLAWK_STREAM_RETRIES=0 it still happens."""
         from openai import APIStatusError
         from run_agent import AIAgent
+
         monkeypatch.setenv("CLAWK_STREAM_RETRIES", "0")
 
-        body = {"detail": [{"type": "extra_forbidden", "loc": ["body", "stream_options", "include_usage"],
-                            "msg": "Extra inputs are not permitted"}]}
-        rejection = APIStatusError("Unprocessable Entity", response=MagicMock(status_code=422), body=body)
+        body = {
+            "detail": [
+                {
+                    "type": "extra_forbidden",
+                    "loc": ["body", "stream_options", "include_usage"],
+                    "msg": "Extra inputs are not permitted",
+                }
+            ]
+        }
+        rejection = APIStatusError(
+            "Unprocessable Entity", response=MagicMock(status_code=422), body=body
+        )
         rejection.status_code = 422
         calls = []
 
@@ -281,15 +308,27 @@ class TestStreamingAccumulator:
             calls.append(kwargs)
             if "stream_options" in kwargs:
                 raise rejection
-            return iter([_make_stream_chunk(content="ok", finish_reason="stop", model="mistral-small")])
+            return iter(
+                [
+                    _make_stream_chunk(
+                        content="ok", finish_reason="stop", model="mistral-small"
+                    )
+                ]
+            )
 
         mock_client = MagicMock()
         mock_client.chat.completions.create.side_effect = _create
         mock_create.return_value = mock_client
 
-        agent = AIAgent(api_key="k", base_url="https://hub.services.ai.azure.com/openai/v1",
-                        model="mistral-small-2503", provider="custom", quiet_mode=True,
-                        skip_context_files=True, skip_memory=True)
+        agent = AIAgent(
+            api_key="k",
+            base_url="https://hub.services.ai.azure.com/openai/v1",
+            model="mistral-small-2503",
+            provider="custom",
+            quiet_mode=True,
+            skip_context_files=True,
+            skip_memory=True,
+        )
         agent.api_mode = "chat_completions"
         agent._interrupt_requested = False
 
@@ -300,8 +339,6 @@ class TestStreamingAccumulator:
         assert agent._stream_options_unsupported is True
         assert agent._disable_streaming is False  # streaming itself still works there
 
-
-
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
     def test_tool_call_response(self, mock_close, mock_create):
@@ -309,15 +346,17 @@ class TestStreamingAccumulator:
         from run_agent import AIAgent
 
         chunks = [
-            _make_stream_chunk(tool_calls=[
-                _make_tool_call_delta(index=0, tc_id="call_123", name="terminal")
-            ]),
-            _make_stream_chunk(tool_calls=[
-                _make_tool_call_delta(index=0, arguments='{"command":')
-            ]),
-            _make_stream_chunk(tool_calls=[
-                _make_tool_call_delta(index=0, arguments=' "ls"}')
-            ]),
+            _make_stream_chunk(
+                tool_calls=[
+                    _make_tool_call_delta(index=0, tc_id="call_123", name="terminal")
+                ]
+            ),
+            _make_stream_chunk(
+                tool_calls=[_make_tool_call_delta(index=0, arguments='{"command":')]
+            ),
+            _make_stream_chunk(
+                tool_calls=[_make_tool_call_delta(index=0, arguments=' "ls"}')]
+            ),
             _make_stream_chunk(finish_reason="tool_calls"),
         ]
 
@@ -345,7 +384,6 @@ class TestStreamingAccumulator:
         assert tc[0].function.name == "terminal"
         assert tc[0].function.arguments == '{"command": "ls"}'
 
-
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
     @patch("agent.relay_llm.stream")
@@ -359,17 +397,19 @@ class TestStreamingAccumulator:
         fake_stream = MagicMock()
         fake_stream.final_response = None
         chunks = [
-            _make_stream_chunk(tool_calls=[
-                _make_tool_call_delta(
-                    index=0,
-                    tc_id="call_123",
-                    name="search",
-                    arguments='{"q":',
-                )
-            ]),
-            _make_stream_chunk(tool_calls=[
-                _make_tool_call_delta(index=0, arguments='"hello"}')
-            ]),
+            _make_stream_chunk(
+                tool_calls=[
+                    _make_tool_call_delta(
+                        index=0,
+                        tc_id="call_123",
+                        name="search",
+                        arguments='{"q":',
+                    )
+                ]
+            ),
+            _make_stream_chunk(
+                tool_calls=[_make_tool_call_delta(index=0, arguments='"hello"}')]
+            ),
             _make_stream_chunk(finish_reason="tool_calls"),
         ]
         fake_stream.__iter__.return_value = iter(chunks)
@@ -398,6 +438,7 @@ class TestStreamingAccumulator:
 
         # Relay's contract: the collector sees every chunk as JSON, then the finalizer runs.
         from agent.relay_llm import _jsonable
+
         for chunk in chunks:
             captured["on_chunk"](_jsonable(chunk))
         payload = captured["finalizer"]()
@@ -429,19 +470,21 @@ class TestStreamingAccumulator:
                 for i in range(0, len(payload), fragment_size)
             ]
             chunks = [
-                _make_stream_chunk(tool_calls=[
-                    _make_tool_call_delta(
-                        index=0,
-                        tc_id="call_123",
-                        name="write_file",
-                        arguments=fragments[0],
-                    )
-                ])
+                _make_stream_chunk(
+                    tool_calls=[
+                        _make_tool_call_delta(
+                            index=0,
+                            tc_id="call_123",
+                            name="write_file",
+                            arguments=fragments[0],
+                        )
+                    ]
+                )
             ]
             chunks.extend(
-                _make_stream_chunk(tool_calls=[
-                    _make_tool_call_delta(index=0, arguments=fragment)
-                ])
+                _make_stream_chunk(
+                    tool_calls=[_make_tool_call_delta(index=0, arguments=fragment)]
+                )
                 for fragment in fragments[1:]
             )
             chunks.append(_make_stream_chunk(finish_reason="tool_calls"))
@@ -467,21 +510,27 @@ class TestStreamingAccumulator:
             arguments = assemble(fragment_size)
             assert arguments.encode("utf-8") == payload.encode("utf-8")
 
-
-# ── Test: Streaming Callbacks ────────────────────────────────────────────
-
+    # ── Test: Streaming Callbacks ────────────────────────────────────────────
 
     @pytest.mark.parametrize(
         "chunks, expect_content, expect_finish, expect_refusal",
         [
             pytest.param(
                 [(None, "I can't"), (None, " help with that."), (None, None)],
-                "I can't help with that.", "content_filter", "I can't help with that.",
+                "I can't help with that.",
+                "content_filter",
+                "I can't help with that.",
                 id="refusal-only",
             ),
             pytest.param(
-                [("Partial answer.", None), (None, "But I won't do the rest."), (None, None)],
-                "Partial answer.", "stop", "But I won't do the rest.",
+                [
+                    ("Partial answer.", None),
+                    (None, "But I won't do the rest."),
+                    (None, None),
+                ],
+                "Partial answer.",
+                "stop",
+                "But I won't do the rest.",
                 id="refusal-alongside-content",
             ),
         ],
@@ -489,7 +538,13 @@ class TestStreamingAccumulator:
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
     def test_streamed_refusal_accumulated(
-        self, mock_close, mock_create, chunks, expect_content, expect_finish, expect_refusal
+        self,
+        mock_close,
+        mock_create,
+        chunks,
+        expect_content,
+        expect_finish,
+        expect_refusal,
     ):
         """delta.refusal streams assemble onto message.refusal.
 
@@ -578,10 +633,6 @@ class TestStreamingCallbacks:
 
         assert deltas == ["a", "b", "c"]
 
-
-
-
-
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
     def test_list_content_after_tool_call_is_normalized(self, mock_close, mock_create):
@@ -596,9 +647,11 @@ class TestStreamingCallbacks:
 
         chunks = [
             _make_stream_chunk(content=[{"type": "text", "text": "before tool; "}]),
-            _make_stream_chunk(tool_calls=[
-                _make_tool_call_delta(index=0, tc_id="call_63734", name="read_file")
-            ]),
+            _make_stream_chunk(
+                tool_calls=[
+                    _make_tool_call_delta(index=0, tc_id="call_63734", name="read_file")
+                ]
+            ),
             _make_stream_chunk(content=[{"type": "text", "text": "after tool"}]),
             _make_stream_chunk(finish_reason="tool_calls"),
         ]
@@ -668,7 +721,6 @@ class TestStreamingFallback:
         # The flag should be set so the main retry loop switches to non-streaming
         assert agent._disable_streaming is True
 
-
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
     def test_response_object_disables_streaming_and_returns_final_response(
@@ -679,15 +731,17 @@ class TestStreamingFallback:
 
         final_response = SimpleNamespace(
             model="copilot-acp",
-            choices=[SimpleNamespace(
-                message=SimpleNamespace(
-                    content="Hello from ACP",
-                    tool_calls=None,
-                    reasoning_content=None,
-                    reasoning=None,
-                ),
-                finish_reason="stop",
-            )],
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        content="Hello from ACP",
+                        tool_calls=None,
+                        reasoning_content=None,
+                        reasoning=None,
+                    ),
+                    finish_reason="stop",
+                )
+            ],
             usage=SimpleNamespace(prompt_tokens=1, completion_tokens=1, total_tokens=2),
         )
 
@@ -737,7 +791,10 @@ class TestStreamingFallback:
 
         request = httpx.Request("POST", "https://gw.example/v1/chat/completions")
         response = httpx.Response(
-            200, request=request, headers={"x-request-id": "req-empty-frame"}, content=content
+            200,
+            request=request,
+            headers={"x-request-id": "req-empty-frame"},
+            content=content,
         )
         stream = Stream(
             cast_to=ChatCompletionChunk,
@@ -766,12 +823,15 @@ class TestStreamingFallback:
 
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
-    def test_non_json_sse_frame_stays_a_fatal_provider_error(self, mock_close, mock_create):
+    def test_non_json_sse_frame_stays_a_fatal_provider_error(
+        self, mock_close, mock_create
+    ):
         """A real malformed payload is NOT a keepalive: unchanged behaviour (#65147)."""
         from agent.error_classifier import PROVIDER_STREAM_NON_JSON_ERROR_CODE
 
         agent = self._wire_agent(
-            mock_create, b"event: error\ndata: upstream sent opaque plain-text stream data\n\n"
+            mock_create,
+            b"event: error\ndata: upstream sent opaque plain-text stream data\n\n",
         )
 
         with pytest.raises(Exception) as exc_info:
@@ -837,16 +897,15 @@ class TestStreamingFallback:
         interrupter.start()
 
         with pytest.raises(InterruptedError):
-            agent._interruptible_streaming_api_call({"model": "default", "messages": []})
+            agent._interruptible_streaming_api_call(
+                {"model": "default", "messages": []}
+            )
 
         assert stream.closed.wait(timeout=2)
         assert stream.close_calls == 1
         mock_create.assert_called_once()
         mock_close_openai.assert_not_called()
         mock_abort_openai.assert_not_called()
-
-
-
 
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
@@ -864,9 +923,12 @@ class TestStreamingFallback:
         # Create an APIError that mimics what the OpenAI SDK raises from SSE error events.
         # Key: no status_code attribute (unlike APIStatusError which has one).
         from openai import APIError as OAIAPIError
+
         sse_error = OAIAPIError(
             message="Network connection lost.",
-            request=httpx.Request("POST", "https://openrouter.ai/api/v1/chat/completions"),
+            request=httpx.Request(
+                "POST", "https://openrouter.ai/api/v1/chat/completions"
+            ),
             body={"message": "Network connection lost."},
         )
 
@@ -892,7 +954,6 @@ class TestStreamingFallback:
         assert mock_client.chat.completions.create.call_count == 3
         # Connection cleanup should happen for each failed retry
         assert mock_close.call_count >= 2
-
 
 
 # ── Test: Reasoning Streaming ────────────────────────────────────────────
@@ -938,15 +999,13 @@ class TestReasoningStreaming:
 
         assert reasoning_deltas == ["Let me think", " about this"]
         assert text_deltas == ["The answer is 42"]
-        assert response.choices[0].message.reasoning_content == "Let me think about this"
+        assert (
+            response.choices[0].message.reasoning_content == "Let me think about this"
+        )
         assert response.choices[0].message.content == "The answer is 42"
 
 
 # ── Test: _has_stream_consumers ──────────────────────────────────────────
-
-
-
-
 
 
 # ── Test: Codex stream fires callbacks ────────────────────────────────
@@ -987,6 +1046,7 @@ class TestCodexStreamCallbacks:
         class _FakeCreateStream:
             def __iter__(self_inner):
                 return iter(events)
+
             def close(self_inner):
                 return None
 
@@ -995,7 +1055,6 @@ class TestCodexStreamCallbacks:
 
         agent._run_codex_stream({}, client=mock_client)
         assert "Hello from Codex!" in deltas
-
 
     def test_codex_remote_protocol_error_retries_then_raises(self):
         """Transport errors from ``responses.create`` retry once then re-raise.
@@ -1055,14 +1114,18 @@ class TestCodexStreamCallbacks:
 
         events = [
             SimpleNamespace(type="response.output_text.delta", delta="Hello"),
-            SimpleNamespace(type="response.output_item.done", item=SimpleNamespace(type="message")),
+            SimpleNamespace(
+                type="response.output_item.done", item=SimpleNamespace(type="message")
+            ),
             SimpleNamespace(
                 type="response.completed",
                 response=SimpleNamespace(
-                    output=[SimpleNamespace(
-                        type="message",
-                        content=[SimpleNamespace(type="output_text", text="Hello")],
-                    )]
+                    output=[
+                        SimpleNamespace(
+                            type="message",
+                            content=[SimpleNamespace(type="output_text", text="Hello")],
+                        )
+                    ]
                 ),
             ),
         ]
@@ -1148,7 +1211,10 @@ class TestAnthropicStreamCallbacks:
     @patch("run_agent.AIAgent._rebuild_anthropic_client")
     @patch("run_agent.AIAgent._replace_primary_openai_client")
     def test_anthropic_stream_parser_valueerror_retries_before_delivery(
-        self, mock_replace, mock_rebuild, monkeypatch,
+        self,
+        mock_replace,
+        mock_rebuild,
+        monkeypatch,
     ):
         """Malformed Anthropic event-stream frames retry instead of surfacing HTTP None.
 
@@ -1171,13 +1237,17 @@ class TestAnthropicStreamCallbacks:
         agent._interrupt_requested = False
         monkeypatch.setenv("CLAWK_STREAM_RETRIES", "1")
 
-        bad_stream = _AnthropicEventStream([], ValueError("expected ident at line 1 column 149"))
+        bad_stream = _AnthropicEventStream(
+            [], ValueError("expected ident at line 1 column 149")
+        )
 
         final_message = SimpleNamespace(content=[], stop_reason="end_turn")
         good_stream = MagicMock()
         good_stream.__enter__ = MagicMock(return_value=good_stream)
         good_stream.__exit__ = MagicMock(return_value=False)
-        good_stream.__iter__ = MagicMock(return_value=iter([SimpleNamespace(type="message_stop")]))
+        good_stream.__iter__ = MagicMock(
+            return_value=iter([SimpleNamespace(type="message_stop")])
+        )
         good_stream.get_final_message.return_value = final_message
 
         agent._anthropic_client = MagicMock()
@@ -1219,20 +1289,36 @@ class TestAnthropicStreamCallbacks:
         # stream; a tool_use that never registers as in flight is stubbed instead.
         malformed = _AnthropicEventStream(
             [
-                SimpleNamespace(type="content_block_delta", delta=SimpleNamespace(type="text_delta", text="Checking the tool.")),
-                SimpleNamespace(type="content_block_start", content_block=SimpleNamespace(type="tool_use", name="cronjob_manage")),
+                SimpleNamespace(
+                    type="content_block_delta",
+                    delta=SimpleNamespace(type="text_delta", text="Checking the tool."),
+                ),
+                SimpleNamespace(
+                    type="content_block_start",
+                    content_block=SimpleNamespace(
+                        type="tool_use", name="cronjob_manage"
+                    ),
+                ),
             ],
             ValueError("expected value at line 1 column 11"),
         )
 
         repaired_message = SimpleNamespace(
-            content=[SimpleNamespace(type="tool_use", name="cronjob_manage", input={"names": "cronjob_manage"})],
+            content=[
+                SimpleNamespace(
+                    type="tool_use",
+                    name="cronjob_manage",
+                    input={"names": "cronjob_manage"},
+                )
+            ],
             stop_reason="tool_use",
         )
         good_stream = MagicMock()
         good_stream.__enter__ = MagicMock(return_value=good_stream)
         good_stream.__exit__ = MagicMock(return_value=False)
-        good_stream.__iter__ = MagicMock(return_value=iter([SimpleNamespace(type="message_stop")]))
+        good_stream.__iter__ = MagicMock(
+            return_value=iter([SimpleNamespace(type="message_stop")])
+        )
         good_stream.get_final_message.return_value = repaired_message
 
         seen_tools = []
@@ -1246,7 +1332,9 @@ class TestAnthropicStreamCallbacks:
         agent._create_request_anthropic_client = lambda *a, **k: agent._anthropic_client
         tools = [{"name": "cronjob_manage", "input_schema": {"type": "object"}}]
 
-        response = agent._interruptible_streaming_api_call({"model": agent.model, "tools": tools})
+        response = agent._interruptible_streaming_api_call(
+            {"model": agent.model, "tools": tools}
+        )
 
         assert response is repaired_message
         assert agent._anthropic_client.messages.create.call_count == 0
@@ -1272,15 +1360,29 @@ class TestAnthropicStreamCallbacks:
         agent._interrupt_requested = False
 
         attempts = [
-            _AnthropicEventStream([SimpleNamespace(type="content_block_start",
-                                     content_block=SimpleNamespace(type="tool_use", name="old_tool"))],
-                    ValueError("expected value at line 1 column 11")),
-            _AnthropicEventStream([SimpleNamespace(type="content_block_delta",
-                                     delta=SimpleNamespace(type="text_delta", text="Plain answer."))],
-                    ConnectionError("connection dropped")),
+            _AnthropicEventStream(
+                [
+                    SimpleNamespace(
+                        type="content_block_start",
+                        content_block=SimpleNamespace(type="tool_use", name="old_tool"),
+                    )
+                ],
+                ValueError("expected value at line 1 column 11"),
+            ),
+            _AnthropicEventStream(
+                [
+                    SimpleNamespace(
+                        type="content_block_delta",
+                        delta=SimpleNamespace(type="text_delta", text="Plain answer."),
+                    )
+                ],
+                ConnectionError("connection dropped"),
+            ),
         ]
         agent._anthropic_client = MagicMock()
-        agent._anthropic_client.messages.stream.side_effect = lambda **kwargs: attempts.pop(0)
+        agent._anthropic_client.messages.stream.side_effect = lambda **kwargs: (
+            attempts.pop(0)
+        )
         agent._create_request_anthropic_client = lambda *a, **k: agent._anthropic_client
         emitted = []
         # A real consumer: delivered text is recorded, so the second attempt counts as
@@ -1288,16 +1390,24 @@ class TestAnthropicStreamCallbacks:
         agent.stream_delta_callback = emitted.append
 
         response = agent._interruptible_streaming_api_call(
-            {"model": agent.model, "tools": [{"name": "old_tool", "input_schema": {"type": "object"}}]})
+            {
+                "model": agent.model,
+                "tools": [{"name": "old_tool", "input_schema": {"type": "object"}}],
+            }
+        )
 
         assert agent._anthropic_client.messages.stream.call_count == 2
         # anthropic_messages partial stubs are Messages-shaped (#45908).
-        assert "old_tool" not in "".join(getattr(b, "text", "") for b in response.content)
+        assert "old_tool" not in "".join(
+            getattr(b, "text", "") for b in response.content
+        )
         assert not any("old_tool" in t for t in emitted)
 
     @patch("run_agent.AIAgent._replace_primary_openai_client")
     def test_generic_anthropic_valueerror_still_propagates_without_stream_retry(
-        self, mock_replace, monkeypatch,
+        self,
+        mock_replace,
+        monkeypatch,
     ):
         """Only known provider stream parser ValueErrors are treated as transient."""
         from run_agent import AIAgent
@@ -1327,12 +1437,14 @@ class TestAnthropicStreamCallbacks:
         assert agent._anthropic_client.messages.stream.call_count == 1
         assert mock_replace.call_count == 0
 
-
     @patch("run_agent.AIAgent._try_refresh_anthropic_client_credentials")
     @patch("run_agent.AIAgent._rebuild_anthropic_client")
     @patch("run_agent.AIAgent._replace_primary_openai_client")
     def test_anthropic_eventless_sdk_assertion_normalized_to_empty_stream(
-        self, mock_replace, mock_rebuild, mock_refresh,
+        self,
+        mock_replace,
+        mock_rebuild,
+        mock_refresh,
     ):
         """Real-SDK shape: an eventless stream has no message_start, so
         get_final_message() raises AssertionError (final snapshot is None).
@@ -1400,16 +1512,22 @@ class TestPartialToolCallWarning:
 
         def _stalling_stream():
             yield _make_stream_chunk(content="Let me write the audit: ")
-            yield _make_stream_chunk(tool_calls=[
-                _make_tool_call_delta(index=0, tc_id="call_1", name="write_file"),
-            ])
-            yield _make_stream_chunk(tool_calls=[
-                _make_tool_call_delta(index=0, arguments='{"path": "/tmp/x", '),
-            ])
+            yield _make_stream_chunk(
+                tool_calls=[
+                    _make_tool_call_delta(index=0, tc_id="call_1", name="write_file"),
+                ]
+            )
+            yield _make_stream_chunk(
+                tool_calls=[
+                    _make_tool_call_delta(index=0, arguments='{"path": "/tmp/x", '),
+                ]
+            )
             raise _StallError("simulated upstream stall")
 
         mock_client = MagicMock()
-        mock_client.chat.completions.create.side_effect = lambda *a, **kw: _stalling_stream()
+        mock_client.chat.completions.create.side_effect = lambda *a, **kw: (
+            _stalling_stream()
+        )
         mock_create.return_value = mock_client
 
         agent = AIAgent(
@@ -1428,6 +1546,7 @@ class TestPartialToolCallWarning:
         agent._current_streamed_assistant_text = "Let me write the audit: "
 
         import os as _os
+
         _prev = _os.environ.get("CLAWK_STREAM_RETRIES")
         _os.environ["CLAWK_STREAM_RETRIES"] = "0"
         try:
@@ -1455,7 +1574,6 @@ class TestPartialToolCallWarning:
             f"fired_deltas={fired_deltas}"
         )
 
-
     @staticmethod
     def _zero_char_agent(mock_create, attempts_that_die: int):
         """Real streaming helper; the stream dies after a whitespace-only delta (nothing
@@ -1472,7 +1590,9 @@ class TestPartialToolCallWarning:
             def _stream():
                 if attempt <= attempts_that_die:
                     yield _make_stream_chunk(content=" \n")
-                    raise httpx.RemoteProtocolError("peer closed connection without sending complete message body")
+                    raise httpx.RemoteProtocolError(
+                        "peer closed connection without sending complete message body"
+                    )
                 yield _make_stream_chunk(content="Recovered answer.")
                 yield _make_stream_chunk(finish_reason="stop")
 
@@ -1491,12 +1611,16 @@ class TestPartialToolCallWarning:
         )
         agent.api_mode = "chat_completions"
         agent._interrupt_requested = False
-        agent.stream_delta_callback = lambda text: None  # a real consumer; the delta is whitespace-only
+        agent.stream_delta_callback = lambda text: (
+            None
+        )  # a real consumer; the delta is whitespace-only
         return agent, calls
 
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
-    def test_zero_char_partial_stream_retries_instead_of_empty_stub(self, mock_close, mock_create):
+    def test_zero_char_partial_stream_retries_instead_of_empty_stub(
+        self, mock_close, mock_create
+    ):
         """A stream that dies before any VISIBLE text reached the user is undelivered, not
         "partial delivery": the same request is retried (nothing to duplicate) instead of
         returning an empty length stub that makes the loop ask the model to continue from
@@ -1514,14 +1638,19 @@ class TestPartialToolCallWarning:
 
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
-    def test_zero_char_partial_stream_exhausted_raises_to_main_loop(self, mock_close, mock_create):
+    def test_zero_char_partial_stream_exhausted_raises_to_main_loop(
+        self, mock_close, mock_create
+    ):
         """Retries exhausted with still 0 visible chars: the stream error propagates so the
         conversation loop's fallback/backoff owns it — never an empty stub, never
         placeholder text (#68041) that would leak into the stitched response."""
         import httpx
 
         agent, calls = self._zero_char_agent(mock_create, attempts_that_die=99)
-        with patch.dict("os.environ", {"CLAWK_STREAM_RETRIES": "0"}), pytest.raises(httpx.RemoteProtocolError):
+        with (
+            patch.dict("os.environ", {"CLAWK_STREAM_RETRIES": "0"}),
+            pytest.raises(httpx.RemoteProtocolError),
+        ):
             agent._interruptible_streaming_api_call({})
         assert calls["n"] == 1
 
@@ -1540,7 +1669,10 @@ class TestSilentRetryMidToolCall:
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
     def test_silent_retry_recovers_tool_call(
-        self, mock_close, mock_create, mock_replace,
+        self,
+        mock_close,
+        mock_create,
+        mock_replace,
     ):
         """First attempt: text + partial tool-call + connection drop.
         Second attempt: text + complete tool-call.  Response should contain
@@ -1552,24 +1684,33 @@ class TestSilentRetryMidToolCall:
 
         def _first_stream():
             yield _make_stream_chunk(content="Let me write the audit: ")
-            yield _make_stream_chunk(tool_calls=[
-                _make_tool_call_delta(index=0, tc_id="call_1", name="write_file"),
-            ])
-            yield _make_stream_chunk(tool_calls=[
-                _make_tool_call_delta(index=0, arguments='{"path": "/tmp/x", '),
-            ])
+            yield _make_stream_chunk(
+                tool_calls=[
+                    _make_tool_call_delta(index=0, tc_id="call_1", name="write_file"),
+                ]
+            )
+            yield _make_stream_chunk(
+                tool_calls=[
+                    _make_tool_call_delta(index=0, arguments='{"path": "/tmp/x", '),
+                ]
+            )
             raise _httpx.RemoteProtocolError("peer closed connection")
 
         def _second_stream():
             yield _make_stream_chunk(content="Let me write the audit: ")
-            yield _make_stream_chunk(tool_calls=[
-                _make_tool_call_delta(index=0, tc_id="call_1", name="write_file"),
-            ])
-            yield _make_stream_chunk(tool_calls=[
-                _make_tool_call_delta(
-                    index=0, arguments='{"path": "/tmp/x", "content": "hi"}',
-                ),
-            ])
+            yield _make_stream_chunk(
+                tool_calls=[
+                    _make_tool_call_delta(index=0, tc_id="call_1", name="write_file"),
+                ]
+            )
+            yield _make_stream_chunk(
+                tool_calls=[
+                    _make_tool_call_delta(
+                        index=0,
+                        arguments='{"path": "/tmp/x", "content": "hi"}',
+                    ),
+                ]
+            )
             yield _make_stream_chunk(finish_reason="tool_calls")
 
         def _pick_stream(*a, **kw):
@@ -1595,6 +1736,7 @@ class TestSilentRetryMidToolCall:
         agent._fire_stream_delta = lambda text: fired_deltas.append(text)
 
         import os as _os
+
         _prev = _os.environ.get("CLAWK_STREAM_RETRIES")
         _os.environ["CLAWK_STREAM_RETRIES"] = "2"
         try:
@@ -1617,8 +1759,7 @@ class TestSilentRetryMidToolCall:
         )
         _tc0 = tool_calls[0]
         _name = (
-            _tc0["function"]["name"] if isinstance(_tc0, dict)
-            else _tc0.function.name
+            _tc0["function"]["name"] if isinstance(_tc0, dict) else _tc0.function.name
         )
         assert _name == "write_file"
         # User saw a reconnect marker between attempts.
@@ -1635,7 +1776,10 @@ class TestSilentRetryMidToolCall:
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
     def test_silent_retry_exhausted_falls_back_to_stub(
-        self, mock_close, mock_create, mock_replace,
+        self,
+        mock_close,
+        mock_create,
+        mock_replace,
     ):
         """When all retry attempts fail with connection errors, fall back
         to the original stub-with-warning behaviour so the user isn't left
@@ -1645,13 +1789,17 @@ class TestSilentRetryMidToolCall:
 
         def _always_fails():
             yield _make_stream_chunk(content="Let me write the audit: ")
-            yield _make_stream_chunk(tool_calls=[
-                _make_tool_call_delta(index=0, tc_id="call_1", name="write_file"),
-            ])
+            yield _make_stream_chunk(
+                tool_calls=[
+                    _make_tool_call_delta(index=0, tc_id="call_1", name="write_file"),
+                ]
+            )
             raise _httpx.RemoteProtocolError("peer closed connection")
 
         mock_client = MagicMock()
-        mock_client.chat.completions.create.side_effect = lambda *a, **kw: _always_fails()
+        mock_client.chat.completions.create.side_effect = lambda *a, **kw: (
+            _always_fails()
+        )
         mock_create.return_value = mock_client
 
         agent = AIAgent(
@@ -1669,6 +1817,7 @@ class TestSilentRetryMidToolCall:
         agent._fire_stream_delta = lambda text: fired_deltas.append(text)
 
         import os as _os
+
         _prev = _os.environ.get("CLAWK_STREAM_RETRIES")
         _os.environ["CLAWK_STREAM_RETRIES"] = "1"
         try:
@@ -1690,7 +1839,10 @@ class TestSilentRetryMidToolCall:
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
     def test_no_silent_retry_for_text_only_stall(
-        self, mock_close, mock_create, mock_replace,
+        self,
+        mock_close,
+        mock_create,
+        mock_replace,
     ):
         """Text-only stall (no tool call in flight) must NOT trigger silent
         retry — that's the case where the user saw the model's text reply
@@ -1706,6 +1858,7 @@ class TestSilentRetryMidToolCall:
             def _gen():
                 yield _make_stream_chunk(content="Here's my answer so far")
                 raise _httpx.RemoteProtocolError("peer closed connection")
+
             return _gen()
 
         mock_client = MagicMock()
@@ -1725,6 +1878,7 @@ class TestSilentRetryMidToolCall:
         agent._current_streamed_assistant_text = "Here's my answer so far"
 
         import os as _os
+
         _prev = _os.environ.get("CLAWK_STREAM_RETRIES")
         _os.environ["CLAWK_STREAM_RETRIES"] = "2"
         try:
@@ -1772,7 +1926,10 @@ class TestBedrockIamStreamingFallback:
         return agent
 
     def test_iam_denial_falls_back_inline_and_disables_streaming(self):
-        pytest.importorskip("botocore.exceptions", reason="botocore (with working exceptions module) required")
+        pytest.importorskip(
+            "botocore.exceptions",
+            reason="botocore (with working exceptions module) required",
+        )
         from botocore.exceptions import ClientError
 
         agent = self._make_bedrock_agent()
@@ -1807,7 +1964,6 @@ class TestBedrockIamStreamingFallback:
         client.converse.assert_called_once()
         assert response.choices[0].message.content == "hi"
         assert getattr(agent, "_disable_streaming", False) is True
-
 
 
 class _AnthropicEventStream:
@@ -1915,7 +2071,10 @@ class TestBedrockStreamLivenessWatchdog:
         """A Bedrock stream that opens then stops yielding events trips the
         watchdog: it bumps the cross-turn stale streak and raises TimeoutError
         instead of hanging forever."""
-        pytest.importorskip("botocore.exceptions", reason="botocore (with working exceptions module) required")
+        pytest.importorskip(
+            "botocore.exceptions",
+            reason="botocore (with working exceptions module) required",
+        )
         import threading as _t
 
         # Tiny stale timeout so the watchdog trips quickly; give-up threshold
@@ -1948,7 +2107,10 @@ class TestBedrockStreamLivenessWatchdog:
     def test_pre_elevated_streak_aborts_before_streaming(self, monkeypatch):
         """A streak already past the give-up threshold aborts at entry with
         RuntimeError — Bedrock never even opens a stream (cross-turn breaker)."""
-        pytest.importorskip("botocore.exceptions", reason="botocore (with working exceptions module) required")
+        pytest.importorskip(
+            "botocore.exceptions",
+            reason="botocore (with working exceptions module) required",
+        )
 
         monkeypatch.setenv("CLAWK_STREAM_STALE_GIVEUP", "5")
 
@@ -1970,7 +2132,10 @@ class TestBedrockStreamLivenessWatchdog:
     def test_successful_stream_resets_streak(self, monkeypatch):
         """A Bedrock stream that completes normally clears any prior stale
         streak so a recovered provider doesn't carry it into later turns."""
-        pytest.importorskip("botocore.exceptions", reason="botocore (with working exceptions module) required")
+        pytest.importorskip(
+            "botocore.exceptions",
+            reason="botocore (with working exceptions module) required",
+        )
 
         monkeypatch.setenv("CLAWK_STREAM_STALE_TIMEOUT", "60")
 

@@ -46,10 +46,6 @@ def _error():
     )
 
 
-
-
-
-
 def test_raw_refresh_token_never_logged(caplog):
     """Load-bearing redaction-safety test: the raw secret must never appear."""
     state = _make_state()
@@ -61,5 +57,3 @@ def test_raw_refresh_token_never_logged(caplog):
     # Belt-and-suspenders: the access token and agent key must not leak either.
     assert "nous_at_SECRET_access_token_material" not in text
     assert "nous_agent_key_SECRET_material" not in text
-
-

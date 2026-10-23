@@ -4,6 +4,7 @@
 them (OPENAI_BASE_URL, XAI_BASE_URL, NOUS_INFERENCE_BASE_URL) and the gateway proxy URL / browser
 provider endpoints must follow the same rule, or a secondary's key is sent to another profile's host.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -13,11 +14,21 @@ from agent import secret_scope
 
 @pytest.fixture
 def secondary_scope(monkeypatch):
-    for name in ("OPENAI_BASE_URL", "XAI_BASE_URL", "CLAWK_XAI_BASE_URL", "NOUS_INFERENCE_BASE_URL",
-                 "GATEWAY_PROXY_URL", "FIRECRAWL_API_URL", "BROWSERBASE_BASE_URL", "XAI_API_KEY"):
+    for name in (
+        "OPENAI_BASE_URL",
+        "XAI_BASE_URL",
+        "CLAWK_XAI_BASE_URL",
+        "NOUS_INFERENCE_BASE_URL",
+        "GATEWAY_PROXY_URL",
+        "FIRECRAWL_API_URL",
+        "BROWSERBASE_BASE_URL",
+        "XAI_API_KEY",
+    ):
         monkeypatch.setenv(name, f"https://{name.lower()}.default.example/v1")
     secret_scope.set_multiplex_active(True)
-    token = secret_scope.set_secret_scope({"BROWSERBASE_API_KEY": "bb-b", "BROWSERBASE_PROJECT_ID": "pid-b"})
+    token = secret_scope.set_secret_scope(
+        {"BROWSERBASE_API_KEY": "bb-b", "BROWSERBASE_PROJECT_ID": "pid-b"}
+    )
     try:
         yield
     finally:
@@ -25,7 +36,9 @@ def secondary_scope(monkeypatch):
         secret_scope.set_multiplex_active(False)
 
 
-def test_base_urls_follow_the_scoped_key_not_default_environ(monkeypatch, secondary_scope, tmp_path):
+def test_base_urls_follow_the_scoped_key_not_default_environ(
+    monkeypatch, secondary_scope, tmp_path
+):
     import agent.auxiliary_client as aux
     import plugins.browser.browserbase.provider as browserbase
     import plugins.browser.firecrawl.provider as firecrawl
@@ -35,15 +48,26 @@ def test_base_urls_follow_the_scoped_key_not_default_environ(monkeypatch, second
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     from clawk_cli.runtime_provider_custom import expand_direct_api_alias
-    monkeypatch.setattr("clawk_cli.runtime_provider._get_named_custom_provider", lambda name: None)
+
+    monkeypatch.setattr(
+        "clawk_cli.runtime_provider._get_named_custom_provider", lambda name: None
+    )
 
     _, base = expand_direct_api_alias("openai", None)
     assert "default.example" not in (base or "")
     assert aux._scoped_key_env("OPENAI_BASE_URL") == ""
     assert auth_nous._nous_inference_env_override() is None
     monkeypatch.setattr("gateway.run._load_gateway_config", dict)
-    assert GatewayTurnMixin._get_proxy_url(GatewayTurnMixin.__new__(GatewayTurnMixin)) is None
-    assert "default.example" not in browserbase.BrowserbaseBrowserProvider()._get_config_or_none()["base_url"]
+    assert (
+        GatewayTurnMixin._get_proxy_url(GatewayTurnMixin.__new__(GatewayTurnMixin))
+        is None
+    )
+    assert (
+        "default.example"
+        not in browserbase.BrowserbaseBrowserProvider()._get_config_or_none()[
+            "base_url"
+        ]
+    )
     assert "default.example" not in firecrawl.FirecrawlBrowserProvider()._api_url()
     # xAI video: a scoped miss stays a miss — no environ fallback-after-miss for the key or the URL.
     api_key, base_url = xai_video._resolve_xai_credentials()
@@ -60,7 +84,12 @@ def test_unscoped_single_profile_reads_keep_environ(monkeypatch):
     try:
         monkeypatch.setenv("GATEWAY_PROXY_URL", "https://proxy.mine.example/")
         monkeypatch.setenv("NOUS_INFERENCE_BASE_URL", "https://nous.mine.example/v1/")
-        assert GatewayTurnMixin._get_proxy_url(GatewayTurnMixin.__new__(GatewayTurnMixin)) == "https://proxy.mine.example"
-        assert auth_nous._nous_inference_env_override() == "https://nous.mine.example/v1"
+        assert (
+            GatewayTurnMixin._get_proxy_url(GatewayTurnMixin.__new__(GatewayTurnMixin))
+            == "https://proxy.mine.example"
+        )
+        assert (
+            auth_nous._nous_inference_env_override() == "https://nous.mine.example/v1"
+        )
     finally:
         secret_scope.reset_secret_scope(token)

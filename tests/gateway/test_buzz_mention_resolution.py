@@ -46,7 +46,9 @@ def _clean_env(monkeypatch, tmp_path):
 def _make_adapter(extra=None):
     from gateway.config import PlatformConfig
 
-    cfg = PlatformConfig(enabled=True, extra={"relay_url": "https://test.relay", **(extra or {})})
+    cfg = PlatformConfig(
+        enabled=True, extra={"relay_url": "https://test.relay", **(extra or {})}
+    )
     adapter = BuzzAdapter(cfg)
     adapter._self_pubkey = SELF_PUBKEY
     adapter._private_key = "nsec1test"
@@ -91,7 +93,6 @@ def _profile(pubkey, name):
 
 
 class TestChannelMemberPubkeys:
-
     @pytest.mark.asyncio
     async def test_members_subcommand_is_primary_source(self):
         adapter = _make_adapter()
@@ -125,7 +126,6 @@ class TestChannelMemberPubkeys:
 
 
 class TestMentionTokenMatching:
-
     async def _resolve(self, content, members=None, profiles=None):
         adapter = _make_adapter()
         cli = _wire(adapter, _ScriptedCli())
@@ -164,7 +164,6 @@ class TestMentionTokenMatching:
         # non-ASCII script, not a mention.
         assert await self._resolve("山田@Fizz") == []
 
-
     @pytest.mark.asyncio
     async def test_longest_name_wins_and_consumes_span(self):
         result = await self._resolve(
@@ -197,7 +196,6 @@ class TestMentionTokenMatching:
 
 
 class TestResolutionCaching:
-
     @pytest.mark.asyncio
     async def test_member_list_cached_within_ttl(self):
         adapter = _make_adapter()
@@ -208,7 +206,9 @@ class TestResolutionCaching:
         assert await adapter._mention_pubkeys_for(CHANNEL, "@Fizz one") == [FIZZ_PUBKEY]
         assert await adapter._mention_pubkeys_for(CHANNEL, "@Fizz two") == [FIZZ_PUBKEY]
 
-        member_calls = [c for c in cli.calls if (c[0][0], c[0][1]) == ("channels", "members")]
+        member_calls = [
+            c for c in cli.calls if (c[0][0], c[0][1]) == ("channels", "members")
+        ]
         assert len(member_calls) == 1, "second resolve must hit the member cache"
 
     @pytest.mark.asyncio
@@ -227,14 +227,15 @@ class TestResolutionCaching:
         assert await adapter._mention_pubkeys_for(CHANNEL, "@FizzRenamed hi") == []
         # Past the name TTL (and member TTL): the rename resolves.
         clock[0] += _buzz_mod._PROFILE_NAME_TTL + 1
-        assert await adapter._mention_pubkeys_for(CHANNEL, "@FizzRenamed hi") == [FIZZ_PUBKEY]
+        assert await adapter._mention_pubkeys_for(CHANNEL, "@FizzRenamed hi") == [
+            FIZZ_PUBKEY
+        ]
 
 
 # ── send() recovery paths ─────────────────────────────────────────────────
 
 
 class TestSendRecovery:
-
     def _sending_adapter(self):
         adapter = _make_adapter()
         cli = _wire(adapter, _ScriptedCli())
@@ -261,9 +262,16 @@ class TestSendRecovery:
     async def test_non_member_mention_retries_without_mentions(self):
         adapter, cli = self._sending_adapter()
         cli.script(
-            "messages", "send", "",
+            "messages",
+            "send",
+            "",
             code=1,
-            stderr=json.dumps({"error": "user_error", "message": "mentioned pubkeys are not channel members"}),
+            stderr=json.dumps(
+                {
+                    "error": "user_error",
+                    "message": "mentioned pubkeys are not channel members",
+                }
+            ),
         )
         cli.script("messages", "send", {"accepted": True, "event_id": "e2"})
 
@@ -280,10 +288,12 @@ class TestSendRecovery:
         adapter = _make_adapter()
         cli = _wire(adapter, _ScriptedCli())
         cli.script("channels", "members", _members())  # nobody to resolve
-        unresolved = json.dumps({
-            "error": "user_error",
-            "message": "mention '@-mention' does not match a current channel member",
-        })
+        unresolved = json.dumps(
+            {
+                "error": "user_error",
+                "message": "mention '@-mention' does not match a current channel member",
+            }
+        )
         # Composed ladder (#82646 + #83414): the presentation-escape retry
         # fires first; when the CLI still rejects, the self-mention downgrade
         # is the last rung.
@@ -309,12 +319,16 @@ class TestSendRecovery:
         cli = _wire(adapter, _ScriptedCli())
         cli.script("channels", "members", _members())
         cli.script(
-            "messages", "send", "",
+            "messages",
+            "send",
+            "",
             code=1,
-            stderr=json.dumps({
-                "error": "user_error",
-                "message": "mention '@-mention' does not match a current channel member",
-            }),
+            stderr=json.dumps(
+                {
+                    "error": "user_error",
+                    "message": "mention '@-mention' does not match a current channel member",
+                }
+            ),
         )
         cli.script("messages", "send", {"accepted": True, "event_id": "e4"})
 

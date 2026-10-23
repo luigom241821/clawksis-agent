@@ -37,7 +37,10 @@ class _WireClient:
         self.requests.append((method, params))
         if method == "thread/resume":
             if params["threadId"] in _WireClient.dead:
-                raise CodexAppServerError(code=-32600, message=f"no rollout found for thread id {params['threadId']}")
+                raise CodexAppServerError(
+                    code=-32600,
+                    message=f"no rollout found for thread id {params['threadId']}",
+                )
             return {"thread": {"id": params["threadId"]}}
         _WireClient.counter += 1
         return {"thread": {"id": f"thread-{_WireClient.counter}"}}
@@ -48,18 +51,35 @@ class _WireClient:
 
 def _agent(db, **kwargs):
     from run_agent import AIAgent
-    agent = AIAgent(api_key="stub", base_url="https://stub.invalid", provider="openai", api_mode="codex_app_server",
-                    quiet_mode=True, skip_context_files=True, skip_memory=True, session_db=db, session_id=SID, **kwargs)
+
+    agent = AIAgent(
+        api_key="stub",
+        base_url="https://stub.invalid",
+        provider="openai",
+        api_mode="codex_app_server",
+        quiet_mode=True,
+        skip_context_files=True,
+        skip_memory=True,
+        session_db=db,
+        session_id=SID,
+        **kwargs,
+    )
     agent._spawn_background_review = lambda **kw: None
     return agent
 
 
 def _run_turn(self, user_input, **kwargs):
-    return TurnResult(final_text=f"echo {user_input}", thread_id=self._thread_id, turn_id="turn-1",
-                      projected_messages=[{"role": "assistant", "content": f"echo {user_input}"}])
+    return TurnResult(
+        final_text=f"echo {user_input}",
+        thread_id=self._thread_id,
+        turn_id="turn-1",
+        projected_messages=[{"role": "assistant", "content": f"echo {user_input}"}],
+    )
 
 
-def test_rebuilt_agent_resumes_the_stored_codex_thread_and_an_unresumable_one_fails_closed(monkeypatch, tmp_path):
+def test_rebuilt_agent_resumes_the_stored_codex_thread_and_an_unresumable_one_fails_closed(
+    monkeypatch, tmp_path
+):
     monkeypatch.setattr(session_mod, "CodexAppServerClient", _WireClient)
     monkeypatch.setattr(CodexAppServerSession, "run_turn", _run_turn)
     _WireClient.instances, _WireClient.dead, _WireClient.counter = [], set(), 0
@@ -69,16 +89,24 @@ def test_rebuilt_agent_resumes_the_stored_codex_thread_and_an_unresumable_one_fa
         first = _agent(db)
         assert first.run_conversation("Remember the word amber.")["completed"]
         assert db.get_session_model_config_value(SID, "codex_thread_id") == "thread-1"
-        assert [r["content"] for r in db.get_messages(SID)][-1] == "echo Remember the word amber."
+        assert [r["content"] for r in db.get_messages(SID)][
+            -1
+        ] == "echo Remember the word amber."
 
         # Process 2 (restart): a new AIAgent for the same session resumes that thread before turn/start.
         notices: list[str] = []
-        def status_callback(kind, message):  # the lifecycle rail every surface renders; other kinds are noise
+
+        def status_callback(
+            kind, message
+        ):  # the lifecycle rail every surface renders; other kinds are noise
             if kind == "lifecycle":
                 notices.append(str(message))
+
         second = _agent(db)
         second.status_callback = status_callback
-        assert second.run_conversation("Which word?", conversation_history=[])["completed"]
+        assert second.run_conversation("Which word?", conversation_history=[])[
+            "completed"
+        ]
         assert [m for m, _ in _WireClient.instances[1].requests] == ["thread/resume"]
         assert _WireClient.instances[1].requests[0][1]["threadId"] == "thread-1"
         assert notices == []
@@ -88,7 +116,10 @@ def test_rebuilt_agent_resumes_the_stored_codex_thread_and_an_unresumable_one_fa
         third = _agent(db)
         third.status_callback = status_callback
         assert third.run_conversation("And now?", conversation_history=[])["completed"]
-        assert [m for m, _ in _WireClient.instances[2].requests] == ["thread/resume", "thread/start"]
+        assert [m for m, _ in _WireClient.instances[2].requests] == [
+            "thread/resume",
+            "thread/start",
+        ]
         assert db.get_session_model_config_value(SID, "codex_thread_id") == "thread-2"
         assert notices == ["Codex thread could not be resumed; starting a new one."]
     finally:

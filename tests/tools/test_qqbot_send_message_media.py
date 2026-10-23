@@ -172,9 +172,12 @@ class TestSendQqbotMedia:
             }
         )
 
-        with patch.dict("sys.modules", {"httpx": _HttpxMod()}), patch(
-            "plugins.platforms.qqbot.send._qqbot_deliver_one_media",
-            new=deliver,
+        with (
+            patch.dict("sys.modules", {"httpx": _HttpxMod()}),
+            patch(
+                "plugins.platforms.qqbot.send._qqbot_deliver_one_media",
+                new=deliver,
+            ),
         ):
             result = asyncio.run(
                 _send_qqbot(
@@ -217,12 +220,15 @@ class TestSendQqbotMedia:
             calls.append(("send", chat_type, file_info, caption))
             return {"id": "mid-2"}
 
-        with patch(
-            "plugins.platforms.qqbot.send._qqbot_upload_local_file",
-            new=AsyncMock(side_effect=_fake_upload_local),
-        ), patch(
-            "plugins.platforms.qqbot.send._qqbot_send_media_message",
-            new=AsyncMock(side_effect=_fake_send_media),
+        with (
+            patch(
+                "plugins.platforms.qqbot.send._qqbot_upload_local_file",
+                new=AsyncMock(side_effect=_fake_upload_local),
+            ),
+            patch(
+                "plugins.platforms.qqbot.send._qqbot_send_media_message",
+                new=AsyncMock(side_effect=_fake_send_media),
+            ),
         ):
             result = asyncio.run(
                 _qqbot_deliver_one_media(
@@ -252,7 +258,9 @@ class TestQqbotMediaFailureFallsBackToText:
 
         def _post(url, json):
             if "getAppAccessToken" in url:
-                return SimpleNamespace(status_code=200, json=lambda: {"access_token": "at-1"})
+                return SimpleNamespace(
+                    status_code=200, json=lambda: {"access_token": "at-1"}
+                )
             posted.append((url, json))
             return SimpleNamespace(status_code=200, json=lambda: {"id": "text-mid"})
 
@@ -268,28 +276,42 @@ class TestQqbotMediaFailureFallsBackToText:
             )
 
         assert result.get("success") is True, result
-        assert any(json and json.get("content") == "the caption text" for _, json in posted), posted
-        assert any("omitted" in w or "skipping" in w for w in result.get("warnings", [])), result
+        assert any(
+            json and json.get("content") == "the caption text" for _, json in posted
+        ), posted
+        assert any(
+            "omitted" in w or "skipping" in w for w in result.get("warnings", [])
+        ), result
 
     def test_upload_quota_error_still_delivers_caption_as_text(self, tmp_path):
         img = tmp_path / "big.png"
         img.write_bytes(b"png")
 
-        async def _deliver(client, headers, chat_id, media_path, is_voice, caption=None):
-            return {"error": "QQBot media send failed (guild/channel native media is unsupported; "
-                             "tried c2c and group): c2c: QQ Bot API error [400] "
-                             "/v2/users/user-openid/files: daily upload quota exceeded"}
+        async def _deliver(
+            client, headers, chat_id, media_path, is_voice, caption=None
+        ):
+            return {
+                "error": "QQBot media send failed (guild/channel native media is unsupported; "
+                "tried c2c and group): c2c: QQ Bot API error [400] "
+                "/v2/users/user-openid/files: daily upload quota exceeded"
+            }
 
         posted = []
 
         def _post(url, json):
             if "getAppAccessToken" in url:
-                return SimpleNamespace(status_code=200, json=lambda: {"access_token": "at-1"})
+                return SimpleNamespace(
+                    status_code=200, json=lambda: {"access_token": "at-1"}
+                )
             posted.append((url, json))
             return SimpleNamespace(status_code=200, json=lambda: {"id": "text-mid"})
 
-        with patch.dict("sys.modules", {"httpx": _token_client(_post)}), patch(
-            "plugins.platforms.qqbot.send._qqbot_deliver_one_media", new=AsyncMock(side_effect=_deliver)
+        with (
+            patch.dict("sys.modules", {"httpx": _token_client(_post)}),
+            patch(
+                "plugins.platforms.qqbot.send._qqbot_deliver_one_media",
+                new=AsyncMock(side_effect=_deliver),
+            ),
         ):
             result = asyncio.run(
                 _send_qqbot(
@@ -302,23 +324,34 @@ class TestQqbotMediaFailureFallsBackToText:
             )
 
         assert result.get("success") is True, result
-        assert any(json and json.get("content") == "urgent notice" for _, json in posted), posted
+        assert any(
+            json and json.get("content") == "urgent notice" for _, json in posted
+        ), posted
         assert result.get("warnings"), "media failure must be surfaced as a warning"
 
-    def test_non_caption_message_text_sent_before_failed_media_is_not_duplicated(self, tmp_path):
+    def test_non_caption_message_text_sent_before_failed_media_is_not_duplicated(
+        self, tmp_path
+    ):
         img = tmp_path / "x.png"
         img.write_bytes(b"x")
         posted = []
 
         def _post(url, json):
             if "getAppAccessToken" in url:
-                return SimpleNamespace(status_code=200, json=lambda: {"access_token": "at-1"})
+                return SimpleNamespace(
+                    status_code=200, json=lambda: {"access_token": "at-1"}
+                )
             posted.append((url, json))
             return SimpleNamespace(status_code=200, json=lambda: {"id": "mid"})
 
-        with patch.dict("sys.modules", {"httpx": _token_client(_post)}), patch(
-            "plugins.platforms.qqbot.send._qqbot_deliver_one_media",
-            new=AsyncMock(return_value={"error": "QQBot media send failed: too large"}),
+        with (
+            patch.dict("sys.modules", {"httpx": _token_client(_post)}),
+            patch(
+                "plugins.platforms.qqbot.send._qqbot_deliver_one_media",
+                new=AsyncMock(
+                    return_value={"error": "QQBot media send failed: too large"}
+                ),
+            ),
         ):
             result = asyncio.run(
                 _send_qqbot(

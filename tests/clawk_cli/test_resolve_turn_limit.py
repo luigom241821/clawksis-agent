@@ -5,6 +5,7 @@ Covers the full spelling table (int, float, numeric string, ``"none"``,
 ``"unlimited"``, ``"infinite"``, ``"-1"``, ``"0"``, YAML ``None``, bool,
 garbage) and the config→env bridge in the gateway and TUI resolvers.
 """
+
 import os
 import pytest
 
@@ -31,15 +32,20 @@ class TestNumericValues:
         assert resolve_turn_limit(-5) == TURN_LIMIT_UNLIMITED
 
 
-
 class TestUnlimitedSpellings:
-    @pytest.mark.parametrize("spelling", [
-        "none", "None", "NONE",
-        "unlimited",
-        "infinite",
-        "∞",
-        "-1", "0",
-    ])
+    @pytest.mark.parametrize(
+        "spelling",
+        [
+            "none",
+            "None",
+            "NONE",
+            "unlimited",
+            "infinite",
+            "∞",
+            "-1",
+            "0",
+        ],
+    )
     def test_string_spellings_resolve_to_sentinel(self, spelling):
         assert resolve_turn_limit(spelling) == TURN_LIMIT_UNLIMITED
 
@@ -69,7 +75,6 @@ class TestAbsentAndDefault:
         assert resolve_turn_limit("   ") == TURN_LIMIT_UNLIMITED
 
 
-
 class TestInvalidInputs:
     def test_bool_rejected(self):
         # bool is an int subclass — must not silently become 1/0
@@ -89,10 +94,6 @@ class TestInvalidInputs:
         assert resolve_turn_limit({"max_turns": 90}) == TURN_LIMIT_UNLIMITED
 
 
-
-
-
-
 class TestGatewayBridgeNullHandling:
     """Verify that _bridge_max_turns_from_config does NOT serialize Python None
     (from YAML ``null`` or bare ``key:``) into the env var as the string
@@ -105,6 +106,7 @@ class TestGatewayBridgeNullHandling:
         monkeypatch.setenv("CLAWK_MAX_ITERATIONS", "stale-120")
         # Import here to avoid module-level gateway dependency
         from gateway.run import _bridge_max_turns_from_config
+
         _bridge_max_turns_from_config(tmp_path)
         # The stale env var should be cleared so downstream resolver
         # applies the default rather than using the stale value.
@@ -116,6 +118,7 @@ class TestGatewayBridgeNullHandling:
         cfg_file.write_text('agent:\n  max_turns: "none"\n', encoding="utf-8")
         monkeypatch.delenv("CLAWK_MAX_ITERATIONS", raising=False)
         from gateway.run import _bridge_max_turns_from_config
+
         _bridge_max_turns_from_config(tmp_path)
         assert os.environ.get("CLAWK_MAX_ITERATIONS") == "none"
 
@@ -125,6 +128,7 @@ class TestGatewayBridgeNullHandling:
         cfg_file.write_text("agent:\n  max_turns: 120\n", encoding="utf-8")
         monkeypatch.delenv("CLAWK_MAX_ITERATIONS", raising=False)
         from gateway.run import _bridge_max_turns_from_config
+
         _bridge_max_turns_from_config(tmp_path)
         assert os.environ.get("CLAWK_MAX_ITERATIONS") == "120"
 
@@ -134,6 +138,7 @@ class TestGatewayBridgeNullHandling:
         cfg_file.write_text("agent:\n  max_turns:\n", encoding="utf-8")
         monkeypatch.setenv("CLAWK_MAX_ITERATIONS", "stale-90")
         from gateway.run import _bridge_max_turns_from_config
+
         _bridge_max_turns_from_config(tmp_path)
         assert "CLAWK_MAX_ITERATIONS" not in os.environ
 
@@ -144,23 +149,25 @@ class TestTUIResolver:
 
     def test_string_none_resolves_to_unlimited(self):
         from tui_gateway.server import _cfg_max_turns
+
         cfg = {"agent": {"max_turns": "none"}}
         assert _cfg_max_turns(cfg, default=25) == TURN_LIMIT_UNLIMITED
 
-
-
     def test_int_passthrough(self):
         from tui_gateway.server import _cfg_max_turns
+
         cfg = {"agent": {"max_turns": 50}}
         assert _cfg_max_turns(cfg, default=25) == 50
 
     def test_none_falls_through_to_default(self):
         from tui_gateway.server import _cfg_max_turns
+
         cfg = {"agent": {}}
         assert _cfg_max_turns(cfg, default=25) == 25
 
     def test_env_var_override(self, monkeypatch):
         from tui_gateway.server import _cfg_max_turns
+
         monkeypatch.setenv("CLAWK_TUI_MAX_TURNS", "none")
         cfg = {"agent": {"max_turns": 50}}
         assert _cfg_max_turns(cfg, default=25) == TURN_LIMIT_UNLIMITED
@@ -169,6 +176,7 @@ class TestTUIResolver:
         """Old code swallowed 0 via `int(0) > 0` → False. Now it routes
         through resolve_turn_limit which treats 0 as unlimited."""
         from tui_gateway.server import _cfg_max_turns
+
         monkeypatch.setenv("CLAWK_TUI_MAX_TURNS", "0")
         cfg = {"agent": {"max_turns": 50}}
         assert _cfg_max_turns(cfg, default=25) == TURN_LIMIT_UNLIMITED
@@ -176,5 +184,6 @@ class TestTUIResolver:
     def test_root_level_max_turns(self):
         """Legacy root-level max_turns still works."""
         from tui_gateway.server import _cfg_max_turns
+
         cfg = {"max_turns": "none"}
         assert _cfg_max_turns(cfg, default=25) == TURN_LIMIT_UNLIMITED

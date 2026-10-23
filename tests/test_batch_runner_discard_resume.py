@@ -36,8 +36,6 @@ def _discarded_result():
     }
 
 
-
-
 # ─────────────────────────────────────────────────────────────────────
 # Content scan: tombstones count as completed
 # ─────────────────────────────────────────────────────────────────────
@@ -51,12 +49,16 @@ def _scan_runner(tmp_path):
 
 def test_content_scan_treats_tombstone_as_completed(tmp_path):
     (tmp_path / "batch_1.jsonl").write_text(
-        json.dumps({"prompt_index": 0, "discarded": "no_reasoning", "prompt": "tombstoned q"})
+        json.dumps(
+            {"prompt_index": 0, "discarded": "no_reasoning", "prompt": "tombstoned q"}
+        )
         + "\n"
-        + json.dumps({
-            "conversations": [{"from": "human", "value": "normal q"}],
-            "completed": True,
-        })
+        + json.dumps(
+            {
+                "conversations": [{"from": "human", "value": "normal q"}],
+                "completed": True,
+            }
+        )
         + "\n",
         encoding="utf-8",
     )
@@ -68,7 +70,9 @@ def test_content_scan_treats_tombstone_as_completed(tmp_path):
 
 def test_content_scan_still_skips_failed_rows(tmp_path):
     (tmp_path / "batch_1.jsonl").write_text(
-        json.dumps({"failed": True, "conversations": [{"from": "human", "value": "retry me"}]})
+        json.dumps(
+            {"failed": True, "conversations": [{"from": "human", "value": "retry me"}]}
+        )
         + "\n",
         encoding="utf-8",
     )
@@ -109,14 +113,18 @@ def test_merge_excludes_tombstones_from_trajectories(tmp_path, monkeypatch):
     out_dir = tmp_path / "data" / "discard-resume-test"
     out_dir.mkdir(parents=True)
     (out_dir / "batch_1.jsonl").write_text(
-        json.dumps({
-            "prompt_index": 0,
-            "conversations": [{"from": "human", "value": "real q"}],
-            "completed": True,
-            "tool_stats": {},
-        })
+        json.dumps(
+            {
+                "prompt_index": 0,
+                "conversations": [{"from": "human", "value": "real q"}],
+                "completed": True,
+                "tool_stats": {},
+            }
+        )
         + "\n"
-        + json.dumps({"prompt_index": 1, "discarded": "no_reasoning", "prompt": "dropped q"})
+        + json.dumps(
+            {"prompt_index": 1, "discarded": "no_reasoning", "prompt": "dropped q"}
+        )
         + "\n",
         encoding="utf-8",
     )
@@ -153,9 +161,18 @@ def test_merge_excludes_tombstones_from_trajectories(tmp_path, monkeypatch):
 
 def test_entry_prompt_text_shapes():
     assert _entry_prompt_text({"prompt": "flat"}) == "flat"
-    assert _entry_prompt_text({"conversations": [{"from": "human", "value": "sharegpt"}]}) == "sharegpt"
-    assert _entry_prompt_text({"conversations": [{"role": "user", "content": "chat"}]}) == "chat"
-    assert _entry_prompt_text({"messages": [{"role": "user", "content": "msgs"}]}) == "msgs"
+    assert (
+        _entry_prompt_text({"conversations": [{"from": "human", "value": "sharegpt"}]})
+        == "sharegpt"
+    )
+    assert (
+        _entry_prompt_text({"conversations": [{"role": "user", "content": "chat"}]})
+        == "chat"
+    )
+    assert (
+        _entry_prompt_text({"messages": [{"role": "user", "content": "msgs"}]})
+        == "msgs"
+    )
     assert _entry_prompt_text({"prompt": "  padded  ", "discarded": "x"}) == "padded"
     assert _entry_prompt_text({}) == ""
     assert _entry_prompt_text("not-a-dict") == ""
@@ -165,22 +182,24 @@ def test_scans_skip_non_dict_lines(tmp_path):
     """A parseable-but-non-object line used to raise AttributeError/TypeError
     mid-scan (resume scan and dataset load); it is skipped like invalid JSON."""
     (tmp_path / "batch_1.jsonl").write_text(
-        '"scalar row"\n'
-        + json.dumps({"prompt": "ok q", "completed": True}) + "\n",
+        '"scalar row"\n' + json.dumps({"prompt": "ok q", "completed": True}) + "\n",
         encoding="utf-8",
     )
     runner = _scan_runner(tmp_path)
     assert runner._scan_completed_prompts_by_content() == {"ok q"}
     dataset = tmp_path / "dataset.jsonl"
-    dataset.write_text('"not an entry"\n' + json.dumps({"prompt": "real"}) + "\n", encoding="utf-8")
+    dataset.write_text(
+        '"not an entry"\n' + json.dumps({"prompt": "real"}) + "\n", encoding="utf-8"
+    )
     runner.dataset_file = dataset
     assert runner._load_dataset() == [{"prompt": "real"}]
 
 
 def test_combine_batch_files_skips_non_dict_lines(tmp_path):
     (tmp_path / "batch_1.jsonl").write_text(
-        '42\n'
-        + json.dumps({"conversations": [{"from": "human", "value": "kept"}]}) + "\n",
+        "42\n"
+        + json.dumps({"conversations": [{"from": "human", "value": "kept"}]})
+        + "\n",
         encoding="utf-8",
     )
     runner = _scan_runner(tmp_path)

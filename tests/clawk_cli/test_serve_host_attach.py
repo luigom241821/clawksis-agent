@@ -19,7 +19,9 @@ from clawk_cli.main_dashboard import _attach_to_host_backend
 
 
 def _args(**over):
-    base = dict(host="127.0.0.1", port=9200, no_open=True, isolated=False, open_profile="")
+    base = dict(
+        host="127.0.0.1", port=9200, no_open=True, isolated=False, open_profile=""
+    )
     return SimpleNamespace(**{**base, **over})
 
 
@@ -41,8 +43,14 @@ def owner(host_dir):
             if self.path != hr.HOST_IDENTITY_PATH:
                 self.send_error(404)
                 return
-            body = json.dumps({"ok": True, "pid": os.getpid(), "role": hr.ROLE_SERVE,
-                               "servesSpa": serves_spa["value"]}).encode()
+            body = json.dumps(
+                {
+                    "ok": True,
+                    "pid": os.getpid(),
+                    "role": hr.ROLE_SERVE,
+                    "servesSpa": serves_spa["value"],
+                }
+            ).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
@@ -72,10 +80,16 @@ def _dead_port() -> int:
 
 def _publish(create_time, *, pid=None, port=9119, host="127.0.0.1"):
     record = hr.HostRecord(
-        role=hr.ROLE_SERVE, pid=pid if pid is not None else os.getpid(), create_time=create_time,
-        host=host, port=port, protocol_version=hr.HOST_PROTOCOL_VERSION,
-        token_fingerprint="", profiles=("default", "alpha"),
-        updated_at="2026-01-01T00:00:00+00:00")
+        role=hr.ROLE_SERVE,
+        pid=pid if pid is not None else os.getpid(),
+        create_time=create_time,
+        host=host,
+        port=port,
+        protocol_version=hr.HOST_PROTOCOL_VERSION,
+        token_fingerprint="",
+        profiles=("default", "alpha"),
+        updated_at="2026-01-01T00:00:00+00:00",
+    )
     path = hr.record_path(hr.ROLE_SERVE)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(record.to_json()), encoding="utf-8")
@@ -92,7 +106,9 @@ def test_second_serve_attaches_to_the_live_host_backend(host_dir, owner, capsys)
     assert f"port {owner.port}" in capsys.readouterr().out
 
 
-def test_inherited_desktop_flag_without_spawn_credential_still_attaches(host_dir, owner, monkeypatch):
+def test_inherited_desktop_flag_without_spawn_credential_still_attaches(
+    host_dir, owner, monkeypatch
+):
     """A terminal spawned by Desktop inherits its marker, not Desktop ownership.
 
     Only the Desktop backend receives the per-spawn session credential.  A bare
@@ -108,7 +124,9 @@ def test_inherited_desktop_flag_without_spawn_credential_still_attaches(host_dir
     assert exc.value.code == 0
 
 
-def test_desktop_owned_backend_keeps_its_separate_lifecycle(host_dir, owner, monkeypatch):
+def test_desktop_owned_backend_keeps_its_separate_lifecycle(
+    host_dir, owner, monkeypatch
+):
     """Desktop's credential-bearing backend does not attach to the host owner."""
     monkeypatch.setenv("CLAWK_DESKTOP", "1")
     monkeypatch.setenv("CLAWK_DASHBOARD_SESSION_TOKEN", "desktop-spawn-token")
@@ -143,7 +161,9 @@ def test_a_record_whose_owner_does_not_answer_falls_through_to_the_bind(host_dir
 def test_unprovable_liveness_still_has_to_answer(host_dir, monkeypatch):
     """Without psutil the liveness answer is ``None`` (unprovable). Treating that as "alive" made
     a record for a long-dead PID a permanent silent outage — every launch exited 0 forever."""
-    monkeypatch.setattr("clawk_cli.process_identity._pid_alive_matches", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        "clawk_cli.process_identity._pid_alive_matches", lambda *_a, **_k: None
+    )
     _publish(None, pid=2**22 - 1, port=_dead_port())
 
     assert _attach_to_host_backend(_args(), headless_backend=True) is None
@@ -151,12 +171,15 @@ def test_unprovable_liveness_still_has_to_answer(host_dir, monkeypatch):
 
 @pytest.mark.parametrize(
     "argv,over",
-    [(["clawk", "serve", "--port", "8899"], {"port": 8899}),
-     (["clawk", "serve", "--host", "0.0.0.0"], {"host": "0.0.0.0"})],
+    [
+        (["clawk", "serve", "--port", "8899"], {"port": 8899}),
+        (["clawk", "serve", "--host", "0.0.0.0"], {"host": "0.0.0.0"}),
+    ],
     ids=["explicit-port", "explicit-host"],
 )
-def test_an_explicit_endpoint_the_owner_cannot_serve_is_refused(host_dir, owner, monkeypatch,
-                                                                argv, over, capsys):
+def test_an_explicit_endpoint_the_owner_cannot_serve_is_refused(
+    host_dir, owner, monkeypatch, argv, over, capsys
+):
     """`--port 8899` answered with "use 127.0.0.1:<other>", or `--host 0.0.0.0` (LAN access)
     silently turned into a loopback attach, are both wrong answers: refuse, naming the owner."""
     monkeypatch.setattr("sys.argv", argv)

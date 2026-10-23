@@ -12,6 +12,7 @@ The fix (salvaged from PR #87591 by @RelaxJonh) adds
 early-exit paths, wrapped best-effort so a failing store can never crash the
 tick these paths exist to protect.
 """
+
 from __future__ import annotations
 
 import sys
@@ -25,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 import cron.jobs as jobs_mod
 from cron.jobs import clear_run_claim
 
+
 @pytest.fixture
 def cron_store(tmp_path, monkeypatch):
     clawk_home = tmp_path / ".clawk"
@@ -36,6 +38,7 @@ def cron_store(tmp_path, monkeypatch):
     monkeypatch.setattr(jobs_mod, "OUTPUT_DIR", clawk_home / "cron" / "output")
     return clawk_home
 
+
 def _make_oneshot(claimed: bool = True) -> dict:
     job = jobs_mod.create_job(prompt="remind me", schedule="in 30m")
     if claimed:
@@ -45,6 +48,7 @@ def _make_oneshot(claimed: bool = True) -> dict:
                 j["run_claim"] = {"at": "2026-08-17T10:00:00+00:00", "by": "test:1"}
         jobs_mod.save_jobs(jobs)
     return job
+
 
 class TestClearRunClaim:
     def test_clears_claim_on_oneshot(self, cron_store):
@@ -71,17 +75,20 @@ class TestClearRunClaim:
     def test_unknown_job_id_returns_false(self, cron_store):
         assert clear_run_claim("no-such-job") is False
 
+
 class TestDispatchFailurePathsClearClaim:
     """Each _submit_with_guard early-exit must clear the one-shot claim so the
     next healthy tick re-dispatches instead of waiting out the 30-min TTL."""
 
     def _tick_one(self, job):
         from cron import scheduler as sched
+
         with patch.object(sched, "get_due_jobs", return_value=[dict(job)]):
             return sched.tick(verbose=False, sync=True)
 
     def test_interpreter_shutdown_path_clears_claim(self, cron_store):
         from cron import scheduler as sched
+
         job = _make_oneshot(claimed=True)
         with patch.object(sched, "_interpreter_shutting_down", return_value=True):
             self._tick_one(job)
@@ -92,8 +99,11 @@ class TestDispatchFailurePathsClearClaim:
 
     def test_execution_creation_failure_clears_claim(self, cron_store):
         from cron import scheduler as sched
+
         job = _make_oneshot(claimed=True)
-        with patch.object(sched, "create_execution", side_effect=RuntimeError("db gone")):
+        with patch.object(
+            sched, "create_execution", side_effect=RuntimeError("db gone")
+        ):
             self._tick_one(job)
         reloaded = next(j for j in jobs_mod.load_jobs() if j["id"] == job["id"])
         assert reloaded.get("run_claim") is None
@@ -101,6 +111,7 @@ class TestDispatchFailurePathsClearClaim:
 
     def test_submit_failure_clears_claim(self, cron_store):
         from cron import scheduler as sched
+
         job = _make_oneshot(claimed=True)
 
         class _ExplodingPool:
@@ -119,8 +130,13 @@ class TestDispatchFailurePathsClearClaim:
         not crash the tick — these early-exit paths exist to skip cleanly; the
         claim then simply expires at the TTL."""
         from cron import scheduler as sched
+
         job = _make_oneshot(claimed=True)
-        with patch.object(sched, "_interpreter_shutting_down", return_value=True), \
-             patch.object(sched, "clear_run_claim", side_effect=OSError(24, "Too many open files")):
+        with (
+            patch.object(sched, "_interpreter_shutting_down", return_value=True),
+            patch.object(
+                sched, "clear_run_claim", side_effect=OSError(24, "Too many open files")
+            ),
+        ):
             n = self._tick_one(job)  # must not raise
         assert n == 0

@@ -2,6 +2,7 @@
 
 Source and supported launch settings are frozen per route, never process env.
 """
+
 from __future__ import annotations
 
 import json
@@ -32,12 +33,21 @@ class LocalSessionAdapter(BasePlatformAdapter):
         if saved is None:
             return False
         original, identity = saved
-        return (source is original and self._identity(source) == identity
-                and any(live.source is source for live in self.authority.sessions.values()))
+        return (
+            source is original
+            and self._identity(source) == identity
+            and any(live.source is source for live in self.authority.sessions.values())
+        )
 
     @staticmethod
     def _identity(source):
-        return source.platform, source.chat_id, source.user_id, source.profile, source.chat_type
+        return (
+            source.platform,
+            source.chat_id,
+            source.user_id,
+            source.profile,
+            source.chat_type,
+        )
 
     def register_source(self, source):
         self.sources[source.chat_id] = source, self._identity(source)
@@ -64,14 +74,16 @@ class LocalSessionAdapter(BasePlatformAdapter):
         return None
 
     async def get_chat_info(self, chat_id):
-        return {'id': chat_id, 'type': 'dm'}
+        return {"id": chat_id, "type": "dm"}
 
     async def send_exec_approval(self, **kwargs):
         # The existing callback owns registration in PendingControls. An ACK here
         # selects that rendering path without a plaintext fallback or a second waiter.
         return SendResult(success=True, message_id=uuid.uuid4().hex)
 
-    async def send_clarify(self, chat_id, question, choices, clarify_id, session_key, metadata=None):
+    async def send_clarify(
+        self, chat_id, question, choices, clarify_id, session_key, metadata=None
+    ):
         error = self._unanswerable_clarify(chat_id)
         if error is not None:
             # Acknowledging this question would park the turn on an answer nobody can submit.
@@ -79,10 +91,21 @@ class LocalSessionAdapter(BasePlatformAdapter):
             # (an ordinary failure would fall back to a send() that ACKs, and the turn would
             # wait the whole clarify timeout).
             from gateway.relay.egress import EGRESS_DECLINE_CODE
-            return SendResult(success=False, error=error, error_kind='forbidden',
-                              raw_response={'success': False, 'code': EGRESS_DECLINE_CODE, 'error': error})
+
+            return SendResult(
+                success=False,
+                error=error,
+                error_kind="forbidden",
+                raw_response={
+                    "success": False,
+                    "code": EGRESS_DECLINE_CODE,
+                    "error": error,
+                },
+            )
         # Local sessions keep the base prompt: a choice question also captures typed text.
-        return await super().send_clarify(chat_id, question, choices, clarify_id, session_key, metadata)
+        return await super().send_clarify(
+            chat_id, question, choices, clarify_id, session_key, metadata
+        )
 
     def _unanswerable_clarify(self, chat_id):
         """Why no one can answer a question asked in this chat now, or None to ask it.
@@ -96,21 +119,34 @@ class LocalSessionAdapter(BasePlatformAdapter):
         if policy is None:
             return None
         from gateway.session_a2a import is_forward_policy
-        if policy.source == 'bot_room':
-            return 'Clarification is unavailable in hosted rooms'
+
+        if policy.source == "bot_room":
+            return "Clarification is unavailable in hosted rooms"
         if is_forward_policy(policy):
-            return 'Clarification is unavailable to a forwarded peer'
+            return "Clarification is unavailable to a forwarded peer"
         live = self.authority.sessions.get(chat_id)
         if live is None:
             return None
         with live.event_stream.lock:
-            if any('session:respond' in member.capabilities for member in live.subscribers.values()):
+            if any(
+                "session:respond" in member.capabilities
+                for member in live.subscribers.values()
+            ):
                 return None
         from clawk_state_runtime import list_session_admissions
-        started = next((row for row in list_session_admissions(self.authority.db, session_id=chat_id)
-                        if row['status'] == 'started'), None)
-        if started is not None and 'local_automation_v1' in started['payload']:
-            return 'Clarification is unavailable: no viewer can answer this chat'
+
+        started = next(
+            (
+                row
+                for row in list_session_admissions(
+                    self.authority.db, session_id=chat_id
+                )
+                if row["status"] == "started"
+            ),
+            None,
+        )
+        if started is not None and "local_automation_v1" in started["payload"]:
+            return "Clarification is unavailable: no viewer can answer this chat"
         return None
 
 
@@ -121,6 +157,7 @@ def authorize_local_source(runner, source):
     # A forged profile must not miss this adapter and fall into a messaging
     # allow-all policy. Local source identity is owned by this authority alone.
     from gateway.session_authorities import all_authorities
+
     owners = all_authorities(runner)
     adapter = runner._adapters_for_profile(source.profile).get(Platform.LOCAL)
     if not isinstance(adapter, LocalSessionAdapter):
@@ -141,14 +178,23 @@ def _bypass_policy(params, *, private_secrets, client_local=False):
     import copy
     from gateway.session_policy import build_policy
     from clawk_cli.config_defaults import DEFAULT_CONFIG
-    if not params.get('model'):
-        raise RuntimeStoreError('invalid_params', field='model',
-                                detail='a bypass launch has no profile to inherit a model from')
+
+    if not params.get("model"):
+        raise RuntimeStoreError(
+            "invalid_params",
+            field="model",
+            detail="a bypass launch has no profile to inherit a model from",
+        )
     defaults = copy.deepcopy(DEFAULT_CONFIG)
-    if not isinstance(defaults.get('model'), dict):  # code default is the empty string
-        defaults['model'] = {}
-    return build_policy(params, defaults, private_secrets=private_secrets, profile_terminal=False,
-                        client_local=client_local)
+    if not isinstance(defaults.get("model"), dict):  # code default is the empty string
+        defaults["model"] = {}
+    return build_policy(
+        params,
+        defaults,
+        private_secrets=private_secrets,
+        profile_terminal=False,
+        client_local=client_local,
+    )
 
 
 def load_profile_config(home=None):
@@ -159,20 +205,31 @@ def load_profile_config(home=None):
     on the launch profile still falls to the process env (systemd / ``op run`` injection)."""
     from pathlib import Path
     from gateway.run import _load_gateway_config
+
     with profile_env_scope(home):
-        return _load_gateway_config(*(() if home is None else (Path(home) / 'config.yaml',)))
+        return _load_gateway_config(
+            *(() if home is None else (Path(home) / "config.yaml",))
+        )
 
 
 @contextmanager
 def profile_env_scope(home=None):
     """Bind the profile's current ``.env`` (see ``load_profile_config``) unless a scope is bound."""
     from pathlib import Path
-    from agent.secret_scope import build_profile_secret_scope, current_secret_scope, reset_secret_scope, set_secret_scope
+    from agent.secret_scope import (
+        build_profile_secret_scope,
+        current_secret_scope,
+        reset_secret_scope,
+        set_secret_scope,
+    )
     from gateway.run import _gateway_config_home
+
     if current_secret_scope() is not None:
         yield
         return
-    home = Path(home) if home is not None else _gateway_config_home()  # default: the active gateway home
+    home = (
+        Path(home) if home is not None else _gateway_config_home()
+    )  # default: the active gateway home
     token = set_secret_scope(build_profile_secret_scope(home), profile_home=str(home))
     try:
         yield
@@ -185,31 +242,57 @@ def project_plugins_warning(policy):
     ``CLAWK_ENABLE_PROJECT_PLUGINS``) in a folder that has some: the gateway never loads them."""
     from pathlib import Path
     from utils import is_truthy_value
+
     # The client's folder is a path on this host only for a client the gateway proved local.
-    env = policy.client_env() if policy is not None and not policy.client_env_remote else None
-    folder = Path(policy.cwd) / '.clawksis' / 'plugins' if env else None
-    if not env or not is_truthy_value(env.get('CLAWK_ENABLE_PROJECT_PLUGINS')) or not folder.is_dir():
+    env = (
+        policy.client_env()
+        if policy is not None and not policy.client_env_remote
+        else None
+    )
+    folder = Path(policy.cwd) / ".clawksis" / "plugins" if env else None
+    if (
+        not env
+        or not is_truthy_value(env.get("CLAWK_ENABLE_PROJECT_PLUGINS"))
+        or not folder.is_dir()
+    ):
         return None
     try:
         if not any(folder.iterdir()):
             return None
     except OSError:  # an unlistable folder skips the optional notice, never the session
         return None
-    return (f'project plugins in {folder} are not loaded: the gateway that runs Clawksis sessions does not '
-            'load ./.clawksis/plugins, so CLAWK_ENABLE_PROJECT_PLUGINS has no effect here.')
+    return (
+        f"project plugins in {folder} are not loaded: the gateway that runs Clawksis sessions does not "
+        "load ./.clawksis/plugins, so CLAWK_ENABLE_PROJECT_PLUGINS has no effect here."
+    )
 
 
-def create_local_session(authority, actor, params, *, trusted_policy=None, trusted_secrets=None, skills_prompt=None,
-                         client_local=False):
+def create_local_session(
+    authority,
+    actor,
+    params,
+    *,
+    trusted_policy=None,
+    trusted_secrets=None,
+    skills_prompt=None,
+    client_local=False,
+):
     """Stage, commit and publish a local session inline (synchronous callers)."""
     from gateway.session_local_recovery import restore_local_session
     from clawk_state_local import commit_local_session
-    staged = stage_local_session(authority, actor, params, trusted_policy=trusted_policy,
-                                 trusted_secrets=trusted_secrets, skills_prompt=skills_prompt,
-                                 client_local=client_local)
+
+    staged = stage_local_session(
+        authority,
+        actor,
+        params,
+        trusted_policy=trusted_policy,
+        trusted_secrets=trusted_secrets,
+        skills_prompt=skills_prompt,
+        client_local=client_local,
+    )
     if isinstance(staged, dict):
         commit_local_session(authority.db, epoch=authority.epoch, receipt=staged)
-        staged = restore_local_session(authority, staged['session_id'])
+        staged = restore_local_session(authority, staged["session_id"])
     return staged
 
 
@@ -225,18 +308,28 @@ def staged_creation_follows(authority, actor, request_id):
         return True
     from gateway.session_local_recovery import local_identity
     from clawk_state_local import local_receipt
+
     sid = local_identity(authority.profile_id, actor.subject, request_id)
     if authority.db.get_session(sid) is None:
         return True
     try:
-        request = json.loads(local_receipt(authority.db, sid)['policy']['request_json'])
+        request = json.loads(local_receipt(authority.db, sid)["policy"]["request_json"])
     except (KeyError, TypeError, ValueError, RuntimeStoreError):
         return True
-    return isinstance(request, dict) and request.get('follow_profile_config') is True
+    return isinstance(request, dict) and request.get("follow_profile_config") is True
 
 
-def stage_local_session(authority, actor, params, *, trusted_policy=None, trusted_secrets=None, skills_prompt=None,
-                        client_local=False, desktop_local=False):
+def stage_local_session(
+    authority,
+    actor,
+    params,
+    *,
+    trusted_policy=None,
+    trusted_secrets=None,
+    skills_prompt=None,
+    client_local=False,
+    desktop_local=False,
+):
     """Everything before the creation commit: the existing session's ref on an exact retry, else the
     receipt ``commit_local_session`` writes (the async RPC commits it off the owner loop).
     ``client_local``: the gateway's own proof that the client is on this host (its connection redeemed a
@@ -244,91 +337,155 @@ def stage_local_session(authority, actor, params, *, trusted_policy=None, truste
     that client is also the Desktop app (``process_identity.local_desktop_client``); a Desktop chat
     records it so its turns run as work for the local Desktop (``session_policy.local_desktop_turn``)."""
     if actor.profile_id != authority.profile_id:
-        raise RuntimeStoreError('profile_mismatch')
-    if 'session:create' not in actor.capabilities:
-        raise RuntimeStoreError('permission_denied')
-    from gateway.session_policy import build_policy, BYPASS_FIELDS, FOLLOW_ADOPTED, LOCAL_DESKTOP_CHAT
+        raise RuntimeStoreError("profile_mismatch")
+    if "session:create" not in actor.capabilities:
+        raise RuntimeStoreError("permission_denied")
+    from gateway.session_policy import (
+        build_policy,
+        BYPASS_FIELDS,
+        FOLLOW_ADOPTED,
+        LOCAL_DESKTOP_CHAT,
+    )
     from gateway.run import _resolve_gateway_model
     from dataclasses import replace
+
     private_secrets = dict(trusted_secrets or {})
-    client_key = params.get('api_key')  # the client's own; an alias's key is the owner's expansion
+    client_key = params.get(
+        "api_key"
+    )  # the client's own; an alias's key is the owner's expansion
     if trusted_policy is not None:
         policy = trusted_policy
     elif any(params.get(name) is True for name in BYPASS_FIELDS):
-        policy = _bypass_policy(params, private_secrets=private_secrets, client_local=client_local)
+        policy = _bypass_policy(
+            params, private_secrets=private_secrets, client_local=client_local
+        )
     else:
         from gateway.session_local_route import resolve_launch_route
-        raw_model, sent = params.get('model'), params
-        with profile_env_scope():  # an alias's ``key_env`` / ``${VAR}`` key reads the same .env
+
+        raw_model, sent = params.get("model"), params
+        with (
+            profile_env_scope()
+        ):  # an alias's ``key_env`` / ``${VAR}`` key reads the same .env
             config = load_profile_config()
             params = resolve_launch_route(params, config)
         # A client's session.create is the one caller whose named folder may select the coding posture.
-        policy = build_policy(params, config, private_secrets=private_secrets, workspace_posture=True,
-                              client_local=client_local)
+        policy = build_policy(
+            params,
+            config,
+            private_secrets=private_secrets,
+            workspace_posture=True,
+            client_local=client_local,
+        )
         if params is not sent:  # resolved, even to a model of the alias's own name
             # Owner-stamped provenance (not create fields): a remote client cannot re-resolve the typed
             # `-m` alias against its own home, so resume and an exact retry compare a repeat against the
             # name, and ``route_derived`` names the fields the route (not the client) filled.
             import json
-            derived = sorted(key for key in ('provider', 'base_url') if key in params and key not in sent)
-            policy = replace(policy, request_json=json.dumps(
-                {**json.loads(policy.request_json), 'model_requested': raw_model, 'route_derived': derived},
-                sort_keys=True))
-        marks = {LOCAL_DESKTOP_CHAT: True} if desktop_local and policy.source == 'gui' else {}
+
+            derived = sorted(
+                key
+                for key in ("provider", "base_url")
+                if key in params and key not in sent
+            )
+            policy = replace(
+                policy,
+                request_json=json.dumps(
+                    {
+                        **json.loads(policy.request_json),
+                        "model_requested": raw_model,
+                        "route_derived": derived,
+                    },
+                    sort_keys=True,
+                ),
+            )
+        marks = (
+            {LOCAL_DESKTOP_CHAT: True}
+            if desktop_local and policy.source == "gui"
+            else {}
+        )
         if policy.model is None:
             from clawk_cli.anon_auth import GUEST_MODEL
-            policy = replace(policy, model=_resolve_gateway_model(policy.config()) or None)
+
+            policy = replace(
+                policy, model=_resolve_gateway_model(policy.config()) or None
+            )
             if policy.model == GUEST_MODEL:
                 # Follows its profile, so the provider the user connects later replaces the trial model.
                 marks[FOLLOW_ADOPTED] = True
         if marks:
             import json
-            policy = replace(policy, config_json=json.dumps({**json.loads(policy.config_json), **marks}))
-    request_id = params.get('request_id', uuid.uuid4().hex)
+
+            policy = replace(
+                policy,
+                config_json=json.dumps({**json.loads(policy.config_json), **marks}),
+            )
+    request_id = params.get("request_id", uuid.uuid4().hex)
     if not isinstance(request_id, str) or not request_id or len(request_id) > 256:
-        raise RuntimeStoreError('invalid_params', field='request_id',
-                                detail='must be a non-empty string of at most 256 characters')
+        raise RuntimeStoreError(
+            "invalid_params",
+            field="request_id",
+            detail="must be a non-empty string of at most 256 characters",
+        )
     from dataclasses import asdict
     from gateway.session import SessionEntry
     from gateway.session_lifecycle import _now
     from gateway.session_local_recovery import local_identity, restore_local_session
+
     authority._require_admission_open()
     sid = local_identity(authority.profile_id, actor.subject, request_id)
     from gateway.session_policy import bind_launch_key, restore_policy, launch_key
+
     if authority.db.get_session(sid) is not None:
         from clawk_state_local import local_receipt
+
         saved = local_receipt(authority.db, sid)
-        original = restore_policy(saved['policy'])
+        original = restore_policy(saved["policy"])
         from clawk_state_local import same_create_retry
-        if not same_create_retry(saved['policy'], policy.request_json, params):
-            raise RuntimeStoreError('invalid_params', field='request_id',
-                                    detail='a resumed request_id must carry the same frozen request')
+
+        if not same_create_retry(saved["policy"], policy.request_json, params):
+            raise RuntimeStoreError(
+                "invalid_params",
+                field="request_id",
+                detail="a resumed request_id must carry the same frozen request",
+            )
         import hmac
         import json
-        if 'model_requested' in json.loads(original.request_json):
+
+        if "model_requested" in json.loads(original.request_json):
             # An owner-resolved alias: its key came from the profile (a `.env` rotation is not a changed
             # request) and the client sent none, so one it sends now is a different request.
             if client_key is not None:
-                raise RuntimeStoreError('admission_conflict')
-        elif original.credential_ref is not None or params.get('api_key') is not None:
+                raise RuntimeStoreError("admission_conflict")
+        elif original.credential_ref is not None or params.get("api_key") is not None:
             key = launch_key(authority, original)
-            if key is None or not hmac.compare_digest(key, params.get('api_key') or ''):
-                raise RuntimeStoreError('admission_conflict')
+            if key is None or not hmac.compare_digest(key, params.get("api_key") or ""):
+                raise RuntimeStoreError("admission_conflict")
         return restore_local_session(authority, sid)
     from gateway.session_policy import launch_skills
+
     if launch_skills(params) and skills_prompt is None:
         # `-s` is rendered off-loop by the RPC handler (render_launch_skills); a caller that
         # skipped it must not mint a session silently missing its preload.
-        raise RuntimeStoreError('invalid_params', field='skills',
-                                detail='the caller must render -s skills before minting the session')
+        raise RuntimeStoreError(
+            "invalid_params",
+            field="skills",
+            detail="the caller must render -s skills before minting the session",
+        )
     policy = replace(policy, skills_prompt=skills_prompt)
     if warning := project_plugins_warning(policy):
-        logger.warning('session %s: %s', sid, warning)
-    client_request = {k: params[k] for k in ('client_env',) if k in params}
-    policy = bind_launch_key(authority, sid, policy, params.get("api_key"), config_secrets=private_secrets,
-                             owner_key=client_key is None,  # an overlapping exact retry takes the held one
-                             client_request=client_request)
+        logger.warning("session %s: %s", sid, warning)
+    client_request = {k: params[k] for k in ("client_env",) if k in params}
+    policy = bind_launch_key(
+        authority,
+        sid,
+        policy,
+        params.get("api_key"),
+        config_secrets=private_secrets,
+        owner_key=client_key is None,  # an overlapping exact retry takes the held one
+        client_request=client_request,
+    )
     from gateway.session_local_recovery import local_source
+
     source = local_source(authority, sid, actor.subject)
     route = authority.runner.session_store._generate_session_key(source)
     # Same clock as every other routing entry: the recovery sweeps compare against a
@@ -337,9 +494,20 @@ def stage_local_session(authority, actor, params, *, trusted_policy=None, truste
     entry = SessionEntry(route, sid, now, now, origin=source, platform=Platform.LOCAL)
     # Prefill is read now, at creation (main's CLI: at startup), and held only if this attempt commits.
     from gateway.session_worker_construct import stage_session_prefill
-    staged = stage_session_prefill(authority, policy, {
-        'profile_id': authority.profile_id, 'principal_id': actor.subject, 'request_id': request_id,
-        'session_id': sid, 'route': route, 'entry': entry.to_dict(), 'policy': asdict(policy)})
+
+    staged = stage_session_prefill(
+        authority,
+        policy,
+        {
+            "profile_id": authority.profile_id,
+            "principal_id": actor.subject,
+            "request_id": request_id,
+            "session_id": sid,
+            "route": route,
+            "entry": entry.to_dict(),
+            "policy": asdict(policy),
+        },
+    )
     # Owner memory, never stored: an overlapping create's commit judges this request's own map by the
     # winner's committed rules, as a sequential retry is.
     staged.client_request = client_request
@@ -349,10 +517,14 @@ def stage_local_session(authority, actor, params, *, trusted_policy=None, truste
 def publish_local_policy(authority, session_id, *, evict=True):
     from clawk_state_local import local_receipt
     from gateway.session_policy import restore_policy
+
     live = authority.sessions[session_id]
     from gateway.session_local_recovery import local_adapter_map
+
     adapter = local_adapter_map(authority)[Platform.LOCAL]
-    adapter.policies[live.source.chat_id] = restore_policy(local_receipt(authority.db, session_id)['policy'])
+    adapter.policies[live.source.chat_id] = restore_policy(
+        local_receipt(authority.db, session_id)["policy"]
+    )
     if evict:
         authority.runner._evict_cached_agent(live.route)
 
@@ -361,12 +533,17 @@ def _lazy_model(authority, policy):
     """The model a not-yet-built session will run: with no provider pinned, the free tier's agent
     build pins ``nous/welcome`` (``pin_model_for_route``), so the configured default is not it."""
     import json
+
     model = policy.current_model(authority) if policy else None
-    if (policy is None or json.loads(policy.request_json).get('model')
-            or str(policy.provider or '').strip().lower() not in {'', 'auto'}):
+    if (
+        policy is None
+        or json.loads(policy.request_json).get("model")
+        or str(policy.provider or "").strip().lower() not in {"", "auto"}
+    ):
         return model
     from gateway.session_authorities import owner_scope
     from clawk_cli.anon_auth import GUEST_MODEL, free_tier_route
+
     with owner_scope(authority):
         return GUEST_MODEL if free_tier_route() else model
 
@@ -377,20 +554,36 @@ def _reasoning_fields(agent, policy, model, authority=None, override=None):
     pending until ``reasoning_effort`` arrives."""
     from agent.fast_mode import parse_service_tier
     from agent.voice_turn_route import session_runtime_view
+
     if agent is None and policy is None:
         return {}
     view = session_runtime_view(agent) if agent is not None else None
     if view is None:
         from clawk_constants import resolve_reasoning_config
+
         effective, next_model = policy.effective(authority, secrets=False)
-        route = effective.get('model') or {}
-    config = (getattr(view, 'reasoning_config', None) if view is not None
-              else override if override is not None else resolve_reasoning_config(effective, next_model or ''))
-    tier = (getattr(view, 'service_tier', None) if view is not None
-            else parse_service_tier((effective.get('agent') or {}).get('service_tier'))) or ''
-    provider = getattr(view, 'provider', None) if view is not None else route.get('provider')
-    base_url = getattr(view, 'base_url', None) if view is not None else route.get('base_url')
-    return effort_fields(config, tier, model, provider, base_url, getattr(view, 'api_mode', None))
+        route = effective.get("model") or {}
+    config = (
+        getattr(view, "reasoning_config", None)
+        if view is not None
+        else override
+        if override is not None
+        else resolve_reasoning_config(effective, next_model or "")
+    )
+    tier = (
+        getattr(view, "service_tier", None)
+        if view is not None
+        else parse_service_tier((effective.get("agent") or {}).get("service_tier"))
+    ) or ""
+    provider = (
+        getattr(view, "provider", None) if view is not None else route.get("provider")
+    )
+    base_url = (
+        getattr(view, "base_url", None) if view is not None else route.get("base_url")
+    )
+    return effort_fields(
+        config, tier, model, provider, base_url, getattr(view, "api_mode", None)
+    )
 
 
 def effort_fields(config, tier, model, provider, base_url, api_mode=None):
@@ -398,19 +591,39 @@ def effort_fields(config, tier, model, provider, base_url, api_mode=None):
     from agent.fast_mode import STATIC_TIERS
     from agent.reasoning_effort import clamp_effort, route_supported_efforts
     from clawk_cli.models import resolve_fast_mode_overrides
-    tier = tier or ''
-    effort = ''
+
+    tier = tier or ""
+    effort = ""
     if isinstance(config, dict):
-        effort = 'none' if config.get('enabled') is False else str(config.get('effort') or '')
-    wire = ''
-    if effort and effort != 'none':
-        wire = str(clamp_effort(effort, route_supported_efforts(provider, model, api_mode)) or '')
+        effort = (
+            "none"
+            if config.get("enabled") is False
+            else str(config.get("effort") or "")
+        )
+    wire = ""
+    if effort and effort != "none":
+        wire = str(
+            clamp_effort(effort, route_supported_efforts(provider, model, api_mode))
+            or ""
+        )
     try:
-        fast = tier in STATIC_TIERS and resolve_fast_mode_overrides(
-            model, provider=provider or None, base_url=base_url or None, tier=tier) is not None
-    except Exception:  # health: allow BLE001 -- main's _fast_tier_applies gate: unknown means not Fast
+        fast = (
+            tier in STATIC_TIERS
+            and resolve_fast_mode_overrides(
+                model, provider=provider or None, base_url=base_url or None, tier=tier
+            )
+            is not None
+        )
+    except (
+        Exception
+    ):  # health: allow BLE001 -- main's _fast_tier_applies gate: unknown means not Fast
         fast = False
-    return {'reasoning_effort': effort, 'reasoning_effort_wire': wire, 'service_tier': tier, 'fast': fast}
+    return {
+        "reasoning_effort": effort,
+        "reasoning_effort_wire": wire,
+        "service_tier": tier,
+        "fast": fast,
+    }
 
 
 def local_session_info(authority, ref):
@@ -418,37 +631,58 @@ def local_session_info(authority, ref):
     agent = authority.agent(ref)
     from gateway.session_authorities import served_profile_name
     from gateway.session_policy import policy_for_source
+
     policy = policy_for_source(authority.runner, live.source)
-    info = {'source': policy.source if policy else live.source.platform.value,
-            'model': (getattr(agent, 'model', policy.current_model(authority) if policy else None) if agent is not None
-                      else _lazy_model(authority, policy)),
-            'lazy': agent is None,
-            'profile_id': authority.profile_id, 'desktop_protocol': CANONICAL_GATEWAY_PROTOCOL,
-            # Main's TUI labels a named profile's composer (``alpha ❯``) from this field.
-            'profile_name': served_profile_name(authority.profile_id),
-            **({'cwd': policy.cwd} if policy else {}),
-            # An ACP session's edit approval policy: every attached surface reads the same one.
-            **({'edit_approval_policy': policy.edit_approval_policy} if policy and policy.source == 'acp' else {})}
-    peek = getattr(authority.runner, '_peek_session_state', None)
+    info = {
+        "source": policy.source if policy else live.source.platform.value,
+        "model": (
+            getattr(agent, "model", policy.current_model(authority) if policy else None)
+            if agent is not None
+            else _lazy_model(authority, policy)
+        ),
+        "lazy": agent is None,
+        "profile_id": authority.profile_id,
+        "desktop_protocol": CANONICAL_GATEWAY_PROTOCOL,
+        # Main's TUI labels a named profile's composer (``alpha ❯``) from this field.
+        "profile_name": served_profile_name(authority.profile_id),
+        **({"cwd": policy.cwd} if policy else {}),
+        # An ACP session's edit approval policy: every attached surface reads the same one.
+        **(
+            {"edit_approval_policy": policy.edit_approval_policy}
+            if policy and policy.source == "acp"
+            else {}
+        ),
+    }
+    peek = getattr(authority.runner, "_peek_session_state", None)
     state = peek(live.route) if peek is not None else None
-    override = state.conversation.reasoning_override if state is not None else None  # a typed /reasoning
+    override = (
+        state.conversation.reasoning_override if state is not None else None
+    )  # a typed /reasoning
     if agent is None and policy is None and live.source.platform != Platform.LOCAL:
         # A messaging chat not built yet: what its next turn resolves (its /model and /reasoning picks
         # included), so a viewer's model and reasoning pill never wait on a field that never comes.
         from gateway.session_messaging_picks import messaging_route_info
+
         info.update(messaging_route_info(authority.runner, live))
     else:
-        info.update(_reasoning_fields(agent, policy, info['model'], authority, override))
+        info.update(
+            _reasoning_fields(agent, policy, info["model"], authority, override)
+        )
     if policy:
         # The creation request the route was frozen with (secrets already extracted), so a
         # resuming client can tell "same flags again" from a real override attempt.
         import json
-        info['launch_request'] = json.loads(policy.request_json)
+
+        info["launch_request"] = json.loads(policy.request_json)
         from agent.session_client_env import NOT_LOCAL_WARNING
+
         # Session-start notices main's TUI already renders as ``config_warning``.
-        notices = (project_plugins_warning(policy), NOT_LOCAL_WARNING if policy.client_env_remote else None)
-        if warning := ' '.join(filter(None, notices)):
-            info['config_warning'] = warning
+        notices = (
+            project_plugins_warning(policy),
+            NOT_LOCAL_WARNING if policy.client_env_remote else None,
+        )
+        if warning := " ".join(filter(None, notices)):
+            info["config_warning"] = warning
     info.update(_classic_cli_fields(authority, ref, live, agent, policy))
     return info
 
@@ -458,28 +692,42 @@ def _classic_cli_fields(authority, ref, live, agent, policy):
     stored title and times, the session's yolo, api_mode, the loaded tool count and a masked
     credential hint (never the key). Lazy sessions report what is known without building an agent."""
     import contextlib
+
     stored_id = ref.session_id
     with contextlib.suppress(Exception):
         from clawk_state_local import local_receipt
-        stored_id = local_receipt(authority.db, ref.session_id)['entry']['session_id'] or stored_id
+
+        stored_id = (
+            local_receipt(authority.db, ref.session_id)["entry"]["session_id"]
+            or stored_id
+        )
     row = {}
     with contextlib.suppress(Exception):
         row = authority.db.get_session(stored_id) or {}
-    yolo = bool(policy is not None and getattr(policy, 'yolo', False))
+    yolo = bool(policy is not None and getattr(policy, "yolo", False))
     with contextlib.suppress(Exception):
         from tools.approval import is_session_yolo_enabled
+
         yolo = yolo or is_session_yolo_enabled(live.route)
-    api_mode = getattr(agent, 'api_mode', None) if agent is not None else None
+    api_mode = getattr(agent, "api_mode", None) if agent is not None else None
     if api_mode is None and policy is not None:
         with contextlib.suppress(Exception):
-            api_mode = (policy.effective(authority, secrets=False)[0].get('model') or {}).get('api_mode')
+            api_mode = (
+                policy.effective(authority, secrets=False)[0].get("model") or {}
+            ).get("api_mode")
     hint = None
-    if agent is not None and getattr(agent, 'api_key', None):
+    if agent is not None and getattr(agent, "api_key", None):
         from agent.redact import mask_secret
+
         hint = mask_secret(str(agent.api_key))
-    tools = getattr(agent, 'tools', None) if agent is not None else None
-    started = row.get('started_at')
-    return {'title': row.get('title'), 'started_at': started,
-            'last_active_at': row.get('last_activity_at') or started, 'yolo': yolo,
-            'api_mode': api_mode or None, 'tool_count': len(tools) if isinstance(tools, list) else None,
-            'credential_hint': hint}
+    tools = getattr(agent, "tools", None) if agent is not None else None
+    started = row.get("started_at")
+    return {
+        "title": row.get("title"),
+        "started_at": started,
+        "last_active_at": row.get("last_activity_at") or started,
+        "yolo": yolo,
+        "api_mode": api_mode or None,
+        "tool_count": len(tools) if isinstance(tools, list) else None,
+        "credential_hint": hint,
+    }

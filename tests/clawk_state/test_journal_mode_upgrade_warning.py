@@ -53,7 +53,9 @@ def _make_delete_db_with_content(path) -> None:
     """Create a real, non-empty database left in journal_mode=DELETE."""
     conn = sqlite3.connect(str(path))
     try:
-        assert conn.execute("PRAGMA journal_mode=DELETE").fetchone()[0].lower() == "delete"
+        assert (
+            conn.execute("PRAGMA journal_mode=DELETE").fetchone()[0].lower() == "delete"
+        )
         conn.execute("CREATE TABLE t (x)")
         conn.execute("INSERT INTO t VALUES (1)")
         conn.commit()
@@ -70,10 +72,7 @@ def _reset_dedup():
     clawk_state_wal._journal_upgrade_warned_paths.clear()
 
 
-
-
 class TestTheWarningFires:
-
     def test_an_existing_delete_database_warns_when_flipped(
         self, monkeypatch, tmp_path, caplog
     ):
@@ -94,7 +93,6 @@ class TestTheWarningFires:
         blob = "\n".join(r.getMessage() for r in caplog.records)
         assert "state.db" in blob
         assert "delete" in blob.lower()
-
 
     def test_the_flip_still_happens(self, monkeypatch, tmp_path):
         """Log-only: WAL is still applied, and it still persists.
@@ -219,7 +217,10 @@ class TestTheWarningStaysQuiet:
         conn = sqlite3.connect(str(path))
         try:
             with caplog.at_level("WARNING", logger="clawk_state"):
-                assert apply_wal_with_fallback(conn, db_label="configured-delete.db") == "delete"
+                assert (
+                    apply_wal_with_fallback(conn, db_label="configured-delete.db")
+                    == "delete"
+                )
             assert conn.execute("PRAGMA journal_mode").fetchone()[0].lower() == "delete"
         finally:
             conn.close()
@@ -255,9 +256,7 @@ class TestTheWarningStaysQuiet:
             conn.close()
 
         assert not [
-            r
-            for r in caplog.records
-            if "database.journal_mode" in r.getMessage()
+            r for r in caplog.records if "database.journal_mode" in r.getMessage()
         ]
 
 
@@ -271,7 +270,9 @@ class TestTheExistingContractIsUnchanged:
         path = tmp_path / "existing-wal.db"
         conn = sqlite3.connect(str(path))
         try:
-            assert conn.execute("PRAGMA journal_mode=WAL").fetchone()[0].lower() == "wal"
+            assert (
+                conn.execute("PRAGMA journal_mode=WAL").fetchone()[0].lower() == "wal"
+            )
             monkeypatch.setattr(
                 "clawk_state_wal.is_sqlite_wal_reset_vulnerable",
                 lambda **kwargs: True,

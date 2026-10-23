@@ -43,7 +43,9 @@ class _Adapter(BasePlatformAdapter):
     async def get_chat_info(self, chat_id):
         return {"id": chat_id}
 
-    async def send_image_file(self, chat_id, image_path, caption=None, reply_to=None, metadata=None, **kw):
+    async def send_image_file(
+        self, chat_id, image_path, caption=None, reply_to=None, metadata=None, **kw
+    ):
         self.images.append(Path(image_path).read_bytes())
         return SendResult(success=True, message_id="i")
 
@@ -54,38 +56,60 @@ async def _hold_typing(_chat_id, interval=2.0, metadata=None, stop_event=None):
 
 def _docker_profile(home: Path, mount: Path) -> None:
     mount.mkdir(parents=True)
-    (home / "config.yaml").write_text(json.dumps(
-        {"terminal": {"backend": "docker", "docker_volumes": [f"{mount}:/output"]}}), encoding="utf-8")
+    (home / "config.yaml").write_text(
+        json.dumps(
+            {"terminal": {"backend": "docker", "docker_volumes": [f"{mount}:/output"]}}
+        ),
+        encoding="utf-8",
+    )
 
 
 @pytest.mark.asyncio
-async def test_secondary_docker_media_resolves_via_its_own_mounts(tmp_path, monkeypatch):
+async def test_secondary_docker_media_resolves_via_its_own_mounts(
+    tmp_path, monkeypatch
+):
     root = tmp_path / "clawk"
-    default_out, public_out = root / "cache" / "output", root / "profiles" / "public" / "cache" / "output"
+    default_out, public_out = (
+        root / "cache" / "output",
+        root / "profiles" / "public" / "cache" / "output",
+    )
     _docker_profile(root, default_out)
     _docker_profile(root / "profiles" / "public", public_out)
     # The launch process carries the DEFAULT profile's bridged terminal env.
     monkeypatch.setenv("CLAWK_HOME", str(root))
     monkeypatch.setenv("TERMINAL_ENV", "docker")
-    monkeypatch.setenv("TERMINAL_DOCKER_VOLUMES", json.dumps([f"{default_out}:/output"]))
+    monkeypatch.setenv(
+        "TERMINAL_DOCKER_VOLUMES", json.dumps([f"{default_out}:/output"])
+    )
     (public_out / "pic.png").write_bytes(b"\x89PNG\r\n\x1a\n" + b"public" * 8)
-    (default_out / "pic.png").write_bytes(b"\x89PNG\r\n\x1a\n" + b"decoy!" * 8)  # same name, wrong profile
+    (default_out / "pic.png").write_bytes(
+        b"\x89PNG\r\n\x1a\n" + b"decoy!" * 8
+    )  # same name, wrong profile
 
     runner = GatewayRunner(GatewayConfig(multiplex_profiles=True))
     adapter = _Adapter()
     adapter.gateway_runner = runner
     adapter._keep_typing = _hold_typing
 
-    async def routed_handler(event):  # what _make_profile_message_handler does around _handle_message
+    async def routed_handler(
+        event,
+    ):  # what _make_profile_message_handler does around _handle_message
         event.source.profile = "public"
         async with _async_profile_runtime_scope(root / "profiles" / "public"):
             return "here MEDIA:/output/pic.png"
 
     adapter.set_message_handler(routed_handler)
     event = MessageEvent(
-        text="pic", message_type=MessageType.TEXT, message_id="m1",
-        source=SessionSource(platform=Platform.DISCORD, chat_id="1", chat_type="dm", user_id="u"))
-    await adapter._process_message_background(event, build_session_key(event.source, profile="public"))
+        text="pic",
+        message_type=MessageType.TEXT,
+        message_id="m1",
+        source=SessionSource(
+            platform=Platform.DISCORD, chat_id="1", chat_type="dm", user_id="u"
+        ),
+    )
+    await adapter._process_message_background(
+        event, build_session_key(event.source, profile="public")
+    )
 
     assert len(adapter.images) == 1
     assert b"public" in adapter.images[0]

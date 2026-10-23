@@ -22,17 +22,27 @@ from typing import Any, Callable, Optional, Protocol, runtime_checkable
 
 # Errno values that mean "the peer is gone" rather than "the host has a real I/O problem". Anything
 # outside this set re-raises so it surfaces in the crash log instead of looking like a clean disconnect.
-_PEER_GONE_ERRNOS = frozenset({
-    errno.EPIPE, errno.ECONNRESET, errno.EBADF, errno.ESHUTDOWN,
-    getattr(errno, "WSAECONNRESET", -1), getattr(errno, "WSAESHUTDOWN", -1),  # win32 (no-op on POSIX)
-} - {-1})
+_PEER_GONE_ERRNOS = frozenset(
+    {
+        errno.EPIPE,
+        errno.ECONNRESET,
+        errno.EBADF,
+        errno.ESHUTDOWN,
+        getattr(errno, "WSAECONNRESET", -1),
+        getattr(errno, "WSAESHUTDOWN", -1),  # win32 (no-op on POSIX)
+    }
+    - {-1}
+)
 
 logger = logging.getLogger(__name__)
 
 # When true, StdioTransport skips ``stream.flush`` after writing: on a half-closed pipe (TUI Node parent quit
 # while the gateway still emits) flush can block long enough to starve the worker pool. Python text stdout is
 # fully buffered on a pipe, so this ONLY makes sense with ``-u``/``PYTHONUNBUFFERED=1``; otherwise the TUI hangs.
-_DISABLE_FLUSH = (os.environ.get("CLAWK_TUI_GATEWAY_NO_FLUSH", "") or "").strip().lower() in {"1", "true", "yes", "on"}
+_DISABLE_FLUSH = (
+    os.environ.get("CLAWK_TUI_GATEWAY_NO_FLUSH", "") or ""
+).strip().lower() in {"1", "true", "yes", "on"}
+
 
 @runtime_checkable
 class Transport(Protocol):
@@ -45,8 +55,8 @@ class Transport(Protocol):
         """Release any resources owned by this transport."""
 
 
-_current_transport: contextvars.ContextVar[Optional[Transport]] = contextvars.ContextVar(
-    "clawk_gateway_transport", default=None
+_current_transport: contextvars.ContextVar[Optional[Transport]] = (
+    contextvars.ContextVar("clawk_gateway_transport", default=None)
 )
 
 
@@ -88,10 +98,21 @@ def serialize_frame(obj: dict, peer: str, log: logging.Logger) -> str:
         return json.dumps(obj, ensure_ascii=False)
     except (TypeError, ValueError) as exc:
         rid = obj.get("id") if isinstance(obj, dict) else None
-        log.error("frame serialization failed peer=%s id=%s error_type=%s error=%s",
-                  peer, rid, type(exc).__name__, exc)
-        fallback = {"jsonrpc": "2.0", "id": rid,
-                    "error": {"code": -32603, "message": f"response serialization error: {exc}"}}
+        log.error(
+            "frame serialization failed peer=%s id=%s error_type=%s error=%s",
+            peer,
+            rid,
+            type(exc).__name__,
+            exc,
+        )
+        fallback = {
+            "jsonrpc": "2.0",
+            "id": rid,
+            "error": {
+                "code": -32603,
+                "message": f"response serialization error: {exc}",
+            },
+        }
         return json.dumps(fallback, ensure_ascii=False)
 
 
@@ -204,7 +225,9 @@ class FanoutTransport:
 
     def contains(self, transport: Transport) -> bool:
         with self._lock:
-            return any(peer.attached and peer.transport is transport for peer in self._peers)
+            return any(
+                peer.attached and peer.transport is transport for peer in self._peers
+            )
 
     def transports(self) -> list[Transport]:
         with self._lock:
@@ -240,17 +263,27 @@ class FanoutTransport:
                 # Duck-typed on purpose: importing ``tui_gateway.ws`` here would pull
                 # ``tui_gateway.server`` in on this drain thread, racing any concurrent
                 # importer with a partially initialized module.
-                write_current = getattr(peer.transport, "write_many_if_current_async", None)
-                write_many = write_current or getattr(peer.transport, "write_many_async", None)
+                write_current = getattr(
+                    peer.transport, "write_many_if_current_async", None
+                )
+                write_many = write_current or getattr(
+                    peer.transport, "write_many_async", None
+                )
                 loop = getattr(peer.transport, "_loop", None)
                 if write_many is not None and loop is not None:
                     # write() acknowledges buffered tokens/timeouts, not socket
                     # progress. Await the real send so WS cannot move an
                     # unbounded backlog underneath this bounded mailbox.
                     from agent.async_utils import safe_schedule_threadsafe
+
                     frames = [frame for frame, _size in batch]
                     if write_current is not None:
-                        send = write_current(frames, lambda generation=generation: self._is_current(peer, generation))
+                        send = write_current(
+                            frames,
+                            lambda generation=generation: self._is_current(
+                                peer, generation
+                            ),
+                        )
                     elif self._is_current(peer, generation):
                         send = write_many(frames)
                     else:
@@ -258,8 +291,11 @@ class FanoutTransport:
                     future = safe_schedule_threadsafe(send, loop)
                     ok = future is not None and future.result()
                 else:
-                    ok = all(not self._is_current(peer, generation) or peer.transport.write(frame)
-                             for frame, _size in batch)
+                    ok = all(
+                        not self._is_current(peer, generation)
+                        or peer.transport.write(frame)
+                        for frame, _size in batch
+                    )
             except Exception:
                 logger.debug("fanout write failed; pruning peer", exc_info=True)
                 ok = False
@@ -279,9 +315,17 @@ class FanoutTransport:
             abort = getattr(transport, "abort", None)
             (abort or transport.close)()
         except Exception:
-            logger.debug("fanout overflow close failed; membership already dropped", exc_info=True)
+            logger.debug(
+                "fanout overflow close failed; membership already dropped",
+                exc_info=True,
+            )
 
-    def write(self, obj: dict, *, overflow: Callable[[Transport], Optional[dict]] | None = None) -> bool:
+    def write(
+        self,
+        obj: dict,
+        *,
+        overflow: Callable[[Transport], Optional[dict]] | None = None,
+    ) -> bool:
         """Fan *obj* out. A peer whose bounded backlog is full loses its subscription; *overflow*
         (called with its transport, under the membership lock) may return one final frame that
         replaces the dropped backlog, so a socket that is still healthy learns it must resume
@@ -297,8 +341,10 @@ class FanoutTransport:
             for peer in list(self._peers):
                 if not peer.attached:
                     continue
-                if (len(peer.pending) >= self._MAX_PENDING_FRAMES
-                        or peer.pending_bytes + size > self._MAX_PENDING_BYTES):
+                if (
+                    len(peer.pending) >= self._MAX_PENDING_FRAMES
+                    or peer.pending_bytes + size > self._MAX_PENDING_BYTES
+                ):
                     logger.warning("fanout subscriber backlog full; detaching peer")
                     self._remove(peer)
                     notice = overflow(peer.transport) if overflow is not None else None
@@ -310,15 +356,20 @@ class FanoutTransport:
                             self._peers.append(peer)
                         if not peer.writing:
                             peer.writing = True
-                            threading.Thread(target=self._drain, args=(peer,),
-                                             name="tui-fanout", daemon=True).start()
+                            threading.Thread(
+                                target=self._drain,
+                                args=(peer,),
+                                name="tui-fanout",
+                                daemon=True,
+                            ).start()
                     continue
                 peer.pending.append((frame, size))
                 peer.pending_bytes += size
                 if not peer.writing:
                     peer.writing = True
-                    threading.Thread(target=self._drain, args=(peer,),
-                                     name="tui-fanout", daemon=True).start()
+                    threading.Thread(
+                        target=self._drain, args=(peer,), name="tui-fanout", daemon=True
+                    ).start()
             remaining = any(peer.attached for peer in self._peers)
         for transport in overflowed:
             self._signal_overflow_detach(transport)

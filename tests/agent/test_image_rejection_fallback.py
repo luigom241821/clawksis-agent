@@ -7,7 +7,9 @@ require, and that the phrase detector fires on the expected error bodies.
 """
 
 from agent.message_sanitization import (
-    _looks_like_corrupt_image_rejection, _looks_like_image_content_rejection, _strip_images_from_messages,
+    _looks_like_corrupt_image_rejection,
+    _looks_like_image_content_rejection,
+    _strip_images_from_messages,
     strip_images_for_rejecting_model,
 )
 
@@ -27,9 +29,6 @@ class TestStripImagesPreservesAlternation:
             {"role": "assistant", "content": "hi"},
         ]
 
-
-
-
     def test_tool_message_with_all_images_replaced_not_deleted(self):
         """CRITICAL: tool messages must NEVER be deleted — their tool_call_id
         pairs with an assistant tool_call and providers reject unmatched IDs.
@@ -39,17 +38,22 @@ class TestStripImagesPreservesAlternation:
             {
                 "role": "assistant",
                 "content": None,
-                "tool_calls": [{
-                    "id": "call_abc",
-                    "type": "function",
-                    "function": {"name": "computer_use", "arguments": "{}"},
-                }],
+                "tool_calls": [
+                    {
+                        "id": "call_abc",
+                        "type": "function",
+                        "function": {"name": "computer_use", "arguments": "{}"},
+                    }
+                ],
             },
             {
                 "role": "tool",
                 "tool_call_id": "call_abc",
                 "content": [
-                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,..."}},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/png;base64,..."},
+                    },
                 ],
             },
         ]
@@ -69,7 +73,13 @@ class TestStripImagesPreservesAlternation:
             {
                 "role": "assistant",
                 "content": None,
-                "tool_calls": [{"id": "call_1", "type": "function", "function": {"name": "x", "arguments": "{}"}}],
+                "tool_calls": [
+                    {
+                        "id": "call_1",
+                        "type": "function",
+                        "function": {"name": "x", "arguments": "{}"},
+                    }
+                ],
             },
             {
                 "role": "tool",
@@ -96,13 +106,18 @@ class TestStripImagesPreservesAlternation:
             {
                 "role": "assistant",
                 "content": [
-                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,..."}},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/png;base64,..."},
+                    },
                 ],
-                "tool_calls": [{
-                    "id": "call_xyz",
-                    "type": "function",
-                    "function": {"name": "annotate", "arguments": "{}"},
-                }],
+                "tool_calls": [
+                    {
+                        "id": "call_xyz",
+                        "type": "function",
+                        "function": {"name": "annotate", "arguments": "{}"},
+                    }
+                ],
             },
             {"role": "tool", "tool_call_id": "call_xyz", "content": "done"},
         ]
@@ -141,8 +156,16 @@ class TestStripImagesPreservesAlternation:
                 "role": "assistant",
                 "content": None,
                 "tool_calls": [
-                    {"id": "c1", "type": "function", "function": {"name": "x", "arguments": "{}"}},
-                    {"id": "c2", "type": "function", "function": {"name": "x", "arguments": "{}"}},
+                    {
+                        "id": "c1",
+                        "type": "function",
+                        "function": {"name": "x", "arguments": "{}"},
+                    },
+                    {
+                        "id": "c2",
+                        "type": "function",
+                        "function": {"name": "x", "arguments": "{}"},
+                    },
                 ],
             },
             {
@@ -163,8 +186,6 @@ class TestStripImagesPreservesAlternation:
         assert {m["tool_call_id"] for m in tool_msgs} == {"c1", "c2"}
 
 
-
-
 class TestImageRejectionPhraseIsolation:
     """The image-rejection phrase list must NOT false-match on other
     image-related error categories (size-too-large, format errors, etc.)
@@ -174,14 +195,18 @@ class TestImageRejectionPhraseIsolation:
     def _matches(self, body: str) -> bool:
         # The two phrase lists are disjoint (corrupt payload vs. text-only model) but both
         # trip the strip-and-retry recovery; this asks the same question the recovery does.
-        return _looks_like_corrupt_image_rejection(body) or _looks_like_image_content_rejection(body)
+        return _looks_like_corrupt_image_rejection(
+            body
+        ) or _looks_like_image_content_rejection(body)
 
     def test_kimi_truncated_image_trips_recovery(self):
         # Kimi/Moonshot reject truncated image bytes with this 400; the
         # bad bytes are in immutable history so stripping must fire.
-        body = ("HTTP 400: Invalid request: prepare image failed error, "
-                "status code: 400, message: failed to decode image: invalid "
-                "or unsupported image format")
+        body = (
+            "HTTP 400: Invalid request: prepare image failed error, "
+            "status code: 400, message: failed to decode image: invalid "
+            "or unsupported image format"
+        )
         assert self._matches(body) is True
 
     def test_anthropic_image_too_large_does_not_trip(self):
@@ -196,8 +221,6 @@ class TestImageRejectionPhraseIsolation:
         ]
         for body in bodies:
             assert self._matches(body) is False, f"false positive on: {body}"
-
-
 
     def test_real_image_rejection_bodies_trip(self):
         """Positive cases — real-world error wordings that should trigger."""
@@ -254,7 +277,10 @@ class TestStripImagesDropsStaleApiContent:
             "role": "user",
             "content": [
                 {"type": "text", "text": "look"},
-                {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": "data:image/png;base64,AAAA"},
+                },
             ],
             "api_content": sidecar,
         }
@@ -322,29 +348,49 @@ class TestRejectionNeverReachesPersistedHistory:
         from types import SimpleNamespace
 
         return SimpleNamespace(
-            provider=provider, model=model, _force_ascii_payload=False,
-            _image_rejecting_models=set(), _db_flush_scan_prefix=7, log_prefix="",
+            provider=provider,
+            model=model,
+            _force_ascii_payload=False,
+            _image_rejecting_models=set(),
+            _db_flush_scan_prefix=7,
+            log_prefix="",
             _vprint=lambda *a, **k: None,
         )
 
     @staticmethod
     def _history():
         return [
-            {"role": "user", "content": [
-                {"type": "text", "text": "what is in this?"},
-                {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}},
-            ]},
-            {"role": "user", "content": [
-                {"type": "image_url", "image_url": {"url": "data:image/png;base64,BBBB"}},
-            ]},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "what is in this?"},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/png;base64,AAAA"},
+                    },
+                ],
+            },
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/png;base64,BBBB"},
+                    },
+                ],
+            },
         ]
 
     def _recover(self, agent, messages, api_messages):
         from agent.turn_recovery import recover_before_classification
 
         return recover_before_classification(
-            agent, self._Err(), messages=messages, api_messages=api_messages,
-            api_kwargs={}, active_system_prompt="sys",
+            agent,
+            self._Err(),
+            messages=messages,
+            api_messages=api_messages,
+            api_kwargs={},
+            active_system_prompt="sys",
         )
 
     def test_canonical_history_keeps_its_images(self):
@@ -404,7 +450,6 @@ class TestRejectionNeverReachesPersistedHistory:
         the rest of the session."""
         import copy
 
-
         class _CorruptErr(Exception):
             status_code = 400
             body = "Invalid request: prepare image failed: failed to decode image: invalid or unsupported image format"
@@ -414,8 +459,12 @@ class TestRejectionNeverReachesPersistedHistory:
         agent, history = self._agent(), self._history()
         before, wire = copy.deepcopy(history), copy.deepcopy(history)
         retry, _ = recover_before_classification(
-            agent, _CorruptErr(), messages=history, api_messages=wire,
-            api_kwargs={}, active_system_prompt="sys",
+            agent,
+            _CorruptErr(),
+            messages=history,
+            api_messages=wire,
+            api_kwargs={},
+            active_system_prompt="sys",
         )
 
         assert retry is True
@@ -437,21 +486,36 @@ def test_iteration_summary_strips_images_for_rejecting_model(tmp_path, monkeypat
     from run_agent import AIAgent
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    agent = AIAgent(api_key="k", base_url="https://api.groq.com/openai/v1", provider="custom", model="m",
-                    quiet_mode=True, skip_context_files=True, skip_memory=True)
+    agent = AIAgent(
+        api_key="k",
+        base_url="https://api.groq.com/openai/v1",
+        provider="custom",
+        model="m",
+        quiet_mode=True,
+        skip_context_files=True,
+        skip_memory=True,
+    )
     agent._cached_system_prompt = "SYS"
     agent._image_rejecting_models.add(_provider_model_key(agent))
     history = [
-        {"role": "user", "content": [
-            {"type": "text", "text": "look"},
-            {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}},
-        ]},
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "look"},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": "data:image/png;base64,AAAA"},
+                },
+            ],
+        },
         {"role": "assistant", "content": "ok"},
     ]
     before = copy.deepcopy(history)
 
     out = _iteration_summary_api_messages(agent, history)
 
-    assert "image_url" not in str(out), "summary request must be text-only for a rejecting model"
+    assert "image_url" not in str(out), (
+        "summary request must be text-only for a rejecting model"
+    )
     assert any("look" in str(m.get("content")) for m in out if m.get("role") == "user")
     assert history == before, "the per-call strip must not leak into canonical history"

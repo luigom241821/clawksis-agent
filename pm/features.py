@@ -89,7 +89,9 @@ def opt_in_extras(repo_dir: Path) -> list[str]:
     declared = set(data.get("project", {}).get("optional-dependencies", {}))
     unknown = sorted(set(names) - declared)
     if unknown:
-        raise ValueError(f"[tool.clawk] opt-in-extras names undeclared extras: {unknown}")
+        raise ValueError(
+            f"[tool.clawk] opt-in-extras names undeclared extras: {unknown}"
+        )
     return sorted(set(names))
 
 
@@ -125,19 +127,41 @@ print(json.dumps(result))
 """
     try:
         child = subprocess.run(
-            [str(python_exe), "-B", "-I", "-S", "-c", probe,
-             str(venv_dir.resolve()), json.dumps(anchors)],
-            cwd=repo_dir, capture_output=True, text=True, encoding="utf-8",
-            errors="replace", timeout=60, check=True,
+            [
+                str(python_exe),
+                "-B",
+                "-I",
+                "-S",
+                "-c",
+                probe,
+                str(venv_dir.resolve()),
+                json.dumps(anchors),
+            ],
+            cwd=repo_dir,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=60,
+            check=True,
         )
     except (OSError, subprocess.SubprocessError) as exc:
         detail = (getattr(exc, "stderr", None) or str(exc)).strip()
-        raise FeatureProbeError(f"feature inventory failed on {python_exe}: {detail}") from exc
+        raise FeatureProbeError(
+            f"feature inventory failed on {python_exe}: {detail}"
+        ) from exc
     try:
         resolved = json.loads(child.stdout)
     except ValueError as exc:
         raise FeatureProbeError("feature inventory returned invalid JSON") from exc
-    if (not isinstance(resolved, dict) or set(resolved) != set(anchors)
-            or any(type(value) is not bool for value in resolved.values())):
+    if (
+        not isinstance(resolved, dict)
+        or set(resolved) != set(anchors)
+        or any(type(value) is not bool for value in resolved.values())
+    ):
         raise FeatureProbeError("feature inventory returned incomplete anchor results")
-    return sorted(extra for extra, group in required.items() if all(resolved[anchor] for anchor in group))
+    return sorted(
+        extra
+        for extra, group in required.items()
+        if all(resolved[anchor] for anchor in group)
+    )

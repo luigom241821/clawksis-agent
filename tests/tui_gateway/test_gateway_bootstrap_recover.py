@@ -18,26 +18,45 @@ from clawk_cli import gateway_runtime
 import clawk_constants
 
 
-_SCRIPT = Path(__file__).resolve().parents[2] / "ui-tui" / "scripts" / "gateway_bootstrap.py"
+_SCRIPT = (
+    Path(__file__).resolve().parents[2] / "ui-tui" / "scripts" / "gateway_bootstrap.py"
+)
 
 
 def _load_bootstrap():
-    spec = importlib.util.spec_from_file_location("ink_gateway_bootstrap_recover_test", _SCRIPT)
+    spec = importlib.util.spec_from_file_location(
+        "ink_gateway_bootstrap_recover_test", _SCRIPT
+    )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-@pytest.mark.parametrize("record", [
-    {"gateway_state": "running", "pid": 999999},  # SIGKILL / OOM: dead process still claims live
-    {"gateway_state": "stopped", "pid": 999999},  # `clawk gateway stop` while the TUI is open
-    {"gateway_state": "running", "desired_state": "stopped"},  # durable operator stop intent
-    {"gateway_state": "stopped", "exit_reason": "auto-started gateway idle for 600s "
-     "(gateway.unmanaged_idle_exit_seconds)"},
-    {"gateway_state": "stopped", "exit_reason": "Gateway restart requested"},
-    None,  # no record at all
-])
+@pytest.mark.parametrize(
+    "record",
+    [
+        {
+            "gateway_state": "running",
+            "pid": 999999,
+        },  # SIGKILL / OOM: dead process still claims live
+        {
+            "gateway_state": "stopped",
+            "pid": 999999,
+        },  # `clawk gateway stop` while the TUI is open
+        {
+            "gateway_state": "running",
+            "desired_state": "stopped",
+        },  # durable operator stop intent
+        {
+            "gateway_state": "stopped",
+            "exit_reason": "auto-started gateway idle for 600s "
+            "(gateway.unmanaged_idle_exit_seconds)",
+        },
+        {"gateway_state": "stopped", "exit_reason": "Gateway restart requested"},
+        None,  # no record at all
+    ],
+)
 def test_recover_reensures_an_owner_that_is_gone(monkeypatch, tmp_path, record):
     ensured = True
     module = _load_bootstrap()
@@ -46,13 +65,20 @@ def test_recover_reensures_an_owner_that_is_gone(monkeypatch, tmp_path, record):
     if record is not None:
         (home / "gateway_state.json").write_text(json.dumps(record))
     monkeypatch.setattr(clawk_constants, "get_clawk_home", lambda: home)
-    monkeypatch.setattr(gateway_runtime, "discover_gateway_endpoint",
-                        lambda h, timeout=5: SimpleNamespace(state="absent", endpoint=None, reason_code=None, detail=None))
+    monkeypatch.setattr(
+        gateway_runtime,
+        "discover_gateway_endpoint",
+        lambda h, timeout=5: SimpleNamespace(
+            state="absent", endpoint=None, reason_code=None, detail=None
+        ),
+    )
     calls = []
 
     def ensure(h, timeout=30, idle_exit=False):
         calls.append(Path(h))
-        return SimpleNamespace(state="starting", endpoint=None, reason_code="deadline", detail=None)
+        return SimpleNamespace(
+            state="starting", endpoint=None, reason_code="deadline", detail=None
+        )
 
     monkeypatch.setattr(gateway_runtime, "ensure_gateway_runtime", ensure)
 
@@ -66,10 +92,18 @@ def test_recover_reensures_an_owner_that_is_gone(monkeypatch, tmp_path, record):
     assert calls == []
 
 
-@pytest.mark.parametrize("observed", [
-    SimpleNamespace(state="incompatible", endpoint=None, reason_code="runtime_protocol", detail=None),
-    SimpleNamespace(state="starting", endpoint=None, reason_code=None, detail=None),
-])
+@pytest.mark.parametrize(
+    "observed",
+    [
+        SimpleNamespace(
+            state="incompatible",
+            endpoint=None,
+            reason_code="runtime_protocol",
+            detail=None,
+        ),
+        SimpleNamespace(state="starting", endpoint=None, reason_code=None, detail=None),
+    ],
+)
 def test_recover_reensures_any_unready_owner(monkeypatch, tmp_path, observed):
     """A reconnect that finds an old (incompatible) owner, or one still starting, ensures like the
     first launch does instead of reporting the same verdict every 30 s."""
@@ -77,10 +111,20 @@ def test_recover_reensures_any_unready_owner(monkeypatch, tmp_path, observed):
     home = (tmp_path / "home").resolve()
     home.mkdir()
     monkeypatch.setattr(clawk_constants, "get_clawk_home", lambda: home)
-    monkeypatch.setattr(gateway_runtime, "discover_gateway_endpoint", lambda h, timeout=5: observed)
+    monkeypatch.setattr(
+        gateway_runtime, "discover_gateway_endpoint", lambda h, timeout=5: observed
+    )
     calls = []
-    monkeypatch.setattr(gateway_runtime, "ensure_gateway_runtime", lambda h, timeout=30, idle_exit=False: (
-        calls.append(h), SimpleNamespace(state="starting", endpoint=None, reason_code="deadline", detail=None))[1])
+    monkeypatch.setattr(
+        gateway_runtime,
+        "ensure_gateway_runtime",
+        lambda h, timeout=30, idle_exit=False: (
+            calls.append(h),
+            SimpleNamespace(
+                state="starting", endpoint=None, reason_code="deadline", detail=None
+            ),
+        )[1],
+    )
     with pytest.raises(RuntimeError):
         module.bootstrap(False, recover=True)
     assert calls == [home]
@@ -92,17 +136,27 @@ def test_failure_names_the_reason_and_its_remedy(monkeypatch, tmp_path):
     home = (tmp_path / "home").resolve()
     home.mkdir()
     monkeypatch.setattr(clawk_constants, "get_clawk_home", lambda: home)
-    monkeypatch.setattr(gateway_runtime, "ensure_gateway_runtime", lambda h, timeout=30, idle_exit=False:
-                        SimpleNamespace(state="incompatible", endpoint=None, reason_code="runtime_protocol",
-                                        detail="the gateway belongs to another Clawksis install; stop it there"))
+    monkeypatch.setattr(
+        gateway_runtime,
+        "ensure_gateway_runtime",
+        lambda h, timeout=30, idle_exit=False: SimpleNamespace(
+            state="incompatible",
+            endpoint=None,
+            reason_code="runtime_protocol",
+            detail="the gateway belongs to another Clawksis install; stop it there",
+        ),
+    )
     with pytest.raises(RuntimeError) as err:
         module.bootstrap(True)
     assert str(err.value).splitlines() == [
         "gateway incompatible: runtime_protocol",
-        "gateway incompatible: the gateway belongs to another Clawksis install; stop it there"]
+        "gateway incompatible: the gateway belongs to another Clawksis install; stop it there",
+    ]
 
 
-def test_started_daemon_does_not_inherit_the_launch_time_kanban_board(monkeypatch, tmp_path):
+def test_started_daemon_does_not_inherit_the_launch_time_kanban_board(
+    monkeypatch, tmp_path
+):
     """`clawk --tui` pins CLAWK_KANBAN_BOARD for its own launch; the shared daemon this bootstrap
     starts (spawn_unmanaged_gateway copies os.environ) must keep the profile's current board."""
     module = _load_bootstrap()
@@ -114,8 +168,11 @@ def test_started_daemon_does_not_inherit_the_launch_time_kanban_board(monkeypatc
 
     def ensure(h, timeout=30, idle_exit=False):
         import os
+
         seen.append(os.environ.get("CLAWK_KANBAN_BOARD"))
-        return SimpleNamespace(state="starting", endpoint=None, reason_code="deadline", detail=None)
+        return SimpleNamespace(
+            state="starting", endpoint=None, reason_code="deadline", detail=None
+        )
 
     monkeypatch.setattr(gateway_runtime, "ensure_gateway_runtime", ensure)
     with pytest.raises(RuntimeError):
@@ -124,27 +181,54 @@ def test_started_daemon_does_not_inherit_the_launch_time_kanban_board(monkeypatc
 
 
 @pytest.mark.parametrize("start,recover", [(True, False), (False, True)])
-def test_restart_wait_owner_is_attachable_on_start_and_recover(monkeypatch, tmp_path, start, recover):
+def test_restart_wait_owner_is_attachable_on_start_and_recover(
+    monkeypatch, tmp_path, start, recover
+):
     """GW-6: an owner in a restart's after-turn wait (draining/restart_wait) still owns its turns;
     reopening the TUI to answer a parked prompt must attach, not refuse or re-ensure it."""
     import io
     import os
+
     module = _load_bootstrap()
     home = (tmp_path / "home").resolve()
     home.mkdir()
-    endpoint = SimpleNamespace(profile_id=str(home), instance_id="draining-owner", api_origin="http://127.0.0.1:1",
-                               runtime_protocol=1, control_home=str(home))
-    receipt = SimpleNamespace(state="draining", endpoint=endpoint, reason_code="restart_wait", detail=None)
+    endpoint = SimpleNamespace(
+        profile_id=str(home),
+        instance_id="draining-owner",
+        api_origin="http://127.0.0.1:1",
+        runtime_protocol=1,
+        control_home=str(home),
+    )
+    receipt = SimpleNamespace(
+        state="draining", endpoint=endpoint, reason_code="restart_wait", detail=None
+    )
     monkeypatch.setattr(clawk_constants, "get_clawk_home", lambda: home)
-    monkeypatch.setattr(gateway_runtime, "discover_gateway_endpoint", lambda h, timeout=5: receipt)
+    monkeypatch.setattr(
+        gateway_runtime, "discover_gateway_endpoint", lambda h, timeout=5: receipt
+    )
     ensured = []
-    monkeypatch.setattr(gateway_runtime, "ensure_gateway_runtime",
-                        lambda h, timeout=30, idle_exit=False: (ensured.append(h), receipt)[1])
-    reply = json.dumps({"ok": True, "id": 1, "result": {
-        "instance_id": endpoint.instance_id, "profile_id": endpoint.profile_id, "ticket": "grant"}}).encode()
+    monkeypatch.setattr(
+        gateway_runtime,
+        "ensure_gateway_runtime",
+        lambda h, timeout=30, idle_exit=False: (ensured.append(h), receipt)[1],
+    )
+    reply = json.dumps(
+        {
+            "ok": True,
+            "id": 1,
+            "result": {
+                "instance_id": endpoint.instance_id,
+                "profile_id": endpoint.profile_id,
+                "ticket": "grant",
+            },
+        }
+    ).encode()
     if os.name == "nt":
         import gateway.runtime_bootstrap_windows as windows_bootstrap
-        monkeypatch.setattr(windows_bootstrap, "query_runtime_control", lambda h, req, timeout: reply)
+
+        monkeypatch.setattr(
+            windows_bootstrap, "query_runtime_control", lambda h, req, timeout: reply
+        )
     else:
         import clawk_cli.gateway_runtime_discovery as discovery
 

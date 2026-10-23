@@ -27,9 +27,13 @@ def _create_app(adapter: APIServerAdapter) -> web.Application:
 
 async def _captured_include_unconfigured(adapter, query: str) -> tuple[int, bool]:
     app = _create_app(adapter)
-    with patch("clawk_cli.inventory.load_picker_context", return_value=object()), \
-         patch("clawk_cli.inventory.build_model_options_payload",
-               return_value={"providers": []}) as build:
+    with (
+        patch("clawk_cli.inventory.load_picker_context", return_value=object()),
+        patch(
+            "clawk_cli.inventory.build_model_options_payload",
+            return_value={"providers": []},
+        ) as build,
+    ):
         async with TestClient(TestServer(app)) as cli:
             response = await cli.get(f"/api/model/options{query}")
     return response.status, bool(build.call_args.kwargs.get("include_unconfigured"))
@@ -45,6 +49,9 @@ async def test_default_keeps_unconfigured_rows():
 @pytest.mark.asyncio
 async def test_false_query_param_disables_unconfigured_rows():
     status, flag = await _captured_include_unconfigured(
-        _make_adapter(), "?include_unconfigured=false")
+        _make_adapter(), "?include_unconfigured=false"
+    )
     assert status == 200
-    assert flag is False, "explicit include_unconfigured=false must reach the payload builder"
+    assert flag is False, (
+        "explicit include_unconfigured=false must reach the payload builder"
+    )

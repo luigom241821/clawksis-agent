@@ -57,7 +57,11 @@ def resume(profile, monkeypatch):
     def run(stored: str | None) -> dict:
         db.create_session(KEY, source="desktop", model="test-model", cwd=stored)
         resp = server.handle_request(
-            {"id": "1", "method": "session.resume", "params": {"session_id": KEY, "profile": "austin"}}
+            {
+                "id": "1",
+                "method": "session.resume",
+                "params": {"session_id": KEY, "profile": "austin"},
+            }
         )
         assert "error" not in resp, resp
         return server._sessions[resp["result"]["session_id"]]
@@ -76,7 +80,12 @@ def test_resume_lands_in_the_profiles_own_home(resume, profile, stored):
     sibling = root / "profiles" / "jordan"
     sibling.mkdir(parents=True, exist_ok=True)
     install = server.Path(server.__file__).resolve().parent.parent
-    path = {"root": str(root), "sibling": str(sibling), "install": str(install), None: None}[stored]
+    path = {
+        "root": str(root),
+        "sibling": str(sibling),
+        "install": str(install),
+        None: None,
+    }[stored]
 
     live = resume(path)
 

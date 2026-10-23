@@ -23,7 +23,13 @@ _CUA_DRIVER_ARGS = ["mcp"]  # stdio MCP; fallback when the driver has no `manife
 _CUA_DRIVER_RUNTIME_CONTRACT_MIN = (0, 20, 0)
 _CUA_DRIVER_RUNTIME_CONTRACT_ARGS = {  # key order feeds the "manifest is missing" text
     "mcp": {"--socket", "--grant"},
-    "serve": {"--socket", "--permission-mode", "--capability-manifest", "--approve-capability-manifest", "--embedded"},
+    "serve": {
+        "--socket",
+        "--permission-mode",
+        "--capability-manifest",
+        "--approve-capability-manifest",
+        "--embedded",
+    },
     "stop": {"--socket"},
 }
 _SEMVER_RE = re.compile(r"v?(\d+)\.(\d+)\.(\d+)(?:[-+].*)?")
@@ -32,14 +38,21 @@ _SEMVER_RE = re.compile(r"v?(\d+)\.(\d+)\.(\d+)(?:[-+].*)?")
 def _cb():
     """Facade module (config/policy helpers), looked up lazily to avoid the import cycle."""
     from tools.computer_use import cua_backend
+
     return cua_backend
 
-def _driver_json(driver_cmd: str, *args: str, timeout: float) -> Optional[dict[str, Any]]:
+
+def _driver_json(
+    driver_cmd: str, *args: str, timeout: float
+) -> Optional[dict[str, Any]]:
     """Run a driver verb and parse its stdout as a JSON object; None on spawn failure, empty stdout (older drivers
     print usage to stderr), unparseable or non-object output, or a non-zero exit."""
     proc = _cb()._run_driver(driver_cmd, *args, timeout=timeout, swallow=Exception)
     out = (proc.stdout or "").strip() if proc is not None else ""
-    return None if proc is None or not out or proc.returncode != 0 else _json_object(out)
+    return (
+        None if proc is None or not out or proc.returncode != 0 else _json_object(out)
+    )
+
 
 def _json_object(text: str) -> Optional[dict[str, Any]]:
     """``json.loads`` that yields a dict or None (unparseable / non-object)."""
@@ -49,13 +62,20 @@ def _json_object(text: str) -> Optional[dict[str, Any]]:
         return None
     return data if isinstance(data, dict) else None
 
+
 def _valid_mcp_args(invocation: Any) -> Optional[list[str]]:
     """``mcp_invocation.args`` when it is a list of strings (possibly empty), else None."""
     args = invocation.get("args") if isinstance(invocation, dict) else None
-    return args if isinstance(args, list) and all(isinstance(a, str) for a in args) else None
+    return (
+        args
+        if isinstance(args, list) and all(isinstance(a, str) for a in args)
+        else None
+    )
+
 
 def _has_path_separator(value: str) -> bool:
     return os.sep in value or (os.altsep is not None and os.altsep in value)
+
 
 def _wsl_windows_path_to_posix(path: str) -> str:
     """Translate a Windows absolute manifest command to its DrvFS ``/mnt/<drive>/...`` form when Clawksis runs in WSL
@@ -65,6 +85,7 @@ def _wsl_windows_path_to_posix(path: str) -> str:
         return path
     try:
         from clawk_constants import is_wsl
+
         wsl = is_wsl()
     except Exception:
         wsl = False
@@ -72,9 +93,12 @@ def _wsl_windows_path_to_posix(path: str) -> str:
     drive = (win.drive or "").rstrip(":").lower()
     return "/".join(["/mnt", drive, *win.parts[1:]]) if wsl and drive else path
 
+
 def resolve_cua_driver_cmd(override: Optional[str] = None) -> Optional[str]:
     """Read PM's selected binary without installing; never replace an explicit override."""
-    configured = (override if override is not None else os.environ.get(_CUA_DRIVER_CMD_ENV, "")).strip()
+    configured = (
+        override if override is not None else os.environ.get(_CUA_DRIVER_CMD_ENV, "")
+    ).strip()
     if configured:
         expanded = os.path.expanduser(configured)
         resolved = shutil.which(expanded)
@@ -84,18 +108,26 @@ def resolve_cua_driver_cmd(override: Optional[str] = None) -> Optional[str]:
     installed = installed_package("cua-driver")
     return str(installed.binary) if installed and installed.binary else None
 
+
 def cua_driver_binary_available() -> bool:
     """True if PM or an explicit override selects a local driver."""
     return resolve_cua_driver_cmd() is not None
 
-def cua_driver_install_hint() -> str:
-    return ("cua-driver is not installed. Install the pinned driver with:\n  clawk computer-use install\n"
-            "Or run `clawk tools` and enable the Computer Use toolset to install it automatically.")
 
-def _mcp_args_with_overlay_flag(args: list[str], driver_cmd: str = _CUA_DRIVER_DEFAULT_CMD) -> list[str]:
+def cua_driver_install_hint() -> str:
+    return (
+        "cua-driver is not installed. Install the pinned driver with:\n  clawk computer-use install\n"
+        "Or run `clawk tools` and enable the Computer Use toolset to install it automatically."
+    )
+
+
+def _mcp_args_with_overlay_flag(
+    args: list[str], driver_cmd: str = _CUA_DRIVER_DEFAULT_CMD
+) -> list[str]:
     """Return *args* with ``--no-overlay`` appended when configured and supported."""
     on = _cb()._cua_no_overlay() and _cua_driver_supports_no_overlay(driver_cmd)
     return [*args, "--no-overlay"] if on else list(args)
+
 
 @functools.lru_cache(maxsize=1)
 def _cua_driver_supports_no_overlay(driver_cmd: str) -> bool:
@@ -107,7 +139,10 @@ def _cua_driver_supports_no_overlay(driver_cmd: str) -> bool:
     except Exception:
         return False
 
-def _resolve_mcp_invocation(driver_cmd: str, *, timeout: float = 6.0) -> tuple[str, list[str]]:
+
+def _resolve_mcp_invocation(
+    driver_cmd: str, *, timeout: float = 6.0
+) -> tuple[str, list[str]]:
     """``(command, args)`` that spawn cua-driver's stdio MCP server, asked of the driver itself via ``cua-driver
     manifest`` (``mcp_invocation``) so a subcommand rename keeps working. Falls back to ``(driver_cmd, ["mcp"])``
     on older drivers or any discovery failure — the wrapper must not refuse to start over a failed discovery hop.
@@ -125,15 +160,24 @@ def _resolve_mcp_invocation(driver_cmd: str, *, timeout: float = 6.0) -> tuple[s
     manifest = _driver_json(driver_cmd, "manifest", timeout=timeout) or {}
     invocation = manifest.get("mcp_invocation")
     args = _valid_mcp_args(invocation)
-    command = invocation.get("command") if args is not None and isinstance(invocation, dict) else None
+    command = (
+        invocation.get("command")
+        if args is not None and isinstance(invocation, dict)
+        else None
+    )
     args = list(_CUA_DRIVER_ARGS) if args is None else args
     # Translate a Windows ``C:\...`` command for WSL BEFORE the separator check (backslash is not a separator on
     # POSIX). A generic ``cua-driver`` name would lose the resolved user-local path under a GUI's thin PATH, so only
     # a concrete (path-bearing) command replaces the one we verified — and THAT binary is probed for `--no-overlay`,
     # not the system one.
-    command = _wsl_windows_path_to_posix(command) if isinstance(command, str) and command else ""
+    command = (
+        _wsl_windows_path_to_posix(command)
+        if isinstance(command, str) and command
+        else ""
+    )
     command = command if command and _has_path_separator(command) else driver_cmd
     return command, _mcp_args_with_overlay_flag(args, driver_cmd=command)
+
 
 def _manifest_contract_reason(manifest: Optional[dict[str, Any]]) -> str:
     """Why a parsed manifest fails the 0.20 contract, or ``""`` when it passes (version floor, MCP launch
@@ -148,14 +192,21 @@ def _manifest_contract_reason(manifest: Optional[dict[str, Any]]) -> str:
     if not _valid_mcp_args(manifest.get("mcp_invocation")):
         return "driver manifest does not provide an MCP launch command"
     advertised: dict[str, set[str]] = {
-        command["name"]: {arg["name"] for arg in command.get("args") or []
-                          if isinstance(arg, dict) and isinstance(arg.get("name"), str)}
+        command["name"]: {
+            arg["name"]
+            for arg in command.get("args") or []
+            if isinstance(arg, dict) and isinstance(arg.get("name"), str)
+        }
         for command in manifest.get("subcommands") or []
         if isinstance(command, dict) and isinstance(command.get("name"), str)
     }
-    missing = [f"{command} {arg}" for command, required in _CUA_DRIVER_RUNTIME_CONTRACT_ARGS.items()
-               for arg in sorted(required - advertised.get(command, set()))]
+    missing = [
+        f"{command} {arg}"
+        for command, required in _CUA_DRIVER_RUNTIME_CONTRACT_ARGS.items()
+        for arg in sorted(required - advertised.get(command, set()))
+    ]
     return "driver manifest is missing: " + ", ".join(missing) if missing else ""
+
 
 def cua_driver_runtime_contract_status(binary: Optional[str] = None) -> dict[str, Any]:
     """Report whether a local driver can host Clawksis' 0.20 integration."""
@@ -164,17 +215,36 @@ def cua_driver_runtime_contract_status(binary: Optional[str] = None) -> dict[str
     reason = "cua-driver is not installed"
     if resolved:
         try:
-            result = _cb()._run_driver(resolved, "manifest", timeout=15.0 if sys.platform == "win32" else 5.0)
+            result = _cb()._run_driver(
+                resolved, "manifest", timeout=15.0 if sys.platform == "win32" else 5.0
+            )
         except (OSError, subprocess.SubprocessError) as exc:
             result, reason = None, f"manifest check failed: {exc}"
         if result is not None and result.returncode != 0:
-            result, reason = None, (result.stderr or result.stdout or "manifest command failed").strip().splitlines()[-1][:200]
+            result, reason = (
+                None,
+                (result.stderr or result.stdout or "manifest command failed")
+                .strip()
+                .splitlines()[-1][:200],
+            )
         if result is not None:
             manifest = _json_object(result.stdout or "")
             reason = _manifest_contract_reason(manifest)
-            version = str(manifest.get("binary_version") or "").strip() or None if manifest is not None else None
-    return {"ready": not reason, "binary": resolved, "version": version, "reason": reason}
+            version = (
+                str(manifest.get("binary_version") or "").strip() or None
+                if manifest is not None
+                else None
+            )
+    return {
+        "ready": not reason,
+        "binary": resolved,
+        "version": version,
+        "reason": reason,
+    }
 
-def cua_driver_update_check(*, timeout: Optional[float] = None) -> Optional[dict[str, Any]]:
+
+def cua_driver_update_check(
+    *, timeout: Optional[float] = None
+) -> Optional[dict[str, Any]]:
     """Historical import: upstream release polling is retired; PM owns the pin."""
     return None

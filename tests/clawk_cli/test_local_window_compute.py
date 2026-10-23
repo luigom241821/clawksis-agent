@@ -17,16 +17,30 @@ from clawk_cli.local_runtime.estimator import HardwareBudget, footprint_bytes
 GIB = 1 << 30
 MIB = 1 << 20
 # A 128 GB GB10 (DGX Spark) as the probe budgets it: the CUDA pool, 20% headroom, lazy reads.
-SPARK = HardwareBudget(usable_vram_bytes=int(121.7 * GIB * 0.8), total_device_bytes=int(121.7 * GIB),
-                       ram_available_bytes=0, uma=True)
+SPARK = HardwareBudget(
+    usable_vram_bytes=int(121.7 * GIB * 0.8),
+    total_device_bytes=int(121.7 * GIB),
+    ram_available_bytes=0,
+    uma=True,
+)
 # What b11370 allocated for Flash Next UD-IQ4_XS + ggml-org's Q8_0 head + the BF16 projector at
 # -c 262144, -ub 512, unified KV, q8_0 cache, --lazy-mode on (MiB, from its own buffer logs).
-MEASURED_256K_LEAN = (61222.13 + 644.14              # target weights, device + host
-                      + 3291.18 + 644.14             # MTP head weights
-                      + 865.5 + 248.1                # projector + its compute buffer
-                      + 3264 + 816 + 512 + 128       # target and head KV
-                      + 5111.55 + 798.45             # target compute, device + host
-                      + 5053.94 + 808.15) * MIB      # head compute, device + host
+MEASURED_256K_LEAN = (
+    61222.13
+    + 644.14  # target weights, device + host
+    + 3291.18
+    + 644.14  # MTP head weights
+    + 865.5
+    + 248.1  # projector + its compute buffer
+    + 3264
+    + 816
+    + 512
+    + 128  # target and head KV
+    + 5111.55
+    + 798.45  # target compute, device + host
+    + 5053.94
+    + 808.15
+) * MIB  # head compute, device + host
 
 
 def test_flash_next_on_a_128_gb_spark_runs_256k_at_the_lean_microbatch_and_is_priced_as_measured():
@@ -34,9 +48,16 @@ def test_flash_next_on_a_128_gb_spark_runs_256k_at_the_lean_microbatch_and_is_pr
     variant = entry.variants[0]
 
     plan = entry.launch_plan(variant, SPARK)
-    args = launch_args(plan.profile, plan.decision, mtp_capable=True, uma=True,
-                       mtp_prefill=plan.mtp_prefill)
-    priced = footprint_bytes(plan.profile, plan.decision.window, overhead_bytes=plan.overhead_bytes)
+    args = launch_args(
+        plan.profile,
+        plan.decision,
+        mtp_capable=True,
+        uma=True,
+        mtp_prefill=plan.mtp_prefill,
+    )
+    priced = footprint_bytes(
+        plan.profile, plan.decision.window, overhead_bytes=plan.overhead_bytes
+    )
 
     assert plan.decision.window == 262144 and not plan.decision.spilled
     assert "-ub" not in args

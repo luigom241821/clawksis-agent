@@ -28,6 +28,7 @@ from unittest.mock import patch
 def _cli_env_map() -> dict[str, str]:
     """terminal config key -> env var bridged by cli.load_cli_config() (via _mirror_config_to_env)."""
     import cli
+
     return dict(cli._TERMINAL_ENV_MAPPINGS)
 
 
@@ -60,14 +61,20 @@ def _gateway_env_map() -> dict[str, str]:
     # A bridge that stopped consulting its config would make the probe below vacuous.
     assert len(recorder.seen) > 1, "gateway bridge looked up no terminal keys"
     probe = "/clawk-bridge-probe"  # absolute, so the cwd placeholder skip never fires
-    candidates = set(_cli_env_map()) | set(hc_config.TERMINAL_CONFIG_ENV_MAP) | recorder.seen
+    candidates = (
+        set(_cli_env_map()) | set(hc_config.TERMINAL_CONFIG_ENV_MAP) | recorder.seen
+    )
     bridged: dict[str, str] = {}
     with patch.dict(os.environ):  # restores the process env on exit
         for key in sorted(candidates):
             for var in [v for v in os.environ if v.startswith("TERMINAL_")]:
                 del os.environ[var]
             _bridge_terminal_config_to_env({key: probe})
-            written = [v for v, val in os.environ.items() if v.startswith("TERMINAL_") and val == probe]
+            written = [
+                v
+                for v, val in os.environ.items()
+                if v.startswith("TERMINAL_") and val == probe
+            ]
             if written:
                 (bridged[key],) = written
     return bridged
@@ -84,6 +91,7 @@ def _save_config_env_sync_keys() -> set[str]:
     literal that the consolidation removed.
     """
     from clawk_cli import config as hc_config
+
     # set_config_value bridges every TERMINAL_CONFIG_ENV_MAP key except
     # terminal.cwd (see the ``key != "terminal.cwd"`` guard in
     # set_config_value); mirror that exclusion here.
@@ -92,17 +100,19 @@ def _save_config_env_sync_keys() -> set[str]:
 
 # Keys present in cli.py env_mappings but intentionally absent from
 # gateway/run.py or set_config_value.  Each entry must be justified.
-_CLI_ONLY_OK = frozenset({
-    # `env_type` is a legacy YAML key alias for `backend` that cli.py
-    # accepts for backwards-compat with older cli-config.yaml.  The
-    # gateway path normalizes on the canonical `backend` key, which is
-    # also in the map and handles the same bridging.  See cli.py ~line 515.
-    "env_type",
-    # sudo_password is not a terminal-backend option — it's a credential
-    # used across backends, bridged to $SUDO_PASSWORD (not TERMINAL_*).
-    # Treating it as terminal-only would be misleading.
-    "sudo_password",
-})
+_CLI_ONLY_OK = frozenset(
+    {
+        # `env_type` is a legacy YAML key alias for `backend` that cli.py
+        # accepts for backwards-compat with older cli-config.yaml.  The
+        # gateway path normalizes on the canonical `backend` key, which is
+        # also in the map and handles the same bridging.  See cli.py ~line 515.
+        "env_type",
+        # sudo_password is not a terminal-backend option — it's a credential
+        # used across backends, bridged to $SUDO_PASSWORD (not TERMINAL_*).
+        # Treating it as terminal-only would be misleading.
+        "sudo_password",
+    }
+)
 
 
 def test_cli_and_gateway_env_maps_agree():
@@ -120,7 +130,11 @@ def test_cli_and_gateway_env_maps_agree():
 
     missing_in_gateway = sorted(set(cli_map) - set(gw_map))
     missing_in_cli = sorted(set(gw_map) - set(cli_map))
-    mismatched = {k: (cli_map[k], gw_map[k]) for k in set(cli_map) & set(gw_map) if cli_map[k] != gw_map[k]}
+    mismatched = {
+        k: (cli_map[k], gw_map[k])
+        for k in set(cli_map) & set(gw_map)
+        if cli_map[k] != gw_map[k]
+    }
 
     assert not missing_in_gateway, (
         f"Keys the CLI bridges but gateway/run.py _bridge_terminal_config_to_env "
@@ -131,7 +145,9 @@ def test_cli_and_gateway_env_maps_agree():
         f"Keys the gateway bridges but cli.py env_mappings ignores: "
         f"{missing_in_cli}.  Add them to both maps."
     )
-    assert not mismatched, f"Same key bridged to different env vars (cli, gateway): {mismatched}"
+    assert not mismatched, (
+        f"Same key bridged to different env vars (cli, gateway): {mismatched}"
+    )
 
 
 def test_save_config_set_bridges_every_cli_terminal_key():

@@ -17,12 +17,13 @@ class TestMemorySetupProviderRouting:
     def test_setup_with_provider_arg_skips_picker(self):
         """`memory setup honcho` routes straight to cmd_setup_provider."""
         args = SimpleNamespace(memory_command="setup", provider="honcho")
-        with patch.object(memory_setup, "cmd_setup_provider") as direct, \
-             patch.object(memory_setup, "cmd_setup") as picker:
+        with (
+            patch.object(memory_setup, "cmd_setup_provider") as direct,
+            patch.object(memory_setup, "cmd_setup") as picker,
+        ):
             memory_setup.memory_command(args)
         direct.assert_called_once_with("honcho")
         picker.assert_not_called()
-
 
     def test_unknown_provider_reports_and_returns_early(self, capsys):
         """An unknown provider name surfaces a helpful message and returns

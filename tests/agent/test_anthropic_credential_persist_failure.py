@@ -240,8 +240,6 @@ def test_direct_resolver_fails_closed_when_rotation_cannot_commit(
     assert _read_claude_pair(claude_credentials) == (_STALE_ACCESS, _STALE_REFRESH)
 
 
-
-
 # ---------------------------------------------------------------------------
 # Pool path: claude_code
 # ---------------------------------------------------------------------------
@@ -367,9 +365,7 @@ def test_pool_clawk_pkce_fails_closed_and_reload_cannot_resurrect(
     on_disk = json.loads(oauth_file.read_text(encoding="utf-8"))
     assert on_disk["refreshToken"] == _STALE_REFRESH
 
-    reloaded = [
-        e for e in load_pool("anthropic").entries() if e.source == "clawk_pkce"
-    ]
+    reloaded = [e for e in load_pool("anthropic").entries() if e.source == "clawk_pkce"]
     assert reloaded
     assert reloaded[0].refresh_token == _STALE_REFRESH
     assert reloaded[0].last_status == STATUS_DEAD

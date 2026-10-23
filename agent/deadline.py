@@ -53,7 +53,9 @@ __all__ = [
 # is the semantic "unbounded" on platforms that can express it; Windows
 # takes the DWORD-ms cap, which is still semantically "unbounded" for
 # every wait in this codebase.
-_WINDOWS_MAX_WAIT_S = (0xFFFFFFFF - 1000) / 1000.0  # DWORD ms, minus a 1s rounding guard
+_WINDOWS_MAX_WAIT_S = (
+    0xFFFFFFFF - 1000
+) / 1000.0  # DWORD ms, minus a 1s rounding guard
 MAX_SAFE_TIMEOUT_S = (
     _WINDOWS_MAX_WAIT_S if sys.platform == "win32" else 31_536_000.0
 )  # 365 days off-Windows
@@ -111,9 +113,20 @@ class BoundedResult:
     label: str
 
 
-def _result(start: float, timeout_s: Optional[float], label: str, *, value: Any = None, timed_out: bool = False) -> BoundedResult:
+def _result(
+    start: float,
+    timeout_s: Optional[float],
+    label: str,
+    *,
+    value: Any = None,
+    timed_out: bool = False,
+) -> BoundedResult:
     return BoundedResult(
-        timed_out=timed_out, value=value, elapsed_s=time.monotonic() - start, timeout_s=timeout_s, label=label
+        timed_out=timed_out,
+        value=value,
+        elapsed_s=time.monotonic() - start,
+        timeout_s=timeout_s,
+        label=label,
     )
 
 
@@ -124,7 +137,9 @@ def clamp_timeout(timeout: Optional[float]) -> Optional[float]:
     try:
         value = float(timeout)
     except (TypeError, ValueError):
-        logger.warning("clamp_timeout: non-numeric timeout %r; treating as unbounded", timeout)
+        logger.warning(
+            "clamp_timeout: non-numeric timeout %r; treating as unbounded", timeout
+        )
         return None
     if value != value:  # NaN
         logger.warning("clamp_timeout: NaN timeout; treating as unbounded")
@@ -139,6 +154,7 @@ def _timeouts_section() -> dict:
     """Read the ``timeouts:`` root section from config.yaml (read-only, fail-open)."""
     try:
         from clawk_cli.config import load_config_readonly
+
         section = load_config_readonly().get("timeouts")
         return section if isinstance(section, dict) else {}
     except Exception:
@@ -156,7 +172,9 @@ def _lookup_dotted(section: dict, key: str) -> Any:
     return node
 
 
-def resolve_timeout(key: str, *, default: Optional[float], env_var: Optional[str] = None) -> Optional[float]:
+def resolve_timeout(
+    key: str, *, default: Optional[float], env_var: Optional[str] = None
+) -> Optional[float]:
     """Resolve a timeout (seconds): dotted ``timeouts.<key>`` > ``env_var`` > ``default``; the winner
     goes through :func:`clamp_timeout`, invalid config/env values fall through with a warning."""
     raw = _lookup_dotted(_timeouts_section(), key)
@@ -171,7 +189,9 @@ def resolve_timeout(key: str, *, default: Optional[float], env_var: Optional[str
                     return clamp_timeout(value)
             except (TypeError, ValueError):
                 pass
-        logger.warning("timeouts.%s: invalid value %r in config.yaml; ignoring", key, raw)
+        logger.warning(
+            "timeouts.%s: invalid value %r in config.yaml; ignoring", key, raw
+        )
 
     if env_var:
         env_raw = os.getenv(env_var, "").strip()
@@ -224,7 +244,9 @@ def _dump_blocked_loop_diagnostics(label: str, timeout_s: float) -> None:
         "after a further %.0fs — the loop thread appears BLOCKED in a synchronous call, which is "
         "why no asyncio timeout can fire. Dumping all thread stacks to stderr to identify the "
         "blocking frame.",
-        label, timeout_s, _LOOP_BLOCKED_DUMP_GRACE_S,
+        label,
+        timeout_s,
+        _LOOP_BLOCKED_DUMP_GRACE_S,
     )
     try:
         faulthandler.dump_traceback(all_threads=True)
@@ -265,15 +287,21 @@ async def run_bounded_async(
         if not loop_processed_expiry.is_set():
             _dump_blocked_loop_diagnostics(label, timeout_s)
 
-    timers = [threading.Timer(timeout_s, lambda: loop.call_soon_threadsafe(_mark_expired))]
+    timers = [
+        threading.Timer(timeout_s, lambda: loop.call_soon_threadsafe(_mark_expired))
+    ]
     if dump_on_blocked_loop:
-        timers.append(threading.Timer(timeout_s + _LOOP_BLOCKED_DUMP_GRACE_S, _watchdog_check))
+        timers.append(
+            threading.Timer(timeout_s + _LOOP_BLOCKED_DUMP_GRACE_S, _watchdog_check)
+        )
     for t in timers:
         t.daemon = True
         t.start()
     try:
         try:
-            done, _ = await asyncio.wait({task, deadline}, return_when=asyncio.FIRST_COMPLETED)
+            done, _ = await asyncio.wait(
+                {task, deadline}, return_when=asyncio.FIRST_COMPLETED
+            )
         except asyncio.CancelledError:
             _abandon(task)  # the CALLER cancelled us; `task` must not run unobserved
             raise
@@ -284,11 +312,15 @@ async def run_bounded_async(
 
         _abandon(task)
         if on_abandon is not None:
-            asyncio.ensure_future(_run_abandon_cleanup(on_abandon)).add_done_callback(_consume_abandoned)
+            asyncio.ensure_future(_run_abandon_cleanup(on_abandon)).add_done_callback(
+                _consume_abandoned
+            )
         # Deliberately INLINE on the loop: the mark must happen-before this result returns
         # AND before the ensure_future'd on_abandon cleanup starts (next tick).
         _mark_backend_suspect(backend, label, timeout_s)
-        logger.warning("[deadline] %r timed out after %.1fs; task abandoned", label, timeout_s)
+        logger.warning(
+            "[deadline] %r timed out after %.1fs; task abandoned", label, timeout_s
+        )
         return _result(start, timeout_s, label, timed_out=True)
     finally:
         for t in timers:
@@ -342,7 +374,9 @@ def run_bounded_sync(
         done.wait(min(_BOUNDED_SYNC_WAIT_SLICE_S, remaining))
 
     if not done.is_set():
-        logger.warning("[deadline] %r timed out after %.1fs; worker abandoned", label, timeout_s)
+        logger.warning(
+            "[deadline] %r timed out after %.1fs; worker abandoned", label, timeout_s
+        )
         # Mark suspect BEFORE owner cleanup so a recycle in on_timeout never
         # inherits a stale flag on the healed replacement.
         _mark_backend_suspect(backend, label, timeout_s)
@@ -373,6 +407,7 @@ def _process_tree_snapshot(pid: int, *, hard_kill: bool):
     try:
         try:
             import psutil
+
             root = psutil.Process(pid)
             descendants = root.children(recursive=True)
             if hard_kill:
@@ -386,7 +421,9 @@ def _process_tree_snapshot(pid: int, *, hard_kill: bool):
                             continue
                         seen.add(process.pid)
                         if time.monotonic() >= stop_deadline:
-                            raise TimeoutError("process tree did not stop before snapshot deadline")
+                            raise TimeoutError(
+                                "process tree did not stop before snapshot deadline"
+                            )
                         try:
                             status = process.status()
                             if status in (psutil.STATUS_ZOMBIE, psutil.STATUS_DEAD):
@@ -396,7 +433,9 @@ def _process_tree_snapshot(pid: int, *, hard_kill: bool):
                                 stopped.append(process)
                             while process.status() != psutil.STATUS_STOPPED:
                                 if time.monotonic() >= stop_deadline:
-                                    raise TimeoutError("process did not stop before snapshot deadline")
+                                    raise TimeoutError(
+                                        "process did not stop before snapshot deadline"
+                                    )
                                 time.sleep(0.001)
                         except psutil.NoSuchProcess:
                             continue
@@ -405,18 +444,25 @@ def _process_tree_snapshot(pid: int, *, hard_kill: bool):
                     for process in root.children(recursive=True):
                         known.setdefault(process.pid, process)
                     descendants = list(known.values())
-                    pending = [process for process in descendants if process.pid not in seen]
+                    pending = [
+                        process for process in descendants if process.pid not in seen
+                    ]
         except Exception:
             # Preserve the existing best-effort group fallback when discovery or
             # stopping is unavailable; never strand a successfully stopped target.
-            logger.debug("kill_process_tree: snapshot incomplete for pid %s", pid, exc_info=True)
+            logger.debug(
+                "kill_process_tree: snapshot incomplete for pid %s", pid, exc_info=True
+            )
         yield descendants
     finally:
         for process in stopped:
             try:
                 process.resume()
             except Exception:
-                logger.debug("kill_process_tree: target already gone or resume refused", exc_info=True)
+                logger.debug(
+                    "kill_process_tree: target already gone or resume refused",
+                    exc_info=True,
+                )
 
 
 def kill_process_tree(pid: int, *, sig: Optional[int] = None) -> bool:
@@ -431,25 +477,35 @@ def kill_process_tree(pid: int, *, sig: Optional[int] = None) -> bool:
     if sys.platform == "win32":
         try:
             from clawk_cli._subprocess_compat import windows_hide_flags
+
             creationflags = windows_hide_flags()
         except Exception:
             creationflags = 0
         try:
             proc = subprocess.run(
                 ["taskkill", "/F", "/T", "/PID", str(pid)],
-                stdin=subprocess.DEVNULL, capture_output=True, timeout=15, check=False, creationflags=creationflags,
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                timeout=15,
+                check=False,
+                creationflags=creationflags,
             )
             # taskkill exits non-zero for not-found / access-denied (False = nothing terminated).
             return proc.returncode == 0
         except Exception:
-            logger.debug("kill_process_tree: taskkill failed for pid %s", pid, exc_info=True)
+            logger.debug(
+                "kill_process_tree: taskkill failed for pid %s", pid, exc_info=True
+            )
             return False
 
     import signal as _signal
+
     if sig is None:
         sig = _signal.SIGKILL
 
-    with _process_tree_snapshot(int(pid), hard_kill=sig == _signal.SIGKILL) as descendants:
+    with _process_tree_snapshot(
+        int(pid), hard_kill=sig == _signal.SIGKILL
+    ) as descendants:
         signalled = False
         # Signal descendants while their ownership ancestry is still observable.
         # Frozen hard-kill targets cannot fork during this bottom-up teardown.
@@ -469,13 +525,17 @@ def kill_process_tree(pid: int, *, sig: Optional[int] = None) -> bool:
         try:
             if pgid is not None and pgid == pid:
                 # pid leads its own group (the == check avoids signalling the caller's group).
-                os.killpg(pgid, sig)  # windows-footgun: ok — POSIX-only branch (win32 returns above)
+                os.killpg(
+                    pgid, sig
+                )  # windows-footgun: ok — POSIX-only branch (win32 returns above)
             else:
                 os.kill(pid, sig)
             signalled = True
         except ProcessLookupError:
             pass
         except (PermissionError, OSError):
-            logger.debug("kill_process_tree: signal failed for pid %s", pid, exc_info=True)
+            logger.debug(
+                "kill_process_tree: signal failed for pid %s", pid, exc_info=True
+            )
 
         return signalled

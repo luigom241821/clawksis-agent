@@ -70,7 +70,9 @@ def _make_runner():
 
 def _make_event(text="hello", chat_id="12345"):
     source = SessionSource(
-        platform=Platform.TELEGRAM, chat_id=chat_id, chat_type="dm",
+        platform=Platform.TELEGRAM,
+        chat_id=chat_id,
+        chat_type="dm",
         user_id="u1",
     )
     return MessageEvent(text=text, message_type=MessageType.TEXT, source=source)
@@ -162,6 +164,7 @@ async def test_recent_telegram_followups_append_in_pending_queue():
     fake_agent.get_activity_summary.return_value = {"seconds_since_activity": 0}
     runner._running_agents[session_key] = fake_agent
     import time as _time
+
     runner._running_agents_ts[session_key] = _time.time()
 
     await runner._handle_message(first)
@@ -286,4 +289,4 @@ async def test_stop_during_sentinel_force_cleans_session():
 # ------------------------------------------------------------------
 # Test 7: Shutdown skips sentinel entries
 # ------------------------------------------------------------------
-    # Should not have raised on the sentinel
+# Should not have raised on the sentinel

@@ -10,6 +10,7 @@ through :func:`toolchain_environ`. Values naming this host (toolchain paths, the
 project-plugins check of the client's folder) apply only when the gateway proved the client is on its
 host (``local``); otherwise the session keeps the gateway's and is told so. Values are never logged.
 """
+
 from __future__ import annotations
 
 import json
@@ -20,29 +21,49 @@ from contextvars import ContextVar
 from tools.code_execution_env import is_secret_env_name
 
 # What main's CLI read per process and the gateway otherwise reads daemon-wide.
-BEHAVIOUR_ENV = ('CLAWK_EPHEMERAL_SYSTEM_PROMPT', 'CLAWK_PREFILL_MESSAGES_FILE', 'CLAWK_INFERENCE_PROVIDER',
-                 'CLAWK_ENABLE_PROJECT_PLUGINS')
+BEHAVIOUR_ENV = (
+    "CLAWK_EPHEMERAL_SYSTEM_PROMPT",
+    "CLAWK_PREFILL_MESSAGES_FILE",
+    "CLAWK_INFERENCE_PROVIDER",
+    "CLAWK_ENABLE_PROJECT_PLUGINS",
+)
 # Behaviour values that name the client's host: a path, or the opt-in that inspects the client's folder.
-HOST_BEHAVIOUR = ('CLAWK_PREFILL_MESSAGES_FILE', 'CLAWK_ENABLE_PROJECT_PLUGINS')
-TOOL_ENV = ('PATH', 'VIRTUAL_ENV', 'GOPATH', 'GOROOT', 'CARGO_HOME', 'RUSTUP_HOME', 'JAVA_HOME')
-TOOL_ENV_PREFIXES = ('CONDA_', 'NODE_', 'NVM_', 'PYENV_')
+HOST_BEHAVIOUR = ("CLAWK_PREFILL_MESSAGES_FILE", "CLAWK_ENABLE_PROJECT_PLUGINS")
+TOOL_ENV = (
+    "PATH",
+    "VIRTUAL_ENV",
+    "GOPATH",
+    "GOROOT",
+    "CARGO_HOME",
+    "RUSTUP_HOME",
+    "JAVA_HOME",
+)
+TOOL_ENV_PREFIXES = ("CONDA_", "NODE_", "NVM_", "PYENV_")
 # ``terminal.client_env_passthrough`` names more non-secret toolchain variables for a profile.
-CONFIG_KEY = 'client_env_passthrough'
+CONFIG_KEY = "client_env_passthrough"
 # The session-start notice of a session whose client the gateway could not place on its own host.
-NOT_LOCAL_WARNING = ("this session uses the gateway's own PATH, toolchain and prefill file: the client's environment "
-                     'was not applied because the client is not attached to this gateway locally.')
+NOT_LOCAL_WARNING = (
+    "this session uses the gateway's own PATH, toolchain and prefill file: the client's environment "
+    "was not applied because the client is not attached to this gateway locally."
+)
 _MAX_NAMES = 256
 _MAX_BYTES = 256 * 1024
 
 # (env, local) for the session executing here; None outside a shell client's session.
-_BOUND: ContextVar = ContextVar('session_client_env', default=None)
+_BOUND: ContextVar = ContextVar("session_client_env", default=None)
 
 
 def configured_names(config) -> frozenset:
     """The profile's extra tool names (``terminal.client_env_passthrough``)."""
-    terminal = config.get('terminal') if isinstance(config, dict) else None
+    terminal = config.get("terminal") if isinstance(config, dict) else None
     raw = terminal.get(CONFIG_KEY) if isinstance(terminal, dict) else None
-    return frozenset(name.strip() for name in raw if isinstance(name, str) and name.strip()) if isinstance(raw, list) else frozenset()
+    return (
+        frozenset(
+            name.strip() for name in raw if isinstance(name, str) and name.strip()
+        )
+        if isinstance(raw, list)
+        else frozenset()
+    )
 
 
 def _travels(name: str, secret=None) -> bool:
@@ -50,8 +71,12 @@ def _travels(name: str, secret=None) -> bool:
     listed: ``NODE_AUTH_TOKEN`` matches ``NODE_``; secrets reach tools through ``terminal.env_passthrough``)
     or a Clawksis control name (a delegated child's markers, Kanban pins). ``secret``: a session's frozen
     copy of that policy's substrings."""
-    hidden = is_secret_env_name(name) if secret is None else any(s in name.upper() for s in secret)
-    return not hidden and not name.startswith('CLAWK_')
+    hidden = (
+        is_secret_env_name(name)
+        if secret is None
+        else any(s in name.upper() for s in secret)
+    )
+    return not hidden and not name.startswith("CLAWK_")
 
 
 def client_env_rules(config, *, local=True) -> dict:
@@ -59,31 +84,50 @@ def client_env_rules(config, *, local=True) -> dict:
     is judged by these, never by the profile's allowlist or the secret policy as they are later. A client
     not proven ``local`` keeps only the values that name nothing on this host (prompt, provider request)."""
     from tools.code_execution_env import _SECRET_SUBSTRINGS
-    return {'behaviour': [n for n in BEHAVIOUR_ENV if local or n not in HOST_BEHAVIOUR],
-            'names': sorted(set(TOOL_ENV) | configured_names(config)) if local else [],
-            'prefixes': list(TOOL_ENV_PREFIXES) if local else [], 'secret': list(_SECRET_SUBSTRINGS)}
+
+    return {
+        "behaviour": [n for n in BEHAVIOUR_ENV if local or n not in HOST_BEHAVIOUR],
+        "names": sorted(set(TOOL_ENV) | configured_names(config)) if local else [],
+        "prefixes": list(TOOL_ENV_PREFIXES) if local else [],
+        "secret": list(_SECRET_SUBSTRINGS),
+    }
 
 
 def _kept(name: str, rules: dict) -> bool:
-    return name in rules['behaviour'] or (_travels(name, rules['secret']) and (
-        name in rules['names'] or name.startswith(tuple(rules['prefixes']))))
+    return name in rules["behaviour"] or (
+        _travels(name, rules["secret"])
+        and (name in rules["names"] or name.startswith(tuple(rules["prefixes"])))
+    )
 
 
 def collect_client_env(environ=None, config=None) -> dict[str, str]:
     """Client side: this shell's allowlisted values (the profile's extra names included)."""
     environ = os.environ if environ is None else environ
     rules = client_env_rules(config)
-    return {name: value for name, value in environ.items() if isinstance(value, str) and _kept(name, rules)}
+    return {
+        name: value
+        for name, value in environ.items()
+        if isinstance(value, str) and _kept(name, rules)
+    }
 
 
 def normalise_client_env(value, rules) -> dict[str, str]:
     """The validated map filtered by ``rules`` (``None``: unfiltered, for a map frozen before rules were).
     Raises ``ValueError`` for anything but a bounded flat string-to-string map."""
-    if (not isinstance(value, dict) or len(value) > _MAX_NAMES
-            or any(not isinstance(k, str) or not isinstance(v, str) for k, v in value.items())
-            or sum(len(k) + len(v) for k, v in value.items()) > _MAX_BYTES):
-        raise ValueError('client_env must be a map of variable names to string values')
-    return {name: value[name] for name in sorted(value) if rules is None or _kept(name, rules)}
+    if (
+        not isinstance(value, dict)
+        or len(value) > _MAX_NAMES
+        or any(
+            not isinstance(k, str) or not isinstance(v, str) for k, v in value.items()
+        )
+        or sum(len(k) + len(v) for k, v in value.items()) > _MAX_BYTES
+    ):
+        raise ValueError("client_env must be a map of variable names to string values")
+    return {
+        name: value[name]
+        for name in sorted(value)
+        if rules is None or _kept(name, rules)
+    }
 
 
 def accept_client_env(value, config, *, local=True) -> dict[str, str]:
@@ -98,12 +142,14 @@ def retry_matches(committed: dict, request: dict) -> bool:
     missing stored name or a changed value is a different request; one they drop never counts. Staging
     and the transactional commit both judge by this. A session committed without a map (Desktop, one
     from before the field) still matches only a retry that sends none."""
-    stored = committed.get('client_env_json')
-    if stored is None or 'client_env' not in request:
-        return stored is None and 'client_env' not in request
-    rules = committed.get('client_env_rules_json')
+    stored = committed.get("client_env_json")
+    if stored is None or "client_env" not in request:
+        return stored is None and "client_env" not in request
+    rules = committed.get("client_env_rules_json")
     try:
-        sent = normalise_client_env(request['client_env'], None if rules is None else json.loads(rules))
+        sent = normalise_client_env(
+            request["client_env"], None if rules is None else json.loads(rules)
+        )
     except ValueError:
         return False
     return sent == json.loads(stored)
@@ -126,7 +172,7 @@ def bound_client_env():
     return None if bound is None else bound[0]
 
 
-def session_env(name: str, default: str = '') -> str:
+def session_env(name: str, default: str = "") -> str:
     """A behaviour value for the session executing here: its client's (an unexported name is unset,
     as it was for main's process), else the gateway's own environment, which a client not attached
     locally also keeps for the values that name this host."""
@@ -141,7 +187,11 @@ def tool_env() -> dict[str, str]:
     bound = _BOUND.get()
     if bound is None or not bound[1]:
         return {}
-    return {name: value for name, value in bound[0].items() if name not in BEHAVIOUR_ENV and _travels(name)}
+    return {
+        name: value
+        for name, value in bound[0].items()
+        if name not in BEHAVIOUR_ENV and _travels(name)
+    }
 
 
 def toolchain_environ(base=None) -> dict[str, str]:
@@ -163,8 +213,16 @@ def toolchain_environ(base=None) -> dict[str, str]:
             env.pop(name, None)
     if not bound[1]:
         return env
-    rules = bound[2] or {'names': TOOL_ENV, 'prefixes': TOOL_ENV_PREFIXES, 'secret': None}
-    names = {name for name in rules['names'] if _travels(name, rules['secret'])}
-    prefixes = tuple(rules['prefixes'])
-    kept = {k: v for k, v in env.items() if k == 'PATH' or not (k in names or k.startswith(prefixes))}
+    rules = bound[2] or {
+        "names": TOOL_ENV,
+        "prefixes": TOOL_ENV_PREFIXES,
+        "secret": None,
+    }
+    names = {name for name in rules["names"] if _travels(name, rules["secret"])}
+    prefixes = tuple(rules["prefixes"])
+    kept = {
+        k: v
+        for k, v in env.items()
+        if k == "PATH" or not (k in names or k.startswith(prefixes))
+    }
     return kept | tool_env()

@@ -22,6 +22,7 @@ from gateway.platforms.event import MessageEvent, MessageType
 # Minimal adapter for testing pending message storage
 # ---------------------------------------------------------------------------
 
+
 class _StubAdapter(BasePlatformAdapter):
     def __init__(self):
         super().__init__(PlatformConfig(enabled=True, token="test"), Platform.TELEGRAM)
@@ -34,6 +35,7 @@ class _StubAdapter(BasePlatformAdapter):
 
     async def send(self, chat_id, content, reply_to=None, metadata=None):
         from gateway.platforms.base import SendResult
+
         return SendResult(success=True, message_id="msg-1")
 
     async def get_chat_info(self, chat_id):
@@ -44,9 +46,9 @@ class _StubAdapter(BasePlatformAdapter):
 # Tests
 # ---------------------------------------------------------------------------
 
+
 class TestQueueMessageStorage:
     """Verify /queue stores messages correctly in adapter._pending_messages."""
-
 
     def test_get_pending_message_consumes_and_clears(self):
         adapter = _StubAdapter()
@@ -64,7 +66,6 @@ class TestQueueMessageStorage:
         assert retrieved.text == "queued prompt"
         # Should be consumed (cleared)
         assert adapter.get_pending_message(session_key) is None
-
 
     def test_queue_does_not_set_interrupt_event(self):
         """The whole point of /queue — no interrupt signal."""
@@ -115,7 +116,6 @@ class TestQueueConsumptionAfterCompletion:
         assert retrieved is not None
         assert retrieved.text == "process this after"
 
-
     def test_promote_stages_overflow_when_slot_already_populated(self):
         """If the slot was re-populated (e.g. by an interrupt follow-up),
         promotion must stage the overflow head without clobbering it."""
@@ -158,7 +158,9 @@ class TestQueueConsumptionAfterCompletion:
         # follow-up's turn runs — so here, the slot keeps the interrupt
         # and Q2 stays queued.  Verify we return the interrupt event and
         # Q2 is positioned to run next.
-        returned = runner._promote_queued_event(session_key, adapter, interrupt_follow_up)
+        returned = runner._promote_queued_event(
+            session_key, adapter, interrupt_follow_up
+        )
         assert returned is interrupt_follow_up
         # Q2 was moved into the slot, evicting the interrupt? No —
         # current implementation puts Q2 in the slot unconditionally,
@@ -218,13 +220,17 @@ class TestBusyInputModeQueueFifo:
         ]
         assert runner._queue_depth(session_key, adapter=adapter) == len(texts)
 
-
-
-    def _media_event(self, path: str, mime: str, message_type: MessageType, text: str = "") -> MessageEvent:
+    def _media_event(
+        self, path: str, mime: str, message_type: MessageType, text: str = ""
+    ) -> MessageEvent:
         source = MagicMock(chat_id="c1", platform=Platform.TELEGRAM, profile=None)
         return MessageEvent(
-            text=text, message_type=message_type, source=source,
-            media_urls=[path], media_types=[mime], message_id=f"m-{path}",
+            text=text,
+            message_type=message_type,
+            source=source,
+            media_urls=[path],
+            media_types=[mime],
+            message_id=f"m-{path}",
         )
 
     def test_non_photo_media_followups_each_keep_their_own_fifo_turn(self):
@@ -236,15 +242,25 @@ class TestBusyInputModeQueueFifo:
 
         for path in ("/tmp/v1.ogg", "/tmp/v2.ogg", "/tmp/v3.ogg"):
             runner._queue_or_replace_pending_event(
-                session_key, self._media_event(path, "audio/ogg", MessageType.VOICE))
+                session_key, self._media_event(path, "audio/ogg", MessageType.VOICE)
+            )
         runner._queue_or_replace_pending_event(
-            session_key, self._media_event("/tmp/clip.mp4", "video/mp4", MessageType.VIDEO))
+            session_key,
+            self._media_event("/tmp/clip.mp4", "video/mp4", MessageType.VIDEO),
+        )
         runner._queue_or_replace_pending_event(
-            session_key, self._media_event("/tmp/notes.pdf", "application/pdf", MessageType.DOCUMENT))
+            session_key,
+            self._media_event(
+                "/tmp/notes.pdf", "application/pdf", MessageType.DOCUMENT
+            ),
+        )
 
         assert adapter._pending_messages[session_key].media_urls == ["/tmp/v1.ogg"]
         assert [e.media_urls for e in runner._queued_events[session_key]] == [
-            ["/tmp/v2.ogg"], ["/tmp/v3.ogg"], ["/tmp/clip.mp4"], ["/tmp/notes.pdf"],
+            ["/tmp/v2.ogg"],
+            ["/tmp/v3.ogg"],
+            ["/tmp/clip.mp4"],
+            ["/tmp/notes.pdf"],
         ]
         assert runner._queue_depth(session_key, adapter=adapter) == 5
 
@@ -255,9 +271,15 @@ class TestBusyInputModeQueueFifo:
         session_key = "telegram:user:photo-burst"
 
         runner._queue_or_replace_pending_event(
-            session_key, self._media_event("/tmp/a.jpg", "image/jpeg", MessageType.PHOTO, text="first"))
+            session_key,
+            self._media_event(
+                "/tmp/a.jpg", "image/jpeg", MessageType.PHOTO, text="first"
+            ),
+        )
         runner._queue_or_replace_pending_event(
-            session_key, self._media_event("/tmp/b.jpg", "image/jpeg", MessageType.PHOTO))
+            session_key,
+            self._media_event("/tmp/b.jpg", "image/jpeg", MessageType.PHOTO),
+        )
         runner._queue_or_replace_pending_event(session_key, self._text_event("second"))
 
         head = adapter._pending_messages[session_key]
@@ -275,7 +297,9 @@ class TestBusyInputModeQueueFifo:
         continuation.inherit_channel_pin = True
         runner._queue_or_replace_pending_event(session_key, continuation)
         runner._queue_or_replace_pending_event(
-            session_key, self._media_event("/tmp/a.jpg", "image/jpeg", MessageType.PHOTO))
+            session_key,
+            self._media_event("/tmp/a.jpg", "image/jpeg", MessageType.PHOTO),
+        )
 
         assert adapter._pending_messages[session_key] is continuation
         assert continuation.media_urls == []

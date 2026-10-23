@@ -109,11 +109,20 @@ def test_driver_submit_settles_through_the_real_in_process_rpc(db: Path):
         calls.append(("prompt.submit", params))
         hosted = params["_hosted_task"]
         # The real handler settles from its background turn, after submit returns.
-        threading.Timer(0.05, params["_hosted_terminal_callback"], args=[{
-            "status": "settled", "settlement_id": "reply-1", "message_id": "reply-1",
-            "text": "Finished once.", "task_id": hosted["task_id"],
-            "execution_generation": hosted["execution_generation"],
-        }]).start()
+        threading.Timer(
+            0.05,
+            params["_hosted_terminal_callback"],
+            args=[
+                {
+                    "status": "settled",
+                    "settlement_id": "reply-1",
+                    "message_id": "reply-1",
+                    "text": "Finished once.",
+                    "task_id": hosted["task_id"],
+                    "execution_generation": hosted["execution_generation"],
+                }
+            ],
+        ).start()
         return {"id": rid, "result": {"status": "streaming"}}
 
     server._methods["prompt.submit"] = prompt_submit

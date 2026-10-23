@@ -19,7 +19,9 @@ class VercelAuthStatus:
 def describe_vercel_auth() -> VercelAuthStatus:
     """Return Vercel auth status without exposing secret values."""
     present_token_vars = tuple(name for name in _TOKEN_TUPLE_VARS if os.getenv(name))
-    missing_token_vars = tuple(name for name in _TOKEN_TUPLE_VARS if not os.getenv(name))
+    missing_token_vars = tuple(
+        name for name in _TOKEN_TUPLE_VARS if not os.getenv(name)
+    )
 
     if os.getenv("VERCEL_OIDC_TOKEN"):
         details = [
@@ -29,13 +31,18 @@ def describe_vercel_auth() -> VercelAuthStatus:
         ]
         if present_token_vars:
             details.append(f"also present: {', '.join(present_token_vars)}")
-        return VercelAuthStatus(True, "OIDC token via VERCEL_OIDC_TOKEN", tuple(details))
+        return VercelAuthStatus(
+            True, "OIDC token via VERCEL_OIDC_TOKEN", tuple(details)
+        )
 
     if not missing_token_vars:
         return VercelAuthStatus(
             True,
             "access token + project/team via VERCEL_TOKEN, VERCEL_PROJECT_ID, VERCEL_TEAM_ID",
-            ("mode: access token", "active env: VERCEL_TOKEN, VERCEL_PROJECT_ID, VERCEL_TEAM_ID"),
+            (
+                "mode: access token",
+                "active env: VERCEL_TOKEN, VERCEL_PROJECT_ID, VERCEL_TEAM_ID",
+            ),
         )
 
     if present_token_vars:
@@ -53,6 +60,8 @@ def describe_vercel_auth() -> VercelAuthStatus:
     return VercelAuthStatus(
         False,
         "not configured",
-        ("recommended: set VERCEL_TOKEN, VERCEL_PROJECT_ID, and VERCEL_TEAM_ID",
-         "development-only alternative: set VERCEL_OIDC_TOKEN"),
+        (
+            "recommended: set VERCEL_TOKEN, VERCEL_PROJECT_ID, and VERCEL_TEAM_ID",
+            "development-only alternative: set VERCEL_OIDC_TOKEN",
+        ),
     )

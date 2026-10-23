@@ -31,21 +31,31 @@ def cmd_codex_runtime_migrate(args: argparse.Namespace) -> int:
 def build_codex_runtime_parser(subparsers) -> None:
     """Attach the ``codex-runtime`` subcommand (``migrate`` action) to ``subparsers``."""
     parser = subparsers.add_parser(
-        "codex-runtime", help="Manage the optional codex app-server runtime (migrate MCP config)",
+        "codex-runtime",
+        help="Manage the optional codex app-server runtime (migrate MCP config)",
         description="Noninteractive counterpart of the /codex-runtime slash command. Toggling the "
-            "runtime itself stays in the chat command (`/codex-runtime on|off`); `migrate` "
-            "re-projects Clawksis' mcp_servers + installed codex plugins into the managed block of "
-            "~/.codex/config.toml for the selected profile.")
+        "runtime itself stays in the chat command (`/codex-runtime on|off`); `migrate` "
+        "re-projects Clawksis' mcp_servers + installed codex plugins into the managed block of "
+        "~/.codex/config.toml for the selected profile.",
+    )
     actions = parser.add_subparsers(dest="codex_runtime_action")
     migrate_parser = actions.add_parser(
-        "migrate", help="Regenerate the clawk-managed block in codex's config.toml",
+        "migrate",
+        help="Regenerate the clawk-managed block in codex's config.toml",
         description="Idempotent: replaces the managed block, keeps user text verbatim, skips Clawksis "
-            "servers whose name the user already declares outside the block, validates the result "
-            "as TOML before writing atomically.")
+        "servers whose name the user already declares outside the block, validates the result "
+        "as TOML before writing atomically.",
+    )
     migrate_parser.add_argument(
-        "--dry-run", action="store_true", help="Report what would be written without touching config.toml")
+        "--dry-run",
+        action="store_true",
+        help="Report what would be written without touching config.toml",
+    )
     migrate_parser.add_argument(
-        "--json", action="store_true", help="Print the migration report as JSON (for automation)")
+        "--json",
+        action="store_true",
+        help="Print the migration report as JSON (for automation)",
+    )
     migrate_parser.set_defaults(func=cmd_codex_runtime_migrate)
 
     def _print_help(args):

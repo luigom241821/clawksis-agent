@@ -15,21 +15,40 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from tools.skills_hub_clawhub import ClawHubSource
-from tools.skills_hub_github import GitHubAuth, GitHubSource, _filter_results_by_provider, _provider_filter_of
-from tools.skills_hub_models import SkillMeta, SkillSource, TRUST_RANK, _dedupe_by_trust, hub
+from tools.skills_hub_github import (
+    GitHubAuth,
+    GitHubSource,
+    _filter_results_by_provider,
+    _provider_filter_of,
+)
+from tools.skills_hub_models import (
+    SkillMeta,
+    SkillSource,
+    TRUST_RANK,
+    _dedupe_by_trust,
+    hub,
+)
 from tools.skills_hub_official import ClawksisIndexSource, OptionalSkillSource
 from tools.skills_hub_skillssh import SkillsShSource
-from tools.skills_hub_sources import BrowseShSource, LobeHubSource, UrlSource, WellKnownSkillSource
+from tools.skills_hub_sources import (
+    BrowseShSource,
+    LobeHubSource,
+    UrlSource,
+    WellKnownSkillSource,
+)
 
 # Log-record parity with the origin module.
 logger = logging.getLogger("tools.skills_hub")
 
-CLAWK_INDEX_URL = "https://samuelgradientai-sys.github.io/clawksis-agent/api/skills-index.json"
+CLAWK_INDEX_URL = (
+    "https://samuelgradientai-sys.github.io/clawksis-agent/api/skills-index.json"
+)
 CLAWK_INDEX_TTL = 6 * 3600  # 6 hours
 
 
 def _clawk_index_cache_file() -> Path:
     from tools.skills_hub import _index_cache_dir
+
     return _index_cache_dir() / "clawk-index.json"
 
 
@@ -44,6 +63,7 @@ def _load_clawk_index() -> Optional[dict]:
     ignore the header and return Brotli anyway.
     """
     from tools.skills_hub import _read_json_if_fresh
+
     cache_file = _clawk_index_cache_file()
     cached = _read_json_if_fresh(cache_file, CLAWK_INDEX_TTL)
     if cached is not None:
@@ -52,7 +72,9 @@ def _load_clawk_index() -> Optional[dict]:
     for accept_encoding in ("gzip, deflate", "identity"):
         try:
             resp = hub()._skills_hub_http_get(
-                CLAWK_INDEX_URL, timeout=15, follow_redirects=True,
+                CLAWK_INDEX_URL,
+                timeout=15,
+                follow_redirects=True,
                 headers={"Accept-Encoding": accept_encoding},
             )
             if resp.status_code != 200:
@@ -61,7 +83,11 @@ def _load_clawk_index() -> Optional[dict]:
             data = resp.json()
             break
         except httpx.DecodingError as e:
-            logger.debug("Clawksis index decode failed (Accept-Encoding=%s): %s", accept_encoding, e)
+            logger.debug(
+                "Clawksis index decode failed (Accept-Encoding=%s): %s",
+                accept_encoding,
+                e,
+            )
         except (httpx.HTTPError, json.JSONDecodeError) as e:
             logger.debug("Clawksis index fetch failed: %s", e)
             return _load_stale_index_cache()
@@ -78,6 +104,7 @@ def _load_clawk_index() -> Optional[dict]:
 def _load_stale_index_cache() -> Optional[dict]:
     """Fall back to the cache regardless of age when the network fetch fails."""
     from tools.skills_hub import _read_json_if_fresh
+
     return _read_json_if_fresh(_clawk_index_cache_file(), float("inf"))
 
 
@@ -99,37 +126,47 @@ _INDEX_MISS_FALLBACK_BUDGET = 8.0
 def create_source_router(auth: Optional[GitHubAuth] = None) -> list[SkillSource]:
     """All configured source adapters, in priority order."""
     from tools.skills_hub import TapsManager
+
     if auth is None:
         auth = GitHubAuth()
     return [
-        OptionalSkillSource(auth=auth),   # official optional skills (highest priority)
-        ClawksisIndexSource(auth=auth),     # centralized index (search + resolved install paths)
+        OptionalSkillSource(auth=auth),  # official optional skills (highest priority)
+        ClawksisIndexSource(
+            auth=auth
+        ),  # centralized index (search + resolved install paths)
         SkillsShSource(auth=auth),
         WellKnownSkillSource(),
-        UrlSource(),                      # direct HTTP(S) URL to a SKILL.md
+        UrlSource(),  # direct HTTP(S) URL to a SKILL.md
         GitHubSource(auth=auth, extra_taps=TapsManager().list_taps()),
         ClawHubSource(),
         LobeHubSource(),
-        BrowseShSource(),                 # browse.sh site-specific browser skills
+        BrowseShSource(),  # browse.sh site-specific browser skills
     ]
 
 
 def _search_one_source(
-    src: SkillSource, query: str, limit: int, provider_filter: str = "",
+    src: SkillSource,
+    query: str,
+    limit: int,
+    provider_filter: str = "",
 ) -> tuple[str, list[SkillMeta]]:
     """Search a single source.  Runs in a thread for parallelism."""
     try:
         # These sources mix providers in one catalog. Narrow before their top-N
         # cut so another provider cannot crowd every requested match out.
         if provider_filter and isinstance(src, (ClawksisIndexSource, GitHubSource)):
-            return src.source_id(), src.search(query, limit=limit, provider_filter=provider_filter)
+            return src.source_id(), src.search(
+                query, limit=limit, provider_filter=provider_filter
+            )
         return src.source_id(), src.search(query, limit=limit)
     except Exception as e:
         logger.debug("Search failed for %s: %s", src.source_id(), e)
         return src.source_id(), []
 
 
-def _select_active_sources(sources: list[SkillSource], source_filter: str) -> list[SkillSource]:
+def _select_active_sources(
+    sources: list[SkillSource], source_filter: str
+) -> list[SkillSource]:
     """Sources to query for ``source_filter``.
 
     A provider filter (nvidia/openai/...) is not a source id — the data lives
@@ -140,7 +177,8 @@ def _select_active_sources(sources: list[SkillSource], source_filter: str) -> li
     """
     effective = "all" if _provider_filter_of(source_filter) else source_filter
     index_available = effective == "all" and any(
-        src.source_id() == "clawk-index" and getattr(src, "is_available", False) for src in sources
+        src.source_id() == "clawk-index" and getattr(src, "is_available", False)
+        for src in sources
     )
     active: list[SkillSource] = []
     for src in sources:
@@ -154,7 +192,10 @@ def _select_active_sources(sources: list[SkillSource], source_filter: str) -> li
 
 
 def _index_miss_fallback_sources(
-    sources: list[SkillSource], active: list[SkillSource], query: str, source_counts: dict[str, int],
+    sources: list[SkillSource],
+    active: list[SkillSource],
+    query: str,
+    source_counts: dict[str, int],
     provider_filter: str = "",
 ) -> list[SkillSource]:
     """Registries to consult after the index stood in for them and found nothing.
@@ -166,17 +207,31 @@ def _index_miss_fallback_sources(
     (``--source nvidia``): the fallback registries carry no ``extra.provider``,
     so their results would all be cut and the calls would only burn budget.
     """
-    if not query.strip() or provider_filter or not any(src.source_id() == "clawk-index" for src in active):
+    if (
+        not query.strip()
+        or provider_filter
+        or not any(src.source_id() == "clawk-index" for src in active)
+    ):
         return []
     if source_counts.get("clawk-index") != 0:
         return []
-    return [src for src in sources if src.source_id() in _INDEX_MISS_FALLBACK_IDS and src not in active]
+    return [
+        src
+        for src in sources
+        if src.source_id() in _INDEX_MISS_FALLBACK_IDS and src not in active
+    ]
 
 
 def _fan_out(
-    active: list[SkillSource], query: str, per_source_limits: dict[str, int], provider_filter: str,
-    deadline: float, on_source_done: Optional[Any], all_results: list[SkillMeta],
-    source_counts: dict[str, int], timed_out_ids: list[str],
+    active: list[SkillSource],
+    query: str,
+    per_source_limits: dict[str, int],
+    provider_filter: str,
+    deadline: float,
+    on_source_done: Optional[Any],
+    all_results: list[SkillMeta],
+    source_counts: dict[str, int],
+    timed_out_ids: list[str],
 ) -> None:
     """Query ``active`` in parallel until ``deadline`` (monotonic), merging into the accumulators."""
     from concurrent.futures import as_completed
@@ -192,7 +247,11 @@ def _fan_out(
     pool = DaemonThreadPoolExecutor(max_workers=min(len(active), 8))
     futures = {
         pool.submit(
-            _search_one_source, src, query, per_source_limits.get(src.source_id(), 50), provider_filter,
+            _search_one_source,
+            src,
+            query,
+            per_source_limits.get(src.source_id(), 50),
+            provider_filter,
         ): src.source_id()
         for src in active
     }
@@ -221,8 +280,12 @@ def _fan_out(
 
 
 def parallel_search_sources(
-    sources: list[SkillSource], query: str = "", per_source_limits: Optional[dict[str, int]] = None,
-    source_filter: str = "all", overall_timeout: float = 30, on_source_done: Optional[Any] = None,
+    sources: list[SkillSource],
+    query: str = "",
+    per_source_limits: Optional[dict[str, int]] = None,
+    source_filter: str = "all",
+    overall_timeout: float = 30,
+    on_source_done: Optional[Any] = None,
 ) -> tuple[list[SkillMeta], dict[str, int], list[str]]:
     """Search all sources in parallel with an overall timeout.
 
@@ -248,20 +311,45 @@ def parallel_search_sources(
         return all_results, source_counts, timed_out_ids
 
     deadline = time.monotonic() + overall_timeout
-    _fan_out(active, query, per_source_limits, provider_filter, deadline, on_source_done,
-             all_results, source_counts, timed_out_ids)
-    fallback = _index_miss_fallback_sources(sources, active, query, source_counts, provider_filter)
+    _fan_out(
+        active,
+        query,
+        per_source_limits,
+        provider_filter,
+        deadline,
+        on_source_done,
+        all_results,
+        source_counts,
+        timed_out_ids,
+    )
+    fallback = _index_miss_fallback_sources(
+        sources, active, query, source_counts, provider_filter
+    )
     if fallback:
-        fallback_deadline = min(deadline, time.monotonic() + _INDEX_MISS_FALLBACK_BUDGET)
-        _fan_out(fallback, query, per_source_limits, provider_filter, fallback_deadline, on_source_done,
-                 all_results, source_counts, timed_out_ids)
+        fallback_deadline = min(
+            deadline, time.monotonic() + _INDEX_MISS_FALLBACK_BUDGET
+        )
+        _fan_out(
+            fallback,
+            query,
+            per_source_limits,
+            provider_filter,
+            fallback_deadline,
+            on_source_done,
+            all_results,
+            source_counts,
+            timed_out_ids,
+        )
     return all_results, source_counts, timed_out_ids
 
 
-def unified_search(query: str, sources: list[SkillSource],
-                   source_filter: str = "all", limit: int = 10) -> list[SkillMeta]:
+def unified_search(
+    query: str, sources: list[SkillSource], source_filter: str = "all", limit: int = 10
+) -> list[SkillMeta]:
     """Search all sources (in parallel) and merge results."""
-    all_results, _, _ = parallel_search_sources(sources, query=query, source_filter=source_filter, overall_timeout=30)
+    all_results, _, _ = parallel_search_sources(
+        sources, query=query, source_filter=source_filter, overall_timeout=30
+    )
     deduped = _dedupe_by_trust(all_results)
     # Stable-sort by trust before truncating so the limit cut never drops a
     # builtin/official entry because a high-volume community source finished

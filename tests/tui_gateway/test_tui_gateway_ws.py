@@ -11,8 +11,6 @@ from tui_gateway import server
 from tui_gateway import ws as ws_mod
 
 
-
-
 def _run_disconnect(monkeypatch, seed):
     """Drive handle_ws to its disconnect `finally`, seeding sessions against the
     live WSTransport the moment it exists. Returns nothing; inspect _sessions."""
@@ -37,8 +35,11 @@ def _run_disconnect(monkeypatch, seed):
     created = []
     real_transport = ws_mod.WSTransport
     monkeypatch.setattr(
-        ws_mod, "WSTransport",
-        lambda ws, loop, **kw: created.append(real_transport(ws, loop, **kw)) or created[-1],
+        ws_mod,
+        "WSTransport",
+        lambda ws, loop, **kw: (
+            created.append(real_transport(ws, loop, **kw)) or created[-1]
+        ),
     )
 
     class FakeWS:
@@ -84,9 +85,9 @@ def test_ws_disconnect_reaps_flagged_session_and_closes_worker(monkeypatch):
         server._sessions.clear()
 
 
-
-
-def test_ws_connection_registers_then_disconnect_unregisters_live_transport(monkeypatch):
+def test_ws_connection_registers_then_disconnect_unregisters_live_transport(
+    monkeypatch,
+):
     """A connected client must be tracked in the live-transport registry so a
     session-less global broadcast (skin.changed from the background watcher)
     reaches it, and dropped on disconnect so no stale write targets a dead peer.
@@ -120,10 +121,6 @@ def test_ws_disconnect_releases_wake_word_owner(monkeypatch):
     _run_disconnect(monkeypatch, lambda transport: created.append(transport))
 
     assert released == created
-
-
-
-
 
 
 def test_ws_ready_advertises_heartbeat_and_ping_is_inline(monkeypatch):
@@ -235,10 +232,16 @@ def test_ws_ping_is_answered_while_an_earlier_rpc_blocks_dispatch(monkeypatch):
     async def scenario():
         task = asyncio.create_task(ws_mod.handle_ws(ws))
         try:
-            for frame in (_rpc("r1", "slow"), _rpc("r2", "fast"), _rpc("heartbeat-1", "gateway.ping")):
+            for frame in (
+                _rpc("r1", "slow"),
+                _rpc("r2", "fast"),
+                _rpc("heartbeat-1", "gateway.ping"),
+            ):
                 inbound.put_nowait(frame)
             ping_answered = await _wait_for(lambda: "heartbeat-1" in ids(), timeout=1.0)
-            assert ping_answered, f"gateway.ping went unanswered while dispatch was busy; sent ids={ids()}"
+            assert ping_answered, (
+                f"gateway.ping went unanswered while dispatch was busy; sent ids={ids()}"
+            )
             assert "done:slow" not in log and "dispatch:fast" not in log
         finally:
             release.set()
@@ -270,7 +273,9 @@ def test_ws_context_breakdown_does_not_block_a_later_control_read(monkeypatch):
         await asyncio.wait_for(task, 5)
 
     asyncio.run(scenario())
-    assert log.index("done:session.context_breakdown") > log.index("done:session.control.read")
+    assert log.index("done:session.context_breakdown") > log.index(
+        "done:session.control.read"
+    )
 
 
 def test_ws_disconnect_teardown_waits_for_in_flight_dispatch(monkeypatch):
@@ -290,7 +295,13 @@ def test_ws_disconnect_teardown_waits_for_in_flight_dispatch(monkeypatch):
         await asyncio.wait_for(task, 5)
 
     asyncio.run(scenario())
-    assert log == ["dispatch:slow", "done:slow", "dispatch:queued", "done:queued", "teardown"]
+    assert log == [
+        "dispatch:slow",
+        "done:slow",
+        "dispatch:queued",
+        "done:queued",
+        "teardown",
+    ]
 
 
 def test_ws_failed_reply_from_dispatcher_ends_the_connection(monkeypatch):
@@ -361,7 +372,11 @@ def test_ws_transport_replies_with_error_for_unserializable_response(caplog):
         async def send_text(self, line):
             sent.append(json.loads(line))
 
-    bad = {"jsonrpc": "2.0", "id": "profiles", "result": {"created": datetime.datetime(2026, 8, 22)}}
+    bad = {
+        "jsonrpc": "2.0",
+        "id": "profiles",
+        "result": {"created": datetime.datetime(2026, 8, 22)},
+    }
 
     loop = asyncio.new_event_loop()
     thread = threading.Thread(target=loop.run_forever, daemon=True)
@@ -370,7 +385,10 @@ def test_ws_transport_replies_with_error_for_unserializable_response(caplog):
         transport = ws_mod.WSTransport(FakeWS(), loop, peer="serialization-test")
         assert transport.write(bad) is True
         assert transport.write({"jsonrpc": "2.0", "id": "next", "result": {}}) is True
-        assert asyncio.run_coroutine_threadsafe(transport.write_async(bad), loop).result(5) is True
+        assert (
+            asyncio.run_coroutine_threadsafe(transport.write_async(bad), loop).result(5)
+            is True
+        )
         assert transport.closed is False
     finally:
         loop.call_soon_threadsafe(loop.stop)
@@ -424,8 +442,16 @@ def test_ws_transport_preserves_cross_batch_order():
     asyncio.run(scenario())
 
 
-_INTERACTIVE = frozenset({"session:create", "session:read", "session:submit", "session:control",
-                          "session:approve", "session:respond"})
+_INTERACTIVE = frozenset(
+    {
+        "session:create",
+        "session:read",
+        "session:submit",
+        "session:control",
+        "session:approve",
+        "session:respond",
+    }
+)
 
 
 def _drive_authority_fallback(monkeypatch, *, capabilities, profile_id, method):
@@ -435,17 +461,28 @@ def _drive_authority_fallback(monkeypatch, *, capabilities, profile_id, method):
 
     class FakeConnection:
         def __init__(self, authority, transport, identity, operator=False):
-            self.actor = type("Actor", (), {"capabilities": frozenset(capabilities), "profile_id": profile_id})()
+            self.actor = type(
+                "Actor",
+                (),
+                {"capabilities": frozenset(capabilities), "profile_id": profile_id},
+            )()
 
         async def dispatch(self, req):
-            return {"jsonrpc": "2.0", "id": req["id"], "error": {"code": -32601, "message": "unknown method"}}
+            return {
+                "jsonrpc": "2.0",
+                "id": req["id"],
+                "error": {"code": -32601, "message": "unknown method"},
+            }
 
         async def close(self):
             pass
 
     monkeypatch.setattr(session_controls, "AuthorityConnection", FakeConnection)
     monkeypatch.setattr(server, "_WS_ORPHAN_REAP_GRACE_S", 0)
-    sent, inbound = [], [json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": {}})]
+    sent, inbound = (
+        [],
+        [json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": {}})],
+    )
 
     class FakeWS:
         scope = {"clawk.session_authority": object()}
@@ -474,7 +511,9 @@ def test_ready_frame_advertises_a_session_authority_only_when_one_is_bound(monke
 
     class FakeConnection:
         def __init__(self, authority, transport, identity, operator=False):
-            self.actor = type("Actor", (), {"capabilities": frozenset(), "profile_id": "p"})()
+            self.actor = type(
+                "Actor", (), {"capabilities": frozenset(), "profile_id": "p"}
+            )()
 
         async def close(self):
             pass
@@ -490,7 +529,9 @@ def test_ready_frame_advertises_a_session_authority_only_when_one_is_bound(monke
                 pass
 
             async def send_text(self, line):
-                sent.extend(json.loads(part) for part in line.splitlines() if part.strip())
+                sent.extend(
+                    json.loads(part) for part in line.splitlines() if part.strip()
+                )
 
             async def receive_text(self):
                 raise ws_mod._WebSocketDisconnect()
@@ -510,35 +551,67 @@ def test_legacy_fallback_requires_the_interactive_grant(monkeypatch):
     """A worker-adoption ticket (or any connection without the authority's interactive grant) must
     not reach general legacy dispatch after an authority -32601; an interactive one still does."""
     ran = []
-    monkeypatch.setitem(server._methods, "probe.legacy",
-                        lambda rid, params: ran.append(rid) or {"jsonrpc": "2.0", "id": rid, "result": {}})
+    monkeypatch.setitem(
+        server._methods,
+        "probe.legacy",
+        lambda rid, params: (
+            ran.append(rid) or {"jsonrpc": "2.0", "id": rid, "result": {}}
+        ),
+    )
     launch = str(server._launch_home())
     for restricted in ({"worker:adopt"}, set()):
-        reply = _drive_authority_fallback(monkeypatch, capabilities=restricted, profile_id=launch, method="probe.legacy")
+        reply = _drive_authority_fallback(
+            monkeypatch,
+            capabilities=restricted,
+            profile_id=launch,
+            method="probe.legacy",
+        )
         assert reply["error"]["code"] == -32601 and ran == []
-    reply = _drive_authority_fallback(monkeypatch, capabilities=_INTERACTIVE, profile_id=launch, method="probe.legacy")
+    reply = _drive_authority_fallback(
+        monkeypatch, capabilities=_INTERACTIVE, profile_id=launch, method="probe.legacy"
+    )
     assert reply["result"] == {} and ran == [1]
 
 
-def test_legacy_fallback_keeps_the_ticket_profile_for_sessionless_scoped_handlers(monkeypatch, tmp_path):
+def test_legacy_fallback_keeps_the_ticket_profile_for_sessionless_scoped_handlers(
+    monkeypatch, tmp_path
+):
     """A secondary-profile ticket's sessionless ``@_profile_scoped`` legacy call runs in THAT profile's
     home, not the launch profile's."""
     from clawk_constants import get_clawk_home
 
     secondary = tmp_path / "profiles" / "l106742sec"
     secondary.mkdir(parents=True)
-    monkeypatch.setitem(server._methods, "probe.scoped", server._profile_scoped(
-        lambda rid, params: {"jsonrpc": "2.0", "id": rid, "result": {"home": str(get_clawk_home())}}))
-    reply = _drive_authority_fallback(monkeypatch, capabilities=_INTERACTIVE, profile_id=str(secondary),
-                                      method="probe.scoped")
+    monkeypatch.setitem(
+        server._methods,
+        "probe.scoped",
+        server._profile_scoped(
+            lambda rid, params: {
+                "jsonrpc": "2.0",
+                "id": rid,
+                "result": {"home": str(get_clawk_home())},
+            }
+        ),
+    )
+    reply = _drive_authority_fallback(
+        monkeypatch,
+        capabilities=_INTERACTIVE,
+        profile_id=str(secondary),
+        method="probe.scoped",
+    )
     assert reply["result"]["home"] == str(secondary)
 
 
-@pytest.mark.parametrize("method,params", [
-    ("session.delete", {"session_id": "owned"}),
-    ("session.archive", {"session_id": "owned", "archived": True}),
-])
-def test_legacy_fallback_never_writes_an_authority_owned_session(monkeypatch, tmp_path, method, params):
+@pytest.mark.parametrize(
+    "method,params",
+    [
+        ("session.delete", {"session_id": "owned"}),
+        ("session.archive", {"session_id": "owned", "archived": True}),
+    ],
+)
+def test_legacy_fallback_never_writes_an_authority_owned_session(
+    monkeypatch, tmp_path, method, params
+):
     """A session write the authority answers -32601 for must not reach the legacy writer: it would
     change the authority's state.db behind its receipts and revision fence (and a delete would leave
     the authority holding a live session whose row is gone)."""
@@ -551,11 +624,25 @@ def test_legacy_fallback_never_writes_an_authority_owned_session(monkeypatch, tm
     with SessionDB(db_path=tmp_path / "state.db") as db:
         db.create_session("owned", source="tui")
         revision = db.get_session("owned")["runtime_revision"]
-        authority = SessionAuthority(SimpleNamespace(_draining=False), profile_id=str(tmp_path),
-                                     instance_id="current", db=db, epoch=begin_runtime_epoch(db, instance_id="current"))
+        authority = SessionAuthority(
+            SimpleNamespace(_draining=False),
+            profile_id=str(tmp_path),
+            instance_id="current",
+            db=db,
+            epoch=begin_runtime_epoch(db, instance_id="current"),
+        )
         authority.sessions["owned"] = LiveSession(None, "route")
-        monkeypatch.setattr(server, "_profile_db", lambda *_a, **_k: contextlib.nullcontext(db))
-        sent, inbound = [], [json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params})]
+        monkeypatch.setattr(
+            server, "_profile_db", lambda *_a, **_k: contextlib.nullcontext(db)
+        )
+        sent, inbound = (
+            [],
+            [
+                json.dumps(
+                    {"jsonrpc": "2.0", "id": 1, "method": method, "params": params}
+                )
+            ],
+        )
 
         class FakeWS:
             scope = {"clawk.session_authority": authority}
@@ -564,7 +651,9 @@ def test_legacy_fallback_never_writes_an_authority_owned_session(monkeypatch, tm
                 pass
 
             async def send_text(self, line):
-                sent.extend(json.loads(part) for part in line.splitlines() if part.strip())
+                sent.extend(
+                    json.loads(part) for part in line.splitlines() if part.strip()
+                )
 
             async def receive_text(self):
                 if inbound:
@@ -574,9 +663,17 @@ def test_legacy_fallback_never_writes_an_authority_owned_session(monkeypatch, tm
             async def close(self, **_kw):
                 pass
 
-        asyncio.run(ws_mod.handle_ws(FakeWS(), auth_identity={"user_id": "owner", "instance_id": "current"}))
+        asyncio.run(
+            ws_mod.handle_ws(
+                FakeWS(), auth_identity={"user_id": "owner", "instance_id": "current"}
+            )
+        )
         reply = next(frame for frame in sent if frame.get("id") == 1)
         assert reply["error"]["code"] == -32601, reply
         row = db.get_session("owned")
-        assert row is not None and not row.get("archived") and row["runtime_revision"] == revision
+        assert (
+            row is not None
+            and not row.get("archived")
+            and row["runtime_revision"] == revision
+        )
         assert "owned" in authority.sessions

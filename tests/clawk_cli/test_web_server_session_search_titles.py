@@ -49,7 +49,9 @@ def real_db(tmp_path):
 def db_path_for_profile(real_db, monkeypatch):
     """Point the endpoint's profile DB opener at the real temp state.db."""
     monkeypatch.setattr(
-        _web_server_sessions, "_session_db_path_for_profile", lambda profile: real_db.db_path
+        _web_server_sessions,
+        "_session_db_path_for_profile",
+        lambda profile: real_db.db_path,
     )
 
 

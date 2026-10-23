@@ -26,6 +26,7 @@ TERMINAL_ENV_VARS = (
     "WT_SESSION",
 )
 
+
 @pytest.fixture
 def clawk_home(tmp_path, monkeypatch):
     home = tmp_path / ".clawk"
@@ -33,24 +34,30 @@ def clawk_home(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(home))
     return home
 
+
 @pytest.fixture
 def no_terminal_env(monkeypatch):
     """Strip every terminal-identity env var so tests control identity."""
     for var in TERMINAL_ENV_VARS:
         monkeypatch.delenv(var, raising=False)
 
+
 def _fake_no_tty(monkeypatch):
     monkeypatch.setattr(tb.os, "ttyname", lambda fd: (_ for _ in ()).throw(OSError()))
+
 
 def _fake_tty(monkeypatch, name="/dev/pts/7"):
     monkeypatch.setattr(tb.os, "ttyname", lambda fd: name)
 
+
 # ---------------------------------------------------------------- identity
+
 
 def test_terminal_id_prefers_tty(monkeypatch, no_terminal_env):
     _fake_tty(monkeypatch, "/dev/pts/7")
     monkeypatch.setenv("TMUX_PANE", "%3")
     assert tb.get_terminal_id() == "tty-dev-pts-7"
+
 
 def test_terminal_id_env_var_order(monkeypatch, no_terminal_env):
     _fake_no_tty(monkeypatch)
@@ -59,6 +66,7 @@ def test_terminal_id_env_var_order(monkeypatch, no_terminal_env):
     # KITTY_WINDOW_ID comes before WT_SESSION in the preference order
     assert tb.get_terminal_id() == "kitty_window_id-12"
 
+
 def test_terminal_id_sanitizes_env_value(monkeypatch, no_terminal_env):
     _fake_no_tty(monkeypatch)
     monkeypatch.setenv("TMUX_PANE", "%41")
@@ -66,11 +74,14 @@ def test_terminal_id_sanitizes_env_value(monkeypatch, no_terminal_env):
     assert tid is not None
     assert "/" not in tid and "%" not in tid
 
+
 def test_terminal_id_none_when_no_identity(monkeypatch, no_terminal_env):
     _fake_no_tty(monkeypatch)
     assert tb.get_terminal_id() is None
 
+
 # ---------------------------------------------------------- write / read
+
 
 def test_breadcrumb_roundtrip(clawk_home, monkeypatch, no_terminal_env):
     _fake_tty(monkeypatch)
@@ -83,11 +94,15 @@ def test_breadcrumb_roundtrip(clawk_home, monkeypatch, no_terminal_env):
     files = list((clawk_home / "terminal-sessions").iterdir())
     assert [f.name for f in files] == ["tty-dev-pts-7"]
 
-def test_write_skipped_without_terminal_identity(clawk_home, monkeypatch, no_terminal_env):
+
+def test_write_skipped_without_terminal_identity(
+    clawk_home, monkeypatch, no_terminal_env
+):
     _fake_no_tty(monkeypatch)
     tb.write_breadcrumb("20260815_120000_abc123")
     assert not (clawk_home / "terminal-sessions").exists()
     assert tb.read_breadcrumb() is None
+
 
 def test_two_terminals_do_not_clobber(clawk_home, monkeypatch, no_terminal_env):
     _fake_tty(monkeypatch, "/dev/pts/1")
@@ -97,6 +112,7 @@ def test_two_terminals_do_not_clobber(clawk_home, monkeypatch, no_terminal_env):
     assert tb.read_breadcrumb()["session_id"] == "session-two"
     _fake_tty(monkeypatch, "/dev/pts/1")
     assert tb.read_breadcrumb()["session_id"] == "session-one"
+
 
 def test_stale_breadcrumb_ignored_and_pruned(clawk_home, monkeypatch, no_terminal_env):
     _fake_tty(monkeypatch, "/dev/pts/1")
@@ -115,6 +131,7 @@ def test_stale_breadcrumb_ignored_and_pruned(clawk_home, monkeypatch, no_termina
     tb.write_breadcrumb("fresh")
     assert not stale.exists()
 
+
 def test_corrupt_breadcrumb_returns_none(clawk_home, monkeypatch, no_terminal_env):
     _fake_tty(monkeypatch, "/dev/pts/1")
     directory = clawk_home / "terminal-sessions"
@@ -122,7 +139,9 @@ def test_corrupt_breadcrumb_returns_none(clawk_home, monkeypatch, no_terminal_en
     (directory / "tty-dev-pts-1").write_text("not json{")
     assert tb.read_breadcrumb() is None
 
+
 # ------------------------------------------------------------- resolution
+
 
 def _make_session(home: Path, session_id: str):
     from clawk_state import SessionDB
@@ -131,6 +150,7 @@ def _make_session(home: Path, session_id: str):
     db.create_session(session_id, "cli")
     db.close()
 
+
 def test_resolve_picks_this_terminals_session(clawk_home, monkeypatch, no_terminal_env):
     _fake_tty(monkeypatch, "/dev/pts/5")
     _make_session(clawk_home, "20260815_100000_aaaaaa")
@@ -138,13 +158,19 @@ def test_resolve_picks_this_terminals_session(clawk_home, monkeypatch, no_termin
     tb.write_breadcrumb("20260815_100000_aaaaaa")
     assert tb.resolve_breadcrumb_session() == "20260815_100000_aaaaaa"
 
-def test_resolve_falls_back_when_session_deleted(clawk_home, monkeypatch, no_terminal_env):
+
+def test_resolve_falls_back_when_session_deleted(
+    clawk_home, monkeypatch, no_terminal_env
+):
     _fake_tty(monkeypatch, "/dev/pts/5")
     _make_session(clawk_home, "20260815_110000_bbbbbb")
     tb.write_breadcrumb("20260815_100000_deleted")  # never existed / deleted
     assert tb.resolve_breadcrumb_session() is None
 
-def test_resolve_projects_through_compression_chain(clawk_home, monkeypatch, no_terminal_env):
+
+def test_resolve_projects_through_compression_chain(
+    clawk_home, monkeypatch, no_terminal_env
+):
     _fake_tty(monkeypatch, "/dev/pts/5")
     _make_session(clawk_home, "20260815_100000_parent")
     tb.write_breadcrumb("20260815_100000_parent")
@@ -158,7 +184,9 @@ def test_resolve_projects_through_compression_chain(clawk_home, monkeypatch, no_
     )
     assert tb.resolve_breadcrumb_session() == "20260815_110000_child"
 
+
 # ------------------------------------------------------------ config gate
+
 
 def test_config_gate_off_disables_writes_and_resolution(
     clawk_home, monkeypatch, no_terminal_env

@@ -62,11 +62,11 @@ secrets:
     )
     assert result.returncode == 0, result.stderr
     line = next(
-        line for line in result.stdout.splitlines() if line.startswith("LOADED_MODULES=")
+        line
+        for line in result.stdout.splitlines()
+        if line.startswith("LOADED_MODULES=")
     )
     return set(json.loads(line.removeprefix("LOADED_MODULES=")))
-
-
 
 
 def test_complete_update_dispatch_does_not_import_cryptography(tmp_path):
@@ -124,14 +124,21 @@ def test_update_probe_children_skip_external_secret_sources(tmp_path):
     home.mkdir()
     hit = tmp_path / "helper_hit"
     (home / "config.yaml").write_text(
-        f"secrets:\n  command:\n    enabled: true\n    command: 'touch {hit}'\n", encoding="utf-8",
+        f"secrets:\n  command:\n    enabled: true\n    command: 'touch {hit}'\n",
+        encoding="utf-8",
     )
     result = subprocess.run(
-        [sys.executable, "-c",
-         "import sys; sys.argv = ['clawk', 'update']\n"
-         "from clawk_cli.update_cmd_validation import _validate_critical_modules_import\n"
-         "print('PROBE=' + repr(_validate_critical_modules_import(__import__('os').getcwd())))"],
-        capture_output=True, text=True, timeout=180, cwd=REPO_ROOT,
+        [
+            sys.executable,
+            "-c",
+            "import sys; sys.argv = ['clawk', 'update']\n"
+            "from clawk_cli.update_cmd_validation import _validate_critical_modules_import\n"
+            "print('PROBE=' + repr(_validate_critical_modules_import(__import__('os').getcwd())))",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=180,
+        cwd=REPO_ROOT,
         env={**os.environ, "CLAWK_HOME": str(home)},
         check=False,
     )

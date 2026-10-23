@@ -24,7 +24,8 @@ def runtime_outside_gateway_evidence(runtime: dict) -> bool:
     from clawk_cli.update_serve_obligations import defer_manual_serve
 
     return runtime.get("kind") in ("serve", "dashboard") and (
-        defer_manual_serve(runtime) or runtime.get("supervisor") in _SUPERVISOR_OWNED_SERVE_BACKENDS
+        defer_manual_serve(runtime)
+        or runtime.get("supervisor") in _SUPERVISOR_OWNED_SERVE_BACKENDS
     )
 
 
@@ -46,4 +47,7 @@ def host_owes_no_gateway_restart() -> bool:
         state = record.get("gateway_state") if isinstance(record, dict) else None
         if not (isinstance(state, str) and state in _NOT_EXPECTED_STATES):
             return False
-    return all(runtime_outside_gateway_evidence(asdict(runtime)) for runtime in collect_runtime_inventory().runtimes)
+    return all(
+        runtime_outside_gateway_evidence(asdict(runtime))
+        for runtime in collect_runtime_inventory().runtimes
+    )

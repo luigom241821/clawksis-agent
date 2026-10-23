@@ -45,14 +45,19 @@ class _NonStreamRequest:
         self.thread = None
 
     def _install_codex_request_token(self) -> None:
-        if self.codex_token is not None and not self.codex_retired:  # retired before start: don't re-publish
+        if (
+            self.codex_token is not None and not self.codex_retired
+        ):  # retired before start: don't re-publish
             self.agent._active_codex_stream_request_token = self.codex_token
 
     def _retire_codex_request_token(self) -> None:
         if self.codex_token is None:
             return
         self.codex_retired = True
-        if getattr(self.agent, "_active_codex_stream_request_token", None) is self.codex_token:
+        if (
+            getattr(self.agent, "_active_codex_stream_request_token", None)
+            is self.codex_token
+        ):
             self.agent._active_codex_stream_request_token = None
 
     def _make_client(self, reason: str, kind: str = "openai"):
@@ -61,7 +66,9 @@ class _NonStreamRequest:
         if kind == "anthropic_messages":
             client = self.agent._create_request_anthropic_client(reason=reason)
         else:
-            client = self.agent._create_request_openai_client(reason=reason, api_kwargs=self.api_kwargs)
+            client = self.agent._create_request_openai_client(
+                reason=reason, api_kwargs=self.api_kwargs
+            )
         return self.clients.set_client(client, kind=kind)
 
     def _call(self):
@@ -72,22 +79,31 @@ class _NonStreamRequest:
                 from agent.codex_runtime import _codex_watchdog_state_var
 
                 watchdog_state_var = _codex_watchdog_state_var
-                watchdog_context_token = watchdog_state_var.set(self.codex_watchdog_state)
+                watchdog_context_token = watchdog_state_var.set(
+                    self.codex_watchdog_state
+                )
             self.result["response"] = h._dispatch_nonstreaming_api_request(
-                self.agent, self.api_kwargs, make_client=self._make_client)
+                self.agent, self.api_kwargs, make_client=self._make_client
+            )
         except Exception as e:
             # Our own force-close caused this error: swallow it, the main
             # thread raises InterruptedError (#6600). Retirement logs at info
             # (a watchdog discarded output the provider already sent — what an
             # operator debugging a truncated reply needs); cancellation at debug.
             if self.codex_retired:
-                h.logger.info("Codex worker caught %s after request retirement — "
+                h.logger.info(
+                    "Codex worker caught %s after request retirement — "
                     "discarding the stale partial instead of surfacing it as a completed response. %s",
-                    type(e).__name__, self.agent._client_log_context())
+                    type(e).__name__,
+                    self.agent._client_log_context(),
+                )
                 return
             if self.cancelled:
-                h.logger.debug("Non-streaming worker caught %s after request "
-                    "cancellation — exiting without surfacing a network error.", type(e).__name__)
+                h.logger.debug(
+                    "Non-streaming worker caught %s after request "
+                    "cancellation — exiting without surfacing a network error.",
+                    type(e).__name__,
+                )
                 return
             self.result["error"] = e
         finally:
@@ -99,7 +115,10 @@ class _NonStreamRequest:
             # Reuse reason only on a clean response; error or cancel-swallow
             # really closes so the next attempt builds a fresh pool.
             self.clients.close_once(
-                "request_complete" if self.result["response"] is not None else "request_error_cleanup")
+                "request_complete"
+                if self.result["response"] is not None
+                else "request_error_cleanup"
+            )
 
     def _abort_request(self, reason: str) -> None:
         """Watchdog/interrupt kill: abort the request client (kind-aware, #67142)
@@ -128,35 +147,58 @@ class _NonStreamRequest:
             return (None, None, None, self.call_start)
         with state.lock:
             retry_started_ts = state.retry_started_ts
-            return (state.last_event_ts, state.last_progress_ts, retry_started_ts,
-                    retry_started_ts if retry_started_ts is not None else self.call_start)
+            return (
+                state.last_event_ts,
+                state.last_progress_ts,
+                retry_started_ts,
+                retry_started_ts if retry_started_ts is not None else self.call_start,
+            )
 
     def _pre_progress(self, last_event_ts, last_progress_ts) -> bool:
         """Stream open on this attempt, but no substantive model progress yet."""
-        return self.wd.progress_timeout > 0 and last_event_ts is not None and last_progress_ts is None
+        return (
+            self.wd.progress_timeout > 0
+            and last_event_ts is not None
+            and last_progress_ts is None
+        )
 
     def _emit_wait_notice(self, elapsed: float, *, heartbeat: bool = True) -> None:
         wd = self.wd
         try:
-            last_event_ts, last_progress_ts, retry_started_ts, attempt_started_ts = self._codex_watchdog_snapshot()
+            last_event_ts, last_progress_ts, retry_started_ts, attempt_started_ts = (
+                self._codex_watchdog_snapshot()
+            )
             pre_progress = self._pre_progress(last_event_ts, last_progress_ts)
-            activity_ts = attempt_started_ts if pre_progress else (
-                retry_started_ts if retry_started_ts is not None else last_event_ts)
+            activity_ts = (
+                attempt_started_ts
+                if pre_progress
+                else (
+                    retry_started_ts if retry_started_ts is not None else last_event_ts
+                )
+            )
             # Lifecycle chatter is not progress: once pre-progress begins it must not
             # clear/reset this notice. Real progress changes phase and clears it.
-            if (self.wait_notice_started_ts is not None and activity_ts is not None
-                    and activity_ts > self.wait_notice_started_ts):
+            if (
+                self.wait_notice_started_ts is not None
+                and activity_ts is not None
+                and activity_ts > self.wait_notice_started_ts
+            ):
                 self.agent._emit_wait_notice("")
                 self.wait_notice_started_ts = None
                 self.wait_notice.reset()
             if not heartbeat:
                 return
-            silence = self.call_start + elapsed - (
-                activity_ts if activity_ts is not None else self.call_start)
+            silence = (
+                self.call_start
+                + elapsed
+                - (activity_ts if activity_ts is not None else self.call_start)
+            )
             if silence < 60.0:
                 self.agent._touch_activity(
                     "waiting for first stream event after reconnect"
-                    if retry_started_ts is not None else "waiting for provider response")
+                    if retry_started_ts is not None
+                    else "waiting for provider response"
+                )
                 return
             phase = "first_event"
             if pre_progress:
@@ -165,20 +207,35 @@ class _NonStreamRequest:
                 phase = "reconnect"
             elif last_event_ts is not None:
                 phase = "post_event"
-            watchdog = wn.codex_watchdog_deadline(stale_timeout=wd.stale_timeout,
-                ttfb_enabled=wd.ttfb_enabled, ttfb_timeout=wd.ttfb_timeout,
-                last_event_ts=last_event_ts, last_progress_ts=last_progress_ts,
+            watchdog = wn.codex_watchdog_deadline(
+                stale_timeout=wd.stale_timeout,
+                ttfb_enabled=wd.ttfb_enabled,
+                ttfb_timeout=wd.ttfb_timeout,
+                last_event_ts=last_event_ts,
+                last_progress_ts=last_progress_ts,
                 retry_started_ts=retry_started_ts,
-                call_start=self.call_start, idle_enabled=wd.idle_enabled, idle_timeout=wd.idle_timeout,
-                idle_requires_progress=wd.idle_requires_progress, progress_timeout=wd.progress_timeout,
-                elapsed=elapsed)
+                call_start=self.call_start,
+                idle_enabled=wd.idle_enabled,
+                idle_timeout=wd.idle_timeout,
+                idle_requires_progress=wd.idle_requires_progress,
+                progress_timeout=wd.progress_timeout,
+                elapsed=elapsed,
+            )
             # One neutral notice per silence; repeating it every heartbeat made
             # healthy long calls read as provider trouble (#92550).
             if not self.wait_notice.should_emit(phase, watchdog):
-                self.agent._touch_activity(f"waiting for provider response ({int(silence)}s, {phase})")
+                self.agent._touch_activity(
+                    f"waiting for provider response ({int(silence)}s, {phase})"
+                )
                 return
-            self.agent._emit_wait_notice(wn.wait_notice_text(
-                self.api_kwargs.get('model', 'the provider'), silence, phase, watchdog))
+            self.agent._emit_wait_notice(
+                wn.wait_notice_text(
+                    self.api_kwargs.get("model", "the provider"),
+                    silence,
+                    phase,
+                    watchdog,
+                )
+            )
             self.wait_notice_started_ts = self.call_start + elapsed
         except Exception:
             h.logger.debug("wait-notice construction failed", exc_info=True)
@@ -188,35 +245,54 @@ class _NonStreamRequest:
         reconnects instead of waiting out the stale timeout."""
         agent, wd = self.agent, self.wd
         silent_hint = h._codex_silent_hang_hint(agent, self.api_kwargs)
-        h.logger.warning("Codex stream produced no parsed stream event within TTFB cutoff "
+        h.logger.warning(
+            "Codex stream produced no parsed stream event within TTFB cutoff "
             "(%.0fs > %.0fs, model=%s). Backend accepted the connection "
-            "but sent no stream events. Killing connection so the retry loop can reconnect.", elapsed,
-            wd.ttfb_timeout, self._model())
+            "but sent no stream events. Killing connection so the retry loop can reconnect.",
+            elapsed,
+            wd.ttfb_timeout,
+            self._model(),
+        )
         agent._buffer_diagnostic_status(
             f"⚠️ No first stream event from provider in {int(elapsed)}s (codex stream, model: {self._model()}). "
-            f"Reconnecting." + (f" {silent_hint}" if silent_hint else ""))
+            f"Reconnecting." + (f" {silent_hint}" if silent_hint else "")
+        )
         self._abort_request("codex_ttfb_kill")
-        agent._emit_diagnostic_wait(f"⚠ no response from provider in {int(elapsed)}s — reconnecting...")
-        agent._touch_activity(f"codex stream killed after {int(elapsed)}s with no first stream event")
+        agent._emit_diagnostic_wait(
+            f"⚠ no response from provider in {int(elapsed)}s — reconnecting..."
+        )
+        agent._touch_activity(
+            f"codex stream killed after {int(elapsed)}s with no first stream event"
+        )
         self._await_worker_after_kill(
             f"Codex stream produced no parsed stream event within {int(elapsed)}s "
             f"(TTFB threshold: {int(wd.ttfb_timeout)}s)"
-            + (f". {silent_hint}" if silent_hint else ""))
+            + (f". {silent_hint}" if silent_hint else "")
+        )
 
     def _progress_kill(self, elapsed: float) -> None:
         """The stream opened, but this physical attempt never made model progress."""
         agent, wd = self.agent, self.wd
-        h.logger.warning("Codex stream produced lifecycle events but no substantive model progress "
+        h.logger.warning(
+            "Codex stream produced lifecycle events but no substantive model progress "
             "for %.0fs (threshold %.0fs, model=%s, context=~%s tokens). Reconnecting.",
-            elapsed, wd.progress_timeout, self._model(), f"{wd.est_tokens:,}")
+            elapsed,
+            wd.progress_timeout,
+            self._model(),
+            f"{wd.est_tokens:,}",
+        )
         agent._buffer_diagnostic_status(
             f"⚠️ Codex stream opened but made no model progress for {int(elapsed)}s "
-            f"(model: {self._model()}). Reconnecting.")
+            f"(model: {self._model()}). Reconnecting."
+        )
         self._abort_request("codex_progress_kill")
-        agent._touch_activity(f"codex stream killed after {int(elapsed)}s without model progress")
+        agent._touch_activity(
+            f"codex stream killed after {int(elapsed)}s without model progress"
+        )
         self._await_worker_after_kill(
             f"Codex stream produced no substantive model progress for {int(elapsed)}s "
-            f"(progress threshold: {int(wd.progress_timeout)}s)")
+            f"(progress threshold: {int(wd.progress_timeout)}s)"
+        )
 
     def _idle_kill(self, event_stale_elapsed: float) -> None:
         """SSE events stopped after the phase-specific idle arm point.
@@ -226,45 +302,64 @@ class _NonStreamRequest:
         parsed event. Once armed, any parsed SSE event refreshes transport activity.
         """
         agent, wd = self.agent, self.wd
-        arm_point = "model progress began" if wd.idle_requires_progress else "the first parsed event"
-        h.logger.warning("Codex stream produced no SSE events for %.0fs after %s "
+        arm_point = (
+            "model progress began"
+            if wd.idle_requires_progress
+            else "the first parsed event"
+        )
+        h.logger.warning(
+            "Codex stream produced no SSE events for %.0fs after %s "
             "(threshold %.0fs, model=%s, context=~%s tokens). Killing "
-            "connection so the retry loop can reconnect.", event_stale_elapsed, arm_point, wd.idle_timeout,
-            self._model(), f"{wd.est_tokens:,}")
+            "connection so the retry loop can reconnect.",
+            event_stale_elapsed,
+            arm_point,
+            wd.idle_timeout,
+            self._model(),
+            f"{wd.est_tokens:,}",
+        )
         agent._buffer_diagnostic_status(
             f"⚠️ Codex stream sent no events for {int(event_stale_elapsed)}s after {arm_point} "
-            f"(model: {self._model()}). Reconnecting.")
+            f"(model: {self._model()}). Reconnecting."
+        )
         self._abort_request("codex_stream_idle_kill")
-        agent._touch_activity(f"codex stream killed after {int(event_stale_elapsed)}s with no SSE events")
+        agent._touch_activity(
+            f"codex stream killed after {int(event_stale_elapsed)}s with no SSE events"
+        )
         self._await_worker_after_kill(
             f"Codex stream produced no SSE events for {int(event_stale_elapsed)}s "
-            f"after {arm_point} (threshold: {int(wd.idle_timeout)}s)")
+            f"after {arm_point} (threshold: {int(wd.idle_timeout)}s)"
+        )
 
     def _stale_kill(self, elapsed: float) -> None:
         """No response within the stale timeout: kill and count toward the
         circuit breaker (#58962, see ``_stale_streak``)."""
         agent, wd = self.agent, self.wd
         silent_hint = h._codex_silent_hang_hint(agent, self.api_kwargs)
-        h._report_stale_nonstream_kill(agent, self.api_kwargs, elapsed, wd.stale_timeout, hint=silent_hint)
+        h._report_stale_nonstream_kill(
+            agent, self.api_kwargs, elapsed, wd.stale_timeout, hint=silent_hint
+        )
         self._abort_request("stale_call_kill")
         h._bump_stale_streak(agent)
         h._touch_stale_kill_activity(agent, elapsed)
         self._await_worker_after_kill(
             f"Non-streaming API call timed out after {int(elapsed)}s with no response (threshold: {int(wd.stale_timeout)}s)"
-            + (f". {silent_hint}" if silent_hint else ""))
+            + (f". {silent_hint}" if silent_hint else "")
+        )
 
     def _interrupt(self, elapsed: float) -> None:
         agent = self.agent
         last_event_ts, _, _, _ = self._codex_watchdog_snapshot()
-        h._record_interrupted_provider_wait(agent, elapsed,
-            response_started=self.wd.codex and last_event_ts is not None
+        h._record_interrupted_provider_wait(
+            agent, elapsed, response_started=self.wd.codex and last_event_ts is not None
         )
         # Mark cancelled BEFORE force-closing so the worker treats the transport
         # error as a cancel (#6600). Never close the shared client (releasing a
         # TLS FD mid-SSL-BIO corrupted an unrelated SQLite DB, #67142). Then let
         # the worker unwind Relay scopes before raising (#81521).
         self.cancelled = True
-        h.logger.debug("Force-closing httpx client due to interrupt (not a network error).")
+        h.logger.debug(
+            "Force-closing httpx client due to interrupt (not a network error)."
+        )
         self._abort_request("interrupt_abort")
         h._join_worker_for_relay_teardown(self.thread, label="Non-streaming")
         raise InterruptedError("Agent interrupted during API call")
@@ -280,7 +375,9 @@ class _NonStreamRequest:
                 self.codex_watchdog_state.retry_started_ts = None
         agent._touch_activity("waiting for non-streaming API response")
 
-        self.thread = t = h.threading.Thread(target=h._context_thread_target(self._call), daemon=True)
+        self.thread = t = h.threading.Thread(
+            target=h._context_thread_target(self._call), daemon=True
+        )
         t.start()
         poll_count = 0
         while t.is_alive():
@@ -291,19 +388,31 @@ class _NonStreamRequest:
             now = h.time.time()
             elapsed = now - self.call_start
             self._emit_wait_notice(elapsed, heartbeat=poll_count % 100 == 0)
-            last_event_ts, last_progress_ts, retry_started_ts, attempt_started_ts = self._codex_watchdog_snapshot()
+            last_event_ts, last_progress_ts, retry_started_ts, attempt_started_ts = (
+                self._codex_watchdog_snapshot()
+            )
             attempt_elapsed = now - attempt_started_ts
-            if (wd.ttfb_enabled and last_event_ts is None and attempt_elapsed > wd.ttfb_timeout):
+            if (
+                wd.ttfb_enabled
+                and last_event_ts is None
+                and attempt_elapsed > wd.ttfb_timeout
+            ):
                 self._ttfb_kill(attempt_elapsed)
                 break
-            if (self._pre_progress(last_event_ts, last_progress_ts)
-                    and attempt_elapsed > wd.progress_timeout):
+            if (
+                self._pre_progress(last_event_ts, last_progress_ts)
+                and attempt_elapsed > wd.progress_timeout
+            ):
                 self._progress_kill(attempt_elapsed)
                 break
             idle_elapsed = now - last_event_ts if last_event_ts is not None else None
-            if (retry_started_ts is None and wd.idle_enabled and idle_elapsed is not None
-                    and (not wd.idle_requires_progress or last_progress_ts is not None)
-                    and idle_elapsed > wd.idle_timeout):
+            if (
+                retry_started_ts is None
+                and wd.idle_enabled
+                and idle_elapsed is not None
+                and (not wd.idle_requires_progress or last_progress_ts is not None)
+                and idle_elapsed > wd.idle_timeout
+            ):
                 self._idle_kill(idle_elapsed)
                 break
             if elapsed > wd.stale_timeout:

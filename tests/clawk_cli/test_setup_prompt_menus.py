@@ -4,6 +4,7 @@ import pytest
 
 from clawk_cli import setup as setup_mod
 
+
 def test_prompt_choice_escape_keeps_default_without_numbered_fallback(monkeypatch):
     monkeypatch.setattr(
         setup_mod,
@@ -19,26 +20,34 @@ def test_prompt_choice_escape_keeps_default_without_numbered_fallback(monkeypatc
 
     assert setup_mod.prompt_choice("Pick one", ["a", "b"], default=1) == 1
 
+
 def test_setup_navigation_escape_cancels_and_left_goes_back():
     state = setup_mod._SetupNavigationState(section_index=1)
     token = setup_mod._SETUP_NAVIGATION.set(state)
     try:
-        assert setup_mod._handle_setup_menu_navigation(
-            setup_mod.MenuNavigationEvent.BEGIN
-        ).allow_back is True
+        assert (
+            setup_mod._handle_setup_menu_navigation(
+                setup_mod.MenuNavigationEvent.BEGIN
+            ).allow_back
+            is True
+        )
         with pytest.raises(setup_mod._SetupCancelled):
             setup_mod._handle_setup_menu_navigation(
                 setup_mod.MenuNavigationEvent.CANCEL
             )
 
-        assert setup_mod._handle_setup_menu_navigation(
-            setup_mod.MenuNavigationEvent.BEGIN
-        ).allow_back is True
+        assert (
+            setup_mod._handle_setup_menu_navigation(
+                setup_mod.MenuNavigationEvent.BEGIN
+            ).allow_back
+            is True
+        )
         with pytest.raises(setup_mod._SetupGoBack) as exc_info:
             setup_mod._handle_setup_menu_navigation(setup_mod.MenuNavigationEvent.BACK)
         assert exc_info.value.prompt_index == 1
     finally:
         setup_mod._SETUP_NAVIGATION.reset(token)
+
 
 def test_setup_steps_move_to_previous_section_or_restart_current_section():
     calls = []
@@ -80,6 +89,7 @@ def test_setup_steps_move_to_previous_section_or_restart_current_section():
         "gateway",
     ]
 
+
 def test_nested_back_reopens_only_the_immediately_previous_prompt():
     shown = []
     attempts = 0
@@ -118,6 +128,7 @@ def test_nested_back_reopens_only_the_immediately_previous_prompt():
         "existing or reauthenticate",
         "auth method",
     ]
+
 
 def test_section_specific_model_setup_can_go_back_from_model_to_provider(
     tmp_path, monkeypatch
@@ -171,6 +182,7 @@ def test_section_specific_model_setup_can_go_back_from_model_to_provider(
     )
 
     assert shown == ["provider", "model", "provider", "model"]
+
 
 def test_prompt_strips_bracketed_paste_markers(monkeypatch):
     monkeypatch.setattr(

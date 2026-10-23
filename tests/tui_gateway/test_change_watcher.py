@@ -32,7 +32,9 @@ def watcher_home(tmp_path, monkeypatch):
 
     events = []
     monkeypatch.setattr(
-        server, "_broadcast_global_event", lambda ev, payload=None: events.append((ev, payload))
+        server,
+        "_broadcast_global_event",
+        lambda ev, payload=None: events.append((ev, payload)),
     )
     return tmp_path, events
 
@@ -114,19 +116,27 @@ def test_activity_heartbeats_do_not_broadcast_sessions_changed(watcher_home):
     for tick in range(1, 4):
         time.sleep(0.02)
         _write(db, "UPDATE gateway_heartbeats SET last_heartbeat = ?", tick * 60.0)
-        _write(db, "UPDATE sessions SET last_activity_at = ?, last_activity_description = ? "
-                   "WHERE id = 's1'", tick * 60.0, f"tool {tick}")
+        _write(
+            db,
+            "UPDATE sessions SET last_activity_at = ?, last_activity_description = ? "
+            "WHERE id = 's1'",
+            tick * 60.0,
+            f"tool {tick}",
+        )
         server._broadcast_watched_changes(now=tick * 10.0)
 
     assert ("sessions.changed", {}) not in events
 
 
-@pytest.mark.parametrize("sql", [
-    "INSERT INTO sessions VALUES ('s2', 'new', 2, 0, 2, NULL)",
-    "UPDATE sessions SET title = 'renamed' WHERE id = 's1'",
-    "UPDATE sessions SET message_count = 4 WHERE id = 's1'",
-    "DELETE FROM sessions WHERE id = 's1'",
-])
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "INSERT INTO sessions VALUES ('s2', 'new', 2, 0, 2, NULL)",
+        "UPDATE sessions SET title = 'renamed' WHERE id = 's1'",
+        "UPDATE sessions SET message_count = 4 WHERE id = 's1'",
+        "DELETE FROM sessions WHERE id = 's1'",
+    ],
+)
 def test_session_row_changes_broadcast_sessions_changed(watcher_home, sql):
     home, events = watcher_home
     db = home / "state.db"
@@ -168,14 +178,18 @@ def test_projects_db_move_broadcasts_projects_changed(watcher_home):
     assert ("projects.changed", {}) in events
 
 
-def test_served_profile_projects_db_move_broadcasts_projects_changed(watcher_home, monkeypatch):
+def test_served_profile_projects_db_move_broadcasts_projects_changed(
+    watcher_home, monkeypatch
+):
     """A backend serving a sibling profile watches that profile's projects.db too —
     the sibling-home half of the sessions.changed contract (#53046)."""
     home, events = watcher_home
     coder_home = home / "profiles" / "coder"
     coder_home.mkdir(parents=True)
     monkeypatch.setattr(server, "_served_profile_homes", set())
-    monkeypatch.setattr("clawk_cli.profiles.get_profile_dir", lambda name: home / "profiles" / name)
+    monkeypatch.setattr(
+        "clawk_cli.profiles.get_profile_dir", lambda name: home / "profiles" / name
+    )
     assert server._profile_home("coder") == coder_home
     server._broadcast_watched_changes(now=0.0)
 
@@ -197,14 +211,18 @@ def test_projects_sig_does_not_track_state_db_writes(watcher_home):
     assert ("projects.changed", {}) not in events
 
 
-def test_served_profile_store_move_broadcasts_sessions_changed(watcher_home, monkeypatch):
+def test_served_profile_store_move_broadcasts_sessions_changed(
+    watcher_home, monkeypatch
+):
     """A backend serving a sibling profile must see that profile's state.db
     move too — otherwise a routed profile's Bot Chat never refreshes (#99333)."""
     home, events = watcher_home
     bot_home = home / "profiles" / "bot"
     bot_home.mkdir(parents=True)
     monkeypatch.setattr(server, "_served_profile_homes", set())
-    monkeypatch.setattr("clawk_cli.profiles.get_profile_dir", lambda name: home / "profiles" / name)
+    monkeypatch.setattr(
+        "clawk_cli.profiles.get_profile_dir", lambda name: home / "profiles" / name
+    )
     assert server._profile_home("bot") == bot_home
     server._broadcast_watched_changes(now=0.0)
 
@@ -249,7 +267,9 @@ def test_pairing_signal_follows_a_profile_store(watcher_home):
     home, events = watcher_home
     store = home / "profiles" / "work" / "platforms" / "pairing"
     store.mkdir(parents=True)
-    (home / "profiles" / "work" / "config.yaml").write_text("{}\n")  # identity marker: a bare dir is not a profile
+    (home / "profiles" / "work" / "config.yaml").write_text(
+        "{}\n"
+    )  # identity marker: a bare dir is not a profile
     server._broadcast_watched_changes(now=0.0)
 
     (store / "telegram-approved.json").write_text('{"u1": {"user_id": "u1"}}')
@@ -258,7 +278,9 @@ def test_pairing_signal_follows_a_profile_store(watcher_home):
     assert ("pairing.changed", {}) in events
 
 
-def test_pairing_probe_reuses_live_profile_roots_until_the_profile_set_moves(watcher_home, monkeypatch):
+def test_pairing_probe_reuses_live_profile_roots_until_the_profile_set_moves(
+    watcher_home, monkeypatch
+):
     """The per-profile liveness probe (~14 stats each) runs once per profiles/ mtime + TTL, not
     on every 2 s tick (#114041 §2); ledger writes under known roots are still seen each tick,
     and a newly created profile is picked up because creating it bumps the parent's mtime."""
@@ -267,8 +289,11 @@ def test_pairing_probe_reuses_live_profile_roots_until_the_profile_set_moves(wat
     home, events = watcher_home
     live_calls = []
     real_live = clawk_constants.named_profile_is_live
-    monkeypatch.setattr(clawk_constants, "named_profile_is_live",
-                        lambda p: live_calls.append(p.name) or real_live(p))
+    monkeypatch.setattr(
+        clawk_constants,
+        "named_profile_is_live",
+        lambda p: live_calls.append(p.name) or real_live(p),
+    )
 
     def _profile(name):
         (home / "profiles" / name / "platforms" / "pairing").mkdir(parents=True)
@@ -276,21 +301,29 @@ def test_pairing_probe_reuses_live_profile_roots_until_the_profile_set_moves(wat
 
     _profile("work")
     server._broadcast_watched_changes(now=0.0)
-    (home / "profiles" / "work" / "platforms" / "pairing" / "telegram-pending.json").write_text("{}", encoding="utf-8")
+    (
+        home / "profiles" / "work" / "platforms" / "pairing" / "telegram-pending.json"
+    ).write_text("{}", encoding="utf-8")
     server._broadcast_watched_changes(now=10.0)
     assert events == [("pairing.changed", {})]
-    assert live_calls == ["work"]  # second tick reused the cached roots, still saw the ledger
+    assert live_calls == [
+        "work"
+    ]  # second tick reused the cached roots, still saw the ledger
 
     _profile("play")
     os.utime(home / "profiles", ns=(0, 10**18))  # deterministic parent-mtime bump
     server._broadcast_watched_changes(now=20.0)
-    (home / "profiles" / "play" / "platforms" / "pairing" / "discord-approved.json").write_text("{}", encoding="utf-8")
+    (
+        home / "profiles" / "play" / "platforms" / "pairing" / "discord-approved.json"
+    ).write_text("{}", encoding="utf-8")
     server._broadcast_watched_changes(now=30.0)
     assert events == [("pairing.changed", {})] * 2
     assert sorted(live_calls) == ["play", "work", "work"]
 
 
-def test_second_ledger_with_the_same_mtime_still_broadcasts_pairing_changed(watcher_home):
+def test_second_ledger_with_the_same_mtime_still_broadcasts_pairing_changed(
+    watcher_home,
+):
     """Coarse-timestamp filesystems give two ledgers written in one tick the same mtime; a
     newest-mtime signature cannot see the second one, so the badge for it never appears."""
     home, events = watcher_home
@@ -309,7 +342,9 @@ def test_second_ledger_with_the_same_mtime_still_broadcasts_pairing_changed(watc
     assert events == [("pairing.changed", {})]
 
 
-def test_sibling_projects_db_write_in_the_same_mtime_tick_broadcasts(watcher_home, monkeypatch):
+def test_sibling_projects_db_write_in_the_same_mtime_tick_broadcasts(
+    watcher_home, monkeypatch
+):
     """One served profile's projects.db write that lands in the same timestamp tick as
     another's must not be masked by a newest-mtime-across-homes signature."""
     home, events = watcher_home
@@ -366,7 +401,9 @@ def test_pet_sig_stays_off_without_a_renderable_pet(watcher_home):
     server._broadcast_watched_changes(now=0.0)
 
     # Config flips enabled but no pet exists on disk → signature stays ("off",).
-    (home / "config.yaml").write_text("display:\n  pet:\n    enabled: true\n    slug: boba\n")
+    (home / "config.yaml").write_text(
+        "display:\n  pet:\n    enabled: true\n    slug: boba\n"
+    )
     server._cfg_cache = None
     server._broadcast_watched_changes(now=10.0)
 
@@ -375,7 +412,9 @@ def test_pet_sig_stays_off_without_a_renderable_pet(watcher_home):
 
 def test_renderable_pet_broadcasts_meta_payload(watcher_home, monkeypatch):
     home, events = watcher_home
-    (home / "config.yaml").write_text("display:\n  pet:\n    enabled: true\n    slug: boba\n")
+    (home / "config.yaml").write_text(
+        "display:\n  pet:\n    enabled: true\n    slug: boba\n"
+    )
     server._cfg_cache = None
     server._broadcast_watched_changes(now=0.0)
 
@@ -388,7 +427,9 @@ def test_renderable_pet_broadcasts_meta_payload(watcher_home, monkeypatch):
         exists = True
         spritesheet = sheet
 
-    monkeypatch.setattr(server, "_pet_active_selection", lambda: (True, FakePet(), 0.33))
+    monkeypatch.setattr(
+        server, "_pet_active_selection", lambda: (True, FakePet(), 0.33)
+    )
     server._broadcast_watched_changes(now=10.0)
 
     pet_events = [e for e in events if e[0] == "pet.changed"]
@@ -484,11 +525,14 @@ def test_broken_probe_never_kills_the_pass(watcher_home, monkeypatch):
     assert ("sessions.changed", {}) in events
 
 
-def test_skill_installed_from_another_terminal_broadcasts_skills_changed(watcher_home, monkeypatch):
+def test_skill_installed_from_another_terminal_broadcasts_skills_changed(
+    watcher_home, monkeypatch
+):
     """CFG-8: the gateway notices a new skill dir and tells attached clients to refetch
     ``commands.catalog``; clients never rescan disk themselves."""
     home, events = watcher_home
     import tools.skills_tool as st
+
     skills = home / "skills"
     skills.mkdir()
     monkeypatch.setattr(st, "SKILLS_DIR", skills)
@@ -504,7 +548,9 @@ def test_skill_installed_from_another_terminal_broadcasts_skills_changed(watcher
     assert ("skills.changed", {}) in events
 
 
-def test_a_skill_installed_in_another_sessions_repo_broadcasts_skills_changed(watcher_home, monkeypatch, tmp_path):
+def test_a_skill_installed_in_another_sessions_repo_broadcasts_skills_changed(
+    watcher_home, monkeypatch, tmp_path
+):
     """The gateway runs in repo A; a session's catalog resolved under repo B (its workspace, via the
     session cwd). Installing a skill in B's ``.clawk/skills`` must still notify viewers: the watcher
     signs every scope a session resolved commands in, not only the launch repo."""
@@ -512,6 +558,7 @@ def test_a_skill_installed_in_another_sessions_repo_broadcasts_skills_changed(wa
     import agent.skill_commands as sc
     import tools.skills_tool as st
     from agent.runtime_cwd import reset_session_cwd, set_session_cwd
+
     home, events = watcher_home
     monkeypatch.setenv("CLAWK_HOME", str(home))
     (home / "skills").mkdir()
@@ -522,12 +569,16 @@ def test_a_skill_installed_in_another_sessions_repo_broadcasts_skills_changed(wa
     for repo in (repo_a, repo_b):
         (repo / ".git").mkdir(parents=True)
         (repo / ".clawk" / "skills").mkdir(parents=True)
-    (home / "config.yaml").write_text(json.dumps({"skills": {"trusted_project_dirs": [str(repo_a), str(repo_b)]}}))
+    (home / "config.yaml").write_text(
+        json.dumps({"skills": {"trusted_project_dirs": [str(repo_a), str(repo_b)]}})
+    )
     monkeypatch.chdir(repo_a)
     st.clear_skills_cache()
     token = set_session_cwd(str(repo_b))
     try:
-        assert "/workspace-only" not in sc.get_skill_commands()  # B's session catalog: publishes B's scope
+        assert (
+            "/workspace-only" not in sc.get_skill_commands()
+        )  # B's session catalog: publishes B's scope
     finally:
         reset_session_cwd(token)
     server._broadcast_watched_changes(now=0.0)
@@ -535,7 +586,9 @@ def test_a_skill_installed_in_another_sessions_repo_broadcasts_skills_changed(wa
 
     skill = repo_b / ".clawk" / "skills" / "workspace-only"
     skill.mkdir()
-    (skill / "SKILL.md").write_text("---\nname: workspace-only\ndescription: d\n---\nbody\n")
+    (skill / "SKILL.md").write_text(
+        "---\nname: workspace-only\ndescription: d\n---\nbody\n"
+    )
     server._broadcast_watched_changes(now=10.0)
     assert ("skills.changed", {}) in events
     token = set_session_cwd(str(repo_b))

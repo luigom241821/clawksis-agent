@@ -36,8 +36,6 @@ def test_cli_skills_uninstall_yes_sets_skip_confirm(monkeypatch):
     assert captured["skip_confirm"] is True
 
 
-
-
 def test_cli_skills_uninstall_no_flags_keeps_prompt(monkeypatch):
     """Without --yes, skip_confirm must be False (prompt preserved)."""
     captured = _run_uninstall_cli(

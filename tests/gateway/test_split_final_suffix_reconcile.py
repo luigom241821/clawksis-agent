@@ -32,11 +32,13 @@ def _make_adapter():
     async def _send(chat_id, content, reply_to=None, metadata=None, **kw):
         a.send_calls.append(content)
         return SendResult(success=True, message_id=f"m{len(a.send_calls)}")
+
     a.send = _send
 
     async def _edit(chat_id, message_id, content, **kw):
         a.edit_calls.append({"id": message_id, "content": content})
         return SendResult(success=True, message_id=message_id)
+
     a.edit_message = _edit
     return a
 
@@ -47,8 +49,11 @@ FOOTER = "\n\n⚠️ File-mutation verifier: 1 file(s) were NOT modified this tu
 
 def _consumer(adapter):
     cfg = StreamConsumerConfig(
-        transport="edit", chat_type="dm",
-        edit_interval=0.01, buffer_threshold=1, cursor="",
+        transport="edit",
+        chat_type="dm",
+        edit_interval=0.01,
+        buffer_threshold=1,
+        cursor="",
     )
     return GatewayStreamConsumer(adapter, "D1", cfg)
 
@@ -71,16 +76,12 @@ class TestSplitSuffixReconcile:
         assert sc.delivered_final_matches(BODY + FOOTER) is True
         # And the footer actually reached the platform (rode the final
         # edit/send), rather than reconciling vacuously.
-        all_payloads = adapter.send_calls + [
-            e["content"] for e in adapter.edit_calls
-        ]
+        all_payloads = adapter.send_calls + [e["content"] for e in adapter.edit_calls]
         assert any(FOOTER.strip() in p for p in all_payloads)
         # The body was NOT re-delivered whole after the split: no payload
         # equals the full body+footer via a fresh send while heads were
         # already on screen — the suffix rode the existing tail.
-        assert all(
-            p.startswith(BODY) or FOOTER.strip() in p for p in all_payloads
-        )
+        assert all(p.startswith(BODY) or FOOTER.strip() in p for p in all_payloads)
 
     @pytest.mark.asyncio
     async def test_non_prefix_rewrite_keeps_mismatch(self):

@@ -17,11 +17,13 @@ import pytest
 
 from agent import secret_scope as ss
 
+
 @pytest.fixture(autouse=True)
 def _reset_multiplex():
     ss.set_multiplex_active(False)
     yield
     ss.set_multiplex_active(False)
+
 
 class _Scope:
     """Context manager installing a secret scope."""
@@ -37,13 +39,16 @@ class _Scope:
     def __exit__(self, *exc):
         ss.reset_secret_scope(self.token)
 
+
 class _ExplodingScope(dict):
     """A bound secret scope whose resolution fails (resolver/backend error)."""
+
     def get(self, name, default=None):
         raise RuntimeError("resolver boom")
 
 
 # ── Cluster A: gateway/pairing.py allowlist reads ─────────────────────────
+
 
 class TestPairingAllowlistRead:
     def test_scoped_value_wins(self, monkeypatch):
@@ -81,7 +86,9 @@ class TestPairingAllowlistRead:
             with pytest.raises(RuntimeError, match="resolver boom"):
                 _read_allowlist_env("TELEGRAM_ALLOWED_USERS")
 
+
 # ── Cluster A: gateway/authz_mixin.py gate reads ───────────────────────────
+
 
 class TestAuthzPlatformGateEnv:
     def test_scoped_value_wins(self, monkeypatch):
@@ -105,6 +112,7 @@ class TestAuthzPlatformGateEnv:
 
         monkeypatch.setenv("GATEWAY_ALLOWED_USERS", "42")
         assert _platform_gate_env("GATEWAY_ALLOWED_USERS") == "42"
+
 
 class TestAuthzAuthEnv:
     """_auth_env must follow platform_gate_env isolation (no os.environ
@@ -136,7 +144,9 @@ class TestAuthzAuthEnv:
         monkeypatch.setenv("GATEWAY_ALLOWED_USERS", "42")
         assert _auth_env("GATEWAY_ALLOWED_USERS") == "42"
 
+
 # ── Cluster B: matrix startup reads (Slack pattern) ────────────────────────
+
 
 class TestMatrixStartupSecret:
     def _helper(self):
@@ -165,7 +175,9 @@ class TestMatrixStartupSecret:
         ss.set_multiplex_active(True)
         assert helper("MATRIX_PASSWORD") == "own-env-pass"
 
+
 # ── Cluster C: managed tool gateway token override ─────────────────────────
+
 
 class TestToolGatewayUserToken:
     def test_scoped_value_wins(self, monkeypatch):
@@ -200,6 +212,7 @@ class TestToolGatewayUserToken:
             with pytest.raises(RuntimeError, match="resolver boom"):
                 _read_user_token_override()
 
+
 class TestOpenRouterCheckApiKey:
     def test_scoped_value_wins(self, monkeypatch):
         from tools.openrouter_client import check_api_key
@@ -226,7 +239,9 @@ class TestOpenRouterCheckApiKey:
             with pytest.raises(RuntimeError, match="resolver boom"):
                 check_api_key()
 
+
 # ── Cluster D: auxiliary client key resolution ──────────────────────────────
+
 
 class TestAuxiliaryScopedKeyEnv:
     def test_scoped_value_wins(self, monkeypatch):
@@ -269,6 +284,7 @@ class TestAuxiliaryScopedKeyEnv:
 
 # ── Cluster F: clawk_cli config env readers ───────────────────────────────
 
+
 class TestScopedEnvironGet:
     """``_scoped_environ_get`` (feeds ``get_env_value`` / ``get_env_value_prefer_dotenv``)
     documents that ``UnscopedSecretError`` propagates; a blanket ``except Exception``
@@ -297,5 +313,6 @@ class TestScopedEnvironGet:
 
         monkeypatch.setenv("SOME_PROFILE_KEY", "own-env")
         assert _scoped_environ_get("SOME_PROFILE_KEY") == "own-env"
+
 
 # ── Cluster E: azure identity presence reads ────────────────────────────────

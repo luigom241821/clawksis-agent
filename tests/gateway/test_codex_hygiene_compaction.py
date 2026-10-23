@@ -110,6 +110,7 @@ def _gateway(tmp_path, session_key="tg:123", agent=None):
 # Core no-op regression: clawk mode + live thread => thread/compact runs
 # ---------------------------------------------------------------------------
 
+
 def test_clawk_mode_compacts_live_thread_at_rpc_boundary(tmp_path):
     agent = LiveCodexAgent(mode="clawk")
     key = "tg:123"
@@ -170,6 +171,7 @@ def test_clawk_mode_without_cached_agent_skips_without_local_compression(tmp_pat
 # Mode semantics: native / off never touch the thread nor run local fallback
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize("mode", ["native", "off"])
 def test_native_and_off_modes_skip_cleanly(tmp_path, mode):
     agent = LiveCodexAgent(mode=mode)
@@ -220,6 +222,7 @@ def test_unknown_mode_falls_back_to_native_semantics(tmp_path):
 # transcript mirror.
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize("mode", ["native", "clawk", "off"])
 def test_force_compacts_thread_never_local_fallback(mode):
     agent = LiveCodexAgent(mode=mode)
@@ -261,6 +264,7 @@ def test_force_without_live_thread_does_not_run_local_compressor(mode):
 # Failure handling: a wedged compaction records a DB cooldown (real SessionDB)
 # ---------------------------------------------------------------------------
 
+
 def test_timeout_records_persistent_cooldown(tmp_path):
     class HangingSession(FakeCodexSession):
         def compact_thread(self):
@@ -300,6 +304,7 @@ def test_timeout_records_persistent_cooldown(tmp_path):
 # Manual /compress gateway surface
 # ---------------------------------------------------------------------------
 
+
 def _slash_host(agent, session_key="tg:123"):
     from gateway.slash_commands import GatewaySlashCommandsMixin
 
@@ -332,7 +337,9 @@ def test_manual_compress_routes_to_live_thread():
 
 
 @pytest.mark.parametrize("entry", ["hygiene", "manual"])
-def test_codex_compaction_releases_the_live_sessions_read_dedup(tmp_path, entry, monkeypatch):
+def test_codex_compaction_releases_the_live_sessions_read_dedup(
+    tmp_path, entry, monkeypatch
+):
     """Both out-of-turn codex compaction entry points reset the read_file dedup under the LIVE
     session row id — the task_id the main turn hands to run_conversation — not the "default"
     bucket, so a post-compaction re-read returns content instead of a stub (#98206)."""
@@ -347,18 +354,28 @@ def test_codex_compaction_releases_the_live_sessions_read_dedup(tmp_path, entry,
 
     if entry == "hygiene":
         gw, _db = _gateway(tmp_path, "tg:123", agent)
-        outcome = asyncio.run(run_codex_hygiene_compaction(
-            gw, "tg:123", agent.session_id, auto_mode="clawk", history=_history(),
-            approx_tokens=345_000, timeout_seconds=30.0))
+        outcome = asyncio.run(
+            run_codex_hygiene_compaction(
+                gw,
+                "tg:123",
+                agent.session_id,
+                auto_mode="clawk",
+                history=_history(),
+                approx_tokens=345_000,
+                timeout_seconds=30.0,
+            )
+        )
         assert outcome == "compacted"
     else:
-        reply = asyncio.run(_slash_host(agent)._compress_codex_app_server_session("tg:123", agent.session_id))
+        reply = asyncio.run(
+            _slash_host(agent)._compress_codex_app_server_session(
+                "tg:123", agent.session_id
+            )
+        )
         assert "compacted" in reply
 
     assert tracker["sess-1"]["dedup_generation_reads"] == set()
     assert tracker["default"]["dedup_generation_reads"] == {"/other/file.py"}
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -368,6 +385,7 @@ def test_codex_compaction_releases_the_live_sessions_read_dedup(tmp_path, entry,
 # summary path fails closed and every hygiene compaction degrades to a lossy
 # truncation (#100849 bundle).
 # ---------------------------------------------------------------------------
+
 
 def test_hygiene_worker_inherits_caller_contextvars(tmp_path):
     import contextvars
@@ -390,8 +408,13 @@ def test_hygiene_worker_inherits_caller_contextvars(tmp_path):
         token = marker.set("profile-scope")
         try:
             return await run_codex_hygiene_compaction(
-                gw, key, agent.session_id, auto_mode="clawk",
-                history=_history(), approx_tokens=345_000, timeout_seconds=30.0,
+                gw,
+                key,
+                agent.session_id,
+                auto_mode="clawk",
+                history=_history(),
+                approx_tokens=345_000,
+                timeout_seconds=30.0,
             )
         finally:
             marker.reset(token)

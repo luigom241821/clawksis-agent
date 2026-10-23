@@ -44,6 +44,7 @@ def _no_compression_sleep(monkeypatch):
 
     monkeypatch.setattr(_time, "sleep", lambda *_a, **_k: None)
     from agent import retry_utils as _retry_utils
+
     monkeypatch.setattr(_retry_utils, "jittered_backoff", lambda *a, **k: 0.0)
 
 
@@ -91,7 +92,10 @@ def _make_overflow_error():
 @pytest.fixture()
 def agent():
     with (
-        patch("model_tools.get_tool_definitions", return_value=_make_tool_defs("web_search")),
+        patch(
+            "model_tools.get_tool_definitions",
+            return_value=_make_tool_defs("web_search"),
+        ),
         patch("model_tools.check_toolset_requirements", return_value={}),
         patch("agent.process_bootstrap.OpenAI"),
     ):
@@ -154,11 +158,13 @@ class TestLockSkipSignalTypePin:
         assert compression_skipped_due_to_lock(a) is True
 
     def test_none_and_missing_are_not_lock_skips(self):
-        assert compression_skipped_due_to_lock(
-            SimpleNamespace(_compression_skipped_due_to_lock=None)
-        ) is False
+        assert (
+            compression_skipped_due_to_lock(
+                SimpleNamespace(_compression_skipped_due_to_lock=None)
+            )
+            is False
+        )
         assert compression_skipped_due_to_lock(SimpleNamespace()) is False
-
 
     def test_truthy_non_true_non_str_values_are_not_lock_skips(self):
         for junk in (1, 1.0, ["holder"], {"holder": True}, object(), MagicMock()):
@@ -179,14 +185,17 @@ class TestLockContended413Defer:
 
         with (
             patch.object(
-                agent, "_compress_context",
+                agent,
+                "_compress_context",
                 side_effect=_lock_skipping_compress(agent),
             ) as mock_compress,
             patch.object(agent, "_persist_session"),
             patch.object(agent, "_save_trajectory"),
             patch.object(agent, "_cleanup_task_resources"),
         ):
-            result = agent.run_conversation("hello", conversation_history=list(_PREFILL))
+            result = agent.run_conversation(
+                "hello", conversation_history=list(_PREFILL)
+            )
 
         mock_compress.assert_called_once()
         assert result.get("compression_deferred") is True
@@ -197,7 +206,6 @@ class TestLockContended413Defer:
         assert result.get("completed") is False
         assert result.get("partial") is True
 
-
     def test_unconfirmed_lock_skip_true_also_defers(self, agent):
         """``_compression_skipped_due_to_lock = True`` (holder unconfirmed —
         ``try_acquire`` swallowed a sqlite error) is still a lock skip."""
@@ -205,19 +213,20 @@ class TestLockContended413Defer:
 
         with (
             patch.object(
-                agent, "_compress_context",
+                agent,
+                "_compress_context",
                 side_effect=_lock_skipping_compress(agent, holder=True),
             ),
             patch.object(agent, "_persist_session"),
             patch.object(agent, "_save_trajectory"),
             patch.object(agent, "_cleanup_task_resources"),
         ):
-            result = agent.run_conversation("hello", conversation_history=list(_PREFILL))
+            result = agent.run_conversation(
+                "hello", conversation_history=list(_PREFILL)
+            )
 
         assert result.get("compression_deferred") is True
         assert not result.get("compression_exhausted")
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -293,7 +302,9 @@ class TestPreApiLockDeferDoesNotBurnBudget:
             patch.object(agent, "_save_trajectory"),
             patch.object(agent, "_cleanup_task_resources"),
         ):
-            result = agent.run_conversation("hello", conversation_history=list(_PREFILL))
+            result = agent.run_conversation(
+                "hello", conversation_history=list(_PREFILL)
+            )
 
         # Pass 1: pre-API (lock defer, refunded). Pass 2: 413 handler
         # (succeeds within the cap because the defer did not count).

@@ -1,4 +1,5 @@
 """A malformed state.db must not turn dashboard analytics polling into a traceback storm (#96591)."""
+
 import logging
 import re
 import sqlite3
@@ -27,9 +28,12 @@ def _malformed_state_db(home: Path) -> Path:
     return db_path
 
 
-def test_corrupt_store_polls_return_status_and_warn_once_per_interval(tmp_path, monkeypatch, caplog):
+def test_corrupt_store_polls_return_status_and_warn_once_per_interval(
+    tmp_path, monkeypatch, caplog
+):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     import clawk_state
+
     db_path = _malformed_state_db(tmp_path)
     monkeypatch.setattr(clawk_state, "_default_db_path", lambda: db_path)
     monkeypatch.setattr(_common, "_corrupt_store_warned_at", {})
@@ -47,25 +51,37 @@ def test_corrupt_store_polls_return_status_and_warn_once_per_interval(tmp_path, 
     # Only the dashboard's own warning counts: clawk_state logs an unrelated
     # once-per-process SQLite-version advisory on some interpreters (CI's 3.50.4).
     warnings = [
-        r for r in caplog.records
+        r
+        for r in caplog.records
         if r.levelno >= logging.WARNING and r.name.startswith("clawk_cli.web_server")
     ]
     assert len(warnings) == 1, [r.getMessage() for r in warnings]
-    assert not any(r.exc_info for r in caplog.records), "no tracebacks for a known corrupt store"
-    assert db_path.exists() and db_path.stat().st_size > 0, "dashboard must never quarantine the file"
+    assert not any(r.exc_info for r in caplog.records), (
+        "no tracebacks for a known corrupt store"
+    )
+    assert db_path.exists() and db_path.stat().st_size > 0, (
+        "dashboard must never quarantine the file"
+    )
 
     # The gate re-arms once the interval has elapsed (aged, not slept).
-    _common._corrupt_store_warned_at[str(db_path)] -= _common._CORRUPT_STORE_WARN_INTERVAL_S + 1
+    _common._corrupt_store_warned_at[str(db_path)] -= (
+        _common._CORRUPT_STORE_WARN_INTERVAL_S + 1
+    )
     caplog.clear()
     with caplog.at_level(logging.WARNING, logger="clawk_cli.web_server"):
         assert client.get("/api/analytics/usage?days=7").status_code == 503
-    assert sum(
-        r.levelno >= logging.WARNING and r.name.startswith("clawk_cli.web_server")
-        for r in caplog.records
-    ) == 1
+    assert (
+        sum(
+            r.levelno >= logging.WARNING and r.name.startswith("clawk_cli.web_server")
+            for r in caplog.records
+        )
+        == 1
+    )
 
 
-def test_corrupt_store_as_status_maps_replaced_store_errors_to_503_without_fix_nudge(tmp_path, monkeypatch):
+def test_corrupt_store_as_status_maps_replaced_store_errors_to_503_without_fix_nudge(
+    tmp_path, monkeypatch
+):
     """A retired WAL generation / replaced state.db (RuntimeError subclasses, not sqlite3 errors)
     must come back as a structured 503 like the corrupt case, and the guidance must never tell the
     user to run `doctor --fix` while a holder is live (#110054). Busy/locked still propagates."""
@@ -74,7 +90,10 @@ def test_corrupt_store_as_status_maps_replaced_store_errors_to_503_without_fix_n
 
     monkeypatch.setattr(_common, "_corrupt_store_warned_at", {})
     db_path = tmp_path / "state.db"
-    for exc_cls, code in ((DeletedWalGenerationError, "state_db_deleted_wal"), (StateDbReplacedError, "state_db_replaced")):
+    for exc_cls, code in (
+        (DeletedWalGenerationError, "state_db_deleted_wal"),
+        (StateDbReplacedError, "state_db_replaced"),
+    ):
         with pytest.raises(HTTPException) as info:
             with _common.corrupt_store_as_status(db_path):
                 raise exc_cls("retired WAL held by pid 4242")
@@ -84,7 +103,9 @@ def test_corrupt_store_as_status_maps_replaced_store_errors_to_503_without_fix_n
         msg = info.value.detail["message"]
         assert "run `clawk doctor`" in msg
         # `--fix` may only appear negated — never as the action to take while a holder is live.
-        negated = re.findall(r"(?i)(?:do not|don't|never) run `clawk doctor --fix`", msg)
+        negated = re.findall(
+            r"(?i)(?:do not|don't|never) run `clawk doctor --fix`", msg
+        )
         assert len(negated) == msg.count("`clawk doctor --fix`"), msg
 
     with pytest.raises(sqlite3.OperationalError):
@@ -109,11 +130,23 @@ def test_corrupt_store_as_status_maps_replaced_store_errors_to_503_without_fix_n
 
     with pytest.raises(HTTPException) as info:
         sessions._resolve_session_id(_RetiredDb(), "abc")
-    assert (info.value.status_code, info.value.detail["error"]) == (503, "state_db_deleted_wal")
+    assert (info.value.status_code, info.value.detail["error"]) == (
+        503,
+        "state_db_deleted_wal",
+    )
 
-    monkeypatch.setattr(sessions, "_session_db_path_for_profile", lambda profile: db_path)
-    monkeypatch.setattr(sessions, "_open_session_db_for_profile", lambda profile, read_only: _RetiredDb())
+    monkeypatch.setattr(
+        sessions, "_session_db_path_for_profile", lambda profile: db_path
+    )
+    monkeypatch.setattr(
+        sessions,
+        "_open_session_db_for_profile",
+        lambda profile, read_only: _RetiredDb(),
+    )
     app = FastAPI()
     app.include_router(sessions.list_router)
     resp = TestClient(app, raise_server_exceptions=False).get("/api/sessions")
-    assert (resp.status_code, resp.json()["detail"]["error"]) == (503, "state_db_deleted_wal")
+    assert (resp.status_code, resp.json()["detail"]["error"]) == (
+        503,
+        "state_db_deleted_wal",
+    )

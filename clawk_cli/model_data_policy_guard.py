@@ -23,10 +23,13 @@ class DataTrainingWarning:
 # Rule predicates are deliberately conservative: match an explicit, vendor-documented id rather
 # than guessing from price (a corroborating signal that can change).
 
+
 def _is_meta_contributor(model_lower: str, provider_lower: str) -> bool:
     # Meta "contributor" tier, matched on the id alone (no provider check) so it fires whether
     # selected via the meta-ai plugin, a gateway, or a custom endpoint serving the same id.
-    return model_lower.endswith("-contributor") or "contributor" in model_lower.split("-")
+    return model_lower.endswith("-contributor") or "contributor" in model_lower.split(
+        "-"
+    )
 
 
 _META_CONTRIBUTOR_MESSAGE = (
@@ -70,7 +73,9 @@ def data_training_warning(
     for predicate, message in _RULES:
         try:
             if predicate(model_lower, provider_lower):
-                return DataTrainingWarning(model=model, provider=(provider or "").strip(), message=message)
+                return DataTrainingWarning(
+                    model=model, provider=(provider or "").strip(), message=message
+                )
         except Exception:
             continue  # a misbehaving predicate must never break model selection
     return None

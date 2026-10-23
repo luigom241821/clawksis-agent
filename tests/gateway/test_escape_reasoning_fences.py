@@ -13,7 +13,6 @@ class TestEscapeCodeFencesForDisplay:
     """escape_code_fences_for_display prevents inner ``` from breaking
     the outer code block used to render reasoning."""
 
-
     def test_single_fence_escaped(self):
         text = "model used ```python\nx = 1\n``` in its thinking"
         result = escape_code_fences_for_display(text)
@@ -25,5 +24,3 @@ class TestEscapeCodeFencesForDisplay:
         result = escape_code_fences_for_display(text)
         assert result.count("```") == 0
         assert result.count("\\`\\`\\`") == 4
-
-

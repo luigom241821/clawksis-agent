@@ -23,6 +23,7 @@ def _kanban_config() -> dict:
     """``config.yaml`` ``kanban:`` section, or ``{}`` when config can't be loaded."""
     try:
         from clawk_cli.config import load_config
+
         cfg = load_config()
         return (cfg.get("kanban", {}) if isinstance(cfg, dict) else {}) or {}
     except Exception:
@@ -63,6 +64,7 @@ def _cmd_dispatch(args: argparse.Namespace) -> int:
     # semantics as the gateway dispatch path.
     try:
         from clawk_cli.config import load_config
+
         _cfg = load_config()
         _kanban_cfg = _cfg.get("kanban", {}) if isinstance(_cfg, dict) else {}
         default_assignee = (_kanban_cfg.get("default_assignee") or "").strip() or None
@@ -76,7 +78,9 @@ def _cmd_dispatch(args: argparse.Namespace) -> int:
         # CLI --max is the more explicit signal, so it wins over kanban.max_spawn.
         cli_max = getattr(args, "max", None)
         max_spawn = (
-            cli_max if cli_max is not None else kbd._positive_int(_kanban_cfg.get("max_spawn"), None)
+            cli_max
+            if cli_max is not None
+            else kbd._positive_int(_kanban_cfg.get("max_spawn"), None)
         )
     except Exception:
         default_assignee = max_in_progress_per_profile = max_in_progress = None
@@ -92,32 +96,47 @@ def _cmd_dispatch(args: argparse.Namespace) -> int:
             max_in_progress_per_profile=max_in_progress_per_profile,
         )
     if getattr(args, "json", False):
-        _print_json({
-            **{k: getattr(res, k)
-               for k in ("reclaimed", "crashed", "timed_out", "stale", "auto_blocked", "promoted",
-                         "reaped_terminal_workers")},
-            "spawned": [
-                {"task_id": tid, "assignee": who, "workspace": ws} for (tid, who, ws) in res.spawned
-            ],
-            "skipped_unassigned": res.skipped_unassigned,
-            "skipped_nonspawnable": res.skipped_nonspawnable,
-            "skipped_per_profile_capped": [
-                {"task_id": tid, "assignee": who, "current": current}
-                for (tid, who, current) in res.skipped_per_profile_capped
-            ],
-            "auto_assigned_default": res.auto_assigned_default,
-            "respawn_guarded": [
-                {"task_id": tid, "reason": reason}
-                for (tid, reason) in res.respawn_guarded
-            ],
-            "rate_limited": res.rate_limited,
-            "skipped_locked": res.skipped_locked,
-            "memory_pressure": res.memory_pressure,
-        }, ascii=True)
+        _print_json(
+            {
+                **{
+                    k: getattr(res, k)
+                    for k in (
+                        "reclaimed",
+                        "crashed",
+                        "timed_out",
+                        "stale",
+                        "auto_blocked",
+                        "promoted",
+                        "reaped_terminal_workers",
+                    )
+                },
+                "spawned": [
+                    {"task_id": tid, "assignee": who, "workspace": ws}
+                    for (tid, who, ws) in res.spawned
+                ],
+                "skipped_unassigned": res.skipped_unassigned,
+                "skipped_nonspawnable": res.skipped_nonspawnable,
+                "skipped_per_profile_capped": [
+                    {"task_id": tid, "assignee": who, "current": current}
+                    for (tid, who, current) in res.skipped_per_profile_capped
+                ],
+                "auto_assigned_default": res.auto_assigned_default,
+                "respawn_guarded": [
+                    {"task_id": tid, "reason": reason}
+                    for (tid, reason) in res.respawn_guarded
+                ],
+                "rate_limited": res.rate_limited,
+                "skipped_locked": res.skipped_locked,
+                "memory_pressure": res.memory_pressure,
+            },
+            ascii=True,
+        )
         return 0
     print(f"Reclaimed:    {res.reclaimed}")
     if res.reaped_terminal_workers:
-        print(f"Reaped workers of finished tasks: {', '.join(res.reaped_terminal_workers)}")
+        print(
+            f"Reaped workers of finished tasks: {', '.join(res.reaped_terminal_workers)}"
+        )
     for label, items in (
         ("Crashed:     ", res.crashed),
         ("Timed out:   ", res.timed_out),
@@ -149,11 +168,17 @@ def _cmd_dispatch(args: argparse.Namespace) -> int:
     for tid, reason in res.respawn_guarded:
         print(f"Guarded ({reason}): {tid}")
     if res.rate_limited:
-        print(f"Rate-limited (released to ready, no failure counted): {', '.join(res.rate_limited)}")
+        print(
+            f"Rate-limited (released to ready, no failure counted): {', '.join(res.rate_limited)}"
+        )
     if res.skipped_locked:
-        print("Skipped: another dispatcher holds this board's lock (no writes this tick)")
+        print(
+            "Skipped: another dispatcher holds this board's lock (no writes this tick)"
+        )
     if res.memory_pressure:
-        print(f"Memory pressure {res.memory_pressure}: new workers restricted this tick")
+        print(
+            f"Memory pressure {res.memory_pressure}: new workers restricted this tick"
+        )
     return 0
 
 
@@ -231,14 +256,20 @@ def _cmd_daemon(args: argparse.Namespace) -> int:
                     f"successfully.{held} Check profile health (venv, PATH, credentials) and `clawk "
                     f"kanban list --status ready` / `clawk kanban list --status blocked` for "
                     f"recent spawn_failed tasks.",
-                    file=sys.stderr, flush=True,
+                    file=sys.stderr,
+                    flush=True,
                 )
                 health_state["last_warn_at"] = now
         if not verbose:
             return
         did_work = (
-            res.reclaimed or res.crashed or res.timed_out or res.promoted
-            or res.spawned or res.auto_blocked or res.stale
+            res.reclaimed
+            or res.crashed
+            or res.timed_out
+            or res.promoted
+            or res.spawned
+            or res.auto_blocked
+            or res.stale
         )
         if did_work:
             print(
@@ -268,11 +299,20 @@ def _cmd_daemon(args: argparse.Namespace) -> int:
 
 def _cmd_watch(args: argparse.Namespace) -> int:
     """Live-stream task_events to the terminal."""
-    kinds = {k.strip() for k in args.kinds.split(",") if k.strip()} if args.kinds else None
-    print(f"Watching kanban events (initial board '{kb.get_current_board()}'). Ctrl-C to stop.", flush=True)
+    kinds = (
+        {k.strip() for k in args.kinds.split(",") if k.strip()} if args.kinds else None
+    )
+    print(
+        f"Watching kanban events (initial board '{kb.get_current_board()}'). Ctrl-C to stop.",
+        flush=True,
+    )
     # Seed cursor at the latest id so we don't replay history.
     with kbc.connect_closing() as conn:
-        cursor = int(conn.execute("SELECT COALESCE(MAX(id), 0) AS m FROM task_events").fetchone()["m"])
+        cursor = int(
+            conn.execute(
+                "SELECT COALESCE(MAX(id), 0) AS m FROM task_events"
+            ).fetchone()["m"]
+        )
 
     def tick():
         nonlocal cursor
@@ -285,8 +325,11 @@ def _cmd_watch(args: argparse.Namespace) -> int:
             ).fetchall()
         for r in rows:
             cursor = max(cursor, int(r["id"]))
-            if (kinds and r["kind"] not in kinds) or (args.assignee and r["assignee"] != args.assignee) \
-                    or (args.tenant and r["tenant"] != args.tenant):
+            if (
+                (kinds and r["kind"] not in kinds)
+                or (args.assignee and r["assignee"] != args.assignee)
+                or (args.tenant and r["tenant"] != args.tenant)
+            ):
                 continue
             try:
                 payload = json.loads(r["payload"]) if r["payload"] else None
@@ -305,6 +348,7 @@ def _cmd_watch(args: argparse.Namespace) -> int:
 def _cmd_gc(args: argparse.Namespace) -> int:
     """Remove archived tasks' scratch workspaces, old events, and old worker logs."""
     import shutil
+
     event_days = getattr(args, "event_retention_days", 30)
     log_days = getattr(args, "log_retention_days", 30)
     if event_days < 0 or log_days < 0:
@@ -324,7 +368,9 @@ def _cmd_gc(args: argparse.Namespace) -> int:
                 if wt_path and Path(wt_path).is_dir():
                     if kbw._defer_shared_worktree_cleanup(conn, row["id"], wt_path):
                         continue
-                    kbw._cleanup_worktree_workspace(row["id"], wt_path, row["branch_name"])
+                    kbw._cleanup_worktree_workspace(
+                        row["id"], wt_path, row["branch_name"]
+                    )
                     if not Path(wt_path).is_dir():
                         removed_ws += 1
                 continue
@@ -335,7 +381,11 @@ def _cmd_gc(args: argparse.Namespace) -> int:
             # managed root, never the root itself (which holds every task's scratch dir).
             # Cheap existence/symlink check first: most rows were already cleaned at
             # completion, and rmtree refuses a symlink (so it must not be counted).
-            if not path.is_dir() or path.is_symlink() or not kbw._is_managed_scratch_path(path):
+            if (
+                not path.is_dir()
+                or path.is_symlink()
+                or not kbw._is_managed_scratch_path(path)
+            ):
                 continue
             if kbw._defer_shared_workspace_cleanup(conn, row["id"], path):
                 continue
@@ -346,10 +396,16 @@ def _cmd_gc(args: argparse.Namespace) -> int:
     removed_events = 0
     if event_days:
         with kbc.connect_closing() as conn:
-            removed_events = kb.gc_events(conn, older_than_seconds=event_days * 24 * 3600)
-    removed_logs = kb.gc_worker_logs(older_than_seconds=log_days * 24 * 3600) if log_days else 0
-    print(f"GC complete: {removed_ws} workspace(s), "
-          f"{removed_events} event row(s), {removed_logs} log file(s) removed")
+            removed_events = kb.gc_events(
+                conn, older_than_seconds=event_days * 24 * 3600
+            )
+    removed_logs = (
+        kb.gc_worker_logs(older_than_seconds=log_days * 24 * 3600) if log_days else 0
+    )
+    print(
+        f"GC complete: {removed_ws} workspace(s), "
+        f"{removed_events} event row(s), {removed_logs} log file(s) removed"
+    )
     return 0
 
 
@@ -363,14 +419,17 @@ def _cmd_repair(args: argparse.Namespace) -> int:
         return _err(f"kanban repair: {exc}")
 
     if getattr(args, "json", False):
-        _print_json({
-            "status": report.status,
-            "db_path": str(report.db_path),
-            "messages": report.messages,
-            "post_repair_messages": report.post_repair_messages,
-            "backup_path": str(report.backup_path) if report.backup_path else None,
-            "reindexed": report.reindexed,
-        }, ascii=True)
+        _print_json(
+            {
+                "status": report.status,
+                "db_path": str(report.db_path),
+                "messages": report.messages,
+                "post_repair_messages": report.post_repair_messages,
+                "backup_path": str(report.backup_path) if report.backup_path else None,
+                "reindexed": report.reindexed,
+            },
+            ascii=True,
+        )
         return 0 if report.status in {"ok", "repaired", "missing"} else 1
 
     if report.status == "missing":
@@ -386,6 +445,7 @@ def _cmd_repair(args: argparse.Namespace) -> int:
             print(f"  pre-repair backup: {report.backup_path}")
         print("  integrity_check now ok.")
         return 0
+
     # still corrupt
     def err(line: str) -> None:
         print(line, file=sys.stderr)
@@ -394,16 +454,20 @@ def _cmd_repair(args: argparse.Namespace) -> int:
     for line in (report.messages or [])[:10]:
         err(f"  {line}")
     if report.reindexed:
-        err(f"  REINDEX ({', '.join(report.reindexed)}) attempted but integrity_check is still failing:")
+        err(
+            f"  REINDEX ({', '.join(report.reindexed)}) attempted but integrity_check is still failing:"
+        )
         for line in (report.post_repair_messages or [])[:10]:
             err(f"    {line}")
     else:
-        err("  Not an index-only failure — automatic REINDEX repair does not apply (fail-closed).")
+        err(
+            "  Not an index-only failure — automatic REINDEX repair does not apply (fail-closed)."
+        )
     if report.backup_path:
         err(f"  corrupt copy quarantined at: {report.backup_path}")
     err(
         "  Recover manually (copy kanban.db aside FIRST, then run "
-        "`sqlite3 <copy> \".recover\"` into a fresh file — never against "
+        '`sqlite3 <copy> ".recover"` into a fresh file — never against '
         "the live path, a WAL-reset-vulnerable sqlite3 CLI can corrupt it "
         "further) or move the file aside to start a new board."
     )

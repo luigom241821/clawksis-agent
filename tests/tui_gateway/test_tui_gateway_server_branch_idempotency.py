@@ -105,7 +105,9 @@ def test_session_branch_idempotency_key_dedupes_retry(monkeypatch, tmp_path):
     server._sessions["parent"] = parent
     monkeypatch.setattr(server, "_get_db", lambda: ProfileDB())
     monkeypatch.setattr("clawk_state_registry.acquire", ProfileDB)
-    monkeypatch.setattr(server, "_claim_active_session_slot", lambda *a, **k: (None, None))
+    monkeypatch.setattr(
+        server, "_claim_active_session_slot", lambda *a, **k: (None, None)
+    )
     monkeypatch.setattr(server, "_make_agent", lambda *a, **k: FakeAgent())
     monkeypatch.setattr(server, "_set_session_context", lambda *a, **k: {})
     monkeypatch.setattr(server, "_clear_session_context", lambda *a, **k: None)
@@ -115,8 +117,14 @@ def test_session_branch_idempotency_key_dedupes_retry(monkeypatch, tmp_path):
     monkeypatch.setattr(server, "_attach_worker", lambda *a, **k: None)
     server._idempotency_keys.clear()
     try:
-        params = {"session_id": "parent", "name": "forked", "idempotency_key": "branch-live-retry-1"}
-        first = server.handle_request({"id": "b1", "method": "session.branch", "params": dict(params)})
+        params = {
+            "session_id": "parent",
+            "name": "forked",
+            "idempotency_key": "branch-live-retry-1",
+        }
+        first = server.handle_request(
+            {"id": "b1", "method": "session.branch", "params": dict(params)}
+        )
         assert "result" in first, first
         first_sid = first["result"]["session_id"]
         first_key = first["result"]["stored_session_id"]
@@ -124,7 +132,9 @@ def test_session_branch_idempotency_key_dedupes_retry(monkeypatch, tmp_path):
         assert first["result"]["parent"] == "parent-key"
 
         # Client retries after a lost response: same key, same params.
-        second = server.handle_request({"id": "b2", "method": "session.branch", "params": dict(params)})
+        second = server.handle_request(
+            {"id": "b2", "method": "session.branch", "params": dict(params)}
+        )
         assert "result" in second, second
         assert second["result"]["session_id"] == first_sid
         assert second["result"]["stored_session_id"] == first_key

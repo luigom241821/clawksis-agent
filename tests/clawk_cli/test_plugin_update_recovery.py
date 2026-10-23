@@ -1,4 +1,5 @@
 """Process death cannot leave new plugin code paired with the old dependency selection."""
+
 from __future__ import annotations
 
 import json
@@ -24,8 +25,12 @@ def test_boot_recovers_plugin_publication_after_process_death(tmp_path, committe
     (staged / "__init__.py").write_text("new code", encoding="utf-8")
     project = tmp_path / "project"
     project.mkdir()
-    env = {**os.environ, "CLAWK_HOME": str(home), "PYTHONPATH": str(Path(__file__).resolve().parents[2])}
-    program = '''
+    env = {
+        **os.environ,
+        "CLAWK_HOME": str(home),
+        "PYTHONPATH": str(Path(__file__).resolve().parents[2]),
+    }
+    program = """
 from pathlib import Path
 import os,sys
 from pm.publication import StagedPlugin
@@ -39,11 +44,26 @@ StagedPlugin({"staged": str(staged), "target": str(target), "target_digest": tre
 if sys.argv[4] == "True":
     Facts(runtime_facts_path(project)).record_state("venv","new",[])
 os._exit(17)
-'''
-    child = subprocess.run([sys.executable, "-c", program, str(project), str(staged), str(target), str(committed)],
-                           env=env, cwd=tmp_path, capture_output=True, text=True, timeout=30, check=False)
+"""
+    child = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            program,
+            str(project),
+            str(staged),
+            str(target),
+            str(committed),
+        ],
+        env=env,
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
     assert child.returncode == 17, child.stderr
-    recovery = '''
+    recovery = """
 from pathlib import Path
 import sys
 from clawk_cli.runtime_state import runtime_lock,recover_publication
@@ -51,12 +71,23 @@ project=Path(sys.argv[1])
 with runtime_lock(project):
     recover_publication(project)
     recover_publication(project)
-'''
-    result = subprocess.run([sys.executable, "-c", recovery, str(project)], env=env, cwd=tmp_path,
-                            capture_output=True, text=True, timeout=30, check=False)
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", recovery, str(project)],
+        env=env,
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
     assert result.returncode == 0, result.stderr
-    assert (target / "__init__.py").read_text(encoding="utf-8") == ("new code" if committed else "old code")
-    assert json.loads(metadata.read_text(encoding="utf-8"))["example"]["revision"] == ("new" if committed else "old")
+    assert (target / "__init__.py").read_text(encoding="utf-8") == (
+        "new code" if committed else "old code"
+    )
+    assert json.loads(metadata.read_text(encoding="utf-8"))["example"]["revision"] == (
+        "new" if committed else "old"
+    )
     if not committed:
         assert metadata.read_bytes() == previous
     assert not list(target.parent.glob(".previous-*"))

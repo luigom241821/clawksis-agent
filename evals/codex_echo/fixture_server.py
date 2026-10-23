@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Offline Codex JSON-RPC peer; no provider or authentication calls."""
+
 import json
 import os
 import sys
@@ -26,13 +27,44 @@ for line in sys.stdin:
     mode = os.environ.get("ECHO_FIXTURE_MODE", "echo")
     items = []
     if mode != "assistant_only":
-        items.append({"type": "userMessage", "id": "input", "content": [
-            {"type": "text", "text": "different" if mode == "different" else text}]})
+        items.append(
+            {
+                "type": "userMessage",
+                "id": "input",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "different" if mode == "different" else text,
+                    }
+                ],
+            }
+        )
     items.append({"type": "agentMessage", "id": "reply", "text": "fixture reply"})
     if mode == "later_equal":
-        items.append({"type": "userMessage", "id": "steer", "content": [{"type": "text", "text": text}]})
+        items.append(
+            {
+                "type": "userMessage",
+                "id": "steer",
+                "content": [{"type": "text", "text": text}],
+            }
+        )
     for item in items:
-        send({"method": "item/completed", "params": {
-            "threadId": "fixture-thread", "turnId": "fixture-turn", "item": item}})
-    send({"method": "turn/completed", "params": {
-        "threadId": "fixture-thread", "turn": {"id": "fixture-turn", "status": "completed", "error": None}}})
+        send(
+            {
+                "method": "item/completed",
+                "params": {
+                    "threadId": "fixture-thread",
+                    "turnId": "fixture-turn",
+                    "item": item,
+                },
+            }
+        )
+    send(
+        {
+            "method": "turn/completed",
+            "params": {
+                "threadId": "fixture-thread",
+                "turn": {"id": "fixture-turn", "status": "completed", "error": None},
+            },
+        }
+    )

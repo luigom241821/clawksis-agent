@@ -96,8 +96,11 @@ class TestOrdering:
         db.create_session("s-abs", "test")
         db.queue_token_counts("s-abs", input_tokens=100, api_call_count=1)
         db.queue_token_counts(
-            "s-abs", input_tokens=500, output_tokens=50,
-            api_call_count=3, absolute=True,
+            "s-abs",
+            input_tokens=500,
+            output_tokens=50,
+            api_call_count=3,
+            absolute=True,
         )
         db.queue_token_counts("s-abs", input_tokens=7, api_call_count=1)
         assert db.flush_token_counts()
@@ -137,16 +140,24 @@ class TestCoalescing:
         try:
             n = 20
             db.queue_token_counts(
-                "s-c", input_tokens=1, output_tokens=1,
-                estimated_cost_usd=0.001, model="m1",
-                billing_provider="p1", api_call_count=1,
+                "s-c",
+                input_tokens=1,
+                output_tokens=1,
+                estimated_cost_usd=0.001,
+                model="m1",
+                billing_provider="p1",
+                api_call_count=1,
             )
             assert first_apply_started.wait(timeout=10)
             for _ in range(n - 1):
                 db.queue_token_counts(
-                    "s-c", input_tokens=1, output_tokens=1,
-                    estimated_cost_usd=0.001, model="m1",
-                    billing_provider="p1", api_call_count=1,
+                    "s-c",
+                    input_tokens=1,
+                    output_tokens=1,
+                    estimated_cost_usd=0.001,
+                    model="m1",
+                    billing_provider="p1",
+                    api_call_count=1,
                 )
             release_first_apply.set()
             assert db.flush_token_counts()
@@ -170,16 +181,43 @@ class TestCoalescing:
         """Applying a coalesced batch produces byte-identical session and
         per-model rows to applying the same deltas one at a time."""
         batch = [
-            ("s-eq", dict(input_tokens=10, output_tokens=2, model="m1",
-                          billing_provider="p1", estimated_cost_usd=0.01,
-                          cost_status="estimated", api_call_count=1)),
-            ("s-eq", dict(input_tokens=20, output_tokens=4, model="m1",
-                          billing_provider="p1", estimated_cost_usd=0.02,
-                          cost_status="estimated", api_call_count=1)),
+            (
+                "s-eq",
+                dict(
+                    input_tokens=10,
+                    output_tokens=2,
+                    model="m1",
+                    billing_provider="p1",
+                    estimated_cost_usd=0.01,
+                    cost_status="estimated",
+                    api_call_count=1,
+                ),
+            ),
+            (
+                "s-eq",
+                dict(
+                    input_tokens=20,
+                    output_tokens=4,
+                    model="m1",
+                    billing_provider="p1",
+                    estimated_cost_usd=0.02,
+                    cost_status="estimated",
+                    api_call_count=1,
+                ),
+            ),
             # /model switch mid-session — must not merge with the m1 run.
-            ("s-eq", dict(input_tokens=5, output_tokens=1, model="m2",
-                          billing_provider="p1", estimated_cost_usd=0.005,
-                          cost_status="estimated", api_call_count=1)),
+            (
+                "s-eq",
+                dict(
+                    input_tokens=5,
+                    output_tokens=1,
+                    model="m2",
+                    billing_provider="p1",
+                    estimated_cost_usd=0.005,
+                    cost_status="estimated",
+                    api_call_count=1,
+                ),
+            ),
         ]
 
         db.create_session("s-eq", "test")
@@ -194,8 +232,6 @@ class TestCoalescing:
             assert _model_usage(db, "s-eq") == _model_usage(seq_db, "s-eq")
         finally:
             seq_db.close()
-
-
 
 
 # =========================================================================
@@ -221,8 +257,10 @@ class TestReaderFlush:
                 sid_tokens = i
                 # Alternate models to defeat coalescing — four real applies.
                 db.queue_token_counts(
-                    "s-r", input_tokens=sid_tokens,
-                    model=f"m{i % 2}", api_call_count=1,
+                    "s-r",
+                    input_tokens=sid_tokens,
+                    model=f"m{i % 2}",
+                    api_call_count=1,
                 )
             row = db.get_session("s-r")
         finally:
@@ -230,9 +268,6 @@ class TestReaderFlush:
 
         assert row["input_tokens"] == 1 + 2 + 3 + 4
         assert row["api_call_count"] == 4
-
-
-
 
     def test_concurrent_flush_waits_for_caller_drain(self, db):
         """The dead-writer caller-drain claims busy: a second flush must not
@@ -253,14 +288,10 @@ class TestReaderFlush:
 
         db.update_token_counts = gated
         try:
-            db._token_queue.append(
-                ("s-cc", dict(input_tokens=4, api_call_count=1))
-            )
+            db._token_queue.append(("s-cc", dict(input_tokens=4, api_call_count=1)))
             results = {}
             t_a = threading.Thread(
-                target=lambda: results.__setitem__(
-                    "a", db.flush_token_counts()
-                )
+                target=lambda: results.__setitem__("a", db.flush_token_counts())
             )
             t_a.start()
             assert applied.wait(timeout=10)
@@ -275,7 +306,6 @@ class TestReaderFlush:
             db.update_token_counts = original
 
         assert _totals(db, "s-cc")["input_tokens"] == 4
-
 
     def test_enqueue_after_close_lands_via_reopen(self, tmp_path):
         """After close() the synchronous fallback used to surface an opaque
@@ -310,10 +340,17 @@ class TestRouteSwitchBarrier:
         db.create_session("s-sw", "test")
         # First delta of the session, queued but not yet applied (writer
         # not started — same state as a backlogged writer).
-        db._token_queue.append(("s-sw", dict(
-            input_tokens=10, model="m1", billing_provider="p1",
-            api_call_count=1,
-        )))
+        db._token_queue.append(
+            (
+                "s-sw",
+                dict(
+                    input_tokens=10,
+                    model="m1",
+                    billing_provider="p1",
+                    api_call_count=1,
+                ),
+            )
+        )
 
         db.update_session_model("s-sw", "m2")
         db.update_session_billing_route(
@@ -341,7 +378,6 @@ class TestRouteSwitchBarrier:
 
 
 class TestDurability:
-
     def test_idle_writer_restarts_for_later_delta(self, tmp_path, monkeypatch):
         db = SessionDB(db_path=tmp_path / "writer-restart.db")
         monkeypatch.setattr(SessionDB, "_TOKEN_WRITER_IDLE_SECONDS", 0.01)
@@ -372,7 +408,9 @@ class TestDurability:
         from clawk_cli.sqlite_safe_read import has_live_connection
 
         db_path = tmp_path / "abandoned.db"
-        monkeypatch.setattr(SessionDB, "_TOKEN_WRITER_IDLE_SECONDS", 0.01, raising=False)
+        monkeypatch.setattr(
+            SessionDB, "_TOKEN_WRITER_IDLE_SECONDS", 0.01, raising=False
+        )
         db = SessionDB(db_path=db_path)
         db.create_session("s-abandoned", "test")
         db.queue_token_counts("s-abandoned", input_tokens=1, api_call_count=1)
@@ -407,6 +445,7 @@ class TestDurability:
         """Turn finalize (_persist_session) flushes the accounting queue —
         the crash window is at most the in-flight call's delta."""
         import os
+
         monkeypatch.setitem(os.environ, "OPENROUTER_API_KEY", "test-key")
         from run_agent import AIAgent
 
@@ -445,7 +484,6 @@ class TestDurability:
 
 
 class TestWriterFailure:
-
     def test_coalesce_failure_falls_back_to_raw_batch(self, db, caplog):
         """A coalescing bug must never kill the writer: the batch is applied
         raw (delta-by-delta) and the failure is logged."""
@@ -462,16 +500,13 @@ class TestWriterFailure:
                 db.queue_token_counts("s-co", input_tokens=3, api_call_count=1)
                 db.queue_token_counts("s-co", input_tokens=4, api_call_count=1)
                 assert db.flush_token_counts()
-            assert any(
-                "coalesce failed" in rec.getMessage() for rec in caplog.records
-            )
+            assert any("coalesce failed" in rec.getMessage() for rec in caplog.records)
         finally:
             db._coalesce_token_deltas = original
 
         totals = _totals(db, "s-co")
         assert totals["input_tokens"] == 7
         assert totals["api_call_count"] == 2
-
 
     def test_stop_drain_claims_busy_before_clearing_queue(self, db):
         """_stop_token_writer's leftover drain must follow the same

@@ -16,6 +16,7 @@ session, at call 1, before there is a cache to lose; later calls never flip.
 ``classify_upstream`` is pure and unit-tested; ``maybe_switch_wire_after_first_response`` is
 the single hook, called from the usage recorder.
 """
+
 from __future__ import annotations
 
 import logging
@@ -59,7 +60,9 @@ def wire_for_upstream(upstream: Optional[str]) -> str:
     return "chat_completions"
 
 
-def maybe_switch_wire_after_first_response(agent: Any, response: Any, api_call_count: int) -> bool:
+def maybe_switch_wire_after_first_response(
+    agent: Any, response: Any, api_call_count: int
+) -> bool:
     """Decide the session's wire from its first response; the switch itself is applied at the
     start of the next iteration (``apply_pending_wire_switch``), never while a response is being
     consumed. Returns True when a switch was scheduled.
@@ -76,6 +79,7 @@ def maybe_switch_wire_after_first_response(agent: Any, response: Any, api_call_c
         return False
     try:
         from clawk_cli.providers import _nous_anthropic_wire
+
         if _nous_anthropic_wire() != "auto":
             return False
     except Exception:
@@ -102,11 +106,27 @@ def apply_pending_wire_switch(agent: Any) -> bool:
     want, upstream = pending
     try:
         from agent.agent_runtime_helpers import switch_model
-        switch_model(agent, agent.model, "nous", api_key=getattr(agent, "api_key", "") or "",
-                     base_url=getattr(agent, "base_url", "") or "", api_mode=want)
+
+        switch_model(
+            agent,
+            agent.model,
+            "nous",
+            api_key=getattr(agent, "api_key", "") or "",
+            base_url=getattr(agent, "base_url", "") or "",
+            api_mode=want,
+        )
     except Exception as exc:  # never let wire selection break a turn
-        logger.warning("nous wire auto: switch to %s failed (%s); staying on %s", want, exc, agent.api_mode)
+        logger.warning(
+            "nous wire auto: switch to %s failed (%s); staying on %s",
+            want,
+            exc,
+            agent.api_mode,
+        )
         return False
-    logger.info("nous wire auto: upstream=%s -> %s for the rest of session %s", upstream, want,
-                getattr(agent, "session_id", "?"))
+    logger.info(
+        "nous wire auto: upstream=%s -> %s for the rest of session %s",
+        upstream,
+        want,
+        getattr(agent, "session_id", "?"),
+    )
     return True

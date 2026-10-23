@@ -70,10 +70,15 @@ def complete_source_checkout(
         )
     try:
         return _complete_locked(
-            root, desktop=desktop, assume_yes=assume_yes, gateway_mode=gateway_mode,
+            root,
+            desktop=desktop,
+            assume_yes=assume_yes,
+            gateway_mode=gateway_mode,
             pre_update_snapshot_id=pre_update_snapshot_id,
             pre_update_version=pre_update_version,
-            completion_message=completion_message, announce=announce, followups=followups,
+            completion_message=completion_message,
+            announce=announce,
+            followups=followups,
             before_build=before_build,
         )
     finally:
@@ -105,7 +110,9 @@ def _complete_locked(
         # git; a fresh Windows machine has only PM's.
         expose_pm_git(root)
     except Exception as exc:
-        print(f"⚠ Could not provide git for the source completion: {exc}", file=sys.stderr)
+        print(
+            f"⚠ Could not provide git for the source completion: {exc}", file=sys.stderr
+        )
     owed: list[tuple[str, str]] = []
 
     def step(name: str, run) -> None:
@@ -113,7 +120,10 @@ def _complete_locked(
         # config migration, the maintenance, or (in an update) the gateway restart after it.
         try:
             run()
-        except (Exception, SystemExit) as exc:  # health: allow BLE001 -- reported as an owed follow-up
+        except (
+            Exception,
+            SystemExit,
+        ) as exc:  # health: allow BLE001 -- reported as an owed follow-up
             from clawk_cli.update_receipt import record_followup
 
             reason = str(exc) or type(exc).__name__
@@ -127,15 +137,20 @@ def _complete_locked(
     if announce:
         print(announce)
     verdict: list[bool] = []
-    step("maintenance", lambda: verdict.append(_run_post_update_maintenance(
-        assume_yes=assume_yes,
-        gateway_mode=gateway_mode,
-        pre_update_snapshot_id=pre_update_snapshot_id,
-        had_desktop_app_before_update=desktop,
-        pre_update_version=pre_update_version,
-        completion_message=completion_message,
-        followups=owed,
-    )))
+    step(
+        "maintenance",
+        lambda: verdict.append(
+            _run_post_update_maintenance(
+                assume_yes=assume_yes,
+                gateway_mode=gateway_mode,
+                pre_update_snapshot_id=pre_update_snapshot_id,
+                had_desktop_app_before_update=desktop,
+                pre_update_version=pre_update_version,
+                completion_message=completion_message,
+                followups=owed,
+            )
+        ),
+    )
     tail_done = not owed
     if tail_done:
         from clawk_cli.source_stamp import write_source_stamp
@@ -143,8 +158,10 @@ def _complete_locked(
         try:
             write_source_stamp(root)
         except (OSError, ValueError) as exc:
-            print(f"⚠ Source update completed, but the install stamp could not be written: {exc}",
-                  file=sys.stderr)
+            print(
+                f"⚠ Source update completed, but the install stamp could not be written: {exc}",
+                file=sys.stderr,
+            )
     if followups is not None:
         followups.extend(owed)
     # The SQLite verdict is not tail work (re-running the tail cannot fix the interpreter); it
@@ -156,8 +173,17 @@ def _bootstrap_command(root: Path, argv: list[str]) -> list[str]:
     """Re-enter the checkout on PM's selected interpreter with its environment."""
     from pm.environments import project_python
 
-    return [str(project_python(root)), "-I", "-B", "-u",
-            str(Path(__file__).resolve()), "--source", str(root), *argv, _PREPARED]
+    return [
+        str(project_python(root)),
+        "-I",
+        "-B",
+        "-u",
+        str(Path(__file__).resolve()),
+        "--source",
+        str(root),
+        *argv,
+        _PREPARED,
+    ]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -165,13 +191,20 @@ def main(argv: list[str] | None = None) -> int:
     prepared = _PREPARED in argv
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", type=Path, required=True)
-    parser.add_argument("--desktop", action="store_true",
-                        help="Also build the packaged desktop app.")
-    parser.add_argument("--interactive", action="store_true",
-                        help="Allow prompts; installers pass no flag and stay unattended.")
-    parser.add_argument("--finish-update", action="store_true",
-                        help="Complete a source UPDATE tail instead of an install: the "
-                             "same launchers/products/maintenance with update wording.")
+    parser.add_argument(
+        "--desktop", action="store_true", help="Also build the packaged desktop app."
+    )
+    parser.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Allow prompts; installers pass no flag and stay unattended.",
+    )
+    parser.add_argument(
+        "--finish-update",
+        action="store_true",
+        help="Complete a source UPDATE tail instead of an install: the "
+        "same launchers/products/maintenance with update wording.",
+    )
     args = parser.parse_args([argument for argument in argv if argument != _PREPARED])
     root = args.source.resolve()
     if not (root / "clawk_cli/source_completion.py").is_file():
@@ -193,13 +226,19 @@ def main(argv: list[str] | None = None) -> int:
             # unsafe SQLite runtime is reported, but re-running the tail cannot fix it.
             owed: list[tuple[str, str]] = []
             complete_source_checkout(
-                root, desktop=args.desktop, assume_yes=True,
-                completion_message=None, announce="\n✓ Code updated!", followups=owed,
+                root,
+                desktop=args.desktop,
+                assume_yes=True,
+                completion_message=None,
+                announce="\n✓ Code updated!",
+                followups=owed,
             )
             ok = not owed
         else:
             ok = complete_source_checkout(
-                root, desktop=args.desktop, assume_yes=not args.interactive,
+                root,
+                desktop=args.desktop,
+                assume_yes=not args.interactive,
                 completion_message="✓ Install complete!",
             )
         return 0 if ok else 1
@@ -209,16 +248,21 @@ def main(argv: list[str] | None = None) -> int:
     # This interpreter is a bootstrap one: the work happens in the re-exec, so
     # every flag that decides WHICH tail runs has to survive into it. Losing
     # --finish-update here silently reports an update as an install.
-    passthrough = (["--desktop"] if args.desktop else []) + \
-                  (["--finish-update"] if args.finish_update else [])
+    passthrough = (["--desktop"] if args.desktop else []) + (
+        ["--finish-update"] if args.finish_update else []
+    )
     command = _bootstrap_command(root, passthrough)
     from clawk_cli.update_lock import checkout_lock_fds
 
     # Called inside an update tree (venv_sync's interrupted-update finish), the prepared child
     # keeps the checkout lock this bootstrap inherited.
     fds = checkout_lock_fds(root)
-    return subprocess.call(command, cwd=root, env=activation_environment(root),
-                           **({"pass_fds": fds} if fds else {}))
+    return subprocess.call(
+        command,
+        cwd=root,
+        env=activation_environment(root),
+        **({"pass_fds": fds} if fds else {}),
+    )
 
 
 if __name__ == "__main__":

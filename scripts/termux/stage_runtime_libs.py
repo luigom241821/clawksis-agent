@@ -26,6 +26,7 @@ emitted only after the complete build succeeds.
 
 Usage: stage_runtime_libs.py <payload-dir>
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -130,10 +131,14 @@ def _ensure_extracted(payload: Path, name: str, row: dict) -> Path:
             archive_ok = False
     if not archive_ok:
         try:
-            Download([pinned_source(row["url"], archive, row["sha256"])],
-                     partials_dir=scratch).run()
+            Download(
+                [pinned_source(row["url"], archive, row["sha256"])],
+                partials_dir=scratch,
+            ).run()
         except Exception as exc:
-            raise StageError(f"{name} {row['version']}: download failed from {row['url']}: {exc}") from exc
+            raise StageError(
+                f"{name} {row['version']}: download failed from {row['url']}: {exc}"
+            ) from exc
     if extract.exists():
         shutil.rmtree(extract)
     extract.mkdir(parents=True, exist_ok=True)
@@ -154,8 +159,10 @@ def stage(payload: Path, table: dict, licenses: dict | None = None) -> Path:
 
     identity = {"libs": table, "licenses": licenses}
     if _cache_valid(out, manifest_path, identity):
-        print(f"runtime libs already staged (manifest-verified): "
-              f"{len(list(out.glob('*.so*')))} .so* -> {out}")
+        print(
+            f"runtime libs already staged (manifest-verified): "
+            f"{len(list(out.glob('*.so*')))} .so* -> {out}"
+        )
         return out
 
     # A cache miss rebuilds from verified archives, never scratch extracts.
@@ -169,8 +176,9 @@ def stage(payload: Path, table: dict, licenses: dict | None = None) -> Path:
         lib_dir = extract / PREFIX_REL / "lib"
         sos = sorted(lib_dir.glob("*.so*"))
         if not sos:
-            raise StageError(f"{name}: no shared objects in "
-                             f"{PREFIX_REL}/lib of the package")
+            raise StageError(
+                f"{name}: no shared objects in {PREFIX_REL}/lib of the package"
+            )
         n = 0
         for so in sos:
             dest = out / so.name
@@ -180,7 +188,8 @@ def stage(payload: Path, table: dict, licenses: dict | None = None) -> Path:
                 if _sha256_file(so) != _sha256_file(dest):
                     raise StageError(
                         f"soname collision with different bytes: "
-                        f"{so.name} from {name} vs already-staged")
+                        f"{so.name} from {name} vs already-staged"
+                    )
                 continue
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(so, dest)
@@ -190,7 +199,9 @@ def stage(payload: Path, table: dict, licenses: dict | None = None) -> Path:
             target = payload / "runtime-libs/share/doc"
             shutil.copytree(notices, target, dirs_exist_ok=True, symlinks=True)
         merged += n
-        print(f"  {name} {row['version']}: {n} new .so* -> runtime-libs/lib", flush=True)
+        print(
+            f"  {name} {row['version']}: {n} new .so* -> runtime-libs/lib", flush=True
+        )
 
     if not any(out.glob("*.so*")):
         raise StageError("no shared objects staged")
@@ -198,8 +209,10 @@ def stage(payload: Path, table: dict, licenses: dict | None = None) -> Path:
     if licenses:
         extract = _ensure_extracted(payload, "termux-licenses", licenses)
         shutil.copytree(
-            extract / PREFIX_REL / "share/LICENSES", payload / "runtime-libs/share/LICENSES",
-            dirs_exist_ok=True, symlinks=True,
+            extract / PREFIX_REL / "share/LICENSES",
+            payload / "runtime-libs/share/LICENSES",
+            dirs_exist_ok=True,
+            symlinks=True,
         )
     # Manifest last: its existence is the promise that the build above
     # completed for the exact table.
@@ -208,9 +221,9 @@ def stage(payload: Path, table: dict, licenses: dict | None = None) -> Path:
         "files": {p.name: _sha256_file(p) for p in sorted(out.glob("*.so*"))},
     }
     manifest_path.write_text(
-        json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    print(f"runtime libs staged: {len(table)} packages, {merged} new .so* "
-          f"-> {out}")
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    print(f"runtime libs staged: {len(table)} packages, {merged} new .so* -> {out}")
     return out
 
 

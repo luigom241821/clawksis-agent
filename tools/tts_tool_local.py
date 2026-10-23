@@ -14,7 +14,12 @@ import sys
 from pathlib import Path
 from typing import Any, Callable, Dict, Tuple
 
-from tools.tts_tool_delivery import _finalize_wav_output, _origin, _section, _wav_sidecar_path
+from tools.tts_tool_delivery import (
+    _finalize_wav_output,
+    _origin,
+    _section,
+    _wav_sidecar_path,
+)
 
 logger = logging.getLogger("tools.tts_tool")
 
@@ -34,10 +39,14 @@ _TTS_MODEL_CACHE_MAX = 3
 _piper_voice_cache: dict[str, Any] = {}
 _kittentts_model_cache: dict[str, Any] = {}
 _LOCAL_TTS_MODEL_CACHES: dict[str, dict[str, Any]] = {
-    "piper": _piper_voice_cache, "kittentts": _kittentts_model_cache}
+    "piper": _piper_voice_cache,
+    "kittentts": _kittentts_model_cache,
+}
 
 
-def _tts_cache_get_or_load(cache: dict[str, Any], key: str, load: Callable[[], Any]) -> Any:
+def _tts_cache_get_or_load(
+    cache: dict[str, Any], key: str, load: Callable[[], Any]
+) -> Any:
     """Get ``key`` from ``cache`` or load it, LRU-bounded at ``_TTS_MODEL_CACHE_MAX`` (a hit refreshes
     recency via pop + reinsert; eviction only releases the slot, not live references)."""
     if key in cache:
@@ -52,7 +61,13 @@ def _tts_cache_get_or_load(cache: dict[str, Any], key: str, load: Callable[[], A
 
 def _run_helper(cmd: list, timeout: int) -> subprocess.CompletedProcess:
     return subprocess.run(
-        cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=timeout, stdin=subprocess.DEVNULL,
+        cmd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+        stdin=subprocess.DEVNULL,
         check=False,
     )
 
@@ -62,17 +77,31 @@ def _generate_neutts(text: str, output_path: str, tts_config: dict[str, Any]) ->
     neutts_config = tts_config.get("neutts") or {}
     wav_path = _wav_sidecar_path(output_path)
     cmd = [
-        sys.executable, str(Path(__file__).parent / "neutts_synth.py"),
-        "--text", text,
-        "--out", wav_path,
-        "--ref-audio", neutts_config.get("ref_audio", "") or str(_NEUTTS_SAMPLES / "jo.wav"),
-        "--ref-text", neutts_config.get("ref_text", "") or str(_NEUTTS_SAMPLES / "jo.txt"),
-        "--model", neutts_config.get("model", "neuphonic/neutts-air-q4-gguf"),
-        "--device", neutts_config.get("device", "cpu")]
+        sys.executable,
+        str(Path(__file__).parent / "neutts_synth.py"),
+        "--text",
+        text,
+        "--out",
+        wav_path,
+        "--ref-audio",
+        neutts_config.get("ref_audio", "") or str(_NEUTTS_SAMPLES / "jo.wav"),
+        "--ref-text",
+        neutts_config.get("ref_text", "") or str(_NEUTTS_SAMPLES / "jo.txt"),
+        "--model",
+        neutts_config.get("model", "neuphonic/neutts-air-q4-gguf"),
+        "--device",
+        neutts_config.get("device", "cpu"),
+    ]
     result = _run_helper(cmd, 120)
-    if result.returncode != 0:  # the synth script reports success lines as "OK:" on stderr too
-        error_lines = [l for l in result.stderr.strip().splitlines() if not l.startswith("OK:")]
-        raise RuntimeError(f"NeuTTS synthesis failed: {chr(10).join(error_lines) or 'unknown error'}")
+    if (
+        result.returncode != 0
+    ):  # the synth script reports success lines as "OK:" on stderr too
+        error_lines = [
+            l for l in result.stderr.strip().splitlines() if not l.startswith("OK:")
+        ]
+        raise RuntimeError(
+            f"NeuTTS synthesis failed: {chr(10).join(error_lines) or 'unknown error'}"
+        )
     return _finalize_wav_output(wav_path, output_path)
 
 
@@ -80,6 +109,7 @@ def _generate_neutts(text: str, output_path: str, tts_config: dict[str, Any]) ->
 def _get_piper_voices_dir() -> Path:
     """``<CLAWK_HOME>/cache/piper-voices/`` so voice downloads follow profile boundaries."""
     from clawk_constants import get_clawk_dir
+
     root = Path(get_clawk_dir("cache/piper-voices", "piper_voices_cache"))
     root.mkdir(parents=True, exist_ok=True)
     return root
@@ -98,10 +128,20 @@ def _resolve_piper_voice_path(voice: str, download_dir: Path) -> str:
     logger.info("[Piper] Downloading voice '%s' to %s (first use)", voice, download_dir)
     try:
         result = _run_helper(
-            [sys.executable, "-m", "piper.download_voices", voice, "--download-dir", str(download_dir)], 300,
+            [
+                sys.executable,
+                "-m",
+                "piper.download_voices",
+                voice,
+                "--download-dir",
+                str(download_dir),
+            ],
+            300,
         )
     except subprocess.TimeoutExpired as exc:
-        raise RuntimeError(f"Piper voice download timed out after 300s for '{voice}'") from exc
+        raise RuntimeError(
+            f"Piper voice download timed out after 300s for '{voice}'"
+        ) from exc
     if result.returncode != 0:
         stderr = (result.stderr or "").strip() or "no stderr output"
         raise RuntimeError(f"Piper voice download failed for '{voice}': {stderr[:400]}")
@@ -109,17 +149,22 @@ def _resolve_piper_voice_path(voice: str, download_dir: Path) -> str:
         raise RuntimeError(
             f"Piper voice download completed but {cached} is missing — "
             f"check voice name (see: https://github.com/OHF-Voice/piper1-gpl/"
-            f"blob/main/docs/VOICES.md)")
+            f"blob/main/docs/VOICES.md)"
+        )
     return str(cached)
 
 
-def _load_piper_voice_for_config(tts_config: dict[str, Any]) -> tuple[Any, dict[str, Any]]:
+def _load_piper_voice_for_config(
+    tts_config: dict[str, Any],
+) -> tuple[Any, dict[str, Any]]:
     """Resolve + load (or fetch from cache) the selected Piper voice -> ``(voice, piper_config)``.
     Shared by synthesis and ``warm_tts_provider`` so a warm-up fills exactly the slot synthesis hits."""
     PiperVoice = _origin()._import_piper()
     piper_config = _section(tts_config, "piper")
     voice_name = piper_config.get("voice") or DEFAULT_PIPER_VOICE
-    download_dir = Path(piper_config.get("voices_dir") or _get_piper_voices_dir()).expanduser()
+    download_dir = Path(
+        piper_config.get("voices_dir") or _get_piper_voices_dir()
+    ).expanduser()
     download_dir.mkdir(parents=True, exist_ok=True)
     use_cuda = bool(piper_config.get("use_cuda", False))
     model_path = _resolve_piper_voice_path(voice_name, download_dir)
@@ -132,14 +177,24 @@ def _load_piper_voice_for_config(tts_config: dict[str, Any]) -> tuple[Any, dict[
 
     # speaker_id is applied per call via syn_config, so one instance serves every speaker.
     cache_key = f"{model_path}::cuda={use_cuda}"
-    return _tts_cache_get_or_load(_piper_voice_cache, cache_key, _load_piper_voice), piper_config
+    return _tts_cache_get_or_load(
+        _piper_voice_cache, cache_key, _load_piper_voice
+    ), piper_config
 
 
-_PIPER_ADVANCED_KNOBS = ("length_scale", "noise_scale", "noise_w_scale", "volume", "normalize_audio", "speaker_id")
+_PIPER_ADVANCED_KNOBS = (
+    "length_scale",
+    "noise_scale",
+    "noise_w_scale",
+    "volume",
+    "normalize_audio",
+    "speaker_id",
+)
 
 
 def _generate_piper_tts(text: str, output_path: str, tts_config: dict[str, Any]) -> str:
     import wave
+
     voice, piper_config = _load_piper_voice_for_config(tts_config)
     # Bad speaker_id drops to 0 (Piper's default); bools are rejected (they'd coerce to 1/0).
     _raw_speaker = piper_config.get("speaker_id", 0)
@@ -150,15 +205,19 @@ def _generate_piper_tts(text: str, output_path: str, tts_config: dict[str, Any])
     if any(k in piper_config for k in _PIPER_ADVANCED_KNOBS):
         try:
             from piper import SynthesisConfig  # type: ignore
+
             syn_config = SynthesisConfig(
                 length_scale=float(piper_config.get("length_scale", 1.0)),
                 noise_scale=float(piper_config.get("noise_scale", 0.667)),
                 noise_w_scale=float(piper_config.get("noise_w_scale", 0.8)),
                 volume=float(piper_config.get("volume", 1.0)),
                 normalize_audio=bool(piper_config.get("normalize_audio", True)),
-                speaker_id=speaker_id)
+                speaker_id=speaker_id,
+            )
         except ImportError:
-            logger.warning("[Piper] SynthesisConfig not available in this piper-tts version — advanced knobs ignored")
+            logger.warning(
+                "[Piper] SynthesisConfig not available in this piper-tts version — advanced knobs ignored"
+            )
     wav_path = _wav_sidecar_path(output_path)
     with wave.open(wav_path, "wb") as wav_file:
         if syn_config is not None:
@@ -169,7 +228,9 @@ def _generate_piper_tts(text: str, output_path: str, tts_config: dict[str, Any])
 
 
 # --- KittenTTS (local ONNX, 25-80MB models, CPU only) ---
-def _load_kittentts_model_for_config(tts_config: dict[str, Any]) -> tuple[Any, dict[str, Any]]:
+def _load_kittentts_model_for_config(
+    tts_config: dict[str, Any],
+) -> tuple[Any, dict[str, Any]]:
     """Load (or fetch from cache) the KittenTTS model; returns ``(model, kittentts_config)``."""
     KittenTTS = _origin()._import_kittentts()
     kt_config = _section(tts_config, "kittentts")
@@ -181,15 +242,21 @@ def _load_kittentts_model_for_config(tts_config: dict[str, Any]) -> tuple[Any, d
         logger.info("[KittenTTS] Model loaded successfully")
         return m
 
-    return _tts_cache_get_or_load(_kittentts_model_cache, model_name, _load_kittentts_model), kt_config
+    return _tts_cache_get_or_load(
+        _kittentts_model_cache, model_name, _load_kittentts_model
+    ), kt_config
 
 
 def _generate_kittentts(text: str, output_path: str, tts_config: dict[str, Any]) -> str:
     model, kt_config = _load_kittentts_model_for_config(tts_config)
     audio = model.generate(  # numpy array at 24kHz
-        text, voice=kt_config.get("voice", DEFAULT_KITTENTTS_VOICE),
-        speed=kt_config.get("speed", 1.0), clean_text=kt_config.get("clean_text", True))
+        text,
+        voice=kt_config.get("voice", DEFAULT_KITTENTTS_VOICE),
+        speed=kt_config.get("speed", 1.0),
+        clean_text=kt_config.get("clean_text", True),
+    )
     import soundfile as sf
+
     wav_path = _wav_sidecar_path(output_path)
     sf.write(wav_path, audio, 24000)
     return _finalize_wav_output(wav_path, output_path)

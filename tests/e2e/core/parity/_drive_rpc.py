@@ -40,7 +40,9 @@ READY_TIMEOUT = 120.0
 class RpcClient:
     """Minimal JSON-RPC 2.0 client over a line/frame transport (``send`` + ``recv`` callables)."""
 
-    def __init__(self, send: Callable[[str], None], frames: queue.Queue[str | None]) -> None:
+    def __init__(
+        self, send: Callable[[str], None], frames: queue.Queue[str | None]
+    ) -> None:
         self._send = send
         self._frames = frames
         self._next_id = 0
@@ -59,16 +61,32 @@ class RpcClient:
             self.events.append(msg.get("params") or {})
         elif "id" in msg and "method" in msg:
             # Server→client request (approval/clarify/...): this scripted turn never needs one.
-            self._send(json.dumps({"jsonrpc": "2.0", "id": msg["id"],
-                                   "error": {"code": -32601, "message": "parity driver: unsupported"}}))
+            self._send(
+                json.dumps(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": msg["id"],
+                        "error": {
+                            "code": -32601,
+                            "message": "parity driver: unsupported",
+                        },
+                    }
+                )
+            )
         elif "id" in msg:
             self._responses[msg["id"]] = msg
         return True
 
-    def call(self, method: str, params: dict[str, Any] | None = None, timeout: float = 60.0) -> Any:
+    def call(
+        self, method: str, params: dict[str, Any] | None = None, timeout: float = 60.0
+    ) -> Any:
         self._next_id += 1
         rid = f"parity-{self._next_id}"
-        self._send(json.dumps({"jsonrpc": "2.0", "id": rid, "method": method, "params": params or {}}))
+        self._send(
+            json.dumps(
+                {"jsonrpc": "2.0", "id": rid, "method": method, "params": params or {}}
+            )
+        )
         deadline = time.monotonic() + timeout
         while rid not in self._responses:
             remaining = deadline - time.monotonic()
@@ -80,8 +98,12 @@ class RpcClient:
             raise AssertionError(f"{method} failed: {resp['error']}")
         return resp.get("result")
 
-    def wait_event(self, etype: str, pred: Callable[[dict], bool] = lambda _e: True,
-                   timeout: float = TURN_TIMEOUT) -> dict[str, Any]:
+    def wait_event(
+        self,
+        etype: str,
+        pred: Callable[[dict], bool] = lambda _e: True,
+        timeout: float = TURN_TIMEOUT,
+    ) -> dict[str, Any]:
         deadline = time.monotonic() + timeout
         seen = 0
         while True:
@@ -92,7 +114,8 @@ class RpcClient:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise AssertionError(
-                    f"no {etype!r} event within {timeout}s; saw {[e.get('type') for e in self.events][-30:]}")
+                    f"no {etype!r} event within {timeout}s; saw {[e.get('type') for e in self.events][-30:]}"
+                )
             self._pump(min(remaining, 0.5))
 
 
@@ -141,8 +164,14 @@ class StreamCapture:
 
 def spawn_tui_gateway(ph: ParityHome) -> tuple[subprocess.Popen, StreamCapture]:
     proc = subprocess.Popen(
-        [sys.executable, "-m", "tui_gateway.entry"], cwd=ph.project, env=ph.env(),
-        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1,
+        [sys.executable, "-m", "tui_gateway.entry"],
+        cwd=ph.project,
+        env=ph.env(),
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        bufsize=1,
     )
     return proc, StreamCapture().start(proc)
 
@@ -169,8 +198,12 @@ def drive_tui_gateway(ph: ParityHome, srv: FakeLLMServer, prompt: str) -> DriveR
             graceful = True
         except subprocess.TimeoutExpired:
             terminate(proc)
-    return DriveResult(final_text=text, toolset="clawk-cli", graceful_exit=graceful,
-                       extra={"exit_code": proc.returncode, "stderr_tail": cap.stderr[-2000:]})
+    return DriveResult(
+        final_text=text,
+        toolset="clawk-cli",
+        graceful_exit=graceful,
+        extra={"exit_code": proc.returncode, "stderr_tail": cap.stderr[-2000:]},
+    )
 
 
 # clawk serve (Desktop backend) ------------------------------------------------------
@@ -186,14 +219,22 @@ class ServeProcess:
 def spawn_serve(ph: ParityHome) -> ServeProcess:
     """Spawn ``clawk serve`` with the Desktop's argv/env/stdio shape (electron/main.ts)."""
     token = uuid.uuid4().hex
-    env = ph.env({
-        "TERMINAL_CWD": str(ph.project),
-        "CLAWK_DASHBOARD_SESSION_TOKEN": token,
-        "CLAWK_DESKTOP": "1",
-    })
+    env = ph.env(
+        {
+            "TERMINAL_CWD": str(ph.project),
+            "CLAWK_DASHBOARD_SESSION_TOKEN": token,
+            "CLAWK_DESKTOP": "1",
+        }
+    )
     proc = subprocess.Popen(
-        clawk_argv("serve", "--host", "127.0.0.1", "--port", "0"), cwd=ph.home, env=env,
-        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1,
+        clawk_argv("serve", "--host", "127.0.0.1", "--port", "0"),
+        cwd=ph.home,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        bufsize=1,
     )
     return ServeProcess(proc=proc, cap=StreamCapture().start(proc), token=token)
 
@@ -207,15 +248,20 @@ def first_stdout_line(sp: ServeProcess, timeout: float = READY_TIMEOUT) -> str:
         except queue.Empty:
             line = ""
         if line is None:
-            raise AssertionError(f"serve exited {sp.proc.poll()} before any stdout line\n{sp.cap.stderr[-3000:]}")
+            raise AssertionError(
+                f"serve exited {sp.proc.poll()} before any stdout line\n{sp.cap.stderr[-3000:]}"
+            )
         if line:
             return line
         if "CLAWK_BACKEND_READY" in sp.cap.stderr:
             raise AssertionError(
                 "READY sentinel was written to STDERR; the Desktop only watches stdout "
-                f"(backend-ready.ts):\n{sp.cap.stderr[-1500:]}")
+                f"(backend-ready.ts):\n{sp.cap.stderr[-1500:]}"
+            )
         if time.monotonic() >= deadline:
-            raise AssertionError(f"no stdout line from serve within {timeout}s\n{sp.cap.stderr[-3000:]}")
+            raise AssertionError(
+                f"no stdout line from serve within {timeout}s\n{sp.cap.stderr[-3000:]}"
+            )
 
 
 def desktop_port(sp: ServeProcess, timeout: float = READY_TIMEOUT) -> int:
@@ -237,7 +283,9 @@ def desktop_port(sp: ServeProcess, timeout: float = READY_TIMEOUT) -> int:
 def ws_rpc(port: int, token: str) -> tuple[RpcClient, Callable[[], None]]:
     from websockets.sync.client import connect
 
-    ws = connect(f"ws://127.0.0.1:{port}/api/ws?token={token}", open_timeout=30, max_size=None)
+    ws = connect(
+        f"ws://127.0.0.1:{port}/api/ws?token={token}", open_timeout=30, max_size=None
+    )
     frames: queue.Queue[str | None] = queue.Queue()
 
     def pump() -> None:
@@ -267,6 +315,10 @@ def drive_serve(ph: ParityHome, srv: FakeLLMServer, prompt: str) -> DriveResult:
         # Desktop quit path: SIGTERM, bounded wait.
         code = terminate(sp.proc, timeout=60)
         graceful = code is not None and code in (0, -15, 143)
-    return DriveResult(final_text=text, toolset="clawk-cli", cwd_channel="TERMINAL_CWD + session.create cwd",
-                       graceful_exit=graceful,
-                       extra={"exit_code": sp.proc.returncode, "stderr_tail": sp.cap.stderr[-2000:]})
+    return DriveResult(
+        final_text=text,
+        toolset="clawk-cli",
+        cwd_channel="TERMINAL_CWD + session.create cwd",
+        graceful_exit=graceful,
+        extra={"exit_code": sp.proc.returncode, "stderr_tail": sp.cap.stderr[-2000:]},
+    )

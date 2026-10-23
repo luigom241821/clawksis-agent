@@ -54,15 +54,22 @@ def test_import_rejects_non_finite_nested_model_config(db):
     error = _rejected(db, _payload("nested", model_config='{"temperature": 1e309}'))
     assert "non-finite number at session.model_config" in error
     # Also as a decoded dict, not only as a JSON string.
-    error = _rejected(db, _payload("nested-dict", model_config={"temperature": float("inf")}))
+    error = _rejected(
+        db, _payload("nested-dict", model_config={"temperature": float("inf")})
+    )
     assert "non-finite" in error
 
 
 def test_import_rejects_non_finite_reasoning_json(db):
     session = _payload(
         "reasoning",
-        messages=[{"role": "assistant", "content": "hi",
-                   "reasoning_details": '[{"temperature": 1e309}]'}],
+        messages=[
+            {
+                "role": "assistant",
+                "content": "hi",
+                "reasoning_details": '[{"temperature": 1e309}]',
+            }
+        ],
     )
     error = _rejected(db, session)
     assert "non-finite number at session.messages[0].reasoning_details" in error
@@ -70,25 +77,45 @@ def test_import_rejects_non_finite_reasoning_json(db):
 
 def test_import_rejects_int_columns_outside_sqlite_range(db):
     huge = 1 << 63
-    for field in ("input_tokens", "output_tokens", "api_call_count", "cache_read_tokens",
-                  "cache_write_tokens", "reasoning_tokens"):
-        assert "outside SQLite's integer range" in _rejected(db, _payload(f"huge-{field}", **{field: huge})), field
+    for field in (
+        "input_tokens",
+        "output_tokens",
+        "api_call_count",
+        "cache_read_tokens",
+        "cache_write_tokens",
+        "reasoning_tokens",
+    ):
+        assert "outside SQLite's integer range" in _rejected(
+            db, _payload(f"huge-{field}", **{field: huge})
+        ), field
 
 
 def test_import_rejects_oversized_scalar_message_content(db):
-    error = _rejected(db, _payload("huge-content", messages=[
-        {"role": "user", "content": 1 << 63}]))
+    error = _rejected(
+        db, _payload("huge-content", messages=[{"role": "user", "content": 1 << 63}])
+    )
     assert "content is outside SQLite's integer range" in error
-    error = _rejected(db, _payload("inf-content", messages=[
-        {"role": "user", "content": float("inf")}]))
+    error = _rejected(
+        db,
+        _payload("inf-content", messages=[{"role": "user", "content": float("inf")}]),
+    )
     assert "non-finite number at session.messages[0].content" in error
 
 
 def test_import_rejects_oversized_token_count_and_bad_message_timestamp(db):
-    assert "token_count" in _rejected(db, _payload("huge-tokens", messages=[
-        {"role": "user", "content": "hi", "token_count": 1 << 63}]))
-    assert "timestamp" in _rejected(db, _payload("bad-ts", messages=[
-        {"role": "user", "content": "hi", "timestamp": 1e309}]))
+    assert "token_count" in _rejected(
+        db,
+        _payload(
+            "huge-tokens",
+            messages=[{"role": "user", "content": "hi", "token_count": 1 << 63}],
+        ),
+    )
+    assert "timestamp" in _rejected(
+        db,
+        _payload(
+            "bad-ts", messages=[{"role": "user", "content": "hi", "timestamp": 1e309}]
+        ),
+    )
 
 
 def test_reserved_content_prefix_literal_round_trips_verbatim(db):
@@ -96,7 +123,9 @@ def test_reserved_content_prefix_literal_round_trips_verbatim(db):
     as structured content on read — it comes back as the exact literal string."""
     marker = SessionDB._CONTENT_JSON_PREFIX
     literal = marker + "not actually json"
-    db.import_sessions([_payload("marker", messages=[{"role": "user", "content": literal}])])
+    db.import_sessions(
+        [_payload("marker", messages=[{"role": "user", "content": literal}])]
+    )
     assert db.get_messages("marker")[0]["content"] == literal
     # And the encoded form of a marker-prefixed string still decodes to the literal.
     encoded = SessionDB._encode_content(literal)
@@ -114,9 +143,14 @@ def test_normal_export_round_trips_unchanged(db):
     with content, timestamps and counters intact."""
     db.create_session(session_id="rt-src", source="cli", model="test-model")
     db.append_message("rt-src", "user", "hello world", token_count=5)
-    db.append_message("rt-src", "assistant", [{"type": "text", "text": "hi"}],
-                      token_count=7, finish_reason="stop",
-                      reasoning_details=[{"type": "summary", "text": "because"}])
+    db.append_message(
+        "rt-src",
+        "assistant",
+        [{"type": "text", "text": "hi"}],
+        token_count=7,
+        finish_reason="stop",
+        reasoning_details=[{"type": "summary", "text": "because"}],
+    )
     db.end_session("rt-src", "done")
     payload = json.loads(json.dumps(db.export_session("rt-src")))
 

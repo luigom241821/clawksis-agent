@@ -31,13 +31,27 @@ REPO_ROOT = Path(__file__).resolve().parents[4]
 # Children get an ALLOWLISTED env: a developer or agent shell exports TERMINAL_CWD,
 # CLAWK_SESSION_*, AUXILIARY_*, provider keys ... any of which changes the child's prompt or
 # routing and would make a surface-switch comparison diverge for reasons outside the product.
-_ENV_ALLOW = ("PATH", "LANG", "LC_ALL", "LC_CTYPE", "USER", "LOGNAME", "SHELL", "SSL_CERT_FILE", "TZ")
+_ENV_ALLOW = (
+    "PATH",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "USER",
+    "LOGNAME",
+    "SHELL",
+    "SSL_CERT_FILE",
+    "TZ",
+)
 
 # No network from probes: no update check, models.dev fetch fails fast on a closed port.
-OFFLINE_CONFIG = "updates:\n  check: false\nmodels_dev:\n  url: http://127.0.0.1:9/api.json\n"
+OFFLINE_CONFIG = (
+    "updates:\n  check: false\nmodels_dev:\n  url: http://127.0.0.1:9/api.json\n"
+)
 # The periodic memory/skill background review forks a second agent against the same provider on
 # its own thread; its requests would race the scripted turns. Scenarios that want it opt in.
-NO_BACKGROUND_REVIEW = "skills:\n  creation_nudge_interval: 0\nmemory:\n  nudge_interval: 0\n"
+NO_BACKGROUND_REVIEW = (
+    "skills:\n  creation_nudge_interval: 0\nmemory:\n  nudge_interval: 0\n"
+)
 
 SUMMARY_TEXT = "Fake summary of the earlier conversation."
 
@@ -78,8 +92,17 @@ def identity(msg: dict[str, Any]) -> tuple:
     User rows replay their ``api_content`` sidecar when present (surface notes, attachments),
     so that is the text the identity uses.
     """
-    content = msg.get("api_content") if msg.get("role") == "user" and msg.get("api_content") else msg.get("content")
-    return (msg.get("role"), _text(content or ""), msg.get("tool_call_id") or None, _calls(msg.get("tool_calls")))
+    content = (
+        msg.get("api_content")
+        if msg.get("role") == "user" and msg.get("api_content")
+        else msg.get("content")
+    )
+    return (
+        msg.get("role"),
+        _text(content or ""),
+        msg.get("tool_call_id") or None,
+        _calls(msg.get("tool_calls")),
+    )
 
 
 def short(ident: tuple) -> str:
@@ -91,7 +114,7 @@ def short(ident: tuple) -> str:
 
 def first_divergence(a: str, b: str) -> str:
     n = next((i for i, (x, y) in enumerate(zip(a, b)) if x != y), min(len(a), len(b)))
-    return f"first diverging byte at {n}: {a[max(0, n - 60):n + 60]!r}  vs  {b[max(0, n - 60):n + 60]!r}"
+    return f"first diverging byte at {n}: {a[max(0, n - 60) : n + 60]!r}  vs  {b[max(0, n - 60) : n + 60]!r}"
 
 
 # ---------------------------------------------------------------------------------------------
@@ -99,7 +122,9 @@ def first_divergence(a: str, b: str) -> str:
 
 
 def db_connect(clawk_home: Path) -> sqlite3.Connection:
-    con = sqlite3.connect(f"file:{clawk_home / 'state.db'}?mode=ro", uri=True, timeout=30)
+    con = sqlite3.connect(
+        f"file:{clawk_home / 'state.db'}?mode=ro", uri=True, timeout=30
+    )
     con.row_factory = sqlite3.Row
     return con
 
@@ -121,16 +146,23 @@ def model_only_identities(clawk_home: Path, model: list[dict]) -> set[tuple]:
     if not ids:
         return set()
     with db_connect(clawk_home) as con:
-        hidden = {r[0] for r in con.execute(
-            f"SELECT id FROM messages WHERE id IN ({','.join('?' * len(ids))}) "
-            "AND COALESCE(json_extract(display_metadata, '$.model_only'), 0) != 0", ids)}
+        hidden = {
+            r[0]
+            for r in con.execute(
+                f"SELECT id FROM messages WHERE id IN ({','.join('?' * len(ids))}) "
+                "AND COALESCE(json_extract(display_metadata, '$.model_only'), 0) != 0",
+                ids,
+            )
+        }
     return {identity(m) for m in model if m.get("_row_id") in hidden}
 
 
 def row_counts(clawk_home: Path, sid: str) -> dict[str, int]:
     with db_connect(clawk_home) as con:
         total, active = con.execute(
-            "SELECT count(*), coalesce(sum(active), 0) FROM messages WHERE session_id=?", (sid,)).fetchone()
+            "SELECT count(*), coalesce(sum(active), 0) FROM messages WHERE session_id=?",
+            (sid,),
+        ).fetchone()
         return {"total": total, "active": active}
 
 
@@ -144,7 +176,9 @@ def lineage(clawk_home: Path, sid: str) -> list[str]:
     chain = [sid]
     with db_connect(clawk_home) as con:
         while True:
-            row = con.execute("SELECT parent_session_id FROM sessions WHERE id=?", (chain[0],)).fetchone()
+            row = con.execute(
+                "SELECT parent_session_id FROM sessions WHERE id=?", (chain[0],)
+            ).fetchone()
             if not row or not row[0]:
                 return chain
             chain.insert(0, row[0])
@@ -155,7 +189,9 @@ def lineage(clawk_home: Path, sid: str) -> list[str]:
 
 
 def is_summary(msg: dict[str, Any]) -> bool:
-    return SUMMARY_TEXT in _text(msg.get("content") or "") or bool(msg.get("_compressed_summary"))
+    return SUMMARY_TEXT in _text(msg.get("content") or "") or bool(
+        msg.get("_compressed_summary")
+    )
 
 
 def assert_rows_exactly_once(clawk_home: Path, sid: str, where: str) -> None:
@@ -165,7 +201,9 @@ def assert_rows_exactly_once(clawk_home: Path, sid: str, where: str) -> None:
     try:
         rows = con.execute(
             "SELECT id, role, content, tool_call_id, tool_calls FROM messages "
-            "WHERE session_id = ? AND active = 1 ORDER BY id", (sid,)).fetchall()
+            "WHERE session_id = ? AND active = 1 ORDER BY id",
+            (sid,),
+        ).fetchall()
     finally:
         con.close()
     seen: dict[tuple, int] = {}
@@ -175,7 +213,9 @@ def assert_rows_exactly_once(clawk_home: Path, sid: str, where: str) -> None:
         if key in seen:
             dups.append((seen[key], row_id, ident[0], str(ident[1])[:60]))
         seen.setdefault(key, row_id)
-    assert not dups, f"{where}: the same message is persisted as more than one active row: {dups}"
+    assert not dups, (
+        f"{where}: the same message is persisted as more than one active row: {dups}"
+    )
 
 
 def assert_exactly_once(msgs: Iterable[dict[str, Any]], where: str) -> None:
@@ -185,7 +225,9 @@ def assert_exactly_once(msgs: Iterable[dict[str, Any]], where: str) -> None:
         if m.get("role") == "system":
             continue
         k = identity(m)
-        assert k not in seen, f"{where}: {short(k)} persisted twice (positions {seen[k]} and {i})"
+        assert k not in seen, (
+            f"{where}: {short(k)} persisted twice (positions {seen[k]} and {i})"
+        )
         seen[k] = i
 
 
@@ -193,25 +235,34 @@ def model_payload(msgs: Iterable[dict[str, Any]]) -> list[tuple]:
     return [identity(m) for m in msgs if m.get("role") != "system"]
 
 
-def assert_replay_equals_persisted(request: dict[str, Any], persisted: list[dict], where: str) -> None:
+def assert_replay_equals_persisted(
+    request: dict[str, Any], persisted: list[dict], where: str
+) -> None:
     """(b) The first request of turn N+1 replays exactly the persisted model history + the new user msg."""
     sent = model_payload(request["messages"])
     want = model_payload(persisted)
     assert sent[:-1] == want, (
         f"{where}: history sent to the model != persisted history\n"
-        + _list_diff(want, sent[:-1], "persisted", "sent"))
-    assert sent[-1][0] == "user", f"{where}: the turn's request does not end with the new user message"
+        + _list_diff(want, sent[:-1], "persisted", "sent")
+    )
+    assert sent[-1][0] == "user", (
+        f"{where}: the turn's request does not end with the new user message"
+    )
 
 
 def _list_diff(a: list[tuple], b: list[tuple], an: str, bn: str) -> str:
     n = next((i for i, (x, y) in enumerate(zip(a, b)) if x != y), min(len(a), len(b)))
     lines = [f"  lengths {an}={len(a)} {bn}={len(b)}; first difference at index {n}"]
     for label, seq in ((an, a), (bn, b)):
-        lines.append(f"  {label}[{n}:{n + 3}] = " + "; ".join(short(x) for x in seq[n:n + 3]))
+        lines.append(
+            f"  {label}[{n}:{n + 3}] = " + "; ".join(short(x) for x in seq[n : n + 3])
+        )
     return "\n".join(lines)
 
 
-def prefix_breaks(requests: list[dict[str, Any]], *, tools: bool = True) -> list[tuple[int, str]]:
+def prefix_breaks(
+    requests: list[dict[str, Any]], *, tools: bool = True
+) -> list[tuple[int, str]]:
     """(C17) Indices i where request i is NOT a byte-identical extension of request i-1.
 
     Byte-stability covers the tools array (unless ``tools=False``), the system prompt and every
@@ -221,7 +272,13 @@ def prefix_breaks(requests: list[dict[str, Any]], *, tools: bool = True) -> list
     for i in range(1, len(requests)):
         prev, cur = requests[i - 1], requests[i]
         if tools and canon(prev.get("tools")) != canon(cur.get("tools")):
-            breaks.append((i, "tools array changed: " + tools_diff(prev.get("tools"), cur.get("tools"))))
+            breaks.append(
+                (
+                    i,
+                    "tools array changed: "
+                    + tools_diff(prev.get("tools"), cur.get("tools")),
+                )
+            )
             continue
         pm, cm = prev["messages"], cur["messages"]
         if len(cm) < len(pm):
@@ -230,16 +287,23 @@ def prefix_breaks(requests: list[dict[str, Any]], *, tools: bool = True) -> list
         for j, (a, b) in enumerate(zip(pm, cm)):
             ca, cb = canon(a), canon(b)
             if ca != cb:
-                breaks.append((i, f"messages[{j}] ({a.get('role')}) changed; {first_divergence(ca, cb)}"))
+                breaks.append(
+                    (
+                        i,
+                        f"messages[{j}] ({a.get('role')}) changed; {first_divergence(ca, cb)}",
+                    )
+                )
                 break
     return breaks
 
 
 def tools_breaks(requests: list[dict[str, Any]]) -> list[tuple[int, str]]:
     """Indices i where request i sends a different tools array than request i-1."""
-    return [(i, tools_diff(requests[i - 1].get("tools"), requests[i].get("tools")))
-            for i in range(1, len(requests))
-            if canon(requests[i - 1].get("tools")) != canon(requests[i].get("tools"))]
+    return [
+        (i, tools_diff(requests[i - 1].get("tools"), requests[i].get("tools")))
+        for i in range(1, len(requests))
+        if canon(requests[i - 1].get("tools")) != canon(requests[i].get("tools"))
+    ]
 
 
 def tools_diff(a: Any, b: Any) -> str:
@@ -253,33 +317,56 @@ def tools_diff(a: Any, b: Any) -> str:
     return "?"
 
 
-def assert_no_loss(ever_sent: dict[tuple, str], display: list[dict], model: list[dict], where: str) -> None:
+def assert_no_loss(
+    ever_sent: dict[tuple, str], display: list[dict], model: list[dict], where: str
+) -> None:
     """Loss-free persistence: every message the model was ever sent is still on disk exactly once in
     the display history, and every message still in the model's working context is there too.
     Compaction may move a message out of the model view (summarized) but never out of display."""
-    shown = [identity(m) for m in display if m.get("role") != "system" and not is_summary(m)]
+    shown = [
+        identity(m) for m in display if m.get("role") != "system" and not is_summary(m)
+    ]
     counts: dict[tuple, int] = {}
     for k in shown:
         counts[k] = counts.get(k, 0) + 1
     dup = [short(k) for k, c in counts.items() if c > 1]
     assert not dup, f"{where}: display history shows messages twice: {dup}"
     missing = [label for k, label in ever_sent.items() if k not in counts]
-    assert not missing, (f"{where}: messages the model saw are gone from the durable transcript: {missing}\n"
-                         f"  display now: {[short(k) for k in shown]}")
-    model_missing = [short(identity(m)) for m in model
-                     if m.get("role") != "system" and not is_summary(m) and identity(m) not in counts]
-    assert not model_missing, f"{where}: model-view rows absent from display: {model_missing}"
+    assert not missing, (
+        f"{where}: messages the model saw are gone from the durable transcript: {missing}\n"
+        f"  display now: {[short(k) for k in shown]}"
+    )
+    model_missing = [
+        short(identity(m))
+        for m in model
+        if m.get("role") != "system" and not is_summary(m) and identity(m) not in counts
+    ]
+    assert not model_missing, (
+        f"{where}: model-view rows absent from display: {model_missing}"
+    )
 
 
-def assert_inputs_shown_once(inputs: list[str], display: list[dict], model: list[dict], where: str) -> None:
+def assert_inputs_shown_once(
+    inputs: list[str], display: list[dict], model: list[dict], where: str
+) -> None:
     """Every text the user typed is on screen exactly once after a resume, and at most once in
     what the model is fed (compaction may summarize it away, never duplicate or merge-copy it)."""
+
     def hits(msgs: list[dict], text: str) -> int:
-        return sum(_text(m.get("content") or "").count(text) for m in msgs if m.get("role") == "user")
+        return sum(
+            _text(m.get("content") or "").count(text)
+            for m in msgs
+            if m.get("role") == "user"
+        )
+
     for text in inputs:
         shown, fed = hits(display, text), hits(model, text)
-        assert shown == 1, f"{where}: user input {text[:60]!r} shown {shown}x in the resumed display history"
-        assert fed <= 1, f"{where}: user input {text[:60]!r} replayed {fed}x to the model"
+        assert shown == 1, (
+            f"{where}: user input {text[:60]!r} shown {shown}x in the resumed display history"
+        )
+        assert fed <= 1, (
+            f"{where}: user input {text[:60]!r} replayed {fed}x to the model"
+        )
 
 
 def billed_usage(records: list[dict[str, Any]], kind: str = "main") -> dict[str, int]:
@@ -296,7 +383,9 @@ def billed_usage(records: list[dict[str, Any]], kind: str = "main") -> dict[str,
     return tot
 
 
-def assert_usage_matches(clawk_home: Path, sids: list[str], records: list[dict[str, Any]], where: str) -> None:
+def assert_usage_matches(
+    clawk_home: Path, sids: list[str], records: list[dict[str, Any]], where: str
+) -> None:
     """(f) state.db usage equals what the provider billed: main-loop totals on ``sessions`` and in
     the per-model ledger, no double count, no drop; cache reads are split out of input tokens."""
     want = billed_usage(records, "main")
@@ -304,16 +393,29 @@ def assert_usage_matches(clawk_home: Path, sids: list[str], records: list[dict[s
     with db_connect(clawk_home) as con:
         s = con.execute(
             f"SELECT sum(input_tokens), sum(output_tokens), sum(cache_read_tokens), sum(api_call_count) "
-            f"FROM sessions WHERE id IN ({marks})", sids).fetchone()
+            f"FROM sessions WHERE id IN ({marks})",
+            sids,
+        ).fetchone()
         u = con.execute(
             f"SELECT sum(input_tokens), sum(output_tokens), sum(cache_read_tokens), sum(api_call_count) "
-            f"FROM session_model_usage WHERE session_id IN ({marks}) AND task=''", sids).fetchone()
-    expect = (want["prompt"] - want["cached"], want["completion"], want["cached"], want["calls"])
+            f"FROM session_model_usage WHERE session_id IN ({marks}) AND task=''",
+            sids,
+        ).fetchone()
+    expect = (
+        want["prompt"] - want["cached"],
+        want["completion"],
+        want["cached"],
+        want["calls"],
+    )
     got_s = tuple(int(x or 0) for x in s)
     got_u = tuple(int(x or 0) for x in u)
     cols = "(input, output, cache_read, api_calls)"
-    assert got_s == expect, f"{where}: sessions usage {cols} {got_s} != provider-billed {expect}"
-    assert got_u == expect, f"{where}: session_model_usage main rows {cols} {got_u} != provider-billed {expect}"
+    assert got_s == expect, (
+        f"{where}: sessions usage {cols} {got_s} != provider-billed {expect}"
+    )
+    assert got_u == expect, (
+        f"{where}: session_model_usage main rows {cols} {got_u} != provider-billed {expect}"
+    )
 
 
 # ---------------------------------------------------------------------------------------------
@@ -323,13 +425,20 @@ def assert_usage_matches(clawk_home: Path, sids: list[str], records: list[dict[s
 def child_env(home: Path, clawk_home: Path, workdir: Path) -> dict[str, str]:
     env = {k: os.environ[k] for k in _ENV_ALLOW if k in os.environ}
     env.update(
-        HOME=str(home), CLAWK_HOME=str(clawk_home), PWD=str(workdir),
+        HOME=str(home),
+        CLAWK_HOME=str(clawk_home),
+        PWD=str(workdir),
         CLAWK_TEST_ISOLATION=str(clawk_home),
         # The child's state.db IS this test's sandbox db; the live-DB guard would refuse it
         # because a pytest ancestor is present.
         CLAWK_STATE_DB_GUARD_BYPASS="1",
-        PYTHONPATH=str(REPO_ROOT), PYTHONUNBUFFERED="1", NO_COLOR="1", TMPDIR=str(home),
-        TZ="UTC", LANG="C.UTF-8", PYTHONHASHSEED="0",
+        PYTHONPATH=str(REPO_ROOT),
+        PYTHONUNBUFFERED="1",
+        NO_COLOR="1",
+        TMPDIR=str(home),
+        TZ="UTC",
+        LANG="C.UTF-8",
+        PYTHONHASHSEED="0",
     )
     return env
 
@@ -357,20 +466,39 @@ class Spawned:
 _SID_RE = re.compile(r"^session_id:\s*(\S+)\s*$", re.MULTILINE)
 
 
-def run_oneshot(env: dict[str, str], cwd: Path, prompt: str, spawned: Spawned, *,
-                resume: str | None = None, timeout: float = 180.0) -> tuple[str, str]:
+def run_oneshot(
+    env: dict[str, str],
+    cwd: Path,
+    prompt: str,
+    spawned: Spawned,
+    *,
+    resume: str | None = None,
+    timeout: float = 180.0,
+) -> tuple[str, str]:
     """``clawk chat -q PROMPT -Q [--resume SID]`` in a fresh process -> (stdout, durable sid)."""
     cmd = [sys.executable, "-m", "clawk_cli.main", "chat", "-q", prompt, "-Q"]
     if resume:
         cmd += ["--resume", resume]
-    p = spawned.add(subprocess.Popen(cmd, cwd=str(cwd), env={**env, "PWD": str(cwd)}, stdin=subprocess.DEVNULL,
-                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8"))
+    p = spawned.add(
+        subprocess.Popen(
+            cmd,
+            cwd=str(cwd),
+            env={**env, "PWD": str(cwd)},
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+        )
+    )
     try:
         out, err = p.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
         p.kill()
         out, err = p.communicate(timeout=10)
-        raise AssertionError(f"oneshot did not finish in {timeout}s; stderr tail: {err[-2000:]}")
+        raise AssertionError(
+            f"oneshot did not finish in {timeout}s; stderr tail: {err[-2000:]}"
+        )
     assert p.returncode == 0, f"oneshot rc={p.returncode}; stderr tail: {err[-3000:]}"
     sids = _SID_RE.findall(err)
     assert sids, f"oneshot printed no session_id line; stderr tail: {err[-2000:]}"
@@ -384,8 +512,20 @@ class GatewayError(RuntimeError):
 class TuiGateway:
     """The real ``python -m tui_gateway.entry`` stdio JSON-RPC server (what the TUI spawns)."""
 
-    def __init__(self, env: dict[str, str], cwd: Path, spawned: Spawned, *, ready_timeout: float = 120.0):
-        self.env, self.cwd, self.spawned, self.ready_timeout = env, str(cwd), spawned, ready_timeout
+    def __init__(
+        self,
+        env: dict[str, str],
+        cwd: Path,
+        spawned: Spawned,
+        *,
+        ready_timeout: float = 120.0,
+    ):
+        self.env, self.cwd, self.spawned, self.ready_timeout = (
+            env,
+            str(cwd),
+            spawned,
+            ready_timeout,
+        )
         self.proc: subprocess.Popen | None = None
         self.events: list[dict] = []
         self.stderr_lines: list[str] = []
@@ -399,13 +539,30 @@ class TuiGateway:
         # A ``clawk chat -q`` hop leaves the always-on gateway owning this home, and the standalone
         # stdio entry refuses a home a gateway owns (it would be a second state.db writer). Stop
         # the owner first so each "gw" hop is still a fresh process on the same durable store.
-        subprocess.run([sys.executable, "-m", "clawk_cli.main", "gateway", "stop"], cwd=self.cwd,
-                       env={**self.env, "PWD": self.cwd}, stdin=subprocess.DEVNULL,
-                       capture_output=True, text=True, encoding="utf-8", timeout=120, check=False)
-        self.proc = self.spawned.add(subprocess.Popen(
-            [sys.executable, "-m", "tui_gateway.entry"], cwd=self.cwd, env={**self.env, "PWD": self.cwd},
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True, encoding="utf-8", bufsize=1))
+        subprocess.run(
+            [sys.executable, "-m", "clawk_cli.main", "gateway", "stop"],
+            cwd=self.cwd,
+            env={**self.env, "PWD": self.cwd},
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=120,
+            check=False,
+        )
+        self.proc = self.spawned.add(
+            subprocess.Popen(
+                [sys.executable, "-m", "tui_gateway.entry"],
+                cwd=self.cwd,
+                env={**self.env, "PWD": self.cwd},
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+                bufsize=1,
+            )
+        )
         threading.Thread(target=self._read_stdout, daemon=True).start()
         threading.Thread(target=self._read_stderr, daemon=True).start()
         self.wait_event("gateway.ready", timeout=self.ready_timeout)
@@ -442,8 +599,16 @@ class TuiGateway:
                     self.events.append(frame.get("params") or {})
                     self._cond.notify_all()
             elif "method" in frame and "id" in frame:  # server->client request: decline
-                self._write({"jsonrpc": "2.0", "id": frame["id"],
-                             "error": {"code": -32601, "message": "test client declines server requests"}})
+                self._write(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": frame["id"],
+                        "error": {
+                            "code": -32601,
+                            "message": "test client declines server requests",
+                        },
+                    }
+                )
             elif "id" in frame and frame["id"] in self._pending:
                 self._pending[frame["id"]].put(frame)
         with self._cond:
@@ -458,17 +623,23 @@ class TuiGateway:
             self.proc.stdin.write(json.dumps(frame) + "\n")
             self.proc.stdin.flush()
 
-    def call(self, method: str, params: dict | None = None, timeout: float = 120.0) -> Any:
+    def call(
+        self, method: str, params: dict | None = None, timeout: float = 120.0
+    ) -> Any:
         self._next_id += 1
         rid = self._next_id
         q: queue.Queue = queue.Queue()
         self._pending[rid] = q
         try:
-            self._write({"jsonrpc": "2.0", "id": rid, "method": method, "params": params or {}})
+            self._write(
+                {"jsonrpc": "2.0", "id": rid, "method": method, "params": params or {}}
+            )
             try:
                 frame = q.get(timeout=timeout)
             except queue.Empty:
-                raise TimeoutError(f"{method}: no reply in {timeout}s; stderr tail={self.stderr_lines[-8:]}")
+                raise TimeoutError(
+                    f"{method}: no reply in {timeout}s; stderr tail={self.stderr_lines[-8:]}"
+                )
         finally:
             self._pending.pop(rid, None)
         if "error" in frame:
@@ -479,19 +650,32 @@ class TuiGateway:
         with self._cond:
             return len(self.events)
 
-    def wait_event(self, etype: str, sid: str | None = None, *, start: int = 0, timeout: float = 120.0) -> dict:
+    def wait_event(
+        self,
+        etype: str,
+        sid: str | None = None,
+        *,
+        start: int = 0,
+        timeout: float = 120.0,
+    ) -> dict:
         deadline = time.monotonic() + timeout
         with self._cond:
             while True:
                 for ev in self.events[start:]:
-                    if ev.get("type") == etype and (sid is None or ev.get("session_id") == sid):
+                    if ev.get("type") == etype and (
+                        sid is None or ev.get("session_id") == sid
+                    ):
                         return ev
                 if self.proc.poll() is not None:
-                    raise RuntimeError(f"gateway exited rc={self.proc.returncode} waiting for {etype}; "
-                                       f"stderr tail={self.stderr_lines[-10:]}")
+                    raise RuntimeError(
+                        f"gateway exited rc={self.proc.returncode} waiting for {etype}; "
+                        f"stderr tail={self.stderr_lines[-10:]}"
+                    )
                 left = deadline - time.monotonic()
                 if left <= 0:
-                    raise TimeoutError(f"no {etype} in {timeout}s; recent={[e.get('type') for e in self.events[-15:]]}")
+                    raise TimeoutError(
+                        f"no {etype} in {timeout}s; recent={[e.get('type') for e in self.events[-15:]]}"
+                    )
                 self._cond.wait(min(left, 0.5))
 
     def create(self) -> str:
@@ -519,7 +703,12 @@ class TuiGateway:
     def submit(self, sid: str, text: str, timeout: float = 120.0) -> dict:
         start = self.mark()
         self.call("prompt.submit", {"session_id": sid, "text": text}, timeout=timeout)
-        return self.wait_event("message.complete", sid, start=start, timeout=timeout).get("payload") or {}
+        return (
+            self.wait_event("message.complete", sid, start=start, timeout=timeout).get(
+                "payload"
+            )
+            or {}
+        )
 
 
 # ---------------------------------------------------------------------------------------------
@@ -558,12 +747,18 @@ class Script:
         # request is always distinguishable.
         from tests.fakes.fake_llm_provider import Text
 
-        return Text(f"answer #{self.n}", prompt_tokens=900 + 13 * self.n, completion_tokens=5 + self.n,
-                    cached_tokens=400 + self.n)
+        return Text(
+            f"answer #{self.n}",
+            prompt_tokens=900 + 13 * self.n,
+            completion_tokens=5 + self.n,
+            cached_tokens=400 + self.n,
+        )
 
     def raise_errors(self, where: str) -> None:
-        assert not self.errors, f"{where}: a scripted action failed on the provider thread:\n" + "\n".join(
-            self.errors)
+        assert not self.errors, (
+            f"{where}: a scripted action failed on the provider thread:\n"
+            + "\n".join(self.errors)
+        )
 
 
 def big(label: str, n: int = 12000) -> str:
@@ -580,7 +775,9 @@ class InProcessSession:
     """A real ``AIAgent`` + ``SessionDB`` driven the way the classic CLI drives it: the surface
     owns ``history`` and hands it back each turn; ``/compress`` goes through ``compress_now``."""
 
-    def __init__(self, base_url: str, clawk_home: Path, sid: str, *, platform: str = "cli") -> None:
+    def __init__(
+        self, base_url: str, clawk_home: Path, sid: str, *, platform: str = "cli"
+    ) -> None:
         from clawk_cli.config import load_config
         from clawk_cli.tools_config import _get_platform_tools
         from clawk_state import SessionDB
@@ -590,9 +787,17 @@ class InProcessSession:
         # The CLI entrypoints enable the platform's configured toolsets; a bare AIAgent would
         # advertise a different tools array than every real surface resuming this session.
         toolsets = sorted(_get_platform_tools(load_config(), platform))
-        self.agent = AIAgent(provider="custom", base_url=base_url, api_key="sk-fake-e2e", model="fake-model",
-                             session_db=self.db, session_id=sid, quiet_mode=True, platform=platform,
-                             enabled_toolsets=toolsets)
+        self.agent = AIAgent(
+            provider="custom",
+            base_url=base_url,
+            api_key="sk-fake-e2e",
+            model="fake-model",
+            session_db=self.db,
+            session_id=sid,
+            quiet_mode=True,
+            platform=platform,
+            enabled_toolsets=toolsets,
+        )
         self.history: list[dict[str, Any]] = []
 
     @property
@@ -600,18 +805,27 @@ class InProcessSession:
         return self.agent.session_id
 
     def turn(self, text: str) -> dict[str, Any]:
-        result = self.agent.run_conversation(text, conversation_history=self.history, task_id=self.sid)
+        result = self.agent.run_conversation(
+            text, conversation_history=self.history, task_id=self.sid
+        )
         self.history = result.get("messages") or self.history
         return result
 
     def compress(self, args: str = "") -> Any:
         """Mirror ``clawk_cli.cli_session_mixin`` ``/compress``: install ``after_messages``, follow a
         rotated session id, re-flush the handoff on rotation, finalize the engine notification."""
-        from agent.conversation_compression import finalize_context_engine_compression_notification
-        from agent.conversation_compression_manual import compress_now, parse_compress_args
+        from agent.conversation_compression import (
+            finalize_context_engine_compression_notification,
+        )
+        from agent.conversation_compression_manual import (
+            compress_now,
+            parse_compress_args,
+        )
 
         before_sid = self.sid
-        result = compress_now(self.agent, self.history, parse_compress_args(args), task_id=before_sid)
+        result = compress_now(
+            self.agent, self.history, parse_compress_args(args), task_id=before_sid
+        )
         if result.status != "compressed":
             return result
         self.history = result.after_messages
@@ -630,7 +844,9 @@ class InProcessSession:
 class Ledger:
     """Cross-checks request stream, model view, display view, row counts and usage after each step."""
 
-    def __init__(self, srv: Any, clawk_home: Path, *, check_inputs: bool = True) -> None:
+    def __init__(
+        self, srv: Any, clawk_home: Path, *, check_inputs: bool = True
+    ) -> None:
         self.srv, self.home, self.check_inputs = srv, clawk_home, check_inputs
         self.ever: dict[tuple, str] = {}
         self.inputs: list[str] = []
@@ -643,9 +859,11 @@ class Ledger:
     def main(self) -> list[dict[str, Any]]:
         return self.srv.main_requests()
 
-    def step(self, sid: str, label: str, *, compaction: bool = False, turn: bool = True) -> None:
+    def step(
+        self, sid: str, label: str, *, compaction: bool = False, turn: bool = True
+    ) -> None:
         reqs = self.main()
-        new = reqs[self._seen_main:]
+        new = reqs[self._seen_main :]
         where = f"after step {label!r}"
         model, display = views(self.home, sid)
         if turn:
@@ -661,9 +879,10 @@ class Ledger:
                     assert_replay_equals_persisted(first, self.model_view, where)
                 sent = model_payload(first["messages"])
                 persisted = model_payload(model)
-                assert persisted[:len(sent)] == sent, (
+                assert persisted[: len(sent)] == sent, (
                     f"{where}: the durable model view does not start with what this turn sent\n"
-                    + _list_diff(sent, persisted[:len(sent)], "sent", "persisted"))
+                    + _list_diff(sent, persisted[: len(sent)], "sent", "persisted")
+                )
         elif compaction:
             self.compaction_request_idx.append(len(reqs))
         for r in new:
@@ -681,15 +900,20 @@ class Ledger:
         merged = self.model_only
         for k in merged:
             self.ever.pop(k, None)
-        assert_no_loss(self.ever, display, [m for m in model if identity(m) not in merged], where)
+        assert_no_loss(
+            self.ever, display, [m for m in model if identity(m) not in merged], where
+        )
         if self.check_inputs:
             assert_inputs_shown_once(self.inputs, display, model, where)
         counts = row_counts(self.home, sid)
         if self.counts is not None and sid == self._sid:
-            assert counts["total"] >= self.counts["total"], f"{where}: durable rows were deleted {self.counts} -> {counts}"
+            assert counts["total"] >= self.counts["total"], (
+                f"{where}: durable rows were deleted {self.counts} -> {counts}"
+            )
             if not compaction:
                 assert counts["active"] >= self.counts["active"], (
-                    f"{where}: active rows shrank outside compaction {self.counts} -> {counts}")
+                    f"{where}: active rows shrank outside compaction {self.counts} -> {counts}"
+                )
         self.counts, self._sid = counts, sid
         self.model_view = model
         self._seen_main = len(reqs)

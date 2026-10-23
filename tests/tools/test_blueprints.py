@@ -72,7 +72,6 @@ class TestParseBlueprint:
         assert spec.deliver == "telegram"
         assert spec.prompt is not None and spec.prompt.startswith("Summarize")
 
-
     def test_deliver_defaults_to_origin(self):
         skill = (
             "---\nname: r\ndescription: d\nmetadata:\n  clawk:\n"
@@ -94,7 +93,6 @@ class TestBlueprintSpecForInstalled:
             spec = blueprint_spec_for_installed("morning-brief")
         assert spec is not None
         assert spec.schedule == "0 8 * * *"
-
 
     def test_plain_skill_returns_none(self, tmp_path):
         skills_dir = tmp_path / "skills"
@@ -142,7 +140,6 @@ class TestExportBlueprint:
         assert spec.deliver == "telegram"
         # Name is sanitized to a valid skill identifier.
         assert spec.skill_name == "my-morning-brief"
-
 
     def test_export_interval_job_without_display(self):
         # Regression: parse_schedule stores interval periods as "minutes" —

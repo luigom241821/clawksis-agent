@@ -7,6 +7,7 @@ is compared constant-time and vouched for as the ``drain-control`` principal. Fa
 entropy gate at registration (length, distinct chars, Shannon bits); interactive ABC methods
 raise. Knobs ``scope`` / ``min_secret_chars`` live under ``dashboard.drain_auth``.
 """
+
 from __future__ import annotations
 
 import hmac
@@ -17,7 +18,12 @@ from collections import Counter
 from typing import Optional
 
 from clawk_cli.dashboard_auth import DashboardAuthProvider, Session, TokenPrincipal
-from plugins.dashboard_auth._shared import NonInteractiveMixin, SkipRegistration, load_config_section, register_provider
+from plugins.dashboard_auth._shared import (
+    NonInteractiveMixin,
+    SkipRegistration,
+    load_config_section,
+    register_provider,
+)
 
 logger = logging.getLogger(__name__)
 _TAG = "dashboard-auth-drain"
@@ -45,7 +51,9 @@ def _shannon_bits(value: str) -> float:
     return per_char * n
 
 
-def assess_secret_strength(secret: str, *, min_chars: int = _DEFAULT_MIN_SECRET_CHARS) -> Optional[str]:
+def assess_secret_strength(
+    secret: str, *, min_chars: int = _DEFAULT_MIN_SECRET_CHARS
+) -> Optional[str]:
     """Human-readable rejection reason if ``secret`` is too weak, else ``None``. Checks, in
     order: length >= ``min_chars``, distinct chars >= ``_MIN_DISTINCT_CHARS``, Shannon
     entropy >= ``_MIN_SHANNON_BITS``."""
@@ -54,8 +62,9 @@ def assess_secret_strength(secret: str, *, min_chars: int = _DEFAULT_MIN_SECRET_
     if len(secret) < min_chars:
         return (
             f"secret too short: {len(secret)} chars (need >= {min_chars}; "
-            "use a >=256-bit value, e.g. `python -c \"import secrets; "
-            "print(secrets.token_urlsafe(32))\"`)")
+            'use a >=256-bit value, e.g. `python -c "import secrets; '
+            'print(secrets.token_urlsafe(32))"`)'
+        )
     distinct = len(set(secret))
     if distinct < _MIN_DISTINCT_CHARS:
         return f"secret has only {distinct} distinct characters (need >= {_MIN_DISTINCT_CHARS}); looks structured/low-entropy"
@@ -89,8 +98,12 @@ class DrainSecretProvider(NonInteractiveMixin, DashboardAuthProvider):
     def verify_token(self, *, token: str) -> Optional[TokenPrincipal]:
         """Constant-time compare; ``drain-control`` principal on match, else
         ``None`` so the generic seam falls through / fails closed."""
-        if token and hmac.compare_digest(token.encode("utf-8"), self._secret.encode("utf-8")):
-            return TokenPrincipal(principal="drain-control", provider=self.name, scopes=(self._scope,))
+        if token and hmac.compare_digest(
+            token.encode("utf-8"), self._secret.encode("utf-8")
+        ):
+            return TokenPrincipal(
+                principal="drain-control", provider=self.name, scopes=(self._scope,)
+            )
         return None
 
     # ---- interactive methods: unsupported (service credential only) --------
@@ -109,6 +122,7 @@ class DrainSecretProvider(NonInteractiveMixin, DashboardAuthProvider):
 
 # ---- Plugin entry point ----
 
+
 def _load_config_drain_auth_section() -> dict:
     return load_config_section(logger, _TAG, "dashboard", "drain_auth")
 
@@ -119,8 +133,9 @@ def _settings() -> dict:
     if not secret:
         raise SkipRegistration(
             "CLAWK_DASHBOARD_DRAIN_SECRET is not set. Set a per-agent >=256-bit secret "
-            "(e.g. `python -c \"import secrets; print(secrets.token_urlsafe(32))\"`) to enable "
-            "NAS-driven drain coordination; leave it unset to disable the drain endpoint.")
+            '(e.g. `python -c "import secrets; print(secrets.token_urlsafe(32))"`) to enable '
+            "NAS-driven drain coordination; leave it unset to disable the drain endpoint."
+        )
     section = _load_config_drain_auth_section()
     scope = str(section.get("scope", "drain") or "drain").strip() or "drain"
     try:
@@ -131,7 +146,8 @@ def _settings() -> dict:
     if reason is not None:
         raise SkipRegistration(
             f"CLAWK_DASHBOARD_DRAIN_SECRET rejected — {reason}. The drain endpoint stays disabled (fail-closed).",
-            level="warning")
+            level="warning",
+        )
     return {"secret": secret, "scope": scope}
 
 
@@ -141,7 +157,9 @@ def register(ctx) -> None:
     success also registers the drain route as token-authable via the generic seam."""
     global LAST_SKIP_REASON
     LAST_SKIP_REASON = ""
-    kwargs, LAST_SKIP_REASON = register_provider(ctx, logger, _TAG, DrainSecretProvider, _settings)
+    kwargs, LAST_SKIP_REASON = register_provider(
+        ctx, logger, _TAG, DrainSecretProvider, _settings
+    )
     if kwargs is None:
         return
     # Opt the drain endpoint into the token-auth seam so the interactive cookie gate
@@ -151,7 +169,13 @@ def register(ctx) -> None:
 
         register_token_route(DRAIN_ROUTE_PATH)
     except Exception as exc:
-        logger.warning("dashboard-auth-drain: could not register token route %s: %s", DRAIN_ROUTE_PATH, exc)
+        logger.warning(
+            "dashboard-auth-drain: could not register token route %s: %s",
+            DRAIN_ROUTE_PATH,
+            exc,
+        )
     logger.info(
         "dashboard-auth-drain: registered drain service-credential provider (scope=%s, route=%s)",
-        kwargs["scope"], DRAIN_ROUTE_PATH)
+        kwargs["scope"],
+        DRAIN_ROUTE_PATH,
+    )

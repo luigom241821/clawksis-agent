@@ -1,4 +1,5 @@
 """One browser payload serves both headed and headless callers."""
+
 from pathlib import Path
 
 import pytest
@@ -16,13 +17,19 @@ def test_browser_closure_and_bundle_ship_full_chromium_only():
     assert "chromium-headless-shell" not in closure | bundled
 
 
-@pytest.mark.parametrize(("target", "relative"), [
-    ("linux-x64", "chrome-linux64/chrome"),
-    ("linux-arm64", "chrome-linux/chrome"),
-    ("darwin-arm64", "chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"),
-    ("win32-x64", "chrome-win64/chrome.exe"),
-    ("win32-arm64", "chrome-win64/chrome.exe"),
-])
+@pytest.mark.parametrize(
+    ("target", "relative"),
+    [
+        ("linux-x64", "chrome-linux64/chrome"),
+        ("linux-arm64", "chrome-linux/chrome"),
+        (
+            "darwin-arm64",
+            "chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing",
+        ),
+        ("win32-x64", "chrome-win64/chrome.exe"),
+        ("win32-arm64", "chrome-win64/chrome.exe"),
+    ],
+)
 def test_chromium_binary_and_env_survive_store_relocation(tmp_path, target, relative):
     package = Chromium()
     store = tmp_path / "store"
@@ -33,7 +40,9 @@ def test_chromium_binary_and_env_survive_store_relocation(tmp_path, target, rela
     executable.chmod(0o755)
     assert package.binary(entry, target) == executable
     facts = Facts(store / "facts.json")
-    facts.record("chromium", "1234+145.0.0.0", entry.name, package.env(entry, target), store)
+    facts.record(
+        "chromium", "1234+145.0.0.0", entry.name, package.env(entry, target), store
+    )
     moved = tmp_path / "relocated"
     store.rename(moved)
     env = Facts(moved / "facts.json").env_for("chromium", moved)

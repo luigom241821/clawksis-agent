@@ -20,7 +20,10 @@ import pytest
 
 from clawk_cli.auth import resolve_provider
 from clawk_cli.models import normalize_provider as models_normalize
-from clawk_cli.providers import LLAMACPP_ALIASES, normalize_provider as providers_normalize
+from clawk_cli.providers import (
+    LLAMACPP_ALIASES,
+    normalize_provider as providers_normalize,
+)
 from providers import get_provider_profile
 
 _CUSTOM_ALIASES = tuple(get_provider_profile("custom").aliases)

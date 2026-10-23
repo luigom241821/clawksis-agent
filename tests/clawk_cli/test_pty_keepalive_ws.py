@@ -14,7 +14,7 @@ class FakeBridge:
         self.written = bytearray()
 
     def read(self, timeout):
-        return b""        # idle forever
+        return b""  # idle forever
 
     async def write(self, data):
         if not self.accept_input:
@@ -74,7 +74,7 @@ async def test_attach_token_reuses_same_session(pty_keepalive_harness):
         ws1.send_bytes(b"hi")
     with client.websocket_connect("/api/pty?attach=TOK1") as ws2:
         ws2.send_bytes(b"again")
-    assert len(pty_keepalive_harness) == 1                # reattached, did not respawn
+    assert len(pty_keepalive_harness) == 1  # reattached, did not respawn
     assert bytes(pty_keepalive_harness.bridges[0].written) == b"hi\x0cagain"
 
 
@@ -109,8 +109,6 @@ async def test_attach_token_reuses_same_resume(pty_keepalive_harness):
     assert pty_keepalive_harness == [["x", "same"]]
 
 
-
-
 @pytest.mark.asyncio
 async def test_attach_token_reuses_canonical_resume(pty_keepalive_harness):
     from starlette.testclient import TestClient
@@ -121,8 +119,6 @@ async def test_attach_token_reuses_canonical_resume(pty_keepalive_harness):
     with client.websocket_connect("/api/pty?attach=TOK1&resume=child") as ws2:
         ws2.send_bytes(b"again")
     assert pty_keepalive_harness == [["x", "child"]]
-
-
 
 
 @pytest.mark.asyncio
@@ -152,6 +148,7 @@ async def test_attach_token_reuses_default_chat_after_active_session_fallback(
 
 # --- #63553: pty_active_session_files must not grow without bound -----------
 
+
 def _pty_marker_dict():
     from clawk_cli.web_server import _get_pty_active_session_files
 
@@ -159,7 +156,9 @@ def _pty_marker_dict():
 
 
 @pytest.mark.asyncio
-async def test_channel_marker_leaves_no_dict_entry_after_pty_lifecycle(pty_keepalive_harness):
+async def test_channel_marker_leaves_no_dict_entry_after_pty_lifecycle(
+    pty_keepalive_harness,
+):
     """The channel→marker mapping is gone once the keep-alive PTY is closed.
 
     Regression for #63553: `_active_session_file_for_channel` inserted a
@@ -195,7 +194,9 @@ async def test_channel_marker_reconnect_reuses_one_entry(pty_keepalive_harness):
     attach = "TOK63553R"
     try:
         for _ in range(3):
-            with client.websocket_connect(f"/api/pty?attach={attach}&channel=CHAN63553R") as ws:
+            with client.websocket_connect(
+                f"/api/pty?attach={attach}&channel=CHAN63553R"
+            ) as ws:
                 ws.send_bytes(b"hi")
         assert list(markers) == ["CHAN63553R"]
     finally:
@@ -227,7 +228,9 @@ async def test_legacy_channel_connect_pops_marker_on_disconnect(pty_keepalive_ha
 
 
 @pytest.mark.asyncio
-async def test_legacy_marker_dropped_when_cancel_lands_mid_close(pty_keepalive_harness, monkeypatch):
+async def test_legacy_marker_dropped_when_cancel_lands_mid_close(
+    pty_keepalive_harness, monkeypatch
+):
     """The disconnect closes the bridge in a worker thread; cancelling the handler while that close is still
     running must not skip the marker discard."""
     import threading
@@ -238,7 +241,9 @@ async def test_legacy_marker_dropped_when_cancel_lands_mid_close(pty_keepalive_h
 
     def slow_close(self):
         close_started.set()
-        time.sleep(0.5)  # still running when the client context exits and cancels the handler
+        time.sleep(
+            0.5
+        )  # still running when the client context exits and cancels the handler
         self.alive = False
 
     monkeypatch.setattr(FakeBridge, "close", slow_close)
@@ -279,11 +284,13 @@ async def test_fresh_start_pops_stale_marker_and_reregisters_child_path(
     stale_path.write_text(json.dumps({"session_id": "stale"}))
 
     # Fresh start on the same channel: new PTY, new breadcrumb.
-    with client.websocket_connect("/api/pty?attach=TOKFRESH2&channel=CHANFRESH&fresh=1") as ws:
+    with client.websocket_connect(
+        "/api/pty?attach=TOKFRESH2&channel=CHANFRESH&fresh=1"
+    ) as ws:
         ws.send_bytes(b"hi")
 
-    assert stale_path.exists() is False            # stale file removed
-    assert markers["CHANFRESH"] is stale_path      # same mapping kept for the fresh child
+    assert stale_path.exists() is False  # stale file removed
+    assert markers["CHANFRESH"] is stale_path  # same mapping kept for the fresh child
     # The kept mapping is what lets the next same-channel reconnect resume the
     # fresh child instead of allocating a new unmapped path (#63563 review).
     with client.websocket_connect("/api/pty?attach=TOKFRESH2&channel=CHANFRESH") as ws:

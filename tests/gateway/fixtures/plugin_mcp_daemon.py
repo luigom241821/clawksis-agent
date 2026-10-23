@@ -3,6 +3,7 @@
 ``probe-mcp`` answers every tool with the call and the pid of the process holding the registry, so a
 test sees that a plugin's ``ctx.call_mcp`` reached THIS gateway's MCP registry.
 """
+
 import asyncio
 import json
 import os
@@ -15,9 +16,15 @@ from tools.mcp_tool_loop import _ensure_mcp_loop
 
 class _Session:
     async def call_tool(self, name, arguments=None):
-        text = json.dumps({'tool': name, 'arguments': arguments, 'registry_pid': os.getpid()})
-        return SimpleNamespace(is_error=False, content=[SimpleNamespace(type='text', text=text)],
-                               structured_content=None, meta=None)
+        text = json.dumps(
+            {"tool": name, "arguments": arguments, "registry_pid": os.getpid()}
+        )
+        return SimpleNamespace(
+            is_error=False,
+            content=[SimpleNamespace(type="text", text=text)],
+            structured_content=None,
+            meta=None,
+        )
 
 
 class _Server:
@@ -27,5 +34,5 @@ class _Server:
 
 
 _ensure_mcp_loop()
-mcp_tool._servers['probe-mcp'] = _Server()
-runpy.run_module('gateway.run', run_name='__main__')
+mcp_tool._servers["probe-mcp"] = _Server()
+runpy.run_module("gateway.run", run_name="__main__")

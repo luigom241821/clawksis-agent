@@ -19,10 +19,20 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from agent.secret_sources._cache import CachedFetch, SecretCache, fingerprint as _fingerprint
+from agent.secret_sources._cache import (
+    CachedFetch,
+    SecretCache,
+    fingerprint as _fingerprint,
+)
 from agent.secret_sources.base import (
-    ErrorKind, FetchResult, SecretSource, classify_cli_error, coerce_float,
-    get_source_environment, is_valid_env_name, run_cli,
+    ErrorKind,
+    FetchResult,
+    SecretSource,
+    classify_cli_error,
+    coerce_float,
+    get_source_environment,
+    is_valid_env_name,
+    run_cli,
 )
 
 logger = logging.getLogger(__name__)
@@ -37,9 +47,21 @@ _DEFAULT_TOKEN_ENV = "OP_SERVICE_ACCOUNT_TOKEN"
 # holds every provider credential). OP_SESSION_* and the token are added
 # dynamically in _op_child_env().
 _OP_ENV_ALLOWLIST = (
-    "PATH", "HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "SystemRoot",
-    "TMPDIR", "TMP", "TEMP", "XDG_CONFIG_HOME", "XDG_RUNTIME_DIR", "OP_CONFIG_DIR",
-    "OP_ACCOUNT", "OP_CONNECT_HOST", "OP_CONNECT_TOKEN",
+    "PATH",
+    "HOME",
+    "USERPROFILE",
+    "APPDATA",
+    "LOCALAPPDATA",
+    "SystemRoot",
+    "TMPDIR",
+    "TMP",
+    "TEMP",
+    "XDG_CONFIG_HOME",
+    "XDG_RUNTIME_DIR",
+    "OP_CONFIG_DIR",
+    "OP_ACCOUNT",
+    "OP_CONNECT_HOST",
+    "OP_CONNECT_TOKEN",
     # Lets a user skip op's desktop-app integration probe (which can hang with
     # no timeout on a wedged desktop container) and go straight to token auth.
     "OP_LOAD_DESKTOP_APP_SETTINGS",
@@ -57,7 +79,9 @@ def _disk_key_str(cache_key: _CacheKey) -> str:
     return f"{auth_fp}|{account}|{refs_fp}"
 
 
-_STORE: SecretCache[_CacheKey] = SecretCache(_DISK_CACHE_BASENAME, key_serializer=_disk_key_str)
+_STORE: SecretCache[_CacheKey] = SecretCache(
+    _DISK_CACHE_BASENAME, key_serializer=_disk_key_str
+)
 _CACHE = _STORE.memory  # tests flush L1 directly
 
 _MISSING_BINARY_HINT = (
@@ -68,9 +92,21 @@ _MISSING_BINARY_HINT = (
 # First matching rule wins.
 _OP_ERROR_RULES = (
     (ErrorKind.TIMEOUT, ("timed out",)),
-    (ErrorKind.BINARY_MISSING, ("not found on path", "not an executable", "failed to invoke")),
-    (ErrorKind.AUTH_FAILED, ("unauthorized", "not signed in", "session expired",
-                             "authentication", "401", "403")),
+    (
+        ErrorKind.BINARY_MISSING,
+        ("not found on path", "not an executable", "failed to invoke"),
+    ),
+    (
+        ErrorKind.AUTH_FAILED,
+        (
+            "unauthorized",
+            "not signed in",
+            "session expired",
+            "authentication",
+            "401",
+            "403",
+        ),
+    ),
     (ErrorKind.EMPTY_VALUE, ("empty value",)),
     (ErrorKind.NETWORK, ("network", "connection", "resolve host", "dns")),
 )
@@ -80,7 +116,9 @@ def _classify_op_error(message: str) -> ErrorKind:
     return classify_cli_error(message, _OP_ERROR_RULES)
 
 
-def _validate_references(references: Optional[dict[str, str]]) -> tuple[dict[str, str], list[str]]:
+def _validate_references(
+    references: Optional[dict[str, str]],
+) -> tuple[dict[str, str], list[str]]:
     """``(valid_refs, warnings)``: keep valid env names bound to stripped ``op://`` strings."""
     valid: dict[str, str] = {}
     warnings: list[str] = []
@@ -90,7 +128,9 @@ def _validate_references(references: Optional[dict[str, str]]) -> tuple[dict[str
         elif not isinstance(ref, str):
             warnings.append(f"Skipping {name!r}: reference is not a string")
         elif not ref.strip().startswith("op://"):
-            warnings.append(f"Skipping {name!r}: {ref!r} is not an op:// secret reference")
+            warnings.append(
+                f"Skipping {name!r}: {ref!r} is not an op:// secret reference"
+            )
         else:
             valid[name] = ref.strip()
     return valid, warnings
@@ -100,15 +140,27 @@ def _auth_fingerprint(token_env: str) -> str:
     """SHA-256 prefix over everything `op` would authenticate with (token, account,
     Connect host/token, ``OP_SESSION_*``), so a new identity never sees old cached values."""
     source_env = get_source_environment()
-    parts: list[str] = [f"{label}={source_env.get(var, '')}" for label, var in (
-        ("token", token_env), ("account", "OP_ACCOUNT"),
-        ("connect_host", "OP_CONNECT_HOST"), ("connect_token", "OP_CONNECT_TOKEN"))]
-    parts += [f"{key}={source_env[key]}" for key in sorted(source_env) if key.startswith("OP_SESSION_")]
+    parts: list[str] = [
+        f"{label}={source_env.get(var, '')}"
+        for label, var in (
+            ("token", token_env),
+            ("account", "OP_ACCOUNT"),
+            ("connect_host", "OP_CONNECT_HOST"),
+            ("connect_token", "OP_CONNECT_TOKEN"),
+        )
+    ]
+    parts += [
+        f"{key}={source_env[key]}"
+        for key in sorted(source_env)
+        if key.startswith("OP_SESSION_")
+    ]
     return _fingerprint("\n".join(parts))
 
 
 def _refs_fingerprint(references: dict[str, str]) -> str:
-    return _fingerprint("\n".join(f"{name}={references[name]}" for name in sorted(references)))
+    return _fingerprint(
+        "\n".join(f"{name}={references[name]}" for name in sorted(references))
+    )
 
 
 def find_op(binary_path: str = "") -> Optional[Path]:
@@ -137,7 +189,9 @@ def _op_child_env(token_value: str) -> dict[str, str]:
     return env
 
 
-def _run_op_read(op: Path, reference: str, *, account: str = "", token_value: str = "") -> str:
+def _run_op_read(
+    op: Path, reference: str, *, account: str = "", token_value: str = ""
+) -> str:
     """Resolve one ``op://`` reference; raises ``RuntimeError`` on any failure, including
     an exit-0 empty value (applying it would clobber a good credential with ``""``)."""
     cmd: list[str] = [str(op), "read"]
@@ -145,8 +199,14 @@ def _run_op_read(op: Path, reference: str, *, account: str = "", token_value: st
         cmd += ["--account", account]
     cmd += ["--", reference]  # `--` so a reference can never parse as an op flag
 
-    proc = run_cli(cmd, env=_op_child_env(token_value), timeout=_OP_RUN_TIMEOUT, label="op",
-                   timeout_message=f"op read timed out after {_OP_RUN_TIMEOUT}s for {reference!r}", stdin=None)
+    proc = run_cli(
+        cmd,
+        env=_op_child_env(token_value),
+        timeout=_OP_RUN_TIMEOUT,
+        label="op",
+        timeout_message=f"op read timed out after {_OP_RUN_TIMEOUT}s for {reference!r}",
+        stdin=None,
+    )
 
     if proc.returncode != 0:
         err = _scrub(proc.stderr or "")[:200]
@@ -162,9 +222,15 @@ def _run_op_read(op: Path, reference: str, *, account: str = "", token_value: st
 
 
 def fetch_onepassword_secrets(
-    *, references: dict[str, str], account: str = "", token_env: str = _DEFAULT_TOKEN_ENV,
-    binary: Optional[Path] = None, binary_path: str = "", use_cache: bool = True,
-    cache_ttl_seconds: float = 300, home_path: Optional[Path] = None,
+    *,
+    references: dict[str, str],
+    account: str = "",
+    token_env: str = _DEFAULT_TOKEN_ENV,
+    binary: Optional[Path] = None,
+    binary_path: str = "",
+    use_cache: bool = True,
+    cache_ttl_seconds: float = 300,
+    home_path: Optional[Path] = None,
 ) -> tuple[dict[str, str], list[str]]:
     """Resolve ``references`` (name → ``op://…``) to ``(secrets, warnings)``.
 
@@ -177,8 +243,12 @@ def fetch_onepassword_secrets(
         return {}, warnings
 
     token_value = get_source_environment().get(token_env, "").strip()
-    cache_key: _CacheKey = (_auth_fingerprint(token_env), account or "",
-                            str(home_path) if home_path is not None else "", _refs_fingerprint(valid))
+    cache_key: _CacheKey = (
+        _auth_fingerprint(token_env),
+        account or "",
+        str(home_path) if home_path is not None else "",
+        _refs_fingerprint(valid),
+    )
 
     if use_cache:
         cached = _STORE.lookup(cache_key, cache_ttl_seconds, home_path)
@@ -187,22 +257,30 @@ def fetch_onepassword_secrets(
 
     op = binary or find_op(binary_path)
     if op is None:
-        raise RuntimeError("op CLI not found.  Install the 1Password CLI "
-                           "(https://developer.1password.com/docs/cli/get-started/) or set "
-                           "secrets.onepassword.binary_path to its absolute location.")
+        raise RuntimeError(
+            "op CLI not found.  Install the 1Password CLI "
+            "(https://developer.1password.com/docs/cli/get-started/) or set "
+            "secrets.onepassword.binary_path to its absolute location."
+        )
 
     secrets: dict[str, str] = {}
     read_errors = 0
     for name in sorted(valid):
         try:
-            secrets[name] = _run_op_read(op, valid[name], account=account, token_value=token_value)
+            secrets[name] = _run_op_read(
+                op, valid[name], account=account, token_value=token_value
+            )
         except RuntimeError as exc:
             warnings.append(str(exc))
             read_errors += 1
 
     if use_cache and not read_errors and secrets:
-        _STORE.store(cache_key, CachedFetch(secrets=dict(secrets), fetched_at=time.time()),
-                     cache_ttl_seconds, home_path)
+        _STORE.store(
+            cache_key,
+            CachedFetch(secrets=dict(secrets), fetched_at=time.time()),
+            cache_ttl_seconds,
+            home_path,
+        )
 
     return secrets, warnings
 
@@ -210,14 +288,22 @@ def fetch_onepassword_secrets(
 def _missing_binary_error(binary_path: str) -> str:
     if binary_path:
         return f"secrets.onepassword.binary_path ({binary_path!r}) is not an executable op binary."
-    return ("secrets.onepassword.enabled is true but the op CLI was not found on PATH.  Install it "
-            "(https://developer.1password.com/docs/cli/get-started/) or set secrets.onepassword.binary_path.")
+    return (
+        "secrets.onepassword.enabled is true but the op CLI was not found on PATH.  Install it "
+        "(https://developer.1password.com/docs/cli/get-started/) or set secrets.onepassword.binary_path."
+    )
 
 
 def apply_onepassword_secrets(
-    *, enabled: bool, env: Optional[dict[str, str]] = None, account: str = "",
-    service_account_token_env: str = _DEFAULT_TOKEN_ENV, binary_path: str = "",
-    override_existing: bool = True, cache_ttl_seconds: float = 300, home_path: Optional[Path] = None,
+    *,
+    enabled: bool,
+    env: Optional[dict[str, str]] = None,
+    account: str = "",
+    service_account_token_env: str = _DEFAULT_TOKEN_ENV,
+    binary_path: str = "",
+    override_existing: bool = True,
+    cache_ttl_seconds: float = 300,
+    home_path: Optional[Path] = None,
 ) -> FetchResult:
     """Resolve configured ``op://`` references and set them on ``os.environ``
     (``clawk secrets onepassword sync --apply``). Never raises. Refs already
@@ -232,7 +318,9 @@ def apply_onepassword_secrets(
 
     def _guarded(name: str) -> bool:
         """True when ``name`` must not be applied (token var or env already set)."""
-        return name == service_account_token_env or (not override_existing and bool(os.environ.get(name)))
+        return name == service_account_token_env or (
+            not override_existing and bool(os.environ.get(name))
+        )
 
     result.skipped.extend(n for n in valid if _guarded(n))
     refs_to_fetch = {n: ref for n, ref in valid.items() if not _guarded(n)}
@@ -247,8 +335,13 @@ def apply_onepassword_secrets(
 
     try:
         secrets, fetch_warnings = fetch_onepassword_secrets(
-            references=refs_to_fetch, account=account, token_env=service_account_token_env,
-            binary=binary, cache_ttl_seconds=cache_ttl_seconds, home_path=home_path)
+            references=refs_to_fetch,
+            account=account,
+            token_env=service_account_token_env,
+            binary=binary,
+            cache_ttl_seconds=cache_ttl_seconds,
+            home_path=home_path,
+        )
     except RuntimeError as exc:
         result.error = str(exc)
         return result
@@ -278,22 +371,44 @@ class OnePasswordSource(SecretSource):
     # override_existing defaults True: an explicit VAR→op:// binding is the
     # strongest user intent; a stale .env line must not silently defeat it.
     override_existing_default = True
-    _AUTH_HINT = ("Run `clawk secrets onepassword token` to paste a fresh service-account token "
-                  "({token_env}), or `op signin` for an interactive session.")
-    remediation_hints = {ErrorKind.AUTH_FAILED: _AUTH_HINT, ErrorKind.AUTH_EXPIRED: _AUTH_HINT,
-                         ErrorKind.BINARY_MISSING: _MISSING_BINARY_HINT}
+    _AUTH_HINT = (
+        "Run `clawk secrets onepassword token` to paste a fresh service-account token "
+        "({token_env}), or `op signin` for an interactive session."
+    )
+    remediation_hints = {
+        ErrorKind.AUTH_FAILED: _AUTH_HINT,
+        ErrorKind.AUTH_EXPIRED: _AUTH_HINT,
+        ErrorKind.BINARY_MISSING: _MISSING_BINARY_HINT,
+    }
 
     def config_schema(self) -> dict:
         return {
             "enabled": {"description": "Master switch", "default": False},
-            "env": {"description": "Map of ENV_VAR -> op://vault/item/field reference", "default": {}},
-            "account": {"description": "op --account shorthand (empty = default account)", "default": ""},
-            "service_account_token_env": {"description": "Env var holding the service-account token "
-                                                         "(unset = desktop/interactive session)",
-                                          "default": _DEFAULT_TOKEN_ENV},
-            "binary_path": {"description": "Pin the op binary (empty = resolve via PATH)", "default": ""},
-            "cache_ttl_seconds": {"description": "Disk+memory cache TTL; 0 disables", "default": 300},
-            "override_existing": {"description": "Resolved values overwrite .env/shell values", "default": True},
+            "env": {
+                "description": "Map of ENV_VAR -> op://vault/item/field reference",
+                "default": {},
+            },
+            "account": {
+                "description": "op --account shorthand (empty = default account)",
+                "default": "",
+            },
+            "service_account_token_env": {
+                "description": "Env var holding the service-account token "
+                "(unset = desktop/interactive session)",
+                "default": _DEFAULT_TOKEN_ENV,
+            },
+            "binary_path": {
+                "description": "Pin the op binary (empty = resolve via PATH)",
+                "default": "",
+            },
+            "cache_ttl_seconds": {
+                "description": "Disk+memory cache TTL; 0 disables",
+                "default": 300,
+            },
+            "override_existing": {
+                "description": "Resolved values overwrite .env/shell values",
+                "default": True,
+            },
         }
 
     def fetch(self, cfg: dict, home_path: Path) -> FetchResult:
@@ -301,25 +416,38 @@ class OnePasswordSource(SecretSource):
         result = FetchResult()
 
         env_map = cfg.get("env")
-        valid, warnings = _validate_references(env_map if isinstance(env_map, dict) else None)
+        valid, warnings = _validate_references(
+            env_map if isinstance(env_map, dict) else None
+        )
         result.warnings.extend(warnings)
         if not valid:
             if not warnings:
-                result.fail("secrets.onepassword.enabled is true but the env: map is "
-                            "empty.  Add ENV_VAR: op://vault/item/field entries.", ErrorKind.NOT_CONFIGURED)
+                result.fail(
+                    "secrets.onepassword.enabled is true but the env: map is "
+                    "empty.  Add ENV_VAR: op://vault/item/field entries.",
+                    ErrorKind.NOT_CONFIGURED,
+                )
             return result
 
         binary_path = str(cfg.get("binary_path") or "")
         binary = find_op(binary_path)
         result.binary_path = binary
         if binary is None:
-            return result.fail(_missing_binary_error(binary_path), ErrorKind.BINARY_MISSING)
+            return result.fail(
+                _missing_binary_error(binary_path), ErrorKind.BINARY_MISSING
+            )
 
         try:
             secrets, fetch_warnings = fetch_onepassword_secrets(
-                references=valid, account=str(cfg.get("account") or ""), token_env=self.token_env(cfg),
-                binary=binary, cache_ttl_seconds=coerce_float(cfg.get("cache_ttl_seconds", 300), 300.0),
-                home_path=home_path)
+                references=valid,
+                account=str(cfg.get("account") or ""),
+                token_env=self.token_env(cfg),
+                binary=binary,
+                cache_ttl_seconds=coerce_float(
+                    cfg.get("cache_ttl_seconds", 300), 300.0
+                ),
+                home_path=home_path,
+            )
         except RuntimeError as exc:
             return result.fail(str(exc), _classify_op_error(str(exc)))
 

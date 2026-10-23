@@ -17,6 +17,7 @@ from gateway.platforms.shared_ingress import is_wildcard_host
 
 logger = logging.getLogger(__name__)
 
+
 def has_live_listener(host: str, port: int) -> bool:
     """Blocking probe: True when something accepts connections on ``host:port``. Refused = nobody listens;
     any other failure (timeout, unroutable) is treated as live so the caller stays exclusive."""
@@ -29,7 +30,9 @@ def has_live_listener(host: str, port: int) -> bool:
         return True
 
 
-async def start_tcp_site(runner: web.BaseRunner, host: Optional[str], port: int, *, log_tag: str) -> web.TCPSite:
+async def start_tcp_site(
+    runner: web.BaseRunner, host: Optional[str], port: int, *, log_tag: str
+) -> web.TCPSite:
     """Bind ``host:port`` on ``runner`` and return the started site; raises OSError when unavailable.
 
     SO_REUSEADDR: on macOS (BSD) two wildcard/specific sockets can silently split traffic while
@@ -56,9 +59,16 @@ async def start_tcp_site(runner: web.BaseRunner, host: Optional[str], port: int,
             raise
         if await asyncio.to_thread(has_live_listener, host, port):
             raise
-        await site.stop()  # aiohttp registers a site before binding: drop the dead one from the runner
-        logger.info("[%s] %s:%d busy without a live listener (TIME_WAIT from the previous gateway); "
-                    "rebinding with SO_REUSEADDR", log_tag, host, port)
+        await (
+            site.stop()
+        )  # aiohttp registers a site before binding: drop the dead one from the runner
+        logger.info(
+            "[%s] %s:%d busy without a live listener (TIME_WAIT from the previous gateway); "
+            "rebinding with SO_REUSEADDR",
+            log_tag,
+            host,
+            port,
+        )
         site = web.TCPSite(runner, host, port, reuse_address=True)
         await site.start()
     return site

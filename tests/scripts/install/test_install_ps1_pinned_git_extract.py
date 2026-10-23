@@ -9,6 +9,7 @@ against the real pinned archive with a PATH that carries no bzip2 (or
 anything else to fall back on) and demands a working git.exe plus the
 bundled bash contract pm/shell.py relies on.
 """
+
 import subprocess
 import textwrap
 from pathlib import Path
@@ -38,9 +39,17 @@ def test_pinned_git_extracts_without_a_bzip2_capable_tar(tmp_path):
         encoding="ascii",
     )
     result = subprocess.run(
-        ["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
-         "-File", str(driver)],
-        capture_output=True, timeout=900,
+        [
+            "powershell",
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(driver),
+        ],
+        capture_output=True,
+        timeout=900,
         check=False,
     )
     out = (result.stdout + result.stderr).decode("utf-8", errors="replace")

@@ -33,6 +33,7 @@ def _make_cli(with_app=True):
     cli_obj._skip_paste_collapse = False
     return cli_obj
 
+
 def test_open_external_editor_uses_prompt_toolkit_buffer_editor():
     cli_obj = _make_cli()
 
@@ -50,11 +51,6 @@ def test_open_external_editor_rejects_when_no_tui():
     assert "interactive cli" in str(mock_cprint.call_args).lower()
 
 
-
-
-
-
-
 def test_open_external_editor_expands_paste_placeholders_before_open(tmp_path):
     cli_obj = _make_cli()
     paste_file = tmp_path / "paste.txt"
@@ -65,8 +61,6 @@ def test_open_external_editor_expands_paste_placeholders_before_open(tmp_path):
     assert buffer.text == "alpha\nbeta"
     assert buffer.cursor_position == len("alpha\nbeta")
     assert buffer.calls == [False]
-
-
 
 
 def test_inline_pastes_stores_full_content(tmp_path):
@@ -82,8 +76,6 @@ def test_inline_pastes_stores_full_content(tmp_path):
     assert buffer.cursor_position == len("line one\nline two")
     # Skip flag set so the resulting text-change doesn't re-collapse.
     assert cli_obj._skip_paste_collapse is True
-
-
 
 
 def test_inline_pastes_missing_file_keeps_placeholder(tmp_path):

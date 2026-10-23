@@ -20,15 +20,27 @@ class _StatusError(Exception):
 def test_404_insufficient_credits_code_is_billing_with_fallback():
     # Structured code only, message carries no billing wording (message-pattern rules cannot save it).
     err = _StatusError(
-        "Not Found", 404, {"error": {"code": "insufficient_credits_for_paid_model", "message": "Not Found"}},
+        "Not Found",
+        404,
+        {
+            "error": {
+                "code": "insufficient_credits_for_paid_model",
+                "message": "Not Found",
+            }
+        },
     )
     verdict = classify_api_error(err, provider="nous", model="z-ai/glm-5.2")
     assert verdict.reason == FailoverReason.billing
     assert verdict.should_fallback and not verdict.retryable
     # Control: an unrelated 404 body keeps its generic verdict — nothing to fall back for.
     other = classify_api_error(
-        _StatusError("Not Found", 404, {"error": {"code": "route_not_found", "message": "Not Found"}}),
-        provider="nous", model="z-ai/glm-5.2",
+        _StatusError(
+            "Not Found",
+            404,
+            {"error": {"code": "route_not_found", "message": "Not Found"}},
+        ),
+        provider="nous",
+        model="z-ai/glm-5.2",
     )
     assert other.reason == FailoverReason.unknown
 
@@ -42,7 +54,14 @@ def test_billing_fallback_warning_names_failing_profile_and_remedy(tmp_path, cap
         try:
             caplog.clear()
             with caplog.at_level(logging.INFO, logger="agent.chat_completion_helpers"):
-                _log_fallback_activated(None, FailoverReason.billing, "z-ai/glm-5.2", "nous", "free/model", "nous")
+                _log_fallback_activated(
+                    None,
+                    FailoverReason.billing,
+                    "z-ai/glm-5.2",
+                    "nous",
+                    "free/model",
+                    "nous",
+                )
         finally:
             reset_clawk_home_override(token)
         warnings = [r for r in caplog.records if r.levelno == logging.WARNING]

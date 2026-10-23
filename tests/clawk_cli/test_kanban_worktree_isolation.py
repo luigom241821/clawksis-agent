@@ -41,13 +41,20 @@ def kanban_home(tmp_path, monkeypatch):
 def _git(cwd: Path, *args: str) -> None:
     subprocess.run(
         [
-            "git", "-C", str(cwd),
-            "-c", "user.name=Test User",
-            "-c", "user.email=test@example.com",
-            "-c", "commit.gpgsign=false",
+            "git",
+            "-C",
+            str(cwd),
+            "-c",
+            "user.name=Test User",
+            "-c",
+            "user.email=test@example.com",
+            "-c",
+            "commit.gpgsign=false",
             *args,
         ],
-        check=True, capture_output=True, text=True,
+        check=True,
+        capture_output=True,
+        text=True,
     )
 
 
@@ -56,7 +63,9 @@ def _make_repo(tmp_path: Path) -> Path:
     repo.mkdir()
     subprocess.run(
         ["git", "init", "-b", "main", str(repo)],
-        check=True, capture_output=True, text=True,
+        check=True,
+        capture_output=True,
+        text=True,
     )
     (repo / "README.md").write_text("base\n", encoding="utf-8")
     _git(repo, "add", "README.md")
@@ -102,8 +111,6 @@ def test_decompose_worktree_children_get_own_workspace(kanban_home):
             assert row["workspace_path"] is None
 
 
-
-
 def test_resolve_worktree_falls_back_when_path_occupied(kanban_home, tmp_path):
     repo = _make_repo(tmp_path)
     occupied = _add_worktree(repo, repo / ".worktrees" / "sibling", "wt/sibling")
@@ -124,10 +131,8 @@ def test_resolve_worktree_falls_back_when_path_occupied(kanban_home, tmp_path):
     assert (occupied / "README.md").exists()
     head = subprocess.run(
         ["git", "-C", str(occupied), "rev-parse", "--abbrev-ref", "HEAD"],
-        capture_output=True, text=True, check=True,
+        capture_output=True,
+        text=True,
+        check=True,
     ).stdout.strip()
     assert head == "wt/sibling"
-
-
-
-

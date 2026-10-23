@@ -59,14 +59,20 @@ from tests.e2e.core.security._helpers import (
 )
 
 pytestmark = [
-    pytest.mark.skipif(sys.platform == "win32", reason="process groups + POSIX loopback listeners"),
-    pytest.mark.skipif(shutil.which("node") is None, reason="the TUI hand-off needs node on PATH"),
+    pytest.mark.skipif(
+        sys.platform == "win32", reason="process groups + POSIX loopback listeners"
+    ),
+    pytest.mark.skipif(
+        shutil.which("node") is None, reason="the TUI hand-off needs node on PATH"
+    ),
 ]
 
 KNOWN: dict[str, tuple[str, str]] = {
-    "impersonator": (r"^impersonator: TUI was attached to the rogue listener's socket: "
-                     r"ws://127\.0\.0\.1:\d+/api/ws\?token=stolen-ws-token-",
-                     "#120604 attach handshake accepts an echoing loopback listener"),
+    "impersonator": (
+        r"^impersonator: TUI was attached to the rogue listener's socket: "
+        r"ws://127\.0\.0\.1:\d+/api/ws\?token=stolen-ws-token-",
+        "#120604 attach handshake accepts an echoing loopback listener",
+    ),
 }
 SCENARIOS = ["impersonator", "foreign_owner"]
 
@@ -163,7 +169,9 @@ class Listener:
         class Handler(BaseHTTPRequestHandler):
             def do_GET(self):
                 owner.paths.append(self.path)
-                query = {k: v[0] for k, v in parse_qs(urlsplit(self.path).query).items()}
+                query = {
+                    k: v[0] for k, v in parse_qs(urlsplit(self.path).query).items()
+                }
                 body = json.dumps(respond(query, self.server.server_port)).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
@@ -190,16 +198,23 @@ class Listener:
 
 def _echo_reply(token: str):
     """Echo the request verbatim and offer the listener's own socket (the issue's repro)."""
+
     def respond(query: dict[str, str], port: int) -> dict[str, str]:
         return {**query, "websocket_url": f"ws://127.0.0.1:{port}/api/ws?token={token}"}
+
     return respond
 
 
 def _foreign_reply(token: str):
     """Answer for the right session and profile but with some other runtime's lease id."""
+
     def respond(query: dict[str, str], port: int) -> dict[str, str]:
-        return {**query, "lease_id": uuid.uuid4().hex,
-                "websocket_url": f"ws://127.0.0.1:{port}/api/ws?token={token}"}
+        return {
+            **query,
+            "lease_id": uuid.uuid4().hex,
+            "websocket_url": f"ws://127.0.0.1:{port}/api/ws?token={token}",
+        }
+
     return respond
 
 
@@ -211,15 +226,23 @@ class OwnerProcess:
 
     def __init__(self, home: Path, sid: str, advertise: str, token: str) -> None:
         self.proc = subprocess.Popen(
-            [sys.executable, "-c", OWNER_CODE, sid, advertise, token], cwd=str(home),
-            env=hermetic_env(home), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True, start_new_session=True)
+            [sys.executable, "-c", OWNER_CODE, sid, advertise, token],
+            cwd=str(home),
+            env=hermetic_env(home),
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True,
+        )
         line = self.proc.stdout.readline()
         try:
             self.info = json.loads(line)
         except json.JSONDecodeError:
             self.stop()
-            raise AssertionError(f"owner process did not start: {line!r} {self.proc.stderr.read()[-2000:]}")
+            raise AssertionError(
+                f"owner process did not start: {line!r} {self.proc.stderr.read()[-2000:]}"
+            )
         assert self.info.get("ready"), f"owner could not take the lease: {self.info}"
 
     def stop(self) -> None:
@@ -237,7 +260,9 @@ class OwnerProcess:
 def home(tmp_path: Path) -> Path:
     home = tmp_path / "home"
     # The model is never called: the launcher hands off to the TUI stand-in before any turn.
-    write_home(home / ".clawksis", "http://127.0.0.1:9/v1", api_key=canary("unused-key"))
+    write_home(
+        home / ".clawksis", "http://127.0.0.1:9/v1", api_key=canary("unused-key")
+    )
     probe = tmp_path / "tui-probe" / "dist"
     probe.mkdir(parents=True)
     (probe / "entry.js").write_text(PROBE_ENTRY, encoding="utf-8")
@@ -248,9 +273,15 @@ def _resume(home: Path, sid: str) -> tuple[subprocess.CompletedProcess, dict | N
     """Run ``clawk --tui --resume SID``; return the process result and what the TUI child received."""
     out = home.parent / f"handoff-{uuid.uuid4().hex}.json"
     result = run_clawk(
-        ["--tui", "--resume", sid], home, timeout=90,
-        extra_env={"CLAWK_TUI_DIR": str(home.parent / "tui-probe"), "CLAWK_SKIP_NODE_BOOTSTRAP": "1",
-                   "ATTACH_PROBE_OUT": str(out)})
+        ["--tui", "--resume", sid],
+        home,
+        timeout=90,
+        extra_env={
+            "CLAWK_TUI_DIR": str(home.parent / "tui-probe"),
+            "CLAWK_SKIP_NODE_BOOTSTRAP": "1",
+            "ATTACH_PROBE_OUT": str(out),
+        },
+    )
     handoff = json.loads(out.read_text(encoding="utf-8")) if out.exists() else None
     return result, handoff
 
@@ -273,16 +304,30 @@ def test_rogue_listener_is_not_attached(home: Path, scenario: str) -> None:
 
     # Harness: discovery must actually have run against the listener, and the launcher must have
     # either handed off to the TUI (rc 0) or refused (non-zero) - never a silent no-op.
-    assert listener.attach_hits() >= 1, f"discovery never contacted the listener\n{_describe(result)}"
-    assert (result.returncode == 0) == (handoff is not None), f"inconsistent launch outcome\n{_describe(result)}"
+    assert listener.attach_hits() >= 1, (
+        f"discovery never contacted the listener\n{_describe(result)}"
+    )
+    assert (result.returncode == 0) == (handoff is not None), (
+        f"inconsistent launch outcome\n{_describe(result)}"
+    )
 
     gateway = (handoff or {}).get("gateway_url") or ""
-    leaked = [name for name, text in (("stdout", result.stdout), ("stderr", result.stderr)) if stolen in text]
+    leaked = [
+        name
+        for name, text in (("stdout", result.stdout), ("stderr", result.stderr))
+        if stolen in text
+    ]
     with known_gate(KNOWN, scenario, raises=BoundaryBreach):
-        if stolen in gateway or gateway.startswith(listener.origin.replace("http:", "ws:")):
-            raise BoundaryBreach(f"{scenario}: TUI was attached to the rogue listener's socket: {gateway}")
+        if stolen in gateway or gateway.startswith(
+            listener.origin.replace("http:", "ws:")
+        ):
+            raise BoundaryBreach(
+                f"{scenario}: TUI was attached to the rogue listener's socket: {gateway}"
+            )
         if leaked:
-            raise BoundaryBreach(f"{scenario}: the rogue listener's token was echoed to {leaked}")
+            raise BoundaryBreach(
+                f"{scenario}: the rogue listener's token was echoed to {leaked}"
+            )
 
 
 def test_genuine_owner_is_attached(home: Path) -> None:
@@ -296,9 +341,13 @@ def test_genuine_owner_is_attached(home: Path) -> None:
     finally:
         owner.stop()
 
-    assert result.returncode == 0 and handoff is not None, f"resume did not reach the TUI\n{_describe(result)}"
+    assert result.returncode == 0 and handoff is not None, (
+        f"resume did not reach the TUI\n{_describe(result)}"
+    )
     expected = owner.info["origin"].replace("http:", "ws:") + f"/api/ws?token={token}"
-    assert handoff["gateway_url"] == expected, f"TUI not attached to the owner: {handoff}"
+    assert handoff["gateway_url"] == expected, (
+        f"TUI not attached to the owner: {handoff}"
+    )
     assert handoff["resume"] == sid, handoff
     # Discovery attaches; it never takes the lease from the running owner.
     assert snap.returncode == 0, snap.stderr[-2000:]

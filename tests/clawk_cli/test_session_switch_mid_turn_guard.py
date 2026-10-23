@@ -35,27 +35,43 @@ def cli(tmp_path, monkeypatch):
     db = SessionDB(db_path=tmp_path / "state.db")
     obj = object.__new__(ClawksisCLI)
     obj._session_db, obj.session_id, obj.model, obj.max_turns = db, "parent", "m", 5
-    obj.reasoning_config, obj._pending_title, obj._resumed, obj._pending_resume_sessions = {}, None, False, None
+    (
+        obj.reasoning_config,
+        obj._pending_title,
+        obj._resumed,
+        obj._pending_resume_sessions,
+    ) = {}, None, False, None
     obj.agent = _Agent("parent")
     obj.conversation_history = [{"role": "user", "content": "hi"}]
-    for name in ("_restore_session_cwd", "_restore_session_yolo",
-                 "_restore_session_model", "_display_resumed_history"):
+    for name in (
+        "_restore_session_cwd",
+        "_restore_session_yolo",
+        "_restore_session_model",
+        "_display_resumed_history",
+    ):
         setattr(obj, name, lambda *a, **k: None)
     db.create_session(session_id="parent", source="cli", model="m")
     db.append_message("parent", "user", "hi")
     db.create_session(session_id="other", source="cli", model="m")
     db.append_message("other", "user", "x")
     obj.printed = []
-    monkeypatch.setattr(cli_commands_mixin, "_cp", lambda *lines: obj.printed.extend(lines))
+    monkeypatch.setattr(
+        cli_commands_mixin, "_cp", lambda *lines: obj.printed.extend(lines)
+    )
     yield obj
     db.close()
 
 
-@pytest.mark.parametrize("command", ["/branch explore", "/resume other", "/sessions other"])
+@pytest.mark.parametrize(
+    "command", ["/branch explore", "/resume other", "/sessions other"]
+)
 def test_session_switch_refused_mid_turn(cli, command):
     cli._agent_running = True
-    handler = {"/branch": cli._handle_branch_command, "/resume": cli._handle_resume_command,
-               "/sessions": cli._handle_sessions_command}[command.split()[0]]
+    handler = {
+        "/branch": cli._handle_branch_command,
+        "/resume": cli._handle_resume_command,
+        "/sessions": cli._handle_sessions_command,
+    }[command.split()[0]]
     handler(command)
     assert "busy" in " ".join(cli.printed).lower()
     assert cli.session_id == "parent" and cli.agent.session_id == "parent"

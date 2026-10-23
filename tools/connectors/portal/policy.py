@@ -38,20 +38,33 @@ def _slug(connector: str) -> str:
 
 def _validated_tools(tools: list[str]) -> list[str]:
     if any(not tool or len(tool) > 256 for tool in tools):
-        raise InvalidMemberPolicy("disabled_tools must contain non-empty tool slugs up to 256 characters")
+        raise InvalidMemberPolicy(
+            "disabled_tools must contain non-empty tool slugs up to 256 characters"
+        )
     return tools
 
 
-def compose_connector_write(member_body: PolicyBody | None, change: ConnectorChange) -> dict[str, Any]:
+def compose_connector_write(
+    member_body: PolicyBody | None, change: ConnectorChange
+) -> dict[str, Any]:
     connector = _slug(change.connector)
     key, values, allow = _layer(member_body)
     retained = [item for item in values if item != connector]
-    return {"scope": "member", key: [*retained, connector] if change.enabled == allow else retained}
+    return {
+        "scope": "member",
+        key: [*retained, connector] if change.enabled == allow else retained,
+    }
 
 
-def compose_tools_write(member_body: PolicyBody | None, change: ToolsChange) -> dict[str, Any]:
+def compose_tools_write(
+    member_body: PolicyBody | None, change: ToolsChange
+) -> dict[str, Any]:
     connector = _slug(change.connector)
     key, values, allow = _layer(member_body)
     if (connector in values) != allow:
         raise InvalidMemberPolicy("connector is off in the member policy")
-    return {"scope": "member", key: values, "tools": {connector: _validated_tools(change.disabled_tools)}}
+    return {
+        "scope": "member",
+        key: values,
+        "tools": {connector: _validated_tools(change.disabled_tools)},
+    }

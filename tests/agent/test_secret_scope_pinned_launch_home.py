@@ -10,6 +10,7 @@ a multiplexing gateway/dashboard, since neither calls the pin itself. Two contra
 * Deactivation releases only the pin activation itself created: an embedding host's explicit pin
   survives the transient toggles in ``gateway_migrate._multiplex_read_mode`` and cron workers.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -32,11 +33,15 @@ def homes(tmp_path, monkeypatch):
     launch.mkdir()
     served.mkdir(parents=True)
     monkeypatch.setenv("CLAWK_HOME", str(launch))
-    monkeypatch.setattr(clawk_constants, "_PINNED_PROCESS_CLAWK_HOME", None, raising=False)
+    monkeypatch.setattr(
+        clawk_constants, "_PINNED_PROCESS_CLAWK_HOME", None, raising=False
+    )
     return launch, served
 
 
-def test_multiplex_activation_pins_the_launch_home_but_env_readers_still_follow_the_env(homes, monkeypatch):
+def test_multiplex_activation_pins_the_launch_home_but_env_readers_still_follow_the_env(
+    homes, monkeypatch
+):
     launch, served = homes
     set_multiplex_active(True)
     monkeypatch.setenv("CLAWK_HOME", str(served))  # the host's per-turn mirror

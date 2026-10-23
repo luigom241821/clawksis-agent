@@ -33,8 +33,10 @@ class TestDesktopLinuxUsernsSandboxAvailable:
             assert main_desktop._desktop_linux_userns_sandbox_available() is False
 
     def test_true_when_probe_succeeds(self, monkeypatch):
-        with patch.object(main_desktop.shutil, "which", return_value="/usr/bin/unshare"), \
-             patch.object(main_desktop.subprocess, "run") as run:
+        with (
+            patch.object(main_desktop.shutil, "which", return_value="/usr/bin/unshare"),
+            patch.object(main_desktop.subprocess, "run") as run,
+        ):
             run.return_value.returncode = 0
             assert main_desktop._desktop_linux_userns_sandbox_available() is True
         probe = run.call_args.args[0]
@@ -43,18 +45,22 @@ class TestDesktopLinuxUsernsSandboxAvailable:
 
     def test_false_when_probe_fails(self, monkeypatch):
         """EPERM from the kernel (userns disabled or AppArmor-restricted)."""
-        with patch.object(main_desktop.shutil, "which", return_value="/usr/bin/unshare"), \
-             patch.object(main_desktop.subprocess, "run") as run:
+        with (
+            patch.object(main_desktop.shutil, "which", return_value="/usr/bin/unshare"),
+            patch.object(main_desktop.subprocess, "run") as run,
+        ):
             run.return_value.returncode = 1
             assert main_desktop._desktop_linux_userns_sandbox_available() is False
 
     def test_false_when_probe_raises(self, monkeypatch):
-        with patch.object(main_desktop.shutil, "which", return_value="/usr/bin/unshare"), \
-             patch.object(
-                 main_desktop.subprocess,
-                 "run",
-                 side_effect=subprocess.TimeoutExpired(cmd="unshare", timeout=5),
-             ):
+        with (
+            patch.object(main_desktop.shutil, "which", return_value="/usr/bin/unshare"),
+            patch.object(
+                main_desktop.subprocess,
+                "run",
+                side_effect=subprocess.TimeoutExpired(cmd="unshare", timeout=5),
+            ),
+        ):
             assert main_desktop._desktop_linux_userns_sandbox_available() is False
 
 
@@ -77,20 +83,28 @@ class TestDesktopLinuxSandboxFixup:
         prompt, so reaching the sudo path at all kills the launch.
         """
         exe = self._fake_packaged_app(tmp_path)
-        with patch.object(
-                 main_desktop, "_desktop_linux_userns_sandbox_available", return_value=True
-             ), \
-             patch.object(main_desktop.subprocess, "run") as run:
+        with (
+            patch.object(
+                main_desktop,
+                "_desktop_linux_userns_sandbox_available",
+                return_value=True,
+            ),
+            patch.object(main_desktop.subprocess, "run") as run,
+        ):
             assert main_desktop._desktop_linux_sandbox_fixup(exe) is True
         run.assert_not_called()
 
     def test_restricted_host_without_sudo_still_fails(self, monkeypatch, tmp_path):
         """The pre-existing strict path is preserved when userns is unusable."""
         exe = self._fake_packaged_app(tmp_path)
-        with patch.object(
-                 main_desktop, "_desktop_linux_userns_sandbox_available", return_value=False
-             ), \
-             patch.object(main_desktop.shutil, "which", return_value=None):
+        with (
+            patch.object(
+                main_desktop,
+                "_desktop_linux_userns_sandbox_available",
+                return_value=False,
+            ),
+            patch.object(main_desktop.shutil, "which", return_value=None),
+        ):
             assert main_desktop._desktop_linux_sandbox_fixup(exe) is False
 
     def test_root_owned_setuid_helper_short_circuits(self, monkeypatch, tmp_path):
@@ -105,10 +119,12 @@ class TestDesktopLinuxSandboxFixup:
             def __getattr__(self, name):
                 return getattr(real_lstat, name)
 
-        with patch.object(main_desktop.Path, "lstat", return_value=_RootSetuidStat()), \
-             patch.object(
-                 main_desktop, "_desktop_linux_userns_sandbox_available"
-             ) as probe:
+        with (
+            patch.object(main_desktop.Path, "lstat", return_value=_RootSetuidStat()),
+            patch.object(
+                main_desktop, "_desktop_linux_userns_sandbox_available"
+            ) as probe,
+        ):
             assert main_desktop._desktop_linux_sandbox_fixup(exe) is True
         probe.assert_not_called()
 
@@ -142,11 +158,17 @@ class TestDesktopLinuxNeedsDisableSetuidSandbox:
             def __getattr__(self, name):
                 return getattr(real_lstat, name)
 
-        with patch.object(main_desktop.Path, "lstat", return_value=_RootSetuidStat()), \
-             patch.object(
-                 main_desktop, "_desktop_linux_userns_sandbox_available", return_value=True
-             ) as probe:
-            assert main_desktop._desktop_linux_needs_disable_setuid_sandbox(exe) is False
+        with (
+            patch.object(main_desktop.Path, "lstat", return_value=_RootSetuidStat()),
+            patch.object(
+                main_desktop,
+                "_desktop_linux_userns_sandbox_available",
+                return_value=True,
+            ) as probe,
+        ):
+            assert (
+                main_desktop._desktop_linux_needs_disable_setuid_sandbox(exe) is False
+            )
         probe.assert_not_called()
 
     def test_false_when_helper_missing(self, monkeypatch, tmp_path):
@@ -191,7 +213,8 @@ class TestDesktopLinuxSandboxFixupNoTty:
         monkeypatch.setattr(sys, "platform", "linux")
         monkeypatch.setattr(sys, "stdin", io.StringIO())  # isatty() is False
         monkeypatch.setattr(
-            main_desktop, "_desktop_linux_userns_sandbox_available", lambda: False)
+            main_desktop, "_desktop_linux_userns_sandbox_available", lambda: False
+        )
         monkeypatch.setattr(main_desktop.shutil, "which", lambda _name: "/usr/bin/sudo")
         monkeypatch.setattr(main_desktop.subprocess, "run", fake_run)
         assert main_desktop._desktop_linux_sandbox_fixup(exe) is True
@@ -202,7 +225,9 @@ class TestDesktopLinuxSandboxFixupNoTty:
             assert kwargs.get("stdin") == subprocess.DEVNULL
             assert kwargs.get("timeout") is not None
 
-    def test_sudo_is_non_interactive_with_an_unusable_stdin(self, monkeypatch, tmp_path):
+    def test_sudo_is_non_interactive_with_an_unusable_stdin(
+        self, monkeypatch, tmp_path
+    ):
         """A detached launch (``sys.stdin is None``) or a closed stream still fails fast.
 
         CPython sets ``sys.stdin`` to ``None`` when the process has no stdin at all,
@@ -226,8 +251,11 @@ class TestDesktopLinuxSandboxFixupNoTty:
                 monkeypatch.setattr(sys, "stdin", closed)
             monkeypatch.setattr(sys, "platform", "linux")
             monkeypatch.setattr(
-                main_desktop, "_desktop_linux_userns_sandbox_available", lambda: False)
-            monkeypatch.setattr(main_desktop.shutil, "which", lambda _name: "/usr/bin/sudo")
+                main_desktop, "_desktop_linux_userns_sandbox_available", lambda: False
+            )
+            monkeypatch.setattr(
+                main_desktop.shutil, "which", lambda _name: "/usr/bin/sudo"
+            )
             monkeypatch.setattr(main_desktop.subprocess, "run", fake_run)
             assert main_desktop._desktop_linux_sandbox_fixup(exe) is True, state
             assert len(calls) == 2, state
@@ -249,7 +277,8 @@ class TestDesktopLinuxSandboxFixupNoTty:
         monkeypatch.setattr(sys, "platform", "linux")
         monkeypatch.setattr(sys, "stdin", tty)
         monkeypatch.setattr(
-            main_desktop, "_desktop_linux_userns_sandbox_available", lambda: False)
+            main_desktop, "_desktop_linux_userns_sandbox_available", lambda: False
+        )
         monkeypatch.setattr(main_desktop.shutil, "which", lambda _name: "/usr/bin/sudo")
         monkeypatch.setattr(main_desktop.subprocess, "run", fake_run)
         assert main_desktop._desktop_linux_sandbox_fixup(exe) is True
@@ -281,15 +310,20 @@ class TestDesktopLinuxSandboxFixupNoTty:
         def target():
             outcome["result"] = main_desktop._desktop_linux_sandbox_fixup(exe)
 
-        with patch.object(sys, "platform", "linux"), \
-             patch.object(
-                 main_desktop, "_desktop_linux_userns_sandbox_available",
-                 return_value=False), \
-             patch.object(main_desktop.shutil, "which", return_value=str(fake)), \
-             patch.object(sys, "stdin", io.StringIO()):
+        with (
+            patch.object(sys, "platform", "linux"),
+            patch.object(
+                main_desktop,
+                "_desktop_linux_userns_sandbox_available",
+                return_value=False,
+            ),
+            patch.object(main_desktop.shutil, "which", return_value=str(fake)),
+            patch.object(sys, "stdin", io.StringIO()),
+        ):
             worker = threading.Thread(target=target, daemon=True)
             worker.start()
             worker.join(timeout=10)
-            assert not worker.is_alive(), \
+            assert not worker.is_alive(), (
                 "fixup hung in sudo with no TTY (icon click goes nowhere)"
+            )
             assert outcome.get("result") is False

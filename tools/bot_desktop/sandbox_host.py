@@ -12,6 +12,7 @@ The Desktop pane never sees a socket path: ``open_rfb_stream()`` returns a Popen
 RFB byte stream, relayed by a 15-line Python script inside the sandbox (python3 is in every sandbox image;
 socat is not). cua-driver runs the same way: ``cua_mcp_argv()`` is the docker/ssh prefix + ``cua-driver mcp``.
 """
+
 from __future__ import annotations
 
 import base64
@@ -32,7 +33,17 @@ logger = logging.getLogger(__name__)
 # it) ships uid 1000 `pn`; a root Xvnc/Chromium/cua-driver is the wrong shape (Chromium refuses the sandbox,
 # AT-SPI wants a user session). Falls back to the exec default when the image has no such user.
 DESKTOP_USER = "pn"
-_REQUIRED = ("Xvnc", "xfwm4", "xfce4-panel", "xfdesktop", "xfsettingsd", "dbus-run-session", "xauth", "xdpyinfo", "xprop")
+_REQUIRED = (
+    "Xvnc",
+    "xfwm4",
+    "xfce4-panel",
+    "xfdesktop",
+    "xfsettingsd",
+    "dbus-run-session",
+    "xauth",
+    "xdpyinfo",
+    "xprop",
+)
 SANDBOX_IMAGE_HINT = "nousresearch/hermes-sandbox:desktop"
 
 _RELAY = (
@@ -56,10 +67,13 @@ def plugin_image_advice(backend: Optional[str]) -> Optional[str]:
     """How to get the desktop stack into a plugin backend's sandbox, or None for a built-in backend: a plugin
     picks its image through its own settings, so there is no ``terminal.<plugin>_image`` key to name."""
     from tools.terminal_tool_config import _BUILTIN_BACKENDS
+
     if not backend or backend in _BUILTIN_BACKENDS:
         return None
-    return (f"give the {backend} plugin's sandbox the desktop stack through the plugin's own image setting "
-            f"({SANDBOX_IMAGE_HINT} has it)")
+    return (
+        f"give the {backend} plugin's sandbox the desktop stack through the plugin's own image setting "
+        f"({SANDBOX_IMAGE_HINT} has it)"
+    )
 
 
 def _marker() -> Path:
@@ -100,8 +114,20 @@ def marker_sandbox_alive(marker: dict[str, Any]) -> bool:
     if cached and now - cached[0] < 5.0:
         return cached[1]
     try:
-        proc = subprocess.run([marker.get("docker") or "docker", "inspect", "-f", "{{.State.Running}}", container],
-                              capture_output=True, text=True, timeout=15, check=False, stdin=subprocess.DEVNULL)
+        proc = subprocess.run(
+            [
+                marker.get("docker") or "docker",
+                "inspect",
+                "-f",
+                "{{.State.Running}}",
+                container,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+            stdin=subprocess.DEVNULL,
+        )
         alive = proc.returncode == 0 and proc.stdout.strip() == "true"
     except (OSError, subprocess.TimeoutExpired):
         alive = False
@@ -121,8 +147,12 @@ def desktop_home(env: Any) -> str:
     cached = getattr(env, "_bd_desktop_home", None)
     if cached:
         return cached
-    proc = streams.run_in(env, ["bash", "-c", 'printf %s "$HOME"'], user=_user_for(env), timeout=15)
-    home = proc.stdout.decode("utf-8", "replace").strip() if proc.returncode == 0 else ""
+    proc = streams.run_in(
+        env, ["bash", "-c", 'printf %s "$HOME"'], user=_user_for(env), timeout=15
+    )
+    home = (
+        proc.stdout.decode("utf-8", "replace").strip() if proc.returncode == 0 else ""
+    )
     if not home or not home.startswith("/"):
         home = f"/home/{DESKTOP_USER}" if _user_for(env) else "/root"
     env._bd_desktop_home = home
@@ -149,7 +179,9 @@ def chromium_executable(env: Any) -> Optional[str]:
     cached = getattr(env, "_bd_chromium", "unset")
     if cached != "unset":
         return cached
-    proc = streams.run_in(env, ["bash", "-c", _CHROMIUM_PROBE], user=_user_for(env), timeout=20)
+    proc = streams.run_in(
+        env, ["bash", "-c", _CHROMIUM_PROBE], user=_user_for(env), timeout=20
+    )
     exe = proc.stdout.decode("utf-8", "replace").strip() if proc.returncode == 0 else ""
     env._bd_chromium = exe or None
     return env._bd_chromium
@@ -166,7 +198,9 @@ sys.stdout.buffer.write(buf.getvalue())
 """
 
 
-def grab_jpeg(env: Any, published: dict[str, str], max_size: tuple[int, int], quality: int) -> Optional[bytes]:
+def grab_jpeg(
+    env: Any, published: dict[str, str], max_size: tuple[int, int], quality: int
+) -> Optional[bytes]:
     """One JPEG of the sandbox screen, grabbed INSIDE the sandbox (the X socket and its cookie live there).
     Needs Pillow in the image (the published desktop image ships it); None when the grab fails."""
     display = published.get("DISPLAY")
@@ -174,13 +208,29 @@ def grab_jpeg(env: Any, published: dict[str, str], max_size: tuple[int, int], qu
         return None
     child_env = {k: v for k, v in published.items() if k in ("DISPLAY", "XAUTHORITY")}
     try:
-        proc = streams.run_in(env, ["python3", "-c", _GRAB_SCRIPT, display, str(max_size[0]), str(max_size[1]),
-                                    str(quality)], child_env=child_env, user=_user_for(env), timeout=20)
+        proc = streams.run_in(
+            env,
+            [
+                "python3",
+                "-c",
+                _GRAB_SCRIPT,
+                display,
+                str(max_size[0]),
+                str(max_size[1]),
+                str(quality),
+            ],
+            child_env=child_env,
+            user=_user_for(env),
+            timeout=20,
+        )
     except (OSError, subprocess.SubprocessError) as exc:
         logger.debug("sandbox screen grab failed: %s", exc)
         return None
     if proc.returncode != 0 or not proc.stdout.startswith(b"\xff\xd8"):
-        logger.debug("sandbox screen grab failed: %s", proc.stderr.decode("utf-8", "replace")[-300:])
+        logger.debug(
+            "sandbox screen grab failed: %s",
+            proc.stderr.decode("utf-8", "replace")[-300:],
+        )
         return None
     return proc.stdout
 
@@ -197,15 +247,27 @@ def _user_for(env: Any) -> Optional[str]:
 
 
 def missing_binaries(env: Any) -> list[str]:
-    script = "for b in " + " ".join(_REQUIRED) + '; do command -v "$b" >/dev/null 2>&1 || echo "$b"; done'
+    script = (
+        "for b in "
+        + " ".join(_REQUIRED)
+        + '; do command -v "$b" >/dev/null 2>&1 || echo "$b"; done'
+    )
     proc = streams.run_in(env, ["bash", "-c", script], user=_user_for(env), timeout=20)
     return [b for b in proc.stdout.decode("utf-8", "replace").split() if b]
 
 
 def _published(env: Any, rdir: str) -> dict[str, str]:
-    proc = streams.run_in(env, ["bash", "-c", f"kill -0 $(cat {shlex.quote(rdir)}/launcher.pid 2>/dev/null) 2>/dev/null "
-                                             f"&& test -S {shlex.quote(rdir)}/rfb.sock && cat {shlex.quote(rdir)}/env"],
-                          user=_user_for(env), timeout=15)
+    proc = streams.run_in(
+        env,
+        [
+            "bash",
+            "-c",
+            f"kill -0 $(cat {shlex.quote(rdir)}/launcher.pid 2>/dev/null) 2>/dev/null "
+            f"&& test -S {shlex.quote(rdir)}/rfb.sock && cat {shlex.quote(rdir)}/env",
+        ],
+        user=_user_for(env),
+        timeout=15,
+    )
     if proc.returncode != 0:
         return {}
     out: dict[str, str] = {}
@@ -220,8 +282,15 @@ def published_env(env: Any, profile: str) -> dict[str, str]:
     return _published(env, _remote_dir(env, profile))
 
 
-def start(env: Any, profile: str, *, geometry: str, wait_seconds: float = 20.0,
-          browser_exec: Optional[str] = None, browser_exec_line: Optional[str] = None) -> dict[str, str]:
+def start(
+    env: Any,
+    profile: str,
+    *,
+    geometry: str,
+    wait_seconds: float = 20.0,
+    browser_exec: Optional[str] = None,
+    browser_exec_line: Optional[str] = None,
+) -> dict[str, str]:
     """Bring the screen up inside ``env`` (idempotent); returns the published env. Raises RuntimeError naming
     the blocker."""
     rdir = _remote_dir(env, profile)
@@ -230,17 +299,21 @@ def start(env: Any, profile: str, *, geometry: str, wait_seconds: float = 20.0,
         # Adopting a screen the sandbox kept while this host's state was lost (fresh CLAWK_HOME, a stop()
         # whose kill missed): without the marker, status/thumbnail/stop would not know it is ours.
         return _record(env, rdir, profile, live)
-    stop(env, profile)  # a dead launcher may have left Xvnc holding :20; the relaunch needs it gone
+    stop(
+        env, profile
+    )  # a dead launcher may have left Xvnc holding :20; the relaunch needs it gone
     missing = missing_binaries(env)
     if missing:
         advice = plugin_image_advice(getattr(env, "_clawk_backend_name", None)) or (
             f"use {SANDBOX_IMAGE_HINT} (the default sandbox base plus the desktop stack) as "
-            f"terminal.docker_image / modal_image")
+            f"terminal.docker_image / modal_image"
+        )
         raise RuntimeError(
             f"Bot Desktop needs {', '.join(missing)} inside the terminal backend's sandbox. The configured image "
-            f"does not have them; {advice}, or set bot_desktop.placement: gateway.")
+            f"does not have them; {advice}, or set bot_desktop.placement: gateway."
+        )
     user = _user_for(env)
-    launcher = (Path(__file__).with_name("launcher.sh").read_bytes())
+    launcher = Path(__file__).with_name("launcher.sh").read_bytes()
     wallpaper = Path(__file__).with_name("wallpaper.png").read_bytes()
     seed = (
         f"set -e; rm -rf {shlex.quote(rdir)}; mkdir -p {shlex.quote(rdir)}; cd {shlex.quote(rdir)};"
@@ -250,12 +323,19 @@ def start(env: Any, profile: str, *, geometry: str, wait_seconds: float = 20.0,
     )
     proc = streams.run_in(env, ["bash", "-c", seed], user=user, timeout=30)
     if proc.returncode != 0:
-        raise RuntimeError(f"could not seed the sandbox desktop dir: {proc.stderr.decode('utf-8', 'replace')[-500:]}")
+        raise RuntimeError(
+            f"could not seed the sandbox desktop dir: {proc.stderr.decode('utf-8', 'replace')[-500:]}"
+        )
     num = 20  # one profile per sandbox; the launcher's stale-lock logic handles a leftover :20
     child_env = {
-        "CLAWK_BD_PROFILE": profile, "CLAWK_BD_DISPLAY_NUM": str(num), "CLAWK_BD_SOCKET": f"{rdir}/rfb.sock",
-        "CLAWK_BD_XAUTH": f"{rdir}/Xauthority", "CLAWK_BD_ENV_FILE": f"{rdir}/env",
-        "CLAWK_BD_CONFIG_HOME": f"{rdir}/xdg", "CLAWK_BD_GEOMETRY": geometry, "CLAWK_BD_WALLPAPER": f"{rdir}/wallpaper.png",
+        "CLAWK_BD_PROFILE": profile,
+        "CLAWK_BD_DISPLAY_NUM": str(num),
+        "CLAWK_BD_SOCKET": f"{rdir}/rfb.sock",
+        "CLAWK_BD_XAUTH": f"{rdir}/Xauthority",
+        "CLAWK_BD_ENV_FILE": f"{rdir}/env",
+        "CLAWK_BD_CONFIG_HOME": f"{rdir}/xdg",
+        "CLAWK_BD_GEOMETRY": geometry,
+        "CLAWK_BD_WALLPAPER": f"{rdir}/wallpaper.png",
     }
     if browser_exec and browser_exec_line:
         child_env["CLAWK_BD_BROWSER_EXEC"] = browser_exec
@@ -263,29 +343,53 @@ def start(env: Any, profile: str, *, geometry: str, wait_seconds: float = 20.0,
     # The launcher must outlive this exec (docker exec / ssh) and be its own session so stop() can take the
     # whole group (Xvnc, dbus, Xfce) with one kill. `setsid -f` forks, so `$!` would be the wrong pid: the
     # launcher records ITS OWN pid (= its session id) before doing anything else.
-    spawn = (f"cd {shlex.quote(rdir)} && setsid -f bash -c "
-             f"'echo $$ > launcher.pid; exec bash launcher.sh' > launcher.log 2>&1 < /dev/null; "
-             f"for _ in 1 2 3 4 5 6 7 8 9 10; do [ -s launcher.pid ] && break; sleep 0.1; done; [ -s launcher.pid ]")
-    proc = streams.run_in(env, ["bash", "-c", spawn], child_env=child_env, user=user, timeout=30)
+    spawn = (
+        f"cd {shlex.quote(rdir)} && setsid -f bash -c "
+        f"'echo $$ > launcher.pid; exec bash launcher.sh' > launcher.log 2>&1 < /dev/null; "
+        f"for _ in 1 2 3 4 5 6 7 8 9 10; do [ -s launcher.pid ] && break; sleep 0.1; done; [ -s launcher.pid ]"
+    )
+    proc = streams.run_in(
+        env, ["bash", "-c", spawn], child_env=child_env, user=user, timeout=30
+    )
     if proc.returncode != 0:
-        raise RuntimeError(f"sandbox desktop launcher did not start: {proc.stderr.decode('utf-8', 'replace')[-500:]}")
+        raise RuntimeError(
+            f"sandbox desktop launcher did not start: {proc.stderr.decode('utf-8', 'replace')[-500:]}"
+        )
     deadline = time.monotonic() + wait_seconds
     while time.monotonic() < deadline:
         live = _published(env, rdir)
         if live.get("DISPLAY"):
-            logger.info("Bot Desktop for profile %s up inside %s on %s", profile, type(env).__name__, live["DISPLAY"])
+            logger.info(
+                "Bot Desktop for profile %s up inside %s on %s",
+                profile,
+                type(env).__name__,
+                live["DISPLAY"],
+            )
             return _record(env, rdir, profile, live)
         time.sleep(0.25)
-    tail = streams.run_in(env, ["tail", "-c", "2000", f"{rdir}/launcher.log"], user=user, timeout=10).stdout
+    tail = streams.run_in(
+        env, ["tail", "-c", "2000", f"{rdir}/launcher.log"], user=user, timeout=10
+    ).stdout
     stop(env, profile)
-    raise RuntimeError(f"sandbox desktop did not publish its display within {wait_seconds:.0f}s:\n"
-                       f"{tail.decode('utf-8', 'replace')}")
+    raise RuntimeError(
+        f"sandbox desktop did not publish its display within {wait_seconds:.0f}s:\n"
+        f"{tail.decode('utf-8', 'replace')}"
+    )
 
 
 def _record(env: Any, rdir: str, profile: str, live: dict[str, str]) -> dict[str, str]:
     _marker().parent.mkdir(parents=True, exist_ok=True)
-    _marker().write_text(json.dumps({"display": live["DISPLAY"], "dir": rdir, "profile": profile,
-                                     **_owner_identity(env)}), encoding="utf-8")
+    _marker().write_text(
+        json.dumps(
+            {
+                "display": live["DISPLAY"],
+                "dir": rdir,
+                "profile": profile,
+                **_owner_identity(env),
+            }
+        ),
+        encoding="utf-8",
+    )
     return live
 
 
@@ -313,14 +417,23 @@ rm -f {q}/env {q}/launcher.pid {q}/rfb.sock
 def open_rfb_stream(env: Any, profile: str) -> subprocess.Popen:
     """Popen whose stdin/stdout carry the RFB bytes of the sandbox's Xvnc."""
     rdir = _remote_dir(env, profile)
-    return streams.open_stream(env, ["python3", "-c", _RELAY, f"{rdir}/rfb.sock"], user=_user_for(env))
+    return streams.open_stream(
+        env, ["python3", "-c", _RELAY, f"{rdir}/rfb.sock"], user=_user_for(env)
+    )
 
 
-def cua_mcp_invocation(env: Any, profile: str, published: dict[str, str]) -> tuple[str, list[str]]:
+def cua_mcp_invocation(
+    env: Any, profile: str, published: dict[str, str]
+) -> tuple[str, list[str]]:
     """``(command, args)`` for ``StdioServerParameters``: the backend's exec prefix running ``cua-driver mcp`` on
     the sandbox display."""
-    argv = streams.remote_command(env, ["cua-driver", "mcp", "--no-overlay"], child_env=published,
-                                  user=_user_for(env), interactive=True)
+    argv = streams.remote_command(
+        env,
+        ["cua-driver", "mcp", "--no-overlay"],
+        child_env=published,
+        user=_user_for(env),
+        interactive=True,
+    )
     if argv is None:
         raise RuntimeError(f"{type(env).__name__} cannot host cua-driver")
     return argv[0], argv[1:]

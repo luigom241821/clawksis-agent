@@ -86,9 +86,7 @@ class TestSameThreadParallelTurns:
         )
         await adapter.stop_native_task_card_progress("C1", metadata=md)
         card_ids = {
-            o["card_id"]
-            for o in t.ops
-            if o["op"] in ("task_card", "task_card_stop")
+            o["card_id"] for o in t.ops if o["op"] in ("task_card", "task_card_stop")
         }
         assert len(card_ids) == 1, t.ops
 
@@ -158,12 +156,8 @@ class TestLegacyPlacementOnlyCallers:
         """With several open streams, an identity-less send must NOT guess:
         plain send (recoverable) over sealing the wrong stream (not)."""
         adapter, t = _adapter()
-        await adapter.send_draft(
-            "C1", 41, "A", metadata={"message_id": "m.1"}
-        )
-        await adapter.send_draft(
-            "C1", 42, "B", metadata={"message_id": "m.2"}
-        )
+        await adapter.send_draft("C1", 41, "A", metadata={"message_id": "m.1"})
+        await adapter.send_draft("C1", 42, "B", metadata={"message_id": "m.2"})
         r = await adapter.send("C1", "ambiguous final", metadata=None)
         assert r.success
         assert [o["op"] for o in t.ops][-1] == "send"

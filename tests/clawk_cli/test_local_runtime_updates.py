@@ -19,9 +19,16 @@ def runtime_env(tmp_path, monkeypatch):
     monkeypatch.setattr(paths, "store_root", lambda: store)
     monkeypatch.setattr(paths, "lockfile_path", lambda: lock_path)
     lock = Lockfile(lock_path)
-    lock.set_pin("llamacpp-cpu", "10412", {pm.current_target(): {
-        "url": "https://example.invalid/cpu.zip", "sha256": "a" * 64,
-    }})
+    lock.set_pin(
+        "llamacpp-cpu",
+        "10412",
+        {
+            pm.current_target(): {
+                "url": "https://example.invalid/cpu.zip",
+                "sha256": "a" * 64,
+            }
+        },
+    )
     lock.save()
     return store, lock
 
@@ -33,8 +40,16 @@ def record_engine(store, version, digest="b" * 64):
     entry.mkdir(parents=True, exist_ok=True)
     binary = package.binary(entry, target)
     binary.write_bytes(b"installed engine fixture")
-    Facts(store / "facts.json").record(package.name, version, entry.name, {}, store,
-                                       target=target, artifacts=[digest], digest=tree_digest(entry))
+    Facts(store / "facts.json").record(
+        package.name,
+        version,
+        entry.name,
+        {},
+        store,
+        target=target,
+        artifacts=[digest],
+        digest=tree_digest(entry),
+    )
     return binary
 
 

@@ -44,8 +44,9 @@ def _success_result():
     return result
 
 
-def _install_stub_server(mcp_tool_module, name: str, call_tool_impl,
-                         *, children_dead, on_reconnect=None):
+def _install_stub_server(
+    mcp_tool_module, name: str, call_tool_impl, *, children_dead, on_reconnect=None
+):
     """Fake MCP server with real-bool stdio liveness and a countable
     reconnect event (mirrors tests/tools/test_mcp_circuit_breaker.py).
 
@@ -116,7 +117,9 @@ def test_precall_dead_children_respawn_and_retry(monkeypatch, tmp_path):
         server._ready.set()
 
     server = _install_stub_server(
-        mcp_tool, "srv-dead", _call_tool,
+        mcp_tool,
+        "srv-dead",
+        _call_tool,
         children_dead=lambda: not alive["v"],
         on_reconnect=_respawn,
     )
@@ -164,7 +167,9 @@ def test_midcall_child_exit_reconnects_without_replay(monkeypatch, tmp_path):
         server._ready.set()
 
     server = _install_stub_server(
-        mcp_tool, "srv-midcall", _hanging_call,
+        mcp_tool,
+        "srv-midcall",
+        _hanging_call,
         children_dead=lambda: not alive["v"],
         on_reconnect=_respawn,
     )
@@ -175,12 +180,16 @@ def test_midcall_child_exit_reconnects_without_replay(monkeypatch, tmp_path):
         parsed = json.loads(handler({}))
         assert parsed["outcome_uncertain"] is True, parsed
         assert server._reconnect_event.set_calls == 1
-        assert effects["n"] == 1, "the replacement session must not repeat an uncertain side effect"
+        assert effects["n"] == 1, (
+            "the replacement session must not repeat an uncertain side effect"
+        )
     finally:
         _cleanup(mcp_tool, "srv-midcall")
 
 
-def test_sdk_first_transport_close_midcall_is_uncertain_without_replay(monkeypatch, tmp_path):
+def test_sdk_first_transport_close_midcall_is_uncertain_without_replay(
+    monkeypatch, tmp_path
+):
     """The SDK usually notices the closed pipe before the 250 ms child watcher does and raises a
     transport-closure error. On a stdio server that is the same ambiguous mid-call death: it must
     surface as uncertain, never reach the session-expired recoverer, which would replay the call."""
@@ -209,7 +218,9 @@ def test_sdk_first_transport_close_midcall_is_uncertain_without_replay(monkeypat
         server._ready.set()
 
     server = _install_stub_server(
-        mcp_tool, "srv-sdk-first", _effect_then_pipe_closes,
+        mcp_tool,
+        "srv-sdk-first",
+        _effect_then_pipe_closes,
         children_dead=lambda: False,
         on_reconnect=_respawn,
     )
@@ -221,13 +232,16 @@ def test_sdk_first_transport_close_midcall_is_uncertain_without_replay(monkeypat
         parsed = json.loads(handler({}))
         assert parsed["outcome_uncertain"] is True, parsed
         assert server._reconnect_event.set_calls == 1
-        assert effects["n"] == 1, "the session-expired recoverer must not replay an in-flight stdio call"
+        assert effects["n"] == 1, (
+            "the session-expired recoverer must not replay an in-flight stdio call"
+        )
     finally:
         _cleanup(mcp_tool, "srv-sdk-first")
 
 
 def test_dead_child_never_returning_is_not_reported_as_a_timeout(
-    monkeypatch, tmp_path,
+    monkeypatch,
+    tmp_path,
 ):
     """No fresh session inside the respawn window → a clean error that says
     the subprocess exited, never that something timed out (the
@@ -245,7 +259,10 @@ def test_dead_child_never_returning_is_not_reported_as_a_timeout(
         return _success_result()
 
     server = _install_stub_server(
-        mcp_tool, "srv-gone", _call_tool, children_dead=lambda: True,
+        mcp_tool,
+        "srv-gone",
+        _call_tool,
+        children_dead=lambda: True,
     )
     _mcp_loop._ensure_mcp_loop()
     try:
@@ -264,7 +281,8 @@ def test_dead_child_never_returning_is_not_reported_as_a_timeout(
 
 
 def test_child_dying_again_after_respawn_does_not_hot_cycle(
-    monkeypatch, tmp_path,
+    monkeypatch,
+    tmp_path,
 ):
     """A server whose child dies immediately after every respawn gets ONE
     retry per call, not an endless respawn loop — run()'s rapid-drop budget
@@ -290,7 +308,9 @@ def test_child_dying_again_after_respawn_does_not_hot_cycle(
         server._ready.set()
 
     server = _install_stub_server(
-        mcp_tool, "srv-flap", _call_tool,
+        mcp_tool,
+        "srv-flap",
+        _call_tool,
         children_dead=lambda: True,
         on_reconnect=_respawn_then_die,
     )

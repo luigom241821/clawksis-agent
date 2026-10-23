@@ -64,9 +64,7 @@ HISTORY = [{"role": "user", "content": "hello"}]
 # -- ABC default -----------------------------------------------------------
 
 
-
 # -- Host call site: _apply_context_engine_selection -----------------------
-
 
 
 def test_base_noop_select_context_is_short_circuited_not_called():
@@ -95,20 +93,6 @@ def test_base_noop_select_context_is_short_circuited_not_called():
         )
     assert out is REQUEST
     assert not logger.warning.called
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 def test_empty_list_keeps_original_request():
@@ -149,8 +133,14 @@ def test_engine_mutating_inputs_cannot_corrupt_persisted_state():
     incoming_snapshot = dict(incoming)
 
     class _Engine(_MinimalEngine):
-        def select_context(self, request_messages, *, conversation_messages=None,
-                            incoming_message=None, **kwargs):
+        def select_context(
+            self,
+            request_messages,
+            *,
+            conversation_messages=None,
+            incoming_message=None,
+            **kwargs,
+        ):
             # Misbehaving engine: mutate the read-only inputs in place.
             if conversation_messages is not None:
                 conversation_messages.append({"role": "user", "content": "INJECTED"})
@@ -169,10 +159,7 @@ def test_engine_mutating_inputs_cannot_corrupt_persisted_state():
     assert incoming == incoming_snapshot
 
 
-
-
 # -- cache-stability + downstream-sanitizer contract -----------------------
-
 
 
 def test_role_unusual_replacement_passed_through_for_downstream_sanitizers():
@@ -206,7 +193,6 @@ def test_role_unusual_replacement_passed_through_for_downstream_sanitizers():
 # -- on_turn_complete (post-turn observation) ------------------------------
 
 
-
 def test_on_turn_complete_called_with_snapshot_and_meta():
     """Host forwards a transcript copy + metadata; base no-op is skipped."""
     captured = {}
@@ -219,17 +205,15 @@ def test_on_turn_complete_called_with_snapshot_and_meta():
 
     agent = _agent_with(_Engine())
     _notify_context_engine_turn_complete(
-        agent, HISTORY, usage={"total_tokens": 12}, logger=MagicMock(),
-        turn_id="t1", api_call_count=1,
+        agent,
+        HISTORY,
+        usage={"total_tokens": 12},
+        logger=MagicMock(),
+        turn_id="t1",
+        api_call_count=1,
     )
     assert captured["messages"] == HISTORY
     assert captured["messages"] is not HISTORY  # shallow copy
     assert captured["usage"] == {"total_tokens": 12}
     assert captured["kwargs"]["turn_id"] == "t1"
     assert captured["kwargs"]["api_call_count"] == 1
-
-
-
-
-
-

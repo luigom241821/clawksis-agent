@@ -15,12 +15,15 @@ from unittest.mock import patch
 
 import pytest
 
+
 class TestAuxProbeMode:
     def test_probe_mode_returns_stub_without_openai_import(self):
         import agent.auxiliary_client as aux
 
         with aux.aux_probe_mode():
-            client = aux._create_openai_client(api_key="k", base_url="https://x.invalid/v1")
+            client = aux._create_openai_client(
+                api_key="k", base_url="https://x.invalid/v1"
+            )
         assert isinstance(client, aux._AuxProbeClientStub)
         assert client.api_key == "k"
 
@@ -33,7 +36,9 @@ class TestAuxProbeMode:
         with aux._client_cache_lock:
             assert key not in aux._client_cache
 
-    @pytest.mark.parametrize("wrap", [False, True], ids=["bare-stub", "adapter-wrapped-stub"])
+    @pytest.mark.parametrize(
+        "wrap", [False, True], ids=["bare-stub", "adapter-wrapped-stub"]
+    )
     def test_repeat_probes_stay_resolvable_and_never_cache(self, wrap):
         """Probes go through _get_cached_client's inline store, not _store_cached_client,
         so the stub (bare, or wrapped in a Codex adapter whose leaf is the stub) used to
@@ -47,11 +52,22 @@ class TestAuxProbeMode:
             return (aux.CodexAuxiliaryClient(stub, "v/m") if wrap else stub), "v/m"
 
         aux.shutdown_cached_clients()
-        with patch.object(aux, "resolve_provider_client", _resolve), aux.aux_probe_mode():
-            answers = [aux._get_cached_client("probe-guard-test", "vendor/model")[0] is not None for _ in range(3)]
+        with (
+            patch.object(aux, "resolve_provider_client", _resolve),
+            aux.aux_probe_mode(),
+        ):
+            answers = [
+                aux._get_cached_client("probe-guard-test", "vendor/model")[0]
+                is not None
+                for _ in range(3)
+            ]
         assert answers == [True, True, True]
         with aux._client_cache_lock:
-            assert not [k for k in aux._client_cache if k[1:2] == (False,) and k[-1] == "vendor/model"]
+            assert not [
+                k
+                for k in aux._client_cache
+                if k[1:2] == (False,) and k[-1] == "vendor/model"
+            ]
 
     def test_probe_stub_raises_on_runtime_use(self):
         import agent.auxiliary_client as aux
@@ -86,6 +102,7 @@ class TestAuxProbeMode:
             t.join()
         assert seen["active"] is False
 
+
 class TestVisionCheckUsesProbeMode:
     def test_check_vision_requirements_enters_probe_mode(self):
         from tools import vision_tools
@@ -101,6 +118,7 @@ class TestVisionCheckUsesProbeMode:
             assert vision_tools.check_vision_requirements() is True
         assert states and all(states)
 
+
 class TestLazyMcpSdk:
     def test_module_import_does_not_import_mcp_sdk(self):
         """Importing tools.mcp_tool must not pull in the `mcp` package."""
@@ -114,7 +132,9 @@ class TestLazyMcpSdk:
         )
         proc = subprocess.run(
             [sys.executable, "-c", code],
-            capture_output=True, text=True, timeout=120,
+            capture_output=True,
+            text=True,
+            timeout=120,
             check=False,
         )
         assert proc.returncode == 0, proc.stderr
@@ -130,14 +150,17 @@ class TestLazyMcpSdk:
         # original) must materialize the symbol instead of AttributeError.
         assert mcp_tool.StdioServerParameters is not None
 
+
 class TestBannerUpdateCheckNonBlocking:
     def test_banner_does_not_block_on_pending_update_check(self):
         """When the prefetch hasn't finished, the banner path must return in
         well under the old 500ms blocking wait."""
         from clawk_cli import banner
 
-        with patch.object(banner, "_update_check_done", threading.Event()), \
-             patch.object(banner, "_deferred_update_notice_started", False):
+        with (
+            patch.object(banner, "_update_check_done", threading.Event()),
+            patch.object(banner, "_deferred_update_notice_started", False),
+        ):
             start = time.perf_counter()
             behind = banner.get_update_result(timeout=0.05)
             if behind is None and not banner._update_check_done.is_set():
@@ -154,10 +177,15 @@ class TestBannerUpdateCheckNonBlocking:
 
         printed = []
         done = threading.Event()
-        with patch.object(banner, "_update_check_done", done), \
-             patch.object(banner, "_update_result", None), \
-             patch.object(banner, "_deferred_update_notice_started", False), \
-             patch("prompt_toolkit.print_formatted_text", side_effect=lambda *a, **k: printed.append(a[0])):
+        with (
+            patch.object(banner, "_update_check_done", done),
+            patch.object(banner, "_update_result", None),
+            patch.object(banner, "_deferred_update_notice_started", False),
+            patch(
+                "prompt_toolkit.print_formatted_text",
+                side_effect=lambda *a, **k: printed.append(a[0]),
+            ),
+        ):
             banner._defer_update_notice(max_wait=5.0)
             banner._update_result = 3
             done.set()

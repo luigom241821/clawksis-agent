@@ -35,8 +35,12 @@ class Adapter:
 
 
 class _Guid(ctypes.Structure):
-    _fields_ = [("Data1", wintypes.DWORD), ("Data2", wintypes.WORD), ("Data3", wintypes.WORD),
-                ("Data4", ctypes.c_ubyte * 8)]
+    _fields_ = [
+        ("Data1", wintypes.DWORD),
+        ("Data2", wintypes.WORD),
+        ("Data3", wintypes.WORD),
+        ("Data4", ctypes.c_ubyte * 8),
+    ]
 
 
 class _Luid(ctypes.Structure):
@@ -44,13 +48,26 @@ class _Luid(ctypes.Structure):
 
 
 class _AdapterDesc1(ctypes.Structure):
-    _fields_ = [("Description", ctypes.c_wchar * 128), ("VendorId", wintypes.UINT),
-                ("DeviceId", wintypes.UINT), ("SubSysId", wintypes.UINT), ("Revision", wintypes.UINT),
-                ("DedicatedVideoMemory", ctypes.c_size_t), ("DedicatedSystemMemory", ctypes.c_size_t),
-                ("SharedSystemMemory", ctypes.c_size_t), ("AdapterLuid", _Luid), ("Flags", wintypes.UINT)]
+    _fields_ = [
+        ("Description", ctypes.c_wchar * 128),
+        ("VendorId", wintypes.UINT),
+        ("DeviceId", wintypes.UINT),
+        ("SubSysId", wintypes.UINT),
+        ("Revision", wintypes.UINT),
+        ("DedicatedVideoMemory", ctypes.c_size_t),
+        ("DedicatedSystemMemory", ctypes.c_size_t),
+        ("SharedSystemMemory", ctypes.c_size_t),
+        ("AdapterLuid", _Luid),
+        ("Flags", wintypes.UINT),
+    ]
 
 
-_IID_DXGI_FACTORY1 = _Guid(0x770AAE78, 0xF26F, 0x4DBA, (ctypes.c_ubyte * 8)(0xA8, 0x29, 0x25, 0x3C, 0x83, 0xD1, 0xB3, 0x87))
+_IID_DXGI_FACTORY1 = _Guid(
+    0x770AAE78,
+    0xF26F,
+    0x4DBA,
+    (ctypes.c_ubyte * 8)(0xA8, 0x29, 0x25, 0x3C, 0x83, 0xD1, 0xB3, 0x87),
+)
 
 
 def _method(obj: ctypes.c_void_p, slot: int, *argtypes):
@@ -63,20 +80,41 @@ def windows_gpu_adapters() -> tuple[Adapter, ...]:
     """Every adapter DXGI enumerates, in its order; empty off Windows or when DXGI can't answer."""
     with suppress(OSError, AttributeError):
         factory = ctypes.c_void_p()
-        if ctypes.WinDLL("dxgi").CreateDXGIFactory1(ctypes.byref(_IID_DXGI_FACTORY1), ctypes.byref(factory)) != 0:
+        if (
+            ctypes.WinDLL("dxgi").CreateDXGIFactory1(
+                ctypes.byref(_IID_DXGI_FACTORY1), ctypes.byref(factory)
+            )
+            != 0
+        ):
             return ()
         found: list[Adapter] = []
         try:
-            enum = _method(factory, _ENUM_ADAPTERS1, wintypes.UINT, ctypes.POINTER(ctypes.c_void_p))
+            enum = _method(
+                factory, _ENUM_ADAPTERS1, wintypes.UINT, ctypes.POINTER(ctypes.c_void_p)
+            )
             for index in range(_MAX_ADAPTERS):
                 adapter = ctypes.c_void_p()
-                if enum(factory, index, ctypes.byref(adapter)) != 0:  # DXGI_ERROR_NOT_FOUND ends the list
+                if (
+                    enum(factory, index, ctypes.byref(adapter)) != 0
+                ):  # DXGI_ERROR_NOT_FOUND ends the list
                     break
                 try:
                     desc = _AdapterDesc1()
-                    if _method(adapter, _GET_DESC1, ctypes.POINTER(_AdapterDesc1))(adapter, ctypes.byref(desc)) == 0:
-                        found.append(Adapter(desc.Description, desc.VendorId, desc.DedicatedVideoMemory,
-                                             desc.SharedSystemMemory, bool(desc.Flags & _SOFTWARE_FLAG)))
+                    if (
+                        _method(adapter, _GET_DESC1, ctypes.POINTER(_AdapterDesc1))(
+                            adapter, ctypes.byref(desc)
+                        )
+                        == 0
+                    ):
+                        found.append(
+                            Adapter(
+                                desc.Description,
+                                desc.VendorId,
+                                desc.DedicatedVideoMemory,
+                                desc.SharedSystemMemory,
+                                bool(desc.Flags & _SOFTWARE_FLAG),
+                            )
+                        )
                 finally:
                     _method(adapter, _RELEASE)(adapter)
         finally:

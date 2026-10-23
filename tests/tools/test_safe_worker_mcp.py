@@ -1,4 +1,5 @@
 """Fresh-interpreter proof that a safe worker never spawns MCP servers; config-only keeps them."""
+
 import json
 import os
 from pathlib import Path
@@ -8,7 +9,7 @@ import textwrap
 
 import pytest
 
-PEER = '''import json, os, sys
+PEER = """import json, os, sys
 from pathlib import Path
 Path(os.environ["SPAWNED"]).touch()
 for line in sys.stdin:
@@ -23,7 +24,7 @@ for line in sys.stdin:
     else:
         result = {}
     print(json.dumps({"jsonrpc": "2.0", "id": ident, "result": result}), flush=True)
-'''
+"""
 
 
 @pytest.mark.parametrize("mode", ["safe", "config"])
@@ -32,8 +33,11 @@ def test_safe_worker_never_spawns_mcp_servers(tmp_path, mode):
     home.mkdir()
     (home / "peer.py").write_text(PEER, encoding="utf-8")
     spawned = home / "spawned"
-    server = {"command": sys.executable, "args": [str(home / "peer.py")],
-              "env": {"SPAWNED": str(spawned)}}
+    server = {
+        "command": sys.executable,
+        "args": [str(home / "peer.py")],
+        "env": {"SPAWNED": str(spawned)},
+    }
     config = {"mcp_servers": {"owned": server}, "plugins": {"enabled": []}}
     (home / "config.yaml").write_text(json.dumps(config), encoding="utf-8")
     root = Path(__file__).resolve().parents[2]
@@ -41,7 +45,9 @@ def test_safe_worker_never_spawns_mcp_servers(tmp_path, mode):
     for key in ("CLAWK_SAFE_MODE", "CLAWK_IGNORE_USER_CONFIG"):
         env.pop(key, None)
     script = home / "probe.py"
-    script.write_text(f"import sys; sys.path.insert(0, {str(root)!r})\n" + textwrap.dedent(f'''
+    script.write_text(
+        f"import sys; sys.path.insert(0, {str(root)!r})\n"
+        + textwrap.dedent(f"""
         import json, os
         from agent.safe_worker_policy import _bind_safe_worker_policy
         config = {config!r}
@@ -56,9 +62,19 @@ def test_safe_worker_never_spawns_mcp_servers(tmp_path, mode):
         again = register_mcp_servers({{"editor": {server!r}}})
         print(json.dumps({{"loaded": sorted(loaded), "explicit": explicit,
                            "discovered": discovered, "again": again}}))
-    '''), encoding="utf-8")
-    result = subprocess.run([sys.executable, str(script)], cwd=root, env=env, stdin=subprocess.DEVNULL,
-                            capture_output=True, text=True, timeout=120, check=False)
+    """),
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [sys.executable, str(script)],
+        cwd=root,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
     assert result.returncode == 0, result.stdout + result.stderr
     out = json.loads(result.stdout.strip().splitlines()[-1])
     if mode == "safe":

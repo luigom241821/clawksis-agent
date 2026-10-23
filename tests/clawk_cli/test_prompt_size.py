@@ -43,25 +43,17 @@ def isolated_home(tmp_path, monkeypatch):
     return clawk_home
 
 
-
-
 def test_runs_offline_without_credentials(isolated_home, monkeypatch):
     """No provider credentials configured → still produces a breakdown."""
-    for var in ("OPENROUTER_API_KEY", "OPENAI_API_KEY", "NOUS_API_KEY",
-                "ANTHROPIC_API_KEY"):
+    for var in (
+        "OPENROUTER_API_KEY",
+        "OPENAI_API_KEY",
+        "NOUS_API_KEY",
+        "ANTHROPIC_API_KEY",
+    ):
         monkeypatch.delenv(var, raising=False)
     data = compute_prompt_breakdown("cli")
     assert data["system_prompt"]["bytes"] > 0
-
-
-
-
-
-
-
-
-
-
 
 
 def test_skills_breakdown_shape_sorted_and_attributed(isolated_home):
@@ -115,7 +107,3 @@ def test_skills_breakdown_attributes_demoted_category_shared_line(isolated_home)
         assert entry["index_line_total_bytes"] == shared_line_bytes
         assert entry["index_line_shared_bytes"] > 0
         assert entry["index_line_skill_count"] == 2
-
-
-
-

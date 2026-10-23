@@ -170,7 +170,9 @@ def test_kill_process_never_killpgs_the_callers_own_group(monkeypatch):
 
     monkeypatch.setattr(os, "getpgid", lambda _pid: 67890)
     monkeypatch.setattr(os, "getpgrp", lambda: 67890)
-    monkeypatch.setattr(os, "killpg", lambda pgid, sig: killpg_calls.append((pgid, sig)))
+    monkeypatch.setattr(
+        os, "killpg", lambda pgid, sig: killpg_calls.append((pgid, sig))
+    )
 
     env._kill_process(proc)
 
@@ -199,11 +201,20 @@ class TestReapUntrackedGroupGuard:
         session = SimpleNamespace(systemd_unit="", host_start_time=4242)
         calls, forbidden = [], []
         monkeypatch.setattr(
-            ProcessRegistry, "_terminate_host_pid",
+            ProcessRegistry,
+            "_terminate_host_pid",
             classmethod(
-                lambda cls, pid, expected_start=None: calls.append((pid, expected_start))))
-        monkeypatch.setattr(os, "getpgid", lambda pid: forbidden.append(("getpgid", pid)))
-        monkeypatch.setattr(os, "killpg", lambda pgid, sig: forbidden.append(("killpg", pgid)))
+                lambda cls, pid, expected_start=None: calls.append(
+                    (pid, expected_start)
+                )
+            ),
+        )
+        monkeypatch.setattr(
+            os, "getpgid", lambda pid: forbidden.append(("getpgid", pid))
+        )
+        monkeypatch.setattr(
+            os, "killpg", lambda pgid, sig: forbidden.append(("killpg", pgid))
+        )
 
         reg._reap_untracked(session, proc)
 
@@ -215,11 +226,13 @@ class TestReapUntrackedGroupGuard:
         still matches is terminated."""
         from tools.process_registry import ProcessRegistry
 
-        monkeypatch.setattr(ProcessRegistry, "_daemon_term_grace_seconds",
-                            staticmethod(lambda: 0.5))
+        monkeypatch.setattr(
+            ProcessRegistry, "_daemon_term_grace_seconds", staticmethod(lambda: 0.5)
+        )
         proc = subprocess.Popen(
             [sys.executable, "-c", "import time; time.sleep(30)"],
-            start_new_session=True)
+            start_new_session=True,
+        )
         try:
             real_start = ProcessRegistry._safe_host_start_time(proc.pid)
             assert real_start is not None, "no /proc start time on this platform?"
@@ -239,15 +252,19 @@ class TestReapUntrackedGroupGuard:
         be signalled, even though getpgid(pid) == pid authorized the old arm."""
         from tools.process_registry import ProcessRegistry
 
-        monkeypatch.setattr(ProcessRegistry, "_daemon_term_grace_seconds",
-                            staticmethod(lambda: 0.5))
+        monkeypatch.setattr(
+            ProcessRegistry, "_daemon_term_grace_seconds", staticmethod(lambda: 0.5)
+        )
         proc = subprocess.Popen(
             [sys.executable, "-c", "import time; time.sleep(30)"],
-            start_new_session=True)
+            start_new_session=True,
+        )
         try:
             real_start = ProcessRegistry._safe_host_start_time(proc.pid)
             assert real_start is not None, "no /proc start time on this platform?"
-            assert os.getpgid(proc.pid) == proc.pid  # leads its group: old arm fired here
+            assert (
+                os.getpgid(proc.pid) == proc.pid
+            )  # leads its group: old arm fired here
             session = SimpleNamespace(systemd_unit="", host_start_time=real_start + 1)
             # A stub Popen keeps the wait tail from parking 5s on the still-live child.
             stub = SimpleNamespace(pid=proc.pid, wait=lambda timeout=None: None)

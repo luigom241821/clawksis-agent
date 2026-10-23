@@ -76,9 +76,7 @@ class TestCollectMemoryStatus:
         assert status["last_boot_unclean"] is False
         assert status["last_boot_suspected_oom"] is False
 
-    def test_fresh_heartbeat_reports_pressure_and_numbers(
-        self, tmp_path: Path
-    ) -> None:
+    def test_fresh_heartbeat_reports_pressure_and_numbers(self, tmp_path: Path) -> None:
         _write_heartbeat(
             tmp_path,
             updated_at=_NOW - timedelta(seconds=30),
@@ -152,9 +150,10 @@ class TestCollectMemoryStatus:
         )
         status = collect_memory_status(tmp_path, now=_NOW)
         assert status["boot_id"] is None
-        assert collect_memory_status(tmp_path.joinpath("nohome"), now=_NOW)[
-            "boot_id"
-        ] is None
+        assert (
+            collect_memory_status(tmp_path.joinpath("nohome"), now=_NOW)["boot_id"]
+            is None
+        )
 
     def test_clean_sentinel_has_no_flags(self, tmp_path: Path) -> None:
         _write_sentinel(

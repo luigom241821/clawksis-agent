@@ -16,11 +16,19 @@ def _stream_body(platform_cfg):
 
     async def fake_agent():
         return {"final_response": "done", "completed": True}, {
-            "input_tokens": 1, "output_tokens": 1, "total_tokens": 2}
+            "input_tokens": 1,
+            "output_tokens": 1,
+            "total_tokens": 2,
+        }
 
     async def run():
         stream_q = ThreadSafeAsyncQueue()
-        stream_q.put_nowait(("__tool_progress__", {"tool": "terminal", "toolCallId": "c1", "status": "running"}))
+        stream_q.put_nowait(
+            (
+                "__tool_progress__",
+                {"tool": "terminal", "toolCallId": "c1", "status": "running"},
+            )
+        )
         stream_q.put_nowait("done")
         stream_q.put_nowait(None)
         agent_task = asyncio.ensure_future(fake_agent())
@@ -29,8 +37,12 @@ def _stream_body(platform_cfg):
         resp.prepare = AsyncMock()
         req = MagicMock()
         req.headers = {}
-        with patch("gateway.platforms.api_server.web.StreamResponse", return_value=resp):
-            await adapter._write_sse_chat_completion(req, "cmpl-1", "m", 1, stream_q, agent_task)
+        with patch(
+            "gateway.platforms.api_server.web.StreamResponse", return_value=resp
+        ):
+            await adapter._write_sse_chat_completion(
+                req, "cmpl-1", "m", 1, stream_q, agent_task
+            )
 
     asyncio.run(run())
     return b"".join(written).decode()

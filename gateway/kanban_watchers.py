@@ -74,22 +74,32 @@ class GatewayKanbanWatchersMixin:
             cfg = _load_config()
             kanban_cfg = cfg.get("kanban", {}) if isinstance(cfg, dict) else {}
         except Exception as exc:
-            logger.warning("kanban notifier: cannot load config (%s); continuing enabled", exc)
+            logger.warning(
+                "kanban notifier: cannot load config (%s); continuing enabled", exc
+            )
             kanban_cfg = {}
         if not kanban_cfg.get("notify_in_gateway", True):
-            logger.info("kanban notifier: disabled via config kanban.notify_in_gateway=false")
+            logger.info(
+                "kanban notifier: disabled via config kanban.notify_in_gateway=false"
+            )
             return
 
         from gateway.config import Platform as _Platform
+
         try:
             from clawk_cli import kanban_db as _kb
         except Exception:
-            logger.warning("kanban notifier: kanban_db not importable; notifier disabled")
+            logger.warning(
+                "kanban notifier: kanban_db not importable; notifier disabled"
+            )
             return
 
         sub_fail_counts: dict[tuple, int] = getattr(self, "_kanban_sub_fail_counts", {})
         self._kanban_sub_fail_counts = sub_fail_counts
-        notifier_profile = getattr(self, "_kanban_notifier_profile", None) or self._active_profile_name()
+        notifier_profile = (
+            getattr(self, "_kanban_notifier_profile", None)
+            or self._active_profile_name()
+        )
         self._kanban_notifier_profile = notifier_profile
 
         # Initial delay so the gateway can finish wiring adapters.
@@ -109,22 +119,32 @@ class GatewayKanbanWatchersMixin:
                     _retention = _gc_retention_days()
 
                 deliveries = await asyncio.to_thread(
-                    _notifier_collect, self, _kb,
-                    notifier_profile=notifier_profile, gc_due=_gc_due, gc_retention_days=_retention,
+                    _notifier_collect,
+                    self,
+                    _kb,
+                    notifier_profile=notifier_profile,
+                    gc_due=_gc_due,
+                    gc_retention_days=_retention,
                 )
                 for d in deliveries:
                     await _KanbanNotification(
-                        self, d, platform_cls=_Platform, sub_fail_counts=sub_fail_counts,
+                        self,
+                        d,
+                        platform_cls=_Platform,
+                        sub_fail_counts=sub_fail_counts,
                     ).deliver()
             except Exception as exc:
                 logger.warning("kanban notifier tick failed: %s", exc)
             await self._sleep_between_ticks(interval)
 
-    def _kanban_sub_op(self, board: Optional[str], op: str, sub: dict, **extra: Any) -> None:
+    def _kanban_sub_op(
+        self, board: Optional[str], op: str, sub: dict, **extra: Any
+    ) -> None:
         """Sync helper (runs in to_thread): call ``kanban_db_notify.<op>`` for one subscription on its board."""
         from clawk_cli import kanban_db as _kb
         from clawk_cli import kanban_db_connect as _kbc
         from clawk_cli import kanban_db_notify as _kbn
+
         # Cursor writes are machine flow: the sub's board slug must resolve
         # through the env pin on a dispatcher-pinned box (same as the notifier
         # tick), or advance/rewind land on a per-slug DB the notifier never
@@ -133,23 +153,49 @@ class GatewayKanbanWatchersMixin:
             conn = _kbc.connect(board=board)
             try:
                 getattr(_kbn, op)(
-                    conn, task_id=sub["task_id"], platform=sub["platform"], chat_id=sub["chat_id"],
-                    thread_id=sub.get("thread_id") or "", **extra,
+                    conn,
+                    task_id=sub["task_id"],
+                    platform=sub["platform"],
+                    chat_id=sub["chat_id"],
+                    thread_id=sub.get("thread_id") or "",
+                    **extra,
                 )
             finally:
                 conn.close()
 
-    def _kanban_advance(self, sub: dict, cursor: int, board: Optional[str] = None) -> None:
+    def _kanban_advance(
+        self, sub: dict, cursor: int, board: Optional[str] = None
+    ) -> None:
         self._kanban_sub_op(board, "advance_notify_cursor", sub, new_cursor=cursor)
 
     def _kanban_unsub(self, sub: dict, board: Optional[str] = None) -> None:
         self._kanban_sub_op(board, "remove_notify_sub", sub)
 
-    def _kanban_rewind(self, sub: dict, claimed_cursor: int, old_cursor: int, board: Optional[str] = None) -> None:
+    def _kanban_rewind(
+        self,
+        sub: dict,
+        claimed_cursor: int,
+        old_cursor: int,
+        board: Optional[str] = None,
+    ) -> None:
         """Undo a claimed notification cursor after send failure."""
-        self._kanban_sub_op(board, "rewind_notify_cursor", sub, claimed_cursor=claimed_cursor, old_cursor=old_cursor)
+        self._kanban_sub_op(
+            board,
+            "rewind_notify_cursor",
+            sub,
+            claimed_cursor=claimed_cursor,
+            old_cursor=old_cursor,
+        )
 
-    async def _deliver_kanban_artifacts(self, *, adapter, chat_id: str, metadata: dict, event_payload: Optional[dict], task) -> None:
+    async def _deliver_kanban_artifacts(
+        self,
+        *,
+        adapter,
+        chat_id: str,
+        metadata: dict,
+        event_payload: Optional[dict],
+        task,
+    ) -> None:
         """Upload artifact files referenced by a completed kanban task.
 
         Sources, in priority order: ``event_payload['artifacts']``,
@@ -182,6 +228,7 @@ class GatewayKanbanWatchersMixin:
             return
 
         from gateway.platforms.base import BasePlatformAdapter
+
         candidates = BasePlatformAdapter.filter_local_delivery_paths(candidates)
         if not candidates:
             return
@@ -190,21 +237,31 @@ class GatewayKanbanWatchersMixin:
 
         # Images ride one send_multiple_images call (batch uploads on Signal/Slack).
         image_paths = [p for p in candidates if Path(p).suffix.lower() in _IMAGE_EXTS]
-        other_paths = [p for p in candidates if Path(p).suffix.lower() not in _IMAGE_EXTS]
+        other_paths = [
+            p for p in candidates if Path(p).suffix.lower() not in _IMAGE_EXTS
+        ]
         if image_paths:
             try:
                 batch = [(f"file://{_quote(p)}", "") for p in image_paths]
-                await adapter.send_multiple_images(chat_id=chat_id, images=batch, metadata=metadata)
+                await adapter.send_multiple_images(
+                    chat_id=chat_id, images=batch, metadata=metadata
+                )
             except Exception as exc:
                 logger.warning("kanban notifier: image batch upload failed: %s", exc)
         for path in other_paths:
             try:
                 if Path(path).suffix.lower() in _VIDEO_EXTS:
-                    await adapter.send_video(chat_id=chat_id, video_path=path, metadata=metadata)
+                    await adapter.send_video(
+                        chat_id=chat_id, video_path=path, metadata=metadata
+                    )
                 else:
-                    await adapter.send_document(chat_id=chat_id, file_path=path, metadata=metadata)
+                    await adapter.send_document(
+                        chat_id=chat_id, file_path=path, metadata=metadata
+                    )
             except Exception as exc:
-                logger.warning("kanban notifier: artifact upload (%s) failed: %s", path, exc)
+                logger.warning(
+                    "kanban notifier: artifact upload (%s) failed: %s", path, exc
+                )
 
     def _kanban_dispatcher_boot(self) -> Optional[tuple]:
         """Resolve config, kanban_db and the singleton lock; None when the dispatcher must not run.
@@ -218,9 +275,13 @@ class GatewayKanbanWatchersMixin:
         except Exception:
             logger.warning("kanban dispatcher: config loader unavailable; disabled")
             return None
-        env_override = os.environ.get("CLAWK_KANBAN_DISPATCH_IN_GATEWAY", "").strip().lower()
+        env_override = (
+            os.environ.get("CLAWK_KANBAN_DISPATCH_IN_GATEWAY", "").strip().lower()
+        )
         if env_override in {"0", "false", "no", "off"}:
-            logger.info("kanban dispatcher: disabled via CLAWK_KANBAN_DISPATCH_IN_GATEWAY env")
+            logger.info(
+                "kanban dispatcher: disabled via CLAWK_KANBAN_DISPATCH_IN_GATEWAY env"
+            )
             return None
         try:
             cfg = _load_config()
@@ -229,12 +290,16 @@ class GatewayKanbanWatchersMixin:
             return None
         kanban_cfg = cfg.get("kanban", {}) if isinstance(cfg, dict) else {}
         if not kanban_cfg.get("dispatch_in_gateway", True):
-            logger.info("kanban dispatcher: disabled via config kanban.dispatch_in_gateway=false")
+            logger.info(
+                "kanban dispatcher: disabled via config kanban.dispatch_in_gateway=false"
+            )
             return None
         try:
             from clawk_cli import kanban_db as _kb
         except Exception:
-            logger.warning("kanban dispatcher: kanban_db not importable; dispatcher disabled")
+            logger.warning(
+                "kanban dispatcher: kanban_db not importable; dispatcher disabled"
+            )
             return None
 
         # Single-dispatcher backstop (see _acquire_singleton_lock). The lock
@@ -243,15 +308,25 @@ class GatewayKanbanWatchersMixin:
         _lock_path = _kb.kanban_home() / "kanban" / ".dispatcher.lock"
         _lock_handle, _lock_state = _acquire_singleton_lock(_lock_path)
         if _lock_state == "contended":
-            logger.info("kanban dispatcher: another gateway already holds the dispatcher "
-                        "lock (%s); this gateway will NOT dispatch.", _lock_path)
+            logger.info(
+                "kanban dispatcher: another gateway already holds the dispatcher "
+                "lock (%s); this gateway will NOT dispatch.",
+                _lock_path,
+            )
             return None
         if _lock_state == "held":
-            self._kanban_dispatcher_lock_handle = _lock_handle  # hold for process lifetime
-            logger.info("kanban dispatcher: holding singleton dispatcher lock (%s)", _lock_path)
+            self._kanban_dispatcher_lock_handle = (
+                _lock_handle  # hold for process lifetime
+            )
+            logger.info(
+                "kanban dispatcher: holding singleton dispatcher lock (%s)", _lock_path
+            )
         else:
-            logger.warning("kanban dispatcher: advisory lock unavailable at %s; proceeding "
-                           "on config control alone.", _lock_path)
+            logger.warning(
+                "kanban dispatcher: advisory lock unavailable at %s; proceeding "
+                "on config control alone.",
+                _lock_path,
+            )
         return _load_config, _kb, kanban_cfg
 
     async def _kanban_dispatcher_watcher(self) -> None:
@@ -287,9 +362,14 @@ class GatewayKanbanWatchersMixin:
                 # Reap zombies before per-board work so a board DB failure
                 # cannot block cleanup of unrelated workers.
                 from clawk_cli import kanban_db_dispatch as _kbd
+
                 pids = await _to_thread_process_service(_kbd.reap_worker_zombies)
                 if pids:
-                    logger.info("kanban dispatcher: reaped %d zombie worker(s), pids=%s", len(pids), pids)
+                    logger.info(
+                        "kanban dispatcher: reaped %d zombie worker(s), pids=%s",
+                        len(pids),
+                        pids,
+                    )
             except Exception:
                 logger.exception("kanban dispatcher: zombie reaper failed")
 
@@ -301,23 +381,34 @@ class GatewayKanbanWatchersMixin:
                 else:
                     # Re-read the auto-decompose toggle live so disabling it
                     # takes effect on the next tick, not on restart.
-                    _ad_enabled, _ad_per_tick = _resolve_auto_decompose_settings(_load_config)
+                    _ad_enabled, _ad_per_tick = _resolve_auto_decompose_settings(
+                        _load_config
+                    )
                     # See #49638.
                     if _ad_enabled:
-                        await _to_thread_process_service(dispatcher.auto_decompose_tick, _ad_per_tick)
+                        await _to_thread_process_service(
+                            dispatcher.auto_decompose_tick, _ad_per_tick
+                        )
                     results = await _to_thread_process_service(dispatcher.tick_once)
                     any_spawned = _log_spawn_results(results)
-                    ready_pending = await _to_thread_process_service(dispatcher.ready_nonempty)
-                    bad_ticks = bad_ticks + 1 if ready_pending and not any_spawned else 0
+                    ready_pending = await _to_thread_process_service(
+                        dispatcher.ready_nonempty
+                    )
+                    bad_ticks = (
+                        bad_ticks + 1 if ready_pending and not any_spawned else 0
+                    )
                 now = int(time.time())
                 if bad_ticks >= _HEALTH_WINDOW and now - last_warn_at >= 300:
-                    held = _kbd.describe_suppression(res for _slug, res in (results or []))
+                    held = _kbd.describe_suppression(
+                        res for _slug, res in (results or [])
+                    )
                     logger.warning(
                         "kanban dispatcher stuck: ready queue non-empty for "
                         "%d consecutive ticks but 0 workers spawned.%s Check "
                         "profile health (venv, PATH, credentials) and "
                         "`clawk kanban list --status ready`.",
-                        bad_ticks, f" Last tick held back: {held}." if held else "",
+                        bad_ticks,
+                        f" Last tick held back: {held}." if held else "",
                     )
                     last_warn_at = now
             except asyncio.CancelledError:

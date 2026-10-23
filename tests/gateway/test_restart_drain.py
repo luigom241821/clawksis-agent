@@ -27,9 +27,7 @@ async def test_restart_command_while_busy_requests_drain_without_interrupt(monke
     # Hermeticity: neutralize the real container probe (see
     # test_restart_service_detection.py) — /.dockerenv on a containerized CI
     # runner would otherwise route via_service=True under this test.
-    monkeypatch.setattr(
-        "gateway.restart.is_container_restart_context", lambda: False
-    )
+    monkeypatch.setattr("gateway.restart.is_container_restart_context", lambda: False)
     runner, _adapter = make_restart_runner()
     runner.request_restart = MagicMock(return_value=True)
     event = MessageEvent(
@@ -58,7 +56,9 @@ async def test_restart_command_while_busy_requests_drain_without_interrupt(monke
     runner.request_restart.assert_called_once_with(detached=True, via_service=False)
 
 
-def test_load_busy_text_mode_follows_input_mode_and_honors_legacy(tmp_path, monkeypatch):
+def test_load_busy_text_mode_follows_input_mode_and_honors_legacy(
+    tmp_path, monkeypatch
+):
     monkeypatch.setattr(gateway_run, "_clawk_home", tmp_path)
     monkeypatch.delenv("CLAWK_GATEWAY_BUSY_TEXT_MODE", raising=False)
     monkeypatch.delenv("CLAWK_GATEWAY_BUSY_INPUT_MODE", raising=False)
@@ -288,7 +288,9 @@ async def test_restart_from_served_profile_chat_restarts_the_host_gateway(monkey
     watcher_envs = []
     monkeypatch.setattr(gateway_run, "_resolve_clawk_bin", lambda: ["clawk"])
     monkeypatch.setattr(
-        subprocess, "Popen", lambda _argv, **kwargs: watcher_envs.append(kwargs["env"]) or MagicMock()
+        subprocess,
+        "Popen",
+        lambda _argv, **kwargs: watcher_envs.append(kwargs["env"]) or MagicMock(),
     )
 
     async with gateway_run._async_profile_runtime_scope(profile_home):
@@ -337,14 +339,20 @@ async def test_windows_detached_restart_scrubs_gateway_marker(monkeypatch, tmp_p
     # dependency generation at child start, no venv is captured in its env.
     from clawk_cli._launchers import runtime_command
     from pathlib import Path
-    assert cmd[:3] == runtime_command(Path(gateway_run.__file__).resolve().parent.parent)[:3]
+
+    assert (
+        cmd[:3]
+        == runtime_command(Path(gateway_run.__file__).resolve().parent.parent)[:3]
+    )
     assert kwargs["stdout"] is subprocess.DEVNULL
     assert kwargs["stderr"] is subprocess.DEVNULL
 
 
 @pytest.mark.platforms("windows")
 @pytest.mark.asyncio
-async def test_windows_detached_restart_watcher_keeps_console_python(monkeypatch, tmp_path):
+async def test_windows_detached_restart_watcher_keeps_console_python(
+    monkeypatch, tmp_path
+):
     """The restart watcher must run sys.executable (console python) under the
     hidden-console detach kwargs — NOT swap in GUI-subsystem pythonw.exe,
     which would leave the watcher console-less and make its descendants
@@ -418,7 +426,9 @@ async def test_shutdown_notification_uses_persisted_origin_for_colon_ids():
 
 
 @pytest.mark.asyncio
-async def test_drain_suppress_skips_home_channel_keeps_session_ping(tmp_path, monkeypatch):
+async def test_drain_suppress_skips_home_channel_keeps_session_ping(
+    tmp_path, monkeypatch
+):
     """A suppress_notification drain marker mutes ONLY the home-channel broadcast.
 
     The per-active-session interrupt ping MUST still fire (it carries the
@@ -452,8 +462,6 @@ async def test_drain_suppress_skips_home_channel_keeps_session_ping(tmp_path, mo
     assert "999" in sent_chat_ids
     assert "home-42" not in sent_chat_ids
     assert "shutting down" in adapter.sent[0]
-
-
 
 
 def _wedged_agent(idle_seconds: float = 4000.0) -> MagicMock:
@@ -550,7 +558,9 @@ def test_wedged_agent_count_ignores_sentinels_and_bad_summaries(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_request_restart_skips_wait_for_cron_run_past_inflight_allowance(monkeypatch, tmp_path):
+async def test_request_restart_skips_wait_for_cron_run_past_inflight_allowance(
+    monkeypatch, tmp_path
+):
     """A cron run older than the scheduler's stale-inflight allowance is wedged: the restart proceeds.
 
     #115469 Defect B: a no-agent job whose delivery hung pinned ``clawk update`` in "draining" for the
@@ -564,14 +574,21 @@ async def test_request_restart_skips_wait_for_cron_run_past_inflight_allowance(m
     monkeypatch.setattr("cron.jobs.load_jobs", list)
     runner, _adapter = make_restart_runner()
     runner.stop = AsyncMock()
-    runner._restart_after_turn_timeout = 300.0  # would hang the test without the wedge bypass
+    runner._restart_after_turn_timeout = (
+        300.0  # would hang the test without the wedge bypass
+    )
     assert sched.try_register_running_job("hung-delivery-job")
     try:
         with sched._running_lock:
-            sched._running_since[sched._inflight_key("hung-delivery-job")] = time.time() - 702 * 60
+            sched._running_since[sched._inflight_key("hung-delivery-job")] = (
+                time.time() - 702 * 60
+            )
         assert runner._wedged_agent_count() == 1 and runner._awaitable_work_count() == 0
         cron_units = [u for u in runner._describe_active_work() if u["kind"] == "cron"]
-        assert cron_units[0]["job_id"] == "hung-delivery-job" and cron_units[0]["wedged"] is True
+        assert (
+            cron_units[0]["job_id"] == "hung-delivery-job"
+            and cron_units[0]["wedged"] is True
+        )
 
         assert runner.request_restart(detached=False, via_service=True) is True
         await asyncio.wait_for(runner._restart_task, timeout=5.0)
@@ -580,21 +597,32 @@ async def test_request_restart_skips_wait_for_cron_run_past_inflight_allowance(m
         sched.release_running_job("hung-delivery-job")
 
 
-def test_wedged_cron_allowance_honours_young_runs_and_job_interval(monkeypatch, tmp_path):
+def test_wedged_cron_allowance_honours_young_runs_and_job_interval(
+    monkeypatch, tmp_path
+):
     """Control: a run inside ``max(2 * interval, cron.inflight_max_minutes)`` is live work, not wedged."""
     import cron.scheduler as sched
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    monkeypatch.setattr("cron.jobs.load_jobs", lambda: [{"id": "six-hourly-job", "schedule": {"kind": "interval", "minutes": 360}}])
+    monkeypatch.setattr(
+        "cron.jobs.load_jobs",
+        lambda: [
+            {"id": "six-hourly-job", "schedule": {"kind": "interval", "minutes": 360}}
+        ],
+    )
     runner, _adapter = make_restart_runner()
     assert sched.try_register_running_job("six-hourly-job")
     try:
         assert runner._wedged_agent_count() == 0 and runner._awaitable_work_count() == 1
         with sched._running_lock:
-            sched._running_since[sched._inflight_key("six-hourly-job")] = time.time() - 11 * 3600  # past the 30m floor, inside 2 * 6h
+            sched._running_since[sched._inflight_key("six-hourly-job")] = (
+                time.time() - 11 * 3600
+            )  # past the 30m floor, inside 2 * 6h
         assert runner._wedged_agent_count() == 0
         with sched._running_lock:
-            sched._running_since[sched._inflight_key("six-hourly-job")] = time.time() - 13 * 3600
+            sched._running_since[sched._inflight_key("six-hourly-job")] = (
+                time.time() - 13 * 3600
+            )
         assert runner._wedged_agent_count() == 1 and runner._awaitable_work_count() == 0
     finally:
         sched.release_running_job("six-hourly-job")
@@ -607,8 +635,16 @@ def test_wedged_cron_check_parses_jobs_once_per_run(monkeypatch, tmp_path):
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     loads = []
-    monkeypatch.setattr("cron.jobs.load_jobs", lambda: loads.append(1) or [
-        {"id": jid, "schedule": {"kind": "interval", "minutes": 360}} for jid in ("job-a", "job-b", "job-c")])
+    monkeypatch.setattr(
+        "cron.jobs.load_jobs",
+        lambda: (
+            loads.append(1)
+            or [
+                {"id": jid, "schedule": {"kind": "interval", "minutes": 360}}
+                for jid in ("job-a", "job-b", "job-c")
+            ]
+        ),
+    )
     for jid in ("job-a", "job-b", "job-c"):
         assert sched.try_register_running_job(jid)
     try:
@@ -626,7 +662,9 @@ def test_wedged_cron_check_parses_jobs_once_per_run(monkeypatch, tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_request_restart_skips_wait_for_scope_isolated_cron_worker(monkeypatch, tmp_path):
+async def test_request_restart_skips_wait_for_scope_isolated_cron_worker(
+    monkeypatch, tmp_path
+):
     """A cron run in its own restart-safe systemd scope outlives the restart: the wait must skip it.
 
     Its worker lives outside the gateway cgroup, so the shutdown drain deliberately leaves it
@@ -641,17 +679,23 @@ async def test_request_restart_skips_wait_for_scope_isolated_cron_worker(monkeyp
     monkeypatch.setattr("cron.jobs.load_jobs", list)
     runner, _adapter = make_restart_runner()
     runner.stop = AsyncMock()
-    runner._restart_after_turn_timeout = 300.0  # would hang the test without the scope bypass
+    runner._restart_after_turn_timeout = (
+        300.0  # would hang the test without the scope bypass
+    )
     assert sched.try_register_running_job("scoped-screening-job")
     try:
-        sched._record_external_cron_worker("scoped-screening-job", 4321, scope_isolated=True)
+        sched._record_external_cron_worker(
+            "scoped-screening-job", 4321, scope_isolated=True
+        )
         # Counted as work (the drain still sees it), but not awaited.
         assert runner._active_work_count() == 1
         assert runner._restart_safe_cron_count() == 1
         assert runner._awaitable_work_count() == 0
         cron_units = [u for u in runner._describe_active_work() if u["kind"] == "cron"]
         assert cron_units[0]["job_id"] == "scoped-screening-job"
-        assert cron_units[0]["external"] is True and cron_units[0]["restart_safe"] is True
+        assert (
+            cron_units[0]["external"] is True and cron_units[0]["restart_safe"] is True
+        )
 
         assert runner.request_restart(detached=False, via_service=True) is True
         await asyncio.wait_for(runner._restart_task, timeout=5.0)
@@ -662,7 +706,9 @@ async def test_request_restart_skips_wait_for_scope_isolated_cron_worker(monkeyp
 
 
 @pytest.mark.asyncio
-async def test_request_restart_still_waits_for_worker_without_its_own_scope(monkeypatch, tmp_path):
+async def test_request_restart_still_waits_for_worker_without_its_own_scope(
+    monkeypatch, tmp_path
+):
     """Control: an external worker WITHOUT its own scope dies with the gateway, so the wait holds.
 
     A ``degraded`` dispatch (no reachable user D-Bus) is still an external subprocess but stays in
@@ -682,10 +728,14 @@ async def test_request_restart_still_waits_for_worker_without_its_own_scope(monk
         assert runner._restart_safe_cron_count() == 0
         assert runner._awaitable_work_count() == 1
         cron_units = [u for u in runner._describe_active_work() if u["kind"] == "cron"]
-        assert cron_units[0]["external"] is True and cron_units[0]["restart_safe"] is False
+        assert (
+            cron_units[0]["external"] is True and cron_units[0]["restart_safe"] is False
+        )
         # Still awaited: the wait does not return while this run is in flight.
         with pytest.raises(asyncio.TimeoutError):
-            await asyncio.wait_for(runner._await_active_work_before_restart(), timeout=0.5)
+            await asyncio.wait_for(
+                runner._await_active_work_before_restart(), timeout=0.5
+            )
     finally:
         sched.release_running_job("degraded-job")
 
@@ -697,7 +747,9 @@ def _register_in_profile(monkeypatch, sched, home, job_id):
     assert sched.try_register_running_job(job_id)
 
 
-def test_same_job_id_scoped_in_one_profile_does_not_hide_degraded_in_another(monkeypatch, tmp_path):
+def test_same_job_id_scoped_in_one_profile_does_not_hide_degraded_in_another(
+    monkeypatch, tmp_path
+):
     """One gateway ticks every profile, so two profiles can run ``daily-brief`` at once.
 
     Profile A's run is in its own scope (outlives the restart); profile B's is degraded (shares the
@@ -717,7 +769,11 @@ def test_same_job_id_scoped_in_one_profile_does_not_hide_degraded_in_another(mon
 
         assert runner._restart_safe_cron_count() == 1
         assert runner._awaitable_work_count() == 1
-        flags = sorted(u["restart_safe"] for u in runner._describe_active_work() if u["kind"] == "cron")
+        flags = sorted(
+            u["restart_safe"]
+            for u in runner._describe_active_work()
+            if u["kind"] == "cron"
+        )
         assert flags == [False, True]
 
         # B finishes: only the scoped run is left, and it no longer holds the wait.
@@ -728,7 +784,9 @@ def test_same_job_id_scoped_in_one_profile_does_not_hide_degraded_in_another(mon
         sched.release_running_job("daily-brief", home_b)
 
 
-def test_same_job_id_wedged_in_one_profile_does_not_hide_live_run_in_another(monkeypatch, tmp_path):
+def test_same_job_id_wedged_in_one_profile_does_not_hide_live_run_in_another(
+    monkeypatch, tmp_path
+):
     """Sibling of the scoped case for the wedged exclusion: profile A's ``daily-brief`` is past its
     in-flight allowance, profile B's is a young live run. Only A may be skipped.
     """
@@ -741,7 +799,9 @@ def test_same_job_id_wedged_in_one_profile_does_not_hide_live_run_in_another(mon
     try:
         _register_in_profile(monkeypatch, sched, home_a, "daily-brief")
         with sched._running_lock:
-            sched._running_since[sched._inflight_key("daily-brief")] = time.time() - 702 * 60
+            sched._running_since[sched._inflight_key("daily-brief")] = (
+                time.time() - 702 * 60
+            )
         _register_in_profile(monkeypatch, sched, home_b, "daily-brief")
 
         assert runner._wedged_agent_count() == 1

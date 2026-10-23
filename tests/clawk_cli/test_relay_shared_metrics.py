@@ -131,6 +131,7 @@ def _resource(
         "os_family": os_family,
     }
 
+
 def _legacy_dimensions() -> dict[str, str]:
     return {
         "call_role": "primary",
@@ -503,7 +504,14 @@ def test_package_schema_matches_the_model_call_contract():
     properties = _package_dimension_schema()["properties"]
 
     assert schema["properties"]["schema_version"]["const"] == "clawk.shared_metrics.v4"
-    assert set(properties) == {"call_role", "error_class", "model", "outcome", "provider", "ttft_bucket"}
+    assert set(properties) == {
+        "call_role",
+        "error_class",
+        "model",
+        "outcome",
+        "provider",
+        "ttft_bucket",
+    }
     # Rows counted before the v3 upgrade carry only model/provider and must still drain.
     assert set(_package_dimension_schema()["required"]) == {"model", "provider"}
     assert properties["model"]["maxLength"] == MODEL_IDENTIFIER_MAX_LENGTH
@@ -535,13 +543,18 @@ def test_client_resource_classification_is_bounded():
         install_method="unknown",
     )
 
+
 def test_microsoft_store_stamp_reports_its_own_install_method(tmp_path, monkeypatch):
     """The Store build's stamp is the only place it is named; ``detect_install_method`` has no word for it."""
-    from clawk_cli.observability.shared_metrics_install import detect_client_install_method
+    from clawk_cli.observability.shared_metrics_install import (
+        detect_client_install_method,
+    )
 
     monkeypatch.setattr("clawk_cli.config.get_project_root", lambda: tmp_path)
     stamp = tmp_path / "install-stamp.json"
-    stamp.write_text(json.dumps({"updateMechanism": "microsoft-store"}), encoding="utf-8")
+    stamp.write_text(
+        json.dumps({"updateMechanism": "microsoft-store"}), encoding="utf-8"
+    )
     assert detect_client_install_method() == "microsoft-store"
 
     stamp.write_text(json.dumps({"updateMechanism": "app-installer"}), encoding="utf-8")
@@ -610,6 +623,7 @@ def test_package_schema_matches_the_task_contract():
     assert set(terminal["outcome"]["enum"]) == TASK_OUTCOMES
     assert set(terminal["termination"]["enum"]) == TASK_TERMINATIONS
 
+
 def test_v1_package_schema_retains_the_legacy_model_contract():
     schema = json.loads(LEGACY_SCHEMA_PATH.read_text(encoding="utf-8"))
     model_counter = schema["$defs"]["model_call_counter"]
@@ -635,9 +649,7 @@ def test_package_schema_matches_the_tool_contract():
     assert set(tool["approval_outcome"]["enum"]) == TOOL_APPROVAL_OUTCOMES
     assert tool["latency_bucket"] == {"$ref": "#/$defs/tool_latency_bucket"}
     assert tool["retry_count_bucket"] == {"$ref": "#/$defs/tool_retry_bucket"}
-    assert set(schema["$defs"]["tool_latency_bucket"]["enum"]) == (
-        TOOL_LATENCY_BUCKETS
-    )
+    assert set(schema["$defs"]["tool_latency_bucket"]["enum"]) == (TOOL_LATENCY_BUCKETS)
     assert set(schema["$defs"]["tool_retry_bucket"]["enum"]) == TOOL_RETRY_BUCKETS
     assert set(approval["attribution"]["enum"]) == TOOL_APPROVAL_ATTRIBUTIONS
     assert set(approval["outcome"]["enum"]) == (
@@ -743,21 +755,25 @@ def test_tool_retry_bucket_requires_an_explicit_non_negative_count(
 
 
 def test_model_call_fields_report_terminal_model_and_shipped_provider():
-    assert model_call_fields({
-        "model": "fallback/model",
-        "response_model": "NVIDIA/Nemotron-3-Ultra",
-        "provider": "OpenRouter",
-        "base_url": "https://private-endpoint.example/v1",
-    }) == {
+    assert model_call_fields(
+        {
+            "model": "fallback/model",
+            "response_model": "NVIDIA/Nemotron-3-Ultra",
+            "provider": "OpenRouter",
+            "base_url": "https://private-endpoint.example/v1",
+        }
+    ) == {
         "model": "nvidia/nemotron-3-ultra",
         "provider": "openrouter",
     }
     # A provider Clawksis does not ship is user-named (a custom endpoint key): neither it nor
     # the model id it serves leaves the machine.
-    assert model_call_fields({
-        "model": "ZAI/GLM-5.2",
-        "provider": "Brev",
-    }) == {
+    assert model_call_fields(
+        {
+            "model": "ZAI/GLM-5.2",
+            "provider": "Brev",
+        }
+    ) == {
         "model": "custom",
         "provider": "custom",
     }
@@ -791,10 +807,12 @@ def test_auxiliary_logical_scope_projects_one_normalized_terminal_route():
         "ttft_bucket": "unknown",
     }
 
-    event.data.update({
-        "model": "configured/model",
-        "response_model": "malformed response model",
-    })
+    event.data.update(
+        {
+            "model": "configured/model",
+            "response_model": "malformed response model",
+        }
+    )
     assert model_call_dimensions(event) == {
         "call_role": "auxiliary",
         "error_class": "none",
@@ -816,11 +834,13 @@ def test_auxiliary_logical_scope_projects_one_normalized_terminal_route():
     ],
 )
 def test_model_call_fields_fall_back_when_response_model_is_invalid(response_model):
-    assert model_call_fields({
-        "model": "nvidia/nemotron-3-ultra",
-        "response_model": response_model,
-        "provider": "openrouter",
-    }) == {
+    assert model_call_fields(
+        {
+            "model": "nvidia/nemotron-3-ultra",
+            "response_model": response_model,
+            "provider": "openrouter",
+        }
+    ) == {
         "model": "nvidia/nemotron-3-ultra",
         "provider": "openrouter",
     }
@@ -867,13 +887,19 @@ def test_tool_subscriber_contract_accepts_only_bounded_events():
         },
     )
     assert tool_call_dimensions(terminal) == {
-        "approval_outcome": "approved", "outcome": "success", "tool_category": "terminal",
+        "approval_outcome": "approved",
+        "outcome": "success",
+        "tool_category": "terminal",
     }
     assert tool_latency_dimensions(terminal) == {
-        "latency_bucket": "250ms_to_500ms", "retry_count_bucket": "0", "tool_category": "terminal",
+        "latency_bucket": "250ms_to_500ms",
+        "retry_count_bucket": "0",
+        "tool_category": "terminal",
     }
     assert tool_usage_dimensions(terminal) == {
-        "error_class": "none", "outcome": "success", "tool_name": "terminal",
+        "error_class": "none",
+        "outcome": "success",
+        "tool_name": "terminal",
     }
     terminal.data["tool_name"] = "private-plugin-tool"
     assert tool_usage_dimensions(terminal) is None
@@ -922,17 +948,19 @@ def test_skill_subscriber_contract_accepts_only_bounded_marks():
         lifecycle.data,
     )
 
-    load = SimpleNamespace(**{
-        **lifecycle.__dict__,
-        "name": "clawk.skill.load",
-        "data": {
-            "post_patch_state": "reused_after_patch",
-            "provenance": "agent_created",
-            "reuse_state": "reused",
-            "skill_name": "custom",
-            "use_count_bucket": "3_to_5",
-        },
-    })
+    load = SimpleNamespace(
+        **{
+            **lifecycle.__dict__,
+            "name": "clawk.skill.load",
+            "data": {
+                "post_patch_state": "reused_after_patch",
+                "provenance": "agent_created",
+                "reuse_state": "reused",
+                "skill_name": "custom",
+                "use_count_bucket": "3_to_5",
+            },
+        }
+    )
     assert skill_counter(load) == ("clawk.skill.load.count", load.data)
 
     # Only bundled/optional skill names (public) may appear; a local name is refused.
@@ -944,32 +972,39 @@ def test_skill_subscriber_contract_accepts_only_bounded_marks():
     lifecycle.metadata["skill_name"] = "privacy-canary"
     assert skill_counter(lifecycle) is None
 
+
 def test_skill_event_fields_are_bounded_and_reject_malformed_usage():
-    assert skill_lifecycle_fields({
-        "action": "patched",
-        "provenance": "agent_created",
-        "skill_name": "privacy-canary",
-    }) == {"action": "patched", "provenance": "agent_created"}
+    assert skill_lifecycle_fields(
+        {
+            "action": "patched",
+            "provenance": "agent_created",
+            "skill_name": "privacy-canary",
+        }
+    ) == {"action": "patched", "provenance": "agent_created"}
     assert skill_lifecycle_fields({"action": "deleted"}) is None
-    assert skill_load_fields({
-        "provenance": "private-repository",
-        "use_count": 2,
-        "reused": True,
-        "reuse_after_patch": False,
-        "skill_name": "privacy-canary",
-    }) == {
+    assert skill_load_fields(
+        {
+            "provenance": "private-repository",
+            "use_count": 2,
+            "reused": True,
+            "reuse_after_patch": False,
+            "skill_name": "privacy-canary",
+        }
+    ) == {
         "post_patch_state": "no_new_patch",
         "provenance": "unknown",
         "reuse_state": "reused",
         "skill_name": "custom",
         "use_count_bucket": "2",
     }
-    assert skill_load_fields({
-        "use_count": 1,
-        "reused": False,
-        "reuse_after_patch": False,
-        "skill_name": "codex",
-    }) == {
+    assert skill_load_fields(
+        {
+            "use_count": 1,
+            "reused": False,
+            "reuse_after_patch": False,
+            "skill_name": "codex",
+        }
+    ) == {
         "post_patch_state": "not_applicable",
         "provenance": "unknown",
         "reuse_state": "first_use",
@@ -977,13 +1012,16 @@ def test_skill_event_fields_are_bounded_and_reject_malformed_usage():
         "use_count_bucket": "1",
     }
     assert (
-        skill_load_fields({
-            "use_count": 1,
-            "reused": False,
-            "reuse_after_patch": True,
-        })
+        skill_load_fields(
+            {
+                "use_count": 1,
+                "reused": False,
+                "reuse_after_patch": True,
+            }
+        )
         is None
     )
+
 
 def test_store_rejects_an_unsupported_schema_version(tmp_path):
     database_path = tmp_path / "metrics.sqlite3"
@@ -1003,6 +1041,7 @@ def test_store_rejects_an_unsupported_schema_version(tmp_path):
             "SELECT value FROM telemetry_state WHERE key = 'schema_version'"
         ).fetchone()
     assert schema_version == "999"
+
 
 def test_store_migrates_v1_counters_with_unknown_client_dimensions(tmp_path):
     database_path = tmp_path / "metrics.sqlite3"
@@ -1076,6 +1115,7 @@ def test_store_migrates_v1_counters_with_unknown_client_dimensions(tmp_path):
     assert package["install_id"] == install_id
     assert package["metrics"][0]["value"] == 2
 
+
 def test_pending_metrics_keep_the_client_resource_recorded_at_event_time(tmp_path):
     store = SharedMetricsStore(tmp_path / "metrics.sqlite3", tmp_path / "outbox")
     resource_a = _resource("version-a", architecture="arm64", install_method="pip")
@@ -1093,6 +1133,7 @@ def test_pending_metrics_keep_the_client_resource_recorded_at_event_time(tmp_pat
         tuple(sorted(resource_b.items())),
     }
     assert all(package["metrics"][0]["value"] == 1 for package in packages)
+
 
 def test_store_exports_task_started_and_terminal_counters(tmp_path):
     store = SharedMetricsStore(tmp_path / "metrics.sqlite3", tmp_path / "outbox")
@@ -1113,8 +1154,12 @@ def test_store_exports_task_started_and_terminal_counters(tmp_path):
         retry_count=0,
     )
     end = SimpleNamespace(
-        kind="scope", category="function", category_profile=None, name="clawk.task_run",
-        scope_category="end", metadata={"clawk.metrics.schema_version": "clawk.metrics.event.v4"},
+        kind="scope",
+        category="function",
+        category_profile=None,
+        name="clawk.task_run",
+        scope_category="end",
+        metadata={"clawk.metrics.schema_version": "clawk.metrics.event.v4"},
         data=terminal,
     )
     for counter in (task_counter(end), task_duration_counter(end)):
@@ -1130,23 +1175,42 @@ def test_store_exports_task_started_and_terminal_counters(tmp_path):
         "clawk.task_run.started",
     }
 
+
 def test_v2_task_and_tool_rows_recorded_before_an_upgrade_still_package(tmp_path):
     store = SharedMetricsStore(tmp_path / "metrics.sqlite3", tmp_path / "outbox")
-    store.record_counter("clawk.task_run.finished", {
-        "duration_bucket": "1s_to_5s", "end_reason": "completed", "entrypoint": "interactive",
-        "execution_surface": "cli", "model_call_count_bucket": "1", "outcome": "success",
-        "retry_count_bucket": "0", "termination": "none", "tool_call_count_bucket": "2",
-    }, _resource())
-    store.record_counter("clawk.tool_call.count", {
-        "approval_outcome": "not_required", "latency_bucket": "lt_100ms", "outcome": "success",
-        "retry_count_bucket": "0", "tool_category": "file",
-    }, _resource())
+    store.record_counter(
+        "clawk.task_run.finished",
+        {
+            "duration_bucket": "1s_to_5s",
+            "end_reason": "completed",
+            "entrypoint": "interactive",
+            "execution_surface": "cli",
+            "model_call_count_bucket": "1",
+            "outcome": "success",
+            "retry_count_bucket": "0",
+            "termination": "none",
+            "tool_call_count_bucket": "2",
+        },
+        _resource(),
+    )
+    store.record_counter(
+        "clawk.tool_call.count",
+        {
+            "approval_outcome": "not_required",
+            "latency_bucket": "lt_100ms",
+            "outcome": "success",
+            "retry_count_bucket": "0",
+            "tool_category": "file",
+        },
+        _resource(),
+    )
 
     [package_path] = store.create_and_export_package()
     package = json.loads(package_path.read_text(encoding="utf-8"))
     _schema_validator().validate(package)
     assert {metric["name"] for metric in package["metrics"]} == {
-        "clawk.task_run.finished", "clawk.tool_call.count",
+        "clawk.task_run.finished",
+        "clawk.tool_call.count",
     }
 
 
@@ -1157,20 +1221,41 @@ def test_failure_class_rows_validate_and_v3_rows_still_drain(tmp_path, monkeypat
 
     store = SharedMetricsStore(tmp_path / "metrics.sqlite3", tmp_path / "outbox")
     legacy = {
-        "clawk.compression.count": {"context_fill_bucket": "lt_50", "outcome": "failed", "trigger": "auto"},
-        "clawk.memory.op.count": {"op": "add", "origin": "foreground", "outcome": "failed", "provider": "builtin"},
+        "clawk.compression.count": {
+            "context_fill_bucket": "lt_50",
+            "outcome": "failed",
+            "trigger": "auto",
+        },
+        "clawk.memory.op.count": {
+            "op": "add",
+            "origin": "foreground",
+            "outcome": "failed",
+            "provider": "builtin",
+        },
     }
     for name, dimensions in legacy.items():
         store.record_counter(name, dimensions, _resource())
     classes = {}
-    for raw in ("exception:AcmeCorpSecretError", "rollback:KeyboardInterrupt", "acme_engine_reason", None):
-        fields = compression_fields(trigger="auto", outcome="failed", tokens_before=1, context_length=10,
-                                    failure_class=raw)
+    for raw in (
+        "exception:AcmeCorpSecretError",
+        "rollback:KeyboardInterrupt",
+        "acme_engine_reason",
+        None,
+    ):
+        fields = compression_fields(
+            trigger="auto",
+            outcome="failed",
+            tokens_before=1,
+            context_length=10,
+            failure_class=raw,
+        )
         classes[raw] = fields["failure_class"]
         store.record_counter("clawk.compression.count", fields, _resource())
     assert classes == {
-        "exception:AcmeCorpSecretError": "exception", "rollback:KeyboardInterrupt": "rollback",
-        "acme_engine_reason": "other", None: "unknown",
+        "exception:AcmeCorpSecretError": "exception",
+        "rollback:KeyboardInterrupt": "rollback",
+        "acme_engine_reason": "other",
+        None: "unknown",
     }
     # The skip/fail verdict reads the same normalized class that is stored, so they cannot disagree.
     from clawk_cli.observability import shared_metrics_events as events
@@ -1179,13 +1264,18 @@ def test_failure_class_rows_validate_and_v3_rows_still_drain(tmp_path, monkeypat
     monkeypatch.setattr(events, "record_compression", lambda **kw: recorded.append(kw))
     events.begin_compression_attempt("auto", 1)
     events.finish_compression_attempt("aborted", "  Lock_Contended ", 10)
-    assert [(kw["outcome"], kw["failure_class"]) for kw in recorded] == [("skipped", "lock_contended")]
+    assert [(kw["outcome"], kw["failure_class"]) for kw in recorded] == [
+        ("skipped", "lock_contended")
+    ]
 
     [package_path] = store.create_and_export_package()
     package = json.loads(package_path.read_text(encoding="utf-8"))
     _schema_validator().validate(package)
     assert "Acme" not in package_path.read_text(encoding="utf-8")
-    assert sum(1 for m in package["metrics"] if "failure_class" not in m["dimensions"]) == 2
+    assert (
+        sum(1 for m in package["metrics"] if "failure_class" not in m["dimensions"])
+        == 2
+    )
 
 
 def test_sent_package_keeps_its_file_but_not_a_second_copy_in_the_database(tmp_path):
@@ -1198,9 +1288,13 @@ def test_sent_package_keeps_its_file_but_not_a_second_copy_in_the_database(tmp_p
     [pending_path] = store.create_and_export_package()
 
     with sqlite3.connect(store.database_path) as connection:
-        bodies = dict(connection.execute("SELECT package_id, payload_json FROM package_outbox"))
+        bodies = dict(
+            connection.execute("SELECT package_id, payload_json FROM package_outbox")
+        )
     assert bodies[sent_path.stem] == ""
-    assert json.loads(bodies[pending_path.stem]) == json.loads(pending_path.read_text(encoding="utf-8"))
+    assert json.loads(bodies[pending_path.stem]) == json.loads(
+        pending_path.read_text(encoding="utf-8")
+    )
     _schema_validator().validate(json.loads(sent_path.read_text(encoding="utf-8")))
 
 
@@ -1215,6 +1309,7 @@ def test_package_schema_rejects_unknown_fields(tmp_path):
     jsonschema = pytest.importorskip("jsonschema")
     with pytest.raises(jsonschema.ValidationError):
         _schema_validator().validate(invalid_package)
+
 
 def test_store_does_not_record_the_retired_model_metric(tmp_path):
     store = SharedMetricsStore(tmp_path / "metrics.sqlite3", tmp_path / "outbox")
@@ -1241,6 +1336,7 @@ def test_store_rejects_dimensions_outside_the_metric_contract(tmp_path):
 
     assert store.counter_snapshot() == []
 
+
 def test_store_rejects_client_resources_outside_the_contract(tmp_path):
     store = SharedMetricsStore(tmp_path / "metrics.sqlite3", tmp_path / "outbox")
 
@@ -1254,6 +1350,7 @@ def test_store_rejects_client_resources_outside_the_contract(tmp_path):
         )
 
     assert store.counter_snapshot() == []
+
 
 def test_package_builder_rejects_tampered_dimensions(tmp_path):
     database_path = tmp_path / "metrics.sqlite3"
@@ -1272,11 +1369,19 @@ def test_package_builder_rejects_tampered_dimensions(tmp_path):
     assert list(outbox_directory.glob("*.json")) == []
 
 
-@pytest.mark.parametrize(("metric_name", "dimensions"), [
-    ("clawk.tool_enabled_unused.count", {"toolset": "start_chat", "used": "yes"}),
-    ("clawk.tool.usage.count", {"error_class": "none", "outcome": "success", "tool_name": "setup_choose"}),
-])
-def test_a_saved_row_naming_a_retired_setup_tool_or_toolset_still_packages(tmp_path, metric_name, dimensions):
+@pytest.mark.parametrize(
+    ("metric_name", "dimensions"),
+    [
+        ("clawk.tool_enabled_unused.count", {"toolset": "start_chat", "used": "yes"}),
+        (
+            "clawk.tool.usage.count",
+            {"error_class": "none", "outcome": "success", "tool_name": "setup_choose"},
+        ),
+    ],
+)
+def test_a_saved_row_naming_a_retired_setup_tool_or_toolset_still_packages(
+    tmp_path, metric_name, dimensions
+):
     # v0.21.6/7 recorded these names before the old setup flow was deleted; v4 only adds values.
     database_path = tmp_path / "metrics.sqlite3"
     store = SharedMetricsStore(database_path, tmp_path / "outbox")
@@ -1284,7 +1389,10 @@ def test_a_saved_row_naming_a_retired_setup_tool_or_toolset_still_packages(tmp_p
     with sqlite3.connect(database_path) as connection:
         connection.execute(
             "UPDATE counter_aggregates SET metric_name = ?, dimensions_json = ?",
-            (metric_name, json.dumps(dimensions, sort_keys=True, separators=(",", ":"))),
+            (
+                metric_name,
+                json.dumps(dimensions, sort_keys=True, separators=(",", ":")),
+            ),
         )
 
     [path] = store.create_and_export_package()
@@ -1315,7 +1423,9 @@ def test_package_builder_rejects_tampered_client_resources(tmp_path):
     assert list(outbox_directory.glob("*.json")) == []
 
 
-def test_package_builder_buckets_values_that_drifted_out_of_the_catalog(tmp_path, monkeypatch):
+def test_package_builder_buckets_values_that_drifted_out_of_the_catalog(
+    tmp_path, monkeypatch
+):
     """A catalog-backed value that left the catalog between the recording and packaging
     processes re-buckets to ``custom`` instead of aborting the whole period's package, and
     every other metric in the period still exports (#133017)."""
@@ -1327,10 +1437,19 @@ def test_package_builder_buckets_values_that_drifted_out_of_the_catalog(tmp_path
     store = SharedMetricsStore(database_path, outbox_directory)
     # Recording process: the plugin was a catalog entry, so the row passes record-time
     # validation and is persisted under its real name.
-    monkeypatch.setattr(catalog_module, "plugin_catalog_names", lambda: frozenset({"later-removed-plugin"}))
+    monkeypatch.setattr(
+        catalog_module,
+        "plugin_catalog_names",
+        lambda: frozenset({"later-removed-plugin"}),
+    )
     store.record_counter(
         EXTENSION_INSTALL_METRIC,
-        {"kind": "plugin", "name": "later-removed-plugin", "outcome": "success", "source": "catalog"},
+        {
+            "kind": "plugin",
+            "name": "later-removed-plugin",
+            "outcome": "success",
+            "source": "catalog",
+        },
         _resource(),
     )
     store.record_model_call(_dimensions(), _resource())
@@ -1342,45 +1461,77 @@ def test_package_builder_buckets_values_that_drifted_out_of_the_catalog(tmp_path
     payload = json.loads(package_path.read_text(encoding="utf-8"))
     metrics = {metric["name"]: metric for metric in payload["metrics"]}
     assert metrics[EXTENSION_INSTALL_METRIC]["dimensions"] == {
-        "kind": "plugin", "name": "custom", "outcome": "success", "source": "catalog",
+        "kind": "plugin",
+        "name": "custom",
+        "outcome": "success",
+        "source": "catalog",
     }
     assert metrics[MODEL_ROUTE_METRIC]["dimensions"] == _dimensions()
     # The drifted row settles like any other instead of wedging the period forever.
     assert store._create_package() is None
 
 
-def test_package_builder_settles_rows_an_earlier_build_stored_with_retired_values(tmp_path):
+def test_package_builder_settles_rows_an_earlier_build_stored_with_retired_values(
+    tmp_path,
+):
     """A built-in toolset or tool an earlier build shipped (Spotify, Home Assistant) is no longer in
     the contract: rows holding it re-bucket (merged with their siblings) or, when the field has no
     bucket, stay out, and the rest of the period still exports instead of wedging every package."""
     from clawk_cli.observability.shared_metrics_contract import (
-        TOOL_ENABLED_UNUSED_METRIC, TOOL_UNAVAILABLE_METRIC,
+        TOOL_ENABLED_UNUSED_METRIC,
+        TOOL_UNAVAILABLE_METRIC,
     )
 
     database_path = tmp_path / "metrics.sqlite3"
     outbox_directory = tmp_path / "outbox"
     store = SharedMetricsStore(database_path, outbox_directory)
     store.record_model_call(_dimensions(), _resource())
-    for dims in ({"toolset": "file", "used": "yes"}, {"toolset": "terminal", "used": "yes"}):
+    for dims in (
+        {"toolset": "file", "used": "yes"},
+        {"toolset": "terminal", "used": "yes"},
+    ):
         store.record_counter(TOOL_ENABLED_UNUSED_METRIC, dims, _resource())
-    store.record_counter(TOOL_UNAVAILABLE_METRIC, {**_dimensions(), "tool_name": "read_file"}, _resource())
+    store.record_counter(
+        TOOL_UNAVAILABLE_METRIC,
+        {**_dimensions(), "tool_name": "read_file"},
+        _resource(),
+    )
     retired = {
-        '{"toolset":"file","used":"yes"}': {"toolset": "retired-toolset-a", "used": "yes"},
-        '{"toolset":"terminal","used":"yes"}': {"toolset": "retired-toolset-b", "used": "yes"},
+        '{"toolset":"file","used":"yes"}': {
+            "toolset": "retired-toolset-a",
+            "used": "yes",
+        },
+        '{"toolset":"terminal","used":"yes"}': {
+            "toolset": "retired-toolset-b",
+            "used": "yes",
+        },
     }
     with sqlite3.connect(database_path) as connection:
         for old, dims in retired.items():
-            connection.execute("UPDATE counter_aggregates SET dimensions_json = ? WHERE dimensions_json = ?",
-                               (json.dumps(dims, separators=(",", ":")), old))
-        connection.execute("UPDATE counter_aggregates SET dimensions_json = ? WHERE metric_name = ?",
-                           (json.dumps({**_dimensions(), "tool_name": "retired_tool"}), TOOL_UNAVAILABLE_METRIC))
+            connection.execute(
+                "UPDATE counter_aggregates SET dimensions_json = ? WHERE dimensions_json = ?",
+                (json.dumps(dims, separators=(",", ":")), old),
+            )
+        connection.execute(
+            "UPDATE counter_aggregates SET dimensions_json = ? WHERE metric_name = ?",
+            (
+                json.dumps({**_dimensions(), "tool_name": "retired_tool"}),
+                TOOL_UNAVAILABLE_METRIC,
+            ),
+        )
 
     [package_path] = store.create_and_export_package()
 
     text = package_path.read_text(encoding="utf-8")
     assert "retired" not in text
-    metrics = [(m["name"], m["dimensions"], m["value"]) for m in json.loads(text)["metrics"]]
-    assert (TOOL_ENABLED_UNUSED_METRIC, {"toolset": "custom", "used": "yes"}, 2) in metrics
+    metrics = [
+        (m["name"], m["dimensions"], m["value"]) for m in json.loads(text)["metrics"]
+    ]
+    assert (
+        TOOL_ENABLED_UNUSED_METRIC,
+        {"toolset": "custom", "used": "yes"},
+        2,
+    ) in metrics
     assert [m for m in metrics if m[0] == TOOL_UNAVAILABLE_METRIC] == []
     assert (MODEL_ROUTE_METRIC, _dimensions(), 1) in metrics
     assert store._create_package() is None
@@ -1418,9 +1569,7 @@ def test_retention_prunes_only_expired_exported_history(tmp_path):
             (expired_path.stem,),
         )
 
-    store._prune_expired_history(
-        now=datetime(2026, 7, 23, tzinfo=UTC)
-    )
+    store._prune_expired_history(now=datetime(2026, 7, 23, tzinfo=UTC))
 
     assert not expired_path.exists()
     assert current_path.exists()
@@ -1439,9 +1588,10 @@ def test_retention_prunes_only_expired_exported_history(tmp_path):
         current_path.stem,
         pending_package["package_id"],
     }
-    assert next(
-        row[1] for row in outbox_rows if row[0] == pending_package["package_id"]
-    ) is None
+    assert (
+        next(row[1] for row in outbox_rows if row[0] == pending_package["package_id"])
+        is None
+    )
     assert aggregate_versions == {"current-version", "pending-version"}
 
 

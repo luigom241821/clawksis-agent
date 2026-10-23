@@ -23,7 +23,9 @@ def _make_event(text="/model"):
     return MessageEvent(
         text=text,
         message_type=MessageType.TEXT,
-        source=SessionSource(platform=Platform.TELEGRAM, chat_id="12345", chat_type="dm"),
+        source=SessionSource(
+            platform=Platform.TELEGRAM, chat_id="12345", chat_type="dm"
+        ),
     )
 
 
@@ -57,5 +59,7 @@ async def test_direct_model_switch_runs_off_the_event_loop(tmp_path, monkeypatch
     result = await _make_runner()._handle_model_command(_make_event("/model gpt-5.4"))
 
     assert switch_threads, "switch_model never ran"
-    assert threading.get_ident() not in switch_threads, "switch_model ran inline on the event-loop thread"
+    assert threading.get_ident() not in switch_threads, (
+        "switch_model ran inline on the event-loop thread"
+    )
     assert result is not None and "nope" in result

@@ -34,9 +34,15 @@ def _submit(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Future | None:
     try:
         with _executor_lock:
             if _executor is None:
-                _executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="clawk-gateway-metrics")
-        return _executor.submit(contextvars.copy_context().run, _guarded, fn, *args, **kwargs)
-    except Exception:  # interpreter shutdown refuses new work: the metric is simply dropped
+                _executor = ThreadPoolExecutor(
+                    max_workers=1, thread_name_prefix="clawk-gateway-metrics"
+                )
+        return _executor.submit(
+            contextvars.copy_context().run, _guarded, fn, *args, **kwargs
+        )
+    except (
+        Exception
+    ):  # interpreter shutdown refuses new work: the metric is simply dropped
         logger.debug("Gateway shared metric not scheduled", exc_info=True)
         return None
 
@@ -55,7 +61,9 @@ def drain(timeout: float = 5.0) -> None:
         future.result(timeout=timeout)
 
 
-def _emit(mark_name: str, build: Callable[..., dict[str, str] | None], **raw: Any) -> None:
+def _emit(
+    mark_name: str, build: Callable[..., dict[str, str] | None], **raw: Any
+) -> None:
     from . import shared_metrics_contract as contract
     from .shared_metrics_events import _emit as emit
 
@@ -76,11 +84,30 @@ _STATUS_CLASSES = {401: "auth", 403: "forbidden", 413: "too_long", 429: "rate_li
 _CODE_CLASSES = (
     (("missing", "dependency", "npm", "config", "conflict", "lock", "bind"), "config"),
     (("auth", "credential", "token", "unauthor", "forbidden", "login"), "auth"),
-    (("ratelimit", "rate_limit", "flood", "too_many", "toomany", "429"), "rate_limited"),
-    (("network", "connect", "timeout", "socket", "dns", "ssl", "lost", "exited", "stream"), "network"),
+    (
+        ("ratelimit", "rate_limit", "flood", "too_many", "toomany", "429"),
+        "rate_limited",
+    ),
+    (
+        (
+            "network",
+            "connect",
+            "timeout",
+            "socket",
+            "dns",
+            "ssl",
+            "lost",
+            "exited",
+            "stream",
+        ),
+        "network",
+    ),
 )
 _SEND_KIND_CLASSES = {
-    "too_long": "too_long", "forbidden": "forbidden", "rate_limited": "rate_limited", "transient": "network",
+    "too_long": "too_long",
+    "forbidden": "forbidden",
+    "rate_limited": "rate_limited",
+    "transient": "network",
 }
 
 
@@ -92,7 +119,11 @@ def _status_code(exc: BaseException | None) -> int | None:
     for holder in (exc, getattr_static(exc, "response", None)):
         for attr in ("status_code", "status", "code"):
             value = getattr_static(holder, attr, None)
-            if isinstance(value, int) and not isinstance(value, bool) and 100 <= value <= 599:
+            if (
+                isinstance(value, int)
+                and not isinstance(value, bool)
+                and 100 <= value <= 599
+            ):
                 return value
     return None
 
@@ -101,7 +132,10 @@ def _code_class(code: Any) -> str | None:
     text = str(code or "").strip().lower()
     if not text:
         return None
-    return next((cls for needles, cls in _CODE_CLASSES if any(n in text for n in needles)), "other")
+    return next(
+        (cls for needles, cls in _CODE_CLASSES if any(n in text for n in needles)),
+        "other",
+    )
 
 
 def _exception_class(exc: BaseException | None) -> str:
@@ -119,10 +153,15 @@ def _exception_class(exc: BaseException | None) -> str:
         return "network"
     names = "".join(cls.__name__.lower() for cls in type(exc).__mro__[:-1])
     # Type names say auth / rate / network; "configuration" is only ever a Clawksis fatal code.
-    return next((cls for needles, cls in _CODE_CLASSES[1:] if any(n in names for n in needles)), "other")
+    return next(
+        (cls for needles, cls in _CODE_CLASSES[1:] if any(n in names for n in needles)),
+        "other",
+    )
 
 
-def connect_error_class(*, exc: BaseException | None = None, fatal_code: Any = None) -> str:
+def connect_error_class(
+    *, exc: BaseException | None = None, fatal_code: Any = None
+) -> str:
     if fatal_code:
         return _code_class(fatal_code) or "other"
     return _exception_class(exc)
@@ -137,7 +176,9 @@ def delivery_failure_class(result: Any = None, exc: BaseException | None = None)
         cls = _exception_class(exc)
         return cls if cls in {"auth", "network", "rate_limited"} else "other"
     raw = getattr(result, "raw_response", None)
-    status = raw.get("status_code", raw.get("status")) if isinstance(raw, dict) else None
+    status = (
+        raw.get("status_code", raw.get("status")) if isinstance(raw, dict) else None
+    )
     if isinstance(status, int) and status in _STATUS_CLASSES:
         return _STATUS_CLASSES[status]
     if getattr(result, "retry_after", None) is not None:
@@ -154,23 +195,46 @@ def delivery_failure_class(result: Any = None, exc: BaseException | None = None)
 
 # ---- clawk.platform.health ----
 
-def platform_health_fields(*, platform: Any, event: str, error_class: str) -> dict[str, str] | None:
+
+def platform_health_fields(
+    *, platform: Any, event: str, error_class: str
+) -> dict[str, str] | None:
     from . import shared_metrics_contract as contract
 
     if event not in contract.PLATFORM_HEALTH_EVENTS:
         return None
     ok = event in {"connect_ok", "reconnect"}
     return {
-        "error_class": "none" if ok else error_class if error_class in contract.PLATFORM_ERROR_CLASSES else "other",
+        "error_class": "none"
+        if ok
+        else error_class
+        if error_class in contract.PLATFORM_ERROR_CLASSES
+        else "other",
         "event": event,
         "platform": _platform(platform),
     }
 
 
-def _record_health(platform: Any, event: str, *, exc: BaseException | None = None, fatal_code: Any = None) -> None:
+def _record_health(
+    platform: Any,
+    event: str,
+    *,
+    exc: BaseException | None = None,
+    fatal_code: Any = None,
+) -> None:
     # Classified on the worker: whatever an exception carries, the caller re-raising it never sees us.
-    error_class = "none" if event in {"connect_ok", "reconnect"} else connect_error_class(exc=exc, fatal_code=fatal_code)
-    _emit("PLATFORM_HEALTH_MARK", platform_health_fields, platform=platform, event=event, error_class=error_class)
+    error_class = (
+        "none"
+        if event in {"connect_ok", "reconnect"}
+        else connect_error_class(exc=exc, fatal_code=fatal_code)
+    )
+    _emit(
+        "PLATFORM_HEALTH_MARK",
+        platform_health_fields,
+        platform=platform,
+        event=event,
+        error_class=error_class,
+    )
 
 
 def _in_home(home: Any, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
@@ -191,7 +255,14 @@ def _in_home(home: Any, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> No
 _failing_connects: dict[tuple[str, str], str] = {}
 
 
-def _record_connect(platform: Any, event: str, *, exc: BaseException | None, fatal_code: Any, terminal: bool) -> None:
+def _record_connect(
+    platform: Any,
+    event: str,
+    *,
+    exc: BaseException | None,
+    fatal_code: Any,
+    terminal: bool,
+) -> None:
     from clawk_constants import get_clawk_home
 
     from .relay_shared_metrics import enabled
@@ -201,26 +272,49 @@ def _record_connect(platform: Any, event: str, *, exc: BaseException | None, fat
     day = datetime.now(UTC).date().isoformat()
     if event != "connect_failed" or terminal:
         counted = _failing_connects.pop(key, None) == day
-    elif not enabled():  # nothing is recorded, so nothing is latched: opting in mid-outage counts it
+    elif (
+        not enabled()
+    ):  # nothing is recorded, so nothing is latched: opting in mid-outage counts it
         return
     else:
         counted = _failing_connects.get(key) == day
         _failing_connects[key] = day
-    if not (counted and event == "connect_failed"):  # else: a watcher retry already counted today
+    if not (
+        counted and event == "connect_failed"
+    ):  # else: a watcher retry already counted today
         _record_health(platform, event, exc=exc, fatal_code=fatal_code)
 
 
 def record_platform_connect(
-    adapter: Any, platform: Any, *, is_reconnect: bool, ok: bool, exc: BaseException | None = None,
+    adapter: Any,
+    platform: Any,
+    *,
+    is_reconnect: bool,
+    ok: bool,
+    exc: BaseException | None = None,
 ) -> None:
     """One adapter connect attempt (cold start or reconnect watcher), from the runner's single
     connect seam. ``connect_failed`` counts a failed EPISODE once per profile, platform and UTC day:
     the watcher's backoff retries are not new failures, so the next row is the success that ends
     it (or the next day it is still failing). A non-retryable failure ends its episode."""
     event = ("reconnect" if is_reconnect else "connect_ok") if ok else "connect_failed"
-    fatal_code = None if ok or exc is not None else getattr(adapter, "fatal_error_code", None)
-    terminal = not ok and exc is None and bool(fatal_code) and not getattr(adapter, "fatal_error_retryable", True)
-    _submit(_record_connect, platform, event, exc=exc, fatal_code=fatal_code, terminal=terminal)
+    fatal_code = (
+        None if ok or exc is not None else getattr(adapter, "fatal_error_code", None)
+    )
+    terminal = (
+        not ok
+        and exc is None
+        and bool(fatal_code)
+        and not getattr(adapter, "fatal_error_retryable", True)
+    )
+    _submit(
+        _record_connect,
+        platform,
+        event,
+        exc=exc,
+        fatal_code=fatal_code,
+        terminal=terminal,
+    )
 
 
 # The user turned the platform off (relay opt-out revokes its credential): not a lost connection.
@@ -234,16 +328,26 @@ def record_platform_disconnect(adapter: Any, *, clawk_home: Any = None) -> None:
     fatal_code = getattr(adapter, "fatal_error_code", None)
     if fatal_code in _USER_CHOSEN_FATAL_CODES:
         return
-    _submit(_in_home, clawk_home, _record_health, adapter, "disconnect", fatal_code=fatal_code)
+    _submit(
+        _in_home,
+        clawk_home,
+        _record_health,
+        adapter,
+        "disconnect",
+        fatal_code=fatal_code,
+    )
 
 
 # ---- clawk.platform.delivery + clawk.gateway.reply_latency ----
+
 
 def delivery_fields(*, platform: Any, failure_class: str) -> dict[str, str]:
     from . import shared_metrics_contract as contract
 
     return {
-        "failure_class": failure_class if failure_class in contract.DELIVERY_FAILURE_CLASSES else "other",
+        "failure_class": failure_class
+        if failure_class in contract.DELIVERY_FAILURE_CLASSES
+        else "other",
         "outcome": "sent" if failure_class == "none" else "failed",
         "platform": _platform(platform),
     }
@@ -272,11 +376,23 @@ def records_delivery(send: Callable[..., Any]) -> Callable[..., Any]:
 
 
 def _record_delivery(
-    adapter: Any, result: Any = None, *, exc: BaseException | None = None, chat_id: Any = None,
+    adapter: Any,
+    result: Any = None,
+    *,
+    exc: BaseException | None = None,
+    chat_id: Any = None,
 ) -> None:
-    failure_class = "none" if exc is None and result.success else delivery_failure_class(result, exc)
-    _emit("PLATFORM_DELIVERY_MARK", delivery_fields, platform=_source_platform(adapter, chat_id),
-          failure_class=failure_class)
+    failure_class = (
+        "none"
+        if exc is None and result.success
+        else delivery_failure_class(result, exc)
+    )
+    _emit(
+        "PLATFORM_DELIVERY_MARK",
+        delivery_fields,
+        platform=_source_platform(adapter, chat_id),
+        failure_class=failure_class,
+    )
 
 
 def stops_reply_clock(send_or_edit: Callable[..., Any]) -> Callable[..., Any]:
@@ -286,13 +402,20 @@ def stops_reply_clock(send_or_edit: Callable[..., Any]) -> Callable[..., Any]:
     async def wrapper(self, *args: Any, **kwargs: Any) -> Any:
         ok = await send_or_edit(self, *args, **kwargs)
         if ok is True and getattr(self, "_last_sent_text", None):
-            stop_reply_clock(getattr(self, "adapter", None), getattr(self, "chat_id", None))
+            stop_reply_clock(
+                getattr(self, "adapter", None), getattr(self, "chat_id", None)
+            )
         return ok
 
     return wrapper
 
 
-_REPLY_THRESHOLDS = ((2.0, "lt_2s"), (5.0, "2s_to_5s"), (15.0, "5s_to_15s"), (60.0, "15s_to_60s"))
+_REPLY_THRESHOLDS = (
+    (2.0, "lt_2s"),
+    (5.0, "2s_to_5s"),
+    (15.0, "5s_to_15s"),
+    (60.0, "15s_to_60s"),
+)
 _REPLY_CLOCK_MAX = 1024
 _REPLY_CLOCK_MAX_AGE = 3600.0
 # (platform value, chat id) -> (monotonic start, owning Clawksis home). Keyed without the profile: the
@@ -311,7 +434,9 @@ def _source_platform(adapter: Any, chat_id: Any) -> Any:
     """The platform a fronting adapter's chat really lives on (the relay connector learned it from
     the inbound, else the one platform it fronts); the adapter's own platform otherwise. Read-only."""
     platform = getattr(adapter, "platform", None)
-    if str(getattr(platform, "value", platform) or "") not in _FRONTING_PLATFORMS or chat_id in (None, ""):
+    if str(
+        getattr(platform, "value", platform) or ""
+    ) not in _FRONTING_PLATFORMS or chat_id in (None, ""):
         return adapter
     resolve = getattr(adapter, "_metrics_platform", None)
     try:
@@ -327,14 +452,23 @@ def _clock_key(platform: Any, chat_id: Any) -> tuple[str, str] | None:
 
 def start_reply_clock(source: Any, *, internal: bool = False) -> None:
     """An inbound user message was accepted as a new agent turn (internal events never are)."""
-    key = None if internal else _clock_key(getattr(source, "platform", None), getattr(source, "chat_id", None))
+    key = (
+        None
+        if internal
+        else _clock_key(
+            getattr(source, "platform", None), getattr(source, "chat_id", None)
+        )
+    )
     if key is None:
         return
     from clawk_constants import get_clawk_home
 
     home = str(get_clawk_home())
     with _reply_lock:
-        for table, value in ((_reply_clocks, (time.monotonic(), home)), (_chat_homes, home)):
+        for table, value in (
+            (_reply_clocks, (time.monotonic(), home)),
+            (_chat_homes, home),
+        ):
             table.pop(key, None)
             table[key] = value
             while len(table) > _REPLY_CLOCK_MAX:
@@ -360,7 +494,9 @@ def stop_reply_clock(adapter: Any, chat_id: Any, result: Any = None) -> None:
     """First outbound text for the chat's pending turn (stream first chunk or the final reply; busy
     acks and command replies never stop it). ``result``: a failed send is not a reply."""
     key = _clock_key(getattr(adapter, "platform", None), chat_id)
-    if key is None or (result is not None and getattr(result, "success", False) is not True):
+    if key is None or (
+        result is not None and getattr(result, "success", False) is not True
+    ):
         return
     with _reply_lock:
         started, started_key = _reply_clocks.pop(key, None), key
@@ -373,19 +509,35 @@ def stop_reply_clock(adapter: Any, chat_id: Any, result: Any = None) -> None:
     if started is not None and time.monotonic() - started[0] <= _REPLY_CLOCK_MAX_AGE:
         # Labelled by the platform the message came in on, not the connector that carried the reply.
         platform = started_key[0] if started_key[0] not in _FRONTING_PLATFORMS else None
-        _submit(_in_home, started[1], _emit_reply_latency, adapter, chat_id, platform, time.monotonic() - started[0])
+        _submit(
+            _in_home,
+            started[1],
+            _emit_reply_latency,
+            adapter,
+            chat_id,
+            platform,
+            time.monotonic() - started[0],
+        )
 
 
-def _emit_reply_latency(adapter: Any, chat_id: Any, platform: Any, seconds: float) -> None:
-    _emit("REPLY_LATENCY_MARK", reply_latency_fields,
-          platform=platform or _source_platform(adapter, chat_id), seconds=seconds)
+def _emit_reply_latency(
+    adapter: Any, chat_id: Any, platform: Any, seconds: float
+) -> None:
+    _emit(
+        "REPLY_LATENCY_MARK",
+        reply_latency_fields,
+        platform=platform or _source_platform(adapter, chat_id),
+        seconds=seconds,
+    )
 
 
 def reply_latency_fields(*, platform: Any, seconds: float) -> dict[str, str]:
     from .shared_metrics_contract import _bucket
 
     return {
-        "first_response_bucket": _bucket(max(0.0, seconds), _REPLY_THRESHOLDS, "gte_60s"),
+        "first_response_bucket": _bucket(
+            max(0.0, seconds), _REPLY_THRESHOLDS, "gte_60s"
+        ),
         "platform": _platform(platform),
     }
 
@@ -405,7 +557,9 @@ def cron_delivery_kind(job: Any) -> str:
     if not isinstance(job, dict):
         return "other"
     deliver = job.get("deliver")
-    parts = deliver if isinstance(deliver, (list, tuple)) else str(deliver or "").split(",")
+    parts = (
+        deliver if isinstance(deliver, (list, tuple)) else str(deliver or "").split(",")
+    )
     kinds = {str(p).strip().lower().split(":", 1)[0] for p in parts} - {""}
     if not kinds or kinds <= _LOCAL_DELIVERY:
         return "local"
@@ -436,16 +590,25 @@ def note_cron_skipped(job: Any) -> None:
 
 def _iso_seconds(start: Any, end: Any) -> float:
     try:
-        return max(0.0, (datetime.fromisoformat(str(end)) - datetime.fromisoformat(str(start))).total_seconds())
+        return max(
+            0.0,
+            (
+                datetime.fromisoformat(str(end)) - datetime.fromisoformat(str(start))
+            ).total_seconds(),
+        )
     except (TypeError, ValueError):
         return 0.0
 
 
-def cron_run_fields(*, outcome: str, delivery_kind: str, seconds: float) -> dict[str, str]:
+def cron_run_fields(
+    *, outcome: str, delivery_kind: str, seconds: float
+) -> dict[str, str]:
     from . import shared_metrics_contract as contract
 
     return {
-        "delivery_kind": delivery_kind if delivery_kind in contract.CRON_DELIVERY_KINDS else "other",
+        "delivery_kind": delivery_kind
+        if delivery_kind in contract.CRON_DELIVERY_KINDS
+        else "other",
         "duration_bucket": contract.duration_bucket(int(seconds * 1000)),
         "outcome": outcome if outcome in contract.CRON_RUN_OUTCOMES else "failed",
     }
@@ -468,12 +631,24 @@ def record_cron_finish(record: Any, delivery_outcome: Any = None) -> None:
         outcome = "skipped"
     else:
         outcome = "success" if success else "failed"
-    _submit(_emit, "CRON_RUN_MARK", cron_run_fields, outcome=outcome, delivery_kind=delivery_kind,
-            seconds=_iso_seconds(started, record.get("finished_at")) if started else 0.0)
+    _submit(
+        _emit,
+        "CRON_RUN_MARK",
+        cron_run_fields,
+        outcome=outcome,
+        delivery_kind=delivery_kind,
+        seconds=_iso_seconds(started, record.get("finished_at")) if started else 0.0,
+    )
 
 
 def record_cron_missed(job: Any) -> None:
     """A scheduled occurrence the scheduler dropped without running it (catch-up disabled after
     downtime, or a one-shot past its grace window)."""
-    _submit(_emit, "CRON_RUN_MARK", cron_run_fields, outcome="missed",
-            delivery_kind=cron_delivery_kind(job), seconds=0.0)
+    _submit(
+        _emit,
+        "CRON_RUN_MARK",
+        cron_run_fields,
+        outcome="missed",
+        delivery_kind=cron_delivery_kind(job),
+        seconds=0.0,
+    )

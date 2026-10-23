@@ -8,7 +8,9 @@ from tui_gateway import server
 
 
 def _request(method: str, params: dict) -> dict:
-    return server.handle_request({"jsonrpc": "2.0", "id": "r1", "method": method, "params": params})
+    return server.handle_request(
+        {"jsonrpc": "2.0", "id": "r1", "method": method, "params": params}
+    )
 
 
 def test_client_reports_the_command_and_gateway_hops_do_not_count(monkeypatch):
@@ -16,9 +18,17 @@ def test_client_reports_the_command_and_gateway_hops_do_not_count(monkeypatch):
     monkeypatch.setattr(events, "record_slash_command", lambda **kw: calls.append(kw))
     monkeypatch.setenv("CLAWK_DESKTOP", "1")
     monkeypatch.delenv("CLAWK_DESKTOP_TERMINAL", raising=False)
-    monkeypatch.setitem(server._methods, "slash.exec", lambda rid, params: server._ok(rid, {"output": "ok"}))
+    monkeypatch.setitem(
+        server._methods,
+        "slash.exec",
+        lambda rid, params: server._ok(rid, {"output": "ok"}),
+    )
 
-    assert _request("shared_metrics.slash_command", {"command": "branch"})["result"] == {"ok": True}
-    assert _request("slash.exec", {"command": "branch", "session_id": "s1"})["result"] == {"output": "ok"}
+    assert _request("shared_metrics.slash_command", {"command": "branch"})[
+        "result"
+    ] == {"ok": True}
+    assert _request("slash.exec", {"command": "branch", "session_id": "s1"})[
+        "result"
+    ] == {"output": "ok"}
 
     assert calls == [{"command": "branch", "surface": "desktop"}]

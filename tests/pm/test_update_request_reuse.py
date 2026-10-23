@@ -1,4 +1,5 @@
 """An update reads each successful index/artifact once, not once per target."""
+
 from __future__ import annotations
 
 from argparse import Namespace
@@ -36,19 +37,33 @@ def upstream(dl_server, monkeypatch):
 
     def route(request):
         parsed = urlsplit(request.full_url)
-        request.full_url = url(dl_server, parsed.path + (f"?{parsed.query}" if parsed.query else ""))
+        request.full_url = url(
+            dl_server, parsed.path + (f"?{parsed.query}" if parsed.query else "")
+        )
         return request
 
     real_open = urllib_security.open_credentialed_url
     real_artifact_open = downloader._OPENER.open
     monkeypatch.setattr(RangeHandler, "do_GET", record)
-    monkeypatch.setattr(urllib_security, "open_credentialed_url", lambda req, **kw: real_open(route(req), **kw))
-    monkeypatch.setattr(downloader._OPENER, "open", lambda req, **kw: real_artifact_open(route(req), **kw))
+    monkeypatch.setattr(
+        urllib_security,
+        "open_credentialed_url",
+        lambda req, **kw: real_open(route(req), **kw),
+    )
+    monkeypatch.setattr(
+        downloader._OPENER,
+        "open",
+        lambda req, **kw: real_artifact_open(route(req), **kw),
+    )
     return calls, failures
 
 
-@pytest.mark.parametrize("name", ["npm", "node", "uv", "python", "llamacpp-cpu", "ffmpeg"])
-def test_resolution_reuses_successful_responses_but_refreshes_next_operation(upstream, monkeypatch, tmp_path, name):
+@pytest.mark.parametrize(
+    "name", ["npm", "node", "uv", "python", "llamacpp-cpu", "ffmpeg"]
+)
+def test_resolution_reuses_successful_responses_but_refreshes_next_operation(
+    upstream, monkeypatch, tmp_path, name
+):
     calls, failures = upstream
     package = get_package(name)
     targets = [t for t in ALL_TARGETS if package.missing_reason(t) is None]
@@ -66,24 +81,37 @@ def test_resolution_reuses_successful_responses_but_refreshes_next_operation(ups
         if name == "npm":
             payloads["/-/package/npm/dist-tags"] = {"latest": version}
         elif name == "node":
-            payloads["/dist/index.json"] = [{"version": f"v{version}"}, {"version": "nightly"}]
+            payloads["/dist/index.json"] = [
+                {"version": f"v{version}"},
+                {"version": "nightly"},
+            ]
         elif name == "uv":
             # Three populated pages exercise the real pagination loop.
             for page in range(1, 4):
                 payloads[f"/repos/astral-sh/uv/releases?per_page=30&page={page}"] = [
-                    {"tag_name": version}, *[{"tag_name": "9.0.0", "prerelease": True}] * 29,
+                    {"tag_name": version},
+                    *[{"tag_name": "9.0.0", "prerelease": True}] * 29,
                 ]
         elif name == "python":
             version = f"3.14.{generation}+20990102"
             locked = "3.14.0+20990101"
             # Only one architecture is advertised: sharing JSON must not share its candidates.
             expected_targets = ["linux-x64"]
-            payloads["/repos/astral-sh/python-build-standalone/releases?per_page=30&page=1"] = [{
-                "tag_name": "20990102", "assets": [
-                    {"name": f"cpython-{version}-x86_64-unknown-linux-gnu-install_only.tar.gz"},
-                    {"name": "cpython-3.15.0+20990102-aarch64-apple-darwin-install_only.tar.gz"},
-                ],
-            }]
+            payloads[
+                "/repos/astral-sh/python-build-standalone/releases?per_page=30&page=1"
+            ] = [
+                {
+                    "tag_name": "20990102",
+                    "assets": [
+                        {
+                            "name": f"cpython-{version}-x86_64-unknown-linux-gnu-install_only.tar.gz"
+                        },
+                        {
+                            "name": "cpython-3.15.0+20990102-aarch64-apple-darwin-install_only.tar.gz"
+                        },
+                    ],
+                }
+            ]
         elif name == "llamacpp-cpu":
             version = str(100 + generation)
             locked = "100"
@@ -95,23 +123,28 @@ def test_resolution_reuses_successful_responses_but_refreshes_next_operation(ups
             expected_targets = [t for t in targets if t != "linux-arm64-bionic"]
             payloads["/"] = "\n".join(
                 f'<a href="/download/{osname}/{arch}/{generation}_{version}/ffmpeg.zip">build</a>'
-                for osname in ("linux", "macos") for arch in ("amd64", "arm64")
+                for osname in ("linux", "macos")
+                for arch in ("amd64", "arm64")
             )
             btbn_assets = []
             for arch in ("64", "arm64"):
                 btbn_assets.append(
-                    {"name": f"ffmpeg-n{version}-1-gabcdef-win{arch}-gpl-9.1.zip"})
+                    {"name": f"ffmpeg-n{version}-1-gabcdef-win{arch}-gpl-9.1.zip"}
+                )
                 # Linux comes from BtbN too (Windows .zip, Linux .tar.xz).
                 btbn_assets.append(
-                    {"name": f"ffmpeg-n{version}-1-gabcdef-linux{arch}-gpl-9.1.tar.xz"})
+                    {"name": f"ffmpeg-n{version}-1-gabcdef-linux{arch}-gpl-9.1.tar.xz"}
+                )
             btbn_tag = f"autobuild-2026-{generation:02d}-28-12-00"
             payloads["/repos/BtbN/FFmpeg-Builds/releases?per_page=30&page=1"] = [
                 # Newest tag is the in-progress month's daily, never pinned.
                 {"tag_name": "autobuild-2026-12-01-12-00", "assets": []},
                 {"tag_name": btbn_tag, "assets": btbn_assets},
             ]
-        RangeHandler.payloads = {path: (value if isinstance(value, str) else json.dumps(value)).encode()
-                                 for path, value in payloads.items()}
+        RangeHandler.payloads = {
+            path: (value if isinstance(value, str) else json.dumps(value)).encode()
+            for path, value in payloads.items()
+        }
         # A failed transfer still retries; only the eventual success is reusable.
         retry_path = next(iter(payloads))
         failures[retry_path] = [503]
@@ -121,14 +154,21 @@ def test_resolution_reuses_successful_responses_but_refreshes_next_operation(ups
         assert decision.changed
         if name == "ffmpeg":
             assert set(decision.artifact_updates) == set(expected_targets)
-            assert all(f"/{generation}_{version}/" in urls[0] or f"/{btbn_tag}/" in urls[0]
-                       for urls in decision.artifact_updates.values())
+            assert all(
+                f"/{generation}_{version}/" in urls[0] or f"/{btbn_tag}/" in urls[0]
+                for urls in decision.artifact_updates.values()
+            )
         expected = Counter(dict.fromkeys(payloads, 1))
         expected[retry_path] += 1
         assert Counter(path for path, _ in calls) == expected
         for path, auth in calls:
-            token = (f"github-{generation}" if path.startswith("/repos/") else
-                     f"huggingface-{generation}" if "ggml-org/install.sh" in path else None)
+            token = (
+                f"github-{generation}"
+                if path.startswith("/repos/")
+                else f"huggingface-{generation}"
+                if "ggml-org/install.sh" in path
+                else None
+            )
             assert auth == (f"Bearer {token}" if token else None)
 
     # Recovery semantics differ: npm propagates, while llama's optional pointer
@@ -143,7 +183,9 @@ def test_resolution_reuses_successful_responses_but_refreshes_next_operation(ups
         assert Counter(path for path, _ in calls) == {retry_path: 2}
     elif name == "llamacpp-cpu":
         fallback = "/repos/ggml-org/llama.cpp/releases?per_page=30&page=1"
-        RangeHandler.payloads[fallback] = json.dumps([{"tag_name": f"b{version}"}]).encode()
+        RangeHandler.payloads[fallback] = json.dumps(
+            [{"tag_name": f"b{version}"}]
+        ).encode()
         assert update.resolve_package(package, targets, locked).version == version
         assert Counter(path for path, _ in calls) == {**expected, fallback: 1}
     elif name == "uv":
@@ -159,7 +201,9 @@ def test_resolution_reuses_successful_responses_but_refreshes_next_operation(ups
         # Manual re-pinning also needs a short-lived index scope after removing
         # the old process-wide FFmpeg indexes. Pin real bytes into a real lock.
         failures.clear()
-        monkeypatch.setattr(package, "gaps", {**package.gaps, "linux-arm64-bionic": "separate supplier"})
+        monkeypatch.setattr(
+            package, "gaps", {**package.gaps, "linux-arm64-bionic": "separate supplier"}
+        )
         body = b"advertised ffmpeg artifact"
         for urls in decision.artifact_updates.values():
             RangeHandler.payloads[urlsplit(urls[0]).path] = body
@@ -169,15 +213,32 @@ def test_resolution_reuses_successful_responses_but_refreshes_next_operation(ups
         pinned = Lockfile(lock.path)
         assert pinned.version(name) == version
         for target, urls in decision.artifact_updates.items():
-            assert pinned.artifacts(name, target) == [{"url": urls[0], "sha256": hashlib.sha256(body).hexdigest()}]
-        assert Counter(path for path, _ in calls) == dict.fromkeys(RangeHandler.payloads, 1)
+            assert pinned.artifacts(name, target) == [
+                {"url": urls[0], "sha256": hashlib.sha256(body).hexdigest()}
+            ]
+        assert Counter(path for path, _ in calls) == dict.fromkeys(
+            RangeHandler.payloads, 1
+        )
 
 
-@pytest.mark.parametrize("pointer, tree, expected", [
-    ("b10679\n", [{"path": "b10326/linux"}, {"path": "b10098/win"}, {"path": "b10326/mac"}, {"path": "b9733/mac"}, {"path": "latest/other"}], ["10679", "10326", "10098", "9733"]),
-    (None, [], ["10362", "10217"]),
-    ("malformed", [{"path": "not-a-build"}, {}], ["10362", "10217"]),
-])
+@pytest.mark.parametrize(
+    "pointer, tree, expected",
+    [
+        (
+            "b10679\n",
+            [
+                {"path": "b10326/linux"},
+                {"path": "b10098/win"},
+                {"path": "b10326/mac"},
+                {"path": "b9733/mac"},
+                {"path": "latest/other"},
+            ],
+            ["10679", "10326", "10098", "9733"],
+        ),
+        (None, [], ["10362", "10217"]),
+        ("malformed", [{"path": "not-a-build"}, {}], ["10362", "10217"]),
+    ],
+)
 def test_llama_real_index_fallback(upstream, monkeypatch, pointer, tree, expected):
     calls, _ = upstream
     monkeypatch.delenv("HF_TOKEN", raising=False)
@@ -186,7 +247,9 @@ def test_llama_real_index_fallback(upstream, monkeypatch, pointer, tree, expecte
     latest = "/buckets/ggml-org/install.sh/resolve/latest"
     if pointer is not None:
         RangeHandler.payloads[latest] = pointer.encode()
-    RangeHandler.payloads["/api/buckets/ggml-org/install.sh/tree?limit=1000&offset=0"] = json.dumps(tree).encode()
+    RangeHandler.payloads[
+        "/api/buckets/ggml-org/install.sh/tree?limit=1000&offset=0"
+    ] = json.dumps(tree).encode()
     github = "/repos/ggml-org/llama.cpp/releases?per_page=30&page=1"
     RangeHandler.payloads[github] = b'[{"tag_name":"b10362"},{"tag_name":"b10217"}]'
     assert packages.LlamaCppCpu().latest_versions("linux-x64") == expected
@@ -194,22 +257,34 @@ def test_llama_real_index_fallback(upstream, monkeypatch, pointer, tree, expecte
     assert any(path == github for path, _ in calls) is (pointer != "b10679\n")
 
 
-def test_pinning_hashes_new_npm_url_once_and_keeps_existing_rows(upstream, tmp_path, monkeypatch):
+def test_pinning_hashes_new_npm_url_once_and_keeps_existing_rows(
+    upstream, tmp_path, monkeypatch
+):
     calls, failures = upstream
     monkeypatch.setenv("CLAWK_RUNTIME_DIR", str(tmp_path / "store"))
     package = packages.Npm()
     version = "2.0.0"
     artifact_url = package.fetch_url(version, ALL_TARGETS[0])
     artifact_path = urlsplit(artifact_url).path
-    filename, digest = make_tar(tmp_path, "npm.tgz", {"package/package.json": '{"version":"2.0.0"}'})
+    filename, digest = make_tar(
+        tmp_path, "npm.tgz", {"package/package.json": '{"version":"2.0.0"}'}
+    )
     RangeHandler.payloads[artifact_path] = (tmp_path / filename).read_bytes()
     old = {"url": package.fetch_url("1.0.0", ALL_TARGETS[0]), "sha256": "a" * 64}
     current = {"any": old, "unresolved-target": old}
-    decision = update.Resolved("npm", "1.0.0", "semver", version,
-                               per_target=dict.fromkeys(ALL_TARGETS, version))
+    decision = update.Resolved(
+        "npm",
+        "1.0.0",
+        "semver",
+        version,
+        per_target=dict.fromkeys(ALL_TARGETS, version),
+    )
     pinned = cli._pin_artifacts(package, decision, current)
     assert current == {"any": old, "unresolved-target": old}
-    assert pinned == {**current, **{key: {"url": artifact_url, "sha256": digest} for key in ALL_TARGETS}}
+    assert pinned == {
+        **current,
+        **{key: {"url": artifact_url, "sha256": digest} for key in ALL_TARGETS},
+    }
     assert Counter(path for path, _ in calls) == {artifact_path: 1}
 
     # Existing pins need no download; a separate pin invocation must not retain new hashes.
@@ -224,5 +299,7 @@ def test_pinning_hashes_new_npm_url_once_and_keeps_existing_rows(upstream, tmp_p
     assert current == {"any": old, "unresolved-target": old}
     calls.clear()
     repinned = cli._pin_artifacts(package, decision, current)
-    assert repinned[ALL_TARGETS[-1]]["sha256"] == hashlib.sha256(replacement).hexdigest()
+    assert (
+        repinned[ALL_TARGETS[-1]]["sha256"] == hashlib.sha256(replacement).hexdigest()
+    )
     assert Counter(path for path, _ in calls) == {artifact_path: 1}

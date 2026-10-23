@@ -40,7 +40,9 @@ def _write_config(home, providers):
 def _apply(provider, model="local/model"):
     import clawk_cli.web_server as ws
 
-    return _web_server_config._apply_model_assignment_sync("main", provider, model, "", "")
+    return _web_server_config._apply_model_assignment_sync(
+        "main", provider, model, "", ""
+    )
 
 
 def _raw_model_cfg(home):
@@ -51,7 +53,12 @@ def test_env_ref_key_carries_template_not_plaintext(_clawk_home, monkeypatch):
     monkeypatch.setenv("MY_LOCAL_KEY", "sk-super-secret-value")
     _write_config(
         _clawk_home,
-        {"mylocal": {"base_url": "http://localhost:1234/v1", "api_key": "${MY_LOCAL_KEY}"}},
+        {
+            "mylocal": {
+                "base_url": "http://localhost:1234/v1",
+                "api_key": "${MY_LOCAL_KEY}",
+            }
+        },
     )
     _apply("mylocal")
     model_cfg = _raw_model_cfg(_clawk_home)
@@ -65,7 +72,12 @@ def test_key_env_entry_carries_pointer(_clawk_home, monkeypatch):
     monkeypatch.setenv("MYLOCAL_API_KEY", "sk-keyenv-secret")
     _write_config(
         _clawk_home,
-        {"mylocal": {"base_url": "http://localhost:1234/v1", "key_env": "MYLOCAL_API_KEY"}},
+        {
+            "mylocal": {
+                "base_url": "http://localhost:1234/v1",
+                "key_env": "MYLOCAL_API_KEY",
+            }
+        },
     )
     _apply("mylocal")
     raw = (_clawk_home / "config.yaml").read_text()
@@ -76,7 +88,12 @@ def test_key_env_entry_carries_pointer(_clawk_home, monkeypatch):
 def test_literal_key_still_mirrored(_clawk_home):
     _write_config(
         _clawk_home,
-        {"mylocal": {"base_url": "http://localhost:1234/v1", "api_key": "literal-key-abc"}},
+        {
+            "mylocal": {
+                "base_url": "http://localhost:1234/v1",
+                "api_key": "literal-key-abc",
+            }
+        },
     )
     _apply("mylocal")
     assert _raw_model_cfg(_clawk_home).get("api_key") == "literal-key-abc"

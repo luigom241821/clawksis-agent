@@ -47,8 +47,8 @@ def _flush_agent(db, session_id):
         _compression_adoption_failed=False,
     )
     agent._ensure_db_session = lambda: None
-    agent._flush_messages_to_session_db = (
-        AIAgent._flush_messages_to_session_db.__get__(agent, AIAgent)
+    agent._flush_messages_to_session_db = AIAgent._flush_messages_to_session_db.__get__(
+        agent, AIAgent
     )
     agent._flush_messages_to_session_db_unlocked = (
         AIAgent._flush_messages_to_session_db_unlocked.__get__(agent, AIAgent)
@@ -68,7 +68,9 @@ def _stomp_fts_shadow(db_path):
     """Overwrite the messages_fts shadow b-tree blocks: FTS5 raises SQLITE_CORRUPT_VTAB on the
     next MATCH / sync-trigger insert while every canonical row stays intact."""
     raw = sqlite3.connect(str(db_path))
-    raw.execute("UPDATE messages_fts_data SET block = X'DEADBEEFDEADBEEFDEADBEEFDEADBEEF'")
+    raw.execute(
+        "UPDATE messages_fts_data SET block = X'DEADBEEFDEADBEEFDEADBEEFDEADBEEF'"
+    )
     raw.commit()
     raw.close()
 
@@ -76,7 +78,10 @@ def _stomp_fts_shadow(db_path):
 def _contents(db_path):
     raw = sqlite3.connect(str(db_path))
     try:
-        return [r[0] for r in raw.execute("SELECT content FROM messages ORDER BY id").fetchall()]
+        return [
+            r[0]
+            for r in raw.execute("SELECT content FROM messages ORDER BY id").fetchall()
+        ]
     finally:
         raw.close()
 
@@ -126,7 +131,9 @@ def test_escaped_fts_only_error_is_index_scoped_not_quarantined(tmp_path, monkey
             [{"role": "user", "content": "refused detach"}], []
         )
         if ok is True:
-            pytest.skip("this SQLite build defers FTS shadow corruption past the insert trigger")
+            pytest.skip(
+                "this SQLite build defers FTS shadow corruption past the insert trigger"
+            )
 
         assert ok is False
         assert agent._last_persistence_error_cause == "fts_index"
@@ -162,7 +169,9 @@ def test_detach_waits_out_a_sibling_holding_the_write_lock(tmp_path):
 
         def check_then_contend(exc):
             hit = real_check(exc)
-            if hit and not holder:  # the writer has rolled back; the sibling grabs the lock now
+            if (
+                hit and not holder
+            ):  # the writer has rolled back; the sibling grabs the lock now
                 holder.append(threading.Thread(target=sibling))
                 holder[0].start()
                 assert held.wait(10)
@@ -172,7 +181,9 @@ def test_detach_waits_out_a_sibling_holding_the_write_lock(tmp_path):
         db._is_fts_write_corruption_error = check_then_contend
         db.append_message("s1", "user", "lands after the sibling lets go")
         if not holder:
-            pytest.skip("this SQLite build defers FTS shadow corruption past the insert trigger")
+            pytest.skip(
+                "this SQLite build defers FTS shadow corruption past the insert trigger"
+            )
         holder[0].join(10)
 
         assert _contents(db_path)[-1] == "lands after the sibling lets go"
@@ -201,7 +212,10 @@ def test_quarantine_while_detach_waits_commits_nothing(tmp_path):
             raw.execute("COMMIT")
             raw.close()
 
-        real_check, real_sleep = db._is_fts_write_corruption_error, db._sleep_before_write_retry
+        real_check, real_sleep = (
+            db._is_fts_write_corruption_error,
+            db._sleep_before_write_retry,
+        )
         holder = []
 
         def check_then_contend(exc):
@@ -213,7 +227,9 @@ def test_quarantine_while_detach_waits_commits_nothing(tmp_path):
             return hit
 
         def quarantine_then_sleep(deadline, patience_s):
-            mark_storage_corrupt(db_path, "database disk image is malformed (sibling handle)")
+            mark_storage_corrupt(
+                db_path, "database disk image is malformed (sibling handle)"
+            )
             release.set()
             return real_sleep(deadline, patience_s)
 
@@ -222,7 +238,9 @@ def test_quarantine_while_detach_waits_commits_nothing(tmp_path):
         with pytest.raises(StateDbCorruptError):
             db.append_message("s1", "user", "must not land on a quarantined file")
         if not holder:
-            pytest.skip("this SQLite build defers FTS shadow corruption past the insert trigger")
+            pytest.skip(
+                "this SQLite build defers FTS shadow corruption past the insert trigger"
+            )
         holder[0].join(10)
 
         raw = sqlite3.connect(str(db_path))
@@ -230,7 +248,9 @@ def test_quarantine_while_detach_waits_commits_nothing(tmp_path):
             triggers = raw.execute(
                 "SELECT count(*) FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'messages_fts%'"
             ).fetchone()[0]
-            stale = raw.execute("SELECT value FROM state_meta WHERE key LIKE 'fts%stale%'").fetchall()
+            stale = raw.execute(
+                "SELECT value FROM state_meta WHERE key LIKE 'fts%stale%'"
+            ).fetchall()
         finally:
             raw.close()
         assert triggers > 0

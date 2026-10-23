@@ -16,19 +16,25 @@ method = _registry.method
 # ext -> mime; iteration order is the on-disk lookup order for assets.
 _ASSET_EXTS = {"png": "image/png", "jpg": "image/jpeg", "webp": "image/webp"}
 # ext -> [(start, end, magic bytes)]; format is sniffed, the declared mime is never trusted.
-_ASSET_MAGIC = {"png": [(0, 8, b"\x89PNG\r\n\x1a\n")], "jpg": [(0, 3, b"\xff\xd8\xff")],
-                "webp": [(0, 4, b"RIFF"), (8, 12, b"WEBP")]}
+_ASSET_MAGIC = {
+    "png": [(0, 8, b"\x89PNG\r\n\x1a\n")],
+    "jpg": [(0, 3, b"\xff\xd8\xff")],
+    "webp": [(0, 4, b"RIFF"), (8, 12, b"WEBP")],
+}
 
 
 def _profile_handler(name: str, code: int):
     """``@method(name)`` whose body's uncaught exception becomes ``_err(rid, code, str(e))``."""
+
     def deco(fn):
         def handler(rid, params: dict) -> dict:
             try:
                 return fn(rid, params)
             except Exception as e:
                 return _err(rid, code, str(e))
+
         return method(name)(handler)
+
     return deco
 
 
@@ -40,11 +46,14 @@ def _lazy(module, name):
 
 def _pin_profile_model(profile_dir, provider, model, base_url="") -> None:
     _lazy("clawk_cli.web_routers.profiles", "_write_profile_model")(
-        profile_dir, provider, model, base_url=base_url)
+        profile_dir, provider, model, base_url=base_url
+    )
 
 
 def _model_provider_params(params) -> tuple:
-    return str(params.get("model") or "").strip(), str(params.get("provider") or "").strip()
+    return str(params.get("model") or "").strip(), str(
+        params.get("provider") or ""
+    ).strip()
 
 
 def _try(fn, default):
@@ -67,7 +76,9 @@ def _clawk_home_scope(path):
     #120726). The launch home maps to None so it keeps its frozen launch env (systemd / ``op run``
     keys). No external-source hydration: these bodies read and write config, never call a provider."""
     launch = Path(path).resolve() == Path(_clawk_home).resolve()
-    return _session_profile_runtime_scope({"profile_home": None if launch else str(path)}, hydrate_secrets=False)
+    return _session_profile_runtime_scope(
+        {"profile_home": None if launch else str(path)}, hydrate_secrets=False
+    )
 
 
 def _resolve_profile(rid, params):
@@ -76,6 +87,7 @@ def _resolve_profile(rid, params):
     if not name:
         return name, None, _err(rid, 4063, "name required")
     from clawk_cli.profiles import get_profile_dir
+
     try:
         profile_dir = Path(get_profile_dir(name))
     except ValueError:
@@ -87,10 +99,17 @@ def _resolve_profile(rid, params):
 
 def _read_profile_yaml(profile_dir) -> dict:
     """profile.yaml as a mapping; ``{}`` when missing, unreadable, unparseable, or not a mapping."""
+
     def load():
         import clawk_yaml as yaml
+
         meta_path = profile_dir / "profile.yaml"
-        return (yaml.safe_load(meta_path.read_text(encoding="utf-8")) or {}) if meta_path.is_file() else {}
+        return (
+            (yaml.safe_load(meta_path.read_text(encoding="utf-8")) or {})
+            if meta_path.is_file()
+            else {}
+        )
+
     loaded = _try(load, {})
     return loaded if isinstance(loaded, dict) else {}
 
@@ -103,7 +122,11 @@ def _yaml_scalar_to_json(value):
 
 def _clean_revisions(raw: dict) -> dict:
     """Normalise a ``_ui_meta_revisions`` map: str keys, non-bool ints clamped at 0."""
-    return {str(k): max(0, int(v)) for k, v in raw.items() if isinstance(v, int) and not isinstance(v, bool)}
+    return {
+        str(k): max(0, int(v))
+        for k, v in raw.items()
+        if isinstance(v, int) and not isinstance(v, bool)
+    }
 
 
 def _latest_message_preview(db, session_id):
@@ -116,7 +139,8 @@ def _latest_message_preview(db, session_id):
                 " WHERE session_id = ? AND role IN ('user', 'assistant')"
                 " AND active = 1 AND content IS NOT NULL AND TRIM(content) != ''"
                 " ORDER BY id DESC LIMIT 1",
-                (session_id,)).fetchone()
+                (session_id,),
+            ).fetchone()
     except Exception:
         return ""
     text = " ".join(str(row[0] or "").split()).strip() if row else ""
@@ -134,9 +158,14 @@ def _resurrect_recoverable_canonical(db, profile_path, session_id):
         if not row or not row.get("archived"):
             return False
         tip_id = _try(lambda: db.get_compression_tip(session_id), None) or session_id
-        tip = (_try(lambda: db.get_session(tip_id), None) or row) if tip_id != session_id else row
+        tip = (
+            (_try(lambda: db.get_session(tip_id), None) or row)
+            if tip_id != session_id
+            else row
+        )
         from clawk_state import SessionDB
         from clawk_state_registry import acquire
+
         if (tip.get("end_reason") or "") not in SessionDB.RECOVERABLE_END_REASONS:
             return False
         wdb = acquire(Path(profile_path) / "state.db")
@@ -181,17 +210,26 @@ def _canonical_session_row(db, profile_path):
         # recoverability READ-ONLY first so the writable open (20s write-lock patience, the very stall this
         # refactor removes from the 5s poll) is paid only in the rare accidental-archive case, then run the
         # real predicate through unarchive_recoverable_session on a short-lived writable handle.
-        if row.get("archived") and not _resurrect_recoverable_canonical(db, profile_path, session_id):
+        if row.get("archived") and not _resurrect_recoverable_canonical(
+            db, profile_path, session_id
+        ):
             return None
         tip = _try(lambda: db.get_compression_tip(session_id), None) or session_id
         tip_row = db.get_session(tip) or row
         started = row.get("started_at") or 0
         return {
-            "id": session_id, "resolved_id": tip, "root_title": row.get("title") or "",
-            "title": tip_row.get("title") or "", "preview": _latest_message_preview(db, tip),
+            "id": session_id,
+            "resolved_id": tip,
+            "root_title": row.get("title") or "",
+            "title": tip_row.get("title") or "",
+            "preview": _latest_message_preview(db, tip),
             "started_at": tip_row.get("started_at") or started,
-            "last_active": tip_row.get("last_activity_at") or tip_row.get("started_at") or started,
-            "message_count": tip_row.get("message_count") or 0, **_live_count_field(db, tip)}
+            "last_active": tip_row.get("last_activity_at")
+            or tip_row.get("started_at")
+            or started,
+            "message_count": tip_row.get("message_count") or 0,
+            **_live_count_field(db, tip),
+        }
     except Exception:
         return None
 
@@ -210,18 +248,35 @@ def _latest_profile_session_rows(db):
     """
     try:
         human = worker = None
-        for s in db.list_sessions_rich(source=None, limit=20, order_by_last_active=True, compact_rows=True):
-            title, last_active = s.get("title") or "", s.get("last_active") or s.get("started_at") or 0
+        for s in db.list_sessions_rich(
+            source=None, limit=20, order_by_last_active=True, compact_rows=True
+        ):
+            title, last_active = (
+                s.get("title") or "",
+                s.get("last_active") or s.get("started_at") or 0,
+            )
             if _denied_source(s):
                 if worker is None:
-                    worker = {"id": s["id"], "source": (s.get("source") or "").strip().lower(),
-                              "title": title, "last_active": last_active}
-            elif human is None:  # rosters want "where the conversation IS": prefer the newest text
-                human = {"id": s["id"], "title": title,
-                         "preview": _latest_message_preview(db, s["id"]) or s.get("preview") or "",
-                         "started_at": s.get("started_at") or 0, "last_active": last_active,
-                         "message_count": s.get("message_count") or 0,
-                         **_live_count_field(db, s["id"])}
+                    worker = {
+                        "id": s["id"],
+                        "source": (s.get("source") or "").strip().lower(),
+                        "title": title,
+                        "last_active": last_active,
+                    }
+            elif (
+                human is None
+            ):  # rosters want "where the conversation IS": prefer the newest text
+                human = {
+                    "id": s["id"],
+                    "title": title,
+                    "preview": _latest_message_preview(db, s["id"])
+                    or s.get("preview")
+                    or "",
+                    "started_at": s.get("started_at") or 0,
+                    "last_active": last_active,
+                    "message_count": s.get("message_count") or 0,
+                    **_live_count_field(db, s["id"]),
+                }
             if human is not None and worker is not None:
                 break
         return human, worker
@@ -233,16 +288,25 @@ def _profile_session_fields(row, profile_path):
     """Attach last_session / worker_session / canonical_session to a roster row. The DB is a
     read-only attach (a writable ``SessionDB()`` waits up to 20s for the write lock + runs DDL
     and stalled the 5s roster poll); no/unreadable DB -> every field None (the readers swallow)."""
+
     def _read() -> dict:
         db_path = Path(profile_path) / "state.db"
         db = None
         if _try(db_path.exists, False):
-            db = _try(lambda: _lazy("clawk_state", "SessionDB")(db_path=db_path, read_only=True), None)
+            db = _try(
+                lambda: _lazy("clawk_state", "SessionDB")(
+                    db_path=db_path, read_only=True
+                ),
+                None,
+            )
         try:
             last, worker = _latest_profile_session_rows(db)
             # Resolved server-side on every listing so no client carries a session pointer.
-            return {"last_session": last, "worker_session": worker,
-                    "canonical_session": _canonical_session_row(db, profile_path)}
+            return {
+                "last_session": last,
+                "worker_session": worker,
+                "canonical_session": _canonical_session_row(db, profile_path),
+            }
         finally:
             if db is not None:
                 _best_effort(db.close)
@@ -257,16 +321,22 @@ def _profile_session_fields(row, profile_path):
 def _profile_ui_meta_fields(row: dict, profile_dir) -> None:
     """Attach ``ui_meta`` / ``ui_meta_revisions`` / ``has_avatar`` from profile.yaml + assets.
     ``ui_meta_revisions`` is always present: it feature-detects gateway-owned CAS for a new profile."""
+
     def _read() -> dict:
         raw_meta = _read_profile_yaml(profile_dir)
         ui_meta, revisions = raw_meta.get("ui_meta"), raw_meta.get("_ui_meta_revisions")
         # Key order is wire-visible: ui_meta_revisions precedes ui_meta.
-        fields = {"ui_meta_revisions":
-                  _try(lambda: _clean_revisions(revisions), {}) if isinstance(revisions, dict) else {}}
+        fields = {
+            "ui_meta_revisions": _try(lambda: _clean_revisions(revisions), {})
+            if isinstance(revisions, dict)
+            else {}
+        }
         if isinstance(ui_meta, dict) and ui_meta:
             # YAML promotes unquoted timestamps to datetime/date; the handler's contract is JSON, so
             # coerce YAML-only scalars to their ISO string at the boundary (#92506).
-            fields["ui_meta"] = json.loads(json.dumps(ui_meta, default=_yaml_scalar_to_json))
+            fields["ui_meta"] = json.loads(
+                json.dumps(ui_meta, default=_yaml_scalar_to_json)
+            )
         return fields
 
     # Second parse of this profile.yaml in the same request (``read_profile_meta`` already read it
@@ -276,7 +346,12 @@ def _profile_ui_meta_fields(row: dict, profile_dir) -> None:
 
     row.update(cached_ui_meta_fields(profile_dir, _read))
     # Cheap existence flag so rosters skip a get_asset probe per paint.
-    row["has_avatar"] = _try(lambda: any((profile_dir / "assets" / f"avatar.{e}").is_file() for e in _ASSET_EXTS), False)
+    row["has_avatar"] = _try(
+        lambda: any(
+            (profile_dir / "assets" / f"avatar.{e}").is_file() for e in _ASSET_EXTS
+        ),
+        False,
+    )
 
 
 @_profile_handler("profiles.list", 5061)
@@ -284,14 +359,22 @@ def _(rid, params: dict) -> dict:
     """List Clawksis profiles. ``include_sessions`` (default true) adds ``last_session`` /
     ``worker_session`` / ``canonical_session`` so a roster paints previews without N calls."""
     from clawk_cli.profiles import list_profiles
+
     include_sessions = is_truthy_value(params.get("include_sessions", True))
     out = []
     # Roster polls this every 5s: ``skill_count`` is the last known value, refreshed off-request.
     for p in list_profiles(lazy_skill_count=True):
-        row = {"name": p.name, "path": str(p.path), "is_default": bool(p.is_default), "model": p.model,
-               "provider": p.provider, "description": p.description or "",
-               "display_name": p.display_name or "", "skill_count": p.skill_count or 0,
-               "previous_names": list(p.previous_names or [])}
+        row = {
+            "name": p.name,
+            "path": str(p.path),
+            "is_default": bool(p.is_default),
+            "model": p.model,
+            "provider": p.provider,
+            "description": p.description or "",
+            "display_name": p.display_name or "",
+            "skill_count": p.skill_count or 0,
+            "previous_names": list(p.previous_names or []),
+        }
         if include_sessions:
             _profile_session_fields(row, p.path)
         _profile_ui_meta_fields(row, Path(str(p.path)))
@@ -300,7 +383,15 @@ def _(rid, params: dict) -> dict:
     # session, so clients must not append it to SOUL.md. install_id (same value as /api/status)
     # lets a multi-connection client prove WHICH machine answered a routed list.
     from clawk_cli.install_identity import get_install_id
-    return _ok(rid, {"profiles": out, "bot_mode_protocol": True, "install_id": _try(lambda: get_install_id() or "", "")})
+
+    return _ok(
+        rid,
+        {
+            "profiles": out,
+            "bot_mode_protocol": True,
+            "install_id": _try(lambda: get_install_id() or "", ""),
+        },
+    )
 
 
 @method("profiles.create")
@@ -315,14 +406,18 @@ def _(rid, params: dict) -> dict:
         return _err(rid, 4061, "name required")
     try:
         from clawk_cli import profiles as profiles_mod
+
         clone_from = str(params.get("clone_from") or "").strip() or None
         clone_all = is_truthy_value(params.get("clone_all", False))
         path = profiles_mod.create_profile(
-            name=name, clone_from=clone_from, clone_all=clone_all,
+            name=name,
+            clone_from=clone_from,
+            clone_all=clone_all,
             clone_config=bool(clone_from) and not clone_all,
             no_skills=is_truthy_value(params.get("no_skills", False)),
             description=str(params.get("description") or "").strip() or None,
-            clone_channels=is_truthy_value(params.get("clone_channels", False)))
+            clone_channels=is_truthy_value(params.get("clone_channels", False)),
+        )
     except (ValueError, FileExistsError, FileNotFoundError) as e:
         return _err(rid, 4062, str(e))
     except Exception as e:
@@ -331,10 +426,18 @@ def _(rid, params: dict) -> dict:
     if not clone_from:
         _best_effort(lambda: profiles_mod.seed_profile_skills(path, quiet=True))
     if not is_truthy_value(params.get("no_alias", False)):
-        _best_effort(lambda: profiles_mod.check_alias_collision(name) or profiles_mod.create_wrapper_script(name))
+        _best_effort(
+            lambda: (
+                profiles_mod.check_alias_collision(name)
+                or profiles_mod.create_wrapper_script(name)
+            )
+        )
     soul = params.get("soul")
-    soul_written = isinstance(soul, str) and bool(soul.strip()) and _best_effort(
-        lambda: (path / "SOUL.md").write_text(soul, encoding="utf-8"))
+    soul_written = (
+        isinstance(soul, str)
+        and bool(soul.strip())
+        and _best_effort(lambda: (path / "SOUL.md").write_text(soul, encoding="utf-8"))
+    )
     mirrored = _mirror_launch_credentials(path, params)
     model, provider = _model_provider_params(params)
     model_set = False
@@ -342,8 +445,17 @@ def _(rid, params: dict) -> dict:
         model_set = _best_effort(lambda: _pin_profile_model(path, provider, model))
     elif is_truthy_value(params.get("mirror_credentials", True)):
         mirrored["model_inherited"] = _try(lambda: _inherit_launch_model(path), False)
-    return _ok(rid, {"ok": True, "name": name, "path": str(path), "soul_written": soul_written,
-                     "model_set": model_set, "mirrored": mirrored})
+    return _ok(
+        rid,
+        {
+            "ok": True,
+            "name": name,
+            "path": str(path),
+            "soul_written": soul_written,
+            "model_set": model_set,
+            "mirrored": mirrored,
+        },
+    )
 
 
 @_profile_handler("profiles.describe", 5063)
@@ -357,30 +469,68 @@ def _(rid, params: dict) -> dict:
         from agent.skill_utils import iter_skill_index_files
         from clawk_cli.config import load_config
         from clawk_cli.skills_config import get_disabled_skills
+
         cfg = load_config() or {}
         disabled = {s.lower() for s in get_disabled_skills(cfg)}
         skills_root = profile_dir / "skills"
         installed = [
             {"name": md.parent.name, "enabled": md.parent.name.lower() not in disabled}
-            for md in (iter_skill_index_files(skills_root, "SKILL.md") if skills_root.is_dir() else ())]
+            for md in (
+                iter_skill_index_files(skills_root, "SKILL.md")
+                if skills_root.is_dir()
+                else ()
+            )
+        ]
         toolsets_out, pinned_set = _describe_toolsets(cfg)
         soul_path = profile_dir / "SOUL.md"
-        soul = _try(lambda: soul_path.read_text(encoding="utf-8", errors="replace") if soul_path.is_file() else "", "")
+        soul = _try(
+            lambda: (
+                soul_path.read_text(encoding="utf-8", errors="replace")
+                if soul_path.is_file()
+                else ""
+            ),
+            "",
+        )
         mcp_cfg = cfg.get("mcp_servers")
-        mcp_out = _try(lambda: [
-            {"name": str(srv_name), "enabled": _mcp_entry_enabled(entry),
-             "transport": str(entry.get("transport") or "http") if entry.get("url") else "stdio"}
-            for srv_name in sorted(mcp_cfg.keys()) for entry in (mcp_cfg[srv_name],)
-            if isinstance(entry, dict)
-        ], []) if isinstance(mcp_cfg, dict) else []
+        mcp_out = (
+            _try(
+                lambda: [
+                    {
+                        "name": str(srv_name),
+                        "enabled": _mcp_entry_enabled(entry),
+                        "transport": str(entry.get("transport") or "http")
+                        if entry.get("url")
+                        else "stdio",
+                    }
+                    for srv_name in sorted(mcp_cfg.keys())
+                    for entry in (mcp_cfg[srv_name],)
+                    if isinstance(entry, dict)
+                ],
+                [],
+            )
+            if isinstance(mcp_cfg, dict)
+            else []
+        )
         model_cfg = cfg.get("model") if isinstance(cfg.get("model"), dict) else {}
-        meta = _try(lambda: _lazy("clawk_cli.profiles", "read_profile_meta")(profile_dir), {})
-        return _ok(rid, {
-            "name": name, "description": str(meta.get("description") or ""), "soul": soul,
-            "model": {"provider": str(model_cfg.get("provider") or ""),
-                      "default": str(model_cfg.get("default") or "")},
-            "skills": installed, "toolsets": toolsets_out,
-            "toolsets_pinned": pinned_set is not None, "mcp_servers": mcp_out})
+        meta = _try(
+            lambda: _lazy("clawk_cli.profiles", "read_profile_meta")(profile_dir), {}
+        )
+        return _ok(
+            rid,
+            {
+                "name": name,
+                "description": str(meta.get("description") or ""),
+                "soul": soul,
+                "model": {
+                    "provider": str(model_cfg.get("provider") or ""),
+                    "default": str(model_cfg.get("default") or ""),
+                },
+                "skills": installed,
+                "toolsets": toolsets_out,
+                "toolsets_pinned": pinned_set is not None,
+                "mcp_servers": mcp_out,
+            },
+        )
 
 
 @_profile_handler("profiles.configure", 5064)
@@ -395,18 +545,39 @@ def _(rid, params: dict) -> dict:
     if isinstance(params.get("ui_meta"), dict):
         _configure_ui_meta(profile_dir, params, applied)
     if isinstance(params.get("soul"), str):
-        applied["soul"] = _best_effort(lambda: (profile_dir / "SOUL.md").write_text(params["soul"], encoding="utf-8"))
+        applied["soul"] = _best_effort(
+            lambda: (profile_dir / "SOUL.md").write_text(
+                params["soul"], encoding="utf-8"
+            )
+        )
     if isinstance(params.get("description"), str):
         write_meta = _lazy("clawk_cli.profiles", "write_profile_meta")
-        applied["description"] = _best_effort(lambda: write_meta(
-            profile_dir, description=params["description"].strip(), description_auto=False))
+        applied["description"] = _best_effort(
+            lambda: write_meta(
+                profile_dir,
+                description=params["description"].strip(),
+                description_auto=False,
+            )
+        )
     confirm_message = _configure_model(profile_dir, params, applied)
-    if any(isinstance(params.get(k), list) for k in ("disabled_skills", "enabled_toolsets", "enabled_mcp_servers")):
+    if any(
+        isinstance(params.get(k), list)
+        for k in ("disabled_skills", "enabled_toolsets", "enabled_mcp_servers")
+    ):
         _configure_cfg_sections(profile_dir, params, applied)
     # confirm_* is the shape config.set returns, so clients reuse one confirm handler.
-    return _ok(rid, {"ok": all(applied.values()) if applied else True, "applied": applied,
-                     **({"confirm_required": True, "confirm_message": confirm_message}
-                        if confirm_message is not None else {})})
+    return _ok(
+        rid,
+        {
+            "ok": all(applied.values()) if applied else True,
+            "applied": applied,
+            **(
+                {"confirm_required": True, "confirm_message": confirm_message}
+                if confirm_message is not None
+                else {}
+            ),
+        },
+    )
 
 
 @_profile_handler("profiles.set_asset", 5065)
@@ -420,12 +591,21 @@ def _(rid, params: dict) -> dict:
         return _err(rid, 4066, f"unknown asset '{asset}' (supported: avatar)")
     import base64
     import re
+
     _name, profile_dir, err = _resolve_profile(rid, params)
     if err is not None:
         return err
     assets_dir = profile_dir / "assets"
     if is_truthy_value(params.get("clear", False)):
-        return _ok(rid, {"ok": True, "asset": asset, "size": 0, "removed": _unlink_asset_files(assets_dir, asset)})
+        return _ok(
+            rid,
+            {
+                "ok": True,
+                "asset": asset,
+                "size": 0,
+                "removed": _unlink_asset_files(assets_dir, asset),
+            },
+        )
     data = str(params.get("data") or "")
     if not data:
         return _err(rid, 4067, "data required (data URL or base64)")
@@ -436,7 +616,14 @@ def _(rid, params: dict) -> dict:
         return _err(rid, 4068, "data is not valid base64")
     if len(blob) > 2_000_000:
         return _err(rid, 4069, f"asset too large ({len(blob)} bytes; max 2MB)")
-    ext = next((e for e, magic in _ASSET_MAGIC.items() if all(blob[a:b] == m for a, b, m in magic)), None)
+    ext = next(
+        (
+            e
+            for e, magic in _ASSET_MAGIC.items()
+            if all(blob[a:b] == m for a, b, m in magic)
+        ),
+        None,
+    )
     if ext is None:
         return _err(rid, 4070, "unsupported image format (PNG/JPEG/WebP only)")
     assets_dir.mkdir(parents=True, exist_ok=True)
@@ -452,6 +639,7 @@ def _(rid, params: dict) -> dict:
     """Profile asset as a data URL; absent is ``found: false``, not an error."""
     asset = str(params.get("asset") or "avatar").strip().lower()
     import base64
+
     _name, profile_dir, err = _resolve_profile(rid, params)
     if err is not None:
         return err
@@ -459,8 +647,15 @@ def _(rid, params: dict) -> dict:
         target = profile_dir / "assets" / f"{asset}.{ext}"
         if target.is_file():
             blob = target.read_bytes()
-            return _ok(rid, {"found": True, "mime": mime, "size": len(blob),
-                             "data": f"data:{mime};base64,{base64.b64encode(blob).decode('ascii')}"})
+            return _ok(
+                rid,
+                {
+                    "found": True,
+                    "mime": mime,
+                    "size": len(blob),
+                    "data": f"data:{mime};base64,{base64.b64encode(blob).decode('ascii')}",
+                },
+            )
     return _ok(rid, {"found": False})
 
 
@@ -470,6 +665,7 @@ def _mirror_secret(path, launch_home, name: str, wanted) -> bool:
     if not (src.is_file() and wanted(src, dst)):
         return False
     import shutil
+
     shutil.copy2(src, dst)
     with contextlib.suppress(OSError):
         os.chmod(str(dst), 0o600)
@@ -486,6 +682,7 @@ def _mirror_voice_sections(path) -> bool:
     so voice fell back to defaults); True if written."""
     try:
         from clawk_cli.config import read_user_config_raw, save_config
+
         # Launch file RAW too: the loaded config has ${VAR} refs expanded, and the new profile
         # must get the ref (resolved against its own .env), never the launch profile's secret.
         src_cfg = read_user_config_raw()
@@ -511,6 +708,7 @@ def _inherit_launch_model(path) -> bool:
     # inheritance for every non-clone bot ("No inference provider configured" on first message, tester
     # report). Clones bring their own model section and stay untouched.
     from clawk_cli.config import load_config_readonly, read_user_config_raw
+
     with _clawk_home_scope(path):
         dst_model = (read_user_config_raw() or {}).get("model") or {}
     if dst_model.get("provider") and dst_model.get("default"):
@@ -523,23 +721,33 @@ def _inherit_launch_model(path) -> bool:
     # written BEFORE the pin: the pin validates the pick inside the new profile, and an empty profile
     # rejects a provider it has not been told about ("Unknown provider").
     # Seeded from the RAW launch file so a ${VAR} api_key travels as the ref, not its value.
-    seed = _lazy("clawk_cli.profile_model_seed", "launch_model_seed")(read_user_config_raw())
+    seed = _lazy("clawk_cli.profile_model_seed", "launch_model_seed")(
+        read_user_config_raw()
+    )
     if seed.get("providers") or seed.get("custom_providers"):
         from clawk_cli.config import save_config
+
         merge = _lazy("clawk_cli.profile_model_seed", "merge_endpoint_seed")
         with _clawk_home_scope(path):
             save_config(merge(read_user_config_raw(), seed))
     # Bare ``custom``/``local`` carries its endpoint into validation (the new profile's config names
     # none); other providers ignore it. Validation needs the expanded URL, the profile keeps the
     # launch file's spelling so a ${VAR} URL stays a ref.
-    _pin_profile_model(path, str(model_cfg["provider"]), str(model_cfg["default"]),
-                       str(model_cfg.get("base_url") or ""))
+    _pin_profile_model(
+        path,
+        str(model_cfg["provider"]),
+        str(model_cfg["default"]),
+        str(model_cfg.get("base_url") or ""),
+    )
     raw_url = ((read_user_config_raw() or {}).get("model") or {}).get("base_url")
     if isinstance(raw_url, str) and "${" in raw_url:
         from clawk_cli.config import save_config
+
         with _clawk_home_scope(path):
             cfg = read_user_config_raw() or {}
-            if isinstance(cfg.get("model"), dict) and cfg["model"].get("base_url") == model_cfg.get("base_url"):
+            if isinstance(cfg.get("model"), dict) and cfg["model"].get(
+                "base_url"
+            ) == model_cfg.get("base_url"):
                 cfg["model"]["base_url"] = raw_url
                 save_config(cfg)
     return True
@@ -550,25 +758,52 @@ def _mirror_launch_credentials(path, params: dict) -> dict:
     ``share_auth`` reports ``auth: "shared"`` and skips the auth copy; ``mirror_credentials``
     false skips everything. ``model_inherited`` is filled in by the caller."""
     share_auth = is_truthy_value(params.get("share_auth", False))
-    mirrored = {"env": False, "auth": "shared" if share_auth else False, "model_inherited": False,
-                "voice": False}
+    mirrored = {
+        "env": False,
+        "auth": "shared" if share_auth else False,
+        "model_inherited": False,
+        "voice": False,
+    }
     if not is_truthy_value(params.get("mirror_credentials", True)):
         return mirrored
     launch_home = get_clawk_home()
     # .env: only over the seeded comment-only stub (never a clone's secrets).
-    mirrored["env"] = _try(lambda: _mirror_secret(path, launch_home, ".env", lambda src, dst: (
-        _env_has_content(src) and not _try(lambda: _env_has_content(dst), False))), False)
+    mirrored["env"] = _try(
+        lambda: _mirror_secret(
+            path,
+            launch_home,
+            ".env",
+            lambda src, dst: (
+                _env_has_content(src) and not _try(lambda: _env_has_content(dst), False)
+            ),
+        ),
+        False,
+    )
     if mirrored["env"] and not is_truthy_value(params.get("clone_channels", False)):
         # Provider/tool keys are what "mirror credentials" means; the launch profile's bot tokens
         # and allowlists would make the new bot collide with it over one Telegram/Discord bot.
-        _best_effort(lambda: _lazy("clawk_cli.profile_channels", "strip_channel_env_file")(path / ".env"))
-    if not share_auth:  # a copy forks token state: the first refresh in either store strands the other
-        mirrored["auth"] = _try(lambda: _mirror_secret(path, launch_home, "auth.json",
-                                                       lambda src, dst: not dst.exists()), False)
+        _best_effort(
+            lambda: _lazy("clawk_cli.profile_channels", "strip_channel_env_file")(
+                path / ".env"
+            )
+        )
+    if (
+        not share_auth
+    ):  # a copy forks token state: the first refresh in either store strands the other
+        mirrored["auth"] = _try(
+            lambda: _mirror_secret(
+                path, launch_home, "auth.json", lambda src, dst: not dst.exists()
+            ),
+            False,
+        )
         if mirrored["auth"]:
             # Drop single-use OAuth grants (first refresh strands every sibling); they read from the
             # root grant via the pool fallback. API keys stay.
-            _best_effort(lambda: _lazy("clawk_cli.auth", "strip_cloned_single_use_oauth_grants")(path))
+            _best_effort(
+                lambda: _lazy("clawk_cli.auth", "strip_cloned_single_use_oauth_grants")(
+                    path
+                )
+            )
     mirrored["voice"] = _mirror_voice_sections(path)
     return mirrored
 
@@ -577,23 +812,43 @@ def _describe_toolsets(cfg):
     """``(toolsets, pinned_set)`` as the `clawk tools` checklist presents them (the raw registry
     leaks platform composites and reports everything enabled without a pin)."""
     from clawk_cli.tools_config import (
-        _coerce_platform_toolsets_value, _get_effective_configurable_toolsets, _get_platform_tools,
-        _toolset_allowed_for_platform)
+        _coerce_platform_toolsets_value,
+        _get_effective_configurable_toolsets,
+        _get_platform_tools,
+        _toolset_allowed_for_platform,
+    )
     from toolsets import resolve_toolset
-    pinned = _coerce_platform_toolsets_value((cfg.get("platform_toolsets") or {}).get("cli"), "cli")
+
+    pinned = _coerce_platform_toolsets_value(
+        (cfg.get("platform_toolsets") or {}).get("cli"), "cli"
+    )
     pinned_set = _clean_names(pinned) if isinstance(pinned, list) else None
-    platform_enabled = _try(lambda: set(_get_platform_tools(cfg, "cli", include_default_mcp_servers=False)), set())
-    default_off = _try(lambda: _lazy("clawk_cli.tools_config", "_DEFAULT_OFF_TOOLSETS"), set())
+    platform_enabled = _try(
+        lambda: set(_get_platform_tools(cfg, "cli", include_default_mcp_servers=False)),
+        set(),
+    )
+    default_off = _try(
+        lambda: _lazy("clawk_cli.tools_config", "_DEFAULT_OFF_TOOLSETS"), set()
+    )
     toolsets_out = []
     for ts_name, ts_label, ts_desc in _get_effective_configurable_toolsets():
-        enabled = ts_name in (pinned_set if pinned_set is not None else platform_enabled)
+        enabled = ts_name in (
+            pinned_set if pinned_set is not None else platform_enabled
+        )
         # Default-off integrations (+ opt-in yuanbao) are noise unless already enabled.
         if not _toolset_allowed_for_platform(ts_name, "cli") or (
-                (ts_name in default_off or ts_name == "yuanbao") and not enabled):
+            (ts_name in default_off or ts_name == "yuanbao") and not enabled
+        ):
             continue
-        toolsets_out.append({"name": ts_name, "label": ts_label, "description": ts_desc or "",
-                             "tool_count": _try(lambda: len(set(resolve_toolset(ts_name))), 0),
-                             "enabled": enabled})
+        toolsets_out.append(
+            {
+                "name": ts_name,
+                "label": ts_label,
+                "description": ts_desc or "",
+                "tool_count": _try(lambda: len(set(resolve_toolset(ts_name))), 0),
+                "enabled": enabled,
+            }
+        )
     return toolsets_out, pinned_set
 
 
@@ -617,15 +872,24 @@ def _configure_ui_meta(profile_dir, params, applied) -> None:
         with _profile_ui_meta_lock:
             existing = _read_profile_yaml(profile_dir)
             raw_revisions = existing.get("_ui_meta_revisions")
-            revisions = _clean_revisions(raw_revisions if isinstance(raw_revisions, dict) else {})
+            revisions = _clean_revisions(
+                raw_revisions if isinstance(raw_revisions, dict) else {}
+            )
             conflicts = {}
             for key in incoming if isinstance(expected, dict) else ():
                 wanted, actual = expected.get(key), revisions.get(key, 0)
-                if not isinstance(wanted, int) or isinstance(wanted, bool) or wanted < 0 or wanted != actual:
+                if (
+                    not isinstance(wanted, int)
+                    or isinstance(wanted, bool)
+                    or wanted < 0
+                    or wanted != actual
+                ):
                     conflicts[key] = {"expected": wanted, "actual": actual}
             if conflicts:
                 applied["ui_meta_conflicts"] = conflicts
-                applied["ui_meta_revisions"] = {key: revisions.get(key, 0) for key in incoming}
+                applied["ui_meta_revisions"] = {
+                    key: revisions.get(key, 0) for key in incoming
+                }
                 return
             current = existing.get("ui_meta")
             current = current if isinstance(current, dict) else {}
@@ -642,6 +906,7 @@ def _configure_ui_meta(profile_dir, params, applied) -> None:
                 existing.pop("ui_meta", None)
             existing["_ui_meta_revisions"] = revisions
             from utils import atomic_yaml_write
+
             atomic_yaml_write(profile_dir / "profile.yaml", existing, sort_keys=False)
             applied["ui_meta"] = True
             applied["ui_meta_revisions"] = {key: revisions[key] for key in incoming}
@@ -650,8 +915,11 @@ def _configure_ui_meta(profile_dir, params, applied) -> None:
                 # `[bot-meta win=…]` desktop.log line at the same time names the window.
                 logging.getLogger(__name__).info(
                     "ui_meta clawk-bots title for profile %s: %r -> %r (revision %s)",
-                    params.get("name") or profile_dir.name, old_title, _bots_title(current),
-                    revisions.get("clawk-bots"))
+                    params.get("name") or profile_dir.name,
+                    old_title,
+                    _bots_title(current),
+                    revisions.get("clawk-bots"),
+                )
     except Exception:
         applied["ui_meta"] = False
 
@@ -672,9 +940,14 @@ def _configure_model(profile_dir, params, applied):
     # ``_apply_model_switch``.
     if not is_truthy_value(params.get("confirm_expensive_model", False)):
         warn = _lazy("clawk_cli.model_selection_guards", "combined_selection_warning")
-        confirm_message = _try(lambda: getattr(warn(model, provider=provider or None), "message", None), None)
+        confirm_message = _try(
+            lambda: getattr(warn(model, provider=provider or None), "message", None),
+            None,
+        )
     if confirm_message is None:
-        applied["model"] = _best_effort(lambda: _pin_profile_model(profile_dir, provider, model))
+        applied["model"] = _best_effort(
+            lambda: _pin_profile_model(profile_dir, provider, model)
+        )
     return confirm_message
 
 
@@ -700,7 +973,10 @@ def _mcp_entry_enabled(entry: dict) -> bool:
     migrated by config v46) still reads as off."""
     from clawk_cli.tools_config import _parse_enabled_flag
     from tools.mcp_tool_common import mcp_server_enabled
-    return mcp_server_enabled(entry) and not _parse_enabled_flag(entry.get("disabled", False), default=False)
+
+    return mcp_server_enabled(entry) and not _parse_enabled_flag(
+        entry.get("disabled", False), default=False
+    )
 
 
 def _save_mcp_toggles(cfg, enabled, launch_mcp, save_config) -> None:
@@ -709,7 +985,9 @@ def _save_mcp_toggles(cfg, enabled, launch_mcp, save_config) -> None:
     wanted = _clean_names(enabled)
     mcp_cfg = cfg.get("mcp_servers") if isinstance(cfg.get("mcp_servers"), dict) else {}
     for srv in wanted:
-        if not isinstance(mcp_cfg.get(srv), dict) and isinstance(launch_mcp.get(srv), dict):
+        if not isinstance(mcp_cfg.get(srv), dict) and isinstance(
+            launch_mcp.get(srv), dict
+        ):
             mcp_cfg[srv] = dict(launch_mcp[srv])
     for srv, entry in mcp_cfg.items():
         if isinstance(entry, dict):
@@ -733,25 +1011,37 @@ def _configure_cfg_sections(profile_dir, params, applied) -> None:
         launch_mcp = launch_mcp if isinstance(launch_mcp, dict) else {}
     with _clawk_home_scope(profile_dir):
         from clawk_cli.config import load_config, save_config
+
         cfg = load_config() or {}
         if isinstance(params.get("disabled_skills"), list):
             try:
                 from clawk_cli.skills_config import save_disabled_skills
+
                 save_disabled_skills(cfg, _clean_names(params["disabled_skills"]))
                 applied["skills"] = True
                 cfg = load_config() or {}
             except Exception:
                 applied["skills"] = False
         if isinstance(params.get("enabled_toolsets"), list):
-            applied["toolsets"] = _best_effort(lambda: _save_toolset_pin(cfg, params["enabled_toolsets"], save_config))
+            applied["toolsets"] = _best_effort(
+                lambda: _save_toolset_pin(cfg, params["enabled_toolsets"], save_config)
+            )
         if want_mcp:
-            applied["mcp_servers"] = _best_effort(lambda: _save_mcp_toggles(
-                load_config() or {}, params["enabled_mcp_servers"], launch_mcp, save_config))
+            applied["mcp_servers"] = _best_effort(
+                lambda: _save_mcp_toggles(
+                    load_config() or {},
+                    params["enabled_mcp_servers"],
+                    launch_mcp,
+                    save_config,
+                )
+            )
 
 
 def _unlink_asset_files(assets_dir, asset) -> int:
     """Delete every ``<asset>.<ext>`` in ``assets_dir``; returns how many existed."""
-    present = [t for t in (assets_dir / f"{asset}.{ext}" for ext in _ASSET_EXTS) if t.is_file()]
+    present = [
+        t for t in (assets_dir / f"{asset}.{ext}" for ext in _ASSET_EXTS) if t.is_file()
+    ]
     return len([t.unlink() for t in present])
 
 

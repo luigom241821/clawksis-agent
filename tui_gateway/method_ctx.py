@@ -24,6 +24,7 @@ def rebind(fn, g: dict, _seen=None):
         return contextlib.contextmanager(rebind(wrapped, g, _seen))
     closure = fn.__closure__
     if closure:
+
         def _cell(cell):
             try:
                 val = cell.cell_contents
@@ -32,6 +33,7 @@ def rebind(fn, g: dict, _seen=None):
             if isinstance(val, types.FunctionType) and val.__module__ == fn.__module__:
                 return types.CellType(rebind(val, g, _seen))
             return cell
+
         closure = tuple(_cell(c) for c in closure)
     real = types.FunctionType(fn.__code__, g, fn.__name__, fn.__defaults__, closure)
     real.__kwdefaults__ = fn.__kwdefaults__
@@ -49,9 +51,11 @@ class HandlerRegistry:
 
     def method(self, name: str):
         """Drop-in for server.py's ``@method`` decorator (defers registration)."""
+
         def dec(fn):
             self._pending.append((name, fn))
             return fn
+
         return dec
 
     def names(self) -> set[str]:
@@ -72,7 +76,14 @@ class HandlerRegistry:
             server.register_method(name, real)
 
 
-_PLUMBING = {"HandlerRegistry", "method", "_profile_scoped", "register", "rebind", "logger"}
+_PLUMBING = {
+    "HandlerRegistry",
+    "method",
+    "_profile_scoped",
+    "register",
+    "rebind",
+    "logger",
+}
 
 
 def bind_module(module_globals: dict, server, *, skip=()) -> None:
@@ -97,12 +108,22 @@ def bind_module(module_globals: dict, server, *, skip=()) -> None:
         return type(v)(_rebind_in(x) for x in v) if isinstance(v, (tuple, list)) else v
 
     def _has_own_fn(v):
-        items = v.values() if isinstance(v, dict) else v if isinstance(v, (tuple, list)) else None
+        items = (
+            v.values()
+            if isinstance(v, dict)
+            else v
+            if isinstance(v, (tuple, list))
+            else None
+        )
         return _own_fn(v) if items is None else any(_has_own_fn(x) for x in items)
 
     for name, obj in list(module_globals.items()):
-        if (name.startswith("__") or name in _PLUMBING or name in skip
-                or isinstance(obj, (types.ModuleType, HandlerRegistry))):
+        if (
+            name.startswith("__")
+            or name in _PLUMBING
+            or name in skip
+            or isinstance(obj, (types.ModuleType, HandlerRegistry))
+        ):
             continue
         if isinstance(obj, types.FunctionType):
             if obj.__module__ == mod_name:
@@ -110,7 +131,9 @@ def bind_module(module_globals: dict, server, *, skip=()) -> None:
             elif name == obj.__name__:
                 continue  # plain import; server has its own (``_alias = other.fn`` publishes as-is)
         elif isinstance(obj, (dict, tuple, list)) and _has_own_fn(obj):
-            obj = module_globals[name] = _rebind_in(obj)  # keep the split module's own view in sync
+            obj = module_globals[name] = _rebind_in(
+                obj
+            )  # keep the split module's own view in sync
         elif isinstance(obj, type):
             if obj.__module__ != mod_name:
                 continue

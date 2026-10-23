@@ -1,4 +1,5 @@
 """Real CLI readers stay usable while the canonical store has a writer."""
+
 import os
 from pathlib import Path
 import subprocess
@@ -7,11 +8,20 @@ import sys
 
 def test_cli_readers_observe_committed_state_during_writer_transaction(tmp_path):
     repo = Path(__file__).resolve().parents[2]
-    home = tmp_path / 'profile'
+    home = tmp_path / "profile"
     home.mkdir()
-    env = {k: os.environ[k] for k in ('PATH', 'SYSTEMROOT', 'LANG', 'TZ') if k in os.environ}
-    env.update(HOME=str(tmp_path), USERPROFILE=str(tmp_path), CLAWK_HOME=str(home), PYTHONPATH=str(repo))
-    code = '''
+    env = {
+        k: os.environ[k]
+        for k in ("PATH", "SYSTEMROOT", "LANG", "TZ")
+        if k in os.environ
+    }
+    env.update(
+        HOME=str(tmp_path),
+        USERPROFILE=str(tmp_path),
+        CLAWK_HOME=str(home),
+        PYTHONPATH=str(repo),
+    )
+    code = """
 import os, subprocess, sys
 from pathlib import Path
 from clawk_state import SessionDB
@@ -42,7 +52,15 @@ with SessionDB(db_path=path) as owner:
         finally:
             owner._conn.rollback()
     assert owner.get_session_title('committed-fixture') == 'Committed title'
-'''
-    result = subprocess.run([sys.executable, '-c', code], cwd=repo, env=env, stdin=subprocess.DEVNULL,
-                            capture_output=True, text=True, timeout=60, check=False)
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=repo,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
     assert result.returncode == 0, result.stdout + result.stderr

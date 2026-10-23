@@ -19,7 +19,10 @@ from pathlib import Path
 from typing import Optional
 
 # Same profile-aware / fleet-root resolvers the file-safety guards use (fail-open to ~/.clawksis).
-from agent.file_safety import _clawk_home_path as _clawk_home, _clawk_root_path as _canonical_root
+from agent.file_safety import (
+    _clawk_home_path as _clawk_home,
+    _clawk_root_path as _canonical_root,
+)
 
 SENTINEL_NAME = "ESTOP"
 
@@ -69,7 +72,9 @@ def engage(reason: Optional[str] = None) -> Path:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     except OSError:
-        with suppress(OSError):  # Best effort: an empty/partial sentinel still pauses (fail safe).
+        with suppress(
+            OSError
+        ):  # Best effort: an empty/partial sentinel still pauses (fail safe).
             path.touch(exist_ok=True)
     return path
 
@@ -105,7 +110,10 @@ def get_state() -> Optional[dict]:
         with suppress(OSError, ValueError, AttributeError):
             raw = json.loads(path.read_text(encoding="utf-8-sig"))
             if isinstance(raw, dict):
-                state = {"reason": raw.get("reason") or None, "engaged_at": raw.get("engaged_at") or None}
+                state = {
+                    "reason": raw.get("reason") or None,
+                    "engaged_at": raw.get("engaged_at") or None,
+                }
                 break
     return state if found else None
 
@@ -133,6 +141,8 @@ def check_paused(component: str, logger: logging.Logger) -> bool:
         suffix = f" (reason: {reason})" if reason else ""
         logger.info(
             "%s dispatch paused by global emergency stop%s — remove with `clawk resume` (%s)",
-            component, suffix, sentinel_path(),
+            component,
+            suffix,
+            sentinel_path(),
         )
     return True

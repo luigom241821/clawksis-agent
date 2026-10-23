@@ -39,14 +39,19 @@ def _mock_response(content="a perfectly fine summary", finish_reason="stop"):
 
 def _msgs(n=12):
     return [
-        {"role": "user" if i % 2 == 0 else "assistant", "content": f"msg {i} " + "x" * 50}
+        {
+            "role": "user" if i % 2 == 0 else "assistant",
+            "content": f"msg {i} " + "x" * 50,
+        }
         for i in range(n)
     ]
 
 
 class TestResponseFinishReason:
     def test_object_shaped(self):
-        assert _response_finish_reason(_mock_response(finish_reason="length")) == "length"
+        assert (
+            _response_finish_reason(_mock_response(finish_reason="length")) == "length"
+        )
         assert _response_finish_reason(_mock_response(finish_reason="stop")) == "stop"
 
     def test_dict_shaped(self):
@@ -54,7 +59,9 @@ class TestResponseFinishReason:
         assert _response_finish_reason(resp) == "length"
 
     def test_missing_field_is_empty(self):
-        assert _response_finish_reason({"choices": [{"message": {"content": "x"}}]}) == ""
+        assert (
+            _response_finish_reason({"choices": [{"message": {"content": "x"}}]}) == ""
+        )
         assert _response_finish_reason({"choices": []}) == ""
         assert _response_finish_reason(None) == ""
 
@@ -96,10 +103,14 @@ class TestGenerateSummaryTruncationGuard:
         """A length-stopped summary must not become a checkpoint; with no
         distinct aux model to fall back from, compression ABORTS and the
         session is preserved unchanged."""
-        with patch("agent.context_compressor.get_model_context_length", return_value=100000):
+        with patch(
+            "agent.context_compressor.get_model_context_length", return_value=100000
+        ):
             c = ContextCompressor(
-                model="test", quiet_mode=True,
-                protect_first_n=2, protect_last_n=2,
+                model="test",
+                quiet_mode=True,
+                protect_first_n=2,
+                protect_last_n=2,
                 abort_on_summary_failure=False,
             )
         msgs = _msgs()
@@ -119,7 +130,9 @@ class TestGenerateSummaryTruncationGuard:
     def test_length_stop_falls_back_to_main_model_once(self):
         """With a distinct aux summary model, a length stop retries once on
         the main model (which may have a larger output budget) and succeeds."""
-        with patch("agent.context_compressor.get_model_context_length", return_value=100000):
+        with patch(
+            "agent.context_compressor.get_model_context_length", return_value=100000
+        ):
             c = ContextCompressor(
                 model="main-model",
                 summary_model_override="small-aux-model",
@@ -142,20 +155,31 @@ class TestGenerateSummaryTruncationGuard:
         """#69637: a later turn (e.g. an async delegation completion arriving after the cooldown lapsed)
         must not re-arm a fresh flat 30s attempt. Consecutive length-stopped summaries walk the durable
         60s -> 300s -> 900s ladder, one LLM call per turn, and the transcript is preserved every time."""
-        with patch("agent.context_compressor.get_model_context_length", return_value=100000):
-            c = ContextCompressor(model="test", quiet_mode=True, protect_first_n=2, protect_last_n=2)
+        with patch(
+            "agent.context_compressor.get_model_context_length", return_value=100000
+        ):
+            c = ContextCompressor(
+                model="test", quiet_mode=True, protect_first_n=2, protect_last_n=2
+            )
         clock = [1000.0]
         recorded = []
         with (
-            patch("agent.context_compressor.time.monotonic", side_effect=lambda: clock[0]),
-            patch("agent.context_compressor.call_llm", return_value=_mock_response("partial...", "length")) as call,
+            patch(
+                "agent.context_compressor.time.monotonic", side_effect=lambda: clock[0]
+            ),
+            patch(
+                "agent.context_compressor.call_llm",
+                return_value=_mock_response("partial...", "length"),
+            ) as call,
         ):
             for _turn in range(4):
                 msgs = _msgs()
                 assert c.compress(msgs, current_tokens=999999) == msgs
                 cooldown = c._summary_failure_cooldown_until - clock[0]
                 recorded.append(round(cooldown))
-                clock[0] += cooldown + 1  # the next turn arrives right after the cooldown lapses
+                clock[0] += (
+                    cooldown + 1
+                )  # the next turn arrives right after the cooldown lapses
         assert recorded == [60, 300, 900, 900]
         assert call.call_count == 4
         # Truncation keeps its own streak: the timeout ladder (which arms the deterministic stall
@@ -165,12 +189,21 @@ class TestGenerateSummaryTruncationGuard:
 
     def test_other_transient_failures_keep_short_cooldown(self):
         """Control: empty-content stays on the flat 30s rung and does not bump the truncation streak."""
-        with patch("agent.context_compressor.get_model_context_length", return_value=100000):
-            c = ContextCompressor(model="test", quiet_mode=True, protect_first_n=2, protect_last_n=2)
+        with patch(
+            "agent.context_compressor.get_model_context_length", return_value=100000
+        ):
+            c = ContextCompressor(
+                model="test", quiet_mode=True, protect_first_n=2, protect_last_n=2
+            )
         clock = [1000.0]
         with (
-            patch("agent.context_compressor.time.monotonic", side_effect=lambda: clock[0]),
-            patch("agent.context_compressor.call_llm", side_effect=RuntimeError("LLM returned empty content")),
+            patch(
+                "agent.context_compressor.time.monotonic", side_effect=lambda: clock[0]
+            ),
+            patch(
+                "agent.context_compressor.call_llm",
+                side_effect=RuntimeError("LLM returned empty content"),
+            ),
         ):
             for _turn in range(2):
                 c.compress(_msgs(), current_tokens=999999)
@@ -180,7 +213,9 @@ class TestGenerateSummaryTruncationGuard:
 
     def test_stop_finish_reason_still_succeeds(self):
         """Control: a normal stop-terminated summary is accepted unchanged."""
-        with patch("agent.context_compressor.get_model_context_length", return_value=100000):
+        with patch(
+            "agent.context_compressor.get_model_context_length", return_value=100000
+        ):
             c = ContextCompressor(model="test", quiet_mode=True)
         with patch(
             "agent.context_compressor.call_llm",
@@ -192,15 +227,22 @@ class TestGenerateSummaryTruncationGuard:
 
     def test_refusal_body_is_rejected_and_never_becomes_previous_summary(self):
         """A stop-terminated refusal is not a usable compaction checkpoint."""
-        with patch("agent.context_compressor.get_model_context_length", return_value=100000):
+        with patch(
+            "agent.context_compressor.get_model_context_length", return_value=100000
+        ):
             c = ContextCompressor(
-                model="test", quiet_mode=True,
-                protect_first_n=2, protect_last_n=2,
+                model="test",
+                quiet_mode=True,
+                protect_first_n=2,
+                protect_last_n=2,
                 abort_on_summary_failure=False,
             )
         msgs = _msgs()
         refusal = "I can't produce this summary as requested. The instructions conflict with my operating rules."
-        with patch("agent.context_compressor.call_llm", return_value=_mock_response(refusal, "stop")):
+        with patch(
+            "agent.context_compressor.call_llm",
+            return_value=_mock_response(refusal, "stop"),
+        ):
             result = c.compress(msgs, current_tokens=999999, force=True)
 
         assert result == msgs
@@ -210,10 +252,14 @@ class TestGenerateSummaryTruncationGuard:
 
     def test_provider_refusal_field_is_rejected_even_with_summary_shaped_content(self):
         """An explicit ``message.refusal`` wins over plausible-looking content (#118406)."""
-        with patch("agent.context_compressor.get_model_context_length", return_value=100000):
+        with patch(
+            "agent.context_compressor.get_model_context_length", return_value=100000
+        ):
             c = ContextCompressor(
-                model="test", quiet_mode=True,
-                protect_first_n=2, protect_last_n=2,
+                model="test",
+                quiet_mode=True,
+                protect_first_n=2,
+                protect_last_n=2,
                 abort_on_summary_failure=False,
             )
         msgs = _msgs()
@@ -231,7 +277,9 @@ class TestGenerateSummaryTruncationGuard:
 
     def test_missing_finish_reason_still_succeeds(self):
         """Providers that omit finish_reason entirely must not be rejected."""
-        with patch("agent.context_compressor.get_model_context_length", return_value=100000):
+        with patch(
+            "agent.context_compressor.get_model_context_length", return_value=100000
+        ):
             c = ContextCompressor(model="test", quiet_mode=True)
         resp = {"choices": [{"message": {"content": "complete summary"}}]}
         with patch("agent.context_compressor.call_llm", return_value=resp):
@@ -240,7 +288,9 @@ class TestGenerateSummaryTruncationGuard:
         assert "complete summary" in result
 
     def test_successful_summary_clears_truncated_flag(self):
-        with patch("agent.context_compressor.get_model_context_length", return_value=100000):
+        with patch(
+            "agent.context_compressor.get_model_context_length", return_value=100000
+        ):
             c = ContextCompressor(model="test", quiet_mode=True)
         c._last_summary_truncated_failure = True
         c._summary_failure_cooldown_until = 0
@@ -255,7 +305,9 @@ class TestGenerateSummaryTruncationGuard:
 
 class TestMicroSummarizeTruncationGuard:
     def test_length_stop_discards_partial_merge(self):
-        with patch("agent.context_compressor.get_model_context_length", return_value=100000):
+        with patch(
+            "agent.context_compressor.get_model_context_length", return_value=100000
+        ):
             c = ContextCompressor(model="test", quiet_mode=True)
         c._micro_compact_rolling_summary = "existing rolling summary"
         with patch(
@@ -266,7 +318,9 @@ class TestMicroSummarizeTruncationGuard:
         assert result is None
 
     def test_stop_finish_reason_merges(self):
-        with patch("agent.context_compressor.get_model_context_length", return_value=100000):
+        with patch(
+            "agent.context_compressor.get_model_context_length", return_value=100000
+        ):
             c = ContextCompressor(model="test", quiet_mode=True)
         c._micro_compact_rolling_summary = "existing"
         with patch(
@@ -277,7 +331,9 @@ class TestMicroSummarizeTruncationGuard:
         assert result == "merged summary"
 
     def test_refusal_leaves_exchange_and_cursor_unchanged(self):
-        with patch("agent.context_compressor.get_model_context_length", return_value=100000):
+        with patch(
+            "agent.context_compressor.get_model_context_length", return_value=100000
+        ):
             c = ContextCompressor(
                 model="test",
                 quiet_mode=True,

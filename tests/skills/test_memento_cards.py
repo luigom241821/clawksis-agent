@@ -11,7 +11,13 @@ from unittest import mock
 import pytest
 
 # Add the scripts dir so we can import the module directly
-SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "optional-skills" / "productivity" / "memento-flashcards" / "scripts"
+SCRIPTS_DIR = (
+    Path(__file__).resolve().parents[2]
+    / "optional-skills"
+    / "productivity"
+    / "memento-flashcards"
+    / "scripts"
+)
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 import memento_cards
@@ -37,9 +43,21 @@ def _run(capsys, argv: list[str]) -> dict:
 
 # ── Add / List / Delete ──────────────────────────────────────────────────────
 
+
 class TestCardCRUD:
     def test_add_creates_card(self, capsys):
-        result = _run(capsys, ["add", "--question", "What is 2+2?", "--answer", "4", "--collection", "Math"])
+        result = _run(
+            capsys,
+            [
+                "add",
+                "--question",
+                "What is 2+2?",
+                "--answer",
+                "4",
+                "--collection",
+                "Math",
+            ],
+        )
         assert result["ok"] is True
         card = result["card"]
         assert card["question"] == "What is 2+2?"
@@ -49,14 +67,15 @@ class TestCardCRUD:
         assert card["ease_streak"] == 0
         uuid.UUID(card["id"])  # validates it's a real UUID
 
-
     def test_list_all(self, capsys):
-        _run(capsys, ["add", "--question", "Q1", "--answer", "A1", "--collection", "C1"])
-        _run(capsys, ["add", "--question", "Q2", "--answer", "A2", "--collection", "C2"])
+        _run(
+            capsys, ["add", "--question", "Q1", "--answer", "A1", "--collection", "C1"]
+        )
+        _run(
+            capsys, ["add", "--question", "Q2", "--answer", "A2", "--collection", "C2"]
+        )
         result = _run(capsys, ["list"])
         assert result["count"] == 2
-
-
 
     def test_delete_card(self, capsys):
         result = _run(capsys, ["add", "--question", "Q", "--answer", "A"])
@@ -69,9 +88,8 @@ class TestCardCRUD:
         assert list_result["count"] == 0
 
 
-
-
 # ── Due Filtering ────────────────────────────────────────────────────────────
+
 
 class TestDueFiltering:
     def test_new_card_is_due(self, capsys):
@@ -95,14 +113,19 @@ class TestDueFiltering:
         assert result["count"] == 0
 
     def test_due_with_collection_filter(self, capsys):
-        _run(capsys, ["add", "--question", "Q1", "--answer", "A1", "--collection", "C1"])
-        _run(capsys, ["add", "--question", "Q2", "--answer", "A2", "--collection", "C2"])
+        _run(
+            capsys, ["add", "--question", "Q1", "--answer", "A1", "--collection", "C1"]
+        )
+        _run(
+            capsys, ["add", "--question", "Q2", "--answer", "A2", "--collection", "C2"]
+        )
         result = _run(capsys, ["due", "--collection", "C1"])
         assert result["count"] == 1
         assert result["cards"][0]["collection"] == "C1"
 
 
 # ── Rating and Rescheduling ──────────────────────────────────────────────────
+
 
 class TestRating:
     def test_hard_adds_1_day(self, capsys):
@@ -123,7 +146,6 @@ class TestRating:
         next_review = datetime.fromisoformat(result["card"]["next_review_at"])
         assert next_review >= before + timedelta(days=3)
         assert result["card"]["ease_streak"] == 0
-
 
     def test_retire_sets_retired(self, capsys):
         _run(capsys, ["add", "--question", "Q", "--answer", "A"])
@@ -151,14 +173,17 @@ class TestRating:
         assert result["card"]["status"] == "retired"
 
 
-
-
 # ── CSV Export/Import ────────────────────────────────────────────────────────
+
 
 class TestCSV:
     def test_export_import_roundtrip(self, capsys, tmp_path):
-        _run(capsys, ["add", "--question", "Q1", "--answer", "A1", "--collection", "C1"])
-        _run(capsys, ["add", "--question", "Q2", "--answer", "A2", "--collection", "C2"])
+        _run(
+            capsys, ["add", "--question", "Q1", "--answer", "A1", "--collection", "C1"]
+        )
+        _run(
+            capsys, ["add", "--question", "Q2", "--answer", "A2", "--collection", "C2"]
+        )
 
         csv_path = str(tmp_path / "export.csv")
         result = _run(capsys, ["export", "--output", csv_path])
@@ -178,7 +203,9 @@ class TestCSV:
         data["cards"] = []
         memento_cards._save(data)
 
-        result = _run(capsys, ["import", "--file", csv_path, "--collection", "Fallback"])
+        result = _run(
+            capsys, ["import", "--file", csv_path, "--collection", "Fallback"]
+        )
         assert result["ok"] is True
         assert result["imported"] == 2
 
@@ -188,21 +215,16 @@ class TestCSV:
         assert collections == {"C1", "C2"}
 
 
-
-
-
 # ── Quiz Batch Add ───────────────────────────────────────────────────────────
-
 
 
 # ── Statistics ───────────────────────────────────────────────────────────────
 
 
-
 # ── Edge Cases ───────────────────────────────────────────────────────────────
 
-class TestEdgeCases:
 
+class TestEdgeCases:
     def test_corrupt_json_recovery(self, capsys):
         """Corrupt JSON file should be treated as empty."""
         memento_cards.DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -214,10 +236,10 @@ class TestEdgeCases:
         result = _run(capsys, ["add", "--question", "Q", "--answer", "A"])
         assert result["ok"] is True
 
-
     def test_atomic_write_creates_dir(self, capsys):
         """Data dir is created automatically if missing."""
         import shutil
+
         if memento_cards.DATA_DIR.exists():
             shutil.rmtree(memento_cards.DATA_DIR)
         result = _run(capsys, ["add", "--question", "Q", "--answer", "A"])
@@ -225,18 +247,16 @@ class TestEdgeCases:
         assert memento_cards.CARDS_FILE.exists()
 
 
-
 # ── User Answer Tracking ────────────────────────────────────────────────────
 
+
 class TestUserAnswer:
-
-
-
     def test_user_answer_persists_in_list(self, capsys):
         _run(capsys, ["add", "--question", "Q", "--answer", "A"])
         card_id = _run(capsys, ["list"])["cards"][0]["id"]
-        _run(capsys, ["rate", "--id", card_id, "--rating", "easy",
-                      "--user-answer", "my answer"])
+        _run(
+            capsys,
+            ["rate", "--id", card_id, "--rating", "easy", "--user-answer", "my answer"],
+        )
         result = _run(capsys, ["list"])
         assert result["cards"][0]["last_user_answer"] == "my answer"
-

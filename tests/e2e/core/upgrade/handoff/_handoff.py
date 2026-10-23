@@ -61,7 +61,14 @@ def refs() -> Refs:
     head = I.head_sha()
     try:
         tag = os.environ.get("CLAWK_E2E_UPGRADE_BASE") or I.git(
-            "describe", "--tags", "--match", "v20[0-9][0-9].*", "--abbrev=0", "HEAD~1", cwd=H.WORKTREE)
+            "describe",
+            "--tags",
+            "--match",
+            "v20[0-9][0-9].*",
+            "--abbrev=0",
+            "HEAD~1",
+            cwd=H.WORKTREE,
+        )
         return Refs(head, tag, I.git("rev-parse", f"{tag}^{{commit}}", cwd=H.WORKTREE))
     except AssertionError:  # shallow checkout without tags
         return Refs(head, "", "")
@@ -107,7 +114,9 @@ class Install:
     def sha(self) -> str:
         return I.git("rev-parse", "HEAD", cwd=self.checkout)
 
-    def cli(self, *args: str, timeout: float = 600, env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
+    def cli(
+        self, *args: str, timeout: float = 600, env: dict[str, str] | None = None
+    ) -> subprocess.CompletedProcess:
         assert self.host is not None
         return self.host.run([self.clawk, *args], timeout=timeout, env=env)
 
@@ -117,7 +126,9 @@ class Install:
         self.logs.append(log)
         return self.host.spawn([self.clawk, *args], log=log, env=env)
 
-    def update(self, *extra: str, timeout: float = UPDATE_TIMEOUT) -> subprocess.CompletedProcess:
+    def update(
+        self, *extra: str, timeout: float = UPDATE_TIMEOUT
+    ) -> subprocess.CompletedProcess:
         return self.cli("update", "--yes", "--branch", "main", *extra, timeout=timeout)
 
     def diagnostics(self, cp: subprocess.CompletedProcess | None = None) -> str:
@@ -127,24 +138,36 @@ class Install:
             parts.append(H.describe(cp, 8000))
         for log in self.logs:
             if log.exists():
-                parts.append(f"--- {log.name} (tail) ---\n{log.read_text(errors='replace')[-3000:]}")
+                parts.append(
+                    f"--- {log.name} (tail) ---\n{log.read_text(errors='replace')[-3000:]}"
+                )
         logs = self.clawk_home / "logs"
         for name in ("gateway.log", "errors.log", "update.log", "agent.log"):
             p = logs / name
             if p.exists():
-                parts.append(f"--- logs/{name} (tail) ---\n{p.read_text(errors='replace')[-3000:]}")
+                parts.append(
+                    f"--- logs/{name} (tail) ---\n{p.read_text(errors='replace')[-3000:]}"
+                )
         receipt = logs / "update_receipts" / "latest.json"
         if receipt.exists():
-            parts.append(f"--- update receipt ---\n{receipt.read_text(errors='replace')[-4000:]}")
+            parts.append(
+                f"--- update receipt ---\n{receipt.read_text(errors='replace')[-4000:]}"
+            )
         shims = self.root / "shims" / "shim-calls.log"
         if shims.exists():
-            parts.append(f"--- supervisor shim calls ---\n{shims.read_text(errors='replace')[-2000:]}")
+            parts.append(
+                f"--- supervisor shim calls ---\n{shims.read_text(errors='replace')[-2000:]}"
+            )
         if self.host is not None:
             try:
                 parts.append("--- sandbox process table ---\n" + self.host.ps_text())
-            except Exception as exc:  # the table is a diagnostic; never mask the real failure
+            except (
+                Exception
+            ) as exc:  # the table is a diagnostic; never mask the real failure
                 parts.append(f"--- sandbox process table unavailable: {exc} ---")
-            parts.append("--- sandbox transcript ---\n" + "\n".join(self.host.transcript[-40:]))
+            parts.append(
+                "--- sandbox transcript ---\n" + "\n".join(self.host.transcript[-40:])
+            )
         return "\n".join(parts)
 
     def close(self) -> list[str]:
@@ -158,7 +181,10 @@ def _user_uv(env: dict[str, str], clawk_home: Path) -> None:
     bin_dir = clawk_home / "bin"
     bin_dir.mkdir(parents=True, exist_ok=True)
     uv = bin_dir / "uv"
-    uv.write_text("#!/bin/sh\n" 'if [ "$1" = self ]; then exit 0; fi\n' f'exec "{real}" "$@"\n', encoding="utf-8")
+    uv.write_text(
+        f'#!/bin/sh\nif [ "$1" = self ]; then exit 0; fi\nexec "{real}" "$@"\n',
+        encoding="utf-8",
+    )
     uv.chmod(0o755)
 
 
@@ -180,11 +206,38 @@ def stage_n1(root: Path) -> Install:
         base_python = tomllib.load(fh)["project"]["requires-python"]
     no_cfg = root / "uv-config"
     no_cfg.mkdir(exist_ok=True)
-    uv_env = {k: v for k, v in os.environ.items() if k not in ("VIRTUAL_ENV", "UV_NO_CONFIG", "UV_CONFIG_FILE")}
-    uv_env.update(UV_PROJECT_ENVIRONMENT=str(checkout / "venv"), XDG_CONFIG_HOME=str(no_cfg), XDG_CONFIG_DIRS=str(no_cfg))
-    cp = subprocess.run([I.real_uv(), "sync", "-q", "--locked", "--extra", "all", "--managed-python", "--python",
-                         base_python], cwd=str(checkout), env=uv_env, capture_output=True, text=True, timeout=1800, check=False)
-    assert cp.returncode == 0, f"N-1 venv install from its uv.lock failed:\n{cp.stderr[-4000:]}"
+    uv_env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in ("VIRTUAL_ENV", "UV_NO_CONFIG", "UV_CONFIG_FILE")
+    }
+    uv_env.update(
+        UV_PROJECT_ENVIRONMENT=str(checkout / "venv"),
+        XDG_CONFIG_HOME=str(no_cfg),
+        XDG_CONFIG_DIRS=str(no_cfg),
+    )
+    cp = subprocess.run(
+        [
+            I.real_uv(),
+            "sync",
+            "-q",
+            "--locked",
+            "--extra",
+            "all",
+            "--managed-python",
+            "--python",
+            base_python,
+        ],
+        cwd=str(checkout),
+        env=uv_env,
+        capture_output=True,
+        text=True,
+        timeout=1800,
+        check=False,
+    )
+    assert cp.returncode == 0, (
+        f"N-1 venv install from its uv.lock failed:\n{cp.stderr[-4000:]}"
+    )
     local_bin = sb.home / ".local" / "bin"
     local_bin.mkdir(parents=True, exist_ok=True)
     (local_bin / "clawk").symlink_to(checkout / "venv" / "bin" / "clawk")
@@ -202,7 +255,9 @@ def stage_head(root: Path) -> Install:
     I.git("config", "uploadpack.allowAnySHA1InWant", "true", cwd=origin)
     sb = I.new_sandbox(root / "sb", origin)
     cp = I.run_installer(sb)
-    assert cp.returncode == 0 and TRACEBACK not in cp.stdout + cp.stderr, "HEAD install failed:\n" + I.describe(cp)
+    assert cp.returncode == 0 and TRACEBACK not in cp.stdout + cp.stderr, (
+        "HEAD install failed:\n" + I.describe(cp)
+    )
     sb.env["PATH"] = os.pathsep.join([str(sb.home / ".local" / "bin"), sb.env["PATH"]])
     return Install("head", root, origin, sb.env)
 
@@ -217,8 +272,12 @@ def publish_target(inst: Install) -> str:
         I.git("update-ref", "refs/heads/main", refs().head, cwd=inst.origin)
         inst.target = refs().head
     else:
-        inst.target = I.publish_commit(inst.origin, inst.root, "release: e2e handoff NEXT",
-                                       {NEXT_MARKER: f"NEXT above {refs().head}\n"})
+        inst.target = I.publish_commit(
+            inst.origin,
+            inst.root,
+            "release: e2e handoff NEXT",
+            {NEXT_MARKER: f"NEXT above {refs().head}\n"},
+        )
     return inst.target
 
 
@@ -230,27 +289,53 @@ def start_host(inst: Install) -> NamespaceHost:
 # -- user configuration -------------------------------------------------------------------------
 
 
-def write_config(home: Path, provider_url: str, *, port: int | None = None, extra: dict | None = None) -> None:
+def write_config(
+    home: Path, provider_url: str, *, port: int | None = None, extra: dict | None = None
+) -> None:
     """A user config on the fake provider; ``port`` enables the API server platform."""
     home.mkdir(parents=True, exist_ok=True)
     cfg: dict = {
-        "model": {"provider": "custom", "base_url": provider_url, "default": "fake-model", "context_length": 128000},
+        "model": {
+            "provider": "custom",
+            "base_url": provider_url,
+            "default": "fake-model",
+            "context_length": 128000,
+        },
         "agent": {"api_max_retries": 1},
         "compression": {"enabled": False},
     }
     if port is not None:
-        cfg["platforms"] = {"api_server": {"enabled": True, "extra": {"host": "127.0.0.1", "port": port}}}
+        cfg["platforms"] = {
+            "api_server": {
+                "enabled": True,
+                "extra": {"host": "127.0.0.1", "port": port},
+            }
+        }
     for k, v in (extra or {}).items():
-        cfg[k] = {**cfg.get(k, {}), **v} if isinstance(v, dict) and isinstance(cfg.get(k), dict) else v
-    (home / "config.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")
-    (home / ".env").write_text(f"OPENAI_API_KEY={I.FAKE_KEY}\nAPI_SERVER_KEY={API_KEY}\n", encoding="utf-8")
+        cfg[k] = (
+            {**cfg.get(k, {}), **v}
+            if isinstance(v, dict) and isinstance(cfg.get(k), dict)
+            else v
+        )
+    (home / "config.yaml").write_text(
+        yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8"
+    )
+    (home / ".env").write_text(
+        f"OPENAI_API_KEY={I.FAKE_KEY}\nAPI_SERVER_KEY={API_KEY}\n", encoding="utf-8"
+    )
 
 
 # -- talking to the gateway ---------------------------------------------------------------------
 
 
-def http(method: str, url: str, body: dict | None = None, *, key: str | None = API_KEY,
-         timeout: float = 120) -> tuple[int, dict | str]:
+def http(
+    method: str,
+    url: str,
+    body: dict | None = None,
+    *,
+    key: str | None = API_KEY,
+    timeout: float = 120,
+) -> tuple[int, dict | str]:
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(url, data=data, method=method)
     req.add_header("Content-Type", "application/json")
@@ -276,8 +361,12 @@ def health(port: int) -> dict | None:
 
 
 def chat(port: int, text: str) -> tuple[int, dict | str]:
-    return http("POST", f"http://127.0.0.1:{port}/v1/chat/completions",
-                {"model": "clawksis-agent", "messages": [{"role": "user", "content": text}]}, timeout=180)
+    return http(
+        "POST",
+        f"http://127.0.0.1:{port}/v1/chat/completions",
+        {"model": "clawksis-agent", "messages": [{"role": "user", "content": text}]},
+        timeout=180,
+    )
 
 
 def reply_text(body) -> str:
@@ -304,7 +393,12 @@ def gateway_pids(inst: Install) -> list[dict]:
         if p["state"] in ("Z", "X") or not argv:
             continue
         joined = " ".join(argv)
-        if "gateway" in argv and ("run" in argv or "start" in argv) and "clawk" in joined and "update" not in argv:
+        if (
+            "gateway" in argv
+            and ("run" in argv or "start" in argv)
+            and "clawk" in joined
+            and "update" not in argv
+        ):
             out.append(p)
     pids = {p["pid"] for p in out}
     return [p for p in out if p["ppid"] not in pids]
@@ -366,11 +460,23 @@ def start_gateway(inst: Install, *args: str) -> dict:
     """``clawk gateway run`` as a user starts it by hand; returns its ``identify`` answer."""
     inst.spawn("gateway", "gateway", "run", *args)
     try:
-        wait_for(lambda: health(inst.port), timeout=240, what="the gateway API server /health")
-        ident = wait_for(lambda: identify(inst.clawk_home), timeout=60, what="control-socket identify")
+        wait_for(
+            lambda: health(inst.port),
+            timeout=240,
+            what="the gateway API server /health",
+        )
+        ident = wait_for(
+            lambda: identify(inst.clawk_home),
+            timeout=60,
+            what="control-socket identify",
+        )
     except AssertionError as exc:
-        raise AssertionError(f"premise: the gateway never came up: {exc}\n{inst.diagnostics()}") from None
-    assert ident["code_sha"] == inst.sha(), f"premise: the gateway must serve the installed commit: {ident}"
+        raise AssertionError(
+            f"premise: the gateway never came up: {exc}\n{inst.diagnostics()}"
+        ) from None
+    assert ident["code_sha"] == inst.sha(), (
+        f"premise: the gateway must serve the installed commit: {ident}"
+    )
     return ident
 
 
@@ -378,7 +484,7 @@ def gateway_starts(inst: Install) -> list[int]:
     """PIDs of every gateway boot recorded in ``logs/gateway-exit-diag.log`` (one ``gateway.start`` each)."""
     p = inst.clawk_home / "logs" / "gateway-exit-diag.log"
     pids = []
-    for line in (p.read_text(errors="replace").splitlines() if p.exists() else []):
+    for line in p.read_text(errors="replace").splitlines() if p.exists() else []:
         try:
             rec = json.loads(line)
         except ValueError:
@@ -410,11 +516,21 @@ def receipt(inst: Install) -> dict:
 
 def settle_gateway(inst: Install, old_pid: int, *, timeout: float = 180) -> dict | None:
     """Wait for a gateway serving ``inst.target`` under a new PID; None if none shows up."""
+
     def serving():
         ident = identify(inst.clawk_home)
-        return ident if ident and ident.get("pid") != old_pid and ident.get("code_sha") == inst.target else None
+        return (
+            ident
+            if ident
+            and ident.get("pid") != old_pid
+            and ident.get("code_sha") == inst.target
+            else None
+        )
+
     try:
-        return wait_for(serving, timeout=timeout, what="a relaunched gateway", interval=1.0)
+        return wait_for(
+            serving, timeout=timeout, what="a relaunched gateway", interval=1.0
+        )
     except AssertionError:
         return None
 
@@ -422,15 +538,24 @@ def settle_gateway(inst: Install, old_pid: int, *, timeout: float = 180) -> dict
 # Which open issue explains a missing relaunch, per column (fix PRs delete their entry). ``n1``: the
 # restart watcher runs on the bare store Python and dies importing gateway.status.
 RELAUNCH_GATES = {
-    "n1": (r"relaunch armed but never started: no new gateway process booted",
-           "gated on #124649: the update restart watcher dies before relaunching a manual gateway"),
+    "n1": (
+        r"relaunch armed but never started: no new gateway process booted",
+        "gated on #124649: the update restart watcher dies before relaunching a manual gateway",
+    ),
 }
 
-_UNSUPERVISED_STOP = re.compile(r"Stopped \d+ manual gateway process\(es\) that had no supervisor")
+_UNSUPERVISED_STOP = re.compile(
+    r"Stopped \d+ manual gateway process\(es\) that had no supervisor"
+)
 
 
-def relaunch_verdict(inst: Install, old_pid: int, boots_before: int, ident: dict | None,
-                     up: subprocess.CompletedProcess | None = None) -> str:
+def relaunch_verdict(
+    inst: Install,
+    old_pid: int,
+    boots_before: int,
+    ident: dict | None,
+    up: subprocess.CompletedProcess | None = None,
+) -> str:
     """Why no gateway is serving the new commit, in words a gate can key on; '' when one is."""
     if ident is not None:
         return ""
@@ -439,18 +564,26 @@ def relaunch_verdict(inst: Install, old_pid: int, boots_before: int, ident: dict
     armed = receipt(inst).get("gateway_restart", {})
     out = (up.stdout + up.stderr) if up is not None else ""
     if not boots and armed.get("relaunched_profiles"):
-        return (f"relaunch armed but never started: no new gateway process booted after the update stopped PID "
-                f"{old_pid} (receipt relaunched_profiles={armed.get('relaunched_profiles')}, live gateways={alive})")
+        return (
+            f"relaunch armed but never started: no new gateway process booted after the update stopped PID "
+            f"{old_pid} (receipt relaunched_profiles={armed.get('relaunched_profiles')}, live gateways={alive})"
+        )
     if not boots and _UNSUPERVISED_STOP.search(out) and not armed.get("killed_pids"):
-        return (f"no relaunch: the update did not recognise gateway PID {old_pid} and stopped it as an unsupervised "
-                f"stale survivor (receipt gateway_restart={armed}, live gateways={alive})")
+        return (
+            f"no relaunch: the update did not recognise gateway PID {old_pid} and stopped it as an unsupervised "
+            f"stale survivor (receipt gateway_restart={armed}, live gateways={alive})"
+        )
     if not boots:
-        return (f"no relaunch: the update left no gateway running after PID {old_pid} and armed none "
-                f"(receipt gateway_restart={armed}, live gateways={alive})")
+        return (
+            f"no relaunch: the update left no gateway running after PID {old_pid} and armed none "
+            f"(receipt gateway_restart={armed}, live gateways={alive})"
+        )
     if not alive:
         return f"relaunched gateway exited: boots {boots} after the update, none alive"
     stale = identify(inst.clawk_home)
-    return f"gateway alive ({alive}) but not serving {inst.target[:12]}: identify={stale}"
+    return (
+        f"gateway alive ({alive}) but not serving {inst.target[:12]}: identify={stale}"
+    )
 
 
 def pid_file_verdict(inst: Install, pid: int, history: list[tuple[float, str]]) -> str:
@@ -458,12 +591,14 @@ def pid_file_verdict(inst: Install, pid: int, history: list[tuple[float, str]]) 
     live gateway, never written, or naming someone else)."""
     if pid_file_pid(inst) == pid:
         return ""
-    wrote = any(re.search(rf'\b{pid}\b', v) for _, v in history)
+    wrote = any(re.search(rf"\b{pid}\b", v) for _, v in history)
     now = history[-1][1] if history else "<unknown>"
     if wrote and now == "<missing>" and pid in [p["pid"] for p in gateway_pids(inst)]:
         return f"gateway.pid was deleted under the live gateway {pid} (history below)"
     if not wrote:
-        return f"the relaunched gateway {pid} never wrote gateway.pid (now: {now[:120]})"
+        return (
+            f"the relaunched gateway {pid} never wrote gateway.pid (now: {now[:120]})"
+        )
     return f"gateway.pid names someone other than the live gateway {pid}: {now[:120]}"
 
 

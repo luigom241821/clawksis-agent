@@ -13,9 +13,13 @@ def clipboard_header(length):
     return b"\x06\x00\x00\x00" + length.to_bytes(4, "big", signed=True)
 
 
-@pytest.mark.parametrize("length", [_MAX_CUT_TEXT + 1, -_MAX_CUT_TEXT - 1, 2**31 - 1, -(2**31)])
+@pytest.mark.parametrize(
+    "length", [_MAX_CUT_TEXT + 1, -_MAX_CUT_TEXT - 1, 2**31 - 1, -(2**31)]
+)
 @pytest.mark.parametrize("holder", [False, True])
-def test_oversized_clipboard_is_rejected_at_header_without_waiting_for_payload(length, holder):
+def test_oversized_clipboard_is_rejected_at_header_without_waiting_for_payload(
+    length, holder
+):
     parser = RfbClientFilter(lambda: holder)
     parser.feed(_HANDSHAKE)
     header = clipboard_header(length)
@@ -28,9 +32,20 @@ def test_oversized_clipboard_is_rejected_at_header_without_waiting_for_payload(l
 def set_desktop_size(width, height, screens=1):
     # RFB 7.5.x SetDesktopSize: type, pad, u16 width, u16 height, u8 nScreens, pad, then 16 bytes per screen
     # (u32 id, u16 x, u16 y, u16 w, u16 h, u32 flags).
-    head = bytes([251, 0]) + width.to_bytes(2, "big") + height.to_bytes(2, "big") + bytes([screens, 0])
-    return head + b"".join(i.to_bytes(4, "big") + b"\x00\x00\x00\x00" + width.to_bytes(2, "big") + height.to_bytes(2, "big")
-                           + b"\x00\x00\x00\x00" for i in range(screens))
+    head = (
+        bytes([251, 0])
+        + width.to_bytes(2, "big")
+        + height.to_bytes(2, "big")
+        + bytes([screens, 0])
+    )
+    return head + b"".join(
+        i.to_bytes(4, "big")
+        + b"\x00\x00\x00\x00"
+        + width.to_bytes(2, "big")
+        + height.to_bytes(2, "big")
+        + b"\x00\x00\x00\x00"
+        for i in range(screens)
+    )
 
 
 @pytest.mark.parametrize("holder", [False, True])
@@ -43,7 +58,10 @@ def test_set_desktop_size_is_framed_and_gated_like_input(holder):
     parser.feed(_HANDSHAKE)
     resize = set_desktop_size(1280, 800)
     update_request = b"\x03\x00" + b"\x00" * 8
-    assert parser.feed(resize + update_request) == (resize if holder else b"") + update_request
+    assert (
+        parser.feed(resize + update_request)
+        == (resize if holder else b"") + update_request
+    )
 
 
 def test_truncated_set_desktop_size_waits_for_the_rest():

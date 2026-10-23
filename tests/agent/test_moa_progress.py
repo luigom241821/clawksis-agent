@@ -70,8 +70,6 @@ def _collect_emits(facade):
     return captured
 
 
-
-
 def test_moa_phase_transitions_to_aggregator(moa_config, monkeypatch):
     """A single ``moa.phase`` event with ``phase="aggregator"`` fires after the fan-out."""
     from agent.moa_loop import MoAChatCompletions
@@ -100,10 +98,6 @@ def test_moa_phase_transitions_to_aggregator(moa_config, monkeypatch):
     # counts match the configured reference count
     assert kwargs["refs_done"] == 3
     assert kwargs["refs_total"] == 3
-
-
-
-
 
 
 def test_moa_progress_callback_none_safe(moa_config, monkeypatch):

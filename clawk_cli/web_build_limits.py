@@ -80,7 +80,9 @@ def _bounded_heap_mb() -> int:
     limit_mb = _cgroup_memory_limit_mb()
     if not limit_mb:
         return _MAX_WEB_BUILD_HEAP_MB
-    return max(_MIN_WEB_BUILD_HEAP_MB, min(_MAX_WEB_BUILD_HEAP_MB, int(limit_mb * 0.75)))
+    return max(
+        _MIN_WEB_BUILD_HEAP_MB, min(_MAX_WEB_BUILD_HEAP_MB, int(limit_mb * 0.75))
+    )
 
 
 def _env_flag(env: dict[str, str], name: str) -> bool:
@@ -103,8 +105,10 @@ def web_build_limits(env: dict[str, str] | None = None) -> dict[str, str]:
     if not any(t.startswith("--max-old-space-size=") for t in tokens):
         explicit = (env.get("CLAWK_WEB_BUILD_MAX_OLD_SPACE_SIZE") or "").strip()
         try:
-            heap_mb = int(explicit) if explicit else (
-                _MIN_WEB_BUILD_HEAP_MB if light else _bounded_heap_mb()
+            heap_mb = (
+                int(explicit)
+                if explicit
+                else (_MIN_WEB_BUILD_HEAP_MB if light else _bounded_heap_mb())
             )
         except ValueError:
             heap_mb = _MIN_WEB_BUILD_HEAP_MB if light else _bounded_heap_mb()
@@ -116,7 +120,9 @@ def web_build_limits(env: dict[str, str] | None = None) -> dict[str, str]:
     if not env.get("RAYON_NUM_THREADS"):
         explicit = (env.get("CLAWK_WEB_BUILD_THREADS") or "").strip()
         try:
-            threads = int(explicit) if explicit else (1 if light else _bounded_threads())
+            threads = (
+                int(explicit) if explicit else (1 if light else _bounded_threads())
+            )
         except ValueError:
             threads = 1 if light else _bounded_threads()
         env["RAYON_NUM_THREADS"] = str(max(1, threads))
@@ -137,4 +143,6 @@ def light_build_requested(env: dict[str, str] | None = None) -> bool:
     1 GB heap — for VPS hosts that cannot spare full CPU during the build
     (the closed PR #78131's ``build:light`` idea).
     """
-    return _env_flag(env if env is not None else dict(os.environ), "CLAWK_WEB_BUILD_LIGHT")
+    return _env_flag(
+        env if env is not None else dict(os.environ), "CLAWK_WEB_BUILD_LIGHT"
+    )

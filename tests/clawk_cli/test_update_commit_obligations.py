@@ -100,7 +100,10 @@ def test_disarm_never_writes_through_a_planted_restore_alias(root, tmp_path):
     sentinel = tmp_path / "sentinel"
     sentinel.write_text("PRECIOUS", encoding="utf-8")
     commit.arm_commit_obligations(root, "a" * 40)
-    for alias in (host.with_name(host.name + ".restore"), host.with_name(f".{host.name}.{os.getpid()}.restore")):
+    for alias in (
+        host.with_name(host.name + ".restore"),
+        host.with_name(f".{host.name}.{os.getpid()}.restore"),
+    ):
         alias.symlink_to(sentinel)
 
     commit.disarm_commit_obligations()
@@ -110,15 +113,30 @@ def test_disarm_never_writes_through_a_planted_restore_alias(root, tmp_path):
 
 
 def _git(cwd: Path, *args: str) -> str:
-    env = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1",
-           "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.invalid",
-           "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.invalid"}
-    return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True,
-                          encoding="utf-8", env=env).stdout.strip()
+    env = {
+        **os.environ,
+        "GIT_CONFIG_GLOBAL": os.devnull,
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_AUTHOR_NAME": "t",
+        "GIT_AUTHOR_EMAIL": "t@example.invalid",
+        "GIT_COMMITTER_NAME": "t",
+        "GIT_COMMITTER_EMAIL": "t@example.invalid",
+    }
+    return subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        env=env,
+    ).stdout.strip()
 
 
 @pytest.mark.skipif(shutil.which("git") is None, reason="needs git")
-def test_a_refused_pull_after_the_branch_switch_owes_the_head_the_switch_landed_on(tmp_path, monkeypatch):
+def test_a_refused_pull_after_the_branch_switch_owes_the_head_the_switch_landed_on(
+    tmp_path, monkeypatch
+):
     """CP0 switched a parked feature branch (X) to main (A); CP1's arm for B then failed. The
     obligation used to stay on B, which the checkout at A never contains, while disarm refused
     (HEAD != X): an undischargeable debt (review C1). It must name A, and the refusal must not
@@ -150,7 +168,9 @@ def test_a_refused_pull_after_the_branch_switch_owes_the_head_the_switch_landed_
     monkeypatch.chdir(clone)
 
     commit.record_run_start(["git"], clone)
-    switched = update_cmd._switch_branch_at_commit_point(["git"], "main", "origin/main", pre=x, stash=None)
+    switched = update_cmd._switch_branch_at_commit_point(
+        ["git"], "main", "origin/main", pre=x, stash=None
+    )
     assert switched.returncode == 0 and _git(clone, "rev-parse", "HEAD") == a
     interrupted_pull_marker(clone).mkdir()  # CP1's marker cannot be written
     reason = commit.arm_commit_point(["git"], clone, b, pre=a, target=b, stash=None)
@@ -160,8 +180,9 @@ def test_a_refused_pull_after_the_branch_switch_owes_the_head_the_switch_landed_
 
 
 def _run_state() -> dict:
-    return {name: getattr(commit, name, None) for name in ("_armed_snapshot", "_owner")} | {
-        "_armed_bytes": dict(commit._armed_bytes)}
+    return {
+        name: getattr(commit, name, None) for name in ("_armed_snapshot", "_owner")
+    } | {"_armed_bytes": dict(commit._armed_bytes)}
 
 
 def _enter_run(state: dict) -> None:
@@ -173,7 +194,9 @@ def _enter_run(state: dict) -> None:
             setattr(commit, name, value)
 
 
-def test_one_installs_disarm_never_deletes_another_installs_debt_for_the_same_sha(root, tmp_path):
+def test_one_installs_disarm_never_deletes_another_installs_debt_for_the_same_sha(
+    root, tmp_path
+):
     """Install A and install B both arm SHA X. Same-SHA arms share one host record, so a byte
     compare cannot tell them apart: A's failed run used to delete the record B still owes through
     (review C2). A's disarm hands back only A's stake; the last owner to leave puts back what the first found."""
@@ -189,11 +212,15 @@ def test_one_installs_disarm_never_deletes_another_installs_debt_for_the_same_sh
 
     _enter_run(run_a)
     commit.disarm_commit_obligations()
-    assert (read_host_obligation() or {}).get("expected_sha") == "a" * 40  # B still owes it
+    assert (read_host_obligation() or {}).get(
+        "expected_sha"
+    ) == "a" * 40  # B still owes it
 
     _enter_run(run_b)
     commit.disarm_commit_obligations()
-    assert not host_obligation_path().exists()  # the last owner puts back what the FIRST one found
+    assert (
+        not host_obligation_path().exists()
+    )  # the last owner puts back what the FIRST one found
 
 
 def _abc_clone(tmp_path, monkeypatch):
@@ -229,7 +256,9 @@ def _move_ref_after_arm(monkeypatch, clone, ref, sha):
 
 
 @pytest.mark.skipif(shutil.which("git") is None, reason="needs git")
-def test_the_pull_merges_the_armed_commit_not_a_tracking_ref_that_moved(tmp_path, monkeypatch):
+def test_the_pull_merges_the_armed_commit_not_a_tracking_ref_that_moved(
+    tmp_path, monkeypatch
+):
     """CP1 armed B, then origin/main moved to C before ``merge --ff-only origin/main``: HEAD landed C
     while the debt named B and the marker was gone (review O3). The merge names the armed OID."""
     from clawk_cli import update_cmd
@@ -241,15 +270,24 @@ def test_the_pull_merges_the_armed_commit_not_a_tracking_ref_that_moved(tmp_path
     _git(clone, "update-ref", "refs/remotes/origin/main", b)
     commit.record_run_start(["git"], clone)
     _move_ref_after_arm(monkeypatch, clone, "refs/remotes/origin/main", c)
-    update_cmd._pull_updates(["git"], "main", None, prompt_for_restore=False, gw_input_fn=None,
-                             discard_local_changes=False, keep_stash=False)
+    update_cmd._pull_updates(
+        ["git"],
+        "main",
+        None,
+        prompt_for_restore=False,
+        gw_input_fn=None,
+        discard_local_changes=False,
+        keep_stash=False,
+    )
     assert _git(clone, "rev-parse", "HEAD") == b
     assert (read_host_obligation() or {}).get("expected_sha") == b
     assert not interrupted_pull_marker(clone).exists()
 
 
 @pytest.mark.skipif(shutil.which("git") is None, reason="needs git")
-def test_a_branch_that_moves_during_the_switch_leaves_head_and_debt_agreeing(tmp_path, monkeypatch):
+def test_a_branch_that_moves_during_the_switch_leaves_head_and_debt_agreeing(
+    tmp_path, monkeypatch
+):
     """CP0 resolved main to A and armed A, then main moved to B before ``checkout main``: the switch
     landed B, reported success and dropped the marker while the debt named A (review O2). It must
     refuse, with the debt following the HEAD it landed on."""
@@ -266,7 +304,9 @@ def test_a_branch_that_moves_during_the_switch_leaves_head_and_debt_agreeing(tmp
     x = _git(clone, "rev-parse", "HEAD")
     commit.record_run_start(["git"], clone)
     _move_ref_after_arm(monkeypatch, clone, "refs/heads/main", b)
-    switched = update_cmd._switch_branch_at_commit_point(["git"], "main", "origin/main", pre=x, stash=None)
+    switched = update_cmd._switch_branch_at_commit_point(
+        ["git"], "main", "origin/main", pre=x, stash=None
+    )
     assert switched.returncode == 1 and "moved" in switched.stderr
     assert _git(clone, "rev-parse", "HEAD") == b
     assert (read_host_obligation() or {}).get("expected_sha") == b
@@ -285,7 +325,9 @@ def _repo_at_a(tmp_path, monkeypatch) -> tuple[Path, str]:
 
 
 @pytest.mark.skipif(shutil.which("git") is None, reason="needs git")
-def test_a_retarget_within_one_run_keeps_the_host_records_saved_baseline(tmp_path, monkeypatch):
+def test_a_retarget_within_one_run_keeps_the_host_records_saved_baseline(
+    tmp_path, monkeypatch
+):
     """One run arms B, then retargets to C (CP0 then the pull), and the checkout ends back on its
     start commit A. The second arm used to overwrite the saved baseline with "absent", so the
     disarm deleted the restart debt that stood before the run (review R1)."""
@@ -308,7 +350,9 @@ def test_a_later_runs_failed_retarget_puts_back_the_earlier_runs_debt(root):
     host = host_obligation_path()
     host.parent.mkdir(parents=True, exist_ok=True)
     host.write_bytes(b"PRIOR-DEBT")
-    commit.arm_commit_obligations(root, "b" * 40)  # run 1: its move commits, nothing hands back
+    commit.arm_commit_obligations(
+        root, "b" * 40
+    )  # run 1: its move commits, nothing hands back
     run_one_record = host.read_bytes()
     commit.begin_update_attempt()
 
@@ -318,7 +362,9 @@ def test_a_later_runs_failed_retarget_puts_back_the_earlier_runs_debt(root):
     assert host.read_bytes() == run_one_record
 
 
-def test_an_owner_leaving_a_shared_record_for_another_target_hands_the_others_stake_back(root, tmp_path):
+def test_an_owner_leaving_a_shared_record_for_another_target_hands_the_others_stake_back(
+    root, tmp_path
+):
     """Installs X and Y joined one record for SHA S; X then retargets to T and fails. Y's stake
     (and the first owner's baseline) comes back, and Y's own release then restores what stood
     before either of them (review R1)."""
@@ -337,13 +383,17 @@ def test_an_owner_leaving_a_shared_record_for_another_target_hands_the_others_st
     commit.disarm_commit_obligations()
 
     record = read_host_obligation() or {}
-    assert record.get("expected_sha") == "a" * 40 and record.get("owners") == [run_y["_owner"]]
+    assert record.get("expected_sha") == "a" * 40 and record.get("owners") == [
+        run_y["_owner"]
+    ]
     _enter_run(run_y)
     commit.disarm_commit_obligations()
     assert host.read_bytes() == b"PRIOR-DEBT"
 
 
-def test_a_second_update_in_one_process_never_hands_back_the_first_updates_debt(root, monkeypatch):
+def test_a_second_update_in_one_process_never_hands_back_the_first_updates_debt(
+    root, monkeypatch
+):
     """Update 1 moved to B and left its tail and restart owed; update 2, in the same interpreter,
     armed C and was refused before its move. It used to reuse update 1's snapshot and owner and
     delete B's debt as its own undo (review O5). ``_cmd_update_impl`` starts a fresh attempt."""
@@ -352,7 +402,9 @@ def test_a_second_update_in_one_process_never_hands_back_the_first_updates_debt(
     from clawk_cli import update_cmd
     from clawk_cli.venv_sync import completion_pending_path
 
-    commit.arm_commit_obligations(root, "b" * 40)  # update 1: committed, nothing handed back
+    commit.arm_commit_obligations(
+        root, "b" * 40
+    )  # update 1: committed, nothing handed back
     tail, host = completion_pending_path(root), host_obligation_path()
     owed = {tail: tail.read_bytes(), host: host.read_bytes()}
 
@@ -363,7 +415,9 @@ def test_a_second_update_in_one_process_never_hands_back_the_first_updates_debt(
         raise _Entered
 
     monkeypatch.setattr(update_cmd, "git_operation_in_progress", stop)
-    with pytest.raises(_Entered):  # update 2's entry, stopped right after the attempt begins
+    with pytest.raises(
+        _Entered
+    ):  # update 2's entry, stopped right after the attempt begins
         update_cmd._cmd_update_impl(SimpleNamespace(), gateway_mode=False)
     commit.arm_commit_obligations(root, "c" * 40)
     commit.disarm_commit_obligations()
@@ -373,7 +427,9 @@ def test_a_second_update_in_one_process_never_hands_back_the_first_updates_debt(
 
 @pytest.mark.platforms("posix")  # unprivileged symlinks
 @pytest.mark.parametrize("kind", ["regular", "symlink", "hardlink", "none"])
-def test_disarm_restores_through_an_unpredictable_temp_and_leaves_every_sibling(root, tmp_path, kind):
+def test_disarm_restores_through_an_unpredictable_temp_and_leaves_every_sibling(
+    root, tmp_path, kind
+):
     """The restore used a fixed ``.<name>.<pid>.restore`` temp and unlinked whatever stood there
     first: a user's ordinary file of that name was deleted (review O1). Nothing at the old name, or
     any alias target, is touched; the record still comes back."""
@@ -401,8 +457,9 @@ def test_disarm_restores_through_an_unpredictable_temp_and_leaves_every_sibling(
         assert planted.read_bytes() == b"USER-FILE"
     elif kind != "none":
         assert os.path.lexists(planted) and planted.read_bytes() == b"PRECIOUS"
-    assert sorted(p.name for p in tail.parent.iterdir() if p.name.endswith(".restore")) == (
-        [planted.name] if kind != "none" else [])
+    assert sorted(
+        p.name for p in tail.parent.iterdir() if p.name.endswith(".restore")
+    ) == ([planted.name] if kind != "none" else [])
 
 
 def test_an_arm_racing_a_release_is_never_undone_by_it(root, monkeypatch):
@@ -412,17 +469,26 @@ def test_an_arm_racing_a_release_is_never_undone_by_it(root, monkeypatch):
     write under one mutex, so the racing arm lands after the release, never under it."""
     import threading
 
-    from clawk_cli.update_host_obligation import read_host_obligation, write_host_obligation
+    from clawk_cli.update_host_obligation import (
+        read_host_obligation,
+        write_host_obligation,
+    )
 
     commit.arm_commit_obligations(root, "a" * 40)  # run X, over an absent record
     host, real_unlink, racer = host_obligation_path(), Path.unlink, []
 
     def unlink_after_a_racing_arm(self, *args, **kwargs):
         if self == host and not racer:
-            racer.append(threading.Thread(target=write_host_obligation,
-                                          kwargs={"expected_sha": "e" * 40, "owner": "other-install"}))
+            racer.append(
+                threading.Thread(
+                    target=write_host_obligation,
+                    kwargs={"expected_sha": "e" * 40, "owner": "other-install"},
+                )
+            )
             racer[0].start()
-            racer[0].join(timeout=1.0)  # under the mutex it can only wait for this release
+            racer[0].join(
+                timeout=1.0
+            )  # under the mutex it can only wait for this release
         return real_unlink(self, *args, **kwargs)
 
     monkeypatch.setattr(Path, "unlink", unlink_after_a_racing_arm)
@@ -431,4 +497,6 @@ def test_an_arm_racing_a_release_is_never_undone_by_it(root, monkeypatch):
     monkeypatch.setattr(Path, "unlink", real_unlink)
 
     record = read_host_obligation() or {}
-    assert record.get("expected_sha") == "e" * 40 and record.get("owners") == ["other-install"]
+    assert record.get("expected_sha") == "e" * 40 and record.get("owners") == [
+        "other-install"
+    ]

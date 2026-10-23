@@ -4,15 +4,18 @@ import pytest
 
 from tools.process_registry import ProcessRegistry
 
+
 @pytest.fixture
 def registry(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
     return ProcessRegistry()
 
+
 def _spawn_sleeper(registry, notify=False):
     session = registry.spawn_local("sleep 30", cwd="/tmp", task_id="t-waitclar")
     session.notify_on_complete = notify
     return session.id
+
 
 class TestWaitTimeoutClarity:
     def test_wait_timeout_marks_process_running(self, registry):
@@ -24,7 +27,9 @@ class TestWaitTimeoutClarity:
         finally:
             registry.kill_process(sid)
 
-    def test_clamped_wait_keeps_clamp_note_and_running_semantics(self, registry, monkeypatch):
+    def test_clamped_wait_keeps_clamp_note_and_running_semantics(
+        self, registry, monkeypatch
+    ):
         monkeypatch.setenv("TERMINAL_TIMEOUT", "1")
         sid = _spawn_sleeper(registry)
         try:
@@ -39,6 +44,7 @@ class TestWaitTimeoutClarity:
         r = registry.wait(session.id, timeout=10)
         assert r["status"] == "exited"
         assert "process_running" not in r
+
 
 class TestWaitYieldRelease:
     """A mid-turn steer/redirect (request_yield on the tool-worker tid) releases a
@@ -62,13 +68,16 @@ class TestWaitYieldRelease:
             time.sleep(0.3)
             request_yield(t.ident)
             t.join(5)
-            assert not t.is_alive(), "wait did not release within 5s of the yield request"
+            assert not t.is_alive(), (
+                "wait did not release within 5s of the yield request"
+            )
             r = result["r"]
             assert r["status"] == "interrupted"
             assert r["process_running"] is True
             # The process was not killed and the yield bit was consumed.
             assert registry.poll(sid)["status"] == "running"
             from tools.interrupt import is_thread_yield_requested
+
             assert not is_thread_yield_requested(t.ident)
         finally:
             registry.kill_process(sid)

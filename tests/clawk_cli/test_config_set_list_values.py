@@ -7,6 +7,7 @@ stored the value as a raw STRING. Every reader that gates on
 so the setting looked saved but never took effect (observed in the wild as a
 platform running on the wrong toolset bundle for weeks).
 """
+
 import pytest
 
 

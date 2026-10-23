@@ -43,34 +43,58 @@ KIB = 1024
 # ── synthetic profiles (per-layer tuples, per the verification plan) ──
 
 
-def dense(name="dense-32b", layers=64, per_token_f16=4096, weights_gib=20,
-          native=128 * 1024) -> ModelProfile:
+def dense(
+    name="dense-32b", layers=64, per_token_f16=4096, weights_gib=20, native=128 * 1024
+) -> ModelProfile:
     return ModelProfile(
-        name=name, weights_bytes=weights_gib * GIB, embd_table_bytes=0,
+        name=name,
+        weights_bytes=weights_gib * GIB,
+        embd_table_bytes=0,
         n_ctx_train=native,
-        layers=[(LayerKind.FULL, per_token_f16)] * layers)
+        layers=[(LayerKind.FULL, per_token_f16)] * layers,
+    )
 
 
-def hybrid(name="hybrid-30b", full_layers=16, recurrent_layers=48,
-           per_token_f16=4096, weights_gib=22, native=1024 * 1024) -> ModelProfile:
-    layers = ([(LayerKind.FULL, per_token_f16)] * full_layers
-              + [(LayerKind.RECURRENT, 0)] * recurrent_layers)
-    return ModelProfile(name=name, weights_bytes=weights_gib * GIB,
-                        embd_table_bytes=0, n_ctx_train=native, layers=layers)
+def hybrid(
+    name="hybrid-30b",
+    full_layers=16,
+    recurrent_layers=48,
+    per_token_f16=4096,
+    weights_gib=22,
+    native=1024 * 1024,
+) -> ModelProfile:
+    layers = [(LayerKind.FULL, per_token_f16)] * full_layers + [
+        (LayerKind.RECURRENT, 0)
+    ] * recurrent_layers
+    return ModelProfile(
+        name=name,
+        weights_bytes=weights_gib * GIB,
+        embd_table_bytes=0,
+        n_ctx_train=native,
+        layers=layers,
+    )
 
 
-def moe(name="moe-30b", layers=48, per_token_f16=3072, weights_gib=17,
-        native=256 * 1024) -> ModelProfile:
-    return ModelProfile(name=name, weights_bytes=weights_gib * GIB,
-                        embd_table_bytes=0, n_ctx_train=native,
-                        layers=[(LayerKind.FULL, per_token_f16)] * layers,
-                        moe=True)
+def moe(
+    name="moe-30b", layers=48, per_token_f16=3072, weights_gib=17, native=256 * 1024
+) -> ModelProfile:
+    return ModelProfile(
+        name=name,
+        weights_bytes=weights_gib * GIB,
+        embd_table_bytes=0,
+        n_ctx_train=native,
+        layers=[(LayerKind.FULL, per_token_f16)] * layers,
+        moe=True,
+    )
 
 
 def card(vram_gib, ram_gib=64, uma=False) -> HardwareBudget:
-    return HardwareBudget(usable_vram_bytes=int(vram_gib * GIB),
-                          total_device_bytes=int(vram_gib * GIB),
-                          ram_available_bytes=int(ram_gib * GIB), uma=uma)
+    return HardwareBudget(
+        usable_vram_bytes=int(vram_gib * GIB),
+        total_device_bytes=int(vram_gib * GIB),
+        ram_available_bytes=int(ram_gib * GIB),
+        uma=uma,
+    )
 
 
 # ── estimator invariants ─────────────────────────────────────
@@ -89,18 +113,26 @@ def test_recurrent_state_constant_in_window():
     full_share_1m = ctx_bytes(p, 1024 * KIB)
     # Grows only through the 16 full-attn layers — the recurrent share is
     # identical, so the ratio tracks the full-attn ratio exactly.
-    full_only = ModelProfile(name="x", weights_bytes=0, embd_table_bytes=0,
-                             n_ctx_train=p.n_ctx_train,
-                             layers=[(LayerKind.FULL, 4096)] * 16)
+    full_only = ModelProfile(
+        name="x",
+        weights_bytes=0,
+        embd_table_bytes=0,
+        n_ctx_train=p.n_ctx_train,
+        layers=[(LayerKind.FULL, 4096)] * 16,
+    )
     expected_delta = ctx_bytes(full_only, 1024 * KIB) - ctx_bytes(full_only, 32 * KIB)
     assert abs((full_share_1m - full_share_32) - expected_delta) <= 1
 
 
 def test_swa_layers_capped_at_window():
     p = ModelProfile(
-        name="swa", weights_bytes=0, embd_table_bytes=0, n_ctx_train=128 * KIB,
+        name="swa",
+        weights_bytes=0,
+        embd_table_bytes=0,
+        n_ctx_train=128 * KIB,
         layers=[(LayerKind.SWA, 4096)] * 5 + [(LayerKind.FULL, 4096)] * 1,
-        swa_window=1024)
+        swa_window=1024,
+    )
     small, big = ctx_bytes(p, 4 * KIB), ctx_bytes(p, 32 * KIB)
     # Full layer grew 8x; the 5 SWA layers stayed capped at 1024 — total
     # growth must land well under the all-full 8x (here ~4.1x).
@@ -110,7 +142,8 @@ def test_swa_layers_capped_at_window():
 def test_non_fa_fallback_doubles_ctx_cost():
     p = dense()
     assert ctx_bytes(p, FLOOR, flash_attention=False) == pytest.approx(
-        ctx_bytes(p, FLOOR, flash_attention=True) * 64 / 34, rel=0.001)
+        ctx_bytes(p, FLOOR, flash_attention=True) * 64 / 34, rel=0.001
+    )
 
 
 # ── measured-constant spot checks (real models, tolerance bands) ──
@@ -153,11 +186,18 @@ def test_initial_window_accounts_for_overhead_in_every_verdict(uma):
     exact = replace(budget, usable_vram_bytes=base + overhead, ram_available_bytes=0)
     assert not initial_window(profile, exact, overhead_bytes=overhead).spilled
     short = replace(exact, usable_vram_bytes=exact.usable_vram_bytes - 1)
-    assert isinstance(initial_window(profile, short, overhead_bytes=overhead), PhysicsRefusal)
+    assert isinstance(
+        initial_window(profile, short, overhead_bytes=overhead), PhysicsRefusal
+    )
 
     # A cheap-KV model may grow on the spill path, but only into memory that exists.
-    growing = hybrid(weights_gib=20, full_layers=4, recurrent_layers=0,
-                     per_token_f16=1024, native=1024 * KIB)
+    growing = hybrid(
+        weights_gib=20,
+        full_layers=4,
+        recurrent_layers=0,
+        per_token_f16=1024,
+        native=1024 * KIB,
+    )
     floor_need = growing.weights_bytes + ctx_bytes(growing, FLOOR) + overhead
     limited = HardwareBudget(8 * GIB, 8 * GIB, floor_need - 8 * GIB)
     decision = initial_window(growing, limited, overhead_bytes=overhead)
@@ -237,8 +277,12 @@ def test_uma_budget_caps_the_window_through_physics():
 
 
 def _grow(profile, budget, **kw):
-    defaults = dict(current_window=FLOOR, session_tokens=int(FLOOR * 0.9),
-                    measured_decode_tok_s=40.0, server_idle=True)
+    defaults = dict(
+        current_window=FLOOR,
+        session_tokens=int(FLOOR * 0.9),
+        measured_decode_tok_s=40.0,
+        server_idle=True,
+    )
     defaults.update(kw)
     return growth_decision(profile, budget, **defaults)
 
@@ -265,8 +309,9 @@ def test_growth_steps_one_rung_and_is_monotone():
 
 def test_growth_stops_at_native():
     p = dense(native=128 * KIB)
-    d = _grow(p, card(48), current_window=128 * KIB,
-              session_tokens=int(128 * KIB * 0.9))
+    d = _grow(
+        p, card(48), current_window=128 * KIB, session_tokens=int(128 * KIB * 0.9)
+    )
     assert d.action == "compress-default"
 
 
@@ -301,7 +346,9 @@ def _ot_pattern(args: list[str]) -> str:
 
 def _moved(pattern: str, n_layers: int) -> list[int]:
     # llama.cpp matches -ot patterns with std::regex_search against tensor names.
-    return [i for i in range(n_layers) if re.search(pattern, f"blk.{i}.ffn_down.weight")]
+    return [
+        i for i in range(n_layers) if re.search(pattern, f"blk.{i}.ffn_down.weight")
+    ]
 
 
 def test_hybrid_spill_moves_only_recurrent_blocks_needed_for_spill_bytes():
@@ -309,9 +356,13 @@ def test_hybrid_spill_moves_only_recurrent_blocks_needed_for_spill_bytes():
     layout (every 4th block full attention), 100 MiB of FFN per block."""
     kinds = [LayerKind.FULL if i % 4 == 3 else LayerKind.RECURRENT for i in range(16)]
     profile = ModelProfile(
-        name="interleaved-hybrid", weights_bytes=8 * GIB, embd_table_bytes=0, n_ctx_train=FLOOR,
+        name="interleaved-hybrid",
+        weights_bytes=8 * GIB,
+        embd_table_bytes=0,
+        n_ctx_train=FLOOR,
         layers=[(k, 4096 if k == LayerKind.FULL else 0) for k in kinds],
-        ffn_block_bytes={i: 100 * MIB for i in range(16)})
+        ffn_block_bytes={i: 100 * MIB for i in range(16)},
+    )
 
     assert recurrent_spill_blocks(profile, 250 * MIB) == [0, 1, 2]
     assert recurrent_spill_blocks(profile, 300 * MIB) == [0, 1, 2]
@@ -323,22 +374,31 @@ def test_hybrid_spill_moves_only_recurrent_blocks_needed_for_spill_bytes():
     # More spill than all recurrent FFNs hold: every recurrent block, never a full-attention one.
     recurrent = [i for i, k in enumerate(kinds) if k == LayerKind.RECURRENT]
     assert _moved(_ot_pattern(spill_overrides(profile, 20 * GIB)), 16) == recurrent
-    assert not re.search(_ot_pattern(spill_overrides(profile, 20 * GIB)), "blk.3.ffn_up.weight")
+    assert not re.search(
+        _ot_pattern(spill_overrides(profile, 20 * GIB)), "blk.3.ffn_up.weight"
+    )
 
 
 def test_hybrid_spill_without_ffn_sizes_moves_every_recurrent_block_only():
-    profile = hybrid(full_layers=16, recurrent_layers=48)   # no tensor-table sizes
+    profile = hybrid(full_layers=16, recurrent_layers=48)  # no tensor-table sizes
     assert _moved(_ot_pattern(spill_overrides(profile, GIB)), 64) == list(range(16, 64))
-    partial = replace(profile, ffn_block_bytes={i: GIB for i in range(16, 63)})  # block 63 unknown
+    partial = replace(
+        profile, ffn_block_bytes={i: GIB for i in range(16, 63)}
+    )  # block 63 unknown
     assert recurrent_spill_blocks(partial, GIB) == list(range(16, 64))
 
 
 def test_launch_args_sizes_hybrid_spill_from_decision():
-    profile = replace(hybrid(full_layers=2, recurrent_layers=6),
-                      ffn_block_bytes={i: GIB for i in range(8)})
+    profile = replace(
+        hybrid(full_layers=2, recurrent_layers=6),
+        ffn_block_bytes={i: GIB for i in range(8)},
+    )
     spilled = WindowDecision(window=FLOOR, spill_bytes=int(1.5 * GIB), kv_on_gpu=True)
     args = launch_args(profile, spilled)
-    assert _moved(_ot_pattern(args[args.index("-ot"):args.index("-ot") + 2]), 8) == [2, 3]
+    assert _moved(_ot_pattern(args[args.index("-ot") : args.index("-ot") + 2]), 8) == [
+        2,
+        3,
+    ]
     assert "-ot" not in launch_args(profile, spilled, uma=True)
 
 
@@ -348,10 +408,10 @@ def test_launch_args_contract():
     resident = WindowDecision(window=131072, spill_bytes=0, kv_on_gpu=True)
 
     a = launch_args(p, spilled, mtp_capable=True)
-    assert a[:2] == ["-c", str(FLOOR)]           # explicit window, always
-    assert "q8_0" in a                            # q8 KV under flash attn
-    assert "-ot" in a                             # spill placement
-    assert "--spec-type" in a                     # MTP on spilled
+    assert a[:2] == ["-c", str(FLOOR)]  # explicit window, always
+    assert "q8_0" in a  # q8 KV under flash attn
+    assert "-ot" in a  # spill placement
+    assert "--spec-type" in a  # MTP on spilled
 
     # MTP is not gated on spill: resident decode measured +16% at depth 2.
     b = launch_args(p, resident, mtp_capable=True, mtp_draft_depth=2)
@@ -371,20 +431,21 @@ def test_launch_args_contract():
     # Headroom proven: the stacked posture carries the large microbatch
     # (measured best on both axes where it fits: 93.3 vs 89.5 tok/s
     # decode on Qwen3.8 Q4). ub_logits_bytes must price the same choice.
-    s = launch_args(p, resident, mtp_capable=True, mtp_draft_depth=2,
-                    mtp_prefill=True)
+    s = launch_args(p, resident, mtp_capable=True, mtp_draft_depth=2, mtp_prefill=True)
     assert "-ub" in s and s[s.index("-ub") + 1] == "2048"
     assert "--spec-type" in s
     v = 248320
     assert ub_logits_bytes(v, mtp_capable=True) == 512 * v * 4 * 2
-    assert ub_logits_bytes(v, mtp_capable=True, mtp_prefill=True) == int(2048 * v * 4 * 1.5)
+    assert ub_logits_bytes(v, mtp_capable=True, mtp_prefill=True) == int(
+        2048 * v * 4 * 1.5
+    )
 
     c = launch_args(p, resident, mtp_capable=False)
     assert "-ub" in c and c[c.index("-ub") + 1] == "2048"  # prefill hint
     assert "--spec-type" not in c
 
     d = launch_args(p, spilled, flash_attention=False, mtp_capable=False)
-    assert "q8_0" not in d                        # f16 on non-FA fallback
+    assert "q8_0" not in d  # f16 on non-FA fallback
 
 
 def test_launch_args_uma_never_pins_tensors():
@@ -399,14 +460,15 @@ def test_launch_args_uma_never_pins_tensors():
 
     u = launch_args(p, spilled, mtp_capable=False, uma=True)
     assert "-ot" not in u, "UMA must never pin tensors to the host path"
-    assert u[:2] == ["-c", str(FLOOR)]            # window contract unchanged
-    assert "q8_0" in u                            # KV policy unchanged
+    assert u[:2] == ["-c", str(FLOOR)]  # window contract unchanged
+    assert "q8_0" in u  # KV policy unchanged
 
     # Same call on discrete keeps the pinning — the flag is the ONLY delta.
     disc = launch_args(p, spilled, mtp_capable=False, uma=False)
     assert "-ot" in disc
-    assert [x for x in disc if x != "-ot" and not x.startswith("blk")] == \
-        [x for x in u if x != "-ot" and not x.startswith("blk")]
+    assert [x for x in disc if x != "-ot" and not x.startswith("blk")] == [
+        x for x in u if x != "-ot" and not x.startswith("blk")
+    ]
 
 
 def test_ub_logits_bytes_prices_the_flag_choice():
@@ -417,7 +479,7 @@ def test_ub_logits_bytes_prices_the_flag_choice():
     v = 248320
     assert ub_logits_bytes(v, mtp_capable=False) == 2048 * v * 4
     assert ub_logits_bytes(v, mtp_capable=True) == 512 * v * 4 * 2
-    assert ub_logits_bytes(0, mtp_capable=True) == 0   # unknown vocab: no charge
+    assert ub_logits_bytes(0, mtp_capable=True) == 0  # unknown vocab: no charge
 
 
 def test_kv_scale_prices_mtp_draft_context():

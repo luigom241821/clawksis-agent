@@ -4,7 +4,9 @@ import clawk_cli.gateway as gateway_mod
 from clawk_cli.gateway_setup_service import ensure_gateway_service
 
 
-def _patch_host(monkeypatch, *, container=False, systemd=True, macos=False, windows=False):
+def _patch_host(
+    monkeypatch, *, container=False, systemd=True, macos=False, windows=False
+):
     monkeypatch.setattr("clawk_constants.is_container", lambda: container)
     monkeypatch.setattr(gateway_mod, "supports_systemd_services", lambda: systemd)
     monkeypatch.setattr(gateway_mod, "is_macos", lambda: macos)
@@ -15,7 +17,9 @@ class TestEnsureGatewayService:
     def test_container_is_noop(self, monkeypatch, capsys):
         _patch_host(monkeypatch, container=True)
         called = []
-        monkeypatch.setattr(gateway_mod, "systemd_install", lambda **kw: called.append("install"))
+        monkeypatch.setattr(
+            gateway_mod, "systemd_install", lambda **kw: called.append("install")
+        )
 
         assert ensure_gateway_service(install=True) is False
         assert not called
@@ -32,21 +36,27 @@ class TestEnsureGatewayService:
         _patch_host(monkeypatch)
         monkeypatch.setattr(gateway_mod, "_is_service_running", lambda: True)
         called = []
-        monkeypatch.setattr(gateway_mod, "systemd_install", lambda **kw: called.append("install"))
-        monkeypatch.setattr(gateway_mod, "systemd_start", lambda **kw: called.append("start"))
+        monkeypatch.setattr(
+            gateway_mod, "systemd_install", lambda **kw: called.append("install")
+        )
+        monkeypatch.setattr(
+            gateway_mod, "systemd_start", lambda **kw: called.append("start")
+        )
 
         assert ensure_gateway_service(install=True) is True
         assert not called
-
-
 
     def test_installed_but_stopped_starts_without_reinstall(self, monkeypatch):
         _patch_host(monkeypatch)
         monkeypatch.setattr(gateway_mod, "_is_service_running", lambda: False)
         monkeypatch.setattr(gateway_mod, "_is_service_installed", lambda: True)
         calls = []
-        monkeypatch.setattr(gateway_mod, "systemd_install", lambda **kw: calls.append("install"))
-        monkeypatch.setattr(gateway_mod, "systemd_start", lambda **kw: calls.append("start"))
+        monkeypatch.setattr(
+            gateway_mod, "systemd_install", lambda **kw: calls.append("install")
+        )
+        monkeypatch.setattr(
+            gateway_mod, "systemd_start", lambda **kw: calls.append("start")
+        )
 
         assert ensure_gateway_service(install=True) is True
         assert calls == ["start"]
@@ -58,14 +68,17 @@ class TestEnsureGatewayService:
         monkeypatch.setattr(gateway_mod, "has_conflicting_systemd_units", lambda: True)
         warned = []
         monkeypatch.setattr(
-            gateway_mod, "print_systemd_scope_conflict_warning", lambda: warned.append(True)
+            gateway_mod,
+            "print_systemd_scope_conflict_warning",
+            lambda: warned.append(True),
         )
         calls = []
-        monkeypatch.setattr(gateway_mod, "systemd_install", lambda **kw: calls.append("install"))
+        monkeypatch.setattr(
+            gateway_mod, "systemd_install", lambda **kw: calls.append("install")
+        )
 
         assert ensure_gateway_service(install=True) is False
         assert warned and not calls
-
 
     def test_never_raises_on_install_failure(self, monkeypatch, capsys):
         _patch_host(monkeypatch)
@@ -104,7 +117,9 @@ class TestEnsureGatewayService:
         monkeypatch.setattr(gateway_mod, "_is_service_installed", lambda: True)
 
         def unreachable(**kw):
-            raise gateway_mod.UserSystemdUnavailableError("no D-Bus session\nenable linger")
+            raise gateway_mod.UserSystemdUnavailableError(
+                "no D-Bus session\nenable linger"
+            )
 
         monkeypatch.setattr(gateway_mod, "systemd_start", unreachable)
 

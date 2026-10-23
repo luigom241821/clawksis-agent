@@ -38,21 +38,27 @@ def _isolated_session(sid, monkeypatch, host, **extra):
         **extra,
     }
     server._sessions[sid] = session
-    monkeypatch.setattr(server, "_load_cfg", lambda: {"dashboard": {"turn_isolation": True}})
+    monkeypatch.setattr(
+        server, "_load_cfg", lambda: {"dashboard": {"turn_isolation": True}}
+    )
     monkeypatch.setattr(server, "_get_compute_host_supervisor", lambda _cfg=None: host)
     return session
 
 
 def _interrupt(sid):
     try:
-        return server.handle_request({"id": "1", "method": "session.interrupt", "params": {"session_id": sid}})
+        return server.handle_request(
+            {"id": "1", "method": "session.interrupt", "params": {"session_id": sid}}
+        )
     finally:
         server._sessions.pop(sid, None)
 
 
 def test_dead_host_stop_clears_the_stuck_turn(monkeypatch):
     session = _isolated_session(
-        "iso-dead", monkeypatch, _DeadComputeHost(),
+        "iso-dead",
+        monkeypatch,
+        _DeadComputeHost(),
         queued_prompt={"text": "stale next", "transport": None},
         inflight_turn={"user": "hi", "assistant": "", "streaming": True},
     )
@@ -68,7 +74,9 @@ def test_dead_host_stop_clears_the_stuck_turn(monkeypatch):
 
 def test_a_pending_host_completion_keeps_its_own_teardown(monkeypatch):
     session = _isolated_session(
-        "iso-pending", monkeypatch, _DeadComputeHost(pending_sids=("iso-pending",)),
+        "iso-pending",
+        monkeypatch,
+        _DeadComputeHost(pending_sids=("iso-pending",)),
         inflight_turn={"user": "hi", "assistant": "", "streaming": True},
     )
 
@@ -82,7 +90,9 @@ def test_a_pending_host_completion_keeps_its_own_teardown(monkeypatch):
 
 def test_after_teardown_running_belongs_to_the_drain(monkeypatch):
     # The crash waiter already cleared inflight; a successor drain may own `running` for its queued prompt.
-    session = _isolated_session("iso-post", monkeypatch, _DeadComputeHost(), inflight_turn=None)
+    session = _isolated_session(
+        "iso-post", monkeypatch, _DeadComputeHost(), inflight_turn=None
+    )
 
     resp = _interrupt("iso-post")
 
@@ -95,7 +105,9 @@ def test_a_successor_turn_that_replaced_inflight_is_not_clobbered(monkeypatch):
     old_inflight = {"user": "old", "assistant": "", "streaming": True}
     new_inflight = {"user": "new", "assistant": "", "streaming": True}
     host = _DeadComputeHost()
-    session = _isolated_session("iso-race", monkeypatch, host, inflight_turn=old_inflight)
+    session = _isolated_session(
+        "iso-race", monkeypatch, host, inflight_turn=old_inflight
+    )
 
     def interrupt_and_swap(sid, *, request_id=None):
         # prompt.submit replaces inflight after history_lock is released, before submit_turn registers it.

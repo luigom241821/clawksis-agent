@@ -40,15 +40,19 @@ def _descriptor(**overrides):
 
 
 class TestDescriptorCapabilityBit:
-
     def test_from_json_reads_flag(self):
         import json
 
         payload = dict(
-            contract_version=1, platform="slack", label="Slack",
-            max_message_length=4000, supports_draft_streaming=False,
-            supports_edit=True, supports_threads=True,
-            markdown_dialect="mrkdwn", len_unit="chars",
+            contract_version=1,
+            platform="slack",
+            label="Slack",
+            max_message_length=4000,
+            supports_draft_streaming=False,
+            supports_edit=True,
+            supports_threads=True,
+            markdown_dialect="mrkdwn",
+            len_unit="chars",
             supports_inchannel_continuable=True,
         )
         d = CapabilityDescriptor.from_json(json.dumps(payload))
@@ -59,10 +63,15 @@ class TestDescriptorCapabilityBit:
         import json
 
         payload = dict(
-            contract_version=1, platform="slack", label="Slack",
-            max_message_length=4000, supports_draft_streaming=False,
-            supports_edit=True, supports_threads=True,
-            markdown_dialect="mrkdwn", len_unit="chars",
+            contract_version=1,
+            platform="slack",
+            label="Slack",
+            max_message_length=4000,
+            supports_draft_streaming=False,
+            supports_edit=True,
+            supports_threads=True,
+            markdown_dialect="mrkdwn",
+            len_unit="chars",
         )
         d = CapabilityDescriptor.from_json(json.dumps(payload))
         assert d.supports_inchannel_continuable is False
@@ -75,8 +84,6 @@ class TestRelayAdapterCapabilityMapping:
 
         config = PlatformConfig(enabled=True, extra={})
         return RelayAdapter(config, descriptor)
-
-
 
     def test_renegotiation_updates_flag(self):
         """_apply_descriptor must carry the bit, like supports_code_blocks."""
@@ -109,8 +116,9 @@ class TestPerPlatformCapability:
         """Slack-primary (capable) + Discord fronted (not advertised):
         Discord must NOT inherit Slack's bit through the scalar."""
         slack = _descriptor(supports_inchannel_continuable=True)
-        discord = _descriptor(platform="discord", label="Discord",
-                              markdown_dialect="markdown")
+        discord = _descriptor(
+            platform="discord", label="Discord", markdown_dialect="markdown"
+        )
         adapter = self._adapter(slack, {"slack": slack, "discord": discord})
         assert adapter.supports_inchannel_continuable_for_platform("slack") is True
         assert adapter.supports_inchannel_continuable_for_platform("discord") is False
@@ -118,8 +126,9 @@ class TestPerPlatformCapability:
     def test_nonprimary_advertised_bit_is_honored(self):
         """Discord-primary (not capable) + Slack fronted (advertised):
         Slack's own descriptor must win over the primary scalar False."""
-        discord = _descriptor(platform="discord", label="Discord",
-                              markdown_dialect="markdown")
+        discord = _descriptor(
+            platform="discord", label="Discord", markdown_dialect="markdown"
+        )
         slack = _descriptor(supports_inchannel_continuable=True)
         adapter = self._adapter(discord, {"slack": slack, "discord": discord})
         assert adapter.supports_inchannel_continuable_for_platform("slack") is True

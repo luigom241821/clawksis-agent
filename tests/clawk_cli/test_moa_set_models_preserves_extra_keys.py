@@ -23,7 +23,9 @@ def _base_payload(**overrides) -> MoaConfigPayload:
                 reference_models=[
                     MoaModelSlot(provider="openai-codex", model="gpt-5.5"),
                 ],
-                aggregator=MoaModelSlot(provider="openrouter", model="anthropic/claude-opus-4.8"),
+                aggregator=MoaModelSlot(
+                    provider="openrouter", model="anthropic/claude-opus-4.8"
+                ),
                 max_tokens=4096,
                 enabled=True,
             ),
@@ -48,7 +50,10 @@ class TestSetMoaModelsPreservesUndeclaredKeys:
                         "reference_models": [
                             {"provider": "openai-codex", "model": "gpt-5.5"},
                         ],
-                        "aggregator": {"provider": "openrouter", "model": "anthropic/claude-opus-4.8"},
+                        "aggregator": {
+                            "provider": "openrouter",
+                            "model": "anthropic/claude-opus-4.8",
+                        },
                         "max_tokens": 4096,
                         "enabled": True,
                     },
@@ -67,7 +72,10 @@ class TestSetMoaModelsPreservesUndeclaredKeys:
         payload = _base_payload()
 
         with (
-            patch("clawk_cli.config.require_readable_config_before_write", side_effect=fake_readable_config),
+            patch(
+                "clawk_cli.config.require_readable_config_before_write",
+                side_effect=fake_readable_config,
+            ),
             patch("clawk_cli.config.save_config", side_effect=fake_save_config),
             patch("clawk_cli.web_server_profiles._profile_scope"),
         ):
@@ -80,8 +88,6 @@ class TestSetMoaModelsPreservesUndeclaredKeys:
         assert moa.get("trace_dir") == "/custom/traces", (
             "trace_dir was dropped by set_moa_models"
         )
-
-
 
 
 def test_moa_save_writes_only_the_moa_section(tmp_path, monkeypatch):
@@ -97,10 +103,15 @@ def test_moa_save_writes_only_the_moa_section(tmp_path, monkeypatch):
     home = tmp_path / ".clawk"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
-    get_config_path().write_text(yaml.safe_dump({"model": {"default": "m1", "provider": "custom"}}), encoding="utf-8")
-    stale = load_config()                       # snapshot BEFORE the chain exists
-    stale["fallback_providers"] = []            # what the default-expanded snapshot carries
-    chain = [{"provider": "custom", "model": "glm-5.08", "base_url": "http://gw:8080/v1"}]
+    get_config_path().write_text(
+        yaml.safe_dump({"model": {"default": "m1", "provider": "custom"}}),
+        encoding="utf-8",
+    )
+    stale = load_config()  # snapshot BEFORE the chain exists
+    stale["fallback_providers"] = []  # what the default-expanded snapshot carries
+    chain = [
+        {"provider": "custom", "model": "glm-5.08", "base_url": "http://gw:8080/v1"}
+    ]
     raw = read_raw_config()
     raw["fallback_providers"] = chain
     get_config_path().write_text(yaml.safe_dump(raw), encoding="utf-8")
@@ -112,6 +123,11 @@ def test_moa_save_writes_only_the_moa_section(tmp_path, monkeypatch):
         set_moa_models(_base_payload())
 
     on_disk = read_raw_config()
-    assert on_disk["fallback_providers"] == chain, "MoA save clobbered fallback_providers"
+    assert on_disk["fallback_providers"] == chain, (
+        "MoA save clobbered fallback_providers"
+    )
     # The MoA edit itself landed (a non-default value, so default stripping leaves it on disk).
-    assert on_disk["moa"]["presets"]["default"]["reference_models"][0]["model"] == "gpt-5.5"
+    assert (
+        on_disk["moa"]["presets"]["default"]["reference_models"][0]["model"]
+        == "gpt-5.5"
+    )

@@ -40,8 +40,9 @@ def _switch_to_alias(monkeypatch, alias_entry):
 
     probed = {}
 
-    def _fake_validate(model_name, provider, *, api_key=None, base_url=None,
-                       api_mode=None, **_kwargs):
+    def _fake_validate(
+        model_name, provider, *, api_key=None, base_url=None, api_mode=None, **_kwargs
+    ):
         probed["api_key"] = api_key
         probed["base_url"] = base_url
         return {"accepted": True, "persist": True, "recognized": True, "message": ""}
@@ -67,6 +68,7 @@ def _switch_to_alias(monkeypatch, alias_entry):
 # Loading
 # ---------------------------------------------------------------------------
 
+
 class TestDirectAliasCredentialLoading:
     def test_api_key_and_key_env_are_loaded_from_config(self, monkeypatch):
         """``api_key``/``key_env`` survive into the DirectAlias (were dropped)."""
@@ -87,7 +89,6 @@ class TestDirectAliasCredentialLoading:
         assert alias.key_env == "THETA_API_KEY"
 
 
-
 class TestNestedModelAliasesCredentials:
     """``model.aliases:`` dict entries must keep ``api_key``/``key_env`` like
     top-level ``model_aliases:`` entries do (#114471)."""
@@ -101,7 +102,9 @@ class TestNestedModelAliasesCredentials:
             },
         }
         monkeypatch.setattr("clawk_cli.config.load_config", lambda *a, **k: cfg)
-        monkeypatch.setattr("clawk_cli.runtime_provider.load_config", lambda *a, **k: cfg)
+        monkeypatch.setattr(
+            "clawk_cli.runtime_provider.load_config", lambda *a, **k: cfg
+        )
         return cfg
 
     def test_nested_alias_keeps_key_env(self, monkeypatch):
@@ -160,6 +163,7 @@ class TestDirectAliasApiKeyHelper:
 # ---------------------------------------------------------------------------
 # /model <alias> — the switch path
 # ---------------------------------------------------------------------------
+
 
 class TestModelSwitchUsesAliasCredential:
     def test_alias_api_key_is_sent_to_alias_host(self, monkeypatch):
@@ -313,11 +317,17 @@ class TestBuiltinProviderKeysDoNotLeak:
 
         probed = {}
 
-        def _fake_validate(model_name, prov, *, api_key=None, base_url=None,
-                           api_mode=None, **_kwargs):
+        def _fake_validate(
+            model_name, prov, *, api_key=None, base_url=None, api_mode=None, **_kwargs
+        ):
             probed["api_key"] = api_key
             probed["base_url"] = base_url
-            return {"accepted": True, "persist": True, "recognized": True, "message": ""}
+            return {
+                "accepted": True,
+                "persist": True,
+                "recognized": True,
+                "message": "",
+            }
 
         monkeypatch.setattr(
             "clawk_cli.models_validate.validate_requested_model", _fake_validate
@@ -347,36 +357,57 @@ class TestProviderLabelCannotSelectAKeyForAnArbitraryHost:
     endpoint is resolved as bare `custom` instead, which is host-gated.
     """
 
-    def _switch(self, monkeypatch, alias, session_provider="openrouter",
-                session_base_url="https://openrouter.ai/api/v1"):
+    def _switch(
+        self,
+        monkeypatch,
+        alias,
+        session_provider="openrouter",
+        session_base_url="https://openrouter.ai/api/v1",
+    ):
         cfg = {
             "model": {"default": "m", "provider": session_provider},
             "model_aliases": {"theta": alias},
         }
         monkeypatch.setattr("clawk_cli.config.load_config", lambda *a, **k: cfg)
-        monkeypatch.setattr("clawk_cli.runtime_provider.load_config", lambda *a, **k: cfg)
+        monkeypatch.setattr(
+            "clawk_cli.runtime_provider.load_config", lambda *a, **k: cfg
+        )
         probed = {}
 
-        def _fake_validate(model_name, prov, *, api_key=None, base_url=None,
-                           api_mode=None, **_kwargs):
+        def _fake_validate(
+            model_name, prov, *, api_key=None, base_url=None, api_mode=None, **_kwargs
+        ):
             probed["api_key"] = api_key
-            return {"accepted": True, "persist": True, "recognized": True, "message": ""}
+            return {
+                "accepted": True,
+                "persist": True,
+                "recognized": True,
+                "message": "",
+            }
 
-        monkeypatch.setattr("clawk_cli.models_validate.validate_requested_model", _fake_validate)
+        monkeypatch.setattr(
+            "clawk_cli.models_validate.validate_requested_model", _fake_validate
+        )
         import clawk_cli.model_switch as ms
 
         monkeypatch.setattr(ms, "DIRECT_ALIASES", {})
         result = ms.switch_model(
-            raw_input="theta", current_provider=session_provider, current_model="m",
-            current_base_url=session_base_url, current_api_key="sk-session",
+            raw_input="theta",
+            current_provider=session_provider,
+            current_model="m",
+            current_base_url=session_base_url,
+            current_api_key="sk-session",
         )
         return result, probed
 
-    @pytest.mark.parametrize("provider, env_var", [
-        ("anthropic", "ANTHROPIC_API_KEY"),
-        ("openai", "OPENAI_API_KEY"),
-        ("openrouter", "OPENROUTER_API_KEY"),
-    ])
+    @pytest.mark.parametrize(
+        "provider, env_var",
+        [
+            ("anthropic", "ANTHROPIC_API_KEY"),
+            ("openai", "OPENAI_API_KEY"),
+            ("openrouter", "OPENROUTER_API_KEY"),
+        ],
+    )
     def test_builtin_label_does_not_pull_that_providers_key_to_a_foreign_host(
         self, monkeypatch, provider, env_var
     ):
@@ -397,8 +428,11 @@ class TestProviderLabelCannotSelectAKeyForAnArbitraryHost:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-anthropic-SECRET")
         result, _ = self._switch(
             monkeypatch,
-            {"model": "c", "provider": "anthropic",
-             "base_url": "https://api.anthropic.com/v1"},
+            {
+                "model": "c",
+                "provider": "anthropic",
+                "base_url": "https://api.anthropic.com/v1",
+            },
         )
         assert result.api_key == "sk-anthropic-SECRET"
 
@@ -414,40 +448,75 @@ class TestSessionCredentialIsScopedToTheOrigin:
     def _switch(self, monkeypatch, alias_base_url, session_base_url):
         cfg = {
             "model": {"default": "m", "provider": "my-endpoint"},
-            "model_aliases": {"theta": {
-                "model": "m2", "provider": "custom", "base_url": alias_base_url}},
+            "model_aliases": {
+                "theta": {
+                    "model": "m2",
+                    "provider": "custom",
+                    "base_url": alias_base_url,
+                }
+            },
         }
         monkeypatch.setattr("clawk_cli.config.load_config", lambda *a, **k: cfg)
-        monkeypatch.setattr("clawk_cli.runtime_provider.load_config", lambda *a, **k: cfg)
+        monkeypatch.setattr(
+            "clawk_cli.runtime_provider.load_config", lambda *a, **k: cfg
+        )
         monkeypatch.setattr(
             "clawk_cli.models_validate.validate_requested_model",
-            lambda *a, **k: {"accepted": True, "persist": True,
-                             "recognized": True, "message": ""},
+            lambda *a, **k: {
+                "accepted": True,
+                "persist": True,
+                "recognized": True,
+                "message": "",
+            },
         )
         import clawk_cli.model_switch as ms
 
         monkeypatch.setattr(ms, "DIRECT_ALIASES", {})
         return ms.switch_model(
-            raw_input="theta", current_provider="my-endpoint", current_model="m",
-            current_base_url=session_base_url, current_api_key="sk-SESSION-SECRET",
+            raw_input="theta",
+            current_provider="my-endpoint",
+            current_model="m",
+            current_base_url=session_base_url,
+            current_api_key="sk-SESSION-SECRET",
         )
 
-    @pytest.mark.parametrize("alias_url, session_url, why", [
-        ("http://api.example.com/v1", "https://api.example.com/v1", "https->http"),
-        ("https://api.example.com:8443/v1", "https://api.example.com/v1", "port change"),
-        ("http://api.example.com:8080/v1", "https://api.example.com/v1", "scheme+port"),
-        ("https://other.example.com/v1", "https://api.example.com/v1", "cross-host"),
-    ])
+    @pytest.mark.parametrize(
+        "alias_url, session_url, why",
+        [
+            ("http://api.example.com/v1", "https://api.example.com/v1", "https->http"),
+            (
+                "https://api.example.com:8443/v1",
+                "https://api.example.com/v1",
+                "port change",
+            ),
+            (
+                "http://api.example.com:8080/v1",
+                "https://api.example.com/v1",
+                "scheme+port",
+            ),
+            (
+                "https://other.example.com/v1",
+                "https://api.example.com/v1",
+                "cross-host",
+            ),
+        ],
+    )
     def test_origin_change_drops_the_session_credential(
         self, monkeypatch, alias_url, session_url, why
     ):
-        assert self._switch(monkeypatch, alias_url, session_url).api_key != "sk-SESSION-SECRET"
+        assert (
+            self._switch(monkeypatch, alias_url, session_url).api_key
+            != "sk-SESSION-SECRET"
+        )
 
-    @pytest.mark.parametrize("url", [
-        "https://api.example.com/v1",
-        "http://127.0.0.1:11434/v1",   # loopback plaintext is not a downgrade
-        "http://localhost:8080/v1",
-    ])
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "https://api.example.com/v1",
+            "http://127.0.0.1:11434/v1",  # loopback plaintext is not a downgrade
+            "http://localhost:8080/v1",
+        ],
+    )
     def test_same_origin_keeps_the_session_credential(self, monkeypatch, url):
         assert self._switch(monkeypatch, url, url).api_key == "sk-SESSION-SECRET"
 
@@ -465,8 +534,9 @@ class TestCredentialPrecedenceIsExplicit:
         monkeypatch.setenv("THETA_API_KEY", "sk-from-key-env")
         from clawk_cli.model_switch import DirectAlias, direct_alias_api_key
 
-        alias = DirectAlias("theta-1", "custom", ALIAS_HOST,
-                            "sk-literal", "THETA_API_KEY")
+        alias = DirectAlias(
+            "theta-1", "custom", ALIAS_HOST, "sk-literal", "THETA_API_KEY"
+        )
         assert direct_alias_api_key(alias) == "sk-literal"
 
     def test_env_template_api_key_also_wins_over_key_env(self, monkeypatch):
@@ -474,8 +544,7 @@ class TestCredentialPrecedenceIsExplicit:
         monkeypatch.setenv("FALLBACK", "sk-from-key-env")
         from clawk_cli.model_switch import DirectAlias, direct_alias_api_key
 
-        alias = DirectAlias("theta-1", "custom", ALIAS_HOST,
-                            "${PRIMARY}", "FALLBACK")
+        alias = DirectAlias("theta-1", "custom", ALIAS_HOST, "${PRIMARY}", "FALLBACK")
         assert direct_alias_api_key(alias) == "sk-from-template"
 
     def test_key_env_used_when_api_key_is_blank(self, monkeypatch):
@@ -514,10 +583,12 @@ class TestSchemelessBaseUrls:
         not evidence that the origin is unchanged."""
         from clawk_cli.model_switch import _may_reuse_session_credential
 
-        assert _may_reuse_session_credential(
-            "http://localhost:11434/v1", "localhost:11434/v1"
-        ) is False
-
+        assert (
+            _may_reuse_session_credential(
+                "http://localhost:11434/v1", "localhost:11434/v1"
+            )
+            is False
+        )
 
 
 class TestAliasCacheIsProfileScoped:
@@ -545,18 +616,26 @@ class TestAliasCacheIsProfileScoped:
     def test_second_profile_does_not_inherit_the_first_profiles_key(
         self, tmp_path, monkeypatch
     ):
-        a = self._profile(tmp_path, "a", (
-            'model_aliases:\n'
-            '  theta:\n    model: a-model\n    provider: custom\n'
-            '    base_url: "https://a.example.com/v1"\n'
-            '    api_key: "sk-PROFILE-A-SECRET"\n'
-        ))
-        b = self._profile(tmp_path, "b", (
-            'model_aliases:\n'
-            '  theta:\n    model: b-model\n    provider: custom\n'
-            '    base_url: "https://b.example.com/v1"\n'
-            '    api_key: "sk-PROFILE-B-SECRET"\n'
-        ))
+        a = self._profile(
+            tmp_path,
+            "a",
+            (
+                "model_aliases:\n"
+                "  theta:\n    model: a-model\n    provider: custom\n"
+                '    base_url: "https://a.example.com/v1"\n'
+                '    api_key: "sk-PROFILE-A-SECRET"\n'
+            ),
+        )
+        b = self._profile(
+            tmp_path,
+            "b",
+            (
+                "model_aliases:\n"
+                "  theta:\n    model: b-model\n    provider: custom\n"
+                '    base_url: "https://b.example.com/v1"\n'
+                '    api_key: "sk-PROFILE-B-SECRET"\n'
+            ),
+        )
         assert self._load(monkeypatch, a)["theta"].api_key == "sk-PROFILE-A-SECRET"
 
         theta = self._load(monkeypatch, b)["theta"]
@@ -567,16 +646,24 @@ class TestAliasCacheIsProfileScoped:
     def test_alias_absent_from_the_second_profile_does_not_persist(
         self, tmp_path, monkeypatch
     ):
-        a = self._profile(tmp_path, "a2", (
-            'model_aliases:\n'
-            '  only-in-a:\n    model: x\n    provider: custom\n'
-            '    base_url: "https://a.example.com/v1"\n'
-        ))
-        b = self._profile(tmp_path, "b2", (
-            'model_aliases:\n'
-            '  only-in-b:\n    model: y\n    provider: custom\n'
-            '    base_url: "https://b.example.com/v1"\n'
-        ))
+        a = self._profile(
+            tmp_path,
+            "a2",
+            (
+                "model_aliases:\n"
+                "  only-in-a:\n    model: x\n    provider: custom\n"
+                '    base_url: "https://a.example.com/v1"\n'
+            ),
+        )
+        b = self._profile(
+            tmp_path,
+            "b2",
+            (
+                "model_aliases:\n"
+                "  only-in-b:\n    model: y\n    provider: custom\n"
+                '    base_url: "https://b.example.com/v1"\n'
+            ),
+        )
         assert "only-in-a" in self._load(monkeypatch, a)
 
         loaded = self._load(monkeypatch, b)
@@ -584,29 +671,40 @@ class TestAliasCacheIsProfileScoped:
         assert "only-in-b" in loaded
 
     def test_key_rotation_in_place_is_picked_up(self, tmp_path, monkeypatch):
-        home = self._profile(tmp_path, "rot", (
-            'model_aliases:\n'
-            '  theta:\n    model: m\n    provider: custom\n'
-            '    base_url: "https://h.example.com/v1"\n'
-            '    api_key: "sk-BEFORE-ROTATION"\n'
-        ))
+        home = self._profile(
+            tmp_path,
+            "rot",
+            (
+                "model_aliases:\n"
+                "  theta:\n    model: m\n    provider: custom\n"
+                '    base_url: "https://h.example.com/v1"\n'
+                '    api_key: "sk-BEFORE-ROTATION"\n'
+            ),
+        )
         assert self._load(monkeypatch, home)["theta"].api_key == "sk-BEFORE-ROTATION"
 
-        (home / "config.yaml").write_text((
-            'model_aliases:\n'
-            '  theta:\n    model: m\n    provider: custom\n'
-            '    base_url: "https://h.example.com/v1"\n'
-            '    api_key: "sk-AFTER-ROTATION-XYZ"\n'
-        ), encoding="utf-8")
+        (home / "config.yaml").write_text(
+            (
+                "model_aliases:\n"
+                "  theta:\n    model: m\n    provider: custom\n"
+                '    base_url: "https://h.example.com/v1"\n'
+                '    api_key: "sk-AFTER-ROTATION-XYZ"\n'
+            ),
+            encoding="utf-8",
+        )
         assert self._load(monkeypatch, home)["theta"].api_key == "sk-AFTER-ROTATION-XYZ"
 
     def test_cache_is_still_mutated_in_place(self, tmp_path, monkeypatch):
         """Callers hold this exact dict (#16767) — reloading must not rebind."""
-        home = self._profile(tmp_path, "inplace", (
-            'model_aliases:\n'
-            '  theta:\n    model: m\n    provider: custom\n'
-            '    base_url: "https://h.example.com/v1"\n'
-        ))
+        home = self._profile(
+            tmp_path,
+            "inplace",
+            (
+                "model_aliases:\n"
+                "  theta:\n    model: m\n    provider: custom\n"
+                '    base_url: "https://h.example.com/v1"\n'
+            ),
+        )
         import clawk_cli.model_switch as ms
 
         before = id(ms.DIRECT_ALIASES)
@@ -622,11 +720,14 @@ class TestOneShotUsesTheSameHostInvariant:
     would test nothing.
     """
 
-    @pytest.mark.parametrize("provider, env_var", [
-        ("anthropic", "ANTHROPIC_API_KEY"),
-        ("deepseek", "DEEPSEEK_API_KEY"),
-        ("xai", "XAI_API_KEY"),
-    ])
+    @pytest.mark.parametrize(
+        "provider, env_var",
+        [
+            ("anthropic", "ANTHROPIC_API_KEY"),
+            ("deepseek", "DEEPSEEK_API_KEY"),
+            ("xai", "XAI_API_KEY"),
+        ],
+    )
     def test_no_key_alias_on_a_foreign_host_gets_no_provider_token(
         self, monkeypatch, provider, env_var
     ):
@@ -653,9 +754,10 @@ class TestOneShotUsesTheSameHostInvariant:
         the only routing information there is."""
         from clawk_cli.model_switch import DirectAlias, direct_alias_runtime_request
 
-        assert direct_alias_runtime_request(
-            DirectAlias("c", "anthropic", "")
-        ) == ("anthropic", None)
+        assert direct_alias_runtime_request(DirectAlias("c", "anthropic", "")) == (
+            "anthropic",
+            None,
+        )
 
     def test_url_bearing_alias_is_forced_to_custom(self):
         from clawk_cli.model_switch import DirectAlias, direct_alias_runtime_request
@@ -675,15 +777,18 @@ class TestOneShotUsesTheSameHostInvariant:
 class TestBaseUrlOrigin:
     """The origin helper the reuse decision is built on."""
 
-    @pytest.mark.parametrize("url, expected", [
-        ("https://h/v1", ("https", "h", 443)),
-        ("https://h:443/v1", ("https", "h", 443)),
-        ("http://h/v1", ("http", "h", 80)),
-        ("https://h:8443/v1", ("https", "h", 8443)),
-        ("https://H./v1", ("https", "h", 443)),
-        ("", ("", "", 0)),
-        ("https://h:99999/v1", ("", "", 0)),
-    ])
+    @pytest.mark.parametrize(
+        "url, expected",
+        [
+            ("https://h/v1", ("https", "h", 443)),
+            ("https://h:443/v1", ("https", "h", 443)),
+            ("http://h/v1", ("http", "h", 80)),
+            ("https://h:8443/v1", ("https", "h", 8443)),
+            ("https://H./v1", ("https", "h", 443)),
+            ("", ("", "", 0)),
+            ("https://h:99999/v1", ("", "", 0)),
+        ],
+    )
     def test_origin_normalisation(self, url, expected):
         from utils import base_url_origin
 
@@ -693,6 +798,7 @@ class TestBaseUrlOrigin:
 # ---------------------------------------------------------------------------
 # Host gating in the direct-alias runtime branch
 # ---------------------------------------------------------------------------
+
 
 class TestDirectAliasHostGating:
     @pytest.mark.parametrize(
@@ -720,6 +826,7 @@ class TestDirectAliasHostGating:
 # ---------------------------------------------------------------------------
 # clawk chat -m <alias> — the oneshot path
 # ---------------------------------------------------------------------------
+
 
 class TestOneshotPassesAliasCredential:
     def test_alias_api_key_is_passed_to_the_resolver(self, monkeypatch):

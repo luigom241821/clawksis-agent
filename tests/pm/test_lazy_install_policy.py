@@ -6,14 +6,19 @@ import pm
 from clawk_cli.config import get_config_path
 
 
-@pytest.mark.parametrize("content,expected", [
-    ("{}\n", True),
-    ("security:\n  allow_lazy_installs: true\n", True),
-    ("security:\n  allow_lazy_installs: false\n", False),
-    ("security:\n  allow_lazy_installs: 'false'\n", False),
-    ("security: [\n", False),
-])
-def test_real_policy_is_boolean_and_fails_closed(monkeypatch, capsys, content, expected):
+@pytest.mark.parametrize(
+    "content,expected",
+    [
+        ("{}\n", True),
+        ("security:\n  allow_lazy_installs: true\n", True),
+        ("security:\n  allow_lazy_installs: false\n", False),
+        ("security:\n  allow_lazy_installs: 'false'\n", False),
+        ("security: [\n", False),
+    ],
+)
+def test_real_policy_is_boolean_and_fails_closed(
+    monkeypatch, capsys, content, expected
+):
     monkeypatch.delenv("CLAWK_DISABLE_LAZY_INSTALLS", raising=False)
     config = get_config_path()
     config.write_text(content, encoding="utf-8")
@@ -24,7 +29,9 @@ def test_real_policy_is_boolean_and_fails_closed(monkeypatch, capsys, content, e
 
 
 def test_internal_disable_overrides_enabled_config(monkeypatch):
-    get_config_path().write_text("security:\n  allow_lazy_installs: true\n", encoding="utf-8")
+    get_config_path().write_text(
+        "security:\n  allow_lazy_installs: true\n", encoding="utf-8"
+    )
     monkeypatch.setenv("CLAWK_DISABLE_LAZY_INSTALLS", "1")
 
     assert not pm.lazy_installs_allowed()

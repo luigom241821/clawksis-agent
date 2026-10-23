@@ -17,11 +17,20 @@ from typing import Any
 def _pc():
     """The facade, read at call time: tests patch ``plugins_cmd.<name>`` and sibling calls must see it."""
     from clawk_cli import plugins_cmd
+
     return plugins_cmd
 
 
-def _pull_plugin_update(target: Path, pinned_msg, not_git_msg, before_pull=None, *, interactive: bool = False,
-                        force: bool = False, scan_decision_cb=None) -> str:
+def _pull_plugin_update(
+    target: Path,
+    pinned_msg,
+    not_git_msg,
+    before_pull=None,
+    *,
+    interactive: bool = False,
+    force: bool = False,
+    scan_decision_cb=None,
+) -> str:
     """Shared ``update`` core: refuse pinned checkouts, ``git pull`` (or re-install from the
     recorded source when the tree carries no ``.git`` — subdirectory installs), record the new
     revision. Returns the pull output; raises :class:`PluginOperationError` on any refusal.
@@ -35,6 +44,7 @@ def _pull_plugin_update(target: Path, pinned_msg, not_git_msg, before_pull=None,
     # A URL install whose name/repo later landed on the kill list must not keep pulling or
     # re-cloning new code, including subdirectory installs that carry no local .git directory.
     from clawk_cli import plugins_cmd_catalog as catalog
+
     catalog.refuse_if_installed_removed(target.name, target)
     if not (target / ".git").exists():
         source = install_record.get("source")
@@ -42,17 +52,30 @@ def _pull_plugin_update(target: Path, pinned_msg, not_git_msg, before_pull=None,
             raise _pc().PluginOperationError(not_git_msg())
         if before_pull is not None:
             before_pull()
-        return _reclone_plugin_update(target, source, install_record.get("revision"),
-                                      force=force, scan_decision_cb=scan_decision_cb)
+        return _reclone_plugin_update(
+            target,
+            source,
+            install_record.get("revision"),
+            force=force,
+            scan_decision_cb=scan_decision_cb,
+        )
     if before_pull is not None:
         before_pull()
     from clawk_cli.plugins_transaction import update_plugin
 
-    return update_plugin(target, interactive=interactive, force=force, scan_decision_cb=scan_decision_cb)
+    return update_plugin(
+        target, interactive=interactive, force=force, scan_decision_cb=scan_decision_cb
+    )
 
 
-def _reclone_plugin_update(target: Path, source: str, previous_revision: object, *, force: bool = False,
-                           scan_decision_cb=None) -> str:
+def _reclone_plugin_update(
+    target: Path,
+    source: str,
+    previous_revision: object,
+    *,
+    force: bool = False,
+    scan_decision_cb=None,
+) -> str:
     """Update a subdirectory install by re-cloning its source and atomically replacing the tree.
 
     These installs carry no local ``.git``, so the staged replacement also carries user-owned
@@ -69,14 +92,18 @@ def _reclone_plugin_update(target: Path, source: str, previous_revision: object,
         scan_decision_cb=scan_decision_cb,
         before_swap=lambda _manifest, tree: _carry_user_files(target, tree, None),
     )
-    revision = str(_pc()._read_install_metadata().get(new_target.name, {}).get("revision") or "")
+    revision = str(
+        _pc()._read_install_metadata().get(new_target.name, {}).get("revision") or ""
+    )
     previous = previous_revision if isinstance(previous_revision, str) else ""
     if revision and revision == previous:
         return "Already up to date."
     return f"Re-installed from {source}: {previous[:8]}..{revision[:8]}"
 
 
-def update_one(name: str, target: Path, console, *, interactive: bool = True, force: bool = False) -> bool:
+def update_one(
+    name: str, target: Path, console, *, interactive: bool = True, force: bool = False
+) -> bool:
     """Update one installed plugin, printing progress and consent prompts; True when it moved.
 
     Every update is scanned. A caution verdict on a git update asks ``Update anyway? [y/N]`` when
@@ -88,20 +115,29 @@ def update_one(name: str, target: Path, console, *, interactive: bool = True, fo
     from rich.markup import escape
     from clawk_cli import plugins_cmd_catalog as catalog
     from clawk_cli.plugins_cmd_install import interactive_scan_decision
+
     sidecar = catalog.catalog_install_record(target)
     if sidecar:  # catalog installs re-pin to the reviewed SHA — never `git pull`
-        return catalog.cmd_update_catalog(name, target, sidecar, console, interactive=interactive)
+        return catalog.cmd_update_catalog(
+            name, target, sidecar, console, interactive=interactive
+        )
     output = _pull_plugin_update(
         target,
         lambda rec: (
             f"Plugin '{name}' is pinned to {rec.get('revision')}. To move it, run "
             f"`clawk plugins install {escape(str(rec.get('source', '<source>')))} --force "
-            "--ref <40-character commit SHA>`."),
-        lambda: f"Plugin '{name}' was not installed from git (no .git directory). Cannot update.",
+            "--ref <40-character commit SHA>`."
+        ),
+        lambda: (
+            f"Plugin '{name}' was not installed from git (no .git directory). Cannot update."
+        ),
         before_pull=lambda: console.print(f"[dim]Updating {name}...[/dim]"),
         interactive=interactive,
         force=force,
-        scan_decision_cb=interactive_scan_decision(console, "Update") if interactive else None)
+        scan_decision_cb=interactive_scan_decision(console, "Update")
+        if interactive
+        else None,
+    )
     _post_pull_housekeeping(target, console)
 
     # Update-time re-consent (#64228): if the new version declares
@@ -111,18 +147,32 @@ def update_one(name: str, target: Path, console, *, interactive: bool = True, fo
     # (non-interactive updates leave them ungranted — fail closed).
     updated_manifest = _pc()._read_manifest(target)
     plugin_id = updated_manifest.get("name") or target.name
-    declared_caps = _pc()._declared_capabilities_from_manifest(updated_manifest, plugin_id)
+    declared_caps = _pc()._declared_capabilities_from_manifest(
+        updated_manifest, plugin_id
+    )
     if declared_caps:
-        from clawk_cli.plugin_capabilities import declared_set_changed, pending_capabilities
-        if pending_capabilities(plugin_id, declared_caps) or declared_set_changed(plugin_id, declared_caps):
+        from clawk_cli.plugin_capabilities import (
+            declared_set_changed,
+            pending_capabilities,
+        )
+
+        if pending_capabilities(plugin_id, declared_caps) or declared_set_changed(
+            plugin_id, declared_caps
+        ):
             if interactive:
-                _pc()._run_capability_consent(console, plugin_id, declared_caps, context="update")
+                _pc()._run_capability_consent(
+                    console, plugin_id, declared_caps, context="update"
+                )
             else:
-                console.print(f"[yellow]Plugin {plugin_id} has new capabilities; review them with `clawk plugins capabilities {plugin_id}`.[/yellow]")
+                console.print(
+                    f"[yellow]Plugin {plugin_id} has new capabilities; review them with `clawk plugins capabilities {plugin_id}`.[/yellow]"
+                )
 
     out = output.strip()
     if "Already up to date" in out:
-        console.print(f"[green]✓[/green] Plugin [bold]{name}[/bold] is already up to date.")
+        console.print(
+            f"[green]✓[/green] Plugin [bold]{name}[/bold] is already up to date."
+        )
         return False
     console.print(f"[green]✓[/green] Plugin [bold]{name}[/bold] updated.")
     console.print(f"[dim]{out}[/dim]")
@@ -132,6 +182,7 @@ def update_one(name: str, target: Path, console, *, interactive: bool = True, fo
 def cmd_update(name: str, *, interactive: bool = True, force: bool = False) -> None:
     """``clawk plugins update <name> [--force]``: :func:`update_one`, exit 1 on a refusal."""
     from clawk_cli.plugins_cmd_catalog import RepinConsentRequired
+
     console = _pc()._console()
     target = _pc()._require_installed_plugin(name, _pc()._plugins_dir(), console)
     try:
@@ -167,7 +218,9 @@ def cmd_adopt(name: str) -> None:
 
     from clawk_cli.plugins_provenance import ProvenanceClass, plugins_provenance
 
-    prov = next((p for p in plugins_provenance(plugins_dir) if p.name == target.name), None)
+    prov = next(
+        (p for p in plugins_provenance(plugins_dir) if p.name == target.name), None
+    )
     if prov is None:
         console.print(f"[red]Error:[/red] Plugin '{name}' not classifiable.")
         sys.exit(1)
@@ -192,7 +245,9 @@ def cmd_adopt(name: str) -> None:
 
     metadata = _pc()._read_install_metadata()
     if target.name in metadata:
-        console.print(f"[red]Error:[/red] Plugin '{name}' already has a provenance row.")
+        console.print(
+            f"[red]Error:[/red] Plugin '{name}' already has a provenance row."
+        )
         sys.exit(1)
 
     git_exe = _pc()._resolve_git_executable()
@@ -239,12 +294,12 @@ def cmd_trust_update_url(name: str) -> None:
     claimed = (manifest or {}).get("update_url") or None
     if claimed == saved:
         console.print(
-            f"[yellow]Nothing to trust:[/yellow] '{name}' has no "
-            "update_url mismatch."
+            f"[yellow]Nothing to trust:[/yellow] '{name}' has no update_url mismatch."
         )
         return
     if claimed is not None:
         from clawk_cli.plugins_updates import https_update_url
+
         try:
             claimed = https_update_url(claimed)
         except ValueError as exc:
@@ -296,17 +351,19 @@ def cmd_check_updates(args: Any | None = None) -> None:
             status = "[dim]up to date[/dim]"
         else:
             status = f"[yellow]unknown[/yellow]\n[dim]{r.reason}[/dim]"
-        table.add_row(
-            r.name, r.klass, (r.current or "-")[:12], r.latest or "-", status
-        )
+        table.add_row(r.name, r.klass, (r.current or "-")[:12], r.latest or "-", status)
     console.print()
     console.print(table)
     console.print()
-    console.print("[dim]Check-only. Apply with: clawk plugins update <name>, or "
-                  "clawk plugins update to update them all[/dim]")
+    console.print(
+        "[dim]Check-only. Apply with: clawk plugins update <name>, or "
+        "clawk plugins update to update them all[/dim]"
+    )
 
 
-def dashboard_update_user_plugin(name: str, *, accept_capabilities: bool = False, force: bool = False) -> dict[str, Any]:
+def dashboard_update_user_plugin(
+    name: str, *, accept_capabilities: bool = False, force: bool = False
+) -> dict[str, Any]:
     """The one non-interactive update for the dashboard and Desktop: ``git pull`` inside
     ``~/.clawksis/plugins/<name>``; catalog installs re-pin instead. Nothing changes on a refusal:
     a re-pin that widens the plugin returns ``{"ok": False, "consent_required": True, "delta": {...}}``
@@ -316,31 +373,60 @@ def dashboard_update_user_plugin(name: str, *, accept_capabilities: bool = False
     from clawk_cli import plugins_cmd_catalog as catalog
     from clawk_cli.plugins_activation import activate_plugin_now
     from clawk_cli.plugins_cmd_install import scan_blocked_result
+
     target = _pc()._user_installed_plugin_dir(name)
     if target is None:
-        return {"ok": False, "error": f"Plugin '{name}' was not found under {_pc()._plugins_dir()}."}
+        return {
+            "ok": False,
+            "error": f"Plugin '{name}' was not found under {_pc()._plugins_dir()}.",
+        }
     sidecar = catalog.catalog_install_record(target)
     try:
         if sidecar:
             result = catalog.repin_catalog_plugin(
-                target, sidecar, consent_cb=(lambda _delta: True) if accept_capabilities else None)
+                target,
+                sidecar,
+                consent_cb=(lambda _delta: True) if accept_capabilities else None,
+            )
             warnings = list(result.warnings)
             new_target = target.parent / result.installed_name
-            deps = _pc()._python_dependency_summary(new_target, warnings) if result.changed else []
-            activated = activate_plugin_now(result.installed_name) if result.changed else {}
-            return {"ok": True, "name": result.installed_name, "sha": result.sha, "unchanged": not result.changed,
-                    "python_dependencies": deps, "warnings": warnings, **activated}
+            deps = (
+                _pc()._python_dependency_summary(new_target, warnings)
+                if result.changed
+                else []
+            )
+            activated = (
+                activate_plugin_now(result.installed_name) if result.changed else {}
+            )
+            return {
+                "ok": True,
+                "name": result.installed_name,
+                "sha": result.sha,
+                "unchanged": not result.changed,
+                "python_dependencies": deps,
+                "warnings": warnings,
+                **activated,
+            }
         msg = _pull_plugin_update(
             target,
             lambda rec: (
                 f"Plugin '{name}' is pinned to {rec.get('revision')}; "
                 f"run `clawk plugins install {rec.get('source', '<source>')} --force "
-                "--ref <40-character commit SHA>` to move it."),
+                "--ref <40-character commit SHA>` to move it."
+            ),
             lambda: f"Plugin '{name}' is not a git checkout; cannot pull updates.",
-            force=force)
+            force=force,
+        )
     except catalog.RepinConsentRequired as exc:
-        return {"ok": False, "consent_required": True, "error": str(exc), "name": exc.name, "sha": exc.sha,
-                "delta": exc.delta, "delta_lines": catalog.surface_delta_lines(exc.delta)}
+        return {
+            "ok": False,
+            "consent_required": True,
+            "error": str(exc),
+            "name": exc.name,
+            "sha": exc.sha,
+            "delta": exc.delta,
+            "delta_lines": catalog.surface_delta_lines(exc.delta),
+        }
     except _pc().PluginScanBlocked as exc:
         return {**scan_blocked_result(exc), "name": name}
     except _pc().PluginOperationError as exc:
@@ -348,7 +434,13 @@ def dashboard_update_user_plugin(name: str, *, accept_capabilities: bool = False
     _post_pull_housekeeping(target, _pc()._console())
     unchanged = "Already up to date" in msg
     activated = {} if unchanged else activate_plugin_now(target.name)
-    return {"ok": True, "name": name, "output": msg, "unchanged": unchanged, **activated}
+    return {
+        "ok": True,
+        "name": name,
+        "output": msg,
+        "unchanged": unchanged,
+        **activated,
+    }
 
 
 def _clear_plugin_bytecode(target: Path) -> int:

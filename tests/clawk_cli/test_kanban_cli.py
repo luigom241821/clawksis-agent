@@ -29,15 +29,9 @@ def kanban_home(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-
-
-
-
-
 # ---------------------------------------------------------------------------
 # run_slash smoke tests (end-to-end via the same entry both CLI and gateway use)
 # ---------------------------------------------------------------------------
-
 
 
 def test_kanban_list_json_includes_session_id(kanban_home):
@@ -45,15 +39,13 @@ def test_kanban_list_json_includes_session_id(kanban_home):
     dashboards) don't need a side query to filter by chat session."""
     from clawk_cli import kanban_db as kb
     from clawk_cli import kanban_db_connect as kbc
+
     with kbc.connect() as conn:
-        kb.create_task(
-            conn, title="acp task", assignee="alice", session_id="acp-x"
-        )
+        kb.create_task(conn, title="acp task", assignee="alice", session_id="acp-x")
     raw = kc.run_slash("list --json")
     payload = json.loads(raw)
     assert any(
-        row.get("title") == "acp task"
-        and row.get("session_id") == "acp-x"
+        row.get("title") == "acp task" and row.get("session_id") == "acp-x"
         for row in payload
     )
 
@@ -103,7 +95,10 @@ def test_kanban_show_text_renders_legacy_iso_completed_at(kanban_home):
     with kbc.connect_closing() as conn:
         task_id = kb.create_task(conn, title="legacy stamp")
         kb.complete_task(conn, task_id, result="ok", force=True)
-        conn.execute("UPDATE tasks SET completed_at = '2026-09-30T14:22:11' WHERE id = ?", (task_id,))
+        conn.execute(
+            "UPDATE tasks SET completed_at = '2026-09-30T14:22:11' WHERE id = ?",
+            (task_id,),
+        )
         conn.commit()
 
     output = kc.run_slash(f"show {task_id}")
@@ -122,9 +117,13 @@ def test_show_survives_iso_strings_in_integer_timestamp_columns(kanban_home):
         task_id = kb.create_task(conn, title="corrupted card", assignee="alice")
         assert kb.claim_task(conn, task_id)
         assert kb.complete_task(conn, task_id, summary="done")
-        conn.execute("UPDATE task_runs SET ended_at = ? WHERE task_id = ?", (iso_utc, task_id))
+        conn.execute(
+            "UPDATE task_runs SET ended_at = ? WHERE task_id = ?", (iso_utc, task_id)
+        )
         conn.execute("UPDATE tasks SET completed_at = ? WHERE id = ?", (iso_z, task_id))
-        conn.execute("UPDATE task_events SET created_at = ? WHERE task_id = ?", (iso_z, task_id))
+        conn.execute(
+            "UPDATE task_events SET created_at = ? WHERE task_id = ?", (iso_z, task_id)
+        )
         conn.commit()
 
     output = kc.run_slash(f"show {task_id}")
@@ -133,17 +132,19 @@ def test_show_survives_iso_strings_in_integer_timestamp_columns(kanban_home):
 
     payload = json.loads(kc.run_slash(f"show {task_id} --json"))
     assert payload["task"]["id"] == task_id
-    assert [r["ended_at"] for r in payload["runs"]] == [1787927722]  # iso_utc, not a 0 fallback
-    assert payload["events"] and {e["created_at"] for e in payload["events"]} == {1787936336}  # iso_z
+    assert [r["ended_at"] for r in payload["runs"]] == [
+        1787927722
+    ]  # iso_utc, not a 0 fallback
+    assert payload["events"] and {e["created_at"] for e in payload["events"]} == {
+        1787936336
+    }  # iso_z
 
 
 def test_kanban_edit_updates_documented_task_fields(kanban_home):
     with kbc.connect_closing() as conn:
         task_id = kb.create_task(conn, title="old title", body="old body", priority=2)
 
-    kc.run_slash(
-        f"edit {task_id} --title 'new title' --body 'new body' --priority 70"
-    )
+    kc.run_slash(f"edit {task_id} --title 'new title' --body 'new body' --priority 70")
 
     with kbc.connect_closing() as conn:
         task = kb.get_task(conn, task_id)
@@ -165,18 +166,33 @@ def test_worker_link_preserves_foreign_child_rules(kanban_home, monkeypatch):
     monkeypatch.setenv("CLAWK_KANBAN_TASK", worker)
     monkeypatch.setenv("CLAWK_KANBAN_RUN_ID", str(worker_run_id))
 
-    assert kc._cmd_link(argparse.Namespace(
-        parent_id=parent, child_id=ready_child,
-    )) == 0
+    assert (
+        kc._cmd_link(
+            argparse.Namespace(
+                parent_id=parent,
+                child_id=ready_child,
+            )
+        )
+        == 0
+    )
     with pytest.raises(ValueError, match="child is already running"):
-        kc._cmd_link(argparse.Namespace(
-            parent_id=parent, child_id=running_child,
-        ))
+        kc._cmd_link(
+            argparse.Namespace(
+                parent_id=parent,
+                child_id=running_child,
+            )
+        )
     # Owner handoff: the worker links its own running card, proving ownership
     # with CLAWK_KANBAN_RUN_ID — the one path _cmd_link forwards a run id for.
-    assert kc._cmd_link(argparse.Namespace(
-        parent_id=parent, child_id=worker,
-    )) == 0
+    assert (
+        kc._cmd_link(
+            argparse.Namespace(
+                parent_id=parent,
+                child_id=worker,
+            )
+        )
+        == 0
+    )
 
     with kbc.connect_closing() as conn:
         assert kb.parent_ids(conn, ready_child) == [parent]
@@ -235,13 +251,10 @@ def test_board_override_is_isolated_per_concurrent_call(kanban_home, monkeypatch
 # ---------------------------------------------------------------------------
 
 
-
-
-
-
 # ---------------------------------------------------------------------------
 # reclaim + reassign CLI smoke tests
 # ---------------------------------------------------------------------------
+
 
 def test_run_slash_reclaim_running_task(kanban_home):
     import re
@@ -281,8 +294,6 @@ def test_run_slash_reclaim_running_task(kanban_home):
     assert "ready" in out2.lower()
 
 
-
-
 # ---------------------------------------------------------------------------
 # /kanban specify — slash surface (same entry point CLI + gateway use)
 # ---------------------------------------------------------------------------
@@ -291,5 +302,3 @@ def test_run_slash_reclaim_running_task(kanban_home):
 # ---------------------------------------------------------------------------
 # /kanban help / no-args / unknown-action UX (issue #21794)
 # ---------------------------------------------------------------------------
-
-

@@ -59,14 +59,18 @@ def test_openai_base_url_probe_names_the_http_status_instead_of_no_models(monkey
     monkeypatch.setattr(mod, "_endpoint_probe_client", lambda url, timeout: _Client())
     monkeypatch.setattr(mod, "_require_token", lambda request: None)
 
-    body = EnvVarUpdate(key="OPENAI_BASE_URL", value="http://127.0.0.1:8080/v1", api_key="")
+    body = EnvVarUpdate(
+        key="OPENAI_BASE_URL", value="http://127.0.0.1:8080/v1", api_key=""
+    )
     out = asyncio.run(mod.validate_provider_credential(body, request=None))  # type: ignore[arg-type]
 
     assert out["ok"] is False and out["reachable"] is True
     assert "HTTP 502" in out["message"]
 
 
-@pytest.mark.parametrize("route", ["/api/providers/validate", "/api/providers/custom-endpoints/validate"])
+@pytest.mark.parametrize(
+    "route", ["/api/providers/validate", "/api/providers/custom-endpoints/validate"]
+)
 def test_bare_root_probe_resolves_to_the_v1_base_that_served_models(route, monkeypatch):
     """A custom endpoint typed without ``/v1`` (#65488): the probe must fall through to
     ``{base}/v1/models`` AND report that base as ``resolved_base_url`` so the Desktop persists a URL
@@ -79,7 +83,11 @@ def test_bare_root_probe_resolves_to_the_v1_base_that_served_models(route, monke
             self.status_code, self.is_success = status, status == 200
 
         def json(self):
-            return {"data": [{"id": "local-model"}]} if self.is_success else {"error": "Unexpected endpoint"}
+            return (
+                {"data": [{"id": "local-model"}]}
+                if self.is_success
+                else {"error": "Unexpected endpoint"}
+            )
 
     seen = []
 
@@ -97,10 +105,18 @@ def test_bare_root_probe_resolves_to_the_v1_base_that_served_models(route, monke
     monkeypatch.setattr(mod, "_endpoint_probe_client", lambda url, timeout: _Client())
     monkeypatch.setattr(mod, "_require_token", lambda request: None)
     if route == "/api/providers/validate":
-        body = EnvVarUpdate(key="OPENAI_BASE_URL", value="http://127.0.0.1:39080/", api_key="")
+        body = EnvVarUpdate(
+            key="OPENAI_BASE_URL", value="http://127.0.0.1:39080/", api_key=""
+        )
         data = asyncio.run(mod.validate_provider_credential(body, request=None))
     else:
-        body = CustomEndpointUpdate(id="", name="local", base_url="http://127.0.0.1:39080/", api_key="", model="")
+        body = CustomEndpointUpdate(
+            id="",
+            name="local",
+            base_url="http://127.0.0.1:39080/",
+            api_key="",
+            model="",
+        )
         data = asyncio.run(mod.validate_custom_endpoint(body))
 
     assert seen == ["http://127.0.0.1:39080/models", "http://127.0.0.1:39080/v1/models"]
@@ -108,8 +124,12 @@ def test_bare_root_probe_resolves_to_the_v1_base_that_served_models(route, monke
     assert data["resolved_base_url"] == "http://127.0.0.1:39080/v1"
 
 
-@pytest.mark.parametrize("route", ["/api/providers/validate", "/api/providers/custom-endpoints/validate"])
-def test_bare_root_probe_reports_the_v1_key_rejection_not_the_root_404(route, monkeypatch):
+@pytest.mark.parametrize(
+    "route", ["/api/providers/validate", "/api/providers/custom-endpoints/validate"]
+)
+def test_bare_root_probe_reports_the_v1_key_rejection_not_the_root_404(
+    route, monkeypatch
+):
     """Server lives at ``/v1`` and wants a key: typed root 404s, ``/v1/models`` answers 401. The
     verdict must be the key rejection from the candidate that produced it, not the first 404."""
     import clawk_cli.web_routers.config_env as mod
@@ -135,11 +155,19 @@ def test_bare_root_probe_reports_the_v1_key_rejection_not_the_root_404(route, mo
     monkeypatch.setattr(mod, "_endpoint_probe_client", lambda url, timeout: _Client())
     monkeypatch.setattr(mod, "_require_token", lambda request: None)
     if route == "/api/providers/validate":
-        body = EnvVarUpdate(key="OPENAI_BASE_URL", value="http://127.0.0.1:39080", api_key="k")
+        body = EnvVarUpdate(
+            key="OPENAI_BASE_URL", value="http://127.0.0.1:39080", api_key="k"
+        )
         data = asyncio.run(mod.validate_provider_credential(body, request=None))
         assert "401" in data["message"]
     else:
-        body = CustomEndpointUpdate(id="", name="local", base_url="http://127.0.0.1:39080", api_key="k", model="")
+        body = CustomEndpointUpdate(
+            id="",
+            name="local",
+            base_url="http://127.0.0.1:39080",
+            api_key="k",
+            model="",
+        )
         data = asyncio.run(mod.validate_custom_endpoint(body))
     assert data["ok"] is False and data["reachable"] is True
     assert "404" not in data["message"]
@@ -180,12 +208,19 @@ def _models_probe_host(monkeypatch, content_type, body):
 @pytest.mark.parametrize(
     "name, content_type, body, needle",
     [
-        ("spa_html", "text/html", "<html><body><div id=root></div></body></html>", "text/html"),
+        (
+            "spa_html",
+            "text/html",
+            "<html><body><div id=root></div></body></html>",
+            "text/html",
+        ),
         ("non_json_body", "text/plain", "OK", "instead of a JSON model list"),
         ("empty_model_list", "application/json", {"data": []}, "advertised no models"),
     ],
 )
-def test_custom_endpoint_probe_warns_when_no_models_parse(name, content_type, body, needle, monkeypatch):
+def test_custom_endpoint_probe_warns_when_no_models_parse(
+    name, content_type, body, needle, monkeypatch
+):
     """A 200 ``/models`` answer is only a pass when it is JSON with a usable model list: an SPA
     catch-all (200 + HTML), a non-JSON body, or an empty list must be ``ok:false`` with a
     message naming the cause, not a green check (#83128)."""
@@ -193,12 +228,15 @@ def test_custom_endpoint_probe_warns_when_no_models_parse(name, content_type, bo
     from clawk_cli.web_models import CustomEndpointUpdate
 
     _models_probe_host(monkeypatch, content_type, body)
-    req = CustomEndpointUpdate(id="", name="x", base_url="https://spa.example.com/v1",
-                               api_key="", model="")
+    req = CustomEndpointUpdate(
+        id="", name="x", base_url="https://spa.example.com/v1", api_key="", model=""
+    )
     data = asyncio.run(mod.validate_custom_endpoint(req))
 
     assert data["ok"] is False, name
-    assert data["reachable"] is True, name  # warning, not a hard block: Save stays possible
+    assert data["reachable"] is True, (
+        name
+    )  # warning, not a hard block: Save stays possible
     assert needle in data["message"], (name, data["message"])
     assert "https://spa.example.com/v1" in data["message"], name
     assert data["models"] == [], name
@@ -210,10 +248,14 @@ def test_custom_endpoint_probe_passes_on_a_json_models_reply(monkeypatch):
     import clawk_cli.web_routers.config_env as mod
     from clawk_cli.web_models import CustomEndpointUpdate
 
-    _models_probe_host(monkeypatch, "application/json",
-                       {"data": [{"id": "gpt-4o"}, {"id": "gpt-4o-mini"}], "object": "list"})
-    req = CustomEndpointUpdate(id="", name="x", base_url="https://api.example.com/v1",
-                               api_key="", model="")
+    _models_probe_host(
+        monkeypatch,
+        "application/json",
+        {"data": [{"id": "gpt-4o"}, {"id": "gpt-4o-mini"}], "object": "list"},
+    )
+    req = CustomEndpointUpdate(
+        id="", name="x", base_url="https://api.example.com/v1", api_key="", model=""
+    )
     data = asyncio.run(mod.validate_custom_endpoint(req))
 
     assert data["ok"] is True and data["reachable"] is True

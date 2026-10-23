@@ -11,15 +11,15 @@ from clawk_cli.init_command import (
     build_init_prompt_for_cwd,
 )
 
-class TestBuildInitPrompt:
 
+class TestBuildInitPrompt:
     def test_includes_extra_notes_verbatim(self):
         notes = "focus on the test setup, and mention the flaky e2e suite"
         prompt = build_init_prompt("/tmp/proj", extra=notes)
         assert notes in prompt
 
-class TestBuildInitPromptForCwd:
 
+class TestBuildInitPromptForCwd:
     def test_reads_existing_agents_md(self, tmp_path):
         (tmp_path / "AGENTS.md").write_text(
             "# Existing\n\nRun `tox -e py311`.\n", encoding="utf-8"
@@ -136,10 +136,8 @@ class TestInitRegistryWiring:
         assert cmd is not None
         assert cmd.name == "init"
 
-
     def test_init_works_on_the_gateway(self):
         # /init is a both-surfaces command like /learn, not CLI-only.
         from clawk_cli.commands import GATEWAY_KNOWN_COMMANDS
 
         assert "init" in GATEWAY_KNOWN_COMMANDS
-

@@ -52,12 +52,6 @@ def test_status_lists_and_filters_connectors():
     ]
 
 
-
-
-
-
-
-
 def test_connect_without_connectors_is_a_usage_error():
     out = json.loads(
         manage_connections({"action": "connect"}, client_factory=FakeClient)
@@ -83,9 +77,7 @@ def test_gateway_failure_is_a_model_actionable_error():
     def exploding():
         raise RuntimeError("gateway on fire")
 
-    out = json.loads(
-        manage_connections({"action": "status"}, client_factory=exploding)
-    )
+    out = json.loads(manage_connections({"action": "status"}, client_factory=exploding))
     assert "connector gateway request failed" in out["error"]
 
 
@@ -95,23 +87,27 @@ def test_mcp_actions_belong_to_mcp_targets_only():
     enum = MANAGE_CONNECTIONS_SCHEMA["parameters"]["properties"]["action"]["enum"]
     assert {"install", "enable", "authorize"} <= set(enum)
 
-    out = json.loads(manage_connections({"action": "install", "connectors": ["linear"]}))
+    out = json.loads(
+        manage_connections({"action": "install", "connectors": ["linear"]})
+    )
     assert "mcp" in out["error"] and "install" in out["error"]
 
     out = json.loads(
-        manage_connections({"action": "connect", "connectors": [{"name": "linear", "mcp": True}]})
+        manage_connections(
+            {"action": "connect", "connectors": [{"name": "linear", "mcp": True}]}
+        )
     )
     assert "managed-connector action" in out["error"]
 
-    out = json.loads(manage_connections({"action": "uninstall", "connectors": ["gmail"]}))
+    out = json.loads(
+        manage_connections({"action": "uninstall", "connectors": ["gmail"]})
+    )
     assert "action must be one of" in out["error"]
 
 
 # ---------------------------------------------------------------------------
 # blocking operations are never parallelized
 # ---------------------------------------------------------------------------
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -129,8 +125,9 @@ def _session_tool_names(enabled_toolsets, *, connectors, disabled_toolsets=None)
     from model_tools import _compute_tool_definitions
     from tools.registry import invalidate_check_fn_cache
 
-    with patch("tools.connectors.gateway.config.connectors_available",
-               return_value=connectors):
+    with patch(
+        "tools.connectors.gateway.config.connectors_available", return_value=connectors
+    ):
         invalidate_check_fn_cache()
         try:
             defs = _compute_tool_definitions(
@@ -144,7 +141,6 @@ def _session_tool_names(enabled_toolsets, *, connectors, disabled_toolsets=None)
     return {d["function"]["name"] for d in defs}
 
 
-
 def test_cli_session_gets_the_tool_outside_a_code_workspace(tmp_path, monkeypatch):
     """The path a plain `clawk` run takes: _get_platform_tools, no git cwd."""
     from clawk_cli.tools_config import _get_platform_tools
@@ -154,8 +150,6 @@ def test_cli_session_gets_the_tool_outside_a_code_workspace(tmp_path, monkeypatc
 
     assert "connections" in enabled
     assert "manage_connections" in _session_tool_names(enabled, connectors=True)
-
-
 
 
 def test_tui_and_desktop_sessions_get_the_tool(monkeypatch):
@@ -184,7 +178,9 @@ def test_focus_mode_coding_posture_gets_the_tool(monkeypatch):
     assert "manage_connections" in _session_tool_names(selection, connectors=True)
 
 
-def test_session_the_portal_has_not_enabled_never_receives_the_tool(tmp_path, monkeypatch):
+def test_session_the_portal_has_not_enabled_never_receives_the_tool(
+    tmp_path, monkeypatch
+):
     """The portal gate is the tool's check_fn: a session whose account the portal has not enabled
     for connectors does not get ``manage_connections`` in its schema on any surface, so the
     model cannot call it and read the gateway's 404 back to the user. The handler keeps the same
@@ -202,9 +198,13 @@ def test_session_the_portal_has_not_enabled_never_receives_the_tool(tmp_path, mo
         ["coding"],
     ]
     for selection in selections:
-        assert "manage_connections" not in _session_tool_names(selection, connectors=False), selection
+        assert "manage_connections" not in _session_tool_names(
+            selection, connectors=False
+        ), selection
 
-    with patch("tools.connectors.gateway.config.connectors_available", return_value=False):
+    with patch(
+        "tools.connectors.gateway.config.connectors_available", return_value=False
+    ):
         out = json.loads(registry.dispatch("manage_connections", {"action": "status"}))
     assert "not available in this session" in out["error"]
 

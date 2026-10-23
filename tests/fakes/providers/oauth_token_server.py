@@ -51,8 +51,10 @@ DEVICE_CODE_PATH = "/api/oauth/device/code"
 
 def unsigned_jwt(claims: dict[str, Any]) -> str:
     """An ``alg: none`` JWT (clients that only *decode* claims accept it)."""
+
     def seg(obj: dict[str, Any]) -> str:
         return base64.urlsafe_b64encode(json.dumps(obj).encode()).decode().rstrip("=")
+
     return f"{seg({'alg': 'none', 'typ': 'JWT'})}.{seg(claims)}.sig"
 
 
@@ -100,7 +102,9 @@ class OAuthTokenServer:
     ) -> None:
         self._lock = threading.Lock()
         self._counter = 0
-        self._access_factory = access_token_factory or (lambda n: f"sk-ant-oat01-fake-{n}")
+        self._access_factory = access_token_factory or (
+            lambda n: f"sk-ant-oat01-fake-{n}"
+        )
         self._rt_prefix = refresh_token_prefix
         self.expires_in = expires_in
         self.extra_token_fields = dict(extra_token_fields or {})
@@ -144,26 +148,48 @@ class OAuthTokenServer:
         return self._access_factory(n), refresh
 
     def _token_body(self, access: str, refresh: str) -> dict[str, Any]:
-        return {"access_token": access, "refresh_token": refresh, "token_type": "Bearer",
-                "expires_in": self.expires_in, **self.extra_token_fields}
+        return {
+            "access_token": access,
+            "refresh_token": refresh,
+            "token_type": "Bearer",
+            "expires_in": self.expires_in,
+            **self.extra_token_fields,
+        }
 
     # ---- grant handlers (called with the parsed form) ---------------------
 
-    def handle_token(self, form: dict[str, str], meta: dict[str, str]) -> tuple[int, dict[str, Any]]:
+    def handle_token(
+        self, form: dict[str, str], meta: dict[str, str]
+    ) -> tuple[int, dict[str, Any]]:
         grant_type = form.get("grant_type", "")
-        handler = {"refresh_token": self._refresh, DEVICE_CODE_GRANT: self._device_poll}.get(grant_type)
+        handler = {
+            "refresh_token": self._refresh,
+            DEVICE_CODE_GRANT: self._device_poll,
+        }.get(grant_type)
         if handler is None:
             return 400, {"error": "unsupported_grant_type"}
         return handler(form, meta)
 
-    def _refresh(self, form: dict[str, str], meta: dict[str, str]) -> tuple[int, dict[str, Any]]:
+    def _refresh(
+        self, form: dict[str, str], meta: dict[str, str]
+    ) -> tuple[int, dict[str, Any]]:
         presented = form.get("refresh_token", "")
         with self._lock:
-            grant = Grant(at=time.monotonic(), grant_type="refresh_token", presented=presented, status=200, **meta)
+            grant = Grant(
+                at=time.monotonic(),
+                grant_type="refresh_token",
+                presented=presented,
+                status=200,
+                **meta,
+            )
             self.grants.append(grant)
             if presented not in self.live:
                 grant.status, grant.error = 400, "invalid_grant"
-                why = "refresh token already used" if presented in self.spent else "unknown refresh token"
+                why = (
+                    "refresh token already used"
+                    if presented in self.spent
+                    else "unknown refresh token"
+                )
                 return 400, {"error": "invalid_grant", "error_description": why}
             self.live.discard(presented)
             self.spent.add(presented)
@@ -173,12 +199,19 @@ class OAuthTokenServer:
             self.before_refresh_response(grant)
         return 200, self._token_body(access, refresh)
 
-    def _device_poll(self, form: dict[str, str], meta: dict[str, str]) -> tuple[int, dict[str, Any]]:
+    def _device_poll(
+        self, form: dict[str, str], meta: dict[str, str]
+    ) -> tuple[int, dict[str, Any]]:
         flow = self.device
         now = time.monotonic()
         with self._lock:
-            grant = Grant(at=now, grant_type=DEVICE_CODE_GRANT, presented=form.get("device_code", ""),
-                          status=400, **meta)
+            grant = Grant(
+                at=now,
+                grant_type=DEVICE_CODE_GRANT,
+                presented=form.get("device_code", ""),
+                status=400,
+                **meta,
+            )
             self.grants.append(grant)
             if flow is None or grant.presented != flow.device_code:
                 grant.error = "invalid_grant"
@@ -198,12 +231,18 @@ class OAuthTokenServer:
         with self._lock:
             self.device_requests += 1
         if flow is None:
-            return 400, {"error": "invalid_request", "error_description": "no device flow armed"}
+            return 400, {
+                "error": "invalid_request",
+                "error_description": "no device flow armed",
+            }
         base = f"{self.base_url}/device"
         return 200, {
-            "device_code": flow.device_code, "user_code": flow.user_code,
-            "verification_uri": base, "verification_uri_complete": f"{base}?user_code={flow.user_code}",
-            "expires_in": flow.expires_in, "interval": flow.interval,
+            "device_code": flow.device_code,
+            "user_code": flow.user_code,
+            "verification_uri": base,
+            "verification_uri_complete": f"{base}?user_code={flow.user_code}",
+            "expires_in": flow.expires_in,
+            "interval": flow.interval,
         }
 
     # ---- lifecycle -------------------------------------------------------
@@ -211,8 +250,12 @@ class OAuthTokenServer:
     def start(self) -> OAuthTokenServer:
         self._httpd = ThreadingHTTPServer(("127.0.0.1", 0), _make_handler(self))
         self._httpd.daemon_threads = True
-        self._thread = threading.Thread(target=self._httpd.serve_forever, kwargs={"poll_interval": 0.05},
-                                        name="fake-oauth", daemon=True)
+        self._thread = threading.Thread(
+            target=self._httpd.serve_forever,
+            kwargs={"poll_interval": 0.05},
+            name="fake-oauth",
+            daemon=True,
+        )
         self._thread.start()
         return self
 
@@ -261,7 +304,11 @@ def _make_handler(server: OAuthTokenServer) -> type[BaseHTTPRequestHandler]:
                 form = _parse_form(raw, ctype)
             except ValueError:
                 return self._send(400, {"error": "invalid_request"})
-            meta = {"host": self.headers.get("Host", ""), "path": path, "content_type": ctype}
+            meta = {
+                "host": self.headers.get("Host", ""),
+                "path": path,
+                "content_type": ctype,
+            }
             if path in TOKEN_PATHS:
                 return self._send(*server.handle_token(form, meta))
             if path == DEVICE_CODE_PATH:
@@ -302,6 +349,7 @@ def _san(host: str):
     import ipaddress
 
     from cryptography import x509
+
     try:
         return x509.IPAddress(ipaddress.ip_address(host))
     except ValueError:
@@ -320,15 +368,32 @@ def make_test_ca(directory: Path, hosts: Iterable[str]) -> TestCA:
     ca_key = ec.generate_private_key(ec.SECP256R1())
     ca_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "clawk e2e test CA")])
     ca_cert = (
-        x509.CertificateBuilder().subject_name(ca_name).issuer_name(ca_name)
-        .public_key(ca_key.public_key()).serial_number(x509.random_serial_number())
-        .not_valid_before(now - _dt.timedelta(minutes=5)).not_valid_after(now + _dt.timedelta(days=1))
+        x509.CertificateBuilder()
+        .subject_name(ca_name)
+        .issuer_name(ca_name)
+        .public_key(ca_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - _dt.timedelta(minutes=5))
+        .not_valid_after(now + _dt.timedelta(days=1))
         .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
-        .add_extension(x509.KeyUsage(digital_signature=True, key_cert_sign=True, crl_sign=True,
-                                     content_commitment=False, key_encipherment=False,
-                                     data_encipherment=False, key_agreement=False,
-                                     encipher_only=False, decipher_only=False), critical=True)
-        .add_extension(x509.SubjectKeyIdentifier.from_public_key(ca_key.public_key()), critical=False)
+        .add_extension(
+            x509.KeyUsage(
+                digital_signature=True,
+                key_cert_sign=True,
+                crl_sign=True,
+                content_commitment=False,
+                key_encipherment=False,
+                data_encipherment=False,
+                key_agreement=False,
+                encipher_only=False,
+                decipher_only=False,
+            ),
+            critical=True,
+        )
+        .add_extension(
+            x509.SubjectKeyIdentifier.from_public_key(ca_key.public_key()),
+            critical=False,
+        )
         .sign(ca_key, hashes.SHA256())
     )
     leaf_key = ec.generate_private_key(ec.SECP256R1())
@@ -336,27 +401,46 @@ def make_test_ca(directory: Path, hosts: Iterable[str]) -> TestCA:
     leaf = (
         x509.CertificateBuilder()
         .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, hosts[0])]))
-        .issuer_name(ca_name).public_key(leaf_key.public_key()).serial_number(x509.random_serial_number())
-        .not_valid_before(now - _dt.timedelta(minutes=5)).not_valid_after(now + _dt.timedelta(days=1))
-        .add_extension(x509.SubjectAlternativeName([_san(h) for h in hosts]), critical=False)
+        .issuer_name(ca_name)
+        .public_key(leaf_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - _dt.timedelta(minutes=5))
+        .not_valid_after(now + _dt.timedelta(days=1))
+        .add_extension(
+            x509.SubjectAlternativeName([_san(h) for h in hosts]), critical=False
+        )
         .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
-        .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
-        .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()), critical=False)
+        .add_extension(
+            x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False
+        )
+        .add_extension(
+            x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()),
+            critical=False,
+        )
         .sign(ca_key, hashes.SHA256())
     )
     pem = serialization.Encoding.PEM
-    out = TestCA(ca_pem=directory / "ca.pem", leaf_pem=directory / "leaf.pem", leaf_key=directory / "leaf.key")
+    out = TestCA(
+        ca_pem=directory / "ca.pem",
+        leaf_pem=directory / "leaf.pem",
+        leaf_key=directory / "leaf.key",
+    )
     out.ca_pem.write_bytes(ca_cert.public_bytes(pem))
     out.leaf_pem.write_bytes(leaf.public_bytes(pem))
-    out.leaf_key.write_bytes(leaf_key.private_bytes(
-        pem, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()))
+    out.leaf_key.write_bytes(
+        leaf_key.private_bytes(
+            pem, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
+        )
+    )
     return out
 
 
 class TLSInterceptProxy:
     """``HTTPS_PROXY`` that serves CONNECTs to ``hosts`` with the OAuth server's handler."""
 
-    def __init__(self, oauth: OAuthTokenServer, ca: TestCA, hosts: Iterable[str]) -> None:
+    def __init__(
+        self, oauth: OAuthTokenServer, ca: TestCA, hosts: Iterable[str]
+    ) -> None:
         self.oauth = oauth
         self.hosts = frozenset(h.lower() for h in hosts)
         self.connects: list[str] = []
@@ -376,7 +460,9 @@ class TLSInterceptProxy:
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._sock.bind(("127.0.0.1", 0))
         self._sock.listen(64)
-        self._thread = threading.Thread(target=self._accept_loop, name="fake-oauth-proxy", daemon=True)
+        self._thread = threading.Thread(
+            target=self._accept_loop, name="fake-oauth-proxy", daemon=True
+        )
         self._thread.start()
         return self
 
@@ -412,7 +498,9 @@ class TLSInterceptProxy:
             host = target.rsplit(":", 1)[0].lower()
             if method != "CONNECT" or host not in self.hosts:
                 self.refused.append(request_line)
-                conn.sendall(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                conn.sendall(
+                    b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                )
                 return
             self.connects.append(host)
             conn.sendall(b"HTTP/1.1 200 Connection Established\r\n\r\n")

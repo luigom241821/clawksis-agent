@@ -19,7 +19,9 @@ import cron.executions as executions_mod
 def _ledger(monkeypatch, tmp_path):
     import gateway.status
 
-    monkeypatch.setattr(executions_mod, "EXECUTIONS_FILE", tmp_path / "cron" / "executions.db")
+    monkeypatch.setattr(
+        executions_mod, "EXECUTIONS_FILE", tmp_path / "cron" / "executions.db"
+    )
     # The owner process exists for every row in this module; only the fingerprint decides.
     monkeypatch.setattr(gateway.status, "_pid_exists", lambda pid: True)
 
@@ -45,12 +47,16 @@ def _status(execution_id: str) -> str:
         (3600, False),  # PID-reuse scale
     ],
 )
-def test_drift_within_tolerance_keeps_execution_running(monkeypatch, drift, expect_live):
+def test_drift_within_tolerance_keeps_execution_running(
+    monkeypatch, drift, expect_live
+):
     """Recovery only reaps a claimed/running row when the recomputed fingerprint is far from
     the claim-time one, not merely unequal to it."""
     claimed = 178864182760  # the exact reading from the report
     execution_id = _seed_external_running(monkeypatch, claimed_start_time=claimed)
-    monkeypatch.setattr(executions_mod, "_process_start_time", lambda pid: claimed + drift)
+    monkeypatch.setattr(
+        executions_mod, "_process_start_time", lambda pid: claimed + drift
+    )
 
     recovered = executions_mod.recover_interrupted_executions()
 

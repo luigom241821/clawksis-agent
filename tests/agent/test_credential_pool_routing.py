@@ -20,6 +20,7 @@ from unittest.mock import MagicMock, patch
 # 1. CLI _resolve_turn_agent_config includes credential_pool
 # ---------------------------------------------------------------------------
 
+
 class TestCliTurnRoutePool:
     def test_resolve_turn_includes_pool(self):
         """CLI's _resolve_turn_agent_config must pass credential_pool in runtime."""
@@ -38,6 +39,7 @@ class TestCliTurnRoutePool:
         )
 
         from cli import ClawksisCLI
+
         bound = ClawksisCLI._resolve_turn_agent_config.__get__(shell)
         route = bound("test message")
 
@@ -53,6 +55,7 @@ class TestCliTurnRoutePool:
 # ---------------------------------------------------------------------------
 # 2. Gateway _resolve_turn_agent_config includes credential_pool
 # ---------------------------------------------------------------------------
+
 
 class TestGatewayTurnRoutePool:
     def test_resolve_turn_includes_pool(self):
@@ -84,10 +87,10 @@ class TestGatewayTurnRoutePool:
 # ---------------------------------------------------------------------------
 
 
-
 # ---------------------------------------------------------------------------
 # 5. Full 429 rotation cycle via _recover_with_credential_pool
 # ---------------------------------------------------------------------------
+
 
 class TestPoolRotationCycle:
     """Verify the retry-same → rotate → exhaust flow in _recover_with_credential_pool."""
@@ -148,7 +151,12 @@ class TestPoolRotationCycle:
         )
         assert recovered is True
         assert has_retried is False  # reset after rotation
-        pool.mark_exhausted_and_rotate.assert_called_once_with(status_code=429, error_context=None, api_key_hint="test-api-key", failure_reason="rate_limit")
+        pool.mark_exhausted_and_rotate.assert_called_once_with(
+            status_code=429,
+            error_context=None,
+            api_key_hint="test-api-key",
+            failure_reason="rate_limit",
+        )
         agent._swap_credential.assert_called_once_with(entries[1])
 
     def test_pool_exhaustion_returns_false(self):
@@ -174,8 +182,12 @@ class TestPoolRotationCycle:
         )
         assert recovered is True
         assert has_retried is False
-        pool.mark_exhausted_and_rotate.assert_called_once_with(status_code=402, error_context=None, api_key_hint="test-api-key", failure_reason="billing")
-
+        pool.mark_exhausted_and_rotate.assert_called_once_with(
+            status_code=402,
+            error_context=None,
+            api_key_hint="test-api-key",
+            failure_reason="billing",
+        )
 
     def test_api_key_hint_from_pool_current_when_agent_key_missing(self):
         """api_key_hint should fall back to pool.current().runtime_api_key
@@ -211,7 +223,9 @@ class TestPoolRotationCycle:
         )
         assert recovered is True
         pool.mark_exhausted_and_rotate.assert_called_once_with(
-            status_code=402, error_context=None, api_key_hint="pool-current-key",
+            status_code=402,
+            error_context=None,
+            api_key_hint="pool-current-key",
             failure_reason="billing",
         )
 
@@ -219,6 +233,7 @@ class TestPoolRotationCycle:
 # ---------------------------------------------------------------------------
 # 6. Real-pool regression: the hint routes exhaustion to the FAILED entry
 # ---------------------------------------------------------------------------
+
 
 class TestApiKeyHintRealPool:
     """Prove the routing guarantee through the real CredentialPool selector:
@@ -297,6 +312,7 @@ class TestApiKeyHintRealPool:
 # 7. Failure attribution — mark the key that failed, not pool.current()
 # ---------------------------------------------------------------------------
 
+
 class TestFailureAttribution:
     """Regression: recover_with_credential_pool must mark the entry whose API
     key actually produced the failure.
@@ -363,18 +379,18 @@ class TestFailureAttribution:
     def _statuses(self, pool):
         return {e.id: e.last_status for e in pool.entries()}
 
-
-
     def test_pre_exhausted_check_uses_failing_key(self, tmp_path, monkeypatch):
         """The 'already exhausted → rotate immediately' check must inspect the
         failing entry, not pool.current(): first 429 on an already-exhausted
         key rotates without burning a retry."""
         pool = self._make_pool(
-            tmp_path, monkeypatch,
+            tmp_path,
+            monkeypatch,
             [
                 self._entry(0, "key-a"),
                 self._entry(
-                    1, "key-b",
+                    1,
+                    "key-b",
                     last_status="exhausted",
                     last_status_at=time.time(),
                     last_error_code=429,
@@ -403,7 +419,8 @@ class TestFailureAttribution:
         forced refresh marks the entry exhausted outright — so healthy A dies,
         the hinted rotation then exhausts B, and the pool has nothing left."""
         pool = self._make_pool(
-            tmp_path, monkeypatch,
+            tmp_path,
+            monkeypatch,
             [self._entry(0, "key-a"), self._entry(1, "key-b")],
         )
         # Point the shared cursor at the healthy entry, as a concurrent
@@ -428,14 +445,12 @@ class TestFailureAttribution:
         swapped = agent._swap_credential.call_args[0][0]
         assert swapped.id == "cred-0"
 
-
-    def test_unmatched_key_does_not_retry_only_pool_entry(
-        self, tmp_path, monkeypatch
-    ):
+    def test_unmatched_key_does_not_retry_only_pool_entry(self, tmp_path, monkeypatch):
         """Legacy agents without a stable id must stop when an unmatched key
         has no different credential to rotate to."""
         pool = self._make_pool(
-            tmp_path, monkeypatch,
+            tmp_path,
+            monkeypatch,
             [self._entry(0, "pool-runtime-key")],
         )
         agent = self._agent(pool, failing_key="wrapper-runtime-key")
@@ -464,7 +479,8 @@ class TestFailureAttribution:
         from agent.error_classifier import FailoverReason
 
         pool = self._make_pool(
-            tmp_path, monkeypatch,
+            tmp_path,
+            monkeypatch,
             [self._entry(0, "key-a"), self._entry(1, "key-b")],
         )
         agent = self._agent(pool, failing_key="key-b")
@@ -486,7 +502,8 @@ class TestFailureAttribution:
     def test_unclassified_403_records_no_billing_reason(self, tmp_path, monkeypatch):
         """An unclassified 403 stays transient — no billing verdict is invented."""
         pool = self._make_pool(
-            tmp_path, monkeypatch,
+            tmp_path,
+            monkeypatch,
             [self._entry(0, "key-a"), self._entry(1, "key-b")],
         )
         agent = self._agent(pool, failing_key="key-b")
@@ -494,10 +511,7 @@ class TestFailureAttribution:
 
         from agent.agent_runtime_helpers import recover_with_credential_pool
 
-        recover_with_credential_pool(
-            agent, status_code=403, has_retried_429=False
-        )
+        recover_with_credential_pool(agent, status_code=403, has_retried_429=False)
 
         failed = {e.id: e for e in pool.entries()}["cred-1"]
         assert failed.failure_reason != "billing"
-

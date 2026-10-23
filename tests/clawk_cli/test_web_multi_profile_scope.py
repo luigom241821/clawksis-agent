@@ -28,29 +28,41 @@ def two_homes(tmp_path, monkeypatch):
     b = root / "profiles" / "b"
     b.mkdir(parents=True)
     (root / ".env").write_text(f"A_ONLY_TOKEN={A_VAL}\n", encoding="utf-8")
-    (b / ".env").write_text(f"B_ONLY_TOKEN={B_VAL}\nTELEGRAM_BOT_TOKEN=b-telegram-token\n", encoding="utf-8")
+    (b / ".env").write_text(
+        f"B_ONLY_TOKEN={B_VAL}\nTELEGRAM_BOT_TOKEN=b-telegram-token\n", encoding="utf-8"
+    )
     for home in (root, b):
         (home / "config.yaml").write_text(
             "model:\n  default: openai/gpt-4o-mini\n  api_key: ${A_ONLY_TOKEN}\n"
             "custom_probe:\n  a_ref: ${A_ONLY_TOKEN}\n  b_ref: ${B_ONLY_TOKEN}\n",
-            encoding="utf-8")
+            encoding="utf-8",
+        )
     monkeypatch.setenv("CLAWK_HOME", str(root))
-    monkeypatch.setenv("A_ONLY_TOKEN", A_VAL)  # the dashboard process loaded its own .env
+    monkeypatch.setenv(
+        "A_ONLY_TOKEN", A_VAL
+    )  # the dashboard process loaded its own .env
     monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
     from agent import secret_scope
     from tui_gateway import launch_profile_policy as lpp
+
     monkeypatch.setattr(secret_scope, "_MULTIPLEX_ACTIVE", False)
     monkeypatch.setattr(lpp, "_snapshot", None)
     from clawk_cli import config as cfg_mod
+
     for attr in ("_CONFIG_CACHE", "_config_cache"):
         if hasattr(cfg_mod, attr):
-            monkeypatch.setattr(cfg_mod, attr, None if not isinstance(getattr(cfg_mod, attr), dict) else {})
+            monkeypatch.setattr(
+                cfg_mod,
+                attr,
+                None if not isinstance(getattr(cfg_mod, attr), dict) else {},
+            )
     return root, b
 
 
 @pytest.fixture
 def client(two_homes):
     from clawk_cli.web_server import _SESSION_HEADER_NAME, _SESSION_TOKEN, app
+
     c = TestClient(app)
     c.headers[_SESSION_HEADER_NAME] = _SESSION_TOKEN
     return c
@@ -73,7 +85,9 @@ def test_get_config_for_named_profile_expands_only_its_own_secrets(client, two_h
     assert probe_a["a_ref"] == A_VAL and probe_a["b_ref"] == "${B_ONLY_TOKEN}"
 
 
-def test_console_send_for_named_profile_does_not_write_process_env(two_homes, monkeypatch):
+def test_console_send_for_named_profile_does_not_write_process_env(
+    two_homes, monkeypatch
+):
     """``send`` loads the target profile's ``.env`` for the gateway config loader; inside a
     multi-profile host that must land in the request's scope, never ``os.environ``."""
     from clawk_cli.web_routers.chat_ws import _execute_console_line
@@ -84,6 +98,7 @@ def test_console_send_for_named_profile_does_not_write_process_env(two_homes, mo
     def fake_send(args):
         from clawk_cli import send_cmd
         from gateway.config import _getenv
+
         send_cmd._load_clawk_env()
         seen["loader_sees"] = _getenv("TELEGRAM_BOT_TOKEN")
         seen["environ_has"] = "TELEGRAM_BOT_TOKEN" in os.environ
@@ -93,21 +108,31 @@ def test_console_send_for_named_profile_does_not_write_process_env(two_homes, mo
     class Engine:
         def execute(self, line, *, confirmed=False):
             import argparse
+
             return fake_send(argparse.Namespace())
 
-    _execute_console_line(Engine(), "send --to telegram hi", confirmed=False, profile="b")
-    assert seen["loader_sees"] == "b-telegram-token"  # the loader gets B's token through the scope
+    _execute_console_line(
+        Engine(), "send --to telegram hi", confirmed=False, profile="b"
+    )
+    assert (
+        seen["loader_sees"] == "b-telegram-token"
+    )  # the loader gets B's token through the scope
     assert seen["environ_has"] is False  # and the dashboard process env never learns it
     assert "B_ONLY_TOKEN" not in os.environ
 
 
 def _native_ticket(home):
     from types import SimpleNamespace
-    return SimpleNamespace(state=SimpleNamespace(native_http_principal={"profile_id": str(home.resolve())}))
+
+    return SimpleNamespace(
+        state=SimpleNamespace(native_http_principal={"profile_id": str(home.resolve())})
+    )
 
 
 @pytest.mark.parametrize("selector", [None, "", "current"])
-def test_secondary_native_ticket_implicit_selector_expands_only_the_ticket_profiles_secrets(two_homes, selector):
+def test_secondary_native_ticket_implicit_selector_expands_only_the_ticket_profiles_secrets(
+    two_homes, selector
+):
     """R16: under a secondary-profile native ticket, a nested ``_config_profile_scope(None/''/current)``
     installed the LAUNCH profile's secret scope, so B's YAML expanded with A's credentials."""
     from clawk_cli.config import load_config
@@ -119,11 +144,15 @@ def test_secondary_native_ticket_implicit_selector_expands_only_the_ticket_profi
     with native_profile_scope(_native_ticket(b)), _config_profile_scope(selector):
         probe = load_config()["custom_probe"]
     assert probe["b_ref"] == B_VAL  # present only in the ticket profile's .env
-    assert probe["a_ref"] == "${A_ONLY_TOKEN}"  # missing in B: never borrowed from the launch profile
+    assert (
+        probe["a_ref"] == "${A_ONLY_TOKEN}"
+    )  # missing in B: never borrowed from the launch profile
     assert dict(os.environ) == environ_before
 
 
-def test_concurrent_launch_and_secondary_native_requests_keep_their_own_secrets(two_homes):
+def test_concurrent_launch_and_secondary_native_requests_keep_their_own_secrets(
+    two_homes,
+):
     import threading
 
     from clawk_cli.config import load_config
@@ -138,7 +167,9 @@ def test_concurrent_launch_and_secondary_native_requests_keep_their_own_secrets(
             barrier.wait()  # both scopes are live at once
             seen[name] = load_config()["custom_probe"]
 
-    threads = [threading.Thread(target=request, args=args) for args in (("a", root), ("b", b))]
+    threads = [
+        threading.Thread(target=request, args=args) for args in (("a", root), ("b", b))
+    ]
     for t in threads:
         t.start()
     for t in threads:

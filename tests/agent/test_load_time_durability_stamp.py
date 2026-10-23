@@ -42,8 +42,8 @@ def _make_flush_agent(db: SessionDB, session_id: str):
         _pending_cli_user_message=None,
     )
     agent._ensure_db_session = lambda: None
-    agent._flush_messages_to_session_db = (
-        AIAgent._flush_messages_to_session_db.__get__(agent, AIAgent)
+    agent._flush_messages_to_session_db = AIAgent._flush_messages_to_session_db.__get__(
+        agent, AIAgent
     )
     agent._flush_messages_to_session_db_unlocked = (
         AIAgent._flush_messages_to_session_db_unlocked.__get__(agent, AIAgent)
@@ -175,13 +175,10 @@ def test_noop_progress_check_is_marker_insensitive(tmp_path: Path) -> None:
     assert all(m.get(_DB_PERSISTED_MARKER_KEY) is True for m in stamped)
     # What a no-op engine hands back after the terminal marker sweep.
     swept = [
-        {k: v for k, v in m.items() if k != _DB_PERSISTED_MARKER_KEY}
-        for m in stamped
+        {k: v for k, v in m.items() if k != _DB_PERSISTED_MARKER_KEY} for m in stamped
     ]
     assert swept != stamped  # raw == is marker-sensitive — the bug shape
-    assert _strip_marker_for_comparison(swept) == _strip_marker_for_comparison(
-        stamped
-    )
+    assert _strip_marker_for_comparison(swept) == _strip_marker_for_comparison(stamped)
 
     # Genuine progress must still register as inequality.
     compacted = swept[:-1]

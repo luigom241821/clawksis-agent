@@ -31,18 +31,23 @@ def skills_home(tmp_path, monkeypatch):
     )
     refs = d / "references"
     refs.mkdir()
-    (refs / "guide.md").write_text("# Guide\n\nDetailed reference content here.\n", encoding="utf-8")
+    (refs / "guide.md").write_text(
+        "# Guide\n\nDetailed reference content here.\n", encoding="utf-8"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(home))
     reset_skill_view_dedup()
     from tools.skill_manager_guards import _reset_background_review_read_marks
+
     _reset_background_review_read_marks()
     return home
+
 
 def _view(name, file_path=None, task="t-svd"):
     args = {"name": name}
     if file_path:
         args["file_path"] = file_path
     return json.loads(_skill_view_with_bump(args, task_id=task))
+
 
 class TestSkillViewDedup:
     def test_first_view_returns_full_content(self, skills_home):
@@ -62,7 +67,10 @@ class TestSkillViewDedup:
         _view("demo-dedup-skill")
         md = skills_home / "skills" / "demo-dedup-skill" / "SKILL.md"
         time.sleep(0.01)
-        md.write_text(md.read_text(encoding="utf-8") + "\nStep two: new instruction.\n", encoding="utf-8")
+        md.write_text(
+            md.read_text(encoding="utf-8") + "\nStep two: new instruction.\n",
+            encoding="utf-8",
+        )
         r2 = _view("demo-dedup-skill")
         assert "Step two" in r2.get("content", "")
         assert r2.get("dedup") is None
@@ -113,7 +121,10 @@ class TestSkillViewDedup:
         assert review.get("content_returned") is None
         # The real read marks the file, so the fork's read-before-write guard now admits the patch.
         from tools.skill_manager_guards import _background_review_has_read
-        assert _background_review_has_read(skills_home / "skills" / "demo-dedup-skill" / "SKILL.md")
+
+        assert _background_review_has_read(
+            skills_home / "skills" / "demo-dedup-skill" / "SKILL.md"
+        )
 
     def test_background_review_does_not_pollute_foreground_cache(self, skills_home):
         from tools.skill_provenance import (
@@ -149,7 +160,10 @@ class TestSkillViewDedupRaces:
 
         def write_after_read(*args, **kwargs):
             # A background-review skill_manage patch lands after skill_view read v1.
-            md.write_text(md.read_text(encoding="utf-8").replace("Step one", "Step NEW!"), encoding="utf-8")
+            md.write_text(
+                md.read_text(encoding="utf-8").replace("Step one", "Step NEW!"),
+                encoding="utf-8",
+            )
             return real(*args, **kwargs)
 
         monkeypatch.setattr(st, "_log_security_warnings", write_after_read)
@@ -164,7 +178,10 @@ class TestSkillViewDedupRaces:
     def test_same_size_rewrite_with_pinned_mtime_is_not_deduped(self, skills_home):
         md = self._md(skills_home)
         _view("demo-dedup-skill")
-        md.write_text(md.read_text(encoding="utf-8").replace("Step one", "Step 111"), encoding="utf-8")
+        md.write_text(
+            md.read_text(encoding="utf-8").replace("Step one", "Step 111"),
+            encoding="utf-8",
+        )
         _pin_mtime(md, _SETTLED_NS)
 
         again = _view("demo-dedup-skill")

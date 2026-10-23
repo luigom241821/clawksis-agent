@@ -7,6 +7,7 @@ httpx.HTTPStatusError(401), the handler should:
   3. If no, return a structured needs_reauth error so the model stops
      hallucinating manual refresh attempts.
 """
+
 import json
 from unittest.mock import MagicMock
 
@@ -24,7 +25,9 @@ def test_is_auth_error_detects_oauth_flow_error():
     assert _is_auth_error(OAuthFlowError("expired")) is True
 
 
-def test_call_tool_handler_returns_needs_reauth_on_unrecoverable_401(monkeypatch, tmp_path):
+def test_call_tool_handler_returns_needs_reauth_on_unrecoverable_401(
+    monkeypatch, tmp_path
+):
     """When session.call_tool raises 401 and handle_401 returns False,
     handler returns a structured needs_reauth error (not a generic failure)."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
@@ -50,6 +53,7 @@ def test_call_tool_handler_returns_needs_reauth_on_unrecoverable_401(monkeypatch
     server._ready.is_set.return_value = True
 
     from tools import mcp_tool
+
     mcp_tool._servers["srv"] = server
     mcp_tool._server_error_counts.pop("srv", None)
 
@@ -68,9 +72,14 @@ def test_call_tool_handler_returns_needs_reauth_on_unrecoverable_401(monkeypatch
         handler = _make_tool_handler("srv", "tool1", 10.0)
         result = handler({"arg": "v"})
         parsed = json.loads(result)
-        assert parsed.get("needs_reauth") is True, f"expected needs_reauth, got: {parsed}"
+        assert parsed.get("needs_reauth") is True, (
+            f"expected needs_reauth, got: {parsed}"
+        )
         assert parsed.get("server") == "srv"
-        assert "re-auth" in parsed.get("error", "").lower() or "reauth" in parsed.get("error", "").lower()
+        assert (
+            "re-auth" in parsed.get("error", "").lower()
+            or "reauth" in parsed.get("error", "").lower()
+        )
     finally:
         mcp_tool._servers.pop("srv", None)
         mcp_tool._server_error_counts.pop("srv", None)
@@ -93,6 +102,7 @@ def test_call_tool_handler_non_auth_error_still_generic(monkeypatch, tmp_path):
 
     from tools import mcp_tool
     from tools import mcp_tool_loop as _mcp_loop
+
     mcp_tool._servers["srv"] = server
     mcp_tool._server_error_counts.pop("srv", None)
     _mcp_loop._ensure_mcp_loop()

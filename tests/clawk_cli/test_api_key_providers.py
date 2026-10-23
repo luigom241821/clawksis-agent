@@ -35,12 +35,19 @@ from clawk_cli.auth import PROVIDER_REGISTRY as _REGISTRY
 
 _EXTRA_ENV_VARS = (
     # Checked directly in resolve_provider("auto"), not via the registry.
-    "OPENROUTER_API_KEY", "NOUS_API_KEY",
+    "OPENROUTER_API_KEY",
+    "NOUS_API_KEY",
     # Base URLs / paths that influence detection but aren't api_key_env_vars.
-    "LM_BASE_URL", "KIMI_BASE_URL", "STEPFUN_BASE_URL", "KILOCODE_BASE_URL",
-    "GMI_BASE_URL", "OPENAI_BASE_URL",
-    "CLAWK_COPILOT_ACP_COMMAND", "COPILOT_CLI_PATH",
-    "CLAWK_COPILOT_ACP_ARGS", "COPILOT_ACP_BASE_URL",
+    "LM_BASE_URL",
+    "KIMI_BASE_URL",
+    "STEPFUN_BASE_URL",
+    "KILOCODE_BASE_URL",
+    "GMI_BASE_URL",
+    "OPENAI_BASE_URL",
+    "CLAWK_COPILOT_ACP_COMMAND",
+    "COPILOT_CLI_PATH",
+    "CLAWK_COPILOT_ACP_ARGS",
+    "COPILOT_ACP_BASE_URL",
 )
 
 PROVIDER_ENV_VARS = tuple(
@@ -61,7 +68,6 @@ def _clear_provider_env(monkeypatch):
 class TestResolveProvider:
     """Test resolve_provider() with new providers."""
 
-
     def test_alias_zhipu(self):
         assert resolve_provider("zhipu") == "zai"
 
@@ -77,14 +83,11 @@ class TestResolveProvider:
     def test_alias_minimax_underscore(self):
         assert resolve_provider("minimax_cn") == "minimax-cn"
 
-
     def test_alias_vercel(self):
         assert resolve_provider("vercel") == "ai-gateway"
 
-
     def test_alias_kilo(self):
         assert resolve_provider("kilo") == "kilocode"
-
 
     def test_alias_case_insensitive(self):
         assert resolve_provider("GLM") == "zai"
@@ -105,22 +108,25 @@ class TestResolveProvider:
 
         assert normalize_provider("chatgpt") == "openai-codex"
         assert normalize_provider("chatgpt-codex") == "openai-codex"
-        assert parse_model_input("chatgpt:gpt-5.5", "openrouter") == ("openai-codex", "gpt-5.5")
-        assert parse_model_input("chatgpt-codex:gpt-5.5", "openrouter") == ("openai-codex", "gpt-5.5")
+        assert parse_model_input("chatgpt:gpt-5.5", "openrouter") == (
+            "openai-codex",
+            "gpt-5.5",
+        )
+        assert parse_model_input("chatgpt-codex:gpt-5.5", "openrouter") == (
+            "openai-codex",
+            "gpt-5.5",
+        )
         assert _normalize_provider("chatgpt") == "openai-codex"
 
     def test_alias_github_copilot(self):
         assert resolve_provider("github-copilot") == "copilot"
 
-
     def test_alias_github_copilot_acp(self):
         assert resolve_provider("github-copilot-acp") == "copilot-acp"
         assert resolve_provider("copilot-acp-agent") == "copilot-acp"
 
-
     def test_alias_hf(self):
         assert resolve_provider("hf") == "huggingface"
-
 
     def test_unknown_provider_raises(self):
         with pytest.raises(AuthError):
@@ -130,16 +136,13 @@ class TestResolveProvider:
         monkeypatch.setenv("GLM_API_KEY", "test-glm-key")
         assert resolve_provider("auto") == "zai"
 
-
     def test_auto_detects_kimi_key(self, monkeypatch):
         monkeypatch.setenv("KIMI_API_KEY", "test-kimi-key")
         assert resolve_provider("auto") == "kimi-coding"
 
-
     def test_auto_detects_minimax_cn_key(self, monkeypatch):
         monkeypatch.setenv("MINIMAX_CN_API_KEY", "test-mm-cn-key")
         assert resolve_provider("auto") == "minimax-cn"
-
 
     def test_openrouter_takes_priority_over_glm(self, monkeypatch):
         """OpenRouter API key should win over GLM in auto-detection."""
@@ -167,8 +170,8 @@ class TestResolveProvider:
 # API Key Provider Status tests
 # =============================================================================
 
-class TestApiKeyProviderStatus:
 
+class TestApiKeyProviderStatus:
     def test_unconfigured_provider(self):
         status = get_api_key_provider_status("zai")
         assert status["configured"] is False
@@ -187,10 +190,11 @@ class TestApiKeyProviderStatus:
 # Credential Resolution tests
 # =============================================================================
 
+
 class TestResolveApiKeyProviderCredentials:
-
-
-    def test_try_gh_cli_token_uses_homebrew_path_when_not_on_path(self, monkeypatch, tmp_path):
+    def test_try_gh_cli_token_uses_homebrew_path_when_not_on_path(
+        self, monkeypatch, tmp_path
+    ):
         from clawk_cli.copilot_auth import _invalidate_gh_cli_token_cache
         from clawk_platform.resolver import known_dirs
 
@@ -219,7 +223,6 @@ class TestResolveApiKeyProviderCredentials:
         assert _try_gh_cli_token() == "gh-cli-secret"
         assert calls == [[str(gh), "auth", "token"]]
 
-
     def test_resolve_stepfun_with_key(self, monkeypatch):
         monkeypatch.setenv("STEPFUN_API_KEY", "stepfun-secret-key")
         creds = resolve_api_key_provider_credentials("stepfun")
@@ -232,36 +235,40 @@ class TestResolveApiKeyProviderCredentials:
 # Runtime Provider Resolution tests
 # =============================================================================
 
-class TestRuntimeProviderResolution:
 
+class TestRuntimeProviderResolution:
     def test_runtime_zai(self, monkeypatch):
         monkeypatch.setenv("GLM_API_KEY", "glm-key")
         from clawk_cli.runtime_provider import resolve_runtime_provider
+
         result = resolve_runtime_provider(requested="zai")
         assert result["provider"] == "zai"
         assert result["api_mode"] == "chat_completions"
         assert result["api_key"] == "glm-key"
         assert "z.ai" in result["base_url"] or "api.z.ai" in result["base_url"]
 
-
     def test_runtime_minimax(self, monkeypatch):
         monkeypatch.setenv("MINIMAX_API_KEY", "mm-key")
         from clawk_cli.runtime_provider import resolve_runtime_provider
+
         result = resolve_runtime_provider(requested="minimax")
         assert result["provider"] == "minimax"
         assert result["api_key"] == "mm-key"
 
-
     def test_runtime_auto_detects_api_key_provider(self, monkeypatch):
         monkeypatch.setenv("KIMI_API_KEY", "auto-kimi-key")
         from clawk_cli.runtime_provider import resolve_runtime_provider
+
         result = resolve_runtime_provider(requested="auto")
         assert result["provider"] == "kimi-coding"
         assert result["api_key"] == "auto-kimi-key"
 
     def test_runtime_copilot_uses_gh_cli_token(self, monkeypatch):
-        monkeypatch.setattr("clawk_cli.copilot_auth._try_gh_cli_token", lambda: "gho_cli_secret")
+        monkeypatch.setattr(
+            "clawk_cli.copilot_auth._try_gh_cli_token", lambda: "gho_cli_secret"
+        )
         from clawk_cli.runtime_provider import resolve_runtime_provider
+
         result = resolve_runtime_provider(requested="copilot")
         assert result["provider"] == "copilot"
         assert result["api_mode"] == "chat_completions"
@@ -269,7 +276,9 @@ class TestRuntimeProviderResolution:
         assert result["base_url"] == "https://api.githubcopilot.com"
 
     def test_runtime_copilot_uses_responses_for_gpt_5_4(self, monkeypatch):
-        monkeypatch.setattr("clawk_cli.copilot_auth._try_gh_cli_token", lambda: "gho_cli_secret")
+        monkeypatch.setattr(
+            "clawk_cli.copilot_auth._try_gh_cli_token", lambda: "gho_cli_secret"
+        )
         monkeypatch.setattr(
             "clawk_cli.runtime_provider._get_model_config",
             lambda: {"provider": "copilot", "default": "gpt-5.4"},
@@ -314,20 +323,27 @@ class TestRuntimeProviderResolution:
 # _has_any_provider_configured tests
 # =============================================================================
 
+
 class TestHasAnyProviderConfigured:
-
-
     def test_claude_code_creds_ignored_on_fresh_install(self, monkeypatch, tmp_path):
         """Claude Code credentials should NOT skip the wizard when Clawksis is unconfigured."""
         from clawk_cli import config as config_module
+
         clawk_home = tmp_path / ".clawk"
         clawk_home.mkdir()
         monkeypatch.setattr(config_module, "get_env_path", lambda: clawk_home / ".env")
         monkeypatch.setattr(config_module, "get_clawk_home", lambda: clawk_home)
-        monkeypatch.setattr("clawk_cli.copilot_auth.resolve_copilot_token", lambda: ("", ""))
+        monkeypatch.setattr(
+            "clawk_cli.copilot_auth.resolve_copilot_token", lambda: ("", "")
+        )
         # Clear all provider env vars so earlier checks don't short-circuit
-        _all_vars = {"OPENROUTER_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY",
-                      "ANTHROPIC_TOKEN", "OPENAI_BASE_URL"}
+        _all_vars = {
+            "OPENROUTER_API_KEY",
+            "OPENAI_API_KEY",
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_TOKEN",
+            "OPENAI_BASE_URL",
+        }
         for pconfig in PROVIDER_REGISTRY.values():
             if pconfig.auth_type == "api_key":
                 _all_vars.update(pconfig.api_key_env_vars)
@@ -345,33 +361,53 @@ class TestHasAnyProviderConfigured:
             lambda creds: True,
         )
         from clawk_cli.main import _has_any_provider_configured
+
         assert _has_any_provider_configured() is False
 
     def test_config_provider_counts(self, monkeypatch, tmp_path):
         """config.yaml with model.provider set should count as configured."""
         import clawk_yaml as yaml
         from clawk_cli import config as config_module
+
         clawk_home = tmp_path / ".clawk"
         clawk_home.mkdir()
         config_file = clawk_home / "config.yaml"
-        config_file.write_text(yaml.safe_dump({
-            "model": {"default": "anthropic/claude-opus-4.6", "provider": "openrouter"},
-        }))
+        config_file.write_text(
+            yaml.safe_dump(
+                {
+                    "model": {
+                        "default": "anthropic/claude-opus-4.6",
+                        "provider": "openrouter",
+                    },
+                }
+            )
+        )
         monkeypatch.setattr(config_module, "get_env_path", lambda: clawk_home / ".env")
         monkeypatch.setattr(config_module, "get_clawk_home", lambda: clawk_home)
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
         # Clear all provider env vars
-        for var in ("OPENROUTER_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY",
-                     "ANTHROPIC_TOKEN", "OPENAI_BASE_URL"):
+        for var in (
+            "OPENROUTER_API_KEY",
+            "OPENAI_API_KEY",
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_TOKEN",
+            "OPENAI_BASE_URL",
+        ):
             monkeypatch.delenv(var, raising=False)
         from clawk_cli.main import _has_any_provider_configured
+
         assert _has_any_provider_configured() is True
 
     @staticmethod
     def _clear_provider_env(monkeypatch):
         """Clear every provider env var so early checks can't short-circuit."""
-        _all_vars = {"OPENROUTER_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY",
-                     "ANTHROPIC_TOKEN", "OPENAI_BASE_URL"}
+        _all_vars = {
+            "OPENROUTER_API_KEY",
+            "OPENAI_API_KEY",
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_TOKEN",
+            "OPENAI_BASE_URL",
+        }
         for pconfig in PROVIDER_REGISTRY.values():
             if pconfig.auth_type == "api_key":
                 _all_vars.update(pconfig.api_key_env_vars)
@@ -380,6 +416,7 @@ class TestHasAnyProviderConfigured:
 
     def _setup_home(self, monkeypatch, tmp_path):
         from clawk_cli import config as config_module
+
         clawk_home = tmp_path / ".clawk"
         clawk_home.mkdir()
         monkeypatch.setattr(config_module, "get_env_path", lambda: clawk_home / ".env")
@@ -398,10 +435,18 @@ class TestHasAnyProviderConfigured:
         recorded call proves the sweep ran even if the raise was swallowed.
         """
         import clawk_yaml as yaml
+
         clawk_home = self._setup_home(monkeypatch, tmp_path)
-        (clawk_home / "config.yaml").write_text(yaml.safe_dump({
-            "model": {"default": "anthropic/claude-opus-4.6", "provider": "openrouter"},
-        }))
+        (clawk_home / "config.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "model": {
+                        "default": "anthropic/claude-opus-4.6",
+                        "provider": "openrouter",
+                    },
+                }
+            )
+        )
         sweep_calls = []
 
         def _trap(provider_id):
@@ -410,6 +455,7 @@ class TestHasAnyProviderConfigured:
 
         monkeypatch.setattr("clawk_cli.auth.get_auth_status", _trap)
         from clawk_cli.main import _has_any_provider_configured
+
         assert _has_any_provider_configured() is True
         assert sweep_calls == [], (
             f"provider registry sweep ran before config short-circuit: {sweep_calls}"
@@ -419,14 +465,19 @@ class TestHasAnyProviderConfigured:
         """Custom endpoint (base_url/api_key in config, no provider) must also
         short-circuit before the registry sweep."""
         import clawk_yaml as yaml
+
         clawk_home = self._setup_home(monkeypatch, tmp_path)
-        (clawk_home / "config.yaml").write_text(yaml.safe_dump({
-            "model": {
-                "default": "local/custom-model",
-                "base_url": "http://localhost:8000/v1",
-                "api_key": "sk-local-test",
-            },
-        }))
+        (clawk_home / "config.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "model": {
+                        "default": "local/custom-model",
+                        "base_url": "http://localhost:8000/v1",
+                        "api_key": "sk-local-test",
+                    },
+                }
+            )
+        )
         sweep_calls = []
 
         def _trap(provider_id):
@@ -435,6 +486,7 @@ class TestHasAnyProviderConfigured:
 
         monkeypatch.setattr("clawk_cli.auth.get_auth_status", _trap)
         from clawk_cli.main import _has_any_provider_configured
+
         assert _has_any_provider_configured() is True
         assert sweep_calls == [], (
             f"provider registry sweep ran before config short-circuit: {sweep_calls}"
@@ -446,10 +498,15 @@ class TestHasAnyProviderConfigured:
         provider from auth.json — any other provider id means the sweep ran.
         """
         import json
+
         clawk_home = self._setup_home(monkeypatch, tmp_path)
-        (clawk_home / "auth.json").write_text(json.dumps({
-            "active_provider": "nous",
-        }))
+        (clawk_home / "auth.json").write_text(
+            json.dumps(
+                {
+                    "active_provider": "nous",
+                }
+            )
+        )
         calls = []
 
         def _guarded_status(provider_id):
@@ -459,6 +516,7 @@ class TestHasAnyProviderConfigured:
 
         monkeypatch.setattr("clawk_cli.auth.get_auth_status", _guarded_status)
         from clawk_cli.main import _has_any_provider_configured
+
         assert _has_any_provider_configured() is True
         assert calls == ["nous"], (
             f"provider registry sweep ran before auth.json short-circuit: {calls}"
@@ -479,7 +537,6 @@ class TestResolveKimiBaseUrl:
         url = _resolve_kimi_base_url("sk-kimi-abc123", MOONSHOT_DEFAULT_URL, "")
         assert url == KIMI_CODE_BASE_URL
 
-
     def test_env_override_wins_over_legacy(self):
         custom = "https://custom.example.com/v1"
         url = _resolve_kimi_base_url("sk-abc123", MOONSHOT_DEFAULT_URL, custom)
@@ -488,7 +545,6 @@ class TestResolveKimiBaseUrl:
 
 class TestKimiCodeStatusAutoDetect:
     """Test that get_api_key_provider_status auto-detects sk-kimi- keys."""
-
 
     def test_env_override_wins(self, monkeypatch):
         monkeypatch.setenv("KIMI_API_KEY", "sk-kimi-test-key")
@@ -500,13 +556,11 @@ class TestKimiCodeStatusAutoDetect:
 class TestKimiCodeCredentialAutoDetect:
     """Test that resolve_api_key_provider_credentials auto-detects sk-kimi- keys."""
 
-
     def test_legacy_key_gets_moonshot_url(self, monkeypatch):
         monkeypatch.setenv("KIMI_API_KEY", "sk-legacy-secret-key")
         creds = resolve_api_key_provider_credentials("kimi-coding")
         assert creds["api_key"] == "sk-legacy-secret-key"
         assert creds["base_url"] == MOONSHOT_DEFAULT_URL
-
 
     def test_non_kimi_providers_unaffected(self, monkeypatch):
         """Ensure the auto-detect logic doesn't leak to other providers."""
@@ -518,7 +572,6 @@ class TestKimiCodeCredentialAutoDetect:
 
 class TestZaiEndpointAutoDetect:
     """Test that resolve_api_key_provider_credentials auto-detects Z.AI endpoints."""
-
 
     def test_env_override_skips_probe(self, monkeypatch):
         """GLM_BASE_URL should always win without probing."""
@@ -545,12 +598,18 @@ class TestZaiEndpointAutoDetect:
         """A key whose detection fails (429 on every endpoint) is probed once, not on every
         credential resolution — the picker resolves Z.AI dozens of times per open (#114215)."""
         from clawk_cli import auth_zai_kimi
+
         monkeypatch.setenv("GLM_API_KEY", "glm-key-that-429s")
         monkeypatch.setattr(auth_zai_kimi, "_zai_probe_failed_until", {})
         calls = []
-        monkeypatch.setattr("clawk_cli.auth.detect_zai_endpoint", lambda *a, **kw: calls.append(1))
+        monkeypatch.setattr(
+            "clawk_cli.auth.detect_zai_endpoint", lambda *a, **kw: calls.append(1)
+        )
         for _ in range(3):
-            assert resolve_api_key_provider_credentials("zai")["base_url"] == "https://api.z.ai/api/paas/v4"
+            assert (
+                resolve_api_key_provider_credentials("zai")["base_url"]
+                == "https://api.z.ai/api/paas/v4"
+            )
         assert len(calls) == 1
 
 
@@ -650,11 +709,13 @@ class TestZaiParallelProbe:
 # Kimi / Moonshot model list isolation tests
 # =============================================================================
 
+
 class TestKimiMoonshotModelListIsolation:
     """Moonshot (legacy) users must not see Coding Plan-only models."""
 
     def test_moonshot_list_excludes_coding_plan_only_models(self):
         from clawk_cli.models import _PROVIDER_MODELS
+
         moonshot_models = _PROVIDER_MODELS["moonshot"]
         coding_plan_only = {"kimi-for-coding", "kimi-k2-thinking-turbo"}
         leaked = set(moonshot_models) & coding_plan_only
@@ -665,14 +726,15 @@ class TestKimiMoonshotModelListIsolation:
 # Hugging Face provider model list tests
 # =============================================================================
 
+
 class TestHuggingFaceModels:
     """Verify Hugging Face model lists are consistent across all locations."""
-
 
     def test_model_metadata_has_context_lengths(self):
         """Every HF model should have a context length entry."""
         from clawk_cli.models import _PROVIDER_MODELS
         from agent.model_metadata import DEFAULT_CONTEXT_LENGTHS
+
         lower_keys = {k.lower() for k in DEFAULT_CONTEXT_LENGTHS}
         hf_models = _PROVIDER_MODELS["huggingface"]
         for model in hf_models:
@@ -685,14 +747,15 @@ class TestHuggingFaceModels:
 # NovitaAI provider tests (added by feat/add-novita-provider)
 # =============================================================================
 
+
 class TestNovitaProvider:
     """Tests for NovitaAI — an OpenAI-compatible multi-model aggregator."""
-
 
     def test_novita_pricing_cache(self, monkeypatch):
         """_fetch_novita_pricing should cache results in _pricing_cache."""
         from clawk_cli import models as models_mod
         from clawk_cli import models_pricing
+
         monkeypatch.setenv("NOVITA_API_KEY", "sk-test-key")
         monkeypatch.setenv("NOVITA_BASE_URL", "https://api.novita.ai/openai/v1")
         models_pricing._pricing_cache.pop("https://api.novita.ai/openai/v1", None)
@@ -717,15 +780,14 @@ class TestNovitaProvider:
 
             def read(self):
                 import json as _json
+
                 return _json.dumps(fake_payload).encode()
 
         def fake_urlopen(req, timeout=None):
             call_count["n"] += 1
             return _FakeResp()
 
-        monkeypatch.setattr(
-            models_mod, "_urlopen_model_catalog_request", fake_urlopen
-        )
+        monkeypatch.setattr(models_mod, "_urlopen_model_catalog_request", fake_urlopen)
 
         # First call hits the network.
         first = models_pricing._fetch_novita_pricing()
@@ -746,9 +808,9 @@ class TestNovitaProvider:
 # MiniMax OAuth provider tests (added by feat/minimax-oauth-provider)
 # =============================================================================
 
+
 class TestMinimaxOAuthProvider:
     """Tests for the minimax-oauth OAuth provider."""
-
 
     def test_minimax_oauth_aux_model_registered(self):
         # Aux model for the minimax-oauth provider now lives on the
@@ -789,6 +851,7 @@ def _deepinfra_cache_isolation(monkeypatch):
     a later test's fetch within the failure TTL.
     """
     import clawk_cli.models as _models_mod
+
     monkeypatch.setattr(_models_mod, "_deepinfra_catalog_cache", {})
     monkeypatch.setattr(_models_mod, "_deepinfra_catalog_neg_cache", {})
     yield
@@ -804,21 +867,35 @@ class TestFetchDeepInfraModels:
         class _Resp:
             def __enter__(self):
                 return self
+
             def __exit__(self, *a):
                 return False
+
             def read(self):
-                return json.dumps({"data": [
-                    {"id": "meta-llama/Llama-3-70B-Instruct", "metadata": {}},
-                    {"id": "mistralai/Mistral-Nemo-Instruct-2407", "metadata": {}},
-                    {"id": "BAAI/bge-large-en-v1.5-embed", "metadata": {}},
-                    {"id": "stabilityai/stable-diffusion-xl-base-1.0", "metadata": {}},
-                ]}).encode()
+                return json.dumps(
+                    {
+                        "data": [
+                            {"id": "meta-llama/Llama-3-70B-Instruct", "metadata": {}},
+                            {
+                                "id": "mistralai/Mistral-Nemo-Instruct-2407",
+                                "metadata": {},
+                            },
+                            {"id": "BAAI/bge-large-en-v1.5-embed", "metadata": {}},
+                            {
+                                "id": "stabilityai/stable-diffusion-xl-base-1.0",
+                                "metadata": {},
+                            },
+                        ]
+                    }
+                ).encode()
 
         from clawk_cli import models
+
         monkeypatch.setattr(
             models, "_urlopen_model_catalog_request", lambda *a, **kw: _Resp()
         )
         from clawk_cli.models import _fetch_deepinfra_models
+
         result = _fetch_deepinfra_models()
 
         assert result is not None
@@ -827,7 +904,6 @@ class TestFetchDeepInfraModels:
         # Embedding and image models should be excluded
         assert not any("embed" in m.lower() for m in result)
         assert not any("stable-diffusion" in m.lower() for m in result)
-
 
     def test_catalog_uses_credential_safe_opener(self, monkeypatch):
         from clawk_cli import models
@@ -885,20 +961,25 @@ class TestDeepInfraTagFiltering:
         #  - the regex excludes id-name matches (whisper, embed, …)
         #  - a surface tag takes priority over the regex
         #  - ``metadata: None`` stubs are dropped
-        payload = {"data": [
-            {"id": "vendor/chat-tagged", "metadata": {"tags": ["chat"]}},
-            {"id": "vendor/image-tagged", "metadata": {"tags": ["image-gen"]}},
-            {"id": "vendor/tts-tagged", "metadata": {"tags": ["tts"]}},
-            {"id": "vendor/stt-tagged", "metadata": {"tags": ["stt"]}},
-            {"id": "vendor/embed-tagged", "metadata": {"tags": ["embed"]}},
-            # capability-only — rolls through regex fallback
-            {"id": "Qwen/Qwen3-30B", "metadata": {"tags": ["reasoning", "vision"]}},
-            {"id": "openai/whisper-large", "metadata": {"tags": ["reasoning"]}},
-            # surface tag overrides legacy regex exclusion
-            {"id": "some-org/whisper-finetune-chat", "metadata": {"tags": ["chat"]}},
-            # null metadata — stub model, must be skipped
-            {"id": "stub-model", "metadata": None},
-        ]}
+        payload = {
+            "data": [
+                {"id": "vendor/chat-tagged", "metadata": {"tags": ["chat"]}},
+                {"id": "vendor/image-tagged", "metadata": {"tags": ["image-gen"]}},
+                {"id": "vendor/tts-tagged", "metadata": {"tags": ["tts"]}},
+                {"id": "vendor/stt-tagged", "metadata": {"tags": ["stt"]}},
+                {"id": "vendor/embed-tagged", "metadata": {"tags": ["embed"]}},
+                # capability-only — rolls through regex fallback
+                {"id": "Qwen/Qwen3-30B", "metadata": {"tags": ["reasoning", "vision"]}},
+                {"id": "openai/whisper-large", "metadata": {"tags": ["reasoning"]}},
+                # surface tag overrides legacy regex exclusion
+                {
+                    "id": "some-org/whisper-finetune-chat",
+                    "metadata": {"tags": ["chat"]},
+                },
+                # null metadata — stub model, must be skipped
+                {"id": "stub-model", "metadata": None},
+            ]
+        }
         from clawk_cli.models import _fetch_deepinfra_models_by_tag
         import clawk_cli.models as _m
 
@@ -933,26 +1014,38 @@ class TestDeepInfraPricingFetcher:
     and is wired into the get_pricing_for_provider dispatch."""
 
     def test_pricing_shape_and_dispatch(self, monkeypatch):
-        payload = {"data": [
-            {
-                "id": "vendor/model-a",
-                "metadata": {
-                    "tags": ["chat", "prompt_cache"],
-                    "pricing": {
-                        "input_tokens": 0.1,
-                        "output_tokens": 0.3,
-                        "cache_read_tokens": 0.02,
+        payload = {
+            "data": [
+                {
+                    "id": "vendor/model-a",
+                    "metadata": {
+                        "tags": ["chat", "prompt_cache"],
+                        "pricing": {
+                            "input_tokens": 0.1,
+                            "output_tokens": 0.3,
+                            "cache_read_tokens": 0.02,
+                        },
                     },
                 },
-            },
-            {
-                "id": "vendor/model-b",
-                "metadata": {"tags": ["chat"], "pricing": {"input_tokens": 1.0, "output_tokens": 5.0}},
-            },
-            # non-chat — must not appear
-            {"id": "vendor/model-image", "metadata": {"tags": ["image-gen"], "pricing": {"per_image_unit": 0.05}}},
-        ]}
+                {
+                    "id": "vendor/model-b",
+                    "metadata": {
+                        "tags": ["chat"],
+                        "pricing": {"input_tokens": 1.0, "output_tokens": 5.0},
+                    },
+                },
+                # non-chat — must not appear
+                {
+                    "id": "vendor/model-image",
+                    "metadata": {
+                        "tags": ["image-gen"],
+                        "pricing": {"per_image_unit": 0.05},
+                    },
+                },
+            ]
+        }
         from clawk_cli import models
+
         monkeypatch.setattr(
             models,
             "_urlopen_model_catalog_request",
@@ -964,8 +1057,12 @@ class TestDeepInfraPricingFetcher:
         result = get_pricing_for_provider("deepinfra")
         assert set(result) == {"vendor/model-a", "vendor/model-b"}
         # Picker-shape: per-token strings under prompt/completion (+ cache_read when source had it)
-        assert float(result["vendor/model-a"]["prompt"]) == pytest.approx(0.1 / 1_000_000)
-        assert float(result["vendor/model-a"]["completion"]) == pytest.approx(0.3 / 1_000_000)
+        assert float(result["vendor/model-a"]["prompt"]) == pytest.approx(
+            0.1 / 1_000_000
+        )
+        assert float(result["vendor/model-a"]["completion"]) == pytest.approx(
+            0.3 / 1_000_000
+        )
         assert "input_cache_read" in result["vendor/model-a"]
         assert "input_cache_read" not in result["vendor/model-b"]
 
@@ -979,6 +1076,7 @@ def _kilo_pricing_isolation(monkeypatch):
     the next test's read.
     """
     import clawk_cli.models_pricing as _mp
+
     monkeypatch.setattr(_mp, "_pricing_cache", {})
     monkeypatch.setattr(_mp, "_pricing_cache_retry_after", {})
     monkeypatch.setattr(_mp, "_pricing_provider_cache_keys", {})
@@ -991,29 +1089,37 @@ class TestKilocodePricingFetcher:
     pricing, and is wired into the get_pricing_for_provider dispatch."""
 
     def test_pricing_shape_and_dispatch(self, monkeypatch):
-        payload = {"data": [
-            {
-                "id": "vendor/paid",
-                "pricing": {
-                    "prompt": "0.000004",
-                    "completion": "0.00002",
-                    "input_cache_read": "0.0000004",
+        payload = {
+            "data": [
+                {
+                    "id": "vendor/paid",
+                    "pricing": {
+                        "prompt": "0.000004",
+                        "completion": "0.00002",
+                        "input_cache_read": "0.0000004",
+                    },
                 },
-            },
-            # Free router with non-zero underlying rates — the explicit isFree
-            # flag is authoritative and must win (the kilo-auto/free case).
-            {"id": "kilo-auto/free", "isFree": True,
-             "pricing": {"prompt": "0.000002", "completion": "0.00001"}},
-            # Sentinel pricing ("rate varies per request") — no price is better
-            # than a fabricated one, so the row is skipped.
-            {"id": "kilo-auto/efficient",
-             "pricing": {"prompt": "-1", "completion": "-1"}},
-            # Malformed records must be skipped, not crash the parser.
-            {"id": "vendor/no-pricing"},
-            {"id": ""},
-            "not-a-dict",
-        ]}
+                # Free router with non-zero underlying rates — the explicit isFree
+                # flag is authoritative and must win (the kilo-auto/free case).
+                {
+                    "id": "kilo-auto/free",
+                    "isFree": True,
+                    "pricing": {"prompt": "0.000002", "completion": "0.00001"},
+                },
+                # Sentinel pricing ("rate varies per request") — no price is better
+                # than a fabricated one, so the row is skipped.
+                {
+                    "id": "kilo-auto/efficient",
+                    "pricing": {"prompt": "-1", "completion": "-1"},
+                },
+                # Malformed records must be skipped, not crash the parser.
+                {"id": "vendor/no-pricing"},
+                {"id": ""},
+                "not-a-dict",
+            ]
+        }
         from clawk_cli import models
+
         monkeypatch.setattr(
             models,
             "_urlopen_model_catalog_request",
@@ -1026,7 +1132,8 @@ class TestKilocodePricingFetcher:
         assert set(result) == {"vendor/paid", "kilo-auto/free"}
         # Paid: per-token strings pass through, cache-read when the source had it.
         assert result["vendor/paid"] == {
-            "prompt": "0.000004", "completion": "0.00002",
+            "prompt": "0.000004",
+            "completion": "0.00002",
             "input_cache_read": "0.0000004",
         }
         # Free: explicit zero mapping, ignoring the non-zero underlying rates.
@@ -1044,7 +1151,11 @@ class TestKilocodePricingFetcher:
         def fake_urlopen(req, timeout=None):
             seen.append((req.full_url, req.get_header("Authorization")))
             return _make_urlopen_returning(
-                {"data": [{"id": "a/b", "pricing": {"prompt": "0.1", "completion": "0.2"}}]}
+                {
+                    "data": [
+                        {"id": "a/b", "pricing": {"prompt": "0.1", "completion": "0.2"}}
+                    ]
+                }
             )(req, timeout=timeout)
 
         monkeypatch.delenv("KILOCODE_API_KEY", raising=False)
@@ -1105,6 +1216,7 @@ class TestRuntimeAlibabaRegionalAndTokenPlan:
     def test_runtime_alibaba_cn(self, monkeypatch):
         monkeypatch.setenv("DASHSCOPE_API_KEY", "ds-key")
         from clawk_cli.runtime_provider import resolve_runtime_provider
+
         result = resolve_runtime_provider(requested="alibaba-cn")
         assert result["provider"] == "alibaba-cn"
         assert result["api_mode"] == "chat_completions"
@@ -1115,6 +1227,7 @@ class TestRuntimeAlibabaRegionalAndTokenPlan:
         monkeypatch.setenv("ALIBABA_CODING_PLAN_API_KEY", "acp-key")
         monkeypatch.delenv("DASHSCOPE_API_KEY", raising=False)
         from clawk_cli.runtime_provider import resolve_runtime_provider
+
         result = resolve_runtime_provider(requested="alibaba-coding-plan-cn")
         assert result["provider"] == "alibaba-coding-plan-cn"
         assert result["api_mode"] == "chat_completions"
@@ -1124,17 +1237,25 @@ class TestRuntimeAlibabaRegionalAndTokenPlan:
     def test_runtime_alibaba_token_plan(self, monkeypatch):
         monkeypatch.setenv("ALIBABA_TOKEN_PLAN_API_KEY", "atp-key")
         from clawk_cli.runtime_provider import resolve_runtime_provider
+
         result = resolve_runtime_provider(requested="alibaba-token-plan")
         assert result["provider"] == "alibaba-token-plan"
         assert result["api_mode"] == "chat_completions"
         assert result["api_key"] == "atp-key"
-        assert result["base_url"] == "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+        assert (
+            result["base_url"]
+            == "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+        )
 
     def test_runtime_alibaba_token_plan_cn(self, monkeypatch):
         monkeypatch.setenv("ALIBABA_TOKEN_PLAN_API_KEY", "atp-key")
         from clawk_cli.runtime_provider import resolve_runtime_provider
+
         result = resolve_runtime_provider(requested="alibaba-token-plan-cn")
         assert result["provider"] == "alibaba-token-plan-cn"
         assert result["api_mode"] == "chat_completions"
         assert result["api_key"] == "atp-key"
-        assert result["base_url"] == "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+        assert (
+            result["base_url"]
+            == "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+        )

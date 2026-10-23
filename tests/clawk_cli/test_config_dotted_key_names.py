@@ -78,6 +78,7 @@ PROVIDER_CONFIG = {
 # real literal key WITHOUT any escaping (the common unescaped command).
 # ---------------------------------------------------------------------------
 
+
 class TestUnescapedDottedModelKeys:
     def test_set_hits_existing_literal_key_no_phantom(self, _isolated_clawk_home):
         _write_config(_isolated_clawk_home, PROVIDER_CONFIG)
@@ -129,7 +130,9 @@ class TestUnescapedDottedModelKeys:
         silently writing a phantom."""
         _write_config(_isolated_clawk_home, PROVIDER_CONFIG)
         with pytest.raises(SystemExit):
-            set_config_value("providers.myprov.models.grok-4.7.context_length", "128000")
+            set_config_value(
+                "providers.myprov.models.grok-4.7.context_length", "128000"
+            )
         err = capsys.readouterr().err
         assert "Refusing to create nested key" in err
         assert "grok-4" in err
@@ -139,9 +142,7 @@ class TestUnescapedDottedModelKeys:
 
     def test_escaped_form_creates_new_dotted_key(self, _isolated_clawk_home):
         _write_config(_isolated_clawk_home, PROVIDER_CONFIG)
-        set_config_value(
-            "providers.myprov.models.grok-4\\.7.context_length", "128000"
-        )
+        set_config_value("providers.myprov.models.grok-4\\.7.context_length", "128000")
         saved = _read_config(_isolated_clawk_home)
         assert saved["providers"]["myprov"]["models"]["grok-4.7"] == {
             "context_length": 128000
@@ -151,6 +152,7 @@ class TestUnescapedDottedModelKeys:
 # ---------------------------------------------------------------------------
 # #80006 — Matrix room IDs with dots
 # ---------------------------------------------------------------------------
+
 
 class TestMatrixRoomIds:
     def test_set_existing_room_id_key(self, _isolated_clawk_home):
@@ -166,9 +168,7 @@ class TestMatrixRoomIds:
 
     def test_escaped_creates_new_room_id_key(self, _isolated_clawk_home):
         _write_config(_isolated_clawk_home, {"matrix": {"channel_prompts": {}}})
-        set_config_value(
-            "matrix.channel_prompts.!TestRoom:example\\.org", "be brief"
-        )
+        set_config_value("matrix.channel_prompts.!TestRoom:example\\.org", "be brief")
         saved = _read_config(_isolated_clawk_home)
         assert saved["matrix"]["channel_prompts"]["!TestRoom:example.org"] == "be brief"
 
@@ -176,6 +176,7 @@ class TestMatrixRoomIds:
 # ---------------------------------------------------------------------------
 # #91095 — dotted model key under a custom_providers LIST index
 # ---------------------------------------------------------------------------
+
 
 class TestCustomProvidersListIndex:
     def test_set_updates_existing_dotted_model_under_list_index(
@@ -192,9 +193,7 @@ class TestCustomProvidersListIndex:
                 ]
             },
         )
-        set_config_value(
-            "custom_providers.0.models.qwen3.5:4b.context_length", "65536"
-        )
+        set_config_value("custom_providers.0.models.qwen3.5:4b.context_length", "65536")
         saved = _read_config(_isolated_clawk_home)
         models = saved["custom_providers"][0]["models"]
         assert models["qwen3.5:4b"]["context_length"] == 65536
@@ -222,16 +221,14 @@ class TestCustomProvidersListIndex:
 # #91607 — model_overrides via utils.atomic_roundtrip_yaml_update
 # ---------------------------------------------------------------------------
 
+
 class TestAtomicRoundtripYamlUpdate:
     def test_existing_dotted_model_id_not_split(self, tmp_path):
         from utils import atomic_roundtrip_yaml_update
 
         path = tmp_path / "config.yaml"
         path.write_text(
-            "model_overrides:\n"
-            "  zai:\n"
-            "    glm-5.3:\n"
-            "      supports_reasoning: false\n"
+            "model_overrides:\n  zai:\n    glm-5.3:\n      supports_reasoning: false\n"
         )
         atomic_roundtrip_yaml_update(
             path, "model_overrides.zai.glm-5.3.supports_reasoning", True
@@ -268,11 +265,10 @@ class TestAtomicRoundtripYamlUpdate:
 # #99124 — dotted LEAF keys (glm-5.3-flash) round-trip through set/get/unset
 # ---------------------------------------------------------------------------
 
+
 class TestDottedLeafKeys:
     CFG = {
-        "providers": {
-            "Bai": {"models": {"glm-5.3-flash": {"context_length": 128000}}}
-        }
+        "providers": {"Bai": {"models": {"glm-5.3-flash": {"context_length": 128000}}}}
     }
 
     def test_set_leaf_parent_is_dotted(self, _isolated_clawk_home):
@@ -307,6 +303,7 @@ class TestDottedLeafKeys:
 # Backward compatibility: plain dotted paths with no dotted-key collision
 # split exactly as before.
 # ---------------------------------------------------------------------------
+
 
 class TestBackwardCompatibility:
     def test_plain_nested_set(self, _isolated_clawk_home):

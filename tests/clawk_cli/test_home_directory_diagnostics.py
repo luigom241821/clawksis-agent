@@ -1,4 +1,5 @@
 """Home initialization must respect operator-owned links and diagnose storage."""
+
 import stat
 from pathlib import Path
 
@@ -9,7 +10,9 @@ from clawk_cli import config
 
 @pytest.mark.platforms("linux")
 @pytest.mark.parametrize("subdir", (".", *config._CLAWK_HOME_SUBDIRS))
-def test_unavailable_directory_links_are_diagnosed_without_creating_targets(tmp_path, monkeypatch, subdir):
+def test_unavailable_directory_links_are_diagnosed_without_creating_targets(
+    tmp_path, monkeypatch, subdir
+):
     home = tmp_path / "clawk"
     link = home / subdir
     link.parent.mkdir(parents=True, exist_ok=True)
@@ -37,7 +40,9 @@ def test_unavailable_directory_links_are_diagnosed_without_creating_targets(tmp_
 
 @pytest.mark.platforms("linux")
 @pytest.mark.parametrize("linked", ("plain", "logs", "home"))
-def test_initialization_preserves_external_directory_modes(tmp_path, monkeypatch, linked):
+def test_initialization_preserves_external_directory_modes(
+    tmp_path, monkeypatch, linked
+):
     home = tmp_path / "clawk"
     target = tmp_path / "shared"
     target.mkdir(mode=0o750)

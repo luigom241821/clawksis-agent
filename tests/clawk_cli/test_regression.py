@@ -17,21 +17,25 @@ def test_chat_provider_argparse_acceptance(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["clawk", "chat", "--provider", "my-custom-key"])
 
     from clawk_cli.main import main
+
     main()
 
     assert recorded["provider"] == "my-custom-key"
 
+
 def test_resolve_named_custom_runtime_honors_explicit_base_url(monkeypatch):
     """_resolve_named_custom_runtime honors (provider='custom', explicit_base_url=...)."""
     # Mock has_usable_secret to recognize our test key
-    monkeypatch.setattr("clawk_cli.runtime_provider.has_usable_secret", lambda x: x == "test-api-key")
-    
+    monkeypatch.setattr(
+        "clawk_cli.runtime_provider.has_usable_secret", lambda x: x == "test-api-key"
+    )
+
     result = _resolve_named_custom_runtime(
         requested_provider="custom",
         explicit_api_key="test-api-key",
-        explicit_base_url="http://example.test:1234/v1"
+        explicit_base_url="http://example.test:1234/v1",
     )
-    
+
     assert result is not None
     assert result["base_url"] == "http://example.test:1234/v1"
     assert result["provider"] == "custom"

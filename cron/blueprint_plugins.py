@@ -86,16 +86,24 @@ def _validate(blueprint: AutomationBlueprint) -> None:
     for name in _placeholders(blueprint.prompt_template, "prompt_template"):
         slot = by_name.get(name)
         if slot is None:
-            raise ValueError(f"prompt_template uses {{{name}}} but there is no slot named {name!r}")
+            raise ValueError(
+                f"prompt_template uses {{{name}}} but there is no slot named {name!r}"
+            )
         if slot.optional and slot.default in (None, ""):
-            raise ValueError(f"prompt_template uses optional slot {name!r} that has no default")
+            raise ValueError(
+                f"prompt_template uses optional slot {name!r} that has no default"
+            )
     for name in _placeholders(blueprint.schedule_template, "schedule_template"):
         if name in _DERIVED_SCHEDULE_FIELDS:
             needed = _DERIVED_SCHEDULE_FIELDS[name]
             if needed and needed not in by_name:
-                raise ValueError(f"schedule_template uses {{{name}}}, which needs a slot named {needed!r}")
+                raise ValueError(
+                    f"schedule_template uses {{{name}}}, which needs a slot named {needed!r}"
+                )
         elif name not in by_name:
-            raise ValueError(f"schedule_template uses {{{name}}} but there is no slot named {name!r}")
+            raise ValueError(
+                f"schedule_template uses {{{name}}} but there is no slot named {name!r}"
+            )
     # When every required slot has a default, fill it now so a broken template or schedule fails at
     # registration instead of on the user's first "Schedule it".
     if all(s.optional or s.default not in (None, "") for s in blueprint.slots):
@@ -105,9 +113,18 @@ def _validate(blueprint: AutomationBlueprint) -> None:
 
 
 def build_plugin_blueprint(
-    plugin: str, key: str, *, title: str, description: str, schedule_template: str,
-    prompt_template: str, category: str = "general", slots: Iterable[Any] = (),
-    deliver_default: str = "origin", skills: Iterable[str] = (), tags: Iterable[str] = (),
+    plugin: str,
+    key: str,
+    *,
+    title: str,
+    description: str,
+    schedule_template: str,
+    prompt_template: str,
+    category: str = "general",
+    slots: Iterable[Any] = (),
+    deliver_default: str = "origin",
+    skills: Iterable[str] = (),
+    tags: Iterable[str] = (),
 ) -> AutomationBlueprint:
     """Validated blueprint keyed ``<plugin>:<key>``; raises ``ValueError`` on malformed input."""
     if not isinstance(plugin, str) or not _NAMESPACE_RE.match(plugin):

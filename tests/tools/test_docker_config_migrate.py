@@ -16,14 +16,18 @@ SCRIPT = REPO_ROOT / "scripts" / "docker_config_migrate.py"
 
 
 def _load_script_module():
-    spec = importlib.util.spec_from_file_location("docker_config_migrate_test_module", SCRIPT)
+    spec = importlib.util.spec_from_file_location(
+        "docker_config_migrate_test_module", SCRIPT
+    )
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-def _run_migration(clawk_home: Path, **env_overrides: str) -> subprocess.CompletedProcess[str]:
+def _run_migration(
+    clawk_home: Path, **env_overrides: str
+) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env.update(
         {
@@ -43,7 +47,9 @@ def _run_migration(clawk_home: Path, **env_overrides: str) -> subprocess.Complet
     )
 
 
-def test_docker_config_migrate_backs_up_and_migrates_legacy_config(tmp_path: Path) -> None:
+def test_docker_config_migrate_backs_up_and_migrates_legacy_config(
+    tmp_path: Path,
+) -> None:
     config_path = tmp_path / "config.yaml"
     env_path = tmp_path / ".env"
     config_path.write_text(
@@ -69,27 +75,29 @@ def test_docker_config_migrate_backs_up_and_migrates_legacy_config(tmp_path: Pat
     # max_async_children into max_concurrent_children.
     assert "ttl_hours" not in raw["model_catalog"]
     assert raw["delegation"] == {"max_concurrent_children": 8}
-    assert list((tmp_path / "backups" / "config").glob("config.yaml.pre-docker-migrate.*"))
+    assert list(
+        (tmp_path / "backups" / "config").glob("config.yaml.pre-docker-migrate.*")
+    )
     assert list((tmp_path / "backups" / "config").glob(".env.pre-docker-migrate.*"))
 
 
-def test_docker_config_migrate_skips_below_floor_config_untouched(tmp_path: Path) -> None:
+def test_docker_config_migrate_skips_below_floor_config_untouched(
+    tmp_path: Path,
+) -> None:
     """Configs below the v12 auto-migration support floor are refused with a
     warning: no migration, no backup, no rewrite — and the boot continues."""
     config_path = tmp_path / "config.yaml"
-    original = (
-        yaml.safe_dump(
-            {
-                "_config_version": 11,
-                "custom_providers": [
-                    {
-                        "name": "Local API",
-                        "base_url": "http://localhost:8080/v1",
-                        "api_key": "test-key",
-                    }
-                ],
-            }
-        )
+    original = yaml.safe_dump(
+        {
+            "_config_version": 11,
+            "custom_providers": [
+                {
+                    "name": "Local API",
+                    "base_url": "http://localhost:8080/v1",
+                    "api_key": "test-key",
+                }
+            ],
+        }
     )
     config_path.write_text(original, encoding="utf-8")
 
@@ -119,7 +127,9 @@ def test_docker_config_migrate_stamps_unversioned_config(tmp_path: Path) -> None
 
 
 @pytest.mark.parametrize("original", ["model: [unterminated\n", "- a\n- b\n"])
-def test_docker_config_migrate_does_not_rewrite_invalid_yaml(tmp_path: Path, original: str) -> None:
+def test_docker_config_migrate_does_not_rewrite_invalid_yaml(
+    tmp_path: Path, original: str
+) -> None:
     config_path = tmp_path / "config.yaml"
     config_path.write_text(original, encoding="utf-8")
 
@@ -151,14 +161,18 @@ def test_docker_config_migrate_restores_backups_after_failed_migration(
     module = _load_script_module()
     config_path = tmp_path / "config.yaml"
     env_path = tmp_path / ".env"
-    original_config = yaml.safe_dump({"_config_version": 12, "gateway": {"provider": "telegram"}})
+    original_config = yaml.safe_dump(
+        {"_config_version": 12, "gateway": {"provider": "telegram"}}
+    )
     original_env = "TELEGRAM_BOT_TOKEN=test-token\n"
     config_path.write_text(original_config, encoding="utf-8")
     env_path.write_text(original_env, encoding="utf-8")
 
     monkeypatch.setattr(
-        module, "read_config_version_stamp",
-        lambda *, raise_on_parse_error=False: (12, DEFAULT_CONFIG["_config_version"]))
+        module,
+        "read_config_version_stamp",
+        lambda *, raise_on_parse_error=False: (12, DEFAULT_CONFIG["_config_version"]),
+    )
     monkeypatch.setattr(module, "get_config_path", lambda: config_path)
     monkeypatch.setattr(module, "get_env_path", lambda: env_path)
 
@@ -174,7 +188,9 @@ def test_docker_config_migrate_restores_backups_after_failed_migration(
 
     assert config_path.read_text(encoding="utf-8") == original_config
     assert env_path.read_text(encoding="utf-8") == original_env
-    assert list((tmp_path / "backups" / "config").glob("config.yaml.pre-docker-migrate.*"))
+    assert list(
+        (tmp_path / "backups" / "config").glob("config.yaml.pre-docker-migrate.*")
+    )
     assert list((tmp_path / "backups" / "config").glob(".env.pre-docker-migrate.*"))
 
 
@@ -184,15 +200,21 @@ def test_docker_config_migrate_restores_backups_when_version_does_not_advance(
     module = _load_script_module()
     config_path = tmp_path / "config.yaml"
     env_path = tmp_path / ".env"
-    original_config = yaml.safe_dump({"_config_version": 12, "gateway": {"provider": "telegram"}})
+    original_config = yaml.safe_dump(
+        {"_config_version": 12, "gateway": {"provider": "telegram"}}
+    )
     original_env = "TELEGRAM_BOT_TOKEN=test-token\n"
     config_path.write_text(original_config, encoding="utf-8")
     env_path.write_text(original_env, encoding="utf-8")
 
     monkeypatch.setattr(
-        module, "read_config_version_stamp",
-        lambda *, raise_on_parse_error=False: (12, DEFAULT_CONFIG["_config_version"]))
-    monkeypatch.setattr(module, "check_config_version", lambda: (12, DEFAULT_CONFIG["_config_version"]))
+        module,
+        "read_config_version_stamp",
+        lambda *, raise_on_parse_error=False: (12, DEFAULT_CONFIG["_config_version"]),
+    )
+    monkeypatch.setattr(
+        module, "check_config_version", lambda: (12, DEFAULT_CONFIG["_config_version"])
+    )
     monkeypatch.setattr(module, "get_config_path", lambda: config_path)
     monkeypatch.setattr(module, "get_env_path", lambda: env_path)
 
@@ -209,7 +231,9 @@ def test_docker_config_migrate_restores_backups_when_version_does_not_advance(
     assert env_path.read_text(encoding="utf-8") == original_env
 
 
-def test_docker_config_migrate_second_boot_preserves_env_byte_for_byte(tmp_path: Path) -> None:
+def test_docker_config_migrate_second_boot_preserves_env_byte_for_byte(
+    tmp_path: Path,
+) -> None:
     """Regression for #51579: booting ``gateway run`` twice (i.e. a host
     reboot under ``--restart unless-stopped``) must not strip or rewrite
     ``$CLAWK_HOME/.env``. The first boot migrates the stale config and bumps
@@ -250,7 +274,9 @@ def test_docker_config_migrate_second_boot_preserves_env_byte_for_byte(tmp_path:
     assert env_path.read_bytes() == env_bytes_before
 
     config_after_first = config_path.read_bytes()
-    first_boot_backups = sorted((tmp_path / "backups" / "config").glob("config.yaml.pre-docker-migrate.*"))
+    first_boot_backups = sorted(
+        (tmp_path / "backups" / "config").glob("config.yaml.pre-docker-migrate.*")
+    )
 
     # ── Second boot (host reboot): version is current, must be a no-op. ──
     second = _run_migration(tmp_path)
@@ -261,4 +287,9 @@ def test_docker_config_migrate_second_boot_preserves_env_byte_for_byte(tmp_path:
     assert env_path.read_bytes() == env_bytes_before
     # config.yaml is untouched by the second boot, and no new backup is made.
     assert config_path.read_bytes() == config_after_first
-    assert sorted((tmp_path / "backups" / "config").glob("config.yaml.pre-docker-migrate.*")) == first_boot_backups
+    assert (
+        sorted(
+            (tmp_path / "backups" / "config").glob("config.yaml.pre-docker-migrate.*")
+        )
+        == first_boot_backups
+    )

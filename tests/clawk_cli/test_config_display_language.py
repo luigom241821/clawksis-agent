@@ -31,13 +31,17 @@ def home(tmp_path, monkeypatch):
 
 
 def _saved_language(home) -> str:
-    return yaml.safe_load((home / "config.yaml").read_text(encoding="utf-8"))["display"]["language"]
+    return yaml.safe_load((home / "config.yaml").read_text(encoding="utf-8"))[
+        "display"
+    ]["language"]
 
 
 def test_bundled_language_and_alias_are_accepted(home, capsys):
     set_config_value("display.language", "de")
     assert _saved_language(home) == "de"
-    set_config_value("display.language", "zh-TW")  # alias of a bundled catalog; stored as typed
+    set_config_value(
+        "display.language", "zh-TW"
+    )  # alias of a bundled catalog; stored as typed
     assert _saved_language(home) == "zh-TW"
     assert i18n.get_language() == "zh-hant"
 
@@ -53,12 +57,26 @@ def test_unknown_language_is_refused_with_the_available_list(home, capsys):
 def test_pack_language_is_accepted_once_the_pack_is_installed(home, capsys):
     plugin = home / "plugins" / "clawk-lang-pl"
     (plugin / "locales").mkdir(parents=True)
-    (plugin / "plugin.yaml").write_text(yaml.safe_dump({
-        "name": "clawk-lang-pl", "version": "1.0.0", "description": "Polish pack", "provides_locales": ["pl"],
-    }), encoding="utf-8")
-    (plugin / "locales" / "pl.yaml").write_text(yaml.safe_dump({"approval": {"denied": "Odrzucono"}}), encoding="utf-8")
-    (home / "config.yaml").write_text(yaml.safe_dump({"display": {"language": "en"},
-                                                     "plugins": {"enabled": ["clawk-lang-pl"]}}), encoding="utf-8")
+    (plugin / "plugin.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "name": "clawk-lang-pl",
+                "version": "1.0.0",
+                "description": "Polish pack",
+                "provides_locales": ["pl"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (plugin / "locales" / "pl.yaml").write_text(
+        yaml.safe_dump({"approval": {"denied": "Odrzucono"}}), encoding="utf-8"
+    )
+    (home / "config.yaml").write_text(
+        yaml.safe_dump(
+            {"display": {"language": "en"}, "plugins": {"enabled": ["clawk-lang-pl"]}}
+        ),
+        encoding="utf-8",
+    )
 
     set_config_value("display.language", "pl")
     assert _saved_language(home) == "pl"

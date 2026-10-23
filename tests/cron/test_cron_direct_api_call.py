@@ -28,8 +28,6 @@ def _make_agent(*, platform="cron"):
     return agent
 
 
-
-
 def test_direct_api_call_keeps_activity_alive_during_slow_wait(monkeypatch):
     """Mid-wait activity heartbeats must tick while the inline request blocks.
 
@@ -61,9 +59,7 @@ def test_direct_api_call_keeps_activity_alive_during_slow_wait(monkeypatch):
     result_box = {}
 
     def _runner():
-        result_box["response"] = direct_api_call(
-            agent, {"model": "m", "messages": []}
-        )
+        result_box["response"] = direct_api_call(agent, {"model": "m", "messages": []})
 
     worker = threading.Thread(target=_runner, daemon=True)
     worker.start()

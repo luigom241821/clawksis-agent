@@ -51,15 +51,25 @@ JWT_BEARER_GRANT = "urn:ietf:params:oauth:grant-type:jwt-bearer"
 GOOGLE_TOKEN_AUDIENCE = "https://oauth2.googleapis.com/token"
 UNAUTHENTICATED_MESSAGE = (
     "Request had invalid authentication credentials. Expected OAuth 2 access token, login cookie or "
-    "other valid authentication credential. See https://developers.google.com/identity/sign-in/web/devconsole-project.")
+    "other valid authentication credential. See https://developers.google.com/identity/sign-in/web/devconsole-project."
+)
 MISSING_SIGNATURE_MESSAGE = (
     "Function call is missing a thought_signature in functionCall parts. This is required for tools to work "
     "correctly, and missing thought_signature may lead to degraded model performance. Additional data, function "
     "call `default_api:{name}` , position {pos}. Please refer to https://ai.google.dev/gemini-api/docs/"
-    "thought-signatures for more details.")
+    "thought-signatures for more details."
+)
 # HTTP status -> google.rpc canonical status name (https://cloud.google.com/apis/design/errors).
-GRPC_STATUS = {400: "INVALID_ARGUMENT", 401: "UNAUTHENTICATED", 403: "PERMISSION_DENIED", 404: "NOT_FOUND",
-               429: "RESOURCE_EXHAUSTED", 500: "INTERNAL", 503: "UNAVAILABLE", 504: "DEADLINE_EXCEEDED"}
+GRPC_STATUS = {
+    400: "INVALID_ARGUMENT",
+    401: "UNAUTHENTICATED",
+    403: "PERMISSION_DENIED",
+    404: "NOT_FOUND",
+    429: "RESOURCE_EXHAUSTED",
+    500: "INTERNAL",
+    503: "UNAVAILABLE",
+    504: "DEADLINE_EXCEEDED",
+}
 _MODEL_RE = re.compile(r"^google/gemini-[0-9a-z.\-]+$")
 # FunctionDeclaration.name: letter/underscore first, then [a-zA-Z0-9_.:-], at most 64 chars.
 _FUNC_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.:\-]{0,63}$")
@@ -77,7 +87,9 @@ class Say:
     prompt_tokens: int | None = None
     completion_tokens: int = 20
     chunk_chars: int = 16
-    expire_tokens_after: bool = False  # the ~1h boundary passes right after this response
+    expire_tokens_after: bool = (
+        False  # the ~1h boundary passes right after this response
+    )
 
 
 @dataclass
@@ -132,29 +144,68 @@ def make_tls_material(root: Path, hosts: list[str]) -> tuple[Path, Path, Path]:
     ca_key = ec.generate_private_key(ec.SECP256R1())
     ca_ski = x509.SubjectKeyIdentifier.from_public_key(ca_key.public_key())
     ca_cert = (
-        x509.CertificateBuilder().subject_name(_name("clawk-e2e fake Google CA")).issuer_name(_name("clawk-e2e fake Google CA"))
-        .public_key(ca_key.public_key()).serial_number(x509.random_serial_number())
-        .not_valid_before(now - _dt.timedelta(minutes=5)).not_valid_after(now + _dt.timedelta(days=1))
+        x509.CertificateBuilder()
+        .subject_name(_name("clawk-e2e fake Google CA"))
+        .issuer_name(_name("clawk-e2e fake Google CA"))
+        .public_key(ca_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - _dt.timedelta(minutes=5))
+        .not_valid_after(now + _dt.timedelta(days=1))
         .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
-        .add_extension(x509.KeyUsage(digital_signature=True, key_cert_sign=True, crl_sign=True, content_commitment=False,
-                                     key_encipherment=False, data_encipherment=False, key_agreement=False,
-                                     encipher_only=False, decipher_only=False), critical=True)
+        .add_extension(
+            x509.KeyUsage(
+                digital_signature=True,
+                key_cert_sign=True,
+                crl_sign=True,
+                content_commitment=False,
+                key_encipherment=False,
+                data_encipherment=False,
+                key_agreement=False,
+                encipher_only=False,
+                decipher_only=False,
+            ),
+            critical=True,
+        )
         .add_extension(ca_ski, critical=False)
-        .sign(ca_key, hashes.SHA256()))
+        .sign(ca_key, hashes.SHA256())
+    )
     leaf_key = ec.generate_private_key(ec.SECP256R1())
     leaf_cert = (
-        x509.CertificateBuilder().subject_name(_name(hosts[0])).issuer_name(ca_cert.subject)
-        .public_key(leaf_key.public_key()).serial_number(x509.random_serial_number())
-        .not_valid_before(now - _dt.timedelta(minutes=5)).not_valid_after(now + _dt.timedelta(days=1))
-        .add_extension(x509.SubjectAlternativeName([x509.DNSName(h) for h in hosts]), critical=False)
+        x509.CertificateBuilder()
+        .subject_name(_name(hosts[0]))
+        .issuer_name(ca_cert.subject)
+        .public_key(leaf_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - _dt.timedelta(minutes=5))
+        .not_valid_after(now + _dt.timedelta(days=1))
+        .add_extension(
+            x509.SubjectAlternativeName([x509.DNSName(h) for h in hosts]),
+            critical=False,
+        )
         .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
-        .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
-        .add_extension(x509.AuthorityKeyIdentifier.from_issuer_subject_key_identifier(ca_ski), critical=False)
-        .sign(ca_key, hashes.SHA256()))
-    ca_pem = _write_pem(root / "fake-google-ca.pem", ca_cert.public_bytes(serialization.Encoding.PEM))
-    cert_pem = _write_pem(root / "leaf.pem", leaf_cert.public_bytes(serialization.Encoding.PEM))
-    key_pem = _write_pem(root / "leaf.key", leaf_key.private_bytes(
-        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()))
+        .add_extension(
+            x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False
+        )
+        .add_extension(
+            x509.AuthorityKeyIdentifier.from_issuer_subject_key_identifier(ca_ski),
+            critical=False,
+        )
+        .sign(ca_key, hashes.SHA256())
+    )
+    ca_pem = _write_pem(
+        root / "fake-google-ca.pem", ca_cert.public_bytes(serialization.Encoding.PEM)
+    )
+    cert_pem = _write_pem(
+        root / "leaf.pem", leaf_cert.public_bytes(serialization.Encoding.PEM)
+    )
+    key_pem = _write_pem(
+        root / "leaf.key",
+        leaf_key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        ),
+    )
     return ca_pem, cert_pem, key_pem
 
 
@@ -173,11 +224,18 @@ def make_service_account(path: Path, token_uri: str, project_id: str) -> Service
     email = f"clawk-e2e@{project_id}.iam.gserviceaccount.com"
     kid = secrets.token_hex(20)
     info = {
-        "type": "service_account", "project_id": project_id, "private_key_id": kid,
-        "private_key": key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
-                                         serialization.NoEncryption()).decode(),
-        "client_email": email, "client_id": str(secrets.randbelow(10**20)),
-        "auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": token_uri,
+        "type": "service_account",
+        "project_id": project_id,
+        "private_key_id": kid,
+        "private_key": key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        ).decode(),
+        "client_email": email,
+        "client_id": str(secrets.randbelow(10**20)),
+        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+        "token_uri": token_uri,
         "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
         "universe_domain": "googleapis.com",
     }
@@ -190,12 +248,22 @@ def _b64url_decode(part: str) -> bytes:
     return base64.urlsafe_b64decode(part + "=" * (-len(part) % 4))
 
 
-def verify_jwt_assertion(assertion: str, sa: ServiceAccount) -> tuple[dict[str, Any] | None, str]:
+def verify_jwt_assertion(
+    assertion: str, sa: ServiceAccount
+) -> tuple[dict[str, Any] | None, str]:
     """RS256 signature + the claims Google's token endpoint enforces; (claims, "") or (None, reason)."""
     try:
         head_b64, body_b64, sig_b64 = assertion.split(".")
-        header, claims = json.loads(_b64url_decode(head_b64)), json.loads(_b64url_decode(body_b64))
-        sa.public_key.verify(_b64url_decode(sig_b64), f"{head_b64}.{body_b64}".encode(), padding.PKCS1v15(), hashes.SHA256())
+        header, claims = (
+            json.loads(_b64url_decode(head_b64)),
+            json.loads(_b64url_decode(body_b64)),
+        )
+        sa.public_key.verify(
+            _b64url_decode(sig_b64),
+            f"{head_b64}.{body_b64}".encode(),
+            padding.PKCS1v15(),
+            hashes.SHA256(),
+        )
     except Exception as exc:
         return None, f"Invalid JWT Signature. ({type(exc).__name__})"
     now = time.time()
@@ -206,7 +274,8 @@ def verify_jwt_assertion(assertion: str, sa: ServiceAccount) -> tuple[dict[str, 
         "aud": claims.get("aud") != GOOGLE_TOKEN_AUDIENCE,
         "scope": CLOUD_PLATFORM_SCOPE not in str(claims.get("scope", "")).split(),
         "iat": not isinstance(claims.get("iat"), int) or abs(claims["iat"] - now) > 300,
-        "exp": not isinstance(claims.get("exp"), int) or not 0 < claims["exp"] - claims.get("iat", 0) <= 3600,
+        "exp": not isinstance(claims.get("exp"), int)
+        or not 0 < claims["exp"] - claims.get("iat", 0) <= 3600,
     }
     bad = sorted(k for k, v in problems.items() if v)
     return (None, f"Invalid JWT: bad claims {bad}") if bad else (claims, "")
@@ -222,8 +291,14 @@ def _first_signature(tool_call: dict[str, Any]) -> Any:
 
 
 def _check_tool_call_shape(tc: Any) -> str | None:
-    if not isinstance(tc, dict) or tc.get("type", "function") != "function" or not isinstance(tc.get("function"), dict):
-        return "Invalid value at 'messages[].tool_calls[]': expected a function tool call"
+    if (
+        not isinstance(tc, dict)
+        or tc.get("type", "function") != "function"
+        or not isinstance(tc.get("function"), dict)
+    ):
+        return (
+            "Invalid value at 'messages[].tool_calls[]': expected a function tool call"
+        )
     fn = tc["function"]
     if not isinstance(tc.get("id"), str) or not tc["id"]:
         return "tool_calls[].id must be a non-empty string"
@@ -231,7 +306,11 @@ def _check_tool_call_shape(tc: Any) -> str | None:
         args = json.loads(fn.get("arguments") or "{}")
     except (TypeError, json.JSONDecodeError):
         return f"Invalid JSON payload in function call arguments for `{fn.get('name')}`"
-    return None if isinstance(args, dict) else "function call arguments must be a JSON object (google.protobuf.Struct)"
+    return (
+        None
+        if isinstance(args, dict)
+        else "function call arguments must be a JSON object (google.protobuf.Struct)"
+    )
 
 
 def _check_pairing(messages: list[dict[str, Any]]) -> str | None:
@@ -240,8 +319,10 @@ def _check_pairing(messages: list[dict[str, Any]]) -> str | None:
     while i < len(messages):
         msg = messages[i]
         if msg.get("role") == "tool":
-            return ("Please ensure that function response turn comes immediately after a function call turn. "
-                    f"(orphan tool message at index {i}, tool_call_id={msg.get('tool_call_id')!r})")
+            return (
+                "Please ensure that function response turn comes immediately after a function call turn. "
+                f"(orphan tool message at index {i}, tool_call_id={msg.get('tool_call_id')!r})"
+            )
         calls = msg.get("tool_calls") if msg.get("role") == "assistant" else None
         if not calls:
             i += 1
@@ -253,8 +334,10 @@ def _check_pairing(messages: list[dict[str, Any]]) -> str | None:
             answered.append(messages[j].get("tool_call_id"))
             j += 1
         if sorted(map(str, answered)) != sorted(map(str, expected)):
-            return ("Please ensure that the number of function response parts is equal to the number of function "
-                    f"call parts of the function call turn. (calls {expected} at index {i}, responses {answered})")
+            return (
+                "Please ensure that the number of function response parts is equal to the number of function "
+                f"call parts of the function call turn. (calls {expected} at index {i}, responses {answered})"
+            )
         i = j
     return None
 
@@ -262,7 +345,9 @@ def _check_pairing(messages: list[dict[str, Any]]) -> str | None:
 def _check_signatures(messages: list[dict[str, Any]], issued: set[str]) -> str | None:
     """Gemini 3: the first call of every step in the current turn carries a signature we issued;
     any replayed signature (current or historical) must be byte-identical to one we issued."""
-    last_user = max((i for i, m in enumerate(messages) if m.get("role") == "user"), default=-1)
+    last_user = max(
+        (i for i, m in enumerate(messages) if m.get("role") == "user"), default=-1
+    )
     step = 0
     for i, msg in enumerate(messages):
         calls = msg.get("tool_calls") if msg.get("role") == "assistant" else None
@@ -273,7 +358,9 @@ def _check_signatures(messages: list[dict[str, Any]], issued: set[str]) -> str |
             if sig is not None and sig not in issued:
                 return "Corrupted thought signature."
             if i > last_user and pos == 0 and sig is None:
-                return MISSING_SIGNATURE_MESSAGE.format(name=tc.get("function", {}).get("name"), pos=step + 1)
+                return MISSING_SIGNATURE_MESSAGE.format(
+                    name=tc.get("function", {}).get("name"), pos=step + 1
+                )
         step += 1
     return None
 
@@ -285,9 +372,13 @@ def _merged_anyof_error(node: Any, where: str) -> str | None:
         branches = node.get("anyOf")
         if isinstance(branches, list) and len(branches) > 1:
             types = {b.get("type") for b in branches if isinstance(b, dict)}
-            if len(types) > 1 and any(isinstance(b, dict) and "items" in b for b in branches):
-                return (f"functionDeclaration `{where}` schema specified incorrect schema type field. "
-                        "For schema with items, schema type should be ARRAY.")
+            if len(types) > 1 and any(
+                isinstance(b, dict) and "items" in b for b in branches
+            ):
+                return (
+                    f"functionDeclaration `{where}` schema specified incorrect schema type field. "
+                    "For schema with items, schema type should be ARRAY."
+                )
         for key, child in node.items():
             found = _merged_anyof_error(child, f"{where}.{key}")
             if found:
@@ -307,7 +398,11 @@ def _check_tools(tools: Any) -> str | None:
         return "Invalid value at 'tools': expected a list"
     seen: set[str] = set()
     for tool in tools:
-        fn = tool.get("function") if isinstance(tool, dict) and tool.get("type") == "function" else None
+        fn = (
+            tool.get("function")
+            if isinstance(tool, dict) and tool.get("type") == "function"
+            else None
+        )
         if not isinstance(fn, dict):
             return "Invalid value at 'tools[]': only function tools are supported"
         name = str(fn.get("name", ""))
@@ -317,7 +412,9 @@ def _check_tools(tools: Any) -> str | None:
             return f"Duplicate function declaration found: {name}"
         seen.add(name)
         params = fn.get("parameters")
-        if params is not None and (not isinstance(params, dict) or params.get("type", "object") != "object"):
+        if params is not None and (
+            not isinstance(params, dict) or params.get("type", "object") != "object"
+        ):
             return f"functionDeclaration `{name}` parameters must be an OBJECT schema"
         found = _merged_anyof_error(params, f"{name}.parameters")
         if found:
@@ -341,7 +438,11 @@ def validate_chat_body(body: dict[str, Any], issued_signatures: set[str]) -> str
             bad = _check_tool_call_shape(tc)
             if bad:
                 return f"messages[{idx}]: {bad}"
-    return _check_tools(body.get("tools")) or _check_pairing(messages) or _check_signatures(messages, issued_signatures)
+    return (
+        _check_tools(body.get("tools"))
+        or _check_pairing(messages)
+        or _check_signatures(messages, issued_signatures)
+    )
 
 
 # Server ----------------------------------------------------------------------------------------------
@@ -356,21 +457,40 @@ class _Token:
 @dataclass
 class TokenPolicy:
     expires_in: int = 3600
-    error: tuple[int, str, str] | None = None  # (status, error, error_description) for every exchange
-    reject_bearers: bool = False  # Vertex refuses every bearer (disabled SA / revoked grant)
+    error: tuple[int, str, str] | None = (
+        None  # (status, error, error_description) for every exchange
+    )
+    reject_bearers: bool = (
+        False  # Vertex refuses every bearer (disabled SA / revoked grant)
+    )
 
 
 class FakeVertex:
     """OAuth token endpoint + TLS-terminating CONNECT proxy serving Vertex. Context manager."""
 
-    def __init__(self, root: Path, *, project: str, region: str, sa_project: str | None = None,
-                 script: list[Response] | Responder | None = None, aux: Responder | None = None,
-                 default_text: str = "ok", prompt_tokens_fn: Callable[[dict[str, Any]], int] | None = None) -> None:
+    def __init__(
+        self,
+        root: Path,
+        *,
+        project: str,
+        region: str,
+        sa_project: str | None = None,
+        script: list[Response] | Responder | None = None,
+        aux: Responder | None = None,
+        default_text: str = "ok",
+        prompt_tokens_fn: Callable[[dict[str, Any]], int] | None = None,
+    ) -> None:
         self.root, self.project, self.region = root, project, region
-        self.host = "aiplatform.googleapis.com" if region == "global" else f"{region}-aiplatform.googleapis.com"
+        self.host = (
+            "aiplatform.googleapis.com"
+            if region == "global"
+            else f"{region}-aiplatform.googleapis.com"
+        )
         self._script: list[Response] = list(script) if isinstance(script, list) else []
         self._responder = script if callable(script) else None
-        self._aux = aux or (lambda _rec: Say("Summary of the earlier conversation (fake)."))
+        self._aux = aux or (
+            lambda _rec: Say("Summary of the earlier conversation (fake).")
+        )
         self.default_text = default_text
         self.prompt_tokens_fn = prompt_tokens_fn
         self.token_policy = TokenPolicy()
@@ -403,8 +523,12 @@ class FakeVertex:
         self.ca_pem, cert, key = make_tls_material(self.root / "tls", [self.host])
         self._tls = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
         self._tls.load_cert_chain(cert, key)
-        self.sa = make_service_account(self.root / "sa.json", self.token_uri, self._sa_project)
-        threading.Thread(target=server.serve_forever, name="fake-vertex", daemon=True).start()
+        self.sa = make_service_account(
+            self.root / "sa.json", self.token_uri, self._sa_project
+        )
+        threading.Thread(
+            target=server.serve_forever, name="fake-vertex", daemon=True
+        ).start()
 
     def stop(self) -> None:
         if self._server is not None:
@@ -426,8 +550,11 @@ class FakeVertex:
 
     def child_env(self) -> dict[str, str]:
         """Standard proxy + CA-trust env for the Clawksis child (no Clawksis-specific knobs)."""
-        return {"HTTPS_PROXY": f"http://127.0.0.1:{self.port}", "NO_PROXY": "127.0.0.1,localhost",
-                "SSL_CERT_FILE": str(self.ca_pem)}
+        return {
+            "HTTPS_PROXY": f"http://127.0.0.1:{self.port}",
+            "NO_PROXY": "127.0.0.1,localhost",
+            "SSL_CERT_FILE": str(self.ca_pem),
+        }
 
     # scripting
     def push(self, *responses: Response) -> None:
@@ -466,7 +593,10 @@ class FakeVertex:
         policy = self.token_policy
         if form.get("grant_type") != JWT_BEARER_GRANT:
             rec["error"] = "unsupported_grant_type"
-            return 400, {"error": "unsupported_grant_type", "error_description": "Invalid grant_type"}
+            return 400, {
+                "error": "unsupported_grant_type",
+                "error_description": "Invalid grant_type",
+            }
         assert self.sa is not None
         claims, why = verify_jwt_assertion(form.get("assertion", ""), self.sa)
         rec["claims"] = claims
@@ -475,12 +605,19 @@ class FakeVertex:
             return 400, {"error": "invalid_grant", "error_description": why}
         if policy.error:
             rec["error"] = policy.error[1]
-            return policy.error[0], {"error": policy.error[1], "error_description": policy.error[2]}
+            return policy.error[0], {
+                "error": policy.error[1],
+                "error_description": policy.error[2],
+            }
         value = f"ya29.fake-{secrets.token_urlsafe(24)}"
         with self._lock:
             self._tokens[value] = _Token(value, time.time() + policy.expires_in)
         rec["access_token"] = value
-        return 200, {"access_token": value, "expires_in": policy.expires_in, "token_type": "Bearer"}
+        return 200, {
+            "access_token": value,
+            "expires_in": policy.expires_in,
+            "token_type": "Bearer",
+        }
 
     def _auth_ok(self, header: str) -> bool:
         if self.token_policy.reject_bearers:
@@ -492,18 +629,36 @@ class FakeVertex:
     def next_ids(self) -> tuple[str, str]:
         with self._lock:
             self._seq += 1
-            sig = base64.b64encode(f"sig-{self._seq}-".encode() + secrets.token_bytes(24)).decode()
+            sig = base64.b64encode(
+                f"sig-{self._seq}-".encode() + secrets.token_bytes(24)
+            ).decode()
             return f"function-call-{self._seq}{secrets.randbelow(10**6):06d}", sig
 
 
 def _vertex_error(status: int, message: str, list_body: bool = True) -> bytes:
-    err = {"error": {"code": status, "message": message, "status": GRPC_STATUS.get(status, "UNKNOWN")}}
+    err = {
+        "error": {
+            "code": status,
+            "message": message,
+            "status": GRPC_STATUS.get(status, "UNKNOWN"),
+        }
+    }
     return json.dumps([err] if list_body else err).encode()
 
 
-def _chunk(model: str, delta: dict[str, Any], finish: str | None = None, usage: dict | None = None) -> dict[str, Any]:
-    out: dict[str, Any] = {"id": "vertex-fake", "object": "chat.completion.chunk", "created": int(time.time()),
-                           "model": model, "choices": [{"index": 0, "delta": delta, "finish_reason": finish}]}
+def _chunk(
+    model: str,
+    delta: dict[str, Any],
+    finish: str | None = None,
+    usage: dict | None = None,
+) -> dict[str, Any]:
+    out: dict[str, Any] = {
+        "id": "vertex-fake",
+        "object": "chat.completion.chunk",
+        "created": int(time.time()),
+        "model": model,
+        "choices": [{"index": 0, "delta": delta, "finish_reason": finish}],
+    }
     if usage is not None:
         out["usage"] = usage
     return out
@@ -517,7 +672,9 @@ def _handler_for(fake: FakeVertex) -> type[BaseHTTPRequestHandler]:
         def log_message(self, format: str, *args: Any) -> None:
             pass
 
-        def _send(self, status: int, body: bytes, headers: dict[str, str] | None = None) -> None:
+        def _send(
+            self, status: int, body: bytes, headers: dict[str, str] | None = None
+        ) -> None:
             self.send_response(status)
             self.send_header("Content-Type", "application/json; charset=UTF-8")
             self.send_header("Content-Length", str(len(body)))
@@ -532,7 +689,9 @@ def _handler_for(fake: FakeVertex) -> type[BaseHTTPRequestHandler]:
             host, _, port = self.path.partition(":")
             allowed = host == fake.host and port == "443"
             with fake._lock:
-                fake.connects.append({"target": self.path, "allowed": allowed, "t": time.time()})
+                fake.connects.append(
+                    {"target": self.path, "allowed": allowed, "t": time.time()}
+                )
             if not allowed:
                 self._send(403, b'{"error": "fake proxy: host not allowed"}')
                 self.close_connection = True
@@ -566,19 +725,30 @@ def _handler_for(fake: FakeVertex) -> type[BaseHTTPRequestHandler]:
             self._vertex(raw)
 
         def do_GET(self) -> None:
-            self._send(404, _vertex_error(404, f"The requested URL {self.path} was not found on this server."))
+            self._send(
+                404,
+                _vertex_error(
+                    404, f"The requested URL {self.path} was not found on this server."
+                ),
+            )
 
         def _vertex(self, raw: bytes) -> None:
             record: dict[str, Any] = {
-                "host": self.tunnel_host, "path": self.path, "auth": self.headers.get("Authorization", ""),
-                "headers": {k.lower(): v for k, v in self.headers.items()}, "t": time.time(), "rejected": None,
+                "host": self.tunnel_host,
+                "path": self.path,
+                "auth": self.headers.get("Authorization", ""),
+                "headers": {k.lower(): v for k, v in self.headers.items()},
+                "t": time.time(),
+                "rejected": None,
             }
             try:
                 body = json.loads(raw or b"{}")
             except json.JSONDecodeError:
                 body = None
             record["body"] = body
-            record["kind"] = "main" if isinstance(body, dict) and body.get("tools") else "aux"
+            record["kind"] = (
+                "main" if isinstance(body, dict) and body.get("tools") else "aux"
+            )
             with fake._lock:
                 fake.requests.append(record)
             problem = self._precheck(record)
@@ -586,7 +756,11 @@ def _handler_for(fake: FakeVertex) -> type[BaseHTTPRequestHandler]:
                 record["rejected"], record["status"] = problem[1], problem[0]
                 self._send(problem[0], _vertex_error(problem[0], problem[1]))
                 return
-            resp = fake._next_main(record) if record["kind"] == "main" else fake._aux(record)
+            resp = (
+                fake._next_main(record)
+                if record["kind"] == "main"
+                else fake._aux(record)
+            )
             record["response"] = type(resp).__name__
             self._respond(resp, record)
             if getattr(resp, "expire_tokens_after", False):
@@ -594,7 +768,10 @@ def _handler_for(fake: FakeVertex) -> type[BaseHTTPRequestHandler]:
 
         def _precheck(self, record: dict[str, Any]) -> tuple[int, str] | None:
             if record["host"] != fake.host or record["path"] != fake.chat_path:
-                return 404, f"Resource not found: {record['host']}{record['path']} (expected {fake.host}{fake.chat_path})"
+                return (
+                    404,
+                    f"Resource not found: {record['host']}{record['path']} (expected {fake.host}{fake.chat_path})",
+                )
             if not fake._auth_ok(record["auth"]):
                 return 401, UNAUTHENTICATED_MESSAGE
             if not isinstance(record["body"], dict):
@@ -608,28 +785,69 @@ def _handler_for(fake: FakeVertex) -> type[BaseHTTPRequestHandler]:
             model = body.get("model", "google/gemini")
             if isinstance(resp, Fail):
                 record["status"] = resp.status
-                headers = {"Retry-After": str(resp.retry_after)} if resp.retry_after is not None else {}
-                self._send(resp.status, _vertex_error(resp.status, resp.message, resp.list_body), headers)
+                headers = (
+                    {"Retry-After": str(resp.retry_after)}
+                    if resp.retry_after is not None
+                    else {}
+                )
+                self._send(
+                    resp.status,
+                    _vertex_error(resp.status, resp.message, resp.list_body),
+                    headers,
+                )
                 return
             record["status"] = 200
             if isinstance(resp, Drop):
                 self._start_sse()
-                self._sse(_chunk(model, {"role": "assistant", "content": resp.text[: resp.after_chars]}))
+                self._sse(
+                    _chunk(
+                        model,
+                        {"role": "assistant", "content": resp.text[: resp.after_chars]},
+                    )
+                )
                 self.connection.close()  # no terminal chunk: the chunked body is left incomplete
                 self.close_connection = True
                 return
-            pt = resp.prompt_tokens if resp.prompt_tokens is not None else (
-                fake.prompt_tokens_fn(body) if fake.prompt_tokens_fn else 120)
+            pt = (
+                resp.prompt_tokens
+                if resp.prompt_tokens is not None
+                else (fake.prompt_tokens_fn(body) if fake.prompt_tokens_fn else 120)
+            )
             deltas, finish = self._deltas(resp, record)
-            usage = {"prompt_tokens": pt, "completion_tokens": 20, "total_tokens": pt + 20}
+            usage = {
+                "prompt_tokens": pt,
+                "completion_tokens": 20,
+                "total_tokens": pt + 20,
+            }
             if not body.get("stream"):
-                message: dict[str, Any] = {"role": "assistant", "content": "".join(d.get("content", "") for d in deltas) or None}
+                message: dict[str, Any] = {
+                    "role": "assistant",
+                    "content": "".join(d.get("content", "") for d in deltas) or None,
+                }
                 calls = [tc for d in deltas for tc in d.get("tool_calls", [])]
                 if calls:
-                    message["tool_calls"] = [{k: v for k, v in tc.items() if k != "index"} for tc in calls]
-                self._send(200, json.dumps({"id": "vertex-fake", "object": "chat.completion", "created": int(time.time()),
-                                            "model": model, "usage": usage,
-                                            "choices": [{"index": 0, "message": message, "finish_reason": finish}]}).encode())
+                    message["tool_calls"] = [
+                        {k: v for k, v in tc.items() if k != "index"} for tc in calls
+                    ]
+                self._send(
+                    200,
+                    json.dumps(
+                        {
+                            "id": "vertex-fake",
+                            "object": "chat.completion",
+                            "created": int(time.time()),
+                            "model": model,
+                            "usage": usage,
+                            "choices": [
+                                {
+                                    "index": 0,
+                                    "message": message,
+                                    "finish_reason": finish,
+                                }
+                            ],
+                        }
+                    ).encode(),
+                )
                 return
             self._start_sse()
             for delta in deltas:
@@ -639,15 +857,24 @@ def _handler_for(fake: FakeVertex) -> type[BaseHTTPRequestHandler]:
             self._write_chunk(b"")
             self.close_connection = True
 
-        def _deltas(self, resp: Say | Call, record: dict[str, Any]) -> tuple[list[dict[str, Any]], str]:
+        def _deltas(
+            self, resp: Say | Call, record: dict[str, Any]
+        ) -> tuple[list[dict[str, Any]], str]:
             if isinstance(resp, Say):
                 size = max(1, resp.chunk_chars)
-                return [{"content": resp.text[i:i + size]} for i in range(0, len(resp.text), size)] or [{"content": ""}], "stop"
+                return [
+                    {"content": resp.text[i : i + size]}
+                    for i in range(0, len(resp.text), size)
+                ] or [{"content": ""}], "stop"
             tool_calls = []
             for pos, (name, args) in enumerate(resp.calls):
                 call_id, sig = fake.next_ids()
-                tc: dict[str, Any] = {"index": pos, "id": call_id, "type": "function",
-                                      "function": {"name": name, "arguments": json.dumps(args)}}
+                tc: dict[str, Any] = {
+                    "index": pos,
+                    "id": call_id,
+                    "type": "function",
+                    "function": {"name": name, "arguments": json.dumps(args)},
+                }
                 if resp.signed and pos == 0:
                     tc["extra_content"] = {"google": {"thought_signature": sig}}
                     with fake._lock:
@@ -655,7 +882,9 @@ def _handler_for(fake: FakeVertex) -> type[BaseHTTPRequestHandler]:
                 tool_calls.append(tc)
             record["tool_calls"] = tool_calls
             with fake._lock:
-                fake.signature_by_call.update({tc["id"]: _first_signature(tc) for tc in tool_calls})
+                fake.signature_by_call.update(
+                    {tc["id"]: _first_signature(tc) for tc in tool_calls}
+                )
             deltas: list[dict[str, Any]] = [{"content": resp.text}] if resp.text else []
             deltas.append({"tool_calls": tool_calls})
             return deltas, "tool_calls"
@@ -679,27 +908,45 @@ def _handler_for(fake: FakeVertex) -> type[BaseHTTPRequestHandler]:
 
 MODEL = "google/gemini-3-flash-preview"
 PROJECT = "clawk-e2e-proj"
-SA_EMBEDDED_PROJECT = "clawk-sa-embedded-proj"  # differs from PROJECT: proves the config override wins
+SA_EMBEDDED_PROJECT = (
+    "clawk-sa-embedded-proj"  # differs from PROJECT: proves the config override wins
+)
 REGION = "us-central1"
 
 
-def clawk_setup(fake: FakeVertex, *, model: str = MODEL, extra_config: dict[str, Any] | None = None,
-                 context_length: int | None = None) -> dict[str, Any]:
+def clawk_setup(
+    fake: FakeVertex,
+    *,
+    model: str = MODEL,
+    extra_config: dict[str, Any] | None = None,
+    context_length: int | None = None,
+) -> dict[str, Any]:
     """``make_home`` kwargs for a Clawksis home that selects ``provider: vertex`` against ``fake``: the SA
     key path in ``.env`` (VERTEX_CREDENTIALS_PATH) and project/region under ``vertex:`` in config.yaml."""
     assert fake.sa is not None
     block: dict[str, Any] = {"provider": "vertex", "default": model}
     if context_length:
         block["context_length"] = context_length
-    cfg: dict[str, Any] = {"vertex": {"project_id": fake.project, "region": fake.region}}
+    cfg: dict[str, Any] = {
+        "vertex": {"project_id": fake.project, "region": fake.region}
+    }
     cfg.update(extra_config or {})
-    return {"model": block, "env_file": {"VERTEX_CREDENTIALS_PATH": str(fake.sa.path)}, "extra_config": cfg}
+    return {
+        "model": block,
+        "env_file": {"VERTEX_CREDENTIALS_PATH": str(fake.sa.path)},
+        "extra_config": cfg,
+    }
 
 
 def signatures_on_wire(body: dict[str, Any]) -> list[str]:
     """Every thought signature replayed in a request's assistant tool calls, in order."""
-    return [sig for m in body.get("messages", []) if m.get("role") == "assistant"
-            for tc in m.get("tool_calls") or [] if (sig := _first_signature(tc))]
+    return [
+        sig
+        for m in body.get("messages", [])
+        if m.get("role") == "assistant"
+        for tc in m.get("tool_calls") or []
+        if (sig := _first_signature(tc))
+    ]
 
 
 __all__ = [

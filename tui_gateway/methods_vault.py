@@ -51,7 +51,10 @@ def _(rid, params: dict) -> dict:
         for backend in enabled_backends():
             if backend.needs_unlock and not backend.is_unlocked():
                 continue
-            items.extend({**meta.to_dict(), "backend": backend.name} for meta in backend.list_items())
+            items.extend(
+                {**meta.to_dict(), "backend": backend.name}
+                for meta in backend.list_items()
+            )
         return _ok(rid, {"items": items})
     except Exception as e:
         return _err(rid, 5095, str(e))
@@ -65,13 +68,28 @@ def _(rid, params: dict) -> dict:
     from agent.vault_backends.base import external_backend_classes, is_installed
 
     enabled = {b.name: b for b in enabled_backends()}
-    rows = [{"name": "local", "display_name": "Clawksis vault", "enabled": True, "needs_unlock": False,
-             "unlocked": True, "installed": True}]
+    rows = [
+        {
+            "name": "local",
+            "display_name": "Clawksis vault",
+            "enabled": True,
+            "needs_unlock": False,
+            "unlocked": True,
+            "installed": True,
+        }
+    ]
     for cls in external_backend_classes():
         live = enabled.get(cls.name)
-        rows.append({"name": cls.name, "display_name": cls.display_name, "enabled": live is not None,
-                     "needs_unlock": True, "unlocked": bool(live and live.is_unlocked()),
-                     "installed": is_installed(cls.name)})
+        rows.append(
+            {
+                "name": cls.name,
+                "display_name": cls.display_name,
+                "enabled": live is not None,
+                "needs_unlock": True,
+                "unlocked": bool(live and live.is_unlocked()),
+                "installed": is_installed(cls.name),
+            }
+        )
     return _ok(rid, {"sources": rows})
 
 
@@ -90,7 +108,9 @@ def _(rid, params: dict) -> dict:
     cfg = load_config()
     section = _ensure_dict(_ensure_dict(cfg, "vault"), name)
     if enabled:
-        section.pop("enabled", None)  # detected managers are on by default; this removes the opt-out
+        section.pop(
+            "enabled", None
+        )  # detected managers are on by default; this removes the opt-out
     else:
         section["enabled"] = False
     if not enabled:
@@ -107,7 +127,9 @@ def _(rid, params: dict) -> dict:
 
     name = str(params.get("name") or "")
     password = str(params.get("password") or "")
-    backend = next((b for b in enabled_backends() if b.name == name and b.needs_unlock), None)
+    backend = next(
+        (b for b in enabled_backends() if b.name == name and b.needs_unlock), None
+    )
     if backend is None:
         return _err(rid, 5095, f"{name} is not an enabled password manager")
     if not password:

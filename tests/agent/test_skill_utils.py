@@ -1,6 +1,5 @@
 """Tests for agent/skill_utils.py."""
 
-
 import pytest
 
 from agent.skill_utils import (
@@ -14,16 +13,6 @@ from agent.skill_utils import (
     resolve_skill_config_values,
     skill_matches_platform,
 )
-
-
-
-
-
-
-
-
-
-
 
 
 def test_skill_config_helpers_share_raw_config_parse_cache(tmp_path, monkeypatch):
@@ -63,9 +52,9 @@ skills:
 
     assert get_disabled_skill_names() == {"hidden-skill"}
     assert get_external_skills_dirs() == [external.resolve()]
-    assert resolve_skill_config_values([
-        {"key": "wiki.path", "description": "Wiki path"}
-    ])["wiki.path"].endswith("/wiki")
+    assert resolve_skill_config_values(
+        [{"key": "wiki.path", "description": "Wiki path"}]
+    )["wiki.path"].endswith("/wiki")
     assert parse_count == 1
 
 
@@ -261,7 +250,7 @@ class TestDisabledSkillsJsonArrayString:
         clawk_home = tmp_path / ".clawk"
         clawk_home.mkdir()
         (clawk_home / "config.yaml").write_text(
-            "skills:\n  disabled: '[\"skill-a\",\"skill-b\"]'\n",
+            'skills:\n  disabled: \'["skill-a","skill-b"]\'\n',
             encoding="utf-8",
         )
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
@@ -270,7 +259,6 @@ class TestDisabledSkillsJsonArrayString:
         getattr(skill_utils, "_raw_config_cache_clear", lambda: None)()
 
         assert get_disabled_skill_names() == {"skill-a", "skill-b"}
-
 
 
 def test_skill_config_home_vars_use_subprocess_home(tmp_path, monkeypatch):
@@ -290,13 +278,15 @@ def test_skill_config_home_vars_use_subprocess_home(tmp_path, monkeypatch):
     monkeypatch.setenv("LEAF", "leaf")
     getattr(skill_utils, "_raw_config_cache_clear", lambda: None)()
 
-    resolved = resolve_skill_config_values([
-        {"key": "wiki.home_var", "default": "$HOME/wiki"},
-        {"key": "wiki.braced_home", "default": "${HOME}/notes"},
-        {"key": "wiki.tilde", "default": "~/scratch"},
-        {"key": "wiki.other_var", "default": "${PROJECT_ROOT}/cache"},
-        {"key": "wiki.tilde_var", "default": "~/$LEAF"},
-    ])
+    resolved = resolve_skill_config_values(
+        [
+            {"key": "wiki.home_var", "default": "$HOME/wiki"},
+            {"key": "wiki.braced_home", "default": "${HOME}/notes"},
+            {"key": "wiki.tilde", "default": "~/scratch"},
+            {"key": "wiki.other_var", "default": "${PROJECT_ROOT}/cache"},
+            {"key": "wiki.tilde_var", "default": "~/$LEAF"},
+        ]
+    )
 
     assert resolved["wiki.home_var"] == str(subprocess_home / "wiki")
     assert resolved["wiki.braced_home"] == str(subprocess_home / "notes")
@@ -320,7 +310,9 @@ def test_iter_skill_index_files_prunes_skill_support_dirs(tmp_path):
 
     script_package = real / "scripts" / "helper-skill"
     script_package.mkdir(parents=True)
-    (script_package / "SKILL.md").write_text("---\nname: helper\n---\n", encoding="utf-8")
+    (script_package / "SKILL.md").write_text(
+        "---\nname: helper\n---\n", encoding="utf-8"
+    )
 
     found = list(iter_skill_index_files(tmp_path, "SKILL.md"))
     desc_found = list(iter_skill_index_files(tmp_path, "DESCRIPTION.md"))
@@ -371,9 +363,6 @@ def test_skill_support_path_uses_explicit_discovery_root_not_cwd(tmp_path, monke
 # ── skill_matches_platform on Termux ──────────────────────────────────────
 
 
-
-
-
 class TestNormalizeSkillLookupName:
     def test_relative_path_unchanged(self, tmp_path, monkeypatch):
         from agent.skill_utils import normalize_skill_lookup_name
@@ -381,8 +370,9 @@ class TestNormalizeSkillLookupName:
         # Relative identifiers early-return before any root lookup.
         assert normalize_skill_lookup_name("foo/bar") == "foo/bar"
 
-
-    def test_absolute_via_symlink_uses_lexical_relative_path(self, tmp_path, monkeypatch):
+    def test_absolute_via_symlink_uses_lexical_relative_path(
+        self, tmp_path, monkeypatch
+    ):
         from agent.skill_utils import normalize_skill_lookup_name
 
         skills_dir = tmp_path / "skills"
@@ -396,7 +386,6 @@ class TestNormalizeSkillLookupName:
             pytest.skip("Symlinks not supported")
         monkeypatch.setattr("tools.skills_tool.SKILLS_DIR", skills_dir)
         assert normalize_skill_lookup_name(str(link)) == "my-skill"
-
 
 
 # ── parse_frontmatter: UTF-8 BOM tolerance ─────────────────────────────────
@@ -436,9 +425,6 @@ class TestParseFrontmatterBOM:
         assert bom_fm["name"] == "my-skill"
         assert bom_fm["description"] == "Does a thing."
 
-
-
-
     def test_bom_platform_gating_regression(self):
         # The concrete harm: a macOS-only skill must be gated identically
         # whether or not the file carries a BOM. Empty frontmatter (the bug)
@@ -455,15 +441,12 @@ class TestParseFrontmatterBOM:
         assert skill_matches_platform(bom_fm) is expected
 
 
-
-
 class TestBOMToleranceSiblingSites:
     """The BOM fix must cover every independent frontmatter parser, not just
     the canonical ``parse_frontmatter`` — several modules reimplement the
     ``---`` fence check locally."""
 
     SKILL = "---\nname: bom-skill\ndescription: Saved by Notepad\n---\n\n# Body\n"
-
 
     def test_prompt_builder_strips_bom_frontmatter(self):
         # A BOM'd context file (AGENTS.md etc.) must not leak raw
@@ -481,4 +464,3 @@ class TestBOMToleranceSiblingSites:
         fm = _split_frontmatter("\ufeff---\nname: bp\n---\nbody")
         assert fm is not None
         assert fm.get("name") == "bp"
-

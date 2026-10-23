@@ -59,8 +59,6 @@ def test_root_budget_counts_utf8_bytes(monkeypatch):
     assert guard("ééé") is True
 
 
-
-
 def test_lifecycle_scan_root_within_budget_is_not_a_verdict(monkeypatch):
     monkeypatch.setattr(lifecycle_guard, "_MAX_LIFECYCLE_SCAN_BYTES", 8)
     monkeypatch.setattr(lifecycle_guard, "_MAX_LIFECYCLE_SCAN_LINE_BYTES", 8)
@@ -77,8 +75,12 @@ def test_unique_path_budget_bounds_reads_and_fails_closed(monkeypatch, tmp_path)
     for i in range(3):
         (tmp_path / f"s{i}.sh").write_text("echo ok\n", encoding="utf-8")
 
-    two = " && ".join(f"bash {shlex.quote(str(tmp_path / f's{i}.sh'))}" for i in range(2))
-    three = " && ".join(f"bash {shlex.quote(str(tmp_path / f's{i}.sh'))}" for i in range(3))
+    two = " && ".join(
+        f"bash {shlex.quote(str(tmp_path / f's{i}.sh'))}" for i in range(2)
+    )
+    three = " && ".join(
+        f"bash {shlex.quote(str(tmp_path / f's{i}.sh'))}" for i in range(3)
+    )
 
     assert guard(two) is False
     assert guard(three) is True
@@ -89,7 +91,12 @@ def test_repeated_path_does_not_spend_unique_path_budget(monkeypatch, tmp_path):
     script = tmp_path / "s.sh"
     script.write_text("echo ok\n", encoding="utf-8")
 
-    assert guard(f"bash {shlex.quote(str(script))} && bash {shlex.quote(str(script))} && sh {shlex.quote(str(script))}") is False
+    assert (
+        guard(
+            f"bash {shlex.quote(str(script))} && bash {shlex.quote(str(script))} && sh {shlex.quote(str(script))}"
+        )
+        is False
+    )
 
 
 def test_remote_read_budget_charged_before_remote_read(monkeypatch):
@@ -125,8 +132,6 @@ def test_cumulative_text_budget_bounds_recursive_scan(monkeypatch, tmp_path):
     assert guard("bash a.sh;bash b.sh", cwd=cwd) is True
 
 
-
-
 def test_remote_script_sanitizer_honours_remaining_budget():
     text, unsafe = lifecycle_guard._sanitize_remote_script_text(
         "echo ok\n", max_bytes=4
@@ -138,9 +143,7 @@ def test_remote_script_sanitizer_honours_remaining_budget():
     assert (text, unsafe) == ("echo ok\n", False)
 
 
-def test_line_budget_fails_closed_before_tokenizing_every_line(
-    monkeypatch, tmp_path
-):
+def test_line_budget_fails_closed_before_tokenizing_every_line(monkeypatch, tmp_path):
     monkeypatch.setattr(lifecycle_guard, "_MAX_LIFECYCLE_SCAN_LINES", 4)
     script = tmp_path / "many.sh"
     script.write_text("echo ok\n" * 10, encoding="utf-8")
@@ -206,7 +209,9 @@ def test_default_budget_admits_a_wide_benign_wrapper_graph(tmp_path):
         child.write_text("echo step && ls -la /tmp\n" * 20, encoding="utf-8")
         children.append(child)
     hub = tmp_path / "hub.sh"
-    hub.write_text("".join(f"bash {shlex.quote(str(c))}\n" for c in children), encoding="utf-8")
+    hub.write_text(
+        "".join(f"bash {shlex.quote(str(c))}\n" for c in children), encoding="utf-8"
+    )
 
     assert guard(f"bash {shlex.quote(str(hub))}") is False
 
@@ -214,5 +219,7 @@ def test_default_budget_admits_a_wide_benign_wrapper_graph(tmp_path):
     # found: the budget bounds work, it does not stop the walk early.
     evil = tmp_path / "evil.sh"
     evil.write_text("clawk gateway restart\n", encoding="utf-8")
-    hub.write_text(hub.read_text() + f"bash {shlex.quote(str(evil))}\n", encoding="utf-8")
+    hub.write_text(
+        hub.read_text() + f"bash {shlex.quote(str(evil))}\n", encoding="utf-8"
+    )
     assert guard(f"bash {shlex.quote(str(hub))}") is True

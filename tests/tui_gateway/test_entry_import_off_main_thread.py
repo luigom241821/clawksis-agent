@@ -76,5 +76,3 @@ def test_entry_imports_cleanly_from_worker_thread():
     combined = out + err
     assert rc == 0, f"entry import off main thread failed (rc={rc}): {err!r}"
     assert "OK" in combined, f"unexpected output: {out!r} / {err!r}"
-
-

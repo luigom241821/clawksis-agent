@@ -73,13 +73,17 @@ def parent_copy(text: str, forced: str) -> str:
 
 def redact_child_text(text: Any, *, force: bool = True) -> str:
     """Scrub one child-produced string. ``force=False`` honours the user's opt-out."""
-    if isinstance(text, _ParentCopy):  # already projected; forced sinks take the pre-trim projection
+    if isinstance(
+        text, _ParentCopy
+    ):  # already projected; forced sinks take the pre-trim projection
         return text.forced if force else text
     if force or _redact._redact_enabled():
         return redact_for_egress(text)
     try:  # opted out: vault values only (still a hard boundary)
         return redact_sensitive_text(str(text or ""))
-    except Exception:  # health: allow BLE001 -- fail closed, never return raw text on redactor faults
+    except (
+        Exception
+    ):  # health: allow BLE001 -- fail closed, never return raw text on redactor faults
         return REDACTION_UNAVAILABLE
 
 
@@ -98,7 +102,11 @@ def _redact_field(key: str, value: str, force: bool) -> str:
         probe = json.loads(scrubbed)
     except ValueError:
         return REDACTION_UNAVAILABLE
-    only = next(iter(probe.values()), None) if isinstance(probe, dict) and len(probe) == 1 else None
+    only = (
+        next(iter(probe.values()), None)
+        if isinstance(probe, dict) and len(probe) == 1
+        else None
+    )
     return only if isinstance(only, str) else REDACTION_UNAVAILABLE
 
 
@@ -118,7 +126,9 @@ def redact_child_value(value: Any, *, force: bool = True, _depth: int = 0) -> An
             for key, item in value.items()
         }
     if isinstance(value, (list, tuple)):
-        return [redact_child_value(item, force=force, _depth=_depth + 1) for item in value]
+        return [
+            redact_child_value(item, force=force, _depth=_depth + 1) for item in value
+        ]
     if value is None or isinstance(value, (bool, int, float)):
         return value
     return REDACTION_UNAVAILABLE
@@ -144,14 +154,24 @@ def redact_summary(summary: Any, structured: bool, force: bool) -> Any:
         except ValueError:
             start = -1
         if start >= 0:
-            prefix, suffix = summary[:start], summary[start + len(candidate):]
+            prefix, suffix = summary[:start], summary[start + len(candidate) :]
             cleaned = redact_child_value(parsed, force=force)
-            body = candidate if cleaned == parsed else json.dumps(cleaned, ensure_ascii=False)
-            return redact_child_text(prefix, force=force) + body + redact_child_text(suffix, force=force)
+            body = (
+                candidate
+                if cleaned == parsed
+                else json.dumps(cleaned, ensure_ascii=False)
+            )
+            return (
+                redact_child_text(prefix, force=force)
+                + body
+                + redact_child_text(suffix, force=force)
+            )
     return redact_child_value(summary, force=force)
 
 
-def redact_child_result(result: dict[str, Any], output_schema=None, *, force: bool = True) -> dict[str, Any]:
+def redact_child_result(
+    result: dict[str, Any], output_schema=None, *, force: bool = True
+) -> dict[str, Any]:
     """Project a result or batch, preserving accounting and host-owned model/task identity.
 
     Revalidation here is only for a summary changed by redaction. General schema
@@ -173,7 +193,9 @@ def redact_child_result(result: dict[str, Any], output_schema=None, *, force: bo
             cleaned[key] = redact_summary(value, structured, force)
         else:
             cleaned[key] = (
-                value if key in _RESULT_METADATA else redact_child_value(value, force=force)
+                value
+                if key in _RESULT_METADATA
+                else redact_child_value(value, force=force)
             )
     if "schema_valid" in result and cleaned.get("summary") != result.get("summary"):
         valid, errors = (
@@ -203,10 +225,13 @@ def redact_child_result(result: dict[str, Any], output_schema=None, *, force: bo
     return cleaned
 
 
-def redact_completion_event(event: dict[str, Any], *, force: bool = True) -> dict[str, Any]:
+def redact_completion_event(
+    event: dict[str, Any], *, force: bool = True
+) -> dict[str, Any]:
     """Scrub output while leaving parent instructions and routing outside the projection."""
     cleaned = redact_child_result(
-        {key: value for key, value in event.items() if key not in _PARENT_EVENT_FIELDS}, force=force
+        {key: value for key, value in event.items() if key not in _PARENT_EVENT_FIELDS},
+        force=force,
     )
     cleaned.update(
         {key: value for key, value in event.items() if key in _PARENT_EVENT_FIELDS}

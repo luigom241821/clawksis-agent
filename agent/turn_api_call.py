@@ -64,15 +64,26 @@ def _should_stream(agent: Any) -> bool:
         if agent.provider == "moa":
             return False
         from unittest.mock import Mock
+
         if isinstance(getattr(agent, "client", None), Mock):
             return False
     return True
 
 
 def perform_api_call(
-    agent: Any, *, api_kwargs: Any, _original_api_kwargs: Any, _llm_middleware_trace: Any,
-    _moa_prepared_request: Any, _retry: Any, thinking_spinner: Any, retry_count: Any,
-    api_call_count: Any, api_request_id: Any, effective_task_id: Any, turn_id: Any,
+    agent: Any,
+    *,
+    api_kwargs: Any,
+    _original_api_kwargs: Any,
+    _llm_middleware_trace: Any,
+    _moa_prepared_request: Any,
+    _retry: Any,
+    thinking_spinner: Any,
+    retry_count: Any,
+    api_call_count: Any,
+    api_request_id: Any,
+    effective_task_id: Any,
+    turn_id: Any,
     interrupted: Any,
 ) -> ApiCallVerdict:
     """Issue the request (see ``_should_stream`` for the streaming decision)."""
@@ -80,7 +91,9 @@ def perform_api_call(
 
     def _verdict(action: str) -> ApiCallVerdict:
         return ApiCallVerdict(
-            action=action, response=response, thinking_spinner=thinking_spinner,
+            action=action,
+            response=response,
+            thinking_spinner=thinking_spinner,
             interrupted=interrupted,
         )
 
@@ -93,7 +106,9 @@ def perform_api_call(
     def _perform_api_call(next_api_kwargs):
         if agent.api_mode == "codex_responses":
             next_api_kwargs = agent._get_transport().preflight_kwargs(
-                next_api_kwargs, allow_stream=False, is_github_responses=agent._is_copilot_url(),
+                next_api_kwargs,
+                allow_stream=False,
+                is_github_responses=agent._is_copilot_url(),
                 sanitize_harmony_tokens=agent._is_codex_backend(),
             )
         if _use_streaming:
@@ -135,18 +150,28 @@ def perform_api_call(
             _model_request_active.set()
     try:
         response = run_llm_execution_middleware(
-            api_kwargs, _perform_api_call, original_request=_original_api_kwargs,
-            task_id=effective_task_id, turn_id=turn_id, api_request_id=api_request_id,
-            session_id=agent.session_id or "", platform=agent.platform or "", model=agent.model,
-            provider=agent.provider, base_url=agent.base_url, api_mode=agent.api_mode,
-            api_call_count=api_call_count, middleware_trace=list(_llm_middleware_trace),
+            api_kwargs,
+            _perform_api_call,
+            original_request=_original_api_kwargs,
+            task_id=effective_task_id,
+            turn_id=turn_id,
+            api_request_id=api_request_id,
+            session_id=agent.session_id or "",
+            platform=agent.platform or "",
+            model=agent.model,
+            provider=agent.provider,
+            base_url=agent.base_url,
+            api_mode=agent.api_mode,
+            api_call_count=api_call_count,
+            middleware_trace=list(_llm_middleware_trace),
         )
     finally:
         with _bracket:
             if _model_request_active is not None:
                 _model_request_active.clear()
             _redirect_crossed_response = (
-                bool(agent._pending_redirect) if _redirect_lock is not None
+                bool(agent._pending_redirect)
+                if _redirect_lock is not None
                 else agent._has_pending_redirect()
             )
     if _redirect_crossed_response:
@@ -173,8 +198,15 @@ class ApiInterruptVerdict:
 
 
 def handle_api_interrupt(
-    agent: Any, *, _retry: Any, thinking_spinner: Any, messages: Any, conversation_history: Any,
-    api_start_time: Any, interrupted: Any, final_response: Any,
+    agent: Any,
+    *,
+    _retry: Any,
+    thinking_spinner: Any,
+    messages: Any,
+    conversation_history: Any,
+    api_start_time: Any,
+    interrupted: Any,
+    final_response: Any,
 ) -> ApiInterruptVerdict:
     """``InterruptedError`` during the provider call: a pending redirect keeps its correction
     queued for the outer-loop rebuild; otherwise keep any streamed partial text so the next
@@ -187,7 +219,9 @@ def handle_api_interrupt(
     # signed/encrypted reasoning items.
     if agent._has_pending_redirect() and agent.clear_interrupt(preserve_redirect=True):
         _retry.restart_with_redirected_messages = True
-        return ApiInterruptVerdict("break", thinking_spinner, interrupted, final_response)
+        return ApiInterruptVerdict(
+            "break", thinking_spinner, interrupted, final_response
+        )
     api_elapsed = time.time() - api_start_time
     agent._vprint(f"{agent.log_prefix}⚡ Interrupted during API call.", force=True)
     interrupted = True
@@ -205,12 +239,19 @@ def handle_api_interrupt(
         append_message(messages, hidden_interrupt_placeholder_row())
         final_response = REPETITION_LOOP_INTERRUPTED
     elif _partial:
-        append_message(messages, {
-            "role": "assistant", "content": _partial, "display_metadata": {"interrupted": True},
-        })
+        append_message(
+            messages,
+            {
+                "role": "assistant",
+                "content": _partial,
+                "display_metadata": {"interrupted": True},
+            },
+        )
         final_response = _partial
     else:
-        final_response = f"{INTERRUPT_WAITING_FOR_MODEL_PREFIX}{api_elapsed:.1f}s elapsed)."
+        final_response = (
+            f"{INTERRUPT_WAITING_FOR_MODEL_PREFIX}{api_elapsed:.1f}s elapsed)."
+        )
     agent._persist_session(messages, conversation_history)
     return ApiInterruptVerdict("break", thinking_spinner, interrupted, final_response)
 
@@ -228,17 +269,30 @@ class NousRateGuardVerdict:
 
 
 def nous_rate_limit_guard(
-    agent: Any, *, _retry: Any, api_messages: Any, messages: Any, conversation_history: Any,
-    active_system_prompt: Any, retry_count: Any, compression_attempts: Any, api_call_count: Any,
+    agent: Any,
+    *,
+    _retry: Any,
+    api_messages: Any,
+    messages: Any,
+    conversation_history: Any,
+    active_system_prompt: Any,
+    retry_count: Any,
+    compression_attempts: Any,
+    api_call_count: Any,
 ) -> NousRateGuardVerdict:
     """Skip the call if another session recorded a Nous Portal rate limit: every attempt (incl.
     SDK retries) counts against RPH. Never lets the guard itself break the agent loop."""
     from agent.conversation_loop import _arm_fallback_restart
 
-    def _verdict(action: str, result: Optional[dict[str, Any]] = None) -> NousRateGuardVerdict:
+    def _verdict(
+        action: str, result: Optional[dict[str, Any]] = None
+    ) -> NousRateGuardVerdict:
         return NousRateGuardVerdict(
-            action=action, active_system_prompt=active_system_prompt, retry_count=retry_count,
-            compression_attempts=compression_attempts, result=result,
+            action=action,
+            active_system_prompt=active_system_prompt,
+            retry_count=retry_count,
+            compression_attempts=compression_attempts,
+            result=result,
         )
 
     if agent.provider == "nous":
@@ -246,28 +300,33 @@ def nous_rate_limit_guard(
         # (and the config default, when it still names the free tier's model) before the next call.
         try:
             from clawk_cli.anon_auth import apply_model_switch
+
             apply_model_switch(agent)
         except Exception:
             pass
         try:
             from agent.nous_rate_guard import (
-                nous_rate_limit_remaining, format_remaining as _fmt_nous_remaining
+                nous_rate_limit_remaining,
+                format_remaining as _fmt_nous_remaining,
             )
             from clawk_cli import anon_auth
+
             _anonymous = anon_auth.is_anonymous_agent(agent)
             _nous_remaining = nous_rate_limit_remaining(anonymous=_anonymous)
             if _nous_remaining is not None and _nous_remaining > 0:
                 reset = _fmt_nous_remaining(_nous_remaining)
                 if _anonymous:
                     _nous_msg = anon_auth.FREE_TIER_RATE_LIMIT_CHAT.format(
-                        reset=anon_auth.friendly_wait(_nous_remaining))
+                        reset=anon_auth.friendly_wait(_nous_remaining)
+                    )
                 else:
                     _nous_msg = f"Your Nous account has hit its rate limit; it resets in {reset}."
                 agent._buffer_vprint(f"⏳ {_nous_msg} Trying fallback...")
                 agent._buffer_diagnostic_status(f"⏳ {_nous_msg}")
                 if agent._try_activate_fallback():
                     active_system_prompt = _arm_fallback_restart(
-                        agent, api_messages, active_system_prompt, _retry)
+                        agent, api_messages, active_system_prompt, _retry
+                    )
                     retry_count = 0
                     compression_attempts = 0
                     return _verdict("break")
@@ -276,18 +335,40 @@ def nous_rate_limit_guard(
                 agent._persist_session(messages, conversation_history)
                 # The free tier's sentence already says what to do (wait, or sign in); the
                 # fallback-provider advice is for an install that runs its own providers.
-                return _verdict("return", stamp_failure({
-                    "final_response": (f"⏳ {_nous_msg}" if _anonymous
-                                       else f"⏳ {_nous_msg}\n\n{site_copy('nous_rate_limit')}"),
-                    "messages": messages,
-                    "api_calls": api_call_count,
-                    "completed": False,
-                    "failed": True,
-                    "error": _nous_msg,
-                    # The free tier's card body and its sign-in door (agent/error_surface.py).
-                    **({"free_tier": {"kind": "rate_limited", "message": anon_auth.FREE_TIER_RATE_LIMIT_CARD.format(
-                        reset=anon_auth.friendly_wait(_nous_remaining))}} if _anonymous else {}),
-                }, FailoverReason.rate_limit.value, True))
+                return _verdict(
+                    "return",
+                    stamp_failure(
+                        {
+                            "final_response": (
+                                f"⏳ {_nous_msg}"
+                                if _anonymous
+                                else f"⏳ {_nous_msg}\n\n{site_copy('nous_rate_limit')}"
+                            ),
+                            "messages": messages,
+                            "api_calls": api_call_count,
+                            "completed": False,
+                            "failed": True,
+                            "error": _nous_msg,
+                            # The free tier's card body and its sign-in door (agent/error_surface.py).
+                            **(
+                                {
+                                    "free_tier": {
+                                        "kind": "rate_limited",
+                                        "message": anon_auth.FREE_TIER_RATE_LIMIT_CARD.format(
+                                            reset=anon_auth.friendly_wait(
+                                                _nous_remaining
+                                            )
+                                        ),
+                                    }
+                                }
+                                if _anonymous
+                                else {}
+                            ),
+                        },
+                        FailoverReason.rate_limit.value,
+                        True,
+                    ),
+                )
         except Exception:
             pass  # Never let rate guard break the agent loop
     return _verdict("fallthrough")

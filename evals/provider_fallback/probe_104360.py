@@ -121,12 +121,16 @@ def request(label, client, model):
         result = "200"
     except Exception as e:
         result = type(e).__name__ + ": " + str(e)
-    out["cases"].append({
-        "label": label,
-        "result": result,
-        "sdk_key": client.api_key,
-        "sdk_provider_callable": callable(getattr(client, "_api_key_provider", None)),
-    })
+    out["cases"].append(
+        {
+            "label": label,
+            "result": result,
+            "sdk_key": client.api_key,
+            "sdk_provider_callable": callable(
+                getattr(client, "_api_key_provider", None)
+            ),
+        }
+    )
 
 
 direct = OpenAI(api_key=runtime["api_key"], base_url=runtime["base_url"], max_retries=0)

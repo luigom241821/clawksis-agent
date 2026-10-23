@@ -32,6 +32,7 @@ except Exception:  # pragma: no cover - slack extra not installed
 # Mock slack-bolt if not installed (same pattern as test_slack_mention.py)
 # ---------------------------------------------------------------------------
 
+
 def _ensure_slack_mock():
     if "slack_bolt" in sys.modules and hasattr(sys.modules["slack_bolt"], "__file__"):
         return
@@ -48,8 +49,10 @@ def _ensure_slack_mock():
         ("slack_bolt.async_app", slack_bolt.async_app),
         ("slack_bolt.adapter", slack_bolt.adapter),
         ("slack_bolt.adapter.socket_mode", slack_bolt.adapter.socket_mode),
-        ("slack_bolt.adapter.socket_mode.async_handler",
-         slack_bolt.adapter.socket_mode.async_handler),
+        (
+            "slack_bolt.adapter.socket_mode.async_handler",
+            slack_bolt.adapter.socket_mode.async_handler,
+        ),
         ("slack_sdk", slack_sdk),
         ("slack_sdk.web", slack_sdk.web),
         ("slack_sdk.web.async_client", slack_sdk.web.async_client),
@@ -131,7 +134,6 @@ class TestSlackResponsePayload:
     def test_sdk_response_yields_its_data(self, make_response):
         assert _slack_response_payload(make_response({"ok": True})) == {"ok": True}
 
-
     @response_shape
     def test_binary_response_is_not_mistaken_for_data(self, make_response):
         """``SlackResponse.data`` may be bytes; callers need their fallback then."""
@@ -192,9 +194,7 @@ class TestSendPaths:
         """Slash-command replies were reported as 'unexpected_response' failures."""
         adapter = _make_adapter()
         client = MagicMock()
-        client.chat_postEphemeral = AsyncMock(
-            return_value=make_response({"ok": True})
-        )
+        client.chat_postEphemeral = AsyncMock(return_value=make_response({"ok": True}))
         adapter._get_client = lambda *_a, **_kw: client
         result = asyncio.run(
             adapter._post_ephemeral_fallback("C_GEN", {"user_id": "U_HUMAN"}, "hi")
@@ -222,13 +222,9 @@ class TestSendPaths:
         media.write_text("x", encoding="utf-8")
         client = MagicMock()
         client.files_upload_v2 = AsyncMock(
-            return_value=make_response(
-                {"ok": True, "file": {"timestamp": "123.456"}}
-            )
+            return_value=make_response({"ok": True, "file": {"timestamp": "123.456"}})
         )
-        result = asyncio.run(
-            _standalone_upload_file(client, "C_GEN", str(media))
-        )
+        result = asyncio.run(_standalone_upload_file(client, "C_GEN", str(media)))
         assert result == {
             "success": True,
             "message_id": "123.456",
@@ -243,9 +239,7 @@ class TestSendPaths:
         client.files_upload_v2 = AsyncMock(
             return_value=make_response({"ok": False, "error": "not_in_channel"})
         )
-        result = asyncio.run(
-            _standalone_upload_file(client, "C_GEN", str(media))
-        )
+        result = asyncio.run(_standalone_upload_file(client, "C_GEN", str(media)))
         assert "not_in_channel" in result["error"]
 
 
@@ -410,6 +404,4 @@ class TestStandaloneSendMediaPath:
         assert result["success"] is True
         assert result["message_id"] == "555.666"
         client.chat_postMessage.assert_awaited_once()
-        assert (
-            client.chat_postMessage.await_args.kwargs["text"] == "Here is the report"
-        )
+        assert client.chat_postMessage.await_args.kwargs["text"] == "Here is the report"

@@ -35,9 +35,11 @@ def test_composite_percent_monotone_across_stage_walk():
     """Walking the stages in llama-server's real order never moves the
     bar backwards — the property that makes the bar trustworthy."""
     stages = ["text_model", "spec_model", "mmproj_model"]
-    walk = [("text_model", v / 10) for v in range(11)] + \
-           [("spec_model", v / 10) for v in range(11)] + \
-           [("mmproj_model", v / 10) for v in range(11)]
+    walk = (
+        [("text_model", v / 10) for v in range(11)]
+        + [("spec_model", v / 10) for v in range(11)]
+        + [("mmproj_model", v / 10) for v in range(11)]
+    )
     seen = [lp._composite_percent(stages, s, v) for s, v in walk]
     assert seen == sorted(seen)
     assert seen[0] == 0 and seen[-1] == 100
@@ -51,9 +53,14 @@ def test_composite_percent_single_stage_is_plain():
 
 
 def _loading_event(value: float, current: str = "text_model") -> dict:
-    return {"status": "loading",
-            "progress": {"stages": ["text_model", "mmproj_model"],
-                         "current": current, "value": value}}
+    return {
+        "status": "loading",
+        "progress": {
+            "stages": ["text_model", "mmproj_model"],
+            "current": current,
+            "value": value,
+        },
+    }
 
 
 def test_loading_events_build_snapshot_and_terminal_clears():
@@ -99,10 +106,11 @@ def test_load_notice_for_managed_model(tmp_path, monkeypatch):
     from agent.chat_completion_local import _managed_local_load_notice
 
     state = tmp_path / "server.json"
-    state.write_text(json.dumps({"base_url": "http://127.0.0.1:18434/v1",
-                                 "api_key": "k"}), encoding="utf-8")
-    monkeypatch.setattr("clawk_cli.local_runtime.supervisor.state_path",
-                        lambda: state)
+    state.write_text(
+        json.dumps({"base_url": "http://127.0.0.1:18434/v1", "api_key": "k"}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("clawk_cli.local_runtime.supervisor.state_path", lambda: state)
     lp._apply_event("Qwen-Test", "status_change", _loading_event(0.5))
     monkeypatch.setattr(lp, "_ensure_watcher", lambda: None)
 
@@ -122,8 +130,6 @@ def test_load_notice_for_managed_model(tmp_path, monkeypatch):
     assert _managed_local_load_notice(_Agent(), {"model": "Elsewhere"}) is None
 
 
-
-
 # ── prefill progress ─────────────────────────────────────────
 
 
@@ -131,18 +137,17 @@ def test_prefill_notice_for_managed_model(tmp_path, monkeypatch):
     from agent.chat_completion_local import _managed_local_load_notice
 
     state = tmp_path / "server.json"
-    state.write_text(json.dumps({"base_url": "http://127.0.0.1:18434/v1",
-                                 "api_key": "k"}), encoding="utf-8")
-    monkeypatch.setattr("clawk_cli.local_runtime.supervisor.state_path",
-                        lambda: state)
+    state.write_text(
+        json.dumps({"base_url": "http://127.0.0.1:18434/v1", "api_key": "k"}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("clawk_cli.local_runtime.supervisor.state_path", lambda: state)
     monkeypatch.setattr(lp, "_ensure_watcher", lambda: None)
     # No load in flight; a prefill counter is live.
-    monkeypatch.setattr(lp, "get_prefill_progress",
-                        lambda model: {"processed": 12288})
+    monkeypatch.setattr(lp, "get_prefill_progress", lambda model: {"processed": 12288})
     import agent.chat_completion_helpers as cch
 
-    monkeypatch.setattr(cch, "estimate_request_context_tokens",
-                        lambda kw: 39551)
+    monkeypatch.setattr(cch, "estimate_request_context_tokens", lambda kw: 39551)
 
     class _Agent:
         base_url = "http://127.0.0.1:18434/v1"
@@ -164,14 +169,14 @@ def test_load_notice_outranks_prefill(tmp_path, monkeypatch):
     from agent.chat_completion_local import _managed_local_load_notice
 
     state = tmp_path / "server.json"
-    state.write_text(json.dumps({"base_url": "http://127.0.0.1:18434/v1",
-                                 "api_key": "k"}), encoding="utf-8")
-    monkeypatch.setattr("clawk_cli.local_runtime.supervisor.state_path",
-                        lambda: state)
+    state.write_text(
+        json.dumps({"base_url": "http://127.0.0.1:18434/v1", "api_key": "k"}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("clawk_cli.local_runtime.supervisor.state_path", lambda: state)
     monkeypatch.setattr(lp, "_ensure_watcher", lambda: None)
     lp._apply_event("Qwen-Test", "status_change", _loading_event(0.5))
-    monkeypatch.setattr(lp, "get_prefill_progress",
-                        lambda model: {"processed": 999})
+    monkeypatch.setattr(lp, "get_prefill_progress", lambda model: {"processed": 999})
 
     class _Agent:
         base_url = "http://127.0.0.1:18434/v1"
@@ -201,14 +206,16 @@ def test_prefill_progress_reads_busiest_processing_slot(monkeypatch):
         {"id": 1, "is_processing": True, "n_prompt_tokens_processed": 42},
         {"id": 2, "is_processing": True, "n_prompt_tokens_processed": 32768},
     ]
-    monkeypatch.setattr(lp.urllib.request, "urlopen",
-                        lambda req, timeout=0: _Resp(slots))
+    monkeypatch.setattr(
+        lp.urllib.request, "urlopen", lambda req, timeout=0: _Resp(slots)
+    )
     assert lp.get_prefill_progress("m") == {"processed": 32768}
 
     # Nothing processing -> None (idle slots' counters are leftovers).
     idle = [{"id": 0, "is_processing": False, "n_prompt_tokens_processed": 500}]
-    monkeypatch.setattr(lp.urllib.request, "urlopen",
-                        lambda req, timeout=0: _Resp(idle))
+    monkeypatch.setattr(
+        lp.urllib.request, "urlopen", lambda req, timeout=0: _Resp(idle)
+    )
     assert lp.get_prefill_progress("m") is None
 
     # Unreachable server -> None, never an exception.
@@ -227,11 +234,13 @@ def test_endpoint_respects_ownership_guard(monkeypatch):
     import clawk_cli.local_runtime.load_progress as lp
 
     # Guard says "not ours": no endpoint, regardless of state on disk.
-    monkeypatch.setattr("clawk_cli.local_runtime.endpoint._state_endpoint",
-                        lambda: None)
+    monkeypatch.setattr(
+        "clawk_cli.local_runtime.endpoint._state_endpoint", lambda: None
+    )
     assert lp._endpoint() is None
 
     monkeypatch.setattr(
         "clawk_cli.local_runtime.endpoint._state_endpoint",
-        lambda: {"base_url": "http://127.0.0.1:18434/v1", "api_key": "k"})
+        lambda: {"base_url": "http://127.0.0.1:18434/v1", "api_key": "k"},
+    )
     assert lp._endpoint() == ("http://127.0.0.1:18434", "k")

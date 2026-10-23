@@ -8,7 +8,6 @@ they must resolve to the real NEW tree, not test doubles or the old module.
 This fixture avoids depending on a deep Git history in CI/shallow checkouts.
 """
 
-
 import sys
 from pathlib import Path
 
@@ -104,10 +103,14 @@ def _sync_python_dependencies_after_pull(
             uv_env.pop("PYTHONPATH", None)
             uv_env.pop("PYTHONHOME", None)
             install_group = "termux-all"
-            print("  → Termux detected: using uv + curated termux-all optional profile...")
+            print(
+                "  → Termux detected: using uv + curated termux-all optional profile..."
+            )
         if not deps_current:
             if _m()._is_termux_env(uv_env) and _is_android_python():
-                print("  → Termux/Android detected: prebuilding psutil with Linux source path compatibility...")
+                print(
+                    "  → Termux/Android detected: prebuilding psutil with Linux source path compatibility..."
+                )
                 _install_psutil_android_compat([uv_bin, "pip"], env=uv_env)
             _m()._install_python_dependencies_with_optional_fallback(
                 [uv_bin, "pip"], env=uv_env, group=install_group
@@ -121,9 +124,13 @@ def _sync_python_dependencies_after_pull(
             print("  → Termux detected: using curated termux-all optional profile...")
         if not deps_current:
             if _m()._is_termux_env() and _is_android_python():
-                print("  → Termux/Android detected: prebuilding psutil with Linux source path compatibility...")
+                print(
+                    "  → Termux/Android detected: prebuilding psutil with Linux source path compatibility..."
+                )
                 _install_psutil_android_compat(pip_cmd)
-            _m()._install_python_dependencies_with_optional_fallback(pip_cmd, group=install_group)
+            _m()._install_python_dependencies_with_optional_fallback(
+                pip_cmd, group=install_group
+            )
 
     install_prefix = [uv_bin, "pip"] if uv_bin else pip_cmd
     lazy_env = uv_env if uv_bin else None

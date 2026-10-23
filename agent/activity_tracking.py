@@ -3,6 +3,7 @@
 ``_touch_activity`` is the single write path; persistence is rate-limited and never raises.
 Extracted from ``run_agent.py``; every method resolves through ``AIAgent``'s MRO unchanged.
 """
+
 import logging
 import os
 import threading
@@ -39,7 +40,10 @@ class ActivityTrackingMixin:
         return _activity_lock(self)
 
     def _touch_activity(
-        self, desc: str, *, provenance: Optional[ActivityProvenance] = None,
+        self,
+        desc: str,
+        *,
+        provenance: Optional[ActivityProvenance] = None,
         force_persist: bool = False,
     ) -> None:
         """Update the last-activity timestamp and description (thread-safe).
@@ -56,8 +60,10 @@ class ActivityTrackingMixin:
         See #72016, #72039.
         """
         from agent.session_activity import (
-            bound_activity_description, is_terminal_compression_provenance,
-            normalize_activity_provenance, reset_session_activity_persist_window,
+            bound_activity_description,
+            is_terminal_compression_provenance,
+            normalize_activity_provenance,
+            reset_session_activity_persist_window,
         )
 
         resolved_provenance = normalize_activity_provenance(provenance)
@@ -75,8 +81,10 @@ class ActivityTrackingMixin:
             # Never let the bridge break the loop; this guard covers import-time failures.
             with suppress(Exception):
                 from tools.kanban_tools import (
-                    heartbeat_current_worker_from_env, inject_new_comments_from_env
+                    heartbeat_current_worker_from_env,
+                    inject_new_comments_from_env,
                 )
+
                 heartbeat_current_worker_from_env()
                 # Fold new operator notes into the running turn (OUT-OF-BAND steer).
                 inject_new_comments_from_env(self)
@@ -102,17 +110,24 @@ class ActivityTrackingMixin:
         if not callable(touch):
             return
         from agent.session_activity import (
-            SESSION_ACTIVITY_HEARTBEAT_MIN_INTERVAL_SECONDS, normalize_activity_provenance
+            SESSION_ACTIVITY_HEARTBEAT_MIN_INTERVAL_SECONDS,
+            normalize_activity_provenance,
         )
 
         now_mono = time.monotonic()
         last_mono = getattr(self, "_session_activity_last_persist_mono", 0.0)
         # 0.0 is the never-persisted / reset sentinel and always writes through: CLOCK_MONOTONIC is
         # roughly host uptime, so on a freshly booted VM ``now_mono`` itself can be under the interval.
-        if last_mono and (now_mono - last_mono) < SESSION_ACTIVITY_HEARTBEAT_MIN_INTERVAL_SECONDS:
+        if (
+            last_mono
+            and (now_mono - last_mono) < SESSION_ACTIVITY_HEARTBEAT_MIN_INTERVAL_SECONDS
+        ):
             return
         self._session_activity_last_persist_mono = now_mono
-        from agent.runtime_session_store import call_off_event_loop  # Relay callbacks run on a loop (#139029)
+        from agent.runtime_session_store import (
+            call_off_event_loop,
+        )  # Relay callbacks run on a loop (#139029)
+
         try:
             call_off_event_loop(
                 touch,
@@ -125,7 +140,9 @@ class ActivityTrackingMixin:
             )
         except Exception:
             # Heartbeat is observation-only; never let its I/O break the loop.
-            logger.debug("session activity heartbeat write failed (ignored)", exc_info=True)
+            logger.debug(
+                "session activity heartbeat write failed (ignored)", exc_info=True
+            )
 
     def _reset_activity_labels_after_turn(self) -> None:
         """Drop mid-turn activity labels once the turn is no longer running.
@@ -145,5 +162,6 @@ class ActivityTrackingMixin:
         if not callable(clear):
             return
         from agent.runtime_session_store import call_off_event_loop
+
         with suppress(Exception):  # never let durable cleanup I/O break turn teardown
             call_off_event_loop(clear, session_id)

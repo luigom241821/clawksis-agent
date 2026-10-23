@@ -15,7 +15,9 @@ from gateway.session import SessionSource, build_session_key
 
 class DummyTelegramAdapter(BasePlatformAdapter):
     def __init__(self):
-        super().__init__(PlatformConfig(enabled=True, token="fake-token"), Platform.TELEGRAM)
+        super().__init__(
+            PlatformConfig(enabled=True, token="fake-token"), Platform.TELEGRAM
+        )
         self._busy_text_mode = ""
         self.sent = []
         self.typing = []
@@ -50,7 +52,9 @@ class DummyTelegramAdapter(BasePlatformAdapter):
     async def on_processing_start(self, event: MessageEvent) -> None:
         self.processing_hooks.append(("start", event.message_id))
 
-    async def on_processing_complete(self, event: MessageEvent, outcome: ProcessingOutcome) -> None:
+    async def on_processing_complete(
+        self, event: MessageEvent, outcome: ProcessingOutcome
+    ) -> None:
         self.processing_hooks.append(("complete", event.message_id, outcome))
 
 
@@ -68,14 +72,15 @@ def _make_event(chat_id: str, thread_id: str, message_id: str = "1") -> MessageE
 
 
 class TestBasePlatformTopicSessions:
-
     @pytest.mark.asyncio
     async def test_handle_message_interrupts_same_topic(self, monkeypatch):
         adapter = DummyTelegramAdapter()
         adapter.set_message_handler(lambda event: asyncio.sleep(0, result=None))
 
         active_event = _make_event("-1001", "10")
-        adapter._active_sessions[build_session_key(active_event.source)] = asyncio.Event()
+        adapter._active_sessions[build_session_key(active_event.source)] = (
+            asyncio.Event()
+        )
 
         scheduled = []
 
@@ -90,7 +95,10 @@ class TestBasePlatformTopicSessions:
         await adapter.handle_message(pending_event)
 
         assert scheduled == []
-        assert adapter.get_pending_message(build_session_key(pending_event.source)) == pending_event
+        assert (
+            adapter.get_pending_message(build_session_key(pending_event.source))
+            == pending_event
+        )
 
     @pytest.mark.asyncio
     async def test_process_message_background_replies_in_same_topic(self):
@@ -109,7 +117,9 @@ class TestBasePlatformTopicSessions:
         adapter._keep_typing = hold_typing
 
         event = _make_event("-1001", "17585")
-        await adapter._process_message_background(event, build_session_key(event.source))
+        await adapter._process_message_background(
+            event, build_session_key(event.source)
+        )
 
         assert adapter.sent == [
             {
@@ -138,7 +148,9 @@ class TestBasePlatformTopicSessions:
 
 class TestTelegramAutoTtsCaptionDelivery:
     @staticmethod
-    def _make_voice_event(chat_id: str = "-1001", thread_id: str = "17585") -> MessageEvent:
+    def _make_voice_event(
+        chat_id: str = "-1001", thread_id: str = "17585"
+    ) -> MessageEvent:
         return MessageEvent(
             text="hello",
             message_type=MessageType.VOICE,
@@ -158,13 +170,16 @@ class TestTelegramAutoTtsCaptionDelivery:
 
         return hold
 
-
     @pytest.mark.asyncio
-    async def test_long_original_with_short_spoken_script_still_sends_full_reply(self, tmp_path):
+    async def test_long_original_with_short_spoken_script_still_sends_full_reply(
+        self, tmp_path
+    ):
         adapter = DummyTelegramAdapter()
         adapter._keep_typing = self._hold_typing()
         adapter._should_auto_tts_for_chat = lambda _chat_id: True
-        adapter.play_tts = AsyncMock(return_value=SendResult(success=True, message_id="tts-1"))
+        adapter.play_tts = AsyncMock(
+            return_value=SendResult(success=True, message_id="tts-1")
+        )
         # Markdown-heavy reply: over the 1024-char caption limit as written,
         # but the normalized spoken script (markdown and URLs removed) is far
         # below it. Caption eligibility must follow the ORIGINAL reply, so the
@@ -182,11 +197,16 @@ class TestTelegramAutoTtsCaptionDelivery:
         tts_path.write_text("audio", encoding="utf-8")
         event = self._make_voice_event()
 
-        with patch("tools.tts_tool.check_tts_requirements", return_value=True), patch(
-            "tools.tts_tool.text_to_speech_tool",
-            return_value=json.dumps({"file_path": str(tts_path)}),
+        with (
+            patch("tools.tts_tool.check_tts_requirements", return_value=True),
+            patch(
+                "tools.tts_tool.text_to_speech_tool",
+                return_value=json.dumps({"file_path": str(tts_path)}),
+            ),
         ):
-            await adapter._process_message_background(event, build_session_key(event.source))
+            await adapter._process_message_background(
+                event, build_session_key(event.source)
+            )
 
         adapter.play_tts.assert_awaited_once()
         assert adapter.play_tts.await_args.kwargs["caption"] is None
@@ -198,4 +218,3 @@ class TestTelegramAutoTtsCaptionDelivery:
                 "metadata": {"thread_id": "17585", "notify": True},
             }
         ]
-

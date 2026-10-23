@@ -6,6 +6,7 @@ A per-chat 1/s slot shared by both: a SEND waits for its slot (never dropped), a
 skipped (the next edit shows the same text anyway), and the FINAL edit is never gated (the completed
 answer is always delivered).
 """
+
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
@@ -37,7 +38,7 @@ async def test_interim_edit_skipped_when_slot_busy_but_final_edit_never_gated():
     result = await adapter.edit_message("c1", "900", "part one", finalize=False)
     assert result.success is True  # consumed a slot on the first real edit
 
-    busy = adapter._chat_outbound_slot_remaining( "c1")
+    busy = adapter._chat_outbound_slot_remaining("c1")
     assert busy > 0
 
     skipped = await adapter.edit_message("c1", "900", "part two", finalize=False)
@@ -46,7 +47,9 @@ async def test_interim_edit_skipped_when_slot_busy_but_final_edit_never_gated():
 
     final = await adapter.edit_message("c1", "900", "part two final", finalize=True)
     assert final.success is True
-    assert adapter._bot.edit_message_text.await_count == 2  # the final edit is never gated
+    assert (
+        adapter._bot.edit_message_text.await_count == 2
+    )  # the final edit is never gated
 
 
 @pytest.mark.asyncio
@@ -61,31 +64,50 @@ async def test_skipped_interim_edit_leaves_visible_prefix_untouched():
     consumer._already_sent = True
     consumer._flood_strikes = 1
 
-    assert await consumer._edit_existing("The answer▌", finalize=False, is_turn_final=False)
+    assert await consumer._edit_existing(
+        "The answer▌", finalize=False, is_turn_final=False
+    )
     assert consumer._last_sent_text == "The answer▌"
     assert consumer._flood_strikes == 0
     consumer._flood_strikes = 1
 
-    assert adapter._chat_outbound_slot_remaining("c1") > 0  # slot held: next interim edit is skipped
-    assert await consumer._edit_existing("The answer is 42▌", finalize=False, is_turn_final=False)
+    assert (
+        adapter._chat_outbound_slot_remaining("c1") > 0
+    )  # slot held: next interim edit is skipped
+    assert await consumer._edit_existing(
+        "The answer is 42▌", finalize=False, is_turn_final=False
+    )
     assert adapter._bot.edit_message_text.await_count == 1
-    assert consumer._last_sent_text == "The answer▌"  # screen still shows the older preview
+    assert (
+        consumer._last_sent_text == "The answer▌"
+    )  # screen still shows the older preview
     assert consumer._flood_strikes == 1
 
     from gateway.platforms.base import SendResult
 
-    adapter.edit_message = AsyncMock(return_value=SendResult(
-        success=False, error="Flood control exceeded. Retry in 9 seconds", retry_after=9))
-    assert not await consumer._edit_existing("The answer is 42", finalize=True, is_turn_final=True)
+    adapter.edit_message = AsyncMock(
+        return_value=SendResult(
+            success=False,
+            error="Flood control exceeded. Retry in 9 seconds",
+            retry_after=9,
+        )
+    )
+    assert not await consumer._edit_existing(
+        "The answer is 42", finalize=True, is_turn_final=True
+    )
     assert not getattr(consumer, "_final_content_delivered", False)
-    assert consumer._fallback_prefix == "The answer"  # fallback re-sends " is 42", not nothing
+    assert (
+        consumer._fallback_prefix == "The answer"
+    )  # fallback re-sends " is 42", not nothing
 
 
 @pytest.mark.asyncio
 async def test_send_waits_for_held_slot():
     """A send to a chat whose slot is held defers until the slot opens and then fires exactly once."""
     adapter = _adapter(AsyncMock())
-    await adapter.edit_message("c1", "900", "one", finalize=False)  # hold the shared slot for c1
+    await adapter.edit_message(
+        "c1", "900", "one", finalize=False
+    )  # hold the shared slot for c1
 
     sleeps: list[float] = []
 

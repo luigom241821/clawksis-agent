@@ -26,7 +26,12 @@ import pytest
 from clawk_cli.model_switch import switch_model
 
 _ACCEPTED = {"accepted": True, "persist": True, "recognized": True, "message": None}
-_REJECTED = {"accepted": False, "persist": False, "recognized": False, "message": "not found"}
+_REJECTED = {
+    "accepted": False,
+    "persist": False,
+    "recognized": False,
+    "message": "not found",
+}
 # What validate_requested_model returns for an unknown id on openai-codex: it
 # soft-accepts with a "may be a hidden model" note (#16172 / #19729).
 _CODEX_SOFT_ACCEPT = {
@@ -59,21 +64,29 @@ def _run_switch(
     resolution, normalization, and model metadata.  This isolates the new
     configured-provider detection step.
     """
-    with patch("clawk_cli.model_switch.resolve_alias", return_value=None), \
-         patch("clawk_cli.model_switch.list_provider_models", return_value=[]), \
-         patch("clawk_cli.model_switch.normalize_model_for_provider", side_effect=lambda model, provider: model), \
-         patch("clawk_cli.models_validate.validate_requested_model", return_value=validation), \
-         patch("clawk_cli.models.detect_provider_for_model", return_value=None), \
-         patch("clawk_cli.model_switch.get_model_info", return_value=None), \
-         patch("clawk_cli.model_switch.get_model_capabilities", return_value=None), \
-         patch(
-             "clawk_cli.runtime_provider.resolve_runtime_provider",
-             return_value={
-                 "api_key": "***",
-                 "base_url": current_base_url or "http://resolved/v1",
-                 "api_mode": "",
-             },
-         ):
+    with (
+        patch("clawk_cli.model_switch.resolve_alias", return_value=None),
+        patch("clawk_cli.model_switch.list_provider_models", return_value=[]),
+        patch(
+            "clawk_cli.model_switch.normalize_model_for_provider",
+            side_effect=lambda model, provider: model,
+        ),
+        patch(
+            "clawk_cli.models_validate.validate_requested_model",
+            return_value=validation,
+        ),
+        patch("clawk_cli.models.detect_provider_for_model", return_value=None),
+        patch("clawk_cli.model_switch.get_model_info", return_value=None),
+        patch("clawk_cli.model_switch.get_model_capabilities", return_value=None),
+        patch(
+            "clawk_cli.runtime_provider.resolve_runtime_provider",
+            return_value={
+                "api_key": "***",
+                "base_url": current_base_url or "http://resolved/v1",
+                "api_mode": "",
+            },
+        ),
+    ):
         return switch_model(
             raw_input=raw_input,
             current_provider=current_provider,
@@ -82,8 +95,6 @@ def _run_switch(
             user_providers=user_providers or {},
             custom_providers=custom_providers or [],
         )
-
-
 
 
 def test_default_model_only_declaration_routes():
@@ -107,8 +118,6 @@ def test_default_model_only_declaration_routes():
     assert result.new_model == "qwen3.5-4b"
 
 
-
-
 def test_xai_oauth_soft_accept_preserved_when_no_match():
     """The xai-oauth hidden-model soft-accept (sibling of openai-codex) is also
     a no-op when config declares no matching model."""
@@ -126,18 +135,26 @@ def test_xai_oauth_soft_accept_preserved_when_no_match():
     assert result.target_provider == "xai-oauth"
 
 
-
 def test_compat_projection_of_same_provider_is_not_ambiguous():
     """The gateway/TUI/CLI pass ``providers:`` AND ``get_compatible_custom_providers()``, which re-lists
     each ``providers.<slug>`` row as ``custom:<name>``. One configured endpoint must route, not be
     rejected as 'declared by multiple configured providers' (#112788)."""
     from clawk_cli.config import get_compatible_custom_providers
 
-    user_providers = {"relay": {"name": "relay", "api": "https://relay.example/v1",
-                                "key_env": "RELAY_KEY", "default_model": "claude-opus-4-7"}}
+    user_providers = {
+        "relay": {
+            "name": "relay",
+            "api": "https://relay.example/v1",
+            "key_env": "RELAY_KEY",
+            "default_model": "claude-opus-4-7",
+        }
+    }
     result = _run_switch(
-        raw_input="claude-opus-4-7", current_provider="openrouter", user_providers=user_providers,
-        custom_providers=get_compatible_custom_providers({"providers": user_providers}))
+        raw_input="claude-opus-4-7",
+        current_provider="openrouter",
+        user_providers=user_providers,
+        custom_providers=get_compatible_custom_providers({"providers": user_providers}),
+    )
     assert result.success is True, result.error_message
     assert result.target_provider == "relay"
 
@@ -147,23 +164,51 @@ def test_distinct_legacy_endpoint_with_same_model_stays_ambiguous():
     the same model on a different endpoint is still a genuinely separate candidate."""
     from clawk_cli.config import get_compatible_custom_providers
 
-    user_providers = {"relay": {"name": "relay", "api": "https://relay.example/v1",
-                                "key_env": "RELAY_KEY", "default_model": "claude-opus-4-7"}}
-    cfg = {"providers": user_providers, "custom_providers": [
-        {"name": "backup-relay", "base_url": "https://backup.example/v1", "key_env": "BACKUP_KEY",
-         "model": "claude-opus-4-7"}]}
+    user_providers = {
+        "relay": {
+            "name": "relay",
+            "api": "https://relay.example/v1",
+            "key_env": "RELAY_KEY",
+            "default_model": "claude-opus-4-7",
+        }
+    }
+    cfg = {
+        "providers": user_providers,
+        "custom_providers": [
+            {
+                "name": "backup-relay",
+                "base_url": "https://backup.example/v1",
+                "key_env": "BACKUP_KEY",
+                "model": "claude-opus-4-7",
+            }
+        ],
+    }
     result = _run_switch(
-        raw_input="claude-opus-4-7", current_provider="openrouter", user_providers=user_providers,
-        custom_providers=get_compatible_custom_providers(cfg))
+        raw_input="claude-opus-4-7",
+        current_provider="openrouter",
+        user_providers=user_providers,
+        custom_providers=get_compatible_custom_providers(cfg),
+    )
     assert result.success is False
     assert "multiple configured providers" in (result.error_message or "")
-    assert "custom:backup-relay" in result.error_message and "relay" in result.error_message
+    assert (
+        "custom:backup-relay" in result.error_message
+        and "relay" in result.error_message
+    )
 
 
-_RELAY = {"name": "relay", "api": "https://relay.example/v1", "key_env": "RELAY_KEY",
-          "default_model": "claude-opus-4-7"}
-_LEGACY_RELAY = {"name": "relay", "base_url": "https://relay.example/v1", "key_env": "RELAY_KEY",
-                 "model": "claude-opus-4-7"}
+_RELAY = {
+    "name": "relay",
+    "api": "https://relay.example/v1",
+    "key_env": "RELAY_KEY",
+    "default_model": "claude-opus-4-7",
+}
+_LEGACY_RELAY = {
+    "name": "relay",
+    "base_url": "https://relay.example/v1",
+    "key_env": "RELAY_KEY",
+    "model": "claude-opus-4-7",
+}
 
 
 def test_legacy_duplicate_of_same_endpoint_collapses_by_identity():
@@ -175,25 +220,40 @@ def test_legacy_duplicate_of_same_endpoint_collapses_by_identity():
     user_providers = {"relay": _RELAY}
     cfg = {"providers": user_providers, "custom_providers": [_LEGACY_RELAY]}
     result = _run_switch(
-        raw_input="claude-opus-4-7", current_provider="openrouter", user_providers=user_providers,
-        custom_providers=get_compatible_custom_providers(cfg))
+        raw_input="claude-opus-4-7",
+        current_provider="openrouter",
+        user_providers=user_providers,
+        custom_providers=get_compatible_custom_providers(cfg),
+    )
     assert result.success is True, result.error_message
     assert result.target_provider == "relay"
 
 
-@pytest.mark.parametrize("delta", [
-    {"key_env": "OTHER_KEY"}, {"api_mode": "anthropic_messages"}, {"base_url": "https://backup.example/v1"},
-], ids=["credential", "protocol", "endpoint"])
+@pytest.mark.parametrize(
+    "delta",
+    [
+        {"key_env": "OTHER_KEY"},
+        {"api_mode": "anthropic_messages"},
+        {"base_url": "https://backup.example/v1"},
+    ],
+    ids=["credential", "protocol", "endpoint"],
+)
 def test_same_named_legacy_row_with_different_identity_stays_ambiguous(delta):
     """Identity collapse is exact: a legacy row sharing the display name but differing in credential,
     wire protocol or endpoint is still a second candidate (#112788 acceptance criterion)."""
     from clawk_cli.config import get_compatible_custom_providers
 
     user_providers = {"relay": _RELAY}
-    cfg = {"providers": user_providers, "custom_providers": [{**_LEGACY_RELAY, **delta}]}
+    cfg = {
+        "providers": user_providers,
+        "custom_providers": [{**_LEGACY_RELAY, **delta}],
+    }
     result = _run_switch(
-        raw_input="claude-opus-4-7", current_provider="openrouter", user_providers=user_providers,
-        custom_providers=get_compatible_custom_providers(cfg))
+        raw_input="claude-opus-4-7",
+        current_provider="openrouter",
+        user_providers=user_providers,
+        custom_providers=get_compatible_custom_providers(cfg),
+    )
     assert result.success is False
     assert "multiple configured providers" in (result.error_message or "")
 
@@ -205,8 +265,11 @@ def test_session_on_projection_slug_keeps_its_slug():
 
     user_providers = {"relay": _RELAY}
     result = _run_switch(
-        raw_input="claude-opus-4-7", current_provider="custom:relay", user_providers=user_providers,
-        custom_providers=get_compatible_custom_providers({"providers": user_providers}))
+        raw_input="claude-opus-4-7",
+        current_provider="custom:relay",
+        user_providers=user_providers,
+        custom_providers=get_compatible_custom_providers({"providers": user_providers}),
+    )
     assert result.success is True, result.error_message
     assert result.target_provider == "custom:relay"
 
@@ -216,11 +279,21 @@ def test_raw_list_provider_key_pointing_elsewhere_stays_ambiguous():
     fails): a hand-written entry whose ``provider_key`` names a ``providers`` slug but points at a
     different endpoint is a distinct candidate, not silently hidden (#112788)."""
     user_providers = {"relay": _RELAY}
-    raw = [{"name": "relay", "provider_key": "relay", "base_url": "https://backup.example/v1",
-            "key_env": "BACKUP_KEY", "model": "claude-opus-4-7"}]
+    raw = [
+        {
+            "name": "relay",
+            "provider_key": "relay",
+            "base_url": "https://backup.example/v1",
+            "key_env": "BACKUP_KEY",
+            "model": "claude-opus-4-7",
+        }
+    ]
     result = _run_switch(
-        raw_input="claude-opus-4-7", current_provider="openrouter", user_providers=user_providers,
-        custom_providers=raw)
+        raw_input="claude-opus-4-7",
+        current_provider="openrouter",
+        user_providers=user_providers,
+        custom_providers=raw,
+    )
     assert result.success is False
     assert "multiple configured providers" in (result.error_message or "")
 
@@ -232,11 +305,16 @@ def test_legacy_duplicate_keeps_its_own_declared_models():
     from clawk_cli.config import get_compatible_custom_providers
 
     user_providers = {"relay": _RELAY}
-    cfg = {"providers": user_providers,
-           "custom_providers": [{**_LEGACY_RELAY, "models": ["gpt-5.4", "gpt-5.4-mini"]}]}
+    cfg = {
+        "providers": user_providers,
+        "custom_providers": [{**_LEGACY_RELAY, "models": ["gpt-5.4", "gpt-5.4-mini"]}],
+    }
     result = _run_switch(
-        raw_input="gpt-5.4-mini", current_provider="openrouter", user_providers=user_providers,
-        custom_providers=get_compatible_custom_providers(cfg))
+        raw_input="gpt-5.4-mini",
+        current_provider="openrouter",
+        user_providers=user_providers,
+        custom_providers=get_compatible_custom_providers(cfg),
+    )
     assert result.success is True, result.error_message
     assert result.target_provider == "relay"
     assert result.new_model == "gpt-5.4-mini"
@@ -246,10 +324,20 @@ def test_raw_list_provider_key_with_different_credential_stays_ambiguous():
     """Raw-list fallback: a ``provider_key: relay`` stamp on the same endpoint but a DIFFERENT
     credential is not the row's projection — credential identity differs, ambiguity is preserved."""
     user_providers = {"relay": _RELAY}
-    raw = [{"name": "relay", "provider_key": "relay", "base_url": "https://relay.example/v1",
-            "key_env": "OTHER_KEY", "model": "claude-opus-4-7"}]
+    raw = [
+        {
+            "name": "relay",
+            "provider_key": "relay",
+            "base_url": "https://relay.example/v1",
+            "key_env": "OTHER_KEY",
+            "model": "claude-opus-4-7",
+        }
+    ]
     result = _run_switch(
-        raw_input="claude-opus-4-7", current_provider="openrouter", user_providers=user_providers,
-        custom_providers=raw)
+        raw_input="claude-opus-4-7",
+        current_provider="openrouter",
+        user_providers=user_providers,
+        custom_providers=raw,
+    )
     assert result.success is False
     assert "multiple configured providers" in (result.error_message or "")

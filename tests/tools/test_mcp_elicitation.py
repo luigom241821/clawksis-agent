@@ -29,6 +29,7 @@ def _form_params(message="please confirm", schema=None):
     getattr() and tolerates duck-typed inputs.
     """
     from types import SimpleNamespace
+
     return SimpleNamespace(
         mode="form",
         message=message,
@@ -36,16 +37,17 @@ def _form_params(message="please confirm", schema=None):
     )
 
 
-def _url_params(message="open this url", url="https://example.com/auth", elicitation_id="e1"):
+def _url_params(
+    message="open this url", url="https://example.com/auth", elicitation_id="e1"
+):
     from types import SimpleNamespace
+
     return SimpleNamespace(
         mode="url",
         message=message,
         url=url,
         elicitation_id=elicitation_id,
     )
-
-
 
 
 class TestElicitationHandlerFormMode:
@@ -56,7 +58,9 @@ class TestElicitationHandlerFormMode:
             {"properties": {"approved": {"type": "boolean"}}},
         )
 
-        with patch("tools.approval_prompt.request_elicitation_consent", return_value="accept"):
+        with patch(
+            "tools.approval_prompt.request_elicitation_consent", return_value="accept"
+        ):
             result = asyncio.run(handler(context=None, params=params))
 
         assert isinstance(result, ElicitResult)
@@ -64,8 +68,6 @@ class TestElicitationHandlerFormMode:
         assert result.content == {}
         assert handler.metrics["accepted"] == 1
         assert handler.metrics["declined"] == 0
-
-
 
     def test_cancel_propagates_through(self):
         """request_elicitation_consent returns 'cancel' when the gateway
@@ -75,7 +77,9 @@ class TestElicitationHandlerFormMode:
         handler = ElicitationHandler("pay", {"timeout": 5})
         params = _form_params()
 
-        with patch("tools.approval_prompt.request_elicitation_consent", return_value="cancel"):
+        with patch(
+            "tools.approval_prompt.request_elicitation_consent", return_value="cancel"
+        ):
             result = asyncio.run(handler(context=None, params=params))
 
         assert result.action == "cancel"
@@ -115,9 +119,7 @@ class TestElicitationHandlerFailureModes:
         # Shrink the outer grace window so the test budget is just the
         # handler timeout. Default grace is 5s, which makes stall durations
         # tight and the test flaky.
-        monkeypatch.setattr(
-            ElicitationHandler, "_OUTER_TIMEOUT_GRACE_SECONDS", 0
-        )
+        monkeypatch.setattr(ElicitationHandler, "_OUTER_TIMEOUT_GRACE_SECONDS", 0)
         # _safe_numeric clamps `timeout` to a minimum of 1s, so the
         # effective wait_for budget is 1s here. Stall longer than that
         # so the wait_for reliably fires TimeoutError.
@@ -126,16 +128,17 @@ class TestElicitationHandlerFailureModes:
 
         def stall(*_args, **_kwargs):
             import time as _t
+
             _t.sleep(2)
             return "accept"
 
-        with patch("tools.approval_prompt.request_elicitation_consent", side_effect=stall):
+        with patch(
+            "tools.approval_prompt.request_elicitation_consent", side_effect=stall
+        ):
             result = asyncio.run(handler(context=None, params=params))
 
         assert result.action == "cancel"
         assert handler.metrics["errors"] == 1
-
-
 
 
 class TestElicitationHandlerContextBridge:
@@ -172,10 +175,15 @@ class TestElicitationHandlerContextBridge:
             "context, otherwise the test would pass even without replay."
         )
 
-        handler = ElicitationHandler("pay", {"timeout": 5}, call_context=lambda: captured)
+        handler = ElicitationHandler(
+            "pay", {"timeout": 5}, call_context=lambda: captured
+        )
         params = _form_params()
 
-        with patch("tools.approval_prompt.request_elicitation_consent", side_effect=fake_consent):
+        with patch(
+            "tools.approval_prompt.request_elicitation_consent",
+            side_effect=fake_consent,
+        ):
             result = asyncio.run(handler(context=None, params=params))
 
         assert result.action == "accept"
@@ -192,12 +200,13 @@ class TestElicitationHandlerContextBridge:
         handler = ElicitationHandler("pay", {"timeout": 5})
         params = _form_params()
 
-        with patch("tools.approval_prompt.request_elicitation_consent", return_value="accept") as m:
+        with patch(
+            "tools.approval_prompt.request_elicitation_consent", return_value="accept"
+        ) as m:
             result = asyncio.run(handler(context=None, params=params))
 
         assert result.action == "accept"
         assert m.call_count == 1
-
 
     def test_pending_call_context_none_does_not_crash(self):
         """The ``call_context`` thunk returns None between tool
@@ -205,7 +214,9 @@ class TestElicitationHandlerContextBridge:
         handler = ElicitationHandler("pay", {"timeout": 5}, call_context=lambda: None)
         params = _form_params()
 
-        with patch("tools.approval_prompt.request_elicitation_consent", return_value="decline"):
+        with patch(
+            "tools.approval_prompt.request_elicitation_consent", return_value="decline"
+        ):
             result = asyncio.run(handler(context=None, params=params))
 
         assert result.action == "decline"

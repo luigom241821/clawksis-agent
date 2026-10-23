@@ -90,10 +90,15 @@ class TestAutocompleteDevicePaths:
         device = os.path.abspath(os.path.join(os.sep, "nul-device"))
         real = os.path.join(cwd, "real.txt")
 
-        monkeypatch.setattr(cc.shutil, "which", lambda name: "/fake/rg" if name == "rg" else None)
         monkeypatch.setattr(
-            cc.subprocess, "run",
-            lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, f"{device}\n{real}\n", ""),
+            cc.shutil, "which", lambda name: "/fake/rg" if name == "rg" else None
+        )
+        monkeypatch.setattr(
+            cc.subprocess,
+            "run",
+            lambda cmd, **kw: subprocess.CompletedProcess(
+                cmd, 0, f"{device}\n{real}\n", ""
+            ),
         )
         real_relpath = os.path.relpath
 
@@ -140,7 +145,9 @@ class TestSkillHashSymmetry:
     def _make_skill(self, root: Path) -> Path:
         skill = root / "demo-skill"
         (skill / "references" / "methods").mkdir(parents=True)
-        (skill / "SKILL.md").write_text("---\nname: demo\n---\nbody\n", encoding="utf-8")
+        (skill / "SKILL.md").write_text(
+            "---\nname: demo\n---\nbody\n", encoding="utf-8"
+        )
         (skill / "references" / "methods" / "x.md").write_text("x\n", encoding="utf-8")
         # Mixed-case name exercises the case-sensitive sort divergence.
         (skill / "Zeta.md").write_text("z\n", encoding="utf-8")
@@ -160,8 +167,11 @@ class TestSkillHashSymmetry:
                 # Native separators — what Windows bundle construction produces.
                 files[str(f.relative_to(skill))] = f.read_bytes()
         bundle = SkillBundle(
-            name="demo-skill", files=files, source="test",
-            identifier="test/demo-skill", trust_level="community",
+            name="demo-skill",
+            files=files,
+            source="test",
+            identifier="test/demo-skill",
+            trust_level="community",
         )
         assert bundle_content_hash(bundle) == disk
 
@@ -213,10 +223,14 @@ class TestLineEndingPreservation:
 
         p = tmp_path / "mod.py"
         p.write_bytes(b"def f():\n    return 1\n\ndef g():\n    return 2\n")
-        res = json.loads(patch_tool(
-            mode="replace", path=str(p),
-            old_string="    return 1", new_string="    return 100",
-        ))
+        res = json.loads(
+            patch_tool(
+                mode="replace",
+                path=str(p),
+                old_string="    return 1",
+                new_string="    return 100",
+            )
+        )
         assert res.get("success")
         data = p.read_bytes()
         assert b"\r\n" not in data
@@ -228,10 +242,14 @@ class TestLineEndingPreservation:
 
         p = tmp_path / "mod.py"
         p.write_bytes(b"def f():\r\n    return 1\r\n")
-        res = json.loads(patch_tool(
-            mode="replace", path=str(p),
-            old_string="    return 1", new_string="    return 100",
-        ))
+        res = json.loads(
+            patch_tool(
+                mode="replace",
+                path=str(p),
+                old_string="    return 1",
+                new_string="    return 100",
+            )
+        )
         assert res.get("success")
         data = p.read_bytes()
         # CRLF file stays CRLF — no mixed endings after an LF-args patch.

@@ -19,7 +19,9 @@ from tui_gateway import server
 def _write_cfg(home: Path, busy: str, approvals: str) -> None:
     home.mkdir(parents=True, exist_ok=True)
     (home / "config.yaml").write_text(
-        yaml.safe_dump({"display": {"busy_input_mode": busy}, "approvals": {"mode": approvals}}),
+        yaml.safe_dump(
+            {"display": {"busy_input_mode": busy}, "approvals": {"mode": approvals}}
+        ),
         encoding="utf-8",
     )
 
@@ -44,13 +46,24 @@ def homes(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize(
     ("key", "value", "section", "field"),
-    [("busy", "steer", "display", "busy_input_mode"), ("approval_mode", "off", "approvals", "mode")],
+    [
+        ("busy", "steer", "display", "busy_input_mode"),
+        ("approval_mode", "off", "approvals", "mode"),
+    ],
 )
-def test_session_bound_config_set_writes_the_session_profile(homes, key, value, section, field):
+def test_session_bound_config_set_writes_the_session_profile(
+    homes, key, value, section, field
+):
     launch, worker = homes
-    session = {"agent": None, "profile_home": str(worker), "session_key": "worker-session"}
+    session = {
+        "agent": None,
+        "profile_home": str(worker),
+        "session_key": "worker-session",
+    }
     with patch.dict(server._sessions, {"s-worker": session}, clear=False):
-        resp = server._methods["config.set"]("rid", {"session_id": "s-worker", "key": key, "value": value})
+        resp = server._methods["config.set"](
+            "rid", {"session_id": "s-worker", "key": key, "value": value}
+        )
     assert resp["result"]["value"] == value
     assert _read(worker)[section][field] == value
     assert _read(launch)[section][field] != value

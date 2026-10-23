@@ -75,10 +75,13 @@ def test_pre_turn_named_custom_provider_identity_selects_vision_override(monkeyp
         ),
     )
 
-    assert runner._decide_image_input_mode(
-        source=_source(),
-        user_config=cfg,
-    ) == "native"
+    assert (
+        runner._decide_image_input_mode(
+            source=_source(),
+            user_config=cfg,
+        )
+        == "native"
+    )
 
 
 @pytest.mark.asyncio

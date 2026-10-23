@@ -61,7 +61,8 @@ def profile_config(tmp_path, monkeypatch):
     path.write_text(_SEED, encoding="utf-8")
     yield path
     assert (
-        default_config.read_text(encoding="utf-8-sig") == "model: default-profile-model\n"
+        default_config.read_text(encoding="utf-8-sig")
+        == "model: default-profile-model\n"
     )
 
 
@@ -129,7 +130,9 @@ def test_setting_saved_while_route_is_decided_survives(profile_config, monkeypat
             )
         return decide(*args)
 
-    monkeypatch.setattr(route_identity, "should_clear_context_pin", decide_while_other_process_saves)
+    monkeypatch.setattr(
+        route_identity, "should_clear_context_pin", decide_while_other_process_saves
+    )
     persist_model_selection(_RESULT, profile_config)
 
     saved = yaml.safe_load(profile_config.read_text(encoding="utf-8-sig"))
@@ -156,4 +159,6 @@ def test_anchored_model_route_reused_later_saves_the_new_route(tmp_path, monkeyp
     saved = yaml.safe_load(path.read_text(encoding="utf-8-sig"))
     route = {k: v for k, v in _EXPECTED.items() if k != "model_slots"}
     assert saved["model"] == route
-    assert saved["auxiliary"]["vision"] == route  # the alias still shares the node, as on main
+    assert (
+        saved["auxiliary"]["vision"] == route
+    )  # the alias still shares the node, as on main

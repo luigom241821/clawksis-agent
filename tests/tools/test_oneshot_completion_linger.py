@@ -34,9 +34,11 @@ from tools.process_registry import ProcessRegistry, ProcessSession
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
+
 @pytest.fixture()
 def registry():
     return ProcessRegistry()
+
 
 def _make_session(
     sid="proc_linger_test",
@@ -54,13 +56,16 @@ def _make_session(
     s.exited = exited
     return s
 
+
 # ── wait_for_pending_completions: unit semantics ────────────────────────────
+
 
 def test_no_pending_processes_is_immediate_noop(registry):
     t0 = time.monotonic()
     result = registry.wait_for_pending_completions(timeout=30)
     assert time.monotonic() - t0 < 1.0
     assert result == {"waited": [], "completed": [], "timed_out": []}
+
 
 def test_non_notify_background_processes_are_not_waited_on(registry):
     """Servers/daemons without notify_on_complete carry no completion
@@ -73,6 +78,7 @@ def test_non_notify_background_processes_are_not_waited_on(registry):
     assert time.monotonic() - t0 < 1.0
     assert result["waited"] == []
 
+
 def test_already_exited_session_not_waited_on(registry):
     s = _make_session(exited=True)
     s._completion_event.set()
@@ -80,6 +86,7 @@ def test_already_exited_session_not_waited_on(registry):
         registry._running[s.id] = s
     result = registry.wait_for_pending_completions(timeout=30)
     assert result["waited"] == []
+
 
 def test_session_mid_finish_is_still_waited_on(registry):
     """``_move_to_finished`` moves a session out of ``_running`` BEFORE it enqueues the completion and
@@ -97,6 +104,7 @@ def test_session_mid_finish_is_still_waited_on(registry):
     result = registry.wait_for_pending_completions(timeout=30, poll_interval=0.1)
     assert result["waited"] == [s.id]
     assert result["completed"] == [s.id]
+
 
 def test_wait_returns_when_process_completes(registry):
     s = _make_session()
@@ -118,6 +126,7 @@ def test_wait_returns_when_process_completes(registry):
     assert result["timed_out"] == []
     assert elapsed < 10  # returned on completion, not the 30s bound
 
+
 def test_wait_times_out_on_stuck_process(registry):
     s = _make_session()
     with registry._lock:
@@ -129,12 +138,14 @@ def test_wait_times_out_on_stuck_process(registry):
     assert result["completed"] == []
     assert 0.4 <= elapsed < 5
 
+
 def test_timeout_zero_disables_linger(registry):
     s = _make_session()
     with registry._lock:
         registry._running[s.id] = s
     result = registry.wait_for_pending_completions(timeout=0)
     assert result == {"waited": [], "completed": [], "timed_out": []}
+
 
 def test_task_id_filter_scopes_the_wait(registry):
     # The terminal tool stores the container key in task_id and the spawning turn in
@@ -146,11 +157,14 @@ def test_task_id_filter_scopes_the_wait(registry):
     with registry._lock:
         registry._running[mine.id] = mine
         registry._running[other.id] = other
-    result = registry.wait_for_pending_completions("task_a", timeout=0.3, poll_interval=0.1)
+    result = registry.wait_for_pending_completions(
+        "task_a", timeout=0.3, poll_interval=0.1
+    )
     assert result["waited"] == [mine.id]
     # other (task_b) never entered the wait set — no timeout entry for it.
     assert other.id not in result["waited"]
     assert other.id not in result["timed_out"]
+
 
 def test_wait_covers_multiple_pending_processes(registry):
     sessions = [_make_session(sid=f"proc_multi_{i}") for i in range(3)]
@@ -168,6 +182,7 @@ def test_wait_covers_multiple_pending_processes(registry):
     result = registry.wait_for_pending_completions(timeout=30, poll_interval=0.1)
     assert sorted(result["completed"]) == sorted(s.id for s in sessions)
     assert result["timed_out"] == []
+
 
 def test_wait_uses_reconcile_for_orphaned_pipe_exits(registry, monkeypatch):
     """A direct child that exited while its reader is pipe-wedged (#17327)
@@ -189,7 +204,9 @@ def test_wait_uses_reconcile_for_orphaned_pipe_exits(registry, monkeypatch):
     assert result["completed"] == [s.id]
     assert calls["n"] >= 2
 
+
 # ── config plumbing ──────────────────────────────────────────────────────────
+
 
 def test_config_reader_falls_back_when_config_unreadable(monkeypatch):
     import tools.process_registry as pr_mod
@@ -197,11 +214,10 @@ def test_config_reader_falls_back_when_config_unreadable(monkeypatch):
     def _boom():
         raise RuntimeError("config unreadable")
 
-    monkeypatch.setattr(
-        "clawk_cli.config.read_raw_config", _boom, raising=False
-    )
+    monkeypatch.setattr("clawk_cli.config.read_raw_config", _boom, raising=False)
     val = pr_mod.ProcessRegistry._oneshot_completion_wait_seconds()
     assert val > 0
+
 
 def test_config_value_is_floored_at_zero(monkeypatch):
     monkeypatch.setattr(
@@ -211,6 +227,7 @@ def test_config_value_is_floored_at_zero(monkeypatch):
     )
     val = ProcessRegistry._oneshot_completion_wait_seconds()
     assert val == 0.0
+
 
 def test_default_timeout_read_from_config(registry, monkeypatch):
     """timeout=None resolves through _oneshot_completion_wait_seconds."""
@@ -224,7 +241,9 @@ def test_default_timeout_read_from_config(registry, monkeypatch):
     result = registry.wait_for_pending_completions()
     assert result == {"waited": [], "completed": [], "timed_out": []}
 
+
 # ── CLI exit paths invoke the linger ─────────────────────────────────────────
+
 
 def test_finalize_single_query_settles_session_then_releases_then_lingers(monkeypatch):
     """cli._finalize_single_query ordering contract: session-owned settlement
@@ -242,13 +261,17 @@ def test_finalize_single_query_settles_session_then_releases_then_lingers(monkey
     monkeypatch.setattr(
         process_registry,
         "wait_for_pending_completions",
-        lambda *a, **k: order.append("wait") or {"waited": [], "completed": [], "timed_out": []},
+        lambda *a, **k: (
+            order.append("wait") or {"waited": [], "completed": [], "timed_out": []}
+        ),
     )
     monkeypatch.setattr(
         cli_mod, "_flush_one_shot_session_store", lambda cli: order.append("flush")
     )
     monkeypatch.setattr(
-        cli_mod, "_notify_single_query_session_finalize", lambda cli, **k: order.append("finalize")
+        cli_mod,
+        "_notify_single_query_session_finalize",
+        lambda cli, **k: order.append("finalize"),
     )
     monkeypatch.setattr(
         cli_mod, "_shutdown_agent_memory_provider", lambda agent: order.append("memory")
@@ -265,6 +288,7 @@ def test_finalize_single_query_settles_session_then_releases_then_lingers(monkey
     cli_mod._finalize_single_query(_FakeCli())
     assert order == ["flush", "finalize", "memory", "release", "wait", "cleanup"]
 
+
 def test_finalize_single_query_survives_wait_failure(monkeypatch):
     """A raising wait must not break the durable flush path."""
     import cli as cli_mod
@@ -280,7 +304,9 @@ def test_finalize_single_query_survives_wait_failure(monkeypatch):
         cli_mod, "_flush_one_shot_session_store", lambda cli: order.append("flush")
     )
     monkeypatch.setattr(
-        cli_mod, "_notify_single_query_session_finalize", lambda cli, **k: order.append("finalize")
+        cli_mod,
+        "_notify_single_query_session_finalize",
+        lambda cli, **k: order.append("finalize"),
     )
     monkeypatch.setattr(cli_mod, "_run_cleanup", lambda **k: order.append("cleanup"))
 
@@ -293,6 +319,7 @@ def test_finalize_single_query_survives_wait_failure(monkeypatch):
 
     cli_mod._finalize_single_query(_FakeCli())
     assert "flush" in order and "release" in order
+
 
 # ── real-process E2E ─────────────────────────────────────────────────────────
 
@@ -323,6 +350,7 @@ _E2E_PARENT = textwrap.dedent(
     """
 )
 
+
 def _run_e2e_parent(tmp_path, *, linger: bool) -> Path:
     marker = tmp_path / ("done_linger.txt" if linger else "done_nolinger.txt")
     script = tmp_path / f"parent_{linger}.py"
@@ -344,6 +372,7 @@ def _run_e2e_parent(tmp_path, *, linger: bool) -> Path:
     assert proc.returncode == 0, proc.stderr
     assert "SPAWNED" in proc.stdout
     return marker
+
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX pipe/session semantics")
 def test_e2e_lingering_parent_keeps_background_delivery_alive(tmp_path):

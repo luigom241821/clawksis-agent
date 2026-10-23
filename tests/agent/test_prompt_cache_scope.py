@@ -46,7 +46,6 @@ class TestResolvePromptCacheScope:
     def test_no_db_falls_back_to_physical_id(self):
         assert resolve_prompt_cache_scope(_agent("root-sess")) == "root-sess"
 
-
     def test_rotation_child_inherits_root_scope(self, db):
         """THE fix: scope survives a compression rotation boundary."""
         db.create_session("root-sess", source="webui")
@@ -80,9 +79,7 @@ class TestResolvePromptCacheScope:
             model_config={"_branched_from": "root-sess"},
         )
 
-        assert (
-            resolve_prompt_cache_scope(_agent("branch-child", db)) == "branch-child"
-        )
+        assert resolve_prompt_cache_scope(_agent("branch-child", db)) == "branch-child"
 
     def test_delegate_child_stays_isolated(self, db):
         """Delegate subagents keep per-child scopes (matches #79161 semantics)."""
@@ -96,16 +93,13 @@ class TestResolvePromptCacheScope:
         )
 
         assert (
-            resolve_prompt_cache_scope(_agent("delegate-child", db))
-            == "delegate-child"
+            resolve_prompt_cache_scope(_agent("delegate-child", db)) == "delegate-child"
         )
 
     def test_tool_child_stays_isolated(self, db):
         db.create_session("parent-sess", source="webui")
         db.end_session("parent-sess", "compression")
-        db.create_session(
-            "tool-child", source="tool", parent_session_id="parent-sess"
-        )
+        db.create_session("tool-child", source="tool", parent_session_id="parent-sess")
 
         assert resolve_prompt_cache_scope(_agent("tool-child", db)) == "tool-child"
 
@@ -221,7 +215,6 @@ class TestRotationContinuityEndToEnd:
 
         assert key_before == key_after
 
-
     def test_sibling_forks_keep_distinct_keys(self, db):
         db.create_session("parent-sess", source="webui")
         db.end_session("parent-sess", "compression")
@@ -283,9 +276,9 @@ class TestTransportWiring:
         )
         assert kwargs["extra_headers"]["session_id"] == "rotated-1"
         # Routing header mirrors the body's scoped cache key.
-        assert kwargs["extra_headers"]["x-client-request-id"] == kwargs[
-            "prompt_cache_key"
-        ]
+        assert (
+            kwargs["extra_headers"]["x-client-request-id"] == kwargs["prompt_cache_key"]
+        )
 
     def test_xai_conv_id_uses_logical_scope(self):
         from agent.transports.codex import ResponsesApiTransport
@@ -433,12 +426,9 @@ class TestPerResponseRunNonceIsolation:
     def test_cron_normalization_stays_the_only_carve_out(self):
         """The one accepted exception: cron's per-fire timestamp (#51395)."""
         assert (
-            _cache_scope_from_session_id("cron_backup_20260814_120000")
-            == "cron_backup"
+            _cache_scope_from_session_id("cron_backup_20260814_120000") == "cron_backup"
         )
-        assert (
-            _cache_scope_from_session_id(self.RESPONSE_1) == self.RESPONSE_1
-        )
+        assert _cache_scope_from_session_id(self.RESPONSE_1) == self.RESPONSE_1
 
     def test_parentless_rows_resolve_to_their_own_scope(self, db):
         """A row with no lineage is its own scope — permanently.
@@ -454,8 +444,12 @@ class TestPerResponseRunNonceIsolation:
         db.create_session(self.RESPONSE_1, source="studio")
         db.create_session(self.RESPONSE_2, source="studio")
 
-        assert resolve_prompt_cache_scope(_agent(self.RESPONSE_1, db)) == self.RESPONSE_1
-        assert resolve_prompt_cache_scope(_agent(self.RESPONSE_2, db)) == self.RESPONSE_2
+        assert (
+            resolve_prompt_cache_scope(_agent(self.RESPONSE_1, db)) == self.RESPONSE_1
+        )
+        assert (
+            resolve_prompt_cache_scope(_agent(self.RESPONSE_2, db)) == self.RESPONSE_2
+        )
 
     def test_distinct_ids_keep_distinct_affinity_keys(self):
         """Every affinity surface isolates two distinct physical ids.

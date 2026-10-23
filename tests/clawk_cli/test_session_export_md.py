@@ -31,17 +31,25 @@ def _session(**overrides):
                 "role": "assistant",
                 "content": "",
                 "tool_calls": [
-                    {"function": {"name": "terminal", "arguments": "{\"command\": \"pwd\"}"}}
+                    {
+                        "function": {
+                            "name": "terminal",
+                            "arguments": '{"command": "pwd"}',
+                        }
+                    }
                 ],
                 "created_at": 1783331698.0,
             },
-            {"role": "tool", "name": "terminal", "content": "output", "created_at": 1783331699.0},
+            {
+                "role": "tool",
+                "name": "terminal",
+                "content": "output",
+                "created_at": 1783331699.0,
+            },
         ],
     }
     data.update(overrides)
     return data
-
-
 
 
 def test_safe_session_filename_is_deterministic_and_path_safe():
@@ -57,10 +65,6 @@ def test_safe_session_filename_is_deterministic_and_path_safe():
     assert "?" not in filename
 
 
-
-
-
-
 def test_verify_export_file_checks_count_and_sha(tmp_path):
     session = _session()
     path = write_session_markdown(session, tmp_path)
@@ -69,9 +73,9 @@ def test_verify_export_file_checks_count_and_sha(tmp_path):
     assert ok is True
     assert reason == "ok"
 
-    path.write_text(path.read_text(encoding="utf-8").replace("Hello", "Tampered"), encoding="utf-8")
+    path.write_text(
+        path.read_text(encoding="utf-8").replace("Hello", "Tampered"), encoding="utf-8"
+    )
     ok, reason = verify_export_file(path, session)
     assert ok is False
     assert "sha256" in reason
-
-

@@ -26,6 +26,7 @@ And they pin the read-after-mark contract: the adapters gate on
 ``thread_id in self._threads`` immediately after marking, so the in-memory half
 of ``mark_async`` has to be synchronous even though the persist is not.
 """
+
 from __future__ import annotations
 
 import asyncio

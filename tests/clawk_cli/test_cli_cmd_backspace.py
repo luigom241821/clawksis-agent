@@ -17,9 +17,9 @@ from clawk_cli.pt_input_extras import install_cmd_backspace_alias
 # Cmd rides as the super modifier bit (8), so modifier = 9 (super) or
 # 10 (super+shift).
 CMD_BACKSPACE_SEQUENCES = (
-    "\x1b[127;9u",       # Kitty CSI-u
-    "\x1b[127;10u",      # Kitty CSI-u, +shift
-    "\x1b[27;9;127~",    # xterm modifyOtherKeys
+    "\x1b[127;9u",  # Kitty CSI-u
+    "\x1b[127;10u",  # Kitty CSI-u, +shift
+    "\x1b[27;9;127~",  # xterm modifyOtherKeys
 )
 
 # Forward-delete is a CSI tilde key, not a CSI-u codepoint.

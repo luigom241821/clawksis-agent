@@ -32,6 +32,7 @@ class _FakeResponse:
     def raise_for_status(self):
         if self.status_code >= 400:
             import httpx
+
             raise httpx.HTTPStatusError("err", request=None, response=self)  # type: ignore
 
     def json(self):
@@ -53,11 +54,14 @@ class _FakeAsyncClient:
         return _FakeResponse(200, {"request_id": "req-123"})
 
     async def get(self, url, headers=None, timeout=None):
-        return _FakeResponse(200, {
-            "status": "done",
-            "video": {"url": "https://xai-cdn/out.mp4", "duration": 8},
-            "model": self.posts[-1]["json"]["model"],
-        })
+        return _FakeResponse(
+            200,
+            {
+                "status": "done",
+                "video": {"url": "https://xai-cdn/out.mp4", "duration": 8},
+                "model": self.posts[-1]["json"]["model"],
+            },
+        )
 
 
 @pytest.fixture
@@ -109,8 +113,6 @@ class TestXAIEndpoint:
 
 
 class TestXAIPayload:
-
-
     def test_local_image_path_is_sent_as_data_uri(self, xai_provider, tmp_path):
         provider, captured = xai_provider
         image_path = tmp_path / "frame.png"
@@ -146,7 +148,6 @@ class TestXAIValidation:
         # Never hit the network
         assert "client" not in captured or not captured["client"].posts
 
-
     def test_too_many_references_rejects(self, xai_provider):
         provider, _captured = xai_provider
         result = provider.generate(
@@ -162,7 +163,6 @@ class TestXAIClamping:
         provider, captured = xai_provider
         provider.generate("x", duration=30)
         assert _last_post(captured)["json"]["duration"] == 15
-
 
     def test_invalid_aspect_ratio_soft_clamps(self, xai_provider):
         provider, captured = xai_provider

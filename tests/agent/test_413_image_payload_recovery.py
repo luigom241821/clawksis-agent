@@ -46,7 +46,6 @@ class TestSerializedMessagesBytes:
         huge = serialized_messages_bytes([_tool_msg_with_image(3_000_000)])
         assert huge - small == pytest.approx(3_000_000 - 1_000, abs=64)
 
-
     def test_utf8_bytes_not_codepoints(self):
         ascii_msgs = [{"role": "user", "content": "aaaa"}]
         utf8_msgs = [{"role": "user", "content": "éééé"}]  # 2 bytes each in UTF-8

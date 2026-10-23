@@ -4,6 +4,7 @@ These exercise the parsers with real command output shapes instead of
 patching the detectors themselves, so a change in what macOS / xdg report is
 caught here rather than in a user's browser session.
 """
+
 from unittest.mock import patch
 
 import pytest
@@ -70,6 +71,7 @@ class _FakeKey(str):
 class _FakeWinreg:
     """``winreg`` stand-in: ``values`` maps an https association subkey to its ProgId value;
     a subkey mapped to None exists but has no ProgId (``QueryValueEx`` raises WinError 2)."""
+
     HKEY_CURRENT_USER = 0
 
     def __init__(self, values):
@@ -93,22 +95,36 @@ class _FakeWinreg:
 class TestDetectDefaultWindows:
     def test_shell_association_wins_over_stale_legacy_userchoice(self):
         stale = _FakeWinreg({"UserChoice": "VivaldiHTM.ABC"})
-        with patch.object(bc, "_windows_shell_progid", return_value="ChromeHTML", create=True), \
-                patch.dict("sys.modules", {"winreg": stale}):
+        with (
+            patch.object(
+                bc, "_windows_shell_progid", return_value="ChromeHTML", create=True
+            ),
+            patch.dict("sys.modules", {"winreg": stale}),
+        ):
             assert bc._detect_default_windows() == "chrome"
-        with patch.object(bc, "_windows_shell_progid", return_value="ChromeBHTML", create=True):
+        with patch.object(
+            bc, "_windows_shell_progid", return_value="ChromeBHTML", create=True
+        ):
             assert bc._detect_default_windows() == bc.UNSUPPORTED_CHANNEL
 
-    @pytest.mark.parametrize("values,expected", [
-        # 25H2: Settings writes only UserChoiceLatest\ProgId; legacy key exists without a value.
-        ({"UserChoiceLatest\\ProgId": "MSEdgeHTM", "UserChoice": None}, "edge"),
-        ({"UserChoiceLatest\\ProgId": "ChromeHTML", "UserChoice": "MSEdgeHTM"}, "chrome"),
-        ({"UserChoice": "BraveHTML"}, "brave"),  # pre-25H2
-        ({"UserChoice": "FirefoxURL-308046B0AF4A39CB"}, None),
-    ])
+    @pytest.mark.parametrize(
+        "values,expected",
+        [
+            # 25H2: Settings writes only UserChoiceLatest\ProgId; legacy key exists without a value.
+            ({"UserChoiceLatest\\ProgId": "MSEdgeHTM", "UserChoice": None}, "edge"),
+            (
+                {"UserChoiceLatest\\ProgId": "ChromeHTML", "UserChoice": "MSEdgeHTM"},
+                "chrome",
+            ),
+            ({"UserChoice": "BraveHTML"}, "brave"),  # pre-25H2
+            ({"UserChoice": "FirefoxURL-308046B0AF4A39CB"}, None),
+        ],
+    )
     def test_registry_fallback_prefers_userchoicelatest(self, values, expected):
-        with patch.object(bc, "_windows_shell_progid", return_value=None, create=True), \
-                patch.dict("sys.modules", {"winreg": _FakeWinreg(values)}):
+        with (
+            patch.object(bc, "_windows_shell_progid", return_value=None, create=True),
+            patch.dict("sys.modules", {"winreg": _FakeWinreg(values)}),
+        ):
             assert bc._detect_default_windows() == expected
 
 
@@ -130,13 +146,25 @@ class TestDetectDefaultDarwin:
             _handler("https", "com.apple.safari"),
             _handler("ftp", "com.google.chrome"),
         )
-        with self._run_with(dump), \
-             patch.object(bc, "chromium_executable", return_value="/Applications/Google Chrome.app/x"):
+        with (
+            self._run_with(dump),
+            patch.object(
+                bc,
+                "chromium_executable",
+                return_value="/Applications/Google Chrome.app/x",
+            ),
+        ):
             assert bc._detect_default_darwin() is None
 
     def test_no_handler_recorded_fails_closed(self):
-        with self._run_with("(\n)\n"), \
-             patch.object(bc, "chromium_executable", return_value="/Applications/Google Chrome.app/x"):
+        with (
+            self._run_with("(\n)\n"),
+            patch.object(
+                bc,
+                "chromium_executable",
+                return_value="/Applications/Google Chrome.app/x",
+            ),
+        ):
             assert bc._detect_default_darwin() is None
 
     def test_firefox_default_fails_closed(self):
@@ -195,7 +223,9 @@ class TestDetectDefaultLinux:
             assert bc._detect_default_linux() == expected
 
     def test_missing_xdg_settings_fails_closed(self):
-        with patch.object(bc.subprocess, "run", side_effect=FileNotFoundError("xdg-settings")):
+        with patch.object(
+            bc.subprocess, "run", side_effect=FileNotFoundError("xdg-settings")
+        ):
             assert bc._detect_default_linux() is None
 
 
@@ -212,7 +242,9 @@ class TestLinuxProfileDir:
 
     def test_native_path_when_nothing_exists(self, tmp_path, monkeypatch):
         self._env(monkeypatch, tmp_path)
-        assert bc.real_profile_data_dir("chromium", "Linux") == posixpath.join(tmp_path.as_posix(), ".config", "chromium")
+        assert bc.real_profile_data_dir("chromium", "Linux") == posixpath.join(
+            tmp_path.as_posix(), ".config", "chromium"
+        )
 
     def test_snap_chromium_profile_is_found(self, tmp_path, monkeypatch):
         self._env(monkeypatch, tmp_path)
@@ -222,7 +254,9 @@ class TestLinuxProfileDir:
 
     def test_flatpak_chrome_profile_is_found(self, tmp_path, monkeypatch):
         self._env(monkeypatch, tmp_path)
-        flatpak = tmp_path / ".var" / "app" / "com.google.Chrome" / "config" / "google-chrome"
+        flatpak = (
+            tmp_path / ".var" / "app" / "com.google.Chrome" / "config" / "google-chrome"
+        )
         flatpak.mkdir(parents=True)
         assert bc.real_profile_data_dir("chrome", "Linux") == flatpak.as_posix()
 
@@ -230,10 +264,21 @@ class TestLinuxProfileDir:
         self._env(monkeypatch, tmp_path)
         native = tmp_path / ".config" / "BraveSoftware" / "Brave-Browser"
         native.mkdir(parents=True)
-        (tmp_path / ".var" / "app" / "com.brave.Browser" / "config" / "BraveSoftware" / "Brave-Browser").mkdir(parents=True)
+        (
+            tmp_path
+            / ".var"
+            / "app"
+            / "com.brave.Browser"
+            / "config"
+            / "BraveSoftware"
+            / "Brave-Browser"
+        ).mkdir(parents=True)
         assert bc.real_profile_data_dir("brave", "Linux") == native.as_posix()
 
     def test_xdg_config_home_is_honoured(self, tmp_path, monkeypatch):
         monkeypatch.setenv("HOME", str(tmp_path))
         monkeypatch.setenv("XDG_CONFIG_HOME", "/home/t/.config")
-        assert bc.real_profile_data_dir("edge", "Linux") == "/home/t/.config/microsoft-edge"
+        assert (
+            bc.real_profile_data_dir("edge", "Linux")
+            == "/home/t/.config/microsoft-edge"
+        )

@@ -53,9 +53,7 @@ def _row_state(db: SessionDB, session_id: str) -> list[tuple]:
 def _active_ids(db: SessionDB, session_id: str) -> list[int]:
     return [
         int(message["_row_id"])
-        for message in db.get_messages_as_conversation(
-            session_id, include_row_ids=True
-        )
+        for message in db.get_messages_as_conversation(session_id, include_row_ids=True)
     ]
 
 
@@ -203,6 +201,7 @@ def test_guarded_composite_rewind_rejects_append_without_inserting_scaffold(db):
     assert _row_state(db, sid) == before_rows
     assert _session_counts(db, sid) == before_counts
 
+
 def test_guarded_rewind_rejects_selected_target_content_change(db):
     sid = "guarded-rewind-in-place"
     db.create_session(sid, source="cli")
@@ -265,9 +264,7 @@ def test_rewind_guard_rejects_foreign_live_compression_without_any_change(db):
     before_counts = _session_counts(db, sid)
 
     with pytest.raises(SessionCompressionInProgressError):
-        db.rewind_to_message(
-            sid, target_id, preserve_compaction_handoff=True
-        )
+        db.rewind_to_message(sid, target_id, preserve_compaction_handoff=True)
 
     assert _row_state(db, sid) == before_rows
     assert _session_counts(db, sid) == before_counts
@@ -369,9 +366,7 @@ def test_rewind_guard_rejects_compression_ended_parent_without_any_change(db):
     before_counts = _session_counts(db, sid)
 
     with pytest.raises(CompressionSessionClosedError):
-        db.rewind_to_message(
-            sid, target_id, preserve_compaction_handoff=True
-        )
+        db.rewind_to_message(sid, target_id, preserve_compaction_handoff=True)
 
     assert _row_state(db, sid) == before_rows
     assert _session_counts(db, sid) == before_counts

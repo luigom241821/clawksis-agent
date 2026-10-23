@@ -20,6 +20,7 @@ REASONING = "嗯，长度合适。Let me check the file first."
 @pytest.fixture()
 def loop_agent():
     from run_agent import AIAgent
+
     with (
         patch("model_tools.get_tool_definitions", return_value=[]),
         patch("model_tools.check_toolset_requirements", return_value={}),
@@ -49,13 +50,20 @@ def _run(agent, responses, user_message="hello", conversation_history=None):
         patch.object(agent, "_save_trajectory"),
         patch.object(agent, "_cleanup_task_resources"),
     ):
-        return agent.run_conversation(user_message, conversation_history=conversation_history)
+        return agent.run_conversation(
+            user_message, conversation_history=conversation_history
+        )
 
 
-def test_promoted_reasoning_is_returned_but_persisted_row_keeps_content_empty(loop_agent):
+def test_promoted_reasoning_is_returned_but_persisted_row_keeps_content_empty(
+    loop_agent,
+):
     from tests.agent.test_run_agent import _mock_response
 
-    result = _run(loop_agent, [_mock_response(content="", finish_reason="stop", reasoning_content=REASONING)])
+    result = _run(
+        loop_agent,
+        [_mock_response(content="", finish_reason="stop", reasoning_content=REASONING)],
+    )
 
     # Return contract from the parser-compat fix survives: one call, the reasoning is the answer.
     assert result["final_response"] == REASONING
@@ -68,8 +76,12 @@ def test_promoted_reasoning_is_returned_but_persisted_row_keeps_content_empty(lo
     assert row["api_content"] == REASONING
 
     # The next request still replays the promoted text as the assistant's own turn.
-    _run(loop_agent, [_mock_response(content="Second answer.", finish_reason="stop")],
-         user_message="next", conversation_history=result["messages"])
+    _run(
+        loop_agent,
+        [_mock_response(content="Second answer.", finish_reason="stop")],
+        user_message="next",
+        conversation_history=result["messages"],
+    )
     sent = loop_agent.client.chat.completions.create.call_args.kwargs["messages"]
     assistant_rows = [m for m in sent if m.get("role") == "assistant"]
     assert [m["role"] for m in sent] == ["system", "user", "assistant", "user"]
@@ -88,10 +100,13 @@ def test_stall_guard_interim_row_carries_promoted_text_as_sidecar(loop_agent):
     loop_agent.valid_tool_names = {"read_file"}
     loop_agent._stall_guards = True
 
-    result = _run(loop_agent, [
-        _mock_response(content="", finish_reason="stop", reasoning_content=stalled),
-        _mock_response(content="Here is the file.", finish_reason="stop"),
-    ])
+    result = _run(
+        loop_agent,
+        [
+            _mock_response(content="", finish_reason="stop", reasoning_content=stalled),
+            _mock_response(content="Here is the file.", finish_reason="stop"),
+        ],
+    )
 
     assert result["final_response"] == "Here is the file."
     interim = next(m for m in result["messages"] if m.get("role") == "assistant")
@@ -100,7 +115,9 @@ def test_stall_guard_interim_row_carries_promoted_text_as_sidecar(loop_agent):
     assert interim["api_content"] == stalled
 
     # The continuation request carried the promoted text as the interim assistant turn.
-    second_call = loop_agent.client.chat.completions.create.call_args_list[1].kwargs["messages"]
+    second_call = loop_agent.client.chat.completions.create.call_args_list[1].kwargs[
+        "messages"
+    ]
     interim_wire = next(m for m in second_call if m.get("role") == "assistant")
     assert interim_wire["content"] == stalled
     assert "api_content" not in interim_wire
@@ -116,7 +133,9 @@ PLAN_TAILS = [
 
 
 @pytest.mark.parametrize("tail", PLAN_TAILS)
-def test_planning_tail_reasoning_only_stop_with_tools_runs_continuation_not_completion(loop_agent, tail):
+def test_planning_tail_reasoning_only_stop_with_tools_runs_continuation_not_completion(
+    loop_agent, tail
+):
     """Tools offered, zero tool calls, and the promoted reasoning ENDS on a first-person plan
     ("Let me batch...", "I need to check...") — the verbatim tails from the #111761 thread. This
     is a stalled model, not an answer: the stall-guard continuation must run (bounded by the same
@@ -126,10 +145,13 @@ def test_planning_tail_reasoning_only_stop_with_tools_runs_continuation_not_comp
     loop_agent.valid_tool_names = {"terminal", "read_file"}
     loop_agent._stall_guards = True
 
-    result = _run(loop_agent, [
-        _mock_response(content="", finish_reason="stop", reasoning_content=tail),
-        _mock_response(content="Ran the checks; all green.", finish_reason="stop"),
-    ])
+    result = _run(
+        loop_agent,
+        [
+            _mock_response(content="", finish_reason="stop", reasoning_content=tail),
+            _mock_response(content="Ran the checks; all green.", finish_reason="stop"),
+        ],
+    )
 
     assert result["api_calls"] == 2
     assert result["final_response"] == "Ran the checks; all green."
@@ -147,18 +169,23 @@ def test_planning_tail_stall_is_bounded_by_the_continuation_cap(loop_agent):
     loop_agent._stall_guards = True
     tail = PLAN_TAILS[0]
 
-    result = _run(loop_agent, [
-        _mock_response(content="", finish_reason="stop", reasoning_content=tail),
-        _mock_response(content="", finish_reason="stop", reasoning_content=tail),
-        _mock_response(content="", finish_reason="stop", reasoning_content=tail),
-        _mock_response(content="NEVER REACHED", finish_reason="stop"),
-    ])
+    result = _run(
+        loop_agent,
+        [
+            _mock_response(content="", finish_reason="stop", reasoning_content=tail),
+            _mock_response(content="", finish_reason="stop", reasoning_content=tail),
+            _mock_response(content="", finish_reason="stop", reasoning_content=tail),
+            _mock_response(content="NEVER REACHED", finish_reason="stop"),
+        ],
+    )
 
     assert result["api_calls"] == 3
     assert result["final_response"] == tail
 
 
-def test_genuine_reasoning_only_answer_with_tools_still_promotes_on_first_call(loop_agent):
+def test_genuine_reasoning_only_answer_with_tools_still_promotes_on_first_call(
+    loop_agent,
+):
     """The parser-compat contract survives: reasoning that states an answer (no trailing plan) is
     returned on the first call even with tools offered, and mentioning a plan BEFORE the answer
     does not count as a stall."""
@@ -167,12 +194,20 @@ def test_genuine_reasoning_only_answer_with_tools_still_promotes_on_first_call(l
     loop_agent.valid_tool_names = {"terminal", "read_file"}
     loop_agent._stall_guards = True
 
-    for answer in ("The answer is 42.", "Let me check the arithmetic. 6 times 7 is 42, so the answer is 42."):
+    for answer in (
+        "The answer is 42.",
+        "Let me check the arithmetic. 6 times 7 is 42, so the answer is 42.",
+    ):
         loop_agent.client.chat.completions.create.reset_mock()
-        result = _run(loop_agent, [
-            _mock_response(content="", finish_reason="stop", reasoning_content=answer),
-            _mock_response(content="NEVER REACHED", finish_reason="stop"),
-        ])
+        result = _run(
+            loop_agent,
+            [
+                _mock_response(
+                    content="", finish_reason="stop", reasoning_content=answer
+                ),
+                _mock_response(content="NEVER REACHED", finish_reason="stop"),
+            ],
+        )
         assert result["api_calls"] == 1
         assert result["final_response"] == answer
 
@@ -189,16 +224,29 @@ def test_anthropic_signed_thinking_only_stop_continues_instead_of_promoting(loop
     from types import SimpleNamespace
 
     def _anthropic(*blocks):
-        return SimpleNamespace(content=list(blocks), stop_reason="end_turn", stop_details=None,
-                               model="claude-opus-5-5", usage=None)
+        return SimpleNamespace(
+            content=list(blocks),
+            stop_reason="end_turn",
+            stop_details=None,
+            model="claude-opus-5-5",
+            usage=None,
+        )
 
     loop_agent.api_mode = "anthropic_messages"
     loop_agent.provider = "anthropic"
-    thinking_only = _anthropic(SimpleNamespace(type="thinking", thinking=SUMMARY, signature="sig-abc"))
+    thinking_only = _anthropic(
+        SimpleNamespace(type="thinking", thinking=SUMMARY, signature="sig-abc")
+    )
     answer = _anthropic(SimpleNamespace(type="text", text="391 = 17 x 23."))
     with (
-        patch.object(loop_agent, "_interruptible_api_call", side_effect=[thinking_only, answer]),
-        patch.object(loop_agent, "_interruptible_streaming_api_call", side_effect=[thinking_only, answer]),
+        patch.object(
+            loop_agent, "_interruptible_api_call", side_effect=[thinking_only, answer]
+        ),
+        patch.object(
+            loop_agent,
+            "_interruptible_streaming_api_call",
+            side_effect=[thinking_only, answer],
+        ),
         patch.object(loop_agent, "_persist_session"),
         patch.object(loop_agent, "_save_trajectory"),
         patch.object(loop_agent, "_cleanup_task_resources"),
@@ -209,18 +257,43 @@ def test_anthropic_signed_thinking_only_stop_continues_instead_of_promoting(loop
     assert result["api_calls"] == 2
 
 
-def test_native_claude_carrier_thinking_only_stop_continues_instead_of_promoting(loop_agent):
+def test_native_claude_carrier_thinking_only_stop_continues_instead_of_promoting(
+    loop_agent,
+):
     """Same contract for a chat_completions plugin replaying native Claude turns through a
     ``<provider>.native_assistant`` reasoning_details carrier (claude-subscription-directsdk)."""
     from tests.agent.test_run_agent import _mock_response
 
-    carrier = [{"type": "claude-subscription-directsdk-experimental.native_assistant", "version": 1,
-                "messages": [{"role": "assistant", "content": [
-                    {"type": "thinking", "thinking": SUMMARY, "signature": "sig-abc"}]}]}]
-    result = _run(loop_agent, [
-        _mock_response(content=None, finish_reason="stop", reasoning_content=SUMMARY, reasoning_details=carrier),
-        _mock_response(content="391 = 17 x 23.", finish_reason="stop"),
-    ])
+    carrier = [
+        {
+            "type": "claude-subscription-directsdk-experimental.native_assistant",
+            "version": 1,
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": [
+                        {
+                            "type": "thinking",
+                            "thinking": SUMMARY,
+                            "signature": "sig-abc",
+                        }
+                    ],
+                }
+            ],
+        }
+    ]
+    result = _run(
+        loop_agent,
+        [
+            _mock_response(
+                content=None,
+                finish_reason="stop",
+                reasoning_content=SUMMARY,
+                reasoning_details=carrier,
+            ),
+            _mock_response(content="391 = 17 x 23.", finish_reason="stop"),
+        ],
+    )
 
     assert result["final_response"] == "391 = 17 x 23."
     assert result["api_calls"] == 2

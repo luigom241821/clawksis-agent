@@ -2,6 +2,7 @@
 
 ``CheckpointManager.restore(safe=True)`` unless the client sends ``all: true`` (main's ``--all``); a
 file-scoped restore is never ``safe``. Omitted, null and false ``all`` all mean the safe restore."""
+
 import threading
 import types
 
@@ -23,14 +24,33 @@ def test_rollback_restore_keeps_hand_edits_unless_all():
             return {"success": True, "message": "done"}
 
     try:
-        for extra in ({}, {"all": None}, {"all": False}, {"all": True}, {"file_path": "a.py"}):
-            server._sessions["sid"] = _session(types.SimpleNamespace(_checkpoint_mgr=_Mgr()))
-            resp = server.handle_request({"id": "1", "method": "rollback.restore",
-                                          "params": {"session_id": "sid", "hash": "1", **extra}})
+        for extra in (
+            {},
+            {"all": None},
+            {"all": False},
+            {"all": True},
+            {"file_path": "a.py"},
+        ):
+            server._sessions["sid"] = _session(
+                types.SimpleNamespace(_checkpoint_mgr=_Mgr())
+            )
+            resp = server.handle_request(
+                {
+                    "id": "1",
+                    "method": "rollback.restore",
+                    "params": {"session_id": "sid", "hash": "1", **extra},
+                }
+            )
             assert resp.get("result", {}).get("success") is True, resp
     finally:
         server._sessions.pop("sid", None)
-    assert calls == [(None, True), (None, True), (None, True), (None, False), ("a.py", False)]
+    assert calls == [
+        (None, True),
+        (None, True),
+        (None, True),
+        (None, False),
+        ("a.py", False),
+    ]
 
 
 def test_rollback_restore_refuses_a_non_boolean_all_before_touching_anything():
@@ -49,16 +69,34 @@ def test_rollback_restore_refuses_a_non_boolean_all_before_touching_anything():
             calls.append((file_path, safe))
             return {"success": True, "message": "done"}
 
-    history = [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "ok"}]
+    history = [
+        {"role": "user", "content": "hi"},
+        {"role": "assistant", "content": "ok"},
+    ]
     try:
         for value in ("false", "true", 1, 0, [], {}):
             for extra in ({}, {"file_path": "a.py"}):
-                session = _session(types.SimpleNamespace(_checkpoint_mgr=_Mgr()), history=list(history))
+                session = _session(
+                    types.SimpleNamespace(_checkpoint_mgr=_Mgr()), history=list(history)
+                )
                 server._sessions["sid"] = session
-                resp = server.handle_request({"id": "1", "method": "rollback.restore",
-                                              "params": {"session_id": "sid", "hash": "1", "all": value, **extra}})
+                resp = server.handle_request(
+                    {
+                        "id": "1",
+                        "method": "rollback.restore",
+                        "params": {
+                            "session_id": "sid",
+                            "hash": "1",
+                            "all": value,
+                            **extra,
+                        },
+                    }
+                )
                 assert resp.get("error", {}).get("data") == {
-                    "reason": "invalid_params", "field": "all", "detail": "must be a boolean"}, (value, resp)
+                    "reason": "invalid_params",
+                    "field": "all",
+                    "detail": "must be a boolean",
+                }, (value, resp)
                 assert session["history"] == history
     finally:
         server._sessions.pop("sid", None)

@@ -17,19 +17,22 @@ class TestResolveCdpOverride:
 
         assert _resolve_cdp_override(WS_URL) == WS_URL
 
-
     def test_redacts_secret_query_params_in_success_log(self):
         from tools.browser_tool_cdp import _resolve_cdp_override
 
         raw = "https://cdp.example/json/version?access_token=super-secret-token-123456"
-        resolved_ws = "wss://cdp.example/devtools/browser/abc?token=super-secret-token-123456"
+        resolved_ws = (
+            "wss://cdp.example/devtools/browser/abc?token=super-secret-token-123456"
+        )
 
         response = Mock()
         response.raise_for_status.return_value = None
         response.json.return_value = {"webSocketDebuggerUrl": resolved_ws}
 
-        with patch("requests.get", return_value=response), \
-                patch("tools.browser_tool.logger.info") as mock_info:
+        with (
+            patch("requests.get", return_value=response),
+            patch("tools.browser_tool.logger.info") as mock_info,
+        ):
             resolved = _resolve_cdp_override(raw)
 
         assert resolved == resolved_ws
@@ -48,8 +51,10 @@ class TestResolveCdpOverride:
             "upstream rejected https://cdp.example/json/version?access_token=super-secret-token-123456"
         )
 
-        with patch("requests.get", side_effect=secret_error), \
-                patch("tools.browser_tool.logger.warning") as mock_warning:
+        with (
+            patch("requests.get", side_effect=secret_error),
+            patch("tools.browser_tool.logger.warning") as mock_warning,
+        ):
             resolved = _resolve_cdp_override(raw)
 
         assert resolved == raw
@@ -63,7 +68,9 @@ class TestResolveCdpOverride:
         assert "access_token=***" in logged_error
         assert logged_version_url.startswith("https://cdp.example")
 
-    def test_normalizes_provider_returned_http_cdp_url_when_creating_session(self, monkeypatch):
+    def test_normalizes_provider_returned_http_cdp_url_when_creating_session(
+        self, monkeypatch
+    ):
         from tools import browser_tool
 
         provider = Mock()
@@ -80,8 +87,13 @@ class TestResolveCdpOverride:
 
         monkeypatch.setattr(browser_tool, "_active_sessions", {})
         monkeypatch.setattr(browser_tool, "_session_last_activity", {})
-        monkeypatch.setattr("tools.browser_tool_lifecycle._start_browser_cleanup_thread", lambda: None)
-        monkeypatch.setattr("tools.browser_tool_lifecycle._update_session_activity", lambda task_id: None)
+        monkeypatch.setattr(
+            "tools.browser_tool_lifecycle._start_browser_cleanup_thread", lambda: None
+        )
+        monkeypatch.setattr(
+            "tools.browser_tool_lifecycle._update_session_activity",
+            lambda task_id: None,
+        )
         monkeypatch.setattr("tools.browser_tool_cdp._get_cdp_override", lambda: "")
         monkeypatch.setattr(bt_cloud, "_get_cloud_provider", lambda: provider)
 
@@ -126,8 +138,13 @@ class TestGetCdpOverride:
         response.raise_for_status.return_value = None
         response.json.return_value = {"webSocketDebuggerUrl": WS_URL}
 
-        with patch("clawk_cli.config.read_raw_config", return_value={"browser": {"cdp_url": HTTP_URL}}), \
-             patch("requests.get", return_value=response) as mock_get:
+        with (
+            patch(
+                "clawk_cli.config.read_raw_config",
+                return_value={"browser": {"cdp_url": HTTP_URL}},
+            ),
+            patch("requests.get", return_value=response) as mock_get,
+        ):
             resolved = bt_cdp._get_cdp_override()
 
         assert resolved == WS_URL
@@ -149,14 +166,17 @@ class TestGetCdpOverride:
             assert bc.is_camofox_mode() is True
 
         # A config-only CDP override suppresses camofox.
-        with patch("clawk_cli.config.read_raw_config",
-                   return_value={"browser": {"cdp_url": HTTP_URL}}):
+        with patch(
+            "clawk_cli.config.read_raw_config",
+            return_value={"browser": {"cdp_url": HTTP_URL}},
+        ):
             assert bc.is_camofox_mode() is False
 
         # The env override still suppresses camofox.
         monkeypatch.setenv("BROWSER_CDP_URL", HTTP_URL)
         with patch("clawk_cli.config.read_raw_config", return_value={}):
             assert bc.is_camofox_mode() is False
+
 
 class TestCreateCdpSession:
     """_create_cdp_session() must sanitize the CDP URL before logging.
@@ -171,12 +191,16 @@ class TestCreateCdpSession:
     def test_redacts_token_in_session_creation_log(self):
         from tools.browser_tool_session import _create_cdp_session
 
-        cdp_url_with_token = "wss://cdp.example/devtools/browser/abc?token=super-secret-token-999"
+        cdp_url_with_token = (
+            "wss://cdp.example/devtools/browser/abc?token=super-secret-token-999"
+        )
 
         with patch("tools.browser_tool.logger.info") as mock_info:
             result = _create_cdp_session("task-1", cdp_url_with_token)
 
-        assert result["cdp_url"] == cdp_url_with_token, "raw URL must be stored unmodified"
+        assert result["cdp_url"] == cdp_url_with_token, (
+            "raw URL must be stored unmodified"
+        )
 
         mock_info.assert_called_once()
         logged_args = " ".join(str(a) for a in mock_info.call_args.args)
@@ -295,7 +319,10 @@ class TestCDPSupervisorStartErrorRedaction:
             fake.is_alive.return_value = False
             return fake
 
-        with patch("threading.Thread", side_effect=_fake_thread), patch.object(sup, "stop"):
+        with (
+            patch("threading.Thread", side_effect=_fake_thread),
+            patch.object(sup, "stop"),
+        ):
             sup.start(timeout=5.0)
 
     def test_start_error_redacts_query_token(self):
@@ -359,22 +386,36 @@ class TestCdpSessionCommandArgs:
             captured.extend(cmd_parts)
             return {"success": True, "data": {}}
 
-        monkeypatch.setattr("tools.browser_tool_cdp._ensure_cdp_supervisor", lambda task_id: None)
+        monkeypatch.setattr(
+            "tools.browser_tool_cdp._ensure_cdp_supervisor", lambda task_id: None
+        )
         monkeypatch.setattr(bt_session, "_spawn_and_collect", fake_spawn)
         _engine, result = bt_session._dispatch_browser_command(
-            "test-task", session_info, "/usr/bin/agent-browser", "click", ["@e4"], 30, None)
+            "test-task",
+            session_info,
+            "/usr/bin/agent-browser",
+            "click",
+            ["@e4"],
+            30,
+            None,
+        )
         assert result["success"] is True
         return captured
 
     def test_cdp_session_passes_its_own_session_and_cdp_url(self, monkeypatch):
-        argv = self._argv(monkeypatch, {
-            "session_name": "cdp_test_123",
-            "cdp_url": "ws://127.0.0.1:9222/devtools/browser/abc",
-        })
+        argv = self._argv(
+            monkeypatch,
+            {
+                "session_name": "cdp_test_123",
+                "cdp_url": "ws://127.0.0.1:9222/devtools/browser/abc",
+            },
+        )
 
         assert argv.count("--session") == 1
         assert argv[argv.index("--session") + 1] == "cdp_test_123"
-        assert argv[argv.index("--cdp") + 1] == "ws://127.0.0.1:9222/devtools/browser/abc"
+        assert (
+            argv[argv.index("--cdp") + 1] == "ws://127.0.0.1:9222/devtools/browser/abc"
+        )
         assert argv[-2:] == ["click", "@e4"]
 
     def test_local_session_keeps_session_without_cdp(self, monkeypatch):

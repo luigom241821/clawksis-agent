@@ -1,6 +1,11 @@
 import pytest
 
-from gateway.session_context import _UNSET, _VAR_MAP, clear_session_vars, set_session_vars
+from gateway.session_context import (
+    _UNSET,
+    _VAR_MAP,
+    clear_session_vars,
+    set_session_vars,
+)
 from agent.session_source import session_source_for
 
 
@@ -27,8 +32,6 @@ def test_session_source_falls_back_to_platform(monkeypatch):
     monkeypatch.delenv("CLAWK_SESSION_SOURCE", raising=False)
 
     assert session_source_for("tui") == "tui"
-
-
 
 
 @pytest.mark.parametrize("inherited", ["", "tui", "desktop"])

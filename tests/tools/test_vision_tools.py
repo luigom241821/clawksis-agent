@@ -125,8 +125,6 @@ class TestImageToBase64DataUrl:
 class TestHandleVisionAnalyze:
     """Verify _handle_vision_analyze returns an Awaitable and builds correct prompt."""
 
-
-
     @pytest.mark.asyncio
     async def test_model_resolution_config_then_env_then_default(self):
         """config.yaml auxiliary.vision.model wins; then AUXILIARY_VISION_MODEL;
@@ -135,17 +133,24 @@ class TestHandleVisionAnalyze:
         async def resolve(config=None, env_model=None):
             with ExitStack() as st:
                 mock_tool = st.enter_context(
-                    patch("tools.vision_tools.vision_analyze_tool", new_callable=AsyncMock)
+                    patch(
+                        "tools.vision_tools.vision_analyze_tool", new_callable=AsyncMock
+                    )
                 )
-                st.enter_context(patch(
-                    "tools.vision_tools._should_use_native_vision_fast_path",
-                    return_value=False,
-                ))
+                st.enter_context(
+                    patch(
+                        "tools.vision_tools._should_use_native_vision_fast_path",
+                        return_value=False,
+                    )
+                )
                 st.enter_context(patch.dict(os.environ, {}, clear=False))
                 if config is not None:
-                    st.enter_context(patch(
-                        "clawk_cli.config.load_config", return_value=config,
-                    ))
+                    st.enter_context(
+                        patch(
+                            "clawk_cli.config.load_config",
+                            return_value=config,
+                        )
+                    )
                 if env_model is None:
                     os.environ.pop("AUXILIARY_VISION_MODEL", None)
                 else:
@@ -158,13 +163,20 @@ class TestHandleVisionAnalyze:
 
         assert await resolve(env_model="custom/model-v1") == "custom/model-v1"
         assert await resolve() is None
-        assert await resolve(
-            config={"auxiliary": {"vision": {"model": "qwen3.7-plus"}}},
-            env_model="env-model",
-        ) == "qwen3.7-plus"
-        assert await resolve(
-            config={"auxiliary": {"vision": {}}}, env_model="fallback-model",
-        ) == "fallback-model"
+        assert (
+            await resolve(
+                config={"auxiliary": {"vision": {"model": "qwen3.7-plus"}}},
+                env_model="env-model",
+            )
+            == "qwen3.7-plus"
+        )
+        assert (
+            await resolve(
+                config={"auxiliary": {"vision": {}}},
+                env_model="fallback-model",
+            )
+            == "fallback-model"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -224,7 +236,11 @@ class TestErrorLoggingExcInfo:
             mock_response.choices = [mock_choice]
 
             with (
-                patch("tools.vision_tools.async_call_llm", new_callable=AsyncMock, return_value=mock_response),
+                patch(
+                    "tools.vision_tools.async_call_llm",
+                    new_callable=AsyncMock,
+                    return_value=mock_response,
+                ),
             ):
                 # Make unlink fail to trigger the cleanup warning.
                 def failing_unlink(self, *args, **kwargs):
@@ -245,7 +261,9 @@ class TestErrorLoggingExcInfo:
 
 class TestVisionConfig:
     @pytest.mark.asyncio
-    async def test_temperature_and_timeout_come_from_config_with_defaults(self, tmp_path):
+    async def test_temperature_and_timeout_come_from_config_with_defaults(
+        self, tmp_path
+    ):
         img = tmp_path / "test.png"
         img.write_bytes(VALID_PNG + b"\x00" * 8)
 
@@ -302,7 +320,9 @@ class TestVisionSafetyGuards:
         secret = tmp_path / "secret.txt"
         secret.write_text("TOP-SECRET=1\n", encoding="utf-8")
 
-        with patch("tools.vision_tools.async_call_llm", new_callable=AsyncMock) as mock_llm:
+        with patch(
+            "tools.vision_tools.async_call_llm", new_callable=AsyncMock
+        ) as mock_llm:
             result = json.loads(await vision_analyze_tool(str(secret), "extract text"))
 
         assert result["success"] is False
@@ -322,7 +342,9 @@ class TestVisionSafetyGuards:
         secret = tmp_path / ".env"
         secret.write_text("OPENAI_API_KEY=sk-super-secret\n", encoding="utf-8")
 
-        with patch("tools.vision_tools.async_call_llm", new_callable=AsyncMock) as mock_llm:
+        with patch(
+            "tools.vision_tools.async_call_llm", new_callable=AsyncMock
+        ) as mock_llm:
             result = json.loads(await vision_analyze_tool(str(secret), "extract text"))
 
         assert result["success"] is False
@@ -330,7 +352,9 @@ class TestVisionSafetyGuards:
         mock_llm.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_native_fast_path_local_env_file_blocked_via_read_guard(self, tmp_path):
+    async def test_native_fast_path_local_env_file_blocked_via_read_guard(
+        self, tmp_path
+    ):
         """Same read guard must apply to the native vision fast path."""
         from tools.vision_tools import _vision_analyze_native
 
@@ -354,9 +378,13 @@ class TestVisionSafetyGuards:
         with (
             patch("tools.website_policy.check_website_access", return_value=blocked),
             patch("tools.url_safety.is_safe_url", return_value=True),
-            patch("tools.vision_tools._download_image", new_callable=AsyncMock) as mock_download,
+            patch(
+                "tools.vision_tools._download_image", new_callable=AsyncMock
+            ) as mock_download,
         ):
-            result = json.loads(await vision_analyze_tool("https://blocked.test/cat.png", "describe"))
+            result = json.loads(
+                await vision_analyze_tool("https://blocked.test/cat.png", "describe")
+            )
 
         assert result["success"] is False
         assert "Blocked by website policy" in result["error"]
@@ -518,7 +546,7 @@ class TestVisionRequirements:
         # config.yaml must reference the codex provider so vision auto-detect
         # falls back to the active provider via _read_main_provider().
         (tmp_path / "config.yaml").write_text(
-            'model:\n  default: gpt-4o\n  provider: openai-codex\n'
+            "model:\n  default: gpt-4o\n  provider: openai-codex\n"
         )
         monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
         monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
@@ -526,7 +554,9 @@ class TestVisionRequirements:
 
         assert check_vision_requirements() is True
 
-    def test_resolver_crash_propagates_instead_of_reading_as_unconfigured(self, monkeypatch):
+    def test_resolver_crash_propagates_instead_of_reading_as_unconfigured(
+        self, monkeypatch
+    ):
         """The gate must not swallow resolver exceptions into False: the registry owns the
         verdict and logs the traceback, so users can tell "misconfigured" from "crashed" (#87950)."""
         import agent.auxiliary_client as aux
@@ -575,16 +605,20 @@ class TestLocalPathForms:
                 return_value=mock_response,
             ),
         ):
-            data = json.loads(await vision_analyze_tool(
-                "~/test_image.png", "describe this", "test/model"
-            ))
+            data = json.loads(
+                await vision_analyze_tool(
+                    "~/test_image.png", "describe this", "test/model"
+                )
+            )
             assert data["success"] is True
             assert data["analysis"] == "A test image"
 
         # A tilde path that doesn't resolve to a real file fails gracefully.
-        data = json.loads(await vision_analyze_tool(
-            "~/nonexistent.png", "describe this", "test/model"
-        ))
+        data = json.loads(
+            await vision_analyze_tool(
+                "~/nonexistent.png", "describe this", "test/model"
+            )
+        )
         assert data["success"] is False
 
     @pytest.mark.asyncio
@@ -608,15 +642,19 @@ class TestLocalPathForms:
                 return_value=mock_response,
             ),
         ):
-            data = json.loads(await vision_analyze_tool(
-                f"file://{img}", "describe this", "test/model"
-            ))
+            data = json.loads(
+                await vision_analyze_tool(
+                    f"file://{img}", "describe this", "test/model"
+                )
+            )
             assert data["success"] is True
 
         # file:// pointing to a missing file fails gracefully.
-        data = json.loads(await vision_analyze_tool(
-            f"file://{tmp_path}/nonexistent.png", "describe this", "test/model"
-        ))
+        data = json.loads(
+            await vision_analyze_tool(
+                f"file://{tmp_path}/nonexistent.png", "describe this", "test/model"
+            )
+        )
         assert data["success"] is False
 
 
@@ -637,11 +675,19 @@ class TestBase64SizeLimit:
         # the resize target above it so the auto-resize can't legitimately
         # shrink the (now decodable) fixture under the limit — this test
         # isolates the pre-flight size REJECTION, not the resize recovery.
-        with patch("tools.vision_tools._MAX_BASE64_BYTES", 1000), \
-             patch("tools.vision_tools._resize_image_for_vision",
-                   side_effect=lambda p, *a, **k: "data:image/png;base64," +
-                   base64.b64encode(Path(p).read_bytes()).decode("ascii")), \
-             patch("tools.vision_tools.async_call_llm", new_callable=AsyncMock) as mock_llm:
+        with (
+            patch("tools.vision_tools._MAX_BASE64_BYTES", 1000),
+            patch(
+                "tools.vision_tools._resize_image_for_vision",
+                side_effect=lambda p, *a, **k: (
+                    "data:image/png;base64,"
+                    + base64.b64encode(Path(p).read_bytes()).decode("ascii")
+                ),
+            ),
+            patch(
+                "tools.vision_tools.async_call_llm", new_callable=AsyncMock
+            ) as mock_llm,
+        ):
             result = json.loads(await vision_analyze_tool(str(img), "describe this"))
 
         assert result["success"] is False
@@ -699,13 +745,13 @@ class TestErrorClassification:
                 side_effect=api_error,
             ),
         ):
-            result = json.loads(await vision_analyze_tool(str(img), "describe", "test/model"))
+            result = json.loads(
+                await vision_analyze_tool(str(img), "describe", "test/model")
+            )
 
         assert result["success"] is False
         assert "rejected the image" in result["analysis"].lower()
         assert "smaller" in result["analysis"].lower()
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -730,7 +776,6 @@ class TestResizeImageForVision:
         result = _resize_image_for_vision(path, mime_type="image/png")
         assert result.startswith("data:image/png;base64,")
         assert len(result) < _MAX_BASE64_BYTES
-
 
     def test_no_pillow_returns_original(self, tmp_path):
         """Without Pillow, oversized images should be returned as-is."""
@@ -770,22 +815,26 @@ class TestResizeImageForVision:
         # can fit in-budget at full resolution.
         rng = random.Random(42)
         img = Image.new("RGB", (1568, 900))
-        img.putdata([
-            (
-                min(255, (x * 255) // 1568 + rng.randrange(12)),
-                min(255, (y * 255) // 900 + rng.randrange(12)),
-                min(255, ((x + y) * 255) // 2468 + rng.randrange(12)),
-            )
-            for y in range(900)
-            for x in range(1568)
-        ])
+        img.putdata(
+            [
+                (
+                    min(255, (x * 255) // 1568 + rng.randrange(12)),
+                    min(255, (y * 255) // 900 + rng.randrange(12)),
+                    min(255, ((x + y) * 255) // 2468 + rng.randrange(12)),
+                )
+                for y in range(900)
+                for x in range(1568)
+            ]
+        )
         path = tmp_path / "dense.png"
         img.save(path, "PNG")
 
         budget = 256 * 1024
         result = _resize_image_for_vision(
-            path, mime_type="image/png",
-            max_base64_bytes=budget, max_dimension=1568,
+            path,
+            mime_type="image/png",
+            max_base64_bytes=budget,
+            max_dimension=1568,
             force_jpeg=True,
         )
         assert result.startswith("data:image/jpeg;base64,")
@@ -805,8 +854,10 @@ class TestResizeImageForVision:
         img.save(path, "PNG")
 
         result = _resize_image_for_vision(
-            path, mime_type="image/png",
-            max_base64_bytes=256 * 1024, max_dimension=1568,
+            path,
+            mime_type="image/png",
+            max_base64_bytes=256 * 1024,
+            max_dimension=1568,
             force_jpeg=True,
         )
         assert result.startswith("data:image/png;base64,")
@@ -833,16 +884,20 @@ class TestResizeImageForVision:
                 img.putdata([rng.randrange(256) for _ in range(size[0] * size[1])])
             else:
                 bands = len(img.getbands())
-                img.putdata([
-                    tuple(rng.randrange(256) for _ in range(bands))
-                    for _ in range(size[0] * size[1])
-                ])
+                img.putdata(
+                    [
+                        tuple(rng.randrange(256) for _ in range(bands))
+                        for _ in range(size[0] * size[1])
+                    ]
+                )
             path = tmp_path / f"img_{mode}.png"
             img.save(path, "PNG")
 
             result = _resize_image_for_vision(
-                path, mime_type="image/png",
-                max_base64_bytes=16 * 1024, max_dimension=1568,
+                path,
+                mime_type="image/png",
+                max_base64_bytes=16 * 1024,
+                max_dimension=1568,
                 force_jpeg=True,
             )
             assert result.startswith("data:image/jpeg;base64,"), mode
@@ -873,7 +928,6 @@ class TestImageExceedsDimension:
         path = tmp_path / "tall.png"
         img.save(path, "PNG")
         assert _image_exceeds_dimension(path, _EMBED_MAX_DIMENSION) is True
-
 
     def test_undetectable_dimensions_return_false(self, tmp_path):
         # Without Pillow — or with bytes Pillow can't parse — we can't inspect
@@ -950,7 +1004,6 @@ class TestDownloadRetryClassification:
         assert _is_retryable_download_error(ValueError("too large")) is False
         # Unclassified (network blip) is retryable
         assert _is_retryable_download_error(ConnectionError("reset")) is True
-
 
     @pytest.mark.asyncio
     async def test_503_retries_then_raises(self, tmp_path):
@@ -1034,7 +1087,9 @@ class TestVisionCpuBurstCap:
             seen_threads.append(threading.current_thread().name)
             return "data:image/jpeg;base64,AAAA"
 
-        result = await vt._run_encode_on_cpu_executor(fake_encode, "p", mime_type="image/jpeg")
+        result = await vt._run_encode_on_cpu_executor(
+            fake_encode, "p", mime_type="image/jpeg"
+        )
         assert result == "data:image/jpeg;base64,AAAA"
         assert len(seen_threads) == 1
         assert seen_threads[0].startswith("vision-encode"), seen_threads
@@ -1061,6 +1116,7 @@ class TestVisionCpuBurstCap:
         calls_inflight = 0
         calls_peak = 0
         import threading as _t
+
         enc_lock = _t.Lock()
 
         def slow_encode(path, mime_type=None):
@@ -1081,7 +1137,9 @@ class TestVisionCpuBurstCap:
             calls_peak = max(calls_peak, calls_inflight)
             try:
                 # The encode is the capped CPU step.
-                await vt._run_encode_on_cpu_executor(slow_encode, "p", mime_type="image/jpeg")
+                await vt._run_encode_on_cpu_executor(
+                    slow_encode, "p", mime_type="image/jpeg"
+                )
                 # The "LLM call" is NOT capped — overlaps freely.
                 await asyncio.sleep(0.02)
             finally:
@@ -1089,18 +1147,25 @@ class TestVisionCpuBurstCap:
             return json.dumps({"ok": True})
 
         with (
-            patch.object(vt, "_vision_cpu_executor",
-                         ThreadPoolExecutor(max_workers=CAP, thread_name_prefix="vision-encode")),
+            patch.object(
+                vt,
+                "_vision_cpu_executor",
+                ThreadPoolExecutor(max_workers=CAP, thread_name_prefix="vision-encode"),
+            ),
             patch.object(vt, "_should_use_native_vision_fast_path", return_value=True),
             patch.object(vt, "_vision_analyze_native", side_effect=fake_native),
         ):
-            await asyncio.gather(*[
-                vt._handle_vision_analyze(
-                    {"image_url": f"https://example.com/frame_{i}.png",
-                     "question": "what is this"}
-                )
-                for i in range(N)
-            ])
+            await asyncio.gather(
+                *[
+                    vt._handle_vision_analyze(
+                        {
+                            "image_url": f"https://example.com/frame_{i}.png",
+                            "question": "what is this",
+                        }
+                    )
+                    for i in range(N)
+                ]
+            )
 
         assert enc_peak <= CAP, f"encode peak {enc_peak} exceeded cap {CAP}"
         assert enc_peak == CAP, f"expected to saturate encode cap {CAP}, got {enc_peak}"

@@ -1,4 +1,5 @@
 """Protect archive accounting, not report wording or markup."""
+
 from scripts.ci.cache_report import parse_cache_log
 
 
@@ -29,8 +30,10 @@ Cache hit for: unknown
 Cache restored from key: unknown
 """
     entries = parse_cache_log(log)
-    assert [(e["restore_status"], e["restored_bytes"], e["save_status"], e["saved_bytes"])
-            for e in entries] == [
+    assert [
+        (e["restore_status"], e["restored_bytes"], e["save_status"], e["saved_bytes"])
+        for e in entries
+    ] == [
         ("exact", 100, "not-attempted", None),
         ("miss", None, "saved", 200),
         ("failed", None, "unknown", None),

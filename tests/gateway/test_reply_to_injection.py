@@ -7,6 +7,7 @@ in the conversation history. History can contain the same or similar text
 multiple times, and without an explicit pointer the agent has to guess
 which prior message the user is referencing.
 """
+
 import pytest
 
 from gateway.config import GatewayConfig, Platform, PlatformConfig
@@ -78,7 +79,9 @@ async def test_telegram_long_reply_reaches_prompt_without_losing_later_items():
     )
     history = [{"role": "user", "content": "Previous request"}]
     result = await _make_runner()._prepare_inbound_message_text(
-        event=event, source=event.source, history=history,
+        event=event,
+        source=event.source,
+        history=history,
     )
     assert result is not None
     assert quoted in result
@@ -87,7 +90,9 @@ async def test_telegram_long_reply_reaches_prompt_without_losing_later_items():
 
 
 @pytest.mark.asyncio
-async def test_quoted_reply_references_stay_literal_while_typed_ones_expand(tmp_path, monkeypatch):
+async def test_quoted_reply_references_stay_literal_while_typed_ones_expand(
+    tmp_path, monkeypatch
+):
     """The replied-to author's ``@file:`` is quoted text, not the replier's request: no local read.
     The same reference typed in the new message still expands (positive control)."""
     import threading
@@ -98,17 +103,34 @@ async def test_quoted_reply_references_stay_literal_while_typed_ones_expand(tmp_
     runner = _make_runner()
     runner._session_model_overrides, runner._last_resolved_model = {}, {}
     runner._agent_cache, runner._agent_cache_lock = {}, threading.Lock()
-    runner._resolve_session_agent_runtime = lambda **kw: ("openai/gpt-4.1-mini", {"base_url": None, "api_key": ""})
+    runner._resolve_session_agent_runtime = lambda **kw: (
+        "openai/gpt-4.1-mini",
+        {"base_url": None, "api_key": ""},
+    )
     source = _source()
 
     quoted = ("x " * 300) + f"\nsee @file:{payload.name} for details"
-    quoted_ref = MessageEvent(text="what does this say?", source=source, reply_to_message_id="7", reply_to_text=quoted)
-    result = await runner._prepare_inbound_message_text(event=quoted_ref, source=source, history=[])
+    quoted_ref = MessageEvent(
+        text="what does this say?",
+        source=source,
+        reply_to_message_id="7",
+        reply_to_text=quoted,
+    )
+    result = await runner._prepare_inbound_message_text(
+        event=quoted_ref, source=source, history=[]
+    )
     assert quoted in result
     assert "LOCAL-FILE-MARKER" not in result
 
-    typed_ref = MessageEvent(text=f"read @file:{payload.name}", source=source, reply_to_message_id="7", reply_to_text="short")
-    result = await runner._prepare_inbound_message_text(event=typed_ref, source=source, history=[])
+    typed_ref = MessageEvent(
+        text=f"read @file:{payload.name}",
+        source=source,
+        reply_to_message_id="7",
+        reply_to_text="short",
+    )
+    result = await runner._prepare_inbound_message_text(
+        event=typed_ref, source=source, history=[]
+    )
     assert result.startswith('[Replying to: "short"]')
     assert "LOCAL-FILE-MARKER" in result
 
@@ -133,9 +155,7 @@ async def test_reply_prefix_still_injected_when_text_in_history():
         {"role": "user", "content": "I'm thinking of going to Japan or Italy."},
         {
             "role": "assistant",
-            "content": (
-                f"{quoted} Italy is better if you prefer a relaxed pace."
-            ),
+            "content": (f"{quoted} Italy is better if you prefer a relaxed pace."),
         },
         {"role": "user", "content": "How long should I stay?"},
         {"role": "assistant", "content": "For Japan, 10-14 days is ideal."},
@@ -150,5 +170,3 @@ async def test_reply_prefix_still_injected_when_text_in_history():
     assert result is not None
     assert result.startswith(f'[Replying to: "{quoted}"]')
     assert result.endswith("What's the best time to go?")
-
-

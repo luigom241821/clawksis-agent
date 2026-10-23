@@ -17,10 +17,18 @@ def _agent(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     from run_agent import AIAgent
     from clawk_state import SessionDB
-    return AIAgent(session_db=SessionDB(db_path=tmp_path / "proof.db"),
-                   model="test-model", provider="openai-compat", api_key="test",
-                   base_url="http://127.0.0.1:1/v1", max_iterations=4,
-                   quiet_mode=True, skip_context_files=True, skip_memory=True)
+
+    return AIAgent(
+        session_db=SessionDB(db_path=tmp_path / "proof.db"),
+        model="test-model",
+        provider="openai-compat",
+        api_key="test",
+        base_url="http://127.0.0.1:1/v1",
+        max_iterations=4,
+        quiet_mode=True,
+        skip_context_files=True,
+        skip_memory=True,
+    )
 
 
 def _prepare(tmp_path, monkeypatch, messages):
@@ -33,8 +41,11 @@ def _prepare(tmp_path, monkeypatch, messages):
         _reset_per_turn_agent_state(agent)
         user_message = messages[-1].get("content") if messages else None
         prep = prepare_iteration(
-            agent, messages=messages, api_call_count=1,
-            user_message=user_message, current_turn_user_idx=max(len(messages) - 1, 0),
+            agent,
+            messages=messages,
+            api_call_count=1,
+            user_message=user_message,
+            current_turn_user_idx=max(len(messages) - 1, 0),
         )
         return list(prep.messages)
     finally:
@@ -42,7 +53,12 @@ def _prepare(tmp_path, monkeypatch, messages):
 
 
 def _hidden_row(text):
-    return {"role": "assistant", "content": "", "display_kind": "hidden", "api_content": text}
+    return {
+        "role": "assistant",
+        "content": "",
+        "display_kind": "hidden",
+        "api_content": text,
+    }
 
 
 def test_tool_tail_row_is_kept_and_neutralised(tmp_path, monkeypatch):
@@ -53,6 +69,7 @@ def test_tool_tail_row_is_kept_and_neutralised(tmp_path, monkeypatch):
     dropped row leaves user -> user, which repair merges, losing the
     correction's checkpoint sidecar and rewriting the first row in place."""
     import copy
+
     checkpoint = "[Context from the interrupted assistant response]\nhalf a poem\n\nmake it short"
     redirect = [
         {"role": "user", "content": "write a poem"},
@@ -69,18 +86,34 @@ def test_tool_tail_row_is_kept_and_neutralised(tmp_path, monkeypatch):
 
     messages = [
         {"role": "user", "content": "edit the file"},
-        {"role": "assistant", "content": "", "tool_calls": [
-            {"id": "c1", "type": "function", "function": {"name": "patch", "arguments": "{}"}}]},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "c1",
+                    "type": "function",
+                    "function": {"name": "patch", "arguments": "{}"},
+                }
+            ],
+        },
         {"role": "tool", "tool_call_id": "c1", "content": "ok edited"},
         _hidden_row(LEGACY),
         {"role": "user", "content": "they do! increase the timing"},
     ]
     out = _prepare(tmp_path, monkeypatch, messages)
-    assert messages[3]["api_content"] == LEGACY  # durable row dict is never rewritten in place
+    assert (
+        messages[3]["api_content"] == LEGACY
+    )  # durable row dict is never rewritten in place
 
-    hidden = [m for m in out
-              if m.get("role") == "assistant" and m.get("display_kind") == "hidden"]
-    assert len(hidden) == 1, f"tool-tail row was dropped (tool -> user would revive): {out}"
+    hidden = [
+        m
+        for m in out
+        if m.get("role") == "assistant" and m.get("display_kind") == "hidden"
+    ]
+    assert len(hidden) == 1, (
+        f"tool-tail row was dropped (tool -> user would revive): {out}"
+    )
     row = hidden[0]
     assert row.get("content") == ""
     assert row.get("api_content") == NEW_PLACEHOLDER, (

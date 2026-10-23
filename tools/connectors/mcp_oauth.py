@@ -20,8 +20,14 @@ URL_TIMEOUT_SECONDS = 30.0
 
 
 def probe_with_rollback(
-        server_name: str, cfg: dict, clawk_home: str, flow, reconnect_live: bool, *,
-        on_commit: Optional[Callable[[], None]] = None) -> None:
+    server_name: str,
+    cfg: dict,
+    clawk_home: str,
+    flow,
+    reconnect_live: bool,
+    *,
+    on_commit: Optional[Callable[[], None]] = None,
+) -> None:
     """Roll back failures through initialize; commit authorization before tool discovery.
 
     ``on_commit`` runs right after the configuration is saved: a card install persists its setup
@@ -30,6 +36,7 @@ def probe_with_rollback(
     from tools.mcp_dashboard_oauth import exception_message
     from tools.mcp_oauth import ClawksisTokenStorage, login_connect_timeout
     from tools.mcp_oauth_manager import get_manager
+
     manager = get_manager()
     storage = ClawksisTokenStorage(server_name)
     # An attempt that replaced a still-running one starts from that one's half-written files, so
@@ -46,7 +53,10 @@ def probe_with_rollback(
         # ``manager.remove`` cleared the pre-attempt tokens, so anything on disk now is this
         # attempt's grant, and it is not being kept: put the snapshot back. A newer attempt for
         # the same server owns the token files; an older one must not write over it.
-        if flow is not None and _ACTIVE.get((clawk_home, server_name)) not in (None, flow):
+        if flow is not None and _ACTIVE.get((clawk_home, server_name)) not in (
+            None,
+            flow,
+        ):
             return
         storage.restore(backup)
         manager.restore_entry(server_name, previous_entry, clawk_home=clawk_home)
@@ -54,12 +64,17 @@ def probe_with_rollback(
     try:
         previous_entry = manager.remove(server_name, clawk_home=clawk_home)
         tools = _probe_single_server(
-            server_name, cfg, connect_timeout=login_connect_timeout(cfg), details=details)
+            server_name,
+            cfg,
+            connect_timeout=login_connect_timeout(cfg),
+            details=details,
+        )
         if not _oauth_tokens_present(server_name):
             details["initialized"] = False
             no_token = RuntimeError(
                 "The server responded, but no OAuth token was obtained — "
-                "this provider may require a manually-registered OAuth client.")
+                "this provider may require a manually-registered OAuth client."
+            )
             no_token.failure_class = "auth_required"  # type: ignore[attr-defined]
             raise no_token
     except Exception as exc:
@@ -80,6 +95,7 @@ def probe_with_rollback(
         return
     if reconnect_live:
         from tools.mcp_tool_loop import reconnect_mcp_server
+
         reconnect_mcp_server(server_name)
 
 
@@ -107,14 +123,18 @@ def cancel_attempt(flow) -> bool:
     return False
 
 
-def _commit(server_name: str, cfg: dict, on_commit: Optional[Callable[[], None]], flow=None) -> None:
+def _commit(
+    server_name: str, cfg: dict, on_commit: Optional[Callable[[], None]], flow=None
+) -> None:
     from clawk_cli.mcp_config import _save_mcp_server
 
     with _COMMIT_GUARD:
         if flow is not None and getattr(flow, "cancelled", False):
             raise AttemptCanceled("canceled")
         if not _save_mcp_server(server_name, cfg):
-            raise RuntimeError(f"'{server_name}' was rejected: suspicious command/args configuration")
+            raise RuntimeError(
+                f"'{server_name}' was rejected: suspicious command/args configuration"
+            )
         if on_commit is not None:
             on_commit()
         if flow is not None:
@@ -122,7 +142,8 @@ def _commit(server_name: str, cfg: dict, on_commit: Optional[Callable[[], None]]
 
 
 def _reuse_saved_authorization(
-        server_name: str, cfg: dict, flow, on_commit: Optional[Callable[[], None]]) -> bool:
+    server_name: str, cfg: dict, flow, on_commit: Optional[Callable[[], None]]
+) -> bool:
     """Connect with the tokens already on disk, with no browser step and no consent.
 
     Retrying discovery for a server that is authorized must not ask the user to sign in again, and
@@ -148,10 +169,17 @@ def _reuse_saved_authorization(
 
 
 def run_worker(
-        clawk_home: str, server_name: str, cfg: dict, reconnect_live: bool, *,
-        flow, on_done: Optional[Callable[[], None]] = None,
-        env: Optional[dict[str, str]] = None, on_commit: Optional[Callable[[], None]] = None,
-        reuse_saved: bool = False) -> None:
+    clawk_home: str,
+    server_name: str,
+    cfg: dict,
+    reconnect_live: bool,
+    *,
+    flow,
+    on_done: Optional[Callable[[], None]] = None,
+    env: Optional[dict[str, str]] = None,
+    on_commit: Optional[Callable[[], None]] = None,
+    reuse_saved: bool = False,
+) -> None:
     """Drive the interactive MCP OAuth probe under the shared callback bridge.
 
     ``env`` holds a card install's setup values. They join the secret scope for this attempt only,
@@ -159,21 +187,37 @@ def run_worker(
     card's rule: a server whose saved tokens still work connects with no consent step. The RPC
     session surface keeps it off, because its caller waits for an authorization URL."""
     from clawk_constants import reset_clawk_home_override, set_clawk_home_override
+
     try:
         from agent.secret_scope import (
-            build_profile_secret_scope, reset_secret_scope, set_secret_scope)
+            build_profile_secret_scope,
+            reset_secret_scope,
+            set_secret_scope,
+        )
         from tools.mcp_dashboard_oauth import dashboard_oauth_flow
         from tools.mcp_oauth import force_interactive_oauth
+
         home_token = secret_token = None
         try:
             home_token = set_clawk_home_override(clawk_home)
             secret_token = set_secret_scope(
-                {**build_profile_secret_scope(Path(clawk_home)), **(env or {})}, profile_home=clawk_home)
-            if not (reuse_saved and flow is not None
-                    and _reuse_saved_authorization(server_name, cfg, flow, on_commit)):
+                {**build_profile_secret_scope(Path(clawk_home)), **(env or {})},
+                profile_home=clawk_home,
+            )
+            if not (
+                reuse_saved
+                and flow is not None
+                and _reuse_saved_authorization(server_name, cfg, flow, on_commit)
+            ):
                 with force_interactive_oauth(), dashboard_oauth_flow(flow):
                     probe_with_rollback(
-                        server_name, cfg, clawk_home, flow, reconnect_live, on_commit=on_commit)
+                        server_name,
+                        cfg,
+                        clawk_home,
+                        flow,
+                        reconnect_live,
+                        on_commit=on_commit,
+                    )
         finally:
             if secret_token is not None:
                 reset_secret_scope(secret_token)
@@ -182,14 +226,23 @@ def run_worker(
     except Exception as exc:
         from clawk_cli.mcp_config import probe_failure_class
         from tools.mcp_dashboard_oauth import exception_message
+
         msg = exception_message(exc)
         with suppress(Exception):
             from tools.mcp_oauth import humanize_oauth_registration_error
-            msg = humanize_oauth_registration_error(
-                server_name, exc, server_url=cfg.get("url") if isinstance(cfg, dict) else None
-            ) or msg
+
+            msg = (
+                humanize_oauth_registration_error(
+                    server_name,
+                    exc,
+                    server_url=cfg.get("url") if isinstance(cfg, dict) else None,
+                )
+                or msg
+            )
         failure_class = probe_failure_class(exc)
-        if failure_class == "connect_failed" and server_name not in msg:  # e.g. a bare "Not Found"
+        if (
+            failure_class == "connect_failed" and server_name not in msg
+        ):  # e.g. a bare "Not Found"
             msg = f"Could not connect to '{server_name}' ({msg}). Check its URL and that this machine can reach it."
         if flow is not None:
             # Read by ``start``: its error is rebuilt from text, so the class rides on the flow.
@@ -209,10 +262,16 @@ def _validate_client_redirect_uri(uri: str) -> str:
     """Accept only plain-http loopback URLs (RFC 8252)."""
     parsed = urlparse(str(uri or "").strip())
     host = (parsed.hostname or "").lower()
-    if (parsed.scheme != "http" or host not in ("127.0.0.1", "localhost", "::1") or not parsed.port
-            or parsed.username is not None or parsed.password is not None):
+    if (
+        parsed.scheme != "http"
+        or host not in ("127.0.0.1", "localhost", "::1")
+        or not parsed.port
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
         raise ValueError(
-            "client_redirect_uri must be a loopback http URL like http://127.0.0.1:<port>/callback")
+            "client_redirect_uri must be a loopback http URL like http://127.0.0.1:<port>/callback"
+        )
     return f"http://{'[' + host + ']' if ':' in host else host}:{parsed.port}{parsed.path or '/callback'}"
 
 
@@ -245,8 +304,11 @@ def _start_loopback_receiver(flow) -> http.server.HTTPServer:
 
     httpd = http.server.HTTPServer(("127.0.0.1", 0), _Handler)
     threading.Thread(
-        target=httpd.serve_forever, kwargs={"poll_interval": 0.5}, daemon=True,
-        name=f"mcp-oauth-cb-{flow.server_name}").start()
+        target=httpd.serve_forever,
+        kwargs={"poll_interval": 0.5},
+        daemon=True,
+        name=f"mcp-oauth-cb-{flow.server_name}",
+    ).start()
     return httpd
 
 
@@ -261,7 +323,9 @@ def _pinned_redirect_uri(cfg: dict) -> str:
     return f"http://{host}:{oauth['redirect_port']}/callback"
 
 
-def choose_callback_receiver(flow, cfg: dict, client_redirect_uri: Optional[str] = None):
+def choose_callback_receiver(
+    flow, cfg: dict, client_redirect_uri: Optional[str] = None
+):
     """Set the redirect consumed by the SDK and return the optional backend HTTP receiver."""
     if _pinned_loopback(cfg):
         flow.redirect_uri = _pinned_redirect_uri(cfg)
@@ -275,11 +339,17 @@ def choose_callback_receiver(flow, cfg: dict, client_redirect_uri: Optional[str]
 
 
 def _ssh_detail(redirect_uri: str) -> str:
-    if not (os.environ.get("SSH_CLIENT") or os.environ.get("SSH_TTY")) or not redirect_uri:
+    if (
+        not (os.environ.get("SSH_CLIENT") or os.environ.get("SSH_TTY"))
+        or not redirect_uri
+    ):
         return ""
     from tools.mcp_oauth import _SSH_HINT_LOOPBACK
+
     parsed = urlparse(redirect_uri)
-    return _SSH_HINT_LOOPBACK.format(host=parsed.hostname or "127.0.0.1", port=parsed.port or 0).strip()
+    return _SSH_HINT_LOOPBACK.format(
+        host=parsed.hostname or "127.0.0.1", port=parsed.port or 0
+    ).strip()
 
 
 @dataclass
@@ -294,17 +364,27 @@ class OAuthAttempt:
         snapshot = self.flow.snapshot()
         raw = snapshot.get("status")
         status = raw if raw in ("approved", "error") else "pending"
-        tools = [str(t.get("name") or "") for t in (getattr(self.flow, "tools", None) or [])]
-        return {"status": status, "error": snapshot.get("error") or "",
-                "tools": [t for t in tools if t] if status == "approved" else [],
-                "discovery_error": (getattr(self.flow, "discovery_error", "") or "")
-                if status == "approved" else ""}
+        tools = [
+            str(t.get("name") or "") for t in (getattr(self.flow, "tools", None) or [])
+        ]
+        return {
+            "status": status,
+            "error": snapshot.get("error") or "",
+            "tools": [t for t in tools if t] if status == "approved" else [],
+            "discovery_error": (getattr(self.flow, "discovery_error", "") or "")
+            if status == "approved"
+            else "",
+        }
 
 
 def start(
-    server_name: str, *, url_timeout: float = URL_TIMEOUT_SECONDS,
-    client_redirect_uri: Optional[str] = None, cfg: Optional[dict] = None,
-    env: Optional[dict[str, str]] = None, on_commit: Optional[Callable[[], None]] = None,
+    server_name: str,
+    *,
+    url_timeout: float = URL_TIMEOUT_SECONDS,
+    client_redirect_uri: Optional[str] = None,
+    cfg: Optional[dict] = None,
+    env: Optional[dict[str, str]] = None,
+    on_commit: Optional[Callable[[], None]] = None,
 ) -> OAuthAttempt:
     """Start a card OAuth flow and wait until its authorization URL is published.
 
@@ -318,12 +398,19 @@ def start(
     if not cfg:
         raise RuntimeError(f"'{server_name}' is not a configured MCP server")
     if not cfg.get("url"):
-        raise RuntimeError(f"'{server_name}' is a stdio server: it takes env keys, not OAuth")
+        raise RuntimeError(
+            f"'{server_name}' is a stdio server: it takes env keys, not OAuth"
+        )
     cfg["auth"] = "oauth"
     clawk_home = str(get_clawk_home().expanduser().resolve(strict=False))
     flow = DashboardOAuthFlow(
-        flow_id=secrets.token_urlsafe(24), server_name=server_name, profile=None,
-        clawk_home=clawk_home, redirect_uri="", reconnect_live=False)
+        flow_id=secrets.token_urlsafe(24),
+        server_name=server_name,
+        profile=None,
+        clawk_home=clawk_home,
+        redirect_uri="",
+        reconnect_live=False,
+    )
     with _COMMIT_GUARD:
         older = _ACTIVE.get((clawk_home, server_name))
         _ACTIVE[(clawk_home, server_name)] = flow
@@ -333,24 +420,40 @@ def start(
     httpd = choose_callback_receiver(flow, cfg, client_redirect_uri)
     mcp_oauth_sessions.register_flow(flow, httpd=httpd)
     threading.Thread(
-        target=run_worker, args=(clawk_home, server_name, cfg, False),
-        kwargs={"flow": flow, "on_done": lambda: mcp_oauth_sessions.finish_flow(flow.flow_id),
-                "reuse_saved": True,
-                **({"env": env, "on_commit": on_commit} if env or on_commit else {})},
-        daemon=True, name=f"mcp-oauth-{server_name}").start()
+        target=run_worker,
+        args=(clawk_home, server_name, cfg, False),
+        kwargs={
+            "flow": flow,
+            "on_done": lambda: mcp_oauth_sessions.finish_flow(flow.flow_id),
+            "reuse_saved": True,
+            **({"env": env, "on_commit": on_commit} if env or on_commit else {}),
+        },
+        daemon=True,
+        name=f"mcp-oauth-{server_name}",
+    ).start()
     deadline = time.time() + url_timeout
     while time.time() < deadline:
         snapshot = flow.snapshot()
         if snapshot.get("status") == "approved":
-            return OAuthAttempt(auth_url="", flow=flow)  # the saved authorization still works
+            return OAuthAttempt(
+                auth_url="", flow=flow
+            )  # the saved authorization still works
         if snapshot.get("authorization_url"):
             return OAuthAttempt(
-                auth_url=snapshot["authorization_url"], flow=flow,
-                detail=_ssh_detail(flow.redirect_uri) if client_redirect_uri is None else "")
+                auth_url=snapshot["authorization_url"],
+                flow=flow,
+                detail=_ssh_detail(flow.redirect_uri)
+                if client_redirect_uri is None
+                else "",
+            )
         if snapshot.get("status") == "error":
-            failed = RuntimeError(snapshot.get("error") or "the OAuth flow failed before authorization")
+            failed = RuntimeError(
+                snapshot.get("error") or "the OAuth flow failed before authorization"
+            )
             failed.failure_class = getattr(flow, "failure_class", None)  # type: ignore[attr-defined]
             raise failed
         time.sleep(0.05)
     flow.mark_error("Timed out waiting for MCP authorization URL")
-    raise TimeoutError(f"timed out waiting for the authorization URL for '{server_name}'")
+    raise TimeoutError(
+        f"timed out waiting for the authorization URL for '{server_name}'"
+    )

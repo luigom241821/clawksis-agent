@@ -74,7 +74,10 @@ def test_parent_watchdog_does_not_kill_a_live_parent_on_macos_timezone_drift():
 
     assert (
         _is_serve_orphaned(
-            4242, expected, pid_exists=lambda _pid: True, process_start_marker=lambda _pid: actual
+            4242,
+            expected,
+            pid_exists=lambda _pid: True,
+            process_start_marker=lambda _pid: actual,
         )
         is False
     )
@@ -86,7 +89,10 @@ def test_parent_watchdog_still_detects_a_genuinely_dead_parent_despite_ps_marker
 
     assert (
         _is_serve_orphaned(
-            4242, expected, pid_exists=lambda _pid: False, process_start_marker=lambda _pid: actual
+            4242,
+            expected,
+            pid_exists=lambda _pid: False,
+            process_start_marker=lambda _pid: actual,
         )
         is True
     )
@@ -97,7 +103,10 @@ def test_parent_watchdog_exact_ps_marker_match_still_short_circuits():
 
     assert (
         _is_serve_orphaned(
-            4242, marker, pid_exists=lambda _pid: False, process_start_marker=lambda _pid: marker
+            4242,
+            marker,
+            pid_exists=lambda _pid: False,
+            process_start_marker=lambda _pid: marker,
         )
         is False
     )
@@ -166,7 +175,9 @@ def test_parent_watchdog_warns_when_disarmed_by_unusable_marker(monkeypatch, cap
     monkeypatch.setenv("CLAWK_PARENT_NONCE", "n")
     started = []
     monkeypatch.setattr(
-        web_server_lifecycle.threading, "Thread", lambda *a, **k: started.append(1) or _NoThread()
+        web_server_lifecycle.threading,
+        "Thread",
+        lambda *a, **k: started.append(1) or _NoThread(),
     )
     with caplog.at_level(logging.WARNING, logger="clawk_cli.web_server"):
         web_server_lifecycle._start_parent_death_watchdog()
@@ -182,21 +193,45 @@ class _NoThread:
 def test_parent_watchdog_degrades_to_pid_liveness_when_marker_probe_raises_oserror():
     """#80204: a probe failure must fall through to ``pid_exists`` instead of pinning the
     watchdog to "not orphaned" forever on a dead Desktop parent."""
+
     def broken_marker_probe(pid: int) -> str:
-        raise OSError(f"ps could not inspect PID {pid}: process table temporarily unavailable")
+        raise OSError(
+            f"ps could not inspect PID {pid}: process table temporarily unavailable"
+        )
 
     marker = "ps:Thu Aug 20 22:33:11 2026"
-    assert _is_serve_orphaned(4242, marker, pid_exists=lambda _pid: False,
-                              process_start_marker=broken_marker_probe) is True
-    assert _is_serve_orphaned(4242, marker, pid_exists=lambda _pid: True,
-                              process_start_marker=broken_marker_probe) is False
+    assert (
+        _is_serve_orphaned(
+            4242,
+            marker,
+            pid_exists=lambda _pid: False,
+            process_start_marker=broken_marker_probe,
+        )
+        is True
+    )
+    assert (
+        _is_serve_orphaned(
+            4242,
+            marker,
+            pid_exists=lambda _pid: True,
+            process_start_marker=broken_marker_probe,
+        )
+        is False
+    )
 
     def lookup_error_probe(pid: int) -> str:
         raise ProcessLookupError(pid)
 
     # ProcessLookupError is conclusive on its own, whatever a recycled-pid liveness check says.
-    assert _is_serve_orphaned(4242, marker, pid_exists=lambda _pid: True,
-                              process_start_marker=lookup_error_probe) is True
+    assert (
+        _is_serve_orphaned(
+            4242,
+            marker,
+            pid_exists=lambda _pid: True,
+            process_start_marker=lookup_error_probe,
+        )
+        is True
+    )
 
 
 @pytest.mark.platforms("macos")
@@ -209,13 +244,17 @@ def test_ps_marker_probe_classifies_missing_process_vs_other_ps_failures(monkeyp
     from clawk_cli import web_server_lifecycle
 
     def fake_run(stderr):
-        return lambda *a, **k: subprocess.CompletedProcess(args=a, returncode=2, stdout="", stderr=stderr)
+        return lambda *a, **k: subprocess.CompletedProcess(
+            args=a, returncode=2, stdout="", stderr=stderr
+        )
 
     monkeypatch.setattr(subprocess, "run", fake_run("ps: 4242: No such process"))
     with pytest.raises(ProcessLookupError):
         web_server_lifecycle._process_start_marker(4242)
 
-    monkeypatch.setattr(subprocess, "run", fake_run("ps: temporary process table failure"))
+    monkeypatch.setattr(
+        subprocess, "run", fake_run("ps: temporary process table failure")
+    )
     with pytest.raises(OSError) as excinfo:
         web_server_lifecycle._process_start_marker(4242)
     assert not isinstance(excinfo.value, ProcessLookupError)
@@ -238,7 +277,9 @@ def test_parent_watchdog_shuts_down_through_the_signal_path_not_os_exit(monkeypa
     monkeypatch.setattr(web_server_lifecycle, "_is_serve_orphaned", lambda *_args: True)
 
     hard_exits = []
-    monkeypatch.setattr(web_server_lifecycle.os, "_exit", lambda code: hard_exits.append(code))
+    monkeypatch.setattr(
+        web_server_lifecycle.os, "_exit", lambda code: hard_exits.append(code)
+    )
 
     timers = []
 
@@ -270,7 +311,9 @@ def test_parent_watchdog_shuts_down_through_the_signal_path_not_os_exit(monkeypa
             timer.cancel()
         signal.signal(signal.SIGTERM, previous)
 
-    assert handled == ["sigterm"], "parent loss must run this process's shutdown handlers"
+    assert handled == ["sigterm"], (
+        "parent loss must run this process's shutdown handlers"
+    )
     assert hard_exits == [], "the watchdog must not bypass those handlers with os._exit"
 
 

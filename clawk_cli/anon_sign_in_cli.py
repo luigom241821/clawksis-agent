@@ -9,15 +9,20 @@ from clawk_cli.anon_sign_in import Code, SignInState, UPGRADE_CANCELLED, UPGRADE
 
 
 def render_sign_in_cli_code(
-    state: Code, *, open_browser: bool = False, chat: bool = True, printer=print) -> None:
+    state: Code, *, open_browser: bool = False, chat: bool = True, printer=print
+) -> None:
     """Print the ``Code`` state alone: the link, the code, and the do-not-share line."""
     from clawk_cli.auth_device_flow import _print_device_code_instructions
+
     _print_device_code_instructions(
-        state.link, state.code, open_browser=open_browser, swallow_open_errors=True)
+        state.link, state.code, open_browser=open_browser, swallow_open_errors=True
+    )
     printer(f"  {state.copy_with_wait if chat else state.copy}")
 
 
-def drain_sign_in_copy(gen: Iterator[SignInState], *, chat: bool = True, on_terminal=None) -> str:
+def drain_sign_in_copy(
+    gen: Iterator[SignInState], *, chat: bool = True, on_terminal=None
+) -> str:
     """Iterate *gen* to its terminal state, discarding ``Waiting``, and return that state's copy.
 
     ``on_terminal`` is called with each terminal state — the CLI uses it to move the running
@@ -34,8 +39,13 @@ def drain_sign_in_copy(gen: Iterator[SignInState], *, chat: bool = True, on_term
 
 
 def render_sign_in_cli(
-    *, timeout_seconds: float = 15.0, open_browser: bool = False, chat: bool = False,
-    states: Optional[Iterator[SignInState]] = None, printer=print) -> int:
+    *,
+    timeout_seconds: float = 15.0,
+    open_browser: bool = False,
+    chat: bool = False,
+    states: Optional[Iterator[SignInState]] = None,
+    printer=print,
+) -> int:
     """Print a sign-in; returns the process exit code (0 ok, 1 not, 130 interrupted).
 
     ``chat=True`` renders the in-chat wording; *states* lets a caller hand in a partially drained
@@ -43,7 +53,11 @@ def render_sign_in_cli(
     """
     from clawk_cli import anon_auth as _core
 
-    gen = states if states is not None else _core.run_sign_in(timeout_seconds=timeout_seconds)
+    gen = (
+        states
+        if states is not None
+        else _core.run_sign_in(timeout_seconds=timeout_seconds)
+    )
     started = False
     try:
         for state in gen:
@@ -51,10 +65,12 @@ def render_sign_in_cli(
                 printer(UPGRADE_START)
                 started = True
             if state.kind == "code":
-                _core.render_sign_in_cli_code(state, open_browser=open_browser, chat=chat, printer=printer)
+                _core.render_sign_in_cli_code(
+                    state, open_browser=open_browser, chat=chat, printer=printer
+                )
                 continue
             if state.kind == "waiting":
-                if not chat:          # in a chat the wait line already rode the code
+                if not chat:  # in a chat the wait line already rode the code
                     printer(state.copy)
                 continue
             if state.terminal:
@@ -77,8 +93,10 @@ def upgrade_guest(args) -> int:
     from clawk_cli import anon_auth as _core
     from clawk_cli.auth_device_flow import _is_remote_session
     from clawk_cli.guest_handoff import drain
-    drain()   # a move an earlier sign-in left unfinished gets its next try first
+
+    drain()  # a move an earlier sign-in left unfinished gets its next try first
     timeout_seconds = float(getattr(args, "timeout", None) or 15.0)
     open_browser = not getattr(args, "no_browser", False) and not _is_remote_session()
     return _core.render_sign_in_cli(
-        timeout_seconds=timeout_seconds, open_browser=open_browser, chat=False)
+        timeout_seconds=timeout_seconds, open_browser=open_browser, chat=False
+    )

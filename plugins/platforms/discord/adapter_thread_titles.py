@@ -6,6 +6,7 @@ title replaced. Any other observed name retires the record: equal text is not ed
 a moderator who later restores Clawksis's title sees it as itself. Records live in memory; after a
 restart each renamed thread re-renders once.
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
@@ -89,8 +90,12 @@ class DiscordThreadTitlesMixin:
 
     def _format_thread_chat_name(self, thread: Any) -> str:
         """Build a readable chat name for thread-like Discord channels, including forum context when available."""
-        thread_name = getattr(thread, "name", None) or str(getattr(thread, "id", "thread"))
-        thread_name = self._semantic_thread_renames.display_name(str(getattr(thread, "id", "")), thread_name)
+        thread_name = getattr(thread, "name", None) or str(
+            getattr(thread, "id", "thread")
+        )
+        thread_name = self._semantic_thread_renames.display_name(
+            str(getattr(thread, "id", "")), thread_name
+        )
         parent = getattr(thread, "parent", None)
         guild = getattr(thread, "guild", None) or getattr(parent, "guild", None)
         guild_name = getattr(guild, "name", None)
@@ -106,6 +111,13 @@ class DiscordThreadTitlesMixin:
     def _guild_channel_labels(self, channel: Any) -> tuple[str, str | None]:
         """``(chat_name, chat_topic)`` for a guild channel or thread, as a message posted there gets them."""
         if isinstance(channel, discord.Thread):
-            return self._format_thread_chat_name(channel), self._get_effective_topic(channel, is_thread=True)
-        name, guild = getattr(channel, "name", str(channel.id)), getattr(channel, "guild", None)
-        return (f"{guild.name} / #{name}" if guild else name), self._get_effective_topic(channel)
+            return self._format_thread_chat_name(channel), self._get_effective_topic(
+                channel, is_thread=True
+            )
+        name, guild = (
+            getattr(channel, "name", str(channel.id)),
+            getattr(channel, "guild", None),
+        )
+        return (
+            f"{guild.name} / #{name}" if guild else name
+        ), self._get_effective_topic(channel)

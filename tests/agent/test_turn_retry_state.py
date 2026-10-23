@@ -25,7 +25,9 @@ def test_copilot_provider_check_accepts_alias_spellings():
     assert _is_copilot_provider(_Agent("github"))
     # URL fallback: unnormalized provider but a Copilot base URL.
     assert _is_copilot_provider(_Agent("custom", "https://api.githubcopilot.com"))
-    assert not _is_copilot_provider(_Agent("openrouter", "https://openrouter.ai/api/v1"))
+    assert not _is_copilot_provider(
+        _Agent("openrouter", "https://openrouter.ai/api/v1")
+    )
 
     class _NoMethod:
         provider = "github-copilot"

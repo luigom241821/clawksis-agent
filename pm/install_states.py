@@ -30,7 +30,9 @@ logger = logging.getLogger(__name__)
 def _provably_deleted(root: Path, data_root: Path) -> bool:
     if root.exists():
         return False
-    return root.is_relative_to(data_root) or (root.parent.name == ".worktrees" and root.parent.is_dir())
+    return root.is_relative_to(data_root) or (
+        root.parent.name == ".worktrees" and root.parent.is_dir()
+    )
 
 
 def orphan_install_states(installs: Path) -> list[Path]:
@@ -72,7 +74,11 @@ def _held(state: Path) -> bool:
     for generations in (state / "environments", state / "pm-runtime" / "generations"):
         if generations.is_dir():
             for generation in generations.iterdir():
-                if generation.is_dir() and (generation / ".leases").is_dir() and leases_held(generation):
+                if (
+                    generation.is_dir()
+                    and (generation / ".leases").is_dir()
+                    and leases_held(generation)
+                ):
                     return True
     return False
 
@@ -96,7 +102,10 @@ def collect_orphan_install_states(installs: Path) -> list[Path]:
                 with contextlib.suppress(OSError):
                     child.unlink()
         if any(child.name != "inputs" for child in state.iterdir()):
-            logger.debug("orphan install state %s only partly removed; retried next pass", state.name)
+            logger.debug(
+                "orphan install state %s only partly removed; retried next pass",
+                state.name,
+            )
             continue
         shutil.rmtree(state, ignore_errors=True)
         if not state.exists():

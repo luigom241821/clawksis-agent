@@ -1,4 +1,5 @@
 """Regression tests for symlink-safe Docker stage2 ownership repair."""
+
 from __future__ import annotations
 
 import shutil
@@ -10,16 +11,19 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 STAGE2_HOOK = REPO_ROOT / "docker" / "stage2-hook.sh"
 
+
 @pytest.fixture(scope="module")
 def stage2_text() -> str:
     if not STAGE2_HOOK.exists():
         pytest.skip("docker/stage2-hook.sh not present in this checkout")
     return STAGE2_HOOK.read_text()
 
+
 def _chown_clawk_tree_function(text: str) -> str:
     start = text.index("path_has_symlink_component() {")
     end = text.index("\n\nneeds_chown=false", start)
     return text[start:end]
+
 
 def _run_helper(
     text: str,
@@ -39,9 +43,14 @@ def _run_helper(
         f'chown() {{ printf "%s\\n" "$*" >> "{log_path}"; }}\n'
         f'chown_clawk_tree "{target}"\n'
     )
-    return subprocess.run([shell, "-c", script], capture_output=True, text=True, check=False)
+    return subprocess.run(
+        [shell, "-c", script], capture_output=True, text=True, check=False
+    )
 
-def test_chown_helper_repairs_real_directories(stage2_text: str, tmp_path: Path) -> None:
+
+def test_chown_helper_repairs_real_directories(
+    stage2_text: str, tmp_path: Path
+) -> None:
     target = tmp_path / "home"
     target.mkdir()
     log_path = tmp_path / "chown.log"
@@ -53,7 +62,10 @@ def test_chown_helper_repairs_real_directories(stage2_text: str, tmp_path: Path)
         f"-R clawk:clawk {target}",
     ]
 
-def test_chown_helper_refuses_symlinked_directories(stage2_text: str, tmp_path: Path) -> None:
+
+def test_chown_helper_refuses_symlinked_directories(
+    stage2_text: str, tmp_path: Path
+) -> None:
     real_home = tmp_path / "real-home"
     real_home.mkdir()
     symlinked_home = tmp_path / "clawk-home"
@@ -68,6 +80,7 @@ def test_chown_helper_refuses_symlinked_directories(stage2_text: str, tmp_path: 
     assert proc.returncode == 0, proc.stderr
     assert not log_path.exists()
     assert "refusing recursive chown through symlinked path" in proc.stdout
+
 
 def test_chown_helper_refuses_target_under_symlinked_home(
     stage2_text: str,

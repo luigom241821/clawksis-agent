@@ -34,7 +34,10 @@ from tests.fakes.fake_llm_provider import Text, ToolCall
 
 # Not marked ``integration`` (that marker means external services and is deselected by addopts): the backend is
 # loopback-only. ``tests/e2e`` is outside default discovery; run with ``scripts/run_tests.sh --include-integration``.
-pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="POSIX process-group lifecycle for the spawned backend")
+pytestmark = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="POSIX process-group lifecycle for the spawned backend",
+)
 
 TAG_RE = re.compile(r"\b(CLARIFY|RMRF)-([a-z0-9_]+)\b")
 PROMPT_TIMEOUT = 90.0
@@ -63,10 +66,22 @@ class Script:
         last = messages[-1] if messages else {}
         if last.get("role") == "tool":
             with self._lock:
-                self.tool_results.setdefault(tag, []).append(str(last.get("content") or ""))
+                self.tool_results.setdefault(tag, []).append(
+                    str(last.get("content") or "")
+                )
             return Text(f"DONE {tag}")
         if kind == "CLARIFY":
-            return ToolCall("clarify", {"questions": [{"question": f"Which colour for {tag}?", "choices": ["red", "blue"]}]})
+            return ToolCall(
+                "clarify",
+                {
+                    "questions": [
+                        {
+                            "question": f"Which colour for {tag}?",
+                            "choices": ["red", "blue"],
+                        }
+                    ]
+                },
+            )
         return ToolCall("terminal", {"command": f"rm -rf {self.victims[tag]}"})
 
 
@@ -78,10 +93,15 @@ def script() -> Script:
 @pytest.fixture(scope="module")
 def backend(tmp_path_factory, script):
     root = tmp_path_factory.mktemp("c20")
-    be = Backend(root, script, extra_config=(
-        "approvals:\n  mode: manual\n  timeout: 120\n"
-        "clarify:\n  timeout: 120\n"
-        "terminal:\n  backend: local\n"))
+    be = Backend(
+        root,
+        script,
+        extra_config=(
+            "approvals:\n  mode: manual\n  timeout: 120\n"
+            "clarify:\n  timeout: 120\n"
+            "terminal:\n  backend: local\n"
+        ),
+    )
     be.start()
     try:
         yield be
@@ -112,17 +132,30 @@ def _drive(backend: Backend, script: Script, kind: str, how: str, tag: str) -> N
     assert submitted.get("status") == "streaming", submitted
 
     start = len(a.snapshot())
-    request = a.wait_for(lambda f: f.get("method") == method and (f.get("params") or {}).get("session_id") == sid,
-                         timeout=PROMPT_TIMEOUT, start=start, what=f"{method} request for {tag}")
+    request = a.wait_for(
+        lambda f: (
+            f.get("method") == method
+            and (f.get("params") or {}).get("session_id") == sid
+        ),
+        timeout=PROMPT_TIMEOUT,
+        start=start,
+        what=f"{method} request for {tag}",
+    )
     rid = request["id"]
-    req_idx = next(i for i, f in enumerate(a.snapshot()) if f is request or f.get("id") == rid)
+    req_idx = next(
+        i for i, f in enumerate(a.snapshot()) if f is request or f.get("id") == rid
+    )
     assert isinstance(rid, str) and rid.startswith("srq-"), request
     if kind == "clarify":
-        assert request["params"]["questions"][0]["question"] == f"Which colour for {tag}?", request["params"]
+        assert (
+            request["params"]["questions"][0]["question"] == f"Which colour for {tag}?"
+        ), request["params"]
     else:
         assert str(victim) in str(request["params"].get("command")), request["params"]
         assert request["params"].get("request_id"), request["params"]
-        assert [p.get("request_id") for p in _pending(a, sid)] == [request["params"]["request_id"]]
+        assert [p.get("request_id") for p in _pending(a, sid)] == [
+            request["params"]["request_id"]
+        ]
     assert victim.exists(), "dangerous command ran before anyone approved it"
 
     responder: WSClient = a
@@ -130,72 +163,127 @@ def _drive(backend: Backend, script: Script, kind: str, how: str, tag: str) -> N
         other = a.call("session.create", cols=100, source="desktop")
         assert not a.events(other["session_id"], "message.complete")
         back = a.call("session.resume", session_id=key, cols=100)
-        assert back["session_id"] == sid, f"switching back re-minted the waiting runtime: {back['session_id']} != {sid}"
+        assert back["session_id"] == sid, (
+            f"switching back re-minted the waiting runtime: {back['session_id']} != {sid}"
+        )
         assert [r["id"] for r in _open_requests(back, method)] == [rid], (
-            f"switching back lost the pending {method}: {back.get('open_requests')}")
+            f"switching back lost the pending {method}: {back.get('open_requests')}"
+        )
     elif how == "second_conn":
         responder = backend.connect(f"B-{tag}")
         joined = responder.call("session.resume", session_id=key, cols=100)
         assert joined["session_id"] == sid
         assert [r["id"] for r in _open_requests(joined, method)] == [rid], (
-            f"second window does not see the pending {method}: {joined.get('open_requests')}")
+            f"second window does not see the pending {method}: {joined.get('open_requests')}"
+        )
     elif how == "reconnect":
         a.drop()
         responder = backend.connect(f"A2-{tag}")
-        resumed = poll_until(lambda: _resume_ok(responder, key), timeout=PROMPT_TIMEOUT, what="resume after drop")
-        assert resumed["session_id"] == sid, "reconnect within grace re-minted the waiting runtime"
+        resumed = poll_until(
+            lambda: _resume_ok(responder, key),
+            timeout=PROMPT_TIMEOUT,
+            what="resume after drop",
+        )
+        assert resumed["session_id"] == sid, (
+            "reconnect within grace re-minted the waiting runtime"
+        )
         assert [r["id"] for r in _open_requests(resumed, method)] == [rid], (
-            f"reconnected client lost the pending {method}: {resumed.get('open_requests')}")
+            f"reconnected client lost the pending {method}: {resumed.get('open_requests')}"
+        )
 
     answer = f"blue-{tag}"
     if kind == "clarify":
         responder.respond(rid, {"answers": {"q0": answer}})
     elif how == "rpc":
         choice = "deny" if kind == "approval_deny" else "once"
-        resolved = responder.call("approval.respond", session_id=sid, choice=choice,
-                                  request_id=request["params"]["request_id"])
+        resolved = responder.call(
+            "approval.respond",
+            session_id=sid,
+            choice=choice,
+            request_id=request["params"]["request_id"],
+        )
         assert resolved.get("resolved"), resolved
-        poll_until(lambda: _pending(responder, sid) == [], timeout=30,
-                   what=f"approval.respond to actually settle the pending approval ({tag})")
+        poll_until(
+            lambda: _pending(responder, sid) == [],
+            timeout=30,
+            what=f"approval.respond to actually settle the pending approval ({tag})",
+        )
     else:
-        responder.respond(rid, {"choice": "deny" if kind == "approval_deny" else "once"})
+        responder.respond(
+            rid, {"choice": "deny" if kind == "approval_deny" else "once"}
+        )
 
     watcher = responder
-    done = watcher.wait_for(lambda f: etype(f) == "message.complete" and f["params"].get("session_id") == sid,
-                            timeout=PROMPT_TIMEOUT, what=f"turn completion for {tag}")
-    assert f"DONE {tag}" in str((done["params"].get("payload") or {}).get("text")), done["params"]
+    done = watcher.wait_for(
+        lambda f: (
+            etype(f) == "message.complete" and f["params"].get("session_id") == sid
+        ),
+        timeout=PROMPT_TIMEOUT,
+        what=f"turn completion for {tag}",
+    )
+    assert f"DONE {tag}" in str((done["params"].get("payload") or {}).get("text")), (
+        done["params"]
+    )
 
     results = script.tool_results.get(tag) or []
-    assert len(results) == 1, f"expected exactly one tool result for {tag}, got {results}"
+    assert len(results) == 1, (
+        f"expected exactly one tool result for {tag}, got {results}"
+    )
     result = results[0]
     if kind == "clarify":
-        assert answer in result, f"clarify answer never reached the tool: {result[:300]}"
+        assert answer in result, (
+            f"clarify answer never reached the tool: {result[:300]}"
+        )
     elif kind == "approval_deny":
-        assert victim.exists() and (victim / "keep.txt").exists(), "denied command ran anyway"
-        assert "denied by user" in result, f"tool result does not report the denial: {result[:300]}"
+        assert victim.exists() and (victim / "keep.txt").exists(), (
+            "denied command ran anyway"
+        )
+        assert "denied by user" in result, (
+            f"tool result does not report the denial: {result[:300]}"
+        )
     else:
         assert not victim.exists(), f"approved command did not run: {result[:300]}"
         payload = json.loads(result)
-        assert payload.get("exit_code") == 0 and "approved by the user" in str(payload.get("approval")), payload
+        assert payload.get("exit_code") == 0 and "approved by the user" in str(
+            payload.get("approval")
+        ), payload
 
     if responder is not a and not a.dropped:
         # The window that did NOT answer must get the signal that settles its card (Desktop tears the clarify
         # card down on tool.complete / request.cancel and reconciles approvals via approval.pending).
-        a.wait_for(lambda f: (f.get("params") or {}).get("session_id") == sid and (
-            etype(f) == "tool.complete" or (etype(f) == "request.cancel"
-                                            and (f["params"].get("payload") or {}).get("id") == rid)),
-            timeout=PROMPT_TIMEOUT, start=req_idx + 1, what=f"card-settling signal on the other window ({tag})")
+        a.wait_for(
+            lambda f: (
+                (f.get("params") or {}).get("session_id") == sid
+                and (
+                    etype(f) == "tool.complete"
+                    or (
+                        etype(f) == "request.cancel"
+                        and (f["params"].get("payload") or {}).get("id") == rid
+                    )
+                )
+            ),
+            timeout=PROMPT_TIMEOUT,
+            start=req_idx + 1,
+            what=f"card-settling signal on the other window ({tag})",
+        )
 
     # Nothing left waiting on a human, from any surface.
-    final = poll_until(lambda: _resume_ok(responder, key), timeout=PROMPT_TIMEOUT, what="final resume")
+    final = poll_until(
+        lambda: _resume_ok(responder, key), timeout=PROMPT_TIMEOUT, what="final resume"
+    )
     if final.get("open_requests"):
-        raise PromptLeftPending(f"prompt left pending after the turn: {final.get('open_requests')}")
+        raise PromptLeftPending(
+            f"prompt left pending after the turn: {final.get('open_requests')}"
+        )
     assert not final.get("pending_approval"), final.get("pending_approval")
     assert _pending(responder, sid) == []
     for conn in (a, responder):
         if not conn.dropped:
-            assert not [f for f in conn.server_requests() if f["params"].get("session_id") == sid
-                        and f["id"] != rid], "a second prompt was raised for one tool call"
+            assert not [
+                f
+                for f in conn.server_requests()
+                if f["params"].get("session_id") == sid and f["id"] != rid
+            ], "a second prompt was raised for one tool call"
 
 
 def _resume_ok(conn: WSClient, key: str) -> dict | None:
@@ -207,14 +295,25 @@ def _resume_ok(conn: WSClient, key: str) -> dict | None:
 
 
 CASES = [
-    ("clarify", "immediate"), ("clarify", "switch"), ("clarify", "second_conn"), ("clarify", "reconnect"),
-    ("approval_deny", "immediate"), ("approval_deny", "second_conn"), ("approval_deny", "rpc"),
-    ("approval_approve", "immediate"), ("approval_approve", "switch"), ("approval_approve", "reconnect"),
+    ("clarify", "immediate"),
+    ("clarify", "switch"),
+    ("clarify", "second_conn"),
+    ("clarify", "reconnect"),
+    ("approval_deny", "immediate"),
+    ("approval_deny", "second_conn"),
+    ("approval_deny", "rpc"),
+    ("approval_approve", "immediate"),
+    ("approval_approve", "switch"),
+    ("approval_approve", "reconnect"),
 ]
 
 
-@pytest.mark.parametrize(("kind", "how"), [pytest.param(k, h, id=f"{k}-{h}") for k, h in CASES])
-def test_interactive_roundtrip(backend: Backend, script: Script, kind: str, how: str) -> None:
+@pytest.mark.parametrize(
+    ("kind", "how"), [pytest.param(k, h, id=f"{k}-{h}") for k, h in CASES]
+)
+def test_interactive_roundtrip(
+    backend: Backend, script: Script, kind: str, how: str
+) -> None:
     tag = f"{kind}_{how}".lower()
     try:
         _drive(backend, script, kind, how, tag)

@@ -8,7 +8,10 @@ import sys
 def import_foreign_resume(args) -> None:
     """--resume @claude / @codex: import a foreign session and resume it."""
     _resume_foreign = getattr(args, "resume", None)
-    if not (isinstance(_resume_foreign, str) and _resume_foreign.strip().lower() in ("@claude", "@codex")):
+    if not (
+        isinstance(_resume_foreign, str)
+        and _resume_foreign.strip().lower() in ("@claude", "@codex")
+    ):
         return
     from clawk_cli.foreign_sessions import import_foreign_session, pick_foreign_session
 
@@ -32,9 +35,15 @@ def _frozen_cwd(db, session_id) -> str:
 
     from clawk_state_local import local_receipt
     from clawk_state_runtime import RuntimeStoreError
+
     try:
         return str(local_receipt(db, session_id)["policy"].get("cwd") or "").strip()
-    except (RuntimeStoreError, KeyError, AttributeError, sqlite3.Error):  # no readable policy: use the row's cwd
+    except (
+        RuntimeStoreError,
+        KeyError,
+        AttributeError,
+        sqlite3.Error,
+    ):  # no readable policy: use the row's cwd
         return ""
 
 
@@ -45,12 +54,16 @@ def recreate_resumed_tui_worktree(args) -> None:
         return
     cwd = ""
     from clawk_cli.main import _session_db
+
     with _session_db() as db:  # a store error is swallowed: nothing to recreate
-        cwd = (_frozen_cwd(db, args.resume)
-               or ((db.get_session(args.resume) or {}).get("cwd") or "").strip())
+        cwd = (
+            _frozen_cwd(db, args.resume)
+            or ((db.get_session(args.resume) or {}).get("cwd") or "").strip()
+        )
     if not cwd or os.path.isdir(cwd):
         return
     from clawk_cli.tui_worktree_resume import recreate_tui_worktree
+
     tree = recreate_tui_worktree(cwd, args.resume)
     if tree:
         print(f"↪ recreated the session's worktree: {tree}")

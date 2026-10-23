@@ -17,7 +17,9 @@ import pytest
 
 from clawk_cli.profiles import export_profile
 
-pytestmark = pytest.mark.platforms("posix")  # Unix sockets and FIFOs are not available on Windows
+pytestmark = pytest.mark.platforms(
+    "posix"
+)  # Unix sockets and FIFOs are not available on Windows
 
 
 def _patch_named_profile(monkeypatch, profiles_root, profile_dir):

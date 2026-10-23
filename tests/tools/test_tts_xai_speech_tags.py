@@ -10,6 +10,7 @@ from tools.tts_tool_providers import (
     _apply_xai_auto_speech_tags,
 )
 
+
 def test_apply_xai_auto_speech_tags_adds_light_pause_after_first_sentence():
     text = "Bonjour Monsieur Talbot. Ceci est un test de réponse vocale."
 
@@ -17,10 +18,12 @@ def test_apply_xai_auto_speech_tags_adds_light_pause_after_first_sentence():
         "Bonjour Monsieur Talbot. [pause] Ceci est un test de réponse vocale."
     )
 
+
 def test_apply_xai_auto_speech_tags_preserves_explicit_tags():
     text = "Bonjour. [pause] <whisper>Déjà balisé.</whisper>"
 
     assert _apply_xai_auto_speech_tags(text) == text
+
 
 def test_apply_xai_auto_speech_tags_multi_paragraph_emits_single_pause():
     """Regression for #29417 — multi-paragraph input doubled the pause.
@@ -46,6 +49,7 @@ def test_apply_xai_auto_speech_tags_multi_paragraph_emits_single_pause():
         "Welcome to the demo of our new product line. [pause] It has many features."
     )
 
+
 def test_apply_xai_auto_speech_tags_single_paragraph_still_gets_first_sentence_pause():
     """Sanity guard — the fix only suppresses the first-sentence pass when
     a paragraph pass already injected ``[pause]``.  Single-paragraph input
@@ -56,9 +60,8 @@ def test_apply_xai_auto_speech_tags_single_paragraph_still_gets_first_sentence_p
         "Welcome to the demo of our new product line. [pause] It has many features."
     )
 
-def test_generate_xai_tts_sends_auxiliary_rewriter_output_to_api(
-    tmp_path, monkeypatch
-):
+
+def test_generate_xai_tts_sends_auxiliary_rewriter_output_to_api(tmp_path, monkeypatch):
     """auto_speech_tags=True should send the auxiliary rewriter's tagged
     output (not the conservative local pause fallback) to the xAI TTS API.
 
@@ -108,6 +111,7 @@ def test_generate_xai_tts_sends_auxiliary_rewriter_output_to_api(
     assert captured["json"]["language"] == "fr"
     assert captured["json"]["text"] == rewriter_output
 
+
 def test_generate_xai_tts_uses_oauth_pinned_base_url(tmp_path, monkeypatch):
     """OAuth bearer tokens must not follow user/env base URL overrides."""
     captured = {}
@@ -148,6 +152,7 @@ def test_generate_xai_tts_uses_oauth_pinned_base_url(tmp_path, monkeypatch):
 
     assert captured["url"] == "https://api.x.ai/v1/tts"
     assert captured["headers"]["Authorization"] == "Bearer oauth-bearer-token"
+
 
 def test_generate_xai_tts_prefers_explicit_api_key_over_oauth(tmp_path, monkeypatch):
     """TTS requires API billing even when chat OAuth is configured (#87045).
@@ -207,6 +212,7 @@ def test_generate_xai_tts_prefers_explicit_api_key_over_oauth(tmp_path, monkeypa
     assert captured["headers"]["Authorization"] == "Bearer paid-api-key"
     assert captured["url"] == "https://staging.x.ai/v1/tts"
 
+
 def test_auto_speech_tags_calls_auxiliary_rewriter_with_tts_audio_tags_task():
     """When input has no explicit speech tags, the function must call the
     auxiliary rewriter with task='tts_audio_tags' and a system prompt
@@ -236,17 +242,14 @@ def test_auto_speech_tags_calls_auxiliary_rewriter_with_tts_audio_tags_task():
     # comma-separated in two example lines ("Valid inline tags (use as
     # `[tag]`): pause, long-pause, ..." and a similar line for wrapping).
     for tag in _XAI_INLINE_SPEECH_TAGS:
-        assert tag in system_prompt, (
-            f"inline tag {tag!r} missing from system prompt"
-        )
+        assert tag in system_prompt, f"inline tag {tag!r} missing from system prompt"
     for tag in _XAI_WRAPPING_SPEECH_TAGS:
-        assert tag in system_prompt, (
-            f"wrapping tag {tag!r} missing from system prompt"
-        )
+        assert tag in system_prompt, f"wrapping tag {tag!r} missing from system prompt"
 
     # The user message carries the locally pause-tagged transcript (the
     # conservative fallback the rewriter is asked to enrich).
     assert "[pause]" in messages[1]["content"]
+
 
 def test_auto_speech_tags_strips_markdown_fences_from_rewriter_output():
     """If the auxiliary model wraps its reply in ```...``` fences the

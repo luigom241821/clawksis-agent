@@ -40,15 +40,25 @@ def safe_load(stream: str | bytes | IO[str] | IO[bytes]) -> Any:
 
 @overload
 def safe_dump(
-    data: Any, stream: None = None, *, default_flow_style: bool = False,
-    sort_keys: bool = True, allow_unicode: bool = True, width: int = 80,
+    data: Any,
+    stream: None = None,
+    *,
+    default_flow_style: bool = False,
+    sort_keys: bool = True,
+    allow_unicode: bool = True,
+    width: int = 80,
 ) -> str: ...
 
 
 @overload
 def safe_dump(
-    data: Any, stream: IO[str], *, default_flow_style: bool = False,
-    sort_keys: bool = True, allow_unicode: bool = True, width: int = 80,
+    data: Any,
+    stream: IO[str],
+    *,
+    default_flow_style: bool = False,
+    sort_keys: bool = True,
+    allow_unicode: bool = True,
+    width: int = 80,
 ) -> None: ...
 
 

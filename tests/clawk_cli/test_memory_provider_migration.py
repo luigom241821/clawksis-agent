@@ -11,12 +11,18 @@ from clawk_cli import memory_provider_migration as mig
 @pytest.fixture
 def home(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    (tmp_path / "config.yaml").write_text("memory:\n  provider: honcho\n  honcho:\n    workspace: keep-me\n")
-    monkeypatch.setattr(mig, "provider_present", lambda name, home: (home / "plugins" / name).is_dir())
+    (tmp_path / "config.yaml").write_text(
+        "memory:\n  provider: honcho\n  honcho:\n    workspace: keep-me\n"
+    )
+    monkeypatch.setattr(
+        mig, "provider_present", lambda name, home: (home / "plugins" / name).is_dir()
+    )
     return tmp_path
 
 
-def test_missing_provider_installs_its_catalog_plugin_and_keeps_config(home, monkeypatch):
+def test_missing_provider_installs_its_catalog_plugin_and_keeps_config(
+    home, monkeypatch
+):
     monkeypatch.setattr(mig, "catalog_source", lambda name: name)
     calls: list[str] = []
     said: list[str] = []
@@ -41,21 +47,39 @@ def test_presence_is_checked_in_the_home_being_migrated(tmp_path, monkeypatch):
     must count as present for B even when the process-level home (A) lacks it. Real lookup, no mock."""
     a, b = tmp_path / "a", tmp_path / "b"
     for h in (a, b):
-        h.mkdir(); (h / "config.yaml").write_text("memory:\n  provider: twin\n")
+        h.mkdir()
+        (h / "config.yaml").write_text("memory:\n  provider: twin\n")
     (b / "plugins" / "twin").mkdir(parents=True)
-    (b / "plugins" / "twin" / "__init__.py").write_text("class Twin(MemoryProvider): ...\n")
+    (b / "plugins" / "twin" / "__init__.py").write_text(
+        "class Twin(MemoryProvider): ...\n"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(a))
     monkeypatch.setattr(mig, "catalog_source", lambda name: name)
     installs: list[Path] = []
-    assert mig.migrate_home(b, install=lambda n: installs.append(b) or {"ok": True}, say=lambda s: None) is None
+    assert (
+        mig.migrate_home(
+            b, install=lambda n: installs.append(b) or {"ok": True}, say=lambda s: None
+        )
+        is None
+    )
     assert installs == []
-    assert mig.migrate_home(a, install=lambda n: installs.append(a) or {"ok": True}, say=lambda s: None) == "twin"
+    assert (
+        mig.migrate_home(
+            a, install=lambda n: installs.append(a) or {"ok": True}, say=lambda s: None
+        )
+        == "twin"
+    )
 
 
 def test_provider_unknown_to_catalog_is_reported_not_installed(home, monkeypatch):
     monkeypatch.setattr(mig, "catalog_source", lambda name: None)
     said: list[str] = []
-    assert mig.migrate_home(home, install=lambda n: pytest.fail("must not install"), say=said.append) is None
+    assert (
+        mig.migrate_home(
+            home, install=lambda n: pytest.fail("must not install"), say=said.append
+        )
+        is None
+    )
     assert "not in the plugin catalog" in said[0] and "memory.provider" in said[0]
 
 
@@ -67,7 +91,9 @@ def test_startup_recovery_attempts_each_profile_home(tmp_path, monkeypatch):
     homes = [tmp_path / "a", tmp_path / "b"]
     for profile_home in homes:
         profile_home.mkdir()
-        (profile_home / "config.yaml").write_text("memory:\n  provider: twin\n", encoding="utf-8")
+        (profile_home / "config.yaml").write_text(
+            "memory:\n  provider: twin\n", encoding="utf-8"
+        )
     monkeypatch.setattr(mig, "_attempted", set())
     monkeypatch.setattr(mig, "catalog_source", lambda name: name)
     monkeypatch.setattr(mig, "_LEFT_CORE", frozenset({"twin"}))
@@ -78,7 +104,9 @@ def test_startup_recovery_attempts_each_profile_home(tmp_path, monkeypatch):
         def install(name):
             plugin_dir = profile_home / "plugins" / name
             plugin_dir.mkdir(parents=True)
-            (plugin_dir / "__init__.py").write_text("class Twin(MemoryProvider): ...\n", encoding="utf-8")
+            (plugin_dir / "__init__.py").write_text(
+                "class Twin(MemoryProvider): ...\n", encoding="utf-8"
+            )
             installed.append(profile_home)
             return {"ok": True}
 
@@ -97,13 +125,33 @@ def test_startup_recovery_attempts_each_profile_home(tmp_path, monkeypatch):
     assert installed == homes
 
 
-@pytest.mark.parametrize(("name", "tty", "lazy", "consent"), [
-    ("hindsight", False, True, True),    # Desktop/gateway/scripted update: nobody can answer the prompt
-    ("hindsight", False, False, False),  # allow_lazy_installs off: still refused, with the install hint
-    ("hindsight", True, True, False),    # a terminal: the user is asked
-    ("someplugin", False, True, False),  # never bundled: a config naming it is not consent to install it
-])
-def test_unattended_migration_install_carries_lazy_install_consent(tmp_path, monkeypatch, name, tty, lazy, consent):
+@pytest.mark.parametrize(
+    ("name", "tty", "lazy", "consent"),
+    [
+        (
+            "hindsight",
+            False,
+            True,
+            True,
+        ),  # Desktop/gateway/scripted update: nobody can answer the prompt
+        (
+            "hindsight",
+            False,
+            False,
+            False,
+        ),  # allow_lazy_installs off: still refused, with the install hint
+        ("hindsight", True, True, False),  # a terminal: the user is asked
+        (
+            "someplugin",
+            False,
+            True,
+            False,
+        ),  # never bundled: a config naming it is not consent to install it
+    ],
+)
+def test_unattended_migration_install_carries_lazy_install_consent(
+    tmp_path, monkeypatch, name, tty, lazy, consent
+):
     """Every provider still in core declares Python deps; without this, no non-interactive migration
     (the whole point of the agent-start hook) can ever publish one."""
     import io
@@ -119,14 +167,22 @@ def test_unattended_migration_install_carries_lazy_install_consent(tmp_path, mon
     monkeypatch.setattr("sys.stdout", _Stream())
     monkeypatch.setattr(pm_install, "lazy_installs_allowed", lambda: lazy)
     seen = {}
-    monkeypatch.setattr(plugins_cmd, "dashboard_install_plugin", lambda *a, **kw: seen.update(kw) or {"ok": True})
+    monkeypatch.setattr(
+        plugins_cmd,
+        "dashboard_install_plugin",
+        lambda *a, **kw: seen.update(kw) or {"ok": True},
+    )
     assert mig._install_into(tmp_path)(name) == {"ok": True}
     assert seen["catalog_name"] == name
     assert seen.get("assume_deps_consent", False) is consent
 
 
-@pytest.mark.parametrize(("name", "installs"), [("hindsight", True), ("someplugin", False)])
-def test_startup_recovery_never_asks_a_dependency_question(tmp_path, monkeypatch, name, installs):
+@pytest.mark.parametrize(
+    ("name", "installs"), [("hindsight", True), ("someplugin", False)]
+)
+def test_startup_recovery_never_asks_a_dependency_question(
+    tmp_path, monkeypatch, name, installs
+):
     """Agent init cannot answer a prompt: in the CLI the question hangs the turn behind the chat input,
     with no terminal it is refused on every process start. A provider that shipped in core installs
     with its built-in's consent even on a terminal; any other one is not attempted and names the command."""
@@ -139,16 +195,24 @@ def test_startup_recovery_never_asks_a_dependency_question(tmp_path, monkeypatch
         def isatty(self):
             return True
 
-    (tmp_path / "config.yaml").write_text(f"memory:\n  provider: {name}\n", encoding="utf-8")
+    (tmp_path / "config.yaml").write_text(
+        f"memory:\n  provider: {name}\n", encoding="utf-8"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     monkeypatch.setattr("sys.stdin", _Tty())
     monkeypatch.setattr("sys.stdout", _Tty())
     monkeypatch.setattr(mig, "_attempted", set())
     monkeypatch.setattr(mig, "catalog_source", lambda n: n)
     monkeypatch.setattr(pm_install, "lazy_installs_allowed", lambda: True)
-    monkeypatch.setattr("builtins.input", lambda *_a: pytest.fail("agent init asked a question"))
+    monkeypatch.setattr(
+        "builtins.input", lambda *_a: pytest.fail("agent init asked a question")
+    )
     seen: list[dict] = []
-    monkeypatch.setattr(plugins_cmd, "dashboard_install_plugin", lambda *a, **kw: seen.append(kw) or {"ok": False})
+    monkeypatch.setattr(
+        plugins_cmd,
+        "dashboard_install_plugin",
+        lambda *a, **kw: seen.append(kw) or {"ok": False},
+    )
     said: list[str] = []
     mig.recover_at_startup(name, say=said.append)
     assert [kw["assume_deps_consent"] for kw in seen] == ([True] if installs else [])
@@ -164,11 +228,15 @@ def test_update_asks_once_and_names_each_profile(tmp_path, monkeypatch):
     homes = [root, root / "profiles" / "work-a", root / "profiles" / "work-b"]
     for profile_home in homes:
         profile_home.mkdir(parents=True, exist_ok=True)
-        (profile_home / "config.yaml").write_text("memory:\n  provider: twin\n", encoding="utf-8")
+        (profile_home / "config.yaml").write_text(
+            "memory:\n  provider: twin\n", encoding="utf-8"
+        )
     monkeypatch.setenv("CLAWK_HOME", str(root))
     monkeypatch.setattr("clawk_constants.get_default_clawk_root", lambda: root)
     monkeypatch.setattr("pm.plugins_state.dependency_homes", lambda: homes)
-    monkeypatch.setattr(mig, "provider_present", lambda name, home: (home / "plugins" / name).is_dir())
+    monkeypatch.setattr(
+        mig, "provider_present", lambda name, home: (home / "plugins" / name).is_dir()
+    )
     monkeypatch.setattr(mig, "catalog_source", lambda name: name)
     monkeypatch.setattr(plugins_cmd_install.sys.stdin, "isatty", lambda: True)
     monkeypatch.setattr(plugins_cmd_install.sys.stdout, "isatty", lambda: True)
@@ -179,27 +247,38 @@ def test_update_asks_once_and_names_each_profile(tmp_path, monkeypatch):
 
     def installer(profile_home):
         def install(name):  # the real consent gate every catalog install passes through
-            consented, reason = plugins_cmd_install._consent_python_deps(name, ("twin-client",), Console())
+            consented, reason = plugins_cmd_install._consent_python_deps(
+                name, ("twin-client",), Console()
+            )
             if not consented:
                 return {"ok": False, "error": reason}
             (profile_home / "plugins" / name).mkdir(parents=True)
             return {"ok": True}
+
         return install
 
     monkeypatch.setattr(mig, "_install_into", installer)
     for answer, expected in (("n", []), ("y", ["twin"] * 3)):
         prompts, said = [], []
-        monkeypatch.setattr("builtins.input", lambda prompt, a=answer: prompts.append(prompt) or a)
+        monkeypatch.setattr(
+            "builtins.input", lambda prompt, a=answer: prompts.append(prompt) or a
+        )
         assert mig.migrate_all_homes(say=said.append) == expected
         assert len(prompts) == 1
         if answer == "n":
-            assert "[profile 'default']" in said[1] and "dependency install declined" in said[1]
+            assert (
+                "[profile 'default']" in said[1]
+                and "dependency install declined" in said[1]
+            )
             assert "clawk -p work-a plugins install twin" in said[2]
             assert "clawk -p work-b plugins install twin" in said[2]
             assert not any((h / "plugins").exists() for h in homes)
         else:
             assert [line.split("]")[0] for line in said[1:]] == [
-                "  [profile 'default'", "  [profile 'work-a'", "  [profile 'work-b'"]
+                "  [profile 'default'",
+                "  [profile 'work-a'",
+                "  [profile 'work-b'",
+            ]
 
 
 def _profile_homes(tmp_path, monkeypatch, *names):
@@ -207,16 +286,24 @@ def _profile_homes(tmp_path, monkeypatch, *names):
     homes = [root, *(root / "profiles" / n for n in names)]
     for profile_home in homes:
         profile_home.mkdir(parents=True, exist_ok=True)
-        (profile_home / "config.yaml").write_text("memory:\n  provider: twin\n", encoding="utf-8")
+        (profile_home / "config.yaml").write_text(
+            "memory:\n  provider: twin\n", encoding="utf-8"
+        )
     monkeypatch.setenv("CLAWK_HOME", str(root))
     monkeypatch.setattr("clawk_constants.get_default_clawk_root", lambda: root)
-    monkeypatch.setattr(mig, "provider_present", lambda name, home: (home / "plugins" / name).is_dir())
+    monkeypatch.setattr(
+        mig, "provider_present", lambda name, home: (home / "plugins" / name).is_dir()
+    )
     monkeypatch.setattr(mig, "catalog_source", lambda name: name)
-    monkeypatch.setattr(mig, "_LEFT_CORE", frozenset({"twin"}))  # stands in for a formerly bundled provider
+    monkeypatch.setattr(
+        mig, "_LEFT_CORE", frozenset({"twin"})
+    )  # stands in for a formerly bundled provider
     return homes
 
 
-def test_unattended_update_refusal_in_one_profile_does_not_skip_the_others(tmp_path, monkeypatch):
+def test_unattended_update_refusal_in_one_profile_does_not_skip_the_others(
+    tmp_path, monkeypatch
+):
     """Unattended consent is each home's own allow_lazy_installs: the default home refusing says
     nothing about a profile that allows it, which must still migrate (not be reported as failed)."""
     import io
@@ -227,12 +314,19 @@ def test_unattended_update_refusal_in_one_profile_does_not_skip_the_others(tmp_p
 
     default, work = _profile_homes(tmp_path, monkeypatch, "work")
     monkeypatch.setattr("pm.plugins_state.dependency_homes", lambda: [default, work])
-    monkeypatch.setattr("sys.stdin", io.StringIO())  # Desktop / scripted `clawk update`: no terminal
-    monkeypatch.setattr(pm_install, "lazy_installs_allowed", lambda: get_clawk_home() == work)
+    monkeypatch.setattr(
+        "sys.stdin", io.StringIO()
+    )  # Desktop / scripted `clawk update`: no terminal
+    monkeypatch.setattr(
+        pm_install, "lazy_installs_allowed", lambda: get_clawk_home() == work
+    )
 
     def install(*_a, catalog_name, assume_deps_consent, **_kw):
         if not assume_deps_consent:
-            return {"ok": False, "error": "dependency install skipped (non-interactive)"}
+            return {
+                "ok": False,
+                "error": "dependency install skipped (non-interactive)",
+            }
         (get_clawk_home() / "plugins" / catalog_name).mkdir(parents=True)
         return {"ok": True}
 
@@ -250,8 +344,10 @@ def test_startup_hint_installs_into_the_profile_that_printed_it(tmp_path, monkey
 
     default, work = _profile_homes(tmp_path, monkeypatch, "work")
     monkeypatch.setattr(pm_install, "lazy_installs_allowed", lambda: False)
-    for profile_home, command in ((work, "clawk -p work plugins install twin"),
-                                  (default, "clawk plugins install twin")):
+    for profile_home, command in (
+        (work, "clawk -p work plugins install twin"),
+        (default, "clawk plugins install twin"),
+    ):
         monkeypatch.setattr(mig, "_attempted", set())
         monkeypatch.setenv("CLAWK_HOME", str(profile_home))
         said: list[str] = []
@@ -259,7 +355,9 @@ def test_startup_hint_installs_into_the_profile_that_printed_it(tmp_path, monkey
         assert f"`{command}`" in said[0]
 
 
-def test_missing_catalog_provider_recovery_names_the_profile_install_command(tmp_path, monkeypatch, capsys):
+def test_missing_catalog_provider_recovery_names_the_profile_install_command(
+    tmp_path, monkeypatch, capsys
+):
     """Offline, lazy installs off, or a failed migration: every surface a user turns to (doctor,
     ``memory status``, ``memory setup honcho``, ``clawk honcho``) names the one command that installs
     the catalog plugin into THIS profile. Real in-tree catalog, nothing installed."""
@@ -283,11 +381,16 @@ def test_missing_catalog_provider_recovery_names_the_profile_install_command(tmp
     assert want in capsys.readouterr().err
 
 
-def test_recovery_copy_without_a_catalog_memory_entry_keeps_the_generic_hint(tmp_path, monkeypatch, capsys):
+def test_recovery_copy_without_a_catalog_memory_entry_keeps_the_generic_hint(
+    tmp_path, monkeypatch, capsys
+):
     from clawk_cli import doctor_state
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))  # not a profile home: no -p to add
-    assert mig.catalog_install_hint("honcho", category="memory") == "clawk plugins install honcho"
+    assert (
+        mig.catalog_install_hint("honcho", category="memory")
+        == "clawk plugins install honcho"
+    )
     assert mig.catalog_install_hint("honcho", category="tools") is None
     assert mig.catalog_install_hint("no-such-provider") is None
     doctor_state._memory_provider_generic("no-such-provider")
@@ -299,18 +402,28 @@ def test_startup_recovery_backs_off_after_a_failed_install(tmp_path, monkeypatch
     cron run, Desktop restart): one failure, then a quiet hour; `clawk update` still retries."""
     from pm import install as pm_install
 
-    (tmp_path / "config.yaml").write_text("memory:\n  provider: hindsight\n", encoding="utf-8")
+    (tmp_path / "config.yaml").write_text(
+        "memory:\n  provider: hindsight\n", encoding="utf-8"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     monkeypatch.setattr(mig, "catalog_source", lambda n: n)
     monkeypatch.setattr(pm_install, "lazy_installs_allowed", lambda: True)
     attempts: list[str] = []
-    monkeypatch.setattr(mig, "_install_into", lambda home, **_kw: (lambda n: attempts.append(n) or {"ok": False, "error": "uv lock exited 1"}))
+    monkeypatch.setattr(
+        mig,
+        "_install_into",
+        lambda home, **_kw: (
+            lambda n: attempts.append(n) or {"ok": False, "error": "uv lock exited 1"}
+        ),
+    )
     said: list[str] = []
     for _process in range(3):
         monkeypatch.setattr(mig, "_attempted", set())  # a fresh process each time
         assert mig.recover_at_startup("hindsight", say=said.append) is False
     assert attempts == ["hindsight"]
-    assert "`clawk plugins install hindsight`" in said[-1]  # still told memory is off, and the fix
+    assert (
+        "`clawk plugins install hindsight`" in said[-1]
+    )  # still told memory is off, and the fix
     monkeypatch.setattr(mig, "STARTUP_RETRY_SECONDS", 0.0)
     monkeypatch.setattr(mig, "_attempted", set())
     mig.recover_at_startup("hindsight")

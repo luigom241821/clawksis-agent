@@ -1,4 +1,5 @@
 """Concurrency invariants for the LSP service state lock."""
+
 from __future__ import annotations
 
 import asyncio
@@ -43,7 +44,9 @@ def test_reused_multiroot_client_attaches_outside_state_lock(monkeypatch):
             )
 
     client = StubClient()
-    monkeypatch.setattr(service, "_trusted", lambda _root: True)  # trusted roots share the process
+    monkeypatch.setattr(
+        service, "_trusted", lambda _root: True
+    )  # trusted roots share the process
     service._clients[(server.server_id, "")] = client  # multi-root client key
     service._last_used[(server.server_id, "")] = 0.0
 
@@ -64,8 +67,13 @@ def test_delta_baseline_is_capped_by_write_recency(monkeypatch):
     """Driven through the production entry points (``snapshot_baseline`` before a write, ``_apply_delta``
     rolling the baseline forward after one): baselines beyond _DELTA_BASELINE_CAP evict the path
     written longest ago, and re-touching a path refreshes it instead of aging it out."""
-    service = LSPService(enabled=False, wait_mode="document", wait_timeout=0.1,
-                         install_strategy="manual", idle_timeout=0)
+    service = LSPService(
+        enabled=False,
+        wait_mode="document",
+        wait_timeout=0.1,
+        install_strategy="manual",
+        idle_timeout=0,
+    )
     monkeypatch.setattr(service, "enabled_for", lambda _p: True)
     server_diags: list = []
 
@@ -76,7 +84,9 @@ def test_delta_baseline_is_capped_by_write_recency(monkeypatch):
 
     monkeypatch.setattr(service, "_loop", _Loop())
 
-    class _LockedDict(dict):  # every mutation of the shared baseline dict must run under _state_lock
+    class _LockedDict(
+        dict
+    ):  # every mutation of the shared baseline dict must run under _state_lock
         def __setitem__(self, k, v):
             assert service._state_lock.locked()
             super().__setitem__(k, v)
@@ -90,7 +100,9 @@ def test_delta_baseline_is_capped_by_write_recency(monkeypatch):
     for i in range(cap):
         service.snapshot_baseline(f"/repo/f{i}.py")
     server_diags.append({"message": "rewritten"})
-    assert service._apply_delta("/repo/f0.py", [{"message": "rewritten"}], None) == [{"message": "rewritten"}]
+    assert service._apply_delta("/repo/f0.py", [{"message": "rewritten"}], None) == [
+        {"message": "rewritten"}
+    ]
     server_diags.clear()
     service.snapshot_baseline("/repo/new.py")
     assert len(service._delta_baseline) == cap

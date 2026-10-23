@@ -29,11 +29,13 @@ def _resolve_origin(explicit: Optional[dict[str, Any]]) -> Optional[dict[str, An
         return explicit
     try:
         from gateway.session_context import get_session_env
+
         platform = get_session_env("CLAWK_SESSION_PLATFORM")
         chat_id = get_session_env("CLAWK_SESSION_CHAT_ID")
         if platform and chat_id:
             return {
-                "platform": platform, "chat_id": chat_id,
+                "platform": platform,
+                "chat_id": chat_id,
                 "chat_name": get_session_env("CLAWK_SESSION_CHAT_NAME") or None,
                 "thread_id": get_session_env("CLAWK_SESSION_THREAD_ID") or None,
             }
@@ -72,6 +74,7 @@ def match_blueprint(query: str) -> tuple[Optional[Any], list[Any]]:
     anywhere in key/title/description, then a difflib fuzzy pass on keys.
     """
     from cron.blueprint_catalog import list_blueprints
+
     q = (query or "").strip().lower()
     if not q:
         return None, []
@@ -87,9 +90,21 @@ def match_blueprint(query: str) -> tuple[Optional[Any], list[Any]]:
         return (r.key.lower(), r.key.lower().rpartition(":")[2])
 
     passes = (
-        lambda: [r for r in catalog if any(k.startswith(q) for k in _keys(r)) or any(w.lower().startswith(q) for w in r.title.split())],
-        lambda: [r for r in catalog if q in r.key.lower() or q in r.title.lower() or q in r.description.lower()],
-        lambda: [by_key[k] for k in difflib.get_close_matches(q, list(by_key), n=3, cutoff=0.6)],
+        lambda: [
+            r
+            for r in catalog
+            if any(k.startswith(q) for k in _keys(r))
+            or any(w.lower().startswith(q) for w in r.title.split())
+        ],
+        lambda: [
+            r
+            for r in catalog
+            if q in r.key.lower() or q in r.title.lower() or q in r.description.lower()
+        ],
+        lambda: [
+            by_key[k]
+            for k in difflib.get_close_matches(q, list(by_key), n=3, cutoff=0.6)
+        ],
     )
     for candidates in passes:
         picked = _pick(candidates())
@@ -100,6 +115,7 @@ def match_blueprint(query: str) -> tuple[Optional[Any], list[Any]]:
 
 def _humanize_schedule(blueprint) -> str:
     from cron.blueprint_catalog import _humanize_schedule as _h
+
     try:
         return _h(blueprint)
     except Exception:
@@ -114,6 +130,7 @@ def build_blueprint_seed(blueprint) -> str:
     rendered prompt. Defaults are stated so the agent can offer them.
     """
     from cron.blueprint_catalog import WEEKDAY_PRESETS
+
     lines: list[str] = [
         f"Set up the '{blueprint.title}' automation for me (automation blueprint "
         f"'{blueprint.key}'). {blueprint.description}",
@@ -141,7 +158,7 @@ def build_blueprint_seed(blueprint) -> str:
         "(fill {minute}/{hour} from the chosen time, {dow} from the weekday "
         f"choice using {dict(WEEKDAY_PRESETS)}, {{interval_min}} from any "
         "interval). Use this exact prompt for the job (substituting my "
-        f"answers into any {{slot}} placeholders): \"{blueprint.prompt_template}\". "
+        f'answers into any {{slot}} placeholders): "{blueprint.prompt_template}". '
         "Confirm the schedule and what it will do before you create it."
     )
     return "\n".join(lines)
@@ -149,7 +166,10 @@ def build_blueprint_seed(blueprint) -> str:
 
 def _fmt_catalog() -> str:
     from cron.blueprint_catalog import list_blueprints
-    lines = ["Automation Blueprints — `/blueprint <name>` and I'll ask you what I need:\n"]
+
+    lines = [
+        "Automation Blueprints — `/blueprint <name>` and I'll ask you what I need:\n"
+    ]
     for r in list_blueprints():
         source = f" (plugin: {r.plugin})" if r.plugin else ""
         lines.append(f"  • {r.key} — {r.title}{source}")
@@ -170,7 +190,10 @@ def _fmt_candidates(query: str, candidates: list[Any]) -> str:
 
 def _fmt_no_match(query: str) -> str:
     from cron.blueprint_catalog import list_blueprints
-    close = difflib.get_close_matches((query or "").lower(), [r.key for r in list_blueprints()], n=3, cutoff=0.4)
+
+    close = difflib.get_close_matches(
+        (query or "").lower(), [r.key for r in list_blueprints()], n=3, cutoff=0.4
+    )
     msg = f"No automation blueprint matches '{query}'."
     if close:
         msg += " Did you mean: " + ", ".join(close) + "?"
@@ -179,7 +202,11 @@ def _fmt_no_match(query: str) -> str:
 
 def _manage_hint(surface: str) -> str:
     """/cron is CLI-only; on gateway platforms jobs are managed via the agent (cronjob tool) or dashboard."""
-    return "Manage it with /cron." if surface == "cli" else "Ask me to list, pause, or remove it any time."
+    return (
+        "Manage it with /cron."
+        if surface == "cli"
+        else "Ask me to list, pause, or remove it any time."
+    )
 
 
 def handle_blueprint_command(
@@ -196,7 +223,9 @@ def handle_blueprint_command(
         from cron.blueprint_catalog import fill_blueprint, BlueprintFillError
     except Exception as e:  # pragma: no cover - import guard
         logger.debug("blueprint catalog import failed: %s", e)
-        return BlueprintCommandResult("Automation Blueprints are unavailable in this build.")
+        return BlueprintCommandResult(
+            "Automation Blueprints are unavailable in this build."
+        )
 
     try:
         tokens = shlex.split(args or "")
@@ -211,7 +240,9 @@ def handle_blueprint_command(
 
     blueprint, candidates = match_blueprint(query)
     if blueprint is None:
-        return BlueprintCommandResult(_fmt_candidates(query, candidates) if candidates else _fmt_no_match(query))
+        return BlueprintCommandResult(
+            _fmt_candidates(query, candidates) if candidates else _fmt_no_match(query)
+        )
 
     # `<name>` with no inline slot values -> seed the agent to ask for them.
     if not values:
@@ -228,7 +259,11 @@ def handle_blueprint_command(
         )
 
     try:
-        from cron.scheduler import CronSchedulerRegistrationError, create_job_with_scheduler_registration
+        from cron.scheduler import (
+            CronSchedulerRegistrationError,
+            create_job_with_scheduler_registration,
+        )
+
         job = create_job_with_scheduler_registration(**spec)
     except CronSchedulerRegistrationError as e:
         return BlueprintCommandResult(e.user_message())

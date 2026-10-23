@@ -26,7 +26,10 @@ logger = logging.getLogger("clawk_cli.auth")
 def _has_nous_identity() -> bool:
     from clawk_cli.auth_nous import _read_shared_nous_state
 
-    return anon_auth.current_nous_state() is not None or _read_shared_nous_state() is not None
+    return (
+        anon_auth.current_nous_state() is not None
+        or _read_shared_nous_state() is not None
+    )
 
 
 def provider_configured() -> bool:
@@ -48,7 +51,10 @@ def inference_available(*, assume_fresh: bool = False) -> bool:
     if anon_auth.free_inference_active():
         return True
     configured = provider_configured()
-    return configured or claim_blocker(assume_fresh=assume_fresh, configured=configured) is None
+    return (
+        configured
+        or claim_blocker(assume_fresh=assume_fresh, configured=configured) is None
+    )
 
 
 def _machine_is_used(assume_fresh: bool) -> bool:
@@ -60,21 +66,33 @@ def _machine_is_used(assume_fresh: bool) -> bool:
 @dataclass(frozen=True, slots=True)
 class _Ask:
     assume_fresh: bool
-    configured: Optional[bool]  # the caller's provider_configured() answer, when it has one
+    configured: Optional[
+        bool
+    ]  # the caller's provider_configured() answer, when it has one
 
 
 # Cheapest first; the last one reads the disk. Each is a reason the trial cannot be claimed.
 _CLAIM_BLOCKERS: tuple[tuple[str, Callable[[_Ask], bool]], ...] = (
-    ("not the desktop's local backend", lambda _ask: not anon_auth.on_local_desktop_backend()),
+    (
+        "not the desktop's local backend",
+        lambda _ask: not anon_auth.on_local_desktop_backend(),
+    ),
     ("guests are switched off", lambda _ask: not anon_auth.guest_allowed()),
     ("a Nous identity exists", lambda _ask: _has_nous_identity()),
-    ("a provider is configured",
-     lambda ask: provider_configured() if ask.configured is None else ask.configured),
-    ("Clawksis was used on this machine", lambda ask: _machine_is_used(ask.assume_fresh)),
+    (
+        "a provider is configured",
+        lambda ask: provider_configured() if ask.configured is None else ask.configured,
+    ),
+    (
+        "Clawksis was used on this machine",
+        lambda ask: _machine_is_used(ask.assume_fresh),
+    ),
 )
 
 
-def claim_blocker(*, assume_fresh: bool = False, configured: Optional[bool] = None) -> Optional[str]:
+def claim_blocker(
+    *, assume_fresh: bool = False, configured: Optional[bool] = None
+) -> Optional[str]:
     """Why the trial cannot be claimed here, or None when it can. *assume_fresh* is the unpackaged
     desktop's ``--fresh-install`` switch: it skips only the machine check. *configured* is a
     ``provider_configured()`` answer the caller already has, so the ladder is not walked twice."""
@@ -82,7 +100,9 @@ def claim_blocker(*, assume_fresh: bool = False, configured: Optional[bool] = No
     return next((reason for reason, blocks in _CLAIM_BLOCKERS if blocks(ask)), None)
 
 
-def claim_desktop_free_tier(*, assume_fresh: bool = False, force: bool = False) -> Optional[dict[str, Any]]:
+def claim_desktop_free_tier(
+    *, assume_fresh: bool = False, force: bool = False
+) -> Optional[dict[str, Any]]:
     """Claim the trial when nothing blocks it: mint the guest, stamp the claim, mark the machine.
     Returns the claimed state, or None when the trial is not available here. A failed mint raises
     the coded ``AuthError`` from :func:`anon_auth.ensure_portal_identity` (memoised with its cooldown;
@@ -96,13 +116,19 @@ def claim_desktop_free_tier(*, assume_fresh: bool = False, force: bool = False) 
         if reason := claim_blocker(assume_fresh=assume_fresh):
             logger.debug("welcome trial not claimed: %s", reason)
             return None
-        state = anon_auth.ensure_portal_identity(explicit=True, force=force, welcome_claim=True)
+        state = anon_auth.ensure_portal_identity(
+            explicit=True, force=force, welcome_claim=True
+        )
         if state is None:  # still inside the cooldown of the last failure
             failure = anon_auth.last_mint_failure() or {}
             raise anon_auth._anon_err(
-                str(failure.get("error") or anon_auth.ANON_FAILURE_COPY[anon_auth.ANON_SERVER_ERROR]),
+                str(
+                    failure.get("error")
+                    or anon_auth.ANON_FAILURE_COPY[anon_auth.ANON_SERVER_ERROR]
+                ),
                 str(failure.get("error_code") or anon_auth.ANON_SERVER_ERROR),
-                retry_after=failure.get("retry_after"))
+                retry_after=failure.get("retry_after"),
+            )
         install_state.mark_machine_used()
     logger.info("Nous free tier: welcome trial claimed on this machine")
     return state
@@ -118,10 +144,11 @@ def settle_interrupted_claim() -> bool:
     if not trial_reserved():
         return False
     stores = (anon_auth.current_nous_state(), _read_shared_nous_state())
-    if not any(anon_auth.is_guest_state(s) and s.get(anon_auth.WELCOME_CLAIM_FLAG) is True for s in stores):
+    if not any(
+        anon_auth.is_guest_state(s) and s.get(anon_auth.WELCOME_CLAIM_FLAG) is True
+        for s in stores
+    ):
         return False
     mark_machine_used()
     logger.info("Nous free tier: an interrupted welcome-trial claim was settled")
     return True
-
-

@@ -52,6 +52,7 @@ def _make_runner():
     from gateway.run import GatewayRunner
 
     runner = object.__new__(GatewayRunner)
+
     # _finalize_shutdown_agents offloads _cleanup_agent_resources to a worker
     # thread via _run_in_executor_with_context (#53175). Stub it to run inline
     # so the bounded-cleanup path is exercised deterministically in tests.
@@ -65,8 +66,10 @@ def _make_runner():
 def _finalize(runner, agents):
     """Drive the now-async _finalize_shutdown_agents from sync test bodies."""
     if not hasattr(runner, "_run_in_executor_with_context"):
+
         async def _inline_executor(func, *args):
             return func(*args)
+
         runner._run_in_executor_with_context = _inline_executor
     asyncio.run(runner._finalize_shutdown_agents(agents))
 
@@ -94,9 +97,13 @@ class TestFinalizeShutdownFlushesInflightTranscript:
         runner = _make_runner()
         inflight = [
             {"role": "user", "content": "scan the repo and summarise"},
-            {"role": "assistant", "content": "", "tool_calls": [
-                {"id": "c1", "function": {"name": "terminal", "arguments": "{}"}}
-            ]},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {"id": "c1", "function": {"name": "terminal", "arguments": "{}"}}
+                ],
+            },
             {"role": "tool", "tool_call_id": "c1", "content": "huge output..."},
         ]
         agent = _FakeAgent(session_messages=inflight)
@@ -112,7 +119,9 @@ class TestFinalizeShutdownFlushesInflightTranscript:
 # E2E: real AIAgent flush → real SessionDB → real load_transcript.
 # ─────────────────────────────────────────────────────────────────────────
 class TestShutdownTranscriptSurvivesResumeE2E:
-    def test_interrupted_turn_persisted_and_readable_on_resume(self, tmp_path, monkeypatch):
+    def test_interrupted_turn_persisted_and_readable_on_resume(
+        self, tmp_path, monkeypatch
+    ):
         """Drive the real flush path against a real SessionDB and confirm the
         in-flight turn is readable back through SessionStore.load_transcript —
         the exact path the resume logic reads on the next message."""
@@ -127,10 +136,14 @@ class TestShutdownTranscriptSurvivesResumeE2E:
         db.create_session(session_id=session_id, source="discord")
 
         # Simulate a session whose FIRST turn completed and was persisted...
-        db.append_message(session_id=session_id, role="user",
-                          content="hello, remember my cat is Mochi")
-        db.append_message(session_id=session_id, role="assistant",
-                          content="Noted — Mochi the cat.")
+        db.append_message(
+            session_id=session_id,
+            role="user",
+            content="hello, remember my cat is Mochi",
+        )
+        db.append_message(
+            session_id=session_id, role="assistant", content="Noted — Mochi the cat."
+        )
 
         # ...and a SECOND turn that was interrupted mid tool-loop. These rows
         # were NEVER flushed to the DB (only live in _session_messages).
@@ -140,12 +153,25 @@ class TestShutdownTranscriptSurvivesResumeE2E:
         ]
         inflight_tail = [
             {"role": "user", "content": "now scan the whole repo for TODOs"},
-            {"role": "assistant", "content": "", "tool_calls": [
-                {"id": "tc1", "function": {"name": "terminal",
-                                           "arguments": "{\"command\": \"grep -r TODO\"}"}}
-            ]},
-            {"role": "tool", "tool_call_id": "tc1", "name": "terminal",
-             "content": "src/a.py: TODO fix this\nsrc/b.py: TODO and that"},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "tc1",
+                        "function": {
+                            "name": "terminal",
+                            "arguments": '{"command": "grep -r TODO"}',
+                        },
+                    }
+                ],
+            },
+            {
+                "role": "tool",
+                "tool_call_id": "tc1",
+                "name": "terminal",
+                "content": "src/a.py: TODO fix this\nsrc/b.py: TODO and that",
+            },
         ]
         # _session_messages is the live list: history copy + in-flight tail.
         session_messages = list(prior_history) + list(inflight_tail)
@@ -169,6 +195,7 @@ class TestShutdownTranscriptSurvivesResumeE2E:
 
         # Drive the gateway shutdown finalization with this real agent.
         from gateway.run import GatewayRunner
+
         runner = object.__new__(GatewayRunner)
         _finalize(runner, {"agent:main:discord:dm:7": agent})
 
@@ -180,10 +207,11 @@ class TestShutdownTranscriptSurvivesResumeE2E:
 
         assert len(after) == 5, after
         # The interrupted user message survived.
-        assert any("scan the whole repo for TODOs" in (c or "") for c in contents), contents
+        assert any("scan the whole repo for TODOs" in (c or "") for c in contents), (
+            contents
+        )
         # The pending tool result (the immediate pre-restart context) survived.
         assert any("TODO fix this" in (c or "") for c in contents), contents
         # Tail is a tool result — exactly what the _has_fresh_tool_tail resume
         # branch in _handle_message_with_agent expects to handle.
         assert roles[-1] == "tool", roles
-

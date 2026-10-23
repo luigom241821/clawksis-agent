@@ -25,10 +25,20 @@ def test_identical_hook_failure_warns_once_then_debug(manager, caplog):
     manager._hooks.setdefault("pre_tool_call", []).append(on_pre_tool)
     with caplog.at_level(logging.DEBUG, logger="clawk_cli.plugins"):
         for i in range(5):
-            manager.invoke_hook("pre_tool_call", tool_name="read_file", args={"path": f"/p{i}"})
+            manager.invoke_hook(
+                "pre_tool_call", tool_name="read_file", args={"path": f"/p{i}"}
+            )
 
-    warnings = [r for r in caplog.records if r.levelno == logging.WARNING and "on_pre_tool" in r.getMessage()]
-    debugs = [r for r in caplog.records if r.levelno == logging.DEBUG and "on_pre_tool" in r.getMessage()]
+    warnings = [
+        r
+        for r in caplog.records
+        if r.levelno == logging.WARNING and "on_pre_tool" in r.getMessage()
+    ]
+    debugs = [
+        r
+        for r in caplog.records
+        if r.levelno == logging.DEBUG and "on_pre_tool" in r.getMessage()
+    ]
     assert len(warnings) == 1
     assert len(debugs) == 4
     # The one warning tells the author what the hook actually provides.
@@ -49,7 +59,11 @@ def test_distinct_hook_failures_each_warn(manager, caplog):
         for _ in range(3):
             manager.invoke_hook("post_tool_call", tool_name="x", args={}, result="ok")
 
-    warnings = [r for r in caplog.records if r.levelno == logging.WARNING and "flaky" in r.getMessage()]
+    warnings = [
+        r
+        for r in caplog.records
+        if r.levelno == logging.WARNING and "flaky" in r.getMessage()
+    ]
     assert len(warnings) == 3
 
 
@@ -57,19 +71,26 @@ def test_middleware_failure_warns_once_and_unload_forgets_it(manager, caplog):
     """Middleware runs once per tool call like a hook, so it dedupes the same way; a plugin
     reload (unload-all) forgets the reported failures so the reloaded callback's first failure
     warns again."""
+
     def on_exec(tool_data):  # core sends tool_name/args, never tool_data
         return None
 
     manager._middleware.setdefault("agent_tool_execution", []).append(on_exec)
     with caplog.at_level(logging.DEBUG, logger="clawk_cli.plugins"):
         for i in range(3):
-            manager.invoke_middleware("agent_tool_execution", tool_name="x", args={"path": f"/p{i}"})
+            manager.invoke_middleware(
+                "agent_tool_execution", tool_name="x", args={"path": f"/p{i}"}
+            )
         manager._reset_after_unload_all([])
         assert not manager._hook_failures_reported
         manager._middleware.setdefault("agent_tool_execution", []).append(on_exec)
         manager.invoke_middleware("agent_tool_execution", tool_name="x", args={})
 
-    warnings = [r for r in caplog.records if r.levelno == logging.WARNING and "on_exec" in r.getMessage()]
+    warnings = [
+        r
+        for r in caplog.records
+        if r.levelno == logging.WARNING and "on_exec" in r.getMessage()
+    ]
     assert len(warnings) == 2
     assert "Middleware 'agent_tool_execution'" in warnings[0].getMessage()
 
@@ -88,13 +109,23 @@ def test_execution_chain_middleware_failure_warns_once(manager, caplog, monkeypa
     manager._middleware.setdefault(mw.TOOL_EXECUTION_MIDDLEWARE, []).append(on_exec)
     with caplog.at_level(logging.DEBUG):
         results = [
-            mw.run_tool_execution_middleware("read_file", {"path": f"/p{i}"}, lambda args: "ran")
+            mw.run_tool_execution_middleware(
+                "read_file", {"path": f"/p{i}"}, lambda args: "ran"
+            )
             for i in range(4)
         ]
 
     assert results == ["ran"] * 4
-    warnings = [r for r in caplog.records if r.levelno == logging.WARNING and "on_exec" in r.getMessage()]
-    debugs = [r for r in caplog.records if r.levelno == logging.DEBUG and "on_exec" in r.getMessage()]
+    warnings = [
+        r
+        for r in caplog.records
+        if r.levelno == logging.WARNING and "on_exec" in r.getMessage()
+    ]
+    debugs = [
+        r
+        for r in caplog.records
+        if r.levelno == logging.DEBUG and "on_exec" in r.getMessage()
+    ]
     assert len(warnings) == 1
     assert len(debugs) == 3
     assert "Middleware 'tool_execution'" in warnings[0].getMessage()
@@ -121,8 +152,16 @@ def test_stream_observer_hook_failure_warns_once(manager, caplog, monkeypatch):
     finally:
         psh.shutdown_plugin_stream_hook_dispatcher()
 
-    warnings = [r for r in caplog.records if r.levelno == logging.WARNING and "on_stream_delta" in r.getMessage()]
-    debugs = [r for r in caplog.records if r.levelno == logging.DEBUG and "on_stream_delta" in r.getMessage()]
+    warnings = [
+        r
+        for r in caplog.records
+        if r.levelno == logging.WARNING and "on_stream_delta" in r.getMessage()
+    ]
+    debugs = [
+        r
+        for r in caplog.records
+        if r.levelno == logging.DEBUG and "on_stream_delta" in r.getMessage()
+    ]
     assert len(warnings) == 1
     assert len(debugs) == 19
     assert "Hook 'on_stream_delta'" in warnings[0].getMessage()
@@ -134,7 +173,9 @@ def test_event_subscriber_failure_warns_once(manager, caplog):
     emit is reported once with the ``Event`` surface label."""
     manager._discovered = True
 
-    def on_event(tool_data, **kwargs):  # the emitter sends its own payload, never tool_data
+    def on_event(
+        tool_data, **kwargs
+    ):  # the emitter sends its own payload, never tool_data
         return None
 
     manager._subscribe_event("listener", "emitter:tick", on_event)
@@ -143,8 +184,16 @@ def test_event_subscriber_failure_warns_once(manager, caplog):
             assert manager._dispatch_event("emitter:tick", {"n": i}) == 1
         assert manager._wait_for_event_dispatch(timeout=2.0)
 
-    warnings = [r for r in caplog.records if r.levelno == logging.WARNING and "on_event" in r.getMessage()]
-    debugs = [r for r in caplog.records if r.levelno == logging.DEBUG and "on_event" in r.getMessage()]
+    warnings = [
+        r
+        for r in caplog.records
+        if r.levelno == logging.WARNING and "on_event" in r.getMessage()
+    ]
+    debugs = [
+        r
+        for r in caplog.records
+        if r.levelno == logging.DEBUG and "on_event" in r.getMessage()
+    ]
     assert len(warnings) == 1
     assert len(debugs) == 3
     assert "Event 'emitter:tick'" in warnings[0].getMessage()

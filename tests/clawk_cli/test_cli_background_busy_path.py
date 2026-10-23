@@ -21,7 +21,6 @@ mirroring tests/clawk_cli/test_cli_steer_busy_path.py.
 from __future__ import annotations
 
 
-
 def _make_cli():
     """Bare ClawksisCLI (no __init__): the detector only reads _agent_running."""
     from cli import ClawksisCLI
@@ -30,13 +29,11 @@ def _make_cli():
 
 
 class TestBackgroundInlineDetector:
-
     def test_detects_both_commands(self):
         cli = _make_cli()
         cli._agent_running = True
         assert cli._should_handle_background_command_inline("/bg do work") is True
         assert cli._should_handle_background_command_inline("/btw do work") is True
-
 
     def test_ignores_background_when_agent_idle(self):
         """Idle input falls through to the normal process_loop dispatch."""
@@ -61,9 +58,12 @@ class TestBackgroundInlineDetector:
         """Image payloads take the normal path."""
         cli = _make_cli()
         cli._agent_running = True
-        assert cli._should_handle_background_command_inline(
-            "/bg look at this", has_images=True
-        ) is False
+        assert (
+            cli._should_handle_background_command_inline(
+                "/bg look at this", has_images=True
+            )
+            is False
+        )
 
     def test_case_and_whitespace_tolerant(self):
         cli = _make_cli()

@@ -45,7 +45,12 @@ def _restore_cli_and_tool_modules():
 
 def _import_cli():
     for name in list(sys.modules):
-        if name == "cli" or name == "run_agent" or name == "tools" or name.startswith("tools."):
+        if (
+            name == "cli"
+            or name == "run_agent"
+            or name == "tools"
+            or name.startswith("tools.")
+        ):
             sys.modules.pop(name, None)
     if "firecrawl" not in sys.modules:
         sys.modules["firecrawl"] = types.SimpleNamespace(Firecrawl=object)
@@ -66,7 +71,9 @@ def test_credentials_ready_false_when_no_provider(monkeypatch):
     cli = _import_cli()
 
     def _raise(**kwargs):
-        raise AuthError("No inference provider configured.", code="no_provider_configured")
+        raise AuthError(
+            "No inference provider configured.", code="no_provider_configured"
+        )
 
     monkeypatch.setattr("clawk_cli.runtime_provider.resolve_runtime_provider", _raise)
     shell = _make_shell(cli, monkeypatch)
@@ -143,7 +150,9 @@ def test_credentials_ready_never_prints(monkeypatch, capsys):
     cli = _import_cli()
 
     def _raise(**kwargs):
-        raise AuthError("No inference provider configured.", code="no_provider_configured")
+        raise AuthError(
+            "No inference provider configured.", code="no_provider_configured"
+        )
 
     monkeypatch.setattr("clawk_cli.runtime_provider.resolve_runtime_provider", _raise)
     shell = _make_shell(cli, monkeypatch)
@@ -196,15 +205,23 @@ def test_offer_first_run_setup_re_resolves_reasoning_for_picked_model(monkeypatc
     """The picker moves self.model; the CLI-level reasoning_config must follow it before the
     lazily built agent inherits the launch model's effort."""
     cli = _import_cli()
-    monkeypatch.setitem(cli.CLI_CONFIG, "agent", {
-        **cli.CLI_CONFIG.get("agent", {}), "reasoning_effort": "medium",
-        "reasoning_overrides": {"hermes-4-405b": "high"}})
+    monkeypatch.setitem(
+        cli.CLI_CONFIG,
+        "agent",
+        {
+            **cli.CLI_CONFIG.get("agent", {}),
+            "reasoning_effort": "medium",
+            "reasoning_overrides": {"hermes-4-405b": "high"},
+        },
+    )
     shell = _make_shell(cli, monkeypatch)
     assert shell.reasoning_config["effort"] == "medium"
     monkeypatch.setattr("clawk_cli.main.select_provider_and_model", lambda: None)
     monkeypatch.setattr("builtins.input", lambda *a, **k: "y")
-    monkeypatch.setattr("clawk_cli.config.load_config",
-                        lambda: {"model": {"provider": "nous", "default": "hermes-4-405b"}})
+    monkeypatch.setattr(
+        "clawk_cli.config.load_config",
+        lambda: {"model": {"provider": "nous", "default": "hermes-4-405b"}},
+    )
     monkeypatch.setattr(shell, "_runtime_credentials_ready", lambda: True)
 
     assert shell._offer_first_run_setup() is True
@@ -283,23 +300,39 @@ def _bench_nous_pool(monkeypatch, **entry_fields):
     import time
     from agent.credential_pool import STATUS_EXHAUSTED, CredentialPool, PooledCredential
 
-    benched = PooledCredential(id="e1", provider="nous", auth_type="oauth", access_token="x",
-                               refresh_token="r", label="portal", source="manual:device_code",
-                               priority=0, last_status=STATUS_EXHAUSTED, last_status_at=time.time() - 5,
-                               **entry_fields)
+    benched = PooledCredential(
+        id="e1",
+        provider="nous",
+        auth_type="oauth",
+        access_token="x",
+        refresh_token="r",
+        label="portal",
+        source="manual:device_code",
+        priority=0,
+        last_status=STATUS_EXHAUSTED,
+        last_status_at=time.time() - 5,
+        **entry_fields,
+    )
     pool = CredentialPool.__new__(CredentialPool)
     monkeypatch.setattr(pool, "has_credentials", lambda: True, raising=False)
     monkeypatch.setattr(pool, "has_available", lambda **kw: False, raising=False)
-    monkeypatch.setattr(pool, "next_available_at", lambda **kw: time.time() + 55, raising=False)
+    monkeypatch.setattr(
+        pool, "next_available_at", lambda **kw: time.time() + 55, raising=False
+    )
     monkeypatch.setattr(pool, "entries", lambda: [benched], raising=False)
     monkeypatch.setattr("agent.credential_pool.load_pool", lambda provider: pool)
 
 
 def _forbid_wizard(monkeypatch, shell):
-    monkeypatch.setattr("clawk_cli.main.select_provider_and_model",
-                        lambda: (_ for _ in ()).throw(AssertionError("wizard must not run")))
-    monkeypatch.setattr(shell, "_offer_first_run_setup",
-                        lambda: (_ for _ in ()).throw(AssertionError("wizard must not be offered")))
+    monkeypatch.setattr(
+        "clawk_cli.main.select_provider_and_model",
+        lambda: (_ for _ in ()).throw(AssertionError("wizard must not run")),
+    )
+    monkeypatch.setattr(
+        shell,
+        "_offer_first_run_setup",
+        lambda: (_ for _ in ()).throw(AssertionError("wizard must not be offered")),
+    )
 
 
 def test_benched_credential_prints_cooldown_instead_of_wizard(monkeypatch, capsys):
@@ -311,8 +344,12 @@ def test_benched_credential_prints_cooldown_instead_of_wizard(monkeypatch, capsy
     shell.requested_provider = "nous"
 
     def _raise(**kwargs):
-        raise AuthError("Clawksis is not logged into Nous Portal.", provider="nous",
-                        code="nous_auth_missing", relogin_required=True)
+        raise AuthError(
+            "Clawksis is not logged into Nous Portal.",
+            provider="nous",
+            code="nous_auth_missing",
+            relogin_required=True,
+        )
 
     monkeypatch.setattr("clawk_cli.runtime_provider.resolve_runtime_provider", _raise)
     _bench_nous_pool(monkeypatch, last_error_code=429, last_error_reason="rate_limited")
@@ -324,8 +361,14 @@ def test_benched_credential_prints_cooldown_instead_of_wizard(monkeypatch, capsy
     out = capsys.readouterr().out
     assert t("cli.startup.first_run_no_provider") not in out
     headline = next(line for line in out.splitlines() if line.strip())
-    assert headline.endswith(t("cli.startup.credential_cooling_down", provider="nous",
-                         cause=t("cli.startup.cooldown_cause_rate_limit"), minutes=1))
+    assert headline.endswith(
+        t(
+            "cli.startup.credential_cooling_down",
+            provider="nous",
+            cause=t("cli.startup.cooldown_cause_rate_limit"),
+            minutes=1,
+        )
+    )
     assert t("cli.startup.cooldown_cause_token_refresh") not in out
     assert "not logged into Nous Portal" in out
     assert "re-authenticate" not in out and "clawk model" not in out
@@ -341,17 +384,26 @@ def test_auth_json_only_login_explains_instead_of_wizard(monkeypatch, capsys, tm
     import clawk_cli.runtime_provider as rp
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    (tmp_path / "config.yaml").write_text("model:\n  default: some-model\n", encoding="utf-8")
+    (tmp_path / "config.yaml").write_text(
+        "model:\n  default: some-model\n", encoding="utf-8"
+    )
     for key in [k for k in os.environ if k.endswith("_API_KEY")]:
         monkeypatch.delenv(key, raising=False)
 
     def _nous_fail():
-        raise AuthError("Clawksis is not logged into Nous Portal.", provider="nous",
-                        code="nous_auth_missing", relogin_required=True)
+        raise AuthError(
+            "Clawksis is not logged into Nous Portal.",
+            provider="nous",
+            code="nous_auth_missing",
+            relogin_required=True,
+        )
 
     monkeypatch.setattr(rp, "resolve_provider", lambda *a, **kw: "nous")
-    monkeypatch.setitem(rp._OAUTH_RUNTIME_PROVIDERS, "nous",
-                        dataclasses.replace(rp._OAUTH_RUNTIME_PROVIDERS["nous"], resolve=_nous_fail))
+    monkeypatch.setitem(
+        rp._OAUTH_RUNTIME_PROVIDERS,
+        "nous",
+        dataclasses.replace(rp._OAUTH_RUNTIME_PROVIDERS["nous"], resolve=_nous_fail),
+    )
 
     cli = _import_cli()
     shell = _make_shell(cli, monkeypatch)
@@ -367,9 +419,18 @@ def test_auth_json_only_login_explains_instead_of_wizard(monkeypatch, capsys, tm
     assert t("cli.startup.first_run_no_provider") not in out
 
     offered = []
-    monkeypatch.setattr(shell, "_offer_first_run_setup", lambda: offered.append(True) or True)
-    monkeypatch.setattr("clawk_cli.runtime_provider.resolve_runtime_provider", lambda **kw: (_ for _ in ()).throw(
-        AuthError("Clawksis is not connected to any AI provider yet.", code="no_provider_configured")))
+    monkeypatch.setattr(
+        shell, "_offer_first_run_setup", lambda: offered.append(True) or True
+    )
+    monkeypatch.setattr(
+        "clawk_cli.runtime_provider.resolve_runtime_provider",
+        lambda **kw: (_ for _ in ()).throw(
+            AuthError(
+                "Clawksis is not connected to any AI provider yet.",
+                code="no_provider_configured",
+            )
+        ),
+    )
     shell._maybe_offer_first_run_setup()
     assert offered == [True]
     assert "not logged into" not in capsys.readouterr().out

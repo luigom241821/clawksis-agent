@@ -12,18 +12,21 @@ import pytest
 from clawk_cli import web_server
 import gateway.status as _gw_status
 import clawk_cli.web_server_gateway as _web_server_gateway
-from clawk_cli.web_server_gateway import _collect_profile_gateway_topology, _profile_platform_ports
+from clawk_cli.web_server_gateway import (
+    _collect_profile_gateway_topology,
+    _profile_platform_ports,
+)
 
 
 # ---------------------------------------------------------------------------
 # _profile_platform_ports
 # ---------------------------------------------------------------------------
 
+
 class TestProfilePlatformPorts:
     def test_no_runtime_platforms_returns_empty(self, tmp_path):
         assert _profile_platform_ports(tmp_path, None) == {}
         assert _profile_platform_ports(tmp_path, {"platforms": {}}) == {}
-
 
     def test_top_level_platforms_wins_over_gateway_block(self, tmp_path):
         (tmp_path / "config.yaml").write_text(
@@ -33,7 +36,6 @@ class TestProfilePlatformPorts:
         )
         runtime = {"platforms": {"webhook": {"state": "connected"}}}
         assert _profile_platform_ports(tmp_path, runtime) == {"webhook": 2222}
-
 
     def test_dead_platform_states_excluded(self, tmp_path):
         runtime = {
@@ -50,6 +52,7 @@ class TestProfilePlatformPorts:
 # _collect_profile_gateway_topology
 # ---------------------------------------------------------------------------
 
+
 def _patch_topology(monkeypatch, homes, running, runtimes):
     """Patch the topology collector's collaborators.
 
@@ -59,9 +62,12 @@ def _patch_topology(monkeypatch, homes, running, runtimes):
     import clawk_cli.profiles as profiles_mod
     import gateway.status as status_mod
 
-    monkeypatch.setattr(profiles_mod, "profiles_to_serve", lambda multiplex, **kw: homes)
     monkeypatch.setattr(
-        profiles_mod, "_check_gateway_running",
+        profiles_mod, "profiles_to_serve", lambda multiplex, **kw: homes
+    )
+    monkeypatch.setattr(
+        profiles_mod,
+        "_check_gateway_running",
         lambda home: next(n for n, h in homes if h == home) in running,
     )
     by_path = {home / "gateway_state.json": runtimes.get(name) for name, home in homes}
@@ -80,7 +86,9 @@ class TestCollectProfileGatewayTopology:
         (solo / "config.yaml").write_text("gateway:\n  standalone: true\n")
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         monkeypatch.setenv("CLAWK_HOME", str(root))
-        monkeypatch.setattr(profiles, "_check_gateway_running", lambda home: home == solo)
+        monkeypatch.setattr(
+            profiles, "_check_gateway_running", lambda home: home == solo
+        )
         topo = _collect_profile_gateway_topology()
         assert "solo" in topo["profiles"]
         assert [g["profile"] for g in topo["gateways"]] == ["solo"]
@@ -191,9 +199,7 @@ class TestCollectProfileGatewayTopology:
                 }
             },
         }
-        _patch_topology(
-            monkeypatch, homes, running={"coder"}, runtimes=runtimes
-        )
+        _patch_topology(monkeypatch, homes, running={"coder"}, runtimes=runtimes)
         monkeypatch.setattr(
             _web_server_gateway,
             "_profile_gateway_writer_identity",
@@ -211,8 +217,16 @@ class TestCollectProfileGatewayTopology:
         runtimes = {
             "default": {
                 "platforms": {
-                    "api_server": {"state": "connected", "writer_pid": 200, "writer_start_time": 222},
-                    "feishu": {"state": "connected", "writer_pid": 34105, "writer_start_time": 178945520374},
+                    "api_server": {
+                        "state": "connected",
+                        "writer_pid": 200,
+                        "writer_start_time": 222,
+                    },
+                    "feishu": {
+                        "state": "connected",
+                        "writer_pid": 34105,
+                        "writer_start_time": 178945520374,
+                    },
                 }
             },
         }
@@ -249,8 +263,6 @@ class TestCollectProfileGatewayTopology:
         topo = _collect_profile_gateway_topology()
         assert topo["profile_platforms"] == {}
 
-
-
     def test_enumeration_failure_degrades_gracefully(self, monkeypatch):
         import clawk_cli.profiles as profiles_mod
 
@@ -270,6 +282,7 @@ class TestCollectProfileGatewayTopology:
 # ---------------------------------------------------------------------------
 # /api/status wiring
 # ---------------------------------------------------------------------------
+
 
 class TestStatusEndpointTopology:
     @pytest.fixture(autouse=True)
@@ -291,7 +304,8 @@ class TestStatusEndpointTopology:
 
     def test_status_includes_full_topology_on_loopback(self, monkeypatch):
         monkeypatch.setattr(
-            _web_server_gateway, "_collect_profile_gateway_topology",
+            _web_server_gateway,
+            "_collect_profile_gateway_topology",
             lambda: {
                 "profiles": ["default", "coder"],
                 "gateway_mode": "single",
@@ -336,7 +350,9 @@ class TestStatusEndpointTopology:
         assert platforms["telegram"]["state"] == "connected"
         assert platforms["reviewer:discord"]["error_code"] == "duplicate_credential"
 
-    def test_status_reports_the_default_profiles_flat_adapters_under_multiplex(self, monkeypatch):
+    def test_status_reports_the_default_profiles_flat_adapters_under_multiplex(
+        self, monkeypatch
+    ):
         # Under gateway.multiplex_profiles the default's own adapters are the FLAT keys of the
         # multiplexer's record (only secondaries get ``<profile>:`` prefixes). /api/status
         # re-keys the record through profile_platforms_from_multiplexer whenever the
@@ -351,15 +367,22 @@ class TestStatusEndpointTopology:
             "gateway_state": "running",
             "served_profiles": ["default", "coder"],
             "platforms": {
-                "telegram": {"state": "connected", "writer_pid": 101, "writer_start_time": 5},
+                "telegram": {
+                    "state": "connected",
+                    "writer_pid": 101,
+                    "writer_start_time": 5,
+                },
                 "webhook": {"state": "connected"},
                 "coder:discord": {"state": "connected"},
             },
         }
         monkeypatch.setattr(
-            status_router, "resolve_gateway_liveness",
+            status_router,
+            "resolve_gateway_liveness",
             lambda **kwargs: GatewayLiveness(
-                running=True, pid=4242, source="multiplexer", runtime=record))
+                running=True, pid=4242, source="multiplexer", runtime=record
+            ),
+        )
         monkeypatch.setattr(
             _web_server_gateway,
             "_load_configured_gateway_platforms",
@@ -380,7 +403,9 @@ class TestStatusEndpointTopology:
         assert data["components"]["platforms"]["configured"] == 2
         assert data["components"]["platforms"]["connected"] == 2
 
-    def test_profile_scoped_status_folds_default_flat_adapters_on_default_root(self, monkeypatch, tmp_path):
+    def test_profile_scoped_status_folds_default_flat_adapters_on_default_root(
+        self, monkeypatch, tmp_path
+    ):
         # ?profile=default resolves the DEFAULT ROOT directory itself — the shipped root is
         # ``~/.clawksis``, so the directory's basename (".clawk") is not the profile id. The
         # re-key used to fold on that basename: the multiplexer rung's flat keys never matched
@@ -402,24 +427,36 @@ class TestStatusEndpointTopology:
             "gateway_state": "running",
             "served_profiles": ["default", "coder"],
             "platforms": {
-                "telegram": {"state": "connected", "writer_pid": 101, "writer_start_time": 5},
+                "telegram": {
+                    "state": "connected",
+                    "writer_pid": 101,
+                    "writer_start_time": 5,
+                },
                 "webhook": {"state": "connected"},
                 "coder:discord": {"state": "connected"},
             },
         }
-        monkeypatch.setattr(web_server_profiles, "_resolve_profile_dir", lambda name: home)
-        monkeypatch.setattr(web_server_profiles, "_config_profile_scope", lambda profile: nullcontext())
         monkeypatch.setattr(
-            status_router, "resolve_gateway_liveness",
+            web_server_profiles, "_resolve_profile_dir", lambda name: home
+        )
+        monkeypatch.setattr(
+            web_server_profiles, "_config_profile_scope", lambda profile: nullcontext()
+        )
+        monkeypatch.setattr(
+            status_router,
+            "resolve_gateway_liveness",
             lambda **kwargs: GatewayLiveness(
-                running=True, pid=4242, source="multiplexer", runtime=record))
+                running=True, pid=4242, source="multiplexer", runtime=record
+            ),
+        )
         monkeypatch.setattr(
             _web_server_gateway,
             "_load_configured_gateway_platforms",
             lambda: {"telegram", "webhook"},
         )
         monkeypatch.setattr(
-            _web_server_gateway, "_collect_profile_gateway_topology",
+            _web_server_gateway,
+            "_collect_profile_gateway_topology",
             lambda: {
                 "profiles": ["default", "coder"],
                 "gateway_mode": "multiplex",
@@ -443,7 +480,9 @@ class TestStatusEndpointTopology:
         assert data["components"]["platforms"]["configured"] == 2
         assert data["components"]["platforms"]["connected"] == 2
 
-    def _scope_to_served_profile(self, monkeypatch, tmp_path, *, own_runtime, lock_pid, mux_pid, mux_runtime):
+    def _scope_to_served_profile(
+        self, monkeypatch, tmp_path, *, own_runtime, lock_pid, mux_pid, mux_runtime
+    ):
         from contextlib import nullcontext
 
         from gateway.status import GatewayLiveness
@@ -452,32 +491,49 @@ class TestStatusEndpointTopology:
 
         profile = tmp_path / "profiles" / "coder"
         profile.mkdir(parents=True)
-        monkeypatch.setattr(web_server_profiles, "_resolve_profile_dir", lambda name: profile)
-        monkeypatch.setattr(web_server_profiles, "_config_profile_scope", lambda profile: nullcontext())
-        monkeypatch.setattr(status_router, "read_runtime_status", lambda path=None: own_runtime)
+        monkeypatch.setattr(
+            web_server_profiles, "_resolve_profile_dir", lambda name: profile
+        )
+        monkeypatch.setattr(
+            web_server_profiles, "_config_profile_scope", lambda profile: nullcontext()
+        )
+        monkeypatch.setattr(
+            status_router, "read_runtime_status", lambda path=None: own_runtime
+        )
         # The PID rung answers first (gateway.lock resolves), so the ladder never attaches a runtime.
         monkeypatch.setattr(
-            status_router, "resolve_gateway_liveness",
+            status_router,
+            "resolve_gateway_liveness",
             lambda **kwargs: GatewayLiveness(running=True, pid=lock_pid, source="pid"),
         )
+
         def _lookup(home):
             return (mux_pid, mux_runtime) if home == profile else None
 
         monkeypatch.setattr(_gw_status, "multiplexer_liveness_for_profile", _lookup)
-        monkeypatch.setattr(_web_server_gateway, "_load_configured_gateway_platforms", lambda: {"telegram"})
+        monkeypatch.setattr(
+            _web_server_gateway,
+            "_load_configured_gateway_platforms",
+            lambda: {"telegram"},
+        )
 
-    def test_profile_scoped_status_uses_multiplexer_record_when_lock_names_it(self, monkeypatch, tmp_path):
+    def test_profile_scoped_status_uses_multiplexer_record_when_lock_names_it(
+        self, monkeypatch, tmp_path
+    ):
         # #139080: a profile migrated onto the multiplexer keeps its retired standalone gateway's
         # gateway_state.json (stopped, telegram disconnected) while the shared gateway holds its
         # gateway.lock. Liveness came from that lock, so the platform map must come from the same
         # owner's live record, never the dead one.
         self._scope_to_served_profile(
-            monkeypatch, tmp_path,
+            monkeypatch,
+            tmp_path,
             own_runtime={
-                "gateway_state": "stopped", "updated_at": "2026-10-02T12:33:48Z",
+                "gateway_state": "stopped",
+                "updated_at": "2026-10-02T12:33:48Z",
                 "platforms": {"telegram": {"state": "disconnected"}},
             },
-            lock_pid=4242, mux_pid=4242,
+            lock_pid=4242,
+            mux_pid=4242,
             mux_runtime={
                 "gateway_state": "running",
                 "served_profiles": ["default", "coder", "other"],
@@ -500,13 +556,20 @@ class TestStatusEndpointTopology:
         assert data["gateway_shared_with"] == ["default", "coder", "other"]
         assert data["components"]["platforms"]["connected"] == 1
 
-    def test_profile_scoped_status_keeps_own_gateway_record_over_multiplexer(self, monkeypatch, tmp_path):
+    def test_profile_scoped_status_keeps_own_gateway_record_over_multiplexer(
+        self, monkeypatch, tmp_path
+    ):
         # A --force-started gateway of the profile's own holds the lock under a different PID: its
         # record is the live one, and the multiplexer's view of the profile must not replace it.
         self._scope_to_served_profile(
-            monkeypatch, tmp_path,
-            own_runtime={"gateway_state": "running", "platforms": {"telegram": {"state": "connected"}}},
-            lock_pid=5151, mux_pid=4242,
+            monkeypatch,
+            tmp_path,
+            own_runtime={
+                "gateway_state": "running",
+                "platforms": {"telegram": {"state": "connected"}},
+            },
+            lock_pid=5151,
+            mux_pid=4242,
             mux_runtime={
                 "gateway_state": "running",
                 "served_profiles": ["default", "coder"],
@@ -521,23 +584,36 @@ class TestStatusEndpointTopology:
         assert data["gateway_platforms"]["telegram"]["state"] == "connected"
         assert data["gateway_shared_with"] is None
 
-    def test_unscoped_status_on_a_served_profiles_own_backend_uses_multiplexer_record(self, monkeypatch, tmp_path):
+    def test_unscoped_status_on_a_served_profiles_own_backend_uses_multiplexer_record(
+        self, monkeypatch, tmp_path
+    ):
         # `clawk -p coder serve` answers plain /api/status (no ?profile=) for its own home. That
         # home's gateway.lock is the multiplexer's too, so the same live record applies.
         import clawk_cli.web_routers.status as status_router
 
         self._scope_to_served_profile(
-            monkeypatch, tmp_path,
-            own_runtime={"gateway_state": "stopped", "platforms": {"telegram": {"state": "disconnected"}}},
-            lock_pid=4242, mux_pid=4242,
+            monkeypatch,
+            tmp_path,
+            own_runtime={
+                "gateway_state": "stopped",
+                "platforms": {"telegram": {"state": "disconnected"}},
+            },
+            lock_pid=4242,
+            mux_pid=4242,
             mux_runtime={
                 "gateway_state": "running",
                 "served_profiles": ["default", "coder"],
-                "platforms": {"telegram": {"state": "disconnected"},
-                              "coder:telegram": {"state": "connected"}},
+                "platforms": {
+                    "telegram": {"state": "disconnected"},
+                    "coder:telegram": {"state": "connected"},
+                },
             },
         )
-        monkeypatch.setattr(status_router, "get_process_clawk_home", lambda: tmp_path / "profiles" / "coder")
+        monkeypatch.setattr(
+            status_router,
+            "get_process_clawk_home",
+            lambda: tmp_path / "profiles" / "coder",
+        )
 
         resp = self.client.get("/api/status")
 
@@ -547,13 +623,21 @@ class TestStatusEndpointTopology:
         assert data["gateway_platforms"]["telegram"]["state"] == "connected"
         assert data["gateway_shared_with"] == ["default", "coder"]
 
-    def test_profile_scoped_status_keeps_own_record_when_multiplexer_lookup_raises(self, monkeypatch, tmp_path):
+    def test_profile_scoped_status_keeps_own_record_when_multiplexer_lookup_raises(
+        self, monkeypatch, tmp_path
+    ):
         # The multiplexer lookup is optional: a failure there must not 500 the status route or
         # drop the record the ladder already selected.
         self._scope_to_served_profile(
-            monkeypatch, tmp_path,
-            own_runtime={"gateway_state": "running", "platforms": {"telegram": {"state": "connected"}}},
-            lock_pid=4242, mux_pid=4242, mux_runtime={},
+            monkeypatch,
+            tmp_path,
+            own_runtime={
+                "gateway_state": "running",
+                "platforms": {"telegram": {"state": "connected"}},
+            },
+            lock_pid=4242,
+            mux_pid=4242,
+            mux_runtime={},
         )
 
         def _boom(home):
@@ -569,13 +653,21 @@ class TestStatusEndpointTopology:
         assert data["gateway_platforms"]["telegram"]["state"] == "connected"
         assert data["gateway_shared_with"] is None
 
-    def test_profile_scoped_status_keeps_own_record_when_multiplexer_record_is_missing(self, monkeypatch, tmp_path):
+    def test_profile_scoped_status_keeps_own_record_when_multiplexer_record_is_missing(
+        self, monkeypatch, tmp_path
+    ):
         # A missing/unreadable multiplexer gateway_state.json comes back as (pid, {}): that is no
         # record, so it must not replace the profile's own one with an empty platform map.
         self._scope_to_served_profile(
-            monkeypatch, tmp_path,
-            own_runtime={"gateway_state": "running", "platforms": {"telegram": {"state": "connected"}}},
-            lock_pid=4242, mux_pid=4242, mux_runtime={},
+            monkeypatch,
+            tmp_path,
+            own_runtime={
+                "gateway_state": "running",
+                "platforms": {"telegram": {"state": "connected"}},
+            },
+            lock_pid=4242,
+            mux_pid=4242,
+            mux_runtime={},
         )
 
         resp = self.client.get("/api/status", params={"profile": "coder"})
@@ -585,25 +677,39 @@ class TestStatusEndpointTopology:
         assert data["gateway_platforms"]["telegram"]["state"] == "connected"
         assert data["gateway_shared_with"] is None
 
-    def test_remote_health_liveness_never_borrows_the_local_multiplexer_record(self, monkeypatch, tmp_path):
+    def test_remote_health_liveness_never_borrows_the_local_multiplexer_record(
+        self, monkeypatch, tmp_path
+    ):
         # A health-probe answer carries the REMOTE container's PID, which can equal an unrelated
         # local host-record PID; only a PID proven on this host may select the local record.
         from gateway.status import GatewayLiveness
         import clawk_cli.web_routers.status as status_router
 
         mux_runtime = {
-            "gateway_state": "running", "served_profiles": ["default", "coder"],
+            "gateway_state": "running",
+            "served_profiles": ["default", "coder"],
             "platforms": {"coder:telegram": {"state": "disconnected"}},
         }
         self._scope_to_served_profile(
-            monkeypatch, tmp_path,
-            own_runtime={"gateway_state": "running", "platforms": {"telegram": {"state": "connected"}}},
-            lock_pid=4242, mux_pid=4242, mux_runtime=mux_runtime,
+            monkeypatch,
+            tmp_path,
+            own_runtime={
+                "gateway_state": "running",
+                "platforms": {"telegram": {"state": "connected"}},
+            },
+            lock_pid=4242,
+            mux_pid=4242,
+            mux_runtime=mux_runtime,
         )
         monkeypatch.setattr(
-            status_router, "resolve_gateway_liveness",
-            lambda **kwargs: GatewayLiveness(running=True, pid=4242, source="health",
-                                             health_body={"gateway_state": "running", "pid": 4242}),
+            status_router,
+            "resolve_gateway_liveness",
+            lambda **kwargs: GatewayLiveness(
+                running=True,
+                pid=4242,
+                source="health",
+                health_body={"gateway_state": "running", "pid": 4242},
+            ),
         )
         calls = []
 
@@ -630,18 +736,42 @@ class TestStatusEndpointTopology:
         from clawk_constants import get_process_clawk_home
 
         monkeypatch.setattr(_gw_status, "read_runtime_status", lambda path=None: record)
-        monkeypatch.setattr(_gw_status, "get_runtime_status_running_pid",
-                            lambda runtime=None, *, expected_home=None: (runtime or {}).get("pid"))
-        monkeypatch.setattr(host_topology, "host_gateway_topology", lambda: host_topology.HostGatewayTopology(
-            pid=4242, profiles=("default", "reviewer"), source="host_record"))
-        monkeypatch.setattr(status_router, "resolve_gateway_liveness",
-                            lambda **kwargs: GatewayLiveness(running=True, pid=4242, source="pid"))
-        monkeypatch.setattr(_web_server_gateway, "_load_configured_gateway_platforms", lambda: {"telegram"})
-        monkeypatch.setattr(_web_server_gateway, "_collect_profile_gateway_topology", lambda: {
-            "profiles": ["default", "reviewer"], "gateway_mode": "multiplex", "gateways": [],
-            "profile_platforms": {}})
+        monkeypatch.setattr(
+            _gw_status,
+            "get_runtime_status_running_pid",
+            lambda runtime=None, *, expected_home=None: (runtime or {}).get("pid"),
+        )
+        monkeypatch.setattr(
+            host_topology,
+            "host_gateway_topology",
+            lambda: host_topology.HostGatewayTopology(
+                pid=4242, profiles=("default", "reviewer"), source="host_record"
+            ),
+        )
+        monkeypatch.setattr(
+            status_router,
+            "resolve_gateway_liveness",
+            lambda **kwargs: GatewayLiveness(running=True, pid=4242, source="pid"),
+        )
+        monkeypatch.setattr(
+            _web_server_gateway,
+            "_load_configured_gateway_platforms",
+            lambda: {"telegram"},
+        )
+        monkeypatch.setattr(
+            _web_server_gateway,
+            "_collect_profile_gateway_topology",
+            lambda: {
+                "profiles": ["default", "reviewer"],
+                "gateway_mode": "multiplex",
+                "gateways": [],
+                "profile_platforms": {},
+            },
+        )
         # The lookup genuinely succeeds here (no zero-arg PID-probe trap making it raise).
-        assert _gw_status.multiplexer_liveness_for_profile(get_process_clawk_home()) == (4242, record)
+        assert _gw_status.multiplexer_liveness_for_profile(
+            get_process_clawk_home()
+        ) == (4242, record)
         resp = self.client.get("/api/status")
         assert resp.status_code == 200
         return resp.json()
@@ -650,26 +780,42 @@ class TestStatusEndpointTopology:
         # The host's own record proves the live gateway, so it is read whole: folding it through
         # the default profile's projection dropped every ``<profile>:<platform>`` entry and the
         # platforms component read ok over another profile's fatal adapter.
-        data = self._status_on_the_host(monkeypatch, {
-            "pid": 4242, "gateway_state": "running", "served_profiles": ["default", "reviewer"],
-            "platforms": {
-                "telegram": {"state": "connected"},
-                "reviewer:discord": {"state": "fatal", "error_code": "duplicate_credential",
-                                     "error_message": "Profiles configure the same credential"},
+        data = self._status_on_the_host(
+            monkeypatch,
+            {
+                "pid": 4242,
+                "gateway_state": "running",
+                "served_profiles": ["default", "reviewer"],
+                "platforms": {
+                    "telegram": {"state": "connected"},
+                    "reviewer:discord": {
+                        "state": "fatal",
+                        "error_code": "duplicate_credential",
+                        "error_message": "Profiles configure the same credential",
+                    },
+                },
             },
-        })
+        )
 
-        assert data["gateway_platforms"]["reviewer:discord"]["error_code"] == "duplicate_credential"
+        assert (
+            data["gateway_platforms"]["reviewer:discord"]["error_code"]
+            == "duplicate_credential"
+        )
         assert data["gateway_platforms"]["telegram"]["state"] == "connected"
         assert data["components"]["platforms"]["status"] != "ok"
 
     def test_status_on_the_host_names_the_profiles_it_serves(self, monkeypatch):
         # A restart of the host gateway blips every profile it serves, so its own unscoped
         # readout names them just as a served profile's does.
-        data = self._status_on_the_host(monkeypatch, {
-            "pid": 4242, "gateway_state": "running", "served_profiles": ["default", "reviewer"],
-            "platforms": {"telegram": {"state": "connected"}},
-        })
+        data = self._status_on_the_host(
+            monkeypatch,
+            {
+                "pid": 4242,
+                "gateway_state": "running",
+                "served_profiles": ["default", "reviewer"],
+                "platforms": {"telegram": {"state": "connected"}},
+            },
+        )
 
         assert data["gateway_shared_with"] == ["default", "reviewer"]
 
@@ -791,11 +937,10 @@ class TestStatusEndpointTopology:
             "_load_configured_gateway_platforms",
             lambda: {"telegram"},
         )
+        monkeypatch.setattr(profiles_mod, "get_active_profile_name", lambda: "default")
         monkeypatch.setattr(
-            profiles_mod, "get_active_profile_name", lambda: "default"
-        )
-        monkeypatch.setattr(
-            _web_server_gateway, "_collect_profile_gateway_topology",
+            _web_server_gateway,
+            "_collect_profile_gateway_topology",
             lambda: {
                 "profiles": ["default", "lead-gen-outreach"],
                 "gateway_mode": "multiple",
@@ -861,11 +1006,10 @@ class TestStatusEndpointTopology:
             "_load_configured_gateway_platforms",
             lambda: {"telegram"},
         )
+        monkeypatch.setattr(profiles_mod, "get_active_profile_name", lambda: "default")
         monkeypatch.setattr(
-            profiles_mod, "get_active_profile_name", lambda: "default"
-        )
-        monkeypatch.setattr(
-            _web_server_gateway, "_collect_profile_gateway_topology",
+            _web_server_gateway,
+            "_collect_profile_gateway_topology",
             lambda: {
                 "profiles": ["default", "coder"],
                 "gateway_mode": "multiple",
@@ -887,7 +1031,8 @@ class TestStatusEndpointTopology:
         # Clawksis Cloud Portal reads /api/status over the network (a gated bind)
         # to render the profile list, so they must survive the auth gate.
         monkeypatch.setattr(
-            _web_server_gateway, "_collect_profile_gateway_topology",
+            _web_server_gateway,
+            "_collect_profile_gateway_topology",
             lambda: {
                 "profiles": ["default", "coder"],
                 "gateway_mode": "multiplex",

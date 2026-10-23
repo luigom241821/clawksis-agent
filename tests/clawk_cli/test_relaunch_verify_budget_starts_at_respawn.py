@@ -30,7 +30,9 @@ LATE_RESPAWN_S = 33.0
 class _Clock:
     """``_time`` stand-in: only ``sleep`` advances it, so the poll runs as fast as the CPU allows."""
 
-    MAX_SLEEPS = 10_000  # a poll that never ends fails here instead of hanging the suite
+    MAX_SLEEPS = (
+        10_000  # a poll that never ends fails here instead of hanging the suite
+    )
 
     def __init__(self) -> None:
         self.t = 0.0
@@ -53,7 +55,9 @@ def clock(monkeypatch):
     return c
 
 
-def _target(clock: _Clock, appears_at: float, pid: int = 4242, profile: str = "default"):
+def _target(
+    clock: _Clock, appears_at: float, pid: int = 4242, profile: str = "default"
+):
     """A profile target whose replacement process becomes visible at ``appears_at``."""
 
     def probe(_scan):
@@ -65,7 +69,8 @@ def _target(clock: _Clock, appears_at: float, pid: int = 4242, profile: str = "d
 def test_a_late_replacement_is_still_verified(clock):
     """A respawn that lands after the shared deadline is given its own budget and is credited."""
     ready = ucw._poll_until_ready(
-        [_target(clock, appears_at=LATE_RESPAWN_S)], 30.0, set(), respawn_window=30.0)
+        [_target(clock, appears_at=LATE_RESPAWN_S)], 30.0, set(), respawn_window=30.0
+    )
 
     assert ready.get(("profile", "default")) == [4242]
     # It still had to be stable for the confirmation window before being credited.
@@ -80,7 +85,9 @@ def test_shared_budget_times_out_when_the_replacement_is_late(clock):
     Without the per-target budget the target is dropped by the ``now < deadline`` filter before its
     process exists, so ``_verify_relaunched_gateways_alive`` reports it unready - the reported bug.
     """
-    ready = ucw._poll_until_ready([_target(clock, appears_at=LATE_RESPAWN_S)], 30.0, set())
+    ready = ucw._poll_until_ready(
+        [_target(clock, appears_at=LATE_RESPAWN_S)], 30.0, set()
+    )
 
     assert ready == {}
     assert clock.t >= 30.0
@@ -101,7 +108,8 @@ def test_a_replacement_that_never_appears_still_times_out(clock):
     unready — the verdict is late, never wrong.
     """
     ready = ucw._poll_until_ready(
-        [_target(clock, appears_at=float("inf"))], 30.0, set(), respawn_window=30.0)
+        [_target(clock, appears_at=float("inf"))], 30.0, set(), respawn_window=30.0
+    )
 
     assert ready == {}
     assert 2 * 30.0 <= clock.t <= 2 * 30.0 + ucw._READY_CONFIRM_S + 1.0
@@ -127,7 +135,11 @@ def test_a_flapping_replacement_cannot_renew_its_budget_forever(clock):
     def probe(_scan):
         return [4242] if int(clock.t) % 2 == 0 else []
 
-    ready = ucw._poll_until_ready([(("profile", "default"), probe, True)], 30.0, set(), respawn_window=30.0)
+    ready = ucw._poll_until_ready(
+        [(("profile", "default"), probe, True)], 30.0, set(), respawn_window=30.0
+    )
 
     assert ready == {}
-    assert clock.t <= 30.0 + 2 * 30.0 + ucw._READY_CONFIRM_S + ucw._READY_INTERVAL_S + 1e-6
+    assert (
+        clock.t <= 30.0 + 2 * 30.0 + ucw._READY_CONFIRM_S + ucw._READY_INTERVAL_S + 1e-6
+    )

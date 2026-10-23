@@ -54,7 +54,10 @@ def test_model_key_env_does_not_leak_across_providers(clawk_home):
         "  key_env: CLAWK_CUSTOM_LMSTUDIO_API_KEY\n",
         "CLAWK_CUSTOM_LMSTUDIO_API_KEY=sk-lm-should-not-leak\n",
     )
-    from clawk_cli.auth import LMSTUDIO_NOAUTH_PLACEHOLDER, resolve_api_key_provider_credentials
+    from clawk_cli.auth import (
+        LMSTUDIO_NOAUTH_PLACEHOLDER,
+        resolve_api_key_provider_credentials,
+    )
 
     creds = resolve_api_key_provider_credentials("lmstudio")
     assert creds["api_key"] == LMSTUDIO_NOAUTH_PLACEHOLDER

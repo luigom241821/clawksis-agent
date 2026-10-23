@@ -12,18 +12,26 @@ from tools.registry import registry
 def _use_projects_db(monkeypatch, tmp_path):
     db_path = tmp_path / "projects.db"
     original_connect_closing = pdb.connect_closing
-    monkeypatch.setattr(pdb, "connect_closing", lambda: original_connect_closing(db_path=db_path))
+    monkeypatch.setattr(
+        pdb, "connect_closing", lambda: original_connect_closing(db_path=db_path)
+    )
     return db_path, original_connect_closing
 
 
-def test_agent_session_project_create_keeps_profile_active_pointer_and_moves_session(monkeypatch, tmp_path):
+def test_agent_session_project_create_keeps_profile_active_pointer_and_moves_session(
+    monkeypatch, tmp_path
+):
     db_path, connect_closing = _use_projects_db(monkeypatch, tmp_path)
     with connect_closing(db_path=db_path) as conn:
-        active_id = pdb.create_project(conn, name="Foreground", folders=["/work/foreground"])
+        active_id = pdb.create_project(
+            conn, name="Foreground", folders=["/work/foreground"]
+        )
         pdb.set_active(conn, active_id)
 
     workspace_moves: list[tuple[str, str, str]] = []
-    project_tools.set_project_workspace_callback(lambda *args: workspace_moves.append(args))
+    project_tools.set_project_workspace_callback(
+        lambda *args: workspace_moves.append(args)
+    )
 
     try:
         result = json.loads(
@@ -47,7 +55,9 @@ def test_agent_session_project_create_keeps_profile_active_pointer_and_moves_ses
 def test_legacy_project_create_sets_profile_active_pointer(monkeypatch, tmp_path):
     db_path, connect_closing = _use_projects_db(monkeypatch, tmp_path)
     with connect_closing(db_path=db_path) as conn:
-        previous_id = pdb.create_project(conn, name="Previous", folders=["/work/previous"])
+        previous_id = pdb.create_project(
+            conn, name="Previous", folders=["/work/previous"]
+        )
         pdb.set_active(conn, previous_id)
 
     result = json.loads(project_tools.project_create("Created", path="/work/created"))
@@ -74,21 +84,33 @@ def test_legacy_project_switch_sets_profile_active_pointer(monkeypatch, tmp_path
     assert result["id"] == target_id
 
 
-def test_agent_session_project_switch_keeps_profile_active_pointer(monkeypatch, tmp_path):
+def test_agent_session_project_switch_keeps_profile_active_pointer(
+    monkeypatch, tmp_path
+):
     db_path = tmp_path / "projects.db"
     original_connect_closing = pdb.connect_closing
 
     with original_connect_closing(db_path=db_path) as conn:
-        active_id = pdb.create_project(conn, name="Foreground", folders=["/work/foreground"])
-        background_id = pdb.create_project(conn, name="Background", folders=["/work/background"])
+        active_id = pdb.create_project(
+            conn, name="Foreground", folders=["/work/foreground"]
+        )
+        background_id = pdb.create_project(
+            conn, name="Background", folders=["/work/background"]
+        )
         pdb.set_active(conn, active_id)
 
-    monkeypatch.setattr(pdb, "connect_closing", lambda: original_connect_closing(db_path=db_path))
+    monkeypatch.setattr(
+        pdb, "connect_closing", lambda: original_connect_closing(db_path=db_path)
+    )
     workspace_moves: list[tuple[str, str, str]] = []
-    project_tools.set_project_workspace_callback(lambda *args: workspace_moves.append(args))
+    project_tools.set_project_workspace_callback(
+        lambda *args: workspace_moves.append(args)
+    )
 
     try:
-        result = json.loads(project_tools.project_switch(background_id, task_id="session-background"))
+        result = json.loads(
+            project_tools.project_switch(background_id, task_id="session-background")
+        )
     finally:
         project_tools.set_project_workspace_callback(None)
 
@@ -100,7 +122,9 @@ def test_agent_session_project_switch_keeps_profile_active_pointer(monkeypatch, 
     assert workspace_moves == [("session-background", "/work/background", "Background")]
 
 
-def test_session_without_workspace_callback_switch_sets_profile_active_pointer(monkeypatch, tmp_path):
+def test_session_without_workspace_callback_switch_sets_profile_active_pointer(
+    monkeypatch, tmp_path
+):
     """CLI/messaging agents pass a task_id but have no GUI workspace to move — the pointer is the switch."""
     db_path, connect_closing = _use_projects_db(monkeypatch, tmp_path)
     with connect_closing(db_path=db_path) as conn:
@@ -115,7 +139,9 @@ def test_session_without_workspace_callback_switch_sets_profile_active_pointer(m
     assert result["success"] is True
 
 
-def test_session_switch_to_pathless_project_sets_profile_active_pointer(monkeypatch, tmp_path):
+def test_session_switch_to_pathless_project_sets_profile_active_pointer(
+    monkeypatch, tmp_path
+):
     db_path, connect_closing = _use_projects_db(monkeypatch, tmp_path)
     with connect_closing(db_path=db_path) as conn:
         active_id = pdb.create_project(conn, name="Active", folders=["/work/active"])
@@ -123,7 +149,9 @@ def test_session_switch_to_pathless_project_sets_profile_active_pointer(monkeypa
         pdb.set_active(conn, active_id)
 
     workspace_moves: list[tuple[str, str, str]] = []
-    project_tools.set_project_workspace_callback(lambda *args: workspace_moves.append(args))
+    project_tools.set_project_workspace_callback(
+        lambda *args: workspace_moves.append(args)
+    )
     try:
         json.loads(project_tools.project_switch(pathless_id, task_id="session-a"))
     finally:
@@ -143,7 +171,9 @@ def gui_sessions(monkeypatch):
     monkeypatch.setattr(server, "_sessions", {})
     monkeypatch.setattr(terminal_tool, "_task_env_overrides", {})
     monkeypatch.setattr(server, "_emit", lambda *a, **k: None)
-    monkeypatch.setattr(server, "_persist_session_cwd_and_schedule_git_meta", lambda *a, **k: None)
+    monkeypatch.setattr(
+        server, "_persist_session_cwd_and_schedule_git_meta", lambda *a, **k: None
+    )
     project_tools.set_project_workspace_callback(server._apply_project_workspace)
 
     def open_session(key, cwd=""):
@@ -159,7 +189,11 @@ def gui_sessions(monkeypatch):
 
 
 def _tool(action, task_id=None, **args):
-    return json.loads(registry.dispatch("desktop_project", {"action": action, **args}, task_id=task_id))
+    return json.loads(
+        registry.dispatch(
+            "desktop_project", {"action": action, **args}, task_id=task_id
+        )
+    )
 
 
 def test_two_sessions_switch_projects_independently(gui_sessions, tmp_path):
@@ -167,7 +201,9 @@ def test_two_sessions_switch_projects_independently(gui_sessions, tmp_path):
     for folder in folders.values():
         folder.mkdir()
     with pdb.connect_closing() as conn:
-        foreground = pdb.create_project(conn, name="Foreground", folders=[str(folders["foreground"])])
+        foreground = pdb.create_project(
+            conn, name="Foreground", folders=[str(folders["foreground"])]
+        )
         pdb.set_active(conn, foreground)
     tab_a = gui_sessions("tab-a", str(folders["foreground"]))
     tab_b = gui_sessions("tab-b", str(folders["foreground"]))
@@ -209,14 +245,22 @@ def test_project_list_reports_no_project_for_a_detached_session(gui_sessions, tm
     assert _tool("list")["active_id"] == active
 
 
-def test_idempotent_create_from_a_session_keeps_profile_active_pointer(gui_sessions, tmp_path):
+def test_idempotent_create_from_a_session_keeps_profile_active_pointer(
+    gui_sessions, tmp_path
+):
     folders = {name: tmp_path / name for name in ("foreground", "existing")}
     for folder in folders.values():
         folder.mkdir()
     with pdb.connect_closing() as conn:
-        foreground = pdb.create_project(conn, name="Foreground", folders=[str(folders["foreground"])])
+        foreground = pdb.create_project(
+            conn, name="Foreground", folders=[str(folders["foreground"])]
+        )
         existing = pdb.create_project(
-            conn, name="Existing", folders=[str(folders["existing"])], primary_path=str(folders["existing"]))
+            conn,
+            name="Existing",
+            folders=[str(folders["existing"])],
+            primary_path=str(folders["existing"]),
+        )
         pdb.set_active(conn, foreground)
     tab = gui_sessions("tab", str(folders["foreground"]))
 

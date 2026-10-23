@@ -154,7 +154,9 @@ class HostRecord:
             port=int(port) if isinstance(port, int) and 0 < port <= 65535 else None,
             protocol_version=version if isinstance(version, int) else 0,
             token_fingerprint=str(payload.get("tokenFingerprint") or ""),
-            profiles=tuple(str(p) for p in profiles if isinstance(p, str)) if isinstance(profiles, list) else (),
+            profiles=tuple(str(p) for p in profiles if isinstance(p, str))
+            if isinstance(profiles, list)
+            else (),
             updated_at=str(payload.get("updatedAt") or ""),
             home=str(payload.get("home") or ""),
         )
@@ -200,10 +202,16 @@ def _record_is_own(path: Path) -> bool:
         parent = path.parent.stat()
     except OSError:
         return False
-    uid = os.getuid()  # windows-footgun: ok — unreachable on Windows (early return above)
+    uid = (
+        os.getuid()
+    )  # windows-footgun: ok — unreachable on Windows (early return above)
     if info.st_uid != uid or parent.st_uid != uid:
         logger.warning(
-            "ignoring host record %s: owned by uid %s (expected %s)", path, info.st_uid, uid)
+            "ignoring host record %s: owned by uid %s (expected %s)",
+            path,
+            info.st_uid,
+            uid,
+        )
         return False
     return True
 
@@ -228,7 +236,11 @@ def token_path(role: str) -> Path:
 
 def token_fingerprint(token: str) -> str:
     """Short, non-reversible handle for a session token (safe to publish in the record)."""
-    return hashlib.sha256(token.encode("utf-8", "replace")).hexdigest()[:16] if token else ""
+    return (
+        hashlib.sha256(token.encode("utf-8", "replace")).hexdigest()[:16]
+        if token
+        else ""
+    )
 
 
 def process_create_time(pid: Optional[int] = None) -> Optional[float]:
@@ -259,7 +271,9 @@ def _boot_time() -> Optional[float]:
 
         return float(psutil.boot_time())
     except Exception:
-        logger.debug("boot time unreadable; legacy record age check skipped", exc_info=True)
+        logger.debug(
+            "boot time unreadable; legacy record age check skipped", exc_info=True
+        )
         return None
 
 
@@ -291,7 +305,9 @@ def _current_boot_epoch() -> str:
 
         return current_instantiation_epoch() or ""
     except Exception:
-        logger.debug("boot epoch unreadable; host liveness will not use it", exc_info=True)
+        logger.debug(
+            "boot epoch unreadable; host liveness will not use it", exc_info=True
+        )
         return ""
 
 
@@ -328,10 +344,18 @@ def _record_incarnation_matches(record: HostRecord) -> Optional[bool]:
         from gateway.status import get_process_start_time, start_time_fingerprints_match
 
         current = get_process_start_time(record.pid)
-        matched = None if current is None else start_time_fingerprints_match(record.start_time, current)
+        matched = (
+            None
+            if current is None
+            else start_time_fingerprints_match(record.start_time, current)
+        )
     if matched is not True:
         return matched
-    if record.role == ROLE_GATEWAY and not recorded_epoch and record.create_time is not None:
+    if (
+        record.role == ROLE_GATEWAY
+        and not recorded_epoch
+        and record.create_time is not None
+    ):
         boot = _boot_time()
         if boot is not None and record.create_time < boot - _LEGACY_BOOT_SLACK_S:
             lock_free = _host_lock_is_free(record.role)
@@ -377,7 +401,9 @@ def dial_host(record: HostRecord) -> str:
     return "127.0.0.1" if host in ("0.0.0.0", "::", "*", "") else host
 
 
-def probe_owner(record: HostRecord, *, timeout: float = PROBE_TIMEOUT_S) -> Optional[dict]:
+def probe_owner(
+    record: HostRecord, *, timeout: float = PROBE_TIMEOUT_S
+) -> Optional[dict]:
     """Make the recorded endpoint prove it is this record's owner; ``None`` when it does not.
 
     Two gates, both required: a bounded TCP connect (nothing listening → the owner is gone, even
@@ -396,22 +422,33 @@ def probe_owner(record: HostRecord, *, timeout: float = PROBE_TIMEOUT_S) -> Opti
         with socket.create_connection((host, record.port), timeout=timeout):
             pass
     except OSError:
-        logger.debug("host %s owner does not answer at %s:%s", record.role, host, record.port)
+        logger.debug(
+            "host %s owner does not answer at %s:%s", record.role, host, record.port
+        )
         return None
 
     import urllib.request
 
     token = read_token(record.role)
-    headers = {"X-Clawksis-Token": token, "Authorization": f"Bearer {token}"} if token else {}
+    headers = (
+        {"X-Clawksis-Token": token, "Authorization": f"Bearer {token}"} if token else {}
+    )
     request = urllib.request.Request(
-        f"http://{host}:{record.port}{HOST_IDENTITY_PATH}", headers=headers)
+        f"http://{host}:{record.port}{HOST_IDENTITY_PATH}", headers=headers
+    )
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             if response.status != 200:
                 return None
             payload = json.loads(response.read(65536).decode("utf-8", "replace"))
     except Exception:
-        logger.debug("host %s identity probe failed at %s:%s", record.role, host, record.port, exc_info=True)
+        logger.debug(
+            "host %s identity probe failed at %s:%s",
+            record.role,
+            host,
+            record.port,
+            exc_info=True,
+        )
         return None
     if not isinstance(payload, dict):
         return None
@@ -530,7 +567,9 @@ def claim_host_lock(role: str) -> tuple[HostLockOutcome, Optional[OSError]]:
         ensure_host_state_dir()
         handle = open(path, "a+", encoding="utf-8")
     except OSError as exc:
-        logger.debug("host %s lock could not be opened at %s", role, path, exc_info=True)
+        logger.debug(
+            "host %s lock could not be opened at %s", role, path, exc_info=True
+        )
         return (HostLockOutcome.COULD_NOT_OPEN, exc)
     if not _try_acquire_file_lock(handle):
         with contextlib.suppress(OSError):
@@ -589,7 +628,11 @@ def record_names_live_owner(record: HostRecord) -> bool:
     if not liveness_is_proven(record):
         return False
     if host_lock_is_held(record.role) is False:
-        logger.debug("host %s record names pid %s but the host lock is free", record.role, record.pid)
+        logger.debug(
+            "host %s record names pid %s but the host lock is free",
+            record.role,
+            record.pid,
+        )
         return False
     return True
 
@@ -634,7 +677,11 @@ def publish_record(
             _write_private_text(token_path(role), token)
         atomic_json_write(record_path(role), record.to_json(), mode=0o600)
     except OSError:
-        logger.warning("host %s record could not be published; discovery will not find it", role, exc_info=True)
+        logger.warning(
+            "host %s record could not be published; discovery will not find it",
+            role,
+            exc_info=True,
+        )
         return None
     _invalidate_attach_cache()
     return record
@@ -798,7 +845,9 @@ def served_profiles(*, multiplex: Optional[bool] = None) -> tuple[str, ...]:
     try:
         from clawk_cli.profiles import profiles_to_serve
 
-        enabled = _multiplex_profiles_enabled() if multiplex is None else bool(multiplex)
+        enabled = (
+            _multiplex_profiles_enabled() if multiplex is None else bool(multiplex)
+        )
         return tuple(name for name, _ in profiles_to_serve(multiplex=enabled))
     except Exception:
         logger.debug("served profile roster unavailable", exc_info=True)
@@ -807,6 +856,10 @@ def served_profiles(*, multiplex: Optional[bool] = None) -> tuple[str, ...]:
 
 def describe(record: HostRecord) -> str:
     """One-line human description used by attach messages and conflict logs."""
-    where = f"{record.host or '127.0.0.1'}:{record.port}" if record.port else "no bound port"
+    where = (
+        f"{record.host or '127.0.0.1'}:{record.port}"
+        if record.port
+        else "no bound port"
+    )
     profiles = ", ".join(record.profiles) if record.profiles else "unknown"
     return f"PID {record.pid} ({where}; profiles: {profiles})"

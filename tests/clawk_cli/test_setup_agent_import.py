@@ -40,9 +40,11 @@ def homes(tmp_path, monkeypatch):
         (clawk_home / "plugins" / name).mkdir(parents=True)
 
     def run(argv, env, check=False):
-        clawk_args = argv[argv.index("clawk_cli.main") + 1:]
+        clawk_args = argv[argv.index("clawk_cli.main") + 1 :]
         calls.append(("import", clawk_args, env["CLAWK_HOME"]))
-        (clawk_home / "config.yaml").write_text(f"imported: {clawk_args[-1]}\n", encoding="utf-8")
+        (clawk_home / "config.yaml").write_text(
+            f"imported: {clawk_args[-1]}\n", encoding="utf-8"
+        )
         return subprocess.CompletedProcess(argv, 0)
 
     monkeypatch.setattr("clawk_cli.setup.prompt_yes_no", ask)
@@ -64,8 +66,18 @@ def test_found_agent_is_offered_then_installed_from_the_catalog_and_imported(hom
         # core's setup migrated OpenClaw's allowlisted secrets after the preview; so does this step.
         # The root home is named explicitly, so a sticky active_profile cannot redirect the child.
         # --from-setup: the plugin words its preview and result as a step of this setup.
-        ("import", ["--profile", "default", "import-agent", "openclaw", "--migrate-secrets", "--from-setup"],
-         str(clawk_home)),
+        (
+            "import",
+            [
+                "--profile",
+                "default",
+                "import-agent",
+                "openclaw",
+                "--migrate-secrets",
+                "--from-setup",
+            ],
+            str(clawk_home),
+        ),
     ]
 
 
@@ -77,10 +89,19 @@ def test_several_found_are_offered_as_a_checklist_and_only_the_picks_import(home
 
     assert step.offer_agent_import(clawk_home) == "Claude Code"
 
-    assert calls[1] == ("pick", ["Claude Code", "Cursor"], [0, 1])  # never an agent that is absent
-    assert calls[2:] == [("install", "agent-importers", True, True),
-                         ("import", ["--profile", "default", "import-agent", "claude-code", "--from-setup"],
-                          str(clawk_home))]
+    assert calls[1] == (
+        "pick",
+        ["Claude Code", "Cursor"],
+        [0, 1],
+    )  # never an agent that is absent
+    assert calls[2:] == [
+        ("install", "agent-importers", True, True),
+        (
+            "import",
+            ["--profile", "default", "import-agent", "claude-code", "--from-setup"],
+            str(clawk_home),
+        ),
+    ]
 
 
 def test_declining_installs_nothing(homes):
@@ -111,6 +132,7 @@ def test_a_refused_enable_skips_the_import_and_setup_goes_on(homes, monkeypatch)
     """Installed but disabled, and PM cannot admit the enable: the error is printed, nothing is
     imported, and the step returns so the rest of setup still runs."""
     from clawk_cli.plugins_admission import AdmissionRefused
+
     user_home, clawk_home, calls, _answers = homes
     (user_home / ".cursor").mkdir()
     (clawk_home / "plugins" / "agent-importers").mkdir(parents=True)
@@ -118,17 +140,22 @@ def test_a_refused_enable_skips_the_import_and_setup_goes_on(homes, monkeypatch)
     def refuse(name, **_):
         calls.append(("enable", name))
         raise AdmissionRefused("dependency conflict")
+
     monkeypatch.setattr("clawk_cli.plugins_cmd.cmd_enable", refuse)
 
     assert step.offer_agent_import(clawk_home) == ""
 
-    assert calls == [("ask", "Import your setup from Cursor?", True), ("enable", "agent-importers")]
+    assert calls == [
+        ("ask", "Import your setup from Cursor?", True),
+        ("enable", "agent-importers"),
+    ]
 
 
 def test_setup_menu_shows_what_was_found_with_the_question(homes, monkeypatch):
     """Setup's yes/no is a full-screen menu that hides what was printed before it, so the detection
     lines travel with the question: "any of them" must point at text the user can see."""
     from clawk_cli import setup
+
     user_home, clawk_home, calls, _answers = homes
     for d in (".openclaw", ".claude", ".codex"):
         (user_home / d).mkdir()
@@ -137,6 +164,7 @@ def test_setup_menu_shows_what_was_found_with_the_question(homes, monkeypatch):
     def radiolist(title, items, selected=0, *, description=None, **_):
         menus.append((title, items, description))
         return 1  # "No"
+
     monkeypatch.setattr("clawk_cli.setup.prompt_yes_no", real_prompt_yes_no)
     monkeypatch.setattr("clawk_cli.curses_ui.curses_radiolist", radiolist)
 
@@ -145,6 +173,8 @@ def test_setup_menu_shows_what_was_found_with_the_question(homes, monkeypatch):
 
     [(title, items, description)] = menus
     assert (title, items) == ("Import your setup from any of them?", ["Yes", "No"])
-    assert ("Found on this computer: OpenClaw (~/.openclaw), Claude Code (~/.claude), Codex CLI (~/.codex)."
-            in " ".join(description.split()))
+    assert (
+        "Found on this computer: OpenClaw (~/.openclaw), Claude Code (~/.claude), Codex CLI (~/.codex)."
+        in " ".join(description.split())
+    )
     assert calls == [] and not (clawk_home / "plugins").exists()

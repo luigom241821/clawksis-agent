@@ -22,13 +22,18 @@ def fake_root(tmp_path, monkeypatch):
     root.mkdir()
     monkeypatch.setattr(clawk_constants.Path, "home", lambda: tmp_path)
     monkeypatch.setenv("CLAWK_HOME", str(root))
-    monkeypatch.setattr(clawk_constants, "_default_clawk_root_memo", None, raising=False)
+    monkeypatch.setattr(
+        clawk_constants, "_default_clawk_root_memo", None, raising=False
+    )
     return root
 
 
 def _live_record(clawk_home):
     return {
-        "pid": _LIVE_PID, "kind": "clawk-gateway", "gateway_state": "running", "start_time": 1000,
+        "pid": _LIVE_PID,
+        "kind": "clawk-gateway",
+        "gateway_state": "running",
+        "start_time": 1000,
         "argv": ["python", "-m", "clawk_cli.main", "-p", "eagle", "gateway", "run"],
         "clawk_home": str(clawk_home),
     }
@@ -40,19 +45,31 @@ def _alive(monkeypatch, cmdline="python -m clawk_cli.main -p eagle gateway run")
     monkeypatch.setattr(status, "_read_process_cmdline", lambda pid: cmdline)
 
 
-def test_a_runtime_record_stamped_for_another_home_is_not_this_homes_gateway(fake_root, tmp_path, monkeypatch):
+def test_a_runtime_record_stamped_for_another_home_is_not_this_homes_gateway(
+    fake_root, tmp_path, monkeypatch
+):
     """Rung 3: ``gateway_state.json`` copied along with the directory names the ORIGINAL home."""
     _alive(monkeypatch)
     copied = tmp_path / "sandbox-root" / "profiles" / "eagle"
     copied.mkdir(parents=True)
     foreign = _live_record(fake_root / "profiles" / "eagle")
     (copied / "gateway_state.json").write_text(json.dumps(foreign), encoding="utf-8")
-    monkeypatch.setattr(status, "multiplexer_liveness_for_profile", lambda *a, **k: None)
+    monkeypatch.setattr(
+        status, "multiplexer_liveness_for_profile", lambda *a, **k: None
+    )
 
     assert status.get_runtime_status_running_pid(foreign, expected_home=copied) is None
-    assert status.resolve_gateway_liveness(profile_dir=copied, use_cache=False).running is False
+    assert (
+        status.resolve_gateway_liveness(profile_dir=copied, use_cache=False).running
+        is False
+    )
     # Control: the same record asked about from the home it names is believed.
-    assert status.get_runtime_status_running_pid(foreign, expected_home=fake_root / "profiles" / "eagle") == _LIVE_PID
+    assert (
+        status.get_runtime_status_running_pid(
+            foreign, expected_home=fake_root / "profiles" / "eagle"
+        )
+        == _LIVE_PID
+    )
 
 
 def test_a_copied_dir_with_no_identity_files_borrows_neither_the_process_record_nor_the_roster(
@@ -61,16 +78,25 @@ def test_a_copied_dir_with_no_identity_files_borrows_neither_the_process_record_
     """The process home's ``gateway_state.json`` names a live ``-p eagle`` gateway and the multiplexer
     roster lists ``eagle``; a same-named directory under another root is served by neither."""
     _alive(monkeypatch)
-    (fake_root / "gateway_state.json").write_text(json.dumps(_live_record(fake_root)), encoding="utf-8")
+    (fake_root / "gateway_state.json").write_text(
+        json.dumps(_live_record(fake_root)), encoding="utf-8"
+    )
     copied = tmp_path / "sandbox-root" / "profiles" / "eagle"
     copied.mkdir(parents=True)
     from gateway import host_topology
+
     monkeypatch.setattr(
-        host_topology, "host_gateway_topology",
-        lambda: host_topology.HostGatewayTopology(pid=_LIVE_PID, profiles=("default", "eagle"), source="test"),
+        host_topology,
+        "host_gateway_topology",
+        lambda: host_topology.HostGatewayTopology(
+            pid=_LIVE_PID, profiles=("default", "eagle"), source="test"
+        ),
     )
 
-    assert status.resolve_gateway_liveness(profile_dir=copied, use_cache=False).running is False
+    assert (
+        status.resolve_gateway_liveness(profile_dir=copied, use_cache=False).running
+        is False
+    )
     assert status.multiplexer_liveness_for_profile(copied) is None
     # Control: the pooled ``<root>/profiles/eagle`` IS the served home.
     pooled = fake_root / "profiles" / "eagle"

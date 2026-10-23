@@ -19,7 +19,10 @@ from tools import mcp_tool_agent as _mcp_agent
 
 
 def _tool(name):
-    return {"type": "function", "function": {"name": name, "description": "", "parameters": {}}}
+    return {
+        "type": "function",
+        "function": {"name": name, "description": "", "parameters": {}},
+    }
 
 
 def _agent(tool_names, *, enabled=None, disabled=None):
@@ -35,10 +38,15 @@ def test_refresh_adds_late_landing_tools(monkeypatch):
     """A server that registers after build → its tools land in the snapshot."""
     agent = _agent(["read_file", "terminal"])
 
-    new_defs = [_tool(n) for n in ("read_file", "terminal", "mcp_granola_get_account_info")]
-    monkeypatch.setattr(mcp_tool, "get_tool_definitions", lambda **kw: new_defs, raising=False)
+    new_defs = [
+        _tool(n) for n in ("read_file", "terminal", "mcp_granola_get_account_info")
+    ]
+    monkeypatch.setattr(
+        mcp_tool, "get_tool_definitions", lambda **kw: new_defs, raising=False
+    )
     # get_tool_definitions is imported inside the helper from model_tools, so patch there too.
     import model_tools
+
     monkeypatch.setattr(model_tools, "get_tool_definitions", lambda **kw: new_defs)
 
     added = _mcp_agent.refresh_agent_mcp_tools(agent)
@@ -49,8 +57,11 @@ def test_refresh_adds_late_landing_tools(monkeypatch):
 
     side = _agent(["read_file", "terminal"])
     side.side_agent = True
-    monkeypatch.setattr(model_tools, "get_tool_definitions",
-                        lambda **kw: new_defs + [_tool("manage_connections")])
+    monkeypatch.setattr(
+        model_tools,
+        "get_tool_definitions",
+        lambda **kw: new_defs + [_tool("manage_connections")],
+    )
 
     _mcp_agent.refresh_agent_mcp_tools(side)
 
@@ -84,10 +95,12 @@ def test_refresh_preserves_memory_provider_and_context_engine_tools(monkeypatch)
     agent._context_engine_tool_names = {"lcm_grep"}
 
     import model_tools
+
     # The registry now ALSO has a newly-connected MCP tool, but does NOT contain
     # the memory/context tools (they're never in get_tool_definitions output).
     monkeypatch.setattr(
-        model_tools, "get_tool_definitions",
+        model_tools,
+        "get_tool_definitions",
         lambda **kw: [_tool("read_file"), _tool("mcp_new_server_tool")],
     )
 
@@ -95,8 +108,8 @@ def test_refresh_preserves_memory_provider_and_context_engine_tools(monkeypatch)
 
     # The new MCP tool landed AND the injected families survived.
     assert "mcp_new_server_tool" in agent.valid_tool_names
-    assert "memory_search" in agent.valid_tool_names   # not clobbered
-    assert "lcm_grep" in agent.valid_tool_names         # not clobbered
+    assert "memory_search" in agent.valid_tool_names  # not clobbered
+    assert "lcm_grep" in agent.valid_tool_names  # not clobbered
     assert added == {"mcp_new_server_tool"}
 
 
@@ -114,6 +127,7 @@ def test_refresh_does_not_reinject_disabled_memory_provider_tools(monkeypatch):
     )
 
     import model_tools
+
     monkeypatch.setattr(
         model_tools,
         "get_tool_definitions",
@@ -132,22 +146,24 @@ def test_refresh_respects_context_engine_toolset_gate(monkeypatch):
     must not get lcm_* leaked back in by a refresh."""
     agent = _agent(["read_file"], enabled=["coding"])  # context_engine NOT enabled
     agent.context_compressor = types.SimpleNamespace(
-        get_tool_schemas=lambda: [{"name": "lcm_grep", "description": "", "parameters": {}}]
+        get_tool_schemas=lambda: [
+            {"name": "lcm_grep", "description": "", "parameters": {}}
+        ]
     )
     agent._context_engine_tool_names = set()
 
     import model_tools
+
     monkeypatch.setattr(
-        model_tools, "get_tool_definitions",
+        model_tools,
+        "get_tool_definitions",
         lambda **kw: [_tool("read_file"), _tool("mcp_new_tool")],
     )
 
     _mcp_agent.refresh_agent_mcp_tools(agent)
 
     assert "mcp_new_tool" in agent.valid_tool_names  # MCP tool still lands
-    assert "lcm_grep" not in agent.valid_tool_names   # gated out (#5544)
-
-
+    assert "lcm_grep" not in agent.valid_tool_names  # gated out (#5544)
 
 
 def test_refresh_is_thread_safe_under_concurrent_calls(monkeypatch):
@@ -162,6 +178,7 @@ def test_refresh_is_thread_safe_under_concurrent_calls(monkeypatch):
     agent = _agent(["a"])
 
     import itertools
+
     set_a = [_tool("a"), _tool("b")]
     set_b = [_tool("a"), _tool("c")]
     flip = itertools.cycle([set_a, set_b])
@@ -172,6 +189,7 @@ def test_refresh_is_thread_safe_under_concurrent_calls(monkeypatch):
             return list(next(flip))
 
     import model_tools
+
     monkeypatch.setattr(model_tools, "get_tool_definitions", _gtd)
 
     errors = []
@@ -201,8 +219,6 @@ def test_refresh_is_thread_safe_under_concurrent_calls(monkeypatch):
 # ── discovery-wait bound (mcp_discovery_timeout config) ──────────────────────
 
 
-
-
 def test_wait_returns_instantly_when_no_discovery_thread(monkeypatch):
     """The common case (no MCP / discovery done) pays ~0s regardless of bound."""
     import time
@@ -210,6 +226,7 @@ def test_wait_returns_instantly_when_no_discovery_thread(monkeypatch):
 
     monkeypatch.setattr(mcp_startup, "_mcp_discovery_thread", {})
     import clawk_cli.config as cfg
+
     monkeypatch.setattr(cfg, "load_config", lambda: {"mcp_discovery_timeout": 999.0})
 
     t0 = time.time()
@@ -275,7 +292,9 @@ def test_preserve_prefix_appends_late_arrivals_at_the_tail(monkeypatch):
 
     assert added == {"aaa_mcp_late"}
     assert [t["function"]["name"] for t in agent.tools] == [
-        "read_file", "terminal", "aaa_mcp_late",
+        "read_file",
+        "terminal",
+        "aaa_mcp_late",
     ]
 
 
@@ -294,7 +313,8 @@ def test_preserve_prefix_keeps_sent_tool_schemas_byte_identical(monkeypatch):
     fresh = _tool("read_file")
     fresh["function"]["description"] = "Read a file. schema v2"
     fresh["function"]["parameters"] = {
-        "type": "object", "properties": {"path": {"type": "string"}},
+        "type": "object",
+        "properties": {"path": {"type": "string"}},
     }
     _serve(monkeypatch, [fresh, _tool("mcp_late")])
     _registered(monkeypatch, ["read_file", "mcp_late"])
@@ -335,7 +355,9 @@ def test_preserve_prefix_keeps_the_bridge_tools_byte_identical(monkeypatch):
     from tools.tool_search_catalog import BRIDGE_TOOL_NAMES
 
     built = _tool("tool_search")
-    built["function"]["description"] = "Search 21 additional tools. connectors__ hint present."
+    built["function"]["description"] = (
+        "Search 21 additional tools. connectors__ hint present."
+    )
     agent = _agent(["read_file", "manage_connections"])
     agent.tools.append(built)
     agent.valid_tool_names.add("tool_search")
@@ -345,7 +367,10 @@ def test_preserve_prefix_keeps_the_bridge_tools_byte_identical(monkeypatch):
     fresh_bridge["function"]["description"] = "Search 33 additional tools."
     # manage_connections flapped out (portal blip); a late server grew the count.
     _serve(monkeypatch, [_tool("read_file"), fresh_bridge, _tool("mcp_late_tool")])
-    _registered(monkeypatch, ["read_file", "manage_connections", "mcp_late_tool", *BRIDGE_TOOL_NAMES])
+    _registered(
+        monkeypatch,
+        ["read_file", "manage_connections", "mcp_late_tool", *BRIDGE_TOOL_NAMES],
+    )
 
     added = _mcp_agent.refresh_agent_mcp_tools(agent, preserve_prefix=True)
 
@@ -391,9 +416,21 @@ def test_eviction_rebuild_restores_the_sessions_saved_tool_order(monkeypatch):
     from tools import registry as registry_mod
 
     saved = ["read_file", "browser_navigate", "terminal"]
-    entries = {n: types.SimpleNamespace(name=n, schema=_tool(n)["function"]) for n in saved}
-    monkeypatch.setattr(registry_mod.registry, "get_all_entries", lambda: list(entries.values()), raising=False)
-    monkeypatch.setattr(registry_mod.registry, "get_entry", lambda name, **kw: entries.get(name), raising=False)
+    entries = {
+        n: types.SimpleNamespace(name=n, schema=_tool(n)["function"]) for n in saved
+    }
+    monkeypatch.setattr(
+        registry_mod.registry,
+        "get_all_entries",
+        lambda: list(entries.values()),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        registry_mod.registry,
+        "get_entry",
+        lambda name, **kw: entries.get(name),
+        raising=False,
+    )
 
     rebuilt = _agent(["read_file", "terminal"])  # probe flipped: browser_navigate gone
     changed = _mcp_agent.restore_agent_tool_prefix(rebuilt, saved)
@@ -403,7 +440,9 @@ def test_eviction_rebuild_restores_the_sessions_saved_tool_order(monkeypatch):
     assert rebuilt.valid_tool_names == set(saved)
 
 
-def test_resume_on_another_surface_restores_the_pinned_tool_bytes(monkeypatch, tmp_path):
+def test_resume_on_another_surface_restores_the_pinned_tool_bytes(
+    monkeypatch, tmp_path
+):
     """One durable session hops gateway -> ``-q --resume``: the new process derives different
     bytes for the SAME tools (tool_search's per-surface deferred catalog, per-surface dynamic
     PARAMETERS like delegate_task's, the one-shot footprint pruning skill_manage). tools[] heads
@@ -419,17 +458,37 @@ def test_resume_on_another_surface_restores_the_pinned_tool_bytes(monkeypatch, t
         return tool
 
     sent = _agent([])
-    sent.tools = [_tool("read_file"), _described("delegate_task", "delegate", group={"type": "string"}),
-                  _described("skill_manage", "lands in /home/u/.clawksis/skills"),
-                  _described("tool_search", "Search 6 additional tools.")]
-    static = {"skill_manage": _described("skill_manage", "lands in the profile's skills dir")["function"]}
-    monkeypatch.setattr(registry_mod.registry, "get_all_entries",
-                        lambda: [types.SimpleNamespace(name=n) for n in ("read_file", "delegate_task", "skill_manage")],
-                        raising=False)
-    monkeypatch.setattr(registry_mod.registry, "get_entry",
-                        lambda name, **kw: types.SimpleNamespace(name=name, schema=static[name]), raising=False)
-    this_surface = [_tool("read_file"), _described("delegate_task", "delegate"),  # drops `group` here
-                    _described("tool_search", "Search 5 additional tools.")]
+    sent.tools = [
+        _tool("read_file"),
+        _described("delegate_task", "delegate", group={"type": "string"}),
+        _described("skill_manage", "lands in /home/u/.clawksis/skills"),
+        _described("tool_search", "Search 6 additional tools."),
+    ]
+    static = {
+        "skill_manage": _described("skill_manage", "lands in the profile's skills dir")[
+            "function"
+        ]
+    }
+    monkeypatch.setattr(
+        registry_mod.registry,
+        "get_all_entries",
+        lambda: [
+            types.SimpleNamespace(name=n)
+            for n in ("read_file", "delegate_task", "skill_manage")
+        ],
+        raising=False,
+    )
+    monkeypatch.setattr(
+        registry_mod.registry,
+        "get_entry",
+        lambda name, **kw: types.SimpleNamespace(name=name, schema=static[name]),
+        raising=False,
+    )
+    this_surface = [
+        _tool("read_file"),
+        _described("delegate_task", "delegate"),  # drops `group` here
+        _described("tool_search", "Search 5 additional tools."),
+    ]
     with SessionDB(db_path=tmp_path / "state.db") as db:
         sent._session_db = db
         for sid in ("s1", "s2"):
@@ -440,23 +499,47 @@ def test_resume_on_another_surface_restores_the_pinned_tool_bytes(monkeypatch, t
         stored = db._conn.execute("SELECT COUNT(*) FROM system_prompts").fetchone()[0]
 
         resumed = _agent([])
-        resumed.tools, resumed._session_db, resumed.session_id = list(this_surface), db, "s1"
-        _mcp_agent.restore_agent_tool_prefix(resumed, json.loads(db.get_session("s1")["tool_names"]))
+        resumed.tools, resumed._session_db, resumed.session_id = (
+            list(this_surface),
+            db,
+            "s1",
+        )
+        _mcp_agent.restore_agent_tool_prefix(
+            resumed, json.loads(db.get_session("s1")["tool_names"])
+        )
         repinned = db.get_session("s1")["tool_names"]
 
         # The pin came from other code: every tool built here takes this build's definition.
-        monkeypatch.setattr(_mcp_agent, "tool_pin_version", lambda: "sha-after-clawk-update")
+        monkeypatch.setattr(
+            _mcp_agent, "tool_pin_version", lambda: "sha-after-clawk-update"
+        )
         updated = _agent([])
-        updated.tools, updated._session_db, updated.session_id = list(this_surface), db, "s2"
-        _mcp_agent.restore_agent_tool_prefix(updated, json.loads(db.get_session("s2")["tool_names"]))
+        updated.tools, updated._session_db, updated.session_id = (
+            list(this_surface),
+            db,
+            "s2",
+        )
+        _mcp_agent.restore_agent_tool_prefix(
+            updated, json.loads(db.get_session("s2")["tool_names"])
+        )
         upgraded_pin = json.loads(db.get_session("s2")["tool_names"])
 
     assert json.dumps(resumed.tools) == json.dumps(sent.tools)
-    assert resumed.valid_tool_names == {"read_file", "delegate_task", "skill_manage", "tool_search"}
+    assert resumed.valid_tool_names == {
+        "read_file",
+        "delegate_task",
+        "skill_manage",
+        "tool_search",
+    }
     assert stored == 1
-    assert json.loads(repinned)["tools"] == sent.tools  # unchanged pin, no rewrite per hop
-    assert updated.tools == [*this_surface[:2], {"type": "function", "function": {**static["skill_manage"]}},
-                             this_surface[2]]
+    assert (
+        json.loads(repinned)["tools"] == sent.tools
+    )  # unchanged pin, no rewrite per hop
+    assert updated.tools == [
+        *this_surface[:2],
+        {"type": "function", "function": {**static["skill_manage"]}},
+        this_surface[2],
+    ]
     assert upgraded_pin == {"version": "sha-after-clawk-update", "tools": updated.tools}
 
 
@@ -467,8 +550,12 @@ def test_a_pin_never_re_adds_a_tool_this_sessions_config_excludes(monkeypatch):
     import model_tools
 
     monkeypatch.setattr(_mcp_agent, "persist_agent_tool_names", lambda agent: None)
-    pin = {"version": _mcp_agent.tool_pin_version(),
-           "tools": [_tool(n) for n in ("read_file", "terminal", "browser_exec", "focus_pane")]}
+    pin = {
+        "version": _mcp_agent.tool_pin_version(),
+        "tools": [
+            _tool(n) for n in ("read_file", "terminal", "browser_exec", "focus_pane")
+        ],
+    }
     agent = _agent(["read_file"], enabled=["clawk-cli"], disabled=["terminal"])
 
     _mcp_agent.restore_agent_tool_prefix(agent, pin)
@@ -490,7 +577,9 @@ def test_reprobe_tool_availability_drops_cached_check_fn_verdicts(monkeypatch):
     monkeypatch.setattr(registry_mod, "check_fn_cache_scope", lambda: "test-scope")
     assert registry_mod._check_fn_cached(probe) is False
     verdict["ok"] = True
-    assert registry_mod._check_fn_cached(probe) is False  # TTL cache replays stale verdict
+    assert (
+        registry_mod._check_fn_cached(probe) is False
+    )  # TTL cache replays stale verdict
     with model_tools._tool_defs_cache_lock:
         model_tools._tool_defs_cache[("sentinel",)] = []
 
@@ -558,8 +647,12 @@ def test_authorized_message_agent_survives_every_snapshot_rebuild(
 
     agent = _bot_mode_agent(managed_bot_home)
     _serve(monkeypatch, [_tool("read_file")])
-    entry = types.SimpleNamespace(name="read_file", schema=_tool("read_file")["function"])
-    monkeypatch.setattr(registry_mod.registry, "get_all_entries", lambda: [entry], raising=False)
+    entry = types.SimpleNamespace(
+        name="read_file", schema=_tool("read_file")["function"]
+    )
+    monkeypatch.setattr(
+        registry_mod.registry, "get_all_entries", lambda: [entry], raising=False
+    )
     monkeypatch.setattr(
         registry_mod.registry,
         "get_entry",

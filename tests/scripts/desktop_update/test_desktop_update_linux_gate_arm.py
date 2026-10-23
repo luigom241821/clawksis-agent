@@ -12,6 +12,7 @@ lacks ``-m``, a PATH shim provides a GNU-compatible ``readlink`` so the gate
 logic itself is exercised everywhere (the canonicalisation behaviour is
 already covered by the linux_only matrix in test_desktop_update_linux_gate.py).
 """
+
 from __future__ import annotations
 
 import os
@@ -20,7 +21,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-POSIX_SH = Path(__file__).resolve().parent.parent.parent.parent / "scripts" / "desktop-update" / "posix.sh"
+POSIX_SH = (
+    Path(__file__).resolve().parent.parent.parent.parent
+    / "scripts"
+    / "desktop-update"
+    / "posix.sh"
+)
 
 # NOT linux_only: unlike the symlink-matrix file, these cases only exercise
 # the gate's dir-selection logic (the relaunch/skew paths return before the
@@ -39,34 +45,36 @@ def _readlink_shim_dir(tmp_path: Path) -> Path:
         "# requiring the full path to exist (longest existing prefix + -P).\n"
         "args=()\n"
         "while [ $# -gt 0 ]; do\n"
-        "  case \"$1\" in\n"
+        '  case "$1" in\n'
         "    -m|--canonicalize-missing) ;;\n"
-        "    --) shift; args+=(\"$@\"); break ;;\n"
-        "    -*) echo \"shim readlink: unsupported flag $1\" >&2; exit 1 ;;\n"
-        "    *) args+=(\"$1\") ;;\n"
+        '    --) shift; args+=("$@"); break ;;\n'
+        '    -*) echo "shim readlink: unsupported flag $1" >&2; exit 1 ;;\n'
+        '    *) args+=("$1") ;;\n'
         "  esac\n"
         "  shift\n"
         "done\n"
-        "set -- \"${args[@]}\"\n"
-        "[ $# -eq 1 ] || { echo \"usage: readlink -m FILE\" >&2; exit 1; }\n"
-        "p=\"$1\"\n"
-        "case \"$p\" in\n"
+        'set -- "${args[@]}"\n'
+        '[ $# -eq 1 ] || { echo "usage: readlink -m FILE" >&2; exit 1; }\n'
+        'p="$1"\n'
+        'case "$p" in\n'
         "  /*) ;;\n"
-        "  *) p=\"$PWD/$p\" ;;\n"
+        '  *) p="$PWD/$p" ;;\n'
         "esac\n"
         "# Longest existing ANCESTOR dir, then append the missing tail.\n"
-        "prefix=\"$(dirname -- \"$p\")\"\n"
-        "base=\"$(basename -- \"$p\")\"\n"
-        "tail=\"/$base\"\n"
-        "while [ ! -d \"$prefix\" ]; do\n"
-        "  tail=\"/$(basename -- \"$prefix\")$tail\"\n"
-        "  prefix=\"$(dirname -- \"$prefix\")\"\n"
+        'prefix="$(dirname -- "$p")"\n'
+        'base="$(basename -- "$p")"\n'
+        'tail="/$base"\n'
+        'while [ ! -d "$prefix" ]; do\n'
+        '  tail="/$(basename -- "$prefix")$tail"\n'
+        '  prefix="$(dirname -- "$prefix")"\n'
         "done\n"
-        "prefix=\"$(cd \"$prefix\" && pwd -P)\"\n"
-        "printf '%s%s\\n' \"$prefix\" \"$tail\"\n",
+        'prefix="$(cd "$prefix" && pwd -P)"\n'
+        'printf \'%s%s\\n\' "$prefix" "$tail"\n',
         encoding="utf-8",
     )
-    (shim / "readlink").chmod((shim / "readlink").stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    (shim / "readlink").chmod(
+        (shim / "readlink").stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
+    )
     return shim
 
 
@@ -76,9 +84,19 @@ def _gate(install_root: Path, relaunch_target: Path, tmp_path: Path) -> str:
         # BSD readlink lacks -m; prepend a shim so the gate logic itself runs.
         env["PATH"] = f"{_readlink_shim_dir(tmp_path)}{os.pathsep}{env['PATH']}"
     out = subprocess.run(
-        ["bash", str(POSIX_SH), "--self-test-gate", "--install-root", str(install_root),
-         "--relaunch-target", str(relaunch_target)],
-        capture_output=True, text=True, check=True, env=env,
+        [
+            "bash",
+            str(POSIX_SH),
+            "--self-test-gate",
+            "--install-root",
+            str(install_root),
+            "--relaunch-target",
+            str(relaunch_target),
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+        env=env,
     )
     return out.stdout.strip().split(":", 1)[0]
 

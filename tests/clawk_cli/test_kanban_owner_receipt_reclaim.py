@@ -74,17 +74,30 @@ class _Board:
 
     # --- seeding --------------------------------------------------------------------------
     def dead_attempt(
-        self, tid: str = "t_ghost", *, worker_pid=None, worker_fingerprint=FINGERPRINT,
-        worker_bound: bool = False, record_worker_pid: bool = True, owner_pid=None,
-        owner_birth=None, admission=("terminal", "interrupted"), dead_hours: int = 15,
-        expires_age_seconds=None, lock_host=None, heartbeat_age=None,
+        self,
+        tid: str = "t_ghost",
+        *,
+        worker_pid=None,
+        worker_fingerprint=FINGERPRINT,
+        worker_bound: bool = False,
+        record_worker_pid: bool = True,
+        owner_pid=None,
+        owner_birth=None,
+        admission=("terminal", "interrupted"),
+        dead_hours: int = 15,
+        expires_age_seconds=None,
+        lock_host=None,
+        heartbeat_age=None,
     ) -> int:
         """A ``running`` card whose worker died the way t_5ea03658's did."""
         worker_pid = _absent_pid() if worker_pid is None else worker_pid
         owner_pid = _absent_pid(base=3_600_000) if owner_pid is None else owner_pid
         lock = f"{lock_host or HOST}:{owner_pid}"
-        expires = NOW - (expires_age_seconds if expires_age_seconds is not None
-                         else dead_hours * 3600)
+        expires = NOW - (
+            expires_age_seconds
+            if expires_age_seconds is not None
+            else dead_hours * 3600
+        )
         started = NOW - dead_hours * 3600
         run_id = self.conn.execute(
             "INSERT INTO task_runs (task_id, profile, status, claim_lock, claim_expires, "
@@ -97,10 +110,18 @@ class _Board:
             "INSERT INTO tasks (id, title, assignee, status, created_at, claim_lock, claim_expires, "
             "worker_pid, worker_started_at, last_heartbeat_at, current_run_id, started_at, priority) "
             "VALUES (?, ?, 'default', 'running', ?, ?, ?, ?, ?, ?, ?, ?, 5)",
-            (tid, tid, NOW - 86400, lock, expires,
-             worker_pid if record_worker_pid else None,
-             worker_fingerprint if record_worker_pid else None,
-             (NOW - heartbeat_age) if heartbeat_age is not None else None, run, started),
+            (
+                tid,
+                tid,
+                NOW - 86400,
+                lock,
+                expires,
+                worker_pid if record_worker_pid else None,
+                worker_fingerprint if record_worker_pid else None,
+                (NOW - heartbeat_age) if heartbeat_age is not None else None,
+                run,
+                started,
+            ),
         )
         self.event(tid, run, "claimed", {"source_status": "ready"}, started)
         if record_worker_pid:
@@ -108,45 +129,67 @@ class _Board:
         else:
             spawned = {}
         self.event(tid, run, "spawned", spawned, started)
-        payload = {"db": str(self.ledger), "session_id": "sess-1", "pid": owner_pid,
-                   "request_id": f'kanban:["default","{tid}",1]'}
+        payload = {
+            "db": str(self.ledger),
+            "session_id": "sess-1",
+            "pid": owner_pid,
+            "request_id": f'kanban:["default","{tid}",1]',
+        }
         if owner_birth is not None:
             payload["birth"] = owner_birth
         self.event(tid, run, "owner_admitted", payload, started + 30)
         if worker_bound:
-            self.event(tid, run, "worker_bound",
-                       {"pid": worker_pid, "claim_lock": lock, "started_at": worker_fingerprint},
-                       started + 60)
+            self.event(
+                tid,
+                run,
+                "worker_bound",
+                {
+                    "pid": worker_pid,
+                    "claim_lock": lock,
+                    "started_at": worker_fingerprint,
+                },
+                started + 60,
+            )
         if admission:
             with sqlite3.connect(self.ledger) as store:
-                store.execute("INSERT INTO session_admissions VALUES ('sess-1', ?, ?, ?)",
-                              (payload["request_id"], admission[0], admission[1]))
+                store.execute(
+                    "INSERT INTO session_admissions VALUES ('sess-1', ?, ?, ?)",
+                    (payload["request_id"], admission[0], admission[1]),
+                )
         self.conn.commit()
         return run
 
     def event(self, tid: str, run: int, kind: str, payload: dict, ts: int) -> None:
         self.conn.execute(
             "INSERT INTO task_events (task_id, run_id, kind, payload, created_at) "
-            "VALUES (?, ?, ?, ?, ?)", (tid, run, kind, json.dumps(payload), ts))
+            "VALUES (?, ?, ?, ?, ?)",
+            (tid, run, kind, json.dumps(payload), ts),
+        )
 
     def ready(self, tid: str) -> None:
         self.conn.execute(
             "INSERT INTO tasks (id, title, assignee, status, created_at, priority) "
-            "VALUES (?, ?, 'default', 'ready', ?, 5)", (tid, tid, NOW - 86400))
+            "VALUES (?, ?, 'default', 'ready', ?, 5)",
+            (tid, tid, NOW - 86400),
+        )
         self.conn.commit()
 
     # --- reading --------------------------------------------------------------------------
     def state(self, tid: str) -> dict:
-        return dict(self.conn.execute("SELECT * FROM tasks WHERE id = ?", (tid,)).fetchone())
+        return dict(
+            self.conn.execute("SELECT * FROM tasks WHERE id = ?", (tid,)).fetchone()
+        )
 
     def events(self, tid: str) -> list:
         return self.conn.execute(
             "SELECT kind, payload, created_at FROM task_events WHERE task_id = ? ORDER BY id",
-            (tid,)).fetchall()
+            (tid,),
+        ).fetchall()
 
     def diagnostics(self, tid: str, *, config: dict | None = None) -> list:
         return kd.compute_task_diagnostics(
-            self.state(tid), self.events(tid), [], now=NOW, config=config or {})
+            self.state(tid), self.events(tid), [], now=NOW, config=config or {}
+        )
 
 
 @pytest.fixture
@@ -159,38 +202,72 @@ def board(tmp_path, monkeypatch):
 
 # --- the incident shape is named by diagnostics and reclaimed by the platform's own paths --
 
+
 def test_dead_attempt_behind_an_unresolved_receipt_is_named_and_reclaimed(board):
     """Every reclaim path declined this card and no diagnostic could see it; both must now act."""
     board.dead_attempt("t_ghost")
     board.dead_attempt("t_ghost2")
-    board.dead_attempt("t_live", worker_pid=os.getpid(), worker_fingerprint=kbd._process_fingerprint(os.getpid()))
-    assert owner_reclaim_paused(board.conn, "t_ghost") is True      # the pause still applies
-    assert bound_interpreter_gone(board.conn, "t_ghost") is False   # nothing bound to read
+    board.dead_attempt(
+        "t_live",
+        worker_pid=os.getpid(),
+        worker_fingerprint=kbd._process_fingerprint(os.getpid()),
+    )
+    assert (
+        owner_reclaim_paused(board.conn, "t_ghost") is True
+    )  # the pause still applies
+    assert (
+        bound_interpreter_gone(board.conn, "t_ghost") is False
+    )  # nothing bound to read
     assert owner_reclaim_blocked(board.conn, "t_ghost") is False
 
     hits = [d for d in board.diagnostics("t_ghost") if d.kind == "stale_running"]
-    assert [d.severity for d in hits] == ["critical"]                  # 15x the 1h grace
+    assert [d.severity for d in hits] == ["critical"]  # 15x the 1h grace
     assert [a.kind for a in hits[0].actions] == ["reclaim", "cli_hint"]
     assert not [d for d in board.diagnostics("t_live") if d.kind == "stale_running"]
 
     assert kb.release_stale_claims(board.conn) == 2
     row = board.state("t_ghost")
-    assert (row["status"], row["claim_lock"], row["worker_pid"], row["current_run_id"]) == ("ready", None, None, None)
-    run = board.conn.execute("SELECT status, outcome FROM task_runs WHERE task_id = 't_ghost'").fetchone()
+    assert (
+        row["status"],
+        row["claim_lock"],
+        row["worker_pid"],
+        row["current_run_id"],
+    ) == ("ready", None, None, None)
+    run = board.conn.execute(
+        "SELECT status, outcome FROM task_runs WHERE task_id = 't_ghost'"
+    ).fetchone()
     assert tuple(run) == ("reclaimed", "reclaimed")
     assert board.state("t_live")["status"] == "running"
 
 
-@pytest.mark.parametrize("shape", [
-    dict(worker_pid=os.getpid(), worker_fingerprint=kbd._process_fingerprint(os.getpid())),  # live worker
-    dict(worker_bound=True, worker_pid=os.getpid(),
-         worker_fingerprint=kbd._process_fingerprint(os.getpid())),                          # live bound interpreter
-    dict(heartbeat_age=300),                                                                 # fresh heartbeat
-    dict(expires_age_seconds=-3600),                                                         # live claim
-    dict(lock_host="some-other-host"),                                                       # foreign host
-    dict(owner_pid=os.getpid(), owner_birth=None),                                           # live, uncomparable owner
-    dict(record_worker_pid=False),                                                           # no pid recorded
-], ids=["live-worker", "live-bound", "fresh-heartbeat", "live-claim", "foreign-host", "live-owner", "no-pid"])
+@pytest.mark.parametrize(
+    "shape",
+    [
+        dict(
+            worker_pid=os.getpid(),
+            worker_fingerprint=kbd._process_fingerprint(os.getpid()),
+        ),  # live worker
+        dict(
+            worker_bound=True,
+            worker_pid=os.getpid(),
+            worker_fingerprint=kbd._process_fingerprint(os.getpid()),
+        ),  # live bound interpreter
+        dict(heartbeat_age=300),  # fresh heartbeat
+        dict(expires_age_seconds=-3600),  # live claim
+        dict(lock_host="some-other-host"),  # foreign host
+        dict(owner_pid=os.getpid(), owner_birth=None),  # live, uncomparable owner
+        dict(record_worker_pid=False),  # no pid recorded
+    ],
+    ids=[
+        "live-worker",
+        "live-bound",
+        "fresh-heartbeat",
+        "live-claim",
+        "foreign-host",
+        "live-owner",
+        "no-pid",
+    ],
+)
 def test_the_pause_still_holds_every_attempt_that_may_be_alive(board, shape):
     """Missing evidence is never proof: reclaiming beside a possibly-live attempt repeats its effects."""
     board.dead_attempt("t_ghost", **shape)
@@ -204,7 +281,9 @@ def test_the_pause_still_holds_every_attempt_that_may_be_alive(board, shape):
 
 _RECLAIM_PATHS = {
     "ttl": lambda conn: kb.release_stale_claims(conn),
-    "stale": lambda conn: kbd.detect_stale_running(conn, stale_timeout_seconds=1, signal_fn=lambda *_: None),
+    "stale": lambda conn: kbd.detect_stale_running(
+        conn, stale_timeout_seconds=1, signal_fn=lambda *_: None
+    ),
     "runtime": lambda conn: kbd.enforce_max_runtime(conn, signal_fn=lambda *_: None),
 }
 
@@ -220,9 +299,19 @@ def test_an_interpreter_bound_after_the_gate_keeps_its_claim(board, monkeypatch,
 
     def gate_then_bind(conn, task_id, **kwargs):
         verdict = real_gate(conn, task_id, **kwargs)
-        if not calls:  # the recovered owner binds a live interpreter right after the first look
-            board.event(task_id, run, "worker_bound",
-                        {"pid": os.getpid(), "started_at": kbd._process_fingerprint(os.getpid())}, NOW)
+        if (
+            not calls
+        ):  # the recovered owner binds a live interpreter right after the first look
+            board.event(
+                task_id,
+                run,
+                "worker_bound",
+                {
+                    "pid": os.getpid(),
+                    "started_at": kbd._process_fingerprint(os.getpid()),
+                },
+                NOW,
+            )
             board.conn.commit()
         calls.append(verdict)
         return verdict
@@ -234,55 +323,90 @@ def test_an_interpreter_bound_after_the_gate_keeps_its_claim(board, monkeypatch,
     assert (row["status"], row["current_run_id"]) == ("running", run)
 
 
-
 @pytest.mark.parametrize("path", ["ttl", "stale"])
-def test_a_foreign_host_interpreter_bound_after_the_gate_keeps_its_claim(board, monkeypatch, path):
+def test_a_foreign_host_interpreter_bound_after_the_gate_keeps_its_claim(
+    board, monkeypatch, path
+):
     """No local signal was sent for a foreign-host claim, so its bound interpreter's pid says
     nothing here: an absent local pid is no proof that the remote attempt ended."""
-    run = board.dead_attempt("t_remote", lock_host="some-other-host", admission=("terminal", "completed"))
+    run = board.dead_attempt(
+        "t_remote", lock_host="some-other-host", admission=("terminal", "completed")
+    )
     real_gate, calls = owner_reclaim_blocked, []
 
     def gate_then_remote_bind(conn, task_id, **kwargs):
         verdict = real_gate(conn, task_id, **kwargs)
         if not calls:  # the remote owner admits and binds an interpreter right after the first look
-            board.event(task_id, run, "worker_bound", {"pid": _absent_pid(base=3_700_000)}, NOW)
+            board.event(
+                task_id, run, "worker_bound", {"pid": _absent_pid(base=3_700_000)}, NOW
+            )
             board.conn.commit()
             with sqlite3.connect(board.ledger) as store:
-                store.execute("UPDATE session_admissions SET status = 'unknown', outcome = NULL")
+                store.execute(
+                    "UPDATE session_admissions SET status = 'unknown', outcome = NULL"
+                )
         calls.append(verdict)
         return verdict
 
-    monkeypatch.setattr(kanban_owner_recovery, "owner_reclaim_blocked", gate_then_remote_bind)
+    monkeypatch.setattr(
+        kanban_owner_recovery, "owner_reclaim_blocked", gate_then_remote_bind
+    )
     assert not _RECLAIM_PATHS[path](board.conn)
     row = board.state("t_remote")
     assert (row["status"], row["current_run_id"]) == ("running", run)
 
+
 @pytest.mark.platforms("linux", "macos")
-def test_a_timed_out_managed_run_is_booked_timed_out_not_left_for_the_crash_sweep(board):
+def test_a_timed_out_managed_run_is_booked_timed_out_not_left_for_the_crash_sweep(
+    board,
+):
     """Killing a managed run's worker takes its bound interpreter down with it, and the owner
     settles the admission ``unknown``. The under-lock re-check must not read that pause, which
     the timeout itself caused, as an owner still in flight: the run is ``timed_out``, never left
     running for the crash sweep to book ``crashed`` on the next tick."""
-    worker, interpreter = (subprocess.Popen([sys.executable, "-c", "input()"], stdin=subprocess.PIPE)
-                           for _ in range(2))
+    worker, interpreter = (
+        subprocess.Popen([sys.executable, "-c", "input()"], stdin=subprocess.PIPE)
+        for _ in range(2)
+    )
     try:
         run = board.dead_attempt(
-            "t_slow", worker_pid=worker.pid, worker_fingerprint=kbd._process_fingerprint(worker.pid),
-            owner_pid=os.getpid(), owner_birth=process_birth(psutil.Process()), admission=("started", None))
-        board.event("t_slow", run, "worker_bound", {"pid": interpreter.pid,
-                    "started_at": kbd._process_fingerprint(interpreter.pid)}, NOW)
-        board.conn.execute("UPDATE tasks SET max_runtime_seconds = 1 WHERE id = 't_slow'")
+            "t_slow",
+            worker_pid=worker.pid,
+            worker_fingerprint=kbd._process_fingerprint(worker.pid),
+            owner_pid=os.getpid(),
+            owner_birth=process_birth(psutil.Process()),
+            admission=("started", None),
+        )
+        board.event(
+            "t_slow",
+            run,
+            "worker_bound",
+            {
+                "pid": interpreter.pid,
+                "started_at": kbd._process_fingerprint(interpreter.pid),
+            },
+            NOW,
+        )
+        board.conn.execute(
+            "UPDATE tasks SET max_runtime_seconds = 1 WHERE id = 't_slow'"
+        )
         board.conn.commit()
 
         def sigterm_ends_the_attempt(pid, sig):
             os.kill(pid, sig)
             interpreter.kill()  # _watch_submitter: the interpreter exits with its worker
             interpreter.wait()
-            with sqlite3.connect(board.ledger) as store:  # the owner settles the lost turn
+            with sqlite3.connect(
+                board.ledger
+            ) as store:  # the owner settles the lost turn
                 store.execute("UPDATE session_admissions SET status = 'unknown'")
 
-        assert kbd.enforce_max_runtime(board.conn, signal_fn=sigterm_ends_the_attempt) == ["t_slow"]
-        outcome = board.conn.execute("SELECT outcome FROM task_runs WHERE id = ?", (run,)).fetchone()[0]
+        assert kbd.enforce_max_runtime(
+            board.conn, signal_fn=sigterm_ends_the_attempt
+        ) == ["t_slow"]
+        outcome = board.conn.execute(
+            "SELECT outcome FROM task_runs WHERE id = ?", (run,)
+        ).fetchone()[0]
         assert (board.state("t_slow")["status"], outcome) == ("ready", "timed_out")
         assert kbd.detect_crashed_workers(board.conn) == []
     finally:
@@ -314,4 +438,6 @@ def test_an_earlier_runs_live_pid_does_not_hide_the_current_dead_run(board):
     run = board.dead_attempt("t_ghost")
     board.event("t_ghost", run - 1, "spawned", {"pid": os.getpid()}, NOW - 100_000)
     board.conn.commit()
-    assert [d.kind for d in board.diagnostics("t_ghost") if d.kind == "stale_running"] == ["stale_running"]
+    assert [
+        d.kind for d in board.diagnostics("t_ghost") if d.kind == "stale_running"
+    ] == ["stale_running"]

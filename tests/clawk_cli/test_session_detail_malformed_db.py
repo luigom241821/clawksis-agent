@@ -41,7 +41,9 @@ class _MalformedDB:
 def malformed_db(monkeypatch):
     db = _MalformedDB()
     monkeypatch.setattr(
-        _web_server_sessions, "_open_session_db_for_profile", lambda profile, *, read_only: db
+        _web_server_sessions,
+        "_open_session_db_for_profile",
+        lambda profile, *, read_only: db,
     )
     return db
 
@@ -110,7 +112,11 @@ def _mutation_request(monkeypatch):
 
     authority = SimpleNamespace(db=_CorruptAuthorityDB(), profile_id="p", epoch=1)
     principal = object()
-    monkeypatch.setattr(_web_server_sessions, "_session_mutation_context", lambda request, profile: (authority, principal))
+    monkeypatch.setattr(
+        _web_server_sessions,
+        "_session_mutation_context",
+        lambda request, profile: (authority, principal),
+    )
 
     async def _mutate(*_args, **_kwargs):
         raise sqlite3.DatabaseError("database disk image is malformed")
@@ -136,7 +142,9 @@ async def test_rename_endpoint_reports_corruption(monkeypatch):
     request = _mutation_request(monkeypatch)
     with pytest.raises(HTTPException) as excinfo:
         await sessions_router.rename_session_endpoint(
-            "20260830_180820_744f05", SessionRename(title="neu", request_id="r1", expected_revision=1), request
+            "20260830_180820_744f05",
+            SessionRename(title="neu", request_id="r1", expected_revision=1),
+            request,
         )
     assert excinfo.value.status_code == 503
 

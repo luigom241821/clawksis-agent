@@ -10,28 +10,36 @@ from tools.code_kernel import shutdown_all_kernels
 from tools.registry import registry
 
 
-PROBE = '''
+PROBE = """
 from __future__ import annotations
 {imports}
 import json
 print(json.dumps([json_parse('{{"value": 7}}')["value"],
                   shell_quote("two words"), retry(lambda: "ok", delay=0)]))
-'''
+"""
 
 
 @pytest.fixture(autouse=True)
 def local_kernel(tmp_path, monkeypatch):
     monkeypatch.setenv("TERMINAL_ENV", "local")
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    (tmp_path / "config.yaml").write_text("code_execution:\n  mode: strict\n", encoding="utf-8")
+    (tmp_path / "config.yaml").write_text(
+        "code_execution:\n  mode: strict\n", encoding="utf-8"
+    )
     shutdown_all_kernels()
     yield
     shutdown_all_kernels()
 
 
 def run(code, reset=False):
-    return json.loads(registry.dispatch("execute_code", {"code": code, "reset": reset},
-                                        task_id="helper-contract", enabled_tools=[]))
+    return json.loads(
+        registry.dispatch(
+            "execute_code",
+            {"code": code, "reset": reset},
+            task_id="helper-contract",
+            enabled_tools=[],
+        )
+    )
 
 
 def test_schema_helper_instructions_work_across_kernel_lifetimes():
@@ -54,5 +62,6 @@ def test_missing_helper_recovery_instructions_execute():
         assert recovered["status"] == "success", recovered
         assert recovered["output"].strip() == "True"
         skew = code_execution_tool._sandbox_failure_hint(
-            f"ImportError: cannot import name '{helper}' from 'clawk_tools'")
+            f"ImportError: cannot import name '{helper}' from 'clawk_tools'"
+        )
         assert instruction.group() in skew

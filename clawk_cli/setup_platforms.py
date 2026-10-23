@@ -25,6 +25,7 @@ def _profile_name_from_clawk_home(clawk_home) -> str | None:
 def _setup_telegram_auto_result():
     """Attempt automatic Telegram bot creation via managed QR onboarding."""
     from clawk_cli.setup import get_clawk_home
+
     try:
         from clawk_cli.telegram_managed_bot import auto_setup_telegram_bot_result
     except ImportError:
@@ -42,19 +43,28 @@ def declines_reconfigure(label: str, question: str, *env_vars: str) -> bool:
     "already configured? Reconfigure? [y/N]" gate has one wording and one default.
     """
     from clawk_cli.setup import get_env_value, print_info, prompt_yes_no
+
     if not any(get_env_value(v) for v in env_vars):
         return False
     print_info(f"{label}: already configured")
     return not prompt_yes_no(question, False)
 
 
-def save_prompted(env_var: str, question: str, *, password: bool = False, success_msg: str | None = None,
-                   skip_msg: str | None = None, transform=None) -> str:
+def save_prompted(
+    env_var: str,
+    question: str,
+    *,
+    password: bool = False,
+    success_msg: str | None = None,
+    skip_msg: str | None = None,
+    transform=None,
+) -> str:
     """Prompt, persist the (optionally transformed) answer when non-empty, and report either way.
 
     ``success_msg`` may reference ``{value}``. Returns the raw answer ("" when skipped).
     """
     from clawk_cli.setup import print_success, print_warning, prompt, save_env_value
+
     value = prompt(question, password=password)
     if value:
         save_env_value(env_var, transform(value) if transform else value)
@@ -68,13 +78,21 @@ def save_prompted(env_var: str, question: str, *, password: bool = False, succes
 def _save_allowlist(env_var: str, users: str, success_msg: str) -> None:
     """Strip spaces, persist the allowlist, and confirm."""
     from clawk_cli.setup import print_success, save_env_value
+
     save_env_value(env_var, users.replace(" ", ""))
     print_success(success_msg)
 
 
-def _prompt_allowlist(env_var: str, question: str, success_msg: str, open_msg: str, preset: str | None = None) -> str:
+def _prompt_allowlist(
+    env_var: str,
+    question: str,
+    success_msg: str,
+    open_msg: str,
+    preset: str | None = None,
+) -> str:
     """Persist ``preset`` (or the prompted answer) as an allowlist, warning when it stays open."""
     from clawk_cli.setup import print_info, prompt
+
     users = prompt(question) if preset is None else preset
     if users:
         _save_allowlist(env_var, users, success_msg)
@@ -86,6 +104,7 @@ def _prompt_allowlist(env_var: str, question: str, success_msg: str, open_msg: s
 def _save_port(env_var: str, value: str, default: str) -> None:
     """Persist ``value`` as an int port; warn (keeping ``default``) when it isn't one."""
     from clawk_cli.setup import print_success, print_warning, save_env_value
+
     if not value:
         return
     try:
@@ -97,18 +116,22 @@ def _save_port(env_var: str, value: str, default: str) -> None:
 
 def _prompt_telegram_bot_token() -> str | None:
     from clawk_cli.setup import print_error, print_info, prompt
+
     print_info("Create a bot via @BotFather on Telegram")
     while True:
         token = prompt("Telegram bot token", password=True)
         if not token or _is_valid_telegram_bot_token(token):
             return token or None
-        print_error("Invalid token format. Expected: <numeric_id>:<alphanumeric_hash> "
-                    "(e.g., 123456789:ABCdefGHI-jklMNOpqrSTUvwxYZ)")
+        print_error(
+            "Invalid token format. Expected: <numeric_id>:<alphanumeric_hash> "
+            "(e.g., 123456789:ABCdefGHI-jklMNOpqrSTUvwxYZ)"
+        )
 
 
 def _telegram_allowlist_nudge() -> None:
     """Existing config kept as-is: warn when it has no user allowlist."""
     from clawk_cli.setup import get_env_value, print_info, prompt, prompt_yes_no
+
     if get_env_value("TELEGRAM_ALLOWED_USERS"):
         return
     print_info("⚠️  Telegram has no user allowlist - anyone can use your bot!")
@@ -116,18 +139,26 @@ def _telegram_allowlist_nudge() -> None:
         print_info("   To find your Telegram user ID: message @userinfobot")
         allowed_users = prompt("Allowed user IDs (comma-separated)")
         if allowed_users:
-            _save_allowlist("TELEGRAM_ALLOWED_USERS", allowed_users, "Telegram allowlist configured")
+            _save_allowlist(
+                "TELEGRAM_ALLOWED_USERS", allowed_users, "Telegram allowlist configured"
+            )
 
 
 def _obtain_telegram_token():
     """Return (token, setup_result); auto flow first when chosen, else manual paste."""
     from clawk_cli.setup import _info, print_error, prompt
-    _info("How would you like to create your Telegram bot?", None,
-          "  [1] Automatic (recommended)",
-          "      Scan a QR code → confirm in Telegram → done.",
-          "      No token copy-paste needed.", None,
-          "  [2] Manual",
-          "      Create a bot via @BotFather yourself and paste the token.", None)
+
+    _info(
+        "How would you like to create your Telegram bot?",
+        None,
+        "  [1] Automatic (recommended)",
+        "      Scan a QR code → confirm in Telegram → done.",
+        "      No token copy-paste needed.",
+        None,
+        "  [2] Manual",
+        "      Create a bot via @BotFather yourself and paste the token.",
+        None,
+    )
     token = setup_result = None
     if prompt("Choice [1/2]", default="1").strip() == "1":
         setup_result = _setup_telegram_auto_result()
@@ -145,7 +176,16 @@ def _obtain_telegram_token():
 
 def _setup_telegram():
     """Configure Telegram bot credentials and allowlist."""
-    from clawk_cli.setup import _info, print_info, print_header, print_success, prompt, prompt_yes_no, save_env_value
+    from clawk_cli.setup import (
+        _info,
+        print_info,
+        print_header,
+        print_success,
+        prompt,
+        prompt_yes_no,
+        save_env_value,
+    )
+
     print_header("Telegram")
     if declines_reconfigure("Telegram", "Reconfigure Telegram?", "TELEGRAM_BOT_TOKEN"):
         _telegram_allowlist_nudge()
@@ -155,33 +195,56 @@ def _setup_telegram():
         return
     save_env_value("TELEGRAM_BOT_TOKEN", token)
     print_success("Telegram token saved")
-    _info(None, "🔒 Security: Restrict who can use your bot",
-          "   To find your Telegram user ID:",
-          "   1. Message @userinfobot on Telegram",
-          "   2. It will reply with your numeric ID (e.g., 123456789)", None)
+    _info(
+        None,
+        "🔒 Security: Restrict who can use your bot",
+        "   To find your Telegram user ID:",
+        "   1. Message @userinfobot on Telegram",
+        "   2. It will reply with your numeric ID (e.g., 123456789)",
+        None,
+    )
     allowed_users = None
     detected_id = str(getattr(setup_result, "owner_user_id", None) or "")
     if detected_id:
         print_success(f"Detected your Telegram user ID: {detected_id}")
         if prompt_yes_no("Allow this Telegram account to use the bot?", True):
             extra = prompt("Additional allowed user IDs (comma-separated, optional)")
-            allowed_users = ",".join(dict.fromkeys([detected_id, *filter(None, extra.replace(" ", "").split(","))]))
+            allowed_users = ",".join(
+                dict.fromkeys(
+                    [detected_id, *filter(None, extra.replace(" ", "").split(","))]
+                )
+            )
     allowed_users = _prompt_allowlist(
-        "TELEGRAM_ALLOWED_USERS", "Allowed user IDs (comma-separated, leave empty for open access)",
+        "TELEGRAM_ALLOWED_USERS",
+        "Allowed user IDs (comma-separated, leave empty for open access)",
         "Telegram allowlist configured - only listed users can use the bot",
-        "⚠️  No allowlist set - anyone who finds your bot can use it!", preset=allowed_users)
-    _info(None, "📬 Home Channel: where Clawksis delivers cron job results,",
-          "   cross-platform messages, and notifications.",
-          "   For Telegram DMs, this is your user ID (same as above).")
+        "⚠️  No allowlist set - anyone who finds your bot can use it!",
+        preset=allowed_users,
+    )
+    _info(
+        None,
+        "📬 Home Channel: where Clawksis delivers cron job results,",
+        "   cross-platform messages, and notifications.",
+        "   For Telegram DMs, this is your user ID (same as above).",
+    )
     first_user_id = allowed_users.split(",")[0].strip() if allowed_users else ""
     if not first_user_id:
-        print_info("   You can also set this later by typing /set-home in your Telegram chat.")
-        save_prompted("TELEGRAM_HOME_CHANNEL", "Home channel ID (leave empty to set later)")
-    elif prompt_yes_no(f"Use your user ID ({first_user_id}) as the home channel?", True):
+        print_info(
+            "   You can also set this later by typing /set-home in your Telegram chat."
+        )
+        save_prompted(
+            "TELEGRAM_HOME_CHANNEL", "Home channel ID (leave empty to set later)"
+        )
+    elif prompt_yes_no(
+        f"Use your user ID ({first_user_id}) as the home channel?", True
+    ):
         save_env_value("TELEGRAM_HOME_CHANNEL", first_user_id)
         print_success(f"Telegram home channel set to {first_user_id}")
     else:
-        save_prompted("TELEGRAM_HOME_CHANNEL", "Home channel ID (or leave empty to set later with /set-home in Telegram)")
+        save_prompted(
+            "TELEGRAM_HOME_CHANNEL",
+            "Home channel ID (or leave empty to set later with /set-home in Telegram)",
+        )
 
 
 # _setup_slack and _write_slack_manifest_and_instruct moved to the slack plugin:
@@ -192,39 +255,62 @@ def _setup_telegram():
 
 def _setup_webhooks():
     """Configure webhook integration."""
-    from clawk_cli.setup import _info, print_header, print_success, print_warning, prompt, save_env_value
+    from clawk_cli.setup import (
+        _info,
+        print_header,
+        print_success,
+        print_warning,
+        prompt,
+        save_env_value,
+    )
+
     print_header("Webhooks")
     if declines_reconfigure("Webhooks", "Reconfigure webhooks?", "WEBHOOK_ENABLED"):
         return
     print()
     print_warning("⚠  Webhook and SMS platforms require exposing gateway ports to the")
-    print_warning("   internet. For security, run the gateway in a sandboxed environment")
+    print_warning(
+        "   internet. For security, run the gateway in a sandboxed environment"
+    )
     print_warning("   (Docker, VM, etc.) to limit blast radius from prompt injection.")
     print()
-    _info("   Full guide: https://samuelgradientai-sys.github.io/clawksis-agent/user-guide/messaging/webhooks/", None)
+    _info(
+        "   Full guide: https://samuelgradientai-sys.github.io/clawksis-agent/user-guide/messaging/webhooks/",
+        None,
+    )
     _save_port("WEBHOOK_PORT", prompt("Webhook port (default 8644)"), "8644")
-    save_prompted("WEBHOOK_SECRET", "Global HMAC secret (shared across all routes)", password=True,
-                   success_msg="Webhook secret saved",
-                   skip_msg="No secret set — you must configure per-route secrets in config.yaml")
+    save_prompted(
+        "WEBHOOK_SECRET",
+        "Global HMAC secret (shared across all routes)",
+        password=True,
+        success_msg="Webhook secret saved",
+        skip_msg="No secret set — you must configure per-route secrets in config.yaml",
+    )
     save_env_value("WEBHOOK_ENABLED", "true")
     print()
     print_success("Webhooks enabled! Next steps:")
     from clawk_constants import display_clawk_home as _dhh
-    _info(f"   1. Define webhook routes in {_dhh()}/config.yaml",
-          "   2. Point your service (GitHub, GitLab, etc.) at:",
-          "      http://your-server:8644/webhooks/<route-name>", None,
-          "   Route configuration guide:",
-          "   https://samuelgradientai-sys.github.io/clawksis-agent/user-guide/messaging/webhooks/#configuring-routes",
-          None,
-          # Printed twice upstream; kept verbatim for output parity.
-          "   Open config in your editor:  clawk config edit",
-          "   Open config in your editor:  clawk config edit")
+
+    _info(
+        f"   1. Define webhook routes in {_dhh()}/config.yaml",
+        "   2. Point your service (GitHub, GitLab, etc.) at:",
+        "      http://your-server:8644/webhooks/<route-name>",
+        None,
+        "   Route configuration guide:",
+        "   https://samuelgradientai-sys.github.io/clawksis-agent/user-guide/messaging/webhooks/#configuring-routes",
+        None,
+        # Printed twice upstream; kept verbatim for output parity.
+        "   Open config in your editor:  clawk config edit",
+        "   Open config in your editor:  clawk config edit",
+    )
 
 
 # (platform label, credential env var, home-channel env vars — any one satisfies)
 _HOME_CHANNEL_CHECKS = (
-    ("Telegram", "TELEGRAM_BOT_TOKEN", ("TELEGRAM_HOME_CHANNEL",)), ("Discord", "DISCORD_BOT_TOKEN", ("DISCORD_HOME_CHANNEL",)),
-    ("Slack", "SLACK_BOT_TOKEN", ("SLACK_HOME_CHANNEL",)), ("BlueBubbles", "BLUEBUBBLES_SERVER_URL", ("BLUEBUBBLES_HOME_CHANNEL",)),
+    ("Telegram", "TELEGRAM_BOT_TOKEN", ("TELEGRAM_HOME_CHANNEL",)),
+    ("Discord", "DISCORD_BOT_TOKEN", ("DISCORD_HOME_CHANNEL",)),
+    ("Slack", "SLACK_BOT_TOKEN", ("SLACK_HOME_CHANNEL",)),
+    ("BlueBubbles", "BLUEBUBBLES_SERVER_URL", ("BLUEBUBBLES_HOME_CHANNEL",)),
     ("QQBot", "QQ_APP_ID", ("QQBOT_HOME_CHANNEL", "QQ_HOME_CHANNEL")),
 )
 
@@ -238,17 +324,25 @@ def _is_progress(status: str) -> bool:
 def _warn_missing_home_channels() -> None:
     """Platforms with a token but no home channel."""
     from clawk_cli.setup import get_env_value, _info, print_warning
+
     missing_home = [
-        plat for plat, token_var, home_vars in _HOME_CHANNEL_CHECKS
-        if get_env_value(token_var) and not any(get_env_value(v) for v in home_vars)]
+        plat
+        for plat, token_var, home_vars in _HOME_CHANNEL_CHECKS
+        if get_env_value(token_var) and not any(get_env_value(v) for v in home_vars)
+    ]
     if not missing_home:
         return
     print()
     print_warning(f"No home channel set for: {', '.join(missing_home)}")
-    _info("   Without a home channel, cron jobs and cross-platform",
-          "   messages can't be delivered to those platforms.",
-          "   Set one later with /set-home in your chat, or:",
-          *(f"     clawk config set {plat.upper()}_HOME_CHANNEL <channel_id>" for plat in missing_home))
+    _info(
+        "   Without a home channel, cron jobs and cross-platform",
+        "   messages can't be delivered to those platforms.",
+        "   Set one later with /set-home in your chat, or:",
+        *(
+            f"     clawk config set {plat.upper()}_HOME_CHANNEL <channel_id>"
+            for plat in missing_home
+        ),
+    )
 
 
 def _restart_running_gateway(any_messaging: bool, supports_systemd: bool) -> None:
@@ -256,14 +350,22 @@ def _restart_running_gateway(any_messaging: bool, supports_systemd: bool) -> Non
     a restart interrupts any active session, so it stays behind a prompt."""
     from clawk_cli.setup import print_error, prompt_yes_no
     from clawk_cli.gateway import (
-        systemd_restart, launchd_restart, UserSystemdUnavailableError, SystemScopeRequiresRootError,
-        _system_scope_wizard_would_need_root, _print_system_scope_remediation,
+        systemd_restart,
+        launchd_restart,
+        UserSystemdUnavailableError,
+        SystemScopeRequiresRootError,
+        _system_scope_wizard_would_need_root,
+        _print_system_scope_remediation,
     )
     import platform as _platform
+
     if supports_systemd and _system_scope_wizard_would_need_root():
         _print_system_scope_remediation("restart")
         return
-    if not (any_messaging and prompt_yes_no("  Restart the gateway to pick up changes?", True)):
+    if not (
+        any_messaging
+        and prompt_yes_no("  Restart the gateway to pick up changes?", True)
+    ):
         return
     try:
         if supports_systemd:
@@ -272,6 +374,7 @@ def _restart_running_gateway(any_messaging: bool, supports_systemd: bool) -> Non
             launchd_restart()
         elif _platform.system() == "Windows":
             from clawk_cli import gateway_windows
+
             gateway_windows.restart()
     except UserSystemdUnavailableError as e:
         print_error("  Restart failed — user systemd not reachable:")
@@ -288,20 +391,35 @@ def _restart_running_gateway(any_messaging: bool, supports_systemd: bool) -> Non
 
 def setup_gateway(config: dict):
     """Configure messaging platform integrations."""
-    from clawk_cli.setup import _info, print_header, print_info, print_success, prompt_checklist
+    from clawk_cli.setup import (
+        _info,
+        print_header,
+        print_info,
+        print_success,
+        prompt_checklist,
+    )
     from clawk_cli.gateway import _all_platforms, _platform_status, _configure_platform
+
     print_header("Messaging Platforms")
-    _info("Connect to messaging platforms to chat with Clawksis from anywhere.",
-          "Toggle with Space, confirm with Enter.", None)
+    _info(
+        "Connect to messaging platforms to chat with Clawksis from anywhere.",
+        "Toggle with Space, confirm with Enter.",
+        None,
+    )
     platforms = _all_platforms()
 
     # Build checklist, pre-selecting already-configured platforms.
     statuses = [_platform_status(plat) for plat in platforms]
-    items = [f"{plat['emoji']} {plat['label']}  ({status})" for plat, status in zip(platforms, statuses)]
+    items = [
+        f"{plat['emoji']} {plat['label']}  ({status})"
+        for plat, status in zip(platforms, statuses)
+    ]
     pre_selected = [i for i, status in enumerate(statuses) if status == "configured"]
     selected = prompt_checklist("Select platforms to configure:", items, pre_selected)
     if not selected:
-        print_info("No platforms selected. Run 'clawk setup gateway' later to configure.")
+        print_info(
+            "No platforms selected. Run 'clawk setup gateway' later to configure."
+        )
     for idx in selected or ():
         _configure_platform(platforms[idx])
 
@@ -317,6 +435,7 @@ def setup_gateway(config: dict):
     # Offer optional persistence even with no messaging platforms: cron can run alone.
     from clawk_cli.gateway import _is_service_running, supports_systemd_services
     from clawk_cli.gateway_setup_service import ensure_gateway_service
+
     supports_systemd = supports_systemd_services()
     print()
     if _is_service_running():

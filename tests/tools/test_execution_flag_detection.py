@@ -24,12 +24,12 @@ def test_real_read_tool_binaries_confirm_option_ownership(
     if shutil.which(argv[0]) is None:
         pytest.skip(f"{argv[0]} is not installed")
 
-    completed = subprocess.run(argv, input=stdin, text=True, capture_output=True, check=False)
+    completed = subprocess.run(
+        argv, input=stdin, text=True, capture_output=True, check=False
+    )
 
     assert completed.returncode == expected_returncode
     assert completed.stdout == expected_output
-
-
 
 
 @pytest.mark.parametrize(
@@ -103,10 +103,22 @@ def test_ag_pager_less_is_an_executable_option_and_requires_approval():
     ("command", "description"),
     [
         ("rg --pre -payload-marker needle", "arbitrary program execution via rg --pre"),
-        ("rg --hostname-bin=-payload-marker needle", "arbitrary program execution via rg --hostname-bin"),
-        ("sort --compress-program -payload-marker names", "arbitrary program execution via sort --compress-program"),
-        ("ag --pager=-payload-marker needle", "arbitrary program execution via ag --pager"),
-        ("man --pager -payload-marker ls", "arbitrary program execution via man --pager"),
+        (
+            "rg --hostname-bin=-payload-marker needle",
+            "arbitrary program execution via rg --hostname-bin",
+        ),
+        (
+            "sort --compress-program -payload-marker names",
+            "arbitrary program execution via sort --compress-program",
+        ),
+        (
+            "ag --pager=-payload-marker needle",
+            "arbitrary program execution via ag --pager",
+        ),
+        (
+            "man --pager -payload-marker ls",
+            "arbitrary program execution via man --pager",
+        ),
         ("man -P -payload-marker ls", "arbitrary program execution via man -P"),
         ("man -H-payload-marker ls", "arbitrary program execution via man -H"),
     ],
@@ -226,8 +238,6 @@ def _time_benign_segments(count):
     started = time.perf_counter()
     result = detect_dangerous_command(command)
     return time.perf_counter() - started, result
-
-
 
 
 def test_max_accepted_separator_free_input_is_fast():

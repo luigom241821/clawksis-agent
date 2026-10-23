@@ -13,7 +13,12 @@ from __future__ import annotations
 import re
 from typing import Tuple
 
-__all__ = ["THINK_CLOSE_TAGS", "THINK_OPEN_TAGS", "THINK_TAG_NAMES", "StreamingThinkScrubber"]
+__all__ = [
+    "THINK_CLOSE_TAGS",
+    "THINK_OPEN_TAGS",
+    "THINK_TAG_NAMES",
+    "StreamingThinkScrubber",
+]
 
 # The one list of model reasoning tag names. Every surface that hides reasoning (this scrubber,
 # the CLI stream filter, the gateway stream filter, the final-response regex stripper) binds to
@@ -21,11 +26,22 @@ __all__ = ["THINK_CLOSE_TAGS", "THINK_OPEN_TAGS", "THINK_TAG_NAMES", "StreamingT
 # literal tags are lowercase. The CJK names cover models (MiniMax-M3) that emit Chinese reasoning
 # tags: 思考 (think), 反思 (reflect), 推理 (reason), 推敲 (deliberate).
 THINK_TAG_NAMES: tuple[str, ...] = (
-    "think", "thinking", "reasoning", "thought", "REASONING_SCRATCHPAD",
-    "思考", "反思", "推理", "推敲",
+    "think",
+    "thinking",
+    "reasoning",
+    "thought",
+    "REASONING_SCRATCHPAD",
+    "思考",
+    "反思",
+    "推理",
+    "推敲",
 )
-THINK_OPEN_TAGS: tuple[str, ...] = tuple(f"<{name.lower()}>" for name in THINK_TAG_NAMES)
-THINK_CLOSE_TAGS: tuple[str, ...] = tuple(f"</{name.lower()}>" for name in THINK_TAG_NAMES)
+THINK_OPEN_TAGS: tuple[str, ...] = tuple(
+    f"<{name.lower()}>" for name in THINK_TAG_NAMES
+)
+THINK_CLOSE_TAGS: tuple[str, ...] = tuple(
+    f"</{name.lower()}>" for name in THINK_TAG_NAMES
+)
 
 
 class StreamingThinkScrubber:
@@ -43,7 +59,8 @@ class StreamingThinkScrubber:
     _MAX_TAG_LEN: int = max(len(tag) for tag in _ALL_TAGS)
     # Orphan close tag plus trailing whitespace (matches _strip_think_blocks case 3).
     _ORPHAN_CLOSE_RE = re.compile(
-        "(?:" + "|".join(re.escape(t) for t in _CLOSE_TAGS) + r")[ \t\n\r]*", re.IGNORECASE
+        "(?:" + "|".join(re.escape(t) for t in _CLOSE_TAGS) + r")[ \t\n\r]*",
+        re.IGNORECASE,
     )
 
     def __init__(self) -> None:
@@ -82,7 +99,7 @@ class StreamingThinkScrubber:
                     hidden.append(self._hold_partial(buf, self._CLOSE_TAGS))
                     break
                 hidden.append(buf[:close_idx])
-                buf = buf[close_idx + close_len:]
+                buf = buf[close_idx + close_len :]
                 self._in_block = False
                 continue
 
@@ -92,15 +109,17 @@ class StreamingThinkScrubber:
             pair = self._find_earliest_closed_pair(buf)
             open_idx, open_len = self._find_open_at_boundary(buf, out)
             if pair is not None and (open_idx == -1 or pair[0] <= open_idx):
-                self._emit(out, buf[:pair[0]])
+                self._emit(out, buf[: pair[0]])
                 # Pair tags are exact ``<name>``/``</name>``: inner text sits between them.
-                hidden.append(buf[buf.index(">", pair[0]) + 1:buf.rindex("<", pair[0], pair[1])])
-                buf = buf[pair[1]:]
+                hidden.append(
+                    buf[buf.index(">", pair[0]) + 1 : buf.rindex("<", pair[0], pair[1])]
+                )
+                buf = buf[pair[1] :]
                 continue
             if open_idx != -1:
                 self._emit(out, buf[:open_idx])
                 self._in_block = True
-                buf = buf[open_idx + open_len:]
+                buf = buf[open_idx + open_len :]
                 continue
 
             # No resolvable tag: hold back any partial-tag prefix at the tail
@@ -143,12 +162,18 @@ class StreamingThinkScrubber:
         pairs = []
         for open_tag, close_tag in zip(self._OPEN_TAGS, self._CLOSE_TAGS):
             open_idx = buf_lower.find(open_tag)
-            close_idx = buf_lower.find(close_tag, open_idx + len(open_tag)) if open_idx != -1 else -1
+            close_idx = (
+                buf_lower.find(close_tag, open_idx + len(open_tag))
+                if open_idx != -1
+                else -1
+            )
             if close_idx != -1:
                 pairs.append((open_idx, close_idx + len(close_tag)))
         return min(pairs) if pairs else None
 
-    def _find_open_at_boundary(self, buf: str, already_emitted: list[str]) -> tuple[int, int]:
+    def _find_open_at_boundary(
+        self, buf: str, already_emitted: list[str]
+    ) -> tuple[int, int]:
         """Return the earliest block-boundary open-tag (idx, len), or (-1, 0)."""
         buf_lower = buf.lower()
         hits = []
@@ -160,16 +185,24 @@ class StreamingThinkScrubber:
                 hits.append((idx, len(tag)))
         return min(hits) if hits else (-1, 0)
 
-    def _is_block_boundary(self, buf: str, idx: int, already_emitted: list[str]) -> bool:
+    def _is_block_boundary(
+        self, buf: str, idx: int, already_emitted: list[str]
+    ) -> bool:
         """True iff *idx* is a block boundary: position 0 after a newline-terminated (or no) prior emission,
         or any position whose preceding text on the current line is whitespace-only (when no newline
         precedes it in *buf*, the prior emission must also have ended with a newline)."""
-        prior_newline = already_emitted[-1].endswith("\n") if already_emitted else self._last_emitted_ended_newline
+        prior_newline = (
+            already_emitted[-1].endswith("\n")
+            if already_emitted
+            else self._last_emitted_ended_newline
+        )
         if idx == 0:
             return prior_newline
         preceding = buf[:idx]
         last_nl = preceding.rfind("\n")
-        return (prior_newline if last_nl == -1 else True) and preceding[last_nl + 1:].strip() == ""
+        return (prior_newline if last_nl == -1 else True) and preceding[
+            last_nl + 1 :
+        ].strip() == ""
 
     @classmethod
     def _max_partial_suffix(cls, buf: str, tags: tuple[str, ...]) -> int:

@@ -92,7 +92,9 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
     # SQLite cannot widen a CHECK in place. Preserve all old rows atomically,
     # including claimed sends, while admitting a distinct never-sent disposition.
     for table in ("deliveries", "delivery_tombstones"):
-        row = conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone()
+        row = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (table,)
+        ).fetchone()
         if row and "'suppressed'" not in row[0]:
             conn.execute("SAVEPOINT notification_disposition")
             try:
@@ -131,7 +133,9 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
            )"""
     )
     add_column_if_missing(
-        conn, "deliveries", "for_failure",
+        conn,
+        "deliveries",
+        "for_failure",
         "for_failure INTEGER NOT NULL DEFAULT 0",
     )
 
@@ -143,7 +147,12 @@ def _connect() -> sqlite3.Connection:
     from clawk_cli.sqlite_util import open_db
 
     path = _path()
-    conn = open_db(path, db_label="cron/deliveries.db", synchronous_full=True, initialize=_initialize_schema)
+    conn = open_db(
+        path,
+        db_label="cron/deliveries.db",
+        synchronous_full=True,
+        initialize=_initialize_schema,
+    )
     try:
         path.chmod(0o600)
     except OSError:
@@ -254,7 +263,9 @@ def claim_next() -> Optional[dict]:
     return result
 
 
-def _finish(execution_id: str, *, error: Optional[str], suppressed: bool = False) -> bool:
+def _finish(
+    execution_id: str, *, error: Optional[str], suppressed: bool = False
+) -> bool:
     status = "failed" if error else "suppressed" if suppressed else "delivered"
     safe_error = (
         redact_sensitive_text(str(error), force=True, redact_url_credentials=True)
@@ -316,7 +327,9 @@ def recover_abandoned() -> int:
             )
             if cur.rowcount:
                 # Read the job id now: pruning below redacts a terminal row's job_json.
-                fenced.append((json.loads(row["job_json"] or "{}").get("id"), row["execution_id"]))
+                fenced.append(
+                    (json.loads(row["job_json"] or "{}").get("id"), row["execution_id"])
+                )
         _prune_terminal_unlocked(conn)
     from cron.delivery_outcome import settle_quietly
 
@@ -325,9 +338,7 @@ def recover_abandoned() -> int:
     return len(fenced)
 
 
-def drain(
-    send: Callable[[dict, str, bool], Optional[str]], *, limit: int = 20
-) -> int:
+def drain(send: Callable[[dict, str, bool], Optional[str]], *, limit: int = 20) -> int:
     """Deliver pending rows through *send*, terminalizing every claimed row."""
     recover_abandoned()
     processed = 0
@@ -339,13 +350,14 @@ def drain(
             _ACTIVE_DELIVERIES.add(row["execution_id"])
         try:
             try:
-                error = send(
-                    row["job"], row["content"], bool(row["for_failure"])
-                )
+                error = send(row["job"], row["content"], bool(row["for_failure"]))
             except BaseException as exc:
                 error = f"{type(exc).__name__}: {exc}"
-            if _finish(row["execution_id"], error=error,
-                       suppressed=bool(row["job"].get("_notification_all_targets_suppressed"))):
+            if _finish(
+                row["execution_id"],
+                error=error,
+                suppressed=bool(row["job"].get("_notification_all_targets_suppressed")),
+            ):
                 from cron.delivery_outcome import settle_quietly
 
                 settle_quietly(row["job"].get("id"), row["execution_id"])
@@ -411,8 +423,10 @@ def enqueue_and_wait(
     """Queue delivery and wait for a gateway's terminal at-most-once outcome."""
     queued = enqueue(execution_id, job, content, for_failure=for_failure)
     if queued["status"] in _TERMINAL:
-        return None if queued["status"] in {"delivered", "suppressed"} else str(
-            queued.get("error") or f"delivery {queued['status']}"
+        return (
+            None
+            if queued["status"] in {"delivered", "suppressed"}
+            else str(queued.get("error") or f"delivery {queued['status']}")
         )
     wait_timeout = (
         DEFAULT_DELIVERY_WAIT_TIMEOUT_SECONDS if timeout is None else max(0.0, timeout)
@@ -421,8 +435,10 @@ def enqueue_and_wait(
     while time.monotonic() < deadline:
         row = get_status(execution_id)
         if row and row["status"] in _TERMINAL:
-            return None if row["status"] in {"delivered", "suppressed"} else str(
-                row.get("error") or f"delivery {row['status']}"
+            return (
+                None
+                if row["status"] in {"delivered", "suppressed"}
+                else str(row.get("error") or f"delivery {row['status']}")
             )
         time.sleep(1.0)
     return _terminalize_wait_timeout(execution_id) or None

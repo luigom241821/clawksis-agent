@@ -15,7 +15,9 @@ from clawk_cli.config import redact_key
 from clawk_cli.web_models import MCPServerCreate
 
 
-def _normalize_mcp_server_create(body: MCPServerCreate) -> tuple[str, dict[str, Any], Optional[str]]:
+def _normalize_mcp_server_create(
+    body: MCPServerCreate,
+) -> tuple[str, dict[str, Any], Optional[str]]:
     """Validate a Dashboard MCP create request and build its safe config.
 
     The returned config never contains the Bearer token; callers persist it via
@@ -32,7 +34,9 @@ def _normalize_mcp_server_create(body: MCPServerCreate) -> tuple[str, dict[str, 
     url = (body.url or "").strip()
     command = (body.command or "").strip()
     auth = (body.auth or "none").strip().lower()
-    bearer_token = body.bearer_token.get_secret_value() if body.bearer_token is not None else None
+    bearer_token = (
+        body.bearer_token.get_secret_value() if body.bearer_token is not None else None
+    )
 
     if bool(url) == bool(command):
         raise ValueError("Provide exactly one of URL (HTTP/SSE) or command (stdio)")
@@ -44,7 +48,9 @@ def _normalize_mcp_server_create(body: MCPServerCreate) -> tuple[str, dict[str, 
         if body.args:
             raise ValueError("Arguments are only supported for stdio MCP servers")
         if body.env:
-            raise ValueError("Environment variables are only supported for stdio MCP servers")
+            raise ValueError(
+                "Environment variables are only supported for stdio MCP servers"
+            )
         if auth == "header":
             normalized = _strip_bearer_prefix(bearer_token) if bearer_token else ""
             if not normalized or normalized.lower() == "bearer":
@@ -58,7 +64,9 @@ def _normalize_mcp_server_create(body: MCPServerCreate) -> tuple[str, dict[str, 
             server_config["auth"] = "oauth"
     else:
         if auth != "none" or body.bearer_token is not None:
-            raise ValueError("HTTP authentication is not supported for stdio MCP servers")
+            raise ValueError(
+                "HTTP authentication is not supported for stdio MCP servers"
+            )
         server_config["command"] = command
         if body.args:
             server_config["args"] = list(body.args)
@@ -115,13 +123,21 @@ def _redact_mcp_env(env: dict[str, Any]) -> dict[str, str]:
     return out
 
 
-def _mcp_server_summary(name: str, cfg: dict[str, Any], plugin: str | None = None) -> dict[str, Any]:
+def _mcp_server_summary(
+    name: str, cfg: dict[str, Any], plugin: str | None = None
+) -> dict[str, Any]:
     from tools.mcp_tool_common import mcp_server_enabled
 
-    transport = "http" if cfg.get("url") else ("stdio" if cfg.get("command") else "unknown")
+    transport = (
+        "http" if cfg.get("url") else ("stdio" if cfg.get("command") else "unknown")
+    )
     auth = cfg.get("auth")
     headers = cfg.get("headers") or {}
-    if not auth and isinstance(headers, dict) and any(str(key).lower() == "authorization" for key in headers):
+    if (
+        not auth
+        and isinstance(headers, dict)
+        and any(str(key).lower() == "authorization" for key in headers)
+    ):
         auth = "header"
     return {
         "name": name,
@@ -152,19 +168,34 @@ def _mcp_oauth_transaction(flow) -> threading.Lock:
 
 def _run_dashboard_mcp_oauth(flow, cfg: dict) -> None:
     """Run the normal MCP probe with dashboard redirect/callback handlers."""
-    from clawk_cli.mcp_config import _oauth_tokens_present, _probe_single_server, _save_mcp_server
+    from clawk_cli.mcp_config import (
+        _oauth_tokens_present,
+        _probe_single_server,
+        _save_mcp_server,
+    )
+
     try:
-        from agent.secret_scope import build_profile_secret_scope, reset_secret_scope, set_secret_scope
+        from agent.secret_scope import (
+            build_profile_secret_scope,
+            reset_secret_scope,
+            set_secret_scope,
+        )
         from clawk_constants import reset_clawk_home_override, set_clawk_home_override
         from tools.mcp_dashboard_oauth import dashboard_oauth_flow
-        from tools.mcp_oauth import ClawksisTokenStorage, force_interactive_oauth, login_connect_timeout
+        from tools.mcp_oauth import (
+            ClawksisTokenStorage,
+            force_interactive_oauth,
+            login_connect_timeout,
+        )
         from tools.mcp_oauth_manager import get_manager
 
         home_token = secret_token = None
         try:
             home_token = set_clawk_home_override(flow.clawk_home)
             secret_token = set_secret_scope(
-                build_profile_secret_scope(Path(flow.clawk_home)), profile_home=flow.clawk_home)
+                build_profile_secret_scope(Path(flow.clawk_home)),
+                profile_home=flow.clawk_home,
+            )
             transaction = _mcp_oauth_transaction(flow)
             with transaction, force_interactive_oauth(), dashboard_oauth_flow(flow):
                 manager = get_manager()
@@ -172,9 +203,13 @@ def _run_dashboard_mcp_oauth(flow, cfg: dict) -> None:
                 backup = storage.snapshot()
                 previous_entry = None
                 try:
-                    previous_entry = manager.remove(flow.server_name, clawk_home=flow.clawk_home)
+                    previous_entry = manager.remove(
+                        flow.server_name, clawk_home=flow.clawk_home
+                    )
                     tools = _probe_single_server(
-                        flow.server_name, cfg, connect_timeout=login_connect_timeout(cfg)
+                        flow.server_name,
+                        cfg,
+                        connect_timeout=login_connect_timeout(cfg),
                     )
                     if not _oauth_tokens_present(flow.server_name):
                         raise RuntimeError(
@@ -190,7 +225,9 @@ def _run_dashboard_mcp_oauth(flow, cfg: dict) -> None:
                         reconnect_mcp_server(flow.server_name)
                 except Exception:
                     storage.restore(backup, only_if_absent=True)
-                    manager.restore_entry(flow.server_name, previous_entry, clawk_home=flow.clawk_home)
+                    manager.restore_entry(
+                        flow.server_name, previous_entry, clawk_home=flow.clawk_home
+                    )
                     raise
         finally:
             if secret_token is not None:
@@ -207,7 +244,9 @@ def _run_dashboard_mcp_oauth(flow, cfg: dict) -> None:
             from tools.mcp_oauth import humanize_oauth_registration_error
 
             humanized = humanize_oauth_registration_error(
-                flow.server_name, exc, server_url=cfg.get("url") if isinstance(cfg, dict) else None
+                flow.server_name,
+                exc,
+                server_url=cfg.get("url") if isinstance(cfg, dict) else None,
             )
             if humanized:
                 msg = humanized

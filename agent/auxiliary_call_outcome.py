@@ -29,12 +29,19 @@ class _EmbeddedProviderError(Exception):
 
 def embedded_provider_error(response: Any) -> dict[str, Any] | None:
     """The ``error`` object of an HTTP-200 body that carried no choices, else None."""
-    error = response.get("error") if isinstance(response, dict) else getattr(response, "error", None)
+    error = (
+        response.get("error")
+        if isinstance(response, dict)
+        else getattr(response, "error", None)
+    )
     if isinstance(error, dict):
         return error or None
     if error is None or not (hasattr(error, "message") or hasattr(error, "code")):
         return None
-    fields = {"message": getattr(error, "message", None), "code": getattr(error, "code", None)}
+    fields = {
+        "message": getattr(error, "message", None),
+        "code": getattr(error, "code", None),
+    }
     return {k: v for k, v in fields.items() if v is not None} or None
 
 
@@ -53,7 +60,9 @@ def error_class(error: BaseException, *, provider: str = "", model: str = "") ->
         from agent.error_classifier import classify_api_error
 
         embedded = getattr(error, PROVIDER_ERROR_ATTR, None)
-        target = _EmbeddedProviderError(embedded) if isinstance(embedded, dict) else error
+        target = (
+            _EmbeddedProviderError(embedded) if isinstance(embedded, dict) else error
+        )
         return classify_api_error(target, provider=provider, model=model).reason.value
     except Exception:
         logger.debug("Auxiliary error classification failed", exc_info=True)

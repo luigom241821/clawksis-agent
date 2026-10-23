@@ -25,7 +25,11 @@ printf '%s\n%s\n%s\n' "$target" "$UV_PIN_URL" "$UV_PIN_SHA256"
 """
     result = subprocess.run(
         ["bash", "-c", script, "_", str(ROOT / "scripts" / "install.sh")],
-        check=True, capture_output=True, text=True,
+        check=True,
+        capture_output=True,
+        text=True,
     )
-    row = json.loads((ROOT / "pm" / "lock.json").read_text())["packages"]["uv"]["artifacts"]["linux-x64-musl"]
+    row = json.loads((ROOT / "pm" / "lock.json").read_text())["packages"]["uv"][
+        "artifacts"
+    ]["linux-x64-musl"]
     assert result.stdout.splitlines() == ["linux-x64-musl", row["url"], row["sha256"]]

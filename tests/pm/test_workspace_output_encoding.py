@@ -49,8 +49,11 @@ def test_uv_failure_retains_utf8_build_diagnostic(
     from pm.environment import PythonEnvironment
 
     environment = PythonEnvironment(
-        uv=Path(sys.executable), python=Path(sys.executable),
-        destination=tmp_path / "venv", cache=tmp_path / "cache", env=dict(os.environ),
+        uv=Path(sys.executable),
+        python=Path(sys.executable),
+        destination=tmp_path / "venv",
+        cache=tmp_path / "cache",
+        env=dict(os.environ),
     )
     completed = []
 
@@ -65,10 +68,18 @@ def test_uv_failure_retains_utf8_build_diagnostic(
 
     monkeypatch.setattr("pm.environment.subprocess.run", run_uv)
     with pytest.raises(InstallError) as excinfo:
-        ws.lock_and_sync([], [], root=tmp_path / "workspace", source=core,
-                         seed_lock=None, environment=environment)
+        ws.lock_and_sync(
+            [],
+            [],
+            root=tmp_path / "workspace",
+            source=core,
+            seed_lock=None,
+            environment=environment,
+        )
 
-    assert type(excinfo.value) is InstallError  # A build error is not a resolver conflict.
+    assert (
+        type(excinfo.value) is InstallError
+    )  # A build error is not a resolver conflict.
     assert excinfo.value.cause == f"uv {stage} exited 17: {expected}"
     assert getattr(completed[-1], stream) == expected + "\n"
 

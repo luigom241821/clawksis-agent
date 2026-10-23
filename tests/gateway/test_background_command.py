@@ -12,8 +12,10 @@ from gateway.config import Platform
 from gateway.platforms.event import MessageEvent
 from gateway.session import SessionSource
 
-def _make_event(text="/bg", platform=Platform.TELEGRAM,
-                user_id="12345", chat_id="67890"):
+
+def _make_event(
+    text="/bg", platform=Platform.TELEGRAM, user_id="12345", chat_id="67890"
+):
     """Build a MessageEvent for testing."""
     source = SessionSource(
         platform=platform,
@@ -23,9 +25,11 @@ def _make_event(text="/bg", platform=Platform.TELEGRAM,
     )
     return MessageEvent(text=text, source=source)
 
+
 def _make_runner():
     """Create a bare GatewayRunner with minimal mocks."""
     from gateway.run import GatewayRunner
+
     runner = object.__new__(GatewayRunner)
     runner.adapters = {}
     runner._voice_mode = {}
@@ -44,9 +48,11 @@ def _make_runner():
     runner.session_store = mock_store
 
     from gateway.hooks import HookRegistry
+
     runner.hooks = HookRegistry()
 
     return runner
+
 
 # ---------------------------------------------------------------------------
 # _handle_background_command
@@ -55,6 +61,7 @@ def _make_runner():
 # ---------------------------------------------------------------------------
 # _run_background_task
 # ---------------------------------------------------------------------------
+
 
 class TestRunBackgroundTask:
     """Tests for GatewayRunner._run_background_task (the actual execution)."""
@@ -65,8 +72,12 @@ class TestRunBackgroundTask:
         runner = _make_runner()
         mock_adapter = AsyncMock()
         mock_adapter.send = AsyncMock()
-        mock_adapter.extract_media = MagicMock(return_value=([], "Hello from background!"))
-        mock_adapter.extract_images = MagicMock(return_value=([], "Hello from background!"))
+        mock_adapter.extract_media = MagicMock(
+            return_value=([], "Hello from background!")
+        )
+        mock_adapter.extract_images = MagicMock(
+            return_value=([], "Hello from background!")
+        )
         runner.adapters[Platform.TELEGRAM] = mock_adapter
 
         source = SessionSource(
@@ -86,9 +97,14 @@ class TestRunBackgroundTask:
                 "max_file_size_mb": 3,
             }
         }
-        with patch("gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "test-key"}), \
-             patch("gateway.run._load_gateway_config", return_value=checkpoint_config), \
-             patch("run_agent.AIAgent") as MockAgent:
+        with (
+            patch(
+                "gateway.run._resolve_runtime_agent_kwargs",
+                return_value={"api_key": "test-key"},
+            ),
+            patch("gateway.run._load_gateway_config", return_value=checkpoint_config),
+            patch("run_agent.AIAgent") as MockAgent,
+        ):
             mock_agent_instance = MagicMock()
             mock_agent_instance.shutdown_memory_provider = MagicMock()
             mock_agent_instance.close = MagicMock()
@@ -100,7 +116,9 @@ class TestRunBackgroundTask:
         # Should have sent the result
         mock_adapter.send.assert_called_once()
         call_args = mock_adapter.send.call_args
-        content = call_args[1].get("content", call_args[0][1] if len(call_args[0]) > 1 else "")
+        content = call_args[1].get(
+            "content", call_args[0][1] if len(call_args[0]) > 1 else ""
+        )
         assert "Hello from background!" in content
         agent_kwargs = MockAgent.call_args.kwargs
         assert agent_kwargs["checkpoints_enabled"] is True
@@ -109,6 +127,7 @@ class TestRunBackgroundTask:
         assert agent_kwargs["checkpoint_max_file_size_mb"] == 3
         mock_agent_instance.shutdown_memory_provider.assert_called_once()
         mock_agent_instance.close.assert_called_once()
+
 
 # ---------------------------------------------------------------------------
 # /bg in help and known_commands
@@ -121,6 +140,7 @@ class TestRunBackgroundTask:
 # ---------------------------------------------------------------------------
 # _handle_btw_command
 # ---------------------------------------------------------------------------
+
 
 class TestHandleBtwCommand:
     """Tests for GatewayRunner._handle_btw_command (context-aware side question)."""
@@ -137,8 +157,15 @@ class TestHandleBtwCommand:
         store._store = runner.session_store
         runner._async_session_store = store
         runner._resolve_session_agent_runtime = MagicMock(
-            return_value=("test-model", {"api_key": "k", "provider": "p",
-                                         "base_url": "u", "api_mode": "chat_completions"})
+            return_value=(
+                "test-model",
+                {
+                    "api_key": "k",
+                    "provider": "p",
+                    "base_url": "u",
+                    "api_mode": "chat_completions",
+                },
+            )
         )
         runner._reply_anchor_for_event = MagicMock(return_value=None)
         runner._thread_metadata_for_source = MagicMock(return_value=None)
@@ -147,8 +174,9 @@ class TestHandleBtwCommand:
 
         event = _make_event(text="/btw which file was that?")
 
-        with patch("agent.side_question.answer_side_question",
-                   return_value="it was foo.py") as mock_answer:
+        with patch(
+            "agent.side_question.answer_side_question", return_value="it was foo.py"
+        ) as mock_answer:
             result = await runner._handle_btw_command(event)
             # Ack returned immediately, worker task registered.
             assert "which file was that?" in result

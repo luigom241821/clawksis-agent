@@ -33,8 +33,16 @@ from tui_gateway.contracts.connectors import (
     ConnectorToolFacet,
     ConnectorToolsSource,
 )
-from tui_gateway.contracts.connectors_operation import ConnectionSettleReason, ConnectionTargetState
-from tui_gateway.contracts.registry import CANONICAL_METHODS, EVENTS, METHODS, SERVER_REQUESTS
+from tui_gateway.contracts.connectors_operation import (
+    ConnectionSettleReason,
+    ConnectionTargetState,
+)
+from tui_gateway.contracts.registry import (
+    CANONICAL_METHODS,
+    EVENTS,
+    METHODS,
+    SERVER_REQUESTS,
+)
 from tools.connectors.contract import SettleReason, TargetState
 from tools.connectors.gateway.wire import ConnectionStatus
 from tools.connectors.portal.tools_cache import ToolsRead
@@ -45,9 +53,24 @@ OPENRPC_OUT = ROOT / "apps" / "shared" / "src" / "gateway-contract.openrpc.json"
 _ENUM_PAIRS = (
     ("ConnectionTargetState", ConnectionTargetState, "TargetState", TargetState),
     ("ConnectionSettleReason", ConnectionSettleReason, "SettleReason", SettleReason),
-    ("ConnectorAccountStatus", ConnectorAccountStatus, "ConnectionStatus", ConnectionStatus),
-    ("ConnectorToolFacet", ConnectorToolFacet, "ConnectorTool.facet", ConnectorTool.model_fields["facet"].annotation),
-    ("ConnectorToolsSource", ConnectorToolsSource, "ToolsRead.source", get_type_hints(ToolsRead)["source"]),
+    (
+        "ConnectorAccountStatus",
+        ConnectorAccountStatus,
+        "ConnectionStatus",
+        ConnectionStatus,
+    ),
+    (
+        "ConnectorToolFacet",
+        ConnectorToolFacet,
+        "ConnectorTool.facet",
+        ConnectorTool.model_fields["facet"].annotation,
+    ),
+    (
+        "ConnectorToolsSource",
+        ConnectorToolsSource,
+        "ToolsRead.source",
+        get_type_hints(ToolsRead)["source"],
+    ),
 )
 
 HEADER = (
@@ -69,7 +92,9 @@ def _schema_for(models: list[type]) -> tuple[dict[str, dict], list[dict]]:
     from pydantic.json_schema import models_json_schema
 
     defs, top = models_json_schema(
-        [(m, "serialization") for m in models], schema_generator=_Schema, ref_template="#/$defs/{model}"
+        [(m, "serialization") for m in models],
+        schema_generator=_Schema,
+        ref_template="#/$defs/{model}",
     )
     return top.get("$defs", {}), [defs[(m, "serialization")] for m in models]
 
@@ -84,7 +109,7 @@ class Renderer:
 
     def ref_name(self, ref: str) -> str:
         assert ref.startswith("#/$defs/"), ref
-        return ref[len("#/$defs/"):]
+        return ref[len("#/$defs/") :]
 
     def type_of(self, schema: dict, *, inline_depth: int = 0) -> str:
         if "$ref" in schema:
@@ -97,11 +122,18 @@ class Renderer:
             return " | ".join(_lit(v) for v in schema["enum"])
         if "anyOf" in schema or "oneOf" in schema:
             variants = schema.get("anyOf") or schema.get("oneOf") or []
-            rendered = list(dict.fromkeys(self.type_of(v, inline_depth=inline_depth) for v in variants))
+            rendered = list(
+                dict.fromkeys(
+                    self.type_of(v, inline_depth=inline_depth) for v in variants
+                )
+            )
             return " | ".join(rendered)
         t = schema.get("type")
         if isinstance(t, list):
-            return " | ".join(self.type_of({**schema, "type": x}, inline_depth=inline_depth) for x in t)
+            return " | ".join(
+                self.type_of({**schema, "type": x}, inline_depth=inline_depth)
+                for x in t
+            )
         if t == "string":
             return "string"
         if t in ("integer", "number"):
@@ -115,14 +147,20 @@ class Renderer:
             if items is None:
                 return "unknown[]"
             if "prefixItems" in schema:
-                return "[" + ", ".join(self.type_of(x) for x in schema["prefixItems"]) + "]"
+                return (
+                    "["
+                    + ", ".join(self.type_of(x) for x in schema["prefixItems"])
+                    + "]"
+                )
             inner = self.type_of(items, inline_depth=inline_depth)
             return f"({inner})[]" if " | " in inner else f"{inner}[]"
         if t == "object" or "properties" in schema or "additionalProperties" in schema:
             return self.object_literal(schema, inline_depth)
         if not schema or set(schema) <= {"title", "description", "default"}:
             return "unknown"
-        raise ValueError(f"unsupported JSON-Schema construct: {json.dumps(schema)[:200]}")
+        raise ValueError(
+            f"unsupported JSON-Schema construct: {json.dumps(schema)[:200]}"
+        )
 
     def object_literal(self, schema: dict, depth: int) -> str:
         props = schema.get("properties")
@@ -137,9 +175,13 @@ class Renderer:
         lines = ["{"]
         for key, sub in props.items():
             opt = "" if key in required else "?"
-            lines.append(f"  {_prop(key)}{opt}: {self.type_of(sub, inline_depth=depth + 1)}")
+            lines.append(
+                f"  {_prop(key)}{opt}: {self.type_of(sub, inline_depth=depth + 1)}"
+            )
         if extra not in (None, False):
-            lines.append(f"  [key: string]: {'unknown' if extra is True else self.type_of(extra)}")
+            lines.append(
+                f"  [key: string]: {'unknown' if extra is True else self.type_of(extra)}"
+            )
         lines.append("}")
         return "\n".join(lines)
 
@@ -241,41 +283,64 @@ def render_ts() -> str:
     out.append("export interface RpcMethods {\n")
     for m in sorted(METHODS.values(), key=lambda x: x.name):
         out.append(_doc(m.doc, "  "))
-        out.append(f"  {_prop(m.name)}: {{ params: {name_of[m.params]}; result: {name_of[m.result]} }}\n")
+        out.append(
+            f"  {_prop(m.name)}: {{ params: {name_of[m.params]}; result: {name_of[m.result]} }}\n"
+        )
     out.append("}\n")
     out.append("export type RpcMethod = keyof RpcMethods\n")
-    out.append("export const RPC_METHODS = [\n" + _const_items(sorted(METHODS)) + "] as const satisfies readonly RpcMethod[]\n")
+    out.append(
+        "export const RPC_METHODS = [\n"
+        + _const_items(sorted(METHODS))
+        + "] as const satisfies readonly RpcMethod[]\n"
+    )
 
-    out.append("\n// ── Canonical (clawk-gateway-v1) methods only the session authority serves ──\n")
+    out.append(
+        "\n// ── Canonical (clawk-gateway-v1) methods only the session authority serves ──\n"
+    )
     out.append("export interface CanonicalRpcMethods {\n")
     for m in sorted(CANONICAL_METHODS.values(), key=lambda x: x.name):
         out.append(_doc(m.doc, "  "))
-        out.append(f"  {_prop(m.name)}: {{ params: {name_of[m.params]}; result: {name_of[m.result]} }}\n")
+        out.append(
+            f"  {_prop(m.name)}: {{ params: {name_of[m.params]}; result: {name_of[m.result]} }}\n"
+        )
     out.append("}\n")
     out.append("export type CanonicalRpcMethod = keyof CanonicalRpcMethods\n")
-    out.append("export const CANONICAL_RPC_METHODS = [\n" + _const_items(sorted(CANONICAL_METHODS))
-               + "] as const satisfies readonly CanonicalRpcMethod[]\n")
+    out.append(
+        "export const CANONICAL_RPC_METHODS = [\n"
+        + _const_items(sorted(CANONICAL_METHODS))
+        + "] as const satisfies readonly CanonicalRpcMethod[]\n"
+    )
 
     out.append("\n// ── Server→client requests ──\n")
     out.append("export interface ServerRequestMap {\n")
     for s in sorted(SERVER_REQUESTS.values(), key=lambda x: x.name):
         out.append(_doc(s.doc, "  "))
-        out.append(f"  {_prop(s.name)}: {{ params: {name_of[s.params]}; result: {name_of[s.result]} }}\n")
+        out.append(
+            f"  {_prop(s.name)}: {{ params: {name_of[s.params]}; result: {name_of[s.result]} }}\n"
+        )
     out.append("}\n")
     out.append("export type ServerRequestMethod = keyof ServerRequestMap\n")
-    out.append("export const SERVER_REQUEST_METHODS = [\n" + _const_items(sorted(SERVER_REQUESTS))
-               + "] as const satisfies readonly ServerRequestMethod[]\n")
+    out.append(
+        "export const SERVER_REQUEST_METHODS = [\n"
+        + _const_items(sorted(SERVER_REQUESTS))
+        + "] as const satisfies readonly ServerRequestMethod[]\n"
+    )
 
     out.append("\n// ── Notifications (`event` frames) ──\n")
     out.append("export interface BackendGatewayEventMap {\n")
     for e in sorted(EVENTS.values(), key=lambda x: x.name):
         out.append(_doc(e.doc, "  "))
-        payload = name_of[e.payload] if e.payload is not None else "Record<string, never>"
+        payload = (
+            name_of[e.payload] if e.payload is not None else "Record<string, never>"
+        )
         out.append(f"  {_prop(e.name)}: {payload}\n")
     out.append("}\n")
     out.append("export type BackendGatewayEventName = keyof BackendGatewayEventMap\n")
-    out.append("export const GATEWAY_EVENT_TYPES = [\n" + _const_items(sorted(EVENTS))
-               + "] as const satisfies readonly BackendGatewayEventName[]\n")
+    out.append(
+        "export const GATEWAY_EVENT_TYPES = [\n"
+        + _const_items(sorted(EVENTS))
+        + "] as const satisfies readonly BackendGatewayEventName[]\n"
+    )
     return "".join(out)
 
 
@@ -288,7 +353,9 @@ def _tidy(text: str) -> str:
 
 
 def _openrpc_schema(model: type) -> dict:
-    schema = TypeAdapter(model).json_schema(schema_generator=_Schema, ref_template="#/components/schemas/{model}")
+    schema = TypeAdapter(model).json_schema(
+        schema_generator=_Schema, ref_template="#/components/schemas/{model}"
+    )
     schema.pop("$defs", None)
     return schema
 
@@ -310,7 +377,8 @@ def render_openrpc() -> str:
     for m in all_models:
         seen.setdefault(m)
     _, top = models_json_schema(
-        [(m, "serialization") for m in seen], schema_generator=_Schema,
+        [(m, "serialization") for m in seen],
+        schema_generator=_Schema,
         ref_template="#/components/schemas/{model}",
     )
     components = top.get("$defs", {})
@@ -324,31 +392,52 @@ def render_openrpc() -> str:
 
     doc = {
         "openrpc": "1.3.2",
-        "info": {"title": "Clawksis TUI/Desktop gateway", "version": "1",
-                 "description": "Generated from tui_gateway/contracts by scripts/gen_gateway_contracts.py."},
+        "info": {
+            "title": "Clawksis TUI/Desktop gateway",
+            "version": "1",
+            "description": "Generated from tui_gateway/contracts by scripts/gen_gateway_contracts.py.",
+        },
         "methods": [
-            {"name": m.name, "summary": " ".join(m.doc.split()),
-             "params": [{"name": "params", "schema": ref(m.params)}],
-             "result": {"name": "result", "schema": ref(m.result)}}
+            {
+                "name": m.name,
+                "summary": " ".join(m.doc.split()),
+                "params": [{"name": "params", "schema": ref(m.params)}],
+                "result": {"name": "result", "schema": ref(m.result)},
+            }
             for m in sorted(METHODS.values(), key=lambda x: x.name)
         ],
         "components": {"schemas": components},
         "x-canonical-methods": [
-            {"name": m.name, "summary": " ".join(m.doc.split()),
-             "params": [{"name": "params", "schema": ref(m.params)}],
-             "result": {"name": "result", "schema": ref(m.result)}}
+            {
+                "name": m.name,
+                "summary": " ".join(m.doc.split()),
+                "params": [{"name": "params", "schema": ref(m.params)}],
+                "result": {"name": "result", "schema": ref(m.result)},
+            }
             for m in sorted(CANONICAL_METHODS.values(), key=lambda x: x.name)
         ],
         "x-server-requests": [
-            {"name": s.name, "summary": " ".join(s.doc.split()),
-             "params": [{"name": "params", "schema": ref(s.params)}],
-             "result": {"name": "result", "schema": ref(s.result)}}
+            {
+                "name": s.name,
+                "summary": " ".join(s.doc.split()),
+                "params": [{"name": "params", "schema": ref(s.params)}],
+                "result": {"name": "result", "schema": ref(s.result)},
+            }
             for s in sorted(SERVER_REQUESTS.values(), key=lambda x: x.name)
         ],
         "x-notifications": [
-            {"name": e.name, "summary": " ".join(e.doc.split()),
-             "params": [{"name": "payload", "schema": ref(e.payload) if e.payload is not None
-                         else {"type": "object", "additionalProperties": False}}]}
+            {
+                "name": e.name,
+                "summary": " ".join(e.doc.split()),
+                "params": [
+                    {
+                        "name": "payload",
+                        "schema": ref(e.payload)
+                        if e.payload is not None
+                        else {"type": "object", "additionalProperties": False},
+                    }
+                ],
+            }
             for e in sorted(EVENTS.values(), key=lambda x: x.name)
         ],
     }
@@ -374,7 +463,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"wrote {path.relative_to(ROOT)}")
     if stale:
         for p in stale:
-            print(f"stale: {p.relative_to(ROOT)} — run scripts/gen_gateway_contracts.py", file=sys.stderr)
+            print(
+                f"stale: {p.relative_to(ROOT)} — run scripts/gen_gateway_contracts.py",
+                file=sys.stderr,
+            )
         return 1
     return 0
 

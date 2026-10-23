@@ -15,7 +15,9 @@ from gateway.config import Platform
 from gateway.session import SessionSource
 
 # Adapters that override ``BasePlatformAdapter.create_handoff_thread`` (the base returns None).
-BRANCH_THREAD_PLATFORMS = frozenset({Platform.DISCORD, Platform.TELEGRAM, Platform.SLACK, Platform.MATRIX})
+BRANCH_THREAD_PLATFORMS = frozenset(
+    {Platform.DISCORD, Platform.TELEGRAM, Platform.SLACK, Platform.MATRIX}
+)
 BRANCH_HERE_FLAG = "--here"
 
 
@@ -48,21 +50,36 @@ def branch_thread_parent(source: SessionSource) -> Optional[str]:
     return str(source.chat_id) if source.chat_id else None
 
 
-def branch_dest_source(source: SessionSource, *, parent_id: str, thread_id: str, title: str) -> SessionSource:
+def branch_dest_source(
+    source: SessionSource, *, parent_id: str, thread_id: str, title: str
+) -> SessionSource:
     """The ``SessionSource`` a follow-up typed in the new thread will arrive on — the shape must
     match each adapter's inbound source or the clone is bound to a key nobody ever reads (the
     CLI→platform handoff in ``run_startup.py::_handoff_resolve_destination`` mirrors the same
     rules). Per-message fields are dropped; identity/scope fields travel with the copy."""
-    common = dict(thread_id=str(thread_id), message_id=None, prospective_thread_id=None,
-                  auto_thread_created=False, auto_thread_initial_name=None)
+    common = dict(
+        thread_id=str(thread_id),
+        message_id=None,
+        prospective_thread_id=None,
+        auto_thread_created=False,
+        auto_thread_initial_name=None,
+    )
     if source.platform == Platform.DISCORD:
         # Discord keys an in-thread message on the thread's OWN id as chat_id.
-        return dataclasses.replace(source, chat_id=str(thread_id), chat_name=title or source.chat_name,
-                                   chat_type="thread", parent_chat_id=str(parent_id), **common)
+        return dataclasses.replace(
+            source,
+            chat_id=str(thread_id),
+            chat_name=title or source.chat_name,
+            chat_type="thread",
+            parent_chat_id=str(parent_id),
+            **common,
+        )
     # Telegram (``group:<chat>:<topic>``, private-chat topics stay ``dm``), Slack (parent channel's
     # dm/group + workspace scope) and Matrix (room type) key a thread reply on the PARENT chat's type.
     chat_type = "group" if source.chat_type == "thread" else source.chat_type
-    return dataclasses.replace(source, chat_id=str(parent_id), chat_type=chat_type, **common)
+    return dataclasses.replace(
+        source, chat_id=str(parent_id), chat_type=chat_type, **common
+    )
 
 
 def format_thread_ref(platform: Optional[Platform], thread_id: str) -> str:

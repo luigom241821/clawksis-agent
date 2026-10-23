@@ -4,6 +4,7 @@
 command as the retry — so the command must actually reach a handler, and must fail loudly when the
 settlement still cannot be made. Regression for the delete side of #111926.
 """
+
 import argparse
 from argparse import Namespace
 from pathlib import Path
@@ -25,29 +26,37 @@ def profile_env(tmp_path, monkeypatch):
 def test_every_profile_subcommand_has_a_dispatch_entry():
     """A subcommand that parses but has no entry in the dispatch table silently does nothing."""
     from clawk_cli.subcommands.profile import build_profile_parser
+
     top = argparse.ArgumentParser()
     subparsers = top.add_subparsers(dest="command")
     build_profile_parser(subparsers, cmd_profile=lambda args: None)
     profile_parser = subparsers.choices["profile"]
-    groups = [a for a in profile_parser._actions if isinstance(a, argparse._SubParsersAction)]
+    groups = [
+        a for a in profile_parser._actions if isinstance(a, argparse._SubParsersAction)
+    ]
     assert groups, "the profile parser exposes subcommands"
     assert set(groups[0].choices) == set(profile_cmd.PROFILE_ACTIONS) - {None}
 
 
-
-
 def test_purge_identity_exits_nonzero_when_settlement_stays_pending(
-        profile_env, monkeypatch, capsys):
-    monkeypatch.setattr("clawk_cli.profile_identity.purge_profile_identity", lambda name: False)
+    profile_env, monkeypatch, capsys
+):
+    monkeypatch.setattr(
+        "clawk_cli.profile_identity.purge_profile_identity", lambda name: False
+    )
 
     with pytest.raises(SystemExit) as exc:
-        profile_cmd.cmd_profile(Namespace(profile_action="purge-identity", profile_name="gone"))
+        profile_cmd.cmd_profile(
+            Namespace(profile_action="purge-identity", profile_name="gone")
+        )
 
     assert exc.value.code not in (0, None)
     assert "clawk profile purge-identity gone" in capsys.readouterr().err
 
 
-def test_purge_identity_refuses_a_same_name_profile_created_after_the_delete(profile_env, capsys):
+def test_purge_identity_refuses_a_same_name_profile_created_after_the_delete(
+    profile_env, capsys
+):
     """The retry must not purge identity out from under a profile that exists again.
 
     The purge keys off the name alone, so the recovery flow — ``delete foo`` (settlement pending),
@@ -65,17 +74,22 @@ def test_purge_identity_refuses_a_same_name_profile_created_after_the_delete(pro
     db = SessionDB(profile_env / ".clawk" / "state.db")
     db.save_gateway_routing_entry(
         "agent:gone:feishu:dm:chatA",
-        json.dumps({"session_key": "agent:gone:feishu:dm:chatA"}), scope=scope)
+        json.dumps({"session_key": "agent:gone:feishu:dm:chatA"}),
+        scope=scope,
+    )
     db.close()
 
     with pytest.raises(SystemExit) as exc:
-        profile_cmd.cmd_profile(Namespace(profile_action="purge-identity", profile_name="gone"))
+        profile_cmd.cmd_profile(
+            Namespace(profile_action="purge-identity", profile_name="gone")
+        )
 
     assert exc.value.code not in (0, None)
     check = SessionDB(profile_env / ".clawk" / "state.db")
     try:
         # The recreated profile still owns its routing key.
         assert set(check.load_gateway_routing_entries(scope=scope)) == {
-            "agent:gone:feishu:dm:chatA"}
+            "agent:gone:feishu:dm:chatA"
+        }
     finally:
         check.close()

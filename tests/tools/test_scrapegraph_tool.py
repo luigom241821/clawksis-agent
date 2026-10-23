@@ -171,10 +171,12 @@ def test_handler_multi_urls(monkeypatch):
 
     monkeypatch.setattr("tools.scrapegraph_tool.extract_many", _fake_many)
     res = _run_tool(
-        _handle_scrapegraph({
-            "url": "https://a.com",
-            "urls": ["https://b.com", "a.com"],
-        })
+        _handle_scrapegraph(
+            {
+                "url": "https://a.com",
+                "urls": ["https://b.com", "a.com"],
+            }
+        )
     )
     assert res["ok"] is True
     # de-duped, scheme-normalised, order preserved
@@ -232,20 +234,24 @@ def test_normalize_urls_https_preserved():
 def test_normalize_urls_dedup():
     from tools.scrapegraph_tool import _normalize_urls
 
-    out = _normalize_urls({
-        "url": "https://a.com",
-        "urls": ["https://a.com", "https://b.com"],
-    })
+    out = _normalize_urls(
+        {
+            "url": "https://a.com",
+            "urls": ["https://a.com", "https://b.com"],
+        }
+    )
     assert out == ["https://a.com", "https://b.com"]
 
 
 def test_normalize_urls_order_preserved():
     from tools.scrapegraph_tool import _normalize_urls
 
-    out = _normalize_urls({
-        "url": "https://z.com",
-        "urls": ["https://a.com", "https://m.com"],
-    })
+    out = _normalize_urls(
+        {
+            "url": "https://z.com",
+            "urls": ["https://a.com", "https://m.com"],
+        }
+    )
     assert out == ["https://z.com", "https://a.com", "https://m.com"]
 
 
@@ -269,16 +275,18 @@ def test_normalize_urls_skips_non_http_schemes():
     that only failed later with obscure errors. They must be skipped."""
     from tools.scrapegraph_tool import _normalize_urls
 
-    out = _normalize_urls({
-        "url": "ftp://files.example.com/x.zip",
-        "urls": [
-            "mailto:boss@example.com",
-            "javascript:void(0)",
-            "data:text/html;base64,PGI+",
-            "file:///etc/passwd",
-            "https://good.example.com",
-        ],
-    })
+    out = _normalize_urls(
+        {
+            "url": "ftp://files.example.com/x.zip",
+            "urls": [
+                "mailto:boss@example.com",
+                "javascript:void(0)",
+                "data:text/html;base64,PGI+",
+                "file:///etc/passwd",
+                "https://good.example.com",
+            ],
+        }
+    )
     assert out == ["https://good.example.com"]
 
     # Uppercase scheme is still recognised as non-http(s) and skipped.
@@ -316,9 +324,11 @@ def test_normalize_urls_skips_non_string_items_in_list():
     errors. They must be skipped, keeping only real string URLs."""
     from tools.scrapegraph_tool import _normalize_urls
 
-    out = _normalize_urls({
-        "urls": [42, None, {"a": 1}, ["x"], "b.com", "  c.com  ", 0],
-    })
+    out = _normalize_urls(
+        {
+            "urls": [42, None, {"a": 1}, ["x"], "b.com", "  c.com  ", 0],
+        }
+    )
     assert out == ["https://b.com", "https://c.com"]
 
 
@@ -326,10 +336,12 @@ def test_normalize_urls_mixed_valid_and_junk():
     """Valid `url` + `urls` with junk items: junk dropped, valid kept, no crash."""
     from tools.scrapegraph_tool import _normalize_urls
 
-    out = _normalize_urls({
-        "url": "https://a.com",
-        "urls": [None, "", "https://b.com", {"bad": 1}],
-    })
+    out = _normalize_urls(
+        {
+            "url": "https://a.com",
+            "urls": [None, "", "https://b.com", {"bad": 1}],
+        }
+    )
     assert out == ["https://a.com", "https://b.com"]
 
 
@@ -872,9 +884,9 @@ def test_looks_like_empty_result_nested_shapes():
     assert sgc.looks_like_empty_result({"data": [{}]}) is True
     # Deeply nested mixed shapes.
     assert (
-        sgc.looks_like_empty_result({
-            "content": [{"answer": "none"}, {"answer": "null"}]
-        })
+        sgc.looks_like_empty_result(
+            {"content": [{"answer": "none"}, {"answer": "null"}]}
+        )
         is True
     )
     # Any real value at ANY depth keeps the result.

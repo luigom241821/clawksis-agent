@@ -1,8 +1,8 @@
 """Regression test for #25676 — nested gateway.streaming config must be loaded."""
+
 from unittest.mock import patch
 
 import clawk_yaml as yaml
-
 
 
 def _load_with_yaml_dict(yaml_dict: dict, tmp_path):
@@ -16,16 +16,20 @@ def _load_with_yaml_dict(yaml_dict: dict, tmp_path):
 
 class TestStreamingConfigNested:
     def test_top_level_streaming(self, tmp_path):
-        cfg = _load_with_yaml_dict({"streaming": {"enabled": True, "transport": "draft"}}, tmp_path)
+        cfg = _load_with_yaml_dict(
+            {"streaming": {"enabled": True, "transport": "draft"}}, tmp_path
+        )
         assert cfg.streaming.enabled is True
         assert cfg.streaming.transport == "draft"
 
-
     def test_top_level_takes_precedence(self, tmp_path):
-        cfg = _load_with_yaml_dict({
-            "streaming": {"enabled": True, "transport": "edit"},
-            "gateway": {"streaming": {"enabled": False, "transport": "draft"}},
-        }, tmp_path)
+        cfg = _load_with_yaml_dict(
+            {
+                "streaming": {"enabled": True, "transport": "edit"},
+                "gateway": {"streaming": {"enabled": False, "transport": "draft"}},
+            },
+            tmp_path,
+        )
         assert cfg.streaming.enabled is True
         assert cfg.streaming.transport == "edit"
 
@@ -52,8 +56,6 @@ class TestStreamingModeAlias:
         assert sc.enabled is True
         assert sc.transport == "edit"
 
-
-
     def test_explicit_enabled_overrides_mode(self):
         from gateway.config import StreamingConfig
 
@@ -61,9 +63,6 @@ class TestStreamingModeAlias:
         assert sc.enabled is False
         # transport still resolves from mode
         assert sc.transport == "auto"
-
-
-
 
 
 class TestStreamingYamlBooleanQuirk:
@@ -91,15 +90,15 @@ class TestStreamingYamlBooleanQuirk:
         assert sc.enabled is True
         assert sc.transport == "auto"
 
-
     def test_loader_normalizes_bare_yaml_off(self, tmp_path):
         """End-to-end through load_gateway_config(): unquoted ``mode: off``
         (a YAML boolean) must keep streaming disabled."""
         from gateway.config import load_gateway_config
 
-        (tmp_path / "config.yaml").write_text("streaming:\n  mode: off\n", encoding="utf-8")
+        (tmp_path / "config.yaml").write_text(
+            "streaming:\n  mode: off\n", encoding="utf-8"
+        )
         with patch("gateway.config.get_clawk_home", return_value=tmp_path):
             cfg = load_gateway_config()
         assert cfg.streaming.enabled is False
         assert cfg.streaming.transport == "off"
-

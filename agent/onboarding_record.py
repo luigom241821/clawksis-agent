@@ -16,7 +16,15 @@ from collections.abc import Callable, Mapping
 from typing import Any
 
 from agent.onboarding_flow import (
-    Applied, End, Event, Facts, Step, applies_to, apply, is_active, new_record,
+    Applied,
+    End,
+    Event,
+    Facts,
+    Step,
+    applies_to,
+    apply,
+    is_active,
+    new_record,
 )
 from agent.onboarding_text import reminder
 
@@ -34,12 +42,20 @@ def on_ended(listener: Callable[[dict], None]) -> None:
 
 
 def load(db, session_id: str) -> dict | None:
-    record = db.get_session_model_config_value(session_id, KEY) if db is not None and session_id else None
+    record = (
+        db.get_session_model_config_value(session_id, KEY)
+        if db is not None and session_id
+        else None
+    )
     return record if isinstance(record, dict) else None
 
 
 def _announce(run_id: str | None, session_id: str, outcome: str) -> None:
-    ended = {"run_id": run_id or "", "stored_session_id": session_id, "outcome": outcome}
+    ended = {
+        "run_id": run_id or "",
+        "stored_session_id": session_id,
+        "outcome": outcome,
+    }
     for listener in _ended_listeners:
         listener(ended)
 
@@ -57,7 +73,9 @@ def _transition(db, session_id: str, event: Event) -> Step | None:
         if not isinstance(current, dict):
             return current
         holder["was_active"] = is_active(current)
-        holder["step"] = apply(current, event, Facts.from_stored(current["facts"]), now=time.time())
+        holder["step"] = apply(
+            current, event, Facts.from_stored(current["facts"]), now=time.time()
+        )
         return holder["step"].record
 
     db.update_conversation_model_config_value(session_id, KEY, update)
@@ -65,7 +83,11 @@ def _transition(db, session_id: str, event: Event) -> Step | None:
     # Told before the flag write, which can fail: the record already says the run ended.
     if step is not None and holder["was_active"] and not is_active(step.record):
         _announce(step.record.get("run_id"), session_id, step.record["ended_by"])
-    if step is not None and not is_active(step.record) and active_session_id(db) is None:
+    if (
+        step is not None
+        and not is_active(step.record)
+        and active_session_id(db) is None
+    ):
         _close_install_flag()
     return step
 
@@ -77,7 +99,9 @@ def _close_install_flag() -> None:
 
     from agent.onboarding import PROFILE_BUILD_FLAG
 
-    section = config_mod.read_user_config_raw(get_default_clawk_root() / "config.yaml").get("onboarding")
+    section = config_mod.read_user_config_raw(
+        get_default_clawk_root() / "config.yaml"
+    ).get("onboarding")
     section = section if isinstance(section, dict) else {}
     seen = section.get("seen") if isinstance(section.get("seen"), dict) else {}
     if section.get("run") is not False or not seen.get(PROFILE_BUILD_FLAG):
@@ -130,7 +154,10 @@ def delete_chat(db, session_id: str, delete: Callable[[], bool]) -> bool:
     from clawk_cli.onboarding_run import set_run
 
     record = load(db, session_id)
-    live = is_active(record) and (db.resolve_resume_session_id(session_id) or session_id) == session_id
+    live = (
+        is_active(record)
+        and (db.resolve_resume_session_id(session_id) or session_id) == session_id
+    )
     last = live and all(sid == session_id for sid in open_session_ids(db))
     if last:
         _close_install_flag()
@@ -145,7 +172,9 @@ def delete_chat(db, session_id: str, delete: Callable[[], bool]) -> bool:
     if live:
         # Each older copy is written on its own row: a tip-routed write would land every copy on the
         # newest one left.
-        for sid in db.session_ids_with_model_config_key(KEY) if record.get("run_id") else ():
+        for sid in (
+            db.session_ids_with_model_config_key(KEY) if record.get("run_id") else ()
+        ):
             if ((older := load(db, sid)) or {}).get("run_id") == record["run_id"]:
                 db.patch_session_model_config(sid, {KEY: _end_deleted(older)})
         _announce(record.get("run_id"), session_id, "deleted")
@@ -155,7 +184,9 @@ def delete_chat(db, session_id: str, delete: Callable[[], bool]) -> bool:
 def _end_deleted(current: Any) -> Any:
     if not is_active(current):
         return current
-    return apply(current, End("deleted"), Facts.from_stored(current["facts"]), now=time.time()).record
+    return apply(
+        current, End("deleted"), Facts.from_stored(current["facts"]), now=time.time()
+    ).record
 
 
 def observe_tool_result(agent, name: str, args: Mapping[str, Any], result: Any) -> Any:
@@ -163,16 +194,25 @@ def observe_tool_result(agent, name: str, args: Mapping[str, Any], result: Any) 
     ``gui_tour``). Runs for every tool result; only an onboarding chat (one whose agent carries
     ``setup_beat``) reads its record. Returns *result*, with the next-step reminder added when it
     settled a beat."""
-    if not applies_to(name) or "setup_beat" not in (getattr(agent, "valid_tool_names", None) or ()):
+    if not applies_to(name) or "setup_beat" not in (
+        getattr(agent, "valid_tool_names", None) or ()
+    ):
         return result
-    db, session_id = getattr(agent, "_session_db", None), getattr(agent, "session_id", "") or ""
+    db, session_id = (
+        getattr(agent, "_session_db", None),
+        getattr(agent, "session_id", "") or "",
+    )
     try:
         parsed = json.loads(result) if isinstance(result, str) else result
         if isinstance(parsed, dict) and load(db, session_id) is not None:
             step = advance(db, session_id, Applied(name, dict(args or {}), parsed))
-            text = reminder(step.reminder, step.record, Facts.from_stored(step.record["facts"]))
+            text = reminder(
+                step.reminder, step.record, Facts.from_stored(step.record["facts"])
+            )
             if text and isinstance(result, str):
                 return json.dumps({**parsed, "reminder": text}, ensure_ascii=False)
     except Exception:
-        logger.warning("onboarding: %s result did not update the run record", name, exc_info=True)
+        logger.warning(
+            "onboarding: %s result did not update the run record", name, exc_info=True
+        )
     return result

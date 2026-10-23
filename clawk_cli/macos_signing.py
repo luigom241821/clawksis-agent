@@ -1,4 +1,5 @@
 """Managed interpreter identity, available before PM or application imports."""
+
 from __future__ import annotations
 
 import logging
@@ -22,26 +23,52 @@ def sign_managed_python(python: Path) -> bool:
         return False
     codesign = shutil.which("codesign")
     if not codesign:
-        logger.info("macOS codesign is unavailable; using the downloaded Python signature")
+        logger.info(
+            "macOS codesign is unavailable; using the downloaded Python signature"
+        )
         return False
     try:
         signed = subprocess.run(
-            [codesign, "--force", "--deep", "--sign", "-", "--timestamp=none",
-             "--identifier", _IDENTIFIER, "--requirements",
-             f'=designated => identifier "{_IDENTIFIER}"', str(python)],
-            check=False, capture_output=True, text=True, encoding="utf-8", errors="replace",
+            [
+                codesign,
+                "--force",
+                "--deep",
+                "--sign",
+                "-",
+                "--timestamp=none",
+                "--identifier",
+                _IDENTIFIER,
+                "--requirements",
+                f'=designated => identifier "{_IDENTIFIER}"',
+                str(python),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         if signed.returncode != 0:
-            logger.warning("could not stably sign managed Python %s: %s", python,
-                           (signed.stderr or signed.stdout or "codesign failed").strip())
+            logger.warning(
+                "could not stably sign managed Python %s: %s",
+                python,
+                (signed.stderr or signed.stdout or "codesign failed").strip(),
+            )
             return False
         verified = subprocess.run(
             [codesign, "--verify", "--deep", "--strict", str(python)],
-            check=False, capture_output=True, text=True, encoding="utf-8", errors="replace",
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         if verified.returncode != 0:
-            logger.warning("macOS signature verification failed for managed Python %s: %s", python,
-                           (verified.stderr or verified.stdout or "verification failed").strip())
+            logger.warning(
+                "macOS signature verification failed for managed Python %s: %s",
+                python,
+                (verified.stderr or verified.stdout or "verification failed").strip(),
+            )
             return False
         return True
     except Exception as exc:

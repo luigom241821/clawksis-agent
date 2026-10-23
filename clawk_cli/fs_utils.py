@@ -13,6 +13,7 @@ def rmtree_force(path: Path) -> None:
     store objects read-only — raising ``PermissionError`` where POSIX unlinks
     them fine. The ``onerror`` hook chmods the file writable and retries.
     """
+
     def _onerror(func, p, _exc_info):
         try:
             os.chmod(p, stat.S_IWRITE)

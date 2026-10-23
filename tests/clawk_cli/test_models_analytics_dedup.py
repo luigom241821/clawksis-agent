@@ -49,9 +49,12 @@ def test_aux_tasks_do_not_duplicate_the_model_card(db, analytics):
     _session(db, "s1", "gpt-5.6-terra", "openai-codex")
     for task in ("vision", "compression", "title_generation"):
         db.record_auxiliary_usage(
-            "s1", task, model="gpt-5.6-terra",
+            "s1",
+            task,
+            model="gpt-5.6-terra",
             billing_provider="openai-codex",
-            input_tokens=100, output_tokens=10,
+            input_tokens=100,
+            output_tokens=10,
         )
 
     result = analytics()
@@ -59,7 +62,10 @@ def test_aux_tasks_do_not_duplicate_the_model_card(db, analytics):
 
     assert pairs == [("gpt-5.6-terra", "openai-codex")]
     # Session counts must stay reconcilable with the totals block.
-    assert sum(m["sessions"] for m in result["models"]) == result["totals"]["total_sessions"]
+    assert (
+        sum(m["sessions"] for m in result["models"])
+        == result["totals"]["total_sessions"]
+    )
     # Aux tokens are still accounted for, just on the one row.
     assert result["models"][0]["input_tokens"] == 300
 
@@ -68,8 +74,12 @@ def test_aux_only_model_still_gets_its_own_row(db, analytics):
     """Regression guard for #23270 — a dedicated aux model stays visible."""
     _session(db, "s1", "gpt-5.6-terra", "openai-codex")
     db.record_auxiliary_usage(
-        "s1", "vision", model="gemini-3-flash", billing_provider="gemini",
-        input_tokens=500, output_tokens=50,
+        "s1",
+        "vision",
+        model="gemini-3-flash",
+        billing_provider="gemini",
+        input_tokens=500,
+        output_tokens=50,
     )
 
     result = analytics()
@@ -88,11 +98,17 @@ def test_distinct_models_counts_aux_only_models(db, analytics):
     """
     _session(db, "s1", "gpt-5.6-terra", "openai-codex")
     db.record_auxiliary_usage(
-        "s1", "title_generation", model="gpt-5.4-mini", billing_provider="openai-codex",
-        input_tokens=50, output_tokens=5,
+        "s1",
+        "title_generation",
+        model="gpt-5.4-mini",
+        billing_provider="openai-codex",
+        input_tokens=50,
+        output_tokens=5,
     )
 
     result = analytics()
 
     assert {m["model"] for m in result["models"]} == {"gpt-5.6-terra", "gpt-5.4-mini"}
-    assert result["totals"]["distinct_models"] == len({m["model"] for m in result["models"]})
+    assert result["totals"]["distinct_models"] == len(
+        {m["model"] for m in result["models"]}
+    )

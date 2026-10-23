@@ -32,10 +32,6 @@ def _bare_adapter():
 
 
 class TestPollingHealthConfirmation:
-
-
-
-
     def test_stale_generation_progress_stays_silent(self, caplog):
         """Progress from an abandoned generation must neither log nor set the
         current event (pre-existing guard, pinned here because the log line

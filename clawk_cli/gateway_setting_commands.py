@@ -12,6 +12,7 @@ main's handler (one writer); ``/cron run`` lasts as long as the job, so a write 
 ``/toolsets`` too: the gateway builds the report from its own registry (MCP and plugin toolsets
 included) with this session's toolsets marked (gateway/session_info_reads.py).
 """
+
 from __future__ import annotations
 
 import shlex
@@ -28,6 +29,7 @@ def _mirror_busy(cli, arg):
 def _watch_reviewer(cli, _arg):
     """/review spawns its reviewer off-turn: have the live-work dock poll for it right away."""
     from clawk_cli.gateway_tools import process_view
+
     view = process_view()
     if view is not None:
         view.watch_subagents()
@@ -35,9 +37,17 @@ def _watch_reviewer(cli, _arg):
 
 # Reports the owner already lays out (main's own line builders): printed as is.
 _VERBATIM = frozenset({"toolsets"})
-GATEWAY_SETTINGS = {"personality": None, "busy": _mirror_busy, "approvals": None, "footer": None, "fast": None,
-                    "refine": None, "review": _watch_reviewer, "cron": None,
-                    "toolsets": None}
+GATEWAY_SETTINGS = {
+    "personality": None,
+    "busy": _mirror_busy,
+    "approvals": None,
+    "footer": None,
+    "fast": None,
+    "refine": None,
+    "review": _watch_reviewer,
+    "cron": None,
+    "toolsets": None,
+}
 
 
 def _unbounded(canonical, arg):
@@ -46,6 +56,7 @@ def _unbounded(canonical, arg):
     if canonical != "cron":
         return False
     from gateway.session_cron_commands import cron_read
+
     try:
         return cron_read(shlex.split(arg)) is None
     except ValueError:
@@ -59,12 +70,14 @@ def _call(cli, connection, canonical, arg):
     # No deadline, on a socket of its own so the session's prompts never queue behind it
     # (GatewayConnection.call_until); Ctrl+C stops waiting.
     from clawk_cli.gateway_plugin_commands import call_unbounded
+
     return call_unbounded(cli, connection, canonical, command)
 
 
 def run(cli, canonical, cmd):
     """True when the gateway answered the command (the local handler must not run)."""
     from clawk_cli.gateway_side import connection_for
+
     if canonical not in GATEWAY_SETTINGS:
         return False
     connection = connection_for(cli)
@@ -73,6 +86,7 @@ def run(cli, canonical, cmd):
     from cli import _cprint
     from clawk_cli.gateway_client import GatewayClientError
     from clawk_cli.gateway_plugin_commands import STOPPED
+
     parts = (cmd or "").strip().split(None, 1)
     arg = parts[1].strip() if len(parts) > 1 else ""
     try:
@@ -88,4 +102,3 @@ def run(cli, canonical, cmd):
     if mirror is not None:
         mirror(cli, arg)
     return True
-

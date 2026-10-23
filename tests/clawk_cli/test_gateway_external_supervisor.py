@@ -144,5 +144,3 @@ def test_update_still_uses_detached_watcher_without_supervisor_flag(monkeypatch)
 
     assert gateway._prepare_profile_gateway_update_restart("work", 1234) == "detached"
     assert launched == [("work", 1234)]
-
-

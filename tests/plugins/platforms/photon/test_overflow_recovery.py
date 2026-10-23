@@ -17,6 +17,7 @@ dying (issue #50185):
 
 No Node sidecar is spawned and no ports are bound.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -39,6 +40,7 @@ def _make_adapter(monkeypatch: pytest.MonkeyPatch) -> PhotonAdapter:
 
 # -- Gap 1: retryable classification of overflow errors ---------------------
 
+
 @pytest.mark.parametrize(
     "error",
     [
@@ -55,7 +57,9 @@ def test_overflow_strings_classified_retryable(error: str) -> None:
 
 def test_unrelated_error_not_retryable() -> None:
     # A genuine permanent failure must NOT be retried.
-    assert PhotonAdapter._is_retryable_error("400 bad request: invalid spaceId") is False
+    assert (
+        PhotonAdapter._is_retryable_error("400 bad request: invalid spaceId") is False
+    )
     assert PhotonAdapter._is_retryable_error(None) is False
 
 
@@ -119,6 +123,7 @@ async def test_send_with_retry_uses_structured_retryable_flag(
 
 # -- Gap 2: typing-indicator cooldown ---------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_typing_cooldown_suppresses_rapid_repeats(
     monkeypatch: pytest.MonkeyPatch,
@@ -166,6 +171,7 @@ async def test_stop_typing_resets_cooldown(
 
 
 # -- Gap 3: sidecar crash detection -----------------------------------------
+
 
 class _EofStdout:
     """A proc.stdout whose readline() reports immediate EOF (dead sidecar)."""
@@ -239,7 +245,9 @@ async def test_clean_shutdown_does_not_raise_fatal(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("runner_stopping", [True, False], ids=["gateway-stopping", "gateway-running"])
+@pytest.mark.parametrize(
+    "runner_stopping", [True, False], ids=["gateway-stopping", "gateway-running"]
+)
 async def test_sidecar_sigterm_is_fatal_only_while_gateway_keeps_running(
     monkeypatch: pytest.MonkeyPatch, runner_stopping: bool
 ) -> None:
@@ -316,7 +324,8 @@ async def _drain_pending_tasks(limit: int = 50) -> None:
     """
     for _ in range(limit):
         pending = [
-            t for t in asyncio.all_tasks()
+            t
+            for t in asyncio.all_tasks()
             if t is not asyncio.current_task() and not t.done()
         ]
         if not pending:
@@ -336,6 +345,7 @@ async def _drain_pending_tasks(limit: int = 50) -> None:
 # task executing the fatal-error handler -- aborting it (via CancelledError,
 # a BaseException the handler's `except Exception` guards don't catch)
 # before the Gateway's reconnect-queue step ever runs.
+
 
 class _FakeStoppedProc:
     """Minimal proc stand-in so _stop_sidecar() reaches its finally block
@@ -515,7 +525,9 @@ async def test_standalone_send_classifies_target_not_allowed(
     monkeypatch.setattr(photon_adapter.httpx, "AsyncClient", _FakeClient)
 
     result = await photon_adapter._standalone_send(
-        PlatformConfig(enabled=True, extra={}), "space-1", "hello",
+        PlatformConfig(enabled=True, extra={}),
+        "space-1",
+        "hello",
     )
 
     assert result.get("error") == photon_adapter._TARGET_NOT_ALLOWED_MESSAGE

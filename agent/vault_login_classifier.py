@@ -30,16 +30,42 @@ LOGIN_AUTOFILL_TOKENS = ("username", "email", "tel", "current-password")
 # Payment / address autocomplete tokens (WHATWG) the checkout fill targets. ``cc-exp`` (combined
 # MM/YY) is derived at fill time from exp_month + exp_year. Field-name/label heuristics below back
 # up sites that omit autocomplete attributes.
-PAYMENT_AUTOFILL_TOKENS = ("cc-number", "cc-name", "cc-exp", "cc-exp-month", "cc-exp-year", "cc-csc")
-ADDRESS_AUTOFILL_TOKENS = ("address-line1", "address-line2", "address-level2", "address-level1",
-                           "postal-code", "country-name", "country")
+PAYMENT_AUTOFILL_TOKENS = (
+    "cc-number",
+    "cc-name",
+    "cc-exp",
+    "cc-exp-month",
+    "cc-exp-year",
+    "cc-csc",
+)
+ADDRESS_AUTOFILL_TOKENS = (
+    "address-line1",
+    "address-line2",
+    "address-level2",
+    "address-level1",
+    "postal-code",
+    "country-name",
+    "country",
+)
 _CHECKOUT_HEURISTICS = (
-    (re.compile(r"\b(?:card\s*number|cardnumber|ccnumber|cc\s*num|pan)\b"), "cc-number"),
+    (
+        re.compile(r"\b(?:card\s*number|cardnumber|ccnumber|cc\s*num|pan)\b"),
+        "cc-number",
+    ),
     (re.compile(r"\b(?:name\s*on\s*card|cardholder|cc\s*name|ccname)\b"), "cc-name"),
     (re.compile(r"\b(?:cvc|cvv|csc|security\s*code|card\s*code)\b"), "cc-csc"),
-    (re.compile(r"\b(?:exp(?:iry|iration)?\s*month|exp\s*mm|ccmonth)\b"), "cc-exp-month"),
-    (re.compile(r"\b(?:exp(?:iry|iration)?\s*year|exp\s*yy(?:yy)?|ccyear)\b"), "cc-exp-year"),
-    (re.compile(r"\b(?:exp(?:iry|iration)?(?:\s*date)?|mm\s*yy|valid\s*thru)\b"), "cc-exp"),
+    (
+        re.compile(r"\b(?:exp(?:iry|iration)?\s*month|exp\s*mm|ccmonth)\b"),
+        "cc-exp-month",
+    ),
+    (
+        re.compile(r"\b(?:exp(?:iry|iration)?\s*year|exp\s*yy(?:yy)?|ccyear)\b"),
+        "cc-exp-year",
+    ),
+    (
+        re.compile(r"\b(?:exp(?:iry|iration)?(?:\s*date)?|mm\s*yy|valid\s*thru)\b"),
+        "cc-exp",
+    ),
     (re.compile(r"\b(?:address\s*(?:line\s*)?2|apt|suite|unit)\b"), "address-line2"),
     (re.compile(r"\b(?:address(?:\s*line\s*1)?|street)\b"), "address-line1"),
     (re.compile(r"\b(?:city|town|locality)\b"), "address-level2"),
@@ -99,9 +125,7 @@ class ClassifiedLoginControl:
 
 def classify_login_control(control: LoginControl) -> Optional[ClassifiedLoginControl]:
     """Classify one control, or return None if it is not a login fill target."""
-    autocomplete_tokens = [
-        t for t in control.autocomplete.lower().split() if t
-    ]
+    autocomplete_tokens = [t for t in control.autocomplete.lower().split() if t]
     if any(t in _EXCLUDED_AUTOCOMPLETE for t in autocomplete_tokens):
         return None
 
@@ -178,24 +202,33 @@ def select_password_fill(
     ]
 
 
-def classify_checkout_control(control: LoginControl) -> Optional[ClassifiedLoginControl]:
+def classify_checkout_control(
+    control: LoginControl,
+) -> Optional[ClassifiedLoginControl]:
     """Classify one control as a payment/address fill target (autocomplete token exact match 100,
     label/name heuristic 70), or None. Password/email inputs are never checkout targets."""
     tokens = [t for t in control.autocomplete.lower().split() if t]
     for token in PAYMENT_AUTOFILL_TOKENS + ADDRESS_AUTOFILL_TOKENS:
         if token in tokens:
-            return ClassifiedLoginControl(control, 100, "country-name" if token == "country" else token)
+            return ClassifiedLoginControl(
+                control, 100, "country-name" if token == "country" else token
+            )
     if control.type in ("password", "email"):
         return None
-    searchable = _normalize_text(" ".join(part for part in (control.name, control.label) if part))
+    searchable = _normalize_text(
+        " ".join(part for part in (control.name, control.label) if part)
+    )
     for pattern, token in _CHECKOUT_HEURISTICS:
         if pattern.search(searchable):
             return ClassifiedLoginControl(control, 70, token)
     return None
 
 
-def select_checkout_fills(classified: list[ClassifiedLoginControl], secret: dict[str, str],
-                          field_tokens: dict[str, str]) -> list[dict[str, Any]]:
+def select_checkout_fills(
+    classified: list[ClassifiedLoginControl],
+    secret: dict[str, str],
+    field_tokens: dict[str, str],
+) -> list[dict[str, Any]]:
     """Map a payment/address secret payload onto the best control per autocomplete token.
 
     ``field_tokens`` is ``PAYMENT_FIELDS`` / ``ADDRESS_FIELDS`` (agent/vault_store.py). A combined
@@ -203,14 +236,23 @@ def select_checkout_fills(classified: list[ClassifiedLoginControl], secret: dict
     month/year fills. Returns ``[{"index", "token", "value"}]``: one control per token, highest
     score then DOM order.
     """
-    values: dict[str, str] = {tok: secret[f] for f, tok in field_tokens.items() if secret.get(f)}
+    values: dict[str, str] = {
+        tok: secret[f] for f, tok in field_tokens.items() if secret.get(f)
+    }
     if "cc-exp-month" in values and "cc-exp-year" in values:
-        values["cc-exp"] = f"{values['cc-exp-month'].zfill(2)}/{values['cc-exp-year'][-2:]}"
+        values["cc-exp"] = (
+            f"{values['cc-exp-month'].zfill(2)}/{values['cc-exp-year'][-2:]}"
+        )
     fills: list[dict[str, Any]] = []
     for token, value in values.items():
-        candidates = sorted((c for c in classified if c.token == token), key=lambda c: (-c.score, c.control.index))
+        candidates = sorted(
+            (c for c in classified if c.token == token),
+            key=lambda c: (-c.score, c.control.index),
+        )
         if candidates:
-            fills.append({"index": candidates[0].control.index, "token": token, "value": value})
+            fills.append(
+                {"index": candidates[0].control.index, "token": token, "value": value}
+            )
     if any(f["token"] == "cc-exp" for f in fills):
         fills = [f for f in fills if f["token"] not in ("cc-exp-month", "cc-exp-year")]
     return fills
@@ -224,7 +266,9 @@ def select_checkout_fills(classified: list[ClassifiedLoginControl], secret: dict
 INSPECTION_STAMP_ATTR = "data-clawk-vault-slot"
 
 
-def build_otp_fills(otp_controls: list[ClassifiedLoginControl], code: str) -> list[dict[str, Any]]:
+def build_otp_fills(
+    otp_controls: list[ClassifiedLoginControl], code: str
+) -> list[dict[str, Any]]:
     """One fill per box. Default: the single best-scoring code field takes the whole code.
 
     Per-digit entry only when the page unmistakably uses it: exactly len(code) OTP controls that are all
@@ -232,11 +276,21 @@ def build_otp_fills(otp_controls: list[ClassifiedLoginControl], code: str) -> li
     looser (several code-like inputs scattered over a page) gets ONE field, never a digit sprayed across
     unrelated inputs."""
     best = max(otp_controls, key=lambda c: c.score)
-    boxes = sorted((c for c in otp_controls if c.control.max_length == 1), key=lambda c: c.control.index)
-    if (len(boxes) == len(code)
-            and len({b.control.form_index for b in boxes}) == 1
-            and all(b.control.index - a.control.index == 1 for a, b in itertools.pairwise(boxes))):
-        return [{"index": b.control.index, "token": "one-time-code", "value": ch} for b, ch in zip(boxes, code)]
+    boxes = sorted(
+        (c for c in otp_controls if c.control.max_length == 1),
+        key=lambda c: c.control.index,
+    )
+    if (
+        len(boxes) == len(code)
+        and len({b.control.form_index for b in boxes}) == 1
+        and all(
+            b.control.index - a.control.index == 1 for a, b in itertools.pairwise(boxes)
+        )
+    ):
+        return [
+            {"index": b.control.index, "token": "one-time-code", "value": ch}
+            for b, ch in zip(boxes, code)
+        ]
     return [{"index": best.control.index, "token": "one-time-code", "value": code}]
 
 
@@ -280,7 +334,9 @@ _LOGIN_CONTROL_INSPECTION_JS_TEMPLATE = """(() => {
 })()"""
 
 
-def build_fill_js(fills: list[dict[str, Any]], expected_origin: str, nonce: str = "") -> str:
+def build_fill_js(
+    fills: list[dict[str, Any]], expected_origin: str, nonce: str = ""
+) -> str:
     """Build a JS expression that fills the selected controls and reports only a count. The
     returned expression never echoes the values back.
 
@@ -293,10 +349,20 @@ def build_fill_js(fills: list[dict[str, Any]], expected_origin: str, nonce: str 
     left on filled controls so later model-driven DOM reads cannot address them deterministically.
     """
     payload = json.dumps(
-        [{"index": f["index"], "token": f.get("token", "current-password"), "value": f["value"]} for f in fills]
+        [
+            {
+                "index": f["index"],
+                "token": f.get("token", "current-password"),
+                "value": f["value"],
+            }
+            for f in fills
+        ]
     )
-    return (_FILL_JS_TEMPLATE.replace("__EXPECTED_ORIGIN__", json.dumps(expected_origin))
-            .replace("__FILLS__", payload).replace("__NONCE__", json.dumps(nonce)))
+    return (
+        _FILL_JS_TEMPLATE.replace("__EXPECTED_ORIGIN__", json.dumps(expected_origin))
+        .replace("__FILLS__", payload)
+        .replace("__NONCE__", json.dumps(nonce))
+    )
 
 
 _FILL_JS_TEMPLATE = """(() => {

@@ -18,7 +18,6 @@ class TestStaticDenyList:
         target = tmp_path / "regular.txt"
         assert _is_write_denied(str(target)) is False
 
-
     def test_etc_shadow_is_denied(self):
         assert _is_write_denied("/etc/shadow") is True
 
@@ -66,7 +65,6 @@ class TestSshConfigApprovalGate:
         assert is_write_approval_required(str(tmp_path / "notes.txt")) is False
 
 
-
 class TestSafeWriteRoot:
     """CLAWK_WRITE_SAFE_ROOT should sandbox writes to a specific subtree."""
 
@@ -77,7 +75,6 @@ class TestSafeWriteRoot:
 
         monkeypatch.setenv("CLAWK_WRITE_SAFE_ROOT", str(safe_root))
         assert _is_write_denied(str(child)) is False
-
 
     def test_safe_root_with_tilde_expansion(self, tmp_path: Path, monkeypatch):
         """~ in CLAWK_WRITE_SAFE_ROOT should be expanded."""
@@ -109,7 +106,6 @@ class TestMultipleSafeWriteRoots:
         monkeypatch.setenv("CLAWK_WRITE_SAFE_ROOT", f"{root_a}{os.pathsep}{root_b}")
         assert _is_write_denied(str(child)) is False
 
-
     def test_trailing_separator_ignored(self, tmp_path: Path, monkeypatch):
         root = tmp_path / "workspace"
         inside = root / "file.txt"
@@ -118,8 +114,9 @@ class TestMultipleSafeWriteRoots:
         monkeypatch.setenv("CLAWK_WRITE_SAFE_ROOT", f"{root}{os.pathsep}")
         assert _is_write_denied(str(inside)) is False
 
-
-    def test_static_deny_still_wins_with_multiple_roots(self, tmp_path: Path, monkeypatch):
+    def test_static_deny_still_wins_with_multiple_roots(
+        self, tmp_path: Path, monkeypatch
+    ):
         """Static deny list takes priority even when multiple safe roots include home."""
         root = tmp_path / "workspace"
         os.makedirs(root, exist_ok=True)
@@ -188,6 +185,7 @@ class TestSafeRootDenialMessageIntegration:
     def ops(self, tmp_path: Path):
         from tools.environments.local import LocalEnvironment
         from tools.file_operations import ShellFileOperations
+
         env = LocalEnvironment(cwd=str(tmp_path))
         return ShellFileOperations(env, cwd=str(tmp_path))
 
@@ -206,7 +204,6 @@ class TestSafeRootDenialMessageIntegration:
         assert str(safe_root) in res.error
         assert "credential" not in res.error
         assert not outside.exists()
-
 
     def test_write_file_credential_path_shows_credential_message(
         self, ops, tmp_path: Path
@@ -235,30 +232,36 @@ class TestCheckSensitivePathMacOSBypass:
     @pytest.mark.platforms("linux")
     def test_etc_hosts_blocked(self):
         from tools.file_tools_write_guards import _check_sensitive_path
+
         assert _check_sensitive_path("/etc/hosts") is not None
 
     @pytest.mark.platforms("linux")
     def test_private_etc_hosts_blocked(self):
         from tools.file_tools_write_guards import _check_sensitive_path
+
         assert _check_sensitive_path("/private/etc/hosts") is not None
 
     @pytest.mark.platforms("linux")
     def test_private_etc_ssh_config_blocked(self):
         from tools.file_tools_write_guards import _check_sensitive_path
+
         assert _check_sensitive_path("/private/etc/ssh/sshd_config") is not None
 
     @pytest.mark.platforms("linux")
     def test_private_var_blocked(self):
         from tools.file_tools_write_guards import _check_sensitive_path
+
         assert _check_sensitive_path("/private/var/db/something") is not None
 
     @pytest.mark.platforms("linux")
     def test_boot_still_blocked(self):
         from tools.file_tools_write_guards import _check_sensitive_path
+
         assert _check_sensitive_path("/boot/grub/grub.cfg") is not None
 
     def test_safe_path_allowed(self):
         from tools.file_tools_write_guards import _check_sensitive_path
+
         assert _check_sensitive_path("/tmp/safe_file.txt") is None
 
 
@@ -275,6 +278,7 @@ class TestAtomicWrite:
     def ops(self, tmp_path: Path):
         from tools.environments.local import LocalEnvironment
         from tools.file_operations import ShellFileOperations
+
         env = LocalEnvironment(cwd=str(tmp_path))
         return ShellFileOperations(env, cwd=str(tmp_path))
 
@@ -289,12 +293,10 @@ class TestAtomicWrite:
         assert target.read_text(encoding="utf-8") == "v2 content"
         assert os.stat(target).st_ino != ino_before
 
-
     def test_no_temp_file_leaked_on_success(self, ops, tmp_path: Path):
         target = tmp_path / "f.txt"
         ops.write_file(str(target), "hello\n")
         assert [p for p in os.listdir(tmp_path) if ".clawk-tmp" in p] == []
-
 
     @pytest.mark.platforms("linux")
     def test_patch_routes_through_atomic_write(self, ops, tmp_path: Path):
@@ -322,9 +324,9 @@ class TestBomHandling:
     def ops(self, tmp_path: Path):
         from tools.environments.local import LocalEnvironment
         from tools.file_operations import ShellFileOperations
+
         env = LocalEnvironment(cwd=str(tmp_path))
         return ShellFileOperations(env, cwd=str(tmp_path))
-
 
     def test_read_strips_bom(self, ops, tmp_path: Path):
         target = tmp_path / "bom.py"
@@ -336,7 +338,6 @@ class TestBomHandling:
         first_line = res.content.split("\n", 1)[0]
         assert self.BOM not in first_line
         assert first_line.endswith("import os")
-
 
     def test_patch_matches_first_line_through_bom(self, ops, tmp_path: Path):
         # The whole point: an edit targeting the BOM-prefixed first line
@@ -370,15 +371,18 @@ class TestBomHandling:
         assert raw.startswith(self.BOM.encode("utf-8")), "BOM lost on V4A update"
         assert b"print('world')" in raw
 
-
-    def test_v4a_update_keeps_terminal_escape_bytes_on_untouched_lines(self, ops, tmp_path: Path):
+    def test_v4a_update_keeps_terminal_escape_bytes_on_untouched_lines(
+        self, ops, tmp_path: Path
+    ):
         # read_file_raw feeds the V4A write-back: every byte on a line the patch never touched
         # survives, including OSC escapes, BEL and literal fence-marker text.
         target = tmp_path / "prompt.sh"
-        original = (b'set_title() { printf "\x1b]0;%s\x07" "$1"; }\n'
-                    b'beep() { printf "\x07"; }\n'
-                    b'SENTINEL = "__CLAWK_FENCE_a9f7b3__\x07"  # marker text is file content too\n'
-                    b'VERSION=1\n')
+        original = (
+            b'set_title() { printf "\x1b]0;%s\x07" "$1"; }\n'
+            b'beep() { printf "\x07"; }\n'
+            b'SENTINEL = "__CLAWK_FENCE_a9f7b3__\x07"  # marker text is file content too\n'
+            b"VERSION=1\n"
+        )
         target.write_bytes(original)
         patch = (
             "*** Begin Patch\n"
@@ -393,19 +397,25 @@ class TestBomHandling:
         assert target.read_bytes() == original.replace(b"VERSION=1", b"VERSION=2")
 
     @pytest.mark.parametrize("mode", ["replace", "v4a"])
-    def test_edit_keeps_bytes_utf8_cannot_decode_on_untouched_lines(self, ops, tmp_path: Path, mode):
+    def test_edit_keeps_bytes_utf8_cannot_decode_on_untouched_lines(
+        self, ops, tmp_path: Path, mode
+    ):
         # Both edit paths write back every line they did not touch, so their source read must be
         # byte-exact: the text transport decodes with errors="replace", which turned this legacy
         # latin-1 byte into U+FFFD on disk. (Past the 1000-byte sample, where V4A reads it as text.)
         target = tmp_path / "legacy.py"
-        original = (b"# -*- coding: latin-1 -*-\n" + b"# " + b"x" * 1100 + b"\n"
-                    b"name = 'caf\xe9'\n"
-                    b"x = 1\n")
+        original = (
+            b"# -*- coding: latin-1 -*-\n" + b"# " + b"x" * 1100 + b"\n"
+            b"name = 'caf\xe9'\n"
+            b"x = 1\n"
+        )
         target.write_bytes(original)
         if mode == "replace":
             res = ops.patch_replace(str(target), "x = 1", "x = 2")
         else:
-            res = ops.patch_v4a(f"*** Begin Patch\n*** Update File: {target}\n@@\n-x = 1\n+x = 2\n*** End Patch")
+            res = ops.patch_v4a(
+                f"*** Begin Patch\n*** Update File: {target}\n@@\n-x = 1\n+x = 2\n*** End Patch"
+            )
         assert res.success, res.error
         assert target.read_bytes() == original.replace(b"x = 1", b"x = 2")
         # The file declares its encoding, so it is valid Python and lints clean.
@@ -424,37 +434,48 @@ class TestBomHandling:
                     result = dict(result)
                     result["output"] = "TERM\n" + (result.get("output") or "")
                 return result
+
         return Env
 
-    def test_byte_exact_read_fences_backend_stdout_noise(self, tmp_path: Path, monkeypatch):
+    def test_byte_exact_read_fences_backend_stdout_noise(
+        self, tmp_path: Path, monkeypatch
+    ):
         # The edit paths write this read straight back, so noise in the backend's merged stdout must
         # never reach the decode. "TERM" is four base64 characters: unfenced it decodes to b"LDL" and
         # lands at the head of the file. Remote backends announce things on connect, so the local
         # native fast path is off here and the base64 transport is what runs.
         from tools.file_operations import ShellFileOperations
+
         monkeypatch.setenv("CLAWK_NATIVE_FILE_READ", "0")
 
         target = tmp_path / "conf.txt"
         original = b"HEADER\nVERSION=1\n"
         target.write_bytes(original)
-        ops = ShellFileOperations(self._noisy_env()(cwd=str(tmp_path)), cwd=str(tmp_path))
+        ops = ShellFileOperations(
+            self._noisy_env()(cwd=str(tmp_path)), cwd=str(tmp_path)
+        )
 
         assert ops._read_exact_bytes(str(target)) == (original, None)
         ops.patch_replace(str(target), "VERSION=1", "VERSION=2")
         assert target.read_bytes() == original.replace(b"VERSION=1", b"VERSION=2")
 
-    def test_binary_admission_sample_fences_backend_stdout_noise(self, tmp_path: Path, monkeypatch):
+    def test_binary_admission_sample_fences_backend_stdout_noise(
+        self, tmp_path: Path, monkeypatch
+    ):
         # The same transport gap one step EARLIER: _sample_file_bytes is the binary-admission gate
         # in front of the byte-exact read, so backend noise joined onto its base64 decides whether a
         # file is editable at all and what a refusal reports about it. The sample must be the file's
         # own leading bytes, not the backend's banner decoded into them.
         from tools.file_operations import ShellFileOperations
+
         monkeypatch.setenv("CLAWK_NATIVE_FILE_READ", "0")
 
         target = tmp_path / "head.bin"
         original = b"\x00\x01\x02binary payload\n"
         target.write_bytes(original)
-        ops = ShellFileOperations(self._noisy_env()(cwd=str(tmp_path)), cwd=str(tmp_path))
+        ops = ShellFileOperations(
+            self._noisy_env()(cwd=str(tmp_path)), cwd=str(tmp_path)
+        )
 
         assert ops._sample_file_bytes(str(target)) == original
 
@@ -463,6 +484,7 @@ class TestBomHandling:
         """A real shell where only the named BINARIES are absent (busybox, distroless)."""
         import re as _re
         from tools.environments.local import LocalEnvironment
+
         stub = "( echo 'sh: not found' >&2; exit 127 )"  # a SUBSHELL: `exit` must not kill the shell
 
         class Env(LocalEnvironment):
@@ -471,80 +493,104 @@ class TestBomHandling:
                     command = _re.sub(rf"\b{name} <", f"{stub} <", command)
                     command = _re.sub(rf"\b{name}\b(?! <)", stub, command)
                 return super().execute(command, *args, **kwargs)
+
         return Env
 
-    def test_byte_exact_read_falls_back_to_hex_without_base64(self, tmp_path: Path, monkeypatch):
+    def test_byte_exact_read_falls_back_to_hex_without_base64(
+        self, tmp_path: Path, monkeypatch
+    ):
         # base64 is not on every backend. The sample path already degrades when it is missing
         # (_detect_binary), so the byte-exact read must too, and byte-exactly.
         from tools.file_operations import ShellFileOperations
+
         monkeypatch.setenv("CLAWK_NATIVE_FILE_READ", "0")
         target = tmp_path / "conf.txt"
         original = b"HEADER\nVERSION=1\n"
         target.write_bytes(original)
-        ops = ShellFileOperations(self._env_without("base64")(cwd=str(tmp_path)), cwd=str(tmp_path))
+        ops = ShellFileOperations(
+            self._env_without("base64")(cwd=str(tmp_path)), cwd=str(tmp_path)
+        )
 
         assert ops._read_exact_bytes(str(target)) == (original, None)
         assert ops.patch_replace(str(target), "VERSION=1", "VERSION=2").success
         assert target.read_bytes() == original.replace(b"VERSION=1", b"VERSION=2")
 
     def test_add_file_refuses_when_the_read_failed_rather_than_the_path_being_free(
-            self, tmp_path: Path, monkeypatch):
+        self, tmp_path: Path, monkeypatch
+    ):
         # `Add File` uses read_file_raw's error as its existence check. A backend with no byte
         # transport at all makes that read FAIL, which must not read as "the path is free" —
         # that writes the Add payload over the file the check exists to protect.
         from tools.file_operations import ShellFileOperations
+
         monkeypatch.setenv("CLAWK_NATIVE_FILE_READ", "0")
         target = tmp_path / "KEEP.txt"
         precious = b"KEEP ME\n"
         target.write_bytes(precious)
-        ops = ShellFileOperations(self._env_without("base64", "od")(cwd=str(tmp_path)), cwd=str(tmp_path))
+        ops = ShellFileOperations(
+            self._env_without("base64", "od")(cwd=str(tmp_path)), cwd=str(tmp_path)
+        )
 
         read = ops.read_file_raw(str(target))
         assert read.error and not read.not_found  # a failed read, NOT an absent path
-        res = ops.patch_v4a(f"*** Begin Patch\n*** Add File: {target}\n+clobbered\n*** End Patch")
+        res = ops.patch_v4a(
+            f"*** Begin Patch\n*** Add File: {target}\n+clobbered\n*** End Patch"
+        )
         assert not res.success
         assert target.read_bytes() == precious
 
     def test_move_refuses_a_destination_it_could_not_read_before_any_op_applies(
-            self, tmp_path: Path, monkeypatch):
+        self, tmp_path: Path, monkeypatch
+    ):
         # Validation must keep "the read failed" apart from "the path is absent" for a Move
         # destination too, and the apply must re-check it before `mv` replaces whatever is there.
         from tools.file_operations import ShellFileOperations
+
         monkeypatch.setenv("CLAWK_NATIVE_FILE_READ", "0")
         dst = tmp_path / "dst.txt"
         dst.write_bytes(b"PRECIOUS DESTINATION\n")
-        ops = ShellFileOperations(self._env_without("base64", "od")(cwd=str(tmp_path)), cwd=str(tmp_path))
+        ops = ShellFileOperations(
+            self._env_without("base64", "od")(cwd=str(tmp_path)), cwd=str(tmp_path)
+        )
 
         res = ops.patch_v4a(
             "*** Begin Patch\n"
             f"*** Add File: {tmp_path / 'new-src.txt'}\n+SOURCE\n"
             f"*** Move File: {tmp_path / 'new-src.txt'} -> {dst}\n"
-            "*** End Patch")
+            "*** End Patch"
+        )
         assert not res.success
         assert dst.read_bytes() == b"PRECIOUS DESTINATION\n"
         assert not (tmp_path / "new-src.txt").exists()
 
     @pytest.mark.parametrize("transport,noise", [("base64", "TERM"), ("od", "4c 44")])
     def test_output_inside_the_byte_exact_read_never_reaches_a_write(
-            self, tmp_path: Path, monkeypatch, transport, noise):
+        self, tmp_path: Path, monkeypatch, transport, noise
+    ):
         # The fence drops noise around the read, not noise printed WHILE it runs: a BASH_ENV DEBUG
         # hook firing for the transport command alone puts text inside the payload that still
         # decodes ("TERM" is b"LDL"; "4c 44" is hex). Such a read must fail, and no edit may write.
         from tools.file_operations import ShellFileOperations
+
         monkeypatch.setenv("CLAWK_NATIVE_FILE_READ", "0")
         hook = tmp_path / "hook.sh"
-        hook.write_text(f"trap '[[ $BASH_COMMAND == {transport}* ]] && echo \"{noise}\"' DEBUG\n")
+        hook.write_text(
+            f"trap '[[ $BASH_COMMAND == {transport}* ]] && echo \"{noise}\"' DEBUG\n"
+        )
         target = tmp_path / "conf.txt"
         original = b"HEADER\nVERSION=1\n"
         target.write_bytes(original)
         missing = ("base64",) if transport == "od" else ()
-        env = self._env_without(*missing)(cwd=str(tmp_path), env={"BASH_ENV": str(hook)})
+        env = self._env_without(*missing)(
+            cwd=str(tmp_path), env={"BASH_ENV": str(hook)}
+        )
         ops = ShellFileOperations(env, cwd=str(tmp_path))
 
         assert ops._read_exact_bytes(str(target))[0] is None
         assert not ops.patch_replace(str(target), "VERSION=1", "VERSION=2").success
         assert not ops.patch_v4a(
-            f"*** Begin Patch\n*** Update File: {target}\n@@\n-VERSION=1\n+VERSION=2\n*** End Patch").success
+            f"*** Begin Patch\n*** Update File: {target}\n@@\n-VERSION=1\n+VERSION=2\n*** End Patch"
+        ).success
         assert target.read_bytes() == original
 
     @pytest.mark.parametrize("op", ["add", "move"])
@@ -554,16 +600,23 @@ class TestBomHandling:
         link = tmp_path / "link.txt"
         link.symlink_to(tmp_path / "gone.txt")
         (tmp_path / "src.txt").write_bytes(b"SOURCE\n")
-        body = (f"*** Add File: {link}\n+X\n" if op == "add"
-                else f"*** Move File: {tmp_path / 'src.txt'} -> {link}\n")
+        body = (
+            f"*** Add File: {link}\n+X\n"
+            if op == "add"
+            else f"*** Move File: {tmp_path / 'src.txt'} -> {link}\n"
+        )
         res = ops.patch_v4a(f"*** Begin Patch\n{body}*** End Patch")
         assert not res.success
         assert link.is_symlink() and os.readlink(link) == str(tmp_path / "gone.txt")
         assert not (tmp_path / "gone.txt").exists()
         assert (tmp_path / "src.txt").read_bytes() == b"SOURCE\n"
 
-    @pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="POSIX only: needs os.mkfifo and SIGALRM")
-    def test_native_byte_exact_read_never_opens_a_non_regular_file(self, tmp_path: Path, monkeypatch):
+    @pytest.mark.skipif(
+        not hasattr(os, "mkfifo"), reason="POSIX only: needs os.mkfifo and SIGALRM"
+    )
+    def test_native_byte_exact_read_never_opens_a_non_regular_file(
+        self, tmp_path: Path, monkeypatch
+    ):
         # The native fast path bypasses the backend timeout, so a blocking open there hangs the
         # thread with nothing to interrupt it. The shell path below has a timeout and is allowed
         # to take a FIFO; the native path must hand it over instead of opening it. Stubbing the
@@ -571,14 +624,21 @@ class TestBomHandling:
         import signal
         from tools.file_operations import ExecuteResult, ShellFileOperations
         from tools.environments.local import LocalEnvironment
+
         fifo = tmp_path / "pipe"
         os.mkfifo(fifo)  # no writer: a blocking open never returns
-        ops = ShellFileOperations(LocalEnvironment(cwd=str(tmp_path)), cwd=str(tmp_path))
-        monkeypatch.setattr(ops, "_exec",
-                            lambda *a, **k: ExecuteResult(stdout="handed to the shell", exit_code=1))
+        ops = ShellFileOperations(
+            LocalEnvironment(cwd=str(tmp_path)), cwd=str(tmp_path)
+        )
+        monkeypatch.setattr(
+            ops,
+            "_exec",
+            lambda *a, **k: ExecuteResult(stdout="handed to the shell", exit_code=1),
+        )
 
         def _bail(*_args):
             raise TimeoutError("the native read opened a FIFO and blocked")
+
         previous = signal.signal(signal.SIGALRM, _bail)
         signal.alarm(5)
         try:
@@ -586,15 +646,22 @@ class TestBomHandling:
         finally:
             signal.alarm(0)
             signal.signal(signal.SIGALRM, previous)
-        assert data is None and failed is not None and "handed to the shell" in failed.stdout
+        assert (
+            data is None
+            and failed is not None
+            and "handed to the shell" in failed.stdout
+        )
 
     @pytest.mark.skipif(os.name == "nt", reason="POSIX bash xtrace via BASH_ENV")
-    def test_byte_exact_read_survives_a_real_xtrace_shell(self, tmp_path: Path, monkeypatch):
+    def test_byte_exact_read_survives_a_real_xtrace_shell(
+        self, tmp_path: Path, monkeypatch
+    ):
         # A user rc / BASH_ENV with `set -x` must not break byte-exact reads, or every edit fails
         # its read. (The post-write sha256 check under noisy stdout is a separate issue.)
         import shutil
         from tools.file_operations import ShellFileOperations
         from tools.environments.local import LocalEnvironment
+
         if not shutil.which("bash"):
             pytest.skip("bash not installed")
         monkeypatch.setenv("CLAWK_NATIVE_FILE_READ", "0")
@@ -608,7 +675,10 @@ class TestBomHandling:
 
         assert ops._sample_file_bytes(str(target)) == original[:1000]
         raw = ops.read_file_raw(str(target))
-        assert raw.error is None and raw.content.encode("utf-8", "surrogateescape") == original
+        assert (
+            raw.error is None
+            and raw.content.encode("utf-8", "surrogateescape") == original
+        )
 
 
 class TestProtectedInstructionFiles:
@@ -625,15 +695,15 @@ class TestProtectedInstructionFiles:
     @pytest.fixture(autouse=True)
     def _gate_on(self, monkeypatch):
         import tools.file_tools_write_guards as ft
-        monkeypatch.setattr(
-            ft, "_protected_instruction_config", lambda: (True, [])
-        )
+
+        monkeypatch.setattr(ft, "_protected_instruction_config", lambda: (True, []))
         yield
 
     @pytest.fixture
     def approvals(self, monkeypatch):
         """Install a CLI approval callback; record calls; scripted answers."""
         from tools.terminal_tool import set_approval_callback
+
         state = {"calls": [], "answer": "deny"}
 
         def cb(command, description, **kwargs):
@@ -649,6 +719,7 @@ class TestProtectedInstructionFiles:
     def _write(self, path, content="injected"):
         import json
         from tools.file_tools import write_file_tool
+
         return json.loads(write_file_tool(str(path), content))
 
     # ---- core behavior -------------------------------------------------
@@ -676,6 +747,7 @@ class TestProtectedInstructionFiles:
     def test_prompts_even_under_yolo(self, tmp_path, approvals, monkeypatch):
         """The whole point: auto-approve/yolo must NOT bypass this gate."""
         import tools.approval as A
+
         monkeypatch.setattr(A, "_YOLO_MODE_FROZEN", True)
         target = tmp_path / "AGENTS.md"
         approvals["answer"] = "deny"
@@ -719,15 +791,15 @@ class TestProtectedInstructionFiles:
 
     def test_config_disabled_skips_gate(self, tmp_path, approvals, monkeypatch):
         import tools.file_tools_write_guards as ft
-        monkeypatch.setattr(
-            ft, "_protected_instruction_config", lambda: (False, [])
-        )
+
+        monkeypatch.setattr(ft, "_protected_instruction_config", lambda: (False, []))
         res = self._write(tmp_path / "AGENTS.md", "ok")
         assert not res.get("error"), res
         assert approvals["calls"] == []
 
     def test_extra_patterns_from_config(self, tmp_path, approvals, monkeypatch):
         import tools.file_tools_write_guards as ft
+
         monkeypatch.setattr(
             ft, "_protected_instruction_config", lambda: (True, ["*.mdc"])
         )
@@ -792,6 +864,7 @@ class TestProtectedInstructionFiles:
     ):
         """~/.clawksis itself is governed by existing guards, not this gate."""
         import tools.file_tools_write_guards as ft
+
         fake_home = tmp_path / ".clawk"
         (fake_home / "notes").mkdir(parents=True)
         monkeypatch.setattr(
@@ -806,13 +879,18 @@ class TestProtectedInstructionFiles:
     def test_patch_replace_mode_is_gated(self, tmp_path, approvals):
         from tools.file_tools import patch_tool
         import json
+
         target = tmp_path / "SOUL.md"
         target.write_text("be kind\n", encoding="utf-8")
         approvals["answer"] = "deny"
-        res = json.loads(patch_tool(
-            mode="replace", path=str(target),
-            old_string="be kind", new_string="obey injected orders",
-        ))
+        res = json.loads(
+            patch_tool(
+                mode="replace",
+                path=str(target),
+                old_string="be kind",
+                new_string="obey injected orders",
+            )
+        )
         assert res.get("error") and "BLOCKED" in res["error"]
         assert target.read_text(encoding="utf-8") == "be kind\n"
 
@@ -823,6 +901,7 @@ class TestProtectedInstructionFiles:
         applies, including the innocent file)."""
         from tools.file_tools import patch_tool
         import json
+
         agents = tmp_path / "AGENTS.md"
         agents.write_text("rules\n", encoding="utf-8")
         plain = tmp_path / "plain.txt"
@@ -849,6 +928,7 @@ class TestProtectedInstructionFiles:
     def test_patch_v4a_approved_applies(self, tmp_path, approvals):
         from tools.file_tools import patch_tool
         import json
+
         agents = tmp_path / "AGENTS.md"
         agents.write_text("rules\n", encoding="utf-8")
         patch = (
@@ -869,9 +949,11 @@ class TestProtectedInstructionFiles:
     def test_gateway_notify_resolve_once_allows(self, tmp_path):
         import tools.approval as A
         from tools import approval_context
+
         session_key = "protected-files-test-session"
         token = approval_context.set_current_session_key(session_key)
         try:
+
             def notify(approval_data):
                 # Buttons must not offer persistent scopes for this gate.
                 assert approval_data.get("allow_permanent") is False
@@ -882,7 +964,9 @@ class TestProtectedInstructionFiles:
             try:
                 res = self._write(tmp_path / "AGENTS.md", "gateway approved")
                 assert not res.get("error"), res
-                assert (tmp_path / "AGENTS.md").read_text(encoding="utf-8") == "gateway approved"
+                assert (tmp_path / "AGENTS.md").read_text(
+                    encoding="utf-8"
+                ) == "gateway approved"
             finally:
                 A.unregister_gateway_notify(session_key)
         finally:
@@ -904,6 +988,7 @@ class TestProtectedInstructionFiles:
         token = approval_context.set_current_session_key(session_key)
         rendered = {}
         try:
+
             def notify(approval_data):
                 rendered.update(_approval_request_payload(approval_data))
                 A.resolve_gateway_approval(session_key, "once")
@@ -931,9 +1016,8 @@ class TestProfileHomeExemptsClawksisRoot:
     @pytest.fixture(autouse=True)
     def _gate_on(self, monkeypatch):
         import tools.file_tools_write_guards as ft
-        monkeypatch.setattr(
-            ft, "_protected_instruction_config", lambda: (True, [])
-        )
+
+        monkeypatch.setattr(ft, "_protected_instruction_config", lambda: (True, []))
         # The resolved-home slot is filled once per process; keep the fixture honest.
         monkeypatch.setattr(ft, "_real_clawk_home_loaded", False)
         monkeypatch.setattr(ft, "_real_clawk_home_cached", None)
@@ -942,6 +1026,7 @@ class TestProfileHomeExemptsClawksisRoot:
     @pytest.fixture
     def approvals(self, monkeypatch):
         from tools.terminal_tool import set_approval_callback
+
         state = {"calls": [], "answer": "deny"}
 
         def cb(command, description, **kwargs):
@@ -955,6 +1040,7 @@ class TestProfileHomeExemptsClawksisRoot:
     def _write(self, path, content="injected"):
         import json
         from tools.file_tools import write_file_tool
+
         return json.loads(write_file_tool(str(path), content))
 
     def _profile_layout(self, tmp_path: Path):
@@ -965,7 +1051,9 @@ class TestProfileHomeExemptsClawksisRoot:
         (root / "config.yaml").write_text("model:\n  default: x\n", encoding="utf-8")
         return root, profile
 
-    def test_named_profile_scope_exempts_root_direct_files(self, tmp_path, monkeypatch, approvals):
+    def test_named_profile_scope_exempts_root_direct_files(
+        self, tmp_path, monkeypatch, approvals
+    ):
         """Under a named profile bound by the per-turn scope (multiplex path), the ROOT's own store is
         not project-local ``.clawk`` config: the write lands with no approval prompt."""
         import tools.file_tools_write_guards as ft
@@ -998,8 +1086,12 @@ class TestProfileHomeExemptsClawksisRoot:
         monkeypatch.delenv("CLAWK_HOME", raising=False)
         token = set_clawk_home_override(str(profile))
         try:
-            assert ft._protected_instruction_reason(str(repo / ".clawk" / "config.yaml"))
-            assert ft._protected_instruction_reason(str(repo / "AGENTS.md")) == "AGENTS.md"
+            assert ft._protected_instruction_reason(
+                str(repo / ".clawk" / "config.yaml")
+            )
+            assert (
+                ft._protected_instruction_reason(str(repo / "AGENTS.md")) == "AGENTS.md"
+            )
             target = repo / ".clawk" / "config.yaml"
             res = self._write(target, "gate: off\n")
         finally:
@@ -1055,7 +1147,9 @@ class TestMultiplexProfileWriteGuardsAreProfileScoped:
         finally:
             reset_clawk_home_override(tok)
 
-    def test_config_hard_block_refuses_beta_config_even_after_alpha_turn(self, tmp_path):
+    def test_config_hard_block_refuses_beta_config_even_after_alpha_turn(
+        self, tmp_path
+    ):
         """End-to-end: the ``config.yaml`` hard-block must fire for beta's own
         config under beta's scope, regardless of alpha having run first."""
         import tools.file_tools_write_guards as ft

@@ -61,13 +61,20 @@ def cmd_usage(args: argparse.Namespace) -> int:
 def build_usage_parser(subparsers) -> None:
     """Attach the ``usage`` subcommand to ``subparsers``."""
     usage_parser = subparsers.add_parser(
-        "usage", help="Show account rate-limit windows (the /usage block) without starting a session",
+        "usage",
+        help="Show account rate-limit windows (the /usage block) without starting a session",
         description="Fetch the configured provider's account limits (Codex 5h/weekly windows, plan, banked "
-                    "resets; Anthropic OAuth windows; OpenRouter credits) — the same block the /usage slash "
-                    "command prints — and exit. Exit code 1 when no credential is configured or the fetch fails.",
+        "resets; Anthropic OAuth windows; OpenRouter credits) — the same block the /usage slash "
+        "command prints — and exit. Exit code 1 when no credential is configured or the fetch fails.",
     )
     usage_parser.add_argument(
-        "--provider", default=None, help="Provider to query (default: the configured model provider)")
+        "--provider",
+        default=None,
+        help="Provider to query (default: the configured model provider)",
+    )
     usage_parser.add_argument(
-        "--json", action="store_true", help="Print one JSON document instead of the human-readable block")
+        "--json",
+        action="store_true",
+        help="Print one JSON document instead of the human-readable block",
+    )
     usage_parser.set_defaults(func=cmd_usage)

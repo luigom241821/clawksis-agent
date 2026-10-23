@@ -8,7 +8,9 @@ import pytest
 
 
 @pytest.mark.no_isolate
-def test_self_probe_revival_runs_with_interactive_oauth_suppressed(monkeypatch, tmp_path):
+def test_self_probe_revival_runs_with_interactive_oauth_suppressed(
+    monkeypatch, tmp_path
+):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 
     from tools import mcp_tool
@@ -19,6 +21,7 @@ def test_self_probe_revival_runs_with_interactive_oauth_suppressed(monkeypatch, 
     monkeypatch.setattr(mcp_tool, "_PARKED_RETRY_INTERVAL", 0.05)
 
     from tools import mcp_tool_config as _config
+
     monkeypatch.setattr(_config, "_load_mcp_config", lambda: {"srv": {"command": "x"}})
     _real_sleep = asyncio.sleep
 
@@ -58,7 +61,8 @@ def test_self_probe_revival_runs_with_interactive_oauth_suppressed(monkeypatch, 
     asyncio.run(_scenario())
     assert attempts[0] is True, "the attended initial connect may still prompt"
     assert len(attempts) >= 2 and attempts[-1] is False, (
-        "timed self-probe revival ran with interactive OAuth enabled -> browser tab per probe")
+        "timed self-probe revival ran with interactive OAuth enabled -> browser tab per probe"
+    )
 
 
 def test_explicit_reconnect_request_keeps_the_callers_interactivity():

@@ -16,8 +16,10 @@ def _model_section_has_credentials(config: dict) -> bool:
     auth store (OAuth providers), ``PROVIDER_REGISTRY`` ``api_key_env_vars``, or the legacy
     OpenRouter aggregator env vars (``OPENAI_API_KEY`` / ``OPENROUTER_API_KEY``)."""
     from clawk_cli.setup import get_env_value
+
     try:
         from clawk_cli.auth import get_active_provider
+
         if get_active_provider():
             return True
     except Exception:
@@ -30,7 +32,11 @@ def _model_section_has_credentials(config: dict) -> bool:
     def _has_key(pconfig) -> bool:
         # CLAUDE_CODE_OAUTH_TOKEN is set by Claude Code itself, not by the user —
         # mirrors is_provider_explicitly_configured in auth.py.
-        return any(get_env_value(v) for v in pconfig.api_key_env_vars if v != "CLAUDE_CODE_OAUTH_TOKEN")
+        return any(
+            get_env_value(v)
+            for v in pconfig.api_key_env_vars
+            if v != "CLAUDE_CODE_OAUTH_TOKEN"
+        )
 
     any_openrouter_key = any(get_env_value(v) for v in _OPENROUTER_ENV_VARS)
 
@@ -39,7 +45,9 @@ def _model_section_has_credentials(config: dict) -> bool:
     model_cfg = config.get("model") if isinstance(config, dict) else None
     if isinstance(model_cfg, dict):
         provider_id = (model_cfg.get("provider") or "").strip().lower()
-        if provider_id in PROVIDER_REGISTRY and _has_key(PROVIDER_REGISTRY[provider_id]):
+        if provider_id in PROVIDER_REGISTRY and _has_key(
+            PROVIDER_REGISTRY[provider_id]
+        ):
             return True
         if provider_id == "openrouter" and any_openrouter_key:
             return True
@@ -49,7 +57,11 @@ def _model_section_has_credentials(config: dict) -> bool:
         return True
     # Skip copilot in auto-detect: GH_TOKEN / GITHUB_TOKEN are commonly set for git tooling.
     # Mirrors resolve_provider in auth.py.
-    return any(_has_key(pconfig) for pid, pconfig in PROVIDER_REGISTRY.items() if pid != "copilot")
+    return any(
+        _has_key(pconfig)
+        for pid, pconfig in PROVIDER_REGISTRY.items()
+        if pid != "copilot"
+    )
 
 
 def _model_summary(config: dict) -> Optional[str]:
@@ -65,11 +77,13 @@ def _model_summary(config: dict) -> Optional[str]:
 
 def _cfg_summary(config: dict, section: str, key: str, default, prefix: str) -> str:
     from clawk_cli.setup import cfg_get
+
     return f"{prefix}{cfg_get(config, section, key, default=default)}"
 
 
 def _gateway_summary(config: dict) -> Optional[str]:
     from clawk_cli.gateway import _all_platforms, _platform_status
+
     # Any non-empty status other than "not configured" counts — WhatsApp ("enabled, not paired"),
     # Matrix ("configured + E2EE") mean setup already started.
     configured = [
@@ -90,14 +104,23 @@ _TOOL_ENV_LABELS = (
 
 def _tools_summary(config: dict) -> Optional[str]:
     from clawk_cli.setup import get_env_value
+
     tools = [label for env_var, label in _TOOL_ENV_LABELS if get_env_value(env_var)]
     return ", ".join(tools) if tools else None
 
 
 _SECTION_SUMMARIES = {
     "model": _model_summary,
-    "terminal": partial(_cfg_summary, section="terminal", key="backend", default="local", prefix="backend: "),
-    "agent": partial(_cfg_summary, section="agent", key="max_turns", default=90, prefix="max turns: "),
+    "terminal": partial(
+        _cfg_summary,
+        section="terminal",
+        key="backend",
+        default="local",
+        prefix="backend: ",
+    ),
+    "agent": partial(
+        _cfg_summary, section="agent", key="max_turns", default=90, prefix="max turns: "
+    ),
     "gateway": _gateway_summary,
     "tools": _tools_summary,
 }
@@ -114,6 +137,7 @@ def _get_section_config_summary(config: dict, section_key: str) -> Optional[str]
 def _skip_configured_section(config: dict, section_key: str, label: str) -> bool:
     """Show an already-configured section summary and offer to skip; True when the user skips."""
     from clawk_cli.setup import print_success, prompt_yes_no
+
     summary = _get_section_config_summary(config, section_key)
     if not summary:
         return False

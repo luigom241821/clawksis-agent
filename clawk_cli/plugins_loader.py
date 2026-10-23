@@ -22,10 +22,19 @@ from functools import wraps
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Mapping, Optional, Union
 
-from clawk_constants import get_clawk_home, reset_clawk_home_override, set_clawk_home_override
+from clawk_constants import (
+    get_clawk_home,
+    reset_clawk_home_override,
+    set_clawk_home_override,
+)
 from registration_lifecycle import replacement_coordinator
 from clawk_cli.plugins_discovery import ENTRY_POINTS_GROUP, _select_entry_point_group
-from clawk_cli.plugins_manifest import PluginManifest, manifest_key, portable_mcp_server_name, validate_config_schema
+from clawk_cli.plugins_manifest import (
+    PluginManifest,
+    manifest_key,
+    portable_mcp_server_name,
+    validate_config_schema,
+)
 from clawk_cli.plugins_state import _plugin_settings_entry
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -50,8 +59,11 @@ _ABANDONED_LOADERS_LOCK = threading.Lock()
 # Guards creating a manager's plugin host, so concurrent first callers share one host process.
 _PLUGIN_HOST_CREATE_LOCK = threading.Lock()
 # PluginContexts of the outermost deadline-bounded load; set only inside its worker.
-_IN_PLUGIN_LOAD: contextvars.ContextVar[Optional[list[PluginContext]]] = contextvars.ContextVar(
-    "clawk_plugin_load_scope", default=None,
+_IN_PLUGIN_LOAD: contextvars.ContextVar[Optional[list[PluginContext]]] = (
+    contextvars.ContextVar(
+        "clawk_plugin_load_scope",
+        default=None,
+    )
 )
 
 
@@ -70,21 +82,34 @@ def _resolve_plugin_load_timeout() -> float:
     default = _LOAD_TIMEOUT_SECS
     try:
         from clawk_cli.config import load_config_readonly
+
         plugins_cfg = (load_config_readonly() or {}).get("plugins")
-        if not isinstance(plugins_cfg, dict) or plugins_cfg.get("load_timeout_seconds") is None:
+        if (
+            not isinstance(plugins_cfg, dict)
+            or plugins_cfg.get("load_timeout_seconds") is None
+        ):
             return default
         timeout = float(plugins_cfg["load_timeout_seconds"])
     except (TypeError, ValueError):
-        logger.warning("plugins.load_timeout_seconds is not a number; using default %gs", default)
+        logger.warning(
+            "plugins.load_timeout_seconds is not a number; using default %gs", default
+        )
         return default
     except Exception:
         return default
     if timeout < 0:
-        logger.warning("plugins.load_timeout_seconds=%g is negative; using default %gs", timeout, default)
+        logger.warning(
+            "plugins.load_timeout_seconds=%g is negative; using default %gs",
+            timeout,
+            default,
+        )
         return default
     if timeout > _MAX_LOAD_TIMEOUT_SECS:
-        logger.warning("plugins.load_timeout_seconds=%g exceeds max %gs; clamping", timeout,
-                       _MAX_LOAD_TIMEOUT_SECS)
+        logger.warning(
+            "plugins.load_timeout_seconds=%g exceeds max %gs; clamping",
+            timeout,
+            _MAX_LOAD_TIMEOUT_SECS,
+        )
         return _MAX_LOAD_TIMEOUT_SECS
     return timeout
 
@@ -103,7 +128,9 @@ def _reserve_abandoned_loader_slot() -> None:
     )
 
 
-def run_with_load_deadline(plugin_key: str, ctx: PluginContext, fn: Callable[[], Any]) -> Any:
+def run_with_load_deadline(
+    plugin_key: str, ctx: PluginContext, fn: Callable[[], Any]
+) -> Any:
     """Run ``fn`` (a plugin's import + ``register()``) under the per-plugin deadline.
 
     The worker inherits the caller's context (the Clawksis-home override is a ContextVar). On timeout the
@@ -132,13 +159,18 @@ def run_with_load_deadline(plugin_key: str, ctx: PluginContext, fn: Callable[[],
         token = _IN_PLUGIN_LOAD.set(scope)
         try:
             outcome.append(fn())
-        except BaseException as exc:  # re-raised on the loading thread, KeyboardInterrupt included
+        except (
+            BaseException
+        ) as exc:  # re-raised on the loading thread, KeyboardInterrupt included
             failure.append(exc)
         finally:
             _IN_PLUGIN_LOAD.reset(token)
 
     worker = threading.Thread(
-        target=contextvars.copy_context().run, args=(_worker,), name=f"{_LOADER_THREAD_PREFIX}{plugin_key}", daemon=True,
+        target=contextvars.copy_context().run,
+        args=(_worker,),
+        name=f"{_LOADER_THREAD_PREFIX}{plugin_key}",
+        daemon=True,
     )
     worker.start()
     worker.join(timeout)
@@ -147,7 +179,9 @@ def run_with_load_deadline(plugin_key: str, ctx: PluginContext, fn: Callable[[],
             loaded_ctx._abandon_load()
         with _ABANDONED_LOADERS_LOCK:
             _ABANDONED_LOADERS.append(worker)
-        raise PluginLoadTimeout(f"load timed out after {timeout:g}s (import + register() never returned)")
+        raise PluginLoadTimeout(
+            f"load timed out after {timeout:g}s (import + register() never returned)"
+        )
     if failure:
         raise failure[0]
     return outcome[0]
@@ -172,6 +206,7 @@ def _evict_modules(module_name: str) -> None:
 
 def _serialized_replacement(method):
     """Make snapshot → write → lease attachment one atomic transaction."""
+
     @wraps(method)
     def wrapped(*args, **kwargs):
         with replacement_coordinator.transaction():
@@ -212,7 +247,9 @@ def _dist_installed(req: str) -> Optional[bool]:
 
 
 class PluginLoaderMixin:
-    def on_plugin_loaded(self, callback: Callable[[list[dict[str, Any]]], Any]) -> Callable[[], None]:
+    def on_plugin_loaded(
+        self, callback: Callable[[list[dict[str, Any]]], Any]
+    ) -> Callable[[], None]:
         """Subscribe to "a discovery sweep loaded plugins this process did not have": fires from INSIDE
         :meth:`discover_and_load` (never emitted by an install RPC) with one
         ``{name, key, activated_now, deferred}`` summary per NEWLY loaded plugin — every plugin at boot,
@@ -236,6 +273,7 @@ class PluginLoaderMixin:
                 listeners.remove(callback)
             except ValueError:
                 pass
+
         return _unsubscribe
 
     def _notify_plugin_loaded(self, loaded_before: frozenset) -> None:
@@ -244,14 +282,19 @@ class PluginLoaderMixin:
         if not self._plugin_loaded_listeners:
             return
         from clawk_cli.plugins_activation import activation_summaries
-        summaries = [s for s in activation_summaries(self) if s["key"] not in loaded_before]
+
+        summaries = [
+            s for s in activation_summaries(self) if s["key"] not in loaded_before
+        ]
         if not summaries:
             return
         for callback in list(self._plugin_loaded_listeners):
             try:
                 callback(summaries)
             except Exception:
-                logger.warning("plugin-loaded listener %r raised", callback, exc_info=True)
+                logger.warning(
+                    "plugin-loaded listener %r raised", callback, exc_info=True
+                )
 
     @staticmethod
     def _platform_name_from_manifest(manifest: PluginManifest) -> str:
@@ -267,6 +310,7 @@ class PluginLoaderMixin:
         ``platform_registry`` is first asked for it; a placeholder ``LoadedPlugin`` keeps it visible in
         ``clawk plugins list`` until then."""
         from clawk_cli.plugins import LoadedPlugin
+
         lookup_key = manifest_key(manifest)
         loaded = LoadedPlugin(manifest=manifest, enabled=True, deferred=True)
         self._plugins[lookup_key] = loaded
@@ -283,61 +327,116 @@ class PluginLoaderMixin:
         retries the import. A failed load disposes its lease (the registry forgets the platform), so without
         this a load that raised or overran its deadline at startup stays down until a forced re-discovery
         (#126356). True when a loader was re-armed."""
-        from clawk_cli.plugins_discovery import _get_disabled_plugins, _get_enabled_plugins, gate_manifest
+        from clawk_cli.plugins_discovery import (
+            _get_disabled_plugins,
+            _get_enabled_plugins,
+            gate_manifest,
+        )
         from clawk_cli.plugins_manifest import requires_clawk_error
+
         with self._discovery_lock, _plugin_home_scope(self.home_path):
-            failed = next((p.manifest for p in self._plugins.values()
-                           if p.error and not p.enabled and p.manifest.kind == "platform"
-                           and self._platform_name_from_manifest(p.manifest) == platform_name), None)
+            failed = next(
+                (
+                    p.manifest
+                    for p in self._plugins.values()
+                    if p.error
+                    and not p.enabled
+                    and p.manifest.kind == "platform"
+                    and self._platform_name_from_manifest(p.manifest) == platform_name
+                ),
+                None,
+            )
             # Re-gate: a placeholder (disabled, not enabled, catalog-removed) or a requires_clawk mismatch
             # carries the same error-set shape as a failed load but must never be imported.
-            if failed is None or requires_clawk_error(failed) or gate_manifest(
-                    failed, _get_disabled_plugins(), _get_enabled_plugins()).action not in ("defer", "load"):
+            if (
+                failed is None
+                or requires_clawk_error(failed)
+                or gate_manifest(
+                    failed, _get_disabled_plugins(), _get_enabled_plugins()
+                ).action
+                not in ("defer", "load")
+            ):
                 return False
-            with _ABANDONED_LOADERS_LOCK:  # its hung import is still running: another retry only leaks a thread
-                if any(t.is_alive() and t.name == f"{_LOADER_THREAD_PREFIX}{manifest_key(failed)}" for t in _ABANDONED_LOADERS):
+            with (
+                _ABANDONED_LOADERS_LOCK
+            ):  # its hung import is still running: another retry only leaks a thread
+                if any(
+                    t.is_alive()
+                    and t.name == f"{_LOADER_THREAD_PREFIX}{manifest_key(failed)}"
+                    for t in _ABANDONED_LOADERS
+                ):
                     return False
             logger.info("Re-arming failed platform plugin load: %s", platform_name)
             self._register_deferred_platform(failed)
             return True
 
     @_serialized_replacement
-    def _lease_deferred_platform(self, manifest: PluginManifest, lookup_key: str) -> bool:
+    def _lease_deferred_platform(
+        self, manifest: PluginManifest, lookup_key: str
+    ) -> bool:
         """Publish the deferred loader as a ledger-owned lease; False when the registry refused it."""
         platform_name = self._platform_name_from_manifest(manifest)
         try:
             from gateway.platform_registry import platform_registry
+
             scope = self.scope_key
 
             def _loader(_manifest: PluginManifest = manifest) -> None:
                 # Lock before checking cancellation: if an unload won the race it restored the predecessor
                 # and this loader must publish nothing; if loading won, unload waits and disposes the set.
                 with self._discovery_lock, _plugin_home_scope(self.home_path):
-                    if platform_registry.is_deferred_load_cancelled(platform_name, scope=scope):
+                    if platform_registry.is_deferred_load_cancelled(
+                        platform_name, scope=scope
+                    ):
                         return
                     self._load_plugin_scoped(_manifest)
 
-            previous = platform_registry.snapshot_registration(platform_name, scope=scope)
+            previous = platform_registry.snapshot_registration(
+                platform_name, scope=scope
+            )
             platform_registry.register_deferred(platform_name, _loader, scope=scope)
             # Lets the gateway config pass recognise an env-only setup (sms: TWILIO_*) without
             # importing the adapter; see gateway.platform_activation.
             platform_registry.note_activation_env(
-                platform_name, [e.get("name") if isinstance(e, dict) else e for e in manifest.requires_env or ()])
-            current = platform_registry.snapshot_registration(platform_name, scope=scope)
+                platform_name,
+                [
+                    e.get("name") if isinstance(e, dict) else e
+                    for e in manifest.requires_env or ()
+                ],
+            )
+            current = platform_registry.snapshot_registration(
+                platform_name, scope=scope
+            )
             if current[0] is None and current[1] is _loader:
                 self._plugin_platform_names.add(platform_name)
                 self._track_scoped_registration(
-                    manifest, "platform", platform_name, platform_registry, current, previous,
-                    finalize=lambda: self._remove_platform_name_if_unowned(platform_name),
+                    manifest,
+                    "platform",
+                    platform_name,
+                    platform_registry,
+                    current,
+                    previous,
+                    finalize=lambda: self._remove_platform_name_if_unowned(
+                        platform_name
+                    ),
                 )
-            logger.debug("Registered deferred platform loader: %s (plugin=%s)", platform_name, lookup_key)
+            logger.debug(
+                "Registered deferred platform loader: %s (plugin=%s)",
+                platform_name,
+                lookup_key,
+            )
         except Exception:
             logger.debug(
-                "Deferred platform registration failed for '%s'; eager-loading", lookup_key, exc_info=True)
+                "Deferred platform registration failed for '%s'; eager-loading",
+                lookup_key,
+                exc_info=True,
+            )
             return False
         return True
 
-    def _register_deferred_platform_tools(self, manifest: PluginManifest, loaded: LoadedPlugin) -> None:
+    def _register_deferred_platform_tools(
+        self, manifest: PluginManifest, loaded: LoadedPlugin
+    ) -> None:
         """Register a deferred platform's *client* tools without its adapter. Deferring the plugin would
         otherwise defer its outbound tools too, so CLI/TUI processes (which never materialize platforms)
         would miss them in ``clawk tools`` / ``platform_toolsets``. Opt-in is explicit via ``provides_tools``;
@@ -357,6 +456,7 @@ class PluginLoaderMixin:
         the field is untouched and stays fully deferred.
         """
         from clawk_cli.plugins import PluginContext, _PLUGINS_DEBUG
+
         if not manifest.provides_tools:
             return
         lookup_key = manifest_key(manifest)
@@ -374,10 +474,14 @@ class PluginLoaderMixin:
                 # Staying quiet here reproduces the exact symptom this path exists to fix — tools the
                 # manifest promises, silently absent from the session (#78050) — so say so.
                 "Plugin '%s' declares provides_tools %s but has no tools.py; "
-                "those tools will not be available in CLI/TUI sessions.", lookup_key, declared,
+                "those tools will not be available in CLI/TUI sessions.",
+                lookup_key,
+                declared,
             )
             return
-        before = set(self._plugin_tool_names)  # lets the failure path credit partial registrations
+        before = set(
+            self._plugin_tool_names
+        )  # lets the failure path credit partial registrations
 
         def _credit() -> list[str]:
             """Attribute every tool registered since ``before`` to this plugin."""
@@ -399,13 +503,17 @@ class PluginLoaderMixin:
                 logger.warning(
                     "Plugin '%s' declares provides_tools %s but its tools.py "
                     "has no register_tools(ctx); those tools will not be "
-                    "available in CLI/TUI sessions.", lookup_key, declared,
+                    "available in CLI/TUI sessions.",
+                    lookup_key,
+                    declared,
                 )
                 return
             register_tools(PluginContext(manifest, self))
             registered = _credit()
             logger.debug(
-                "Deferred platform '%s': pre-registered %d client tool(s) %s", lookup_key, len(registered),
+                "Deferred platform '%s': pre-registered %d client tool(s) %s",
+                lookup_key,
+                len(registered),
                 registered,
             )
         except (Exception, SystemExit) as exc:
@@ -415,13 +523,20 @@ class PluginLoaderMixin:
             partial, total = _credit(), len(declared)
             complete = len(partial) >= total
             scope = (
-                f"before registering any of its {total} declared tool(s)" if not partial
-                else f"after registering all {total} declared tool(s)" if complete
+                f"before registering any of its {total} declared tool(s)"
+                if not partial
+                else f"after registering all {total} declared tool(s)"
+                if complete
                 else f"after registering {len(partial)} of {total} declared tool(s)"
             )
             logger.warning(
-                "Plugin '%s': client-tool pre-registration failed %s (%s).%s", lookup_key, scope, exc,
-                "" if complete else " The remainder will be missing from CLI/TUI sessions.",
+                "Plugin '%s': client-tool pre-registration failed %s (%s).%s",
+                lookup_key,
+                scope,
+                exc,
+                ""
+                if complete
+                else " The remainder will be missing from CLI/TUI sessions.",
                 exc_info=_PLUGINS_DEBUG,
             )
 
@@ -440,10 +555,13 @@ class PluginLoaderMixin:
                 "Plugin %s declares Python dependencies that are not "
                 "installed: %s. For an enabled plugin, run clawk pm repair, "
                 "then restart Clawksis. Discovery does not install dependencies.",
-                key, ", ".join(missing),
+                key,
+                ", ".join(missing),
             )
         else:
-            logger.debug("Plugin %s python_dependencies satisfied: %s", key, ", ".join(deps))
+            logger.debug(
+                "Plugin %s python_dependencies satisfied: %s", key, ", ".join(deps)
+            )
 
     def _validate_plugin_config_schema(self, manifest: PluginManifest) -> None:
         """Warn (never block) on plugins.entries.<id> settings that violate config_schema.
@@ -456,6 +574,7 @@ class PluginLoaderMixin:
         settings: Mapping[str, Any] = {}
         try:
             from clawk_cli.config import load_config
+
             entry = _plugin_settings_entry(load_config() or {}, plugin_id) or {}
             raw = entry.get("settings")
             if not isinstance(raw, Mapping):
@@ -463,7 +582,9 @@ class PluginLoaderMixin:
             settings = raw if isinstance(raw, Mapping) else {}
         except Exception:
             settings = {}
-        for warning in validate_config_schema(plugin_id, manifest.config_schema, settings):
+        for warning in validate_config_schema(
+            plugin_id, manifest.config_schema, settings
+        ):
             logger.warning("Plugin %s config: %s", plugin_id, warning)
 
     def _load_plugin(self, manifest: PluginManifest) -> None:
@@ -474,17 +595,22 @@ class PluginLoaderMixin:
     def _load_plugin_scoped(self, manifest: PluginManifest) -> None:
         """Load one plugin with the manager's home bound as current."""
         from clawk_cli.plugins import LoadedPlugin, PluginContext, _PLUGINS_DEBUG
+
         loaded = LoadedPlugin(manifest=manifest)
         plugin_key = manifest_key(manifest)
         logger.debug(
             "Loading plugin '%s' (source=%s, kind=%s, path=%s)",
-            plugin_key, manifest.source, manifest.kind, manifest.path,
+            plugin_key,
+            manifest.source,
+            manifest.kind,
+            manifest.path,
         )
         if manifest.portable:
             self._load_portable_plugin(manifest, loaded)
             return
         # requires_clawk gate: skip cleanly (no import, no traceback) on a version mismatch.
         from clawk_cli.plugins_manifest import requires_clawk_error
+
         reason = requires_clawk_error(manifest)
         if reason:
             loaded.error = reason
@@ -503,8 +629,12 @@ class PluginLoaderMixin:
             # so a failing register() unwinds them too.
             self._register_declared_locales(manifest, ctx)
             if in_host and not self._is_manifest_only_language_pack(manifest):
-                self._plugin_host().load(manifest, ctx, module_name=module_name,
-                                         entrypoint=manifest.source not in {"user", "project"})
+                self._plugin_host().load(
+                    manifest,
+                    ctx,
+                    module_name=module_name,
+                    entrypoint=manifest.source not in {"user", "project"},
+                )
                 return True
             # Reuse a deferred platform's already-imported package so its body doesn't run twice.
             # See #78050.
@@ -516,7 +646,11 @@ class PluginLoaderMixin:
             elif module is None:
                 module = self._load_entrypoint_module(manifest)
             register_fn = None
-            if module is not None and not isinstance(module, types.ModuleType) and callable(module):
+            if (
+                module is not None
+                and not isinstance(module, types.ModuleType)
+                and callable(module)
+            ):
                 # An entry point declared as ``module:function`` resolves to the function object itself via
                 # ``ep.load()``, not its module (#72052).
                 register_fn = module
@@ -550,7 +684,12 @@ class PluginLoaderMixin:
             # register() may have subscribed before raising; a failed plugin must leave no callable reachable
             # from later event dispatch.
             self._remove_plugin_subscriptions(plugin_key)
-            logger.warning("Failed to load plugin '%s': %s", manifest.name, _load_error_text(exc), exc_info=_PLUGINS_DEBUG)
+            logger.warning(
+                "Failed to load plugin '%s': %s",
+                manifest.name,
+                _load_error_text(exc),
+                exc_info=_PLUGINS_DEBUG,
+            )
         # The failure path swept this plugin's whole ledger (not just the registration_start slice), so
         # discovery-time pre-registrations are gone too.
         # There is no live tool left to credit — attribution and the registry agree at zero. Only the
@@ -564,8 +703,11 @@ class PluginLoaderMixin:
     def _is_manifest_only_language_pack(manifest: PluginManifest) -> bool:
         """A ``provides_locales`` plugin with no ``__init__.py`` is complete without Python — like a
         manifest-only desktop plugin, it loads from its declared files alone."""
-        return bool(manifest.provides_locales and manifest.path
-                    and not (Path(manifest.path) / "__init__.py").is_file())
+        return bool(
+            manifest.provides_locales
+            and manifest.path
+            and not (Path(manifest.path) / "__init__.py").is_file()
+        )
 
     def _register_declared_locales(self, manifest: PluginManifest, ctx) -> None:
         """``provides_locales`` -> ``ctx.register_locale_dir(<plugin>/locales)``; a declared id with no file
@@ -573,16 +715,24 @@ class PluginLoaderMixin:
         if not manifest.provides_locales or not manifest.path:
             return
         locales_dir = Path(manifest.path) / "locales"
-        handles = ctx.register_locale_dir(locales_dir, metadata=manifest.locale_metadata)
+        handles = ctx.register_locale_dir(
+            locales_dir, metadata=manifest.locale_metadata
+        )
         registered = {handle.key.split(".", 1)[0] for handle in handles}
         for lang_id in manifest.provides_locales:
             if lang_id not in registered:
-                logger.warning("Plugin '%s' declares provides_locales %r but %s has no %s.yaml",
-                               manifest.name, lang_id, locales_dir, lang_id)
+                logger.warning(
+                    "Plugin '%s' declares provides_locales %r but %s has no %s.yaml",
+                    manifest.name,
+                    lang_id,
+                    locales_dir,
+                    lang_id,
+                )
 
     def _runs_in_plugin_host(self, manifest: PluginManifest) -> bool:
         """``plugins.isolation: host`` sends every non-bundled Python plugin to the profile's host."""
         from clawk_cli.plugin_isolation import ISOLATION_HOST, isolation_mode
+
         return manifest.source != "bundled" and isolation_mode() == ISOLATION_HOST
 
     def _plugin_host(self) -> Any:
@@ -592,37 +742,52 @@ class PluginLoaderMixin:
         host = getattr(self, "_plugin_host_instance", None)
         if host is None:
             from clawk_cli.plugin_host import PluginHost
+
             with _PLUGIN_HOST_CREATE_LOCK:
                 host = getattr(self, "_plugin_host_instance", None)
                 if host is None:
                     host = self._plugin_host_instance = PluginHost(self)
         return host
 
-    def _track_tool_override_policy(self, manifest: PluginManifest, module_name: str) -> None:
+    def _track_tool_override_policy(
+        self, manifest: PluginManifest, module_name: str
+    ) -> None:
         """Install the plugin's tool-override policy in tools.registry as a ledger-owned lease."""
         from clawk_cli.plugins import PluginContext
         from tools.registry import registry as _registry
+
         scope = self.scope_key
         with replacement_coordinator.transaction():
-            previous_policy = _registry.snapshot_plugin_override_policy(module_name, scope=scope)
+            previous_policy = _registry.snapshot_plugin_override_policy(
+                module_name, scope=scope
+            )
             current_policy = _registry.register_plugin_override_policy(
-                module_name, PluginContext(manifest, self)._tool_override_allowed(""), scope=scope,
+                module_name,
+                PluginContext(manifest, self)._tool_override_allowed(""),
+                scope=scope,
             )
             policy_lease = replacement_coordinator.acquire(
-                ("tool_override_policy", scope, module_name), current=current_policy,
+                ("tool_override_policy", scope, module_name),
+                current=current_policy,
                 previous=previous_policy,
                 restore=lambda replacement: _registry.restore_plugin_override_policy(
-                    module_name, current_policy, replacement, scope=scope,
+                    module_name,
+                    current_policy,
+                    replacement,
+                    scope=scope,
                 ),
             )
-            self._track_registration(manifest, "tool_override_policy", module_name, policy_lease.dispose)
+            self._track_registration(
+                manifest, "tool_override_policy", module_name, policy_lease.dispose
+            )
 
     def _attribute_registrations(
         self, loaded: LoadedPlugin, plugin_key: str, registration_start: int
     ) -> None:
         """Fill ``loaded.*_registered`` from the ledger slice this plugin's register() produced."""
         registrations = [
-            r for r in self._registration_order[registration_start:]
+            r
+            for r in self._registration_order[registration_start:]
             if r.plugin_key == plugin_key and r.active
         ]
 
@@ -631,43 +796,74 @@ class PluginLoaderMixin:
 
         # Discovery-time tools predate registration_start; credit them back or `clawk plugins list`
         # under-reports once the deferred adapter materializes.
-        predeclared = [t for t in self._predeclared_tools.pop(plugin_key, []) if t in self._plugin_tool_names]
-        loaded.tools_registered = predeclared + [k for k in _keys("tool") if k not in predeclared]
+        predeclared = [
+            t
+            for t in self._predeclared_tools.pop(plugin_key, [])
+            if t in self._plugin_tool_names
+        ]
+        loaded.tools_registered = predeclared + [
+            k for k in _keys("tool") if k not in predeclared
+        ]
         loaded.hooks_registered = _keys("hook")
         loaded.middleware_registered = _keys("middleware")
         loaded.commands_registered = _keys("command")
         logger.debug(
             "  registered: %d tool(s), %d hook(s), %d middleware, %d slash command(s), %d CLI command(s)",
-            len(loaded.tools_registered), len(loaded.hooks_registered),
-            len(loaded.middleware_registered), len(loaded.commands_registered),
+            len(loaded.tools_registered),
+            len(loaded.hooks_registered),
+            len(loaded.middleware_registered),
+            len(loaded.commands_registered),
             sum(1 for c in self._cli_commands if c in _keys("cli_command")),
         )
 
-    def _load_portable_plugin(self, manifest: PluginManifest, loaded: LoadedPlugin) -> None:
+    def _load_portable_plugin(
+        self, manifest: PluginManifest, loaded: LoadedPlugin
+    ) -> None:
         """Load validated portable components without importing Python code."""
         from clawk_cli.plugins import PluginContext
+
         lookup_key = manifest_key(manifest)
         try:
             from clawk_cli.agent_plugins import load_agent_plugin
+
             package = load_agent_plugin(
-                Path(manifest.path), get_clawk_home() / "plugin-data" / manifest.skill_namespace)
+                Path(manifest.path),
+                get_clawk_home() / "plugin-data" / manifest.skill_namespace,
+            )
             ctx = PluginContext(manifest, self)
             for diagnostic in package.diagnostics:
-                logger.warning("Agent Plugin '%s' [%s]: %s", lookup_key, diagnostic.scope, diagnostic.message)
+                logger.warning(
+                    "Agent Plugin '%s' [%s]: %s",
+                    lookup_key,
+                    diagnostic.scope,
+                    diagnostic.message,
+                )
             for skill in package.skills:
                 try:
-                    ctx.register_skill(skill.name, skill.skill_md, skill.description, skill.frontmatter)
+                    ctx.register_skill(
+                        skill.name, skill.skill_md, skill.description, skill.frontmatter
+                    )
                 except Exception as exc:
-                    logger.warning("Agent Plugin '%s' skill '%s' skipped: %s", lookup_key, skill.name, exc)
+                    logger.warning(
+                        "Agent Plugin '%s' skill '%s' skipped: %s",
+                        lookup_key,
+                        skill.name,
+                        exc,
+                    )
             from clawk_cli.agent_plugins import _clear_liveness, _set_liveness
             from clawk_platform import declaration
+
             registered: list[str] = []
             try:
                 for server_name, config in package.mcp_servers.items():
                     internal_name = portable_mcp_server_name(lookup_key, server_name)
                     if internal_name in self._portable_mcp_servers:
-                        logger.warning("Agent Plugin '%s' MCP server '%s' skipped: name already taken by plugin '%s'; rename one server",
-                                       lookup_key, internal_name, self._portable_mcp_server_plugins.get(internal_name, "?"))
+                        logger.warning(
+                            "Agent Plugin '%s' MCP server '%s' skipped: name already taken by plugin '%s'; rename one server",
+                            lookup_key,
+                            internal_name,
+                            self._portable_mcp_server_plugins.get(internal_name, "?"),
+                        )
                         continue
                     self._portable_mcp_servers[internal_name] = dict(config)
                     self._portable_mcp_server_plugins[internal_name] = lookup_key
@@ -677,13 +873,16 @@ class PluginLoaderMixin:
                         _set_liveness(internal_name, server_decl.liveness)
                     registered.append(internal_name)
                 for internal_name in registered:
+
                     def release(name: str = internal_name) -> None:
                         self._portable_mcp_servers.pop(name, None)
                         self._portable_mcp_server_plugins.pop(name, None)
                         declaration.unregister(name)
                         _clear_liveness(name)
 
-                    self._track_registration(manifest, "portable_mcp", internal_name, release)
+                    self._track_registration(
+                        manifest, "portable_mcp", internal_name, release
+                    )
                 loaded.enabled = True
             except BaseException:
                 for internal_name in registered:
@@ -703,7 +902,10 @@ class PluginLoaderMixin:
         slug = manifest_key(manifest).replace("/", "__").replace("-", "_")
         bare_name = f"{_NS_PARENT}.{slug}"
         with _MODULE_NAMESPACE_LOCK:
-            if _BARE_MODULE_SCOPE.setdefault(bare_name, self.scope_key) == self.scope_key:
+            if (
+                _BARE_MODULE_SCOPE.setdefault(bare_name, self.scope_key)
+                == self.scope_key
+            ):
                 return bare_name
             digest = hashlib.sha256(self.scope_key.encode("utf-8")).hexdigest()[:12]
             return f"{bare_name}__home_{digest}"
@@ -717,7 +919,10 @@ class PluginLoaderMixin:
         return self._directory_module_name(manifest)
 
     def _load_directory_module(
-        self, manifest: PluginManifest, *, module_name: Optional[str] = None,
+        self,
+        manifest: PluginManifest,
+        *,
+        module_name: Optional[str] = None,
     ) -> types.ModuleType:
         """Import a directory plugin as ``clawk_plugins.<slug>`` (slug from ``manifest.key`` so
         ``image_gen/openai`` cannot collide with ``tts/openai``)."""
@@ -737,7 +942,8 @@ class PluginLoaderMixin:
         # serving the previous load's code/state.
         _evict_modules(module_name)
         spec = importlib.util.spec_from_file_location(
-            module_name, init_file, submodule_search_locations=[str(plugin_dir)])
+            module_name, init_file, submodule_search_locations=[str(plugin_dir)]
+        )
         if spec is None or spec.loader is None:
             raise ImportError(f"Cannot create module spec for {init_file}")
         module = importlib.util.module_from_spec(spec)
@@ -753,10 +959,16 @@ class PluginLoaderMixin:
             raise
         return module
 
-    def _load_entrypoint_module(self, manifest: PluginManifest) -> types.ModuleType | Callable[..., Any]:
+    def _load_entrypoint_module(
+        self, manifest: PluginManifest
+    ) -> types.ModuleType | Callable[..., Any]:
         """Load a pip-installed plugin via its entry-point reference: the module for a bare ``module`` target,
         the referenced attribute (normally ``register``) for the ``module:function`` form."""
-        for ep in _select_entry_point_group(importlib.metadata.entry_points(), ENTRY_POINTS_GROUP):
+        for ep in _select_entry_point_group(
+            importlib.metadata.entry_points(), ENTRY_POINTS_GROUP
+        ):
             if ep.name == manifest.name:
                 return ep.load()
-        raise ImportError(f"Entry point '{manifest.name}' not found in group '{ENTRY_POINTS_GROUP}'")
+        raise ImportError(
+            f"Entry point '{manifest.name}' not found in group '{ENTRY_POINTS_GROUP}'"
+        )

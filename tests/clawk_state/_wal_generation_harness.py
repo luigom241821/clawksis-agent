@@ -26,7 +26,9 @@ from clawk_state import SessionDB
 def pin_wal(monkeypatch) -> None:
     """Pin WAL so this host's vulnerable SQLite still matches production topology."""
     monkeypatch.setattr(
-        clawk_state_wal, "is_sqlite_wal_reset_vulnerable", lambda version_info=None: False
+        clawk_state_wal,
+        "is_sqlite_wal_reset_vulnerable",
+        lambda version_info=None: False,
     )
     monkeypatch.setattr(clawk_state_wal, "resolve_journal_mode", lambda: "wal")
 
@@ -68,13 +70,22 @@ def write_second_generation(db_path: Path, n_rows: int) -> int:
     holds the deleted generation — two live handles on one db in one process collide on the -shm."""
     conn = sqlite3.connect(str(db_path), timeout=5.0, isolation_level=None)
     try:
-        conn.execute("PRAGMA journal_mode")  # header says WAL -> a fresh -wal/-shm generation on the path
-        sessions = [r[0] for r in conn.execute("SELECT id FROM sessions ORDER BY id").fetchall()]
+        conn.execute(
+            "PRAGMA journal_mode"
+        )  # header says WAL -> a fresh -wal/-shm generation on the path
+        sessions = [
+            r[0] for r in conn.execute("SELECT id FROM sessions ORDER BY id").fetchall()
+        ]
         conn.execute("BEGIN IMMEDIATE")
         for i in range(n_rows):
             conn.execute(
                 "INSERT INTO messages (session_id, role, content, timestamp) VALUES (?, ?, ?, ?)",
-                (sessions[i % len(sessions)], "assistant", "gen2 " + "y" * 2000 + f" #{i}", 1.0 + i),
+                (
+                    sessions[i % len(sessions)],
+                    "assistant",
+                    "gen2 " + "y" * 2000 + f" #{i}",
+                    1.0 + i,
+                ),
             )
         conn.execute("COMMIT")
         conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
@@ -85,7 +96,9 @@ def write_second_generation(db_path: Path, n_rows: int) -> int:
 
 def integrity_ok_conn(conn: sqlite3.Connection) -> bool:
     try:
-        return [r[0] for r in conn.execute("PRAGMA integrity_check").fetchall()] == ["ok"]
+        return [r[0] for r in conn.execute("PRAGMA integrity_check").fetchall()] == [
+            "ok"
+        ]
     except sqlite3.DatabaseError:
         return False  # a badly torn file fails the pragma itself
 
@@ -191,7 +204,8 @@ class GatewayWriter:
         except queue.Empty:
             pytest.fail(f"writer timed out waiting for {name!r}\n" + self.stderr_text())
         assert line is not None, (
-            f"writer exited early (rc={self._proc.poll()}) waiting for {name!r}\n" + self.stderr_text()
+            f"writer exited early (rc={self._proc.poll()}) waiting for {name!r}\n"
+            + self.stderr_text()
         )
         event = json.loads(line)
         if name == "ready" and event.get("event") == "skip":
@@ -235,9 +249,20 @@ def gateway_writer(tmp_path: Path):
     stderr_path = tmp_path / "writer-stderr.log"
     with stderr_path.open("w", encoding="utf-8") as stderr:
         proc = subprocess.Popen(
-            [sys.executable, "-c", _GATEWAY_CHILD, repo_root, str(clawk_home), str(path)],
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=stderr,
-            text=True, encoding="utf-8", bufsize=1,
+            [
+                sys.executable,
+                "-c",
+                _GATEWAY_CHILD,
+                repo_root,
+                str(clawk_home),
+                str(path),
+            ],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=stderr,
+            text=True,
+            encoding="utf-8",
+            bufsize=1,
             env={**os.environ, "CLAWK_STATE_DB_GUARD_BYPASS": "1"},
         )
         gw = GatewayWriter(proc, path, stderr_path)

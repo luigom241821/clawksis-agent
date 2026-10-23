@@ -33,10 +33,13 @@ def _make_adapter(require_mention=False, auto_thread=False, monkeypatch=None):
     # MATRIX_REQUIRE_MENTION and MATRIX_AUTO_THREAD are read once at __init__,
     # so they must be set in the environment before constructing the adapter.
     if monkeypatch is not None:
-        monkeypatch.setenv("MATRIX_REQUIRE_MENTION", "true" if require_mention else "false")
+        monkeypatch.setenv(
+            "MATRIX_REQUIRE_MENTION", "true" if require_mention else "false"
+        )
         monkeypatch.setenv("MATRIX_AUTO_THREAD", "true" if auto_thread else "false")
     else:
         import os
+
         os.environ["MATRIX_REQUIRE_MENTION"] = "true" if require_mention else "false"
         os.environ["MATRIX_AUTO_THREAD"] = "true" if auto_thread else "false"
 
@@ -264,7 +267,9 @@ async def test_reply_to_bot_under_require_mention_keeps_reply_author(monkeypatch
     adapter._startup_ts = time.time() - 10
 
     body = "> <@clawk:example.org> did you check the logs?\n\nhello there"
-    event = _make_event(body, in_reply_to_event_id="$bot_msg", event_id="$evt_reply_bot")
+    event = _make_event(
+        body, in_reply_to_event_id="$bot_msg", event_id="$evt_reply_bot"
+    )
     await adapter._on_room_message(event)
 
     adapter.handle_message.assert_awaited_once()
@@ -282,8 +287,12 @@ async def test_reply_with_explicit_mention_still_strips_it_from_reply_text(monke
     adapter = _make_adapter(require_mention=True, monkeypatch=monkeypatch)
     adapter._startup_ts = time.time() - 10
 
-    body = "> <@carol:example.org> original question\n\n@clawk:example.org because reasons"
-    event = _make_event(body, in_reply_to_event_id="$carol_msg", event_id="$evt_reply_carol")
+    body = (
+        "> <@carol:example.org> original question\n\n@clawk:example.org because reasons"
+    )
+    event = _make_event(
+        body, in_reply_to_event_id="$carol_msg", event_id="$evt_reply_carol"
+    )
     await adapter._on_room_message(event)
 
     msg = adapter.handle_message.await_args.args[0]
@@ -299,7 +308,9 @@ async def test_plain_blockquote_without_reply_is_stripped_whole(monkeypatch):
     adapter = _make_adapter(require_mention=True, monkeypatch=monkeypatch)
     adapter._startup_ts = time.time() - 10
 
-    event = _make_event("> @clawk:example.org please summarise\n\nthanks", event_id="$evt_quote")
+    event = _make_event(
+        "> @clawk:example.org please summarise\n\nthanks", event_id="$evt_quote"
+    )
     await adapter._on_room_message(event)
 
     msg = adapter.handle_message.await_args.args[0]

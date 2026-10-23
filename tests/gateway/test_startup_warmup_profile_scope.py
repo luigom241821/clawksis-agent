@@ -6,6 +6,7 @@ With multiplex active and no scope on the executor thread that read fails closed
 absent, and a non-production Portal's refresh token is POSTed to the production Portal. The warm-up
 must run under the same binding a routed turn gets, and the binding must reach the executor thread.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -38,9 +39,11 @@ def multiplex_home(tmp_path, monkeypatch):
 def _probe(seen: dict):
     def probe() -> int:
         from clawk_cli.auth_nous import _nous_portal_env_override
+
         seen["scope_installed"] = secret_scope._SECRET_SCOPE.get() is not None
         seen["portal_override"] = _nous_portal_env_override()
         return 1
+
     return probe
 
 
@@ -59,6 +62,7 @@ def _run_warmup(monkeypatch, *, multiplex: bool) -> dict:
         await _Runner(multiplex=multiplex)._warm_turn_prerequisites()
         # Same task as the warm-up (asyncio.run copies the context, so the caller's view proves nothing).
         from clawk_constants import get_clawk_home_override
+
         seen["scope_after"] = secret_scope._SECRET_SCOPE.get()
         seen["home_override_after"] = get_clawk_home_override()
 
@@ -66,7 +70,9 @@ def _run_warmup(monkeypatch, *, multiplex: bool) -> dict:
     return seen
 
 
-def test_multiplex_warmup_runs_check_fns_inside_the_launch_profile_scope(multiplex_home, monkeypatch):
+def test_multiplex_warmup_runs_check_fns_inside_the_launch_profile_scope(
+    multiplex_home, monkeypatch
+):
     """The executor thread sees the launch profile's secret scope, so the .env routing override resolves
     exactly as it does on a routed turn — never the fail-closed 'absent' that heals to production. The
     binding is per activity: once the warm-up returns, the loop thread is unscoped again."""

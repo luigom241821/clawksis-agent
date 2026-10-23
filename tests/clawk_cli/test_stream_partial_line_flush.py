@@ -7,6 +7,7 @@ line (the terminal soft-wraps them and rejoins on copy, matching the
 TUI's selection copy), and TTFT perception is served by mirroring the
 partial line's tail into the spinner status text instead.
 """
+
 import os
 import re
 import sys
@@ -63,7 +64,6 @@ class TestLogicalLineStreaming:
         assert cli._spinner_text.startswith("…")
         assert "newline" in cli._spinner_text
 
-
     def test_no_content_lost_across_stream(self, cli_stub):
         cli, emitted = cli_stub
         words = [f"word{i}" for i in range(120)]
@@ -74,7 +74,6 @@ class TestLogicalLineStreaming:
         plain = " ".join(_strip_ansi("\n".join(emitted)).split())
         for w in words:
             assert w in plain, f"lost {w}"
-
 
     def test_table_rows_not_previewed_in_spinner(self, cli_stub):
         cli, emitted = cli_stub
@@ -98,7 +97,5 @@ class TestLogicalLineStreaming:
         cli._flush_stream()
         plain = _strip_ansi("\n".join(emitted))
         assert plain.count("x") == 300
-        content = [
-            _strip_ansi(e) for e in emitted if "x" in _strip_ansi(e)
-        ]
+        content = [_strip_ansi(e) for e in emitted if "x" in _strip_ansi(e)]
         assert len(content) == 1, "unbreakable run was hard-wrapped"

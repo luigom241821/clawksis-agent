@@ -5,6 +5,7 @@ Main ran one gateway process per profile, so ``clawk -p work --tui`` only ever s
 it must not push the launch home's skin onto a work-profile TUI, and a work-profile skin switch made
 outside the TUI (``clawk -p work config set display.skin …``) must still repaint that TUI.
 """
+
 from __future__ import annotations
 
 import os
@@ -29,7 +30,11 @@ class _Peer:
 
 
 def _skins(peer):
-    return [f["params"]["payload"]["name"] for f in peer.frames if f["params"]["type"] == "skin.changed"]
+    return [
+        f["params"]["payload"]["name"]
+        for f in peer.frames
+        if f["params"]["type"] == "skin.changed"
+    ]
 
 
 def _write_skin(home, name):
@@ -44,6 +49,7 @@ def _write_skin(home, name):
 @pytest.fixture
 def homes(tmp_path, monkeypatch):
     from tui_gateway import server
+
     default, work = tmp_path / "default", tmp_path / "default" / "profiles" / "work"
     work.mkdir(parents=True)
     _write_skin(default, "default")

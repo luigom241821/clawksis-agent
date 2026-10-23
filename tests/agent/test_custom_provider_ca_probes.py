@@ -1,4 +1,5 @@
 """Probe-specific policy edges; real TLS handshakes live in test_ssl_transport_contracts."""
+
 import ssl
 from unittest.mock import MagicMock, patch
 
@@ -12,7 +13,13 @@ _BASE = "https://relay.example.invalid/v1"
 
 @pytest.fixture
 def clean_env(monkeypatch):
-    for key in ("CLAWK_CA_BUNDLE", "REQUESTS_CA_BUNDLE", "SSL_CERT_FILE", "SSL_CERT_DIR", "CURL_CA_BUNDLE"):
+    for key in (
+        "CLAWK_CA_BUNDLE",
+        "REQUESTS_CA_BUNDLE",
+        "SSL_CERT_FILE",
+        "SSL_CERT_DIR",
+        "CURL_CA_BUNDLE",
+    ):
         monkeypatch.delenv(key, raising=False)
     return monkeypatch
 
@@ -22,10 +29,15 @@ def clean_env(monkeypatch):
 def test_probe_policy_edges(clean_env, case, ambient):
     if ambient:
         clean_env.setenv("SSL_CERT_FILE", "/does/not/exist.pem")
-    providers = MagicMock(return_value=[{
-        "name": "test", "base_url": _BASE if case != "unmatched" else "https://other.invalid",
-        "ssl_ca_cert": "/missing-provider.pem",
-    }])
+    providers = MagicMock(
+        return_value=[
+            {
+                "name": "test",
+                "base_url": _BASE if case != "unmatched" else "https://other.invalid",
+                "ssl_ca_cert": "/missing-provider.pem",
+            }
+        ]
+    )
     if case == "config-error":
         providers.side_effect = RuntimeError("config unavailable")
     url = "" if case == "no-url" else _BASE
@@ -67,11 +79,14 @@ def test_public_endpoint_calls_seam_without_ssl_context_kwarg(clean_env):
         calls.append(req.full_url)
         return _Resp()
 
-    with patch(
-        "clawk_cli.config.get_compatible_custom_providers",
-        return_value=[],
-    ), patch.object(
-        models, "_urlopen_model_catalog_request", side_effect=_strict_two_arg
+    with (
+        patch(
+            "clawk_cli.config.get_compatible_custom_providers",
+            return_value=[],
+        ),
+        patch.object(
+            models, "_urlopen_model_catalog_request", side_effect=_strict_two_arg
+        ),
     ):
         probe = models.probe_api_models("key", "http://localhost:8000", timeout=1)
 

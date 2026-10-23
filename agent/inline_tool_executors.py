@@ -17,7 +17,9 @@ from typing import Any, Callable, Dict, Optional, Tuple
 from tools.arg_coercion import coerce_tool_args
 
 
-def tool_hook_ids(agent, effective_task_id: str, tool_call_id: Optional[str]) -> dict[str, str]:
+def tool_hook_ids(
+    agent, effective_task_id: str, tool_call_id: Optional[str]
+) -> dict[str, str]:
     """Identity kwargs every tool hook/middleware call carries (all coerced to ``""``)."""
     return {
         "task_id": effective_task_id or "",
@@ -45,6 +47,7 @@ def emit_terminal_post_tool_call(
     """Emit the one terminal ``post_tool_call`` hook for a tool_call_id (best-effort)."""
     try:
         from model_tools import _emit_post_tool_call_hook
+
         _emit_post_tool_call_hook(
             function_name=function_name,
             function_args=function_args,
@@ -77,8 +80,12 @@ def apply_transform_tool_result(
     ``post_tool_call``) to keep the hook's "every tool" contract. Fail-open."""
     try:
         from model_tools import _CallIds, _apply_transform_tool_result_hook
+
         return _apply_transform_tool_result_hook(
-            function_name, function_args, result, duration_ms,
+            function_name,
+            function_args,
+            result,
+            duration_ms,
             _CallIds(**tool_hook_ids(agent, effective_task_id, tool_call_id)),
         )
     except Exception:
@@ -100,24 +107,44 @@ InlineToolExecutor = Callable[[Any, dict, InlineToolContext], Any]
 _ArgSpec = tuple[Any, ...]
 
 
-def _call_tool(module: str, func: str, args: dict, arg_specs: tuple[_ArgSpec, ...], **fixed: Any) -> Any:
+def _call_tool(
+    module: str, func: str, args: dict, arg_specs: tuple[_ArgSpec, ...], **fixed: Any
+) -> Any:
     """Import ``module.func`` lazily and call it with args mapped per ``arg_specs`` plus ``fixed``."""
     fn = getattr(import_module(module), func)
     return fn(**{spec[0]: args.get(*spec[1:]) for spec in arg_specs}, **fixed)
 
 
 def _tool(
-    module: str, func: str, *arg_specs: _ArgSpec, **fixed: Callable[[Any, InlineToolContext], Any],
+    module: str,
+    func: str,
+    *arg_specs: _ArgSpec,
+    **fixed: Callable[[Any, InlineToolContext], Any],
 ) -> InlineToolExecutor:
     """Executor calling ``module.func`` with mapped args plus ``fixed`` kwargs computed from ``(agent, ctx)``."""
+
     def _exec(agent, args: dict, ctx: InlineToolContext) -> Any:
-        return _call_tool(module, func, args, arg_specs, **{k: f(agent, ctx) for k, f in fixed.items()})
+        return _call_tool(
+            module,
+            func,
+            args,
+            arg_specs,
+            **{k: f(agent, ctx) for k, f in fixed.items()},
+        )
+
     return _exec
 
 
-def _callback_tool(module: str, func: str, callback_attr: str, *arg_specs: _ArgSpec) -> InlineToolExecutor:
+def _callback_tool(
+    module: str, func: str, callback_attr: str, *arg_specs: _ArgSpec
+) -> InlineToolExecutor:
     """Executor for a GUI-callback tool: mapped args plus ``callback=getattr(agent, callback_attr, None)``."""
-    return _tool(module, func, *arg_specs, callback=lambda agent, ctx: getattr(agent, callback_attr, None))
+    return _tool(
+        module,
+        func,
+        *arg_specs,
+        callback=lambda agent, ctx: getattr(agent, callback_attr, None),
+    )
 
 
 def _session_search(agent, args: dict, ctx: InlineToolContext) -> Any:
@@ -127,24 +154,40 @@ def _session_search(agent, args: dict, ctx: InlineToolContext) -> Any:
 
         return json.dumps({"success": False, "error": format_session_db_unavailable()})
     return _call_tool(
-        "tools.session_search_tool", "session_search", args,
+        "tools.session_search_tool",
+        "session_search",
+        args,
         (
-            ("query", "query", ""), ("role_filter", "role_filter"), ("limit", "limit", 3),
-            ("session_id", "session_id"), ("around_message_id", "around_message_id"),
-            ("window", "window", 5), ("sort", "sort"), ("profile", "profile"),
-            ("detail", "detail", "adaptive"), ("after", "after"), ("before", "before"),
+            ("query", "query", ""),
+            ("role_filter", "role_filter"),
+            ("limit", "limit", 3),
+            ("session_id", "session_id"),
+            ("around_message_id", "around_message_id"),
+            ("window", "window", 5),
+            ("sort", "sort"),
+            ("profile", "profile"),
+            ("detail", "detail", "adaptive"),
+            ("after", "after"),
+            ("before", "before"),
             ("exclude_session_ids", "exclude_session_ids"),
         ),
-        db=session_db, current_session_id=agent.session_id,
+        db=session_db,
+        current_session_id=agent.session_id,
     )
 
 
 def _memory(agent, args: dict, ctx: InlineToolContext) -> Any:
     result = _call_tool(
-        "tools.memory_tool", "memory_tool", args,
+        "tools.memory_tool",
+        "memory_tool",
+        args,
         (
-            ("action", "action"), ("target", "target"), ("content", "content"),
-            ("old_text", "old_text"), ("new_text", "new_text"), ("operations", "operations"),
+            ("action", "action"),
+            ("target", "target"),
+            ("content", "content"),
+            ("old_text", "old_text"),
+            ("new_text", "new_text"),
+            ("operations", "operations"),
         ),
         store=agent._memory_store,
     )
@@ -163,8 +206,11 @@ def _memory(agent, args: dict, ctx: InlineToolContext) -> Any:
 
 
 _read_preview = _callback_tool(
-    "tools.read_preview_tool", "read_preview_tool", "read_preview_callback",
-    ("start", "start"), ("count", "count"),
+    "tools.read_preview_tool",
+    "read_preview_tool",
+    "read_preview_callback",
+    ("start", "start"),
+    ("count", "count"),
 )
 
 
@@ -184,7 +230,9 @@ def _manage_connections(agent, args: dict, ctx: InlineToolContext) -> Any:
     from tools.connectors.gateway import config as gateway_config
 
     result = manage_connections(
-        args, session_id=getattr(agent, "session_id", None), tool_call_id=ctx.tool_call_id,
+        args,
+        session_id=getattr(agent, "session_id", None),
+        tool_call_id=ctx.tool_call_id,
         turn_id=getattr(agent, "_current_turn_id", None) or None,
         connection_callback=getattr(agent, "connection_callback", None),
         connectors_available=gateway_config.connectors_available,
@@ -208,8 +256,14 @@ def _scope_in_connected_mcp_servers(agent, result: Any) -> None:
         targets = json.loads(result).get("targets") or []
     except (AttributeError, TypeError, ValueError):
         return
-    connected = [str(t.get("name")) for t in targets if isinstance(t, dict)
-                 and t.get("kind") == "mcp" and t.get("state") == "connected" and t.get("tools")]
+    connected = [
+        str(t.get("name"))
+        for t in targets
+        if isinstance(t, dict)
+        and t.get("kind") == "mcp"
+        and t.get("state") == "connected"
+        and t.get("tools")
+    ]
     added = [name for name in connected if name not in enabled]
     if added:
         agent.enabled_toolsets = [*enabled, *added]
@@ -220,7 +274,9 @@ def _manage_catalog(agent, args: dict, ctx: InlineToolContext) -> Any:
     from tools.connectors.catalog_tool import manage_catalog
 
     return manage_catalog(
-        args, session_id=getattr(agent, "session_id", None), tool_call_id=ctx.tool_call_id,
+        args,
+        session_id=getattr(agent, "session_id", None),
+        tool_call_id=ctx.tool_call_id,
         connection_callback=getattr(agent, "connection_callback", None),
         card_surface=getattr(agent, "platform", None) == "desktop",
     )
@@ -234,8 +290,11 @@ def _setup_beat(agent, args: dict, ctx: InlineToolContext) -> Any:
     from tools.setup_beat_tool import setup_beat_tool
 
     return setup_beat_tool(
-        args, db=getattr(agent, "_session_db", None), session_id=getattr(agent, "session_id", None) or "",
-        tool_call_id=ctx.tool_call_id or "", callback=getattr(agent, "setup_beat_callback", None),
+        args,
+        db=getattr(agent, "_session_db", None),
+        session_id=getattr(agent, "session_id", None) or "",
+        tool_call_id=ctx.tool_call_id or "",
+        callback=getattr(agent, "setup_beat_callback", None),
         end_turn=lambda: agent.interrupt(tool_reason=_REASON_NEW_MESSAGE),
     )
 
@@ -243,56 +302,101 @@ def _setup_beat(agent, args: dict, ctx: InlineToolContext) -> Any:
 def _setup_mcp_shim(agent, args: dict, ctx: InlineToolContext) -> Any:
     # Replay shim for conversations whose cached prompt still names setup_mcp.
     # Not in _LEGACY_TOOL_ALIASES: inline tools bypass handle_function_call.
-    return _manage_connections(agent, {
-        "action": args.get("action", "install"),
-        "connectors": [{"name": args.get("server", ""), "mcp": True}],
-    }, ctx)
+    return _manage_connections(
+        agent,
+        {
+            "action": args.get("action", "install"),
+            "connectors": [{"name": args.get("server", ""), "mcp": True}],
+        },
+        ctx,
+    )
 
 
 # Order is the historical if/elif order of ``execute_tool_calls_sequential``.
 _RAW_INLINE_TOOL_EXECUTORS: dict[str, InlineToolExecutor] = {
     "todo_list": _tool(
-        "tools.todo_tool", "todo_tool", ("todos", "todos"), ("merge", "merge", False),
+        "tools.todo_tool",
+        "todo_tool",
+        ("todos", "todos"),
+        ("merge", "merge", False),
         store=lambda agent, ctx: agent._todo_store,
     ),
     # Bot Mode teammate DM is injected, not registered: only a canonical Bot
     # Chat session carries the schema, and the tool re-gates on the title.
     "message_agent": _tool(
-        "tools.bot_mode_dm", "message_agent_tool", ("target", "target", ""), ("message", "message", ""),
-        task_id=lambda agent, ctx: ctx.effective_task_id, agent=lambda agent, ctx: agent,
+        "tools.bot_mode_dm",
+        "message_agent_tool",
+        ("target", "target", ""),
+        ("message", "message", ""),
+        task_id=lambda agent, ctx: ctx.effective_task_id,
+        agent=lambda agent, ctx: agent,
     ),
     "session_search": _session_search,
     "memory": _memory,
     "clarify": _tool(
-        "tools.clarify_tool", "clarify_tool", ("questions", "questions"),
+        "tools.clarify_tool",
+        "clarify_tool",
+        ("questions", "questions"),
         callback=lambda agent, ctx: agent.clarify_callback,
     ),
     "read_terminal": _callback_tool(
-        "tools.read_terminal_tool", "read_terminal_tool", "read_terminal_callback",
-        ("start_line", "start_line"), ("count", "count"),
+        "tools.read_terminal_tool",
+        "read_terminal_tool",
+        "read_terminal_callback",
+        ("start_line", "start_line"),
+        ("count", "count"),
     ),
     "desktop_preview": _desktop_preview,
     "drive_preview": _callback_tool(
-        "tools.drive_preview_tool", "drive_preview_tool", "drive_preview_callback",
-        ("action", "action", ""), ("ref", "ref"), ("selector", "selector"), ("text", "text"),
-        ("key", "key"), ("submit", "submit"), ("amount", "amount"), ("to", "to"), ("limit", "max"),
+        "tools.drive_preview_tool",
+        "drive_preview_tool",
+        "drive_preview_callback",
+        ("action", "action", ""),
+        ("ref", "ref"),
+        ("selector", "selector"),
+        ("text", "text"),
+        ("key", "key"),
+        ("submit", "submit"),
+        ("amount", "amount"),
+        ("to", "to"),
+        ("limit", "max"),
     ),
     "annotate_preview": _callback_tool(
-        "tools.annotate_preview_tool", "annotate_preview_tool", "drive_preview_callback",
-        ("action", "action", "add"), ("ref", "ref"), ("selector", "selector"), ("label", "label"),
+        "tools.annotate_preview_tool",
+        "annotate_preview_tool",
+        "drive_preview_callback",
+        ("action", "action", "add"),
+        ("ref", "ref"),
+        ("selector", "selector"),
+        ("label", "label"),
     ),
     "read_window_below": _callback_tool(
-        "tools.read_window_tool", "read_window_below_tool", "read_window_below_callback",
+        "tools.read_window_tool",
+        "read_window_below_tool",
+        "read_window_below_callback",
     ),
     "gui_tour": _callback_tool(
-        "tools.tour_tool", "tour_tool", "tour_callback",
-        ("action", "action", ""), ("surface", "surface"), ("selector", "selector"), ("title", "title"),
-        ("text", "text"), ("side", "side"), ("steps", "steps"), ("step_index", "step_index"),
+        "tools.tour_tool",
+        "tour_tool",
+        "tour_callback",
+        ("action", "action", ""),
+        ("surface", "surface"),
+        ("selector", "selector"),
+        ("title", "title"),
+        ("text", "text"),
+        ("side", "side"),
+        ("steps", "steps"),
+        ("step_index", "step_index"),
         ("preset", "preset"),
     ),
     "set_theme": _callback_tool(
-        "tools.set_theme_tool", "set_theme_tool", "theme_callback",
-        ("accent", "accent"), ("mode", "mode"), ("layout", "layout"), ("picker", "picker"),
+        "tools.set_theme_tool",
+        "set_theme_tool",
+        "theme_callback",
+        ("accent", "accent"),
+        ("mode", "mode"),
+        ("layout", "layout"),
+        ("picker", "picker"),
     ),
     "setup_beat": _setup_beat,
     "manage_connections": _manage_connections,
@@ -305,20 +409,26 @@ _RAW_INLINE_TOOL_EXECUTORS: dict[str, InlineToolExecutor] = {
 def _coerced(name: str, executor: InlineToolExecutor) -> InlineToolExecutor:
     def _exec(agent, args: dict, ctx: InlineToolContext) -> Any:
         return executor(agent, coerce_tool_args(name, args), ctx)
+
     return _exec
 
 
 INLINE_TOOL_EXECUTORS: dict[str, InlineToolExecutor] = {
-    name: _coerced(name, executor) for name, executor in _RAW_INLINE_TOOL_EXECUTORS.items()
+    name: _coerced(name, executor)
+    for name, executor in _RAW_INLINE_TOOL_EXECUTORS.items()
 }
 
 # ``invoke_tool`` (concurrent path) consults the memory manager right after these three
 # names and before the remaining inline tools; ``message_agent`` falls through to the
 # registry there (Bot Mode DM is only injected into the sequential path's schema).
-INVOKE_TOOL_PRE_MEMORY_MANAGER_NAMES = frozenset({"todo_list", "session_search", "memory"})
+INVOKE_TOOL_PRE_MEMORY_MANAGER_NAMES = frozenset(
+    {"todo_list", "session_search", "memory"}
+)
 
 
-def resolve_invoke_tool_executor(agent, function_name: str) -> Optional[InlineToolExecutor]:
+def resolve_invoke_tool_executor(
+    agent, function_name: str
+) -> Optional[InlineToolExecutor]:
     """Inline executor for ``invoke_tool`` (concurrent path), or None for registry dispatch.
 
     Precedence: todo_list/session_search/memory, then memory-manager tools, then the
@@ -329,7 +439,8 @@ def resolve_invoke_tool_executor(agent, function_name: str) -> Optional[InlineTo
     memory_manager = agent._memory_manager
     if memory_manager and memory_manager.has_tool(function_name):
         return lambda agent, args, ctx: agent._memory_manager.handle_tool_call(
-            function_name, args,
+            function_name,
+            args,
             caller_gsk=(getattr(agent, "_gateway_session_key", "") or ""),
         )
     if function_name == "message_agent":

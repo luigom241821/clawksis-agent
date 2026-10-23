@@ -60,6 +60,7 @@ class TestRegisterTranscriptionProvider:
         from clawk_cli.plugins import PluginManager
 
         from agent import transcription_registry
+
         transcription_registry._reset_for_tests()
 
         clawk_home = Path(os.environ["CLAWK_HOME"])
@@ -92,6 +93,7 @@ class TestRegisterTranscriptionProvider:
         from clawk_cli.plugins import PluginManager
 
         from agent import transcription_registry
+
         transcription_registry._reset_for_tests()
 
         clawk_home = Path(os.environ["CLAWK_HOME"])
@@ -116,6 +118,7 @@ class TestRegisterTranscriptionProvider:
         from clawk_cli.plugins import PluginManager
 
         from agent import transcription_registry
+
         transcription_registry._reset_for_tests()
 
         clawk_home = Path(os.environ["CLAWK_HOME"])

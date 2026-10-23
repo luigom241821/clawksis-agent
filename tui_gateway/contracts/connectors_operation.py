@@ -192,8 +192,11 @@ class ConnectionRequestPayload(Payload):
     display: ConnectionDisplay | None = None
 
 
-event("connection.request", ConnectionRequestPayload,
-      doc="A connection operation opened on this session; the desktop renders its card.")
+event(
+    "connection.request",
+    ConnectionRequestPayload,
+    doc="A connection operation opened on this session; the desktop renders its card.",
+)
 
 
 class ConnectionOperationStatus(Result):
@@ -214,13 +217,19 @@ class ConnectionUpdatePayload(ConnectionOperationStatus, Payload):
 
     owner: ConnectorOwner
     target: str | None = None
-    from_: ConnectionTargetState | None = Field(default=None, alias="from")  # ``from`` is a keyword
+    from_: ConnectionTargetState | None = Field(
+        default=None, alias="from"
+    )  # ``from`` is a keyword
     to: ConnectionTargetState | None = None
     actor: ConnectionActor | None = None
     detail: str | None = None
 
-event("connection.update", ConnectionUpdatePayload,
-      doc="One transition or the settlement of an open connection operation.")
+
+event(
+    "connection.update",
+    ConnectionUpdatePayload,
+    doc="One transition or the settlement of an open connection operation.",
+)
 
 
 class ConnectionOperationParams(ProfileParams):
@@ -228,16 +237,24 @@ class ConnectionOperationParams(ProfileParams):
     op_id: str
 
 
-method("connectors.operation.status", params=ConnectionOperationParams, result=ConnectionOperationStatus,
-       doc="The current snapshot of one open session or account operation.")
+method(
+    "connectors.operation.status",
+    params=ConnectionOperationParams,
+    result=ConnectionOperationStatus,
+    doc="The current snapshot of one open session or account operation.",
+)
 
 
 class ConnectionWakeResult(Result):
     status: Literal["ok"]
 
 
-method("connectors.operation.wake", params=ConnectionOperationParams, result=ConnectionWakeResult,
-       doc="The browser leg came back (clawk://connections/done): read the accounts now, not at the next tick.")
+method(
+    "connectors.operation.wake",
+    params=ConnectionOperationParams,
+    result=ConnectionWakeResult,
+    doc="The browser leg came back (clawk://connections/done): read the accounts now, not at the next tick.",
+)
 
 
 class ConnectionAnswerStatus(WireEnum):
@@ -276,5 +293,9 @@ class ConnectionRespondResult(Result):
     settled: bool
 
 
-method("connection.respond", params=ConnectionRespondParams, result=ConnectionRespondResult,
-       doc="Per-target outcomes from the card, and an optional Continue.")
+method(
+    "connection.respond",
+    params=ConnectionRespondParams,
+    result=ConnectionRespondResult,
+    doc="Per-target outcomes from the card, and an optional Continue.",
+)

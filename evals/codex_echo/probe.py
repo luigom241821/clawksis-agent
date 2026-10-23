@@ -3,6 +3,7 @@
 Real subprocess pipes, protocol parser/projector, persistence and SQLite replay.
 The peer is an offline fixture, not a Codex/provider validation.
 """
+
 import json
 import os
 from pathlib import Path
@@ -12,7 +13,9 @@ import threading
 
 def main():
     with tempfile.TemporaryDirectory(prefix="clawk-echo-") as tmp:
-        os.environ.update(HOME=tmp, CLAWK_HOME=tmp, CODEX_HOME=tmp, CLAWK_DISABLE_PLUGINS="1")
+        os.environ.update(
+            HOME=tmp, CLAWK_HOME=tmp, CODEX_HOME=tmp, CLAWK_DISABLE_PLUGINS="1"
+        )
         from agent import codex_runtime
         from agent.message_metadata import append_message
         from agent.session_persistence import SessionPersistenceMixin
@@ -32,29 +35,67 @@ def main():
                 agent._session_db_created = True
                 agent._last_flushed_db_idx = 0
                 agent._session_persist_lock = threading.RLock()
-                session = CodexAppServerSession(cwd=tmp, codex_home=tmp,
-                    codex_bin=str(Path(__file__).with_name("fixture_server.py").resolve()))
+                session = CodexAppServerSession(
+                    cwd=tmp,
+                    codex_home=tmp,
+                    codex_bin=str(
+                        Path(__file__).with_name("fixture_server.py").resolve()
+                    ),
+                )
                 messages = []
-                wire_input = [{"type": "text", "text": "caption"},
-                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}] if rich else "caption"
+                wire_input = (
+                    [
+                        {"type": "text", "text": "caption"},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": "data:image/png;base64,abc"},
+                        },
+                    ]
+                    if rich
+                    else "caption"
+                )
                 try:
                     for accepted in range(2):
-                        append_message(messages, {"role": "user", "content": "caption",
-                            "platform_message_id": str(accepted) if not rich else None})
+                        append_message(
+                            messages,
+                            {
+                                "role": "user",
+                                "content": "caption",
+                                "platform_message_id": str(accepted)
+                                if not rich
+                                else None,
+                            },
+                        )
                         assert agent._flush_messages_to_session_db(messages)
                         turn = session.run_turn(wire_input, turn_timeout=10)
                         assert turn.error is None, turn.error
                         assert turn.final_text == "fixture reply", turn
                         codex_runtime._persist_projected_messages(agent, turn, messages)
                         assert agent._flush_messages_to_session_db(messages)
-                    users = [m["content"] for m in db.get_messages_as_conversation(sid) if m["role"] == "user"]
+                    users = [
+                        m["content"]
+                        for m in db.get_messages_as_conversation(sid)
+                        if m["role"] == "user"
+                    ]
                     expected_count = 4 if mode in {"different", "later_equal"} else 2
-                    observations.append({"mode": mode, "rich_keyless": rich, "users": users,
-                        "expected_user_rows": expected_count, "user_rows": len(users), "pass": len(users) == expected_count})
+                    observations.append(
+                        {
+                            "mode": mode,
+                            "rich_keyless": rich,
+                            "users": users,
+                            "expected_user_rows": expected_count,
+                            "user_rows": len(users),
+                            "pass": len(users) == expected_count,
+                        }
+                    )
                 finally:
                     session.close()
                     db.close()
-        print(json.dumps({"module": codex_runtime.__file__, "cases": observations}, indent=2))
+        print(
+            json.dumps(
+                {"module": codex_runtime.__file__, "cases": observations}, indent=2
+            )
+        )
 
 
 if __name__ == "__main__":

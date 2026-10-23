@@ -20,12 +20,14 @@ from typing import Any, Dict, List, Optional
 from gateway.config import PlatformConfig, Platform
 from gateway.platforms.base import BasePlatformAdapter, SendResult
 
+
 class _StubStore:
     def __init__(self, transcript: list[dict[str, Any]]) -> None:
         self._transcript = transcript
 
     def load_transcript(self, session_id: str) -> list[dict[str, Any]]:
         return list(self._transcript)
+
 
 class _StubAdapter(BasePlatformAdapter):
     """Minimal concrete adapter (BasePlatformAdapter is abstract)."""
@@ -40,7 +42,9 @@ class _StubAdapter(BasePlatformAdapter):
     async def stop(self) -> None:  # pragma: no cover - unused
         pass
 
-    async def connect(self, *, is_reconnect: bool = False) -> bool:  # pragma: no cover - unused
+    async def connect(
+        self, *, is_reconnect: bool = False
+    ) -> bool:  # pragma: no cover - unused
         return True
 
     async def disconnect(self) -> None:  # pragma: no cover - unused
@@ -49,8 +53,11 @@ class _StubAdapter(BasePlatformAdapter):
     async def get_chat_info(self, chat_id):  # pragma: no cover - unused
         return {}
 
-    async def send(self, chat_id, content, reply_to=None, metadata=None) -> SendResult:  # pragma: no cover - unused
+    async def send(
+        self, chat_id, content, reply_to=None, metadata=None
+    ) -> SendResult:  # pragma: no cover - unused
         return SendResult(success=True)
+
 
 def _tts_tool_row(path: str) -> dict[str, Any]:
     return {
@@ -59,6 +66,7 @@ def _tts_tool_row(path: str) -> dict[str, Any]:
             f'{{"success": true, "file_path": "{path}", "media_tag": "MEDIA:{path}"}}'
         ),
     }
+
 
 def test_current_turn_tts_media_not_treated_as_history():
     """This turn's TTS output (persisted before delivery) must NOT be deduped."""
@@ -75,6 +83,7 @@ def test_current_turn_tts_media_not_treated_as_history():
     adapter = _StubAdapter(transcript)
     paths: Optional[set] = adapter._history_media_paths_for_session("k")
     assert not paths or current not in paths
+
 
 def test_prior_turn_media_still_deduped():
     """A file delivered in a PRIOR turn stays in the dedup set."""

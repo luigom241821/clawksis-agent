@@ -44,7 +44,6 @@ class TestGetSmartPolicy(unittest.TestCase):
         mock_cfg.return_value = {"mode": "smart"}
         assert _get_smart_policy() == ""
 
-
     @patch("tools.approval_context._get_approval_config")
     def test_policy_text_is_stripped(self, mock_cfg):
         mock_cfg.return_value = {"smart_policy": f"  {POLICY_TEXT}\n"}
@@ -80,7 +79,6 @@ class TestSmartApprovePolicyInjection(unittest.TestCase):
         sys_content = messages_missing[0]["content"]
         assert "Additional policy rules from the operator" not in sys_content
 
-
     @patch("tools.approval_context._get_approval_config")
     @patch("agent.auxiliary_client.call_llm")
     def test_policy_never_in_user_message(self, mock_call_llm, mock_cfg):
@@ -108,9 +106,6 @@ class TestSmartApprovePolicyInjection(unittest.TestCase):
         mock_cfg.side_effect = RuntimeError("config unreadable")
         # _smart_approve's outer try/except catches this and escalates
         assert _smart_approve("echo hi", "flagged") == "escalate"
-
-
-
 
     @patch("tools.approval_context._get_approval_config")
     @patch("agent.auxiliary_client.call_llm")

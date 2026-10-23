@@ -23,6 +23,7 @@ _I18N_ERR = 5400
 @_profile_scoped
 def _(rid, params: dict) -> dict:
     from agent.i18n import language_options
+
     try:
         return _ok(rid, {"languages": language_options()})
     except Exception as e:
@@ -34,12 +35,20 @@ def _(rid, params: dict) -> dict:
 def _(rid, params: dict) -> dict:
     from agent.i18n import resolve_language_id, surface_catalog
     from agent.i18n_layers import CORE_SURFACE, SURFACES
+
     surface = str(params.get("surface") or CORE_SURFACE)
     if surface not in SURFACES:
         return _err(rid, 4002, f"surface must be one of {', '.join(SURFACES)}")
     lang = resolve_language_id(params.get("lang", "")) or "en"
     try:
-        return _ok(rid, {"lang": lang, "surface": surface, "messages": surface_catalog(lang, surface)})
+        return _ok(
+            rid,
+            {
+                "lang": lang,
+                "surface": surface,
+                "messages": surface_catalog(lang, surface),
+            },
+        )
     except Exception as e:
         return _err(rid, _I18N_ERR, str(e))
 

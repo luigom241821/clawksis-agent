@@ -13,10 +13,19 @@ import re
 
 def _record(name: str, action: str, step_number: int | None) -> dict:
     return {
-        "name": name, "step_number": step_number, "action": action, "requested_key": None, "matched_key": None,
+        "name": name,
+        "step_number": step_number,
+        "action": action,
+        "requested_key": None,
+        "matched_key": None,
         "restore_status": "not-attempted" if action.endswith("/save") else "unknown",
-        "restored_bytes": None, "save_status": "not-attempted", "saved_bytes": None,
-        "saved_key": None, "warnings": [], "restore_warnings": [], "paths": [],
+        "restored_bytes": None,
+        "save_status": "not-attempted",
+        "saved_bytes": None,
+        "saved_key": None,
+        "warnings": [],
+        "restore_warnings": [],
+        "paths": [],
     }
 
 
@@ -28,7 +37,9 @@ def _message(raw: str) -> tuple[str | None, str]:
 
 def _stable_label(name: str) -> str:
     # GitHub uses the pinned action reference as the default top-level step name.
-    return re.sub(r"(actions/cache(?:/restore|/save)?)@\S+", r"\1", name.removeprefix("Post "))
+    return re.sub(
+        r"(actions/cache(?:/restore|/save)?)@\S+", r"\1", name.removeprefix("Post ")
+    )
 
 
 class _CacheLogParser:
@@ -39,9 +50,15 @@ class _CacheLogParser:
         self.inputs = False
         self.path_input = False
         self.steps = [
-            (datetime.fromisoformat(s["started_at"]).timestamp(),
-             datetime.fromisoformat(s["completed_at"]).timestamp() + 1, s["name"], s.get("number"))
-            for s in steps if s.get("started_at") and s.get("completed_at")
+            (
+                datetime.fromisoformat(s["started_at"]).timestamp(),
+                datetime.fromisoformat(s["completed_at"]).timestamp() + 1,
+                s["name"],
+                s.get("number"),
+            )
+            for s in steps
+            if s.get("started_at")
+            and s.get("completed_at")
             and s.get("conclusion") != "skipped"
         ]
 
@@ -49,21 +66,33 @@ class _CacheLogParser:
         step, number = None, None
         if timestamp:
             instant = datetime.fromisoformat(timestamp).timestamp()
-            step, number = next(((name, number) for start, end, name, number in reversed(self.steps)
-                                 if start <= instant < end), (None, None))
+            step, number = next(
+                (
+                    (name, number)
+                    for start, end, name, number in reversed(self.steps)
+                    if start <= instant < end
+                ),
+                (None, None),
+            )
         labels = [_stable_label(label) for label in (step, self.marker) if label]
         return " / ".join(dict.fromkeys(labels)) or action, number
 
     def _start(self, timestamp: str | None, action: str, save: bool):
         name, number = self._context(timestamp, action)
         self.phase = {
-            "entry": _record(name, action, number), "save": save,
-            "size": None, "received": None, "sent": None, "restored": False,
+            "entry": _record(name, action, number),
+            "save": save,
+            "size": None,
+            "received": None,
+            "sent": None,
+            "restored": False,
         }
 
     def _save_target(self, entry: dict) -> dict | None:
         key = entry["saved_key"] or entry["requested_key"]
-        candidates = [e for e in reversed(self.entries) if e["save_status"] == "not-attempted"]
+        candidates = [
+            e for e in reversed(self.entries) if e["save_status"] == "not-attempted"
+        ]
         if key:
             exact = next((e for e in candidates if e["requested_key"] == key), None)
             if exact is not None:
@@ -88,7 +117,9 @@ class _CacheLogParser:
             if entry["save_status"] == "not-attempted":
                 return
             if entry["save_status"] == "saved":
-                entry["saved_bytes"] = phase["sent"] if phase["sent"] is not None else phase["size"]
+                entry["saved_bytes"] = (
+                    phase["sent"] if phase["sent"] is not None else phase["size"]
+                )
             target = self._save_target(entry)
             if target:
                 for field in ("saved_key", "save_status", "saved_bytes"):
@@ -97,17 +128,25 @@ class _CacheLogParser:
                 return
         elif phase["restored"]:
             entry["restore_status"] = (
-                "exact" if entry["requested_key"] == entry["matched_key"] else "fallback"
+                "exact"
+                if entry["requested_key"] == entry["matched_key"]
+                else "fallback"
             )
-            entry["restored_bytes"] = phase["size"] if phase["size"] is not None else phase["received"]
+            entry["restored_bytes"] = (
+                phase["size"] if phase["size"] is not None else phase["received"]
+            )
         elif entry["restore_status"] == "unknown" and entry["warnings"]:
             entry["restore_status"] = "failed"
         self.entries.append(entry)
 
     def _warning(self, phase: dict, line: str) -> bool:
-        match = re.match(r"^(?:##\[(?:warning|error)\]|\[(?:warning|error)\])(.+)$", line)
+        match = re.match(
+            r"^(?:##\[(?:warning|error)\]|\[(?:warning|error)\])(.+)$", line
+        )
         message = match[1] if match else line
-        failure = message.startswith(("Failed to save:", "Failed to restore:", "Path Validation Error:"))
+        failure = message.startswith(
+            ("Failed to save:", "Failed to restore:", "Path Validation Error:")
+        )
         if not match and not failure:
             return False
         phase["entry"]["warnings"].append(message)
@@ -125,11 +164,15 @@ class _CacheLogParser:
         if self._warning(phase, line):
             return
         size = re.fullmatch(r"Cache Size: ~[\d.]+ MB \((\d+) B\)", line)
-        progress = re.fullmatch(r"(Received|Sent) \d+ of (\d+) \([\d.]+%\), [\d.]+ MBs/sec", line)
+        progress = re.fullmatch(
+            r"(Received|Sent) \d+ of (\d+) \([\d.]+%\), [\d.]+ MBs/sec", line
+        )
         if size:
             phase["size"] = int(size[1])
         if progress:
-            phase["received" if progress[1] == "Received" else "sent"] = int(progress[2])
+            phase["received" if progress[1] == "Received" else "sent"] = int(
+                progress[2]
+            )
             if phase["save"] and phase["entry"]["save_status"] == "not-attempted":
                 phase["entry"]["save_status"] = "unknown"
         if phase["save"]:
@@ -140,7 +183,9 @@ class _CacheLogParser:
     def _save_event(self, phase: dict, line: str):
         entry = phase["entry"]
         saved = re.fullmatch(r"Cache saved with key: (.+)", line)
-        skipped = re.fullmatch(r"Cache hit occurred on the primary key (.+), not saving cache\.", line)
+        skipped = re.fullmatch(
+            r"Cache hit occurred on the primary key (.+), not saving cache\.", line
+        )
         if saved or skipped:
             entry["saved_key"] = (saved or skipped)[1]
             entry["save_status"] = "saved" if saved else "skipped-exact-hit"
@@ -180,7 +225,9 @@ class _CacheLogParser:
             return
         if line.startswith("##[group]Run "):
             self._finish()
-            action = re.fullmatch(r"##\[group\]Run (actions/cache(?:/restore|/save)?)@\S+", line)
+            action = re.fullmatch(
+                r"##\[group\]Run (actions/cache(?:/restore|/save)?)@\S+", line
+            )
             if action:
                 self._start(timestamp, action[1], save=action[1].endswith("/save"))
                 self.inputs = True
@@ -223,8 +270,12 @@ def parse_cache_log(log: str, steps: list[dict] | None = None) -> list[dict]:
     occurrences: dict[str, int] = {}
     for entry in parser.entries:
         # PRs use restore-only PM actions where main uses combined cache actions.
-        labels = [re.sub(r"^(?:Cache|Restore|Save) ", "", label).removesuffix(" without saving")
-                  for label in entry["name"].split(" / ")]
+        labels = [
+            re.sub(r"^(?:Cache|Restore|Save) ", "", label).removesuffix(
+                " without saving"
+            )
+            for label in entry["name"].split(" / ")
+        ]
         name = " / ".join(labels)
         occurrences[name] = occurrences.get(name, 0) + 1
         entry["occurrence"] = occurrences[name]
@@ -266,48 +317,87 @@ def _bucket(entry: dict) -> str:
 def _view(timings: dict, baseline: dict | None) -> dict:
     data = timings["cache_data"]
     is_main = timings.get("is_main", False)
-    references = {(e.get("job", ""), e["identity"]): e
-                  for e in (baseline or {}).get("cache_data", {}).get("entries", [])}
-    groups: dict[str, list[dict]] = {name: [] for name in ("hits", "misses", "unavailable", "saves without restore")}
+    references = {
+        (e.get("job", ""), e["identity"]): e
+        for e in (baseline or {}).get("cache_data", {}).get("entries", [])
+    }
+    groups: dict[str, list[dict]] = {
+        name: [] for name in ("hits", "misses", "unavailable", "saves without restore")
+    }
     missed = []
     for entry in data.get("entries", []):
         group = _bucket(entry)
         groups[group].append(entry)
-        if entry["restore_status"] not in ("not-attempted", "lookup-only") and group != "hits":
-            reference = entry if is_main else references.get((entry.get("job", ""), entry["identity"]))
+        if (
+            entry["restore_status"] not in ("not-attempted", "lookup-only")
+            and group != "hits"
+        ):
+            reference = (
+                entry
+                if is_main
+                else references.get((entry.get("job", ""), entry["identity"]))
+            )
             missed.append(_archive_size(reference))
-    return {"groups": groups, "attempts": len(groups["hits"]) + len(missed), "missed": missed,
-            "references": references, "is_main": is_main, "data": data,
-            "has_baseline": "cache_data" in (baseline or {})}
+    return {
+        "groups": groups,
+        "attempts": len(groups["hits"]) + len(missed),
+        "missed": missed,
+        "references": references,
+        "is_main": is_main,
+        "data": data,
+        "has_baseline": "cache_data" in (baseline or {}),
+    }
 
 
 def _amount(values: list[int | None], label: str) -> str:
     known = [value for value in values if value is not None]
     unknown = len(values) - len(known)
-    result = f"{_bytes(sum(known))} {label}" if known or not values else f"? bytes {label}"
+    result = (
+        f"{_bytes(sum(known))} {label}" if known or not values else f"? bytes {label}"
+    )
     return result + (f" (+{unknown} unknown sizes)" if unknown else "")
 
 
 def _summary(view: dict) -> str:
     groups = view["groups"]
-    result = (f"{len(groups['hits'])} / {view['attempts']} cache hits ({len(groups['misses'])} miss{'es' if len(groups['misses']) != 1 else ''})"
-    + "\n" 
-              + _amount([e["restored_bytes"] for e in groups["hits"]], "restored")
-              + "\n" + _amount(view["missed"], "not restored"))
+    result = (
+        f"{len(groups['hits'])} / {view['attempts']} cache hits ({len(groups['misses'])} miss{'es' if len(groups['misses']) != 1 else ''})"
+        + "\n"
+        + _amount([e["restored_bytes"] for e in groups["hits"]], "restored")
+        + "\n"
+        + _amount(view["missed"], "not restored")
+    )
     if view["is_main"]:
-        result += "; " + _amount([e["saved_bytes"] for rows in groups.values() for e in rows
-                                 if e["save_status"] == "saved"], "saved")
+        result += "; " + _amount(
+            [
+                e["saved_bytes"]
+                for rows in groups.values()
+                for e in rows
+                if e["save_status"] == "saved"
+            ],
+            "saved",
+        )
     return result + "."
 
 
 def _notes(view: dict) -> list[str]:
-    source = "newly saved archive sizes" if view["is_main"] else "the main-size reference"
-    notes = [f"Compressed archive bytes. Not-restored bytes use {source}; missing sizes remain unknown."]
+    source = (
+        "newly saved archive sizes" if view["is_main"] else "the main-size reference"
+    )
+    notes = [
+        f"Compressed archive bytes. Not-restored bytes use {source}; missing sizes remain unknown."
+    ]
     if not view["is_main"] and not view["has_baseline"]:
-        notes.append("No main archive reference yet; deltas and missed sizes are unknown.")
+        notes.append(
+            "No main archive reference yet; deltas and missed sizes are unknown."
+        )
     if view["data"].get("unavailable_jobs"):
-        notes.append("Unavailable job logs: " + ", ".join(view["data"]["unavailable_jobs"]))
-    lookups = sum(e["restore_status"] == "lookup-only" for e in view["groups"]["unavailable"])
+        notes.append(
+            "Unavailable job logs: " + ", ".join(view["data"]["unavailable_jobs"])
+        )
+    lookups = sum(
+        e["restore_status"] == "lookup-only" for e in view["groups"]["unavailable"]
+    )
     if lookups:
         notes.append(f"{lookups} lookup-only checks excluded from restore attempts.")
     return notes
@@ -351,10 +441,16 @@ def _cells(entry: dict, group: str, view: dict) -> list[str]:
     if group == "hits":
         cells.append(_bytes(entry["restored_bytes"]))
         if not view["is_main"]:
-            reference = view["references"].get((entry.get("job", ""), entry["identity"]))
+            reference = view["references"].get(
+                (entry.get("job", ""), entry["identity"])
+            )
             size = _archive_size(reference)
             current = entry["restored_bytes"]
-            cells.append(_bytes(current - size, signed=True) if current is not None and size is not None else "unknown")
+            cells.append(
+                _bytes(current - size, signed=True)
+                if current is not None and size is not None
+                else "unknown"
+            )
     elif group == "unavailable":
         cells.append(entry["restore_status"])
     if view["is_main"]:
@@ -376,7 +472,9 @@ def _table(rows: list[dict], group: str, view: dict) -> str:
 def _details(view: dict) -> str:
     lines = ["<details>", "<summary>per-job cache results</summary>", ""]
     for group, rows in view["groups"].items():
-        if group not in ("hits", "misses") and (not rows or (group == "saves without restore" and not view["is_main"])):
+        if group not in ("hits", "misses") and (
+            not rows or (group == "saves without restore" and not view["is_main"])
+        ):
             continue
         lines += [f"<h3>{group}</h3>", ""]
         lines += [_table(rows, group, view) if rows else "none", ""]
@@ -402,15 +500,27 @@ def render_cache_html(timings: dict, baseline: dict | None) -> str:
     if "cache_data" not in timings:
         return ""
     view = _view(timings, baseline)
-    return ('<section id="ci-caches"><h2>CI caches</h2><p>' + escape(_summary(view)) + '</p>'
-            + _details(view) + '</section>')
+    return (
+        '<section id="ci-caches"><h2>CI caches</h2><p>'
+        + escape(_summary(view))
+        + "</p>"
+        + _details(view)
+        + "</section>"
+    )
 
 
-def cache_review_status(timings: dict, baseline: dict | None, report_url: str | None = None) -> list[dict]:
+def cache_review_status(
+    timings: dict, baseline: dict | None, report_url: str | None = None
+) -> list[dict]:
     if "cache_data" not in timings:
         return []
     view = _view(timings, baseline)
-    result = {"kind": "info", "title": "CI caches", "summary": _summary(view), "detail": _details(view)}
+    result = {
+        "kind": "info",
+        "title": "CI caches",
+        "summary": _summary(view),
+        "detail": _details(view),
+    }
     if report_url:
         result.update(link=report_url, link_label="View report")
     return [{"source": "ci caches", "results": [result]}]

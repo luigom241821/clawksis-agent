@@ -4,6 +4,7 @@ Drives a fake process profile (registered like a ``$CLAWK_HOME/plugins/<name>`` 
 would) through ``list_available_providers``, ``provider_model_ids``, the TUI/Desktop ``model.options``
 RPC, the ``clawk model`` setup picker and a session-scoped ``config.set model`` switch.
 """
+
 import shutil
 import sys
 from pathlib import Path
@@ -21,10 +22,19 @@ class _FakeProcessProfile(ProviderProfile):
         return list(LIVE)
 
     def discover_models(self, **_):
-        return [{"id": m, "label": m, "note": "usage credits" if "credit" in m else ""} for m in LIVE]
+        return [
+            {"id": m, "label": m, "note": "usage credits" if "credit" in m else ""}
+            for m in LIVE
+        ]
 
     def setup_status(self, **_):
-        return {"available": True, "logged_in": True, "plan": "Fake Pro", "detail": "", "login_command": None}
+        return {
+            "available": True,
+            "logged_in": True,
+            "plan": "Fake Pro",
+            "detail": "",
+            "login_command": None,
+        }
 
 
 @pytest.fixture
@@ -35,17 +45,32 @@ def picker_env(monkeypatch, tmp_path):
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     profile = _FakeProcessProfile(
-        name="fake-process-provider", display_name="Fake Process Provider", auth_type="external_process",
-        api_mode="chat_completions", base_url="process://fake-process-provider", process_command="fake-process-cli",
-        default_aux_model="fake-small", fallback_models=("fake-large[1m]", "fake-small", "fake-pinned-only"),
-        model_aliases={"large": "fake-large[1m]"})
+        name="fake-process-provider",
+        display_name="Fake Process Provider",
+        auth_type="external_process",
+        api_mode="chat_completions",
+        base_url="process://fake-process-provider",
+        process_command="fake-process-cli",
+        default_aux_model="fake-small",
+        fallback_models=("fake-large[1m]", "fake-small", "fake-pinned-only"),
+        model_aliases={"large": "fake-large[1m]"},
+    )
     register_provider(profile)
     real_which = shutil.which
-    monkeypatch.setattr(shutil, "which",
-                        lambda cmd, *a, **kw: sys.executable if cmd == profile.process_command else real_which(cmd, *a, **kw))
+    monkeypatch.setattr(
+        shutil,
+        "which",
+        lambda cmd, *a, **kw: (
+            sys.executable
+            if cmd == profile.process_command
+            else real_which(cmd, *a, **kw)
+        ),
+    )
     from agent import models_dev
+
     monkeypatch.setattr(models_dev, "fetch_models_dev", lambda *a, **kw: {})
     from clawk_cli import inventory
+
     monkeypatch.setattr(inventory, "_prewarm_pricing_async", lambda *a, **kw: None)
     return home, profile
 
@@ -54,7 +79,11 @@ def test_process_provider_reaches_every_shared_picker(picker_env, monkeypatch):
     home, profile = picker_env
     from clawk_cli.config import save_config
     from clawk_cli.main_provider_setup import _build_provider_picker_rows
-    from clawk_cli.models import _PROVIDER_LABELS, list_available_providers, provider_model_ids
+    from clawk_cli.models import (
+        _PROVIDER_LABELS,
+        list_available_providers,
+        provider_model_ids,
+    )
     from tui_gateway import server
 
     assert any(row["id"] == profile.name for row in list_available_providers())
@@ -78,11 +107,17 @@ def test_process_provider_reaches_every_shared_picker(picker_env, monkeypatch):
 
     # Both native clients use model.options. The desktop explicit-only view
     # must keep a configured process provider without borrowing API credentials.
-    save_config({"model": {"provider": profile.name, "default": profile.default_aux_model}})
+    save_config(
+        {"model": {"provider": profile.name, "default": profile.default_aux_model}}
+    )
     for explicit_only in (False, True):
-        response = server._methods["model.options"](1, {"explicit_only": explicit_only, "refresh": True})
+        response = server._methods["model.options"](
+            1, {"explicit_only": explicit_only, "refresh": True}
+        )
         assert "error" not in response, response
-        row = next(r for r in response["result"]["providers"] if r["slug"] == profile.name)
+        row = next(
+            r for r in response["result"]["providers"] if r["slug"] == profile.name
+        )
         assert set(LIVE) <= set(row["models"])
         assert row["is_current"]
         assert row["authenticated"]
@@ -90,6 +125,7 @@ def test_process_provider_reaches_every_shared_picker(picker_env, monkeypatch):
     # The setup picker dispatches the process row through the generic plugin flow and persists it.
     from clawk_cli import main, model_setup_flows
     from clawk_cli.config import load_config
+
     selected = "fake-credit[1m]"
     seen = {}
     monkeypatch.setattr(main, "_pick_provider", lambda *a: profile.name)
@@ -120,18 +156,24 @@ def test_native_picker_selection_preserves_process_runtime(picker_env, monkeypat
     from clawk_cli.models import provider_model_ids
     from tui_gateway import server
 
-    save_config(load_config())  # materialize defaults before checking session-only writes
+    save_config(
+        load_config()
+    )  # materialize defaults before checking session-only writes
     config_before = (home / "config.yaml").read_bytes()
     session = {"agent": None, "running": False}
     monkeypatch.setitem(server._sessions, "process-picker", session)
     models = provider_model_ids(profile.name)
     assert models, "A registered process provider must expose selectable models"
     for model in models:
-        response = server._methods["config.set"](2, {
-            "session_id": "process-picker", "key": "model",
-            "value": f"{model} --provider {profile.name} --session",
-            "confirm_expensive_model": True,
-        })
+        response = server._methods["config.set"](
+            2,
+            {
+                "session_id": "process-picker",
+                "key": "model",
+                "value": f"{model} --provider {profile.name} --session",
+                "confirm_expensive_model": True,
+            },
+        )
         assert "error" not in response, response
         assert response["result"]["value"] == model
         runtime = session["model_override"]

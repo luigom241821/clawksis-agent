@@ -14,7 +14,9 @@ from gateway.platforms.event import MessageEvent
 from gateway.run import GatewayRunner
 from gateway.session import SessionSource
 
-WAKE_ID = '["plugin","demo","agent:main:telegram:dm:42","0f1e2d3c4b5a69788796a5b4c3d2e1f0"]'
+WAKE_ID = (
+    '["plugin","demo","agent:main:telegram:dm:42","0f1e2d3c4b5a69788796a5b4c3d2e1f0"]'
+)
 
 
 class _Adapter:
@@ -31,13 +33,25 @@ def _runner():
     return runner
 
 
-@pytest.mark.parametrize("thread_id,chat_type", [(None, "dm"), ("7", "group"), ("7", "dm")])
+@pytest.mark.parametrize(
+    "thread_id,chat_type", [(None, "dm"), ("7", "group"), ("7", "dm")]
+)
 @pytest.mark.asyncio
 async def test_busy_reply_to_an_internal_wake_is_unanchored(thread_id, chat_type):
-    source = SessionSource(platform=Platform.TELEGRAM, chat_id="42", user_id="u1",
-                           chat_type=chat_type, thread_id=thread_id)
-    event = MessageEvent(text="wake", source=source, message_id=WAKE_ID, internal=True,
-                         allow_gateway_control=False)
+    source = SessionSource(
+        platform=Platform.TELEGRAM,
+        chat_id="42",
+        user_id="u1",
+        chat_type=chat_type,
+        thread_id=thread_id,
+    )
+    event = MessageEvent(
+        text="wake",
+        source=source,
+        message_id=WAKE_ID,
+        internal=True,
+        allow_gateway_control=False,
+    )
     adapter = _Adapter()
     await _runner()._send_busy_reply(event, adapter, "draining")
     assert adapter.sends[0]["reply_to"] is None
@@ -45,7 +59,9 @@ async def test_busy_reply_to_an_internal_wake_is_unanchored(thread_id, chat_type
 
 @pytest.mark.asyncio
 async def test_busy_reply_to_a_human_message_still_anchors():
-    source = SessionSource(platform=Platform.TELEGRAM, chat_id="42", user_id="u1", chat_type="dm")
+    source = SessionSource(
+        platform=Platform.TELEGRAM, chat_id="42", user_id="u1", chat_type="dm"
+    )
     event = MessageEvent(text="hi", source=source, message_id="1234")
     adapter = _Adapter()
     await _runner()._send_busy_reply(event, adapter, "draining")

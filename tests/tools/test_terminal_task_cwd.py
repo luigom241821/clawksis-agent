@@ -15,7 +15,9 @@ def _minimal_terminal_config(cwd="/default"):
     }
 
 
-def test_foreground_command_uses_registered_task_cwd_for_existing_environment(monkeypatch):
+def test_foreground_command_uses_registered_task_cwd_for_existing_environment(
+    monkeypatch,
+):
     """ACP can update task cwd after the local env exists; foreground must honor it."""
     calls = []
 
@@ -29,8 +31,12 @@ def test_foreground_command_uses_registered_task_cwd_for_existing_environment(mo
     task_id = "acp-session-1"
     monkeypatch.setattr(terminal_tool, "_active_environments", {task_id: FakeEnv()})
     monkeypatch.setattr(terminal_tool, "_last_activity", {})
-    monkeypatch.setattr(terminal_tool, "_task_env_overrides", {task_id: {"cwd": "/workspace/acp"}})
-    monkeypatch.setattr(terminal_tool, "_get_env_config", lambda: _minimal_terminal_config())
+    monkeypatch.setattr(
+        terminal_tool, "_task_env_overrides", {task_id: {"cwd": "/workspace/acp"}}
+    )
+    monkeypatch.setattr(
+        terminal_tool, "_get_env_config", lambda: _minimal_terminal_config()
+    )
     monkeypatch.setattr(
         terminal_tool,
         "_check_all_guards",
@@ -41,7 +47,10 @@ def test_foreground_command_uses_registered_task_cwd_for_existing_environment(mo
 
     assert result["exit_code"] == 0
     assert len(calls) == 1 and calls[0][0] == "pwd"
-    assert calls[0][1] | {"timeout": 60, "cwd": "/workspace/acp", "bounded_capture": True} == calls[0][1]
+    assert (
+        calls[0][1] | {"timeout": 60, "cwd": "/workspace/acp", "bounded_capture": True}
+        == calls[0][1]
+    )
 
 
 def test_explicit_workdir_still_wins_over_registered_task_cwd(monkeypatch):
@@ -57,8 +66,12 @@ def test_explicit_workdir_still_wins_over_registered_task_cwd(monkeypatch):
     task_id = "acp-session-1"
     monkeypatch.setattr(terminal_tool, "_active_environments", {task_id: FakeEnv()})
     monkeypatch.setattr(terminal_tool, "_last_activity", {})
-    monkeypatch.setattr(terminal_tool, "_task_env_overrides", {task_id: {"cwd": "/workspace/acp"}})
-    monkeypatch.setattr(terminal_tool, "_get_env_config", lambda: _minimal_terminal_config())
+    monkeypatch.setattr(
+        terminal_tool, "_task_env_overrides", {task_id: {"cwd": "/workspace/acp"}}
+    )
+    monkeypatch.setattr(
+        terminal_tool, "_get_env_config", lambda: _minimal_terminal_config()
+    )
     monkeypatch.setattr(
         terminal_tool,
         "_check_all_guards",
@@ -75,7 +88,10 @@ def test_explicit_workdir_still_wins_over_registered_task_cwd(monkeypatch):
 
     assert result["exit_code"] == 0
     assert len(calls) == 1
-    assert calls[0] | {"timeout": 60, "cwd": "/explicit/workdir", "bounded_capture": True} == calls[0]
+    assert (
+        calls[0] | {"timeout": 60, "cwd": "/explicit/workdir", "bounded_capture": True}
+        == calls[0]
+    )
 
 
 def test_explicit_workdir_does_not_persist_into_session_cwd(monkeypatch):
@@ -99,8 +115,12 @@ def test_explicit_workdir_does_not_persist_into_session_cwd(monkeypatch):
     task_id = "acp-session-2"
     monkeypatch.setattr(terminal_tool, "_active_environments", {task_id: FakeEnv()})
     monkeypatch.setattr(terminal_tool, "_last_activity", {})
-    monkeypatch.setattr(terminal_tool, "_task_env_overrides", {task_id: {"cwd": "/workspace/acp"}})
-    monkeypatch.setattr(terminal_tool, "_get_env_config", lambda: _minimal_terminal_config())
+    monkeypatch.setattr(
+        terminal_tool, "_task_env_overrides", {task_id: {"cwd": "/workspace/acp"}}
+    )
+    monkeypatch.setattr(
+        terminal_tool, "_get_env_config", lambda: _minimal_terminal_config()
+    )
     monkeypatch.setattr(
         terminal_tool,
         "_check_all_guards",
@@ -118,7 +138,9 @@ def test_explicit_workdir_does_not_persist_into_session_cwd(monkeypatch):
     assert all(cwd != "/one/off/dir" for _, cwd in recorded), recorded
 
 
-def test_background_command_prefers_recorded_session_cwd_over_init_time_cwd(monkeypatch):
+def test_background_command_prefers_recorded_session_cwd_over_init_time_cwd(
+    monkeypatch,
+):
     """Background process launches must also use the recorded session cwd."""
 
     class FakeEnv:
@@ -141,10 +163,18 @@ def test_background_command_prefers_recorded_session_cwd_over_init_time_cwd(monk
     monkeypatch.setattr(terminal_tool, "_active_environments", {task_id: FakeEnv()})
     monkeypatch.setattr(terminal_tool, "_last_activity", {})
     monkeypatch.setattr(terminal_tool, "_session_cwd", {})
-    monkeypatch.setattr(terminal_tool, "_task_env_overrides", {task_id: {"cwd": "/workspace/init"}})
-    monkeypatch.setattr(terminal_tool, "_get_env_config", lambda: _minimal_terminal_config(cwd="/workspace/init"))
+    monkeypatch.setattr(
+        terminal_tool, "_task_env_overrides", {task_id: {"cwd": "/workspace/init"}}
+    )
+    monkeypatch.setattr(
+        terminal_tool,
+        "_get_env_config",
+        lambda: _minimal_terminal_config(cwd="/workspace/init"),
+    )
     monkeypatch.setattr(terminal_tool, "_start_cleanup_thread", lambda: None)
-    monkeypatch.setattr(terminal_tool, "_resolve_container_task_id", lambda value: value or "default")
+    monkeypatch.setattr(
+        terminal_tool, "_resolve_container_task_id", lambda value: value or "default"
+    )
     monkeypatch.setattr(
         terminal_tool,
         "_check_all_guards",
@@ -170,7 +200,9 @@ def test_background_command_prefers_recorded_session_cwd_over_init_time_cwd(monk
     assert registry.calls[0]["session_key"] == task_id
 
 
-def test_host_local_background_command_bypasses_configured_backend(tmp_path, monkeypatch):
+def test_host_local_background_command_bypasses_configured_backend(
+    tmp_path, monkeypatch
+):
     """Clawksis control-plane children stay on the host when tools use Docker."""
     calls = []
 
@@ -212,7 +244,9 @@ def test_host_local_background_command_bypasses_configured_backend(tmp_path, mon
     monkeypatch.setattr(terminal_tool, "_last_activity", {})
     monkeypatch.setattr(terminal_tool, "_task_env_overrides", {})
     monkeypatch.setattr(terminal_tool, "_start_cleanup_thread", lambda: None)
-    monkeypatch.setattr(terminal_tool, "_resolve_container_task_id", lambda value: value)
+    monkeypatch.setattr(
+        terminal_tool, "_resolve_container_task_id", lambda value: value
+    )
     monkeypatch.setattr(terminal_tool, "_docker_has_host_access", lambda config: False)
     monkeypatch.setattr(
         terminal_tool,
@@ -274,8 +308,12 @@ def test_concurrent_commands_record_their_own_observed_cwd(monkeypatch, tmp_path
     monkeypatch.setattr(terminal_tool, "_last_activity", {})
     monkeypatch.setattr(terminal_tool, "_task_env_overrides", {})
     monkeypatch.setattr(terminal_tool, "_session_cwd", {})
-    monkeypatch.setattr(terminal_tool, "_resolve_container_task_id", lambda _value: "default")
-    monkeypatch.setattr(terminal_tool, "_get_env_config", lambda: _minimal_terminal_config())
+    monkeypatch.setattr(
+        terminal_tool, "_resolve_container_task_id", lambda _value: "default"
+    )
+    monkeypatch.setattr(
+        terminal_tool, "_get_env_config", lambda: _minimal_terminal_config()
+    )
     monkeypatch.setattr(
         terminal_tool,
         "_check_all_guards",

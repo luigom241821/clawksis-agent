@@ -6,6 +6,7 @@ still initializing). Import concrete submodules directly."""
 def check_file_requirements():
     """File tools only require terminal backend availability."""
     from .terminal_tool import check_terminal_requirements
+
     return check_terminal_requirements()
 
 

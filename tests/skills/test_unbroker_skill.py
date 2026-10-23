@@ -6,6 +6,7 @@ an isolated temp PDD_DATA_DIR. Runnable with pytest or directly:
     python3 -m pytest tests/test_unbroker_skill.py -q
     python3 tests/test_unbroker_skill.py        # portable fallback runner
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -20,9 +21,9 @@ from pathlib import Path
 _HERE = Path(__file__).resolve()
 _REL = ("optional-skills", "security", "unbroker", "scripts")
 _CANDIDATES = [
-    _HERE.parent.parent / "skill" / "scripts",           # standalone dev repo
-    _HERE.parent.parent.joinpath(*_REL),                 # standalone layout
-    _HERE.parent.parent.parent.joinpath(*_REL),          # clawksis-agent (tests/skills/)
+    _HERE.parent.parent / "skill" / "scripts",  # standalone dev repo
+    _HERE.parent.parent.joinpath(*_REL),  # standalone layout
+    _HERE.parent.parent.parent.joinpath(*_REL),  # clawksis-agent (tests/skills/)
 ]
 SCRIPTS = next((c for c in _CANDIDATES if (c / "pdd.py").exists()), _CANDIDATES[0])
 sys.path.insert(0, str(SCRIPTS))
@@ -81,17 +82,20 @@ def _consenting(full_name="Jane Q. Public"):
 # --- config -------------------------------------------------------------------
 
 
-
-
-
 def test_browser_clears_captcha_logic():
     assert config.browser_clears_captcha({"browser_backend": "browserbase"}) is True
     assert config.browser_clears_captcha({"browser_backend": "agent-browser"}) is False
     assert config.browser_clears_captcha({"browser_backend": "auto"}, env={}) is False
-    assert config.browser_clears_captcha({"browser_backend": "auto"}, env={"BROWSERBASE_API_KEY": "x"}) is True
+    assert (
+        config.browser_clears_captcha(
+            {"browser_backend": "auto"}, env={"BROWSERBASE_API_KEY": "x"}
+        )
+        is True
+    )
 
 
 # --- storage ------------------------------------------------------------------
+
 
 def test_storage_json_and_jsonl_roundtrip():
     with temp_env() as data:
@@ -108,12 +112,8 @@ def test_storage_json_and_jsonl_roundtrip():
 # --- at-rest encryption -------------------------------------------------------
 
 
-
-
-
-
-
 # --- broker DB ----------------------------------------------------------------
+
 
 def test_seed_broker_db_loads_and_is_well_formed():
     everyone = brokers.load_all()
@@ -121,29 +121,26 @@ def test_seed_broker_db_loads_and_is_well_formed():
     ids = {b["id"] for b in everyone}
     assert {"spokeo", "whitepages", "mylife"} <= ids
     for b in everyone:
-        assert b.get("id") and b.get("name") and b.get("priority") in {"crucial", "high", "standard", "long_tail"}
+        assert (
+            b.get("id")
+            and b.get("name")
+            and b.get("priority") in {"crucial", "high", "standard", "long_tail"}
+        )
         assert (b.get("optout") or {}).get("method")
 
 
-
-
-
-
 # --- tier selection -----------------------------------------------------------
+
 
 def test_every_broker_resolves_to_valid_tier():
     for b in brokers.load_all():
         assert tiers.select_tier(b) in {"T0", "T1", "T2", "T3"}
 
 
-
-
 def test_captcha_tier_shifts_with_browser():
     tps = brokers.get("truepeoplesearch")
     assert tiers.select_tier(tps, "programmatic", browser_clears_captcha=False) == "T2"
     assert tiers.select_tier(tps, "programmatic", browser_clears_captcha=True) == "T1"
-
-
 
 
 def test_plan_excludes_disallowed_fields():
@@ -154,20 +151,33 @@ def test_plan_excludes_disallowed_fields():
         assert "profile_url" not in a["disclosure_fields"]
 
 
-
-
 def _mini_broker(bid, owns=None, requires=None, notes="", quirks=None):
-    return {"id": bid, "name": bid.title(), "priority": "high",
-            "search": {"by": ["name"]},
-            "optout": {"method": "web_form", "url": f"https://{bid}.example/optout",
-                       "requires": requires or {}, "inputs": ["full_name"], "owns": owns or [],
-                       "notes": notes, "quirks": quirks or []},
-            "owns": owns or []}
+    return {
+        "id": bid,
+        "name": bid.title(),
+        "priority": "high",
+        "search": {"by": ["name"]},
+        "optout": {
+            "method": "web_form",
+            "url": f"https://{bid}.example/optout",
+            "requires": requires or {},
+            "inputs": ["full_name"],
+            "owns": owns or [],
+            "notes": notes,
+            "quirks": quirks or [],
+        },
+        "owns": owns or [],
+    }
 
 
 def test_batch_plan_groups_by_ledger_state():
     d = _consenting()
-    bl = [_mini_broker("aaa"), _mini_broker("bbb"), _mini_broker("ccc"), _mini_broker("ddd")]
+    bl = [
+        _mini_broker("aaa"),
+        _mini_broker("bbb"),
+        _mini_broker("ccc"),
+        _mini_broker("ddd"),
+    ]
     ledger = {
         "aaa": {"state": "found"},
         "bbb": {"state": "not_found"},
@@ -175,7 +185,7 @@ def test_batch_plan_groups_by_ledger_state():
         # ddd absent -> unscanned/new
     }
     bp = tiers.batch_plan(d, bl, config.DEFAULT_CONFIG, ledger)
-    assert bp["phase"] == "discover"                      # ddd is unscanned
+    assert bp["phase"] == "discover"  # ddd is unscanned
     assert bp["counts"]["found"] == 1
     assert bp["counts"]["not_found"] == 1
     assert bp["counts"]["blocked"] == 1
@@ -183,15 +193,8 @@ def test_batch_plan_groups_by_ledger_state():
     assert any("PHASE 1" in t for t in bp["next_actions"])
 
 
-
-
-
-
-
-
-
-
 # --- ledger / state machine ---------------------------------------------------
+
 
 def test_ledger_valid_transition_and_audit():
     with temp_env():
@@ -206,64 +209,71 @@ def test_ledger_valid_transition_and_audit():
         assert any(e["to"] == "found" for e in audit)
 
 
-
-
 def test_indirect_exposure_state_and_transitions():
     with temp_env():
         sid = "sub_test01"
         # a scan can land directly on indirect_exposure (PII on a relative's record)
-        case = ledger.transition(sid, "thatsthem", "indirect_exposure",
-                                  evidence={"summary": "email on relative record"})
+        case = ledger.transition(
+            sid,
+            "thatsthem",
+            "indirect_exposure",
+            evidence={"summary": "email on relative record"},
+        )
         assert case["state"] == "indirect_exposure"
         # the lever from there is a targeted delete-my-PII request (-> submitted)
         assert ledger.transition(sid, "thatsthem", "submitted")["state"] == "submitted"
         # and a separate broker: not_found -> indirect_exposure is allowed (found on re-read)
         ledger.transition(sid, "radaris", "not_found")
-        assert ledger.transition(sid, "radaris", "indirect_exposure")["state"] == "indirect_exposure"
+        assert (
+            ledger.transition(sid, "radaris", "indirect_exposure")["state"]
+            == "indirect_exposure"
+        )
         # re-scan can clear it
         assert ledger.transition(sid, "radaris", "not_found")["state"] == "not_found"
-
-
-
-
 
 
 # --- dossier / consent / least-disclosure ------------------------------------
 
 
-
 def test_least_disclosure_selection():
     d = _consenting()
-    got = dossier.select_disclosure(d, ["full_name", "contact_email", "profile_url", "ssn", "date_of_birth"])
+    got = dossier.select_disclosure(
+        d, ["full_name", "contact_email", "profile_url", "ssn", "date_of_birth"]
+    )
     assert set(got) == {"full_name", "contact_email", "date_of_birth"}
     assert "ssn" not in got and "profile_url" not in got
 
 
-
-
 # --- alternates / search vectors ---------------------------------------------
+
 
 def test_all_names_and_locations_dedupe():
     d = _consenting()
-    d["identity"]["also_known_as"] = ["Jane Public", "Jane Q. Public"]   # 2nd dups primary
-    d["identity"]["prior_addresses"] = [{"city": "Berkeley", "state": "CA"}, {"city": "Oakland", "state": "CA"}]
+    d["identity"]["also_known_as"] = [
+        "Jane Public",
+        "Jane Q. Public",
+    ]  # 2nd dups primary
+    d["identity"]["prior_addresses"] = [
+        {"city": "Berkeley", "state": "CA"},
+        {"city": "Oakland", "state": "CA"},
+    ]
     assert dossier.all_names(d) == ["Jane Q. Public", "Jane Public"]
-    assert [loc["city"] for loc in dossier.all_locations(d)] == ["Oakland", "Berkeley"]  # current first, deduped
-
-
-
-
-
-
+    assert [loc["city"] for loc in dossier.all_locations(d)] == [
+        "Oakland",
+        "Berkeley",
+    ]  # current first, deduped
 
 
 # --- opaque ids / fan-out / antibot ------------------------------------------
+
 
 def test_subject_id_is_opaque_no_name_leak():
     sid = dossier.new_subject_id("Maiden Married Person")
     assert sid.startswith("sub_")
     assert "maiden" not in sid.lower() and "person" not in sid.lower()
-    assert dossier.new_subject_id("Maiden Married Person") != sid  # not derived from the name
+    assert (
+        dossier.new_subject_id("Maiden Married Person") != sid
+    )  # not derived from the name
 
 
 def test_fanout_batches_large_runs():
@@ -274,42 +284,26 @@ def test_fanout_batches_large_runs():
     assert small["should_fanout"] is False and small["batches"] == [["x", "y"]]
 
 
-
-
 # --- cdp (operator browser over the DevTools protocol) --------------------------------------
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 # --- legal / templates --------------------------------------------------------
 
 
-
 def test_render_optout_email_includes_listing_and_name():
     b = brokers.get("spokeo")
-    out = legal.render_optout_email(b, {"full_name": "Jane Q. Public",
-                                        "contact_email": "jane@example.com",
-                                        "listing_urls": ["https://www.spokeo.com/jane"]})
+    out = legal.render_optout_email(
+        b,
+        {
+            "full_name": "Jane Q. Public",
+            "contact_email": "jane@example.com",
+            "listing_urls": ["https://www.spokeo.com/jane"],
+        },
+    )
     assert "Jane Q. Public" in out and "https://www.spokeo.com/jane" in out
 
 
-
-
 # --- email verification-link extraction --------------------------------------
-
-
-
 
 
 # --- BADBOOL live-pull parser -------------------------------------------------
@@ -321,13 +315,13 @@ This is not a broker; ignore it.
 
 ## People Search Sites
 
-### \U0001F490 BeenVerified
+### \U0001f490 BeenVerified
 Find your information and opt out of [people search](https://www.beenverified.com/app/optout/search).
 
-### \U0001F490 \U0001F4DE MyLife
+### \U0001f490 \U0001f4de MyLife
 [Find your information](https://www.mylife.com), and then [opt out](https://www.mylife.com/privacyrequest).
 
-### \U0001F3AB PimEyes
+### \U0001f3ab PimEyes
 To opt out, [upload an ID](https://pimeyes.com/en/opt-out-request-form).
 
 ## Special Circumstances
@@ -346,11 +340,11 @@ def test_badbool_parses_people_search_section_only():
     assert bv["source"] == "BADBOOL-auto" and bv["confidence"] == "auto"
 
 
-
-
 def test_badbool_merge_keeps_curated_and_adds_new():
     with temp_env():
-        badbool.refresh(__import__("paths").brokers_cache_path(), markdown=BADBOOL_FIXTURE)
+        badbool.refresh(
+            __import__("paths").brokers_cache_path(), markdown=BADBOOL_FIXTURE
+        )
         merged = {b["id"]: b for b in brokers.load_all()}
         # curated record wins over the live one
         assert merged["beenverified"]["source"] == "BADBOOL"
@@ -361,9 +355,7 @@ def test_badbool_merge_keeps_curated_and_adds_new():
 # --- report -------------------------------------------------------------------
 
 
-
 # --- autonomy: auto-configure ---------------------------------------------------------------
-
 
 
 def test_auto_configure_picks_most_autonomous():
@@ -374,19 +366,27 @@ def test_auto_configure_picks_most_autonomous():
         assert cfg["email_mode"] == "draft_only"
         assert cfg["browser_backend"] == "auto"
         # SMTP creds -> programmatic email; Browserbase key -> cloud browser
-        cfg = config.auto_configure(env={"EMAIL_ADDRESS": "agent@gmail.com",
-                                         "EMAIL_PASSWORD": "app-pass",
-                                         "BROWSERBASE_API_KEY": "bb"})
+        cfg = config.auto_configure(
+            env={
+                "EMAIL_ADDRESS": "agent@gmail.com",
+                "EMAIL_PASSWORD": "app-pass",
+                "BROWSERBASE_API_KEY": "bb",
+            }
+        )
         assert cfg["email_mode"] == "programmatic"
         assert cfg["browser_backend"] == "browserbase"
         # AgentMail only -> alias mode
-        assert config.auto_configure(env={"AGENTMAIL_API_KEY": "am"})["email_mode"] == "alias"
+        assert (
+            config.auto_configure(env={"AGENTMAIL_API_KEY": "am"})["email_mode"]
+            == "alias"
+        )
         # encryption auto-on exactly when age is installed (free privacy, zero human cost)
-        assert config.auto_configure(env={})["encryption"] == ("age" if _AGE else "none")
+        assert config.auto_configure(env={})["encryption"] == (
+            "age" if _AGE else "none"
+        )
 
 
 # --- emailer: programmatic send + verification polling --------------------------------------
-
 
 
 class _FakeSMTP:
@@ -418,21 +418,28 @@ def test_emailer_send_locks_recipient_to_broker():
     env = {"EMAIL_ADDRESS": "agent@gmail.com", "EMAIL_PASSWORD": "p"}
     broker = {"id": "radaris", "optout": {"email": "privacy@radaris.example"}}
     _FakeSMTP.sent = []
-    out = emailer.send(broker, "Subject: Remove my listing\n\nBody here", env=env,
-                       _smtp_factory=_FakeSMTP)
+    out = emailer.send(
+        broker,
+        "Subject: Remove my listing\n\nBody here",
+        env=env,
+        _smtp_factory=_FakeSMTP,
+    )
     assert out["to"] == "privacy@radaris.example"
     assert _FakeSMTP.sent[0]["Subject"] == "Remove my listing"
     assert "Body here" in _FakeSMTP.sent[0].get_content()
     # arbitrary recipients are refused -- this tool cannot be repurposed to email people
     try:
-        emailer.send(broker, "Subject: x\n\nb", to="victim@example.com", env=env,
-                     _smtp_factory=_FakeSMTP)
+        emailer.send(
+            broker,
+            "Subject: x\n\nb",
+            to="victim@example.com",
+            env=env,
+            _smtp_factory=_FakeSMTP,
+        )
     except PermissionError:
         pass
     else:
         raise AssertionError("non-broker recipient must be refused")
-
-
 
 
 def test_browser_send_payload_is_recipient_locked():
@@ -449,16 +456,23 @@ def test_browser_send_payload_is_recipient_locked():
         raise AssertionError("browser lane must refuse a non-broker recipient")
 
 
-
-
 def test_verification_link_from_messages_is_domain_scoped():
-    broker = {"id": "spokeo", "name": "Spokeo",
-              "search": {"url": "https://www.spokeo.com/"},
-              "optout": {"url": "https://www.spokeo.com/optout"}}
-    phish = {"from": "phisher@evil.example", "subject": "verify now",
-             "text": "click https://evil.example/optout/verify?x=1"}
-    real = {"from": "no-reply@spokeo.com", "subject": "Confirm your opt out",
-            "text": "Confirm here: https://www.spokeo.com/optout/verify/abc123"}
+    broker = {
+        "id": "spokeo",
+        "name": "Spokeo",
+        "search": {"url": "https://www.spokeo.com/"},
+        "optout": {"url": "https://www.spokeo.com/optout"},
+    }
+    phish = {
+        "from": "phisher@evil.example",
+        "subject": "verify now",
+        "text": "click https://evil.example/optout/verify?x=1",
+    }
+    real = {
+        "from": "no-reply@spokeo.com",
+        "subject": "Confirm your opt out",
+        "text": "Confirm here: https://www.spokeo.com/optout/verify/abc123",
+    }
     hit = emailer.link_from_messages([phish, real], broker)
     assert hit["link"] == "https://www.spokeo.com/optout/verify/abc123"
     # a phishing-only inbox yields nothing (domain scoping + link scoring)
@@ -468,12 +482,8 @@ def test_verification_link_from_messages_is_domain_scoped():
 # --- ledger: follow-up scheduling + due queue ------------------------------------------------
 
 
-
-
-
-
-
 # --- autopilot: the autonomous action queue --------------------------------------------------
+
 
 def _auto_cfg(**over):
     cfg = dict(config.DEFAULT_CONFIG)
@@ -484,25 +494,30 @@ def _auto_cfg(**over):
 def test_next_actions_scan_first_then_optouts_parents_first():
     with temp_env():
         d = _consenting()
-        bl = [_mini_broker("parent", owns=["kid"]), _mini_broker("kid"), _mini_broker("solo")]
+        bl = [
+            _mini_broker("parent", owns=["kid"]),
+            _mini_broker("kid"),
+            _mini_broker("solo"),
+        ]
         q = autopilot.next_actions(d, bl, _auto_cfg(), {}, env={})
         types = [a["type"] for a in q["actions"]]
         assert "scan_inline" in types
-        assert not any(t.startswith("optout") for t in types)   # never act before the crawl
+        assert not any(
+            t.startswith("optout") for t in types
+        )  # never act before the crawl
         assert q["phase"] == "discover"
-        led = {"parent": {"state": "found"}, "kid": {"state": "found"}, "solo": {"state": "found"}}
+        led = {
+            "parent": {"state": "found"},
+            "kid": {"state": "found"},
+            "solo": {"state": "found"},
+        }
         q2 = autopilot.next_actions(d, bl, _auto_cfg(), led, env={})
         opt = [a for a in q2["actions"] if a["type"] == "optout_web_form"]
-        assert [a["broker_id"] for a in opt] == ["parent", "solo"]  # kid covered by parent
+        assert [a["broker_id"] for a in opt] == [
+            "parent",
+            "solo",
+        ]  # kid covered by parent
         assert q2["phase"] == "delete"
-
-
-
-
-
-
-
-
 
 
 def test_next_actions_blocked_stealth_or_operator_browser():
@@ -510,14 +525,12 @@ def test_next_actions_blocked_stealth_or_operator_browser():
         d = _consenting()
         b = _mini_broker("gated")
         led = {"gated": {"state": "blocked"}}
-        q = autopilot.next_actions(d, [b], _auto_cfg(), led, env={"BROWSERBASE_API_KEY": "bb"})
+        q = autopilot.next_actions(
+            d, [b], _auto_cfg(), led, env={"BROWSERBASE_API_KEY": "bb"}
+        )
         assert any(a["type"] == "stealth_rescan" for a in q["actions"])
         q2 = autopilot.next_actions(d, [b], _auto_cfg(), led, env={})
         assert any("anti-bot" in t["reason"] for t in q2["human_digest"])
-
-
-
-
 
 
 def test_parked_and_reappeared_states_group_correctly():
@@ -526,21 +539,26 @@ def test_parked_and_reappeared_states_group_correctly():
     with temp_env():
         d = _consenting()
         bl = [_mini_broker("parked"), _mini_broker("chosen"), _mini_broker("back")]
-        led = {"parked": {"state": "human_task_queued"},
-               "chosen": {"state": "action_selected"},
-               "back": {"state": "reappeared"}}
+        led = {
+            "parked": {"state": "human_task_queued"},
+            "chosen": {"state": "action_selected"},
+            "back": {"state": "reappeared"},
+        }
         bp = tiers.batch_plan(d, bl, config.DEFAULT_CONFIG, led)
         assert bp["counts"]["unscanned"] == 0
         assert bp["phase"] == "delete"
         assert [r["broker_id"] for r in bp["groups"]["human"]] == ["parked"]
         assert {r["broker_id"] for r in bp["groups"]["found"]} == {"chosen", "back"}
         q = autopilot.next_actions(d, bl, _auto_cfg(), led, env={})
-        assert not any(a["type"] in ("scan_inline", "fanout_scan") for a in q["actions"])
-        assert {a["broker_id"] for a in q["actions"] if a["type"] == "optout_web_form"} == {"chosen", "back"}
+        assert not any(
+            a["type"] in ("scan_inline", "fanout_scan") for a in q["actions"]
+        )
+        assert {
+            a["broker_id"] for a in q["actions"] if a["type"] == "optout_web_form"
+        } == {"chosen", "back"}
 
 
 # --- cluster parents: verified deletion lanes + data-driven playbooks ------------------------
-
 
 
 def test_curated_intelius_suppress_first_not_delete():
@@ -549,14 +567,12 @@ def test_curated_intelius_suppress_first_not_delete():
     b = brokers.get("intelius")
     d = b["optout"]["deletion"]
     assert d["prefer"] is False and d["via"] == "in_flow"
-    assert d["email"] == "privacy@peopleconnect.us"     # rights-request address for the data-purge path
+    assert (
+        d["email"] == "privacy@peopleconnect.us"
+    )  # rights-request address for the data-purge path
     steps = " ".join(b["optout"]["playbook"]).upper()
-    assert "SUPPRESS" in steps                          # the recommended action
-    assert "DELETE MY USER DATA" in steps               # names the trap to avoid
-
-
-
-
+    assert "SUPPRESS" in steps  # the recommended action
+    assert "DELETE MY USER DATA" in steps  # names the trap to avoid
 
 
 def test_request_kind_is_residency_honest():
@@ -564,7 +580,9 @@ def test_request_kind_is_residency_honest():
     tx = {"residency_jurisdiction": "US-TX"}
     de = {"residency_jurisdiction": "EU-DE"}
     assert autopilot.request_kind(ca) == "ccpa"
-    assert autopilot.request_kind(tx) == "generic"      # never claim CCPA for a non-CA resident
+    assert (
+        autopilot.request_kind(tx) == "generic"
+    )  # never claim CCPA for a non-CA resident
     assert autopilot.request_kind(de) == "gdpr"
     assert autopilot.request_kind({}) == "generic"
     # broker restriction can force DOWN to generic but never upgrade
@@ -573,18 +591,16 @@ def test_request_kind_is_residency_honest():
     assert autopilot.request_kind(ca, allowed=["ccpa", "generic"]) == "ccpa"
 
 
-
-
-
-
 # --- human-task digest ------------------------------------------------------------------------
+
 
 def test_human_tasks_digest_markdown():
     with temp_env():
         sid = "sub_test01"
         ledger.transition(sid, "mylife", "found", found=True)
-        ledger.transition(sid, "mylife", "human_task_queued",
-                          human_task_reason="gov ID demanded")
+        ledger.transition(
+            sid, "mylife", "human_task_queued", human_task_reason="gov ID demanded"
+        )
         ledger.transition(sid, "fastpeoplesearch", "blocked")
         md = report.human_tasks_markdown(sid)
         assert "gov ID demanded" in md
@@ -598,16 +614,19 @@ def test_human_tasks_digest_markdown():
 
 # --- hardening: locking / rate-limit / retry / idempotency / freshness / metrics ------------
 
+
 def test_storage_lock_mutual_exclusion_and_stale_break():
     with temp_env() as data:
         target = data / "x.json"
-        with storage.locked(target):                       # hold the lock
+        with storage.locked(target):  # hold the lock
             try:
-                with storage.locked(target, timeout=0.2):  # second acquire must time out
+                with storage.locked(
+                    target, timeout=0.2
+                ):  # second acquire must time out
                     raise AssertionError("second acquire should have timed out")
             except TimeoutError:
                 pass
-        with storage.locked(target, timeout=0.2):          # released -> acquires fine
+        with storage.locked(target, timeout=0.2):  # released -> acquires fine
             pass
         # a stale lock (old mtime) from a crashed writer gets broken
         lock = target.with_name(target.name + ".lock")
@@ -618,8 +637,6 @@ def test_storage_lock_mutual_exclusion_and_stale_break():
             pass
 
 
-
-
 def _run(argv) -> dict:
     buf = _io.StringIO()
     with _ctx.redirect_stdout(buf):
@@ -627,14 +644,30 @@ def _run(argv) -> dict:
     return _json.loads(buf.getvalue())
 
 
-
-
 def test_show_reads_back_case_state_and_evidence():
     with temp_env():
-        sid = _run(["intake", "--full-name", "Jane Q. Public",
-                    "--email", "jane@example.com", "--consent"])["subject_id"]
-        _run(["record", sid, "radaris", "found", "--found", "true",
-              "--evidence", '{"listing_urls": ["https://radaris.com/p/x"]}'])
+        sid = _run(
+            [
+                "intake",
+                "--full-name",
+                "Jane Q. Public",
+                "--email",
+                "jane@example.com",
+                "--consent",
+            ]
+        )["subject_id"]
+        _run(
+            [
+                "record",
+                sid,
+                "radaris",
+                "found",
+                "--found",
+                "true",
+                "--evidence",
+                '{"listing_urls": ["https://radaris.com/p/x"]}',
+            ]
+        )
         shown = _run(["show", sid, "radaris"])
         assert shown["broker"] == "radaris" and shown["state"] == "found"
         assert shown["found"] is True
@@ -644,26 +677,20 @@ def test_show_reads_back_case_state_and_evidence():
         assert empty["state"] == "new" and empty["evidence"] == {}
 
 
-
-
-
-
-
-
-
-
-
-
 def test_report_metrics_removal_rate_and_overdue():
     with temp_env():
         sid = "sub_test01"
         for st in ("found", "submitted", "awaiting_processing", "confirmed_removed"):
-            ledger.transition(sid, "a", st, **({"found": True} if st == "found" else {}))
-        ledger.transition(sid, "b", "found", found=True)                        # open
+            ledger.transition(
+                sid, "a", st, **({"found": True} if st == "found" else {})
+            )
+        ledger.transition(sid, "b", "found", found=True)  # open
         for st in ("found", "submitted", "awaiting_processing"):
-            ledger.transition(sid, "c", st, **({"found": True} if st == "found" else {}))
+            ledger.transition(
+                sid, "c", st, **({"found": True} if st == "found" else {})
+            )
         led = ledger.load(sid)
-        led["c"]["next_recheck_at"] = "2000-01-01T00:00:00Z"                    # force overdue
+        led["c"]["next_recheck_at"] = "2000-01-01T00:00:00Z"  # force overdue
         ledger.save(sid, led)
         m = report.metrics(sid)
         assert m["confirmed_removed"] == 1
@@ -673,7 +700,11 @@ def test_report_metrics_removal_rate_and_overdue():
 
 if __name__ == "__main__":
     failures = []
-    tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
+    tests = [
+        (n, f)
+        for n, f in sorted(globals().items())
+        if n.startswith("test_") and callable(f)
+    ]
     for name, fn in tests:
         try:
             fn()

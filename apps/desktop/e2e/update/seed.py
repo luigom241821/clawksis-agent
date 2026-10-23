@@ -67,7 +67,9 @@ def install(root: Path) -> None:
     # runner's git every missing-object probe then starts a lazy fetch whose own probe starts
     # another one (a chain of 78+ nested `fetch --filter=blob:none --stdin`). The clone is full, so
     # there is nothing to lazily fetch; stop the chain for the installer run only.
-    cp = I.run_installer(I.Sandbox(root=sb.root, env={**sb.env, "GIT_NO_LAZY_FETCH": "1"}))
+    cp = I.run_installer(
+        I.Sandbox(root=sb.root, env={**sb.env, "GIT_NO_LAZY_FETCH": "1"})
+    )
     if cp.returncode != 0:
         _fail("scripts/install.sh --non-interactive", cp)
     # publishUpstream() lands commits on main, never a release: follow main, not the stable default.

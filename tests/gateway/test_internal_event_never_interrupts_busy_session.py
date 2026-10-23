@@ -124,5 +124,3 @@ async def test_internal_event_does_not_interrupt_busy_session() -> None:
     parent.interrupt.assert_not_called()
     # No "⚡ Interrupting current task" (or any) ack for a synthetic event.
     adapter._send_with_retry.assert_not_called()
-
-

@@ -47,11 +47,19 @@ def timestamp_or(value: Any, default: datetime | None) -> datetime | None:
         return default
 
 
-def session_timestamps(meta: dict, created_fallback: datetime | None = None) -> tuple[datetime, datetime]:
+def session_timestamps(
+    meta: dict, created_fallback: datetime | None = None
+) -> tuple[datetime, datetime]:
     """``(created, last_activity)`` from a SessionDB row; last activity falls back to created."""
     created = timestamp_or(meta.get("started_at"), created_fallback) or datetime.now()
     updated = next(
-        (stamp for stamp in (timestamp_or(meta.get(f), None) for f in _LAST_ACTIVITY_FIELDS) if stamp),
+        (
+            stamp
+            for stamp in (
+                timestamp_or(meta.get(f), None) for f in _LAST_ACTIVITY_FIELDS
+            )
+            if stamp
+        ),
         created,
     )
     return created, updated

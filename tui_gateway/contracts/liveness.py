@@ -14,16 +14,24 @@ class PingResult(Result):
     pong: bool
 
 
-method("ping", params=PingParams, result=PingResult,
-       doc="Cheapest liveness probe; answered on the WS reader thread even while every agent is mid-turn.")
+method(
+    "ping",
+    params=PingParams,
+    result=PingResult,
+    doc="Cheapest liveness probe; answered on the WS reader thread even while every agent is mid-turn.",
+)
 
 
 class GatewayCapabilitiesResult(Result):
     per_session_exclusive_submit: bool
 
 
-method("gateway.capabilities", params=PingParams, result=GatewayCapabilitiesResult,
-       doc="What THIS build enforces (a client withholds a feature unless advertised).")
+method(
+    "gateway.capabilities",
+    params=PingParams,
+    result=GatewayCapabilitiesResult,
+    doc="What THIS build enforces (a client withholds a feature unless advertised).",
+)
 
 
 class ClientCapabilitiesParams(Params):
@@ -48,6 +56,10 @@ class ClientCapabilitiesResult(Result):
     declines_not_shown: bool = False
 
 
-method("client.capabilities", params=ClientCapabilitiesParams, result=ClientCapabilitiesResult,
-       doc="What the calling client handles, sent once per connection (after gateway.ready); returns the "
-           "server→client request methods this backend may send.")
+method(
+    "client.capabilities",
+    params=ClientCapabilitiesParams,
+    result=ClientCapabilitiesResult,
+    doc="What the calling client handles, sent once per connection (after gateway.ready); returns the "
+    "server→client request methods this backend may send.",
+)

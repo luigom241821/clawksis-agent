@@ -4,6 +4,7 @@ Canary identity uses SemVer build metadata (``X.Y.Z+canary.<stamp>``) and
 compares equal to its stable. Channel records, not SemVer precedence, decide
 which canary is newer.
 """
+
 from __future__ import annotations
 
 import re

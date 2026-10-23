@@ -77,6 +77,7 @@ def _arm_turn(monkeypatch, requirements, sounddevice_factory=None):
         started.set()
 
     import tools.tts_tool_speaker as speaker_mod
+
     monkeypatch.setattr(speaker_mod, "stream_tts_to_speaker", _fake_stream)
 
     cli = _StreamingTTSArming().make_cli()
@@ -98,7 +99,9 @@ def test_streaming_tts_arms_without_importing_sounddevice(monkeypatch):
     raising import (or none at all) must not stand between requirements and
     arming."""
     turn, probe, spoke = _arm_turn(monkeypatch, requirements=True)
-    assert turn.use_streaming_tts is True, "streaming TTS must arm without a sounddevice probe"
+    assert turn.use_streaming_tts is True, (
+        "streaming TTS must arm without a sounddevice probe"
+    )
     assert probe == [], "the arm gate must not probe sounddevice"
     assert spoke is True, "the TTS speaker thread must have been started"
 
@@ -112,7 +115,9 @@ def test_streaming_tts_arms_with_a_plain_working_import_too(monkeypatch):
         sounddevice_factory=lambda: probe.append(1) or types.ModuleType("sounddevice"),
     )
     assert turn.use_streaming_tts is True
-    assert probe == [], "arming must come from check_tts_requirements() alone, never the probe"
+    assert probe == [], (
+        "arming must come from check_tts_requirements() alone, never the probe"
+    )
 
 
 def test_streaming_tts_stays_off_when_provider_unavailable(monkeypatch):
@@ -129,8 +134,11 @@ def test_streaming_tts_not_armed_without_voice_tts(monkeypatch):
     from tools import tts_tool
 
     probe = []
-    monkeypatch.setattr(tts_tool, "_import_sounddevice",
-                        lambda: probe.append(1) or types.ModuleType("sounddevice"))
+    monkeypatch.setattr(
+        tts_tool,
+        "_import_sounddevice",
+        lambda: probe.append(1) or types.ModuleType("sounddevice"),
+    )
 
     cli = _StreamingTTSArming().make_cli()
     cli._voice_tts = False

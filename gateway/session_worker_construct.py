@@ -5,19 +5,23 @@ cannot reconstruct them (its config readers serve the frozen session snapshot, a
 worker must never reload the profile), so the owner resolves them per turn, mode-appropriately,
 and they ride the hydrated request beside ``turn_v1``. The child validates the closed shape.
 """
+
 import json
 from pathlib import Path
 
-KEYS = frozenset({'fallback_model', 'ephemeral_system_prompt', 'prefill_messages'})
+KEYS = frozenset({"fallback_model", "ephemeral_system_prompt", "prefill_messages"})
 
 
 def construct_inputs(authority, policy, chat_id):
     """Owner side, per turn (off the owner loop: config reads)."""
     from gateway.session_authorities import owner_scope
+
     with owner_scope(authority):
-        return {'fallback_model': _fallback_chain(authority, policy),
-                'ephemeral_system_prompt': _ephemeral_prompt(authority, policy, chat_id),
-                'prefill_messages': session_prefill(authority, policy, chat_id)}
+        return {
+            "fallback_model": _fallback_chain(authority, policy),
+            "ephemeral_system_prompt": _ephemeral_prompt(authority, policy, chat_id),
+            "prefill_messages": session_prefill(authority, policy, chat_id),
+        }
 
 
 def _fallback_chain(authority, policy):
@@ -28,8 +32,9 @@ def _fallback_chain(authority, policy):
         return None
     if policy.ignore_user_config:
         from clawk_cli.fallback_config import get_fallback_chain
+
         return get_fallback_chain(policy.config(authority)) or None
-    refresh = getattr(authority.runner, '_refresh_fallback_model', None)
+    refresh = getattr(authority.runner, "_refresh_fallback_model", None)
     return refresh() if refresh is not None else None
 
 
@@ -39,18 +44,19 @@ def _ephemeral_prompt(authority, policy, chat_id):
     the frozen ``-s`` skills blocks. API-time only, never part of the persisted system prefix.
     A bypass session never reads the profile: only its frozen launch additions apply."""
     configured = None
-    resolve = getattr(authority.runner, '_get_system_prompt_for_channel', None)
+    resolve = getattr(authority.runner, "_get_system_prompt_for_channel", None)
     if not policy.ignore_user_config and resolve is not None:
         from gateway.config import Platform
+
         with policy.client_env_scope():
-            configured = resolve(Platform.LOCAL, chat_id or '')
-    return '\n\n'.join(p for p in (configured, policy.skills_prompt) if p) or None
+            configured = resolve(Platform.LOCAL, chat_id or "")
+    return "\n\n".join(p for p in (configured, policy.skills_prompt) if p) or None
 
 
 def session_routing(authority, policy):
     """The session's ``provider_routing``: its own profile's, as of its creation (main's CLI read it
     once at startup). Never the runner's daemon-start copy."""
-    routing = policy.config(authority, secrets=False).get('provider_routing')
+    routing = policy.config(authority, secrets=False).get("provider_routing")
     return routing if isinstance(routing, dict) else {}
 
 
@@ -70,15 +76,21 @@ def session_prefill(authority, policy, session_id):
 class StagedReceipt(dict):
     """A creation receipt plus owner memory ``commit_local_session`` publishes only from the
     transaction that creates the session (never persisted: the receipt itself is the dict)."""
-    on_create: '_PrefillPublication | None' = None
+
+    on_create: "_PrefillPublication | None" = None
     # The request's own ``client_env`` (stage_local_session), for an overlapping create's retry check.
-    client_request: 'dict | None' = None
+    client_request: "dict | None" = None
 
 
 class _PrefillPublication:
     def __init__(self, authority, policy, session_id):
         # A box per attempt: ownership is identity, even when two attempts read the same contents.
-        self.authority, self.policy, self.session_id, self.box = authority, policy, session_id, None
+        self.authority, self.policy, self.session_id, self.box = (
+            authority,
+            policy,
+            session_id,
+            None,
+        )
 
     def read(self):
         """This attempt's snapshot, read by its commit before the transaction (off the owner loop)."""
@@ -102,30 +114,37 @@ def stage_session_prefill(authority, policy, receipt):
     nothing. Never evicted by other sessions; ``release_session_prefill`` drops it with the session."""
     staged = StagedReceipt(receipt)
     if not policy.ignore_user_config:
-        staged.on_create = _PrefillPublication(authority, policy, receipt['session_id'])
+        staged.on_create = _PrefillPublication(authority, policy, receipt["session_id"])
     return staged
 
 
 def release_session_prefill(authority, session_ids):
-    held = getattr(authority, '_local_prefill', None) or {}
+    held = getattr(authority, "_local_prefill", None) or {}
     for sid in session_ids:
         held.pop(str(sid), None)
 
 
 def _held_prefill(authority):
-    held = getattr(authority, '_local_prefill', None)
+    held = getattr(authority, "_local_prefill", None)
     if held is None:
         held = authority._local_prefill = {}
     return held
 
 
 def _read_prefill(authority, policy):
-    from clawk_cli.cli_config_load import _load_prefill_messages, _resolve_prefill_messages_file
+    from clawk_cli.cli_config_load import (
+        _load_prefill_messages,
+        _resolve_prefill_messages_file,
+    )
+
     home = Path(str(authority.profile_id))
     if not home.is_absolute():
         from clawk_constants import get_clawk_home
+
         home = get_clawk_home()
-    with policy.client_env_scope():  # CLAWK_PREFILL_MESSAGES_FILE: a local session's client's
+    with (
+        policy.client_env_scope()
+    ):  # CLAWK_PREFILL_MESSAGES_FILE: a local session's client's
         path = _resolve_prefill_messages_file(policy.config(authority, secrets=False))
     return _load_prefill_messages(path, home) or None
 
@@ -133,18 +152,24 @@ def _read_prefill(authority, policy):
 def construct_kwargs(frame):
     """Child side: the validated ``AIAgent`` keyword arguments; a frame without the object
     (older owner) constructs exactly as before."""
-    inputs = json.loads(frame['policy'].get('request_json') or '{}').get('construct_v1')
+    inputs = json.loads(frame["policy"].get("request_json") or "{}").get("construct_v1")
     if inputs is None:
         return {}
-    if (not isinstance(inputs, dict) or set(inputs) != KEYS
-            or not _dict_list(inputs['fallback_model']) or not _dict_list(inputs['prefill_messages'])
-            or not isinstance(inputs['ephemeral_system_prompt'], (str, type(None)))):
-        raise ValueError('invalid_managed_worker_bootstrap')
+    if (
+        not isinstance(inputs, dict)
+        or set(inputs) != KEYS
+        or not _dict_list(inputs["fallback_model"])
+        or not _dict_list(inputs["prefill_messages"])
+        or not isinstance(inputs["ephemeral_system_prompt"], (str, type(None)))
+    ):
+        raise ValueError("invalid_managed_worker_bootstrap")
     return dict(inputs)
 
 
 def _dict_list(value):
-    return value is None or (isinstance(value, list) and all(isinstance(e, dict) for e in value))
+    return value is None or (
+        isinstance(value, list) and all(isinstance(e, dict) for e in value)
+    )
 
 
 def route_runtime(policy, frozen, model, key, *, fallback=True):
@@ -153,24 +178,34 @@ def route_runtime(policy, frozen, model, key, *, fallback=True):
     control asking which route the session itself runs). The one resolver an in-process turn
     (``_resolve_policy_agent_runtime``) and a key-less managed worker (``worker_api_key``) share."""
     from clawk_cli.runtime_provider import (
-        frozen_runtime_config, resolve_runtime_provider, resolve_runtime_with_fallback,
+        frozen_runtime_config,
+        resolve_runtime_provider,
+        resolve_runtime_with_fallback,
     )
     from clawk_cli.runtime_provider_custom import _resolve_named_custom_runtime
-    provider = (frozen.get('model') or {}).get('provider')
-    launch_url = json.loads(policy.request_json).get('base_url')
+
+    provider = (frozen.get("model") or {}).get("provider")
+    launch_url = json.loads(policy.request_json).get("base_url")
     if launch_url:
         # The creation request is immutable identity, not the current selection: once a canonical
         # model mutation moved the route off the launch endpoint, the policy's selection wins.
         from clawk_cli.route_identity import normalize_route_base_url
-        if normalize_route_base_url(launch_url) != normalize_route_base_url((frozen.get('model') or {}).get('base_url')):
+
+        if normalize_route_base_url(launch_url) != normalize_route_base_url(
+            (frozen.get("model") or {}).get("base_url")
+        ):
             launch_url = None
     # Every rung reads the session's FROZEN config, never live config.yaml: a later
     # ``model.base_url`` edit must not carry this route's frozen credential to the new host
     # (R2-M2). The auth-store pool is not config, so refresh/rotation still applies.
     with frozen_runtime_config(frozen):
-        runtime = _resolve_named_custom_runtime(requested_provider=provider,
-            explicit_api_key=key, explicit_base_url=launch_url,
-            target_model=model, config=frozen)
+        runtime = _resolve_named_custom_runtime(
+            requested_provider=provider,
+            explicit_api_key=key,
+            explicit_base_url=launch_url,
+            target_model=model,
+            config=frozen,
+        )
         if runtime is not None:
             return runtime, None
         # Only a bound launch key is explicit: the frozen ``model.api_key`` is config, which the
@@ -183,10 +218,19 @@ def route_runtime(policy, frozen, model, key, *, fallback=True):
         # the provider chain, which keeps the credential pool an explicit URL would drop.
         if not fallback:
             # Takes no config argument: it reads `frozen` only through the frozen_runtime_config scope above, so it must stay inside that `with`.
-            return resolve_runtime_provider(requested=provider, target_model=model,
-                explicit_base_url=launch_url, explicit_api_key=key), None
-        return resolve_runtime_with_fallback(frozen, requested=provider,
-            explicit_api_key=key, explicit_base_url=launch_url, target_model=model)
+            return resolve_runtime_provider(
+                requested=provider,
+                target_model=model,
+                explicit_base_url=launch_url,
+                explicit_api_key=key,
+            ), None
+        return resolve_runtime_with_fallback(
+            frozen,
+            requested=provider,
+            explicit_api_key=key,
+            explicit_base_url=launch_url,
+            target_model=model,
+        )
 
 
 def worker_api_key(policy, construct):
@@ -199,10 +243,14 @@ def worker_api_key(policy, construct):
     ``construct_v1`` chain (an ordinary session's refreshed profile fallbacks) when it was sent,
     the frozen snapshot's otherwise (older owner)."""
     frozen, model = policy.effective()
-    if 'fallback_model' in construct:
-        frozen = {**frozen, 'fallback_providers': construct['fallback_model'] or [], 'fallback_model': None}
+    if "fallback_model" in construct:
+        frozen = {
+            **frozen,
+            "fallback_providers": construct["fallback_model"] or [],
+            "fallback_model": None,
+        }
     runtime, fallback_entry = route_runtime(policy, frozen, model, None)
-    return runtime.get('api_key') if fallback_entry is None else None
+    return runtime.get("api_key") if fallback_entry is None else None
 
 
 def checkpoint_agent_kwargs(config):
@@ -215,12 +263,20 @@ def checkpoint_agent_kwargs(config):
     elif not isinstance(cp_cfg, dict):
         cp_cfg = {}
     from clawk_cli.config import DEFAULT_CONFIG
+
     defaults = DEFAULT_CONFIG["checkpoints"]
     return {
         "checkpoints_enabled": cp_cfg.get("enabled", defaults["enabled"]),
-        "checkpoint_max_snapshots": cp_cfg.get("max_snapshots", defaults["max_snapshots"]),
-        "checkpoint_max_total_size_mb": cp_cfg.get("max_total_size_mb", defaults["max_total_size_mb"]),
-        "checkpoint_max_file_size_mb": cp_cfg.get("max_file_size_mb", defaults["max_file_size_mb"])}
+        "checkpoint_max_snapshots": cp_cfg.get(
+            "max_snapshots", defaults["max_snapshots"]
+        ),
+        "checkpoint_max_total_size_mb": cp_cfg.get(
+            "max_total_size_mb", defaults["max_total_size_mb"]
+        ),
+        "checkpoint_max_file_size_mb": cp_cfg.get(
+            "max_file_size_mb", defaults["max_file_size_mb"]
+        ),
+    }
 
 
 def routing_agent_kwargs(config, model, provider, base_url):
@@ -229,11 +285,27 @@ def routing_agent_kwargs(config, model, provider, base_url):
     tier's request overrides), from a managed worker's frozen session config."""
     from agent.fast_mode import STATIC_TIERS, parse_service_tier
     from clawk_cli.models import resolve_fast_mode_overrides
-    pr = config.get('provider_routing') or {}
-    score = (config.get('openrouter') or {}).get('min_coding_score')
-    tier = parse_service_tier((config.get('agent') or {}).get('service_tier', ''))
-    overrides = resolve_fast_mode_overrides(model, provider=provider, base_url=base_url, tier=tier) if tier in STATIC_TIERS else None
-    return {'providers_allowed': pr.get('only'), 'providers_ignored': pr.get('ignore'), 'providers_order': pr.get('order'),
-            'provider_sort': pr.get('sort'), 'provider_require_parameters': pr.get('require_parameters', False),
-            'provider_data_collection': pr.get('data_collection'), 'service_tier': tier, 'request_overrides': overrides,
-            'openrouter_min_coding_score': score if isinstance(score, (int, float)) and 0 <= score <= 1 else None}
+
+    pr = config.get("provider_routing") or {}
+    score = (config.get("openrouter") or {}).get("min_coding_score")
+    tier = parse_service_tier((config.get("agent") or {}).get("service_tier", ""))
+    overrides = (
+        resolve_fast_mode_overrides(
+            model, provider=provider, base_url=base_url, tier=tier
+        )
+        if tier in STATIC_TIERS
+        else None
+    )
+    return {
+        "providers_allowed": pr.get("only"),
+        "providers_ignored": pr.get("ignore"),
+        "providers_order": pr.get("order"),
+        "provider_sort": pr.get("sort"),
+        "provider_require_parameters": pr.get("require_parameters", False),
+        "provider_data_collection": pr.get("data_collection"),
+        "service_tier": tier,
+        "request_overrides": overrides,
+        "openrouter_min_coding_score": score
+        if isinstance(score, (int, float)) and 0 <= score <= 1
+        else None,
+    }

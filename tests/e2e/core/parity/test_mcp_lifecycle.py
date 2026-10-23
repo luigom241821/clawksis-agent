@@ -47,7 +47,9 @@ from tests.e2e.core.parity._helpers import (
 # Same rationale as test_entrypoint_parity: Linux /proc scans, and the bypass is
 # for teardown of reparented orphans carrying this run's unique tag only.
 pytestmark = [
-    pytest.mark.skipif(not sys.platform.startswith("linux"), reason="process-tree checks use /proc"),
+    pytest.mark.skipif(
+        not sys.platform.startswith("linux"), reason="process-tree checks use /proc"
+    ),
     pytest.mark.live_system_guard_bypass,
 ]
 
@@ -96,49 +98,78 @@ def _alive(pid: int) -> bool:
 
 def _turn(rpc: RpcClient, timeout: float) -> str:
     sid = rpc.call("session.create", {}, timeout=READY_TIMEOUT)["session_id"]
-    rpc.call("prompt.submit", {"session_id": sid, "text": "Use the parity tool, then report."}, timeout=READY_TIMEOUT)
-    done = rpc.wait_event("message.complete", lambda e: e.get("session_id") == sid, timeout=timeout)
+    rpc.call(
+        "prompt.submit",
+        {"session_id": sid, "text": "Use the parity tool, then report."},
+        timeout=READY_TIMEOUT,
+    )
+    done = rpc.wait_event(
+        "message.complete", lambda e: e.get("session_id") == sid, timeout=timeout
+    )
     return str((done.get("payload") or {}).get("text") or "")
 
 
-def test_mcp_server_death_mid_call_fails_fast_and_the_turn_completes(tmp_path: Path) -> None:
-    with tui_host(tmp_path, tool=MCP_DIE_TOOL, grandchild=False, death_tool=True,
-                  mcp_timeout=MCP_CALL_TIMEOUT) as (ph, srv, proc, cap, rpc):
+def test_mcp_server_death_mid_call_fails_fast_and_the_turn_completes(
+    tmp_path: Path,
+) -> None:
+    with tui_host(
+        tmp_path,
+        tool=MCP_DIE_TOOL,
+        grandchild=False,
+        death_tool=True,
+        mcp_timeout=MCP_CALL_TIMEOUT,
+    ) as (ph, srv, proc, cap, rpc):
         started = time.monotonic()
         text = _turn(rpc, timeout=FAST_DEATH_BOUND)
         elapsed = time.monotonic() - started
 
         obs = collect_observation("tui_gateway", ph, srv, text)
-        assert FINAL_ANSWER in text, f"turn did not complete after the MCP server died: {text[-300:]!r}"
-        assert obs.tool_results, "the dead MCP call produced no tool result for the model"
-        assert not any(ph.canaries["mcp"] in r for r in obs.tool_results), obs.tool_results
+        assert FINAL_ANSWER in text, (
+            f"turn did not complete after the MCP server died: {text[-300:]!r}"
+        )
+        assert obs.tool_results, (
+            "the dead MCP call produced no tool result for the model"
+        )
+        assert not any(ph.canaries["mcp"] in r for r in obs.tool_results), (
+            obs.tool_results
+        )
         assert elapsed < FAST_DEATH_BOUND, elapsed
         # The server really died mid-call (not a schema/dispatch error before the RPC).
         dying = mcp_pids(ph).get("dying_server") or []
         # Exactly once: a call that died mid-flight may have had side effects, so it
         # must surface as outcome-uncertain, never be silently replayed.
         assert len(dying) == 1, (
-            f"parity_die ran {len(dying)}x (want exactly 1): {mcp_pids(ph)}; results {obs.tool_results}")
+            f"parity_die ran {len(dying)}x (want exactly 1): {mcp_pids(ph)}; results {obs.tool_results}"
+        )
         wait_until(lambda: not _alive(dying[0]), REAP_BOUND, "fixture MCP server exit")
-        assert proc.poll() is None, f"host died with the MCP server:\n{cap.stderr[-2000:]}"
+        assert proc.poll() is None, (
+            f"host died with the MCP server:\n{cap.stderr[-2000:]}"
+        )
 
         assert mcp_pids(ph).get("pipe_holder"), "fixture pipe holder never started"
         proc.stdin.close()
         proc.wait(timeout=60)
         survivors = wait_no_orphans(ph, timeout=REAP_BOUND)
-        assert not survivors, f"dead server's pipe holder survived host shutdown: {describe_pids(survivors)}"
+        assert not survivors, (
+            f"dead server's pipe holder survived host shutdown: {describe_pids(survivors)}"
+        )
 
 
-def test_host_crash_still_reaps_the_mcp_server_and_its_grandchild(tmp_path: Path) -> None:
+def test_host_crash_still_reaps_the_mcp_server_and_its_grandchild(
+    tmp_path: Path,
+) -> None:
     with tui_host(tmp_path) as (ph, _srv, proc, _cap, rpc):
         text = _turn(rpc, timeout=READY_TIMEOUT)
         assert FINAL_ANSWER in text, text[-300:]
         pids = mcp_pids(ph)
-        assert pids.get("server") and pids.get("grandchild"), f"MCP tree never spawned: {pids}"
+        assert pids.get("server") and pids.get("grandchild"), (
+            f"MCP tree never spawned: {pids}"
+        )
 
         os.kill(proc.pid, signal.SIGKILL)  # no atexit, no shutdown hook, no finally
         proc.wait(timeout=30)
 
         survivors = wait_no_orphans(ph, timeout=REAP_BOUND)
         assert not survivors, (
-            f"MCP tree survived a host crash for {REAP_BOUND}s: {describe_pids(survivors)} (pid log {pids})")
+            f"MCP tree survived a host crash for {REAP_BOUND}s: {describe_pids(survivors)} (pid log {pids})"
+        )

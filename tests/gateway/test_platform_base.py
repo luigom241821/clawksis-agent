@@ -43,14 +43,12 @@ class TestInboundMediaSizeCap:
 
     _PNG = b"\x89PNG\r\n\x1a\n" + b"x" * 64
 
-
     def test_image_bytes_rejected_when_oversized(self, monkeypatch):
         from gateway.platforms import base
+
         monkeypatch.setattr(base, "get_inbound_media_max_bytes", lambda: 16)
         with pytest.raises(ValueError, match="Inbound image payload is too large"):
             cache_image_from_bytes(self._PNG, ext=".png")
-
-
 
 
 class TestSafeUrlForLog:
@@ -95,7 +93,9 @@ class TestMessageEventIsCommand:
 
     def test_slash_command_with_image_ref_spaces_in_path(self):
         """Image refs with Windows spaces (e.g. C:\\Users\\John Doe\\img.png) must be correctly stripped."""
-        event = MessageEvent(text="@image:C:\\Users\\John Doe\\My Pictures\\photo.png\n\n/moa what is this?")
+        event = MessageEvent(
+            text="@image:C:\\Users\\John Doe\\My Pictures\\photo.png\n\n/moa what is this?"
+        )
         assert event.is_command() is True
 
     def test_slash_command_with_file_ref_prefix(self):
@@ -166,14 +166,12 @@ class TestExtractImages:
         assert images[0][1] == "cat"
         assert "![cat]" not in cleaned
 
-
     def test_fal_media_cdn(self):
         content = "![gen](https://fal.media/files/abc123/output.png)"
         images, _ = BasePlatformAdapter.extract_images(content)
         assert len(images) == 1
         assert images[0][0] == "https://fal.media/files/abc123/output.png"
         assert images[0][1] == "gen"
-
 
     def test_replicate_delivery(self):
         content = "![](https://replicate.delivery/pbxt/abc/output)"
@@ -182,7 +180,6 @@ class TestExtractImages:
         assert images[0][0] == "https://replicate.delivery/pbxt/abc/output"
         assert images[0][1] == ""
 
-
     def test_html_img_tag(self):
         content = 'Check this: <img src="https://example.com/photo.png">'
         images, cleaned = BasePlatformAdapter.extract_images(content)
@@ -190,7 +187,6 @@ class TestExtractImages:
         assert images[0][0] == "https://example.com/photo.png"
         assert images[0][1] == ""  # HTML images have no alt text
         assert "<img" not in cleaned
-
 
     def test_non_image_link_preserved_when_mixed_with_images(self):
         """Regression: non-image markdown links must not be silently removed
@@ -224,7 +220,6 @@ class TestExtractMedia:
         assert media[0][0] == "/path/to/audio.ogg"
         assert media[0][1] is False  # no voice tag
 
-
     def test_voice_directive_only_taints_audio_files(self):
         """[[audio_as_voice]] is message-global but must only flag audio files.
 
@@ -253,12 +248,10 @@ class TestExtractMedia:
         media, _ = BasePlatformAdapter.extract_media(content)
         assert len(media) == 2
 
-
     def test_cleaned_content_trims_excess_newlines(self):
         content = "Before\n\nMEDIA:/audio.ogg\n\n\n\nAfter"
         _, cleaned = BasePlatformAdapter.extract_media(content)
         assert "\n\n\n" not in cleaned
-
 
     def test_duplicate_media_tags_are_deduplicated(self):
         content = "MEDIA:/tmp/test.png\nMEDIA:/tmp/test.png\nMEDIA:/tmp/other.png"
@@ -269,9 +262,9 @@ class TestExtractMedia:
         ]
         assert cleaned == ""
 
-
     def test_dedup_uses_expanded_path_so_tilde_and_absolute_collapse(self):
         import os
+
         home = os.path.expanduser("~")
         content = f"MEDIA:~/foo.png\nMEDIA:{home}/foo.png"
         media, _ = BasePlatformAdapter.extract_media(content)
@@ -286,7 +279,6 @@ class TestExtractMedia:
         assert media == [("/tmp/x.jpg", False)]
         assert "[[as_document]]" not in cleaned
         assert "Here is your infographic" in cleaned
-
 
     def test_both_directives_can_coexist(self):
         """A response could (rarely) contain both [[audio_as_voice]] for an
@@ -303,16 +295,12 @@ class TestExtractMedia:
 
     # Windows path support — regression coverage for #34632
 
-
     def test_relative_path_still_ignored(self):
         """Relative Windows-style paths (no drive letter) must not match."""
-        media, _ = BasePlatformAdapter.extract_media(
-            r"MEDIA:Users\kotsu\file.pdf"
-        )
+        media, _ = BasePlatformAdapter.extract_media(r"MEDIA:Users\kotsu\file.pdf")
         assert media == []
 
     # --- Code block / inline code / blockquote false-positive guards (#35695) ---
-
 
     def test_media_mixed_code_and_prose(self):
         """Real MEDIA: in prose + example in code block: only prose extracted,
@@ -356,7 +344,6 @@ class TestMediaInsideSerializedJson:
     at line start, indented, or as quoted-path tags keep working.
     """
 
-
     def test_media_in_embedded_serialized_reply_not_extracted(self):
         """A serialized tool result that embeds a prior reply's MEDIA: tag."""
         content = (
@@ -367,7 +354,6 @@ class TestMediaInsideSerializedJson:
         assert media == [], f"embedded serialized reply leaked: {media}"
 
     # --- Legitimate tags must still extract (no regression vs line-start anchor) ---
-
 
     def test_quoted_path_media_still_extracted(self):
         """MEDIA:"..." quoted-path form (a real LLM output) is not JSON-masked."""
@@ -407,7 +393,6 @@ class TestMediaExtensionAllowlistParity:
     MEDIA_DELIVERY_EXTS source of truth, and the strip is anchored to that set.
     """
 
-
     def test_unknown_extension_not_black_holed_by_cleanup(self):
         """A MEDIA: tag with an unknown extension is NOT stripped from the
         body by the extension-anchored cleanup — and when the path does not
@@ -416,6 +401,7 @@ class TestMediaExtensionAllowlistParity:
         Validated unknown-extension paths DO deliver — see
         TestUniversalMediaEgress (#36060)."""
         from gateway.platforms.base import MEDIA_TAG_CLEANUP_RE
+
         text = "Saved to MEDIA:/tmp/data.weirdext done"
         media, _ = BasePlatformAdapter.extract_media(text)
         assert media == []  # nonexistent path fails validation, not delivered
@@ -433,7 +419,9 @@ class TestExtensionlessMediaDelivery:
         )
         monkeypatch.delenv("CLAWK_MEDIA_DELIVERY_STRICT", raising=False)
 
-    def test_extensionless_media_extracted_when_file_validates(self, tmp_path, monkeypatch):
+    def test_extensionless_media_extracted_when_file_validates(
+        self, tmp_path, monkeypatch
+    ):
         root = tmp_path / "output"
         root.mkdir()
         caddy = root / "Caddyfile"
@@ -464,12 +452,24 @@ class TestUniversalMediaEgress:
         )
         monkeypatch.delenv("CLAWK_MEDIA_DELIVERY_STRICT", raising=False)
 
-    @pytest.mark.parametrize("name", [
-        "script.py", "server.log", "notes.weirdext", "app.ts", "run.sh",
-        "config.toml", "styles.css", "contract.sol",
-    ])
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "script.py",
+            "server.log",
+            "notes.weirdext",
+            "app.ts",
+            "run.sh",
+            "config.toml",
+            "styles.css",
+            "contract.sol",
+        ],
+    )
     def test_unknown_extension_delivered_when_file_validates(
-        self, tmp_path, monkeypatch, name,
+        self,
+        tmp_path,
+        monkeypatch,
+        name,
     ):
         root = tmp_path / "output"
         root.mkdir()
@@ -483,7 +483,6 @@ class TestUniversalMediaEgress:
         assert media[0][0] == str(f.resolve())
         assert "MEDIA:" not in cleaned
         assert "Done." in cleaned
-
 
     def test_known_extension_still_unconditional(self):
         # Known extensions keep the pre-#36060 behavior: extracted (and the
@@ -511,7 +510,6 @@ class TestMediaDeliveryPathValidation:
         # specifically cover recency trust re-enable it themselves.
         monkeypatch.setenv("CLAWK_MEDIA_TRUST_RECENT_FILES", "0")
 
-
     def test_rejects_symlink_escape_from_safe_root(self, tmp_path, monkeypatch):
         root = tmp_path / "media-cache"
         root.mkdir()
@@ -535,16 +533,19 @@ class TestMediaDeliveryPathValidation:
         unsafe.write_bytes(b"OggS")
         self._patch_roots(monkeypatch, root)
 
-        filtered = BasePlatformAdapter.filter_media_delivery_paths([
-            (str(unsafe), False),
-            (str(safe), True),
-        ])
+        filtered = BasePlatformAdapter.filter_media_delivery_paths(
+            [
+                (str(unsafe), False),
+                (str(safe), True),
+            ]
+        )
 
         assert filtered == [(str(safe.resolve()), True)]
 
-
     def test_allows_stale_kanban_attachment_but_not_neighboring_workspace(
-        self, tmp_path, monkeypatch,
+        self,
+        tmp_path,
+        monkeypatch,
     ):
         """Strict mode trusts durable attachments without trusting scratch."""
         self._patch_roots(monkeypatch)
@@ -565,8 +566,9 @@ class TestMediaDeliveryPathValidation:
         )
         assert BasePlatformAdapter.validate_media_delivery_path(str(scratch)) is None
 
-
-    def test_recency_trust_denies_system_paths_even_when_fresh(self, tmp_path, monkeypatch):
+    def test_recency_trust_denies_system_paths_even_when_fresh(
+        self, tmp_path, monkeypatch
+    ):
         """A freshly-touched file under /etc must NOT be uploaded.
 
         Belt-and-braces: even if an attacker rewrites the file's mtime
@@ -627,8 +629,9 @@ class TestMediaDeliveryDefaultMode:
         old_mtime = time.time() - 7200  # 2 hours ago — far outside any window
         os.utime(notes, (old_mtime, old_mtime))
 
-        assert BasePlatformAdapter.validate_media_delivery_path(str(notes)) == str(notes.resolve())
-
+        assert BasePlatformAdapter.validate_media_delivery_path(str(notes)) == str(
+            notes.resolve()
+        )
 
     @pytest.mark.parametrize(
         "rel",
@@ -662,7 +665,6 @@ class TestMediaDeliveryDefaultMode:
 
         assert BasePlatformAdapter.validate_media_delivery_path(str(secret)) is None
 
-
     def test_denylist_blocks_google_token_default_mode(self, tmp_path, monkeypatch):
         """Integration credentials at the CLAWK_HOME root (google_token.json)
         must never be deliverable, even though they aren't the historically
@@ -683,8 +685,9 @@ class TestMediaDeliveryDefaultMode:
 
         assert BasePlatformAdapter.validate_media_delivery_path(str(token)) is None
 
-
-    def test_denylist_blocks_non_cache_file_under_clawk_home(self, tmp_path, monkeypatch):
+    def test_denylist_blocks_non_cache_file_under_clawk_home(
+        self, tmp_path, monkeypatch
+    ):
         """A non-credential file the agent wrote directly under ~/.clawksis
         (not in a cache subdir) is still deliverable via recency trust — we
         did NOT blanket-deny the tree (per #32090/#34425). This guards against
@@ -703,9 +706,13 @@ class TestMediaDeliveryDefaultMode:
         monkeypatch.setattr("gateway.platforms.base._CLAWK_HOME", clawk_dir)
         monkeypatch.setattr("gateway.platforms.base._CLAWK_ROOT", clawk_dir)
 
-        assert BasePlatformAdapter.validate_media_delivery_path(str(artifact)) == str(artifact.resolve())
+        assert BasePlatformAdapter.validate_media_delivery_path(str(artifact)) == str(
+            artifact.resolve()
+        )
 
-    def test_denylist_blocks_session_stores_but_not_neighbouring_artifacts(self, tmp_path, monkeypatch):
+    def test_denylist_blocks_session_stores_but_not_neighbouring_artifacts(
+        self, tmp_path, monkeypatch
+    ):
         """The SQLite session/kanban stores (and WAL/SHM sidecars, whose mtime is always fresh),
         legacy ``sessions/`` transcripts and the copied browser cookie store hold every secret ever
         pasted into a chat; ``MEDIA:~/.clawksis/state.db`` must not exfiltrate them (#41071). Named
@@ -722,18 +729,42 @@ class TestMediaDeliveryDefaultMode:
         board = clawk_dir / "kanban" / "boards" / "team-a"
         (board / "attachments").mkdir(parents=True)
 
-        denied = ["state.db", "state.db-wal", "state.db-shm", "kanban.db", "kanban.db-wal",
-                  "sessions/20260101_abc.json", "browser-profile/Default/Cookies",
-                  "kanban/boards/team-a/kanban.db", "kanban/boards/team-a/kanban.db-wal"]
-        allowed = ["kanban/boards/team-a/attachments/report.pdf", "adhoc_report.pdf", "logs/agent.log"]
+        denied = [
+            "state.db",
+            "state.db-wal",
+            "state.db-shm",
+            "kanban.db",
+            "kanban.db-wal",
+            "sessions/20260101_abc.json",
+            "browser-profile/Default/Cookies",
+            "kanban/boards/team-a/kanban.db",
+            "kanban/boards/team-a/kanban.db-wal",
+        ]
+        allowed = [
+            "kanban/boards/team-a/attachments/report.pdf",
+            "adhoc_report.pdf",
+            "logs/agent.log",
+        ]
         for rel in denied + allowed:
             path = clawk_dir / rel
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(b"SQLite format 3\x00")
-        assert [rel for rel in denied if BasePlatformAdapter.validate_media_delivery_path(str(clawk_dir / rel))] == []
-        assert [rel for rel in allowed if not BasePlatformAdapter.validate_media_delivery_path(str(clawk_dir / rel))] == []
+        assert [
+            rel
+            for rel in denied
+            if BasePlatformAdapter.validate_media_delivery_path(str(clawk_dir / rel))
+        ] == []
+        assert [
+            rel
+            for rel in allowed
+            if not BasePlatformAdapter.validate_media_delivery_path(
+                str(clawk_dir / rel)
+            )
+        ] == []
 
-    def test_denylist_covers_every_profile_home_not_just_the_launch_home(self, tmp_path, monkeypatch):
+    def test_denylist_covers_every_profile_home_not_just_the_launch_home(
+        self, tmp_path, monkeypatch
+    ):
         """Multiplex: one process serves every ``<root>/profiles/*``. The credential denylist must
         cover each profile's ``.env`` / ``auth.json`` / ``state.db`` / transcripts whether the emitting
         turn is the launch (default) profile's or the secondary's own (CLAWK_HOME override), while
@@ -748,8 +779,15 @@ class TestMediaDeliveryDefaultMode:
         monkeypatch.setattr("gateway.platforms.base._CLAWK_HOME", clawk_root)
         monkeypatch.setattr("gateway.platforms.base._CLAWK_ROOT", clawk_root)
 
-        denied = [".env", "auth.json", "state.db", "state.db-wal", "config.yaml",
-                  "sessions/20260101_abc.json", "mcp-tokens/server.json"]
+        denied = [
+            ".env",
+            "auth.json",
+            "state.db",
+            "state.db-wal",
+            "config.yaml",
+            "sessions/20260101_abc.json",
+            "mcp-tokens/server.json",
+        ]
         allowed = ["cache/images/gen.png", "report.pdf"]
         for rel in denied + allowed:
             path = profile_b / rel
@@ -759,8 +797,20 @@ class TestMediaDeliveryDefaultMode:
         for scope in (None, profile_b):  # default profile's turn, then beta's own turn
             token = set_clawk_home_override(scope)
             try:
-                assert [rel for rel in denied if BasePlatformAdapter.validate_media_delivery_path(str(profile_b / rel))] == []
-                assert [rel for rel in allowed if not BasePlatformAdapter.validate_media_delivery_path(str(profile_b / rel))] == []
+                assert [
+                    rel
+                    for rel in denied
+                    if BasePlatformAdapter.validate_media_delivery_path(
+                        str(profile_b / rel)
+                    )
+                ] == []
+                assert [
+                    rel
+                    for rel in allowed
+                    if not BasePlatformAdapter.validate_media_delivery_path(
+                        str(profile_b / rel)
+                    )
+                ] == []
             finally:
                 reset_clawk_home_override(token)
 
@@ -779,7 +829,6 @@ class TestMediaDeliveryDefaultMode:
         os.utime(stale, (old_mtime, old_mtime))
 
         assert BasePlatformAdapter.validate_media_delivery_path(str(stale)) is None
-
 
     def test_root_home_deliverable_is_accepted(self, tmp_path, monkeypatch):
         """The motivating bug (#38106): a root-run gateway has ``$HOME=/root``,
@@ -803,13 +852,13 @@ class TestMediaDeliveryDefaultMode:
             (str(fake_home),),
         )
 
-        assert (
-            BasePlatformAdapter.validate_media_delivery_path(str(doc))
-            == str(doc.resolve())
+        assert BasePlatformAdapter.validate_media_delivery_path(str(doc)) == str(
+            doc.resolve()
         )
 
-
-    def test_profile_scoped_cache_delivers_under_symlinked_root(self, tmp_path, monkeypatch):
+    def test_profile_scoped_cache_delivers_under_symlinked_root(
+        self, tmp_path, monkeypatch
+    ):
         """Reopened #31733: a profile gateway whose CLAWK_HOME is symlinked
         under a denied prefix (e.g. /opt/data -> /root/.clawksis) emits
         profile-scoped paths (``<root>/profiles/<name>/cache/images/x.png``)
@@ -836,18 +885,16 @@ class TestMediaDeliveryDefaultMode:
             "gateway.platforms.base._MEDIA_DELIVERY_DENIED_PREFIXES",
             (str(denied_root),),
         )
-        monkeypatch.setattr(
-            "gateway.platforms.base._CLAWK_ROOT", clawk_root
-        )
+        monkeypatch.setattr("gateway.platforms.base._CLAWK_ROOT", clawk_root)
 
-        assert (
-            BasePlatformAdapter.validate_media_delivery_path(str(image))
-            == str(image.resolve())
+        assert BasePlatformAdapter.validate_media_delivery_path(str(image)) == str(
+            image.resolve()
         )
-
 
     @pytest.mark.require_symlinks
-    def test_root_home_workdir_symlink_to_credential_blocked(self, tmp_path, monkeypatch):
+    def test_root_home_workdir_symlink_to_credential_blocked(
+        self, tmp_path, monkeypatch
+    ):
         """A symlink in the workdir pointing at a credential is rejected on its
         resolved target, even under the $HOME exception.
         """
@@ -947,10 +994,12 @@ class TestDockerContainerMediaPathTranslation:
         nested.write_bytes(b"png")
         monkeypatch.setenv(
             "TERMINAL_DOCKER_VOLUMES",
-            json.dumps([
-                f"{host_a}:/data",
-                f"{host_b}:/data/nested",
-            ]),
+            json.dumps(
+                [
+                    f"{host_a}:/data",
+                    f"{host_b}:/data/nested",
+                ]
+            ),
         )
 
         assert BasePlatformAdapter.validate_media_delivery_path(
@@ -976,7 +1025,10 @@ class TestDockerContainerMediaPathTranslation:
     def test_unmapped_container_path_fails(self, monkeypatch):
         monkeypatch.delenv("TERMINAL_DOCKER_VOLUMES", raising=False)
         monkeypatch.delenv("TERMINAL_ENV", raising=False)
-        assert BasePlatformAdapter.validate_media_delivery_path("/workspace/nope.png") is None
+        assert (
+            BasePlatformAdapter.validate_media_delivery_path("/workspace/nope.png")
+            is None
+        )
 
     def test_persistent_home_root_write_translates(self, tmp_path, monkeypatch):
         """An agent writing /root/out.png in a persistent container produced a
@@ -991,11 +1043,13 @@ class TestDockerContainerMediaPathTranslation:
         monkeypatch.setenv("TERMINAL_SANDBOX_DIR", str(sandbox))
         monkeypatch.delenv("TERMINAL_DOCKER_VOLUMES", raising=False)
 
-        assert BasePlatformAdapter.validate_media_delivery_path(
-            "/root/out.png"
-        ) == str(media.resolve())
+        assert BasePlatformAdapter.validate_media_delivery_path("/root/out.png") == str(
+            media.resolve()
+        )
 
-    def test_cache_dir_container_path_translates_to_host_cache(self, tmp_path, monkeypatch):
+    def test_cache_dir_container_path_translates_to_host_cache(
+        self, tmp_path, monkeypatch
+    ):
         """MEDIA:/root/.clawksis/cache/images/... (the agent_visible_image path
         under docker) must translate to the HOST cache file, not the sandbox
         home copy."""
@@ -1012,7 +1066,9 @@ class TestDockerContainerMediaPathTranslation:
             "/root/.clawksis/cache/images/generated.png"
         ) == str(media.resolve())
 
-    def test_container_credential_path_never_translates_through_home(self, tmp_path, monkeypatch):
+    def test_container_credential_path_never_translates_through_home(
+        self, tmp_path, monkeypatch
+    ):
         """/root/.clawksis/* outside a cache mount (the sandbox's credential
         surface: .env, auth.json) must NOT resolve through the persistent
         home mount — those host-side copies sit outside the credential
@@ -1030,26 +1086,31 @@ class TestDockerContainerMediaPathTranslation:
         monkeypatch.setenv("TERMINAL_SANDBOX_DIR", str(sandbox))
         monkeypatch.delenv("TERMINAL_DOCKER_VOLUMES", raising=False)
 
-        assert BasePlatformAdapter.validate_media_delivery_path(
-            "/root/.clawksis/auth.json"
-        ) is None
+        assert (
+            BasePlatformAdapter.validate_media_delivery_path(
+                "/root/.clawksis/auth.json"
+            )
+            is None
+        )
 
 
 # ---------------------------------------------------------------------------
 # should_send_media_as_audio
 # ---------------------------------------------------------------------------
 
+
 class TestShouldSendMediaAsAudio:
     """Audio-routing policy shared by gateway + scheduler + send_message."""
 
     def test_unknown_extension_returns_false(self):
         from gateway.platforms.base import should_send_media_as_audio
+
         assert should_send_media_as_audio(None, ".png") is False
         assert should_send_media_as_audio("telegram", ".pdf") is False
 
-
     def test_telegram_ogg_opus_only_when_voice_flagged(self):
         from gateway.platforms.base import should_send_media_as_audio
+
         assert should_send_media_as_audio("telegram", ".ogg", is_voice=True) is True
         assert should_send_media_as_audio("telegram", ".opus", is_voice=True) is True
         assert should_send_media_as_audio("telegram", ".ogg") is False
@@ -1085,8 +1146,10 @@ class TestIsSenderAuthorized:
 
         from gateway.config import Platform, PlatformConfig
 
-        return StubAdapter(config=PlatformConfig(enabled=True, token="test"),
-                           platform=Platform.TELEGRAM)
+        return StubAdapter(
+            config=PlatformConfig(enabled=True, token="test"),
+            platform=Platform.TELEGRAM,
+        )
 
     def test_no_check_registered_is_unknown(self):
         assert self._adapter()._is_sender_authorized("user") is None
@@ -1121,7 +1184,9 @@ class TestIsSenderAuthorized:
         seen = []
         adapter = self._adapter()
         adapter.set_authorization_check(
-            lambda user_id, chat_type, chat_id: seen.append((user_id, chat_type, chat_id)) or True
+            lambda user_id, chat_type, chat_id: (
+                seen.append((user_id, chat_type, chat_id)) or True
+            )
         )
         adapter._is_sender_authorized("user", "group", "chan")
         assert seen == [("user", "group", "chan")]
@@ -1160,7 +1225,6 @@ class TestTruncateMessage:
         chunks = adapter.truncate_message(msg, max_length=100)
         assert chunks == [msg]
 
-
     @staticmethod
     def _truncate_with_timeout(content, max_length, *, len_fn=None, timeout=3.0):
         """Run truncate_message on a worker thread; fail if it doesn't return.
@@ -1194,12 +1258,9 @@ class TestTruncateMessage:
         for max_length in (0, 1, 2):
             chunks = self._truncate_with_timeout("abcdefghij", max_length)
             assert chunks, f"no chunks for max_length={max_length}"
-            reassembled = "".join(
-                re.sub(r"\s*\(\d+/\d+\)$", "", c) for c in chunks
-            )
+            reassembled = "".join(re.sub(r"\s*\(\d+/\d+\)$", "", c) for c in chunks)
             for ch in "abcdefghij":
                 assert ch in reassembled, f"char {ch!r} lost at max_length={max_length}"
-
 
     def test_code_block_language_tag_carried(self):
         adapter = self._adapter()
@@ -1229,26 +1290,56 @@ class TestGetHumanDelay:
         return adapter
 
     def test_off_and_installed_range_never_touch_process_env(self):
-        env = {"CLAWK_HUMAN_DELAY_MODE": "custom", "CLAWK_HUMAN_DELAY_MIN_MS": "10",
-               "CLAWK_HUMAN_DELAY_MAX_MS": "20"}
-        with patch.dict(os.environ, env), patch(
-            "gateway.platforms.base.random.uniform", return_value=1.5
-        ) as uniform:
+        env = {
+            "CLAWK_HUMAN_DELAY_MODE": "custom",
+            "CLAWK_HUMAN_DELAY_MIN_MS": "10",
+            "CLAWK_HUMAN_DELAY_MAX_MS": "20",
+        }
+        with (
+            patch.dict(os.environ, env),
+            patch("gateway.platforms.base.random.uniform", return_value=1.5) as uniform,
+        ):
             assert self._adapter_with(None)._get_human_delay() == 0.0
             uniform.assert_not_called()
             assert self._adapter_with((1000, 2000))._get_human_delay() == 1.5
             uniform.assert_called_once_with(1.0, 2.0)
 
-    @pytest.mark.parametrize("cfg, expected, warned_key", [
-        ({"human_delay": {"mode": "off", "min_ms": -5}}, None, None),
-        ({"human_delay": {"mode": "natural", "min_ms": "oops", "max_ms": "bad"}}, (800, 2500), None),
-        ({"human_delay": {"mode": "custom", "min_ms": 1000, "max_ms": 2000}}, (1000, 2000), None),
-        ({"human_delay": {"mode": "custom", "min_ms": "oops", "max_ms": 1000}}, (800, 1000), "human_delay.min_ms"),
-        ({"human_delay": {"mode": "custom", "min_ms": -1, "max_ms": 1000}}, (800, 1000), "human_delay.min_ms"),
-        ({"human_delay": {"mode": "custom", "min_ms": 3000, "max_ms": 1000}}, (800, 2500), "human_delay.max_ms=1000"),
-    ])
-    def test_config_bounds_are_validated_with_a_warning_naming_the_key(self, cfg, expected, warned_key, caplog):
+    @pytest.mark.parametrize(
+        "cfg, expected, warned_key",
+        [
+            ({"human_delay": {"mode": "off", "min_ms": -5}}, None, None),
+            (
+                {"human_delay": {"mode": "natural", "min_ms": "oops", "max_ms": "bad"}},
+                (800, 2500),
+                None,
+            ),
+            (
+                {"human_delay": {"mode": "custom", "min_ms": 1000, "max_ms": 2000}},
+                (1000, 2000),
+                None,
+            ),
+            (
+                {"human_delay": {"mode": "custom", "min_ms": "oops", "max_ms": 1000}},
+                (800, 1000),
+                "human_delay.min_ms",
+            ),
+            (
+                {"human_delay": {"mode": "custom", "min_ms": -1, "max_ms": 1000}},
+                (800, 1000),
+                "human_delay.min_ms",
+            ),
+            (
+                {"human_delay": {"mode": "custom", "min_ms": 3000, "max_ms": 1000}},
+                (800, 2500),
+                "human_delay.max_ms=1000",
+            ),
+        ],
+    )
+    def test_config_bounds_are_validated_with_a_warning_naming_the_key(
+        self, cfg, expected, warned_key, caplog
+    ):
         from gateway.run import GatewayRunner
+
         with caplog.at_level(logging.WARNING, logger="gateway.run"):
             assert GatewayRunner._human_delay_from_config(cfg) == expected
         if warned_key is None:
@@ -1281,7 +1372,6 @@ class TestPrefixWithinUtf16Limit:
 
     def test_fits_entirely(self):
         assert _prefix_within_utf16_limit("hello", 10) == "hello"
-
 
     def test_all_emoji(self):
         msg = "😀" * 10  # 20 UTF-16 units
@@ -1325,7 +1415,6 @@ class TestTruncateMessageUtf16:
 class TestProxyKwargsForAiohttp:
     """Verify proxy_kwargs_for_aiohttp routes all schemes through ProxyConnector."""
 
-
     def test_http_proxy_uses_connector_when_aiohttp_socks_available(self):
         pytest.importorskip("aiohttp_socks")
         from unittest.mock import MagicMock
@@ -1347,20 +1436,35 @@ class TestMediaDeliveryDiagnosability:
     def test_rejected_path_appears_in_log(self, tmp_path, caplog):
         outside = tmp_path / "outside.ogg"
         outside.write_bytes(b"OggS")
-        with patch.dict(os.environ, {"CLAWK_MEDIA_DELIVERY_STRICT": "1",
-                                     "CLAWK_MEDIA_TRUST_RECENT_FILES": "0"}), \
-                patch("gateway.platforms.base.MEDIA_DELIVERY_SAFE_ROOTS", ()):
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "CLAWK_MEDIA_DELIVERY_STRICT": "1",
+                    "CLAWK_MEDIA_TRUST_RECENT_FILES": "0",
+                },
+            ),
+            patch("gateway.platforms.base.MEDIA_DELIVERY_SAFE_ROOTS", ()),
+        ):
             with caplog.at_level("WARNING"):
-                out = BasePlatformAdapter.filter_media_delivery_paths([(str(outside), False)])
+                out = BasePlatformAdapter.filter_media_delivery_paths(
+                    [(str(outside), False)]
+                )
         assert out == []
         # The dropped path must be in the log so operators can diagnose it, with the REASON: a policy
         # rejection reads differently from a path that simply does not exist (#100074).
-        assert str(outside) in caplog.text and "denied by the delivery policy" in caplog.text
+        assert (
+            str(outside) in caplog.text
+            and "denied by the delivery policy" in caplog.text
+        )
 
     def test_missing_file_is_logged_as_not_found_not_unsafe(self, tmp_path, caplog):
         ghost = tmp_path / "never-written.pdf"
         with caplog.at_level("WARNING"):
-            assert BasePlatformAdapter.filter_media_delivery_paths([(str(ghost), False)]) == []
+            assert (
+                BasePlatformAdapter.filter_media_delivery_paths([(str(ghost), False)])
+                == []
+            )
         assert "not found on this host" in caplog.text and "unsafe" not in caplog.text
 
     def test_crafted_null_path_does_not_abort_batch(self, tmp_path, monkeypatch):
@@ -1368,10 +1472,12 @@ class TestMediaDeliveryDiagnosability:
         good = tmp_path / "good.png"
         good.write_bytes(b"\x89PNG")
         monkeypatch.setenv("CLAWK_MEDIA_DELIVERY_STRICT", "0")
-        out = BasePlatformAdapter.filter_media_delivery_paths([
-            ("~\x00evil.png", False),
-            (str(good), False),
-        ])
+        out = BasePlatformAdapter.filter_media_delivery_paths(
+            [
+                ("~\x00evil.png", False),
+                (str(good), False),
+            ]
+        )
         assert out == [(str(good.resolve()), False)]
 
 
@@ -1393,6 +1499,7 @@ class _CapturingAdapter(BasePlatformAdapter):
 
     def __init__(self):
         from gateway.config import Platform, PlatformConfig
+
         super().__init__(PlatformConfig(enabled=True), Platform.TELEGRAM)
         self.sent: list[dict] = []
 
@@ -1407,12 +1514,15 @@ class _CapturingAdapter(BasePlatformAdapter):
 
     async def send(self, chat_id, content, reply_to=None, metadata=None):
         from gateway.platforms.base import SendResult
-        self.sent.append({
-            "chat_id": chat_id,
-            "content": content,
-            "reply_to": reply_to,
-            "metadata": metadata,
-        })
+
+        self.sent.append(
+            {
+                "chat_id": chat_id,
+                "content": content,
+                "reply_to": reply_to,
+                "metadata": metadata,
+            }
+        )
         return SendResult(success=True, message_id="m1")
 
 
@@ -1426,7 +1536,6 @@ class TestMediaFallbackDoesNotLeakHostPath:
     """
 
     SENSITIVE_PATH = "/home/jayne/.clawksis/cache/media/sensitive_host_path_abc123.bin"
-
 
     @pytest.mark.asyncio
     async def test_send_document_fallback_includes_explicit_filename_only(self):
@@ -1443,7 +1552,6 @@ class TestMediaFallbackDoesNotLeakHostPath:
         assert self.SENSITIVE_PATH not in sent_text
         assert "/home/" not in sent_text
         assert "report.pdf" in sent_text
-
 
     @pytest.mark.asyncio
     async def test_caption_is_preserved_in_fallback(self):
@@ -1590,7 +1698,8 @@ class TestDockerProfileSandboxMediaTranslation:
 
         assert resolved is None
         assert any(
-            "did not resolve" in r.message and f"session_key={self.SESSION_KEY}" in r.message
+            "did not resolve" in r.message
+            and f"session_key={self.SESSION_KEY}" in r.message
             for r in caplog.records
         )
 
@@ -1657,7 +1766,9 @@ class TestPlatformLockTakeoverGovernance:
         adapter = self._make_adapter(takeover_allowed=False)
         # Ordinary (supervised) start: the live cross-home holder must be
         # left untouched — the gateway fails retryably instead of killing it.
-        assert adapter._acquire_platform_lock("discord-token", "tok", "Discord") is False
+        assert (
+            adapter._acquire_platform_lock("discord-token", "tok", "Discord") is False
+        )
         assert takeover_calls == []
         assert adapter.fatal_error_retryable is True
         assert adapter._fatal_error_code == "discord-token_lock"
@@ -1685,10 +1796,14 @@ class TestPlatformLockTakeoverGovernance:
 
         adapter = self._make_adapter(takeover_allowed=True)
         # An explicit --replace start may attempt exactly one takeover...
-        assert adapter._acquire_platform_lock("discord-token", "tok", "Discord") is False
+        assert (
+            adapter._acquire_platform_lock("discord-token", "tok", "Discord") is False
+        )
         assert len(takeover_calls) == 1
         # ...but the authority is consumed, so a reconnect can never evict a
         # healthy holder (this is what stops the supervised respawn loop).
-        assert adapter._acquire_platform_lock("discord-token", "tok", "Discord") is False
+        assert (
+            adapter._acquire_platform_lock("discord-token", "tok", "Discord") is False
+        )
         assert len(takeover_calls) == 1
         assert adapter._platform_lock_takeover_attempted is True

@@ -56,7 +56,9 @@ def test_session_delete_refuses_active_session(monkeypatch):
             return True
 
     monkeypatch.setattr(server, "_get_db", lambda: _DB())
-    monkeypatch.setitem(server._sessions, "live", {"session_key": "key-live", "running": True})
+    monkeypatch.setitem(
+        server._sessions, "live", {"session_key": "key-live", "running": True}
+    )
     try:
         resp = server.handle_request(
             {
@@ -147,7 +149,9 @@ def test_session_delete_closes_idle_live_session_first(monkeypatch):
 
     monkeypatch.setattr(server, "_get_db", lambda: _DB())
     monkeypatch.setattr(server, "_close_session_by_id", _close)
-    monkeypatch.setitem(server._sessions, "idle", {"session_key": "key-idle", "running": False})
+    monkeypatch.setitem(
+        server._sessions, "idle", {"session_key": "key-idle", "running": False}
+    )
 
     resp = server.handle_request(
         {"id": "1", "method": "session.delete", "params": {"session_id": "key-idle"}}
@@ -187,8 +191,6 @@ def test_session_delete_success_returns_deleted_id(monkeypatch):
     assert str(captured["sessions_dir"]).endswith("sessions")
 
 
-
-
 # --------------------------------------------------------------------------
 # session.* profile scoping (app-global remote mode) — #62503
 # --------------------------------------------------------------------------
@@ -212,7 +214,9 @@ def test_session_delete_honors_params_profile_sessions_dir(monkeypatch, tmp_path
         def close(self):
             captured["closed"] = True
 
-    monkeypatch.setattr(server, "_profile_home", lambda p: profile_home if p == "mlperf" else None)
+    monkeypatch.setattr(
+        server, "_profile_home", lambda p: profile_home if p == "mlperf" else None
+    )
     monkeypatch.setattr(server, "_get_db", lambda: None)
     monkeypatch.setattr("clawk_state_registry.acquire", ProfileDB)
 

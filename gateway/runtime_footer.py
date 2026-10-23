@@ -26,7 +26,7 @@ def _home_relative_cwd(cwd: str) -> str:
         home = os.path.expanduser("~")
         p = os.path.abspath(cwd)
         if home and (p == home or p.startswith(home + os.sep)):
-            return "~" + p[len(home):]
+            return "~" + p[len(home) :]
         return p
     except Exception:
         return cwd
@@ -45,13 +45,18 @@ def _env_cwd() -> str:
     return terminal_env("TERMINAL_CWD", "")
 
 
-def resolve_footer_config(user_config: dict[str, Any] | None, platform_key: str | None = None) -> dict[str, Any]:
+def resolve_footer_config(
+    user_config: dict[str, Any] | None, platform_key: str | None = None
+) -> dict[str, Any]:
     """Resolve effective footer config: defaults (enabled=False) <
     ``display.runtime_footer`` < ``display.platforms.<platform_key>.runtime_footer``."""
     resolved = {"enabled": False, "fields": list(_DEFAULT_FIELDS)}
     cfg = (user_config or {}).get("display") or {}
     plat_cfg = (cfg.get("platforms") or {}).get(platform_key) if platform_key else None
-    sections = [cfg.get("runtime_footer"), plat_cfg.get("runtime_footer") if isinstance(plat_cfg, dict) else None]
+    sections = [
+        cfg.get("runtime_footer"),
+        plat_cfg.get("runtime_footer") if isinstance(plat_cfg, dict) else None,
+    ]
     for section in sections:
         if not isinstance(section, dict):
             continue
@@ -73,16 +78,25 @@ def _format_latency(seconds: float) -> str:
     return f"{m}m{sec:02d}s"
 
 
-def format_runtime_footer(*, model: Optional[str], context_tokens: int,
-                          context_length: Optional[int], cwd: Optional[str] = None,
-                          turn_seconds: Optional[float] = None,
-                          requested_model: Optional[str] = None, served_model: Optional[str] = None,
-                          fields: Iterable[str] = _DEFAULT_FIELDS) -> str:
+def format_runtime_footer(
+    *,
+    model: Optional[str],
+    context_tokens: int,
+    context_length: Optional[int],
+    cwd: Optional[str] = None,
+    turn_seconds: Optional[float] = None,
+    requested_model: Optional[str] = None,
+    served_model: Optional[str] = None,
+    fields: Iterable[str] = _DEFAULT_FIELDS,
+) -> str:
     """Render the footer line, or "" if no fields have data. Fields whose data is missing (and
     unknown field names) are skipped silently — a partial footer beats ``?%`` or empty slots."""
+
     def context_pct() -> str:
         if context_length and context_length > 0 and context_tokens >= 0:
-            return f"{max(0, min(100, round((context_tokens / context_length) * 100)))}%"
+            return (
+                f"{max(0, min(100, round((context_tokens / context_length) * 100)))}%"
+            )
         return ""
 
     def served() -> str:
@@ -97,16 +111,30 @@ def format_runtime_footer(*, model: Optional[str], context_tokens: int,
         "served_model": served,
         "context_pct": context_pct,
         # Skipped when the caller did not measure (None) or the value is negative.
-        "latency": lambda: _format_latency(turn_seconds) if turn_seconds is not None and turn_seconds >= 0 else "",
+        "latency": lambda: (
+            _format_latency(turn_seconds)
+            if turn_seconds is not None and turn_seconds >= 0
+            else ""
+        ),
         "cwd": lambda: _home_relative_cwd(cwd or _env_cwd()),
     }
-    return _SEP.join(v for field in fields if (render := renderers.get(field)) and (v := render()))
+    return _SEP.join(
+        v for field in fields if (render := renderers.get(field)) and (v := render())
+    )
 
 
-def build_footer_line(*, user_config: dict[str, Any] | None, platform_key: str | None,
-                      model: Optional[str], context_tokens: int, context_length: Optional[int],
-                      cwd: Optional[str] = None, turn_seconds: Optional[float] = None,
-                      requested_model: Optional[str] = None, served_model: Optional[str] = None) -> str:
+def build_footer_line(
+    *,
+    user_config: dict[str, Any] | None,
+    platform_key: str | None,
+    model: Optional[str],
+    context_tokens: int,
+    context_length: Optional[int],
+    cwd: Optional[str] = None,
+    turn_seconds: Optional[float] = None,
+    requested_model: Optional[str] = None,
+    served_model: Optional[str] = None,
+) -> str:
     """Entry point for gateway/run.py: footer text, or "" when disabled / no data. Callers append it
     to the final response themselves, preserving a single blank line of separation.
     ``turn_seconds`` is the caller-measured (``time.monotonic()``) run duration; ``None`` skips the
@@ -114,7 +142,13 @@ def build_footer_line(*, user_config: dict[str, Any] | None, platform_key: str |
     cfg = resolve_footer_config(user_config, platform_key)
     if not cfg.get("enabled"):
         return ""
-    return format_runtime_footer(model=model, context_tokens=context_tokens,
-                                 context_length=context_length, cwd=cwd, turn_seconds=turn_seconds,
-                                 requested_model=requested_model, served_model=served_model,
-                                 fields=cfg.get("fields") or _DEFAULT_FIELDS)
+    return format_runtime_footer(
+        model=model,
+        context_tokens=context_tokens,
+        context_length=context_length,
+        cwd=cwd,
+        turn_seconds=turn_seconds,
+        requested_model=requested_model,
+        served_model=served_model,
+        fields=cfg.get("fields") or _DEFAULT_FIELDS,
+    )

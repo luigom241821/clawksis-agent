@@ -56,9 +56,7 @@ def _run_backstop(monkeypatch, jobs):
     provider = _RecordingProvider()
     monkeypatch.setattr("cron.jobs.load_jobs", lambda: jobs)
     monkeypatch.setattr("cron.jobs.is_job_runnable", lambda j: True)
-    monkeypatch.setattr(
-        "cron.scheduler_provider._misfire_grace_minutes", lambda: 5.0
-    )
+    monkeypatch.setattr("cron.scheduler_provider._misfire_grace_minutes", lambda: 5.0)
     fired = fire_overdue_jobs(provider)
     return provider, fired
 
@@ -77,9 +75,7 @@ class TestMisfireBackstopOneShotGrace:
         provider, _fired = _run_backstop(monkeypatch, [overdue])
         assert provider.claimed == ["overdue-cron"]
 
-    def test_oneshot_within_oneshot_grace_but_past_misfire_grace(
-        self, monkeypatch
-    ):
+    def test_oneshot_within_oneshot_grace_but_past_misfire_grace(self, monkeypatch):
         # misfire grace patched to ~0 so a 60s-late one-shot is "overdue" for
         # the backstop but still inside ONESHOT_GRACE_SECONDS -> must fire.
         assert ONESHOT_GRACE_SECONDS > 60

@@ -29,7 +29,6 @@ class TestRewrites:
     def test_or_background(self):
         assert rewrite("A || B &") == "A || { B & }"
 
-
     def test_multiple_rewrites_in_one_script(self):
         cmd = "A && B &\nfalse || C &"
         assert rewrite(cmd) == "A && { B & }\nfalse || { C & }"
@@ -42,8 +41,6 @@ class TestPreserved:
         # No compound — just background a single command. Works fine as-is.
         assert rewrite("sleep 5 &") == "sleep 5 &"
 
-
-
     def test_whitespace_only(self):
         assert rewrite("   \n\t") == "   \n\t"
 
@@ -53,7 +50,6 @@ class TestRedirectsNotConfused:
 
     def test_amp_gt_redirect_alone(self):
         assert rewrite("echo hi &>/dev/null") == "echo hi &>/dev/null"
-
 
     def test_gt_amp_inside_compound(self):
         cmd = "A && B 2>&1 &"
@@ -66,7 +62,6 @@ class TestQuotingAndParens:
     def test_and_and_inside_single_quotes(self):
         cmd = "echo 'A && B &'"
         assert rewrite(cmd) == "echo 'A && B &'"
-
 
     def test_backslash_escaped_ampersand(self):
         # Escaped & is not a background operator.
@@ -98,7 +93,6 @@ class TestEdgeCases:
         cmd = "A && &"
         # Don't assert a specific output; just don't raise.
         rewrite(cmd)
-
 
     def test_tabs_between_tokens(self):
         assert rewrite("A\t&&\tB\t&") == "A\t&&\t{ B\t& }"
@@ -148,8 +142,10 @@ class TestTrailingStatementSeparator:
     def test_case_arm_terminator_untouched(self):
         # `;;` already terminates the arm; adding `;` would leave an empty
         # command between `;` and `;;`, which bash rejects.
-        assert rewrite("case $x in p) b && c & ;; esac") == "case $x in p) b && { c & } ;; esac"
-
+        assert (
+            rewrite("case $x in p) b && c & ;; esac")
+            == "case $x in p) b && { c & } ;; esac"
+        )
 
     def test_second_background_then_trailing(self):
         assert rewrite("echo a && sleep 5 & echo b & echo c") == (
@@ -198,7 +194,9 @@ class TestRewriteIsValidBash:
         # End-to-end: the command after the backgrounded compound must run.
         rewritten = rewrite("echo first && true & echo SECOND_RAN")
         result = subprocess.run(
-            ["bash", "-c", rewritten], capture_output=True, text=True,
+            ["bash", "-c", rewritten],
+            capture_output=True,
+            text=True,
             check=False,
         )
         assert result.returncode == 0

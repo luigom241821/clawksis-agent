@@ -29,15 +29,19 @@ def _recording_agent():
     agent = SimpleNamespace(
         _fire_stream_delta=lambda text: calls["stream"].append(text),
         _fire_reasoning_delta=lambda text: calls["reasoning"].append(text),
-        tool_progress_callback=lambda *args, **kwargs: calls["tool_progress"].append((
-            args,
-            kwargs,
-        )),
-        tool_start_callback=lambda call_id, name, args: calls["tool_start"].append((
-            call_id,
-            name,
-            args,
-        )),
+        tool_progress_callback=lambda *args, **kwargs: calls["tool_progress"].append(
+            (
+                args,
+                kwargs,
+            )
+        ),
+        tool_start_callback=lambda call_id, name, args: calls["tool_start"].append(
+            (
+                call_id,
+                name,
+                args,
+            )
+        ),
         tool_complete_callback=lambda call_id, name, args, result: calls[
             "tool_complete"
         ].append((call_id, name, args, result)),
@@ -45,10 +49,6 @@ def _recording_agent():
         show_commentary=True,
     )
     return agent, calls
-
-
-
-
 
 
 def test_stable_ids_match_history_projector():
@@ -102,7 +102,3 @@ def test_failed_command_result_and_error_flag_are_preserved():
     assert is_error is True
     assert calls["tool_progress"][0][1]["is_error"] is True
     assert calls["tool_complete"][0][3] == "[exit 2]\nboom"
-
-
-
-

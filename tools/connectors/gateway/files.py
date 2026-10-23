@@ -64,7 +64,11 @@ class FileInputError(Exception):
 
     def result(self) -> dict[str, Any]:
         """The call's error entry, in the shape the gateway's execute errors take."""
-        error: dict[str, Any] = {"code": self.code, "message": str(self), "family": execute_error_family(self.code)}
+        error: dict[str, Any] = {
+            "code": self.code,
+            "message": str(self),
+            "family": execute_error_family(self.code),
+        }
         if self.hint:
             error["hint"] = self.hint
         return {"data": None, "error": error}
@@ -80,7 +84,9 @@ def model_parameters(name: str, input_schema: Any) -> dict[str, Any]:
     file-input argument paths for ``name`` so execute knows what to stage."""
     if not isinstance(input_schema, dict):
         return {}
-    _FILE_INPUTS[name] = tuple(dict.fromkeys(_file_paths(input_schema, input_schema, (), 0)))
+    _FILE_INPUTS[name] = tuple(
+        dict.fromkeys(_file_paths(input_schema, input_schema, (), 0))
+    )
     return _as_model_schema(input_schema)
 
 
@@ -95,7 +101,9 @@ def _as_model_schema(node: Any) -> Any:
     return {key: _as_model_schema(value) for key, value in node.items()}
 
 
-def _file_paths(node: Any, root: dict[str, Any], path: Path_, depth: int) -> Iterator[Path_]:
+def _file_paths(
+    node: Any, root: dict[str, Any], path: Path_, depth: int
+) -> Iterator[Path_]:
     """Argument paths of every ``file_uploadable`` subschema: properties, items, combinators, local refs."""
     from tools.schema_sanitizer import resolve_local_schema_ref
 
@@ -126,10 +134,16 @@ def _known_file_inputs(client: Any, plan: PlannedCall) -> tuple[Path_, ...]:
     try:
         schemas = (client.schemas(list(candidates)) or {}).get("schemas") or {}
     except ToolGatewayError as exc:
-        logger.warning("connector %s: schema fetch for file inputs failed (%s); executing without staging",
-                       plan.name, exc.code)
+        logger.warning(
+            "connector %s: schema fetch for file inputs failed (%s); executing without staging",
+            plan.name,
+            exc.code,
+        )
         return ()
-    schema = next((schemas[slug] for slug in candidates if isinstance(schemas.get(slug), dict)), {})
+    schema = next(
+        (schemas[slug] for slug in candidates if isinstance(schemas.get(slug), dict)),
+        {},
+    )
     model_parameters(plan.name, schema.get("input_schema") or {})
     return _FILE_INPUTS[plan.name]
 
@@ -139,7 +153,9 @@ def _known_file_inputs(client: Any, plan: PlannedCall) -> tuple[Path_, ...]:
 # ---------------------------------------------------------------------------
 
 
-def stage_inputs(client: Any, plan: PlannedCall, *, task_id: Optional[str]) -> PlannedCall:
+def stage_inputs(
+    client: Any, plan: PlannedCall, *, task_id: Optional[str]
+) -> PlannedCall:
     """``plan`` with each file-input path replaced by a staged descriptor for ``plan.tool``.
 
     Raises ``FileInputError`` when a path is refused or a stage fails; nothing is executed then."""
@@ -150,7 +166,9 @@ def stage_inputs(client: Any, plan: PlannedCall, *, task_id: Optional[str]) -> P
         return plan
     arguments = plan.arguments
     for path in paths:
-        arguments = _substitute(arguments, path, lambda raw: _stage_one(client, plan, raw, task_id))
+        arguments = _substitute(
+            arguments, path, lambda raw: _stage_one(client, plan, raw, task_id)
+        )
     return dataclass_replace(plan, arguments=arguments)
 
 
@@ -170,34 +188,56 @@ def _substitute(value: Any, path: Sequence[str], stage) -> Any:
     if not path:
         if isinstance(value, str):
             return stage(value)
-        if isinstance(value, Mapping) and not isinstance(value, _Staged) and "s3key" in value:
-            raise FileInputError("FILE_NOT_ALLOWED", "File inputs take a local file path, not a storage descriptor.",
-                                 hint="Pass the path of the local file to send.")
+        if (
+            isinstance(value, Mapping)
+            and not isinstance(value, _Staged)
+            and "s3key" in value
+        ):
+            raise FileInputError(
+                "FILE_NOT_ALLOWED",
+                "File inputs take a local file path, not a storage descriptor.",
+                hint="Pass the path of the local file to send.",
+            )
         return value
     head, rest = path[0], path[1:]
     if head == _ARRAY_ITEM:
-        return [_substitute(item, rest, stage) for item in value] if isinstance(value, list) else value
+        return (
+            [_substitute(item, rest, stage) for item in value]
+            if isinstance(value, list)
+            else value
+        )
     if isinstance(value, Mapping) and head in value:
         return {**value, head: _substitute(value[head], rest, stage)}
     return value
 
 
-def _stage_one(client: Any, plan: PlannedCall, raw: str, task_id: Optional[str]) -> dict[str, str]:
+def _stage_one(
+    client: Any, plan: PlannedCall, raw: str, task_id: Optional[str]
+) -> dict[str, str]:
     path = _readable_file(raw, task_id)
     data = _read_bytes(raw, path)
     name = Path(path).name[-255:]
     mimetype = mimetypes.guess_type(name)[0] or "application/octet-stream"
     try:
-        staged = client.stage_file(toolkit=plan.connector.lower(), tool=plan.tool, filename=name,
-                                   mimetype=mimetype, size=len(data))
+        staged = client.stage_file(
+            toolkit=plan.connector.lower(),
+            tool=plan.tool,
+            filename=name,
+            mimetype=mimetype,
+            size=len(data),
+        )
     except ToolGatewayError as exc:
         if exc.code == "TOOL_NOT_ALLOWED":
             raise FileInputError("TOOL_NOT_ALLOWED", str(exc)) from exc
-        raise FileInputError("FILE_UPLOAD_FAILED", f"The tool gateway could not stage {name}: {exc}") from exc
+        raise FileInputError(
+            "FILE_UPLOAD_FAILED", f"The tool gateway could not stage {name}: {exc}"
+        ) from exc
     try:
         client.put_file(staged["upload_url"], staged["headers"], data)
     except ToolGatewayError as exc:
-        raise FileInputError("FILE_UPLOAD_FAILED", f"Uploading {name} to storage failed: {exc}") from exc
+        raise FileInputError(
+            "FILE_UPLOAD_FAILED", f"Uploading {name} to storage failed: {exc}"
+        ) from exc
     return _Staged(staged["descriptor"])
 
 
@@ -207,30 +247,42 @@ def _readable_file(raw: str, task_id: Optional[str]) -> str:
     from gateway.session_context import get_session_env
 
     candidate = _backend_path(raw, task_id)
-    allowed = validate_media_delivery_path(candidate, session_key=get_session_env("CLAWK_SESSION_KEY", ""))
+    allowed = validate_media_delivery_path(
+        candidate, session_key=get_session_env("CLAWK_SESSION_KEY", "")
+    )
     if allowed:
         return allowed
     if not Path(candidate).is_file():
-        raise FileInputError("FILE_NOT_FOUND", f"{raw} is not a regular file on this machine.",
-                             hint="Pass the path of an existing file.")
+        raise FileInputError(
+            "FILE_NOT_FOUND",
+            f"{raw} is not a regular file on this machine.",
+            hint="Pass the path of an existing file.",
+        )
     raise FileInputError(
-        "FILE_NOT_ALLOWED", f"{raw} may not leave this machine: the file-sending policy refuses it.",
+        "FILE_NOT_ALLOWED",
+        f"{raw} may not leave this machine: the file-sending policy refuses it.",
         hint="Files under the Clawksis downloads and cache folders, or a folder listed in "
-             "gateway.media_delivery_allow_dirs, can be sent.")
+        "gateway.media_delivery_allow_dirs, can be sent.",
+    )
 
 
 def _backend_path(raw: str, task_id: Optional[str]) -> str:
     """``raw`` as an absolute path in the terminal backend's namespace, resolved the way the file
     tools resolve it. Backends whose files live on another machine are refused, as ``MEDIA:`` is."""
-    from tools.file_tools_paths import _resolve_path_for_task, _terminal_env_type_for_task
+    from tools.file_tools_paths import (
+        _resolve_path_for_task,
+        _terminal_env_type_for_task,
+    )
 
     task = task_id or "default"
     backend = _terminal_env_type_for_task(task)
     if backend not in _HOST_READABLE_BACKENDS:
         raise FileInputError(
-            "FILE_NOT_ALLOWED", f"Files in the {backend} terminal backend are not on this machine, "
+            "FILE_NOT_ALLOWED",
+            f"Files in the {backend} terminal backend are not on this machine, "
             "so they cannot be sent as a connector file input.",
-            hint="Use a file on this machine, or switch to the local or Docker terminal backend.")
+            hint="Use a file on this machine, or switch to the local or Docker terminal backend.",
+        )
     return str(_resolve_path_for_task(raw, task))
 
 
@@ -238,12 +290,16 @@ def _read_bytes(raw: str, path: str) -> bytes:
     try:
         size = os.path.getsize(path)
         if size > CONNECTOR_FILE_MAX_BYTES:
-            raise FileInputError("FILE_TOO_LARGE",
-                                 f"{raw} is {size // (1024 * 1024)} MiB; connector file inputs are limited to "
-                                 f"{CONNECTOR_FILE_MAX_BYTES // (1024 * 1024)} MiB.")
+            raise FileInputError(
+                "FILE_TOO_LARGE",
+                f"{raw} is {size // (1024 * 1024)} MiB; connector file inputs are limited to "
+                f"{CONNECTOR_FILE_MAX_BYTES // (1024 * 1024)} MiB.",
+            )
         data = Path(path).read_bytes()
     except OSError as exc:
-        raise FileInputError("FILE_NOT_FOUND", f"{raw} could not be read: {exc.strerror or exc}.") from exc
+        raise FileInputError(
+            "FILE_NOT_FOUND", f"{raw} could not be read: {exc.strerror or exc}."
+        ) from exc
     if not data:
         raise FileInputError("FILE_NOT_FOUND", f"{raw} is empty.")
     return data
@@ -257,7 +313,11 @@ def _read_bytes(raw: str, path: str) -> bytes:
 def save_outputs(client: Any, result: Any) -> Any:
     """A successful result with each ``{name, mimetype, url}`` replaced by ``{name, mimetype, path}``,
     or ``{name, mimetype, error}`` when the download failed. Errors and replays pass through."""
-    if not isinstance(result, Mapping) or result.get("error") is not None or result.get("data") is None:
+    if (
+        not isinstance(result, Mapping)
+        or result.get("error") is not None
+        or result.get("data") is None
+    ):
         return result
     return {**result, "data": _saved(client, result["data"])}
 
@@ -273,8 +333,9 @@ def _saved(client: Any, value: Any) -> Any:
 
 
 def _is_file_output(value: Mapping[str, Any]) -> bool:
-    return all(isinstance(value.get(key), str) for key in ("name", "mimetype", "url")) and \
-        value["url"].startswith(("https://", "http://"))
+    return all(
+        isinstance(value.get(key), str) for key in ("name", "mimetype", "url")
+    ) and value["url"].startswith(("https://", "http://"))
 
 
 def _download(client: Any, file: Mapping[str, Any]) -> dict[str, Any]:
@@ -282,7 +343,11 @@ def _download(client: Any, file: Mapping[str, Any]) -> dict[str, Any]:
     try:
         kept["path"] = _fetch_to_downloads(client, file["url"], file["name"])
     except (ToolGatewayError, OSError) as exc:
-        logger.warning("connector file download of %s failed: %s", _safe_name(file["name"]), type(exc).__name__)
+        logger.warning(
+            "connector file download of %s failed: %s",
+            _safe_name(file["name"]),
+            type(exc).__name__,
+        )
         kept["error"] = f"download failed: {exc}"
     return kept
 
@@ -290,7 +355,11 @@ def _download(client: Any, file: Mapping[str, Any]) -> dict[str, Any]:
 def _fetch_to_downloads(client: Any, url: str, name: str) -> str:
     """Stream ``url`` into a temp file, then link it under a fresh name: a cut download never leaves
     a partial file under the final name, and an existing file is never replaced."""
-    from clawk_constants import CONNECTOR_DOWNLOADS_SUBDIR, get_clawk_home, mkdir_under_clawk_home
+    from clawk_constants import (
+        CONNECTOR_DOWNLOADS_SUBDIR,
+        get_clawk_home,
+        mkdir_under_clawk_home,
+    )
 
     folder = mkdir_under_clawk_home(get_clawk_home() / CONNECTOR_DOWNLOADS_SUBDIR)
     handle = tempfile.NamedTemporaryFile(dir=folder, prefix=".partial-", delete=False)
@@ -309,7 +378,9 @@ def _reserve_name(folder: Path, name: str) -> Path:
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     stem, suffix = os.path.splitext(name)
     for attempt in range(1000):
-        target = folder / (f"{stamp}-{name}" if attempt == 0 else f"{stamp}-{stem}-{attempt}{suffix}")
+        target = folder / (
+            f"{stamp}-{name}" if attempt == 0 else f"{stamp}-{stem}-{attempt}{suffix}"
+        )
         try:
             target.open("xb").close()
         except FileExistsError:

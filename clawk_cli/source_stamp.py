@@ -100,7 +100,9 @@ def refresh_bootstrap_receipt(root: Path, stamp: dict) -> None:
         "pinnedBranch": stamp["branch"] or previous.get("pinnedBranch"),
         "completedAt": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
     }
-    fd, tmp_name = tempfile.mkstemp(dir=root, prefix=".clawk-bootstrap-complete.", suffix=".tmp")
+    fd, tmp_name = tempfile.mkstemp(
+        dir=root, prefix=".clawk-bootstrap-complete.", suffix=".tmp"
+    )
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             handle.write(json.dumps(receipt, indent=2) + "\n")

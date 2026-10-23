@@ -35,8 +35,8 @@ def _flush_agent(db, session_id):
         _compression_adoption_failed=False,
     )
     agent._ensure_db_session = lambda: None
-    agent._flush_messages_to_session_db = (
-        AIAgent._flush_messages_to_session_db.__get__(agent, AIAgent)
+    agent._flush_messages_to_session_db = AIAgent._flush_messages_to_session_db.__get__(
+        agent, AIAgent
     )
     agent._flush_messages_to_session_db_unlocked = (
         AIAgent._flush_messages_to_session_db_unlocked.__get__(agent, AIAgent)

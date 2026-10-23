@@ -4,6 +4,7 @@
 recording connection, inside the recording transaction — the way the cron ledgers prune — not on a
 second connection opened after the first one closed.
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -27,11 +28,23 @@ def test_recording_a_reply_does_not_open_a_second_connection(tmp_path, monkeypat
         return real_connect(*args, **kwargs)
 
     monkeypatch.setattr(sqlite3, "connect", counting_connect)
-    dl.record_obligation(obligation_id="ob-warm", session_key="s", platform="p", chat_id="c",
-                         thread_id=None, content="warm-up (schema)")
+    dl.record_obligation(
+        obligation_id="ob-warm",
+        session_key="s",
+        platform="p",
+        chat_id="c",
+        thread_id=None,
+        content="warm-up (schema)",
+    )
     opened.clear()
 
-    dl.record_obligation(obligation_id="ob-1", session_key="s", platform="p", chat_id="c",
-                         thread_id=None, content="hello")
+    dl.record_obligation(
+        obligation_id="ob-1",
+        session_key="s",
+        platform="p",
+        chat_id="c",
+        thread_id=None,
+        content="hello",
+    )
 
     assert len(opened) == 1, opened

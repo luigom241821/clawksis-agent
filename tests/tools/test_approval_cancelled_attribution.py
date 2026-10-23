@@ -4,6 +4,7 @@ Teardown paths (a parent's ``delegate_task`` finishing, ``unregister_gateway_not
 end, a ``/stop``) end the wait fail-closed, but the tool result carries ``outcome="cancelled"``
 and the cause instead of "denied by user" (#112026, #22992).
 """
+
 import threading
 import time
 
@@ -28,11 +29,18 @@ def gateway_session(monkeypatch):
     # ``--yolo`` is frozen at import from CLAWK_YOLO_MODE; a host shell running yolo must not
     # auto-approve the gate under test.
     monkeypatch.setattr(mod, "_YOLO_MODE_FROZEN", False)
-    monkeypatch.setattr(approval_context, "_get_approval_config", lambda: {"mode": "manual", "timeout": 60})
+    monkeypatch.setattr(
+        approval_context,
+        "_get_approval_config",
+        lambda: {"mode": "manual", "timeout": 60},
+    )
     hooks = []
     original = approval_context._fire_approval_hook
-    monkeypatch.setattr(approval_context, "_fire_approval_hook",
-                        lambda name, **kw: (hooks.append((name, kw)), original(name, **kw)))
+    monkeypatch.setattr(
+        approval_context,
+        "_fire_approval_hook",
+        lambda name, **kw: (hooks.append((name, kw)), original(name, **kw)),
+    )
     yield hooks
     mod._gateway_queues.clear()
     mod._gateway_notify_cbs.clear()
@@ -104,7 +112,9 @@ def test_session_boundary_teardown_reports_withdrawn_prompt(gateway_session):
     mod.clear_session(SESSION_KEY)
     thread.join(timeout=10)
     assert not thread.is_alive()
-    _assert_withdrawn(holder["result"], "the session ended before the prompt was answered")
+    _assert_withdrawn(
+        holder["result"], "the session ended before the prompt was answered"
+    )
 
 
 def test_coalesced_follower_inherits_the_leaders_cancellation(gateway_session):
@@ -112,10 +122,15 @@ def test_coalesced_follower_inherits_the_leaders_cancellation(gateway_session):
     leader_thread, leader = _run_gate_until_pending()
     follower = {}
     follower_thread = threading.Thread(
-        target=lambda: follower.__setitem__("result", mod.check_all_command_guards("rm -rf .git", "local")))
+        target=lambda: follower.__setitem__(
+            "result", mod.check_all_command_guards("rm -rf .git", "local")
+        )
+    )
     follower_thread.start()  # identical command → coalesces onto the leader, no second prompt
     deadline = time.monotonic() + 10
-    while not any(n == "pre_approval_request" and kw.get("coalesced") for n, kw in gateway_session):
+    while not any(
+        n == "pre_approval_request" and kw.get("coalesced") for n, kw in gateway_session
+    ):
         assert time.monotonic() < deadline, "follower never coalesced onto the leader"
         time.sleep(0.05)
     set_interrupt(True, leader["tid"], reason="parent delegation ended")
@@ -132,23 +147,39 @@ def test_coalesced_follower_inherits_the_leaders_cancellation(gateway_session):
 @pytest.fixture
 def cli_session(monkeypatch):
     mod._session_approved.clear()
-    for k in ("CLAWK_CRON_SESSION", "CLAWK_YOLO_MODE", "CLAWK_GATEWAY_SESSION", "CLAWK_EXEC_ASK"):
+    for k in (
+        "CLAWK_CRON_SESSION",
+        "CLAWK_YOLO_MODE",
+        "CLAWK_GATEWAY_SESSION",
+        "CLAWK_EXEC_ASK",
+    ):
         monkeypatch.delenv(k, raising=False)
     monkeypatch.setenv("CLAWK_INTERACTIVE", "1")
     monkeypatch.setattr(mod, "_YOLO_MODE_FROZEN", False)
-    monkeypatch.setattr(approval_context, "_get_approval_config", lambda: {"mode": "manual", "timeout": 60})
+    monkeypatch.setattr(
+        approval_context,
+        "_get_approval_config",
+        lambda: {"mode": "manual", "timeout": 60},
+    )
     hooks = []
-    monkeypatch.setattr(approval_context, "_fire_approval_hook", lambda name, **kw: hooks.append((name, kw)))
+    monkeypatch.setattr(
+        approval_context,
+        "_fire_approval_hook",
+        lambda name, **kw: hooks.append((name, kw)),
+    )
     return hooks
 
 
 def test_cli_callback_failure_reports_undelivered_prompt_not_user_deny(cli_session):
     """The CLI residual of #22992: a prompt that never reached a human (the approval callback
     raised) is 'cancelled' with its cause, not 'User denied this command'."""
+
     def broken_callback(command, description, **kwargs):
         raise TypeError("callback signature mismatch")
 
-    result = mod.check_all_command_guards("rm -rf .git", "local", approval_callback=broken_callback)
+    result = mod.check_all_command_guards(
+        "rm -rf .git", "local", approval_callback=broken_callback
+    )
     _assert_withdrawn(result, "the approval callback failed: TypeError")
     assert "user denied" not in result["message"].lower()
     posts = [kw for name, kw in cli_session if name == "post_approval_response"]

@@ -17,6 +17,7 @@ The delta-filter contract spans three pieces:
 These tests exercise the contract at the unit level; the E2E case
 (real LSP server, real shift) is covered in test_service.py.
 """
+
 from __future__ import annotations
 
 from agent.lsp.client import _diagnostic_key
@@ -28,9 +29,15 @@ from agent.lsp.range_shift import (
 )
 
 
-def _diag(*, line: int, message: str = "Undefined variable",
-          severity: int = 1, code: str = "reportUndefinedVariable",
-          source: str = "Pyright", end_line: int | None = None) -> dict:
+def _diag(
+    *,
+    line: int,
+    message: str = "Undefined variable",
+    severity: int = 1,
+    code: str = "reportUndefinedVariable",
+    source: str = "Pyright",
+    end_line: int | None = None,
+) -> dict:
     if end_line is None:
         end_line = line
     return {
@@ -50,7 +57,6 @@ def _diag(*, line: int, message: str = "Undefined variable",
 # ----------------------------------------------------------------------
 
 
-
 def test_diag_key_matches_client_key_for_shifted_baseline():
     """When a baseline diagnostic is remapped through a shift, its
     _diag_key must match the corresponding post-edit diagnostic's key
@@ -66,12 +72,6 @@ def test_diag_key_matches_client_key_for_shifted_baseline():
     assert _diag_key(shifted) == _diag_key(post)
 
 
-
-
-
-
-
-
 def test_diag_key_matches_client_key_byte_for_byte():
     """The manager-side and client-side keys must agree on diagnostic
     identity — they're used by two layers that need to round-trip the
@@ -83,11 +83,6 @@ def test_diag_key_matches_client_key_byte_for_byte():
 # ----------------------------------------------------------------------
 # build_line_shift
 # ----------------------------------------------------------------------
-
-
-
-
-
 
 
 def test_shift_replacement_in_middle():
@@ -103,13 +98,10 @@ def test_shift_replacement_in_middle():
     assert shift(4) == 3  # e → post line 3
 
 
-
-
-
-
 # ----------------------------------------------------------------------
 # shift_diagnostic_range
 # ----------------------------------------------------------------------
+
 
 def test_shift_diag_remaps_start_and_end():
     pre = "a\nb\nc\nd\n"
@@ -120,10 +112,6 @@ def test_shift_diag_remaps_start_and_end():
     assert remapped is not None
     assert remapped["range"]["start"]["line"] == 3
     assert remapped["range"]["end"]["line"] == 3
-
-
-
-
 
 
 def test_shift_baseline_drops_deleted_and_remaps_rest():
@@ -145,7 +133,6 @@ def test_shift_baseline_drops_deleted_and_remaps_rest():
 # ----------------------------------------------------------------------
 # End-to-end: simulate the delta-filter pipeline
 # ----------------------------------------------------------------------
-
 
 
 def test_pipeline_preserves_new_instance_at_different_line():

@@ -38,15 +38,25 @@ def is_connector_batch(event: dict[str, Any]) -> bool:
     if event.get("tool_name") != "tool_call":
         return False
     entries = _call_entries(event.get("args"))
-    return bool(entries) and all(is_connector_name(entry.get("name")) for entry in entries)
+    return bool(entries) and all(
+        is_connector_name(entry.get("name")) for entry in entries
+    )
 
 
-def is_batch_entry(identity: tuple[str, str, str], wrapper: tuple[str, str, str]) -> bool:
+def is_batch_entry(
+    identity: tuple[str, str, str], wrapper: tuple[str, str, str]
+) -> bool:
     """Whether ``identity`` is an entry (``<id>#<n>``) of the batch whose wrapper has identity ``wrapper``."""
-    return bool(wrapper[2]) and identity[2].startswith(f"{wrapper[2]}#") and identity[:2] == wrapper[:2]
+    return (
+        bool(wrapper[2])
+        and identity[2].startswith(f"{wrapper[2]}#")
+        and identity[:2] == wrapper[:2]
+    )
 
 
-def batch_entry_ran(identities: Iterable[tuple[str, str, str]], wrapper: tuple[str, str, str]) -> bool:
+def batch_entry_ran(
+    identities: Iterable[tuple[str, str, str]], wrapper: tuple[str, str, str]
+) -> bool:
     """Whether an entry of the batch whose wrapper has identity ``wrapper`` was already counted."""
     return any(is_batch_entry(identity, wrapper) for identity in identities)
 
@@ -54,7 +64,9 @@ def batch_entry_ran(identities: Iterable[tuple[str, str, str]], wrapper: tuple[s
 def _described_names(args: Any) -> list[str]:
     """``tool_describe`` names as its dispatcher reads them: a bare string is one name, items stripped."""
     names = args.get("names") if isinstance(args, dict) else None
-    names = [names] if isinstance(names, str) else names if isinstance(names, list) else []
+    names = (
+        [names] if isinstance(names, str) else names if isinstance(names, list) else []
+    )
     return [str(name or "").strip() for name in names]
 
 
@@ -74,7 +86,10 @@ class ConnectorSessionState:
             return None
         if name == "tool_describe":
             for described in _described_names(event.get("args")):
-                if is_connector_name(described) and len(self.described) < _MAX_DESCRIBED:
+                if (
+                    is_connector_name(described)
+                    and len(self.described) < _MAX_DESCRIBED
+                ):
                     self.described.add(described)
             return None
         if not is_connector_name(name):
@@ -82,7 +97,9 @@ class ConnectorSessionState:
         fields = {
             "described_first": "yes" if name in self.described else "no",
             "outcome": contract.tool_outcome(event),
-            "searches_before_bucket": contract.count_bucket(self.searches_since_execute),
+            "searches_before_bucket": contract.count_bucket(
+                self.searches_since_execute
+            ),
         }
         self.searches_since_execute = 0
         return fields
@@ -90,7 +107,10 @@ class ConnectorSessionState:
 
 # ---- row builders ----------------------------------------------------------------------------
 
-def tool_batch_fields(route: dict[str, str], tool_calls: Iterable[Any]) -> dict[str, str] | None:
+
+def tool_batch_fields(
+    route: dict[str, str], tool_calls: Iterable[Any]
+) -> dict[str, str] | None:
     """One model reply's tool calls: how many logical calls (``tool_call`` entries counted one by
     one) and how many of them were connector calls. None for a reply with no calls."""
     total = connectors = 0
@@ -106,7 +126,11 @@ def tool_batch_fields(route: dict[str, str], tool_calls: Iterable[Any]) -> dict[
     if not total:
         return None
     share = "none" if not connectors else "all" if connectors == total else "some"
-    return {**route, "connector_share": share, "size_bucket": contract.count_bucket(total)}
+    return {
+        **route,
+        "connector_share": share,
+        "size_bucket": contract.count_bucket(total),
+    }
 
 
 def _parsed_arguments(raw: Any) -> Any:
@@ -119,6 +143,13 @@ def _parsed_arguments(raw: Any) -> Any:
 
 
 def tool_search_fields(*, scope: str, hits: int, outcome: str) -> dict[str, str] | None:
-    if scope not in contract.TOOL_SEARCH_SCOPES or outcome not in contract.TOOL_SEARCH_OUTCOMES:
+    if (
+        scope not in contract.TOOL_SEARCH_SCOPES
+        or outcome not in contract.TOOL_SEARCH_OUTCOMES
+    ):
         return None
-    return {"hits_bucket": contract.count_bucket(hits), "outcome": outcome, "scope": scope}
+    return {
+        "hits_bucket": contract.count_bucket(hits),
+        "outcome": outcome,
+        "scope": scope,
+    }

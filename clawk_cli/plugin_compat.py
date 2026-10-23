@@ -5,12 +5,15 @@ layer, and the scanner that reported plugins still using it, is gone. An updater
 an older checkout still lazy-imports these three names for its post-update notice after the swap
 (``tests/compat/old_updater_surface.json``), so they stay as inert stubs with nothing left to report.
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict, List
 
 
-def compat_report(manifests: Any = None, *, force: bool = False) -> dict[str, list[Any]]:
+def compat_report(
+    manifests: Any = None, *, force: bool = False
+) -> dict[str, list[Any]]:
     return {}
 
 

@@ -8,13 +8,17 @@ from tests.pm.test_pm_authority import core_env, pm_env, served
 
 
 @pytest.mark.parametrize("sealed_install", [True, False])
-def test_missing_bundle_tool_is_installed_in_writable_store(pm_env, tmp_path, monkeypatch, sealed_install):
+def test_missing_bundle_tool_is_installed_in_writable_store(
+    pm_env, tmp_path, monkeypatch, sealed_install
+):
     from pm.install import ensure, env_for, is_installed
     import importlib
 
     shipped = tmp_path / "payload" / "tools"
     shipped.mkdir(parents=True)
-    (shipped.parent / "manifest.json").write_text('{"repo":"core","store":"tools","venv":"venv"}')
+    (shipped.parent / "manifest.json").write_text(
+        '{"repo":"core","store":"tools","venv":"venv"}'
+    )
     monkeypatch.setattr(paths, "store_root", lambda: shipped)
     monkeypatch.setattr(paths, "facts_path", lambda: shipped / "facts.json")
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "home"))
@@ -24,10 +28,14 @@ def test_missing_bundle_tool_is_installed_in_writable_store(pm_env, tmp_path, mo
     before = sorted(p.relative_to(shipped).as_posix() for p in shipped.rglob("*"))
     runner = ensure("faketool", explicit=True, base_env={})
     assert is_installed("faketool")
-    assert sorted(p.relative_to(shipped).as_posix() for p in shipped.rglob("*")) == before
+    assert (
+        sorted(p.relative_to(shipped).as_posix() for p in shipped.rglob("*")) == before
+    )
     writable = paths.writable_store_root()
     fact = Facts(writable / "facts.json").get("faketool")
-    assert fact is not None and (writable / fact["entry"] / "bin" / "faketool").is_file()
+    assert (
+        fact is not None and (writable / fact["entry"] / "bin" / "faketool").is_file()
+    )
     assert str(writable) in runner.env["PATH"]
     assert env_for("faketool", base_env={}) == runner.env
 

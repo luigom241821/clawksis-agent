@@ -18,8 +18,14 @@ import pytest
 
 from agent import auxiliary_client, conversation_compression, local_prompt_progress
 from agent.auxiliary_client import _ChatStreamAccumulator, _current_aux_stream_deadline
-from agent.conversation_compression import CompressionCommitFence, _await_worker_within_budget
-from agent.conversation_compression_deadline import compression_deadline_scope, effective_ceiling
+from agent.conversation_compression import (
+    CompressionCommitFence,
+    _await_worker_within_budget,
+)
+from agent.conversation_compression_deadline import (
+    compression_deadline_scope,
+    effective_ceiling,
+)
 from agent.local_prompt_progress import PromptReadingClock, prompt_reading_hook
 
 
@@ -37,15 +43,31 @@ def _progress(processed, time_ms=None):
     payload = {"total": 150_000, "cache": 0, "processed": processed}
     if time_ms is not None:
         payload["time_ms"] = time_ms
-    return SimpleNamespace(model_extra={"prompt_progress": payload},
-                           choices=[SimpleNamespace(delta=SimpleNamespace(content=None), finish_reason=None)],
-                           usage=None)
+    return SimpleNamespace(
+        model_extra={"prompt_progress": payload},
+        choices=[
+            SimpleNamespace(delta=SimpleNamespace(content=None), finish_reason=None)
+        ],
+        usage=None,
+    )
 
 
 def _token(text):
-    return SimpleNamespace(model_extra={}, choices=[SimpleNamespace(
-        delta=SimpleNamespace(content=text, reasoning=None, reasoning_content=None, tool_calls=None),
-        finish_reason=None)], usage=None)
+    return SimpleNamespace(
+        model_extra={},
+        choices=[
+            SimpleNamespace(
+                delta=SimpleNamespace(
+                    content=text,
+                    reasoning=None,
+                    reasoning_content=None,
+                    tool_calls=None,
+                ),
+                finish_reason=None,
+            )
+        ],
+        usage=None,
+    )
 
 
 def test_reading_time_pushes_back_the_shared_deadline(clock):
@@ -72,7 +94,9 @@ def test_server_reading_time_bounds_each_stretch(clock):
 def test_progress_without_new_tokens_gets_no_time(clock):
     fence = CompressionCommitFence(total_ceiling_seconds=60)
     with compression_deadline_scope(fence):
-        acc = _ChatStreamAccumulator(total_ceiling=60, host_deadline=_current_aux_stream_deadline)
+        acc = _ChatStreamAccumulator(
+            total_ceiling=60, host_deadline=_current_aux_stream_deadline
+        )
         with patch.object(auxiliary_client, "_notify_aux_progress") as alive:
             clock[0] += 10
             acc.feed(_progress(5_000))
@@ -83,7 +107,9 @@ def test_progress_without_new_tokens_gets_no_time(clock):
             with pytest.raises(TimeoutError, match="timed out"):  # the limit still runs
                 acc.feed(_progress(5_000))
         assert alive.call_count == 1
-        assert fence.deadline_monotonic == pytest.approx(1070.0)  # only the first 10 s of reading
+        assert fence.deadline_monotonic == pytest.approx(
+            1070.0
+        )  # only the first 10 s of reading
 
 
 def test_a_closed_fence_stays_closed(clock):
@@ -100,7 +126,9 @@ def test_a_closed_fence_stays_closed(clock):
 
     committing = CompressionCommitFence(total_ceiling_seconds=60)
     assert committing.begin_commit()
-    assert committing.extend_deadline(30) is False  # the commit owns the fence; nothing to extend
+    assert (
+        committing.extend_deadline(30) is False
+    )  # the commit owns the fence; nothing to extend
     committing.finish_commit()
     assert committing.deadline_monotonic == pytest.approx(clock[0] + 60)
 
@@ -108,8 +136,15 @@ def test_a_closed_fence_stays_closed(clock):
 def test_stream_outlives_a_ceiling_shorter_than_its_prompt_reading(clock):
     fence = CompressionCommitFence(total_ceiling_seconds=60)
     with compression_deadline_scope(fence):
-        acc = _ChatStreamAccumulator(total_ceiling=60, host_deadline=_current_aux_stream_deadline)
-        for processed in (0, 50_000, 100_000, 150_000):  # 50 s between batches, 200 s of reading
+        acc = _ChatStreamAccumulator(
+            total_ceiling=60, host_deadline=_current_aux_stream_deadline
+        )
+        for processed in (
+            0,
+            50_000,
+            100_000,
+            150_000,
+        ):  # 50 s between batches, 200 s of reading
             clock[0] += 50
             acc.feed(_progress(processed))
         clock[0] += 20
@@ -150,5 +185,7 @@ def test_host_keeps_waiting_while_the_deadline_moves():
     fence.extend_deadline(4.0)
     fence.touch_progress()
     threading.Timer(3.0, lambda: future.set_result(("summary", ""))).start()
-    settled, result = _await_worker_within_budget(future, fence, idle=10.0, ceiling=2.0, wait_started=wait_started)
+    settled, result = _await_worker_within_budget(
+        future, fence, idle=10.0, ceiling=2.0, wait_started=wait_started
+    )
     assert settled and result == ("summary", "")

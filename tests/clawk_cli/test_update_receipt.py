@@ -111,14 +111,12 @@ class TestReceiptLifecycle:
         assert latest is not None
         assert latest["outcome"] == "partial"
 
-
     def test_record_without_begin_is_noop(self, receipt_home):
         # No begin — nothing should raise, nothing should be written.
         ur.record_step("orphan", True)
         ur.record_skip("orphan", "no receipt")
         ur.record_gateway_restart(restarted_services=[])
         assert _finalize("success") is None
-
 
     def test_pruning_keeps_recent(self, receipt_home, monkeypatch):
         monkeypatch.setattr(ur, "_RECEIPT_KEEP", 3)
@@ -228,8 +226,12 @@ class TestCommandBoundaryFinalization:
         monkeypatch.setattr(update_lock_mod, "UpdateLock", _FakeLock)
 
         args = SimpleNamespace(
-            check=False, gateway=False, branch=None, yes=False,
-            force=False, force_venv=False,
+            check=False,
+            gateway=False,
+            branch=None,
+            yes=False,
+            force=False,
+            force_venv=False,
         )
         with pytest.raises(SystemExit) as exc_info:
             clawk_main.cmd_update(args)
@@ -250,7 +252,11 @@ class TestCommandBoundaryFinalization:
 def _desktop_correlated_receipt(home, correlation):
     """Desktop's managed SSH receipt lookup (managed-ssh-update.ts ``receipt()``)."""
     directory = home / "logs" / "update_receipts"
-    for path in sorted(directory.glob("update_*.json"), key=lambda p: p.stat().st_mtime_ns, reverse=True):
+    for path in sorted(
+        directory.glob("update_*.json"),
+        key=lambda p: p.stat().st_mtime_ns,
+        reverse=True,
+    ):
         payload = json.loads(path.read_text(encoding="utf-8"))
         if payload.get("correlation_id") != correlation:
             continue
@@ -284,16 +290,23 @@ class TestLauncherCorrelation:
         with ur.update_receipt_scope():
             # The post-swap interpreter need not inherit the env var.
             monkeypatch.delenv("CLAWK_UPDATE_CORRELATION_ID")
-            ur.begin_update_receipt(previous=pre_swap, correlation_id=pre_swap["update_id"])
+            ur.begin_update_receipt(
+                previous=pre_swap, correlation_id=pre_swap["update_id"]
+            )
             _finalize("success")
         assert _desktop_correlated_receipt(receipt_home, self.CORRELATION) is not None
 
     def test_legacy_handoff_receipt_gains_correlation(self, receipt_home, monkeypatch):
         # A pre-swap receipt from an older updater has no correlation_id field.
         monkeypatch.setenv("CLAWK_UPDATE_CORRELATION_ID", self.CORRELATION)
-        ur.begin_update_receipt(previous={"update_id": "abc123", "steps": []}, correlation_id="abc123")
+        ur.begin_update_receipt(
+            previous={"update_id": "abc123", "steps": []}, correlation_id="abc123"
+        )
         _finalize("success")
-        assert _desktop_correlated_receipt(receipt_home, self.CORRELATION)["update_id"] == "abc123"
+        assert (
+            _desktop_correlated_receipt(receipt_home, self.CORRELATION)["update_id"]
+            == "abc123"
+        )
 
     def test_no_launcher_correlation_is_null(self, receipt_home, monkeypatch):
         monkeypatch.delenv("CLAWK_UPDATE_CORRELATION_ID", raising=False)
@@ -318,12 +331,14 @@ class TestFleetClassification:
         )
         monkeypatch.setattr(
             "clawk_cli.version_info.get_code_identity",
-            lambda refresh=False: {"sha": expected_sha, "short_sha": expected_sha[:8],
-                                   "version": "1.0", "source": "git"},
+            lambda refresh=False: {
+                "sha": expected_sha,
+                "short_sha": expected_sha[:8],
+                "version": "1.0",
+                "source": "git",
+            },
         )
-        monkeypatch.setattr(
-            "clawk_cli.profiles._get_default_clawk_home", lambda: home
-        )
+        monkeypatch.setattr("clawk_cli.profiles._get_default_clawk_home", lambda: home)
         monkeypatch.setattr(
             "clawk_cli.profiles._get_profiles_root",
             lambda: tmp_path / "nonexistent_profiles_root",
@@ -344,12 +359,14 @@ class TestFleetClassification:
         monkeypatch.setenv("CLAWK_HOME", str(home))
         monkeypatch.setattr(
             "clawk_cli.version_info.get_code_identity",
-            lambda refresh=False: {"sha": "a" * 40, "short_sha": "a" * 8,
-                                   "version": "1.0", "source": "git"},
+            lambda refresh=False: {
+                "sha": "a" * 40,
+                "short_sha": "a" * 8,
+                "version": "1.0",
+                "source": "git",
+            },
         )
-        monkeypatch.setattr(
-            "clawk_cli.profiles._get_default_clawk_home", lambda: home
-        )
+        monkeypatch.setattr("clawk_cli.profiles._get_default_clawk_home", lambda: home)
         monkeypatch.setattr(
             "clawk_cli.profiles._get_profiles_root",
             lambda: tmp_path / "nonexistent_profiles_root",
@@ -368,7 +385,8 @@ class TestFleetClassification:
     def test_current_gateway(self, monkeypatch, tmp_path):
         sha = "a" * 40
         fleet = self._fleet_with(
-            monkeypatch, tmp_path,
+            monkeypatch,
+            tmp_path,
             {"pid": 4242, "code_sha": sha, "code_version": "1.0"},
             expected_sha=sha,
         )
@@ -376,7 +394,9 @@ class TestFleetClassification:
         assert fleet[0]["state"] == "current"
         assert fleet[0]["pid"] == 4242
 
-    def test_current_multiplexer_reports_its_served_profiles(self, monkeypatch, tmp_path):
+    def test_current_multiplexer_reports_its_served_profiles(
+        self, monkeypatch, tmp_path
+    ):
         """One verified multiplexer is evidence for every profile it serves."""
         sha = "a" * 40
         fleet = self._fleet_with(
@@ -395,7 +415,8 @@ class TestFleetClassification:
 
     def test_stale_gateway(self, monkeypatch, tmp_path):
         fleet = self._fleet_with(
-            monkeypatch, tmp_path,
+            monkeypatch,
+            tmp_path,
             {"pid": 4242, "code_sha": "b" * 40, "code_version": "0.9"},
             expected_sha="a" * 40,
         )
@@ -414,9 +435,7 @@ class TestFleetClassification:
         (home / "gateway_state.json").write_text(
             json.dumps({"pid": 999999, "code_sha": "a" * 40}), encoding="utf-8"
         )
-        monkeypatch.setattr(
-            "clawk_cli.profiles._get_default_clawk_home", lambda: home
-        )
+        monkeypatch.setattr("clawk_cli.profiles._get_default_clawk_home", lambda: home)
         monkeypatch.setattr(
             "clawk_cli.profiles._get_profiles_root",
             lambda: tmp_path / "nope",
@@ -446,8 +465,12 @@ class TestFleetClassification:
         monkeypatch.setattr(ur, "_profile_homes", lambda: [("default", home)])
         monkeypatch.setattr(ur, "_socket_identity", lambda home: None)
         monkeypatch.setattr("gateway.status.read_runtime_status", lambda path: record)
-        monkeypatch.setattr("gateway.status.runtime_status_pid_is_live", lambda record: True)
-        monkeypatch.setattr("gateway.status.live_gateway_pid_for_home", lambda home: None)
+        monkeypatch.setattr(
+            "gateway.status.runtime_status_pid_is_live", lambda record: True
+        )
+        monkeypatch.setattr(
+            "gateway.status.live_gateway_pid_for_home", lambda home: None
+        )
 
         fleet = ur.collect_fleet_versions()
 
@@ -464,7 +487,12 @@ class TestFleetClassification:
         assert ok is False
         stale = ur.print_fleet_version_matrix(
             [
-                {"profile": "default", "pid": 1, "code_sha": "a" * 40, "state": "current"},
+                {
+                    "profile": "default",
+                    "pid": 1,
+                    "code_sha": "a" * 40,
+                    "state": "current",
+                },
                 {"profile": "work", "pid": 2, "code_sha": "b" * 40, "state": "stale"},
             ]
         )
@@ -483,8 +511,12 @@ class TestGatewayStatusStamping:
 
         monkeypatch.setattr(
             "clawk_cli.version_info.get_code_identity",
-            lambda refresh=False: {"sha": "c" * 40, "short_sha": "c" * 8,
-                                   "version": "2.0", "source": "git"},
+            lambda refresh=False: {
+                "sha": "c" * 40,
+                "short_sha": "c" * 8,
+                "version": "2.0",
+                "source": "git",
+            },
         )
         record = gs._build_runtime_status_record()
         assert record["code_sha"] == "c" * 40
@@ -504,7 +536,6 @@ class TestGatewayStatusStamping:
 
 
 class TestCodeIdentity:
-
     def test_get_code_identity_cached(self):
         from clawk_cli.build_info import get_code_identity
 
@@ -528,7 +559,9 @@ class TestPreUpdateBackupStep:
     @staticmethod
     def _record(monkeypatch, *, args, snapshot_id, updates_cfg) -> dict:
         """Run the receipt classifier and return the persisted receipt payload."""
-        monkeypatch.setattr(update_cmd_maint, "_load_updates_cfg", lambda: dict(updates_cfg))
+        monkeypatch.setattr(
+            update_cmd_maint, "_load_updates_cfg", lambda: dict(updates_cfg)
+        )
         ur.begin_update_receipt()
         update_cmd._record_pre_update_backup_outcome(args, snapshot_id)
         path = _finalize("success")
@@ -539,17 +572,25 @@ class TestPreUpdateBackupStep:
         "args, updates_cfg, expected_reason",
         [
             # The shipped-template case: legacy ``false`` resolves to mode "off" (see #94944).
-            (SimpleNamespace(no_backup=False, backup=False), {"pre_update_backup": False},
-             "updates.pre_update_backup"),
+            (
+                SimpleNamespace(no_backup=False, backup=False),
+                {"pre_update_backup": False},
+                "updates.pre_update_backup",
+            ),
             # An explicit flag is a different opt-out and must name itself.
-            (SimpleNamespace(no_backup=True, backup=False), {"pre_update_backup": "quick"},
-             "--no-backup"),
+            (
+                SimpleNamespace(no_backup=True, backup=False),
+                {"pre_update_backup": "quick"},
+                "--no-backup",
+            ),
         ],
     )
     def test_opt_out_records_a_skip_not_a_failed_step(
         self, receipt_home, monkeypatch, args, updates_cfg, expected_reason
     ):
-        payload = self._record(monkeypatch, args=args, snapshot_id=None, updates_cfg=updates_cfg)
+        payload = self._record(
+            monkeypatch, args=args, snapshot_id=None, updates_cfg=updates_cfg
+        )
 
         step = "pre_update_backup"
         assert [entry for entry in payload["steps"] if entry["name"] == step] == []
@@ -563,12 +604,17 @@ class TestPreUpdateBackupStep:
         updates_cfg = {"pre_update_backup": "quick"}
 
         captured = self._record(
-            monkeypatch, args=args, snapshot_id="20260911-021847-pre-update", updates_cfg=updates_cfg
+            monkeypatch,
+            args=args,
+            snapshot_id="20260911-021847-pre-update",
+            updates_cfg=updates_cfg,
         )
         assert captured["skips"] == []
         assert [step["ok"] for step in captured["steps"]] == [True]
         assert captured["steps"][0]["detail"] == "snapshot=20260911-021847-pre-update"
 
-        empty = self._record(monkeypatch, args=args, snapshot_id=None, updates_cfg=updates_cfg)
+        empty = self._record(
+            monkeypatch, args=args, snapshot_id=None, updates_cfg=updates_cfg
+        )
         assert empty["skips"] == []
         assert [step["ok"] for step in empty["steps"]] == [False]

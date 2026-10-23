@@ -106,48 +106,83 @@ def test_discord_handoff_key_does_not_use_parent_channel():
     assert handoff != buggy, "handoff regressed to keying on the parent channel"
 
 
-def _handoff_destination(platform: Platform, channel_id: str, thread_id: str, scope_id, adapter):
+def _handoff_destination(
+    platform: Platform, channel_id: str, thread_id: str, scope_id, adapter
+):
     """Run the real handoff destination/key path against a configured home channel."""
-    config = GatewayConfig(platforms={platform: PlatformConfig(enabled=True, token="test")})
+    config = GatewayConfig(
+        platforms={platform: PlatformConfig(enabled=True, token="test")}
+    )
     config.platforms[platform].home_channel = HomeChannel(
-        platform=platform, chat_id=channel_id, name="home", scope_id=scope_id)
+        platform=platform, chat_id=channel_id, name="home", scope_id=scope_id
+    )
     adapter.create_handoff_thread = AsyncMock(return_value=thread_id)
     runner = object.__new__(GatewayRunner)
     runner.config = config
     runner.adapters = {platform: adapter}
     runner.session_store = None
-    with patch("gateway.delivery.resolve_delivery_transport",
-               lambda *_a: SimpleNamespace(adapter=adapter, send=AsyncMock())):
-        dest = asyncio.run(runner._handoff_resolve_destination(
-            {"id": "cli-session", "title": "work", "handoff_platform": platform.value}, profile_name=None))
+    with patch(
+        "gateway.delivery.resolve_delivery_transport",
+        lambda *_a: SimpleNamespace(adapter=adapter, send=AsyncMock()),
+    ):
+        dest = asyncio.run(
+            runner._handoff_resolve_destination(
+                {
+                    "id": "cli-session",
+                    "title": "work",
+                    "handoff_platform": platform.value,
+                },
+                profile_name=None,
+            )
+        )
     return dest, runner._handoff_session_key(dest, profile_name=None)
 
 
 def _slack_handoff_destination(channel_id: str, thread_ts: str, team_id: str):
-    return _handoff_destination(Platform.SLACK, channel_id, thread_ts, team_id, MagicMock())
+    return _handoff_destination(
+        Platform.SLACK, channel_id, thread_ts, team_id, MagicMock()
+    )
 
 
-def _organic_slack_reply_key(channel_id: str, thread_ts: str, team_id: str, chat_type: str) -> str:
+def _organic_slack_reply_key(
+    channel_id: str, thread_ts: str, team_id: str, chat_type: str
+) -> str:
     """Key the Slack adapter builds for a thread reply (``_build_message_event``): parent channel
     as chat_id, ``dm``/``group`` from the channel type, workspace id as scope_id."""
-    return build_session_key(SessionSource(
-        platform=Platform.SLACK, chat_id=channel_id, chat_type=chat_type, user_id="U123456",
-        thread_id=thread_ts, scope_id=team_id), thread_sessions_per_user=False)
+    return build_session_key(
+        SessionSource(
+            platform=Platform.SLACK,
+            chat_id=channel_id,
+            chat_type=chat_type,
+            user_id="U123456",
+            thread_id=thread_ts,
+            scope_id=team_id,
+        ),
+        thread_sessions_per_user=False,
+    )
 
 
 def test_slack_dm_handoff_key_matches_the_thread_reply_key():
     """/handoff into a Slack DM must bind the key the next in-thread reply resolves to, or a
     gateway restart forks the thread onto a fresh empty session (#111896)."""
-    dest, handoff = _slack_handoff_destination("D0C1HFBMQAX", "1789474088.089709", "T0C2HL96FH6")
-    assert handoff == _organic_slack_reply_key("D0C1HFBMQAX", "1789474088.089709", "T0C2HL96FH6", "dm")
+    dest, handoff = _slack_handoff_destination(
+        "D0C1HFBMQAX", "1789474088.089709", "T0C2HL96FH6"
+    )
+    assert handoff == _organic_slack_reply_key(
+        "D0C1HFBMQAX", "1789474088.089709", "T0C2HL96FH6", "dm"
+    )
     assert dest.source.chat_id == "D0C1HFBMQAX"
 
 
 def test_slack_channel_handoff_key_matches_the_thread_reply_key():
     """Channel handoffs key on the parent channel (not the thread ts) with the ``group`` layout the
     adapter uses for channel replies (#111896)."""
-    dest, handoff = _slack_handoff_destination("C0CHANNEL01", "1789474088.089709", "T0C2HL96FH6")
-    assert handoff == _organic_slack_reply_key("C0CHANNEL01", "1789474088.089709", "T0C2HL96FH6", "group")
+    dest, handoff = _slack_handoff_destination(
+        "C0CHANNEL01", "1789474088.089709", "T0C2HL96FH6"
+    )
+    assert handoff == _organic_slack_reply_key(
+        "C0CHANNEL01", "1789474088.089709", "T0C2HL96FH6", "group"
+    )
     assert dest.source.chat_id == "C0CHANNEL01"
 
 
@@ -157,18 +192,35 @@ def test_slack_handoff_without_stored_scope_uses_the_sole_workspace_on_a_cold_ch
     from plugins.platforms.slack.adapter import SlackAdapter
 
     adapter = SlackAdapter.__new__(SlackAdapter)
-    adapter._channel_team, adapter._channel_teams, adapter._team_clients = {}, {}, {"T0C2HL96FH6": object()}
-    _dest, handoff = _handoff_destination(Platform.SLACK, "D0C1HFBMQAX", "1789474088.089709", None, adapter)
-    assert handoff == _organic_slack_reply_key("D0C1HFBMQAX", "1789474088.089709", "T0C2HL96FH6", "dm")
+    adapter._channel_team, adapter._channel_teams, adapter._team_clients = (
+        {},
+        {},
+        {"T0C2HL96FH6": object()},
+    )
+    _dest, handoff = _handoff_destination(
+        Platform.SLACK, "D0C1HFBMQAX", "1789474088.089709", None, adapter
+    )
+    assert handoff == _organic_slack_reply_key(
+        "D0C1HFBMQAX", "1789474088.089709", "T0C2HL96FH6", "dm"
+    )
 
 
 def test_telegram_forum_handoff_key_matches_the_topic_reply_key():
     """The Telegram adapter keys forum-topic replies ``group:<chat>:<topic>``; the handoff must
     bind the same slot, not ``thread``."""
-    _dest, handoff = _handoff_destination(Platform.TELEGRAM, "-1001234567", "77", None, SimpleNamespace())
-    assert handoff == build_session_key(SessionSource(
-        platform=Platform.TELEGRAM, chat_id="-1001234567", chat_type="group", user_id="42",
-        thread_id="77"), thread_sessions_per_user=False)
+    _dest, handoff = _handoff_destination(
+        Platform.TELEGRAM, "-1001234567", "77", None, SimpleNamespace()
+    )
+    assert handoff == build_session_key(
+        SessionSource(
+            platform=Platform.TELEGRAM,
+            chat_id="-1001234567",
+            chat_type="group",
+            user_id="42",
+            thread_id="77",
+        ),
+        thread_sessions_per_user=False,
+    )
     assert handoff == "agent:main:telegram:group:-1001234567:77"
 
 
@@ -178,12 +230,22 @@ def _matrix_adapter(room_id: str, *, is_dm: bool, monkeypatch):
 
     monkeypatch.setenv("MATRIX_REQUIRE_MENTION", "false")
     monkeypatch.delenv("MATRIX_AUTO_THREAD", raising=False)
-    adapter = MatrixAdapter(PlatformConfig(enabled=True, token="syt_test", extra={
-        "homeserver": "https://matrix.example.org", "user_id": "@clawk:example.org"}))
+    adapter = MatrixAdapter(
+        PlatformConfig(
+            enabled=True,
+            token="syt_test",
+            extra={
+                "homeserver": "https://matrix.example.org",
+                "user_id": "@clawk:example.org",
+            },
+        )
+    )
     adapter._text_batch_delay_seconds = 0
     adapter._startup_ts = 0
     adapter._dm_rooms[room_id] = is_dm
-    adapter._client = SimpleNamespace(send_message_event=AsyncMock(return_value="$seed"), crypto=None)
+    adapter._client = SimpleNamespace(
+        send_message_event=AsyncMock(return_value="$seed"), crypto=None
+    )
     adapter._get_display_name = AsyncMock(return_value="alice")
     adapter._background_read_receipt = lambda *_a: None
     adapter.handle_message = AsyncMock()
@@ -195,11 +257,20 @@ def _organic_matrix_reply_key(adapter, room_id: str, thread_id: str) -> str:
     import time
 
     event = SimpleNamespace(
-        sender="@alice:example.org", event_id="$reply", room_id=room_id, timestamp=int(time.time() * 1000),
-        content={"body": "what happened?", "msgtype": "m.text",
-                 "m.relates_to": {"rel_type": "m.thread", "event_id": thread_id}})
+        sender="@alice:example.org",
+        event_id="$reply",
+        room_id=room_id,
+        timestamp=int(time.time() * 1000),
+        content={
+            "body": "what happened?",
+            "msgtype": "m.text",
+            "m.relates_to": {"rel_type": "m.thread", "event_id": thread_id},
+        },
+    )
     asyncio.run(adapter._on_room_message(event))
-    return build_session_key(adapter.handle_message.await_args.args[0].source, thread_sessions_per_user=False)
+    return build_session_key(
+        adapter.handle_message.await_args.args[0].source, thread_sessions_per_user=False
+    )
 
 
 @pytest.mark.parametrize("is_dm", [False, True], ids=["room", "dm"])
@@ -209,6 +280,8 @@ def test_matrix_handoff_key_matches_the_thread_reply_key(is_dm, monkeypatch):
     destination must bind that key or the first reply opens an empty session (#112918)."""
     room_id = "!ops:example.org"
     adapter = _matrix_adapter(room_id, is_dm=is_dm, monkeypatch=monkeypatch)
-    _dest, handoff = _handoff_destination(Platform.MATRIX, room_id, "$seed", None, adapter)
+    _dest, handoff = _handoff_destination(
+        Platform.MATRIX, room_id, "$seed", None, adapter
+    )
     assert handoff == _organic_matrix_reply_key(adapter, room_id, "$seed")
     assert handoff.split(":")[3] == ("dm" if is_dm else "group")

@@ -40,14 +40,16 @@ def _config(chat_id):
         platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="***")}
     )
     cfg.platforms[Platform.TELEGRAM].home_channel = HomeChannel(
-        platform=Platform.TELEGRAM, chat_id=chat_id, name=f"home-{chat_id}",
+        platform=Platform.TELEGRAM,
+        chat_id=chat_id,
+        name=f"home-{chat_id}",
     )
     return cfg
 
 
 def _make_multiplex_runner():
     runner = object.__new__(GatewayRunner)
-    runner.config = _config("1111")          # primary/default home
+    runner.config = _config("1111")  # primary/default home
     runner.config.multiplex_profiles = True
     runner.adapters = {Platform.TELEGRAM: _adapter("primary")}
     runner._profile_adapters = {
@@ -55,24 +57,34 @@ def _make_multiplex_runner():
     }
     runner._voice_mode = {}
     runner.hooks = SimpleNamespace(
-        emit=AsyncMock(), emit_collect=AsyncMock(return_value=[]), loaded_hooks=False,
+        emit=AsyncMock(),
+        emit_collect=AsyncMock(return_value=[]),
+        loaded_hooks=False,
     )
 
     captured = {}
 
     store = MagicMock()
-    store.get_or_create_session = AsyncMock(return_value=SessionEntry(
-        session_key="k", session_id="s",
-        created_at=datetime.now(), updated_at=datetime.now(),
-        platform=Platform.TELEGRAM, chat_type="dm",
-    ))
+    store.get_or_create_session = AsyncMock(
+        return_value=SessionEntry(
+            session_key="k",
+            session_id="s",
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            platform=Platform.TELEGRAM,
+            chat_type="dm",
+        )
+    )
 
     async def _switch(key, sid, *, preserve_prompt_pin=True):
         captured["session_key"] = key
         return SessionEntry(
-            session_key=key, session_id=sid,
-            created_at=datetime.now(), updated_at=datetime.now(),
-            platform=Platform.TELEGRAM, chat_type="dm",
+            session_key=key,
+            session_id=sid,
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            platform=Platform.TELEGRAM,
+            chat_type="dm",
         )
 
     store.switch_session = AsyncMock(side_effect=_switch)
@@ -103,6 +115,7 @@ def _spy_transport_factory(used):
     The real transport exposes ``.adapter`` AND an awaitable ``.send``; the
     handoff uses both, so the stand-in must too.
     """
+
     def _spy(platform, config, adapters):
         adapter = adapters[platform]
         used["adapter_tag"] = adapter.tag
@@ -124,7 +137,8 @@ async def test_secondary_profile_handoff_uses_its_own_adapter(monkeypatch):
 
     used = {}
     monkeypatch.setattr(
-        "gateway.delivery.resolve_delivery_transport", _spy_transport_factory(used),
+        "gateway.delivery.resolve_delivery_transport",
+        _spy_transport_factory(used),
     )
     # The watcher would already be inside _profile_runtime_scope here, so a
     # fresh load resolves the secondary's config.
@@ -155,7 +169,8 @@ async def test_default_profile_handoff_keeps_primary_adapter(monkeypatch):
 
     used = {}
     monkeypatch.setattr(
-        "gateway.delivery.resolve_delivery_transport", _spy_transport_factory(used),
+        "gateway.delivery.resolve_delivery_transport",
+        _spy_transport_factory(used),
     )
 
     await runner._process_handoff(
@@ -181,7 +196,8 @@ async def test_secondary_profile_config_load_failure_fails_closed(monkeypatch):
         raise RuntimeError("config.yaml exploded")
 
     monkeypatch.setattr(
-        "gateway.delivery.resolve_delivery_transport", _spy_transport_factory(used),
+        "gateway.delivery.resolve_delivery_transport",
+        _spy_transport_factory(used),
     )
     monkeypatch.setattr("gateway.run.load_gateway_config", _boom)
 
@@ -190,9 +206,7 @@ async def test_secondary_profile_config_load_failure_fails_closed(monkeypatch):
             {"id": "cli-session", "title": "work", "handoff_platform": "telegram"},
             profile_name="medicina",
         )
-    assert used == {}, (
-        "nothing may be delivered when the profile config fails to load"
-    )
+    assert used == {}, "nothing may be delivered when the profile config fails to load"
 
 
 @pytest.mark.asyncio
@@ -206,7 +220,8 @@ async def test_secondary_profile_without_live_adapters_fails_loudly(monkeypatch)
     runner._profile_adapters = {}
 
     monkeypatch.setattr(
-        "gateway.delivery.resolve_delivery_transport", _spy_transport_factory({}),
+        "gateway.delivery.resolve_delivery_transport",
+        _spy_transport_factory({}),
     )
 
     with pytest.raises(RuntimeError, match="no live adapters"):

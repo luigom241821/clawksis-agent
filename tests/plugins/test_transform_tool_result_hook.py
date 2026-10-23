@@ -27,7 +27,8 @@ def _run_handle_function_call(
     from tools.registry import registry
 
     monkeypatch.setattr(
-        registry, "dispatch",
+        registry,
+        "dispatch",
         lambda name, args, **kw: dispatch_result,
     )
     # Skip unrelated side effects (read-loop tracker).
@@ -49,12 +50,6 @@ def _run_handle_function_call(
         tool_call_id="tc1",
         skip_pre_tool_call_hook=True,
     )
-
-
-
-
-
-
 
 
 def test_first_valid_string_return_replaces_result(monkeypatch):
@@ -89,10 +84,9 @@ def test_hook_receives_expected_kwargs(monkeypatch):
     assert captured["tool_call_id"] == "tc1"
 
 
-
-
 def test_post_tool_call_remains_observational(monkeypatch):
     """post_tool_call return values must NOT replace the result."""
+
     def _hook(hook_name, **kw):
         if hook_name == "post_tool_call":
             # Observers returning a string must be ignored.
@@ -140,7 +134,9 @@ def test_transform_tool_result_integration_with_real_plugin(monkeypatch, tmp_pat
     plugins_dir = clawk_home / "plugins"
     plugin_dir = plugins_dir / "transform_result_canon"
     plugin_dir.mkdir(parents=True)
-    (plugin_dir / "plugin.yaml").write_text("name: transform_result_canon\n", encoding="utf-8")
+    (plugin_dir / "plugin.yaml").write_text(
+        "name: transform_result_canon\n", encoding="utf-8"
+    )
     (plugin_dir / "__init__.py").write_text(
         "def register(ctx):\n"
         '    ctx.register_hook("transform_tool_result", '

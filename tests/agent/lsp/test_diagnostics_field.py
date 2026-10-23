@@ -4,6 +4,7 @@ The field exists so the agent can read syntax errors (``lint``) and
 semantic errors (``lsp_diagnostics``) as separate signals rather than
 having LSP output prepended to the lint string.
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -20,32 +21,14 @@ from tools.file_operations import (
 # ---------------------------------------------------------------------------
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 # ---------------------------------------------------------------------------
 # Channel separation: lint and lsp_diagnostics stay independent
 # ---------------------------------------------------------------------------
 
 
-
-
 # ---------------------------------------------------------------------------
 # write_file populates the field via _maybe_lsp_diagnostics
 # ---------------------------------------------------------------------------
-
-
-
-
 
 
 def test_write_file_skips_lsp_when_syntax_failed(tmp_path):

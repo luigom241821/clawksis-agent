@@ -25,6 +25,7 @@ def _client_for(handler, limit=LIMIT):
 async def test_small_json_body_passes():
     async def handler(request):
         return httpx.Response(200, json={"ok": True})
+
     async with _client_for(handler) as client:
         resp = await client.get("http://mcp.test/rpc")
         assert resp.json() == {"ok": True}
@@ -33,8 +34,10 @@ async def test_small_json_body_passes():
 @pytest.mark.asyncio
 async def test_oversized_body_rejected_via_content_length():
     body = b"x" * (LIMIT + 1)
+
     async def handler(request):
         return httpx.Response(200, content=body)
+
     async with _client_for(handler) as client:
         with pytest.raises(httpx.ReadError, match=r"Content-Length"):
             await client.get("http://mcp.test/rpc")
@@ -54,6 +57,7 @@ async def test_oversized_streamed_body_rejected_without_content_length():
 
     async def handler(request):
         return httpx.Response(200, stream=_Stream())
+
     async with _client_for(handler) as client:
         with pytest.raises(httpx.ReadError, match=r"HTTP response exceeds"):
             await client.get("http://mcp.test/rpc")
@@ -71,9 +75,11 @@ async def test_sse_event_over_cap_rejected():
 
     async def handler(request):
         return httpx.Response(
-            200, stream=_Stream(),
+            200,
+            stream=_Stream(),
             headers={"content-type": "text/event-stream"},
         )
+
     async with _client_for(handler) as client:
         with pytest.raises(httpx.ReadError, match=r"SSE event exceeds"):
             async with client.stream("GET", "http://mcp.test/sse") as resp:
@@ -87,7 +93,7 @@ async def test_sse_cumulative_keepalives_unlimited():
     # pass: accounting resets at every completed event boundary.
     async def gen():
         for i in range(64):
-            yield b": keepalive %d\n\n" % i + b"data: {\"n\": %d}\n\n" % i
+            yield b": keepalive %d\n\n" % i + b'data: {"n": %d}\n\n' % i
 
     class _Stream(httpx.AsyncByteStream):
         async def __aiter__(self):
@@ -96,9 +102,11 @@ async def test_sse_cumulative_keepalives_unlimited():
 
     async def handler(request):
         return httpx.Response(
-            200, stream=_Stream(),
+            200,
+            stream=_Stream(),
             headers={"content-type": "text/event-stream"},
         )
+
     total = 0
     async with _client_for(handler, limit=64) as client:
         async with client.stream("GET", "http://mcp.test/sse") as resp:
@@ -122,9 +130,11 @@ async def test_sse_event_split_across_chunks_counts_prefix():
 
     async def handler(request):
         return httpx.Response(
-            200, stream=_Stream(),
+            200,
+            stream=_Stream(),
             headers={"content-type": "text/event-stream"},
         )
+
     async with _client_for(handler) as client:
         with pytest.raises(httpx.ReadError, match=r"SSE event exceeds"):
             async with client.stream("GET", "http://mcp.test/sse") as resp:
@@ -140,9 +150,11 @@ def _sse_client(chunks, limit=64):
 
     async def handler(request):
         return httpx.Response(
-            200, stream=_Stream(),
+            200,
+            stream=_Stream(),
             headers={"content-type": "text/event-stream"},
         )
+
     return _client_for(handler, limit=limit)
 
 
@@ -152,11 +164,22 @@ _EVENT2 = b"data: " + b"b" * 40
 # is any terminator pair. Every shape, cut at every seam between two chunks.
 _SPLIT_BOUNDARY_CASES = [
     pytest.param([_EVENT1 + sep[:cut], sep[cut:] + _EVENT2 + sep], id=f"{sep!r}@{cut}")
-    for sep in (b"\n\n", b"\r\r", b"\n\r", b"\r\n\r\n", b"\r\n\n", b"\r\n\r", b"\n\r\n", b"\r\r\n")
+    for sep in (
+        b"\n\n",
+        b"\r\r",
+        b"\n\r",
+        b"\r\n\r\n",
+        b"\r\n\n",
+        b"\r\n\r",
+        b"\n\r\n",
+        b"\r\r\n",
+    )
     for cut in range(1, len(sep))
 ] + [
     # A CRLF CRLF boundary dribbled across three chunks.
-    pytest.param([_EVENT1 + b"\r", b"\n\r", b"\n" + _EVENT2 + b"\r\n\r\n"], id="three-way"),
+    pytest.param(
+        [_EVENT1 + b"\r", b"\n\r", b"\n" + _EVENT2 + b"\r\n\r\n"], id="three-way"
+    ),
     # Two completed events in ONE chunk are two budgets, not one lumped charge.
     pytest.param([_EVENT1 + b"\n\n" + _EVENT2 + b"\n\n"], id="two-events-one-chunk"),
 ]

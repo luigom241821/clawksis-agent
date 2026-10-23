@@ -49,8 +49,6 @@ def _make_runner():
     return runner
 
 
-
-
 @pytest.mark.asyncio
 @patch("clawk_cli.plugins.invoke_hook")
 async def test_interrupt_fires_agent_loop_stopped_hook(mock_invoke_hook):
@@ -103,7 +101,8 @@ async def test_hook_not_fired_for_pending_sentinel_stop(mock_invoke_hook):
     )
 
     agent_loop_stopped_calls = [
-        call for call in mock_invoke_hook.call_args_list
+        call
+        for call in mock_invoke_hook.call_args_list
         if call.args and call.args[0] == "agent_loop_stopped"
     ]
     assert agent_loop_stopped_calls == [], (
@@ -130,7 +129,8 @@ async def test_hook_not_fired_when_no_running_agent(mock_invoke_hook):
     )
 
     agent_loop_stopped_calls = [
-        call for call in mock_invoke_hook.call_args_list
+        call
+        for call in mock_invoke_hook.call_args_list
         if call.args and call.args[0] == "agent_loop_stopped"
     ]
     assert agent_loop_stopped_calls == []

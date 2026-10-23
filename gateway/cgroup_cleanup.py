@@ -30,7 +30,9 @@ def _own_cgroup_path() -> str | None:
 
 def _read_cgroup_pids(cgroup_path: str) -> list[int]:
     try:
-        raw = Path(f"/sys/fs/cgroup{cgroup_path}/cgroup.procs").read_text(encoding="utf-8")
+        raw = Path(f"/sys/fs/cgroup{cgroup_path}/cgroup.procs").read_text(
+            encoding="utf-8"
+        )
     except OSError:
         return []
     pids: list[int] = []
@@ -51,7 +53,9 @@ def _parent_is_systemd() -> bool:
     """
     ppid = os.getppid()
     try:
-        return Path(f"/proc/{ppid}/comm").read_text(encoding="utf-8").strip() == "systemd"
+        return (
+            Path(f"/proc/{ppid}/comm").read_text(encoding="utf-8").strip() == "systemd"
+        )
     except OSError:
         return False
 
@@ -65,7 +69,10 @@ def _live_gateway_among(pids: list[int]) -> bool:
     or ``restart``): without a service manager, ``gateway restart`` runs the
     gateway in-process and is itself the live runtime.
     """
-    from gateway.status import _read_process_cmdline, looks_like_gateway_runtime_command_line
+    from gateway.status import (
+        _read_process_cmdline,
+        looks_like_gateway_runtime_command_line,
+    )
 
     for pid in pids:
         cmdline = _read_process_cmdline(pid)
@@ -104,7 +111,9 @@ def reap_cgroup(cgroup_path: str | None = None) -> int | None:
         if pid == me:
             continue
         try:
-            os.kill(pid, signal.SIGKILL)  # windows-footgun: ok — Linux-only (reads /proc, /sys/fs/cgroup; runs from a systemd unit)
+            os.kill(
+                pid, signal.SIGKILL
+            )  # windows-footgun: ok — Linux-only (reads /proc, /sys/fs/cgroup; runs from a systemd unit)
             killed += 1
         except (ProcessLookupError, PermissionError):
             continue

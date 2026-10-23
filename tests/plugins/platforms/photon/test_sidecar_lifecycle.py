@@ -6,6 +6,7 @@ replacement spawn then died on EADDRINUSE. These tests cover the startup
 reaper (`_reap_stale_sidecar`) and the stdin-pipe lifetime binding, without
 spawning Node or binding ports.
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -23,7 +24,9 @@ def _make_adapter(monkeypatch: pytest.MonkeyPatch) -> PhotonAdapter:
     monkeypatch.setenv("PHOTON_PROJECT_ID", "test-project-id")
     monkeypatch.setenv("PHOTON_PROJECT_SECRET", "test-project-secret")
     # Stand-in for PM's node; the user's PATH node is never picked up.
-    monkeypatch.setattr(photon_adapter, "find_node_executable", lambda _name: "/pm/node")
+    monkeypatch.setattr(
+        photon_adapter, "find_node_executable", lambda _name: "/pm/node"
+    )
     cfg = PlatformConfig(enabled=True, token="", extra={})
     return PhotonAdapter(cfg)
 
@@ -195,9 +198,7 @@ async def test_spectrum_patch_runs_off_the_event_loop(
             # the assertion below only cares where the patch run executed.
             return 0
 
-    monkeypatch.setattr(
-        photon_adapter.subprocess, "Popen", lambda *a, **k: _FakeProc()
-    )
+    monkeypatch.setattr(photon_adapter.subprocess, "Popen", lambda *a, **k: _FakeProc())
 
     try:
         await adapter._start_sidecar()

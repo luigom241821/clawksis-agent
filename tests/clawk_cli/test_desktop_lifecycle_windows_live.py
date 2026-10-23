@@ -63,7 +63,9 @@ def sleeper():
             stderr=subprocess.DEVNULL,
         )
         procs.append(p)
-        assert _wait_until(lambda: _argv_visible(p.pid, SLEEPER_MARKER)), "sleeper argv never visible"
+        assert _wait_until(lambda: _argv_visible(p.pid, SLEEPER_MARKER)), (
+            "sleeper argv never visible"
+        )
         return p
 
     yield _spawn

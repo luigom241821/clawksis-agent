@@ -216,8 +216,6 @@ def test_event_from_wire_reply_to_absent_and_partial():
 # ── hello command manifest ───────────────────────────────────────────────
 
 
-
-
 # ── auto-thread routing feedback (send-result thread_id) ─────────────────
 
 
@@ -522,9 +520,7 @@ async def test_title_rename_waits_for_feedback_that_arrives_late():
     # (the discriminator caches are keyed by the parent channel, not the thread;
     # omitting it made the connector decline "target not routed to an onboarded
     # tenant" — the live failure on staging 2026-08-01).
-    assert renames == [
-        ("th-9", "Debugging the flux capacitor", True, "chan-parent")
-    ]
+    assert renames == [("th-9", "Debugging the flux capacitor", True, "chan-parent")]
 
 
 @pytest.mark.asyncio
@@ -553,8 +549,6 @@ async def test_title_rename_true_miss_noops():
         await adapter.send("chan-parent", "the reply")
 
     task = asyncio.create_task(deliver())
-    await runner._rename_discord_auto_thread_for_session_title(
-        src, "sess1", "A title"
-    )
+    await runner._rename_discord_auto_thread_for_session_title(src, "sess1", "A title")
     await task
     assert renames == []

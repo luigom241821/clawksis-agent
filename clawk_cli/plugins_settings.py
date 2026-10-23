@@ -16,26 +16,44 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional
 
-from clawk_cli.plugins_state import _plugin_relative_segments, _plugin_settings_entry, save_plugin_setting
+from clawk_cli.plugins_state import (
+    _plugin_relative_segments,
+    _plugin_settings_entry,
+    save_plugin_setting,
+)
 
 logger = logging.getLogger(__name__)
 
 # manifest ``type`` → wire field type the renderer keys its component table on.
 _FIELD_TYPES: dict[str, str] = {
-    "str": "string", "string": "string",
-    "int": "number", "integer": "number", "float": "number", "number": "number",
-    "bool": "boolean", "boolean": "boolean",
-    "list": "json", "array": "json", "dict": "json", "object": "json",
+    "str": "string",
+    "string": "string",
+    "int": "number",
+    "integer": "number",
+    "float": "number",
+    "number": "number",
+    "bool": "boolean",
+    "boolean": "boolean",
+    "list": "json",
+    "array": "json",
+    "dict": "json",
+    "object": "json",
     "secret": "secret",
 }
 # wire field type → Python types a saved value must have (bool is excluded from number on purpose).
 _VALUE_TYPES: dict[str, tuple] = {
-    "string": (str,), "enum": (str,), "number": (int, float), "boolean": (bool,), "json": (list, dict),
+    "string": (str,),
+    "enum": (str,),
+    "number": (int, float),
+    "boolean": (bool,),
+    "json": (list, dict),
 }
 _ENV_NAME_CLEAN_RE = re.compile(r"[^A-Z0-9]+")
 
 
-def _manifest_config_schema(plugin_dir: Optional[Path]) -> Mapping[str, Mapping[str, Any]]:
+def _manifest_config_schema(
+    plugin_dir: Optional[Path],
+) -> Mapping[str, Mapping[str, Any]]:
     """``config_schema`` from ``<plugin_dir>/plugin.yaml``, or for a portable package from
     ``plugin.json`` ``extensions.com.nousresearch.clawk.config_schema`` (Agent Plugins v1 forbids
     unknown top-level fields, so Clawksis-specific keys live in the vendor namespace); ``{}`` when
@@ -46,16 +64,22 @@ def _manifest_config_schema(plugin_dir: Optional[Path]) -> Mapping[str, Mapping[
     try:
         if manifest.is_file():
             from utils import fast_safe_load
+
             data = fast_safe_load(manifest.read_text(encoding="utf-8-sig")) or {}
             raw = data.get("config_schema") if isinstance(data, Mapping) else None
         else:
             raw = _portable_config_schema(Path(plugin_dir))
-    except Exception as exc:  # unreadable manifest: no settings surface, never a failed list
-        logger.debug("plugin settings: cannot read the manifest in %s: %s", plugin_dir, exc)
+    except (
+        Exception
+    ) as exc:  # unreadable manifest: no settings surface, never a failed list
+        logger.debug(
+            "plugin settings: cannot read the manifest in %s: %s", plugin_dir, exc
+        )
         return {}
     if not isinstance(raw, Mapping):
         return {}
     return {str(k): v for k, v in raw.items() if isinstance(v, Mapping)}
+
 
 def _portable_config_schema(plugin_dir: Path) -> Any:
     portable = plugin_dir / "plugin.json"
@@ -63,8 +87,8 @@ def _portable_config_schema(plugin_dir: Path) -> Any:
         return None
     import json
     from clawk_cli.agent_plugins import manifest_config_schema
-    return manifest_config_schema(json.loads(portable.read_text(encoding="utf-8-sig")))
 
+    return manifest_config_schema(json.loads(portable.read_text(encoding="utf-8-sig")))
 
 
 def secret_env_name(plugin_id: str, key: str, spec: Mapping[str, Any]) -> str:
@@ -86,7 +110,9 @@ def _field_type(spec: Mapping[str, Any]) -> str:
     return kind
 
 
-def plugin_settings_fields(plugin_id: str, plugin_dir: Optional[Path]) -> list[dict[str, Any]]:
+def plugin_settings_fields(
+    plugin_id: str, plugin_dir: Optional[Path]
+) -> list[dict[str, Any]]:
     """Renderable settings fields for one plugin: schema + the current value of each key.
 
     Secret fields never carry the value — only ``env`` (where it lives) and ``has_value``.
@@ -95,6 +121,7 @@ def plugin_settings_fields(plugin_id: str, plugin_dir: Optional[Path]) -> list[d
     if not schema:
         return []
     from clawk_cli.config import get_env_value, load_config_readonly
+
     entry = _plugin_settings_entry(load_config_readonly() or {}, plugin_id) or {}
     raw_current = entry.get("settings")
     current: Mapping[str, Any] = raw_current if isinstance(raw_current, Mapping) else {}
@@ -106,7 +133,8 @@ def plugin_settings_fields(plugin_id: str, plugin_dir: Optional[Path]) -> list[d
             continue  # a key the plugin could never read through ctx.get_config
         kind = _field_type(spec)
         field: dict[str, Any] = {
-            "key": key, "type": kind,
+            "key": key,
+            "type": kind,
             "label": str(spec.get("label") or spec.get("title") or key),
             "description": str(spec.get("description") or ""),
             "required": bool(spec.get("required")),
@@ -125,7 +153,9 @@ def plugin_settings_fields(plugin_id: str, plugin_dir: Optional[Path]) -> list[d
     return fields
 
 
-def save_plugin_settings(plugin_id: str, plugin_dir: Optional[Path], values: Mapping[str, Any]) -> list[str]:
+def save_plugin_settings(
+    plugin_id: str, plugin_dir: Optional[Path], values: Mapping[str, Any]
+) -> list[str]:
     """Write ``values`` (``{key: value}``) for the plugin's schema keys; returns the keys written.
 
     Raises ``ValueError`` on an unknown key, a type mismatch, an enum value outside ``choices`` or a
@@ -140,11 +170,17 @@ def save_plugin_settings(plugin_id: str, plugin_dir: Optional[Path], values: Map
             raise ValueError(f"{key!r} is not declared in the plugin's config_schema")
         kind = _field_type(spec)
         if kind == "secret":
-            raise ValueError(f"{key!r} is a secret; it is stored in .env, not config.yaml")
+            raise ValueError(
+                f"{key!r} is a secret; it is stored in .env, not config.yaml"
+            )
         expected = _VALUE_TYPES[kind]
-        if not isinstance(value, expected) or (isinstance(value, bool) and bool not in expected):
+        if not isinstance(value, expected) or (
+            isinstance(value, bool) and bool not in expected
+        ):
             raise ValueError(f"{key!r} should be {kind} (got {type(value).__name__})")
-        if kind == "enum" and value not in [str(c) for c in spec.get("choices", spec.get("enum"))]:
+        if kind == "enum" and value not in [
+            str(c) for c in spec.get("choices", spec.get("enum"))
+        ]:
             raise ValueError(f"{key!r} must be one of the declared choices")
         plan.append((str(key), _plugin_relative_segments(str(key)), value))
     for key, segments, value in plan:

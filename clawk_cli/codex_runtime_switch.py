@@ -14,8 +14,14 @@ VALID_RUNTIMES = ("auto", "codex_app_server")
 
 # Human-friendly synonyms accepted by parse_args.
 _ARG_SYNONYMS = {
-    "on": "codex_app_server", "codex": "codex_app_server", "enable": "codex_app_server",
-    "off": "auto", "default": "auto", "disable": "auto", "clawk": "auto"}
+    "on": "codex_app_server",
+    "codex": "codex_app_server",
+    "enable": "codex_app_server",
+    "off": "auto",
+    "default": "auto",
+    "disable": "auto",
+    "clawk": "auto",
+}
 
 _CLAWK_TOOLS_CALLBACK_NOTE = (
     "Clawksis tool callback registered: codex can now use "
@@ -24,7 +30,8 @@ _CLAWK_TOOLS_CALLBACK_NOTE = (
     "kanban_* (worker + orchestrator) via MCP.",
     "  (delegate_task, memory, session_search, todo run "
     "only on the default Clawksis runtime — they need the "
-    "agent loop context.)")
+    "agent loop context.)",
+)
 
 
 @dataclass
@@ -49,7 +56,9 @@ def parse_args(arg_string: str) -> tuple[Optional[str], list[str]]:
     value = _ARG_SYNONYMS.get(raw, raw)
     if value in VALID_RUNTIMES:
         return value, []
-    return None, [f"Unknown runtime {raw!r}. Use one of: auto, codex_app_server, on, off"]
+    return None, [
+        f"Unknown runtime {raw!r}. Use one of: auto, codex_app_server, on, off"
+    ]
 
 
 def get_current_runtime(config: dict) -> str:
@@ -77,7 +86,9 @@ def get_configured_codex_binary(config: dict) -> str:
 def set_runtime(config: dict, new_value: str) -> str:
     """Persist *new_value* into the config dict in place; returns the previous value."""
     if new_value not in VALID_RUNTIMES:
-        raise ValueError(f"invalid runtime {new_value!r}; must be one of {VALID_RUNTIMES}")
+        raise ValueError(
+            f"invalid runtime {new_value!r}; must be one of {VALID_RUNTIMES}"
+        )
     old = get_current_runtime(config)
     if not isinstance(config.get("model"), dict):
         config["model"] = {}
@@ -99,22 +110,34 @@ def _migration_lines(config: dict) -> list[str]:
     """Run the ~/.codex/config.toml migration and describe it; failures are non-fatal."""
     lines: list[str] = []
     try:
-        from clawk_cli.codex_runtime_plugin_migration import CLAWK_TOOLS_MCP_SERVER_NAME, migrate
+        from clawk_cli.codex_runtime_plugin_migration import (
+            CLAWK_TOOLS_MCP_SERVER_NAME,
+            migrate,
+        )
+
         mig_report = migrate(config)
         # The clawk-tools callback is internal plumbing — surfaced separately below.
-        user_servers = [s for s in mig_report.migrated if s != CLAWK_TOOLS_MCP_SERVER_NAME]
+        user_servers = [
+            s for s in mig_report.migrated if s != CLAWK_TOOLS_MCP_SERVER_NAME
+        ]
         if user_servers:
-            lines.append(f"Migrated {len(user_servers)} MCP server(s): {', '.join(user_servers)}")
+            lines.append(
+                f"Migrated {len(user_servers)} MCP server(s): {', '.join(user_servers)}"
+            )
         if mig_report.migrated_plugins:
             lines.append(
                 f"Migrated {len(mig_report.migrated_plugins)} native "
-                f"Codex plugin(s): {', '.join(mig_report.migrated_plugins)}")
+                f"Codex plugin(s): {', '.join(mig_report.migrated_plugins)}"
+            )
         elif mig_report.plugin_query_error:
-            lines.append(f"Codex plugin discovery skipped: {mig_report.plugin_query_error}")
+            lines.append(
+                f"Codex plugin discovery skipped: {mig_report.plugin_query_error}"
+            )
         if mig_report.wrote_permissions_default:
             lines.append(
                 f"Default sandbox: {mig_report.wrote_permissions_default} "
-                f"(no approval prompt on every write)")
+                f"(no approval prompt on every write)"
+            )
         if CLAWK_TOOLS_MCP_SERVER_NAME in mig_report.migrated:
             lines.extend(_CLAWK_TOOLS_CALLBACK_NOTE)
         lines.append(f"  (config: {mig_report.target_path})")
@@ -126,7 +149,8 @@ def _migration_lines(config: dict) -> list[str]:
 
 
 def apply(
-    config: dict, new_value: Optional[str], *, persist_callback=None) -> CodexRuntimeStatus:
+    config: dict, new_value: Optional[str], *, persist_callback=None
+) -> CodexRuntimeStatus:
     """Entry point for CLI and gateway. ``config`` is mutated in place when ``new_value`` is set
     (None = show current state); ``persist_callback(config)`` writes it, skipped when None."""
     current = get_current_runtime(config)
@@ -141,7 +165,9 @@ def apply(
             f"openai_runtime: {current}\n"
             f"codex CLI: {'OK ' + ver if ok else 'not available — ' + (ver or 'install with `npm i -g @openai/codex`')}"
         )
-        return CodexRuntimeStatus(success=True, new_value=current, old_value=current, message=msg)
+        return CodexRuntimeStatus(
+            success=True, new_value=current, old_value=current, message=msg
+        )
 
     # Re-enabling codex_app_server falls through to the migration: the config value is already
     # correct but the world state (managed block in ~/.codex/config.toml, clawk-tools MCP
@@ -151,8 +177,11 @@ def apply(
     reapplying_enable = new_value == current == "codex_app_server"
     if new_value == current and not reapplying_enable:
         return CodexRuntimeStatus(
-            success=True, new_value=current, old_value=current,
-            message=f"openai_runtime already set to {current}")
+            success=True,
+            new_value=current,
+            old_value=current,
+            message=f"openai_runtime already set to {current}",
+        )
 
     # Switching ON: verify codex CLI before persisting — an opt-in toggle that silently fails on
     # the first turn is the worst possible UX.
@@ -160,11 +189,15 @@ def apply(
         ok, ver_or_msg = _check_binary_cached(codex_bin)
         if not ok:
             return CodexRuntimeStatus(
-                success=False, new_value=None, old_value=current,
+                success=False,
+                new_value=None,
+                old_value=current,
                 message=(
                     "Cannot enable codex_app_server runtime: "
                     f"{ver_or_msg or 'codex CLI not available'}\n"
-                    "Install with: npm i -g @openai/codex"))
+                    "Install with: npm i -g @openai/codex"
+                ),
+            )
 
     if not reapplying_enable:
         set_runtime(config, new_value)
@@ -174,13 +207,17 @@ def apply(
             except Exception as exc:
                 logger.exception("failed to persist openai_runtime change")
                 return CodexRuntimeStatus(
-                    success=False, new_value=new_value, old_value=current,
-                    message=f"updated config in memory but persist failed: {exc}")
+                    success=False,
+                    new_value=new_value,
+                    old_value=current,
+                    message=f"updated config in memory but persist failed: {exc}",
+                )
 
     msg_lines = [
         f"openai_runtime already set to {current} — re-applying migration"
         if reapplying_enable
-        else f"openai_runtime: {current} → {new_value}"]
+        else f"openai_runtime: {current} → {new_value}"
+    ]
     if new_value == "codex_app_server":
         ok, ver = _check_binary_cached(codex_bin)
         if ok:
@@ -191,13 +228,19 @@ def apply(
         msg_lines.append(
             "OpenAI/Codex turns now run through `codex app-server` "
             "(terminal/file ops/patching inside Codex; "
-            "Clawksis tools available via MCP callback).")
+            "Clawksis tools available via MCP callback)."
+        )
         msg_lines.append(
             "Effective on next session — current cached agent keeps "
-            "the prior runtime to preserve prompt cache.")
+            "the prior runtime to preserve prompt cache."
+        )
     else:
         msg_lines.append("OpenAI/Codex turns will use the default Clawksis runtime.")
         msg_lines.append("Effective on next session.")
     return CodexRuntimeStatus(
-        success=True, new_value=new_value, old_value=current,
-        message="\n".join(msg_lines), requires_new_session=True)
+        success=True,
+        new_value=new_value,
+        old_value=current,
+        message="\n".join(msg_lines),
+        requires_new_session=True,
+    )

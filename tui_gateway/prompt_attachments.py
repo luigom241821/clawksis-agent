@@ -20,8 +20,12 @@ _PDF_ATTACH_MAX_PAGES = 25
 
 # Leading magic bytes -> file extension, for filename-less uploads.
 _IMAGE_MAGIC: tuple[tuple[bytes, str], ...] = (
-    (b"\x89PNG\r\n\x1a\n", ".png"), (b"\xff\xd8\xff", ".jpg"), (b"GIF87a", ".gif"),
-    (b"GIF89a", ".gif"), (b"BM", ".bmp"))
+    (b"\x89PNG\r\n\x1a\n", ".png"),
+    (b"\xff\xd8\xff", ".jpg"),
+    (b"GIF87a", ".gif"),
+    (b"GIF89a", ".gif"),
+    (b"BM", ".bmp"),
+)
 
 # Context-ref values containing any of these must be quoted (desktop formatRefValue parity).
 _ATTACHMENT_REF_NEEDS_QUOTING_RE = _re.compile(r"""[\s()\[\]{}<>"'`]""")
@@ -32,6 +36,7 @@ def _b64_payload(raw: str, data_url_re: str, flags: int) -> bytes:
     """Strip an optional ``data:...;base64,`` wrapper and all whitespace, then strictly decode."""
     import base64 as _base64
     import re as _re
+
     cleaned = (raw or "").strip()
     if m := _re.match(data_url_re, cleaned, flags):
         cleaned = m.group(1)
@@ -41,15 +46,20 @@ def _b64_payload(raw: str, data_url_re: str, flags: int) -> bytes:
 def _decode_attach_base64(raw: str, *, mime_prefix: str) -> bytes | None:
     """Decode a (``data:<mime_prefix>...;base64,``-wrapped) payload; None when invalid."""
     import re as _re
+
     try:
         return _b64_payload(
-            raw, rf"^data:{_re.escape(mime_prefix)}[a-zA-Z0-9.+-]*;base64,(.*)$", _re.DOTALL)
+            raw,
+            rf"^data:{_re.escape(mime_prefix)}[a-zA-Z0-9.+-]*;base64,(.*)$",
+            _re.DOTALL,
+        )
     except Exception:
         return None
 
 
 def _decode_attach_payload(
-    rid, raw_b64: str, *, mime_prefix: str, max_bytes: int, label: str, empty_msg: str):
+    rid, raw_b64: str, *, mime_prefix: str, max_bytes: int, label: str, empty_msg: str
+):
     """``(bytes, None)`` or ``(None, error)``: 4017 on bad/empty base64, 4018 over *max_bytes*."""
     data = _decode_attach_base64(raw_b64, mime_prefix=mime_prefix)
     if data is None:
@@ -58,13 +68,16 @@ def _decode_attach_payload(
         return None, _err(rid, 4017, empty_msg)
     if len(data) > max_bytes:
         mb = max_bytes // (1024 * 1024)
-        return None, _err(rid, 4018, f"{label} too large ({len(data)} bytes; cap is {mb} MB)")
+        return None, _err(
+            rid, 4018, f"{label} too large ({len(data)} bytes; cap is {mb} MB)"
+        )
     return data, None
 
 
 def _sniff_image_ext(img_bytes: bytes, filename: str = "") -> str:
     """Extension from the filename hint, else magic bytes (WebP: RIFF container), else ``.png``."""
     from pathlib import Path
+
     if filename and (suffix := Path(filename).suffix.lower()):
         return suffix
     head = img_bytes[:16]
@@ -76,6 +89,7 @@ def _sniff_image_ext(img_bytes: bytes, filename: str = "") -> str:
 def _allowed_image_extensions() -> frozenset[str]:
     try:
         from cli import _IMAGE_EXTENSIONS
+
         return frozenset(_IMAGE_EXTENSIONS)
     except Exception:
         return frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"})
@@ -91,7 +105,10 @@ def _session_home_dir(session: dict, name: str) -> Path:
     in via ``attachments.storage: workspace`` (#110662): staging then lands inside the
     allowed ref root, so the ``@file:`` ref stays workspace-relative."""
     profile_home = session.get("profile_home")
-    if name == "attachments" and _profile_attachments_storage(profile_home) == "workspace":
+    if (
+        name == "attachments"
+        and _profile_attachments_storage(profile_home) == "workspace"
+    ):
         if workspace := _session_attachments_workspace(session):
             return workspace / ".clawk" / "attachments"
     return (Path(profile_home) if profile_home else _clawk_home) / name
@@ -104,9 +121,11 @@ def _profile_attachments_storage(profile_home) -> str:
     installs the profile scope, so the process config still belongs to the launch profile
     (same reason as ``_profile_configured_cwd``)."""
     import contextlib as _contextlib
+
     home = Path(profile_home) if profile_home else _clawk_home
     with _contextlib.suppress(Exception):
         from clawk_cli.config_effective import load_user_config_effective
+
         cfg_path = home / "config.yaml"
         if cfg_path.exists():
             attachments_cfg = load_user_config_effective(cfg_path).get("attachments")
@@ -123,6 +142,7 @@ def _session_attachments_workspace(session: dict) -> Path | None:
     for, so both keep the bind-mounted ``<profile home>/attachments`` that container and
     remote backends receive (#76577)."""
     import contextlib as _contextlib
+
     if _cwd_is_remote(session.get("profile_home")):
         return None
     with _contextlib.suppress(Exception):
@@ -141,6 +161,7 @@ def stage_image_bytes(directory, img_bytes: bytes, ext: str, *, prefix: str):
     import os
     from pathlib import Path
     import tempfile
+
     directory = Path(directory)
     directory.mkdir(mode=0o700, parents=True, exist_ok=True)
     fd, name = tempfile.mkstemp(dir=directory, prefix=prefix + "_", suffix=ext)
@@ -156,7 +177,9 @@ def stage_image_bytes(directory, img_bytes: bytes, ext: str, *, prefix: str):
     return path
 
 
-def _queue_attached_image(session: dict, img_bytes: bytes, ext: str, *, prefix: str) -> Path:
+def _queue_attached_image(
+    session: dict, img_bytes: bytes, ext: str, *, prefix: str
+) -> Path:
     """Write image bytes into the session images dir and queue them for the next submit."""
     session["image_counter"] = session.get("image_counter", 0) + 1
     img_dir = _session_images_dir(session)
@@ -192,12 +215,14 @@ def _attachment_ref_path(session: dict, target: Path) -> str:
 
 def _sanitize_attachment_name(name: str) -> str:
     import re as _re
+
     candidate = _re.sub(r"[\x00-\x1f]+", "_", Path(str(name or "").strip()).name)
     return candidate.strip().strip(".") or "attachment"
 
 
 def _stage_session_file_attachment(
-    session: dict, *, raw_path: str, data_url: str, name: str) -> tuple[Path, bool]:
+    session: dict, *, raw_path: str, data_url: str, name: str
+) -> tuple[Path, bool]:
     """Make a desktop file attachment available to the gateway agent: ``(stored_path, uploaded)``.
     Inside the workspace -> as-is; gateway-visible but outside -> copied into ``attachments/``
     (bind-mounted into container backends so ``@file:`` resolves in the sandbox); not on the
@@ -206,7 +231,11 @@ def _stage_session_file_attachment(
     resolved = None
     if raw_path:
         try:
-            from cli import _detect_file_drop, _resolve_attachment_path, _split_path_input
+            from cli import (
+                _detect_file_drop,
+                _resolve_attachment_path,
+                _split_path_input,
+            )
         except Exception:
             _detect_file_drop = None
         if _detect_file_drop is not None:
@@ -230,9 +259,13 @@ def _stage_session_file_attachment(
         # Any media type (unlike the image-specific decoder); bare base64 also accepted.
         import binascii as _binascii
         import re as _re
+
         try:
             payload = _b64_payload(
-                data_url, r"^data:[^;,]*(?:;[^;,=]+=[^;,]+)*;base64,(.*)$", _re.DOTALL | _re.IGNORECASE)
+                data_url,
+                r"^data:[^;,]*(?:;[^;,=]+=[^;,]+)*;base64,(.*)$",
+                _re.DOTALL | _re.IGNORECASE,
+            )
         except (ValueError, _binascii.Error) as exc:
             raise ValueError("invalid data_url payload") from exc
         filename = _sanitize_attachment_name(name or Path(str(raw_path or "")).name)

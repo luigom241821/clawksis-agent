@@ -20,9 +20,7 @@ def db(tmp_path):
 
 
 def _prompt_count(db: SessionDB) -> int:
-    return int(
-        db._conn.execute("SELECT COUNT(*) FROM system_prompts").fetchone()[0]
-    )
+    return int(db._conn.execute("SELECT COUNT(*) FROM system_prompts").fetchone()[0])
 
 
 def test_prompt_snapshots_are_deduplicated_and_hydrated_for_readers(db):
@@ -38,18 +36,14 @@ def test_prompt_snapshots_are_deduplicated_and_hydrated_for_readers(db):
     db.create_session("s2", "cli", system_prompt=prompt)
     db.request_handoff("s1", "telegram")
 
-    stored = db._conn.execute(
-        "SELECT hash, prompt FROM system_prompts"
-    ).fetchall()
+    stored = db._conn.execute("SELECT hash, prompt FROM system_prompts").fetchall()
     assert len(stored) == 1
     assert stored[0]["prompt"] == prompt
     raw_sessions = db._conn.execute(
         "SELECT system_prompt, system_prompt_hash FROM sessions ORDER BY id"
     ).fetchall()
     assert [row["system_prompt"] for row in raw_sessions] == [None, None]
-    assert {row["system_prompt_hash"] for row in raw_sessions} == {
-        stored[0]["hash"]
-    }
+    assert {row["system_prompt_hash"] for row in raw_sessions} == {stored[0]["hash"]}
 
     assert db.get_session("s1")["system_prompt"] == prompt
     assert db.list_sessions_rich()[0]["system_prompt"] == prompt
@@ -106,8 +100,7 @@ def test_existing_session_enrichment_does_not_leak_unused_prompt(db):
     db.create_session("s1", "cli", system_prompt="unused prompt")
 
     prompts = [
-        row["prompt"]
-        for row in db._conn.execute("SELECT prompt FROM system_prompts")
+        row["prompt"] for row in db._conn.execute("SELECT prompt FROM system_prompts")
     ]
     assert prompts == ["original prompt"]
     assert db.get_session("s1")["system_prompt"] == "original prompt"
@@ -137,10 +130,13 @@ def test_every_session_deletion_path_reclaims_final_prompt_reference(db):
 
     seed("pruned")
     db.end_session("pruned", "user_exit")
-    assert db.prune_sessions(
-        older_than_days=None,
-        started_before=time.time() + 1,
-    ) == 1
+    assert (
+        db.prune_sessions(
+            older_than_days=None,
+            started_before=time.time() + 1,
+        )
+        == 1
+    )
     assert _prompt_count(db) == 0
 
     seed("ghost", source="tui")
@@ -189,15 +185,23 @@ def test_compression_child_uses_content_addressed_prompt(db):
 
 
 def test_compression_child_continues_the_parents_tool_pin(db):
-    pin = {"version": "sha", "tools": [{"type": "function", "function": {"name": "read_file"}}]}
+    pin = {
+        "version": "sha",
+        "tools": [{"type": "function", "function": {"name": "read_file"}}],
+    }
     db.create_session("parent", "telegram")
     db.update_session_tool_names("parent", pin)
     db.append_message("parent", "user", "original")
     assert db.try_acquire_compression_lock("parent", "holder", ttl_seconds=60)
 
     db.publish_compression_child(
-        parent_session_id="parent", child_session_id="child", source="telegram", system_prompt="p",
-        messages=[{"role": "user", "content": "summary"}], compression_lock_holder="holder")
+        parent_session_id="parent",
+        child_session_id="child",
+        source="telegram",
+        system_prompt="p",
+        messages=[{"role": "user", "content": "summary"}],
+        compression_lock_holder="holder",
+    )
 
     assert json.loads(db.get_session("child")["tool_names"]) == pin
 
@@ -205,14 +209,21 @@ def test_compression_child_continues_the_parents_tool_pin(db):
 def test_recovery_cleanup_keeps_tool_pins_and_drops_dangling_pin_refs(tmp_path):
     from clawk_cli.session_recovery import _cleanup_partial_orphans
 
-    pin = {"version": "sha", "tools": [{"type": "function", "function": {"name": "read_file"}}]}
+    pin = {
+        "version": "sha",
+        "tools": [{"type": "function", "function": {"name": "read_file"}}],
+    }
     with SessionDB(db_path=tmp_path / "state.db") as db:
         db.create_session("pinned", "tui")
         db.update_session_tool_names("pinned", pin)
         db.create_session("dangling", "tui")
-        db._conn.execute("UPDATE sessions SET tool_names = ? WHERE id = 'dangling'", ("ab" * 32,))
+        db._conn.execute(
+            "UPDATE sessions SET tool_names = ? WHERE id = 'dangling'", ("ab" * 32,)
+        )
         db.create_session("legacy", "tui")
-        db._conn.execute("UPDATE sessions SET tool_names = ? WHERE id = 'legacy'", ('["read_file"]',))
+        db._conn.execute(
+            "UPDATE sessions SET tool_names = ? WHERE id = 'legacy'", ('["read_file"]',)
+        )
         db._conn.commit()
     conn = sqlite3.connect(str(tmp_path / "state.db"), isolation_level=None)
     conn.row_factory = sqlite3.Row
@@ -277,9 +288,12 @@ def test_v24_inline_prompts_migrate_once_to_content_addressed_storage(tmp_path):
         ).fetchall()
         assert [row["system_prompt"] for row in raw_sessions] == [None, None]
         assert len({row["system_prompt_hash"] for row in raw_sessions}) == 1
-        assert migrated._conn.execute(
-            "SELECT version FROM schema_version LIMIT 1"
-        ).fetchone()[0] == SCHEMA_VERSION
+        assert (
+            migrated._conn.execute(
+                "SELECT version FROM schema_version LIMIT 1"
+            ).fetchone()[0]
+            == SCHEMA_VERSION
+        )
     finally:
         migrated.close()
 

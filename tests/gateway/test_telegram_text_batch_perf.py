@@ -22,18 +22,19 @@ class TestEnvFloatClamped:
     """_env_float_clamped is the fence around every float env var the
     adapter reads — must reject NaN/Inf and honor min/max bounds."""
 
-
     def test_rejects_nan(self, monkeypatch):
         monkeypatch.setenv("CLAWK_TEST_VAR", "nan")
         result = TelegramAdapter._env_float_clamped("CLAWK_TEST_VAR", 0.5)
         assert math.isfinite(result)
         assert result == 0.5
 
-
     def test_clamps_below_min(self, monkeypatch):
         monkeypatch.setenv("CLAWK_TEST_VAR", "0.01")
-        assert TelegramAdapter._env_float_clamped(
-            "CLAWK_TEST_VAR", 0.5, min_value=0.1,
-        ) == 0.1
-
-
+        assert (
+            TelegramAdapter._env_float_clamped(
+                "CLAWK_TEST_VAR",
+                0.5,
+                min_value=0.1,
+            )
+            == 0.1
+        )

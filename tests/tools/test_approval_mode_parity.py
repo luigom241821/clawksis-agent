@@ -30,12 +30,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+
 @pytest.fixture()
 def clawk_home(tmp_path, monkeypatch):
     home = tmp_path / ".clawk"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     return home
+
 
 @pytest.fixture()
 def tui_server():
@@ -48,6 +50,7 @@ def tui_server():
     ):
         yield importlib.import_module("tui_gateway.server")
 
+
 def _write_config(home, yaml_text: str | None) -> None:
     cfg = home / "config.yaml"
     if yaml_text is None:
@@ -56,12 +59,11 @@ def _write_config(home, yaml_text: str | None) -> None:
     else:
         cfg.write_text(yaml_text, encoding="utf-8")
 
+
 # (config yaml, expected mode, expected timeout)
 CASES = [
     pytest.param(None, "smart", 300, id="unset-defaults"),
-    pytest.param(
-        "approvals:\n  mode: manual\n", "manual", 300, id="global-manual"
-    ),
+    pytest.param("approvals:\n  mode: manual\n", "manual", 300, id="global-manual"),
     pytest.param(
         "approvals:\n  mode: smart\n  timeout: 120\n",
         "smart",
@@ -87,6 +89,7 @@ CASES = [
     ),
 ]
 
+
 def _approval_module():
     """Resolve tools.approval via sys.modules, not the package attribute.
 
@@ -98,6 +101,7 @@ def _approval_module():
     the same sys.modules entry.
     """
     return importlib.import_module("tools.approval")
+
 
 @pytest.mark.parametrize("yaml_text,expected_mode,expected_timeout", CASES)
 def test_mode_and_timeout_parity_across_surfaces(
@@ -126,6 +130,4 @@ def test_mode_and_timeout_parity_across_surfaces(
         with patch.object(
             approval_mod, "is_current_session_yolo_enabled", return_value=False
         ):
-            assert approval_mod.is_approval_bypass_active() == (
-                core_mode == "off"
-            )
+            assert approval_mod.is_approval_bypass_active() == (core_mode == "off")

@@ -6,6 +6,7 @@ Two disposable homes: the default root (the multiplexer) and a named profile who
 must stay the default profile's, the named launcher must start as a secondary,
 and a duplicate refusal must say which claim came from the environment.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -33,14 +34,17 @@ def _two_homes(tmp_path: Path) -> tuple[Path, Path]:
     worker_home = default_home / "profiles" / "worker"
     worker_home.mkdir(parents=True)
     (default_home / "config.yaml").write_text(
-        "gateway:\n  multiplex_profiles: true\n", encoding="utf-8",
+        "gateway:\n  multiplex_profiles: true\n",
+        encoding="utf-8",
     )
     (default_home / ".env").write_text("", encoding="utf-8")
     (worker_home / "config.yaml").write_text(
-        "gateway:\n  multiplex_profiles: true\n", encoding="utf-8",
+        "gateway:\n  multiplex_profiles: true\n",
+        encoding="utf-8",
     )
     (worker_home / ".env").write_text(
-        f"TELEGRAM_BOT_TOKEN={_WORKER_TOKEN}\n", encoding="utf-8",
+        f"TELEGRAM_BOT_TOKEN={_WORKER_TOKEN}\n",
+        encoding="utf-8",
     )
     return default_home, worker_home
 
@@ -52,7 +56,9 @@ def _inherit_worker_env(monkeypatch, worker_home: Path) -> None:
 
 
 class TestProfileEnvIsNotThePrimaryClaim:
-    def test_worker_env_does_not_become_the_host_primary_token(self, tmp_path, monkeypatch):
+    def test_worker_env_does_not_become_the_host_primary_token(
+        self, tmp_path, monkeypatch
+    ):
         """Profile env inherited by the host process must not seed the primary adapter."""
         from gateway import run as run_mod
 
@@ -94,9 +100,14 @@ class TestProfileEnvIsNotThePrimaryClaim:
 
         monkeypatch.setattr(
             "clawk_cli.profiles.profiles_to_serve",
-            lambda multiplex, **_kw: [("default", default_home), ("worker", worker_home)],
+            lambda multiplex, **_kw: [
+                ("default", default_home),
+                ("worker", worker_home),
+            ],
         )
-        monkeypatch.setattr("clawk_cli.profiles.get_active_profile_name", lambda: "worker")
+        monkeypatch.setattr(
+            "clawk_cli.profiles.get_active_profile_name", lambda: "worker"
+        )
 
         async def fake_start(profile_name, profile_home, claimed):
             started.append(profile_name)
@@ -104,7 +115,8 @@ class TestProfileEnvIsNotThePrimaryClaim:
 
         monkeypatch.setattr(runner, "_start_one_profile_adapters", fake_start)
         monkeypatch.setattr(
-            "gateway.run_profile_reconcile.profile_serve_signature", lambda _home: "signature",
+            "gateway.run_profile_reconcile.profile_serve_signature",
+            lambda _home: "signature",
         )
 
         assert await runner._start_secondary_profile_adapters() == 1
@@ -112,7 +124,9 @@ class TestProfileEnvIsNotThePrimaryClaim:
 
 
 class TestHostGatewaySpawnEnv:
-    def test_restart_watcher_uses_settled_default_on_when_config_is_unset(self, tmp_path, monkeypatch):
+    def test_restart_watcher_uses_settled_default_on_when_config_is_unset(
+        self, tmp_path, monkeypatch
+    ):
         """A resolved default-on decision survives restart even when raw config is unset."""
         from agent.secret_scope import set_multiplex_active
         from gateway.run_shutdown import GatewayShutdownMixin
@@ -125,7 +139,9 @@ class TestHostGatewaySpawnEnv:
         assert env.get("CLAWK_HOME") == str(default_home)
         assert env.get("TELEGRAM_BOT_TOKEN") != _WORKER_TOKEN
 
-    def test_restart_watcher_keeps_standalone_named_profile_isolated(self, tmp_path, monkeypatch):
+    def test_restart_watcher_keeps_standalone_named_profile_isolated(
+        self, tmp_path, monkeypatch
+    ):
         """A standalone named gateway remains profile-scoped when multiplex is not settled."""
         from gateway.run_shutdown import GatewayShutdownMixin
 
@@ -136,7 +152,9 @@ class TestHostGatewaySpawnEnv:
         assert env.get("CLAWK_HOME") == str(worker_home)
         assert env.get("TELEGRAM_BOT_TOKEN") == _WORKER_TOKEN
 
-    def test_restart_watcher_does_not_inherit_profile_token(self, tmp_path, monkeypatch):
+    def test_restart_watcher_does_not_inherit_profile_token(
+        self, tmp_path, monkeypatch
+    ):
         """The detached restart child is built with served_profile_child_env, not os.environ.copy()."""
         from gateway.run_shutdown import GatewayShutdownMixin
 
@@ -156,9 +174,12 @@ class TestSettledHostRecordDecidesRestart:
     from ambient coordinates (current CLAWK_HOME / raw config re-read). #120305, #93943."""
 
     @staticmethod
-    def _publish_live_host_record(monkeypatch, tmp_path, *, home: Path, profiles: Sequence[str]) -> None:
+    def _publish_live_host_record(
+        monkeypatch, tmp_path, *, home: Path, profiles: Sequence[str]
+    ) -> None:
         """Publish a proven-live host record in an isolated lock dir."""
         from gateway import host_rendezvous as hr
+
         lock_dir = tmp_path / "locks"
         lock_dir.mkdir(parents=True, exist_ok=True)
         monkeypatch.setenv("CLAWK_GATEWAY_LOCK_DIR", str(lock_dir))
@@ -167,7 +188,9 @@ class TestSettledHostRecordDecidesRestart:
         monkeypatch.setattr(hr, "_lock_handles", dict(hr._lock_handles))
         assert hr.claim_host_lock(hr.ROLE_GATEWAY)[0] is hr.HostLockOutcome.ACQUIRED
         record = hr.publish_record(
-            hr.ROLE_GATEWAY, profiles=tuple(profiles), home=str(home),
+            hr.ROLE_GATEWAY,
+            profiles=tuple(profiles),
+            home=str(home),
         )
         assert record is not None, "fixture must publish a host record"
         # Make the recorded PID provably live: it must match this process's own
@@ -175,18 +198,25 @@ class TestSettledHostRecordDecidesRestart:
         published = hr.read_record(hr.ROLE_GATEWAY)
         assert published is not None
         monkeypatch.setattr(
-            hr, "_pid_incarnation_matches", lambda pid, create_time: True,
+            hr,
+            "_pid_incarnation_matches",
+            lambda pid, create_time: True,
         )
 
     def test_selectorless_replay_of_a_live_host_is_host_even_from_named_home(
-        self, tmp_path, monkeypatch,
+        self,
+        tmp_path,
+        monkeypatch,
     ):
         """The updater sits on the named profile's home; the host record proves hostness."""
         from clawk_cli.gateway import _restart_argv_is_host_gateway
 
         _default_home, worker_home = _two_homes(tmp_path)
         self._publish_live_host_record(
-            monkeypatch, tmp_path, home=worker_home, profiles=("default", "worker"),
+            monkeypatch,
+            tmp_path,
+            home=worker_home,
+            profiles=("default", "worker"),
         )
         _inherit_worker_env(monkeypatch, worker_home)
 
@@ -195,7 +225,9 @@ class TestSettledHostRecordDecidesRestart:
         ), "a live host multiplexer's selector-less argv must replay as the host"
 
     def test_replay_stays_profile_scoped_without_a_live_host_record(
-        self, tmp_path, monkeypatch,
+        self,
+        tmp_path,
+        monkeypatch,
     ):
         """No live host record + a named-profile home => the argv is that profile's."""
         from clawk_cli.gateway import _restart_argv_is_host_gateway
@@ -210,7 +242,9 @@ class TestSettledHostRecordDecidesRestart:
         ), "without settled proof a named-home process must not mint host authority"
 
     def test_restart_watcher_uses_the_live_host_record_when_no_flag_is_set(
-        self, tmp_path, monkeypatch,
+        self,
+        tmp_path,
+        monkeypatch,
     ):
         """An unset raw config + no settled flag + a live host record => host env."""
         from gateway.run_shutdown import GatewayShutdownMixin
@@ -218,7 +252,10 @@ class TestSettledHostRecordDecidesRestart:
         default_home, worker_home = _two_homes(tmp_path)
         (worker_home / "config.yaml").write_text("gateway: {}\n", encoding="utf-8")
         self._publish_live_host_record(
-            monkeypatch, tmp_path, home=worker_home, profiles=("default", "worker"),
+            monkeypatch,
+            tmp_path,
+            home=worker_home,
+            profiles=("default", "worker"),
         )
         _inherit_worker_env(monkeypatch, worker_home)
 
@@ -255,22 +292,29 @@ class TestDuplicateRefusalNamesEnvClaim:
         adapter = _Adapter()
         config = GatewayConfig(
             multiplex_profiles=True,
-            platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token=_WORKER_TOKEN)},
+            platforms={
+                Platform.TELEGRAM: PlatformConfig(enabled=True, token=_WORKER_TOKEN)
+            },
         )
         monkeypatch.setattr("gateway.config.load_gateway_config", lambda: config)
         monkeypatch.setattr(runner, "_create_adapter", lambda _p, _c: adapter)
         monkeypatch.setattr(
-            runner, "_update_platform_runtime_status",
+            runner,
+            "_update_platform_runtime_status",
             lambda platform, **kwargs: writes.append((platform, kwargs)),
         )
         monkeypatch.setattr(runner, "_subscribe_plugin_rewire", lambda *_a, **_k: None)
         monkeypatch.setattr(runner, "_register_config_hooks", lambda *_a, **_k: None)
-        monkeypatch.setattr(runner, "_snapshot_profile_busy_modes", lambda *_a, **_k: None)
+        monkeypatch.setattr(
+            runner, "_snapshot_profile_busy_modes", lambda *_a, **_k: None
+        )
         claim = runner._adapter_credential_claim(Platform.TELEGRAM, adapter)
         assert claim is not None
 
         connected = await runner._start_one_profile_adapters(
-            "worker", worker_home, {claim: "default"},
+            "worker",
+            worker_home,
+            {claim: "default"},
         )
 
         assert connected == 0

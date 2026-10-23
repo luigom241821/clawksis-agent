@@ -19,8 +19,14 @@ from typing import Any, Callable, Dict, Optional
 import httpx
 
 from clawk_cli.dashboard_auth import (
-    DashboardAuthProvider, InvalidCodeError, LoginStart, ProviderError, RefreshExpiredError, Session,
-    classify_jwks_lookup_error)
+    DashboardAuthProvider,
+    InvalidCodeError,
+    LoginStart,
+    ProviderError,
+    RefreshExpiredError,
+    Session,
+    classify_jwks_lookup_error,
+)
 
 # JWKS Cache-Control max-age (nous contract C7); self-hosted mirrors it.
 JWKS_CACHE_SECONDS = 300
@@ -36,6 +42,7 @@ DEFAULT_TOKEN_LEEWAY_SECONDS = 60.0
 
 # ---- Config / env resolution ----
 
+
 def load_config_section(logger: logging.Logger, tag: str, *path: str) -> dict:
     """The ``config.yaml`` block at ``path`` as a dict, or ``{}`` — robust to load_config()
     raising (fresh install, malformed YAML), absent keys, or a non-dict value."""
@@ -44,7 +51,11 @@ def load_config_section(logger: logging.Logger, tag: str, *path: str) -> dict:
 
         cfg = load_config()
     except Exception as exc:
-        logger.debug("%s: load_config() raised %s; falling back to env-only configuration", tag, exc)
+        logger.debug(
+            "%s: load_config() raised %s; falling back to env-only configuration",
+            tag,
+            exc,
+        )
         return {}
     section = cfg_get(cfg, *path, default=None)
     return section if isinstance(section, dict) else {}
@@ -81,6 +92,7 @@ def parse_leeway(raw: Any) -> float:
 
 # ---- register() bookkeeping ----
 
+
 class SkipRegistration(Exception):
     """Raised by a provider's settings resolver to decline registration; ``reason`` is
     the operator-facing text stored in the module's ``LAST_SKIP_REASON``."""
@@ -91,7 +103,11 @@ class SkipRegistration(Exception):
 
 
 def register_provider(
-    ctx, logger: logging.Logger, tag: str, provider_cls: type, settings: Callable[[], dict],
+    ctx,
+    logger: logging.Logger,
+    tag: str,
+    provider_cls: type,
+    settings: Callable[[], dict],
 ) -> tuple[Optional[dict], str]:
     """Build ``provider_cls(**settings())`` and register it on ``ctx``.
 
@@ -115,6 +131,7 @@ def register_provider(
 
 # ---- OAuth / PKCE ----
 
+
 def b64url_no_pad(raw: bytes) -> str:
     """Base64url-encode without ``=`` padding (RFC 7636 §4)."""
     return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
@@ -128,10 +145,14 @@ def validate_redirect_uri(redirect_uri: str) -> None:
     if parsed.scheme not in ("https", "http"):
         raise ProviderError(f"redirect_uri must be http(s), got {redirect_uri!r}")
     if not parsed.path or not parsed.path.endswith("/auth/callback"):
-        raise ProviderError(f"redirect_uri path must end with '/auth/callback', got {redirect_uri!r}")
+        raise ProviderError(
+            f"redirect_uri path must end with '/auth/callback', got {redirect_uri!r}"
+        )
 
 
-def pkce_login_start(authorize_url: str, *, client_id: str, scope: str, redirect_uri: str) -> LoginStart:
+def pkce_login_start(
+    authorize_url: str, *, client_id: str, scope: str, redirect_uri: str
+) -> LoginStart:
     """Build the authorization-code + PKCE (S256) redirect and cookie payload. Callers
     validate ``redirect_uri`` first. The auth-route layer expects
     ``cookie_payload["clawk_session_pkce"]`` as a flat ``state=…;verifier=…`` string
@@ -139,12 +160,22 @@ def pkce_login_start(authorize_url: str, *, client_id: str, scope: str, redirect
     code_verifier = b64url_no_pad(secrets.token_bytes(64))  # ~86 chars
     state = b64url_no_pad(secrets.token_bytes(32))
     params = {
-        "response_type": "code", "client_id": client_id, "redirect_uri": redirect_uri, "scope": scope, "state": state,
-        "code_challenge": b64url_no_pad(hashlib.sha256(code_verifier.encode("ascii")).digest()),
-        "code_challenge_method": "S256"}
+        "response_type": "code",
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "scope": scope,
+        "state": state,
+        "code_challenge": b64url_no_pad(
+            hashlib.sha256(code_verifier.encode("ascii")).digest()
+        ),
+        "code_challenge_method": "S256",
+    }
     return LoginStart(
         redirect_url=f"{authorize_url}?{urllib.parse.urlencode(params)}",
-        cookie_payload={"clawk_session_pkce": f"state={state};verifier={code_verifier}"})
+        cookie_payload={
+            "clawk_session_pkce": f"state={state};verifier={code_verifier}"
+        },
+    )
 
 
 def parse_json_body(response: httpx.Response) -> dict[str, Any]:
@@ -159,8 +190,16 @@ def parse_json_body(response: httpx.Response) -> dict[str, Any]:
 
 
 def exchange_token(
-    url: str, data: dict[str, str], *, headers: Optional[dict[str, str]] = None, bad_request_exc: type[Exception],
-    idp: str, endpoint: str, token_key: str, missing_msg: str) -> tuple[str, dict[str, Any]]:
+    url: str,
+    data: dict[str, str],
+    *,
+    headers: Optional[dict[str, str]] = None,
+    bad_request_exc: type[Exception],
+    idp: str,
+    endpoint: str,
+    token_key: str,
+    missing_msg: str,
+) -> tuple[str, dict[str, Any]]:
     """POST a token grant and return ``(token, payload)``.
 
     A 400 (OAuth-shaped error envelope) raises ``bad_request_exc`` — ``InvalidCodeError``
@@ -170,14 +209,21 @@ def exchange_token(
     deliberately NOT followed: the body carries an auth code / refresh token.
     """
     try:
-        response = httpx.post(url, data=data, headers={**JSON_HEADERS, **(headers or {})}, timeout=TOKEN_ENDPOINT_TIMEOUT_SEC)
+        response = httpx.post(
+            url,
+            data=data,
+            headers={**JSON_HEADERS, **(headers or {})},
+            timeout=TOKEN_ENDPOINT_TIMEOUT_SEC,
+        )
     except httpx.RequestError as exc:
         raise ProviderError(f"{endpoint} unreachable: {exc}") from exc
     if response.status_code == 400:
         error_code = parse_json_body(response).get("error", "invalid_request")
         raise bad_request_exc(f"{idp} rejected token request: {error_code}")
     if response.status_code != 200:
-        raise ProviderError(f"{endpoint} returned {response.status_code}: {response.text[:200]!r}")
+        raise ProviderError(
+            f"{endpoint} returned {response.status_code}: {response.text[:200]!r}"
+        )
     payload = parse_json_body(response)
     token = payload.get(token_key)
     if not token or not isinstance(token, str):
@@ -196,19 +242,35 @@ def refresh_token_from(payload: dict[str, Any], fallback: str = "") -> str:
 
 
 def session_from_claims(
-    provider: str, claims: dict[str, Any], *, access_token: str, refresh_token: str,
-    label: str = "token", email: str = "", display_name: str = "", org_id: str = "") -> Session:
+    provider: str,
+    claims: dict[str, Any],
+    *,
+    access_token: str,
+    refresh_token: str,
+    label: str = "token",
+    email: str = "",
+    display_name: str = "",
+    org_id: str = "",
+) -> Session:
     """Map verified JWT claims onto a Session; ``sub`` is mandatory."""
     user_id = str(claims.get("sub", ""))
     if not user_id:
         raise ProviderError(f"{label} missing 'sub' (user_id) claim")
     return Session(
-        user_id=user_id, email=email, display_name=display_name, org_id=org_id, provider=provider,
-        expires_at=int(claims["exp"]), access_token=access_token, refresh_token=refresh_token,
-        issuer=str(claims.get("iss") or ""))
+        user_id=user_id,
+        email=email,
+        display_name=display_name,
+        org_id=org_id,
+        provider=provider,
+        expires_at=int(claims["exp"]),
+        access_token=access_token,
+        refresh_token=refresh_token,
+        issuer=str(claims.get("iss") or ""),
+    )
 
 
 # ---- JWT verification ----
+
 
 def make_jwks_client(jwks_url: str) -> Any:
     """PyJWKClient with explicit Accept/User-Agent (some WAFs block the library default).
@@ -216,12 +278,21 @@ def make_jwks_client(jwks_url: str) -> Any:
     from jwt import PyJWKClient
 
     return PyJWKClient(
-        jwks_url, cache_keys=True, lifespan=JWKS_CACHE_SECONDS,
-        headers={"Accept": "application/json", "User-Agent": "ClawksisAgent/1.0"})
+        jwks_url,
+        cache_keys=True,
+        lifespan=JWKS_CACHE_SECONDS,
+        headers={"Accept": "application/json", "User-Agent": "ClawksisAgent/1.0"},
+    )
 
 
 def verify_jwt(
-    token: str, jwks_client: Any, *, algorithms: list[str], audience: str, issuer: str, label: str,
+    token: str,
+    jwks_client: Any,
+    *,
+    algorithms: list[str],
+    audience: str,
+    issuer: str,
+    label: str,
     leeway: float = DEFAULT_TOKEN_LEEWAY_SECONDS,
 ) -> dict[str, Any]:
     """Verify ``token`` against ``jwks_client`` with pinned ``aud``/``iss``.
@@ -247,8 +318,14 @@ def verify_jwt(
         raise classify_jwks_lookup_error(exc) from exc
     try:
         return jwt.decode(
-            token, signing_key.key, algorithms=algorithms, audience=audience, issuer=issuer, leeway=leeway,
-            options={"require": ["exp", "iat", "aud", "iss", "sub"]})
+            token,
+            signing_key.key,
+            algorithms=algorithms,
+            audience=audience,
+            issuer=issuer,
+            leeway=leeway,
+            options={"require": ["exp", "iat", "aud", "iss", "sub"]},
+        )
     except jwt.ExpiredSignatureError as exc:
         raise InvalidCodeError(f"{label} expired: {exc}") from exc
     except jwt.InvalidSignatureError as exc:
@@ -265,16 +342,20 @@ def verify_jwt(
         # these values are surfaced for diagnostics only, never trusted.
         details = ""
         try:
-            unverified = jwt.decode(token, options={"verify_signature": False, "verify_exp": False})
+            unverified = jwt.decode(
+                token, options={"verify_signature": False, "verify_exp": False}
+            )
             details = (
                 f" [token iss={unverified.get('iss')!r} aud={unverified.get('aud')!r}; "
-                f"expected iss={issuer!r} aud={audience!r}]")
+                f"expected iss={issuer!r} aud={audience!r}]"
+            )
         except Exception:
             pass
         raise ProviderError(f"{label} verification failed: {exc}{details}") from exc
 
 
 # ---- Shared provider skeletons ----
+
 
 class NonInteractiveMixin:
     """OAuth-redirect stubs for providers without a browser login flow (password / service
@@ -287,7 +368,9 @@ class NonInteractiveMixin:
     def start_login(self, *, redirect_uri: str) -> LoginStart:
         raise NotImplementedError(self._NO_START_LOGIN or self._NOT_INTERACTIVE)
 
-    def complete_login(self, *, code: str, state: str, code_verifier: str, redirect_uri: str) -> Session:
+    def complete_login(
+        self, *, code: str, state: str, code_verifier: str, redirect_uri: str
+    ) -> Session:
         raise NotImplementedError(self._NOT_INTERACTIVE)
 
 
@@ -308,19 +391,31 @@ class JwtOAuthProvider(DashboardAuthProvider):
             self._jwks_client = make_jwks_client(self._jwks_uri())
         return self._jwks_client
 
-    def complete_login(self, *, code: str, state: str, code_verifier: str, redirect_uri: str) -> Session:
+    def complete_login(
+        self, *, code: str, state: str, code_verifier: str, redirect_uri: str
+    ) -> Session:
         # ``state`` is verified by the auth-route layer before this call.
         return self._grant(
-            {"grant_type": "authorization_code", "code": code, "redirect_uri": redirect_uri,
-             "client_id": self._client_id, "code_verifier": code_verifier},
-            bad_request_exc=InvalidCodeError)
+            {
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": redirect_uri,
+                "client_id": self._client_id,
+                "code_verifier": code_verifier,
+            },
+            bad_request_exc=InvalidCodeError,
+        )
 
     def refresh_session(self, *, refresh_token: str) -> Session:
         if not refresh_token:
             raise RefreshExpiredError("no refresh token present in session")
         data, headers = self._refresh_request(refresh_token)
         return self._grant(
-            data, headers=headers, bad_request_exc=RefreshExpiredError, previous_refresh_token=refresh_token)
+            data,
+            headers=headers,
+            bad_request_exc=RefreshExpiredError,
+            previous_refresh_token=refresh_token,
+        )
 
     def verify_session(self, *, access_token: str) -> Optional[Session]:
         # None on expiry/invalidity (middleware then tries refresh); a ProviderError

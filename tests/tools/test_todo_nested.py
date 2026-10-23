@@ -71,17 +71,24 @@ class TestMergeParent:
         store = TodoStore()
         store.write([_item("a")])
         items = store.write([_item("a2", parent="a")], merge=True)
-        assert items[-1] == {"id": "a2", "content": "task a2", "status": "pending", "parent": "a"}
+        assert items[-1] == {
+            "id": "a2",
+            "content": "task a2",
+            "status": "pending",
+            "parent": "a",
+        }
 
 
 class TestNestedInjection:
     def test_children_indented(self):
         store = TodoStore()
-        store.write([
-            _item("wp1", status="in_progress"),
-            _item("t1", parent="wp1"),
-            _item("t2", parent="wp1"),
-        ])
+        store.write(
+            [
+                _item("wp1", status="in_progress"),
+                _item("t1", parent="wp1"),
+                _item("t2", parent="wp1"),
+            ]
+        )
         text = store.format_for_injection()
         assert text is not None
         lines = text.split("\n")
@@ -91,10 +98,12 @@ class TestNestedInjection:
 
     def test_completed_parent_kept_when_child_active(self):
         store = TodoStore()
-        store.write([
-            _item("wp1", status="completed"),
-            _item("t1", status="pending", parent="wp1"),
-        ])
+        store.write(
+            [
+                _item("wp1", status="completed"),
+                _item("t1", status="pending", parent="wp1"),
+            ]
+        )
         text = store.format_for_injection()
         assert text is not None
         assert "wp1" in text  # parent context survives
@@ -103,11 +112,13 @@ class TestNestedInjection:
 
     def test_finished_subtree_omitted(self):
         store = TodoStore()
-        store.write([
-            _item("wp1", status="completed"),
-            _item("t1", status="completed", parent="wp1"),
-            _item("wp2", status="pending"),
-        ])
+        store.write(
+            [
+                _item("wp1", status="completed"),
+                _item("t1", status="completed", parent="wp1"),
+                _item("wp2", status="pending"),
+            ]
+        )
         text = store.format_for_injection()
         assert text is not None
         assert "wp1" not in text
@@ -116,33 +127,36 @@ class TestNestedInjection:
 
     def test_all_finished_returns_none(self):
         store = TodoStore()
-        store.write([
-            _item("a", status="completed"),
-            _item("a1", status="cancelled", parent="a"),
-        ])
+        store.write(
+            [
+                _item("a", status="completed"),
+                _item("a1", status="cancelled", parent="a"),
+            ]
+        )
         assert store.format_for_injection() is None
-
 
 
 class TestOrderGuard:
     def test_nested_list_keeps_authored_order(self):
         store = TodoStore()
-        items = store.write([
-            _item("a", status="pending"),
-            _item("b", status="in_progress"),
-            _item("b1", parent="b"),
-        ])
+        items = store.write(
+            [
+                _item("a", status="pending"),
+                _item("b", status="in_progress"),
+                _item("b1", parent="b"),
+            ]
+        )
         assert [i["id"] for i in items] == ["a", "b", "b1"]
 
 
-
 class TestToolRoundTrip:
-
     def test_hydration_replay_preserves_parent(self):
         # Simulate _hydrate_todo_store: write the previous tool result's
         # todos array back into a fresh store in replace mode.
         store = TodoStore()
-        out = json.loads(todo_tool(todos=[_item("a"), _item("a1", parent="a")], store=store))
+        out = json.loads(
+            todo_tool(todos=[_item("a"), _item("a1", parent="a")], store=store)
+        )
         fresh = TodoStore()
         replayed = fresh.write(out["todos"], merge=False)
         assert replayed[1]["parent"] == "a"

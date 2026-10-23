@@ -34,6 +34,7 @@ def _capture_run(captured, stdout=""):
         captured["env"] = kwargs.get("env")
         captured["creationflags"] = kwargs.get("creationflags")
         return _fake_completed_process(stdout)
+
     return fake_run
 
 
@@ -85,7 +86,9 @@ def test_resolve_mcp_invocation_sanitizes_env(monkeypatch):
 
     captured = {}
     _patch_windows_hide_flags(monkeypatch, cua_backend)
-    manifest = json.dumps({"mcp_invocation": {"command": "cua-driver", "args": ["mcp"]}})
+    manifest = json.dumps(
+        {"mcp_invocation": {"command": "cua-driver", "args": ["mcp"]}}
+    )
     monkeypatch.setattr(
         cua_backend.subprocess, "run", _capture_run(captured, stdout=manifest)
     )
@@ -159,8 +162,6 @@ def test_permissions_run_sanitizes_env(monkeypatch):
     _assert_sanitized(captured)
 
 
-
-
 def test_doctor_spawn_sanitizes_env_and_hides_console_on_windows(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", SECRET)
     monkeypatch.setenv("PATH", "/usr/bin:/bin")
@@ -173,17 +174,19 @@ def test_doctor_spawn_sanitizes_env_and_hides_console_on_windows(monkeypatch):
     proc = MagicMock()
     proc.stdout.readline.side_effect = [
         json.dumps({"jsonrpc": "2.0", "id": 1, "result": {}}),
-        json.dumps({
-            "jsonrpc": "2.0",
-            "id": 2,
-            "result": {
-                "structuredContent": {
-                    "schema_version": "1",
-                    "overall": "ok",
-                    "checks": [],
-                }
-            },
-        }),
+        json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": 2,
+                "result": {
+                    "structuredContent": {
+                        "schema_version": "1",
+                        "overall": "ok",
+                        "checks": [],
+                    }
+                },
+            }
+        ),
     ]
 
     def fake_popen(cmd, **kwargs):

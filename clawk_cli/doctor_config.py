@@ -5,7 +5,15 @@ from __future__ import annotations
 
 import os
 from clawk_cli.doctor_report import (
-    Finding, _fail_and_issue, _section, check_bool, check_fail, check_info, check_ok, check_warn, doctor_check,
+    Finding,
+    _fail_and_issue,
+    _section,
+    check_bool,
+    check_fail,
+    check_info,
+    check_ok,
+    check_warn,
+    doctor_check,
     warn_on_error,
 )
 
@@ -13,6 +21,7 @@ from clawk_cli.doctor_report import (
 def _has_provider_env_config(content: str) -> bool:
     """Return True when ~/.clawksis/.env contains provider auth/base URL settings."""
     from clawk_cli.doctor import _PROVIDER_ENV_HINTS
+
     return any(key in content for key in _PROVIDER_ENV_HINTS)
 
 
@@ -22,7 +31,8 @@ _DEPRECATED_CONFIG_KEYS: tuple[tuple[str, str, str], ...] = (
     ("display", "tool_progress_overrides", "display.platforms"),
     ("delegation", "max_async_children", "delegation.max_concurrent_children"),
     ("compression", "summary_model", "auxiliary.compression"),
-    ("compression", "summary_provider", "auxiliary.compression"), ("compression", "summary_base_url", "auxiliary.compression"),
+    ("compression", "summary_provider", "auxiliary.compression"),
+    ("compression", "summary_base_url", "auxiliary.compression"),
 )
 
 
@@ -30,10 +40,15 @@ _DEPRECATED_CONFIG_KEYS: tuple[tuple[str, str, str], ...] = (
 # TERMINAL_CWD do not false-positive). CLAWK_TOOL_PROGRESS is silently ignored since the v12 config floor
 # removed its only consumer; CLAWK_TOOL_PROGRESS_MODE is still read by the gateway as a back-compat fallback.
 _DEPRECATED_ENV_VARS: tuple[tuple[str, str], ...] = (
-    ("CLAWK_TOOL_PROGRESS", "display.tool_progress in config.yaml — ignored/unsupported since config floor v12"),
+    (
+        "CLAWK_TOOL_PROGRESS",
+        "display.tool_progress in config.yaml — ignored/unsupported since config floor v12",
+    ),
     ("CLAWK_TOOL_PROGRESS_MODE", "display.tool_progress in config.yaml"),
-    ("TERMINAL_CWD", "terminal.cwd in config.yaml"), ("MESSAGING_CWD", "terminal.cwd in config.yaml"),
-    ("QQ_HOME_CHANNEL", "QQBOT_HOME_CHANNEL"), ("QQ_HOME_CHANNEL_NAME", "QQBOT_HOME_CHANNEL_NAME"),
+    ("TERMINAL_CWD", "terminal.cwd in config.yaml"),
+    ("MESSAGING_CWD", "terminal.cwd in config.yaml"),
+    ("QQ_HOME_CHANNEL", "QQBOT_HOME_CHANNEL"),
+    ("QQ_HOME_CHANNEL_NAME", "QQBOT_HOME_CHANNEL_NAME"),
 )
 
 
@@ -41,8 +56,11 @@ def collect_deprecated_config_keys(raw_config: dict | None) -> list[tuple[str, s
     """``(legacy_path, replacement)`` for deprecated keys in the on-disk YAML (empty containers still count)."""
     if not isinstance(raw_config, dict):
         return []
-    return [(f"{section}.{key}", replacement) for section, key, replacement in _DEPRECATED_CONFIG_KEYS
-            if isinstance(raw_config.get(section), dict) and key in raw_config[section]]
+    return [
+        (f"{section}.{key}", replacement)
+        for section, key, replacement in _DEPRECATED_CONFIG_KEYS
+        if isinstance(raw_config.get(section), dict) and key in raw_config[section]
+    ]
 
 
 def collect_deprecated_env_vars(env_map: dict | None) -> list[tuple[str, str]]:
@@ -50,20 +68,35 @@ def collect_deprecated_env_vars(env_map: dict | None) -> list[tuple[str, str]]:
     so bridged runtime vars do not false-positive)."""
     if not isinstance(env_map, dict):
         return []
-    return [(name, replacement) for name, replacement in _DEPRECATED_ENV_VARS
-            if env_map.get(name) is not None and str(env_map[name]).strip() != ""]
+    return [
+        (name, replacement)
+        for name, replacement in _DEPRECATED_ENV_VARS
+        if env_map.get(name) is not None and str(env_map[name]).strip() != ""
+    ]
 
 
-def collect_relay_plugin_cutover_findings(raw_config: dict | None, env_map: dict | None) -> list[tuple[str, str]]:
+def collect_relay_plugin_cutover_findings(
+    raw_config: dict | None, env_map: dict | None
+) -> list[tuple[str, str]]:
     """Return actionable findings for the removed Clawksis Relay plugin."""
-    from clawk_cli.relay_plugin_cutover import (LEGACY_RELAY_EXPORT_ENV_VARS, RELAY_PLUGINS_CONFIG_ENV,
-                                                 configured_legacy_relay_env_vars, legacy_relay_plugin_keys)
+    from clawk_cli.relay_plugin_cutover import (
+        LEGACY_RELAY_EXPORT_ENV_VARS,
+        RELAY_PLUGINS_CONFIG_ENV,
+        configured_legacy_relay_env_vars,
+        legacy_relay_plugin_keys,
+    )
+
     findings: list[tuple[str, str]] = []
     plugins = raw_config.get("plugins") if isinstance(raw_config, dict) else None
     if isinstance(plugins, dict):
-        findings += [(f"plugins.enabled: {key}", "remove it and configure a standard user or system Relay plugins.toml; "
-                     f"use {RELAY_PLUGINS_CONFIG_ENV} for an explicit user-file override")
-                     for key in legacy_relay_plugin_keys(plugins.get("enabled"))]
+        findings += [
+            (
+                f"plugins.enabled: {key}",
+                "remove it and configure a standard user or system Relay plugins.toml; "
+                f"use {RELAY_PLUGINS_CONFIG_ENV} for an explicit user-file override",
+            )
+            for key in legacy_relay_plugin_keys(plugins.get("enabled"))
+        ]
     effective_env = dict(env_map or {})
     # Fall through to process env ONLY when no explicit env_map was given: run_doctor passes None and wants
     # live-process vars, but an explicit map describes a complete environment (merging os.environ breaks hermeticity).
@@ -72,16 +105,25 @@ def collect_relay_plugin_cutover_findings(raw_config: dict | None, env_map: dict
             if name not in effective_env and os.environ.get(name) is not None:
                 effective_env[name] = os.environ[name]
     if not str(effective_env.get(RELAY_PLUGINS_CONFIG_ENV, "")).strip():
-        findings += [(name, f"run `clawk migrate relay` to generate relay-plugins.toml and set {RELAY_PLUGINS_CONFIG_ENV}; "
-                            "this legacy variable is now ignored and does not configure an exporter")
-                     for name in configured_legacy_relay_env_vars(effective_env)]
+        findings += [
+            (
+                name,
+                f"run `clawk migrate relay` to generate relay-plugins.toml and set {RELAY_PLUGINS_CONFIG_ENV}; "
+                "this legacy variable is now ignored and does not configure an exporter",
+            )
+            for name in configured_legacy_relay_env_vars(effective_env)
+        ]
     return findings
 
 
-def report_deprecated_config_and_env(raw_config: dict | None = None, env_map: dict | None = None) -> list[tuple[str, str]]:
+def report_deprecated_config_and_env(
+    raw_config: dict | None = None, env_map: dict | None = None
+) -> list[tuple[str, str]]:
     """Emit non-failing doctor warnings for deprecated config keys and env vars; returns the findings reported.
     Does not mutate config/env and does not append to the blocking ``issues`` list."""
-    deprecated = collect_deprecated_config_keys(raw_config) + collect_deprecated_env_vars(env_map)
+    deprecated = collect_deprecated_config_keys(
+        raw_config
+    ) + collect_deprecated_env_vars(env_map)
     relay_cutover = collect_relay_plugin_cutover_findings(raw_config, env_map)
     findings = deprecated + relay_cutover
     if not findings:
@@ -89,7 +131,9 @@ def report_deprecated_config_and_env(raw_config: dict | None = None, env_map: di
         return findings
     for legacy, replacement in deprecated:
         check_warn(f"Deprecated: {legacy}", f"(use {replacement} instead)")
-        check_info(f"Replace {legacy} → {replacement} (warn-only; not auto-migrated here)")
+        check_info(
+            f"Replace {legacy} → {replacement} (warn-only; not auto-migrated here)"
+        )
     for legacy, replacement in relay_cutover:
         check_warn(f"Breaking Relay migration: {legacy}", f"({replacement})")
         check_info(f"Migrate {legacy}: {replacement}")
@@ -100,6 +144,7 @@ def report_deprecated_config_and_env(raw_config: dict | None = None, env_map: di
 def _check_relay_plugins(should_fix: bool, f: Finding) -> None:
     """Name the plugins.toml files Relay applies to Clawksis, including ones outside the Clawksis home."""
     from agent.relay_runtime import resolve_plugin_sources
+
     try:
         sources = resolve_plugin_sources()
     except ModuleNotFoundError as exc:
@@ -108,21 +153,34 @@ def _check_relay_plugins(should_fix: bool, f: Finding) -> None:
         check_ok("NeMo Relay is not available on this platform")
         return
     except Exception as exc:
-        check_warn("Relay plugin configuration could not be read", "(Clawksis runs without Relay plugins)")
+        check_warn(
+            "Relay plugin configuration could not be read",
+            "(Clawksis runs without Relay plugins)",
+        )
         _relay_info_lines(cause for cause in (exc, exc.__cause__) if cause is not None)
-        f.manual_issues.append("Fix the Relay plugin configuration shown under NeMo Relay Plugins.")
+        f.manual_issues.append(
+            "Fix the Relay plugin configuration shown under NeMo Relay Plugins."
+        )
         return
     if not sources.config_paths:
         check_ok("No Relay plugin files found")
         return
     if sources.errors:
-        check_warn("Relay will reject this plugin configuration", "(Clawksis runs without Relay plugins)")
-        f.manual_issues.append("Fix the Relay plugin configuration shown under NeMo Relay Plugins.")
+        check_warn(
+            "Relay will reject this plugin configuration",
+            "(Clawksis runs without Relay plugins)",
+        )
+        f.manual_issues.append(
+            "Fix the Relay plugin configuration shown under NeMo Relay Plugins."
+        )
     else:
         # Validation cannot load dynamic plugins, so Relay reports what it cannot confirm as a warning.
         report = check_warn if sources.warnings else check_ok
         if sources.enabled:
-            report("Relay plugins enabled", "(applies to every profile a Clawksis process hosts)")
+            report(
+                "Relay plugins enabled",
+                "(applies to every profile a Clawksis process hosts)",
+            )
         else:
             report("Relay plugin files found, nothing enabled")
     _relay_info_lines((*sources.config_paths, *sources.errors, *sources.warnings))
@@ -131,7 +189,11 @@ def _check_relay_plugins(should_fix: bool, f: Finding) -> None:
 def _relay_info_lines(lines) -> None:
     """Print Relay paths and messages as doctor detail rows, keeping multi-line parser errors indented."""
     for line in lines:
-        check_info("\n      ".join(part for part in str(line).strip().splitlines() if part.strip()))
+        check_info(
+            "\n      ".join(
+                part for part in str(line).strip().splitlines() if part.strip()
+            )
+        )
 
 
 def managed_scope_check() -> None:
@@ -140,11 +202,17 @@ def managed_scope_check() -> None:
     managed_dir = None
     with warn_on_error(""):  # diagnostics must never crash
         from clawk_cli import managed_scope
+
         managed_dir = managed_scope.get_managed_dir()
     if managed_dir is None:
         return
-    n_cfg, n_env = len(managed_scope.managed_config_keys()), len(managed_scope.load_managed_env())
-    check_ok(f"Managed scope active: {n_cfg} config key(s), {n_env} env key(s) pinned by {managed_dir}")
+    n_cfg, n_env = (
+        len(managed_scope.managed_config_keys()),
+        len(managed_scope.load_managed_env()),
+    )
+    check_ok(
+        f"Managed scope active: {n_cfg} config key(s), {n_env} env key(s) pinned by {managed_dir}"
+    )
     if os.environ.get("CLAWK_MANAGED_DIR", "").strip():
         check_info(f"managed dir set via CLAWK_MANAGED_DIR={managed_dir}")
 
@@ -154,15 +222,22 @@ def _check_mcp_security(should_fix: bool, f: Finding) -> None:
     """Flag mcp_servers entries with suspicious stdio commands."""
     from clawk_cli.config import load_config
     from clawk_cli.mcp_security import validate_mcp_server_entry
+
     servers = load_config().get("mcp_servers") or {}
     suspicious = 0
     for name, entry in sorted(servers.items()) if isinstance(servers, dict) else ():
-        issues_found = validate_mcp_server_entry(name, entry) if isinstance(entry, dict) else None
+        issues_found = (
+            validate_mcp_server_entry(name, entry) if isinstance(entry, dict) else None
+        )
         if not issues_found:
             continue
         suspicious += 1
-        check_warn(f"MCP server '{name}' has suspicious stdio command", "; ".join(issues_found))
-        f.manual_issues.append(f"Review/remove mcp_servers.{name} in config.yaml; rotate any credentials that may have been exposed.")
+        check_warn(
+            f"MCP server '{name}' has suspicious stdio command", "; ".join(issues_found)
+        )
+        f.manual_issues.append(
+            f"Review/remove mcp_servers.{name} in config.yaml; rotate any credentials that may have been exposed."
+        )
     if suspicious == 0:
         check_ok("No suspicious MCP stdio commands")
 
@@ -171,8 +246,9 @@ def _check_mcp_security(should_fix: bool, f: Finding) -> None:
 def _check_env_file(should_fix: bool, f: Finding) -> None:
     """Managed scope plus ~/.clawksis/.env presence and provider credentials."""
     from clawk_cli.doctor import CLAWK_HOME, PROJECT_ROOT, _DHH
+
     managed_scope_check()
-    env_path = CLAWK_HOME / '.env'
+    env_path = CLAWK_HOME / ".env"
     if env_path.exists():
         check_ok(f"{_DHH}/.env file exists")
         # UTF-8 first; latin-1 fallback for Windows Notepad/cp1252 files (matches env_loader._load_dotenv_with_fallback).
@@ -180,9 +256,13 @@ def _check_env_file(should_fix: bool, f: Finding) -> None:
             content = env_path.read_text(encoding="utf-8-sig")
         except UnicodeDecodeError:
             content = env_path.read_text(encoding="latin-1")
-        if not check_bool(_has_provider_env_config(content), "API key or custom endpoint configured", f"No API key found in {_DHH}/.env"):
+        if not check_bool(
+            _has_provider_env_config(content),
+            "API key or custom endpoint configured",
+            f"No API key found in {_DHH}/.env",
+        ):
             f.issues.append("Run 'clawk setup' to configure API keys")
-    elif (PROJECT_ROOT / '.env').exists():  # project root as fallback
+    elif (PROJECT_ROOT / ".env").exists():  # project root as fallback
         check_ok(".env file exists (in project directory)")
     else:
         check_fail(f"{_DHH}/.env file missing")
@@ -208,17 +288,27 @@ def _known_provider_ids(cfg: dict) -> tuple[set, list, object, object, object]:
     custom_providers: list = []
     with warn_on_error(""):
         from clawk_cli.auth import PROVIDER_REGISTRY, resolve_provider as resolve_auth
+
         known = set(PROVIDER_REGISTRY.keys()) | {"openrouter", "custom", "auto", "moa"}
     with warn_on_error(""):
         from clawk_cli.config import get_compatible_custom_providers
-        from clawk_cli.providers import custom_provider_aliases as aliases, normalize_provider as normalize, resolve_provider_full as resolve_full
+        from clawk_cli.providers import (
+            custom_provider_aliases as aliases,
+            normalize_provider as normalize,
+            resolve_provider_full as resolve_full,
+        )
+
         with warn_on_error(""):
             custom_providers = get_compatible_custom_providers(cfg)
     user_providers = cfg.get("providers")
     if isinstance(user_providers, dict):
         from clawk_cli.config import is_provider_enabled
-        known.update(str(name).strip().lower() for name, prov_cfg in user_providers.items()
-                     if str(name).strip() and is_provider_enabled(prov_cfg))
+
+        known.update(
+            str(name).strip().lower()
+            for name, prov_cfg in user_providers.items()
+            if str(name).strip() and is_provider_enabled(prov_cfg)
+        )
     for entry in custom_providers if aliases is not None else ():
         name = str(entry.get("name") or "").strip() if isinstance(entry, dict) else ""
         if name:
@@ -229,8 +319,17 @@ def _known_provider_ids(cfg: dict) -> tuple[set, list, object, object, object]:
 # Vendor/model slugs are valid on aggregators and any custom provider; Fireworks' native IDs are slash-form
 # (accounts/fireworks/models/...) and DeepInfra's catalog is exclusively vendor/model.
 _VENDOR_SLUG_PROVIDERS = {
-    "openrouter", "auto", "ai-gateway", "kilocode", "opencode-zen", "huggingface", "lmstudio", "nous", "nvidia",
-    "fireworks", "deepinfra",
+    "openrouter",
+    "auto",
+    "ai-gateway",
+    "kilocode",
+    "opencode-zen",
+    "huggingface",
+    "lmstudio",
+    "nous",
+    "nvidia",
+    "fireworks",
+    "deepinfra",
 }
 
 
@@ -239,12 +338,19 @@ def _provider_has_credentials(runtime_provider: str) -> bool:
     checks elsewhere, and get_auth_status() returns a bare {logged_in: False} for anything it doesn't dispatch."""
     if runtime_provider == "openrouter":
         from clawk_cli.config import get_env_value
-        return any(str(get_env_value(k) or "").strip() for k in ("OPENROUTER_API_KEY", "OPENAI_API_KEY"))
+
+        return any(
+            str(get_env_value(k) or "").strip()
+            for k in ("OPENROUTER_API_KEY", "OPENAI_API_KEY")
+        )
     from clawk_cli.auth import PROVIDER_REGISTRY, get_auth_status
+
     pconfig = PROVIDER_REGISTRY.get(runtime_provider)
     if pconfig and getattr(pconfig, "auth_type", "") == "api_key":
         status = get_auth_status(runtime_provider) or {}
-        return bool(status.get("configured") or status.get("logged_in") or status.get("api_key"))
+        return bool(
+            status.get("configured") or status.get("logged_in") or status.get("api_key")
+        )
     return True
 
 
@@ -252,12 +358,17 @@ def _validate_model_config(config_path, issues: list) -> None:
     """Validate model.provider / model.default against the provider registry (raw file)."""
     # Detect stale root-level model keys (known bug source — PR #4329)
     from clawk_cli.config import read_user_config_raw
+
     cfg = read_user_config_raw(config_path)
     model_section = cfg.get("model") or {}
     provider_raw = (model_section.get("provider") or "").strip()
     provider = provider_raw.lower()
-    default_model = (model_section.get("default") or model_section.get("model") or "").strip()
-    known_providers, custom_providers, resolve_auth, normalize, resolve_full = _known_provider_ids(cfg)
+    default_model = (
+        model_section.get("default") or model_section.get("model") or ""
+    ).strip()
+    known_providers, custom_providers, resolve_auth, normalize, resolve_full = (
+        _known_provider_ids(cfg)
+    )
     valid_provider_ids = set(known_providers)
     accept = {provider} if provider else set()
     for known_provider in known_providers if normalize is not None else ():
@@ -274,35 +385,65 @@ def _validate_model_config(config_path, issues: list) -> None:
             except Exception:
                 runtime_provider = provider
         if resolve_full is not None:
-            provider_def = resolve_full(provider, cfg.get("providers"), custom_providers)
+            provider_def = resolve_full(
+                provider, cfg.get("providers"), custom_providers
+            )
             catalog_provider = provider_def.id if provider_def is not None else None
             accept.update({catalog_provider} - {None})
-    if provider and provider != "auto" and (catalog_provider is None or (known_providers and not (accept & valid_provider_ids))):
-        known_list = ", ".join(sorted(known_providers)) if known_providers else "(unavailable)"
-        _fail_and_issue(f"model.provider '{provider_raw}' is not a recognised provider", f"(known: {known_list})",
-                        f"model.provider '{provider_raw}' is unknown. Valid providers: {known_list}. "
-                        f"Fix: run 'clawk config set model.provider <valid_provider>'", issues)
+    if (
+        provider
+        and provider != "auto"
+        and (
+            catalog_provider is None
+            or (known_providers and not (accept & valid_provider_ids))
+        )
+    ):
+        known_list = (
+            ", ".join(sorted(known_providers)) if known_providers else "(unavailable)"
+        )
+        _fail_and_issue(
+            f"model.provider '{provider_raw}' is not a recognised provider",
+            f"(known: {known_list})",
+            f"model.provider '{provider_raw}' is unknown. Valid providers: {known_list}. "
+            f"Fix: run 'clawk config set model.provider <valid_provider>'",
+            issues,
+        )
     policy_id = str(runtime_provider or catalog_provider or "").strip().lower()
-    accepts_vendor_slug = policy_id in _VENDOR_SLUG_PROVIDERS or policy_id == "custom" or policy_id.startswith("custom:")
+    accepts_vendor_slug = (
+        policy_id in _VENDOR_SLUG_PROVIDERS
+        or policy_id == "custom"
+        or policy_id.startswith("custom:")
+    )
     # openai-api pointed at a non-OpenAI endpoint (local router, proxy) is an aggregator in all but name:
     # the router owns the model namespace, so vendor/model slugs are the correct IDs there.
     model_base_url = str(model_section.get("base_url") or "").strip()
     if policy_id == "openai-api" and model_base_url:
         from utils import base_url_host_matches
-        accepts_vendor_slug = accepts_vendor_slug or not base_url_host_matches(model_base_url, "api.openai.com")
+
+        accepts_vendor_slug = accepts_vendor_slug or not base_url_host_matches(
+            model_base_url, "api.openai.com"
+        )
     if default_model and "/" in default_model and policy_id and not accepts_vendor_slug:
-        check_warn(f"model.default '{default_model}' uses a vendor/model slug but provider is '{provider_raw}'",
-                   "(vendor-prefixed slugs belong to aggregators like openrouter)")
-        issues.append(f"model.default '{default_model}' is vendor-prefixed but model.provider is '{provider_raw}'. "
-                      "Either set model.provider to 'openrouter', or drop the vendor prefix.")
+        check_warn(
+            f"model.default '{default_model}' uses a vendor/model slug but provider is '{provider_raw}'",
+            "(vendor-prefixed slugs belong to aggregators like openrouter)",
+        )
+        issues.append(
+            f"model.default '{default_model}' is vendor-prefixed but model.provider is '{provider_raw}'. "
+            "Either set model.provider to 'openrouter', or drop the vendor prefix."
+        )
     if runtime_provider and runtime_provider not in ("auto", "custom"):
         from clawk_cli.doctor import _DHH
+
         with warn_on_error(""):
             if not _provider_has_credentials(runtime_provider):
-                _fail_and_issue(f"model.provider '{runtime_provider}' is set but no API key is configured",
-                                f"(add it to {_DHH}/.env or run 'clawk setup')",
-                                f"No credentials found for provider '{runtime_provider}'. Run 'clawk setup' or set the provider's "
-                                f"API key in {_DHH}/.env, or switch providers with 'clawk config set model.provider <name>'", issues)
+                _fail_and_issue(
+                    f"model.provider '{runtime_provider}' is set but no API key is configured",
+                    f"(add it to {_DHH}/.env or run 'clawk setup')",
+                    f"No credentials found for provider '{runtime_provider}'. Run 'clawk setup' or set the provider's "
+                    f"API key in {_DHH}/.env, or switch providers with 'clawk config set model.provider <name>'",
+                    issues,
+                )
 
 
 def _validate_auxiliary_config(config_path, issues: list) -> None:
@@ -311,23 +452,45 @@ def _validate_auxiliary_config(config_path, issues: list) -> None:
     from clawk_cli.config import read_user_config_raw
     from clawk_cli.runtime_provider import resolve_runtime_provider
     from utils import base_url_hostname
+
     aux = read_user_config_raw(config_path).get("auxiliary")
-    routed = {name: block for name, block in (aux.items() if isinstance(aux, dict) else ())
-              if isinstance(block, dict) and str(block.get("provider") or "").strip().lower() not in ("", "auto")}
+    routed = {
+        name: block
+        for name, block in (aux.items() if isinstance(aux, dict) else ())
+        if isinstance(block, dict)
+        and str(block.get("provider") or "").strip().lower() not in ("", "auto")
+    }
     ok = []
     for task, block in sorted(routed.items()):
-        provider, model, base_url, api_key = (str(block.get(k) or "").strip() or None for k in ("provider", "model", "base_url", "api_key"))
+        provider, model, base_url, api_key = (
+            str(block.get(k) or "").strip() or None
+            for k in ("provider", "model", "base_url", "api_key")
+        )
         try:
-            runtime = resolve_runtime_provider(requested=provider, target_model=model, explicit_api_key=api_key, explicit_base_url=base_url)
+            runtime = resolve_runtime_provider(
+                requested=provider,
+                target_model=model,
+                explicit_api_key=api_key,
+                explicit_base_url=base_url,
+            )
         except Exception as exc:
-            _fail_and_issue(f"auxiliary.{task}.provider '{provider}' does not resolve", f"({str(exc).splitlines()[0]})",
-                            f"auxiliary.{task}.provider '{provider}' cannot be resolved ({str(exc).splitlines()[0]}); the task "
-                            f"silently runs on the main model. Fix the provider name/credentials in auxiliary.{task}.", issues)
+            _fail_and_issue(
+                f"auxiliary.{task}.provider '{provider}' does not resolve",
+                f"({str(exc).splitlines()[0]})",
+                f"auxiliary.{task}.provider '{provider}' cannot be resolved ({str(exc).splitlines()[0]}); the task "
+                f"silently runs on the main model. Fix the provider name/credentials in auxiliary.{task}.",
+                issues,
+            )
             continue
         if not runtime.get("api_key") and not runtime.get("command"):
-            check_warn(f"auxiliary.{task}.provider '{provider}' resolved without credentials", f"({runtime.get('provider')} @ {runtime.get('base_url')})")
+            check_warn(
+                f"auxiliary.{task}.provider '{provider}' resolved without credentials",
+                f"({runtime.get('provider')} @ {runtime.get('base_url')})",
+            )
             continue
-        ok.append(f"{task}→{runtime.get('provider')}@{base_url_hostname(str(runtime.get('base_url') or '')) or '?'}")
+        ok.append(
+            f"{task}→{runtime.get('provider')}@{base_url_hostname(str(runtime.get('base_url') or '')) or '?'}"
+        )
     if ok:
         check_ok("auxiliary task routing resolves: " + ", ".join(ok))
 
@@ -336,19 +499,25 @@ def _validate_auxiliary_config(config_path, issues: list) -> None:
 def _check_config_file(should_fix: bool, f: Finding) -> None:
     """config.yaml presence (project cli-config.yaml as fallback); model/provider validation."""
     from clawk_cli.doctor import CLAWK_HOME, PROJECT_ROOT, _DHH
-    config_path = CLAWK_HOME / 'config.yaml'
+
+    config_path = CLAWK_HOME / "config.yaml"
     if config_path.exists():
         check_ok(f"{_DHH}/config.yaml exists")
         with warn_on_error("Could not validate model/provider config"):
             _validate_model_config(config_path, f.issues)
         with warn_on_error("Could not validate auxiliary task routing"):
             _validate_auxiliary_config(config_path, f.issues)
-    elif (PROJECT_ROOT / 'cli-config.yaml').exists():
+    elif (PROJECT_ROOT / "cli-config.yaml").exists():
         check_ok("cli-config.yaml exists (in project directory)")
     elif should_fix:
         from clawk_cli.config import seed_config_file
-        from_template = seed_config_file(config_path, PROJECT_ROOT / 'cli-config.yaml.example')
-        check_ok(f"Created {_DHH}/config.yaml from {'cli-config.yaml.example' if from_template else 'defaults'}")
+
+        from_template = seed_config_file(
+            config_path, PROJECT_ROOT / "cli-config.yaml.example"
+        )
+        check_ok(
+            f"Created {_DHH}/config.yaml from {'cli-config.yaml.example' if from_template else 'defaults'}"
+        )
         f.fixed += 1
     else:
         check_warn("config.yaml not found", "(using defaults)")
@@ -356,9 +525,17 @@ def _check_config_file(should_fix: bool, f: Finding) -> None:
 
 def _drift_config_version(f: Finding, should_fix: bool, config_path) -> None:
     from clawk_cli.config import check_config_version, migrate_config
+
     current_ver, latest_ver = check_config_version()
-    outdated = (f"Config version outdated (v{current_ver} → v{latest_ver})", "(new settings available)")
-    if check_bool(current_ver >= latest_ver, f"Config version up to date (v{current_ver})", outdated):
+    outdated = (
+        f"Config version outdated (v{current_ver} → v{latest_ver})",
+        "(new settings available)",
+    )
+    if check_bool(
+        current_ver >= latest_ver,
+        f"Config version up to date (v{current_ver})",
+        outdated,
+    ):
         return
     if not should_fix:
         f.issues.append("Run 'clawk doctor --fix' or 'clawk setup' to migrate config")
@@ -375,18 +552,32 @@ def _drift_config_version(f: Finding, should_fix: bool, config_path) -> None:
 def _drift_stale_root_keys(f: Finding, should_fix: bool, config_path) -> None:
     """Root-level ``provider``/``base_url`` belong under ``model:`` (raw-file diagnostic)."""
     from clawk_cli.config import atomic_config_replace, read_user_config_raw
+
     raw_config = read_user_config_raw(config_path)
-    stale_root_keys = [k for k in ("provider", "base_url") if k in raw_config and isinstance(raw_config[k], str)]
+    stale_root_keys = [
+        k
+        for k in ("provider", "base_url")
+        if k in raw_config and isinstance(raw_config[k], str)
+    ]
     if not stale_root_keys:
         return
-    check_warn(f"Stale root-level config keys: {', '.join(stale_root_keys)}", "(should be under 'model:' section)")
+    check_warn(
+        f"Stale root-level config keys: {', '.join(stale_root_keys)}",
+        "(should be under 'model:' section)",
+    )
     if not should_fix:
-        f.issues.append("Stale root-level provider/base_url in config.yaml — run 'clawk doctor --fix'")
+        f.issues.append(
+            "Stale root-level provider/base_url in config.yaml — run 'clawk doctor --fix'"
+        )
         return
     # Coerce scalar/None ``model:`` into a dict before mutation (setdefault would hand back a scalar).
     raw_model = raw_config.get("model")
     if not isinstance(raw_model, dict):
-        raw_model = raw_config["model"] = {"default": raw_model.strip()} if isinstance(raw_model, str) and raw_model.strip() else {}
+        raw_model = raw_config["model"] = (
+            {"default": raw_model.strip()}
+            if isinstance(raw_model, str) and raw_model.strip()
+            else {}
+        )
     for k in stale_root_keys:
         value = raw_config.pop(k)
         if not raw_model.get(k):
@@ -404,6 +595,7 @@ def _drift_max_iterations_ghost(f: Finding, should_fix: bool, config_path) -> No
     .env FILE (load_env), not get_env_value/os.environ, which the bridge may have overridden already.
     """
     from clawk_cli.doctor import _DHH
+
     # Detect stale CLAWK_MAX_ITERATIONS ghost in .env shadowing agent.max_turns in config.yaml (issue
     # #17534). The setup wizard used to dual-write the iteration budget to both stores; users who later edit
     # only config.yaml are left with a .env ghost. The gateway bridge normally derives CLAWK_MAX_ITERATIONS
@@ -411,29 +603,43 @@ def _drift_max_iterations_ghost(f: Finding, should_fix: bool, config_path) -> No
     # .env value silently wins and the agent runs at the wrong budget — e.g. config says 400 but the
     # activity line reads N/90.
     from clawk_cli.config import load_env, read_user_config_raw, remove_env_value
+
     raw_config = read_user_config_raw(config_path)
     agent_cfg = raw_config.get("agent")
     cfg_max_turns = agent_cfg.get("max_turns") if isinstance(agent_cfg, dict) else None
     if cfg_max_turns is None:
         cfg_max_turns = raw_config.get("max_turns")  # legacy root-level key counts too
     env_ghost = load_env().get("CLAWK_MAX_ITERATIONS")
-    if cfg_max_turns is None or env_ghost is None or str(cfg_max_turns).strip() == str(env_ghost).strip():
+    if (
+        cfg_max_turns is None
+        or env_ghost is None
+        or str(cfg_max_turns).strip() == str(env_ghost).strip()
+    ):
         return
-    check_warn(f"CLAWK_MAX_ITERATIONS={env_ghost} in .env shadows agent.max_turns={cfg_max_turns} in config.yaml",
-               "(stale ghost from an earlier `clawk setup` run)")
+    check_warn(
+        f"CLAWK_MAX_ITERATIONS={env_ghost} in .env shadows agent.max_turns={cfg_max_turns} in config.yaml",
+        "(stale ghost from an earlier `clawk setup` run)",
+    )
     if not should_fix:
-        f.issues.append("Stale CLAWK_MAX_ITERATIONS in .env shadows config.yaml — run 'clawk doctor --fix'")
+        f.issues.append(
+            "Stale CLAWK_MAX_ITERATIONS in .env shadows config.yaml — run 'clawk doctor --fix'"
+        )
     elif remove_env_value("CLAWK_MAX_ITERATIONS"):
-        check_ok(f"Removed stale CLAWK_MAX_ITERATIONS from .env (config.yaml agent.max_turns={cfg_max_turns} is now authoritative)")
+        check_ok(
+            f"Removed stale CLAWK_MAX_ITERATIONS from .env (config.yaml agent.max_turns={cfg_max_turns} is now authoritative)"
+        )
         f.fixed += 1
     else:
         check_warn("Could not remove CLAWK_MAX_ITERATIONS from .env")
-        f.manual_issues.append(f"Manually delete the CLAWK_MAX_ITERATIONS line from {_DHH}/.env — config.yaml agent.max_turns is authoritative.")
+        f.manual_issues.append(
+            f"Manually delete the CLAWK_MAX_ITERATIONS line from {_DHH}/.env — config.yaml agent.max_turns is authoritative."
+        )
 
 
 def _drift_deprecations(f: Finding, should_fix: bool, config_path) -> None:
     """Warn-only deprecation sweep over the raw file + on-disk .env (process env would false-positive)."""
     from clawk_cli.config import load_env, read_user_config_raw
+
     raw = read_user_config_raw(config_path) if config_path is not None else {}
     env = {}
     with warn_on_error(""):
@@ -444,6 +650,7 @@ def _drift_deprecations(f: Finding, should_fix: bool, config_path) -> None:
 def _drift_structure(f: Finding, should_fix: bool, config_path) -> None:
     """Structural validation (malformed custom_providers, etc.)."""
     from clawk_cli.config import validate_config_structure
+
     config_issues = validate_config_structure()
     if not config_issues:
         return
@@ -469,25 +676,41 @@ def _drift_legacy_custom_providers(f: Finding, should_fix: bool, config_path) ->
     picker and the Custom Endpoints page) instead of the ``providers:`` map every other surface edits.
     """
     from clawk_cli.config import read_user_config_raw
+
     raw_config = read_user_config_raw(config_path)
     legacy = raw_config.get("custom_providers")
     if not isinstance(legacy, list):
         return
     providers = raw_config.get("providers")
-    twins = {_endpoint_url(e) for e in (providers.values() if isinstance(providers, dict) else ()) if isinstance(e, dict)}
+    twins = {
+        _endpoint_url(e)
+        for e in (providers.values() if isinstance(providers, dict) else ())
+        if isinstance(e, dict)
+    }
     for entry in legacy:
-        if not isinstance(entry, dict) or not _endpoint_url(entry) or _endpoint_url(entry) in twins:
+        if (
+            not isinstance(entry, dict)
+            or not _endpoint_url(entry)
+            or _endpoint_url(entry) in twins
+        ):
             continue
         label = str(entry.get("name") or "").strip() or _endpoint_url(entry)
-        check_warn(f"Legacy custom_providers entry '{label}' has no providers: twin",
-                   "(still read from the retired list store; every other surface edits providers:)")
+        check_warn(
+            f"Legacy custom_providers entry '{label}' has no providers: twin",
+            "(still read from the retired list store; every other surface edits providers:)",
+        )
         f.manual_issues.append(
             f"Move custom_providers entry '{label}' into config.yaml providers: as `providers.<key>.api: "
-            f"{_endpoint_url(entry)}` and delete it from the list — the v12 list migration ran once and does not re-fire")
+            f"{_endpoint_url(entry)}` and delete it from the list — the v12 list migration ran once and does not re-fire"
+        )
 
 
 _CONFIG_DRIFT_STEPS = (
-    _drift_config_version, _drift_stale_root_keys, _drift_max_iterations_ghost, _drift_deprecations, _drift_structure,
+    _drift_config_version,
+    _drift_stale_root_keys,
+    _drift_max_iterations_ghost,
+    _drift_deprecations,
+    _drift_structure,
     _drift_legacy_custom_providers,
 )
 
@@ -530,7 +753,8 @@ def _check_config_drift(should_fix: bool, f: Finding) -> None:
     Each step is independent and best-effort: a failure in one never hides the next.
     """
     from clawk_cli.doctor import CLAWK_HOME
-    config_path = CLAWK_HOME / 'config.yaml'
+
+    config_path = CLAWK_HOME / "config.yaml"
     if not config_path.exists():
         config_path = None
     for step in _CONFIG_DRIFT_STEPS if config_path else (_drift_deprecations,):
@@ -544,7 +768,12 @@ def _check_config_drift(should_fix: bool, f: Finding) -> None:
 @doctor_check("xAI retirement check skipped", "({e})")
 def _check_xai_retirement(should_fix: bool, f: Finding) -> None:
     from clawk_cli.config import load_config
-    from clawk_cli.xai_retirement import MIGRATION_GUIDE_URL, find_retired_xai_refs, format_issue
+    from clawk_cli.xai_retirement import (
+        MIGRATION_GUIDE_URL,
+        find_retired_xai_refs,
+        format_issue,
+    )
+
     retired_refs = find_retired_xai_refs(load_config())
     if not retired_refs:
         check_ok("No retired xAI models in config")
@@ -552,13 +781,20 @@ def _check_xai_retirement(should_fix: bool, f: Finding) -> None:
     for ref in retired_refs:
         check_warn(format_issue(ref))
     check_info(f"Migration guide: {MIGRATION_GUIDE_URL}")
-    f.manual_issues.append(f"Update {len(retired_refs)} retired xAI model reference(s) in config.yaml — see {MIGRATION_GUIDE_URL}")
+    f.manual_issues.append(
+        f"Update {len(retired_refs)} retired xAI model reference(s) in config.yaml — see {MIGRATION_GUIDE_URL}"
+    )
 
 
 @doctor_check("Session reset check skipped", "({e})")
 def _check_retired_session_reset(should_fix: bool, f: Finding) -> None:
     from clawk_cli.config_effective import load_user_config_effective
-    from clawk_cli.session_reset_retirement import format_notice, reset_plugin_enabled, retired_reset_policy
+    from clawk_cli.session_reset_retirement import (
+        format_notice,
+        reset_plugin_enabled,
+        retired_reset_policy,
+    )
+
     found = retired_reset_policy(load_user_config_effective())
     if found is None:
         check_ok("No idle/daily session_reset policy configured")

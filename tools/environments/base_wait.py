@@ -13,7 +13,8 @@ _FMT = {
     "TIMEOUT": "iter=%d timeout=%ss",
     "HEARTBEAT": "iter=%d elapsed=%.0fs interrupt=%s activity_cb=%s%s",
     "EXCEPTION_EXIT": "iter=%d elapsed=%.1fs — killing subprocess group before re-raise",
-    "EXIT (natural)": "iter=%d elapsed=%.1fs returncode=%s"}
+    "EXIT (natural)": "iter=%d elapsed=%.1fs returncode=%s",
+}
 
 
 class _WaitTrace:
@@ -35,15 +36,23 @@ class _WaitTrace:
     def _emit(self, event: str, *args) -> None:
         self._log.info(
             "[interrupt-debug] _wait_for_process %s tid=%s pid=%s " + _FMT[event],
-            event, self._tid, self._pid, *args)
+            event,
+            self._tid,
+            self._pid,
+            *args,
+        )
 
     def _elapsed(self) -> float:
         return time.monotonic() - self._start
 
     def enter(self) -> None:
         if self.enabled:
-            self._emit("ENTER", self._timeout,
-                       "set" if not self._cb_was_none else "MISSING", is_interrupted())
+            self._emit(
+                "ENTER",
+                self._timeout,
+                "set" if not self._cb_was_none else "MISSING",
+                is_interrupted(),
+            )
 
     def interrupted(self) -> None:
         if self.enabled:
@@ -60,9 +69,13 @@ class _WaitTrace:
             return
         cb_now_none = self._get_cb() is None
         self._emit(
-            "HEARTBEAT", self.iterations, self._elapsed(), is_interrupted(),
+            "HEARTBEAT",
+            self.iterations,
+            self._elapsed(),
+            is_interrupted(),
             "set" if not cb_now_none else "MISSING",
-            " (LOST during run)" if cb_now_none and not self._cb_was_none else "")
+            " (LOST during run)" if cb_now_none and not self._cb_was_none else "",
+        )
         self._last_heartbeat = time.monotonic()
         self._cb_was_none = cb_now_none
 

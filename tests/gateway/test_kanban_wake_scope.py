@@ -48,7 +48,9 @@ def _slack_adapter(channel_team=None):
     adapter._app.client = AsyncMock()
     adapter._running = True
     adapter.send = AsyncMock()
-    adapter.handle_message = AsyncMock(side_effect=lambda event: setattr(event, "_gateway_accepted", True))
+    adapter.handle_message = AsyncMock(
+        side_effect=lambda event: setattr(event, "_gateway_accepted", True)
+    )
     if channel_team:
         adapter._channel_team.update(channel_team)
     return adapter
@@ -104,7 +106,9 @@ def _wake_source_from(adapter):
     return adapter.handle_message.await_args.args[0].source
 
 
-def test_slack_wake_resumes_the_creators_workspace_scoped_session(tmp_path, monkeypatch):
+def test_slack_wake_resumes_the_creators_workspace_scoped_session(
+    tmp_path, monkeypatch
+):
     monkeypatch.setenv("CLAWK_KANBAN_DB", str(tmp_path / "wake-scope.db"))
     kb.init_db()
     _completed_subscription(
@@ -137,7 +141,9 @@ def test_slack_wake_resumes_the_creators_workspace_scoped_session(tmp_path, monk
     assert build_session_key(replace(wake, scope_id=None, guild_id=None)) != wake_key
 
 
-def test_slack_wake_falls_back_to_the_adapter_channel_workspace_map(tmp_path, monkeypatch):
+def test_slack_wake_falls_back_to_the_adapter_channel_workspace_map(
+    tmp_path, monkeypatch
+):
     """Subscriptions that stored no workspace resolve it from the adapter."""
     monkeypatch.setenv("CLAWK_KANBAN_DB", str(tmp_path / "wake-scope-fallback.db"))
     kb.init_db()
@@ -199,9 +205,12 @@ def test_wake_scope_id_prefers_persisted_metadata_over_the_adapter_map():
     adapter = SlackAdapter.__new__(SlackAdapter)
     adapter._channel_team = {CHANNEL: "T_STALE"}
 
-    assert _wake_scope_id(
-        adapter, {"chat_id": CHANNEL, "delivery_metadata": {"slack_team_id": TEAM}}
-    ) == TEAM
+    assert (
+        _wake_scope_id(
+            adapter, {"chat_id": CHANNEL, "delivery_metadata": {"slack_team_id": TEAM}}
+        )
+        == TEAM
+    )
     assert _wake_scope_id(adapter, {"chat_id": CHANNEL}) == "T_STALE"
     assert _wake_scope_id(adapter, {"chat_id": "C_OTHER"}) is None
 
@@ -212,10 +221,6 @@ def test_wake_scope_id_degrades_when_the_adapter_lookup_raises():
             raise RuntimeError("adapter state gone")
 
     assert _wake_scope_id(Exploding(), {"chat_id": CHANNEL}) is None
-
-
-
-
 
 
 def test_slack_adapter_reports_no_scope_for_ambiguous_channels():

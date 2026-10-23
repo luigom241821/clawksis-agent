@@ -6,6 +6,7 @@ a thread-pool worker and is tracked in ``cron.scheduler._running_job_ids``, not
 in ``GatewayRunner._running_agents`` — so a zero-agent drain must still wait
 for cron to finish (or time out and take the interrupt/kill path).
 """
+
 import asyncio
 from unittest.mock import patch
 
@@ -41,5 +42,3 @@ async def test_drain_active_agents_waits_for_in_flight_cron_jobs():
 
     assert timed_out is False
     assert _snapshot == {}
-
-

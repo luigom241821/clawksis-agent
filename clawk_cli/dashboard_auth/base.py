@@ -1,4 +1,5 @@
 """Abstract base + dataclasses + exceptions for dashboard auth providers."""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -10,6 +11,7 @@ from typing import Optional
 class Session:
     """A verified interactive identity (from ``complete_login`` / ``verify_session``). All fields
     mandatory; providers without orgs set ``org_id=""``. The tokens are opaque to Clawksis."""
+
     user_id: str
     email: str
     display_name: str
@@ -26,6 +28,7 @@ class TokenPrincipal:
     """A verified non-interactive (service-to-service) caller — the token analog of
     :class:`Session`: one bearer token on one request, no login/cookie/refresh. ``principal`` is
     an opaque stable caller id; ``scopes`` empty means "unscoped" (a route MAY enforce one)."""
+
     principal: str
     provider: str
     scopes: tuple[str, ...] = ()
@@ -36,6 +39,7 @@ class LoginStart:
     """First leg of the OAuth round trip: ``redirect_url`` is the IDP's authorize endpoint;
     ``cookie_payload`` maps cookie name -> serialised PKCE/CSRF state that the auth route sets
     (HttpOnly, Secure + ``SameSite=None`` over HTTPS, TTL <= 10 min; see ``set_pkce_cookie``)."""
+
     redirect_url: str
     cookie_payload: dict[str, str]
 
@@ -107,6 +111,7 @@ class DashboardAuthProvider(ABC):
     ``NotImplementedError`` stubs), ``supports_token`` (``verify_token`` for the token-auth seam),
     ``supports_session`` (False for token-only credentials such as drain, never offered a login).
     """
+
     name: str = ""
     display_name: str = ""
     supports_password: bool = False
@@ -118,7 +123,8 @@ class DashboardAuthProvider(ABC):
 
     @abstractmethod
     def complete_login(
-        self, *, code: str, state: str, code_verifier: str, redirect_uri: str) -> Session: ...
+        self, *, code: str, state: str, code_verifier: str, redirect_uri: str
+    ) -> Session: ...
 
     @abstractmethod
     def verify_session(self, *, access_token: str) -> Optional[Session]: ...
@@ -136,7 +142,8 @@ class DashboardAuthProvider(ABC):
         unreachable. The default raises so a mis-flagged provider fails loudly."""
         raise NotImplementedError(
             f"{type(self).__name__} does not support password login "
-            "(set supports_password = True and override complete_password_login)")
+            "(set supports_password = True and override complete_password_login)"
+        )
 
     def verify_token(self, *, token: str) -> Optional[TokenPrincipal]:
         """Verify a non-interactive bearer token; return its principal. Mirrors ``verify_session``:
@@ -145,7 +152,8 @@ class DashboardAuthProvider(ABC):
         with ``hmac.compare_digest``. The default raises so a mis-flagged provider fails loudly."""
         raise NotImplementedError(
             f"{type(self).__name__} does not support token auth "
-            "(set supports_token = True and override verify_token)")
+            "(set supports_token = True and override verify_token)"
+        )
 
 
 def assert_protocol_compliance(cls: type) -> None:
@@ -154,10 +162,16 @@ def assert_protocol_compliance(cls: type) -> None:
     for attr in ("name", "display_name"):
         if not getattr(cls, attr, ""):
             raise TypeError(f"{cls.__name__} missing or empty attribute: {attr!r}")
-    for method in ("start_login", "complete_login", "verify_session", "refresh_session",
-                   "revoke_session"):
+    for method in (
+        "start_login",
+        "complete_login",
+        "verify_session",
+        "refresh_session",
+        "revoke_session",
+    ):
         if not callable(getattr(cls, method, None)):
             raise TypeError(f"{cls.__name__} missing method: {method}")
     if getattr(cls, "__abstractmethods__", None):
         raise TypeError(
-            f"{cls.__name__} has unimplemented abstract methods: {sorted(cls.__abstractmethods__)}")
+            f"{cls.__name__} has unimplemented abstract methods: {sorted(cls.__abstractmethods__)}"
+        )

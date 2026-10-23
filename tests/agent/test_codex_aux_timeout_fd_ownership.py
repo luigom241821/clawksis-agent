@@ -72,16 +72,23 @@ class TestCodexAuxiliaryTimeoutFdOwnership:
         adapter's ``finally``."""
 
         interrupted = threading.Event()
+
         def _stalled():
-            assert interrupted.wait(10), "watchdog did not interrupt the stalled transport"
+            assert interrupted.wait(10), (
+                "watchdog did not interrupt the stalled transport"
+            )
             yield SimpleNamespace(type="response.in_progress")
 
         adapter, events = _adapter_with_recording_client(_stalled())
-        socket = adapter._client._client._transport._pool._connections[0].get_extra_info("socket")
+        socket = adapter._client._client._transport._pool._connections[
+            0
+        ].get_extra_info("socket")
         original_shutdown = socket.shutdown
+
         def shutdown(how):
             original_shutdown(how)
             interrupted.set()
+
         socket.shutdown = shutdown
         owner_tid = threading.get_ident()
 
@@ -92,7 +99,9 @@ class TestCodexAuxiliaryTimeoutFdOwnership:
             return SimpleNamespace(output=[], usage=None)
 
         with (
-            patch("agent.auxiliary_client._AUX_STREAM_NO_PROGRESS_TIMEOUT_SECONDS", 0.3),
+            patch(
+                "agent.auxiliary_client._AUX_STREAM_NO_PROGRESS_TIMEOUT_SECONDS", 0.3
+            ),
             patch("agent.auxiliary_client._evict_cached_client_instance"),
             patch("agent.codex_runtime._consume_codex_event_stream", _consume),
             pytest.raises(TimeoutError),
@@ -111,7 +120,8 @@ class TestCodexAuxiliaryTimeoutFdOwnership:
         assert owner_tid not in shutdown_tids, "shutdown ran on owner thread"
         # close() from a stranger thread is the corruption vector — banned.
         stranger_closes = [
-            (a, tid) for a, tid in events
+            (a, tid)
+            for a, tid in events
             if a in {"client.close", "sock.close"} and tid != owner_tid
         ]
         assert not stranger_closes, f"stranger-thread FD release: {stranger_closes}"
@@ -146,8 +156,13 @@ class TestCodexAuxiliaryTimeoutFdOwnership:
 
             def __init__(self):
                 network_stream = SimpleNamespace(
-                    get_extra_info=lambda name: stream_sock if name == "socket" else None)
-                self.response = SimpleNamespace(extensions={"network_stream": network_stream})
+                    get_extra_info=lambda name: (
+                        stream_sock if name == "socket" else None
+                    )
+                )
+                self.response = SimpleNamespace(
+                    extensions={"network_stream": network_stream}
+                )
 
             def __iter__(self):
                 assert woken.wait(10), "watchdog did not wake the stalled stream"
@@ -167,7 +182,9 @@ class TestCodexAuxiliaryTimeoutFdOwnership:
             return SimpleNamespace(output=[], usage=None)
 
         with (
-            patch("agent.auxiliary_client._AUX_STREAM_NO_PROGRESS_TIMEOUT_SECONDS", 0.3),
+            patch(
+                "agent.auxiliary_client._AUX_STREAM_NO_PROGRESS_TIMEOUT_SECONDS", 0.3
+            ),
             patch("agent.auxiliary_client._evict_cached_client_instance"),
             patch("agent.codex_runtime._consume_codex_event_stream", _consume),
             pytest.raises(TimeoutError),
@@ -178,7 +195,9 @@ class TestCodexAuxiliaryTimeoutFdOwnership:
             )
 
         stranger = [(a, tid) for a, tid in events if tid != owner_tid]
-        assert stranger and all(a == "stream.sock.shutdown" for a, _ in stranger), f"stranger-thread FD release: {stranger}"
+        assert stranger and all(a == "stream.sock.shutdown" for a, _ in stranger), (
+            f"stranger-thread FD release: {stranger}"
+        )
         # The owner released the stream (and with it the socket) on unwind.
         assert ("stream.close", owner_tid) in events, events
         assert ("client.close", owner_tid) in client_events, client_events
@@ -214,7 +233,9 @@ class TestCodexAuxiliaryTimeoutFdOwnership:
                 pass
 
         with (
-            patch("agent.auxiliary_client._AUX_STREAM_NO_PROGRESS_TIMEOUT_SECONDS", 0.3),
+            patch(
+                "agent.auxiliary_client._AUX_STREAM_NO_PROGRESS_TIMEOUT_SECONDS", 0.3
+            ),
             patch("agent.auxiliary_client._evict_cached_client_instance"),
             patch("agent.auxiliary_client.threading.Timer", _NeverTimer),
             patch("agent.codex_runtime._consume_codex_event_stream", _consume),

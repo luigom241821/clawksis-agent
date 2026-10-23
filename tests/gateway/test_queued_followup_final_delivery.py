@@ -14,7 +14,11 @@ from gateway.config import Platform
 from gateway.platforms.base import SendResult
 from gateway.platforms.event import MessageEvent, MessageType, SessionSource
 from gateway.run import GatewayRunner
-from tests.gateway.test_run_progress_topics import ProgressCaptureAdapter, _make_runner, _run_with_agent
+from tests.gateway.test_run_progress_topics import (
+    ProgressCaptureAdapter,
+    _make_runner,
+    _run_with_agent,
+)
 
 _SESSION_KEY = "agent:main:telegram:group:-1001:17585"
 
@@ -26,8 +30,16 @@ class _DocCaptureAdapter(ProgressCaptureAdapter):
         super().__init__(platform=platform)
         self.documents = []
 
-    async def send_document(self, chat_id, file_path, caption=None, file_name=None,
-                            reply_to=None, metadata=None, **kwargs) -> SendResult:
+    async def send_document(
+        self,
+        chat_id,
+        file_path,
+        caption=None,
+        file_name=None,
+        reply_to=None,
+        metadata=None,
+        **kwargs,
+    ) -> SendResult:
         self.documents.append(file_path)
         return SendResult(success=True, message_id="doc-1")
 
@@ -45,7 +57,9 @@ def _agent_returning(text):
         def __init__(self, **kwargs):
             self.tools = []
 
-        def run_conversation(self, message, conversation_history=None, task_id=None, **kwargs):
+        def run_conversation(
+            self, message, conversation_history=None, task_id=None, **kwargs
+        ):
             return {"final_response": text, "messages": [], "api_calls": 1}
 
     return _Agent
@@ -59,12 +73,17 @@ async def _run_with_refused_followup(monkeypatch, tmp_path, agent_cls, adapter_c
     """First turn answers, the queued follow-up's text is refused: the lane hands back the FIRST
     turn's result, which is the object the completion send then acts on."""
     monkeypatch.setattr(
-        GatewayRunner, "_expand_inbound_context_references",
+        GatewayRunner,
+        "_expand_inbound_context_references",
         lambda self, source, session_key, message_text: _none(),
     )
     return await _run_with_agent(
-        monkeypatch, tmp_path, agent_cls, session_id="sess-refused-followup",
-        pending_text="@file:/etc/shadow please", adapter_cls=adapter_cls,
+        monkeypatch,
+        tmp_path,
+        agent_cls,
+        session_id="sess-refused-followup",
+        pending_text="@file:/etc/shadow please",
+        adapter_cls=adapter_cls,
     )
 
 
@@ -73,15 +92,29 @@ async def _completion_seam(adapter, agent_result, response):
     caller sends the body again. Returns the text the caller would send (None = suppressed)."""
     runner = _make_runner(adapter)
     source = SessionSource(
-        platform=adapter.platform, chat_id="-1001", chat_type="group", thread_id="17585",
+        platform=adapter.platform,
+        chat_id="-1001",
+        chat_type="group",
+        thread_id="17585",
     )
-    event = MessageEvent(text="hi", message_type=MessageType.TEXT, source=source, message_id="1")
+    event = MessageEvent(
+        text="hi", message_type=MessageType.TEXT, source=source, message_id="1"
+    )
 
     class _Entry:
         session_id = "s1"
 
     return await runner._hmwa_deliver_turn_response(
-        event, source, _Entry(), _SESSION_KEY, None, agent_result, [], response, None, False,
+        event,
+        source,
+        _Entry(),
+        _SESSION_KEY,
+        None,
+        agent_result,
+        [],
+        response,
+        None,
+        False,
     )
 
 
@@ -93,7 +126,10 @@ async def test_queued_lane_delivers_text_and_media_exactly_once(monkeypatch, tmp
     doc.write_text("x", encoding="utf-8")
     final = f"answer 1\n\nMEDIA: {doc}"
     adapter, result = await _run_with_refused_followup(
-        monkeypatch, tmp_path, _agent_returning(final), _DocCaptureAdapter,
+        monkeypatch,
+        tmp_path,
+        _agent_returning(final),
+        _DocCaptureAdapter,
     )
 
     assert [c["content"] for c in adapter.sent] == ["answer 1"]
@@ -106,14 +142,19 @@ async def test_queued_lane_delivers_text_and_media_exactly_once(monkeypatch, tmp
 
 
 @pytest.mark.asyncio
-async def test_refused_queued_send_leaves_the_completion_send_as_the_fallback(monkeypatch, tmp_path):
+async def test_refused_queued_send_leaves_the_completion_send_as_the_fallback(
+    monkeypatch, tmp_path
+):
     """A refused queued send (``SendResult.success`` False) must NOT mark the turn delivered: the
     completion seam is the only remaining send, and suppressing it loses the answer entirely."""
     doc = tmp_path / "report.pdf"
     doc.write_text("x", encoding="utf-8")
     final = f"answer 1\n\nMEDIA: {doc}"
     adapter, result = await _run_with_refused_followup(
-        monkeypatch, tmp_path, _agent_returning(final), _RefusingDocCaptureAdapter,
+        monkeypatch,
+        tmp_path,
+        _agent_returning(final),
+        _RefusingDocCaptureAdapter,
     )
 
     # Attempted (and retried) but never accepted by the platform.

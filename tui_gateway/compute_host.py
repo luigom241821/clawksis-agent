@@ -54,23 +54,35 @@ _FLUSH_RESERVE_SECS = 1.0
 
 # Fallback control.error text when a routed server method returns an error without a message.
 _CONTROL_FAILURES = {
-    "session.save": "session save failed", "session.compress": "session compression failed"}
+    "session.save": "session save failed",
+    "session.compress": "session compression failed",
+}
 
 
 class ComputeHost:
     # frame ``type`` -> handler method name (resolved per call so monkeypatches take effect).
     _FRAME_HANDLERS: dict[str, str] = {
-        "turn.start": "_handle_turn_start", "interrupt": "_handle_interrupt",
-        "respond": "_handle_respond", "reload_mcp": "_handle_reload_mcp",
-        "control": "_handle_control", "shutdown": "_handle_shutdown"}
+        "turn.start": "_handle_turn_start",
+        "interrupt": "_handle_interrupt",
+        "respond": "_handle_respond",
+        "reload_mcp": "_handle_reload_mcp",
+        "control": "_handle_control",
+        "shutdown": "_handle_shutdown",
+    }
 
     def __init__(
-        self, *, stdout: Any = None, max_workers: int | None = None,
-        heartbeat_secs: float | None = None) -> None:
+        self,
+        *,
+        stdout: Any = None,
+        max_workers: int | None = None,
+        heartbeat_secs: float | None = None,
+    ) -> None:
         self._stdout = stdout or sys.stdout
         self._write_lock = threading.Lock()
         self._executor = concurrent.futures.ThreadPoolExecutor(
-            max_workers=max_workers or _default_workers(), thread_name_prefix="compute-host-turn")
+            max_workers=max_workers or _default_workers(),
+            thread_name_prefix="compute-host-turn",
+        )
         self._closed = threading.Event()
         self._parent_pid = os.getppid()
         self._boot_id = uuid.uuid4().hex
@@ -81,12 +93,15 @@ class ComputeHost:
         self._turn_futures_lock = threading.Lock()
         self._transport = _HostTransport(self.emit)
         self._heartbeat_secs = (
-            float(heartbeat_secs) if heartbeat_secs is not None
-            else float(os.environ.get("CLAWK_COMPUTE_HOST_HEARTBEAT_SECS") or "15"))
+            float(heartbeat_secs)
+            if heartbeat_secs is not None
+            else float(os.environ.get("CLAWK_COMPUTE_HOST_HEARTBEAT_SECS") or "15")
+        )
         if self._heartbeat_secs > 0:
             for target, name in (
                 (self._heartbeat_loop, "compute-host-heartbeat"),
-                (self._parent_guard_loop, "compute-host-ppid-guard")):
+                (self._parent_guard_loop, "compute-host-ppid-guard"),
+            ):
                 threading.Thread(target=target, name=name, daemon=True).start()
 
     def emit(self, frame: dict[str, Any]) -> None:
@@ -106,6 +121,7 @@ class ComputeHost:
         # running in its own process group would outlive the host.
         with contextlib.suppress(Exception):
             from tools.environments.base import kill_live_foreground_processes
+
             kill_live_foreground_processes()
 
     def shutdown(self, *, reason: str = "shutdown", wait: float = 10.0) -> None:
@@ -127,12 +143,15 @@ class ComputeHost:
             # Bounded by ``remaining``: a flat sleep would eat the reserve it protects.
             time.sleep(min(0.05, remaining))
         with self._turn_futures_lock:
-            live_sids = {sid for f, sid in self._turn_futures.items() if sid and not f.done()}
+            live_sids = {
+                sid for f, sid in self._turn_futures.items() if sid and not f.done()
+            }
         self.flush_all_sessions(reason=reason, skip_sids=live_sids)
         self.close()
 
     def flush_all_sessions(
-        self, *, reason: str = "shutdown", skip_sids: Collection[str] | None = None) -> None:
+        self, *, reason: str = "shutdown", skip_sids: Collection[str] | None = None
+    ) -> None:
         """Finalize every server session except ``skip_sids`` (turn still live)."""
         try:
             from tui_gateway import server
@@ -149,9 +168,13 @@ class ComputeHost:
         kind = str(frame.get("type") or "")
         handler = self._FRAME_HANDLERS.get(kind)
         if handler is None:
-            self.emit({
-                "type": "error", "request_id": frame.get("request_id"),
-                "message": f"unknown frame type: {kind}"})
+            self.emit(
+                {
+                    "type": "error",
+                    "request_id": frame.get("request_id"),
+                    "message": f"unknown frame type: {kind}",
+                }
+            )
         else:
             getattr(self, handler)(frame)
 
@@ -175,13 +198,20 @@ class ComputeHost:
         self._track_turn_future(future, str(frame.get("sid") or ""))
 
     def _guarded(
-        self, frame: dict[str, Any], error_kind: str, body: Callable, *,
-        on_error: Callable[[str], None] | None = None, **error_extra: Any) -> None:
+        self,
+        frame: dict[str, Any],
+        error_kind: str,
+        body: Callable,
+        *,
+        on_error: Callable[[str], None] | None = None,
+        **error_extra: Any,
+    ) -> None:
         """Run ``body(server, sid, request_id)``; any exception becomes an ``error_kind`` reply."""
         sid = str(frame.get("sid") or "")
         request_id = frame.get("request_id")
         try:
             from tui_gateway import server
+
             body(server, sid, request_id)
         except Exception as exc:
             if on_error is not None:
@@ -197,7 +227,10 @@ class ComputeHost:
             # In the child the shared helper interrupts the local agent and releases this
             # process's pending clarify Event (the parent only has a metadata mirror).
             server._interrupt_session_turn(sid, session)
-            self._reply("interrupt.ack", sid, request_id, applied=True, applied_ns=now_ns())
+            self._reply(
+                "interrupt.ack", sid, request_id, applied=True, applied_ns=now_ns()
+            )
+
         self._guarded(frame, "interrupt.ack", body, applied=False)
 
     def _handle_respond(self, frame: dict[str, Any]) -> None:
@@ -205,24 +238,48 @@ class ComputeHost:
         frame relayed by the parent; ``params.lock`` is one batch-clarify lock (answered with ``clarify.lock``'s
         result so the parent can ack the client); ``params.cancel`` withdraws this session's open requests of
         one ``method`` (the parent's own cancel never reaches a wait owned here)."""
+
         def body(server: Any, sid: str, request_id: Any) -> None:
             params = frame.get("params")
-            error = ("session not found" if sid not in server._sessions
-                     else None if isinstance(params, dict) else "response params must be an object")
+            error = (
+                "session not found"
+                if sid not in server._sessions
+                else None
+                if isinstance(params, dict)
+                else "response params must be an object"
+            )
             if error:
                 self._reply("respond.error", sid, request_id, message=error)
                 return
             from tui_gateway import server_requests
+
             if isinstance(params.get("lock"), dict):
                 response = server._methods["clarify.lock"](request_id, params["lock"])
             elif isinstance(cancel := params.get("cancel"), dict):
-                withdrawn = server_requests.cancel(sid, str(cancel.get("reason") or "resolved"), method=str(cancel["method"]))
-                response = {"jsonrpc": "2.0", "id": request_id, "result": {"cancelled": withdrawn}}
+                withdrawn = server_requests.cancel(
+                    sid,
+                    str(cancel.get("reason") or "resolved"),
+                    method=str(cancel["method"]),
+                )
+                response = {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "result": {"cancelled": withdrawn},
+                }
             else:
-                response_frame = params.get("frame") if isinstance(params.get("frame"), dict) else params
+                response_frame = (
+                    params.get("frame")
+                    if isinstance(params.get("frame"), dict)
+                    else params
+                )
                 resolved = server_requests.resolve_response(response_frame)
-                response = {"jsonrpc": "2.0", "id": request_id, "result": {"status": "ok" if resolved else "expired"}}
+                response = {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "result": {"status": "ok" if resolved else "expired"},
+                }
             self._reply("respond.ack", sid, request_id, response=response)
+
         self._guarded(frame, "respond.error", body)
 
     def _run_real_turn(self, frame: dict[str, Any]) -> None:
@@ -233,6 +290,7 @@ class ComputeHost:
             return
         try:
             from tui_gateway import server
+
             session = self._ensure_server_session(server, frame)
             # #101416: the parent already holds this session's active-session lease (claimed in
             # prompt.submit before routing here). Install the inert borrow BEFORE the turn runs, or
@@ -246,12 +304,16 @@ class ComputeHost:
                 queued_gen = frame.get("queued_prompt_generation")
                 current_gen = int(session.get("_queued_prompt_generation", 0))
                 if queued_gen is not None and current_gen != int(queued_gen):
-                    self._reply("turn.end", sid, request_id, interrupted=True, ended_ns=now_ns())
+                    self._reply(
+                        "turn.end", sid, request_id, interrupted=True, ended_ns=now_ns()
+                    )
                     return
                 if session.get("running"):
                     self._reply("turn.error", sid, request_id, message="session busy")
                     return
-                session.update(running=True, _turn_cancel_requested=False, last_active=time.time())
+                session.update(
+                    running=True, _turn_cancel_requested=False, last_active=time.time()
+                )
                 server._start_inflight_turn(session, inflight)
                 turn_started_at = time.time()
             self._reply("turn.started", sid, request_id, started_ns=now_ns())
@@ -263,22 +325,35 @@ class ComputeHost:
                 # row still marked ended_at. Same best-effort shape as the row binding above.
                 with server._session_db(session) as db:
                     if db is not None:
-                        server._reopen_if_finalized(db, str(session.get("session_key") or ""))
+                        server._reopen_if_finalized(
+                            db, str(session.get("session_key") or "")
+                        )
             with contextlib.suppress(Exception):
                 import clawk_undo
+
                 clawk_undo.on_user_message_appended(session["session_key"])
             with contextlib.suppress(Exception):
                 server._persist_branch_seed(session)
             server._run_prompt_submit(
-                request_id, sid, session, text, display_kind=frame.get("display_kind") or None,
-                display_metadata=(frame.get("display_metadata")
-                                  if isinstance(frame.get("display_metadata"), dict) else None))
+                request_id,
+                sid,
+                session,
+                text,
+                display_kind=frame.get("display_kind") or None,
+                display_metadata=(
+                    frame.get("display_metadata")
+                    if isinstance(frame.get("display_metadata"), dict)
+                    else None
+                ),
+            )
             run_thread = session.get("_run_thread")
             if run_thread is not None and hasattr(run_thread, "join"):
                 while run_thread.is_alive():
                     run_thread.join(timeout=1.0)
                     if run_thread.is_alive() and frame.get("turn_id"):
-                        self._emit_turn_activity(sid, session, frame["turn_id"], turn_started_at)
+                        self._emit_turn_activity(
+                            sid, session, frame["turn_id"], turn_started_at
+                        )
             with session["history_lock"]:
                 meta = _history_meta(session)
                 interrupted = bool(session.get("_turn_cancel_requested"))
@@ -286,19 +361,31 @@ class ComputeHost:
             with self._progress_lock:
                 self._progress_counter += 1
             self._reply(
-                "turn.end", sid, request_id, **meta, interrupted=interrupted, ended_ns=now_ns(),
-                session_info=session_info, session_info_emitted=True)
+                "turn.end",
+                sid,
+                request_id,
+                **meta,
+                interrupted=interrupted,
+                ended_ns=now_ns(),
+                session_info=session_info,
+                session_info_emitted=True,
+            )
         except Exception as exc:
             with contextlib.suppress(Exception):
                 from tui_gateway import server
+
                 session = server._sessions.get(sid)
                 if session is not None:
                     with session.get("history_lock", threading.Lock()):
                         session["running"] = False
                         server._clear_inflight_turn(session)
-            self._reply("turn.error", sid, request_id, reason="exception", message=str(exc))
+            self._reply(
+                "turn.error", sid, request_id, reason="exception", message=str(exc)
+            )
 
-    def _emit_turn_activity(self, sid: str, session: dict, turn_id: str, started_at: float) -> None:
+    def _emit_turn_activity(
+        self, sid: str, session: dict, turn_id: str, started_at: float
+    ) -> None:
         # Observe the agent clock, never the host heartbeat. A reused agent's last
         # turn must not lend its activity to a new turn that has not made progress.
         activity_ns = None
@@ -306,14 +393,30 @@ class ComputeHost:
             summary = session["agent"].get_activity_summary()
             stamped_at = summary.get("last_activity_at")
             elapsed = summary.get("seconds_since_activity")
-            if stamped_at is not None and stamped_at >= started_at and elapsed is not None and elapsed >= 0:
+            if (
+                stamped_at is not None
+                and stamped_at >= started_at
+                and elapsed is not None
+                and elapsed >= 0
+            ):
                 activity_ns = now_ns() - int(elapsed * 1_000_000_000)
         except Exception:
-            logging.getLogger(__name__).debug("compute host activity unavailable sid=%s", sid, exc_info=True)
+            logging.getLogger(__name__).debug(
+                "compute host activity unavailable sid=%s", sid, exc_info=True
+            )
         # perf_counter is shared across local processes; queued frames and cached
         # samples age without requiring synchronized wall clocks in the parent.
-        self._transport.write({"jsonrpc": "2.0", "method": "compute_host.activity", "params": {
-            "session_id": sid, "turn_id": turn_id, "activity_ns": activity_ns}})
+        self._transport.write(
+            {
+                "jsonrpc": "2.0",
+                "method": "compute_host.activity",
+                "params": {
+                    "session_id": sid,
+                    "turn_id": turn_id,
+                    "activity_ns": activity_ns,
+                },
+            }
+        )
 
     def _ensure_server_session(self, server: Any, frame: dict[str, Any]) -> dict:
         sid = str(frame.get("sid") or "")
@@ -338,7 +441,9 @@ class ComputeHost:
             session["pending_model_switch"] = dict(frame["pending_model_switch"])
         return session
 
-    def _build_server_session(self, server: Any, frame: dict[str, Any], sid: str) -> dict:
+    def _build_server_session(
+        self, server: Any, frame: dict[str, Any], sid: str
+    ) -> dict:
         """Build the agent under the frame's profile scope and register the session."""
         key = str(frame.get("session_key") or sid)
         history = frame.get("history") if isinstance(frame.get("history"), list) else []
@@ -348,9 +453,13 @@ class ComputeHost:
         try:
             if profile_home:
                 from clawk_constants import set_clawk_home_override
-                from agent.secret_scope import build_profile_secret_scope, set_secret_scope
+                from agent.secret_scope import (
+                    build_profile_secret_scope,
+                    set_secret_scope,
+                )
                 from clawk_cli.env_loader import hydrate_profile_secret_sources
                 from clawk_state_registry import acquire
+
                 home_token = set_clawk_home_override(profile_home)
                 # External sources first (1Password / Bitwarden / secrets.command): this isolated
                 # turn process never ran the launch dotenv path for the routed profile, so without
@@ -359,59 +468,88 @@ class ComputeHost:
                 # and tui_gateway/model_switch.py::_profile_runtime_scope_tokens (#119521).
                 hydrate_profile_secret_sources(Path(profile_home))
                 secret_token = set_secret_scope(
-                    build_profile_secret_scope(Path(profile_home)), profile_home=profile_home)
+                    build_profile_secret_scope(Path(profile_home)),
+                    profile_home=profile_home,
+                )
                 # DEDICATED handle — ours only until _make_agent succeeds, then the agent owns
                 # it. A RAISING _make_agent is the one path where nothing takes it (``owns_db``).
                 session_db = acquire(Path(profile_home) / "state.db")
                 owns_db = True
             agent = server._make_agent(
-                sid, key, session_id=key, model_override=frame.get("model_override"),
+                sid,
+                key,
+                session_id=key,
+                model_override=frame.get("model_override"),
                 reasoning_config_override=frame.get("reasoning_config_override"),
                 service_tier_override=frame.get("service_tier_override"),
                 platform_override=frame.get("source"),
                 cwd_override=str(frame.get("cwd") or "") or None,
                 context_cwd_is_launch_artifact=bool(
-                    frame.get("context_cwd_is_launch_artifact", False)),
-                session_db=session_db, auth_user_id=frame.get("auth_user_id"))
+                    frame.get("context_cwd_is_launch_artifact", False)
+                ),
+                session_db=session_db,
+                auth_user_id=frame.get("auth_user_id"),
+            )
             if server._transfer_db_to_agent(agent, session_db):
                 owns_db = False
         finally:
             if owns_db and session_db is not None:
                 with contextlib.suppress(Exception):
                     from clawk_state_registry import release_or_close
+
                     release_or_close(session_db)
             if home_token is not None:
                 with contextlib.suppress(Exception):
                     from clawk_constants import reset_clawk_home_override
                     from agent.secret_scope import reset_secret_scope
+
                     reset_clawk_home_override(home_token)
                     reset_secret_scope(secret_token)
         try:
             from tui_gateway.transport import bind_transport, reset_transport
+
             token = bind_transport(self._transport)
             try:
                 server._init_session(
-                    sid, key, agent, list(history), cols=int(frame.get("cols") or 80),
-                    cwd=str(frame.get("cwd") or "") or None, session_db=session_db,
-                    source=frame.get("source"), explicit_cwd=bool(frame.get("explicit_cwd")))
+                    sid,
+                    key,
+                    agent,
+                    list(history),
+                    cols=int(frame.get("cols") or 80),
+                    cwd=str(frame.get("cwd") or "") or None,
+                    session_db=session_db,
+                    source=frame.get("source"),
+                    explicit_cwd=bool(frame.get("explicit_cwd")),
+                )
             finally:
                 reset_transport(token)
         except Exception:
             # _init_session's side machinery (slash worker, approval notify) unavailable: keep a
             # minimal host-owned session rather than failing after the expensive agent build.
             server._sessions[sid] = {
-                "agent": agent, "session_key": key, "history": list(history),
+                "agent": agent,
+                "session_key": key,
+                "history": list(history),
                 "history_lock": threading.Lock(),
-                "history_version": int(frame.get("history_version") or 0), "inflight_turn": None,
-                "created_at": time.time(), "last_active": time.time(), "running": False,
-                "attached_images": [], "image_counter": 0,
-                "cwd": str(frame.get("cwd") or os.getcwd()), "cols": int(frame.get("cols") or 80),
+                "history_version": int(frame.get("history_version") or 0),
+                "inflight_turn": None,
+                "created_at": time.time(),
+                "last_active": time.time(),
+                "running": False,
+                "attached_images": [],
+                "image_counter": 0,
+                "cwd": str(frame.get("cwd") or os.getcwd()),
+                "cols": int(frame.get("cols") or 80),
                 "explicit_cwd": bool(frame.get("explicit_cwd")),
-                "slash_worker": None, "show_reasoning": server._load_show_reasoning(),
-                "tool_progress_mode": server._load_tool_progress_mode(), "edit_snapshots": {},
-                "tool_started_at": {}, "model_override": frame.get("model_override"),
+                "slash_worker": None,
+                "show_reasoning": server._load_show_reasoning(),
+                "tool_progress_mode": server._load_tool_progress_mode(),
+                "edit_snapshots": {},
+                "tool_started_at": {},
+                "model_override": frame.get("model_override"),
                 "source": server._resolve_session_source(frame.get("source")),
-                "transport": self._transport}
+                "transport": self._transport,
+            }
         session = server._sessions[sid]
         session["transport"] = self._transport
         # The host pipe names no login; the record carries the one the gateway stamped at creation.
@@ -427,10 +565,15 @@ class ComputeHost:
 
     def _handle_reload_mcp(self, frame: dict[str, Any]) -> None:
         def body(server: Any, sid: str, request_id: Any) -> None:
-            resp = server.handle_request({
-                "id": request_id, "method": "reload.mcp",
-                "params": {"session_id": sid, "confirm": True}})
+            resp = server.handle_request(
+                {
+                    "id": request_id,
+                    "method": "reload.mcp",
+                    "params": {"session_id": sid, "confirm": True},
+                }
+            )
             self._reply("reload_mcp.ack", sid, request_id, response=resp)
+
         self._guarded(frame, "control.error", body)
 
     def _handle_control(self, frame: dict[str, Any]) -> None:
@@ -439,10 +582,15 @@ class ComputeHost:
         def body(server: Any, sid: str, request_id: Any) -> None:
             route = MUTATOR_ROUTE_TABLE.get(route_name)
             session = server._sessions.get(sid)
-            error = (f"unclassified route: {route_name}" if route is None
-                     else "session not found" if session is None
-                     else "session busy" if route == "idle-gated" and session.get("running")
-                     else None)
+            error = (
+                f"unclassified route: {route_name}"
+                if route is None
+                else "session not found"
+                if session is None
+                else "session busy"
+                if route == "idle-gated" and session.get("running")
+                else None
+            )
             if error:
                 self._reply("control.error", sid, request_id, message=error)
             elif route_name == "reload.mcp":
@@ -450,10 +598,17 @@ class ComputeHost:
             else:
                 ack = self._control_ack(server, frame, session)
                 if "error" in ack:
-                    self._reply("control.error", sid, request_id, message=ack["error"],
-                                **({"code": c} if (c := ack.get("code")) else {}))
+                    self._reply(
+                        "control.error",
+                        sid,
+                        request_id,
+                        message=ack["error"],
+                        **({"code": c} if (c := ack.get("code")) else {}),
+                    )
                 else:
-                    self._reply("control.ack", sid, request_id, route_name=route_name, **ack)
+                    self._reply(
+                        "control.ack", sid, request_id, route_name=route_name, **ack
+                    )
 
         def on_error(sid: str) -> None:
             if route_name in {"session.compress", "slash.compress"}:
@@ -463,10 +618,13 @@ class ComputeHost:
                 with contextlib.suppress(Exception):
                     from tui_gateway import server as _server
                     from agent.conversation_compression import (
-                        finalize_context_engine_compression_notification as _finalize)
+                        finalize_context_engine_compression_notification as _finalize,
+                    )
+
                     _agent = (_server._sessions.get(sid) or {}).get("agent")
                     if _agent is not None:
                         _finalize(_agent, committed=False)
+
         self._guarded(frame, "control.error", body, on_error=on_error)
 
     def _control_ack(self, server: Any, frame: dict[str, Any], session: dict) -> dict:
@@ -483,7 +641,10 @@ class ComputeHost:
             response = server._methods[route_name](frame.get("request_id"), params)
             if "error" in response:
                 failure = _CONTROL_FAILURES[route_name]
-                return {"error": str(response["error"].get("message") or failure), "code": response["error"].get("code")}
+                return {
+                    "error": str(response["error"].get("message") or failure),
+                    "code": response["error"].get("code"),
+                }
             ack = {"result": response.get("result") or {}}
             if route_name == "session.save":
                 return ack
@@ -493,11 +654,21 @@ class ComputeHost:
             if route_name == "slash.refine":
                 parts = command.lstrip("/").split(maxsplit=1)
                 focus = parts[1] if len(parts) > 1 else ""
-                output = server._live_slash_command_output(sid, session, "refine", focus) or ""
+                output = (
+                    server._live_slash_command_output(sid, session, "refine", focus)
+                    or ""
+                )
             else:
-                output = server._mirror_slash_side_effects(sid, session, command) if command else ""
+                output = (
+                    server._mirror_slash_side_effects(sid, session, command)
+                    if command
+                    else ""
+                )
             with session["history_lock"]:
-                messages = server._history_to_messages(list(session.get("history") or []), profile_home=session.get("profile_home"))
+                messages = server._history_to_messages(
+                    list(session.get("history") or []),
+                    profile_home=session.get("profile_home"),
+                )
                 ack = {"output": output, **_history_meta(session), "messages": messages}
         ack["session_info"] = server._session_info(session.get("agent"), session)
         return ack
@@ -511,15 +682,22 @@ class ComputeHost:
             active_turns = len(self._live_turns())
             with self._progress_lock:
                 counter = self._progress_counter
-            self.emit({
-                "type": "hb", "active_turns": active_turns, "progress_counter": counter,
-                "rss_mb": _rss_mb(os.getpid())})
+            self.emit(
+                {
+                    "type": "hb",
+                    "active_turns": active_turns,
+                    "progress_counter": counter,
+                    "rss_mb": _rss_mb(os.getpid()),
+                }
+            )
 
     def _parent_guard_loop(self) -> None:
         while not self._closed.wait(1.0):
             ppid = os.getppid()
             if ppid in {0, 1} or (self._parent_pid and ppid != self._parent_pid):
-                self.emit({"type": "orphan", "old_ppid": self._parent_pid, "ppid": ppid})
+                self.emit(
+                    {"type": "orphan", "old_ppid": self._parent_pid, "ppid": ppid}
+                )
                 self.shutdown(reason="orphan")
                 os._exit(0)
 
@@ -529,14 +707,21 @@ def _history_meta(session: dict) -> dict[str, Any]:
     return {
         "session_key": str(session.get("session_key") or ""),
         "history_version": int(session.get("history_version", 0)),
-        "message_count": len(session.get("history") or [])}
+        "message_count": len(session.get("history") or []),
+    }
 
 
 def _rss_mb(pid: int) -> float:
     try:
         out = subprocess.check_output(
-            ["ps", "-o", "rss=", "-p", str(pid)], text=True, encoding="utf-8", errors="replace",
-            stdin=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2).strip()
+            ["ps", "-o", "rss=", "-p", str(pid)],
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stdin=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=2,
+        ).strip()
         return int(out.splitlines()[-1].strip()) / 1024.0 if out else 0.0
     except Exception:
         return 0.0
@@ -559,6 +744,7 @@ def run_host(stdin: Any = None, stdout: Any = None) -> None:
     # from a plugin tool/hook running in the isolated turn) ride the host pipe to the parent
     # gateway, which fans them out to its clients (compute_host_bridge._relay_compute_host_rpc).
     from tui_gateway import server
+
     server.register_live_transport(host._transport)
 
     def _signal_handler(_signum, _frame) -> None:
@@ -567,13 +753,20 @@ def run_host(stdin: Any = None, stdout: Any = None) -> None:
         shutting_down.set()
         host.shutdown(reason="sigterm")
         raise SystemExit(0)
+
     with contextlib.suppress(Exception):
         signal.signal(signal.SIGTERM, _signal_handler)
         signal.signal(signal.SIGINT, _signal_handler)
-    host.emit({
-        "type": "hello", "host_pid": os.getpid(), "boot_id": host._boot_id,
-        "build_sha": _build_sha(), "cwd": os.getcwd(),
-        "clawk_home": os.environ.get("CLAWK_HOME", "")})
+    host.emit(
+        {
+            "type": "hello",
+            "host_pid": os.getpid(),
+            "boot_id": host._boot_id,
+            "build_sha": _build_sha(),
+            "cwd": os.getcwd(),
+            "clawk_home": os.environ.get("CLAWK_HOME", ""),
+        }
+    )
 
     def _reader() -> None:
         for raw in stdin:
@@ -592,7 +785,10 @@ def run_host(stdin: Any = None, stdout: Any = None) -> None:
                 os._exit(0)
             if host._closed.is_set():
                 break
-    reader = threading.Thread(target=_reader, name="compute-host-control-reader", daemon=True)
+
+    reader = threading.Thread(
+        target=_reader, name="compute-host-control-reader", daemon=True
+    )
     reader.start()
     try:
         while not host._closed.wait(0.2):
@@ -604,7 +800,9 @@ def run_host(stdin: Any = None, stdout: Any = None) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    argparse.ArgumentParser(description="Dashboard compute-host process").parse_args(argv)
+    argparse.ArgumentParser(description="Dashboard compute-host process").parse_args(
+        argv
+    )
     run_host()
     return 0
 

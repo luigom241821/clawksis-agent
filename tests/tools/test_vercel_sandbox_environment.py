@@ -75,7 +75,9 @@ class _FakeSandbox:
     def refresh(self) -> None:
         self.refresh_calls += 1
 
-    def wait_for_status(self, status: _FakeSandboxStatus | str, *, timeout, poll_interval) -> None:
+    def wait_for_status(
+        self, status: _FakeSandboxStatus | str, *, timeout, poll_interval
+    ) -> None:
         self.wait_for_status_calls.append((status, timeout, poll_interval))
         if self.wait_for_status_side_effects:
             effect = self.wait_for_status_side_effects.pop(0)
@@ -300,8 +302,12 @@ class TestFileSync:
                 }
             ],
         )
-        monkeypatch.setattr("tools.credential_files.iter_skills_files", lambda **kwargs: [])
-        monkeypatch.setattr("tools.credential_files.iter_cache_files", lambda **kwargs: [])
+        monkeypatch.setattr(
+            "tools.credential_files.iter_skills_files", lambda **kwargs: []
+        )
+        monkeypatch.setattr(
+            "tools.credential_files.iter_cache_files", lambda **kwargs: []
+        )
 
         make_env()
 
@@ -327,8 +333,12 @@ class TestFileSync:
                 }
             ],
         )
-        monkeypatch.setattr("tools.credential_files.iter_skills_files", lambda **kwargs: [])
-        monkeypatch.setattr("tools.credential_files.iter_cache_files", lambda **kwargs: [])
+        monkeypatch.setattr(
+            "tools.credential_files.iter_skills_files", lambda **kwargs: []
+        )
+        monkeypatch.setattr(
+            "tools.credential_files.iter_cache_files", lambda **kwargs: []
+        )
 
         env = make_env()
         src.write_text("updated-secret-token")
@@ -385,9 +395,14 @@ class TestFileSync:
         env.cleanup()
 
         # The remote tar must skip live sockets (gateway.sock) instead of failing the download.
-        tar_scripts = [args[1] for cmd, args, _ in sandbox.run_command_calls
-                       if cmd == "bash" and args and args[1].startswith("tar cf ")]
-        assert tar_scripts and all("--exclude='*.sock'" in script for script in tar_scripts)
+        tar_scripts = [
+            args[1]
+            for cmd, args, _ in sandbox.run_command_calls
+            if cmd == "bash" and args and args[1].startswith("tar cf ")
+        ]
+        assert tar_scripts and all(
+            "--exclude='*.sock'" in script for script in tar_scripts
+        )
 
         # Credential mounts are upload-only since bcfc7458fa ("fix remote
         # sync-back credential overwrite"): the sandbox must never rewrite a
@@ -398,7 +413,9 @@ class TestFileSync:
         assert not (tmp_path / "new.txt").exists()
         assert not (tmp_path / "skip.txt").exists()
         assert len(sandbox.snapshot_calls) == 1
-        assert len(sandbox.stop_calls) == 1  # always stop after snapshot to avoid resource leaks
+        assert (
+            len(sandbox.stop_calls) == 1
+        )  # always stop after snapshot to avoid resource leaks
         assert sandbox.closed == 1
         assert vercel_module._load_snapshots() == {"task-123": "snap_cleanup"}
 
@@ -436,7 +453,9 @@ class TestFileSync:
                 _FakeRunResult(""),
             ]
         )
-        monkeypatch.setattr("tools.environments.file_sync.time.sleep", lambda _delay: None)
+        monkeypatch.setattr(
+            "tools.environments.file_sync.time.sleep", lambda _delay: None
+        )
 
         env.cleanup()
 
@@ -447,14 +466,11 @@ class TestFileSync:
 
 
 class TestExecute:
-
     @pytest.mark.parametrize(
         ("make_unhealthy", "label"),
         [
             (
-                lambda sandbox: setattr(
-                    sandbox, "status", _FakeSandboxStatus.STOPPED
-                ),
+                lambda sandbox: setattr(sandbox, "status", _FakeSandboxStatus.STOPPED),
                 "terminal state",
             ),
             (
@@ -491,9 +507,7 @@ class TestExecute:
         assert original.closed == 1
         assert vercel_sdk.current is replacement
 
-    def test_run_bash_handle_uses_captured_sandbox_for_exec_and_cancel(
-        self, make_env
-    ):
+    def test_run_bash_handle_uses_captured_sandbox_for_exec_and_cancel(self, make_env):
         env = make_env()
         original = env._sandbox
         assert original is not None
@@ -523,14 +537,15 @@ class TestExecute:
         assert args == ["-c", "echo done"]
         assert kwargs["cwd"] == "/vercel/sandbox"
 
-
     def test_payload_stdin_is_staged_byte_exact_not_in_argv(self, make_env):
         env = make_env()
         sandbox = env._sandbox
         raw = (b"A" * (160 * 1024)) + b"\x00\xff\xfeTAIL"
         writes_before = len(sandbox.write_files_calls)
 
-        handle = env._run_bash("cat > /tmp/out", stdin_data=raw.decode("utf-8", "surrogateescape"))
+        handle = env._run_bash(
+            "cat > /tmp/out", stdin_data=raw.decode("utf-8", "surrogateescape")
+        )
 
         assert handle.wait(timeout=2) == 0
         (staged,) = sandbox.write_files_calls[writes_before]
@@ -569,9 +584,7 @@ class TestSnapshotPersistence:
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
         vercel_module._store_snapshot("task-123", "snap_stale")
         fresh = _FakeSandbox(cwd="/fresh")
-        vercel_sdk.create_side_effects.extend(
-            [RuntimeError("snapshot missing"), fresh]
-        )
+        vercel_sdk.create_side_effects.extend([RuntimeError("snapshot missing"), fresh])
 
         env = make_env()
 
@@ -660,7 +673,10 @@ class TestImageSelection:
         make_env(runtime="node22", image="vercel/sandbox/python:3.14")
         fresh, custom, pinned = vercel_sdk.create_kwargs[-3:]
         assert (fresh["image"], fresh["runtime"]) == (DEFAULT_VERCEL_IMAGE, None)
-        assert (custom["image"], custom["runtime"]) == ("vercel/sandbox/python:3.14", None)
+        assert (custom["image"], custom["runtime"]) == (
+            "vercel/sandbox/python:3.14",
+            None,
+        )
         assert (pinned["image"], pinned["runtime"]) == (None, "node22")
 
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))

@@ -166,7 +166,9 @@ def _build_fake_upstream(captured: dict[str, Any]) -> web.Application:
         captured["requests"].append(
             {"path": request.path, "auth": request.headers.get("Authorization")}
         )
-        return web.json_response({"echoed": True, "body": body.decode("utf-8") if body else ""})
+        return web.json_response(
+            {"echoed": True, "body": body.decode("utf-8") if body else ""}
+        )
 
     app = web.Application()
     app.router.add_route("*", "/v1/chat/completions", echo)
@@ -215,10 +217,13 @@ def test_get_credential_runs_off_the_event_loop():
     On the unfixed handler ``adapter.get_credential()`` is called inline, so the
     recorded thread is the loop's own and this assertion fails.
     """
+
     async def run():
         loop_thread = threading.get_ident()
         captured: dict[str, Any] = {"requests": []}
-        upstream_runner, upstream_base = await _start_runner(_build_fake_upstream(captured))
+        upstream_runner, upstream_base = await _start_runner(
+            _build_fake_upstream(captured)
+        )
         adapter = _RecordingAdapter(f"{upstream_base}/v1")
         proxy_runner, proxy_base = await _start_runner(create_app(adapter))
         try:
@@ -229,7 +234,9 @@ def test_get_credential_runs_off_the_event_loop():
                     assert resp.status == 200
                     await resp.read()
 
-            assert adapter.credential_thread is not None, "get_credential was never called"
+            assert adapter.credential_thread is not None, (
+                "get_credential was never called"
+            )
             assert adapter.credential_thread != loop_thread, (
                 "get_credential ran on the event-loop thread "
                 f"({adapter.credential_thread}); it blocks on a cross-process "
@@ -251,11 +258,14 @@ def test_event_loop_keeps_running_while_credentials_resolve():
     on entry and exit — not from an HTTP client, whose clock cannot advance
     while the loop is blocked and which would therefore report a false pass.
     """
+
     async def run():
         ticks = [0]
         running = [True]
         captured: dict[str, Any] = {"requests": []}
-        upstream_runner, upstream_base = await _start_runner(_build_fake_upstream(captured))
+        upstream_runner, upstream_base = await _start_runner(
+            _build_fake_upstream(captured)
+        )
         adapter = _RecordingAdapter(
             f"{upstream_base}/v1", stall=_STALL_SECONDS, ticks=ticks
         )
@@ -291,9 +301,12 @@ def test_credential_failure_still_maps_to_401():
     ``upstream_auth_failed`` 401. This one is deliberately *not* in the
     red-before set — it guards the behaviour the fix must leave alone.
     """
+
     async def run():
         captured: dict[str, Any] = {"requests": []}
-        upstream_runner, upstream_base = await _start_runner(_build_fake_upstream(captured))
+        upstream_runner, upstream_base = await _start_runner(
+            _build_fake_upstream(captured)
+        )
         adapter = _RecordingAdapter(f"{upstream_base}/v1", raise_on_credential=True)
         proxy_runner, proxy_base = await _start_runner(create_app(adapter))
         try:
@@ -334,6 +347,7 @@ def test_get_retry_credential_runs_off_the_event_loop():
     Called inline, that whole rotation runs on the loop thread and this
     assertion fails.
     """
+
     async def run():
         loop_thread = threading.get_ident()
         captured: dict[str, Any] = {"requests": []}
@@ -354,7 +368,9 @@ def test_get_retry_credential_runs_off_the_event_loop():
                     assert resp.status == 200
                     await resp.read()
 
-            assert adapter.retry_thread is not None, "get_retry_credential was never called"
+            assert adapter.retry_thread is not None, (
+                "get_retry_credential was never called"
+            )
             assert adapter.retry_thread != loop_thread, (
                 "get_retry_credential ran on the event-loop thread "
                 f"({adapter.retry_thread}); it force-refreshes the upstream token "
@@ -380,6 +396,7 @@ def test_event_loop_keeps_running_while_the_retry_credential_resolves():
     entry and exit. A 429 rotation is precisely when the proxy is busiest, so
     this is the worst moment to freeze every other in-flight completion.
     """
+
     async def run():
         ticks = [0]
         running = [True]
@@ -427,6 +444,7 @@ def test_retry_credential_failure_still_returns_the_upstream_rejection():
     swallows it and streams the upstream's own 401 back. Deliberately *not* in
     the red-before set — it guards behaviour the fix must leave alone.
     """
+
     async def run():
         captured: dict[str, Any] = {"requests": []}
         upstream_runner, upstream_base = await _start_runner(
@@ -467,6 +485,7 @@ def test_is_authenticated_runs_off_the_event_loop():
     a supervisor, systemd unit, container healthcheck or load balancer polls, so
     it is the endpoint least able to afford a lock wait.
     """
+
     async def run():
         loop_thread = threading.get_ident()
         adapter = _RecordingAdapter("http://127.0.0.1:1/v1")
@@ -478,7 +497,9 @@ def test_is_authenticated_runs_off_the_event_loop():
                     payload = await resp.json()
 
             assert payload["authenticated"] is True
-            assert adapter.authenticated_thread is not None, "is_authenticated was never called"
+            assert adapter.authenticated_thread is not None, (
+                "is_authenticated was never called"
+            )
             assert adapter.authenticated_thread != loop_thread, (
                 "is_authenticated ran on the event-loop thread "
                 f"({adapter.authenticated_thread}); it takes the cross-process "
@@ -496,6 +517,7 @@ def test_event_loop_keeps_running_while_health_resolves_auth_state():
     Same loop-side heartbeat measurement as the credential test — a client on
     the blocked loop cannot observe its own starvation.
     """
+
     async def run():
         ticks = [0]
         running = [True]

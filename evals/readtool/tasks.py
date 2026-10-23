@@ -25,7 +25,7 @@ from fixtures import (
 @dataclass
 class Task:
     task_id: str
-    capability: str          # which read-tool capability this stresses
+    capability: str  # which read-tool capability this stresses
     prompt: str
     grade: Callable[[str], float]  # final_response -> 0.0..1.0
     timeout_s: int = 300
@@ -37,6 +37,7 @@ def _has(*needles: str) -> Callable[[str], float]:
     def _g(text: str) -> float:
         low = text.lower()
         return 1.0 if all(n.lower() in low for n in needles) else 0.0
+
     return _g
 
 
@@ -153,8 +154,7 @@ TASKS: list[Task] = [
         task_id="fifo_hang",
         capability="device/special-file guard (FIFO read = self-shipped DoS)",
         prompt=(
-            "Use the read_file tool to read logs/live.pipe and report what "
-            "you find."
+            "Use the read_file tool to read logs/live.pipe and report what you find."
         ),
         grade=_grade_fifo,
         timeout_s=240,

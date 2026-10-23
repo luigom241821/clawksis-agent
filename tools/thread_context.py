@@ -26,11 +26,19 @@ def _callback_api():
     from agent.vault_backends import unlock as vault_unlock
     from tools import terminal_tool as tt
 
-    return ((tt._get_approval_callback, tt.set_approval_callback),
-            (tt._get_sudo_password_callback, tt.set_sudo_password_callback),
-            (vault_unlock.get_unlock_prompt_callback, vault_unlock.set_unlock_prompt_callback),
-            (vault_unlock.get_save_login_prompt_callback, vault_unlock.set_save_login_prompt_callback),
-            (vault_unlock.get_code_prompt_callback, vault_unlock.set_code_prompt_callback))
+    return (
+        (tt._get_approval_callback, tt.set_approval_callback),
+        (tt._get_sudo_password_callback, tt.set_sudo_password_callback),
+        (
+            vault_unlock.get_unlock_prompt_callback,
+            vault_unlock.set_unlock_prompt_callback,
+        ),
+        (
+            vault_unlock.get_save_login_prompt_callback,
+            vault_unlock.set_save_login_prompt_callback,
+        ),
+        (vault_unlock.get_code_prompt_callback, vault_unlock.set_code_prompt_callback),
+    )
 
 
 def propagate_context_to_thread(target: Callable) -> Callable:
@@ -57,8 +65,11 @@ def propagate_context_to_thread(target: Callable) -> Callable:
                     if cb is not None:
                         setter(cb)
             except Exception:
-                logger.debug("Failed to install propagated approval/sudo callbacks; "
-                             "dangerous-command approval will fail closed", exc_info=True)
+                logger.debug(
+                    "Failed to install propagated approval/sudo callbacks; "
+                    "dangerous-command approval will fail closed",
+                    exc_info=True,
+                )
             try:
                 return target(*args, **kwargs)
             finally:
@@ -66,8 +77,10 @@ def propagate_context_to_thread(target: Callable) -> Callable:
                     for setter, _cb in installs:
                         setter(None)
                 except Exception:
-                    logger.debug("Failed to clear propagated approval/sudo callbacks",
-                                 exc_info=True)
+                    logger.debug(
+                        "Failed to clear propagated approval/sudo callbacks",
+                        exc_info=True,
+                    )
 
         return ctx.run(_inner)
 

@@ -26,8 +26,12 @@ _TAIL_CHARS = 2000
 PHASE_ORDER = ("bootstrap", "build", "test")
 # Project-authored shell commands; see module docstring.
 _SUBPROCESS_KW: dict[str, Any] = dict(
-    shell=True, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-    text=True, errors="replace",
+    shell=True,
+    stdin=subprocess.DEVNULL,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.STDOUT,
+    text=True,
+    errors="replace",
 )
 
 
@@ -46,8 +50,12 @@ class PhaseResult:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "phase": self.phase, "command": self.command, "exitCode": self.exit_code,
-            "duration": round(self.duration, 3), "ok": self.ok, "timedOut": self.timed_out,
+            "phase": self.phase,
+            "command": self.command,
+            "exitCode": self.exit_code,
+            "duration": round(self.duration, 3),
+            "ok": self.ok,
+            "timedOut": self.timed_out,
             "outputTail": self.output_tail,
         }
 
@@ -63,8 +71,12 @@ class ReadinessResult:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "url": self.url, "ready": self.ready, "statusCode": self.status_code,
-            "duration": round(self.duration, 3), "error": self.error, "outputTail": self.output_tail,
+            "url": self.url,
+            "ready": self.ready,
+            "statusCode": self.status_code,
+            "duration": round(self.duration, 3),
+            "error": self.error,
+            "outputTail": self.output_tail,
         }
 
 
@@ -76,11 +88,14 @@ class VerifyResult:
 
     @property
     def ok(self) -> bool:
-        return all(p.ok for p in self.phases) and (self.readiness is None or self.readiness.ready)
+        return all(p.ok for p in self.phases) and (
+            self.readiness is None or self.readiness.ready
+        )
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "recipe": self.recipe_name, "ok": self.ok,
+            "recipe": self.recipe_name,
+            "ok": self.ok,
             "phases": [p.to_dict() for p in self.phases],
             "readiness": self.readiness.to_dict() if self.readiness else None,
         }
@@ -91,16 +106,25 @@ def _tail(text: str, limit: int = _TAIL_CHARS) -> str:
 
 
 def _run_phase_command(
-    phase: str, command: str, root: Path, timeout: float,
+    phase: str,
+    command: str,
+    root: Path,
+    timeout: float,
     on_output: Callable[[str], None] | None = None,
 ) -> PhaseResult:
     started = time.monotonic()
     try:
-        proc = subprocess.run(command, cwd=str(root), timeout=timeout, **_SUBPROCESS_KW, check=False)
+        proc = subprocess.run(
+            command, cwd=str(root), timeout=timeout, **_SUBPROCESS_KW, check=False
+        )
         output, exit_code, timed_out = proc.stdout or "", proc.returncode, False
     except subprocess.TimeoutExpired as exc:
         raw = exc.output
-        output = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else (raw or "")
+        output = (
+            raw.decode("utf-8", errors="replace")
+            if isinstance(raw, bytes)
+            else (raw or "")
+        )
         exit_code, timed_out = None, True
     duration = time.monotonic() - started
     if on_output and output:
@@ -108,7 +132,9 @@ def _run_phase_command(
     return PhaseResult(phase, command, exit_code, duration, _tail(output), timed_out)
 
 
-def _poll_readiness(url: str, timeout: float, interval: float = 1.0) -> tuple[bool, int | None, str | None]:
+def _poll_readiness(
+    url: str, timeout: float, interval: float = 1.0
+) -> tuple[bool, int | None, str | None]:
     deadline = time.monotonic() + timeout
     last_error: str | None = None
     while time.monotonic() < deadline:
@@ -144,7 +170,9 @@ def _terminate_process_group(proc: subprocess.Popen) -> None:
 
     def stop(sig: int, fallback: Callable[[], None]) -> None:
         if pgid is not None:
-            killpg(pgid, sig)  # windows-footgun: ok — POSIX-only branch (pgid only set when killpg exists)
+            killpg(
+                pgid, sig
+            )  # windows-footgun: ok — POSIX-only branch (pgid only set when killpg exists)
         else:
             fallback()
 
@@ -173,7 +201,9 @@ def _run_start_phase(
     url = f"http://127.0.0.1:{port}{recipe.readiness_path}"
     started = time.monotonic()
     # start_new_session: own process group for clean teardown.
-    proc = subprocess.Popen(recipe.start, cwd=str(root), start_new_session=True, **_SUBPROCESS_KW)
+    proc = subprocess.Popen(
+        recipe.start, cwd=str(root), start_new_session=True, **_SUBPROCESS_KW
+    )
     output = ""
     try:
         ready, status, error = _poll_readiness(url, ready_timeout)
@@ -183,7 +213,9 @@ def _run_start_phase(
             output = proc.stdout.read() or "" if proc.stdout is not None else ""
         except (OSError, ValueError):
             output = ""
-    return ReadinessResult(url, ready, status, time.monotonic() - started, error, _tail(output))
+    return ReadinessResult(
+        url, ready, status, time.monotonic() - started, error, _tail(output)
+    )
 
 
 def _compose_live_state_reason(root: Path) -> str | None:
@@ -197,24 +229,39 @@ def _compose_live_state_reason(root: Path) -> str | None:
     try:
         result = subprocess.run(
             ["docker", "compose", "ps", "--status", "running", "--format", "{{.Name}}"],
-            cwd=root, capture_output=True, text=True, timeout=15, stdin=subprocess.DEVNULL,
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=15,
+            stdin=subprocess.DEVNULL,
             check=False,
         )
     except FileNotFoundError:
         return None
     except subprocess.TimeoutExpired:
-        return "docker compose ps timed out after 15s; live containers cannot be ruled out"
+        return (
+            "docker compose ps timed out after 15s; live containers cannot be ruled out"
+        )
     if result.returncode != 0:
         detail = (result.stderr or result.stdout or "").strip().splitlines()
         return f"docker compose ps failed (exit {result.returncode}): {detail[-1] if detail else 'no output'}"
     names = [line for line in result.stdout.splitlines() if line.strip()]
-    return f"this compose project already has running container(s): {', '.join(names)}" if names else None
+    return (
+        f"this compose project already has running container(s): {', '.join(names)}"
+        if names
+        else None
+    )
 
 
 def run_verify(
-    root: Path, recipe: Recipe, phases: tuple[str, ...] | list[str] | None = None,
-    phase_timeout: float = DEFAULT_PHASE_TIMEOUT, ready_timeout: float = DEFAULT_READY_TIMEOUT,
-    skip_start: bool = False, port_override: int | None = None, stop_on_failure: bool = True,
+    root: Path,
+    recipe: Recipe,
+    phases: tuple[str, ...] | list[str] | None = None,
+    phase_timeout: float = DEFAULT_PHASE_TIMEOUT,
+    ready_timeout: float = DEFAULT_READY_TIMEOUT,
+    skip_start: bool = False,
+    port_override: int | None = None,
+    stop_on_failure: bool = True,
     on_output: Callable[[str], None] | None = None,
 ) -> VerifyResult:
     """Run the selected command phases sequentially, then (unless ``skip_start`` or a
@@ -235,26 +282,38 @@ def run_verify(
     if recipe.kind == "compose" and mutating:
         reason = _compose_live_state_reason(root)
         if reason:
-            result.phases.append(PhaseResult(
-                phase="build", command=recipe.build[0] if recipe.build else "docker compose build",
-                exit_code=1, duration=0.0, output_tail=(
-                    f"Refusing to run: {reason}. `docker compose build` + `up` would replace "
-                    "live containers on an image-hash change, destroying any container-local "
-                    "state they carry. If you intend to rebuild this live deployment, run "
-                    "`docker compose build`/`up` yourself."
-                ),
-            ))
+            result.phases.append(
+                PhaseResult(
+                    phase="build",
+                    command=recipe.build[0] if recipe.build else "docker compose build",
+                    exit_code=1,
+                    duration=0.0,
+                    output_tail=(
+                        f"Refusing to run: {reason}. `docker compose build` + `up` would replace "
+                        "live containers on an image-hash change, destroying any container-local "
+                        "state they carry. If you intend to rebuild this live deployment, run "
+                        "`docker compose build`/`up` yourself."
+                    ),
+                )
+            )
             return result
 
     for phase in PHASE_ORDER:
         if phase not in selected:
             continue
         for command in getattr(recipe, phase):
-            phase_result = _run_phase_command(phase, command, root, phase_timeout, on_output)
+            phase_result = _run_phase_command(
+                phase, command, root, phase_timeout, on_output
+            )
             result.phases.append(phase_result)
             if not phase_result.ok and stop_on_failure:
                 return result
 
-    if not skip_start and "start" in selected and recipe.start and all(p.ok for p in result.phases):
+    if (
+        not skip_start
+        and "start" in selected
+        and recipe.start
+        and all(p.ok for p in result.phases)
+    ):
         result.readiness = _run_start_phase(recipe, root, ready_timeout, port_override)
     return result

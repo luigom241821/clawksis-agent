@@ -34,13 +34,36 @@ TURN_TIMEOUT = 180.0
 
 # Windows needs these for a child to start at all (CreateProcess, Winsock, temp dirs,
 # Program Files lookups the Git Bash resolver uses). Credentials never pass.
-_PASSTHROUGH_ENV = frozenset({
-    "PATH", "PATHEXT", "SYSTEMROOT", "SystemRoot", "SYSTEMDRIVE", "SystemDrive", "COMSPEC",
-    "WINDIR", "TEMP", "TMP", "OS", "PROCESSOR_ARCHITECTURE", "NUMBER_OF_PROCESSORS",
-    "ProgramFiles", "ProgramFiles(x86)", "ProgramW6432", "ProgramData", "CommonProgramFiles",
-    "CommonProgramFiles(x86)", "CommonProgramW6432", "USERNAME", "USERDOMAIN", "COMPUTERNAME",
-    "PSModulePath", "LANG", "TZ",
-})
+_PASSTHROUGH_ENV = frozenset(
+    {
+        "PATH",
+        "PATHEXT",
+        "SYSTEMROOT",
+        "SystemRoot",
+        "SYSTEMDRIVE",
+        "SystemDrive",
+        "COMSPEC",
+        "WINDIR",
+        "TEMP",
+        "TMP",
+        "OS",
+        "PROCESSOR_ARCHITECTURE",
+        "NUMBER_OF_PROCESSORS",
+        "ProgramFiles",
+        "ProgramFiles(x86)",
+        "ProgramW6432",
+        "ProgramData",
+        "CommonProgramFiles",
+        "CommonProgramFiles(x86)",
+        "CommonProgramW6432",
+        "USERNAME",
+        "USERDOMAIN",
+        "COMPUTERNAME",
+        "PSModulePath",
+        "LANG",
+        "TZ",
+    }
+)
 _SECRET_SUFFIXES = ("_API_KEY", "_TOKEN", "_SECRET", "_ACCESS_KEY")
 
 
@@ -56,26 +79,29 @@ class WinHome:
 
     def env(self, extra: dict[str, str] | None = None) -> dict[str, str]:
         env = {
-            k: v for k, v in os.environ.items()
+            k: v
+            for k, v in os.environ.items()
             if k in _PASSTHROUGH_ENV and not k.upper().endswith(_SECRET_SUFFIXES)
         }
         local = self.profile / "AppData" / "Local"
         roaming = self.profile / "AppData" / "Roaming"
         local.mkdir(parents=True, exist_ok=True)
         roaming.mkdir(parents=True, exist_ok=True)
-        env.update({
-            "USERPROFILE": str(self.profile),
-            "HOME": str(self.profile),
-            "LOCALAPPDATA": str(local),
-            "APPDATA": str(roaming),
-            "CLAWK_HOME": str(self.clawk_home),
-            "PYTHONPATH": str(REPO_ROOT),
-            "PYTHONUNBUFFERED": "1",
-            "NO_COLOR": "1",
-            # The child's state.db lives under tmp_path; under a pytest ancestor the live-DB
-            # guard would refuse it. Documented child-process escape hatch (tests/conftest.py).
-            "CLAWK_STATE_DB_GUARD_BYPASS": "1",
-        })
+        env.update(
+            {
+                "USERPROFILE": str(self.profile),
+                "HOME": str(self.profile),
+                "LOCALAPPDATA": str(local),
+                "APPDATA": str(roaming),
+                "CLAWK_HOME": str(self.clawk_home),
+                "PYTHONPATH": str(REPO_ROOT),
+                "PYTHONUNBUFFERED": "1",
+                "NO_COLOR": "1",
+                # The child's state.db lives under tmp_path; under a pytest ancestor the live-DB
+                # guard would refuse it. Documented child-process escape hatch (tests/conftest.py).
+                "CLAWK_STATE_DB_GUARD_BYPASS": "1",
+            }
+        )
         env.update(self.extra_env)
         env.update(extra or {})
         return env
@@ -84,7 +110,9 @@ class WinHome:
         path = self.clawk_home / "config.yaml"
         cfg = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         mutate(cfg)
-        path.write_text(yaml.safe_dump(cfg, sort_keys=False, allow_unicode=True), encoding="utf-8")
+        path.write_text(
+            yaml.safe_dump(cfg, sort_keys=False, allow_unicode=True), encoding="utf-8"
+        )
 
     @property
     def db_path(self) -> Path:
@@ -107,7 +135,9 @@ def make_home(tmp_path: Path, base_url: str, *, extra_config: str = "") -> WinHo
     home = WinHome(root=root, profile=profile, clawk_home=clawk_home, project=project)
 
     def _hermetic(cfg: dict) -> None:
-        cfg["updates"] = {"check": False}  # offline: no GitHub round trip / git lazy fetch
+        cfg["updates"] = {
+            "check": False
+        }  # offline: no GitHub round trip / git lazy fetch
         cfg.setdefault("display", {})["compact"] = True
 
     home.update_config(_hermetic)
@@ -132,8 +162,11 @@ def clawk_exe(home: WinHome) -> Path:
     bin_dir = home.profile / "AppData" / "Local" / "clawk" / "bin"
     bin_dir.mkdir(parents=True, exist_ok=True)
     launcher = mint_launcher("clawk", REPO_ROOT, bin_dir, Path(sys.executable), None)
-    assert launcher is not None and launcher.suffix.lower() == ".exe" and launcher.is_file(), (
-        f"could not publish source clawk.exe in {bin_dir}: {launcher}")
+    assert (
+        launcher is not None
+        and launcher.suffix.lower() == ".exe"
+        and launcher.is_file()
+    ), f"could not publish source clawk.exe in {bin_dir}: {launcher}"
     return launcher
 
 
@@ -147,11 +180,23 @@ class Run:
         return f"rc={self.returncode}\n--stdout--\n{self.stdout[-n:]}\n--stderr--\n{self.stderr[-n:]}"
 
 
-def run(argv: list[str], home: WinHome, *, cwd: Path | None = None, timeout: float = TURN_TIMEOUT,
-        env_extra: dict[str, str] | None = None, stdin: bytes | None = None) -> Run:
+def run(
+    argv: list[str],
+    home: WinHome,
+    *,
+    cwd: Path | None = None,
+    timeout: float = TURN_TIMEOUT,
+    env_extra: dict[str, str] | None = None,
+    stdin: bytes | None = None,
+) -> Run:
     proc = subprocess.run(
-        argv, cwd=cwd or home.project, env=home.env(env_extra), capture_output=True,
-        input=stdin, stdin=None if stdin is not None else subprocess.DEVNULL, timeout=timeout,
+        argv,
+        cwd=cwd or home.project,
+        env=home.env(env_extra),
+        capture_output=True,
+        input=stdin,
+        stdin=None if stdin is not None else subprocess.DEVNULL,
+        timeout=timeout,
         check=False,
     )
     return Run(proc.returncode, _decode(proc.stdout), _decode(proc.stderr))
@@ -165,7 +210,9 @@ def _decode(raw: bytes) -> str:
     try:
         return raw.decode("utf-8")
     except UnicodeDecodeError:
-        return raw.decode("mbcs" if sys.platform == "win32" else "latin-1", errors="replace")
+        return raw.decode(
+            "mbcs" if sys.platform == "win32" else "latin-1", errors="replace"
+        )
 
 
 # Provider wire ---------------------------------------------------------------
@@ -180,11 +227,19 @@ def text_of(content: Any) -> str:
 
 
 def system_prompt(body: dict[str, Any]) -> str:
-    return "\n".join(text_of(m.get("content")) for m in body.get("messages") or [] if m.get("role") == "system")
+    return "\n".join(
+        text_of(m.get("content"))
+        for m in body.get("messages") or []
+        if m.get("role") == "system"
+    )
 
 
 def last_user(body: dict[str, Any]) -> str:
-    users = [text_of(m.get("content")) for m in body.get("messages") or [] if m.get("role") == "user"]
+    users = [
+        text_of(m.get("content"))
+        for m in body.get("messages") or []
+        if m.get("role") == "user"
+    ]
     return users[-1] if users else ""
 
 
@@ -194,7 +249,9 @@ def tool_results(srv: FakeLLMServer) -> list[str]:
     for body in srv.main_requests():
         for m in body.get("messages") or []:
             if m.get("role") == "tool":
-                seen.setdefault(m.get("tool_call_id") or str(len(seen)), text_of(m.get("content")))
+                seen.setdefault(
+                    m.get("tool_call_id") or str(len(seen)), text_of(m.get("content"))
+                )
     return list(seen.values())
 
 
@@ -211,7 +268,9 @@ def parse_tool_json(result: str) -> dict[str, Any]:
 
 def db_rows(home: WinHome, sql: str, params: Iterable[Any] = ()) -> list[sqlite3.Row]:
     assert home.db_path.exists(), f"no state.db at {home.db_path}"
-    conn = sqlite3.connect(f"file:{home.db_path.as_posix()}?mode=ro", uri=True, timeout=30)
+    conn = sqlite3.connect(
+        f"file:{home.db_path.as_posix()}?mode=ro", uri=True, timeout=30
+    )
     conn.row_factory = sqlite3.Row
     try:
         return list(conn.execute(sql, tuple(params)))
@@ -226,7 +285,9 @@ def persisted_messages(home: WinHome) -> list[sqlite3.Row]:
 # Processes -------------------------------------------------------------------
 
 
-def wait_until(pred: Callable[[], Any], timeout: float, what: str, interval: float = 0.1) -> Any:
+def wait_until(
+    pred: Callable[[], Any], timeout: float, what: str, interval: float = 0.1
+) -> Any:
     deadline = time.monotonic() + timeout
     while True:
         value = pred()
@@ -272,11 +333,17 @@ def _owned_by(proc: Any, root: str, home: str) -> bool:
 
     try:
         env = {k.upper(): v for k, v in proc.environ().items()}
-        if "CLAWK_HOME" in env and os.path.normcase(os.path.normpath(env["CLAWK_HOME"])) == home:
+        if (
+            "CLAWK_HOME" in env
+            and os.path.normcase(os.path.normpath(env["CLAWK_HOME"])) == home
+        ):
             return True
         if _under(proc.cwd(), root):
             return True
-        return any(_under(arg, root) or root + os.sep in os.path.normcase(arg) for arg in proc.cmdline())
+        return any(
+            _under(arg, root) or root + os.sep in os.path.normcase(arg)
+            for arg in proc.cmdline()
+        )
     except (psutil.Error, OSError):
         return False
 
@@ -294,7 +361,9 @@ def owned_processes(home: WinHome, *, since: float) -> list[Any]:
     owned = []
     for proc in psutil.process_iter():
         try:
-            if proc.pid == me or proc.create_time() < since - 1.0:  # 1 s: create_time rounding
+            if (
+                proc.pid == me or proc.create_time() < since - 1.0
+            ):  # 1 s: create_time rounding
                 continue
         except psutil.Error:
             continue
@@ -332,7 +401,12 @@ def kill_owned(home: WinHome, *, since: float) -> None:
 
 def taskkill_tree(pid: int) -> subprocess.CompletedProcess:
     """The Desktop's backend quit path on Windows (electron/backend-child.ts): taskkill /T /F."""
-    return subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True, timeout=60, check=False)
+    return subprocess.run(
+        ["taskkill", "/PID", str(pid), "/T", "/F"],
+        capture_output=True,
+        timeout=60,
+        check=False,
+    )
 
 
 def nonce(prefix: str) -> str:

@@ -26,7 +26,7 @@ logger = logging.getLogger("tools.terminal_tool")
 # punctuation; shell metacharacters stay rejected. Unicode is allowed on
 # purpose (e.g. CJK vault paths). Defense-in-depth — the cwd is also
 # shlex-quoted before reaching the shell.
-_WORKDIR_SAFE_ASCII_CHARS = frozenset('/\\:_-.~ +@=,')
+_WORKDIR_SAFE_ASCII_CHARS = frozenset("/\\:_-.~ +@=,")
 
 
 def _is_safe_workdir_char(ch: str) -> bool:
@@ -61,11 +61,15 @@ def _safe_command_preview(command: Any, limit: int = 200) -> str:
 
 def _blocked_json(error: str, status: str) -> str:
     """The guard result envelope: exit_code 1 + *error* + *status*."""
-    return json.dumps({"output": "", "exit_code": 1, "error": error, "status": status}, ensure_ascii=False)
+    return json.dumps(
+        {"output": "", "exit_code": 1, "error": error, "status": status},
+        ensure_ascii=False,
+    )
 
 
 _SHELL_LEVEL_BACKGROUND_RE = re.compile(
-    r"(?:^|[;&|]\s*|&&\s*|\|\|\s*|\$\(\s*)(?:nohup|disown|setsid)\b", re.IGNORECASE | re.MULTILINE
+    r"(?:^|[;&|]\s*|&&\s*|\|\|\s*|\$\(\s*)(?:nohup|disown|setsid)\b",
+    re.IGNORECASE | re.MULTILINE,
 )
 _INLINE_BACKGROUND_AMP_RE = re.compile(r"\s&\s")
 _TRAILING_BACKGROUND_AMP_RE = re.compile(r"\s&\s*(?:#.*)?$")
@@ -86,30 +90,35 @@ def _strip_quotes(command: str) -> str:
     return re.sub(r"`[^`]*`", "``", result)
 
 
-_LONG_LIVED_FOREGROUND_PATTERNS = tuple(re.compile(p, re.IGNORECASE) for p in (
-    r"\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:dev|start|serve|watch)\b",
-    r"\bdocker\s+compose\s+up\b",
-    r"\bnext\s+dev\b",
-    r"\bvite(?:\s|$)",
-    r"\bnodemon\b",
-    r"\buvicorn\b",
-    r"\bgunicorn\b",
-    r"\bpython(?:3)?\s+-m\s+http\.server\b",
-))
+_LONG_LIVED_FOREGROUND_PATTERNS = tuple(
+    re.compile(p, re.IGNORECASE)
+    for p in (
+        r"\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:dev|start|serve|watch)\b",
+        r"\bdocker\s+compose\s+up\b",
+        r"\bnext\s+dev\b",
+        r"\bvite(?:\s|$)",
+        r"\bnodemon\b",
+        r"\buvicorn\b",
+        r"\bgunicorn\b",
+        r"\bpython(?:3)?\s+-m\s+http\.server\b",
+    )
+)
 
 # Ordered (predicate on the unquoted command, guidance) — first hit wins.
 _FOREGROUND_GUIDANCE = (
     (
         _SHELL_LEVEL_BACKGROUND_RE.search,
         "Foreground command uses shell-level background wrappers (nohup/disown/setsid). "
-        "Re-send WITHOUT the wrapper as terminal(command=\"<cmd>\", background=true, "
+        'Re-send WITHOUT the wrapper as terminal(command="<cmd>", background=true, '
         "notify_on_complete=true) so Clawksis tracks the process, then run readiness "
         "checks and tests in separate commands.",
     ),
     (
-        lambda s: _INLINE_BACKGROUND_AMP_RE.search(s) or _TRAILING_BACKGROUND_AMP_RE.search(s),
+        lambda s: (
+            _INLINE_BACKGROUND_AMP_RE.search(s) or _TRAILING_BACKGROUND_AMP_RE.search(s)
+        ),
         "Foreground command uses '&' backgrounding. Re-send WITHOUT the '&' as "
-        "terminal(command=\"<cmd>\", background=true) — add notify_on_complete=true "
+        'terminal(command="<cmd>", background=true) — add notify_on_complete=true '
         "for bounded jobs — then run health checks and tests in follow-up terminal calls.",
     ),
     (
@@ -160,7 +169,7 @@ def _strip_trailing_amp(command: str) -> str:
     body = command.rstrip()[:-1]
     end = len(body)
     while end and body[end - 1].isspace():
-        backslashes = len(body[:end - 1]) - len(body[:end - 1].rstrip("\\"))
+        backslashes = len(body[: end - 1]) - len(body[: end - 1].rstrip("\\"))
         if backslashes % 2:
             break
         end -= 1
@@ -172,8 +181,16 @@ def _approval_identity(command: str) -> tuple:
     dangerous pattern key/description (what session/permanent approvals are stored under), the
     sudo-stdin floor, runtime self-delete, the user's deny rules and the permanent allowlist."""
     from agent.runtime_self_protection import command_deletes_runtime
-    from tools.approval import _command_matches_permanent_allowlist, _match_user_deny_rule
-    from tools.approval_detection import _check_sudo_stdin_guard, detect_dangerous_command, detect_hardline_command
+    from tools.approval import (
+        _command_matches_permanent_allowlist,
+        _match_user_deny_rule,
+    )
+    from tools.approval_detection import (
+        _check_sudo_stdin_guard,
+        detect_dangerous_command,
+        detect_hardline_command,
+    )
+
     return (
         tuple(detect_hardline_command(command)),
         tuple(detect_dangerous_command(command)),
@@ -203,7 +220,13 @@ def trailing_amp_background_command(command: str) -> str | None:
     if not _TRAILING_AMP_ONLY_RE.search(unquoted) or not command.rstrip().endswith("&"):
         return None
     body = unquoted.rstrip()[:-1]
-    if "\n" in body or "\r" in body or ";" in body or "#" in body or _SHELL_LEVEL_BACKGROUND_RE.search(body):
+    if (
+        "\n" in body
+        or "\r" in body
+        or ";" in body
+        or "#" in body
+        or _SHELL_LEVEL_BACKGROUND_RE.search(body)
+    ):
         return None
     if "&" in _NON_BACKGROUND_AMP_RE.sub("", body):
         return None
@@ -218,7 +241,9 @@ def trailing_amp_background_command(command: str) -> str | None:
     return stripped
 
 
-def _read_script_for_guard(env: Any, guard_cwd: str, script_path: str, max_bytes: int) -> Optional[str]:
+def _read_script_for_guard(
+    env: Any, guard_cwd: str, script_path: str, max_bytes: int
+) -> Optional[str]:
     """Best-effort script read: host filesystem first, then a bounded
     ``env.execute('head -c ... < path')`` for remote backends. Binary content
     (NUL byte) is not a script: feeding it to the guard tokenizes machine code
@@ -234,7 +259,11 @@ def _read_script_for_guard(env: Any, guard_cwd: str, script_path: str, max_bytes
             if stat.S_ISREG(metadata.st_mode) and metadata.st_size <= max_bytes:
                 data = local_path.read_bytes()
                 if len(data) <= max_bytes:
-                    return None if b"\x00" in data else data.decode("utf-8", errors="replace")
+                    return (
+                        None
+                        if b"\x00" in data
+                        else data.decode("utf-8", errors="replace")
+                    )
     except Exception:
         pass
     # Remote backend: bound the read at the source with `head -c` so an
@@ -287,10 +316,13 @@ def gateway_lifecycle_block(
         lifecycle_scan_root_within_budget,
         scan_gateway_lifecycle,
     )
+
     # Keep the specific launchctl diagnostic when this optional pre-scan fits the
     # budget. The full fail-closed guard below still runs when it does not, so
     # oversized roots never reach shlex here.
-    if lifecycle_scan_root_within_budget(command) and contains_launchctl_submit_command(command):
+    if lifecycle_scan_root_within_budget(command) and contains_launchctl_submit_command(
+        command
+    ):
         return _blocked_json(
             "Blocked: launchctl submit/bootstrap is restricted inside a supervised "
             "gateway regardless of the job label, to prevent indirect gateway "
@@ -304,14 +336,19 @@ def gateway_lifecycle_block(
     if guard_cwd_base is None:
         guard_cwd_base = getattr(env, "cwd", None) or cwd
     guard_cwd = _resolve_command_cwd(
-        workdir=workdir, default_cwd=guard_cwd_base, session_key=session_key, env_type=env_type,
+        workdir=workdir,
+        default_cwd=guard_cwd_base,
+        session_key=session_key,
+        env_type=env_type,
         mounted_host=getattr(env, "host_cwd", None),
         env=env,
     )
     unsafe, refusal = scan_gateway_lifecycle(
         command,
         cwd=guard_cwd,
-        read_remote_script=lambda p: _read_script_for_guard(env, guard_cwd, p, _MAX_REFERENCED_SCRIPT_BYTES),
+        read_remote_script=lambda p: _read_script_for_guard(
+            env, guard_cwd, p, _MAX_REFERENCED_SCRIPT_BYTES
+        ),
     )
     if unsafe and refusal:
         # Not a lifecycle command: a script the command EXECUTES could not be scanned (budget,
@@ -327,7 +364,9 @@ def gateway_lifecycle_block(
     if unsafe:
         # Name the ownership-scoped route for image-name kills: the intent is almost always "stop
         # MY background job", and re-rolling the same over-broad spelling is what takes the gateway down.
-        if lifecycle_scan_root_within_budget(command) and contains_host_interpreter_kill(command):
+        if lifecycle_scan_root_within_budget(
+            command
+        ) and contains_host_interpreter_kill(command):
             return _blocked_json(HOST_INTERPRETER_KILL_REJECTION, "error")
         return _blocked_json(
             "Blocked: command or referenced script cannot restart, stop, or "
@@ -360,9 +399,13 @@ def self_repo_block(
 
     if not guard_active():
         return None
-    guard_cwd = _resolve_command_cwd(workdir=workdir, default_cwd=cwd, session_key=session_key)
+    guard_cwd = _resolve_command_cwd(
+        workdir=workdir, default_cwd=cwd, session_key=session_key
+    )
     hit, msg = detect_self_repo_git_mutation(command, guard_cwd)
     if not hit:
         return None
-    logger.warning("Blocked self-repo git mutation (command: %s)", _safe_command_preview(command))
+    logger.warning(
+        "Blocked self-repo git mutation (command: %s)", _safe_command_preview(command)
+    )
     return _blocked_json(msg, "blocked")

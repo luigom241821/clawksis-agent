@@ -71,7 +71,9 @@ def test_a_managed_run_false_wins_on_a_fresh_install(root, tmp_path, monkeypatch
 
     managed = tmp_path / "managed"
     managed.mkdir()
-    (managed / "config.yaml").write_text("onboarding:\n  run: false\n", encoding="utf-8")
+    (managed / "config.yaml").write_text(
+        "onboarding:\n  run: false\n", encoding="utf-8"
+    )
     monkeypatch.setenv("CLAWK_MANAGED_DIR", str(managed))
     managed_scope.invalidate_managed_cache()
 
@@ -86,13 +88,17 @@ def test_explicit_true_runs_despite_history(root):
 
 
 def test_set_run_false_persists_and_keeps_comments(root):
-    (root / "config.yaml").write_text("# my notes\nmodel:\n  default: some-model  # pinned\n", encoding="utf-8")
+    (root / "config.yaml").write_text(
+        "# my notes\nmodel:\n  default: some-model  # pinned\n", encoding="utf-8"
+    )
 
     onboarding_run.set_run(False)
 
     text = (root / "config.yaml").read_text(encoding="utf-8-sig")
     assert "# my notes" in text and "# pinned" in text
-    assert read_user_config_raw(root / "config.yaml")["model"] == {"default": "some-model"}
+    assert read_user_config_raw(root / "config.yaml")["model"] == {
+        "default": "some-model"
+    }
     assert onboarding_run.should_run() is False
 
 
@@ -102,7 +108,9 @@ def test_named_profile_launch_uses_the_root_file(root, monkeypatch):
     onboarding_run.set_run(True)
 
     assert read_user_config_raw(root / "config.yaml")["onboarding"]["run"] is True
-    assert "run" not in (read_user_config_raw(work / "config.yaml").get("onboarding") or {})
+    assert "run" not in (
+        read_user_config_raw(work / "config.yaml").get("onboarding") or {}
+    )
     assert onboarding_run.should_run() is True
 
     (work / "config.yaml").write_text("onboarding:\n  run: true\n", encoding="utf-8")

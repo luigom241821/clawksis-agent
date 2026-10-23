@@ -79,7 +79,9 @@ def test_every_n_cadence_runs_references_every_nth_iteration(monkeypatch, tmp_pa
     from agent.moa_loop import MoAChatCompletions
 
     events = []
-    facade = MoAChatCompletions("review", reference_callback=lambda ev, **kw: events.append(ev))
+    facade = MoAChatCompletions(
+        "review", reference_callback=lambda ev, **kw: events.append(ev)
+    )
     base = [{"role": "user", "content": "do the thing"}]
     for msgs in _iteration_messages(base, 6):
         facade.create(messages=msgs, tools=[{"type": "function"}])
@@ -123,13 +125,10 @@ def test_every_n_off_cadence_iterations_reuse_cached_guidance(monkeypatch, tmp_p
     for reused in prepared[1:]:
         assert "advice #1" in reused["guidance"]
         assert _STALE_GUIDANCE_NOTE in reused["guidance"]
-        assert reused["guidance"].replace(_STALE_GUIDANCE_NOTE, "") == prepared[0]["guidance"]
-
-
-
-
-
-
+        assert (
+            reused["guidance"].replace(_STALE_GUIDANCE_NOTE, "")
+            == prepared[0]["guidance"]
+        )
 
 
 def test_per_iteration_default_unchanged_by_cadence_state(monkeypatch, tmp_path):

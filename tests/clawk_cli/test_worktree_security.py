@@ -9,6 +9,7 @@ import pytest
 def _can_symlink():
     """Check if we can create symlinks (needs admin/dev-mode on Windows)."""
     import tempfile
+
     try:
         with tempfile.TemporaryDirectory() as d:
             src = Path(d) / "src"
@@ -26,11 +27,26 @@ def git_repo(tmp_path):
     repo = tmp_path / "test-repo"
     repo.mkdir()
     subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
-    subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=repo, check=True, capture_output=True)
-    subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@test.com"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
     (repo / "README.md").write_text("# Test Repo\n")
     subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True)
-    subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "Initial commit"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
     return repo
 
 
@@ -152,7 +168,6 @@ class TestWorktreeIncludeEncoding:
     swallowed at DEBUG so no include is copied), and a Notepad BOM glues to
     the first line on every platform."""
 
-
     def test_non_ascii_worktreeinclude_entry_copied(self, git_repo):
         import cli as cli_mod
 
@@ -169,4 +184,3 @@ class TestWorktreeIncludeEncoding:
             assert (Path(info["path"]) / "секреты.env").exists()
         finally:
             _force_remove_worktree(info)
-

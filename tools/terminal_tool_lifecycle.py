@@ -24,21 +24,34 @@ logger = logging.getLogger("tools.terminal_tool")
 
 
 def _create_configured_env(
-    config: dict[str, Any], env_type: str, *, image: str, cwd: str, timeout: int,
-    task_id: str, host_cwd: Optional[str],
+    config: dict[str, Any],
+    env_type: str,
+    *,
+    image: str,
+    cwd: str,
+    timeout: int,
+    task_id: str,
+    host_cwd: Optional[str],
 ):
     """``_create_environment`` with the ssh/local/container kwargs shaped from *config*
     (shared by the terminal tool, the file tools and the lazy :func:`ensure_task_env` bring-up)."""
     from tools.terminal_tool_backends import _create_environment
     from tools.terminal_tool_config import _is_container_backend
+
     return _create_environment(
-        env_type=env_type, image=image, cwd=cwd, timeout=timeout,
+        env_type=env_type,
+        image=image,
+        cwd=cwd,
+        timeout=timeout,
         ssh_config=_ssh_config_from_config(config) if env_type == "ssh" else None,
         container_config=(
-            _container_config_from_config(config) if _is_container_backend(env_type) else None
+            _container_config_from_config(config)
+            if _is_container_backend(env_type)
+            else None
         ),
         local_config=_local_config_from_config(config) if env_type == "local" else None,
-        task_id=task_id, host_cwd=host_cwd,
+        task_id=task_id,
+        host_cwd=host_cwd,
     )
 
 
@@ -50,18 +63,28 @@ def _cleanup_env(env: Any, *, force_remove: Optional[bool] = None) -> None:
     Shared by ``cleanup_vm``, the idle reaper and the prompt-time backend probe so
     the signature check lives in one place.
     """
-    if hasattr(env, 'cleanup'):
-        if force_remove is not None and "force_remove" in inspect.signature(env.cleanup).parameters:
+    if hasattr(env, "cleanup"):
+        if (
+            force_remove is not None
+            and "force_remove" in inspect.signature(env.cleanup).parameters
+        ):
             env.cleanup(force_remove=force_remove)
         else:
             env.cleanup()
-    elif hasattr(env, 'stop'):
+    elif hasattr(env, "stop"):
         env.stop()
-    elif hasattr(env, 'terminate'):
+    elif hasattr(env, "terminate"):
         env.terminate()
 
 
-def _teardown_env(env: Any, task_id: str, *, force_remove: Optional[bool] = None, done_msg: str = "Cleaned up inactive environment for task: %s", stop_idle: bool = False) -> None:
+def _teardown_env(
+    env: Any,
+    task_id: str,
+    *,
+    force_remove: Optional[bool] = None,
+    done_msg: str = "Cleaned up inactive environment for task: %s",
+    stop_idle: bool = False,
+) -> None:
     """``_cleanup_env`` (or, with *stop_idle*, the backend's ``stop_idle``) plus outcome logging.
     A 404/"not found" error means the sandbox is already gone — logged at info."""
     try:
@@ -82,6 +105,7 @@ def _clear_file_ops_cache(task_id: str) -> None:
     """Invalidate the file_ops cache entry so ShellFileOperations can't reference a dead sandbox."""
     try:
         from tools.file_tools import clear_file_ops_cache
+
         clear_file_ops_cache(task_id)
     except ImportError:
         pass
@@ -93,9 +117,13 @@ def _unregister_env(task_id: str):
     Modal/Docker teardown can block 10-15s and would stall every concurrent
     terminal/file tool call."""
     from tools.terminal_tool import (
-        _active_environments, _creation_locks, _creation_locks_lock, _env_lock,
+        _active_environments,
+        _creation_locks,
+        _creation_locks_lock,
+        _env_lock,
         _last_activity,
     )
+
     with _env_lock:
         env = _active_environments.pop(task_id, None)
         _last_activity.pop(task_id, None)
@@ -107,20 +135,28 @@ def _unregister_env(task_id: str):
 def _cleanup_inactive_envs(lifetime_seconds: int = 300):
     """Clean up environments that have been inactive for longer than lifetime_seconds."""
     from tools.terminal_tool import (
-        _active_environments, _creation_locks, _creation_locks_lock, _env_lock,
+        _active_environments,
+        _creation_locks,
+        _creation_locks_lock,
+        _env_lock,
         _last_activity,
     )
+
     current_time = time.time()
 
     # Sandboxes with active background processes stay alive (refresh activity).
     try:
         from tools.process_registry import process_registry
+
         for task_id in list(_last_activity.keys()):
             # A workspace container is keyed by its digest, not the spawning task id: also keep it
             # while any process it hosts is still running (stopping it would kill that process).
             if process_registry.has_active_processes(task_id) or (
-                    _is_workspace_key(task_id)
-                    and process_registry._any_running(lambda s, key=task_id: s.task_id == key)):
+                _is_workspace_key(task_id)
+                and process_registry._any_running(
+                    lambda s, key=task_id: s.task_id == key
+                )
+            ):
                 _last_activity[task_id] = current_time
     except ImportError:
         pass
@@ -128,7 +164,11 @@ def _cleanup_inactive_envs(lifetime_seconds: int = 300):
     # Phase 1: unregister stale entries atomically under the lock; phase 2:
     # stop them outside it (see _unregister_env for why).
     with _env_lock:
-        stale = [t for t, last in list(_last_activity.items()) if current_time - last > lifetime_seconds]
+        stale = [
+            t
+            for t, last in list(_last_activity.items())
+            if current_time - last > lifetime_seconds
+        ]
         envs_to_stop = [(t, _active_environments.pop(t, None)) for t in stale]
         for t in stale:
             _last_activity.pop(t, None)
@@ -153,7 +193,12 @@ def _is_workspace_key(key: str) -> bool:
 
 def get_active_env(task_id: str):
     """Return the active BaseEnvironment for *task_id*, or None."""
-    from tools.terminal_tool import _active_environments, _env_lock, _resolve_container_task_id
+    from tools.terminal_tool import (
+        _active_environments,
+        _env_lock,
+        _resolve_container_task_id,
+    )
+
     lookup = _resolve_container_task_id(task_id)
     with _env_lock:
         return _active_environments.get(lookup) or _active_environments.get(task_id)
@@ -174,10 +219,19 @@ def ensure_task_env(task_id: Optional[str] = None):
     bring the env up on demand, reusing the same creation machinery as the terminal tool.
     """
     from tools.terminal_tool import (
-        _active_environments, _creation_locks, _creation_locks_lock, _env_lock,
-        _get_env_config, _last_activity, _resolve_container_task_id,
-        _resolve_task_host_cwd, _select_image, _start_cleanup_thread, resolve_task_overrides,
+        _active_environments,
+        _creation_locks,
+        _creation_locks_lock,
+        _env_lock,
+        _get_env_config,
+        _last_activity,
+        _resolve_container_task_id,
+        _resolve_task_host_cwd,
+        _select_image,
+        _start_cleanup_thread,
+        resolve_task_overrides,
     )
+
     config = _get_env_config()
     env_type = config["env_type"]
     if env_type == "local":
@@ -204,14 +258,20 @@ def ensure_task_env(task_id: Optional[str] = None):
             return existing
         try:
             new_env = _create_configured_env(
-                config, env_type, image=image, cwd=config["cwd"],
-                timeout=config["timeout"], task_id=effective_task_id,
+                config,
+                env_type,
+                image=image,
+                cwd=config["cwd"],
+                timeout=config["timeout"],
+                task_id=effective_task_id,
                 host_cwd=_resolve_task_host_cwd(config, task_id),
             )
         except Exception as exc:
             logger.warning(
                 "Lazy %s environment init failed for task %s: %s",
-                env_type, effective_task_id[:8], exc,
+                env_type,
+                effective_task_id[:8],
+                exc,
             )
             return None
 
@@ -220,7 +280,8 @@ def ensure_task_env(task_id: Optional[str] = None):
             _last_activity[effective_task_id] = time.time()
         logger.info(
             "%s environment lazily initialized for task %s",
-            env_type, effective_task_id[:8],
+            env_type,
+            effective_task_id[:8],
         )
         return new_env
 
@@ -237,13 +298,16 @@ def is_persistent_env(task_id: str) -> bool:
     env = get_active_env(task_id)
     if env is None:
         return False
-    return bool(getattr(env, "_session_scoped", False) or getattr(env, "_persistent", False))
+    return bool(
+        getattr(env, "_session_scoped", False) or getattr(env, "_persistent", False)
+    )
 
 
 def cleanup_all_environments():
     """Clean up ALL active environments (process exit). Use with caution."""
     from tools.environments.base import kill_live_foreground_processes
     from tools.terminal_tool import _active_environments
+
     # A command still running when the host exits would outlive it in its own process group.
     kill_live_foreground_processes()
     cleaned = 0
@@ -277,7 +341,9 @@ def cleanup_vm(task_id: str, *, force_remove: bool = False):
     if env is None:
         return
     _teardown_env(
-        env, task_id, force_remove=force_remove,
+        env,
+        task_id,
+        force_remove=force_remove,
         done_msg="Manually cleaned up environment for task: %s",
     )
 
@@ -286,8 +352,12 @@ def _evict_environment_for_task(task_id: Optional[str]) -> None:
     """Drop any cached env for *task_id* (and its collapsed key) after an
     infrastructure failure, so later calls don't reuse a dead connection."""
     from tools.terminal_tool import (
-        _active_environments, _env_lock, _last_activity, _resolve_container_task_id,
+        _active_environments,
+        _env_lock,
+        _last_activity,
+        _resolve_container_task_id,
     )
+
     keys = {_resolve_container_task_id(task_id)}
     if task_id:
         keys.add(task_id)

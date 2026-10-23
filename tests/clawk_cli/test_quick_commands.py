@@ -1,4 +1,5 @@
 """Tests for user-defined quick commands that bypass the agent loop."""
+
 import os
 import subprocess
 from unittest.mock import MagicMock, patch
@@ -7,6 +8,7 @@ import pytest
 
 
 # ── CLI tests ──────────────────────────────────────────────────────────────
+
 
 class TestCLIQuickCommands:
     """Test quick command dispatch in ClawksisCLI.process_command."""
@@ -19,6 +21,7 @@ class TestCLIQuickCommands:
 
     def _make_cli(self, quick_commands):
         from cli import ClawksisCLI
+
         cli = ClawksisCLI.__new__(ClawksisCLI)
         cli.config = {"quick_commands": quick_commands}
         cli.console = MagicMock()
@@ -53,13 +56,6 @@ class TestCLIQuickCommands:
         assert printed == "daily-note"
         cli.console.print.assert_not_called()
 
-
-
-
-
-
-
-
     def test_quick_command_takes_priority_over_skill_commands(self):
         """Quick commands must be checked before skill slash commands."""
         cli = self._make_cli({"mygif": {"type": "exec", "command": "echo overridden"}})
@@ -70,9 +66,8 @@ class TestCLIQuickCommands:
         assert printed == "overridden"
 
 
-
-
 # ── Gateway tests ──────────────────────────────────────────────────────────
+
 
 class TestGatewayQuickCommands:
     """Test quick command dispatch in GatewayRunner._handle_message."""
@@ -93,8 +88,11 @@ class TestGatewayQuickCommands:
     @pytest.mark.asyncio
     async def test_exec_command_returns_output(self):
         from gateway.run import GatewayRunner
+
         runner = GatewayRunner.__new__(GatewayRunner)
-        runner.config = {"quick_commands": {"limits": {"type": "exec", "command": "echo ok"}}}
+        runner.config = {
+            "quick_commands": {"limits": {"type": "exec", "command": "echo ok"}}
+        }
         runner._running_agents = {}
         runner._pending_messages = {}
         runner._is_user_authorized = MagicMock(return_value=True)
@@ -118,8 +116,9 @@ class TestGatewayQuickCommands:
         with patch.dict(os.environ, {"OPENROUTER_API_KEY": "sk-or-secret-12345"}):
             result = await runner._handle_message(event)
 
-        assert "sk-or-secret-12345" not in result, \
+        assert "sk-or-secret-12345" not in result, (
             "Quick command leaked OPENROUTER_API_KEY — exec runs without env sanitization"
+        )
 
     @pytest.mark.asyncio
     async def test_exec_command_output_is_redacted(self, monkeypatch):
@@ -131,7 +130,14 @@ class TestGatewayQuickCommands:
         monkeypatch.setattr("agent.redact._REDACT_ENABLED", True)
 
         runner = GatewayRunner.__new__(GatewayRunner)
-        runner.config = {"quick_commands": {"token": {"type": "exec", "command": "echo sk-ant-api03-supersecretkey1234567890"}}}
+        runner.config = {
+            "quick_commands": {
+                "token": {
+                    "type": "exec",
+                    "command": "echo sk-ant-api03-supersecretkey1234567890",
+                }
+            }
+        }
         runner._running_agents = {}
         runner._pending_messages = {}
         runner._is_user_authorized = MagicMock(return_value=True)
@@ -139,16 +145,19 @@ class TestGatewayQuickCommands:
         event = self._make_event("token")
         result = await runner._handle_message(event)
 
-        assert "supersecretkey1234567890" not in result, \
+        assert "supersecretkey1234567890" not in result, (
             "Quick command output not redacted — raw API key returned to user"
-
+        )
 
     @pytest.mark.asyncio
     async def test_timeout_returns_error(self):
         from gateway.run import GatewayRunner
         import asyncio
+
         runner = GatewayRunner.__new__(GatewayRunner)
-        runner.config = {"quick_commands": {"slow": {"type": "exec", "command": "sleep 100"}}}
+        runner.config = {
+            "quick_commands": {"slow": {"type": "exec", "command": "sleep 100"}}
+        }
         runner._running_agents = {}
         runner._pending_messages = {}
         runner._is_user_authorized = MagicMock(return_value=True)

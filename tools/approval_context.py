@@ -32,7 +32,9 @@ _approval_session_id: contextvars.ContextVar[str] = _ctx("approval_session_id")
 # os.environ["CLAWK_INTERACTIVE"] races: one session's `finally` restore can clobber another's set mid-run, dropping
 # it onto the non-interactive auto-approve path so a dangerous command runs without the approval callback firing
 # (GHSA-96vc-wcxf-jjff). None = unset → env fallback.
-_clawk_interactive_ctx: contextvars.ContextVar[str | None] = _ctx("clawk_interactive", None)
+_clawk_interactive_ctx: contextvars.ContextVar[str | None] = _ctx(
+    "clawk_interactive", None
+)
 
 
 def set_clawk_interactive_context(interactive: bool) -> contextvars.Token:
@@ -48,7 +50,11 @@ def reset_clawk_interactive_context(token: contextvars.Token) -> None:
 def _is_interactive_cli() -> bool:
     """True for an interactive CLI/ACP session (contextvar first, env fallback)."""
     ctx_val = _clawk_interactive_ctx.get()
-    return is_truthy_value(ctx_val) if ctx_val is not None else env_var_enabled("CLAWK_INTERACTIVE")
+    return (
+        is_truthy_value(ctx_val)
+        if ctx_val is not None
+        else env_var_enabled("CLAWK_INTERACTIVE")
+    )
 
 
 def _fire_approval_hook(hook_name: str, **kwargs) -> None:
@@ -77,6 +83,7 @@ def gateway_approval_surface() -> str:
     """Surface a gateway-rendered approval reports: ``cli`` for a classic CLI session's turn (main
     prompted those in the CLI process), else ``gateway``."""
     from clawk_cli.plugin_session import session_surface
+
     return "cli" if session_surface() == "cli" else "gateway"
 
 
@@ -90,7 +97,9 @@ def is_local_interactive_session() -> bool:
     their own sources and stay out."""
     try:
         from gateway.session_policy import active_policy
-    except ImportError:  # install without the gateway package: no local session can be running
+    except (
+        ImportError
+    ):  # install without the gateway package: no local session can be running
         return False
     policy = active_policy()
     return policy is not None and policy.source in _LOCAL_INTERACTIVE_SOURCES
@@ -104,13 +113,18 @@ def is_viewer_turn_with_approver() -> bool:
     heartbeat or a hosted-room task is never a viewer turn."""
     try:
         from gateway.session_ingress import viewer_turn
-    except ImportError:  # install without the gateway package: no admission is executing
+    except (
+        ImportError
+    ):  # install without the gateway package: no admission is executing
         return False
     live = viewer_turn.get()
     if live is None:
         return False
     with live.event_stream.lock:
-        return any("session:approve" in member.capabilities for member in live.subscribers.values())
+        return any(
+            "session:approve" in member.capabilities
+            for member in live.subscribers.values()
+        )
 
 
 def set_current_session_key(session_key: str) -> contextvars.Token[str]:
@@ -126,10 +140,15 @@ def reset_current_session_key(token: contextvars.Token[str]) -> None:
 _Tokens = tuple[contextvars.Token[str], contextvars.Token[str], contextvars.Token[str]]
 
 
-def set_current_observability_context(*, turn_id: str = "", tool_call_id: str = "", session_id: str = "") -> _Tokens:
+def set_current_observability_context(
+    *, turn_id: str = "", tool_call_id: str = "", session_id: str = ""
+) -> _Tokens:
     """Bind active tool correlation IDs to approval hooks."""
-    return (_approval_turn_id.set(turn_id or ""), _approval_tool_call_id.set(tool_call_id or ""),
-            _approval_session_id.set(session_id or ""))
+    return (
+        _approval_turn_id.set(turn_id or ""),
+        _approval_tool_call_id.set(tool_call_id or ""),
+        _approval_session_id.set(session_id or ""),
+    )
 
 
 def reset_current_observability_context(tokens: _Tokens) -> None:
@@ -145,6 +164,7 @@ def get_current_session_key(default: str = "default") -> str:
     if session_key := _approval_session_key.get():
         return session_key
     from gateway.session_context import get_session_env
+
     return get_session_env("CLAWK_SESSION_KEY", default)
 
 
@@ -154,6 +174,7 @@ def _session_env(name: str) -> str:
     fallback for CLI tests and older entrypoints."""
     try:
         from gateway.session_context import get_session_env
+
         return get_session_env(name, "") or ""
     except Exception:
         return os.getenv(name, "") or ""
@@ -205,7 +226,9 @@ def _is_single_query_approval_context() -> bool:
     over the daemon): the viewer detaches on the first prompt, so nobody answers there either."""
     try:
         from gateway.session_finite import finite_turn_required
-    except ImportError:  # install without the gateway package: no admitted turn to carry the flag
+    except (
+        ImportError
+    ):  # install without the gateway package: no admitted turn to carry the flag
         pass
     else:
         if finite_turn_required() is True:
@@ -216,8 +239,11 @@ def _is_single_query_approval_context() -> bool:
 def _no_user_can_answer() -> bool:
     """True in single-query (-q), cron and unattended-platform sessions. `clawk chat -q` still registers the
     CLI panel callback, so a prompt that only checks for a callback would wait the full timeout for nobody."""
-    return (_is_single_query_approval_context() or _is_cron_approval_context()
-            or _is_unattended_platform_approval_context())
+    return (
+        _is_single_query_approval_context()
+        or _is_cron_approval_context()
+        or _is_unattended_platform_approval_context()
+    )
 
 
 def _is_gateway_approval_context() -> bool:
@@ -246,12 +272,15 @@ def _resolve_cli_approval_callback(approval_callback=None):
         return approval_callback
     try:
         from tools.terminal_tool import _get_approval_callback
+
         return _get_approval_callback()
     except Exception:
         return None
 
 
-def _should_fall_through_to_cli_approval(*, is_cli: bool, approval_callback, notify_cb) -> bool:
+def _should_fall_through_to_cli_approval(
+    *, is_cli: bool, approval_callback, notify_cb
+) -> bool:
     """Prefer the CLI Dangerous Command panel over a silent pending approval:
     ``CLAWK_EXEC_ASK`` (or a platform marker) can leak into an interactive CLI
     process (historically via ``import gateway.run``), and without a gateway notify
@@ -275,8 +304,11 @@ def _normalize_approval_mode(mode) -> str:
         if normalized in _VALID_MODES:
             return normalized
         if normalized:
-            logger.warning("Unknown approvals.mode %r — defaulting to 'manual'. "
-                           "Valid values: %s", mode, ", ".join(_VALID_MODES))
+            logger.warning(
+                "Unknown approvals.mode %r — defaulting to 'manual'. Valid values: %s",
+                mode,
+                ", ".join(_VALID_MODES),
+            )
     return "manual"
 
 
@@ -285,6 +317,7 @@ def _get_approval_config() -> dict:
     (load_config_readonly contract) — callers must not mutate it or any nested structure."""
     try:
         from clawk_cli.config import load_config_readonly
+
         return load_config_readonly().get("approvals", {}) or {}
     except Exception as e:
         logger.warning("Failed to load approval config: %s", e)
@@ -295,6 +328,7 @@ def _get_approval_mode() -> str:
     """Return 'manual', 'smart', or 'off' (a hosted-room policy overrides config)."""
     try:
         from gateway.hosted_room_execution_policy import current_room_execution_policy
+
         if (room_policy := current_room_execution_policy()) is not None:
             return room_policy.approval_mode
     except Exception:
@@ -315,11 +349,16 @@ def _get_approval_timeout() -> int:
         return 300
     try:
         from agent.deadline import MAX_SAFE_TIMEOUT_S
+
         safe_cap = int(MAX_SAFE_TIMEOUT_S)
     except Exception:
         safe_cap = 300  # dependency failure must keep the safe default
     if raw > safe_cap:
-        logger.warning("approvals.timeout=%s exceeds the platform-safe maximum; clamping to %ss", raw, safe_cap)
+        logger.warning(
+            "approvals.timeout=%s exceeds the platform-safe maximum; clamping to %ss",
+            raw,
+            safe_cap,
+        )
     return min(raw, safe_cap)
 
 
@@ -334,7 +373,12 @@ def format_approval_window(seconds: int) -> str:
         count, unit = seconds // 60, "minute"
     else:
         count, unit = seconds, "second"
-    return t(f"approval.window.{unit}_one" if count == 1 else f"approval.window.{unit}_other", count=count)
+    return t(
+        f"approval.window.{unit}_one"
+        if count == 1
+        else f"approval.window.{unit}_other",
+        count=count,
+    )
 
 
 def approval_timeout_notice_kwargs() -> dict:
@@ -348,7 +392,12 @@ def _binary_approval_mode(key: str) -> str:
     """Read ``approvals.<key>`` as 'approve' or 'deny' (default deny)."""
     try:
         from clawk_cli.config import load_config_readonly
-        mode = str(cfg_get(load_config_readonly(), "approvals", key, default="deny")).lower().strip()
+
+        mode = (
+            str(cfg_get(load_config_readonly(), "approvals", key, default="deny"))
+            .lower()
+            .strip()
+        )
         return "approve" if mode in {"approve", "off", "allow", "yes"} else "deny"
     except Exception:
         return "deny"
@@ -375,7 +424,10 @@ def _get_approval_transport_config() -> tuple[str, str | None]:
     """Return explicitly selected transport and fail-closed fallback mode."""
     try:
         from clawk_cli.config import load_config_readonly
-        cfg = ((load_config_readonly() or {}).get("security") or {}).get("approval") or {}
+
+        cfg = ((load_config_readonly() or {}).get("security") or {}).get(
+            "approval"
+        ) or {}
         selected = str(cfg.get("transport") or "builtin").strip().lower()
         fallback = str(cfg.get("transport_fallback") or "").strip().lower()
     except Exception:

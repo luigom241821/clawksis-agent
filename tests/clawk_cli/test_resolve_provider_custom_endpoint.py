@@ -18,11 +18,21 @@ def isolated_home(tmp_path, monkeypatch):
     home.mkdir()
     (home / ".env").write_text("", encoding="utf-8")
     monkeypatch.setenv("CLAWK_HOME", str(home))
-    for var in ("OPENAI_API_KEY", "OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_BASE_URL",
-                "OPENROUTER_BASE_URL", "CLAWK_INFERENCE_PROVIDER", "NOUS_API_KEY"):
+    for var in (
+        "OPENAI_API_KEY",
+        "OPENROUTER_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "OPENAI_BASE_URL",
+        "OPENROUTER_BASE_URL",
+        "CLAWK_INFERENCE_PROVIDER",
+        "NOUS_API_KEY",
+    ):
         monkeypatch.delenv(var, raising=False)
-    monkeypatch.setattr("agent.bedrock_adapter.has_aws_credentials", lambda *_a, **_kw: False)
+    monkeypatch.setattr(
+        "agent.bedrock_adapter.has_aws_credentials", lambda *_a, **_kw: False
+    )
     from clawk_cli import free_tier_bootstrap as fb
+
     fb.reset_for_tests()
     return home
 
@@ -71,7 +81,9 @@ def isolated_home(tmp_path, monkeypatch):
         ),
     ],
 )
-def test_configured_custom_endpoint_resolves_as_a_provider(isolated_home, model_block, expected):
+def test_configured_custom_endpoint_resolves_as_a_provider(
+    isolated_home, model_block, expected
+):
     (isolated_home / "config.yaml").write_text(model_block, encoding="utf-8")
     from clawk_cli.auth import resolve_provider
     from clawk_cli.free_tier_bootstrap import run_bootstrap
@@ -100,7 +112,9 @@ def test_stale_remote_base_url_without_a_custom_pin_is_not_a_provider(isolated_h
     assert run_bootstrap(announce=False).provider_configured is False
 
 
-def test_auto_provider_with_loopback_base_url_resolves_without_recursing(isolated_home, monkeypatch):
+def test_auto_provider_with_loopback_base_url_resolves_without_recursing(
+    isolated_home, monkeypatch
+):
     """A fresh setup keeps ``provider: auto`` until the picker stores its choice (#110926)."""
     (isolated_home / "config.yaml").write_text(
         "model:\n  provider: auto\n  base_url: http://127.0.0.1:8000/v1\n",
@@ -110,14 +124,20 @@ def test_auto_provider_with_loopback_base_url_resolves_without_recursing(isolate
     from clawk_cli.auth import resolve_provider
 
     def unexpected_provider_resolution(_name):
-        raise AssertionError("the bare custom trust check must not resolve model.provider=auto")
+        raise AssertionError(
+            "the bare custom trust check must not resolve model.provider=auto"
+        )
 
-    monkeypatch.setattr(runtime_provider, "_resolves_to_custom", unexpected_provider_resolution)
+    monkeypatch.setattr(
+        runtime_provider, "_resolves_to_custom", unexpected_provider_resolution
+    )
 
     assert resolve_provider("auto") == "custom"
 
 
-def test_a_provider_configured_after_boot_flips_the_stale_setup_record(isolated_home, monkeypatch):
+def test_a_provider_configured_after_boot_flips_the_stale_setup_record(
+    isolated_home, monkeypatch
+):
     """A serve process whose boot inventory found nothing keeps that record for its lifetime;
     ``setup.status`` reads it (``wait_for_record``), so the dashboard chat stayed on "Setup
     Required" after the user configured a provider — from the Models page, a picker key, or
@@ -130,17 +150,25 @@ def test_a_provider_configured_after_boot_flips_the_stale_setup_record(isolated_
     monkeypatch.setattr(fb, "_broadcast", broadcasts.append)
     boot = fb.run_bootstrap(announce=False)
     assert boot.provider_configured is False
-    assert fb.wait_for_record(timeout=0) is boot and broadcasts == [], "blank machine: nothing to reconcile"
+    assert fb.wait_for_record(timeout=0) is boot and broadcasts == [], (
+        "blank machine: nothing to reconcile"
+    )
 
     # The record is the launch profile's: a write scoped to another profile (the dashboard's
     # ``?profile=b``) must not let THAT profile's provider open the launch gate.
     from clawk_constants import reset_clawk_home_override, set_clawk_home_override
+
     profile_b = isolated_home / "profiles" / "b"
     profile_b.mkdir(parents=True)
-    (profile_b / "config.yaml").write_text("model:\n  default: qwen3\n  provider: custom\n  base_url: http://127.0.0.1:8000/v1\n  api_key: dummy\n", encoding="utf-8")
+    (profile_b / "config.yaml").write_text(
+        "model:\n  default: qwen3\n  provider: custom\n  base_url: http://127.0.0.1:8000/v1\n  api_key: dummy\n",
+        encoding="utf-8",
+    )
     token = set_clawk_home_override(str(profile_b))
     try:
-        assert fb.reconcile_record() is boot and broadcasts == [], "another profile's provider is not ours"
+        assert fb.reconcile_record() is boot and broadcasts == [], (
+            "another profile's provider is not ours"
+        )
     finally:
         reset_clawk_home_override(token)
 
@@ -151,6 +179,10 @@ def test_a_provider_configured_after_boot_flips_the_stale_setup_record(isolated_
     fresh = fb.wait_for_record(timeout=0)
     assert fresh.provider_configured is True and fresh.other_providers is True
     assert fresh.inference_provider == "custom"
-    assert fresh.has_identity is boot.has_identity and fresh.failure == boot.failure, "the mint verdict is kept"
+    assert fresh.has_identity is boot.has_identity and fresh.failure == boot.failure, (
+        "the mint verdict is kept"
+    )
     assert broadcasts == [fresh]
-    assert fb.wait_for_record(timeout=0) is fresh and broadcasts == [fresh], "settled: no re-inventory, no re-announce"
+    assert fb.wait_for_record(timeout=0) is fresh and broadcasts == [fresh], (
+        "settled: no re-inventory, no re-announce"
+    )

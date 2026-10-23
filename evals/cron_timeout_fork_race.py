@@ -3,6 +3,7 @@
 Run with the repository's Python and a disposable CLAWK_HOME. No provider calls.
 The scheduling hook retains psutil's real snapshot; it never invents process state.
 """
+
 import ctypes
 import json
 import os
@@ -51,7 +52,10 @@ def main():
             while time.monotonic() < deadline:
                 try:
                     ids = json.loads(marker.read_text(encoding="utf-8"))
-                    if len(ids) == 3 or psutil.Process(ids[0]).status() == psutil.STATUS_STOPPED:
+                    if (
+                        len(ids) == 3
+                        or psutil.Process(ids[0]).status() == psutil.STATUS_STOPPED
+                    ):
                         break
                 except (FileNotFoundError, ValueError, psutil.NoSuchProcess):
                     pass
@@ -75,11 +79,22 @@ def main():
                     states[pid] = psutil.Process(pid).status()
                 except psutil.NoSuchProcess:
                     states[pid] = "gone"
-            print(json.dumps({"result": result, "elapsed": elapsed, "states": states,
-                              "real_snapshot_sizes": schedules}), flush=True)
+            print(
+                json.dumps(
+                    {
+                        "result": result,
+                        "elapsed": elapsed,
+                        "states": states,
+                        "real_snapshot_sizes": schedules,
+                    }
+                ),
+                flush=True,
+            )
             assert result[1].startswith("Script timed out after 2s:"), result
             assert len(ids) >= 2, "pre-existing detached child did not start"
-            assert all(state in ("gone", psutil.STATUS_ZOMBIE) for state in states.values()), states
+            assert all(
+                state in ("gone", psutil.STATUS_ZOMBIE) for state in states.values()
+            ), states
         finally:
             for process in owned:
                 try:

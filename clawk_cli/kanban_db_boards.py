@@ -32,7 +32,12 @@ def board_metadata_path(board: Optional[str] = None) -> Path:
 
 def _default_board_display_name(slug: str) -> str:
     """``atm10-server`` -> ``Atm10 Server``."""
-    return " ".join(part.capitalize() for part in slug.replace("_", "-").split("-") if part) or slug
+    return (
+        " ".join(
+            part.capitalize() for part in slug.replace("_", "-").split("-") if part
+        )
+        or slug
+    )
 
 
 def read_board_metadata(board: Optional[str] = None) -> dict:
@@ -67,9 +72,15 @@ def read_board_metadata(board: Optional[str] = None) -> dict:
 
 
 def write_board_metadata(
-    board: Optional[str], *, name: Optional[str] = None, description: Optional[str] = None,
-    icon: Optional[str] = None, color: Optional[str] = None, archived: Optional[bool] = None,
-    default_workdir: Optional[str] = None, project_id: Optional[str] = None,
+    board: Optional[str],
+    *,
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+    icon: Optional[str] = None,
+    color: Optional[str] = None,
+    archived: Optional[bool] = None,
+    default_workdir: Optional[str] = None,
+    project_id: Optional[str] = None,
 ) -> dict:
     """Create/update ``board.json``; unmentioned fields are preserved, ``created_at``
     set on first write. ``project_id``/``default_workdir``: ``None`` = unchanged,
@@ -86,7 +97,10 @@ def write_board_metadata(
             meta[key] = str(value)
     if archived is not None:
         meta["archived"] = bool(archived)
-    for key, value in (("default_workdir", default_workdir), ("project_id", project_id)):
+    for key, value in (
+        ("default_workdir", default_workdir),
+        ("project_id", project_id),
+    ):
         if value is not None:
             meta[key] = str(value) if value else None
     if not meta.get("created_at"):
@@ -94,15 +108,21 @@ def write_board_metadata(
     path = board_metadata_path(slug)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        json.dumps(meta, indent=2, ensure_ascii=False) + "\n", encoding="utf-8",
+        json.dumps(meta, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
     )
     meta["db_path"] = str(_kb.kanban_db_path(slug))
     return meta
 
 
 def create_board(
-    slug: str, *, name: Optional[str] = None, description: Optional[str] = None,
-    icon: Optional[str] = None, color: Optional[str] = None, default_workdir: Optional[str] = None,
+    slug: str,
+    *,
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+    icon: Optional[str] = None,
+    color: Optional[str] = None,
+    default_workdir: Optional[str] = None,
     project_id: Optional[str] = None,
 ) -> dict:
     """Create board dir + DB + metadata (``mkdir -p`` semantics: existing board returns its metadata)."""
@@ -111,8 +131,14 @@ def create_board(
     # remove_board(archive=True)) — otherwise _kb.init_db() below would rightly
     # refuse to recreate the archived board's DB (#43243).
     meta = write_board_metadata(
-        normed, name=name, description=description, icon=icon, color=color,
-        default_workdir=default_workdir, project_id=project_id, archived=False,
+        normed,
+        name=name,
+        description=description,
+        icon=icon,
+        color=color,
+        default_workdir=default_workdir,
+        project_id=project_id,
+        archived=False,
     )
     # Touch the DB so list_boards() sees it immediately.
     _kb.init_db(board=normed)
@@ -130,7 +156,9 @@ def list_boards(*, include_archived: bool = True) -> list[dict]:
             if not child.is_dir():
                 continue
             try:
-                normed = _kb._normalize_board_slug(child.name)  # skip junk dirs, don't raise
+                normed = _kb._normalize_board_slug(
+                    child.name
+                )  # skip junk dirs, don't raise
             except ValueError:
                 continue
             if not normed or normed in seen or not _dir_holds_board(child):
@@ -191,6 +219,7 @@ def remove_board(slug: str, *, archive: bool = True) -> dict:
         )
         return {"slug": normed, "action": "archived", "new_path": str(target)}
     import shutil
+
     shutil.rmtree(d)
     return {"slug": normed, "action": "deleted", "new_path": ""}
 

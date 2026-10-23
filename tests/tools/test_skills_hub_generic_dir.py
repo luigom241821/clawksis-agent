@@ -7,14 +7,24 @@ from tools.skills_hub_models import SkillBundle
 from tools.skills_hub_official import ClawksisIndexSource
 from tools.skills_hub_skillssh import SkillsShSource
 
-ROW = {"name": "weread-skills", "description": "WeChat Reading skills", "source": "skills.sh",
-       "identifier": "skills-sh/tencent/wechatreading/weread-skills",
-       "repo": "tencent/wechatreading", "path": "weread-skills"}
+ROW = {
+    "name": "weread-skills",
+    "description": "WeChat Reading skills",
+    "source": "skills.sh",
+    "identifier": "skills-sh/tencent/wechatreading/weread-skills",
+    "repo": "tencent/wechatreading",
+    "path": "weread-skills",
+}
 
 
 def _generic_bundle(*_):
-    return SkillBundle(name="skills", files={"SKILL.md": "---\nname: weread-skills\n---\n"},
-                       source="github", identifier="tencent/wechatreading/skills", trust_level="community")
+    return SkillBundle(
+        name="skills",
+        files={"SKILL.md": "---\nname: weread-skills\n---\n"},
+        source="github",
+        identifier="tencent/wechatreading/skills",
+        trust_level="community",
+    )
 
 
 def _index_source(row, github, monkeypatch):
@@ -29,14 +39,25 @@ def test_finds_single_generic_skills_directory_when_slug_is_stale(mock_get):
     """A lone ``skills/SKILL.md`` answers for a stale slug; a lone NAMED skill (``skills/bar``) never does."""
     auth = MagicMock(spec=GitHubAuth)
     auth.get_headers.return_value = {"Accept": "application/vnd.github.v3+json"}
-    for lone, expected in (("skills/SKILL.md", "tencent/wechatreading/skills"), ("skills/bar/SKILL.md", None)):
-        tree_entries = [{"path": "README.md", "type": "blob"}, {"path": lone, "type": "blob"}]
+    for lone, expected in (
+        ("skills/SKILL.md", "tencent/wechatreading/skills"),
+        ("skills/bar/SKILL.md", None),
+    ):
+        tree_entries = [
+            {"path": "README.md", "type": "blob"},
+            {"path": lone, "type": "blob"},
+        ]
         mock_get.side_effect = [
             MagicMock(status_code=200, json=lambda: {"default_branch": "main"}),
             MagicMock(status_code=200, json=lambda t=tree_entries: {"tree": t}),
         ]
 
-        assert GitHubSource(auth=auth)._find_skill_in_repo_tree("tencent/wechatreading", "weread-skills") == expected
+        assert (
+            GitHubSource(auth=auth)._find_skill_in_repo_tree(
+                "tencent/wechatreading", "weread-skills"
+            )
+            == expected
+        )
 
 
 def test_fetch_resolves_generic_skill_directory_from_index_slug(monkeypatch):
@@ -45,24 +66,44 @@ def test_fetch_resolves_generic_skill_directory_from_index_slug(monkeypatch):
     github = MagicMock()
     github._find_skill_in_repo_tree.return_value = "tencent/wechatreading/skills"
     github._find_repo_root_skill.return_value = None
-    for extra, fetched in (({}, [None, _generic_bundle()]),
-                           ({"resolved_github_id": "tencent/wechatreading/skills"}, [_generic_bundle()])):
+    for extra, fetched in (
+        ({}, [None, _generic_bundle()]),
+        ({"resolved_github_id": "tencent/wechatreading/skills"}, [_generic_bundle()]),
+    ):
         github.fetch.side_effect = fetched
 
-        bundle = _index_source({**ROW, **extra}, github, monkeypatch).fetch(ROW["identifier"])
+        bundle = _index_source({**ROW, **extra}, github, monkeypatch).fetch(
+            ROW["identifier"]
+        )
 
-        assert (bundle.name, bundle.identifier) == ("weread-skills", ROW["identifier"])  # one lock name
-    github._find_skill_in_repo_tree.assert_called_once_with("tencent/wechatreading", "weread-skills")
+        assert (bundle.name, bundle.identifier) == (
+            "weread-skills",
+            ROW["identifier"],
+        )  # one lock name
+    github._find_skill_in_repo_tree.assert_called_once_with(
+        "tencent/wechatreading", "weread-skills"
+    )
 
     skills_sh = SkillsShSource(auth=MagicMock(spec=GitHubAuth))
     monkeypatch.setattr(skills_sh, "_fetch_detail_page", lambda _id: None)
     monkeypatch.setattr(skills_sh, "_candidate_identifiers", lambda _id: [])
-    monkeypatch.setattr(skills_sh, "_discover_identifier", lambda *_a, **_k: "tencent/wechatreading/skills")
+    monkeypatch.setattr(
+        skills_sh,
+        "_discover_identifier",
+        lambda *_a, **_k: "tencent/wechatreading/skills",
+    )
     monkeypatch.setattr(skills_sh.github, "fetch", _generic_bundle)
     assert skills_sh.fetch(ROW["identifier"]).name == "weread-skills"
 
     github.reset_mock()
     github.fetch.side_effect = [None]
-    gone = {**ROW, "source": "github", "identifier": "tencent/wechatreading/gone", "path": "gone"}
-    assert _index_source(gone, github, monkeypatch).fetch(gone["identifier"]) is None  # no other skill relabeled
+    gone = {
+        **ROW,
+        "source": "github",
+        "identifier": "tencent/wechatreading/gone",
+        "path": "gone",
+    }
+    assert (
+        _index_source(gone, github, monkeypatch).fetch(gone["identifier"]) is None
+    )  # no other skill relabeled
     github._find_skill_in_repo_tree.assert_not_called()

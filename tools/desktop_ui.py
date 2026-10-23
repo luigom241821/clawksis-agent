@@ -48,6 +48,7 @@ def user_enabled(setting: str, default: bool) -> bool:
     on a transient read error."""
     try:
         from clawk_cli.config import load_config_readonly
+
         display = load_config_readonly().get("display")
     except Exception:
         return default
@@ -70,7 +71,9 @@ def emit(event: str, payload: dict) -> bool:
     return True
 
 
-def emit_or_error(event: str, payload: dict, fail_prefix: str, desktop_only: str, result: dict) -> str:
+def emit_or_error(
+    event: str, payload: dict, fail_prefix: str, desktop_only: str, result: dict
+) -> str:
     """Emit ``event``; ``tool_error`` text on failure (``fail_prefix`` + exception, or
     ``desktop_only`` when no emitter), else ``result`` as JSON. Calls ``emit`` via the
     module attribute so tests can patch it."""

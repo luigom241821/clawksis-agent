@@ -82,6 +82,7 @@ def test_windows_taskkill_targets_tree_and_is_best_effort(error):
         _legacy_kill_process_tree(MagicMock(pid=4321))
     assert run.call_args.args[0] == ["taskkill", "/PID", "4321", "/T", "/F"]
 
+
 # ---------------------------------------------------------------------------
 # Group-leadership guard (#119149): a child that does not lead its own group
 # shares OURS — killpg would signal the whole Clawksis/test-runner tree.
@@ -98,7 +99,9 @@ def test_posix_shared_group_is_never_killpgd(monkeypatch, fake_process_table):
     proc.pid = 999
     monkeypatch.setattr(os, "getpgid", lambda pid: 555)  # child's group != its pid
     killpg_calls = []
-    monkeypatch.setattr(os, "killpg", lambda pgid, sig: killpg_calls.append((pgid, sig)))
+    monkeypatch.setattr(
+        os, "killpg", lambda pgid, sig: killpg_calls.append((pgid, sig))
+    )
 
     _legacy_kill_process_tree(proc)
 

@@ -5,6 +5,7 @@ token and follow redirects, so they must validate the destination (CWE-918)
 exactly like the already-guarded outbound ``send_image`` path: a pre-flight
 ``is_safe_url`` check plus a per-redirect guard.
 """
+
 import asyncio
 import sys
 from types import SimpleNamespace
@@ -89,9 +90,11 @@ def test_unsafe_url_blocked_before_network(monkeypatch, method_name):
 
     self = _fake_adapter()
     method = getattr(self, method_name)
-    args = ("http://169.254.169.254/latest/meta-data/", ".jpg") \
-        if method_name == "_download_slack_file" \
+    args = (
+        ("http://169.254.169.254/latest/meta-data/", ".jpg")
+        if method_name == "_download_slack_file"
         else ("http://169.254.169.254/latest/meta-data/",)
+    )
 
     with pytest.raises(ValueError):
         asyncio.run(method(*args))
@@ -111,9 +114,11 @@ def test_redirect_guard_is_wired(monkeypatch, method_name):
 
     self = _fake_adapter()
     method = getattr(self, method_name)
-    args = ("https://files.slack.com/x.jpg", ".jpg") \
-        if method_name == "_download_slack_file" \
+    args = (
+        ("https://files.slack.com/x.jpg", ".jpg")
+        if method_name == "_download_slack_file"
         else ("https://files.slack.com/x.jpg",)
+    )
 
     # The fake client raises when .get() is called; we only care that the
     # client was constructed with the redirect guard hook.
@@ -124,8 +129,7 @@ def test_redirect_guard_is_wired(monkeypatch, method_name):
     assert kwargs is not None
     hooks = kwargs.get("event_hooks", {})
     assert ssrf_redirect_guard in hooks.get("response", []), (
-        "AsyncClient must register ssrf_redirect_guard to block "
-        "redirect-based SSRF"
+        "AsyncClient must register ssrf_redirect_guard to block redirect-based SSRF"
     )
 
 
@@ -146,5 +150,3 @@ def test_redirect_guard_is_wired(monkeypatch, method_name):
 # whose DNS answer flips from public at preflight to a metadata IP at connect
 # time must be blocked before any TCP connect is attempted.
 # ---------------------------------------------------------------------------
-
-

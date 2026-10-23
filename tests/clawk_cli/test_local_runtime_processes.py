@@ -11,7 +11,7 @@ import psutil
 import pytest
 
 
-_SCRIPT = r'''
+_SCRIPT = r"""
 import json, os, subprocess, sys, time
 from pathlib import Path
 import psutil
@@ -42,7 +42,7 @@ elif role == 'router':
     time.sleep(90)
 else:
     time.sleep(90)
-'''
+"""
 
 
 def _wait(predicate, timeout=10):
@@ -50,7 +50,7 @@ def _wait(predicate, timeout=10):
     while time.monotonic() < deadline:
         if predicate():
             return True
-        time.sleep(.03)
+        time.sleep(0.03)
     return bool(predicate())
 
 
@@ -61,8 +61,8 @@ def _read(path):
 
 def _alive(identity):
     try:
-        proc = psutil.Process(identity['pid'])
-        if proc.create_time() != identity['created']:
+        proc = psutil.Process(identity["pid"])
+        if proc.create_time() != identity["created"]:
             return False
         try:
             proc.wait(timeout=0)
@@ -75,51 +75,64 @@ def _alive(identity):
 
 def _kill(identity):
     if _alive(identity):
-        proc = psutil.Process(identity['pid'])
+        proc = psutil.Process(identity["pid"])
         proc.kill()
         proc.wait(timeout=10)
 
 
 @pytest.mark.platforms("windows")
-@pytest.mark.parametrize('stop_mode', ['graceful', 'abrupt'])
-@pytest.mark.parametrize('nested', [False, True])
+@pytest.mark.parametrize("stop_mode", ["graceful", "abrupt"])
+@pytest.mark.parametrize("nested", [False, True])
 def test_owner_exit_kills_router_tree_not_external(tmp_path, stop_mode, nested):
-    script = tmp_path / 'disposable server.py'
+    script = tmp_path / "disposable server.py"
     script.write_text(_SCRIPT)
-    env = dict(os.environ, CLAWK_HOME=str(tmp_path / 'home'),
-               PYTHONPATH=str(Path(__file__).resolve().parents[2]))
+    env = dict(
+        os.environ,
+        CLAWK_HOME=str(tmp_path / "home"),
+        PYTHONPATH=str(Path(__file__).resolve().parents[2]),
+    )
     launchers = []
     outer_job = None
-    with (tmp_path / 'children.log').open('w') as log:
+    with (tmp_path / "children.log").open("w") as log:
         try:
-            for role in ('control', 'owner'):
+            for role in ("control", "owner"):
                 cmd = [sys.executable, str(script), str(tmp_path), role]
-                if nested and role == 'owner':
+                if nested and role == "owner":
                     from clawk_cli.local_runtime.processes import spawn_server
-                    launcher, outer_job = spawn_server(cmd, env=env, stdout=log, stderr=log)
+
+                    launcher, outer_job = spawn_server(
+                        cmd, env=env, stdout=log, stderr=log
+                    )
                 else:
                     launcher = subprocess.Popen(cmd, env=env, stdout=log, stderr=log)
                 launchers.append(launcher)
-            owner = _read(tmp_path / 'owner.json')
-            router = _read(tmp_path / 'router.json')
-            grandchild = _read(tmp_path / 'grandchild.json')
-            control = _read(tmp_path / 'control.json')
-            assert _wait((tmp_path / 'ready').exists)
+            owner = _read(tmp_path / "owner.json")
+            router = _read(tmp_path / "router.json")
+            grandchild = _read(tmp_path / "grandchild.json")
+            control = _read(tmp_path / "control.json")
+            assert _wait((tmp_path / "ready").exists)
             assert all(_alive(i) for i in (owner, router, grandchild, control))
-            print('disposable identities:', stop_mode, owner, router, grandchild, control)
-            if stop_mode == 'graceful':
-                (tmp_path / 'stop').write_text('stop')
-                assert _wait((tmp_path / 'closed').exists), 'close killed the owner itself'
+            print(
+                "disposable identities:", stop_mode, owner, router, grandchild, control
+            )
+            if stop_mode == "graceful":
+                (tmp_path / "stop").write_text("stop")
+                assert _wait((tmp_path / "closed").exists), (
+                    "close killed the owner itself"
+                )
                 assert _alive(owner)
                 assert _wait(lambda: not _alive(router) and not _alive(grandchild))
                 assert _alive(control)
-                (tmp_path / 'exit').write_text('exit')
+                (tmp_path / "exit").write_text("exit")
             else:
                 _kill(owner)  # The venv launcher is not necessarily the owner.
             assert _wait(lambda: not _alive(owner))
             assert _wait(lambda: not _alive(router) and not _alive(grandchild)), (
-                'uncontained router/grandchild survived owner exit', router, grandchild)
-            assert _alive(control), 'unrelated external control was terminated'
+                "uncontained router/grandchild survived owner exit",
+                router,
+                grandchild,
+            )
+            assert _alive(control), "unrelated external control was terminated"
         finally:
             if outer_job is not None:
                 outer_job.close()
@@ -127,13 +140,15 @@ def test_owner_exit_kills_router_tree_not_external(tmp_path, stop_mode, nested):
             descendants = []
             for launcher in launchers:
                 try:
-                    descendants.extend(psutil.Process(launcher.pid).children(recursive=True))
+                    descendants.extend(
+                        psutil.Process(launcher.pid).children(recursive=True)
+                    )
                 except psutil.NoSuchProcess:
                     pass
-            for path in tmp_path.glob('*.json'):
+            for path in tmp_path.glob("*.json"):
                 _kill(json.loads(path.read_text()))
             for proc in reversed(descendants):
-                _kill({'pid': proc.pid, 'created': proc.create_time()})
+                _kill({"pid": proc.pid, "created": proc.create_time()})
             for launcher in launchers:
                 if launcher.poll() is None:
                     launcher.kill()
@@ -141,13 +156,15 @@ def test_owner_exit_kills_router_tree_not_external(tmp_path, stop_mode, nested):
 
 
 @pytest.mark.platforms("windows")
-@pytest.mark.parametrize('failure', ['assign', 'resume', 'popen', 'configure'])
-def test_failed_setup_never_runs_child_and_releases_handles(tmp_path, monkeypatch, failure):
+@pytest.mark.parametrize("failure", ["assign", "resume", "popen", "configure"])
+def test_failed_setup_never_runs_child_and_releases_handles(
+    tmp_path, monkeypatch, failure
+):
     import ctypes
     from ctypes import wintypes
     from clawk_cli.local_runtime import processes
 
-    marker = tmp_path / 'child executed'
+    marker = tmp_path / "child executed"
     jobs, children, handles = [], [], []
     real_init = processes._WindowsJob.__init__
     real_assign = processes._WindowsJob.assign
@@ -157,7 +174,7 @@ def test_failed_setup_never_runs_child_and_releases_handles(tmp_path, monkeypatc
         real_init(job)
         handles.append(job._handle)
 
-    if failure == 'configure':
+    if failure == "configure":
         real_dll = ctypes.WinDLL
 
         def failed_config_dll(*args, **kwargs):
@@ -165,12 +182,12 @@ def test_failed_setup_never_runs_child_and_releases_handles(tmp_path, monkeypatc
 
             def fail_config(handle, *args):
                 handles.append(handle)
-                raise KeyboardInterrupt('injected cancellation configuring job')
+                raise KeyboardInterrupt("injected cancellation configuring job")
 
             api.SetInformationJobObject = fail_config
             return api
 
-        monkeypatch.setattr(ctypes, 'WinDLL', failed_config_dll)
+        monkeypatch.setattr(ctypes, "WinDLL", failed_config_dll)
 
     def assign(job, proc):
         children.append(proc)
@@ -179,8 +196,13 @@ def test_failed_setup_never_runs_child_and_releases_handles(tmp_path, monkeypatc
         # Query the actual kernel object, not implementation source/constants.
         limits = processes._ExtendedLimits()
         query = job._api.QueryInformationJobObject
-        query.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p,
-                          wintypes.DWORD, ctypes.c_void_p]
+        query.argtypes = [
+            wintypes.HANDLE,
+            ctypes.c_int,
+            ctypes.c_void_p,
+            wintypes.DWORD,
+            ctypes.c_void_p,
+        ]
         query.restype = wintypes.BOOL
         assert query(job._handle, 9, ctypes.byref(limits), ctypes.sizeof(limits), None)
         flags = limits.BasicLimitInformation.LimitFlags
@@ -192,33 +214,49 @@ def test_failed_setup_never_runs_child_and_releases_handles(tmp_path, monkeypatc
         inherited = wintypes.DWORD()
         assert info(job._handle, ctypes.byref(inherited))
         assert not inherited.value & 1  # HANDLE_FLAG_INHERIT
-        if failure == 'assign':
+        if failure == "assign":
             # Exercise a real WinAPI rejection while the child is suspended.
             assert not job._api.AssignProcessToJobObject(job._handle, None)
             raise ctypes.WinError(ctypes.get_last_error())
         real_assign(job, proc)
 
     def fail_resume(self):
-        raise KeyboardInterrupt('injected cancellation before resume')
+        raise KeyboardInterrupt("injected cancellation before resume")
 
-    monkeypatch.setattr(processes._WindowsJob, '__init__', track_job)
-    monkeypatch.setattr(processes._WindowsJob, 'assign', assign)
-    monkeypatch.setattr(psutil.Process, 'resume', fail_resume)
-    cmd = ([str(tmp_path / 'missing.exe')] if failure == 'popen' else
-           [sys.executable, '-c', 'from pathlib import Path; import sys; '
-            'Path(sys.argv[1]).write_text("ran")', str(marker)])
+    monkeypatch.setattr(processes._WindowsJob, "__init__", track_job)
+    monkeypatch.setattr(processes._WindowsJob, "assign", assign)
+    monkeypatch.setattr(psutil.Process, "resume", fail_resume)
+    cmd = (
+        [str(tmp_path / "missing.exe")]
+        if failure == "popen"
+        else [
+            sys.executable,
+            "-c",
+            'from pathlib import Path; import sys; Path(sys.argv[1]).write_text("ran")',
+            str(marker),
+        ]
+    )
     try:
         with pytest.raises((OSError, KeyboardInterrupt)):
-            processes.spawn_server(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                   stderr=subprocess.PIPE)
+            processes.spawn_server(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
         assert not marker.exists()
         assert jobs and jobs[0]._handle is None
         for proc in children:
-            assert proc.poll() is not None, 'failed setup left a live suspended child'
-            assert all(stream.closed for stream in (proc.stdin, proc.stdout, proc.stderr))
-            assert proc._handle.closed, 'failed setup leaked the Popen process handle'
-        api = ctypes.WinDLL('kernel32', use_last_error=True)
-        api.GetHandleInformation.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+            assert proc.poll() is not None, "failed setup left a live suspended child"
+            assert all(
+                stream.closed for stream in (proc.stdin, proc.stdout, proc.stderr)
+            )
+            assert proc._handle.closed, "failed setup leaked the Popen process handle"
+        api = ctypes.WinDLL("kernel32", use_last_error=True)
+        api.GetHandleInformation.argtypes = [
+            wintypes.HANDLE,
+            ctypes.POINTER(wintypes.DWORD),
+        ]
         api.GetHandleInformation.restype = wintypes.BOOL
         for handle in handles:
             flags = wintypes.DWORD()

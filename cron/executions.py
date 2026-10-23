@@ -41,6 +41,7 @@ _PROCESS_ID = uuid.uuid4().hex
 
 # --- executions ledger --------------------------------------------------------------------------
 
+
 def _connect() -> sqlite3.Connection:
     # Late imports: a scheduler daemon that outlives an on-disk upgrade already has the OLD
     # ``clawk_cli.sqlite_util`` / ``cron.jobs`` cached, so new names must be resolved at call time,
@@ -50,7 +51,12 @@ def _connect() -> sqlite3.Connection:
 
     path = EXECUTIONS_FILE or (get_clawk_home().resolve() / "cron" / "executions.db")
     _ensure_cron_dir(path.parent)
-    return open_db(path, db_label="cron/executions.db", synchronous_full=True, initialize=_initialize_schema)
+    return open_db(
+        path,
+        db_label="cron/executions.db",
+        synchronous_full=True,
+        initialize=_initialize_schema,
+    )
 
 
 def _initialize_schema(conn: sqlite3.Connection) -> None:
@@ -75,7 +81,9 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
            )"""
     )
     add_column_if_missing(
-        conn, "executions", "handoff_pending",
+        conn,
+        "executions",
+        "handoff_pending",
         "handoff_pending INTEGER NOT NULL DEFAULT 0",
     )
     add_column_if_missing(
@@ -89,8 +97,12 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         "CREATE INDEX IF NOT EXISTS idx_executions_status_claimed "
         "ON executions(status, claimed_at DESC, id DESC)"
     )
-    add_column_if_missing(conn, "executions", "delivery_outcome", "delivery_outcome TEXT")
-    add_column_if_missing(conn, "executions", "scheduled_instant", "scheduled_instant TEXT")
+    add_column_if_missing(
+        conn, "executions", "delivery_outcome", "delivery_outcome TEXT"
+    )
+    add_column_if_missing(
+        conn, "executions", "scheduled_instant", "scheduled_instant TEXT"
+    )
     add_column_if_missing(conn, "executions", "progress_at", "progress_at TEXT")
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_executions_occurrence "
@@ -107,7 +119,9 @@ def _transaction() -> Iterator[sqlite3.Connection]:
 
 
 def _fetch(conn: sqlite3.Connection, execution_id: str) -> Optional[dict[str, Any]]:
-    row = conn.execute("SELECT * FROM executions WHERE id=?", (execution_id,)).fetchone()
+    row = conn.execute(
+        "SELECT * FROM executions WHERE id=?", (execution_id,)
+    ).fetchone()
     return dict(row) if row is not None else None
 
 
@@ -126,6 +140,7 @@ def _emit_execution_state(
 def _process_start_time(pid: int) -> Optional[int]:
     try:
         from gateway.status import get_process_start_time
+
         return get_process_start_time(pid)
     except Exception:
         return None
@@ -134,6 +149,7 @@ def _process_start_time(pid: int) -> Optional[int]:
 def _owner_is_live(pid: int, started_at: Optional[int]) -> bool:
     try:
         from gateway.status import _pid_exists
+
         if not _pid_exists(pid):
             return False
     except Exception:
@@ -146,6 +162,7 @@ def _owner_is_live(pid: int, started_at: Optional[int]) -> bool:
     # Drifted same-host readings (#117505) are not proof of death; a live misread is still
     # bounded by the stale-claim sweep below.
     from gateway.status import start_time_fingerprints_match
+
     return start_time_fingerprints_match(started_at, current)
 
 
@@ -211,7 +228,10 @@ def _prune_unlocked(conn: sqlite3.Connection) -> None:
 
 
 def create_execution(
-    job_id: str, *, source: str, scheduled_instant: Optional[str] = None,
+    job_id: str,
+    *,
+    source: str,
+    scheduled_instant: Optional[str] = None,
 ) -> dict[str, Any]:
     """Persist a claimed attempt before executor/provider dispatch."""
     from cron.occurrences import scheduled_instant as canonical_instant
@@ -225,8 +245,16 @@ def create_execution(
                (id, job_id, source, process_id, pid, process_started_at,
                 status, claimed_at, scheduled_instant)
                VALUES (?, ?, ?, ?, ?, ?, 'claimed', ?, ?)""",
-            (execution_id, str(job_id), str(source), _PROCESS_ID, pid,
-             _process_start_time(pid), now, canonical_instant(scheduled_instant)),
+            (
+                execution_id,
+                str(job_id),
+                str(source),
+                _PROCESS_ID,
+                pid,
+                _process_start_time(pid),
+                now,
+                canonical_instant(scheduled_instant),
+            ),
         )
         record = _fetch(conn, execution_id)
     _emit_execution_state(record)
@@ -310,7 +338,10 @@ def mark_execution_running(execution_id: str) -> Optional[dict[str, Any]]:
 
 
 def finish_execution(
-    execution_id: str, *, success: bool, error: Optional[str] = None,
+    execution_id: str,
+    *,
+    success: bool,
+    error: Optional[str] = None,
     delivery_outcome: Optional[str] = None,
 ) -> Optional[dict[str, Any]]:
     """Write a terminal result once; terminal attempts cannot be rewritten.
@@ -340,7 +371,9 @@ def finish_execution(
     return record
 
 
-def recover_receipted_execution(execution_id, job_id, *, success, error=None, delivery_outcome=None):
+def recover_receipted_execution(
+    execution_id, job_id, *, success, error=None, delivery_outcome=None
+):
     """Settle a verified canonical receipt after owner loss, including its unknown audit row.
 
     Terminal verdicts stay immutable. A live firer still owns its bookkeeping
@@ -354,8 +387,14 @@ def recover_receipted_execution(execution_id, job_id, *, success, error=None, de
         conn.execute(
             """UPDATE executions SET status=?, finished_at=?, error=?, handoff_pending=0,
                handoff_started_at=NULL, delivery_outcome=? WHERE id=?""",
-            ('completed' if success else 'failed', now, None if success else (str(error) if error else 'unknown failure'),
-             delivery_outcome, execution_id))
+            (
+                "completed" if success else "failed",
+                now,
+                None if success else (str(error) if error else "unknown failure"),
+                delivery_outcome,
+                execution_id,
+            ),
+        )
         _prune_unlocked(conn)
         record = _fetch(conn, execution_id)
     _emit_execution_state(record, delivery_outcome=delivery_outcome)
@@ -367,15 +406,16 @@ def _recoverable_row(conn, execution_id, job_id):
     return conn.execute(
         """SELECT status, process_id, pid, process_started_at FROM executions
            WHERE id=? AND job_id=? AND status IN ('claimed','running','unknown')""",
-        (str(execution_id), str(job_id))).fetchone()
+        (str(execution_id), str(job_id)),
+    ).fetchone()
 
 
 def _row_owner_live(row) -> bool:
-    if row['process_id'] == _PROCESS_ID:
+    if row["process_id"] == _PROCESS_ID:
         # The in-gateway ticker fires on pool threads: a claimed/running row of THIS process is
         # still in flight here. Only an unknown row was given up by its own firer.
-        return row['status'] != 'unknown'
-    return _owner_is_live(int(row['pid']), row['process_started_at'])
+        return row["status"] != "unknown"
+    return _owner_is_live(int(row["pid"]), row["process_started_at"])
 
 
 def execution_owner_live(execution_id: str, job_id: str) -> bool:
@@ -419,8 +459,13 @@ def settle_unstarted_execution(execution_id: str, job_id: str, error: str) -> No
     try:
         finish_execution(execution_id, success=False, error=error)
     except (sqlite3.Error, OSError) as record_err:
-        logger.error("Job '%s': failed to close execution receipt %s (%s): %s",
-                     job_id, execution_id, error, record_err)
+        logger.error(
+            "Job '%s': failed to close execution receipt %s (%s): %s",
+            job_id,
+            execution_id,
+            error,
+            record_err,
+        )
 
 
 def recover_interrupted_executions() -> int:
@@ -461,7 +506,8 @@ def recover_interrupted_executions() -> int:
                     stale_after_resolved = True
                 if (
                     stale_after is None
-                    or _stale_age_seconds(row["claimed_at"], row["progress_at"]) <= stale_after
+                    or _stale_age_seconds(row["claimed_at"], row["progress_at"])
+                    <= stale_after
                 ):
                     continue
                 reason = _OWNER_WEDGED_REASON
@@ -483,9 +529,18 @@ def recover_interrupted_executions() -> int:
                      AND handoff_pending=?
                      AND handoff_started_at IS ?
                      AND claimed_at=? AND progress_at IS ?""",
-                (now, reason, row["id"], row["status"], row["process_id"], row["pid"],
-                 row["handoff_pending"], row["handoff_started_at"],
-                 row["claimed_at"], row["progress_at"]),
+                (
+                    now,
+                    reason,
+                    row["id"],
+                    row["status"],
+                    row["process_id"],
+                    row["pid"],
+                    row["handoff_pending"],
+                    row["handoff_started_at"],
+                    row["claimed_at"],
+                    row["progress_at"],
+                ),
             )
             changed += cur.rowcount
             if cur.rowcount:
@@ -565,7 +620,8 @@ def give_up_execution(execution_id: str, *, reason: str) -> bool:
             """UPDATE executions SET status='unknown', finished_at=?, error=?,
                    handoff_pending=0, handoff_started_at=NULL
                WHERE id=? AND status IN ('claimed','running') AND process_id=? AND pid=?""",
-            (now, reason, str(execution_id), _PROCESS_ID, os.getpid()))
+            (now, reason, str(execution_id), _PROCESS_ID, os.getpid()),
+        )
         if cur.rowcount != 1:
             return False
         record = _fetch(conn, str(execution_id))
@@ -575,7 +631,10 @@ def give_up_execution(execution_id: str, *, reason: str) -> bool:
 
 
 def list_executions(
-    *, job_id: Optional[str] = None, limit: int = 50, before_claimed_at: Optional[str] = None,
+    *,
+    job_id: Optional[str] = None,
+    limit: int = 50,
+    before_claimed_at: Optional[str] = None,
 ) -> list[dict[str, Any]]:
     """Return indexed, newest-first execution history with cursor pagination."""
     clauses: list[str] = []
@@ -593,7 +652,8 @@ def list_executions(
     # is not time order. julianday() compares instants (ms); the text breaks same-ms ties.
     with _transaction() as conn:
         rows = conn.execute(
-            "SELECT * FROM executions" + where
+            "SELECT * FROM executions"
+            + where
             + " ORDER BY julianday(claimed_at) DESC, claimed_at DESC, id DESC LIMIT ?",
             params,
         ).fetchall()

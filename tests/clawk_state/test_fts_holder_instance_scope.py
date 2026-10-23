@@ -140,7 +140,9 @@ class TestUninspectableHolderInstanceScope:
             assert [pid for pid, _ in holders] == [222], argv
             assert holders[0][1].startswith("uninspectable holder:"), argv
 
-    def test_install_root_argv_still_holds_a_profile_store_under_it(self, tmp_path, monkeypatch):
+    def test_install_root_argv_still_holds_a_profile_store_under_it(
+        self, tmp_path, monkeypatch
+    ):
         """One process per host serves EVERY profile, so argv naming only the install root does
         not prove the process is another instance: it holds ``<root>/profiles/<name>/state.db``
         too. A DIFFERENT install root is still proof."""
@@ -152,13 +154,17 @@ class TestUninspectableHolderInstanceScope:
 
         _install_fake_proc(monkeypatch, db_path.parent, unreadable_pids=(222,))
         _install_fake_argv(monkeypatch, {222: multiplexer})
-        assert [pid for pid, _ in clawk_state_holders.foreign_state_db_holders(db_path)] == [222]
+        assert [
+            pid for pid, _ in clawk_state_holders.foreign_state_db_holders(db_path)
+        ] == [222]
 
         _install_fake_proc(monkeypatch, db_path.parent, unreadable_pids=(222,))
         _install_fake_argv(monkeypatch, {222: other_install})
         assert clawk_state_holders.foreign_state_db_holders(db_path) == []
 
-    def test_shared_binary_plus_another_profile_selection_is_dismissed(self, tmp_path, monkeypatch):
+    def test_shared_binary_plus_another_profile_selection_is_dismissed(
+        self, tmp_path, monkeypatch
+    ):
         """argv[0] is the SHARED install binary, so it cannot prove a hold of profile b's store.
 
         Every clawk process on a normal host runs ``<root>/venv/bin/clawk``; counting that token
@@ -184,7 +190,9 @@ class TestUninspectableHolderInstanceScope:
             holders = clawk_state_holders.foreign_state_db_holders(db_path)
             assert [pid for pid, _ in holders] == expected, argv
 
-    def test_token_naming_another_profiles_store_is_dismissal_evidence(self, tmp_path, monkeypatch):
+    def test_token_naming_another_profiles_store_is_dismissal_evidence(
+        self, tmp_path, monkeypatch
+    ):
         """A token positively naming ANOTHER profile's store is the strongest dismissal there is.
 
         It sits under our install root, so a blanket own-prefix test read the strongest evidence of
@@ -221,10 +229,14 @@ class TestUninspectableHolderInstanceScope:
 
         _install_fake_proc(monkeypatch, db_path.parent, unreadable_pids=(222,))
         _install_fake_argv(
-            monkeypatch, {222: ["clawk", "--clawk-home", str(unrelated_home), "gateway", "run"]})
+            monkeypatch,
+            {222: ["clawk", "--clawk-home", str(unrelated_home), "gateway", "run"]},
+        )
         assert clawk_state_holders.foreign_state_db_holders(db_path) == []
 
-    def test_custom_home_is_not_dismissed_by_the_install_location(self, tmp_path, monkeypatch):
+    def test_custom_home_is_not_dismissed_by_the_install_location(
+        self, tmp_path, monkeypatch
+    ):
         """A store at a custom CLAWK_HOME is SERVED BY the binary under ``~/.clawksis``.
 
         Dismissing on that argv[0] admitted auto-VACUUM and the FTS rebuild under the live
@@ -235,6 +247,7 @@ class TestUninspectableHolderInstanceScope:
 
         _install_fake_proc(monkeypatch, db_path.parent, unreadable_pids=(222,))
         _install_fake_argv(
-            monkeypatch, {222: ["/home/u/.clawksis/venv/bin/clawk", "gateway", "run"]})
+            monkeypatch, {222: ["/home/u/.clawksis/venv/bin/clawk", "gateway", "run"]}
+        )
         holders = clawk_state_holders.foreign_state_db_holders(db_path)
         assert [pid for pid, _ in holders] == [222]

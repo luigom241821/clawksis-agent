@@ -23,8 +23,12 @@ class LMStudioProfile(ProviderProfile):
     """LM Studio: top-level ``reasoning_effort`` from the model's published options."""
 
     def build_api_kwargs_extras(
-        self, *, reasoning_config: dict | None = None, supports_reasoning: bool = False,
-        lmstudio_reasoning_options: list[str] | None = None, **context: Any,
+        self,
+        *,
+        reasoning_config: dict | None = None,
+        supports_reasoning: bool = False,
+        lmstudio_reasoning_options: list[str] | None = None,
+        **context: Any,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         """``supports_reasoning`` is true only when the model publishes a non-``off`` option;
         ``lmstudio_reasoning_options`` is the agent's cached probe of them. Auxiliary calls have no
@@ -37,7 +41,12 @@ class LMStudioProfile(ProviderProfile):
         return {}, ({"reasoning_effort": effort} if effort is not None else {})
 
 
-register_provider(LMStudioProfile(
-    name="lmstudio", display_name="LM Studio", supports_model_listing=False, supports_health_check=False,
-    env_vars=("LM_API_KEY", "LM_BASE_URL"),
-))
+register_provider(
+    LMStudioProfile(
+        name="lmstudio",
+        display_name="LM Studio",
+        supports_model_listing=False,
+        supports_health_check=False,
+        env_vars=("LM_API_KEY", "LM_BASE_URL"),
+    )
+)

@@ -69,7 +69,12 @@ def _connect() -> sqlite3.Connection:
 
     path = _db_path()
     _ensure_cron_dir(path.parent)
-    return open_db(path, db_label="cron/executions.db", synchronous_full=True, initialize=_initialize_schema)
+    return open_db(
+        path,
+        db_label="cron/executions.db",
+        synchronous_full=True,
+        initialize=_initialize_schema,
+    )
 
 
 def _initialize_schema(conn: sqlite3.Connection) -> None:
@@ -94,12 +99,10 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
     # Ledgers created before the alert-once gate lack ``alerted_at``; add it in place.
     add_column_if_missing(conn, "cron_incidents", "alerted_at", "alerted_at TEXT")
     conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_cron_incidents_job "
-        "ON cron_incidents(job_id)"
+        "CREATE INDEX IF NOT EXISTS idx_cron_incidents_job ON cron_incidents(job_id)"
     )
     conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_cron_incidents_state "
-        "ON cron_incidents(state)"
+        "CREATE INDEX IF NOT EXISTS idx_cron_incidents_state ON cron_incidents(state)"
     )
 
 
@@ -122,7 +125,9 @@ def _redact_error(error: str) -> str:
     try:
         from agent.redact import redact_sensitive_text
 
-        text = redact_sensitive_text(text, force=True)  # persisted to disk: always scrub
+        text = redact_sensitive_text(
+            text, force=True
+        )  # persisted to disk: always scrub
     except Exception:
         pass
     return text[:MAX_ERROR_CHARS]
@@ -130,7 +135,9 @@ def _redact_error(error: str) -> str:
 
 def _error_signature(job_id: str, error: str) -> str:
     """Dedup key: stable for same job + same normalized error prefix."""
-    normalized = _DURATION_RE.sub("#s", _normalize_error(error))[:_MAX_SIGNATURE_ERROR_CHARS]
+    normalized = _DURATION_RE.sub("#s", _normalize_error(error))[
+        :_MAX_SIGNATURE_ERROR_CHARS
+    ]
     return hashlib.sha256(job_id.encode() + normalized.encode()).hexdigest()[:12]
 
 
@@ -154,7 +161,11 @@ def _classify_failure_type(error: str) -> str:
 
 
 def upsert_incident(
-    job_id: str, error: str, *, job_name: Optional[str] = None, failure_type: Optional[str] = None,
+    job_id: str,
+    error: str,
+    *,
+    job_name: Optional[str] = None,
+    failure_type: Optional[str] = None,
     output_file: Optional[str] = None,
 ) -> tuple[str, bool]:
     """Record (or refresh) the incident for ``job_id`` + ``error``; returns ``(incident_id,
@@ -191,8 +202,16 @@ def upsert_incident(
                (id, job_id, error_sig, state, failure_type,
                 first_seen_at, last_seen_at, error, output_file)
                VALUES (?, ?, ?, 'detected', ?, ?, ?, ?, ?)""",
-            (incident_id, job_id, sig, failure_type, now, now,
-             stored_error, output_file),
+            (
+                incident_id,
+                job_id,
+                sig,
+                failure_type,
+                now,
+                now,
+                stored_error,
+                output_file,
+            ),
         )
         return incident_id, True
 
@@ -269,7 +288,8 @@ def list_incidents(state: Optional[str] = None) -> list[dict[str, Any]]:
     with _transaction() as conn:
         # last_seen_at carries a DST-varying offset: order by instant, not text.
         rows = conn.execute(
-            "SELECT * FROM cron_incidents" + where
+            "SELECT * FROM cron_incidents"
+            + where
             + " ORDER BY julianday(last_seen_at) DESC, last_seen_at DESC, id DESC",
             params,
         ).fetchall()
@@ -289,5 +309,7 @@ def count_incidents(state: Optional[str] = None) -> int:
         return 0
     where, params = _state_filter(state)
     with _transaction() as conn:
-        row = conn.execute("SELECT COUNT(*) AS n FROM cron_incidents" + where, params).fetchone()
+        row = conn.execute(
+            "SELECT COUNT(*) AS n FROM cron_incidents" + where, params
+        ).fetchone()
     return int(row["n"]) if row is not None else 0

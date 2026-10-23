@@ -63,7 +63,7 @@ def load(paths: list[Path]) -> tuple[list[dict], list[dict]]:
                 if idx == -1:
                     continue
                 try:
-                    sink.append(json.loads(line[idx + len(marker):]))
+                    sink.append(json.loads(line[idx + len(marker) :]))
                 except ValueError:
                     pass
                 break
@@ -97,30 +97,44 @@ def report(micro: list[dict], batch: list[dict], per_session: bool) -> int:
     for e in micro:
         outcomes[e.get("outcome", "?")] += 1
 
-    occupancies = [e["occupancy_pct"] for e in micro if e.get("occupancy_pct") is not None]
+    occupancies = [
+        e["occupancy_pct"] for e in micro if e.get("occupancy_pct") is not None
+    ]
     saved = sum(-(e.get("tokens_delta") or 0) for e in micro)
     absorbed = [e for e in micro if e.get("outcome") == "absorbed"]
     durations = [e.get("duration_ms") or 0 for e in micro]
 
     if per_session:
-        print(f"{'session':<26} {'passes':>6} {'occupancy%':>18} {'batch':>6} {'saved':>10}")
+        print(
+            f"{'session':<26} {'passes':>6} {'occupancy%':>18} {'batch':>6} {'saved':>10}"
+        )
         print("-" * 72)
         batch_by_session: dict[str, int] = defaultdict(int)
         for b in batch:
             batch_by_session[b.get("session_id") or "(unknown)"] += 1
         for sid, evs in sorted(by_session.items(), key=lambda kv: -len(kv[1])):
-            occ = [e["occupancy_pct"] for e in evs if e.get("occupancy_pct") is not None]
+            occ = [
+                e["occupancy_pct"] for e in evs if e.get("occupancy_pct") is not None
+            ]
             spread = pct(occ)
-            occ_s = f"{spread[0]:.0f}-{spread[2]:.0f} (med {spread[1]:.0f})" if spread else "-"
+            occ_s = (
+                f"{spread[0]:.0f}-{spread[2]:.0f} (med {spread[1]:.0f})"
+                if spread
+                else "-"
+            )
             s = sum(-(e.get("tokens_delta") or 0) for e in evs)
-            print(f"{sid[:26]:<26} {len(evs):>6} {occ_s:>18} "
-                  f"{batch_by_session.get(sid, 0):>6} {s:>+10,}")
+            print(
+                f"{sid[:26]:<26} {len(evs):>6} {occ_s:>18} "
+                f"{batch_by_session.get(sid, 0):>6} {s:>+10,}"
+            )
         print()
 
     print("-- headroom ----------------------------------")
     spread = pct(occupancies)
     if spread:
-        print(f"context occupancy       min {spread[0]:.0f}%  median {spread[1]:.0f}%  max {spread[2]:.0f}%")
+        print(
+            f"context occupancy       min {spread[0]:.0f}%  median {spread[1]:.0f}%  max {spread[2]:.0f}%"
+        )
         print("                        (% of the batch-compaction threshold)")
     else:
         print("context occupancy       unavailable (window not resolved when logged)")
@@ -138,16 +152,20 @@ def report(micro: list[dict], batch: list[dict], per_session: bool) -> int:
         print(f"  {name:<20}  {count:,}")
     if durations:
         ordered = sorted(durations)
-        print(f"pass duration           median {ordered[len(ordered) // 2]:,} ms  "
-              f"max {ordered[-1]:,} ms")
+        print(
+            f"pass duration           median {ordered[len(ordered) // 2]:,} ms  "
+            f"max {ordered[-1]:,} ms"
+        )
 
     print()
     print("-- tokens (least interesting) ----------------")
     print(f"net tokens saved        {saved:+,}")
     if absorbed:
         sizes = [e.get("exchange_tokens") or 0 for e in absorbed]
-        print(f"exchanges absorbed      {len(absorbed):,}  "
-              f"(mean {sum(sizes) // len(absorbed):,} tokens each)")
+        print(
+            f"exchanges absorbed      {len(absorbed):,}  "
+            f"(mean {sum(sizes) // len(absorbed):,} tokens each)"
+        )
     print("note: the first pass in a session costs ~400 tokens of marker")
     print("scaffolding; it pays back from the second pass on.")
     return 0
@@ -155,7 +173,8 @@ def report(micro: list[dict], batch: list[dict], per_session: bool) -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("logs", nargs="*", type=Path, help="log files (default: agent.log)")
     ap.add_argument("--per-session", action="store_true", help="break down by session")
     args = ap.parse_args()

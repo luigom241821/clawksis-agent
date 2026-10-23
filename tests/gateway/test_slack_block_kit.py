@@ -17,7 +17,6 @@ class TestRenderBlocksBasics:
         assert render_blocks("") is None
         assert render_blocks("   \n  ") is None
 
-
     def test_header_becomes_header_block(self):
         blocks = render_blocks("# Title")
         assert blocks[0]["type"] == "header"
@@ -30,7 +29,9 @@ class TestNestedLists:
         md = "- a\n  - b\n    - c"
         blocks = render_blocks(md)
         rich = next(b for b in blocks if b["type"] == "rich_text")
-        indents = [e["indent"] for e in rich["elements"] if e["type"] == "rich_text_list"]
+        indents = [
+            e["indent"] for e in rich["elements"] if e["type"] == "rich_text_list"
+        ]
         # true nesting: indent levels must strictly increase across the run
         assert indents == sorted(indents)
         assert max(indents) >= 2
@@ -38,7 +39,6 @@ class TestNestedLists:
 
 
 class TestInlineFormatting:
-
     def test_slack_mrkdwn_link_in_bullet_becomes_link_element(self):
         """rich_text lists must parse Slack <url|label>, not emit it as text.
 
@@ -67,7 +67,6 @@ class TestInlineFormatting:
         assert "<@U123>" in blob
         assert "<#C456>" in blob
 
-
     def test_blank_line_separated_ordered_items_stay_in_one_list(self):
         """Regression: blank lines between ordered items must not reset numbering.
 
@@ -87,12 +86,7 @@ class TestInlineFormatting:
 
 class TestTables:
     def test_pipe_table_renders_native_table_block(self):
-        md = (
-            "| Name | Status |\n"
-            "|------|--------|\n"
-            "| a | ok |\n"
-            "| b | fail |"
-        )
+        md = "| Name | Status |\n|------|--------|\n| a | ok |\n| b | fail |"
         blocks = render_blocks(md)
         assert len(blocks) == 1
         assert blocks[0]["type"] == "table"
@@ -104,7 +98,6 @@ class TestTables:
         assert str(rows[0]).count("Name") == 1
         assert "fail" in str(rows[2])
 
-
     def test_oversized_table_falls_back_to_monospace(self):
         # 120 rows > MAX_TABLE_ROWS -> monospace rich_text fallback, not a table
         big = "| a | b |\n|---|---|\n" + "\n".join(f"| x{i} | y |" for i in range(120))
@@ -112,13 +105,8 @@ class TestTables:
         assert blocks[0]["type"] == "rich_text"  # preformatted fallback
         assert blocks[0]["elements"][0]["type"] == "rich_text_preformatted"
 
-
     def test_escaped_pipe_not_a_column_separator(self):
-        md = (
-            "| Expr | Meaning |\n"
-            "|------|--------|\n"
-            "| a \\| b | or |"
-        )
+        md = "| Expr | Meaning |\n|------|--------|\n| a \\| b | or |"
         blocks = render_blocks(md)
         assert blocks[0]["type"] == "table"
         # the escaped-pipe cell stays a single cell containing a literal pipe
@@ -128,7 +116,6 @@ class TestTables:
 
 
 class TestLimits:
-
     def test_too_many_blocks_returns_none(self):
         # 60 dividers => 60 blocks > MAX_BLOCKS => decline (caller uses text)
         md = "\n\n".join(["---"] * (MAX_BLOCKS + 10))
@@ -150,7 +137,9 @@ class TestEmptyContentGuards:
         def walk(o):
             if isinstance(o, dict):
                 if o.get("type") in (
-                    "rich_text_section", "rich_text_preformatted", "rich_text_quote"
+                    "rich_text_section",
+                    "rich_text_preformatted",
+                    "rich_text_quote",
                 ):
                     assert o.get("elements"), f"empty {o['type']} elements"
                 if o.get("type") == "text":
@@ -171,8 +160,8 @@ class TestEmptyContentGuards:
         md = (
             "| x | y | z |\n"
             "| --- | --- | --- |\n"
-            "| 1 |  | 3 |\n"   # blank middle cell
-            "| 4 |"           # ragged row -> padded with empty cells
+            "| 1 |  | 3 |\n"  # blank middle cell
+            "| 4 |"  # ragged row -> padded with empty cells
         )
         blocks = render_blocks(md)
         assert blocks[0]["type"] == "table"
@@ -194,7 +183,6 @@ class TestSanitizeBlocks:
     (#56615 null column_settings, #62054 / #53693 >3000-char sections on
     approval chat.update after HTML-escaping inflation).
     """
-
 
     def test_oversized_section_text_is_clamped(self):
         blocks = [
@@ -253,5 +241,3 @@ class TestSplitTextFenceBalanced:
             assert chunk.count("```") % 2 == 0, (
                 f"chunk {i} has unbalanced fences: {chunk[:60]!r}"
             )
-
-

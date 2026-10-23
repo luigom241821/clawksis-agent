@@ -65,9 +65,10 @@ def _wait_for_cont_init(container: str) -> None:
     last = ""
     while time.monotonic() < deadline:
         r = subprocess.run(
-            ["docker", "exec", container,
-             "cat", "/opt/data/logs/container-boot.log"],
-            capture_output=True, text=True, timeout=5,
+            ["docker", "exec", container, "cat", "/opt/data/logs/container-boot.log"],
+            capture_output=True,
+            text=True,
+            timeout=5,
             check=False,
         )
         if r.returncode == 0:
@@ -86,12 +87,23 @@ def sleep_container(built_image: str, container_name: str) -> Iterator[str]:
     """Long-lived container running `sleep infinity` so we can docker exec into it."""
     subprocess.run(
         ["docker", "rm", "-f", container_name],
-        capture_output=True, check=False,
+        capture_output=True,
+        check=False,
     )
     r = subprocess.run(
-        ["docker", "run", "-d", "--name", container_name, built_image,
-         "sleep", "infinity"],
-        capture_output=True, text=True, timeout=30,
+        [
+            "docker",
+            "run",
+            "-d",
+            "--name",
+            container_name,
+            built_image,
+            "sleep",
+            "infinity",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
         check=False,
     )
     assert r.returncode == 0, f"docker run failed: {r.stderr}"
@@ -101,7 +113,8 @@ def sleep_container(built_image: str, container_name: str) -> Iterator[str]:
     finally:
         subprocess.run(
             ["docker", "rm", "-f", container_name],
-            capture_output=True, check=False,
+            capture_output=True,
+            check=False,
         )
 
 
@@ -122,25 +135,55 @@ def test_shim_drops_root_to_clawk_uid(sleep_container: str) -> None:
     """
     # Wipe any prior state.
     subprocess.run(
-        ["docker", "exec", "--user", "root", sleep_container,
-         "rm", "-f", "/opt/data/config.yaml"],
-        capture_output=True, check=False,
+        [
+            "docker",
+            "exec",
+            "--user",
+            "root",
+            sleep_container,
+            "rm",
+            "-f",
+            "/opt/data/config.yaml",
+        ],
+        capture_output=True,
+        check=False,
     )
 
     # Default docker exec (root) — should be dropped by the shim.
     r = subprocess.run(
-        ["docker", "exec", sleep_container,
-         "clawk", "config", "set", "_test.shim_marker", "1"],
-        capture_output=True, text=True, timeout=30,
+        [
+            "docker",
+            "exec",
+            sleep_container,
+            "clawk",
+            "config",
+            "set",
+            "_test.shim_marker",
+            "1",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
         check=False,
     )
-    assert r.returncode == 0, f"config set failed: stdout={r.stdout!r} stderr={r.stderr!r}"
+    assert r.returncode == 0, (
+        f"config set failed: stdout={r.stdout!r} stderr={r.stderr!r}"
+    )
 
     # The written file must be owned by clawk, not root.
     r = subprocess.run(
-        ["docker", "exec", sleep_container,
-         "stat", "-c", "%U:%G", "/opt/data/config.yaml"],
-        capture_output=True, text=True, timeout=10,
+        [
+            "docker",
+            "exec",
+            sleep_container,
+            "stat",
+            "-c",
+            "%U:%G",
+            "/opt/data/config.yaml",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=10,
         check=False,
     )
     assert r.returncode == 0, f"stat failed: {r.stderr}"
@@ -148,14 +191,6 @@ def test_shim_drops_root_to_clawk_uid(sleep_container: str) -> None:
         f"config.yaml owned by {r.stdout.strip()!r}, expected clawk:clawk. "
         "The shim did not drop privileges before invoking clawk."
     )
-
-
-
-
-
-
-
-
 
 
 def test_e2e_login_then_supervised_gateway_can_read_auth(
@@ -187,9 +222,19 @@ def test_e2e_login_then_supervised_gateway_can_read_auth(
     # provoke a write into CLAWK_HOME so we have something concrete to
     # owner-check.
     r = subprocess.run(
-        ["docker", "exec", sleep_container,
-         "clawk", "config", "set", "_test.e2e_marker", "1"],
-        capture_output=True, text=True, timeout=30,
+        [
+            "docker",
+            "exec",
+            sleep_container,
+            "clawk",
+            "config",
+            "set",
+            "_test.e2e_marker",
+            "1",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
         check=False,
     )
     assert r.returncode == 0, f"config set failed: {r.stderr}"
@@ -197,10 +242,25 @@ def test_e2e_login_then_supervised_gateway_can_read_auth(
     # The supervised UID (10000) must be able to read everything under
     # CLAWK_HOME that docker exec just wrote.
     r = subprocess.run(
-        ["docker", "exec", "--user", "clawk", sleep_container,
-         "find", "/opt/data", "-maxdepth", "2", "-type", "f",
-         "!", "-readable", "-print"],
-        capture_output=True, text=True, timeout=15,
+        [
+            "docker",
+            "exec",
+            "--user",
+            "clawk",
+            sleep_container,
+            "find",
+            "/opt/data",
+            "-maxdepth",
+            "2",
+            "-type",
+            "f",
+            "!",
+            "-readable",
+            "-print",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=15,
         check=False,
     )
     assert r.returncode == 0, f"find failed: {r.stderr}"

@@ -23,17 +23,28 @@ def test_secondary_profile_session_cwd_is_found_inside_its_scope(monkeypatch, tm
     home.mkdir(parents=True)
     workspace = tmp_path / "ws"
     workspace.mkdir()
-    session = {"session_key": "sess-b", "cwd": str(workspace), "explicit_cwd": True,
-               "source": "desktop", "profile_home": str(home)}
+    session = {
+        "session_key": "sess-b",
+        "cwd": str(workspace),
+        "explicit_cwd": True,
+        "source": "desktop",
+        "profile_home": str(home),
+    }
     secret_scope.set_multiplex_active(True)
     try:
-        server._register_session_cwd(session)  # session.create path: no scope bound by the caller
+        server._register_session_cwd(
+            session
+        )  # session.create path: no scope bound by the caller
         token = set_clawk_home_override(str(home))
         try:
             assert terminal_tool.get_session_cwd("sess-b") == str(workspace)
-            assert terminal_tool.resolve_task_overrides("sess-b")["cwd"] == str(workspace)
+            assert terminal_tool.resolve_task_overrides("sess-b")["cwd"] == str(
+                workspace
+            )
         finally:
             reset_clawk_home_override(token)
-        assert terminal_tool.get_session_cwd("sess-b") is None  # not leaked onto the launch profile's key
+        assert (
+            terminal_tool.get_session_cwd("sess-b") is None
+        )  # not leaked onto the launch profile's key
     finally:
         secret_scope.set_multiplex_active(False)

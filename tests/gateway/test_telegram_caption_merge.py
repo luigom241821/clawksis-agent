@@ -1,6 +1,5 @@
 """Tests for TelegramPlatform._merge_caption caption deduplication logic."""
 
-
 from plugins.platforms.telegram.adapter import TelegramAdapter
 
 merge = TelegramAdapter._merge_caption
@@ -31,5 +30,3 @@ class TestMergeCaptionMultipleItems:
         text = merge(text, "B")
         text = merge(text, "C")
         assert text == "A\n\nB\n\nC"
-
-

@@ -46,7 +46,9 @@ def _evt(media_urls, media_types, message_type):
 
 
 def test_image_trusts_own_mime_over_photo_message_type():
-    evt = _evt(["/c/pic.png", "/c/brief.md"], ["image/png", "text/markdown"], MessageType.PHOTO)
+    evt = _evt(
+        ["/c/pic.png", "/c/brief.md"], ["image/png", "text/markdown"], MessageType.PHOTO
+    )
     assert _event_media_is_image(evt, 0) is True
     # The document must NOT be promoted to an image by the PHOTO fallback.
     assert _event_media_is_image(evt, 1) is False
@@ -56,7 +58,11 @@ def test_image_trusts_own_mime_over_photo_message_type():
 
 
 def test_placeholder_document_in_photo_message_is_not_an_image():
-    evt = _evt(["/c/product.png", "/c/brief.md"], ["image/png", "text/markdown"], MessageType.PHOTO)
+    evt = _evt(
+        ["/c/product.png", "/c/brief.md"],
+        ["image/png", "text/markdown"],
+        MessageType.PHOTO,
+    )
     out = _build_media_placeholder(evt)
     assert "[User sent an image: /c/product.png]" in out
     assert "[User sent an image: /c/brief.md]" not in out

@@ -28,9 +28,12 @@ def _unlink_pty_markers(app: FastAPI) -> None:
 @asynccontextmanager
 async def standalone_lifespan(app: "FastAPI"):
     from clawk_cli.web_server import (
-        _eager_reconcile_own_session_db, _warm_gateway_module,
-        _start_desktop_cron_ticker, _dashboard_selftest_loop,
-        _auto_archive_ticker_loop, _terminate_desktop_managed_gateway,
+        _eager_reconcile_own_session_db,
+        _warm_gateway_module,
+        _start_desktop_cron_ticker,
+        _dashboard_selftest_loop,
+        _auto_archive_ticker_loop,
+        _terminate_desktop_managed_gateway,
     )
     from clawk_cli.web_server_chat import PTY_REGISTRY
 
@@ -103,6 +106,7 @@ async def standalone_lifespan(app: "FastAPI"):
     # gateway running the scheduler. Server `clawk dashboard` is unaffected —
     # it relies on its own gateway.
     from clawk_cli.process_identity import is_desktop_owned_backend
+
     cron_stop: threading.Event | None = None
     cron_thread: threading.Thread | None = None
     desktop_owned = is_desktop_owned_backend()
@@ -150,7 +154,9 @@ async def standalone_lifespan(app: "FastAPI"):
         except Exception as exc:
             logging.getLogger(__name__).warning("local runtime boot failed: %s", exc)
 
-    threading.Thread(target=_boot_local_runtime, daemon=True, name="local-runtime-boot").start()
+    threading.Thread(
+        target=_boot_local_runtime, daemon=True, name="local-runtime-boot"
+    ).start()
 
     # Records who carries inference for setup.status / free_tier.status and broadcasts `setup.ready`
     # (no identity is created at boot). Off-thread; the desktop's first setup.status waits on the
@@ -221,6 +227,10 @@ async def http_lifespan(app: FastAPI):
 
 @asynccontextmanager
 async def app_lifespan(app: FastAPI):
-    lifespan = http_lifespan if getattr(app.state, "gateway_runner", None) is not None else standalone_lifespan
+    lifespan = (
+        http_lifespan
+        if getattr(app.state, "gateway_runner", None) is not None
+        else standalone_lifespan
+    )
     async with lifespan(app):
         yield

@@ -6,7 +6,13 @@ from unittest import mock
 
 import pytest
 
-SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "optional-skills" / "research" / "rss-feeds" / "scripts"
+SCRIPTS_DIR = (
+    Path(__file__).resolve().parents[2]
+    / "optional-skills"
+    / "research"
+    / "rss-feeds"
+    / "scripts"
+)
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 import feed
@@ -33,12 +39,18 @@ PAGE = b"""<html><head><title>x</title>
 def test_all_three_formats_normalise_to_the_same_entry_shape_and_utc_dates():
     """RSS (RFC 822), Atom (ISO), JSON Feed (ISO) parse to identical keys with UTC-normalised dates,
     and Atom picks the rel=alternate link over rel=self."""
-    rss, atom, jf = feed.parse_feed(RSS), feed.parse_feed(ATOM), feed.parse_feed(JSONFEED, "application/feed+json")
+    rss, atom, jf = (
+        feed.parse_feed(RSS),
+        feed.parse_feed(ATOM),
+        feed.parse_feed(JSONFEED, "application/feed+json"),
+    )
     keys = {"title", "link", "published", "author", "summary"}
     for f in (rss, atom, jf):
         assert f["entries"] and all(set(e) == keys for e in f["entries"])
     assert rss["title"] == "Blog & Notes"
-    assert rss["entries"][0]["summary"] == "Hello world"  # HTML stripped, entities decoded
+    assert (
+        rss["entries"][0]["summary"] == "Hello world"
+    )  # HTML stripped, entities decoded
     assert rss["entries"][1]["published"] == "2026-09-04T06:30:00+00:00"  # +0200 → UTC
     assert atom["entries"][0]["link"] == "https://ex.com/post"
     assert jf["entries"][0]["author"] == "Cy"
@@ -54,15 +66,21 @@ def test_page_url_discovers_advertised_feed_then_reads_it():
         "https://ex.com/atom/everything/": (ATOM, "application/atom+xml"),
     }
     with mock.patch.object(feed, "fetch", side_effect=lambda u: responses[u]):
-        assert feed.discover("https://ex.com/blog/") == ["https://ex.com/atom/everything/"]
+        assert feed.discover("https://ex.com/blog/") == [
+            "https://ex.com/atom/everything/"
+        ]
         result = feed.read("https://ex.com/blog/")
     assert result["url"] == "https://ex.com/atom/everything/"
     assert result["discovered_from"] == "https://ex.com/blog/"
     assert result["entries"][0]["title"] == "Entry"
     # no advertised feed → well-known paths are proposed, never an empty list
-    with mock.patch.object(feed, "fetch", return_value=(b"<html><body>plain</body></html>", "text/html")):
+    with mock.patch.object(
+        feed, "fetch", return_value=(b"<html><body>plain</body></html>", "text/html")
+    ):
         candidates = feed.discover("https://plain.example/")
-    assert candidates and all(c.startswith("https://plain.example/") for c in candidates)
+    assert candidates and all(
+        c.startswith("https://plain.example/") for c in candidates
+    )
 
 
 if __name__ == "__main__":

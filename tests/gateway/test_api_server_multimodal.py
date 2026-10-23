@@ -45,10 +45,10 @@ class TestNormalizeMultimodalContent:
 
 
 class TestContentHasVisiblePayload:
-
-
     def test_list_with_image_only(self):
-        assert _content_has_visible_payload([{"type": "image_url", "image_url": {"url": "x"}}])
+        assert _content_has_visible_payload(
+            [{"type": "image_url", "image_url": {"url": "x"}}]
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -61,7 +61,9 @@ def _make_adapter() -> APIServerAdapter:
 
 
 def _create_app(adapter: APIServerAdapter) -> web.Application:
-    mws = [mw for mw in (cors_middleware, security_headers_middleware) if mw is not None]
+    mws = [
+        mw for mw in (cors_middleware, security_headers_middleware) if mw is not None
+    ]
     app = web.Application(middlewares=mws)
     app["api_server_adapter"] = adapter
     app.router.add_post("/v1/chat/completions", adapter._handle_chat_completions)
@@ -81,7 +83,10 @@ class TestChatCompletionsMultimodalHTTP:
         """Multimodal user content reaches _run_agent as a list of parts."""
         image_payload = [
             {"type": "text", "text": "What's in this image?"},
-            {"type": "image_url", "image_url": {"url": "https://example.com/cat.png", "detail": "high"}},
+            {
+                "type": "image_url",
+                "image_url": {"url": "https://example.com/cat.png", "detail": "high"},
+            },
         ]
 
         app = _create_app(adapter)
@@ -91,12 +96,14 @@ class TestChatCompletionsMultimodalHTTP:
                 "_run_agent",
                 new=MagicMock(),
             ) as mock_run:
+
                 async def _stub(**kwargs):
                     mock_run.captured = kwargs
                     return (
                         {"final_response": "A cat.", "messages": [], "api_calls": 1},
                         {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
                     )
+
                 mock_run.side_effect = _stub
 
                 resp = await cli.post(
@@ -117,12 +124,14 @@ class TestResponsesMultimodalHTTP:
         app = _create_app(adapter)
         async with TestClient(TestServer(app)) as cli:
             with patch.object(adapter, "_run_agent", new=MagicMock()) as mock_run:
+
                 async def _stub(**kwargs):
                     mock_run.captured = kwargs
                     return (
                         {"final_response": "ok", "messages": [], "api_calls": 1},
                         {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
                     )
+
                 mock_run.side_effect = _stub
 
                 resp = await cli.post(
@@ -147,7 +156,9 @@ class TestResponsesMultimodalHTTP:
             assert resp.status == 200, await resp.text()
             expected = [
                 {"type": "text", "text": "Describe."},
-                {"type": "image_url", "image_url": {"url": "https://example.com/cat.png"}},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": "https://example.com/cat.png"},
+                },
             ]
             assert mock_run.captured["user_message"] == expected
-

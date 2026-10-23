@@ -63,18 +63,30 @@ def enforcement(repo: Path, rev: str) -> str:
 
 def _parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="code_health", description=__doc__)
-    p.add_argument("--base", help="base revision (default: merge-base of HEAD with origin/main)")
-    p.add_argument("--head", help="head commit or tree (default: the working tree, untracked included)")
-    p.add_argument("--report", action="store_true", help="burn-down summary of the whole head tree")
+    p.add_argument(
+        "--base", help="base revision (default: merge-base of HEAD with origin/main)"
+    )
+    p.add_argument(
+        "--head",
+        help="head commit or tree (default: the working tree, untracked included)",
+    )
+    p.add_argument(
+        "--report", action="store_true", help="burn-down summary of the whole head tree"
+    )
     p.add_argument("--json", action="store_true", help="machine-readable findings")
-    p.add_argument("--print-pins", action="store_true",
-                   help="print the pinned ruff requirement (CI installs exactly this)")
+    p.add_argument(
+        "--print-pins",
+        action="store_true",
+        help="print the pinned ruff requirement (CI installs exactly this)",
+    )
     return p
 
 
 def _report(repo: Path, head: str | None) -> int:
     paths = [p for p in gitio.tracked_files(repo, head) if in_scope(p)]
-    measurer = Measurer(repo, resolve_ruff(repo), known_env=gitio.known_env_names(repo, head))
+    measurer = Measurer(
+        repo, resolve_ruff(repo), known_env=gitio.known_env_names(repo, head)
+    )
     print(summarize_tree(measurer.measure(head, paths)))
     return 0
 
@@ -86,15 +98,23 @@ def _skipped(why: str, as_json: bool) -> None:
     print(why, file=sys.stderr if as_json else sys.stdout)
 
 
-def run(repo: Path, base: str, head: str | None, as_json: bool = False,
-        switch_rev: str | None = None) -> int:
+def run(
+    repo: Path,
+    base: str,
+    head: str | None,
+    as_json: bool = False,
+    switch_rev: str | None = None,
+) -> int:
     """Judge ``head`` against ``base``; the ENFORCEMENT switch is read from ``switch_rev``
     (default: the base), never from the head under test."""
     started = time.monotonic()
     switch_rev = switch_rev or base
     mode = enforcement(repo, switch_rev)
     if mode == "off":
-        _skipped(f"code health: off (ENFORCEMENT in {_SWITCH_FILE} on {switch_rev[:12]})", as_json)
+        _skipped(
+            f"code health: off (ENFORCEMENT in {_SWITCH_FILE} on {switch_rev[:12]})",
+            as_json,
+        )
         return 0
     changes = gitio.changed_files(repo, base, head)
     head_paths = sorted({c.new for c in changes if c.new and in_scope(c.new)})
@@ -119,12 +139,16 @@ def run(repo: Path, base: str, head: str | None, as_json: bool = False,
     if body:
         print(body)
     elapsed = time.monotonic() - started
-    print(f"\ncode health: {len(head_paths)} files vs {base[:12]}: {blocking} blocking, "
-          f"{advisory} advisory ({elapsed:.1f}s)")
+    print(
+        f"\ncode health: {len(head_paths)} files vs {base[:12]}: {blocking} blocking, "
+        f"{advisory} advisory ({elapsed:.1f}s)"
+    )
     if blocking:
         print(_FOOTER)
     if blocking and not failed:
-        print(f"\nadvisory mode (ENFORCEMENT in {_SWITCH_FILE}): not failing on the above.")
+        print(
+            f"\nadvisory mode (ENFORCEMENT in {_SWITCH_FILE}): not failing on the above."
+        )
     return 1 if failed else 0
 
 
@@ -138,8 +162,12 @@ def main(argv: list[str] | None = None) -> int:
         head = gitio.resolve_tree(repo, args.head) if args.head else None
         if args.report:
             return _report(repo, head)
-        if args.base:  # CI: the base is the target branch tip, which also holds the switch
-            return run(repo, gitio.resolve_rev(repo, args.base), head, as_json=args.json)
+        if (
+            args.base
+        ):  # CI: the base is the target branch tip, which also holds the switch
+            return run(
+                repo, gitio.resolve_rev(repo, args.base), head, as_json=args.json
+            )
         # Locally the base is the merge-base, which lags main; the switch comes from the main tip
         # so a flip on main reaches a branch without a rebase. The head never supplies it.
         tip = gitio.commit_or_none(repo, args.head) if args.head else None

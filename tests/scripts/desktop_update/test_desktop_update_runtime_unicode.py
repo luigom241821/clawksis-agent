@@ -31,7 +31,7 @@ import pytest
 from tests.installation_launcher_fixture import publish_fixture_launcher
 
 ROOT = Path(__file__).resolve().parents[3]
-HELPER = str(ROOT / 'scripts/desktop-update/runtime.ps1').replace("'", "''")
+HELPER = str(ROOT / "scripts/desktop-update/runtime.ps1").replace("'", "''")
 
 # Mirrors the production launchers: clawk_bootstrap reconfigures stdio to
 # UTF-8 on import before the entry module runs, so both outputs carry raw
@@ -54,28 +54,38 @@ if __name__ == '__main__':
 """
 
 # From #124526 / #128326: profile names that die as OEM mojibake.
-PROFILE = 'Balázs Paweł Ñuñez'
+PROFILE = "Balázs Paweł Ñuñez"
 
 
-def _run_helper(script: str, home: Path, env_extra: dict[str, str], out: Path) -> list[str]:
+def _run_helper(
+    script: str, home: Path, env_extra: dict[str, str], out: Path
+) -> list[str]:
     """Run *script*, which writes its answer lines to ``$out`` as UTF-8.
 
     The answer goes through a file, not stdout: under code page 437 or 936 the console cannot
     represent ``ł``, so stdout would lose the very characters under test.
     """
-    result = subprocess.run(['powershell', '-NoProfile', '-Command', f"$out = '{out}'; " + script],
-                            env={**os.environ, 'CLAWK_HOME': str(home), **env_extra},
-                            capture_output=True, timeout=120, check=False)
-    assert result.returncode == 0, (result.stdout + result.stderr).decode('utf-8', 'replace')
-    return out.read_text(encoding='utf-8-sig').splitlines()
+    result = subprocess.run(
+        ["powershell", "-NoProfile", "-Command", f"$out = '{out}'; " + script],
+        env={**os.environ, "CLAWK_HOME": str(home), **env_extra},
+        capture_output=True,
+        timeout=120,
+        check=False,
+    )
+    assert result.returncode == 0, (result.stdout + result.stderr).decode(
+        "utf-8", "replace"
+    )
+    return out.read_text(encoding="utf-8-sig").splitlines()
 
 
 _WRITE = "[IO.File]::WriteAllLines($out, [string[]]@({lines}), (New-Object Text.UTF8Encoding($false)))"
 
 
-@pytest.mark.platforms('windows')
-@pytest.mark.parametrize('code_page', [936, 437, 65001])
-def test_runtime_command_survives_a_non_ascii_profile_path(tmp_path: Path, code_page: int) -> None:
+@pytest.mark.platforms("windows")
+@pytest.mark.parametrize("code_page", [936, 437, 65001])
+def test_runtime_command_survives_a_non_ascii_profile_path(
+    tmp_path: Path, code_page: int
+) -> None:
     """Get-ClawksisRuntimeCommand returns the launcher's exact interpreter path.
 
     The launcher JSON is ASCII-escaped today, so this is the round-trip
@@ -85,33 +95,44 @@ def test_runtime_command_survives_a_non_ascii_profile_path(tmp_path: Path, code_
     console encoding unchanged, whatever code page the console carries.
     """
     profile = tmp_path / PROFILE
-    install = profile / 'clawksis-agent'
+    install = profile / "clawksis-agent"
     # PM's store under the same non-ASCII profile, with a facts.json naming a
     # store interpreter there — the layout a real install resolves and prints.
-    store = profile / 'tools'
-    python_dir = store / 'cpython-3.14-windows-x86_64-none'
+    store = profile / "tools"
+    python_dir = store / "cpython-3.14-windows-x86_64-none"
     python_dir.mkdir(parents=True)
-    python = python_dir / 'python.exe'
+    python = python_dir / "python.exe"
     python.write_bytes(Path(sys.executable).read_bytes())
-    (store / 'facts.json').write_text(
-        json.dumps({'packages': {'python': {'entry': python_dir.name}}}), encoding='utf-8')
+    (store / "facts.json").write_text(
+        json.dumps({"packages": {"python": {"entry": python_dir.name}}}),
+        encoding="utf-8",
+    )
     publish_fixture_launcher(install, CLI)
-    home = tmp_path / 'home'
+    home = tmp_path / "home"
     home.mkdir()
     target = str(install).replace("'", "''")
     prefix = f"[Console]::OutputEncoding = [Text.Encoding]::GetEncoding({code_page}); "
-    script = (prefix + f". '{HELPER}'; "
-              f"$c = @(Get-ClawksisRuntimeCommand -InstallRoot '{target}'); "
-              + _WRITE.format(lines="$c[0], [Console]::OutputEncoding.CodePage"))
-    lines = _run_helper(script, home, {'CLAWK_RUNTIME_DIR': str(store)}, tmp_path / 'answer.txt')
+    script = (
+        prefix + f". '{HELPER}'; "
+        f"$c = @(Get-ClawksisRuntimeCommand -InstallRoot '{target}'); "
+        + _WRITE.format(lines="$c[0], [Console]::OutputEncoding.CodePage")
+    )
+    lines = _run_helper(
+        script, home, {"CLAWK_RUNTIME_DIR": str(store)}, tmp_path / "answer.txt"
+    )
     assert lines[0] == str(python), (
-        f"interpreter path was mojibaked under code page {code_page}: {lines[0]!r}")
-    assert int(lines[1]) == code_page, 'the capture must leave the caller console encoding unchanged'
+        f"interpreter path was mojibaked under code page {code_page}: {lines[0]!r}"
+    )
+    assert int(lines[1]) == code_page, (
+        "the capture must leave the caller console encoding unchanged"
+    )
 
 
-@pytest.mark.platforms('windows')
-@pytest.mark.parametrize('code_page', [936, 437, 65001])
-def test_legacy_version_identity_check_matches_a_non_ascii_install(tmp_path: Path, code_page: int) -> None:
+@pytest.mark.platforms("windows")
+@pytest.mark.parametrize("code_page", [936, 437, 65001])
+def test_legacy_version_identity_check_matches_a_non_ascii_install(
+    tmp_path: Path, code_page: int
+) -> None:
     """The user-bin fallback resolves by reported install directory, not PATH order.
 
     Red on base: the fixture CLI prints ``Install directory:`` as UTF-8 (the
@@ -120,21 +141,24 @@ def test_legacy_version_identity_check_matches_a_non_ascii_install(tmp_path: Pat
     a profile like ``Paweł Łącki`` reports mojibaked and the identity check's
     GetFullPath comparison never matches (#124526).
     """
-    install = tmp_path / PROFILE / 'clawksis-agent'
+    install = tmp_path / PROFILE / "clawksis-agent"
     launcher = publish_fixture_launcher(install, CLI)
     # Earlier PM installers published only to user-bin: move (not copy) the
     # launcher out of .clawk\bin so Get-ClawksisRuntimeCommand takes the
     # legacy branch. Its body still reports the checkout it was minted from.
-    home = tmp_path / 'profile'
-    userbin = home / 'bin'
+    home = tmp_path / "profile"
+    userbin = home / "bin"
     userbin.mkdir(parents=True)
     external = userbin / launcher.name
     launcher.rename(external)
     target = str(install).replace("'", "''")
     prefix = f"[Console]::OutputEncoding = [Text.Encoding]::GetEncoding({code_page}); "
-    script = (prefix + f". '{HELPER}'; "
-              f"try {{ $c = @(Get-ClawksisRuntimeCommand -InstallRoot '{target}') }} catch {{ exit 1 }}; "
-              + _WRITE.format(lines="$c[0]"))
-    lines = _run_helper(script, home, {}, tmp_path / 'answer.txt')
+    script = (
+        prefix + f". '{HELPER}'; "
+        f"try {{ $c = @(Get-ClawksisRuntimeCommand -InstallRoot '{target}') }} catch {{ exit 1 }}; "
+        + _WRITE.format(lines="$c[0]")
+    )
+    lines = _run_helper(script, home, {}, tmp_path / "answer.txt")
     assert lines[0] == str(external), (
-        f"legacy identity check lost the non-ASCII path under code page {code_page}")
+        f"legacy identity check lost the non-ASCII path under code page {code_page}"
+    )

@@ -18,13 +18,16 @@ from gateway.platforms.media_cache import (
 # Shared table contract
 # ---------------------------------------------------------------------------
 
-class TestSharedTable:
 
+class TestSharedTable:
     def test_stage_gating(self):
         # use_defaults=False skips the shared table.
-        assert ext_for_mime(
-            "audio/ogg", use_defaults=False, use_mimetypes=False, fallback=".x"
-        ) == ".x"
+        assert (
+            ext_for_mime(
+                "audio/ogg", use_defaults=False, use_mimetypes=False, fallback=".x"
+            )
+            == ".x"
+        )
         # use_mimetypes=False skips the mimetypes fallback.
         assert ext_for_mime("image/bmp", use_mimetypes=False) is None
 
@@ -34,9 +37,11 @@ class TestSharedTable:
         assert mime_for_ext(".unknown", fallback="x/y") == "x/y"
         assert mime_for_ext(".pdf", overrides={".pdf": "custom/pdf"}) == "custom/pdf"
 
+
 # ---------------------------------------------------------------------------
 # cache_media_bytes dispatch
 # ---------------------------------------------------------------------------
+
 
 class TestCacheMediaBytes:
     PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
@@ -52,28 +57,32 @@ class TestCacheMediaBytes:
         monkeypatch.setattr(
             "gateway.platforms.base.get_document_cache_dir", lambda: tmp_path
         )
-        path = cache_media_bytes(b"%PDF-1.4", "application/pdf",
-                                 filename_hint="report.pdf")
+        path = cache_media_bytes(
+            b"%PDF-1.4", "application/pdf", filename_hint="report.pdf"
+        )
         assert path.endswith("_report.pdf")
+
 
 # ---------------------------------------------------------------------------
 # Per-adapter parity: HISTORICAL mappings hardcoded as the contract
 # ---------------------------------------------------------------------------
+
 
 class TestWhatsAppCloudParity:
     """Historical _ext_for_mime: overrides → mimetypes → None."""
 
     CASES = {
         # Pinned overrides (Meta-sent types the STT pipeline needs pinned).
-        "audio/ogg": ".ogg",         # NOT mimetypes' .oga
+        "audio/ogg": ".ogg",  # NOT mimetypes' .oga
         "audio/x-opus+ogg": ".ogg",
         "audio/opus": ".ogg",
         "audio/mp4": ".m4a",
         "audio/x-m4a": ".m4a",
-        "image/jpeg": ".jpg",        # NOT the legacy .jpe
+        "image/jpeg": ".jpg",  # NOT the legacy .jpe
     }
 
     @pytest.mark.parametrize("mime,expected", sorted(CASES.items()))
     def test_pinned_overrides(self, mime, expected):
         from plugins.platforms.whatsapp_cloud.adapter import _ext_for_mime
+
         assert _ext_for_mime(mime) == expected

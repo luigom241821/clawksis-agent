@@ -24,13 +24,28 @@ from clawk_cli.config import redact_key
 from clawk_cli.web_deps import late
 from clawk_cli.web_server_files import _path_is_under
 from clawk_cli.web_server_gateway import _restart_gateway_after
-from clawk_cli.web_server_memory import _normalize_memory_provider_name, _require_memory_provider_ready
+from clawk_cli.web_server_memory import (
+    _normalize_memory_provider_name,
+    _require_memory_provider_ready,
+)
 from clawk_cli.web_models import (
-    BackupRequest, CredentialPoolAdd, HookCreate, HookDelete, ImportRequest, MemoryProviderSelect,
-    MemoryReset, PairingApprove, PairingRevoke, WebhookCreate, WebhookEnabledToggle,
+    BackupRequest,
+    CredentialPoolAdd,
+    HookCreate,
+    HookDelete,
+    ImportRequest,
+    MemoryProviderSelect,
+    MemoryReset,
+    PairingApprove,
+    PairingRevoke,
+    WebhookCreate,
+    WebhookEnabledToggle,
 )
 from clawk_cli.web_routers._common import (
-    config_scoped_to_thread, config_write_scope, destructive_profile, http_failure,
+    config_scoped_to_thread,
+    config_write_scope,
+    destructive_profile,
+    http_failure,
     spawn_profile_action,
 )
 from clawk_cli.web_routers.files import stream_upload_to_path
@@ -39,19 +54,29 @@ _log = logging.getLogger("clawk_cli.web_server")
 router = APIRouter()
 
 # Late-bound so a test's monkeypatch on the owning module wins at call time.
-_discover_memory_provider_statuses = late("_discover_memory_provider_statuses", "clawk_cli.web_server_memory")
+_discover_memory_provider_statuses = late(
+    "_discover_memory_provider_statuses", "clawk_cli.web_server_memory"
+)
 _gateway_subcommand = late("_gateway_subcommand", "clawk_cli.web_server_gateway")
 _config_profile_scope = late("_config_profile_scope", "clawk_cli.web_server_profiles")
 _resolve_profile_dir = late("_resolve_profile_dir", "clawk_cli.web_server_profiles")
 _spawn_clawk_action = late("_spawn_clawk_action", "clawk_cli.web_server_gateway")
-_write_platform_enabled = late("_write_platform_enabled", "clawk_cli.web_server_messaging")
+_write_platform_enabled = late(
+    "_write_platform_enabled", "clawk_cli.web_server_messaging"
+)
 get_clawk_home = late("get_clawk_home", "clawk_cli.config")
 load_config = late("load_config", "clawk_cli.config")
 save_config = late("save_config", "clawk_cli.config")
 
 
-def _spawn_action(argv: list[str], name: str, *, log_msg: str, prefix: str,
-                  profile: Optional[str] = None) -> dict:
+def _spawn_action(
+    argv: list[str],
+    name: str,
+    *,
+    log_msg: str,
+    prefix: str,
+    profile: Optional[str] = None,
+) -> dict:
     """Spawn a ``clawk -p <profile> <argv>`` action; spawn failure -> 500.
 
     The profile reaches the child as argv (``_profile_cli_args``) — the only mechanism
@@ -85,7 +110,10 @@ def _pairing_store(profile: Optional[str] = None):
 async def list_pairing(profile: Optional[str] = None):
     store = _pairing_store(profile)
     # Pairing edits wait on a cross-process lock (gateway, CLI): never on the server's event loop.
-    return {"pending": await asyncio.to_thread(store.list_pending), "approved": store.list_approved()}
+    return {
+        "pending": await asyncio.to_thread(store.list_pending),
+        "approved": store.list_approved(),
+    }
 
 
 @router.post("/api/pairing/approve")
@@ -97,7 +125,9 @@ async def approve_pairing(body: PairingApprove):
     # the older `code` field still routes to the request path.
     target = (body.request_id or body.code or "").strip()
     if not platform or not target:
-        raise HTTPException(status_code=400, detail="platform and request_id or code are required")
+        raise HTTPException(
+            status_code=400, detail="platform and request_id or code are required"
+        )
 
     by_request_id = bool(body.request_id) or store.looks_like_request_id(target)
     if by_request_id:
@@ -110,10 +140,12 @@ async def approve_pairing(body: PairingApprove):
     # as a bogus 429 while the platform is locked out for an unrelated reason.
     if not by_request_id and store._is_locked_out(platform):
         raise HTTPException(
-            status_code=429, detail=f"Platform '{platform}' is locked out after too many failed approvals.",
+            status_code=429,
+            detail=f"Platform '{platform}' is locked out after too many failed approvals.",
         )
     raise HTTPException(
-        status_code=404, detail=f"Pairing request or code not found or expired for platform '{platform}'.",
+        status_code=404,
+        detail=f"Pairing request or code not found or expired for platform '{platform}'.",
     )
 
 
@@ -125,19 +157,27 @@ async def revoke_pairing(body: PairingRevoke):
         raise HTTPException(status_code=400, detail="platform and user_id are required")
     if await asyncio.to_thread(store.revoke, platform, body.user_id):
         return {"ok": True}
-    raise HTTPException(status_code=404, detail=f"User {body.user_id} not found in approved list for {platform}.")
+    raise HTTPException(
+        status_code=404,
+        detail=f"User {body.user_id} not found in approved list for {platform}.",
+    )
 
 
 @router.post("/api/pairing/clear-pending")
 async def clear_pending_pairing(profile: Optional[str] = None):
-    return {"ok": True, "cleared": await asyncio.to_thread(_pairing_store(profile).clear_pending)}
+    return {
+        "ok": True,
+        "cleared": await asyncio.to_thread(_pairing_store(profile).clear_pending),
+    }
 
 
 # --- Webhooks: same JSON store as the CLI (clawk_cli.webhook); the adapter
 # hot-reloads it. Per-route HMAC secrets are redacted on read, surfaced once on create.
 
 
-def _webhook_route_summary(name: str, route: dict[str, Any], base_url: str) -> dict[str, Any]:
+def _webhook_route_summary(
+    name: str, route: dict[str, Any], base_url: str
+) -> dict[str, Any]:
     return {
         "name": name,
         "description": route.get("description", ""),
@@ -179,9 +219,15 @@ async def enable_webhooks(profile: Optional[str] = None):
         with config_write_scope(profile):
             _write_platform_enabled("webhook", True)
 
-    with http_failure("Failed to enable webhook platform from dashboard", 500, detail="Failed to enable webhook platform."):
+    with http_failure(
+        "Failed to enable webhook platform from dashboard",
+        500,
+        detail="Failed to enable webhook platform.",
+    ):
         await asyncio.to_thread(_run)
-    restart_result = _restart_gateway_after(profile, what="enabling webhooks", label="Webhook enable")
+    restart_result = _restart_gateway_after(
+        profile, what="enabling webhooks", label="Webhook enable"
+    )
     return {
         "ok": True,
         "platform": "webhook",
@@ -200,16 +246,19 @@ async def create_webhook(body: WebhookCreate, profile: Optional[str] = None):
 
     if not await config_scoped_to_thread(profile, _enabled):
         raise HTTPException(
-            status_code=400, detail="Webhook platform is not enabled. Enable it from the Webhooks page first.",
+            status_code=400,
+            detail="Webhook platform is not enabled. Enable it from the Webhooks page first.",
         )
     name = (body.name or "").strip().lower().replace(" ", "-")
     if not re.match(r"^[a-z0-9][a-z0-9_-]*$", name):
         raise HTTPException(
-            status_code=400, detail="Invalid name. Use lowercase alphanumeric with hyphens/underscores.",
+            status_code=400,
+            detail="Invalid name. Use lowercase alphanumeric with hyphens/underscores.",
         )
     if body.deliver_only and body.deliver == "log":
         raise HTTPException(
-            status_code=400, detail="Direct delivery requires a real target (telegram, discord, …), not 'log'.",
+            status_code=400,
+            detail="Direct delivery requires a real target (telegram, discord, …), not 'log'.",
         )
 
     def _snapshot():
@@ -272,9 +321,12 @@ async def delete_webhook(name: str, profile: Optional[str] = None):
 
 
 @router.put("/api/webhooks/{name}/enabled")
-async def set_webhook_enabled(name: str, body: WebhookEnabledToggle, profile: Optional[str] = None):
+async def set_webhook_enabled(
+    name: str, body: WebhookEnabledToggle, profile: Optional[str] = None
+):
     """Disabled routes stay on disk (re-enable later) but the gateway rejects
     their events with 403; it hot-reloads the file, so no restart is needed."""
+
     def _run():
         import clawk_cli.webhook as wh
 
@@ -296,29 +348,41 @@ async def set_webhook_enabled(name: str, body: WebhookEnabledToggle, profile: Op
 @router.post("/api/gateway/start")
 async def start_gateway(profile: Optional[str] = None):
     from clawk_cli.web_server_gateway import multiplexed_profile_refusal
+
     # The spawned `clawk -p X gateway start` would refuse with exit 78 into an action log nobody reads;
     # surface the same refusal here so the UI can point at the multiplexer instead of showing "started".
     refusal = await asyncio.to_thread(multiplexed_profile_refusal, profile, "start")
     if refusal:
         raise HTTPException(status_code=409, detail=refusal)
     with http_failure("Failed to spawn gateway start", 500, "Failed to start gateway"):
-        proc = _spawn_clawk_action(_gateway_subcommand(profile, "start"), "gateway-start")
+        proc = _spawn_clawk_action(
+            _gateway_subcommand(profile, "start"), "gateway-start"
+        )
     return {"ok": True, "pid": proc.pid, "name": "gateway-start"}
 
 
 @router.post("/api/gateway/stop")
 async def stop_gateway(profile: Optional[str] = None, interrupt: bool = False):
-    from clawk_cli.web_server_gateway import live_session_refusal, multiplexed_profile_refusal
+    from clawk_cli.web_server_gateway import (
+        live_session_refusal,
+        multiplexed_profile_refusal,
+    )
+
     # A served profile has no gateway of its own to stop: the child prints "No gateway running for this
     # profile" (exit 0) while the multiplexer keeps serving it and the UI flips to "stopped".
     refusal = await asyncio.to_thread(multiplexed_profile_refusal, profile, "stop")
     if refusal:
         raise HTTPException(status_code=409, detail=refusal)
     # Live sessions refuse a stop unless the caller interrupts them deliberately (`?interrupt=true`).
-    if not interrupt and (refusal := await asyncio.to_thread(live_session_refusal, profile, "stop")):
+    if not interrupt and (
+        refusal := await asyncio.to_thread(live_session_refusal, profile, "stop")
+    ):
         raise HTTPException(status_code=409, detail=refusal)
     with http_failure("Failed to spawn gateway stop", 500, "Failed to stop gateway"):
-        proc = _spawn_clawk_action(_gateway_subcommand(profile, "stop") + ["--interrupt"] * interrupt, "gateway-stop")
+        proc = _spawn_clawk_action(
+            _gateway_subcommand(profile, "stop") + ["--interrupt"] * interrupt,
+            "gateway-stop",
+        )
     return {"ok": True, "pid": proc.pid, "name": "gateway-stop"}
 
 
@@ -365,10 +429,15 @@ async def list_credential_pool(profile: Optional[str] = None):
                 continue
             entries = pool.entries()
             if entries:
-                providers.append({
-                    "provider": provider_id,
-                    "entries": [_pool_entry_summary(e, i) for i, e in enumerate(entries, start=1)],
-                })
+                providers.append(
+                    {
+                        "provider": provider_id,
+                        "entries": [
+                            _pool_entry_summary(e, i)
+                            for i, e in enumerate(entries, start=1)
+                        ],
+                    }
+                )
         return {"providers": providers}
 
     # A named profile reads only its own auth.json (#111724), and the store path
@@ -378,7 +447,9 @@ async def list_credential_pool(profile: Optional[str] = None):
 
 
 @router.post("/api/credentials/pool")
-async def add_credential_pool_entry(body: CredentialPoolAdd, profile: Optional[str] = None):
+async def add_credential_pool_entry(
+    body: CredentialPoolAdd, profile: Optional[str] = None
+):
     import uuid
     from agent.credential_pool import (
         AUTH_TYPE_API_KEY,
@@ -397,28 +468,33 @@ async def add_credential_pool_entry(body: CredentialPoolAdd, profile: Optional[s
         try:
             pool = load_pool(provider)
             label = (body.label or "").strip() or f"key #{len(pool.entries()) + 1}"
-            pool.add_entry(PooledCredential(
-                provider=provider,
-                # Add a distinct, self-contained pool entry per account (matching the qwen-oauth /
-                # minimax-oauth multi-account patterns, and the xai-oauth path below) instead of routing
-                # through the singleton ``_save_codex_tokens`` save path. The singleton round-trip collapsed
-                # every added account into the latest login: a second ``clawk auth add openai-codex``
-                # overwrote the first account's singleton-mirrored ``device_code`` entry rather than
-                # creating an independent one (#39236). ``manual:device_code`` entries refresh from their
-                # own token pair, so they need no singleton shadow.
-                id=uuid.uuid4().hex[:6],
-                label=label,
-                auth_type=AUTH_TYPE_API_KEY,
-                priority=0,
-                source=SOURCE_MANUAL,
-                access_token=api_key,
-            ))
+            pool.add_entry(
+                PooledCredential(
+                    provider=provider,
+                    # Add a distinct, self-contained pool entry per account (matching the qwen-oauth /
+                    # minimax-oauth multi-account patterns, and the xai-oauth path below) instead of routing
+                    # through the singleton ``_save_codex_tokens`` save path. The singleton round-trip collapsed
+                    # every added account into the latest login: a second ``clawk auth add openai-codex``
+                    # overwrote the first account's singleton-mirrored ``device_code`` entry rather than
+                    # creating an independent one (#39236). ``manual:device_code`` entries refresh from their
+                    # own token pair, so they need no singleton shadow.
+                    id=uuid.uuid4().hex[:6],
+                    label=label,
+                    auth_type=AUTH_TYPE_API_KEY,
+                    priority=0,
+                    source=SOURCE_MANUAL,
+                    access_token=api_key,
+                )
+            )
             # Re-adding is an explicit re-engagement signal: lift every suppression
             # for this provider so a source deleted earlier can seed again
             # (mirrors `clawk auth add`).
             if not provider.startswith(CUSTOM_POOL_PREFIX):
                 try:
-                    from clawk_cli.auth import _load_auth_store, unsuppress_credential_source
+                    from clawk_cli.auth import (
+                        _load_auth_store,
+                        unsuppress_credential_source,
+                    )
 
                     suppressed = _load_auth_store().get("suppressed_sources", {})
                     for src in list(suppressed.get(provider, []) or []):
@@ -436,7 +512,9 @@ async def add_credential_pool_entry(body: CredentialPoolAdd, profile: Optional[s
 
 
 @router.delete("/api/credentials/pool/{provider}/{index}")
-async def remove_credential_pool_entry(provider: str, index: int, profile: Optional[str] = None):
+async def remove_credential_pool_entry(
+    provider: str, index: int, profile: Optional[str] = None
+):
     """Remove a pool entry (``index`` is 1-based, as listed).
 
     Removal must be sticky: ``load_pool()`` re-seeds entries from their backing
@@ -477,15 +555,27 @@ async def remove_credential_pool_entry(provider: str, index: int, profile: Optio
             except Exception:
                 # Cleanup is best-effort, but suppression is the actual fix —
                 # without it the entry resurrects on the next load_pool().
-                _log.exception("credential source cleanup failed for %s/%s; suppressing anyway", provider, removed.source)
+                _log.exception(
+                    "credential source cleanup failed for %s/%s; suppressing anyway",
+                    provider,
+                    removed.source,
+                )
                 try:
                     suppress_credential_source(provider, removed.source)
                 except Exception:
                     _log.exception("suppress_credential_source failed")
-        return {"ok": True, "provider": provider, "count": len(pool.entries()), "cleaned": cleaned, "hints": hints}
+        return {
+            "ok": True,
+            "provider": provider,
+            "count": len(pool.entries()),
+            "cleaned": cleaned,
+            "hints": hints,
+        }
 
     return await config_scoped_to_thread(
-        destructive_profile(profile, "DELETE /api/credentials/pool/{provider}/{index}"), _run)
+        destructive_profile(profile, "DELETE /api/credentials/pool/{provider}/{index}"),
+        _run,
+    )
 
 
 # --- Memory provider: setup is dashboard-native only via get_config_schema();
@@ -500,19 +590,29 @@ async def get_memory_status(profile: Optional[str] = None):
     def _run():  # load_config(), stats and discovery are disk reads — off-loop
         cfg = load_config()
         mem = cfg.get("memory")
-        active = _normalize_memory_provider_name(mem.get("provider")) if isinstance(mem, dict) else ""
+        active = (
+            _normalize_memory_provider_name(mem.get("provider"))
+            if isinstance(mem, dict)
+            else ""
+        )
         mem_dir = get_clawk_home() / "memories"
         files = {}  # sizes so the UI can show what a reset would erase
         for fname, key in _MEMORY_FILES:
             path = mem_dir / fname
             files[key] = path.stat().st_size if path.exists() else 0
-        return {"active": active, "providers": _discover_memory_provider_statuses(), "builtin_files": files}
+        return {
+            "active": active,
+            "providers": _discover_memory_provider_statuses(),
+            "builtin_files": files,
+        }
 
     return await config_scoped_to_thread(profile, _run)
 
 
 @router.put("/api/memory/provider")
-async def set_memory_provider(body: MemoryProviderSelect, profile: Optional[str] = None):
+async def set_memory_provider(
+    body: MemoryProviderSelect, profile: Optional[str] = None
+):
     provider = _normalize_memory_provider_name(body.provider)
 
     def _run():
@@ -536,7 +636,9 @@ async def set_memory_provider(body: MemoryProviderSelect, profile: Optional[str]
 async def reset_memory(body: MemoryReset, profile: Optional[str] = None):
     target = (body.target or "all").strip().lower()
     if target not in {"all", "memory", "user"}:
-        raise HTTPException(status_code=400, detail="target must be all, memory, or user")
+        raise HTTPException(
+            status_code=400, detail="target must be all, memory, or user"
+        )
     profile = destructive_profile(profile, "POST /api/memory/reset")
 
     def _run():
@@ -549,7 +651,9 @@ async def reset_memory(body: MemoryReset, profile: Optional[str] = None):
                     path.unlink()
                     deleted.append(fname)
                 except OSError as exc:
-                    raise HTTPException(status_code=500, detail=f"Could not delete {fname}: {exc}")
+                    raise HTTPException(
+                        status_code=500, detail=f"Could not delete {fname}: {exc}"
+                    )
         return {"ok": True, "deleted": deleted}
 
     return await config_scoped_to_thread(profile, _run)
@@ -562,15 +666,23 @@ async def reset_memory(body: MemoryReset, profile: Optional[str] = None):
 
 @router.post("/api/ops/doctor")
 async def run_doctor(profile: Optional[str] = None):
-    return _spawn_action(["doctor"], "doctor", log_msg="Failed to spawn doctor",
-                         prefix="Failed to run doctor", profile=profile)
+    return _spawn_action(
+        ["doctor"],
+        "doctor",
+        log_msg="Failed to spawn doctor",
+        prefix="Failed to run doctor",
+        profile=profile,
+    )
 
 
 @router.post("/api/ops/security-audit")
 async def run_security_audit(profile: Optional[str] = None):
     return _spawn_action(
-        ["security", "audit"], "security-audit",
-        log_msg="Failed to spawn security audit", prefix="Failed to run security audit", profile=profile,
+        ["security", "audit"],
+        "security-audit",
+        log_msg="Failed to spawn security audit",
+        prefix="Failed to run security audit",
+        profile=profile,
     )
 
 
@@ -586,14 +698,24 @@ async def run_backup(body: BackupRequest, profile: Optional[str] = None):
     output = (body.output or "").strip()
     if not output:
         stamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
-        archive = _dashboard_backup_dir(profile) / f"clawk-backup-{stamp}-{secrets.token_hex(4)}.zip"
+        archive = (
+            _dashboard_backup_dir(profile)
+            / f"clawk-backup-{stamp}-{secrets.token_hex(4)}.zip"
+        )
         try:
             archive.parent.mkdir(parents=True, exist_ok=True)
         except OSError as exc:
-            raise HTTPException(status_code=500, detail=f"Could not create backup directory: {exc}")
+            raise HTTPException(
+                status_code=500, detail=f"Could not create backup directory: {exc}"
+            )
         output = str(archive)
-    response = _spawn_action(["backup", "-o", output], "backup", log_msg="Failed to spawn backup",
-                             prefix="Failed to run backup", profile=profile)
+    response = _spawn_action(
+        ["backup", "-o", output],
+        "backup",
+        log_msg="Failed to spawn backup",
+        prefix="Failed to run backup",
+        profile=profile,
+    )
     if archive is not None:
         response["archive"] = str(archive)
     return response
@@ -610,11 +732,16 @@ async def download_dashboard_backup(archive: str, profile: Optional[str] = None)
         raise HTTPException(status_code=400, detail="Invalid backup path")
 
     if not _path_is_under(backup_dir, target):
-        raise HTTPException(status_code=403, detail="Backup is outside the dashboard backup directory")
+        raise HTTPException(
+            status_code=403, detail="Backup is outside the dashboard backup directory"
+        )
     if not target.is_file():
         raise HTTPException(status_code=404, detail="Backup not found")
     return FileResponse(
-        path=str(target), media_type="application/zip", filename=target.name, content_disposition_type="attachment",
+        path=str(target),
+        media_type="application/zip",
+        filename=target.name,
+        content_disposition_type="attachment",
     )
 
 
@@ -622,8 +749,13 @@ def _spawn_import(archive: str, force: bool, profile: Optional[str] = None) -> d
     args = ["import", archive]
     if force:
         args.append("--force")
-    return _spawn_action(args, "import", log_msg="Failed to spawn import",
-                         prefix="Failed to run import", profile=profile)
+    return _spawn_action(
+        args,
+        "import",
+        log_msg="Failed to spawn import",
+        prefix="Failed to run import",
+        profile=profile,
+    )
 
 
 @router.post("/api/ops/import")
@@ -656,24 +788,39 @@ async def run_import_upload(
     try:
         staging_dir.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
-        raise HTTPException(status_code=500, detail=f"Could not create import staging directory: {exc}")
+        raise HTTPException(
+            status_code=500, detail=f"Could not create import staging directory: {exc}"
+        )
 
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
-    target = staging_dir / f"dashboard-import-{stamp}-{secrets.token_hex(4)}-{_safe_backup_upload_name(file.filename)}"
+    target = (
+        staging_dir
+        / f"dashboard-import-{stamp}-{secrets.token_hex(4)}-{_safe_backup_upload_name(file.filename)}"
+    )
     total = await stream_upload_to_path(
-        file, target, too_large="Archive is too large",
-        not_writable="Import staging directory is not writable", write_failed="Could not write uploaded archive",
+        file,
+        target,
+        too_large="Archive is too large",
+        not_writable="Import staging directory is not writable",
+        write_failed="Could not write uploaded archive",
     )
     if not zipfile.is_zipfile(target):
         target.unlink(missing_ok=True)
-        raise HTTPException(status_code=400, detail="Uploaded archive is not a valid zip file")
-    return {**_spawn_import(str(target), force, profile), "archive": str(target), "uploaded_bytes": total}
+        raise HTTPException(
+            status_code=400, detail="Uploaded archive is not a valid zip file"
+        )
+    return {
+        **_spawn_import(str(target), force, profile),
+        "archive": str(target),
+        "uploaded_bytes": total,
+    }
 
 
 @router.get("/api/ops/hooks")
 async def list_hooks(profile: Optional[str] = None):
     """Configured shell hooks with consent (allowlist) status, whether the
     script is currently executable, and the valid hook events for the form."""
+
     def _run():
         from clawk_cli.config import load_config as _load_config
         from agent import shell_hooks
@@ -681,6 +828,7 @@ async def list_hooks(profile: Optional[str] = None):
         valid_events = []
         with contextlib.suppress(Exception):
             from clawk_cli.plugins import VALID_HOOKS
+
             valid_events = sorted(VALID_HOOKS)
 
         specs = []
@@ -697,15 +845,17 @@ async def list_hooks(profile: Optional[str] = None):
                 entry = shell_hooks.allowlist_entry_for(spec.event, spec.command)
             with contextlib.suppress(Exception):
                 executable = shell_hooks.script_is_executable(spec.command)
-            out.append({
-                "event": spec.event,
-                "matcher": spec.matcher,
-                "command": spec.command,
-                "timeout": spec.timeout,
-                "allowed": entry is not None,
-                "approved_at": (entry or {}).get("approved_at"),
-                "executable": executable,
-            })
+            out.append(
+                {
+                    "event": spec.event,
+                    "matcher": spec.matcher,
+                    "command": spec.command,
+                    "timeout": spec.timeout,
+                    "allowed": entry is not None,
+                    "approved_at": (entry or {}).get("approved_at"),
+                    "executable": executable,
+                }
+            )
         return {"hooks": out, "valid_events": valid_events}
 
     return await config_scoped_to_thread(profile, _run)
@@ -739,7 +889,10 @@ async def create_hook(body: HookCreate, profile: Optional[str] = None):
     with contextlib.suppress(Exception):
         from clawk_cli.plugins import VALID_HOOKS as valid_hooks
     if valid_hooks is not None and event not in valid_hooks:
-        raise HTTPException(status_code=400, detail=f"Unknown event '{event}'. Valid: {', '.join(sorted(valid_hooks))}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown event '{event}'. Valid: {', '.join(sorted(valid_hooks))}",
+        )
 
     def _run():
         with config_write_scope(profile):
@@ -786,7 +939,8 @@ async def delete_hook(body: HookDelete, profile: Optional[str] = None):
             if isinstance(hooks_cfg, dict) and isinstance(hooks_cfg.get(event), list):
                 before = len(hooks_cfg[event])
                 hooks_cfg[event] = [
-                    e for e in hooks_cfg[event]
+                    e
+                    for e in hooks_cfg[event]
                     if not (isinstance(e, dict) and e.get("command") == command)
                 ]
                 removed = len(hooks_cfg[event]) < before
@@ -810,6 +964,7 @@ async def list_checkpoints(profile: Optional[str] = None):
     """/rollback shadow-store checkpoints (read-only): count + size per session
     so the UI can show what a prune reclaims; pruning itself is a spawned CLI
     action so the confirmation logic stays in one place."""
+
     def _run():
         cp_dir = get_clawk_home() / "checkpoints"
         sessions = []
@@ -838,7 +993,9 @@ async def list_checkpoints(profile: Optional[str] = None):
 @router.post("/api/ops/checkpoints/prune")
 async def prune_checkpoints(profile: Optional[str] = None):
     return _spawn_action(
-        ["checkpoints", "prune"], "checkpoints-prune",
-        log_msg="Failed to spawn checkpoints prune", prefix="Failed to prune checkpoints",
+        ["checkpoints", "prune"],
+        "checkpoints-prune",
+        log_msg="Failed to spawn checkpoints prune",
+        prefix="Failed to prune checkpoints",
         profile=destructive_profile(profile, "POST /api/ops/checkpoints/prune"),
     )

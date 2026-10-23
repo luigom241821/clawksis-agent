@@ -12,6 +12,7 @@ def _store():
     # Late import: tests and callers patch ``agent.vault_store.get_vault_store``; binding it here
     # at call time keeps that facade name the single seam.
     from agent.vault_store import get_vault_store
+
     return get_vault_store()
 
 
@@ -31,6 +32,7 @@ class LocalLoginBackend(LoginBackend):
 
     def resolve_otp(self, handle: str) -> Optional[str]:
         from agent.vault_store import totp_now
+
         seed = str(_store().resolve_secret(handle).get("otp_secret") or "")
         return totp_now(seed) if seed else None
 

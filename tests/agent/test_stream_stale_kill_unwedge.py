@@ -19,6 +19,7 @@ so the retry actually reconnects. Descriptor release stays on the worker:
 ``_call``'s ``except``/``finally`` closes the managed stream and the request
 client on the owner thread.
 """
+
 import json
 import threading
 import time
@@ -36,13 +37,22 @@ from agent import chat_completion_helpers as helpers
 
 def _agent():
     return run_agent.AIAgent(
-        api_key="test-key", base_url="http://127.0.0.1:1/v1", model="m", provider="custom",
-        quiet_mode=True, skip_context_files=True, skip_memory=True, enabled_toolsets=[], max_iterations=1,
+        api_key="test-key",
+        base_url="http://127.0.0.1:1/v1",
+        model="m",
+        provider="custom",
+        quiet_mode=True,
+        skip_context_files=True,
+        skip_memory=True,
+        enabled_toolsets=[],
+        max_iterations=1,
     )
 
 
 def _call(agent, model="m"):
-    call = helpers._StreamingCall(agent, {"model": model, "messages": [{"role": "user", "content": "hi"}]}, None)
+    call = helpers._StreamingCall(
+        agent, {"model": model, "messages": [{"role": "user", "content": "hi"}]}, None
+    )
     call._stream_stale_timeout = 5.0
     return call
 
@@ -64,22 +74,31 @@ def test_shutdown_reaches_socket_through_real_httpx_wrapper_shape():
     (review blocker). Shape verified against a live httpx 0.28.1/httpcore 1.0.9
     loopback probe."""
     import socket as _socket
+
     reader, writer = _socket.socketpair()
     try:
+
         def _no_close():
             raise AssertionError("monitor must never close")
+
         # Exact live shape: PoolByteStream carries the byte stream under _stream
         # (no _connection); the HTTP/1.1 connection carries the socket under
         # _network_stream (no _stream).
         pool_stream = SimpleNamespace(_stream=None, _connection=None)
         h11_byte_stream = SimpleNamespace(_connection=None)
-        h11_conn = SimpleNamespace(_network_stream=SimpleNamespace(_sock=reader),
-                                   _stream=None, _connection=None, _httpcore_stream=None)
+        h11_conn = SimpleNamespace(
+            _network_stream=SimpleNamespace(_sock=reader),
+            _stream=None,
+            _connection=None,
+            _httpcore_stream=None,
+        )
         h11_byte_stream._connection = h11_conn
         pool_stream._stream = h11_byte_stream
         resp = SimpleNamespace(
             close=_no_close,
-            stream=SimpleNamespace(_stream=SimpleNamespace(_httpcore_stream=pool_stream)),
+            stream=SimpleNamespace(
+                _stream=SimpleNamespace(_httpcore_stream=pool_stream)
+            ),
         )
         call = _call(_agent())
         call._attempt_stream_response = resp
@@ -88,6 +107,7 @@ def test_shutdown_reaches_socket_through_real_httpx_wrapper_shape():
     finally:
         reader.close()
         writer.close()
+
 
 # ── end to end: a reader parked on a silent provider must reconnect ──
 
@@ -126,11 +146,27 @@ class _SilentFirstRequest:
                     hits.release.wait(timeout=30.0)
                     return
                 try:
-                    chunk = {"id": "c1", "object": "chat.completion.chunk", "created": 1, "model": "m",
-                             "choices": [{"index": 0, "delta": {"content": "reconnected"}, "finish_reason": None}]}
+                    chunk = {
+                        "id": "c1",
+                        "object": "chat.completion.chunk",
+                        "created": 1,
+                        "model": "m",
+                        "choices": [
+                            {
+                                "index": 0,
+                                "delta": {"content": "reconnected"},
+                                "finish_reason": None,
+                            }
+                        ],
+                    }
                     self.wfile.write(f"data: {json.dumps(chunk)}\n\n".encode())
-                    fin = {"id": "c1", "object": "chat.completion.chunk", "created": 1, "model": "m",
-                           "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]}
+                    fin = {
+                        "id": "c1",
+                        "object": "chat.completion.chunk",
+                        "created": 1,
+                        "model": "m",
+                        "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+                    }
                     self.wfile.write(b"data: " + json.dumps(fin).encode() + b"\n\n")
                     self.wfile.write(b"data: [DONE]\n\n")
                     self.wfile.flush()
@@ -139,7 +175,9 @@ class _SilentFirstRequest:
 
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         self.server.daemon_threads = True
-        threading.Thread(target=lambda: self.server.serve_forever(poll_interval=0.05), daemon=True).start()
+        threading.Thread(
+            target=lambda: self.server.serve_forever(poll_interval=0.05), daemon=True
+        ).start()
         self.base_url = f"http://127.0.0.1:{self.server.server_address[1]}/v1"
 
     def close(self):
@@ -155,7 +193,9 @@ def silent_wire():
     wire.close()
 
 
-def test_wedged_stream_unwinds_within_its_stale_budget_and_reconnects(silent_wire, monkeypatch):
+def test_wedged_stream_unwinds_within_its_stale_budget_and_reconnects(
+    silent_wire, monkeypatch
+):
     """Pre-fix the worker stayed parked in the body read: no second request was
     ever issued and the call only ended at the byte-read timeout (>= 20s here,
     120s by default). Now the kill unblocks the reader, the abort-induced read
@@ -164,16 +204,24 @@ def test_wedged_stream_unwinds_within_its_stale_budget_and_reconnects(silent_wir
     monkeypatch.setenv("CLAWK_STREAM_RETRIES", "1")
     monkeypatch.setenv("CLAWK_STREAM_READ_TIMEOUT", "20")
     agent = run_agent.AIAgent(
-        api_key="test-key", base_url=silent_wire.base_url, model="m", provider="custom",
+        api_key="test-key",
+        base_url=silent_wire.base_url,
+        model="m",
+        provider="custom",
         platform="cli",  # worker thread + monitor thread: the gateway shape from the report
-        quiet_mode=True, skip_context_files=True, skip_memory=True, enabled_toolsets=[], max_iterations=1,
+        quiet_mode=True,
+        skip_context_files=True,
+        skip_memory=True,
+        enabled_toolsets=[],
+        max_iterations=1,
     )
     agent.api_mode = "chat_completions"
     agent._interrupt_requested = False
 
     started = time.time()
     response = agent._interruptible_streaming_api_call(
-        {"model": "m", "messages": [{"role": "user", "content": "hi"}]})
+        {"model": "m", "messages": [{"role": "user", "content": "hi"}]}
+    )
     elapsed = time.time() - started
 
     assert len(silent_wire.completions) >= 2, (
@@ -183,4 +231,6 @@ def test_wedged_stream_unwinds_within_its_stale_budget_and_reconnects(silent_wir
     assert response.choices[0].message.content == "reconnected"
     # The stale budget is 2s; the byte-read timeout is 20s. A parked reader can
     # only be recovered by the read timeout, which is what this pins out.
-    assert elapsed < 12.0, f"stream took {elapsed:.1f}s to recover — the reader was not unwedged by the kill"
+    assert elapsed < 12.0, (
+        f"stream took {elapsed:.1f}s to recover — the reader was not unwedged by the kill"
+    )

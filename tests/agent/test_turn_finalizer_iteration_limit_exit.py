@@ -114,20 +114,6 @@ def _finalize(
     )
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 @pytest.mark.parametrize(
     ("exit_reason", "interrupted", "failed"),
     [
@@ -371,11 +357,16 @@ def test_bounded_fallback_does_not_fire_when_budget_not_exhausted(monkeypatch):
 
 
 @pytest.mark.parametrize("scope", ["child", "non-owner"])
-def test_budget_exhausted_child_does_not_record_parent_kanban_timeout(monkeypatch, scope):
+def test_budget_exhausted_child_does_not_record_parent_kanban_timeout(
+    monkeypatch, scope
+):
     """An in-process delegate_task child (or cron run) inherits ``CLAWK_KANBAN_TASK`` from
     the dispatcher worker; exhausting ITS budget must not record ``timed_out`` against the
     parent's task or release the parent's claim (#112817)."""
-    from agent.delegation_context import delegated_child_context, non_dispatcher_owned_context
+    from agent.delegation_context import (
+        delegated_child_context,
+        non_dispatcher_owned_context,
+    )
 
     monkeypatch.setattr("clawk_cli.plugins.invoke_hook", lambda *_a, **_kw: [])
     monkeypatch.setenv("CLAWK_KANBAN_TASK", "t_parent")
@@ -414,6 +405,8 @@ def test_finalize_turn_starts_the_title_upgrade_the_prologue_held_back():
     ran = threading.Event()
     agent = _LimitAgent()
     agent._deferred_title_upgrade = threading.Thread(target=ran.set, daemon=True)
-    _finalize(agent, final_response="done", exit_reason="text_response(1)", api_call_count=1)
+    _finalize(
+        agent, final_response="done", exit_reason="text_response(1)", api_call_count=1
+    )
     assert ran.wait(timeout=5), "deferred title upgrade never started"
     assert agent._deferred_title_upgrade is None

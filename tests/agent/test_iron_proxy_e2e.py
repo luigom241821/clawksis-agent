@@ -140,9 +140,12 @@ def test_iron_proxy_swaps_authorization_header_end_to_end(clawk_home, monkeypatc
             [
                 "curl",
                 "--silent",
-                "--max-time", "10",
-                "-x", f"http://127.0.0.1:{tunnel_port + 1}",
-                "-H", f"Authorization: Bearer {proxy_token}",
+                "--max-time",
+                "10",
+                "-x",
+                f"http://127.0.0.1:{tunnel_port + 1}",
+                "-H",
+                f"Authorization: Bearer {proxy_token}",
                 f"http://127.0.0.1:{upstream_port}/",
             ],
             capture_output=True,
@@ -248,9 +251,12 @@ def test_iron_proxy_swaps_x_api_key_header_end_to_end(clawk_home, monkeypatch):
             [
                 "curl",
                 "--silent",
-                "--max-time", "10",
-                "-x", f"http://127.0.0.1:{tunnel_port + 1}",
-                "-H", f"x-api-key: {proxy_token}",
+                "--max-time",
+                "10",
+                "-x",
+                f"http://127.0.0.1:{tunnel_port + 1}",
+                "-H",
+                f"x-api-key: {proxy_token}",
                 f"http://127.0.0.1:{upstream_port}/",
             ],
             capture_output=True,
@@ -313,11 +319,13 @@ def test_iron_proxy_management_reload_end_to_end(clawk_home, monkeypatch):
             ip.write_mappings([mapping])
 
         tunnel_port = _free_port()
-        _write_cfg(ip.TokenMapping(
-            proxy_token=token_v1,
-            real_env_name="TEST_RELOAD_KEY",
-            upstream_hosts=("127.0.0.1",),
-        ))
+        _write_cfg(
+            ip.TokenMapping(
+                proxy_token=token_v1,
+                real_env_name="TEST_RELOAD_KEY",
+                upstream_hosts=("127.0.0.1",),
+            )
+        )
 
         try:
             status = ip.start_proxy()
@@ -335,11 +343,13 @@ def test_iron_proxy_management_reload_end_to_end(clawk_home, monkeypatch):
 
         # Rotate the sandbox-visible token in the config, then hot-reload.
         token_v2 = ip.mint_proxy_token("v2")
-        _write_cfg(ip.TokenMapping(
-            proxy_token=token_v2,
-            real_env_name="TEST_RELOAD_KEY",
-            upstream_hosts=("127.0.0.1",),
-        ))
+        _write_cfg(
+            ip.TokenMapping(
+                proxy_token=token_v2,
+                real_env_name="TEST_RELOAD_KEY",
+                upstream_hosts=("127.0.0.1",),
+            )
+        )
         assert ip.reload_proxy() is True
 
         # Same daemon (no restart) ...
@@ -349,12 +359,18 @@ def test_iron_proxy_management_reload_end_to_end(clawk_home, monkeypatch):
         _CaptureHandler.captured_auth = None
         result = subprocess.run(
             [
-                "curl", "--silent", "--max-time", "10",
-                "-x", f"http://127.0.0.1:{tunnel_port + 1}",
-                "-H", f"Authorization: Bearer {token_v2}",
+                "curl",
+                "--silent",
+                "--max-time",
+                "10",
+                "-x",
+                f"http://127.0.0.1:{tunnel_port + 1}",
+                "-H",
+                f"Authorization: Bearer {token_v2}",
                 f"http://127.0.0.1:{upstream_port}/",
             ],
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
             check=False,
         )
         assert result.returncode == 0, f"curl failed: {result.stderr}"

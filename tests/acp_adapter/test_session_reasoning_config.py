@@ -28,28 +28,51 @@ def acp_env(monkeypatch, tmp_path):
     monkeypatch.setattr("run_agent.AIAgent", _CapturingAgent)
     monkeypatch.setattr(
         "clawk_cli.runtime_provider.resolve_runtime_provider",
-        lambda requested=None, **_kwargs: {"provider": requested or "openai-api", "api_mode": "codex_responses",
-                                           "base_url": "https://example.invalid/v1", "api_key": "test-key"},
+        lambda requested=None, **_kwargs: {
+            "provider": requested or "openai-api",
+            "api_mode": "codex_responses",
+            "base_url": "https://example.invalid/v1",
+            "api_key": "test-key",
+        },
     )
-    monkeypatch.setattr("acp_adapter.session._register_task_cwd", lambda task_id, cwd: None)
-    monkeypatch.setattr("clawk_cli.mcp_startup.ensure_mcp_discovery_before_agent_build", lambda **_kwargs: None)
+    monkeypatch.setattr(
+        "acp_adapter.session._register_task_cwd", lambda task_id, cwd: None
+    )
+    monkeypatch.setattr(
+        "clawk_cli.mcp_startup.ensure_mcp_discovery_before_agent_build",
+        lambda **_kwargs: None,
+    )
 
     def _write_config(cfg: dict) -> None:
-        (Path(os.environ["CLAWK_HOME"]) / "config.yaml").write_text(yaml.safe_dump(cfg), encoding="utf-8")
+        (Path(os.environ["CLAWK_HOME"]) / "config.yaml").write_text(
+            yaml.safe_dump(cfg), encoding="utf-8"
+        )
 
     return _write_config
 
 
 def test_acp_agent_receives_configured_reasoning(acp_env):
-    acp_env({"model": {"default": "gpt-4o-mini", "provider": "openai-api"}, "agent": {"reasoning_effort": "none"}})
+    acp_env(
+        {
+            "model": {"default": "gpt-4o-mini", "provider": "openai-api"},
+            "agent": {"reasoning_effort": "none"},
+        }
+    )
     sm = SessionManager(db=None)
     sm._get_db = lambda: None
     agent = sm._make_agent(session_id="s1", cwd=".")
     assert agent.kwargs["reasoning_config"] == {"enabled": False}
 
     # Per-model overrides key off the session's model, not ``model.default``.
-    acp_env({"model": {"default": "gpt-4o-mini", "provider": "openai-api"},
-             "agent": {"reasoning_effort": "none", "reasoning_overrides": {"gpt-5.6": "high"}}})
+    acp_env(
+        {
+            "model": {"default": "gpt-4o-mini", "provider": "openai-api"},
+            "agent": {
+                "reasoning_effort": "none",
+                "reasoning_overrides": {"gpt-5.6": "high"},
+            },
+        }
+    )
     agent = sm._make_agent(session_id="s2", cwd=".", model="gpt-5.6")
     assert agent.kwargs["reasoning_config"] == {"enabled": True, "effort": "high"}
 
@@ -59,15 +82,23 @@ def test_acp_agent_receives_custom_provider_request_body(acp_env, monkeypatch):
     on the CLI; an explicit base_url naming a different endpoint does not inherit them."""
     monkeypatch.setattr(
         "clawk_cli.runtime_provider.resolve_runtime_provider",
-        lambda requested=None, **_kwargs: {"provider": "custom", "api_mode": "chat_completions",
-                                           "base_url": "https://proxy.example/v1", "api_key": "k",
-                                           "request_overrides": {"extra_body": {"user": "proxy-user"}}},
+        lambda requested=None, **_kwargs: {
+            "provider": "custom",
+            "api_mode": "chat_completions",
+            "base_url": "https://proxy.example/v1",
+            "api_key": "k",
+            "request_overrides": {"extra_body": {"user": "proxy-user"}},
+        },
     )
     acp_env({"model": {"default": "some-model", "provider": "custom:my-proxy"}})
     sm = SessionManager(db=None)
     sm._get_db = lambda: None
-    assert sm._make_agent(session_id="s1", cwd=".").kwargs["request_overrides"] == {"extra_body": {"user": "proxy-user"}}
+    assert sm._make_agent(session_id="s1", cwd=".").kwargs["request_overrides"] == {
+        "extra_body": {"user": "proxy-user"}
+    }
     same = sm._make_agent(session_id="s2", cwd=".", base_url="https://proxy.example/v1")
     assert same.kwargs["request_overrides"] == {"extra_body": {"user": "proxy-user"}}
-    other = sm._make_agent(session_id="s3", cwd=".", base_url="https://elsewhere.example/v1")
+    other = sm._make_agent(
+        session_id="s3", cwd=".", base_url="https://elsewhere.example/v1"
+    )
     assert "request_overrides" not in other.kwargs

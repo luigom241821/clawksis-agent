@@ -56,7 +56,9 @@ def _adapter(extra=None) -> TelegramAdapter:
     """
     a = object.__new__(TelegramAdapter)
     a.platform = Platform.TELEGRAM
-    a.config = SimpleNamespace(extra=extra if extra is not None else {"allow_from": ["*"]})
+    a.config = SimpleNamespace(
+        extra=extra if extra is not None else {"allow_from": ["*"]}
+    )
     a.gateway_runner = None
     return a
 
@@ -97,7 +99,9 @@ def _auth_reaction_update(user_id, chat_type="private", chat_id=123, message_id=
     post-auth gate has an identity to authorize against.
     """
     update = _reaction_update(
-        [_reaction(emoji="\U0001F44D")], chat_id=chat_id, message_id=message_id,
+        [_reaction(emoji="\U0001f44d")],
+        chat_id=chat_id,
+        message_id=message_id,
     )
     update.message_reaction.user.id = str(user_id)
     update.message_reaction.chat.type = chat_type
@@ -109,10 +113,10 @@ def _auth_reaction_update(user_id, chat_type="private", chat_id=123, message_id=
 # ---------------------------------------------------------------------------
 
 
-
 # ---------------------------------------------------------------------------
 # Runner-owned dispatch — authoritative post-auth gate + isolation
 # ---------------------------------------------------------------------------
+
 
 class TestRunnerDispatch:
     def test_authorized_event_routes_normalized_envelope(self):
@@ -142,13 +146,14 @@ class TestRunnerDispatch:
         )
 
         with patch("clawk_cli.lifecycle.invoke_hook", invoke):
-            asyncio.run(runner._handle_gateway_platform_event(
-                {"platform": "telegram", "event_type": "reaction", "payload": {}},
-                source,
-            ))
+            asyncio.run(
+                runner._handle_gateway_platform_event(
+                    {"platform": "telegram", "event_type": "reaction", "payload": {}},
+                    source,
+                )
+            )
 
         invoke.assert_not_called()
-
 
     def test_plugin_layer_error_is_isolated(self):
         runner = object.__new__(GatewayRunner)
@@ -159,28 +164,33 @@ class TestRunnerDispatch:
         )
 
         with patch("clawk_cli.lifecycle.invoke_hook", invoke):
-            asyncio.run(runner._handle_gateway_platform_event(
-                {"platform": "telegram", "event_type": "reaction", "payload": {}},
-                source,
-            ))  # no raise
+            asyncio.run(
+                runner._handle_gateway_platform_event(
+                    {"platform": "telegram", "event_type": "reaction", "payload": {}},
+                    source,
+                )
+            )  # no raise
 
 
 # ---------------------------------------------------------------------------
 # TelegramAdapter._normalize_platform_event — envelope normalization
 # ---------------------------------------------------------------------------
 
+
 class TestNormalizePlatformEvent:
     def test_standard_emoji_reaction_normalized(self):
         """A message_reaction update becomes {platform, event_type, payload} with
         exactly the fields a real plugin consumes — no raw SDK objects."""
         a = _adapter()
-        update = _reaction_update([_reaction(emoji="\U0001F44E")], chat_id=123, message_id=456)
+        update = _reaction_update(
+            [_reaction(emoji="\U0001f44e")], chat_id=123, message_id=456
+        )
 
         assert a._normalize_platform_event(update) == {
             "platform": "telegram",
             "event_type": "reaction",
             "payload": {
-                "emojis": ["\U0001F44E"],
+                "emojis": ["\U0001f44e"],
                 "custom_emoji_ids": [],
                 "chat_id": "123",
                 "message_id": "456",
@@ -201,21 +211,21 @@ class TestNormalizePlatformEvent:
     def test_mixed_reactions_split_correctly(self):
         """A reaction set with standard + custom emojis splits into both lists."""
         a = _adapter()
-        update = _reaction_update([
-            _reaction(emoji="\U0001F44D"),
-            _reaction(custom_emoji_id="555"),
-            _reaction(emoji="\U0001F525"),
-        ])
+        update = _reaction_update(
+            [
+                _reaction(emoji="\U0001f44d"),
+                _reaction(custom_emoji_id="555"),
+                _reaction(emoji="\U0001f525"),
+            ]
+        )
 
         event = a._normalize_platform_event(update)
-        assert event["payload"]["emojis"] == ["\U0001F44D", "\U0001F525"]
+        assert event["payload"]["emojis"] == ["\U0001f44d", "\U0001f525"]
         assert event["payload"]["custom_emoji_ids"] == ["555"]
 
     def test_malformed_values_never_escape_as_live_objects(self):
         a = _adapter()
-        update = _reaction_update(
-            [_reaction(emoji=object(), custom_emoji_id=object())]
-        )
+        update = _reaction_update([_reaction(emoji=object(), custom_emoji_id=object())])
 
         event = a._normalize_platform_event(update)
 
@@ -256,6 +266,7 @@ class TestNormalizePlatformEvent:
 # ---------------------------------------------------------------------------
 # TelegramAdapter message_edited normalization (#64176 remaining scope)
 # ---------------------------------------------------------------------------
+
 
 def _edited_update(
     *,
@@ -326,7 +337,12 @@ class TestNormalizeMessageEdited:
         a = _adapter()
         update = _edited_update()
         update.edited_message.edit_date = _dt.datetime(
-            2026, 8, 12, 10, 30, tzinfo=_dt.UTC,
+            2026,
+            8,
+            12,
+            10,
+            30,
+            tzinfo=_dt.UTC,
         )
 
         event = a._normalize_platform_event(update)
@@ -385,32 +401,39 @@ class TestNormalizeMessageEdited:
 # TelegramAdapter._on_platform_update — fire-site
 # ---------------------------------------------------------------------------
 
-class TestOnPlatformUpdate:
 
+class TestOnPlatformUpdate:
     def test_fires_gateway_platform_event_with_envelope(self):
         a = _adapter()
         seen: list = []
+
         async def observe(event, source):
             seen.append((event, source))
+
         a.set_platform_event_handler(observe)
 
-        asyncio.run(a._on_platform_update(
-            _reaction_update([_reaction(emoji="\U0001F44E")], 123, 456), context=MagicMock(),
-        ))
+        asyncio.run(
+            a._on_platform_update(
+                _reaction_update([_reaction(emoji="\U0001f44e")], 123, 456),
+                context=MagicMock(),
+            )
+        )
 
         assert len(seen) == 1
         event, source = seen[0]
         assert event["platform"] == "telegram"
         assert event["event_type"] == "reaction"
-        assert event["payload"]["emojis"] == ["\U0001F44E"]
+        assert event["payload"]["emojis"] == ["\U0001f44e"]
         assert event["payload"]["chat_id"] == "123"
         assert source.chat_id == "123"
 
     def test_unsupported_update_does_not_fire(self):
         a = _adapter()
         seen: list = []
+
         async def observe(event, source):
             seen.append((event, source))
+
         a.set_platform_event_handler(observe)
 
         update = MagicMock()
@@ -423,20 +446,25 @@ class TestOnPlatformUpdate:
         """A malformed update that makes normalize raise must be swallowed — the
         observer can't break the adapter (regression guard for the try/except)."""
         a = _adapter()
+
         async def observe(event, source):
             pytest.fail("must not fire on normalize error")
+
         a.set_platform_event_handler(observe)
 
         def boom(update):
             raise RuntimeError("malformed update")
 
         a._normalize_platform_event = boom  # type: ignore[assignment]
-        asyncio.run(a._on_platform_update(MagicMock(), context=MagicMock()))  # must not raise
+        asyncio.run(
+            a._on_platform_update(MagicMock(), context=MagicMock())
+        )  # must not raise
 
 
 # ---------------------------------------------------------------------------
 # TelegramAdapter._on_platform_update post-auth gate (#64176)
 # ---------------------------------------------------------------------------
+
 
 class TestOnPlatformUpdateAuthBoundary:
     def test_without_runner_callback_fails_closed(self):
@@ -446,9 +474,12 @@ class TestOnPlatformUpdateAuthBoundary:
         seen: list = []
         # No set_platform_event_handler: the authoritative gateway boundary has
         # not been installed, so even a syntactically valid reaction is dropped.
-        asyncio.run(a._on_platform_update(
-            _auth_reaction_update(user_id=777), context=MagicMock(),
-        ))
+        asyncio.run(
+            a._on_platform_update(
+                _auth_reaction_update(user_id=777),
+                context=MagicMock(),
+            )
+        )
 
         assert seen == []
 
@@ -459,8 +490,10 @@ class TestOnPlatformUpdateAuthBoundary:
         and fire it despite the restrictive allow_from."""
         a = _adapter(extra={"allow_from": ["999"]})
         seen: list = []
+
         async def observe(event, source):
             seen.append((event, source))
+
         a.set_platform_event_handler(observe)
 
         update = MagicMock()
@@ -468,7 +501,9 @@ class TestOnPlatformUpdateAuthBoundary:
         update.edited_message = None
         # Simulate that future normalization produced an event for it.
         a._normalize_platform_event = lambda u: {  # type: ignore[assignment]
-            "platform": "telegram", "event_type": "future", "payload": {},
+            "platform": "telegram",
+            "event_type": "future",
+            "payload": {},
         }
 
         asyncio.run(a._on_platform_update(update, context=MagicMock()))
@@ -534,7 +569,10 @@ class TestProfileScopedPlatformEventHandler:
         dispatch = AsyncMock()
         runner._handle_gateway_platform_event = dispatch
         handler = runner._make_default_profile_platform_event_handler()
-        with patch("gateway.run._profile_runtime_scope", side_effect=lambda _home: nullcontext()):
+        with patch(
+            "gateway.run._profile_runtime_scope",
+            side_effect=lambda _home: nullcontext(),
+        ):
             asyncio.run(handler({"event_type": "reaction"}, source))
 
         resolver.assert_called_once_with(source)
@@ -550,14 +588,20 @@ class TestProfileScopedPlatformEventHandler:
 
         runner._handle_gateway_platform_event = dispatch
         monkeypatch.setattr(
-            "clawk_cli.profiles.get_profile_dir", lambda name: None,
+            "clawk_cli.profiles.get_profile_dir",
+            lambda name: None,
         )
         handler = runner._make_profile_platform_event_handler("work")
         source = _adapter()._source_from_reaction_for_auth(
             _auth_reaction_update(user_id=777)
         )
 
-        asyncio.run(handler({"platform": "telegram", "event_type": "reaction", "payload": {}}, source))
+        asyncio.run(
+            handler(
+                {"platform": "telegram", "event_type": "reaction", "payload": {}},
+                source,
+            )
+        )
 
         assert captured["profile"] == "work"
 
@@ -567,11 +611,13 @@ class TestFixturePluginObservationPath:
         """Adapter -> normalized source/envelope -> runner auth -> real plugin bus."""
         manager = PluginManager()
         context = PluginContext(
-            PluginManifest(name="reaction-fixture", source="user"), manager,
+            PluginManifest(name="reaction-fixture", source="user"),
+            manager,
         )
         seen = []
         context.register_hook(
-            "gateway_platform_event", lambda **event: seen.append(event),
+            "gateway_platform_event",
+            lambda **event: seen.append(event),
         )
 
         runner = object.__new__(GatewayRunner)
@@ -580,26 +626,32 @@ class TestFixturePluginObservationPath:
         adapter.set_platform_event_handler(runner._handle_gateway_platform_event)
 
         with patch("clawk_cli.plugins.get_plugin_manager", return_value=manager):
-            asyncio.run(adapter._on_platform_update(
-                _auth_reaction_update(user_id=777), context=MagicMock(),
-            ))
+            asyncio.run(
+                adapter._on_platform_update(
+                    _auth_reaction_update(user_id=777),
+                    context=MagicMock(),
+                )
+            )
 
-        assert seen == [{
-            "platform": "telegram",
-            "event_type": "reaction",
-            "payload": {
-                "emojis": ["\U0001F44D"],
-                "custom_emoji_ids": [],
-                "chat_id": "123",
-                "message_id": "456",
-                "thread_id": None,
-            },
-        }]
+        assert seen == [
+            {
+                "platform": "telegram",
+                "event_type": "reaction",
+                "payload": {
+                    "emojis": ["\U0001f44d"],
+                    "custom_emoji_ids": [],
+                    "chat_id": "123",
+                    "message_id": "456",
+                    "thread_id": None,
+                },
+            }
+        ]
 
 
 # ---------------------------------------------------------------------------
 # TelegramAdapter._register_handlers single registration site (#64176)
 # ---------------------------------------------------------------------------
+
 
 class TestRegisterHandlers:
     """_register_handlers is the sole PTB handler registration site, so a
@@ -617,7 +669,9 @@ class TestRegisterHandlers:
         first_app.initialize = MagicMock(side_effect=OSError("transient"))
         rebuilt_app = MagicMock()
         rebuilt_app.bot = MagicMock()
-        rebuilt_app.initialize = MagicMock(side_effect=RuntimeError("stop after rebuild"))
+        rebuilt_app.initialize = MagicMock(
+            side_effect=RuntimeError("stop after rebuild")
+        )
 
         builder = MagicMock()
         builder.token.return_value = builder
@@ -630,7 +684,8 @@ class TestRegisterHandlers:
             SimpleNamespace(builder=MagicMock(return_value=builder)),
         )
         monkeypatch.setattr(
-            "plugins.platforms.telegram.adapter.HTTPXRequest", lambda **kwargs: MagicMock(),
+            "plugins.platforms.telegram.adapter.HTTPXRequest",
+            lambda **kwargs: MagicMock(),
         )
         monkeypatch.setattr(
             "plugins.platforms.telegram.adapter.discover_fallback_ips",

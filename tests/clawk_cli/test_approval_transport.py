@@ -58,10 +58,14 @@ def test_context_registers_owned_approval_transport():
 
 def test_transport_names_are_unique_and_builtin_is_reserved():
     manager = PluginManager()
-    _context(manager, "first").register_approval_transport("phone", lambda request: None)
+    _context(manager, "first").register_approval_transport(
+        "phone", lambda request: None
+    )
 
     with pytest.raises(ValueError, match="already registered"):
-        _context(manager, "second").register_approval_transport("phone", lambda request: None)
+        _context(manager, "second").register_approval_transport(
+            "phone", lambda request: None
+        )
     with pytest.raises(ValueError, match="reserved"):
         _context(manager).register_approval_transport("builtin", lambda request: None)
 
@@ -253,11 +257,21 @@ def _configure_manual_guard(monkeypatch, approval_module, manager, *, fallback=N
     monkeypatch.setattr(approval_context, "_get_approval_mode", lambda: "manual")
     monkeypatch.setattr(approval_module, "_is_interactive_cli", lambda: True)
     monkeypatch.setattr(approval_module, "_is_gateway_approval_context", lambda: False)
-    monkeypatch.setattr(approval_module, "detect_hardline_command", lambda command: (False, ""))
-    monkeypatch.setattr(approval_module, "_check_sudo_stdin_guard", lambda command: (False, ""))
+    monkeypatch.setattr(
+        approval_module, "detect_hardline_command", lambda command: (False, "")
+    )
+    monkeypatch.setattr(
+        approval_module, "_check_sudo_stdin_guard", lambda command: (False, "")
+    )
     monkeypatch.setattr(approval_module, "_match_user_deny_rule", lambda command: None)
-    monkeypatch.setattr(approval_module, "_command_matches_permanent_allowlist", lambda command: False)
-    monkeypatch.setattr(approval_module, "detect_dangerous_command", lambda command: (True, "danger", "dangerous"))
+    monkeypatch.setattr(
+        approval_module, "_command_matches_permanent_allowlist", lambda command: False
+    )
+    monkeypatch.setattr(
+        approval_module,
+        "detect_dangerous_command",
+        lambda command: (True, "danger", "dangerous"),
+    )
     monkeypatch.setattr(
         approval_module,
         "get_current_session_key",
@@ -265,7 +279,9 @@ def _configure_manual_guard(monkeypatch, approval_module, manager, *, fallback=N
     )
     monkeypatch.setattr(approval_module, "is_approved", lambda *args: False)
     monkeypatch.setattr(approval_prompt, "get_plugin_manager", lambda: manager)
-    monkeypatch.setattr(approval_context, "_get_approval_transport_config", lambda: ("phone", fallback))
+    monkeypatch.setattr(
+        approval_context, "_get_approval_transport_config", lambda: ("phone", fallback)
+    )
 
 
 def test_cli_selected_transport_replaces_builtin_prompt(monkeypatch):
@@ -304,7 +320,9 @@ def test_gateway_selected_transport_does_not_require_gateway_notifier(monkeypatc
     _configure_manual_guard(monkeypatch, approval, manager)
     monkeypatch.setattr(approval, "_is_interactive_cli", lambda: False)
     monkeypatch.setattr(approval, "_is_gateway_approval_context", lambda: True)
-    monkeypatch.setattr(tools_approval_context, "_is_gateway_approval_context", lambda: True)
+    monkeypatch.setattr(
+        tools_approval_context, "_is_gateway_approval_context", lambda: True
+    )
     monkeypatch.setattr(approval, "_gateway_notify_cbs", {})
 
     result = approval.check_all_command_guards("rm -rf /tmp/example", "local")
@@ -325,14 +343,20 @@ def test_execute_code_gateway_uses_selected_transport(monkeypatch):
     )
     monkeypatch.setattr(approval_context, "_get_approval_mode", lambda: "manual")
     monkeypatch.setattr(approval, "_is_gateway_approval_context", lambda: True)
-    monkeypatch.setattr(tools_approval_context, "_is_gateway_approval_context", lambda: True)
+    monkeypatch.setattr(
+        tools_approval_context, "_is_gateway_approval_context", lambda: True
+    )
     monkeypatch.setattr(approval, "_is_cron_approval_context", lambda: False)
-    monkeypatch.setattr(tools_approval_context, "_is_cron_approval_context", lambda: False)
+    monkeypatch.setattr(
+        tools_approval_context, "_is_cron_approval_context", lambda: False
+    )
     monkeypatch.setattr(
         approval, "get_current_session_key", lambda *args, **kwargs: "session-a"
     )
     monkeypatch.setattr(
-        tools_approval_context, "get_current_session_key", lambda *args, **kwargs: "session-a"
+        tools_approval_context,
+        "get_current_session_key",
+        lambda *args, **kwargs: "session-a",
     )
     monkeypatch.setattr(approval, "is_approved", lambda *args: False)
     monkeypatch.setattr(approval_prompt, "get_plugin_manager", lambda: manager)
@@ -353,7 +377,9 @@ def test_transport_failure_denies_without_builtin_fallback(monkeypatch):
     from tools import approval
 
     manager = PluginManager()
-    _context(manager).register_approval_transport("phone", lambda request: {"choice": "once"})
+    _context(manager).register_approval_transport(
+        "phone", lambda request: {"choice": "once"}
+    )
     _configure_manual_guard(monkeypatch, approval, manager)
     builtin_calls = []
 
@@ -426,7 +452,9 @@ def test_explicit_builtin_fallback_uses_existing_surface(monkeypatch):
     from tools import approval
 
     manager = PluginManager()
-    _context(manager).register_approval_transport("phone", lambda request: {"choice": "once"})
+    _context(manager).register_approval_transport(
+        "phone", lambda request: {"choice": "once"}
+    )
     _configure_manual_guard(monkeypatch, approval, manager, fallback="builtin")
     builtin_calls = []
 

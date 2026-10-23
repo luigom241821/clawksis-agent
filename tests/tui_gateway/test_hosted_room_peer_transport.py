@@ -239,10 +239,12 @@ def test_peer_transport_rejects_profile_source_and_room_title_mismatch():
 def test_roomlink_falls_back_to_relay_on_retryable_prepare_failure():
     direct = FailingPeerClient(method="prepare")
     relay = FakePeerClient()
-    client = FailoverHostedRoomPeerClient([
-        RoomLinkCandidate("direct", "direct", "install-peer", direct),
-        RoomLinkCandidate("relay", "relay", "install-peer", relay),
-    ])
+    client = FailoverHostedRoomPeerClient(
+        [
+            RoomLinkCandidate("direct", "direct", "install-peer", direct),
+            RoomLinkCandidate("relay", "relay", "install-peer", relay),
+        ]
+    )
 
     session = client.prepare(
         room_id="room-1",
@@ -259,10 +261,12 @@ def test_roomlink_falls_back_to_relay_on_retryable_prepare_failure():
 def test_roomlink_never_falls_back_after_ambiguous_direct_failure():
     direct = FailingPeerClient(method="dispatch")
     relay = FakePeerClient()
-    client = FailoverHostedRoomPeerClient([
-        RoomLinkCandidate("direct", "direct", "install-peer", direct),
-        RoomLinkCandidate("relay", "relay", "install-peer", relay),
-    ])
+    client = FailoverHostedRoomPeerClient(
+        [
+            RoomLinkCandidate("direct", "direct", "install-peer", direct),
+            RoomLinkCandidate("relay", "relay", "install-peer", relay),
+        ]
+    )
     dispatch = {"task_id": "task-1", "execution_generation": 1}
 
     try:
@@ -280,10 +284,12 @@ def test_roomlink_never_falls_back_after_ambiguous_direct_failure():
 def test_roomlink_falls_back_after_proven_not_admitted_direct_failure():
     direct = FailingPeerClient(method="dispatch", not_admitted=True)
     relay = FakePeerClient()
-    client = FailoverHostedRoomPeerClient([
-        RoomLinkCandidate("direct", "direct", "install-peer", direct),
-        RoomLinkCandidate("relay", "relay", "install-peer", relay),
-    ])
+    client = FailoverHostedRoomPeerClient(
+        [
+            RoomLinkCandidate("direct", "direct", "install-peer", direct),
+            RoomLinkCandidate("relay", "relay", "install-peer", relay),
+        ]
+    )
     dispatch = {"task_id": "task-1", "execution_generation": 1}
 
     result = client.dispatch(dispatch=dispatch, grant="grant")
@@ -297,10 +303,12 @@ def test_roomlink_falls_back_after_proven_not_admitted_direct_failure():
 def test_roomlink_never_falls_back_after_nonretryable_rejection():
     rejected = FailingPeerClient(method="prepare", retryable=False)
     relay = FakePeerClient()
-    client = FailoverHostedRoomPeerClient([
-        RoomLinkCandidate("direct", "direct", "install-peer", rejected),
-        RoomLinkCandidate("relay", "relay", "install-peer", relay),
-    ])
+    client = FailoverHostedRoomPeerClient(
+        [
+            RoomLinkCandidate("direct", "direct", "install-peer", rejected),
+            RoomLinkCandidate("relay", "relay", "install-peer", relay),
+        ]
+    )
 
     try:
         client.prepare(

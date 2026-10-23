@@ -58,8 +58,14 @@ class PauseRefused(RuntimeError):
 
 
 def _empty_token() -> dict:
-    return {"platform": "posix", "resume_needed": False, "profiles": {}, "unmapped_pids": [],
-            "unmapped": [], "posix_units": []}
+    return {
+        "platform": "posix",
+        "resume_needed": False,
+        "profiles": {},
+        "unmapped_pids": [],
+        "unmapped": [],
+        "posix_units": [],
+    }
 
 
 def arm_pause(*, no_gateway_restart: bool) -> dict | None:
@@ -72,11 +78,14 @@ def arm_pause(*, no_gateway_restart: bool) -> dict | None:
     if sys.platform == "win32" or no_gateway_restart:
         return None
     from clawk_cli import update_pause_record as pause_record
+
     token = _empty_token()
     try:
         adopted, claims = pause_record.adopt_orphans()
         if adopted is not None:
-            token = pause_record.record_pause({**token, "resume_needed": True}, adopted, claims)
+            token = pause_record.record_pause(
+                {**token, "resume_needed": True}, adopted, claims
+            )
             token["platform"] = "posix"
     except Exception as exc:  # health: allow BLE001 -- an unreadable record must not block the update; recovery retries it
         print(f"  ⚠ Could not adopt gateways an earlier update paused: {exc}")
@@ -91,10 +100,14 @@ def gateways_paused() -> bool:
 
 # --------------------------------------------------------------------------- discovery
 
+
 def _unit_cgroup(scope_cmd: list, unit: str) -> str | None:
     from clawk_cli.update_cmd_fleet import _systemctl
+
     with suppress(OSError, subprocess.TimeoutExpired):
-        result = _systemctl(scope_cmd + ["show", unit, "--property=ControlGroup", "--value"], timeout=10)
+        result = _systemctl(
+            scope_cmd + ["show", unit, "--property=ControlGroup", "--value"], timeout=10
+        )
         if result.returncode == 0 and result.stdout.strip():
             return result.stdout.strip()
     return None
@@ -106,8 +119,17 @@ def _pid_cgroup(pid: int | str = "self") -> str | None:
     callers must treat as unknown, never as outside a unit."""
     with suppress(OSError):
         lines = Path(f"/proc/{pid}/cgroup").read_text(encoding="utf-8").splitlines()
-        unified = next((line[3:].strip() for line in lines if line.startswith("0::")), "")
-        legacy = next((line.split(":", 2)[2].strip() for line in lines if ":name=systemd:" in line), "")
+        unified = next(
+            (line[3:].strip() for line in lines if line.startswith("0::")), ""
+        )
+        legacy = next(
+            (
+                line.split(":", 2)[2].strip()
+                for line in lines
+                if ":name=systemd:" in line
+            ),
+            "",
+        )
         return unified or legacy or None
     return None
 
@@ -122,9 +144,12 @@ def _discover_systemd() -> list[dict]:
     """Active ``clawk-gateway*`` units of this install, one per live MainPID."""
     from clawk_cli.gateway import _ensure_user_systemd_env, supports_systemd_services
     from clawk_cli.update_cmd_fleet import (
-        _for_each_systemd_gateway_unit, _systemd_gateway_unit_listings, _systemd_unit_owned_by_update,
+        _for_each_systemd_gateway_unit,
+        _systemd_gateway_unit_listings,
+        _systemd_unit_owned_by_update,
         _unit_main_pid,
     )
+
     if not supports_systemd_services():
         return []
     with suppress(Exception):
@@ -133,17 +158,34 @@ def _discover_systemd() -> list[dict]:
     seen_pids: set[int] = set()
     for scope, scope_cmd, listing in _systemd_gateway_unit_listings():
         names: list[str] = []
-        _for_each_systemd_gateway_unit(listing.stdout, process_unit=names.append,
-                                       on_unit_timeout=lambda name, exc: None)
+        _for_each_systemd_gateway_unit(
+            listing.stdout,
+            process_unit=names.append,
+            on_unit_timeout=lambda name, exc: None,
+        )
         for name in names:
             if not name.startswith("clawk-gateway"):
                 continue  # serve/dashboard units are not gateways: the post-commit restart owns them
             pid = _unit_main_pid(scope_cmd, name)
-            if pid <= 0 or pid in seen_pids or not _systemd_unit_owned_by_update(scope_cmd, name):
+            if (
+                pid <= 0
+                or pid in seen_pids
+                or not _systemd_unit_owned_by_update(scope_cmd, name)
+            ):
                 continue
-            seen_pids.add(pid)  # a legacy per-profile unit sharing the multiplexer's PID is one process
-            units.append({"kind": "systemd", "scope": scope, "unit": name, "pid": pid,
-                          "cgroup": _unit_cgroup(scope_cmd, name), "home": _home_of(pid)})
+            seen_pids.add(
+                pid
+            )  # a legacy per-profile unit sharing the multiplexer's PID is one process
+            units.append(
+                {
+                    "kind": "systemd",
+                    "scope": scope,
+                    "unit": name,
+                    "pid": pid,
+                    "cgroup": _unit_cgroup(scope_cmd, name),
+                    "home": _home_of(pid),
+                }
+            )
     return units
 
 
@@ -152,10 +194,13 @@ def _discover_launchd() -> list[dict]:
     if sys.platform != "darwin":
         return []
     from clawk_cli.gateway import (
-        _locate_launchd_gateway_service, get_launchd_plist_path, launchd_gateway_labels_for_install,
+        _locate_launchd_gateway_service,
+        get_launchd_plist_path,
+        launchd_gateway_labels_for_install,
         legacy_launchd_labels_for_install,
     )
     from clawk_cli.update_fleet_scope import launchd_label_foreign_home
+
     derived = launchd_gateway_labels_for_install()
     jobs = []
     for label in derived + legacy_launchd_labels_for_install(exclude=set(derived)):
@@ -165,14 +210,23 @@ def _discover_launchd() -> list[dict]:
         if domain is None or not pid or pid <= 0:
             continue
         plist = get_launchd_plist_path().with_name(f"{label}.plist")
-        jobs.append({"kind": "launchd", "label": label, "domain": domain, "plist": str(plist), "pid": int(pid),
-                     "home": _home_of(int(pid))})
+        jobs.append(
+            {
+                "kind": "launchd",
+                "label": label,
+                "domain": domain,
+                "plist": str(plist),
+                "pid": int(pid),
+                "home": _home_of(int(pid)),
+            }
+        )
     return jobs
 
 
 def _home_of(pid: int) -> str | None:
     """The Clawksis home *pid* serves (its control socket lives there), or ``None``."""
     from clawk_cli.update_fleet_scope import gateway_pid_home
+
     with suppress(Exception):
         if home := gateway_pid_home(pid):
             return str(home)
@@ -183,12 +237,16 @@ def _supervisor_markers(pid: int) -> str | None:
     """Why *pid* answers to a supervisor other than a clawk unit/job (it would respawn it on old
     code), or ``None``."""
     from clawk_cli.gateway import _capture_gateway_argv
+
     if "--external-supervisor" in (_capture_gateway_argv(pid) or []):
         return "--external-supervisor"
     try:
         import psutil  # type: ignore
+
         env = psutil.Process(pid).environ()
-    except Exception:  # health: allow BLE001 -- unreadable environment: no marker proven
+    except (
+        Exception
+    ):  # health: allow BLE001 -- unreadable environment: no marker proven
         return None
     if env.get("CLAWK_S6_SUPERVISED_CHILD"):
         return "s6"
@@ -209,6 +267,7 @@ def _respawning_service(pid: int) -> str | None:
     INVOCATION_ID is no evidence: a terminal tab's shell carries one (its .scope is never
     respawned), and so does anything deep under a CI runner's service."""
     from clawk_cli.update_cmd_fleet import _systemctl, _unit_main_pid
+
     cgroup = _pid_cgroup(pid) or ""
     leaf = cgroup.rsplit("/", 1)[-1]
     if not leaf.endswith(".service"):
@@ -217,7 +276,9 @@ def _respawning_service(pid: int) -> str | None:
     with suppress(OSError, subprocess.SubprocessError):
         main = _unit_main_pid(scope_cmd, leaf)
         if main > 0 and main in (pid, _ppid(pid)):
-            restart = _systemctl(scope_cmd + ["show", leaf, "--property=Restart", "--value"], timeout=10)
+            restart = _systemctl(
+                scope_cmd + ["show", leaf, "--property=Restart", "--value"], timeout=10
+            )
             return leaf if (restart.stdout or "").strip() not in ("", "no") else None
     return None
 
@@ -225,26 +286,48 @@ def _respawning_service(pid: int) -> str | None:
 def _discover_bare(service_pids: set[int]) -> tuple[list[dict], list[str]]:
     """``(bare gateways, notices)``: this install's ``gateway run`` processes outside any unit."""
     from gateway.status import get_process_start_time
-    from clawk_cli.gateway import _capture_gateway_argv, _get_service_pids, find_gateway_pids
+    from clawk_cli.gateway import (
+        _capture_gateway_argv,
+        _get_service_pids,
+        find_gateway_pids,
+    )
     from clawk_cli.update_cmd_fleet import _scoped_manual_gateway_pids
     from clawk_cli.update_fleet_scope import gateway_pid_home
+
     exclude = set(service_pids) | set(_get_service_pids(all_profiles=True))
-    pids = _scoped_manual_gateway_pids(find_gateway_pids(exclude_pids=exclude, all_profiles=True))
+    pids = _scoped_manual_gateway_pids(
+        find_gateway_pids(exclude_pids=exclude, all_profiles=True)
+    )
     bare, notices = [], []
     for pid in pids:
         pid = int(pid)
         marker = _supervisor_markers(pid)
         argv, home = _capture_gateway_argv(pid), gateway_pid_home(pid)
         if marker or not argv or not home:
-            why = f"supervised by {marker}" if marker else "its command line could not be read" if not argv \
+            why = (
+                f"supervised by {marker}"
+                if marker
+                else "its command line could not be read"
+                if not argv
                 else "its Clawksis home could not be proved"
-            notices.append(f"  ↷ gateway PID {pid} keeps running until after the update ({why})")
+            )
+            notices.append(
+                f"  ↷ gateway PID {pid} keeps running until after the update ({why})"
+            )
             continue
-        bare.append({"pid": pid, "argv": list(argv), "home": str(home), "ct": get_process_start_time(pid)})
+        bare.append(
+            {
+                "pid": pid,
+                "argv": list(argv),
+                "home": str(home),
+                "ct": get_process_start_time(pid),
+            }
+        )
     return bare, notices
 
 
 # --------------------------------------------------------------------------- self-preservation
+
 
 def _ppid(pid: int) -> int:
     with suppress(OSError, ValueError, IndexError):
@@ -264,22 +347,53 @@ def _escape_cgroup(unit: dict) -> bool:
     if not _inside(own, unit_cgroup):
         return True
     from gateway.status import looks_like_gateway_command_line
+
     pids, pid = [], os.getpid()
     while pid > 1 and pid != unit["pid"] and _inside(_pid_cgroup(pid), unit["cgroup"]):
         with suppress(OSError):
-            cmdline = Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode("utf-8", "replace")
+            cmdline = (
+                Path(f"/proc/{pid}/cmdline")
+                .read_bytes()
+                .replace(b"\0", b" ")
+                .decode("utf-8", "replace")
+            )
             if pid != os.getpid() and looks_like_gateway_command_line(cmdline):
                 break
         pids.append(pid)
         pid = _ppid(pid)
     bus = "--user" if unit["scope"] == "user" else "--system"
-    cmd = ["busctl", bus, "call", "org.freedesktop.systemd1", "/org/freedesktop/systemd1",
-           "org.freedesktop.systemd1.Manager", "StartTransientUnit", "ssa(sv)a(sa(sv))",
-           f"clawk-update-{os.getpid()}.scope", "fail", "2", "PIDs", "au", str(len(pids)), *map(str, pids),
-           "Description", "s", f"clawk update (outside {unit['unit']} while it is paused)", "0"]
+    cmd = [
+        "busctl",
+        bus,
+        "call",
+        "org.freedesktop.systemd1",
+        "/org/freedesktop/systemd1",
+        "org.freedesktop.systemd1.Manager",
+        "StartTransientUnit",
+        "ssa(sv)a(sa(sv))",
+        f"clawk-update-{os.getpid()}.scope",
+        "fail",
+        "2",
+        "PIDs",
+        "au",
+        str(len(pids)),
+        *map(str, pids),
+        "Description",
+        "s",
+        f"clawk update (outside {unit['unit']} while it is paused)",
+        "0",
+    ]
     with suppress(OSError, subprocess.SubprocessError):
-        subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                   stdin=subprocess.DEVNULL, timeout=15, check=False)
+        subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stdin=subprocess.DEVNULL,
+            timeout=15,
+            check=False,
+        )
     deadline = time.monotonic() + 5.0
     while time.monotonic() < deadline:
         if (now := _pid_cgroup()) is not None and not _inside(now, unit_cgroup):
@@ -288,24 +402,35 @@ def _escape_cgroup(unit: dict) -> bool:
     return False
 
 
-def _left_running(units: list[dict], jobs: list[dict]) -> tuple[list[dict], list[dict], list[str]]:
+def _left_running(
+    units: list[dict], jobs: list[dict]
+) -> tuple[list[dict], list[dict], list[str]]:
     """Drop the runtimes whose stop would kill this updater; name each one."""
     from clawk_cli.gateway import _is_pid_ancestor_of_current_process
+
     keep_units, keep_jobs, notices = [], [], []
     for unit in units:
         if _manage_cmd(unit["scope"]) is None:
-            notices.append(f"  ↷ {unit['unit']} keeps running until after the update (stopping a system "
-                           "unit needs root or passwordless sudo)")
+            notices.append(
+                f"  ↷ {unit['unit']} keeps running until after the update (stopping a system "
+                "unit needs root or passwordless sudo)"
+            )
         elif _escape_cgroup(unit):
             keep_units.append(unit)
         else:
-            notices.append(f"  ↷ {unit['unit']} keeps running until after the update (this update could "
-                           "not prove it runs outside that unit's cgroup)")
+            notices.append(
+                f"  ↷ {unit['unit']} keeps running until after the update (this update could "
+                "not prove it runs outside that unit's cgroup)"
+            )
     for job in jobs:
-        if (_is_pid_ancestor_of_current_process(job["pid"])
-                or os.environ.get("XPC_SERVICE_NAME") == job["label"]):
-            notices.append(f"  ↷ {job['label']} keeps running until after the update (this update runs "
-                           "inside its launchd job)")
+        if (
+            _is_pid_ancestor_of_current_process(job["pid"])
+            or os.environ.get("XPC_SERVICE_NAME") == job["label"]
+        ):
+            notices.append(
+                f"  ↷ {job['label']} keeps running until after the update (this update runs "
+                "inside its launchd job)"
+            )
         else:
             keep_jobs.append(job)
     return keep_units, keep_jobs, notices
@@ -313,32 +438,45 @@ def _left_running(units: list[dict], jobs: list[dict]) -> tuple[list[dict], list
 
 # --------------------------------------------------------------------------- stop / start
 
+
 def _manage_cmd(scope: str) -> list | None:
     from clawk_cli.update_cmd_fleet import _needs_sudo, _sudo_noninteractive_ok
+
     cmd = ["systemctl", "--user"] if scope == "user" else ["systemctl"]
     cmd = cmd + ["--no-ask-password"]
     if scope == "system" and _needs_sudo(scope):
         sudo = ["sudo", "-n", *cmd]
-        return sudo if _sudo_noninteractive_ok(cmd + ["show", "-p", "Id", "clawk-gateway"]) else None
+        return (
+            sudo
+            if _sudo_noninteractive_ok(cmd + ["show", "-p", "Id", "clawk-gateway"])
+            else None
+        )
     return cmd
 
 
 def _stop_unit(unit: dict) -> None:
     from clawk_cli.update_cmd_fleet import _systemctl
+
     cmd = _manage_cmd(unit["scope"])
     if cmd is None:
         raise PauseRefused(f"no privilege to stop system unit {unit['unit']}")
     result = _systemctl(cmd + ["stop", unit["unit"]], timeout=_STOP_TIMEOUT_S)
     if result.returncode != 0:
-        raise PauseRefused(f"systemctl stop {unit['unit']} failed: {(result.stderr or '').strip()}")
+        raise PauseRefused(
+            f"systemctl stop {unit['unit']} failed: {(result.stderr or '').strip()}"
+        )
 
 
 def _start_unit(unit: dict) -> int:
     """Start *unit* through systemd; the new MainPID (raises when it does not come up). The unit
     gets the definition repair the restart it replaces ran first (``_restart_one_systemd_gateway_unit``)."""
     from clawk_cli.update_cmd_fleet import (
-        _repair_unit_without_fatal_exit_park, _systemctl, _unit_main_pid, _wait_for_service_active,
+        _repair_unit_without_fatal_exit_park,
+        _systemctl,
+        _unit_main_pid,
+        _wait_for_service_active,
     )
+
     cmd = _manage_cmd(unit["scope"])
     if cmd is None:
         raise RuntimeError(f"no privilege to start system unit {unit['unit']}")
@@ -346,8 +484,12 @@ def _start_unit(unit: dict) -> int:
     _systemctl(cmd + ["reset-failed", unit["unit"]], timeout=10)
     result = _systemctl(cmd + ["start", unit["unit"]], timeout=_STOP_TIMEOUT_S)
     scope_cmd = ["systemctl", "--user"] if unit["scope"] == "user" else ["systemctl"]
-    if result.returncode != 0 or not _wait_for_service_active(scope_cmd, unit["unit"], timeout=15.0):
-        raise RuntimeError(f"{unit['unit']} did not start: {(result.stderr or '').strip() or 'not active'}")
+    if result.returncode != 0 or not _wait_for_service_active(
+        scope_cmd, unit["unit"], timeout=15.0
+    ):
+        raise RuntimeError(
+            f"{unit['unit']} did not start: {(result.stderr or '').strip() or 'not active'}"
+        )
     return _unit_main_pid(scope_cmd, unit["unit"])
 
 
@@ -356,34 +498,61 @@ def _stop_job(job: dict, *, drained: bool = False) -> None:
     bootout only keeps KeepAlive from serving the update."""
     from clawk_cli.gateway import _locate_launchd_gateway_service
     from clawk_cli.update_cmd_windows import _write_update_planned_stop_marker
+
     if not drained and job.get("home"):
         _write_update_planned_stop_marker(Path(job["home"]), job["pid"])
-    result = subprocess.run(["launchctl", "bootout", f"{job['domain']}/{job['label']}"],
-                            capture_output=True, text=True, encoding="utf-8", errors="replace",
-                   stdin=subprocess.DEVNULL, timeout=90, check=False)
+    result = subprocess.run(
+        ["launchctl", "bootout", f"{job['domain']}/{job['label']}"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        stdin=subprocess.DEVNULL,
+        timeout=90,
+        check=False,
+    )
     _wait_gone([job["pid"]], 30.0)
     # KeepAlive may have respawned the drained gateway already: the job, not the old PID, decides.
-    if result.returncode != 0 and (_locate_launchd_gateway_service(job["label"])[1] or 0) > 0:
-        raise PauseRefused(f"launchctl bootout {job['label']} failed: {(result.stderr or '').strip()}")
+    if (
+        result.returncode != 0
+        and (_locate_launchd_gateway_service(job["label"])[1] or 0) > 0
+    ):
+        raise PauseRefused(
+            f"launchctl bootout {job['label']} failed: {(result.stderr or '').strip()}"
+        )
 
 
 def _start_job(job: dict) -> None:
     """Load and start *job*. The invoking profile's plist is regenerated first, as the restart it
     replaces does (``launchd_restart``); that refresh also loads it."""
     from clawk_cli.gateway import (
-        _launchctl_bootstrap, _wait_for_launchd_service_pid, get_launchd_label, refresh_launchd_plist_if_needed,
+        _launchctl_bootstrap,
+        _wait_for_launchd_service_pid,
+        get_launchd_label,
+        refresh_launchd_plist_if_needed,
     )
+
     if not (job["label"] == get_launchd_label() and refresh_launchd_plist_if_needed()):
         _launchctl_bootstrap(job["domain"], job["plist"], job["label"])
-    subprocess.run(["launchctl", "kickstart", f"{job['domain']}/{job['label']}"],
-                   capture_output=True, text=True, encoding="utf-8", errors="replace",
-                   stdin=subprocess.DEVNULL, timeout=30, check=False)
-    if not _wait_for_launchd_service_pid(job["label"], old_pid=job["pid"], timeout=15.0, domain=job["domain"]):
+    subprocess.run(
+        ["launchctl", "kickstart", f"{job['domain']}/{job['label']}"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        stdin=subprocess.DEVNULL,
+        timeout=30,
+        check=False,
+    )
+    if not _wait_for_launchd_service_pid(
+        job["label"], old_pid=job["pid"], timeout=15.0, domain=job["domain"]
+    ):
         raise RuntimeError(f"{job['label']} did not come back under launchd")
 
 
 def _alive(pid: int, ct) -> bool:
     from gateway.status import _pid_exists, get_process_start_time
+
     try:
         if not _pid_exists(int(pid)):
             return False
@@ -411,6 +580,7 @@ def _ask_to_drain(entry: dict) -> bool:
     (``mark_stop_sent``) BEFORE sending it, so a request that reaches the gateway after this update
     died still leaves the evidence that keeps the drained gateway's restart debt."""
     from gateway.control_socket import pause_gateway_for_update
+
     if not entry.get("home"):
         return False
     try:
@@ -423,6 +593,7 @@ def _ask_to_drain(entry: dict) -> bool:
 def _stop_at_once(entry: dict) -> None:
     """The stop for a gateway that did not take the drain: its supervisor's, else marker + SIGTERM."""
     from clawk_cli.update_cmd_windows import _write_update_planned_stop_marker
+
     if entry.get("kind") == "systemd":
         _stop_unit(entry)
     elif entry.get("kind") == "launchd":
@@ -436,6 +607,7 @@ def _stop_at_once(entry: dict) -> None:
 def _drain_budget() -> float:
     """The post-update restart's wait for a drained gateway (after-turn wait + stop drain + headroom)."""
     from clawk_cli.update_cmd_fleet import _gateway_drain_budget
+
     return _gateway_drain_budget()
 
 
@@ -447,19 +619,31 @@ def _stop_gateways(token: dict, entries: list[dict]) -> None:
     survivor gets its supervisor's stop and a bare one SIGKILL, as the restart path escalates."""
     from clawk_cli import update_pause_record as pause_record
     from clawk_cli.update_cmd_drain_report import drain_progress_reporter
+
     budget, waiting = _drain_budget(), []
     for entry in entries:
-        pause_record.mark_stop_sent(token, entry["pid"])  # before the request: see _ask_to_drain
+        pause_record.mark_stop_sent(
+            token, entry["pid"]
+        )  # before the request: see _ask_to_drain
         if _ask_to_drain(entry):
             waiting.append(entry)
         else:
             _stop_at_once(entry)
             if not entry.get("kind"):
-                waiting.append(entry)  # a SIGTERMed bare gateway is waited for like a drained one
+                waiting.append(
+                    entry
+                )  # a SIGTERMed bare gateway is waited for like a drained one
     if not waiting:
         return
-    print(f"  ⏳ Waiting up to {budget:.0f}s for in-flight turns on {_names(waiting)} to finish before the update...")
-    ticks = [drain_progress_reporter(Path(e["home"]) if e.get("home") else None, budget_s=budget) for e in waiting]
+    print(
+        f"  ⏳ Waiting up to {budget:.0f}s for in-flight turns on {_names(waiting)} to finish before the update..."
+    )
+    ticks = [
+        drain_progress_reporter(
+            Path(e["home"]) if e.get("home") else None, budget_s=budget
+        )
+        for e in waiting
+    ]
     deadline = time.monotonic() + budget
     while waiting and time.monotonic() < deadline:
         for entry in [e for e in waiting if not _alive(e["pid"], e.get("ct"))]:
@@ -475,8 +659,12 @@ def _stop_gateways(token: dict, entries: list[dict]) -> None:
             with suppress(ProcessLookupError, PermissionError):
                 os.kill(entry["pid"], getattr(signal, "SIGKILL", signal.SIGTERM))
     bare = [e for e in waiting if not e.get("kind")]
-    if left := _wait_gone([e["pid"] for e in bare], 10.0, {e["pid"]: e.get("ct") for e in bare}):
-        raise PauseRefused("gateway PID(s) " + ", ".join(map(str, sorted(left))) + " did not stop")
+    if left := _wait_gone(
+        [e["pid"] for e in bare], 10.0, {e["pid"]: e.get("ct") for e in bare}
+    ):
+        raise PauseRefused(
+            "gateway PID(s) " + ", ".join(map(str, sorted(left))) + " did not stop"
+        )
 
 
 def _disarm(entry: dict) -> None:
@@ -488,7 +676,9 @@ def _disarm(entry: dict) -> None:
 
 
 def _names(entries: list[dict]) -> str:
-    return ", ".join(e.get("unit") or e.get("label") or f"gateway PID {e['pid']}" for e in entries)
+    return ", ".join(
+        e.get("unit") or e.get("label") or f"gateway PID {e['pid']}" for e in entries
+    )
 
 
 def _gateway_on_home(home: str, exclude: set[int]) -> int | None:
@@ -496,9 +686,12 @@ def _gateway_on_home(home: str, exclude: set[int]) -> int | None:
     then the runtime status record), never a process scan: a replayed ``gateway run`` matches the
     process matcher for the moment before it finds the home already served and exits."""
     from gateway.status import live_gateway_pid_for_home
+
     try:
         pid = live_gateway_pid_for_home(Path(home))
-    except Exception:  # health: allow BLE001 -- unreadable identity files: nothing proven to adopt
+    except (
+        Exception
+    ):  # health: allow BLE001 -- unreadable identity files: nothing proven to adopt
         return None
     return int(pid) if pid and int(pid) not in exclude else None
 
@@ -511,9 +704,15 @@ def _replay_env(home: str) -> dict:
     own secrets and none of the launcher's (``served_profile_child_env``)."""
     from clawk_constants import get_default_clawk_root, get_routing_process_clawk_home
     from tools.environments.local import build_subprocess_env, served_profile_child_env
+
     target = Path(home).resolve()
-    if target != get_default_clawk_root().resolve() and target == get_routing_process_clawk_home().resolve():
-        return build_subprocess_env(scrub_secrets=False, inherit_profile_home=False, extra={"CLAWK_HOME": home})
+    if (
+        target != get_default_clawk_root().resolve()
+        and target == get_routing_process_clawk_home().resolve()
+    ):
+        return build_subprocess_env(
+            scrub_secrets=False, inherit_profile_home=False, extra={"CLAWK_HOME": home}
+        )
     return served_profile_child_env(target_home=home, inherit_credentials=True)
 
 
@@ -525,29 +724,48 @@ def _relaunch_bare(entry: dict) -> int:
     logs = Path(entry["home"]) / "logs"
     logs.mkdir(parents=True, exist_ok=True)
     env = _replay_env(entry["home"])
-    for leaked in ("INVOCATION_ID", "JOURNAL_STREAM", "CLAWK_UPDATE_PAUSED", "_CLAWK_GATEWAY"):
+    for leaked in (
+        "INVOCATION_ID",
+        "JOURNAL_STREAM",
+        "CLAWK_UPDATE_PAUSED",
+        "_CLAWK_GATEWAY",
+    ):
         env.pop(leaked, None)
     with open(logs / "gateway-update-resume.log", "ab") as log:
-        proc = subprocess.Popen(list(entry["argv"]), env=env, stdin=subprocess.DEVNULL, stdout=log,
-                                stderr=subprocess.STDOUT, start_new_session=True, close_fds=True)
+        proc = subprocess.Popen(
+            list(entry["argv"]),
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+            close_fds=True,
+        )
     deadline = time.monotonic() + _READY_TIMEOUT_S
     while time.monotonic() < deadline:
         if (pid := _gateway_on_home(entry["home"], {int(entry["pid"])})) is not None:
             return pid  # the replay, or a gateway someone started meanwhile (the replay then exits 0)
         if proc.poll() is not None:
-            raise RuntimeError(f"replayed gateway for {entry['home']} exited {proc.returncode} "
-                               f"(see {logs / 'gateway-update-resume.log'})")
+            raise RuntimeError(
+                f"replayed gateway for {entry['home']} exited {proc.returncode} "
+                f"(see {logs / 'gateway-update-resume.log'})"
+            )
         time.sleep(0.5)
-    raise RuntimeError(f"replayed gateway for {entry['home']} did not come up within {int(_READY_TIMEOUT_S)}s")
+    raise RuntimeError(
+        f"replayed gateway for {entry['home']} did not come up within {int(_READY_TIMEOUT_S)}s"
+    )
 
 
 def _describe(token: dict) -> str:
     names = [u.get("unit") or u.get("label") for u in token.get("posix_units") or []]
-    names += [f"gateway PID {u['pid']}" for u in token.get("unmapped") or [] if u.get("argv")]
+    names += [
+        f"gateway PID {u['pid']}" for u in token.get("unmapped") or [] if u.get("argv")
+    ]
     return ", ".join(names)
 
 
 # --------------------------------------------------------------------------- the commit point
+
 
 def pause_at_commit_point() -> str | None:
     """Stop this install's gateways before the first checkout move; once per run.
@@ -566,12 +784,19 @@ def pause_at_commit_point() -> str | None:
 
 def _pause(token: dict) -> str | None:
     from clawk_cli import update_pause_record as pause_record
+
     try:
         units, jobs = _discover_systemd(), _discover_launchd()
         units, jobs, notices = _left_running(units, jobs)
-        bare, more = _discover_bare({u["pid"] for u in units} | {j["pid"] for j in jobs})
-    except Exception as exc:  # health: allow BLE001 -- a discovery that cannot finish stops nothing
-        print(f"  ⚠ Could not list the running gateways ({exc}); they keep running and are restarted after the update")
+        bare, more = _discover_bare(
+            {u["pid"] for u in units} | {j["pid"] for j in jobs}
+        )
+    except (
+        Exception
+    ) as exc:  # health: allow BLE001 -- a discovery that cannot finish stops nothing
+        print(
+            f"  ⚠ Could not list the running gateways ({exc}); they keep running and are restarted after the update"
+        )
         return None
     for line in notices + more:
         print(line)
@@ -580,21 +805,40 @@ def _pause(token: dict) -> str | None:
         return None
     from gateway.status import get_process_start_time
     from clawk_cli.update_cmd_windows import _planned_stop_marker_path
-    before = copy.deepcopy(token)  # what this attempt may add; a failed record puts it back
+
+    before = copy.deepcopy(
+        token
+    )  # what this attempt may add; a failed record puts it back
     for entry in supervised + bare:
-        entry["ct"] = get_process_start_time(entry["pid"])  # native birth stamp: what _alive compares
+        entry["ct"] = get_process_start_time(
+            entry["pid"]
+        )  # native birth stamp: what _alive compares
     token["posix_units"] = [*token.get("posix_units", []), *supervised]
     token["unmapped"] = [*token.get("unmapped", []), *bare]
-    token["unmapped_pids"] = [*token.get("unmapped_pids", []), *(e["pid"] for e in bare)]
+    token["unmapped_pids"] = [
+        *token.get("unmapped_pids", []),
+        *(e["pid"] for e in bare),
+    ]
     # Recovery judges liveness by the canonical identity (``ct:<unix seconds>``), never the native stamp.
-    token["identities"] = {**token.get("identities", {}),
-                           **{str(e["pid"]): pause_record.identity(e["pid"])["ct"] for e in supervised + bare}}
+    token["identities"] = {
+        **token.get("identities", {}),
+        **{
+            str(e["pid"]): pause_record.identity(e["pid"])["ct"]
+            for e in supervised + bare
+        },
+    }
     token["resume_needed"] = True
     try:
         pause_record.record_pause(token, None, [])
         pause_record.mark_stop_requested(
-            token, [e["pid"] for e in supervised + bare],
-            markers={e["pid"]: _planned_stop_marker_path(Path(e["home"])) for e in supervised + bare if e.get("home")})
+            token,
+            [e["pid"] for e in supervised + bare],
+            markers={
+                e["pid"]: _planned_stop_marker_path(Path(e["home"]))
+                for e in supervised + bare
+                if e.get("home")
+            },
+        )
     except Exception as exc:  # health: allow BLE001 -- no durable record, no stop
         # Nothing was stopped: this attempt's id must not arm the checkout's tree gate, whose
         # required record write would then refuse the update. An adopted obligation stays as it was.
@@ -603,7 +847,9 @@ def _pause(token: dict) -> str | None:
                 pause_record.discharge(token)
         token.clear()
         token.update(before)
-        print(f"  ⚠ Could not record the gateways to pause ({exc}); they keep running and are restarted after the update")
+        print(
+            f"  ⚠ Could not record the gateways to pause ({exc}); they keep running and are restarted after the update"
+        )
         return None
     # From here a refusal or a crash leaves the set owed: the command's own exit resume (registered
     # in ``_cmd_update_impl`` for this token), else the next launch's recovery, restarts it.
@@ -611,7 +857,9 @@ def _pause(token: dict) -> str | None:
     try:
         _stop_gateways(token, supervised + bare)
     except Exception as exc:  # health: allow BLE001 -- roll back: restart the stopped set, update unpaused
-        print(f"  ⚠ Could not pause every gateway ({exc}); restarting them, the update continues without the pause")
+        print(
+            f"  ⚠ Could not pause every gateway ({exc}); restarting them, the update continues without the pause"
+        )
         try:
             resume_paused_set(token)
         except Exception as again:  # health: allow BLE001 -- still owed: completion restarts them after the deps
@@ -621,11 +869,14 @@ def _pause(token: dict) -> str | None:
         pause_record.sync(token)
         return None
     pause_record.sync(token)
-    print(f"  ⏸ Paused for the update: {_describe(token)} (restarted once the dependencies are synced)")
+    print(
+        f"  ⏸ Paused for the update: {_describe(token)} (restarted once the dependencies are synced)"
+    )
     return None
 
 
 # --------------------------------------------------------------------------- resume
+
 
 def resume_paused_set(token: dict) -> None:
     """Start every paused runtime again; each leaves *token* only on its own verified start."""
@@ -665,7 +916,9 @@ def resume_paused_set(token: dict) -> None:
     if restarted:
         print(f"  ▶ Restarted paused gateway(s): {', '.join(restarted)}")
     if failures:
-        raise RuntimeError("Could not restart every paused gateway: " + "; ".join(failures))
+        raise RuntimeError(
+            "Could not restart every paused gateway: " + "; ".join(failures)
+        )
     token["resume_needed"] = False
     token["posix_stopped"] = False
 

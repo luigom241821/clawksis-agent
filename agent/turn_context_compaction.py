@@ -16,8 +16,10 @@ from typing import Any, Dict, List, Optional
 
 from agent.context_engine import automatic_compaction_status_message
 from agent.conversation_compression import (
-    IDLE_COMPACTION_STATUS_TEMPLATE, PREFLIGHT_COMPRESSION_STATUS_TEMPLATE,
-    compression_skipped_due_to_lock, conversation_history_after_compression,
+    IDLE_COMPACTION_STATUS_TEMPLATE,
+    PREFLIGHT_COMPRESSION_STATUS_TEMPLATE,
+    compression_skipped_due_to_lock,
+    conversation_history_after_compression,
 )
 
 logger = logging.getLogger("agent.turn_context")
@@ -89,7 +91,9 @@ def _blocked_compress_reason(
 def _apply_grown_window(agent: Any, compressor: Any, grown: int) -> None:
     """A managed local runtime granted a bigger window: recalibrate the compressor."""
     compressor.update_model(
-        agent.model, grown, base_url=getattr(agent, "base_url", "") or "",
+        agent.model,
+        grown,
+        base_url=getattr(agent, "base_url", "") or "",
         api_key=getattr(agent, "api_key", "") or "",
         provider=getattr(agent, "provider", "") or "",
         api_mode=getattr(agent, "api_mode", "") or "",
@@ -127,14 +131,22 @@ def _reanchor(agent: Any, messages: list[Any], user_message: Any) -> int:
 
 
 def run_turn_start_compaction(
-    agent: Any, *, messages: list[dict[str, Any]], system_message: Optional[str],
-    active_system_prompt: Optional[str], conversation_history: Optional[list[dict[str, Any]]],
-    current_turn_user_idx: int, user_message: Any, effective_task_id: str,
+    agent: Any,
+    *,
+    messages: list[dict[str, Any]],
+    system_message: Optional[str],
+    active_system_prompt: Optional[str],
+    conversation_history: Optional[list[dict[str, Any]]],
+    current_turn_user_idx: int,
+    user_message: Any,
+    effective_task_id: str,
 ) -> CompactionOutcome:
     """Idle compaction, then preflight compression (or the uncompressed guard)."""
     out = CompactionOutcome(
-        messages=messages, active_system_prompt=active_system_prompt,
-        conversation_history=conversation_history, current_turn_user_idx=current_turn_user_idx,
+        messages=messages,
+        active_system_prompt=active_system_prompt,
+        conversation_history=conversation_history,
+        current_turn_user_idx=current_turn_user_idx,
     )
     _idle_compaction(agent, out, system_message, user_message, effective_task_id)
     _preflight_compression(agent, out, system_message, user_message, effective_task_id)
@@ -142,7 +154,10 @@ def run_turn_start_compaction(
 
 
 def _idle_compaction(
-    agent: Any, out: CompactionOutcome, system_message: Optional[str], user_message: Any,
+    agent: Any,
+    out: CompactionOutcome,
+    system_message: Optional[str],
+    user_message: Any,
     effective_task_id: str,
 ) -> None:
     """Idle-triggered compaction (opt-in; ``idle_compact_after_seconds``): fires on the
@@ -176,17 +191,26 @@ def _idle_compaction(
     # ``_idle_floor``. Type pin: compressor doubles expose truthy non-ints here; only a real
     # int may raise the floor, anything else falls back to 0 (original semantics).
     _idle_last_compaction = getattr(_compressor, "last_compression_rough_tokens", 0)
-    if not isinstance(_idle_last_compaction, int) or isinstance(_idle_last_compaction, bool):
+    if not isinstance(_idle_last_compaction, int) or isinstance(
+        _idle_last_compaction, bool
+    ):
         _idle_last_compaction = 0
     if not _tc._should_idle_compact(
-        enabled=agent.compression_enabled, idle_after_seconds=_idle_after,
-        idle_gap_seconds=_idle_gap, tokens=_idle_tokens, floor_tokens=_idle_floor,
-        cooldown_active=bool(_idle_cooldown), last_compaction_tokens=_idle_last_compaction,
+        enabled=agent.compression_enabled,
+        idle_after_seconds=_idle_after,
+        idle_gap_seconds=_idle_gap,
+        tokens=_idle_tokens,
+        floor_tokens=_idle_floor,
+        cooldown_active=bool(_idle_cooldown),
+        last_compaction_tokens=_idle_last_compaction,
     ):
         return
     logger.info(
         "Idle compaction: %ss idle >= %ss, ~%s tokens > %s floor (last compaction produced ~%s) (session %s)",
-        int(_idle_gap), _idle_after, f"{_idle_tokens:,}", f"{_idle_floor:,}",
+        int(_idle_gap),
+        _idle_after,
+        f"{_idle_tokens:,}",
+        f"{_idle_floor:,}",
         f"{_idle_last_compaction:,}" if _idle_last_compaction > 0 else "n/a",
         agent.session_id or "none",
     )
@@ -203,7 +227,11 @@ def _idle_compaction(
     if _idle_status:
         agent._emit_status(_idle_status)
     out.messages, out.active_system_prompt = agent._compress_context(
-        messages, system_message, approx_tokens=_idle_tokens, task_id=effective_task_id, trigger="idle",
+        messages,
+        system_message,
+        approx_tokens=_idle_tokens,
+        task_id=effective_task_id,
+        trigger="idle",
     )
     # ``_compress_context`` returns the INPUT list object when it skips; only
     # re-baseline and re-anchor after a real compaction.
@@ -228,7 +256,10 @@ def _codex_native_auto_compaction(agent: Any) -> bool:
 
 
 def _preflight_compression(
-    agent: Any, out: CompactionOutcome, system_message: Optional[str], user_message: Any,
+    agent: Any,
+    out: CompactionOutcome,
+    system_message: Optional[str],
+    user_message: Any,
     effective_task_id: str,
 ) -> None:
     """Preflight context compression; the cheap pre-check gates the full estimate
@@ -246,8 +277,12 @@ def _preflight_compression(
     _lift = getattr(_compressor, "lift_structural_backoff_if_grown", None)
     if callable(_lift):
         _lift(len(out.messages))
-    if _tc._review_fork_first_request_pending(agent) or not _tc._should_run_preflight_estimate(
-        out.messages, _compressor.protect_first_n, _compressor.protect_last_n,
+    if _tc._review_fork_first_request_pending(
+        agent
+    ) or not _tc._should_run_preflight_estimate(
+        out.messages,
+        _compressor.protect_first_n,
+        _compressor.protect_last_n,
         _compressor.threshold_tokens,
     ):
         return
@@ -265,7 +300,9 @@ def _preflight_compression(
         if isinstance(_snapshot_val, int) and not isinstance(_snapshot_val, bool):
             agent._turn_preflight_display_snapshot = _snapshot_val
     # An anchored figure is real usage + delta: never deferred.
-    _preflight_deferred = not getattr(agent, "_request_pressure_anchored", False) and getattr(
+    _preflight_deferred = not getattr(
+        agent, "_request_pressure_anchored", False
+    ) and getattr(
         _compressor, "should_defer_preflight_to_real_usage", lambda _tokens: False
     )(_preflight_tokens)
     _codex_native_auto = _codex_native_auto_compaction(agent)
@@ -287,7 +324,8 @@ def _preflight_compression(
         logger.info(
             "Skipping preflight compression: rough estimate ~%s >= %s is not anchored on "
             "real usage (last real provider prompt %s); deferring to the next response",
-            f"{_preflight_tokens:,}", f"{_compressor.threshold_tokens:,}",
+            f"{_preflight_tokens:,}",
+            f"{_compressor.threshold_tokens:,}",
             f"{_compressor.last_real_prompt_tokens:,}",
         )
     elif _compression_cooldown:
@@ -310,7 +348,9 @@ def _preflight_compression(
     else:
         _should_compress_now = _compressor.should_compress(_preflight_tokens)
         if not _should_compress_now:
-            _compress_block_reason = _blocked_compress_reason(_compressor, _preflight_tokens)
+            _compress_block_reason = _blocked_compress_reason(
+                _compressor, _preflight_tokens
+            )
     if _should_compress_now:
         # Managed local runtime: growing the window beats compressing (ladder order;
         # same seam as _maybe_grow_local_window in the loop).
@@ -325,7 +365,12 @@ def _preflight_compression(
             _should_compress_now = _compressor.should_compress(_preflight_tokens)
     if _should_compress_now:
         _run_preflight_passes(
-            agent, out, _compressor, _preflight_tokens, system_message, effective_task_id
+            agent,
+            out,
+            _compressor,
+            _preflight_tokens,
+            system_message,
+            effective_task_id,
         )
     elif _compress_block_reason:
         # Over threshold but compression blocked: surface a deduped warning so the
@@ -340,7 +385,12 @@ def _preflight_compression(
         # estimate, or codex-native route keep the engine hook unconsulted.
         if not (_compression_cooldown or _preflight_deferred or _codex_native_auto):
             _engine_preflight_maintenance(
-                agent, out, _compressor, _preflight_tokens, system_message, effective_task_id
+                agent,
+                out,
+                _compressor,
+                _preflight_tokens,
+                system_message,
+                effective_task_id,
             )
 
     if out.compressed:
@@ -350,8 +400,12 @@ def _preflight_compression(
 
 
 def _run_preflight_passes(
-    agent: Any, out: CompactionOutcome, _compressor: Any, _preflight_tokens: int,
-    system_message: Optional[str], effective_task_id: str,
+    agent: Any,
+    out: CompactionOutcome,
+    _compressor: Any,
+    _preflight_tokens: int,
+    system_message: Optional[str],
+    effective_task_id: str,
 ) -> None:
     """Threshold-triggered preflight passes (honor ``compression.max_attempts`` like
     the loop's sites, default 3)."""
@@ -363,7 +417,9 @@ def _run_preflight_passes(
     _clear_overflow_warn(agent)
     logger.info(
         "Preflight compression: ~%s tokens >= %s threshold (model %s, ctx %s)",
-        f"{_preflight_tokens:,}", f"{_compressor.threshold_tokens:,}", agent.model,
+        f"{_preflight_tokens:,}",
+        f"{_compressor.threshold_tokens:,}",
+        agent.model,
         f"{_compressor.context_length:,}",
     )
     _preflight_status = automatic_compaction_status_message(
@@ -379,14 +435,19 @@ def _run_preflight_passes(
     )
     if _preflight_status:
         agent._emit_status(_preflight_status)
-    _max_preflight_passes = max(1, int(getattr(agent, "max_compression_attempts", 3) or 3))
+    _max_preflight_passes = max(
+        1, int(getattr(agent, "max_compression_attempts", 3) or 3)
+    )
     for _pass in range(_max_preflight_passes):
         _preflight_input = out.messages
         _orig_len = len(_preflight_input)
         _orig_tokens = _preflight_tokens
         out.messages, out.active_system_prompt = agent._compress_context(
-            _preflight_input, system_message, approx_tokens=_preflight_tokens,
-            task_id=effective_task_id, trigger="turn_start_threshold",
+            _preflight_input,
+            system_message,
+            approx_tokens=_preflight_tokens,
+            task_id=effective_task_id,
+            trigger="turn_start_threshold",
         )
         if out.messages is _preflight_input and compression_skipped_due_to_lock(agent):
             # Lock-skip: another path holds the lock, so this is a DEFER, not proof of
@@ -426,7 +487,8 @@ def _run_preflight_passes(
             logger.warning(
                 "Preflight compression made insufficient progress: "
                 "~%s -> ~%s request tokens; skipping additional passes",
-                f"{_orig_tokens:,}", f"{_preflight_tokens:,}",
+                f"{_orig_tokens:,}",
+                f"{_preflight_tokens:,}",
             )
             # Sub-5% progress on a request still above the window: no further pass will get under it.
             _tc._fail_closed_on_insufficient_progress(agent, _preflight_tokens)
@@ -434,8 +496,12 @@ def _run_preflight_passes(
 
 
 def _engine_preflight_maintenance(
-    agent: Any, out: CompactionOutcome, _compressor: Any, _preflight_tokens: int,
-    system_message: Optional[str], effective_task_id: str,
+    agent: Any,
+    out: CompactionOutcome,
+    _compressor: Any,
+    _preflight_tokens: int,
+    system_message: Optional[str],
+    effective_task_id: str,
 ) -> None:
     """Engine-driven sub-threshold preflight maintenance: engines overriding
     ``should_compress_preflight()`` get exactly ONE ``compress()`` pass; a no-op never
@@ -459,11 +525,15 @@ def _engine_preflight_maintenance(
         "Engine-driven preflight maintenance: %s requested "
         "compress() at ~%s tokens (below %s threshold)",
         getattr(_compressor, "name", type(_compressor).__name__),
-        f"{_preflight_tokens:,}", f"{getattr(_compressor, 'threshold_tokens', 0):,}",
+        f"{_preflight_tokens:,}",
+        f"{getattr(_compressor, 'threshold_tokens', 0):,}",
     )
     _engine_input = out.messages
     out.messages, out.active_system_prompt = agent._compress_context(
-        _engine_input, system_message, approx_tokens=_preflight_tokens, task_id=effective_task_id,
+        _engine_input,
+        system_message,
+        approx_tokens=_preflight_tokens,
+        task_id=effective_task_id,
         trigger="engine_preflight",
     )
     # ``_compress_context`` returns the INPUT list on every skip path and an engine
@@ -483,7 +553,9 @@ def _rearm_uncompressed_overflow_warn(
     here we only RE-ARM the dedup once back under the window."""
     from agent import turn_context as _tc
 
-    _ctx_len = getattr(getattr(agent, "context_compressor", None), "context_length", None)
+    _ctx_len = getattr(
+        getattr(agent, "context_compressor", None), "context_length", None
+    )
     if not (isinstance(_ctx_len, int) and _ctx_len > 0):
         return
     _raw_chars = 0

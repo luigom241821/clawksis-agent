@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class _ClarifyEntry:
     """One pending clarify request inside a gateway session."""
+
     clarify_id: str
     session_key: str
     question: str
@@ -31,7 +32,9 @@ class _ClarifyEntry:
 
 _lock = threading.RLock()
 _entries: dict[str, _ClarifyEntry] = {}  # clarify_id -> entry (button callbacks)
-_session_index: dict[str, list[str]] = {}  # session_key -> [clarify_id] FIFO (text intercept, cleanup)
+_session_index: dict[
+    str, list[str]
+] = {}  # session_key -> [clarify_id] FIFO (text intercept, cleanup)
 # Per-session notify callbacks (gateway -> adapter bridge); mirrors tools.approval. Tests clear it.
 _notify_cbs: dict[str, Callable[[_ClarifyEntry], None]] = {}
 
@@ -46,12 +49,23 @@ SKIPPED = "\x00skipped"
 CANCELLED = "\x00cancelled"
 
 
-def register(clarify_id: str, session_key: str, question: str, choices: Optional[list[str]],
-             multi_select: bool = False) -> _ClarifyEntry:
+def register(
+    clarify_id: str,
+    session_key: str,
+    question: str,
+    choices: Optional[list[str]],
+    multi_select: bool = False,
+) -> _ClarifyEntry:
     """Register a pending clarify request; caller then blocks on ``wait_for_response``.
     Open-ended (no choices) entries start in text mode: the next message IS the response."""
-    entry = _ClarifyEntry(clarify_id, session_key, question, list(choices) if choices else None,
-                          bool(multi_select) and bool(choices), awaiting_text=not bool(choices))
+    entry = _ClarifyEntry(
+        clarify_id,
+        session_key,
+        question,
+        list(choices) if choices else None,
+        bool(multi_select) and bool(choices),
+        awaiting_text=not bool(choices),
+    )
     with _lock:
         _entries[clarify_id] = entry
         _session_index.setdefault(session_key, []).append(clarify_id)
@@ -71,7 +85,12 @@ def wait_for_response(clarify_id: str, timeout: float) -> Optional[str]:
     except Exception:  # pragma: no cover - optional
         touch_activity_if_due = None
     from tools.interrupt import is_interrupted
-    deadline = None if timeout is None or float(timeout) <= 0.0 else time.monotonic() + float(timeout)
+
+    deadline = (
+        None
+        if timeout is None or float(timeout) <= 0.0
+        else time.monotonic() + float(timeout)
+    )
     activity_state = {"last_touch": time.monotonic(), "start": time.monotonic()}
     while True:
         remaining = 1.0 if deadline is None else deadline - time.monotonic()
@@ -121,7 +140,9 @@ def get_pending(clarify_id: str) -> Optional[_ClarifyEntry]:
         return entry if entry is not None and not entry.event.is_set() else None
 
 
-def get_pending_for_session(session_key: str, *, include_choice_prompts: bool = False) -> Optional[_ClarifyEntry]:
+def get_pending_for_session(
+    session_key: str, *, include_choice_prompts: bool = False
+) -> Optional[_ClarifyEntry]:
     """Oldest pending entry awaiting free text (open-ended, or after "Other");
     ``include_choice_prompts=True`` returns the oldest unresolved entry of any kind (user
     typed at an active choice prompt: resolve it rather than queue a follow-up turn)."""
@@ -137,6 +158,7 @@ def _match_label(text: str, choices: list[str]) -> Optional[str]:
     """Stripped choice text matching ``text`` case-insensitively, ignoring the '(Recommended)'
     suffix the first choice carries by the time it reaches adapters; None if no match."""
     from tools.clarify_tool import strip_recommended
+
     wanted = strip_recommended(text).casefold()
     for choice in choices:
         if strip_recommended(str(choice)).casefold() == wanted:
@@ -160,7 +182,9 @@ def _is_int(text: str) -> bool:
         return False
 
 
-def _selection_attempt_tokens(text: str, choices: Optional[list[str]] = None) -> Optional[list[str]]:
+def _selection_attempt_tokens(
+    text: str, choices: Optional[list[str]] = None
+) -> Optional[list[str]]:
     """Tokens when ``text`` looks like a typed selection (bare int, comma list,
     all-numeric space list); None for free prose so the gateway can release the
     clarify. Comma-list labels may span up to the longest choice's word count."""
@@ -174,7 +198,11 @@ def _selection_attempt_tokens(text: str, choices: Optional[list[str]] = None) ->
     if "," not in stripped or not tokens:
         return tokens or None
     max_words = max(1, max((len(str(c).split()) for c in choices or []), default=1))
-    return tokens if all(t.isdigit() or len(t.split()) <= max_words for t in tokens) else None
+    return (
+        tokens
+        if all(t.isdigit() or len(t.split()) <= max_words for t in tokens)
+        else None
+    )
 
 
 def _coerce_text_response(entry: _ClarifyEntry, response: str) -> Optional[str]:
@@ -182,7 +210,9 @@ def _coerce_text_response(entry: _ClarifyEntry, response: str) -> Optional[str]:
     return _coerce_text_response_detailed(entry, response)[0]
 
 
-def _coerce_text_response_detailed(entry: _ClarifyEntry, response: str) -> tuple[Optional[str], Optional[str]]:
+def _coerce_text_response_detailed(
+    entry: _ClarifyEntry, response: str
+) -> tuple[Optional[str], Optional[str]]:
     """Map a typed reply to ``(value, None)`` or ``(None, reason)``: ``"invalid_selection"``
     (selection-shaped but out of range/unrecognised — keep the clarify armed for a retry) or
     ``"prose"`` (free text on a native choice prompt — the gateway may cancel and route normally
@@ -200,7 +230,11 @@ def _coerce_text_response_detailed(entry: _ClarifyEntry, response: str) -> tuple
         # Out-of-range / non-canonical integer is a failed selection, not prose.
         selection_shaped = _is_int(text)
         idx = int(text) - 1 if selection_shaped else -1
-        coerced = entry.choices[idx] if 0 <= idx < len(entry.choices) else _match_label(text, entry.choices)
+        coerced = (
+            entry.choices[idx]
+            if 0 <= idx < len(entry.choices)
+            else _match_label(text, entry.choices)
+        )
     if coerced is not None:
         return coerced, None
     if is_skip:
@@ -237,10 +271,16 @@ def attempt_text_response_for_session(session_key: str, response: str) -> str:
         return TEXT_NO_PENDING
     coerced, reason = _coerce_text_response_detailed(entry, response)
     if coerced is None:
-        return TEXT_REJECTED_SELECTION if reason == "invalid_selection" else TEXT_REJECTED_PROSE
+        return (
+            TEXT_REJECTED_SELECTION
+            if reason == "invalid_selection"
+            else TEXT_REJECTED_PROSE
+        )
     if resolve_gateway_clarify(entry.clarify_id, coerced):
         return TEXT_RESOLVED
-    return TEXT_NO_PENDING  # lost a race with a button/callback resolution — no work left
+    return (
+        TEXT_NO_PENDING  # lost a race with a button/callback resolution — no work left
+    )
 
 
 def resolve_text_response_for_session(session_key: str, response: str) -> bool:
@@ -260,7 +300,10 @@ def mark_awaiting_text(clarify_id: str) -> bool:
 def has_pending(session_key: str) -> bool:
     """True when this session has at least one pending clarify entry."""
     with _lock:
-        return any(_entries.get(cid) is not None for cid in _session_index.get(session_key) or [])
+        return any(
+            _entries.get(cid) is not None
+            for cid in _session_index.get(session_key) or []
+        )
 
 
 def clear_session(session_key: str) -> int:
@@ -271,7 +314,10 @@ def clear_session(session_key: str) -> int:
     session is never resurrected by late callbacks."""
     with _lock:
         cancelled = 0
-        for entry in (_entries.pop(cid, None) for cid in list(_session_index.pop(session_key, []) or [])):
+        for entry in (
+            _entries.pop(cid, None)
+            for cid in list(_session_index.pop(session_key, []) or [])
+        ):
             if entry is None or entry.event.is_set():
                 continue
             entry.response = CANCELLED
@@ -303,6 +349,7 @@ def get_clarify_timeout() -> int:
     """
     try:
         from clawk_cli.config import load_config
+
         return resolve_clarify_timeout(load_config() or {})
     except Exception:
         return 3600

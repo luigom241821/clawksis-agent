@@ -10,6 +10,9 @@ def close_preview_tool(url: str = "") -> str:
     """Ask the desktop GUI to close the preview pane, or the tab for ``url``."""
     target = _normalize_target(url or "")
     return desktop_ui.emit_or_error(
-        "preview.close", {"url": target}, "Failed to close the preview pane: ",
-        "The preview pane is only available in the Clawksis desktop app.", {"success": True, "url": target},
+        "preview.close",
+        {"url": target},
+        "Failed to close the preview pane: ",
+        "The preview pane is only available in the Clawksis desktop app.",
+        {"success": True, "url": target},
     )

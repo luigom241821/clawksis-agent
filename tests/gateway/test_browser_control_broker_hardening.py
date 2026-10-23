@@ -112,19 +112,25 @@ def test_completion_requires_the_same_scope_as_the_pending_command():
     thread, outcome, frames = _start_pending(broker, scope)
     command_id = frames[0]["params"]["command_id"]
 
-    assert broker.complete(
-        command_id,
-        scope=_scope(principal_id="other-principal"),
-        ok=True,
-        result={"unsafe": True},
-    ) is False
+    assert (
+        broker.complete(
+            command_id,
+            scope=_scope(principal_id="other-principal"),
+            ok=True,
+            result={"unsafe": True},
+        )
+        is False
+    )
     assert thread.is_alive()
-    assert broker.complete(
-        command_id,
-        scope=scope,
-        ok=True,
-        result={"safe": True},
-    ) is True
+    assert (
+        broker.complete(
+            command_id,
+            scope=scope,
+            ok=True,
+            result={"safe": True},
+        )
+        is True
+    )
     thread.join(timeout=1.0)
 
     assert outcome.get("result") == {"safe": True}
@@ -141,12 +147,15 @@ def test_same_identity_reattach_preserves_pending_work_and_completes_on_new_owne
     broker.attach(scope, replacement_frames.append, owner="replacement-owner")
     assert thread.is_alive()
     assert broker.pending_count == 1
-    assert broker.complete(
-        command_id,
-        scope=scope,
-        ok=True,
-        result={"reconnected": True},
-    ) is True
+    assert (
+        broker.complete(
+            command_id,
+            scope=scope,
+            ok=True,
+            result={"reconnected": True},
+        )
+        is True
+    )
     thread.join(timeout=1.0)
 
     assert not thread.is_alive()
@@ -164,17 +173,23 @@ def test_same_stable_identity_can_renegotiate_capabilities_without_ambiguity():
 
     broker.attach(refreshed, lambda _frame: None, owner="replacement-owner")
 
-    assert broker.scope_for_session(
-        session_id="session-fixture",
-        principal_id="principal-fixture",
-        transport_family="local-api",
-    ) == refreshed
-    assert broker.complete(
-        command_id,
-        scope=refreshed,
-        ok=True,
-        result={"capabilities": "refreshed"},
-    ) is True
+    assert (
+        broker.scope_for_session(
+            session_id="session-fixture",
+            principal_id="principal-fixture",
+            transport_family="local-api",
+        )
+        == refreshed
+    )
+    assert (
+        broker.complete(
+            command_id,
+            scope=refreshed,
+            ok=True,
+            result={"capabilities": "refreshed"},
+        )
+        is True
+    )
     thread.join(timeout=1.0)
     assert outcome.get("result") == {"capabilities": "refreshed"}
 
@@ -193,12 +208,15 @@ def test_transport_disconnect_parks_pending_and_reconnect_completes_it():
         broker.dispatch(scope, action="controller.noop")
 
     broker.attach(scope, lambda _frame: None, owner="replacement-owner")
-    assert broker.complete(
-        command_id,
-        scope=scope,
-        ok=True,
-        result={"after": "reconnect"},
-    ) is True
+    assert (
+        broker.complete(
+            command_id,
+            scope=scope,
+            ok=True,
+            result={"after": "reconnect"},
+        )
+        is True
+    )
     thread.join(timeout=1.0)
     assert outcome.get("result") == {"after": "reconnect"}
 
@@ -243,12 +261,15 @@ def test_timeout_while_disconnected_flushes_cancel_before_new_dispatch():
     while len(replacement_frames) < 2:
         second_thread.join(timeout=0.01)
     assert replacement_frames[1]["method"] == "browser.controller.command"
-    assert broker.complete(
-        replacement_frames[1]["params"]["command_id"],
-        scope=scope,
-        ok=True,
-        result={"second": True},
-    ) is True
+    assert (
+        broker.complete(
+            replacement_frames[1]["params"]["command_id"],
+            scope=scope,
+            ok=True,
+            result={"second": True},
+        )
+        is True
+    )
     second_thread.join(timeout=1.0)
     assert second.get("result") == {"second": True}
 
@@ -258,24 +279,32 @@ def test_old_transport_owner_cannot_complete_after_same_identity_reconnect():
     scope = _scope()
     thread, outcome, frames = _start_pending(broker, scope)
     command_id = frames[0]["params"]["command_id"]
-    refreshed_scope = _scope(capabilities=frozenset({"controller.noop", "browser_snapshot"}))
+    refreshed_scope = _scope(
+        capabilities=frozenset({"controller.noop", "browser_snapshot"})
+    )
 
     broker.attach(refreshed_scope, lambda _frame: None, owner="replacement-owner")
 
     assert broker.is_owner(refreshed_scope, "owner-fixture") is False
     assert broker.is_owner(refreshed_scope, "replacement-owner") is True
-    assert broker.complete(
-        command_id,
-        scope=scope,
-        ok=True,
-        result={"stale": True},
-    ) is False
-    assert broker.complete(
-        command_id,
-        scope=refreshed_scope,
-        ok=True,
-        result={"fresh": True},
-    ) is True
+    assert (
+        broker.complete(
+            command_id,
+            scope=scope,
+            ok=True,
+            result={"stale": True},
+        )
+        is False
+    )
+    assert (
+        broker.complete(
+            command_id,
+            scope=refreshed_scope,
+            ok=True,
+            result={"fresh": True},
+        )
+        is True
+    )
     thread.join(timeout=1.0)
     assert outcome.get("result") == {"fresh": True}
 
@@ -292,10 +321,13 @@ def test_cancel_with_pre_reconnect_scope_still_cancels_same_stable_identity():
     refreshed_frames = []
     broker.attach(refreshed, refreshed_frames.append, owner="replacement-owner")
 
-    assert broker.cancel(
-        original,
-        tool_call_id="tool-call-before-reconnect",
-    ) is True
+    assert (
+        broker.cancel(
+            original,
+            tool_call_id="tool-call-before-reconnect",
+        )
+        is True
+    )
     thread.join(timeout=1.0)
     assert isinstance(outcome.get("error"), ControllerCancelled)
     assert refreshed_frames == [
@@ -318,18 +350,24 @@ def test_different_stable_identity_hard_replaces_and_cancels_pending_work():
 
     broker.attach(replacement, lambda _frame: None, owner="replacement-owner")
 
-    assert broker.complete(
-        command_id,
-        scope=replacement,
-        ok=True,
-        result={"unsafe": True},
-    ) is False
-    assert broker.complete(
-        command_id,
-        scope=original,
-        ok=True,
-        result={"original": True},
-    ) is False
+    assert (
+        broker.complete(
+            command_id,
+            scope=replacement,
+            ok=True,
+            result={"unsafe": True},
+        )
+        is False
+    )
+    assert (
+        broker.complete(
+            command_id,
+            scope=original,
+            ok=True,
+            result={"original": True},
+        )
+        is False
+    )
     thread.join(timeout=1.0)
     assert isinstance(outcome.get("error"), ControllerCancelled)
 
@@ -353,11 +391,14 @@ def test_different_controller_identity_hard_replaces_parked_session_controller()
 
     thread.join(timeout=1.0)
     assert isinstance(outcome.get("error"), ControllerCancelled)
-    assert broker.scope_for_session(
-        session_id=original.session_id,
-        principal_id=original.principal_id,
-        transport_family=original.transport_family,
-    ) == replacement
+    assert (
+        broker.scope_for_session(
+            session_id=original.session_id,
+            principal_id=original.principal_id,
+            transport_family=original.transport_family,
+        )
+        == replacement
+    )
     assert broker.select(original, "controller.noop") is None
     assert broker.select(replacement, "controller.noop") is not None
 
@@ -391,35 +432,50 @@ def test_session_lane_replacement_and_owner_detach_are_scoped():
     broker.attach(second, lambda _frame: None, owner="owner-shared")
     broker.attach(other, lambda _frame: None, owner="owner-other")
 
-    assert broker.scope_for_session(
-        session_id="session-fixture",
-        principal_id="principal-fixture",
-        transport_family="local-api",
-    ) == second
-    assert broker.scope_for_session(
-        session_id="other-session",
-        principal_id="principal-fixture",
-        transport_family="cloud-ticket-ws",
-    ) == other
+    assert (
+        broker.scope_for_session(
+            session_id="session-fixture",
+            principal_id="principal-fixture",
+            transport_family="local-api",
+        )
+        == second
+    )
+    assert (
+        broker.scope_for_session(
+            session_id="other-session",
+            principal_id="principal-fixture",
+            transport_family="cloud-ticket-ws",
+        )
+        == other
+    )
 
     broker.detach(second, owner="owner-shared")
-    assert broker.scope_for_session(
-        session_id="session-fixture",
-        principal_id="principal-fixture",
-        transport_family="local-api",
-    ) is None
-    assert broker.scope_for_session(
-        session_id="other-session",
-        principal_id="principal-fixture",
-        transport_family="cloud-ticket-ws",
-    ) == other
+    assert (
+        broker.scope_for_session(
+            session_id="session-fixture",
+            principal_id="principal-fixture",
+            transport_family="local-api",
+        )
+        is None
+    )
+    assert (
+        broker.scope_for_session(
+            session_id="other-session",
+            principal_id="principal-fixture",
+            transport_family="cloud-ticket-ws",
+        )
+        == other
+    )
 
     broker.reset()
-    assert broker.scope_for_session(
-        session_id="other-session",
-        principal_id="principal-fixture",
-        transport_family="cloud-ticket-ws",
-    ) is None
+    assert (
+        broker.scope_for_session(
+            session_id="other-session",
+            principal_id="principal-fixture",
+            transport_family="cloud-ticket-ws",
+        )
+        is None
+    )
     assert broker.pending_count == 0
 
 
@@ -439,35 +495,49 @@ def test_session_lookup_requires_exact_server_principal_and_transport_family():
     broker.attach(remote, lambda _frame: None, owner="owner-remote")
 
     assert broker.scope_for_session(session_id="session-fixture") is None
-    assert broker.scope_for_session(
-        session_id="session-fixture",
-        principal_id="principal:api:local",
-        transport_family="local-api",
-    ) == local
-    assert broker.scope_for_session(
-        session_id="session-fixture",
-        principal_id="principal:api:local",
-        transport_family="remote-api",
-    ) is None
-    assert broker.scope_for_session(
-        session_id="session-fixture",
-        principal_id="principal:api:attacker",
-        transport_family="local-api",
-    ) is None
+    assert (
+        broker.scope_for_session(
+            session_id="session-fixture",
+            principal_id="principal:api:local",
+            transport_family="local-api",
+        )
+        == local
+    )
+    assert (
+        broker.scope_for_session(
+            session_id="session-fixture",
+            principal_id="principal:api:local",
+            transport_family="remote-api",
+        )
+        is None
+    )
+    assert (
+        broker.scope_for_session(
+            session_id="session-fixture",
+            principal_id="principal:api:attacker",
+            transport_family="local-api",
+        )
+        is None
+    )
 
 
 def test_feature_flag_requires_literal_boolean_true():
     assert browser_control_enabled({}) is False
-    assert browser_control_enabled(
-        {"browser": {"extension_control": {"enabled": False}}}
-    ) is False
-    assert browser_control_enabled(
-        {"browser": {"extension_control": {"enabled": True}}}
-    ) is True
+    assert (
+        browser_control_enabled({"browser": {"extension_control": {"enabled": False}}})
+        is False
+    )
+    assert (
+        browser_control_enabled({"browser": {"extension_control": {"enabled": True}}})
+        is True
+    )
     for ambiguous in ("true", "false", "yes", 1, [], {}):
-        assert browser_control_enabled(
-            {"browser": {"extension_control": {"enabled": ambiguous}}}
-        ) is False
+        assert (
+            browser_control_enabled(
+                {"browser": {"extension_control": {"enabled": ambiguous}}}
+            )
+            is False
+        )
 
 
 def test_transport_teardown_can_cancel_waiters_without_writing_to_closing_peer():
@@ -526,9 +596,7 @@ def test_completion_winning_at_timeout_boundary_is_not_misreported_as_timeout():
 
     command_id = ""
     broker.attach(scope, send)
-    assert broker.dispatch(scope, action="controller.noop") == {
-        "boundary": "completed"
-    }
+    assert broker.dispatch(scope, action="controller.noop") == {"boundary": "completed"}
 
 
 def test_timeout_marks_terminal_and_emits_cancel_to_controller():

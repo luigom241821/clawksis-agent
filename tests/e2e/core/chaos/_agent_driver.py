@@ -63,7 +63,8 @@ def main(spec_path: str) -> None:
         result = agent.run_conversation(message, conversation_history=history)
         history = result.get("messages") or history
         _emit(
-            ev="turn_end", i=i,
+            ev="turn_end",
+            i=i,
             failed=bool(result.get("failed")),
             interrupted=bool(result.get("interrupted")),
             completed=bool(result.get("completed")),

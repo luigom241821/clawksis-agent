@@ -25,10 +25,23 @@ class _StubCapture(_CaptureMixin):
         self._session_id: Optional[str] = None
         self._last_app = ""
 
-    def _resolve_capture_windows(self, mode: str, app: Optional[str], pid: Optional[int],
-                                 window_id: Optional[int]) -> list[dict[str, Any]]:
-        return [{"app_name": "Finder", "pid": 607, "window_id": 382, "title": "", "z_index": 1,
-                 "off_screen": False}]
+    def _resolve_capture_windows(
+        self,
+        mode: str,
+        app: Optional[str],
+        pid: Optional[int],
+        window_id: Optional[int],
+    ) -> list[dict[str, Any]]:
+        return [
+            {
+                "app_name": "Finder",
+                "pid": 607,
+                "window_id": 382,
+                "title": "",
+                "z_index": 1,
+                "off_screen": False,
+            }
+        ]
 
     def _set_active_target(self, target: dict[str, Any]) -> None:
         self._active_pid, self._active_window_id = target["pid"], target["window_id"]
@@ -40,7 +53,6 @@ def _write_config(tmp_path, body: str) -> None:
 
 
 class TestAxWalkBound:
-
     def test_configured_value_reaches_the_driver_args(self, tmp_path, monkeypatch):
         """End to end through the loader the backend uses: config.yaml -> get_window_state args."""
         _write_config(tmp_path, "computer_use:\n  ax_max_elements: 350\n")
@@ -67,14 +79,33 @@ class TestCappedWalkHint:
     def _summary(monkeypatch, n_elements: int, bound: int) -> str:
         from tools.computer_use import tool
         from tools.computer_use.backend import CaptureResult, UIElement
-        monkeypatch.setattr(tool, "_spill_elements_to_file", lambda cap: "/tmp/elements.json")
-        cap = CaptureResult(mode="ax", width=800, height=600, ax_max_elements=bound,
-                            elements=[UIElement(index=i + 1, role="AXButton", label=f"b{i}") for i in range(n_elements)])
-        return "\n".join(tool._capture_summary_lines(tool._capture_view(cap, max_elements=5)))
 
-    @pytest.mark.parametrize(("n_elements", "bound", "capped"), [(8, 8, True), (8, 50, False), (8, 0, False)])
-    def test_hint_names_a_cap_only_when_the_walk_hit_it(self, monkeypatch, n_elements, bound, capped):
+        monkeypatch.setattr(
+            tool, "_spill_elements_to_file", lambda cap: "/tmp/elements.json"
+        )
+        cap = CaptureResult(
+            mode="ax",
+            width=800,
+            height=600,
+            ax_max_elements=bound,
+            elements=[
+                UIElement(index=i + 1, role="AXButton", label=f"b{i}")
+                for i in range(n_elements)
+            ],
+        )
+        return "\n".join(
+            tool._capture_summary_lines(tool._capture_view(cap, max_elements=5))
+        )
+
+    @pytest.mark.parametrize(
+        ("n_elements", "bound", "capped"), [(8, 8, True), (8, 50, False), (8, 0, False)]
+    )
+    def test_hint_names_a_cap_only_when_the_walk_hit_it(
+        self, monkeypatch, n_elements, bound, capped
+    ):
         text = self._summary(monkeypatch, n_elements=n_elements, bound=bound)
         assert ("accessibility walk capped" in text) is capped
-        assert ("full element tree with untruncated labels saved to" in text) is not capped
+        assert (
+            "full element tree with untruncated labels saved to" in text
+        ) is not capped
         assert "element tree with untruncated labels saved to" in text

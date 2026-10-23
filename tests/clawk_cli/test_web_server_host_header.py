@@ -23,8 +23,6 @@ class TestHostHeaderValidator:
     """Unit test the _is_accepted_host helper directly — cheaper and
     more thorough than spinning up the full FastAPI app."""
 
-
-
     def test_zero_zero_bind_accepts_anything(self):
         """0.0.0.0 means operator explicitly opted into all-interfaces
         (requires --insecure). No Host-layer defence is possible — rely
@@ -47,15 +45,12 @@ class TestHostHeaderValidator:
         # Loopback — reject (we bound to a specific non-loopback name)
         assert not _is_accepted_host("localhost", "my-server.corp.net")
 
-
     def test_trusted_public_host_is_exact_match_only(self):
         """A declared proxy host is accepted without weakening rebinding checks."""
         from clawk_cli.web_server import _is_accepted_host
 
         trusted = frozenset({"dashboard.example.test"})
-        assert _is_accepted_host(
-            "dashboard.example.test:9443", "127.0.0.1", trusted
-        )
+        assert _is_accepted_host("dashboard.example.test:9443", "127.0.0.1", trusted)
         assert not _is_accepted_host(
             "dashboard.example.test.evil.test", "127.0.0.1", trusted
         )
@@ -100,7 +95,6 @@ class TestHostHeaderMiddleware:
             # Clean up so other tests don't inherit the bound_host
             if hasattr(app.state, "bound_host"):
                 del app.state.bound_host
-
 
     def test_trusted_public_host_request_accepted(self):
         """A loopback backend may accept its declared reverse-proxy host."""
@@ -163,7 +157,6 @@ class TestWebSocketHostOriginGuard:
                 pass
 
         assert exc.value.code == 4403
-
 
     def test_loopback_websocket_host_and_origin_are_accepted(self, monkeypatch):
         from fastapi.testclient import TestClient

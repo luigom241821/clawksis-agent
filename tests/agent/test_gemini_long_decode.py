@@ -30,7 +30,9 @@ def _scripted_stream_client(monkeypatch, streams):
         def iter_text(self):
             for item in self._script:
                 if item == "DROP":
-                    raise httpx.RemoteProtocolError("peer closed connection without sending complete message body")
+                    raise httpx.RemoteProtocolError(
+                        "peer closed connection without sending complete message body"
+                    )
                 yield f"data: {json.dumps(item)}\n\n"
 
     class DummyHTTP:
@@ -41,35 +43,70 @@ def _scripted_stream_client(monkeypatch, streams):
         def close(self):
             return None
 
-    monkeypatch.setattr("agent.gemini_native_adapter.httpx.Client", lambda *a, **k: DummyHTTP())
-    client = GeminiNativeClient(api_key="AQ.test", base_url="https://generativelanguage.googleapis.com/v1beta")
-    kwargs = {"model": "gemini-4-argon", "messages": [{"role": "user", "content": "count"}], "stream": True}
+    monkeypatch.setattr(
+        "agent.gemini_native_adapter.httpx.Client", lambda *a, **k: DummyHTTP()
+    )
+    client = GeminiNativeClient(
+        api_key="AQ.test", base_url="https://generativelanguage.googleapis.com/v1beta"
+    )
+    kwargs = {
+        "model": "gemini-4-argon",
+        "messages": [{"role": "user", "content": "count"}],
+        "stream": True,
+    }
     return client, kwargs, sent
 
 
 def _ld_event(text, token=None, finish=None):
     cand = {"content": {"role": "model", "parts": [{"text": text}]}}
-    return {"candidates": [{**cand, **({"continuationToken": token} if token else {}), **({"finishReason": finish} if finish else {})}]}
+    return {
+        "candidates": [
+            {
+                **cand,
+                **({"continuationToken": token} if token else {}),
+                **({"finishReason": finish} if finish else {}),
+            }
+        ]
+    }
 
 
 def test_dropped_long_decode_stream_resumes_from_its_last_checkpoint(monkeypatch):
     """Past 32K a stream checkpoints every ~5K tokens (the token rides the event whose text it commits).
     A drop after a checkpoint resends the SAME request plus that token: no restart, no duplicated text."""
-    streams = [[_ld_event("1\n"), _ld_event("2\n", token="ckpt-2"), "DROP"], [_ld_event("3\n", finish="STOP")]]
+    streams = [
+        [_ld_event("1\n"), _ld_event("2\n", token="ckpt-2"), "DROP"],
+        [_ld_event("3\n", finish="STOP")],
+    ]
     client, kwargs, sent = _scripted_stream_client(monkeypatch, streams)
 
     chunks = list(client.chat.completions.create(**kwargs))
     assert sent[1] == {**sent[0], "continuationToken": "ckpt-2"}
     assert "".join(c.choices[0].delta.content or "" for c in chunks) == "1\n2\n3\n"
-    assert [c.choices[0].finish_reason for c in chunks if c.choices[0].finish_reason] == ["stop"]
+    assert [
+        c.choices[0].finish_reason for c in chunks if c.choices[0].finish_reason
+    ] == ["stop"]
 
 
-@pytest.mark.parametrize("streams, requests", [
-    ([[_ld_event("1\n"), "DROP"]], 1),  # before the first checkpoint: nothing to resume from
-    ([[_ld_event("1\n", token="ckpt-1"), _ld_event("2\n"), "DROP"]], 1),  # "2" was shown but not committed
-    ([[_ld_event("1\n", token="ckpt-1"), "DROP"], ["DROP"]], 4),  # bounded: one token rides at most 3 resends
-])
-def test_dropped_stream_without_a_clean_checkpoint_raises(monkeypatch, streams, requests):
+@pytest.mark.parametrize(
+    "streams, requests",
+    [
+        (
+            [[_ld_event("1\n"), "DROP"]],
+            1,
+        ),  # before the first checkpoint: nothing to resume from
+        (
+            [[_ld_event("1\n", token="ckpt-1"), _ld_event("2\n"), "DROP"]],
+            1,
+        ),  # "2" was shown but not committed
+        (
+            [[_ld_event("1\n", token="ckpt-1"), "DROP"], ["DROP"]],
+            4,
+        ),  # bounded: one token rides at most 3 resends
+    ],
+)
+def test_dropped_stream_without_a_clean_checkpoint_raises(
+    monkeypatch, streams, requests
+):
     from agent.gemini_native_adapter import GeminiAPIError
 
     client, kwargs, sent = _scripted_stream_client(monkeypatch, streams)
@@ -85,9 +122,19 @@ def test_long_decode_hop_ceiling_ends_as_length(monkeypatch):
     from agent.gemini_native_adapter import GeminiNativeClient
 
     def hop(n):
-        cand = {"content": {"role": "model", "parts": [{"text": f"p{n} "}]}, "finishReason": "CONTINUATION",
-                "continuationToken": f"tok-{n}"}
-        return {"candidates": [cand], "usageMetadata": {"promptTokenCount": 10, "candidatesTokenCount": 5, "totalTokenCount": 15}}
+        cand = {
+            "content": {"role": "model", "parts": [{"text": f"p{n} "}]},
+            "finishReason": "CONTINUATION",
+            "continuationToken": f"tok-{n}",
+        }
+        return {
+            "candidates": [cand],
+            "usageMetadata": {
+                "promptTokenCount": 10,
+                "candidatesTokenCount": 5,
+                "totalTokenCount": 15,
+            },
+        }
 
     sent = []
 
@@ -107,7 +154,9 @@ def test_long_decode_hop_ceiling_ends_as_length(monkeypatch):
     class DummyHTTP:
         def post(self, url, json=None, headers=None, timeout=None):
             sent.append(json)
-            return SimpleNamespace(status_code=200, json=lambda payload=hop(len(sent)): payload)
+            return SimpleNamespace(
+                status_code=200, json=lambda payload=hop(len(sent)): payload
+            )
 
         def stream(self, method, url, json=None, headers=None, timeout=None):
             sent.append(json)
@@ -116,9 +165,17 @@ def test_long_decode_hop_ceiling_ends_as_length(monkeypatch):
         def close(self):
             return None
 
-    monkeypatch.setattr("agent.gemini_native_adapter.httpx.Client", lambda *a, **k: DummyHTTP())
-    client = GeminiNativeClient(api_key="AQ.test", base_url="https://generativelanguage.googleapis.com/v1beta")
-    kwargs = {"model": "gemini-4-argon", "messages": [{"role": "user", "content": "go"}], "max_tokens": 65_536}
+    monkeypatch.setattr(
+        "agent.gemini_native_adapter.httpx.Client", lambda *a, **k: DummyHTTP()
+    )
+    client = GeminiNativeClient(
+        api_key="AQ.test", base_url="https://generativelanguage.googleapis.com/v1beta"
+    )
+    kwargs = {
+        "model": "gemini-4-argon",
+        "messages": [{"role": "user", "content": "go"}],
+        "max_tokens": 65_536,
+    }
 
     response = client.chat.completions.create(**kwargs)
     assert len(sent) == 3  # 65,536 / 32,768 = 2 hops, +1 slack
@@ -130,7 +187,10 @@ def test_long_decode_hop_ceiling_ends_as_length(monkeypatch):
     assert len(sent) == 3
     finishes = [c for c in chunks if c.choices[0].finish_reason]
     assert [c.choices[0].finish_reason for c in finishes] == ["length"]
-    assert (finishes[0].usage.prompt_tokens, finishes[0].usage.initial_prompt_tokens) == (30, 10)
+    assert (
+        finishes[0].usage.prompt_tokens,
+        finishes[0].usage.initial_prompt_tokens,
+    ) == (30, 10)
 
 
 def test_long_decode_usage_keeps_canonical_buckets_on_first_hop():
@@ -139,8 +199,21 @@ def test_long_decode_usage_keeps_canonical_buckets_on_first_hop():
     from agent.gemini_long_decode import merge_hop_usage
     from agent.gemini_native_adapter import _usage_from_metadata
 
-    hops = [{"promptTokenCount": 100, "cachedContentTokenCount": 40, "candidatesTokenCount": 32768},
-            {"promptTokenCount": 32868, "cachedContentTokenCount": 32800, "candidatesTokenCount": 10}]
+    hops = [
+        {
+            "promptTokenCount": 100,
+            "cachedContentTokenCount": 40,
+            "candidatesTokenCount": 32768,
+        },
+        {
+            "promptTokenCount": 32868,
+            "cachedContentTokenCount": 32800,
+            "candidatesTokenCount": 10,
+        },
+    ]
     usage = _usage_from_metadata(merge_hop_usage(hops))
-    assert (usage.prompt_tokens, usage.prompt_tokens_details.cached_tokens) == (32968, 32840)  # billing: summed
+    assert (usage.prompt_tokens, usage.prompt_tokens_details.cached_tokens) == (
+        32968,
+        32840,
+    )  # billing: summed
     assert (usage.initial_prompt_tokens, usage.initial_cached_tokens) == (100, 40)

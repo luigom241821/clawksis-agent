@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+
 @pytest.fixture
 def weixin_adapter():
     """Create a minimal WeixinAdapter with mocked internals for typing tests."""
@@ -30,6 +31,7 @@ def weixin_adapter():
 
     return adapter
 
+
 class TestEnsureTypingTicket:
     """Tests for _ensure_typing_ticket — the fix for stuck typing indicator."""
 
@@ -43,7 +45,9 @@ class TestEnsureTypingTicket:
         )
 
         mock_response = {"typing_ticket": "fresh-ticket-xyz"}
-        with patch("plugins.platforms.weixin.adapter._get_config", new_callable=AsyncMock) as mock_get:
+        with patch(
+            "plugins.platforms.weixin.adapter._get_config", new_callable=AsyncMock
+        ) as mock_get:
             mock_get.return_value = mock_response
             ticket = await weixin_adapter._ensure_typing_ticket("user-123")
 
@@ -62,7 +66,9 @@ class TestEnsureTypingTicket:
         weixin_adapter._token_store.get.return_value = "stored-ctx-token"
 
         mock_response = {"typing_ticket": "ticket-with-ctx"}
-        with patch("plugins.platforms.weixin.adapter._get_config", new_callable=AsyncMock) as mock_get:
+        with patch(
+            "plugins.platforms.weixin.adapter._get_config", new_callable=AsyncMock
+        ) as mock_get:
             mock_get.return_value = mock_response
             ticket = await weixin_adapter._ensure_typing_ticket("user-789")
 
@@ -78,7 +84,9 @@ class TestEnsureTypingTicket:
     @pytest.mark.asyncio
     async def test_returns_none_when_getconfig_fails(self, weixin_adapter):
         """Return None when getConfig raises an exception."""
-        with patch("plugins.platforms.weixin.adapter._get_config", new_callable=AsyncMock) as mock_get:
+        with patch(
+            "plugins.platforms.weixin.adapter._get_config", new_callable=AsyncMock
+        ) as mock_get:
             mock_get.side_effect = Exception("network error")
             ticket = await weixin_adapter._ensure_typing_ticket("user-123")
 

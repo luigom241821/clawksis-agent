@@ -14,6 +14,7 @@ truthy string), so the probe must treat ``"0"`` as not-under-launchd:
 routing an unsupervised interactive gateway to the service path would
 make it exit non-zero with nothing to revive it.
 """
+
 from unittest.mock import MagicMock
 
 import pytest
@@ -44,9 +45,7 @@ def _make_runner_with_mock_restart(tmp_path, monkeypatch):
     # CI runner /.dockerenv exists and would route every case via_service=True
     # regardless of the env markers under test (the detection under test is
     # the SUPERVISOR markers, not the runner's own containment).
-    monkeypatch.setattr(
-        "gateway.restart.is_container_restart_context", lambda: False
-    )
+    monkeypatch.setattr("gateway.restart.is_container_restart_context", lambda: False)
     runner, _adapter = make_restart_runner()
     runner.request_restart = MagicMock(return_value=True)
     return runner
@@ -82,7 +81,10 @@ def test_supervised_child_marker_is_a_launch_not_a_restart_route():
     """The Windows Scheduled-Task launcher exports only ``CLAWK_SUPERVISED_CHILD``: that must make
     the gateway a supervised LAUNCH (self-kill guards active, #113667) without selecting the exit-75
     restart route, which the task cannot honour (#113670)."""
-    from gateway.restart import is_gateway_supervisor_process, is_supervised_gateway_launch
+    from gateway.restart import (
+        is_gateway_supervisor_process,
+        is_supervised_gateway_launch,
+    )
     from clawk_cli.gateway_windows import _GATEWAY_ENV
 
     task_env = dict(_GATEWAY_ENV)

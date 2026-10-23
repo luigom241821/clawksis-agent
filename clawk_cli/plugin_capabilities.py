@@ -20,31 +20,53 @@ class CapabilitySpec:
     """One declarable capability and the legacy gate it maps to."""
 
     id: str
-    legacy_path: tuple[str, ...]  # deprecated boolean under plugins.entries.<id>, e.g. ("llm", "allow_model_override")
+    legacy_path: tuple[
+        str, ...
+    ]  # deprecated boolean under plugins.entries.<id>, e.g. ("llm", "allow_model_override")
     description: str  # one-line risk description shown on the consent screen
 
 
 # (id, legacy_path, description) — ONLY capabilities with an existing enforcing surface.
 _CAPABILITY_ROWS = (
-    ("tools.override", ("allow_tool_override",),
-     "Replace built-in tools (e.g. shell_exec, write_file) — an "
-     "override can intercept everything routed through that tool"),
-    ("llm.provider_override", ("llm", "allow_provider_override"),
-     "Run host-owned LLM calls against a provider other than your "
-     "active one (uses your credentials)"),
-    ("llm.model_override", ("llm", "allow_model_override"),
-     "Choose which model host-owned LLM calls use (spend follows "
-     "the chosen model)"),
-    ("llm.agent_id_override", ("llm", "allow_agent_id_override"),
-     "Attribute its LLM calls to a different agent id"),
-    ("llm.profile_override", ("llm", "allow_profile_override"),
-     "Run LLM calls under a different auth profile"),
-    ("llm.task_override", ("llm", "allow_task_override"),
-     "Route its LLM calls through the host's built-in auxiliary "
-     "task lanes"),
-    ("gateway.platform_actions", ("allow_platform_actions",),
-     "Act on connected chat platforms as the gateway bot "
-     "(add reactions, rename threads) via ctx.platform_actions"))
+    (
+        "tools.override",
+        ("allow_tool_override",),
+        "Replace built-in tools (e.g. shell_exec, write_file) — an "
+        "override can intercept everything routed through that tool",
+    ),
+    (
+        "llm.provider_override",
+        ("llm", "allow_provider_override"),
+        "Run host-owned LLM calls against a provider other than your "
+        "active one (uses your credentials)",
+    ),
+    (
+        "llm.model_override",
+        ("llm", "allow_model_override"),
+        "Choose which model host-owned LLM calls use (spend follows the chosen model)",
+    ),
+    (
+        "llm.agent_id_override",
+        ("llm", "allow_agent_id_override"),
+        "Attribute its LLM calls to a different agent id",
+    ),
+    (
+        "llm.profile_override",
+        ("llm", "allow_profile_override"),
+        "Run LLM calls under a different auth profile",
+    ),
+    (
+        "llm.task_override",
+        ("llm", "allow_task_override"),
+        "Route its LLM calls through the host's built-in auxiliary task lanes",
+    ),
+    (
+        "gateway.platform_actions",
+        ("allow_platform_actions",),
+        "Act on connected chat platforms as the gateway bot "
+        "(add reactions, rename threads) via ctx.platform_actions",
+    ),
+)
 CAPABILITY_REGISTRY: dict[str, CapabilitySpec] = {
     cid: CapabilitySpec(cid, path, desc) for cid, path, desc in _CAPABILITY_ROWS
 }
@@ -66,18 +88,25 @@ def parse_declared_capabilities(raw: Any, plugin_name: str = "?") -> list[str]:
     if not isinstance(raw, (list, tuple)):
         logger.warning(
             "Plugin %s: manifest 'capabilities' must be a list, got %s — ignoring",
-            plugin_name, type(raw).__name__)
+            plugin_name,
+            type(raw).__name__,
+        )
         return []
     out: list[str] = []
     for item in raw:
         if not isinstance(item, str):
-            logger.warning("Plugin %s: ignoring non-string capability entry %r", plugin_name, item)
+            logger.warning(
+                "Plugin %s: ignoring non-string capability entry %r", plugin_name, item
+            )
             continue
         cap = item.strip()
         if cap not in VALID_CAPABILITY_IDS:
             logger.warning(
                 "Plugin %s: unknown capability %r (known: %s) — ignoring",
-                plugin_name, cap, ", ".join(sorted(VALID_CAPABILITY_IDS)))
+                plugin_name,
+                cap,
+                ", ".join(sorted(VALID_CAPABILITY_IDS)),
+            )
         elif cap not in out:
             out.append(cap)
     return out
@@ -96,12 +125,14 @@ def capability_set_hash(capabilities: Iterable[str]) -> str:
 
 # ── Consent state (read side — fail closed on ANY error) ────────────────────────────────────
 
+
 def _plugin_entry(plugin_id: str, config: Optional[Mapping[str, Any]] = None) -> dict:
     """``plugins.entries.<plugin_id>`` or ``{}`` — never raises (unreadable state = not granted)."""
     try:
         cfg: Any = config
         if cfg is None:
             from clawk_cli.config import load_config
+
             cfg = load_config() or {}
         entry = ((cfg.get("plugins") or {}).get("entries") or {}).get(plugin_id) or {}
         return entry if isinstance(entry, dict) else {}
@@ -109,7 +140,9 @@ def _plugin_entry(plugin_id: str, config: Optional[Mapping[str, Any]] = None) ->
         return {}
 
 
-def granted_capabilities(plugin_id: str, config: Optional[Mapping[str, Any]] = None) -> frozenset:
+def granted_capabilities(
+    plugin_id: str, config: Optional[Mapping[str, Any]] = None
+) -> frozenset:
     """The set of capabilities the user has granted this plugin."""
     raw = _plugin_entry(plugin_id, config).get(GRANTED_KEY)
     if not isinstance(raw, list):
@@ -127,27 +160,43 @@ def _legacy_gate_set(entry: Mapping[str, Any], spec: CapabilitySpec) -> bool:
     return bool(node)
 
 
-def plugin_capability_granted(plugin_id: str, capability: str, config: Optional[Mapping[str, Any]] = None) -> bool:
+def plugin_capability_granted(
+    plugin_id: str, capability: str, config: Optional[Mapping[str, Any]] = None
+) -> bool:
     """Canonical check: is *capability* live for *plugin_id*? True via ``granted_capabilities`` OR
     the deprecated-but-honored legacy ``allow_*`` key. Unknown ids / unreadable state -> False."""
     spec = CAPABILITY_REGISTRY.get(capability)
     if spec is None:
-        logger.debug("capability check for unknown id %r (plugin %s) — denied", capability, plugin_id)
+        logger.debug(
+            "capability check for unknown id %r (plugin %s) — denied",
+            capability,
+            plugin_id,
+        )
         return False
     entry = _plugin_entry(plugin_id, config)
-    if capability in granted_capabilities(plugin_id, config={"plugins": {"entries": {plugin_id: entry}}}):
+    if capability in granted_capabilities(
+        plugin_id, config={"plugins": {"entries": {plugin_id: entry}}}
+    ):
         allowed, evidence = True, "granted_capabilities"
     elif _legacy_gate_set(entry, spec):
-        allowed, evidence = True, f"legacy key plugins.entries.{plugin_id}.{'.'.join(spec.legacy_path)} (deprecated)"
+        allowed, evidence = (
+            True,
+            f"legacy key plugins.entries.{plugin_id}.{'.'.join(spec.legacy_path)} (deprecated)",
+        )
     else:
         allowed, evidence = False, "not granted"
     logger.info(  # audit trail for capability gate decisions
         "capability_check plugin=%s capability=%s decision=%s checked_by=plugin_capability_granted evidence=%s",
-        plugin_id, capability, "allow" if allowed else "deny", evidence)
+        plugin_id,
+        capability,
+        "allow" if allowed else "deny",
+        evidence,
+    )
     return allowed
 
 
 # ── Consent state (write side) ──────────────────────────────────────────────────────────────
+
 
 def _child_dict(parent: dict, key: str) -> dict:
     """``parent[key]`` as a dict, replacing any non-dict value in place."""
@@ -158,13 +207,18 @@ def _child_dict(parent: dict, key: str) -> dict:
     return child
 
 
-def record_consent(plugin_id: str, granted: Iterable[str], declared: Iterable[str]) -> None:
+def record_consent(
+    plugin_id: str, granted: Iterable[str], declared: Iterable[str]
+) -> None:
     """Persist a consent decision: ``granted_capabilities`` (union with prior grants), the consent
     record (hash of the declared set the user saw + UTC timestamp), and the legacy ``allow_*`` key
     for each grant so existing enforcement sites keep working unchanged."""
     from clawk_cli.config import load_config, save_config
+
     config = load_config()
-    entry = _child_dict(_child_dict(_child_dict(config, "plugins"), "entries"), plugin_id)
+    entry = _child_dict(
+        _child_dict(_child_dict(config, "plugins"), "entries"), plugin_id
+    )
     previous = entry.get(GRANTED_KEY)
     merged = (list(previous) if isinstance(previous, list) else []) + _known(granted)
     entry[GRANTED_KEY] = sorted(_known(c for c in merged if isinstance(c, str)))
@@ -182,11 +236,16 @@ def record_consent(plugin_id: str, granted: Iterable[str], declared: Iterable[st
 
     save_config(config)
     logger.info(
-        "capability_consent plugin=%s granted=%s declared_hash=%s", plugin_id,
-        ",".join(entry[GRANTED_KEY]) or "(none)", entry[CONSENT_KEY]["hash"][:12])
+        "capability_consent plugin=%s granted=%s declared_hash=%s",
+        plugin_id,
+        ",".join(entry[GRANTED_KEY]) or "(none)",
+        entry[CONSENT_KEY]["hash"][:12],
+    )
 
 
-def consent_hash(plugin_id: str, config: Optional[Mapping[str, Any]] = None) -> Optional[str]:
+def consent_hash(
+    plugin_id: str, config: Optional[Mapping[str, Any]] = None
+) -> Optional[str]:
     """Return the stored consent hash, or None when absent/corrupt."""
     consent = _plugin_entry(plugin_id, config).get(CONSENT_KEY)
     h = consent.get("hash") if isinstance(consent, dict) else None

@@ -36,15 +36,19 @@ class _Transport:
 
 def _client(transport, **kwargs):
     return ConnectorClient(
-        transport=transport, endpoint_resolver=lambda: "https://gw.test",
-        header_provider=lambda url: {"Authorization": "Bearer t"}, **kwargs,
+        transport=transport,
+        endpoint_resolver=lambda: "https://gw.test",
+        header_provider=lambda url: {"Authorization": "Bearer t"},
+        **kwargs,
     )
 
 
 def _consent(send: bool):
     path = get_config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(f"telemetry:\n  shared_metrics:\n    enabled: true\n    send: {str(send).lower()}\n")
+    path.write_text(
+        f"telemetry:\n  shared_metrics:\n    enabled: true\n    send: {str(send).lower()}\n"
+    )
 
 
 @pytest.fixture
@@ -58,36 +62,54 @@ def platform():
     clear_session_vars(tokens)
 
 
-@pytest.mark.parametrize(("bound", "surface"), [
-    ("", "cli"), ("tui", "tui"), ("desktop", "desktop"), ("telegram", "gateway"), ("api_server", "api"),
-])
+@pytest.mark.parametrize(
+    ("bound", "surface"),
+    [
+        ("", "cli"),
+        ("tui", "tui"),
+        ("desktop", "desktop"),
+        ("telegram", "gateway"),
+        ("api_server", "api"),
+    ],
+)
 def test_user_agent_names_the_session_surface(platform, bound, surface):
     if bound:
         platform(bound)
     agent = user_agent()
     product, _, rest = agent.partition(" ")
-    assert product.startswith("clawksis-agent/") and len(product) > len("clawksis-agent/")
+    assert product.startswith("clawksis-agent/") and len(product) > len(
+        "clawksis-agent/"
+    )
     assert rest.startswith(f"({surface}; ") and rest.endswith(")")
-    assert rest[len(surface) + 3:-1] in {"linux", "macos", "windows", "unknown"}
+    assert rest[len(surface) + 3 : -1] in {"linux", "macos", "windows", "unknown"}
 
 
 @pytest.mark.parametrize("send", [False, True])
 def test_correlation_ids_go_only_with_send_consent(send):
     _consent(send)
-    transport = _Transport(_Response(200, {"schemas": {}}), _Response(200, {"schemas": {}}))
+    transport = _Transport(
+        _Response(200, {"schemas": {}}), _Response(200, {"schemas": {}})
+    )
     client = _client(transport, call=CallRef(turn_id="turn-1", tool_call_id="call-1"))
     client.schemas(["GMAIL_SEND_EMAIL"])
     client.schemas(["GMAIL_SEND_EMAIL"])
 
     first, second = (sent["headers"] for sent in transport.sent)
     assert first["User-Agent"].startswith("clawksis-agent/")
-    correlation = {k for k in first if k.startswith("x-nous-clawk-") or k == "x-request-id"}
+    correlation = {
+        k for k in first if k.startswith("x-nous-clawk-") or k == "x-request-id"
+    }
     if not send:
         assert correlation == set()
         return
-    assert first["x-nous-clawk-turn"] == "turn-1" and first["x-nous-clawk-tool-call"] == "call-1"
+    assert (
+        first["x-nous-clawk-turn"] == "turn-1"
+        and first["x-nous-clawk-tool-call"] == "call-1"
+    )
     assert first["x-request-id"] != second["x-request-id"]  # one id per HTTP attempt
-    assert not any(k.startswith("x-clawk-") for k in first)  # the gateway strips only x-nous-
+    assert not any(
+        k.startswith("x-clawk-") for k in first
+    )  # the gateway strips only x-nous-
 
 
 def test_session_header_is_the_conversation_root(monkeypatch):
@@ -104,7 +126,11 @@ def test_session_header_is_the_conversation_root(monkeypatch):
 def test_gateway_request_id_is_logged_on_failure_and_success(caplog):
     transport = _Transport(
         _Response(200, {"schemas": {}}, request_id="ok-id"),
-        _Response(403, {"error": {"code": "TOOL_NOT_ALLOWED", "message": "no"}}, request_id="bad-id"),
+        _Response(
+            403,
+            {"error": {"code": "TOOL_NOT_ALLOWED", "message": "no"}},
+            request_id="bad-id",
+        ),
     )
     client = _client(transport, call=CallRef(tool_call_id="call-9"))
     with caplog.at_level(logging.DEBUG, logger="tools.managed_gateway_identity"):
@@ -113,9 +139,14 @@ def test_gateway_request_id_is_logged_on_failure_and_success(caplog):
             client.schemas(["X"])
     assert raised.value.request_id == "bad-id"
     lines = [(r.levelno, r.getMessage()) for r in caplog.records]
-    assert (logging.DEBUG, "connector connectors.schemas 200 - request_id=ok-id dispatch=call-9") in lines
-    assert (logging.WARNING,
-            "connector connectors.schemas 403 TOOL_NOT_ALLOWED request_id=bad-id dispatch=call-9") in lines
+    assert (
+        logging.DEBUG,
+        "connector connectors.schemas 200 - request_id=ok-id dispatch=call-9",
+    ) in lines
+    assert (
+        logging.WARNING,
+        "connector connectors.schemas 403 TOOL_NOT_ALLOWED request_id=bad-id dispatch=call-9",
+    ) in lines
 
 
 def test_a_not_yet_created_account_stays_debug(caplog):
@@ -127,7 +158,15 @@ def test_a_not_yet_created_account_stays_debug(caplog):
 
 
 def _mint_ok(names):
-    return _Response(200, {"results": [{"connector": n, "status": "initiated", "connectUrl": "https://l"} for n in names]})
+    return _Response(
+        200,
+        {
+            "results": [
+                {"connector": n, "status": "initiated", "connectUrl": "https://l"}
+                for n in names
+            ]
+        },
+    )
 
 
 def test_each_connect_path_names_its_initiator(monkeypatch):
@@ -136,23 +175,40 @@ def test_each_connect_path_names_its_initiator(monkeypatch):
     from tools.connectors.operation import ConnectionOperation, Target
     from tools.connectors.run import reissue
 
-    transport = _Transport(_mint_ok(["gmail"]), _mint_ok(["gmail"]), _mint_ok(["gmail"]))
+    transport = _Transport(
+        _mint_ok(["gmail"]), _mint_ok(["gmail"]), _mint_ok(["gmail"])
+    )
     monkeypatch.setattr(managed, "ensure_guest_identity", lambda: None)
     real = ConnectorClient
-    monkeypatch.setattr("tools.connectors.gateway.client.ConnectorClient", lambda **kw: real(
-        transport=transport, endpoint_resolver=lambda: "https://gw.test",
-        header_provider=lambda url: {"Authorization": "Bearer t"}, **kw))
+    monkeypatch.setattr(
+        "tools.connectors.gateway.client.ConnectorClient",
+        lambda **kw: real(
+            transport=transport,
+            endpoint_resolver=lambda: "https://gw.test",
+            header_provider=lambda url: {"Authorization": "Bearer t"},
+            **kw,
+        ),
+    )
 
     for initiator in (managed.AGENT_TOOL, managed.DESKTOP_PAGE):
         operation = ConnectionOperation([Target("gmail", "connector", "connect")])
-        client = (managed.managed_client(creates_guest=True) if initiator == managed.AGENT_TOOL
-                  else managed.managed_client(creates_guest=True, initiator=initiator))
-        managed.mint(client, operation, ["gmail"], reinitiate=False, actor=Actor.backend_watcher)
+        client = (
+            managed.managed_client(creates_guest=True)
+            if initiator == managed.AGENT_TOOL
+            else managed.managed_client(creates_guest=True, initiator=initiator)
+        )
+        managed.mint(
+            client, operation, ["gmail"], reinitiate=False, actor=Actor.backend_watcher
+        )
 
     operation.transition("gmail", TargetState.failed, Actor.backend_watcher)
     assert reissue(operation, ["gmail"]) is None  # the card's Try again
 
-    assert [sent["json"]["initiator"] for sent in transport.sent] == ["agent_tool", "desktop_page", "card_retry"]
+    assert [sent["json"]["initiator"] for sent in transport.sent] == [
+        "agent_tool",
+        "desktop_page",
+        "card_retry",
+    ]
 
 
 def test_operation_logs_open_transitions_and_settle(caplog):
@@ -160,7 +216,9 @@ def test_operation_logs_open_transitions_and_settle(caplog):
     from tools.connectors.contract import Actor, SettleReason, TargetState
     from tools.connectors.operation import ConnectionOperation, Target
 
-    operation = ConnectionOperation([Target("gmail", "connector", "connect")], session_key="s-log")
+    operation = ConnectionOperation(
+        [Target("gmail", "connector", "connect")], session_key="s-log"
+    )
     with caplog.at_level(logging.INFO, logger="tools.connectors"):
         live.open(operation)
         operation.transition("gmail", TargetState.initiated, Actor.backend_watcher)
@@ -178,7 +236,11 @@ def test_operation_logs_open_transitions_and_settle(caplog):
 
 
 def _outcomes(caplog):
-    return [(r.levelno, r.getMessage()) for r in caplog.records if r.name == "tools.managed_gateway_identity"]
+    return [
+        (r.levelno, r.getMessage())
+        for r in caplog.records
+        if r.name == "tools.managed_gateway_identity"
+    ]
 
 
 def test_a_200_whose_body_failed_is_a_warning_with_the_request_id(caplog):
@@ -189,12 +251,24 @@ def test_a_200_whose_body_failed_is_a_warning_with_the_request_id(caplog):
 
     from tools.connectors.gateway import client as client_module
 
-    failed_call = {"results": [{"error": {"code": "CONNECTION_REQUIRED", "message": "connect gmail"}}]}
-    transport = _Transport(_Response(200, failed_call, request_id="exec-id"),
-                           _Response(200, ValueError("not json"), request_id="junk-id"),
-                           _Response(200, {"unexpected": True}, request_id="one-id"))
+    failed_call = {
+        "results": [
+            {"error": {"code": "CONNECTION_REQUIRED", "message": "connect gmail"}}
+        ]
+    }
+    transport = _Transport(
+        _Response(200, failed_call, request_id="exec-id"),
+        _Response(200, ValueError("not json"), request_id="junk-id"),
+        _Response(200, {"unexpected": True}, request_id="one-id"),
+    )
     client = _client(transport, call=CallRef(tool_call_id="call-3"))
-    plan = PlannedCall(position=0, name="gmail_send_email", connector="gmail", tool="GMAIL_SEND_EMAIL", arguments={})
+    plan = PlannedCall(
+        position=0,
+        name="gmail_send_email",
+        connector="gmail",
+        tool="GMAIL_SEND_EMAIL",
+        arguments={},
+    )
     with caplog.at_level(logging.DEBUG, logger="tools.managed_gateway_identity"):
         # An older gateway answers the array form: a 200 envelope with the call's failure inside.
         client_module._LEGACY_EXECUTE_ORIGINS.add("https://gw.test")
@@ -206,11 +280,22 @@ def test_a_200_whose_body_failed_is_a_warning_with_the_request_id(caplog):
             client.schemas(["X"])
         with pytest.raises(ToolGatewayError):
             client.execute([plan])
-    assert raised.value.request_id == "junk-id" and raised.value.code == "INVALID_RESPONSE"
+    assert (
+        raised.value.request_id == "junk-id" and raised.value.code == "INVALID_RESPONSE"
+    )
     assert _outcomes(caplog) == [
-        (logging.WARNING, "connector connectors.execute 200 CONNECTION_REQUIRED request_id=exec-id dispatch=call-3"),
-        (logging.WARNING, "connector connectors.schemas 200 INVALID_RESPONSE request_id=junk-id dispatch=call-3"),
-        (logging.WARNING, "connector connectors.execute 200 INVALID_RESPONSE request_id=one-id dispatch=call-3"),
+        (
+            logging.WARNING,
+            "connector connectors.execute 200 CONNECTION_REQUIRED request_id=exec-id dispatch=call-3",
+        ),
+        (
+            logging.WARNING,
+            "connector connectors.schemas 200 INVALID_RESPONSE request_id=junk-id dispatch=call-3",
+        ),
+        (
+            logging.WARNING,
+            "connector connectors.execute 200 INVALID_RESPONSE request_id=one-id dispatch=call-3",
+        ),
     ]
 
 
@@ -218,17 +303,29 @@ def test_portal_tools_304_is_a_success_and_a_bad_body_a_failure(caplog):
     from tools.connectors.portal.client import NotModified, PortalConnectorClient
     from tools.connectors.portal.errors import PortalToolsUnavailable
 
-    transport = _Transport(_Response(304, None, request_id="same-id"), _Response(200, [], request_id="bad-id"))
-    client = PortalConnectorClient(transport=transport, endpoint_resolver=lambda: "https://portal.test",
-                                   header_provider=lambda url: {"Authorization": "Bearer t"})
+    transport = _Transport(
+        _Response(304, None, request_id="same-id"),
+        _Response(200, [], request_id="bad-id"),
+    )
+    client = PortalConnectorClient(
+        transport=transport,
+        endpoint_resolver=lambda: "https://portal.test",
+        header_provider=lambda url: {"Authorization": "Bearer t"},
+    )
     with caplog.at_level(logging.DEBUG, logger="tools.managed_gateway_identity"):
         assert isinstance(client.tools("gmail", if_none_match="etag-1"), NotModified)
         with pytest.raises(PortalToolsUnavailable) as raised:
             client.tools("gmail")
     assert raised.value.request_id == "bad-id"
     assert _outcomes(caplog) == [
-        (logging.DEBUG, "connector portal.connectors.tools 304 - request_id=same-id dispatch=-"),
-        (logging.WARNING, "connector portal.connectors.tools 200 INVALID_RESPONSE request_id=bad-id dispatch=-"),
+        (
+            logging.DEBUG,
+            "connector portal.connectors.tools 304 - request_id=same-id dispatch=-",
+        ),
+        (
+            logging.WARNING,
+            "connector portal.connectors.tools 200 INVALID_RESPONSE request_id=bad-id dispatch=-",
+        ),
     ]
 
 
@@ -242,16 +339,27 @@ def test_try_again_keeps_the_opening_calls_ids(monkeypatch, caplog):
     transport = _Transport(_mint_ok(["gmail"]))
     monkeypatch.setattr(managed, "ensure_guest_identity", lambda: None)
     real = ConnectorClient
-    monkeypatch.setattr("tools.connectors.gateway.client.ConnectorClient", lambda **kw: real(
-        transport=transport, endpoint_resolver=lambda: "https://gw.test",
-        header_provider=lambda url: {"Authorization": "Bearer t"}, **kw))
-    operation = ConnectionOperation([Target("gmail", "connector", "connect")],
-                                    call=CallRef(turn_id="turn-7", tool_call_id="call-7"))
+    monkeypatch.setattr(
+        "tools.connectors.gateway.client.ConnectorClient",
+        lambda **kw: real(
+            transport=transport,
+            endpoint_resolver=lambda: "https://gw.test",
+            header_provider=lambda url: {"Authorization": "Bearer t"},
+            **kw,
+        ),
+    )
+    operation = ConnectionOperation(
+        [Target("gmail", "connector", "connect")],
+        call=CallRef(turn_id="turn-7", tool_call_id="call-7"),
+    )
     operation.transition("gmail", TargetState.initiated, Actor.backend_watcher)
     operation.transition("gmail", TargetState.failed, Actor.backend_watcher)
 
     with caplog.at_level(logging.DEBUG, logger="tools.managed_gateway_identity"):
         assert reissue(operation, ["gmail"]) is None
     headers = transport.sent[0]["headers"]
-    assert headers["x-nous-clawk-turn"] == "turn-7" and headers["x-nous-clawk-tool-call"] == "call-7"
+    assert (
+        headers["x-nous-clawk-turn"] == "turn-7"
+        and headers["x-nous-clawk-tool-call"] == "call-7"
+    )
     assert _outcomes(caplog)[-1][1].endswith("dispatch=call-7")

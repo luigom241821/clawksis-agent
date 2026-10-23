@@ -46,7 +46,9 @@ class TestClawksisExeShims:
     def test_shims_include_declared_console_scripts(
         self, temp_pyproject, fake_scripts_dir
     ):
-        names = {path.name for path in main_install_repair._clawk_exe_shims(fake_scripts_dir)}
+        names = {
+            path.name for path in main_install_repair._clawk_exe_shims(fake_scripts_dir)
+        }
 
         assert {"clawk.exe", "clawksis-agent.exe", "clawk-acp.exe"} <= names
         assert "clawk-gateway.exe" in names

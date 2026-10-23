@@ -12,7 +12,9 @@ CHAT = "208214988"
 
 
 def _session(db, sid, profile_name=None):
-    db.create_session(session_id=sid, source="telegram", user_id=CHAT, profile_name=profile_name)
+    db.create_session(
+        session_id=sid, source="telegram", user_id=CHAT, profile_name=profile_name
+    )
 
 
 def test_legacy_rows_migrate_only_to_default(tmp_path: Path):
@@ -61,18 +63,34 @@ def test_legacy_rows_migrate_only_to_default(tmp_path: Path):
     db.apply_telegram_topic_migration()
     assert db.get_meta("telegram_dm_topic_schema_version") == "3"
     assert db.is_telegram_topic_mode_enabled(
-        chat_id=CHAT, user_id=CHAT, profile_name="default",
+        chat_id=CHAT,
+        user_id=CHAT,
+        profile_name="default",
     )
     assert not db.is_telegram_topic_mode_enabled(
-        chat_id=CHAT, user_id=CHAT, profile_name="coder",
+        chat_id=CHAT,
+        user_id=CHAT,
+        profile_name="coder",
     )
-    assert db.get_telegram_topic_binding(
-        chat_id=CHAT, thread_id="99", profile_name="default",
-    )["session_id"] == "legacy-sess"
-    assert db.get_telegram_topic_binding(
-        chat_id=CHAT, thread_id="99", profile_name="coder",
-    ) is None
-    fk = db._conn.execute("PRAGMA foreign_key_list('telegram_dm_topic_bindings')").fetchall()
+    assert (
+        db.get_telegram_topic_binding(
+            chat_id=CHAT,
+            thread_id="99",
+            profile_name="default",
+        )["session_id"]
+        == "legacy-sess"
+    )
+    assert (
+        db.get_telegram_topic_binding(
+            chat_id=CHAT,
+            thread_id="99",
+            profile_name="coder",
+        )
+        is None
+    )
+    fk = db._conn.execute(
+        "PRAGMA foreign_key_list('telegram_dm_topic_bindings')"
+    ).fetchall()
     assert any(row[2] == "sessions" and row[6] == "CASCADE" for row in fk)
     db.close()
 
@@ -85,33 +103,70 @@ def test_mode_and_bindings_isolated_across_profiles(tmp_path: Path):
     db.enable_telegram_topic_mode(chat_id=CHAT, user_id=CHAT, profile_name="alpha")
     db.enable_telegram_topic_mode(chat_id=CHAT, user_id=CHAT, profile_name="beta")
     db.disable_telegram_topic_mode(chat_id=CHAT, profile_name="alpha")
-    assert not db.is_telegram_topic_mode_enabled(chat_id=CHAT, user_id=CHAT, profile_name="alpha")
-    assert db.is_telegram_topic_mode_enabled(chat_id=CHAT, user_id=CHAT, profile_name="beta")
+    assert not db.is_telegram_topic_mode_enabled(
+        chat_id=CHAT, user_id=CHAT, profile_name="alpha"
+    )
+    assert db.is_telegram_topic_mode_enabled(
+        chat_id=CHAT, user_id=CHAT, profile_name="beta"
+    )
 
     db.bind_telegram_topic(
-        chat_id=CHAT, thread_id="77", user_id=CHAT,
-        session_key="ka", session_id="sess-a", profile_name="alpha",
+        chat_id=CHAT,
+        thread_id="77",
+        user_id=CHAT,
+        session_key="ka",
+        session_id="sess-a",
+        profile_name="alpha",
     )
     db.bind_telegram_topic(
-        chat_id=CHAT, thread_id="77", user_id=CHAT,
-        session_key="kb", session_id="sess-b", profile_name="beta",
+        chat_id=CHAT,
+        thread_id="77",
+        user_id=CHAT,
+        session_key="kb",
+        session_id="sess-b",
+        profile_name="beta",
     )
-    assert db.get_telegram_topic_binding(
-        chat_id=CHAT, thread_id="77", profile_name="alpha",
-    )["session_id"] == "sess-a"
-    assert db.get_telegram_topic_binding(
-        chat_id=CHAT, thread_id="77", profile_name="beta",
-    )["session_id"] == "sess-b"
+    assert (
+        db.get_telegram_topic_binding(
+            chat_id=CHAT,
+            thread_id="77",
+            profile_name="alpha",
+        )["session_id"]
+        == "sess-a"
+    )
+    assert (
+        db.get_telegram_topic_binding(
+            chat_id=CHAT,
+            thread_id="77",
+            profile_name="beta",
+        )["session_id"]
+        == "sess-b"
+    )
 
-    assert db.delete_telegram_topic_binding(
-        chat_id=CHAT, thread_id="77", profile_name="alpha",
-    ) == 1
-    assert db.get_telegram_topic_binding(
-        chat_id=CHAT, thread_id="77", profile_name="alpha",
-    ) is None
-    assert db.get_telegram_topic_binding(
-        chat_id=CHAT, thread_id="77", profile_name="beta",
-    ) is not None
+    assert (
+        db.delete_telegram_topic_binding(
+            chat_id=CHAT,
+            thread_id="77",
+            profile_name="alpha",
+        )
+        == 1
+    )
+    assert (
+        db.get_telegram_topic_binding(
+            chat_id=CHAT,
+            thread_id="77",
+            profile_name="alpha",
+        )
+        is None
+    )
+    assert (
+        db.get_telegram_topic_binding(
+            chat_id=CHAT,
+            thread_id="77",
+            profile_name="beta",
+        )
+        is not None
+    )
     # Omitted kwarg == the single-profile "default" namespace, not a wildcard.
     assert not db.is_telegram_topic_mode_enabled(chat_id=CHAT, user_id=CHAT)
     assert db.get_telegram_topic_binding(chat_id=CHAT, thread_id="77") is None

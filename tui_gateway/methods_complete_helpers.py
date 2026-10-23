@@ -15,8 +15,24 @@ _registry = HandlerRegistry()
 _FUZZY_CACHE_TTL_S = 5.0
 _FUZZY_CACHE_MAX_FILES = 20000
 _FUZZY_FALLBACK_EXCLUDES = frozenset(
-    {".git", ".hg", ".svn", ".next", ".cache", ".venv", "venv", "node_modules", "__pycache__",
-     "dist", "build", "target", ".mypy_cache", ".pytest_cache", ".ruff_cache"})
+    {
+        ".git",
+        ".hg",
+        ".svn",
+        ".next",
+        ".cache",
+        ".venv",
+        "venv",
+        "node_modules",
+        "__pycache__",
+        "dist",
+        "build",
+        "target",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+    }
+)
 _fuzzy_cache_lock = threading.Lock()
 _fuzzy_cache: dict[str, tuple[float, list[str]]] = {}
 
@@ -28,15 +44,35 @@ def _git_repo_files(root: str):
     :func:`noninteractive_git_env` (GHSA-7x36-8jrh-v4pw): runs on a keystroke in the session cwd,
     and ``ls-files`` reads the index, which executes a repo-configured ``core.fsmonitor``."""
     from clawk_cli._subprocess_compat import noninteractive_git_env, windows_hide_flags
-    run_kw = dict(capture_output=True, timeout=2.0, check=False, stdin=subprocess.DEVNULL,
-                  creationflags=windows_hide_flags(), env=noninteractive_git_env())
+
+    run_kw = dict(
+        capture_output=True,
+        timeout=2.0,
+        check=False,
+        stdin=subprocess.DEVNULL,
+        creationflags=windows_hide_flags(),
+        env=noninteractive_git_env(),
+    )
     try:
-        top_result = subprocess.run(["git", "-C", root, "rev-parse", "--show-toplevel"], **run_kw)
+        top_result = subprocess.run(
+            ["git", "-C", root, "rev-parse", "--show-toplevel"], **run_kw
+        )
         if top_result.returncode != 0:
             return
         top = top_result.stdout.decode("utf-8", "replace").strip()
         list_result = subprocess.run(
-            ["git", "-C", top, "ls-files", "-z", "--cached", "--others", "--exclude-standard"], **run_kw)
+            [
+                "git",
+                "-C",
+                top,
+                "ls-files",
+                "-z",
+                "--cached",
+                "--others",
+                "--exclude-standard",
+            ],
+            **run_kw,
+        )
         if list_result.returncode != 0:
             return
     except (OSError, subprocess.TimeoutExpired):
@@ -53,7 +89,11 @@ def _walk_repo_files(root: str):
     (the ranker decides based on whether the query starts with `.`)."""
     try:
         for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
-            dirnames[:] = [d for d in dirnames if d not in _FUZZY_FALLBACK_EXCLUDES and not d.startswith(".")]
+            dirnames[:] = [
+                d
+                for d in dirnames
+                if d not in _FUZZY_FALLBACK_EXCLUDES and not d.startswith(".")
+            ]
             rel_dir = os.path.relpath(dirpath, root)
             for f in filenames:
                 yield (f if rel_dir == "." else f"{rel_dir}/{f}").replace(os.sep, "/")
@@ -70,13 +110,16 @@ def _list_repo_files(root: str) -> list[str]:
         if cached and now - cached[0] < _FUZZY_CACHE_TTL_S:
             return cached[1]
     from itertools import islice
+
     files = list(islice(_git_repo_files(root), _FUZZY_CACHE_MAX_FILES))
     if not files:
         files = list(islice(_walk_repo_files(root), _FUZZY_CACHE_MAX_FILES))
     with _fuzzy_cache_lock:
         # The TTL is only consulted on read, so a root that stops being queried (one .worktrees/<id>
         # root per worktree flow, MBs each) would stay pinned for the process lifetime (#62950).
-        for stale in [r for r, (ts, _) in _fuzzy_cache.items() if now - ts >= _FUZZY_CACHE_TTL_S]:
+        for stale in [
+            r for r, (ts, _) in _fuzzy_cache.items() if now - ts >= _FUZZY_CACHE_TTL_S
+        ]:
             del _fuzzy_cache[stale]
         _fuzzy_cache[root] = (now, files)
     return files
@@ -131,17 +174,33 @@ def _abs_completion_prefix_exists(path_part: str) -> bool:
 def _model_picker_context(agent):
     """Layer live session state onto config without losing custom identity."""
     from clawk_cli.inventory import load_picker_context
+
     ctx = load_picker_context()
-    provider, base_url, model = (getattr(agent, k, "") if agent else "" for k in ("provider", "base_url", "model"))
+    provider, base_url, model = (
+        getattr(agent, k, "") if agent else ""
+        for k in ("provider", "base_url", "model")
+    )
     if str(provider or "").strip().lower() == "custom":
         try:
             from clawk_cli.runtime_provider import canonical_custom_identity
-            provider = canonical_custom_identity(
-                base_url=base_url or None, config_provider=ctx.current_provider, model=model or None) or provider
+
+            provider = (
+                canonical_custom_identity(
+                    base_url=base_url or None,
+                    config_provider=ctx.current_provider,
+                    model=model or None,
+                )
+                or provider
+            )
         except Exception:
-            logger.debug("custom provider identity recovery failed (model picker)", exc_info=True)
+            logger.debug(
+                "custom provider identity recovery failed (model picker)", exc_info=True
+            )
     return ctx.with_overrides(
-        current_provider=provider, current_model=model or _resolve_model(), current_base_url=base_url)
+        current_provider=provider,
+        current_model=model or _resolve_model(),
+        current_base_url=base_url,
+    )
 
 
 def register(server) -> None:

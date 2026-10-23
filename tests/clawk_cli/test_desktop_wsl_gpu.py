@@ -20,21 +20,33 @@ def _launch_env(monkeypatch, tmp_path, *, wsl: bool, dxg: bool, driver: bool) ->
         driver_path.write_bytes(b"\x7fELF")
     monkeypatch.setattr(host_runtime, "_wsl_detected", wsl)
     monkeypatch.setattr(main_desktop, "_WSL_DXG_DEVICE", dxg_path)
-    monkeypatch.setattr(main_desktop, "_WSL_D3D12_DRIVERS", (tmp_path / "missing_dri.so", driver_path))
-    monkeypatch.setattr(main_desktop, "_desktop_launch_options", lambda: ([], "auto", "auto", "auto", True))
+    monkeypatch.setattr(
+        main_desktop, "_WSL_D3D12_DRIVERS", (tmp_path / "missing_dri.so", driver_path)
+    )
+    monkeypatch.setattr(
+        main_desktop,
+        "_desktop_launch_options",
+        lambda: ([], "auto", "auto", "auto", True),
+    )
     monkeypatch.setattr(main_desktop, "_detect_linux_password_store", lambda: None)
-    env, _flags = main_desktop._desktop_launch_env(argparse.Namespace(cwd=str(tmp_path)))
+    env, _flags = main_desktop._desktop_launch_env(
+        argparse.Namespace(cwd=str(tmp_path))
+    )
     return env
 
 
-def test_wslg_with_dxg_and_installed_d3d12_driver_selects_gpu_mesa_backend(monkeypatch, tmp_path):
+def test_wslg_with_dxg_and_installed_d3d12_driver_selects_gpu_mesa_backend(
+    monkeypatch, tmp_path
+):
     for var in main_desktop._MESA_DRIVER_OVERRIDES:
         monkeypatch.delenv(var, raising=False)
 
     env = _launch_env(monkeypatch, tmp_path, wsl=True, dxg=True, driver=True)
 
     assert env["GALLIUM_DRIVER"] == "d3d12"
-    assert Path(env["CLAWK_DESKTOP_CWD"]) == tmp_path.resolve()  # the rest of the env still builds
+    assert (
+        Path(env["CLAWK_DESKTOP_CWD"]) == tmp_path.resolve()
+    )  # the rest of the env still builds
 
 
 def test_explicit_mesa_choice_and_non_wsl_hosts_are_left_alone(monkeypatch, tmp_path):
@@ -49,6 +61,10 @@ def test_explicit_mesa_choice_and_non_wsl_hosts_are_left_alone(monkeypatch, tmp_
 
     # Any one leg missing → untouched: plain Linux with a dxg-like node and driver installed,
     # WSL without /dev/dxg, WSL with /dev/dxg but no Mesa d3d12 driver on disk.
-    for wsl, dxg, driver in ((False, True, True), (True, False, True), (True, True, False)):
+    for wsl, dxg, driver in (
+        (False, True, True),
+        (True, False, True),
+        (True, True, False),
+    ):
         env = _launch_env(monkeypatch, tmp_path, wsl=wsl, dxg=dxg, driver=driver)
         assert "GALLIUM_DRIVER" not in env, (wsl, dxg, driver)

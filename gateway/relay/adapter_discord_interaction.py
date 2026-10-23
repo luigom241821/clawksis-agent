@@ -35,7 +35,10 @@ class RelayDiscordInteractionMixin:
         # the interaction must render what the text lane last rendered, not an older label.
         if getattr(source, "platform", None) != Platform.DISCORD or not source.chat_id:
             return
-        key, labels = (str(source.scope_id or ""), str(source.chat_id)), (source.chat_name, source.chat_topic)
+        key, labels = (
+            (str(source.scope_id or ""), str(source.chat_id)),
+            (source.chat_name, source.chat_topic),
+        )
         self._discord_chat_labels[key] = labels
         self._evict_oldest(self._discord_chat_labels, self._DISCORD_LABELS_MAX)
         store = getattr(self, "_session_store", None)
@@ -67,12 +70,19 @@ class RelayDiscordInteractionMixin:
         store = getattr(self, "_session_store", None)
         try:
             # Off the loop: the read takes the database's writer lock, which a write may be holding.
-            recorded = (await asyncio.to_thread(store.chat_labels, Platform.DISCORD, scope, chat_id)
-                        if store is not None else None)
+            recorded = (
+                await asyncio.to_thread(
+                    store.chat_labels, Platform.DISCORD, scope, chat_id
+                )
+                if store is not None
+                else None
+            )
         except Exception:
             # Labels only keep the prompt cache warm; a store fault must not drop the interaction.
             # Not cached either: the next interaction asks the store again.
-            logger.debug("relay: recorded Discord chat labels unreadable", exc_info=True)
+            logger.debug(
+                "relay: recorded Discord chat labels unreadable", exc_info=True
+            )
             return (None, None)
         if recorded is not None:
             self._discord_labels_recorded[key] = recorded
@@ -99,14 +109,18 @@ class RelayDiscordInteractionMixin:
                         return
                     src = event.source
                     src.chat_name, src.chat_topic = await self._discord_chat_labels_for(
-                        str(src.scope_id or ""), src.chat_id)
+                        str(src.scope_id or ""), src.chat_id
+                    )
                     from gateway.session_ingress_context import relay_passthrough_event
+
                     with relay_passthrough_event(self._transport, forward, event):
                         await self.handle_message(event)
                     return
             logger.info(
                 "relay passthrough_forward dropped (no handler): platform=%s method=%s path=%s",
-                platform, getattr(forward, "method", "?"), getattr(forward, "path", "?"),
+                platform,
+                getattr(forward, "method", "?"),
+                getattr(forward, "path", "?"),
             )
         except Exception:
             logger.warning("relay passthrough_forward handling failed", exc_info=True)
@@ -141,7 +155,11 @@ class RelayDiscordInteractionMixin:
         else:
             text = ""
         member = payload.get("member") or {}
-        user = (member.get("user") if isinstance(member, dict) else None) or payload.get("user") or {}
+        user = (
+            (member.get("user") if isinstance(member, dict) else None)
+            or payload.get("user")
+            or {}
+        )
         if not isinstance(user, dict):
             user = {}
         guild_id = payload.get("guild_id")
@@ -149,14 +167,25 @@ class RelayDiscordInteractionMixin:
         # global name, else username. The interaction carries all three as of now, so derive the
         # same name from it; a remembered one would outlive a nickname change.
         user_name = next(
-            (str(v) for v in ((member.get("nick") if isinstance(member, dict) else None),
-                              user.get("global_name"), user.get("username")) if v), None)
+            (
+                str(v)
+                for v in (
+                    (member.get("nick") if isinstance(member, dict) else None),
+                    user.get("global_name"),
+                    user.get("username"),
+                )
+                if v
+            ),
+            None,
+        )
         chat_id = str(payload.get("channel_id") or "")
         # The text lane keys a message inside a thread on chat_type "thread" + thread_id (both session-key
         # fields), so an interaction sent there must carry the same or it lands in a per-user "group"
         # session beside the thread's. The partial channel object marks a thread by type (10 announcement,
         # 11 public, 12 private: what discord.py's Thread covers) and names the parent.
-        channel = payload.get("channel") if isinstance(payload.get("channel"), dict) else {}
+        channel = (
+            payload.get("channel") if isinstance(payload.get("channel"), dict) else {}
+        )
         is_thread = bool(guild_id) and channel.get("type") in (10, 11, 12)
         source = SessionSource(
             # The LOGICAL platform, not RELAY: session keys must match the connector's
@@ -168,7 +197,9 @@ class RelayDiscordInteractionMixin:
             # native Discord adapter key guild channels as "group".
             chat_type="thread" if is_thread else ("group" if guild_id else "dm"),
             thread_id=chat_id if is_thread else None,
-            parent_chat_id=str(channel["parent_id"]) if is_thread and channel.get("parent_id") else None,
+            parent_chat_id=str(channel["parent_id"])
+            if is_thread and channel.get("parent_id")
+            else None,
             user_id=str(user["id"]) if user.get("id") else None,
             user_name=user_name,
             # chat_name / chat_topic: filled by _on_passthrough from what the text lane recorded.
@@ -193,7 +224,9 @@ class RelayDiscordInteractionMixin:
             if decoded:
                 prompt_id, option_id = decoded
                 msg = payload.get("message") or {}
-                prompt_message_id = str(msg["id"]) if isinstance(msg, dict) and msg.get("id") else None
+                prompt_message_id = (
+                    str(msg["id"]) if isinstance(msg, dict) and msg.get("id") else None
+                )
                 event.prompt_response = {
                     "prompt_id": prompt_id,
                     "option_id": option_id,
@@ -224,7 +257,9 @@ class RelayDiscordInteractionMixin:
             comp = stack.pop()
             if not isinstance(comp, dict):
                 continue
-            nested = comp.get("components") or ([comp["component"]] if comp.get("component") else [])
+            nested = comp.get("components") or (
+                [comp["component"]] if comp.get("component") else []
+            )
             stack.extend(reversed(nested if isinstance(nested, list) else []))
             value = comp.get("value", comp.get("values"))
             if isinstance(value, list):
@@ -248,7 +283,11 @@ class RelayDiscordInteractionMixin:
                 sub_name = str(opt.get("name") or "").strip()
                 if sub_name:
                     parts.append(sub_name)
-                parts.extend(RelayDiscordInteractionMixin._render_interaction_options(opt.get("options")))
+                parts.extend(
+                    RelayDiscordInteractionMixin._render_interaction_options(
+                        opt.get("options")
+                    )
+                )
             else:
                 value = opt.get("value")
                 if value is not None and str(value).strip():

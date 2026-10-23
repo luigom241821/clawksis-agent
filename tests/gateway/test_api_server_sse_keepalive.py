@@ -33,9 +33,14 @@ def adapter():
 
 
 @pytest.mark.asyncio
-async def test_idle_openai_stream_writes_keepalive_before_remote_client_deadline(monkeypatch):
+async def test_idle_openai_stream_writes_keepalive_before_remote_client_deadline(
+    monkeypatch,
+):
     """Chat/Responses streams (``_iter_stream_items``) keep the wire alive inside the client window."""
-    assert api_server.CHAT_COMPLETIONS_SSE_KEEPALIVE_SECONDS <= REMOTE_CLIENT_IDLE_DEADLINE_S
+    assert (
+        api_server.CHAT_COMPLETIONS_SSE_KEEPALIVE_SECONDS
+        <= REMOTE_CLIENT_IDLE_DEADLINE_S
+    )
 
     # Module-local fake clock: each read is one keepalive interval later, so the poll loop
     # observes an idle stream without waiting real seconds (asyncio keeps the real clock).
@@ -65,7 +70,9 @@ async def test_idle_openai_stream_writes_keepalive_before_remote_client_deadline
 
 
 @pytest.mark.asyncio
-async def test_idle_run_events_stream_uses_shared_keepalive_cadence(monkeypatch, adapter):
+async def test_idle_run_events_stream_uses_shared_keepalive_cadence(
+    monkeypatch, adapter
+):
     """``GET /v1/runs/{id}/events`` follows the same keepalive constant as the OpenAI routes."""
     monkeypatch.setattr(api_server, "CHAT_COMPLETIONS_SSE_KEEPALIVE_SECONDS", 0.2)
     from gateway.platforms.api_server_runs import _RunStream

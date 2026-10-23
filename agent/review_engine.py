@@ -41,13 +41,20 @@ def _message_text(message: dict[str, Any]) -> str:
     if isinstance(content, str):
         return content
     if isinstance(content, list):
-        parts = [str(part.get("text") or "") if part.get("type") == "text" else f"[{part.get('type', 'attachment')}]"
-                 for part in content if isinstance(part, dict)]
+        parts = [
+            str(part.get("text") or "")
+            if part.get("type") == "text"
+            else f"[{part.get('type', 'attachment')}]"
+            for part in content
+            if isinstance(part, dict)
+        ]
         return "\n".join(p for p in parts if p)
     return ""
 
 
-def snapshot_recent_messages(messages: list[dict[str, Any]], limit: int = DEFAULT_CONTEXT_MESSAGES) -> list[dict[str, str]]:
+def snapshot_recent_messages(
+    messages: list[dict[str, Any]], limit: int = DEFAULT_CONTEXT_MESSAGES
+) -> list[dict[str, str]]:
     """Last ``limit`` user/assistant messages with text as {role, text}, oldest first (system, tool and
     pure tool-call stubs excluded)."""
     out: list[dict[str, str]] = []
@@ -67,13 +74,17 @@ def snapshot_recent_messages(messages: list[dict[str, Any]], limit: int = DEFAUL
     return out
 
 
-def collect_parent_loaded_skills(parent_agent, messages: list[dict[str, Any]], limit: int = 8) -> list[str]:
+def collect_parent_loaded_skills(
+    parent_agent, messages: list[dict[str, Any]], limit: int = 8
+) -> list[str]:
     """Skills the parent was operating under: launch-preloaded (marker in ``ephemeral_system_prompt``)
     first, then ``skill_view`` loads from history, deduped, capped at ``limit`` (a reviewer told to load 30
     skills would burn its budget before working)."""
     names: list[str] = []
     prompt = str(getattr(parent_agent, "ephemeral_system_prompt", "") or "")
-    candidates = [m.group(1) for m in re.finditer(r'with the "([^"]+)" skill\s+preloaded', prompt)]
+    candidates = [
+        m.group(1) for m in re.finditer(r'with the "([^"]+)" skill\s+preloaded', prompt)
+    ]
     for message in messages or []:
         if not isinstance(message, dict) or message.get("role") != "assistant":
             continue
@@ -96,7 +107,11 @@ def collect_parent_loaded_skills(parent_agent, messages: list[dict[str, Any]], l
     return names[:limit]
 
 
-def build_review_task(snapshot: list[dict[str, str]], user_prompt: str = "", loaded_skills: Optional[list[str]] = None) -> tuple:
+def build_review_task(
+    snapshot: list[dict[str, str]],
+    user_prompt: str = "",
+    loaded_skills: Optional[list[str]] = None,
+) -> tuple:
     """Compose a viewer-friendly goal and the complete reviewer briefing."""
     focus = " ".join(user_prompt.split())
     goal = f"Review: {focus}" if focus else "Review recent work"
@@ -113,7 +128,11 @@ def build_review_task(snapshot: list[dict[str, str]], user_prompt: str = "", loa
         "--- Recent conversation (oldest first) ---",
     ]
     for message in snapshot:
-        lines += [f"[{'USER' if message['role'] == 'user' else 'PRIMARY AGENT'}]", message["text"], ""]
+        lines += [
+            f"[{'USER' if message['role'] == 'user' else 'PRIMARY AGENT'}]",
+            message["text"],
+            "",
+        ]
     lines.append("--- End of conversation excerpt ---")
     if loaded_skills:
         skill_list = ", ".join(loaded_skills)
@@ -126,7 +145,11 @@ def build_review_task(snapshot: list[dict[str, str]], user_prompt: str = "", loa
             "was produced under them and must be judged against them.",
         ]
     if user_prompt.strip():
-        lines += ["", "Additional review instructions from the user:", user_prompt.strip()]
+        lines += [
+            "",
+            "Additional review instructions from the user:",
+            user_prompt.strip(),
+        ]
     lines += [
         "",
         "Your review is delivered back into that conversation, addressed to "
@@ -141,13 +164,17 @@ def _load_review_credentials_cfg() -> Optional[dict[str, Any]]:
     and no model/base_url) so the reviewer inherits the parent's credentials."""
     try:
         from clawk_cli.config import load_config_readonly
+
         review = (load_config_readonly().get("auxiliary") or {}).get("review") or {}
     except Exception:
         return None
     if not isinstance(review, dict):
         return None
 
-    cfg = {k: str(review.get(k) or "").strip() for k in ("provider", "model", "base_url", "api_key", "api_mode")}
+    cfg = {
+        k: str(review.get(k) or "").strip()
+        for k in ("provider", "model", "base_url", "api_key", "api_mode")
+    }
     if cfg["provider"].lower() == "auto":
         cfg["provider"] = ""
     if not (cfg["provider"] or cfg["model"] or cfg["base_url"]):
@@ -155,7 +182,9 @@ def _load_review_credentials_cfg() -> Optional[dict[str, Any]]:
     return cfg
 
 
-def start_review(parent_agent, messages: list[dict[str, Any]], user_prompt: str = "") -> dict[str, Any]:
+def start_review(
+    parent_agent, messages: list[dict[str, Any]], user_prompt: str = ""
+) -> dict[str, Any]:
     """Dispatch the reviewer subagent; returns the parsed ``delegate_task`` dict (``status: "dispatched"`` +
     ``delegation_id``, or the synchronous result on channels without async completions). Raises ValueError
     when there is nothing to review or the dispatch is rejected/errored."""
@@ -164,11 +193,20 @@ def start_review(parent_agent, messages: list[dict[str, Any]], user_prompt: str 
     snapshot = snapshot_recent_messages(messages)
     if not snapshot:
         raise ValueError("Nothing to review yet — the conversation is empty.")
-    goal, context = build_review_task(snapshot, user_prompt, collect_parent_loaded_skills(parent_agent, messages))
+    goal, context = build_review_task(
+        snapshot, user_prompt, collect_parent_loaded_skills(parent_agent, messages)
+    )
     credentials_cfg = _load_review_credentials_cfg()
 
     from tools.delegate_tool import delegate_task
-    raw = delegate_task(goal=goal, context=context, background=True, parent_agent=parent_agent, credentials_cfg=credentials_cfg)
+
+    raw = delegate_task(
+        goal=goal,
+        context=context,
+        background=True,
+        parent_agent=parent_agent,
+        credentials_cfg=credentials_cfg,
+    )
     try:
         result = json.loads(raw)
     except Exception:

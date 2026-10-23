@@ -157,7 +157,10 @@ def test_pool_billing_message_none_when_pool_is_usable():
     from agent.auxiliary_unavailable import pool_billing_message
 
     assert pool_billing_message("openrouter", pool=_healthy_pool()) is None
-    assert pool_billing_message("openrouter", pool=CredentialPool("openrouter", [])) is None
+    assert (
+        pool_billing_message("openrouter", pool=CredentialPool("openrouter", []))
+        is None
+    )
 
 
 def test_pool_billing_message_defers_non_billing_cooldown():

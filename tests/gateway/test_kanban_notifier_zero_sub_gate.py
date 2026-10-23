@@ -83,5 +83,3 @@ def test_zero_sub_board_is_never_opened_writable(tmp_path, monkeypatch):
 
     spy_connect.assert_not_called()
     assert adapter.sent == []
-
-

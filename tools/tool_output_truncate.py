@@ -12,7 +12,9 @@ from __future__ import annotations
 HEAD_RATIO = 0.4
 
 
-def truncation_notice(omitted: int, total: int, *, label: str = "OUTPUT", unit: str = "chars") -> str:
+def truncation_notice(
+    omitted: int, total: int, *, label: str = "OUTPUT", unit: str = "chars"
+) -> str:
     return f"\n\n... [{label} TRUNCATED - {omitted:,} {unit} omitted out of {total:,} total] ...\n\n"
 
 
@@ -29,4 +31,6 @@ def truncate_head_tail(text: str, max_chars: int, *, label: str = "OUTPUT") -> s
         return text
     head, tail = head_tail_split(max_chars)
     omitted = len(text) - head - tail
-    return text[:head] + truncation_notice(omitted, len(text), label=label) + text[-tail:]
+    return (
+        text[:head] + truncation_notice(omitted, len(text), label=label) + text[-tail:]
+    )

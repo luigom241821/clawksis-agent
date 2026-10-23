@@ -1,4 +1,5 @@
 """Editor prompt content -> ``prompt.submit`` text and staged image attachments (ACP gateway bridge)."""
+
 from __future__ import annotations
 
 import asyncio
@@ -19,6 +20,7 @@ async def _fetch_remote_image(url):
     (pre-flight and per-redirect address checks, the inbound media size cap) and stages the bytes
     like any other image (#134889 ACP-16)."""
     from gateway.platforms.base import cache_image_from_url
+
     try:
         path = await cache_image_from_url(url, ".img", retries=0)
     except Exception:
@@ -54,6 +56,7 @@ async def stage_user_content(content, home=None):
         return content, []
     if home is not None:
         from clawk_constants import reset_clawk_home_override, set_clawk_home_override
+
         token = set_clawk_home_override(home)
         try:
             return await stage_user_content(content)
@@ -62,22 +65,31 @@ async def stage_user_content(content, home=None):
     import base64
     import binascii
     from gateway.platforms.base import cache_image_from_bytes
-    from gateway.session_ingress_media import _ATTACHMENT_LIMIT, _IMAGE_EXT, sniff_image_mime
+    from gateway.session_ingress_media import (
+        _ATTACHMENT_LIMIT,
+        _IMAGE_EXT,
+        sniff_image_mime,
+    )
+
     texts, attachments = [], []
     for part in content:
-        if part.get('type') == 'text':
-            texts.append(part['text'])
+        if part.get("type") == "text":
+            texts.append(part["text"])
             continue
-        url = part['image_url']['url']
+        url = part["image_url"]["url"]
         if len(attachments) >= _ATTACHMENT_LIMIT:
-            raise GatewayClientError('acp_content_invalid')
-        if url.startswith('data:'):
+            raise GatewayClientError("acp_content_invalid")
+        if url.startswith("data:"):
             try:
-                raw = base64.b64decode(url.partition(',')[2], validate=True)
+                raw = base64.b64decode(url.partition(",")[2], validate=True)
             except (binascii.Error, ValueError) as exc:
-                raise GatewayClientError('acp_content_invalid') from exc
+                raise GatewayClientError("acp_content_invalid") from exc
         else:
-            raw = await _fetch_remote_image(url) if url.startswith(('http://', 'https://')) else None
+            raw = (
+                await _fetch_remote_image(url)
+                if url.startswith(("http://", "https://"))
+                else None
+            )
             if raw is None:
                 texts.append(f"[Image attached: {url}]")
                 continue
@@ -94,7 +106,7 @@ async def stage_user_content(content, home=None):
         except ValueError as exc:
             texts.append(f"[Image omitted: {exc}]")
             continue
-        attachments.append({'path': path, 'mime': mime})
+        attachments.append({"path": path, "mime": mime})
     return "\n".join(texts), attachments
 
 
@@ -103,9 +115,15 @@ def submit_fingerprint(session_id, content):
     URLs), taken before staging: a retry of the same prompt matches without re-fetching a remote image,
     whose second download could fail or return other bytes and so change what is submitted."""
     import hashlib
+
     digest = hashlib.sha256()
     for part in [content] if isinstance(content, str) else content:
-        kind, value = ('text', part) if isinstance(part, str) else \
-            ('text', part['text']) if part.get('type') == 'text' else ('image', part['image_url']['url'])
-        digest.update(kind.encode() + len(value).to_bytes(8, 'big') + value.encode())
+        kind, value = (
+            ("text", part)
+            if isinstance(part, str)
+            else ("text", part["text"])
+            if part.get("type") == "text"
+            else ("image", part["image_url"]["url"])
+        )
+        digest.update(kind.encode() + len(value).to_bytes(8, "big") + value.encode())
     return session_id, digest.hexdigest()

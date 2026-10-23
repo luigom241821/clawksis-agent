@@ -50,16 +50,16 @@ def _chat_args(**overrides):
 
 
 def _missing_config_name_error(name: str = "resolve_turn_limit") -> ImportError:
-    exc = ImportError(
-        f"cannot import name '{name}' from 'clawk_cli.config'"
-    )
+    exc = ImportError(f"cannot import name '{name}' from 'clawk_cli.config'")
     exc.name = "clawk_cli.config"
     return exc
 
 
 def _install_boom(monkeypatch, boom):
     """``clawk chat`` runs main's ``cli.main``; ``-z`` keeps the gateway transport launcher."""
-    monkeypatch.setitem(sys.modules, "cli", types.SimpleNamespace(main=lambda **_kw: boom(None)))
+    monkeypatch.setitem(
+        sys.modules, "cli", types.SimpleNamespace(main=lambda **_kw: boom(None))
+    )
     monkeypatch.setattr("clawk_cli.gateway_chat.launch_from_args", boom)
 
 
@@ -83,8 +83,6 @@ def test_emit_hint_for_missing_resolve_turn_limit():
     text = buf.getvalue()
     assert "resolve_turn_limit" in text
     assert "clawk update" in text
-
-
 
 
 def test_emit_hint_stays_silent_for_third_party_import_error():

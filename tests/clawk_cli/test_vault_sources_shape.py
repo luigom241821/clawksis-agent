@@ -34,7 +34,9 @@ def test_sources_disable_tolerates_scalar_vault_section(tmp_path, monkeypatch):
     assert saved["vault"]["bitwarden"]["enabled"] is False
 
 
-def test_vault_command_surfaces_corrupt_store_as_clean_error(tmp_path, monkeypatch, capsys):
+def test_vault_command_surfaces_corrupt_store_as_clean_error(
+    tmp_path, monkeypatch, capsys
+):
     """A decryptable-but-malformed vault file surfaces through the VaultError
     contract as a clean error line on every subcommand, not a traceback."""
     home = tmp_path / ".clawk"

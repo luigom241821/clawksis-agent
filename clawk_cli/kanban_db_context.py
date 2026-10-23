@@ -20,11 +20,11 @@ if TYPE_CHECKING:
     from clawk_cli.kanban_db import Attachment, Comment, Task
 
 # build_worker_context() caps, sized for a ~100k-char prompt with headroom.
-_CTX_MAX_PRIOR_ATTEMPTS = 10      # most recent N prior runs shown in full
-_CTX_MAX_COMMENTS       = 30      # most recent N comments shown in full
-_CTX_MAX_FIELD_BYTES    = 4 * 1024   # per summary/error/metadata/result
-_CTX_MAX_BODY_BYTES     = 8 * 1024   # per task.body (opening post)
-_CTX_MAX_COMMENT_BYTES  = 2 * 1024   # per comment
+_CTX_MAX_PRIOR_ATTEMPTS = 10  # most recent N prior runs shown in full
+_CTX_MAX_COMMENTS = 30  # most recent N comments shown in full
+_CTX_MAX_FIELD_BYTES = 4 * 1024  # per summary/error/metadata/result
+_CTX_MAX_BODY_BYTES = 8 * 1024  # per task.body (opening post)
+_CTX_MAX_COMMENT_BYTES = 2 * 1024  # per comment
 
 
 def _relative_age(ts: Optional[int], now: Optional[int] = None) -> str:
@@ -38,7 +38,9 @@ def _relative_age(ts: Optional[int], now: Optional[int] = None) -> str:
     if now is None:
         now = int(time.time())
     delta = now - ts
-    if delta < 60:  # includes negative = clock skew across machines; never claim "in the future"
+    if (
+        delta < 60
+    ):  # includes negative = clock skew across machines; never claim "in the future"
         return "just now"
     if delta < 3600:
         return f"{delta // 60}m ago"
@@ -91,12 +93,17 @@ def _ctx_header(lines: list[str], task: Task) -> None:
     lines.append(f"Status:   {task.status}")
     if task.tenant:
         lines.append(f"Tenant:   {task.tenant}")
-    lines.append(f"Workspace: {task.workspace_kind} @ {task.workspace_path or '(unresolved)'}")
+    lines.append(
+        f"Workspace: {task.workspace_kind} @ {task.workspace_path or '(unresolved)'}"
+    )
     if task.max_runtime_seconds is not None:
         terminal_timeout = _kb._worker_terminal_timeout_env(
-            task.max_runtime_seconds, os.environ.get("TERMINAL_TIMEOUT"),
+            task.max_runtime_seconds,
+            os.environ.get("TERMINAL_TIMEOUT"),
         )
-        effective_terminal_timeout = terminal_timeout or os.environ.get("TERMINAL_TIMEOUT")
+        effective_terminal_timeout = terminal_timeout or os.environ.get(
+            "TERMINAL_TIMEOUT"
+        )
         lines.append(f"Max runtime: {task.max_runtime_seconds}s")
         if effective_terminal_timeout:
             lines.append(f"Terminal timeout: {effective_terminal_timeout}s")
@@ -127,7 +134,9 @@ def _ctx_attachments(lines: list[str], attachments: list[Attachment]) -> None:
     lines.append("")
 
 
-def _ctx_prior_attempts(lines: list[str], conn: sqlite3.Connection, task_id: str, now: int) -> None:
+def _ctx_prior_attempts(
+    lines: list[str], conn: sqlite3.Connection, task_id: str, now: int
+) -> None:
     """Closed runs on this task (the active run is this worker), newest
     ``_CTX_MAX_PRIOR_ATTEMPTS`` in full, older ones as a one-line marker."""
     all_prior = [r for r in _kb.list_runs(conn, task_id) if r.ended_at is not None]
@@ -154,12 +163,15 @@ def _ctx_prior_attempts(lines: list[str], conn: sqlite3.Connection, task_id: str
         lines.append("")
 
 
-def _ctx_parent_results(lines: list[str], conn: sqlite3.Connection, task_id: str, now: int) -> None:
+def _ctx_parent_results(
+    lines: list[str], conn: sqlite3.Connection, task_id: str, now: int
+) -> None:
     """Done-parent handoffs: newest ``completed`` run's summary+metadata,
     falling back to ``task.result`` for pre-runs-table data. Stamped with a
     relative age so the worker re-verifies stale upstream results."""
     parent_rows = conn.execute(
-        "SELECT parent_id FROM task_links WHERE child_id = ? ORDER BY parent_id", (task_id,),
+        "SELECT parent_id FROM task_links WHERE child_id = ? ORDER BY parent_id",
+        (task_id,),
     ).fetchall()
     wrote_header = False
     for pid in (r["parent_id"] for r in parent_rows):
@@ -179,7 +191,11 @@ def _ctx_parent_results(lines: list[str], conn: sqlite3.Connection, task_id: str
                 "source before acting on it as current._"
             )
             wrote_header = True
-        done_ts = run.ended_at if run is not None and run.ended_at else (pt.completed_at or None)
+        done_ts = (
+            run.ended_at
+            if run is not None and run.ended_at
+            else (pt.completed_at or None)
+        )
         age = _relative_age(done_ts, now)
         lines.append(f"### {pid}" + (f" (completed {age})" if age else ""))
         if run is not None and run.summary and run.summary.strip():
@@ -194,7 +210,9 @@ def _ctx_parent_results(lines: list[str], conn: sqlite3.Connection, task_id: str
         lines.append("")
 
 
-def _ctx_role_history(lines: list[str], conn: sqlite3.Connection, task: Task, now: int) -> None:
+def _ctx_role_history(
+    lines: list[str], conn: sqlite3.Connection, task: Task, now: int
+) -> None:
     """The assignee's 5 most recent completed runs on OTHER tasks — implicit
     role continuity without wiring anything into SOUL.md / MEMORY.md."""
     if not task.assignee:
@@ -204,7 +222,8 @@ def _ctx_role_history(lines: list[str], conn: sqlite3.Connection, task: Task, no
         "FROM task_runs r JOIN tasks t ON r.task_id = t.id "
         "WHERE r.profile = ? AND r.task_id != ? "
         "  AND r.outcome = 'completed' "
-        "ORDER BY r.ended_at DESC LIMIT 5", (task.assignee, task.id),
+        "ORDER BY r.ended_at DESC LIMIT 5",
+        (task.assignee, task.id),
     ).fetchall()
     if not role_rows:
         return
@@ -234,6 +253,8 @@ def _ctx_comments(lines: list[str], comments: list[Comment], now: int) -> None:
         # directive above the (attacker-influenceable) comment body. Defense-in-depth — the LLM-controlled
         # author-forgery surface was already closed in #22435. See #22452.
         safe_author = (c.author or "").replace("`", "")
-        lines.append(f"comment from worker `{safe_author}` at {_ctx_stamp(c.created_at, now)}:")
+        lines.append(
+            f"comment from worker `{safe_author}` at {_ctx_stamp(c.created_at, now)}:"
+        )
         lines.append(_ctx_cap(c.body, _CTX_MAX_COMMENT_BYTES))
         lines.append("")

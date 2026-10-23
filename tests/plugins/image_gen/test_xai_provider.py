@@ -52,17 +52,12 @@ def _no_live_catalog(monkeypatch):
 
 
 class TestXAIImageGenProvider:
-
-
     def test_is_available_with_key(self, monkeypatch):
         monkeypatch.setenv("XAI_API_KEY", "sk-xxx")
         from plugins.image_gen.xai import XAIImageGenProvider
 
         provider = XAIImageGenProvider()
         assert provider.is_available() is True
-
-
-
 
     def test_get_setup_schema(self):
         from plugins.image_gen.xai import XAIImageGenProvider
@@ -76,16 +71,12 @@ class TestXAIImageGenProvider:
         assert schema["post_setup"] == "xai_grok"
 
 
-
 # ---------------------------------------------------------------------------
 # Config tests
 # ---------------------------------------------------------------------------
 
 
 class TestConfig:
-
-
-
     def test_caller_model_overrides_env(self, monkeypatch):
         """caller_model (from image_gen.model config key) must take priority
         over XAI_IMAGE_MODEL env — mirrors the fix applied to the openrouter
@@ -113,14 +104,22 @@ class TestConfig:
         mock_resp.raise_for_status = MagicMock()
         mock_resp.json.return_value = {"data": [{"b64_json": "dGVzdA=="}]}
 
-        with patch("plugins.image_gen.xai.requests.post", return_value=mock_resp) as mock_post:
-            with patch("plugins.image_gen._common.save_b64_image", return_value="/tmp/out.png"):
+        with patch(
+            "plugins.image_gen.xai.requests.post", return_value=mock_resp
+        ) as mock_post:
+            with patch(
+                "plugins.image_gen._common.save_b64_image", return_value="/tmp/out.png"
+            ):
                 provider = XAIImageGenProvider()
-                result = provider.generate(prompt="test", model="grok-imagine-image-quality")
+                result = provider.generate(
+                    prompt="test", model="grok-imagine-image-quality"
+                )
 
         assert result["success"] is True
         assert result["model"] == "grok-imagine-image-quality"
-        payload = mock_post.call_args.kwargs.get("json") or mock_post.call_args[1].get("json", {})
+        payload = mock_post.call_args.kwargs.get("json") or mock_post.call_args[1].get(
+            "json", {}
+        )
         assert payload.get("model") == "grok-imagine-image-quality"
 
 
@@ -130,14 +129,19 @@ class TestConfig:
 
 
 class TestLiveCatalog:
-
     def test_unknown_live_model_appears_in_catalog(self, monkeypatch):
         """A model xAI ships tomorrow shows up without a code change."""
         import plugins.image_gen.xai as xai_mod
 
         live = {
-            "grok-imagine-image": {"input_modalities": ["text", "image"], "aliases": []},
-            "grok-imagine-image-3.0": {"input_modalities": ["text", "image"], "aliases": []},
+            "grok-imagine-image": {
+                "input_modalities": ["text", "image"],
+                "aliases": [],
+            },
+            "grok-imagine-image-3.0": {
+                "input_modalities": ["text", "image"],
+                "aliases": [],
+            },
         }
         monkeypatch.setattr(xai_mod, "_fetch_live_models", lambda: live)
         monkeypatch.setattr(xai_mod, "_LIVE_CACHE", None)
@@ -145,7 +149,10 @@ class TestLiveCatalog:
         catalog = xai_mod._catalog()
         assert "grok-imagine-image-3.0" in catalog
         # Curated metadata survives the merge for known models.
-        assert catalog["grok-imagine-image"]["display"] == xai_mod._MODELS["grok-imagine-image"]["display"]
+        assert (
+            catalog["grok-imagine-image"]["display"]
+            == xai_mod._MODELS["grok-imagine-image"]["display"]
+        )
         # And the new model is selectable end to end.
         monkeypatch.setenv("XAI_IMAGE_MODEL", "grok-imagine-image-3.0")
         model_id, _ = xai_mod._resolve_model()
@@ -162,31 +169,48 @@ class TestLiveCatalog:
         import plugins.image_gen.xai as xai_mod
 
         live = {
-            "grok-imagine-image-2.0": {"input_modalities": ["text", "image"], "aliases": []},
-            "grok-imagine-image-quality": {"input_modalities": ["text", "image"], "aliases": []},
+            "grok-imagine-image-2.0": {
+                "input_modalities": ["text", "image"],
+                "aliases": [],
+            },
+            "grok-imagine-image-quality": {
+                "input_modalities": ["text", "image"],
+                "aliases": [],
+            },
         }
         monkeypatch.setattr(xai_mod, "_fetch_live_models", lambda: live)
         monkeypatch.setattr(xai_mod, "_LIVE_CACHE", None)
         monkeypatch.setenv("XAI_IMAGE_MODEL", "grok-imagine-image-2.0")
         assert xai_mod._resolve_edit_model() == "grok-imagine-image-2.0"
 
-
     def test_edit_model_honors_caller_kwarg(self, monkeypatch):
         """The dispatched model kwarg reaches the edit path too."""
         import plugins.image_gen.xai as xai_mod
 
         live = {
-            "grok-imagine-image-2.0": {"input_modalities": ["text", "image"], "aliases": []},
-            "grok-imagine-image-quality": {"input_modalities": ["text", "image"], "aliases": []},
+            "grok-imagine-image-2.0": {
+                "input_modalities": ["text", "image"],
+                "aliases": [],
+            },
+            "grok-imagine-image-quality": {
+                "input_modalities": ["text", "image"],
+                "aliases": [],
+            },
         }
         monkeypatch.setattr(xai_mod, "_fetch_live_models", lambda: live)
         monkeypatch.setattr(xai_mod, "_LIVE_CACHE", None)
         monkeypatch.delenv("XAI_IMAGE_MODEL", raising=False)
-        assert xai_mod._resolve_edit_model("grok-imagine-image-2.0") == "grok-imagine-image-2.0"
+        assert (
+            xai_mod._resolve_edit_model("grok-imagine-image-2.0")
+            == "grok-imagine-image-2.0"
+        )
         # Text-only caller model must not hijack the edit path.
         live["grok-imagine-image-2.0"]["input_modalities"] = ["text"]
         monkeypatch.setattr(xai_mod, "_LIVE_CACHE", None)
-        assert xai_mod._resolve_edit_model("grok-imagine-image-2.0") == "grok-imagine-image-quality"
+        assert (
+            xai_mod._resolve_edit_model("grok-imagine-image-2.0")
+            == "grok-imagine-image-quality"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -215,7 +239,9 @@ class TestGenerate:
         }
 
         with patch("plugins.image_gen.xai.requests.post", return_value=mock_resp):
-            with patch("plugins.image_gen._common.save_b64_image", return_value="/tmp/test.png"):
+            with patch(
+                "plugins.image_gen._common.save_b64_image", return_value="/tmp/test.png"
+            ):
                 provider = XAIImageGenProvider()
                 result = provider.generate(prompt="A cat playing piano")
 
@@ -223,7 +249,6 @@ class TestGenerate:
         assert result["image"] == "/tmp/test.png"
         assert result["provider"] == "xai"
         assert result["model"] == "grok-imagine-image"
-
 
     def test_url_response_falls_back_to_bare_url_when_download_fails(self):
         """If caching the URL fails (network blip, 404 in-flight), the
@@ -243,11 +268,13 @@ class TestGenerate:
             "data": [{"url": "https://imgen.x.ai/xai-tmp-imgen-already-404.jpeg"}],
         }
 
-        with patch("plugins.image_gen.xai.requests.post", return_value=mock_resp), \
-             patch(
-                 "plugins.image_gen._common.save_url_image",
-                 side_effect=req_lib.HTTPError("404 from CDN"),
-             ):
+        with (
+            patch("plugins.image_gen.xai.requests.post", return_value=mock_resp),
+            patch(
+                "plugins.image_gen._common.save_url_image",
+                side_effect=req_lib.HTTPError("404 from CDN"),
+            ),
+        ):
             provider = XAIImageGenProvider()
             result = provider.generate(prompt="A cat playing piano")
 
@@ -273,13 +300,14 @@ class TestGenerate:
         assert result["success"] is False
         assert result["error_type"] == "api_error"
 
-
     def test_timeout(self):
         import requests as req_lib
 
         from plugins.image_gen.xai import XAIImageGenProvider
 
-        with patch("plugins.image_gen.xai.requests.post", side_effect=req_lib.Timeout()):
+        with patch(
+            "plugins.image_gen.xai.requests.post", side_effect=req_lib.Timeout()
+        ):
             provider = XAIImageGenProvider()
             result = provider.generate(prompt="test")
 
@@ -311,7 +339,9 @@ class TestGenerate:
             "data": [{"url": "https://xai.image/test.png"}],
         }
 
-        with patch("plugins.image_gen.xai.requests.post", return_value=mock_resp) as mock_post:
+        with patch(
+            "plugins.image_gen.xai.requests.post", return_value=mock_resp
+        ) as mock_post:
             provider = XAIImageGenProvider()
             provider.generate(prompt="test")
 
@@ -333,11 +363,15 @@ class TestGenerate:
         mock_resp.raise_for_status = MagicMock()
         mock_resp.json.return_value = {"data": [{"url": "https://xai.image/test.png"}]}
 
-        with patch("plugins.image_gen.xai.requests.post", return_value=mock_resp) as mock_post:
+        with patch(
+            "plugins.image_gen.xai.requests.post", return_value=mock_resp
+        ) as mock_post:
             provider = XAIImageGenProvider()
             provider.generate(prompt="test")
 
-        payload = mock_post.call_args.kwargs.get("json") or mock_post.call_args[1].get("json")
+        payload = mock_post.call_args.kwargs.get("json") or mock_post.call_args[1].get(
+            "json"
+        )
         assert payload["resolution"] in {"1k", "2k"}, (
             f"resolution must be the literal '1k' or '2k', got {payload['resolution']!r}"
         )
@@ -348,10 +382,19 @@ class TestGenerate:
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.raise_for_status = MagicMock()
-        mock_resp.json.return_value = {"data": [{"url": "https://xai.image/edited.png"}]}
+        mock_resp.json.return_value = {
+            "data": [{"url": "https://xai.image/edited.png"}]
+        }
 
-        with patch("plugins.image_gen.xai.requests.post", return_value=mock_resp) as mock_post, \
-             patch("plugins.image_gen._common.save_url_image", return_value="/tmp/edited.png"):
+        with (
+            patch(
+                "plugins.image_gen.xai.requests.post", return_value=mock_resp
+            ) as mock_post,
+            patch(
+                "plugins.image_gen._common.save_url_image",
+                return_value="/tmp/edited.png",
+            ),
+        ):
             provider = XAIImageGenProvider()
             result = provider.generate(
                 prompt="make the robot red",
@@ -362,17 +405,25 @@ class TestGenerate:
         assert result["error_type"] == "invalid_image_url"
         mock_post.assert_not_called()
 
-
     def test_multi_image_edit_rejects_bare_file_id_inputs(self):
         from plugins.image_gen.xai import XAIImageGenProvider
 
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.raise_for_status = MagicMock()
-        mock_resp.json.return_value = {"data": [{"url": "https://xai.image/edited.png"}]}
+        mock_resp.json.return_value = {
+            "data": [{"url": "https://xai.image/edited.png"}]
+        }
 
-        with patch("plugins.image_gen.xai.requests.post", return_value=mock_resp) as mock_post, \
-             patch("plugins.image_gen._common.save_url_image", return_value="/tmp/edited.png"):
+        with (
+            patch(
+                "plugins.image_gen.xai.requests.post", return_value=mock_resp
+            ) as mock_post,
+            patch(
+                "plugins.image_gen._common.save_url_image",
+                return_value="/tmp/edited.png",
+            ),
+        ):
             provider = XAIImageGenProvider()
             result = provider.generate(
                 prompt="combine these robots into one product shot",
@@ -387,7 +438,6 @@ class TestGenerate:
         assert result["error_type"] == "invalid_image_url"
         mock_post.assert_not_called()
 
-
     def test_storage_options_are_sent_by_default(self):
         from plugins.image_gen.xai import XAIImageGenProvider
 
@@ -396,12 +446,20 @@ class TestGenerate:
         mock_resp.raise_for_status = MagicMock()
         mock_resp.json.return_value = {"data": [{"b64_json": "dGVzdA=="}]}
 
-        with patch("plugins.image_gen.xai.requests.post", return_value=mock_resp) as mock_post, \
-             patch("plugins.image_gen._common.save_b64_image", return_value="/tmp/test.png"):
+        with (
+            patch(
+                "plugins.image_gen.xai.requests.post", return_value=mock_resp
+            ) as mock_post,
+            patch(
+                "plugins.image_gen._common.save_b64_image", return_value="/tmp/test.png"
+            ),
+        ):
             provider = XAIImageGenProvider()
             provider.generate(prompt="test")
 
-        payload = mock_post.call_args.kwargs.get("json") or mock_post.call_args[1].get("json")
+        payload = mock_post.call_args.kwargs.get("json") or mock_post.call_args[1].get(
+            "json"
+        )
         assert payload["storage_options"]["public_url"] is True
         assert "expires_after" not in payload["storage_options"]
         assert payload["storage_options"]["filename"].endswith(".png")
@@ -413,19 +471,23 @@ class TestGenerate:
         mock_resp.status_code = 200
         mock_resp.raise_for_status = MagicMock()
         mock_resp.json.return_value = {
-            "data": [{
-                "url": "https://imgen.x.ai/xai-tmp-imgen-test.jpeg",
-                "file_output": {
-                    "file_id": "file-123",
-                    "filename": "stored.png",
-                    "public_url": "https://xai-files.example/stored.png",
-                    "public_url_expires_at": 1234567890,
-                },
-            }],
+            "data": [
+                {
+                    "url": "https://imgen.x.ai/xai-tmp-imgen-test.jpeg",
+                    "file_output": {
+                        "file_id": "file-123",
+                        "filename": "stored.png",
+                        "public_url": "https://xai-files.example/stored.png",
+                        "public_url_expires_at": 1234567890,
+                    },
+                }
+            ],
         }
 
-        with patch("plugins.image_gen.xai.requests.post", return_value=mock_resp), \
-             patch("plugins.image_gen._common.save_url_image") as mock_save_url:
+        with (
+            patch("plugins.image_gen.xai.requests.post", return_value=mock_resp),
+            patch("plugins.image_gen._common.save_url_image") as mock_save_url,
+        ):
             provider = XAIImageGenProvider()
             result = provider.generate(prompt="A cat playing piano")
 
@@ -485,5 +547,3 @@ class TestXAIImageFieldReadGuard:
 
         with pytest.raises(ValueError, match="credential store"):
             _xai_image_field(str(auth_json))
-
-

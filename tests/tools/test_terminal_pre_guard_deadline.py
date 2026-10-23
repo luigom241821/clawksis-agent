@@ -35,15 +35,21 @@ def stubbed_pipeline(monkeypatch):
     monkeypatch.setattr(terminal_module, "_plan_execution", lambda *_a, **_k: _plan())
     monkeypatch.setattr(terminal_module, "_acquire_env", lambda *_a, **_k: object())
     monkeypatch.setattr(
-        terminal_module, "_run_approval_guards", lambda *_a, **_k: terminal_module._ApprovalVerdict(),
+        terminal_module,
+        "_run_approval_guards",
+        lambda *_a, **_k: terminal_module._ApprovalVerdict(),
     )
     monkeypatch.setattr(
-        terminal_module, "_run_foreground", lambda *_a, **_k: calls.append("foreground") or "foreground-ran",
+        terminal_module,
+        "_run_foreground",
+        lambda *_a, **_k: calls.append("foreground") or "foreground-ran",
     )
     return calls
 
 
-def test_wedged_pre_execution_guard_returns_bounded_error_without_running(monkeypatch, stubbed_pipeline):
+def test_wedged_pre_execution_guard_returns_bounded_error_without_running(
+    monkeypatch, stubbed_pipeline
+):
     """A stalled identity probe returns a retryable error within the deadline; the command does not run."""
 
     def _wedged_probe(*_a, **_k):
@@ -58,10 +64,14 @@ def test_wedged_pre_execution_guard_returns_bounded_error_without_running(monkey
     assert elapsed < 0.5, f"pre-execution guard wedged terminal_tool for {elapsed:.2f}s"
     assert result["status"] == "error"
     assert "did not finish" in result["error"]
-    assert stubbed_pipeline == [], "a guard with no verdict must not fail open into execution"
+    assert stubbed_pipeline == [], (
+        "a guard with no verdict must not fail open into execution"
+    )
 
 
-def test_completed_pre_execution_guard_verdicts_pass_through(monkeypatch, stubbed_pipeline):
+def test_completed_pre_execution_guard_verdicts_pass_through(
+    monkeypatch, stubbed_pipeline
+):
     """A finished guard keeps its outcome: pass → execution, rejection → its own blocked result."""
     monkeypatch.setattr(terminal_module, "_pre_exec_block", lambda *_a, **_k: None)
     assert terminal_module.terminal_tool("echo ok") == "foreground-ran"
@@ -74,12 +84,18 @@ def test_completed_pre_execution_guard_verdicts_pass_through(monkeypatch, stubbe
     assert stubbed_pipeline == ["foreground"]
 
 
-def test_pre_execution_guard_on_the_deadline_worker_sees_the_tool_threads_interrupt(monkeypatch, stubbed_pipeline):
+def test_pre_execution_guard_on_the_deadline_worker_sees_the_tool_threads_interrupt(
+    monkeypatch, stubbed_pipeline
+):
     """/stop keys on the tool thread's tid; the guard chain moved onto a worker must still see it."""
     from tools.interrupt import is_interrupted, set_interrupt
 
     seen: list[bool] = []
-    monkeypatch.setattr(terminal_module, "_pre_exec_block", lambda *_a, **_k: seen.append(is_interrupted()))
+    monkeypatch.setattr(
+        terminal_module,
+        "_pre_exec_block",
+        lambda *_a, **_k: seen.append(is_interrupted()),
+    )
 
     set_interrupt(True)
     try:
@@ -87,5 +103,9 @@ def test_pre_execution_guard_on_the_deadline_worker_sees_the_tool_threads_interr
     finally:
         set_interrupt(False)
 
-    assert seen == [True], "guard on the deadline worker was blind to the tool thread's interrupt bit"
-    assert is_interrupted() is False, "the tool thread's own interrupt view must not leak past the guard"
+    assert seen == [True], (
+        "guard on the deadline worker was blind to the tool thread's interrupt bit"
+    )
+    assert is_interrupted() is False, (
+        "the tool thread's own interrupt view must not leak past the guard"
+    )

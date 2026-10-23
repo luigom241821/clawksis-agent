@@ -21,7 +21,9 @@ from agent.context_compressor import ContextCompressor
 def _make(ctx: int, pct: float = 0.50) -> ContextCompressor:
     with patch.object(cc, "get_model_context_length", return_value=ctx):
         comp = ContextCompressor(
-            model="test/model", threshold_percent=pct, quiet_mode=True,
+            model="test/model",
+            threshold_percent=pct,
+            quiet_mode=True,
         )
         # Resolve while the mock is active — lazy init (#32221) defers the
         # window probe (and the floor application) past __init__.
@@ -30,10 +32,6 @@ def _make(ctx: int, pct: float = 0.50) -> ContextCompressor:
 
 
 class TestSmallContextThresholdFloor:
-
-
-
-
     def test_update_model_rederives_floor_both_directions(self):
         comp = _make(128_000, pct=0.50)
         assert comp.threshold_percent == 0.75
@@ -52,15 +50,20 @@ class TestReasoningExcludedFromSummarizer:
         comp = _make(128_000)
         turns = [
             {"role": "user", "content": "do the thing"},
-            {"role": "assistant", "content": "<think>INLINE_TRACE</think>visible answer"},
-            {"role": "assistant", "content": "<reasoning>VARIANT_TRACE</reasoning>other answer"},
+            {
+                "role": "assistant",
+                "content": "<think>INLINE_TRACE</think>visible answer",
+            },
+            {
+                "role": "assistant",
+                "content": "<reasoning>VARIANT_TRACE</reasoning>other answer",
+            },
         ]
         ser = comp._serialize_for_summary(turns)
         assert "INLINE_TRACE" not in ser
         assert "VARIANT_TRACE" not in ser
         assert "visible answer" in ser
         assert "other answer" in ser
-
 
     def test_summarizer_output_think_block_stripped_before_store(self):
         comp = _make(128_000)
@@ -81,7 +84,6 @@ class TestReasoningExcludedFromSummarizer:
         # The iterative-update seed must be clean too, or the trace compounds
         # across every subsequent compaction.
         assert "OUTPUT_TRACE" not in (comp._previous_summary or "")
-
 
 
 class TestSummaryBudgetEnvelope:
@@ -116,9 +118,6 @@ class TestSummaryBudgetEnvelope:
         assert "max_tokens" not in captured
 
 
-
-
-
 class TestTailBudgetProportionality:
     def test_tail_budget_is_target_ratio_of_threshold(self):
         # Legacy-mode contract: the threshold-proportional formula. The
@@ -127,16 +126,20 @@ class TestTailBudgetProportionality:
         comp = _make(128_000)
         comp.tail_mode = "legacy"
         comp._tail_token_budget = None  # force mode-aware recompute
-        assert comp.tail_token_budget == int(comp.threshold_tokens * comp.summary_target_ratio)
+        assert comp.tail_token_budget == int(
+            comp.threshold_tokens * comp.summary_target_ratio
+        )
         # Sanity: tail protection stays a modest slice of the window (<= 20%).
         assert comp.tail_token_budget <= comp.context_length * 0.20
-
 
     def test_tail_budget_never_exceeds_window_share(self):
         """The lean 10K floor is 61% of a 16K window and 122% of an 8K one: on a local 27B the
         "protected" tail was the whole request and compaction reclaimed nothing. Whatever the
         formula, the verbatim tail stays within ``TAIL_MAX_CONTEXT_FRACTION`` of the window."""
-        from agent.context_compressor import LEAN_TAIL_FLOOR_TOKENS, TAIL_MAX_CONTEXT_FRACTION
+        from agent.context_compressor import (
+            LEAN_TAIL_FLOOR_TOKENS,
+            TAIL_MAX_CONTEXT_FRACTION,
+        )
 
         for ctx in (8_192, 16_384, 32_768):
             comp = _make(ctx)
@@ -149,18 +152,32 @@ class TestTailBudgetProportionality:
         """End to end through the boundary walk: on an 8K window a tool-heavy transcript must yield a
         compressible middle that is most of the transcript, and the retained tail must stay near the
         window share (one atomic tool group of overrun is allowed for the required anchors)."""
-        from agent.context_compressor import TAIL_MAX_CONTEXT_FRACTION, _estimate_msg_budget_tokens
+        from agent.context_compressor import (
+            TAIL_MAX_CONTEXT_FRACTION,
+            _estimate_msg_budget_tokens,
+        )
 
         ctx = 8_192
         comp = _make(ctx)
         msgs: list = [{"role": "system", "content": "sys"}]
         for i in range(12):
             msgs.append({"role": "user", "content": f"step {i}"})
-            msgs.append({
-                "role": "assistant", "content": "",
-                "tool_calls": [{"id": f"c{i}", "type": "function", "function": {"name": "terminal", "arguments": "{}"}}],
-            })
-            msgs.append({"role": "tool", "tool_call_id": f"c{i}", "content": "x" * 4_000})
+            msgs.append(
+                {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [
+                        {
+                            "id": f"c{i}",
+                            "type": "function",
+                            "function": {"name": "terminal", "arguments": "{}"},
+                        }
+                    ],
+                }
+            )
+            msgs.append(
+                {"role": "tool", "tool_call_id": f"c{i}", "content": "x" * 4_000}
+            )
             msgs.append({"role": "assistant", "content": f"done {i}"})
         start, end = comp._compress_window(msgs)
         tail_tokens = sum(_estimate_msg_budget_tokens(m) for m in msgs[end:])

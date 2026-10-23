@@ -15,7 +15,6 @@ an empty-content assistant turn. The synthetic row is hidden from the user
 ``api_content`` sidecar, substituted at API-build time for the LLM.
 """
 
-
 from agent.agent_runtime_helpers_placeholders import _INTERRUPTED_PLACEHOLDER
 from agent.turn_finalizer import finalize_turn
 
@@ -170,10 +169,6 @@ def test_interrupt_after_tool_closes_sequence_with_placeholder():
     _assert_no_tool_then_user(follow_on)
 
 
-
-
-
-
 def test_interrupt_without_tool_tail_adds_nothing():
     # Interrupt while the tail is already an assistant/user message: no
     # synthetic close needed.
@@ -195,7 +190,9 @@ def test_interrupted_turn_with_diagnostic_text_is_not_completed():
     status trust that flag (#111770)."""
     agent = _StubAgent()
     result = _finalize(
-        agent, [{"role": "user", "content": "hi"}], interrupted=True,
+        agent,
+        [{"role": "user", "content": "hi"}],
+        interrupted=True,
         final_response="Operation interrupted: waiting for model response (0.1s elapsed).",
     )
     assert result["interrupted"] is True
@@ -259,7 +256,10 @@ def test_tool_tail_with_non_tool_last_role_is_untouched():
     existing exit reason."""
     agent = _StubAgent()
     result = _finalize(
-        agent, [{"role": "user", "content": "hi"}], interrupted=False, final_response=None,
+        agent,
+        [{"role": "user", "content": "hi"}],
+        interrupted=False,
+        final_response=None,
     )
     assert result["turn_exit_reason"] == "interrupted_by_user"  # unchanged passthrough
     assert result["failed"] is False

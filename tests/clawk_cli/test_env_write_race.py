@@ -79,7 +79,9 @@ def _race_two_writers(writer_a, writer_b):
         except BaseException as exc:  # surfaced via the errors assert below
             errors.append(exc)
 
-    with mock.patch.object(config_mod, "_read_env_lines", side_effect=read_then_barrier):
+    with mock.patch.object(
+        config_mod, "_read_env_lines", side_effect=read_then_barrier
+    ):
         threads = [
             threading.Thread(target=run, args=(writer_a,), name="env-writer-a"),
             threading.Thread(target=run, args=(writer_b,), name="env-writer-b"),
@@ -104,7 +106,8 @@ def test_concurrent_save_env_value_writers_do_not_lose_keys(race_env_home):
     )
     keys = _env_keys(env_path)
     assert keys == {"BASE_KEY", "RACE_A", "RACE_B"}, (
-        f"lost a write to the unlocked read-modify-write race: {keys}")
+        f"lost a write to the unlocked read-modify-write race: {keys}"
+    )
 
 
 def test_concurrent_remove_and_save_do_not_lose_keys(race_env_home):
@@ -119,4 +122,5 @@ def test_concurrent_remove_and_save_do_not_lose_keys(race_env_home):
     )
     keys = _env_keys(env_path)
     assert keys == {"BASE_KEY", "RACE_B"}, (
-        f"remove/save race produced a torn .env: {keys}")
+        f"remove/save race produced a torn .env: {keys}"
+    )

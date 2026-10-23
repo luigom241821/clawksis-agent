@@ -1,4 +1,5 @@
 """Guard Python filesystem calls in tests, not arbitrary native/subprocess I/O."""
+
 from __future__ import annotations
 
 import builtins
@@ -18,31 +19,42 @@ def _pm_generation_dirs(prefixes) -> set[Path]:
     found = set()
     for prefix in prefixes:
         venv = Path(prefix).resolve()
-        if venv.name in ("venv", ".venv") and venv.parent.parent.name in ("environments", "test-environment"):
+        if venv.name in ("venv", ".venv") and venv.parent.parent.name in (
+            "environments",
+            "test-environment",
+        ):
             found.add(venv.parent)
     return found
 
 
-_INTERPRETER_PREFIXES = tuple({
-    Path(p).resolve() for p in (sys.prefix, sys.base_prefix, sys.exec_prefix, sys.base_exec_prefix)
-} | {
-    # A PM-activated developer shell runs sys.prefix's python against a dependency generation
-    # whose site-packages sits under the (real) Clawksis home; third-party imports from it are the
-    # interpreter's installation, not Clawksis state.
-    Path(p).resolve() for p in sys.path if p and Path(p).name in ("site-packages", "dist-packages")
-} | {
-    # scripts/run_tests.sh runs a PM generation venv (<installs>/<key>/{environments,test-environment}
-    # /<gen>/venv) that sits under the home whenever HOME is the run's fake home. The generation dir
-    # around the venv is that interpreter's installation too: `clawk update` probes
-    # <venv>/../clawk_cli/main.py to find the checkout owning its venv (update_owning_install).
-    *_pm_generation_dirs((sys.prefix, sys.exec_prefix)),
-} | {
-    # The default install checks the repo out INSIDE the home (install.sh:
-    # INSTALL_DIR=$CLAWK_HOME/clawksis-agent). Reading test data, sources for tracebacks, or the
-    # checkout's own .venv is not Clawksis state; without this every run from a default install
-    # trips on its first traceback.
-    Path(__file__).resolve().parent.parent,
-})
+_INTERPRETER_PREFIXES = tuple(
+    {
+        Path(p).resolve()
+        for p in (sys.prefix, sys.base_prefix, sys.exec_prefix, sys.base_exec_prefix)
+    }
+    | {
+        # A PM-activated developer shell runs sys.prefix's python against a dependency generation
+        # whose site-packages sits under the (real) Clawksis home; third-party imports from it are the
+        # interpreter's installation, not Clawksis state.
+        Path(p).resolve()
+        for p in sys.path
+        if p and Path(p).name in ("site-packages", "dist-packages")
+    }
+    | {
+        # scripts/run_tests.sh runs a PM generation venv (<installs>/<key>/{environments,test-environment}
+        # /<gen>/venv) that sits under the home whenever HOME is the run's fake home. The generation dir
+        # around the venv is that interpreter's installation too: `clawk update` probes
+        # <venv>/../clawk_cli/main.py to find the checkout owning its venv (update_owning_install).
+        *_pm_generation_dirs((sys.prefix, sys.exec_prefix)),
+    }
+    | {
+        # The default install checks the repo out INSIDE the home (install.sh:
+        # INSTALL_DIR=$CLAWK_HOME/clawksis-agent). Reading test data, sources for tracebacks, or the
+        # checkout's own .venv is not Clawksis state; without this every run from a default install
+        # trips on its first traceback.
+        Path(__file__).resolve().parent.parent,
+    }
+)
 # The same prefixes as plain strings for the check() fast path. PurePath comparison folds case on
 # Windows; ``os.path.normcase`` (identity on POSIX) reproduces that for string compares. Prefixes
 # resolve once at import, as before: they are fixed for the process lifetime.
@@ -54,14 +66,20 @@ def _within(path: str, prefix: str) -> bool:
     """``Path(path).is_relative_to(prefix)`` for two normalized, case-folded absolute strings."""
     if path == prefix:
         return True
-    return path.startswith(prefix) if prefix == os.sep else path.startswith(prefix + os.sep)
+    return (
+        path.startswith(prefix)
+        if prefix == os.sep
+        else path.startswith(prefix + os.sep)
+    )
 
 
 def _contains(path: str, prefix: str) -> bool:
     """``Path(prefix).is_relative_to(path)``: *path* is *prefix* or one of its ancestors."""
     if path == prefix:
         return True
-    return prefix.startswith(path) if path == os.sep else prefix.startswith(path + os.sep)
+    return (
+        prefix.startswith(path) if path == os.sep else prefix.startswith(path + os.sep)
+    )
 
 
 class HomeIOGuard:
@@ -75,7 +93,11 @@ class HomeIOGuard:
         self.directories: dict[int, Path] = {}
 
     def check(self, value, *, dir_fd=None, metadata=False, destructive=False):
-        if value is None or isinstance(value, int) or getattr(self.checking, "active", False):
+        if (
+            value is None
+            or isinstance(value, int)
+            or getattr(self.checking, "active", False)
+        ):
             return
         self.checking.active = True
         try:
@@ -90,15 +112,23 @@ class HomeIOGuard:
             if dir_fd is not None and not os.path.isabs(candidate):
                 parent = self.directories.get(dir_fd)
                 if parent is None:
-                    raise AssertionError("TEST BUG: untracked dir_fd in guarded filesystem I/O")
+                    raise AssertionError(
+                        "TEST BUG: untracked dir_fd in guarded filesystem I/O"
+                    )
                 candidate = os.path.join(os.fspath(parent), candidate)
             absolute = _normcase(os.path.abspath(candidate))
             # /proc/<pid>/fd/N is descriptor inspection (deleted-WAL holder scans stat the magic
             # link to compare inode identity); resolving it names whatever file that fd holds,
             # which is not I/O against the home.
-            if metadata and (absolute == "/proc" or absolute.startswith("/proc" + os.sep)):
+            if metadata and (
+                absolute == "/proc" or absolute.startswith("/proc" + os.sep)
+            ):
                 return
-            resolved = self._refuse_installed_app_change(value, absolute) if destructive else None
+            resolved = (
+                self._refuse_installed_app_change(value, absolute)
+                if destructive
+                else None
+            )
             roots = tuple(_normcase(os.fspath(r)) for r in self.roots())
             # Resolving the root itself (get_default_clawk_root's relative_to
             # probe) reads no state; only its contents are guarded.
@@ -112,13 +142,17 @@ class HomeIOGuard:
                 path = os.environ.get("PATH", "")
                 cwd = os.getcwd() if self._relative_path_entries(path) else None
                 entries = self._path_entries(path, cwd)
-                if os.path.dirname(absolute) in entries or any(_contains(absolute, entry) for entry in entries):
+                if os.path.dirname(absolute) in entries or any(
+                    _contains(absolute, entry) for entry in entries
+                ):
                     return
             # The interpreter's own installation (a PM-managed python under ~/.clawksis/tools):
             # stdlib source reads (linecache, traceback) are not Clawksis state either, nor is
             # realpath() walking up through its ancestors.
             for prefix in _INTERPRETER_PREFIX_STRS:
-                if _within(absolute, prefix) or (metadata and _contains(absolute, prefix)):
+                if _within(absolute, prefix) or (
+                    metadata and _contains(absolute, prefix)
+                ):
                     return
             # Check the lexical path first: resolving must not probe a protected
             # tree merely to decide that the original path was forbidden.
@@ -149,10 +183,13 @@ class HomeIOGuard:
         for app in apps:
             if _within(absolute, app) or _within(resolved, app):
                 import pytest
+
                 # pytest.fail, not AssertionError: removal helpers catch Exception and would log
                 # the refusal as a warning while the test passed.
-                pytest.fail(f"TEST BUG: changing the REAL installed Clawksis desktop app: {value}\n"
-                            "Stub clawk_cli.gui_uninstall.packaged_gui_app_paths to a temporary path.")
+                pytest.fail(
+                    f"TEST BUG: changing the REAL installed Clawksis desktop app: {value}\n"
+                    "Stub clawk_cli.gui_uninstall.packaged_gui_app_paths to a temporary path."
+                )
         return resolved
 
     @staticmethod
@@ -165,7 +202,9 @@ class HomeIOGuard:
     @staticmethod
     @lru_cache(maxsize=8)
     def _relative_path_entries(path: str) -> bool:
-        return any(entry and not os.path.isabs(entry) for entry in path.split(os.pathsep))
+        return any(
+            entry and not os.path.isabs(entry) for entry in path.split(os.pathsep)
+        )
 
     @staticmethod
     @lru_cache(maxsize=8)
@@ -173,7 +212,8 @@ class HomeIOGuard:
         # Relative PATH entries change meaning after chdir; absolute ones need no cwd.
         return frozenset(
             _normcase(os.path.normpath(os.path.join(cwd or "", entry)))
-            for entry in path.split(os.pathsep) if entry
+            for entry in path.split(os.pathsep)
+            if entry
         )
 
     def install(self, monkeypatch):
@@ -184,8 +224,14 @@ class HomeIOGuard:
             def guarded(*args, **kwargs):
                 for index, (parameter, descriptor) in enumerate(parameters):
                     value = args[index] if index < len(args) else kwargs.get(parameter)
-                    self.check(value, dir_fd=kwargs.get(descriptor) if descriptor else None, metadata=metadata,
-                               destructive=destructive(args, kwargs) if callable(destructive) else destructive)
+                    self.check(
+                        value,
+                        dir_fd=kwargs.get(descriptor) if descriptor else None,
+                        metadata=metadata,
+                        destructive=destructive(args, kwargs)
+                        if callable(destructive)
+                        else destructive,
+                    )
                 return original(*args, **kwargs)
 
             monkeypatch.setattr(module, name, guarded)
@@ -203,7 +249,12 @@ class HomeIOGuard:
         for name in ("makedirs", "listdir", "scandir"):
             wrap(os, name, (("name" if name == "makedirs" else "path", None),))
         for name in ("rename", "replace"):
-            wrap(os, name, (("src", "src_dir_fd"), ("dst", "dst_dir_fd")), destructive=True)
+            wrap(
+                os,
+                name,
+                (("src", "src_dir_fd"), ("dst", "dst_dir_fd")),
+                destructive=True,
+            )
         wrap(shutil, "rmtree", (("path", "dir_fd"),), destructive=True)
         wrap(sqlite3, "connect", (("database", None),))
 
@@ -211,7 +262,13 @@ class HomeIOGuard:
 
         @wraps(original_open)
         def guarded_open(path, flags, *args, **kwargs):
-            self.check(path, dir_fd=kwargs.get("dir_fd"), destructive=bool(flags & (os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_TRUNC)))
+            self.check(
+                path,
+                dir_fd=kwargs.get("dir_fd"),
+                destructive=bool(
+                    flags & (os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_TRUNC)
+                ),
+            )
             fd = original_open(path, flags, *args, **kwargs)
             candidate = Path(os.fsdecode(path))
             if kwargs.get("dir_fd") is not None and not candidate.is_absolute():

@@ -101,13 +101,17 @@ def _host_bundle(tmp_path: Path) -> tuple[Path, Path]:
         repo = _windows_bundle(tmp_path)
         return repo, tmp_path / "Clawksis" / "Clawksis.exe"
     if sys.platform == "darwin":
-        return _macos_bundle(tmp_path), tmp_path / "Clawksis.app/Contents/MacOS/Clawksis"
+        return _macos_bundle(
+            tmp_path
+        ), tmp_path / "Clawksis.app/Contents/MacOS/Clawksis"
     repo = _linux_bundle(tmp_path)
     return repo, tmp_path / "linux-unpacked" / "Clawksis"
 
 
 class TestResolveBundleLayout:
-    @pytest.mark.platforms("posix")  # POSIX-only: the Linux launcher rule reads execute bits, which os.access reports as always-set on Windows
+    @pytest.mark.platforms(
+        "posix"
+    )  # POSIX-only: the Linux launcher rule reads execute bits, which os.access reports as always-set on Windows
     def test_linux_launcher_is_the_one_non_helper_executable(self, tmp_path):
         repo = _linux_bundle(tmp_path)
         layout = resolve_bundle_layout(repo, platform="linux")
@@ -125,7 +129,10 @@ class TestResolveBundleLayout:
         layout = resolve_bundle_layout(repo, platform="darwin")
         assert layout.app_root == tmp_path / "Clawksis.app"
         assert layout.resources == tmp_path / "Clawksis.app" / "Contents" / "Resources"
-        assert layout.launcher == tmp_path / "Clawksis.app" / "Contents" / "MacOS" / "Clawksis"
+        assert (
+            layout.launcher
+            == tmp_path / "Clawksis.app" / "Contents" / "MacOS" / "Clawksis"
+        )
 
     def test_ambiguous_launcher_reports_none_rather_than_guessing(self, tmp_path):
         repo = _windows_bundle(tmp_path)
@@ -219,8 +226,14 @@ class TestCmdGuiOnABundle:
     @staticmethod
     def _args(**overrides):
         base = dict(
-            source=False, build_only=False, fake_boot=False, ignore_existing=False,
-            clawk_root=None, cwd=None, skip_build=False, force_build=False,
+            source=False,
+            build_only=False,
+            fake_boot=False,
+            ignore_existing=False,
+            clawk_root=None,
+            cwd=None,
+            skip_build=False,
+            force_build=False,
         )
         base.update(overrides)
         return SimpleNamespace(**base)
@@ -241,19 +254,36 @@ class TestCmdGuiOnABundle:
 
         from clawk_cli import main_desktop, source_build
         import pm
+
         monkeypatch.setattr(cli_main, "PROJECT_ROOT", repo)
-        monkeypatch.setattr(source_build, "source_build_env", lambda env, **kwargs: dict(env))
-        monkeypatch.setattr(pm, "ensure", lambda name, *, base_env, **_: SimpleNamespace(env=base_env))
+        monkeypatch.setattr(
+            source_build, "source_build_env", lambda env, **kwargs: dict(env)
+        )
+        monkeypatch.setattr(
+            pm, "ensure", lambda name, *, base_env, **_: SimpleNamespace(env=base_env)
+        )
         monkeypatch.setattr(main_desktop, "_desktop_build_needed", lambda *a, **k: True)
-        monkeypatch.setattr(main_desktop, "_stop_desktop_processes_locking_build", lambda *a, **k: [])
-        monkeypatch.setattr(main_desktop, "_desktop_linux_sandbox_fixup", lambda *a, **k: launcher_ok)
-        monkeypatch.setattr(main_desktop, "_desktop_linux_needs_no_sandbox", lambda: not launcher_ok)
-        monkeypatch.setattr(main_desktop, "_desktop_linux_sandbox_helper_is_regular_file", lambda *a, **k: True)
+        monkeypatch.setattr(
+            main_desktop, "_stop_desktop_processes_locking_build", lambda *a, **k: []
+        )
+        monkeypatch.setattr(
+            main_desktop, "_desktop_linux_sandbox_fixup", lambda *a, **k: launcher_ok
+        )
+        monkeypatch.setattr(
+            main_desktop, "_desktop_linux_needs_no_sandbox", lambda: not launcher_ok
+        )
+        monkeypatch.setattr(
+            main_desktop,
+            "_desktop_linux_sandbox_helper_is_regular_file",
+            lambda *a, **k: True,
+        )
         monkeypatch.setattr(main_desktop, "_detect_linux_password_store", lambda: None)
 
-        with patch("clawk_cli.bundled_app.subprocess.Popen", side_effect=record_popen), \
-             patch.object(cli_main.subprocess, "run", side_effect=record_run), \
-             pytest.raises(SystemExit) as exit_info:
+        with (
+            patch("clawk_cli.bundled_app.subprocess.Popen", side_effect=record_popen),
+            patch.object(cli_main.subprocess, "run", side_effect=record_run),
+            pytest.raises(SystemExit) as exit_info,
+        ):
             cli_main.cmd_gui(args)
 
         return exit_info.value.code, builds, launches
@@ -298,7 +328,9 @@ class TestCmdGuiOnABundle:
         assert any("npm" in " ".join(cmd) for cmd in builds), builds
 
     @pytest.mark.parametrize("flag", ["source", "build_only", "force_build"])
-    def test_build_flags_are_refused_rather_than_ignored(self, tmp_path, monkeypatch, flag):
+    def test_build_flags_are_refused_rather_than_ignored(
+        self, tmp_path, monkeypatch, flag
+    ):
         repo, _launcher = _host_bundle(tmp_path)
         code, builds, launches = self._run(
             monkeypatch, repo, self._args(**{flag: True})
@@ -320,7 +352,9 @@ class TestCmdGuiOnABundle:
         assert builds == []
         assert launches == []
 
-    def test_a_bundle_with_no_resolvable_launcher_reports_damage(self, tmp_path, monkeypatch):
+    def test_a_bundle_with_no_resolvable_launcher_reports_damage(
+        self, tmp_path, monkeypatch
+    ):
         app = tmp_path / "linux-unpacked"
         repo = _payload(app)
         _exe(app / "Clawksis")

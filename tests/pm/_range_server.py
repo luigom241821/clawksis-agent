@@ -18,12 +18,12 @@ import pytest
 
 class RangeHandler(BaseHTTPRequestHandler):
     payloads: dict = {}
-    ranges_seen: list = []           # (path, start, end) from real Range requests
-    abort_after: int | None = None   # refuse bytes beyond this payload offset
-    slow_per_chunk: float = 0.0      # sleep per served piece (pause tests)
-    no_range: bool = False           # ignore Range, serve 200 full body
+    ranges_seen: list = []  # (path, start, end) from real Range requests
+    abort_after: int | None = None  # refuse bytes beyond this payload offset
+    slow_per_chunk: float = 0.0  # sleep per served piece (pause tests)
+    no_range: bool = False  # ignore Range, serve 200 full body
     etags: bool = True
-    chunk: int = 1 << 20             # serve piece size
+    chunk: int = 1 << 20  # serve piece size
 
     def log_message(self, *args):
         pass
@@ -52,7 +52,7 @@ class RangeHandler(BaseHTTPRequestHandler):
                     return
                 if self.slow_per_chunk:
                     time.sleep(self.slow_per_chunk)
-                piece = payload[served:served + self.chunk]
+                piece = payload[served : served + self.chunk]
                 self.wfile.write(piece)
                 self.wfile.flush()
                 served += len(piece)
@@ -73,10 +73,9 @@ class RangeHandler(BaseHTTPRequestHandler):
             start_s, end_s = spec.split("-", 1)
             start, end = int(start_s), int(end_s)
             self.ranges_seen.append((self.path, start, end))
-            body = payload[start:end + 1]
+            body = payload[start : end + 1]
             self.send_response(206)
-            self.send_header("Content-Range",
-                             f"bytes {start}-{end}/{len(payload)}")
+            self.send_header("Content-Range", f"bytes {start}-{end}/{len(payload)}")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             served = 0

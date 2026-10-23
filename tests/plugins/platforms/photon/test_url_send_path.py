@@ -12,6 +12,7 @@ The routing decision lives in
 assert the chosen builder for representative payloads — they do not read the
 sidecar source.
 """
+
 from __future__ import annotations
 
 import json
@@ -26,28 +27,42 @@ _MODULE = Path("plugins/platforms/photon/sidecar/send-format.mjs").resolve()
 _CASES: dict[str, tuple[str, str, str]] = {
     # name: (format, text, expected builder)
     "markdown_without_url_keeps_markdown": (
-        "markdown", "**bold** and `code`", "markdown",
+        "markdown",
+        "**bold** and `code`",
+        "markdown",
     ),
     "markdown_with_https_url_falls_back_to_text": (
-        "markdown", "see **this**: https://example.com/a?b=1", "text",
+        "markdown",
+        "see **this**: https://example.com/a?b=1",
+        "text",
     ),
     "markdown_with_http_url_falls_back_to_text": (
-        "markdown", "http://example.com", "text",
+        "markdown",
+        "http://example.com",
+        "text",
     ),
     "markdown_link_syntax_also_falls_back_to_text": (
-        "markdown", "[docs](https://example.com/docs)", "text",
+        "markdown",
+        "[docs](https://example.com/docs)",
+        "text",
     ),
     "markdown_with_uppercase_scheme_falls_back_to_text": (
-        "markdown", "HTTPS://EXAMPLE.COM is loud", "text",
+        "markdown",
+        "HTTPS://EXAMPLE.COM is loud",
+        "text",
     ),
     "markdown_bare_domain_without_scheme_keeps_markdown": (
         # Only scheme'd URLs trip iMessage's data-detection 500; a bare domain
         # is ordinary text and must keep markdown rendering.
-        "markdown", "ask example.com about *this*", "markdown",
+        "markdown",
+        "ask example.com about *this*",
+        "markdown",
     ),
     "text_format_stays_text": ("text", "plain message", "text"),
     "text_format_with_url_stays_text": (
-        "text", "https://example.com", "text",
+        "text",
+        "https://example.com",
+        "text",
     ),
 }
 

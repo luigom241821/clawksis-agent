@@ -6,6 +6,7 @@ one. Outside any session (a timer, a plugin thread, cron, a process with no live
 is refused with a result, never an exception. Routing and the edit fallback live in
 ``gateway/plugin_messages.py``; this side only hands work to the gateway loop and back.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -52,7 +53,11 @@ class PluginMessage:
         return f"<PluginMessage ok={self.ok} message_id={self.message_id!r} error={self.error!r}>"
 
     def _adopt(self, other: PluginMessage) -> None:
-        self._target, self.result, self.message_id = other._target, other.result, other.message_id
+        self._target, self.result, self.message_id = (
+            other._target,
+            other.result,
+            other.message_id,
+        )
 
     def _refused(self) -> Optional[dict[str, Any]]:
         if self._target is None:
@@ -70,8 +75,12 @@ class PluginMessage:
         if refused is not None:
             return refused
         from gateway import plugin_messages
-        return self._settle(await plugin_messages.edit(self._target, self.message_id, str(text),
-                                                       plugin_id=self._plugin_id))
+
+        return self._settle(
+            await plugin_messages.edit(
+                self._target, self.message_id, str(text), plugin_id=self._plugin_id
+            )
+        )
 
     async def aedit(self, text: str) -> dict[str, Any]:
         """``edit`` for code already running on the gateway's event loop (async hooks/commands)."""
@@ -82,12 +91,17 @@ class PluginMessage:
     def edit(self, text: str) -> dict[str, Any]:
         """Replace the message text: ``{"ok", "message_id", "edited", ["fallback"]}``. Thread-safe."""
         if _on_gateway_loop():  # never block the loop the pending operation needs
-            return _err("on_event_loop", "called from the gateway event loop: use await handle.aedit(...)")
+            return _err(
+                "on_event_loop",
+                "called from the gateway event loop: use await handle.aedit(...)",
+            )
         if self.pending:
             try:
                 self._pending.result(_TIMEOUT_S)
             except concurrent.futures.TimeoutError:
-                return _err("timeout", "the previous operation on this message has not finished")
+                return _err(
+                    "timeout", "the previous operation on this message has not finished"
+                )
             except Exception:  # its own outcome is already on the handle
                 logger.debug("plugin_message: previous operation failed", exc_info=True)
         refused = self._refused()
@@ -99,11 +113,17 @@ class PluginMessage:
 def _gateway_loop():
     try:
         from gateway.run import _gateway_runner_ref
+
         runner = _gateway_runner_ref()
     except ImportError:
         runner = None
     loop = getattr(runner, "_gateway_loop", None)
-    if runner is None or not getattr(runner, "_running", False) or loop is None or loop.is_closed():
+    if (
+        runner is None
+        or not getattr(runner, "_running", False)
+        or loop is None
+        or loop.is_closed()
+    ):
         return None, None
     return runner, loop
 
@@ -125,14 +145,20 @@ def _run_on_gateway_loop(coro, handle: PluginMessage) -> dict[str, Any]:
         return _err("gateway_unavailable", "no live gateway is running in this process")
     if _on_gateway_loop():
         coro.close()
-        return _err("on_event_loop", "called from the gateway event loop: use the async form (await ...)")
+        return _err(
+            "on_event_loop",
+            "called from the gateway event loop: use the async form (await ...)",
+        )
     future = asyncio.run_coroutine_threadsafe(coro, loop)
     handle._pending = future
     try:
         return future.result(_TIMEOUT_S)
     except concurrent.futures.TimeoutError:
-        result = _err("timeout", f"the gateway did not answer within {_TIMEOUT_S:.0f}s; the operation "
-                                 "is still running and its result will land on this handle")
+        result = _err(
+            "timeout",
+            f"the gateway did not answer within {_TIMEOUT_S:.0f}s; the operation "
+            "is still running and its result will land on this handle",
+        )
         handle.result = result
         return result
     except Exception as exc:  # the plugin gets a result, never the raise
@@ -140,8 +166,10 @@ def _run_on_gateway_loop(coro, handle: PluginMessage) -> dict[str, Any]:
         return _err("send_failed", str(exc)[:512])
 
 
-_NO_SESSION = ("no session is bound in the calling context (a tool call, slash command or hook "
-               "fired for a session)")
+_NO_SESSION = (
+    "no session is bound in the calling context (a tool call, slash command or hook "
+    "fired for a session)"
+)
 
 
 async def _post_for(ctx: Any, text: str, session_key: str, route: Any) -> PluginMessage:
@@ -151,19 +179,30 @@ async def _post_for(ctx: Any, text: str, session_key: str, route: Any) -> Plugin
     if not session_key:
         result = _err("no_conversation", _NO_SESSION)
     elif runner is None:
-        result = _err("gateway_unavailable", "no live gateway is running in this process")
+        result = _err(
+            "gateway_unavailable", "no live gateway is running in this process"
+        )
     else:
         from gateway import plugin_messages
+
         # The session store read is disk-bound: keep it off the gateway loop.
-        target, refusal = await asyncio.to_thread(plugin_messages.resolve, runner, session_key=session_key,
-                                                  route=route, plugin_home=ctx._manager.home_path, plugin_id=plugin_id)
+        target, refusal = await asyncio.to_thread(
+            plugin_messages.resolve,
+            runner,
+            session_key=session_key,
+            route=route,
+            plugin_home=ctx._manager.home_path,
+            plugin_id=plugin_id,
+        )
         if target is None:
             result = refusal or _err("no_conversation")
         else:
             result = await plugin_messages.post(target, str(text), plugin_id=plugin_id)
             if result.get("ok"):
                 return PluginMessage(plugin_id, target, result)
-    logger.info("plugin_message plugin=%s op=post refused: %s", plugin_id, result.get("error"))
+    logger.info(
+        "plugin_message plugin=%s op=post refused: %s", plugin_id, result.get("error")
+    )
     return PluginMessage(plugin_id, None, result)
 
 
@@ -171,6 +210,7 @@ async def apost(ctx: Any, text: str) -> PluginMessage:
     """``post`` for code already running on the gateway's event loop (async hooks/commands)."""
     from gateway.plugin_messages import bound_route
     from gateway.session_context import bound_session_key
+
     return await _post_for(ctx, text, bound_session_key(), bound_route())
 
 
@@ -178,10 +218,12 @@ def post(ctx: Any, text: str) -> PluginMessage:
     """Post *text* to the calling session from a tool handler or hook on a worker thread. The session
     is read here, on the caller's own context, then the send runs on the gateway loop."""
     from gateway.session_context import bound_session_key
+
     session_key = bound_session_key()
     if not session_key:
         return PluginMessage(ctx.plugin_id, None, _err("no_conversation", _NO_SESSION))
     from gateway.plugin_messages import bound_route
+
     route = bound_route()
     handle = PluginMessage(ctx.plugin_id, None, _err("timeout"))
 

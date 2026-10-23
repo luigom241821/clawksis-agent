@@ -24,44 +24,99 @@ from clawk_cli.plugin_validate_core_override import _clawk_top_level, _python_fi
 # clawk_cli/plugins.py (property/return types, base classes its ``register_*`` methods check), and
 # the names those plugin pages tell authors to call, raise, return or subclass in prose. ``module`` entries allow the module (underscore names excepted);
 # ``module:Name`` entries allow one name. Re-harvest when those docs or PluginContext change.
-_PUBLIC = frozenset({
-    # developer-guide / plugins docs
-    "agent.account_usage", "agent.browser_provider", "agent.context_engine", "agent.credential_pool",
-    "agent.delegation_backends", "agent.delegation_provider", "clawk_cli.auth_model_picker:prompt_model_selection",
-    "agent.image_gen_provider", "agent.memory_manager", "agent.memory_provider", "agent.secret_scope",
-    "agent.secret_sources.base", "agent.subagent_lifecycle", "agent.terminal_env_provider",
-    "agent.transports", "agent.transports.chat_completions", "agent.video_gen_provider",
-    "agent.web_search_provider", "cli", "gateway.config", "gateway.platform_registry",
-    "gateway.platforms._shared", "gateway.platforms.base", "gateway.platforms.event",
-    "gateway.platforms.helpers", "gateway.status", "clawk_cli.auth_oauth_pkce_plugin",
-    "clawk_cli.config", "clawk_cli.plugin_events", "clawk_cli.plugin_provider_requests",
-    "clawk_constants", "clawk_platform", "clawk_state", "plugins.plugin_storage", "plugins.plugin_utils", "pm",
-    "providers", "providers.base", "tools.browser_supervisor", "tools.browser_supervisor_capture",
-    "tools.computer_use.backend", "tools.registry",
-    # PluginContext (clawk_cli/plugins.py)
-    "agent.context_references", "agent.plugin_llm", "agent.transcription_provider", "agent.tts_provider",
-    "cron.execution_identity",
-    "clawk_cli.dashboard_auth", "clawk_cli.platform_actions", "clawk_cli.plugins:PluginContext",
-    "clawk_cli.plugins_ledger:PluginRegistration", "clawk_cli.plugins_state:PluginState",
-    # prose in memory-provider / model-provider / terminal-environment plugin pages
-    "agent.runtime_cwd:resolve_agent_cwd", "agent.usage_pricing:CostResult", "clawk_cli.auth_constants:AuthError",
-    "tools.environments.base:BaseEnvironment", "tools.environments:BaseEnvironment",  # package ``__all__``
-    "utils:atomic_json_write", "utils:read_json_or_empty",
-    # adding-platform-adapters.md § Public helpers for platform plugins
-    "gateway.platforms.access_policy_mixin:OwnAccessPolicyMixin", "tools.approval:resolve_gateway_approval",
-    "tools.clarify_gateway:get_pending", "tools.clarify_gateway:resolve_gateway_clarify",
-    "tools.clarify_gateway:mark_awaiting_text", "tools.clarify_gateway:SKIPPED",
-    "tools.url_safety:is_safe_url", "tools.url_safety:create_ssrf_safe_async_client",
-    "gateway.platforms._http_client_limits:platform_httpx_limits",
-    "clawk_cli.gateway_setup_wizard:print_setup_header", "clawk_cli.gateway_setup_wizard:confirm_reconfigure",
-    "clawk_cli.gateway_setup_wizard:offer_home_channel", "clawk_cli.gateway_setup_wizard:save_env_values",
-    "clawk_cli.gateway_setup_wizard:prompt_csv", "clawk_cli.setup:prompt", "clawk_cli.setup:prompt_choice",
-    "clawk_cli.setup:prompt_yes_no", "clawk_cli.cli_output",
-    # plugins/index.md § Read the skill catalog
-    "tools.skills_tool:find_all_skills", "tools.skills_tool:sort_skills", "tools.skills_tool:skill_search_dirs",
-    "tools.skills_tool:locate_skill", "tools.skills_tool:skill_lookup_path_error",
-    "tools.skills_sync:dir_hash", "tools.skill_usage:read_skill_name",
-})
+_PUBLIC = frozenset(
+    {
+        # developer-guide / plugins docs
+        "agent.account_usage",
+        "agent.browser_provider",
+        "agent.context_engine",
+        "agent.credential_pool",
+        "agent.delegation_backends",
+        "agent.delegation_provider",
+        "clawk_cli.auth_model_picker:prompt_model_selection",
+        "agent.image_gen_provider",
+        "agent.memory_manager",
+        "agent.memory_provider",
+        "agent.secret_scope",
+        "agent.secret_sources.base",
+        "agent.subagent_lifecycle",
+        "agent.terminal_env_provider",
+        "agent.transports",
+        "agent.transports.chat_completions",
+        "agent.video_gen_provider",
+        "agent.web_search_provider",
+        "cli",
+        "gateway.config",
+        "gateway.platform_registry",
+        "gateway.platforms._shared",
+        "gateway.platforms.base",
+        "gateway.platforms.event",
+        "gateway.platforms.helpers",
+        "gateway.status",
+        "clawk_cli.auth_oauth_pkce_plugin",
+        "clawk_cli.config",
+        "clawk_cli.plugin_events",
+        "clawk_cli.plugin_provider_requests",
+        "clawk_constants",
+        "clawk_platform",
+        "clawk_state",
+        "plugins.plugin_storage",
+        "plugins.plugin_utils",
+        "pm",
+        "providers",
+        "providers.base",
+        "tools.browser_supervisor",
+        "tools.browser_supervisor_capture",
+        "tools.computer_use.backend",
+        "tools.registry",
+        # PluginContext (clawk_cli/plugins.py)
+        "agent.context_references",
+        "agent.plugin_llm",
+        "agent.transcription_provider",
+        "agent.tts_provider",
+        "cron.execution_identity",
+        "clawk_cli.dashboard_auth",
+        "clawk_cli.platform_actions",
+        "clawk_cli.plugins:PluginContext",
+        "clawk_cli.plugins_ledger:PluginRegistration",
+        "clawk_cli.plugins_state:PluginState",
+        # prose in memory-provider / model-provider / terminal-environment plugin pages
+        "agent.runtime_cwd:resolve_agent_cwd",
+        "agent.usage_pricing:CostResult",
+        "clawk_cli.auth_constants:AuthError",
+        "tools.environments.base:BaseEnvironment",
+        "tools.environments:BaseEnvironment",  # package ``__all__``
+        "utils:atomic_json_write",
+        "utils:read_json_or_empty",
+        # adding-platform-adapters.md § Public helpers for platform plugins
+        "gateway.platforms.access_policy_mixin:OwnAccessPolicyMixin",
+        "tools.approval:resolve_gateway_approval",
+        "tools.clarify_gateway:get_pending",
+        "tools.clarify_gateway:resolve_gateway_clarify",
+        "tools.clarify_gateway:mark_awaiting_text",
+        "tools.clarify_gateway:SKIPPED",
+        "tools.url_safety:is_safe_url",
+        "tools.url_safety:create_ssrf_safe_async_client",
+        "gateway.platforms._http_client_limits:platform_httpx_limits",
+        "clawk_cli.gateway_setup_wizard:print_setup_header",
+        "clawk_cli.gateway_setup_wizard:confirm_reconfigure",
+        "clawk_cli.gateway_setup_wizard:offer_home_channel",
+        "clawk_cli.gateway_setup_wizard:save_env_values",
+        "clawk_cli.gateway_setup_wizard:prompt_csv",
+        "clawk_cli.setup:prompt",
+        "clawk_cli.setup:prompt_choice",
+        "clawk_cli.setup:prompt_yes_no",
+        "clawk_cli.cli_output",
+        # plugins/index.md § Read the skill catalog
+        "tools.skills_tool:find_all_skills",
+        "tools.skills_tool:sort_skills",
+        "tools.skills_tool:skill_search_dirs",
+        "tools.skills_tool:locate_skill",
+        "tools.skills_tool:skill_lookup_path_error",
+        "tools.skills_sync:dir_hash",
+        "tools.skill_usage:read_skill_name",
+    }
+)
 
 _SHOWN = 10
 
@@ -72,11 +127,18 @@ def _clawk_packages() -> frozenset:
     setup.py ships as ``py-modules`` (every root ``*.py``)."""
     root = Path(__file__).resolve().parents[1]
     try:
-        pyproject = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8-sig"))
-        packages = {name.split(".")[0] for name in pyproject["tool"]["setuptools"]["packages"]["find"]["include"]}
+        pyproject = tomllib.loads(
+            (root / "pyproject.toml").read_text(encoding="utf-8-sig")
+        )
+        packages = {
+            name.split(".")[0]
+            for name in pyproject["tool"]["setuptools"]["packages"]["find"]["include"]
+        }
     except (OSError, KeyError, ValueError):
         packages = set(_clawk_top_level()) - {"clawk_plugins", "tests", "evals"}
-    return frozenset((packages | {p.stem for p in root.glob("*.py")}) - {"setup", "conftest"})
+    return frozenset(
+        (packages | {p.stem for p in root.glob("*.py")}) - {"setup", "conftest"}
+    )
 
 
 def _local_modules(rels) -> set[str]:
@@ -85,7 +147,11 @@ def _local_modules(rels) -> set[str]:
     for rel in rels:
         parts = rel.with_suffix("").parts
         parts = parts[:-1] if parts[-1] == "__init__" else parts
-        names |= {".".join(parts[start:end]) for start in range(len(parts)) for end in range(start + 1, len(parts) + 1)}
+        names |= {
+            ".".join(parts[start:end])
+            for start in range(len(parts))
+            for end in range(start + 1, len(parts) + 1)
+        }
     return names
 
 
@@ -93,7 +159,11 @@ def _type_checking_nodes(tree: ast.AST) -> set[int]:
     skipped: set[int] = set()
     for node in ast.walk(tree):
         test = getattr(node, "test", None)
-        if isinstance(node, ast.If) and (getattr(test, "id", None) or getattr(test, "attr", None)) == "TYPE_CHECKING":
+        if (
+            isinstance(node, ast.If)
+            and (getattr(test, "id", None) or getattr(test, "attr", None))
+            == "TYPE_CHECKING"
+        ):
             skipped |= {id(n) for stmt in node.body for n in ast.walk(stmt)}
     return skipped
 
@@ -104,8 +174,13 @@ def _imported(node: ast.AST) -> list[tuple[str, str]]:
         return [(alias.name, "") for alias in node.names]
     if isinstance(node, ast.ImportFrom) and not node.level and node.module:
         return [(node.module, alias.name) for alias in node.names]
-    if isinstance(node, ast.Call) and node.args and isinstance(node.args[0], ast.Constant) \
-            and isinstance(node.args[0].value, str) and ast.unparse(node.func) in ("importlib.import_module", "import_module"):
+    if (
+        isinstance(node, ast.Call)
+        and node.args
+        and isinstance(node.args[0], ast.Constant)
+        and isinstance(node.args[0].value, str)
+        and ast.unparse(node.func) in ("importlib.import_module", "import_module")
+    ):
         return [(node.args[0].value, "")]
     return []
 
@@ -114,8 +189,11 @@ def _private_target(module: str, name: str, core: frozenset, local: set[str]) ->
     """The dotted target to report, or "" when the import is public, local or not Clawksis's."""
     target = f"{module}.{name}" if name else module
     clawk = module.split(".")[0] in core and module not in local
-    public = target in _PUBLIC or f"{module}:{name}" in _PUBLIC \
-        or (module in _PUBLIC and not name.startswith("_"))  # ``from gateway.platforms import base`` too
+    public = (
+        target in _PUBLIC
+        or f"{module}:{name}" in _PUBLIC
+        or (module in _PUBLIC and not name.startswith("_"))
+    )  # ``from gateway.platforms import base`` too
     return target if clawk and not public else ""
 
 
@@ -125,7 +203,11 @@ def private_import_findings(plugin_dir: Path) -> list[str]:
     then the rest, each group in file/line order."""
     plugin_dir = Path(plugin_dir)
     # Hidden dirs (``.github/`` CI helpers) never load inside Clawksis.
-    files = [(path, rel) for path, rel in _python_files(plugin_dir) if not any(p.startswith(".") for p in rel.parts[:-1])]
+    files = [
+        (path, rel)
+        for path, rel in _python_files(plugin_dir)
+        if not any(p.startswith(".") for p in rel.parts[:-1])
+    ]
     local = _local_modules(rel for _path, rel in files)
     core = _clawk_packages()
     found: set[tuple[str, int, str, str]] = set()
@@ -141,9 +223,13 @@ def private_import_findings(plugin_dir: Path) -> list[str]:
             for module, name in _imported(node):
                 target = _private_target(module, name, core, local)
                 if target:
-                    found.add((rel.as_posix(), getattr(node, "lineno", 0), target, module))
+                    found.add(
+                        (rel.as_posix(), getattr(node, "lineno", 0), target, module)
+                    )
     seen: set[str] = set()
-    first = [site for site in sorted(found) if site[3] not in seen and not seen.add(site[3])]
+    first = [
+        site for site in sorted(found) if site[3] not in seen and not seen.add(site[3])
+    ]
     rest = sorted(found.difference(first))
     return [f"{rel}:{line} {target}" for rel, line, target, _module in first + rest]
 
@@ -155,6 +241,7 @@ def check_private_imports(report, plugin_dir: Path) -> None:
         more = f"; and {len(hits) - _SHOWN} more" if len(hits) > _SHOWN else ""
         report.warn(
             "private core imports (catalog rule 9: public surfaces only; these can break on any release): "
-            + "; ".join(hits[:_SHOWN]) + more
+            + "; ".join(hits[:_SHOWN])
+            + more
             + ". Use ctx.* / documented plugin APIs, or open an issue for the seam you need."
         )

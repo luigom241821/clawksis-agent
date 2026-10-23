@@ -82,7 +82,9 @@ def _claim_run(adapter: APIServerAdapter, run_id: str) -> None:
 
 def _create_runs_app(adapter: APIServerAdapter) -> web.Application:
     """Create an aiohttp app with /v1/runs routes registered."""
-    mws = [mw for mw in (cors_middleware, security_headers_middleware) if mw is not None]
+    mws = [
+        mw for mw in (cors_middleware, security_headers_middleware) if mw is not None
+    ]
     app = web.Application(middlewares=mws)
     app["api_server_adapter"] = adapter
     app.router.add_post("/v1/runs", adapter._handle_runs)
@@ -273,7 +275,9 @@ class TestStartRun:
             with patch.object(adapter, "_create_agent") as mock_create:
                 mock_agent = MagicMock()
 
-                def _capture_run(user_message=None, conversation_history=None, task_id=None):
+                def _capture_run(
+                    user_message=None, conversation_history=None, task_id=None
+                ):
                     from tools.async_delegation import _current_origin_session_id
 
                     captured["origin_session_id"] = _current_origin_session_id()
@@ -316,26 +320,58 @@ class TestStartRun:
     @staticmethod
     def _capturing_agent(captured):
         agent = MagicMock()
-        agent.run_conversation.side_effect = lambda **kwargs: captured.update(kwargs) or {"final_response": "done"}
-        agent.session_prompt_tokens = agent.session_completion_tokens = agent.session_total_tokens = 0
+        agent.run_conversation.side_effect = lambda **kwargs: (
+            captured.update(kwargs) or {"final_response": "done"}
+        )
+        agent.session_prompt_tokens = agent.session_completion_tokens = (
+            agent.session_total_tokens
+        ) = 0
         return agent
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("body, expected", [
-        ({"input": "hello", "author": {"id": "bot:dixie", "name": " dixie ", "is_bot": True, "role": "admin"}},
-         {"id": "bot:dixie", "name": "dixie", "is_bot": True}),
-        ({"input": "hello", "author": {"id": "bot:dixie", "name": "dixie", "is_bot": True, "origin": "cloud-1"}},
-         {"id": "bot:cloud-1/dixie", "name": "dixie", "is_bot": True}),
-        ({"input": "hello"}, "absent"),
-    ], ids=["author", "author with origin", "no author"])
-    async def test_start_passes_normalized_author_to_run_conversation(self, adapter, body, expected):
+    @pytest.mark.parametrize(
+        "body, expected",
+        [
+            (
+                {
+                    "input": "hello",
+                    "author": {
+                        "id": "bot:dixie",
+                        "name": " dixie ",
+                        "is_bot": True,
+                        "role": "admin",
+                    },
+                },
+                {"id": "bot:dixie", "name": "dixie", "is_bot": True},
+            ),
+            (
+                {
+                    "input": "hello",
+                    "author": {
+                        "id": "bot:dixie",
+                        "name": "dixie",
+                        "is_bot": True,
+                        "origin": "cloud-1",
+                    },
+                },
+                {"id": "bot:cloud-1/dixie", "name": "dixie", "is_bot": True},
+            ),
+            ({"input": "hello"}, "absent"),
+        ],
+        ids=["author", "author with origin", "no author"],
+    )
+    async def test_start_passes_normalized_author_to_run_conversation(
+        self, adapter, body, expected
+    ):
         """A body ``author`` reaches ``run_conversation`` normalized; it labels memory only. Without one the
         call keeps today's shape."""
         app = _create_runs_app(adapter)
         captured = {}
 
         async with TestClient(TestServer(app)) as cli:
-            with patch.object(adapter, "_create_agent", return_value=self._capturing_agent(captured)):
+            with patch.object(
+                adapter, "_create_agent", return_value=self._capturing_agent(captured)
+            ):
                 resp = await cli.post("/v1/runs", json=body)
                 assert resp.status == 202
                 await self._wait_completed(cli, (await resp.json())["run_id"])
@@ -349,13 +385,14 @@ class TestStartRun:
         app = _create_runs_app(adapter)
         async with TestClient(TestServer(app)) as cli:
             with patch.object(adapter, "_create_agent") as mock_create:
-                resp = await cli.post("/v1/runs", json={"input": "hello", "author": author})
+                resp = await cli.post(
+                    "/v1/runs", json={"input": "hello", "author": author}
+                )
                 assert resp.status == 400
                 body = await resp.json()
         assert body["error"]["code"] == "invalid_author"
         mock_create.assert_not_called()
         assert adapter._run_statuses == {}
-
 
     @pytest.mark.asyncio
     async def test_start_rejects_conflicting_route_and_request_provider(self):
@@ -393,7 +430,9 @@ class TestStartRun:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("worker_fails", [False, True], ids=["completed", "failed"])
-    async def test_events_stream_forwards_interim_commentary(self, adapter, worker_fails):
+    async def test_events_stream_forwards_interim_commentary(
+        self, adapter, worker_fails
+    ):
         """Commentary reaches /v1/runs clients before the terminal event, even
         when the worker finishes before asyncio wraps its Future (#67580)."""
         import json
@@ -407,7 +446,9 @@ class TestStartRun:
                 future.exception(timeout=10)
                 return future
 
-        asyncio.get_running_loop().set_default_executor(CompletedWorkerExecutor(max_workers=1))
+        asyncio.get_running_loop().set_default_executor(
+            CompletedWorkerExecutor(max_workers=1)
+        )
         app = _create_runs_app(adapter)
 
         def create_agent(**kwargs):
@@ -422,7 +463,9 @@ class TestStartRun:
                 return {"final_response": "Done."}
 
             agent.run_conversation.side_effect = run_conversation
-            agent.session_prompt_tokens = agent.session_completion_tokens = agent.session_total_tokens = 0
+            agent.session_prompt_tokens = agent.session_completion_tokens = (
+                agent.session_total_tokens
+            ) = 0
             return agent
 
         async with TestClient(TestServer(app)) as cli:
@@ -431,11 +474,24 @@ class TestStartRun:
                 run_id = (await resp.json())["run_id"]
                 body = await (await cli.get(f"/v1/runs/{run_id}/events")).text()
 
-        events = [json.loads(line[6:]) for line in body.splitlines() if line.startswith("data: ")]
-        interim = [(e["text"], e["already_streamed"]) for e in events if e["event"] == "message.interim"]
-        assert interim == [("Checking the docs first.", False), ("Applying the fix.", True)]
+        events = [
+            json.loads(line[6:])
+            for line in body.splitlines()
+            if line.startswith("data: ")
+        ]
+        interim = [
+            (e["text"], e["already_streamed"])
+            for e in events
+            if e["event"] == "message.interim"
+        ]
+        assert interim == [
+            ("Checking the docs first.", False),
+            ("Applying the fix.", True),
+        ]
         assert [e["event"] for e in events] == [
-            "message.interim", "message.interim", "run.failed" if worker_fails else "run.completed",
+            "message.interim",
+            "message.interim",
+            "run.failed" if worker_fails else "run.completed",
         ]
         if worker_fails:
             assert events[-1]["error"] == "worker failed"
@@ -443,7 +499,9 @@ class TestStartRun:
             assert events[-1]["output"] == "Done."
 
     @pytest.mark.asyncio
-    async def test_start_passes_request_model_provider_options_to_create_agent(self, adapter):
+    async def test_start_passes_request_model_provider_options_to_create_agent(
+        self, adapter
+    ):
         app = _create_runs_app(adapter)
         model_options = {"reasoning_effort": "medium", "service_tier": "priority"}
         async with TestClient(TestServer(app)) as cli:
@@ -482,9 +540,10 @@ class TestStartRun:
 
 
 class TestRunStatus:
-
     @pytest.mark.asyncio
-    async def test_drain_boundary_is_visible_to_pollers_on_live_runs_only(self, adapter):
+    async def test_drain_boundary_is_visible_to_pollers_on_live_runs_only(
+        self, adapter
+    ):
         """GET /v1/runs/{id} shows ``shutdown_requested_at`` as soon as the drain starts (#115133).
 
         A live run keeps ``status: running`` (it is still being served) but gains the marker,
@@ -495,10 +554,14 @@ class TestRunStatus:
         _claim_run(adapter, "run_live")
         scope = adapter._run_owners["run_live"]
         adapter._run_idempotency_store.reserve(
-            scope, "shutdown-test-key", "shutdown-test-fingerprint", "run_live", status)
+            scope, "shutdown-test-key", "shutdown-test-fingerprint", "run_live", status
+        )
         adapter._run_idempotency_ids.add("run_live")
         adapter._run_statuses["run_done"] = {
-            "object": "clawk.run", "run_id": "run_done", "status": "completed"}
+            "object": "clawk.run",
+            "run_id": "run_done",
+            "status": "completed",
+        }
         _claim_run(adapter, "run_done")
 
         async with TestClient(TestServer(_create_runs_app(adapter))) as client:
@@ -546,11 +609,16 @@ class TestRunStatus:
                     await asyncio.sleep(0.05)
 
                 mock_agent.run_conversation.assert_called_once()
-                assert mock_agent.run_conversation.call_args.kwargs["task_id"] == "space-session"
+                assert (
+                    mock_agent.run_conversation.call_args.kwargs["task_id"]
+                    == "space-session"
+                )
                 assert status["session_id"] == "space-session"
 
     @pytest.mark.asyncio
-    async def test_status_completed_run_reports_served_runtime_and_cache_tokens(self, adapter):
+    async def test_status_completed_run_reports_served_runtime_and_cache_tokens(
+        self, adapter
+    ):
         """After a fallback_providers switch the run record carries the runtime that actually
         served the turn plus cache-read tokens, next to the requested ``model`` (#102101).
 
@@ -572,7 +640,9 @@ class TestRunStatus:
                 mock_agent.session_cache_write_tokens = 11
                 mock_create.return_value = mock_agent
 
-                resp = await cli.post("/v1/runs", json={"input": "hello", "model": "deepseek-v4-pro"})
+                resp = await cli.post(
+                    "/v1/runs", json={"input": "hello", "model": "deepseek-v4-pro"}
+                )
                 run_id = (await resp.json())["run_id"]
 
                 for _ in range(40):
@@ -586,12 +656,17 @@ class TestRunStatus:
                 assert status["model"] == "deepseek-v4-pro"
                 # Canonical api_server runtime shape (same as /v1/chat/completions), not a thinner twin.
                 assert status["runtime"] == {
-                    "provider": "openai-codex", "model": "gpt-5.6-luna", "route_source": "raw_request",
+                    "provider": "openai-codex",
+                    "model": "gpt-5.6-luna",
+                    "route_source": "raw_request",
                     "requested": {"provider": "", "model": "deepseek-v4-pro"},
                 }
                 assert status["usage"] == {
-                    "input_tokens": 100, "output_tokens": 5, "total_tokens": 105,
-                    "cache_read_tokens": 84, "cache_write_tokens": 11,
+                    "input_tokens": 100,
+                    "output_tokens": 5,
+                    "total_tokens": 105,
+                    "cache_read_tokens": 84,
+                    "cache_write_tokens": 11,
                 }
 
 
@@ -602,13 +677,18 @@ class TestRunStatus:
 
 class TestRunEvents:
     @pytest.mark.asyncio
-    async def test_tool_completed_event_includes_redacted_bounded_result_preview(self, adapter):
+    async def test_tool_completed_event_includes_redacted_bounded_result_preview(
+        self, adapter
+    ):
         loop = asyncio.get_running_loop()
         adapter._run_streams["run_tool"] = _RunStream()
         callback = adapter._make_run_event_callback("run_tool", loop)
 
         callback(
-            "tool.completed", "terminal", duration=0.077, is_error=True,
+            "tool.completed",
+            "terminal",
+            duration=0.077,
+            is_error=True,
             result={
                 "exit_code": 2,
                 "error": "BLOCKED: approval required",
@@ -616,7 +696,9 @@ class TestRunEvents:
                 "output": "x" * 600,
             },
         )
-        await asyncio.sleep(0)  # the callback hops onto the loop via call_soon_threadsafe
+        await asyncio.sleep(
+            0
+        )  # the callback hops onto the loop via call_soon_threadsafe
         _, event = adapter._run_streams["run_tool"].backlog[-1]
 
         assert event["error"] is True
@@ -681,13 +763,16 @@ class TestRunEvents:
         with patch.object(api_server_runs.web, "StreamResponse", FailingResponse):
             with pytest.raises(RuntimeError, match="prepare failed"):
                 await api_server_runs._handle_run_events(
-                    adapter, request, _api_server=api_server_module)
+                    adapter, request, _api_server=api_server_module
+                )
 
         assert stream.subscribers == set()
         assert adapter._run_streams[run_id] is stream
 
     @pytest.mark.asyncio
-    async def test_two_subscribers_each_receive_every_event_and_survive_one_disconnect(self, adapter):
+    async def test_two_subscribers_each_receive_every_event_and_survive_one_disconnect(
+        self, adapter
+    ):
         """/events is fanout, not a work queue: every subscriber sees the whole ordered stream,
         and one client's disconnect never tears down the stream another client still reads."""
 
@@ -696,7 +781,9 @@ class TestRunEvents:
         async def frame(resp):
             # Skip SSE comment frames (``: open`` head flush, keepalives): only events count.
             while True:
-                chunk = (await asyncio.wait_for(resp.content.readuntil(b"\n\n"), timeout=2.0)).decode()
+                chunk = (
+                    await asyncio.wait_for(resp.content.readuntil(b"\n\n"), timeout=2.0)
+                ).decode()
                 if not chunk.startswith(":"):
                     return chunk
 
@@ -705,7 +792,9 @@ class TestRunEvents:
             with patch.object(adapter, "_create_agent") as mock_create:
                 mock_agent, agent_ready, _ = _make_slow_agent()
                 mock_create.return_value = mock_agent
-                run_id = (await (await cli.post("/v1/runs", json={"input": "hello"})).json())["run_id"]
+                run_id = (
+                    await (await cli.post("/v1/runs", json={"input": "hello"})).json()
+                )["run_id"]
                 assert agent_ready.wait(timeout=3.0)
                 first = await cli.get(f"/v1/runs/{run_id}/events")
                 second = await cli.get(f"/v1/runs/{run_id}/events")
@@ -721,8 +810,11 @@ class TestRunEvents:
                 assert "run.steered" in await frame(second)
                 stream = adapter._run_streams[run_id]
                 # ceiling past the 10s SSE keepalive, whose write also detaches a dead socket
-                await async_wait_until(lambda: len(stream.subscribers) == 1, timeout=30,
-                                       what="the dropped subscriber to detach")
+                await async_wait_until(
+                    lambda: len(stream.subscribers) == 1,
+                    timeout=30,
+                    what="the dropped subscriber to detach",
+                )
                 _mark_run_event(adapter, run_id, "approval.responded", choice="once")
                 assert "approval.responded" in await frame(second)
 
@@ -731,7 +823,9 @@ class TestRunEvents:
                 assert b"stream closed" in tail
 
     @pytest.mark.asyncio
-    async def test_completed_event_carries_served_runtime_and_cache_tokens(self, adapter):
+    async def test_completed_event_carries_served_runtime_and_cache_tokens(
+        self, adapter
+    ):
         """The run.completed SSE event discloses the same served runtime and cache tokens as the
         pollable status, so streaming clients get identical cost-attribution data (#102101)."""
         import json as _json
@@ -750,7 +844,9 @@ class TestRunEvents:
                 mock_agent.session_cache_write_tokens = 42
                 mock_create.return_value = mock_agent
 
-                resp = await cli.post("/v1/runs", json={"input": "hello", "model": "deepseek-v4-pro"})
+                resp = await cli.post(
+                    "/v1/runs", json={"input": "hello", "model": "deepseek-v4-pro"}
+                )
                 run_id = (await resp.json())["run_id"]
 
                 events_resp = await cli.get(f"/v1/runs/{run_id}/events")
@@ -761,7 +857,7 @@ class TestRunEvents:
                 for frame in body.split("\n"):
                     if frame.startswith("data: "):
                         try:
-                            payload = _json.loads(frame[len("data: "):])
+                            payload = _json.loads(frame[len("data: ") :])
                         except ValueError:
                             continue
                         if payload.get("event") == "run.completed":
@@ -774,9 +870,10 @@ class TestRunEvents:
                 assert completed["usage"]["cache_read_tokens"] == 650000
                 assert completed["usage"]["cache_write_tokens"] == 42
 
-
     @pytest.mark.asyncio
-    async def test_concurrent_subscribers_each_receive_delta_and_terminal(self, adapter):
+    async def test_concurrent_subscribers_each_receive_delta_and_terminal(
+        self, adapter
+    ):
         """Each SSE client observes the complete run instead of sharing one FIFO."""
         app = _create_runs_app(adapter)
         create_agent, callbacks, ready, release = _make_scripted_agent()
@@ -871,7 +968,9 @@ class TestRunEvents:
         async with TestClient(TestServer(app)) as cli:
             with patch.object(auth_adapter, "_create_agent") as mock_create:
                 victim_agent, victim_ready, victim_interrupted = _make_slow_agent()
-                attacker_agent, attacker_ready, attacker_interrupted = _make_slow_agent()
+                attacker_agent, attacker_ready, attacker_interrupted = (
+                    _make_slow_agent()
+                )
                 mock_create.side_effect = [victim_agent, attacker_agent]
 
                 victim_resp = await cli.post(
@@ -893,18 +992,25 @@ class TestRunEvents:
                 attacker_ready.wait(timeout=3.0)
                 assert auth_adapter._run_approval_sessions[victim_run] == victim_run
                 assert auth_adapter._run_approval_sessions[attacker_run] == attacker_run
-                assert auth_adapter._run_approval_sessions[victim_run] != auth_adapter._run_approval_sessions[attacker_run]
+                assert (
+                    auth_adapter._run_approval_sessions[victim_run]
+                    != auth_adapter._run_approval_sessions[attacker_run]
+                )
 
-                victim_entry = approval_gateway_wait._ApprovalEntry({
-                    "command": "bash -c victim-danger",
-                    "description": "victim approval",
-                    "pattern_keys": ["shell-c"],
-                })
-                attacker_entry = approval_gateway_wait._ApprovalEntry({
-                    "command": "bash -c attacker-danger",
-                    "description": "attacker approval",
-                    "pattern_keys": ["shell-c"],
-                })
+                victim_entry = approval_gateway_wait._ApprovalEntry(
+                    {
+                        "command": "bash -c victim-danger",
+                        "description": "victim approval",
+                        "pattern_keys": ["shell-c"],
+                    }
+                )
+                attacker_entry = approval_gateway_wait._ApprovalEntry(
+                    {
+                        "command": "bash -c attacker-danger",
+                        "description": "attacker approval",
+                        "pattern_keys": ["shell-c"],
+                    }
+                )
                 with approval_mod._lock:
                     approval_mod._gateway_queues[victim_run] = [victim_entry]
                     approval_mod._gateway_queues[attacker_run] = [attacker_entry]
@@ -954,7 +1060,9 @@ class TestRunEventsCORS:
     def _prime_closed_stream(adapter, run_id):
         _claim_run(adapter, run_id)
         stream = _RunStream()
-        stream.put_nowait(None)  # run finished: handler writes ": stream closed" and returns
+        stream.put_nowait(
+            None
+        )  # run finished: handler writes ": stream closed" and returns
         adapter._run_streams[run_id] = stream
 
     @pytest.mark.asyncio
@@ -973,9 +1081,14 @@ class TestRunEventsCORS:
             )
             assert resp.status == 200
             assert resp.headers.get("Content-Type") == "text/event-stream"
-            assert resp.headers.get("Access-Control-Allow-Origin") == "http://localhost:3000"
+            assert (
+                resp.headers.get("Access-Control-Allow-Origin")
+                == "http://localhost:3000"
+            )
             assert "GET" in resp.headers.get("Access-Control-Allow-Methods", "")
-            assert "Authorization" in resp.headers.get("Access-Control-Allow-Headers", "")
+            assert "Authorization" in resp.headers.get(
+                "Access-Control-Allow-Headers", ""
+            )
             await resp.text()
 
 
@@ -997,7 +1110,9 @@ class TestSteerRun:
         _claim_run(adapter, "run_123")
 
         async with TestClient(TestServer(app)) as cli:
-            resp = await cli.post("/v1/runs/run_123/steer", json={"input": "tighten the ending"})
+            resp = await cli.post(
+                "/v1/runs/run_123/steer", json={"input": "tighten the ending"}
+            )
             payload = await resp.json()
 
         assert resp.status == 200
@@ -1138,13 +1253,28 @@ class TestSteerRun:
     @pytest.mark.parametrize(
         ("result", "expected_status"),
         [
-            ({"final_response": "Operation interrupted.", "interrupted": True, "completed": False}, "cancelled"),
-            ({"final_response": "Budget exhausted summary.", "completed": False,
-              "turn_exit_reason": "max_iterations_reached(2/2)"}, "failed"),
+            (
+                {
+                    "final_response": "Operation interrupted.",
+                    "interrupted": True,
+                    "completed": False,
+                },
+                "cancelled",
+            ),
+            (
+                {
+                    "final_response": "Budget exhausted summary.",
+                    "completed": False,
+                    "turn_exit_reason": "max_iterations_reached(2/2)",
+                },
+                "failed",
+            ),
             ({"final_response": "done", "completed": True}, "completed"),
         ],
     )
-    async def test_run_terminal_status_follows_result_flags(self, adapter, result, expected_status):
+    async def test_run_terminal_status_follows_result_flags(
+        self, adapter, result, expected_status
+    ):
         """A turn that ended interrupted or unfinished must not be booked as ``completed``
         (#111770): the persisted status, the ``completed`` flag and the terminal event name
         agree, and a late steer survives on every terminal status."""
@@ -1162,7 +1292,10 @@ class TestSteerRun:
                 start_resp = await cli.post("/v1/runs", json={"input": "hello"})
                 run_id = (await start_resp.json())["run_id"]
                 for _ in range(40):
-                    if adapter._run_statuses.get(run_id, {}).get("status") == expected_status:
+                    if (
+                        adapter._run_statuses.get(run_id, {}).get("status")
+                        == expected_status
+                    ):
                         break
                     await asyncio.sleep(0.05)
                 events = await (await cli.get(f"/v1/runs/{run_id}/events")).text()
@@ -1188,9 +1321,10 @@ class TestSteerRun:
 
 
 class TestRunLifecycleSweep:
-
     @pytest.mark.asyncio
-    async def test_expired_live_run_drops_transport_but_keeps_control_state(self, adapter):
+    async def test_expired_live_run_drops_transport_but_keeps_control_state(
+        self, adapter
+    ):
         """Stream TTL bounds buffering without detaching a live run."""
         app = _create_runs_app(adapter)
         adapter._max_concurrent_runs = 1
@@ -1209,11 +1343,13 @@ class TestRunLifecycleSweep:
                 assert isinstance(task, asyncio.Task)
                 assert not task.done()
 
-                pending = approval_gateway_wait._ApprovalEntry({
-                    "command": "bash -c long-running",
-                    "description": "approval after stream TTL",
-                    "pattern_keys": ["shell-c"],
-                })
+                pending = approval_gateway_wait._ApprovalEntry(
+                    {
+                        "command": "bash -c long-running",
+                        "description": "approval after stream TTL",
+                        "pattern_keys": ["shell-c"],
+                    }
+                )
                 with approval_mod._lock:
                     approval_mod._gateway_queues[run_id] = [pending]
 
@@ -1258,7 +1394,10 @@ class TestRunOwnershipAcrossProfiles:
     """Every served profile holds a valid key under multiplex; only the
     creating profile may see or control a run."""
 
-    KEYS = {"victim": "sk-victim-profile-key-0001", "attacker": "sk-attacker-profile-key-01"}
+    KEYS = {
+        "victim": "sk-victim-profile-key-0001",
+        "attacker": "sk-attacker-profile-key-01",
+    }
 
     @classmethod
     def _profile_app(cls, adapter: APIServerAdapter) -> web.Application:
@@ -1278,7 +1417,8 @@ class TestRunOwnershipAcrossProfiles:
         app = _create_runs_app(adapter)
         app.middlewares.append(stamp_profile)
         app.router.add_post(
-            "/api/sessions/{session_id}/chat/stream", adapter._handle_session_chat_stream
+            "/api/sessions/{session_id}/chat/stream",
+            adapter._handle_session_chat_stream,
         )
         return app
 
@@ -1299,8 +1439,14 @@ class TestRunOwnershipAcrossProfiles:
     async def test_session_chat_stream_run_is_owned_by_creating_profile(self, adapter):
         """The session-chat-stream run mint claims ownership like /v1/runs does."""
         app = self._profile_app(adapter)
-        victim = {"X-Test-Profile": "victim", "Authorization": f"Bearer {self.KEYS['victim']}"}
-        attacker = {"X-Test-Profile": "attacker", "Authorization": f"Bearer {self.KEYS['attacker']}"}
+        victim = {
+            "X-Test-Profile": "victim",
+            "Authorization": f"Bearer {self.KEYS['victim']}",
+        }
+        attacker = {
+            "X-Test-Profile": "attacker",
+            "Authorization": f"Bearer {self.KEYS['attacker']}",
+        }
         gate = asyncio.Event()
 
         async def slow_run_agent(**kwargs):
@@ -1309,21 +1455,37 @@ class TestRunOwnershipAcrossProfiles:
 
         async with TestClient(TestServer(app)) as cli:
             with (
-                patch.object(adapter, "_get_existing_session_or_404", new=AsyncMock(return_value=({"id": "s1"}, None))),
-                patch.object(adapter, "_conversation_history_for_session", new=AsyncMock(return_value=[])),
+                patch.object(
+                    adapter,
+                    "_get_existing_session_or_404",
+                    new=AsyncMock(return_value=({"id": "s1"}, None)),
+                ),
+                patch.object(
+                    adapter,
+                    "_conversation_history_for_session",
+                    new=AsyncMock(return_value=[]),
+                ),
                 patch.object(adapter, "_run_agent", new=slow_run_agent),
             ):
                 stream = await cli.post(
-                    "/api/sessions/s1/chat/stream", json={"message": "hi"}, headers=victim
+                    "/api/sessions/s1/chat/stream",
+                    json={"message": "hi"},
+                    headers=victim,
                 )
                 await stream.content.readline()
                 (run_id,) = list(adapter._run_statuses)
                 assert run_id in adapter._run_owners
 
                 foreign_get = await cli.get(f"/v1/runs/{run_id}", headers=attacker)
-                foreign_stop = await cli.post(f"/v1/runs/{run_id}/stop", headers=attacker)
+                foreign_stop = await cli.post(
+                    f"/v1/runs/{run_id}/stop", headers=attacker
+                )
                 own_get = await cli.get(f"/v1/runs/{run_id}", headers=victim)
-                assert (foreign_get.status, foreign_stop.status, own_get.status) == (404, 404, 200)
+                assert (foreign_get.status, foreign_stop.status, own_get.status) == (
+                    404,
+                    404,
+                    200,
+                )
 
                 gate.set()
                 await stream.text()
@@ -1341,7 +1503,6 @@ class TestRunOwnershipAcrossProfiles:
 
 
 class TestStopRun:
-
     @pytest.mark.asyncio
     async def test_completion_wins_before_uncooperative_stop_is_acknowledged(
         self, adapter
@@ -1433,7 +1594,6 @@ class TestStopRun:
                 await asyncio.sleep(0.2)
                 assert run_id not in adapter._active_run_agents
                 assert run_id not in adapter._active_run_tasks
-
 
     @pytest.mark.asyncio
     async def test_stop_sends_sentinel_to_events_stream(self, adapter):
@@ -1531,9 +1691,7 @@ class TestRunIdempotency:
         app = _create_runs_app(adapter)
         async with TestClient(TestServer(app)) as cli:
             headers = {"Idempotency-Key": "valid-after-rejection"}
-            rejected = await cli.post(
-                "/v1/runs", json={"input": ""}, headers=headers
-            )
+            rejected = await cli.post("/v1/runs", json={"input": ""}, headers=headers)
             with patch.object(adapter, "_create_agent") as create:
                 agent = MagicMock()
                 agent.run_conversation.return_value = {"final_response": "done"}
@@ -1548,9 +1706,7 @@ class TestRunIdempotency:
         assert accepted.status == 202
 
     @pytest.mark.asyncio
-    async def test_capacity_rejection_does_not_reserve_key(
-        self, adapter, tmp_path
-    ):
+    async def test_capacity_rejection_does_not_reserve_key(self, adapter, tmp_path):
         _use_idempotency_db(adapter, tmp_path / "idem.db")
         app = _create_runs_app(adapter)
         with patch.object(
@@ -1711,27 +1867,31 @@ class TestRunIdempotency:
         )
         store.close()
 
-    def test_retention_never_releases_an_active_idempotency_reservation(
-        self, tmp_path
-    ):
+    def test_retention_never_releases_an_active_idempotency_reservation(self, tmp_path):
         from gateway.platforms.api_server_run_idempotency import RunIdempotencyStore
 
         store = RunIdempotencyStore(str(tmp_path / "idem.db"))
         with patch("gateway.platforms.api_server.time.time", return_value=100):
-            assert store.reserve(
-                "tenant",
-                "active-key",
-                "active-fingerprint",
-                "run-active",
-                {"status": "running"},
-            )[0] == "created"
-            assert store.reserve(
-                "tenant",
-                "done-key",
-                "done-fingerprint",
-                "run-done",
-                {"status": "completed"},
-            )[0] == "created"
+            assert (
+                store.reserve(
+                    "tenant",
+                    "active-key",
+                    "active-fingerprint",
+                    "run-active",
+                    {"status": "running"},
+                )[0]
+                == "created"
+            )
+            assert (
+                store.reserve(
+                    "tenant",
+                    "done-key",
+                    "done-fingerprint",
+                    "run-done",
+                    {"status": "completed"},
+                )[0]
+                == "created"
+            )
 
         after_retention = 100 + RunIdempotencyStore.RETENTION_SECONDS + 1
         with patch(
@@ -1740,9 +1900,7 @@ class TestRunIdempotency:
             active, active_record = store.lookup(
                 "tenant", "active-key", "active-fingerprint"
             )
-            done, done_record = store.lookup(
-                "tenant", "done-key", "done-fingerprint"
-            )
+            done, done_record = store.lookup("tenant", "done-key", "done-fingerprint")
 
         assert active == "reused"
         assert active_record["run_id"] == "run-active"
@@ -1759,14 +1917,17 @@ class TestRunIdempotency:
         monkeypatch.setattr(idempotency.time, "time", lambda: now[0])
         store = idempotency.RunIdempotencyStore(str(tmp_path / "idem.db"))
         horizon = now[0] + 30 * 24 * 60 * 60
-        assert store.reserve(
-            "room-scope",
-            "room:task-1:1",
-            "room-fingerprint",
-            "run-room",
-            {"run_id": "run-room", "status": "completed"},
-            retention_until=horizon,
-        )[0] == "created"
+        assert (
+            store.reserve(
+                "room-scope",
+                "room:task-1:1",
+                "room-fingerprint",
+                "run-room",
+                {"run_id": "run-room", "status": "completed"},
+                retention_until=horizon,
+            )[0]
+            == "created"
+        )
 
         now[0] += idempotency.RunIdempotencyStore.RETENTION_SECONDS + 1
         store.reserve(
@@ -1890,9 +2051,7 @@ class TestRunIdempotency:
                 assert replay.headers["X-Clawksis-Session-Key"] == "memory-a"
 
     @pytest.mark.asyncio
-    async def test_direct_status_hydrates_after_adapter_restart(
-        self, tmp_path
-    ):
+    async def test_direct_status_hydrates_after_adapter_restart(self, tmp_path):
         path = tmp_path / "idem.db"
         first_adapter = _make_adapter()
         _use_idempotency_db(first_adapter, path)
@@ -1929,15 +2088,11 @@ class TestRunIdempotency:
         assert body["output"] == "done"
 
     @pytest.mark.asyncio
-    async def test_dead_owner_nonterminal_status_becomes_interrupted(
-        self, tmp_path
-    ):
+    async def test_dead_owner_nonterminal_status_becomes_interrupted(self, tmp_path):
         from gateway.platforms.api_server_run_idempotency import RunIdempotencyStore
 
         path = tmp_path / "idem.db"
-        scope = hashlib.sha256(
-            b"default\0unauthenticated-test-listener"
-        ).hexdigest()
+        scope = hashlib.sha256(b"default\0unauthenticated-test-listener").hexdigest()
         store = RunIdempotencyStore(str(path))
         store.reserve(
             scope,
@@ -1959,7 +2114,6 @@ class TestRunIdempotency:
         assert response.status == 200
         assert body["status"] == "interrupted"
         assert body["last_event"] == "run.interrupted"
-
 
     def test_status_sweep_prunes_in_memory_ownership_mirrors(self, adapter):
         adapter._run_statuses["run_old"] = {

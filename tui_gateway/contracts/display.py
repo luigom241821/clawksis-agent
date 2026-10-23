@@ -56,11 +56,15 @@ class DisplayStatus(Result):
     geometry: str
     install_command: str | None = None
     browser: str | None = None
-    blocker: str | None = None  # why display.start would refuse now (host memory); the pane shows it instead of Start
+    blocker: str | None = (
+        None  # why display.start would refuse now (host memory); the pane shows it instead of Start
+    )
     memory_available_mb: int | None = None
     memory_limit_mb: int | None = None
     placement: str = "gateway"  # "gateway" | "terminal:<backend>" — where Xvnc runs (bot_desktop.placement)
-    image_switch: DisplayImageSwitch | None = None  # a default-image switch the pane may approve (docker placement)
+    image_switch: DisplayImageSwitch | None = (
+        None  # a default-image switch the pane may approve (docker placement)
+    )
     lease: DisplayLease
     profile_key: str
 
@@ -68,8 +72,12 @@ class DisplayStatus(Result):
 # ── methods ───────────────────────────────────────────────────────────────────────────────────
 
 
-method("display.status", params=ProfileParams, result=DisplayStatus,
-       doc="Runtime + lease snapshot for this profile's screen.")
+method(
+    "display.status",
+    params=ProfileParams,
+    result=DisplayStatus,
+    doc="Runtime + lease snapshot for this profile's screen.",
+)
 
 
 class DisplayThumbnailResult(Result):
@@ -80,11 +88,19 @@ class DisplayThumbnailResult(Result):
     suppressed: str | None = None
 
 
-method("display.thumbnail", params=ProfileParams, result=DisplayThumbnailResult,
-       doc="One JPEG grab of the bot's screen; read-only, never changes the lease.")
+method(
+    "display.thumbnail",
+    params=ProfileParams,
+    result=DisplayThumbnailResult,
+    doc="One JPEG grab of the bot's screen; read-only, never changes the lease.",
+)
 
-method("display.start", params=ProfileParams, result=DisplayStatus,
-       doc="Start this profile's Xvnc + Xfce (idempotent); blocks until the display is published.")
+method(
+    "display.start",
+    params=ProfileParams,
+    result=DisplayStatus,
+    doc="Start this profile's Xvnc + Xfce (idempotent); blocks until the display is published.",
+)
 
 
 class DisplayStopParams(ProfileParams):
@@ -95,12 +111,18 @@ class DisplayStopResult(DisplayStatus):
     stopped: bool
 
 
-method("display.stop", params=DisplayStopParams, result=DisplayStopResult,
-       doc="Stop the screen. Refused (5300, code viewer_mismatch) while a human holds unless force.")
+method(
+    "display.stop",
+    params=DisplayStopParams,
+    result=DisplayStopResult,
+    doc="Stop the screen. Refused (5300, code viewer_mismatch) while a human holds unless force.",
+)
 
 
 class DisplayObserveParams(ProfileParams):
-    viewer_id: str | None = None  # an id THIS connection minted earlier keeps its identity across a reconnect
+    viewer_id: str | None = (
+        None  # an id THIS connection minted earlier keeps its identity across a reconnect
+    )
 
 
 class DisplayObserveResult(DisplayStatus):
@@ -109,8 +131,12 @@ class DisplayObserveResult(DisplayStatus):
     viewer_id: str
 
 
-method("display.observe", params=DisplayObserveParams, result=DisplayObserveResult,
-       doc="Mint a single-use ticket for /api/display/ws and the server-minted viewer id for this connection.")
+method(
+    "display.observe",
+    params=DisplayObserveParams,
+    result=DisplayObserveResult,
+    doc="Mint a single-use ticket for /api/display/ws and the server-minted viewer id for this connection.",
+)
 
 
 class DisplayInstallResult(Result):
@@ -127,12 +153,20 @@ class DisplaySwitchSandboxImageResult(DisplayStatus):
     docker_image: str  # the image now pinned in terminal.docker_image
 
 
-method("display.switchSandboxImage", params=DisplaySwitchSandboxImageParams, result=DisplaySwitchSandboxImageResult,
-       doc="Decide the pending default sandbox image switch for this profile; refused when none is pending.")
+method(
+    "display.switchSandboxImage",
+    params=DisplaySwitchSandboxImageParams,
+    result=DisplaySwitchSandboxImageResult,
+    doc="Decide the pending default sandbox image switch for this profile; refused when none is pending.",
+)
 
 
-method("display.install", params=ProfileParams, result=DisplayInstallResult,
-       doc="Run the distro package install on the gateway host; progress streams as display.install.log/.done.")
+method(
+    "display.install",
+    params=ProfileParams,
+    result=DisplayInstallResult,
+    doc="Run the distro package install on the gateway host; progress streams as display.install.log/.done.",
+)
 
 
 class DisplayLeaseAcquireParams(ProfileParams):
@@ -144,8 +178,12 @@ class DisplayLeaseResult(Result):
     lease: DisplayLease
 
 
-method("display.lease.acquire", params=DisplayLeaseAcquireParams, result=DisplayLeaseResult,
-       doc="Take over: the human named by a viewer id this connection minted controls the screen.")
+method(
+    "display.lease.acquire",
+    params=DisplayLeaseAcquireParams,
+    result=DisplayLeaseResult,
+    doc="Take over: the human named by a viewer id this connection minted controls the screen.",
+)
 
 
 class DisplayLeaseReleaseParams(ProfileParams):
@@ -153,8 +191,12 @@ class DisplayLeaseReleaseParams(ProfileParams):
     force: bool | None = None
 
 
-method("display.lease.release", params=DisplayLeaseReleaseParams, result=DisplayLeaseResult,
-       doc="Hand back. Without a viewer id the release is refused while a human holds unless force.")
+method(
+    "display.lease.release",
+    params=DisplayLeaseReleaseParams,
+    result=DisplayLeaseResult,
+    doc="Hand back. Without a viewer id the release is refused while a human holds unless force.",
+)
 
 
 # ── server → client ───────────────────────────────────────────────────────────────────────────
@@ -164,8 +206,12 @@ class DisplayInstallSudoParams(ServerRequestParams):
     profile_key: str
 
 
-server_request("display.install.sudo", params=DisplayInstallSudoParams, result=ValueResult,
-               doc="Masked sudo password for the Bot Screen package install; app-level (empty session).")
+server_request(
+    "display.install.sudo",
+    params=DisplayInstallSudoParams,
+    result=ValueResult,
+    doc="Masked sudo password for the Bot Screen package install; app-level (empty session).",
+)
 
 
 # ── events ────────────────────────────────────────────────────────────────────────────────────
@@ -175,8 +221,11 @@ class DisplayStatusPayload(DisplayStatus, Payload):
     pass
 
 
-event("display.status", DisplayStatusPayload,
-      doc="This profile's screen started or stopped (also for transitions made outside clawk serve).")
+event(
+    "display.status",
+    DisplayStatusPayload,
+    doc="This profile's screen started or stopped (also for transitions made outside clawk serve).",
+)
 
 
 class DisplayLeasePayload(Payload):
@@ -184,7 +233,11 @@ class DisplayLeasePayload(Payload):
     lease: DisplayLease
 
 
-event("display.lease", DisplayLeasePayload, doc="The takeover lease changed hands; every client repaints.")
+event(
+    "display.lease",
+    DisplayLeasePayload,
+    doc="The takeover lease changed hands; every client repaints.",
+)
 
 
 class DisplayInstallLogPayload(Payload):
@@ -192,7 +245,11 @@ class DisplayInstallLogPayload(Payload):
     line: str
 
 
-event("display.install.log", DisplayInstallLogPayload, doc="One line of package-manager output.")
+event(
+    "display.install.log",
+    DisplayInstallLogPayload,
+    doc="One line of package-manager output.",
+)
 
 
 class DisplayInstallDonePayload(Payload):
@@ -201,5 +258,8 @@ class DisplayInstallDonePayload(Payload):
     status: DisplayStatus
 
 
-event("display.install.done", DisplayInstallDonePayload,
-      doc="The install ended (0 ok, -1 cancelled, -2 no sudo: the command to run by hand was streamed).")
+event(
+    "display.install.done",
+    DisplayInstallDonePayload,
+    doc="The install ended (0 ok, -1 cancelled, -2 no sudo: the command to run by hand was streamed).",
+)

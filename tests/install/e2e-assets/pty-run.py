@@ -21,6 +21,7 @@ Usage:
 
 Exits with the child's exit code (124 if the timeout killed it).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -31,8 +32,14 @@ import threading
 import time
 
 
-def _run_under_pty(argv: list[str], out_path: str, cwd: str | None, cols: int, rows: int,
-                   timeout: float | None) -> int | None:
+def _run_under_pty(
+    argv: list[str],
+    out_path: str,
+    cwd: str | None,
+    cols: int,
+    rows: int,
+    timeout: float | None,
+) -> int | None:
     """Return the child's exit code, or None when pywinpty is unavailable.
 
     ``PtyProcess.read`` blocks until the child writes, so the deadline cannot be
@@ -81,8 +88,10 @@ def _run_under_pty(argv: list[str], out_path: str, cwd: str | None, cols: int, r
             sys.stdout.write(chunk)
             sys.stdout.flush()
         if timed_out:
-            note = (f"\npty-run: TIMEOUT after {timeout:g}s: the child was still running and had "
-                    "stopped writing (waiting for input?); killing it.\n")
+            note = (
+                f"\npty-run: TIMEOUT after {timeout:g}s: the child was still running and had "
+                "stopped writing (waiting for input?); killing it.\n"
+            )
             log.write(note)
             sys.stdout.write(note)
             sys.stdout.flush()
@@ -93,14 +102,25 @@ def _run_under_pty(argv: list[str], out_path: str, cwd: str | None, cols: int, r
     return int(proc.exitstatus or 0)
 
 
-def _run_piped(argv: list[str], out_path: str, cwd: str | None, timeout: float | None) -> int:
+def _run_piped(
+    argv: list[str], out_path: str, cwd: str | None, timeout: float | None
+) -> int:
     """Fallback: a pipe, which is exactly what breaks a released tag's print path."""
     with open(out_path, "w", encoding="utf-8", errors="replace") as log:
-        log.write("pty-run: pywinpty is unavailable, so the child got a pipe instead of a "
-                  "console; a released tag's print path will fail here.\n")
+        log.write(
+            "pty-run: pywinpty is unavailable, so the child got a pipe instead of a "
+            "console; a released tag's print path will fail here.\n"
+        )
         log.flush()
-        proc = subprocess.Popen(argv, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                text=True, errors="replace", bufsize=1)
+        proc = subprocess.Popen(
+            argv,
+            cwd=cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            errors="replace",
+            bufsize=1,
+        )
         try:
             assert proc.stdout is not None
             for line in proc.stdout:
@@ -116,18 +136,29 @@ def _run_piped(argv: list[str], out_path: str, cwd: str | None, timeout: float |
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run a command under a Windows pseudoconsole.")
-    parser.add_argument("--out", required=True, help="file to capture the child's output into")
+    parser = argparse.ArgumentParser(
+        description="Run a command under a Windows pseudoconsole."
+    )
+    parser.add_argument(
+        "--out", required=True, help="file to capture the child's output into"
+    )
     parser.add_argument("--cwd", default=None)
     parser.add_argument("--cols", type=int, default=120)
     parser.add_argument("--rows", type=int, default=30)
-    parser.add_argument("--timeout", type=float, default=None, help="seconds; kills the child and exits 124")
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=None,
+        help="seconds; kills the child and exits 124",
+    )
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args()
     argv = [a for a in args.command if a != "--"]
     if not argv:
         parser.error("no command given")
-    if not sys.platform.startswith("win"):  # pragma: no cover - rig is windows-only here
+    if not sys.platform.startswith(
+        "win"
+    ):  # pragma: no cover - rig is windows-only here
         raise SystemExit("pty-run.py is Windows-only")
 
     code = _run_under_pty(argv, args.out, args.cwd, args.cols, args.rows, args.timeout)

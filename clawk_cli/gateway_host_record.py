@@ -1,4 +1,5 @@
 """Host-gateway cleanup after a confirmed stop: the rendezvous record and the memoized probe."""
+
 from __future__ import annotations
 
 import logging

@@ -20,7 +20,9 @@ if str(REPO_ROOT) not in sys.path:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--endpoint", default="http://127.0.0.1:4318/v1/traces")
-    parser.add_argument("--log", required=True, help="JSONL file written by otel_capture_collector.py")
+    parser.add_argument(
+        "--log", required=True, help="JSONL file written by otel_capture_collector.py"
+    )
     parser.add_argument("--wait", type=float, default=7.0)
     args = parser.parse_args()
 
@@ -69,7 +71,9 @@ def main() -> None:
         error_code="auth_failed",
         error_message="Bearer *** rejected for smoke@example.com",
     )
-    logging.getLogger("gateway.platforms.slack").warning("Slack token *** rejected for smoke@example.com")
+    logging.getLogger("gateway.platforms.slack").warning(
+        "Slack token *** rejected for smoke@example.com"
+    )
     emitter.get_emitter().flush(timeout=2.0)
     time.sleep(args.wait)
     write_runtime_status(gateway_state="stopped", active_agents=0)
@@ -77,9 +81,22 @@ def main() -> None:
     emitter.get_emitter().flush(timeout=2.0)
 
     log_path = Path(args.log)
-    rows = [json.loads(line) for line in log_path.read_text(encoding="utf-8-sig").splitlines() if line.strip()]
+    rows = [
+        json.loads(line)
+        for line in log_path.read_text(encoding="utf-8-sig").splitlines()
+        if line.strip()
+    ]
     paths = {row["path"] for row in rows}
-    print(json.dumps({"clawk_home": str(clawk_home), "requests": len(rows), "paths": sorted(paths)}, indent=2))
+    print(
+        json.dumps(
+            {
+                "clawk_home": str(clawk_home),
+                "requests": len(rows),
+                "paths": sorted(paths),
+            },
+            indent=2,
+        )
+    )
     if "/v1/traces" not in paths:
         raise SystemExit("missing /v1/traces request")
     if "/v1/logs" not in paths:

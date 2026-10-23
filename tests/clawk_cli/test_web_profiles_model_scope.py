@@ -57,6 +57,7 @@ def probe(monkeypatch):
         return {"accepted": True, "persist": True, "recognized": True, "message": ""}
 
     import clawk_cli.models_validate as mv
+
     monkeypatch.setattr(mv, "validate_requested_model", _fake_validate)
     return captured
 
@@ -85,6 +86,7 @@ def test_model_pick_resolves_key_env_from_profile_scope(client, homes, probe):
     assert probe["api_key"] == "profile-key"
     from clawk_cli.config import load_config
     from clawk_cli.web_server_profiles import _clawk_home_scope
+
     with _clawk_home_scope(homes[1]):
         assert (load_config().get("model") or {}).get("default") == "acme/mini"
 
@@ -97,13 +99,15 @@ def test_model_pick_for_default_from_named_profile_launch(homes, probe, monkeypa
     (root / ".env").write_text("ACME_RELAY_KEY=root-key\n", encoding="utf-8")
     from clawk_cli.config import invalidate_env_cache, load_config
     from clawk_cli.web_server_profiles import _clawk_home_scope
+
     invalidate_env_cache()
     from clawk_cli import web_server
 
     with TestClient(web_server.app, raise_server_exceptions=False) as client:
         client.headers["Authorization"] = f"Bearer {web_server._SESSION_TOKEN}"
         resp = client.put(
-            "/api/profiles/default/model", json={"provider": "acme", "model": "acme/mini"}
+            "/api/profiles/default/model",
+            json={"provider": "acme", "model": "acme/mini"},
         )
 
     assert resp.status_code == 200, resp.text
@@ -142,7 +146,9 @@ def test_model_set_without_a_profile_pins_to_the_launch_home(client, homes):
         assert (load_config().get("model") or {}).get("default") is None
 
 
-def test_model_set_names_target_from_a_backend_launched_as_another_profile(homes, probe, monkeypatch):
+def test_model_set_names_target_from_a_backend_launched_as_another_profile(
+    homes, probe, monkeypatch
+):
     """A→B→A under one host backend (#118431/#118432): a backend launched under profile A
     serving ``POST /api/model/set?profile=B`` writes B's config.yaml and leaves A's (and the
     root's) untouched; the follow-up for A lands on A only. This is the server half the
@@ -160,7 +166,12 @@ def test_model_set_names_target_from_a_backend_launched_as_another_profile(homes
     invalidate_env_cache()
     from clawk_cli import web_server
 
-    body = {"scope": "main", "provider": "acme", "model": "acme/mini", "confirm_expensive_model": True}
+    body = {
+        "scope": "main",
+        "provider": "acme",
+        "model": "acme/mini",
+        "confirm_expensive_model": True,
+    }
 
     def model_of(home):
         with _clawk_home_scope(home):
@@ -170,11 +181,17 @@ def test_model_set_names_target_from_a_backend_launched_as_another_profile(homes
         client.headers["Authorization"] = f"Bearer {web_server._SESSION_TOKEN}"
         resp = client.post("/api/model/set", params={"profile": "other"}, json=body)
         assert resp.status_code == 200, resp.text
-        assert probe["api_key"] == "other-key"  # validated under B's secret scope, not A's
+        assert (
+            probe["api_key"] == "other-key"
+        )  # validated under B's secret scope, not A's
         assert model_of(other) == "acme/mini"
         assert model_of(demo) is None and model_of(root) is None
 
-        resp = client.post("/api/model/set", params={"profile": "demo"}, json={**body, "model": "acme/mini"})
+        resp = client.post(
+            "/api/model/set",
+            params={"profile": "demo"},
+            json={**body, "model": "acme/mini"},
+        )
         assert resp.status_code == 200, resp.text
         assert probe["api_key"] == "profile-key"
         assert model_of(demo) == "acme/mini" and model_of(root) is None

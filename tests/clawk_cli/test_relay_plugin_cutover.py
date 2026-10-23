@@ -42,8 +42,7 @@ def test_v38_migration_removes_only_legacy_relay_plugin_keys(tmp_path):
     assert raw["_config_version"] >= 38
     assert raw["plugins"]["enabled"] == ["keep-me"]
     assert any(
-        "observability/nemo_relay" in warning
-        and RELAY_PLUGINS_CONFIG_ENV in warning
+        "observability/nemo_relay" in warning and RELAY_PLUGINS_CONFIG_ENV in warning
         for warning in results["warnings"]
     )
 
@@ -77,8 +76,7 @@ def test_doctor_reports_legacy_exporter_env_without_new_config(monkeypatch):
     assert RELAY_PLUGINS_CONFIG_ENV in findings["CLAWK_NEMO_RELAY_ATIF_ENABLED"]
     assert "now ignored" in findings["CLAWK_NEMO_RELAY_ATIF_EXPORT_TIMEOUT_S"]
     assert (
-        RELAY_PLUGINS_CONFIG_ENV
-        in findings["CLAWK_NEMO_RELAY_ATIF_EXPORT_TIMEOUT_S"]
+        RELAY_PLUGINS_CONFIG_ENV in findings["CLAWK_NEMO_RELAY_ATIF_EXPORT_TIMEOUT_S"]
     )
 
 

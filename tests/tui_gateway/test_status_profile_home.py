@@ -46,7 +46,11 @@ def test_session_status_path_uses_owning_profile_home(monkeypatch, tmp_path):
     monkeypatch.setattr("clawk_state_registry.acquire", ProfileDB)
     try:
         resp = server.handle_request(
-            {"id": "1", "method": "session.status", "params": {"session_id": "status-profile-home"}}
+            {
+                "id": "1",
+                "method": "session.status",
+                "params": {"session_id": "status-profile-home"},
+            }
         )
         output = resp["result"]["output"]
         assert f"Path: {profile_home}" in output
@@ -55,7 +59,9 @@ def test_session_status_path_uses_owning_profile_home(monkeypatch, tmp_path):
         server._sessions.pop("status-profile-home", None)
 
 
-def test_session_status_path_without_profile_home_keeps_launch_home(monkeypatch, tmp_path):
+def test_session_status_path_without_profile_home_keeps_launch_home(
+    monkeypatch, tmp_path
+):
     launch_home = tmp_path / "launch"
     launch_home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(launch_home))
@@ -68,7 +74,11 @@ def test_session_status_path_without_profile_home_keeps_launch_home(monkeypatch,
     monkeypatch.setattr(server, "_get_db", lambda: LaunchDB())
     try:
         resp = server.handle_request(
-            {"id": "1", "method": "session.status", "params": {"session_id": "status-launch-home"}}
+            {
+                "id": "1",
+                "method": "session.status",
+                "params": {"session_id": "status-launch-home"},
+            }
         )
         assert f"Path: {launch_home}" in resp["result"]["output"]
     finally:

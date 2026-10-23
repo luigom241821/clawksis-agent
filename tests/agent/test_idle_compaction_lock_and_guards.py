@@ -32,8 +32,9 @@ from agent.turn_context import build_turn_context
 from tests.agent.test_compression_concurrent_fork import _build_agent_with_db
 
 
-def _prep_idle_agent(db: SessionDB, session_id: str, *, idle_after: int = 60,
-                     idle_gap: float = 3600.0):
+def _prep_idle_agent(
+    db: SessionDB, session_id: str, *, idle_after: int = 60, idle_gap: float = 3600.0
+):
     """Real AIAgent (mock compressor) primed so the idle trigger is eligible."""
     agent = _build_agent_with_db(db, session_id)
     agent.compression_enabled = True
@@ -47,15 +48,16 @@ def _prep_idle_agent(db: SessionDB, session_id: str, *, idle_after: int = 60,
     agent.context_compressor.protect_last_n = 2
     agent.context_compressor.awaiting_real_usage_after_compression = False
     # No active failure cooldown unless a test installs one.
-    agent.context_compressor.get_active_compression_failure_cooldown = (
-        lambda *a, **k: None
+    agent.context_compressor.get_active_compression_failure_cooldown = lambda *a, **k: (
+        None
     )
     agent._cached_system_prompt = "SYSTEM"
     return agent
 
 
-def _run_prologue(agent, history, user_message="hello again",
-                  rough_tokens: int = 999_999):
+def _run_prologue(
+    agent, history, user_message="hello again", rough_tokens: int = 999_999
+):
     """Invoke ``build_turn_context`` the way ``conversation_loop`` does.
 
     The token-threshold preflight gate is pinned False so these tests
@@ -63,11 +65,14 @@ def _run_prologue(agent, history, user_message="hello again",
     coverage in ``test_turn_context.py``). ``rough_tokens`` pins the estimate
     that the idle floor is compared against.
     """
-    with patch("agent.auxiliary_client.set_runtime_main", lambda *a, **k: None), \
-         patch("agent.turn_context._should_run_preflight_estimate",
-               return_value=False), \
-         patch("agent.turn_context.estimate_request_tokens_rough",
-               return_value=rough_tokens):
+    with (
+        patch("agent.auxiliary_client.set_runtime_main", lambda *a, **k: None),
+        patch("agent.turn_context._should_run_preflight_estimate", return_value=False),
+        patch(
+            "agent.turn_context.estimate_request_tokens_rough",
+            return_value=rough_tokens,
+        ),
+    ):
         return build_turn_context(
             agent=agent,
             user_message=user_message,
@@ -88,10 +93,6 @@ def _run_prologue(agent, history, user_message="hello again",
 
 def _history(n: int = 20) -> list:
     return [{"role": "user", "content": f"m{i}"} for i in range(n)]
-
-
-
-
 
 
 def test_idle_compaction_status_emitted_by_default(tmp_path: Path) -> None:
@@ -200,10 +201,6 @@ def test_idle_compaction_skips_a_transcript_that_has_not_grown(tmp_path: Path) -
     assert ctx.current_turn_user_idx == len(ctx.messages) - 1
 
 
-
-
-
-
 def test_idle_compaction_respects_anti_thrash_breaker(tmp_path: Path) -> None:
     """A tripped ineffective-compression breaker must block the idle trigger.
 
@@ -242,7 +239,3 @@ def test_idle_compaction_respects_anti_thrash_breaker(tmp_path: Path) -> None:
     compressor.compress.assert_not_called()
     assert agent.session_id == sid
     assert len(ctx.messages) == len(_history()) + 1
-
-
-
-

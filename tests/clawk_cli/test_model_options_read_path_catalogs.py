@@ -36,9 +36,13 @@ def _picker_env(monkeypatch, tmp_path, *, hung=None):
     monkeypatch.setattr(models_mod, "provider_model_ids", fake_provider_model_ids)
     monkeypatch.setattr(
         "agent.models_dev.fetch_models_dev",
-        lambda *a, **k: {_DEAD_PROVIDER: {"env": ["DEEPSEEK_API_KEY"], "name": "DeepSeek"}},
+        lambda *a, **k: {
+            _DEAD_PROVIDER: {"env": ["DEEPSEEK_API_KEY"], "name": "DeepSeek"}
+        },
     )
-    monkeypatch.setattr("agent.models_dev.PROVIDER_TO_MODELS_DEV", {_DEAD_PROVIDER: _DEAD_PROVIDER})
+    monkeypatch.setattr(
+        "agent.models_dev.PROVIDER_TO_MODELS_DEV", {_DEAD_PROVIDER: _DEAD_PROVIDER}
+    )
     monkeypatch.setattr("clawk_cli.providers.CLAWK_OVERLAYS", {})
     return live_calls, release
 
@@ -74,9 +78,13 @@ def test_degraded_provider_cannot_stall_the_open(monkeypatch, tmp_path):
 
     assert returned_while_hung, "the open waited on a degraded provider's catalog probe"
     row = _row(box["payload"], _DEAD_PROVIDER)
-    assert row is not None and row["models"], "the degraded row must still render from curated"
+    assert row is not None and row["models"], (
+        "the degraded row must still render from curated"
+    )
     assert "live-model" not in row["models"]
-    assert _DEAD_PROVIDER in live_calls, "the degraded provider is still probed — off the read path"
+    assert _DEAD_PROVIDER in live_calls, (
+        "the degraded provider is still probed — off the read path"
+    )
 
 
 def test_explicit_refresh_still_probes_providers(monkeypatch, tmp_path):
@@ -85,6 +93,8 @@ def test_explicit_refresh_still_probes_providers(monkeypatch, tmp_path):
 
     payload = build_model_options_payload(load_picker_context(), refresh=True)
 
-    assert _DEAD_PROVIDER in live_calls, "an explicit refresh must still probe provider catalogs"
+    assert _DEAD_PROVIDER in live_calls, (
+        "an explicit refresh must still probe provider catalogs"
+    )
     assert "live-model" in _row(payload, _DEAD_PROVIDER)["models"]
     _drain_background_warms()

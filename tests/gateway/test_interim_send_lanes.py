@@ -36,8 +36,6 @@ class RecordingTransport:
 
 
 class TestInterimMetadataHelper:
-
-
     def test_does_not_mutate_input(self):
         src = {"thread_id": "t1"}
         _interim_metadata(src)

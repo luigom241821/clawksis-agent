@@ -24,7 +24,9 @@ import pytest
 
 from clawk_cli import dashboard_procs
 
-pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="POSIX signal semantics only")
+pytestmark = pytest.mark.skipif(
+    sys.platform == "win32", reason="POSIX signal semantics only"
+)
 
 _IGNORING_CHILD = textwrap.dedent(
     """
@@ -78,12 +80,18 @@ _WEDGED_BACKEND = textwrap.dedent(
 def _spawn_ready(script: str, ready_path, *args: str) -> subprocess.Popen:
     child = subprocess.Popen(
         [sys.executable, "-c", script, *args],
-        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
     deadline = time.monotonic() + 10.0
-    while not ready_path.exists():  # the SIGTERM handler must be installed before we signal
+    while (
+        not ready_path.exists()
+    ):  # the SIGTERM handler must be installed before we signal
         if child.poll() is not None:
-            raise AssertionError(f"child exited before signaling ready: {child.returncode}")
+            raise AssertionError(
+                f"child exited before signaling ready: {child.returncode}"
+            )
         if time.monotonic() > deadline:
             raise AssertionError("child never signaled ready")
         time.sleep(0.02)
@@ -108,11 +116,14 @@ def _pid_running(pid: int) -> bool:
         os.kill(pid, 0)
     except ProcessLookupError:
         return False
-    stat = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True,
-                          stdin=subprocess.DEVNULL, check=False).stdout.strip()
+    stat = subprocess.run(
+        ["ps", "-o", "stat=", "-p", str(pid)],
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+        check=False,
+    ).stdout.strip()
     return bool(stat) and not stat.startswith("Z")
-
-
 
 
 def test_sigterm_ignoring_process_is_still_sigkilled(tmp_path, monkeypatch):
@@ -135,16 +146,26 @@ def test_wedged_pty_descendant_is_gone_but_detached_bot_survives(tmp_path, monke
     started with ``start_new_session`` is untouched."""
     pytest.importorskip("ptyprocess")
     monkeypatch.setattr(dashboard_procs, "_POSIX_TERM_GRACE_SECONDS", 0.6)
-    tui_pid_file, bot_pid_file, ready = tmp_path / "tui.pid", tmp_path / "bot.pid", tmp_path / "ready"
-    backend = _spawn_ready(_WEDGED_BACKEND, ready, str(tui_pid_file), str(bot_pid_file), str(ready))
+    tui_pid_file, bot_pid_file, ready = (
+        tmp_path / "tui.pid",
+        tmp_path / "bot.pid",
+        tmp_path / "ready",
+    )
+    backend = _spawn_ready(
+        _WEDGED_BACKEND, ready, str(tui_pid_file), str(bot_pid_file), str(ready)
+    )
     tui_pid, bot_pid = int(tui_pid_file.read_text()), int(bot_pid_file.read_text())
     try:
         killed, failed = _kill_and_reap(backend)
 
         assert (killed, failed) == ([backend.pid], [])
         assert backend.returncode == -signal.SIGKILL
-        assert not _pid_running(tui_pid), "wedged hosted TUI outlived the dashboard stop"
-        assert _pid_running(bot_pid), "detached gateway bot was killed with the dashboard"
+        assert not _pid_running(tui_pid), (
+            "wedged hosted TUI outlived the dashboard stop"
+        )
+        assert _pid_running(bot_pid), (
+            "detached gateway bot was killed with the dashboard"
+        )
     finally:
         for pid in (tui_pid, bot_pid):
             if _pid_running(pid):

@@ -107,5 +107,3 @@ async def test_blocked_loop_after_expiry_dumps_diagnostics(monkeypatch):
 
     assert dumps == [("telegram", 0.05)]
     hung.cancel()
-
-

@@ -20,7 +20,8 @@ from pathlib import Path
 from typing import Any
 
 _connection_profile_home: contextvars.ContextVar[str | None] = contextvars.ContextVar(
-    "clawk_ws_connection_profile_home", default=None)
+    "clawk_ws_connection_profile_home", default=None
+)
 
 
 # The authority owns every session, its transcript and its admissions: a legacy handler in these
@@ -30,10 +31,16 @@ _connection_profile_home: contextvars.ContextVar[str | None] = contextvars.Conte
 # policy: Desktop sends ``session.mutate operation=workspace``). Kept: store-wide reads and
 # foreign-history import (new rows only).
 _SESSION_NAMESPACES = ("session.", "prompt.", "message.")
-_SESSION_FALLBACK_ALLOWED = frozenset({
-    "session.most_recent", "session.active_list", "session.events.stats",
-    "session.foreign.list", "session.foreign.preview", "session.foreign.import",
-})
+_SESSION_FALLBACK_ALLOWED = frozenset(
+    {
+        "session.most_recent",
+        "session.active_list",
+        "session.events.stats",
+        "session.foreign.list",
+        "session.foreign.preview",
+        "session.foreign.import",
+    }
+)
 # Sidecar verbs whose handler acts on PROCESS-global state. In a TUI's own sidecar that state was
 # that TUI's alone; on the shared owner it is every chat's, Desktop window's and served profile's:
 # ``process.stop`` = ``kill_all`` over the whole registry (persisted jobs included),
@@ -43,7 +50,9 @@ _SESSION_FALLBACK_ALLOWED = frozenset({
 # (``gateway/session_ancillary.py``), and ``reload.env`` / ``delegation.pause`` with owner-side rules
 # (``gateway/session_tui_ops.py``); listing them here keeps the sidecar handler unreachable.
 # ``process.kill`` stays: its handler is already session-scoped.
-_PROCESS_GLOBAL = frozenset({"process.stop", "delegation.pause", "reload.mcp", "reload.env", "agents.list"})
+_PROCESS_GLOBAL = frozenset(
+    {"process.stop", "delegation.pause", "reload.mcp", "reload.env", "agents.list"}
+)
 # ``browser.manage`` is NOT here: connect/disconnect run in the requesting profile's scope (the
 # ticket's home, or the session's ``profile_home`` via ``_profile_scoped``) and the live endpoint, the
 # reap and the CDP supervisors are keyed by that profile home (CLI-9, #134889), so a multiplexed
@@ -55,11 +64,17 @@ def legacy_fallback_allowed(actor: Any, method: str) -> bool:
     capability map; never a second list that could drift) and *method* is neither a session verb
     the authority owns nor a process-global sidecar verb."""
     from gateway.runtime_bootstrap import _PURPOSE_CAPABILITIES
+
     if method in _PROCESS_GLOBAL:
         return False
-    if method.startswith(_SESSION_NAMESPACES) and method not in _SESSION_FALLBACK_ALLOWED:
+    if (
+        method.startswith(_SESSION_NAMESPACES)
+        and method not in _SESSION_FALLBACK_ALLOWED
+    ):
         return False
-    return _PURPOSE_CAPABILITIES["interactive"] <= frozenset(getattr(actor, "capabilities", ()) or ())
+    return _PURPOSE_CAPABILITIES["interactive"] <= frozenset(
+        getattr(actor, "capabilities", ()) or ()
+    )
 
 
 def connection_profile_home() -> str | None:
@@ -80,7 +95,9 @@ def _foreign_profile_home(server: Any, profile_id: Any) -> str | None:
     return str(home)
 
 
-def _ticket_profile_request(server: Any, req: dict, home: str) -> tuple[dict, str | None]:
+def _ticket_profile_request(
+    server: Any, req: dict, home: str
+) -> tuple[dict, str | None]:
     """Bind a non-launch ticket's profile into a legacy verb (N86). The verb runs in the ticket's
     home, or in the one an explicit ``profile`` names (Desktop's host-scoped routing), so handlers
     that ignore ``profile`` (billing, usage) resolve through that runtime scope instead of the
@@ -89,8 +106,13 @@ def _ticket_profile_request(server: Any, req: dict, home: str) -> tuple[dict, st
     request plus the home to scope ("" = launch), or an error frame and None."""
     from clawk_constants import profile_name_for_home
     from tui_gateway.contracts.registry import METHODS
+
     params = req.get("params") if isinstance(req.get("params"), dict) else {}
-    refused = {"jsonrpc": "2.0", "id": req.get("id"), "error": {"code": 4064, "message": "profile unavailable"}}
+    refused = {
+        "jsonrpc": "2.0",
+        "id": req.get("id"),
+        "error": {"code": 4064, "message": "profile unavailable"},
+    }
     if explicit := str(params.get("profile") or "").strip():
         try:
             named = server._profile_home(explicit)
@@ -115,6 +137,7 @@ def _own_profile_read(server: Any, req: dict, home: str) -> dict:
     to the LAUNCH profile's store and ``session.active_list`` lists every profile's live sessions, so
     the ticket's own profile is named (or the read refused), never the launch profile's served."""
     from clawk_constants import profile_name_for_home
+
     params = req.get("params") if isinstance(req.get("params"), dict) else {}
     name = params.get("profile") or profile_name_for_home(home)
     try:
@@ -122,15 +145,23 @@ def _own_profile_read(server: Any, req: dict, home: str) -> dict:
     except (OSError, ValueError):
         resolved = None
     if resolved is None or Path(resolved).resolve() != Path(home).resolve():
-        return {"jsonrpc": "2.0", "id": req.get("id"), "error": {"code": 4064, "message": "profile unavailable"}}
+        return {
+            "jsonrpc": "2.0",
+            "id": req.get("id"),
+            "error": {"code": 4064, "message": "profile unavailable"},
+        }
     if req.get("method") != "session.active_list":
         return dict(req, params={**params, "profile": name})
     with server._sessions_lock:
         live = list(server._sessions.items())
     current = str(params.get("current_session_id") or "")
-    rows = [server._session_live_item(sid, session, current) for sid, session in live
-            if not session.get("_finalized") and Path(session.get("profile_home") or server._launch_home()).resolve()
-            == Path(home).resolve()]
+    rows = [
+        server._session_live_item(sid, session, current)
+        for sid, session in live
+        if not session.get("_finalized")
+        and Path(session.get("profile_home") or server._launch_home()).resolve()
+        == Path(home).resolve()
+    ]
     return {"jsonrpc": "2.0", "id": req.get("id"), "result": {"sessions": rows}}
 
 
@@ -140,7 +171,11 @@ def dispatch_legacy(server: Any, req: dict, transport: Any, actor: Any) -> dict 
     try:
         home = _foreign_profile_home(server, getattr(actor, "profile_id", None))
     except OSError:
-        return {"jsonrpc": "2.0", "id": req.get("id"), "error": {"code": 4064, "message": "profile unavailable"}}
+        return {
+            "jsonrpc": "2.0",
+            "id": req.get("id"),
+            "error": {"code": 4064, "message": "profile unavailable"},
+        }
     scope = contextlib.nullcontext()
     if home is not None and req.get("method") in _SESSION_FALLBACK_ALLOWED:
         scoped = _own_profile_read(server, req, home)

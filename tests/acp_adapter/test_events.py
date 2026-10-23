@@ -43,17 +43,20 @@ def event_loop_fixture():
 
 
 class TestToolProgressCallback:
-
-
-
-    def test_duplicate_same_name_tool_calls_use_fifo_ids(self, mock_conn, event_loop_fixture):
+    def test_duplicate_same_name_tool_calls_use_fifo_ids(
+        self, mock_conn, event_loop_fixture
+    ):
         """Multiple same-name tool calls should be tracked independently in order."""
         tool_call_ids = {}
         tool_call_meta = {}
         loop = event_loop_fixture
 
-        progress_cb = make_tool_progress_cb(mock_conn, "session-1", loop, tool_call_ids, tool_call_meta)
-        step_cb = make_step_cb(mock_conn, "session-1", loop, tool_call_ids, tool_call_meta)
+        progress_cb = make_tool_progress_cb(
+            mock_conn, "session-1", loop, tool_call_ids, tool_call_meta
+        )
+        step_cb = make_step_cb(
+            mock_conn, "session-1", loop, tool_call_ids, tool_call_meta
+        )
 
         with patch("acp_adapter.events.asyncio.run_coroutine_threadsafe") as mock_rcts:
             future = MagicMock(spec=Future)
@@ -76,42 +79,57 @@ class TestToolProgressCallback:
 # ---------------------------------------------------------------------------
 
 
-
-
 # ---------------------------------------------------------------------------
 # Step callback
 # ---------------------------------------------------------------------------
 
 
 class TestStepCallback:
-
-
-
     @pytest.mark.parametrize("raw, expected", [("", ""), (0, "0"), (False, "False")])
-    def test_falsey_result_reaches_client_unchanged(self, mock_conn, event_loop_fixture, raw, expected):
+    def test_falsey_result_reaches_client_unchanged(
+        self, mock_conn, event_loop_fixture, raw, expected
+    ):
         """A present-but-falsey ``result`` is the tool's real output, not a missing key (#10845)."""
         from collections import deque
 
-        cb = make_step_cb(mock_conn, "session-1", event_loop_fixture, {"terminal": deque(["tc-f"])}, {})
-        with patch("acp_adapter.events.asyncio.run_coroutine_threadsafe") as mock_rcts, \
-             patch("acp_adapter.events.build_tool_complete") as mock_btc:
+        cb = make_step_cb(
+            mock_conn,
+            "session-1",
+            event_loop_fixture,
+            {"terminal": deque(["tc-f"])},
+            {},
+        )
+        with (
+            patch("acp_adapter.events.asyncio.run_coroutine_threadsafe") as mock_rcts,
+            patch("acp_adapter.events.build_tool_complete") as mock_btc,
+        ):
             mock_rcts.return_value = MagicMock(spec=Future)
             cb(1, [{"name": "terminal", "result": raw}])
-        mock_btc.assert_called_once_with("tc-f", "terminal", result=expected, function_args=None, snapshot=None)
+        mock_btc.assert_called_once_with(
+            "tc-f", "terminal", result=expected, function_args=None, snapshot=None
+        )
 
-
-
-
-    def test_tool_progress_captures_snapshot_metadata(self, mock_conn, event_loop_fixture):
+    def test_tool_progress_captures_snapshot_metadata(
+        self, mock_conn, event_loop_fixture
+    ):
         tool_call_ids = {}
         tool_call_meta = {}
         loop = event_loop_fixture
 
-        with patch("acp_adapter.events.make_tool_call_id", return_value="tc-meta"), \
-             patch("acp_adapter.events._send_update") as mock_send, \
-             patch("agent.display.capture_local_edit_snapshot", return_value="snapshot"):
-            cb = make_tool_progress_cb(mock_conn, "session-1", loop, tool_call_ids, tool_call_meta)
-            cb("tool.started", "write_file", None, {"path": "diff-test.txt", "content": "hello"})
+        with (
+            patch("acp_adapter.events.make_tool_call_id", return_value="tc-meta"),
+            patch("acp_adapter.events._send_update") as mock_send,
+            patch("agent.display.capture_local_edit_snapshot", return_value="snapshot"),
+        ):
+            cb = make_tool_progress_cb(
+                mock_conn, "session-1", loop, tool_call_ids, tool_call_meta
+            )
+            cb(
+                "tool.started",
+                "write_file",
+                None,
+                {"path": "diff-test.txt", "content": "hello"},
+            )
 
         assert list(tool_call_ids["write_file"]) == ["tc-meta"]
         assert tool_call_meta["tc-meta"] == {
@@ -120,7 +138,9 @@ class TestStepCallback:
         }
         mock_send.assert_called_once()
 
-    def test_todo_completion_emits_native_plan_update_after_tool_completion(self, mock_conn, event_loop_fixture):
+    def test_todo_completion_emits_native_plan_update_after_tool_completion(
+        self, mock_conn, event_loop_fixture
+    ):
         from collections import deque
 
         tool_call_ids = {"todo": deque(["tc-todo"])}
@@ -149,10 +169,16 @@ class TestStepCallback:
             "Patch renderer",
             "[cancelled] Drop stale task",
         ]
-        assert [entry.status for entry in plan.entries] == ["completed", "in_progress", "completed"]
-        assert [entry.priority for entry in plan.entries] == ["medium", "medium", "medium"]
-
-
+        assert [entry.status for entry in plan.entries] == [
+            "completed",
+            "in_progress",
+            "completed",
+        ]
+        assert [entry.priority for entry in plan.entries] == [
+            "medium",
+            "medium",
+            "medium",
+        ]
 
 
 # ---------------------------------------------------------------------------
@@ -160,11 +186,10 @@ class TestStepCallback:
 # ---------------------------------------------------------------------------
 
 
-
-
 # ---------------------------------------------------------------------------
 # Scheduler-failure regression
 # ---------------------------------------------------------------------------
+
 
 class TestSendUpdate:
     def test_scheduler_failure_closes_update_coroutine(self, event_loop_fixture):
@@ -197,7 +222,8 @@ class TestSendUpdate:
         #  may emit unrelated
         # "coroutine was never awaited" warnings that bleed through.
         runtime_warnings = [
-            w for w in caught
+            w
+            for w in caught
             if issubclass(w.category, RuntimeWarning)
             and "was never awaited" in str(w.message)
             and "_session_update" in str(w.message)
@@ -214,8 +240,10 @@ class TestAssistantMessageIds:
         ids = AssistantMessageIdAllocator()
         cb = make_message_cb(mock_conn, "s", event_loop_fixture, ids)
         sent = []
-        with patch("acp_adapter.events._send_update",
-                   side_effect=lambda c, s, l, u: sent.append(u)):
+        with patch(
+            "acp_adapter.events._send_update",
+            side_effect=lambda c, s, l, u: sent.append(u),
+        ):
             cb("Hello ")
             cb("")  # empty delta is ignored, not a flush
             cb("world")
@@ -233,8 +261,10 @@ class TestAssistantMessageIds:
         think = make_thinking_cb(mock_conn, "s", event_loop_fixture, ids)
         msg = make_message_cb(mock_conn, "s", event_loop_fixture, ids)
         sent = []
-        with patch("acp_adapter.events._send_update",
-                   side_effect=lambda c, s, l, u: sent.append(u)):
+        with patch(
+            "acp_adapter.events._send_update",
+            side_effect=lambda c, s, l, u: sent.append(u),
+        ):
             think("pondering")
             msg("answer")
         # Reasoning and answer of the same reply share one message id.
@@ -243,8 +273,10 @@ class TestAssistantMessageIds:
     def test_no_allocator_keeps_legacy_shape(self, mock_conn, event_loop_fixture):
         cb = make_message_cb(mock_conn, "s", event_loop_fixture)
         sent = []
-        with patch("acp_adapter.events._send_update",
-                   side_effect=lambda c, s, l, u: sent.append(u)):
+        with patch(
+            "acp_adapter.events._send_update",
+            side_effect=lambda c, s, l, u: sent.append(u),
+        ):
             cb("text")
         assert sent[0].message_id is None
 
@@ -259,23 +291,44 @@ class TestToolCallsAlwaysReachATerminalStatus:
     def _patch(self):
         return patch("acp_adapter.events.asyncio.run_coroutine_threadsafe")
 
-    def test_tool_completed_closes_the_call_once_and_the_step_closer_stands_down(self, mock_conn, event_loop_fixture):
+    def test_tool_completed_closes_the_call_once_and_the_step_closer_stands_down(
+        self, mock_conn, event_loop_fixture
+    ):
         from collections import deque
 
-        ids, meta, turn_state = {"read": deque(["tc-1", "tc-2"])}, {"tc-1": {"args": {"path": "a"}}}, {}
-        progress = make_tool_progress_cb(mock_conn, "s", event_loop_fixture, ids, meta, turn_state=turn_state)
+        ids, meta, turn_state = (
+            {"read": deque(["tc-1", "tc-2"])},
+            {"tc-1": {"args": {"path": "a"}}},
+            {},
+        )
+        progress = make_tool_progress_cb(
+            mock_conn, "s", event_loop_fixture, ids, meta, turn_state=turn_state
+        )
         step = make_step_cb(mock_conn, "s", event_loop_fixture, ids, meta, turn_state)
-        with self._patch() as rcts, patch("acp_adapter.events.build_tool_complete") as btc:
+        with (
+            self._patch() as rcts,
+            patch("acp_adapter.events.build_tool_complete") as btc,
+        ):
             rcts.return_value = MagicMock(spec=Future)
             progress("tool.completed", "read", None, None, result="file body")
-            step(2, [{"name": "read", "result": "file body", "arguments": '{"path": "a"}'}])
+            step(
+                2,
+                [{"name": "read", "result": "file body", "arguments": '{"path": "a"}'}],
+            )
         btc.assert_called_once_with(
-            "tc-1", "read", result="file body", function_args={"path": "a"}, snapshot=None, is_error=False,
+            "tc-1",
+            "read",
+            result="file body",
+            function_args={"path": "a"},
+            snapshot=None,
+            is_error=False,
         )
         assert list(ids["read"]) == ["tc-2"] and "tc-1" not in meta
 
     def test_step_fallback_coerces_wire_arguments_and_turn_end_flush_fails_what_is_still_open(
-        self, mock_conn, event_loop_fixture,
+        self,
+        mock_conn,
+        event_loop_fixture,
     ):
         """No completion projected: the step closer must survive the JSON-string ``arguments``
         the wire carries (a real ``write_file`` close raised on ``.get`` and was swallowed);
@@ -285,19 +338,41 @@ class TestToolCallsAlwaysReachATerminalStatus:
         from acp_adapter.events import flush_open_tool_calls
 
         ids = {"write_file": deque(["tc-1"]), "edit": deque(["tc-denied"])}
-        meta = {"tc-1": {"args": {"path": "a"}, "snapshot": None}, "tc-denied": {"args": {}}}
+        meta = {
+            "tc-1": {"args": {"path": "a"}, "snapshot": None},
+            "tc-denied": {"args": {}},
+        }
         step = make_step_cb(mock_conn, "s", event_loop_fixture, ids, meta, {})
         with self._patch() as rcts:
             rcts.return_value = MagicMock(spec=Future)
-            step(2, [{"name": "write_file", "result": "ok", "arguments": '{"path": "a", "content": "x"}'}])
-            assert [c.args[1].status for c in mock_conn.session_update.call_args_list] == ["completed"]
-            assert flush_open_tool_calls(mock_conn, "s", event_loop_fixture, ids, meta) == 1
-            assert flush_open_tool_calls(mock_conn, "s", event_loop_fixture, ids, meta) == 0
+            step(
+                2,
+                [
+                    {
+                        "name": "write_file",
+                        "result": "ok",
+                        "arguments": '{"path": "a", "content": "x"}',
+                    }
+                ],
+            )
+            assert [
+                c.args[1].status for c in mock_conn.session_update.call_args_list
+            ] == ["completed"]
+            assert (
+                flush_open_tool_calls(mock_conn, "s", event_loop_fixture, ids, meta)
+                == 1
+            )
+            assert (
+                flush_open_tool_calls(mock_conn, "s", event_loop_fixture, ids, meta)
+                == 0
+            )
         statuses = [c.args[1].status for c in mock_conn.session_update.call_args_list]
         assert statuses == ["completed", "failed"]
         assert ids == {} and meta == {}
 
-    def test_tool_completed_is_error_flag_closes_the_call_as_failed(self, mock_conn, event_loop_fixture):
+    def test_tool_completed_is_error_flag_closes_the_call_as_failed(
+        self, mock_conn, event_loop_fixture
+    ):
         """``tool.completed`` carries the executor's ``is_error``; a cancelled tool's plain-text
         result trips no heuristic, so dropping the flag showed an interrupted call green."""
         from collections import deque
@@ -306,6 +381,14 @@ class TestToolCallsAlwaysReachATerminalStatus:
         progress = make_tool_progress_cb(mock_conn, "s", event_loop_fixture, ids, {})
         with self._patch() as rcts:
             rcts.return_value = MagicMock(spec=Future)
-            progress("tool.completed", "terminal", None, None, is_error=True,
-                     result="[Tool execution cancelled — terminal was skipped. User sent a new message]")
-        assert [c.args[1].status for c in mock_conn.session_update.call_args_list] == ["failed"]
+            progress(
+                "tool.completed",
+                "terminal",
+                None,
+                None,
+                is_error=True,
+                result="[Tool execution cancelled — terminal was skipped. User sent a new message]",
+            )
+        assert [c.args[1].status for c in mock_conn.session_update.call_args_list] == [
+            "failed"
+        ]

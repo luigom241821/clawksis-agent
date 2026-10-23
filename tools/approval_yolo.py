@@ -25,11 +25,21 @@ def _persist(persist: Persist, enabled: bool, session_key: str) -> None:
     try:
         persist(enabled)
     except Exception:
-        logger.warning("failed to persist session yolo=%s for %s", enabled, session_key, exc_info=True)
+        logger.warning(
+            "failed to persist session yolo=%s for %s",
+            enabled,
+            session_key,
+            exc_info=True,
+        )
 
 
-def toggle_session_yolo(session_key: str, enabled: Optional[bool] = None, *, persisted: bool = False,
-                        persist: Persist = None) -> bool:
+def toggle_session_yolo(
+    session_key: str,
+    enabled: Optional[bool] = None,
+    *,
+    persisted: bool = False,
+    persist: Persist = None,
+) -> bool:
     """Flip (``enabled=None``) or set the bypass for *session_key*; returns the new state.
 
     *persisted* is the stored flag: after a restart only it is set and the user still sees ON, so a toggle
@@ -39,7 +49,9 @@ def toggle_session_yolo(session_key: str, enabled: Optional[bool] = None, *, per
     if enabled is None:
         enabled = not (persisted or approval.is_session_yolo_enabled(session_key))
     _persist(persist, enabled, session_key)
-    (approval.enable_session_yolo if enabled else approval.disable_session_yolo)(session_key)
+    (approval.enable_session_yolo if enabled else approval.disable_session_yolo)(
+        session_key
+    )
     return enabled
 
 
@@ -49,8 +61,12 @@ def restore_session_yolo(session_key: str, persisted: bool) -> bool:
     Key it on the id approvals are checked under (the stored session id / routing key), never a
     transport-local id. Skipped under the frozen process ``--yolo``, which already bypasses everything.
     """
-    if (not session_key or not persisted or approval._YOLO_MODE_FROZEN
-            or approval.is_session_yolo_enabled(session_key)):
+    if (
+        not session_key
+        or not persisted
+        or approval._YOLO_MODE_FROZEN
+        or approval.is_session_yolo_enabled(session_key)
+    ):
         return False
     approval.enable_session_yolo(session_key)
     return True
@@ -71,7 +87,9 @@ def apply_launch_yolo(session_key: str) -> None:
     approval.enable_session_yolo(session_key)
 
 
-def restore_gateway_yolo(session_key: str, persisted: Optional[bool], *, launch: bool = False) -> None:
+def restore_gateway_yolo(
+    session_key: str, persisted: Optional[bool], *, launch: bool = False
+) -> None:
     """Restore the authoritative routing value, including OFF, before frozen launch seeding.
 
     ``persisted`` None means nobody toggled this route: the ``--yolo`` launch policy (*launch*) is seeded
@@ -87,7 +105,9 @@ def restore_gateway_yolo(session_key: str, persisted: Optional[bool], *, launch:
         if session_key in approval._launch_yolo_applied:
             return  # after restoration, the live toggle remains authoritative in this process
         approval._launch_yolo_applied.add(session_key)
-        (approval._session_yolo.add if persisted else approval._session_yolo.discard)(session_key)
+        (approval._session_yolo.add if persisted else approval._session_yolo.discard)(
+            session_key
+        )
 
 
 def transfer_session_yolo(old_key: str, new_key: str) -> None:
@@ -96,8 +116,14 @@ def transfer_session_yolo(old_key: str, new_key: str) -> None:
     continuation site calls this, so it also moves the chat's MCP spend total: a rotation must not hand a
     chat that spent its limit a fresh budget."""
     from tools.mcp_tool_costs import transfer_session
+
     transfer_session(old_key, new_key)
-    if not old_key or not new_key or old_key == new_key or not approval.is_session_yolo_enabled(old_key):
+    if (
+        not old_key
+        or not new_key
+        or old_key == new_key
+        or not approval.is_session_yolo_enabled(old_key)
+    ):
         return
     approval.enable_session_yolo(new_key)
     approval.disable_session_yolo(old_key)

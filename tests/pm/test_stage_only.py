@@ -59,6 +59,7 @@ def sandbox(tmp_path, monkeypatch):
 
 def _arm_lock(monkeypatch, artifacts):
     from pm import paths
+
     lock = Lockfile(paths.store_root().parent / "stage-lock.json")
     lock.set_pin("node", "1.0", {"any": artifacts})
     lock.set_pin("stage-test", "1.0", {"any": artifacts})
@@ -71,10 +72,17 @@ TARGET = "linux-arm64-bionic"
 ENTRY = "stage-test-1.0-linux-arm64-bionic"
 
 
-@pytest.mark.parametrize("name,relative", [
-    ("python", "bin/python3.14"), ("uv", "bin/uv"), ("node", "bin/node"),
-])
-def test_bionic_deb_stages_real_packages_without_host_execution(tmp_path, monkeypatch, name, relative):
+@pytest.mark.parametrize(
+    "name,relative",
+    [
+        ("python", "bin/python3.14"),
+        ("uv", "bin/uv"),
+        ("node", "bin/node"),
+    ],
+)
+def test_bionic_deb_stages_real_packages_without_host_execution(
+    tmp_path, monkeypatch, name, relative
+):
     from pm import paths
     from tests.pm.test_deb_safety import _build_deb
     from pm.registry import get_package
@@ -85,16 +93,29 @@ def test_bionic_deb_stages_real_packages_without_host_execution(tmp_path, monkey
     monkeypatch.setattr(paths, "lockfile_path", lambda: lock.path)
     deb = tmp_path / "tool.deb"
     main = "data/data/com.termux/files/usr/" + relative
-    _build_deb(deb, [(main, b"bionic fixture"), ("data/data/com.termux/files/usr/lib/keep", b"library")])
+    _build_deb(
+        deb,
+        [
+            (main, b"bionic fixture"),
+            ("data/data/com.termux/files/usr/lib/keep", b"library"),
+        ],
+    )
     digest = _sha(deb.read_bytes())
-    lock.set_pin(name, "1.0", {TARGET: {"url": "https://example.invalid/tool.deb", "sha256": digest}})
+    lock.set_pin(
+        name,
+        "1.0",
+        {TARGET: {"url": "https://example.invalid/tool.deb", "sha256": digest}},
+    )
     lock.save()
     cached = paths.store_root() / f"fetch-{digest}"
     cached.mkdir(parents=True)
     (cached / "tool.deb").write_bytes(deb.read_bytes())
     paths.facts_path().write_bytes(b'{"schema":1,"packages":{}}')
     before = paths.facts_path().read_bytes()
-    monkeypatch.setattr("pm.packages.subprocess.run", lambda *a, **kw: pytest.fail("bionic executed on host"))
+    monkeypatch.setattr(
+        "pm.packages.subprocess.run",
+        lambda *a, **kw: pytest.fail("bionic executed on host"),
+    )
     entry = ensure_mod.stage_only(name, TARGET)
     assert get_package(name).binary(entry, TARGET) == entry / main
     assert (entry / main).read_bytes() == b"bionic fixture"
@@ -126,7 +147,9 @@ def test_real_node_foreign_stage_checks_bytes_without_exec(tmp_path, monkeypatch
     with zipfile.ZipFile(archive, "w") as payload:
         payload.writestr("node-v1.0-linux-arm64/bin/node", elf)
     data = archive.getvalue()
-    _arm_lock(monkeypatch, [{"url": "https://example.test/node.zip", "sha256": _sha(data)}])
+    _arm_lock(
+        monkeypatch, [{"url": "https://example.test/node.zip", "sha256": _sha(data)}]
+    )
     cached = store.entry(f"fetch-{_sha(data)}")
     cached.mkdir(parents=True)
     (cached / "node.zip").write_bytes(data)
@@ -146,14 +169,18 @@ def test_real_node_foreign_stage_checks_bytes_without_exec(tmp_path, monkeypatch
     # The no-exec path must still diagnose wrong-architecture and missing bytes.
     elf[18:20] = (0x3E).to_bytes(2, "little")  # x86-64
     node.write_bytes(elf)
-    assert "not a linux-arm64 binary" in get_package("node").verify(entry, "linux-arm64")
+    assert "not a linux-arm64 binary" in get_package("node").verify(
+        entry, "linux-arm64"
+    )
     node.unlink()
     assert get_package("node").verify(entry, "linux-arm64")
 
 
 @pytest.mark.platforms("posix")
 @pytest.mark.parametrize("compression", ["gz", "xz"])
-def test_real_node_native_install_keeps_smoke_validation(tmp_path, sandbox, monkeypatch, compression):
+def test_real_node_native_install_keeps_smoke_validation(
+    tmp_path, sandbox, monkeypatch, compression
+):
     import io
     import tarfile
 
@@ -170,13 +197,18 @@ def test_real_node_native_install_keeps_smoke_validation(tmp_path, sandbox, monk
         member.size = len(script)
         payload.addfile(member, io.BytesIO(script))
     data = archive.getvalue()
-    _arm_lock(monkeypatch, [{"url": f"https://example.test/node.tar.{compression}", "sha256": _sha(data)}])
+    _arm_lock(
+        monkeypatch,
+        [{"url": f"https://example.test/node.tar.{compression}", "sha256": _sha(data)}],
+    )
     cached = sandbox.entry(f"fetch-{_sha(data)}")
     cached.mkdir(parents=True)
     (cached / f"node.tar.{compression}").write_bytes(data)
     monkeypatch.setenv("PATH", "")
     package, facts = Nodejs(), ensure_mod._facts()
-    entry = ensure_mod._install(package, ensure_mod._lockfile(), facts, sandbox, current_target())
+    entry = ensure_mod._install(
+        package, ensure_mod._lockfile(), facts, sandbox, current_target()
+    )
     assert probe.read_text().splitlines() == ["--version", "--version"]
     assert facts.get("node")["entry"] == entry.name
     (entry / "bin/node").write_text("#!/bin/sh\nexit 23\n")
@@ -184,20 +216,33 @@ def test_real_node_native_install_keeps_smoke_validation(tmp_path, sandbox, monk
 
 
 @pytest.mark.platforms("windows")
-def test_stage_repin_refuses_a_native_directory_hold_then_recovers(sandbox, monkeypatch):
+def test_stage_repin_refuses_a_native_directory_hold_then_recovers(
+    sandbox, monkeypatch
+):
     import ctypes
     from ctypes import wintypes
 
     original, replacement = b"original", b"replacement"
-    _arm_lock(monkeypatch, [{"url": "https://example.test/tool", "sha256": _sha(original)}])
+    _arm_lock(
+        monkeypatch, [{"url": "https://example.test/tool", "sha256": _sha(original)}]
+    )
     _seed_fetch_cache(sandbox, original)
     entry = ensure_mod.stage_only("stage-test", TARGET)
     marker = (entry / ".pm-stage-pin.json").read_bytes()
-    _arm_lock(monkeypatch, [{"url": "https://example.test/tool", "sha256": _sha(replacement)}])
+    _arm_lock(
+        monkeypatch, [{"url": "https://example.test/tool", "sha256": _sha(replacement)}]
+    )
     _seed_fetch_cache(sandbox, replacement)
     kernel = ctypes.WinDLL("kernel32", use_last_error=True)
-    kernel.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD,
-                                  wintypes.LPVOID, wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
+    kernel.CreateFileW.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.LPVOID,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.HANDLE,
+    ]
     kernel.CreateFileW.restype = wintypes.HANDLE
     kernel.CloseHandle.argtypes = [wintypes.HANDLE]
     kernel.CloseHandle.restype = wintypes.BOOL

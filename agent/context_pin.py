@@ -4,6 +4,7 @@ Two helpers make that visible without changing the numeric value used: a label f
 surface that renders the context window, and a one-time startup warning when the pin
 disagrees with what the provider is known to advertise for the model.
 """
+
 from __future__ import annotations
 
 import logging
@@ -26,7 +27,9 @@ def is_context_pinned(context_length, config_context_length) -> bool:
 
 def context_pin_suffix(context_length, config_context_length) -> str:
     """`` (pinned)`` when the shown value comes from ``model.context_length``, else ``""``."""
-    return " (pinned)" if is_context_pinned(context_length, config_context_length) else ""
+    return (
+        " (pinned)" if is_context_pinned(context_length, config_context_length) else ""
+    )
 
 
 def advertised_context_length(model: str, base_url: str = "") -> Optional[int]:
@@ -35,9 +38,13 @@ def advertised_context_length(model: str, base_url: str = "") -> Optional[int]:
     precisely when the endpoint cannot report its window, so the check must not add startup
     latency or a failing request."""
     from agent.model_metadata import (
-        DEFAULT_CONTEXT_LENGTHS, _load_model_metadata_disk_cache, _longest_key_match,
-        _strip_provider_prefix, get_cached_context_length,
+        DEFAULT_CONTEXT_LENGTHS,
+        _load_model_metadata_disk_cache,
+        _longest_key_match,
+        _strip_provider_prefix,
+        get_cached_context_length,
     )
+
     model = _strip_provider_prefix(str(model or ""))
     if not model:
         return None
@@ -53,7 +60,9 @@ def advertised_context_length(model: str, base_url: str = "") -> Optional[int]:
     return hit[1] if hit else None
 
 
-def warn_once_on_pin_disagreement(model: str, base_url: str, config_context_length) -> bool:
+def warn_once_on_pin_disagreement(
+    model: str, base_url: str, config_context_length
+) -> bool:
     """Log ONE warning per (model, pin) when ``model.context_length`` disagrees with the
     advertised window. Returns True when the warning fired (the pin still wins)."""
     if not is_context_pinned(config_context_length, config_context_length):
@@ -68,6 +77,8 @@ def warn_once_on_pin_disagreement(model: str, base_url: str, config_context_leng
     logger.warning(
         "model.context_length pins %s at %s tokens but the provider advertises %s; the pin wins. "
         "Remove model.context_length from config.yaml to use the advertised window.",
-        model, f"{config_context_length:,}", f"{advertised:,}",
+        model,
+        f"{config_context_length:,}",
+        f"{advertised:,}",
     )
     return True

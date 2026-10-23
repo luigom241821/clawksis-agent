@@ -17,12 +17,25 @@ from tests.e2e.core.providers._openai_helpers import HarnessError, Home
 
 class TuiGateway:
     def __init__(self, h: Home, extra_env: dict[str, str] | None = None) -> None:
-        env = h.env({"TERMINAL_ENV": "local", "TERMINAL_CWD": str(h.project), "CLAWK_YOLO_MODE": "1",
-                     **(extra_env or {})})
+        env = h.env(
+            {
+                "TERMINAL_ENV": "local",
+                "TERMINAL_CWD": str(h.project),
+                "CLAWK_YOLO_MODE": "1",
+                **(extra_env or {}),
+            }
+        )
         self.stderr_path = h.root / f"tui-gateway-{time.monotonic_ns()}.log"
         self._stderr = open(self.stderr_path, "wb")
-        self.proc = subprocess.Popen([sys.executable, "-m", "tui_gateway.entry"], cwd=h.project, env=env,
-                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self._stderr, bufsize=0)
+        self.proc = subprocess.Popen(
+            [sys.executable, "-m", "tui_gateway.entry"],
+            cwd=h.project,
+            env=env,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=self._stderr,
+            bufsize=0,
+        )
         if self.proc.stdin is None or self.proc.stdout is None:
             raise HarnessError("tui_gateway spawned without stdio pipes")
         self._stdin, self._stdout = self.proc.stdin, self.proc.stdout
@@ -47,24 +60,34 @@ class TuiGateway:
         with self._cv:
             self._cv.notify_all()
 
-    def call(self, method: str, params: dict[str, Any] | None = None, timeout: float = 90.0) -> dict[str, Any]:
+    def call(
+        self, method: str, params: dict[str, Any] | None = None, timeout: float = 90.0
+    ) -> dict[str, Any]:
         rid = next(self._ids)
-        self._stdin.write(json.dumps({"jsonrpc": "2.0", "id": rid, "method": method,
-                                      "params": params or {}}).encode() + b"\n")
+        self._stdin.write(
+            json.dumps(
+                {"jsonrpc": "2.0", "id": rid, "method": method, "params": params or {}}
+            ).encode()
+            + b"\n"
+        )
         self._stdin.flush()
         deadline = time.monotonic() + timeout
         with self._cv:
             while rid not in self._responses:
                 left = deadline - time.monotonic()
                 if left <= 0 or self.proc.poll() is not None:
-                    raise HarnessError(f"no reply to {method} (rc={self.proc.poll()}){self.tail()}")
+                    raise HarnessError(
+                        f"no reply to {method} (rc={self.proc.poll()}){self.tail()}"
+                    )
                 self._cv.wait(min(left, 0.5))
             frame = self._responses.pop(rid)
         if "error" in frame:
             raise HarnessError(f"{method} -> {frame['error']}{self.tail()}")
         return frame["result"]
 
-    def wait_event(self, pred: Callable[[dict[str, Any]], bool], timeout: float, start: int = 0) -> dict[str, Any]:
+    def wait_event(
+        self, pred: Callable[[dict[str, Any]], bool], timeout: float, start: int = 0
+    ) -> dict[str, Any]:
         deadline = time.monotonic() + timeout
         seen = start
         with self._cv:
@@ -76,7 +99,9 @@ class TuiGateway:
                         return {**ev, "_i": seen - 1}
                 left = deadline - time.monotonic()
                 if left <= 0 or self.proc.poll() is not None:
-                    raise HarnessError(f"event never arrived within {timeout}s{self.tail()}")
+                    raise HarnessError(
+                        f"event never arrived within {timeout}s{self.tail()}"
+                    )
                 self._cv.wait(min(left, 0.5))
 
     def turn(self, sid: str, text: str, timeout: float = 120.0) -> str:
@@ -84,11 +109,25 @@ class TuiGateway:
         start = len(self.events)
         reply = self.call("prompt.submit", {"session_id": sid, "text": text})
         if reply.get("status") != "streaming":
-            raise HarnessError(f"prompt.submit did not start streaming: {reply}{self.tail()}")
-        done = self.wait_event(lambda e: e.get("type") == "message.complete" and e.get("session_id") == sid,
-                               timeout, start)
-        self.wait_event(lambda e: e.get("type") == "session.info" and e.get("session_id") == sid
-                        and (e.get("payload") or {}).get("running") is False, 60.0, done["_i"] + 1)
+            raise HarnessError(
+                f"prompt.submit did not start streaming: {reply}{self.tail()}"
+            )
+        done = self.wait_event(
+            lambda e: (
+                e.get("type") == "message.complete" and e.get("session_id") == sid
+            ),
+            timeout,
+            start,
+        )
+        self.wait_event(
+            lambda e: (
+                e.get("type") == "session.info"
+                and e.get("session_id") == sid
+                and (e.get("payload") or {}).get("running") is False
+            ),
+            60.0,
+            done["_i"] + 1,
+        )
         payload = done.get("payload") or {}
         text_out = payload.get("text")
         return text_out if isinstance(text_out, str) else json.dumps(text_out)
@@ -107,6 +146,8 @@ class TuiGateway:
     def tail(self, n: int = 3000) -> str:
         try:
             self._stderr.flush()
-            return "\n--- tui_gateway stderr ---\n" + Path(self.stderr_path).read_bytes()[-n:].decode(errors="replace")
+            return "\n--- tui_gateway stderr ---\n" + Path(
+                self.stderr_path
+            ).read_bytes()[-n:].decode(errors="replace")
         except (OSError, ValueError):
             return ""

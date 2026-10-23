@@ -45,8 +45,8 @@ def _build_gateway(agent, events: list[tuple]):
     gateway._persist_active_agents = lambda: None
     gateway._agent_cache_lock = None
     gateway._agent_cache = {KEY: (agent, "signature", 0)}
-    gateway._spawn_release_thread = lambda target, args, name, inline_fallback, **kw: events.append(
-        ("cache_release", args[0])
+    gateway._spawn_release_thread = lambda target, args, name, inline_fallback, **kw: (
+        events.append(("cache_release", args[0]))
     )
     state = gateway._session_state(KEY)
     state.turn.agent = agent
@@ -54,7 +54,9 @@ def _build_gateway(agent, events: list[tuple]):
 
 
 @pytest.mark.parametrize("entrypoint", ("direct", "reaped"))
-def test_eviction_interrupts_before_release_and_drops_cached_agent(entrypoint: str) -> None:
+def test_eviction_interrupts_before_release_and_drops_cached_agent(
+    entrypoint: str,
+) -> None:
     events: list[tuple] = []
     gateway = None
 
@@ -80,7 +82,9 @@ def test_eviction_interrupts_before_release_and_drops_cached_agent(entrypoint: s
     assert agent.interrupted
     assert events[0] == ("interrupt", _INTERRUPT_REASON_EVICTED, True)
     release_events = [event for event in events if event[0] == "release"]
-    assert release_events == [("release", True)]  # the interrupt was requested BEFORE the slot release
+    assert release_events == [
+        ("release", True)
+    ]  # the interrupt was requested BEFORE the slot release
     assert gateway._peek_session_state(KEY).turn.agent is None
     assert KEY not in gateway._agent_cache
     # The reason must be a registered control message or the finalizer treats it as user text.
@@ -125,19 +129,30 @@ def test_one_shot_override_settles_on_stop_and_stale_finalizer_is_a_noop() -> No
     gateway, state = _build_gateway(object(), events)
     prior = {"model": "original-model", "provider": "test"}
     state.conversation.model_override = {"model": "once-model", "provider": "test"}
-    state.conversation.one_turn_restore = {"had_override": True, "override": dict(prior)}
+    state.conversation.one_turn_restore = {
+        "had_override": True,
+        "override": dict(prior),
+    }
     owning_gen = gateway._begin_session_run_generation(KEY)
 
-    gateway._invalidate_session_run_generation(KEY, reason="user_stop")  # settlement point
+    gateway._invalidate_session_run_generation(
+        KEY, reason="user_stop"
+    )  # settlement point
     assert state.conversation.model_override == prior
     assert state.conversation.one_turn_restore is None
 
     # The successor claims its own --once; the displaced finalizer (owning_gen) must not touch it.
     state.conversation.model_override = {"model": "successor-once", "provider": "test"}
-    state.conversation.one_turn_restore = {"had_override": False, "override": None,
-                                           "run_generation": state.persistent.run_generation}
+    state.conversation.one_turn_restore = {
+        "had_override": False,
+        "override": None,
+        "run_generation": state.persistent.run_generation,
+    }
     gateway._restore_pending_one_turn_model_override(KEY, run_generation=owning_gen)
-    assert state.conversation.model_override == {"model": "successor-once", "provider": "test"}
+    assert state.conversation.model_override == {
+        "model": "successor-once",
+        "provider": "test",
+    }
     assert state.conversation.one_turn_restore is not None
 
 
@@ -146,14 +161,16 @@ async def test_turn_lease_rebind_preserves_parent_lock_domain_and_releases() -> 
     from gateway.turn_lease import SessionTurnLeaseRegistry
 
     registry = SessionTurnLeaseRegistry()
-    token = await registry.acquire("parent-session", owner_key="key-1", generation=1, timeout=5)
+    token = await registry.acquire(
+        "parent-session", owner_key="key-1", generation=1, timeout=5
+    )
     assert token is not None
     assert registry.rebind(token, "child-session") is True
     assert token.session_id == "child-session"
 
-
     # Parent lock domain remains busy while child is held
     import asyncio
+
     waiter = asyncio.create_task(
         registry.acquire("parent-session", owner_key="key-2", generation=1, timeout=5)
     )
@@ -177,7 +194,10 @@ def test_displaced_turn_lease_release_by_owning_generation() -> None:
     gateway._turn_leases = registry
 
     import asyncio
-    token1 = asyncio.run(registry.acquire("sess-106963", owner_key=KEY, generation=1, timeout=5))
+
+    token1 = asyncio.run(
+        registry.acquire("sess-106963", owner_key=KEY, generation=1, timeout=5)
+    )
     assert token1 is not None
 
     state.turn.lease_tokens[1] = token1

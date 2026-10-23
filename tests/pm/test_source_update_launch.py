@@ -5,6 +5,7 @@ uv/Python. Currency checks, resolution, installation, validation, facts and
 selection all run through production PM. The shared worker fixture stages PM's
 small locked dependency graph; the application project needs no downloads.
 """
+
 from __future__ import annotations
 
 import importlib
@@ -19,7 +20,12 @@ import pytest
 
 import pm
 from clawk_cli import venv_sync
-from pm.environments import install_state_dir, runtime_facts_path, selected_venv, site_packages
+from pm.environments import (
+    install_state_dir,
+    runtime_facts_path,
+    selected_venv,
+    site_packages,
+)
 from pm import paths
 from pm.lock import Facts
 from pm.package import InstallError
@@ -53,13 +59,18 @@ def source_launch(tmp_path, monkeypatch, isolated_python):
     )
     command = [str(isolated_python), "-I", "-B", "-c", worker_code]
     monkeypatch.setattr(client, "runtime_command", lambda *args, **kwargs: command)
-    monkeypatch.setattr(engine, "sync_venv", lambda *args, **kwargs: pytest.fail("sync escaped worker isolation"))
+    monkeypatch.setattr(
+        engine,
+        "sync_venv",
+        lambda *args, **kwargs: pytest.fail("sync escaped worker isolation"),
+    )
 
     root = tmp_path / "source with spaces"
     root.mkdir()
     (root / ".git").mkdir()
     (root / "install-stamp.json").write_text(
-        json.dumps({"updateMechanism": "self"}), encoding="utf-8",
+        json.dumps({"updateMechanism": "self"}),
+        encoding="utf-8",
     )
     # The startup heal hands the shared completion tail (launchers, products,
     # maintenance) to the checkout's own clawk_cli/source_completion.py. This
@@ -72,8 +83,9 @@ def source_launch(tmp_path, monkeypatch, isolated_python):
     )
     (root / "pyproject.toml").write_text(
         '[project]\nname = "launch-proof"\nversion = "1"\nrequires-python = ">=3.11"\n'
-        '[project.optional-dependencies]\nall = []\nlaunch-extra = []\n'
-        '[tool.uv]\npackage = false\nno-index = true\noffline = true\n', encoding="utf-8",
+        "[project.optional-dependencies]\nall = []\nlaunch-extra = []\n"
+        "[tool.uv]\npackage = false\nno-index = true\noffline = true\n",
+        encoding="utf-8",
     )
     pm.lock_project(root, offline=True, explicit=True)
 
@@ -88,15 +100,22 @@ def source_launch(tmp_path, monkeypatch, isolated_python):
     # A Nix wrapper resets sys.executable; use the underlying binary instead.
     store_python.symlink_to(sys._base_executable)
     Facts(paths.facts_path()).record(
-        "python", "test", entry.name, {"PATH": [str(store_python.parent)]}, store,
-        target=current_target(), digest=tree_digest(entry),
+        "python",
+        "test",
+        entry.name,
+        {"PATH": [str(store_python.parent)]},
+        store,
+        target=current_target(),
+        digest=tree_digest(entry),
     )
     return root, store_python, command
 
 
 @pytest.mark.platforms("posix")
 @pytest.mark.parametrize("update", ["launch", "sync", "pm-update"])
-def test_source_python_pin_update_survives_real_gc(source_launch, tmp_path, monkeypatch, update):
+def test_source_python_pin_update_survives_real_gc(
+    source_launch, tmp_path, monkeypatch, update
+):
     from clawk_cli import _launchers
     from pm.cli import cmd_gc
     from pm.lock import Lockfile
@@ -122,9 +141,13 @@ def test_source_python_pin_update_survives_real_gc(source_launch, tmp_path, monk
     # after replacement: the source-update owner must refresh this same command.
     _launchers.ensure_install_launchers(root, root / ".clawk" / "bin")
     command = _launchers.installation_command(root, module="source_probe")
-    (site_packages(selected_venv(root)) / "selected_probe.py").write_text("VALUE = 'A'\n")
+    (site_packages(selected_venv(root)) / "selected_probe.py").write_text(
+        "VALUE = 'A'\n"
+    )
     child_env = {**os.environ, "CLAWK_DISABLE_LAZY_INSTALLS": "1"}
-    before = subprocess.run(command, env=child_env, capture_output=True, text=True, timeout=30, check=False)
+    before = subprocess.run(
+        command, env=child_env, capture_output=True, text=True, timeout=30, check=False
+    )
     assert before.returncode == 0, before.stderr
     assert json.loads(before.stdout)["executable"] == str(old_python)
 
@@ -135,8 +158,13 @@ def test_source_python_pin_update_survives_real_gc(source_launch, tmp_path, monk
     new_python.parent.mkdir(parents=True)
     new_python.symlink_to(sys._base_executable)
     Facts(paths.facts_path()).record(
-        "python", "B", "python-B", {"PATH": [str(new_python.parent)]}, store,
-        target=current_target(), digest=tree_digest(new_python.parent.parent),
+        "python",
+        "B",
+        "python-B",
+        {"PATH": [str(new_python.parent)]},
+        store,
+        target=current_target(),
+        digest=tree_digest(new_python.parent.parent),
     )
     if update != "pm-update":
         pin.set_pin("python", "B", {})
@@ -146,7 +174,10 @@ def test_source_python_pin_update_survives_real_gc(source_launch, tmp_path, monk
     if update == "launch":
         assert venv_sync.prepare_launch(root, []) == new_python
         # The heal finished the whole tail, with update wording, through the checkout's own completion.
-        calls = [json.loads(line) for line in (tmp_path / "completion-calls").read_text().splitlines()]
+        calls = [
+            json.loads(line)
+            for line in (tmp_path / "completion-calls").read_text().splitlines()
+        ]
         assert calls == [["--source", str(root), "--finish-update"]]
     elif update == "sync":
         # This is the PM sync -> launcher publication sequence now split across
@@ -163,30 +194,57 @@ def test_source_python_pin_update_survives_real_gc(source_launch, tmp_path, monk
         monkeypatch.setattr(cli, "repo_root", lambda: root)
         # The latest release and artifact acquisition are fixture inputs; the
         # CLI must still pin, ensure, synchronize and publish through its owners.
-        monkeypatch.setattr(cli, "resolve_package", lambda *a, **k: Resolved("python", "A", "semver", "B"))
+        monkeypatch.setattr(
+            cli,
+            "resolve_package",
+            lambda *a, **k: Resolved("python", "A", "semver", "B"),
+        )
         monkeypatch.setattr(cli, "_pin_artifacts", lambda *a: {})
-        monkeypatch.setattr(importlib.import_module("pm.install"), "sync_venv", pm.sync_venv)
-        assert cli.cmd_update(SimpleNamespace(names=["python"], target=None, skip_target=[], check=False, uv=False, npm=False, termux=False)) == 0
+        monkeypatch.setattr(
+            importlib.import_module("pm.install"), "sync_venv", pm.sync_venv
+        )
+        assert (
+            cli.cmd_update(
+                SimpleNamespace(
+                    names=["python"],
+                    target=None,
+                    skip_target=[],
+                    check=False,
+                    uv=False,
+                    npm=False,
+                    termux=False,
+                )
+            )
+            == 0
+        )
         assert Lockfile(paths.lockfile_path()).version("python") == "B"
     assert pm.venv_is_current(project_root=root)
     assert selected_venv(root) != previous
-    (site_packages(selected_venv(root)) / "selected_probe.py").write_text("VALUE = 'B'\n")
+    (site_packages(selected_venv(root)) / "selected_probe.py").write_text(
+        "VALUE = 'B'\n"
+    )
     monkeypatch.setattr(paths, "repo_root", lambda: root)
     assert cmd_gc(None) == 0
     assert not old_python.exists(), "real PM GC did not remove the superseded Python"
     assert new_python.is_file()
-    after = subprocess.run(command, env=child_env, capture_output=True, text=True, timeout=30, check=False)
+    after = subprocess.run(
+        command, env=child_env, capture_output=True, text=True, timeout=30, check=False
+    )
     assert after.returncode == 0, after.stderr
     assert json.loads(after.stdout) == {"executable": str(new_python), "value": "B"}
 
 
 @pytest.mark.platforms("posix")
-def test_launcher_publication_failure_retries_without_rebuilding_dependencies(source_launch, monkeypatch):
+def test_launcher_publication_failure_retries_without_rebuilding_dependencies(
+    source_launch, monkeypatch
+):
     from clawk_cli import _launchers
 
     root, store_python, _ = source_launch
     with monkeypatch.context() as failed_publication:
-        failed_publication.setattr(_launchers, "ensure_install_launchers", lambda *a: [])
+        failed_publication.setattr(
+            _launchers, "ensure_install_launchers", lambda *a: []
+        )
         result = venv_sync.sync(root)
     assert not result["ok"] and "launcher publication failed" in result["detail"]
     assert pm.venv_is_current(project_root=root)
@@ -198,10 +256,13 @@ def test_launcher_publication_failure_retries_without_rebuilding_dependencies(so
 
 @pytest.mark.platforms("posix")
 @pytest.mark.parametrize("checkout", [False, True])
-def test_source_publication_leaves_external_install_launchers_alone(source_launch, checkout):
+def test_source_publication_leaves_external_install_launchers_alone(
+    source_launch, checkout
+):
     root, _, _ = source_launch
     (root / "install-stamp.json").write_text(
-        json.dumps({"updateMechanism": "external", "distribution": "nix"}), encoding="utf-8",
+        json.dumps({"updateMechanism": "external", "distribution": "nix"}),
+        encoding="utf-8",
     )
     if not checkout:
         (root / ".git").rmdir()
@@ -221,8 +282,15 @@ def _fact(root):
     assert (selected / "pyvenv.cfg").is_file()
     assert Path(fact["resolved_lock"]).is_file()
     probe = subprocess.run(
-        [str(selected / "bin" / "python"), "-I", "-c", "import json,sys; print(json.dumps(sys.prefix))"],
-        capture_output=True, text=True, timeout=30,
+        [
+            str(selected / "bin" / "python"),
+            "-I",
+            "-c",
+            "import json,sys; print(json.dumps(sys.prefix))",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
         check=False,
     )
     assert probe.returncode == 0, probe.stderr
@@ -235,7 +303,9 @@ def _receipts(tmp_path):
 
 
 @pytest.mark.platforms("posix")
-def test_launch_without_marker_publishes_then_skips_and_rebuilds_on_lock_change(source_launch, tmp_path):
+def test_launch_without_marker_publishes_then_skips_and_rebuilds_on_lock_change(
+    source_launch, tmp_path
+):
     root, store_python, _ = source_launch
     assert not runtime_facts_path(root).exists()
     assert not (root / ".update-incomplete").exists()
@@ -257,7 +327,9 @@ def test_launch_without_marker_publishes_then_skips_and_rebuilds_on_lock_change(
     assert _receipts(tmp_path) == receipts, "current launch performed another sync"
 
     lock = root / "uv.lock"
-    lock.write_bytes(lock.read_bytes() + b"\n# source update changes the committed lock\n")
+    lock.write_bytes(
+        lock.read_bytes() + b"\n# source update changes the committed lock\n"
+    )
     assert not pm.venv_is_current(project_root=root)
     assert venv_sync.prepare_launch(root, []) == store_python
     rebuilt = _fact(root)
@@ -270,7 +342,9 @@ def test_launch_without_marker_publishes_then_skips_and_rebuilds_on_lock_change(
 
 
 @pytest.mark.platforms("posix")
-def test_process_spawned_by_the_update_commits_dependencies_but_not_the_tail(source_launch, tmp_path):
+def test_process_spawned_by_the_update_commits_dependencies_but_not_the_tail(
+    source_launch, tmp_path
+):
     """A process an update spawns before its dependencies are current (its restarted gateway)
     must not boot on a tree built for another interpreter; it syncs, but leaves the tail alone."""
     import time
@@ -280,22 +354,30 @@ def test_process_spawned_by_the_update_commits_dependencies_but_not_the_tail(sou
     root, store_python, _ = source_launch
     marker = update_marker_path()
     marker.parent.mkdir(parents=True, exist_ok=True)
-    marker.write_text(f"{os.getppid()}\n{int(time.time())}\n", encoding="utf-8")  # the updater is our ancestor
+    marker.write_text(
+        f"{os.getppid()}\n{int(time.time())}\n", encoding="utf-8"
+    )  # the updater is our ancestor
     assert committed_venv(root) is None
 
     assert venv_sync.prepare_launch(root, []) == store_python
     assert committed_venv(root) == Path(_fact(root)["environment"])
-    assert not (tmp_path / "completion-calls").exists(), "the tail is the updater's, not its child's"
+    assert not (tmp_path / "completion-calls").exists(), (
+        "the tail is the updater's, not its child's"
+    )
     assert not venv_sync.completion_pending_path(root).exists()
 
     facts_bytes, receipts = runtime_facts_path(root).read_bytes(), _receipts(tmp_path)
     venv_sync.prepare_launch(root, [])
     assert runtime_facts_path(root).read_bytes() == facts_bytes
-    assert _receipts(tmp_path) == receipts, "a committed child synced again under the updater's claim"
+    assert _receipts(tmp_path) == receipts, (
+        "a committed child synced again under the updater's claim"
+    )
 
 
 @pytest.mark.platforms("posix")
-def test_failed_real_sync_preserves_previous_selection_and_retries(source_launch, tmp_path):
+def test_failed_real_sync_preserves_previous_selection_and_retries(
+    source_launch, tmp_path
+):
     root, store_python, _ = source_launch
     # Established PM installs must retain their selection, not gain legacy [all].
     pm.sync_venv(["launch-extra"], explicit=True, project_root=root)
@@ -305,7 +387,9 @@ def test_failed_real_sync_preserves_previous_selection_and_retries(source_launch
     lock = root / "uv.lock"
     valid_lock = lock.read_bytes()
     lock.write_text("version = 1\nnot valid TOML\n", encoding="utf-8")
-    markers = [root / name for name in (".update-incomplete", ".lazy-refresh-incomplete")]
+    markers = [
+        root / name for name in (".update-incomplete", ".lazy-refresh-incomplete")
+    ]
     for marker in markers:
         marker.write_text("legacy pending install", encoding="utf-8")
 
@@ -313,13 +397,16 @@ def test_failed_real_sync_preserves_previous_selection_and_retries(source_launch
         receipts = _receipts(tmp_path)
         with pytest.raises(InstallError, match="uv sync exited"):
             venv_sync.prepare_launch(root, [])
-        failed, = _receipts(tmp_path) - receipts
+        (failed,) = _receipts(tmp_path) - receipts
         assert json.loads(failed.read_text(encoding="utf-8"))["outcome"] == "failed"
         assert runtime_facts_path(root).read_bytes() == facts_bytes
         assert _fact(root) == previous
         assert set((install_state_dir(root) / "environments").iterdir()) == generations
         assert not pm.venv_is_current(project_root=root)
-        assert all(marker.read_text(encoding="utf-8") == "legacy pending install" for marker in markers)
+        assert all(
+            marker.read_text(encoding="utf-8") == "legacy pending install"
+            for marker in markers
+        )
 
     lock.write_bytes(valid_lock + b"\n# corrected source update\n")
     assert venv_sync.prepare_launch(root, []) == store_python
@@ -338,8 +425,10 @@ def test_source_update_that_removes_a_recorded_extra_still_syncs(source_launch):
     assert _fact(root)["extras"] == ["all", "launch-extra"]
 
     pyproject = root / "pyproject.toml"
-    pyproject.write_text(pyproject.read_text(encoding="utf-8").replace("launch-extra = []\n", ""),
-                         encoding="utf-8")
+    pyproject.write_text(
+        pyproject.read_text(encoding="utf-8").replace("launch-extra = []\n", ""),
+        encoding="utf-8",
+    )
     pm.lock_project(root, offline=True, explicit=True)
     assert not pm.venv_is_current(project_root=root)
 
@@ -349,14 +438,18 @@ def test_source_update_that_removes_a_recorded_extra_still_syncs(source_launch):
 
 
 @pytest.mark.platforms("posix")
-def test_recorded_extra_spelled_differently_from_its_declaration_survives(source_launch):
+def test_recorded_extra_spelled_differently_from_its_declaration_survives(
+    source_launch,
+):
     """uv matches extras by PEP 685 name; `launch_extra` is the declared `launch-extra`."""
     root, store_python, _ = source_launch
     pm.sync_venv(["all", "launch_extra"], explicit=True, project_root=root)
     assert _fact(root)["extras"] == ["all", "launch_extra"]
 
     lock = root / "uv.lock"
-    lock.write_bytes(lock.read_bytes() + b"\n# source update changes the committed lock\n")
+    lock.write_bytes(
+        lock.read_bytes() + b"\n# source update changes the committed lock\n"
+    )
     assert venv_sync.prepare_launch(root, []) == store_python
     assert _fact(root)["extras"] == ["all", "launch_extra"]
     assert pm.venv_is_current(project_root=root)
@@ -364,7 +457,9 @@ def test_recorded_extra_spelled_differently_from_its_declaration_survives(source
 
 @pytest.mark.platforms("posix")
 @pytest.mark.parametrize("mode", ["script", "module", "command"])
-def test_real_bootstrap_reexecs_before_app_imports(source_launch, tmp_path, isolated_python, mode):
+def test_real_bootstrap_reexecs_before_app_imports(
+    source_launch, tmp_path, isolated_python, mode
+):
     root, store_python, worker_command = source_launch
     repository = Path(__file__).resolve().parents[2]
     # Copy the real bootstrap so it owns this disposable source install. The
@@ -410,18 +505,27 @@ def test_real_bootstrap_reexecs_before_app_imports(source_launch, tmp_path, isol
         # Executable .pth files are real activation hooks. If bootstrap selects
         # the old generation before completing the update, this leaves evidence.
         (old_site / "old_dependency.pth").write_text(
-            f"import pathlib; pathlib.Path({str(activated_old)!r}).touch()\n", encoding="utf-8",
+            f"import pathlib; pathlib.Path({str(activated_old)!r}).touch()\n",
+            encoding="utf-8",
         )
         activation_probe = subprocess.run(
-            [str(isolated_python), "-I", "-c",
-             f"import sys; sys.path.insert(0, {str(repository)!r}); "
-             "from pathlib import Path; from pm.environments import activate_dependencies; "
-             f"activate_dependencies(Path({str(root)!r}))"],
-            capture_output=True, text=True, timeout=30,
+            [
+                str(isolated_python),
+                "-I",
+                "-c",
+                f"import sys; sys.path.insert(0, {str(repository)!r}); "
+                "from pathlib import Path; from pm.environments import activate_dependencies; "
+                f"activate_dependencies(Path({str(root)!r}))",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
             check=False,
         )
         assert activation_probe.returncode == 0, activation_probe.stderr
-        assert activated_old.is_file(), "positive control did not execute the old activation hook"
+        assert activated_old.is_file(), (
+            "positive control did not execute the old activation hook"
+        )
         activated_old.unlink()
         lock = root / "uv.lock"
         lock.write_bytes(lock.read_bytes() + b"\n# update before activation\n")
@@ -432,8 +536,12 @@ def test_real_bootstrap_reexecs_before_app_imports(source_launch, tmp_path, isol
             (root / name).write_text("legacy pending install", encoding="utf-8")
     before_receipts = _receipts(tmp_path)
     result = subprocess.run(
-        [str(isolated_python), *invocation, *args], cwd=root,
-        env=dict(os.environ), capture_output=True, text=True, timeout=60,
+        [str(isolated_python), *invocation, *args],
+        cwd=root,
+        env=dict(os.environ),
+        capture_output=True,
+        text=True,
+        timeout=60,
         check=False,
     )
     assert result.returncode == 0, result.stderr
@@ -445,9 +553,11 @@ def test_real_bootstrap_reexecs_before_app_imports(source_launch, tmp_path, isol
     selected = selected_venv(root)
     assert Path(output["site"]).is_relative_to(selected)
     assert output["site"] in output["path"]
-    assert not activated_old.exists(), "old dependencies activated before source-update completion"
+    assert not activated_old.exists(), (
+        "old dependencies activated before source-update completion"
+    )
     assert _fact(root)["extras"] == ["all"]
-    receipt, = _receipts(tmp_path) - before_receipts
+    (receipt,) = _receipts(tmp_path) - before_receipts
     assert json.loads(receipt.read_text(encoding="utf-8"))["outcome"] == "ok"
     assert not (root / ".update-incomplete").exists()
     assert not (root / ".lazy-refresh-incomplete").exists()
@@ -455,7 +565,9 @@ def test_real_bootstrap_reexecs_before_app_imports(source_launch, tmp_path, isol
 
 @pytest.mark.platforms("posix")
 @pytest.mark.parametrize("argv", [[], ["--version"]])
-def test_failed_launch_completion_degrades_to_a_warning(source_launch, tmp_path, isolated_python, argv):
+def test_failed_launch_completion_degrades_to_a_warning(
+    source_launch, tmp_path, isolated_python, argv
+):
     """An update whose dependency sync cannot finish (offline, bad lock) must leave a usable
     CLI on the previous generation with a warning — and a metadata query must not even try."""
     root, _store_python, worker_command = source_launch
@@ -487,17 +599,26 @@ def test_failed_launch_completion_degrades_to_a_warning(source_launch, tmp_path,
     before_receipts = _receipts(tmp_path)
 
     result = subprocess.run(
-        [str(isolated_python), str(entry), *argv], cwd=root,
-        env=dict(os.environ), capture_output=True, text=True, timeout=60,
+        [str(isolated_python), str(entry), *argv],
+        cwd=root,
+        env=dict(os.environ),
+        capture_output=True,
+        text=True,
+        timeout=60,
         check=False,
     )
 
     assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout) == {"executable": str(isolated_python), "args": argv}
+    assert json.loads(result.stdout) == {
+        "executable": str(isolated_python),
+        "args": argv,
+    }
     assert _fact(root) == previous
     if argv:
         assert "source-update completion failed" not in result.stderr
-        assert _receipts(tmp_path) == before_receipts, "a metadata query attempted a dependency sync"
+        assert _receipts(tmp_path) == before_receipts, (
+            "a metadata query attempted a dependency sync"
+        )
     else:
         assert "source-update completion failed" in result.stderr
         assert "clawk update" in result.stderr
@@ -509,8 +630,11 @@ def test_completion_retry_backoff_and_cap(tmp_path, monkeypatch):
     an environment where every launch re-runs a doomed ~4-minute tail)."""
     from clawk_cli import venv_sync
 
-    monkeypatch.setattr(venv_sync, "completion_pending_path",
-                        lambda root: tmp_path / "source-completion-pending")
+    monkeypatch.setattr(
+        venv_sync,
+        "completion_pending_path",
+        lambda root: tmp_path / "source-completion-pending",
+    )
     record = tmp_path / "source-completion-attempts"
 
     # No record yet: the first retry is immediate (historical behavior).
@@ -528,13 +652,17 @@ def test_completion_retry_backoff_and_cap(tmp_path, monkeypatch):
     past = 12345.0
     old_mtime = past - venv_sync.COMPLETION_RETRY_BACKOFF_SECONDS - 1
     os.utime(record, (old_mtime, old_mtime))
-    may_retry, attempts, _backoff = venv_sync.completion_retry_state(tmp_path, now=lambda: past)
+    may_retry, attempts, _backoff = venv_sync.completion_retry_state(
+        tmp_path, now=lambda: past
+    )
     assert (may_retry, attempts) == (True, 2)
 
     # At the cap the tail never self-starts, regardless of age.
     record.write_text(f"{venv_sync.COMPLETION_RETRY_MAX_ATTEMPTS}\n", encoding="utf-8")
     for now_value in (past, past + 10 * venv_sync.COMPLETION_RETRY_BACKOFF_SECONDS):
-        may_retry, attempts, _backoff = venv_sync.completion_retry_state(tmp_path, now=now_value)
+        may_retry, attempts, _backoff = venv_sync.completion_retry_state(
+            tmp_path, now=now_value
+        )
         assert (may_retry, attempts) == (False, venv_sync.COMPLETION_RETRY_MAX_ATTEMPTS)
 
     # A corrupt record degrades to the historical unbounded behavior.
@@ -543,7 +671,9 @@ def test_completion_retry_backoff_and_cap(tmp_path, monkeypatch):
 
 
 @pytest.mark.platforms("posix")
-def test_capped_completion_attempts_leave_marker_for_explicit_update(source_launch, tmp_path, capsys):
+def test_capped_completion_attempts_leave_marker_for_explicit_update(
+    source_launch, tmp_path, capsys
+):
     """Past the retry cap a launch must NOT re-run the tail; it keeps the pending marker
     and points the operator at `clawk update` instead of burning another doomed attempt."""
     root, store_python, _ = source_launch
@@ -566,26 +696,38 @@ def test_capped_completion_attempts_leave_marker_for_explicit_update(source_laun
     out = capsys.readouterr().err
     assert "could not be finished automatically" in out
     assert "clawk update" in out
-    assert completion_pending_path(root).is_file(), "the owed completion is still recorded"
-    assert not (tmp_path / "completion-calls").exists(), "a capped launch re-ran the tail"
+    assert completion_pending_path(root).is_file(), (
+        "the owed completion is still recorded"
+    )
+    assert not (tmp_path / "completion-calls").exists(), (
+        "a capped launch re-ran the tail"
+    )
 
 
 @pytest.mark.platforms("posix")
-def test_failed_tail_attempt_is_counted_and_success_clears_it(source_launch, tmp_path, monkeypatch, capsys):
+def test_failed_tail_attempt_is_counted_and_success_clears_it(
+    source_launch, tmp_path, monkeypatch, capsys
+):
     """A failing completion tail records the attempt; the successful retry clears the record."""
     root, store_python, _ = source_launch
-    from clawk_cli.venv_sync import _completion_attempts_path, arm_completion, completion_pending_path
+    from clawk_cli.venv_sync import (
+        _completion_attempts_path,
+        arm_completion,
+        completion_pending_path,
+    )
 
     pm.sync_venv(["all"], explicit=True, project_root=root)
     arm_completion(root)
     # The tail script the fixture records calls with — make it fail, then succeed.
-    calls = (root / "clawk_cli" / "source_completion.py")
+    calls = root / "clawk_cli" / "source_completion.py"
     original = calls.read_text(encoding="utf-8")
     calls.write_text("import sys\nsys.exit(3)\n", encoding="utf-8")
     with pytest.raises(RuntimeError, match="source update completion failed"):
         venv_sync.prepare_launch(root, [])
     assert _completion_attempts_path(root).read_text(encoding="utf-8").strip() == "1"
-    assert completion_pending_path(root).is_file(), "a failed attempt must keep the obligation"
+    assert completion_pending_path(root).is_file(), (
+        "a failed attempt must keep the obligation"
+    )
 
     calls.write_text(original, encoding="utf-8")
     old = 1.0
@@ -593,5 +735,6 @@ def test_failed_tail_attempt_is_counted_and_success_clears_it(source_launch, tmp
     # A successful retry still launches normally and clears the obligation.
     assert venv_sync.prepare_launch(root, []) == store_python
     assert not completion_pending_path(root).exists()
-    assert not _completion_attempts_path(root).exists(), "success cleared the attempt record"
-
+    assert not _completion_attempts_path(root).exists(), (
+        "success cleared the attempt record"
+    )

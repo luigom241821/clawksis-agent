@@ -4,6 +4,7 @@ The record files are an optimization layer over idempotent steps; these
 tests assert the contracts that keep that safe: identity resolution from
 real git trees and stamps, record scoping (per-install AND per-home), and the lock protocol including the double-check under lock.
 """
+
 import json
 import os
 import shutil
@@ -29,11 +30,16 @@ from clawk_cli.boot_bootstrap import (
 
 def _git(args, cwd):
     env = dict(os.environ)
-    env.update({
-        "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
-        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
-        "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM": os.devnull,
-    })
+    env.update(
+        {
+            "GIT_AUTHOR_NAME": "t",
+            "GIT_AUTHOR_EMAIL": "t@t",
+            "GIT_COMMITTER_NAME": "t",
+            "GIT_COMMITTER_EMAIL": "t@t",
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_CONFIG_SYSTEM": os.devnull,
+        }
+    )
     return subprocess.run(
         ["git", *args], cwd=cwd, env=env, capture_output=True, text=True, check=True
     )
@@ -247,7 +253,8 @@ def test_double_check_under_lock(repo, tmp_path, monkeypatch, fake_steps):
 
 def test_maybe_run_never_raises(monkeypatch, tmp_path):
     monkeypatch.setattr(
-        boot_bootstrap, "run_boot_bootstrap",
+        boot_bootstrap,
+        "run_boot_bootstrap",
         lambda root: (_ for _ in ()).throw(RuntimeError("boom")),
     )
     boot_bootstrap.maybe_run_boot_bootstrap(tmp_path)  # must not raise
@@ -267,7 +274,13 @@ def test_sealed_tree_bootstrap_end_to_end(tmp_path, monkeypatch):
     sealed = tmp_path / "payload"
     sealed.mkdir()
     (sealed / "install-stamp.json").write_text(
-        _json.dumps({"commit": "aaaa1111", "payload": "full", "updateMechanism": "electron-updater"})
+        _json.dumps(
+            {
+                "commit": "aaaa1111",
+                "payload": "full",
+                "updateMechanism": "electron-updater",
+            }
+        )
     )
 
     calls = {"n": 0}
@@ -285,7 +298,13 @@ def test_sealed_tree_bootstrap_end_to_end(tmp_path, monkeypatch):
 
     # The bundle swap: same root, new stamp commit.
     (sealed / "install-stamp.json").write_text(
-        _json.dumps({"commit": "bbbb2222", "payload": "full", "updateMechanism": "electron-updater"})
+        _json.dumps(
+            {
+                "commit": "bbbb2222",
+                "payload": "full",
+                "updateMechanism": "electron-updater",
+            }
+        )
     )
 
     assert run_boot_bootstrap(sealed)["home"] != "skipped"

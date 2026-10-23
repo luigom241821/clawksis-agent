@@ -12,15 +12,12 @@ class TestWriteDenyExactPaths:
     def test_etc_shadow(self):
         assert _is_write_denied("/etc/shadow") is True
 
-
     def test_ssh_authorized_keys(self):
         assert _is_write_denied("~/.ssh/authorized_keys") is True
-
 
     def test_ssh_id_ed25519(self):
         path = os.path.join(str(Path.home()), ".ssh", "id_ed25519")
         assert _is_write_denied(path) is True
-
 
     def test_clawk_root_env_when_running_under_profile(self, tmp_path, monkeypatch):
         """Top-level ``<root>/.env`` stays write-denied even when running under
@@ -42,6 +39,7 @@ class TestWriteDenyExactPaths:
 
         # Sanity check: CLAWK_HOME does point to the profile dir, not the root.
         from clawk_constants import get_clawk_home, get_default_clawk_root
+
         assert get_clawk_home() == profile_home
         assert get_default_clawk_root() == root
 
@@ -50,19 +48,22 @@ class TestWriteDenyExactPaths:
     def test_shell_profiles_are_writable(self):
         home = str(Path.home())
         for name in [".bashrc", ".zshrc", ".profile", ".bash_profile", ".zprofile"]:
-            assert _is_write_denied(os.path.join(home, name)) is False, f"{name} should be writable"
+            assert _is_write_denied(os.path.join(home, name)) is False, (
+                f"{name} should be writable"
+            )
 
     def test_credential_config_files_denied(self):
         home = str(Path.home())
         for name in [".netrc", ".pgpass", ".npmrc", ".pypirc"]:
-            assert _is_write_denied(os.path.join(home, name)) is True, f"{name} should be denied"
+            assert _is_write_denied(os.path.join(home, name)) is True, (
+                f"{name} should be denied"
+            )
 
 
 class TestWriteDenyPrefixes:
     def test_ssh_prefix(self):
         path = os.path.join(str(Path.home()), ".ssh", "some_key")
         assert _is_write_denied(path) is True
-
 
     def test_systemd_prefix(self, tmp_path):
         # On NixOS, /etc/systemd is a symlink into /nix/store, so
@@ -74,10 +75,13 @@ class TestWriteDenyPrefixes:
         target = str(fake_etc / "evil.service")
         # Patch the prefix builder to include our tmp_path prefix
         import agent.file_safety as _fs
+
         _orig = _fs.build_write_denied_prefixes
         _extra_prefix = str(tmp_path / "etc" / "systemd") + os.sep
+
         def _patched(home):
             return _orig(home) + [_extra_prefix]
+
         with patch.object(_fs, "build_write_denied_prefixes", _patched):
             assert _is_write_denied(target) is True
 
@@ -86,10 +90,11 @@ class TestWriteAllowed:
     def test_tmp_file(self):
         assert _is_write_denied("/tmp/safe_file.txt") is False
 
-
     def test_clawk_control_files_requested_writable(self):
         from clawk_constants import get_clawk_home
 
         home = get_clawk_home()
         for name in ["auth.json", "config.yaml", "webhook_subscriptions.json"]:
-            assert _is_write_denied(str(home / name)) is False, f"{name} should be writable"
+            assert _is_write_denied(str(home / name)) is False, (
+                f"{name} should be writable"
+            )

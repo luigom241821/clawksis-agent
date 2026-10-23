@@ -29,11 +29,7 @@ def _make_adapter(extra=None):
 
 
 RICH_MD = "# Title\n\n- a\n  - nested\n\n---\n\nbody text"
-RICH_TABLE_MD = (
-    "| Item | Status | Note |\n"
-    "|---|---:|---|\n"
-    "| Clawksis | ok | table |"
-)
+RICH_TABLE_MD = "| Item | Status | Note |\n|---|---:|---|\n| Clawksis | ok | table |"
 
 
 class SlackRejectedBlocks(Exception):
@@ -67,9 +63,7 @@ class TestSendMessageBlocks:
 
     @pytest.mark.asyncio
     async def test_unfurl_config_suppresses_previews_without_changing_link_text(self):
-        adapter, client = _make_adapter(
-            {"unfurl_links": False, "unfurl_media": False}
-        )
+        adapter, client = _make_adapter({"unfurl_links": False, "unfurl_media": False})
         content = "[Clawksis](https://example.com/clawk)"
 
         await adapter.send("C1", content)
@@ -79,7 +73,6 @@ class TestSendMessageBlocks:
         assert kwargs["unfurl_links"] is False
         assert kwargs["unfurl_media"] is False
 
-
     @pytest.mark.asyncio
     async def test_enabled_but_unrenderable_falls_back_to_text(self):
         # 60 dividers -> renderer returns None -> no blocks kwarg, text stands
@@ -88,7 +81,6 @@ class TestSendMessageBlocks:
         kwargs = client.chat_postMessage.await_args.kwargs
         assert "blocks" not in kwargs
         assert kwargs["text"]
-
 
     @pytest.mark.asyncio
     async def test_feedback_buttons_opt_in_appended_to_blocks(self):
@@ -120,9 +112,10 @@ class TestEditMessageBlocks:
         assert kwargs.get("blocks")
         assert kwargs["text"]
 
-
     @pytest.mark.asyncio
-    async def test_block_rejection_retries_edit_without_blocks_using_workspace_client(self):
+    async def test_block_rejection_retries_edit_without_blocks_using_workspace_client(
+        self,
+    ):
         adapter, client = _make_adapter({"rich_blocks": True})
         client.chat_update = AsyncMock(
             side_effect=[SlackRejectedBlocks("invalid_blocks"), {"ts": "111.222"}]
@@ -169,7 +162,6 @@ class TestMarkdownBlockMode:
     """Opt-in ``markdown_blocks`` renders raw standard markdown via Slack's
     native ``markdown`` block, keeping the mrkdwn ``text`` fallback."""
 
-
     @pytest.mark.asyncio
     async def test_enabled_sends_markdown_block_with_raw_content(self):
         adapter, client = _make_adapter({"markdown_blocks": True})
@@ -182,7 +174,6 @@ class TestMarkdownBlockMode:
         # mrkdwn fallback text is still present for notifications/search
         assert kwargs["text"]
 
-
     @pytest.mark.asyncio
     async def test_edit_finalize_uses_markdown_block(self):
         adapter, client = _make_adapter({"markdown_blocks": True})
@@ -190,5 +181,3 @@ class TestMarkdownBlockMode:
         kwargs = client.chat_update.await_args.kwargs
         assert kwargs["blocks"][0]["type"] == "markdown"
         assert kwargs["blocks"][0]["text"] == RICH_TABLE_MD
-
-

@@ -16,6 +16,7 @@ These tests pin the fix: the block must resolve model/provider/base_url via
 the hygiene-compression block already uses) and must actually reach
 ``preprocess_context_references_async`` with a real context length.
 """
+
 import logging
 import threading
 from contextlib import contextmanager
@@ -97,7 +98,9 @@ async def test_at_reference_reaches_preprocessor_with_real_context_length(
 
     captured: dict = {}
 
-    async def _fake_preprocess(message, *, cwd, context_length, url_fetcher=None, allowed_root=None):
+    async def _fake_preprocess(
+        message, *, cwd, context_length, url_fetcher=None, allowed_root=None
+    ):
         captured["message"] = message
         captured["cwd"] = cwd
         captured["context_length"] = context_length
@@ -110,7 +113,9 @@ async def test_at_reference_reaches_preprocessor_with_real_context_length(
 
     import agent.context_references as ctx_mod
 
-    monkeypatch.setattr(ctx_mod, "preprocess_context_references_async", _fake_preprocess)
+    monkeypatch.setattr(
+        ctx_mod, "preprocess_context_references_async", _fake_preprocess
+    )
 
     caplog.set_level(logging.DEBUG, logger="gateway.run")
 
@@ -142,7 +147,9 @@ async def test_at_reference_reaches_preprocessor_with_real_context_length(
 
 
 @pytest.mark.asyncio
-async def test_at_reference_ignores_global_context_for_runtime_route_override(monkeypatch):
+async def test_at_reference_ignores_global_context_for_runtime_route_override(
+    monkeypatch,
+):
     """Context expansion must not inherit a global pin from another route."""
     runner = _make_runner()
     source = _source()
@@ -183,7 +190,9 @@ async def test_at_reference_ignores_global_context_for_runtime_route_override(mo
     async def _passthrough(message, **_kwargs):
         return ContextReferenceResult(message=message, original_message=message)
 
-    monkeypatch.setattr(model_meta_mod, "get_model_context_length_async", _fake_get_context)
+    monkeypatch.setattr(
+        model_meta_mod, "get_model_context_length_async", _fake_get_context
+    )
     monkeypatch.setattr(ctx_mod, "preprocess_context_references_async", _passthrough)
 
     await runner._prepare_inbound_message_text(

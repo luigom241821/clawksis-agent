@@ -22,7 +22,13 @@ from tests.gateway.relay.test_relay_interactive import _adapter
 
 
 def _forward(**payload):
-    body = {"type": 2, "id": "i1", "channel_id": "ch1", "guild_id": "g1", "data": {"name": "status"}}
+    body = {
+        "type": 2,
+        "id": "i1",
+        "channel_id": "ch1",
+        "guild_id": "g1",
+        "data": {"name": "status"},
+    }
     body.update(payload)
 
     class Forward:
@@ -34,16 +40,36 @@ def _forward(**payload):
 
 def _pinned_prompt(source):
     runner = object.__new__(gateway_run.GatewayRunner)
-    config = GatewayConfig(platforms={Platform.DISCORD: PlatformConfig(enabled=True, token="x")})
-    return runner._pinned_session_context_prompt(build_session_context(source, config), False, "k")
+    config = GatewayConfig(
+        platforms={Platform.DISCORD: PlatformConfig(enabled=True, token="x")}
+    )
+    return runner._pinned_session_context_prompt(
+        build_session_context(source, config), False, "k"
+    )
 
 
-def _message(chat, user="u1", chat_name="Clawksis Server / #ops", chat_topic="Incident triage"):
+def _message(
+    chat, user="u1", chat_name="Clawksis Server / #ops", chat_topic="Incident triage"
+):
     message_id = f"{user}:{chat_name}"
-    return _event_from_wire({"text": "hi", "message_type": "text", "message_id": message_id, "source": {
-        "platform": "discord", **chat, "scope_id": "g1",
-        "user_id": user, "user_name": "ben", "user_display_name": "Ben D",
-        "chat_name": chat_name, "chat_topic": chat_topic, "message_id": message_id}})
+    return _event_from_wire(
+        {
+            "text": "hi",
+            "message_type": "text",
+            "message_id": message_id,
+            "source": {
+                "platform": "discord",
+                **chat,
+                "scope_id": "g1",
+                "user_id": user,
+                "user_name": "ben",
+                "user_display_name": "Ben D",
+                "chat_name": chat_name,
+                "chat_topic": chat_topic,
+                "message_id": message_id,
+            },
+        }
+    )
 
 
 async def _slash(adapter, **interaction):
@@ -54,10 +80,25 @@ async def _slash(adapter, **interaction):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("case", [
-    "warm", "restart", "thread", "rename", "peer-rename", "cleared", "late-session", "read-retry",
-    "read-unavailable", "write-unavailable", "cancelled"])
-async def test_slash_between_messages_keeps_one_pinned_prompt(tmp_path, monkeypatch, case):
+@pytest.mark.parametrize(
+    "case",
+    [
+        "warm",
+        "restart",
+        "thread",
+        "rename",
+        "peer-rename",
+        "cleared",
+        "late-session",
+        "read-retry",
+        "read-unavailable",
+        "write-unavailable",
+        "cancelled",
+    ],
+)
+async def test_slash_between_messages_keeps_one_pinned_prompt(
+    tmp_path, monkeypatch, case
+):
     """Every case but ``warm`` and ``thread`` restarts the gateway after the last message, so the
     slash command is the first event the new process sees in that chat; its chat labels are the
     ones the session store recorded when the text lane carried them.
@@ -77,13 +118,23 @@ async def test_slash_between_messages_keeps_one_pinned_prompt(tmp_path, monkeypa
     written; the next message with the same labels must write them.
     ``cancelled``: the reader is cancelled while the message's labels are being written, before
     the message was admitted. The connector replays the un-ACKed frame, and the replay is admitted."""
-    config = GatewayConfig(platforms={Platform.DISCORD: PlatformConfig(enabled=True, token="x")})
+    config = GatewayConfig(
+        platforms={Platform.DISCORD: PlatformConfig(enabled=True, token="x")}
+    )
     store = SessionStore(tmp_path, config)
     adapter, _stub = _adapter(platform="discord")
     adapter.set_session_store(store)
     adapter.handle_message = AsyncMock()
-    chat = ({"chat_id": "th1", "chat_type": "thread", "thread_id": "th1", "parent_chat_id": "ch1"}
-            if case == "thread" else {"chat_id": "ch1", "chat_type": "group"})
+    chat = (
+        {
+            "chat_id": "th1",
+            "chat_type": "thread",
+            "thread_id": "th1",
+            "parent_chat_id": "ch1",
+        }
+        if case == "thread"
+        else {"chat_id": "ch1", "chat_type": "group"}
+    )
     renamed = {"chat_name": "Clawksis Server / #triage", "chat_topic": "Renamed"}
     calls, held, entered = [], threading.Event(), threading.Event()
 
@@ -96,7 +147,11 @@ async def test_slash_between_messages_keeps_one_pinned_prompt(tmp_path, monkeypa
             def spy(key, *args, _real=real, _name=name, **kwargs):
                 if key.startswith("gateway_chat_labels:"):
                     calls.append((_name, threading.get_ident()))
-                    if _name == "set_meta" and case == "cancelled" and not held.is_set():
+                    if (
+                        _name == "set_meta"
+                        and case == "cancelled"
+                        and not held.is_set()
+                    ):
                         entered.set()
                         held.wait(5)
                 return _real(key, *args, **kwargs)
@@ -148,7 +203,9 @@ async def test_slash_between_messages_keeps_one_pinned_prompt(tmp_path, monkeypa
         if case == "cleared":
             renamed = {"chat_name": None, "chat_topic": None}
         if case in ("rename", "peer-rename", "cleared"):
-            await relay(_message(chat, "u1" if case != "peer-rename" else "u2", **renamed))
+            await relay(
+                _message(chat, "u1" if case != "peer-rename" else "u2", **renamed)
+            )
             message = _message(chat, **renamed)
         if case == "peer-rename":
             store.reset_session(entry.session_key)
@@ -159,7 +216,9 @@ async def test_slash_between_messages_keeps_one_pinned_prompt(tmp_path, monkeypa
         adapter.set_session_store(store)
     interaction = {"member": {"nick": "Ben D", "user": {"id": "u1", "username": "ben"}}}
     if case == "thread":
-        interaction.update(channel_id="th1", channel={"id": "th1", "type": 11, "parent_id": "ch1"})
+        interaction.update(
+            channel_id="th1", channel={"id": "th1", "type": 11, "parent_id": "ch1"}
+        )
     if case == "read-retry":
         get_meta, faults = store._routing_db.get_meta, [OSError("database is locked")]
 
@@ -179,19 +238,34 @@ async def test_slash_between_messages_keeps_one_pinned_prompt(tmp_path, monkeypa
     # With Discord tools loaded the prompt also renders the thread parent and whether a triggering
     # message id exists, so both renderings must agree.
     for tools_loaded in (False, True):
-        monkeypatch.setattr(gateway_session, "_discord_tools_loaded", lambda: tools_loaded)
-        assert len({_pinned_prompt(event.source) for event in (message, slash, message)}) == 1
+        monkeypatch.setattr(
+            gateway_session, "_discord_tools_loaded", lambda: tools_loaded
+        )
+        assert (
+            len({_pinned_prompt(event.source) for event in (message, slash, message)})
+            == 1
+        )
     # The label record is disk I/O behind the database's writer lock; the gateway loop never waits on it.
-    assert ("set_meta" in {name for name, _ in calls}
-            and threading.get_ident() not in {ident for _, ident in calls})
+    assert "set_meta" in {name for name, _ in calls} and threading.get_ident() not in {
+        ident for _, ident in calls
+    }
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("member, expected", [
-    ({"nick": "Benny", "user": {"id": "u1", "username": "ben", "global_name": "Ben D"}}, "Benny"),
-    ({"user": {"id": "u1", "username": "ben", "global_name": "Ben D"}}, "Ben D"),
-    ({"user": {"id": "u1", "username": "ben"}}, "ben"),
-])
+@pytest.mark.parametrize(
+    "member, expected",
+    [
+        (
+            {
+                "nick": "Benny",
+                "user": {"id": "u1", "username": "ben", "global_name": "Ben D"},
+            },
+            "Benny",
+        ),
+        ({"user": {"id": "u1", "username": "ben", "global_name": "Ben D"}}, "Ben D"),
+        ({"user": {"id": "u1", "username": "ben"}}, "ben"),
+    ],
+)
 async def test_interaction_names_the_user_as_the_text_lane_would_now(member, expected):
     """The text lane's user_display_name is the native author.display_name (guild nick, else global
     name, else username), and an interaction carries all three as of now. The name an earlier

@@ -101,9 +101,7 @@ async def test_unknown_slash_command_returns_guidance(monkeypatch):
     # If the LLM were called, this would fail: the guard must short-circuit
     # before _run_agent is invoked.
     runner._run_agent = AsyncMock(
-        side_effect=AssertionError(
-            "unknown slash command leaked through to the agent"
-        )
+        side_effect=AssertionError("unknown slash command leaked through to the agent")
     )
 
     monkeypatch.setattr(
@@ -155,6 +153,7 @@ async def test_underscored_alias_for_hyphenated_builtin_not_flagged(monkeypatch)
     import gateway.run as gateway_run
 
     runner = _make_runner()
+
     # Prevent real MCP work; we only care that the unknown guard doesn't fire.
     async def _noop_reload(*_a, **_kw):
         return "mcp reloaded"

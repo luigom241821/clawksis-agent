@@ -6,6 +6,7 @@ malformed plists are skipped, but ``plistlib.load`` propagates
 XML that is not well-formed, so one hand-edited LaunchAgent plist aborted the
 whole ``clawk update`` post-pull cleanup instead of being skipped.
 """
+
 import os
 from unittest import mock
 
@@ -51,7 +52,9 @@ def test_malformed_plist_is_skipped_not_fatal(tmp_path):
 
 def test_malformed_sibling_does_not_hide_the_good_job(tmp_path):
     (tmp_path / "com.example.bad.plist").write_text(MALFORMED_PLIST, encoding="utf-8")
-    (tmp_path / "ai.clawk.dashboard.test.plist").write_text(GOOD_PLIST, encoding="utf-8")
+    (tmp_path / "ai.clawk.dashboard.test.plist").write_text(
+        GOOD_PLIST, encoding="utf-8"
+    )
     with mock.patch(
         "clawk_cli.gateway._launchd_print_service_pid", return_value=(True, 4321)
     ) as probe:

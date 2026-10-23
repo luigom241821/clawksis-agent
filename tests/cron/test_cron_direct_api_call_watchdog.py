@@ -89,16 +89,32 @@ def test_inline_cron_openai_codex_keeps_large_context_stale_floor(monkeypatch):
     """#69734: cron Codex runs inline, so the inline stale budget must keep the
     openai-codex large-context floor the worker path applied — else a healthy
     >10k-token cron turn is killed at the 90s default."""
-    from agent.chat_completion_helpers import _resolve_direct_stale_timeout, should_use_direct_api_call
+    from agent.chat_completion_helpers import (
+        _resolve_direct_stale_timeout,
+        should_use_direct_api_call,
+    )
 
-    for key in ("CLAWK_API_CALL_STALE_TIMEOUT", "CLAWK_STREAM_STALE_TIMEOUT", "CLAWK_CODEX_HARD_TIMEOUT_SECONDS"):
+    for key in (
+        "CLAWK_API_CALL_STALE_TIMEOUT",
+        "CLAWK_STREAM_STALE_TIMEOUT",
+        "CLAWK_CODEX_HARD_TIMEOUT_SECONDS",
+    ):
         monkeypatch.delenv(key, raising=False)
     agent = run_agent.AIAgent(
-        model="gpt-5.5", provider="openai-codex", api_mode="codex_responses",
-        base_url="https://chatgpt.com/backend-api/codex", api_key="x", quiet_mode=True,
-        skip_context_files=True, skip_memory=True, platform="cron",
+        model="gpt-5.5",
+        provider="openai-codex",
+        api_mode="codex_responses",
+        base_url="https://chatgpt.com/backend-api/codex",
+        api_key="x",
+        quiet_mode=True,
+        skip_context_files=True,
+        skip_memory=True,
+        platform="cron",
     )
-    api_kwargs = {"model": "gpt-5.5", "input": [{"role": "user", "content": "x " * 60000}]}
+    api_kwargs = {
+        "model": "gpt-5.5",
+        "input": [{"role": "user", "content": "x " * 60000}],
+    }
     assert should_use_direct_api_call(agent) is True
     assert _resolve_direct_stale_timeout(agent, api_kwargs) >= 600.0
 
@@ -111,11 +127,20 @@ def test_inline_local_responses_endpoint_keeps_its_configured_stale_budget(monke
     monkeypatch.delenv("CLAWK_CODEX_HARD_TIMEOUT_SECONDS", raising=False)
     monkeypatch.setenv("CLAWK_API_CALL_STALE_TIMEOUT", "3000")
     agent = run_agent.AIAgent(
-        model="local-model", provider="custom", api_mode="codex_responses",
-        base_url="http://127.0.0.1:8080/v1", api_key="x", quiet_mode=True,
-        skip_context_files=True, skip_memory=True, platform="cron",
+        model="local-model",
+        provider="custom",
+        api_mode="codex_responses",
+        base_url="http://127.0.0.1:8080/v1",
+        api_key="x",
+        quiet_mode=True,
+        skip_context_files=True,
+        skip_memory=True,
+        platform="cron",
     )
-    api_kwargs = {"model": "local-model", "input": [{"role": "user", "content": "x " * 60000}]}
+    api_kwargs = {
+        "model": "local-model",
+        "input": [{"role": "user", "content": "x " * 60000}],
+    }
     assert _resolve_direct_stale_timeout(agent, api_kwargs) == 3000.0
 
 
@@ -194,8 +219,6 @@ def test_local_endpoint_infinite_budget_leaves_the_watchdog_disarmed():
 
     assert box["response"].id == "slow-but-healthy"
     agent._abort_request_openai_client.assert_not_called()
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -430,10 +453,6 @@ def test_resolver_exception_propagates_instead_of_disarming_the_watchdog():
 # ---------------------------------------------------------------------------
 
 
-
-
-
-
 def test_inline_call_passes_hard_read_timeout_to_the_sdk():
     """The bound has to actually reach chat.completions.create — a helper
     that is never wired in would leave cron on read=None (#85252)."""
@@ -467,9 +486,10 @@ def test_inline_call_does_not_override_explicit_timeout():
     fake_client.chat.completions.create.side_effect = _create
     agent._create_request_openai_client.return_value = fake_client
 
-    assert direct_api_call(
-        agent, {"model": "m", "messages": [], "timeout": 12.0}
-    ).id == "ok"
+    assert (
+        direct_api_call(agent, {"model": "m", "messages": [], "timeout": 12.0}).id
+        == "ok"
+    )
     assert captured["timeout"] == 12.0
 
 

@@ -9,14 +9,23 @@ from typing import Any
 from urllib.parse import unquote, urlparse
 
 from acp.schema import (
-    AudioContentBlock, BlobResourceContents, EmbeddedResourceContentBlock, ImageContentBlock,
-    ResourceContentBlock, TextContentBlock, TextResourceContents,
+    AudioContentBlock,
+    BlobResourceContents,
+    EmbeddedResourceContentBlock,
+    ImageContentBlock,
+    ResourceContentBlock,
+    TextContentBlock,
+    TextResourceContents,
 )
 
 logger = logging.getLogger("acp_adapter.server")
 
 PromptBlock = (
-    TextContentBlock | ImageContentBlock | AudioContentBlock | ResourceContentBlock | EmbeddedResourceContentBlock
+    TextContentBlock
+    | ImageContentBlock
+    | AudioContentBlock
+    | ResourceContentBlock
+    | EmbeddedResourceContentBlock
 )
 
 _MAX_ACP_RESOURCE_BYTES = 512 * 1024
@@ -32,7 +41,9 @@ _TEXT_RESOURCE_MIME_TYPES = {
 }
 
 
-def _resource_display_name(uri: str, name: str | None = None, title: str | None = None) -> str:
+def _resource_display_name(
+    uri: str, name: str | None = None, title: str | None = None
+) -> str:
     """Human-readable attachment name for prompt context."""
     raw_name = (name or "").strip()
     raw_title = (title or "").strip()
@@ -83,18 +94,28 @@ def _path_from_file_uri(uri: str) -> Path | None:
     if parsed.scheme and parsed.scheme != "file":
         return None
 
-    if parsed.scheme == "file" and parsed.netloc and parsed.netloc not in {"", "localhost"}:
+    if (
+        parsed.scheme == "file"
+        and parsed.netloc
+        and parsed.netloc not in {"", "localhost"}
+    ):
         return None
     path_text = unquote(parsed.path or "") if parsed.scheme == "file" else unquote(raw)
 
     # file:///C:/Users/... or C:\Users\...
-    if len(path_text) >= 3 and path_text[0] == "/" and path_text[2] == ":" and path_text[1].isalpha():
+    if (
+        len(path_text) >= 3
+        and path_text[0] == "/"
+        and path_text[2] == ":"
+        and path_text[1].isalpha()
+    ):
         drive, rest = path_text[1], path_text[3:]
     elif len(path_text) >= 2 and path_text[1] == ":" and path_text[0].isalpha():
         drive, rest = path_text[0], path_text[2:]
     else:
         return Path(path_text)
     import os
+
     rest = rest.lstrip("/\\").replace("\\", "/")
     if os.name == "nt":
         return Path(f"{drive}:/{rest}")
@@ -117,7 +138,12 @@ def _decode_text_bytes(data: bytes, mime_type: str | None) -> str | None:
 
 
 def _format_resource_text(
-    *, uri: str, body: str, name: str | None = None, title: str | None = None, note: str | None = None
+    *,
+    uri: str,
+    body: str,
+    name: str | None = None,
+    title: str | None = None,
+    note: str | None = None,
 ) -> str:
     display = _resource_display_name(uri, name=name, title=title)
     header = f"[Attached file: {display}]"
@@ -131,11 +157,21 @@ def _text_parts(**kwargs: Any) -> list[dict[str, Any]]:
     return [{"type": "text", "text": _format_resource_text(**kwargs)}]
 
 
-def _image_parts(uri: str, display: str, data: bytes, mime: str) -> list[dict[str, Any]]:
+def _image_parts(
+    uri: str, display: str, data: bytes, mime: str
+) -> list[dict[str, Any]]:
     """Text header + image_url data URL so vision models can see the attachment."""
     return [
-        {"type": "text", "text": f"[Attached image: {display}]" + (f"\nURI: {uri}" if uri else "")},
-        {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"}},
+        {
+            "type": "text",
+            "text": f"[Attached image: {display}]" + (f"\nURI: {uri}" if uri else ""),
+        },
+        {
+            "type": "image_url",
+            "image_url": {
+                "url": f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"
+            },
+        },
     ]
 
 
@@ -151,29 +187,41 @@ def _resource_link_to_parts(block: ResourceContentBlock) -> list[dict[str, Any]]
     if not uri:
         return []
 
-    name, title, mime_type = _attr(block, "name"), _attr(block, "title"), _attr(block, "mime_type")
+    name, title, mime_type = (
+        _attr(block, "name"),
+        _attr(block, "title"),
+        _attr(block, "mime_type"),
+    )
     path = _path_from_file_uri(uri)
     ident = dict(uri=uri, name=name, title=title)
 
     if path is None:
         return _text_parts(
-            **ident, body="[Resource link only; Clawksis cannot read non-file ACP resource URIs directly.]"
+            **ident,
+            body="[Resource link only; Clawksis cannot read non-file ACP resource URIs directly.]",
         )
 
-    image_mime = mime_type if _is_image_resource(mime_type) else _IMAGE_SUFFIX_MIME.get(path.suffix.lower())
+    image_mime = (
+        mime_type
+        if _is_image_resource(mime_type)
+        else _IMAGE_SUFFIX_MIME.get(path.suffix.lower())
+    )
     if image_mime and _is_image_resource(image_mime):
         try:
             size = path.stat().st_size
             if size > _MAX_ACP_RESOURCE_BYTES:
                 return _text_parts(
-                    **ident, body=f"[Image too large to inline: {size} bytes, cap={_MAX_ACP_RESOURCE_BYTES}]"
+                    **ident,
+                    body=f"[Image too large to inline: {size} bytes, cap={_MAX_ACP_RESOURCE_BYTES}]",
                 )
             with path.open("rb") as fh:
                 data = fh.read()
         except OSError as exc:
             logger.warning("ACP image resource read failed: %s", uri, exc_info=True)
             return _text_parts(**ident, body=f"[Could not read attached image: {exc}]")
-        return _image_parts(uri, _resource_display_name(uri, name=name, title=title), data, image_mime)
+        return _image_parts(
+            uri, _resource_display_name(uri, name=name, title=title), data, image_mime
+        )
 
     try:
         size = path.stat().st_size
@@ -181,15 +229,24 @@ def _resource_link_to_parts(block: ResourceContentBlock) -> list[dict[str, Any]]
             data = fh.read(min(size, _MAX_ACP_RESOURCE_BYTES))
         text = _decode_text_bytes(data, mime_type)
         if text is None:
-            return _text_parts(**ident, body=f"[Binary file omitted: {size} bytes, mime={mime_type or 'unknown'}]")
-        note = f"truncated to {_MAX_ACP_RESOURCE_BYTES} of {size} bytes" if size > _MAX_ACP_RESOURCE_BYTES else None
+            return _text_parts(
+                **ident,
+                body=f"[Binary file omitted: {size} bytes, mime={mime_type or 'unknown'}]",
+            )
+        note = (
+            f"truncated to {_MAX_ACP_RESOURCE_BYTES} of {size} bytes"
+            if size > _MAX_ACP_RESOURCE_BYTES
+            else None
+        )
         return _text_parts(**ident, body=text, note=note)
     except OSError as exc:
         logger.warning("ACP resource read failed: %s", uri, exc_info=True)
         return _text_parts(**ident, body=f"[Could not read attached file: {exc}]")
 
 
-def _embedded_resource_to_parts(block: EmbeddedResourceContentBlock) -> list[dict[str, Any]]:
+def _embedded_resource_to_parts(
+    block: EmbeddedResourceContentBlock,
+) -> list[dict[str, Any]]:
     resource = getattr(block, "resource", None)
     if resource is None:
         return []
@@ -213,7 +270,9 @@ def _embedded_resource_to_parts(block: EmbeddedResourceContentBlock) -> list[dic
                     uri=uri,
                     body=f"[Embedded image too large to inline: {len(data)} bytes, cap={_MAX_ACP_RESOURCE_BYTES}]",
                 )
-            return _image_parts(uri, _resource_display_name(uri), data, mime_type or "image/png")
+            return _image_parts(
+                uri, _resource_display_name(uri), data, mime_type or "image/png"
+            )
 
         body = _decode_text_bytes(data[:_MAX_ACP_RESOURCE_BYTES], mime_type)
         if body is None:
@@ -246,14 +305,18 @@ def _image_block_to_openai_part(block: ImageContentBlock) -> dict[str, Any] | No
     return {"type": "image_url", "image_url": {"url": url}}
 
 
-def _append_parts(parts: list, text_parts: list[str], new_parts: list[dict[str, Any]]) -> None:
+def _append_parts(
+    parts: list, text_parts: list[str], new_parts: list[dict[str, Any]]
+) -> None:
     for part in new_parts:
         parts.append(part)
         if part.get("type") == "text":
             text_parts.append(part["text"])
 
 
-def _content_blocks_to_openai_user_content(prompt: list[PromptBlock]) -> str | list[dict[str, Any]]:
+def _content_blocks_to_openai_user_content(
+    prompt: list[PromptBlock],
+) -> str | list[dict[str, Any]]:
     """Convert ACP prompt blocks into a Clawksis/OpenAI-compatible user content payload."""
     parts: list[dict[str, Any]] = []
     text_parts: list[str] = []

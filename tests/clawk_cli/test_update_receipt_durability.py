@@ -1,4 +1,5 @@
 """Receipt recovery must preserve terminal and user-action facts across processes."""
+
 from __future__ import annotations
 
 import json
@@ -16,28 +17,49 @@ def _run(tmp_path: Path, body: str) -> dict:
     state = home / ".clawksis"
     state.mkdir(parents=True)
     script = tmp_path / "receipt_probe.py"
-    script.write_text(textwrap.dedent("""
+    script.write_text(
+        textwrap.dedent("""
         import json, os, subprocess, sys
         from pathlib import Path
         sys.path.insert(0, sys.argv[1])
         from clawk_cli import update_receipt as receipts
         from clawk_cli.process_identity import _process_create_time
-    """) + textwrap.dedent(body), encoding="utf-8")
-    env = {key: value for key, value in os.environ.items()
-           if not key.startswith(("CLAWK_", "PYTEST_"))}
-    env.update(HOME=str(home), USERPROFILE=str(home), CLAWK_HOME=str(state),
-               CLAWK_RUNTIME_DIR=str(tmp_path / "tools"),
-               XDG_CONFIG_HOME=str(home / ".config"), XDG_CACHE_HOME=str(home / ".cache"),
-               PYTHONPATH=os.pathsep.join([str(ROOT), *filter(None, sys.path)]),
-               PYTHONDONTWRITEBYTECODE="1")
-    done = subprocess.run([sys.executable, str(script), str(ROOT)], env=env, cwd=tmp_path,
-                          text=True, capture_output=True, timeout=60, check=False)
+    """)
+        + textwrap.dedent(body),
+        encoding="utf-8",
+    )
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.startswith(("CLAWK_", "PYTEST_"))
+    }
+    env.update(
+        HOME=str(home),
+        USERPROFILE=str(home),
+        CLAWK_HOME=str(state),
+        CLAWK_RUNTIME_DIR=str(tmp_path / "tools"),
+        XDG_CONFIG_HOME=str(home / ".config"),
+        XDG_CACHE_HOME=str(home / ".cache"),
+        PYTHONPATH=os.pathsep.join([str(ROOT), *filter(None, sys.path)]),
+        PYTHONDONTWRITEBYTECODE="1",
+    )
+    done = subprocess.run(
+        [sys.executable, str(script), str(ROOT)],
+        env=env,
+        cwd=tmp_path,
+        text=True,
+        capture_output=True,
+        timeout=60,
+        check=False,
+    )
     assert done.returncode == 0, done.stdout + done.stderr
     return json.loads((tmp_path / "result.json").read_text(encoding="utf-8"))
 
 
 def test_nested_begin_does_not_reconcile_live_outer_receipt(tmp_path):
-    result = _run(tmp_path, """
+    result = _run(
+        tmp_path,
+        """
         receipts.begin_update_receipt()
         outer = dict(receipts._current.get().data)
         receipts.begin_update_receipt()
@@ -48,13 +70,16 @@ def test_nested_begin_does_not_reconcile_live_outer_receipt(tmp_path):
         receipts.finalize_pending_update_receipt(0)
         Path('result.json').write_text(json.dumps({
             'outcome': before['outcome'], 'restored': restored, 'outer': outer['update_id']}))
-    """)
+    """,
+    )
     assert result["outcome"] == "running"
     assert result["restored"] == result["outer"]
 
 
 def test_writer_identity_cannot_resurrect_a_mismatched_owner(tmp_path):
-    result = _run(tmp_path, """
+    result = _run(
+        tmp_path,
+        """
         child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])
         try:
             ct = _process_create_time(child.pid)
@@ -68,19 +93,23 @@ def test_writer_identity_cannot_resurrect_a_mismatched_owner(tmp_path):
         finally:
             child.terminate()
             child.wait(timeout=10)
-    """)
+    """,
+    )
     assert result == {"same": False, "writer": False, "control": True}
 
 
 def test_user_action_survives_interrupt_before_next_stage(tmp_path):
-    result = _run(tmp_path, """
+    result = _run(
+        tmp_path,
+        """
         receipts.begin_update_receipt()
         receipts.record_user_action('local_changes', 'Reapply stash@{0} by hand')
         running = receipts.read_latest_receipt()
         receipts.finalize_interrupted_update_receipt('operator interrupted')
         terminal = receipts.read_latest_receipt()
         Path('result.json').write_text(json.dumps({'running': running, 'terminal': terminal}))
-    """)
+    """,
+    )
     expected = {"step": "local_changes", "reason": "Reapply stash@{0} by hand"}
     assert result["running"].get("user_action") == expected
     assert result["terminal"].get("user_action") == expected
@@ -88,7 +117,9 @@ def test_user_action_survives_interrupt_before_next_stage(tmp_path):
 
 
 def test_parent_followup_does_not_replace_child_terminal_with_running(tmp_path):
-    result = _run(tmp_path, """
+    result = _run(
+        tmp_path,
+        """
         receipts.begin_update_receipt()
         frozen = dict(receipts._current.get().data)
         Path('request.json').write_text(json.dumps(frozen))
@@ -104,7 +135,8 @@ def test_parent_followup_does_not_replace_child_terminal_with_running(tmp_path):
         after = receipts.read_latest_receipt()
         archive = json.loads(receipts._run_file(receipts._receipt_dir(), frozen).read_text())
         Path('result.json').write_text(json.dumps({'before': before, 'after': after, 'archive': archive}))
-    """)
+    """,
+    )
     assert result["before"]["outcome"] == "success"
     for terminal in (result["after"], result["archive"]):
         assert terminal["outcome"] == "success"

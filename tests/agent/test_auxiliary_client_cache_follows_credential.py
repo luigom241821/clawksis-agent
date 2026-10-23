@@ -18,8 +18,14 @@ MODEL = "claude-sonnet-4-5"
 
 def _seed(provider: str, token: str, *, model_cooldown: str | None = None) -> None:
     row = {
-        "id": "entry-1", "label": "pooled", "auth_type": "oauth", "priority": 1, "source": "manual",
-        "access_token": token, "refresh_token": f"rt-{token}", "expires_at": time.time() + 3600,
+        "id": "entry-1",
+        "label": "pooled",
+        "auth_type": "oauth",
+        "priority": 1,
+        "source": "manual",
+        "access_token": token,
+        "refresh_token": f"rt-{token}",
+        "expires_at": time.time() + 3600,
     }
     if model_cooldown:
         row["model_cooldowns"] = {model_cooldown: time.time() + 600}
@@ -38,10 +44,10 @@ def isolated_home(tmp_path, monkeypatch):
     return tmp_path / "clawk"
 
 
-
-
 @pytest.mark.parametrize("provider", ["anthropic", "openai-codex"])
-def test_pool_token_rotation_changes_cache_key_and_hides_the_secret(isolated_home, provider):
+def test_pool_token_rotation_changes_cache_key_and_hides_the_secret(
+    isolated_home, provider
+):
     """Same entry id, new token -> different key; the token itself never enters the key."""
     _seed(provider, "tok-old")
     before = aux._client_cache_key(provider, async_mode=False, model=MODEL)
@@ -70,11 +76,18 @@ def test_pool_cache_hint_follows_rotation_during_per_model_cooldown(isolated_hom
 def _seed_two(provider: str, first_token: str, second_token: str) -> None:
     rows = []
     for idx, token in ((1, first_token), (2, second_token)):
-        rows.append({
-            "id": f"entry-{idx}", "label": f"pooled-{idx}", "auth_type": "oauth", "priority": idx,
-            "source": "manual", "access_token": token, "refresh_token": f"rt-{token}",
-            "expires_at": time.time() + 3600,
-        })
+        rows.append(
+            {
+                "id": f"entry-{idx}",
+                "label": f"pooled-{idx}",
+                "auth_type": "oauth",
+                "priority": idx,
+                "source": "manual",
+                "access_token": token,
+                "refresh_token": f"rt-{token}",
+                "expires_at": time.time() + 3600,
+            }
+        )
     write_credential_pool(provider, rows)
 
 

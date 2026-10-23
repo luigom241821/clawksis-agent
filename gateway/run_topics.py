@@ -29,12 +29,15 @@ if TYPE_CHECKING:  # string annotations only; never imported at runtime (cycle)
 # Log-record parity with the origin module.
 logger = logging.getLogger("gateway.run")
 
+
 def _topic_restore_steps() -> tuple:
     return (t("gateway.topic.restore_step_1"), t("gateway.topic.restore_step_2"))
 
 
 def _collapse_title(title: str) -> str:
-    return re.sub(r"\s+", " ", str(title or "")).strip() or t("gateway.topic.default_title")
+    return re.sub(r"\s+", " ", str(title or "")).strip() or t(
+        "gateway.topic.default_title"
+    )
 
 
 class GatewayTopicThreadsMixin:
@@ -67,7 +70,8 @@ class GatewayTopicThreadsMixin:
             return False
         try:
             raw = session_db.is_telegram_topic_mode_enabled(
-                chat_id=str(source.chat_id), user_id=str(source.user_id),
+                chat_id=str(source.chat_id),
+                user_id=str(source.user_id),
                 profile_name=self._telegram_topic_profile_name(source),
             )
         except Exception:
@@ -80,7 +84,8 @@ class GatewayTopicThreadsMixin:
     def _is_telegram_topic_root_lobby(self, source: SessionSource) -> bool:
         """True for the main Telegram DM (or General topic) when topic mode has made it a lobby."""
         return (
-            self._is_telegram_dm(source) and self._telegram_topic_mode_enabled(source)
+            self._is_telegram_dm(source)
+            and self._telegram_topic_mode_enabled(source)
             and str(source.thread_id or "") in self._TELEGRAM_GENERAL_TOPIC_IDS
         )
 
@@ -88,8 +93,10 @@ class GatewayTopicThreadsMixin:
         """True for a user-created Telegram private-chat topic lane."""
         tid = str(source.thread_id or "")
         return (
-            self._is_telegram_dm(source) and self._telegram_topic_mode_enabled(source)
-            and bool(tid) and tid not in self._TELEGRAM_GENERAL_TOPIC_IDS
+            self._is_telegram_dm(source)
+            and self._telegram_topic_mode_enabled(source)
+            and bool(tid)
+            and tid not in self._TELEGRAM_GENERAL_TOPIC_IDS
         )
 
     def _telegram_topic_cooldown_key(self, source: SessionSource) -> Optional[str]:
@@ -99,9 +106,15 @@ class GatewayTopicThreadsMixin:
         See #76423.
         """
         chat_id = str(source.chat_id or "")
-        return f"{self._telegram_topic_profile_name(source)}:{chat_id}" if chat_id else None
+        return (
+            f"{self._telegram_topic_profile_name(source)}:{chat_id}"
+            if chat_id
+            else None
+        )
 
-    def _telegram_cooldown_elapsed(self, source: SessionSource, attr: str, cooldown_s: float) -> bool:
+    def _telegram_cooldown_elapsed(
+        self, source: SessionSource, attr: str, cooldown_s: float
+    ) -> bool:
         """Per-(profile, chat) debounce: True (and stamp now) when the window has elapsed."""
         if not hasattr(self, attr):
             setattr(self, attr, {})
@@ -116,11 +129,19 @@ class GatewayTopicThreadsMixin:
 
     def _should_send_telegram_lobby_reminder(self, source: SessionSource) -> bool:
         """Rate-limit root-DM lobby reminders to one per cooldown window, not one per prompt typed."""
-        return self._telegram_cooldown_elapsed(source, "_telegram_lobby_reminder_ts", self._TELEGRAM_LOBBY_REMINDER_COOLDOWN_S)
+        return self._telegram_cooldown_elapsed(
+            source,
+            "_telegram_lobby_reminder_ts",
+            self._TELEGRAM_LOBBY_REMINDER_COOLDOWN_S,
+        )
 
     def _should_send_telegram_capability_hint(self, source: SessionSource) -> bool:
         """Rate-limit the BotFather Threads Settings screenshot (repeated /topic must not re-upload it)."""
-        return self._telegram_cooldown_elapsed(source, "_telegram_capability_hint_ts", self._TELEGRAM_CAPABILITY_HINT_COOLDOWN_S)
+        return self._telegram_cooldown_elapsed(
+            source,
+            "_telegram_capability_hint_ts",
+            self._TELEGRAM_CAPABILITY_HINT_COOLDOWN_S,
+        )
 
     # ── Telegram topic mode: user-facing text ───────────────────────────────────────────────
 
@@ -131,25 +152,36 @@ class GatewayTopicThreadsMixin:
         return t("gateway.topic.root_new")
 
     def _telegram_topic_new_header(self, source: SessionSource) -> Optional[str]:
-        return t("gateway.topic.new_header") if self._is_telegram_topic_lane(source) else None
+        return (
+            t("gateway.topic.new_header")
+            if self._is_telegram_topic_lane(source)
+            else None
+        )
 
     def _telegram_topic_help_text(self) -> str:
         return t("gateway.topic.help")
 
     # ── Telegram topic bindings ─────────────────────────────────────────────────────────────
 
-    def _record_telegram_topic_binding(self, source: SessionSource, session_entry) -> None:
+    def _record_telegram_topic_binding(
+        self, source: SessionSource, session_entry
+    ) -> None:
         """Persist the Telegram topic -> Clawksis session binding for topic lanes (off-loop)."""
         session_db = self._sync_session_db()
         if session_db is None or not source.chat_id or not source.thread_id:
             return
         session_db.bind_telegram_topic(
-            chat_id=str(source.chat_id), thread_id=str(source.thread_id), user_id=str(source.user_id or ""),
-            session_key=session_entry.session_key, session_id=session_entry.session_id,
+            chat_id=str(source.chat_id),
+            thread_id=str(source.thread_id),
+            user_id=str(source.user_id or ""),
+            session_key=session_entry.session_key,
+            session_id=session_entry.session_id,
             profile_name=self._telegram_topic_profile_name(source),
         )
 
-    def _sync_telegram_topic_binding(self, source: SessionSource, session_entry, *, reason: str) -> None:
+    def _sync_telegram_topic_binding(
+        self, source: SessionSource, session_entry, *, reason: str
+    ) -> None:
         """Update the topic binding to ``session_entry.session_id``: a stale binding after a mid-turn
         compression rotation reloads the oversized parent next message, retriggering compression.
 
@@ -161,7 +193,9 @@ class GatewayTopicThreadsMixin:
         try:
             self._record_telegram_topic_binding(source, session_entry)
         except Exception:
-            logger.debug("telegram topic binding refresh failed (%s)", reason, exc_info=True)
+            logger.debug(
+                "telegram topic binding refresh failed (%s)", reason, exc_info=True
+            )
 
     def _recover_telegram_topic_thread_id(self, source: SessionSource) -> Optional[str]:
         """Adapter-ingress recovery hook (sync, called off-loop before session keying): lobby recovery,
@@ -176,7 +210,9 @@ class GatewayTopicThreadsMixin:
         user's most-recent bound topic. Never rewrite a non-lobby, unbound thread id: a brand-new DM
         topic is also "unknown" until its first message is recorded. None = leave the source alone."""
         if (
-            not self._is_telegram_dm(source) or not source.chat_id or not source.user_id
+            not self._is_telegram_dm(source)
+            or not source.chat_id
+            or not source.user_id
             or not self._telegram_topic_mode_enabled(source)
         ):
             return None
@@ -188,7 +224,8 @@ class GatewayTopicThreadsMixin:
             return None
         try:
             bindings = session_db.list_telegram_topic_bindings_for_chat(
-                chat_id=str(source.chat_id), profile_name=self._telegram_topic_profile_name(source)
+                chat_id=str(source.chat_id),
+                profile_name=self._telegram_topic_profile_name(source),
             )
         except Exception:
             logger.debug("topic-recover: read failed", exc_info=True)
@@ -199,40 +236,64 @@ class GatewayTopicThreadsMixin:
                 return recovered if recovered and recovered != inbound else None
         return None
 
-    def _telegram_dm_topic_auto_transfer_configured(self, source: SessionSource) -> bool:
+    def _telegram_dm_topic_auto_transfer_configured(
+        self, source: SessionSource
+    ) -> bool:
         """The RECEIVING bot's ``extra.dm_topic_auto_transfer`` (default False): under multiplexing each
         bot owns its opt-in. Off keeps the v0.22 lobby recovery (#136567). No state.db read."""
         adapter = self._delivery_adapter_for(source)
         platform_cfg = getattr(adapter, "config", None) if adapter is not None else None
-        return is_truthy_value((getattr(platform_cfg, "extra", None) or {}).get("dm_topic_auto_transfer"))
+        return is_truthy_value(
+            (getattr(platform_cfg, "extra", None) or {}).get("dm_topic_auto_transfer")
+        )
 
     def _telegram_topic_auto_transfer_enabled(self, source: SessionSource) -> bool:
         """The key is on and ``source`` is a ``/topic``-mode root DM (reads state.db: call off-loop)."""
-        return self._telegram_dm_topic_auto_transfer_configured(source) and self._is_telegram_topic_root_lobby(source)
+        return self._telegram_dm_topic_auto_transfer_configured(
+            source
+        ) and self._is_telegram_topic_root_lobby(source)
 
-    async def _transfer_telegram_root_dm(self, source: SessionSource) -> Optional[tuple[str, bool]]:
+    async def _transfer_telegram_root_dm(
+        self, source: SessionSource
+    ) -> Optional[tuple[str, bool]]:
         """Adapter-ingress transfer hook for an opted-in root-DM message (#139136).
 
         ``(thread_id, True)``: a fresh topic was created and the turn runs there. ``(thread_id, False)``:
         creating it failed, so the message falls back to lobby recovery (the last bound topic).
         ``None``: not applicable (key off, not a topic-mode root DM) or nothing to recover to.
         """
-        if (not source.chat_id or not self._telegram_dm_topic_auto_transfer_configured(source)
-                or not await asyncio.to_thread(self._is_telegram_topic_root_lobby, source)):
+        if (
+            not source.chat_id
+            or not self._telegram_dm_topic_auto_transfer_configured(source)
+            or not await asyncio.to_thread(self._is_telegram_topic_root_lobby, source)
+        ):
             return None
         adapter = self._delivery_adapter_for(source)
-        create_topic = getattr(adapter, "_create_dm_topic", None) if adapter is not None else None
+        create_topic = (
+            getattr(adapter, "_create_dm_topic", None) if adapter is not None else None
+        )
         thread_id = None
         if callable(create_topic):
             try:
-                thread_id = await create_topic(int(source.chat_id), t("gateway.topic.default_title"))
+                thread_id = await create_topic(
+                    int(source.chat_id), t("gateway.topic.default_title")
+                )
             except Exception:
-                logger.debug("Failed to auto-transfer Telegram root DM into a new topic", exc_info=True)
+                logger.debug(
+                    "Failed to auto-transfer Telegram root DM into a new topic",
+                    exc_info=True,
+                )
         if thread_id:
-            logger.info("telegram topic auto-transfer: chat=%s user=%s root -> new topic %s",
-                        source.chat_id, source.user_id, thread_id)
+            logger.info(
+                "telegram topic auto-transfer: chat=%s user=%s root -> new topic %s",
+                source.chat_id,
+                source.user_id,
+                thread_id,
+            )
             return str(thread_id), True
-        recovered = await asyncio.to_thread(self._recover_telegram_lobby_thread_id, source)
+        recovered = await asyncio.to_thread(
+            self._recover_telegram_lobby_thread_id, source
+        )
         return (recovered, False) if recovered else None
 
     # ── Telegram topic mode: /topic activation helpers ──────────────────────────────────────
@@ -245,7 +306,9 @@ class GatewayTopicThreadsMixin:
         try:
             me = await bot.get_me()
         except Exception:
-            logger.debug("Failed to fetch Telegram getMe topic capabilities", exc_info=True)
+            logger.debug(
+                "Failed to fetch Telegram getMe topic capabilities", exc_info=True
+            )
             return {"checked": False}
 
         def _field(name: str):
@@ -256,16 +319,28 @@ class GatewayTopicThreadsMixin:
                 return api_kwargs[name]
             return me.get(name) if isinstance(me, dict) else None
 
-        return {"checked": True, **{k: _field(k) for k in ("has_topics_enabled", "allows_users_to_create_topics")}}
+        return {
+            "checked": True,
+            **{
+                k: _field(k)
+                for k in ("has_topics_enabled", "allows_users_to_create_topics")
+            },
+        }
 
     async def _ensure_telegram_system_topic(self, source: SessionSource) -> None:
         """Create/pin the managed System topic after /topic activation when possible."""
         adapter = self._delivery_adapter_for(source)
-        create_topic = getattr(adapter, "_create_dm_topic", None) if adapter is not None and source.chat_id else None
+        create_topic = (
+            getattr(adapter, "_create_dm_topic", None)
+            if adapter is not None and source.chat_id
+            else None
+        )
         if not callable(create_topic):
             return
         try:
-            thread_id = await create_topic(int(source.chat_id), t("gateway.topic.system_topic_name"))
+            thread_id = await create_topic(
+                int(source.chat_id), t("gateway.topic.system_topic_name")
+            )
         except Exception:
             logger.debug("Failed to create Telegram System topic", exc_info=True)
             return
@@ -273,7 +348,9 @@ class GatewayTopicThreadsMixin:
             return
         try:
             send_result = await adapter.send(
-                source.chat_id, t("gateway.topic.system_topic_intro"), metadata={"thread_id": str(thread_id)},
+                source.chat_id,
+                t("gateway.topic.system_topic_intro"),
+                metadata={"thread_id": str(thread_id)},
             )
             message_id = getattr(send_result, "message_id", None)
         except Exception:
@@ -283,20 +360,37 @@ class GatewayTopicThreadsMixin:
         if not message_id or bot is None or not hasattr(bot, "pin_chat_message"):
             return
         try:
-            await bot.pin_chat_message(chat_id=int(source.chat_id), message_id=int(message_id), disable_notification=True)
+            await bot.pin_chat_message(
+                chat_id=int(source.chat_id),
+                message_id=int(message_id),
+                disable_notification=True,
+            )
         except Exception:
             logger.debug("Failed to pin Telegram System topic intro", exc_info=True)
 
     async def _send_telegram_topic_setup_image(self, source: SessionSource) -> None:
         """Send the bundled BotFather Threads Settings screenshot when available."""
         adapter = self._delivery_adapter_for(source)
-        image_path = Path(__file__).resolve().parent / "assets" / "telegram-botfather-threads-settings.jpg"
-        if adapter is None or not source.chat_id or not hasattr(adapter, "send_image_file") or not image_path.exists():
+        image_path = (
+            Path(__file__).resolve().parent
+            / "assets"
+            / "telegram-botfather-threads-settings.jpg"
+        )
+        if (
+            adapter is None
+            or not source.chat_id
+            or not hasattr(adapter, "send_image_file")
+            or not image_path.exists()
+        ):
             return
         try:
             await adapter.send_image_file(
-                chat_id=source.chat_id, image_path=str(image_path), caption=t("gateway.topic.setup_image_caption"),
-                metadata={"thread_id": str(source.thread_id)} if source.thread_id else None,
+                chat_id=source.chat_id,
+                image_path=str(image_path),
+                caption=t("gateway.topic.setup_image_caption"),
+                metadata={"thread_id": str(source.thread_id)}
+                if source.thread_id
+                else None,
             )
         except Exception:
             logger.debug("Failed to send Telegram topic setup image", exc_info=True)
@@ -312,19 +406,27 @@ class GatewayTopicThreadsMixin:
         """Discord-safe thread title: the 100-char cap is measured in UTF-16 code units (emoji count
         double), so truncate with the UTF-16 helpers rather than Python code-point slices."""
         cleaned = _collapse_title(title)
-        return cleaned if utf16_len(cleaned) <= 80 else _prefix_within_utf16_limit(cleaned, 77).rstrip() + "..."
+        return (
+            cleaned
+            if utf16_len(cleaned) <= 80
+            else _prefix_within_utf16_limit(cleaned, 77).rstrip() + "..."
+        )
 
     # ── Discord auto-thread lanes ───────────────────────────────────────────────────────────
 
     def _is_discord_auto_thread_lane(self, source: SessionSource) -> bool:
         """Return True only for Discord threads Clawksis just auto-created."""
         return (
-            source.platform == Platform.DISCORD and source.chat_type == "thread"
-            and bool(getattr(source, "auto_thread_created", False)) and bool(source.thread_id)
+            source.platform == Platform.DISCORD
+            and source.chat_type == "thread"
+            and bool(getattr(source, "auto_thread_created", False))
+            and bool(source.thread_id)
             and bool(getattr(source, "auto_thread_initial_name", None))
         )
 
-    def _recover_discord_auto_thread_source(self, source: SessionSource, session_key: str) -> SessionSource:
+    def _recover_discord_auto_thread_source(
+        self, source: SessionSource, session_key: str
+    ) -> SessionSource:
         """*source* with the auto-thread markers of the session's opening event, when that event
         created this same native Discord thread.
 
@@ -332,8 +434,11 @@ class GatewayTopicThreadsMixin:
         rebuilt agent arrives unmarked. The routing entry's ``origin`` is that opening source and
         survives restarts. ``replace_source`` keeps the live transport owner and message id."""
         if (
-            source.platform != Platform.DISCORD or source.chat_type != "thread" or not source.thread_id
-            or source.delivered_via_upstream_relay or self._is_discord_auto_thread_lane(source)
+            source.platform != Platform.DISCORD
+            or source.chat_type != "thread"
+            or not source.thread_id
+            or source.delivered_via_upstream_relay
+            or self._is_discord_auto_thread_lane(source)
         ):
             return source
         entry = self.session_store.lookup_by_session_key(session_key)
@@ -342,7 +447,8 @@ class GatewayTopicThreadsMixin:
 
         def opens_this_thread(origin: Optional[SessionSource]) -> bool:
             return (
-                origin is not None and str(origin.thread_id) == str(source.thread_id)
+                origin is not None
+                and str(origin.thread_id) == str(source.thread_id)
                 and self._is_discord_auto_thread_lane(origin)
             )
 
@@ -355,12 +461,16 @@ class GatewayTopicThreadsMixin:
             raw = (row or {}).get("origin_json")
             origin = None
             if raw:
-                with suppress(ValueError, KeyError, TypeError):  # malformed/legacy row: no recovery
+                with suppress(
+                    ValueError, KeyError, TypeError
+                ):  # malformed/legacy row: no recovery
                     origin = SessionSource.from_dict(json.loads(raw))
             if not opens_this_thread(origin):
                 return source
         return replace_source(
-            source, auto_thread_created=True, auto_thread_initial_name=origin.auto_thread_initial_name,
+            source,
+            auto_thread_created=True,
+            auto_thread_initial_name=origin.auto_thread_initial_name,
         )
 
     def _is_relay_discord_channel_lane(self, source: SessionSource) -> bool:
@@ -368,12 +478,16 @@ class GatewayTopicThreadsMixin:
         auto-thread (title-turn registration gate). Deliberately does NOT consult the send-result
         cache — before delivery the feedback can't exist; the rename lane polls it at fire time."""
         return (
-            source.platform == Platform.DISCORD and bool(source.chat_id) and not source.thread_id
+            source.platform == Platform.DISCORD
+            and bool(source.chat_id)
+            and not source.thread_id
             and source.chat_type in ("group", "channel")
             and getattr(source, "delivered_via_upstream_relay", False) is True
         )
 
-    def _relay_auto_thread_info(self, source: SessionSource) -> Optional[tuple[str, str]]:
+    def _relay_auto_thread_info(
+        self, source: SessionSource
+    ) -> Optional[tuple[str, str]]:
         """(thread_id, initial_name) when the RELAY connector auto-threaded our reply — the title-turn
         sibling of _is_discord_auto_thread_lane (whose markers only exist from turn 2 on; the title
         turn's source is the PARENT channel event).
@@ -384,8 +498,10 @@ class GatewayTopicThreadsMixin:
         cache (older connectors), which only ever renamed the FIRST thread.
         """
         from gateway.run import _as_thread_info
+
         if (
-            source.platform != Platform.DISCORD or not source.chat_id
+            source.platform != Platform.DISCORD
+            or not source.chat_id
             or not getattr(source, "delivered_via_upstream_relay", False)
         ):
             return None
@@ -394,23 +510,30 @@ class GatewayTopicThreadsMixin:
             # Deterministic per-thread identity; the empty initial-name marker signals the caller
             # to rely on the connector-side no-clobber guard.
             return (str(prospective), "")
-        info_fn = getattr(self._delivery_adapter_for(source), "auto_thread_info_for_chat", None)
+        info_fn = getattr(
+            self._delivery_adapter_for(source), "auto_thread_info_for_chat", None
+        )
         if not callable(info_fn):
             return None
         with suppress(Exception):
             return _as_thread_info(info_fn(str(source.chat_id)))
         return None
 
-    async def _await_relay_auto_thread_info(self, source: SessionSource) -> Optional[tuple[str, str]]:
+    async def _await_relay_auto_thread_info(
+        self, source: SessionSource
+    ) -> Optional[tuple[str, str]]:
         """``_relay_auto_thread_info``, waited out until this turn delivers (the legacy send-result
         path can only answer once the reply is sent; the caller asks at title time, one turn early).
         The timeout is only a backstop for a turn that never sends: the turn's own inactivity limit."""
         from gateway.run import _as_thread_info, _float_env
+
         # The connector-stamped prospective id is known at ingest, so most sessions answer here.
         known = self._relay_auto_thread_info(source)
         if known is not None:
             return known
-        wait_fn = getattr(self._delivery_adapter_for(source), "wait_for_auto_thread_info", None)
+        wait_fn = getattr(
+            self._delivery_adapter_for(source), "wait_for_auto_thread_info", None
+        )
         if not callable(wait_fn) or not source.chat_id:
             return None
         # 0 means the operator disabled the turn limit; the backstop still needs one.
@@ -420,13 +543,18 @@ class GatewayTopicThreadsMixin:
         return None
 
     async def _rename_discord_auto_thread_for_session_title(
-        self, source: SessionSource, session_id: str, title: str,
+        self,
+        source: SessionSource,
+        session_id: str,
+        title: str,
         relay_info: Optional[tuple[str, str]] = None,
     ) -> None:
         """Best-effort semantic rename of a newly auto-created Discord thread. ``relay_info`` is the
         connector's (thread_id, initial_name) feedback, supplied on the title turn where the source
         is the parent-channel event without auto-thread markers (see _relay_auto_thread_info)."""
-        if relay_info is None and not await asyncio.to_thread(self._is_discord_auto_thread_lane, source):
+        if relay_info is None and not await asyncio.to_thread(
+            self._is_discord_auto_thread_lane, source
+        ):
             # Relay title turn with no feedback captured at schedule time: the title comes off the
             # user's opening message, so it beats the delivery that produces the connector's
             # send-result feedback by the whole length of the turn. None here = a true miss.
@@ -435,7 +563,11 @@ class GatewayTopicThreadsMixin:
             relay_info = await self._await_relay_auto_thread_info(source)
             if relay_info is None:
                 return
-        adapter = self._delivery_adapter_for(source) if getattr(self, "adapters", None) else None
+        adapter = (
+            self._delivery_adapter_for(source)
+            if getattr(self, "adapters", None)
+            else None
+        )
         rename_thread = getattr(adapter, "rename_thread", None)
         if rename_thread is None:
             return
@@ -448,30 +580,54 @@ class GatewayTopicThreadsMixin:
         # channel chat_id, so pass it or the lookup misses. Native: the source IS the thread; guard on
         # the initial name.
         rename_kwargs = (
-            {"prefer_connector_created": True, "parent_chat_id": str(source.chat_id) if source.chat_id else None}
-            if relay else {"only_if_current_name": getattr(source, "auto_thread_initial_name", None)}
+            {
+                "prefer_connector_created": True,
+                "parent_chat_id": str(source.chat_id) if source.chat_id else None,
+            }
+            if relay
+            else {
+                "only_if_current_name": getattr(
+                    source, "auto_thread_initial_name", None
+                )
+            }
         )
         logger.info(
             "discord auto-thread rename: thread=%s lane=%s new_title=%r",
-            target_thread_id, "relay" if relay else "native", thread_name,
+            target_thread_id,
+            "relay" if relay else "native",
+            thread_name,
         )
         try:
-            renamed = await rename_thread(target_thread_id, thread_name, **rename_kwargs)
-            logger.info("discord auto-thread rename result: thread=%s applied=%s", target_thread_id, bool(renamed))
+            renamed = await rename_thread(
+                target_thread_id, thread_name, **rename_kwargs
+            )
+            logger.info(
+                "discord auto-thread rename result: thread=%s applied=%s",
+                target_thread_id,
+                bool(renamed),
+            )
         except TypeError:
             logger.warning(
-                "Discord semantic thread rename raised TypeError (adapter=%s)", type(adapter).__name__, exc_info=True,
+                "Discord semantic thread rename raised TypeError (adapter=%s)",
+                type(adapter).__name__,
+                exc_info=True,
             )
         except Exception:
-            logger.debug("Failed to rename Discord auto-thread for generated session title", exc_info=True)
+            logger.debug(
+                "Failed to rename Discord auto-thread for generated session title",
+                exc_info=True,
+            )
 
     # ── title-thread → loop rename scheduling ───────────────────────────────────────────────
 
-    def _schedule_rename_from_title_thread(self, source: SessionSource, make_coro, label: str) -> None:
+    def _schedule_rename_from_title_thread(
+        self, source: SessionSource, make_coro, label: str
+    ) -> None:
         """Schedule a best-effort rename coroutine onto the gateway loop from the auto-title thread.
         The source is copied so the thread never shares the live dataclass with the loop; failures
         are logged at debug and never propagate."""
         from gateway.run import safe_schedule_threadsafe
+
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
@@ -483,9 +639,13 @@ class GatewayTopicThreadsMixin:
             # Keep the live transport owner and identity; multiplex routes may run under a
             # profile that does not own the Discord adapter/token.
             from gateway.session_identity import replace_source
+
             copied_source = replace_source(source)
         future = safe_schedule_threadsafe(
-            make_coro(copied_source), loop, logger=logger, log_message=f"{label} failed to schedule",
+            make_coro(copied_source),
+            loop,
+            logger=logger,
+            log_message=f"{label} failed to schedule",
         )
 
         def _log_rename_failure(fut) -> None:
@@ -497,7 +657,9 @@ class GatewayTopicThreadsMixin:
         if future is not None:
             future.add_done_callback(_log_rename_failure)
 
-    def _schedule_discord_semantic_thread_rename(self, source: SessionSource, session_id: str, title: str) -> None:
+    def _schedule_discord_semantic_thread_rename(
+        self, source: SessionSource, session_id: str, title: str
+    ) -> None:
         """Schedule Discord auto-thread rename from the auto-title background thread."""
         if not title:
             return
@@ -518,27 +680,49 @@ class GatewayTopicThreadsMixin:
             "Discord semantic thread rename",
         )
 
-    def _schedule_telegram_topic_title_rename(self, source: SessionSource, session_id: str, title: str) -> None:
+    def _schedule_telegram_topic_title_rename(
+        self, source: SessionSource, session_id: str, title: str
+    ) -> None:
         """Schedule a topic rename from the auto-title background thread."""
-        if not title or not self._is_telegram_topic_lane(source) or self._telegram_topic_auto_rename_disabled(source):
+        if (
+            not title
+            or not self._is_telegram_topic_lane(source)
+            or self._telegram_topic_auto_rename_disabled(source)
+        ):
             return
         self._schedule_rename_from_title_thread(
             source,
-            lambda copied: self._rename_telegram_topic_for_session_title(copied, session_id, title),
+            lambda copied: self._rename_telegram_topic_for_session_title(
+                copied, session_id, title
+            ),
             "Telegram topic title rename",
         )
 
     def _telegram_topic_auto_rename_disabled(self, source: SessionSource) -> bool:
         """``gateway.platforms.telegram.extra.disable_topic_auto_rename``; default False (auto-rename on)."""
         config = getattr(self, "config", None)
-        platform_cfg = config.platforms.get(source.platform) if config and getattr(config, "platforms", None) else None
+        platform_cfg = (
+            config.platforms.get(source.platform)
+            if config and getattr(config, "platforms", None)
+            else None
+        )
         if platform_cfg is None:
             return False
-        return is_truthy_value((getattr(platform_cfg, "extra", None) or {}).get("disable_topic_auto_rename"))
+        return is_truthy_value(
+            (getattr(platform_cfg, "extra", None) or {}).get(
+                "disable_topic_auto_rename"
+            )
+        )
 
-    async def _rename_telegram_topic_for_session_title(self, source: SessionSource, session_id: str, title: str) -> None:
+    async def _rename_telegram_topic_for_session_title(
+        self, source: SessionSource, session_id: str, title: str
+    ) -> None:
         """Best-effort rename of a Telegram DM topic when Clawksis auto-titles a session."""
-        if not await asyncio.to_thread(self._is_telegram_topic_lane, source) or not source.chat_id or not source.thread_id:
+        if (
+            not await asyncio.to_thread(self._is_telegram_topic_lane, source)
+            or not source.chat_id
+            or not source.thread_id
+        ):
             return
         # Operator kill-switch, e.g. user-managed topics (ad-hoc Threaded Mode) that auto-rename
         # would keep overwriting.
@@ -549,10 +733,16 @@ class GatewayTopicThreadsMixin:
         # getattr() on a MagicMock auto-creates attributes, so every test double would match. Only
         # dict-shaped returns count; a bare MagicMock or other sentinel shouldn't.
         adapter = self._delivery_adapter_for(source)
-        get_info = getattr(type(adapter), "_get_dm_topic_info", None) if adapter is not None else None
+        get_info = (
+            getattr(type(adapter), "_get_dm_topic_info", None)
+            if adapter is not None
+            else None
+        )
         if callable(get_info):
             try:
-                operator_topic = get_info(adapter, str(source.chat_id), str(source.thread_id))
+                operator_topic = get_info(
+                    adapter, str(source.chat_id), str(source.thread_id)
+                )
             except Exception:
                 operator_topic = None
             if isinstance(operator_topic, dict):
@@ -561,13 +751,17 @@ class GatewayTopicThreadsMixin:
         if session_db is not None:
             try:
                 binding = await session_db.get_telegram_topic_binding(
-                    chat_id=str(source.chat_id), thread_id=str(source.thread_id),
+                    chat_id=str(source.chat_id),
+                    thread_id=str(source.thread_id),
                     profile_name=self._telegram_topic_profile_name(source),
                 )
                 if binding and str(binding.get("session_id") or "") != str(session_id):
                     return
             except Exception:
-                logger.debug("Failed to verify Telegram topic binding before rename", exc_info=True)
+                logger.debug(
+                    "Failed to verify Telegram topic binding before rename",
+                    exc_info=True,
+                )
                 return
         if adapter is None:
             return
@@ -575,18 +769,35 @@ class GatewayTopicThreadsMixin:
         try:
             rename_topic = getattr(adapter, "rename_dm_topic", None)
             if rename_topic is not None:
-                await rename_topic(chat_id=str(source.chat_id), thread_id=str(source.thread_id), name=topic_name)
+                await rename_topic(
+                    chat_id=str(source.chat_id),
+                    thread_id=str(source.thread_id),
+                    name=topic_name,
+                )
                 return
             bot = getattr(adapter, "_bot", None)
-            edit_forum_topic = getattr(bot, "edit_forum_topic", None) or getattr(bot, "editForumTopic", None)
+            edit_forum_topic = getattr(bot, "edit_forum_topic", None) or getattr(
+                bot, "editForumTopic", None
+            )
             if edit_forum_topic is None:
                 return
             try:
-                await edit_forum_topic(chat_id=int(source.chat_id), message_thread_id=int(source.thread_id), name=topic_name)
+                await edit_forum_topic(
+                    chat_id=int(source.chat_id),
+                    message_thread_id=int(source.thread_id),
+                    name=topic_name,
+                )
             except (TypeError, ValueError):
-                await edit_forum_topic(chat_id=source.chat_id, message_thread_id=source.thread_id, name=topic_name)
+                await edit_forum_topic(
+                    chat_id=source.chat_id,
+                    message_thread_id=source.thread_id,
+                    name=topic_name,
+                )
         except Exception:
-            logger.debug("Failed to rename Telegram topic for auto-generated title", exc_info=True)
+            logger.debug(
+                "Failed to rename Telegram topic for auto-generated title",
+                exc_info=True,
+            )
 
     # ── /topic command bodies ───────────────────────────────────────────────────────────────
 
@@ -594,7 +805,10 @@ class GatewayTopicThreadsMixin:
         """Cleanly disable topic mode for a chat via /topic off."""
         if not self._session_db:
             from clawk_state import format_session_db_unavailable
-            return format_session_db_unavailable(prefix=t("gateway.shared.session_db_unavailable_prefix"))
+
+            return format_session_db_unavailable(
+                prefix=t("gateway.shared.session_db_unavailable_prefix")
+            )
         chat_id = str(source.chat_id or "")
         if not chat_id:
             return t("gateway.topic.no_chat_id")
@@ -602,30 +816,45 @@ class GatewayTopicThreadsMixin:
         currently_enabled = False
         with suppress(Exception):
             currently_enabled = await self._session_db.is_telegram_topic_mode_enabled(
-                chat_id=chat_id, user_id=str(source.user_id or ""), profile_name=profile_name,
+                chat_id=chat_id,
+                user_id=str(source.user_id or ""),
+                profile_name=profile_name,
             )
         if not currently_enabled:
             return t("gateway.topic.mode_not_enabled")
         try:
-            await self._session_db.disable_telegram_topic_mode(chat_id=chat_id, profile_name=profile_name)
+            await self._session_db.disable_telegram_topic_mode(
+                chat_id=chat_id, profile_name=profile_name
+            )
         except Exception as exc:
             logger.exception("Failed to disable Telegram topic mode")
             return t("gateway.topic.disable_failed", error=exc)
         # Reset per-profile+chat debounce state so the next activation doesn't see a stale cooldown.
         # See #76423.
         cooldown_key = self._telegram_topic_cooldown_key(source)
-        for attr in ("_telegram_lobby_reminder_ts", "_telegram_capability_hint_ts") if cooldown_key else ():
+        for attr in (
+            ("_telegram_lobby_reminder_ts", "_telegram_capability_hint_ts")
+            if cooldown_key
+            else ()
+        ):
             store = getattr(self, attr, None)
             if isinstance(store, dict):
                 store.pop(cooldown_key, None)
         return t("gateway.topic.mode_disabled")
 
     async def _telegram_topic_root_status_message(self, source: SessionSource) -> str:
-        lines = [t("gateway.topic.status_enabled"), "", t("gateway.topic.status_how_to"), ""]
+        lines = [
+            t("gateway.topic.status_enabled"),
+            "",
+            t("gateway.topic.status_how_to"),
+            "",
+        ]
         try:
             sessions = await self._session_db.list_unlinked_telegram_sessions_for_user(
-                chat_id=str(source.chat_id), user_id=str(source.user_id),
-                profile_name=self._telegram_topic_profile_name(source), limit=10,
+                chat_id=str(source.chat_id),
+                user_id=str(source.user_id),
+                profile_name=self._telegram_topic_profile_name(source),
+                limit=10,
             )
         except Exception:
             logger.debug("Failed to list unlinked Telegram sessions", exc_info=True)
@@ -638,20 +867,40 @@ class GatewayTopicThreadsMixin:
                     f"- {session.get('title') or t('gateway.topic.untitled_session')} — `{session.get('id') or ''}`"
                     + (f" — {preview}" if preview else "")
                 )
-            lines.extend(["", t("gateway.topic.restore_one"), *_topic_restore_steps(),
-                          t("gateway.topic.restore_example", session_id=sessions[0].get("id"))])
+            lines.extend(
+                [
+                    "",
+                    t("gateway.topic.restore_one"),
+                    *_topic_restore_steps(),
+                    t(
+                        "gateway.topic.restore_example",
+                        session_id=sessions[0].get("id"),
+                    ),
+                ]
+            )
         else:
-            lines.extend([t("gateway.topic.no_unlinked"), "", t("gateway.topic.restore_later"), *_topic_restore_steps()])
+            lines.extend(
+                [
+                    t("gateway.topic.no_unlinked"),
+                    "",
+                    t("gateway.topic.restore_later"),
+                    *_topic_restore_steps(),
+                ]
+            )
         return "\n".join(lines)
 
-    async def _restore_telegram_topic_session(self, event: MessageEvent, raw_session_id: str) -> str:
+    async def _restore_telegram_topic_session(
+        self, event: MessageEvent, raw_session_id: str
+    ) -> str:
         """Restore an existing Telegram-owned Clawksis session into this topic."""
         source = event.source
         db = self._session_db
         session_id = await db.resolve_session_id(raw_session_id.strip())
         session = await db.get_session(session_id) if session_id else None
         if not session:
-            return t("gateway.topic.session_not_found", session_id=raw_session_id.strip())
+            return t(
+                "gateway.topic.session_not_found", session_id=raw_session_id.strip()
+            )
         if str(session.get("source") or "") != "telegram":
             return t("gateway.topic.not_telegram_session")
         if str(session.get("user_id") or "") != str(source.user_id):
@@ -659,15 +908,23 @@ class GatewayTopicThreadsMixin:
         linked = await db.is_telegram_session_linked_to_topic(session_id=session_id)
         topic_profile = self._telegram_topic_profile_name(source)
         current_binding = await db.get_telegram_topic_binding(
-            chat_id=str(source.chat_id), thread_id=str(source.thread_id), profile_name=topic_profile,
+            chat_id=str(source.chat_id),
+            thread_id=str(source.thread_id),
+            profile_name=topic_profile,
         )
         already_linked = t("gateway.topic.already_linked")
-        if linked and (not current_binding or current_binding.get("session_id") != session_id):
+        if linked and (
+            not current_binding or current_binding.get("session_id") != session_id
+        ):
             return already_linked
         try:
             await db.bind_telegram_topic(
-                chat_id=str(source.chat_id), thread_id=str(source.thread_id), user_id=str(source.user_id),
-                session_key=self._session_key_for_source(source), session_id=session_id, managed_mode="restored",
+                chat_id=str(source.chat_id),
+                thread_id=str(source.thread_id),
+                user_id=str(source.user_id),
+                session_key=self._session_key_for_source(source),
+                session_id=session_id,
+                managed_mode="restored",
                 profile_name=topic_profile,
             )
         except ValueError as exc:
@@ -685,4 +942,8 @@ class GatewayTopicThreadsMixin:
                     last_assistant = str(projected.get("content"))
                     break
         response = t("gateway.topic.restored", title=title)
-        return response + (t("gateway.topic.restored_last_message", text=last_assistant) if last_assistant else "")
+        return response + (
+            t("gateway.topic.restored_last_message", text=last_assistant)
+            if last_assistant
+            else ""
+        )

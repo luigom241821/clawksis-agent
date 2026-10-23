@@ -4,6 +4,7 @@ Regression tests for #103483 (Muse Spark degenerate finals on the Responses
 wire) and #75202 (strict Responses-compatible providers reject an empty
 ``content`` string with 400).
 """
+
 import json
 from pathlib import Path
 
@@ -13,12 +14,23 @@ from agent.codex_responses_adapter import _chat_messages_to_responses_input
 def test_reasoning_without_tool_keeps_nonempty_following_item():
     """Control: a lone reasoning item still needs a follower (else
     ``missing_following_item``), and it must be non-empty for strict providers."""
-    items = _chat_messages_to_responses_input([{
-        'role': 'assistant', 'content': '',
-        'codex_reasoning_items': [{'type': 'reasoning', 'id': 'rs_test',
-                                  'encrypted_content': 'synthetic-encrypted-fixture', 'summary': []}],
-    }])
-    assert items[-1] == {'type': 'message', 'role': 'assistant', 'content': ' '}
+    items = _chat_messages_to_responses_input(
+        [
+            {
+                "role": "assistant",
+                "content": "",
+                "codex_reasoning_items": [
+                    {
+                        "type": "reasoning",
+                        "id": "rs_test",
+                        "encrypted_content": "synthetic-encrypted-fixture",
+                        "summary": [],
+                    }
+                ],
+            }
+        ]
+    )
+    assert items[-1] == {"type": "message", "role": "assistant", "content": " "}
 
 
 def test_failing_turn_fixture_emits_no_invented_carrier():
@@ -32,19 +44,24 @@ def test_failing_turn_fixture_emits_no_invented_carrier():
     """
     fixture_path = (
         Path(__file__).resolve().parent.parent
-        / "fixtures" / "spark_failing_turn_shape.json"
+        / "fixtures"
+        / "spark_failing_turn_shape.json"
     )
     messages = json.loads(fixture_path.read_text(encoding="utf-8"))
     items = _chat_messages_to_responses_input(messages)
-    assert not any(i.get("role") == "assistant" and i.get("content") == "" for i in items)
+    assert not any(
+        i.get("role") == "assistant" and i.get("content") == "" for i in items
+    )
     for i, item in enumerate(items):
         if item.get("type") == "reasoning":
             # Reasoning items may cluster; the next non-reasoning item after
             # each of them must be the function_call that follows it — never
             # an invented blank assistant message.
-            nxt = next(it for it in items[i + 1:] if it.get("type") != "reasoning")
+            nxt = next(it for it in items[i + 1 :] if it.get("type") != "reasoning")
             assert nxt.get("type") == "function_call"
     calls = [item["call_id"] for item in items if item.get("type") == "function_call"]
-    outputs = [item["call_id"] for item in items if item.get("type") == "function_call_output"]
+    outputs = [
+        item["call_id"] for item in items if item.get("type") == "function_call_output"
+    ]
     assert len(calls) == 5
     assert sorted(calls) == sorted(outputs)

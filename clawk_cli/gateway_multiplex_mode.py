@@ -26,12 +26,15 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 SINGLE_PROFILE_REASON = "only one profile exists (nothing to multiplex)"
-STANDALONE_PROFILE_REASON = "this profile is standalone (gateway.standalone: true); it serves only itself"
+STANDALONE_PROFILE_REASON = (
+    "this profile is standalone (gateway.standalone: true); it serves only itself"
+)
 #: A single-profile boot that ``gateway.auto_multiplex_migration: false`` keeps standalone once a second
 #: profile appears: the in-place switch is an automatic migration, so the opt-out holds it back.
 AUTO_MIGRATION_OPTED_OUT_REASON = (
     "gateway.auto_multiplex_migration is false, so this gateway serves only its own profile; "
-    "run `clawk gateway migrate --multiplex` to serve every profile")
+    "run `clawk gateway migrate --multiplex` to serve every profile"
+)
 
 #: ``gateway.standalone: true`` is a TEMPORARY backwards-compatibility shim, not a supported topology.
 #: It exists so fleets that lost per-profile gateways in the multiplex-only switch keep working while
@@ -48,7 +51,8 @@ STANDALONE_DEPRECATION_NOTICE = (
 RETIRED_OPT_OUT_REASON = (
     "gateway.multiplex_profiles: false is retired and was rewritten to true; one gateway per host "
     "serves every profile. A per-profile gateway is `gateway.standalone: true` in that profile's "
-    "config (temporary shim) or `--force`.")
+    "config (temporary shim) or `--force`."
+)
 
 #: One-time marker the gateway leaves after rewriting a retired ``false``; ``clawk update``'s summary
 #: prints the notice from it and clears it, so the flip is never silent on either surface.
@@ -61,6 +65,7 @@ def explicit_multiplex_flag(default_home: Path) -> Optional[bool]:
     written in its config.yaml; ``None`` when neither is set. Raw read on purpose: the callers are
     other processes (``clawk -p X ...`` has X's config loaded) asking about the default's file."""
     from gateway.config import _bool_token, _env_multiplex_profiles_override
+
     env = _env_multiplex_profiles_override()
     if env is not None:
         return env
@@ -68,6 +73,7 @@ def explicit_multiplex_flag(default_home: Path) -> Optional[bool]:
     if not cfg_path.exists():
         return None
     from clawk_cli.config import read_user_config_raw
+
     cfg = read_user_config_raw(cfg_path) or {}
     gateway_section = cfg.get("gateway") if isinstance(cfg.get("gateway"), dict) else {}
     value = cfg.get("multiplex_profiles")
@@ -93,6 +99,7 @@ def host_serves_named_profile(default_home: Path, home: Path) -> Optional[bool]:
     ``True`` for an explicit ``true`` on the default, ``None`` when boot settles it (unset or the
     retired ``false``, see :func:`resolve_multiplex_mode`)."""
     from clawk_cli.profiles import profile_is_standalone
+
     if profile_is_standalone(home):
         return False
     return settled_explicit_flag(explicit_multiplex_flag(default_home))
@@ -110,6 +117,7 @@ def default_gateway_multiplexes(default_home: Optional[Path] = None) -> bool:
     """
     from clawk_constants import get_default_clawk_root
     from clawk_cli.gateway_multiplex_served import recorded_served_profiles
+
     root = Path(default_home) if default_home is not None else get_default_clawk_root()
     recorded = recorded_served_profiles(root)
     if recorded is not None:
@@ -132,7 +140,10 @@ def _standalone_launcher() -> bool:
     from clawk_cli.profiles import profile_is_standalone
 
     home = get_clawk_home()
-    return profile_name_for_home(home) not in (None, "default") and profile_is_standalone(home)
+    return profile_name_for_home(home) not in (
+        None,
+        "default",
+    ) and profile_is_standalone(home)
 
 
 def standalone_launcher_decision(config) -> Optional[MultiplexDecision]:
@@ -162,6 +173,7 @@ def implicit_multiplex_blocker() -> Optional[str]:
     verb built on "the default's multiplexer" blind to the process actually serving the host.
     """
     from clawk_cli.profiles import profiles_to_serve
+
     if _standalone_launcher():
         return STANDALONE_PROFILE_REASON
     # Cheap and first: a single-profile install has nothing to multiplex, and the fail-closed secret
@@ -170,7 +182,12 @@ def implicit_multiplex_blocker() -> Optional[str]:
     # Parking is reversible without a host restart, so keep the reconcile watcher alive.
     if len(profiles_to_serve(multiplex=True, include_parked=True)) < 2:
         return SINGLE_PROFILE_REASON
-    from clawk_cli.gateway_migrate import MIGRATE_COMMAND, _host_supports_migration, build_migration_plan
+    from clawk_cli.gateway_migrate import (
+        MIGRATE_COMMAND,
+        _host_supports_migration,
+        build_migration_plan,
+    )
+
     host_reason = _host_supports_migration()
     if host_reason:
         return host_reason
@@ -178,7 +195,8 @@ def implicit_multiplex_blocker() -> Optional[str]:
     if plan.standalone_secondaries:
         owned = ", ".join(
             f"'{p.name}' ({'pid ' + str(p.pid) if p.pid else p.service_label()})"
-            for p in plan.standalone_secondaries)
+            for p in plan.standalone_secondaries
+        )
         return f"profile(s) {owned} still run their own gateway; fold them with `{MIGRATE_COMMAND}`"
     if plan.blocked:
         return "; ".join(plan.blockers)
@@ -187,10 +205,13 @@ def implicit_multiplex_blocker() -> Optional[str]:
 
 def _default_profile_home() -> Path:
     from clawk_constants import get_default_clawk_root
+
     return get_default_clawk_root()
 
 
-def persist_resolved_default(decision: MultiplexDecision, default_home: Optional[Path] = None) -> bool:
+def persist_resolved_default(
+    decision: MultiplexDecision, default_home: Optional[Path] = None
+) -> bool:
     """Write ``gateway.multiplex_profiles: true`` into the DEFAULT profile's config.yaml so the file
     reads as the gateway behaves. The key has ONE valid value right now (Teknium ruling): an unset key
     is made explicit ("left unset" was read as "off"), a retired ``false`` is rewritten in place and
@@ -198,38 +219,55 @@ def persist_resolved_default(decision: MultiplexDecision, default_home: Optional
     refusal (the file must not say true while the runtime is standalone). Returns True on a write."""
     if not decision.enabled or decision.source == "guard":
         return False
-    default_home = Path(default_home) if default_home is not None else _default_profile_home()
+    default_home = (
+        Path(default_home) if default_home is not None else _default_profile_home()
+    )
     cfg_path = default_home / "config.yaml"
     try:
         from clawk_cli.config import read_user_config_raw
+
         cfg = read_user_config_raw(cfg_path) or {} if cfg_path.exists() else {}
         section = cfg.get("gateway") if isinstance(cfg.get("gateway"), dict) else {}
         in_file = cfg.get("multiplex_profiles", section.get("multiplex_profiles"))
         if in_file is True:
             return False
         from clawk_cli.gateway_migrate import _write_multiplex_flag
+
         _write_multiplex_flag(default_home, True)
         if decision.source == "retired-opt-out":
-            (default_home / REWRITTEN_MARKER_NAME).write_text(RETIRED_OPT_OUT_REASON + "\n", encoding="utf-8")
+            (default_home / REWRITTEN_MARKER_NAME).write_text(
+                RETIRED_OPT_OUT_REASON + "\n", encoding="utf-8"
+            )
     except Exception:
-        logger.debug("could not persist gateway.multiplex_profiles: true", exc_info=True)
+        logger.debug(
+            "could not persist gateway.multiplex_profiles: true", exc_info=True
+        )
         return False
-    logger.info("Wrote gateway.multiplex_profiles: true to %s (was %s).", cfg_path,
-                "unset" if in_file is None else repr(in_file))
+    logger.info(
+        "Wrote gateway.multiplex_profiles: true to %s (was %s).",
+        cfg_path,
+        "unset" if in_file is None else repr(in_file),
+    )
     return True
 
 
 def retired_opt_out_notice_lines() -> list[str]:
     """The one-time boxed notice for a rewritten ``false`` (same box as the guard warning)."""
-    return _box(["⚠ gateway.multiplex_profiles: false is retired and was rewritten to true;",
-                 "one gateway per host serves every profile.",
-                 "A per-profile gateway is `gateway.standalone: true` in that profile's config",
-                 "(temporary shim) or `--force`."])
+    return _box(
+        [
+            "⚠ gateway.multiplex_profiles: false is retired and was rewritten to true;",
+            "one gateway per host serves every profile.",
+            "A per-profile gateway is `gateway.standalone: true` in that profile's config",
+            "(temporary shim) or `--force`.",
+        ]
+    )
 
 
 def consume_rewritten_notice(default_home: Optional[Path] = None) -> list[str]:
     """``clawk update``'s summary: print the rewrite notice ONCE more, then clear the marker."""
-    default_home = Path(default_home) if default_home is not None else _default_profile_home()
+    default_home = (
+        Path(default_home) if default_home is not None else _default_profile_home()
+    )
     marker = default_home / REWRITTEN_MARKER_NAME
     if not marker.exists():
         return []
@@ -242,9 +280,11 @@ def consume_rewritten_notice(default_home: Optional[Path] = None) -> list[str]:
 
 def _box(body: list[str]) -> list[str]:
     width = max(len(line) for line in body) + 2
-    return ["┌" + "─" * width + "┐",
-            *[f"│ {line.ljust(width - 1)}│" for line in body],
-            "└" + "─" * width + "┘"]
+    return [
+        "┌" + "─" * width + "┐",
+        *[f"│ {line.ljust(width - 1)}│" for line in body],
+        "└" + "─" * width + "┘",
+    ]
 
 
 def resolve_multiplex_mode(config) -> MultiplexDecision:
@@ -267,15 +307,21 @@ def resolve_multiplex_mode(config) -> MultiplexDecision:
     retired_opt_out = current is False
     try:
         blocker = implicit_multiplex_blocker()
-    except Exception as exc:  # a broken preflight must not take the gateway down with it
-        logger.warning("Multiplex preflight failed; starting standalone: %s", exc, exc_info=True)
+    except (
+        Exception
+    ) as exc:  # a broken preflight must not take the gateway down with it
+        logger.warning(
+            "Multiplex preflight failed; starting standalone: %s", exc, exc_info=True
+        )
         blocker = f"preflight failed ({exc})"
     if blocker:
         decision = MultiplexDecision(False, "guard", blocker)
     elif retired_opt_out:
         decision = MultiplexDecision(True, "retired-opt-out", RETIRED_OPT_OUT_REASON)
     else:
-        decision = MultiplexDecision(True, "default", "gateway.multiplex_profiles unset; default applies")
+        decision = MultiplexDecision(
+            True, "default", "gateway.multiplex_profiles unset; default applies"
+        )
     config.multiplex_profiles = decision.enabled
     return decision
 
@@ -294,11 +340,16 @@ def record_multiplex_decision(decision: MultiplexDecision) -> None:
     the claim succeeds, and a launch that loses the claim never writes it."""
     try:
         from gateway.status import owns_gateway_runtime_lock, write_runtime_status
+
         if not owns_gateway_runtime_lock():
             _pending_decision[:] = [decision]
             return
         _pending_decision.clear()
-        write_runtime_status(multiplex_standalone_reason=decision.reason if decision.source == "guard" else None)
+        write_runtime_status(
+            multiplex_standalone_reason=decision.reason
+            if decision.source == "guard"
+            else None
+        )
     except Exception:
         logger.debug("could not record the multiplex decision", exc_info=True)
 
@@ -317,15 +368,20 @@ def log_multiplex_decision(decision: MultiplexDecision) -> None:
         for line in retired_opt_out_notice_lines():
             print(line)
     elif decision.source == "guard" and decision.reason == SINGLE_PROFILE_REASON:
-        logger.info("Single-profile install: gateway.multiplex_profiles unset, serving the default profile only.")
+        logger.info(
+            "Single-profile install: gateway.multiplex_profiles unset, serving the default profile only."
+        )
     elif decision.source == "guard":
         logger.warning(
             "This gateway stays standalone: %s. It serves only the launching profile.",
-            decision.reason)
+            decision.reason,
+        )
         for line in standalone_warning_lines(decision):
             print(line)
     elif decision.source == "default":
-        logger.info("Serving every profile on this host (gateway.multiplex_profiles unset; default on).")
+        logger.info(
+            "Serving every profile on this host (gateway.multiplex_profiles unset; default on)."
+        )
         persist_resolved_default(decision)
 
 
@@ -333,11 +389,18 @@ def unserved_profiles() -> list[str]:
     """Named profiles a standalone gateway leaves without a bot (the whole point of the warning)."""
     from clawk_constants import get_clawk_home, profile_name_for_home
     from clawk_cli.profiles import profiles_to_serve
+
     me = profile_name_for_home(get_clawk_home()) or "default"
-    return [name for name, _home in profiles_to_serve(multiplex=True, include_parked=True) if name != me]
+    return [
+        name
+        for name, _home in profiles_to_serve(multiplex=True, include_parked=True)
+        if name != me
+    ]
 
 
-def standalone_warning_lines(decision: MultiplexDecision, unserved: Optional[list[str]] = None) -> list[str]:
+def standalone_warning_lines(
+    decision: MultiplexDecision, unserved: Optional[list[str]] = None
+) -> list[str]:
     """The boxed warning a multi-profile host prints when a guard keeps its gateway standalone.
 
     Empty for anything but a guard refusal on a host with other profiles to serve: a single-profile
@@ -354,6 +417,7 @@ def standalone_warning_lines(decision: MultiplexDecision, unserved: Optional[lis
     if not unserved:
         return []
     from clawk_cli.gateway_migrate import MIGRATE_COMMAND
+
     body = [
         "⚠ This gateway is STANDALONE: it serves only its own profile.",
         "Profiles NOT served (their bots stay silent): " + ", ".join(unserved),
@@ -368,6 +432,7 @@ def recorded_standalone_reason(state_path: Path | None = None) -> str | None:
     home's, or *state_path*), else ``None``. A stopped, failed or dead record's reason is history."""
     try:
         from gateway.status import read_runtime_status, runtime_status_pid_is_live
+
         record = read_runtime_status(state_path) or {}
         if record.get("gateway_state") in (None, "stopped", "startup_failed"):
             return None

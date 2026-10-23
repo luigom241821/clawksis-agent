@@ -23,18 +23,26 @@ def _agent(manager, session_id="sess-1"):
 def test_manager_survives_across_requests_and_is_exclusive_per_home(monkeypatch):
     registry = ApiServerMemorySessions(max_size=8, idle_ttl_secs=3600.0)
     home = ["home-a"]
-    monkeypatch.setattr(ApiServerMemorySessions, "_owner_home", staticmethod(lambda: (home[0], None)))
+    monkeypatch.setattr(
+        ApiServerMemorySessions, "_owner_home", staticmethod(lambda: (home[0], None))
+    )
     # Shutdowns run inline so the assertion below does not race a daemon thread.
     monkeypatch.setattr(registry, "_shutdown_async", registry._shutdown)
 
     assert registry.checkout("sess-1") is None  # first request builds its own
     manager = _Manager()
     registry.checkin(_agent(manager))
-    assert registry.checkout("sess-1") is manager  # next request on the session gets it back
-    assert registry.checkout("sess-1") is None  # ...exclusively: a concurrent request builds a new one
+    assert (
+        registry.checkout("sess-1") is manager
+    )  # next request on the session gets it back
+    assert (
+        registry.checkout("sess-1") is None
+    )  # ...exclusively: a concurrent request builds a new one
     loser = _Manager()
     registry.checkin(_agent(manager))
-    registry.checkin(_agent(loser))  # the concurrent request checks in behind the winner
+    registry.checkin(
+        _agent(loser)
+    )  # the concurrent request checks in behind the winner
     assert manager.shut_down and not loser.shut_down
     # Same session id under another profile home is a different key (#120116 x multiplex).
     home[0] = "home-b"
@@ -43,13 +51,18 @@ def test_manager_survives_across_requests_and_is_exclusive_per_home(monkeypatch)
     assert registry.checkout("sess-1") is loser
 
 
-def test_a_manager_parked_past_the_retry_horizon_is_not_handed_to_a_reused_id(monkeypatch):
+def test_a_manager_parked_past_the_retry_horizon_is_not_handed_to_a_reused_id(
+    monkeypatch,
+):
     """A swept session's fence ages out at the retry horizon, after which its id may name a new
     session: that session must not adopt the previous one's provider (and its prefetched recall)."""
     import time
     from clawk_state_mutation_retirement import RETRY_HORIZON_S
+
     registry = ApiServerMemorySessions(max_size=8, idle_ttl_secs=10 * RETRY_HORIZON_S)
-    monkeypatch.setattr(ApiServerMemorySessions, "_owner_home", staticmethod(lambda: ("home-a", None)))
+    monkeypatch.setattr(
+        ApiServerMemorySessions, "_owner_home", staticmethod(lambda: ("home-a", None))
+    )
     monkeypatch.setattr(registry, "_shutdown_async", registry._shutdown)
     swept = _Manager()
     registry.checkin(_agent(swept, "user-42"))

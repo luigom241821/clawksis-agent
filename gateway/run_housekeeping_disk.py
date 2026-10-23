@@ -20,8 +20,12 @@ logger = logging.getLogger(__name__)
 def housekeeping_media_caches() -> None:
     """Hourly media-cache prune (24h max age); spillover (None) keeps the session retention window."""
     from gateway.platforms.base import (
-        cleanup_audio_cache, cleanup_document_cache, cleanup_image_cache, cleanup_screenshot_cache,
-        cleanup_video_cache)
+        cleanup_audio_cache,
+        cleanup_document_cache,
+        cleanup_image_cache,
+        cleanup_screenshot_cache,
+        cleanup_video_cache,
+    )
     from tools.tool_result_storage import cleanup_spillover_cache
     from tools.environments.local import cleanup_terminal_temp_cache
     from tools.bot_mode_dm import cleanup_bot_dm_cache
@@ -30,15 +34,26 @@ def housekeeping_media_caches() -> None:
     from gateway.run import _housekeeping_chore
 
     for cache_name, cleanup_fn in (
-        ("Image", cleanup_image_cache), ("Document", cleanup_document_cache),
-        ("Audio", cleanup_audio_cache), ("Video", cleanup_video_cache),
-        ("Screenshot", cleanup_screenshot_cache), ("Spillover", cleanup_spillover_cache),
-        ("Terminal temp", cleanup_terminal_temp_cache), ("Bot DM", cleanup_bot_dm_cache),
-        ("Bot relay", cleanup_bot_relay_artifacts)):
+        ("Image", cleanup_image_cache),
+        ("Document", cleanup_document_cache),
+        ("Audio", cleanup_audio_cache),
+        ("Video", cleanup_video_cache),
+        ("Screenshot", cleanup_screenshot_cache),
+        ("Spillover", cleanup_spillover_cache),
+        ("Terminal temp", cleanup_terminal_temp_cache),
+        ("Bot DM", cleanup_bot_dm_cache),
+        ("Bot relay", cleanup_bot_relay_artifacts),
+    ):
+
         def _one(name=cache_name, fn=cleanup_fn):
-            removed = fn(max_age_hours=None if fn is cleanup_spillover_cache else MEDIA_CACHE_MAX_AGE_HOURS)
+            removed = fn(
+                max_age_hours=None
+                if fn is cleanup_spillover_cache
+                else MEDIA_CACHE_MAX_AGE_HOURS
+            )
             if removed:
                 logger.info("%s cache cleanup: removed %d stale file(s)", name, removed)
+
         _housekeeping_chore(f"{cache_name} cache cleanup", _one)
 
 
@@ -52,7 +67,9 @@ def maybe_post_auto_prune_prompt(runner, loop) -> None:
     from clawk_cli import prune_advisor
     from clawk_constants import get_routing_process_clawk_home
 
-    reachable = {profile for profile, *_rest in runner._served_home_channel_transports()}
+    reachable = {
+        profile for profile, *_rest in runner._served_home_channel_transports()
+    }
     homes: dict = {None: get_routing_process_clawk_home()}
     homes.update(getattr(runner, "_served_profile_homes", None) or {})
     for profile, home in homes.items():
@@ -61,8 +78,12 @@ def maybe_post_auto_prune_prompt(runner, loop) -> None:
         advice = prune_advisor.advise(Path(home))
         if advice is None:
             continue
-        fut = safe_schedule_threadsafe(_post(runner, profile, home, advice), loop, logger=logger,
-                                       log_message="Auto-prune prompt scheduling error")
+        fut = safe_schedule_threadsafe(
+            _post(runner, profile, home, advice),
+            loop,
+            logger=logger,
+            log_message="Auto-prune prompt scheduling error",
+        )
         # Snooze only on a delivered post: a send that failed must not swallow the question.
         if fut is not None and fut.result(timeout=60):
             prune_advisor.snooze(Path(home))
@@ -88,19 +109,29 @@ async def publish_local_auto_prune_notice(authority, ref) -> None:
         return
     try:
         policy = policy_for_source(authority.runner, source)
-    except RuntimeStoreError:  # policy not restored yet: this viewer gets no notice, the next one may
+    except (
+        RuntimeStoreError
+    ):  # policy not restored yet: this viewer gets no notice, the next one may
         return
     if policy is None or policy.source not in {"tui", "gui"}:
         return
     home = Path(authority.db.db_path).parent
     if not prune_advisor.notice_due(home, _LOCAL_NOTIFIED):
         return
-    _LOCAL_NOTIFIED[str(home)] = time.time()  # in-flight claim: one estimate per home at a time
+    _LOCAL_NOTIFIED[str(home)] = (
+        time.time()
+    )  # in-flight claim: one estimate per home at a time
     advice = await asyncio.to_thread(prune_advisor.advise, home)
     # Answered (here or in another window) during the estimate: publishing would re-ask it.
-    delivered = (advice is not None and prune_advisor.should_ask(home) is not None
-                 and live.event_stream.publish(ref.session_id, prune_advisor.notice_payload(advice),
-                                               event_type="notification.show"))
+    delivered = (
+        advice is not None
+        and prune_advisor.should_ask(home) is not None
+        and live.event_stream.publish(
+            ref.session_id,
+            prune_advisor.notice_payload(advice),
+            event_type="notification.show",
+        )
+    )
     if not delivered:
         _LOCAL_NOTIFIED.pop(str(home), None)  # nobody saw it: the next window may ask
 
@@ -110,12 +141,15 @@ def clear_local_auto_prune_notice(runner, source) -> None:
     from gateway.config import Platform
     from gateway.session_authorities import active_authority
     from clawk_cli.prune_advisor import NOTICE_KEY
+
     if getattr(source, "platform", None) != Platform.LOCAL:
         return
     authority = active_authority(runner)
     live = authority.sessions.get(source.chat_id) if authority is not None else None
     if live is not None:
-        live.event_stream.publish(source.chat_id, {"key": NOTICE_KEY}, event_type="notification.clear")
+        live.event_stream.publish(
+            source.chat_id, {"key": NOTICE_KEY}, event_type="notification.clear"
+        )
 
 
 async def _post(runner, profile, home, advice) -> bool:
@@ -125,18 +159,37 @@ async def _post(runner, profile, home, advice) -> bool:
     from clawk_cli.prune_advisor import advice_lines
 
     delivered = False
-    scope = _async_profile_runtime_scope(Path(home)) if profile is not None else contextlib.nullcontext()
+    scope = (
+        _async_profile_runtime_scope(Path(home))
+        if profile is not None
+        else contextlib.nullcontext()
+    )
     async with scope:
-        for target_profile, platform, _cfg, home_ch, transport in list(runner._served_home_channel_transports()):
+        for target_profile, platform, _cfg, home_ch, transport in list(
+            runner._served_home_channel_transports()
+        ):
             if target_profile != profile:
                 continue
-            prefix = getattr(transport.adapter, "typed_command_prefix", "/") if transport.adapter else "/"
+            prefix = (
+                getattr(transport.adapter, "typed_command_prefix", "/")
+                if transport.adapter
+                else "/"
+            )
             message = "⚠ " + "\n".join(advice_lines(advice, command_prefix=prefix))
             sent: list[bool] = []
 
-            async def _send(platform=platform, home_ch=home_ch, transport=transport, message=message):
-                sent.append(await runner._send_home_channel_message(
-                    platform, home_ch, transport, message, "Auto-prune prompt failed for %s:%s: %s"))
+            async def _send(
+                platform=platform, home_ch=home_ch, transport=transport, message=message
+            ):
+                sent.append(
+                    await runner._send_home_channel_message(
+                        platform,
+                        home_ch,
+                        transport,
+                        message,
+                        "Auto-prune prompt failed for %s:%s: %s",
+                    )
+                )
 
             await present_notification(_send, platform=platform)
             delivered = delivered or any(sent)

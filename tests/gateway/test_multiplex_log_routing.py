@@ -53,8 +53,18 @@ def test_multiplex_gateway_routes_profile_records_to_their_own_logs(
     clawk_logging.setup_logging(clawk_home=default_home, mode="gateway")
 
     # Single-profile gateway: wiring is inert and handlers stay static.
-    assert run._enable_multiplex_log_routing(types.SimpleNamespace(multiplex_profiles=False)) is False
-    assert run._enable_multiplex_log_routing(types.SimpleNamespace(multiplex_profiles=True)) is True
+    assert (
+        run._enable_multiplex_log_routing(
+            types.SimpleNamespace(multiplex_profiles=False)
+        )
+        is False
+    )
+    assert (
+        run._enable_multiplex_log_routing(
+            types.SimpleNamespace(multiplex_profiles=True)
+        )
+        is True
+    )
 
     _emit_under(beta_home, "gateway.run", logging.WARNING, "BETA-GATEWAY-WARN")
     _emit_under(default_home, "gateway.run", logging.INFO, "DEFAULT-GATEWAY-INFO")

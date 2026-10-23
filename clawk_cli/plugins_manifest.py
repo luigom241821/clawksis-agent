@@ -15,7 +15,9 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional, Set, Tuple, Union
 
 from utils import fast_safe_load
-from clawk_cli.plugin_capabilities import parse_declared_capabilities as _parse_declared_capabilities
+from clawk_cli.plugin_capabilities import (
+    parse_declared_capabilities as _parse_declared_capabilities,
+)
 
 try:
     import clawk_yaml as yaml
@@ -24,27 +26,70 @@ except ImportError:  # pragma: no cover – yaml is optional at import time
 
 logger = logging.getLogger("clawk_cli.plugins")
 
-_VALID_PLUGIN_KINDS: set[str] = {"standalone", "backend", "exclusive", "platform", "model-provider"}
+_VALID_PLUGIN_KINDS: set[str] = {
+    "standalone",
+    "backend",
+    "exclusive",
+    "platform",
+    "model-provider",
+}
 
 # Unknown plugin.yaml fields are forward-compat surface: warn (debug for v1 files, warning for v2+)
 # and continue loading. ``capabilities``/``emits``/``listens``/``clawk``/``depends`` are reserved.
 # ── Manifest v2 (#64165) parsing helpers ──────────────────────────────────
 _KNOWN_MANIFEST_FIELDS: set[str] = {
-    "name", "version", "description", "author", "requires_env", "provides_tools", "provides_hooks",
-    "kind", "hooks", "label", "optional_env", "platforms", "external_dependencies",
-    "pip_dependencies", "provides_browser_providers", "provides_web_providers",
-    "manifest_version", "api_version", "requires_plugins", "python_dependencies", "config_schema",
-    "license", "homepage", "tags", "capabilities", "emits", "listens", "clawk", "depends",
-    "requires_clawk", "python_runtime", "provides_locales", "requires_auth", "oauth",
+    "name",
+    "version",
+    "description",
+    "author",
+    "requires_env",
+    "provides_tools",
+    "provides_hooks",
+    "kind",
+    "hooks",
+    "label",
+    "optional_env",
+    "platforms",
+    "external_dependencies",
+    "pip_dependencies",
+    "provides_browser_providers",
+    "provides_web_providers",
+    "manifest_version",
+    "api_version",
+    "requires_plugins",
+    "python_dependencies",
+    "config_schema",
+    "license",
+    "homepage",
+    "tags",
+    "capabilities",
+    "emits",
+    "listens",
+    "clawk",
+    "depends",
+    "requires_clawk",
+    "python_runtime",
+    "provides_locales",
+    "requires_auth",
+    "oauth",
 }
 
 # Highest manifest schema version this Clawksis understands.
 SUPPORTED_MANIFEST_VERSION = 2
 
 _CONFIG_SCHEMA_TYPES: dict[str, tuple] = {
-    "str": (str,), "string": (str,), "int": (int,), "integer": (int,), "float": (int, float),
-    "number": (int, float), "bool": (bool,), "boolean": (bool,), "list": (list,), "array": (list,),
-    "dict": (dict,), "object": (dict,),
+    "str": (str,),
+    "string": (str,),
+    "int": (int,),
+    "integer": (int,),
+    "float": (int, float),
+    "number": (int, float),
+    "bool": (bool,),
+    "boolean": (bool,),
+    "list": (list,),
+    "array": (list,),
+    "dict": (dict,),
+    "object": (dict,),
     # ``secret`` values live in ``.env`` (see clawk_cli.plugins_settings), so a config.yaml copy is
     # only ever a stray string.
     "secret": (str,),
@@ -53,6 +98,7 @@ _CONFIG_SCHEMA_TYPES: dict[str, tuple] = {
 
 def _plugins_debug() -> bool:
     from clawk_cli import plugins as _origin
+
     return _origin._PLUGINS_DEBUG
 
 
@@ -64,7 +110,10 @@ def _portable_skill_namespace(key: str) -> str:
 
 
 def _portable_slug(key: str) -> str:
-    slug = "".join(ch if ch.isascii() and (ch.isalnum() or ch in "_-") else "-" for ch in key.lower())
+    slug = "".join(
+        ch if ch.isascii() and (ch.isalnum() or ch in "_-") else "-"
+        for ch in key.lower()
+    )
     return slug.strip("-_") or "plugin"
 
 
@@ -82,7 +131,9 @@ def portable_mcp_server_name(key: str, server: str) -> str:
 def _display_author(value: object) -> str:
     """Normalize a manifest author value for the string PluginManifest field."""
     if isinstance(value, Mapping):
-        return ", ".join(str(value[f]) for f in ("name", "email", "url") if value.get(f))
+        return ", ".join(
+            str(value[f]) for f in ("name", "email", "url") if value.get(f)
+        )
     return "" if value is None else str(value)
 
 
@@ -95,7 +146,9 @@ def _manifest_field_of_type(data: Mapping, key: str, field_name: str, typ, what:
     return raw
 
 
-def _manifest_list(data: Mapping, key: str, field_name: str, what: str, coerce: Callable, warn: str) -> list:
+def _manifest_list(
+    data: Mapping, key: str, field_name: str, what: str, coerce: Callable, warn: str
+) -> list:
     """Coerce each item of list field ``field_name``; ``coerce`` returning None warns ``warn`` and skips."""
     out = []
     for item in _manifest_field_of_type(data, key, field_name, list, what) or []:
@@ -117,7 +170,9 @@ def _dependency_entry(item: object) -> Optional[dict[str, Any]]:
     return None
 
 
-def _manifest_int(raw: object, key: str, warn: str, fallback: Optional[int]) -> Optional[int]:
+def _manifest_int(
+    raw: object, key: str, warn: str, fallback: Optional[int]
+) -> Optional[int]:
     """``int(raw)``; a non-integer warns ``warn`` (formatted with key, raw) and yields ``fallback``."""
     try:
         return int(raw)  # type: ignore[call-overload]
@@ -133,14 +188,20 @@ def _config_schema_entries(key: str, raw: Any) -> dict[str, Any]:
     for skey, spec in (raw if isinstance(raw, Mapping) else {}).items():
         if not isinstance(spec, Mapping):
             logger.warning(
-                "Plugin %s: config_schema entry %r must be a mapping (e.g. {type: str}); skipping", key, skey)
+                "Plugin %s: config_schema entry %r must be a mapping (e.g. {type: str}); skipping",
+                key,
+                skey,
+            )
             continue
         stype = spec.get("type")
         if stype is not None and str(stype).lower() not in _CONFIG_SCHEMA_TYPES:
             logger.warning(
                 "Plugin %s: config_schema key %r declares unknown type %r "
                 "(known: %s); type check will be skipped for it",
-                key, skey, stype, ", ".join(sorted(_CONFIG_SCHEMA_TYPES)),
+                key,
+                skey,
+                stype,
+                ", ".join(sorted(_CONFIG_SCHEMA_TYPES)),
             )
         schema[str(skey)] = dict(spec)
     return schema
@@ -152,44 +213,77 @@ def _parse_manifest_v2_fields(data: Mapping, key: str) -> dict[str, Any]:
     See #64165.
     """
     # manifest_version — absent means v1 (supported forever); api_version is the independent API generation.
-    mv = _manifest_int(data.get("manifest_version", 1), key,
-                       "Plugin %s: manifest_version %r is not an integer; treating as 1", 1)
+    mv = _manifest_int(
+        data.get("manifest_version", 1),
+        key,
+        "Plugin %s: manifest_version %r is not an integer; treating as 1",
+        1,
+    )
     if mv > SUPPORTED_MANIFEST_VERSION:
         logger.warning(
             "Plugin %s: manifest_version %d is newer than this Clawksis "
-            "supports (%d); loading anyway and ignoring unknown fields", key, mv, SUPPORTED_MANIFEST_VERSION,
+            "supports (%d); loading anyway and ignoring unknown fields",
+            key,
+            mv,
+            SUPPORTED_MANIFEST_VERSION,
         )
     raw_api = data.get("api_version")
-    api = None if raw_api is None else _manifest_int(
-        raw_api, key, "Plugin %s: api_version %r is not an integer; ignoring", None)
+    api = (
+        None
+        if raw_api is None
+        else _manifest_int(
+            raw_api, key, "Plugin %s: api_version %r is not an integer; ignoring", None
+        )
+    )
     deps = _manifest_list(
-        data, key, "requires_plugins", "a list", _dependency_entry,
+        data,
+        key,
+        "requires_plugins",
+        "a list",
+        _dependency_entry,
         "Plugin %s: requires_plugins entry %r must be a plugin id "
         "string or a {id, version_range} mapping; skipping",
     )
     # python_dependencies — validated and surfaced ONLY; never auto-installed.
     pydeps = _manifest_list(
-        data, key, "python_dependencies", "a list of requirement strings",
+        data,
+        key,
+        "python_dependencies",
+        "a list of requirement strings",
         lambda item: item.strip() if isinstance(item, str) and item.strip() else None,
         "Plugin %s: python_dependencies entry %r must be a non-empty requirement string; skipping",
     )
-    schema = _config_schema_entries(key, _manifest_field_of_type(data, key, "config_schema", Mapping, "a mapping"))
-    tags = [str(t) for t in (_manifest_field_of_type(data, key, "tags", list, "a list") or [])]
+    schema = _config_schema_entries(
+        key, _manifest_field_of_type(data, key, "config_schema", Mapping, "a mapping")
+    )
+    tags = [
+        str(t)
+        for t in (_manifest_field_of_type(data, key, "tags", list, "a list") or [])
+    ]
     # Forward compat: unknown fields warn (never fail); v1 manifests only at debug.
     unknown = sorted(set(data.keys()) - _KNOWN_MANIFEST_FIELDS)
     if unknown:
         (logger.warning if mv >= 2 else logger.debug)(
             "Plugin %s: unknown manifest field(s) ignored: %s "
-            "(newer manifest schema or typo; plugin still loads)", key, ", ".join(unknown),
+            "(newer manifest schema or typo; plugin still loads)",
+            key,
+            ", ".join(unknown),
         )
     return {
-        "manifest_version": mv, "api_version": api, "requires_plugins": deps, "python_dependencies": pydeps,
-        "config_schema": schema, "license": str(data.get("license") or ""),
-        "homepage": str(data.get("homepage") or ""), "tags": tags,
+        "manifest_version": mv,
+        "api_version": api,
+        "requires_plugins": deps,
+        "python_dependencies": pydeps,
+        "config_schema": schema,
+        "license": str(data.get("license") or ""),
+        "homepage": str(data.get("homepage") or ""),
+        "tags": tags,
     }
 
 
-def validate_config_schema(plugin_id: str, schema: Mapping, settings: Mapping) -> list[str]:
+def validate_config_schema(
+    plugin_id: str, schema: Mapping, settings: Mapping
+) -> list[str]:
     """Return actionable warning strings for settings vs config_schema mismatches (never raises).
 
     Never raises; schema mismatches must not block plugin load (#64165).
@@ -213,7 +307,9 @@ def validate_config_schema(plugin_id: str, schema: Mapping, settings: Mapping) -
             continue
         value = settings[skey]
         # bool is an int subclass — don't let True satisfy int/float.
-        if not isinstance(value, expected) or (isinstance(value, bool) and bool not in expected):
+        if not isinstance(value, expected) or (
+            isinstance(value, bool) and bool not in expected
+        ):
             warnings.append(
                 f"plugins.entries.{plugin_id}.settings.{skey} should be "
                 f"{stype} (got {type(value).__name__})"
@@ -229,6 +325,7 @@ def resolve_plugin_load_order(manifests: Mapping[str, PluginManifest]) -> list[s
     See #64165.
     """
     import graphlib
+
     keys = sorted(manifests.keys())
     by_name: dict[str, str] = {}
     for k in keys:
@@ -246,7 +343,9 @@ def resolve_plugin_load_order(manifests: Mapping[str, PluginManifest]) -> list[s
                     "Plugin %s requires plugin '%s' which is not enabled/"
                     "installed; loading anyway (probe availability at runtime "
                     "via ctx.has_plugin). Run `clawk plugins enable %s` if it is installed.",
-                    k, dep_id, dep_id,
+                    k,
+                    dep_id,
+                    dep_id,
                 )
             elif resolved == k:
                 logger.warning("Plugin %s declares a dependency on itself; ignoring", k)
@@ -259,7 +358,8 @@ def resolve_plugin_load_order(manifests: Mapping[str, PluginManifest]) -> list[s
         cycle = exc.args[1] if len(exc.args) > 1 else []
         logger.warning(
             "Plugin dependency cycle detected (%s); falling back to "
-            "alphabetical load order for all plugins", " -> ".join(str(c) for c in cycle),
+            "alphabetical load order for all plugins",
+            " -> ".join(str(c) for c in cycle),
         )
         return keys
     ordered: list[str] = []
@@ -275,9 +375,17 @@ def _detect_kind_from_source(source_text: str) -> Optional[str]:
     plugins/cron_providers ``_is_cron_provider_dir``): memory-, cron- or computer-use-provider markers -> ``exclusive``;
     ``register_provider`` + ``ProviderProfile`` -> ``model-provider``; else ``None``. Keeps these kinds out
     of the general manager's eager import (its PluginContext has no ``register_cron_scheduler``, #62951)."""
-    if any(marker in source_text for marker in (
-            "register_memory_provider", "MemoryProvider", "register_cron_scheduler", "CronScheduler",
-            "register_computer_use_provider", "ComputerUseProvider")):
+    if any(
+        marker in source_text
+        for marker in (
+            "register_memory_provider",
+            "MemoryProvider",
+            "register_cron_scheduler",
+            "CronScheduler",
+            "register_computer_use_provider",
+            "ComputerUseProvider",
+        )
+    ):
         return "exclusive"
     if "register_provider" in source_text and "ProviderProfile" in source_text:
         return "model-provider"
@@ -354,7 +462,7 @@ class PluginManifest:
     requires_env: list[str | dict[str, Any]] = field(default_factory=list)
     provides_tools: list[str] = field(default_factory=list)
     provides_hooks: list[str] = field(default_factory=list)
-    source: str = ""        # "bundled", "user", "project", or "entrypoint"
+    source: str = ""  # "bundled", "user", "project", or "entrypoint"
     path: Optional[str] = None
     # ``standalone`` (default; opt-in via plugins.enabled) | ``backend`` (pluggable backend for a core tool;
     # bundled auto-load, user-installed gated) | ``exclusive`` (one active provider, selected via
@@ -400,10 +508,13 @@ class PluginManifest:
     locale_metadata: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
-def parse_provides_locales(raw: Any, key: str = "") -> tuple[list[str], dict[str, dict[str, Any]]]:
+def parse_provides_locales(
+    raw: Any, key: str = ""
+) -> tuple[list[str], dict[str, dict[str, Any]]]:
     """``provides_locales`` -> (ids, metadata). Entries are ``"pl"`` or ``{id: pl, endonym: Polski, rtl: false}``;
     ids are canonicalised (lowercase, ``_`` -> ``-``), invalid or duplicate ones are dropped with a warning."""
     from agent.i18n_layers import is_language_id, normalize_language_id
+
     ids: list[str] = []
     metadata: dict[str, dict[str, Any]] = {}
     if raw is None:
@@ -411,7 +522,11 @@ def parse_provides_locales(raw: Any, key: str = "") -> tuple[list[str], dict[str
     if isinstance(raw, (str, Mapping)):
         raw = [raw]
     if not isinstance(raw, list):
-        logger.warning("Plugin %s: provides_locales must be a list of language ids, got %s", key, type(raw).__name__)
+        logger.warning(
+            "Plugin %s: provides_locales must be a list of language ids, got %s",
+            key,
+            type(raw).__name__,
+        )
         return ids, metadata
     for item in raw:
         entry_meta: dict[str, Any] = {}
@@ -424,10 +539,14 @@ def parse_provides_locales(raw: Any, key: str = "") -> tuple[list[str], dict[str
         else:
             lang_id = normalize_language_id(item)
         if not is_language_id(lang_id):
-            logger.warning("Plugin %s: ignoring invalid provides_locales entry %r", key, item)
+            logger.warning(
+                "Plugin %s: ignoring invalid provides_locales entry %r", key, item
+            )
             continue
         if lang_id in ids:
-            logger.warning("Plugin %s: duplicate provides_locales entry %r", key, lang_id)
+            logger.warning(
+                "Plugin %s: duplicate provides_locales entry %r", key, lang_id
+            )
             continue
         ids.append(lang_id)
         if entry_meta:
@@ -470,7 +589,14 @@ def version_satisfies(spec: str, current: str) -> bool:
     cur = _version_tuple(current)
     if cur is None:
         return True
-    ops = {">=": cur.__ge__, "<=": cur.__le__, "==": cur.__eq__, "!=": cur.__ne__, ">": cur.__gt__, "<": cur.__lt__}
+    ops = {
+        ">=": cur.__ge__,
+        "<=": cur.__le__,
+        "==": cur.__eq__,
+        "!=": cur.__ne__,
+        ">": cur.__gt__,
+        "<": cur.__lt__,
+    }
     for clause in filter(None, (c.strip() for c in spec.split(","))):
         m = _VERSION_COMPARATOR_RE.match(clause)
         op, target = (m.group(1), m.group(2)) if m else (">=", clause)
@@ -482,7 +608,11 @@ def version_satisfies(spec: str, current: str) -> bool:
 
 def requires_clawk_error(manifest: PluginManifest) -> Optional[str]:
     """Load-blocking reason when the manifest's ``requires_clawk`` rejects the running version."""
-    spec = manifest.get("requires_clawk", "") if isinstance(manifest, Mapping) else manifest.requires_clawk
+    spec = (
+        manifest.get("requires_clawk", "")
+        if isinstance(manifest, Mapping)
+        else manifest.requires_clawk
+    )
     if not spec:
         return None
     current = running_clawk_version()
@@ -493,15 +623,25 @@ def requires_clawk_error(manifest: PluginManifest) -> Optional[str]:
 
 def portable_plugin_manifest(child: Path, source: str, prefix: str) -> PluginManifest:
     """Build the manifest for a portable Agent Plugin directory (``plugin.json``); diagnostics warn."""
-    from clawk_cli.agent_plugins import manifest_config_schema, read_agent_plugin_manifest
+    from clawk_cli.agent_plugins import (
+        manifest_config_schema,
+        read_agent_plugin_manifest,
+    )
+
     data, diagnostics = read_agent_plugin_manifest(child)
     for diagnostic in diagnostics:
         logger.warning("Agent Plugin '%s': %s", child, diagnostic.message)
     key = f"{prefix}/{child.name}" if prefix else data["name"]
     return PluginManifest(
-        name=data["name"], version=data.get("version", ""), description=data.get("description", ""),
-        author=_display_author(data.get("author", "")), source=source, path=str(child), key=key,
-        portable=True, skill_namespace=_portable_skill_namespace(key),
+        name=data["name"],
+        version=data.get("version", ""),
+        description=data.get("description", ""),
+        author=_display_author(data.get("author", "")),
+        source=source,
+        path=str(child),
+        key=key,
+        portable=True,
+        skill_namespace=_portable_skill_namespace(key),
         config_schema=_config_schema_entries(key, manifest_config_schema(data)),
     )
 
@@ -514,17 +654,26 @@ def _manifest_kind(data: Mapping, key: str, plugin_dir: Path) -> str:
     if kind not in _VALID_PLUGIN_KINDS:
         logger.warning(
             "Plugin %s: unknown kind '%s' (valid: %s); treating as 'standalone'",
-            key, raw_kind, ", ".join(sorted(_VALID_PLUGIN_KINDS)),
+            key,
+            raw_kind,
+            ", ".join(sorted(_VALID_PLUGIN_KINDS)),
         )
         kind = "standalone"
     init_file = plugin_dir / "__init__.py"
     if kind == "standalone" and "kind" not in data and init_file.exists():
         with suppress(Exception):
-            source_text = init_file.read_text(errors="replace", encoding="utf-8-sig")[:8192]
+            source_text = init_file.read_text(errors="replace", encoding="utf-8-sig")[
+                :8192
+            ]
             detected = _detect_kind_from_source(source_text)
             if detected:
                 kind = detected
-                logger.debug("Plugin %s: detected %s, treating as kind='%s'", key, detected, detected)
+                logger.debug(
+                    "Plugin %s: detected %s, treating as kind='%s'",
+                    key,
+                    detected,
+                    detected,
+                )
     return kind
 
 
@@ -538,29 +687,50 @@ def parse_manifest_file(
             return None
         data = fast_safe_load(manifest_file.read_text(encoding="utf-8-sig")) or {}
         if not isinstance(data, Mapping):
-            logger.warning("Failed to parse %s: top level must be a mapping, got %s (#14066)",
-                           manifest_file, type(data).__name__)
+            logger.warning(
+                "Failed to parse %s: top level must be a mapping, got %s (#14066)",
+                manifest_file,
+                type(data).__name__,
+            )
             return None
         name = data.get("name", plugin_dir.name)
         key = f"{prefix}/{plugin_dir.name}" if prefix else name
         kind = _manifest_kind(data, key, plugin_dir)
         logger.debug(
-            "Parsed manifest: key=%s name=%s kind=%s source=%s path=%s", key, name, kind, source, plugin_dir)
-        provides_locales, locale_metadata = parse_provides_locales(data.get("provides_locales"), key)
+            "Parsed manifest: key=%s name=%s kind=%s source=%s path=%s",
+            key,
+            name,
+            kind,
+            source,
+            plugin_dir,
+        )
+        provides_locales, locale_metadata = parse_provides_locales(
+            data.get("provides_locales"), key
+        )
         return PluginManifest(
-            name=name, version=str(data.get("version", "")),
-            description=data.get("description", ""), author=_display_author(data.get("author", "")),
+            name=name,
+            version=str(data.get("version", "")),
+            description=data.get("description", ""),
+            author=_display_author(data.get("author", "")),
             requires_env=data.get("requires_env", []),
             provides_tools=data.get("provides_tools", []),
             # ``hooks:`` is the spelling the bundled manifests carried for months; external copies of it
             # must keep declaring the same thing (#108371).
-            provides_hooks=data.get("provides_hooks", data.get("hooks", [])), source=source, path=str(plugin_dir),
-            kind=kind, key=key, requires_clawk=str(data.get("requires_clawk") or "").strip(),
+            provides_hooks=data.get("provides_hooks", data.get("hooks", [])),
+            source=source,
+            path=str(plugin_dir),
+            kind=kind,
+            key=key,
+            requires_clawk=str(data.get("requires_clawk") or "").strip(),
             capabilities=_parse_declared_capabilities(data.get("capabilities"), name),
-            **_parse_manifest_v2_fields(data, key), emits=data.get("emits") or [],
+            **_parse_manifest_v2_fields(data, key),
+            emits=data.get("emits") or [],
             listens=data.get("listens") or [],
-            provides_locales=provides_locales, locale_metadata=locale_metadata,
+            provides_locales=provides_locales,
+            locale_metadata=locale_metadata,
         )
     except Exception as exc:
-        logger.warning("Failed to parse %s: %s", manifest_file, exc, exc_info=_plugins_debug())
+        logger.warning(
+            "Failed to parse %s: %s", manifest_file, exc, exc_info=_plugins_debug()
+        )
         return None

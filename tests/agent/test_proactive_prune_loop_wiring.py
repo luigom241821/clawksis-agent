@@ -96,7 +96,10 @@ def _quiet_compressor() -> MagicMock:
 @pytest.fixture()
 def agent():
     with (
-        patch("model_tools.get_tool_definitions", return_value=_make_tool_defs("web_search")),
+        patch(
+            "model_tools.get_tool_definitions",
+            return_value=_make_tool_defs("web_search"),
+        ),
         patch("model_tools.check_toolset_requirements", return_value={}),
         patch("agent.process_bootstrap.OpenAI"),
     ):
@@ -148,14 +151,24 @@ class TestProactivePruneLoopWiring:
         compressor.threshold_tokens = 231_200
         compressor.should_compress.return_value = True
         compressor.should_compress_info.return_value = (True, None)
-        compressor.prune_tool_results_only.side_effect = lambda messages, **kw: (messages, 0)
+        compressor.prune_tool_results_only.side_effect = lambda messages, **kw: (
+            messages,
+            0,
+        )
         messages = [{"role": "user", "content": "continue"}]
         with patch.object(agent, "_warn_context_overflow_blocked") as warn:
             verdict = compress_after_tool_results(
-                agent, messages=messages, system_message="system", user_message="continue",
-                active_system_prompt="system", conversation_history=[],
-                compression_attempts=0, max_compression_attempts=3,
-                effective_task_id=None, final_response="", turn_exit_reason=None,
+                agent,
+                messages=messages,
+                system_message="system",
+                user_message="continue",
+                active_system_prompt="system",
+                conversation_history=[],
+                compression_attempts=0,
+                max_compression_attempts=3,
+                effective_task_id=None,
+                final_response="",
+                turn_exit_reason=None,
                 current_turn_user_idx=0,
             )
         assert verdict.messages is messages
@@ -245,6 +258,7 @@ class TestProactivePruneLoopWiring:
     def test_noop_input_object_commits_nothing(self, agent):
         """Engine returns the INPUT object with a (bogus) non-zero count —
         the caller's ``result is not input`` gate must refuse the commit."""
+
         def _prune(messages, current_tokens=None):
             return messages, 5  # lies about count but returns input object
 
@@ -293,13 +307,23 @@ class TestCommittedPruneIsDedupBoundary:
 
     @staticmethod
     def _seed_dedup(tmp_path, task_id):
-        from tools.file_tools_read_tracking import _read_tracker, _read_tracker_lock, _task_data
+        from tools.file_tools_read_tracking import (
+            _read_tracker,
+            _read_tracker_lock,
+            _task_data,
+        )
         from tools.skills_tool_dedup import dedup_skill_view, reset_skill_view_dedup
 
         skill_md = tmp_path / "SKILL.md"
         skill_md.write_text("# s\n", encoding="utf-8")
         reset_skill_view_dedup(task_id)
-        dedup_skill_view(task_id, "bigskill", None, {"name": "bigskill"}, '{"success": true, "content": "# s"}')
+        dedup_skill_view(
+            task_id,
+            "bigskill",
+            None,
+            {"name": "bigskill"},
+            '{"success": true, "content": "# s"}',
+        )
         with _read_tracker_lock:
             _read_tracker.pop(task_id, None)
             td = _task_data(task_id)
@@ -313,7 +337,9 @@ class TestCommittedPruneIsDedupBoundary:
         from tools.skills_tool_dedup import _skill_view_tracker
 
         skill_stubbed = ("bigskill", "") in _skill_view_tracker.get(task_id, {})
-        file_in_generation = ("/x/big.txt", 1, 2000) in _read_tracker[task_id]["dedup_generation_reads"]
+        file_in_generation = ("/x/big.txt", 1, 2000) in _read_tracker[task_id][
+            "dedup_generation_reads"
+        ]
         return skill_stubbed, file_in_generation
 
     def test_committed_prune_releases_skill_and_file_dedup(self, agent, tmp_path):
@@ -331,7 +357,10 @@ class TestCommittedPruneIsDedupBoundary:
             return (pruned, changed) if changed else (messages, 0)
 
         agent.context_compressor.prune_tool_results_only = _prune
-        assert _run_tool_loop(agent, n_tool_iterations=1, task_id=task_id)["completed"] is True
+        assert (
+            _run_tool_loop(agent, n_tool_iterations=1, task_id=task_id)["completed"]
+            is True
+        )
         # Skill: next view serves full content again. File: the generation-read set is cleared so the
         # first unchanged re-read serves content; the mtime map itself is preserved (later reads stub).
         assert self._dedup_state(task_id) == (False, False)
@@ -339,6 +368,11 @@ class TestCommittedPruneIsDedupBoundary:
     def test_noop_prune_keeps_dedup(self, agent, tmp_path):
         task_id = "prune-noop-task"
         self._seed_dedup(tmp_path, task_id)
-        agent.context_compressor.prune_tool_results_only = lambda messages, current_tokens=None: (messages, 0)
-        assert _run_tool_loop(agent, n_tool_iterations=1, task_id=task_id)["completed"] is True
+        agent.context_compressor.prune_tool_results_only = (
+            lambda messages, current_tokens=None: (messages, 0)
+        )
+        assert (
+            _run_tool_loop(agent, n_tool_iterations=1, task_id=task_id)["completed"]
+            is True
+        )
         assert self._dedup_state(task_id) == (True, True)

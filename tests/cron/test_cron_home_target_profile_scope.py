@@ -18,8 +18,7 @@ def profile_home(tmp_path):
     home = tmp_path / "profiles" / "tecnologia"
     home.mkdir(parents=True)
     (home / ".env").write_text(
-        'TELEGRAM_HOME_CHANNEL="111111111"\n'
-        'TELEGRAM_HOME_CHANNEL_THREAD_ID="42"\n',
+        'TELEGRAM_HOME_CHANNEL="111111111"\nTELEGRAM_HOME_CHANNEL_THREAD_ID="42"\n',
         encoding="utf-8",
     )
     return home

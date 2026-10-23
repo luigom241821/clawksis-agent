@@ -123,7 +123,9 @@ def test_cleanup_terminal_temp_cache(tmp_path, monkeypatch):
     assert not (root / "clawk_bg_dead1.log").exists()
 
 
-def test_cleanup_terminal_temp_cache_revalidates_before_each_delete(tmp_path, monkeypatch):
+def test_cleanup_terminal_temp_cache_revalidates_before_each_delete(
+    tmp_path, monkeypatch
+):
     """The age snapshot is a candidate list: a bg session whose .log is written after it
     keeps its remaining files, and a directory rmtree could not remove is not counted."""
     import pathlib
@@ -150,7 +152,9 @@ def test_cleanup_terminal_temp_cache_revalidates_before_each_delete(tmp_path, mo
     def unlink_then_session_writes(self, *args, **kwargs):
         real_unlink(self, *args, **kwargs)
         if self.name.startswith("clawk_bg_resumed.") and not fired:
-            fired.append(self.name)  # the session writes its log right after the first delete
+            fired.append(
+                self.name
+            )  # the session writes its log right after the first delete
             (root / "clawk_bg_resumed.log").write_text("RESUMED OUTPUT\n")
 
     monkeypatch.setattr(pathlib.Path, "unlink", unlink_then_session_writes)
@@ -159,13 +163,17 @@ def test_cleanup_terminal_temp_cache_revalidates_before_each_delete(tmp_path, mo
     removed = local_mod.cleanup_terminal_temp_cache(max_age_hours=24)
     survivors = {p.name for p in root.glob("clawk_bg_resumed.*")}
     # Only the member deleted before the write is gone (iterdir order picks which one).
-    expected = {f"clawk_bg_resumed.{s}" for s in ("pid", "log", "exit")} - (set(fired) - {"clawk_bg_resumed.log"})
+    expected = {f"clawk_bg_resumed.{s}" for s in ("pid", "log", "exit")} - (
+        set(fired) - {"clawk_bg_resumed.log"}
+    )
     assert survivors == expected, (fired, survivors)
     assert stuck.exists()
     assert removed == len(set(fired) - {"clawk_bg_resumed.log"})  # never the stuck dir
 
 
-def test_cleanup_terminal_temp_cache_uninspectable_residue_is_not_counted(tmp_path, monkeypatch):
+def test_cleanup_terminal_temp_cache_uninspectable_residue_is_not_counted(
+    tmp_path, monkeypatch
+):
     """An entry that survives its delete and cannot be lstat'd is not proven gone."""
     import pathlib
     import time
@@ -181,7 +189,9 @@ def test_cleanup_terminal_temp_cache_uninspectable_residue_is_not_counted(tmp_pa
     os.utime(residue, (old, old))
 
     tried = []
-    monkeypatch.setattr(pathlib.Path, "unlink", lambda self, *a, **k: tried.append(self))
+    monkeypatch.setattr(
+        pathlib.Path, "unlink", lambda self, *a, **k: tried.append(self)
+    )
     real_lstat = os.lstat
 
     def lstat(path, *args, **kwargs):

@@ -33,9 +33,13 @@ def real_db(monkeypatch, tmp_path):
     monkeypatch.setattr(server, "_get_db", lambda: db)
     monkeypatch.setattr(server, "_resolve_model", lambda: "test-model")
     monkeypatch.setattr(server, "_enable_gateway_prompts", lambda: None)
-    monkeypatch.setattr(server, "_find_live_session_by_key", lambda _key, _home=None: None)
+    monkeypatch.setattr(
+        server, "_find_live_session_by_key", lambda _key, _home=None: None
+    )
     monkeypatch.setattr(server, "_schedule_agent_build", lambda *a, **k: None)
-    monkeypatch.setattr(server, "_schedule_session_cap_enforcement", lambda *a, **k: None)
+    monkeypatch.setattr(
+        server, "_schedule_session_cap_enforcement", lambda *a, **k: None
+    )
     monkeypatch.setattr(server, "_maybe_schedule_auto_continue", lambda *a, **k: None)
     monkeypatch.setattr(server, "_default_session_cwd", lambda *a, **k: str(tmp_path))
     monkeypatch.setattr(server, "_profile_configured_cwd", lambda _home: str(tmp_path))
@@ -49,7 +53,9 @@ def real_db(monkeypatch, tmp_path):
 
 
 def _resume(**params):
-    return server.handle_request({"id": "1", "method": "session.resume", "params": params})
+    return server.handle_request(
+        {"id": "1", "method": "session.resume", "params": params}
+    )
 
 
 def _assert_resumed_ok(resp, target):
@@ -72,7 +78,8 @@ def test_resume_materializes_row_for_minted_key(real_db):
     # or _current_profile_name, never NULL). A bare create_session leaves NULL, so the
     # oracle is the production expression itself, not a bare insert.
     assert row.get("profile_name") == (
-        server.profile_name_for_home(None) or server._current_profile_name())
+        server.profile_name_for_home(None) or server._current_profile_name()
+    )
 
 
 def test_resume_existing_row_unaffected(real_db):

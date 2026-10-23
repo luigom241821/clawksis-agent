@@ -26,10 +26,6 @@ def db(tmp_path):
     d.close()
 
 
-
-
-
-
 @pytest.mark.requires_wal
 def test_reads_do_not_take_writer_lock(db):
     """Reads must complete while another thread holds self._lock."""
@@ -52,8 +48,6 @@ def test_reads_do_not_take_writer_lock(db):
         assert len(done["messages"]) == 2
     finally:
         db._lock.release()
-
-
 
 
 @pytest.mark.requires_wal
@@ -91,8 +85,6 @@ def test_read_your_writes(db):
     assert rows, "committed write invisible to read connection"
 
 
-
-
 def test_non_wal_uses_locked_path(db):
     db._wal_active = False
     assert db._get_read_conn() is None
@@ -109,7 +101,12 @@ def test_read_conn_open_failure_marks_thread(db, monkeypatch, tmp_path):
     real_connect = _sqlite3.connect
 
     def failing_connect(*a, **k):
-        if a and isinstance(a[0], str) and a[0].startswith("file:") and "mode=ro" in a[0]:
+        if (
+            a
+            and isinstance(a[0], str)
+            and a[0].startswith("file:")
+            and "mode=ro" in a[0]
+        ):
             calls["n"] += 1
             raise _sqlite3.OperationalError("simulated open failure")
         return real_connect(*a, **k)
@@ -138,7 +135,8 @@ def test_anchored_view_and_around_use_read_path(db):
             done["view"] = db.get_anchored_view("s1", anchor, window=2, bookend=1)
 
         t = threading.Thread(target=reader)
-        t.start(); t.join(timeout=5.0)
+        t.start()
+        t.join(timeout=5.0)
         assert not t.is_alive(), "anchored reads blocked on writer lock"
         assert done["around"]["window"]
         assert done["view"]["window"]
@@ -162,7 +160,9 @@ def test_session_resume_reads_do_not_take_writer_lock(db):
     # A real rotation stamps the parent end_reason='compression' (publish_compression_child);
     # without the stamp this is an unverified parent link no production writer creates.
     db.end_session("parent1", "compression")
-    db.create_session(session_id="child1", source="cli", model="m", parent_session_id="parent1")
+    db.create_session(
+        session_id="child1", source="cli", model="m", parent_session_id="parent1"
+    )
     db.append_message("child1", role="user", content="child turn")
     db.append_message("child1", role="assistant", content="child reply")
 
@@ -176,7 +176,8 @@ def test_session_resume_reads_do_not_take_writer_lock(db):
             done["ancestor_prefix"] = db.get_ancestor_display_prefix("child1")
 
         t = threading.Thread(target=reader)
-        t.start(); t.join(timeout=5.0)
+        t.start()
+        t.join(timeout=5.0)
         assert not t.is_alive(), "session resume reads blocked on writer lock"
         assert len(done["conversation"]) == 2
         model_history, display_history = done["resume"]

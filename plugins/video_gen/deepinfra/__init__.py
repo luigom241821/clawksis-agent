@@ -31,19 +31,45 @@ class DeepInfraVideoGenProvider(OpenAICompatibleVideoGenProvider):
         except Exception as exc:
             logger.debug("Cannot import _fetch_deepinfra_models_by_tag: %s", exc)
             return []
-        return [{"id": item["id"], "display": item["id"].split("/")[-1],
-                 "strengths": ((item.get("metadata", {}) or {}).get("description") or "")[:80]}
-                for item in (_fetch_deepinfra_models_by_tag("video-gen") or []) if item.get("id")]
+        return [
+            {
+                "id": item["id"],
+                "display": item["id"].split("/")[-1],
+                "strengths": (
+                    (item.get("metadata", {}) or {}).get("description") or ""
+                )[:80],
+            }
+            for item in (_fetch_deepinfra_models_by_tag("video-gen") or [])
+            if item.get("id")
+        ]
 
     def capabilities(self) -> dict[str, Any]:
-        return {"modalities": ["text", "image"], "aspect_ratios": ["16:9", "9:16", "1:1"], "resolutions": ["480p", "720p", "1080p"],
-                "max_duration": 10, "min_duration": 1, "supports_audio": False, "supports_negative_prompt": True,
-                "supports_seed": True, "supports_upscale": False, "max_reference_images": 0}
+        return {
+            "modalities": ["text", "image"],
+            "aspect_ratios": ["16:9", "9:16", "1:1"],
+            "resolutions": ["480p", "720p", "1080p"],
+            "max_duration": 10,
+            "min_duration": 1,
+            "supports_audio": False,
+            "supports_negative_prompt": True,
+            "supports_seed": True,
+            "supports_upscale": False,
+            "max_reference_images": 0,
+        }
 
     def get_setup_schema(self) -> dict[str, Any]:
-        return {"name": "DeepInfra", "badge": "paid",
-                "tag": "Wan, p-video, … — live catalog from api.deepinfra.com; text-to-video & image-to-video",
-                "env_vars": [{"key": "DEEPINFRA_API_KEY", "prompt": "DeepInfra API key", "url": "https://deepinfra.com/dash/api_keys"}]}
+        return {
+            "name": "DeepInfra",
+            "badge": "paid",
+            "tag": "Wan, p-video, … — live catalog from api.deepinfra.com; text-to-video & image-to-video",
+            "env_vars": [
+                {
+                    "key": "DEEPINFRA_API_KEY",
+                    "prompt": "DeepInfra API key",
+                    "url": "https://deepinfra.com/dash/api_keys",
+                }
+            ],
+        }
 
 
 def register(ctx) -> None:

@@ -27,7 +27,10 @@ def tmp_cron_dir(tmp_path, monkeypatch):
 class TestLastFailureStamp:
     def test_failed_run_stamps_last_failure(self, tmp_cron_dir):
         job = create_job(prompt="Watch the fleet", schedule="every 1h")
-        assert mark_job_run(job["id"], success=False, error="Script exited with code 1") is True
+        assert (
+            mark_job_run(job["id"], success=False, error="Script exited with code 1")
+            is True
+        )
 
         stamp = get_job(job["id"])["last_failure"]
         assert isinstance(stamp, dict)
@@ -38,7 +41,10 @@ class TestLastFailureStamp:
     def test_success_resets_status_but_keeps_stamp(self, tmp_cron_dir):
         """The heart of #118354: the healing success must not erase the failure."""
         job = create_job(prompt="Watch the fleet", schedule="every 1h")
-        assert mark_job_run(job["id"], success=False, error="Script exited with code 1") is True
+        assert (
+            mark_job_run(job["id"], success=False, error="Script exited with code 1")
+            is True
+        )
         failed = get_job(job["id"])
         assert failed["last_status"] == "error"
         assert failed["failure_streak"] == 1
@@ -70,8 +76,10 @@ class TestLastFailureStamp:
         """Agent succeeded but delivery failed: success-path (no stamp), the sticky
         ``last_delivery_error`` already covers that case."""
         job = create_job(prompt="Watch the fleet", schedule="every 1h")
-        assert mark_job_run(
-            job["id"], success=True, delivery_error="webhook unreachable") is True
+        assert (
+            mark_job_run(job["id"], success=True, delivery_error="webhook unreachable")
+            is True
+        )
         record = get_job(job["id"])
         assert record.get("last_failure") is None
         assert record["last_delivery_error"] == "webhook unreachable"

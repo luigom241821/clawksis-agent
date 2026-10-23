@@ -40,7 +40,9 @@ def test_no_recipe_found(tmp_path, capsys):
 
 def test_save_writes_manifest(tmp_path):
     (tmp_path / "go.mod").write_text("module x\n", encoding="utf-8")
-    code = run_verify_command(make_args(tmp_path, detect_only=True, save=True, json=True))
+    code = run_verify_command(
+        make_args(tmp_path, detect_only=True, save=True, json=True)
+    )
     assert code == 0
     manifest = tmp_path / ".clawk" / "environment.json"
     assert manifest.exists()
@@ -75,8 +77,6 @@ def test_failing_phase_exit_code(tmp_path, capsys):
     assert code == 1
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is False
-
-
 
 
 def test_bad_path(tmp_path, capsys):

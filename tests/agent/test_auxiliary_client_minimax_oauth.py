@@ -23,6 +23,7 @@ trampoline into a second sibling); absent/not-logged-in credentials follow the
 ``_log_once_debug`` contract (``test_auxiliary_client_resolve_dedup.py``) so a logged-out
 user gets one debug line, not a WARNING-with-traceback per aux resolution (#21521).
 """
+
 from __future__ import annotations
 
 import logging
@@ -38,7 +39,9 @@ def _runtime_creds():
     """Return what resolve_minimax_oauth_runtime_credentials(as_token_provider=True) yields."""
     return {
         "provider": "minimax-oauth",
-        "api_key": MagicMock(name="minimax_token_provider", return_value="fresh-bearer"),
+        "api_key": MagicMock(
+            name="minimax_token_provider", return_value="fresh-bearer"
+        ),
         "base_url": INFERENCE_BASE_URL,
         "source": "oauth",
     }
@@ -58,13 +61,16 @@ def test_resolve_minimax_oauth_builds_anthropic_wrapper_with_third_party_wire():
     fake_anthropic_client = MagicMock(name="anthropic_sdk_client")
     creds = _runtime_creds()
 
-    with patch(
-        "clawk_cli.auth.resolve_minimax_oauth_runtime_credentials",
-        return_value=creds,
-    ), patch(
-        "agent.anthropic_adapter.build_anthropic_client",
-        return_value=fake_anthropic_client,
-    ) as mock_build:
+    with (
+        patch(
+            "clawk_cli.auth.resolve_minimax_oauth_runtime_credentials",
+            return_value=creds,
+        ),
+        patch(
+            "agent.anthropic_adapter.build_anthropic_client",
+            return_value=fake_anthropic_client,
+        ) as mock_build,
+    ):
         client, model = resolve_provider_client("minimax-oauth", "MiniMax-M3")
 
     assert client is not None, (
@@ -114,15 +120,19 @@ def test_resolve_minimax_oauth_tool_names_unprefixed_on_wire():
             usage=SimpleNamespace(input_tokens=1, output_tokens=1, total_tokens=2),
         )
 
-    with patch(
-        "clawk_cli.auth.resolve_minimax_oauth_runtime_credentials",
-        return_value=_runtime_creds(),
-    ), patch(
-        "agent.anthropic_adapter.build_anthropic_client",
-        return_value=MagicMock(name="anthropic_sdk_client"),
-    ), patch(
-        "agent.anthropic_adapter.create_anthropic_message",
-        side_effect=_fake_create,
+    with (
+        patch(
+            "clawk_cli.auth.resolve_minimax_oauth_runtime_credentials",
+            return_value=_runtime_creds(),
+        ),
+        patch(
+            "agent.anthropic_adapter.build_anthropic_client",
+            return_value=MagicMock(name="anthropic_sdk_client"),
+        ),
+        patch(
+            "agent.anthropic_adapter.create_anthropic_message",
+            side_effect=_fake_create,
+        ),
     ):
         client, _model = resolve_provider_client("minimax-oauth", "MiniMax-M3")
         assert client is not None
@@ -130,8 +140,22 @@ def test_resolve_minimax_oauth_tool_names_unprefixed_on_wire():
             model="MiniMax-M3",
             messages=[{"role": "user", "content": "hi"}],
             tools=[
-                {"type": "function", "function": {"name": "read_file", "description": "x", "parameters": {}}},
-                {"type": "function", "function": {"name": "session_search", "description": "y", "parameters": {}}},
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "read_file",
+                        "description": "x",
+                        "parameters": {},
+                    },
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "session_search",
+                        "description": "y",
+                        "parameters": {},
+                    },
+                },
             ],
         )
     wire_names = sorted(t["name"] for t in captured["tools"])
@@ -161,8 +185,11 @@ def test_resolve_minimax_oauth_missing_credentials_log_once_debug(caplog):
     with patch(
         "clawk_cli.auth.resolve_minimax_oauth_runtime_credentials",
         side_effect=AuthError(
-            "Not logged into MiniMax OAuth.", provider="minimax-oauth",
-            code="not_logged_in", relogin_required=True),
+            "Not logged into MiniMax OAuth.",
+            provider="minimax-oauth",
+            code="not_logged_in",
+            relogin_required=True,
+        ),
     ):
         with caplog.at_level(logging.DEBUG, logger="agent.auxiliary_client"):
             for _ in range(5):
@@ -206,11 +233,15 @@ def test_resolve_minimax_oauth_probe_reads_raw_state_no_refresh():
         "inference_base_url": INFERENCE_BASE_URL,
     }
 
-    with patch(
-        "clawk_cli.auth.get_provider_auth_state", return_value=expired_state,
-    ) as mock_state, patch(
-        "clawk_cli.auth.resolve_minimax_oauth_runtime_credentials",
-    ) as mock_resolve:
+    with (
+        patch(
+            "clawk_cli.auth.get_provider_auth_state",
+            return_value=expired_state,
+        ) as mock_state,
+        patch(
+            "clawk_cli.auth.resolve_minimax_oauth_runtime_credentials",
+        ) as mock_resolve,
+    ):
         with aux.aux_probe_mode():
             client, model = resolve_provider_client("minimax-oauth", "MiniMax-M3")
 

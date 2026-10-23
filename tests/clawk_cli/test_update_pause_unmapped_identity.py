@@ -25,7 +25,9 @@ from clawk_cli.update_cmd_windows import _unmapped_ready_filter
 
 @pytest.fixture
 def spawn(tmp_path):
-    entry = tmp_path / "bin" / "clawk"  # a ``clawk`` entry token: the cmdline reads as a gateway
+    entry = (
+        tmp_path / "bin" / "clawk"
+    )  # a ``clawk`` entry token: the cmdline reads as a gateway
     entry.parent.mkdir()
     entry.write_text("import time\ntime.sleep(60)\n", encoding="utf-8")
     argv = [sys.executable, str(entry), "gateway", "run"]
@@ -33,7 +35,9 @@ def spawn(tmp_path):
 
     def _spawn(home) -> subprocess.Popen:
         proc = subprocess.Popen(argv, env={**os.environ, "CLAWK_HOME": str(home)})
-        procs.append(proc)  # Popen returns after exec: the gateway argv and environment are in place
+        procs.append(
+            proc
+        )  # Popen returns after exec: the gateway argv and environment are in place
         return proc
 
     yield _spawn, argv
@@ -46,21 +50,33 @@ def spawn(tmp_path):
 @pytest.mark.spawns_gateway_lookalike  # stub children that sleep; the fixture reaps them
 def test_an_equal_argv_gateway_of_another_home_never_retires_the_unmapped_debt(spawn):
     spawn, argv = spawn
-    root = os.environ["CLAWK_HOME"]  # the sandboxed home this update owns, with two profiles
+    root = os.environ[
+        "CLAWK_HOME"
+    ]  # the sandboxed home this update owns, with two profiles
     home_a, home_b = (os.path.join(root, "profiles", name) for name in ("a", "b"))
     os.makedirs(home_a)
     os.makedirs(home_b)
     old = spawn(home_a)
-    entry = {"pid": old.pid, "argv": argv, "home": home_a, "ct": get_process_start_time(old.pid)}
+    entry = {
+        "pid": old.pid,
+        "argv": argv,
+        "home": home_a,
+        "ct": get_process_start_time(old.pid),
+    }
     old.kill()
     old.wait(timeout=10)
-    time.sleep(0.05)  # a later clock tick: the replacement is born after the process it replaces
+    time.sleep(
+        0.05
+    )  # a later clock tick: the replacement is born after the process it replaces
 
     sibling = spawn(home_b)
-    assert _unmapped_ready_filter(entry, set())([sibling.pid]) == [], \
+    assert _unmapped_ready_filter(entry, set())([sibling.pid]) == [], (
         "home B's gateway with A's argv retired A's restart debt"
+    )
     replacement = spawn(home_a)
-    assert _unmapped_ready_filter(entry, set())([sibling.pid, replacement.pid]) == [replacement.pid]
+    assert _unmapped_ready_filter(entry, set())([sibling.pid, replacement.pid]) == [
+        replacement.pid
+    ]
 
 
 @pytest.mark.platforms("windows")  # the spec overlays the environment only on Windows
@@ -70,5 +86,9 @@ def test_an_unmapped_replay_runs_on_the_home_its_runtime_ran_on(tmp_path):
     paused_home = tmp_path / "profiles" / "a"
     paused_home.mkdir(parents=True)
     _argv, _cwd, env = windowless_gateway_restart_spec(
-        [sys.executable, "-m", "clawk_cli.main", "gateway", "run"], home=str(paused_home))
-    assert env["CLAWK_HOME"] == str(paused_home.resolve()), "the replay ran on the updater's home"
+        [sys.executable, "-m", "clawk_cli.main", "gateway", "run"],
+        home=str(paused_home),
+    )
+    assert env["CLAWK_HOME"] == str(paused_home.resolve()), (
+        "the replay ran on the updater's home"
+    )

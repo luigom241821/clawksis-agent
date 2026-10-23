@@ -135,7 +135,9 @@ def _append_to_other_room(db, args):
 _INVALIDATE_APPEND = {
     "room": _append_to_other_room,
     "event": lambda db, args: args.update(event_id="other"),
-    "metadata": lambda db, args: args["payload"]["attachments"][0].update(name="different.txt"),
+    "metadata": lambda db, args: args["payload"]["attachments"][0].update(
+        name="different.txt"
+    ),
     "private": lambda db, args: None,
     "expired": lambda db, args: args.update(now=1000.0 + UNCOMMITTED_TTL_SECONDS),
 }

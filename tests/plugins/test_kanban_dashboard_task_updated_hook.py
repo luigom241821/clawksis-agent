@@ -27,7 +27,8 @@ def _load_plugin_router():
     plugin_file = repo_root / "plugins" / "kanban" / "dashboard" / "plugin_api.py"
     assert plugin_file.exists(), f"plugin file missing: {plugin_file}"
     spec = importlib.util.spec_from_file_location(
-        "clawk_dashboard_plugin_kanban_task_updated_test", plugin_file,
+        "clawk_dashboard_plugin_kanban_task_updated_test",
+        plugin_file,
     )
     assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
@@ -85,7 +86,6 @@ def test_patch_priority_fires_task_updated(client, captured_updates):
     assert kw["task_id"] == tid
     assert kw["changed_fields"] == ["priority"]
     assert kw["board"]
-
 
 
 def test_bulk_priority_fires_task_updated_per_task(client, captured_updates):

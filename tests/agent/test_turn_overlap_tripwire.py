@@ -38,12 +38,6 @@ def test_clean_serial_turns_no_warning(caplog):
     assert not caplog.records
 
 
-
-
-
-
-
-
 def test_cross_agent_same_session_overlap_warns(caplog):
     """#64934 route: two routing keys mapped to one session_id run their
     turns on two different agent objects (the gateway agent cache is keyed
@@ -58,8 +52,6 @@ def test_cross_agent_same_session_overlap_warns(caplog):
     assert "s1:t1:aaaa" in msg and "s1:t2:bbbb" in msg and "s1" in msg
 
 
-
-
 def test_distinct_sessions_never_cross_warn(caplog):
     """Concurrent turns on different session_ids are legitimate parallelism."""
     agent_a, agent_b = _FakeAgent(), _FakeAgent()
@@ -70,12 +62,6 @@ def test_distinct_sessions_never_cross_warn(caplog):
     assert not caplog.records
 
 
-
-
-
-
-
-
 def test_persist_disabled_fork_neither_registers_nor_warns(caplog):
     """Background-review forks share the live parent's session_id for
     prompt-cache warmth but are _persist_disabled — they can never write
@@ -84,13 +70,11 @@ def test_persist_disabled_fork_neither_registers_nor_warns(caplog):
     parent, fork = _FakeAgent(), _FakeAgent()
     fork._persist_disabled = True
     with caplog.at_level(logging.WARNING, logger="agent.agent_runtime_helpers"):
-        note_turn_start(parent, "s1:t1:aaaa")     # real turn in flight
+        note_turn_start(parent, "s1:t1:aaaa")  # real turn in flight
         assert note_turn_start(fork, "s1:tr:ffff") is None  # fork: silent
-        note_turn_persisted(fork)                 # fork's funnel still runs
+        note_turn_persisted(fork)  # fork's funnel still runs
         # Reverse order on the next cycle: fork in flight, then real turn.
         note_turn_persisted(parent)
         note_turn_start(fork, "s1:tr:gggg")
         assert note_turn_start(parent, "s1:t2:bbbb") is None
     assert not caplog.records
-
-

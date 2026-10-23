@@ -50,9 +50,15 @@ HOST_SKIPPED_CTX_METHODS: dict[str, str] = {
 }
 
 # Live ctx facades the host reaches by method call; each call returns plain data.
-HOST_REMOTE_FACADES: frozenset[str] = frozenset({
-    "state", "llm", "platform_actions", "subagent_lifecycle", "delegation_backends",
-})
+HOST_REMOTE_FACADES: frozenset[str] = frozenset(
+    {
+        "state",
+        "llm",
+        "platform_actions",
+        "subagent_lifecycle",
+        "delegation_backends",
+    }
+)
 
 # Object-taking ctx methods and the ABC the parent checks. The host sends the object's method table
 # and the parent builds a subclass of that ABC whose methods run in the host.
@@ -81,6 +87,7 @@ HOST_DEGRADED_HOOKS: dict[str, str] = {
 def _plugins_config(config: Optional[Mapping[str, Any]] = None) -> Mapping[str, Any]:
     if config is None:
         from clawk_cli.config import load_config_readonly
+
         config = load_config_readonly() or {}
     section = config.get("plugins") if isinstance(config, Mapping) else None
     return section if isinstance(section, Mapping) else {}
@@ -98,8 +105,11 @@ def isolation_mode(config: Optional[Mapping[str, Any]] = None) -> str:
     raw = _plugins_config(config).get("isolation", ISOLATION_IN_PROCESS)
     mode = str(raw or ISOLATION_IN_PROCESS).strip().lower().replace("-", "_")
     if mode not in _ISOLATION_MODES:
-        logger.warning("plugins.isolation=%r is not one of %s; loading plugins in-process",
-                       raw, ", ".join(sorted(_ISOLATION_MODES)))
+        logger.warning(
+            "plugins.isolation=%r is not one of %s; loading plugins in-process",
+            raw,
+            ", ".join(sorted(_ISOLATION_MODES)),
+        )
         return ISOLATION_IN_PROCESS
     return mode
 
@@ -112,12 +122,14 @@ def host_launcher(config: Optional[Mapping[str, Any]] = None) -> list[str]:
         return []
     if isinstance(launcher, str):
         import shlex
+
         return shlex.split(launcher)
     return [str(part) for part in launcher]
 
 
-def in_process_import_refusal(what: str, *, source: str = "user",
-                              config: Optional[Mapping[str, Any]] = None) -> Optional[str]:
+def in_process_import_refusal(
+    what: str, *, source: str = "user", config: Optional[Mapping[str, Any]] = None
+) -> Optional[str]:
     """Reason an in-process import of third-party code must not happen, or ``None`` when allowed.
 
     Every loader that imports a user-supplied module into the Clawksis process asks this first;
@@ -125,8 +137,10 @@ def in_process_import_refusal(what: str, *, source: str = "user",
     """
     if source == "bundled" or isolation_mode(config) != ISOLATION_HOST:
         return None
-    return (f"{what} runs only in-process, and plugins.isolation is 'host' (third-party plugin code "
-            f"never runs inside the Clawksis process); set plugins.isolation: in_process to load it")
+    return (
+        f"{what} runs only in-process, and plugins.isolation is 'host' (third-party plugin code "
+        f"never runs inside the Clawksis process); set plugins.isolation: in_process to load it"
+    )
 
 
 def user_plugin_host() -> Any:
@@ -138,4 +152,5 @@ def user_plugin_host() -> Any:
     if isolation_mode() != ISOLATION_HOST:
         return None
     from clawk_cli.plugins import get_plugin_manager
+
     return get_plugin_manager()._plugin_host()

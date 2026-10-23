@@ -17,6 +17,7 @@ runs post-connect (``run_deferred_integrity_check``) so a large store can never
 gate platform startup (the ``:8644`` fleet peer-DM transport). The tests below
 keep the historic INLINE behaviour covered via ``defer_integrity_check=False``.
 """
+
 from __future__ import annotations
 
 import json
@@ -33,19 +34,21 @@ from gateway.lifecycle_ledger import (
     run_deferred_integrity_check,
 )
 
-_DEAD_PID = 2 ** 22 + 12345  # beyond default pid_max; never alive
+_DEAD_PID = 2**22 + 12345  # beyond default pid_max; never alive
 
 
 def _write_sentinel(home: Path, phase: str = "running") -> None:
     path = get_lifecycle_sentinel_path(home)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        json.dumps({
-            "phase": phase,
-            "pid": _DEAD_PID,
-            "start_time": 1000.0,
-            "started_at": "2026-08-26T23:56:45+00:00",
-        }),
+        json.dumps(
+            {
+                "phase": phase,
+                "pid": _DEAD_PID,
+                "start_time": 1000.0,
+                "started_at": "2026-08-26T23:56:45+00:00",
+            }
+        ),
         encoding="utf-8",
     )
 
@@ -55,7 +58,10 @@ def _make_state_db(home: Path, *, corrupt: bool, journal_mode: str = "delete") -
     path = home / "state.db"
     conn = sqlite3.connect(path)
     if journal_mode != "delete":
-        assert conn.execute(f"PRAGMA journal_mode={journal_mode}").fetchone()[0] == journal_mode
+        assert (
+            conn.execute(f"PRAGMA journal_mode={journal_mode}").fetchone()[0]
+            == journal_mode
+        )
     conn.execute("CREATE TABLE sessions (id INTEGER PRIMARY KEY, v TEXT)")
     conn.executemany(
         "INSERT INTO sessions (v) VALUES (?)", [(f"row-{i}" * 40,) for i in range(4000)]
@@ -65,7 +71,7 @@ def _make_state_db(home: Path, *, corrupt: bool, journal_mode: str = "delete") -
     if corrupt:
         with open(path, "r+b") as handle:
             handle.seek(4096 * 6)
-            handle.write(b"\xEF" * 4096)
+            handle.write(b"\xef" * 4096)
     return path
 
 
@@ -153,7 +159,9 @@ def test_clean_exit_does_not_pay_for_the_check(tmp_path: Path, monkeypatch) -> N
 # ── deferred startup: the scan must not gate platform startup ───
 
 
-def test_deferred_startup_never_runs_the_check_inline(tmp_path: Path, monkeypatch) -> None:
+def test_deferred_startup_never_runs_the_check_inline(
+    tmp_path: Path, monkeypatch
+) -> None:
     """DEFERRAL IS THE DEFAULT: the boot entry point must return WITHOUT the forensic
     scan completing, and the exit-diag record must record that the verdict is pending.
     The blocking stub below never returns unless the deferred path wrongly runs it."""
@@ -164,7 +172,9 @@ def test_deferred_startup_never_runs_the_check_inline(tmp_path: Path, monkeypatc
 
     def _blocking_check(**kwargs):
         started.set()
-        released.wait(10)  # never set by the caller -> proves the boot path did not run it
+        released.wait(
+            10
+        )  # never set by the caller -> proves the boot path did not run it
         return "ok"
 
     monkeypatch.setattr(ledger, "check_state_db_integrity", _blocking_check)
@@ -176,14 +186,18 @@ def test_deferred_startup_never_runs_the_check_inline(tmp_path: Path, monkeypatc
 
     assert evidence is not None
     assert evidence["state_db_integrity"] == "deferred"
-    assert not started.is_set(), "the inline integrity scan ran on the deferred boot path"
+    assert not started.is_set(), (
+        "the inline integrity scan ran on the deferred boot path"
+    )
     assert elapsed < 5.0
     record = _exit_diag_records(tmp_path)[0]
     assert record["state_db_integrity"] == "deferred"
     assert record["tag"] == "gateway.previous_unclean_exit"
 
 
-def test_deferred_scan_appends_a_second_record_and_returns_the_verdict(tmp_path: Path) -> None:
+def test_deferred_scan_appends_a_second_record_and_returns_the_verdict(
+    tmp_path: Path,
+) -> None:
     _make_state_db(tmp_path, corrupt=True, journal_mode="wal")
     _write_sentinel(tmp_path)
 
@@ -194,7 +208,9 @@ def test_deferred_scan_appends_a_second_record_and_returns_the_verdict(tmp_path:
 
     records = _exit_diag_records(tmp_path)
     assert [r["tag"] for r in records] == [
-        "gateway.previous_unclean_exit", "gateway.state_db_integrity"]
+        "gateway.previous_unclean_exit",
+        "gateway.state_db_integrity",
+    ]
     deferred = records[1]
     assert deferred["deferred"] is True
     assert deferred["state_db_integrity"] == verdict
@@ -214,7 +230,9 @@ def test_deferred_scan_never_raises(tmp_path: Path, monkeypatch) -> None:
 
     monkeypatch.setattr(ledger, "check_state_db_integrity", _boom)
 
-    assert run_deferred_integrity_check(evidence, home=tmp_path).startswith("check-failed")
+    assert run_deferred_integrity_check(evidence, home=tmp_path).startswith(
+        "check-failed"
+    )
 
 
 # ── rollback-journal stores: a background scan would block live writers ──────
@@ -241,14 +259,18 @@ def test_deferred_scan_still_runs_on_a_wal_store(tmp_path: Path, monkeypatch) ->
     _make_state_db(tmp_path, corrupt=False, journal_mode="wal")
     calls = _spy_on_scan(monkeypatch)
 
-    verdict = run_deferred_integrity_check({"prior_pid": _DEAD_PID}, home=tmp_path, deadline_s=60.0)
+    verdict = run_deferred_integrity_check(
+        {"prior_pid": _DEAD_PID}, home=tmp_path, deadline_s=60.0
+    )
 
     assert verdict == "ok"
     assert len(calls) == 1
     assert _exit_diag_records(tmp_path)[-1]["state_db_integrity"] == "ok"
 
 
-def test_deferred_scan_skips_a_rollback_journal_store(tmp_path: Path, monkeypatch, caplog) -> None:
+def test_deferred_scan_skips_a_rollback_journal_store(
+    tmp_path: Path, monkeypatch, caplog
+) -> None:
     path = _make_state_db(tmp_path, corrupt=False)
     calls = _spy_on_scan(monkeypatch)
     evidence = {"prior_pid": _DEAD_PID}
@@ -257,8 +279,10 @@ def test_deferred_scan_skips_a_rollback_journal_store(tmp_path: Path, monkeypatc
         verdict = run_deferred_integrity_check(evidence, home=tmp_path, deadline_s=60.0)
 
     assert not calls, "quick_check ran beside live traffic on a rollback-journal store"
-    assert verdict == ("skipped: rollback-journal store (journal_mode=delete), "
-                       "scan would block live writes")
+    assert verdict == (
+        "skipped: rollback-journal store (journal_mode=delete), "
+        "scan would block live writes"
+    )
     assert evidence["state_db_integrity"] == verdict
     record = _exit_diag_records(tmp_path)[-1]
     assert record["tag"] == "gateway.state_db_integrity"
@@ -278,7 +302,9 @@ def test_deferred_scan_skips_a_rollback_journal_store(tmp_path: Path, monkeypatc
         writer.close()
 
 
-def test_deferred_scan_skips_when_the_journal_mode_is_undeterminable(tmp_path: Path, monkeypatch) -> None:
+def test_deferred_scan_skips_when_the_journal_mode_is_undeterminable(
+    tmp_path: Path, monkeypatch
+) -> None:
     import clawk_state_wal
 
     _make_state_db(tmp_path, corrupt=False, journal_mode="wal")
@@ -289,16 +315,22 @@ def test_deferred_scan_skips_when_the_journal_mode_is_undeterminable(tmp_path: P
 
     monkeypatch.setattr(clawk_state_wal, "_on_disk_journal_mode", _unreadable)
 
-    verdict = run_deferred_integrity_check({"prior_pid": _DEAD_PID}, home=tmp_path, deadline_s=60.0)
+    verdict = run_deferred_integrity_check(
+        {"prior_pid": _DEAD_PID}, home=tmp_path, deadline_s=60.0
+    )
 
     assert not calls
-    assert verdict == ("skipped: rollback-journal store (journal_mode=unknown), "
-                       "scan would block live writes")
+    assert verdict == (
+        "skipped: rollback-journal store (journal_mode=unknown), "
+        "scan would block live writes"
+    )
     assert _exit_diag_records(tmp_path)[-1]["state_db_integrity"] == verdict
 
 
 def test_deferred_scan_of_an_absent_store_is_unchanged(tmp_path: Path) -> None:
-    verdict = run_deferred_integrity_check({"prior_pid": _DEAD_PID}, home=tmp_path, deadline_s=60.0)
+    verdict = run_deferred_integrity_check(
+        {"prior_pid": _DEAD_PID}, home=tmp_path, deadline_s=60.0
+    )
 
     assert verdict == "absent"
     assert _exit_diag_records(tmp_path)[-1]["state_db_integrity"] == "absent"
@@ -319,7 +351,9 @@ def test_deadline_bounds_the_scan(tmp_path: Path, monkeypatch) -> None:
     assert verdict.startswith("check-incomplete: exceeded"), verdict
 
 
-def test_no_deadline_keeps_the_historic_verdict_contract(tmp_path: Path, monkeypatch) -> None:
+def test_no_deadline_keeps_the_historic_verdict_contract(
+    tmp_path: Path, monkeypatch
+) -> None:
     """``deadline_s=None`` must be byte-for-byte today's behaviour: the handler never aborts."""
     import gateway.lifecycle_ledger as ledger
 

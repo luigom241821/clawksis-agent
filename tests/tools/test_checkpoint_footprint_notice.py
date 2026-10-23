@@ -14,20 +14,30 @@ from clawk_constants import get_clawk_home
 from tools.checkpoint_manager import CheckpointManager
 from tools.checkpoint_maintenance import checkpoint_footprint_notice
 
+
 def _write_config(enabled: bool, cap_mb: int) -> None:
     home = get_clawk_home()
     home.mkdir(parents=True, exist_ok=True)
     (home / "config.yaml").write_text(
-        yaml.safe_dump({"checkpoints": {"enabled": enabled, "max_total_size_mb": cap_mb}}), encoding="utf-8")
+        yaml.safe_dump(
+            {"checkpoints": {"enabled": enabled, "max_total_size_mb": cap_mb}}
+        ),
+        encoding="utf-8",
+    )
+
 
 def test_notice_only_when_enabled_and_over_cap(tmp_path, monkeypatch):
     base = get_clawk_home() / "checkpoints"
     monkeypatch.setattr("tools.checkpoint_manager.CHECKPOINT_BASE", base)
     work = tmp_path / "proj"
     work.mkdir()
-    (work / "blob.bin").write_bytes(os.urandom(2 * 1024 * 1024))  # incompressible → store > 1 MB
+    (work / "blob.bin").write_bytes(
+        os.urandom(2 * 1024 * 1024)
+    )  # incompressible → store > 1 MB
     _write_config(enabled=True, cap_mb=1)
-    assert CheckpointManager(enabled=True, max_total_size_mb=1).ensure_checkpoint(str(work), "seed")
+    assert CheckpointManager(enabled=True, max_total_size_mb=1).ensure_checkpoint(
+        str(work), "seed"
+    )
 
     def unexpected_git(*args, **kwargs):
         raise AssertionError("A storage notice must not inspect commit history")

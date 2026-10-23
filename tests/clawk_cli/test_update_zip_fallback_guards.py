@@ -74,17 +74,11 @@ def test_unknown_command_gets_generic_stage():
     assert update_cmd._format_update_failure_stage(exc) == "Update step failed"
 
 
-
-
-
-
 def test_posix_git_failure_does_not_zip(monkeypatch):
     monkeypatch.setattr(clawk_main, "_is_windows", lambda: False)
     monkeypatch.setattr(main_install_repair, "_is_windows", lambda: False)
     exc = _cpe(["git", "pull"], returncode=1)
     assert update_cmd._should_zip_fallback_on_update_error(exc) is False
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -96,9 +90,13 @@ def _porcelain_run(stdout: str, returncode: int = 0):
     def fake_run(cmd, **kwargs):
         joined = " ".join(str(c) for c in cmd)
         if "status" in joined and "--porcelain" in joined:
-            return subprocess.CompletedProcess(cmd, returncode, stdout=stdout, stderr="")
+            return subprocess.CompletedProcess(
+                cmd, returncode, stdout=stdout, stderr=""
+            )
         if "ls-tree" in joined:  # tracked root entries = what the ZIP ships
-            return subprocess.CompletedProcess(cmd, 0, stdout="clawk_cli\nscratch\n", stderr="")
+            return subprocess.CompletedProcess(
+                cmd, 0, stdout="clawk_cli\nscratch\n", stderr=""
+            )
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
     return fake_run
@@ -195,7 +193,9 @@ def test_status_uses_untracked_files_all(tmp_path, monkeypatch):
 
 def test_staging_artifact_lines_are_recognized():
     def is_artifact(line):
-        return update_cmd._is_zip_staging_artifact_status_line(line, ["agent", "cli.py", "tools"])
+        return update_cmd._is_zip_staging_artifact_status_line(
+            line, ["agent", "cli.py", "tools"]
+        )
 
     assert is_artifact("?? agent.clawk-update-staging/")
     assert is_artifact("?? cli.py.clawk-update-staging")
@@ -213,7 +213,9 @@ def test_recheck_ignores_own_staging_artifacts(tmp_path, monkeypatch):
     monkeypatch.setattr(
         update_cmd.subprocess,
         "run",
-        _porcelain_run("?? agent.clawk-update-staging/\n?? cli.py.clawk-update-staging\n"),
+        _porcelain_run(
+            "?? agent.clawk-update-staging/\n?? cli.py.clawk-update-staging\n"
+        ),
     )
     assert (
         update_cmd._zip_overlay_block_reason(tmp_path, staged=["agent", "cli.py"])
@@ -230,9 +232,7 @@ def test_recheck_still_blocks_user_files_amid_staging_artifacts(tmp_path, monkey
         "run",
         _porcelain_run("?? agent.clawk-update-staging/\n?? my-notes.md\n"),
     )
-    reason = update_cmd._zip_overlay_block_reason(
-        tmp_path, staged=["agent"]
-    )
+    reason = update_cmd._zip_overlay_block_reason(tmp_path, staged=["agent"])
     assert reason is not None
 
 
@@ -260,14 +260,19 @@ def test_zip_overlay_flag_is_valid_against_real_git(tmp_path):
     """
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     (tmp_path / ".gitignore").write_text("*.local\nvenv/\n.venv/\n", encoding="utf-8")
-    subprocess.run(
-        ["git", "-C", str(tmp_path), "add", ".gitignore"], check=True
-    )
+    subprocess.run(["git", "-C", str(tmp_path), "add", ".gitignore"], check=True)
     subprocess.run(
         [
-            "git", "-C", str(tmp_path),
-            "-c", "user.email=t@t", "-c", "user.name=t",
-            "commit", "-qm", "init",
+            "git",
+            "-C",
+            str(tmp_path),
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "user.name=t",
+            "commit",
+            "-qm",
+            "init",
         ],
         check=True,
     )
@@ -288,12 +293,20 @@ def test_zip_overlay_flag_is_valid_against_real_git(tmp_path):
     (tmp_path / ".venv").mkdir()
     (tmp_path / ".venv" / "lib.py").write_text("x", encoding="utf-8")
     status = subprocess.run(
-        ["git", "-C", str(tmp_path), "status", "--porcelain", "--untracked-files=all", "--ignored=matching"],
-        capture_output=True, text=True,
+        [
+            "git",
+            "-C",
+            str(tmp_path),
+            "status",
+            "--porcelain",
+            "--untracked-files=all",
+            "--ignored=matching",
+        ],
+        capture_output=True,
+        text=True,
         check=False,
     ).stdout
     assert update_cmd._zip_overlay_block_reason(tmp_path) is None, status
-
 
 
 def _git_install(root):
@@ -302,12 +315,29 @@ def _git_install(root):
     (root / "alpha" / "x.py").write_text("x = 1\n", encoding="utf-8")
     (root / "cli.py").write_text("print('cli')\n", encoding="utf-8")
     subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)
-    subprocess.run(["git", "-C", str(root), "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "init"],
-                   check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(root),
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "user.name=t",
+            "commit",
+            "-qm",
+            "init",
+        ],
+        check=True,
+    )
 
 
-@pytest.mark.parametrize("name", ["alpha.clawk-update-staging", "cli.py.clawk-update-old"])
-def test_zip_gate_refuses_and_keeps_a_user_file_named_like_an_update_artifact(tmp_path, monkeypatch, name):
+@pytest.mark.parametrize(
+    "name", ["alpha.clawk-update-staging", "cli.py.clawk-update-old"]
+)
+def test_zip_gate_refuses_and_keeps_a_user_file_named_like_an_update_artifact(
+    tmp_path, monkeypatch, name
+):
     """Staging deletes ``<entry>.clawk-update-staging``/``-old``: a user's own file by that name (no
     journal claims it) is user work the gate must refuse on, leaving it untouched."""
     _git_install(tmp_path)
@@ -319,7 +349,9 @@ def test_zip_gate_refuses_and_keeps_a_user_file_named_like_an_update_artifact(tm
     assert (tmp_path / name).read_text(encoding="utf-8-sig") == "PRECIOUS USER BYTES"
 
 
-def test_zip_gate_refuses_on_a_user_file_at_the_old_fixed_journal_temp_name(tmp_path, monkeypatch):
+def test_zip_gate_refuses_on_a_user_file_at_the_old_fixed_journal_temp_name(
+    tmp_path, monkeypatch
+):
     """The gate exempted ``.clawk-update-zip-swap.tmp`` as Clawksis' own before any journal existed, and
     the journal writer then deleted it (review Z5). Only the writer's unpredictable temp is exempt now."""
     _git_install(tmp_path)
@@ -328,20 +360,33 @@ def test_zip_gate_refuses_on_a_user_file_at_the_old_fixed_journal_temp_name(tmp_
     monkeypatch.setattr(clawk_main, "PROJECT_ROOT", tmp_path)
     with pytest.raises(SystemExit) as exc_info:
         update_cmd._abort_zip_update_if_dirty_tree()
-    assert exc_info.value.code == 1 and user.read_text(encoding="utf-8-sig") == "USER NOTES"
-    assert update_cmd._is_zip_staging_artifact_status_line("?? .clawk-update-zip-swap.0123456789ab.tmp")
+    assert (
+        exc_info.value.code == 1
+        and user.read_text(encoding="utf-8-sig") == "USER NOTES"
+    )
+    assert update_cmd._is_zip_staging_artifact_status_line(
+        "?? .clawk-update-zip-swap.0123456789ab.tmp"
+    )
 
 
 def test_zip_gate_admits_the_retry_after_an_interrupted_swap(tmp_path, monkeypatch):
     """The siblings an interrupted swap's journal owns never refuse the retry: they are settled first."""
-    from clawk_cli._early_recovery_zip import ZIP_SWAP_JOURNAL, write_zip_swap_journal, zip_entry_identity
+    from clawk_cli._early_recovery_zip import (
+        ZIP_SWAP_JOURNAL,
+        write_zip_swap_journal,
+        zip_entry_identity,
+    )
 
     _git_install(tmp_path)
     leftover = tmp_path / "alpha.clawk-update-staging"
     leftover.mkdir()
     (leftover / "x.py").write_text("x = 2\n", encoding="utf-8")
-    write_zip_swap_journal(tmp_path, "staging", [["alpha", True, zip_entry_identity(leftover), ""],
-                                                 ["cli.py", True, "", ""]], "0123456789ab")
+    write_zip_swap_journal(
+        tmp_path,
+        "staging",
+        [["alpha", True, zip_entry_identity(leftover), ""], ["cli.py", True, "", ""]],
+        "0123456789ab",
+    )
     monkeypatch.setattr(clawk_main, "PROJECT_ROOT", tmp_path)
     update_cmd._abort_zip_update_if_dirty_tree()
     assert not leftover.exists() and not (tmp_path / ZIP_SWAP_JOURNAL).exists()
@@ -352,20 +397,12 @@ def test_preserved_filter_does_not_split_non_rename_lines():
     """A plain ignored FILE literally named 'venv -> node_modules' is ONE
     path (porcelain v1 doesn't quote spaces) — splitting it would filter it
     as two preserved tops and fail-open into the destructive swap."""
-    assert not update_cmd._is_zip_preserved_entry_status_line(
-        "!! venv -> node_modules"
-    )
-    assert not update_cmd._is_zip_preserved_entry_status_line(
-        "?? venv -> node_modules"
-    )
+    assert not update_cmd._is_zip_preserved_entry_status_line("!! venv -> node_modules")
+    assert not update_cmd._is_zip_preserved_entry_status_line("?? venv -> node_modules")
     # Real rename crossing out of a preserved dir still blocks…
-    assert not update_cmd._is_zip_preserved_entry_status_line(
-        "R  venv/x -> src/x"
-    )
+    assert not update_cmd._is_zip_preserved_entry_status_line("R  venv/x -> src/x")
     # …and a rename fully inside preserved entries is still filtered.
-    assert update_cmd._is_zip_preserved_entry_status_line(
-        "R  venv/a -> node_modules/b"
-    )
+    assert update_cmd._is_zip_preserved_entry_status_line("R  venv/a -> node_modules/b")
 
 
 def test_zip_overlay_allows_ignored_preserved_entries(tmp_path, monkeypatch):

@@ -40,10 +40,16 @@ def worker_home(tmp_path, monkeypatch):
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    for var in ("CLAWK_KANBAN_DB", "CLAWK_KANBAN_WORKSPACES_ROOT", "CLAWK_KANBAN_HOME", "CLAWK_KANBAN_BOARD"):
+    for var in (
+        "CLAWK_KANBAN_DB",
+        "CLAWK_KANBAN_WORKSPACES_ROOT",
+        "CLAWK_KANBAN_HOME",
+        "CLAWK_KANBAN_BOARD",
+    ):
         monkeypatch.delenv(var, raising=False)
     try:
         import clawk_constants
+
         clawk_constants._cached_default_clawk_root = None  # type: ignore[attr-defined]
     except Exception:
         pass
@@ -125,7 +131,9 @@ def test_skips_own_authored_comments(worker_home, monkeypatch):
     assert agent.steers == []
 
 
-def test_delegated_child_in_worker_process_neither_receives_nor_consumes_notes(worker_home, monkeypatch):
+def test_delegated_child_in_worker_process_neither_receives_nor_consumes_notes(
+    worker_home, monkeypatch
+):
     """A delegate_task child inherits the worker's ``CLAWK_KANBAN_TASK``; operator notes
     address the worker, so the child must not be steered by them and must not advance the
     shared watermark (which would make the worker miss them) (#112817)."""

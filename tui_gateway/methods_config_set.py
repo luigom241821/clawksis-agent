@@ -17,7 +17,10 @@ _profile_scoped = _registry.profile_scoped
 
 # ── shared helpers
 
-def _write_display_sections(*, sections=None, drop_sections=(), **display_fields) -> None:
+
+def _write_display_sections(
+    *, sections=None, drop_sections=(), **display_fields
+) -> None:
     """Persist ``display.<field>`` + ``display.sections`` edits via the raw (uncached) write-back."""
     cfg = _load_cfg_raw()
     display = cfg.get("display") if isinstance(cfg.get("display"), dict) else {}
@@ -60,14 +63,28 @@ def _cfgset_await_agent(session, rid):
     init_err = _wait_agent(session, rid)
     if init_err:
         return init_err
-    return _err(rid, 5032, "agent initialization failed") if session.get("agent") is None else None
+    return (
+        _err(rid, 5032, "agent initialization failed")
+        if session.get("agent") is None
+        else None
+    )
 
 
-def _cfgset_model_ok(rid, key, value, warning="", confirm_message="", scope="session", **extra):
+def _cfgset_model_ok(
+    rid, key, value, warning="", confirm_message="", scope="session", **extra
+):
     """Model-switch envelope; ``confirm_required`` follows ``confirm_message`` (canonical; ``warning``
     is its legacy alias on the deferred path)."""
-    return _kv(rid, key, value, warning=warning, confirm_required=bool(confirm_message),
-               confirm_message=confirm_message, scope=scope, **extra)
+    return _kv(
+        rid,
+        key,
+        value,
+        warning=warning,
+        confirm_required=bool(confirm_message),
+        confirm_message=confirm_message,
+        scope=scope,
+        **extra,
+    )
 
 
 def _stash_pending_model_switch(rid, key, value, session, confirmed, parsed):
@@ -84,28 +101,45 @@ def _stash_pending_model_switch(rid, key, value, session, confirmed, parsed):
         # A bare pick resolves against the live provider at turn start; guard on that same provider
         # here, or a provider-keyed price check passes now and drops the queued pick later.
         agent = session.get("agent")
-        guard_provider = pending_provider or (getattr(agent, "provider", "") or "").strip()
-        pending_warning = _pending_switch_selection_warning(pending_model, guard_provider, agent)
+        guard_provider = (
+            pending_provider or (getattr(agent, "provider", "") or "").strip()
+        )
+        pending_warning = _pending_switch_selection_warning(
+            pending_model, guard_provider, agent
+        )
         if pending_warning is not None:
-            return _cfgset_model_ok(rid, key, pending_model, pending_warning, pending_warning, deferred=False)
+            return _cfgset_model_ok(
+                rid,
+                key,
+                pending_model,
+                pending_warning,
+                pending_warning,
+                deferred=False,
+            )
     # display_*: _session_info shows the user's pick while pending, not the live old model.
     session["pending_model_switch"] = {
-        "raw": value, "confirm_expensive_model": confirmed,
-        "display_model": pending_model, "display_provider": pending_provider}
+        "raw": value,
+        "confirm_expensive_model": confirmed,
+        "display_model": pending_model,
+        "display_provider": pending_provider,
+    }
     return _cfgset_model_ok(rid, key, pending_model, deferred=True)
 
 
 def _cfgset_guarded(fn):
     """Setter whose uncaught exception becomes ``_err(rid, 5001, str(e))``."""
+
     def setter(rid, params, key, value, session):
         try:
             return fn(rid, params, key, value, session)
         except Exception as e:
             return _err(rid, 5001, str(e))
+
     return setter
 
 
 # ── per-key handlers
+
 
 @_cfgset_guarded
 def _set_model(rid, params, key, value, session):
@@ -115,6 +149,7 @@ def _set_model(rid, params, key, value, session):
     confirmed = bool(params.get("confirm_expensive_model", False))
     if session:
         from clawk_cli.model_switch import parse_model_switch_args
+
         sid = params.get("session_id", "")
         parsed_flags = parse_model_switch_args(value)
         # Compute-host sessions ALWAYS defer, busy or idle. Their live agent is in
@@ -124,25 +159,46 @@ def _set_model(rid, params, key, value, session):
         # model. The stash crosses the boundary in the turn frame and the child's
         # turn thread applies it (_apply_pending_model_switch).
         if session.get("running") or session.get("_compute_host_active"):
-            return _stash_pending_model_switch(rid, key, value, session, confirmed, parsed_flags)
+            return _stash_pending_model_switch(
+                rid, key, value, session, confirmed, parsed_flags
+            )
         explicit_provider = parsed_flags.explicit_provider
-        failed_agent_init = session.get("agent") is None and session.get("agent_error") is not None
+        failed_agent_init = (
+            session.get("agent") is None and session.get("agent_error") is not None
+        )
         failed_ready = session.get("agent_ready") if failed_agent_init else None
         if failed_agent_init:
             if failed_ready is None:
-                return _err(rid, 5032, session.get("agent_error") or "agent initialization failed")
+                return _err(
+                    rid,
+                    5032,
+                    session.get("agent_error") or "agent initialization failed",
+                )
             if not failed_ready.wait(timeout=30.0):
                 return _err(rid, 5032, AGENT_STILL_STARTING)
         failed_agent_init = (
-            failed_agent_init and session.get("agent") is None and session.get("agent_error") is not None
-            and session.get("agent_ready") is failed_ready and failed_ready.is_set())
-        if session.get("agent") is None and not explicit_provider.strip() and not failed_agent_init:
+            failed_agent_init
+            and session.get("agent") is None
+            and session.get("agent_error") is not None
+            and session.get("agent_ready") is failed_ready
+            and failed_ready.is_set()
+        )
+        if (
+            session.get("agent") is None
+            and not explicit_provider.strip()
+            and not failed_agent_init
+        ):
             _start_agent_build(sid, session)
             if init_err := _cfgset_await_agent(session, rid):
                 return init_err
         with _session_profile_runtime_scope(session):
-            result = _apply_model_switch(sid, session, value, confirm_expensive_model=confirmed,
-                                         parsed_flags=parsed_flags)
+            result = _apply_model_switch(
+                sid,
+                session,
+                value,
+                confirm_expensive_model=confirmed,
+                parsed_flags=parsed_flags,
+            )
         if failed_agent_init and not result.get("confirm_required"):
             _restart_completed_failed_agent_build(sid, session, failed_ready)
             if init_err := _cfgset_await_agent(session, rid):
@@ -154,21 +210,42 @@ def _set_model(rid, params, key, value, session):
         # --global cannot persist profile defaults before session.create (#106397:
         # an older Desktop client sent a fresh-draft pick this way).
         from clawk_cli.model_switch import parse_model_switch_args
+
         if parse_model_switch_args(str(value)).is_once:
-            result = _apply_model_switch("", {"agent": None}, value, confirm_expensive_model=confirmed)
+            result = _apply_model_switch(
+                "", {"agent": None}, value, confirm_expensive_model=confirmed
+            )
         else:
             # One string for every client: the Ink TUI (dashboard /chat, `clawk --tui`) has no
             # Settings; the dashboard has a Models page; only the Desktop has Settings -> Models.
-            return _err(rid, 4001, "config.set model requires a live session; to change the "
-                        "profile default run /setup, or use the Models page (dashboard) / "
-                        "Settings -> Models (Desktop)")
-    return _kv(rid, key, result["value"], warning=result["warning"],
-               confirm_required=result.get("confirm_required", False),
-               confirm_message=result.get("confirm_message", ""), scope=result.get("scope", "session"))
+            return _err(
+                rid,
+                4001,
+                "config.set model requires a live session; to change the "
+                "profile default run /setup, or use the Models page (dashboard) / "
+                "Settings -> Models (Desktop)",
+            )
+    return _kv(
+        rid,
+        key,
+        result["value"],
+        warning=result["warning"],
+        confirm_required=result.get("confirm_required", False),
+        confirm_message=result.get("confirm_message", ""),
+        scope=result.get("scope", "session"),
+    )
 
 
-_FAST_WORDS = {"fast": "fast", "on": "fast", "normal": "normal", "off": "normal",
-               "auto": "auto", "cold": "cold", "ultrafast": "ultrafast", "ultra": "ultrafast"}
+_FAST_WORDS = {
+    "fast": "fast",
+    "on": "fast",
+    "normal": "normal",
+    "off": "normal",
+    "auto": "auto",
+    "cold": "cold",
+    "ultrafast": "ultrafast",
+    "ultra": "ultrafast",
+}
 
 
 def _set_fast(rid, params, key, value, session):
@@ -176,47 +253,75 @@ def _set_fast(rid, params, key, value, session):
     agent = session.get("agent") if session else None
     if agent is not None:
         current_tier = getattr(agent, "service_tier", None)
-    elif session is not None and session.get("create_service_tier_override") is not None:
-        current_tier = session["create_service_tier_override"] or None  # pre-build pin beats global
+    elif (
+        session is not None and session.get("create_service_tier_override") is not None
+    ):
+        current_tier = (
+            session["create_service_tier_override"] or None
+        )  # pre-build pin beats global
     else:
         current_tier = _load_service_tier()
     from agent.fast_mode import STATIC_TIERS, service_tier_word
+
     if raw == "status":
         return _kv(rid, key, service_tier_word(current_tier))
-    nv = _FAST_WORDS.get(raw, ("normal" if current_tier in STATIC_TIERS else "fast") if raw in {"", "toggle"} else None)
+    nv = _FAST_WORDS.get(
+        raw,
+        ("normal" if current_tier in STATIC_TIERS else "fast")
+        if raw in {"", "toggle"}
+        else None,
+    )
     if nv is None:
         return _err(rid, 4002, f"unknown fast mode: {value}")
     overrides = None
     if nv in ("fast", "ultrafast"):
         from clawk_cli.models import resolve_fast_mode_overrides
+
         if agent is not None:
             target_model = getattr(agent, "model", None)
         else:  # a pre-build session may carry a picked model (desktop draft): validate against THAT
             session_override = (session or {}).get("model_override") or {}
-            target_model = (isinstance(session_override, dict) and session_override.get("model")) or _resolve_model()
+            target_model = (
+                isinstance(session_override, dict) and session_override.get("model")
+            ) or _resolve_model()
         if not target_model:
-            return _err(rid, 4002, "fast mode is not available without a selected model")
-        overrides = resolve_fast_mode_overrides(target_model, provider=getattr(agent, "provider", None),
-                                                base_url=getattr(agent, "base_url", None),
-                                                tier="ultrafast" if nv == "ultrafast" else None)
+            return _err(
+                rid, 4002, "fast mode is not available without a selected model"
+            )
+        overrides = resolve_fast_mode_overrides(
+            target_model,
+            provider=getattr(agent, "provider", None),
+            base_url=getattr(agent, "base_url", None),
+            tier="ultrafast" if nv == "ultrafast" else None,
+        )
         if overrides is not None and nv == "ultrafast":
             from agent.codex_service_tiers import ultrafast_offered
-            if not ultrafast_offered(target_model, provider=getattr(agent, "provider", None),
-                                     base_url=getattr(agent, "base_url", None),
-                                     access_token=getattr(agent, "api_key", None)):
+
+            if not ultrafast_offered(
+                target_model,
+                provider=getattr(agent, "provider", None),
+                base_url=getattr(agent, "base_url", None),
+                access_token=getattr(agent, "api_key", None),
+            ):
                 overrides = None
         if overrides is None:
             return _err(rid, 4002, f"{nv} mode is not available for this model")
     if session is not None:
         # Session-scoped like `reasoning` (global = `--global` / Settings → Model): writing config.yaml
         # here flipped fast mode for every surface. The create override survives rebuilds; "" pins normal.
-        session["create_service_tier_override"] = {"fast": "priority", "normal": ""}.get(nv, nv)
+        session["create_service_tier_override"] = {
+            "fast": "priority",
+            "normal": "",
+        }.get(nv, nv)
     else:
         _write_config_key("agent.service_tier", nv)
     if agent is not None:
         agent.service_tier = {"fast": "priority", "normal": None}.get(nv, nv)
-        current_overrides = {k: v for k, v in (getattr(agent, "request_overrides", {}) or {}).items()
-                             if k not in ("service_tier", "speed")}
+        current_overrides = {
+            k: v
+            for k, v in (getattr(agent, "request_overrides", {}) or {}).items()
+            if k not in ("service_tier", "speed")
+        }
         agent.request_overrides = {**current_overrides, **(overrides or {})}
         _persist_live_session_runtime(session)
         _emit_session_info(params.get("session_id", ""), session)
@@ -236,7 +341,11 @@ def _set_verbose(rid, params, key, value, session):
         if nv not in cycle:
             return _err(rid, 4002, f"unknown verbose mode: {value}")
     else:
-        cur = session.get("tool_progress_mode", _load_tool_progress_mode()) if session else _load_tool_progress_mode()
+        cur = (
+            session.get("tool_progress_mode", _load_tool_progress_mode())
+            if session
+            else _load_tool_progress_mode()
+        )
         nv = cycle[((cycle.index(cur) if cur in cycle else 2) + 1) % len(cycle)]
     _write_config_key("display.tool_progress", nv)
     if session:
@@ -248,20 +357,36 @@ def _set_verbose(rid, params, key, value, session):
 
 def _set_focus(rid, params, key, value, session):
     # /focus: enabling stashes the configured tool_progress mode and pins it "off"; disabling restores.
-    from clawk_cli.focus_view import FOCUS_TOOL_PROGRESS_MODE, normalize_tool_progress_mode, resolve_focus_arg
+    from clawk_cli.focus_view import (
+        FOCUS_TOOL_PROGRESS_MODE,
+        normalize_tool_progress_mode,
+        resolve_focus_arg,
+    )
+
     d_f = _display_cfg()
     cur_focus = bool(d_f.get("focus_view", False))
     action, target = resolve_focus_arg(str(value or ""), cur_focus)
     if action == "usage":
         return _err(rid, 4002, f"unknown focus value: {value} (use on|off|status)")
     if action == "status" or target is None:
-        return _kv(rid, key, "on" if cur_focus else "off", tool_progress=_load_tool_progress_mode())
+        return _kv(
+            rid,
+            key,
+            "on" if cur_focus else "off",
+            tool_progress=_load_tool_progress_mode(),
+        )
     if target:
-        saved = (cur_focus and d_f.get("focus_saved_tool_progress")) or _load_tool_progress_mode()
-        _write_config_key("display.focus_saved_tool_progress", normalize_tool_progress_mode(saved))
+        saved = (
+            cur_focus and d_f.get("focus_saved_tool_progress")
+        ) or _load_tool_progress_mode()
+        _write_config_key(
+            "display.focus_saved_tool_progress", normalize_tool_progress_mode(saved)
+        )
         effective = FOCUS_TOOL_PROGRESS_MODE
     else:
-        effective = normalize_tool_progress_mode(d_f.get("focus_saved_tool_progress") or "all")
+        effective = normalize_tool_progress_mode(
+            d_f.get("focus_saved_tool_progress") or "all"
+        )
     _write_config_key("display.tool_progress", effective)
     _write_config_key("display.focus_view", bool(target))
     if session:
@@ -274,7 +399,9 @@ def _set_focus(rid, params, key, value, session):
 
 
 def _set_approval_mode(rid, params, key, value, session):
-    return _set_word(rid, params, "approvals.mode", value, session)  # legacy alias reports the real key
+    return _set_word(
+        rid, params, "approvals.mode", value, session
+    )  # legacy alias reports the real key
 
 
 @_cfgset_guarded
@@ -285,29 +412,47 @@ def _set_yolo(rid, params, key, value, session):
     raw = _word(value)
     if scope == "global":
         from tools.approval_context import _normalize_approval_mode
+
         appr = _load_cfg().get("approvals")
         appr = appr if isinstance(appr, dict) else {}
-        enable = _BOOL_WORDS.get(raw, _normalize_approval_mode(appr.get("mode", "manual")) != "off")
-        _write_config_key("approvals.mode", "off" if enable else "manual")  # binary: no "smart" restore
+        enable = _BOOL_WORDS.get(
+            raw, _normalize_approval_mode(appr.get("mode", "manual")) != "off"
+        )
+        _write_config_key(
+            "approvals.mode", "off" if enable else "manual"
+        )  # binary: no "smart" restore
         _emit_all_session_info()  # reflect the flip in every live indicator
     elif session:
         from tools.approval_yolo import toggle_session_yolo
+
         # Row id prefers the agent's session_id: after compression the key can still name the ended parent (#20001).
-        row_id = getattr(session.get("agent"), "session_id", None) or session["session_key"]
+        row_id = (
+            getattr(session.get("agent"), "session_id", None) or session["session_key"]
+        )
 
         def persist(on):
             with _session_db(session) as db:
                 if db is not None:
                     db.set_session_yolo(row_id, on)
-        enable = toggle_session_yolo(session["session_key"], _BOOL_WORDS.get(raw), persist=persist)
+
+        enable = toggle_session_yolo(
+            session["session_key"], _BOOL_WORDS.get(raw), persist=persist
+        )
         _emit_session_info(params.get("session_id", ""), session)
     else:
-        enable = _BOOL_WORDS.get(raw, not is_truthy_value(os.environ.get("CLAWK_YOLO_MODE")))
+        enable = _BOOL_WORDS.get(
+            raw, not is_truthy_value(os.environ.get("CLAWK_YOLO_MODE"))
+        )
         if enable:
             os.environ["CLAWK_YOLO_MODE"] = "1"
         else:
             os.environ.pop("CLAWK_YOLO_MODE", None)
-    return _kv(rid, key, "1" if enable else "0", scope=scope if scope == "global" else "session")
+    return _kv(
+        rid,
+        key,
+        "1" if enable else "0",
+        scope=scope if scope == "global" else "session",
+    )
 
 
 # /reasoning display words: (accepted inputs, reported value, display field, sections.thinking,
@@ -316,12 +461,20 @@ _REASONING_DISPLAY_WORDS = (
     ({"show", "on"}, "show", {"show_reasoning": True}, "expanded", True),
     ({"hide", "off"}, "hide", {"show_reasoning": False}, "hidden", False),
     ({"full", "all"}, "full", {"reasoning_full": True}, "expanded", None),
-    ({"clamp", "collapse", "short"}, "clamp", {"reasoning_full": False}, "collapsed", None))
+    (
+        {"clamp", "collapse", "short"},
+        "clamp",
+        {"reasoning_full": False},
+        "collapsed",
+        None,
+    ),
+)
 
 
 @_cfgset_guarded
 def _set_reasoning(rid, params, key, value, session):
     from clawk_constants import parse_reasoning_effort
+
     arg = _word(value)
     scope = _word(params.get("scope"))
     for words, reported, fields, thinking, show in _REASONING_DISPLAY_WORDS:
@@ -355,25 +508,64 @@ def _word_setters() -> dict:
     """key -> (normaliser, accepted words, error template, apply(word)); the reported value is the
     accepted word. Built per call: the specs reference server.py globals (rebound at install)."""
     return {
-        "busy": (_word, {"queue", "steer", "interrupt"}, "unknown busy mode: {value}",
-                 lambda w: _write_config_key("display.busy_input_mode", w)),
-        "approvals.mode": (_word, _APPROVAL_MODES, "unknown approval mode: {value}; pick one of manual|smart|off",
-                           lambda w: (_write_config_key("approvals.mode", w), _emit_all_session_info())),
-        "details_mode": (_word, _DETAIL_MODES, "unknown details_mode: {value}", lambda w: _write_display_sections(
-            sections={section: w for section in _DETAIL_SECTION_NAMES}, details_mode=w)),
+        "busy": (
+            _word,
+            {"queue", "steer", "interrupt"},
+            "unknown busy mode: {value}",
+            lambda w: _write_config_key("display.busy_input_mode", w),
+        ),
+        "approvals.mode": (
+            _word,
+            _APPROVAL_MODES,
+            "unknown approval mode: {value}; pick one of manual|smart|off",
+            lambda w: (
+                _write_config_key("approvals.mode", w),
+                _emit_all_session_info(),
+            ),
+        ),
+        "details_mode": (
+            _word,
+            _DETAIL_MODES,
+            "unknown details_mode: {value}",
+            lambda w: _write_display_sections(
+                sections={section: w for section in _DETAIL_SECTION_NAMES},
+                details_mode=w,
+            ),
+        ),
         # thinking_mode also keeps details_mode aligned (compat bridge).
-        "thinking_mode": (_word, {"collapsed", "truncated", "full"}, "unknown thinking_mode: {value}", lambda w: (
-            _write_config_key("display.thinking_mode", w),
-            _write_config_key("display.details_mode", "expanded" if w == "full" else "collapsed"))),
+        "thinking_mode": (
+            _word,
+            {"collapsed", "truncated", "full"},
+            "unknown thinking_mode: {value}",
+            lambda w: (
+                _write_config_key("display.thinking_mode", w),
+                _write_config_key(
+                    "display.details_mode", "expanded" if w == "full" else "collapsed"
+                ),
+            ),
+        ),
         # 'light'/'dark' pin beats background auto-detection (xterm.js hosts misreport OSC 11).
-        "theme": (_word, {"auto", "light", "dark"}, "unknown theme value: {value} (use auto|light|dark)",
-                  lambda w: _write_config_key("display.tui_theme", w)),
+        "theme": (
+            _word,
+            {"auto", "light", "dark"},
+            "unknown theme value: {value} (use auto|light|dark)",
+            lambda w: _write_config_key("display.tui_theme", w),
+        ),
         # _raw_word: 0/False/[] keep their text so the error names what was sent.
-        "indicator": (_raw_word, INDICATOR_STYLES, "unknown indicator: {raw!r}; pick one of " + "|".join(INDICATOR_STYLES),
-                      lambda w: _write_config_key("display.tui_status_indicator", w)),
+        "indicator": (
+            _raw_word,
+            INDICATOR_STYLES,
+            "unknown indicator: {raw!r}; pick one of " + "|".join(INDICATOR_STYLES),
+            lambda w: _write_config_key("display.tui_status_indicator", w),
+        ),
         # Which engine the desktop voice button mounts; applies to the NEXT conversation.
-        "voice.voice_chat_mode": (_word, {"chained", "gpt-live"}, "unknown voice chat mode: {value}; pick chained|gpt-live",
-                                  lambda w: _write_config_key("voice.voice_chat_mode", w))}
+        "voice.voice_chat_mode": (
+            _word,
+            {"chained", "gpt-live"},
+            "unknown voice chat mode: {value}; pick chained|gpt-live",
+            lambda w: _write_config_key("voice.voice_chat_mode", w),
+        ),
+    }
 
 
 def _set_word(rid, params, key, value, session):
@@ -394,7 +586,9 @@ def _set_details_section(rid, params, key, value, session):
     nv = _word(value)
     if nv and nv not in _DETAIL_MODES:
         return _err(rid, 4002, f"unknown details_mode: {value}")
-    _write_display_sections(sections={section: nv} if nv else None, drop_sections=() if nv else (section,))
+    _write_display_sections(
+        sections={section: nv} if nv else None, drop_sections=() if nv else (section,)
+    )
     return _kv(rid, key, nv)
 
 
@@ -402,24 +596,64 @@ def _toggle_setters() -> dict:
     """key -> (normaliser, cfg key, alias word -> value, flipped(current), report). ``""``/``toggle``
     flips the current value; an alias word maps directly; anything else is 4002. Built per call:
     the specs reference server.py globals (rebound at install)."""
+
     def on_off(v):
         return "on" if v else "off"
+
     return {
         # density/battery are on/off/toggle booleans on display.<field>.
-        "density": (_word, "display.tui_compact", {"on": True, "off": False},
-                    lambda: not bool(_display_cfg().get("tui_compact", False)), on_off),
-        "battery": (_word, "display.battery",
-                    {"on": True, "true": True, "yes": True, "off": False, "false": False, "no": False},
-                    lambda: not bool(_display_cfg().get("battery", False)), on_off),
+        "density": (
+            _word,
+            "display.tui_compact",
+            {"on": True, "off": False},
+            lambda: not bool(_display_cfg().get("tui_compact", False)),
+            on_off,
+        ),
+        "battery": (
+            _word,
+            "display.battery",
+            {
+                "on": True,
+                "true": True,
+                "yes": True,
+                "off": False,
+                "false": False,
+                "no": False,
+            },
+            lambda: not bool(_display_cfg().get("battery", False)),
+            on_off,
+        ),
         # Ink's /timestamps: the classic CLI's display.timestamps (the shared owner's setter too).
-        "timestamps": (_word, "display.timestamps", _BOOL_WORDS,
-                       lambda: not bool(_display_cfg().get("timestamps", False)), on_off),
-        "statusbar": (_word, "display.tui_statusbar", {"on": "top", **{m: m for m in _STATUSBAR_MODES}},
-                      lambda: "top" if _coerce_statusbar(_display_cfg().get("tui_statusbar", "top")) == "off" else "off",
-                      lambda v: v),
+        "timestamps": (
+            _word,
+            "display.timestamps",
+            _BOOL_WORDS,
+            lambda: not bool(_display_cfg().get("timestamps", False)),
+            on_off,
+        ),
+        "statusbar": (
+            _word,
+            "display.tui_statusbar",
+            {"on": "top", **{m: m for m in _STATUSBAR_MODES}},
+            lambda: (
+                "top"
+                if _coerce_statusbar(_display_cfg().get("tui_statusbar", "top"))
+                == "off"
+                else "off"
+            ),
+            lambda v: v,
+        ),
         # _raw_word: falsy non-strings (0, False) reach the alias map as themselves (-> 'off'), not toggle.
-        "mouse": (_raw_word, "display.mouse_tracking", _MOUSE_TRACKING_ALIASES,
-                  lambda: "all" if _display_mouse_tracking(_display_cfg()) == "off" else "off", lambda v: v)}
+        "mouse": (
+            _raw_word,
+            "display.mouse_tracking",
+            _MOUSE_TRACKING_ALIASES,
+            lambda: (
+                "all" if _display_mouse_tracking(_display_cfg()) == "off" else "off"
+            ),
+            lambda v: v,
+        ),
+    }
 
 
 def _set_toggle(rid, params, key, value, session):
@@ -463,10 +697,18 @@ def _set_personality(rid, params, key, value, session):
     pname, new_prompt = _validate_personality(str(value or ""), _load_cfg_raw())
     # Persists via clawk_cli.personality (single owner), never the user-owned system prompt.
     from clawk_cli.personality import persist_personality
+
     persist_personality(pname)
-    history_reset, info = _apply_personality_to_session(params.get("session_id", ""), session, new_prompt, pname)
-    return _kv(rid, key, str(value or "none"), history_reset=history_reset,
-               **({"info": info} if info is not None else {}))
+    history_reset, info = _apply_personality_to_session(
+        params.get("session_id", ""), session, new_prompt, pname
+    )
+    return _kv(
+        rid,
+        key,
+        str(value or "none"),
+        history_reset=history_reset,
+        **({"info": info} if info is not None else {}),
+    )
 
 
 @_cfgset_guarded
@@ -489,13 +731,32 @@ def _set_display_toggle(rid, params, key, value, session):
 # ── dispatch
 
 _CONFIG_SETTERS = {
-    "model": _set_model, "fast": _set_fast, "busy": _set_busy, "verbose": _set_verbose, "focus": _set_focus,
-    "approval_mode": _set_approval_mode, "approvals.mode": _set_word, "yolo": _set_yolo,
-    "reasoning": _set_reasoning, "details_mode": _set_word, "thinking_mode": _set_word,
-    "density": _set_toggle, "battery": _set_toggle, "timestamps": _set_toggle, "theme": _set_word,
-    "statusbar": _set_toggle, "mouse": _set_toggle, "indicator": _set_word, "voice.voice_chat_mode": _set_word,
-    "cwd": _set_cwd, "terminal.cwd": _set_cwd, "workdir": _set_cwd,
-    "prompt": _set_prompt, "personality": _set_personality, "skin": _set_skin}
+    "model": _set_model,
+    "fast": _set_fast,
+    "busy": _set_busy,
+    "verbose": _set_verbose,
+    "focus": _set_focus,
+    "approval_mode": _set_approval_mode,
+    "approvals.mode": _set_word,
+    "yolo": _set_yolo,
+    "reasoning": _set_reasoning,
+    "details_mode": _set_word,
+    "thinking_mode": _set_word,
+    "density": _set_toggle,
+    "battery": _set_toggle,
+    "timestamps": _set_toggle,
+    "theme": _set_word,
+    "statusbar": _set_toggle,
+    "mouse": _set_toggle,
+    "indicator": _set_word,
+    "voice.voice_chat_mode": _set_word,
+    "cwd": _set_cwd,
+    "terminal.cwd": _set_cwd,
+    "workdir": _set_cwd,
+    "prompt": _set_prompt,
+    "personality": _set_personality,
+    "skin": _set_skin,
+}
 
 # Keys whose sessionless branch writes a different, wider scope than the session branch (config.yaml's
 # agent.* for every surface, the process env every later child inherits). A non-empty session_id this
@@ -509,8 +770,12 @@ _SESSION_SCOPED_KEYS = frozenset({"model", "fast", "yolo", "reasoning"})
 def _(rid, params: dict) -> dict:
     key, value = params.get("key", ""), params.get("value", "")
     session = _sessions.get(params.get("session_id", ""))
-    if session is None and params.get("session_id") and key in _SESSION_SCOPED_KEYS \
-            and _word(params.get("scope")) != "global":
+    if (
+        session is None
+        and params.get("session_id")
+        and key in _SESSION_SCOPED_KEYS
+        and _word(params.get("scope")) != "global"
+    ):
         return _sess_nowait(params, rid)[1]
     handler = _CONFIG_SETTERS.get(key)
     if handler is None and key.startswith("details_mode."):

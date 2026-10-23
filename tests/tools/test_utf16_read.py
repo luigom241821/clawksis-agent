@@ -50,7 +50,9 @@ class TestUtf16Read:
         assert "UTF-16-BE" in (result.hint or "")
 
     def test_utf16le_bomless(self, fops, tmp_path):
-        path = _write(tmp_path, "bomless.txt", "plain ascii saved as utf16\n", "utf-16-le")
+        path = _write(
+            tmp_path, "bomless.txt", "plain ascii saved as utf16\n", "utf-16-le"
+        )
         result = fops.read_file(path)
         assert result.error is None
         assert "plain ascii saved as utf16" in result.content

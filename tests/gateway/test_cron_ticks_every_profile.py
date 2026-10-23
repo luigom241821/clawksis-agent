@@ -59,7 +59,8 @@ def test_secondary_profile_is_ticked_with_multiplex_profiles_off(
 
     monkeypatch.setattr(scheduler_thread, "SupervisedTickerThread", _CapturedTicker)
     monkeypatch.setattr(
-        gateway_run, "_start_gateway_housekeeping", lambda *_a, **_kw: None)
+        gateway_run, "_start_gateway_housekeeping", lambda *_a, **_kw: None
+    )
 
     runner = types.SimpleNamespace(
         config=types.SimpleNamespace(multiplex_profiles=False),

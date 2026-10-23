@@ -2,6 +2,7 @@
 
 This module is stdlib-only until preparation runs inside the isolated child.
 """
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -16,57 +17,111 @@ import uuid
 
 
 _INSTALL_ENV = {
-    "CLAWK_INSTALL_ROOT", "CLAWK_PAYLOAD_ROOT", "CLAWK_PAYLOAD_TAG", "CLAWK_BUILD_COMMIT",
-    "CLAWK_SITE", "CLAWK_PYTHON", "CLAWK_NODE", "CLAWK_PROFILE", "CLAWK_REAL_HOME",
-    "CLAWK_DATA_DIR_SUFFIX", "CLAWK_BUNDLED_SKILLS", "CLAWK_OPTIONAL_SKILLS",
-    "CLAWK_BUNDLED_PLUGINS", "CLAWK_BUNDLED_LOCALES", "CLAWK_OPTIONAL_MCPS",
-    "PYTHONPATH", "PYTHONHOME", "PYTHONUSERBASE", "VIRTUAL_ENV", "CONDA_PREFIX",
+    "CLAWK_INSTALL_ROOT",
+    "CLAWK_PAYLOAD_ROOT",
+    "CLAWK_PAYLOAD_TAG",
+    "CLAWK_BUILD_COMMIT",
+    "CLAWK_SITE",
+    "CLAWK_PYTHON",
+    "CLAWK_NODE",
+    "CLAWK_PROFILE",
+    "CLAWK_REAL_HOME",
+    "CLAWK_DATA_DIR_SUFFIX",
+    "CLAWK_BUNDLED_SKILLS",
+    "CLAWK_OPTIONAL_SKILLS",
+    "CLAWK_BUNDLED_PLUGINS",
+    "CLAWK_BUNDLED_LOCALES",
+    "CLAWK_OPTIONAL_MCPS",
+    "PYTHONPATH",
+    "PYTHONHOME",
+    "PYTHONUSERBASE",
+    "VIRTUAL_ENV",
+    "CONDA_PREFIX",
 }
 
 
-def bootstrap_environment(source: Path, work: Path, cache: Path,
-                          env: Mapping[str, str]) -> dict[str, str]:
+def bootstrap_environment(
+    source: Path, work: Path, cache: Path, env: Mapping[str, str]
+) -> dict[str, str]:
     """Return launch state; never import PM, mutate the process, or write files."""
     source, work, cache = source.resolve(), work.resolve(), cache.resolve()
-    owned = {"HOME", "USERPROFILE", "LOCALAPPDATA", "APPDATA", "CLAWK_HOME", "CLAWK_RUNTIME_DIR",
-             "CLAWK_PYTHON_SRC_ROOT", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME",
-             "UV_CACHE_DIR", "NPM_CONFIG_CACHE", "NPM_EXECPATH", "NPM_NODE_EXECPATH",
-             "NPM_CONFIG_USERCONFIG", "NPM_CONFIG_GLOBALCONFIG", "NPM_CONFIG_PREFIX",
-             "PYTHONUTF8", "PYTHONDONTWRITEBYTECODE", "CARGO_HOME", "RUSTUP_HOME", "CARGO_TARGET_DIR"}
-    result = {key: value for key, value in env.items() if key.upper() not in _INSTALL_ENV | owned}
+    owned = {
+        "HOME",
+        "USERPROFILE",
+        "LOCALAPPDATA",
+        "APPDATA",
+        "CLAWK_HOME",
+        "CLAWK_RUNTIME_DIR",
+        "CLAWK_PYTHON_SRC_ROOT",
+        "XDG_CONFIG_HOME",
+        "XDG_CACHE_HOME",
+        "XDG_DATA_HOME",
+        "XDG_STATE_HOME",
+        "UV_CACHE_DIR",
+        "NPM_CONFIG_CACHE",
+        "NPM_EXECPATH",
+        "NPM_NODE_EXECPATH",
+        "NPM_CONFIG_USERCONFIG",
+        "NPM_CONFIG_GLOBALCONFIG",
+        "NPM_CONFIG_PREFIX",
+        "PYTHONUTF8",
+        "PYTHONDONTWRITEBYTECODE",
+        "CARGO_HOME",
+        "RUSTUP_HOME",
+        "CARGO_TARGET_DIR",
+    }
+    result = {
+        key: value
+        for key, value in env.items()
+        if key.upper() not in _INSTALL_ENV | owned
+    }
     canonical = {key.upper(): value for key, value in env.items()}
     # Rustup must still find the runner's installed toolchain after HOME moves.
     home_key = "USERPROFILE" if os.name == "nt" else "HOME"
-    original_home = Path(canonical.get("CLAWK_REAL_HOME") or canonical.get(home_key) or Path.home())
+    original_home = Path(
+        canonical.get("CLAWK_REAL_HOME") or canonical.get(home_key) or Path.home()
+    )
     for key, directory in (("CARGO_HOME", ".cargo"), ("RUSTUP_HOME", ".rustup")):
         result[key] = canonical.get(key) or str(original_home / directory)
     home = work / "home"
-    result.update({
-        "HOME": str(home), "USERPROFILE": str(home),
-        "LOCALAPPDATA": str(home / "AppData/Local"),
-        "APPDATA": str(home / "AppData/Roaming"),
-        "CLAWK_HOME": str(work / "clawk-home"),
-        "CLAWK_RUNTIME_DIR": str(cache / "tools"),
-        "CLAWK_PYTHON_SRC_ROOT": str(source),
-        "XDG_CONFIG_HOME": str(home / "config"), "XDG_CACHE_HOME": str(home / "cache"),
-        "XDG_DATA_HOME": str(home / "data"), "XDG_STATE_HOME": str(home / "state"),
-        "UV_CACHE_DIR": str(cache / "python/runtime"),
-        # Rust sdists (obstore via maturin) otherwise compile into target/ inside uv's
-        # nested sdist cache entry; on Windows that pushes build-script paths past
-        # MAX_PATH and link.exe fails with LNK1104. A job-local root keeps them short.
-        "CARGO_TARGET_DIR": str(work / "cargo"),
-        # vcpkg's default binary cache is under LOCALAPPDATA, which moved into the
-        # job-local home above; keep its archives in the transported native domain.
-        "VCPKG_DEFAULT_BINARY_CACHE": str(cache / "native/vcpkg-archives"),
-        "npm_config_cache": str(cache / "npm"),
-        "npm_config_userconfig": os.devnull,
-        "PYTHONUTF8": "1", "PYTHONDONTWRITEBYTECODE": "1",
-    })
+    result.update(
+        {
+            "HOME": str(home),
+            "USERPROFILE": str(home),
+            "LOCALAPPDATA": str(home / "AppData/Local"),
+            "APPDATA": str(home / "AppData/Roaming"),
+            "CLAWK_HOME": str(work / "clawk-home"),
+            "CLAWK_RUNTIME_DIR": str(cache / "tools"),
+            "CLAWK_PYTHON_SRC_ROOT": str(source),
+            "XDG_CONFIG_HOME": str(home / "config"),
+            "XDG_CACHE_HOME": str(home / "cache"),
+            "XDG_DATA_HOME": str(home / "data"),
+            "XDG_STATE_HOME": str(home / "state"),
+            "UV_CACHE_DIR": str(cache / "python/runtime"),
+            # Rust sdists (obstore via maturin) otherwise compile into target/ inside uv's
+            # nested sdist cache entry; on Windows that pushes build-script paths past
+            # MAX_PATH and link.exe fails with LNK1104. A job-local root keeps them short.
+            "CARGO_TARGET_DIR": str(work / "cargo"),
+            # vcpkg's default binary cache is under LOCALAPPDATA, which moved into the
+            # job-local home above; keep its archives in the transported native domain.
+            "VCPKG_DEFAULT_BINARY_CACHE": str(cache / "native/vcpkg-archives"),
+            "npm_config_cache": str(cache / "npm"),
+            "npm_config_userconfig": os.devnull,
+            "PYTHONUTF8": "1",
+            "PYTHONDONTWRITEBYTECODE": "1",
+        }
+    )
     return result
 
 
-def run_preparation(source: Path, work: Path, cache: Path, request_file: Path,
-                    *, worker: Path | None = None) -> int:
+def run_preparation(
+    source: Path,
+    work: Path,
+    cache: Path,
+    request_file: Path,
+    *,
+    worker: Path | None = None,
+) -> int:
     """Bootstrap PM after process isolation, then run the preparation worker.
 
     The request contains paths/selection only; credentials stay in the inherited
@@ -85,16 +140,29 @@ def run_preparation(source: Path, work: Path, cache: Path, request_file: Path,
         "sys.exit(subprocess.run(command, stdin=subprocess.DEVNULL).returncode)"
     )
     return subprocess.run(
-        [sys.executable, "-I", "-S", "-B", "-c", launcher,
-         str(source), str(cache), str(request_file.resolve()), str(Path(__file__).resolve()),
-         str(worker or source / "scripts/bundles/desktop_prepare.py")],
-        cwd=source, env=environment, stdin=subprocess.DEVNULL,
+        [
+            sys.executable,
+            "-I",
+            "-S",
+            "-B",
+            "-c",
+            launcher,
+            str(source),
+            str(cache),
+            str(request_file.resolve()),
+            str(Path(__file__).resolve()),
+            str(worker or source / "scripts/bundles/desktop_prepare.py"),
+        ],
+        cwd=source,
+        env=environment,
+        stdin=subprocess.DEVNULL,
         check=False,
     ).returncode
 
 
-def prepare_tools(source: Path, work: Path, cache: Path,
-                  env: Mapping[str, str]) -> tuple[Path, Path, dict[str, str]]:
+def prepare_tools(
+    source: Path, work: Path, cache: Path, env: Mapping[str, str]
+) -> tuple[Path, Path, dict[str, str]]:
     """Run only in the bootstrapped worker; return native Python, Node and env.
 
     PM owns pin selection and verification. The caller passes the resulting env
@@ -110,7 +178,9 @@ def prepare_tools(source: Path, work: Path, cache: Path,
     if pm.current_target() == "win32-arm64":
         from pm.native_build import prepare_windows_environment
 
-        prepared = prepare_windows_environment(source=source, state=cache / "native/prerequisites", env=prepared)
+        prepared = prepare_windows_environment(
+            source=source, state=cache / "native/prerequisites", env=prepared
+        )
     if pm.current_target().startswith("darwin"):
         # python-build-standalone's sysconfig names its absent build-host tools.
         prepared.setdefault("AR", "/usr/bin/ar")
@@ -120,15 +190,24 @@ def prepare_tools(source: Path, work: Path, cache: Path,
     binaries = {}
     for name in ("python", "node"):
         installed = pm.installed_package(name)
-        if installed is None or installed.binary is None or not installed.binary.is_file():
+        if (
+            installed is None
+            or installed.binary is None
+            or not installed.binary.is_file()
+        ):
             raise FileNotFoundError(f"PM did not prepare a native {name} executable")
         binaries[name] = installed.binary
     prepared = pm.env_for("python", "npm", base_env=prepared)
     uv_cache = native_cache_path(cache, prepared)
     if os.name == "nt":
         uv_cache = short_alias(uv_cache, work / "uv")
-    prepared.update({"CLAWK_PYTHON": str(binaries["python"]), "CLAWK_NODE": str(binaries["node"]),
-                     "UV_CACHE_DIR": str(uv_cache)})
+    prepared.update(
+        {
+            "CLAWK_PYTHON": str(binaries["python"]),
+            "CLAWK_NODE": str(binaries["node"]),
+            "UV_CACHE_DIR": str(uv_cache),
+        }
+    )
     return binaries["python"], binaries["node"], prepared
 
 
@@ -159,24 +238,61 @@ def _msvc_identity() -> dict[str, str] | None:
 
     vswhere = locate_command("vswhere.exe", known_dirs=visual_studio_installer_dirs())
     if not vswhere.found:
-        print("warning: MSVC cache identity unavailable: vswhere.exe was not found", file=sys.stderr, flush=True)
+        print(
+            "warning: MSVC cache identity unavailable: vswhere.exe was not found",
+            file=sys.stderr,
+            flush=True,
+        )
         return None
     try:
-        result = subprocess.run([*vswhere.command, "-latest", "-products", "*", "-requires",
-                                 "Microsoft.VisualStudio.Component.VC.Tools.x86.x64", "-format", "json"],
-                                capture_output=True, text=True, encoding="utf-8", errors="replace",
-                                timeout=30, stdin=subprocess.DEVNULL, check=False)
+        result = subprocess.run(
+            [
+                *vswhere.command,
+                "-latest",
+                "-products",
+                "*",
+                "-requires",
+                "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+                "-format",
+                "json",
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+            stdin=subprocess.DEVNULL,
+            check=False,
+        )
         instances = json.loads(result.stdout or "[]")
         if not instances:
-            print("warning: MSVC cache identity unavailable: vswhere found no matching installations",
-                  file=sys.stderr, flush=True)
+            print(
+                "warning: MSVC cache identity unavailable: vswhere found no matching installations",
+                file=sys.stderr,
+                flush=True,
+            )
             return None
         instance = instances[0]
-        tools = Path(instance["installationPath"], "VC/Auxiliary/Build/Microsoft.VCToolsVersion.default.txt")
-        return {"installationVersion": instance["installationVersion"],
-                "VCToolsVersion": tools.read_text(encoding="utf-8-sig").strip()}
-    except (OSError, subprocess.TimeoutExpired, ValueError, IndexError, KeyError) as error:
-        print(f"warning: MSVC cache identity unavailable: {error}", file=sys.stderr, flush=True)
+        tools = Path(
+            instance["installationPath"],
+            "VC/Auxiliary/Build/Microsoft.VCToolsVersion.default.txt",
+        )
+        return {
+            "installationVersion": instance["installationVersion"],
+            "VCToolsVersion": tools.read_text(encoding="utf-8-sig").strip(),
+        }
+    except (
+        OSError,
+        subprocess.TimeoutExpired,
+        ValueError,
+        IndexError,
+        KeyError,
+    ) as error:
+        print(
+            f"warning: MSVC cache identity unavailable: {error}",
+            file=sys.stderr,
+            flush=True,
+        )
         return None
 
 
@@ -189,13 +305,40 @@ def native_cache_path(cache: Path, env: Mapping[str, str]) -> Path:
     from pm.store import current_target
 
     target = current_target()
-    keys = {"CC", "CXX", "AR", "CFLAGS", "CXXFLAGS", "LDFLAGS", "RUSTFLAGS", "RUSTUP_TOOLCHAIN",
-            "SDKROOT", "MACOSX_DEPLOYMENT_TARGET", "WindowsSDKVersion", "VCToolsVersion",
-            "WindowsSdkDir", "INCLUDE", "LIB", "LIBPATH", "OPENSSL_DIR", "OPENSSL_LIB_DIR",
-            "OPENSSL_INCLUDE_DIR", "OPENSSL_STATIC"}
-    selected = {key: value for key, value in env.items() if key in keys or key.startswith("CC_")}
-    identity = {"recipe": 1, "target": target, "host": platform.platform(),
-                "libc": platform.libc_ver(), "inputs": selected, "probes": [], "openssl": {}}
+    keys = {
+        "CC",
+        "CXX",
+        "AR",
+        "CFLAGS",
+        "CXXFLAGS",
+        "LDFLAGS",
+        "RUSTFLAGS",
+        "RUSTUP_TOOLCHAIN",
+        "SDKROOT",
+        "MACOSX_DEPLOYMENT_TARGET",
+        "WindowsSDKVersion",
+        "VCToolsVersion",
+        "WindowsSdkDir",
+        "INCLUDE",
+        "LIB",
+        "LIBPATH",
+        "OPENSSL_DIR",
+        "OPENSSL_LIB_DIR",
+        "OPENSSL_INCLUDE_DIR",
+        "OPENSSL_STATIC",
+    }
+    selected = {
+        key: value for key, value in env.items() if key in keys or key.startswith("CC_")
+    }
+    identity = {
+        "recipe": 1,
+        "target": target,
+        "host": platform.platform(),
+        "libc": platform.libc_ver(),
+        "inputs": selected,
+        "probes": [],
+        "openssl": {},
+    }
     commands = [["rustc", "-vV"]]
     if target.startswith("win32"):
         if env.get("VCToolsVersion"):
@@ -208,34 +351,68 @@ def native_cache_path(cache: Path, env: Mapping[str, str]) -> Path:
             identity["msvc"] = msvc
             complete = msvc is not None
     else:
-        commands.extend([[env.get("CC") or "cc", "--version"], [env.get("CXX") or "c++", "--version"]])
+        commands.extend(
+            [
+                [env.get("CC") or "cc", "--version"],
+                [env.get("CXX") or "c++", "--version"],
+            ]
+        )
         complete = True
-    commands.extend([[value, "--version"] for key, value in selected.items() if key.startswith("CC_")])
+    commands.extend(
+        [
+            [value, "--version"]
+            for key, value in selected.items()
+            if key.startswith("CC_")
+        ]
+    )
     if target.startswith("darwin"):
-        commands.extend([["xcrun", "--show-sdk-path"], ["xcrun", "--show-sdk-build-version"]])
+        commands.extend(
+            [["xcrun", "--show-sdk-path"], ["xcrun", "--show-sdk-build-version"]]
+        )
     openssl = env.get("OPENSSL_DIR")
     if openssl or env.get("OPENSSL_LIB_DIR") or env.get("OPENSSL_INCLUDE_DIR"):
-        roots = {"include": Path(env["OPENSSL_INCLUDE_DIR"]) if env.get("OPENSSL_INCLUDE_DIR")
-                 else Path(openssl or "") / "include",
-                 "lib": Path(env["OPENSSL_LIB_DIR"]) if env.get("OPENSSL_LIB_DIR")
-                 else Path(openssl or "") / "lib"}
+        roots = {
+            "include": Path(env["OPENSSL_INCLUDE_DIR"])
+            if env.get("OPENSSL_INCLUDE_DIR")
+            else Path(openssl or "") / "include",
+            "lib": Path(env["OPENSSL_LIB_DIR"])
+            if env.get("OPENSSL_LIB_DIR")
+            else Path(openssl or "") / "lib",
+        }
         for kind, root in roots.items():
-            files = sorted(path for path in root.rglob("*") if path.is_file()) if root.is_dir() else []
+            files = (
+                sorted(path for path in root.rglob("*") if path.is_file())
+                if root.is_dir()
+                else []
+            )
             complete = complete and bool(files)
             for path in files:
                 with path.open("rb") as stream:
-                    identity["openssl"][f"{kind}/{path.relative_to(root).as_posix()}"] = hashlib.file_digest(stream, "sha256").hexdigest()
+                    identity["openssl"][
+                        f"{kind}/{path.relative_to(root).as_posix()}"
+                    ] = hashlib.file_digest(stream, "sha256").hexdigest()
     else:
         commands.append(["openssl", "version", "-a"])
         if target == "win32-arm64":
             complete = False  # The provider must identify the linked static libraries.
     for command in commands:
         try:
-            result = subprocess.run(command, env=dict(env), capture_output=True, text=True, encoding="utf-8",
-                                    errors="replace", timeout=30, stdin=subprocess.DEVNULL, check=False)
+            result = subprocess.run(
+                command,
+                env=dict(env),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=30,
+                stdin=subprocess.DEVNULL,
+                check=False,
+            )
             output = result.stdout + result.stderr
             # cl /Bv reports its identity and exits 2 when no source is supplied.
-            valid = result.returncode in ((0, 2) if command == ["cl", "/Bv"] else (0,)) and bool(output.strip())
+            valid = result.returncode in (
+                (0, 2) if command == ["cl", "/Bv"] else (0,)
+            ) and bool(output.strip())
             identity["probes"].append([command, output])
             complete = complete and valid
         except (OSError, subprocess.TimeoutExpired):
@@ -247,7 +424,11 @@ def native_cache_path(cache: Path, env: Mapping[str, str]) -> Path:
     encoded = encoded.replace(json.dumps(owned)[1:-1], "<build-cache>")
     # uv builds sdists below this root. Keep the partition compact so compiler
     # outputs fit Windows MAX_PATH; the target is already part of the identity.
-    digest = hashlib.sha256(encoded.encode()).hexdigest()[:32] if complete else uuid.uuid4().hex
+    digest = (
+        hashlib.sha256(encoded.encode()).hexdigest()[:32]
+        if complete
+        else uuid.uuid4().hex
+    )
     return cache.resolve() / "python/runtime" / digest
 
 

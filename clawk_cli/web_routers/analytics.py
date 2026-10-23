@@ -16,15 +16,24 @@ from clawk_cli.config import get_config_path, read_raw_config
 from clawk_cli.web_deps import late
 from clawk_cli.web_routers._common import corrupt_store_as_status
 from clawk_cli.web_server_profiles import (
-    _approval_mode_of, _aux_task_summary, _aux_usage_rows, _broadcast_gateway_session_info, _is_other_profile, _merge_aux_into_by_model,
+    _approval_mode_of,
+    _aux_task_summary,
+    _aux_usage_rows,
+    _broadcast_gateway_session_info,
+    _is_other_profile,
+    _merge_aux_into_by_model,
 )
 from clawk_cli.web_models import RawConfigUpdate
 
 router = APIRouter()
 
 # Late-bound so a test's monkeypatch on the owning module wins at call time.
-_open_session_db_for_profile = late("_open_session_db_for_profile", "clawk_cli.web_server_sessions")
-_session_db_path_for_profile = late("_session_db_path_for_profile", "clawk_cli.web_server_sessions")
+_open_session_db_for_profile = late(
+    "_open_session_db_for_profile", "clawk_cli.web_server_sessions"
+)
+_session_db_path_for_profile = late(
+    "_session_db_path_for_profile", "clawk_cli.web_server_sessions"
+)
 _profile_scope = late("_profile_scope", "clawk_cli.web_server_profiles")
 save_config = late("save_config", "clawk_cli.config")
 
@@ -40,6 +49,7 @@ async def get_config_raw(profile: Optional[str] = None):
     ``config_path`` is machine-global and always reports the dashboard
     process's own profile, which is wrong under the global profile switcher.
     """
+
     def _run():
         with _profile_scope(profile):
             path = get_config_path()
@@ -60,7 +70,9 @@ async def update_config_raw(body: RawConfigUpdate, profile: Optional[str] = None
             # Full-document replacement: the editor owns the whole file; never
             # merge omitted sections back from disk.
             # See #62723.
-            approvals_mode_changed = _approval_mode_of(parsed) != _approval_mode_of(read_raw_config())
+            approvals_mode_changed = _approval_mode_of(parsed) != _approval_mode_of(
+                read_raw_config()
+            )
             save_config(parsed, merge_existing=False)
         # Same indicator refresh as the schema-driven save.
         if approvals_mode_changed and not _is_other_profile(body.profile or profile):
@@ -84,7 +96,9 @@ def _get_usage_analytics(days: int = 30, profile: Optional[str] = None):
     try:
         cutoff = time.time() - (days * 86400)
         # Local calendar day, per-row (DST-correct), the same day /insights uses (agent/insights.py).
-        daily = _rows(db, """
+        daily = _rows(
+            db,
+            """
             SELECT date(started_at, 'unixepoch', 'localtime') as day,
                    SUM(input_tokens) as input_tokens,
                    SUM(output_tokens) as output_tokens,
@@ -96,9 +110,13 @@ def _get_usage_analytics(days: int = 30, profile: Optional[str] = None):
                    SUM(COALESCE(api_call_count, 0)) as api_calls
             FROM sessions WHERE started_at > ?
             GROUP BY day ORDER BY day
-        """, cutoff)
+        """,
+            cutoff,
+        )
 
-        by_model = _rows(db, """
+        by_model = _rows(
+            db,
+            """
             SELECT model,
                    SUM(input_tokens) as input_tokens,
                    SUM(output_tokens) as output_tokens,
@@ -107,7 +125,9 @@ def _get_usage_analytics(days: int = 30, profile: Optional[str] = None):
                    SUM(COALESCE(api_call_count, 0)) as api_calls
             FROM sessions WHERE started_at > ? AND model IS NOT NULL
             GROUP BY model ORDER BY SUM(input_tokens) + SUM(output_tokens) DESC
-        """, cutoff)
+        """,
+            cutoff,
+        )
 
         # Fold in auxiliary usage (vision, compression, ...) from session_model_usage.
         # Aux calls never touch the sessions counters, so this is add-only — no double count.
@@ -116,7 +136,9 @@ def _get_usage_analytics(days: int = 30, profile: Optional[str] = None):
         aux_rows = _aux_usage_rows(db, cutoff)
         by_model = _merge_aux_into_by_model(by_model, aux_rows)
 
-        totals = _rows(db, """
+        totals = _rows(
+            db,
+            """
             SELECT SUM(input_tokens) as total_input,
                    SUM(output_tokens) as total_output,
                    SUM(cache_read_tokens) as total_cache_read,
@@ -126,7 +148,9 @@ def _get_usage_analytics(days: int = 30, profile: Optional[str] = None):
                    COUNT(*) as total_sessions,
                    SUM(COALESCE(api_call_count, 0)) as total_api_calls
             FROM sessions WHERE started_at > ?
-        """, cutoff)[0]
+        """,
+            cutoff,
+        )[0]
         usage = InsightsEngine(db).get_usage_breakdown(days=days)
 
         return {
@@ -136,7 +160,9 @@ def _get_usage_analytics(days: int = 30, profile: Optional[str] = None):
             "totals": totals,
             "period_days": days,
             "skills": usage["skills"],
-            "tools": usage["tools"],  # per-tool-name counts; desktop aggregates per toolset
+            "tools": usage[
+                "tools"
+            ],  # per-tool-name counts; desktop aggregates per toolset
         }
     finally:
         db.close()
@@ -156,8 +182,14 @@ async def get_usage_analytics(
 
 
 _USAGE_KEYS = (
-    "input_tokens", "output_tokens", "cache_read_tokens", "reasoning_tokens",
-    "estimated_cost", "actual_cost", "api_calls", "tool_calls",
+    "input_tokens",
+    "output_tokens",
+    "cache_read_tokens",
+    "reasoning_tokens",
+    "estimated_cost",
+    "actual_cost",
+    "api_calls",
+    "tool_calls",
 )
 
 
@@ -188,14 +220,23 @@ def _fold_session_only_rows(raw_rows: list[dict[str, Any]]) -> list[dict[str, An
         for row in model_rows:
             if row is target or row.get("billing_provider") or _has_usage(row):
                 continue
-            target["sessions"] = (target.get("sessions") or 0) + (row.get("sessions") or 0)
-            target["last_used_at"] = max(target.get("last_used_at") or 0, row.get("last_used_at") or 0)
-            total_tokens = (target.get("input_tokens") or 0) + (target.get("output_tokens") or 0)
+            target["sessions"] = (target.get("sessions") or 0) + (
+                row.get("sessions") or 0
+            )
+            target["last_used_at"] = max(
+                target.get("last_used_at") or 0, row.get("last_used_at") or 0
+            )
+            total_tokens = (target.get("input_tokens") or 0) + (
+                target.get("output_tokens") or 0
+            )
             sessions = target.get("sessions") or 0
-            target["avg_tokens_per_session"] = total_tokens / sessions if sessions else 0
+            target["avg_tokens_per_session"] = (
+                total_tokens / sessions if sessions else 0
+            )
         rows.append(target)
         rows.extend(
-            r for r in model_rows
+            r
+            for r in model_rows
             if r is not target and (r.get("billing_provider") or _has_usage(r))
         )
     return rows
@@ -205,6 +246,7 @@ def _model_capabilities(provider: str, model_name: str) -> dict:
     """models.dev capability metadata for the card; {} when unknown or lookup fails."""
     try:
         from agent.models_dev import get_model_capabilities
+
         mc = get_model_capabilities(provider=provider, model=model_name)
     except Exception:
         return {}
@@ -221,11 +263,18 @@ def _model_capabilities(provider: str, model_name: str) -> dict:
 
 
 _AUX_SUMMED_KEYS = (
-    "input_tokens", "output_tokens", "cache_read_tokens", "reasoning_tokens", "estimated_cost", "api_calls",
+    "input_tokens",
+    "output_tokens",
+    "cache_read_tokens",
+    "reasoning_tokens",
+    "estimated_cost",
+    "api_calls",
 )
 
 
-def _merge_aux_into_rows(raw_rows: list[dict[str, Any]], aux_rows: list[dict[str, Any]]) -> None:
+def _merge_aux_into_rows(
+    raw_rows: list[dict[str, Any]], aux_rows: list[dict[str, Any]]
+) -> None:
     """Add auxiliary usage onto the matching (model, billing_provider) row in place.
 
     Aux calls happen inside sessions the sessions-derived row already counted, so
@@ -255,7 +304,9 @@ def _merge_aux_into_rows(raw_rows: list[dict[str, Any]], aux_rows: list[dict[str
         for k in _AUX_SUMMED_KEYS:
             target[k] = (target.get(k) or 0) + (aux.get(k) or 0)
         if aux.get("last_used_at") is not None:
-            target["last_used_at"] = max(target.get("last_used_at") or 0, aux["last_used_at"])
+            target["last_used_at"] = max(
+                target.get("last_used_at") or 0, aux["last_used_at"]
+            )
         sessions = target.get("sessions") or 0
         if sessions:
             target["avg_tokens_per_session"] = (
@@ -264,9 +315,17 @@ def _merge_aux_into_rows(raw_rows: list[dict[str, Any]], aux_rows: list[dict[str
 
 
 _MODEL_CARD_KEYS = (
-    "input_tokens", "output_tokens", "cache_read_tokens", "reasoning_tokens",
-    "estimated_cost", "actual_cost", "sessions", "api_calls", "tool_calls",
-    "last_used_at", "avg_tokens_per_session",
+    "input_tokens",
+    "output_tokens",
+    "cache_read_tokens",
+    "reasoning_tokens",
+    "estimated_cost",
+    "actual_cost",
+    "sessions",
+    "api_calls",
+    "tool_calls",
+    "last_used_at",
+    "avg_tokens_per_session",
 )
 
 
@@ -280,13 +339,18 @@ def _attach_tool_calls(db, cutoff: float, raw_rows: list[dict[str, Any]]) -> Non
     back to any card of that model when the pair has no per-call row (route
     switched after the last call). Never zeroes the metric (#71778).
     """
-    pair_rows = _rows(db, """
+    pair_rows = _rows(
+        db,
+        """
         SELECT model, billing_provider, SUM(COALESCE(tool_call_count, 0)) as tool_calls
         FROM sessions WHERE started_at > ? AND model IS NOT NULL AND model != ''
         GROUP BY model, billing_provider
-    """, cutoff)
+    """,
+        cutoff,
+    )
     by_pair = {
-        (r.get("model") or "", r.get("billing_provider") or ""): r.get("tool_calls") or 0
+        (r.get("model") or "", r.get("billing_provider") or ""): r.get("tool_calls")
+        or 0
         for r in pair_rows
     }
     index: dict[tuple, dict[str, Any]] = {}
@@ -325,7 +389,8 @@ def _get_models_analytics(days: int = 30, profile: Optional[str] = None):
         # grouping it attributed the whole session to it (#71778). Insights
         # (_compute_model_breakdown) reads the same table.
         try:
-            cur = db._conn.execute("""
+            cur = db._conn.execute(
+                """
                 SELECT u.model,
                        u.billing_provider,
                        SUM(u.input_tokens) as input_tokens,
@@ -344,14 +409,18 @@ def _get_models_analytics(days: int = 30, profile: Optional[str] = None):
                       AND u.task = ''
                 GROUP BY u.model, u.billing_provider
                 ORDER BY SUM(u.input_tokens) + SUM(u.output_tokens) DESC
-            """, (cutoff,))
+            """,
+                (cutoff,),
+            )
             raw_rows = [dict(r) for r in cur.fetchall()]
         except sqlite3.OperationalError:
             raw_rows = []  # pre-v17 DB without session_model_usage
         if not raw_rows:
             # No per-call rows in the window (pre-table DB): fall back to the
             # sessions aggregate, which for those sessions is the only source.
-            raw_rows = _rows(db, """
+            raw_rows = _rows(
+                db,
+                """
                 SELECT model,
                        billing_provider,
                        SUM(input_tokens) as input_tokens,
@@ -368,7 +437,9 @@ def _get_models_analytics(days: int = 30, profile: Optional[str] = None):
                 FROM sessions WHERE started_at > ? AND model IS NOT NULL AND model != ''
                 GROUP BY model, billing_provider
                 ORDER BY SUM(input_tokens) + SUM(output_tokens) DESC
-            """, cutoff)
+            """,
+                cutoff,
+            )
         else:
             _attach_tool_calls(db, cutoff, raw_rows)
 
@@ -389,21 +460,28 @@ def _get_models_analytics(days: int = 30, profile: Optional[str] = None):
         # Models the user hid from the Models page (sessions untouched; Clawksis):
         # ``dashboard.hidden_models`` entries are "provider|model" (or a bare model).
         hidden = _hidden_models()
-        rows = [r for r in rows
-                if f"{r.get('billing_provider') or ''}|{r['model']}" not in hidden
-                and r["model"] not in hidden]
+        rows = [
+            r
+            for r in rows
+            if f"{r.get('billing_provider') or ''}|{r['model']}" not in hidden
+            and r["model"] not in hidden
+        ]
 
         models = [
             {
                 "model": row["model"],
                 "provider": row.get("billing_provider") or "",
                 **{key: row[key] for key in _MODEL_CARD_KEYS},
-                "capabilities": _model_capabilities(row.get("billing_provider") or "", row["model"]),
+                "capabilities": _model_capabilities(
+                    row.get("billing_provider") or "", row["model"]
+                ),
             }
             for row in rows
         ]
 
-        totals = _rows(db, """
+        totals = _rows(
+            db,
+            """
             SELECT SUM(input_tokens) as total_input,
                    SUM(output_tokens) as total_output,
                    SUM(cache_read_tokens) as total_cache_read,
@@ -413,7 +491,9 @@ def _get_models_analytics(days: int = 30, profile: Optional[str] = None):
                    COUNT(*) as total_sessions,
                    SUM(COALESCE(api_call_count, 0)) as total_api_calls
             FROM sessions WHERE started_at > ? AND model IS NOT NULL AND model != ''
-        """, cutoff)[0]
+        """,
+            cutoff,
+        )[0]
         # Counted over the same merged row set the cards come from, so a model
         # reached only through auxiliary usage is in the header as well as on
         # the page (#89631).

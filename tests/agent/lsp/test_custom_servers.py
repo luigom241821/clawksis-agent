@@ -1,4 +1,5 @@
 """Config-declared LSP servers (``lsp.servers.<id>`` with ``extensions``) route files and spawn like built-ins."""
+
 from __future__ import annotations
 
 import json
@@ -10,22 +11,41 @@ from unittest.mock import patch
 import pytest
 
 from agent.lsp.manager import LSPService
-from agent.lsp.servers import SERVERS, ServerContext, custom_servers, find_server_for_file, language_id_for
+from agent.lsp.servers import (
+    SERVERS,
+    ServerContext,
+    custom_servers,
+    find_server_for_file,
+    language_id_for,
+)
 
 _MOCK = os.path.join(os.path.dirname(__file__), "_mock_lsp_server.py")
 
 
 def test_custom_server_precedes_builtins_and_carries_language_id():
     cfg = {
-        "pyright": {"disabled": True},  # override of a built-in id is NOT a custom server
-        "blade": {"command": [sys.executable, _MOCK], "extensions": [".PHP"], "language_id": "blade"},
-        "broken": {"command": "not-a-list", "extensions": [".zzz"]},  # malformed → skipped, not fatal
+        "pyright": {
+            "disabled": True
+        },  # override of a built-in id is NOT a custom server
+        "blade": {
+            "command": [sys.executable, _MOCK],
+            "extensions": [".PHP"],
+            "language_id": "blade",
+        },
+        "broken": {
+            "command": "not-a-list",
+            "extensions": [".zzz"],
+        },  # malformed → skipped, not fatal
     }
     custom = custom_servers(cfg)
     assert [s.server_id for s in custom] == ["blade"]
     registry = [*custom, *SERVERS]
-    assert find_server_for_file("/w/index.php", registry).server_id == "blade"  # custom wins over intelephense
-    assert find_server_for_file("/w/index.php").server_id == "intelephense"  # built-in registry untouched
+    assert (
+        find_server_for_file("/w/index.php", registry).server_id == "blade"
+    )  # custom wins over intelephense
+    assert (
+        find_server_for_file("/w/index.php").server_id == "intelephense"
+    )  # built-in registry untouched
     assert language_id_for("/w/index.php", custom[0]) == "blade"
     assert language_id_for("/w/index.php") == "php"
     spec = custom[0].build_spawn("/w", ServerContext("/w", install_strategy="manual"))
@@ -40,12 +60,26 @@ def test_service_gets_diagnostics_from_config_declared_server(tmp_path, monkeypa
 
     home = tmp_path / "home"
     home.mkdir()
-    (home / "config.yaml").write_text(json.dumps({"lsp": {
-        "install_strategy": "manual", "wait_timeout": 5.0, "idle_timeout": 0,
-        "trusted_workspaces": [str(tmp_path / "ws")],
-        "servers": {"panache": {"command": [sys.executable, _MOCK], "extensions": [".pnch"],
-                                "env": {"MOCK_LSP_SCRIPT": "errors"}}},
-    }}), encoding="utf-8")
+    (home / "config.yaml").write_text(
+        json.dumps(
+            {
+                "lsp": {
+                    "install_strategy": "manual",
+                    "wait_timeout": 5.0,
+                    "idle_timeout": 0,
+                    "trusted_workspaces": [str(tmp_path / "ws")],
+                    "servers": {
+                        "panache": {
+                            "command": [sys.executable, _MOCK],
+                            "extensions": [".pnch"],
+                            "env": {"MOCK_LSP_SCRIPT": "errors"},
+                        }
+                    },
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
     monkeypatch.setenv("CLAWK_HOME", str(home))
     ws = tmp_path / "ws"
     ws.mkdir()
@@ -66,6 +100,8 @@ def test_service_gets_diagnostics_from_config_declared_server(tmp_path, monkeypa
         with patch.object(fops, "_lsp_service", return_value=svc):
             assert fops._lsp_handles_extension(".pnch")
         with patch.object(fops, "_lsp_service", return_value=None):
-            assert not fops._lsp_handles_extension(".pnch") and fops._lsp_handles_extension(".rs")
+            assert not fops._lsp_handles_extension(
+                ".pnch"
+            ) and fops._lsp_handles_extension(".rs")
     finally:
         svc.shutdown()

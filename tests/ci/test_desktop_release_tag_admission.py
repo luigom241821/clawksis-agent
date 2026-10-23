@@ -23,8 +23,15 @@ from pathlib import Path
 import pytest
 
 from tests.ci.desktop_release_roles import (
-    DOWNLOADABLE_DISPATCHES, DRY_DISPATCH, SHA, admitted, credential_gate, evaluate, gate,
-    native_builds, needs_of,
+    DOWNLOADABLE_DISPATCHES,
+    DRY_DISPATCH,
+    SHA,
+    admitted,
+    credential_gate,
+    evaluate,
+    gate,
+    native_builds,
+    needs_of,
 )
 
 _REPO = Path(__file__).resolve().parents[2]
@@ -58,15 +65,25 @@ def _checkout_refs(job: dict, inputs: dict, needs: dict) -> list:
             continue
         if "if" in step and not gate(step["if"], inputs, needs, job_if=False):
             continue
-        refs.append(evaluate(step.get("with", {}).get("ref", ""), inputs, needs,
-                             job_if=False, github={"sha": _CONTROLLER}))
+        refs.append(
+            evaluate(
+                step.get("with", {}).get("ref", ""),
+                inputs,
+                needs,
+                job_if=False,
+                github={"sha": _CONTROLLER},
+            )
+        )
     return refs
 
 
 def test_signing_jobs_pin_source_and_controller_revisions_not_mutable_tags():
     jobs = _workflow()["jobs"]
-    privileged = {name: job for name, job in jobs.items()
-                  if isinstance(job, dict) and job.get("environment") == _SIGNING_ENV}
+    privileged = {
+        name: job
+        for name, job in jobs.items()
+        if isinstance(job, dict) and job.get("environment") == _SIGNING_ENV
+    }
     assert privileged, "walk broken: no release-signing jobs found"
     # The admission job has nothing admitted yet; it resolves the revision
     # every other signing job consumes (the one-dispatch design).
@@ -76,7 +93,9 @@ def test_signing_jobs_pin_source_and_controller_revisions_not_mutable_tags():
     for name, job in privileged.items():
         if name == "validate":
             continue
-        assert "validate" in needs_of(job), f"signing job {name!r} reads needs.validate.outputs.sha but does not need validate"
+        assert "validate" in needs_of(job), (
+            f"signing job {name!r} reads needs.validate.outputs.sha but does not need validate"
+        )
         for dispatch, inputs in DOWNLOADABLE_DISPATCHES.items():
             channel = dispatch == "channel"
             needs = admitted(needs_of(job), channel=channel)
@@ -90,8 +109,11 @@ def test_signing_jobs_pin_source_and_controller_revisions_not_mutable_tags():
             if refs and not channel:
                 assert refs[0] == SHA, (
                     f"signing job {name!r} builds from {refs[0]!r} for a {dispatch} build; "
-                    "outside a pinned channel build it must build the admitted source")
-    assert set(native_builds(jobs).values()) <= exercised, "walk broken: a native build leg never ran"
+                    "outside a pinned channel build it must build the admitted source"
+                )
+    assert set(native_builds(jobs).values()) <= exercised, (
+        "walk broken: a native build leg never ran"
+    )
     assert exercised, "walk broken: no signing job runs for a downloadable build"
 
 
@@ -100,7 +122,9 @@ def test_signing_jobs_pin_source_and_controller_revisions_not_mutable_tags():
 # ---------------------------------------------------------------------------
 
 bash = shutil.which("bash")
-pytestmark = pytest.mark.skipif(bash is None, reason="bash is required to run the admission script")
+pytestmark = pytest.mark.skipif(
+    bash is None, reason="bash is required to run the admission script"
+)
 
 
 def _native_tool(name: str) -> str:
@@ -115,7 +139,11 @@ def _native_tool(name: str) -> str:
     candidates = [hit for hit in (shutil.which(name),) if hit]
     if sys.platform == "win32":
         git_base = Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Git"
-        for rel in (("cmd", f"{name}.exe"), ("bin", f"{name}.exe"), ("usr", "bin", f"{name}.exe")):
+        for rel in (
+            ("cmd", f"{name}.exe"),
+            ("bin", f"{name}.exe"),
+            ("usr", "bin", f"{name}.exe"),
+        ):
             p = git_base.joinpath(*rel)
             if p.exists():
                 candidates.append(str(p))
@@ -141,7 +169,11 @@ _BASH = _native_tool("bash")
 
 def _git(*args: str, cwd: Path) -> str:
     out = subprocess.run(
-        [_GIT, *args], cwd=cwd, capture_output=True, text=True, check=True,
+        [_GIT, *args],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=True,
         env=_child_env(),
     )
     return out.stdout.strip()
@@ -158,7 +190,9 @@ def _seed_repo(root: Path) -> tuple[Path, Path]:
     _git("init", "-b", "main", cwd=origin)
     _git("config", "user.email", "ci@example.com", cwd=origin)
     _git("config", "user.name", "ci", cwd=origin)
-    (origin / "pyproject.toml").write_text('[project]\nname = "x"\nversion = "0.1.2"\n', encoding="utf-8")
+    (origin / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "0.1.2"\n', encoding="utf-8"
+    )
     (origin / "README.md").write_text("seed\n", encoding="utf-8")
     _git("add", "-A", cwd=origin)
     _git("commit", "-m", "seed", cwd=origin)
@@ -170,7 +204,9 @@ def _seed_repo(root: Path) -> tuple[Path, Path]:
     return origin, clone
 
 
-def _run_admission(clone: Path, tag: str, claim_tag: str) -> subprocess.CompletedProcess:
+def _run_admission(
+    clone: Path, tag: str, claim_tag: str
+) -> subprocess.CompletedProcess:
     gh_output = clone / "github_output.txt"
     gh_output.write_text("", encoding="utf-8")
     env = _child_env(
@@ -200,20 +236,25 @@ def _run_admission(clone: Path, tag: str, claim_tag: str) -> subprocess.Complete
 
 
 def _claim_message(clone: Path) -> str:
-    return json.dumps({
-        "schema": 1,
-        "version": "0.1.2",
-        "attempt": 1,
-        "commit": _git("rev-parse", "HEAD", cwd=clone),
-        "autopublish": False,
-        "skipBundles": False,
-        "skipTests": False,
-        "claimEpoch": 1_790_000_000,
-    }, sort_keys=True, separators=(",", ":"))
+    return json.dumps(
+        {
+            "schema": 1,
+            "version": "0.1.2",
+            "attempt": 1,
+            "commit": _git("rev-parse", "HEAD", cwd=clone),
+            "autopublish": False,
+            "skipBundles": False,
+            "skipTests": False,
+            "claimEpoch": 1_790_000_000,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
 
 
 def test_claim_on_origin_main_is_admitted_and_exports_the_full_sha(
-        tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     _origin, clone = _seed_repo(tmp_path)
     monkeypatch.setenv("GIT_COMMITTER_DATE", "@1790000000 +0000")
     _git("tag", "-a", "rc.1-v0.1.2", "-m", _claim_message(clone), cwd=clone)
@@ -227,7 +268,9 @@ def test_claim_on_origin_main_is_admitted_and_exports_the_full_sha(
     assert f"sha={expected}" in gh_output
 
 
-def test_claim_on_a_release_branch_is_admitted(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_claim_on_a_release_branch_is_admitted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     origin, clone = _seed_repo(tmp_path)
     # A hotfix lands on origin's release/0.1.2 only; main never sees it.
     _git("checkout", "-b", "release/0.1.2", cwd=origin)
@@ -243,7 +286,9 @@ def test_claim_on_a_release_branch_is_admitted(tmp_path: Path, monkeypatch: pyte
 
     proc = _run_admission(clone, "v0.1.2", "rc.1-v0.1.2")
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    assert f"sha={_git('rev-parse', 'HEAD', cwd=clone)}" in (clone / "github_output.txt").read_text(encoding="utf-8")
+    assert f"sha={_git('rev-parse', 'HEAD', cwd=clone)}" in (
+        clone / "github_output.txt"
+    ).read_text(encoding="utf-8")
 
 
 def test_claim_not_on_origin_main_is_refused(tmp_path: Path):
@@ -287,27 +332,47 @@ def test_downloadable_native_builds_refuse_to_ship_unsigned(tmp_path: Path):
         steps = jobs[name]["steps"]
         step = credential_gate(jobs[name])
         builds = [index for index, candidate in enumerate(steps) if _builds(candidate)]
-        assert builds and steps.index(step) < builds[0], f"{name} checks credentials after building"
+        assert builds and steps.index(step) < builds[0], (
+            f"{name} checks credentials after building"
+        )
         for dispatch, inputs in DOWNLOADABLE_DISPATCHES.items():
             assert gate(step["if"], inputs, {}, job_if=False), (name, dispatch)
         assert not gate(step["if"], DRY_DISPATCH, {}, job_if=False), name
 
-    windows = {credential_gate(jobs[name])["run"]: credential_gate(jobs[name])
-               for (target, _), name in legs.items() if target.startswith("win32-")}
+    windows = {
+        credential_gate(jobs[name])["run"]: credential_gate(jobs[name])
+        for (target, _), name in legs.items()
+        if target.startswith("win32-")
+    }
     assert windows, "walk broken: no Windows build legs"
     for step in windows.values():
         names = list(step["env"])
-        assert {"AZURE_SIGN_ENDPOINT", "AZURE_SIGN_ACCOUNT", "AZURE_SIGN_PROFILE", "AZURE_CLIENT_ID"} <= set(names)
+        assert {
+            "AZURE_SIGN_ENDPOINT",
+            "AZURE_SIGN_ACCOUNT",
+            "AZURE_SIGN_PROFILE",
+            "AZURE_CLIENT_ID",
+        } <= set(names)
 
         def run(**values: str) -> subprocess.CompletedProcess:
             env = {"PATH": os.environ["PATH"], "RUNNER_TEMP": str(tmp_path)}
             env.update({name: "" for name in names})
             env.update(values)
-            return subprocess.run(["bash", "-euo", "pipefail", "-c", step["run"]], env=env,
-                                  capture_output=True, text=True, timeout=60, check=False)
+            return subprocess.run(
+                ["bash", "-euo", "pipefail", "-c", step["run"]],
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=False,
+            )
 
         proc = run()
-        assert proc.returncode != 0 and "::error::" in proc.stdout and "AZURE_SIGN_ENDPOINT" in proc.stdout
+        assert (
+            proc.returncode != 0
+            and "::error::" in proc.stdout
+            and "AZURE_SIGN_ENDPOINT" in proc.stdout
+        )
         assert run(**{name: "x" for name in names}).returncode == 0
         partial = run(**{name: "x" for name in names if name != "AZURE_CLIENT_ID"})
         assert partial.returncode != 0 and "AZURE_CLIENT_ID" in partial.stdout

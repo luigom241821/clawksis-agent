@@ -14,7 +14,9 @@ import os
 import sys
 from types import SimpleNamespace
 
-_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_REPO_ROOT = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
@@ -34,7 +36,9 @@ class _FakeCompletions:
         return SimpleNamespace(
             choices=[
                 SimpleNamespace(
-                    message=SimpleNamespace(content="ok", reasoning=None, tool_calls=[]),
+                    message=SimpleNamespace(
+                        content="ok", reasoning=None, tool_calls=[]
+                    ),
                     finish_reason="stop",
                 )
             ],

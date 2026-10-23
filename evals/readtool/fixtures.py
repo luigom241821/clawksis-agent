@@ -97,7 +97,7 @@ def _write_lockfile(root: Path, rng: random.Random) -> None:
             '        "node": ">=18"',
             "      },",
             '      "license": "MIT",',
-            "      \"dependencies\": {},",
+            '      "dependencies": {},',
             "    },",
         ]
     out += ["  }", "}"]
@@ -128,19 +128,25 @@ def _write_app_js(root: Path) -> None:
 def _write_minified_bundle(root: Path, rng: random.Random) -> None:
     """One ~600KB line. Greps for 'retryDelay' hit this file too."""
     words = [
-        "function", "return", "var", "const", "let", "typeof", "void 0",
-        "Object.assign", "Promise.resolve", "Array.isArray",
+        "function",
+        "return",
+        "var",
+        "const",
+        "let",
+        "typeof",
+        "void 0",
+        "Object.assign",
+        "Promise.resolve",
+        "Array.isArray",
     ]
     parts = [
-        "(()=>{\"use strict\";function retryDelay(t){return Math.floor(Math.random()*"
+        '(()=>{"use strict";function retryDelay(t){return Math.floor(Math.random()*'
         "Math.min(3e4,250*Math.pow(2,t)))}"
     ]
     while sum(len(p) for p in parts) < 600_000:
         a = rng.choice("abcdefghijklmnopqrstuvwxyz")
         b = rng.randint(0, 99999)
-        parts.append(
-            f"function {a}{b}(e,n){{return {rng.choice(words)}===e?n:{a}{b}}}"
-        )
+        parts.append(f"function {a}{b}(e,n){{return {rng.choice(words)}===e?n:{a}{b}}}")
     parts.append("})();")
     (root / "src" / "app.min.js").write_text("".join(parts), encoding="utf-8")
 
@@ -223,6 +229,10 @@ def _make_fifo(root: Path) -> None:
 if __name__ == "__main__":
     import sys
 
-    target = sys.argv[1] if len(sys.argv) > 1 else os.path.join(tempfile.gettempdir(), "readtool-ws")
+    target = (
+        sys.argv[1]
+        if len(sys.argv) > 1
+        else os.path.join(tempfile.gettempdir(), "readtool-ws")
+    )
     p = build_workspace(target)
     print(f"workspace built at {p}")

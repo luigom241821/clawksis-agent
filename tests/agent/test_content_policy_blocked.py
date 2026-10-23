@@ -13,6 +13,7 @@ repeating across cron jobs and gateway sessions, with the user unable to
 tell whether the gateway was broken, the model was down, or their prompt
 was the problem.
 """
+
 from __future__ import annotations
 
 
@@ -42,9 +43,6 @@ class TestContentPolicyBlockedClassification:
         assert result.should_rotate_credential is False
 
 
-
-
-
 class TestContentPolicyPatternsAreNarrow:
     """Defensive guard: the safety-filter patterns must not collide with
     benign error wording from billing / format / generic 400 errors. If
@@ -64,7 +62,6 @@ class TestContentPolicyPatternsAreNarrow:
         result = classify_api_error(e, provider="openai", model="gpt-4o")
         assert result.reason != FailoverReason.content_policy_blocked
 
-
     def test_openrouter_account_policy_block_stays_distinct(self):
         """``provider_policy_blocked`` (OpenRouter account-level data
         policy) must remain a separate classification from
@@ -83,6 +80,8 @@ class TestContentPolicyPatternsAreNarrow:
             "and data policy",
             status_code=404,
         )
-        result = classify_api_error(e, provider="openrouter", model="anthropic/claude-opus")
+        result = classify_api_error(
+            e, provider="openrouter", model="anthropic/claude-opus"
+        )
         assert result.reason == FailoverReason.provider_policy_blocked
         assert result.reason != FailoverReason.content_policy_blocked

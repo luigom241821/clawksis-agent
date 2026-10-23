@@ -14,6 +14,7 @@ carry `tool_calls` on assistant rows and one `role: tool` row per result, so a
 Transport is OpenRouter's Decisions API (`POST /api/alpha/decisions`, model
 `~typesafe/jev-latest`), so the eval needs only OPENROUTER_API_KEY.
 """
+
 from __future__ import annotations
 
 import copy
@@ -65,7 +66,9 @@ def truncate(text: str, limit: int) -> str:
 def abridge(text: str, head: int, tail: int) -> str:
     if len(text) <= head + tail + 40:
         return text
-    return f"{text[:head]}\n[… {len(text) - head - tail} chars omitted …]\n{text[-tail:]}"
+    return (
+        f"{text[:head]}\n[… {len(text) - head - tail} chars omitted …]\n{text[-tail:]}"
+    )
 
 
 def _json(value: Any) -> str:
@@ -77,7 +80,11 @@ def message_text(m: dict[str, Any]) -> str:
     if isinstance(c, str):
         return c
     if isinstance(c, list):
-        return "\n".join(p.get("text", "") for p in c if isinstance(p, dict) and p.get("type") == "text")
+        return "\n".join(
+            p.get("text", "")
+            for p in c
+            if isinstance(p, dict) and p.get("type") == "text"
+        )
     return ""
 
 
@@ -159,17 +166,26 @@ def collect_tool_calls(messages: list[dict[str, Any]], preserve: int) -> list[To
             ridx = results[tcid]
             fn = tc.get("function") or {}
             rtext = message_text(messages[ridx])
-            calls.append(ToolCall(
-                id=f"t{len(calls) + 1}",
-                tool_call_id=tcid,
-                tool=fn.get("name") or tc.get("name") or "tool",
-                input=_parse_arguments(fn),
-                call_index=idx,
-                result_index=ridx,
-                result_chars=len(rtext),
-                is_error=bool(re.match(r"\s*(\{\"error\"|Error\b|error:)", rtext[:40], re.IGNORECASE)),
-                pinned=is_pinned(idx, total, preserve) or is_pinned(ridx, total, preserve),
-            ))
+            calls.append(
+                ToolCall(
+                    id=f"t{len(calls) + 1}",
+                    tool_call_id=tcid,
+                    tool=fn.get("name") or tc.get("name") or "tool",
+                    input=_parse_arguments(fn),
+                    call_index=idx,
+                    result_index=ridx,
+                    result_chars=len(rtext),
+                    is_error=bool(
+                        re.match(
+                            r"\s*(\{\"error\"|Error\b|error:)",
+                            rtext[:40],
+                            re.IGNORECASE,
+                        )
+                    ),
+                    pinned=is_pinned(idx, total, preserve)
+                    or is_pinned(ridx, total, preserve),
+                )
+            )
     return calls
 
 
@@ -194,14 +210,23 @@ def _compact_call(call: ToolCall) -> str:
     return f"{call.id} {call.tool} {truncate(inp, INPUT_CHARS[2])} → {'error' if call.is_error else 'ok'} {call.result_chars}ch"
 
 
-def _history_entries(messages, calls: list[ToolCall], input_chars: int) -> list[dict[str, Any]]:
+def _history_entries(
+    messages, calls: list[ToolCall], input_chars: int
+) -> list[dict[str, Any]]:
     by_msg: dict[int, list[ToolCall]] = {}
     for c in calls:
         by_msg.setdefault(c.call_index, []).append(c)
     entries = []
     for i, m in enumerate(messages):
-        tcs = [{"id": c.id, "tool": c.tool, "input": _input_text(c.input, input_chars), "result": _result_note(c)}
-               for c in by_msg.get(i, [])]
+        tcs = [
+            {
+                "id": c.id,
+                "tool": c.tool,
+                "input": _input_text(c.input, input_chars),
+                "result": _result_note(c),
+            }
+            for c in by_msg.get(i, [])
+        ]
         text = message_text(m)
         if m.get("role") == "tool":
             text = ""  # results are represented by the call's note, never verbatim
@@ -215,7 +240,11 @@ def _history_entries(messages, calls: list[ToolCall], input_chars: int) -> list[
 
 
 def goal_from_messages(messages) -> str:
-    prompts = [message_text(m) for m in messages if m.get("role") == "user" and message_text(m).strip()]
+    prompts = [
+        message_text(m)
+        for m in messages
+        if m.get("role") == "user" and message_text(m).strip()
+    ]
     return "\n".join(truncate(p, 500) for p in prompts[-3:])
 
 
@@ -266,12 +295,16 @@ def fit_state(messages, calls: list[ToolCall], opt: JevOptions) -> dict[str, Any
         return is_pinned(e["i"], total, opt.preserve_recent_messages)
 
     idx = list(range(len(history)))
-    order = [i for i in idx if not pinned(history[i])] + [i for i in idx if pinned(history[i])]
+    order = [i for i in idx if not pinned(history[i])] + [
+        i for i in idx if pinned(history[i])
+    ]
 
     for i in order:
         if len(history[i]["text"]) <= TEXT_HEAD + TEXT_TAIL + 40:
             continue
-        shrink(i, lambda e: e.__setitem__("text", abridge(e["text"], TEXT_HEAD, TEXT_TAIL)))
+        shrink(
+            i, lambda e: e.__setitem__("text", abridge(e["text"], TEXT_HEAD, TEXT_TAIL))
+        )
         if fits():
             return fitted(history, "texts abridged")
 
@@ -280,7 +313,9 @@ def fit_state(messages, calls: list[ToolCall], opt: JevOptions) -> dict[str, Any
         if pinned(e) or not e["text"]:
             continue
         original = len(message_text(messages[e["i"]]))
-        shrink(i, lambda e, n=original: e.__setitem__("text", f"[… {n} chars omitted …]"))
+        shrink(
+            i, lambda e, n=original: e.__setitem__("text", f"[… {n} chars omitted …]")
+        )
         if fits():
             return fitted(history, "old messages collapsed")
 
@@ -292,7 +327,12 @@ def fit_state(messages, calls: list[ToolCall], opt: JevOptions) -> dict[str, Any
         own = by_msg.get(e["i"])
         if pinned(e) or not own:
             continue
-        shrink(i, lambda e, own=own: e.__setitem__("tool_calls", [_compact_call(c) for c in own]))
+        shrink(
+            i,
+            lambda e, own=own: e.__setitem__(
+                "tool_calls", [_compact_call(c) for c in own]
+            ),
+        )
         if fits():
             return fitted(history, "old calls compacted")
 
@@ -304,13 +344,20 @@ def fit_state(messages, calls: list[ToolCall], opt: JevOptions) -> dict[str, Any
         left.add(i)
         tokens -= per[i]
         if fits():
-            return fitted([h for j, h in enumerate(history) if j not in left], "old messages left out")
+            return fitted(
+                [h for j, h in enumerate(history) if j not in left],
+                "old messages left out",
+            )
 
     remaining = [h for j, h in enumerate(history) if j not in left]
     merged: list[dict[str, Any]] = []
 
     def foldable(e):
-        return not pinned(e) and not e["text"] and isinstance((e.get("tool_calls") or [None])[0], str)
+        return (
+            not pinned(e)
+            and not e["text"]
+            and isinstance((e.get("tool_calls") or [None])[0], str)
+        )
 
     for e in remaining:
         prev = merged[-1] if merged else None
@@ -323,7 +370,9 @@ def fit_state(messages, calls: list[ToolCall], opt: JevOptions) -> dict[str, Any
     tokens = base + sum(per)
     if fits():
         return fitted(history, "old calls merged")
-    raise ValueError(f"history too large for Jev (~{tokens} tokens after truncation, limit {opt.max_state_tokens})")
+    raise ValueError(
+        f"history too large for Jev (~{tokens} tokens after truncation, limit {opt.max_state_tokens})"
+    )
 
 
 def questions_for(call: ToolCall) -> dict[str, Any]:
@@ -332,19 +381,23 @@ def questions_for(call: ToolCall) -> dict[str, Any]:
             "type": "noul",
             "instructions": (
                 f"Tool call {call.id} ({call.tool}) should stay in the history: knowing this call "
-                "was made, with its input, still matters for what the assistant does next"),
+                "was made, with its input, still matters for what the assistant does next"
+            ),
         },
         f"result_{call.id}": {
             "type": "noul",
             "instructions": (
                 f"The full output of tool call {call.id} ({call.tool}, {call.result_chars} chars) should "
                 "stay in the history verbatim: the assistant still needs its contents and re-running "
-                "the tool would not do"),
+                "the tool would not do"
+            ),
         },
     }
 
 
-def batch_calls(calls: list[ToolCall], state_tokens: int, opt: JevOptions) -> list[list[ToolCall]]:
+def batch_calls(
+    calls: list[ToolCall], state_tokens: int, opt: JevOptions
+) -> list[list[ToolCall]]:
     budget = opt.max_request_tokens - state_tokens - REQUEST_OVERHEAD_TOKENS
     batches: list[list[ToolCall]] = []
     cur: list[ToolCall] = []
@@ -355,7 +408,9 @@ def batch_calls(calls: list[ToolCall], state_tokens: int, opt: JevOptions) -> li
             batches.append(cur)
             cur, cur_tokens = [], 0
         if not cur and t > budget:
-            raise ValueError(f"state leaves no room for questions (~{state_tokens} of {opt.max_request_tokens} tokens)")
+            raise ValueError(
+                f"state leaves no room for questions (~{state_tokens} of {opt.max_request_tokens} tokens)"
+            )
         cur.append(c)
         cur_tokens += t
     if cur:
@@ -363,8 +418,12 @@ def batch_calls(calls: list[ToolCall], state_tokens: int, opt: JevOptions) -> li
     return batches
 
 
-def decide_call(call: ToolCall, keep_call: float, keep_result: float, opt: JevOptions) -> Decision:
-    base = dict(id=call.id, tool=call.tool, keep_call=keep_call, keep_result=keep_result)
+def decide_call(
+    call: ToolCall, keep_call: float, keep_result: float, opt: JevOptions
+) -> Decision:
+    base = dict(
+        id=call.id, tool=call.tool, keep_call=keep_call, keep_result=keep_result
+    )
     if call.pinned:
         return Decision(**base, action="keep", reason="pinned")
     if keep_result >= opt.keep_threshold:
@@ -378,11 +437,15 @@ def _truncated_result(text: str, is_error: bool, head: int) -> str:
     if len(text) <= head + 120:
         return text
     lead = f"{text[:head]}\n" if head > 0 else ""
-    return (f"{lead}[fast-jev-compaction truncated {len(text) - head} chars of this tool result"
-            f"{' (error)' if is_error else ''}; re-run the tool if needed]")
+    return (
+        f"{lead}[fast-jev-compaction truncated {len(text) - head} chars of this tool result"
+        f"{' (error)' if is_error else ''}; re-run the tool if needed]"
+    )
 
 
-def apply_decisions(messages, decisions: list[Decision], calls: list[ToolCall], head: int):
+def apply_decisions(
+    messages, decisions: list[Decision], calls: list[ToolCall], head: int
+):
     """Rebuild the Clawksis transcript: dropped calls vanish with their result row,
     dropped results keep a bounded head + note, untouched rows are the same objects."""
     by_id = {c.id: c for c in calls}
@@ -400,7 +463,9 @@ def apply_decisions(messages, decisions: list[Decision], calls: list[ToolCall], 
                 continue
             if act == "drop_result":
                 nm = dict(m)
-                nm["content"] = _truncated_result(message_text(m), errors.get(m.get("tool_call_id"), False), head)
+                nm["content"] = _truncated_result(
+                    message_text(m), errors.get(m.get("tool_call_id"), False), head
+                )
                 kept.append(nm)
                 continue
             kept.append(m)
@@ -421,8 +486,12 @@ def apply_decisions(messages, decisions: list[Decision], calls: list[ToolCall], 
     return kept
 
 
-def openrouter_asker(api_key: Optional[str] = None, model: str = OPENROUTER_JEV_MODEL,
-                     url: str = OPENROUTER_DECISIONS_URL, timeout: float = 120.0) -> Callable:
+def openrouter_asker(
+    api_key: Optional[str] = None,
+    model: str = OPENROUTER_JEV_MODEL,
+    url: str = OPENROUTER_DECISIONS_URL,
+    timeout: float = 120.0,
+) -> Callable:
     """`ask(state, questions) -> response dict` over OpenRouter's Decisions API."""
     import urllib.request
 
@@ -431,16 +500,26 @@ def openrouter_asker(api_key: Optional[str] = None, model: str = OPENROUTER_JEV_
         raise RuntimeError("OPENROUTER_API_KEY is not configured")
 
     def ask(state, questions):
-        body = json.dumps({"model": model, "state": state, "questions": questions}).encode()
-        req = urllib.request.Request(url, data=body, headers={
-            "Authorization": f"Bearer {key}", "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/samuelgradientai-sys/clawksis-agent", "X-Title": "clawk compaction eval",
-        })
+        body = json.dumps(
+            {"model": model, "state": state, "questions": questions}
+        ).encode()
+        req = urllib.request.Request(
+            url,
+            data=body,
+            headers={
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://github.com/samuelgradientai-sys/clawksis-agent",
+                "X-Title": "clawk compaction eval",
+            },
+        )
         try:
             with urllib.request.urlopen(req, timeout=timeout) as r:
                 return json.loads(r.read().decode())
         except urllib.error.HTTPError as e:  # pragma: no cover - network
-            raise RuntimeError(f"Jev request failed ({e.code}): {e.read().decode()[:200]}") from e
+            raise RuntimeError(
+                f"Jev request failed ({e.code}): {e.read().decode()[:200]}"
+            ) from e
 
     return ask
 
@@ -448,8 +527,12 @@ def openrouter_asker(api_key: Optional[str] = None, model: str = OPENROUTER_JEV_
 class JevCompactor:
     """Eval-arm compressor with the ContextCompressor.compress() call shape."""
 
-    def __init__(self, asker: Optional[Callable] = None, options: Optional[JevOptions] = None,
-                 concurrency: int = 4):
+    def __init__(
+        self,
+        asker: Optional[Callable] = None,
+        options: Optional[JevOptions] = None,
+        concurrency: int = 4,
+    ):
         self.asker = asker or openrouter_asker()
         self.opt = options or JevOptions()
         self.concurrency = concurrency
@@ -480,7 +563,13 @@ class JevCompactor:
                 raise ValueError(f"Invalid Jev answer for {name}")
             return float(a["noul"])
 
-        return {c.id: {"keep_call": noul(f"call_{c.id}"), "keep_result": noul(f"result_{c.id}")} for c in batch}
+        return {
+            c.id: {
+                "keep_call": noul(f"call_{c.id}"),
+                "keep_result": noul(f"result_{c.id}"),
+            }
+            for c in batch
+        }
 
     def _budget_decisions(self, messages, calls, candidates, answers) -> list[Decision]:
         """Keep ranked call+result pairs until the tool-content budget is spent; drop the rest."""
@@ -490,7 +579,9 @@ class JevCompactor:
             return (c.result_chars + len(_json(c.input))) // 4
 
         if opt.select == "jev":
-            ranked = sorted(candidates, key=lambda c: -answers.get(c.id, {}).get("keep_result", 0.0))
+            ranked = sorted(
+                candidates, key=lambda c: -answers.get(c.id, {}).get("keep_result", 0.0)
+            )
         else:
             ranked = sorted(candidates, key=lambda c: -c.result_index)
         kept, spent = set(), 0
@@ -503,7 +594,12 @@ class JevCompactor:
         out = []
         for c in calls:
             a = answers.get(c.id, {})
-            base = dict(id=c.id, tool=c.tool, keep_call=a.get("keep_call", 1.0), keep_result=a.get("keep_result", 1.0))
+            base = dict(
+                id=c.id,
+                tool=c.tool,
+                keep_call=a.get("keep_call", 1.0),
+                keep_result=a.get("keep_result", 1.0),
+            )
             if c.pinned:
                 out.append(Decision(**base, action="keep", reason="pinned"))
             elif c.id in kept:
@@ -512,7 +608,12 @@ class JevCompactor:
                 out.append(Decision(**base, action="drop_call", reason="call_dropped"))
         return out
 
-    def compress(self, messages: list[dict[str, Any]], current_tokens: int = 0, force: bool = True):
+    def compress(
+        self,
+        messages: list[dict[str, Any]],
+        current_tokens: int = 0,
+        force: bool = True,
+    ):
         t0 = time.time()
         opt = self.opt
         calls = collect_tool_calls(messages, opt.preserve_recent_messages)
@@ -524,38 +625,78 @@ class JevCompactor:
             fitted = fit_state(messages, calls, opt)
             batches = batch_calls(candidates, fitted["tokens"], opt)
             with ThreadPoolExecutor(max_workers=self.concurrency) as pool:
-                for result in pool.map(lambda b: self._ask_batch(fitted["state"], b), batches):
+                for result in pool.map(
+                    lambda b: self._ask_batch(fitted["state"], b), batches
+                ):
                     answers.update(result)
         if opt.select:
-            self.decisions = self._budget_decisions(messages, calls, candidates, answers)
+            self.decisions = self._budget_decisions(
+                messages, calls, candidates, answers
+            )
         else:
             self.decisions = [
-                decide_call(c, *(answers.get(c.id, {}).get(k, 1.0) for k in ("keep_call", "keep_result")), opt)
+                decide_call(
+                    c,
+                    *(
+                        answers.get(c.id, {}).get(k, 1.0)
+                        for k in ("keep_call", "keep_result")
+                    ),
+                    opt,
+                )
                 for c in calls
             ]
         kept = apply_decisions(messages, self.decisions, calls, opt.truncate_head_chars)
         reasons = [d.reason for d in self.decisions]
         self.stats = {
-            "messages_before": len(messages), "messages_after": len(kept),
-            "calls": len(calls), "kept": reasons.count("kept"),
+            "messages_before": len(messages),
+            "messages_after": len(kept),
+            "calls": len(calls),
+            "kept": reasons.count("kept"),
             "results_dropped": reasons.count("result_dropped"),
-            "calls_dropped": reasons.count("call_dropped"), "pinned": reasons.count("pinned"),
-            "state_tokens": fitted["tokens"], "state_stage": fitted["stage"],
-            "requests": len(batches), "seconds": round(time.time() - t0, 1),
+            "calls_dropped": reasons.count("call_dropped"),
+            "pinned": reasons.count("pinned"),
+            "state_tokens": fitted["tokens"],
+            "state_stage": fitted["stage"],
+            "requests": len(batches),
+            "seconds": round(time.time() - t0, 1),
         }
         return kept
 
 
 def fake_asker(keep_call: float = 0.2, keep_result: float = 0.1) -> Callable:
     """Deterministic asker for offline tests: every candidate gets the same answer."""
+
     def ask(state, questions):
-        return {"model": "fake-jev", "answers": {n: {"type": "noul", "noul": keep_result if n.startswith("result_") else keep_call}
-                                                 for n in questions},
-                "usage": {"input_tokens": estimate_tokens(_json(state)), "output_tokens": len(questions), "cost": 0.0}}
+        return {
+            "model": "fake-jev",
+            "answers": {
+                n: {
+                    "type": "noul",
+                    "noul": keep_result if n.startswith("result_") else keep_call,
+                }
+                for n in questions
+            },
+            "usage": {
+                "input_tokens": estimate_tokens(_json(state)),
+                "output_tokens": len(questions),
+                "cost": 0.0,
+            },
+        }
+
     return ask
 
 
 __all__ = [
-    "JevCompactor", "JevOptions", "JevUsage", "apply_decisions", "batch_calls", "collect_tool_calls",
-    "decide_call", "estimate_tokens", "fake_asker", "fit_state", "openrouter_asker", "questions_for",
+    "JevCompactor",
+    "JevOptions",
+    "JevUsage",
+    "apply_decisions",
+    "batch_calls",
+    "collect_tool_calls",
+    "decide_call",
+    "estimate_tokens",
+    "fake_asker",
+    "fit_state",
+    "openrouter_asker",
+    "questions_for",
 ]

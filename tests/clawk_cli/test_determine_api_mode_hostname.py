@@ -18,10 +18,11 @@ class TestOpenAIHostHardening:
 
 
 class TestAnthropicHostHardening:
-
-
     def test_anthropic_path_suffix_still_wins(self):
         # Third-party Anthropic-compatible gateways (MiniMax, Zhipu GLM, LiteLLM
         # proxies) expose the Anthropic protocol under a ``/anthropic`` suffix.
         # That convention must still resolve to anthropic_messages.
-        assert determine_api_mode("", "https://api.minimax.io/anthropic") == "anthropic_messages"
+        assert (
+            determine_api_mode("", "https://api.minimax.io/anthropic")
+            == "anthropic_messages"
+        )

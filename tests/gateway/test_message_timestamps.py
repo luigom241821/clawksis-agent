@@ -45,8 +45,11 @@ def test_early_naive_iso_preserves_system_local_instant(epoch):
 @pytest.mark.parametrize("epoch", [0.0, 1.0, 86_399.0])
 def test_early_embedded_local_time_preserves_instant(style, epoch):
     local = datetime.fromtimestamp(epoch, tz=UTC).astimezone()
-    stamp = (safe_strftime(local, "%a %Y-%m-%d %H:%M:%S") if style == "human"
-             else local.replace(tzinfo=None).isoformat())
+    stamp = (
+        safe_strftime(local, "%a %Y-%m-%d %H:%M:%S")
+        if style == "human"
+        else local.replace(tzinfo=None).isoformat()
+    )
     content = f"[{stamp}] hello"
 
     assert render_user_content_with_timestamp(content, 1_000_000_000.0) == (
@@ -61,12 +64,17 @@ def test_early_embedded_local_time_replays_with_injection_on_or_off(style, enabl
     from gateway.run import _build_gateway_agent_history
 
     local = datetime.fromtimestamp(1.0, tz=UTC).astimezone()
-    stamp = (safe_strftime(local, "%a %Y-%m-%d %H:%M:%S") if style == "human"
-             else local.replace(tzinfo=None).isoformat())
+    stamp = (
+        safe_strftime(local, "%a %Y-%m-%d %H:%M:%S")
+        if style == "human"
+        else local.replace(tzinfo=None).isoformat()
+    )
     content = f"[{stamp}] hello"
     history, _ = _build_gateway_agent_history(
-        [{"role": "user", "content": content, "timestamp": 1_000_000_000.0},
-         {"role": "assistant", "content": "hi"}],
+        [
+            {"role": "user", "content": content, "timestamp": 1_000_000_000.0},
+            {"role": "assistant", "content": "hi"},
+        ],
         inject_timestamps=enabled,
     )
 
@@ -83,7 +91,8 @@ def test_early_embedded_local_time_renders_in_observed_context():
     content = f"[{local.replace(tzinfo=None).isoformat()}] hello"
     history, observed = _build_gateway_agent_history(
         [{"role": "user", "content": content, "observed": True}],
-        inject_timestamps=True, channel_prompt="observed Telegram group context",
+        inject_timestamps=True,
+        channel_prompt="observed Telegram group context",
     )
 
     assert history == []
@@ -91,10 +100,15 @@ def test_early_embedded_local_time_renders_in_observed_context():
 
 
 @pytest.mark.parametrize("fold", [0, 1])
-@pytest.mark.parametrize("wall_time", [
-    datetime(2026, 1, 15, 12), datetime(2026, 7, 15, 12),
-    datetime(2026, 3, 8, 2, 30), datetime(2026, 11, 1, 1, 30),
-])
+@pytest.mark.parametrize(
+    "wall_time",
+    [
+        datetime(2026, 1, 15, 12),
+        datetime(2026, 7, 15, 12),
+        datetime(2026, 3, 8, 2, 30),
+        datetime(2026, 11, 1, 1, 30),
+    ],
+)
 def test_modern_local_conversion_keeps_existing_fold_and_gap_behavior(wall_time, fold):
     dt = wall_time.replace(fold=fold)
 
@@ -163,8 +177,7 @@ def test_system_timezone_conversion_starts_from_aware_utc(monkeypatch):
 def test_render_user_content_deduplicates_existing_timestamp_and_preserves_embedded_time():
     db_processing_ts = _epoch(2026, 4, 27, 15, 55, 36)
     stored_content = (
-        "[Mon 2026-04-27 15:54:44 CEST] "
-        "[Example User] This should go on our todo list"
+        "[Mon 2026-04-27 15:54:44 CEST] [Example User] This should go on our todo list"
     )
 
     rendered = render_user_content_with_timestamp(
@@ -182,13 +195,15 @@ def test_render_user_content_deduplicates_existing_timestamp_and_preserves_embed
 # ---------------------------------------------------------------------------
 
 
-
-
 def test_build_history_injects_only_when_enabled():
     from gateway.run import _build_gateway_agent_history
 
     history = [
-        {"role": "user", "content": "hello", "timestamp": _epoch(2026, 4, 28, 13, 40, 53)},
+        {
+            "role": "user",
+            "content": "hello",
+            "timestamp": _epoch(2026, 4, 28, 13, 40, 53),
+        },
         {"role": "assistant", "content": "hi"},
     ]
 
@@ -240,25 +255,56 @@ def test_compactor_restatement_replays_unstamped_through_session_db(tmp_path):
     from clawk_time import get_timezone
 
     sent_at = _epoch(2026, 4, 28, 13, 40, 53)
-    messages = [{"role": "system", "content": "sys"},
-                {"role": "user", "content": "Summarize project files", "timestamp": sent_at}]
+    messages = [
+        {"role": "system", "content": "sys"},
+        {"role": "user", "content": "Summarize project files", "timestamp": sent_at},
+    ]
     for i in range(40):
         messages += [
-            {"role": "assistant", "content": f"step {i}", "tool_calls": [
-                {"id": f"c{i}", "type": "function", "function": {"name": "read_file", "arguments": "{}"}}]},
+            {
+                "role": "assistant",
+                "content": f"step {i}",
+                "tool_calls": [
+                    {
+                        "id": f"c{i}",
+                        "type": "function",
+                        "function": {"name": "read_file", "arguments": "{}"},
+                    }
+                ],
+            },
             {"role": "tool", "tool_call_id": f"c{i}", "content": "fixture " * 200},
         ]
-    compressor = ContextCompressor(model="m", quiet_mode=True, config_context_length=100_000,
-                                   protect_first_n=2, protect_last_n=2)
+    compressor = ContextCompressor(
+        model="m",
+        quiet_mode=True,
+        config_context_length=100_000,
+        protect_first_n=2,
+        protect_last_n=2,
+    )
     compressor.tail_token_budget = 500
-    summary = SimpleNamespace(choices=[SimpleNamespace(
-        message=SimpleNamespace(content="## Historical Task Snapshot\nx\n## Summary\ny"), finish_reason="stop")])
+    summary = SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(
+                    content="## Historical Task Snapshot\nx\n## Summary\ny"
+                ),
+                finish_reason="stop",
+            )
+        ]
+    )
     with patch("agent.context_compressor.call_llm", return_value=summary):
-        sent = [m for m in compressor.compress(messages, current_tokens=200_000, force=True) if m["role"] != "system"]
+        sent = [
+            m
+            for m in compressor.compress(messages, current_tokens=200_000, force=True)
+            if m["role"] != "system"
+        ]
     sent.append({"role": "assistant", "content": "Done"})
     # A human pasting the header text is still a message someone sent: it keeps its stamp.
     pasted = f"{_INFLIGHT_TASK_REPLAY_HEADER}\nthis is a pasted log"
-    sent += [{"role": "user", "content": pasted, "timestamp": sent_at}, {"role": "assistant", "content": "ok"}]
+    sent += [
+        {"role": "user", "content": pasted, "timestamp": sent_at},
+        {"role": "assistant", "content": "ok"},
+    ]
 
     db = SessionDB(db_path=tmp_path / "state.db")
     store = SessionStore(tmp_path / "sessions", GatewayConfig())
@@ -266,23 +312,39 @@ def test_compactor_restatement_replays_unstamped_through_session_db(tmp_path):
     try:
         db.create_session("room", source="matrix")
         db.archive_and_compact("room", sent)
-        first, _ = _build_gateway_agent_history(store.load_transcript("room"), inject_timestamps=True)
+        first, _ = _build_gateway_agent_history(
+            store.load_transcript("room"), inject_timestamps=True
+        )
         # A later in-session prune re-persists the replayed view; the next reload must still know the row.
         db.archive_and_compact("room", first)
-        replay, _ = _build_gateway_agent_history(store.load_transcript("room"), inject_timestamps=True)
+        replay, _ = _build_gateway_agent_history(
+            store.load_transcript("room"), inject_timestamps=True
+        )
     finally:
         db.close()
         store.close_all_db_handles()
 
     def restatement(rows):
-        return next((m["content"] for m in rows if m["role"] == "user"
-                     and str(m["content"]).startswith(_INFLIGHT_TASK_REPLAY_HEADER)), None)
+        return next(
+            (
+                m["content"]
+                for m in rows
+                if m["role"] == "user"
+                and str(m["content"]).startswith(_INFLIGHT_TASK_REPLAY_HEADER)
+            ),
+            None,
+        )
 
     assert restatement(sent) is not None
     assert restatement(first) == restatement(sent)
     assert restatement(replay) == restatement(sent)
-    assert next(m for m in replay if m["role"] == "user" and str(m["content"]).endswith("this is a pasted log"))[
-        "content"] == render_user_content_with_timestamp(pasted, sent_at, tz=get_timezone())
+    assert next(
+        m
+        for m in replay
+        if m["role"] == "user" and str(m["content"]).endswith("this is a pasted log")
+    )["content"] == render_user_content_with_timestamp(
+        pasted, sent_at, tz=get_timezone()
+    )
 
 
 def test_compaction_summary_stays_unstamped_across_real_prune(tmp_path):
@@ -293,26 +355,58 @@ def test_compaction_summary_stays_unstamped_across_real_prune(tmp_path):
     from gateway.session import SessionStore
     from clawk_state import SessionDB
 
-    summary = {"role": "user", "content": "[CONTEXT COMPACTION — REFERENCE ONLY] retained summary",
-               "_compressed_summary": True}
+    summary = {
+        "role": "user",
+        "content": "[CONTEXT COMPACTION — REFERENCE ONLY] retained summary",
+        "_compressed_summary": True,
+    }
     rows = [summary, {"role": "assistant", "content": "Continue"}]
     for i in range(5):
-        rows += [{"role": "assistant", "content": None, "tool_calls": [
-                     {"id": f"c{i}", "type": "function", "function": {"name": "read_file", "arguments": "{}"}}]},
-                 {"role": "tool", "tool_call_id": f"c{i}", "content": f"file {i} " + f"unique output {i} " * 5000}]
-    rows += [{"role": "user", "content": "new task"}, {"role": "assistant", "content": "working"}]
+        rows += [
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": f"c{i}",
+                        "type": "function",
+                        "function": {"name": "read_file", "arguments": "{}"},
+                    }
+                ],
+            },
+            {
+                "role": "tool",
+                "tool_call_id": f"c{i}",
+                "content": f"file {i} " + f"unique output {i} " * 5000,
+            },
+        ]
+    rows += [
+        {"role": "user", "content": "new task"},
+        {"role": "assistant", "content": "working"},
+    ]
     db = SessionDB(db_path=tmp_path / "state.db")
     store = SessionStore(tmp_path / "sessions", GatewayConfig())
     store._db = db
     try:
         db.create_session("room", source="matrix")
         db.archive_and_compact("room", rows)
-        first, _ = _build_gateway_agent_history(store.load_transcript("room"), inject_timestamps=True)
-        compressor = ContextCompressor(model="m", quiet_mode=True, config_context_length=100_000, protect_first_n=1,
-                                       protect_last_n=2, proactive_prune_tokens=1, proactive_prune_min_reclaim_tokens=1)
+        first, _ = _build_gateway_agent_history(
+            store.load_transcript("room"), inject_timestamps=True
+        )
+        compressor = ContextCompressor(
+            model="m",
+            quiet_mode=True,
+            config_context_length=100_000,
+            protect_first_n=1,
+            protect_last_n=2,
+            proactive_prune_tokens=1,
+            proactive_prune_min_reclaim_tokens=1,
+        )
         compressor._session_db, compressor._session_id = db, "room"
         _, pruned = compressor.prune_tool_results_only(first, current_tokens=100_000)
-        replay, _ = _build_gateway_agent_history(store.load_transcript("room"), inject_timestamps=True)
+        replay, _ = _build_gateway_agent_history(
+            store.load_transcript("room"), inject_timestamps=True
+        )
     finally:
         db.close()
         store.close_all_db_handles()

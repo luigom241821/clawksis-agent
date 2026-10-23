@@ -1,4 +1,5 @@
 """Recover heartbeat watches from the gateway's canonical persisted routing index."""
+
 from __future__ import annotations
 
 import logging
@@ -40,7 +41,9 @@ async def restore_heartbeat_watches(runner) -> None:
         home = getattr(store, "_routing_home", None) or get_clawk_home()
         # Cheap gate: with no heartbeat persisted in any served profile there is nothing to
         # restore — skip the per-origin profile-scope re-parse over every routed session.
-        if not any(profile_has_active_heartbeat(h) for h in _watched_homes(runner, home)):
+        if not any(
+            profile_has_active_heartbeat(h) for h in _watched_homes(runner, home)
+        ):
             return restored
         with _profile_runtime_scope(home):
             # Enter each profile's scope once per scan, not once per routed session: a scope entry
@@ -53,20 +56,36 @@ async def restore_heartbeat_watches(runner) -> None:
                     continue
                 try:
                     source = runner._restored_source(entry)
-                    by_scope.setdefault(runner._profile_scope_key_for_source(source), []).append((entry, source))
+                    by_scope.setdefault(
+                        runner._profile_scope_key_for_source(source), []
+                    ).append((entry, source))
                 except Exception:
-                    logger.debug("heartbeat restore for %s failed", entry.session_key, exc_info=True)
+                    logger.debug(
+                        "heartbeat restore for %s failed",
+                        entry.session_key,
+                        exc_info=True,
+                    )
             for group in by_scope.values():
                 try:
                     with runner._profile_scope_for_source(group[0][1]):
                         for entry, source in group:
                             try:
                                 if HeartbeatManager(entry.session_id).is_active():
-                                    restored.append((entry.session_key, source, entry.session_id))
+                                    restored.append(
+                                        (entry.session_key, source, entry.session_id)
+                                    )
                             except Exception:
-                                logger.debug("heartbeat restore for %s failed", entry.session_key, exc_info=True)
+                                logger.debug(
+                                    "heartbeat restore for %s failed",
+                                    entry.session_key,
+                                    exc_info=True,
+                                )
                 except Exception:
-                    logger.debug("heartbeat restore scope for %s failed", group[0][0].session_key, exc_info=True)
+                    logger.debug(
+                        "heartbeat restore scope for %s failed",
+                        group[0][0].session_key,
+                        exc_info=True,
+                    )
         return restored
 
     try:
@@ -76,4 +95,6 @@ async def restore_heartbeat_watches(runner) -> None:
             if store.peek_session_id(key) == session_id:
                 runner._register_heartbeat_watch(key, source, session_id)
     except Exception:
-        logger.debug("heartbeat restore scan failed; retrying on next poll", exc_info=True)
+        logger.debug(
+            "heartbeat restore scan failed; retrying on next poll", exc_info=True
+        )

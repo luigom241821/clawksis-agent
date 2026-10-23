@@ -43,7 +43,9 @@ def test_delete_file_refuses_directory(ops, tmp_path):
 
 
 @pytest.mark.platforms("posix")
-@pytest.mark.parametrize("op", ["delete", "delete_trailing_slash", "delete_dot", "move"])
+@pytest.mark.parametrize(
+    "op", ["delete", "delete_trailing_slash", "delete_dot", "move"]
+)
 @pytest.mark.parametrize("layout", ["beside_runtime_venv", "link_in_credential_dir"])
 def test_delete_and_move_guard_the_entry_itself(ops, tmp_path, monkeypatch, op, layout):
     """Delete/Move vet the directory entry (parent resolved, leaf kept): a plain file whose
@@ -68,7 +70,9 @@ def test_delete_and_move_guard_the_entry_itself(ops, tmp_path, monkeypatch, op, 
     if op == "move":
         result = ops.move_file(str(entry), str(moved))
     else:
-        result = ops.delete_file(str(entry) + {"delete_trailing_slash": "/", "delete_dot": "/."}.get(op, ""))
+        result = ops.delete_file(
+            str(entry) + {"delete_trailing_slash": "/", "delete_dot": "/."}.get(op, "")
+        )
 
     if layout == "beside_runtime_venv":
         assert result.error is None, result.error

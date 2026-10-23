@@ -39,7 +39,9 @@ import clawk_bootstrap
     result = subprocess.run(
         [sys.executable, "-S", "-c", code, str(target), phase],
         env={**os.environ, "PYTHONPATH": str(root)},
-        capture_output=True, text=True, timeout=30,
+        capture_output=True,
+        text=True,
+        timeout=30,
         check=False,
     )
     assert result.returncode == 1, result.stderr
@@ -52,7 +54,9 @@ import clawk_bootstrap
     assert "Traceback" not in result.stderr
 
 
-def test_pm_repair_reports_unwritable_runtime_without_traceback(tmp_path, monkeypatch, capsys):
+def test_pm_repair_reports_unwritable_runtime_without_traceback(
+    tmp_path, monkeypatch, capsys
+):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "home"))
     root = Path(__file__).resolve().parents[2]
     target = install_state_dir(root) / "pm-runtime" / ".prepare.lock"
@@ -71,15 +75,21 @@ raise SystemExit(main(["repair"]))
     result = subprocess.run(
         [sys.executable, "-c", code, str(target)],
         env={**os.environ, "PYTHONPATH": str(root)},
-        capture_output=True, text=True, timeout=30,
+        capture_output=True,
+        text=True,
+        timeout=30,
         check=False,
     )
     assert result.returncode == 1, result.stderr
     assert "install state is not writable by this user" in result.stderr
     assert str(target) in result.stderr
     assert "Traceback" not in result.stderr
-    lease = install_state_dir(root) / "environments" / "generation" / ".leases" / "reader"
-    assert install_state_permission_message(root, PermissionError(13, "Permission denied", str(lease)))
+    lease = (
+        install_state_dir(root) / "environments" / "generation" / ".leases" / "reader"
+    )
+    assert install_state_permission_message(
+        root, PermissionError(13, "Permission denied", str(lease))
+    )
     outside = tmp_path / "other" / ".prepare.lock"
     exc = PermissionError(13, "Permission denied", str(outside))
     assert install_state_permission_message(root, exc) is None

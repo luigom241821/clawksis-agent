@@ -46,8 +46,16 @@ def test_auto_repair_never_reads_a_tty(monkeypatch):
 
     monkeypatch.setattr(libatomic, "_ATTEMPT", None)
     monkeypatch.setattr(libatomic, "_is_root", lambda: False)
-    monkeypatch.setattr(libatomic, "_host_install_command", lambda: ("dnf", "install", "-y", "libatomic"))
-    monkeypatch.setattr(libatomic.shutil, "which", lambda name: "/usr/bin/sudo" if name == "sudo" else None)
+    monkeypatch.setattr(
+        libatomic,
+        "_host_install_command",
+        lambda: ("dnf", "install", "-y", "libatomic"),
+    )
+    monkeypatch.setattr(
+        libatomic.shutil,
+        "which",
+        lambda name: "/usr/bin/sudo" if name == "sudo" else None,
+    )
 
     captured = {}
 
@@ -79,7 +87,11 @@ def test_installer_sudo_warmup_honours_non_interactive(tmp_path, flags):
     _node_script(bin_dir / "id", "#!/bin/sh\necho 1000\n")
     _node_script(bin_dir / "sudo", f'#!/bin/sh\necho "$*" >> "{log}"\nexit 0\n')
     probe = f'source "$1" --manifest\n{flags}\nuv_bootstrap_target() {{ echo linux-x64; }}\nstage_prerequisites\n'
-    env = dict(os.environ, PATH=f"{bin_dir}{os.pathsep}{os.environ['PATH']}", HOME=str(tmp_path))
+    env = dict(
+        os.environ,
+        PATH=f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+        HOME=str(tmp_path),
+    )
     # A real controlling terminal: has_terminal() and `sudo -v </dev/tty` open it.
     pid, fd = pty.fork()
     if pid == 0:
@@ -102,8 +114,11 @@ def test_update_completion_installs_before_detaching(monkeypatch):
 
     monkeypatch.setattr(update_completion.sys, "platform", "linux")
     calls = []
-    monkeypatch.setattr(update_completion.subprocess, "run",
-                        lambda argv, **kw: calls.append(("run", argv, kw)))
+    monkeypatch.setattr(
+        update_completion.subprocess,
+        "run",
+        lambda argv, **kw: calls.append(("run", argv, kw)),
+    )
 
     def popen(argv, **kw):
         calls.append(("popen", argv, kw))
@@ -111,8 +126,13 @@ def test_update_completion_installs_before_detaching(monkeypatch):
 
     monkeypatch.setattr(update_completion.subprocess, "Popen", popen)
     with pytest.raises(RuntimeError, match="stop after spawn"):
-        update_completion.run_completion({"source": "/nonexistent", "home": "/nonexistent",
-                                          "receipt": {"update_id": "u"}})
+        update_completion.run_completion(
+            {
+                "source": "/nonexistent",
+                "home": "/nonexistent",
+                "receipt": {"update_id": "u"},
+            }
+        )
     assert [kind for kind, _argv, _kw in calls] == ["run", "popen"]
     _kind, argv, kw = calls[0]
     assert "install_before_lock" in " ".join(argv)

@@ -7,6 +7,7 @@ import shutil
 
 def _gw():
     from clawk_cli import gateway  # late: CLI-only dependency
+
     return gateway
 
 
@@ -34,9 +35,11 @@ def interactive_setup() -> None:
     else:
         _gw().print_warning("signal-cli not found on PATH.")
         _gw()._print_info_lines(
-            "  Signal requires signal-cli running as an HTTP daemon.", "  Install options:",
+            "  Signal requires signal-cli running as an HTTP daemon.",
+            "  Install options:",
             "    Linux:  download from https://github.com/AsamK/signal-cli/releases",
-            "    macOS:  brew install signal-cli", "    Docker: bbernhard/signal-cli-rest-api",
+            "    macOS:  brew install signal-cli",
+            "    Docker: bbernhard/signal-cli-rest-api",
         )
         print()
         _gw()._print_info_lines(
@@ -57,24 +60,34 @@ def interactive_setup() -> None:
     _gw().print_info("  Testing connection...")
     try:
         import httpx
+
         resp = httpx.get(f"{url.rstrip('/')}/api/v1/check", timeout=10.0)
         if resp.status_code == 200:
             _gw().print_success("  signal-cli daemon is reachable!")
         else:
-            _gw().print_warning(f"  signal-cli responded with status {resp.status_code}.")
+            _gw().print_warning(
+                f"  signal-cli responded with status {resp.status_code}."
+            )
             if not _gw().prompt_yes_no("  Continue anyway?", False):
                 return
     except Exception as e:  # health: allow BLE001 -- connectivity probe in a wizard: any failure is "unreachable", the user decides
         _gw().print_warning(f"  Could not reach signal-cli at {url}: {e}")
-        if not _gw().prompt_yes_no("  Save this URL anyway? (you can start signal-cli later)", True):
+        if not _gw().prompt_yes_no(
+            "  Save this URL anyway? (you can start signal-cli later)", True
+        ):
             return
 
     _gw().save_env_value("SIGNAL_HTTP_URL", url)
 
     print()
-    _gw()._print_info_lines("  Enter your Signal account phone number in E.164 format.", "  Example: +15551234567")
+    _gw()._print_info_lines(
+        "  Enter your Signal account phone number in E.164 format.",
+        "  Example: +15551234567",
+    )
     default_account = existing_account or ""
-    account = _signal_line_input(f"  Account number{f' [{default_account}]' if default_account else ''}: ")
+    account = _signal_line_input(
+        f"  Account number{f' [{default_account}]' if default_account else ''}: "
+    )
     if account is None:
         return
     account = account or default_account
@@ -96,18 +109,24 @@ def interactive_setup() -> None:
     _gw().save_env_value("SIGNAL_ALLOWED_USERS", allowed or default_allowed)
 
     print()
-    if _gw().prompt_yes_no("  Enable group messaging? (disabled by default for security)", False):
+    if _gw().prompt_yes_no(
+        "  Enable group messaging? (disabled by default for security)", False
+    ):
         print()
         _gw().print_info("  Enter group IDs to allow, or * for all groups.")
         existing_groups = _gw().get_env_value("SIGNAL_GROUP_ALLOWED_USERS") or ""
         groups = _signal_line_input(f"  Group IDs [{existing_groups or '*'}]: ")
         if groups is None:
             return
-        _gw().save_env_value("SIGNAL_GROUP_ALLOWED_USERS", groups or existing_groups or "*")
+        _gw().save_env_value(
+            "SIGNAL_GROUP_ALLOWED_USERS", groups or existing_groups or "*"
+        )
 
     print()
     _gw().print_success("Signal configured!")
     _gw()._print_info_lines(
-        f"  URL: {url}", f"  Account: {account}", "  DM auth: via SIGNAL_ALLOWED_USERS + DM pairing",
+        f"  URL: {url}",
+        f"  Account: {account}",
+        "  DM auth: via SIGNAL_ALLOWED_USERS + DM pairing",
         f"  Groups: {'enabled' if _gw().get_env_value('SIGNAL_GROUP_ALLOWED_USERS') else 'disabled'}",
     )

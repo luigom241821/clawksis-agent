@@ -71,7 +71,9 @@ def test_active_profile_stamp_resolves_primary_adapter(monkeypatch):
     runner, default_adapter, _secondary_adapter = _make_multiplex_runner(monkeypatch)
     runner._active_profile_name = lambda: "dev"
 
-    assert runner._authorization_adapter(Platform.WECOM, profile="dev") is default_adapter
+    assert (
+        runner._authorization_adapter(Platform.WECOM, profile="dev") is default_adapter
+    )
 
 
 def test_scoped_secondary_profile_still_uses_profile_adapters(monkeypatch):
@@ -125,10 +127,13 @@ def test_secondary_allowlist_dm_behavior_ignores_unauthorized(monkeypatch):
     runner, _default_adapter, secondary_adapter = _make_multiplex_runner(monkeypatch)
     secondary_adapter._dm_policy = "allowlist"
 
-    assert runner._get_unauthorized_dm_behavior(
-        Platform.WECOM,
-        profile="coder",
-    ) == "ignore"
+    assert (
+        runner._get_unauthorized_dm_behavior(
+            Platform.WECOM,
+            profile="coder",
+        )
+        == "ignore"
+    )
     assert runner._get_unauthorized_dm_behavior(Platform.WECOM) == "ignore"
 
 
@@ -184,14 +189,18 @@ def test_startup_guard_gateway_allow_all_reads_scope_not_environ(monkeypatch):
             violation = _own_policy_open_startup_violation(cfg)
         finally:
             secret_scope.reset_secret_scope(token)
-        assert violation is not None, "default profile's env opt-in must not leak into the scoped secondary profile"
+        assert violation is not None, (
+            "default profile's env opt-in must not leak into the scoped secondary profile"
+        )
 
         token = secret_scope.set_secret_scope({"GATEWAY_ALLOW_ALL_USERS": "true"})
         try:
             violation = _own_policy_open_startup_violation(cfg)
         finally:
             secret_scope.reset_secret_scope(token)
-        assert violation is None, "the secondary profile's own scoped opt-in must be honored"
+        assert violation is None, (
+            "the secondary profile's own scoped opt-in must be honored"
+        )
     finally:
         secret_scope.set_multiplex_active(previous_multiplex)
 
@@ -400,13 +409,16 @@ def test_adapter_intake_and_central_authz_agree_on_the_same_list(monkeypatch):
         # Adapter layer: intake filter admits/denies...
         assert (sender in adapter._allowed_pubkeys) is admitted
         # ...and central authz returns the SAME verdict for that sender.
-        assert runner._is_user_authorized(
-            _SessionSource(
-                platform=_BUZZ,
-                user_id=sender,
-                chat_id="chat-1",
-                user_name="member",
-                chat_type="dm",
-                profile="coder",
+        assert (
+            runner._is_user_authorized(
+                _SessionSource(
+                    platform=_BUZZ,
+                    user_id=sender,
+                    chat_id="chat-1",
+                    user_name="member",
+                    chat_type="dm",
+                    profile="coder",
+                )
             )
-        ) is admitted
+            is admitted
+        )

@@ -27,8 +27,16 @@ _KNOWN_REDIRECTS = {("review", "todo"): "ready"}
 
 
 def _load_plugin_router():
-    plugin_file = Path(__file__).resolve().parents[2] / "plugins" / "kanban" / "dashboard" / "plugin_api.py"
-    spec = importlib.util.spec_from_file_location("clawk_dashboard_plugin_kanban_workflow_test", plugin_file)
+    plugin_file = (
+        Path(__file__).resolve().parents[2]
+        / "plugins"
+        / "kanban"
+        / "dashboard"
+        / "plugin_api.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "clawk_dashboard_plugin_kanban_workflow_test", plugin_file
+    )
     mod = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = mod
     spec.loader.exec_module(mod)
@@ -48,10 +56,15 @@ def client(tmp_path, monkeypatch):
 
 
 def _task_in(client, src: str) -> str:
-    tid = client.post("/k/tasks", json={"title": src, "assignee": "a", "triage": src == "triage"}).json()["task"]["id"]
+    tid = client.post(
+        "/k/tasks", json={"title": src, "assignee": "a", "triage": src == "triage"}
+    ).json()["task"]["id"]
     with kbc.connect_closing() as conn:
         if src == "todo":
-            assert client.patch(f"/k/tasks/{tid}", json={"status": "todo"}).status_code == 200
+            assert (
+                client.patch(f"/k/tasks/{tid}", json={"status": "todo"}).status_code
+                == 200
+            )
         elif src == "running":
             assert kb.claim_task(conn, tid) is not None
         elif src == "blocked":
@@ -83,11 +96,15 @@ def test_manual_moves_match_server(client, src):
         # A refusal must be a domain rejection (400 bad verb / 409 refused transition);
         # anything else (5xx, 422) is a bug, never an acceptable "not allowed".
         if r.status_code not in (200, 400, 409):
-            mismatches.append(f"{src}->{dst}: unexpected HTTP {r.status_code}: {r.text[:200]}")
+            mismatches.append(
+                f"{src}->{dst}: unexpected HTTP {r.status_code}: {r.text[:200]}"
+            )
             continue
         accepted = r.status_code == 200
         if accepted != W.can_move(src, dst):
-            mismatches.append(f"{src}->{dst}: server {r.status_code}, workflow can_move={W.can_move(src, dst)}")
+            mismatches.append(
+                f"{src}->{dst}: server {r.status_code}, workflow can_move={W.can_move(src, dst)}"
+            )
         elif accepted and landed != _KNOWN_REDIRECTS.get((src, dst), dst):
             mismatches.append(f"{src}->{dst}: landed in {landed}")
     assert not mismatches, "\n".join(mismatches)

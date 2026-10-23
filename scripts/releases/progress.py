@@ -5,6 +5,7 @@ result (the sequencer prints its steps as JSON there). On GitHub Actions the
 ``::group::`` / ``::notice::`` lines render as collapsible sections and
 annotations; locally they read as plain prefixed lines.
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -36,7 +37,9 @@ def group(title: str) -> Iterator[None]:
     try:
         yield
     except BaseException as exc:
-        log(f"✗ {title} failed after {time.monotonic() - started:.1f}s: {type(exc).__name__}: {exc}")
+        log(
+            f"✗ {title} failed after {time.monotonic() - started:.1f}s: {type(exc).__name__}: {exc}"
+        )
         log("::endgroup::")
         raise
     log(f"✓ {title} ({time.monotonic() - started:.1f}s)")
@@ -64,10 +67,14 @@ def logged_run(run: Callable[[list[str]], str]) -> Callable[[list[str]], str]:
         try:
             result = run(argv)
         except BaseException as exc:
-            log(f"    ↳ failed after {time.monotonic() - started:.1f}s: {type(exc).__name__}: {exc}")
+            log(
+                f"    ↳ failed after {time.monotonic() - started:.1f}s: {type(exc).__name__}: {exc}"
+            )
             raise
         lines = result.count("\n") + 1 if result else 0
-        log(f"    ↳ ok in {time.monotonic() - started:.1f}s ({lines} line{'s' if lines != 1 else ''})")
+        log(
+            f"    ↳ ok in {time.monotonic() - started:.1f}s ({lines} line{'s' if lines != 1 else ''})"
+        )
         return result
 
     wrapper._progress_logged = True  # type: ignore[attr-defined]

@@ -19,20 +19,26 @@ class _NoProject(Exception):
 
 def _projects_payload(conn) -> dict:
     from clawk_cli import projects_db as pdb
+
     return {
-        "projects": [p.to_dict() for p in pdb.list_projects(conn, include_archived=True)],
-        "active_id": pdb.get_active_id(conn)}
+        "projects": [
+            p.to_dict() for p in pdb.list_projects(conn, include_archived=True)
+        ],
+        "active_id": pdb.get_active_id(conn),
+    }
 
 
 def _projects_method(name: str):
     """Register a projects RPC, injecting (pdb, conn) and unifying error mapping; profile-scoped
     so app-global remote mode reads that profile's ``projects.db``."""
+
     def decorator(fn):
         @method(name)
         @_registry.profile_scoped
         def handler(rid, params: dict) -> dict:
             try:
                 from clawk_cli import projects_db as pdb
+
                 with pdb.connect_closing() as conn:
                     return fn(rid, params, pdb, conn)
             except _NoProject:
@@ -41,7 +47,9 @@ def _projects_method(name: str):
                 return _err(rid, _E_PROJECT_ARG, str(e))
             except Exception as e:
                 return _err(rid, _E_PROJECTS, str(e))
+
         return handler
+
     return decorator
 
 
@@ -57,9 +65,12 @@ def _pick(params: dict, *keys: str) -> dict:
     return {k: params.get(k) for k in keys}
 
 
-def _register_project_mutator(suffix: str, fn_name: str, takes_path: bool, kwargs_of) -> None:
+def _register_project_mutator(
+    suffix: str, fn_name: str, takes_path: bool, kwargs_of
+) -> None:
     """``projects.<suffix>``: resolve ``params['id']`` (5062 when missing), call
     ``pdb.<fn_name>(conn, id[, path], **kwargs_of(params))``, answer with the refreshed project."""
+
     @_projects_method(f"projects.{suffix}")
     def _(rid, params, pdb, conn) -> dict:
         proj = _require_project(pdb, conn, params)
@@ -69,11 +80,17 @@ def _register_project_mutator(suffix: str, fn_name: str, takes_path: bool, kwarg
 
 
 _register_project_mutator(
-    "update", "update_project", False,
-    lambda p: _pick(p, "name", "description", "icon", "color", "board_slug"))
+    "update",
+    "update_project",
+    False,
+    lambda p: _pick(p, "name", "description", "icon", "color", "board_slug"),
+)
 _register_project_mutator(
-    "add_folder", "add_folder", True,
-    lambda p: {"label": p.get("label"), "is_primary": bool(p.get("is_primary"))})
+    "add_folder",
+    "add_folder",
+    True,
+    lambda p: {"label": p.get("label"), "is_primary": bool(p.get("is_primary"))},
+)
 _register_project_mutator("remove_folder", "remove_folder", True, lambda p: {})
 _register_project_mutator("set_primary", "set_primary", True, lambda p: {})
 
@@ -91,11 +108,17 @@ def _(rid, params, pdb, conn) -> dict:
 @_projects_method("projects.create")
 def _(rid, params, pdb, conn) -> dict:
     pid = pdb.create_project(
-        conn, name=str(params.get("name") or ""), folders=params.get("folders") or [],
-        **_pick(params, "slug", "primary_path", "description", "icon", "color", "board_slug"))
+        conn,
+        name=str(params.get("name") or ""),
+        folders=params.get("folders") or [],
+        **_pick(
+            params, "slug", "primary_path", "description", "icon", "color", "board_slug"
+        ),
+    )
     if params.get("use"):
         pdb.set_active(conn, pid)
     from clawk_cli.observability.shared_metrics_signals import record_feature_used
+
     record_feature_used("projects")
     proj = pdb.get_project(conn, pid)
     return _ok(rid, {"project": proj.to_dict() if proj else None})
@@ -104,7 +127,9 @@ def _(rid, params, pdb, conn) -> dict:
 @_projects_method("projects.archive")
 def _(rid, params, pdb, conn) -> dict:
     proj = _require_project(pdb, conn, params)
-    (pdb.restore_project if params.get("restore") else pdb.archive_project)(conn, proj.id)
+    (pdb.restore_project if params.get("restore") else pdb.archive_project)(
+        conn, proj.id
+    )
     return _ok(rid, _projects_payload(conn))
 
 
@@ -116,18 +141,26 @@ def _(rid, params, pdb, conn) -> dict:
 
 @_projects_method("projects.set_active")
 def _(rid, params, pdb, conn) -> dict:
-    pdb.set_active(conn, _require_project(pdb, conn, params).id if params.get("id") else None)
+    pdb.set_active(
+        conn, _require_project(pdb, conn, params).id if params.get("id") else None
+    )
     return _ok(rid, {"active_id": pdb.get_active_id(conn)})
 
 
 @_projects_method("projects.for_cwd")
 def _(rid, params, pdb, conn) -> dict:
     cwd = _completion_cwd(
-        {"cwd": str(params.get("cwd") or "").strip()} if params.get("cwd") else {})
+        {"cwd": str(params.get("cwd") or "").strip()} if params.get("cwd") else {}
+    )
     proj = pdb.project_for_path(conn, cwd)
-    return _ok(rid, {
-        "project": proj.to_dict() if proj else None, "cwd": cwd,
-        "branch": git_probe.branch(cwd)})
+    return _ok(
+        rid,
+        {
+            "project": proj.to_dict() if proj else None,
+            "cwd": cwd,
+            "branch": git_probe.branch(cwd),
+        },
+    )
 
 
 def _non_workspace_dirs() -> set[str]:
@@ -145,12 +178,14 @@ def _is_repo_junk(root: str) -> bool:
     if not root:
         return True
     from clawk_constants import get_clawk_home
+
     real = os.path.realpath(root)
     clawk_home = os.path.realpath(str(get_clawk_home()))
     return (
         os.path.normcase(real) in _non_workspace_dirs()
         or real == clawk_home
-        or real.startswith(clawk_home + os.sep))
+        or real.startswith(clawk_home + os.sep)
+    )
 
 
 def _is_session_cwd_junk(cwd: str) -> bool:
@@ -159,6 +194,7 @@ def _is_session_cwd_junk(cwd: str) -> bool:
     if not cwd:
         return True
     from clawk_constants import get_clawk_home
+
     real = os.path.normcase(os.path.realpath(cwd))
     clawk_home = os.path.normcase(os.path.realpath(str(get_clawk_home())))
     return real in _non_workspace_dirs() or real == clawk_home
@@ -167,6 +203,7 @@ def _is_session_cwd_junk(cwd: str) -> bool:
 def _repo_discovery_policy(raw: dict | None = None) -> dict:
     """Return the effective, profile-local Desktop repository scan policy."""
     from clawk_cli.config import DEFAULT_CONFIG
+
     defaults = DEFAULT_CONFIG["desktop"]
     source = raw if isinstance(raw, dict) else (_load_cfg().get("desktop") or {})
     if not isinstance(source, dict):
@@ -180,29 +217,43 @@ def _repo_discovery_policy(raw: dict | None = None) -> dict:
         if not isinstance(values, list):
             return list(defaults[long])
         return [v.strip() for v in values if isinstance(v, str) and v.strip()]
+
     enabled = _get("enabled", "repo_scan_enabled")
     return {
-        "enabled": enabled if isinstance(enabled, bool) else defaults["repo_scan_enabled"],
+        "enabled": enabled
+        if isinstance(enabled, bool)
+        else defaults["repo_scan_enabled"],
         "roots": _paths("roots", "repo_scan_roots"),
-        "exclude_paths": _paths("exclude_paths", "repo_scan_exclude_paths")}
+        "exclude_paths": _paths("exclude_paths", "repo_scan_exclude_paths"),
+    }
 
 
 def _repo_discovery_policy_key(policy: dict) -> str:
     def _paths(values: list[str]) -> list[str]:
         home = os.path.expanduser("~")
-        return sorted({
-            os.path.normcase(os.path.abspath(os.path.join(home, os.path.expanduser(v))))
-            for v in values})
+        return sorted(
+            {
+                os.path.normcase(
+                    os.path.abspath(os.path.join(home, os.path.expanduser(v)))
+                )
+                for v in values
+            }
+        )
+
     canonical = {
-        "enabled": bool(policy["enabled"]), "roots": _paths(policy["roots"]),
-        "exclude_paths": _paths(policy["exclude_paths"])}
+        "enabled": bool(policy["enabled"]),
+        "roots": _paths(policy["roots"]),
+        "exclude_paths": _paths(policy["exclude_paths"]),
+    }
     return json.dumps(canonical, sort_keys=True, separators=(",", ":"))
 
 
 def _repo_discovery_policy_is_default(policy: dict) -> bool:
     from clawk_cli.config import DEFAULT_CONFIG
+
     return _repo_discovery_policy_key(policy) == _repo_discovery_policy_key(
-        _repo_discovery_policy(DEFAULT_CONFIG["desktop"]))
+        _repo_discovery_policy(DEFAULT_CONFIG["desktop"])
+    )
 
 
 def _scan_discovered_repos_remote(conn, policy: dict) -> bool:
@@ -218,6 +269,7 @@ def _scan_discovered_repos_remote(conn, policy: dict) -> bool:
     See #81723.
     """
     from clawk_cli import projects_db as pdb
+
     roots = policy.get("roots") or []
     excludes = policy.get("exclude_paths") or []
     pairs: list[tuple[str, str | None]] = []
@@ -226,7 +278,11 @@ def _scan_discovered_repos_remote(conn, policy: dict) -> bool:
 
     def _is_excluded(path: str) -> bool:
         return any(
-            path == ex or path.startswith(ex.rstrip("/\\") + os.sep) for ex in excludes if ex)
+            path == ex or path.startswith(ex.rstrip("/\\") + os.sep)
+            for ex in excludes
+            if ex
+        )
+
     for root in roots:
         if not os.path.isdir(root):
             # `os.walk` on a missing root yields nothing; an unmounted volume must not wipe.
@@ -237,14 +293,19 @@ def _scan_discovered_repos_remote(conn, policy: dict) -> bool:
             for dirpath, dirnames, _filenames in os.walk(root):
                 if _is_excluded(dirpath):
                     dirnames[:] = []
-                elif ".git" in dirnames:  # check BEFORE pruning hidden dirs — `.git` is hidden
+                elif (
+                    ".git" in dirnames
+                ):  # check BEFORE pruning hidden dirs — `.git` is hidden
                     if dirpath not in seen:
                         seen.add(dirpath)
                         pairs.append((dirpath, os.path.basename(dirpath)))
                     dirnames[:] = []  # don't hunt nested repos inside a repo
                 else:
                     dirnames[:] = [
-                        d for d in dirnames if not d.startswith(".") and d != "node_modules"]
+                        d
+                        for d in dirnames
+                        if not d.startswith(".") and d != "node_modules"
+                    ]
                 if len(pairs) >= 500:
                     break
         except Exception:
@@ -256,7 +317,11 @@ def _scan_discovered_repos_remote(conn, policy: dict) -> bool:
     if pairs:
         try:
             pdb.record_discovered_repos(
-                conn, pairs, replace=authoritative, policy_key=_repo_discovery_policy_key(policy))
+                conn,
+                pairs,
+                replace=authoritative,
+                policy_key=_repo_discovery_policy_key(policy),
+            )
         except Exception:
             logger.debug("discover_repos cache write failed", exc_info=True)
             authoritative = False
@@ -264,7 +329,8 @@ def _scan_discovered_repos_remote(conn, policy: dict) -> bool:
 
 
 def _discover_repos_payload(
-    db, *, conn=None, backfill: bool = True, include_cached: bool = True) -> list[dict]:
+    db, *, conn=None, backfill: bool = True, include_cached: bool = True
+) -> list[dict]:
     """Merge cached filesystem-scanned repos with session-derived roots, junk-filtered, with
     session totals. ``backfill`` persists resolved roots onto session rows — kept OFF the
     per-turn tree path and done only on explicit refresh."""
@@ -272,7 +338,9 @@ def _discover_repos_payload(
 
     def _agg(root: str) -> dict:
         return repos.setdefault(
-            root, {"root": root, "label": "", "sessions": 0, "last_active": 0.0})
+            root, {"root": root, "label": "", "sessions": 0, "last_active": 0.0}
+        )
+
     # ``db`` is None for a profile whose session store was never initialized (read-only foreign
     # handles never bootstrap it): the scan cache in projects.db is still authoritative.
     cwd_rows = list(db.distinct_session_cwds()) if db is not None else []
@@ -302,7 +370,12 @@ def _discover_repos_payload(
         # `last_seen` is scan time, not user activity — never fold it into `last_active`.
         try:
             from clawk_cli import projects_db as pdb
-            with (contextlib.nullcontext(conn) if conn is not None else pdb.connect_closing()) as c:
+
+            with (
+                contextlib.nullcontext(conn)
+                if conn is not None
+                else pdb.connect_closing()
+            ) as c:
                 for entry in pdb.list_discovered_repos(c):
                     root = str(entry.get("root") or "")
                     if root and not _is_repo_junk(root):
@@ -313,7 +386,9 @@ def _discover_repos_payload(
             logger.debug("failed to read discovered repo cache", exc_info=True)
     out = sorted(repos.values(), key=lambda r: r["last_active"], reverse=True)
     for r in out:
-        r["label"] = r["label"] or os.path.basename(r["root"].rstrip("/\\")) or r["root"]
+        r["label"] = (
+            r["label"] or os.path.basename(r["root"].rstrip("/\\")) or r["root"]
+        )
     return out
 
 
@@ -324,17 +399,38 @@ _PROJECT_TREE_EXCLUDED_SOURCES = ["cron", "kanban", "oneshot"]
 def _project_tree_row(r: dict) -> dict:
     """Project a SessionDB row to the minimal shape the sidebar renders (grouping fields +
     what ``SidebarSessionRow`` reads), minus the heavy columns."""
-    row = {k: r.get(k) for k in (
-        "id", "_lineage_root_id", "_lineage_ids", "parent_session_id",
-        "_reset_from", "_branched_from", "title", "preview")}
+    row = {
+        k: r.get(k)
+        for k in (
+            "id",
+            "_lineage_root_id",
+            "_lineage_ids",
+            "parent_session_id",
+            "_reset_from",
+            "_branched_from",
+            "title",
+            "preview",
+        )
+    }
     row.update(
-        started_at=r.get("started_at") or 0, ended_at=r.get("ended_at"),
+        started_at=r.get("started_at") or 0,
+        ended_at=r.get("ended_at"),
         last_active=r.get("last_active") or r.get("started_at") or 0,
-        source=r.get("source"), archived=bool(r.get("archived")),
-        **{k: r.get(k) or 0 for k in (
-            "message_count", "tool_call_count", "input_tokens", "output_tokens")},
+        source=r.get("source"),
+        archived=bool(r.get("archived")),
+        **{
+            k: r.get(k) or 0
+            for k in (
+                "message_count",
+                "tool_call_count",
+                "input_tokens",
+                "output_tokens",
+            )
+        },
         **{k: r.get(k) for k in ("actual_cost_usd", "estimated_cost_usd", "model")},
-        is_active=False, **{k: r.get(k) for k in ("cwd", "git_branch", "git_repo_root")})
+        is_active=False,
+        **{k: r.get(k) for k in ("cwd", "git_branch", "git_repo_root")},
+    )
     return row
 
 
@@ -346,26 +442,37 @@ def _project_tree_inputs(
     the distinct-cwd scan + git probes) on that per-turn path."""
     # compact_rows: selecting the system-prompt blob only to drop it costs tens of MB of reads.
     rows = db.list_sessions_rich(
-        limit=session_limit, offset=0, order_by_last_active=True, min_message_count=1,
-        include_children=False, exclude_sources=_PROJECT_TREE_EXCLUDED_SOURCES,
-        include_archived=False, compact_rows=True)
+        limit=session_limit,
+        offset=0,
+        order_by_last_active=True,
+        min_message_count=1,
+        include_children=False,
+        exclude_sources=_PROJECT_TREE_EXCLUDED_SOURCES,
+        include_archived=False,
+        compact_rows=True,
+    )
     sessions = [_project_tree_row(r) for r in rows]
     # Parallel-warm the git cache so build_tree's resolver doesn't cold-probe each cwd in turn.
     git_probe.warm_roots(s["cwd"] for s in sessions if s.get("cwd"))
     from clawk_cli import projects_db as pdb
+
     policy = _repo_discovery_policy()
     policy_key = _repo_discovery_policy_key(policy)
     with pdb.connect_closing() as conn:
         if include_discovered:
             pdb.reconcile_discovered_repos_policy(
-                conn, policy_key, preserve_unversioned=_repo_discovery_policy_is_default(policy))
+                conn,
+                policy_key,
+                preserve_unversioned=_repo_discovery_policy_is_default(policy),
+            )
         projects = [p.to_dict() for p in pdb.list_projects(conn)]
         active_id = pdb.get_active_id(conn)
         # backfill stays off the hot tree path — grouping uses the live resolver.
         discovered = []
         if include_discovered:
             discovered = _discover_repos_payload(
-                db, conn=conn, backfill=False, include_cached=policy["enabled"])
+                db, conn=conn, backfill=False, include_cached=policy["enabled"]
+            )
     return sessions, projects, discovered, active_id
 
 
@@ -382,21 +489,36 @@ def _dir_exists_cached(path: str) -> bool:
 
 
 def _build_project_tree(
-    db, *, preview_limit: int, hydrate: bool, session_limit: int, include_discovered: bool
+    db,
+    *,
+    preview_limit: int,
+    hydrate: bool,
+    session_limit: int,
+    include_discovered: bool,
 ) -> tuple[dict, str | None]:
     """Gather inputs and run the one authoritative builder. Returns (tree, active_id)."""
     from tui_gateway import project_tree
+
     _DIR_EXISTS_CACHE.clear()
     sessions, projects, discovered, active_id = _project_tree_inputs(
-        db, session_limit, include_discovered=include_discovered)
+        db, session_limit, include_discovered=include_discovered
+    )
     # build_tree also resolves declared project folders and discovered roots — warm them too.
     git_probe.warm_roots(
         [str(f.get("path") or "") for p in projects for f in (p.get("folders") or [])]
-        + [str(r.get("root") or "") for r in discovered])
+        + [str(r.get("root") or "") for r in discovered]
+    )
     tree = project_tree.build_tree(
-        projects, sessions, discovered, git_probe.resolve, preview_limit=preview_limit,
-        hydrate=hydrate, is_junk_root=_is_repo_junk, is_junk_cwd=_is_session_cwd_junk,
-        exists=_dir_exists_cached)
+        projects,
+        sessions,
+        discovered,
+        git_probe.resolve,
+        preview_limit=preview_limit,
+        hydrate=hydrate,
+        is_junk_root=_is_repo_junk,
+        is_junk_cwd=_is_session_cwd_junk,
+        exists=_dir_exists_cached,
+    )
     return tree, active_id
 
 

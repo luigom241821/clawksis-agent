@@ -22,6 +22,7 @@ refactor brief or a CI lane can make it a hard gate. Runs in ~30 s over the whol
 Usage:
     python scripts/ci/check_public_surface.py [--base origin/main] [--head HEAD] [--strict] [--json out.json]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -31,12 +32,28 @@ import re
 import subprocess
 import sys
 
-SRC_DIRS = ("agent", "gateway", "clawk_cli", "tools", "tui_gateway", "cron", "acp_adapter", "plugins")
+SRC_DIRS = (
+    "agent",
+    "gateway",
+    "clawk_cli",
+    "tools",
+    "tui_gateway",
+    "cron",
+    "acp_adapter",
+    "plugins",
+)
 _TEST_DEF_RE = re.compile(r"^\s*(?:async\s+)?def test_", re.MULTILINE)
 
 
 def _git(*args: str) -> str:
-    return subprocess.run(["git", *args], capture_output=True, text=True, encoding="utf-8", errors="replace", check=False).stdout
+    return subprocess.run(
+        ["git", *args],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    ).stdout
 
 
 def _changed_py(base: str, head: str) -> list[str]:
@@ -45,7 +62,14 @@ def _changed_py(base: str, head: str) -> list[str]:
 
 
 def _show(rev: str, path: str) -> str | None:
-    r = subprocess.run(["git", "show", f"{rev}:{path}"], capture_output=True, text=True, encoding="utf-8", errors="replace", check=False)
+    r = subprocess.run(
+        ["git", "show", f"{rev}:{path}"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
     return r.stdout if r.returncode == 0 else None
 
 
@@ -84,12 +108,21 @@ def public_methods(src: str) -> set[str]:
     classes = {n.name: n for n in tree.body if isinstance(n, ast.ClassDef)}
 
     def own(cls: ast.ClassDef) -> set[str]:
-        return {m.name for m in cls.body if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef)) and _is_public_method(m.name)}
+        return {
+            m.name
+            for m in cls.body
+            if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and _is_public_method(m.name)
+        }
 
     def reachable(cls: ast.ClassDef, seen: set[str]) -> set[str]:
         names = own(cls)
         for base in cls.bases:
-            base_name = base.id if isinstance(base, ast.Name) else (base.attr if isinstance(base, ast.Attribute) else None)
+            base_name = (
+                base.id
+                if isinstance(base, ast.Name)
+                else (base.attr if isinstance(base, ast.Attribute) else None)
+            )
             if base_name in classes and base_name not in seen:
                 names |= reachable(classes[base_name], seen | {base_name})
         return names
@@ -124,7 +157,11 @@ def diff_surface(base: str, head: str) -> dict:
             dropped_names[path] = gone
         if gone_m := sorted(public_methods(before) - public_methods(after)):
             dropped_methods[path] = gone_m
-    return {"dropped_names": dropped_names, "dropped_methods": dropped_methods, "test_drops": test_drops}
+    return {
+        "dropped_names": dropped_names,
+        "dropped_methods": dropped_methods,
+        "test_drops": test_drops,
+    }
 
 
 def render(report: dict) -> str:
@@ -138,9 +175,13 @@ def render(report: dict) -> str:
         f"{n_tests} test def(s) dropped in {len(report['test_drops'])} file(s)"
     )
     for path, names in sorted(report["dropped_names"].items()):
-        lines.append(f"  {path}: -{', '.join(names[:12])}{' …' if len(names) > 12 else ''}")
+        lines.append(
+            f"  {path}: -{', '.join(names[:12])}{' …' if len(names) > 12 else ''}"
+        )
     for path, names in sorted(report["dropped_methods"].items()):
-        lines.append(f"  {path}: -{', '.join(names[:8])}{' …' if len(names) > 8 else ''}")
+        lines.append(
+            f"  {path}: -{', '.join(names[:8])}{' …' if len(names) > 8 else ''}"
+        )
     for path, (b, a) in sorted(report["test_drops"].items()):
         lines.append(f"  {path}: {b} -> {a} test defs")
     if n_names or n_meth or n_tests:
@@ -160,19 +201,34 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--json", dest="json_out", help="also write the report as JSON")
     args = ap.parse_args(argv)
     for ref in (args.base, args.head):
-        if subprocess.run(["git", "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"], capture_output=True, check=False).returncode != 0:
-            print(f"public-surface: cannot resolve ref {ref!r} (fetch it first); refusing to report a clean diff", file=sys.stderr)
+        if (
+            subprocess.run(
+                ["git", "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"],
+                capture_output=True,
+                check=False,
+            ).returncode
+            != 0
+        ):
+            print(
+                f"public-surface: cannot resolve ref {ref!r} (fetch it first); refusing to report a clean diff",
+                file=sys.stderr,
+            )
             return 2
     base = _git("merge-base", args.base, args.head).strip()
     if not base:
-        print(f"public-surface: no merge-base between {args.base!r} and {args.head!r}", file=sys.stderr)
+        print(
+            f"public-surface: no merge-base between {args.base!r} and {args.head!r}",
+            file=sys.stderr,
+        )
         return 2
     report = diff_surface(base, args.head)
     print(render(report))
     if args.json_out:
         with open(args.json_out, "w", encoding="utf-8") as fh:
             json.dump(report, fh, indent=1)
-    findings = any(report[k] for k in ("dropped_names", "dropped_methods", "test_drops"))
+    findings = any(
+        report[k] for k in ("dropped_names", "dropped_methods", "test_drops")
+    )
     return 1 if (args.strict and findings) else 0
 
 

@@ -60,8 +60,24 @@ def test_live_buzz_media_delivers_every_file_with_reply_metadata(tmp_path) -> No
     assert result["media_delivered"] is True
     assert calls == [
         ("text", "attached files", {"thread_id": "reply-root"}),
-        ("document", str(first), {"caption": None, "reply_to": "reply-root", "metadata": {"thread_id": "reply-root"}}),
-        ("document", str(second), {"caption": None, "reply_to": "reply-root", "metadata": {"thread_id": "reply-root"}}),
+        (
+            "document",
+            str(first),
+            {
+                "caption": None,
+                "reply_to": "reply-root",
+                "metadata": {"thread_id": "reply-root"},
+            },
+        ),
+        (
+            "document",
+            str(second),
+            {
+                "caption": None,
+                "reply_to": "reply-root",
+                "metadata": {"thread_id": "reply-root"},
+            },
+        ),
     ]
 
 
@@ -101,7 +117,15 @@ def test_live_buzz_single_image_uses_caption_without_duplicate_text(tmp_path) ->
         "media_delivered": True,
     }
     assert calls == [
-        ("image", str(image), {"caption": "screenshot caption", "reply_to": "reply-root", "metadata": {"thread_id": "reply-root"}})
+        (
+            "image",
+            str(image),
+            {
+                "caption": "screenshot caption",
+                "reply_to": "reply-root",
+                "metadata": {"thread_id": "reply-root"},
+            },
+        )
     ]
 
 
@@ -214,7 +238,9 @@ def test_live_buzz_media_exception_reports_partial_delivery(tmp_path) -> None:
     assert "media_delivered" not in result
 
 
-def test_live_adapter_inherited_media_fallback_is_not_claimed_as_delivery(tmp_path) -> None:
+def test_live_adapter_inherited_media_fallback_is_not_claimed_as_delivery(
+    tmp_path,
+) -> None:
     from gateway.platforms.base import BasePlatformAdapter, SendResult
 
     platform = Platform("buzz")
@@ -274,12 +300,20 @@ def test_send_message_routes_buzz_uuid_without_home_fallback() -> None:
     )
     channel_id = "31b543d5-80d4-4df5-8a5c-cefca1a58fdd"
 
-    with patch("gateway.config.load_gateway_config", return_value=config), \
-         patch("tools.interrupt.is_interrupted", return_value=False), \
-         patch("gateway.channel_directory.resolve_channel_name", side_effect=AssertionError("raw UUID should not resolve via directory")), \
-         patch("model_tools._run_async", side_effect=_run_async_immediately), \
-         patch("tools.send_message_tool._send_to_platform", new=AsyncMock(return_value={"success": True})) as send_mock, \
-         patch("gateway.mirror.mirror_to_session", return_value=True):
+    with (
+        patch("gateway.config.load_gateway_config", return_value=config),
+        patch("tools.interrupt.is_interrupted", return_value=False),
+        patch(
+            "gateway.channel_directory.resolve_channel_name",
+            side_effect=AssertionError("raw UUID should not resolve via directory"),
+        ),
+        patch("model_tools._run_async", side_effect=_run_async_immediately),
+        patch(
+            "tools.send_message_tool._send_to_platform",
+            new=AsyncMock(return_value={"success": True}),
+        ) as send_mock,
+        patch("gateway.mirror.mirror_to_session", return_value=True),
+    ):
         result = json.loads(
             send_message_tool(
                 {
@@ -316,18 +350,30 @@ def test_e164_target_still_requires_phone_platform() -> None:
 
 
 def test_send_message_routes_whatsapp_group_jid_without_home_fallback() -> None:
-    whatsapp_cfg = SimpleNamespace(enabled=True, token=None, extra={"api_url": "http://bridge"})
+    whatsapp_cfg = SimpleNamespace(
+        enabled=True, token=None, extra={"api_url": "http://bridge"}
+    )
     config = SimpleNamespace(
         platforms={Platform.WHATSAPP: whatsapp_cfg},
-        get_home_channel=lambda _platform: SimpleNamespace(chat_id="15551234567@s.whatsapp.net"),
+        get_home_channel=lambda _platform: SimpleNamespace(
+            chat_id="15551234567@s.whatsapp.net"
+        ),
     )
 
-    with patch("gateway.config.load_gateway_config", return_value=config), \
-         patch("tools.interrupt.is_interrupted", return_value=False), \
-         patch("gateway.channel_directory.resolve_channel_name", side_effect=AssertionError("raw JID should not resolve via directory")), \
-         patch("model_tools._run_async", side_effect=_run_async_immediately), \
-         patch("tools.send_message_tool._send_to_platform", new=AsyncMock(return_value={"success": True})) as send_mock, \
-         patch("gateway.mirror.mirror_to_session", return_value=True):
+    with (
+        patch("gateway.config.load_gateway_config", return_value=config),
+        patch("tools.interrupt.is_interrupted", return_value=False),
+        patch(
+            "gateway.channel_directory.resolve_channel_name",
+            side_effect=AssertionError("raw JID should not resolve via directory"),
+        ),
+        patch("model_tools._run_async", side_effect=_run_async_immediately),
+        patch(
+            "tools.send_message_tool._send_to_platform",
+            new=AsyncMock(return_value={"success": True}),
+        ) as send_mock,
+        patch("gateway.mirror.mirror_to_session", return_value=True),
+    ):
         result = json.loads(
             send_message_tool(
                 {
@@ -369,18 +415,20 @@ def test_resolved_opaque_plugin_target_uses_directory_id() -> None:
         get_home_channel=lambda _platform: None,
     )
     try:
-        with patch("gateway.config.load_gateway_config", return_value=config), \
-             patch("tools.interrupt.is_interrupted", return_value=False), \
-             patch(
-                 "gateway.channel_directory.resolve_channel_name",
-                 return_value="opaque:directory-id",
-             ), \
-             patch("model_tools._run_async", side_effect=_run_async_immediately), \
-             patch(
-                 "tools.send_message_tool._send_to_platform",
-                 new=AsyncMock(return_value={"success": True}),
-             ) as send_mock, \
-             patch("gateway.mirror.mirror_to_session", return_value=True):
+        with (
+            patch("gateway.config.load_gateway_config", return_value=config),
+            patch("tools.interrupt.is_interrupted", return_value=False),
+            patch(
+                "gateway.channel_directory.resolve_channel_name",
+                return_value="opaque:directory-id",
+            ),
+            patch("model_tools._run_async", side_effect=_run_async_immediately),
+            patch(
+                "tools.send_message_tool._send_to_platform",
+                new=AsyncMock(return_value={"success": True}),
+            ) as send_mock,
+            patch("gateway.mirror.mirror_to_session", return_value=True),
+        ):
             result = json.loads(
                 send_message_tool(
                     {
@@ -427,22 +475,24 @@ def test_unresolved_plugin_target_requires_explicit_parser() -> None:
         get_home_channel=lambda _platform: None,
     )
     try:
-        with patch("gateway.config.load_gateway_config", return_value=config), \
-             patch("tools.interrupt.is_interrupted", return_value=False), \
-             patch(
-                 "gateway.channel_directory.resolve_channel_name",
-                 return_value=None,
-             ), \
-             patch(
-                 "clawk_cli.plugins.discover_plugins",
-                 side_effect=lambda: platform_registry.register(entry),
-             ) as discover_mock, \
-             patch("model_tools._run_async", side_effect=_run_async_immediately), \
-             patch(
-                 "tools.send_message_tool._send_to_platform",
-                 new=AsyncMock(return_value={"success": True}),
-             ) as send_mock, \
-             patch("gateway.mirror.mirror_to_session", return_value=True):
+        with (
+            patch("gateway.config.load_gateway_config", return_value=config),
+            patch("tools.interrupt.is_interrupted", return_value=False),
+            patch(
+                "gateway.channel_directory.resolve_channel_name",
+                return_value=None,
+            ),
+            patch(
+                "clawk_cli.plugins.discover_plugins",
+                side_effect=lambda: platform_registry.register(entry),
+            ) as discover_mock,
+            patch("model_tools._run_async", side_effect=_run_async_immediately),
+            patch(
+                "tools.send_message_tool._send_to_platform",
+                new=AsyncMock(return_value={"success": True}),
+            ) as send_mock,
+            patch("gateway.mirror.mirror_to_session", return_value=True),
+        ):
             result = json.loads(
                 send_message_tool(
                     {
@@ -467,12 +517,14 @@ def test_unresolved_builtin_target_keeps_directory_error() -> None:
         get_home_channel=lambda _platform: None,
     )
 
-    with patch("gateway.config.load_gateway_config", return_value=config), \
-         patch("gateway.channel_directory.resolve_channel_name", return_value=None), \
-         patch(
-             "tools.send_message_tool._send_to_platform",
-             new=AsyncMock(return_value={"success": True}),
-         ) as send_mock:
+    with (
+        patch("gateway.config.load_gateway_config", return_value=config),
+        patch("gateway.channel_directory.resolve_channel_name", return_value=None),
+        patch(
+            "tools.send_message_tool._send_to_platform",
+            new=AsyncMock(return_value={"success": True}),
+        ) as send_mock,
+    ):
         result = json.loads(
             send_message_tool(
                 {
@@ -486,7 +538,6 @@ def test_unresolved_builtin_target_keeps_directory_error() -> None:
     assert set(result) == {"error"}
     assert "missing-room" in result["error"]
     send_mock.assert_not_awaited()
-
 
 
 def test_unresolved_builtin_target_passes_through_when_requested() -> None:
@@ -504,8 +555,6 @@ def test_unresolved_builtin_target_passes_through_when_requested() -> None:
     assert error is None
     assert chat_id == "ops-room"
     assert thread_id is None
-
-
 
 
 def test_photon_group_guid_passes_through_when_requested() -> None:
@@ -584,7 +633,9 @@ def test_plugin_parser_stays_authoritative_despite_fallback() -> None:
     assert error is not None
 
 
-def test_unknown_platform_that_left_core_names_its_install_command(tmp_path, monkeypatch):
+def test_unknown_platform_that_left_core_names_its_install_command(
+    tmp_path, monkeypatch
+):
     """A platform that moved out of core into a catalog plugin, sent to while the plugin is absent."""
     from gateway.config import GatewayConfig
     from tools.send_message_targets import resolve_send_target
@@ -592,7 +643,10 @@ def test_unknown_platform_that_left_core_names_its_install_command(tmp_path, mon
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     _, _, _, err = _resolve_platform_config("homeassistant", GatewayConfig())
-    assert "unregistered plugin platform: homeassistant" in err and "`clawk plugins install homeassistant`" in err
+    assert (
+        "unregistered plugin platform: homeassistant" in err
+        and "`clawk plugins install homeassistant`" in err
+    )
     _, _, err = resolve_send_target("homeassistant", "living room")
     assert "`clawk plugins install homeassistant`" in err
     _, _, _, err = _resolve_platform_config("nosuchplatform", GatewayConfig())

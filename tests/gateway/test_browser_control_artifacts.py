@@ -44,14 +44,21 @@ from gateway.platforms.api_server import APIServerAdapter
 
 
 API_KEY = "-".join(("fixture", "neutral", "api", "key", "123"))
-PNG_BYTES = bytes.fromhex("89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489")
+PNG_BYTES = bytes.fromhex(
+    "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489"
+)
 TEXT_BYTES = b"fixture artifact payload\n"
 
 
 class _Scope:
     """Minimal attribute scope accepted by artifact_scope_key."""
 
-    def __init__(self, principal="principal-fixture", session="session-fixture", family="local-api"):
+    def __init__(
+        self,
+        principal="principal-fixture",
+        session="session-fixture",
+        family="local-api",
+    ):
         self.principal_id = principal
         self.session_id = session
         self.transport_family = family
@@ -84,11 +91,17 @@ def _auth():
 
 
 def test_store_rejects_oversize_and_disallowed_mime_before_writing(tmp_path):
-    store = ArtifactStore(tmp_path / "root", max_bytes=8, allowed_mime_types=frozenset({"image/png"}))
+    store = ArtifactStore(
+        tmp_path / "root", max_bytes=8, allowed_mime_types=frozenset({"image/png"})
+    )
     with pytest.raises(ArtifactTooLarge):
-        store.store(b"123456789", filename="big.png", content_type="image/png", scope=_Scope())
+        store.store(
+            b"123456789", filename="big.png", content_type="image/png", scope=_Scope()
+        )
     with pytest.raises(ArtifactMimeRejected):
-        store.store(b"123", filename="doc.txt", content_type="text/plain", scope=_Scope())
+        store.store(
+            b"123", filename="doc.txt", content_type="text/plain", scope=_Scope()
+        )
     assert store.count() == 0
     assert not list((tmp_path / "root").iterdir())
 
@@ -159,7 +172,10 @@ def test_store_rejects_traversal_ids_and_mints_server_ids(tmp_path):
     # Ids are server-minted 32-hex; filenames never become paths.
     assert len(receipt.artifact_id) == 32
     assert all(character in "0123456789abcdef" for character in receipt.artifact_id)
-    assert store.validate(receipt.artifact_id, scope=_Scope()).artifact_id == receipt.artifact_id
+    assert (
+        store.validate(receipt.artifact_id, scope=_Scope()).artifact_id
+        == receipt.artifact_id
+    )
 
 
 def test_store_ttl_prunes_expired_and_drops_orphan_temps(tmp_path):
@@ -196,7 +212,9 @@ def test_scope_key_is_stable_across_reconnect_and_distinct_per_principal(tmp_pat
 
 def test_rate_limiter_sliding_window_per_key():
     now = [100.0]
-    limiter = ArtifactRateLimiter(window_seconds=60.0, max_requests=3, clock=lambda: now[0])
+    limiter = ArtifactRateLimiter(
+        window_seconds=60.0, max_requests=3, clock=lambda: now[0]
+    )
     assert limiter.allow("principal-a")
     assert limiter.allow("principal-a")
     assert limiter.allow("principal-a")
@@ -230,8 +248,12 @@ def _broker_scope(**overrides):
 
 
 def test_developer_capabilities_are_never_in_the_base_allowlist():
-    assert BROWSER_CONTROL_CAPABILITIES.isdisjoint(BROWSER_CONTROL_DEVELOPER_CAPABILITIES)
-    assert BROWSER_CONTROL_ARTIFACT_CAPABILITIES.isdisjoint(BROWSER_CONTROL_DEVELOPER_CAPABILITIES)
+    assert BROWSER_CONTROL_CAPABILITIES.isdisjoint(
+        BROWSER_CONTROL_DEVELOPER_CAPABILITIES
+    )
+    assert BROWSER_CONTROL_ARTIFACT_CAPABILITIES.isdisjoint(
+        BROWSER_CONTROL_DEVELOPER_CAPABILITIES
+    )
 
 
 def test_filter_rejects_developer_capabilities_without_developer_mode():
@@ -244,10 +266,19 @@ def test_filter_rejects_developer_capabilities_without_developer_mode():
         "browser_artifact_download",
         "arbitrary.capability",
     ]
-    assert filter_browser_control_capabilities(requested, developer_mode=False) == frozenset(
-        {"controller.noop", "browser_navigate", "browser_artifact_upload", "browser_artifact_download"}
+    assert filter_browser_control_capabilities(
+        requested, developer_mode=False
+    ) == frozenset(
+        {
+            "controller.noop",
+            "browser_navigate",
+            "browser_artifact_upload",
+            "browser_artifact_download",
+        }
     )
-    assert filter_browser_control_capabilities(requested, developer_mode=True) == frozenset(
+    assert filter_browser_control_capabilities(
+        requested, developer_mode=True
+    ) == frozenset(
         {
             "controller.noop",
             "browser_navigate",
@@ -257,12 +288,22 @@ def test_filter_rejects_developer_capabilities_without_developer_mode():
             "browser_cdp",
         }
     )
-    assert filter_browser_control_capabilities("not-a-list", developer_mode=True) == frozenset()
+    assert (
+        filter_browser_control_capabilities("not-a-list", developer_mode=True)
+        == frozenset()
+    )
 
 
 def test_browser_control_developer_mode_reads_config_flag():
-    assert browser_control_developer_mode({"browser": {"extension_control": {"developer_mode": True}}}) is True
-    assert browser_control_developer_mode({"browser": {"extension_control": {}}}) is False
+    assert (
+        browser_control_developer_mode(
+            {"browser": {"extension_control": {"developer_mode": True}}}
+        )
+        is True
+    )
+    assert (
+        browser_control_developer_mode({"browser": {"extension_control": {}}}) is False
+    )
     assert browser_control_developer_mode({"browser": {}}) is False
     assert browser_control_developer_mode(None) is False
 
@@ -281,7 +322,9 @@ def test_broker_developer_gate_blocks_evaluate_and_cdp_dispatch(tmp_path):
     with pytest.raises(ControllerUnavailable):
         broker.dispatch(scope, action="browser_evaluate", arguments={"expression": "1"})
     with pytest.raises(ControllerUnavailable):
-        broker.dispatch(scope, action="browser_cdp", arguments={"method": "Page.navigate"})
+        broker.dispatch(
+            scope, action="browser_cdp", arguments={"method": "Page.navigate"}
+        )
     assert broker.select(scope, "browser_evaluate") is None
 
 
@@ -367,7 +410,8 @@ def test_broker_artifact_action_requires_approved_id_only(tmp_path):
     # The frame carries only the id — never the payload bytes.
     assert "data" not in frames[0]["params"]["arguments"]
     assert all(
-        not isinstance(value, bytes) for value in frames[0]["params"]["arguments"].values()
+        not isinstance(value, bytes)
+        for value in frames[0]["params"]["arguments"].values()
     )
 
 
@@ -447,7 +491,10 @@ async def test_artifact_upload_download_round_trip_one_shot(monkeypatch, tmp_pat
         assert receipt["size_bytes"] == len(TEXT_BYTES)
         assert receipt["sha256"] == hashlib.sha256(TEXT_BYTES).hexdigest()
         assert receipt["one_shot"] is True
-        assert receipt["download_path"] == f"/v1/artifacts/download/{receipt['artifact_id']}"
+        assert (
+            receipt["download_path"]
+            == f"/v1/artifacts/download/{receipt['artifact_id']}"
+        )
 
         download = await client.get(receipt["download_path"], headers=_auth())
         assert download.status == 200
@@ -506,7 +553,9 @@ async def test_artifact_upload_bounded_body_rejects_oversize(monkeypatch, tmp_pa
 
 
 @pytest.mark.asyncio
-async def test_artifact_download_rejects_foreign_scope_and_unknown_id(monkeypatch, tmp_path):
+async def test_artifact_download_rejects_foreign_scope_and_unknown_id(
+    monkeypatch, tmp_path
+):
     adapter = _adapter()
     monkeypatch.setattr(adapter, "_browser_control_enabled", lambda: True)
     store = ArtifactStore(tmp_path / "root")
@@ -553,7 +602,9 @@ async def test_artifact_routes_rate_limit_per_principal(monkeypatch, tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_capabilities_advertise_artifact_transport_and_developer_mode(monkeypatch):
+async def test_capabilities_advertise_artifact_transport_and_developer_mode(
+    monkeypatch,
+):
     adapter = _adapter()
     monkeypatch.setattr(adapter, "_browser_control_enabled", lambda: True)
     monkeypatch.setattr(adapter, "_browser_control_developer_mode", lambda: True)
@@ -608,9 +659,7 @@ def test_http_uploaded_artifact_composes_with_broker_dispatch(tmp_path):
     )
 
     def send(frame):
-        broker.complete(
-            frame["params"]["command_id"], ok=True, result={"ok": True}
-        )
+        broker.complete(frame["params"]["command_id"], ok=True, result={"ok": True})
 
     broker.attach(scope, send)
     result = broker.dispatch(
@@ -624,10 +673,14 @@ def test_http_uploaded_artifact_composes_with_broker_dispatch(tmp_path):
     with pytest.raises(ArtifactScopeMismatch):
         store.validate(receipt.artifact_id, scope=_Scope(principal="other"))
     with pytest.raises(ArtifactScopeMismatch):
-        store.validate(receipt.artifact_id, scope=_Scope(session="", family="remote-api"))
+        store.validate(
+            receipt.artifact_id, scope=_Scope(session="", family="remote-api")
+        )
 
 
-def test_multiplex_profiles_get_distinct_stores_regardless_of_touch_order(tmp_path, monkeypatch):
+def test_multiplex_profiles_get_distinct_stores_regardless_of_touch_order(
+    tmp_path, monkeypatch
+):
     """Profile A touching the artifact route first must not pin profile B."""
 
     adapter = _adapter()
@@ -709,5 +762,7 @@ def test_store_construction_sweeps_orphan_files_from_previous_process(tmp_path):
     assert unrelated.exists()  # non-artifact-shaped names untouched
     assert fresh.count() == 0
     # New store works normally afterwards.
-    fresh.store(TEXT_BYTES, filename="new.txt", content_type="text/plain", scope=_Scope())
+    fresh.store(
+        TEXT_BYTES, filename="new.txt", content_type="text/plain", scope=_Scope()
+    )
     assert fresh.count() == 1

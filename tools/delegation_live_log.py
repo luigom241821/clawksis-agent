@@ -48,6 +48,7 @@ def live_transcript_root(home: Optional[Path] = None) -> Path:
     (#91996).
     """
     from clawk_constants import get_clawk_dir
+
     return get_clawk_dir("cache/delegation", "delegation_cache", home=home) / "live"
 
 
@@ -75,6 +76,7 @@ def _redact(text: str) -> str:
         return text
     try:
         from agent.redact import redact_sensitive_text
+
         return redact_sensitive_text(text, force=True) or ""
     except Exception:  # pragma: no cover - core module; never leak on failure
         return "[line withheld: redaction unavailable]"
@@ -92,8 +94,14 @@ class LiveTranscriptWriter:
     """Append-only event log for ONE subagent task. Best-effort: the first write
     failure flips ``_ok`` off and later calls become debug-logged no-ops."""
 
-    def __init__(self, delegation_id: str, task_index: int, goal: str,
-                 context: Optional[str] = None, root: Optional[Path] = None):
+    def __init__(
+        self,
+        delegation_id: str,
+        task_index: int,
+        goal: str,
+        context: Optional[str] = None,
+        root: Optional[Path] = None,
+    ):
         self.delegation_id = delegation_id
         self.task_index = task_index
         self._ok = False
@@ -112,10 +120,19 @@ class LiveTranscriptWriter:
                 f"goal: {_redact(goal_line)}\n"  # header bypasses event(), so redact here too
                 f"started: {time.strftime(_TIME_FMT)}\n"
                 "(append-only; streams while the subagent runs — tail -f me)\n"
-                + "=" * 40 + "\n", encoding="utf-8")
+                + "=" * 40
+                + "\n",
+                encoding="utf-8",
+            )
             self.path, self._ok = path, True
-            self.event("user", "kickoff: " + goal_line
-                       + (f" | context: {_one_line(context, _KICKOFF_MAX)}" if context else ""))
+            self.event(
+                "user",
+                "kickoff: "
+                + goal_line
+                + (
+                    f" | context: {_one_line(context, _KICKOFF_MAX)}" if context else ""
+                ),
+            )
 
     def event(self, role: str, text: str) -> None:
         """Append one ``HH:MM:SS role | text`` line. Single choke point: every typed
@@ -144,14 +161,21 @@ class LiveTranscriptWriter:
         self.flush_stream()
         self.event("tool", f"-> {name or '?'}({_one_line(args_preview, _ARGS_MAX)})")
 
-    def tool_result(self, name: str, result: Any = None,
-                    duration: Any = None, is_error: bool = False) -> None:
+    def tool_result(
+        self,
+        name: str,
+        result: Any = None,
+        duration: Any = None,
+        is_error: bool = False,
+    ) -> None:
         status = "ERROR" if is_error else "ok"
         try:
             dur = "" if duration is None else f" {float(duration):.1f}s"
         except (TypeError, ValueError):
             dur = ""
-        self.event("result", f"{name or '?'} {status}{dur}: {_one_line(result, _RESULT_MAX)}")
+        self.event(
+            "result", f"{name or '?'} {status}{dur}: {_one_line(result, _RESULT_MAX)}"
+        )
 
     def marker(self, text: str) -> None:
         """Lifecycle marker: start / final / error / interrupt / budget."""
@@ -175,27 +199,44 @@ class LiveTranscriptWriter:
     def _on_complete(self, tool_name, preview, args, kwargs):
         dur = kwargs.get("duration_seconds")
         summary = kwargs.get("summary") or preview
-        self.marker(_joined(
-            f"status={kwargs.get('status', '?')}",
-            f"duration={dur}s" if dur is not None else "",
-            f"summary: {_one_line(summary, _RESULT_MAX)}" if summary else ""))
+        self.marker(
+            _joined(
+                f"status={kwargs.get('status', '?')}",
+                f"duration={dur}s" if dur is not None else "",
+                f"summary: {_one_line(summary, _RESULT_MAX)}" if summary else "",
+            )
+        )
 
     # Event demux (the tool_progress_callback surface): handler(self, tool_name, preview, args, kwargs).
     _OBSERVERS = {
-        "tool.started": lambda s, n, p, a, kw: s.tool_start(str(n or ""), p if p else a),
+        "tool.started": lambda s, n, p, a, kw: s.tool_start(
+            str(n or ""), p if p else a
+        ),
         "tool.completed": lambda s, n, p, a, kw: s.tool_result(
-            str(n or ""), result=kw.get("result"), duration=kw.get("duration"),
-            is_error=bool(kw.get("is_error"))),
+            str(n or ""),
+            result=kw.get("result"),
+            duration=kw.get("duration"),
+            is_error=bool(kw.get("is_error")),
+        ),
         # Fired as cb("_thinking", <text>) — text rides in the tool_name slot.
         "_thinking": lambda s, n, p, a, kw: s.thinking(str(n or p or "")),
         # cb("reasoning.available", "_thinking", <text>, None)
         "reasoning.available": lambda s, n, p, a, kw: s.thinking(str(p or "")),
         "subagent.text": lambda s, n, p, a, kw: s.add_stream_delta(str(p or "")),
-        "subagent.start": lambda s, n, p, a, kw: s.event("start", _one_line(p, _KICKOFF_MAX)),
-        "subagent.complete": _on_complete}
+        "subagent.start": lambda s, n, p, a, kw: s.event(
+            "start", _one_line(p, _KICKOFF_MAX)
+        ),
+        "subagent.complete": _on_complete,
+    }
 
-    def observe(self, event_type: Any, tool_name: Any = None, preview: Any = None,
-                args: Any = None, **kwargs: Any) -> None:
+    def observe(
+        self,
+        event_type: Any,
+        tool_name: Any = None,
+        preview: Any = None,
+        args: Any = None,
+        **kwargs: Any,
+    ) -> None:
         """Map a child tool_progress_callback event onto transcript lines.
         Unknown events are ignored. Never raises (event() swallows I/O)."""
         handler = self._OBSERVERS.get(str(event_type or ""))
@@ -205,11 +246,18 @@ class LiveTranscriptWriter:
     def finalize(self, entry: dict[str, Any]) -> None:
         """Terminal marker with exit-reason detail subagent.complete lacks."""
         exit_reason = entry.get("exit_reason")
-        self.marker(_joined(
-            f"end status={entry.get('status', '?')}",
-            f"exit_reason={exit_reason}" if exit_reason else "",
-            "(iteration budget exhausted)" if exit_reason == "max_iterations" else "",
-            f"error: {_one_line(entry['error'], _RESULT_MAX)}" if entry.get("error") else ""))
+        self.marker(
+            _joined(
+                f"end status={entry.get('status', '?')}",
+                f"exit_reason={exit_reason}" if exit_reason else "",
+                "(iteration budget exhausted)"
+                if exit_reason == "max_iterations"
+                else "",
+                f"error: {_one_line(entry['error'], _RESULT_MAX)}"
+                if entry.get("error")
+                else "",
+            )
+        )
 
 
 def wrap_progress_callback(inner_cb, writer: LiveTranscriptWriter):
@@ -233,8 +281,10 @@ def wrap_progress_callback(inner_cb, writer: LiveTranscriptWriter):
 
 
 def create_live_transcripts(
-    task_list: list[dict[str, Any]], context: Optional[str] = None,
-    delegation_id: Optional[str] = None, model: Optional[str] = None,
+    task_list: list[dict[str, Any]],
+    context: Optional[str] = None,
+    delegation_id: Optional[str] = None,
+    model: Optional[str] = None,
     provider: Optional[str] = None,
     home: Optional[Path] = None,
 ) -> tuple[Optional[str], list[Optional[LiveTranscriptWriter]], list[str]]:
@@ -253,14 +303,25 @@ def create_live_transcripts(
         # Same id shape as async_delegation's so the dir name matches the handle.
         deleg_id = delegation_id or f"deleg_{uuid.uuid4().hex[:8]}"
         root = live_transcript_root(home)
-        made = [LiveTranscriptWriter(deleg_id, i, str(t.get("goal", "")),
-                                     context=t.get("context") or context, root=root)
-                for i, t in enumerate(task_list)]
-        writers: list[Optional[LiveTranscriptWriter]] = [w if w.path is not None else None for w in made]
+        made = [
+            LiveTranscriptWriter(
+                deleg_id,
+                i,
+                str(t.get("goal", "")),
+                context=t.get("context") or context,
+                root=root,
+            )
+            for i, t in enumerate(task_list)
+        ]
+        writers: list[Optional[LiveTranscriptWriter]] = [
+            w if w.path is not None else None for w in made
+        ]
         paths: list[str] = [str(w.path) for w in made if w.path is not None]
         if not paths:
             return None, [None] * n, []
-        _write_manifest(deleg_id, task_list, paths, model=model, provider=provider, home=home)
+        _write_manifest(
+            deleg_id, task_list, paths, model=model, provider=provider, home=home
+        )
         return deleg_id, writers, paths
     return None, [None] * n, []
 
@@ -269,24 +330,44 @@ def _manifest_path(delegation_id: str, home: Optional[Path] = None) -> Path:
     return live_transcript_root(home) / delegation_id / "manifest.json"
 
 
-def _write_manifest(delegation_id: str, task_list: list[dict[str, Any]],
-                    paths: list[str], model: Optional[str] = None,
-                    provider: Optional[str] = None, home: Optional[Path] = None) -> None:
+def _write_manifest(
+    delegation_id: str,
+    task_list: list[dict[str, Any]],
+    paths: list[str],
+    model: Optional[str] = None,
+    provider: Optional[str] = None,
+    home: Optional[Path] = None,
+) -> None:
     with _best_effort("manifest write"):
-        _dump_json(_manifest_path(delegation_id, home), {
-            "delegation_id": delegation_id, "started": time.strftime(_TIME_FMT),
-            "task_count": len(task_list), "model": model, "provider": provider,
-            "tasks": [{
-                "index": i,
-                # Same mounted dir as the .log files, so the goal needs the same redaction.
-                "goal": _redact(str(t.get("goal", ""))[:500]),
-                "log": paths[i] if i < len(paths) else None,
-                "status": "running"} for i, t in enumerate(task_list)]})
+        _dump_json(
+            _manifest_path(delegation_id, home),
+            {
+                "delegation_id": delegation_id,
+                "started": time.strftime(_TIME_FMT),
+                "task_count": len(task_list),
+                "model": model,
+                "provider": provider,
+                "tasks": [
+                    {
+                        "index": i,
+                        # Same mounted dir as the .log files, so the goal needs the same redaction.
+                        "goal": _redact(str(t.get("goal", ""))[:500]),
+                        "log": paths[i] if i < len(paths) else None,
+                        "status": "running",
+                    }
+                    for i, t in enumerate(task_list)
+                ],
+            },
+        )
 
 
-def update_manifest_statuses(delegation_id: Optional[str],
-                             results: list[dict[str, Any]],
-                             home: Optional[Path] = None, *, completed: bool = True) -> None:
+def update_manifest_statuses(
+    delegation_id: Optional[str],
+    results: list[dict[str, Any]],
+    home: Optional[Path] = None,
+    *,
+    completed: bool = True,
+) -> None:
     """Best-effort per-task status update once the batch has aggregated (``completed=False``: tasks settled
     before the batch ran, e.g. ones their backend refused, while the rest still run)."""
     if not delegation_id:
@@ -305,13 +386,17 @@ def update_manifest_statuses(delegation_id: Optional[str],
                     task["model"] = r["model"]
         # The dispatch-time model is only the delegation.model override (None when children inherit the parent's).
         if not manifest.get("model"):
-            manifest["model"] = next((t["model"] for t in manifest.get("tasks", []) if t.get("model")), None)
+            manifest["model"] = next(
+                (t["model"] for t in manifest.get("tasks", []) if t.get("model")), None
+            )
         if completed:
             manifest["completed"] = time.strftime(_TIME_FMT)
         _dump_json(mp, manifest)
 
 
-def prune_stale_live_dirs(max_age_days: int = LIVE_RETENTION_DAYS, root: Optional[Path] = None) -> int:
+def prune_stale_live_dirs(
+    max_age_days: int = LIVE_RETENTION_DAYS, root: Optional[Path] = None
+) -> int:
     """Remove live/<delegation_id> dirs older than the retention window. Best-effort.
 
     ``root`` defaults to the ambient resolve; callers that pin transcripts to an

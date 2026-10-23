@@ -29,7 +29,9 @@ def _wait_for(predicate, timeout=1.0):
 
 
 def _make_stream_chunk(content=None, finish_reason=None):
-    delta = SimpleNamespace(content=content, reasoning_content=None, reasoning=None, tool_calls=None)
+    delta = SimpleNamespace(
+        content=content, reasoning_content=None, reasoning=None, tool_calls=None
+    )
     choice = SimpleNamespace(delta=delta, finish_reason=finish_reason)
     return SimpleNamespace(choices=[choice], model="test/model")
 
@@ -48,7 +50,10 @@ def test_stream_delta_plugin_hook_is_queued_off_token_path(monkeypatch):
         time.sleep(0.2)
         calls.append(("on_stream_delta", kwargs))
 
-    monkeypatch.setattr("clawk_cli.plugins.iter_hook_callbacks", _callbacks({"on_stream_delta": [on_stream_delta]}))
+    monkeypatch.setattr(
+        "clawk_cli.plugins.iter_hook_callbacks",
+        _callbacks({"on_stream_delta": [on_stream_delta]}),
+    )
 
     agent = _agent()
 
@@ -76,7 +81,10 @@ def test_stream_delta_plugin_hook_error_does_not_break_streaming(monkeypatch):
     def on_stream_delta(**_kwargs):
         raise RuntimeError("plugin failed")
 
-    monkeypatch.setattr("clawk_cli.plugins.iter_hook_callbacks", _callbacks({"on_stream_delta": [on_stream_delta]}))
+    monkeypatch.setattr(
+        "clawk_cli.plugins.iter_hook_callbacks",
+        _callbacks({"on_stream_delta": [on_stream_delta]}),
+    )
 
     agent = _agent()
     agent.stream_delta_callback = ui_deltas.append
@@ -88,7 +96,10 @@ def test_stream_delta_plugin_hook_error_does_not_break_streaming(monkeypatch):
 
 
 def test_stream_hook_queue_drops_oldest_pending_event_when_full(monkeypatch):
-    from agent.plugin_stream_hooks import enqueue_plugin_stream_hook, shutdown_plugin_stream_hook_dispatcher
+    from agent.plugin_stream_hooks import (
+        enqueue_plugin_stream_hook,
+        shutdown_plugin_stream_hook_dispatcher,
+    )
 
     shutdown_plugin_stream_hook_dispatcher()
     monkeypatch.setattr("agent.plugin_stream_hooks._QUEUE_SIZE", 1)
@@ -101,7 +112,10 @@ def test_stream_hook_queue_drops_oldest_pending_event_when_full(monkeypatch):
         first_delivered.set()
         release_worker.wait(timeout=1.0)
 
-    monkeypatch.setattr("clawk_cli.plugins.iter_hook_callbacks", _callbacks({"on_stream_delta": [on_stream_delta]}))
+    monkeypatch.setattr(
+        "clawk_cli.plugins.iter_hook_callbacks",
+        _callbacks({"on_stream_delta": [on_stream_delta]}),
+    )
 
     assert enqueue_plugin_stream_hook("on_stream_delta", delta="first") is True
     assert first_delivered.wait(timeout=1.0)
@@ -116,7 +130,10 @@ def test_stream_hook_queue_drops_oldest_pending_event_when_full(monkeypatch):
 
 
 def test_stream_hook_queue_isolated_per_consumer(monkeypatch):
-    from agent.plugin_stream_hooks import enqueue_plugin_stream_hook, shutdown_plugin_stream_hook_dispatcher
+    from agent.plugin_stream_hooks import (
+        enqueue_plugin_stream_hook,
+        shutdown_plugin_stream_hook_dispatcher,
+    )
 
     shutdown_plugin_stream_hook_dispatcher()
     monkeypatch.setattr("agent.plugin_stream_hooks._QUEUE_SIZE", 1)
@@ -162,7 +179,10 @@ def test_reasoning_stream_delta_plugin_hook_is_opt_in(monkeypatch):
     def on_stream_delta(**kwargs):
         calls.append(("on_stream_delta", kwargs))
 
-    monkeypatch.setattr("clawk_cli.plugins.iter_hook_callbacks", _callbacks({"on_stream_delta": [on_stream_delta]}))
+    monkeypatch.setattr(
+        "clawk_cli.plugins.iter_hook_callbacks",
+        _callbacks({"on_stream_delta": [on_stream_delta]}),
+    )
 
     agent = _agent()
     agent._fire_reasoning_delta("private chain")
@@ -191,10 +211,15 @@ def test_interim_message_plugin_hook_is_queued(monkeypatch):
     def on_interim_message(**kwargs):
         calls.append(("on_interim_message", kwargs))
 
-    monkeypatch.setattr("clawk_cli.plugins.iter_hook_callbacks", _callbacks({"on_interim_message": [on_interim_message]}))
+    monkeypatch.setattr(
+        "clawk_cli.plugins.iter_hook_callbacks",
+        _callbacks({"on_interim_message": [on_interim_message]}),
+    )
 
     agent = _agent()
-    agent._emit_interim_assistant_message({"content": "I will inspect the files first."})
+    agent._emit_interim_assistant_message(
+        {"content": "I will inspect the files first."}
+    )
     _wait_for(lambda: calls)
     shutdown_plugin_stream_hook_dispatcher()
 
@@ -204,7 +229,10 @@ def test_interim_message_plugin_hook_is_queued(monkeypatch):
 
 
 def test_stream_plugin_hook_counts_as_stream_consumer(monkeypatch):
-    monkeypatch.setattr("clawk_cli.plugins.iter_hook_callbacks", _callbacks({"on_stream_delta": [lambda **_kwargs: None]}))
+    monkeypatch.setattr(
+        "clawk_cli.plugins.iter_hook_callbacks",
+        _callbacks({"on_stream_delta": [lambda **_kwargs: None]}),
+    )
 
     agent = _agent()
 
@@ -212,7 +240,10 @@ def test_stream_plugin_hook_counts_as_stream_consumer(monkeypatch):
 
 
 def test_interim_message_plugin_hook_does_not_count_as_stream_consumer(monkeypatch):
-    monkeypatch.setattr("clawk_cli.plugins.iter_hook_callbacks", _callbacks({"on_interim_message": [lambda **_kwargs: None]}))
+    monkeypatch.setattr(
+        "clawk_cli.plugins.iter_hook_callbacks",
+        _callbacks({"on_interim_message": [lambda **_kwargs: None]}),
+    )
 
     agent = _agent()
 
@@ -233,7 +264,9 @@ def test_stream_lifecycle_plugin_hooks_are_queued(monkeypatch):
 
     monkeypatch.setattr(
         "clawk_cli.plugins.iter_hook_callbacks",
-        _callbacks({"on_stream_start": [on_stream_start], "on_stream_end": [on_stream_end]}),
+        _callbacks(
+            {"on_stream_start": [on_stream_start], "on_stream_end": [on_stream_end]}
+        ),
     )
 
     agent = _agent()
@@ -255,7 +288,9 @@ def test_stream_lifecycle_plugin_hooks_are_queued(monkeypatch):
 
 @patch("run_agent.AIAgent._create_request_openai_client")
 @patch("run_agent.AIAgent._close_request_openai_client")
-def test_chat_completion_stream_emits_lifecycle_hooks(_mock_close, mock_create, monkeypatch):
+def test_chat_completion_stream_emits_lifecycle_hooks(
+    _mock_close, mock_create, monkeypatch
+):
     from agent.plugin_stream_hooks import shutdown_plugin_stream_hook_dispatcher
 
     shutdown_plugin_stream_hook_dispatcher()
@@ -264,9 +299,15 @@ def test_chat_completion_stream_emits_lifecycle_hooks(_mock_close, mock_create, 
         "clawk_cli.plugins.iter_hook_callbacks",
         _callbacks(
             {
-                "on_stream_start": [lambda **kwargs: calls.append(("on_stream_start", kwargs))],
-                "on_stream_delta": [lambda **kwargs: calls.append(("on_stream_delta", kwargs))],
-                "on_stream_end": [lambda **kwargs: calls.append(("on_stream_end", kwargs))],
+                "on_stream_start": [
+                    lambda **kwargs: calls.append(("on_stream_start", kwargs))
+                ],
+                "on_stream_delta": [
+                    lambda **kwargs: calls.append(("on_stream_delta", kwargs))
+                ],
+                "on_stream_end": [
+                    lambda **kwargs: calls.append(("on_stream_end", kwargs))
+                ],
             }
         ),
     )
@@ -274,11 +315,13 @@ def test_chat_completion_stream_emits_lifecycle_hooks(_mock_close, mock_create, 
     mock_client = SimpleNamespace(
         chat=SimpleNamespace(
             completions=SimpleNamespace(
-                create=lambda **_kwargs: iter([
-                    _make_stream_chunk(content="hello "),
-                    _make_stream_chunk(content="world"),
-                    _make_stream_chunk(finish_reason="stop"),
-                ])
+                create=lambda **_kwargs: iter(
+                    [
+                        _make_stream_chunk(content="hello "),
+                        _make_stream_chunk(content="world"),
+                        _make_stream_chunk(finish_reason="stop"),
+                    ]
+                )
             )
         )
     )
@@ -319,15 +362,27 @@ def test_bedrock_reasoning_delta_reaches_plugin_only_observer(monkeypatch):
     def on_stream_delta(**kwargs):
         calls.append(kwargs)
 
-    monkeypatch.setattr("clawk_cli.plugins.iter_hook_callbacks", _callbacks({"on_stream_delta": [on_stream_delta]}))
+    monkeypatch.setattr(
+        "clawk_cli.plugins.iter_hook_callbacks",
+        _callbacks({"on_stream_delta": [on_stream_delta]}),
+    )
     monkeypatch.setattr("clawk_cli.config.cfg_get", lambda *_args, **_kwargs: True)
     monkeypatch.setattr(
         "agent.bedrock_adapter._get_bedrock_runtime_client",
-        lambda _region: SimpleNamespace(converse_stream=lambda **_kwargs: {"stream": []}),
+        lambda _region: SimpleNamespace(
+            converse_stream=lambda **_kwargs: {"stream": []}
+        ),
     )
-    monkeypatch.setattr("agent.bedrock_adapter.is_stale_connection_error", lambda _exc: False)
-    monkeypatch.setattr("agent.bedrock_adapter.is_streaming_access_denied_error", lambda _exc: False)
-    monkeypatch.setattr("agent.bedrock_adapter.invalidate_runtime_client", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "agent.bedrock_adapter.is_stale_connection_error", lambda _exc: False
+    )
+    monkeypatch.setattr(
+        "agent.bedrock_adapter.is_streaming_access_denied_error", lambda _exc: False
+    )
+    monkeypatch.setattr(
+        "agent.bedrock_adapter.invalidate_runtime_client",
+        lambda *_args, **_kwargs: None,
+    )
 
     def stream_converse_with_callbacks(
         _raw_response,
@@ -347,14 +402,19 @@ def test_bedrock_reasoning_delta_reaches_plugin_only_observer(monkeypatch):
             on_reasoning_delta("bedrock reasoning")
         return SimpleNamespace(choices=[], usage=None, stop_reason="end_turn")
 
-    monkeypatch.setattr("agent.bedrock_adapter.stream_converse_with_callbacks", stream_converse_with_callbacks)
+    monkeypatch.setattr(
+        "agent.bedrock_adapter.stream_converse_with_callbacks",
+        stream_converse_with_callbacks,
+    )
 
     agent = _agent()
     agent.api_mode = "bedrock_converse"
     agent.reasoning_callback = None
     agent.stream_delta_callback = None
 
-    agent._interruptible_streaming_api_call({"__bedrock_region__": "us-east-1", "__bedrock_converse__": True})
+    agent._interruptible_streaming_api_call(
+        {"__bedrock_region__": "us-east-1", "__bedrock_converse__": True}
+    )
     _wait_for(lambda: calls)
     shutdown_plugin_stream_hook_dispatcher()
 
@@ -369,7 +429,13 @@ def test_inline_think_reaches_reasoning_pane_unless_native_reasoning_streamed():
     seen = []
     agent.reasoning_callback = seen.append
     agent._reset_stream_delivery_tracking()
-    for delta in ["<think>", "Let me", " check config", "</think>", "The answer is 42."]:
+    for delta in [
+        "<think>",
+        "Let me",
+        " check config",
+        "</think>",
+        "The answer is 42.",
+    ]:
         agent._fire_stream_delta(delta)
     assert "".join(seen) == "Let me check config"
 
@@ -387,6 +453,15 @@ def test_finish_chat_stream_recovers_inline_reasoning_content():
     call = cch._StreamingCall.__new__(cch._StreamingCall)
     call.agent = _agent()
     deltas = ["<think>", "Let me", " check config", "</think>", "The answer is 42."]
-    resp = call._finish_chat_stream(None, "assistant", deltas, [], {}, "stop", "MiniMax-M3", None,
-                                    flush_pending=lambda: None)
+    resp = call._finish_chat_stream(
+        None,
+        "assistant",
+        deltas,
+        [],
+        {},
+        "stop",
+        "MiniMax-M3",
+        None,
+        flush_pending=lambda: None,
+    )
     assert resp.choices[0].message.reasoning_content == "Let me check config"

@@ -33,6 +33,7 @@ def coerce_tool_args(tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
     # renamed); map those keys back to the registry's wire names first.
     try:
         from tools.schema_sanitizer import unrename_tool_args
+
         args = unrename_tool_args(parameters, args)
     except Exception:  # pragma: no cover — never break dispatch
         pass
@@ -56,20 +57,35 @@ def coerce_tool_args(tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
                     args[key] = coerced
                     continue
                 if value.strip().startswith("["):
-                    logger.warning("coerce_tool_args: %s.%s looks like a JSON array string "
-                                   "but could not be parsed — model may have emitted a "
-                                   "JSON-encoded string instead of a native array. "
-                                   "Falling back to single-element list.", tool_name, key)
+                    logger.warning(
+                        "coerce_tool_args: %s.%s looks like a JSON array string "
+                        "but could not be parsed — model may have emitted a "
+                        "JSON-encoded string instead of a native array. "
+                        "Falling back to single-element list.",
+                        tool_name,
+                        key,
+                    )
                 args[key] = [value]
-                logger.info("coerce_tool_args: wrapped bare string in list for %s.%s", tool_name, key)
+                logger.info(
+                    "coerce_tool_args: wrapped bare string in list for %s.%s",
+                    tool_name,
+                    key,
+                )
                 continue
             args[key] = [value]
-            logger.info("coerce_tool_args: wrapped bare %s in list for %s.%s", type(value).__name__, tool_name, key)
+            logger.info(
+                "coerce_tool_args: wrapped bare %s in list for %s.%s",
+                type(value).__name__,
+                tool_name,
+                key,
+            )
             continue
 
         if not isinstance(value, str):
             # Native container: still normalize JSON-encoded elements/sub-fields.
-            if (expected == "array" and is_container) or (expected == "object" and isinstance(value, dict)):
+            if (expected == "array" and is_container) or (
+                expected == "object" and isinstance(value, dict)
+            ):
                 args[key] = _normalize_json_strings_for_schema(
                     value, prop_schema, root_schema=parameters
                 )
@@ -106,8 +122,14 @@ def _schema_accepts_kind(
     t = schema.get("type")
     if t == kind or (isinstance(t, list) and kind in t):
         return True
-    return any(isinstance(branches := schema.get(union_key), list) and any(_schema_accepts_kind(b, kind, root_schema, seen_schema_ids) for b in branches)
-               for union_key in ("anyOf", "oneOf", "allOf"))
+    return any(
+        isinstance(branches := schema.get(union_key), list)
+        and any(
+            _schema_accepts_kind(b, kind, root_schema, seen_schema_ids)
+            for b in branches
+        )
+        for union_key in ("anyOf", "oneOf", "allOf")
+    )
 
 
 def _normalize_json_strings_for_schema(
@@ -133,13 +155,19 @@ def _normalize_json_strings_for_schema(
         trimmed = value.strip()
         expects_array = _schema_accepts_kind(schema, "array", root_schema)
         expects_object = _schema_accepts_kind(schema, "object", root_schema)
-        if not ((expects_array and trimmed.startswith("[")) or (expects_object and trimmed.startswith("{"))):
+        if not (
+            (expects_array and trimmed.startswith("["))
+            or (expects_object and trimmed.startswith("{"))
+        ):
             return value
         try:
             parsed = json.loads(trimmed)
         except (ValueError, TypeError):
             return value
-        if not ((isinstance(parsed, list) and expects_array) or (isinstance(parsed, dict) and expects_object)):
+        if not (
+            (isinstance(parsed, list) and expects_array)
+            or (isinstance(parsed, dict) and expects_object)
+        ):
             return value
         value = parsed
 
@@ -176,12 +204,21 @@ def _coerce_value(value: str, expected_type, schema: dict | None = None):
         return None
 
     if isinstance(expected_type, list):
-        return next((r for t in expected_type if (r := _coerce_value(value, t, schema=schema)) is not value), value)
+        return next(
+            (
+                r
+                for t in expected_type
+                if (r := _coerce_value(value, t, schema=schema)) is not value
+            ),
+            value,
+        )
 
     coercer = _SCALAR_COERCERS.get(expected_type)
     if coercer is not None:
         return coercer(value)
-    return None if expected_type == "null" and value.strip().lower() == "null" else value
+    return (
+        None if expected_type == "null" and value.strip().lower() == "null" else value
+    )
 
 
 def _schema_allows_null(schema: dict | None) -> bool:
@@ -189,13 +226,17 @@ def _schema_allows_null(schema: dict | None) -> bool:
     if not isinstance(schema, dict):
         return False
     schema_type = schema.get("type")
-    if schema_type == "null" or (isinstance(schema_type, list) and "null" in schema_type):
+    if schema_type == "null" or (
+        isinstance(schema_type, list) and "null" in schema_type
+    ):
         return True
     if schema.get("nullable") is True:
         return True
-    return any(isinstance(variants := schema.get(union_key), list)
-               and any(isinstance(v, dict) and v.get("type") == "null" for v in variants)
-               for union_key in ("anyOf", "oneOf"))
+    return any(
+        isinstance(variants := schema.get(union_key), list)
+        and any(isinstance(v, dict) and v.get("type") == "null" for v in variants)
+        for union_key in ("anyOf", "oneOf")
+    )
 
 
 def _coerce_json(value: str, expected_python_type: type):
@@ -204,13 +245,20 @@ def _coerce_json(value: str, expected_python_type: type):
     try:
         parsed = json.loads(value)
     except (ValueError, TypeError) as exc:
-        logger.warning("coerce_tool_args: failed to parse string as JSON for expected type %s: %s", name, exc)
+        logger.warning(
+            "coerce_tool_args: failed to parse string as JSON for expected type %s: %s",
+            name,
+            exc,
+        )
         return value
     if isinstance(parsed, expected_python_type):
         logger.debug("coerce_tool_args: coerced string to %s via json.loads", name)
         return parsed
-    logger.warning("coerce_tool_args: JSON-parsed value is %s, expected %s — skipping coercion",
-                   type(parsed).__name__, name)
+    logger.warning(
+        "coerce_tool_args: JSON-parsed value is %s, expected %s — skipping coercion",
+        type(parsed).__name__,
+        name,
+    )
     return value
 
 

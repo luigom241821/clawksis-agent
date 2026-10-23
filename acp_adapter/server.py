@@ -16,30 +16,78 @@ from typing import Any, Callable, Deque, Optional
 
 import acp
 from acp.schema import (
-    AgentCapabilities, AgentMessageChunk, AuthenticateResponse, ClientCapabilities, ForkSessionResponse,
-    Implementation, InitializeResponse, ListSessionsResponse, LoadSessionResponse, McpServerHttp, McpServerSse,
-    McpServerStdio, ModelInfo, NewSessionResponse, PromptCapabilities, PromptResponse, ResumeSessionResponse,
-    SessionCapabilities, SessionForkCapabilities, SessionInfo, SessionInfoUpdate, SessionListCapabilities,
-    SessionMode, SessionModeState, SessionModelState, SessionResumeCapabilities, SetSessionConfigOptionResponse,
-    SetSessionModeResponse, SetSessionModelResponse, TextContentBlock, Usage, UsageUpdate, UserMessageChunk,
+    AgentCapabilities,
+    AgentMessageChunk,
+    AuthenticateResponse,
+    ClientCapabilities,
+    ForkSessionResponse,
+    Implementation,
+    InitializeResponse,
+    ListSessionsResponse,
+    LoadSessionResponse,
+    McpServerHttp,
+    McpServerSse,
+    McpServerStdio,
+    ModelInfo,
+    NewSessionResponse,
+    PromptCapabilities,
+    PromptResponse,
+    ResumeSessionResponse,
+    SessionCapabilities,
+    SessionForkCapabilities,
+    SessionInfo,
+    SessionInfoUpdate,
+    SessionListCapabilities,
+    SessionMode,
+    SessionModeState,
+    SessionModelState,
+    SessionResumeCapabilities,
+    SetSessionConfigOptionResponse,
+    SetSessionModeResponse,
+    SetSessionModelResponse,
+    TextContentBlock,
+    Usage,
+    UsageUpdate,
+    UserMessageChunk,
 )
 
-from acp_adapter.auth import TERMINAL_SETUP_AUTH_METHOD_ID, build_auth_methods, detect_provider
+from acp_adapter.auth import (
+    TERMINAL_SETUP_AUTH_METHOD_ID,
+    build_auth_methods,
+    detect_provider,
+)
 from acp_adapter.commands import SlashCommandsMixin, _estimate_tokens
-from acp_adapter.content import PromptBlock, _content_blocks_to_openai_user_content, _extract_text
+from acp_adapter.content import (
+    PromptBlock,
+    _content_blocks_to_openai_user_content,
+    _extract_text,
+)
 from acp_adapter.events import (
-    AssistantMessageIdAllocator, _build_plan_update_from_todo_result, _send_update, flush_open_tool_calls,
-    make_message_cb, make_step_cb, make_thinking_cb, make_tool_progress_cb,
+    AssistantMessageIdAllocator,
+    _build_plan_update_from_todo_result,
+    _send_update,
+    flush_open_tool_calls,
+    make_message_cb,
+    make_step_cb,
+    make_thinking_cb,
+    make_tool_progress_cb,
 )
 from acp_adapter.model_catalog import build_model_state, encode_model_choice
 from acp_adapter import modes as _modes
 from acp_adapter.permissions import make_approval_callback
 from acp_adapter.provenance import session_provenance_meta
-from acp_adapter.session import SessionManager, SessionState, _expand_acp_enabled_toolsets
+from acp_adapter.session import (
+    SessionManager,
+    SessionState,
+    _expand_acp_enabled_toolsets,
+)
 from acp_adapter.tools import build_tool_complete, build_tool_start, coerce_tool_args
-from agent.context_compressor import (COMPRESSED_SUMMARY_METADATA_KEY, ContextCompressor)
+from agent.context_compressor import COMPRESSED_SUMMARY_METADATA_KEY, ContextCompressor
 from agent.interrupt_compat import request_hard_interrupt
-from tools.approval_context import reset_clawk_interactive_context, set_clawk_interactive_context
+from tools.approval_context import (
+    reset_clawk_interactive_context,
+    set_clawk_interactive_context,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -62,11 +110,15 @@ def _flatten_history_text(value: Any) -> str:
                 text = item.get("text")
                 if isinstance(text, str):
                     parts.append(text)
-                elif item.get("type") == "text" and isinstance(item.get("content"), str):
+                elif item.get("type") == "text" and isinstance(
+                    item.get("content"), str
+                ):
                     parts.append(item["content"])
             elif isinstance(item, str):
                 parts.append(item)
-        return "\n".join(part.strip() for part in parts if part and part.strip()).strip()
+        return "\n".join(
+            part.strip() for part in parts if part and part.strip()
+        ).strip()
     return ""
 
 
@@ -100,25 +152,38 @@ def _history_summary_meta(message: dict[str, Any], text: str) -> dict[str, Any] 
 
 # role -> (chunk class, session_update tag) for history replay.
 _HISTORY_CHUNK_TYPES = {
-    "user": (UserMessageChunk, "user_message_chunk"), "assistant": (AgentMessageChunk, "agent_message_chunk")
+    "user": (UserMessageChunk, "user_message_chunk"),
+    "assistant": (AgentMessageChunk, "agent_message_chunk"),
 }
 
 
-def _history_tool_call_name_args(tool_call: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+def _history_tool_call_name_args(
+    tool_call: dict[str, Any],
+) -> tuple[str, dict[str, Any]]:
     """Extract function name/arguments from an OpenAI-style tool_call."""
-    function = tool_call.get("function") if isinstance(tool_call.get("function"), dict) else {}
+    function = (
+        tool_call.get("function") if isinstance(tool_call.get("function"), dict) else {}
+    )
     name = str(function.get("name") or tool_call.get("name") or "unknown_tool")
-    raw_args = function.get("arguments") or tool_call.get("arguments") or tool_call.get("args") or {}
+    raw_args = (
+        function.get("arguments")
+        or tool_call.get("arguments")
+        or tool_call.get("args")
+        or {}
+    )
     return name, coerce_tool_args(raw_args)
 
 
-def _history_message_chunk(role: str, message: dict[str, Any]) -> UserMessageChunk | AgentMessageChunk | None:
+def _history_message_chunk(
+    role: str, message: dict[str, Any]
+) -> UserMessageChunk | AgentMessageChunk | None:
     text = _flatten_history_text(message.get("content"))
     if not text:
         return None
     cls, session_update = _HISTORY_CHUNK_TYPES[role]
     return cls(
-        session_update=session_update, content=TextContentBlock(type="text", text=text),
+        session_update=session_update,
+        content=TextContentBlock(type="text", text=text),
         field_meta=_history_summary_meta(message, text),
     )
 
@@ -144,7 +209,10 @@ def _history_replay_updates(history: list[dict[str, Any]]):
                 if not isinstance(tool_call, dict):
                     continue
                 tool_call_id = str(
-                    tool_call.get("id") or tool_call.get("call_id") or tool_call.get("tool_call_id") or ""
+                    tool_call.get("id")
+                    or tool_call.get("call_id")
+                    or tool_call.get("tool_call_id")
+                    or ""
                 ).strip()
                 if not tool_call_id:
                     continue
@@ -161,7 +229,9 @@ def _history_replay_updates(history: list[dict[str, Any]]):
                 continue
             result = message.get("content")
             result_text = result if isinstance(result, str) else None
-            yield build_tool_complete(tool_call_id, tool_name, result=result_text, function_args=function_args)
+            yield build_tool_complete(
+                tool_call_id, tool_name, result=result_text, function_args=function_args
+            )
             if tool_name == "todo":
                 plan_update = _build_plan_update_from_todo_result(result_text)
                 if plan_update is not None:
@@ -170,7 +240,11 @@ def _history_replay_updates(history: list[dict[str, Any]]):
 
 def _mcp_server_config(server: McpServerStdio | McpServerHttp | McpServerSse) -> dict:
     if isinstance(server, McpServerStdio):
-        return {"command": server.command, "args": list(server.args), "env": {i.name: i.value for i in server.env}}
+        return {
+            "command": server.command,
+            "args": list(server.args),
+            "env": {i.name: i.value for i in server.env},
+        }
     return {"url": server.url, "headers": {i.name: i.value for i in server.headers}}
 
 
@@ -181,7 +255,9 @@ def _restore_env(key: str, value: str | None) -> None:
         os.environ[key] = value
 
 
-def _bind_guarded(stack: contextlib.ExitStack, label: str, setup: Callable[[], Callable[[], None]]) -> None:
+def _bind_guarded(
+    stack: contextlib.ExitStack, label: str, setup: Callable[[], Callable[[], None]]
+) -> None:
     """Run ``setup`` (returns its teardown) and register the teardown; failures in either half only
     log — the turn must still run without the binding."""
     try:
@@ -200,7 +276,9 @@ def _bind_guarded(stack: contextlib.ExitStack, label: str, setup: Callable[[], C
 
 
 def _attach_interrupted_prompt(interrupted_prompt: str, guidance: str) -> str:
-    return f"{interrupted_prompt}\n\nUser correction/guidance after interrupt: {guidance}"
+    return (
+        f"{interrupted_prompt}\n\nUser correction/guidance after interrupt: {guidance}"
+    )
 
 
 def _take_interrupted_prompt(state: SessionState) -> tuple[bool, str]:
@@ -245,6 +323,7 @@ class ClawksisACPAgent(SlashCommandsMixin, acp.Agent):
     def __new__(cls, session_manager=None):
         if session_manager is None:
             from acp_adapter.gateway_server import GatewayACPAgent
+
             return GatewayACPAgent()
         return super().__new__(cls)
 
@@ -260,7 +339,14 @@ class ClawksisACPAgent(SlashCommandsMixin, acp.Agent):
         self._conn = conn
         logger.info("ACP client connected")
 
-    async def _send(self, session_id: str, update: Any, *, fail_msg: str, level: int = logging.WARNING) -> bool:
+    async def _send(
+        self,
+        session_id: str,
+        update: Any,
+        *,
+        fail_msg: str,
+        level: int = logging.WARNING,
+    ) -> bool:
         """``session_update`` that logs instead of raising; False on failure."""
         try:
             await self._conn.session_update(session_id=session_id, update=update)
@@ -284,21 +370,32 @@ class ClawksisACPAgent(SlashCommandsMixin, acp.Agent):
             current = self._MODE_DEFAULT
         return SessionModeState(
             current_mode_id=current,
-            available_modes=[SessionMode(id=m, name=n, description=d) for m, (_p, n, d) in self._MODES.items()],
+            available_modes=[
+                SessionMode(id=m, name=n, description=d)
+                for m, (_p, n, d) in self._MODES.items()
+            ],
         )
 
-    def _edit_approval_policy_for_state(self, state: SessionState) -> tuple[str, str | None]:
+    def _edit_approval_policy_for_state(
+        self, state: SessionState
+    ) -> tuple[str, str | None]:
         mode = str(getattr(state, "mode", "") or self._MODE_DEFAULT)
-        policy = self._MODE_TO_EDIT_APPROVAL_POLICY.get(mode, self._EDIT_APPROVAL_POLICY_DEFAULT)
+        policy = self._MODE_TO_EDIT_APPROVAL_POLICY.get(
+            mode, self._EDIT_APPROVAL_POLICY_DEFAULT
+        )
         return policy, state.cwd
 
     def _build_model_state(self, state: SessionState) -> SessionModelState | None:
         """Authenticated providers + models, from the shared Clawksis inventory (same substrate
         as ``clawk model``/TUI/dashboard) so the selector isn't just the current curated list."""
         model = str(state.model or getattr(state.agent, "model", "") or "").strip()
-        provider = getattr(state.agent, "provider", None) or detect_provider() or "openrouter"
+        provider = (
+            getattr(state.agent, "provider", None) or detect_provider() or "openrouter"
+        )
         try:
-            picker = build_model_state(model, provider, str(getattr(state.agent, "base_url", "") or ""))
+            picker = build_model_state(
+                model, provider, str(getattr(state.agent, "base_url", "") or "")
+            )
             if picker is not None:
                 return picker
         except Exception:
@@ -307,7 +404,10 @@ class ClawksisACPAgent(SlashCommandsMixin, acp.Agent):
         if not model:
             return None
         choice = encode_model_choice(provider, model)
-        return SessionModelState(available_models=[ModelInfo(model_id=choice, name=model)], current_model_id=choice)
+        return SessionModelState(
+            available_models=[ModelInfo(model_id=choice, name=model)],
+            current_model_id=choice,
+        )
 
     def _switch_model(
         self, state: SessionState, raw_model: str, *, keep_endpoint: bool = False
@@ -323,29 +423,43 @@ class ClawksisACPAgent(SlashCommandsMixin, acp.Agent):
         from clawk_cli.model_switch import switch_model
         from clawk_cli.models import parse_model_input
 
-        current_provider, current_model = getattr(state.agent, "provider", None), str(state.model or "")
+        current_provider, current_model = (
+            getattr(state.agent, "provider", None),
+            str(state.model or ""),
+        )
         explicit_provider, model_input = parse_model_input(raw_model, "")
         cfg = load_config()
         result = switch_model(
-            raw_input=model_input, explicit_provider=explicit_provider,
-            current_provider=current_provider or "openrouter", current_model=current_model,
+            raw_input=model_input,
+            explicit_provider=explicit_provider,
+            current_provider=current_provider or "openrouter",
+            current_model=current_model,
             current_base_url=str(getattr(state.agent, "base_url", "") or ""),
             current_api_key=str(getattr(state.agent, "api_key", "") or ""),
-            user_providers=cfg.get("providers") if isinstance(cfg.get("providers"), dict) else {},
-            custom_providers=get_compatible_custom_providers(cfg))
+            user_providers=cfg.get("providers")
+            if isinstance(cfg.get("providers"), dict)
+            else {},
+            custom_providers=get_compatible_custom_providers(cfg),
+        )
         if not result.success:
             raise ModelRejected(result.error_message or f"Cannot switch to {raw_model}")
         target_provider, new_model = result.target_provider, result.new_model
         endpoint: dict[str, Any] = {}
-        if keep_endpoint and not (current_provider and target_provider != current_provider):
+        if keep_endpoint and not (
+            current_provider and target_provider != current_provider
+        ):
             endpoint = {
-                "base_url": getattr(state.agent, "base_url", None), "api_mode": getattr(state.agent, "api_mode", None)
+                "base_url": getattr(state.agent, "base_url", None),
+                "api_mode": getattr(state.agent, "api_mode", None),
             }
         # ACP-provided MCP servers live only on the running agent's toolsets (``_register_session_mcp_servers``);
         # a rebuild that re-derived them from config would silently drop every session MCP tool (#42719).
         agent = self.session_manager._make_agent(
-            session_id=state.session_id, cwd=state.cwd, model=new_model,
-            requested_provider=target_provider, **endpoint,
+            session_id=state.session_id,
+            cwd=state.cwd,
+            model=new_model,
+            requested_provider=target_provider,
+            **endpoint,
             enabled_toolsets=getattr(state.agent, "enabled_toolsets", None),
             disabled_toolsets=getattr(state.agent, "disabled_toolsets", None),
         )
@@ -356,8 +470,12 @@ class ClawksisACPAgent(SlashCommandsMixin, acp.Agent):
         from clawk_cli.observability.shared_metrics_events import record_model_switch
 
         record_model_switch(
-            from_provider=current_provider, to_provider=target_provider, surface="acp", from_model=current_model,
-            session_id=state.session_id)
+            from_provider=current_provider,
+            to_provider=target_provider,
+            surface="acp",
+            from_model=current_model,
+            session_id=state.session_id,
+        )
         return current_provider, target_provider, new_model
 
     @staticmethod
@@ -373,28 +491,46 @@ class ClawksisACPAgent(SlashCommandsMixin, acp.Agent):
         except Exception:
             logger.debug("Could not estimate ACP native context usage", exc_info=True)
             used = int(getattr(compressor, "last_prompt_tokens", 0) or 0)
-        return UsageUpdate(session_update="usage_update", size=max(size, 0), used=max(used, 0))
+        return UsageUpdate(
+            session_update="usage_update", size=max(size, 0), used=max(used, 0)
+        )
 
     async def _send_usage_update(self, state: SessionState) -> None:
         if self._conn and (update := self._build_usage_update(state)) is not None:
-            await self._send(state.session_id, update, fail_msg="Failed to send ACP usage update for session %s")
+            await self._send(
+                state.session_id,
+                update,
+                fail_msg="Failed to send ACP usage update for session %s",
+            )
 
     def _provenance_meta(
-        self, acp_session_id: str, current_clawk_session_id: str, previous_clawk_session_id: Optional[str] = None
+        self,
+        acp_session_id: str,
+        current_clawk_session_id: str,
+        previous_clawk_session_id: Optional[str] = None,
     ) -> Optional[dict]:
         """Best-effort ``_meta.clawk.sessionProvenance`` for an ACP session."""
         try:
             return session_provenance_meta(
-                self.session_manager._get_db(), acp_session_id, current_clawk_session_id,
+                self.session_manager._get_db(),
+                acp_session_id,
+                current_clawk_session_id,
                 previous_clawk_session_id=previous_clawk_session_id,
             )
         except Exception:
-            logger.debug("Could not build ACP session provenance for %s", acp_session_id, exc_info=True)
+            logger.debug(
+                "Could not build ACP session provenance for %s",
+                acp_session_id,
+                exc_info=True,
+            )
             return None
 
     async def _send_session_info_update(
-        self, session_id: str, *,
-        current_clawk_session_id: Optional[str] = None, previous_clawk_session_id: Optional[str] = None,
+        self,
+        session_id: str,
+        *,
+        current_clawk_session_id: Optional[str] = None,
+        previous_clawk_session_id: Optional[str] = None,
     ) -> None:
         """Session metadata update; pass ``previous_clawk_session_id`` when the internal head
         rotated (compression split) so provenance flags the reason."""
@@ -403,7 +539,9 @@ class ClawksisACPAgent(SlashCommandsMixin, acp.Agent):
         try:
             row = self.session_manager._get_db().get_session(session_id)
         except Exception:
-            logger.debug("Could not read ACP session info for %s", session_id, exc_info=True)
+            logger.debug(
+                "Could not read ACP session info for %s", session_id, exc_info=True
+            )
             return
         if not row:
             return
@@ -414,15 +552,22 @@ class ClawksisACPAgent(SlashCommandsMixin, acp.Agent):
             title=title if isinstance(title, str) and title.strip() else None,
             updated_at=datetime.now(UTC).isoformat(),
             field_meta=self._provenance_meta(
-                session_id, current_clawk_session_id or session_id, previous_clawk_session_id
+                session_id,
+                current_clawk_session_id or session_id,
+                previous_clawk_session_id,
             ),
         )
         await self._send(
-            session_id, update, fail_msg="Could not send ACP session info update for %s", level=logging.DEBUG
+            session_id,
+            update,
+            fail_msg="Could not send ACP session info update for %s",
+            level=logging.DEBUG,
         )
 
     async def _register_session_mcp_servers(
-        self, state: SessionState, mcp_servers: list[McpServerStdio | McpServerHttp | McpServerSse] | None
+        self,
+        state: SessionState,
+        mcp_servers: list[McpServerStdio | McpServerHttp | McpServerSse] | None,
     ) -> None:
         """Register ACP-provided MCP servers and refresh the agent tool surface."""
         if not mcp_servers:
@@ -439,9 +584,15 @@ class ClawksisACPAgent(SlashCommandsMixin, acp.Agent):
                 set_session_cwd(state.cwd)
                 register_mcp_servers(configs)
 
-            await asyncio.to_thread(_register_pinned)  # to_thread already runs in a copied context
+            await asyncio.to_thread(
+                _register_pinned
+            )  # to_thread already runs in a copied context
         except Exception:
-            logger.warning("Session %s: failed to register ACP MCP servers", state.session_id, exc_info=True)
+            logger.warning(
+                "Session %s: failed to register ACP MCP servers",
+                state.session_id,
+                exc_info=True,
+            )
             return
         try:
             from model_tools import get_tool_definitions
@@ -454,19 +605,27 @@ class ClawksisACPAgent(SlashCommandsMixin, acp.Agent):
             )
             agent.tools = get_tool_definitions(
                 enabled_toolsets=agent.enabled_toolsets,
-                disabled_toolsets=getattr(agent, "disabled_toolsets", None), quiet_mode=True,
+                disabled_toolsets=getattr(agent, "disabled_toolsets", None),
+                quiet_mode=True,
             )
-            agent.valid_tool_names = {tool["function"]["name"] for tool in agent.tools or []}
+            agent.valid_tool_names = {
+                tool["function"]["name"] for tool in agent.tools or []
+            }
             inject_memory_provider_tools(agent)
-            if callable(invalidate := getattr(agent, "_invalidate_system_prompt", None)):
+            if callable(
+                invalidate := getattr(agent, "_invalidate_system_prompt", None)
+            ):
                 invalidate()
             logger.info(
                 "Session %s: refreshed tool surface after ACP MCP registration (%d tools)",
-                state.session_id, len(agent.tools or []),
+                state.session_id,
+                len(agent.tools or []),
             )
         except Exception:
             logger.warning(
-                "Session %s: failed to refresh tool surface after ACP MCP registration", state.session_id, exc_info=True,
+                "Session %s: failed to refresh tool surface after ACP MCP registration",
+                state.session_id,
+                exc_info=True,
             )
 
     def _schedule_mcp_late_refresh(self, state: SessionState) -> None:
@@ -504,7 +663,10 @@ class ClawksisACPAgent(SlashCommandsMixin, acp.Agent):
                 with current.runtime_lock:
                     if current.is_running:
                         return
-                    if any(int(getattr(agent, k, 0) or 0) > 0 for k in ("_user_turn_count", "_api_call_count")):
+                    if any(
+                        int(getattr(agent, k, 0) or 0) > 0
+                        for k in ("_user_turn_count", "_api_call_count")
+                    ):
                         return
 
                     from tools.mcp_tool_agent import refresh_agent_mcp_tools
@@ -513,41 +675,61 @@ class ClawksisACPAgent(SlashCommandsMixin, acp.Agent):
                 if added:
                     logger.info(
                         "Session %s: late MCP refresh added %d tools: %s",
-                        session_id, len(added), ", ".join(sorted(added)),
+                        session_id,
+                        len(added),
+                        ", ".join(sorted(added)),
                     )
             except Exception:
-                logger.debug("Session %s: late MCP refresh failed", session_id, exc_info=True)
+                logger.debug(
+                    "Session %s: late MCP refresh failed", session_id, exc_info=True
+                )
 
-        threading.Thread(target=_wait_then_refresh, name=f"acp-mcp-late-refresh-{session_id}", daemon=True).start()
+        threading.Thread(
+            target=_wait_then_refresh,
+            name=f"acp-mcp-late-refresh-{session_id}",
+            daemon=True,
+        ).start()
 
     # ---- ACP lifecycle ------------------------------------------------------
 
     async def initialize(
-        self, protocol_version: int | None = None, client_capabilities: ClientCapabilities | None = None,
-        client_info: Implementation | None = None, **kwargs: Any,
+        self,
+        protocol_version: int | None = None,
+        client_capabilities: ClientCapabilities | None = None,
+        client_info: Implementation | None = None,
+        **kwargs: Any,
     ) -> InitializeResponse:
         from clawk_cli.version_info import get_version_info
 
         auth_methods = build_auth_methods()
         logger.info(
-            "Initialize from %s (protocol v%s)", client_info.name if client_info else "unknown",
-            protocol_version if isinstance(protocol_version, int) else acp.PROTOCOL_VERSION,
+            "Initialize from %s (protocol v%s)",
+            client_info.name if client_info else "unknown",
+            protocol_version
+            if isinstance(protocol_version, int)
+            else acp.PROTOCOL_VERSION,
         )
 
         return InitializeResponse(
             protocol_version=acp.PROTOCOL_VERSION,
-            agent_info=Implementation(name="clawksis-agent", version=get_version_info().base_version),
+            agent_info=Implementation(
+                name="clawksis-agent", version=get_version_info().base_version
+            ),
             agent_capabilities=AgentCapabilities(
                 load_session=True,
                 prompt_capabilities=PromptCapabilities(image=True),
                 session_capabilities=SessionCapabilities(
-                    fork=SessionForkCapabilities(), list=SessionListCapabilities(), resume=SessionResumeCapabilities(),
+                    fork=SessionForkCapabilities(),
+                    list=SessionListCapabilities(),
+                    resume=SessionResumeCapabilities(),
                 ),
             ),
             auth_methods=auth_methods,
         )
 
-    async def authenticate(self, method_id: str, **kwargs: Any) -> AuthenticateResponse | None:
+    async def authenticate(
+        self, method_id: str, **kwargs: Any
+    ) -> AuthenticateResponse | None:
         # Only acknowledge the method_id advertised in initialize().
         if not isinstance(method_id, str):
             return None
@@ -570,10 +752,16 @@ class ClawksisACPAgent(SlashCommandsMixin, acp.Agent):
         if not self._conn or not state.history:
             return
         for update in _history_replay_updates(state.history):
-            if not await self._send(state.session_id, update, fail_msg="Failed to replay ACP history for session %s"):
+            if not await self._send(
+                state.session_id,
+                update,
+                fail_msg="Failed to replay ACP history for session %s",
+            ):
                 return
 
-    async def _session_response_fields(self, state: SessionState, replay_verb: str | None = None) -> dict[str, Any]:
+    async def _session_response_fields(
+        self, state: SessionState, replay_verb: str | None = None
+    ) -> dict[str, Any]:
         """``models``/``modes``/``field_meta`` for session responses, after an optional history replay;
         schedules command advertisement + usage refresh.
 
@@ -595,47 +783,72 @@ class ClawksisACPAgent(SlashCommandsMixin, acp.Agent):
                 logger.warning(
                     f"ACP history replay raised during session/{replay_verb} for %s — "
                     f"{replay_verb} will still succeed, partial transcript may be missing",
-                    state.session_id, exc_info=True,
+                    state.session_id,
+                    exc_info=True,
                 )
         self._schedule_available_commands_update(state.session_id)
         self._schedule_soon(lambda: self._send_usage_update(state))
         return {
             "models": self._build_model_state(state),
             "modes": self._session_modes(state),
-            "field_meta": self._provenance_meta(state.session_id, getattr(state.agent, "session_id", state.session_id)),
+            "field_meta": self._provenance_meta(
+                state.session_id, getattr(state.agent, "session_id", state.session_id)
+            ),
         }
 
-    async def _attach_session_mcp(self, state: SessionState, mcp_servers: list | None, log: str, *log_args) -> None:
+    async def _attach_session_mcp(
+        self, state: SessionState, mcp_servers: list | None, log: str, *log_args
+    ) -> None:
         await self._register_session_mcp_servers(state, mcp_servers)
         self._schedule_mcp_late_refresh(state)
         logger.info(log, *log_args)
 
-    async def new_session(self, cwd: str, mcp_servers: list | None = None, **kwargs: Any) -> NewSessionResponse:
+    async def new_session(
+        self, cwd: str, mcp_servers: list | None = None, **kwargs: Any
+    ) -> NewSessionResponse:
         # Agent construction (config, memory-provider import, SessionDB) is slow and fully
         # blocking; inline it froze the loop serving every JSON-RPC request (#58083).
         state = await asyncio.to_thread(self.session_manager.create_session, cwd=cwd)
-        await self._attach_session_mcp(state, mcp_servers, "New session %s (cwd=%s)", state.session_id, cwd)
-        return NewSessionResponse(session_id=state.session_id, **await self._session_response_fields(state))
+        await self._attach_session_mcp(
+            state, mcp_servers, "New session %s (cwd=%s)", state.session_id, cwd
+        )
+        return NewSessionResponse(
+            session_id=state.session_id, **await self._session_response_fields(state)
+        )
 
     async def load_session(
         self, cwd: str, session_id: str, mcp_servers: list | None = None, **kwargs: Any
     ) -> LoadSessionResponse | None:
-        state = await asyncio.to_thread(self.session_manager.update_cwd, session_id, cwd)
+        state = await asyncio.to_thread(
+            self.session_manager.update_cwd, session_id, cwd
+        )
         if state is None:
             logger.warning("load_session: session %s not found", session_id)
             return None
-        await self._attach_session_mcp(state, mcp_servers, "Loaded session %s", session_id)
+        await self._attach_session_mcp(
+            state, mcp_servers, "Loaded session %s", session_id
+        )
         return LoadSessionResponse(**await self._session_response_fields(state, "load"))
 
     async def resume_session(
         self, cwd: str, session_id: str, mcp_servers: list | None = None, **kwargs: Any
     ) -> ResumeSessionResponse:
-        state = await asyncio.to_thread(self.session_manager.update_cwd, session_id, cwd)
+        state = await asyncio.to_thread(
+            self.session_manager.update_cwd, session_id, cwd
+        )
         if state is None:
-            logger.warning("resume_session: session %s not found, creating new", session_id)
-            state = await asyncio.to_thread(self.session_manager.create_session, cwd=cwd)
-        await self._attach_session_mcp(state, mcp_servers, "Resumed session %s", state.session_id)
-        return ResumeSessionResponse(**await self._session_response_fields(state, "resume"))
+            logger.warning(
+                "resume_session: session %s not found, creating new", session_id
+            )
+            state = await asyncio.to_thread(
+                self.session_manager.create_session, cwd=cwd
+            )
+        await self._attach_session_mcp(
+            state, mcp_servers, "Resumed session %s", state.session_id
+        )
+        return ResumeSessionResponse(
+            **await self._session_response_fields(state, "resume")
+        )
 
     async def cancel(self, session_id: str, **kwargs: Any) -> None:
         # get_session restores a not-in-memory id from the DB (full AIAgent build) and waits
@@ -654,16 +867,25 @@ class ClawksisACPAgent(SlashCommandsMixin, acp.Agent):
                     request_hard_interrupt(state.agent)
                     # Background delegations are detached from the turn's fan-out; they end with the cancel.
                     from tools.async_delegation import interrupt_for_session
-                    interrupt_for_session(parent_session_id=str(getattr(state.agent, "session_id", "") or ""),
-                                          reason="acp_cancel")
+
+                    interrupt_for_session(
+                        parent_session_id=str(
+                            getattr(state.agent, "session_id", "") or ""
+                        ),
+                        reason="acp_cancel",
+                    )
             except Exception:
-                logger.debug("Failed to interrupt ACP session %s", session_id, exc_info=True)
+                logger.debug(
+                    "Failed to interrupt ACP session %s", session_id, exc_info=True
+                )
         logger.info("Cancelled session %s", session_id)
 
     async def fork_session(
         self, cwd: str, session_id: str, mcp_servers: list | None = None, **kwargs: Any
     ) -> ForkSessionResponse:
-        state = await asyncio.to_thread(self.session_manager.fork_session, session_id, cwd=cwd)
+        state = await asyncio.to_thread(
+            self.session_manager.fork_session, session_id, cwd=cwd
+        )
         if state is None:
             logger.info("Forked session %s -> %s", session_id, "")
             return ForkSessionResponse(session_id="")
@@ -671,7 +893,9 @@ class ClawksisACPAgent(SlashCommandsMixin, acp.Agent):
         logger.info("Forked session %s -> %s", session_id, state.session_id)
         self._schedule_available_commands_update(state.session_id)
         return ForkSessionResponse(
-            session_id=state.session_id, models=self._build_model_state(state), modes=self._session_modes(state)
+            session_id=state.session_id,
+            models=self._build_model_state(state),
+            modes=self._session_modes(state),
         )
 
     async def list_sessions(
@@ -684,7 +908,7 @@ class ClawksisACPAgent(SlashCommandsMixin, acp.Agent):
         if cursor:
             for idx, s in enumerate(infos):
                 if s["session_id"] == cursor:
-                    infos = infos[idx + 1:]
+                    infos = infos[idx + 1 :]
                     break
             else:
                 infos = []
@@ -692,8 +916,12 @@ class ClawksisACPAgent(SlashCommandsMixin, acp.Agent):
         has_more = len(infos) > _LIST_SESSIONS_PAGE_SIZE
         sessions = [
             SessionInfo(
-                session_id=s["session_id"], cwd=s["cwd"], title=s.get("title"),
-                updated_at=None if s.get("updated_at") is None else str(s["updated_at"]),
+                session_id=s["session_id"],
+                cwd=s["cwd"],
+                title=s.get("title"),
+                updated_at=None
+                if s.get("updated_at") is None
+                else str(s["updated_at"]),
             )
             for s in infos[:_LIST_SESSIONS_PAGE_SIZE]
         ]
@@ -722,12 +950,19 @@ class ClawksisACPAgent(SlashCommandsMixin, acp.Agent):
             if interrupted_prompt:
                 return (_attach_interrupted_prompt(interrupted_prompt, steer_text),) * 2
             return (steer_text, steer_text) if idle else (user_text, user_content)
-        if not user_text.startswith("/") and (interrupted_prompt := _take_interrupted_prompt(state)[1]):
+        if not user_text.startswith("/") and (
+            interrupted_prompt := _take_interrupted_prompt(state)[1]
+        ):
             return (_attach_interrupted_prompt(interrupted_prompt, user_text),) * 2
         return user_text, user_content
 
     def _claim_turn_or_queue(
-        self, state: SessionState, session_id: str, user_text: str, user_content: Any, text_only: bool
+        self,
+        state: SessionState,
+        session_id: str,
+        user_text: str,
+        user_content: Any,
+        text_only: bool,
     ) -> str | None:
         """Mark the session running; if a turn is active, redirect it (text-only, supported
         runtime) or queue it. Returns the client message when absorbed, else None."""
@@ -737,20 +972,39 @@ class ClawksisACPAgent(SlashCommandsMixin, acp.Agent):
                 state.current_prompt_text = user_text or "[Image attachment]"
                 return None
             # Redirect steers a live turn; a state-mutating command (command_op) has none.
-            if state.is_running and text_only and isinstance(user_content, str) and hasattr(state.agent, "redirect") and (
-                getattr(state.agent, "_supports_active_turn_redirect", False) is True
+            if (
+                state.is_running
+                and text_only
+                and isinstance(user_content, str)
+                and hasattr(state.agent, "redirect")
+                and (
+                    getattr(state.agent, "_supports_active_turn_redirect", False)
+                    is True
+                )
             ):
                 try:
                     if state.agent.redirect(user_content):
                         return "Redirected the active turn with your correction."
                 except Exception:
-                    logger.debug("ACP active-turn redirect failed for %s", session_id, exc_info=True)
+                    logger.debug(
+                        "ACP active-turn redirect failed for %s",
+                        session_id,
+                        exc_info=True,
+                    )
             state.queued_prompts.append(user_text or "[Image attachment]")
             return f"Queued for the next turn. ({len(state.queued_prompts)} queued)"
 
     def _run_agent_turn(
-        self, *, state: SessionState, session_id: str, user_text: str, user_content: Any, conn: Any,
-        loop: asyncio.AbstractEventLoop, approval_cb: Any, edit_approval_requester: Any,
+        self,
+        *,
+        state: SessionState,
+        session_id: str,
+        user_text: str,
+        user_content: Any,
+        conn: Any,
+        loop: asyncio.AbstractEventLoop,
+        approval_cb: Any,
+        edit_approval_requester: Any,
     ) -> dict:
         """Executor-thread body of one turn, run inside ``contextvars.copy_context()`` so
         ContextVar writes are isolated from concurrent sessions.
@@ -770,7 +1024,10 @@ class ClawksisACPAgent(SlashCommandsMixin, acp.Agent):
                 from gateway.session_context import clear_session_vars, set_session_vars
 
                 tokens = set_session_vars(
-                    session_key=session_id, session_id=session_id, cwd=state.cwd, cron_session="",
+                    session_key=session_id,
+                    session_id=session_id,
+                    cwd=state.cwd,
+                    cron_session="",
                 )
                 return lambda: clear_session_vars(tokens)
 
@@ -782,7 +1039,10 @@ class ClawksisACPAgent(SlashCommandsMixin, acp.Agent):
                 return lambda: terminal_tool.set_approval_callback(previous)
 
             def _edit_approval() -> Callable[[], None]:
-                from acp_adapter.edit_approval import reset_edit_approval_requester, set_edit_approval_requester
+                from acp_adapter.edit_approval import (
+                    reset_edit_approval_requester,
+                    set_edit_approval_requester,
+                )
 
                 token = set_edit_approval_requester(edit_approval_requester)
                 return lambda: reset_edit_approval_requester(token)
@@ -792,27 +1052,37 @@ class ClawksisACPAgent(SlashCommandsMixin, acp.Agent):
                 _bind_guarded(stack, "approval callback", _approval)
             if edit_approval_requester:
                 _bind_guarded(stack, "edit approval requester", _edit_approval)
-            stack.callback(reset_clawk_interactive_context, set_clawk_interactive_context(True))
+            stack.callback(
+                reset_clawk_interactive_context, set_clawk_interactive_context(True)
+            )
             # Tools tag side-effects with the ACP session (``kanban_create``); save/restore it.
-            stack.callback(_restore_env, "CLAWK_SESSION_ID", os.environ.get("CLAWK_SESSION_ID"))
+            stack.callback(
+                _restore_env, "CLAWK_SESSION_ID", os.environ.get("CLAWK_SESSION_ID")
+            )
             os.environ["CLAWK_SESSION_ID"] = session_id
 
             # Auto-titling fires in the turn prologue; push the title now as a session-info update.
             def _notify_title_update(_title: str, _source: str) -> None:
                 if conn:
-                    loop.call_soon_threadsafe(asyncio.create_task, self._send_session_info_update(session_id))
+                    loop.call_soon_threadsafe(
+                        asyncio.create_task, self._send_session_info_update(session_id)
+                    )
 
             agent._on_session_title = _notify_title_update
             try:
                 return agent.run_conversation(
-                    user_message=user_content, conversation_history=state.history, task_id=session_id,
+                    user_message=user_content,
+                    conversation_history=state.history,
+                    task_id=session_id,
                     persist_user_message=user_text or "[Image attachment]",
                 )
             except Exception as e:
                 logger.exception("Agent error in session %s", session_id)
                 return {"final_response": f"Error: {e}", "messages": state.history}
 
-    async def prompt(self, prompt: list[PromptBlock], session_id: str, **kwargs: Any) -> PromptResponse:
+    async def prompt(
+        self, prompt: list[PromptBlock], session_id: str, **kwargs: Any
+    ) -> PromptResponse:
         """Run Clawksis on the user's prompt and stream events back to the editor."""
         state = await asyncio.to_thread(self.session_manager.get_session, session_id)
         if state is None:
@@ -825,25 +1095,39 @@ class ClawksisACPAgent(SlashCommandsMixin, acp.Agent):
         if not user_text and not (isinstance(user_content, list) and user_content):
             return PromptResponse(stop_reason="end_turn")
 
-        user_text, user_content = self._rewrite_prompt_for_interrupt(state, user_text, user_content, text_only_prompt)
+        user_text, user_content = self._rewrite_prompt_for_interrupt(
+            state, user_text, user_content, text_only_prompt
+        )
 
         # Slash commands are text-only; a prompt with media goes to the agent even if it starts with "/".
-        if text_only_prompt and isinstance(user_content, str) and user_text.startswith("/"):
+        if (
+            text_only_prompt
+            and isinstance(user_content, str)
+            and user_text.startswith("/")
+        ):
             # Off the loop: /model validates through switch_model (network I/O) and /compress
             # calls the LLM; handlers are sync and hold no loop-bound state.
-            response_text = await asyncio.to_thread(self._handle_slash_command, user_text, state)
+            response_text = await asyncio.to_thread(
+                self._handle_slash_command, user_text, state
+            )
             if response_text is not None:
                 if self._conn:
-                    await self._conn.session_update(session_id, acp.update_agent_message_text(response_text))
+                    await self._conn.session_update(
+                        session_id, acp.update_agent_message_text(response_text)
+                    )
                     await self._send_usage_update(state)
                 # A mutating command held command_op; prompts that arrived mid-op are queued.
                 await self._drain_queued_prompts(state, session_id, self._conn)
                 return PromptResponse(stop_reason="end_turn")
 
-        absorbed = self._claim_turn_or_queue(state, session_id, user_text, user_content, text_only_prompt)
+        absorbed = self._claim_turn_or_queue(
+            state, session_id, user_text, user_content, text_only_prompt
+        )
         if absorbed is not None:
             if self._conn:
-                await self._conn.session_update(session_id, acp.update_agent_message_text(absorbed))
+                await self._conn.session_update(
+                    session_id, acp.update_agent_message_text(absorbed)
+                )
             return PromptResponse(stop_reason="end_turn")
 
         logger.info("Prompt on session %s: %s", session_id, user_text[:100])
@@ -855,8 +1139,14 @@ class ClawksisACPAgent(SlashCommandsMixin, acp.Agent):
         def _run_agent() -> dict:
             try:
                 return self._run_agent_turn(
-                    state=state, session_id=session_id, user_text=user_text, user_content=user_content, conn=conn,
-                    loop=loop, approval_cb=cbs.approval_cb, edit_approval_requester=cbs.edit_approval_requester,
+                    state=state,
+                    session_id=session_id,
+                    user_text=user_text,
+                    user_content=user_content,
+                    conn=conn,
+                    loop=loop,
+                    approval_cb=cbs.approval_cb,
+                    edit_approval_requester=cbs.edit_approval_requester,
                 )
             finally:
                 # Still on the executor thread: ``_send_update`` blocks on the loop, so flushing
@@ -877,21 +1167,35 @@ class ClawksisACPAgent(SlashCommandsMixin, acp.Agent):
                 state.current_prompt_text = ""
             return PromptResponse(stop_reason="end_turn")
 
-        return await self._finish_turn(state, session_id, conn, result, pre_turn_clawk_id, cbs.streamed)
+        return await self._finish_turn(
+            state, session_id, conn, result, pre_turn_clawk_id, cbs.streamed
+        )
 
     def _flush_turn_tool_calls(
-        self, cbs: _TurnCallbacks, session_id: str, conn: Any, loop: asyncio.AbstractEventLoop
+        self,
+        cbs: _TurnCallbacks,
+        session_id: str,
+        conn: Any,
+        loop: asyncio.AbstractEventLoop,
     ) -> None:
         """Close any tool call the turn left open, so no bubble spins after the turn ends."""
         if not conn or cbs.tool_call_ids is None:
             return
         try:
-            flush_open_tool_calls(conn, session_id, loop, cbs.tool_call_ids, cbs.tool_call_meta or {})
+            flush_open_tool_calls(
+                conn, session_id, loop, cbs.tool_call_ids, cbs.tool_call_meta or {}
+            )
         except Exception:
-            logger.debug("Could not flush open ACP tool calls for %s", session_id, exc_info=True)
+            logger.debug(
+                "Could not flush open ACP tool calls for %s", session_id, exc_info=True
+            )
 
     def _wire_turn_callbacks(
-        self, state: SessionState, session_id: str, conn: Any, loop: asyncio.AbstractEventLoop
+        self,
+        state: SessionState,
+        session_id: str,
+        conn: Any,
+        loop: asyncio.AbstractEventLoop,
     ) -> _TurnCallbacks:
         """Install the ACP streaming callbacks on the session agent for one turn."""
         cbs = _TurnCallbacks()
@@ -904,7 +1208,12 @@ class ClawksisACPAgent(SlashCommandsMixin, acp.Agent):
             turn_state: dict[str, Any] = {}
             policy_getter = lambda: self._edit_approval_policy_for_state(state)
             cbs.tool_progress_cb = make_tool_progress_cb(
-                conn, session_id, loop, tool_call_ids, tool_call_meta, edit_approval_policy_getter=policy_getter,
+                conn,
+                session_id,
+                loop,
+                tool_call_ids,
+                tool_call_meta,
+                edit_approval_policy_getter=policy_getter,
                 turn_state=turn_state,
             )
             # Per-session allocator: a new turn must never reuse a previous turn's
@@ -912,8 +1221,12 @@ class ClawksisACPAgent(SlashCommandsMixin, acp.Agent):
             if state.message_ids is None:
                 state.message_ids = AssistantMessageIdAllocator()
             state.message_ids.close()  # new turn -> next chunk opens a fresh id
-            cbs.reasoning_cb = make_thinking_cb(conn, session_id, loop, state.message_ids)
-            cbs.step_cb = make_step_cb(conn, session_id, loop, tool_call_ids, tool_call_meta, turn_state)
+            cbs.reasoning_cb = make_thinking_cb(
+                conn, session_id, loop, state.message_ids
+            )
+            cbs.step_cb = make_step_cb(
+                conn, session_id, loop, tool_call_ids, tool_call_meta, turn_state
+            )
             message_cb = make_message_cb(conn, session_id, loop, state.message_ids)
 
             def stream_delta_cb(text: str) -> None:
@@ -923,16 +1236,23 @@ class ClawksisACPAgent(SlashCommandsMixin, acp.Agent):
             cbs.stream_delta_cb = stream_delta_cb
             # Closes the synthetic permission-request bubble once the user has answered.
             send_update = lambda update: _send_update(conn, session_id, loop, update)
-            cbs.approval_cb = make_approval_callback(conn.request_permission, loop, session_id, send_update=send_update)
+            cbs.approval_cb = make_approval_callback(
+                conn.request_permission, loop, session_id, send_update=send_update
+            )
             try:
                 from acp_adapter.edit_approval import make_acp_edit_approval_requester
 
                 cbs.edit_approval_requester = make_acp_edit_approval_requester(
-                    conn.request_permission, loop, session_id, auto_approve_getter=policy_getter,
+                    conn.request_permission,
+                    loop,
+                    session_id,
+                    auto_approve_getter=policy_getter,
                     send_update=send_update,
                 )
             except Exception:
-                logger.debug("Could not create ACP edit approval requester", exc_info=True)
+                logger.debug(
+                    "Could not create ACP edit approval requester", exc_info=True
+                )
 
         agent = state.agent
         agent.tool_progress_callback = cbs.tool_progress_cb
@@ -943,7 +1263,12 @@ class ClawksisACPAgent(SlashCommandsMixin, acp.Agent):
         return cbs
 
     async def _finish_turn(
-        self, state: SessionState, session_id: str, conn: Any, result: dict, pre_turn_clawk_id: Any,
+        self,
+        state: SessionState,
+        session_id: str,
+        conn: Any,
+        result: dict,
+        pre_turn_clawk_id: Any,
         streamed_message: bool,
     ) -> PromptResponse:
         """Persist, emit provenance/final text, drain queued prompts, report usage."""
@@ -956,30 +1281,51 @@ class ClawksisACPAgent(SlashCommandsMixin, acp.Agent):
 
             # Head rotated (compression split): emit provenance so clients can render the boundary.
             post_turn_clawk_id = getattr(state.agent, "session_id", None)
-            if conn and post_turn_clawk_id and pre_turn_clawk_id and post_turn_clawk_id != pre_turn_clawk_id:
+            if (
+                conn
+                and post_turn_clawk_id
+                and pre_turn_clawk_id
+                and post_turn_clawk_id != pre_turn_clawk_id
+            ):
                 try:
                     await self._send_session_info_update(
-                        session_id, current_clawk_session_id=post_turn_clawk_id,
+                        session_id,
+                        current_clawk_session_id=post_turn_clawk_id,
                         previous_clawk_session_id=pre_turn_clawk_id,
                     )
                 except Exception:
-                    logger.debug("Could not emit ACP provenance update after rotation for %s", session_id, exc_info=True)
+                    logger.debug(
+                        "Could not emit ACP provenance update after rotation for %s",
+                        session_id,
+                        exc_info=True,
+                    )
 
-            final_response = result.get("final_response") or ""  # None on an interrupted turn
+            final_response = (
+                result.get("final_response") or ""
+            )  # None on an interrupted turn
             cancelled = bool(state.cancel_event and state.cancel_event.is_set())
             # The local "waiting for model" interrupt status is metadata, not prose; stop_reason carries it.
             from agent.conversation_loop import INTERRUPT_WAITING_FOR_MODEL_PREFIX
 
             interrupted = bool(result.get("interrupted")) or cancelled
-            suppress = interrupted and final_response.startswith(INTERRUPT_WAITING_FOR_MODEL_PREFIX)
+            suppress = interrupted and final_response.startswith(
+                INTERRUPT_WAITING_FOR_MODEL_PREFIX
+            )
             # Send the final text unless already streamed — or if a plugin hook transformed it after.
-            if final_response and conn and not suppress and (not streamed_message or result.get("response_transformed")):
+            if (
+                final_response
+                and conn
+                and not suppress
+                and (not streamed_message or result.get("response_transformed"))
+            ):
                 update = acp.update_agent_message_text(final_response)
                 if state.message_ids is not None:
                     # A plugin-rewritten reply replaces the streamed bubble (same id); an
                     # unstreamed final response opens its own.
                     if streamed_message and result.get("response_transformed"):
-                        update.message_id = state.message_ids.last() or state.message_ids.current()
+                        update.message_id = (
+                            state.message_ids.last() or state.message_ids.current()
+                        )
                     else:
                         update.message_id = state.message_ids.current()
                     state.message_ids.close()
@@ -993,16 +1339,25 @@ class ClawksisACPAgent(SlashCommandsMixin, acp.Agent):
             await self._drain_queued_prompts(state, session_id, conn)
 
         usage = None
-        if any(result.get(k) is not None for k in ("prompt_tokens", "completion_tokens", "total_tokens")):
+        if any(
+            result.get(k) is not None
+            for k in ("prompt_tokens", "completion_tokens", "total_tokens")
+        ):
             usage = Usage(
-                input_tokens=result.get("prompt_tokens", 0), output_tokens=result.get("completion_tokens", 0),
-                total_tokens=result.get("total_tokens", 0), thought_tokens=result.get("reasoning_tokens"),
+                input_tokens=result.get("prompt_tokens", 0),
+                output_tokens=result.get("completion_tokens", 0),
+                total_tokens=result.get("total_tokens", 0),
+                thought_tokens=result.get("reasoning_tokens"),
                 cached_read_tokens=result.get("cache_read_tokens"),
             )
         await self._send_usage_update(state)
-        return PromptResponse(stop_reason="cancelled" if cancelled else "end_turn", usage=usage)
+        return PromptResponse(
+            stop_reason="cancelled" if cancelled else "end_turn", usage=usage
+        )
 
-    async def _drain_queued_prompts(self, state: SessionState, session_id: str, conn: Any) -> None:
+    async def _drain_queued_prompts(
+        self, state: SessionState, session_id: str, conn: Any
+    ) -> None:
         """Run queued prompts while the session is idle. Reached from ``_finish_turn`` and
         from the slash path after a state-mutating command releases ``command_op``."""
         while True:
@@ -1011,36 +1366,49 @@ class ClawksisACPAgent(SlashCommandsMixin, acp.Agent):
                     return
                 next_prompt = state.queued_prompts.pop(0)
             if conn:
-                await conn.session_update(session_id, acp.update_user_message_text(next_prompt))
-            await self.prompt(prompt=[TextContentBlock(type="text", text=next_prompt)], session_id=session_id)
+                await conn.session_update(
+                    session_id, acp.update_user_message_text(next_prompt)
+                )
+            await self.prompt(
+                prompt=[TextContentBlock(type="text", text=next_prompt)],
+                session_id=session_id,
+            )
 
     # ---- Session settings (ACP protocol methods) -----------------------------
 
-    async def set_session_model(self, model_id: str, session_id: str, **kwargs: Any) -> SetSessionModelResponse | None:
+    async def set_session_model(
+        self, model_id: str, session_id: str, **kwargs: Any
+    ) -> SetSessionModelResponse | None:
         """Switch the model for a session (called by ACP protocol)."""
         state = await asyncio.to_thread(self.session_manager.get_session, session_id)
         if state is None:
-            logger.warning("Session %s: model switch requested for missing session", session_id)
+            logger.warning(
+                "Session %s: model switch requested for missing session", session_id
+            )
             return None
         # The picker swaps state.agent wholesale; mid-turn that strands the running agent and
         # makes _finish_turn emit a spurious compression-rotation update. Same exclusion as
         # the /model slash command.
         with state.runtime_lock:
             if state.is_running or state.command_op:
-                raise acp.RequestError(-32603, "Session is busy; switch models while the session is idle")
+                raise acp.RequestError(
+                    -32603, "Session is busy; switch models while the session is idle"
+                )
             state.command_op = True
         try:
             # switch_model() does synchronous network I/O (models.dev, custom-endpoint probes,
             # ~10 s cold) — off the loop, like the gateway, so other ACP sessions keep flowing.
             try:
                 _old, requested_provider, resolved_model = await asyncio.to_thread(
-                    self._switch_model, state, model_id, keep_endpoint=True)
+                    self._switch_model, state, model_id, keep_endpoint=True
+                )
             except ModelRejected as exc:
                 # A model no provider can serve is a bad ``modelId`` param (-32602), not an agent
                 # internal error (-32603): the client attributes it to the request, not to Clawksis (#72439).
                 # Only the switch_model rejection maps here; a ValueError from the rebuild itself
                 # (disabled provider, context window below the floor) stays on the -32603 path.
                 from acp.exceptions import RequestError
+
                 raise RequestError.invalid_params({"details": str(exc)}) from exc
         finally:
             with state.runtime_lock:
@@ -1048,17 +1416,26 @@ class ClawksisACPAgent(SlashCommandsMixin, acp.Agent):
             # Drain AFTER this response is queued, never inside it: a prompt that arrived
             # mid-switch would otherwise run a whole turn before the client sees the
             # (possibly failed) switch result.
-            self._schedule_soon(lambda: self._drain_queued_prompts(state, session_id, self._conn))
+            self._schedule_soon(
+                lambda: self._drain_queued_prompts(state, session_id, self._conn)
+            )
         logger.info(
-            "Session %s: model switched to %s via provider %s", session_id, resolved_model, requested_provider
+            "Session %s: model switched to %s via provider %s",
+            session_id,
+            resolved_model,
+            requested_provider,
         )
         return SetSessionModelResponse()
 
-    async def set_session_mode(self, mode_id: str, session_id: str, **kwargs: Any) -> SetSessionModeResponse | None:
+    async def set_session_mode(
+        self, mode_id: str, session_id: str, **kwargs: Any
+    ) -> SetSessionModeResponse | None:
         """Persist the editor-requested mode so ACP clients do not fail on mode switches."""
         state = await asyncio.to_thread(self.session_manager.get_session, session_id)
         if state is None:
-            logger.warning("Session %s: mode switch requested for missing session", session_id)
+            logger.warning(
+                "Session %s: mode switch requested for missing session", session_id
+            )
             return None
         normalized_mode = str(mode_id or "").strip()
         if normalized_mode not in self._MODES:
@@ -1074,11 +1451,15 @@ class ClawksisACPAgent(SlashCommandsMixin, acp.Agent):
         """Accept ACP config option updates even when Clawksis has no typed ACP config surface yet."""
         state = await asyncio.to_thread(self.session_manager.get_session, session_id)
         if state is None:
-            logger.warning("Session %s: config update requested for missing session", session_id)
+            logger.warning(
+                "Session %s: config update requested for missing session", session_id
+            )
             return None
 
         if str(config_id) == self._EDIT_APPROVAL_POLICY_CONFIG_ID:
-            state.mode = self._EDIT_APPROVAL_POLICY_TO_MODE.get(str(value), self._MODE_DEFAULT)
+            state.mode = self._EDIT_APPROVAL_POLICY_TO_MODE.get(
+                str(value), self._MODE_DEFAULT
+            )
         else:
             options = getattr(state, "config_options", None)
             if not isinstance(options, dict):

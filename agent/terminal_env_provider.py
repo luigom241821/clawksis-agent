@@ -95,7 +95,11 @@ class TerminalEnvironmentProvider(ProviderBase):
 
     def probe(self) -> tuple[str, str]:
         """Dashboard picker health ``(status, detail)``; status ``ready``/``needs_setup``/``unavailable``. Never raise; <~2s."""
-        return ("ready", "") if self.is_available() else ("needs_setup", f"{self.display_name} is not configured.")
+        return (
+            ("ready", "")
+            if self.is_available()
+            else ("needs_setup", f"{self.display_name} is not configured.")
+        )
 
     def setup_instructions(self) -> list[str]:
         """Lines printed by ``clawk setup`` after selection (the wizard persists ``terminal.backend`` itself)."""
@@ -110,12 +114,24 @@ class TerminalEnvironmentProvider(ProviderBase):
             ok = bool(self.is_available())
         except Exception:
             ok = False
-        return [(ok, f"{self.display_name} backend", "(configured)" if ok else "(not configured — see setup instructions)")]
+        return [
+            (
+                ok,
+                f"{self.display_name} backend",
+                "(configured)" if ok else "(not configured — see setup instructions)",
+            )
+        ]
 
     @abc.abstractmethod
     def create_environment(
-        self, *, cwd: str, timeout: int, task_id: str = "default", image: Optional[str] = None,
-        container_config: Optional[dict[str, Any]] = None, **kwargs: Any,
+        self,
+        *,
+        cwd: str,
+        timeout: int,
+        task_id: str = "default",
+        image: Optional[str] = None,
+        container_config: Optional[dict[str, Any]] = None,
+        **kwargs: Any,
     ):
         """Create an execution environment (``BaseEnvironment`` duck type). MUST accept ``**kwargs`` and ignore
         unknown keys so the factory can evolve without breaking older plugins. ``task_id`` keys reuse/persistence;

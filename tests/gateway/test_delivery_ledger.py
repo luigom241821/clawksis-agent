@@ -49,13 +49,17 @@ def _row(oid):
                FROM delivery_obligations WHERE obligation_id=?""",
             (oid,),
         ).fetchone()
-    return None if r is None else {
-        "state": r[0],
-        "attempts": r[1],
-        "owner_pid": r[2],
-        "content": r[3],
-        "last_error": r[4],
-    }
+    return (
+        None
+        if r is None
+        else {
+            "state": r[0],
+            "attempts": r[1],
+            "owner_pid": r[2],
+            "content": r[3],
+            "last_error": r[4],
+        }
+    )
 
 
 def _blocking_probe():
@@ -118,7 +122,8 @@ class TestSchemaMigration:
             )
             dl._initialize_schema(conn)
             columns = {
-                row[1] for row in conn.execute("PRAGMA table_info(delivery_obligations)")
+                row[1]
+                for row in conn.execute("PRAGMA table_info(delivery_obligations)")
             }
         finally:
             conn.close()
@@ -187,11 +192,14 @@ class TestRuntimeFailedSweep:
         _record(platform="telegram")
         dl.mark_failed("ob-1", "503 Service Unavailable")
         with dl._connect() as conn:
-            conn.execute("UPDATE delivery_obligations SET attempts=1, updated_at=1000.0 WHERE obligation_id='ob-1'")
+            conn.execute(
+                "UPDATE delivery_obligations SET attempts=1, updated_at=1000.0 WHERE obligation_id='ob-1'"
+            )
 
         assert dl.sweep_failed_for_runtime("telegram", now=1000.0 + 60) == []
         assert dl.pending_retries(now=1000.0 + 60) == [
-            {"platform": "telegram", "profile": "default", "not_before": 1000.0 + 120}]
+            {"platform": "telegram", "profile": "default", "not_before": 1000.0 + 120}
+        ]
         claimed = dl.sweep_failed_for_runtime("telegram", now=1000.0 + 121)
         assert [row["obligation_id"] for row in claimed] == ["ob-1"]
         assert claimed[0]["needs_marker"] is True
@@ -203,8 +211,10 @@ class TestRuntimeFailedSweep:
         _record(platform="telegram")
         dl.mark_failed("ob-1", "503 Service Unavailable")
         with dl._connect() as conn:
-            conn.execute("UPDATE delivery_obligations SET attempts=?, updated_at=1000.0 WHERE obligation_id='ob-1'",
-                         (dl.MAX_ATTEMPTS - 1,))
+            conn.execute(
+                "UPDATE delivery_obligations SET attempts=?, updated_at=1000.0 WHERE obligation_id='ob-1'",
+                (dl.MAX_ATTEMPTS - 1,),
+            )
 
         assert dl.sweep_failed_for_runtime("telegram", now=1000.0 + 10_000) == []
         assert dl.pending_retries(now=1000.0 + 10_000) == []
@@ -218,7 +228,9 @@ class TestRuntimeFailedSweep:
         dl.mark_failed("ob-1", "send_path_degraded")
 
         assert dl.pending_retries(now=time.time() + 10_000) == []
-        assert [r["obligation_id"] for r in dl.sweep_failed_for_runtime("telegram")] == ["ob-1"]
+        assert [
+            r["obligation_id"] for r in dl.sweep_failed_for_runtime("telegram")
+        ] == ["ob-1"]
 
     def test_claim_is_platform_scoped_and_not_reclaimed_while_attempting(self):
         _record(platform="telegram")
@@ -342,8 +354,7 @@ class TestRuntimeFailedSweep:
         # behind: even then, a delivered row must never be reclaimed.
         with dl._connect() as conn:
             conn.execute(
-                "UPDATE delivery_obligations SET last_error=? "
-                "WHERE obligation_id=?",
+                "UPDATE delivery_obligations SET last_error=? WHERE obligation_id=?",
                 ("send_path_degraded", "ob-1"),
             )
 
@@ -380,8 +391,6 @@ class TestPrune:
         with dl._DB_LOCK, dl._transaction() as conn:
             dl._prune_unlocked(conn, time.time())
         assert _row("ob-1") is None
-
-
 
 
 class TestGatewayRedeliverySweep:
@@ -441,9 +450,7 @@ class TestGatewayRedeliverySweep:
         default_adapter = self._adapter()
         owner_adapter = self._adapter()
         runner = self._runner(default_adapter)
-        runner._profile_adapters = {
-            "credential-owner": {Platform.SLACK: owner_adapter}
-        }
+        runner._profile_adapters = {"credential-owner": {Platform.SLACK: owner_adapter}}
 
         n = await runner._redeliver_pending_obligations()
 
@@ -482,7 +489,9 @@ class TestGatewayRedeliverySweep:
         assert sent["content"].startswith(dl.RECOVERED_MARKER)
         assert sent["content"].endswith("the final answer")
 
-    @pytest.mark.parametrize("earlier_boot", ["killed_inside_send", "older_build_left_pending"])
+    @pytest.mark.parametrize(
+        "earlier_boot", ["killed_inside_send", "older_build_left_pending"]
+    )
     @pytest.mark.asyncio
     async def test_redelivery_after_an_earlier_boot_claim_is_marked(self, earlier_boot):
         """Once a boot has claimed a row it may have sent it: every later copy carries the marker."""
@@ -499,7 +508,9 @@ class TestGatewayRedeliverySweep:
             assert first.send.call_args.kwargs["content"] == "the final answer"
         else:
             with dl._connect() as conn:
-                conn.execute("UPDATE delivery_obligations SET attempts=1 WHERE obligation_id='ob-1'")
+                conn.execute(
+                    "UPDATE delivery_obligations SET attempts=1 WHERE obligation_id='ob-1'"
+                )
         _orphan("ob-1")
         second = self._adapter()
 
@@ -521,7 +532,9 @@ class TestGatewayRedeliverySweep:
 
     @pytest.mark.parametrize("claimed_state", ["pending", "failed"])
     @pytest.mark.asyncio
-    async def test_boot_claim_whose_adapter_vanishes_is_left_for_the_reconnect_sweep(self, claimed_state):
+    async def test_boot_claim_whose_adapter_vanishes_is_left_for_the_reconnect_sweep(
+        self, claimed_state
+    ):
         """A boot claim never sent (platform went away before dispatch) must not strand in 'attempting'."""
         _record()
         if claimed_state == "failed":
@@ -535,7 +548,9 @@ class TestGatewayRedeliverySweep:
         await runner._redeliver_claimed_obligations(claimed)
 
         assert _row("ob-1")["state"] == "failed" and _row("ob-1")["attempts"] == 0
-        assert [r["obligation_id"] for r in dl.sweep_failed_for_runtime("slack")] == ["ob-1"]
+        assert [r["obligation_id"] for r in dl.sweep_failed_for_runtime("slack")] == [
+            "ob-1"
+        ]
 
     @pytest.mark.asyncio
     async def test_runtime_failed_redelivery_clears_resume_before_send(self):
@@ -571,9 +586,7 @@ class TestGatewayRedeliverySweep:
         default_adapter = self._adapter()
         reviewer_adapter = self._adapter()
         runner = self._runner(default_adapter)
-        runner._profile_adapters = {
-            "reviewer": {Platform.SLACK: reviewer_adapter}
-        }
+        runner._profile_adapters = {"reviewer": {Platform.SLACK: reviewer_adapter}}
 
         n = await runner._redeliver_failed_obligations_for_platform(
             Platform.SLACK, profile="reviewer"
@@ -703,7 +716,8 @@ class TestAttemptsOnlySpentOnRealSends:
         with dl._connect() as conn:
             state, attempts = conn.execute(
                 "SELECT state, attempts FROM delivery_obligations "
-                "WHERE obligation_id=?", ("ob-1",),
+                "WHERE obligation_id=?",
+                ("ob-1",),
             ).fetchone()
         assert attempts == 0, "an unsendable boot must not spend the budget"
         assert state == "attempting"
@@ -753,7 +767,6 @@ class TestUnconnectedPlatformKeepsItsBudget:
         assert _row("ob-1")["attempts"] == 0
 
 
-
 class TestOwnerAlivePidProbe:
     """_owner_alive's no-start-time fallback must route through
     gateway.status._pid_exists, never a raw ``os.kill(pid, 0)`` probe.
@@ -791,9 +804,15 @@ class TestOwnerAlivePidProbe:
 
         self._no_start_time(monkeypatch)
         calls = []
-        monkeypatch.setattr(status, "_pid_exists", lambda pid: calls.append(pid) or True)
         monkeypatch.setattr(
-            dl.os, "kill", lambda *a, **k: (_ for _ in ()).throw(AssertionError("raw os.kill probe used"))
+            status, "_pid_exists", lambda pid: calls.append(pid) or True
+        )
+        monkeypatch.setattr(
+            dl.os,
+            "kill",
+            lambda *a, **k: (_ for _ in ()).throw(
+                AssertionError("raw os.kill probe used")
+            ),
         )
         assert dl._owner_alive(4242, 999) is True
         assert calls == [4242]

@@ -20,8 +20,14 @@ _BASE_URL = "https://chatgpt.com/backend-api/codex"
 
 def _entry(i: int) -> PooledCredential:
     return PooledCredential(
-        provider="openai-codex", id=f"cred-{i}", label=f"acct-{i}", auth_type="api_key", priority=i,
-        source="manual", access_token=f"tok-{i}-1234567890", base_url=_BASE_URL,
+        provider="openai-codex",
+        id=f"cred-{i}",
+        label=f"acct-{i}",
+        auth_type="api_key",
+        priority=i,
+        source="manual",
+        access_token=f"tok-{i}-1234567890",
+        base_url=_BASE_URL,
     )
 
 
@@ -67,15 +73,35 @@ class _Agent:
 
 def _soft_failure(code: str, message: str) -> SimpleNamespace:
     # The SDK types ``response.error`` as ``ResponseError(code=..., message=...)``, not a dict.
-    return SimpleNamespace(status="failed", output=[], output_text="", error=SimpleNamespace(code=code, message=message))
+    return SimpleNamespace(
+        status="failed",
+        output=[],
+        output_text="",
+        error=SimpleNamespace(code=code, message=message),
+    )
 
 
 def _run(agent: _Agent, response: SimpleNamespace):
     return retry_invalid_response(
-        agent, response=response, error_details=["response.status=failed"], _retry=TurnRetryState(),
-        thinking_spinner=None, messages=[], api_messages=[], api_kwargs=None, active_system_prompt=None,
-        conversation_history=None, retry_count=0, max_retries=3, compression_attempts=0, api_call_count=1,
-        api_request_id="r", api_start_time=0.0, api_duration=0.4, effective_task_id="t", turn_id="turn",
+        agent,
+        response=response,
+        error_details=["response.status=failed"],
+        _retry=TurnRetryState(),
+        thinking_spinner=None,
+        messages=[],
+        api_messages=[],
+        api_kwargs=None,
+        active_system_prompt=None,
+        conversation_history=None,
+        retry_count=0,
+        max_retries=3,
+        compression_attempts=0,
+        api_call_count=1,
+        api_request_id="r",
+        api_start_time=0.0,
+        api_duration=0.4,
+        effective_task_id="t",
+        turn_id="turn",
     )
 
 
@@ -83,12 +109,20 @@ def test_quota_soft_failure_rotates_pool_before_provider_fallback():
     pool = CredentialPool("openai-codex", [_entry(0), _entry(1)])
     agent = _Agent(pool)
 
-    verdict = _run(agent, _soft_failure("usage_limit_reached", "You've hit your usage limit. Try again at 3:00 PM."))
+    verdict = _run(
+        agent,
+        _soft_failure(
+            "usage_limit_reached", "You've hit your usage limit. Try again at 3:00 PM."
+        ),
+    )
 
     assert verdict.action == "continue"
     assert agent.swapped_to == ["cred-1"] and agent.api_key == "tok-1-1234567890"
     benched = next(e for e in pool.entries() if e.id == "cred-0")
-    assert benched.last_status == STATUS_EXHAUSTED and benched.last_error_reason == "usage_limit_reached"
+    assert (
+        benched.last_status == STATUS_EXHAUSTED
+        and benched.last_error_reason == "usage_limit_reached"
+    )
     agent._try_activate_fallback.assert_not_called()
 
 
@@ -96,7 +130,13 @@ def test_content_policy_soft_failure_leaves_pool_alone():
     pool = CredentialPool("openai-codex", [_entry(0), _entry(1)])
     agent = _Agent(pool)
 
-    verdict = _run(agent, _soft_failure("content_policy_violation", "Your request was rejected by our safety system."))
+    verdict = _run(
+        agent,
+        _soft_failure(
+            "content_policy_violation",
+            "Your request was rejected by our safety system.",
+        ),
+    )
 
     assert verdict.action == "continue"  # ordinary invalid-response retry path
     assert agent.swapped_to == [] and agent.api_key == "tok-0-1234567890"

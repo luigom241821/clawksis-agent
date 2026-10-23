@@ -29,14 +29,30 @@ def served_root(tmp_path, monkeypatch):
         "gateway.status.is_gateway_runtime_lock_active",
         lambda lock_path=None: lock_path == root / "gateway.lock",
     )
-    monkeypatch.setattr("gateway.status._read_process_cmdline", lambda pid: "clawk gateway run")
+    monkeypatch.setattr(
+        "gateway.status._read_process_cmdline", lambda pid: "clawk gateway run"
+    )
     root.joinpath("gateway.pid").write_text(json.dumps({"pid": os.getpid()}))
     root.joinpath("config.yaml").write_text("gateway:\n  multiplex_profiles: true\n")
     return root
 
 
-@pytest.mark.parametrize("mode", ["missing", "fresh", "stale", "disabled", "excluded", "local", "external", "unrelated_pid"])
-def test_status_preserves_profile_health_contract(served_root, capsys, monkeypatch, mode):
+@pytest.mark.parametrize(
+    "mode",
+    [
+        "missing",
+        "fresh",
+        "stale",
+        "disabled",
+        "excluded",
+        "local",
+        "external",
+        "unrelated_pid",
+    ],
+)
+def test_status_preserves_profile_health_contract(
+    served_root, capsys, monkeypatch, mode
+):
     from cron import jobs
     from clawk_cli import cron
 
@@ -45,22 +61,31 @@ def test_status_preserves_profile_health_contract(served_root, capsys, monkeypat
     if mode == "stale":
         (jobs.CRON_DIR / "ticker_heartbeat").write_text(str(time.time() - 3600))
     if mode == "disabled":
-        served_root.joinpath("config.yaml").write_text("gateway:\n  multiplex_profiles: false\n")
+        served_root.joinpath("config.yaml").write_text(
+            "gateway:\n  multiplex_profiles: false\n"
+        )
     if mode == "excluded":
-        served_root.joinpath("gateway_state.json").write_text(json.dumps({"served_profiles": ["other"]}))
+        served_root.joinpath("gateway_state.json").write_text(
+            json.dumps({"served_profiles": ["other"]})
+        )
     if mode == "local":
-        monkeypatch.setattr("clawk_cli.gateway.find_gateway_pids", lambda: [os.getpid()])
+        monkeypatch.setattr(
+            "clawk_cli.gateway.find_gateway_pids", lambda: [os.getpid()]
+        )
     if mode == "external":
         monkeypatch.setattr(cron, "_active_cron_provider_name", lambda: "managed-test")
     if mode == "unrelated_pid":
-        monkeypatch.setattr("gateway.status._read_process_cmdline", lambda pid: "python -m pytest")
+        monkeypatch.setattr(
+            "gateway.status._read_process_cmdline", lambda pid: "python -m pytest"
+        )
 
     cron.cron_status()
     output = capsys.readouterr().out
     # This fixture leaves the rendezvous dir EMPTY, so the config-derived multiplexer rung is what
     # answers here — assert its exact line, never a prefix the host-record rung also prints.
-    assert ("Scheduler host: the host gateway (multiplexing this profile)" in output) == (
-        mode in {"missing", "fresh", "stale"})
+    assert (
+        "Scheduler host: the host gateway (multiplexing this profile)" in output
+    ) == (mode in {"missing", "fresh", "stale"})
     assert ("will fire automatically" in output) == (mode in {"fresh", "local"})
     if mode in {"missing", "stale"}:
         assert "clawk --profile default gateway restart" in output
@@ -84,7 +109,9 @@ def test_status_preserves_profile_health_contract(served_root, capsys, monkeypat
         assert "STALLED" not in output
 
 
-def test_host_record_rung_names_the_roster_and_a_runnable_restart(served_root, capsys, monkeypatch, request):
+def test_host_record_rung_names_the_roster_and_a_runnable_restart(
+    served_root, capsys, monkeypatch, request
+):
     """The OTHER rung: a published host record answers before the config-derived one.
 
     Both rungs print a "Scheduler host: the host gateway…" line, so they are only distinguishable
@@ -104,14 +131,21 @@ def test_host_record_rung_names_the_roster_and_a_runnable_restart(served_root, c
     cron.cron_status()
     output = capsys.readouterr().out
 
-    assert f"Scheduler host: the host gateway (PID {os.getpid()}) serving profiles default, probe" in output
+    assert (
+        f"Scheduler host: the host gateway (PID {os.getpid()}) serving profiles default, probe"
+        in output
+    )
     assert "Scheduler host: the host gateway (multiplexing this profile)" not in output
     assert "clawk --profile default gateway restart" in output
-    assert "\n  If heartbeat never appears, restart: clawk gateway restart" not in output
+    assert (
+        "\n  If heartbeat never appears, restart: clawk gateway restart" not in output
+    )
 
 
 @pytest.mark.parametrize("heartbeat", ["missing", "fresh", "stale"])
-def test_satellite_list_and_create_require_own_heartbeat(served_root, capsys, monkeypatch, heartbeat):
+def test_satellite_list_and_create_require_own_heartbeat(
+    served_root, capsys, monkeypatch, heartbeat
+):
     from argparse import Namespace
     from cron import jobs
     from clawk_cli import cron
@@ -126,26 +160,38 @@ def test_satellite_list_and_create_require_own_heartbeat(served_root, capsys, mo
             (jobs.CRON_DIR / "ticker_heartbeat").write_text(str(time.time() - 3600))
     monkeypatch.setattr(cron, "_active_cron_provider_name", lambda: "builtin")
     assert cron._builtin_gateway_liveness() is (heartbeat == "fresh")
-    cron.cron_command(Namespace(cron_command="create", schedule="every 1h", prompt="probe"))
+    cron.cron_command(
+        Namespace(cron_command="create", schedule="every 1h", prompt="probe")
+    )
     created = capsys.readouterr().out
     cron.cron_list()
     listed = capsys.readouterr().out
     for output in (created, listed):
         assert ("Check status:  clawk cron status" in output) == (heartbeat != "fresh")
     cron.cron_status()
-    assert ("will fire automatically" in capsys.readouterr().out) == (heartbeat == "fresh")
+    assert ("will fire automatically" in capsys.readouterr().out) == (
+        heartbeat == "fresh"
+    )
 
 
 @pytest.mark.parametrize("home_kind", ["default", "custom", "named"])
-def test_standalone_guidance_matches_profile_membership(served_root, monkeypatch, capsys, home_kind):
+def test_standalone_guidance_matches_profile_membership(
+    served_root, monkeypatch, capsys, home_kind
+):
     from clawk_cli.cron import cron_status
 
-    homes = {"default": served_root, "custom": served_root.parent / "custom", "named": served_root / "profiles/probe"}
+    homes = {
+        "default": served_root,
+        "custom": served_root.parent / "custom",
+        "named": served_root / "profiles/probe",
+    }
     home = homes[home_kind]
     home.mkdir(exist_ok=True)
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.delenv("CLAWK_PROFILE")
-    monkeypatch.setattr("gateway.status.is_gateway_runtime_lock_active", lambda lock_path=None: False)
+    monkeypatch.setattr(
+        "gateway.status.is_gateway_runtime_lock_active", lambda lock_path=None: False
+    )
     cron_status()
     output = capsys.readouterr().out
     assert "clawk --profile default gateway install" in output
@@ -155,7 +201,9 @@ def test_standalone_guidance_matches_profile_membership(served_root, monkeypatch
     assert "LEGACY" not in output
 
 
-def test_desktop_serve_ticker_is_not_reported_as_no_gateway(tmp_path, monkeypatch, capsys):
+def test_desktop_serve_ticker_is_not_reported_as_no_gateway(
+    tmp_path, monkeypatch, capsys
+):
     """Desktop `serve` ticks cron in-process; a fresh ticker heartbeat is not a missing gateway."""
     from cron import jobs
     from clawk_cli import cron
@@ -172,16 +220,25 @@ def test_desktop_serve_ticker_is_not_reported_as_no_gateway(tmp_path, monkeypatc
     monkeypatch.setattr(jobs, "JOBS_FILE", home / "cron/jobs.json")
     monkeypatch.setattr(jobs, "OUTPUT_DIR", home / "cron/output")
     monkeypatch.setattr("clawk_cli.gateway.find_gateway_pids", list)
-    monkeypatch.setattr("gateway.status.is_gateway_runtime_lock_active", lambda lock_path=None: False)
-    monkeypatch.setattr("clawk_cli.gateway.named_profile_served_by_running_multiplexer", lambda: False)
-    monkeypatch.setattr("gateway.host_topology.host_gateway_serving", lambda profile_name=None: None)
+    monkeypatch.setattr(
+        "gateway.status.is_gateway_runtime_lock_active", lambda lock_path=None: False
+    )
+    monkeypatch.setattr(
+        "clawk_cli.gateway.named_profile_served_by_running_multiplexer", lambda: False
+    )
+    monkeypatch.setattr(
+        "gateway.host_topology.host_gateway_serving", lambda profile_name=None: None
+    )
     monkeypatch.setattr(cron, "_active_cron_provider_name", lambda: "builtin")
     jobs.record_ticker_heartbeat(success=True)
 
     assert cron._builtin_gateway_liveness() is True
     cron.cron_status()
     output = capsys.readouterr().out
-    assert "Scheduler host: an in-process ticker (clawk serve / Desktop backend) ticking profile 'default'" in output
+    assert (
+        "Scheduler host: an in-process ticker (clawk serve / Desktop backend) ticking profile 'default'"
+        in output
+    )
     assert "will fire automatically" in output
     assert "No scheduler is serving profile" not in output
     assert "gateway install" not in output
@@ -194,7 +251,9 @@ def test_desktop_serve_ticker_is_not_reported_as_no_gateway(tmp_path, monkeypatc
     assert "gateway install" in stale
 
 
-def test_in_process_ticker_heartbeat_counts_only_while_its_writer_lives(tmp_path, monkeypatch):
+def test_in_process_ticker_heartbeat_counts_only_while_its_writer_lives(
+    tmp_path, monkeypatch
+):
     """A killed serve/Desktop ticker leaves a stamp that reads fresh for ~3 minutes; without a lock,
     pid or served record the heartbeat proves a scheduler only while the process that wrote it is
     alive. A legacy bare-epoch stamp names no writer and is not proof by itself."""
@@ -209,13 +268,19 @@ def test_in_process_ticker_heartbeat_counts_only_while_its_writer_lives(tmp_path
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr(jobs, "CRON_DIR", home / "cron")
     monkeypatch.setattr("clawk_cli.gateway.find_gateway_pids", list)
-    monkeypatch.setattr("gateway.status.is_gateway_runtime_lock_active", lambda lock_path=None: False)
-    monkeypatch.setattr("clawk_cli.gateway.named_profile_served_by_running_multiplexer", lambda: False)
+    monkeypatch.setattr(
+        "gateway.status.is_gateway_runtime_lock_active", lambda lock_path=None: False
+    )
+    monkeypatch.setattr(
+        "clawk_cli.gateway.named_profile_served_by_running_multiplexer", lambda: False
+    )
     monkeypatch.setattr(cron, "_active_cron_provider_name", lambda: "builtin")
     dead = subprocess.Popen([sys.executable, "-c", ""], stdin=subprocess.DEVNULL)
     dead.wait()
 
-    (jobs.CRON_DIR / "ticker_heartbeat").write_text(f"{time.time()} {dead.pid}", encoding="utf-8")
+    (jobs.CRON_DIR / "ticker_heartbeat").write_text(
+        f"{time.time()} {dead.pid}", encoding="utf-8"
+    )
     assert cron._builtin_gateway_liveness() is False
     (jobs.CRON_DIR / "ticker_heartbeat").write_text(str(time.time()), encoding="utf-8")
     assert cron._builtin_gateway_liveness() is False
@@ -223,7 +288,9 @@ def test_in_process_ticker_heartbeat_counts_only_while_its_writer_lives(tmp_path
     assert cron._builtin_gateway_liveness() is True
 
 
-def test_named_profile_output_names_the_profile_and_trusts_its_own_ticker(served_root, capsys, monkeypatch):
+def test_named_profile_output_names_the_profile_and_trusts_its_own_ticker(
+    served_root, capsys, monkeypatch
+):
     """`clawk -p probe cron list/status` names the inspected profile on every verdict (#99579) and
     answers "is a scheduler ticking THIS home": a fresh heartbeat written into probe's store counts
     even when the default multiplexer's record does not list probe — the serve/Desktop backend ticks
@@ -231,7 +298,9 @@ def test_named_profile_output_names_the_profile_and_trusts_its_own_ticker(served
     from cron import jobs
     from clawk_cli import cron
 
-    served_root.joinpath("gateway_state.json").write_text(json.dumps({"served_profiles": ["other"]}))
+    served_root.joinpath("gateway_state.json").write_text(
+        json.dumps({"served_profiles": ["other"]})
+    )
     monkeypatch.setattr(cron, "_active_cron_provider_name", lambda: "builtin")
 
     cron.cron_list()
@@ -239,7 +308,10 @@ def test_named_profile_output_names_the_profile_and_trusts_its_own_ticker(served
     assert cron._builtin_gateway_liveness() is False
     cron.cron_status()
     dead = capsys.readouterr().out
-    assert "✗ No scheduler is serving profile 'probe' — its cron jobs will NOT fire" in dead
+    assert (
+        "✗ No scheduler is serving profile 'probe' — its cron jobs will NOT fire"
+        in dead
+    )
     assert "on this host" not in dead
 
     jobs.record_ticker_heartbeat(success=True)
@@ -264,7 +336,9 @@ def test_doctor_bounds_persisted_fire_errors(served_root, capsys, detail):
     output = capsys.readouterr().out
     if detail:
         assert "missed scheduled fire at test-time: unreachable" in output
-        line = next(line for line in output.splitlines() if "missed scheduled fire at" in line)
+        line = next(
+            line for line in output.splitlines() if "missed scheduled fire at" in line
+        )
         assert len(line.split(". The messaging gateway")[0]) < 200
         assert f"clawk cron run {records[0]['id']}" in line
         assert detail not in output
@@ -292,7 +366,11 @@ def test_doctor_reports_persisted_dispatch_health(served_root, capsys, dispatch)
         assert persisted["last_dispatch"]["kind"] == dispatch
     assert cron_doctor() == 1
     output = capsys.readouterr().out
-    expected = {"catch_up": "catch-up", "late": "last fire was late", "forward_error": "loopback unavailable"}
+    expected = {
+        "catch_up": "catch-up",
+        "late": "last fire was late",
+        "forward_error": "loopback unavailable",
+    }
     assert expected[dispatch] in output
     assert "Review the findings above, then run `clawk cron doctor` again." in output
     jobs.mark_job_run(job["id"], success=True)

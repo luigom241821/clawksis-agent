@@ -1,4 +1,5 @@
 """Security consumers cross the real PM worker/HTTP/publication boundary."""
+
 from __future__ import annotations
 
 import hashlib
@@ -28,16 +29,33 @@ def consumer_store(tmp_path, monkeypatch, dl_server):
     monkeypatch.setattr(paths, "lockfile_path", lambda: tmp_path / "lock.json")
     # Only the already-prepared interpreter is supplied: the worker, downloader,
     # extractor, probes, publication and read-only selector are all real.
-    monkeypatch.setattr("pm.runtime.runtime_python", lambda **kwargs: Path(sys.executable))
-    monkeypatch.setattr("urllib.request.urlopen", lambda *a, **kw: pytest.fail("consumer bypassed PM acquisition"))
+    monkeypatch.setattr(
+        "pm.runtime.runtime_python", lambda **kwargs: Path(sys.executable)
+    )
+    monkeypatch.setattr(
+        "urllib.request.urlopen",
+        lambda *a, **kw: pytest.fail("consumer bypassed PM acquisition"),
+    )
     return dl_server
 
 
-def pin(server, name, version="1", *, bad_hash=False, payload=None, signature=None, link=False):
-    payload = payload or (
-        f"#!{sys.executable}\nimport json,sys\n"
-        f"print({name + ' fixture ' + version!r})\n"
-    ).encode()
+def pin(
+    server,
+    name,
+    version="1",
+    *,
+    bad_hash=False,
+    payload=None,
+    signature=None,
+    link=False,
+):
+    payload = (
+        payload
+        or (
+            f"#!{sys.executable}\nimport json,sys\n"
+            f"print({name + ' fixture ' + version!r})\n"
+        ).encode()
+    )
     buf = io.BytesIO()
     ext = ".zip" if name == "bws" else ".tar.gz"
     if ext == ".zip":
@@ -55,18 +73,30 @@ def pin(server, name, version="1", *, bad_hash=False, payload=None, signature=No
     archive = f"/{name}-{version}{ext}"
     RangeHandler.payloads[archive] = buf.getvalue()
     digest = hashlib.sha256(buf.getvalue()).hexdigest()
-    artifacts = [{"url": url(server, archive), "sha256": "0" * 64 if bad_hash else digest}]
+    artifacts = [
+        {"url": url(server, archive), "sha256": "0" * 64 if bad_hash else digest}
+    ]
     if name != "bws":
         checksum_path = f"/{name}/{version}/checksums.txt"
         checksum = f"{digest}  {archive[1:]}\n".encode()
         RangeHandler.payloads[checksum_path] = checksum
-        artifacts.append({"url": url(server, checksum_path), "sha256": hashlib.sha256(checksum).hexdigest()})
+        artifacts.append(
+            {
+                "url": url(server, checksum_path),
+                "sha256": hashlib.sha256(checksum).hexdigest(),
+            }
+        )
         if signature is not None:
             files = {"checksums.txt.asc": signature, "public-key.asc": b"public-key"}
             for filename, raw in files.items():
                 path = f"/{name}/{version}/{filename}"
                 RangeHandler.payloads[path] = raw
-                artifacts.append({"url": url(server, path), "sha256": hashlib.sha256(raw).hexdigest()})
+                artifacts.append(
+                    {
+                        "url": url(server, path),
+                        "sha256": hashlib.sha256(raw).hexdigest(),
+                    }
+                )
     lock = pm.Lockfile(paths.lockfile_path())
     lock.set_pin(name, version, {pm.current_target(): artifacts})
     lock.save()
@@ -75,8 +105,10 @@ def pin(server, name, version="1", *, bad_hash=False, payload=None, signature=No
 def consumer(name):
     if name == "bws":
         from agent.secret_sources.bitwarden import find_bws, install_bws
+
         return find_bws, install_bws
     from agent.proxy_sources.iron_proxy import find_iron_proxy, install_iron_proxy
+
     return find_iron_proxy, install_iron_proxy
 
 
@@ -118,7 +150,9 @@ def test_consumer_lifecycle(consumer_store, monkeypatch, tmp_path, name):
 
 @pytest.mark.platforms("posix")
 @pytest.mark.parametrize("name,verifier", [("iron-proxy", "gpg")])
-def test_signature_rejection_preserves_previous_selection(consumer_store, tmp_path, monkeypatch, name, verifier):
+def test_signature_rejection_preserves_previous_selection(
+    consumer_store, tmp_path, monkeypatch, name, verifier
+):
     """A real child verifier rejects after PM hashes pass; publication must not happen."""
     commands = tmp_path / "commands"
     commands.mkdir()
@@ -155,24 +189,34 @@ def test_managed_consumers_run_their_business_protocol(consumer_store, monkeypat
 
     monkeypatch.setenv("PATH", "")
     monkeypatch.setenv("MY_PRIVATE_TOKEN", "not-for-proxy")
-    pin(consumer_store, "bws", payload=(
-        f"#!{sys.executable}\nimport json,os,sys\n"
-        "if '--version' in sys.argv: print('bws fixture')\n"
-        "else:\n"
-        " assert sys.argv[1:] == ['secret','list','project','--output','json']\n"
-        " assert os.environ['BWS_SERVER_URL'] == 'https://vault.example.invalid'\n"
-        " print(json.dumps([{'key':'FIXTURE_VALUE','value':os.environ['BWS_ACCESS_TOKEN']}]))\n"
-    ).encode())
-    install_bws()
-    assert fetch_bitwarden_secrets(access_token="local-token", project_id="project", use_cache=False,
-                                  server_url="https://vault.example.invalid") == (
-        {"FIXTURE_VALUE": "local-token"}, []
+    pin(
+        consumer_store,
+        "bws",
+        payload=(
+            f"#!{sys.executable}\nimport json,os,sys\n"
+            "if '--version' in sys.argv: print('bws fixture')\n"
+            "else:\n"
+            " assert sys.argv[1:] == ['secret','list','project','--output','json']\n"
+            " assert os.environ['BWS_SERVER_URL'] == 'https://vault.example.invalid'\n"
+            " print(json.dumps([{'key':'FIXTURE_VALUE','value':os.environ['BWS_ACCESS_TOKEN']}]))\n"
+        ).encode(),
     )
-    pin(consumer_store, "iron-proxy", payload=(
-        f"#!{sys.executable}\nimport os,sys\n"
-        "assert 'MY_PRIVATE_TOKEN' not in os.environ\n"
-        "assert sys.argv[1:] == ['--version']\nprint('private proxy fixture')\n"
-    ).encode())
+    install_bws()
+    assert fetch_bitwarden_secrets(
+        access_token="local-token",
+        project_id="project",
+        use_cache=False,
+        server_url="https://vault.example.invalid",
+    ) == ({"FIXTURE_VALUE": "local-token"}, [])
+    pin(
+        consumer_store,
+        "iron-proxy",
+        payload=(
+            f"#!{sys.executable}\nimport os,sys\n"
+            "assert 'MY_PRIVATE_TOKEN' not in os.environ\n"
+            "assert sys.argv[1:] == ['--version']\nprint('private proxy fixture')\n"
+        ).encode(),
+    )
     proxy = install_iron_proxy()
     assert iron_proxy_version(proxy) == "private proxy fixture"
 
@@ -186,11 +230,15 @@ def test_nonregular_security_binary_is_never_published(consumer_store, monkeypat
     pin(consumer_store, "iron-proxy", "2", link=True)
     with pytest.raises(pm.InstallError, match="not a regular file"):
         install()
-    assert str(pm.installed_package("iron-proxy", allow_outdated=True).binary) == str(old)
+    assert str(pm.installed_package("iron-proxy", allow_outdated=True).binary) == str(
+        old
+    )
 
 
 @pytest.mark.platforms("posix")
-def test_interrupted_consumer_download_can_retry_without_losing_selection(consumer_store, monkeypatch):
+def test_interrupted_consumer_download_can_retry_without_losing_selection(
+    consumer_store, monkeypatch
+):
     monkeypatch.setenv("PATH", "")
     _, install = consumer("bws")
     pin(consumer_store, "bws")
@@ -210,13 +258,17 @@ def test_interrupted_consumer_download_can_retry_without_losing_selection(consum
 
 @pytest.mark.platforms("posix")
 @pytest.mark.parametrize("name", ["bws", "iron-proxy"])
-def test_external_executable_does_not_require_pm_platform_support(tmp_path, monkeypatch, name):
+def test_external_executable_does_not_require_pm_platform_support(
+    tmp_path, monkeypatch, name
+):
     external = tmp_path / name
     external.write_text(f"#!{sys.executable}\nprint('external')\n")
     external.chmod(0o755)
     monkeypatch.setenv("PATH", str(tmp_path))
+
     def unsupported(_name):
         raise RuntimeError("unsupported architecture: external tool does not need PM")
+
     monkeypatch.setattr(pm, "installed_package", unsupported)
     find, _ = consumer(name)
     assert find(install_if_missing=True) == external
@@ -225,7 +277,9 @@ def test_external_executable_does_not_require_pm_platform_support(tmp_path, monk
 
 @pytest.mark.platforms("posix")
 @pytest.mark.parametrize("name", ["iron-proxy"])
-def test_locked_provenance_is_required_even_without_a_verifier(consumer_store, monkeypatch, name):
+def test_locked_provenance_is_required_even_without_a_verifier(
+    consumer_store, monkeypatch, name
+):
     monkeypatch.setenv("PATH", "")
     _, install = consumer(name)
     pin(consumer_store, name, signature=b"pinned-signature")
@@ -237,4 +291,6 @@ def test_locked_provenance_is_required_even_without_a_verifier(consumer_store, m
         install()
     assert pm.installed_package(name, allow_outdated=True).binary == old
     RangeHandler.payloads[missing] = raw
-    assert subprocess.check_output([install()], text=True).strip() == f"{name} fixture 2"
+    assert (
+        subprocess.check_output([install()], text=True).strip() == f"{name} fixture 2"
+    )

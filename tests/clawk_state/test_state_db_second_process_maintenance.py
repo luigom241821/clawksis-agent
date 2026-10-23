@@ -27,6 +27,7 @@ conn.close()
 @pytest.fixture
 def delete_mode_db(tmp_path, monkeypatch) -> Path:
     import clawk_state_wal
+
     monkeypatch.setattr(clawk_state_wal, "resolve_journal_mode", lambda: "delete")
     db = tmp_path / "state.db"
     handle = SessionDB(db_path=db)
@@ -42,11 +43,21 @@ def test_repair_refuses_delete_mode_db_held_open_by_another_process(delete_mode_
     """A held DELETE-mode reader takes only SHARED, so ``BEGIN IMMEDIATE`` succeeds and the lock probe sees
     nothing; the holder scan must still refuse — REINDEX/VACUUM from a second process is the #103339 class."""
     db = delete_mode_db
-    holder = subprocess.Popen([sys.executable, "-c", _HOLDER, str(db)], stdin=subprocess.PIPE,
-                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    holder = subprocess.Popen(
+        [sys.executable, "-c", _HOLDER, str(db)],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
     try:
-        assert select.select([holder.stdout], [], [], 10)[0] and holder.stdout.readline().strip() == "ready"
-        with open(db, "r+b") as fh:  # schema page garbage under the holder: the shape repair is invoked on
+        assert (
+            select.select([holder.stdout], [], [], 10)[0]
+            and holder.stdout.readline().strip() == "ready"
+        )
+        with open(
+            db, "r+b"
+        ) as fh:  # schema page garbage under the holder: the shape repair is invoked on
             fh.seek(100)
             fh.write(b"\xff" * (4096 - 100))
         report = repair_state_db_schema(db, backup=False)
@@ -73,13 +84,20 @@ def test_holder_scan_sees_through_a_symlinked_home(tmp_path):
     db = real / "state.db"
     sqlite3.connect(db).execute("CREATE TABLE t(x)").connection.close()
     holder = subprocess.Popen(
-        [sys.executable, "-c",
-         f"import sqlite3, sys, time; c = sqlite3.connect({str(db)!r}); c.execute('BEGIN IMMEDIATE'); "
-         "print('held', flush=True); time.sleep(30)"],
-        stdout=subprocess.PIPE, text=True)
+        [
+            sys.executable,
+            "-c",
+            f"import sqlite3, sys, time; c = sqlite3.connect({str(db)!r}); c.execute('BEGIN IMMEDIATE'); "
+            "print('held', flush=True); time.sleep(30)",
+        ],
+        stdout=subprocess.PIPE,
+        text=True,
+    )
     try:
         assert holder.stdout.readline().strip() == "held"
-        assert any(pid == holder.pid for pid, _ in foreign_state_db_holders(alias / "state.db"))
+        assert any(
+            pid == holder.pid for pid, _ in foreign_state_db_holders(alias / "state.db")
+        )
     finally:
         holder.kill()
         holder.wait()

@@ -20,7 +20,9 @@ def pinned_typescript(repo: Path) -> str:
 
 def _version_at(pkg_dir: Path) -> str | None:
     try:
-        return json.loads((pkg_dir / "package.json").read_text(encoding="utf-8-sig"))["version"]
+        return json.loads((pkg_dir / "package.json").read_text(encoding="utf-8-sig"))[
+            "version"
+        ]
     except (OSError, ValueError, KeyError):
         return None
 
@@ -45,14 +47,30 @@ def _install(repo: Path, prefix: Path, pin: str) -> None:
     what = f"npm install typescript@{pin} into {prefix}"
     try:
         subprocess.run(
-            [npm, "install", "--no-save", "--no-package-lock", "--no-audit", "--no-fund",
-             "--prefix", str(prefix), f"typescript@{pin}"],
-            check=True, capture_output=True, text=True, encoding="utf-8", errors="replace",
-            timeout=300, stdin=subprocess.DEVNULL,
+            [
+                npm,
+                "install",
+                "--no-save",
+                "--no-package-lock",
+                "--no-audit",
+                "--no-fund",
+                "--prefix",
+                str(prefix),
+                f"typescript@{pin}",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=300,
+            stdin=subprocess.DEVNULL,
         )
     # cli.main reports a RuntimeError as a tool failure (exit 2), never as a finding.
     except subprocess.CalledProcessError as exc:
-        raise RuntimeError(f"{what} failed: {(exc.stderr or '').strip()[-2000:]}") from exc
+        raise RuntimeError(
+            f"{what} failed: {(exc.stderr or '').strip()[-2000:]}"
+        ) from exc
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError(f"{what} timed out after {exc.timeout:.0f}s") from exc
 
@@ -60,7 +78,9 @@ def _install(repo: Path, prefix: Path, pin: str) -> None:
 def resolve_typescript(repo: Path) -> Path:
     """Directory of the pinned ``typescript`` package, installing it into a cache if absent."""
     pin = pinned_typescript(repo)
-    common = Path(git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir").strip())
+    common = Path(
+        git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir").strip()
+    )
     for root in (repo, common.parent):
         cand = root / "node_modules" / "typescript"
         if _version_at(cand) == pin:
@@ -81,8 +101,12 @@ def measure_ts(repo: Path, root: Path, paths: list[str]) -> dict[str, dict]:
     ts_dir = resolve_typescript(repo)
     proc = subprocess.run(
         [node, str(_SCRIPT), str(ts_dir), str(root)],
-        input=json.dumps(paths), capture_output=True, text=True, encoding="utf-8",
-        timeout=600, check=False,
+        input=json.dumps(paths),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=600,
+        check=False,
     )
     if proc.returncode != 0:
         raise RuntimeError(f"ts_units.mjs failed: {proc.stderr.strip()[:2000]}")

@@ -42,27 +42,43 @@ from tests.e2e.core.tenancy import _helpers as T
 from . import _scope as S
 from ._helpers import BoundaryBreach, poll
 
-pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="POSIX process groups (serve teardown)")
+pytestmark = pytest.mark.skipif(
+    sys.platform == "win32", reason="POSIX process groups (serve teardown)"
+)
 
 PROFILES = ("default", "beta")
 
 KNOWN: dict[str, tuple[str, str]] = {
     # every read fails closed (no scope bound); a route that borrows another profile's value stays red
-    "plugin_route": (r"^plugin_route: plugin API route did not run in the requesting profile's secret scope:"
-                     r"(\n  \w+: get_secret raised UnscopedSecretError)+\Z",
-                     "#120310 /api/plugins/<id>/ routes run with no profile secret scope under multiplex"),
+    "plugin_route": (
+        r"^plugin_route: plugin API route did not run in the requesting profile's secret scope:"
+        r"(\n  \w+: get_secret raised UnscopedSecretError)+\Z",
+        "#120310 /api/plugins/<id>/ routes run with no profile secret scope under multiplex",
+    ),
 }
 
 
 class Host:
-    def __init__(self, root: Path, tenants: dict[str, T.Tenant], secrets: dict[str, str],
-                 backend: T.ServeBackend) -> None:
-        self.root, self.tenants, self.secrets, self.backend = root, tenants, secrets, backend
+    def __init__(
+        self,
+        root: Path,
+        tenants: dict[str, T.Tenant],
+        secrets: dict[str, str],
+        backend: T.ServeBackend,
+    ) -> None:
+        self.root, self.tenants, self.secrets, self.backend = (
+            root,
+            tenants,
+            secrets,
+            backend,
+        )
 
     def get(self, path: str, profile: str | None) -> tuple[int, Any]:
         query = f"?profile={profile}" if profile else ""
-        req = urllib.request.Request(f"http://127.0.0.1:{self.backend.port}{path}{query}",
-                                     headers={"Authorization": f"Bearer {self.backend.token}"})
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{self.backend.port}{path}{query}",
+            headers={"Authorization": f"Bearer {self.backend.token}"},
+        )
         try:
             with urllib.request.urlopen(req, timeout=60) as resp:
                 return resp.status, json.loads(resp.read().decode())
@@ -74,8 +90,15 @@ class Host:
 
     def foreign(self, owner: str) -> dict[str, str]:
         """Every secret-bearing canary that does NOT belong to ``owner``."""
-        out = {f"{u}:{k}": v for u, t in self.tenants.items() if u != owner for k, v in t.canaries().items()}
-        out.update({f"{u}:{S.SECRET_ENV}": v for u, v in self.secrets.items() if u != owner})
+        out = {
+            f"{u}:{k}": v
+            for u, t in self.tenants.items()
+            if u != owner
+            for k, v in t.canaries().items()
+        }
+        out.update(
+            {f"{u}:{S.SECRET_ENV}": v for u, v in self.secrets.items() if u != owner}
+        )
         return out
 
 
@@ -85,7 +108,9 @@ def host(tmp_path_factory: pytest.TempPathFactory):
     home = root / "home"
     tenants = T.make_tenants(root, PROFILES)
     home.mkdir(parents=True, exist_ok=True)
-    T.assert_profiles_root_under(root, home)  # HOME-anchored profile root: prove it is sandboxed first
+    T.assert_profiles_root_under(
+        root, home
+    )  # HOME-anchored profile root: prove it is sandboxed first
     server = S.write_env_dump_server(root / "envdump_server.py")
     # the suffix names the owner, so even the 4-char tail a redacted display keeps is unambiguous
     secrets = {name: f"scopesecret-{t.tag}-{name[:4]}" for name, t in tenants.items()}
@@ -93,9 +118,13 @@ def host(tmp_path_factory: pytest.TempPathFactory):
         assert t.srv is not None
         t.srv.start()
         # the plugin lives in the launch home; every profile enables it (a fix may gate per profile)
-        cfg: dict[str, Any] = {"mcp_servers": S.mcp_config(server, root / f"mcp-env-{name}.json"),
-                               "plugins": {"enabled": [S.PLUGIN_ID]}}
-        T.write_tenant_home(t, extra_config=cfg, extra_env={S.SECRET_ENV: secrets[name]})
+        cfg: dict[str, Any] = {
+            "mcp_servers": S.mcp_config(server, root / f"mcp-env-{name}.json"),
+            "plugins": {"enabled": [S.PLUGIN_ID]},
+        }
+        T.write_tenant_home(
+            t, extra_config=cfg, extra_env={S.SECRET_ENV: secrets[name]}
+        )
     S.install_plugin(tenants["default"].home)
     backend = T.ServeBackend(home, root / "serve.log")
     try:
@@ -109,11 +138,15 @@ def host(tmp_path_factory: pytest.TempPathFactory):
         for t in tenants.values():
             assert t.srv is not None
             t.srv.stop()
-        assert not T.pid_alive(backend.proc.pid), f"serve pid {backend.proc.pid} survived teardown"
+        assert not T.pid_alive(backend.proc.pid), (
+            f"serve pid {backend.proc.pid} survived teardown"
+        )
 
 
 def _selector(name: str) -> str | None:
-    return None if name == "default" else name  # the launch profile is what an unqualified request means
+    return (
+        None if name == "default" else name
+    )  # the launch profile is what an unqualified request means
 
 
 def test_scoped_sibling_route_resolves_each_profiles_secret(host: Host) -> None:
@@ -126,17 +159,27 @@ def test_scoped_sibling_route_resolves_each_profiles_secret(host: Host) -> None:
         shown = entry["env"][S.MCP_ENV_KEY]
         own = host.secrets[name]
         if not (shown == own or shown.endswith(own[-4:])):
-            others = [u for u, v in host.secrets.items() if u != name and shown.endswith(v[-4:])]
-            raise BoundaryBreach(f"/api/mcp/servers?profile={name} resolved ${{{S.SECRET_ENV}}} to {shown!r} "
-                                 f"(own ends {own[-4:]!r}; matches {others or 'nobody'})")
+            others = [
+                u
+                for u, v in host.secrets.items()
+                if u != name and shown.endswith(v[-4:])
+            ]
+            raise BoundaryBreach(
+                f"/api/mcp/servers?profile={name} resolved ${{{S.SECRET_ENV}}} to {shown!r} "
+                f"(own ends {own[-4:]!r}; matches {others or 'nobody'})"
+            )
 
 
 @pytest.mark.parametrize("scenario", ["plugin_route"])
-def test_plugin_route_runs_in_requesting_profile_scope(host: Host, scenario: str) -> None:
+def test_plugin_route_runs_in_requesting_profile_scope(
+    host: Host, scenario: str
+) -> None:
     replies: list[str] = []
     for name in ("default", "beta", "default"):
         status, body = host.get(f"/api/plugins/{S.PLUGIN_ID}/secret", _selector(name))
-        assert status == 200, f"plugin route not mounted/served for {name}: HTTP {status} {body}"
+        assert status == 200, (
+            f"plugin route not mounted/served for {name}: HTTP {status} {body}"
+        )
         if not body.get("ok"):
             replies.append(f"{name}: get_secret raised {body.get('error')}")
             continue
@@ -146,24 +189,43 @@ def test_plugin_route_runs_in_requesting_profile_scope(host: Host, scenario: str
             replies.append(f"{name}: got {owner}'s value {value!r}")
     with known_gate(KNOWN, scenario, raises=BoundaryBreach):
         if replies:
-            raise BoundaryBreach(f"{scenario}: plugin API route did not run in the requesting profile's "
-                                 "secret scope:\n  " + "\n  ".join(replies))
+            raise BoundaryBreach(
+                f"{scenario}: plugin API route did not run in the requesting profile's "
+                "secret scope:\n  " + "\n  ".join(replies)
+            )
 
 
 def test_mcp_subprocess_env_holds_only_own_profile_secrets(host: Host) -> None:
-    envs = {name: poll(lambda n=name: host.dump(n).is_file() and json.loads(host.dump(n).read_text()), 90,
-                       f"{name}'s MCP server to dump its env") for name in PROFILES}
+    envs = {
+        name: poll(
+            lambda n=name: (
+                host.dump(n).is_file() and json.loads(host.dump(n).read_text())
+            ),
+            90,
+            f"{name}'s MCP server to dump its env",
+        )
+        for name in PROFILES
+    }
     problems: list[str] = []
     for name, env in envs.items():
         blob = json.dumps(env)
         if env.get(S.MCP_ENV_KEY) != host.secrets[name]:
-            problems.append(f"{name}: configured {S.MCP_ENV_KEY} is {env.get(S.MCP_ENV_KEY)!r}, "
-                            f"not its own {S.SECRET_ENV}")
-        problems += [f"{name}: MCP server env carries {label}" for label, v in host.foreign(name).items()
-                     if v in blob]
+            problems.append(
+                f"{name}: configured {S.MCP_ENV_KEY} is {env.get(S.MCP_ENV_KEY)!r}, "
+                f"not its own {S.SECRET_ENV}"
+            )
+        problems += [
+            f"{name}: MCP server env carries {label}"
+            for label, v in host.foreign(name).items()
+            if v in blob
+        ]
         # the launch profile's provider key is never handed to any MCP server (no env: entry names it)
         launch_key = host.tenants["default"].provider_key
         if launch_key in blob or T.PROVIDER_KEY_ENV in env:
-            problems.append(f"{name}: MCP server env carries the launch profile's provider key")
+            problems.append(
+                f"{name}: MCP server env carries the launch profile's provider key"
+            )
     if problems:
-        raise BoundaryBreach("MCP subprocess env crossed a profile boundary:\n  " + "\n  ".join(problems))
+        raise BoundaryBreach(
+            "MCP subprocess env crossed a profile boundary:\n  " + "\n  ".join(problems)
+        )

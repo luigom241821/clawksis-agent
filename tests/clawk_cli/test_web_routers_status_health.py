@@ -14,8 +14,14 @@ from clawk_cli.version_info import VersionInfo
 
 
 def _info(commit: str | None) -> VersionInfo:
-    return VersionInfo(base_version="2026.10.1", derived_version="2026.10.1", distance=0,
-                       commit=commit, branch="main", source="git")
+    return VersionInfo(
+        base_version="2026.10.1",
+        derived_version="2026.10.1",
+        distance=0,
+        commit=commit,
+        branch="main",
+        source="git",
+    )
 
 
 @pytest.mark.parametrize("commit", ["0fbe50a9d88aa7e1c0b5f3d2e4a6b8c9d0e1f2a3", None])
@@ -32,5 +38,7 @@ def test_health_reports_the_boot_commit_from_version_info(monkeypatch, commit):
     assert response.status_code == 200
     body = response.json()
     assert body["ok"] is True
-    assert "commit" in body, "attaching clients key the boot-identity decision on this field"
+    assert "commit" in body, (
+        "attaching clients key the boot-identity decision on this field"
+    )
     assert body["commit"] == commit

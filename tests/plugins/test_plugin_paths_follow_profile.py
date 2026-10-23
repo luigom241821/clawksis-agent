@@ -4,6 +4,7 @@ Several plugins carried a ``~/.clawksis`` fallback (guarding an ImportError of `
 that cannot happen for a bundled plugin) or resolved the home at import time. Both are wrong on
 Windows and under multiplex profile overrides. Every resolver below must land inside the override.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -13,11 +14,13 @@ from clawk_constants import reset_clawk_home_override, set_clawk_home_override
 
 def _a2a_conversation(home):
     from plugins.platforms.a2a import protocol
+
     return protocol._conv_path("peer-x")
 
 
 def _photon_auth(home):
     from plugins.platforms.photon import auth
+
     return auth._auth_json_path()
 
 
@@ -35,4 +38,6 @@ def test_plugin_path_follows_profile_override(name, tmp_path, monkeypatch):
         resolved = str(_RESOLVERS[name](profile))
     finally:
         reset_clawk_home_override(token)
-    assert resolved.startswith(str(profile)), f"{name} resolved {resolved!r} outside the active profile"
+    assert resolved.startswith(str(profile)), (
+        f"{name} resolved {resolved!r} outside the active profile"
+    )

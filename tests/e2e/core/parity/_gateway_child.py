@@ -59,16 +59,25 @@ class ParityTelegramAdapter(BasePlatformAdapter):
         # Inbound arriving while startup restore runs is queued and replayed later (the first
         # handle_message then "completes" without a turn); inject once the gateway is serving.
         runner = self.gateway_runner
-        while not getattr(runner, "_running", False) or getattr(runner, "_startup_restore_in_progress", True):
+        while not getattr(runner, "_running", False) or getattr(
+            runner, "_startup_restore_in_progress", True
+        ):
             await asyncio.sleep(0.05)
         emit("ready")
         source = self.build_source(
-            chat_id=PARITY_CHAT_ID, chat_name="parity", chat_type="dm",
-            user_id=PARITY_USER_ID, user_name="parity-user", message_id="1",
+            chat_id=PARITY_CHAT_ID,
+            chat_name="parity",
+            chat_type="dm",
+            user_id=PARITY_USER_ID,
+            user_name="parity-user",
+            message_id="1",
         )
         event = MessageEvent(
-            text=os.environ["PARITY_GATEWAY_PROMPT"], source=source, message_id="1",
-            user_id=PARITY_USER_ID, user_name="parity-user",
+            text=os.environ["PARITY_GATEWAY_PROMPT"],
+            source=source,
+            message_id="1",
+            user_id=PARITY_USER_ID,
+            user_name="parity-user",
         )
         await self.handle_message(event)
         emit("accepted", accepted=bool(getattr(event, "_gateway_accepted", False)))
@@ -78,15 +87,21 @@ class ParityTelegramAdapter(BasePlatformAdapter):
             self._inject_task.cancel()
         self._mark_disconnected()
 
-    async def send(self, chat_id: str, content: str, reply_to: Optional[str] = None,
-                   metadata: Optional[dict[str, Any]] = None) -> SendResult:
+    async def send(
+        self,
+        chat_id: str,
+        content: str,
+        reply_to: Optional[str] = None,
+        metadata: Optional[dict[str, Any]] = None,
+    ) -> SendResult:
         self._sent += 1
         message_id = f"parity-{self._sent}"
         emit("send", chat_id=str(chat_id), message_id=message_id, content=content)
         return SendResult(success=True, message_id=message_id)
 
-    async def edit_message(self, chat_id: str, message_id: str, content: str, *,
-                           finalize: bool = False) -> SendResult:
+    async def edit_message(
+        self, chat_id: str, message_id: str, content: str, *, finalize: bool = False
+    ) -> SendResult:
         emit("edit", chat_id=str(chat_id), message_id=message_id, content=content)
         return SendResult(success=True, message_id=message_id)
 

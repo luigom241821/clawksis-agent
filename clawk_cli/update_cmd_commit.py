@@ -62,7 +62,11 @@ def _obligation_paths(root: Path) -> list[Path]:
     from clawk_cli.update_host_obligation import host_obligation_path
     from clawk_cli.venv_sync import completion_pending_path
 
-    return [completion_pending_path(root), _fleet_restart_pending_marker_path(), host_obligation_path()]
+    return [
+        completion_pending_path(root),
+        _fleet_restart_pending_marker_path(),
+        host_obligation_path(),
+    ]
 
 
 def _read_or_none(path: Path) -> Optional[bytes]:
@@ -91,11 +95,15 @@ def arm_commit_obligations(root: Path, expected_sha: str) -> None:
     if _owns_live_checkout(root):
         return
     if _armed_snapshot is None:
-        _armed_snapshot = {path: _read_or_none(path) for path in _obligation_paths(root)}
+        _armed_snapshot = {
+            path: _read_or_none(path) for path in _obligation_paths(root)
+        }
         _owner = f"{root}|{os.getpid()}|{uuid.uuid4().hex}"
     try:
         arm_completion(root)
-        owed = _write_fleet_restart_pending_marker(expected_sha=expected_sha or "", owner=_owner)
+        owed = _write_fleet_restart_pending_marker(
+            expected_sha=expected_sha or "", owner=_owner
+        )
     finally:  # even a half-done arm: disarm must still recognise what this run wrote
         _armed_bytes.update({path: _read_or_none(path) for path in _armed_snapshot})
     if not owed:
@@ -119,7 +127,11 @@ def disarm_commit_obligations() -> None:
             if root is not None:
                 _owe_for(root, head)
             return
-    from clawk_cli.update_host_obligation import host_obligation_path, release_host_obligation, replace_bytes
+    from clawk_cli.update_host_obligation import (
+        host_obligation_path,
+        release_host_obligation,
+        replace_bytes,
+    )
 
     snapshot, _armed_snapshot = _armed_snapshot, None
     armed = dict(_armed_bytes)
@@ -157,9 +169,14 @@ def _owe_for(root: Path, sha: str) -> None:
     try:
         arm_commit_obligations(root, sha)
     except OSError as exc:
-        logger.warning("Could not re-arm the update obligations for %s: %s", sha[:10], exc)
-        print(f"  ⚠ Could not record the restart this update still owes for {sha[:10]} ({exc}); "
-              "run `clawk gateway restart` once the update is done.", file=sys.stderr)
+        logger.warning(
+            "Could not re-arm the update obligations for %s: %s", sha[:10], exc
+        )
+        print(
+            f"  ⚠ Could not record the restart this update still owes for {sha[:10]} ({exc}); "
+            "run `clawk gateway restart` once the update is done.",
+            file=sys.stderr,
+        )
 
 
 def debt_sha_for_move(pre: str, target: str) -> str:
@@ -184,6 +201,7 @@ def arm_commit_point(git_cmd, root: Path, expected_sha: str, **move) -> str | No
     Linux/macOS gateways are paused first: this is every route's first checkout move.
     """
     from clawk_cli.update_cmd_posix_pause import pause_at_commit_point
+
     if refused := pause_at_commit_point():
         return refused
     try:
@@ -194,14 +212,23 @@ def arm_commit_point(git_cmd, root: Path, expected_sha: str, **move) -> str | No
         head = head_and_branch(git_cmd, root)[0] if _run_start is not None else ""
         if head and head != _run_start[1][0]:
             # A later move (CP1 after the CP0 switch): THIS step moved nothing, an earlier one did.
-            return (f"could not arm the update ({exc}); this step changed nothing, but an earlier step "
-                    f"of this update already moved the checkout to {head[:10]}")
+            return (
+                f"could not arm the update ({exc}); this step changed nothing, but an earlier step "
+                f"of this update already moved the checkout to {head[:10]}"
+            )
         return f"could not arm the update ({exc}); the checkout was not changed"
     return None
 
 
-def arm_tree_move(git_cmd, root: Path, *, pre: str | None, target: str, stash: str | None,
-                  rollback: str | None = None) -> Path:
+def arm_tree_move(
+    git_cmd,
+    root: Path,
+    *,
+    pre: str | None,
+    target: str,
+    stash: str | None,
+    rollback: str | None = None,
+) -> Path:
     """Write the interrupted-pull marker for one git tree move (pre -> target).
 
     ``rollback`` (``branch``/``detach``): a syntax rollback that moves HEAD and the index back to
@@ -211,19 +238,33 @@ def arm_tree_move(git_cmd, root: Path, *, pre: str | None, target: str, stash: s
     marker = interrupted_pull_marker(root)
     ref = ""
     if rollback:
-        named = run_git(git_cmd, ["symbolic-ref", "-q", "HEAD"], cwd=str(root), capture_output=True, text=True,
-                        encoding="utf-8", errors="replace", stdin=subprocess.DEVNULL, timeout=60)
+        named = run_git(
+            git_cmd,
+            ["symbolic-ref", "-q", "HEAD"],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stdin=subprocess.DEVNULL,
+            timeout=60,
+        )
         ref = named.stdout.strip() if named.returncode == 0 else ""
     if pre:
-        with suppress(OSError, subprocess.SubprocessError):  # no closure: the in-tree repair still runs
+        with suppress(
+            OSError, subprocess.SubprocessError
+        ):  # no closure: the in-tree repair still runs
             publish_recovery_closure(git_cmd, root, pre)
     # The restore's only record, durable before git writes: temp + fsync + rename, never in place.
     # ``index_lock``: the lock generation already there before this move's git ran (empty: none). Only
     # THAT one is another git's for sure; a lock that appears later can be our own killed git's.
-    write_durable_text(marker, f"pid={os.getpid()}\npre={pre or ''}\ntarget={target}\nstash={stash or ''}\n"
-                       + f"index_lock={_lock_identity(marker.parent / 'index.lock')}\n"
-                       + (f"rollback={rollback}\nref={ref}\n" if rollback else "")
-                       + (f"git={git}\n" if (git := _absolute_git(git_cmd)) else ""))
+    write_durable_text(
+        marker,
+        f"pid={os.getpid()}\npre={pre or ''}\ntarget={target}\nstash={stash or ''}\n"
+        + f"index_lock={_lock_identity(marker.parent / 'index.lock')}\n"
+        + (f"rollback={rollback}\nref={ref}\n" if rollback else "")
+        + (f"git={git}\n" if (git := _absolute_git(git_cmd)) else ""),
+    )
     return marker
 
 
@@ -244,21 +285,34 @@ def publish_recovery_closure(git_cmd, root: Path, pre: str) -> Path:
     dest = recovery_closure_dir(Path(root), pre)
     if recovery_closure_verified(dest, pre):
         return dest
-    git_cmd = [*([git_cmd] if isinstance(git_cmd, str) else git_cmd), "--no-replace-objects"]
-    listed = run_git(git_cmd, ["ls-tree", "-z", "--full-tree", pre, "--", *RECOVERY_CLOSURE], cwd=str(root),
-                     capture_output=True, stdin=subprocess.DEVNULL, timeout=120)
+    git_cmd = [
+        *([git_cmd] if isinstance(git_cmd, str) else git_cmd),
+        "--no-replace-objects",
+    ]
+    listed = run_git(
+        git_cmd,
+        ["ls-tree", "-z", "--full-tree", pre, "--", *RECOVERY_CLOSURE],
+        cwd=str(root),
+        capture_output=True,
+        stdin=subprocess.DEVNULL,
+        timeout=120,
+    )
     ids = {}
     for entry in (listed.stdout or b"").split(b"\0") if listed.returncode == 0 else ():
         meta, _, rel = entry.decode("utf-8", "replace").partition("\t")
         if meta.split()[1:2] == ["blob"]:
             ids[rel] = meta.split()[2]
     blobs = {RECOVERY_CLOSURE_INIT: b""}
-    shown = read_target_files(git_cmd, root, pre, RECOVERY_CLOSURE)  # one spawn, not a cat-file per file
+    shown = read_target_files(
+        git_cmd, root, pre, RECOVERY_CLOSURE
+    )  # one spawn, not a cat-file per file
     for rel in RECOVERY_CLOSURE:
         if rel not in ids or shown[rel] is None or blob_id(shown[rel], pre) != ids[rel]:
             raise OSError(f"{rel} is not in {pre[:10]}")
         blobs[rel] = shown[rel]
-    manifest = "".join(f"{blob_id(data, pre)} {rel}\n" for rel, data in blobs.items()).encode("utf-8")
+    manifest = "".join(
+        f"{blob_id(data, pre)} {rel}\n" for rel, data in blobs.items()
+    ).encode("utf-8")
     staging = dest.with_name(f".{pre}.{os.getpid()}.staging")
     shutil.rmtree(staging, ignore_errors=True)
     try:
@@ -311,9 +365,17 @@ def files_added_by(git_cmd, root: Path, pre: str, target: str | None) -> list[st
     never touches untracked files, so ``drop_added_files`` removes them by name afterwards."""
     if not target or target == pre:
         return []
-    cp = run_git(git_cmd, ["diff", "--name-only", "-z", "--no-renames", "--diff-filter=A", pre, target],
-                        cwd=str(root), capture_output=True, text=True, encoding="utf-8", errors="replace",
-                        stdin=subprocess.DEVNULL, timeout=120)
+    cp = run_git(
+        git_cmd,
+        ["diff", "--name-only", "-z", "--no-renames", "--diff-filter=A", pre, target],
+        cwd=str(root),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        stdin=subprocess.DEVNULL,
+        timeout=120,
+    )
     return [p for p in cp.stdout.split("\0") if p] if cp.returncode == 0 else []
 
 
@@ -328,8 +390,11 @@ def drop_added_files(root: Path, added: list[str]) -> bool:
             (root / rel).unlink(missing_ok=True)
         except OSError:
             gone = False
-    for parent in sorted({p for rel in added for p in Path(rel).parents if str(p) != "."},
-                         key=lambda p: len(p.parts), reverse=True):
+    for parent in sorted(
+        {p for rel in added for p in Path(rel).parents if str(p) != "."},
+        key=lambda p: len(p.parts),
+        reverse=True,
+    ):
         try:
             (root / parent).rmdir()  # only when empty: anything else inside keeps it
         except OSError:
@@ -339,12 +404,26 @@ def drop_added_files(root: Path, added: list[str]) -> bool:
 
 def tree_whole_at(git_cmd, root: Path, sha: str) -> bool:
     """HEAD is ``sha``, no ``index.lock`` is left and no tracked file differs from it."""
+
     def run(*args: str) -> subprocess.CompletedProcess:
-        return run_git(git_cmd, [*args], cwd=str(root), capture_output=True, text=True, encoding="utf-8",
-                              errors="replace", stdin=subprocess.DEVNULL, timeout=120)
+        return run_git(
+            git_cmd,
+            [*args],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stdin=subprocess.DEVNULL,
+            timeout=120,
+        )
 
     head = run("rev-parse", "-q", "--verify", "HEAD")
-    if head.returncode != 0 or head.stdout.strip() != sha or (interrupted_pull_marker(Path(root)).parent / "index.lock").exists():
+    if (
+        head.returncode != 0
+        or head.stdout.strip() != sha
+        or (interrupted_pull_marker(Path(root)).parent / "index.lock").exists()
+    ):
         return False
     status = run("status", "--porcelain", "-z", "--untracked-files=no")
     return status.returncode == 0 and not status.stdout.strip("\0")
@@ -358,7 +437,9 @@ def settle_failed_tree_move(root: Path) -> bool:
     """
     marker = interrupted_pull_marker(Path(root))
     if not marker.is_file():
-        return False  # no marker names the move: its absence proves nothing about the tree
+        return (
+            False  # no marker names the move: its absence proves nothing about the tree
+        )
     restore_interrupted_pull(Path(root), after_failure=True)
     return not marker.is_file()
 
@@ -385,7 +466,11 @@ def _spec_admits(spec: str, version: str) -> bool:
     except ImportError:  # the lower bound is the part a Python bump moves
         floor = re.search(r">=\s*(\d+)\.(\d+)", spec)
         found = re.match(r"(\d+)\.(\d+)", version)
-        return not floor or bool(found) and (int(found[1]), int(found[2])) >= (int(floor[1]), int(floor[2]))
+        return (
+            not floor
+            or bool(found)
+            and (int(found[1]), int(found[2])) >= (int(floor[1]), int(floor[2]))
+        )
     try:
         return SpecifierSet(spec).contains(version, prereleases=True)
     except InvalidSpecifier:
@@ -416,7 +501,8 @@ _COMPILE_ALL = (
     "    except (SyntaxError, ValueError) as exc:\n"
     "        verdict = [rel, f'{type(exc).__name__}: {exc}']\n"
     "        break\n"
-    "print(json.dumps(verdict))\n")
+    "print(json.dumps(verdict))\n"
+)
 
 
 def _run_python(argv: list[str], *, stdin: str = "", timeout: float = 60) -> str | None:
@@ -424,8 +510,17 @@ def _run_python(argv: list[str], *, stdin: str = "", timeout: float = 60) -> str
     from clawk_cli._subprocess_compat import windows_hide_flags
 
     try:
-        done = subprocess.run(argv, input=stdin, capture_output=True, text=True, encoding="utf-8",
-                              errors="replace", timeout=timeout, creationflags=windows_hide_flags(), check=False)
+        done = subprocess.run(
+            argv,
+            input=stdin,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            creationflags=windows_hide_flags(),
+            check=False,
+        )
     except (OSError, subprocess.SubprocessError):
         return None
     return done.stdout if done.returncode == 0 else None
@@ -437,10 +532,15 @@ def _admitted_python(spec: str) -> str | None:
     (tests/test_managed_runtime_resolution.py), and a missing interpreter only means this one judges."""
     from clawk_platform.resolver import locate_command
 
-    candidates = [res.command[0] for minor in range(40, sys.version_info[1], -1)
-                  if (res := locate_command(f"python3.{minor}")).command][:3]
+    candidates = [
+        res.command[0]
+        for minor in range(40, sys.version_info[1], -1)
+        if (res := locate_command(f"python3.{minor}")).command
+    ][:3]
     for python in candidates:
-        version = (_run_python([python, "-I", "-c", _PYTHON_VERSION], timeout=30) or "").strip()
+        version = (
+            _run_python([python, "-I", "-c", _PYTHON_VERSION], timeout=30) or ""
+        ).strip()
         if version and _spec_admits(spec, version):
             return python
     return None
@@ -455,7 +555,9 @@ def _compile_here(sources: dict[str, bytes]) -> tuple[str, str] | None:
     return None
 
 
-def startup_syntax_error(sources: dict[str, bytes | None], pyproject: bytes | None) -> tuple[str, str] | None:
+def startup_syntax_error(
+    sources: dict[str, bytes | None], pyproject: bytes | None
+) -> tuple[str, str] | None:
     """``(path, error)`` for the first startup file that does not compile, else None.
 
     Judged by the interpreter that will run the target: this one when the target's
@@ -473,12 +575,21 @@ def startup_syntax_error(sources: dict[str, bytes | None], pyproject: bytes | No
     if spec is None or _spec_admits(spec, platform.python_version()):
         return _compile_here(present)
     if python := _admitted_python(spec):
-        payload = json.dumps({rel: base64.b64encode(data).decode("ascii") for rel, data in present.items()})
-        out = _run_python([python, "-I", "-c", _COMPILE_ALL], stdin=payload, timeout=120)
+        payload = json.dumps(
+            {
+                rel: base64.b64encode(data).decode("ascii")
+                for rel, data in present.items()
+            }
+        )
+        out = _run_python(
+            [python, "-I", "-c", _COMPILE_ALL], stdin=payload, timeout=120
+        )
         try:
             verdict = json.loads((out or "").strip().splitlines()[-1])
         except (IndexError, ValueError):
-            verdict = False  # the target's interpreter gave no verdict: judge here (below)
+            verdict = (
+                False  # the target's interpreter gave no verdict: judge here (below)
+            )
         if verdict is None:
             return None
         if isinstance(verdict, list) and len(verdict) == 2:
@@ -486,33 +597,48 @@ def startup_syntax_error(sources: dict[str, bytes | None], pyproject: bytes | No
     broken = _compile_here(present)
     if broken is None:
         return None
-    return broken[0], (f"{broken[1]}\nJudged by Python {platform.python_version()}: the target requires Python "
-                       f"{spec} and no installed interpreter satisfies it. Install one (`uv python install "
-                       f"'{spec}'`) and re-run `clawk update` so the release is judged by its own Python.")
+    return broken[0], (
+        f"{broken[1]}\nJudged by Python {platform.python_version()}: the target requires Python "
+        f"{spec} and no installed interpreter satisfies it. Install one (`uv python install "
+        f"'{spec}'`) and re-run `clawk update` so the release is judged by its own Python."
+    )
 
 
-def read_target_files(git_cmd, root: Path, target_ref: str, relpaths) -> dict[str, bytes | None]:
+def read_target_files(
+    git_cmd, root: Path, target_ref: str, relpaths
+) -> dict[str, bytes | None]:
     """``{rel: bytes}`` of each path as committed at ``target_ref`` (None: absent there or unreadable),
     in ONE ``git cat-file --batch`` instead of one ``git show`` per file."""
     names = list(dict.fromkeys(relpaths))
     found: dict[str, bytes | None] = dict.fromkeys(names)
     request = "".join(f"{target_ref}:{rel}\n" for rel in names).encode("utf-8")
-    cp = run_git(git_cmd, ["cat-file", "--batch"], cwd=str(root), input=request, capture_output=True, timeout=120)
+    cp = run_git(
+        git_cmd,
+        ["cat-file", "--batch"],
+        cwd=str(root),
+        input=request,
+        capture_output=True,
+        timeout=120,
+    )
     out, pos = (cp.stdout or b"") if cp.returncode == 0 else b"", 0
     for rel in names:
         end = out.find(b"\n", pos)
         if end < 0:
             break
         header, pos = out[pos:end].split(), end + 1
-        if len(header) == 3 and header[2].isdigit():  # "<oid> <type> <size>", then the bytes and "\n"
+        if (
+            len(header) == 3 and header[2].isdigit()
+        ):  # "<oid> <type> <size>", then the bytes and "\n"
             size = int(header[2])
             if header[1] == b"blob":
-                found[rel] = out[pos:pos + size]
+                found[rel] = out[pos : pos + size]
             pos += size + 1
     return found
 
 
-def target_syntax_error(git_cmd, root: Path, target_ref: str, relpaths) -> tuple[str, str] | None:
+def target_syntax_error(
+    git_cmd, root: Path, target_ref: str, relpaths
+) -> tuple[str, str] | None:
     """``(path, error)`` for the first startup-critical file that does not compile at ``target_ref``.
 
     Read from the object store, never written to the tree: this runs BEFORE HEAD moves, so a broken
@@ -521,11 +647,15 @@ def target_syntax_error(git_cmd, root: Path, target_ref: str, relpaths) -> tuple
     target (or unreadable) is skipped: the post-pull guard has the last word.
     """
     try:
-        files = read_target_files(git_cmd, root, target_ref, ["pyproject.toml", *relpaths])
+        files = read_target_files(
+            git_cmd, root, target_ref, ["pyproject.toml", *relpaths]
+        )
     except subprocess.TimeoutExpired:
         # A blobless install (install.sh clones --filter=blob:none) lazily fetches each changed blob
         # in its own round trip; on a slow link that outlasts the limit. Unread, like an absent file.
-        print("  ⚠ Syntax preflight skipped (slow object fetch); the post-update check still runs.")
+        print(
+            "  ⚠ Syntax preflight skipped (slow object fetch); the post-update check still runs."
+        )
         return None
     pyproject = files.pop("pyproject.toml", None)
     return startup_syntax_error(files, pyproject)
@@ -541,13 +671,24 @@ def tree_syntax_error(root: Path, relpaths) -> tuple[str, str] | None:
         except OSError as exc:
             return str(rel), f"could not read: {exc}"
     pyproject = root / "pyproject.toml"
-    return startup_syntax_error(sources, pyproject.read_bytes() if pyproject.is_file() else None)
+    return startup_syntax_error(
+        sources, pyproject.read_bytes() if pyproject.is_file() else None
+    )
 
 
 def head_and_branch(git_cmd, root: Path) -> tuple[str, str]:
     def out(*args: str) -> str:
-        cp = run_git(git_cmd, [*args], cwd=str(root), capture_output=True, text=True, encoding="utf-8", errors="replace",
-                            stdin=subprocess.DEVNULL, timeout=60)
+        cp = run_git(
+            git_cmd,
+            [*args],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stdin=subprocess.DEVNULL,
+            timeout=60,
+        )
         return cp.stdout.strip() if cp.returncode == 0 else ""
 
     return out("rev-parse", "HEAD"), out("rev-parse", "--abbrev-ref", "HEAD")
@@ -560,7 +701,10 @@ def checkout_untouched(git_cmd, root: Path, start: tuple[str, str] | None) -> bo
 
     if start is None or not start[0]:
         return False
-    if _unrestored_autostash_notice() is not None or interrupted_pull_marker(root).is_file():
+    if (
+        _unrestored_autostash_notice() is not None
+        or interrupted_pull_marker(root).is_file()
+    ):
         return False
     return head_and_branch(git_cmd, root) == start
 
@@ -593,7 +737,9 @@ def run_checkout_untouched(root: Path) -> bool:
     return checkout_untouched(_run_start[0], Path(root), _run_start[1])
 
 
-def preflight_refusal(git_cmd, root: Path, target_ref: str, critical_files) -> str | None:
+def preflight_refusal(
+    git_cmd, root: Path, target_ref: str, critical_files
+) -> str | None:
     """Why this update must not start, checked BEFORE the first tree move; ``None`` to proceed.
 
     * a venv owned by another OS user (the completion child used to refuse only after the swap);
@@ -614,6 +760,8 @@ def preflight_refusal(git_cmd, root: Path, target_ref: str, critical_files) -> s
     if broken is not None:
         path, error = broken
         _record_stop("target_syntax_error")
-        return (f"✗ The update target has a syntax error in a critical file:\n  {path}\n    "
-                + "\n    ".join(error.splitlines()[:6]))
+        return (
+            f"✗ The update target has a syntax error in a critical file:\n  {path}\n    "
+            + "\n    ".join(error.splitlines()[:6])
+        )
     return None

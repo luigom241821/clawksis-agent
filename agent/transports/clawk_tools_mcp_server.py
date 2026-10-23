@@ -32,10 +32,19 @@ logger = logging.getLogger(__name__)
 CLAWK_TOOLS_MCP_SERVER_NAME = "clawk-tools"
 
 # JSON Schema type -> Python type mapping for signature generation
-_JSON_TO_PY = {"string": str, "integer": int, "number": float, "boolean": bool, "array": list, "object": dict}
+_JSON_TO_PY = {
+    "string": str,
+    "integer": int,
+    "number": float,
+    "boolean": bool,
+    "array": list,
+    "object": dict,
+}
 
 
-def _signature_from_schema(schema: dict | None) -> tuple[inspect.Signature, dict[str, type]]:
+def _signature_from_schema(
+    schema: dict | None,
+) -> tuple[inspect.Signature, dict[str, type]]:
     """KEYWORD_ONLY signature + annotations from a JSON schema (optional params default to None)."""
     props = (schema or {}).get("properties") or {}
     required = set((schema or {}).get("required") or [])
@@ -44,9 +53,15 @@ def _signature_from_schema(schema: dict | None) -> tuple[inspect.Signature, dict
         if pname.startswith("_"):
             continue
         py = _JSON_TO_PY.get((pspec or {}).get("type"), Any)
-        ann, default = (py, inspect.Parameter.empty) if pname in required else (Optional[py], None)
+        ann, default = (
+            (py, inspect.Parameter.empty) if pname in required else (Optional[py], None)
+        )
         annots[pname] = ann
-        params.append(inspect.Parameter(pname, inspect.Parameter.KEYWORD_ONLY, annotation=ann, default=default))
+        params.append(
+            inspect.Parameter(
+                pname, inspect.Parameter.KEYWORD_ONLY, annotation=ann, default=default
+            )
+        )
     return inspect.Signature(params, return_annotation=str), annots
 
 
@@ -54,17 +69,38 @@ def _signature_from_schema(schema: dict | None) -> tuple[inspect.Signature, dict
 # NOT exposed: terminal/file/search/process/clarify (codex built-ins + its own approval UI);
 # delegate_task/memory/session_search/todo (need the running AIAgent context).
 EXPOSED_TOOLS: tuple[str, ...] = (
-    "web_search", "web_extract",
-    "browser_navigate", "browser_click", "browser_type", "browser_press", "browser_snapshot", "browser_scroll",
-    "browser_back", "browser_get_images", "browser_console", "browser_vision",
-    "vision_analyze", "image_generate", "skill_view", "skills_list", "text_to_speech",
+    "web_search",
+    "web_extract",
+    "browser_navigate",
+    "browser_click",
+    "browser_type",
+    "browser_press",
+    "browser_snapshot",
+    "browser_scroll",
+    "browser_back",
+    "browser_get_images",
+    "browser_console",
+    "browser_vision",
+    "vision_analyze",
+    "image_generate",
+    "skill_view",
+    "skills_list",
+    "text_to_speech",
     # Kanban handoff tools: stateless (read CLAWK_KANBAN_TASK, write kanban.db).
     # Without them a codex-runtime worker can't report completion and hangs.
-    "kanban_complete", "kanban_block", "kanban_schedule", "kanban_request_review",
-    "kanban_request_changes", "kanban_comment",
-    "kanban_heartbeat", "kanban_show", "kanban_list",
+    "kanban_complete",
+    "kanban_block",
+    "kanban_schedule",
+    "kanban_request_review",
+    "kanban_request_changes",
+    "kanban_comment",
+    "kanban_heartbeat",
+    "kanban_show",
+    "kanban_list",
     # Orchestrator-only (the kanban tool gates them on CLAWK_KANBAN_TASK unset).
-    "kanban_create", "kanban_unblock", "kanban_link",
+    "kanban_create",
+    "kanban_unblock",
+    "kanban_link",
 )
 
 
@@ -74,7 +110,9 @@ def _build_server() -> Any:
         # mcp 2.0 renamed `mcp.server.fastmcp` to `mcp.server.MCPServer` (same surface).
         from mcp.server import MCPServer
     except ImportError as exc:  # pragma: no cover - install hint
-        raise ImportError(f"clawk-tools MCP server requires the 'mcp' package: {exc}") from exc
+        raise ImportError(
+            f"clawk-tools MCP server requires the 'mcp' package: {exc}"
+        ) from exc
 
     from model_tools import get_tool_definitions, handle_function_call
 
@@ -103,7 +141,9 @@ def _build_server() -> Any:
         def _dispatch(**kwargs: Any) -> str:
             try:
                 # Drop None so unset optionals aren't forwarded to the handler.
-                return handle_function_call(tool_name, {k: v for k, v in kwargs.items() if v is not None})
+                return handle_function_call(
+                    tool_name, {k: v for k, v in kwargs.items() if v is not None}
+                )
             except Exception as exc:
                 logger.exception("tool %s raised", tool_name)
                 return json.dumps({"error": str(exc), "tool": tool_name})
@@ -123,13 +163,23 @@ def _build_server() -> Any:
         description = spec.get("description") or f"Clawksis {name} tool"
         params_schema = spec.get("parameters") or {"type": "object", "properties": {}}
         try:
-            mcp.add_tool(_make_handler(name, params_schema, description), name=name, description=description)
+            mcp.add_tool(
+                _make_handler(name, params_schema, description),
+                name=name,
+                description=description,
+            )
         except TypeError:
             # Older mcp SDK: decorator-style registration; __signature__ still drives schema.
-            mcp.tool(name=name, description=description)(_make_handler(name, params_schema, description))
+            mcp.tool(name=name, description=description)(
+                _make_handler(name, params_schema, description)
+            )
         exposed_count += 1
 
-    logger.info("clawk-tools MCP server registered %d/%d tools", exposed_count, len(EXPOSED_TOOLS))
+    logger.info(
+        "clawk-tools MCP server registered %d/%d tools",
+        exposed_count,
+        len(EXPOSED_TOOLS),
+    )
     return mcp
 
 

@@ -66,8 +66,15 @@ class ServerRequest:
         "writing",
     )
 
-    def __init__(self, sid: str, method: str, params: dict, *, qids: list[str] | None = None,
-                 on_result: Callable[[dict | None], None] | None = None) -> None:
+    def __init__(
+        self,
+        sid: str,
+        method: str,
+        params: dict,
+        *,
+        qids: list[str] | None = None,
+        on_result: Callable[[dict | None], None] | None = None,
+    ) -> None:
         self.id = f"srq-{uuid.uuid4().hex[:12]}"
         self.sid = sid
         self.method = method
@@ -87,8 +94,12 @@ class ServerRequest:
         self.withdrawn: str | None = None
 
     def frame(self) -> dict:
-        return {"jsonrpc": "2.0", "id": self.id, "method": self.method,
-                "params": {"session_id": self.sid, **self.params}}
+        return {
+            "jsonrpc": "2.0",
+            "id": self.id,
+            "method": self.method,
+            "params": {"session_id": self.sid, **self.params},
+        }
 
     def snapshot(self) -> dict:
         """``open_requests`` entry: the request as sent, plus the batch answers locked so far so a
@@ -117,16 +128,22 @@ _clients: Callable[[str], list] = lambda sid: []
 # Error code a client answers when none of its windows shows the request's session, and the refusal the
 # tool reports once every attached client said so. Mirrored in apps/desktop server-requests.ts.
 NOT_SHOWN_CODE = 4404
-NOT_SHOWN_MESSAGE = ("No Clawksis Desktop window is showing this chat, so its preview, terminal and tour are out "
-                     "of reach. Ask the user to open this chat in the Desktop app, then retry.")
+NOT_SHOWN_MESSAGE = (
+    "No Clawksis Desktop window is showing this chat, so its preview, terminal and tour are out "
+    "of reach. Ask the user to open this chat in the Desktop app, then retry."
+)
 
 # Client transports that sent ``client.capabilities {server_requests: true}`` (identity set: StdioTransport
 # has __slots__ and cannot be weak-referenced; ws.py forgets a peer on disconnect).
 _answering_clients: set = set()
 
 
-def bind_sinks(write_json: Callable[[dict], Any], emit: Callable[[str, str, dict], Any],
-               answerable: Callable[[str], bool], clients: Callable[[str], list] | None = None) -> None:
+def bind_sinks(
+    write_json: Callable[[dict], Any],
+    emit: Callable[[str, str, dict], Any],
+    answerable: Callable[[str], bool],
+    clients: Callable[[str], list] | None = None,
+) -> None:
     global _write, _emit, _answerable, _clients
     _write, _emit, _answerable = write_json, emit, answerable
     if clients is not None:
@@ -156,13 +173,21 @@ def answers_requests(transport: Any) -> bool:
 def _unanswerable(method: str, sid: str) -> bool:
     if _answerable(sid):
         return False
-    logger.info("server request %s for %s not sent: the attached client predates server→client requests "
-                "(update the Clawksis app)", method, sid)
+    logger.info(
+        "server request %s for %s not sent: the attached client predates server→client requests "
+        "(update the Clawksis app)",
+        method,
+        sid,
+    )
     return True
 
 
 def _emit_cancel(req: ServerRequest, reason: str) -> None:
-    _emit("request.cancel", req.sid, {"id": req.id, "method": req.method, "reason": reason})
+    _emit(
+        "request.cancel",
+        req.sid,
+        {"id": req.id, "method": req.method, "reason": reason},
+    )
 
 
 def _register(req: ServerRequest) -> None:
@@ -170,10 +195,16 @@ def _register(req: ServerRequest) -> None:
 
     contract = contracts.SERVER_REQUESTS.get(req.method)
     if contract is None:
-        raise RuntimeError(f"server request {req.method!r} has no contract in tui_gateway/contracts")
-    _, problem = contracts.validate_params(contract, {"session_id": req.sid, **req.params})
+        raise RuntimeError(
+            f"server request {req.method!r} has no contract in tui_gateway/contracts"
+        )
+    _, problem = contracts.validate_params(
+        contract, {"session_id": req.sid, **req.params}
+    )
     if problem is not None:
-        raise ValueError(problem)  # a key the renderer's typed handler would never read: our bug
+        raise ValueError(
+            problem
+        )  # a key the renderer's typed handler would never read: our bug
     with _lock:
         req.writing = True
         _open[req.id] = req
@@ -188,8 +219,14 @@ def _register(req: ServerRequest) -> None:
         _emit_cancel(req, withdrawn)
 
 
-def send(method: str, sid: str, params: dict, *, timeout: float | None,
-         qids: list[str] | None = None) -> dict | None:
+def send(
+    method: str,
+    sid: str,
+    params: dict,
+    *,
+    timeout: float | None,
+    qids: list[str] | None = None,
+) -> dict | None:
     """Send one request and block for the response ``result`` (a dict).
 
     Returns ``None`` when the renderer never answered (timeout, cancel, or an error response — e.g.
@@ -227,7 +264,9 @@ def send(method: str, sid: str, params: dict, *, timeout: float | None,
     return None
 
 
-def send_async(method: str, sid: str, params: dict, on_result: Callable[[dict | None], None]) -> Callable[[str], None]:
+def send_async(
+    method: str, sid: str, params: dict, on_result: Callable[[dict | None], None]
+) -> Callable[[str], None]:
     """Send one request whose wait is owned elsewhere (the approval queue's own timeout). ``on_result``
     runs on the dispatching thread when the response lands. Returns ``settle(reason)``: call it when
     the underlying wait ends; if the request is still open it is withdrawn with ``request.cancel``."""
@@ -270,7 +309,9 @@ def _decline(rid: str, transport: Any) -> bool:
         if not clients or not clients <= req.declined:
             return True
         _open.pop(rid, None)
-        req.result = {"value": json.dumps({"success": False, "error": NOT_SHOWN_MESSAGE})}
+        req.result = {
+            "value": json.dumps({"success": False, "error": NOT_SHOWN_MESSAGE})
+        }
         req.answered = True
     if req.on_result is not None:
         req.on_result(req.result)
@@ -292,14 +333,21 @@ def resolve_response(frame: dict, transport: Any = None) -> bool:
         if req is None:
             # Already settled (timed out, cancelled, answered from another surface) or owned by
             # another process; say so — a dropped answer used to vanish without a trace.
-            logger.debug("server request %s: response dropped, request no longer open", rid)
+            logger.debug(
+                "server request %s: response dropped, request no longer open", rid
+            )
             return False
         # Removing the request and committing its outcome are one settlement.
         # ``cancel()`` also settles under this lock, so the first side to get
         # here wins instead of a later cancellation overwriting a response.
         _open.pop(rid, None)
         if "error" in frame:
-            logger.debug("server request %s (%s) answered with error: %s", rid, req.method, frame.get("error"))
+            logger.debug(
+                "server request %s (%s) answered with error: %s",
+                rid,
+                req.method,
+                frame.get("error"),
+            )
             req.result, req.answered = None, False
         else:
             result = frame.get("result")
@@ -316,7 +364,9 @@ def resolve_response(frame: dict, transport: Any = None) -> bool:
     return True
 
 
-def lock_answer(request_id: str, question_id: str, answer: str | None) -> list[str] | None:
+def lock_answer(
+    request_id: str, question_id: str, answer: str | None
+) -> list[str] | None:
     """Lock one batch-clarify answer (update-in-place; ``None`` = skipped). Returns the question ids
     still unanswered; the last lock resolves the request with the full ``{"answers"}`` set. ``None``
     when no open batch has that id (expired or foreign); ``ValueError`` for an unknown question id."""
@@ -336,18 +386,27 @@ def lock_answer(request_id: str, question_id: str, answer: str | None) -> list[s
     return remaining
 
 
-def cancel(sid: str | None = None, reason: str = "interrupted", *, method: str | None = None) -> int:
+def cancel(
+    sid: str | None = None, reason: str = "interrupted", *, method: str | None = None
+) -> int:
     """Withdraw open requests — only *sid*'s (session.interrupt must not touch other sessions'), or
     every one when *sid* is None (shutdown); *method* narrows it to one request kind. Blocked waits
     return None (a batch returns its locked answers with ``outcome: cancelled``); queue-backed requests
     run ``on_result(None)`` so their owner can settle. Returns the number withdrawn."""
     with _lock:
-        targets = [req for req in _open.values()
-                   if (sid is None or req.sid == sid) and (method is None or req.method == method)]
+        targets = [
+            req
+            for req in _open.values()
+            if (sid is None or req.sid == sid)
+            and (method is None or req.method == method)
+        ]
         for req in targets:
             _open.pop(req.id, None)
             if req.qids is not None:
-                req.result, req.answered = settle_batch(req.locked, ended="cancelled"), True
+                req.result, req.answered = (
+                    settle_batch(req.locked, ended="cancelled"),
+                    True,
+                )
             else:
                 req.result, req.answered = None, False
             if req.writing:
@@ -365,7 +424,10 @@ def cancel(sid: str | None = None, reason: str = "interrupted", *, method: str |
 def open_requests(sid: str) -> list[dict]:
     """Unanswered requests for *sid*, oldest first."""
     with _lock:
-        reqs = sorted((req for req in _open.values() if req.sid == sid), key=lambda r: r.created_at)
+        reqs = sorted(
+            (req for req in _open.values() if req.sid == sid),
+            key=lambda r: r.created_at,
+        )
     return [req.snapshot() for req in reqs]
 
 
@@ -385,7 +447,12 @@ def pending_kind(sid: str) -> str:
 
 def is_response_frame(obj: Any) -> bool:
     """A client response: has an ``id`` and a ``result``/``error`` member but no ``method``."""
-    return isinstance(obj, dict) and "method" not in obj and "id" in obj and ("result" in obj or "error" in obj)
+    return (
+        isinstance(obj, dict)
+        and "method" not in obj
+        and "id" in obj
+        and ("result" in obj or "error" in obj)
+    )
 
 
 def reset_for_tests() -> None:

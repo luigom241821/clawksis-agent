@@ -10,7 +10,9 @@ def handle_request(req: dict) -> dict | None:
 
     with retirement.work() as admitted:
         if not admitted:
-            return _err(req.get("id"), 5035, "backend is retiring; reconnect to continue")
+            return _err(
+                req.get("id"), 5035, "backend is retiring; reconnect to continue"
+            )
         return _handle_admitted_request(req)
 
 
@@ -20,8 +22,12 @@ def _handle_admitted_request(req: dict) -> dict | None:
         return normalized
     rid, method, params = normalized
     if not (fn := _methods.get(method)):
-        return _err(rid, -32601, f"unknown method: {method} — the client and the Clawksis backend are out of sync "
-                    "(different versions); run `clawk update` and restart both")
+        return _err(
+            rid,
+            -32601,
+            f"unknown method: {method} — the client and the Clawksis backend are out of sync "
+            "(different versions); run `clawk update` and restart both",
+        )
     # Test doubles register straight into ``_methods`` without a contract; every production
     # handler comes through ``register_method`` and therefore has one.
     contract = _contracts.METHODS.get(method)
@@ -36,7 +42,11 @@ def _handle_admitted_request(req: dict) -> dict | None:
         return _err(rid, 4064, str(exc))
     finally:
         _current_rpc_method.reset(token)
-    if contract is not None and isinstance(response, dict) and isinstance(response.get("result"), dict):
+    if (
+        contract is not None
+        and isinstance(response, dict)
+        and isinstance(response.get("result"), dict)
+    ):
         _contracts.check_params_accepted(contract, params)
         _contracts.check_result(contract, response["result"])
     return response
@@ -51,10 +61,15 @@ def dispatch(req: dict, transport: Optional[Transport] = None) -> dict | None:
     token = bind_transport(t)
     try:
         from tui_gateway import server_requests
+
         if server_requests.is_response_frame(req):
             # The renderer answering one of OUR requests (clarify, approval, …): no response frame goes back.
-            if not server_requests.resolve_response(req, t) and not _relay_compute_host_response(req):
-                logger.debug("dropping response for unknown server request id=%r", req.get("id"))
+            if not server_requests.resolve_response(
+                req, t
+            ) and not _relay_compute_host_response(req):
+                logger.debug(
+                    "dropping response for unknown server request id=%r", req.get("id")
+                )
             return None
         normalized = _normalize_request(req)
         if isinstance(normalized, dict):
@@ -65,11 +80,19 @@ def dispatch(req: dict, transport: Optional[Transport] = None) -> dict | None:
 
         # Reserve BEFORE enqueueing: a queued handler has accepted work even though no worker runs yet.
         if not retirement.acquire():
-            return _err(req.get("id"), 5035, "backend is retiring; reconnect to continue")
+            return _err(
+                req.get("id"), 5035, "backend is retiring; reconnect to continue"
+            )
         try:
-            ctx = contextvars.copy_context()  # the pool worker must see the bound transport
+            ctx = (
+                contextvars.copy_context()
+            )  # the pool worker must see the bound transport
             owner = normalized[2].get("owner")
-            if normalized[1] in _CONNECTOR_RPC_METHODS and isinstance(owner, dict) and owner.get("type") == "session":
+            if (
+                normalized[1] in _CONNECTOR_RPC_METHODS
+                and isinstance(owner, dict)
+                and owner.get("type") == "session"
+            ):
                 ctx.run(_capture_connector_rpc_owner, normalized[2])
 
             def run():
@@ -79,6 +102,7 @@ def dispatch(req: dict, transport: Optional[Transport] = None) -> dict | None:
                     resp = _err(req.get("id"), -32000, f"handler error: {exc}")
                 if resp is not None:
                     t.write(resp)
+
             future = _pool.submit(lambda: ctx.run(run))
         except BaseException:
             retirement.release()

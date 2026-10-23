@@ -25,6 +25,7 @@ def _set(monkeypatch, clawk_home, key, value, force=False):
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
     # set_config_value resolves the home live via get_config_path()/get_clawk_home()
     from clawk_cli.config import set_config_value
+
     set_config_value(key, value, force=force)
 
 
@@ -62,8 +63,6 @@ class TestPerPlatformDisplayRedirect:
         # Connection key untouched
         assert result["platforms"]["telegram"]["token"] == "secret-bot-token"
 
-
-
     def test_connection_key_not_redirected(self, clawk_home, monkeypatch):
         """A real connection key (token) stays in top-level platforms.<name>."""
         _set(monkeypatch, clawk_home, "platforms.telegram.token", "new-token")
@@ -89,7 +88,9 @@ class TestRedirectSiblingSurfaces:
     resolver actually reads (the #71047 symptom was CLI and runtime disagreeing).
     """
 
-    def test_get_mirrors_gateway_resolution_after_set(self, clawk_home, monkeypatch, capsys):
+    def test_get_mirrors_gateway_resolution_after_set(
+        self, clawk_home, monkeypatch, capsys
+    ):
         from gateway.display_config import resolve_display_setting
         from clawk_cli.config import get_config_value
 
@@ -120,13 +121,14 @@ class TestRedirectSiblingSurfaces:
             unset_config_value("platforms.telegram.streaming")
         assert exc.value.code == 1
 
-
     def test_redirect_helper_only_touches_known_display_keys(self):
         from gateway.display_config import OVERRIDEABLE_KEYS
         from clawk_cli.config import _redirect_platform_display_key
 
         for setting in OVERRIDEABLE_KEYS:
-            canonical, note = _redirect_platform_display_key(f"platforms.discord.{setting}")
+            canonical, note = _redirect_platform_display_key(
+                f"platforms.discord.{setting}"
+            )
             assert canonical == f"display.platforms.discord.{setting}"
             assert note
         for key in (

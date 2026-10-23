@@ -27,7 +27,13 @@ def separate_glued_reasoning_blocks(previous: str, delta: Any) -> str:
     """
     # Relays also emit content-part lists/dicts; fragments carry their own whitespace.
     delta = flatten_message_text(delta, sep="")
-    glued = previous and delta and not previous[-1].isspace() and delta.startswith("**") and "**" in delta[2:]
+    glued = (
+        previous
+        and delta
+        and not previous[-1].isspace()
+        and delta.startswith("**")
+        and "**" in delta[2:]
+    )
     return f"\n\n{delta}" if glued else delta
 
 
@@ -38,7 +44,11 @@ _BACKFILL_DETAIL_KEYS = ("signature", "id", "format", "index")
 
 def streamed_reasoning_detail_text(detail: Any) -> str:
     """Readable text from a detail delta; never expose opaque replay material."""
-    dtype = detail.get("type") if isinstance(detail, dict) else getattr(detail, "type", None)
+    dtype = (
+        detail.get("type")
+        if isinstance(detail, dict)
+        else getattr(detail, "type", None)
+    )
     key = _MERGEABLE_DETAIL_TEXT_KEYS.get(dtype) if isinstance(dtype, str) else None
     if key is None:
         return ""
@@ -66,7 +76,12 @@ def append_streamed_reasoning_detail(details_acc: list, detail: Any) -> None:
     dtype = detail.get("type")
     merge_key = _MERGEABLE_DETAIL_TEXT_KEYS.get(dtype)
     last = details_acc[-1] if details_acc else None
-    if last is not None and merge_key and last.get("type") == dtype and isinstance(detail.get(merge_key), str):
+    if (
+        last is not None
+        and merge_key
+        and last.get("type") == dtype
+        and isinstance(detail.get(merge_key), str)
+    ):
         last[merge_key] = (last.get(merge_key) or "") + detail[merge_key]
         for k in _BACKFILL_DETAIL_KEYS:
             if last.get(k) in (None, "") and detail.get(k) not in (None, ""):

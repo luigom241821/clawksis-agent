@@ -32,9 +32,9 @@ def paused_for_payment(reason: Any) -> bool:
 @dataclass(frozen=True)
 class WindowGauge:
     id: str
-    scope: str            # SCOPE_ALL | SCOPE_TOP_TIER
-    label: str            # the server's display fallback
-    used_bp: int          # 0..10000
+    scope: str  # SCOPE_ALL | SCOPE_TOP_TIER
+    label: str  # the server's display fallback
+    used_bp: int  # 0..10000
     resets_at_ms: Optional[int] = None
 
     @property
@@ -72,8 +72,15 @@ def parse_gauges(value: Any) -> Optional[tuple[WindowGauge, ...]]:
         reset = _plausible_reset_ms(item.get("resets_at_ms"))
         label = item.get("label")
         seen.add(gid)
-        out.append(WindowGauge(gid, scope, label.strip() if isinstance(label, str) and label.strip() else gid,
-                               bp, reset))
+        out.append(
+            WindowGauge(
+                gid,
+                scope,
+                label.strip() if isinstance(label, str) and label.strip() else gid,
+                bp,
+                reset,
+            )
+        )
     return tuple(out) or None
 
 
@@ -113,7 +120,12 @@ _WORDS: dict[str, tuple[str, str, str, str]] = {
     "day": ("Today", "today", "daily", "today"),
     "week": ("This week", "this week", "weekly", "week"),
     "month": ("This month", "this month", "monthly", "month"),
-    "top_tier": ("Large models (monthly)", "your monthly large-model usage", "monthly large-model", "large models (monthly)"),
+    "top_tier": (
+        "Large models (monthly)",
+        "your monthly large-model usage",
+        "monthly large-model",
+        "large models (monthly)",
+    ),
 }
 
 

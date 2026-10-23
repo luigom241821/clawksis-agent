@@ -15,10 +15,20 @@ def test_sessions_export_md_writes_single_session(monkeypatch, tmp_path, capsys)
     db.append_message(sid, "user", "hello")
     db.close()
     before = path.read_bytes()
-    monkeypatch.setattr(sys, "argv", [
-        "clawk", "sessions", "export", "--format", "md",
-        "--session-id", "20260706_123456", str(tmp_path / "exports"),
-    ])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "clawk",
+            "sessions",
+            "export",
+            "--format",
+            "md",
+            "--session-id",
+            "20260706_123456",
+            str(tmp_path / "exports"),
+        ],
+    )
 
     main_mod.main()
 
@@ -46,11 +56,22 @@ def test_sessions_export_verified_delete_keeps_file(monkeypatch, tmp_path, capsy
     original = db.export_session("delete-me")
     assert original is not None
     db.close()
-    monkeypatch.setattr(sys, "argv", [
-        "clawk", "sessions", "export", "--format", "md",
-        "--session-id", "delete-me", "--delete-after-verified", "--yes",
-        str(tmp_path / "exports"),
-    ])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "clawk",
+            "sessions",
+            "export",
+            "--format",
+            "md",
+            "--session-id",
+            "delete-me",
+            "--delete-after-verified",
+            "--yes",
+            str(tmp_path / "exports"),
+        ],
+    )
 
     main_mod.main()
 
@@ -77,10 +98,21 @@ def test_sessions_export_redact_scrubs_secrets(monkeypatch, tmp_path):
     db.append_message("s1", "tool", f"api key: {secret}", tool_name="terminal")
     db.close()
     before = path.read_bytes()
-    monkeypatch.setattr(sys, "argv", [
-        "clawk", "sessions", "export", "--format", "md",
-        "--session-id", "s1", "--redact", str(tmp_path / "exports"),
-    ])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "clawk",
+            "sessions",
+            "export",
+            "--format",
+            "md",
+            "--session-id",
+            "s1",
+            "--redact",
+            str(tmp_path / "exports"),
+        ],
+    )
 
     main_mod.main()
 

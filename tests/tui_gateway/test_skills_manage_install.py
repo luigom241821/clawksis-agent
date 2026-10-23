@@ -71,7 +71,9 @@ def test_install_failure_is_an_error_not_success(monkeypatch):
 def test_install_declined_is_still_not_reported_as_installed(monkeypatch):
     """A user-owned no-op (None verdict: already installed / declined) must not claim
     a fresh install either — `installed` tracks the actual outcome."""
-    _stub_do_install(monkeypatch, None, ["Warning: 'x' is already installed at /skills/x"])
+    _stub_do_install(
+        monkeypatch, None, ["Warning: 'x' is already installed at /skills/x"]
+    )
 
     out = _install({"action": "install", "query": "x"})
 

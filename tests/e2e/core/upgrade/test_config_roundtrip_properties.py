@@ -71,13 +71,17 @@ def _leaves(tree: Any, prefix: tuple = ()) -> dict[tuple, Any]:
 
 def _changed_paths(before: dict, after: dict) -> set[tuple]:
     a, b = _leaves(before), _leaves(after)
-    return {p for p in a.keys() | b.keys() if a.get(p, _MISSING) != b.get(p, _MISSING)
-            or type(a.get(p)) is not type(b.get(p))}
+    return {
+        p
+        for p in a.keys() | b.keys()
+        if a.get(p, _MISSING) != b.get(p, _MISSING)
+        or type(a.get(p)) is not type(b.get(p))
+    }
 
 
 def _under(path: tuple, targets: Iterable[tuple]) -> bool:
     """``path`` is a target, lies below one, or is an ancestor that a target write replaced."""
-    return any(path[:len(t)] == t or t[:len(path)] == path for t in targets)
+    return any(path[: len(t)] == t or t[: len(path)] == path for t in targets)
 
 
 def _get(tree: dict, path: tuple, default: Any = _MISSING) -> Any:
@@ -114,7 +118,11 @@ _NULL_TOKEN = re.compile(r"^(\s*[^#\n]*?:)\s+(?:null|~)(\s+#.*)?$")
 def _canon_line(line: str) -> str:
     """ruamel re-emits an untouched ``key: null`` as ``key:`` (same value, cosmetic; see report)."""
     m = _NULL_TOKEN.match(line)
-    return (m.group(1) + (" " + m.group(2).strip() if m.group(2) else "")) if m else re.sub(r":\s+#", ": #", line)
+    return (
+        (m.group(1) + (" " + m.group(2).strip() if m.group(2) else ""))
+        if m
+        else re.sub(r":\s+#", ": #", line)
+    )
 
 
 def _line_diff(before: str, after: str) -> tuple[set[int], list[list[str]]]:
@@ -123,7 +131,9 @@ def _line_diff(before: str, after: str) -> tuple[set[int], list[list[str]]]:
     b = [_canon_line(x) for x in after.splitlines()]
     touched: set[int] = set()
     inserted: list[list[str]] = []
-    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, a, b, autojunk=False).get_opcodes():
+    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(
+        None, a, b, autojunk=False
+    ).get_opcodes():
         if tag in ("replace", "delete"):
             touched.update(range(i1, i2))
         if tag in ("replace", "insert") and j2 > j1:
@@ -132,22 +142,37 @@ def _line_diff(before: str, after: str) -> tuple[set[int], list[list[str]]]:
 
 
 def _udiff(before: str, after: str) -> str:
-    return "".join(difflib.unified_diff(before.splitlines(True), after.splitlines(True), "before", "after"))
+    return "".join(
+        difflib.unified_diff(
+            before.splitlines(True), after.splitlines(True), "before", "after"
+        )
+    )
 
 
-def _assert_one_key_write(ctx: str, before_text: str, after_text: str, targets: set[tuple],
-                          target_lines: set[int], *, allow_insert: bool) -> None:
+def _assert_one_key_write(
+    ctx: str,
+    before_text: str,
+    after_text: str,
+    targets: set[tuple],
+    target_lines: set[int],
+    *,
+    allow_insert: bool,
+) -> None:
     """Bytes outside the target key's line(s) are identical; a new key is ONE contiguous block."""
     touched, inserted = _line_diff(before_text, after_text)
     stray = touched - target_lines
     assert not stray, (
         f"[{ctx}] a write to {sorted(targets)} rewrote untouched lines "
-        f"{sorted(stray)}:\n{_udiff(before_text, after_text)}")
+        f"{sorted(stray)}:\n{_udiff(before_text, after_text)}"
+    )
     if not allow_insert:
         assert sum(len(b) for b in inserted) <= max(len(target_lines), 1), (
-            f"[{ctx}] a value change inserted extra lines:\n{_udiff(before_text, after_text)}")
+            f"[{ctx}] a value change inserted extra lines:\n{_udiff(before_text, after_text)}"
+        )
     else:
-        assert len(inserted) <= 1, f"[{ctx}] new key split across blocks:\n{_udiff(before_text, after_text)}"
+        assert len(inserted) <= 1, (
+            f"[{ctx}] new key split across blocks:\n{_udiff(before_text, after_text)}"
+        )
     _assert_no_duplicate_top_level(after_text, ctx)
 
 
@@ -158,14 +183,66 @@ def _assert_one_key_write(ctx: str, before_text: str, after_text: str, targets: 
 _YAML11_WORDS = {"y", "n", "yes", "no", "true", "false", "on", "off", "null", "~"}
 _PLAIN_OK = re.compile(r"^[A-Za-z_][A-Za-z0-9_\-/]*$")
 _TRICKY = (
-    "off", "on", "yes", "No", "y", "null", "~", "True",
-    "010", "1e3", "0x1F", "1_000", ".5", "+1", "12:30", "2026-09-23", "0o17", ".inf",
-    "colon: space", "hash # not a comment", "*star", "&anchor", "!tag", "%pct", "@at", "`tick",
-    "  leading space", "trailing space  ", "", "quote \" and ' both", "tab\there", "line1\nline2",
-    "a\\b\\c", "C:\\Users\\me\\AppData", "{not: a map}", "[not, a, list]", "- dash", "? what",
+    "off",
+    "on",
+    "yes",
+    "No",
+    "y",
+    "null",
+    "~",
+    "True",
+    "010",
+    "1e3",
+    "0x1F",
+    "1_000",
+    ".5",
+    "+1",
+    "12:30",
+    "2026-09-23",
+    "0o17",
+    ".inf",
+    "colon: space",
+    "hash # not a comment",
+    "*star",
+    "&anchor",
+    "!tag",
+    "%pct",
+    "@at",
+    "`tick",
+    "  leading space",
+    "trailing space  ",
+    "",
+    "quote \" and ' both",
+    "tab\there",
+    "line1\nline2",
+    "a\\b\\c",
+    "C:\\Users\\me\\AppData",
+    "{not: a map}",
+    "[not, a, list]",
+    "- dash",
+    "? what",
 )
-_UNICODE = ("héllo wörld", "中文配置值", "emoji 😀 ok", "Ünïcödé-ß", "Ελληνικά", "日本語テキスト", "مرحبا")
-_WORDS = ("alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel", "india", "juliet")
+_UNICODE = (
+    "héllo wörld",
+    "中文配置值",
+    "emoji 😀 ok",
+    "Ünïcödé-ß",
+    "Ελληνικά",
+    "日本語テキスト",
+    "مرحبا",
+)
+_WORDS = (
+    "alpha",
+    "bravo",
+    "charlie",
+    "delta",
+    "echo",
+    "foxtrot",
+    "golf",
+    "hotel",
+    "india",
+    "juliet",
+)
 
 
 def _render_scalar(v: Any, rng: random.Random) -> str:
@@ -196,6 +273,7 @@ def _documented_scalar_leaves() -> list[tuple[tuple, Any]]:
                     walk(v, p)
             elif isinstance(v, (bool, int, float, str)) or v is None:
                 out.append((p, v))
+
     walk(DEFAULT_CONFIG, ())
     return out
 
@@ -203,31 +281,59 @@ def _documented_scalar_leaves() -> list[tuple[tuple, Any]]:
 DOCUMENTED = _documented_scalar_leaves()
 # Generator leaves: nested (section.key[.sub]) documented scalars whose segments hold no literal dot
 # and which the loader does not canonicalise into another path.
-_GEN_EXCLUDE = {("agent", "max_turns"), ("model", "provider"), ("model", "base_url"), ("model", "api_mode")}
-_GEN_LEAVES = [(p, d) for p, d in DOCUMENTED
-               if 2 <= len(p) <= 3 and not any("." in s for s in p) and p not in _GEN_EXCLUDE
-               and isinstance(DEFAULT_CONFIG.get(p[0]), dict)]
+_GEN_EXCLUDE = {
+    ("agent", "max_turns"),
+    ("model", "provider"),
+    ("model", "base_url"),
+    ("model", "api_mode"),
+}
+_GEN_LEAVES = [
+    (p, d)
+    for p, d in DOCUMENTED
+    if 2 <= len(p) <= 3
+    and not any("." in s for s in p)
+    and p not in _GEN_EXCLUDE
+    and isinstance(DEFAULT_CONFIG.get(p[0]), dict)
+]
 
 
 class Case:
     """A generated config: the text as a user would hand-write it plus the parse oracle."""
 
-    def __init__(self, seed: int, text: str, tree: dict, leaf_lines: dict[tuple, int], env: dict[str, str]):
-        self.seed, self.text, self.tree, self.leaf_lines, self.env = seed, text, tree, leaf_lines, env
+    def __init__(
+        self,
+        seed: int,
+        text: str,
+        tree: dict,
+        leaf_lines: dict[tuple, int],
+        env: dict[str, str],
+    ):
+        self.seed, self.text, self.tree, self.leaf_lines, self.env = (
+            seed,
+            text,
+            tree,
+            leaf_lines,
+            env,
+        )
 
     def lines_of(self, path: tuple) -> set[int]:
         return {self.leaf_lines[path]} if path in self.leaf_lines else set()
 
 
-def _value_for(default: Any, rng: random.Random, *, long: bool, env: dict[str, str], seed: int) -> Any:
+def _value_for(
+    default: Any, rng: random.Random, *, long: bool, env: dict[str, str], seed: int
+) -> Any:
     roll = rng.random()
     if long and roll < 0.35:
         # #119844 shape: a fold point right after a backslash, plus plain long prose.
-        return rng.choice([
-            "A" * rng.randint(74, 85) + "D:\\CentBrowserPortable " + "B" * 40,
-            " ".join(rng.choice(_WORDS) for _ in range(40)) + " \\scripts\\monitor-off-v3.ps1 end",
-            "x" * 150 + " " + "C:\\Users\\me\\.clawk\\scripts\\" + "y" * 90,
-        ])
+        return rng.choice(
+            [
+                "A" * rng.randint(74, 85) + "D:\\CentBrowserPortable " + "B" * 40,
+                " ".join(rng.choice(_WORDS) for _ in range(40))
+                + " \\scripts\\monitor-off-v3.ps1 end",
+                "x" * 150 + " " + "C:\\Users\\me\\.clawk\\scripts\\" + "y" * 90,
+            ]
+        )
     if roll < 0.08:
         return None
     if roll < 0.18:
@@ -257,13 +363,25 @@ def _value_for(default: Any, rng: random.Random, *, long: bool, env: dict[str, s
 
 def _before_version(text: str, block: str) -> str:
     """Insert ``block`` (newline-terminated) right before the root ``_config_version:`` line."""
-    out, n = re.subn(r"^_config_version:", block + "_config_version:", text, count=1, flags=re.MULTILINE)
+    out, n = re.subn(
+        r"^_config_version:",
+        block + "_config_version:",
+        text,
+        count=1,
+        flags=re.MULTILINE,
+    )
     assert n == 1, text
     return out
 
 
-def gen_case(seed: int, *, long: bool = False, n_sections: tuple = (5, 11), exclude_top: set = frozenset(),
-             null_leaves: bool = True) -> Case:
+def gen_case(
+    seed: int,
+    *,
+    long: bool = False,
+    n_sections: tuple = (5, 11),
+    exclude_top: set = frozenset(),
+    null_leaves: bool = True,
+) -> Case:
     rng = random.Random(seed)
     env: dict[str, str] = {}
     by_section: dict[str, list] = {}
@@ -273,7 +391,9 @@ def gen_case(seed: int, *, long: bool = False, n_sections: tuple = (5, 11), excl
     sections = rng.sample(sorted(by_section), rng.randint(*n_sections))
     tree: dict = {}
     for sec in sections:
-        for p, d in rng.sample(by_section[sec], min(len(by_section[sec]), rng.randint(1, 5))):
+        for p, d in rng.sample(
+            by_section[sec], min(len(by_section[sec]), rng.randint(1, 5))
+        ):
             if len(p) == 3 and not isinstance(_get(tree, p[:2], {}), dict):
                 continue
             if len(p) == 2 and isinstance(_get(tree, p), dict):
@@ -290,17 +410,31 @@ def gen_case(seed: int, *, long: bool = False, n_sections: tuple = (5, 11), excl
         # The draw depends on DEFAULT_CONFIG's leaf population, so a new default key reshuffles
         # every seed; the explicit-null property must not hinge on which seed happened to roll one.
         _set(tree, next(p for p in _leaves(tree) if p[0] == sections[0]), None)
-    if "providers" not in exclude_top:  # a provider name with a literal dot (#84064 family)
-        tree["providers"] = {f"acme.v{seed % 7}": {"base_url": f"http://127.0.0.1:9/v{seed}", "api_mode": "chat_completions"}}
+    if (
+        "providers" not in exclude_top
+    ):  # a provider name with a literal dot (#84064 family)
+        tree["providers"] = {
+            f"acme.v{seed % 7}": {
+                "base_url": f"http://127.0.0.1:9/v{seed}",
+                "api_mode": "chat_completions",
+            }
+        }
     if "c18_custom_root" not in exclude_top:
         tree["c18_custom_root"] = rng.choice(_UNICODE)
-    if "skills" not in exclude_top and rng.random() < 0.6:  # a list the writer must keep element-wise
+    if (
+        "skills" not in exclude_top and rng.random() < 0.6
+    ):  # a list the writer must keep element-wise
         tree.setdefault("skills", {})
         if isinstance(tree["skills"], dict):
-            tree["skills"]["external_dirs"] = [f"/opt/c18/{rng.choice(_WORDS)}", rng.choice(_UNICODE)]
+            tree["skills"]["external_dirs"] = [
+                f"/opt/c18/{rng.choice(_WORDS)}",
+                rng.choice(_UNICODE),
+            ]
     tree["_config_version"] = LATEST
 
-    lines: list[str] = [f"# C18 generated config (seed={seed}) — comments must survive every write"]
+    lines: list[str] = [
+        f"# C18 generated config (seed={seed}) — comments must survive every write"
+    ]
     leaf_lines: dict[tuple, int] = {}
 
     def emit(node: dict, depth: int, pre: tuple) -> None:
@@ -317,9 +451,14 @@ def gen_case(seed: int, *, long: bool = False, n_sections: tuple = (5, 11), excl
                 for item in v:
                     lines.append(f"{ind}  - {_render_scalar(item, rng)}")
             else:
-                note = "  # inline note" if rng.random() < 0.25 and k != "_config_version" else ""
+                note = (
+                    "  # inline note"
+                    if rng.random() < 0.25 and k != "_config_version"
+                    else ""
+                )
                 leaf_lines[pre + (k,)] = len(lines)
                 lines.append(f"{ind}{key}: {_render_scalar(v, rng)}{note}")
+
     emit(tree, 0, ())
     text = "\n".join(lines) + "\n"
     parsed = yaml.safe_load(text)
@@ -330,6 +469,7 @@ def gen_case(seed: int, *, long: bool = False, n_sections: tuple = (5, 11), excl
 # ─────────────────────────────────────────────────────────────────────────────
 # Fixtures / production seams
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _cfg_path() -> Path:
     return C.get_config_path()
@@ -342,6 +482,7 @@ def _reset_config_caches(*, keep_lkg: bool = False) -> None:
         C._LAST_EXPANDED_CONFIG_BY_PATH.clear()
     with contextlib.suppress(Exception):
         from tui_gateway import server
+
         server._cfg_cache = server._cfg_sig = server._cfg_path = None
 
 
@@ -366,6 +507,7 @@ def home(monkeypatch):
     _reset_config_caches()
     with contextlib.suppress(Exception):
         from tui_gateway import server
+
         monkeypatch.setattr(server, "_clawk_home", hh)
     yield hh
     _reset_config_caches()
@@ -382,7 +524,10 @@ def _install(case: Case, monkeypatch) -> Path:
 
 @contextlib.contextmanager
 def _quiet():
-    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+    with (
+        contextlib.redirect_stdout(io.StringIO()),
+        contextlib.redirect_stderr(io.StringIO()),
+    ):
         yield
 
 
@@ -405,6 +550,7 @@ class ReadFaults:
                 if self.count in self.fail_at:
                     raise OSError(errno.EMFILE, "Too many open files (C18 injected)")
             return real(stream)
+
         monkeypatch.setattr(C, "fast_safe_load", wrapped)
 
     def arm(self, *ks: int) -> None:
@@ -422,18 +568,31 @@ P1_LONG_SEEDS = [201, 202, 203, 204]
 def _noop_save_roundtrip(case: Case, monkeypatch) -> None:
     path = _install(case, monkeypatch)
     loaded = C.load_config()
-    for p, v in _leaves(case.tree).items():  # ${VAR} expansion is the only load-time rewrite
-        want = case.env.get(v[2:-1], v) if isinstance(v, str) and v.startswith("${") else v
-        assert _get(loaded, p) == want, f"[seed={case.seed}] load_config()[{p}] = {_get(loaded, p)!r}, file says {v!r}"
+    for p, v in _leaves(
+        case.tree
+    ).items():  # ${VAR} expansion is the only load-time rewrite
+        want = (
+            case.env.get(v[2:-1], v) if isinstance(v, str) and v.startswith("${") else v
+        )
+        assert _get(loaded, p) == want, (
+            f"[seed={case.seed}] load_config()[{p}] = {_get(loaded, p)!r}, file says {v!r}"
+        )
     with _quiet():
         C.save_config(loaded)
     after = _read(path)
     assert yaml.safe_load(after) == case.tree, (
-        f"[seed={case.seed}] load(save(x)) != x:\n{_udiff(case.text, after)}")
-    touched, inserted = _line_diff(case.text, after)  # byte-identical modulo `k: null` -> `k:` (cosmetic)
-    assert not touched and not inserted, f"[seed={case.seed}] a no-op save changed bytes:\n{_udiff(case.text, after)}"
+        f"[seed={case.seed}] load(save(x)) != x:\n{_udiff(case.text, after)}"
+    )
+    touched, inserted = _line_diff(
+        case.text, after
+    )  # byte-identical modulo `k: null` -> `k:` (cosmetic)
+    assert not touched and not inserted, (
+        f"[seed={case.seed}] a no-op save changed bytes:\n{_udiff(case.text, after)}"
+    )
     for name, secret in case.env.items():
-        assert secret not in after, f"[seed={case.seed}] expanded ${{{name}}} leaked into config.yaml"
+        assert secret not in after, (
+            f"[seed={case.seed}] expanded ${{{name}}} leaked into config.yaml"
+        )
 
 
 @pytest.mark.parametrize("seed", P1_SEEDS)
@@ -444,7 +603,9 @@ def test_p1_noop_save_is_byte_identical(seed, home, monkeypatch):
 @pytest.mark.parametrize("seed", [101, 102])
 def test_p1_explicit_null_leaves_survive_a_noop_save(seed, home, monkeypatch):
     case = gen_case(seed)
-    assert any(v is None for v in _leaves(case.tree).values()), f"seed {seed} generated no null leaf"
+    assert any(v is None for v in _leaves(case.tree).values()), (
+        f"seed {seed} generated no null leaf"
+    )
     _noop_save_roundtrip(case, monkeypatch)
 
 
@@ -457,9 +618,18 @@ def test_p1_long_scalars_survive_a_noop_save(seed, home, monkeypatch):
 def test_p1_save_of_one_changed_key_touches_only_that_key(seed, home, monkeypatch):
     case = gen_case(seed, null_leaves=False)
     rng = random.Random(seed * 7919)
-    present = [p for p in case.leaf_lines if p[0] not in ("_config_version", "providers")]
-    absent = [p for p, _d in _GEN_LEAVES if _get(case.tree, p) is _MISSING
-              and not _under(p, [q for q in _leaves(case.tree) if not isinstance(_get(case.tree, q), dict)])]
+    present = [
+        p for p in case.leaf_lines if p[0] not in ("_config_version", "providers")
+    ]
+    absent = [
+        p
+        for p, _d in _GEN_LEAVES
+        if _get(case.tree, p) is _MISSING
+        and not _under(
+            p,
+            [q for q in _leaves(case.tree) if not isinstance(_get(case.tree, q), dict)],
+        )
+    ]
     for round_ in range(4):
         path = _install(case, monkeypatch)
         target = rng.choice(present) if round_ % 2 == 0 else rng.choice(absent)
@@ -467,8 +637,12 @@ def test_p1_save_of_one_changed_key_touches_only_that_key(seed, home, monkeypatc
         new = old
         # save_config by contract never writes a default-valued key the user did not already have.
         dflt = _get(DEFAULT_CONFIG, target) if old is _MISSING else _MISSING
-        while new == old or new == dflt or (isinstance(new, str) and new.startswith("${")):
-            new = _value_for(_get(DEFAULT_CONFIG, target), rng, long=False, env={}, seed=seed)
+        while (
+            new == old or new == dflt or (isinstance(new, str) and new.startswith("${"))
+        ):
+            new = _value_for(
+                _get(DEFAULT_CONFIG, target), rng, long=False, env={}, seed=seed
+            )
             if new is None:
                 new = f"c18-{rng.randrange(10**6)}"
         cfg = C.load_config()
@@ -481,9 +655,16 @@ def test_p1_save_of_one_changed_key_touches_only_that_key(seed, home, monkeypatc
         _set(expect, target, new)
         got = yaml.safe_load(after)
         assert got == expect, (
-            f"[{ctx}] changed paths {sorted(_changed_paths(expect, got), key=str)}:\n{_udiff(case.text, after)}")
-        _assert_one_key_write(ctx, case.text, after, {target}, case.lines_of(target),
-                              allow_insert=target not in case.leaf_lines)
+            f"[{ctx}] changed paths {sorted(_changed_paths(expect, got), key=str)}:\n{_udiff(case.text, after)}"
+        )
+        _assert_one_key_write(
+            ctx,
+            case.text,
+            after,
+            {target},
+            case.lines_of(target),
+            allow_insert=target not in case.leaf_lines,
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -492,12 +673,15 @@ def test_p1_save_of_one_changed_key_touches_only_that_key(seed, home, monkeypatc
 
 # Documented side effects that legitimately touch a second key or another file.
 _SET_EXCLUDE = {
-    ("model",),                       # bare `model` is redirected to model.default by design
-    ("model", "provider"),            # provider switch drops the old provider's base_url/api_mode
-    ("model", "api_base"),            # alias rewritten to model.base_url
+    ("model",),  # bare `model` is redirected to model.default by design
+    ("model", "provider"),  # provider switch drops the old provider's base_url/api_mode
+    ("model", "api_base"),  # alias rewritten to model.base_url
     ("_config_version",),
-    ("display", "language"),          # validated against the live language set (bundled ∪ overlay ∪ packs);
-                                      # an unknown id is refused with the list — tests/clawk_cli/test_config_display_language.py
+    (
+        "display",
+        "language",
+    ),  # validated against the live language set (bundled ∪ overlay ∪ packs);
+    # an unknown id is refused with the list — tests/clawk_cli/test_config_display_language.py
 }
 
 
@@ -505,7 +689,9 @@ def _cli_key(path: tuple) -> str:
     return ".".join(seg.replace(".", "\\.") for seg in path)
 
 
-def _set_value_for(path: tuple, default: Any, current: Any, rng: random.Random) -> tuple[str, Any]:
+def _set_value_for(
+    path: tuple, default: Any, current: Any, rng: random.Random
+) -> tuple[str, Any]:
     """(CLI string, the value it must persist as). Only unambiguous encodings."""
     if isinstance(default, bool):
         v = not current if isinstance(current, bool) else not default
@@ -527,7 +713,9 @@ _N_SET_CHUNKS = 8
 
 
 @pytest.mark.parametrize("chunk", range(_N_SET_CHUNKS))
-def test_p2_every_documented_key_is_settable_and_changes_exactly_one_key(chunk, home, monkeypatch):
+def test_p2_every_documented_key_is_settable_and_changes_exactly_one_key(
+    chunk, home, monkeypatch
+):
     """`config set` over EVERY documented scalar leaf (chunked), on a rich generated config."""
     case = gen_case(300 + chunk)
     rng = random.Random(300 + chunk)
@@ -539,8 +727,12 @@ def test_p2_every_documented_key_is_settable_and_changes_exactly_one_key(chunk, 
         current = _get(case.tree, path, None)
         if isinstance(current, (dict, list)):
             continue
-        blocked = [q for q in _leaves(case.tree) if len(q) < len(path) and path[:len(q)] == q]
-        if blocked:  # a scalar sits where this key needs a mapping: the guard refuses by design
+        blocked = [
+            q for q in _leaves(case.tree) if len(q) < len(path) and path[: len(q)] == q
+        ]
+        if (
+            blocked
+        ):  # a scalar sits where this key needs a mapping: the guard refuses by design
             continue
         s, want = _set_value_for(path, default, current, rng)
         out = io.StringIO()
@@ -553,15 +745,30 @@ def test_p2_every_documented_key_is_settable_and_changes_exactly_one_key(chunk, 
         after = _read(cfg_path)
         got = yaml.safe_load(after)
         changed = _changed_paths(case.tree, got)
-        if changed != {path} or _get(got, path) != want or type(_get(got, path)) is not type(want):
-            failures.append(f"{path}={s!r}: changed {sorted(changed, key=str)[:6]}, stored {_get(got, path)!r}")
+        if (
+            changed != {path}
+            or _get(got, path) != want
+            or type(_get(got, path)) is not type(want)
+        ):
+            failures.append(
+                f"{path}={s!r}: changed {sorted(changed, key=str)[:6]}, stored {_get(got, path)!r}"
+            )
             continue
         try:
-            _assert_one_key_write(f"chunk={chunk} {path}", case.text, after, {path}, case.lines_of(path),
-                                  allow_insert=path not in case.leaf_lines)
+            _assert_one_key_write(
+                f"chunk={chunk} {path}",
+                case.text,
+                after,
+                {path},
+                case.lines_of(path),
+                allow_insert=path not in case.leaf_lines,
+            )
         except AssertionError as exc:
             failures.append(str(exc)[:600])
-    assert not failures, f"[chunk={chunk} seed={case.seed}] {len(failures)} documented key(s) failed:\n" + "\n".join(failures)
+    assert not failures, (
+        f"[chunk={chunk} seed={case.seed}] {len(failures)} documented key(s) failed:\n"
+        + "\n".join(failures)
+    )
 
 
 def _dotted_provider(case: Case) -> str:
@@ -569,8 +776,16 @@ def _dotted_provider(case: Case) -> str:
 
 
 def _cli(env: dict, *args: str, timeout: float = 120) -> subprocess.CompletedProcess:
-    return subprocess.run([sys.executable, "-m", "clawk_cli.main", *args], cwd=str(WORKTREE), env=env,
-                          capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL, check=False)
+    return subprocess.run(
+        [sys.executable, "-m", "clawk_cli.main", *args],
+        cwd=str(WORKTREE),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        stdin=subprocess.DEVNULL,
+        check=False,
+    )
 
 
 def _cli_home(tmp_path: Path, case: Case) -> tuple[dict, Path]:
@@ -582,49 +797,102 @@ def _cli_home(tmp_path: Path, case: Case) -> tuple[dict, Path]:
 
 _CLI_CASES = [
     # (id, seed, key-builder, value, expected persisted value)
-    ("documented-existing", 401, lambda c: _cli_key(next(p for p in c.leaf_lines if p[0] != "providers" and p[0] != "_config_version")), "c18-cli-value", "c18-cli-value"),
+    (
+        "documented-existing",
+        401,
+        lambda c: _cli_key(
+            next(
+                p
+                for p in c.leaf_lines
+                if p[0] != "providers" and p[0] != "_config_version"
+            )
+        ),
+        "c18-cli-value",
+        "c18-cli-value",
+    ),
     ("documented-absent-float", 402, lambda c: "compression.threshold", "0.61", 0.61),
     ("documented-absent-bool", 408, lambda c: "compression.enabled", "false", False),
-    ("dotted-provider-name", 403, lambda c: f"providers.{_dotted_provider(c)}.api_mode", "codex_responses", "codex_responses"),
+    (
+        "dotted-provider-name",
+        403,
+        lambda c: f"providers.{_dotted_provider(c)}.api_mode",
+        "codex_responses",
+        "codex_responses",
+    ),
     ("yaml11-word-stays-a-string", 404, lambda c: "approvals.mode", "off", "off"),
-    ("unicode-value", 405, lambda c: "agent.system_prompt", "Réponds en français — 日本語 😀", "Réponds en français — 日本語 😀"),
-    ("custom-top-level-key", 406, lambda c: "c18_custom_root", "changed ü", "changed ü"),
+    (
+        "unicode-value",
+        405,
+        lambda c: "agent.system_prompt",
+        "Réponds en français — 日本語 😀",
+        "Réponds en français — 日本語 😀",
+    ),
+    (
+        "custom-top-level-key",
+        406,
+        lambda c: "c18_custom_root",
+        "changed ü",
+        "changed ü",
+    ),
 ]
 
 
-@pytest.mark.parametrize("cid,seed,keyf,value,want", _CLI_CASES, ids=[c[0] for c in _CLI_CASES])
-def test_p2_real_cli_config_set_changes_exactly_one_key(cid, seed, keyf, value, want, tmp_path):
+@pytest.mark.parametrize(
+    "cid,seed,keyf,value,want", _CLI_CASES, ids=[c[0] for c in _CLI_CASES]
+)
+def test_p2_real_cli_config_set_changes_exactly_one_key(
+    cid, seed, keyf, value, want, tmp_path
+):
     case = gen_case(seed, exclude_top={"compression"})
     env, cfg = _cli_home(tmp_path, case)
     key = keyf(case)
     path = tuple(C._split_key_path(key))
-    if cid == "dotted-provider-name":  # greedy literal match: the existing "acme.vN" entry
+    if (
+        cid == "dotted-provider-name"
+    ):  # greedy literal match: the existing "acme.vN" entry
         path = ("providers", _dotted_provider(case), "api_mode")
     r = _cli(env, "config", "set", key, value)
-    assert r.returncode == 0, f"[{cid} seed={seed}] `config set {key} {value}` exit {r.returncode}:\n{r.stdout}\n{r.stderr}"
+    assert r.returncode == 0, (
+        f"[{cid} seed={seed}] `config set {key} {value}` exit {r.returncode}:\n{r.stdout}\n{r.stderr}"
+    )
     after = _read(cfg)
     got = yaml.safe_load(after)
     changed = _changed_paths(case.tree, got)
-    assert changed == {path}, f"[{cid} seed={seed}] changed {sorted(changed, key=str)}:\n{_udiff(case.text, after)}"
+    assert changed == {path}, (
+        f"[{cid} seed={seed}] changed {sorted(changed, key=str)}:\n{_udiff(case.text, after)}"
+    )
     assert _get(got, path) == want and type(_get(got, path)) is type(want), (
-        f"[{cid}] stored {_get(got, path)!r}, want {want!r}")
-    _assert_one_key_write(f"{cid} seed={seed}", case.text, after, {path}, case.lines_of(path),
-                          allow_insert=path not in case.leaf_lines)
+        f"[{cid}] stored {_get(got, path)!r}, want {want!r}"
+    )
+    _assert_one_key_write(
+        f"{cid} seed={seed}",
+        case.text,
+        after,
+        {path},
+        case.lines_of(path),
+        allow_insert=path not in case.leaf_lines,
+    )
     # A dotted provider name must stay ONE literal key, never a phantom nested sibling.
-    assert list(got["providers"]) == list(case.tree["providers"]), f"[{cid}] providers keys: {list(got['providers'])}"
+    assert list(got["providers"]) == list(case.tree["providers"]), (
+        f"[{cid}] providers keys: {list(got['providers'])}"
+    )
 
 
-def test_p2_real_cli_env_setting_changes_exactly_one_env_line_and_no_config_bytes(tmp_path):
+def test_p2_real_cli_env_setting_changes_exactly_one_env_line_and_no_config_bytes(
+    tmp_path,
+):
     case = gen_case(407)
     env, cfg = _cli_home(tmp_path, case)
     env_file = cfg.with_name(".env")
-    env_before = "# hand-written\nC18_KEEP=one\nexport C18_OTHER=\"two # not comment\"\nTELEGRAM_HOME_CHANNEL=5\n"
+    env_before = '# hand-written\nC18_KEEP=one\nexport C18_OTHER="two # not comment"\nTELEGRAM_HOME_CHANNEL=5\n'
     env_file.write_text(env_before, encoding="utf-8")
     r = _cli(env, "config", "set", "TELEGRAM_HOME_CHANNEL", "4242")
     assert r.returncode == 0, r.stdout + r.stderr
     assert _read(cfg) == case.text, "an env-routed `config set` rewrote config.yaml"
     touched, inserted = _line_diff(env_before, _read(env_file))
-    assert touched == {3} and sum(map(len, inserted)) == 1, _udiff(env_before, _read(env_file))
+    assert touched == {3} and sum(map(len, inserted)) == 1, _udiff(
+        env_before, _read(env_file)
+    )
     assert "TELEGRAM_HOME_CHANNEL=4242" in _read(env_file).splitlines()
 
 
@@ -633,22 +901,32 @@ def test_p2_env_lock_refusal_is_not_reported_as_success(key, tmp_path):
     """exit 0 ⇔ the write happened; a refused key leaves .env AND config.yaml byte-identical."""
     managed = tmp_path / "managed"
     managed.mkdir()
-    (managed / ".env").write_text("DEEPSEEK_API_KEY=sk-admin\nTELEGRAM_HOME_CHANNEL=111\n", encoding="utf-8")
-    env = isolated_env(tmp_path / "cli", pythonpath=WORKTREE, extra={"CLAWK_MANAGED_DIR": str(managed)})
+    (managed / ".env").write_text(
+        "DEEPSEEK_API_KEY=sk-admin\nTELEGRAM_HOME_CHANNEL=111\n", encoding="utf-8"
+    )
+    env = isolated_env(
+        tmp_path / "cli", pythonpath=WORKTREE, extra={"CLAWK_MANAGED_DIR": str(managed)}
+    )
     hh = Path(env["CLAWK_HOME"])
-    (hh / ".env").write_text("DEEPSEEK_API_KEY=sk-old\nTELEGRAM_HOME_CHANNEL=5\n", encoding="utf-8")
+    (hh / ".env").write_text(
+        "DEEPSEEK_API_KEY=sk-old\nTELEGRAM_HOME_CHANNEL=5\n", encoding="utf-8"
+    )
     cfg_text = "model:\n  default: deepseek-chat\n  api_key: sk-old\n"
     _write_file(hh / "config.yaml", cfg_text)
     env_before = _read(hh / ".env")
     r = _cli(env, "config", "set", key, "c18-new")
     wrote = _read(hh / ".env") != env_before
     assert (r.returncode == 0) == wrote, (
-        f"`config set {key}` exit={r.returncode} but .env {'changed' if wrote else 'unchanged'}:\n{r.stdout}{r.stderr}")
+        f"`config set {key}` exit={r.returncode} but .env {'changed' if wrote else 'unchanged'}:\n{r.stdout}{r.stderr}"
+    )
     if not wrote:
-        assert _read(hh / "config.yaml") == cfg_text, "a refused env write still rewrote config.yaml"
+        assert _read(hh / "config.yaml") == cfg_text, (
+            "a refused env write still rewrote config.yaml"
+        )
 
 
 # ── real tui_gateway stdio JSON-RPC process ──────────────────────────────────
+
 
 class _RpcProc:
     def __init__(self, root: Path):
@@ -657,9 +935,17 @@ class _RpcProc:
         self.home = Path(self.env["CLAWK_HOME"])
         _write_file(self.home / "config.yaml", "model_catalog:\n  enabled: false\n")
         self.stderr = open(root / "tui_gateway.stderr", "w", encoding="utf-8")
-        self.proc = subprocess.Popen([sys.executable, "-m", "tui_gateway.entry"], cwd=str(WORKTREE), env=self.env,
-                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self.stderr,
-                                     text=True, encoding="utf-8", bufsize=1)
+        self.proc = subprocess.Popen(
+            [sys.executable, "-m", "tui_gateway.entry"],
+            cwd=str(WORKTREE),
+            env=self.env,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=self.stderr,
+            text=True,
+            encoding="utf-8",
+            bufsize=1,
+        )
         self.q: queue.Queue = queue.Queue()
         self._rid = 100
         threading.Thread(target=self._pump, daemon=True).start()
@@ -675,23 +961,35 @@ class _RpcProc:
         try:
             msg = self.q.get(timeout=max(0.05, deadline - time.monotonic()))
         except queue.Empty:
-            raise AssertionError(f"tui_gateway timed out; stderr:\n{(self.root / 'tui_gateway.stderr').read_text()[-3000:]}")
+            raise AssertionError(
+                f"tui_gateway timed out; stderr:\n{(self.root / 'tui_gateway.stderr').read_text()[-3000:]}"
+            )
         if msg is None:
-            raise AssertionError(f"tui_gateway exited rc={self.proc.poll()}; stderr:\n"
-                                 f"{(self.root / 'tui_gateway.stderr').read_text()[-3000:]}")
+            raise AssertionError(
+                f"tui_gateway exited rc={self.proc.poll()}; stderr:\n"
+                f"{(self.root / 'tui_gateway.stderr').read_text()[-3000:]}"
+            )
         return msg
 
     def wait_event(self, etype: str, timeout: float) -> dict:
         deadline = time.monotonic() + timeout
         while True:
             msg = self._next(deadline)
-            if msg.get("method") == "event" and (msg.get("params") or {}).get("type") == etype:
+            if (
+                msg.get("method") == "event"
+                and (msg.get("params") or {}).get("type") == etype
+            ):
                 return msg
 
     def call(self, method: str, params: dict, timeout: float = 60) -> dict:
         self._rid += 1
         rid = self._rid
-        self.proc.stdin.write(json.dumps({"jsonrpc": "2.0", "id": rid, "method": method, "params": params}) + "\n")
+        self.proc.stdin.write(
+            json.dumps(
+                {"jsonrpc": "2.0", "id": rid, "method": method, "params": params}
+            )
+            + "\n"
+        )
         self.proc.stdin.flush()
         deadline = time.monotonic() + timeout
         while True:
@@ -719,12 +1017,22 @@ def rpc(tmp_path_factory):
 
 # (rpc key, candidate values, config path it owns, value transform to the persisted form)
 _RPC_CASES = [
-    ("display.in_app_tips", ["false", "true"], ("display", "in_app_tips"), {"false": False, "true": True}),
+    (
+        "display.in_app_tips",
+        ["false", "true"],
+        ("display", "in_app_tips"),
+        {"false": False, "true": True},
+    ),
     ("skin", ["mono", "ares", "slate"], ("display", "skin"), None),
     ("approvals.mode", ["off", "smart", "manual"], ("approvals", "mode"), None),
     ("theme", ["dark", "light", "auto"], ("display", "tui_theme"), None),
     ("busy", ["steer", "queue", "interrupt"], ("display", "busy_input_mode"), None),
-    ("voice.voice_chat_mode", ["gpt-live", "chained"], ("voice", "voice_chat_mode"), None),
+    (
+        "voice.voice_chat_mode",
+        ["gpt-live", "chained"],
+        ("voice", "voice_chat_mode"),
+        None,
+    ),
     ("density", ["on", "off"], ("display", "tui_compact"), {"on": True, "off": False}),
     ("statusbar", ["bottom", "top", "off"], ("display", "tui_statusbar"), None),
     ("mouse", ["wheel", "buttons", "off"], ("display", "mouse_tracking"), None),
@@ -733,8 +1041,12 @@ _RPC_CASES = [
 ]
 
 
-@pytest.mark.parametrize("key,values,path,xf", _RPC_CASES, ids=[c[0] for c in _RPC_CASES])
-def test_p2_real_tui_gateway_config_set_changes_exactly_one_key(key, values, path, xf, rpc):
+@pytest.mark.parametrize(
+    "key,values,path,xf", _RPC_CASES, ids=[c[0] for c in _RPC_CASES]
+)
+def test_p2_real_tui_gateway_config_set_changes_exactly_one_key(
+    key, values, path, xf, rpc
+):
     seed = 500 + _RPC_CASES.index(next(c for c in _RPC_CASES if c[0] == key))
     case = gen_case(seed, exclude_top={"model_catalog"})
     text = _before_version(case.text, "model_catalog:\n  enabled: false\n")
@@ -749,13 +1061,24 @@ def test_p2_real_tui_gateway_config_set_changes_exactly_one_key(key, values, pat
     after = _read(cfg)
     got = yaml.safe_load(after)
     changed = _changed_paths(tree, got)
-    assert changed == {path}, f"[{key} seed={seed}] changed {sorted(changed, key=str)}:\n{_udiff(text, after)}"
-    assert _get(got, path) == want and type(_get(got, path)) is type(want), f"[{key}] stored {_get(got, path)!r}"
-    tl = {i for i, ln in enumerate(text.splitlines()) if path in case.leaf_lines and i == case.leaf_lines[path]}
-    _assert_one_key_write(f"rpc {key} seed={seed}", text, after, {path}, tl, allow_insert=not tl)
+    assert changed == {path}, (
+        f"[{key} seed={seed}] changed {sorted(changed, key=str)}:\n{_udiff(text, after)}"
+    )
+    assert _get(got, path) == want and type(_get(got, path)) is type(want), (
+        f"[{key}] stored {_get(got, path)!r}"
+    )
+    tl = {
+        i
+        for i, ln in enumerate(text.splitlines())
+        if path in case.leaf_lines and i == case.leaf_lines[path]
+    }
+    _assert_one_key_write(
+        f"rpc {key} seed={seed}", text, after, {path}, tl, allow_insert=not tl
+    )
 
 
 # ── dashboard / Desktop PUT /api/config ──────────────────────────────────────
+
 
 @pytest.fixture(scope="module")
 def web_app():
@@ -764,7 +1087,10 @@ def web_app():
     except ImportError:
         pytest.skip("starlette not installed")
     from clawk_cli.web_server import _SESSION_HEADER_NAME, _SESSION_TOKEN, app
-    client = TestClient(app)  # no lifespan: requests only; profile/home resolved per request
+
+    client = TestClient(
+        app
+    )  # no lifespan: requests only; profile/home resolved per request
     client.headers.update({_SESSION_HEADER_NAME: _SESSION_TOKEN})
     return client
 
@@ -774,7 +1100,9 @@ def _client(web_app):
 
 
 @pytest.mark.parametrize("seed", [601, 602, 603, 604])
-def test_p2_dashboard_get_put_roundtrip_and_partial_put(seed, web_app, home, monkeypatch):
+def test_p2_dashboard_get_put_roundtrip_and_partial_put(
+    seed, web_app, home, monkeypatch
+):
     """Settings page open→save with no edits leaves the file byte-identical; a Desktop-style
     partial PUT (``setNested({}, key, value)``) changes exactly that key."""
     _dashboard_roundtrip(gen_case(seed, null_leaves=False), web_app, monkeypatch)
@@ -783,11 +1111,14 @@ def test_p2_dashboard_get_put_roundtrip_and_partial_put(seed, web_app, home, mon
 def test_p2_dashboard_partial_put_adds_no_phantom_section(web_app, home, monkeypatch):
     case = gen_case(606, null_leaves=False, exclude_top={"agent", "display"})
     cfg = _install(case, monkeypatch)
-    r = _client(web_app).put("/api/config", json={"config": {"display": {"skin": "ares"}}})
+    r = _client(web_app).put(
+        "/api/config", json={"config": {"display": {"skin": "ares"}}}
+    )
     assert r.status_code == 200, r.text
     got = yaml.safe_load(_read(cfg))
     assert set(got) == set(case.tree) | {"display"}, (
-        f"PUT display.skin added sections {sorted(set(got) - set(case.tree) - {'display'})}:\n{_udiff(case.text, _read(cfg))}")
+        f"PUT display.skin added sections {sorted(set(got) - set(case.tree) - {'display'})}:\n{_udiff(case.text, _read(cfg))}"
+    )
 
 
 @pytest.mark.parametrize("seed", [607])
@@ -804,11 +1135,21 @@ def _dashboard_roundtrip(case: Case, web_app, monkeypatch) -> None:
     body = client.get("/api/config").json()
     r = client.put("/api/config", json={"config": body})
     assert r.status_code == 200, r.text
-    touched, inserted = _line_diff(case.text, _read(cfg))  # modulo cosmetic `k: null` -> `k:`
+    touched, inserted = _line_diff(
+        case.text, _read(cfg)
+    )  # modulo cosmetic `k: null` -> `k:`
     assert not touched and not inserted, (
-        f"[seed={seed}] GET→PUT with no edits changed the file:\n{_udiff(case.text, _read(cfg))}")
+        f"[seed={seed}] GET→PUT with no edits changed the file:\n{_udiff(case.text, _read(cfg))}"
+    )
     rng = random.Random(seed)
-    for target in rng.sample([p for p in case.leaf_lines if p[0] not in ("_config_version", "providers", "c18_custom_root")], 2) + [("display", "resume_last_session")]:
+    for target in rng.sample(
+        [
+            p
+            for p in case.leaf_lines
+            if p[0] not in ("_config_version", "providers", "c18_custom_root")
+        ],
+        2,
+    ) + [("display", "resume_last_session")]:
         _install(case, monkeypatch)
         cur = _get(case.tree, target, _get(DEFAULT_CONFIG, target, None))
         # a partial PUT of a key the user never set writes it only when it differs from the default
@@ -820,9 +1161,17 @@ def _dashboard_roundtrip(case: Case, web_app, monkeypatch) -> None:
         after = _read(cfg)
         got = yaml.safe_load(after)
         changed = _changed_paths(case.tree, got)
-        assert changed == {target}, f"[seed={seed} {target}] changed {sorted(changed, key=str)}:\n{_udiff(case.text, after)}"
-        _assert_one_key_write(f"dashboard seed={seed} {target}", case.text, after, {target}, case.lines_of(target),
-                              allow_insert=target not in case.leaf_lines)
+        assert changed == {target}, (
+            f"[seed={seed} {target}] changed {sorted(changed, key=str)}:\n{_udiff(case.text, after)}"
+        )
+        _assert_one_key_write(
+            f"dashboard seed={seed} {target}",
+            case.text,
+            after,
+            {target},
+            case.lines_of(target),
+            allow_insert=target not in case.leaf_lines,
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -844,13 +1193,16 @@ def _op_save(ctx: dict) -> None:
 
 def _op_tui(ctx: dict) -> None:
     from tui_gateway import server
+
     resp = server._methods["config.set"](1, {"key": "skin", "value": ctx["new"]})
     if "error" in resp:
         raise RuntimeError(resp["error"])
 
 
 def _op_dashboard(ctx: dict) -> None:
-    r = ctx["client"].put("/api/config", json={"config": {"display": {"skin": ctx["new"]}}})
+    r = ctx["client"].put(
+        "/api/config", json={"config": {"display": {"skin": ctx["new"]}}}
+    )
     if r.status_code != 200:
         raise RuntimeError(r.text)
 
@@ -868,16 +1220,33 @@ _P3_OPS: dict[str, tuple[Callable[[dict], None], set]] = {
     "migrate": (_op_migrate, {("_config_version",), ("delegation", "max_iterations")}),
 }
 
+
 def _p3_case(seed: int) -> Case:
-    case = gen_case(seed, null_leaves=False, exclude_top={"display", "delegation", "agent"})
-    text = _before_version(case.text, "display:\n  skin: mono\n  compact: true\ndelegation:\n  max_iterations: 50\n"
-                                      "agent:\n  verify_on_stop: false\n")
+    case = gen_case(
+        seed, null_leaves=False, exclude_top={"display", "delegation", "agent"}
+    )
+    text = _before_version(
+        case.text,
+        "display:\n  skin: mono\n  compact: true\ndelegation:\n  max_iterations: 50\n"
+        "agent:\n  verify_on_stop: false\n",
+    )
     tree = yaml.safe_load(text)
     return Case(seed, text, tree, {}, case.env)
 
 
-def _p3_run(op_name: str, ctx: dict, cfg: Path, text: str, version: int | None) -> tuple[str, str]:
-    body = text if version is None else re.sub(r"^_config_version: \d+$", f"_config_version: {version}", text, flags=re.MULTILINE)
+def _p3_run(
+    op_name: str, ctx: dict, cfg: Path, text: str, version: int | None
+) -> tuple[str, str]:
+    body = (
+        text
+        if version is None
+        else re.sub(
+            r"^_config_version: \d+$",
+            f"_config_version: {version}",
+            text,
+            flags=re.MULTILINE,
+        )
+    )
     _write_file(cfg, body)
     _reset_config_caches(keep_lkg=False)
     outcome = "ok"
@@ -889,25 +1258,37 @@ def _p3_run(op_name: str, ctx: dict, cfg: Path, text: str, version: int | None) 
     return body, outcome
 
 
-_MULTI_STEP_OPS = {"migrate"}  # each migration step persists on its own; a later refusal keeps earlier steps
+_MULTI_STEP_OPS = {
+    "migrate"
+}  # each migration step persists on its own; a later refusal keeps earlier steps
 
 
-def _p3_check(label: str, before_text: str, after_text: str, targets: set, outcome: str) -> str | None:
+def _p3_check(
+    label: str, before_text: str, after_text: str, targets: set, outcome: str
+) -> str | None:
     before, after = yaml.safe_load(before_text), yaml.safe_load(after_text)
     if not isinstance(after, dict):
         return f"{label}: file no longer a mapping ({outcome})"
     stray = {p for p in _changed_paths(before, after) if not _under(p, targets)}
     if stray:
         lost = sorted(set(before) - set(after))
-        return (f"{label} ({outcome}): clobbered {len(stray)} untargeted path(s) "
-                f"{sorted(stray, key=str)[:5]}; lost sections {lost}")
-    if outcome != "ok" and after_text != before_text and label.split()[0] not in _MULTI_STEP_OPS:
+        return (
+            f"{label} ({outcome}): clobbered {len(stray)} untargeted path(s) "
+            f"{sorted(stray, key=str)[:5]}; lost sections {lost}"
+        )
+    if (
+        outcome != "ok"
+        and after_text != before_text
+        and label.split()[0] not in _MULTI_STEP_OPS
+    ):
         return f"{label}: refused ({outcome}) but still rewrote the file"
     return None
 
 
 @pytest.mark.parametrize("op_name", list(_P3_OPS))
-def test_p3_a_transient_error_on_any_single_read_never_clobbers(op_name, web_app, home, monkeypatch):
+def test_p3_a_transient_error_on_any_single_read_never_clobbers(
+    op_name, web_app, home, monkeypatch
+):
     """Dry-run the operation to count its config reads R, then for k in 1..R fail exactly read k."""
     case = _p3_case(700)
     for k, v in case.env.items():
@@ -923,21 +1304,33 @@ def test_p3_a_transient_error_on_any_single_read_never_clobbers(op_name, web_app
     faults.arm()
     before, outcome = _p3_run(op_name, ctx, cfg, case.text, version)
     reads = faults.count
-    clean_err = _p3_check(f"{op_name} clean run", before, _read(cfg), _P3_OPS[op_name][1], outcome)
-    assert clean_err is None and outcome == "ok", clean_err or f"{op_name} clean run {outcome}"
+    clean_err = _p3_check(
+        f"{op_name} clean run", before, _read(cfg), _P3_OPS[op_name][1], outcome
+    )
+    assert clean_err is None and outcome == "ok", (
+        clean_err or f"{op_name} clean run {outcome}"
+    )
     assert reads >= 1, f"{op_name} performed no config read through the read seam"
     problems = []
     for k in range(1, reads + 1):
         faults.arm(k)
         before, outcome = _p3_run(op_name, ctx, cfg, case.text, version)
-        err = _p3_check(f"{op_name} EMFILE on read {k}/{reads}", before, _read(cfg), _P3_OPS[op_name][1], outcome)
+        err = _p3_check(
+            f"{op_name} EMFILE on read {k}/{reads}",
+            before,
+            _read(cfg),
+            _P3_OPS[op_name][1],
+            outcome,
+        )
         if err:
             problems.append(err)
     assert not problems, "\n".join(problems)
 
 
 def _truncate_mid_scalar(text: str) -> str:
-    idx = text.index('"', text.index("\n", 10))  # first double-quoted scalar after the header
+    idx = text.index(
+        '"', text.index("\n", 10)
+    )  # first double-quoted scalar after the header
     return text[: idx + 5]
 
 
@@ -950,7 +1343,9 @@ _PERSISTENT_FAULTS = {
 
 @pytest.mark.parametrize("fault", sorted(_PERSISTENT_FAULTS))
 @pytest.mark.parametrize("op_name", list(_P3_OPS))
-def test_p3_unreadable_or_partial_file_is_never_rewritten(op_name, fault, web_app, home, monkeypatch):
+def test_p3_unreadable_or_partial_file_is_never_rewritten(
+    op_name, fault, web_app, home, monkeypatch
+):
     if fault == "unreadable" and os.geteuid() == 0:
         pytest.skip("root reads mode-000 files")
     case = gen_case(710, null_leaves=False, exclude_top={"display"})
@@ -972,7 +1367,9 @@ def test_p3_unreadable_or_partial_file_is_never_rewritten(op_name, fault, web_ap
                 _P3_OPS[op_name][0](ctx)
     finally:
         cfg.chmod(0o600)
-    assert _read(cfg) == text, f"[{op_name}/{fault}] an unreadable/partial config.yaml was rewritten:\n{_udiff(text, _read(cfg))}"
+    assert _read(cfg) == text, (
+        f"[{op_name}/{fault}] an unreadable/partial config.yaml was rewritten:\n{_udiff(text, _read(cfg))}"
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1006,7 +1403,9 @@ def gen_dotenv(seed: int) -> tuple[str, list[str], dict[str, str]]:
     rng.shuffle(entries)
     # dependency order for references (dotenv resolves top-down)
     order = {f"{p}A": 0, f"{p}U": 0, f"{p}D": 1, f"{p}CHAIN2": 2}
-    entries.sort(key=lambda e: order.get(e.split("=", 1)[0].replace("export ", "").strip(), 0))
+    entries.sort(
+        key=lambda e: order.get(e.split("=", 1)[0].replace("export ", "").strip(), 0)
+    )
     lines = ["# C18 generated .env", ""]
     for e in entries:
         if rng.random() < 0.2:
@@ -1029,6 +1428,7 @@ def env_restore(monkeypatch):
 @pytest.mark.parametrize("seed", P4_SEEDS)
 def test_p4_load_clawk_dotenv_is_idempotent(seed, home, env_restore, monkeypatch):
     from clawk_cli.env_loader import load_clawk_dotenv
+
     text, keys, shell = gen_dotenv(seed)
     for k, v in shell.items():
         monkeypatch.setenv(k, v)
@@ -1037,11 +1437,23 @@ def test_p4_load_clawk_dotenv_is_idempotent(seed, home, env_restore, monkeypatch
     for _ in range(4):
         load_clawk_dotenv(clawk_home=home, load_external_secrets=False)
         snaps.append({k: os.environ.get(k) for k in keys})
-    assert all(s == snaps[0] for s in snaps), f"[seed={seed}] env drifted across reloads:\n" + "\n".join(
-        f"{k}: {[s[k] for s in snaps]}" for k in keys if len({s[k] for s in snaps}) > 1)
-    assert snaps[0]["PATH"].count(f"/c18/{seed}/bin") == 1, f"[seed={seed}] PATH={snaps[0]['PATH']}"
-    assert snaps[0]["PATH"].endswith(_BASE_PATH), f"[seed={seed}] PATH lost the boot value: {snaps[0]['PATH']}"
-    assert snaps[0][f"C18_{seed}_SELF"] == "pre-shellval", f"[seed={seed}] self-ref: {snaps[0][f'C18_{seed}_SELF']}"
+    assert all(s == snaps[0] for s in snaps), (
+        f"[seed={seed}] env drifted across reloads:\n"
+        + "\n".join(
+            f"{k}: {[s[k] for s in snaps]}"
+            for k in keys
+            if len({s[k] for s in snaps}) > 1
+        )
+    )
+    assert snaps[0]["PATH"].count(f"/c18/{seed}/bin") == 1, (
+        f"[seed={seed}] PATH={snaps[0]['PATH']}"
+    )
+    assert snaps[0]["PATH"].endswith(_BASE_PATH), (
+        f"[seed={seed}] PATH lost the boot value: {snaps[0]['PATH']}"
+    )
+    assert snaps[0][f"C18_{seed}_SELF"] == "pre-shellval", (
+        f"[seed={seed}] self-ref: {snaps[0][f'C18_{seed}_SELF']}"
+    )
     assert snaps[0][f"C18_{seed}_D"] == snaps[0][f"C18_{seed}_A"] + "-chained"
 
 
@@ -1053,11 +1465,15 @@ def test_p4_env_parser_sanitizer_and_writer_round_trip(seed, home, env_restore):
     C.invalidate_env_cache()
     first = C.load_env()
     C.invalidate_env_cache()
-    assert C.load_env() == first, f"[seed={seed}] load_env() is not a pure function of the file"
+    assert C.load_env() == first, (
+        f"[seed={seed}] load_env() is not a pure function of the file"
+    )
     with _quiet():
         C.sanitize_env_file()
         sanitized = _read(env_path)
-        assert C.sanitize_env_file() == 0 and _read(env_path) == sanitized, f"[seed={seed}] sanitize is not a fixed point"
+        assert C.sanitize_env_file() == 0 and _read(env_path) == sanitized, (
+            f"[seed={seed}] sanitize is not a fixed point"
+        )
     C.invalidate_env_cache()
     parsed = C.load_env()
     target = f"C18_{seed}_A"
@@ -1066,20 +1482,29 @@ def test_p4_env_parser_sanitizer_and_writer_round_trip(seed, home, env_restore):
     C.invalidate_env_cache()
     after = C.load_env()
     changed = {k for k in parsed.keys() | after.keys() if parsed.get(k) != after.get(k)}
-    assert changed == {target}, f"[seed={seed}] save_env_value({target}) changed {sorted(changed)}"
+    assert changed == {target}, (
+        f"[seed={seed}] save_env_value({target}) changed {sorted(changed)}"
+    )
     assert after[target] == "rewritten value # with hash"
     touched, inserted = _line_diff(sanitized, _read(env_path))
-    assert len(touched) == 1 and sum(map(len, inserted)) == 1, f"[seed={seed}]\n{_udiff(sanitized, _read(env_path))}"
+    assert len(touched) == 1 and sum(map(len, inserted)) == 1, (
+        f"[seed={seed}]\n{_udiff(sanitized, _read(env_path))}"
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # P5 — migrations are idempotent from every historical version
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _migration_start_versions() -> list[int | None]:
     from clawk_cli.config_migrations import MIGRATIONS, SUPPORT_FLOOR_VERSION
+
     starts = sorted({v - 1 for v, _fn in MIGRATIONS if v - 1 >= SUPPORT_FLOOR_VERSION})
-    return [None, *starts]  # None = a hand-written config with no _config_version (full ladder)
+    return [
+        None,
+        *starts,
+    ]  # None = a hand-written config with no _config_version (full ladder)
 
 
 # Stale-default rewrites: (path, old default the migration rewrites).
@@ -1123,25 +1548,56 @@ def gen_legacy(version: int | None, seed: int) -> tuple[str, dict[tuple, Any]]:
         (("delegation", "max_async_children"), 5),
         (("display", "personality"), "kawaii"),
         (("platform_toolsets",), {"cli": ["terminal", "bfl"]}),
-        (("mcp_servers",), {"c18srv": {"command": "c18-mcp-server", "args": ["--stdio"], "disabled": True}}),
+        (
+            ("mcp_servers",),
+            {
+                "c18srv": {
+                    "command": "c18-mcp-server",
+                    "args": ["--stdio"],
+                    "disabled": True,
+                }
+            },
+        ),
         (("cron", "model_drift_guard"), True),
         (("gateway", "multiplex_profile_allowlist"), ["c18"]),
-        (("providers",), {"acme.v1": {"base_url": "http://127.0.0.1:9/v1", "api_mode": "chat_completions"}}),
+        (
+            ("providers",),
+            {
+                "acme.v1": {
+                    "base_url": "http://127.0.0.1:9/v1",
+                    "api_mode": "chat_completions",
+                }
+            },
+        ),
     ]
     for path, val in structural:
         if rng.random() < 0.8:
             _set(tree, path, copy.deepcopy(val))
     if version is None:
-        tree["custom_providers"] = [{"name": "C18 Local", "base_url": "http://127.0.0.1:9/v1"}]
+        tree["custom_providers"] = [
+            {"name": "C18 Local", "base_url": "http://127.0.0.1:9/v1"}
+        ]
     else:
         tree["_config_version"] = version
-    text = "# C18 legacy config — this comment must survive migration\n" + yaml.safe_dump(
-        tree, sort_keys=False, allow_unicode=True, default_flow_style=False, width=4096)
+    text = (
+        "# C18 legacy config — this comment must survive migration\n"
+        + yaml.safe_dump(
+            tree,
+            sort_keys=False,
+            allow_unicode=True,
+            default_flow_style=False,
+            width=4096,
+        )
+    )
     text = text.replace("\nterminal:\n", "\n# terminal: user note\nterminal:\n", 1)
     return text, customized
 
 
-@pytest.mark.parametrize("version", _migration_start_versions(), ids=lambda v: f"from_v{v}" if v is not None else "unversioned")
+@pytest.mark.parametrize(
+    "version",
+    _migration_start_versions(),
+    ids=lambda v: f"from_v{v}" if v is not None else "unversioned",
+)
 def test_p5_migration_is_idempotent_and_keeps_user_values(version, home, monkeypatch):
     seed = 900 + (version or 0)
     text, customized = gen_legacy(version, seed)
@@ -1155,9 +1611,13 @@ def test_p5_migration_is_idempotent_and_keeps_user_values(version, home, monkeyp
     env_once = _read(home / ".env")
     parsed = yaml.safe_load(once)
     ctx = f"from v{version} seed={seed}"
-    assert parsed.get("_config_version") == LATEST, f"[{ctx}] not stamped latest:\n{once}"
+    assert parsed.get("_config_version") == LATEST, (
+        f"[{ctx}] not stamped latest:\n{once}"
+    )
     for path, val in {**_CANARIES, **customized}.items():
-        assert _get(parsed, path) == val, f"[{ctx}] migration clobbered user value {path}: {_get(parsed, path)!r} != {val!r}\n{once}"
+        assert _get(parsed, path) == val, (
+            f"[{ctx}] migration clobbered user value {path}: {_get(parsed, path)!r} != {val!r}\n{once}"
+        )
     for comment in ("# C18 legacy config", "# terminal: user note"):
         assert comment in once, f"[{ctx}] migration dropped the comment {comment!r}"
     _assert_no_duplicate_top_level(once, ctx)
@@ -1165,11 +1625,18 @@ def test_p5_migration_is_idempotent_and_keeps_user_values(version, home, monkeyp
     _reset_config_caches()
     with _quiet():
         C.migrate_config(interactive=False, quiet=True)
-    assert _read(cfg) == once, f"[{ctx}] a second migrate changed the file:\n{_udiff(once, _read(cfg))}"
+    assert _read(cfg) == once, (
+        f"[{ctx}] a second migrate changed the file:\n{_udiff(once, _read(cfg))}"
+    )
     assert _read(home / ".env") == env_once, f"[{ctx}] a second migrate changed .env"
     # Re-applying every step N→latest to its own output is a no-op (step idempotence).
     if version is not None:
-        rewound = re.sub(r"^_config_version: \d+$", f"_config_version: {version}", once, flags=re.MULTILINE)
+        rewound = re.sub(
+            r"^_config_version: \d+$",
+            f"_config_version: {version}",
+            once,
+            flags=re.MULTILINE,
+        )
         _write_file(cfg, rewound)
         _reset_config_caches()
         with _quiet():
@@ -1177,7 +1644,8 @@ def test_p5_migration_is_idempotent_and_keeps_user_values(version, home, monkeyp
         again = yaml.safe_load(_read(cfg))
         assert again == parsed, (
             f"[{ctx}] re-running the steps on migrated output changed "
-            f"{sorted(_changed_paths(parsed, again), key=str)}:\n{_udiff(once, _read(cfg))}")
+            f"{sorted(_changed_paths(parsed, again), key=str)}:\n{_udiff(once, _read(cfg))}"
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1188,8 +1656,12 @@ _TOP_LEVEL = [k for k in DEFAULT_CONFIG if k != "_config_version"]
 
 
 def _p6_setup(section: str, monkeypatch) -> tuple[str, dict, Path, int]:
-    case = gen_case(1000 + _TOP_LEVEL.index(section), n_sections=(3, 5), null_leaves=False,
-                    exclude_top={section, "display", "agent"})
+    case = gen_case(
+        1000 + _TOP_LEVEL.index(section),
+        n_sections=(3, 5),
+        null_leaves=False,
+        exclude_top={section, "display", "agent"},
+    )
     text = _before_version(case.text, f"{section}: null\n")
     for k, v in case.env.items():
         monkeypatch.setenv(k, v)
@@ -1216,7 +1688,9 @@ def test_p6_null_section_survives_every_surface(section, web_app, home, monkeypa
 
     effective = C.load_config()
     if isinstance(DEFAULT_CONFIG[section], dict):
-        assert isinstance(effective.get(section), dict), f"[{ctx}] load_config()[{section!r}] = {effective.get(section)!r}"
+        assert isinstance(effective.get(section), dict), (
+            f"[{ctx}] load_config()[{section!r}] = {effective.get(section)!r}"
+        )
     load_user_config_effective(cfg)
     raw = C.read_user_config_raw(cfg)
     for platform in ("telegram", "discord", "cli"):
@@ -1228,14 +1702,26 @@ def test_p6_null_section_survives_every_surface(section, web_app, home, monkeypa
         C.save_config(C.load_config())
     after = _read(cfg)
     touched, inserted = _line_diff(text, after)
-    assert touched <= {null_line} and len(inserted) <= 1, f"[{ctx}] save touched other lines:\n{_udiff(text, after)}"
+    assert touched <= {null_line} and len(inserted) <= 1, (
+        f"[{ctx}] save touched other lines:\n{_udiff(text, after)}"
+    )
     _assert_no_duplicate_top_level(after, ctx)
 
     writers = {
-        "cli_set": (lambda: C.set_config_value("terminal.timeout", "4242"), ("terminal", "timeout")),
-        "tui_rpc": (lambda: server._methods["config.set"](1, {"key": "skin", "value": "ares"}), ("display", "skin")),
-        "dashboard_put": (lambda: _client(web_app).put("/api/config", json={"config": {"display": {"skin": "ares"}}}),
-                          ("display", "skin")),
+        "cli_set": (
+            lambda: C.set_config_value("terminal.timeout", "4242"),
+            ("terminal", "timeout"),
+        ),
+        "tui_rpc": (
+            lambda: server._methods["config.set"](1, {"key": "skin", "value": "ares"}),
+            ("display", "skin"),
+        ),
+        "dashboard_put": (
+            lambda: _client(web_app).put(
+                "/api/config", json={"config": {"display": {"skin": "ares"}}}
+            ),
+            ("display", "skin"),
+        ),
     }
     for name, (fn, target) in writers.items():
         reset()
@@ -1246,21 +1732,32 @@ def test_p6_null_section_survives_every_surface(section, web_app, home, monkeypa
         if name == "dashboard_put":
             assert res.status_code == 200, f"[{ctx}] PUT /api/config: {res.text}"
         got = yaml.safe_load(_read(cfg))
-        assert _get(got, target) not in (_MISSING, None), f"[{ctx}] {name} did not write {target}"
+        assert _get(got, target) not in (_MISSING, None), (
+            f"[{ctx}] {name} did not write {target}"
+        )
         # (section,) itself may change: a writer may normalise `section: null` to an empty mapping.
-        stray = {p for p in _changed_paths(tree, got) if not _under(p, {target, (section,)})}
-        assert not stray, f"[{ctx}] {name} changed untargeted paths {sorted(stray, key=str)}:\n{_udiff(text, _read(cfg))}"
+        stray = {
+            p for p in _changed_paths(tree, got) if not _under(p, {target, (section,)})
+        }
+        assert not stray, (
+            f"[{ctx}] {name} changed untargeted paths {sorted(stray, key=str)}:\n{_udiff(text, _read(cfg))}"
+        )
 
 
-
-def test_p6_all_sections_null_at_once_through_gateway_loader_and_migration(home, monkeypatch):
+def test_p6_all_sections_null_at_once_through_gateway_loader_and_migration(
+    home, monkeypatch
+):
     """Every top-level key null simultaneously: the real gateway config loader, the effective
     resolver and a migration from the previous schema version run without crashing; the
     migration stamps the latest version and keeps the file's comments."""
     from gateway.config import load_gateway_config
     from clawk_cli.config_effective import load_user_config_effective
 
-    text = "# every section null\n" + "".join(f"{k}: null\n" for k in _TOP_LEVEL) + f"_config_version: {LATEST - 1}\n"
+    text = (
+        "# every section null\n"
+        + "".join(f"{k}: null\n" for k in _TOP_LEVEL)
+        + f"_config_version: {LATEST - 1}\n"
+    )
     cfg = _cfg_path()
     _write_file(cfg, text)
     _reset_config_caches()
@@ -1269,7 +1766,9 @@ def test_p6_all_sections_null_at_once_through_gateway_loader_and_migration(home,
     effective = C.load_config()
     for k in _TOP_LEVEL:
         if isinstance(DEFAULT_CONFIG[k], dict):
-            assert isinstance(effective.get(k), dict), f"load_config()[{k!r}] = {effective.get(k)!r}"
+            assert isinstance(effective.get(k), dict), (
+                f"load_config()[{k!r}] = {effective.get(k)!r}"
+            )
     with _quiet():
         C.migrate_config(interactive=False, quiet=True)
     after = _read(cfg)
@@ -1282,7 +1781,9 @@ def test_p6_all_sections_null_at_once_through_gateway_loader_and_migration(home,
 
 
 @pytest.mark.parametrize("section", _TOP_LEVEL)
-def test_p6_noop_save_keeps_the_effective_value_of_a_null_section(section, home, monkeypatch):
+def test_p6_noop_save_keeps_the_effective_value_of_a_null_section(
+    section, home, monkeypatch
+):
     _p6_setup(section, monkeypatch)
     effective = C.load_config()
     with _quiet():
@@ -1290,4 +1791,5 @@ def test_p6_noop_save_keeps_the_effective_value_of_a_null_section(section, home,
     _reset_config_caches()
     after = C.load_config()
     assert after.get(section) == effective.get(section), (
-        f"[{section}: null] save_config(load_config()) changed {section!r}: {effective.get(section)!r} -> {after.get(section)!r}")
+        f"[{section}: null] save_config(load_config()) changed {section!r}: {effective.get(section)!r} -> {after.get(section)!r}"
+    )

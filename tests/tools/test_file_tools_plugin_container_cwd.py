@@ -23,10 +23,19 @@ def _capture_create(monkeypatch):
 
 def test_plugin_container_backend_gets_the_same_host_cwd_guard_as_docker(monkeypatch):
     host_cwd = "/Users/me/workspace"  # a host-shaped path (_HOST_CWD_PREFIXES), never valid in-sandbox
-    monkeypatch.setattr(terminal_tool, "_get_env_config",
-                        lambda: {"env_type": "mycloud", "cwd": "/workspace", "timeout": 60})
-    monkeypatch.setattr(terminal_tool, "resolve_task_overrides", lambda _tid: {"cwd": host_cwd})
-    monkeypatch.setattr(ttc, "_plugin_env_flag", lambda env_type, attr, default=False: attr == "is_container")
+    monkeypatch.setattr(
+        terminal_tool,
+        "_get_env_config",
+        lambda: {"env_type": "mycloud", "cwd": "/workspace", "timeout": 60},
+    )
+    monkeypatch.setattr(
+        terminal_tool, "resolve_task_overrides", lambda _tid: {"cwd": host_cwd}
+    )
+    monkeypatch.setattr(
+        ttc,
+        "_plugin_env_flag",
+        lambda env_type, attr, default=False: attr == "is_container",
+    )
     seen = _capture_create(monkeypatch)
 
     env_type, _ = ft._create_terminal_env_for_file_ops("sess", "sess")
@@ -37,10 +46,17 @@ def test_plugin_container_backend_gets_the_same_host_cwd_guard_as_docker(monkeyp
 
 def test_plugin_non_container_backend_keeps_the_host_cwd(monkeypatch, tmp_path):
     host_cwd = str(tmp_path / "proj")
-    monkeypatch.setattr(terminal_tool, "_get_env_config",
-                        lambda: {"env_type": "myremote", "cwd": "/workspace", "timeout": 60})
-    monkeypatch.setattr(terminal_tool, "resolve_task_overrides", lambda _tid: {"cwd": host_cwd})
-    monkeypatch.setattr(ttc, "_plugin_env_flag", lambda env_type, attr, default=False: False)
+    monkeypatch.setattr(
+        terminal_tool,
+        "_get_env_config",
+        lambda: {"env_type": "myremote", "cwd": "/workspace", "timeout": 60},
+    )
+    monkeypatch.setattr(
+        terminal_tool, "resolve_task_overrides", lambda _tid: {"cwd": host_cwd}
+    )
+    monkeypatch.setattr(
+        ttc, "_plugin_env_flag", lambda env_type, attr, default=False: False
+    )
     seen = _capture_create(monkeypatch)
 
     ft._create_terminal_env_for_file_ops("sess", "sess")

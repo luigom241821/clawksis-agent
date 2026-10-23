@@ -17,12 +17,30 @@ against those stale modules and crash the update on any name added since.
 from importlib import import_module
 
 _EXPORTS = {
-    "binaries": ("BACKEND_PACKAGES", "BinaryResolutionError", "Engine", "ensure_engine",
-                 "installed_engine", "pinned_tag", "resolve_backend", "select_backend"),
+    "binaries": (
+        "BACKEND_PACKAGES",
+        "BinaryResolutionError",
+        "Engine",
+        "ensure_engine",
+        "installed_engine",
+        "pinned_tag",
+        "resolve_backend",
+        "select_backend",
+    ),
     "bootstrap": ("ensure_local_runtime", "shutdown_local_runtime"),
-    "context_policy": ("FLOOR", "growth_decision", "initial_window", "ladder", "launch_args"),
-    "growth": ("clear_window_override", "load_window_overrides", "maybe_grow_window",
-               "save_window_override"),
+    "context_policy": (
+        "FLOOR",
+        "growth_decision",
+        "initial_window",
+        "ladder",
+        "launch_args",
+    ),
+    "growth": (
+        "clear_window_override",
+        "load_window_overrides",
+        "maybe_grow_window",
+        "save_window_override",
+    ),
     "detect": ("detect_server",),
     "endpoint": ("resolve_llamacpp_endpoint",),
     "estimator": ("HardwareBudget", "ctx_bytes", "physics_check", "profile_from_gguf"),

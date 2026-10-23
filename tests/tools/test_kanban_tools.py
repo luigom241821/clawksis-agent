@@ -6,6 +6,7 @@ Verifies:
   - Each handler's happy path.
   - Error paths (missing required args, bad metadata type, etc).
 """
+
 from __future__ import annotations
 
 import json
@@ -16,6 +17,7 @@ import pytest
 # ---------------------------------------------------------------------------
 # Gating
 # ---------------------------------------------------------------------------
+
 
 def test_kanban_tools_hidden_without_env_var(monkeypatch, tmp_path):
     """Normal `clawk chat` sessions (no CLAWK_KANBAN_TASK) must have
@@ -32,14 +34,13 @@ def test_kanban_tools_hidden_without_env_var(monkeypatch, tmp_path):
     schema = registry.get_definitions(set(resolve_toolset("clawk-cli")), quiet=True)
     names = {s["function"].get("name") for s in schema if "function" in s}
     kanban = {n for n in names if n and n.startswith("kanban_")}
-    assert kanban == set(), (
-        f"kanban tools leaked into normal chat schema: {kanban}"
-    )
+    assert kanban == set(), f"kanban tools leaked into normal chat schema: {kanban}"
 
 
 # ---------------------------------------------------------------------------
 # Handler happy paths
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def worker_env(monkeypatch, tmp_path):
@@ -51,10 +52,12 @@ def worker_env(monkeypatch, tmp_path):
     monkeypatch.setenv("CLAWK_PROFILE", "test-worker")
     monkeypatch.delenv("CLAWK_SESSION_ID", raising=False)
     from pathlib import Path as _Path
+
     monkeypatch.setattr(_Path, "home", lambda: tmp_path)
 
     from clawk_cli import kanban_db as kb
     from clawk_cli import kanban_db_connect as kbc
+
     kb._INITIALIZED_PATHS.clear()
     kb.init_db()
     conn = kbc.connect()
@@ -73,6 +76,7 @@ def worker_env(monkeypatch, tmp_path):
 
 def test_show_defaults_to_env_task_id(worker_env):
     from tools import kanban_tools as kt
+
     out = kt._handle_show({})
     d = json.loads(out)
     assert "task" in d
@@ -82,13 +86,16 @@ def test_show_defaults_to_env_task_id(worker_env):
     assert "runs" in d
 
 
-def test_show_bare_call_outside_worker_returns_orientation_not_error(monkeypatch, worker_env):
+def test_show_bare_call_outside_worker_returns_orientation_not_error(
+    monkeypatch, worker_env
+):
     """#91431: chat profiles with the kanban toolset call kanban_show bare to orient
     themselves; with no dispatcher task in scope there is nothing to show, so the
     answer must be a pointer to kanban_list — not an error naming an env var no
     chat caller can set."""
     monkeypatch.delenv("CLAWK_KANBAN_TASK", raising=False)
     from tools import kanban_tools as kt
+
     out = json.loads(kt._handle_show({}))
     assert "error" not in out, out
     assert out.get("current_task") is None
@@ -100,20 +107,26 @@ def test_comment_bare_call_outside_worker_names_kanban_list(monkeypatch, worker_
     stays an error — but the error must point at kanban_list instead of the env."""
     monkeypatch.delenv("CLAWK_KANBAN_TASK", raising=False)
     from tools import kanban_tools as kt
+
     out = json.loads(kt._handle_comment({"body": "hello"}))
     assert out.get("error"), out
     assert "kanban_list" in out["error"]
     assert "set CLAWK_KANBAN_TASK" not in out["error"]
 
 
-def test_worker_tool_bare_call_outside_worker_error_is_actionable(monkeypatch, worker_env):
+def test_worker_tool_bare_call_outside_worker_error_is_actionable(
+    monkeypatch, worker_env
+):
     """#91431 sibling: the mutation/lifecycle tools still require a target, but the
     rejection a non-worker receives must name what it can do (kanban_list), not the
     env var it cannot set."""
     monkeypatch.delenv("CLAWK_KANBAN_TASK", raising=False)
     from tools import kanban_tools as kt
-    for handler, name in ((kt._handle_heartbeat, "kanban_heartbeat"),
-                           (kt._handle_attachments, "kanban_attachments")):
+
+    for handler, name in (
+        (kt._handle_heartbeat, "kanban_heartbeat"),
+        (kt._handle_attachments, "kanban_attachments"),
+    ):
         out = json.loads(handler({}))
         assert out.get("error"), (name, out)
         assert "kanban_list" in out["error"], (name, out)
@@ -130,13 +143,19 @@ def test_kanban_task_id_descriptions_state_the_non_worker_case():
     for attr, schema in vars(kts).items():
         if not (attr.startswith("KANBAN_") and attr.endswith("_SCHEMA")):
             continue
-        desc = (schema["parameters"]["properties"].get("task_id") or {}).get("description") or ""
+        desc = (schema["parameters"]["properties"].get("task_id") or {}).get(
+            "description"
+        ) or ""
         if "CLAWK_KANBAN_TASK" not in desc:
             continue
         assert "worker" in desc, (
-            schema["name"], "env default promised without the non-worker case (#91431)")
+            schema["name"],
+            "env default promised without the non-worker case (#91431)",
+        )
         assert "no default" in desc or "orientation" in desc, (
-            schema["name"], "must state what a non-worker bare call does (#91431)")
+            schema["name"],
+            "must state what a non-worker bare call does (#91431)",
+        )
         seen.append(schema["name"])
     assert "kanban_show" in seen
 
@@ -146,6 +165,7 @@ def test_list_filters_tasks(monkeypatch, worker_env):
     monkeypatch.delenv("CLAWK_KANBAN_TASK", raising=False)
     from clawk_cli import kanban_db as kb
     from clawk_cli import kanban_db_connect as kbc
+
     conn = kbc.connect()
     try:
         a = kb.create_task(conn, title="alpha", assignee="factory", priority=5)
@@ -155,6 +175,7 @@ def test_list_filters_tasks(monkeypatch, worker_env):
         conn.close()
 
     from tools import kanban_tools as kt
+
     out = kt._handle_list({"assignee": "factory", "status": "ready", "limit": 10})
     d = json.loads(out)
     ids = [t["id"] for t in d["tasks"]]
@@ -164,27 +185,33 @@ def test_list_filters_tasks(monkeypatch, worker_env):
     assert d["tasks"][0]["parent_count"] == 0
     assert b not in ids
 
-    tenant_out = kt._handle_list({
-        "assignee": "factory",
-        "status": "ready",
-        "tenant": "other",
-    })
+    tenant_out = kt._handle_list(
+        {
+            "assignee": "factory",
+            "status": "ready",
+            "tenant": "other",
+        }
+    )
     tenant_ids = [t["id"] for t in json.loads(tenant_out)["tasks"]]
     assert tenant_ids == [c]
 
 
 def test_complete_happy_path(worker_env):
     from tools import kanban_tools as kt
-    out = kt._handle_complete({
-        "summary": "got the thing done",
-        "metadata": {"files": 2},
-    })
+
+    out = kt._handle_complete(
+        {
+            "summary": "got the thing done",
+            "metadata": {"files": 2},
+        }
+    )
     d = json.loads(out)
     assert d["ok"] is True
     assert d["task_id"] == worker_env
     # Verify via kernel
     from clawk_cli import kanban_db as kb
     from clawk_cli import kanban_db_connect as kbc
+
     conn = kbc.connect()
     try:
         run = kb.latest_run(conn, worker_env)
@@ -204,17 +231,25 @@ def test_complete_retry_with_empty_created_cards_succeeds(worker_env):
     from tools import kanban_tools as kt
 
     # Hit the gate first.
-    rejected = json.loads(kt._handle_complete({
-        "summary": "oops",
-        "created_cards": ["t_phantomdeadbeef"],
-    }))
+    rejected = json.loads(
+        kt._handle_complete(
+            {
+                "summary": "oops",
+                "created_cards": ["t_phantomdeadbeef"],
+            }
+        )
+    )
     assert rejected.get("error")
 
     # Retry with the escape hatch.
-    ok = json.loads(kt._handle_complete({
-        "summary": "retry without claims",
-        "created_cards": [],
-    }))
+    ok = json.loads(
+        kt._handle_complete(
+            {
+                "summary": "retry without claims",
+                "created_cards": [],
+            }
+        )
+    )
     assert ok.get("ok") is True
 
     conn = kbc.connect()
@@ -242,20 +277,25 @@ def test_complete_reports_registered_attachments(worker_env):
     artifact = ws / "corpus.json"
     artifact.write_bytes(b"{}")
 
-    out = kt._handle_complete({
-        "summary": "done",
-        "artifacts": [str(artifact)],
-    })
+    out = kt._handle_complete(
+        {
+            "summary": "done",
+            "artifacts": [str(artifact)],
+        }
+    )
     d = json.loads(out)
     assert d["ok"] is True, d
     assert [(a["filename"], a["size"], a["uploaded_by"]) for a in d["attachments"]] == [
-        ("corpus.json", 2, "kanban_complete")]
+        ("corpus.json", 2, "kanban_complete")
+    ]
 
     readback = json.loads(kt._handle_attachments({"task_id": worker_env}))
     assert readback["attachments"] == d["attachments"]
 
 
-def test_request_review_rejects_unknown_reviewer_without_mutation(monkeypatch, worker_env, tmp_path):
+def test_request_review_rejects_unknown_reviewer_without_mutation(
+    monkeypatch, worker_env, tmp_path
+):
     """#106163: a non-profile ``reviewer`` (e.g. the literal "reviewer") must be
     refused with an error the model sees, leaving the task running under the
     implementer — never parked in ``review`` on an assignee nobody can spawn."""
@@ -264,18 +304,28 @@ def test_request_review_rejects_unknown_reviewer_without_mutation(monkeypatch, w
     from tools import kanban_tools as kt
 
     (tmp_path / ".clawk" / "profiles" / "verifier").mkdir(parents=True)
-    (tmp_path / ".clawk" / "profiles" / "verifier" / "config.yaml").write_text("{}\n", encoding="utf-8")  # identity marker
+    (tmp_path / ".clawk" / "profiles" / "verifier" / "config.yaml").write_text(
+        "{}\n", encoding="utf-8"
+    )  # identity marker
     with kbc.connect() as conn:
         before = kb.get_task(conn, worker_env)
         before_events = kb.list_events(conn, worker_env)
     monkeypatch.setenv("CLAWK_KANBAN_RUN_ID", str(before.current_run_id))
 
-    out = json.loads(kt._handle_request_review({"summary": "Ready for review.", "reviewer": "reviewer"}))
+    out = json.loads(
+        kt._handle_request_review(
+            {"summary": "Ready for review.", "reviewer": "reviewer"}
+        )
+    )
 
     assert "'reviewer'" in out["error"] and "verifier" in out["error"]
     with kbc.connect() as conn:
         after = kb.get_task(conn, worker_env)
-        assert (after.status, after.assignee, after.current_run_id) == ("running", "test-worker", before.current_run_id)
+        assert (after.status, after.assignee, after.current_run_id) == (
+            "running",
+            "test-worker",
+            before.current_run_id,
+        )
         assert kb.list_events(conn, worker_env) == before_events
 
 
@@ -285,11 +335,19 @@ def test_request_review_accepts_installed_profile(monkeypatch, worker_env, tmp_p
     from tools import kanban_tools as kt
 
     (tmp_path / ".clawk" / "profiles" / "verifier").mkdir(parents=True)
-    (tmp_path / ".clawk" / "profiles" / "verifier" / "config.yaml").write_text("{}\n", encoding="utf-8")  # identity marker
+    (tmp_path / ".clawk" / "profiles" / "verifier" / "config.yaml").write_text(
+        "{}\n", encoding="utf-8"
+    )  # identity marker
     with kbc.connect() as conn:
-        monkeypatch.setenv("CLAWK_KANBAN_RUN_ID", str(kb.get_task(conn, worker_env).current_run_id))
+        monkeypatch.setenv(
+            "CLAWK_KANBAN_RUN_ID", str(kb.get_task(conn, worker_env).current_run_id)
+        )
 
-    out = json.loads(kt._handle_request_review({"summary": "Ready for review.", "reviewer": "verifier"}))
+    out = json.loads(
+        kt._handle_request_review(
+            {"summary": "Ready for review.", "reviewer": "verifier"}
+        )
+    )
 
     assert out["ok"] is True
     with kbc.connect() as conn:
@@ -318,7 +376,9 @@ def test_unbound_worker_cannot_mutate_card(monkeypatch, worker_env):
         (kt._handle_request_changes, {"reason": "stale worker requests changes"}),
     ]:
         out = json.loads(handler(args))
-        assert "refused" in out.get("error", ""), f"{handler.__name__} did not refuse: {out}"
+        assert "refused" in out.get("error", ""), (
+            f"{handler.__name__} did not refuse: {out}"
+        )
 
     # Nothing moved: the card is still running under its original run.
     with kbc.connect() as conn:
@@ -381,8 +441,11 @@ def test_complete_goal_mode_rejected_by_judge(monkeypatch, tmp_path):
     conn = kbc.connect()
     try:
         goal_task_id = kb.create_task(
-            conn, title="goal-mode-test", assignee="test-worker",
-            body="Must achieve X with verified evidence.", goal_mode=True
+            conn,
+            title="goal-mode-test",
+            assignee="test-worker",
+            body="Must achieve X with verified evidence.",
+            goal_mode=True,
         )
         kb.claim_task(conn, goal_task_id)
         run_id = kb._current_run_id(conn, goal_task_id)
@@ -420,11 +483,13 @@ def test_complete_goal_mode_rejected_by_judge(monkeypatch, tmp_path):
 
 def test_block_happy_path(worker_env):
     from tools import kanban_tools as kt
+
     out = kt._handle_block({"reason": "need clarification"})
     d = json.loads(out)
     assert d["ok"] is True
     from clawk_cli import kanban_db as kb
     from clawk_cli import kanban_db_connect as kbc
+
     conn = kbc.connect()
     try:
         assert kb.get_task(conn, worker_env).status == "blocked"
@@ -444,8 +509,11 @@ def test_schedule_parks_current_worker_with_reason(worker_env):
     out = json.loads(entry.handler({"reason": reason}))
 
     assert out == {
-        "ok": True, "task_id": worker_env, "run_id": out["run_id"],
-        "status": "scheduled", "reason": reason,
+        "ok": True,
+        "task_id": worker_env,
+        "run_id": out["run_id"],
+        "status": "scheduled",
+        "reason": reason,
     }
     with kbc.connect() as conn:
         assert kb.get_task(conn, worker_env).status == "scheduled"
@@ -468,10 +536,13 @@ def test_schedule_rejects_invalid_reason_and_unowned_contexts(monkeypatch, worke
     invalid = json.loads(kt._handle_schedule({"reason": {"until": "tomorrow"}}))
     foreign = json.loads(kt._handle_schedule({"task_id": other, "reason": "wait"}))
     monkeypatch.setattr(
-        kt, "_delegation_ctx",
+        kt,
+        "_delegation_ctx",
         lambda predicate, default: predicate == "is_delegated_child_process_context",
     )
-    delegated = json.loads(kt._handle_schedule({"task_id": worker_env, "reason": "wait"}))
+    delegated = json.loads(
+        kt._handle_schedule({"task_id": worker_env, "reason": "wait"})
+    )
 
     assert "reason must be a string" in invalid["error"]
     assert "refusing to mutate" in foreign["error"]
@@ -500,8 +571,11 @@ def _make_goal_mode_worker_env(monkeypatch, tmp_path):
     conn = kbc.connect()
     try:
         goal_task_id = kb.create_task(
-            conn, title="goal-mode-block-test", assignee="test-worker",
-            body="Must achieve X.", goal_mode=True,
+            conn,
+            title="goal-mode-block-test",
+            assignee="test-worker",
+            body="Must achieve X.",
+            goal_mode=True,
         )
         kb.claim_task(conn, goal_task_id)
         run_id = kb._current_run_id(conn, goal_task_id)
@@ -583,7 +657,9 @@ def test_block_dependency_without_open_parent_is_rekinded(worker_env):
     tool reports the landed kind and tells the worker why."""
     from tools import kanban_tools as kt
 
-    d = json.loads(kt._handle_block({"reason": "upstream input is missing", "kind": "dependency"}))
+    d = json.loads(
+        kt._handle_block({"reason": "upstream input is missing", "kind": "dependency"})
+    )
     assert (d["ok"], d["status"], d["block_kind"]) == (True, "blocked", "needs_input")
     assert d["requested_kind"] == "dependency"
     assert "no parent is open" in d["note"]
@@ -650,7 +726,9 @@ def _expire_claim(conn, tid):
     conn.commit()
 
 
-def test_worker_the_dispatcher_never_recorded_keeps_its_claim_or_never_starts(monkeypatch, worker_env):
+def test_worker_the_dispatcher_never_recorded_keeps_its_claim_or_never_starts(
+    monkeypatch, worker_env
+):
     """``worker_env`` is a claim whose dispatcher died between spawning the worker and recording its
     pid. The worker registers itself, so the expired claim is extended, not handed to a second worker;
     a worker that starts only after its run was reclaimed is told not to work the card."""
@@ -703,12 +781,18 @@ def test_reclaim_loses_to_a_worker_registering_mid_sweep(monkeypatch, worker_env
 def test_comment_rejects_caller_supplied_author(worker_env):
     """Reject an undeclared author override before a worker can forge a comment."""
     from tools import kanban_tools as kt
-    out = kt._handle_comment({
-        "task_id": worker_env, "body": "hi", "author": "clawk-system",
-    })
+
+    out = kt._handle_comment(
+        {
+            "task_id": worker_env,
+            "body": "hi",
+            "author": "clawk-system",
+        }
+    )
     assert "author" in json.loads(out)["error"]
     from clawk_cli import kanban_db as kb
     from clawk_cli import kanban_db_connect as kbc
+
     conn = kbc.connect()
     try:
         assert kb.list_comments(conn, worker_env) == []
@@ -721,11 +805,14 @@ def test_comment_rejects_caller_supplied_author(worker_env):
 
 def test_create_happy_path(worker_env):
     from tools import kanban_tools as kt
-    out = kt._handle_create({
-        "title": "child task",
-        "assignee": "peer",
-        "parents": [worker_env],
-    })
+
+    out = kt._handle_create(
+        {
+            "title": "child task",
+            "assignee": "peer",
+            "parents": [worker_env],
+        }
+    )
     d = json.loads(out)
     assert d["ok"] is True
     assert d["task_id"]
@@ -733,6 +820,7 @@ def test_create_happy_path(worker_env):
     assert d["gated"] is True and d["gated_by"] == worker_env
     from clawk_cli import kanban_db as kb
     from clawk_cli import kanban_db_connect as kbc
+
     conn = kbc.connect()
     try:
         child = kb.get_task(conn, d["task_id"])
@@ -745,7 +833,10 @@ def test_create_happy_path(worker_env):
 @pytest.mark.parametrize("explicit", [{"workspace_kind": "scratch"}, {"project": ""}])
 @pytest.mark.parametrize("target_scoped", [False, True])
 def test_create_explicit_scratch_ignores_ambient_board_project(
-    worker_env, tmp_path, explicit, target_scoped,
+    worker_env,
+    tmp_path,
+    explicit,
+    target_scoped,
 ):
     """#106342: an explicit scratch / empty project wins over the project the
     session's current board (and, when scoped, the target board itself) carries.
@@ -759,16 +850,23 @@ def test_create_explicit_scratch_ignores_ambient_board_project(
     with pdb.connect_closing() as pconn:
         project_id = pdb.create_project(pconn, name="Ambient", primary_path=str(repo))
     kb.write_board_metadata("default", project_id=project_id)
-    kb.create_board("target", name="Target", project_id=project_id if target_scoped else "")
+    kb.create_board(
+        "target", name="Target", project_id=project_id if target_scoped else ""
+    )
 
     def create(**extra):
-        result = json.loads(kt._handle_create(
-            {"board": "target", "title": "card", "assignee": "peer", **extra}))
+        result = json.loads(
+            kt._handle_create(
+                {"board": "target", "title": "card", "assignee": "peer", **extra}
+            )
+        )
         assert result["ok"] is True
         return result["workspace_kind"], result["project_id"]
 
     assert create(**explicit) == ("scratch", None)
-    assert create() == (("worktree", project_id) if target_scoped else ("scratch", None))
+    assert create() == (
+        ("worktree", project_id) if target_scoped else ("scratch", None)
+    )
 
 
 def test_link_running_child_allows_owner_but_rejects_foreign(monkeypatch, worker_env):
@@ -785,9 +883,11 @@ def test_link_running_child_allows_owner_but_rejects_foreign(monkeypatch, worker
 
     monkeypatch.setenv("CLAWK_KANBAN_RUN_ID", str(own_run_id))
     own = json.loads(kt._handle_link({"parent_id": own_parent, "child_id": worker_env}))
-    foreign = json.loads(kt._handle_link(
-        {"parent_id": foreign_parent, "child_id": foreign_child},
-    ))
+    foreign = json.loads(
+        kt._handle_link(
+            {"parent_id": foreign_parent, "child_id": foreign_child},
+        )
+    )
 
     assert own["ok"] is True
     assert "child is already running" in foreign["error"]
@@ -800,6 +900,7 @@ def test_unblock_happy_path(monkeypatch, worker_env):
     monkeypatch.delenv("CLAWK_KANBAN_TASK", raising=False)
     from clawk_cli import kanban_db as kb
     from clawk_cli import kanban_db_connect as kbc
+
     conn = kbc.connect()
     try:
         tid = kb.create_task(conn, title="blocked", assignee="worker")
@@ -808,6 +909,7 @@ def test_unblock_happy_path(monkeypatch, worker_env):
         conn.close()
 
     from tools import kanban_tools as kt
+
     out = kt._handle_unblock({"task_id": tid})
     d = json.loads(out)
     assert d["ok"] is True
@@ -827,10 +929,12 @@ def test_unblock_with_pending_parents_returns_todo(monkeypatch, tmp_path):
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setenv("CLAWK_PROFILE", "orchestrator")
     from pathlib import Path as _Path
+
     monkeypatch.setattr(_Path, "home", lambda: tmp_path)
 
     from clawk_cli import kanban_db as kb
     from clawk_cli import kanban_db_connect as kbc
+
     kb._INITIALIZED_PATHS.clear()
     kb.init_db()
     conn = kbc.connect()
@@ -843,6 +947,7 @@ def test_unblock_with_pending_parents_returns_todo(monkeypatch, tmp_path):
         conn.close()
 
     from tools import kanban_tools as kt
+
     out = kt._handle_unblock({"task_id": child})
     d = json.loads(out)
     assert d["ok"] is True
@@ -869,29 +974,42 @@ def test_worker_lifecycle_through_tools(worker_env):
     assert json.loads(kt._handle_heartbeat({"note": "warming up"}))["ok"]
 
     # 3. comment for a future peer
-    assert json.loads(kt._handle_comment({
-        "task_id": worker_env,
-        "body": "note: using stdlib sqlite3 bindings",
-    }))["ok"]
+    assert json.loads(
+        kt._handle_comment(
+            {
+                "task_id": worker_env,
+                "body": "note: using stdlib sqlite3 bindings",
+            }
+        )
+    )["ok"]
 
     # 4. spawn a child task for follow-up
-    child_out = json.loads(kt._handle_create({
-        "title": "write integration test",
-        "assignee": "qa",
-        "parents": [worker_env],
-    }))
+    child_out = json.loads(
+        kt._handle_create(
+            {
+                "title": "write integration test",
+                "assignee": "qa",
+                "parents": [worker_env],
+            }
+        )
+    )
     assert child_out["ok"]
 
     # 5. complete with structured handoff
-    comp = json.loads(kt._handle_complete({
-        "summary": "implemented + spawned QA follow-up",
-        "metadata": {"child_task": child_out["task_id"]},
-    }))
+    comp = json.loads(
+        kt._handle_complete(
+            {
+                "summary": "implemented + spawned QA follow-up",
+                "metadata": {"child_task": child_out["task_id"]},
+            }
+        )
+    )
     assert comp["ok"]
 
     # Verify final state
     from clawk_cli import kanban_db as kb
     from clawk_cli import kanban_db_connect as kbc
+
     conn = kbc.connect()
     try:
         parent = kb.get_task(conn, worker_env)
@@ -941,6 +1059,7 @@ def test_worker_complete_rejects_foreign_task_id(worker_env):
     """A worker cannot complete a task that isn't its own (#19534)."""
     from clawk_cli import kanban_db as kb
     from clawk_cli import kanban_db_connect as kbc
+
     conn = kbc.connect()
     try:
         other = kb.create_task(conn, title="sibling")
@@ -950,6 +1069,7 @@ def test_worker_complete_rejects_foreign_task_id(worker_env):
         conn.close()
 
     from tools import kanban_tools as kt
+
     out = kt._handle_complete({"task_id": other, "summary": "HIJACK"})
     d = json.loads(out)
     assert d.get("ok") is not True
@@ -974,6 +1094,7 @@ def test_worker_can_comment_on_foreign_task(worker_env):
     """
     from clawk_cli import kanban_db as kb
     from clawk_cli import kanban_db_connect as kbc
+
     conn = kbc.connect()
     try:
         other = kb.create_task(conn, title="sibling")
@@ -981,10 +1102,13 @@ def test_worker_can_comment_on_foreign_task(worker_env):
         conn.close()
 
     from tools import kanban_tools as kt
-    out = kt._handle_comment({
-        "task_id": other,
-        "body": "handoff: see prior findings before starting",
-    })
+
+    out = kt._handle_comment(
+        {
+            "task_id": other,
+            "body": "handoff: see prior findings before starting",
+        }
+    )
     d = json.loads(out)
     assert d.get("ok") is True, f"cross-task comment must succeed: {d}"
 
@@ -1010,6 +1134,7 @@ def test_worker_unblock_rejects_foreign_task_id(worker_env):
     """
     from clawk_cli import kanban_db as kb
     from clawk_cli import kanban_db_connect as kbc
+
     conn = kbc.connect()
     try:
         other = kb.create_task(conn, title="blocked sibling", assignee="peer")
@@ -1018,6 +1143,7 @@ def test_worker_unblock_rejects_foreign_task_id(worker_env):
         conn.close()
 
     from tools import kanban_tools as kt
+
     out = kt._handle_unblock({"task_id": other})
     d = json.loads(out)
     err = d.get("error", "")
@@ -1040,10 +1166,12 @@ def test_orchestrator_complete_any_task_allowed(monkeypatch, tmp_path):
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     from pathlib import Path as _P
+
     monkeypatch.setattr(_P, "home", lambda: tmp_path)
 
     from clawk_cli import kanban_db as kb
     from clawk_cli import kanban_db_connect as kbc
+
     kb._INITIALIZED_PATHS.clear()
     kb.init_db()
     conn = kbc.connect()
@@ -1055,6 +1183,7 @@ def test_orchestrator_complete_any_task_allowed(monkeypatch, tmp_path):
         conn.close()
 
     from tools import kanban_tools as kt
+
     out = kt._handle_complete({"task_id": tid, "summary": "orchestrator close"})
     d = json.loads(out)
     assert d.get("ok") is True and d.get("task_id") == tid
@@ -1074,9 +1203,11 @@ def test_orchestrator_complete_any_task_allowed(monkeypatch, tmp_path):
 #   even when the session has a delivery channel.
 # ---------------------------------------------------------------------------
 
+
 def _list_subs_for_task(task_id):
     from clawk_cli import kanban_db_connect as kbc
     from clawk_cli import kanban_db_notify as kbn
+
     conn = kbc.connect()
     try:
         return list(kbn.list_notify_subs(conn, task_id))
@@ -1093,14 +1224,16 @@ def _sub_index(subs):
         if isinstance(s, dict):
             out.append(s)
         else:
-            out.append({
-                "platform": getattr(s, "platform", None),
-                "chat_id": getattr(s, "chat_id", None),
-                "thread_id": getattr(s, "thread_id", None),
-                "user_id": getattr(s, "user_id", None),
-                "delivery_metadata": getattr(s, "delivery_metadata", None),
-                "notifier_profile": getattr(s, "notifier_profile", None),
-            })
+            out.append(
+                {
+                    "platform": getattr(s, "platform", None),
+                    "chat_id": getattr(s, "chat_id", None),
+                    "thread_id": getattr(s, "thread_id", None),
+                    "user_id": getattr(s, "user_id", None),
+                    "delivery_metadata": getattr(s, "delivery_metadata", None),
+                    "notifier_profile": getattr(s, "notifier_profile", None),
+                }
+            )
     return out
 
 
@@ -1109,6 +1242,7 @@ def test_create_subscribes_gateway_session(monkeypatch, worker_env):
     to its own kanban_create result, and the response surfaces the
     ``subscribed`` flag so the orchestrator can react."""
     from tools import kanban_tools as kt
+
     monkeypatch.setenv("CLAWK_SESSION_PLATFORM", "telegram")
     monkeypatch.setenv("CLAWK_SESSION_CHAT_ID", "chat-42")
     monkeypatch.setenv("CLAWK_SESSION_THREAD_ID", "thread-7")
@@ -1116,10 +1250,12 @@ def test_create_subscribes_gateway_session(monkeypatch, worker_env):
     monkeypatch.setenv("CLAWK_SESSION_USER_ID_ALT", "alt-user-9")
     monkeypatch.setenv("CLAWK_SESSION_CHAT_TYPE", "forum")
 
-    out = kt._handle_create({
-        "title": "auto-sub gateway",
-        "assignee": "peer",
-    })
+    out = kt._handle_create(
+        {
+            "title": "auto-sub gateway",
+            "assignee": "peer",
+        }
+    )
     d = json.loads(out)
     assert d["ok"] is True
     new_tid = d["task_id"]
@@ -1143,6 +1279,7 @@ def test_create_subscribes_tui_session_via_session_key(monkeypatch, worker_env):
     We should still auto-subscribe, with platform='tui' and
     chat_id=<key>."""
     from tools import kanban_tools as kt
+
     monkeypatch.delenv("CLAWK_SESSION_PLATFORM", raising=False)
     monkeypatch.delenv("CLAWK_SESSION_CHAT_ID", raising=False)
     monkeypatch.delenv("CLAWK_SESSION_THREAD_ID", raising=False)
@@ -1150,10 +1287,12 @@ def test_create_subscribes_tui_session_via_session_key(monkeypatch, worker_env):
     monkeypatch.setenv("CLAWK_SESSION_KEY", "tui-session-abc")
     monkeypatch.delenv("CLAWK_SESSION_ID", raising=False)
 
-    out = kt._handle_create({
-        "title": "auto-sub tui",
-        "assignee": "peer",
-    })
+    out = kt._handle_create(
+        {
+            "title": "auto-sub tui",
+            "assignee": "peer",
+        }
+    )
     d = json.loads(out)
     assert d["ok"] is True
     new_tid = d["task_id"]
@@ -1171,15 +1310,18 @@ def test_create_does_not_subscribe_in_cli_session(monkeypatch, worker_env):
     """CLI / cron / test sessions have no persistent delivery channel.
     _maybe_auto_subscribe returns False and no row is written."""
     from tools import kanban_tools as kt
+
     monkeypatch.delenv("CLAWK_SESSION_PLATFORM", raising=False)
     monkeypatch.delenv("CLAWK_SESSION_CHAT_ID", raising=False)
     monkeypatch.delenv("CLAWK_SESSION_KEY", raising=False)
     monkeypatch.delenv("CLAWK_SESSION_ID", raising=False)
 
-    out = kt._handle_create({
-        "title": "no sub cli",
-        "assignee": "peer",
-    })
+    out = kt._handle_create(
+        {
+            "title": "no sub cli",
+            "assignee": "peer",
+        }
+    )
     d = json.loads(out)
     assert d["ok"] is True
     assert d["subscribed"] is False, d
@@ -1187,7 +1329,9 @@ def test_create_does_not_subscribe_in_cli_session(monkeypatch, worker_env):
     assert _list_subs_for_task(d["task_id"]) == []
 
 
-def test_create_tui_subscription_binds_to_live_session_after_compaction_fork(monkeypatch, worker_env, tmp_path):
+def test_create_tui_subscription_binds_to_live_session_after_compaction_fork(
+    monkeypatch, worker_env, tmp_path
+):
     """#110068: the inherited CLAWK_SESSION_KEY can name a session already superseded
     by a compaction fork. Auto-subscribe must bind to the live continuation tip resolved
     from the session store, not the stale key the process was launched with."""
@@ -1210,10 +1354,12 @@ def test_create_tui_subscription_binds_to_live_session_after_compaction_fork(mon
     monkeypatch.delenv("CLAWK_SESSION_ID", raising=False)
     monkeypatch.setenv("CLAWK_PROFILE", "default")
 
-    out = kt._handle_create({
-        "title": "auto-sub tui post-fork",
-        "assignee": "peer",
-    })
+    out = kt._handle_create(
+        {
+            "title": "auto-sub tui post-fork",
+            "assignee": "peer",
+        }
+    )
     d = json.loads(out)
     assert d["ok"] is True
     assert d["subscribed"] is True, d
@@ -1260,11 +1406,14 @@ def test_live_tui_session_key_fails_open_to_original_key(monkeypatch):
     assert kt._live_tui_session_key("stale-key", None) == "stale-key"
     # An unresolvable profile also falls through to the default store path.
     import clawk_cli.profiles as profiles_mod
+
     monkeypatch.setattr(profiles_mod, "profile_exists", lambda name: False)
     assert kt._live_tui_session_key("stale-key", "ghost-profile") == "stale-key"
 
 
-def test_create_respects_auto_subscribe_on_create_false(monkeypatch, worker_env, tmp_path):
+def test_create_respects_auto_subscribe_on_create_false(
+    monkeypatch, worker_env, tmp_path
+):
     """The config gate kanban.auto_subscribe_on_create=false must
     suppress auto-subscription even when the session has a delivery
     channel. This is the knob that addresses the upstream design
@@ -1274,18 +1423,19 @@ def test_create_respects_auto_subscribe_on_create_false(monkeypatch, worker_env,
     # home to avoid mkdir() colliding with the worker's directory.
     home = tmp_path / "gate-home" / ".clawk"
     home.mkdir(parents=True)
-    (home / "config.yaml").write_text(
-        "kanban:\n  auto_subscribe_on_create: false\n"
-    )
+    (home / "config.yaml").write_text("kanban:\n  auto_subscribe_on_create: false\n")
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setenv("CLAWK_SESSION_PLATFORM", "discord")
     monkeypatch.setenv("CLAWK_SESSION_CHAT_ID", "channel-1")
 
     from tools import kanban_tools as kt
-    out = kt._handle_create({
-        "title": "no sub gated",
-        "assignee": "peer",
-    })
+
+    out = kt._handle_create(
+        {
+            "title": "no sub gated",
+            "assignee": "peer",
+        }
+    )
     d = json.loads(out)
     assert d["ok"] is True
     assert d["subscribed"] is False, d
@@ -1299,6 +1449,7 @@ def test_maybe_auto_subscribe_swallows_add_notify_sub_failure(monkeypatch, worke
     kanban_create. The function returns False and the parent create
     still succeeds with subscribed=False."""
     from tools import kanban_tools as kt
+
     monkeypatch.setenv("CLAWK_SESSION_PLATFORM", "telegram")
     monkeypatch.setenv("CLAWK_SESSION_CHAT_ID", "chat-42")
 
@@ -1309,10 +1460,12 @@ def test_maybe_auto_subscribe_swallows_add_notify_sub_failure(monkeypatch, worke
 
     monkeypatch.setattr(kbn, "add_notify_sub", _boom)
 
-    out = kt._handle_create({
-        "title": "auto-sub tolerates add_notify_sub failure",
-        "assignee": "peer",
-    })
+    out = kt._handle_create(
+        {
+            "title": "auto-sub tolerates add_notify_sub failure",
+            "assignee": "peer",
+        }
+    )
     d = json.loads(out)
     assert d["ok"] is True, d
     assert d["subscribed"] is False, d
@@ -1396,6 +1549,7 @@ def _fake_public_dns(monkeypatch, mapping):
         return [(real_af, real_sock, 6, "", (ip, 0))]
 
     from tools import url_safety
+
     monkeypatch.setattr(url_safety.socket, "getaddrinfo", fake_getaddrinfo)
 
 
@@ -1417,7 +1571,7 @@ class _FakeStreamResponse:
 
     def iter_bytes(self, chunk_size):
         for i in range(0, len(self._body), chunk_size):
-            yield self._body[i:i + chunk_size]
+            yield self._body[i : i + chunk_size]
 
     def __enter__(self):
         return self
@@ -1468,17 +1622,20 @@ def test_attach_url_happy_path_public_host(worker_env, default_url_guard, monkey
 class TestDefaultTaskId:
     def test_numeric_task_id_is_coerced(self, monkeypatch):
         from tools import kanban_tools as kt
+
         monkeypatch.delenv("CLAWK_KANBAN_TASK", raising=False)
         assert kt._default_task_id(12345) == "12345"
         assert kt._default_task_id(0) == "0"
 
     def test_whitespace_task_id_is_stripped(self, monkeypatch):
         from tools import kanban_tools as kt
+
         monkeypatch.delenv("CLAWK_KANBAN_TASK", raising=False)
         assert kt._default_task_id("  task-99  ") == "task-99"
 
     def test_blank_task_id_falls_back(self, monkeypatch, worker_env):
         from tools import kanban_tools as kt
+
         monkeypatch.setattr(kt, "_is_dispatcher_owned_worker", lambda: True)
         assert kt._default_task_id("") == worker_env
         assert kt._default_task_id("   ") == worker_env

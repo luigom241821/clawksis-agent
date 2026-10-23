@@ -7,6 +7,7 @@ call a dispatcher-owned worker actually makes) collapsed it into
 "unknown id, stale run, or already terminal", sending the worker/operator
 chasing stale runs while the real blocker was a reopened or unfinished parent.
 """
+
 import json
 
 import pytest
@@ -21,10 +22,12 @@ def running_child_with_parent(monkeypatch, tmp_path):
     monkeypatch.setenv("CLAWK_PROFILE", "test-worker")
     monkeypatch.delenv("CLAWK_SESSION_ID", raising=False)
     from pathlib import Path as _Path
+
     monkeypatch.setattr(_Path, "home", lambda: tmp_path)
 
     from clawk_cli import kanban_db as kb
     from clawk_cli import kanban_db_connect as kbc
+
     kb._INITIALIZED_PATHS.clear()
     kb.init_db()
     conn = kbc.connect()
@@ -32,7 +35,8 @@ def running_child_with_parent(monkeypatch, tmp_path):
         parent_id = kb.create_task(conn, title="parent gate", assignee="op")
         assert kb.complete_task(conn, parent_id, result="parent shipped")
         child_id = kb.create_task(
-            conn, title="child work", assignee="test-worker", parents=[parent_id])
+            conn, title="child work", assignee="test-worker", parents=[parent_id]
+        )
         assert kb.claim_task(conn, child_id) is not None
         run_id = kb._current_run_id(conn, child_id)
         # Parent reopens mid-run: the #113373 timeline.
@@ -55,8 +59,9 @@ def test_complete_names_unsatisfied_parent(running_child_with_parent):
     from tools import kanban_tools as kt
 
     parent_id, child_id = running_child_with_parent
-    out = json.loads(kt._handle_complete(
-        {"task_id": child_id, "summary": "genuinely done work"}))
+    out = json.loads(
+        kt._handle_complete({"task_id": child_id, "summary": "genuinely done work"})
+    )
     assert out.get("error")
     assert parent_id in out["error"]
     assert "parent" in out["error"].lower()
@@ -72,7 +77,9 @@ def test_complete_names_unsatisfied_parent(running_child_with_parent):
     assert shown["unsatisfied_parents"] == [{"id": parent_id, "status": "todo"}]
 
 
-def test_cli_complete_names_unsatisfied_parent(running_child_with_parent, monkeypatch, capsys):
+def test_cli_complete_names_unsatisfied_parent(
+    running_child_with_parent, monkeypatch, capsys
+):
     """`clawk kanban complete` (operator, --force) reports the same blockers."""
     import argparse
 
@@ -80,8 +87,11 @@ def test_cli_complete_names_unsatisfied_parent(running_child_with_parent, monkey
 
     parent_id, child_id = running_child_with_parent
     monkeypatch.delenv("CLAWK_KANBAN_TASK", raising=False)
-    rc = kc._cmd_complete(argparse.Namespace(
-        task_ids=[child_id], result=None, summary=None, metadata=None, force=True))
+    rc = kc._cmd_complete(
+        argparse.Namespace(
+            task_ids=[child_id], result=None, summary=None, metadata=None, force=True
+        )
+    )
     out = capsys.readouterr()
     assert rc != 0
     assert parent_id in out.out + out.err

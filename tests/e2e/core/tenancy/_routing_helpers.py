@@ -33,6 +33,7 @@ from tests.fakes.fake_llm_provider import Error, FakeLLMServer, Text
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 
+
 class RoutingLeak(AssertionError):
     """A prompt or credential reached a host it must not: an unselected fleet host, a selected host
     with another identity's key, or a real inference API (egress trap)."""
@@ -46,19 +47,46 @@ def assert_routing(problems: list[str], ctx: str) -> None:
 
 
 # Env that could route or authenticate a child Clawksis outside the fake fleet.
-_STRIP_SUFFIXES = ("_API_KEY", "_TOKEN", "_BASE_URL", "_SECRET", "_ACCESS_KEY", "_KEY_ID")
-_STRIP_PREFIXES = ("CLAWK_", "OPENAI", "ANTHROPIC", "OPENROUTER", "AWS_", "AZURE_", "GOOGLE_",
-                   "GEMINI", "PYTEST_", "NOUS_", "XAI_", "LLM_", "CUSTOM_")
+_STRIP_SUFFIXES = (
+    "_API_KEY",
+    "_TOKEN",
+    "_BASE_URL",
+    "_SECRET",
+    "_ACCESS_KEY",
+    "_KEY_ID",
+)
+_STRIP_PREFIXES = (
+    "CLAWK_",
+    "OPENAI",
+    "ANTHROPIC",
+    "OPENROUTER",
+    "AWS_",
+    "AZURE_",
+    "GOOGLE_",
+    "GEMINI",
+    "PYTEST_",
+    "NOUS_",
+    "XAI_",
+    "LLM_",
+    "CUSTOM_",
+)
 
 
-def hermetic_env(home: Path, clawk_home: Path | None = None, proxy: str | None = None) -> dict[str, str]:
+def hermetic_env(
+    home: Path, clawk_home: Path | None = None, proxy: str | None = None
+) -> dict[str, str]:
     real_home = Path(pwd.getpwuid(os.getuid()).pw_dir).resolve()
     fake = home.resolve()
     # The state-db guard is bypassed below, so prove first that this child can never reach the
     # real install: its HOME (and therefore every profile root) lives outside the real home.
-    assert fake != real_home and real_home / ".clawksis" not in (fake, *fake.parents), fake
-    env = {k: v for k, v in os.environ.items()
-           if not (k.endswith(_STRIP_SUFFIXES) or k.startswith(_STRIP_PREFIXES))}
+    assert fake != real_home and real_home / ".clawksis" not in (fake, *fake.parents), (
+        fake
+    )
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if not (k.endswith(_STRIP_SUFFIXES) or k.startswith(_STRIP_PREFIXES))
+    }
     env.update(
         HOME=str(home),
         CLAWK_HOME=str(clawk_home or home / ".clawksis"),
@@ -68,11 +96,28 @@ def hermetic_env(home: Path, clawk_home: Path | None = None, proxy: str | None =
         # A pytest-descendant child treats $HOME/.clawksis/state.db as production; that HOME is ours.
         CLAWK_STATE_DB_GUARD_BYPASS="1",
     )
-    for var in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "all_proxy", "no_proxy"):
+    for var in (
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "NO_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+        "no_proxy",
+    ):
         env.pop(var, None)
     if proxy:
-        env.update(HTTP_PROXY=proxy, HTTPS_PROXY=proxy, ALL_PROXY=proxy, http_proxy=proxy, https_proxy=proxy,
-                   all_proxy=proxy, NO_PROXY="127.0.0.1,localhost", no_proxy="127.0.0.1,localhost")
+        env.update(
+            HTTP_PROXY=proxy,
+            HTTPS_PROXY=proxy,
+            ALL_PROXY=proxy,
+            http_proxy=proxy,
+            https_proxy=proxy,
+            all_proxy=proxy,
+            NO_PROXY="127.0.0.1,localhost",
+            no_proxy="127.0.0.1,localhost",
+        )
     return env
 
 
@@ -98,9 +143,15 @@ class Fleet:
     def __post_init__(self) -> None:
         for role in self.roles:
             n = self.key_counts.get(role, 1)
-            self.keys[role] = tuple(f"sk-c11-{role}-{i}-{secrets.token_hex(6)}" for i in range(n))
-            srv = FakeLLMServer(self._dispatch(role), api_key=self.keys[role],
-                                aux=self._aux(role), record_get=True)
+            self.keys[role] = tuple(
+                f"sk-c11-{role}-{i}-{secrets.token_hex(6)}" for i in range(n)
+            )
+            srv = FakeLLMServer(
+                self._dispatch(role),
+                api_key=self.keys[role],
+                aux=self._aux(role),
+                record_get=True,
+            )
             self.servers[role] = srv
         self._scripts: dict[str, Callable[[dict[str, Any]], Any]] = {}
 
@@ -113,6 +164,7 @@ class Fleet:
             fn = self._scripts.get(role)
             resp = fn(record) if fn else None
             return resp if resp is not None else Text(f"answer-from-{role}")
+
         return respond
 
     def _aux(self, role: str) -> Callable[[dict[str, Any]], Any]:
@@ -120,6 +172,7 @@ class Fleet:
             fn = self._scripts.get(f"{role}:aux")
             resp = fn(record) if fn else None
             return resp if resp is not None else Text(f"aux-from-{role}")
+
         return respond
 
     def key(self, role: str, i: int = 0) -> str:
@@ -140,9 +193,14 @@ class Fleet:
     def marks(self) -> dict[str, int]:
         return {role: len(srv.requests) for role, srv in self.servers.items()}
 
-    def since(self, marks: dict[str, int] | None = None) -> dict[str, list[dict[str, Any]]]:
+    def since(
+        self, marks: dict[str, int] | None = None
+    ) -> dict[str, list[dict[str, Any]]]:
         marks = marks or {}
-        return {role: list(srv.requests[marks.get(role, 0):]) for role, srv in self.servers.items()}
+        return {
+            role: list(srv.requests[marks.get(role, 0) :])
+            for role, srv in self.servers.items()
+        }
 
     def owner_of(self, secret: str) -> str:
         for role, keys in self.keys.items():
@@ -173,24 +231,35 @@ def check_routing(
                 # but never with another identity's key.
                 owner = fleet.owner_of(secret)
                 if secret and owner not in {role, "<no identity>"}:
-                    problems.append(f"LEAK: host '{role}' got {where} carrying the key of '{owner}' ({secret!r})")
+                    problems.append(
+                        f"LEAK: host '{role}' got {where} carrying the key of '{owner}' ({secret!r})"
+                    )
                 continue
             if role not in allowed:
-                problems.append(f"LEAK: unselected host '{role}' got {where} carrying the key of "
-                                f"'{fleet.owner_of(secret)}' ({secret!r})")
+                problems.append(
+                    f"LEAK: unselected host '{role}' got {where} carrying the key of "
+                    f"'{fleet.owner_of(secret)}' ({secret!r})"
+                )
             elif secret not in allowed[role]:
-                problems.append(f"LEAK/WRONG KEY: host '{role}' got {where} carrying the key of "
-                                f"'{fleet.owner_of(secret)}' ({secret!r})")
+                problems.append(
+                    f"LEAK/WRONG KEY: host '{role}' got {where} carrying the key of "
+                    f"'{fleet.owner_of(secret)}' ({secret!r})"
+                )
     for role, n in (must_hit or {}).items():
         got = sum(1 for r in log.get(role, []) if r.get("kind") in {"main", "aux"})
         if got < n:
-            problems.append(f"MISSING: host '{role}' served {got} chat request(s), expected >= {n}")
+            problems.append(
+                f"MISSING: host '{role}' served {got} chat request(s), expected >= {n}"
+            )
     return problems
 
 
 def describe(log: dict[str, list[dict[str, Any]]]) -> str:
-    rows = [f"  {role}: " + ", ".join(f"{r.get('kind')}[{_bearer(r)[:22]}]" for r in recs)
-            for role, recs in log.items() if recs]
+    rows = [
+        f"  {role}: " + ", ".join(f"{r.get('kind')}[{_bearer(r)[:22]}]" for r in recs)
+        for role, recs in log.items()
+        if recs
+    ]
     return "\n".join(rows) or "  (no requests anywhere)"
 
 
@@ -215,7 +284,9 @@ class EgressTrap:
                 pass
 
             def _refuse(self) -> None:
-                target = self.path if self.command != "CONNECT" else f"https://{self.path}"
+                target = (
+                    self.path if self.command != "CONNECT" else f"https://{self.path}"
+                )
                 trap.attempts.append((self.command, target))
                 self.send_response(403)
                 self.send_header("Content-Length", "0")
@@ -227,7 +298,9 @@ class EgressTrap:
 
         self._server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         self._server.daemon_threads = True
-        threading.Thread(target=self._server.serve_forever, daemon=True, name="c11-egress").start()
+        threading.Thread(
+            target=self._server.serve_forever, daemon=True, name="c11-egress"
+        ).start()
 
     @property
     def url(self) -> str:
@@ -249,29 +322,55 @@ def inference_hosts() -> frozenset[str]:
     from clawk_cli.auth import PROVIDER_REGISTRY
     from clawk_constants import OPENROUTER_BASE_URL
 
-    urls = [getattr(p, "inference_base_url", "") or "" for p in PROVIDER_REGISTRY.values()] + [OPENROUTER_BASE_URL]
-    return frozenset(h for h in (urlparse(u).hostname for u in urls) if h and h not in {"127.0.0.1", "localhost"})
+    urls = [
+        getattr(p, "inference_base_url", "") or "" for p in PROVIDER_REGISTRY.values()
+    ] + [OPENROUTER_BASE_URL]
+    return frozenset(
+        h
+        for h in (urlparse(u).hostname for u in urls)
+        if h and h not in {"127.0.0.1", "localhost"}
+    )
 
 
 # CLAWK_HOME writing ------------------------------------------------------------
 
 
-def write_home(clawk_home: Path, config: dict[str, Any], env: dict[str, str],
-               auth: dict[str, Any] | None = None) -> Path:
+def write_home(
+    clawk_home: Path,
+    config: dict[str, Any],
+    env: dict[str, str],
+    auth: dict[str, Any] | None = None,
+) -> Path:
     clawk_home.mkdir(parents=True, exist_ok=True)
-    (clawk_home / "config.yaml").write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
-    (clawk_home / ".env").write_text("".join(f"{k}={v}\n" for k, v in env.items()), encoding="utf-8")
+    (clawk_home / "config.yaml").write_text(
+        yaml.safe_dump(config, sort_keys=False), encoding="utf-8"
+    )
+    (clawk_home / ".env").write_text(
+        "".join(f"{k}={v}\n" for k, v in env.items()), encoding="utf-8"
+    )
     if auth is not None:
         (clawk_home / "auth.json").write_text(json.dumps(auth), encoding="utf-8")
     return clawk_home
 
 
 def pool_auth(provider: str, keys: Iterable[str]) -> dict[str, Any]:
-    return {"version": 1, "providers": {}, "credential_pool": {provider: [
-        {"id": f"k{i}", "label": f"key-{i}", "auth_type": "api_key", "priority": i,
-         "source": "manual", "access_token": key}
-        for i, key in enumerate(keys)
-    ]}}
+    return {
+        "version": 1,
+        "providers": {},
+        "credential_pool": {
+            provider: [
+                {
+                    "id": f"k{i}",
+                    "label": f"key-{i}",
+                    "auth_type": "api_key",
+                    "priority": i,
+                    "source": "manual",
+                    "access_token": key,
+                }
+                for i, key in enumerate(keys)
+            ]
+        },
+    }
 
 
 # Child Clawksis processes ---------------------------------------------------------
@@ -286,14 +385,25 @@ class RunResult:
     seconds: float
 
 
-def run_clawk(argv: list[str], home: Path, *, clawk_home: Path | None = None, proxy: str | None = None,
-               timeout: float = 240.0) -> RunResult:
+def run_clawk(
+    argv: list[str],
+    home: Path,
+    *,
+    clawk_home: Path | None = None,
+    proxy: str | None = None,
+    timeout: float = 240.0,
+) -> RunResult:
     """Run the real ``clawk`` entry point in its own process group; kill only that group."""
     start = time.monotonic()
     proc = subprocess.Popen(
         [sys.executable, "-m", "clawk_cli.main", *argv],
-        cwd=str(home), env=hermetic_env(home, clawk_home, proxy), stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True,
+        cwd=str(home),
+        env=hermetic_env(home, clawk_home, proxy),
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
     )
     try:
         out, err = proc.communicate(timeout=timeout)
@@ -319,8 +429,14 @@ class TuiGateway:
         self.home = home
         self._stderr = open(home / "tui_gateway.stderr.log", "w", encoding="utf-8")
         self.proc = subprocess.Popen(
-            [sys.executable, "-m", "tui_gateway.entry"], cwd=str(home), env=hermetic_env(home, proxy=proxy),
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self._stderr, text=True, bufsize=1,
+            [sys.executable, "-m", "tui_gateway.entry"],
+            cwd=str(home),
+            env=hermetic_env(home, proxy=proxy),
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=self._stderr,
+            text=True,
+            bufsize=1,
             start_new_session=True,
         )
         self._q: queue.Queue[dict[str, Any]] = queue.Queue()
@@ -336,7 +452,9 @@ class TuiGateway:
             except json.JSONDecodeError:
                 continue
 
-    def wait(self, pred: Callable[[dict[str, Any]], bool], timeout: float = 120.0) -> dict[str, Any]:
+    def wait(
+        self, pred: Callable[[dict[str, Any]], bool], timeout: float = 120.0
+    ) -> dict[str, Any]:
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             if self.proc.poll() is not None and self._q.empty():
@@ -348,11 +466,18 @@ class TuiGateway:
             self.seen.append(msg)
             if pred(msg):
                 return msg
-        tail = [(m.get("method"), (m.get("params") or {}).get("type"), m.get("id")) for m in self.seen[-25:]]
-        raise AssertionError(f"tui_gateway: condition not met within {timeout}s (rc={self.proc.poll()}); "
-                             f"last frames {tail}")
+        tail = [
+            (m.get("method"), (m.get("params") or {}).get("type"), m.get("id"))
+            for m in self.seen[-25:]
+        ]
+        raise AssertionError(
+            f"tui_gateway: condition not met within {timeout}s (rc={self.proc.poll()}); "
+            f"last frames {tail}"
+        )
 
-    def seen_or_wait(self, pred: Callable[[dict[str, Any]], bool], timeout: float = 120.0) -> dict[str, Any]:
+    def seen_or_wait(
+        self, pred: Callable[[dict[str, Any]], bool], timeout: float = 120.0
+    ) -> dict[str, Any]:
         """Like ``wait`` but also satisfied by a frame already consumed (events may race a turn's end)."""
         return next((m for m in self.seen if pred(m)), None) or self.wait(pred, timeout)
 
@@ -360,14 +485,26 @@ class TuiGateway:
     def event(kind: str, sid: str | None = None) -> Callable[[dict[str, Any]], bool]:
         def pred(m: dict[str, Any]) -> bool:
             p = m.get("params") or {}
-            return m.get("method") == "event" and p.get("type") == kind and (sid is None or p.get("session_id") == sid)
+            return (
+                m.get("method") == "event"
+                and p.get("type") == kind
+                and (sid is None or p.get("session_id") == sid)
+            )
+
         return pred
 
-    def call(self, method: str, params: dict[str, Any], timeout: float = 120.0) -> dict[str, Any]:
+    def call(
+        self, method: str, params: dict[str, Any], timeout: float = 120.0
+    ) -> dict[str, Any]:
         self._rid += 1
         rid = self._rid
         assert self.proc.stdin is not None
-        self.proc.stdin.write(json.dumps({"jsonrpc": "2.0", "id": rid, "method": method, "params": params}) + "\n")
+        self.proc.stdin.write(
+            json.dumps(
+                {"jsonrpc": "2.0", "id": rid, "method": method, "params": params}
+            )
+            + "\n"
+        )
         self.proc.stdin.flush()
         return self.wait(lambda m: m.get("id") == rid and "method" not in m, timeout)
 
@@ -375,7 +512,12 @@ class TuiGateway:
         """Submit one prompt and wait for the turn's terminal event (complete or error)."""
         reply = self.call("prompt.submit", {"session_id": sid, "text": text})
         assert "result" in reply, f"prompt.submit refused: {reply}"
-        return self.wait(lambda m: self.event("message.complete", sid)(m) or self.event("error", sid)(m), timeout)
+        return self.wait(
+            lambda m: (
+                self.event("message.complete", sid)(m) or self.event("error", sid)(m)
+            ),
+            timeout,
+        )
 
     def close(self) -> None:
         try:
@@ -398,4 +540,8 @@ def always(resp_factory: Callable[[], Any]) -> Callable[[dict[str, Any]], Any]:
 
 def reject_key(bad_key: str, status: int) -> Callable[[dict[str, Any]], Any]:
     """Answer ``status`` for requests carrying ``bad_key`` (a pooled key that is rate limited)."""
-    return lambda record: Error(status, "scripted pool-key failure") if _bearer(record) == bad_key else None
+    return lambda record: (
+        Error(status, "scripted pool-key failure")
+        if _bearer(record) == bad_key
+        else None
+    )

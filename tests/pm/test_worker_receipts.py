@@ -1,4 +1,5 @@
 """Worker receipts cross the process seam by identity, never latest.json."""
+
 import contextvars
 
 import pytest
@@ -6,7 +7,9 @@ import pytest
 from pm import receipt
 
 
-def test_worker_receipt_is_attributed_only_to_its_invoking_update(tmp_path, monkeypatch):
+def test_worker_receipt_is_attributed_only_to_its_invoking_update(
+    tmp_path, monkeypatch
+):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 
     def worker():

@@ -43,11 +43,18 @@ def settled(conn: sqlite3.Connection, db_path: Path) -> bool:
     source = source_path(db_path)
     if source is None or source in _failed_sources:
         return True
-    return table_exists(conn, MARKER_TABLE) and conn.execute(
-        f"SELECT 1 FROM {MARKER_TABLE} WHERE source=?", (SOURCE_NAME,)).fetchone() is not None
+    return (
+        table_exists(conn, MARKER_TABLE)
+        and conn.execute(
+            f"SELECT 1 FROM {MARKER_TABLE} WHERE source=?", (SOURCE_NAME,)
+        ).fetchone()
+        is not None
+    )
 
 
-def _select_expressions(legacy: sqlite3.Connection, target: sqlite3.Connection, name: str) -> list[tuple[str, str]]:
+def _select_expressions(
+    legacy: sqlite3.Connection, target: sqlite3.Connection, name: str
+) -> list[tuple[str, str]]:
     """``(target column, source expression)`` pairs for copying ``name``.
 
     Columns only the target has take the same default the in-place column migration applies, so a
@@ -57,12 +64,21 @@ def _select_expressions(legacy: sqlite3.Connection, target: sqlite3.Connection, 
     """
     from gateway.hosted_rooms import _LEGACY_COLUMNS
 
-    defaults = {(table, column): default for table, column, _, default in _LEGACY_COLUMNS if default is not None}
-    source_columns = [str(row[1]) for row in legacy.execute(f"PRAGMA table_info({name})")]
+    defaults = {
+        (table, column): default
+        for table, column, _, default in _LEGACY_COLUMNS
+        if default is not None
+    }
+    source_columns = [
+        str(row[1]) for row in legacy.execute(f"PRAGMA table_info({name})")
+    ]
     target_columns = table_columns(target, name)
     pairs = [(column, column) for column in source_columns if column in target_columns]
-    pairs.extend((column, default) for (table, column), default in defaults.items()
-                 if table == name and column in target_columns and column not in source_columns)
+    pairs.extend(
+        (column, default)
+        for (table, column), default in defaults.items()
+        if table == name and column in target_columns and column not in source_columns
+    )
     return pairs
 
 
@@ -79,22 +95,42 @@ def _copy_rows(target: sqlite3.Connection, source: Path) -> int:
     from gateway.hosted_rooms import _EVENT_BYTES_BACKFILL
 
     copied_rooms: list[str] = []
-    existing = {str(row[0]) for row in target.execute("SELECT room_id FROM hosted_rooms")}
-    with closing(sqlite3.connect(f"file:{source}?mode=ro", uri=True, timeout=10)) as legacy:
-        names = [str(row[0]) for row in legacy.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name GLOB 'hosted_room*'")]
+    existing = {
+        str(row[0]) for row in target.execute("SELECT room_id FROM hosted_rooms")
+    }
+    with closing(
+        sqlite3.connect(f"file:{source}?mode=ro", uri=True, timeout=10)
+    ) as legacy:
+        names = [
+            str(row[0])
+            for row in legacy.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name GLOB 'hosted_room*'"
+            )
+        ]
         # Parents first: hosted_room_events carries a foreign key into hosted_rooms.
         for name in sorted(names, key=lambda name: (name != "hosted_rooms", name)):
-            if name in _SKIP_TABLES or name == MARKER_TABLE or name.endswith(("_next", "_migrating")):
+            if (
+                name in _SKIP_TABLES
+                or name == MARKER_TABLE
+                or name.endswith(("_next", "_migrating"))
+            ):
                 continue
             if not table_exists(target, name):
-                target.execute(str(legacy.execute(
-                    "SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (name,)).fetchone()[0]))
+                target.execute(
+                    str(
+                        legacy.execute(
+                            "SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
+                            (name,),
+                        ).fetchone()[0]
+                    )
+                )
             pairs = _select_expressions(legacy, target, name)
             if not pairs:
                 continue
             columns = [column for column, _ in pairs]
-            rows = legacy.execute(f"SELECT {', '.join(expr for _, expr in pairs)} FROM {name}")
+            rows = legacy.execute(
+                f"SELECT {', '.join(expr for _, expr in pairs)} FROM {name}"
+            )
             if "room_id" in columns:
                 room_index = columns.index("room_id")
                 rows = (row for row in rows if str(row[room_index]) not in existing)
@@ -105,10 +141,16 @@ def _copy_rows(target: sqlite3.Connection, source: Path) -> int:
                 rows = list(rows)
                 copied_rooms = [str(row[room_index]) for row in rows]
             target.executemany(
-                f"{verb} INTO {name} ({', '.join(columns)}) VALUES ({', '.join('?' * len(columns))})", rows)
+                f"{verb} INTO {name} ({', '.join(columns)}) VALUES ({', '.join('?' * len(columns))})",
+                rows,
+            )
         if copied_rooms and "event_bytes" not in table_columns(legacy, "hosted_rooms"):
             target.execute(
-                _EVENT_BYTES_BACKFILL.format(where=f"room_id IN ({', '.join('?' * len(copied_rooms))})"), copied_rooms)
+                _EVENT_BYTES_BACKFILL.format(
+                    where=f"room_id IN ({', '.join('?' * len(copied_rooms))})"
+                ),
+                copied_rooms,
+            )
     return len(copied_rooms)
 
 
@@ -130,14 +172,23 @@ def import_legacy_rooms(conn: sqlite3.Connection, db_path: Path) -> None:
         conn.execute("ROLLBACK TO legacy_import")
         conn.execute("RELEASE legacy_import")
         _failed_sources.add(source)
-        logger.warning("hosted rooms: could not import the pre-isolation %s (%s); will retry on the next start",
-                       source, exc)
+        logger.warning(
+            "hosted rooms: could not import the pre-isolation %s (%s); will retry on the next start",
+            source,
+            exc,
+        )
         return
     conn.execute(
-        f"CREATE TABLE IF NOT EXISTS {MARKER_TABLE} (source TEXT PRIMARY KEY, imported_at REAL NOT NULL, rooms INTEGER NOT NULL)")
+        f"CREATE TABLE IF NOT EXISTS {MARKER_TABLE} (source TEXT PRIMARY KEY, imported_at REAL NOT NULL, rooms INTEGER NOT NULL)"
+    )
     conn.execute(
         f"INSERT OR IGNORE INTO {MARKER_TABLE} (source, imported_at, rooms) VALUES (?, ?, ?)",
-        (SOURCE_NAME, clock(None), copied))
+        (SOURCE_NAME, clock(None), copied),
+    )
     conn.execute("RELEASE legacy_import")
     if copied:
-        logger.info("hosted rooms: imported %d pre-isolation Group Chat(s) from %s", copied, source)
+        logger.info(
+            "hosted rooms: imported %d pre-isolation Group Chat(s) from %s",
+            copied,
+            source,
+        )

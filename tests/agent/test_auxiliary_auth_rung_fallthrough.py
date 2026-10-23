@@ -106,7 +106,9 @@ def hermetic(monkeypatch):
         return "chain-response"
 
     monkeypatch.setattr(aux, "_recoverable_pool_provider", lambda *a, **kw: None)
-    monkeypatch.setattr(aux, "_nous_portal_account_has_fresh_paid_access", lambda: False)
+    monkeypatch.setattr(
+        aux, "_nous_portal_account_has_fresh_paid_access", lambda: False
+    )
     monkeypatch.setattr(aux, "_ladder_provider_fallback", _fake_provider_fallback)
     return chain_calls
 
@@ -116,18 +118,26 @@ def hermetic(monkeypatch):
     [("nous", False), ("nous", True), ("provider_credential", False)],
 )
 def test_post_refresh_retry_owns_the_ladder_outcome(
-        rung, retry_succeeds, monkeypatch, hermetic):
+    rung, retry_succeeds, monkeypatch, hermetic
+):
     """A failed retry resumes the ladder; a successful one returns its response."""
     if rung == "nous":
-        monkeypatch.setattr(aux, "_refresh_nous_auxiliary_client",
-                            lambda **kwargs: (_FakeClient(), AUX_MODEL))
+        monkeypatch.setattr(
+            aux,
+            "_refresh_nous_auxiliary_client",
+            lambda **kwargs: (_FakeClient(), AUX_MODEL),
+        )
         expected_step, expected_base = "call", (f"https://{NOUS_HOST}/v1")
     else:
-        monkeypatch.setattr(aux, "_auth_refresh_provider_for_route",
-                            lambda *a, **kw: "codex")
+        monkeypatch.setattr(
+            aux, "_auth_refresh_provider_for_route", lambda *a, **kw: "codex"
+        )
         monkeypatch.setattr(aux, "_refresh_provider_credentials", lambda *a, **kw: True)
         monkeypatch.setattr(aux, "_evict_cached_clients", lambda *a, **kw: None)
-        expected_step, expected_base = "retry_same_provider", "https://openrouter.ai/api/v1"
+        expected_step, expected_base = (
+            "retry_same_provider",
+            "https://openrouter.ai/api/v1",
+        )
 
     ladder = _ladder(
         base_info=expected_base,
@@ -162,7 +172,9 @@ def test_post_refresh_retry_owns_the_ladder_outcome(
 
 
 @pytest.mark.parametrize("spare_survives", [True, False])
-def test_explicit_provider_auth_uses_its_configured_task_fallback(monkeypatch, spare_survives):
+def test_explicit_provider_auth_uses_its_configured_task_fallback(
+    monkeypatch, spare_survives
+):
     """An explicit route may leave a 401 only through its own configured chain — including the
     re-walk after a chain entry is quarantined mid-request; an exhausted chain raises the primary
     error instead of spilling onto discovery / the main model."""
@@ -173,13 +185,32 @@ def test_explicit_provider_auth_uses_its_configured_task_fallback(monkeypatch, s
     monkeypatch.setattr(
         aux,
         "_get_auxiliary_task_config",
-        lambda task: {"fallback_chain": [{"provider": "custom:dead"}, {"provider": "custom:backup"}]},
+        lambda task: {
+            "fallback_chain": [
+                {"provider": "custom:dead"},
+                {"provider": "custom:backup"},
+            ]
+        },
     )
-    monkeypatch.setattr(aux, "_auth_refresh_provider_for_route", lambda *args, **kwargs: "vertex")
-    monkeypatch.setattr(aux, "_refresh_provider_credentials", lambda *args, **kwargs: False)
+    monkeypatch.setattr(
+        aux, "_auth_refresh_provider_for_route", lambda *args, **kwargs: "vertex"
+    )
+    monkeypatch.setattr(
+        aux, "_refresh_provider_credentials", lambda *args, **kwargs: False
+    )
     monkeypatch.setattr(aux, "_recoverable_pool_provider", lambda *args, **kwargs: None)
-    for name in ("_try_payment_fallback", "_try_main_fallback_chain", "_try_main_agent_model_fallback"):
-        monkeypatch.setattr(aux, name, lambda *a, _n=name, **k: pytest.fail(f"{_n} must stay gated for explicit auth"))
+    for name in (
+        "_try_payment_fallback",
+        "_try_main_fallback_chain",
+        "_try_main_agent_model_fallback",
+    ):
+        monkeypatch.setattr(
+            aux,
+            name,
+            lambda *a, _n=name, **k: pytest.fail(
+                f"{_n} must stay gated for explicit auth"
+            ),
+        )
 
     def configured_chain(*args, **kwargs):
         if not chain:
@@ -211,7 +242,11 @@ def test_explicit_provider_auth_uses_its_configured_task_fallback(monkeypatch, s
         assert step.kind == "fallback"
         if step.args[0] is dead_client:
             return None  # quarantined mid-request → the ladder re-walks the chain
-        assert step.args == (fallback_client, FALLBACK_MODEL, "fallback_chain[1](custom:backup)")
+        assert step.args == (
+            fallback_client,
+            FALLBACK_MODEL,
+            "fallback_chain[1](custom:backup)",
+        )
         return "fallback-response"
 
     if spare_survives:
@@ -228,13 +263,19 @@ def test_explicit_provider_auth_uses_its_configured_task_fallback(monkeypatch, s
 def test_explicit_provider_auth_never_uses_an_unconfigured_fallback(monkeypatch):
     """A 401 without a task chain preserves the explicit-provider boundary."""
     monkeypatch.setattr(aux, "_get_auxiliary_task_config", lambda task: {})
-    monkeypatch.setattr(aux, "_auth_refresh_provider_for_route", lambda *args, **kwargs: "vertex")
-    monkeypatch.setattr(aux, "_refresh_provider_credentials", lambda *args, **kwargs: False)
+    monkeypatch.setattr(
+        aux, "_auth_refresh_provider_for_route", lambda *args, **kwargs: "vertex"
+    )
+    monkeypatch.setattr(
+        aux, "_refresh_provider_credentials", lambda *args, **kwargs: False
+    )
     monkeypatch.setattr(aux, "_recoverable_pool_provider", lambda *args, **kwargs: None)
     monkeypatch.setattr(
         aux,
         "_try_main_agent_model_fallback",
-        lambda *args, **kwargs: pytest.fail("explicit auth must not use the main-agent fallback"),
+        lambda *args, **kwargs: pytest.fail(
+            "explicit auth must not use the main-agent fallback"
+        ),
     )
     ladder = aux._aux_recovery_ladder(
         _auth_error(),
@@ -255,7 +296,9 @@ def test_explicit_provider_auth_never_uses_an_unconfigured_fallback(monkeypatch)
     )
 
     with pytest.raises(_ApiError, match="Unauthorized"):
-        aux._drive_ladder(ladder, lambda step: pytest.fail("no fallback request expected"))
+        aux._drive_ladder(
+            ladder, lambda step: pytest.fail("no fallback request expected")
+        )
 
 
 @pytest.fixture
@@ -293,33 +336,60 @@ def nous_ladder_endpoint(monkeypatch):
             requests.append((self.path, payload))
             model = payload.get("model")
             if model is None:
-                self._send(400, {"error": {"message": "unexpected payload without model"}})
+                self._send(
+                    400, {"error": {"message": "unexpected payload without model"}}
+                )
                 return
             if model == AUX_MODEL:
                 # Stale runtime token: 401 on the first attempt, then the refreshed
                 # client hits a model the account cannot pay for.
                 if sum(1 for _p, body in requests if body["model"] == AUX_MODEL) == 1:
-                    self._send(401, {"error": {"message": "Unauthorized", "type": "authentication_error"}})
+                    self._send(
+                        401,
+                        {
+                            "error": {
+                                "message": "Unauthorized",
+                                "type": "authentication_error",
+                            }
+                        },
+                    )
                     return
-                self._send(404, {"error": {
-                    "message": f"Model '{AUX_MODEL}' requires available credits. Your account "
-                               "balance is too low to use paid models.",
-                    "type": "invalid_request_error",
-                    "code": "insufficient_credits",
-                }})
+                self._send(
+                    404,
+                    {
+                        "error": {
+                            "message": f"Model '{AUX_MODEL}' requires available credits. Your account "
+                            "balance is too low to use paid models.",
+                            "type": "invalid_request_error",
+                            "code": "insufficient_credits",
+                        }
+                    },
+                )
                 return
-            self._send(200, {
-                "id": "chatcmpl-ladder",
-                "created": 1,
-                "model": model,
-                "object": "chat.completion",
-                "choices": [{
-                    "index": 0,
-                    "message": {"role": "assistant", "content": "The task is complete."},
-                    "finish_reason": "stop",
-                }],
-                "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
-            })
+            self._send(
+                200,
+                {
+                    "id": "chatcmpl-ladder",
+                    "created": 1,
+                    "model": model,
+                    "object": "chat.completion",
+                    "choices": [
+                        {
+                            "index": 0,
+                            "message": {
+                                "role": "assistant",
+                                "content": "The task is complete.",
+                            },
+                            "finish_reason": "stop",
+                        }
+                    ],
+                    "usage": {
+                        "prompt_tokens": 10,
+                        "completion_tokens": 5,
+                        "total_tokens": 15,
+                    },
+                },
+            )
 
         def log_message(self, *_args):
             pass
@@ -330,7 +400,7 @@ def nous_ladder_endpoint(monkeypatch):
     )
     thread.start()
     try:
-        yield f'http://{NOUS_HOST}:{server.server_port:d}', requests
+        yield f"http://{NOUS_HOST}:{server.server_port:d}", requests
     finally:
         aux.shutdown_cached_clients()
         server.shutdown()
@@ -339,7 +409,8 @@ def nous_ladder_endpoint(monkeypatch):
 
 
 def test_auth_refresh_retry_failure_reaches_the_configured_chain_over_http(
-        tmp_path, monkeypatch, nous_ladder_endpoint):
+    tmp_path, monkeypatch, nous_ladder_endpoint
+):
     """End to end: the configured chain must serve the retry the refresh could not."""
     host_url, requests = nous_ladder_endpoint
     local_url = "http://127.0.0.1:{}".format(host_url.rsplit(":", 1)[1])
@@ -347,7 +418,9 @@ def test_auth_refresh_retry_failure_reaches_the_configured_chain_over_http(
     monkeypatch.setenv("AUX_FB_KEY", "fallback-test-key")
     config = {
         "model": {"provider": "nous", "default": AUX_MODEL},
-        "providers": {"aux-fb": {"base_url": local_url + "/v1", "key_env": "AUX_FB_KEY"}},
+        "providers": {
+            "aux-fb": {"base_url": local_url + "/v1", "key_env": "AUX_FB_KEY"}
+        },
         "auxiliary": {
             "compression": {
                 "provider": "custom",
@@ -355,17 +428,24 @@ def test_auth_refresh_retry_failure_reaches_the_configured_chain_over_http(
                 "base_url": host_url + "/v1",
                 "timeout": 20,
                 "fallback_chain": [
-                    {"provider": "custom:aux-fb", "model": FALLBACK_MODEL,
-                     "base_url": local_url + "/v1", "timeout": 20}
+                    {
+                        "provider": "custom:aux-fb",
+                        "model": FALLBACK_MODEL,
+                        "base_url": local_url + "/v1",
+                        "timeout": 20,
+                    }
                 ],
             }
         },
     }
     (tmp_path / "config.yaml").write_text(yaml.safe_dump(config), encoding="utf-8")
     # Credential boundaries: the account probe and the runtime-credential fetch.
-    monkeypatch.setattr(aux, "_nous_portal_account_has_fresh_paid_access", lambda: False)
     monkeypatch.setattr(
-        aux, "_resolve_nous_runtime_api",
+        aux, "_nous_portal_account_has_fresh_paid_access", lambda: False
+    )
+    monkeypatch.setattr(
+        aux,
+        "_resolve_nous_runtime_api",
         lambda **kwargs: ("fresh-nous-key", host_url + "/v1"),
     )
 
@@ -386,8 +466,11 @@ def test_auth_refresh_retry_failure_reaches_the_configured_chain_over_http(
 
 def test_exhausted_ladder_raises_the_narrowed_error(monkeypatch, hermetic):
     """No chain answers: the retry's own failure surfaces, not the healed 401."""
-    monkeypatch.setattr(aux, "_refresh_nous_auxiliary_client",
-                        lambda **kwargs: (_FakeClient(), AUX_MODEL))
+    monkeypatch.setattr(
+        aux,
+        "_refresh_nous_auxiliary_client",
+        lambda **kwargs: (_FakeClient(), AUX_MODEL),
+    )
 
     def _no_chain(first_err, route):
         hermetic.append(first_err)
@@ -403,5 +486,6 @@ def test_exhausted_ladder_raises_the_narrowed_error(monkeypatch, hermetic):
         aux._drive_ladder(_ladder(), perform)
 
     assert raised.value is failure, (
-        f"the ladder must surface the actionable retry failure, got {raised.value!r}")
+        f"the ladder must surface the actionable retry failure, got {raised.value!r}"
+    )
     assert hermetic == [failure]

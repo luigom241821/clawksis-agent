@@ -3,6 +3,7 @@
 The installer/runtime shell selectors were retired. The exact pinned archive
 is extracted by Python's tarfile/lzma instead of selecting unpinned gzip bytes.
 """
+
 from __future__ import annotations
 
 import io

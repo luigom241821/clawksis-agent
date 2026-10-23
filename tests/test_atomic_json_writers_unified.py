@@ -29,7 +29,9 @@ def broken_replace(monkeypatch):
     monkeypatch.setattr(utils, "atomic_replace", _failing_replace)
 
 
-def test_sessions_json_failed_replace_keeps_old_bytes_and_no_temp(tmp_path, monkeypatch, broken_replace):
+def test_sessions_json_failed_replace_keeps_old_bytes_and_no_temp(
+    tmp_path, monkeypatch, broken_replace
+):
     from gateway.session_persistence import SessionPersistenceMixin
 
     sessions_dir = tmp_path / "sessions"
@@ -44,7 +46,9 @@ def test_sessions_json_failed_replace_keeps_old_bytes_and_no_temp(tmp_path, monk
     assert _leftovers(sessions_dir, "sessions.json") == []
 
 
-def test_suggestions_failed_replace_keeps_old_bytes_and_no_temp(tmp_path, monkeypatch, broken_replace):
+def test_suggestions_failed_replace_keeps_old_bytes_and_no_temp(
+    tmp_path, monkeypatch, broken_replace
+):
     from cron import suggestions
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
@@ -57,14 +61,18 @@ def test_suggestions_failed_replace_keeps_old_bytes_and_no_temp(tmp_path, monkey
     assert _leftovers(target.parent, target.name) == []
 
 
-def test_shell_hooks_allowlist_survives_failed_replace_without_temp(tmp_path, monkeypatch, broken_replace):
+def test_shell_hooks_allowlist_survives_failed_replace_without_temp(
+    tmp_path, monkeypatch, broken_replace
+):
     from agent import shell_hooks
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "home"))
     target = shell_hooks.allowlist_path()
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps({"approvals": []}), encoding="utf-8")
-    shell_hooks.save_allowlist({"approvals": [{"event": "a", "command": "x"}]})  # logs, never raises
+    shell_hooks.save_allowlist(
+        {"approvals": [{"event": "a", "command": "x"}]}
+    )  # logs, never raises
     assert json.loads(target.read_text(encoding="utf-8")) == {"approvals": []}
     assert _leftovers(target.parent, target.name) == []
 
@@ -86,7 +94,9 @@ def test_surrogate_escaped_strings_round_trip_through_atomic_json_write(tmp_path
 
 
 @pytest.mark.platforms("linux")
-def test_new_non_secret_file_follows_umask_while_secret_and_existing_modes_hold(tmp_path):
+def test_new_non_secret_file_follows_umask_while_secret_and_existing_modes_hold(
+    tmp_path,
+):
     """The writers this helper replaced created files at process umask; only ``mode=`` tightens."""
     import os
     import stat
@@ -97,7 +107,9 @@ def test_new_non_secret_file_follows_umask_while_secret_and_existing_modes_hold(
     try:
         fresh = tmp_path / "cache.json"
         atomic_json_write(fresh, {"a": 1})
-        assert stat.S_IMODE(fresh.stat().st_mode) == 0o644, "new non-secret file must not inherit mkstemp's 0600"
+        assert stat.S_IMODE(fresh.stat().st_mode) == 0o644, (
+            "new non-secret file must not inherit mkstemp's 0600"
+        )
 
         secret = tmp_path / "creds.json"
         atomic_json_write(secret, {"token": "x"}, mode=0o600)

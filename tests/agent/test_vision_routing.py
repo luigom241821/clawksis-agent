@@ -239,7 +239,6 @@ model:
         "capacidades None en CI sin cache/red",
         strict=False,
     )
-
     def test_vision_capable_main_used(self, isolated_home, monkeypatch):
         """Vision-capable main provider should be returned by auto chain."""
         _write_config(

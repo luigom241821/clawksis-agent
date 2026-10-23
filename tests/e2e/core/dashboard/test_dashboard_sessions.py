@@ -26,7 +26,9 @@ import pytest
 from . import _helpers as H
 import itertools
 
-pytestmark = pytest.mark.skipif(not sys.platform.startswith("linux"), reason="POSIX dashboard process")
+pytestmark = pytest.mark.skipif(
+    not sys.platform.startswith("linux"), reason="POSIX dashboard process"
+)
 
 SEEDED = 40
 WRITE_SECONDS = 8.0
@@ -54,9 +56,15 @@ print("DONE", n, flush=True)
 class Writer:
     def __init__(self, sb: H.Sandbox, p: H.Profile) -> None:
         self.proc = subprocess.Popen(
-            [sys.executable, "-c", _WRITER, str(WRITE_SECONDS)], env=sb.env({"CLAWK_HOME": str(p.home)}),
-            cwd=str(sb.home), stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True, start_new_session=True)
+            [sys.executable, "-c", _WRITER, str(WRITE_SECONDS)],
+            env=sb.env({"CLAWK_HOME": str(p.home)}),
+            cwd=str(sb.home),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True,
+        )
         self.committed = 0
         self.done: int | None = None
         threading.Thread(target=self._pump, daemon=True, name="dash-writer").start()
@@ -95,22 +103,30 @@ def _read_round(d: H.Dashboard, committed: Callable[[], int]) -> list[str]:
     body = r.json()
     total = body["total"]
     if not SEEDED <= total <= SEEDED + upper_bound:
-        problems.append(f"total {total} outside [{SEEDED}, {SEEDED + upper_bound}] (writer committed {upper_bound})")
+        problems.append(
+            f"total {total} outside [{SEEDED}, {SEEDED + upper_bound}] (writer committed {upper_bound})"
+        )
     for row in body["sessions"][:2]:
         sid = row["id"]
         det = d.request("GET", f"/api/sessions/{sid}")
         msgs = d.request("GET", f"/api/sessions/{sid}/messages")
         if det.status_code != 200 or msgs.status_code != 200:
-            problems.append(f"{sid}: detail {det.status_code} / messages {msgs.status_code} {msgs.text[:200]}")
+            problems.append(
+                f"{sid}: detail {det.status_code} / messages {msgs.status_code} {msgs.text[:200]}"
+            )
             continue
         listed = msgs.json().get("messages", [])
         # The writer appends to at most the newest session while we read: the detail may lag or
         # lead the messages read by the rows appended in between, never by more.
         if abs(det.json()["message_count"] - len(listed)) > 3:
-            problems.append(f"{sid}: detail message_count {det.json()['message_count']} vs {len(listed)} messages")
+            problems.append(
+                f"{sid}: detail message_count {det.json()['message_count']} vs {len(listed)} messages"
+            )
     stats = d.request("GET", "/api/sessions/stats")
     if stats.status_code != 200:
-        problems.append(f"GET /api/sessions/stats -> {stats.status_code} {stats.text[:200]}")
+        problems.append(
+            f"GET /api/sessions/stats -> {stats.status_code} {stats.text[:200]}"
+        )
     return problems + [f"@total={total}"]
 
 
@@ -148,17 +164,34 @@ def test_session_routes_stay_consistent_under_a_concurrent_writer(env) -> None:
             problems += f.result(timeout=WRITE_SECONDS + 120)
     w.proc.wait(timeout=60)
     err = w.proc.stderr.read() if w.proc.stderr else ""
-    assert w.proc.returncode == 0 and w.done, f"writer failed rc={w.proc.returncode}: {err[-2000:]}"
-    assert w.done >= 20, f"writer committed only {w.done} sessions: the contention window never opened"
-    assert len(totals) >= 10 and len(series) >= 10, f"too few reads overlapped the writer ({len(totals)}, {len(series)})"
-    assert not problems, f"{len(problems)} inconsistent read(s) while writing:\n  " + "\n  ".join(dict.fromkeys(problems[:30]))
+    assert w.proc.returncode == 0 and w.done, (
+        f"writer failed rc={w.proc.returncode}: {err[-2000:]}"
+    )
+    assert w.done >= 20, (
+        f"writer committed only {w.done} sessions: the contention window never opened"
+    )
+    assert len(totals) >= 10 and len(series) >= 10, (
+        f"too few reads overlapped the writer ({len(totals)}, {len(series)})"
+    )
+    assert not problems, (
+        f"{len(problems)} inconsistent read(s) while writing:\n  "
+        + "\n  ".join(dict.fromkeys(problems[:30]))
+    )
     backwards = [(a, b) for a, b in itertools.pairwise(series) if b < a]
-    assert not backwards, f"session total went backwards between sequential reads: {backwards[:5]}"
+    assert not backwards, (
+        f"session total went backwards between sequential reads: {backwards[:5]}"
+    )
 
-    raw = H.db_rows(p.db, "SELECT COUNT(*) FROM sessions WHERE parent_session_id IS NULL")[0][0]
+    raw = H.db_rows(
+        p.db, "SELECT COUNT(*) FROM sessions WHERE parent_session_id IS NULL"
+    )[0][0]
     final = d.ok("GET", "/api/sessions", params={"limit": 1})["total"]
-    assert final == raw == SEEDED + w.done, f"api total {final}, sqlite {raw}, expected {SEEDED + w.done}"
+    assert final == raw == SEEDED + w.done, (
+        f"api total {final}, sqlite {raw}, expected {SEEDED + w.done}"
+    )
     newest = d.ok("GET", f"/api/sessions/live-{w.done - 1:05d}/messages")["messages"]
-    assert [m["content"] for m in newest] == [f"live-{w.done - 1:05d} message {j}" for j in range(3)]
+    assert [m["content"] for m in newest] == [
+        f"live-{w.done - 1:05d} message {j}" for j in range(3)
+    ]
     log = d.log_tail(200_000).lower()
     assert "database is locked" not in log and "traceback" not in log, d.log_tail()

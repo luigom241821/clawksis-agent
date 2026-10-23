@@ -42,14 +42,27 @@ def _ensure_discord_mock():
         discord_mod.DMChannel = type("DMChannel", (), {})
         discord_mod.Thread = type("Thread", (), {})
         discord_mod.ForumChannel = type("ForumChannel", (), {})
-        discord_mod.ui = SimpleNamespace(View=object, button=lambda *a, **k: (lambda fn: fn), Button=object)
-        discord_mod.ButtonStyle = SimpleNamespace(success=1, primary=2, danger=3, green=1, blurple=2, red=3, grey=4, secondary=5)
-        discord_mod.Color = SimpleNamespace(orange=lambda: 1, green=lambda: 2, blue=lambda: 3, red=lambda: 4)
+        discord_mod.ui = SimpleNamespace(
+            View=object, button=lambda *a, **k: lambda fn: fn, Button=object
+        )
+        discord_mod.ButtonStyle = SimpleNamespace(
+            success=1,
+            primary=2,
+            danger=3,
+            green=1,
+            blurple=2,
+            red=3,
+            grey=4,
+            secondary=5,
+        )
+        discord_mod.Color = SimpleNamespace(
+            orange=lambda: 1, green=lambda: 2, blue=lambda: 3, red=lambda: 4
+        )
         discord_mod.Interaction = object
         discord_mod.Embed = MagicMock
         discord_mod.app_commands = SimpleNamespace(
-            describe=lambda **kwargs: (lambda fn: fn),
-            choices=lambda **kwargs: (lambda fn: fn),
+            describe=lambda **kwargs: lambda fn: fn,
+            choices=lambda **kwargs: lambda fn: fn,
             Choice=lambda **kwargs: SimpleNamespace(**kwargs),
         )
         discord_mod.opus = SimpleNamespace(is_loaded=lambda: True)
@@ -128,7 +141,9 @@ class FakeBot:
         {"769524422783664158", "*"},
     ],
 )
-async def test_resolve_allowed_usernames_preserves_wildcard(monkeypatch, initial_allowed):
+async def test_resolve_allowed_usernames_preserves_wildcard(
+    monkeypatch, initial_allowed
+):
     """Regression (#22334): ``_resolve_allowed_usernames`` must not strip ``"*"``.
 
     The method splits entries into numeric-IDs (kept) vs non-numeric (treated
@@ -166,23 +181,31 @@ async def test_resolve_allowed_usernames_preserves_wildcard(monkeypatch, initial
 def _member(uid, name, *, nick=None, global_name=None):
     # discord.py's Member.display_name is the server nickname, else the global name, else the username.
     return SimpleNamespace(
-        id=uid, name=name, display_name=nick or global_name or name, global_name=global_name, discriminator="0",
+        id=uid,
+        name=name,
+        display_name=nick or global_name or name,
+        global_name=global_name,
+        discriminator="0",
     )
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("nick, global_name", [("alice", None), (None, "alice")])
-async def test_resolve_allowed_usernames_ignores_display_names(monkeypatch, capsys, nick, global_name):
+async def test_resolve_allowed_usernames_ignores_display_names(
+    monkeypatch, capsys, nick, global_name
+):
     """A member who copies an allowlisted username into their server nickname or display name must not
     be resolved in its place: those are set by the member, the username is unique."""
     adapter = DiscordAdapter(PlatformConfig(enabled=True, token="test-token"))
     adapter._allowed_user_ids = {"alice"}
     impostor = _member(111, "mallory", nick=nick, global_name=global_name)
     owner = _member(222, "alice", global_name="Alice W")
-    adapter._client = SimpleNamespace(guilds=[
-        SimpleNamespace(name="g1", members=[impostor], member_count=1),
-        SimpleNamespace(name="g2", members=[owner], member_count=1),
-    ])
+    adapter._client = SimpleNamespace(
+        guilds=[
+            SimpleNamespace(name="g1", members=[impostor], member_count=1),
+            SimpleNamespace(name="g2", members=[owner], member_count=1),
+        ]
+    )
     monkeypatch.setenv("DISCORD_ALLOWED_USERS", "alice")
 
     await adapter._resolve_allowed_usernames()
@@ -192,7 +215,9 @@ async def test_resolve_allowed_usernames_ignores_display_names(monkeypatch, caps
 
 
 @pytest.mark.asyncio
-async def test_reconnect_closes_previous_client_to_prevent_zombie_websocket(monkeypatch):
+async def test_reconnect_closes_previous_client_to_prevent_zombie_websocket(
+    monkeypatch,
+):
     """Regression for #18187: calling connect() twice without disconnect() in
     between (e.g. during an in-process reconnect attempt) must close the old
     commands.Bot before creating a new one. Without this guard, two websockets
@@ -201,17 +226,26 @@ async def test_reconnect_closes_previous_client_to_prevent_zombie_websocket(monk
     """
     adapter = DiscordAdapter(PlatformConfig(enabled=True, token="test-token"))
 
-    monkeypatch.setattr("gateway.status.acquire_scoped_lock", lambda scope, identity, metadata=None: (True, None))
-    monkeypatch.setattr("gateway.status_scoped_locks.release_scoped_lock", lambda scope, identity: None)
+    monkeypatch.setattr(
+        "gateway.status.acquire_scoped_lock",
+        lambda scope, identity, metadata=None: (True, None),
+    )
+    monkeypatch.setattr(
+        "gateway.status_scoped_locks.release_scoped_lock", lambda scope, identity: None
+    )
 
     intents = SimpleNamespace(
-        message_content=False, dm_messages=False, guild_messages=False,
-        members=False, voice_states=False,
+        message_content=False,
+        dm_messages=False,
+        guild_messages=False,
+        members=False,
+        voice_states=False,
     )
     monkeypatch.setattr(discord_platform.Intents, "default", lambda: intents)
 
     class TrackedBot(FakeBot):
         """FakeBot that records close() calls and reports open/closed state."""
+
         _closed = False
 
         def is_closed(self):
@@ -222,7 +256,9 @@ async def test_reconnect_closes_previous_client_to_prevent_zombie_websocket(monk
 
     created: list[TrackedBot] = []
 
-    def fake_bot_factory(*, command_prefix, intents, proxy=None, allowed_mentions=None, **_):
+    def fake_bot_factory(
+        *, command_prefix, intents, proxy=None, allowed_mentions=None, **_
+    ):
         bot = TrackedBot(intents=intents, allowed_mentions=allowed_mentions)
         created.append(bot)
         return bot
@@ -270,19 +306,29 @@ async def test_connect_clears_previous_fatal_error(monkeypatch):
     """
     adapter = DiscordAdapter(PlatformConfig(enabled=True, token="test-token"))
 
-    monkeypatch.setattr("gateway.status.acquire_scoped_lock", lambda scope, identity, metadata=None: (True, None))
-    monkeypatch.setattr("gateway.status_scoped_locks.release_scoped_lock", lambda scope, identity: None)
+    monkeypatch.setattr(
+        "gateway.status.acquire_scoped_lock",
+        lambda scope, identity, metadata=None: (True, None),
+    )
+    monkeypatch.setattr(
+        "gateway.status_scoped_locks.release_scoped_lock", lambda scope, identity: None
+    )
 
     intents = SimpleNamespace(
-        message_content=False, dm_messages=False, guild_messages=False,
-        members=False, voice_states=False,
+        message_content=False,
+        dm_messages=False,
+        guild_messages=False,
+        members=False,
+        voice_states=False,
     )
     monkeypatch.setattr(discord_platform.Intents, "default", lambda: intents)
     monkeypatch.setattr(discord_platform.commands, "Bot", FakeBot)
     monkeypatch.setattr(adapter, "_resolve_allowed_usernames", AsyncMock())
 
     # Simulate a prior fatal error left over from a transient connect failure.
-    adapter._set_fatal_error("discord_connect_error", "Discord startup failed: boom", retryable=True)
+    adapter._set_fatal_error(
+        "discord_connect_error", "Discord startup failed: boom", retryable=True
+    )
     assert adapter.has_fatal_error is True
 
     assert await adapter.connect() is True
@@ -310,17 +356,26 @@ async def test_connect_timeout_cancels_bot_task(monkeypatch):
     """
     adapter = DiscordAdapter(PlatformConfig(enabled=True, token="test-token"))
 
-    monkeypatch.setattr("gateway.status.acquire_scoped_lock", lambda scope, identity, metadata=None: (True, None))
-    monkeypatch.setattr("gateway.status_scoped_locks.release_scoped_lock", lambda scope, identity: None)
+    monkeypatch.setattr(
+        "gateway.status.acquire_scoped_lock",
+        lambda scope, identity, metadata=None: (True, None),
+    )
+    monkeypatch.setattr(
+        "gateway.status_scoped_locks.release_scoped_lock", lambda scope, identity: None
+    )
 
     intents = SimpleNamespace(
-        message_content=False, dm_messages=False, guild_messages=False,
-        members=False, voice_states=False,
+        message_content=False,
+        dm_messages=False,
+        guild_messages=False,
+        members=False,
+        voice_states=False,
     )
     monkeypatch.setattr(discord_platform.Intents, "default", lambda: intents)
 
     class NeverReadyBot(FakeBot):
         """Bot whose start() never fires on_ready — simulates a slow gateway handshake."""
+
         async def start(self, token):
             await asyncio.Event().wait()  # hang forever
 
@@ -349,6 +404,7 @@ async def test_connect_timeout_cancels_bot_task(monkeypatch):
         "leaving it alive creates a zombie Discord client that produces duplicate threads"
     )
 
+
 @pytest.mark.asyncio
 async def test_disconnect_cancels_running_bot_task(monkeypatch):
     """Regression: disconnect() must cancel _bot_task even when connect() timed out.
@@ -358,8 +414,13 @@ async def test_disconnect_cancels_running_bot_task(monkeypatch):
     """
     adapter = DiscordAdapter(PlatformConfig(enabled=True, token="test-token"))
 
-    monkeypatch.setattr("gateway.status.acquire_scoped_lock", lambda scope, identity, metadata=None: (True, None))
-    monkeypatch.setattr("gateway.status_scoped_locks.release_scoped_lock", lambda scope, identity: None)
+    monkeypatch.setattr(
+        "gateway.status.acquire_scoped_lock",
+        lambda scope, identity, metadata=None: (True, None),
+    )
+    monkeypatch.setattr(
+        "gateway.status_scoped_locks.release_scoped_lock", lambda scope, identity: None
+    )
 
     # Simulate a zombie bot_task that never finishes (as if discord.py is mid-handshake)
     async def _forever():
@@ -377,7 +438,9 @@ async def test_disconnect_cancels_running_bot_task(monkeypatch):
 
     # The task must have been cancelled (done + cancelled) and cleared from the adapter.
     assert adapter._bot_task is None, "disconnect() must clear _bot_task"
-    assert zombie_task.done(), "disconnect() must have awaited the bot task to completion"
+    assert zombie_task.done(), (
+        "disconnect() must have awaited the bot task to completion"
+    )
     assert zombie_task.cancelled(), "disconnect() must cancel the zombie bot task"
 
 
@@ -463,7 +526,9 @@ async def test_safe_sync_slash_commands_only_mutates_diffs():
             _DesiredCommand(desired_updated),
             _DesiredCommand(desired_created),
         ],
-        fetch_commands=AsyncMock(return_value=[existing_same, existing_updated, existing_deleted]),
+        fetch_commands=AsyncMock(
+            return_value=[existing_same, existing_updated, existing_deleted]
+        ),
     )
     fake_http = SimpleNamespace(
         upsert_global_command=AsyncMock(),
@@ -654,7 +719,9 @@ async def test_safe_sync_recreated_survives_rate_limit_between_mutations():
 
 
 @pytest.mark.asyncio
-async def test_post_connect_initialization_retries_fingerprint_after_timeout(tmp_path, monkeypatch):
+async def test_post_connect_initialization_retries_fingerprint_after_timeout(
+    tmp_path, monkeypatch
+):
     adapter = DiscordAdapter(PlatformConfig(enabled=True, token="test-token"))
     monkeypatch.setattr("clawk_constants.get_clawk_home", lambda: tmp_path)
 
@@ -738,7 +805,16 @@ async def test_safe_sync_reads_permission_attrs_from_existing_command():
     class _ExistingCommand:
         """Mirrors discord.py's AppCommand — to_dict() omits nsfw/dm/perms."""
 
-        def __init__(self, command_id, name, description, *, nsfw, guild_only, default_permissions):
+        def __init__(
+            self,
+            command_id,
+            name,
+            description,
+            *,
+            nsfw,
+            guild_only,
+            default_permissions,
+        ):
             self.id = command_id
             self.name = name
             self.description = description
@@ -819,6 +895,7 @@ async def test_safe_sync_reads_permission_attrs_from_existing_command():
 # #31049: unconfigured platform skips reconnection (non-retryable fatal error)
 # ============================================================================
 
+
 class TestDiscordUnconfiguredNonRetryable:
     """Verify that missing dependency/token sets a non-retryable fatal error
     so the gateway does not queue the platform for background reconnection."""
@@ -841,6 +918,7 @@ class TestDiscordUnconfiguredNonRetryable:
 # #79430: PrivilegedIntentsRequired → actionable, non-retryable fatal
 # ============================================================================
 
+
 class PrivilegedIntentsRequired(Exception):
     """Stand-in for discord.errors.PrivilegedIntentsRequired."""
 
@@ -855,7 +933,6 @@ class PrivilegedIntentsRequired(Exception):
 class TestPrivilegedIntentsRequiredFatal:
     """Missing Developer Portal intents must not spin reconnect forever."""
 
-
     def test_needs_members_intent_rules(self):
         needs = discord_platform._needs_server_members_intent
         assert needs(set(), set()) is False
@@ -867,7 +944,9 @@ class TestPrivilegedIntentsRequiredFatal:
     @pytest.mark.asyncio
     async def test_connect_sets_non_retryable_fatal(self, monkeypatch):
         adapter = DiscordAdapter(
-            PlatformConfig(enabled=True, token="test-token", extra={"slash_commands": False})
+            PlatformConfig(
+                enabled=True, token="test-token", extra={"slash_commands": False}
+            )
         )
         monkeypatch.setattr(
             "gateway.status.acquire_scoped_lock",
@@ -918,11 +997,27 @@ async def test_skill_catalog_scan_runs_off_the_event_loop(monkeypatch):
     import threading
 
     adapter = DiscordAdapter(PlatformConfig(enabled=True, token="test-token"))
-    monkeypatch.setattr("gateway.status.acquire_scoped_lock", lambda scope, identity, metadata=None: (True, None))
-    monkeypatch.setattr("gateway.status_scoped_locks.release_scoped_lock", lambda scope, identity: None)
-    monkeypatch.setattr(discord_platform.Intents, "default", lambda: SimpleNamespace(
-        message_content=False, dm_messages=False, guild_messages=False, members=False, voice_states=False))
-    monkeypatch.setattr(discord_platform.commands, "Bot", lambda **kw: FakeBot(intents=kw["intents"]))
+    monkeypatch.setattr(
+        "gateway.status.acquire_scoped_lock",
+        lambda scope, identity, metadata=None: (True, None),
+    )
+    monkeypatch.setattr(
+        "gateway.status_scoped_locks.release_scoped_lock", lambda scope, identity: None
+    )
+    monkeypatch.setattr(
+        discord_platform.Intents,
+        "default",
+        lambda: SimpleNamespace(
+            message_content=False,
+            dm_messages=False,
+            guild_messages=False,
+            members=False,
+            voice_states=False,
+        ),
+    )
+    monkeypatch.setattr(
+        discord_platform.commands, "Bot", lambda **kw: FakeBot(intents=kw["intents"])
+    )
     monkeypatch.setattr(adapter, "_resolve_allowed_usernames", AsyncMock())
 
     async def _scan_leaves_loop_free(run_site):
@@ -931,9 +1026,16 @@ async def test_skill_catalog_scan_runs_off_the_event_loop(monkeypatch):
         def _blocking_scan(*, reserved_names):
             scan_started.set()
             # Only a free loop can set loop_ticked while this wait is in progress.
-            return ({}, [("x", "desc", "/x")], 0) if loop_ticked.wait(timeout=1) else ({}, [], 0)
+            return (
+                ({}, [("x", "desc", "/x")], 0)
+                if loop_ticked.wait(timeout=1)
+                else ({}, [], 0)
+            )
 
-        monkeypatch.setattr("clawk_cli.commands_platforms.discord_skill_commands_by_category", _blocking_scan)
+        monkeypatch.setattr(
+            "clawk_cli.commands_platforms.discord_skill_commands_by_category",
+            _blocking_scan,
+        )
         task = asyncio.create_task(run_site())
         await asyncio.to_thread(scan_started.wait, 1)
         loop_ticked.set()

@@ -29,7 +29,8 @@ Examples:
     clawk logs --since 1h         Lines from the last hour
     clawk logs --since 30m -f     Follow, starting from 30 min ago
     clawk logs list               List available log files with sizes
-""")
+""",
+    )
     logs_parser.add_argument(
         "log_name",
         nargs="?",
@@ -37,16 +38,34 @@ Examples:
         help="Log to view: agent (default), errors, gateway, gui, desktop, update, handoff, or 'list' to show available files",
     )
     logs_parser.add_argument(
-        "-n", "--lines", type=int, default=50, help="Number of lines to show (default: 50)")
+        "-n",
+        "--lines",
+        type=int,
+        default=50,
+        help="Number of lines to show (default: 50)",
+    )
     logs_parser.add_argument(
-        "-f", "--follow", action="store_true", help="Follow the log in real time (like tail -f)")
+        "-f",
+        "--follow",
+        action="store_true",
+        help="Follow the log in real time (like tail -f)",
+    )
     logs_parser.add_argument(
-        "--level", metavar="LEVEL", help="Minimum log level to show (DEBUG, INFO, WARNING, ERROR)")
+        "--level",
+        metavar="LEVEL",
+        help="Minimum log level to show (DEBUG, INFO, WARNING, ERROR)",
+    )
     logs_parser.add_argument(
-        "--session", metavar="ID", help="Filter lines containing this session ID substring")
+        "--session",
+        metavar="ID",
+        help="Filter lines containing this session ID substring",
+    )
     logs_parser.add_argument(
-        "--since", metavar="TIME", help="Show lines since TIME ago (e.g. 1h, 30m, 2d)")
+        "--since", metavar="TIME", help="Show lines since TIME ago (e.g. 1h, 30m, 2d)"
+    )
     logs_parser.add_argument(
-        "--component", metavar="NAME",
-        help="Filter by component: gateway, agent, tools, cli, cron, gui")
+        "--component",
+        metavar="NAME",
+        help="Filter by component: gateway, agent, tools, cli, cron, gui",
+    )
     logs_parser.set_defaults(func=cmd_logs)

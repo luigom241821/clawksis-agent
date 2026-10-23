@@ -57,7 +57,10 @@ def adapter():
     a._app = MagicMock()
     client = AsyncMock()
     client.chat_postMessage = AsyncMock(
-        side_effect=lambda **kw: {"ok": True, "ts": f"ts_{client.chat_postMessage.call_count}"}
+        side_effect=lambda **kw: {
+            "ok": True,
+            "ts": f"ts_{client.chat_postMessage.call_count}",
+        }
     )
     client.chat_update = AsyncMock(return_value={"ok": True})
     a._get_client = MagicMock(return_value=client)
@@ -68,8 +71,6 @@ def adapter():
 
 
 METADATA = {"thread_id": "1784585355.415219"}
-
-
 
 
 @pytest.mark.asyncio
@@ -83,5 +84,3 @@ async def test_distinct_keys_do_not_crosstalk(adapter):
     client = adapter._get_client.return_value
     assert client.chat_postMessage.call_count == 2
     assert client.chat_update.call_count == 0
-
-

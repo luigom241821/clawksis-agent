@@ -10,10 +10,8 @@ class TestResolveEntryApiKey:
         entry = {"provider": "custom", "api_key": "inline-key", "key_env": "FB_KEY"}
         assert resolve_entry_api_key(entry) == "inline-key"
 
-
     def test_no_key_fields_returns_none(self):
         assert resolve_entry_api_key({"provider": "openrouter", "model": "glm"}) is None
-
 
     def test_whitespace_inline_key_falls_through_to_env(self, monkeypatch):
         monkeypatch.setenv("FB_KEY", "env-key")
@@ -28,7 +26,10 @@ class TestResolveEntryApiKey:
         monkeypatch.setenv("FB_KEY", "fake-other-profile-key")
         token = set_secret_scope({"FB_KEY": "fake-active-profile-key"})
         try:
-            assert resolve_entry_api_key({"key_env": "FB_KEY"}) == "fake-active-profile-key"
+            assert (
+                resolve_entry_api_key({"key_env": "FB_KEY"})
+                == "fake-active-profile-key"
+            )
         finally:
             reset_secret_scope(token)
 

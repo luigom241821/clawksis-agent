@@ -58,7 +58,10 @@ def origin_module(_depth: int = 2):
     frame = start
     while frame is not None:
         for value in list(frame.f_globals.values()):
-            if isinstance(value, ModuleType) and getattr(value, "__name__", None) == _ORIGIN_NAME:
+            if (
+                isinstance(value, ModuleType)
+                and getattr(value, "__name__", None) == _ORIGIN_NAME
+            ):
                 return value
         frame = frame.f_back
     mod = sys.modules.get(_ORIGIN_NAME)

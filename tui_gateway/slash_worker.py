@@ -64,8 +64,14 @@ def _prepare_slash_worker_runtime() -> None:
 
     See #61891.
     """
-    from clawk_cli.mcp_startup import start_background_mcp_discovery, wait_for_mcp_discovery
-    start_background_mcp_discovery(logger=logger, thread_name="slash-worker-mcp-discovery")
+    from clawk_cli.mcp_startup import (
+        start_background_mcp_discovery,
+        wait_for_mcp_discovery,
+    )
+
+    start_background_mcp_discovery(
+        logger=logger, thread_name="slash-worker-mcp-discovery"
+    )
     wait_for_mcp_discovery()
 
 
@@ -77,6 +83,7 @@ def _start_parent_death_watchdog(original_ppid) -> None:
         while _in_flight.is_set() and time.monotonic() < deadline:
             time.sleep(0.05)  # let an in-flight command finish/flush
         os._exit(0)
+
     threading.Thread(target=_loop, daemon=True).start()
 
 
@@ -105,6 +112,7 @@ def _refuse_skill_slash(command: str) -> None:
         return
     try:
         from cli import get_skill_commands
+
         commands = get_skill_commands()
     except Exception:
         return
@@ -144,8 +152,12 @@ def _run(cli: "ClawksisCLI", command: str) -> str:
     # Desktop chat bubbles render plain text, not ANSI. A command that emits Rich color (e.g. /journey
     # under the gateway's inherited COLORTERM) would leak raw escapes; strip at this single choke point.
     from tools.ansi_strip import strip_ansi
+
     output = strip_ansi(buf.getvalue().rstrip())
-    cli._harvested_seed, cli._pending_agent_seed = getattr(cli, "_pending_agent_seed", None) or "", None
+    cli._harvested_seed, cli._pending_agent_seed = (
+        getattr(cli, "_pending_agent_seed", None) or "",
+        None,
+    )
     return output
 
 
@@ -167,21 +179,34 @@ def main():
     args = p.parse_args()
     os.environ["CLAWK_SESSION_KEY"] = args.session_key
     os.environ["CLAWK_INTERACTIVE"] = "1"
-    _start_parent_death_watchdog(_watchdog_parent(args.parent_pid, is_windows=sys.platform == "win32"))
+    _start_parent_death_watchdog(
+        _watchdog_parent(args.parent_pid, is_windows=sys.platform == "win32")
+    )
     # Keep the heavyweight CLI import behind the watchdog (importing it at module
     # load left a reparenting window before main() could snapshot PPID), but ahead
     # of MCP discovery: importing cli loads ~/.clawksis/.env and sets CLAWK_QUIET,
     # which MCP ``${VAR}`` interpolation in the runtime prep depends on.
     from cli import ClawksisCLI
+
     _prepare_slash_worker_runtime()
 
-    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+    with (
+        contextlib.redirect_stdout(io.StringIO()),
+        contextlib.redirect_stderr(io.StringIO()),
+    ):
         # --provider pins the CLI to the parent agent's resolved provider (a MoA session's virtual
         # "moa" provider included). Without it ClawksisCLI re-resolves from config and dispatches the
         # MoA preset NAME to the configured real provider (#57283).
-        cli = ClawksisCLI(model=args.model or None, provider=args.provider or None,
-                        compact=True, resume=args.session_key, verbose=False)
-    cli._slash_metrics_surface = None  # the TUI/Desktop client already counted the typed command
+        cli = ClawksisCLI(
+            model=args.model or None,
+            provider=args.provider or None,
+            compact=True,
+            resume=args.session_key,
+            verbose=False,
+        )
+    cli._slash_metrics_surface = (
+        None  # the TUI/Desktop client already counted the typed command
+    )
     cli.is_slash_worker = True
     # Spurious stdin-EOF recovery (same shared-file-description O_NONBLOCK issue as the gateway entry
     # point — any child inheriting fd 0 can flip the flag).
@@ -201,7 +226,12 @@ def main():
             req = json.loads(line)
             rid = req.get("id")
             output = _run(cli, req.get("command", ""))
-            _reply(id=rid, ok=True, output=output, seed=getattr(cli, "_harvested_seed", "") or "")
+            _reply(
+                id=rid,
+                ok=True,
+                output=output,
+                seed=getattr(cli, "_harvested_seed", "") or "",
+            )
         except Exception as e:
             _reply(id=rid, ok=False, error=str(e))
         finally:
@@ -210,10 +240,13 @@ def main():
             # other long-lived gateway processes (trim_memory's shared cooldown coalesces nearby activity).
             try:
                 from clawk_cli.mem_trim import trim_memory
+
                 trim_memory(reason="slash worker command completion")
             except Exception as exc:
                 # debug, not warning — a persistent failure would repeat every command.
-                logger.debug("slash worker memory trim failed: %s: %s", type(exc).__name__, exc)
+                logger.debug(
+                    "slash worker memory trim failed: %s: %s", type(exc).__name__, exc
+                )
 
 
 if __name__ == "__main__":

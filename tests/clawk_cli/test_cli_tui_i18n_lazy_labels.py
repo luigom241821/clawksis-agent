@@ -4,6 +4,7 @@ A language pack registered (or ``display.language`` changed) after ``clawk_cli.c
 was imported must still reach the approval panel and the hint row; a module-level dict of
 English strings would freeze the first language forever.
 """
+
 import queue
 import threading
 import time
@@ -41,7 +42,9 @@ def swapped_catalog(tmp_path, monkeypatch):
 def _cli_with_approval():
     cli = ClawksisCLI.__new__(ClawksisCLI)
     cli._approval_lock = threading.Lock()
-    cli._sudo_state = cli._secret_state = cli._slash_confirm_state = cli._connection_state = None
+    cli._sudo_state = cli._secret_state = cli._slash_confirm_state = (
+        cli._connection_state
+    ) = None
     cli._clarify_state = None
     cli._clarify_freetext = False
     cli._command_running = False
@@ -61,7 +64,10 @@ def _cli_with_approval():
 def test_approval_panel_and_hint_follow_the_live_catalog(swapped_catalog, monkeypatch):
     import shutil
 
-    monkeypatch.setattr("cli.shutil.get_terminal_size", lambda *_a, **_k: shutil.os.terminal_size((100, 40)))
+    monkeypatch.setattr(
+        "cli.shutil.get_terminal_size",
+        lambda *_a, **_k: shutil.os.terminal_size((100, 40)),
+    )
     cli = _cli_with_approval()
 
     rendered = "".join(text for _style, text in cli._get_approval_display_fragments())
@@ -71,7 +77,9 @@ def test_approval_panel_and_hint_follow_the_live_catalog(swapped_catalog, monkey
 
     hint = "".join(text for _style, text in cli._tui_hint_text())
     assert hint.startswith("  HINT-SWAPPED")
-    assert hint.rstrip().endswith("s)")  # countdown row still appended after the localized hint
+    assert hint.rstrip().endswith(
+        "s)"
+    )  # countdown row still appended after the localized hint
 
 
 def test_unknown_choice_id_renders_verbatim():

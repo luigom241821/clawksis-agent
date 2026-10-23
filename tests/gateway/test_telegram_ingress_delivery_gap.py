@@ -4,6 +4,7 @@ The transport probes prove getUpdates round-trips complete; these pin the one si
 give — whether PTB's dispatcher hands the fetched updates to a handler — and the once-per-adapter
 report for an adapter with no gateway message handler at all.
 """
+
 import asyncio
 import logging
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -31,7 +32,9 @@ def _receive(adapter: TelegramAdapter, n: int, generation: int | None = None) ->
         return_value={"ok": True, "result": [{"update_id": i} for i in range(n)]}
     )
     adapter._observe_polling_request_result(
-        request, adapter._polling_generation if generation is None else generation, (200, b"{}")
+        request,
+        adapter._polling_generation if generation is None else generation,
+        (200, b"{}"),
     )
 
 
@@ -52,7 +55,9 @@ def _deaf_reports(caplog) -> list[str]:
 def _stall_reports(sched) -> list[str]:
     """Errors handed to the (stubbed) recovery handoff: the stall's only announcement."""
     errors = [call.args[0] for call in sched.call_args_list]
-    assert all(type(e) is tg_adapter._PollingStallError and _DEAF in str(e) for e in errors)
+    assert all(
+        type(e) is tg_adapter._PollingStallError and _DEAF in str(e) for e in errors
+    )
     return [str(e) for e in errors]
 
 
@@ -64,10 +69,14 @@ async def test_stall_reported_once_on_backlog_regardless_of_update_age():
     _receive(adapter, 2)
     await _dispatch(adapter, 2)
     with patch.object(adapter, "_schedule_polling_recovery") as sched:
-        _heartbeats(adapter, 2 * tg_adapter._INGRESS_DISPATCH_STALL_HEARTBEATS)  # outlast the first-heartbeat re-arm
+        _heartbeats(
+            adapter, 2 * tg_adapter._INGRESS_DISPATCH_STALL_HEARTBEATS
+        )  # outlast the first-heartbeat re-arm
         assert sched.call_count == 0
 
-        for _ in range(5):  # a fresh update lands before every heartbeat, none dispatched
+        for _ in range(
+            5
+        ):  # a fresh update lands before every heartbeat, none dispatched
             _receive(adapter, 1)
             adapter._check_ingress_dispatch_stall()
     (report,) = _stall_reports(sched)
@@ -80,12 +89,18 @@ async def test_dispatch_progress_rearms_the_report(caplog):
     caplog.set_level(logging.WARNING)
     with patch.object(adapter, "_schedule_polling_recovery") as sched:
         _receive(adapter, 3)
-        recovery = asyncio.get_running_loop().create_future()  # unrelated recovery in flight
+        recovery = (
+            asyncio.get_running_loop().create_future()
+        )  # unrelated recovery in flight
         adapter._polling_error_task = recovery
         _heartbeats(adapter, tg_adapter._INGRESS_DISPATCH_STALL_HEARTBEATS + 1)
-        assert sched.call_count == 0  # deferred: a report now would be swallowed by the in-flight guard
+        assert (
+            sched.call_count == 0
+        )  # deferred: a report now would be swallowed by the in-flight guard
         recovery.set_result(None)
-        _heartbeats(adapter, 3)  # 270s: a slow-but-bounded (<=300s) sequential handler is not a wedge
+        _heartbeats(
+            adapter, 3
+        )  # 270s: a slow-but-bounded (<=300s) sequential handler is not a wedge
         assert sched.call_count == 0
         _heartbeats(adapter, 2)
         assert len(_stall_reports(sched)) == 1
@@ -95,7 +110,9 @@ async def test_dispatch_progress_rearms_the_report(caplog):
         assert len(_stall_reports(sched)) == 1
         _heartbeats(adapter, 4)
         assert len(_stall_reports(sched)) == 2
-    assert _deaf_reports(caplog) == []  # stubbed handoff: no separate pre-log announces the stall
+    assert (
+        _deaf_reports(caplog) == []
+    )  # stubbed handoff: no separate pre-log announces the stall
 
 
 @pytest.mark.asyncio
@@ -154,9 +171,14 @@ async def test_missing_message_handler_is_logged_once_not_silent(caplog):
     event = MessageEvent(
         text="hi",
         message_type=MessageType.TEXT,
-        source=SessionSource(platform=Platform.TELEGRAM, chat_id="1", user_id="1", chat_type="dm"),
+        source=SessionSource(
+            platform=Platform.TELEGRAM, chat_id="1", user_id="1", chat_type="dm"
+        ),
     )
     with caplog.at_level(logging.ERROR):
         await adapter.handle_message(event)
         await adapter.handle_message(event)
-    assert len([r for r in caplog.records if "no gateway message handler" in r.message]) == 1
+    assert (
+        len([r for r in caplog.records if "no gateway message handler" in r.message])
+        == 1
+    )

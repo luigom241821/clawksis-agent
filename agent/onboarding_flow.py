@@ -19,9 +19,15 @@ ONBOARDING, COMPLETE, PHASE_SKIPPED = "onboarding", "complete", "skipped"
 CARD_TIMEOUT_S = 300
 MAX_PLUGINS = 5
 
-LAYOUT_OPTIONS = ({"id": "sidebar-left", "label": "Basic"}, {"id": "terminal-deck", "label": "Elite"})
-TOUR_OPTIONS = ({"id": "quick", "label": "Quick tour"}, {"id": "full", "label": "Show me everything"},
-                {"id": "skip", "label": "Skip, let's build something"})
+LAYOUT_OPTIONS = (
+    {"id": "sidebar-left", "label": "Basic"},
+    {"id": "terminal-deck", "label": "Elite"},
+)
+TOUR_OPTIONS = (
+    {"id": "quick", "label": "Quick tour"},
+    {"id": "full", "label": "Show me everything"},
+    {"id": "skip", "label": "Skip, let's build something"},
+)
 
 
 @dataclass(frozen=True)
@@ -47,7 +53,11 @@ class Facts:
 
     @classmethod
     def from_stored(cls, data: Mapping[str, Any]) -> Facts:
-        known = {key: data[key] for key in cls.__dataclass_fields__ if key in data and key != "full_name"}
+        known = {
+            key: data[key]
+            for key in cls.__dataclass_fields__
+            if key in data and key != "full_name"
+        }
         return cls(**{**known, "plugins": tuple(known.get("plugins") or ())})
 
 
@@ -173,16 +183,41 @@ class Beat:
 
 BEATS: tuple[Beat, ...] = (
     Beat("name", lambda facts, picks: {}, picks=("name",), value="name"),
-    Beat("theme", lambda facts, picks: {"picker": "accent"}, picks=("accent", "mode"), value="accent"),
-    Beat("layout", lambda facts, picks: {"options": list(LAYOUT_OPTIONS)}, picks=("layout",), value="layout",
-         values=lambda facts, picks: _option_ids(LAYOUT_OPTIONS)),
+    Beat(
+        "theme",
+        lambda facts, picks: {"picker": "accent"},
+        picks=("accent", "mode"),
+        value="accent",
+    ),
+    Beat(
+        "layout",
+        lambda facts, picks: {"options": list(LAYOUT_OPTIONS)},
+        picks=("layout",),
+        value="layout",
+        values=lambda facts, picks: _option_ids(LAYOUT_OPTIONS),
+    ),
     Beat("connectors", lambda facts, picks: {}, picks=("connected", "newly_connected")),
-    Beat("plugins", lambda facts, picks: {"plugins": list(facts.plugins[:MAX_PLUGINS])}, picks=("installed",),
-         when=lambda facts, picks: bool(facts.plugins)),
-    Beat("tour", lambda facts, picks: {"options": list(TOUR_OPTIONS)}, picks=("tour",), value="tour",
-         values=lambda facts, picks: _option_ids(TOUR_OPTIONS), when=lambda facts, picks: facts.tours),
-    Beat("build", lambda facts, picks: {"options": card_options(picks.get("build_options"))}, picks=("build",),
-         value="build", values=build_values),
+    Beat(
+        "plugins",
+        lambda facts, picks: {"plugins": list(facts.plugins[:MAX_PLUGINS])},
+        picks=("installed",),
+        when=lambda facts, picks: bool(facts.plugins),
+    ),
+    Beat(
+        "tour",
+        lambda facts, picks: {"options": list(TOUR_OPTIONS)},
+        picks=("tour",),
+        value="tour",
+        values=lambda facts, picks: _option_ids(TOUR_OPTIONS),
+        when=lambda facts, picks: facts.tours,
+    ),
+    Beat(
+        "build",
+        lambda facts, picks: {"options": card_options(picks.get("build_options"))},
+        picks=("build",),
+        value="build",
+        values=build_values,
+    ),
 )
 BEAT_BY_ID = {beat.id: beat for beat in BEATS}
 BEAT_IDS = tuple(BEAT_BY_ID)
@@ -190,26 +225,45 @@ BEAT_IDS = tuple(BEAT_BY_ID)
 
 def new_record(facts: Facts, *, now: float = 0.0, run_id: str = "") -> dict:
     record = {
-        "run_id": run_id, "phase": ONBOARDING, "beats": {beat.id: PENDING for beat in BEATS}, "waiting": None,
-        "picks": {"name": None, "accent": None, "mode": None, "layout": None, "connected": [],
-                  "newly_connected": [], "installed": [], "tour": None, "build": None,
-                  "build_options": []},
-        "look_around": "not_offered", "facts": facts.stored(), "ended_by": None,
-        "started_at": now, "updated_at": now,
+        "run_id": run_id,
+        "phase": ONBOARDING,
+        "beats": {beat.id: PENDING for beat in BEATS},
+        "waiting": None,
+        "picks": {
+            "name": None,
+            "accent": None,
+            "mode": None,
+            "layout": None,
+            "connected": [],
+            "newly_connected": [],
+            "installed": [],
+            "tour": None,
+            "build": None,
+            "build_options": [],
+        },
+        "look_around": "not_offered",
+        "facts": facts.stored(),
+        "ended_by": None,
+        "started_at": now,
+        "updated_at": now,
     }
     return _settle_unfit(record, facts)
 
 
 def _settle_unfit(record: dict, facts: Facts) -> dict:
     for beat in BEATS:
-        if record["beats"][beat.id] == PENDING and not beat.when(facts, record["picks"]):
+        if record["beats"][beat.id] == PENDING and not beat.when(
+            facts, record["picks"]
+        ):
             record["beats"][beat.id] = SKIPPED
     return record
 
 
 def next_beat(record: Mapping[str, Any]) -> str | None:
     """The first beat still pending or shown; None when every beat is settled."""
-    return next((beat for beat in BEAT_IDS if record["beats"][beat] in (PENDING, SHOWN)), None)
+    return next(
+        (beat for beat in BEAT_IDS if record["beats"][beat] in (PENDING, SHOWN)), None
+    )
 
 
 def is_active(record: Mapping[str, Any] | None) -> bool:
@@ -225,7 +279,9 @@ def _next_field(record: Mapping[str, Any]) -> str:
 
 def _settle(record: dict, beat: str, patch: Mapping[str, Any]) -> None:
     record["beats"][beat] = DONE
-    record["picks"].update({key: value for key, value in patch.items() if key in BEAT_BY_ID[beat].picks})
+    record["picks"].update(
+        {key: value for key, value in patch.items() if key in BEAT_BY_ID[beat].picks}
+    )
 
 
 def _build_picks_error(record: dict, event: Shown, facts: Facts) -> str | None:
@@ -234,18 +290,26 @@ def _build_picks_error(record: dict, event: Shown, facts: Facts) -> str | None:
         return None
     if error := pick_error(event.options, facts, record["picks"]):
         return error
-    record["picks"]["build_options"] = [{"id": o["id"], "label": o["label"].strip()} for o in event.options]
+    record["picks"]["build_options"] = [
+        {"id": o["id"], "label": o["label"].strip()} for o in event.options
+    ]
     return None
 
 
 def _has_suggestions(suggest: Any) -> bool:
-    return isinstance(suggest, list | tuple) and any(str(slug).strip() for slug in suggest)
+    return isinstance(suggest, list | tuple) and any(
+        str(slug).strip() for slug in suggest
+    )
 
 
 def _shown(record: dict, event: Shown, facts: Facts, now: float) -> Step:
     if not BEAT_BY_ID[event.beat].when(facts, record["picks"]):
         record["beats"][event.beat] = SKIPPED
-        return Step(record, {"beat": event.beat, "skipped": True, "next": _next_field(record)}, "moved_on")
+        return Step(
+            record,
+            {"beat": event.beat, "skipped": True, "next": _next_field(record)},
+            "moved_on",
+        )
     if event.beat == "build" and (error := _build_picks_error(record, event, facts)):
         # No ``beat``: no card was shown, so the transcript draws nothing for this refusal.
         return Step(record, {"error": error})
@@ -255,12 +319,16 @@ def _shown(record: dict, event: Shown, facts: Facts, now: float) -> Step:
         if not _has_suggestions(event.suggest):
             return Step(record, {"error": "offer first"}, "offer_first")
     # A later card on screen means the user moved on from an earlier card left open.
-    for earlier in BEAT_IDS[:BEAT_IDS.index(event.beat)]:
+    for earlier in BEAT_IDS[: BEAT_IDS.index(event.beat)]:
         if record["beats"][earlier] == SHOWN:
             record["beats"][earlier] = DONE
     if record["beats"][event.beat] != DONE:
         record["beats"][event.beat] = SHOWN
-    record["waiting"] = {"beat": event.beat, "tool_call_id": event.tool_call_id, "since": now}
+    record["waiting"] = {
+        "beat": event.beat,
+        "tool_call_id": event.tool_call_id,
+        "since": now,
+    }
     return Step(record, {})
 
 
@@ -268,7 +336,9 @@ def _is_names(value: Any) -> bool:
     return isinstance(value, list) and all(isinstance(item, str) for item in value)
 
 
-def valid_answer(beat: str, answer: Mapping[str, Any], facts: Facts, picks: Mapping[str, Any]) -> bool:
+def valid_answer(
+    beat: str, answer: Mapping[str, Any], facts: Facts, picks: Mapping[str, Any]
+) -> bool:
     """A card answer carries only its beat's pick keys, with ids from the card's own options. ``label``
     is the text the card showed, kept for the transcript and never recorded."""
     spec = BEAT_BY_ID[beat]
@@ -284,36 +354,64 @@ def valid_answer(beat: str, answer: Mapping[str, Any], facts: Facts, picks: Mapp
     if beat == "theme":
         return all(value is None or isinstance(value, str) for value in answer.values())
     if beat == "plugins":
-        return _is_names(answer.get("installed")) and set(answer["installed"]) <= set(facts.plugins)
+        return _is_names(answer.get("installed")) and set(answer["installed"]) <= set(
+            facts.plugins
+        )
     return "connected" in answer and all(_is_names(value) for value in answer.values())
 
 
 def _answered(record: dict, event: Answered, facts: Facts, now: float) -> Step:
     record["waiting"] = None
     if not valid_answer(event.beat, event.answer, facts, record["picks"]):
-        return Step(record, {"beat": event.beat, "error": "The card sent an answer this beat does not accept. "
-                             f'Bring it back with setup_beat(beat="{event.beat}").'})
+        return Step(
+            record,
+            {
+                "beat": event.beat,
+                "error": "The card sent an answer this beat does not accept. "
+                f'Bring it back with setup_beat(beat="{event.beat}").',
+            },
+        )
     _settle(record, event.beat, event.answer)
     said = {"said": event.said} if event.said else {}
-    return Step(record, {"beat": event.beat, "answer": dict(event.answer), **said, "next": _next_field(record)},
-                BEAT_BY_ID[event.beat].after(record["picks"]))
+    return Step(
+        record,
+        {
+            "beat": event.beat,
+            "answer": dict(event.answer),
+            **said,
+            "next": _next_field(record),
+        },
+        BEAT_BY_ID[event.beat].after(record["picks"]),
+    )
 
 
 def _note_present(record: dict, event: Wrote | TimedOut | Recorded | Skipped) -> dict:
     """Record the beat's picks as the machine has them now; returns them for the result."""
-    present = {key: value for key, value in (event.present or {}).items() if key in BEAT_BY_ID[event.beat].picks}
+    present = {
+        key: value
+        for key, value in (event.present or {}).items()
+        if key in BEAT_BY_ID[event.beat].picks
+    }
     record["picks"].update(present)
     return present
 
 
 def _wrote(record: dict, event: Wrote, facts: Facts, now: float) -> Step:
     record["waiting"] = None
-    return Step(record, {"beat": event.beat, "wrote_instead": True, **_note_present(record, event)}, "wrote")
+    return Step(
+        record,
+        {"beat": event.beat, "wrote_instead": True, **_note_present(record, event)},
+        "wrote",
+    )
 
 
 def _timed_out(record: dict, event: TimedOut, facts: Facts, now: float) -> Step:
     record["waiting"] = None
-    return Step(record, {"beat": event.beat, "timed_out": True, **_note_present(record, event)}, "timed_out")
+    return Step(
+        record,
+        {"beat": event.beat, "timed_out": True, **_note_present(record, event)},
+        "timed_out",
+    )
 
 
 # Beats a general tool applies; their result settles the beat, so a value given in words would only
@@ -324,21 +422,44 @@ APPLIED_BY = {"theme": "set_theme", "layout": "set_theme"}
 def _recorded(record: dict, event: Recorded, facts: Facts, now: float) -> Step:
     beat = BEAT_BY_ID[event.beat]
     if tool := APPLIED_BY.get(event.beat):
-        return Step(record, {"error": f"Apply the {event.beat} with {tool}; its result settles this beat.",
-                             "next": _next_field(record)})
+        return Step(
+            record,
+            {
+                "error": f"Apply the {event.beat} with {tool}; its result settles this beat.",
+                "next": _next_field(record),
+            },
+        )
     accepted = beat.values(facts, record["picks"]) if beat.values else None
     if accepted is not None and event.value not in accepted:
-        return Step(record, {"error": f"value for {event.beat} must be one of: {', '.join(accepted)}.",
-                             "next": _next_field(record)})
+        return Step(
+            record,
+            {
+                "error": f"value for {event.beat} must be one of: {', '.join(accepted)}.",
+                "next": _next_field(record),
+            },
+        )
     _settle(record, event.beat, {beat.value: event.value} if beat.value else {})
     present = _note_present(record, event)
-    return Step(record, {"recorded": event.beat, **present, "next": _next_field(record)}, beat.after(record["picks"]))
+    return Step(
+        record,
+        {"recorded": event.beat, **present, "next": _next_field(record)},
+        beat.after(record["picks"]),
+    )
 
 
 def _skipped(record: dict, event: Skipped, facts: Facts, now: float) -> Step:
     record["beats"][event.beat] = SKIPPED
     present = _note_present(record, event)
-    return Step(record, {"recorded": event.beat, "skipped": True, **present, "next": _next_field(record)}, "moved_on")
+    return Step(
+        record,
+        {
+            "recorded": event.beat,
+            "skipped": True,
+            **present,
+            "next": _next_field(record),
+        },
+        "moved_on",
+    )
 
 
 def _end(record: dict, event: End, facts: Facts, now: float) -> Step:
@@ -351,9 +472,14 @@ def _end(record: dict, event: End, facts: Facts, now: float) -> Step:
 
 def _done(record: dict, event: Done, facts: Facts, now: float) -> Step:
     if record["beats"]["build"] == PENDING:
-        return Step(record, {"error": "Onboarding ends after the first build is shown and its close card is "
-                                      "answered. If they want to stop, tell them about the Skip setup button.",
-                             "next": _next_field(record)})
+        return Step(
+            record,
+            {
+                "error": "Onboarding ends after the first build is shown and its close card is "
+                "answered. If they want to stop, tell them about the Skip setup button.",
+                "next": _next_field(record),
+            },
+        )
     record["beats"]["build"] = DONE
     return Step(record, {}, "complete")
 
@@ -365,11 +491,30 @@ def _applied_beats(event: Applied) -> list[tuple[str, dict]]:
         values = result.get("applied") or result.get("picked") or {}
         theme = {key: values[key] for key in ("accent", "mode") if key in values}
         settled = [("theme", theme)] if theme else []
-        return [*settled, ("layout", {"layout": values["layout"]})] if values.get("layout") else settled
-    if event.tool == "manage_connections" and args.get("action") == "display" and "connected" in result:
-        return [("connectors", {"connected": list(result.get("connected") or ()),
-                                "newly_connected": list(result.get("newly_connected") or ())})]
-    if event.tool == "gui_tour" and args.get("action") == "start" and not result.get("error"):
+        return (
+            [*settled, ("layout", {"layout": values["layout"]})]
+            if values.get("layout")
+            else settled
+        )
+    if (
+        event.tool == "manage_connections"
+        and args.get("action") == "display"
+        and "connected" in result
+    ):
+        return [
+            (
+                "connectors",
+                {
+                    "connected": list(result.get("connected") or ()),
+                    "newly_connected": list(result.get("newly_connected") or ()),
+                },
+            )
+        ]
+    if (
+        event.tool == "gui_tour"
+        and args.get("action") == "start"
+        and not result.get("error")
+    ):
         return [("tour", {"tour": args.get("preset") or "full"})]
     return []
 
@@ -387,12 +532,23 @@ def _applied(record: dict, event: Applied, facts: Facts, now: float) -> Step:
         _settle(record, beat, patch)
         if (record["waiting"] or {}).get("beat") == beat:
             record["waiting"] = None
-    return Step(record, {}, f"after_{settled}" if settled else f"already_{repeated}" if repeated else "")
+    return Step(
+        record,
+        {},
+        f"after_{settled}" if settled else f"already_{repeated}" if repeated else "",
+    )
 
 
 _HANDLERS: dict[type, Callable[[dict, Any, Facts, float], Step]] = {
-    Shown: _shown, Answered: _answered, Wrote: _wrote, TimedOut: _timed_out, Recorded: _recorded,
-    Skipped: _skipped, End: _end, Done: _done, Applied: _applied,
+    Shown: _shown,
+    Answered: _answered,
+    Wrote: _wrote,
+    TimedOut: _timed_out,
+    Recorded: _recorded,
+    Skipped: _skipped,
+    End: _end,
+    Done: _done,
+    Applied: _applied,
 }
 _ENDED = "Onboarding is over in this chat; it is a normal chat now."
 
@@ -409,7 +565,9 @@ def _ended(record: dict, event: Event) -> Step:
     return Step(record, {"error": _ENDED})
 
 
-def apply(record: Mapping[str, Any], event: Event, facts: Facts, *, now: float = 0.0) -> Step:
+def apply(
+    record: Mapping[str, Any], event: Event, facts: Facts, *, now: float = 0.0
+) -> Step:
     """The record after ``event``, the model-facing result, and the reminder key. The run completes
     when the build beat settles: the answer to the first-task card ends onboarding."""
     working = copy.deepcopy(dict(record))

@@ -69,7 +69,9 @@ def _make_runner(session_db=None):
         platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="***")}
     )
     adapter = MagicMock()
-    adapter.config = runner.config.platforms[Platform.TELEGRAM]  # the receiving bot's own extra
+    adapter.config = runner.config.platforms[
+        Platform.TELEGRAM
+    ]  # the receiving bot's own extra
     adapter.send = AsyncMock()
     adapter.send_image_file = AsyncMock()
     adapter._bot = None
@@ -84,23 +86,35 @@ def _make_runner(session_db=None):
     )
 
     runner.session_store = MagicMock()
-    runner.session_store._generate_session_key.side_effect = lambda source: build_session_key(
-        source,
-        group_sessions_per_user=getattr(runner.config, "group_sessions_per_user", True),
-        thread_sessions_per_user=getattr(runner.config, "thread_sessions_per_user", False),
-    )
-    runner.session_store.get_or_create_session.side_effect = lambda source, force_new=False, **_kwargs: SessionEntry(
-        session_key=build_session_key(
+    runner.session_store._generate_session_key.side_effect = lambda source: (
+        build_session_key(
             source,
-            group_sessions_per_user=getattr(runner.config, "group_sessions_per_user", True),
-            thread_sessions_per_user=getattr(runner.config, "thread_sessions_per_user", False),
-        ),
-        session_id="sess-topic" if source.thread_id else "sess-root",
-        created_at=datetime.now(),
-        updated_at=datetime.now(),
-        platform=Platform.TELEGRAM,
-        chat_type="dm",
-        origin=source,
+            group_sessions_per_user=getattr(
+                runner.config, "group_sessions_per_user", True
+            ),
+            thread_sessions_per_user=getattr(
+                runner.config, "thread_sessions_per_user", False
+            ),
+        )
+    )
+    runner.session_store.get_or_create_session.side_effect = (
+        lambda source, force_new=False, **_kwargs: SessionEntry(
+            session_key=build_session_key(
+                source,
+                group_sessions_per_user=getattr(
+                    runner.config, "group_sessions_per_user", True
+                ),
+                thread_sessions_per_user=getattr(
+                    runner.config, "thread_sessions_per_user", False
+                ),
+            ),
+            session_id="sess-topic" if source.thread_id else "sess-root",
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            platform=Platform.TELEGRAM,
+            chat_type="dm",
+            origin=source,
+        )
     )
     runner.session_store.load_transcript.return_value = []
     runner.session_store.has_any_sessions.return_value = True
@@ -112,7 +126,13 @@ def _make_runner(session_db=None):
     # Default switch_session impl: returns a SessionEntry carrying the target
     # session_id. Mirrors SessionStore.switch_session semantics for tests that
     # exercise Telegram topic binding rebinds without a real store.
-    def _switch_session(session_key, target_session_id, *, expected_session_id=None, preserve_prompt_pin=True):
+    def _switch_session(
+        session_key,
+        target_session_id,
+        *,
+        expected_session_id=None,
+        preserve_prompt_pin=True,
+    ):
         return SessionEntry(
             session_key=session_key,
             session_id=target_session_id,
@@ -122,6 +142,7 @@ def _make_runner(session_db=None):
             chat_type="dm",
             origin=None,
         )
+
     runner.session_store.switch_session = MagicMock(side_effect=_switch_session)
     runner._running_agents = {}
     runner._running_agents_ts = {}
@@ -134,6 +155,7 @@ def _make_runner(session_db=None):
     # Gateway holds the async facade; the slash handlers await it.
     if session_db is not None:
         from clawk_state import AsyncSessionDB
+
         session_db = AsyncSessionDB(session_db)
     runner._session_db = session_db
     runner._reasoning_config = None
@@ -146,7 +168,9 @@ def _make_runner(session_db=None):
     runner._session_key_for_source = lambda source: build_session_key(
         source,
         group_sessions_per_user=getattr(runner.config, "group_sessions_per_user", True),
-        thread_sessions_per_user=getattr(runner.config, "thread_sessions_per_user", False),
+        thread_sessions_per_user=getattr(
+            runner.config, "thread_sessions_per_user", False
+        ),
     )
     runner._set_session_env = lambda _context: None
     runner._should_send_voice_reply = lambda *_args, **_kwargs: False
@@ -371,7 +395,9 @@ async def test_managed_topic_binding_reuses_restored_session_over_static_lane_se
         gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"}
     )
 
-    result = await runner._handle_message(_make_event("continue restored", thread_id="17585"))
+    result = await runner._handle_message(
+        _make_event("continue restored", thread_id="17585")
+    )
 
     assert result == "restored response"
     assert captured["session_id"] == "restored-session"
@@ -392,11 +418,16 @@ async def test_telegram_group_prompt_is_not_topic_lobby_even_when_dm_topic_mode_
         gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"}
     )
 
-    result = await runner._handle_message(_make_group_event("hello group", thread_id="555"))
+    result = await runner._handle_message(
+        _make_group_event("hello group", thread_id="555")
+    )
 
     assert result == "group agent response"
     runner._handle_message_with_agent.assert_awaited_once()
-    assert session_db.get_telegram_topic_binding(chat_id="-100123", thread_id="555") is None
+    assert (
+        session_db.get_telegram_topic_binding(chat_id="-100123", thread_id="555")
+        is None
+    )
 
 
 @pytest.mark.asyncio
@@ -427,9 +458,7 @@ async def test_group_new_keeps_existing_reset_semantics_when_dm_topic_mode_enabl
     # /new appends a random tip from clawk_cli.tips; one tip's text contains
     # the phrase "parallel work", which collides with the negative assertion
     # below (observed as a 1-in-N CI flake). Pin the tip.
-    monkeypatch.setattr(
-        "clawk_cli.tips.get_random_tip", lambda: "pinned tip for test"
-    )
+    monkeypatch.setattr("clawk_cli.tips.get_random_tip", lambda: "pinned tip for test")
 
     result = await runner._handle_message(_make_group_event("/new", thread_id="555"))
 
@@ -439,7 +468,9 @@ async def test_group_new_keeps_existing_reset_semantics_when_dm_topic_mode_enabl
 
 
 @pytest.mark.asyncio
-async def test_new_inside_telegram_topic_rewrites_binding_to_new_session(tmp_path, monkeypatch):
+async def test_new_inside_telegram_topic_rewrites_binding_to_new_session(
+    tmp_path, monkeypatch
+):
     """Regression: /new inside a topic must rewrite the binding table.
 
     Previously /new reset the SessionStore entry but the
@@ -494,7 +525,8 @@ async def test_new_inside_telegram_topic_rewrites_binding_to_new_session(tmp_pat
     await runner._handle_message(_make_event("/new", thread_id="17585"))
 
     binding = session_db.get_telegram_topic_binding(
-        chat_id="208214988", thread_id="17585",
+        chat_id="208214988",
+        thread_id="17585",
     )
     assert binding is not None
     assert binding["session_id"] == "new-topic-session"
@@ -519,7 +551,9 @@ async def test_topic_binding_follows_compression_tip_on_read(tmp_path, monkeypat
     # create_session sets started_at to "now", so the child's started_at is
     # always >= parent's ended_at on a real clock.
     session_db.create_session(
-        session_id="parent-session", source="telegram", user_id="208214988",
+        session_id="parent-session",
+        source="telegram",
+        user_id="208214988",
     )
     session_db.end_session("parent-session", end_reason="compression")
     session_db.create_session(
@@ -570,14 +604,17 @@ async def test_topic_binding_follows_compression_tip_on_read(tmp_path, monkeypat
         gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"}
     )
 
-    await runner._handle_message(_make_event("follow up after compression", thread_id="17585"))
+    await runner._handle_message(
+        _make_event("follow up after compression", thread_id="17585")
+    )
 
     # The route was advanced to the compression tip, not the stale parent.
     assert switched_to.get("id") == "child-session"
     # The binding row was rewritten to point at the descendant so future
     # inbound messages skip the tip walk and resolve directly.
     refreshed = session_db.get_telegram_topic_binding(
-        chat_id="208214988", thread_id="17585",
+        chat_id="208214988",
+        thread_id="17585",
     )
     assert refreshed is not None
     assert refreshed["session_id"] == "child-session"
@@ -593,12 +630,17 @@ async def test_topic_binding_heal_switches_with_cas_on_snapshot_session(tmp_path
     """
     session_db = SessionDB(db_path=tmp_path / "state.db")
     session_db.enable_telegram_topic_mode(chat_id="208214988", user_id="208214988")
-    session_db.create_session(session_id="bound-session", source="telegram", user_id="208214988")
+    session_db.create_session(
+        session_id="bound-session", source="telegram", user_id="208214988"
+    )
     topic_source = _make_source(thread_id="17585")
     topic_key = build_session_key(topic_source)
     session_db.bind_telegram_topic(
-        chat_id="208214988", thread_id="17585", user_id="208214988",
-        session_key=topic_key, session_id="bound-session",
+        chat_id="208214988",
+        thread_id="17585",
+        user_id="208214988",
+        session_key=topic_key,
+        session_id="bound-session",
     )
     runner = _make_runner(session_db=session_db)
     snapshot = runner.session_store.get_or_create_session(topic_source)
@@ -607,12 +649,16 @@ async def test_topic_binding_heal_switches_with_cas_on_snapshot_session(tmp_path
     await runner._hmwa_heal_telegram_topic_binding(topic_source, snapshot, topic_key)
 
     runner.session_store.switch_session.assert_called_once_with(
-        topic_key, "bound-session", expected_session_id=snapshot.session_id,
+        topic_key,
+        "bound-session",
+        expected_session_id=snapshot.session_id,
     )
 
 
 @pytest.mark.asyncio
-async def test_topic_root_command_lists_unlinked_sessions_for_restore(tmp_path, monkeypatch):
+async def test_topic_root_command_lists_unlinked_sessions_for_restore(
+    tmp_path, monkeypatch
+):
     import gateway.run as gateway_run
 
     session_db = SessionDB(db_path=tmp_path / "state.db")
@@ -722,16 +768,20 @@ async def test_handoff_to_telegram_dm_topic_uses_dm_lane_not_generic_thread(tmp_
 
     runner._handle_message = AsyncMock(side_effect=fake_handle_message)
 
-    await runner._process_handoff({
-        "id": "cli-session",
-        "title": "CLI work",
-        "handoff_platform": "telegram",
-    })
+    await runner._process_handoff(
+        {
+            "id": "cli-session",
+            "title": "CLI work",
+            "handoff_platform": "telegram",
+        }
+    )
 
     expected_source = _make_source(thread_id="17585")
     expected_key = build_session_key(expected_source)
     runner.session_store.switch_session.assert_called_once_with(
-        expected_key, "cli-session", preserve_prompt_pin=False,
+        expected_key,
+        "cli-session",
+        preserve_prompt_pin=False,
     )
     assert captured["source"].chat_type == "dm"
     assert captured["source"].user_id == "208214988"
@@ -838,9 +888,9 @@ def test_recover_preserves_unknown_thread_id_for_new_topic(tmp_path):
     _seed_two_topic_bindings(db)
     runner = _make_runner(session_db=db)
 
-    assert runner._recover_telegram_topic_thread_id(_make_source(thread_id="9999")) is None
-
-
+    assert (
+        runner._recover_telegram_topic_thread_id(_make_source(thread_id="9999")) is None
+    )
 
 
 def test_list_telegram_topic_bindings_for_chat_no_table(tmp_path):
@@ -859,6 +909,7 @@ def test_list_telegram_topic_bindings_for_chat_no_table(tmp_path):
 # ---------------------------------------------------------------------------
 # Tests for get_telegram_topic_binding_by_session (issue #27166)
 # ---------------------------------------------------------------------------
+
 
 def test_get_telegram_topic_binding_by_session_returns_binding(tmp_path):
     """Reverse lookup by session_id returns the binding row."""
@@ -884,4 +935,3 @@ def test_get_telegram_topic_binding_by_session_returns_binding(tmp_path):
 # ---------------------------------------------------------------------------
 # Test for session-split thread_id recovery (issue #27166)
 # ---------------------------------------------------------------------------
-

@@ -22,7 +22,9 @@ except ImportError:
 
 from gateway.config import Platform, PlatformConfig
 from gateway.platforms.base import (
-    BasePlatformAdapter, SendResult, is_network_accessible,
+    BasePlatformAdapter,
+    SendResult,
+    is_network_accessible,
 )
 from gateway.platforms.event import MessageEvent, MessageType
 from datetime import UTC
@@ -72,7 +74,10 @@ def _parse_allowed_source_cidrs(raw: Any) -> list[ipaddress._BaseNetwork]:
         try:
             networks.append(ipaddress.ip_network(chunk, strict=False))
         except ValueError:
-            logger.warning("[msgraph_webhook] Ignoring invalid allowed_source_cidrs entry: %r", chunk)
+            logger.warning(
+                "[msgraph_webhook] Ignoring invalid allowed_source_cidrs entry: %r",
+                chunk,
+            )
     return networks
 
 
@@ -99,6 +104,7 @@ def _render_template(template: str, payload: dict[str, Any]) -> str:
 
 class MSGraphWebhookAdapter(BasePlatformAdapter):
     """Receive Microsoft Graph change notifications and surface them internally."""
+
     # Answers /p/<profile>/... on the default listener for a served secondary (shared_ingress).
     serves_profile_prefix: bool = True
 
@@ -109,21 +115,34 @@ class MSGraphWebhookAdapter(BasePlatformAdapter):
         _raw_host = extra.get("host", DEFAULT_HOST) or DEFAULT_HOST
         self._host: Optional[str] = str(_raw_host) if _raw_host else None
         self._port: int = int(extra.get("port", DEFAULT_PORT))
-        self._webhook_path: str = _normalize_path(extra.get("webhook_path", DEFAULT_WEBHOOK_PATH))
+        self._webhook_path: str = _normalize_path(
+            extra.get("webhook_path", DEFAULT_WEBHOOK_PATH)
+        )
         self._health_path: str = _normalize_path(extra.get("health_path", "/health"))
         self._accepted_resources: list[str] = [
-            str(value).strip() for value in (extra.get("accepted_resources") or []) if str(value).strip()]
+            str(value).strip()
+            for value in (extra.get("accepted_resources") or [])
+            if str(value).strip()
+        ]
         self._client_state: Optional[str] = _string_or_none(extra.get("client_state"))
-        self._max_seen_receipts = max(1, int(extra.get("max_seen_receipts", DEFAULT_MAX_SEEN_RECEIPTS)))
-        self._max_body_bytes = max(1, int(extra.get("max_body_bytes", DEFAULT_MAX_BODY_BYTES)))
-        self._allowed_source_networks = _parse_allowed_source_cidrs(extra.get("allowed_source_cidrs"))
+        self._max_seen_receipts = max(
+            1, int(extra.get("max_seen_receipts", DEFAULT_MAX_SEEN_RECEIPTS))
+        )
+        self._max_body_bytes = max(
+            1, int(extra.get("max_body_bytes", DEFAULT_MAX_BODY_BYTES))
+        )
+        self._allowed_source_networks = _parse_allowed_source_cidrs(
+            extra.get("allowed_source_cidrs")
+        )
         self._runner = None
         self._notification_scheduler: Optional[NotificationScheduler] = None
         self._seen_receipts: set[str] = set()
         self._seen_receipt_order: deque[str] = deque()
         self._accepted_count = self._duplicate_count = 0
 
-    def set_notification_scheduler(self, scheduler: Optional[NotificationScheduler]) -> None:
+    def set_notification_scheduler(
+        self, scheduler: Optional[NotificationScheduler]
+    ) -> None:
         self._notification_scheduler = scheduler
 
     def _source_allowlist_required_but_missing(self) -> bool:
@@ -133,12 +152,17 @@ class MSGraphWebhookAdapter(BasePlatformAdapter):
 
     async def connect(self, *, is_reconnect: bool = False) -> bool:
         if self._client_state is None:
-            logger.error("[msgraph_webhook] Refusing to start without extra.client_state configured")
+            logger.error(
+                "[msgraph_webhook] Refusing to start without extra.client_state configured"
+            )
             return False
         if self._source_allowlist_required_but_missing():
-            logger.error("[msgraph_webhook] Refusing to start: binding to %s requires extra.allowed_source_cidrs. "
-                         "Configure the Microsoft Graph source CIDRs or bind to loopback (127.0.0.1/::1) behind a "
-                         "tunnel or reverse proxy.", self._host)
+            logger.error(
+                "[msgraph_webhook] Refusing to start: binding to %s requires extra.allowed_source_cidrs. "
+                "Configure the Microsoft Graph source CIDRs or bind to loopback (127.0.0.1/::1) behind a "
+                "tunnel or reverse proxy.",
+                self._host,
+            )
             return False
         app = web.Application(client_max_size=self._max_body_bytes)
         app.router.add_get(self._health_path, self._handle_health)
@@ -148,10 +172,18 @@ class MSGraphWebhookAdapter(BasePlatformAdapter):
         self._wire_plugin_handlers(app)
         # Shared-listener mode (multiplex secondary): no bind; served at /p/<profile>/<webhook_path>.
         from gateway.platforms.shared_ingress import bind_listener
-        self._runner = await bind_listener(self, app, self._host, self._port, self._webhook_path)
+
+        self._runner = await bind_listener(
+            self, app, self._host, self._port, self._webhook_path
+        )
         self._mark_connected()
         if self._runner is not None:
-            logger.info("[msgraph_webhook] Listening on %s:%d%s", self._host, self._port, self._webhook_path)
+            logger.info(
+                "[msgraph_webhook] Listening on %s:%d%s",
+                self._host,
+                self._port,
+                self._webhook_path,
+            )
         return True
 
     async def disconnect(self) -> None:
@@ -160,8 +192,13 @@ class MSGraphWebhookAdapter(BasePlatformAdapter):
             self._runner = None
         self._mark_disconnected()
 
-    async def send(self, chat_id: str, content: str, reply_to: Optional[str] = None,
-                   metadata: Optional[dict[str, Any]] = None) -> SendResult:
+    async def send(
+        self,
+        chat_id: str,
+        content: str,
+        reply_to: Optional[str] = None,
+        metadata: Optional[dict[str, Any]] = None,
+    ) -> SendResult:
         logger.info("[msgraph_webhook] Response for %s: %s", chat_id, content[:200])
         return SendResult(success=True)
 
@@ -171,9 +208,15 @@ class MSGraphWebhookAdapter(BasePlatformAdapter):
     async def _handle_health(self, request: web.Request) -> web.Response:
         if not self._source_ip_allowed(request):
             return web.Response(status=403)
-        return web.json_response({
-            "status": "ok", "platform": self.platform.value, "webhook_path": self._webhook_path,
-            "accepted": self._accepted_count, "duplicates": self._duplicate_count})
+        return web.json_response(
+            {
+                "status": "ok",
+                "platform": self.platform.value,
+                "webhook_path": self._webhook_path,
+                "accepted": self._accepted_count,
+                "duplicates": self._duplicate_count,
+            }
+        )
 
     async def _handle_validation(self, request: web.Request) -> web.Response:
         """Graph subscription validation handshake: echo ``validationToken`` verbatim as text/plain. Bare GETs
@@ -195,10 +238,19 @@ class MSGraphWebhookAdapter(BasePlatformAdapter):
             # Bad clientState is an auth failure: a fully forged batch gets 403 so the sender stops
             # retrying; legitimate Graph retries carry a valid clientState → accepted/duplicate paths.
             return "auth"
-        receipt_key = f"id:{explicit_id}" if (explicit_id := str(notification.get("id") or "").strip()) else None
-        if self._notification_scheduler is not None and receipt_key in self._seen_receipts:
+        receipt_key = (
+            f"id:{explicit_id}"
+            if (explicit_id := str(notification.get("id") or "").strip())
+            else None
+        )
+        if (
+            self._notification_scheduler is not None
+            and receipt_key in self._seen_receipts
+        ):
             return "duplicate"
-        await self._schedule_notification(notification, self._build_message_event(notification, receipt_key))
+        await self._schedule_notification(
+            notification, self._build_message_event(notification, receipt_key)
+        )
         if receipt_key is not None:
             self._remember_receipt(receipt_key)
         self._accepted_count += 1
@@ -290,26 +342,47 @@ class MSGraphWebhookAdapter(BasePlatformAdapter):
         while len(self._seen_receipt_order) > self._max_seen_receipts:
             self._seen_receipts.discard(self._seen_receipt_order.popleft())
 
-    def _build_message_event(self, notification: dict[str, Any], receipt_key: Optional[str]) -> MessageEvent:
-        message_id = receipt_key or f"sha1:{sha1(json.dumps(notification, sort_keys=True).encode('utf-8')).hexdigest()}"
+    def _build_message_event(
+        self, notification: dict[str, Any], receipt_key: Optional[str]
+    ) -> MessageEvent:
+        message_id = (
+            receipt_key
+            or f"sha1:{sha1(json.dumps(notification, sort_keys=True).encode('utf-8')).hexdigest()}"
+        )
         source = self.build_source(
-            chat_id=f"msgraph:{notification.get('subscriptionId', 'unknown')}", chat_name="msgraph/webhook",
-            chat_type="webhook", user_id="msgraph", user_name="Microsoft Graph")
+            chat_id=f"msgraph:{notification.get('subscriptionId', 'unknown')}",
+            chat_name="msgraph/webhook",
+            chat_type="webhook",
+            user_id="msgraph",
+            user_name="Microsoft Graph",
+        )
         return MessageEvent(
-            text=self._render_prompt(notification), message_type=MessageType.TEXT, source=source,
-            raw_message=notification, message_id=message_id, internal=True)
+            text=self._render_prompt(notification),
+            message_type=MessageType.TEXT,
+            source=source,
+            raw_message=notification,
+            message_id=message_id,
+            internal=True,
+        )
 
     def _render_prompt(self, notification: dict[str, Any]) -> str:
         template = self.config.extra.get("prompt", "")
         if template:
-            return _render_template(template, {
-                "notification": notification, "resource": notification.get("resource", ""),
-                "change_type": notification.get("changeType", ""),
-                "subscription_id": notification.get("subscriptionId", "")})
+            return _render_template(
+                template,
+                {
+                    "notification": notification,
+                    "resource": notification.get("resource", ""),
+                    "change_type": notification.get("changeType", ""),
+                    "subscription_id": notification.get("subscriptionId", ""),
+                },
+            )
         rendered = json.dumps(notification, indent=2, sort_keys=True)[:4000]
         return f"Microsoft Graph change notification:\n\n```json\n{rendered}\n```"
 
-    async def _schedule_notification(self, notification: dict[str, Any], event: MessageEvent) -> None:
+    async def _schedule_notification(
+        self, notification: dict[str, Any], event: MessageEvent
+    ) -> None:
         scheduler = self._notification_scheduler
         if scheduler is not None:
             result = scheduler(notification, event)
@@ -336,24 +409,41 @@ class MSGraphWebhookAdapter(BasePlatformAdapter):
             authority._require_admission_open()
             provenance = capture_provenance(authority.runner, event)
             if provenance is None:
-                raise RuntimeStoreError('permission_denied')
+                raise RuntimeStoreError("permission_denied")
             # The routing reservation writes too: off the owner loop like the admission below.
-            ref = authority._publish_route(event.source, *await asyncio.to_thread(authority._reserve_route, event.source))
+            ref = authority._publish_route(
+                event.source,
+                *await asyncio.to_thread(authority._reserve_route, event.source),
+            )
             route = authority.sessions[ref.session_id].route
             source = event.source.to_dict()
-            source['is_bot'] = event.source.is_bot
-            envelope = {'source': source, 'route': route, 'provenance': provenance,
-                'timestamp': datetime.fromtimestamp(0, UTC).isoformat(),
-                'event': {'message_id': event.message_id},
-                'automation': {'identity': event.message_id, 'owner': ref.session_id}}
+            source["is_bot"] = event.source.is_bot
+            envelope = {
+                "source": source,
+                "route": route,
+                "provenance": provenance,
+                "timestamp": datetime.fromtimestamp(0, UTC).isoformat(),
+                "event": {"message_id": event.message_id},
+                "automation": {"identity": event.message_id, "owner": ref.session_id},
+            }
             # Off the owner loop and in admission order (``tracked_write``), committed before the
             # 202: a held SQLite writer must not freeze every session while Graph waits.
             from functools import partial
             from gateway.session_runtime_workers import tracked_write
-            return await tracked_write(authority, partial(
-                admit_session_input, authority.db, epoch=authority.epoch,
-                principal_id='msgraph:' + route, session_id=ref.session_id, request_id=event.message_id,
-                payload={'text': event.text, 'native_text_v1': envelope},
-                _authorize_write=authority._admission_gate()),
-                then=partial(authority._admitted, ref, event), ordered=True,
-                after=partial(authority._schedule_admitted, ref))
+
+            return await tracked_write(
+                authority,
+                partial(
+                    admit_session_input,
+                    authority.db,
+                    epoch=authority.epoch,
+                    principal_id="msgraph:" + route,
+                    session_id=ref.session_id,
+                    request_id=event.message_id,
+                    payload={"text": event.text, "native_text_v1": envelope},
+                    _authorize_write=authority._admission_gate(),
+                ),
+                then=partial(authority._admitted, ref, event),
+                ordered=True,
+                after=partial(authority._schedule_admitted, ref),
+            )

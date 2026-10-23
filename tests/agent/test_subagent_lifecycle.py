@@ -75,10 +75,6 @@ def lifecycle(monkeypatch):
     return SubagentLifecycleService(lambda: parent)
 
 
-
-
-
-
 def test_cancel_is_cooperative_and_forged_handle_is_unknown(lifecycle):
     handle = lifecycle.launch(SubagentLaunchRequest(goal="x"))
     assert lifecycle.cancel(handle, reason="test").accepted
@@ -105,12 +101,6 @@ def test_cancel_uses_explicit_hard_interrupt(lifecycle):
     lifecycle.wait(handle, timeout_seconds=1)
 
 
-
-
-
-
-
-
 def test_public_lifecycle_runs_host_aggregation(monkeypatch):
     memory = Mock()
     parent = SimpleNamespace(
@@ -126,7 +116,9 @@ def test_public_lifecycle_runs_host_aggregation(monkeypatch):
     child.session_id = "child-session"
     hook = Mock()
 
-    monkeypatch.setattr("tools.delegate_tool._build_child_agent", lambda **_kwargs: child)
+    monkeypatch.setattr(
+        "tools.delegate_tool._build_child_agent", lambda **_kwargs: child
+    )
     monkeypatch.setattr(
         "tools.delegate_tool._run_single_child",
         lambda *_args, **_kwargs: {
@@ -167,8 +159,6 @@ def test_public_lifecycle_runs_host_aggregation(monkeypatch):
     assert parent.session_cost_status == "estimated"
 
 
-
-
 def test_agent_turn_binds_and_clears_lifecycle_parent(monkeypatch):
     from run_agent import AIAgent
 
@@ -193,18 +183,25 @@ def steer_lifecycle(monkeypatch):
 
     child = FakeChild("sa-steer-contract")
     started, finish = threading.Event(), threading.Event()
-    service = SubagentLifecycleService(lambda: SimpleNamespace(session_id="parent-steer", enabled_toolsets=["file"]))
+    service = SubagentLifecycleService(
+        lambda: SimpleNamespace(session_id="parent-steer", enabled_toolsets=["file"])
+    )
 
     def run(_index, _goal, child, _parent):
         _register_subagent({"subagent_id": child._subagent_id, "agent": child})
         try:
             started.set()
             assert finish.wait(5)
-            return {"status": "interrupted" if child.interrupted else "completed", "summary": "done"}
+            return {
+                "status": "interrupted" if child.interrupted else "completed",
+                "summary": "done",
+            }
         finally:
             _unregister_subagent(child._subagent_id, agent=child)
 
-    monkeypatch.setattr("tools.delegate_tool._build_child_agent", lambda **_kwargs: child)
+    monkeypatch.setattr(
+        "tools.delegate_tool._build_child_agent", lambda **_kwargs: child
+    )
     monkeypatch.setattr("tools.delegate_tool._run_single_child", run)
     yield service, child, started, finish
     finish.set()
@@ -239,10 +236,13 @@ def test_steer_queues_to_running_child_and_rejects_invalid_calls(steer_lifecycle
     assert child.steering == ["focus on correctness"]
 
 
-@pytest.mark.parametrize("launch_request, message", [
-    ({"goal": "review", "future_field": True}, "future_field"),
-    (42, "request must be a SubagentLaunchRequest"),
-])
+@pytest.mark.parametrize(
+    "launch_request, message",
+    [
+        ({"goal": "review", "future_field": True}, "future_field"),
+        (42, "request must be a SubagentLaunchRequest"),
+    ],
+)
 def test_mapping_request_errors_are_explicit(lifecycle, launch_request, message):
     with pytest.raises(SubagentLifecycleError, match=message):
         lifecycle.launch(launch_request)
@@ -254,11 +254,16 @@ def routing_lifecycle(lifecycle, monkeypatch):
 
     build = Mock(wraps=_build_child_agent)
     config = Mock(return_value={})
-    resolve = Mock(return_value={
-        "provider": "openrouter", "model": "runtime-model",
-        "base_url": "https://route.example/v1", "api_key": "fixture-key",
-        "api_mode": "chat_completions", "request_overrides": {"temperature": 0.2},
-    })
+    resolve = Mock(
+        return_value={
+            "provider": "openrouter",
+            "model": "runtime-model",
+            "base_url": "https://route.example/v1",
+            "api_key": "fixture-key",
+            "api_mode": "chat_completions",
+            "request_overrides": {"temperature": 0.2},
+        }
+    )
     monkeypatch.setattr("tools.delegate_tool._build_child_agent", build)
     monkeypatch.setattr("tools.delegate_tool._load_config", config)
     monkeypatch.setattr("clawk_cli.runtime_provider.resolve_runtime_provider", resolve)
@@ -279,7 +284,9 @@ def test_routing_delegation_provider_bundle(routing_lifecycle):
     assert kwargs["override_request_overrides"] == {"temperature": 0.2}
     assert kwargs["override_acp_command"] is None
     assert kwargs["override_acp_args"] == []
-    resolve.assert_called_once_with(requested="openrouter", target_model="delegated-model")
+    resolve.assert_called_once_with(
+        requested="openrouter", target_model="delegated-model"
+    )
     handle = service.launch(SubagentLaunchRequest(goal="route", model="request-model"))
     assert service.wait(handle, timeout_seconds=2).state is SubagentState.SUCCEEDED
     assert build.call_args.kwargs["model"] == "request-model"
@@ -291,9 +298,12 @@ def test_routing_request_provider_wins_without_mixing_bundles(routing_lifecycle,
 
     service, build, config, resolve = routing_lifecycle
     config.return_value = {
-        "provider": "nous", "model": "delegated-model",
-        "base_url": "https://delegation.example/v1", "api_key": "delegation-fixture-key",
-        "api_mode": "anthropic_messages", "command": "delegation-command",
+        "provider": "nous",
+        "model": "delegated-model",
+        "base_url": "https://delegation.example/v1",
+        "api_key": "delegation-fixture-key",
+        "api_mode": "anthropic_messages",
+        "command": "delegation-command",
         "request_overrides": {"temperature": 0.9},
     }
     request = SubagentLaunchRequest(goal="route", provider="openrouter", model="m")
@@ -316,7 +326,9 @@ def test_routing_request_provider_wins_without_mixing_bundles(routing_lifecycle,
 
 
 @pytest.mark.parametrize("per_launch", [False, True])
-def test_routing_unknown_provider_refuses_before_registration(routing_lifecycle, per_launch):
+def test_routing_unknown_provider_refuses_before_registration(
+    routing_lifecycle, per_launch
+):
     from agent.subagent_lifecycle import _REGISTRY
 
     service, build, config, resolve = routing_lifecycle
@@ -326,7 +338,9 @@ def test_routing_unknown_provider_refuses_before_registration(routing_lifecycle,
     if per_launch:
         request["provider"] = "fixture-missing"
     records, correlations = dict(_REGISTRY.records), dict(_REGISTRY.correlations)
-    with pytest.raises(SubagentLifecycleError, match="Unknown provider fixture-missing"):
+    with pytest.raises(
+        SubagentLifecycleError, match="Unknown provider fixture-missing"
+    ):
         service.launch(request)
     assert _REGISTRY.records == records
     assert _REGISTRY.correlations == correlations
@@ -336,15 +350,27 @@ def test_routing_unknown_provider_refuses_before_registration(routing_lifecycle,
 
 def test_plugin_toolsets_are_known_toolsets(lifecycle, monkeypatch):
     monkeypatch.setattr("toolsets._get_plugin_toolset_names", lambda: {"plugin-tools"})
-    parent = SimpleNamespace(session_id="parent-plugin", enabled_toolsets=["file", "plugin-tools"])
+    parent = SimpleNamespace(
+        session_id="parent-plugin", enabled_toolsets=["file", "plugin-tools"]
+    )
     service = SubagentLifecycleService(lambda: parent)
-    handle = service.launch(SubagentLaunchRequest(goal="use the plugin", allowed_toolsets=("plugin-tools",)))
+    handle = service.launch(
+        SubagentLaunchRequest(goal="use the plugin", allowed_toolsets=("plugin-tools",))
+    )
     assert service.wait(handle, timeout_seconds=2).state is SubagentState.SUCCEEDED
     with pytest.raises(SubagentLifecycleError, match="Unknown toolsets: nope"):
-        service.launch(SubagentLaunchRequest(goal="use the plugin", allowed_toolsets=("nope",)))
-    narrow = SubagentLifecycleService(lambda: SimpleNamespace(session_id="parent-narrow", enabled_toolsets=["file"]))
+        service.launch(
+            SubagentLaunchRequest(goal="use the plugin", allowed_toolsets=("nope",))
+        )
+    narrow = SubagentLifecycleService(
+        lambda: SimpleNamespace(session_id="parent-narrow", enabled_toolsets=["file"])
+    )
     with pytest.raises(SubagentLifecycleError, match="broaden"):
-        narrow.launch(SubagentLaunchRequest(goal="use the plugin", allowed_toolsets=("plugin-tools",)))
+        narrow.launch(
+            SubagentLaunchRequest(
+                goal="use the plugin", allowed_toolsets=("plugin-tools",)
+            )
+        )
 
 
 def test_provider_is_plugin_facing_only():
@@ -352,7 +378,9 @@ def test_provider_is_plugin_facing_only():
     import dataclasses
     from tools.delegate_tool import DELEGATE_TASK_SCHEMA
 
-    assert "provider" in {field.name for field in dataclasses.fields(SubagentLaunchRequest)}
+    assert "provider" in {
+        field.name for field in dataclasses.fields(SubagentLaunchRequest)
+    }
     props = DELEGATE_TASK_SCHEMA["parameters"]["properties"]
     exposed = set(props) | set(props["tasks"]["items"]["properties"])
     assert not exposed & {"provider", "model", "base_url", "api_key"}

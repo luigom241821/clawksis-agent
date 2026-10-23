@@ -25,11 +25,10 @@ def _make_self(prompt_response):
         _prompt_text_input_modal=lambda **_kw: prompt_response,
     )
     self_._normalize_slash_confirm_choice = _bound(
-        ClawksisCLI._normalize_slash_confirm_choice, self_,
+        ClawksisCLI._normalize_slash_confirm_choice,
+        self_,
     )
     return self_
-
-
 
 
 def test_gate_on_choice_once_returns_once():
@@ -43,16 +42,11 @@ def test_gate_on_choice_once_returns_once():
         return_value={"approvals": {"destructive_slash_confirm": True}},
     ):
         result = _bound(ClawksisCLI._confirm_destructive_slash, self_)(
-            "clear", "detail",
+            "clear",
+            "detail",
         )
 
     assert result == "once"
-
-
-
-
-
-
 
 
 def test_gate_on_choice_always_persists_and_returns_always():
@@ -63,26 +57,25 @@ def test_gate_on_choice_always_persists_and_returns_always():
     self_ = _make_self(prompt_response="2")
 
     saves = []
+
     def _fake_save(key, value):
         saves.append((key, value))
         return True
 
-    with patch(
-        "cli.load_cli_config",
-        return_value={"approvals": {"destructive_slash_confirm": True}},
-    ), patch("cli.save_config_value", _fake_save):
+    with (
+        patch(
+            "cli.load_cli_config",
+            return_value={"approvals": {"destructive_slash_confirm": True}},
+        ),
+        patch("cli.save_config_value", _fake_save),
+    ):
         result = _bound(ClawksisCLI._confirm_destructive_slash, self_)(
-            "clear", "detail",
+            "clear",
+            "detail",
         )
 
     assert result == "always"
     assert ("approvals.destructive_slash_confirm", False) in saves
-
-
-
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -102,10 +95,6 @@ def test_split_destructive_skip_recognized_tokens():
     assert ClawksisCLI._split_destructive_skip("/reset now") == ("", True)
     assert ClawksisCLI._split_destructive_skip("/clear --yes") == ("", True)
     assert ClawksisCLI._split_destructive_skip("/undo -y") == ("", True)
-
-
-
-
 
 
 def test_split_destructive_skip_handles_empty_and_none():
@@ -131,7 +120,8 @@ def test_confirm_destructive_slash_now_skips_modal():
         _prompt_text_input_modal=_explode,
     )
     self_._normalize_slash_confirm_choice = _bound(
-        ClawksisCLI._normalize_slash_confirm_choice, self_,
+        ClawksisCLI._normalize_slash_confirm_choice,
+        self_,
     )
     self_._split_destructive_skip = ClawksisCLI._split_destructive_skip  # classmethod
 
@@ -140,12 +130,12 @@ def test_confirm_destructive_slash_now_skips_modal():
         return_value={"approvals": {"destructive_slash_confirm": True}},
     ):
         result = _bound(ClawksisCLI._confirm_destructive_slash, self_)(
-            "new", "detail", cmd_original="/reset now",
+            "new",
+            "detail",
+            cmd_original="/reset now",
         )
 
     assert result == "once"
-
-
 
 
 def test_confirm_destructive_slash_no_skip_token_still_prompts():
@@ -160,7 +150,9 @@ def test_confirm_destructive_slash_no_skip_token_still_prompts():
         return_value={"approvals": {"destructive_slash_confirm": True}},
     ):
         result = _bound(ClawksisCLI._confirm_destructive_slash, self_)(
-            "new", "detail", cmd_original="/new My Session",
+            "new",
+            "detail",
+            cmd_original="/new My Session",
         )
 
     # Prompt was reached and returned cancel → None.

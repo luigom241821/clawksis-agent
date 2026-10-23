@@ -44,9 +44,9 @@ def _ensure_discord_mock():
                 self.parent = parent
 
         discord_mod.app_commands = SimpleNamespace(
-            describe=lambda **kwargs: (lambda fn: fn),
-            choices=lambda **kwargs: (lambda fn: fn),
-            autocomplete=lambda **kwargs: (lambda fn: fn),
+            describe=lambda **kwargs: lambda fn: fn,
+            choices=lambda **kwargs: lambda fn: fn,
+            autocomplete=lambda **kwargs: lambda fn: fn,
             Choice=lambda **kwargs: SimpleNamespace(**kwargs),
             Group=_FakeGroup,
             Command=_FakeCommand,
@@ -68,7 +68,7 @@ def _ensure_discord_mock():
     _app = getattr(sys.modules["discord"], "app_commands", None)
     if _app is not None and not hasattr(_app, "autocomplete"):
         try:
-            _app.autocomplete = lambda **kwargs: (lambda fn: fn)
+            _app.autocomplete = lambda **kwargs: lambda fn: fn
         except Exception:
             pass
 
@@ -138,7 +138,9 @@ async def test_registers_native_thread_slash_command(adapter):
     # defer is now performed inside _handle_thread_create_slash, AFTER the
     # auth check passes — not by the closure.
     interaction.response.defer.assert_not_awaited()
-    adapter._handle_thread_create_slash.assert_awaited_once_with(interaction, "Planning", "", 1440)
+    adapter._handle_thread_create_slash.assert_awaited_once_with(
+        interaction, "Planning", "", 1440
+    )
 
 
 @pytest.mark.asyncio
@@ -152,7 +154,9 @@ async def test_run_simple_slash_executes_when_defer_interaction_expired(adapter)
         channel_id=123,
         guild_id=456,
         user=SimpleNamespace(id=42, name="Jezza", display_name="Jezza"),
-        response=SimpleNamespace(defer=AsyncMock(side_effect=UnknownInteraction("Unknown interaction"))),
+        response=SimpleNamespace(
+            defer=AsyncMock(side_effect=UnknownInteraction("Unknown interaction"))
+        ),
         edit_original_response=AsyncMock(),
         delete_original_response=AsyncMock(),
     )
@@ -292,7 +296,9 @@ async def test_slash_command_registration_stays_under_discord_limit(adapter):
 @pytest.mark.asyncio
 async def test_handle_thread_create_slash_reports_success(adapter):
     created_thread = SimpleNamespace(id=555, name="Planning", send=AsyncMock())
-    parent_channel = SimpleNamespace(create_thread=AsyncMock(return_value=created_thread), send=AsyncMock())
+    parent_channel = SimpleNamespace(
+        create_thread=AsyncMock(return_value=created_thread), send=AsyncMock()
+    )
     interaction_channel = SimpleNamespace(parent=parent_channel)
     interaction = SimpleNamespace(
         channel=interaction_channel,
@@ -321,7 +327,9 @@ async def test_handle_thread_create_slash_reports_success(adapter):
 @pytest.mark.asyncio
 async def test_handle_thread_create_slash_falls_back_to_seed_message(adapter):
     created_thread = SimpleNamespace(id=555, name="Planning")
-    seed_message = SimpleNamespace(id=777, create_thread=AsyncMock(return_value=created_thread))
+    seed_message = SimpleNamespace(
+        id=777, create_thread=AsyncMock(return_value=created_thread)
+    )
     channel = SimpleNamespace(
         create_thread=AsyncMock(side_effect=RuntimeError("direct failed")),
         send=AsyncMock(return_value=seed_message),
@@ -366,8 +374,13 @@ async def test_dispatch_thread_session_builds_thread_event(adapter):
 
     adapter.handle_message = capture_handle
 
-    thread = SimpleNamespace(id=555, name="Planning", guild=interaction.guild, topic=None,
-                             parent=SimpleNamespace(id=100, name="general", guild=interaction.guild))
+    thread = SimpleNamespace(
+        id=555,
+        name="Planning",
+        guild=interaction.guild,
+        topic=None,
+        parent=SimpleNamespace(id=100, name="general", guild=interaction.guild),
+    )
     await adapter._dispatch_thread_session(interaction, thread, "Hello!")
 
     assert len(captured_events) == 1
@@ -479,13 +492,21 @@ class _FakeTextChannel:
 class _FakeThreadChannel(_discord_mod.Thread):
     """isinstance(ch, discord.Thread) → True."""
 
-    def __init__(self, channel_id=200, name="existing-thread", guild_name="TestGuild", parent_id=100):
+    def __init__(
+        self,
+        channel_id=200,
+        name="existing-thread",
+        guild_name="TestGuild",
+        parent_id=100,
+    ):
         # Don't call super().__init__ — mock Thread is just an empty type
         self.id = channel_id
         self.name = name
         self.guild = SimpleNamespace(name=guild_name, id=1)
         self.topic = None
-        self.parent = SimpleNamespace(id=parent_id, name="general", guild=SimpleNamespace(name=guild_name, id=1))
+        self.parent = SimpleNamespace(
+            id=parent_id, name="general", guild=SimpleNamespace(name=guild_name, id=1)
+        )
 
     def history(self, *args, **kwargs):
         async def _empty():
@@ -590,20 +611,30 @@ def test_register_skill_command_payload_fits_discord_8kb_limit(adapter):
     skill_cmd = adapter._client.tree.commands["skill"]
     # Approximate the serialized registration payload (name + description only).
     # Autocomplete options are NOT registered — they're fetched dynamically.
-    payload = json.dumps({
-        "name": skill_cmd.name,
-        "description": skill_cmd.description,
-        "options": [
-            {"name": "name", "description": "Which skill to run", "type": 3, "required": True},
-            {"name": "args", "description": "Optional arguments for the skill", "type": 3, "required": False},
-        ],
-    })
+    payload = json.dumps(
+        {
+            "name": skill_cmd.name,
+            "description": skill_cmd.description,
+            "options": [
+                {
+                    "name": "name",
+                    "description": "Which skill to run",
+                    "type": 3,
+                    "required": True,
+                },
+                {
+                    "name": "args",
+                    "description": "Optional arguments for the skill",
+                    "type": 3,
+                    "required": False,
+                },
+            ],
+        }
+    )
     assert len(payload) < 500, (
         f"Flat /skill command payload is ~{len(payload)} bytes — the whole "
         f"point of this design is that it stays small regardless of skill count"
     )
-
-
 
 
 # ------------------------------------------------------------------
@@ -623,19 +654,37 @@ def test_build_slash_event_routes_guild_profile_like_messages(adapter, monkeypat
     runner = object.__new__(gateway_run.GatewayRunner)
     runner.config = GatewayConfig(
         multiplex_profiles=True,
-        profile_routes=[ProfileRoute(name="work", profile="work", platform="discord", guild_id="1")],
+        profile_routes=[
+            ProfileRoute(name="work", profile="work", platform="discord", guild_id="1")
+        ],
     )
-    monkeypatch.setattr(gateway_run, "_multiplex_profile_homes", lambda _cfg: [("work", None)])
+    monkeypatch.setattr(
+        gateway_run, "_multiplex_profile_homes", lambda _cfg: [("work", None)]
+    )
     adapter.gateway_runner = runner
     user = SimpleNamespace(display_name="Jezza", id=42)
 
     channel_event = adapter._build_slash_event(
-        SimpleNamespace(channel=SimpleNamespace(id=200, name="general", guild=SimpleNamespace(id=1, name="G"), topic=None),
-                        channel_id=200, guild_id=1, user=user),
+        SimpleNamespace(
+            channel=SimpleNamespace(
+                id=200,
+                name="general",
+                guild=SimpleNamespace(id=1, name="G"),
+                topic=None,
+            ),
+            channel_id=200,
+            guild_id=1,
+            user=user,
+        ),
         "/new",
     )
     thread_event = adapter._build_slash_event(
-        SimpleNamespace(channel=_FakeThreadChannel(channel_id=555), channel_id=555, guild_id=None, user=user),
+        SimpleNamespace(
+            channel=_FakeThreadChannel(channel_id=555),
+            channel_id=555,
+            guild_id=None,
+            user=user,
+        ),
         "/status",
     )
 

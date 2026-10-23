@@ -1,4 +1,5 @@
 """Blueprint-to-skill relationships, independent of the generic catalog/renderer tests."""
+
 from datetime import datetime, timedelta, timezone, UTC
 from pathlib import Path
 
@@ -11,10 +12,15 @@ import itertools
 REPO = Path(__file__).resolve().parents[2]
 
 
-@pytest.mark.parametrize("key,skill", [
-    ("morning-brief", "google-workspace"), ("important-mail", "email-inbox-triage"),
-    ("weekly-review", "weekly-review-planning"), ("price-watch", "product-price-monitor"),
-])
+@pytest.mark.parametrize(
+    "key,skill",
+    [
+        ("morning-brief", "google-workspace"),
+        ("important-mail", "email-inbox-triage"),
+        ("weekly-review", "weekly-review-planning"),
+        ("price-watch", "product-price-monitor"),
+    ],
+)
 def test_task_blueprint_loads_procedure(key, skill):
     blueprint = get_blueprint(key)
     assert blueprint is not None, key
@@ -29,11 +35,19 @@ def test_every_blueprint_skill_is_bundled():
         assert set(blueprint.skills) <= bundled, blueprint.key
 
 
-@pytest.mark.parametrize("hours", next(
-    slot.options for bp in CATALOG if bp.key == "price-watch"
-    for slot in bp.slots if slot.name == "interval_h"
-))
-def test_price_watch_fills_and_persists_with_chosen_cadence(hours, tmp_path, monkeypatch):
+@pytest.mark.parametrize(
+    "hours",
+    next(
+        slot.options
+        for bp in CATALOG
+        if bp.key == "price-watch"
+        for slot in bp.slots
+        if slot.name == "interval_h"
+    ),
+)
+def test_price_watch_fills_and_persists_with_chosen_cadence(
+    hours, tmp_path, monkeypatch
+):
     from cron import jobs
 
     monkeypatch.setattr(jobs, "CRON_DIR", tmp_path)
@@ -43,10 +57,15 @@ def test_price_watch_fills_and_persists_with_chosen_cadence(hours, tmp_path, mon
     monkeypatch.setattr(jobs, "OUTPUT_DIR", tmp_path / "output")
     blueprint = get_blueprint("price-watch")
     assert blueprint is not None
-    spec = fill_blueprint(blueprint, {
-        "item": "https://example.test/widget", "condition": "below 42 credits",
-        "interval_h": hours, "deliver": "local",
-    })
+    spec = fill_blueprint(
+        blueprint,
+        {
+            "item": "https://example.test/widget",
+            "condition": "below 42 credits",
+            "interval_h": hours,
+            "deliver": "local",
+        },
+    )
     created = jobs.create_job(**spec)
     saved = jobs.get_job(created["id"])
     assert saved is not None
@@ -57,4 +76,6 @@ def test_price_watch_fills_and_persists_with_chosen_cadence(hours, tmp_path, mon
     ticks = croniter(saved["schedule"]["expr"], datetime(2026, 1, 1, tzinfo=UTC))
     # Span a day boundary: wrong-field steps can otherwise look valid once.
     times = [ticks.get_next(datetime) for _ in range(26)]
-    assert {b - a for a, b in itertools.pairwise(times)} == {timedelta(hours=int(hours))}
+    assert {b - a for a, b in itertools.pairwise(times)} == {
+        timedelta(hours=int(hours))
+    }

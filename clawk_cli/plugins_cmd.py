@@ -18,6 +18,7 @@ from typing import Any, NoReturn, Optional
 from clawk_constants import get_clawk_home, clawk_home_key
 from clawk_cli.config import cfg_get
 from clawk_cli.plugin_capabilities import _child_dict
+
 # Tests patch these two on the facade; the install/remove siblings read them through it.
 from clawk_cli.secret_prompt import masked_secret_prompt
 from utils import rmtree_readonly
@@ -25,39 +26,75 @@ from utils import rmtree_readonly
 # Topical siblings. The facade re-exports what other modules, tests and the old updater import from
 # ``clawk_cli.plugins_cmd``; sibling bodies read those names back through the facade at call time.
 from clawk_cli.plugins_cmd_capabilities import (
-    _declared_capabilities_for_key, _declared_capabilities_from_manifest, _resolve_tool_override_grant,
-    _run_capability_consent, cmd_capabilities,
+    _declared_capabilities_for_key,
+    _declared_capabilities_from_manifest,
+    _resolve_tool_override_grant,
+    _run_capability_consent,
+    cmd_capabilities,
 )
 from clawk_cli.plugins_cmd_git import (
-    _EXACT_COMMIT_RE, _canonical_source, _checkout_exact_revision, _clone_plugin_repo, _git_head_revision,
-    _git_or_raise, _git_pull_plugin_dir, _git_resolve_commit, _normalize_exact_revision, _pin_annotation,
-    _read_install_metadata, _run_plugin_git, _safe_git_error, _scrub_cloned_origin, _update_install_record,
-    _write_install_metadata, pinned_revision,
+    _EXACT_COMMIT_RE,
+    _canonical_source,
+    _checkout_exact_revision,
+    _clone_plugin_repo,
+    _git_head_revision,
+    _git_or_raise,
+    _git_pull_plugin_dir,
+    _git_resolve_commit,
+    _normalize_exact_revision,
+    _pin_annotation,
+    _read_install_metadata,
+    _run_plugin_git,
+    _safe_git_error,
+    _scrub_cloned_origin,
+    _update_install_record,
+    _write_install_metadata,
+    pinned_revision,
 )
 from clawk_cli.plugins_cmd_install import (
-    _check_manifest_version, _consent_python_deps, _display_after_install, _install_plugin_core,
-    _install_plugin_python_deps, _prompt_plugin_env_vars, _python_dependency_summary,
-    _read_manifest_for_install, cmd_install, dashboard_install_plugin,
+    _check_manifest_version,
+    _consent_python_deps,
+    _display_after_install,
+    _install_plugin_core,
+    _install_plugin_python_deps,
+    _prompt_plugin_env_vars,
+    _python_dependency_summary,
+    _read_manifest_for_install,
+    cmd_install,
+    dashboard_install_plugin,
 )
 from clawk_cli.plugins_cmd_listing import (
-    _filter_plugin_entries, cmd_list, cmd_show,
+    _filter_plugin_entries,
+    cmd_list,
+    cmd_show,
 )
 from clawk_cli.plugins_cmd_remove import (
-    _remove_plugin_core, cmd_remove, dashboard_remove_user_plugin,
+    _remove_plugin_core,
+    cmd_remove,
+    dashboard_remove_user_plugin,
 )
 from clawk_cli.plugins_cmd_toggle import (
-    _discover_context_engines, _persist_plugin_selection, _provider_categories, _run_composite_fallback,
+    _discover_context_engines,
+    _persist_plugin_selection,
+    _provider_categories,
+    _run_composite_fallback,
     cmd_toggle,
 )
 from clawk_cli.plugins_cmd_update import (
-    _clear_plugin_bytecode, cmd_adopt, cmd_check_updates, cmd_trust_update_url, cmd_update,
+    _clear_plugin_bytecode,
+    cmd_adopt,
+    cmd_check_updates,
+    cmd_trust_update_url,
+    cmd_update,
     dashboard_update_user_plugin,
 )
 
 logger = logging.getLogger(__name__)
 _DEFAULT_CLONE_TIMEOUT_SECONDS = 300
 _MAX_CLONE_TIMEOUT_SECONDS = 3600
-_CLONE_TIMEOUT_HINT = "On a slow connection, raise plugins.clone_timeout_seconds in config.yaml."
+_CLONE_TIMEOUT_HINT = (
+    "On a slow connection, raise plugins.clone_timeout_seconds in config.yaml."
+)
 
 
 @functools.lru_cache(maxsize=1)
@@ -74,7 +111,11 @@ def _resolve_git_executable() -> Optional[str]:
         local = os.environ.get("LOCALAPPDATA", "")
         if local:
             roots.append(os.path.join(local, "Programs"))
-        candidates = [os.path.join(r, "Git", sub, "git.exe") for r in roots for sub in ("cmd", "bin")]
+        candidates = [
+            os.path.join(r, "Git", sub, "git.exe")
+            for r in roots
+            for sub in ("cmd", "bin")
+        ]
     else:
         candidates = ["/usr/bin/git", "/usr/local/bin/git", "/bin/git"]
     return next((c for c in candidates if c and os.path.isfile(c)), None)
@@ -108,12 +149,14 @@ class PluginScanBlocked(PluginOperationError):
 def _console():
     """A fresh Rich console (rich is imported lazily)."""
     from rich.console import Console
+
     return Console()
 
 
 def _table(columns, **kwargs):
     """A Rich ``Table(**kwargs)`` with ``(header, style)`` *columns* added in order."""
     from rich.table import Table
+
     table = Table(**kwargs)
     for header, style in columns:
         table.add_column(header, style=style)
@@ -143,6 +186,7 @@ def _config_value(*keys: str, default: Any) -> Any:
     """Read ``keys`` from config.yaml; *default* on a missing key or any load failure."""
     try:
         from clawk_cli.config import load_config
+
         return cfg_get(load_config(), *keys, default=default)
     except Exception:
         return default
@@ -150,13 +194,20 @@ def _config_value(*keys: str, default: Any) -> Any:
 
 def _clone_timeout_seconds() -> int:
     """Deadline for plugin clone and pinned fetch, scoped to the active profile."""
-    value = _config_value("plugins", "clone_timeout_seconds", default=_DEFAULT_CLONE_TIMEOUT_SECONDS)
+    value = _config_value(
+        "plugins", "clone_timeout_seconds", default=_DEFAULT_CLONE_TIMEOUT_SECONDS
+    )
     if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        logger.warning("plugins.clone_timeout_seconds must be a positive integer; using %ss",
-                       _DEFAULT_CLONE_TIMEOUT_SECONDS)
+        logger.warning(
+            "plugins.clone_timeout_seconds must be a positive integer; using %ss",
+            _DEFAULT_CLONE_TIMEOUT_SECONDS,
+        )
         return _DEFAULT_CLONE_TIMEOUT_SECONDS
     if value > _MAX_CLONE_TIMEOUT_SECONDS:
-        logger.warning("plugins.clone_timeout_seconds exceeds %ss; clamping", _MAX_CLONE_TIMEOUT_SECONDS)
+        logger.warning(
+            "plugins.clone_timeout_seconds exceeds %ss; clamping",
+            _MAX_CLONE_TIMEOUT_SECONDS,
+        )
         return _MAX_CLONE_TIMEOUT_SECONDS
     return value
 
@@ -175,6 +226,7 @@ def _config_str(*keys: str, default: str) -> str:
 def _write_config_value(section: str, key: str, value: Any) -> None:
     """Persist ``config[section][key] = value`` to config.yaml (creating the section)."""
     from clawk_cli.config import load_config, save_config
+
     config = load_config()
     config.setdefault(section, {})[key] = value
     save_config(config)
@@ -185,8 +237,14 @@ def _scan_on_install_enabled() -> bool:
     return bool(_config_value("plugins", "scan_on_install", default=True))
 
 
-def _scan_plugin_tree(plugin_dir: Path, identifier: str, *, force: bool, scan_decision_cb=None,
-                      reviewed_pin: bool = False):
+def _scan_plugin_tree(
+    plugin_dir: Path,
+    identifier: str,
+    *,
+    force: bool,
+    scan_decision_cb=None,
+    reviewed_pin: bool = False,
+):
     """Scan *plugin_dir* and enforce the install policy.
 
     Verdicts: safe → proceed; caution → needs confirmation (``force=True`` or a truthy
@@ -199,7 +257,12 @@ def _scan_plugin_tree(plugin_dir: Path, identifier: str, *, force: bool, scan_de
     """
     if not _scan_on_install_enabled():
         return None
-    from tools.plugin_guard import format_scan_report, scan_plugin, should_allow_plugin_install
+    from tools.plugin_guard import (
+        format_scan_report,
+        scan_plugin,
+        should_allow_plugin_install,
+    )
+
     result = scan_plugin(plugin_dir, source=identifier)
     allowed, reason = should_allow_plugin_install(result, force=force)
     if allowed is None and reviewed_pin:
@@ -220,7 +283,8 @@ def _scan_plugin_tree(plugin_dir: Path, identifier: str, *, force: bool, scan_de
             "Review the findings above. Install only plugins from sources "
             "you trust. (Scanning can be configured via "
             "plugins.scan_on_install in config.yaml.)",
-            scan_result=result)
+            scan_result=result,
+        )
     logger.info("plugin scan passed for %s: %s", plugin_dir.name, reason)
     return result
 
@@ -231,14 +295,18 @@ def _preserved_files_note(exc: PluginScanBlocked, merged: list[str]) -> str:
     findings = exc.scan_result.findings if exc.scan_result is not None else ()
     hits = sorted({f.file for f in findings if f.file in preserved})
     if hits:
-        note = ("These findings come from user files preserved from the installed copy: "
-                f"{', '.join(hits)}. Move or remove them and retry the update.")
+        note = (
+            "These findings come from user files preserved from the installed copy: "
+            f"{', '.join(hits)}. Move or remove them and retry the update."
+        )
     else:
         note = "The scanned tree included user files preserved from the installed copy."
     return f"{exc}\n\n{note}"
 
 
-def _scan_merged_tree(plugin_dir: Path, identifier: str, merged: Optional[list[str]], **kwargs):
+def _scan_merged_tree(
+    plugin_dir: Path, identifier: str, merged: Optional[list[str]], **kwargs
+):
     """:func:`_scan_plugin_tree` for a candidate that may hold carried user files (*merged*).
 
     A block then names the findings that sit in those files, so user data does not read as a
@@ -249,7 +317,9 @@ def _scan_merged_tree(plugin_dir: Path, identifier: str, merged: Optional[list[s
     except PluginScanBlocked as exc:
         if not merged:
             raise
-        raise PluginScanBlocked(_preserved_files_note(exc, merged), scan_result=exc.scan_result) from exc
+        raise PluginScanBlocked(
+            _preserved_files_note(exc, merged), scan_result=exc.scan_result
+        ) from exc
 
 
 def _plugins_dir() -> Path:
@@ -259,7 +329,9 @@ def _plugins_dir() -> Path:
     return plugins
 
 
-def _sanitize_plugin_name(name: str, plugins_dir: Path, *, allow_subdir: bool = False) -> Path:
+def _sanitize_plugin_name(
+    name: str, plugins_dir: Path, *, allow_subdir: bool = False
+) -> Path:
     """Validate a plugin name and return the safe target path inside *plugins_dir*.
 
     Raises ``ValueError`` on traversal or a target outside the plugins directory. ``allow_subdir``
@@ -271,7 +343,9 @@ def _sanitize_plugin_name(name: str, plugins_dir: Path, *, allow_subdir: bool = 
     if not name:
         raise ValueError("Plugin name must not be empty.")
     if name in {".", ".."}:
-        raise ValueError(f"Invalid plugin name '{name}': must not reference the plugins directory itself.")
+        raise ValueError(
+            f"Invalid plugin name '{name}': must not reference the plugins directory itself."
+        )
     for bad in ("\\", "..") if allow_subdir else ("/", "\\", ".."):
         if bad in name:
             raise ValueError(f"Invalid plugin name '{name}': must not contain '{bad}'.")
@@ -279,14 +353,27 @@ def _sanitize_plugin_name(name: str, plugins_dir: Path, *, allow_subdir: bool = 
     target = (plugins_dir / name).resolve()
     plugins_resolved = plugins_dir.resolve()
     if target == plugins_resolved:
-        raise ValueError(f"Invalid plugin name '{name}': resolves to the plugins directory itself.")
+        raise ValueError(
+            f"Invalid plugin name '{name}': resolves to the plugins directory itself."
+        )
     if plugins_resolved not in target.parents:
-        raise ValueError(f"Invalid plugin name '{name}': resolves outside the plugins directory.")
+        raise ValueError(
+            f"Invalid plugin name '{name}': resolves outside the plugins directory."
+        )
     return target
 
 
 _GITHUB_BROWSER_SEGMENTS = {
-    "actions", "blob", "commit", "commits", "issues", "pull", "pulls", "releases", "tree", "wiki",
+    "actions",
+    "blob",
+    "commit",
+    "commits",
+    "issues",
+    "pull",
+    "pulls",
+    "releases",
+    "tree",
+    "wiki",
 }
 _URL_SCHEMES = ("https://", "http://", "git@", "ssh://", "file://")
 
@@ -301,7 +388,11 @@ def _resolve_git_url(identifier: str) -> tuple[str, Optional[str]]:
             path = identifier[len("https://github.com/") :]
             path = path.split("?", 1)[0].split("#", 1)[0].strip("/")
             parts = path.split("/")
-            if len(parts) >= 3 and all(parts[:2]) and parts[2] in _GITHUB_BROWSER_SEGMENTS:
+            if (
+                len(parts) >= 3
+                and all(parts[:2])
+                and parts[2] in _GITHUB_BROWSER_SEGMENTS
+            ):
                 repo = parts[1].removesuffix(".git")
                 subdir = None
                 if parts[2] == "tree" and len(parts) >= 5:
@@ -327,7 +418,8 @@ def _resolve_git_url(identifier: str) -> tuple[str, Optional[str]]:
     raise ValueError(
         f"Invalid plugin identifier: '{identifier}'. "
         "Use a Git URL or 'owner/repo' shorthand (optionally with a subdirectory: "
-        "'owner/repo/path/to/plugin').")
+        "'owner/repo/path/to/plugin')."
+    )
 
 
 def _resolve_subdir_within(clone_root: Path, subdir: str) -> Path:
@@ -336,14 +428,20 @@ def _resolve_subdir_within(clone_root: Path, subdir: str) -> Path:
     clone_root = clone_root.resolve()
     candidate = (clone_root / subdir).resolve()
     if candidate != clone_root and clone_root not in candidate.parents:
-        raise PluginOperationError(f"Plugin subdirectory '{subdir}' escapes the repository.",
-                                   failure_class="invalid_source")
+        raise PluginOperationError(
+            f"Plugin subdirectory '{subdir}' escapes the repository.",
+            failure_class="invalid_source",
+        )
     if not candidate.exists():
-        raise PluginOperationError(f"Plugin subdirectory '{subdir}' does not exist in the repository.",
-                                   failure_class="invalid_source")
+        raise PluginOperationError(
+            f"Plugin subdirectory '{subdir}' does not exist in the repository.",
+            failure_class="invalid_source",
+        )
     if not candidate.is_dir():
-        raise PluginOperationError(f"Plugin subdirectory '{subdir}' is not a directory.",
-                                   failure_class="invalid_source")
+        raise PluginOperationError(
+            f"Plugin subdirectory '{subdir}' is not a directory.",
+            failure_class="invalid_source",
+        )
     return candidate
 
 
@@ -386,6 +484,7 @@ def _read_manifest(plugin_dir: Path) -> dict:
             return {}
         try:
             from clawk_cli.agent_plugins import read_agent_plugin_manifest
+
             return read_agent_plugin_manifest(plugin_dir)[0]
         except Exception as e:
             logger.warning("Failed to read plugin.json in %s: %s", plugin_dir, e)
@@ -402,7 +501,8 @@ def _looks_like_plugin_dir(target: Path) -> bool:
     return (
         _native_manifest_file(target) is not None
         or (target / "plugin.json").exists()
-        or (target / "__init__.py").exists())
+        or (target / "__init__.py").exists()
+    )
 
 
 def _copy_example_files(plugin_dir: Path, console) -> None:
@@ -417,7 +517,9 @@ def _copy_example_files(plugin_dir: Path, console) -> None:
             shutil.copy2(example_file, real_path)
             console.print(f"[dim]  Created {real_name} from {example_file.name}[/dim]")
         except OSError as e:
-            console.print(f"[yellow]Warning:[/yellow] Failed to copy {example_file.name}: {e}")
+            console.print(
+                f"[yellow]Warning:[/yellow] Failed to copy {example_file.name}: {e}"
+            )
 
 
 def _missing_env_specs(manifest: dict) -> list[dict]:
@@ -431,6 +533,7 @@ def _missing_env_specs(manifest: dict) -> list[dict]:
     if not env_specs:
         return []
     from clawk_cli.config import get_env_value
+
     return [s for s in env_specs if not get_env_value(s["name"])]
 
 
@@ -440,10 +543,13 @@ def _clone_failure_message(git_url: str, git_error: str) -> str:
     The text reaches ``_fail`` -> Rich ``console.print``: escape the git output so ``[...]`` in it is
     not parsed as markup."""
     from rich.markup import escape
-    return (f"Could not download the plugin from {git_url}. Check the address (browse the catalog "
-            "with `clawk plugins search`), check your internet connection, or, if the repository "
-            "is private, sign in first with `gh auth login` (or set GITHUB_TOKEN in your .env).\n"
-            f"Details: {escape(git_error.strip())}")
+
+    return (
+        f"Could not download the plugin from {git_url}. Check the address (browse the catalog "
+        "with `clawk plugins search`), check your internet connection, or, if the repository "
+        "is private, sign in first with `gh auth login` (or set GITHUB_TOKEN in your .env).\n"
+        f"Details: {escape(git_error.strip())}"
+    )
 
 
 def _require_installed_plugin(name: str, plugins_dir: Path, console) -> Path:
@@ -461,14 +567,20 @@ def _require_installed_plugin(name: str, plugins_dir: Path, console) -> Path:
 
 def _unknown_plugin_message(name: str, *, downloaded_only: bool = False) -> str:
     """``No plugin named ...`` with the exact-name rule and the two commands that resolve it."""
-    scope = (" This command only works on downloaded plugins; bundled ones can only be enabled or disabled."
-             if downloaded_only else " Bundled plugins can only be enabled or disabled.")
+    scope = (
+        " This command only works on downloaded plugins; bundled ones can only be enabled or disabled."
+        if downloaded_only
+        else " Bundled plugins can only be enabled or disabled."
+    )
     from clawk_cli.left_core_migration import moved_plugin_hint
+
     if moved := moved_plugin_hint(name):
         return f"[red]No plugin named '{name}'.[/red] {moved}"
-    return (f"[red]No plugin named '{name}'.[/red] Run `clawk plugins list` to see the exact names "
-            f"(nested plugins use their full key, e.g. web/firecrawl).{scope} "
-            "To add one: `clawk plugins install <owner/repo>`.")
+    return (
+        f"[red]No plugin named '{name}'.[/red] Run `clawk plugins list` to see the exact names "
+        f"(nested plugins use their full key, e.g. web/firecrawl).{scope} "
+        "To add one: `clawk plugins install <owner/repo>`."
+    )
 
 
 # ``plugins.disabled`` is an explicit deny-list that wins over the ``plugins.enabled`` allow-list.
@@ -485,11 +597,18 @@ def _save_enabled_set(enabled: set) -> None:
 
 def _plugin_selection_version() -> str:
     from clawk_cli.runtime_state import _digest
+
     return _digest(get_clawk_home() / "config.yaml") or "missing"
 
 
 def _admit_and_save_plugin_sets(
-    enabled: set, disabled: set, *, extra_dirs=(), console=None, action: str = "enable", expected_config=None,
+    enabled: set,
+    disabled: set,
+    *,
+    extra_dirs=(),
+    console=None,
+    action: str = "enable",
+    expected_config=None,
     plugin: Optional[str] = None,
 ) -> None:
     """ONE admission authority for proposed enabled/disabled sets (C13):
@@ -501,18 +620,28 @@ def _admit_and_save_plugin_sets(
     conflict raises its :class:`DependencyConflict` subclass naming *plugin*."""
     from rich.markup import escape
 
-    from clawk_cli.plugins_admission import AdmissionRefused, DependencyConflict, admit_plugin_set_change
+    from clawk_cli.plugins_admission import (
+        AdmissionRefused,
+        DependencyConflict,
+        admit_plugin_set_change,
+    )
 
     try:
         admit_plugin_set_change(
-            enabled, disabled, active_plugins_dir=_plugins_dir(), extra_dirs=extra_dirs, expected_config=expected_config,
+            enabled,
+            disabled,
+            active_plugins_dir=_plugins_dir(),
+            extra_dirs=extra_dirs,
+            expected_config=expected_config,
             plugin=plugin,
         )
     except DependencyConflict as exc:
         # `clawk pm install` cannot fix a conflict, so the retry hint below would mislead here.
         if console is not None:
             console.print(f"[red]✗[/red] {escape(str(exc))}")
-            console.print("[dim]config.yaml and the active environment are unchanged.[/dim]")
+            console.print(
+                "[dim]config.yaml and the active environment are unchanged.[/dim]"
+            )
         raise
     except AdmissionRefused as exc:
         if console is not None:
@@ -522,7 +651,6 @@ def _admit_and_save_plugin_sets(
                 "Run `clawk pm install` to resolve dependencies, then retry.[/dim]"
             )
         raise
-
 
 
 _BASIC_AUTH_PLUGIN_KEYS = frozenset({"basic", "dashboard_auth/basic"})
@@ -556,8 +684,13 @@ def _plugin_aliases(key: str, entries: Optional[list] = None) -> set:
     (``web-firecrawl``), so a stale entry under any form vetoes an enable ("explicit disable wins").
     Pass *entries* to reuse one :func:`_discover_all_plugins` scan across several keys."""
     from clawk_cli.left_core_migration import legacy_plugin_keys
+
     names = {key, key.split("/")[-1], *legacy_plugin_keys(key)}
-    names.update(e[0] for e in (_discover_all_plugins() if entries is None else entries) if e[5] == key)
+    names.update(
+        e[0]
+        for e in (_discover_all_plugins() if entries is None else entries)
+        if e[5] == key
+    )
     return names
 
 
@@ -584,6 +717,7 @@ def _forget_plugin_config(aliases: set) -> dict[str, Any]:
     the next agent init re-clone the plugin from the catalog, silently undoing the uninstall.
     Returns ``{"cleared_memory_provider": True}`` when the selection was reset."""
     from clawk_cli.config import load_config, save_config
+
     config = load_config()
     changed = False
     result: dict[str, Any] = {}
@@ -600,7 +734,10 @@ def _forget_plugin_config(aliases: set) -> dict[str, Any]:
                 del entries[alias]
             changed = True
     memory_cfg = config.get("memory")
-    if isinstance(memory_cfg, dict) and str(memory_cfg.get("provider") or "").strip() in aliases:
+    if (
+        isinstance(memory_cfg, dict)
+        and str(memory_cfg.get("provider") or "").strip() in aliases
+    ):
         memory_cfg["provider"] = ""
         changed, result = True, {"cleared_memory_provider": True}
     if changed:
@@ -631,12 +768,19 @@ def _set_plugin_enabled(name: str, *, enable: bool, aliases=(), console=None) ->
         enabled = set(plugins.get("enabled") or ())
         disabled = set(plugins.get("disabled") or ())
         _apply_activation(enabled, disabled, name, aliases, enable=enable)
-        _admit_and_save_plugin_sets(enabled, disabled, console=console,
-                                   action=f"{'Enable' if enable else 'Disable'} '{name}'",
-                                   expected_config=expected_config, plugin=name if enable else None)
+        _admit_and_save_plugin_sets(
+            enabled,
+            disabled,
+            console=console,
+            action=f"{'Enable' if enable else 'Disable'} '{name}'",
+            expected_config=expected_config,
+            plugin=name if enable else None,
+        )
 
 
-def _apply_activation(enabled: set, disabled: set, key: str, aliases, *, enable: bool) -> None:
+def _apply_activation(
+    enabled: set, disabled: set, key: str, aliases, *, enable: bool
+) -> None:
     """Add canonical *key* to the target list and purge it, its bare leaf and *aliases* from the other."""
     removed = disabled if enable else enabled
     _discard_key_and_leaf(removed, key)
@@ -657,12 +801,18 @@ def _catalog_installed_dir(name: str) -> Optional[Path]:
     :func:`catalog_install_record` (``.install-metadata.json``), never the tree, so a URL-installed
     repo cannot claim a catalog entry's name."""
     from clawk_cli.plugins_cmd_catalog import catalog_install_record
+
     try:
         keys = list(_read_install_metadata())
     except PluginOperationError:
         return None
-    hits = [target for key in keys if (target := _plugins_dir() / key).is_dir()
-            and (record := catalog_install_record(target)) and record["catalog_name"] == name]
+    hits = [
+        target
+        for key in keys
+        if (target := _plugins_dir() / key).is_dir()
+        and (record := catalog_install_record(target))
+        and record["catalog_name"] == name
+    ]
     return hits[0] if len(hits) == 1 else None
 
 
@@ -674,7 +824,10 @@ def _find_plugin_entry(name: str) -> Optional[tuple]:
     Never guesses between two candidates."""
     entries = _discover_all_plugins()
     from clawk_cli.left_core_migration import legacy_plugin_alias
-    target = legacy_plugin_alias(name) or name  # ``observability/langfuse`` -> its catalog plugin
+
+    target = (
+        legacy_plugin_alias(name) or name
+    )  # ``observability/langfuse`` -> its catalog plugin
     exact = next((entry for entry in entries if target in (entry[0], entry[5])), None)
     if exact is not None:
         return exact
@@ -682,8 +835,14 @@ def _find_plugin_entry(name: str) -> Optional[tuple]:
     if leaf_matches:
         return leaf_matches[0] if len(leaf_matches) == 1 else None
     target = _catalog_installed_dir(name)
-    return next((entry for entry in entries if target is not None and entry[4] and Path(str(entry[4])) == target),
-                None)
+    return next(
+        (
+            entry
+            for entry in entries
+            if target is not None and entry[4] and Path(str(entry[4])) == target
+        ),
+        None,
+    )
 
 
 def _resolve_plugin_key_and_source(name: str) -> Optional[tuple]:
@@ -699,15 +858,23 @@ def cmd_enable(name: str, allow_tool_override: Optional[bool] = None) -> None:
     ``allow_tool_override`` grant changes only with an explicit True/False flag;
     None leaves it unchanged. Bundled plugins are trusted.
     """
-    from clawk_cli.relay_plugin_cutover import LEGACY_RELAY_PLUGIN_KEYS, RELAY_PLUGINS_CONFIG_ENV
+    from clawk_cli.relay_plugin_cutover import (
+        LEGACY_RELAY_PLUGIN_KEYS,
+        RELAY_PLUGINS_CONFIG_ENV,
+    )
+
     console = _console()
 
     def _refuse_legacy_relay(plugin: str) -> None:
         if plugin in LEGACY_RELAY_PLUGIN_KEYS:
-            _fail(console, (
-                f"[red]Plugin '{plugin}' was removed.[/red] Relay lifecycle is owned "
-                "by Clawksis core; configure a standard user or system Relay plugins.toml, or use "
-                f"{RELAY_PLUGINS_CONFIG_ENV} for an explicit user-file override."))
+            _fail(
+                console,
+                (
+                    f"[red]Plugin '{plugin}' was removed.[/red] Relay lifecycle is owned "
+                    "by Clawksis core; configure a standard user or system Relay plugins.toml, or use "
+                    f"{RELAY_PLUGINS_CONFIG_ENV} for an explicit user-file override."
+                ),
+            )
 
     _refuse_legacy_relay(name)
     resolved = _resolve_plugin_key_and_source(name)
@@ -718,15 +885,21 @@ def cmd_enable(name: str, allow_tool_override: Optional[bool] = None) -> None:
     if source != "bundled":
         # Activating recalled code is the same act as installing it (`plugins/AGENTS.md`: kill list).
         from clawk_cli import plugins_cmd_catalog as catalog
+
         try:
-            catalog.refuse_if_installed_removed(key, _user_installed_plugin_dir(key.rsplit("/", 1)[-1]))
+            catalog.refuse_if_installed_removed(
+                key, _user_installed_plugin_dir(key.rsplit("/", 1)[-1])
+            )
         except PluginOperationError as exc:
             _fail(console, f"[red]Error:[/red] {exc}")
 
     changed = _activate_key(key, enable=True, console=console)
     if changed:
         from clawk_cli.plugins_activation import report_activation
-        console.print(f"[green]✓[/green] Plugin [bold]{key}[/bold] enabled.")  # the hint says when it applies
+
+        console.print(
+            f"[green]✓[/green] Plugin [bold]{key}[/bold] enabled."
+        )  # the hint says when it applies
         report_activation(console, key)
     else:
         console.print(f"[dim]Plugin '{key}' is already enabled.[/dim]")
@@ -762,6 +935,7 @@ def cmd_disable(name: str) -> None:
         return
     _toggle_plugin_toolset(key, enable=False, toolset_key=toolset_key)
     from clawk_cli.plugins_activation import gateway_reload_hint, reload_running_gateway
+
     console.print(f"[yellow]⊘[/yellow] Plugin [bold]{key}[/bold] disabled.")
     console.print(f"[dim]{gateway_reload_hint(reload_running_gateway(), key)}[/dim]")
 
@@ -774,6 +948,7 @@ def _read_manifest_info(d: Path, prefix: str):
             return None
         try:
             from clawk_cli.agent_plugins import read_agent_plugin_manifest
+
             manifest = read_agent_plugin_manifest(d)[0]
             name = manifest["name"]
         except Exception:
@@ -795,7 +970,11 @@ def _is_portable_plugin_dir(dir_path) -> bool:
     """True for an Agent Plugins v1 package (``plugin.json`` only; native ``plugin.yaml`` wins)."""
     try:
         d = Path(dir_path)
-        return d.is_dir() and _native_manifest_file(d) is None and _has_portable_manifest(d)
+        return (
+            d.is_dir()
+            and _native_manifest_file(d) is None
+            and _has_portable_manifest(d)
+        )
     except OSError:
         return False
 
@@ -821,8 +1000,12 @@ def _default_on(dir_path, source: str) -> bool:
         return False
     if source != "bundled":
         from providers import _declares_model_provider_kind
+
         root = _plugins_dir()
-        if path.name.startswith(("_", ".")) or path.parent not in (root, root / "model-providers"):
+        if path.name.startswith(("_", ".")) or path.parent not in (
+            root,
+            root / "model-providers",
+        ):
             return False
         if path.parent == root:
             return _declares_model_provider_kind(path)
@@ -830,13 +1013,21 @@ def _default_on(dir_path, source: str) -> bool:
     if manifest_file is None:
         return False
     try:
-        kind = str(_load_yaml_manifest(manifest_file).get("kind", "standalone")).strip().lower()
+        kind = (
+            str(_load_yaml_manifest(manifest_file).get("kind", "standalone"))
+            .strip()
+            .lower()
+        )
     except Exception:
         return False
-    return kind == "model-provider" or (source == "bundled" and kind in _BUNDLED_DEFAULT_ON_KINDS)
+    return kind == "model-provider" or (
+        source == "bundled" and kind in _BUNDLED_DEFAULT_ON_KINDS
+    )
 
 
-def _scan_level(base: Path, source: str, skip_names: set, prefix: str, depth: int, seen: dict) -> None:
+def _scan_level(
+    base: Path, source: str, skip_names: set, prefix: str, depth: int, seen: dict
+) -> None:
     """Recursive directory scan matching PluginManager._scan_directory_level."""
     if not base.is_dir():
         return
@@ -857,7 +1048,14 @@ def _scan_level(base: Path, source: str, skip_names: set, prefix: str, depth: in
             continue
         if info is None:
             if depth == 0:
-                _scan_level(d, source, set(), f"{prefix}/{d.name}" if prefix else d.name, 1, seen)
+                _scan_level(
+                    d,
+                    source,
+                    set(),
+                    f"{prefix}/{d.name}" if prefix else d.name,
+                    1,
+                    seen,
+                )
             continue
         name, version, description, key = info
         if key in seen and source == "bundled":
@@ -874,14 +1072,21 @@ def _discover_all_plugins() -> list:
     # memory/, context_engine/, computer_use/ and model-providers/ load through dedicated registries, not the
     # PluginManager opt-in surface, so listing them as toggleable plugins would mislead.
     from clawk_cli.plugins import discover_entrypoint_manifests, get_bundled_plugins_dir
+
     for base, source, skip in (
-        (get_bundled_plugins_dir(), "bundled", {"memory", "context_engine", "computer_use", "model-providers"}),
+        (
+            get_bundled_plugins_dir(),
+            "bundled",
+            {"memory", "context_engine", "computer_use", "model-providers"},
+        ),
         (_plugins_dir(), "user", set()),
     ):
         _scan_level(base, source, skip, "", 0, seen)
     # Entry-point plugins are installed as Python packages, so they have no plugin directory.
     for m in discover_entrypoint_manifests():
-        seen.setdefault(m.name, (m.name, m.version, m.description, "entrypoint", m.path, m.name))
+        seen.setdefault(
+            m.name, (m.name, m.version, m.description, "entrypoint", m.path, m.name)
+        )
     return list(seen.values())
 
 
@@ -891,8 +1096,16 @@ def _category_active_names() -> set:
     return {n for n in (_get_current_memory_provider(),) if n}
 
 
-def _plugin_status(name: str, enabled: set, disabled: set, key: str = "", *, source: str = "",
-                   dir_path=None, active: frozenset | set = frozenset()) -> str:
+def _plugin_status(
+    name: str,
+    enabled: set,
+    disabled: set,
+    key: str = "",
+    *,
+    source: str = "",
+    dir_path=None,
+    active: frozenset | set = frozenset(),
+) -> str:
     """User-facing activation state for a plugin name or key. Mirrors ``gate_manifest``: an explicit
     disable wins, then the allow-list, then the activations that need no list entry — bundled
     backends/platforms and model providers from any source (*source* + *dir_path*) and category-selected providers
@@ -911,8 +1124,12 @@ def _plugin_status(name: str, enabled: set, disabled: set, key: str = "", *, sou
 
 
 # memory.provider ("" = built-in) and context.engine config accessors.
-_get_current_memory_provider = functools.partial(_config_str, "memory", "provider", default="")
-_get_current_context_engine = functools.partial(_config_str, "context", "engine", default="compressor")
+_get_current_memory_provider = functools.partial(
+    _config_str, "memory", "provider", default=""
+)
+_get_current_context_engine = functools.partial(
+    _config_str, "context", "engine", default="compressor"
+)
 _save_memory_provider = functools.partial(_write_config_value, "memory", "provider")
 _save_context_engine = functools.partial(_write_config_value, "context", "engine")
 
@@ -926,10 +1143,18 @@ def _get_plugin_toolset_key(name: str) -> Optional[str]:
         return None
 
     def _first_toolset(tool_names) -> Optional[str]:
-        return next((e.toolset for t in tool_names if (e := registry.get_entry(t)) and e.toolset), None)
+        return next(
+            (
+                e.toolset
+                for t in tool_names
+                if (e := registry.get_entry(t)) and e.toolset
+            ),
+            None,
+        )
 
     def _from_loaded_plugin() -> Optional[str]:
         from clawk_cli.plugins import discover_plugins, get_plugin_manager
+
         discover_plugins()  # idempotent — ensures plugins are loaded
         for _key, loaded in get_plugin_manager()._plugins.items():
             if loaded.manifest.name == name or _key == name:
@@ -938,11 +1163,21 @@ def _get_plugin_toolset_key(name: str) -> Optional[str]:
 
     def _from_manifest_on_disk() -> Optional[str]:
         from clawk_cli.plugins import get_bundled_plugins_dir
-        return next((
-            toolset for base in (get_bundled_plugins_dir(), _plugins_dir())
-            if base.is_dir() and (base / name).is_dir()
-            and (toolset := _first_toolset(_read_manifest(base / name).get("provides_tools") or []))
-        ), None)
+
+        return next(
+            (
+                toolset
+                for base in (get_bundled_plugins_dir(), _plugins_dir())
+                if base.is_dir()
+                and (base / name).is_dir()
+                and (
+                    toolset := _first_toolset(
+                        _read_manifest(base / name).get("provides_tools") or []
+                    )
+                )
+            ),
+            None,
+        )
 
     for lookup in (_from_loaded_plugin, _from_manifest_on_disk):
         try:
@@ -958,13 +1193,18 @@ def _saved_list_toolset_key(name: str) -> Optional[str]:
     ``platform_toolsets`` list (the only lists :func:`_toggle_plugin_toolset` edits)."""
     from clawk_cli.config import load_config
     from clawk_cli.toolset_validation import parse_platform_toolsets_value
+
     saved = load_config().get("platform_toolsets")
-    if not isinstance(saved, dict) or all(parse_platform_toolsets_value(v) is None for v in saved.values()):
+    if not isinstance(saved, dict) or all(
+        parse_platform_toolsets_value(v) is None for v in saved.values()
+    ):
         return None
     return _get_plugin_toolset_key(name)
 
 
-def _toggle_plugin_toolset(name: str, *, enable: bool, toolset_key: Optional[str] = None) -> None:
+def _toggle_plugin_toolset(
+    name: str, *, enable: bool, toolset_key: Optional[str] = None
+) -> None:
     """Add/remove a plugin's toolset in every SAVED ``platform_toolsets`` list (no-op when the plugin
     provides no tools). Platforms with no saved list are left alone: a plugin toolset is already on
     there by default, and seeding ``[<plugin_ts>]`` would replace the core composite and strip every
@@ -975,6 +1215,7 @@ def _toggle_plugin_toolset(name: str, *, enable: bool, toolset_key: Optional[str
         return
     from clawk_cli.config import load_config, save_config
     from clawk_cli.toolset_validation import parse_platform_toolsets_value
+
     config = load_config()
     platform_toolsets = _child_dict(config, "platform_toolsets")
     changed = False
@@ -1015,7 +1256,13 @@ def dashboard_set_agent_plugin_enabled(name: str, *, enabled: bool) -> dict[str,
         # Load it now, here and in the running gateway; ``activation`` tells the UI what is live vs
         # deferred, and ``restart_required`` only survives when no gateway answered (#87770).
         from clawk_cli.plugins_activation import activate_plugin_now
-        result = {"ok": True, "name": key, "unchanged": False, **activate_plugin_now(key)}
+
+        result = {
+            "ok": True,
+            "name": key,
+            "unchanged": False,
+            **activate_plugin_now(key),
+        }
         # Only now is the plugin loaded here, so its toolset key resolves: a backend that scanned
         # while the plugin was off held a placeholder and the toolset was never re-added.
         _toggle_plugin_toolset(key, enable=True)
@@ -1024,7 +1271,12 @@ def dashboard_set_agent_plugin_enabled(name: str, *, enabled: bool) -> dict[str,
         _toggle_plugin_toolset(key, enable=False, toolset_key=toolset_key)
     # Disable is config-only: there is no un-wire primitive, so a running gateway keeps the plugin's
     # handlers until restart and every UI says so — #71595/#54941.
-    return {"ok": True, "name": key, "unchanged": not changed, "restart_required": changed}
+    return {
+        "ok": True,
+        "name": key,
+        "unchanged": not changed,
+        "restart_required": changed,
+    }
 
 
 def _user_installed_plugin_dir(name: str) -> Optional[Path]:
@@ -1040,13 +1292,18 @@ def _user_installed_plugin_dir(name: str) -> Optional[Path]:
 def _resolved_user_plugin_dir(name: str) -> Optional[Path]:
     """Dir of the user install :func:`_find_plugin_entry` resolves *name* to (manifest or catalog name)."""
     entry = _find_plugin_entry(name)
-    found = Path(str(entry[4])) if entry and entry[3] in ("user", "git") and entry[4] else None
+    found = (
+        Path(str(entry[4]))
+        if entry and entry[3] in ("user", "git") and entry[4]
+        else None
+    )
     return found if found is not None and found.is_dir() else None
 
 
 def cmd_plugin_doctor(target: str = ".", *, ci: bool = False) -> None:
     """Validate one plugin through runtime discovery and registration."""
     from clawk_cli.plugin_dev import doctor_plugin
+
     report = doctor_plugin(target)
     _console().print(report.format_text())
     if ci and not report.ok:
@@ -1055,28 +1312,41 @@ def cmd_plugin_doctor(target: str = ".", *, ci: bool = False) -> None:
 
 def _tri_state_flag(args, yes_attr: str, no_attr: str) -> Optional[bool]:
     """Map an argparse ``--x`` / ``--no-x`` pair to True / False / None (neither given)."""
-    return True if getattr(args, yes_attr, False) else (False if getattr(args, no_attr, False) else None)
+    return (
+        True
+        if getattr(args, yes_attr, False)
+        else (False if getattr(args, no_attr, False) else None)
+    )
 
 
 def _catalog():
     from clawk_cli import plugins_cmd_catalog
+
     return plugins_cmd_catalog
 
 
 def _action_update(args):
     if args.name:
         if getattr(args, "yes", False):
-            _fail(_console(), "[red]Error:[/red] --yes only applies to `clawk plugins update` with no name.")
+            _fail(
+                _console(),
+                "[red]Error:[/red] --yes only applies to `clawk plugins update` with no name.",
+            )
         cmd_update(args.name, force=getattr(args, "force", False))
         return
     if getattr(args, "force", False):
-        _fail(_console(), "[red]Error:[/red] --force applies to one named plugin: `clawk plugins update <name> --force`.")
+        _fail(
+            _console(),
+            "[red]Error:[/red] --force applies to one named plugin: `clawk plugins update <name> --force`.",
+        )
     from clawk_cli.plugins_cmd_update_all import cmd_update_all
+
     cmd_update_all(yes=getattr(args, "yes", False))
 
 
 def _action_pack(args):
     from clawk_cli.plugin_packs import pack_command
+
     pack_command(args)
 
 
@@ -1089,12 +1359,17 @@ _PLUGIN_ACTIONS = {
         ref=getattr(args, "ref", None),
         allow_removed=getattr(args, "allow_removed", False),
         no_deps=getattr(args, "no_deps", False),
-        yes_deps=getattr(args, "yes_deps", False)),
+        yes_deps=getattr(args, "yes_deps", False),
+    ),
     "search": lambda args: _catalog().cmd_search(
-        getattr(args, "term", "") or "", json_output=getattr(args, "json", False)),
+        getattr(args, "term", "") or "", json_output=getattr(args, "json", False)
+    ),
     "browse": lambda args: _catalog().cmd_search(""),
     "validate": lambda args: _catalog().cmd_validate(
-        args.path, as_json=getattr(args, "json", False), install_deps=getattr(args, "install_deps", False)),
+        args.path,
+        as_json=getattr(args, "json", False),
+        install_deps=getattr(args, "install_deps", False),
+    ),
     "update": _action_update,
     "adopt": lambda args: cmd_adopt(args.name),
     "trust-update-url": lambda args: cmd_trust_update_url(args.name),
@@ -1105,12 +1380,17 @@ _PLUGIN_ACTIONS = {
     "uninstall": lambda args: cmd_remove(args.name),
     "enable": lambda args: cmd_enable(
         args.name,
-        allow_tool_override=_tri_state_flag(args, "allow_tool_override", "no_allow_tool_override")),
+        allow_tool_override=_tri_state_flag(
+            args, "allow_tool_override", "no_allow_tool_override"
+        ),
+    ),
     "disable": lambda args: cmd_disable(args.name),
     "capabilities": lambda args: cmd_capabilities(getattr(args, "name", None)),
     "list": lambda args: cmd_list(args),
     "ls": lambda args: cmd_list(args),
-    "doctor": lambda args: cmd_plugin_doctor(args.target, ci=getattr(args, "ci", False)),
+    "doctor": lambda args: cmd_plugin_doctor(
+        args.target, ci=getattr(args, "ci", False)
+    ),
     "pack": _action_pack,
     "show": lambda args: cmd_show(args.name),
     "info": lambda args: _catalog().cmd_info(args.name),

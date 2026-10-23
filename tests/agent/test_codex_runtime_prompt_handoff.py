@@ -28,8 +28,13 @@ class _FakeClient:
 
 
 def _agent(**overrides):
-    base = dict(_codex_session=None, session_cwd="/tmp", tool_progress_callback=None,
-                _cached_system_prompt="SOUL: you are Clawksis", ephemeral_system_prompt="Always start with ZZZ")
+    base = dict(
+        _codex_session=None,
+        session_cwd="/tmp",
+        tool_progress_callback=None,
+        _cached_system_prompt="SOUL: you are Clawksis",
+        ephemeral_system_prompt="Always start with ZZZ",
+    )
     base.update(overrides)
     return SimpleNamespace(**base)
 
@@ -45,7 +50,10 @@ def test_runtime_sends_composed_prompt_once_per_thread(monkeypatch):
         agent._codex_session.ensure_started()
     starts = [p for (m, p) in client.requests if m == "thread/start"]
     assert len(starts) == 1
-    assert starts[0]["developerInstructions"] == "SOUL: you are Clawksis\n\nAlways start with ZZZ"
+    assert (
+        starts[0]["developerInstructions"]
+        == "SOUL: you are Clawksis\n\nAlways start with ZZZ"
+    )
 
 
 def test_runtime_omits_prompt_when_agent_has_none(monkeypatch):
@@ -55,7 +63,7 @@ def test_runtime_omits_prompt_when_agent_has_none(monkeypatch):
     agent = _agent(_cached_system_prompt=None, ephemeral_system_prompt=None)
     codex_runtime._ensure_codex_session(agent)
     agent._codex_session.ensure_started()
-    (_, params), = [(m, p) for (m, p) in client.requests if m == "thread/start"]
+    ((_, params),) = [(m, p) for (m, p) in client.requests if m == "thread/start"]
     assert "developerInstructions" not in params
 
 
@@ -70,8 +78,13 @@ def test_runtime_retires_thread_when_prompt_composition_changes(monkeypatch):
     agent.ephemeral_system_prompt = "Personality: pirate"
     codex_runtime._ensure_codex_session(agent)
     agent._codex_session.ensure_started()
-    starts = [p["developerInstructions"] for (m, p) in client.requests if m == "thread/start"]
-    assert starts == ["SOUL: you are Clawksis\n\nAlways start with ZZZ", "SOUL: you are Clawksis\n\nPersonality: pirate"]
+    starts = [
+        p["developerInstructions"] for (m, p) in client.requests if m == "thread/start"
+    ]
+    assert starts == [
+        "SOUL: you are Clawksis\n\nAlways start with ZZZ",
+        "SOUL: you are Clawksis\n\nPersonality: pirate",
+    ]
     assert client.closed == 1  # the stale thread's client was closed, not leaked
 
 
@@ -95,28 +108,49 @@ def test_each_turn_sends_the_agent_s_current_wire_model(monkeypatch):
             pass
 
     monkeypatch.setattr(sess_mod, "CodexAppServerSession", _Session)
-    agent = _agent(model="gpt-5.6-sol-900k", _interrupt_requested=False, _interrupt_message=None)
+    agent = _agent(
+        model="gpt-5.6-sol-900k", _interrupt_requested=False, _interrupt_message=None
+    )
     for model in ("gpt-5.6-sol-900k", "gpt-5.5"):
         agent.model = model
-        codex_runtime.run_codex_app_server_turn(agent, user_message="hi", original_user_message="hi",
-                                                messages=[], effective_task_id="t")
+        codex_runtime.run_codex_app_server_turn(
+            agent,
+            user_message="hi",
+            original_user_message="hi",
+            messages=[],
+            effective_task_id="t",
+        )
     assert turns == ["gpt-5.6-sol", "gpt-5.5"]
 
 
-def test_runtime_retires_thread_when_an_in_place_switch_changes_the_codex_provider(monkeypatch):
+def test_runtime_retires_thread_when_an_in_place_switch_changes_the_codex_provider(
+    monkeypatch,
+):
     """turn/start can change the model but not the provider: switching between codex's own provider and a
     named custom provider (``[model_providers.<id>]``) starts a thread carrying the new modelProvider."""
     import clawk_cli.runtime_provider as rp
-    monkeypatch.setattr(rp, "load_config", lambda: {"providers": {"my-gateway": {"api": "https://gw.example/v1"}}})
+
+    monkeypatch.setattr(
+        rp,
+        "load_config",
+        lambda: {"providers": {"my-gateway": {"api": "https://gw.example/v1"}}},
+    )
     client = _FakeClient()
     monkeypatch.setattr(sess_mod, "CodexAppServerClient", lambda **kw: client)
-    agent = _agent(provider="openai-codex", requested_provider="openai-codex", model="gpt-5.5")
-    for provider, requested in (("openai-codex", "openai-codex"), ("openai-codex", "openai-codex"),
-                                ("custom", "custom:my-gateway")):
+    agent = _agent(
+        provider="openai-codex", requested_provider="openai-codex", model="gpt-5.5"
+    )
+    for provider, requested in (
+        ("openai-codex", "openai-codex"),
+        ("openai-codex", "openai-codex"),
+        ("custom", "custom:my-gateway"),
+    ):
         agent.provider, agent.requested_provider = provider, requested
         codex_runtime._ensure_codex_session(agent)
         agent._codex_session.ensure_started()
-    starts = [p.get("modelProvider") for (m, p) in client.requests if m == "thread/start"]
+    starts = [
+        p.get("modelProvider") for (m, p) in client.requests if m == "thread/start"
+    ]
     assert starts == [None, "my-gateway"]
     assert client.closed == 1
 

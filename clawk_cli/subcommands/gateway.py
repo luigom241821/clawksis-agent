@@ -12,13 +12,15 @@ from clawk_cli.subcommands._shared import add_accept_hooks_flag
 # would double-bind its platforms); `gateway run` carries its own broader --force text.
 _FORCE_SERVED_PROFILE_HELP = (
     "Start a separate gateway for this profile even when the default multiplexer already serves it "
-    "(not recommended: two pollers on one bot token, port conflicts)")
+    "(not recommended: two pollers on one bot token, port conflicts)"
+)
 
 # `stop`/`restart` ask before interrupting live turns, cron jobs or background delegations.
 _INTERRUPT_HELP = (
     "{verb} without asking even while sessions are live (turns, cron jobs, background delegations): "
     "they are interrupted. Without it the command names the live work and asks y/N (refuses when "
-    "there is no terminal). --interrupt is the same flag")
+    "there is no terminal). --interrupt is the same flag"
+)
 
 
 class _GatewayCommandParser(argparse.ArgumentParser):
@@ -37,7 +39,9 @@ class _GatewayCommandParser(argparse.ArgumentParser):
     def error(self, message):
         if not self.ensure_json:
             return super().error(message)
-        print('{"endpoint":null,"reason_code":"invalid_invocation","state":"inaccessible"}')
+        print(
+            '{"endpoint":null,"reason_code":"invalid_invocation","state":"inaccessible"}'
+        )
         self.exit(2, "gateway ensure: invalid invocation\n")
 
 
@@ -59,13 +63,21 @@ def _add_system_flag(parser: argparse.ArgumentParser) -> None:
 
 
 def build_gateway_parser(
-    subparsers, *, cmd_gateway: Callable, cmd_proxy: Callable, cmd_gateway_enroll: Callable
+    subparsers,
+    *,
+    cmd_gateway: Callable,
+    cmd_proxy: Callable,
+    cmd_gateway_enroll: Callable,
 ) -> None:
     """Attach the ``gateway`` and ``proxy`` subcommands to ``subparsers``."""
-    gateway_parser = subparsers.add_parser("gateway", help="Messaging gateway management",
-        description="Manage the messaging gateway (Telegram, Discord, WhatsApp, Weixin, and more)")
+    gateway_parser = subparsers.add_parser(
+        "gateway",
+        help="Messaging gateway management",
+        description="Manage the messaging gateway (Telegram, Discord, WhatsApp, Weixin, and more)",
+    )
     gateway_subparsers = gateway_parser.add_subparsers(
-        dest="gateway_command", parser_class=_GatewayCommandParser)
+        dest="gateway_command", parser_class=_GatewayCommandParser
+    )
 
     gateway_run = gateway_subparsers.add_parser(
         "run", help="Run gateway in foreground (recommended for WSL and Docker)"
@@ -105,13 +117,17 @@ def build_gateway_parser(
             "if CLAWK_DASHBOARD is set). Pass --no-supervise to opt out and "
             "get the historical pre-s6 foreground behavior: the gateway is "
             "the container's main process and the container exits with the "
-            "gateway's exit code. No effect outside an s6 container."),
+            "gateway's exit code. No effect outside an s6 container."
+        ),
     )
-    _flag(gateway_run, "--external-supervisor",
+    _flag(
+        gateway_run,
+        "--external-supervisor",
         help="Declare that an external process manager owns this foreground "
-            "gateway. In-chat restarts and updates exit back to that manager "
-            "instead of spawning a detached replacement. Use this when a "
-            "launchd/systemd wrapper strips its native environment markers.")
+        "gateway. In-chat restarts and updates exit back to that manager "
+        "instead of spawning a detached replacement. Use this when a "
+        "launchd/systemd wrapper strips its native environment markers.",
+    )
     # Internal: set only by a client that auto-starts its own gateway (chat, TUI, cron/kanban
     # clients). Never in service units, Desktop's `gateway ensure` start or a hand-run gateway.
     _flag(gateway_run, "--idle-exit", help=argparse.SUPPRESS)
@@ -119,148 +135,288 @@ def build_gateway_parser(
     add_accept_hooks_flag(gateway_parser)
 
     from clawk_cli.gateway_runtime_cli import cmd_gateway_ensure
+
     gateway_ensure = gateway_subparsers.add_parser(
-        "ensure", ensure_json=True,
+        "ensure",
+        ensure_json=True,
         help="Ensure a local runtime without installing or replacing a service",
         epilog="Exit codes: 0 ready; 2 invalid invocation; 3 incompatible; "
-               "4 authorization/profile mismatch; 5 deadline; 6 draining/update-paused; "
-               "7 inaccessible/conflicting supervisor. Pending startup is not readiness.")
-    _flag(gateway_ensure, "--json", help="Emit one credential-free JSON result (default)")
-    gateway_ensure.add_argument("--timeout", default="60",
-                                help="Total startup deadline in seconds (default: 60)")
+        "4 authorization/profile mismatch; 5 deadline; 6 draining/update-paused; "
+        "7 inaccessible/conflicting supervisor. Pending startup is not readiness.",
+    )
+    _flag(
+        gateway_ensure, "--json", help="Emit one credential-free JSON result (default)"
+    )
+    gateway_ensure.add_argument(
+        "--timeout",
+        default="60",
+        help="Total startup deadline in seconds (default: 60)",
+    )
     gateway_ensure.set_defaults(func=cmd_gateway_ensure)
 
     gateway_start = gateway_subparsers.add_parser(
-        "start", help="Start the installed systemd/launchd background service")
+        "start", help="Start the installed systemd/launchd background service"
+    )
     _add_system_flag(gateway_start)
-    _flag(gateway_start, "--all",
-        help="Kill ALL stale gateway processes across all profiles before starting")
+    _flag(
+        gateway_start,
+        "--all",
+        help="Kill ALL stale gateway processes across all profiles before starting",
+    )
     _flag(gateway_start, "--force", help=_FORCE_SERVED_PROFILE_HELP)
     _add_compat_platform_flag(gateway_start)
 
     gateway_stop = gateway_subparsers.add_parser("stop", help="Stop gateway service")
     _add_system_flag(gateway_stop)
     _flag(gateway_stop, "--all", help="Stop ALL gateway processes across all profiles")
-    _flag(gateway_stop, "-y", "--yes", "--interrupt", dest="interrupt", help=_INTERRUPT_HELP.format(verb="stop"))
+    _flag(
+        gateway_stop,
+        "-y",
+        "--yes",
+        "--interrupt",
+        dest="interrupt",
+        help=_INTERRUPT_HELP.format(verb="stop"),
+    )
 
-    gateway_restart = gateway_subparsers.add_parser("restart", help="Restart gateway service")
+    gateway_restart = gateway_subparsers.add_parser(
+        "restart", help="Restart gateway service"
+    )
     _add_system_flag(gateway_restart)
-    _flag(gateway_restart, "--all",
-        help="Kill ALL gateway processes across all profiles before restarting")
+    _flag(
+        gateway_restart,
+        "--all",
+        help="Kill ALL gateway processes across all profiles before restarting",
+    )
     _flag(gateway_restart, "--force", help=_FORCE_SERVED_PROFILE_HELP)
-    _flag(gateway_restart, "-y", "--yes", "--interrupt", dest="interrupt", help=_INTERRUPT_HELP.format(verb="restart"))
-    _flag(gateway_restart, "--detach", help=(
-        "Without an installed service, start the replacement in the background (as `gateway ensure` "
-        "does) instead of in this terminal; used by apps that run the restart as a short-lived client"))
+    _flag(
+        gateway_restart,
+        "-y",
+        "--yes",
+        "--interrupt",
+        dest="interrupt",
+        help=_INTERRUPT_HELP.format(verb="restart"),
+    )
+    _flag(
+        gateway_restart,
+        "--detach",
+        help=(
+            "Without an installed service, start the replacement in the background (as `gateway ensure` "
+            "does) instead of in this terminal; used by apps that run the restart as a short-lived client"
+        ),
+    )
     _add_compat_platform_flag(gateway_restart)
 
     gateway_status = gateway_subparsers.add_parser("status", help="Show gateway status")
     _flag(gateway_status, "--deep", help="Deep status check")
-    _flag(gateway_status, "-l", "--full",
-        help="Show full, untruncated service/log output where supported")
+    _flag(
+        gateway_status,
+        "-l",
+        "--full",
+        help="Show full, untruncated service/log output where supported",
+    )
     _add_system_flag(gateway_status)
     _add_compat_platform_flag(gateway_status)
 
     # gateway install
     gateway_install = gateway_subparsers.add_parser(
-        "install", help="Install gateway as a systemd/launchd background service")
-    _flag(gateway_install, "--force",
-        help="Force reinstall, and install even when the default multiplexer already serves this profile")
-    _flag(gateway_install, "--system",
-        help="Install as a Linux system-level service (starts at boot)")
-    gateway_install.add_argument("--run-as-user", dest="run_as_user",
-        help="User account the Linux system service should run as")
-    _flag(gateway_install, "--start-now", dest="start_now", default=None,
-        help="Start the gateway service immediately after installing")
-    gateway_install.add_argument("--no-start-now", dest="start_now", action="store_false",
-        help="Do not start the gateway service after installing")
-    _flag(gateway_install, "--start-on-login", dest="start_on_login", default=None,
-        help="Enable the service to start automatically on login/boot")
-    gateway_install.add_argument("--no-start-on-login", dest="start_on_login", action="store_false",
-        help="Do not enable the service to start on login/boot")
-    _flag(gateway_install, "--if-missing", dest="if_missing",
-        help="Do nothing when a gateway service is already installed")
-    _flag(gateway_install, "--force-unit-path", dest="force_unit_path",
-        help="Repoint a service definition that pins another CLAWK_HOME at this one")
-    _flag(gateway_install, "--elevated-handoff", dest="elevated_handoff", help=argparse.SUPPRESS)
+        "install", help="Install gateway as a systemd/launchd background service"
+    )
+    _flag(
+        gateway_install,
+        "--force",
+        help="Force reinstall, and install even when the default multiplexer already serves this profile",
+    )
+    _flag(
+        gateway_install,
+        "--system",
+        help="Install as a Linux system-level service (starts at boot)",
+    )
+    gateway_install.add_argument(
+        "--run-as-user",
+        dest="run_as_user",
+        help="User account the Linux system service should run as",
+    )
+    _flag(
+        gateway_install,
+        "--start-now",
+        dest="start_now",
+        default=None,
+        help="Start the gateway service immediately after installing",
+    )
+    gateway_install.add_argument(
+        "--no-start-now",
+        dest="start_now",
+        action="store_false",
+        help="Do not start the gateway service after installing",
+    )
+    _flag(
+        gateway_install,
+        "--start-on-login",
+        dest="start_on_login",
+        default=None,
+        help="Enable the service to start automatically on login/boot",
+    )
+    gateway_install.add_argument(
+        "--no-start-on-login",
+        dest="start_on_login",
+        action="store_false",
+        help="Do not enable the service to start on login/boot",
+    )
+    _flag(
+        gateway_install,
+        "--if-missing",
+        dest="if_missing",
+        help="Do nothing when a gateway service is already installed",
+    )
+    _flag(
+        gateway_install,
+        "--force-unit-path",
+        dest="force_unit_path",
+        help="Repoint a service definition that pins another CLAWK_HOME at this one",
+    )
+    _flag(
+        gateway_install,
+        "--elevated-handoff",
+        dest="elevated_handoff",
+        help=argparse.SUPPRESS,
+    )
 
-    gateway_uninstall = gateway_subparsers.add_parser("uninstall", help="Uninstall gateway service")
+    gateway_uninstall = gateway_subparsers.add_parser(
+        "uninstall", help="Uninstall gateway service"
+    )
     _add_system_flag(gateway_uninstall)
 
-    gateway_subparsers.add_parser("list", help="List all profiles and their gateway status")
+    gateway_subparsers.add_parser(
+        "list", help="List all profiles and their gateway status"
+    )
 
     gateway_subparsers.add_parser("setup", help="Configure messaging platforms")
 
     gateway_migrate_legacy = gateway_subparsers.add_parser(
-        "migrate-legacy", help="Remove legacy clawk.service units from pre-rename installs",
+        "migrate-legacy",
+        help="Remove legacy clawk.service units from pre-rename installs",
         description="Stop, disable, and remove legacy Clawksis gateway unit files "
-            "(e.g. clawk.service) left over from older installs. Profile "
-            "units (clawk-gateway-<profile>.service) and unrelated "
-            "third-party services are never touched.")
-    _flag(gateway_migrate_legacy, "--dry-run", dest="dry_run",
-        help="List what would be removed without doing it")
-    _flag(gateway_migrate_legacy, "-y", "--yes", dest="yes", help="Skip the confirmation prompt")
+        "(e.g. clawk.service) left over from older installs. Profile "
+        "units (clawk-gateway-<profile>.service) and unrelated "
+        "third-party services are never touched.",
+    )
+    _flag(
+        gateway_migrate_legacy,
+        "--dry-run",
+        dest="dry_run",
+        help="List what would be removed without doing it",
+    )
+    _flag(
+        gateway_migrate_legacy,
+        "-y",
+        "--yes",
+        dest="yes",
+        help="Skip the confirmation prompt",
+    )
 
     gateway_migrate = gateway_subparsers.add_parser(
-        "migrate", help="Converge every per-profile gateway onto the ONE host gateway",
+        "migrate",
+        help="Converge every per-profile gateway onto the ONE host gateway",
         description="Converge this host onto the one-gateway-per-host model: stop and uninstall "
-            "each secondary profile's gateway and its supervisor unit (systemd, launchd, Windows "
-            "Scheduled Task), then restart the default profile's gateway so it serves every "
-            "profile. Runs a preflight first (duplicate bot tokens, port-binding platforms "
-            "without a /p/<profile>/ ingress) and changes nothing when blocked. Safe to re-run: a "
-            "half-migrated host converges on the next run. Per-profile gateways are not a "
-            "supported topology any more, so there is no rollback command.")
-    _flag(gateway_migrate, "--multiplex", dest="multiplex", help="Converge onto the one host gateway (default)")
-    _flag(gateway_migrate, "--dry-run", dest="dry_run", help="Print the plan and blockers without changing anything")
+        "each secondary profile's gateway and its supervisor unit (systemd, launchd, Windows "
+        "Scheduled Task), then restart the default profile's gateway so it serves every "
+        "profile. Runs a preflight first (duplicate bot tokens, port-binding platforms "
+        "without a /p/<profile>/ ingress) and changes nothing when blocked. Safe to re-run: a "
+        "half-migrated host converges on the next run. Per-profile gateways are not a "
+        "supported topology any more, so there is no rollback command.",
+    )
+    _flag(
+        gateway_migrate,
+        "--multiplex",
+        dest="multiplex",
+        help="Converge onto the one host gateway (default)",
+    )
+    _flag(
+        gateway_migrate,
+        "--dry-run",
+        dest="dry_run",
+        help="Print the plan and blockers without changing anything",
+    )
     _flag(gateway_migrate, "-y", "--yes", dest="yes", help="Apply without confirmation")
 
     # enroll: redeem a single-use connector token for the per-gateway secret + per-tenant
     # delivery key, written to .env. See website/docs/developer-guide/relay-connector-contract.md. EXPERIMENTAL.
-    gateway_enroll = gateway_subparsers.add_parser("enroll",
+    gateway_enroll = gateway_subparsers.add_parser(
+        "enroll",
         help="Enroll this gateway with a relay connector (writes relay auth creds to .env)",
         description="Redeem a single-use enrollment token with a relay connector. "
-            "Authenticates as your Nous Portal account (the connector derives the "
-            "authoritative tenant from it), mints this gateway's per-gateway secret "
-            "and per-tenant delivery key, and writes GATEWAY_RELAY_ID / "
-            "GATEWAY_RELAY_SECRET / GATEWAY_RELAY_DELIVERY_KEY into ~/.clawksis/.env. "
-            "Requires being logged in (clawk setup). Not available in managed installs.")
-    gateway_enroll.add_argument("--token", default=None,
+        "Authenticates as your Nous Portal account (the connector derives the "
+        "authoritative tenant from it), mints this gateway's per-gateway secret "
+        "and per-tenant delivery key, and writes GATEWAY_RELAY_ID / "
+        "GATEWAY_RELAY_SECRET / GATEWAY_RELAY_DELIVERY_KEY into ~/.clawksis/.env. "
+        "Requires being logged in (clawk setup). Not available in managed installs.",
+    )
+    gateway_enroll.add_argument(
+        "--token",
+        default=None,
         help="The single-use enrollment token from the connector (delivered with "
-            "your gateway config). Also settable via GATEWAY_RELAY_ENROLL_TOKEN.")
-    gateway_enroll.add_argument("--connector-url", dest="connector_url", default=None,
+        "your gateway config). Also settable via GATEWAY_RELAY_ENROLL_TOKEN.",
+    )
+    gateway_enroll.add_argument(
+        "--connector-url",
+        dest="connector_url",
+        default=None,
         help="The connector base/relay URL, e.g. wss://connector.example.com/relay "
-            "or https://connector.example.com. Also settable via GATEWAY_RELAY_URL "
-            "/ gateway.relay_url in config.yaml.")
-    gateway_enroll.add_argument("--gateway-id", dest="gateway_id", default=None,
+        "or https://connector.example.com. Also settable via GATEWAY_RELAY_URL "
+        "/ gateway.relay_url in config.yaml.",
+    )
+    gateway_enroll.add_argument(
+        "--gateway-id",
+        dest="gateway_id",
+        default=None,
         help="A stable id for this gateway instance (kill-switch granularity). "
-            "Defaults to gw-<hostname>.")
-    gateway_enroll.add_argument("--wake-url", dest="wake_url", default=None,
+        "Defaults to gw-<hostname>.",
+    )
+    gateway_enroll.add_argument(
+        "--wake-url",
+        dest="wake_url",
+        default=None,
         help="Phase 5 §5.2 wake URL: a reachable URL the connector pokes "
-            "(payload-free GET) to wake this gateway when buffered work arrives "
-            "while it's idle/suspended, so it reconnects and drains. Persisted as "
-            "GATEWAY_RELAY_WAKE_URL in ~/.clawksis/.env and forwarded at provision. "
-            "Optional — without it the gateway still drains whenever it next "
-            "reconnects on its own.")
+        "(payload-free GET) to wake this gateway when buffered work arrives "
+        "while it's idle/suspended, so it reconnects and drains. Persisted as "
+        "GATEWAY_RELAY_WAKE_URL in ~/.clawksis/.env and forwarded at provision. "
+        "Optional — without it the gateway still drains whenever it next "
+        "reconnects on its own.",
+    )
     gateway_enroll.set_defaults(func=cmd_gateway_enroll)
 
     # proxy: local OpenAI-compatible proxy attaching the user's OAuth provider credentials,
     # so external apps (Open WebUI, Karakeep, ...) ride a logged-in subscription.
     proxy_parser = subparsers.add_parser(
-        "proxy", help="Local OpenAI-compatible proxy to OAuth providers",
+        "proxy",
+        help="Local OpenAI-compatible proxy to OAuth providers",
         description="Run a local HTTP server that forwards OpenAI-compatible requests "
-            "to an OAuth-authenticated provider (e.g. Nous Portal). External "
-            "apps can point at the proxy with any bearer token; the proxy "
-            "attaches your real credentials.")
+        "to an OAuth-authenticated provider (e.g. Nous Portal). External "
+        "apps can point at the proxy with any bearer token; the proxy "
+        "attaches your real credentials.",
+    )
     proxy_subparsers = proxy_parser.add_subparsers(dest="proxy_command")
 
-    proxy_start = proxy_subparsers.add_parser("start", help="Run the proxy in the foreground")
-    proxy_start.add_argument("--provider", default="nous",
-        help="Upstream provider: nous or xai (default: nous). See `clawk proxy providers`.")
-    proxy_start.add_argument("--host", default=None,
-        help="Bind address (default: 127.0.0.1). Use 0.0.0.0 to expose on LAN.")
-    proxy_start.add_argument("--port", type=int, default=None, help="Bind port (default: 8645)")
+    proxy_start = proxy_subparsers.add_parser(
+        "start", help="Run the proxy in the foreground"
+    )
+    proxy_start.add_argument(
+        "--provider",
+        default="nous",
+        help="Upstream provider: nous or xai (default: nous). See `clawk proxy providers`.",
+    )
+    proxy_start.add_argument(
+        "--host",
+        default=None,
+        help="Bind address (default: 127.0.0.1). Use 0.0.0.0 to expose on LAN.",
+    )
+    proxy_start.add_argument(
+        "--port", type=int, default=None, help="Bind port (default: 8645)"
+    )
 
     proxy_subparsers.add_parser("status", help="Show which proxy upstreams are ready")
-    proxy_subparsers.add_parser("providers", help="List available proxy upstream providers")
+    proxy_subparsers.add_parser(
+        "providers", help="List available proxy upstream providers"
+    )
     proxy_parser.set_defaults(func=cmd_proxy)
     gateway_parser.set_defaults(func=cmd_gateway)

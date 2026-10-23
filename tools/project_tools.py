@@ -18,7 +18,9 @@ from tools.registry import registry
 _workspace_callback: Optional[Callable[[str, str, str], None]] = None
 
 
-def set_project_workspace_callback(fn: Optional[Callable[[str, str, str], None]]) -> None:
+def set_project_workspace_callback(
+    fn: Optional[Callable[[str, str, str], None]],
+) -> None:
     global _workspace_callback
     _workspace_callback = fn
 
@@ -48,6 +50,7 @@ def _apply_workspace(task_id: Optional[str], path: Optional[str], name: str) -> 
 
 def _resolve(conn, token: str):
     from clawk_cli import projects_db as pdb
+
     token = (token or "").strip()
     if not token:
         return None
@@ -66,17 +69,26 @@ def _resolve(conn, token: str):
 def _activated(proj, task_id: Optional[str]) -> str:
     primary = _primary_path(proj)
     _apply_workspace(task_id, primary, proj.name)
-    return json.dumps({
-        "success": True, "id": proj.id, "slug": proj.slug, "name": proj.name,
-        "primary_path": primary})
+    return json.dumps(
+        {
+            "success": True,
+            "id": proj.id,
+            "slug": proj.slug,
+            "name": proj.name,
+            "primary_path": primary,
+        }
+    )
 
 
-def _calling_session_project_id(conn, task_id: Optional[str]) -> tuple[bool, Optional[str]]:
+def _calling_session_project_id(
+    conn, task_id: Optional[str]
+) -> tuple[bool, Optional[str]]:
     """``(scoped, project_id)`` for the calling session. The GUI gateway registers each session's
     workspace (``cwd_source``) in the terminal override table; a caller it never registered (CLI,
     scripts) is unscoped and falls back to the profile-global pointer."""
     from clawk_cli import projects_db as pdb
     from tools.terminal_tool import resolve_task_overrides
+
     overrides = resolve_task_overrides(task_id) if task_id else {}
     if "cwd_source" not in overrides:
         return False, None
@@ -87,26 +99,38 @@ def _calling_session_project_id(conn, task_id: Optional[str]) -> tuple[bool, Opt
 
 def project_list(task_id: Optional[str] = None) -> str:
     from clawk_cli import projects_db as pdb
+
     with pdb.connect_closing() as conn:
         # Another tab's switch moves the profile-global pointer; this chat's project is its own cwd.
         scoped, active = _calling_session_project_id(conn, task_id)
         if not scoped:
             active = pdb.get_active_id(conn)
         projects = pdb.list_projects(conn)
-    return json.dumps({
-        "active_id": active,
-        "projects": [
-            {
-                "id": p.id, "slug": p.slug, "name": p.name,
-                "primary_path": _primary_path(p), "active": p.id == active}
-            for p in projects]})
+    return json.dumps(
+        {
+            "active_id": active,
+            "projects": [
+                {
+                    "id": p.id,
+                    "slug": p.slug,
+                    "name": p.name,
+                    "primary_path": _primary_path(p),
+                    "active": p.id == active,
+                }
+                for p in projects
+            ],
+        }
+    )
 
 
-def project_create(name: str, path: Optional[str] = None, task_id: Optional[str] = None) -> str:
+def project_create(
+    name: str, path: Optional[str] = None, task_id: Optional[str] = None
+) -> str:
     name = (name or "").strip()
     if not name:
         return json.dumps({"success": False, "error": "name is required"})
     from clawk_cli import projects_db as pdb
+
     folder = (path or "").strip()
     if folder:
         folder = os.path.abspath(os.path.expanduser(folder))
@@ -118,7 +142,12 @@ def project_create(name: str, path: Optional[str] = None, task_id: Optional[str]
                 # a duplicate — duplicated projects render N identical sidebar subtrees (#75820).
                 proj = existing
             else:
-                pid = pdb.create_project(conn, name=name, folders=[folder] if folder else [], primary_path=folder or None)
+                pid = pdb.create_project(
+                    conn,
+                    name=name,
+                    folders=[folder] if folder else [],
+                    primary_path=folder or None,
+                )
                 proj = pdb.get_project(conn, pid)
             # A live session that moves owns its workspace, so it leaves the profile-global pointer
             # alone (a background chat would otherwise redirect the sidebar). Anything that can't
@@ -134,10 +163,13 @@ def project_create(name: str, path: Optional[str] = None, task_id: Optional[str]
 
 def project_switch(project: str, task_id: Optional[str] = None) -> str:
     from clawk_cli import projects_db as pdb
+
     with pdb.connect_closing() as conn:
         proj = _resolve(conn, project)
         if proj is None:
-            return json.dumps({"success": False, "error": f"no project matching '{project}'"})
+            return json.dumps(
+                {"success": False, "error": f"no project matching '{project}'"}
+            )
         # Same rule as create.
         if not _moves_session(task_id, _primary_path(proj)):
             pdb.set_active(conn, proj.id)
@@ -147,14 +179,20 @@ def project_switch(project: str, task_id: Optional[str] = None) -> str:
 _ACTIONS = {
     "list": lambda args, tid: project_list(task_id=tid),
     "create": lambda args, tid: project_create(
-        name=args.get("name", ""), path=args.get("path"), task_id=tid),
-    "switch": lambda args, tid: project_switch(project=args.get("name", ""), task_id=tid)}
+        name=args.get("name", ""), path=args.get("path"), task_id=tid
+    ),
+    "switch": lambda args, tid: project_switch(
+        project=args.get("name", ""), task_id=tid
+    ),
+}
 
 
 def _handle_project(args, **kw):
     action = _ACTIONS.get((args.get("action") or "").strip())
     if action is None:
-        return json.dumps({"success": False, "error": "action must be one of: create, switch, list."})
+        return json.dumps(
+            {"success": False, "error": "action must be one of: create, switch, list."}
+        )
     return action(args, kw.get("task_id"))
 
 
@@ -177,8 +215,14 @@ registry.register(
             "type": "object",
             "properties": {
                 "action": {"type": "string", "enum": ["create", "switch", "list"]},
-                "name": {"type": "string", "description": "create: human name. switch: name, slug, or id."},
-                "path": {"type": "string", "description": "create: repo/folder to anchor to."},
+                "name": {
+                    "type": "string",
+                    "description": "create: human name. switch: name, slug, or id.",
+                },
+                "path": {
+                    "type": "string",
+                    "description": "create: repo/folder to anchor to.",
+                },
             },
             "required": ["action"],
         },

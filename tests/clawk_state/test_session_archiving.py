@@ -37,7 +37,10 @@ def test_archiving_compression_tip_archives_projected_root(db):
     assert db.get_session("root")["archived"] == 1
     assert db.get_session("tip")["archived"] == 1
     assert [s["id"] for s in db.list_sessions_rich(order_by_last_active=True)] == []
-    assert [s["id"] for s in db.list_sessions_rich(order_by_last_active=True, archived_only=True)] == ["tip"]
+    assert [
+        s["id"]
+        for s in db.list_sessions_rich(order_by_last_active=True, archived_only=True)
+    ] == ["tip"]
 
 
 def test_unarchiving_compression_tip_unarchives_projected_root(db):
@@ -48,7 +51,9 @@ def test_unarchiving_compression_tip_unarchives_projected_root(db):
 
     assert db.get_session("root")["archived"] == 0
     assert db.get_session("tip")["archived"] == 0
-    assert [s["id"] for s in db.list_sessions_rich(order_by_last_active=True)] == ["tip"]
+    assert [s["id"] for s in db.list_sessions_rich(order_by_last_active=True)] == [
+        "tip"
+    ]
 
 
 def test_archived_only_view_includes_hidden_archived_sessions(db):
@@ -61,9 +66,14 @@ def test_archived_only_view_includes_hidden_archived_sessions(db):
     assert db.set_session_archived("both", True) is True
 
     # Default list: hidden rows stay excluded (unchanged behaviour)...
-    assert [s["id"] for s in db.list_sessions_rich(order_by_last_active=True)] == ["plain"]
+    assert [s["id"] for s in db.list_sessions_rich(order_by_last_active=True)] == [
+        "plain"
+    ]
     # ...and the archived-only view must surface the archived+hidden row.
-    assert [s["id"] for s in db.list_sessions_rich(order_by_last_active=True, archived_only=True)] == ["both"]
+    assert [
+        s["id"]
+        for s in db.list_sessions_rich(order_by_last_active=True, archived_only=True)
+    ] == ["both"]
 
 
 def _stale_lineage(db: SessionDB, prefix: str) -> tuple[str, str]:
@@ -74,7 +84,8 @@ def _stale_lineage(db: SessionDB, prefix: str) -> tuple[str, str]:
     base = time.time() - 40 * 86400
     db._conn.execute(
         "UPDATE sessions SET started_at = ?, ended_at = ?, end_reason = 'compression', last_activity_at = ? WHERE id = ?",
-        (base, base + 10, base + 10, root))
+        (base, base + 10, base + 10, root),
+    )
     db._conn.commit()
     return root, tip
 
@@ -87,13 +98,29 @@ def test_bulk_archive_matches_a_lineage_through_its_tip_only(db):
     db.append_message(live_tip, "user", "still chatting")
     stale_root, stale_tip = _stale_lineage(db, "stale")
     stale = time.time() - 35 * 86400
-    db._conn.execute("UPDATE sessions SET started_at = ?, ended_at = ?, end_reason = 'cli_close', last_activity_at = ? "
-                     "WHERE id = ?", (stale, stale + 10, stale + 10, stale_tip))
+    db._conn.execute(
+        "UPDATE sessions SET started_at = ?, ended_at = ?, end_reason = 'cli_close', last_activity_at = ? "
+        "WHERE id = ?",
+        (stale, stale + 10, stale + 10, stale_tip),
+    )
     db._conn.commit()
 
-    assert [r["id"] for r in db.list_prune_candidates(older_than_days=30, archived=False, lineage_tips_only=True)] == [stale_tip]
+    assert [
+        r["id"]
+        for r in db.list_prune_candidates(
+            older_than_days=30, archived=False, lineage_tips_only=True
+        )
+    ] == [stale_tip]
     assert db.archive_sessions(older_than_days=30) == 1
 
-    assert {s: db.get_session(s)["archived"] for s in (live_root, live_tip)} == {live_root: 0, live_tip: 0}
-    assert {s: db.get_session(s)["archived"] for s in (stale_root, stale_tip)} == {stale_root: 1, stale_tip: 1}
-    assert [s["id"] for s in db.list_sessions_rich(order_by_last_active=True)] == [live_tip]
+    assert {s: db.get_session(s)["archived"] for s in (live_root, live_tip)} == {
+        live_root: 0,
+        live_tip: 0,
+    }
+    assert {s: db.get_session(s)["archived"] for s in (stale_root, stale_tip)} == {
+        stale_root: 1,
+        stale_tip: 1,
+    }
+    assert [s["id"] for s in db.list_sessions_rich(order_by_last_active=True)] == [
+        live_tip
+    ]

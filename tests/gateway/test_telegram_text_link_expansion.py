@@ -37,7 +37,6 @@ def test_hidden_link_in_word_is_inlined():
     assert out.startswith("Ссылка: тут (https://github.com/Cysharp/R3)")
 
 
-
 def test_caption_link_on_media_is_inlined():
     msg = _Message(
         caption="Смотри тут проект",
@@ -62,11 +61,10 @@ def test_expansion_is_idempotent():
         entities=[_Entity("text_link", 8, 3, "https://github.com/Cysharp/R3")],
     )
     out = expand_link_entities(msg)
-    repeat = _Message(text=out, entities=[_Entity("text_link", 8, 3, "https://github.com/Cysharp/R3")])
+    repeat = _Message(
+        text=out, entities=[_Entity("text_link", 8, 3, "https://github.com/Cysharp/R3")]
+    )
     assert expand_link_entities(repeat) == out
-
-
-
 
 
 @pytest.mark.parametrize(
@@ -101,5 +99,7 @@ def test_offset_inside_utf16_surrogate_pair_is_ignored():
 
 def test_anchor_that_is_already_the_url_is_not_duplicated():
     url = "https://example.com/self"
-    msg = _Message(text=f"see {url} now", entities=[_Entity("text_link", 4, len(url), url)])
+    msg = _Message(
+        text=f"see {url} now", entities=[_Entity("text_link", 4, len(url), url)]
+    )
     assert expand_link_entities(msg) == f"see {url} now"

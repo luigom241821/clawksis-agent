@@ -27,7 +27,6 @@ class TestRecordSemantics:
         assert tt.get_session_cwd("sess-b") == "/wt/b"
         assert tt.get_session_cwd("sess-c") is None
 
-
     def test_clear_drops_only_the_named_session(self):
         tt.record_session_cwd("sess-a", "/wt/a")
         tt.record_session_cwd("sess-b", "/wt/b")
@@ -42,7 +41,6 @@ class TestDualWriteSites:
         tt.register_task_env_overrides("desktop-sess", {"cwd": "/wt/desktop"})
         assert tt.get_session_cwd("desktop-sess") == "/wt/desktop"
 
-
     def test_reregistration_updates_the_record(self):
         """ACP session/load switching project roots mid-session."""
         tt.register_task_env_overrides("acp-sess", {"cwd": "/proj/one"})
@@ -55,15 +53,22 @@ class TestPostCommandDualWrite:
 
     def _run(self, monkeypatch, task_id, env):
         import json
+
         monkeypatch.setattr(tt, "_active_environments", {task_id: env})
         monkeypatch.setattr(tt, "_last_activity", {})
         monkeypatch.setattr(
-            tt, "_get_env_config",
-            lambda: {"env_type": "local", "cwd": "/default", "timeout": 60,
-                     "lifetime_seconds": 3600},
+            tt,
+            "_get_env_config",
+            lambda: {
+                "env_type": "local",
+                "cwd": "/default",
+                "timeout": 60,
+                "lifetime_seconds": 3600,
+            },
         )
         monkeypatch.setattr(
-            tt, "_check_all_guards",
+            tt,
+            "_check_all_guards",
             lambda command, env_type, **kwargs: {"approved": True},
         )
         return json.loads(tt.terminal_tool(command="cd /new/dir", task_id=task_id))
@@ -72,6 +77,7 @@ class TestPostCommandDualWrite:
         class FakeEnv:
             env = {}
             cwd = "/start"
+
             def execute(self, command, **kwargs):
                 # Simulate the env's own post-command tracking (marker parse):
                 # the marker is what moves cwd AND what flags the observation.
@@ -87,6 +93,7 @@ class TestPostCommandDualWrite:
     def test_envs_without_cwd_tracking_record_nothing(self, monkeypatch):
         class FakeEnv:
             env = {}
+
             def execute(self, command, **kwargs):
                 return {"output": "", "returncode": 0}
 
@@ -98,7 +105,9 @@ class TestPostCommandDualWrite:
 class TestFileToolsReadTheRecord:
     """Step 2: file-tool path resolution prefers the session's own record."""
 
-    def test_two_sessions_resolve_into_their_own_recorded_cwds(self, tmp_path, monkeypatch):
+    def test_two_sessions_resolve_into_their_own_recorded_cwds(
+        self, tmp_path, monkeypatch
+    ):
         import tools.file_tools as ft
         import tools.file_tools_paths as ftp
 
@@ -119,7 +128,9 @@ class TestFileToolsReadTheRecord:
         assert ftp._resolve_path_for_task("f.py", task_id="sess-a") == (wt_a / "f.py")
         assert ftp._resolve_path_for_task("f.py", task_id="sess-b") == (wt_b / "f.py")
 
-    def test_record_beats_foreign_env_cwd_without_ownership_metadata(self, tmp_path, monkeypatch):
+    def test_record_beats_foreign_env_cwd_without_ownership_metadata(
+        self, tmp_path, monkeypatch
+    ):
         """The leak-A scenario, solved structurally: the shared env's cwd is
         never consulted for path resolution — only the session's own record."""
         import tools.file_tools as ft
@@ -168,9 +179,14 @@ class TestReapedEnvFallbackIsFillOnly:
         monkeypatch.setattr(tt, "_active_environments", {})
         monkeypatch.setattr(tt, "_last_activity", {})
         monkeypatch.setattr(
-            tt, "_get_env_config",
-            lambda: {"env_type": "local", "cwd": str(tmp_path), "timeout": 60,
-                     "lifetime_seconds": 3600},
+            tt,
+            "_get_env_config",
+            lambda: {
+                "env_type": "local",
+                "cwd": str(tmp_path),
+                "timeout": 60,
+                "lifetime_seconds": 3600,
+            },
         )
         ft._get_file_ops(task_id)
 
@@ -197,7 +213,6 @@ class TestCommandCwdReadsTheRecord:
         )
         assert resolved == "/my/worktree"
 
-
     def test_other_sessions_record_is_not_consulted(self):
         tt.record_session_cwd("sess-b", "/other/worktree")
         resolved = tt._resolve_command_cwd(
@@ -214,6 +229,7 @@ class TestCommandCwdReadsTheRecord:
         class FakeEnv:
             env = {}
             cwd = "/start"
+
             def execute(self, command, **kwargs):
                 self.last_cwd_arg = kwargs.get("cwd")
                 if command.startswith("cd "):
@@ -226,12 +242,18 @@ class TestCommandCwdReadsTheRecord:
         monkeypatch.setattr(tt, "_active_environments", {"sess-a": fake})
         monkeypatch.setattr(tt, "_last_activity", {})
         monkeypatch.setattr(
-            tt, "_get_env_config",
-            lambda: {"env_type": "local", "cwd": "/default", "timeout": 60,
-                     "lifetime_seconds": 3600},
+            tt,
+            "_get_env_config",
+            lambda: {
+                "env_type": "local",
+                "cwd": "/default",
+                "timeout": 60,
+                "lifetime_seconds": 3600,
+            },
         )
         monkeypatch.setattr(
-            tt, "_check_all_guards",
+            tt,
+            "_check_all_guards",
             lambda command, env_type, **kwargs: {"approved": True},
         )
 

@@ -59,8 +59,14 @@ def _is_uv_macos_store(path: str) -> bool:
 
 
 def _venv_dir(project_root: Path | None = None) -> Path | None:
-    root = Path(project_root) if project_root is not None else Path(__file__).resolve().parents[1]
-    return next((root / n for n in ("venv", ".venv") if _present(venv_python(root / n))), None)
+    root = (
+        Path(project_root)
+        if project_root is not None
+        else Path(__file__).resolve().parents[1]
+    )
+    return next(
+        (root / n for n in ("venv", ".venv") if _present(venv_python(root / n))), None
+    )
 
 
 def _present(path: Path) -> bool:
@@ -98,7 +104,9 @@ def _interpreter_source(venv_dir: Path) -> str | None:
         lines = cfg.read_text(encoding="utf-8-sig").splitlines()
     except OSError:
         return None
-    home = next((l.partition("=")[2].strip() for l in lines if l.lower().startswith("home")), "")
+    home = next(
+        (l.partition("=")[2].strip() for l in lines if l.lower().startswith("home")), ""
+    )
     interp = _interpreter_file(home) if home else None
     return str(interp) if interp is not None else None
 
@@ -123,7 +131,10 @@ def _anchor_marker(venv_bin: Path) -> Path:
 def _marker_matches(venv_bin: Path, expected: str) -> bool:
     marker = _anchor_marker(venv_bin)
     try:
-        return marker.is_file() and marker.read_text(encoding="utf-8-sig").strip() == expected
+        return (
+            marker.is_file()
+            and marker.read_text(encoding="utf-8-sig").strip() == expected
+        )
     except OSError:
         return False
 
@@ -143,7 +154,9 @@ def _store_root(source_file: Path) -> Path:
     return source_file.resolve(strict=False).parent.parent
 
 
-def _provision_libpython(venv_dir: Path, source_file: Path, *, refresh: bool = False) -> None:
+def _provision_libpython(
+    venv_dir: Path, source_file: Path, *, refresh: bool = False
+) -> None:
     """Hardlink (else copy) store ``libpython*`` into ``venv/lib/``.
 
     Provision-if-present: a surplus hardlink on a statically-linked build is free; a missed
@@ -174,7 +187,9 @@ def _provision_libpython(venv_dir: Path, source_file: Path, *, refresh: bool = F
                 try:
                     shutil.copy2(src, dst)
                 except OSError:
-                    logger.debug("libpython provision failed for %s", src, exc_info=True)
+                    logger.debug(
+                        "libpython provision failed for %s", src, exc_info=True
+                    )
     except OSError:
         logger.debug("libpython provision skipped", exc_info=True)
 
@@ -219,12 +234,16 @@ def _copy_alias(venv_bin: Path, name: str, anchor: Path) -> bool:
         return False
 
 
-def _materialize_aliases(venv_bin: Path, anchor: Path, *, refresh: bool = False) -> bool:
+def _materialize_aliases(
+    venv_bin: Path, anchor: Path, *, refresh: bool = False
+) -> bool:
     """Materialize uv alias names as real-file copies; True only if every needed one succeeded."""
     names = set(_ALIAS_NAMES)
     try:
         names.update(
-            p.name for p in venv_bin.glob("python3*") if re.fullmatch(r"python3(\.\d+)?", p.name)
+            p.name
+            for p in venv_bin.glob("python3*")
+            if re.fullmatch(r"python3(\.\d+)?", p.name)
         )
     except OSError:
         pass
@@ -256,7 +275,9 @@ def _passes_boot_gate(staged: Path, venv_dir: Path) -> bool:
         proc = subprocess.run(
             [str(staged), "-c", "import encodings, sys; print(sys.prefix)"],
             capture_output=True,
-            text=True, encoding="utf-8", errors="replace",
+            text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=30,
             env=env,
             check=False,
@@ -297,7 +318,9 @@ def _install_anchor(venv_dir: Path, source_file: Path) -> None:
         except Exception:  # pragma: no cover - never block the anchor
             logger.debug("anchor copy signing skipped", exc_info=True)
         if not _passes_boot_gate(tmp_path, venv_dir):
-            raise _BootGateFailed(f"staged copy at {tmp_path} failed encodings/prefix probe")
+            raise _BootGateFailed(
+                f"staged copy at {tmp_path} failed encodings/prefix probe"
+            )
         os.replace(tmp_path, venv_py)
         if _materialize_aliases(venv_bin, venv_py, refresh=True):
             # Marker last, atomically: it asserts the WHOLE layout (anchor + aliases) is complete.
@@ -330,7 +353,9 @@ def ensure_tcc_anchor(project_root: Path | None = None) -> Path | None:
     source_file = _interpreter_file(source)
     if source_file is None:
         return None
-    if not venv_py.is_symlink() and _marker_matches(venv_py.parent, _marker_value(source_file)):
+    if not venv_py.is_symlink() and _marker_matches(
+        venv_py.parent, _marker_value(source_file)
+    ):
         try:
             _provision_libpython(venv_dir, source_file, refresh=False)
             if _passes_boot_gate(venv_py, venv_dir):

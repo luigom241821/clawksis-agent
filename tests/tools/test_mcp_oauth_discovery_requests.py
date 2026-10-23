@@ -13,6 +13,7 @@ token-endpoint requests.)
 These tests drive the bridge through the 401 branch so the SDK yields a
 real discovery request, then assert on its headers.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -31,8 +32,13 @@ async def _noop_callback():
 
 async def _make_flow(tmp_path, monkeypatch, *, registered=True):
     from tools.mcp_tool import sdk_httpx
+
     httpx = sdk_httpx()
-    from mcp.shared.auth import OAuthClientInformationFull, OAuthClientMetadata, OAuthToken
+    from mcp.shared.auth import (
+        OAuthClientInformationFull,
+        OAuthClientMetadata,
+        OAuthToken,
+    )
     from pydantic import AnyUrl
 
     from tools.mcp_oauth import ClawksisTokenStorage
@@ -45,7 +51,12 @@ async def _make_flow(tmp_path, monkeypatch, *, registered=True):
 
     storage = ClawksisTokenStorage("srv")
     await storage.set_tokens(
-        OAuthToken(access_token="old_access", token_type="Bearer", expires_in=3600, refresh_token="old_refresh")
+        OAuthToken(
+            access_token="old_access",
+            token_type="Bearer",
+            expires_in=3600,
+            refresh_token="old_refresh",
+        )
     )
     if registered:
         await storage.set_client_info(
@@ -82,7 +93,9 @@ async def test_discovery_request_gets_default_user_agent(tmp_path, monkeypatch):
     fake_401 = httpx.Response(
         401,
         request=outbound,
-        headers={"www-authenticate": 'Bearer resource_metadata="https://example.com/.well-known/oauth-protected-resource"'},
+        headers={
+            "www-authenticate": 'Bearer resource_metadata="https://example.com/.well-known/oauth-protected-resource"'
+        },
     )
     discovery = await flow.asend(fake_401)
 
@@ -107,7 +120,9 @@ async def test_callers_mcp_request_is_left_untouched(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_registration_failure_after_failed_discovery_leads_with_discovery(tmp_path, monkeypatch):
+async def test_registration_failure_after_failed_discovery_leads_with_discovery(
+    tmp_path, monkeypatch
+):
     """When every authorization-server metadata fetch fails, the SDK guesses ``/register`` on the MCP
     host; the surfaced error must name the metadata refusal first, not only the fallback 404 (#113771),
     and must not be mistaken for a DCR allowlist refusal by the humanizer."""
@@ -116,7 +131,9 @@ async def test_registration_failure_after_failed_discovery_leads_with_discovery(
 
     httpx, _req, flow = await _make_flow(tmp_path, monkeypatch, registered=False)
     outbound = await flow.__anext__()
-    response = httpx.Response(401, request=outbound, headers={"www-authenticate": "Bearer"})
+    response = httpx.Response(
+        401, request=outbound, headers={"www-authenticate": "Bearer"}
+    )
     with pytest.raises(OAuthRegistrationError) as excinfo:
         for _ in range(10):
             outbound = await flow.asend(response)
@@ -124,11 +141,18 @@ async def test_registration_failure_after_failed_discovery_leads_with_discovery(
             if "oauth-authorization-server" in url or "openid-configuration" in url:
                 response = httpx.Response(403, request=outbound, text="Forbidden")
             elif outbound.method == "POST":  # the guessed /register on the MCP host
-                response = httpx.Response(404, request=outbound, text='{"detail":"Not Found"}')
+                response = httpx.Response(
+                    404, request=outbound, text='{"detail":"Not Found"}'
+                )
             else:
                 response = httpx.Response(404, request=outbound)
     msg = str(excinfo.value)
     # The metadata refusal (403) must lead; the fallback /register 404 alone is misleading.
     assert "403" in msg and "404" in msg
     assert msg.index("403") < msg.index("404")
-    assert humanize_oauth_registration_error("srv", excinfo.value, server_url="https://example.com/mcp") is None
+    assert (
+        humanize_oauth_registration_error(
+            "srv", excinfo.value, server_url="https://example.com/mcp"
+        )
+        is None
+    )

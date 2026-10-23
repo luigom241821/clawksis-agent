@@ -8,12 +8,18 @@ from tools import checkpoint_manager as checkpoints
 
 
 def test_safe_restore_preserves_exact_paths_and_user_edits(tmp_path, monkeypatch):
-    _assert_safe_restore(tmp_path, monkeypatch, [" leading.txt", "报告.txt", "ordinary.txt"])
+    _assert_safe_restore(
+        tmp_path, monkeypatch, [" leading.txt", "报告.txt", "ordinary.txt"]
+    )
 
 
 @pytest.mark.platforms("linux")
 def test_safe_restore_preserves_posix_byte_paths(tmp_path, monkeypatch):
-    _assert_safe_restore(tmp_path, monkeypatch, [b" raw-\xff.txt", b"carriage\rreturn.txt", b"crlf\r\nname.txt"])
+    _assert_safe_restore(
+        tmp_path,
+        monkeypatch,
+        [b" raw-\xff.txt", b"carriage\rreturn.txt", b"crlf\r\nname.txt"],
+    )
 
 
 def _assert_safe_restore(tmp_path, monkeypatch, names):
@@ -43,7 +49,9 @@ def _assert_safe_restore(tmp_path, monkeypatch, names):
     assert result["success"]
     assert set(result["restored_files"]) == set(names)
     assert result["skipped_user_edits"] == [preserved.name]
-    assert all((work / name).read_text(encoding="utf-8") == "original\n" for name in names)
+    assert all(
+        (work / name).read_text(encoding="utf-8") == "original\n" for name in names
+    )
     assert preserved.read_text(encoding="utf-8") == "user edit\n"
 
 
@@ -73,7 +81,10 @@ def _assert_size_cap(tmp_path, monkeypatch, name):
         ["cat-file", "-e", f"{target}:small.txt"], store, str(work)
     )
     oversized_included, _, _ = checkpoints._run_git(
-        ["cat-file", "-e", f"{target}:{name}"], store, str(work), allowed_returncodes={128}
+        ["cat-file", "-e", f"{target}:{name}"],
+        store,
+        str(work),
+        allowed_returncodes={128},
     )
     assert included
     assert not oversized_included

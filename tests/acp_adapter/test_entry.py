@@ -41,14 +41,6 @@ def test_main_skips_configured_mcp_discovery_when_requested(monkeypatch):
     assert discovery_calls == []
 
 
-
-
-
-
-
-
-
-
 def test_main_setup_offers_browser_install_when_tty(monkeypatch):
     """When stdin is a TTY and the user answers yes, model setup is followed
     by a browser-tools bootstrap call."""
@@ -66,14 +58,6 @@ def test_main_setup_offers_browser_install_when_tty(monkeypatch):
     entry.main(["--setup"])
 
     assert bootstrap_calls == [False]
-
-
-
-
-
-
-
-
 
 
 def test_main_setup_browser_propagates_browser_failure(monkeypatch):
@@ -94,7 +78,9 @@ def test_setup_browser_is_one_explicit_package_request(monkeypatch):
     import pm
 
     calls = []
-    monkeypatch.setattr(pm, "ensure", lambda name, **kwargs: calls.append((name, kwargs)))
+    monkeypatch.setattr(
+        pm, "ensure", lambda name, **kwargs: calls.append((name, kwargs))
+    )
 
     entry.main(["--setup-browser", "--yes"])
 

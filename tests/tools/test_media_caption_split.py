@@ -17,7 +17,9 @@ from tools.send_message_senders import _TELEGRAM_CAPTION_LIMIT
 
 def test_single_image_short_text_becomes_caption():
     caption, body = _media_caption_split(
-        "This Caption", [("/tmp/F22.png", False)], max_caption_len=_DEFAULT_CAPTION_LIMIT
+        "This Caption",
+        [("/tmp/F22.png", False)],
+        max_caption_len=_DEFAULT_CAPTION_LIMIT,
     )
     assert caption == "This Caption"
     assert body == ""

@@ -62,7 +62,9 @@ def client(monkeypatch, profiles_on_disk):
     return c
 
 
-def _seed_session(home, session_id, *, source, cwd=None, tokens=None, cost=None, pinned=False):
+def _seed_session(
+    home, session_id, *, source, cwd=None, tokens=None, cost=None, pinned=False
+):
     """One session with a message, so it clears the sidebar's min_messages=1.
 
     ``cwd`` is what attaches it to a project — without one it lands in Home.
@@ -108,18 +110,23 @@ def _slice_ids(payload, slice_name):
 
 
 class TestSidebarScope:
-
     def test_concrete_profile_sees_only_its_own_slices(self, client, profiles_on_disk):
         _seed_session(profiles_on_disk["default"], "default-chat", source="cli")
         _seed_session(profiles_on_disk["default"], "default-cron", source="cron")
-        _seed_session(profiles_on_disk["default"], "default-telegram", source="telegram")
+        _seed_session(
+            profiles_on_disk["default"], "default-telegram", source="telegram"
+        )
         _seed_session(profiles_on_disk["worker"], "worker-chat", source="cli")
         _seed_session(profiles_on_disk["worker"], "worker-cron", source="cron")
         _seed_session(profiles_on_disk["worker"], "worker-telegram", source="telegram")
 
         payload = client.get(
             "/api/profiles/sessions/sidebar",
-            params={"recents_profile": "worker", "recents_exclude": "cron,telegram", "messaging_exclude": "cli,cron"},
+            params={
+                "recents_profile": "worker",
+                "recents_exclude": "cron,telegram",
+                "messaging_exclude": "cli,cron",
+            },
         ).json()
 
         assert payload["errors"] == []
@@ -130,7 +137,9 @@ class TestSidebarScope:
         assert _slice_ids(payload, "messaging") == {"worker-telegram"}
 
     def test_all_scope_still_spans_every_profile(self, client, profiles_on_disk):
-        _seed_session(profiles_on_disk["default"], "default-telegram", source="telegram")
+        _seed_session(
+            profiles_on_disk["default"], "default-telegram", source="telegram"
+        )
         _seed_session(profiles_on_disk["worker"], "worker-telegram", source="telegram")
 
         payload = client.get(
@@ -138,13 +147,20 @@ class TestSidebarScope:
             params={"recents_profile": "all", "messaging_exclude": "cli,cron"},
         ).json()
 
-        assert _slice_ids(payload, "messaging") == {"default-telegram", "worker-telegram"}
-        assert {row["profile"] for row in payload["messaging"]["sessions"]} == {"default", "worker"}
+        assert _slice_ids(payload, "messaging") == {
+            "default-telegram",
+            "worker-telegram",
+        }
+        assert {row["profile"] for row in payload["messaging"]["sessions"]} == {
+            "default",
+            "worker",
+        }
 
 
 class TestCrossProfileProjectTree:
-
-    def test_one_folder_worked_in_by_two_profiles_is_one_project(self, client, profiles_on_disk, tmp_path):
+    def test_one_folder_worked_in_by_two_profiles_is_one_project(
+        self, client, profiles_on_disk, tmp_path
+    ):
         # A folder is a folder no matter who opened it. Two profiles working the
         # same checkout is the normal case (that's the point of profiles), so it
         # heads ONE group carrying both their sessions — not one group each.
@@ -159,11 +175,15 @@ class TestCrossProfileProjectTree:
 
         assert payload["errors"] == []
 
-        declared = [project for project in payload["projects"] if not project["isNoProject"]]
+        declared = [
+            project for project in payload["projects"] if not project["isNoProject"]
+        ]
         assert [project["path"] for project in declared] == [str(shared)]
         assert declared[0]["sessionCount"] == 2
 
-    def test_group_totals_add_up_the_sessions_the_group_counts(self, client, profiles_on_disk, tmp_path):
+    def test_group_totals_add_up_the_sessions_the_group_counts(
+        self, client, profiles_on_disk, tmp_path
+    ):
         # A header total is only meaningful if it covers exactly what the header
         # says it counts — a project's totals span every profile working it, the
         # same set `sessionCount` reports.
@@ -171,7 +191,14 @@ class TestCrossProfileProjectTree:
         shared.mkdir(parents=True)
 
         for name, home in profiles_on_disk.items():
-            _seed_session(home, f"{name}-chat", source="cli", cwd=shared, tokens=(100, 20), cost=0.25)
+            _seed_session(
+                home,
+                f"{name}-chat",
+                source="cli",
+                cwd=shared,
+                tokens=(100, 20),
+                cost=0.25,
+            )
             _seed_project(home, "Shared", shared)
 
         payload = client.get("/api/profiles/projects/tree").json()
@@ -181,16 +208,23 @@ class TestCrossProfileProjectTree:
         assert project["totalTokens"] == 240
         assert project["totalCostUsd"] == pytest.approx(0.5)
 
-    def test_profile_usage_covers_sessions_past_the_window(self, client, profiles_on_disk):
+    def test_profile_usage_covers_sessions_past_the_window(
+        self, client, profiles_on_disk
+    ):
         # The whole point of aggregating in SQL: the total must not be a sum of
         # whichever page the sidebar happens to have asked for.
         for index in range(3):
             _seed_session(
-                profiles_on_disk["worker"], f"worker-{index}", source="cli", tokens=(10, 5), cost=1.5
+                profiles_on_disk["worker"],
+                f"worker-{index}",
+                source="cli",
+                tokens=(10, 5),
+                cost=1.5,
             )
 
         payload = client.get(
-            "/api/profiles/sessions/sidebar", params={"recents_profile": "all", "recents_limit": 1}
+            "/api/profiles/sessions/sidebar",
+            params={"recents_profile": "all", "recents_limit": 1},
         ).json()
 
         assert payload["recents"]["profiles_usage"]["worker"] == {
@@ -210,7 +244,9 @@ class TestCrossProfileProjectTree:
         assert len(homes) == 1
         assert homes[0]["sessionCount"] == 2
 
-    def test_each_profile_contributes_its_own_projects_db(self, client, profiles_on_disk, tmp_path):
+    def test_each_profile_contributes_its_own_projects_db(
+        self, client, profiles_on_disk, tmp_path
+    ):
         """Proves the per-profile scoping, not just that two trees got merged.
 
         The builder reads projects.db, the repo-scan policy and the junk
@@ -221,27 +257,51 @@ class TestCrossProfileProjectTree:
         for name in profiles_on_disk:
             (tmp_path / "repos" / f"only-{name}").mkdir(parents=True)
             _seed_session(profiles_on_disk[name], f"{name}-chat", source="cli")
-            _seed_project(profiles_on_disk[name], f"Only {name}", tmp_path / "repos" / f"only-{name}")
+            _seed_project(
+                profiles_on_disk[name],
+                f"Only {name}",
+                tmp_path / "repos" / f"only-{name}",
+            )
 
         payload = client.get("/api/profiles/projects/tree").json()
 
-        labels = {project["label"] for project in payload["projects"] if not project["isNoProject"]}
+        labels = {
+            project["label"]
+            for project in payload["projects"]
+            if not project["isNoProject"]
+        }
 
         assert labels == {"Only default", "Only worker"}
 
-    def test_a_named_profile_reads_only_its_own_tree(self, client, profiles_on_disk, tmp_path):
+    def test_a_named_profile_reads_only_its_own_tree(
+        self, client, profiles_on_disk, tmp_path
+    ):
         # The per-profile read a native grant makes; its caller merges the profiles by mergeKey.
         for name in profiles_on_disk:
             (tmp_path / "repos" / f"only-{name}").mkdir(parents=True)
             _seed_session(profiles_on_disk[name], f"{name}-chat", source="cli")
-            _seed_project(profiles_on_disk[name], f"Only {name}", tmp_path / "repos" / f"only-{name}")
+            _seed_project(
+                profiles_on_disk[name],
+                f"Only {name}",
+                tmp_path / "repos" / f"only-{name}",
+            )
 
-        payload = client.get("/api/profiles/projects/tree", params={"profile": "worker"}).json()
+        payload = client.get(
+            "/api/profiles/projects/tree", params={"profile": "worker"}
+        ).json()
 
         assert payload["errors"] == []
-        assert {project["label"] for project in payload["projects"] if not project["isNoProject"]} == {"Only worker"}
+        assert {
+            project["label"]
+            for project in payload["projects"]
+            if not project["isNoProject"]
+        } == {"Only worker"}
         assert all(project["mergeKey"] for project in payload["projects"])
-        sessions = [s for project in payload["projects"] for s in project.get("previewSessions") or []]
+        sessions = [
+            s
+            for project in payload["projects"]
+            for s in project.get("previewSessions") or []
+        ]
         assert {s["profile"] for s in sessions} == {"worker"}
 
     def test_a_profile_that_cannot_be_read_does_not_sink_the_rest(
@@ -251,7 +311,9 @@ class TestCrossProfileProjectTree:
         # A state.db has to exist for a profile to be visited at all.
         for name, home in profiles_on_disk.items():
             _seed_session(home, f"{name}-chat", source="cli")
-        _seed_project(profiles_on_disk["default"], "Healthy", tmp_path / "repos" / "healthy")
+        _seed_project(
+            profiles_on_disk["default"], "Healthy", tmp_path / "repos" / "healthy"
+        )
 
         from tui_gateway import server as gateway_server
 
@@ -272,12 +334,17 @@ class TestCrossProfileProjectTree:
         assert [error["profile"] for error in payload["errors"]] == ["worker"]
         # The healthy profile's tree still lands; only the broken one drops out.
         assert "Healthy" in [project["label"] for project in payload["projects"]]
-        assert [project["sessionCount"] for project in payload["projects"] if project["isNoProject"]] == [1]
+        assert [
+            project["sessionCount"]
+            for project in payload["projects"]
+            if project["isNoProject"]
+        ] == [1]
 
 
 class TestSidebarTruncation:
-
-    def test_pinned_rows_inside_the_window_still_report_more_on_disk(self, client, profiles_on_disk):
+    def test_pinned_rows_inside_the_window_still_report_more_on_disk(
+        self, client, profiles_on_disk
+    ):
         # Regression for #81484: the window is a LIMIT page by recency, so a
         # pin among the newest rows takes a slot. Discounting pins reported 18
         # < 20 and the sidebar never offered "Load more" for the older rows.
@@ -286,7 +353,9 @@ class TestSidebarTruncation:
 
         def window():
             payload = client.get("/api/profiles/sessions/sidebar", params=params).json()
-            return len(payload["recents"]["sessions"]), payload["recents"]["profiles_truncated"]
+            return len(payload["recents"]["sessions"]), payload["recents"][
+                "profiles_truncated"
+            ]
 
         for index in range(3):
             _seed_session(home, f"s-{index}", source="desktop", pinned=index == 2)
@@ -309,23 +378,41 @@ class TestSidebarShowSubagents:
         _seed_session(home, parent_id, source="desktop")
         db = SessionDB(db_path=home / "state.db")
         try:
-            db.create_session(child_id, source="subagent", parent_session_id=parent_id,
-                              model_config={"_delegate_from": parent_id})
+            db.create_session(
+                child_id,
+                source="subagent",
+                parent_session_id=parent_id,
+                model_config={"_delegate_from": parent_id},
+            )
             db.append_message(session_id=child_id, role="user", content="audit billing")
         finally:
             db.close()
 
-    def test_recents_list_subagent_runs_only_for_the_profile_that_opted_in(self, client, profiles_on_disk):
-        (profiles_on_disk["worker"] / "config.yaml").write_text("sessions:\n  show_subagents: true\n")
-        self._seed_subagent(profiles_on_disk["default"], "default-parent", "default-sub")
+    def test_recents_list_subagent_runs_only_for_the_profile_that_opted_in(
+        self, client, profiles_on_disk
+    ):
+        (profiles_on_disk["worker"] / "config.yaml").write_text(
+            "sessions:\n  show_subagents: true\n"
+        )
+        self._seed_subagent(
+            profiles_on_disk["default"], "default-parent", "default-sub"
+        )
         self._seed_subagent(profiles_on_disk["worker"], "worker-parent", "worker-sub")
 
         payload = client.get(
             "/api/profiles/sessions/sidebar",
-            params={"recents_profile": "all", "recents_exclude": "cron,subagent", "messaging_exclude": "cli,cron,desktop"},
+            params={
+                "recents_profile": "all",
+                "recents_exclude": "cron,subagent",
+                "messaging_exclude": "cli,cron,desktop",
+            },
         ).json()
 
         assert payload["errors"] == []
-        assert _slice_ids(payload, "recents") == {"default-parent", "worker-parent", "worker-sub"}
+        assert _slice_ids(payload, "recents") == {
+            "default-parent",
+            "worker-parent",
+            "worker-sub",
+        }
         # The messaging slice keeps its shape: a subagent run is not a platform thread.
         assert _slice_ids(payload, "messaging") == set()

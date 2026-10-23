@@ -67,5 +67,3 @@ def test_same_provider_copilot_switch_recomputes_api_mode():
     assert result.new_model == "claude-opus-4.6"
     assert result.target_provider == "copilot"
     assert result.api_mode == "chat_completions"
-
-

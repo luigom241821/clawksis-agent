@@ -10,6 +10,7 @@ Invariants under test:
 - pin set + missing      -> FAIL CLOSED (error), never silently last_used
 - pin unset              -> native last_used behavior, byte-for-byte
 """
+
 import json
 
 from tests.tools.test_browser_real_profile import _auth_db

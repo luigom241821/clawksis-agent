@@ -37,8 +37,14 @@ def real_uv() -> str | None:
 
 
 def git(*args: str, cwd: Path, check: bool = True, env: dict | None = None) -> str:
-    cp = subprocess.run(["git", *args], cwd=str(cwd), capture_output=True, text=True,
-                        env=env or {**os.environ, "GIT_TERMINAL_PROMPT": "0"}, check=False)
+    cp = subprocess.run(
+        ["git", *args],
+        cwd=str(cwd),
+        capture_output=True,
+        text=True,
+        env=env or {**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+        check=False,
+    )
     if check and cp.returncode != 0:
         raise AssertionError(f"git {args} failed in {cwd}: {cp.stderr}")
     return cp.stdout.strip()
@@ -47,7 +53,9 @@ def git(*args: str, cwd: Path, check: bool = True, env: dict | None = None) -> s
 def head_sha() -> str:
     """The commit the sandbox installs: HEAD, or CLAWK_E2E_INSTALL_REF (a patched commit object,
     used to prove a scenario red against a sabotaged install without moving the branch)."""
-    return git("rev-parse", os.environ.get("CLAWK_E2E_INSTALL_REF") or "HEAD", cwd=H.WORKTREE)
+    return git(
+        "rev-parse", os.environ.get("CLAWK_E2E_INSTALL_REF") or "HEAD", cwd=H.WORKTREE
+    )
 
 
 def make_origin(root: Path, ref: str) -> Path:
@@ -59,7 +67,17 @@ def make_origin(root: Path, ref: str) -> Path:
     ``uploadpack.allowFilter``: a blobless host checkout's object store is itself partial, and the
     installer's clone of this origin needs the filter capability to be served from it."""
     origin = root / "origin.git"
-    git("clone", "-q", "--bare", "--shared", "--no-tags", "--single-branch", str(H.WORKTREE), str(origin), cwd=root)
+    git(
+        "clone",
+        "-q",
+        "--bare",
+        "--shared",
+        "--no-tags",
+        "--single-branch",
+        str(H.WORKTREE),
+        str(origin),
+        cwd=root,
+    )
     git("update-ref", "refs/heads/main", ref, cwd=origin)
     git("symbolic-ref", "HEAD", "refs/heads/main", cwd=origin)
     git("config", "uploadpack.allowAnySHA1InWant", "true", cwd=origin)
@@ -67,14 +85,33 @@ def make_origin(root: Path, ref: str) -> Path:
     return origin
 
 
-def publish_commit(origin: Path, scratch: Path, message: str, files: dict[str, str]) -> str:
+def publish_commit(
+    origin: Path, scratch: Path, message: str, files: dict[str, str]
+) -> str:
     """Add one upstream commit on origin/main (a new release the user updates to); returns its sha."""
     work = scratch / f"publish-{hashlib.sha1(message.encode()).hexdigest()[:8]}"
     if work.exists():
         shutil.rmtree(work)
-    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_AUTHOR_NAME": "e2e", "GIT_AUTHOR_EMAIL": "e2e@example.invalid",
-           "GIT_COMMITTER_NAME": "e2e", "GIT_COMMITTER_EMAIL": "e2e@example.invalid"}
-    git("clone", "-q", "--shared", "--no-checkout", "-b", "main", str(origin), str(work), cwd=scratch, env=env)
+    env = {
+        **os.environ,
+        "GIT_TERMINAL_PROMPT": "0",
+        "GIT_AUTHOR_NAME": "e2e",
+        "GIT_AUTHOR_EMAIL": "e2e@example.invalid",
+        "GIT_COMMITTER_NAME": "e2e",
+        "GIT_COMMITTER_EMAIL": "e2e@example.invalid",
+    }
+    git(
+        "clone",
+        "-q",
+        "--shared",
+        "--no-checkout",
+        "-b",
+        "main",
+        str(origin),
+        str(work),
+        cwd=scratch,
+        env=env,
+    )
     git("reset", "-q", "main", cwd=work, env=env)
     for rel, text in files.items():
         p = work / rel
@@ -115,21 +152,38 @@ class Sandbox:
 
         facts = self.clawk_home / "installs" / install_key(self.checkout) / "facts.json"
         assert facts.is_file(), f"installer did not publish PM facts at {facts}"
-        selected = json.loads(facts.read_text(encoding="utf-8"))["packages"]["venv"]["environment"]
+        selected = json.loads(facts.read_text(encoding="utf-8"))["packages"]["venv"][
+            "environment"
+        ]
         python = Path(selected) / "bin" / "python"
         assert python.is_file(), f"selected PM Python missing: {python}"
         return str(python)
 
-    def run(self, argv: list[str], *, timeout: float = 600, cwd: Path | None = None,
-            input: str | None = None, env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
-        return H.run(argv, env=env or self.env, cwd=cwd or self.root, writable=[self.root], timeout=timeout,
-                     input=input)
+    def run(
+        self,
+        argv: list[str],
+        *,
+        timeout: float = 600,
+        cwd: Path | None = None,
+        input: str | None = None,
+        env: dict[str, str] | None = None,
+    ) -> subprocess.CompletedProcess:
+        return H.run(
+            argv,
+            env=env or self.env,
+            cwd=cwd or self.root,
+            writable=[self.root],
+            timeout=timeout,
+            input=input,
+        )
 
     def cli(self, *args: str, timeout: float = 600) -> subprocess.CompletedProcess:
         return self.run([self.clawk, *args], timeout=timeout)
 
 
-def new_sandbox(root: Path, origin: Path | None = None, *, pythonpath: Path | None = None) -> Sandbox:
+def new_sandbox(
+    root: Path, origin: Path | None = None, *, pythonpath: Path | None = None
+) -> Sandbox:
     """Empty fake HOME: no ``~/.clawksis`` at all, only what a fresh machine with uv/git/node has."""
     root.mkdir(parents=True, exist_ok=True)
     wrap = root / "wrap"
@@ -142,7 +196,9 @@ def new_sandbox(root: Path, origin: Path | None = None, *, pythonpath: Path | No
     # A fresh machine: ~/.local/bin is NOT on PATH yet; the installer must wire it up.
     if origin is not None:
         (home / ".gitconfig").write_text(
-            f'[url "file://{origin}"]\n  insteadOf = {OFFICIAL_HTTPS}\n  insteadOf = {OFFICIAL_SSH}\n', encoding="utf-8")
+            f'[url "file://{origin}"]\n  insteadOf = {OFFICIAL_HTTPS}\n  insteadOf = {OFFICIAL_SSH}\n',
+            encoding="utf-8",
+        )
     wrap.mkdir(exist_ok=True)
     real_git = shutil.which("git")
     shim = wrap / "git"
@@ -153,7 +209,9 @@ def new_sandbox(root: Path, origin: Path | None = None, *, pythonpath: Path | No
         f'  if [ "$p2" = remote ] && [ "$p1" = get-url ] && [ "$a" = origin ]; then echo "{OFFICIAL_HTTPS}"; exit 0; fi\n'
         '  p2="$p1"; p1="$a"\n'
         "done\n"
-        f'exec "{real_git}" "$@"\n', encoding="utf-8")
+        f'exec "{real_git}" "$@"\n',
+        encoding="utf-8",
+    )
     shim.chmod(0o755)
     return Sandbox(root=root, env=env)
 
@@ -162,8 +220,12 @@ def run_installer(sb: Sandbox, *, timeout: float = 1800) -> subprocess.Completed
     """HEAD's scripts/install.sh, non-interactive, as the documented `curl | bash` run does it."""
     script = sb.root / "install.sh"
     shutil.copy(H.WORKTREE / "scripts" / "install.sh", script)
-    return sb.run(["bash", str(script), "--non-interactive"], timeout=timeout, input="",
-                  env=fresh_install_env(sb))
+    return sb.run(
+        ["bash", str(script), "--non-interactive"],
+        timeout=timeout,
+        input="",
+        env=fresh_install_env(sb),
+    )
 
 
 def fresh_install_env(sb: Sandbox) -> dict[str, str]:
@@ -183,7 +245,9 @@ def pin_main_channel(sb: Sandbox) -> None:
     between commits; channel resolution has its own suites (test_release_channel_records,
     tests/clawk_cli/test_source_release_channels.py)."""
     cp = sb.cli("update", "--set-channel", "main", timeout=120)
-    assert cp.returncode == 0 and "Update channel for" in cp.stdout, "could not pin the main channel:\n" + describe(cp)
+    assert cp.returncode == 0 and "Update channel for" in cp.stdout, (
+        "could not pin the main channel:\n" + describe(cp)
+    )
 
 
 def provider_config(base_url: str, version: int | None, extra: str = "") -> str:
@@ -201,7 +265,7 @@ def provider_config(base_url: str, version: int | None, extra: str = "") -> str:
         "# A key this Clawksis version does not know about (from a plugin or a newer release).\n"
         "my_future_section:\n"
         "  nested_flag: true\n"
-        "  words: \"unicode é 漢字 and a # that is not a comment\"\n"
+        '  words: "unicode é 漢字 and a # that is not a comment"\n'
         f"{extra}{ver}"
     )
 
@@ -227,11 +291,17 @@ def db_state(db: Path) -> dict:
     try:
         integrity = con.execute("PRAGMA integrity_check").fetchall()
         sessions = sorted(r[0] for r in con.execute("SELECT id FROM sessions"))
-        msgs = con.execute("SELECT session_id, role, content FROM messages ORDER BY id").fetchall()
+        msgs = con.execute(
+            "SELECT session_id, role, content FROM messages ORDER BY id"
+        ).fetchall()
     finally:
         con.close()
-    return {"integrity": integrity, "sessions": sessions,
-            "messages": hashlib.sha256(repr(msgs).encode()).hexdigest(), "n_messages": len(msgs)}
+    return {
+        "integrity": integrity,
+        "sessions": sessions,
+        "messages": hashlib.sha256(repr(msgs).encode()).hexdigest(),
+        "n_messages": len(msgs),
+    }
 
 
 def cron_jobs(profile_home: Path) -> list[dict]:

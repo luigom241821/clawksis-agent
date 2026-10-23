@@ -48,6 +48,7 @@ The script writes JSON-RPC framed messages to stdout and reads from
 stdin.  No third-party dependencies — uses only stdlib so it runs
 under whatever Python the test process picks up.
 """
+
 from __future__ import annotations
 
 import json
@@ -62,7 +63,11 @@ def _push_by_content(params, is_change, error_diag):
     """``by_content``: once MOCK_LSP_GATE exists (else after MOCK_LSP_PUSH_DELAY), one error iff the
     synced text contains "bad" (so a baseline of the pre-edit text differs from the edit's verdict)."""
     td = params.get("textDocument") or {}
-    text = (params.get("contentChanges") or [{}])[-1].get("text", "") if is_change else td.get("text")
+    text = (
+        (params.get("contentChanges") or [{}])[-1].get("text", "")
+        if is_change
+        else td.get("text")
+    )
     gate = os.environ.get("MOCK_LSP_GATE")
     deadline = time.monotonic() + 60
     while gate and not os.path.exists(gate) and time.monotonic() < deadline:
@@ -71,9 +76,17 @@ def _push_by_content(params, is_change, error_diag):
     if not gate:
         # health: allow HX013 -- the delay IS the behaviour under test (a server slower than the write)
         time.sleep(float(os.environ.get("MOCK_LSP_PUSH_DELAY", "0.4")))
-    write_message({"jsonrpc": "2.0", "method": "textDocument/publishDiagnostics",
-                   "params": {"uri": td.get("uri", ""), "version": td.get("version", 0),
-                              "diagnostics": error_diag if "bad" in (text or "") else []}})
+    write_message(
+        {
+            "jsonrpc": "2.0",
+            "method": "textDocument/publishDiagnostics",
+            "params": {
+                "uri": td.get("uri", ""),
+                "version": td.get("version", 0),
+                "diagnostics": error_diag if "bad" in (text or "") else [],
+            },
+        }
+    )
 
 
 def _push_slow(params, is_change, error_diag):
@@ -82,9 +95,17 @@ def _push_slow(params, is_change, error_diag):
     if is_change:
         # health: allow HX013 -- the delay IS the behaviour under test (a slow re-check)
         time.sleep(float(os.environ.get("MOCK_LSP_PUSH_DELAY", "1.0")))
-    write_message({"jsonrpc": "2.0", "method": "textDocument/publishDiagnostics",
-                   "params": {"uri": td.get("uri", ""), "version": td.get("version", 0),
-                              "diagnostics": [] if is_change else error_diag}})
+    write_message(
+        {
+            "jsonrpc": "2.0",
+            "method": "textDocument/publishDiagnostics",
+            "params": {
+                "uri": td.get("uri", ""),
+                "version": td.get("version", 0),
+                "diagnostics": [] if is_change else error_diag,
+            },
+        }
+    )
 
 
 _PUSH_HANDLERS = {"by_content": _push_by_content, "slow_push": _push_slow}
@@ -167,8 +188,13 @@ def main():
             if script == "init_error":
                 # A conformant JSON-RPC error to `initialize`, then exit: the client must
                 # surface it as an LSPRequestError carrying the exit details.
-                write_message({"jsonrpc": "2.0", "id": msg["id"],
-                               "error": {"code": -32602, "message": "bad init"}})
+                write_message(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": msg["id"],
+                        "error": {"code": -32602, "message": "bad init"},
+                    }
+                )
                 return 0
             if script in {"slow", "slow_tree"}:
                 time.sleep(1.0)
@@ -179,7 +205,10 @@ def main():
                     "result": {
                         "capabilities": {
                             "textDocumentSync": 2 if script == "incremental" else 1,
-                            "diagnosticProvider": {"interFileDependencies": False, "workspaceDiagnostics": False},
+                            "diagnosticProvider": {
+                                "interFileDependencies": False,
+                                "workspaceDiagnostics": False,
+                            },
                         },
                         "serverInfo": {"name": "mock-lsp", "version": "0.1"},
                     },
@@ -220,13 +249,21 @@ def main():
                         continue
                     # Apply the range using the protocol's UTF-16 offsets, as a real server does.
                     lines = text.splitlines(keepends=True)
+
                     def byte_offset(position):
-                        prefix = "".join(lines[:position["line"]])
-                        return len(prefix.encode("utf-16-le")) + position["character"] * 2
+                        prefix = "".join(lines[: position["line"]])
+                        return (
+                            len(prefix.encode("utf-16-le")) + position["character"] * 2
+                        )
+
                     start = byte_offset(change["range"]["start"])
                     end = byte_offset(change["range"]["end"])
                     encoded = text.encode("utf-16-le")
-                    text = (encoded[:start] + change["text"].encode("utf-16-le") + encoded[end:]).decode("utf-16-le")
+                    text = (
+                        encoded[:start]
+                        + change["text"].encode("utf-16-le")
+                        + encoded[end:]
+                    ).decode("utf-16-le")
                 documents[uri] = text
             if not is_change and script in {"clean_eof", "malformed_frame"}:
                 if script == "malformed_frame":
@@ -262,7 +299,11 @@ def main():
                         {
                             "jsonrpc": "2.0",
                             "method": "textDocument/publishDiagnostics",
-                            "params": {"uri": uri, "version": version, "diagnostics": error_diag},
+                            "params": {
+                                "uri": uri,
+                                "version": version,
+                                "diagnostics": error_diag,
+                            },
                         }
                     )
                 continue
@@ -279,14 +320,26 @@ def main():
             params = {"uri": uri, "version": version, "diagnostics": diagnostics}
             if script == "versionless":
                 del params["version"]
-            write_message({"jsonrpc": "2.0", "method": "textDocument/publishDiagnostics", "params": params})
+            write_message(
+                {
+                    "jsonrpc": "2.0",
+                    "method": "textDocument/publishDiagnostics",
+                    "params": params,
+                }
+            )
             continue
 
         if script == "incremental" and msg.get("method") == "textDocument/hover":
             uri = msg["params"]["textDocument"]["uri"]
-            write_message({"jsonrpc": "2.0", "id": msg["id"], "result": {
-                "contents": {"kind": "plaintext", "value": documents[uri]},
-            }})
+            write_message(
+                {
+                    "jsonrpc": "2.0",
+                    "id": msg["id"],
+                    "result": {
+                        "contents": {"kind": "plaintext", "value": documents[uri]},
+                    },
+                }
+            )
             continue
 
         if msg.get("method") == "textDocument/diagnostic":
@@ -327,7 +380,10 @@ def main():
                 {
                     "jsonrpc": "2.0",
                     "id": msg["id"],
-                    "error": {"code": -32601, "message": f"method not found: {msg.get('method')}"},
+                    "error": {
+                        "code": -32601,
+                        "message": f"method not found: {msg.get('method')}",
+                    },
                 }
             )
 

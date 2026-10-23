@@ -91,8 +91,12 @@ from tests.e2e.core.windows_update._machine import (
 )
 from tests.fakes.fake_llm_provider import FakeLLMServer
 
-pytestmark = [pytest.mark.platforms("windows"), pytest.mark.integration,
-              pytest.mark.live_system_guard_bypass, REQUIRES_OPT_IN]
+pytestmark = [
+    pytest.mark.platforms("windows"),
+    pytest.mark.integration,
+    pytest.mark.live_system_guard_bypass,
+    REQUIRES_OPT_IN,
+]
 
 MARKER = ".clawk-update-in-progress"
 # Imported by every `clawk` launch: each crash target appends one statement to both.
@@ -178,14 +182,29 @@ class _GitHold:
         self.flags.mkdir(parents=True)
         script = self.flags / "hold.py"
         script.write_text(HOLD_SCRIPT, encoding="utf-8")
-        command = " ".join(shlex.quote(p) for p in (
-            Path(sys.executable).as_posix(), script.as_posix(), self.flags.as_posix(), str(int(UPDATE_TIMEOUT))))
-        harness_git("-C", str(self.machine.install_dir), "config", f"filter.{HOLD_FILTER}.smudge", command)
+        command = " ".join(
+            shlex.quote(p)
+            for p in (
+                Path(sys.executable).as_posix(),
+                script.as_posix(),
+                self.flags.as_posix(),
+                str(int(UPDATE_TIMEOUT)),
+            )
+        )
+        harness_git(
+            "-C",
+            str(self.machine.install_dir),
+            "config",
+            f"filter.{HOLD_FILTER}.smudge",
+            command,
+        )
         if self.attributes.is_file():
             self._saved_attributes = self.attributes.read_text(encoding="utf-8-sig")
         self.attributes.parent.mkdir(parents=True, exist_ok=True)
-        self.attributes.write_text((self._saved_attributes or "") + f"/{self.path} filter={HOLD_FILTER}\n",
-                                   encoding="utf-8")
+        self.attributes.write_text(
+            (self._saved_attributes or "") + f"/{self.path} filter={HOLD_FILTER}\n",
+            encoding="utf-8",
+        )
 
     def disarm(self) -> None:
         (self.flags / "release").touch()
@@ -194,7 +213,13 @@ class _GitHold:
         else:
             self.attributes.write_text(self._saved_attributes, encoding="utf-8")
         with contextlib.suppress(RuntimeError):  # never armed: nothing to remove
-            harness_git("-C", str(self.machine.install_dir), "config", "--remove-section", f"filter.{HOLD_FILTER}")
+            harness_git(
+                "-C",
+                str(self.machine.install_dir),
+                "config",
+                "--remove-section",
+                f"filter.{HOLD_FILTER}",
+            )
 
     def point(self, proc, machine, target) -> str | None:
         """Git is inside the checkout: the filter holds it, a local write op is alive, index.lock is held."""
@@ -211,18 +236,24 @@ class _GitHold:
             # more time, never fewer looks.
             self._held_since = self._held_since or time.monotonic()
             self._held_looks += 1
-            if (time.monotonic() - self._held_since > HOLD_SETTLE_SECONDS
-                    and self._held_looks >= HOLD_SETTLE_LOOKS):
+            if (
+                time.monotonic() - self._held_since > HOLD_SETTLE_SECONDS
+                and self._held_looks >= HOLD_SETTLE_LOOKS
+            ):
                 gits = []
                 for child in descendants(proc):
                     with contextlib.suppress(Exception):
                         if "git" in child.name().lower():
                             gits.append(" ".join(child.cmdline()[1:6]))
-                raise AssertionError(fail_with(
-                    machine, f"mid_git: the hold filter ran but no {'/'.join(LOCAL_GIT_OPS)} with "
-                             f".git/index.lock held appeared in {time.monotonic() - self._held_since:.0f}s "
-                             f"and {self._held_looks} looks "
-                             f"(index.lock={lock.is_file()}, git children: {gits or 'none'})"))
+                raise AssertionError(
+                    fail_with(
+                        machine,
+                        f"mid_git: the hold filter ran but no {'/'.join(LOCAL_GIT_OPS)} with "
+                        f".git/index.lock held appeared in {time.monotonic() - self._held_since:.0f}s "
+                        f"and {self._held_looks} looks "
+                        f"(index.lock={lock.is_file()}, git children: {gits or 'none'})",
+                    )
+                )
             return None
         return f"git {seen[0]} (pid {seen[1]}) held writing {self.path}, .git/index.lock held"
 
@@ -234,7 +265,9 @@ HOLD_SETTLE_LOOKS = 60
 
 def _head(machine) -> str:
     try:
-        return harness_git("-C", str(machine.install_dir), "rev-parse", "HEAD", timeout=30)
+        return harness_git(
+            "-C", str(machine.install_dir), "rev-parse", "HEAD", timeout=30
+        )
     except RuntimeError:
         return ""
 
@@ -250,7 +283,9 @@ def _head_ref(machine) -> str:
         loose = git_dir / ref
         if loose.is_file():
             return loose.read_text(encoding="utf-8-sig").strip()
-        for line in (git_dir / "packed-refs").read_text(encoding="utf-8-sig").splitlines():
+        for line in (
+            (git_dir / "packed-refs").read_text(encoding="utf-8-sig").splitlines()
+        ):
             sha, _, name = line.partition(" ")
             if name.strip() == ref:
                 return sha
@@ -263,26 +298,48 @@ def _tree(machine, label: str) -> dict:
     """The checkout against its own commit: HEAD, tracked files that differ from it, and
     whether the cell's target-only file is on disk. Read with the harness's git (never the
     product's) without taking the index lock."""
+
     def git(*args: str) -> tuple[int, str]:
-        res = subprocess.run([REAL_GIT, "--no-optional-locks", "-c", "safe.directory=*",
-                              "-C", str(machine.install_dir), *args],
-                             env=machine.env(), capture_output=True, timeout=300, check=False)
+        res = subprocess.run(
+            [
+                REAL_GIT,
+                "--no-optional-locks",
+                "-c",
+                "safe.directory=*",
+                "-C",
+                str(machine.install_dir),
+                *args,
+            ],
+            env=machine.env(),
+            capture_output=True,
+            timeout=300,
+            check=False,
+        )
         return res.returncode, (_decode(res.stdout) + _decode(res.stderr)).strip()
 
     rc_head, head = git("rev-parse", "HEAD")
     rc_status, status = git("status", "--porcelain=v1", "--untracked-files=no")
     rc_diff, diff = git("diff", "--quiet", "HEAD", "--")
-    return {"head": head if rc_head == 0 else f"<rev-parse rc={rc_head}: {head[:200]}>",
-            "dirty": status.splitlines()[:20] if rc_status == 0 else [f"<status rc={rc_status}: {status[:300]}>"],
-            "diff_rc": rc_diff, "diff_err": diff[:300] if rc_diff not in (0, 1) else "",
-            "target_file": (machine.install_dir / f".clawk-e2e-{label}").exists()}
+    return {
+        "head": head if rc_head == 0 else f"<rev-parse rc={rc_head}: {head[:200]}>",
+        "dirty": status.splitlines()[:20]
+        if rc_status == 0
+        else [f"<status rc={rc_status}: {status[:300]}>"],
+        "diff_rc": rc_diff,
+        "diff_err": diff[:300] if rc_diff not in (0, 1) else "",
+        "target_file": (machine.install_dir / f".clawk-e2e-{label}").exists(),
+    }
 
 
 def _tree_matches(tree: dict, commit: str, target: str) -> bool:
     """``tree`` is exactly ``commit``: HEAD, index and every tracked byte agree, and the
     target-only file exists iff ``commit`` is the target."""
-    return (tree["head"] == commit and not tree["dirty"] and tree["diff_rc"] == 0
-            and tree["target_file"] == (commit == target))
+    return (
+        tree["head"] == commit
+        and not tree["dirty"]
+        and tree["diff_rc"] == 0
+        and tree["target_file"] == (commit == target)
+    )
 
 
 def _kill_delivered(killed, pid: int) -> bool:
@@ -295,7 +352,10 @@ def _kill_delivered(killed, pid: int) -> bool:
     """
     if killed is None:
         return False
-    return killed.returncode == 0 or re.search(rb"with PID %d \(" % pid, killed.stdout or b"") is not None
+    return (
+        killed.returncode == 0
+        or re.search(rb"with PID %d \(" % pid, killed.stdout or b"") is not None
+    )
 
 
 def _kill_when(machine, proc, label: str, point, target: str) -> str:
@@ -307,7 +367,9 @@ def _kill_when(machine, proc, label: str, point, target: str) -> str:
     while time.monotonic() < deadline:
         try:
             seen = point(proc, machine, target)
-        except BaseException:  # the point's own harness verdict: never leave the update running
+        except (
+            BaseException
+        ):  # the point's own harness verdict: never leave the update running
             taskkill_tree(proc.pid)
             raise
         if seen:
@@ -317,22 +379,41 @@ def _kill_when(machine, proc, label: str, point, target: str) -> str:
             proc.wait(timeout=60)
             machine.kill_owned()  # stragglers that left the tree (detached helpers)
             if not _kill_delivered(killed, proc.pid):
-                raise AssertionError(fail_with(
-                    machine, f"{label}: the update was not running when killed at {seen} (exit rc="
-                             f"{proc.returncode}, taskkill rc={killed and killed.returncode}): no crash "
-                             f"at the kill point (transcript {proc.transcript.name})"))
+                raise AssertionError(
+                    fail_with(
+                        machine,
+                        f"{label}: the update was not running when killed at {seen} (exit rc="
+                        f"{proc.returncode}, taskkill rc={killed and killed.returncode}): no crash "
+                        f"at the kill point (transcript {proc.transcript.name})",
+                    )
+                )
             return seen
         if proc.poll() is not None:
-            raise AssertionError(fail_with(
-                machine, f"{label}: the update exited rc={proc.returncode} before the kill point "
-                         f"(transcript {proc.transcript.name})"))
+            raise AssertionError(
+                fail_with(
+                    machine,
+                    f"{label}: the update exited rc={proc.returncode} before the kill point "
+                    f"(transcript {proc.transcript.name})",
+                )
+            )
         time.sleep(0.05)
     taskkill_tree(proc.pid)
-    raise AssertionError(fail_with(machine, f"{label}: kill point not reached within {UPDATE_TIMEOUT:.0f}s"))
+    raise AssertionError(
+        fail_with(
+            machine, f"{label}: kill point not reached within {UPDATE_TIMEOUT:.0f}s"
+        )
+    )
 
 
-def _crash(machine, srv, label: str, start, point, hold: _GitHold | None = None,
-           runtime_files: tuple[str, ...] = RUNTIME_FILES) -> dict:
+def _crash(
+    machine,
+    srv,
+    label: str,
+    start,
+    point,
+    hold: _GitHold | None = None,
+    runtime_files: tuple[str, ...] = RUNTIME_FILES,
+) -> dict:
     """Publish a new commit, start the update, kill it at ``point``, then the next
     launch and the follow-up update. Returns everything the cell asserts on.
 
@@ -344,7 +425,9 @@ def _crash(machine, srv, label: str, start, point, hold: _GitHold | None = None,
     leftover = machine.install_dir / ".git" / "index.lock"
     if leftover.is_file():
         leftover.unlink()
-        machine.timings.append((f"(harness removed a prior cell's {leftover.name} before {label})", 0.0))
+        machine.timings.append(
+            (f"(harness removed a prior cell's {leftover.name} before {label})", 0.0)
+        )
     pre = _head(machine)
     target = machine.mint(pre, label, runtime_files)
     machine.publish(target)
@@ -359,28 +442,58 @@ def _crash(machine, srv, label: str, start, point, hold: _GitHold | None = None,
                 hold.disarm()
         index_lock_after_kill = leftover.is_file()
         tree_after_kill = _tree(machine, label)
-        held_missing_after_kill = hold is not None and not (machine.install_dir / hold.path).exists()
+        held_missing_after_kill = (
+            hold is not None and not (machine.install_dir / hold.path).exists()
+        )
         turn = one_shot_turn(machine, srv, f"{label}-next-launch")
         tree_after_launch = _tree(machine, label)
         marker_after_launch = (machine.clawk_home / MARKER).is_file()
-        follow_up = machine.clawk("update", "--yes", label=f"{label}-follow-up-update", timeout=UPDATE_TIMEOUT)
+        follow_up = machine.clawk(
+            "update", "--yes", label=f"{label}-follow-up-update", timeout=UPDATE_TIMEOUT
+        )
     tree_final = _tree(machine, label)
-    return {"label": label, "pre": pre, "target": target, "seen": seen, "tree_after_kill": tree_after_kill,
-            "index_lock_after_kill": index_lock_after_kill, "held_missing_after_kill": held_missing_after_kill,
-            "turn": turn, "tree_after_launch": tree_after_launch, "marker_after_launch": marker_after_launch,
-            "follow_up": follow_up, "tree_final": tree_final,
-            "marker_final": (machine.clawk_home / MARKER).is_file()}
+    return {
+        "label": label,
+        "pre": pre,
+        "target": target,
+        "seen": seen,
+        "tree_after_kill": tree_after_kill,
+        "index_lock_after_kill": index_lock_after_kill,
+        "held_missing_after_kill": held_missing_after_kill,
+        "turn": turn,
+        "tree_after_launch": tree_after_launch,
+        "marker_after_launch": marker_after_launch,
+        "follow_up": follow_up,
+        "tree_final": tree_final,
+        "marker_final": (machine.clawk_home / MARKER).is_file(),
+    }
 
 
 def _cli_update(machine, label: str):
-    return lambda: machine.spawn_logged([str(machine.clawk_exe), "update", "--yes"], label)
+    return lambda: machine.spawn_logged(
+        [str(machine.clawk_exe), "update", "--yes"], label
+    )
 
 
 def _handoff(machine, label: str):
     script = machine.install_dir / "scripts" / "desktop-update" / "windows.ps1"
     return lambda: machine.spawn_logged(
-        ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script),
-         "-InstallRoot", str(machine.install_dir), "-DesktopPid", "0", "-NoUi", "-NoGateway"], label)
+        [
+            "powershell.exe",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(script),
+            "-InstallRoot",
+            str(machine.install_dir),
+            "-DesktopPid",
+            "0",
+            "-NoUi",
+            "-NoGateway",
+        ],
+        label,
+    )
 
 
 def _update_child(proc, machine, target) -> str | None:
@@ -408,6 +521,7 @@ def _tree_moved(proc, machine, target) -> str | None:
 
 
 # -- marker (contract C1, line format) -----------------------------------------------
+
 
 def _marker_live(text: str) -> str | None:
     """Who keeps the marker LIVE (``"owner <pid>"`` / ``"delegate <pid>"``), or None.
@@ -486,7 +600,9 @@ def _new_receipt_outcome(machine, before: set[Path]) -> str | None:
     if not new:
         return None
     try:
-        return json.loads(max(new, key=lambda p: p.stat().st_mtime).read_text(encoding="utf-8-sig")).get("outcome")
+        return json.loads(
+            max(new, key=lambda p: p.stat().st_mtime).read_text(encoding="utf-8-sig")
+        ).get("outcome")
     except (OSError, ValueError):
         return None
 
@@ -494,13 +610,20 @@ def _new_receipt_outcome(machine, before: set[Path]) -> str | None:
 def _orphan_completed(r: dict) -> bool:
     """Logged its completion and exited 0, or exited 120 with its own receipt saying success."""
     return r["orphan_reported_done"] and (
-        r["orphan_rc"] == 0 or (r["orphan_rc"] == PY_FINAL_FLUSH_FAILED and r["orphan_receipt"] == "success"))
+        r["orphan_rc"] == 0
+        or (
+            r["orphan_rc"] == PY_FINAL_FLUSH_FAILED and r["orphan_receipt"] == "success"
+        )
+    )
 
 
 def _update_banners(machine, banner: str = UPDATE_BANNER) -> int:
     try:
-        return (machine.clawk_home / "logs" / "update.log").read_text(
-            encoding="utf-8-sig", errors="replace").count(banner)
+        return (
+            (machine.clawk_home / "logs" / "update.log")
+            .read_text(encoding="utf-8-sig", errors="replace")
+            .count(banner)
+        )
     except OSError:
         return 0
 
@@ -521,7 +644,10 @@ class _ExitCode:
         k.WaitForSingleObject.restype = wintypes.DWORD
         k.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
         k.GetExitCodeProcess.restype = wintypes.BOOL
-        k.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+        k.GetExitCodeProcess.argtypes = [
+            wintypes.HANDLE,
+            ctypes.POINTER(wintypes.DWORD),
+        ]
         k.CloseHandle.argtypes = [wintypes.HANDLE]
         # PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE
         self._h = k.OpenProcess(0x1000 | 0x00100000, False, pid)
@@ -530,7 +656,9 @@ class _ExitCode:
 
     def wait(self, timeout: float) -> int | None:
         """The exit code once the process has exited, else None after ``timeout`` seconds."""
-        if self._k.WaitForSingleObject(self._h, int(timeout * 1000)) != 0:  # WAIT_OBJECT_0
+        if (
+            self._k.WaitForSingleObject(self._h, int(timeout * 1000)) != 0
+        ):  # WAIT_OBJECT_0
             return None
         code = self._wintypes.DWORD()
         if not self._k.GetExitCodeProcess(self._h, self._ctypes.byref(code)):
@@ -562,23 +690,41 @@ def _orphan(machine, srv, label: str) -> dict:
             # Kill point: the script's own `clawk update` child is past its lock
             # acquisition (a fresh banner in update.log) and the marker exists.
             child = _direct_update_child(proc)
-            if child is not None and _read_marker(machine) is not None and _update_banners(machine) > banners:
+            if (
+                child is not None
+                and _read_marker(machine) is not None
+                and _update_banners(machine) > banners
+            ):
                 break
             child = None
             if proc.poll() is not None:
-                raise AssertionError(fail_with(
-                    machine, f"{label}: the hand-off exited rc={proc.returncode} before its clawk update "
-                             f"child ran (transcript {proc.transcript.name})"))
+                raise AssertionError(
+                    fail_with(
+                        machine,
+                        f"{label}: the hand-off exited rc={proc.returncode} before its clawk update "
+                        f"child ran (transcript {proc.transcript.name})",
+                    )
+                )
             time.sleep(0.05)
         if child is None:
             taskkill_tree(proc.pid)
-            raise AssertionError(fail_with(machine, f"{label}: no clawk update child within {UPDATE_TIMEOUT:.0f}s"))
+            raise AssertionError(
+                fail_with(
+                    machine,
+                    f"{label}: no clawk update child within {UPDATE_TIMEOUT:.0f}s",
+                )
+            )
         # Held from before the kill, while the update is minutes from done.
         exit_code = _ExitCode(child.pid)
         marker_at_kill = _read_marker(machine)
         # No /T: the script alone dies; its update child (in the script's job, which has
         # no KILL_ON_JOB_CLOSE) keeps running.
-        subprocess.run(["taskkill", "/PID", str(proc.pid), "/F"], capture_output=True, timeout=60, check=False)
+        subprocess.run(
+            ["taskkill", "/PID", str(proc.pid), "/F"],
+            capture_output=True,
+            timeout=60,
+            check=False,
+        )
         proc.wait(timeout=60)
         killed_at = time.monotonic()
         dead_while_running = None
@@ -602,8 +748,10 @@ def _orphan(machine, srv, label: str) -> dict:
             if who and who != "?":
                 holders.add(who.split()[0])
             elif not who and dead_while_running is None and exit_code.wait(0) is None:
-                dead_while_running = (round(time.monotonic() - killed_at, 1),
-                                      "<absent>" if text is None else repr(text))
+                dead_while_running = (
+                    round(time.monotonic() - killed_at, 1),
+                    "<absent>" if text is None else repr(text),
+                )
         if rc is None:
             rc = exit_code.wait(0)
         exit_code.close()
@@ -616,23 +764,42 @@ def _orphan(machine, srv, label: str) -> dict:
         # The custodian that took the dead script's claim over (Start-MarkerCustodian) releases
         # it on its next 1 s poll after the update ends; only a marker outliving that is a gap.
         release_by = time.monotonic() + ORPHAN_RELEASE_GRACE
-        while orphan_finished and _read_marker(machine) is not None and time.monotonic() < release_by:
+        while (
+            orphan_finished
+            and _read_marker(machine) is not None
+            and time.monotonic() < release_by
+        ):
             time.sleep(0.25)
         marker_after_orphan = _read_marker(machine)
         marker_after_orphan_text = _marker_text(machine)
         turn = one_shot_turn(machine, srv, f"{label}-next-launch")
-        follow_up = machine.clawk("update", "--yes", label=f"{label}-follow-up-update", timeout=UPDATE_TIMEOUT)
-    return {"label": label, "pre": pre, "target": target, "seen": f"update child {child.pid}",
-            "marker_at_kill": marker_at_kill, "orphan_finished": orphan_finished, "orphan_rc": rc,
-            "orphan_reported_done": orphan_reported_done, "orphan_receipt": orphan_receipt,
-            "dead_while_running": dead_while_running, "holders": sorted(holders),
-            "tree_after_orphan": tree_after_orphan, "marker_after_orphan": marker_after_orphan,
-            "marker_after_orphan_text": marker_after_orphan_text,
-            "turn": turn, "follow_up": follow_up,
-            "tree_final": _tree(machine, label), "marker_final": (machine.clawk_home / MARKER).is_file()}
+        follow_up = machine.clawk(
+            "update", "--yes", label=f"{label}-follow-up-update", timeout=UPDATE_TIMEOUT
+        )
+    return {
+        "label": label,
+        "pre": pre,
+        "target": target,
+        "seen": f"update child {child.pid}",
+        "marker_at_kill": marker_at_kill,
+        "orphan_finished": orphan_finished,
+        "orphan_rc": rc,
+        "orphan_reported_done": orphan_reported_done,
+        "orphan_receipt": orphan_receipt,
+        "dead_while_running": dead_while_running,
+        "holders": sorted(holders),
+        "tree_after_orphan": tree_after_orphan,
+        "marker_after_orphan": marker_after_orphan,
+        "marker_after_orphan_text": marker_after_orphan_text,
+        "turn": turn,
+        "follow_up": follow_up,
+        "tree_final": _tree(machine, label),
+        "marker_final": (machine.clawk_home / MARKER).is_file(),
+    }
 
 
 # -- one machine, six cells: a broken cell must not take the later ones down ------------------
+
 
 def _unsound(machine, cell: str, result) -> str | None:
     """Why the next cell cannot trust the machine ``cell`` left (``None``: it can).
@@ -648,7 +815,9 @@ def _unsound(machine, cell: str, result) -> str | None:
         reasons.append(f"its follow-up update exited rc={follow.returncode}")
     tree = _tree(machine, result["label"])
     if not _tree_matches(tree, result["target"], result["target"]):
-        reasons.append(f"the checkout is not its target {result['target']}: {_tree_text(tree)}")
+        reasons.append(
+            f"the checkout is not its target {result['target']}: {_tree_text(tree)}"
+        )
     if (machine.clawk_home / MARKER).is_file():
         reasons.append(f"{MARKER} left: {_marker_text(machine)}")
     if (machine.install_dir / ".git" / "index.lock").is_file():
@@ -673,24 +842,38 @@ def _restore_after(machine, cell: str, result) -> None:
     errors = []
     for commit in ((result["target"],) if isinstance(result, dict) else ()) + ("HEAD",):
         try:
-            harness_git("-C", str(machine.install_dir), "reset", "--quiet", "--hard", commit)
+            harness_git(
+                "-C", str(machine.install_dir), "reset", "--quiet", "--hard", commit
+            )
         except RuntimeError as exc:
             errors.append(f"reset --hard {commit}: {exc}")
             continue
-        machine.timings.append((f"(harness reset the checkout to {commit[:12]} after {cell}: {reason})", 0.0))
+        machine.timings.append(
+            (
+                f"(harness reset the checkout to {commit[:12]} after {cell}: {reason})",
+                0.0,
+            )
+        )
         return
-    raise RuntimeError(fail_with(machine, f"not run: {cell} left the shared machine unsound ({reason}) "
-                                          f"and the harness could not restore it ({'; '.join(errors)})"))
+    raise RuntimeError(
+        fail_with(
+            machine,
+            f"not run: {cell} left the shared machine unsound ({reason}) "
+            f"and the harness could not restore it ({'; '.join(errors)})",
+        )
+    )
 
 
 def _run_cells(machine, j: Journey, cells) -> None:
     """Run ``cells`` (name, fn) in order on one machine, restoring it after a cell that broke it."""
     previous = None
     for name, run in cells:
+
         def cell(run=run, previous=previous):
             if previous is not None:
                 _restore_after(machine, previous, j.results[previous])
             return run()
+
         j.step(name, cell)
         previous = name
 
@@ -707,37 +890,94 @@ def _record_cells_ran(j: Journey) -> None:
         return
     Path(artifacts).mkdir(parents=True, exist_ok=True)
     lines = [f"{name}: {'ok' if j.ok(name) else 'failed'}" for name in j.results]
-    (Path(artifacts) / CELLS_RAN_MANIFEST).write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (Path(artifacts) / CELLS_RAN_MANIFEST).write_text(
+        "\n".join(lines) + "\n", encoding="utf-8"
+    )
 
 
 @pytest.fixture(scope="module")
 def journey(tmp_path_factory):
     with FakeLLMServer() as srv:
-        machine = new_machine(tmp_path_factory.mktemp("crash"), srv.base_url, label="crash")
+        machine = new_machine(
+            tmp_path_factory.mktemp("crash"), srv.base_url, label="crash"
+        )
         j = Journey(machine)
         try:
             j.step("install", machine.install)
-            j.step("installed", lambda: j.require(
-                "install", j["install"].returncode == 0, "install.ps1 failed", j["install"]))
+            j.step(
+                "installed",
+                lambda: j.require(
+                    "install",
+                    j["install"].returncode == 0,
+                    "install.ps1 failed",
+                    j["install"],
+                ),
+            )
             if j.ok("installed"):
                 hold = _GitHold(machine)
                 boot_hold = _GitHold(machine, "clawk_bootstrap.py")
-                _run_cells(machine, j, (
-                    ("mid_fetch", lambda: _crash(machine, srv, "mid-fetch",
-                                                 _cli_update(machine, "mid-fetch-update"), _git_fetching)),
-                    ("tree_moved", lambda: _crash(machine, srv, "tree-moved",
-                                                  _cli_update(machine, "tree-moved-update"), _tree_moved)),
-                    ("desktop_handoff", lambda: _crash(machine, srv, "handoff",
-                                                       _handoff(machine, "handoff-script"), _update_child)),
-                    ("orphaned_update", lambda: _orphan(machine, srv, "orphan")),
-                    # Last: their hold edits the install's git config, and a tree the launch
-                    # cannot repair is the hardest state for the restore to hand on.
-                    ("mid_git", lambda: _crash(machine, srv, "mid-git",
-                                               _cli_update(machine, "mid-git-update"), hold.point, hold)),
-                    ("mid_git_bootstrap", lambda: _crash(
-                        machine, srv, "mid-git-bootstrap", _cli_update(machine, "mid-git-bootstrap-update"),
-                        boot_hold.point, boot_hold, runtime_files=("clawk_bootstrap.py", *RUNTIME_FILES))),
-                ))
+                _run_cells(
+                    machine,
+                    j,
+                    (
+                        (
+                            "mid_fetch",
+                            lambda: _crash(
+                                machine,
+                                srv,
+                                "mid-fetch",
+                                _cli_update(machine, "mid-fetch-update"),
+                                _git_fetching,
+                            ),
+                        ),
+                        (
+                            "tree_moved",
+                            lambda: _crash(
+                                machine,
+                                srv,
+                                "tree-moved",
+                                _cli_update(machine, "tree-moved-update"),
+                                _tree_moved,
+                            ),
+                        ),
+                        (
+                            "desktop_handoff",
+                            lambda: _crash(
+                                machine,
+                                srv,
+                                "handoff",
+                                _handoff(machine, "handoff-script"),
+                                _update_child,
+                            ),
+                        ),
+                        ("orphaned_update", lambda: _orphan(machine, srv, "orphan")),
+                        # Last: their hold edits the install's git config, and a tree the launch
+                        # cannot repair is the hardest state for the restore to hand on.
+                        (
+                            "mid_git",
+                            lambda: _crash(
+                                machine,
+                                srv,
+                                "mid-git",
+                                _cli_update(machine, "mid-git-update"),
+                                hold.point,
+                                hold,
+                            ),
+                        ),
+                        (
+                            "mid_git_bootstrap",
+                            lambda: _crash(
+                                machine,
+                                srv,
+                                "mid-git-bootstrap",
+                                _cli_update(machine, "mid-git-bootstrap-update"),
+                                boot_hold.point,
+                                boot_hold,
+                                runtime_files=("clawk_bootstrap.py", *RUNTIME_FILES),
+                            ),
+                        ),
+                    ),
+                )
             _record_cells_ran(j)
             yield j
         finally:
@@ -745,38 +985,65 @@ def journey(tmp_path_factory):
 
 
 def _tree_text(tree: dict) -> str:
-    return (f"HEAD {tree['head']}, dirty tracked {tree['dirty'] or 'none'}, diff HEAD rc={tree['diff_rc']}"
-            f"{' ' + tree['diff_err'] if tree['diff_err'] else ''}, target file present={tree['target_file']}")
+    return (
+        f"HEAD {tree['head']}, dirty tracked {tree['dirty'] or 'none'}, diff HEAD rc={tree['diff_rc']}"
+        f"{' ' + tree['diff_err'] if tree['diff_err'] else ''}, target file present={tree['target_file']}"
+    )
 
 
-def _assert_tree_is(m, cell: str, when: str, tree: dict, allowed: dict[str, str], target: str, run=None) -> None:
+def _assert_tree_is(
+    m, cell: str, when: str, tree: dict, allowed: dict[str, str], target: str, run=None
+) -> None:
     """``tree`` is exactly one of ``allowed`` (name -> commit), byte for byte."""
     assert any(_tree_matches(tree, sha, target) for sha in allowed.values()), fail_with(
-        m, f"{cell}: {when} the checkout is not the tree of "
-           f"{' or '.join(f'the {name} {sha}' for name, sha in allowed.items())}: {_tree_text(tree)}", run)
+        m,
+        f"{cell}: {when} the checkout is not the tree of "
+        f"{' or '.join(f'the {name} {sha}' for name, sha in allowed.items())}: {_tree_text(tree)}",
+        run,
+    )
 
 
 def _assert_recovered(journey: Journey, cell: str) -> None:
     m, r = journey.machine, journey[cell]
     turn = r["turn"]
     assert turn.ok, fail_with(
-        m, f"{cell}: the first launch after the killed update ran no turn "
-           f"(killed at {r['seen']}; reply printed={turn.reply_id in turn.run.stdout}, "
-           f"prompt reached provider={turn.reached_wire}; tree after the kill: {_tree_text(r['tree_after_kill'])}, "
-           f".git/index.lock after the kill={r['index_lock_after_kill']})",
-        turn.run)
-    _assert_tree_is(m, cell, "after the killed update and the next launch",
-                    r["tree_after_launch"], {"pre-update commit": r["pre"], "target": r["target"]},
-                    r["target"], turn.run)
+        m,
+        f"{cell}: the first launch after the killed update ran no turn "
+        f"(killed at {r['seen']}; reply printed={turn.reply_id in turn.run.stdout}, "
+        f"prompt reached provider={turn.reached_wire}; tree after the kill: {_tree_text(r['tree_after_kill'])}, "
+        f".git/index.lock after the kill={r['index_lock_after_kill']})",
+        turn.run,
+    )
+    _assert_tree_is(
+        m,
+        cell,
+        "after the killed update and the next launch",
+        r["tree_after_launch"],
+        {"pre-update commit": r["pre"], "target": r["target"]},
+        r["target"],
+        turn.run,
+    )
     follow = r["follow_up"]
     assert follow.returncode == 0, fail_with(
-        m, f"{cell}: the update after the killed one did not complete (rc={follow.returncode}): "
-           f"{failure_line(follow)}", follow)
-    _assert_tree_is(m, cell, "after the follow-up update", r["tree_final"], {"target": r["target"]},
-                    r["target"], follow)
+        m,
+        f"{cell}: the update after the killed one did not complete (rc={follow.returncode}): "
+        f"{failure_line(follow)}",
+        follow,
+    )
+    _assert_tree_is(
+        m,
+        cell,
+        "after the follow-up update",
+        r["tree_final"],
+        {"target": r["target"]},
+        r["target"],
+        follow,
+    )
     assert not r["marker_final"], fail_with(
-        m, f"{cell}: {MARKER} survived a completed follow-up update: "
-           f"{_marker_text(m)}", follow)
+        m,
+        f"{cell}: {MARKER} survived a completed follow-up update: {_marker_text(m)}",
+        follow,
+    )
 
 
 def test_update_killed_mid_fetch_leaves_a_runnable_install(journey: Journey) -> None:
@@ -799,27 +1066,37 @@ def test_update_killed_mid_fetch_leaves_a_runnable_install(journey: Journey) -> 
 def test_update_killed_mid_git_leaves_a_runnable_install(journey: Journey) -> None:
     r = journey["mid_git"]
     assert r["index_lock_after_kill"], fail_with(
-        journey.machine, f"mid_git: the kill did not land inside git's checkout (killed at {r['seen']}, "
-                         f"no .git/index.lock after it): this cell proves nothing about a merge-time kill")
+        journey.machine,
+        f"mid_git: the kill did not land inside git's checkout (killed at {r['seen']}, "
+        f"no .git/index.lock after it): this cell proves nothing about a merge-time kill",
+    )
     _assert_recovered(journey, "mid_git")
 
 
 # The repair's own entry: clawk_bootstrap.py unlinked by the killed merge. Red before #132361
 # round 8 (D1): every launch died importing it, the marker kept, the tree never restored.
-def test_update_killed_writing_the_launch_repairs_own_code_leaves_a_runnable_install(journey: Journey) -> None:
+def test_update_killed_writing_the_launch_repairs_own_code_leaves_a_runnable_install(
+    journey: Journey,
+) -> None:
     r = journey["mid_git_bootstrap"]
     assert r["index_lock_after_kill"] and r["held_missing_after_kill"], fail_with(
-        journey.machine, f"mid_git_bootstrap: the kill did not leave git's checkout holding with "
-                         f"clawk_bootstrap.py unlinked (killed at {r['seen']}, index.lock="
-                         f"{r['index_lock_after_kill']}, unlinked={r['held_missing_after_kill']})")
+        journey.machine,
+        f"mid_git_bootstrap: the kill did not leave git's checkout holding with "
+        f"clawk_bootstrap.py unlinked (killed at {r['seen']}, index.lock="
+        f"{r['index_lock_after_kill']}, unlinked={r['held_missing_after_kill']})",
+    )
     _assert_recovered(journey, "mid_git_bootstrap")
 
 
-def test_update_killed_after_the_tree_moved_leaves_a_runnable_install(journey: Journey) -> None:
+def test_update_killed_after_the_tree_moved_leaves_a_runnable_install(
+    journey: Journey,
+) -> None:
     _assert_recovered(journey, "tree_moved")
 
 
-def test_desktop_handoff_killed_mid_run_leaves_a_runnable_install(journey: Journey) -> None:
+def test_desktop_handoff_killed_mid_run_leaves_a_runnable_install(
+    journey: Journey,
+) -> None:
     _assert_recovered(journey, "desktop_handoff")
 
 
@@ -830,15 +1107,26 @@ def test_desktop_handoff_killed_mid_run_leaves_a_runnable_install(journey: Journ
 # keeps it LIVE. Merge-order safe: XFAILs only on exactly this gap, and only after every
 # other assertion of the cell passed; an acceptance run of the integrated batch
 # (CLAWK_E2E_STRICT_ACCEPTANCE=upd-txn) fails on it instead.
-ORPHAN_MARKER_GAP = (r"orphaned_update: \.clawk-update-in-progress (read DEAD|survived)",
-                     "upd-txn: the line-4 delegate lands in #132354 + #132365")
+ORPHAN_MARKER_GAP = (
+    r"orphaned_update: \.clawk-update-in-progress (read DEAD|survived)",
+    "upd-txn: the line-4 delegate lands in #132354 + #132365",
+)
 # The expiry PR CI can check (it never runs this cell, nor strict): the fix's footprint in the
 # tree. Once every half is here the excuse is off, so the cell is strict on any runner, and
 # tests/ci/test_windows_update_crash_oracles.py (every PR) fails until the wrapper is deleted.
 ORPHAN_MARKER_FIX = (
-    ("clawk_cli/update_lock.py", "def delegate_live("),  # #132365: the judge honours a live delegate
-    ("scripts/desktop-update/marker.ps1", "function Add-MarkerDelegate("),  # #132354: the script names one
-    ("scripts/desktop-update/windows.ps1", "Add-MarkerDelegate @($proc.Id)"),  # ... its update child
+    (
+        "clawk_cli/update_lock.py",
+        "def delegate_live(",
+    ),  # #132365: the judge honours a live delegate
+    (
+        "scripts/desktop-update/marker.ps1",
+        "function Add-MarkerDelegate(",
+    ),  # #132354: the script names one
+    (
+        "scripts/desktop-update/windows.ps1",
+        "Add-MarkerDelegate @($proc.Id)",
+    ),  # ... its update child
 )
 _REPO = Path(__file__).resolve().parents[4]
 
@@ -858,36 +1146,67 @@ def orphan_marker_fix_missing(root: Path = _REPO) -> list[str]:
 
 def _orphan_gap_excuse() -> contextlib.AbstractContextManager[None]:
     """``known_failure`` for the orphan-marker gap while its fix is absent; nothing once it is here."""
-    return known_failure(*ORPHAN_MARKER_GAP) if orphan_marker_fix_missing() else contextlib.nullcontext()
+    return (
+        known_failure(*ORPHAN_MARKER_GAP)
+        if orphan_marker_fix_missing()
+        else contextlib.nullcontext()
+    )
 
 
 def test_desktop_handoff_script_killed_alone_keeps_the_marker_live_until_its_update_ends(
-        journey: Journey) -> None:
+    journey: Journey,
+) -> None:
     m, r = journey.machine, journey["orphaned_update"]
     assert r["orphan_finished"], fail_with(
-        m, f"orphaned_update: the orphaned clawk update was still running {UPDATE_TIMEOUT:.0f}s after "
-           f"the script died")
+        m,
+        f"orphaned_update: the orphaned clawk update was still running {UPDATE_TIMEOUT:.0f}s after "
+        f"the script died",
+    )
     assert _orphan_completed(r), fail_with(
-        m, f"orphaned_update: the clawk update orphaned by the dead script did not finish the update "
-           f"(rc={r['orphan_rc']}, '{UPDATE_DONE}' logged={r['orphan_reported_done']}, "
-           f"its receipt's outcome={r['orphan_receipt']}, "
-           f"tree {_tree_text(r['tree_after_orphan'])}, target {r['target']}; marker holders seen: {r['holders']})")
-    _assert_tree_is(m, "orphaned_update", "after the orphaned update finished", r["tree_after_orphan"],
-                    {"target": r["target"]}, r["target"])
+        m,
+        f"orphaned_update: the clawk update orphaned by the dead script did not finish the update "
+        f"(rc={r['orphan_rc']}, '{UPDATE_DONE}' logged={r['orphan_reported_done']}, "
+        f"its receipt's outcome={r['orphan_receipt']}, "
+        f"tree {_tree_text(r['tree_after_orphan'])}, target {r['target']}; marker holders seen: {r['holders']})",
+    )
+    _assert_tree_is(
+        m,
+        "orphaned_update",
+        "after the orphaned update finished",
+        r["tree_after_orphan"],
+        {"target": r["target"]},
+        r["target"],
+    )
     turn = r["turn"]
-    assert turn.ok, fail_with(m, "orphaned_update: the launch after the orphaned update ran no turn", turn.run)
+    assert turn.ok, fail_with(
+        m, "orphaned_update: the launch after the orphaned update ran no turn", turn.run
+    )
     follow = r["follow_up"]
     assert follow.returncode == 0 and not r["marker_final"], fail_with(
-        m, f"orphaned_update: the next update did not complete cleanly (rc={follow.returncode}, "
-           f"marker left={r['marker_final']}): {failure_line(follow)}", follow)
-    _assert_tree_is(m, "orphaned_update", "after the next update", r["tree_final"],
-                    {"target": r["target"]}, r["target"], follow)
+        m,
+        f"orphaned_update: the next update did not complete cleanly (rc={follow.returncode}, "
+        f"marker left={r['marker_final']}): {failure_line(follow)}",
+        follow,
+    )
+    _assert_tree_is(
+        m,
+        "orphaned_update",
+        "after the next update",
+        r["tree_final"],
+        {"target": r["target"]},
+        r["target"],
+        follow,
+    )
     # The marker contract last: the batch-owned gap, so its xfail can hide nothing above.
     gaps = []
     if r["dead_while_running"] is not None:
-        gaps.append(f"{MARKER} read DEAD {r['dead_while_running'][0]}s after the script died while its "
-                    f"clawk update still ran: {r['dead_while_running'][1]} (at kill: {r['marker_at_kill']!r})")
+        gaps.append(
+            f"{MARKER} read DEAD {r['dead_while_running'][0]}s after the script died while its "
+            f"clawk update still ran: {r['dead_while_running'][1]} (at kill: {r['marker_at_kill']!r})"
+        )
     if r["marker_after_orphan"] is not None:
-        gaps.append(f"{MARKER} survived the orphaned update's exit: {r['marker_after_orphan_text']}")
+        gaps.append(
+            f"{MARKER} survived the orphaned update's exit: {r['marker_after_orphan_text']}"
+        )
     with _orphan_gap_excuse():
         assert not gaps, fail_with(m, "orphaned_update: " + "; ".join(gaps))

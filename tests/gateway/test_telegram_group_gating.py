@@ -122,7 +122,12 @@ def _group_message(
 ):
     reply_to_message = None
     if reply_to_bot:
-        reply_to_message = SimpleNamespace(from_user=SimpleNamespace(id=999), message_id=10, text="previous bot reply", caption=None)
+        reply_to_message = SimpleNamespace(
+            from_user=SimpleNamespace(id=999),
+            message_id=10,
+            text="previous bot reply",
+            caption=None,
+        )
     return SimpleNamespace(
         message_id=42,
         text=text,
@@ -131,8 +136,14 @@ def _group_message(
         caption_entities=caption_entities or [],
         message_thread_id=thread_id,
         is_topic_message=thread_id is not None,
-        chat=SimpleNamespace(id=chat_id, type="group", title="Test Group", is_forum=thread_id is not None),
-        from_user=SimpleNamespace(id=from_user_id, full_name=from_user_name, first_name=from_user_name.split()[0]),
+        chat=SimpleNamespace(
+            id=chat_id, type="group", title="Test Group", is_forum=thread_id is not None
+        ),
+        from_user=SimpleNamespace(
+            id=from_user_id,
+            full_name=from_user_name,
+            first_name=from_user_name.split()[0],
+        ),
         reply_to_message=reply_to_message,
         date=None,
     )
@@ -146,8 +157,16 @@ def _dm_message(text="hello", *, from_user_id=111):
         entities=[],
         caption_entities=[],
         message_thread_id=None,
-        chat=SimpleNamespace(id=from_user_id, type="private", full_name="Alice Example", title=None, is_forum=False),
-        from_user=SimpleNamespace(id=from_user_id, full_name="Alice Example", first_name="Alice"),
+        chat=SimpleNamespace(
+            id=from_user_id,
+            type="private",
+            full_name="Alice Example",
+            title=None,
+            is_forum=False,
+        ),
+        from_user=SimpleNamespace(
+            id=from_user_id, full_name="Alice Example", first_name="Alice"
+        ),
         reply_to_message=None,
         date=None,
     )
@@ -318,41 +337,72 @@ def test_group_messages_can_require_direct_trigger_via_config():
     adapter = _make_adapter(require_mention=True)
 
     assert adapter._should_process_message(_group_message("hello everyone")) is False
-    assert adapter._should_process_message(_group_message("hi @clawk_bot", entities=[_mention_entity("hi @clawk_bot")])) is True
-    assert adapter._should_process_message(_group_message("replying", reply_to_bot=True)) is True
+    assert (
+        adapter._should_process_message(
+            _group_message("hi @clawk_bot", entities=[_mention_entity("hi @clawk_bot")])
+        )
+        is True
+    )
+    assert (
+        adapter._should_process_message(_group_message("replying", reply_to_bot=True))
+        is True
+    )
     # Commands must also respect require_mention when it is enabled
-    assert adapter._should_process_message(_group_message("/status"), is_command=True) is False
+    assert (
+        adapter._should_process_message(_group_message("/status"), is_command=True)
+        is False
+    )
     # Telegram's group command menu sends ``/cmd@botname`` as a single
     # ``bot_command`` entity spanning the whole token (no separate mention
     # entity). We must accept it so the menu works when require_mention is on.
-    assert adapter._should_process_message(
-        _group_message(
-            "/status@clawk_bot",
-            entities=[_bot_command_entity("/status@clawk_bot", "/status@clawk_bot")],
-        ),
-        is_command=True,
-    ) is True
+    assert (
+        adapter._should_process_message(
+            _group_message(
+                "/status@clawk_bot",
+                entities=[
+                    _bot_command_entity("/status@clawk_bot", "/status@clawk_bot")
+                ],
+            ),
+            is_command=True,
+        )
+        is True
+    )
     # A bot_command entity addressed at a different bot must not satisfy
     # the mention gate — Telegram groups can host multiple bots that
     # register the same command name.
-    assert adapter._should_process_message(
-        _group_message(
-            "/status@other_bot",
-            entities=[_bot_command_entity("/status@other_bot", "/status@other_bot")],
-        ),
-        is_command=True,
-    ) is False
+    assert (
+        adapter._should_process_message(
+            _group_message(
+                "/status@other_bot",
+                entities=[
+                    _bot_command_entity("/status@other_bot", "/status@other_bot")
+                ],
+            ),
+            is_command=True,
+        )
+        is False
+    )
     # Bare ``/status`` (no @botname) must still be dropped in groups with
     # require_mention=True — Telegram delivers it only when the bot's
     # privacy mode is off, and even then we should not respond unless the
     # user explicitly addressed the bot.
-    assert adapter._should_process_message(
-        _group_message("/status", entities=[_bot_command_entity("/status", "/status")]),
-        is_command=True,
-    ) is False
+    assert (
+        adapter._should_process_message(
+            _group_message(
+                "/status", entities=[_bot_command_entity("/status", "/status")]
+            ),
+            is_command=True,
+        )
+        is False
+    )
     # And commands still pass unconditionally when require_mention is disabled
     adapter_no_mention = _make_adapter(require_mention=False)
-    assert adapter_no_mention._should_process_message(_group_message("/status"), is_command=True) is True
+    assert (
+        adapter_no_mention._should_process_message(
+            _group_message("/status"), is_command=True
+        )
+        is True
+    )
 
 
 def test_explicit_multi_bot_mentions_route_only_to_named_bots():
@@ -363,9 +413,19 @@ def test_explicit_multi_bot_mentions_route_only_to_named_bots():
     research_bot = _make_adapter(require_mention=True, bot_username="research_bot")
     ops_bot = _make_adapter(require_mention=True, bot_username="ops_bot")
 
-    assert default_bot._should_process_message(_group_message(text, reply_to_bot=True, entities=entities)) is False
-    assert research_bot._should_process_message(_group_message(text, entities=entities)) is True
-    assert ops_bot._should_process_message(_group_message(text, entities=entities)) is True
+    assert (
+        default_bot._should_process_message(
+            _group_message(text, reply_to_bot=True, entities=entities)
+        )
+        is False
+    )
+    assert (
+        research_bot._should_process_message(_group_message(text, entities=entities))
+        is True
+    )
+    assert (
+        ops_bot._should_process_message(_group_message(text, entities=entities)) is True
+    )
 
 
 def test_entityless_multi_bot_mentions_still_route_exclusively():
@@ -375,7 +435,10 @@ def test_entityless_multi_bot_mentions_still_route_exclusively():
     research_bot = _make_adapter(require_mention=True, bot_username="research_bot")
     ops_bot = _make_adapter(require_mention=True, bot_username="ops_bot")
 
-    assert default_bot._should_process_message(_group_message(text, reply_to_bot=True)) is False
+    assert (
+        default_bot._should_process_message(_group_message(text, reply_to_bot=True))
+        is False
+    )
     assert research_bot._should_process_message(_group_message(text)) is True
     assert ops_bot._should_process_message(_group_message(text)) is True
 
@@ -383,18 +446,30 @@ def test_entityless_multi_bot_mentions_still_route_exclusively():
 def test_intern_bots_ignore_messages_addressed_to_other_intern_bot():
     text = "@Interntestnumber1bot you're not supposed to do the blog"
 
-    test2_bot = _make_adapter(require_mention=False, bot_username="Interntestnumber2bot")
-    test1_bot = _make_adapter(require_mention=False, bot_username="Interntestnumber1bot")
+    test2_bot = _make_adapter(
+        require_mention=False, bot_username="Interntestnumber2bot"
+    )
+    test1_bot = _make_adapter(
+        require_mention=False, bot_username="Interntestnumber1bot"
+    )
 
-    assert test2_bot._should_process_message(_group_message(text, reply_to_bot=True)) is False
+    assert (
+        test2_bot._should_process_message(_group_message(text, reply_to_bot=True))
+        is False
+    )
     assert test1_bot._should_process_message(_group_message(text)) is True
 
 
 def test_raw_bot_mention_fallback_does_not_match_email_or_substring():
     adapter = _make_adapter(require_mention=True, bot_username="clawk_bot")
 
-    assert adapter._should_process_message(_group_message("email ops@clawk_bot.example")) is False
-    assert adapter._should_process_message(_group_message("prefix@clawk_bot hi")) is False
+    assert (
+        adapter._should_process_message(_group_message("email ops@clawk_bot.example"))
+        is False
+    )
+    assert (
+        adapter._should_process_message(_group_message("prefix@clawk_bot hi")) is False
+    )
     assert adapter._should_process_message(_group_message("hi @clawk_bot")) is True
 
 
@@ -405,9 +480,12 @@ def test_exclusive_bot_mentions_can_be_disabled_for_legacy_groups():
         bot_username="default_bot",
     )
 
-    assert adapter._should_process_message(
-        _group_message("@research_bot hi", reply_to_bot=True)
-    ) is True
+    assert (
+        adapter._should_process_message(
+            _group_message("@research_bot hi", reply_to_bot=True)
+        )
+        is True
+    )
 
 
 def test_free_response_topic_messages_are_dispatched_not_observed():
@@ -444,22 +522,54 @@ def test_guest_mode_allows_only_direct_mentions_outside_allowed_chats():
         entities=[_mention_entity("hi @clawk_bot")],
     )
     assert adapter._should_process_message(mentioned) is True
-    assert adapter._should_process_message(_group_message("reply", chat_id=-201, reply_to_bot=True)) is False
-    assert adapter._should_process_message(_group_message("chompy status", chat_id=-201)) is False
-    assert adapter._should_process_message(_group_message("hello", chat_id=-201)) is False
+    assert (
+        adapter._should_process_message(
+            _group_message("reply", chat_id=-201, reply_to_bot=True)
+        )
+        is False
+    )
+    assert (
+        adapter._should_process_message(_group_message("chompy status", chat_id=-201))
+        is False
+    )
+    assert (
+        adapter._should_process_message(_group_message("hello", chat_id=-201)) is False
+    )
 
 
 def test_allowed_topics_drop_other_forum_topics_before_other_gates():
-    adapter = _make_adapter(require_mention=False, allowed_chats=["-100"], allowed_topics=["8"])
+    adapter = _make_adapter(
+        require_mention=False, allowed_chats=["-100"], allowed_topics=["8"]
+    )
 
-    assert adapter._should_process_message(_group_message("hello", chat_id=-100, thread_id=8)) is True
-    assert adapter._should_process_message(_group_message("hello", chat_id=-100, thread_id=11)) is False
-    assert adapter._should_process_message(
-        _group_message("hi @clawk_bot", chat_id=-100, thread_id=11, entities=[_mention_entity("hi @clawk_bot")])
-    ) is False
+    assert (
+        adapter._should_process_message(
+            _group_message("hello", chat_id=-100, thread_id=8)
+        )
+        is True
+    )
+    assert (
+        adapter._should_process_message(
+            _group_message("hello", chat_id=-100, thread_id=11)
+        )
+        is False
+    )
+    assert (
+        adapter._should_process_message(
+            _group_message(
+                "hi @clawk_bot",
+                chat_id=-100,
+                thread_id=11,
+                entities=[_mention_entity("hi @clawk_bot")],
+            )
+        )
+        is False
+    )
 
 
-def _forum_message(*, chat_id, thread_id, is_topic_message, is_forum, chat_type="supergroup"):
+def _forum_message(
+    *, chat_id, thread_id, is_topic_message, is_forum, chat_type="supergroup"
+):
     """Build a message with independently-controlled topic/forum flags.
 
     The shared ``_group_message`` fixture couples ``is_topic_message`` and
@@ -493,25 +603,39 @@ def test_gating_ignores_non_forum_reply_anchor_thread_id():
     such a reply gates as the General topic instead.
     """
     # ignored_threads: reply anchor 55 must NOT be treated as thread 55.
-    adapter = _make_adapter(require_mention=False, free_response_chats=["-200"], ignored_threads=[55])
+    adapter = _make_adapter(
+        require_mention=False, free_response_chats=["-200"], ignored_threads=[55]
+    )
     reply_anchor = _forum_message(
-        chat_id=-200, thread_id=55, is_topic_message=False, is_forum=False, chat_type="group"
+        chat_id=-200,
+        thread_id=55,
+        is_topic_message=False,
+        is_forum=False,
+        chat_type="group",
     )
     assert adapter._should_process_message(reply_anchor) is True
 
     # allowed_topics: reply anchor 55 normalizes to General ("1"), so a group
     # that only allows topic "1" still processes the reply.
-    adapter2 = _make_adapter(require_mention=False, allowed_chats=["-200"], allowed_topics=["1"])
+    adapter2 = _make_adapter(
+        require_mention=False, allowed_chats=["-200"], allowed_topics=["1"]
+    )
     assert adapter2._should_process_message(reply_anchor) is True
 
 
 def test_gating_forum_general_topic_normalizes_to_one():
     """Forum General-topic messages (thread_id=None) gate as topic "1"."""
-    adapter = _make_adapter(require_mention=False, allowed_chats=["-100"], allowed_topics=["1"])
-    general = _forum_message(chat_id=-100, thread_id=None, is_topic_message=False, is_forum=True)
+    adapter = _make_adapter(
+        require_mention=False, allowed_chats=["-100"], allowed_topics=["1"]
+    )
+    general = _forum_message(
+        chat_id=-100, thread_id=None, is_topic_message=False, is_forum=True
+    )
     assert adapter._should_process_message(general) is True
 
-    adapter2 = _make_adapter(require_mention=False, allowed_chats=["-100"], allowed_topics=["8"])
+    adapter2 = _make_adapter(
+        require_mention=False, allowed_chats=["-100"], allowed_topics=["8"]
+    )
     assert adapter2._should_process_message(general) is False
 
 
@@ -553,13 +677,13 @@ def test_config_bridges_telegram_group_settings(monkeypatch, tmp_path):
         "  exclusive_bot_mentions: true\n"
         "  observe_unmentioned_group_messages: true\n"
         "  mention_patterns:\n"
-        "    - \"^\\\\s*chompy\\\\b\"\n"
+        '    - "^\\\\s*chompy\\\\b"\n'
         "  free_response_chats:\n"
-        "    - \"-123\"\n"
+        '    - "-123"\n'
         "  allowed_chats:\n"
-        "    - \"-100\"\n"
+        '    - "-100"\n'
         "  group_allowed_chats:\n"
-        "    - \"-100\"\n"
+        '    - "-100"\n'
         "  allowed_topics:\n"
         "    - 8\n",
         encoding="utf-8",
@@ -618,8 +742,7 @@ def test_top_level_require_mention_bridges_to_telegram(monkeypatch, tmp_path):
     clawk_home.mkdir()
     # Intentionally no "telegram:" section — keys are at the top level.
     (clawk_home / "config.yaml").write_text(
-        "require_mention: true\n"
-        "group_sessions_per_user: true\n",
+        "require_mention: true\ngroup_sessions_per_user: true\n",
         encoding="utf-8",
     )
 
@@ -633,7 +756,9 @@ def test_top_level_require_mention_bridges_to_telegram(monkeypatch, tmp_path):
 
     # The adapter's extra dict must also carry the setting so that
     # _telegram_require_mention() works even without the env var.
-    tg_cfg = config.platforms.get(__import__("gateway.config", fromlist=["Platform"]).Platform.TELEGRAM)
+    tg_cfg = config.platforms.get(
+        __import__("gateway.config", fromlist=["Platform"]).Platform.TELEGRAM
+    )
     if tg_cfg is not None:
         assert tg_cfg.extra.get("require_mention") is True
 
@@ -641,6 +766,7 @@ def test_top_level_require_mention_bridges_to_telegram(monkeypatch, tmp_path):
 # ---------------------------------------------------------------------------
 # Helpers for location / media observe+attribution tests
 # ---------------------------------------------------------------------------
+
 
 def _group_location_message(
     *,
@@ -658,9 +784,12 @@ def _group_location_message(
         caption_entities=[],
         message_thread_id=None,
         is_topic_message=False,
-        chat=SimpleNamespace(id=chat_id, type="group", title="Test Group", is_forum=False),
+        chat=SimpleNamespace(
+            id=chat_id, type="group", title="Test Group", is_forum=False
+        ),
         from_user=SimpleNamespace(
-            id=from_user_id, full_name=from_user_name,
+            id=from_user_id,
+            full_name=from_user_name,
             first_name=from_user_name.split()[0],
         ),
         reply_to_message=None,
@@ -691,9 +820,12 @@ def _group_voice_message(
         caption_entities=[],
         message_thread_id=None,
         is_topic_message=False,
-        chat=SimpleNamespace(id=chat_id, type="group", title="Test Group", is_forum=False),
+        chat=SimpleNamespace(
+            id=chat_id, type="group", title="Test Group", is_forum=False
+        ),
         from_user=SimpleNamespace(
-            id=from_user_id, full_name=from_user_name,
+            id=from_user_id,
+            full_name=from_user_name,
             first_name=from_user_name.split()[0],
         ),
         reply_to_message=None,
@@ -754,19 +886,41 @@ def test_triggered_location_message_uses_shared_session_in_observe_mode():
 # Observed-media caching (unmentioned group attachments)
 # ---------------------------------------------------------------------------
 
+
 def _group_photo_message(*, chat_id=-100, caption="Veja esta foto", file_size=1024):
     file_obj = SimpleNamespace(
         file_path="photos/observed.png",
-        download_as_bytearray=AsyncMock(return_value=bytearray(b"\x89PNG\r\n\x1a\n observed")),
+        download_as_bytearray=AsyncMock(
+            return_value=bytearray(b"\x89PNG\r\n\x1a\n observed")
+        ),
     )
-    photo = SimpleNamespace(file_size=file_size, get_file=AsyncMock(return_value=file_obj))
+    photo = SimpleNamespace(
+        file_size=file_size, get_file=AsyncMock(return_value=file_obj)
+    )
     return SimpleNamespace(
-        message_id=52, text=None, caption=caption, entities=[], caption_entities=[],
-        message_thread_id=None, is_topic_message=False,
-        chat=SimpleNamespace(id=chat_id, type="group", title="Test Group", is_forum=False),
-        from_user=SimpleNamespace(id=111, full_name="Alice Example", first_name="Alice"),
-        reply_to_message=None, date=None, location=None, venue=None,
-        sticker=None, photo=[photo], video=None, audio=None, voice=None, document=None,
+        message_id=52,
+        text=None,
+        caption=caption,
+        entities=[],
+        caption_entities=[],
+        message_thread_id=None,
+        is_topic_message=False,
+        chat=SimpleNamespace(
+            id=chat_id, type="group", title="Test Group", is_forum=False
+        ),
+        from_user=SimpleNamespace(
+            id=111, full_name="Alice Example", first_name="Alice"
+        ),
+        reply_to_message=None,
+        date=None,
+        location=None,
+        venue=None,
+        sticker=None,
+        photo=[photo],
+        video=None,
+        audio=None,
+        voice=None,
+        document=None,
     )
 
 
@@ -777,16 +931,34 @@ def _group_document_message(*, chat_id=-100, caption="Este arquivo", document=No
     )
     document = document or SimpleNamespace(
         file_name="RESULTADO BIOLOGICO - PROTOCOLO 103- URBAN.pdf",
-        mime_type="application/pdf", file_size=1024,
+        mime_type="application/pdf",
+        file_size=1024,
         get_file=AsyncMock(return_value=file_obj),
     )
     return SimpleNamespace(
-        message_id=53, text=None, caption=caption, entities=[], caption_entities=[],
-        message_thread_id=None, is_topic_message=False,
-        chat=SimpleNamespace(id=chat_id, type="group", title="Test Group", is_forum=False),
-        from_user=SimpleNamespace(id=111, full_name="Alice Example", first_name="Alice"),
-        reply_to_message=None, date=None, location=None, venue=None,
-        sticker=None, photo=None, video=None, audio=None, voice=None, document=document,
+        message_id=53,
+        text=None,
+        caption=caption,
+        entities=[],
+        caption_entities=[],
+        message_thread_id=None,
+        is_topic_message=False,
+        chat=SimpleNamespace(
+            id=chat_id, type="group", title="Test Group", is_forum=False
+        ),
+        from_user=SimpleNamespace(
+            id=111, full_name="Alice Example", first_name="Alice"
+        ),
+        reply_to_message=None,
+        date=None,
+        location=None,
+        venue=None,
+        sticker=None,
+        photo=None,
+        video=None,
+        audio=None,
+        voice=None,
+        document=document,
     )
 
 
@@ -829,19 +1001,24 @@ def _reply_to_bot_message(text, *, entities=None, bot_username, bot_id=999):
     message = _group_message(text, entities=entities)
     message.reply_to_message = SimpleNamespace(
         from_user=SimpleNamespace(id=bot_id, username=bot_username),
-        message_id=10, text="previous bot reply", caption=None,
+        message_id=10,
+        text="previous bot reply",
+        caption=None,
     )
     return message
 
 
 def test_stale_username_schedules_background_identity_recheck():
     """A drop caused by a stale handle self-corrects via a TTL-guarded getMe."""
+
     async def _run():
         adapter = _make_adapter(require_mention=True, exclusive_bot_mentions=True)
         adapter._bot = _IdentityBot(cached="old_helper_bot", server="new_helper_bot")
         adapter._background_tasks = set()
         text = "@new_helper_bot what's the weather"
-        message = _group_message(text, entities=_mention_entities(text, ["@new_helper_bot"]))
+        message = _group_message(
+            text, entities=_mention_entities(text, ["@new_helper_bot"])
+        )
 
         # First message is lost — nothing has revealed the new handle yet.
         assert adapter._should_process_message(message) is False
@@ -860,7 +1037,9 @@ def test_bot_never_adopts_another_accounts_username():
     adapter = _make_adapter(require_mention=True)
     adapter._bot = _IdentityBot(cached="clawk_bot")
     message = _group_message("hello")
-    message.from_user = SimpleNamespace(id=555, username="impostor_bot", full_name="Impostor", first_name="Impostor")
+    message.from_user = SimpleNamespace(
+        id=555, username="impostor_bot", full_name="Impostor", first_name="Impostor"
+    )
 
     adapter._observe_bot_identity_from_message(message)
 
@@ -870,11 +1049,14 @@ def test_bot_never_adopts_another_accounts_username():
 def test_collectible_username_not_suppressed_by_other_bot_mention():
     """@jarvis + @other_bot in one message must still reach @jarvis."""
     adapter = _make_adapter(
-        require_mention=True, exclusive_bot_mentions=True, bot_username="jarvis",
+        require_mention=True,
+        exclusive_bot_mentions=True,
+        bot_username="jarvis",
     )
     text = "@jarvis ask @other_helper_bot for the log"
     message = _group_message(
-        text, entities=_mention_entities(text, ["@jarvis", "@other_helper_bot"]),
+        text,
+        entities=_mention_entities(text, ["@jarvis", "@other_helper_bot"]),
     )
 
     assert adapter._explicit_bot_mentions_exclude_self(message) is False
@@ -962,6 +1144,7 @@ def test_sibling_bot_wake_word_message_is_observed_not_dropped():
     """#115119: the bot-to-bot loop breaker drops a sibling bot's message that carries no explicit
     @mention, so a wake-word (``mention_patterns``) match from that bot is never dispatched. It must
     still land in observed group context instead of vanishing from both paths."""
+
     async def _run():
         adapter = _make_adapter(
             require_mention=True,
@@ -974,7 +1157,9 @@ def test_sibling_bot_wake_word_message_is_observed_not_dropped():
         store = _FakeSessionStore()
         adapter._session_store = store
         msg = _bot_sender_message("clawk, can you take this one?")
-        assert adapter._should_process_message(msg) is False, "loop breaker must still block dispatch"
+        assert adapter._should_process_message(msg) is False, (
+            "loop breaker must still block dispatch"
+        )
         update = SimpleNamespace(update_id=2001, message=msg, effective_message=None)
 
         await adapter._handle_text_message(update, SimpleNamespace())

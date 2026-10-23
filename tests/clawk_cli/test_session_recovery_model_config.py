@@ -26,12 +26,17 @@ def _damaged_source(path: Path) -> None:
         db.create_session("parent", "telegram", session_key="telegram:u:c")
         db.append_message("parent", "user", "hello")
         db.end_session("parent", "session_reset")
-        db.create_session("child", "telegram", session_key="telegram:u:c", parent_session_id="parent")
+        db.create_session(
+            "child", "telegram", session_key="telegram:u:c", parent_session_id="parent"
+        )
     finally:
         db.close()
     raw = sqlite3.connect(str(path))
     try:
-        raw.execute("UPDATE sessions SET model_config = ? WHERE id = 'child'", (_TRUNCATED_JSON,))
+        raw.execute(
+            "UPDATE sessions SET model_config = ? WHERE id = 'child'",
+            (_TRUNCATED_JSON,),
+        )
         raw.commit()
     finally:
         raw.close()

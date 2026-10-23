@@ -149,7 +149,6 @@ class TestOpenCodeGoKimiReasoning:
 class TestOpenCodeGoDeepSeekThinking:
     """DeepSeek V4 models use DeepSeek-style thinking controls on OpenCode Go."""
 
-
     def test_xhigh_and_max_normalize_to_max(self, opencode_go_profile):
         for effort in ("xhigh", "max"):
             extra_body, top_level = opencode_go_profile.build_api_kwargs_extras(
@@ -160,7 +159,9 @@ class TestOpenCodeGoDeepSeekThinking:
             assert top_level == {"reasoning_effort": "max"}
 
     @pytest.mark.parametrize("model", ["deepseek-flash", "deepseek/deepseek-flash"])
-    def test_version_less_canonical_id_gets_the_controls(self, opencode_go_profile, model):
+    def test_version_less_canonical_id_gets_the_controls(
+        self, opencode_go_profile, model
+    ):
         """The canonical version-less Flash id must reach the wire like the versioned ids:
         the asked effort, and an explicit thinking-off when reasoning is disabled."""
         _, top_level = opencode_go_profile.build_api_kwargs_extras(
@@ -192,7 +193,6 @@ class TestOpenCodeGoDeepSeekThinking:
 
 class TestOpenCodeGoGLM52Reasoning:
     """GLM-5.2 uses its native high/max reasoning_effort knob on OpenCode Go."""
-
 
     @pytest.mark.parametrize("model", ["glm-5-2", "glm-5p2"])
     def test_alias_spellings_recognized(self, opencode_go_profile, model):
@@ -262,8 +262,9 @@ class TestOpenCodeGoFullKwargsIntegration:
         assert kwargs["reasoning_effort"] == "high"
 
 
-
-def test_opencode_go_plan_windows_reach_usage_through_profile_hook(opencode_go_profile, monkeypatch):
+def test_opencode_go_plan_windows_reach_usage_through_profile_hook(
+    opencode_go_profile, monkeypatch
+):
     """The Go plan's rolling/weekly/monthly windows feed /usage via the profile hook — no core table entry."""
     from datetime import datetime, timezone
 
@@ -276,11 +277,25 @@ def test_opencode_go_plan_windows_reach_usage_through_profile_hook(opencode_go_p
             return None
 
         def json(self):
-            return {"usage": {
-                "rolling": {"status": "ok", "percent": 3, "resetsAt": "2026-09-16T21:44:55.176Z"},
-                "weekly": {"status": "ok", "percent": 2, "resetsAt": "2026-09-21T00:00:00.176Z"},
-                "monthly": {"status": "ok", "percent": 2, "resetsAt": "2026-10-13T02:13:38.176Z"},
-            }}
+            return {
+                "usage": {
+                    "rolling": {
+                        "status": "ok",
+                        "percent": 3,
+                        "resetsAt": "2026-09-16T21:44:55.176Z",
+                    },
+                    "weekly": {
+                        "status": "ok",
+                        "percent": 2,
+                        "resetsAt": "2026-09-21T00:00:00.176Z",
+                    },
+                    "monthly": {
+                        "status": "ok",
+                        "percent": 2,
+                        "resetsAt": "2026-10-13T02:13:38.176Z",
+                    },
+                }
+            }
 
     class _Client:
         def __init__(self, timeout=None):
@@ -301,12 +316,20 @@ def test_opencode_go_plan_windows_reach_usage_through_profile_hook(opencode_go_p
         "clawk_cli.runtime_provider.resolve_runtime_provider",
         # /v1 stripped, as anthropic_messages routing leaves it — the hook must not reuse this base_url.
         lambda requested, explicit_base_url=None, explicit_api_key=None: {
-            "provider": "opencode-go", "base_url": "https://opencode.ai/zen/go", "api_key": "sk-test"},
+            "provider": "opencode-go",
+            "base_url": "https://opencode.ai/zen/go",
+            "api_key": "sk-test",
+        },
     )
 
     snapshot = fetch_account_usage("opencode-go")
 
     assert snapshot is not None and snapshot.provider == "opencode-go"
     assert [(w.label, w.used_percent) for w in snapshot.windows] == [
-        ("Rolling window", 3.0), ("Weekly", 2.0), ("Monthly", 2.0)]
-    assert snapshot.windows[0].reset_at == datetime(2026, 9, 16, 21, 44, 55, 176000, tzinfo=UTC)
+        ("Rolling window", 3.0),
+        ("Weekly", 2.0),
+        ("Monthly", 2.0),
+    ]
+    assert snapshot.windows[0].reset_at == datetime(
+        2026, 9, 16, 21, 44, 55, 176000, tzinfo=UTC
+    )

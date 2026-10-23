@@ -96,7 +96,9 @@ def update_marker_path() -> Path:
     """
     try:
         from clawk_constants import get_default_clawk_root
-    except ImportError:  # a partial tree (an -I -S completion child of a stubbed checkout)
+    except (
+        ImportError
+    ):  # a partial tree (an -I -S completion child of a stubbed checkout)
         home = Path(os.environ.get("CLAWK_HOME") or Path.home() / ".clawksis")
         root = home.parent.parent if home.parent.name == "profiles" else home
         return root / MARKER_NAME
@@ -121,7 +123,9 @@ def _git_common_dir(root: Path) -> Path | None:
             text = dot.read_text(encoding="utf-8-sig").strip()
             if not text.startswith("gitdir:"):
                 return None
-            gitdir = root / text[len("gitdir:"):].strip()  # an absolute target replaces root
+            gitdir = (
+                root / text[len("gitdir:") :].strip()
+            )  # an absolute target replaces root
         else:
             return None
         common = gitdir / "commondir"
@@ -135,7 +139,9 @@ def _git_common_dir(root: Path) -> Path | None:
 def checkout_lock_path(install_root: Path | str | None = None) -> Path:
     root = Path(install_root or _default_install_root())
     common = _git_common_dir(root)
-    return root / CHECKOUT_LOCK_NAME if common is None else common / GIT_CHECKOUT_LOCK_NAME
+    return (
+        root / CHECKOUT_LOCK_NAME if common is None else common / GIT_CHECKOUT_LOCK_NAME
+    )
 
 
 def _pid_alive(pid: int) -> bool:
@@ -144,6 +150,7 @@ def _pid_alive(pid: int) -> bool:
         return False
     try:
         from clawk_cli._early_recovery import _pid_is_running
+
         return _pid_is_running(pid)
     except Exception as exc:
         logger.debug("Could not probe pid %s: %s", pid, exc)
@@ -160,7 +167,9 @@ def _windows_kernel32():
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
     kernel32.OpenProcess.restype = wintypes.HANDLE
-    kernel32.GetProcessTimes.argtypes = [wintypes.HANDLE] + [ctypes.POINTER(wintypes.FILETIME)] * 4
+    kernel32.GetProcessTimes.argtypes = [wintypes.HANDLE] + [
+        ctypes.POINTER(wintypes.FILETIME)
+    ] * 4
     kernel32.GetProcessTimes.restype = wintypes.BOOL
     kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
     kernel32.CloseHandle.restype = wintypes.BOOL
@@ -173,7 +182,9 @@ def _windows_create_filetime(pid: int) -> int | None:
     from ctypes import wintypes
 
     kernel32 = _windows_kernel32()
-    handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+    handle = kernel32.OpenProcess(
+        0x1000, False, pid
+    )  # PROCESS_QUERY_LIMITED_INFORMATION
     if not handle:
         return None
     try:
@@ -199,21 +210,43 @@ def _stdlib_create_time(pid: int) -> float | None:
         if os.path.isdir("/proc"):
             with open(f"/proc/{pid}/stat", "rb") as fh:
                 stat = fh.read()
-            start_ticks = int(stat[stat.rindex(b")") + 2:].split()[19])
+            start_ticks = int(stat[stat.rindex(b")") + 2 :].split()[19])
             with open("/proc/stat", "rb") as fh:
-                btime = next(int(line.split()[1]) for line in fh if line.startswith(b"btime "))
+                btime = next(
+                    int(line.split()[1]) for line in fh if line.startswith(b"btime ")
+                )
             return btime + start_ticks / os.sysconf("SC_CLK_TCK")
         # UTC wall clock: a local-time lstart is ambiguous in the repeated DST hour.
         out = subprocess.run(
-            ["ps", "-o", "lstart=", "-p", str(pid)], capture_output=True, text=True,
-            encoding="utf-8", errors="replace", timeout=5, stdin=subprocess.DEVNULL,
-            env={"PATH": os.environ.get("PATH") or "/bin:/usr/bin", "LC_ALL": "C", "TZ": "UTC0"},
+            ["ps", "-o", "lstart=", "-p", str(pid)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+            stdin=subprocess.DEVNULL,
+            env={
+                "PATH": os.environ.get("PATH") or "/bin:/usr/bin",
+                "LC_ALL": "C",
+                "TZ": "UTC0",
+            },
             check=False,
         ).stdout.strip()
         if not out:
             return None
-        return float(calendar.timegm(time.strptime(" ".join(out.split()), "%a %b %d %H:%M:%S %Y")))
-    except (OSError, ValueError, IndexError, StopIteration, subprocess.SubprocessError, AttributeError):
+        return float(
+            calendar.timegm(
+                time.strptime(" ".join(out.split()), "%a %b %d %H:%M:%S %Y")
+            )
+        )
+    except (
+        OSError,
+        ValueError,
+        IndexError,
+        StopIteration,
+        subprocess.SubprocessError,
+        AttributeError,
+    ):
         return None
 
 
@@ -289,7 +322,9 @@ class _World:
 
 
 def _real_world() -> _World:
-    return _World(os.getpid(), _own_create_time(), time.time(), _pid_alive, process_create_time)
+    return _World(
+        os.getpid(), _own_create_time(), time.time(), _pid_alive, process_create_time
+    )
 
 
 def _incarnation(pid: int, recorded: float | None, w: _World) -> bool | None:
@@ -307,10 +342,16 @@ def _incarnation(pid: int, recorded: float | None, w: _World) -> bool | None:
     if not w.alive(pid):
         return False
     actual = None if recorded is None else w.ct_of(pid)
-    return None if actual is None else abs(actual - recorded) <= CREATE_TIME_TOLERANCE_SECONDS
+    return (
+        None
+        if actual is None
+        else abs(actual - recorded) <= CREATE_TIME_TOLERANCE_SECONDS
+    )
 
 
-def _identity_live(pid: int, create_time: float | None, age: float, world: _World | None = None) -> bool:
+def _identity_live(
+    pid: int, create_time: float | None, age: float, world: _World | None = None
+) -> bool:
     """C1 rule 3 + A1 + A7 rule 4 for one (pid, ct) identity of a marker ``age`` seconds old:
     :func:`incarnation_live`, where an unprovable identity (a v1 marker, or a creation time we
     cannot read) may be a reused pid, so only the legacy age ceiling bounds it."""
@@ -347,11 +388,16 @@ def _windows_parent_pid(pid: int) -> int | None:
 
     class PROCESSENTRY32W(ctypes.Structure):
         _fields_ = [
-            ("dwSize", wintypes.DWORD), ("cntUsage", wintypes.DWORD),
-            ("th32ProcessID", wintypes.DWORD), ("th32DefaultHeapID", ctypes.c_size_t),
-            ("th32ModuleID", wintypes.DWORD), ("cntThreads", wintypes.DWORD),
-            ("th32ParentProcessID", wintypes.DWORD), ("pcPriClassBase", ctypes.c_long),
-            ("dwFlags", wintypes.DWORD), ("szExeFile", ctypes.c_wchar * 260),
+            ("dwSize", wintypes.DWORD),
+            ("cntUsage", wintypes.DWORD),
+            ("th32ProcessID", wintypes.DWORD),
+            ("th32DefaultHeapID", ctypes.c_size_t),
+            ("th32ModuleID", wintypes.DWORD),
+            ("cntThreads", wintypes.DWORD),
+            ("th32ParentProcessID", wintypes.DWORD),
+            ("pcPriClassBase", ctypes.c_long),
+            ("dwFlags", wintypes.DWORD),
+            ("szExeFile", ctypes.c_wchar * 260),
         ]
 
     kernel32 = _windows_kernel32()
@@ -378,8 +424,15 @@ def _windows_parent_pid(pid: int) -> int | None:
         kernel32.CloseHandle(snapshot)
     if not parent:
         return None
-    parent_created, child_created = _windows_create_filetime(parent), _windows_create_filetime(pid)
-    if parent_created is not None and child_created is not None and parent_created > child_created:
+    parent_created, child_created = (
+        _windows_create_filetime(parent),
+        _windows_create_filetime(pid),
+    )
+    if (
+        parent_created is not None
+        and child_created is not None
+        and parent_created > child_created
+    ):
         return None
     return parent
 
@@ -405,7 +458,12 @@ def _stdlib_parent_pid(pid: int) -> int | None:
         else:
             out = subprocess.run(
                 ["ps", "-o", "ppid=", "-p", str(pid)],
-                capture_output=True, text=True, encoding="utf-8", errors="replace", check=True, timeout=5,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                check=True,
+                timeout=5,
                 stdin=subprocess.DEVNULL,
             ).stdout
             value = int(out.strip() or -1)
@@ -415,7 +473,7 @@ def _stdlib_parent_pid(pid: int) -> int | None:
     # Field 4 (1-indexed) is ppid, but comm may contain spaces/parens: split
     # after the closing paren of comm instead of on whitespace.
     try:
-        return int(stat[stat.rindex(b")") + 2:].split()[1])
+        return int(stat[stat.rindex(b")") + 2 :].split()[1])
     except (ValueError, IndexError):
         return None
 
@@ -493,8 +551,12 @@ def _is_runtime_host(cmdline: list[str]) -> bool:
     command-line matchers (profile flags, ``clawk_cli/main.py`` paths, inline bootstraps)."""
     from gateway.status import looks_like_gateway_command_line
     from clawk_cli.update_cmd_windows import _clawk_holder_subcommand
+
     line = " ".join(cmdline)
-    return looks_like_gateway_command_line(line) or _clawk_holder_subcommand(line) in ("serve", "dashboard")
+    return looks_like_gateway_command_line(line) or _clawk_holder_subcommand(line) in (
+        "serve",
+        "dashboard",
+    )
 
 
 def _runtime_host_below(holder_pid: int) -> bool:
@@ -576,12 +638,18 @@ class _Marker:
         return now - self.started_at if self.started_at is not None else float("inf")
 
     def owner_live(self, world: _World | None = None) -> bool:
-        return self.started_at is not None \
-            and _identity_live(self.pid, self.create_time, self.age(world), world)
+        return self.started_at is not None and _identity_live(
+            self.pid, self.create_time, self.age(world), world
+        )
 
     def delegate_live(self, world: _World | None = None) -> bool:
-        return self.delegate_pid is not None and self.started_at is not None \
-            and _identity_live(self.delegate_pid, self.delegate_create_time, self.age(world), world)
+        return (
+            self.delegate_pid is not None
+            and self.started_at is not None
+            and _identity_live(
+                self.delegate_pid, self.delegate_create_time, self.age(world), world
+            )
+        )
 
     def live_pid(self, world: _World | None = None) -> int | None:
         if self.in_flight:
@@ -622,20 +690,37 @@ def _parse_marker(raw: bytes, *, mtime: float | None = None) -> _Marker:
     started_at = _bounded_int(lines[1], _U64_MAX) if pid is not None else None
     pid = -1 if pid is None else pid
     ct = _CT_LINE.fullmatch(lines[2])
-    delegates = ((m, _bounded_int(m.group(1), _U32_MAX)) for m in map(_DELEGATE_LINE.fullmatch, lines[3:]) if m)
-    delegate, delegate_pid = next(((m, d) for m, d in delegates if d is not None), (None, None))
+    delegates = (
+        (m, _bounded_int(m.group(1), _U32_MAX))
+        for m in map(_DELEGATE_LINE.fullmatch, lines[3:])
+        if m
+    )
+    delegate, delegate_pid = next(
+        ((m, d) for m, d in delegates if d is not None), (None, None)
+    )
     runs = tuple(m.group(1) for m in map(_RUN_LINE.fullmatch, lines[3:]) if m)
-    in_flight = not raw and mtime is not None and time.time() - mtime < EMPTY_MARKER_GRACE_SECONDS
+    in_flight = (
+        not raw
+        and mtime is not None
+        and time.time() - mtime < EMPTY_MARKER_GRACE_SECONDS
+    )
     return _Marker(
-        raw=raw, pid=pid, started_at=started_at, create_time=float(ct.group(1)) if ct else None,
+        raw=raw,
+        pid=pid,
+        started_at=started_at,
+        create_time=float(ct.group(1)) if ct else None,
         delegate_pid=delegate_pid,
-        delegate_create_time=float(delegate.group(2)) if delegate else None, in_flight=in_flight,
-        ct_text=ct.group(1) if ct else None, delegate_ct_text=delegate.group(2) if delegate else None,
+        delegate_create_time=float(delegate.group(2)) if delegate else None,
+        in_flight=in_flight,
+        ct_text=ct.group(1) if ct else None,
+        delegate_ct_text=delegate.group(2) if delegate else None,
         runs=runs,
     )
 
 
-def judge_marker(raw: bytes, world: _World | None = None) -> tuple[str, int | None, str | None]:
+def judge_marker(
+    raw: bytes, world: _World | None = None
+) -> tuple[str, int | None, str | None]:
     """``(verdict, owner, run)`` of marker bytes — the shared corpus' judge contract.
 
     verdict: ``malformed`` | ``dead`` | ``ours`` (a live identity is this incarnation) | ``live``;
@@ -648,12 +733,15 @@ def judge_marker(raw: bytes, world: _World | None = None) -> tuple[str, int | No
     owner = marker.live_pid(w)
     if owner is None:
         return "dead", None, marker.run
-    ours = (marker.pid == w.pid and marker.owner_live(w)) \
-        or (marker.delegate_pid == w.pid and marker.delegate_live(w))
+    ours = (marker.pid == w.pid and marker.owner_live(w)) or (
+        marker.delegate_pid == w.pid and marker.delegate_live(w)
+    )
     return ("ours" if ours else "live"), owner, marker.run
 
 
-def _release_decision(raw: bytes, world: _World | None = None) -> tuple[str, bytes | None]:
+def _release_decision(
+    raw: bytes, world: _World | None = None
+) -> tuple[str, bytes | None]:
     """A7 rule 5: what releasing ``world``'s claim does to marker bytes ``raw``.
 
     ``("delete", None)`` | ``("rewrite", new bytes)`` | ``("keep", None)``. The owner (line 1–3
@@ -667,7 +755,9 @@ def _release_decision(raw: bytes, world: _World | None = None) -> tuple[str, byt
         return "keep", None
     if marker.pid == w.pid and marker.owner_live(w):
         if marker.delegate_pid not in (None, w.pid) and marker.delegate_live(w):
-            return "rewrite", marker.canonical(marker.delegate_pid, marker.delegate_ct_text)
+            return "rewrite", marker.canonical(
+                marker.delegate_pid, marker.delegate_ct_text
+            )
         return "delete", None
     if marker.delegate_pid == w.pid and marker.delegate_live(w):
         if marker.owner_live(w):
@@ -718,8 +808,12 @@ def _sweep_dead_tmp_siblings(path: Path) -> None:
     with suppress(OSError):
         for entry in path.parent.iterdir():
             name = entry.name
-            owner = name[len(prefix):].split(".", 1)[0]
-            if not (name.startswith(prefix) and name.endswith(".tmp") and _INT_LINE.fullmatch(owner)):
+            owner = name[len(prefix) :].split(".", 1)[0]
+            if not (
+                name.startswith(prefix)
+                and name.endswith(".tmp")
+                and _INT_LINE.fullmatch(owner)
+            ):
                 continue
             with suppress(OSError):
                 if _tmp_writer_gone(_bounded_int(owner, _U32_MAX), entry):
@@ -753,12 +847,24 @@ def _windows_open_exclusive(path: Path):
     from ctypes import wintypes
 
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    kernel32.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p,
-                                     wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
+    kernel32.CreateFileW.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.HANDLE,
+    ]
     kernel32.CreateFileW.restype = wintypes.HANDLE
     invalid = ctypes.c_void_p(-1).value
-    for access, disposition in ((0xC0000000, 4), (0x80000000, 3)):  # RW OPEN_ALWAYS; R OPEN_EXISTING
-        handle = kernel32.CreateFileW(str(path), access, 0, None, disposition, 0x80, None)
+    for access, disposition in (
+        (0xC0000000, 4),
+        (0x80000000, 3),
+    ):  # RW OPEN_ALWAYS; R OPEN_EXISTING
+        handle = kernel32.CreateFileW(
+            str(path), access, 0, None, disposition, 0x80, None
+        )
         if handle and handle != invalid:
             return handle
         error = ctypes.get_last_error()
@@ -790,7 +896,9 @@ def _mutex_acquire(path: Path, wait: float):
     try:
         fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o644)
     except PermissionError:
-        fd = os.open(path, os.O_RDONLY)  # flock works on a read-only fd (root-owned sidecar)
+        fd = os.open(
+            path, os.O_RDONLY
+        )  # flock works on a read-only fd (root-owned sidecar)
     try:
         while True:
             try:
@@ -830,7 +938,9 @@ def marker_mutex(path: Path, *, wait: float = MUTEX_WAIT_SECONDS):
         if sys.platform == "win32":
             _windows_close(handle)
         else:
-            os.close(handle)  # closing the only fd of this open file description drops the flock
+            os.close(
+                handle
+            )  # closing the only fd of this open file description drops the flock
 
 
 def _compare_and_swap(path: Path, expected: bytes, new: bytes) -> bool:
@@ -868,7 +978,9 @@ def _live_partners(marker: _Marker) -> list[int]:
     return partners
 
 
-def read_live_update(*, path: Path | None = None, install_root: Path | str | None = None) -> UpdateHolder | None:
+def read_live_update(
+    *, path: Path | None = None, install_root: Path | str | None = None
+) -> UpdateHolder | None:
     """Return the live update holding the marker, or ``None``.
 
     Absent, unreadable, malformed and dead-owner all mean "no live update" — unless the
@@ -892,11 +1004,19 @@ def read_live_update(*, path: Path | None = None, install_root: Path | str | Non
                 return None
             live = parsed.live_pid()
             if live is not None:
-                return UpdateHolder(pid=live, age_seconds=parsed.age() if parsed.started_at is not None else 0.0)
+                return UpdateHolder(
+                    pid=live,
+                    age_seconds=parsed.age() if parsed.started_at is not None else 0.0,
+                )
             verdict = _reclaim_dead(marker, install_root)
             if verdict == "held":
-                return UpdateHolder(pid=0, held=True,
-                                    age_seconds=max(parsed.age(), 0.0) if parsed.started_at is not None else 0.0)
+                return UpdateHolder(
+                    pid=0,
+                    held=True,
+                    age_seconds=max(parsed.age(), 0.0)
+                    if parsed.started_at is not None
+                    else 0.0,
+                )
             if verdict != "live":
                 break
     except Exception as exc:  # health: allow BLE001 -- never raises: fails open on the marker only; the kernel lock guards (doc)
@@ -956,7 +1076,9 @@ def describe_holder(holder: UpdateHolder | None) -> str:
             "  writable (fix its owner or permissions, or remount a read-only filesystem\n"
             "  read-write), or run `clawk update` as the user that owns the install."
         )
-    minutes, seconds = divmod(int(max(0 if holder is None else holder.age_seconds, 0)), 60)
+    minutes, seconds = divmod(
+        int(max(0 if holder is None else holder.age_seconds, 0)), 60
+    )
     elapsed = f"{minutes}m {seconds}s" if minutes else f"{seconds}s"
     who = f", process {holder.pid}" if holder and holder.pid else ""
     if holder is not None and holder.held:
@@ -983,7 +1105,9 @@ def _try_lock(fd: int) -> bool:
     if sys.platform == "win32":
         if not _lock_bytes(fd, _WINDOWS_LOCK_OFFSET):
             return False
-        if not _lock_bytes(fd, _WINDOWS_LOCK_OFFSET + 1, _LEASE_SLOTS):  # a dead owner's leased child
+        if not _lock_bytes(
+            fd, _WINDOWS_LOCK_OFFSET + 1, _LEASE_SLOTS
+        ):  # a dead owner's leased child
             _unlock(fd)
             return False
         _unlock(fd, _WINDOWS_LOCK_OFFSET + 1, _LEASE_SLOTS)
@@ -1021,7 +1145,9 @@ def _unlock(fd: int, offset: int = _WINDOWS_LOCK_OFFSET, count: int = 1) -> None
 def _take_lease(fd: int) -> int | None:
     """Windows: lock a free lease byte (R5b) on ``fd``; its offset, or None when all are held
     (the tree's other joiners hold them: this one still runs inside their custody)."""
-    for offset in range(_WINDOWS_LOCK_OFFSET + 1, _WINDOWS_LOCK_OFFSET + 1 + _LEASE_SLOTS):
+    for offset in range(
+        _WINDOWS_LOCK_OFFSET + 1, _WINDOWS_LOCK_OFFSET + 1 + _LEASE_SLOTS
+    ):
         if _lock_bytes(fd, offset):
             return offset
     return None
@@ -1101,14 +1227,22 @@ def _acquire_checkout(install_root: Path) -> UpdateHolder | None:
         return None
     fd, writable = _open_lock_file(path)
     if fd is None:
-        return UpdateHolder(pid=0, age_seconds=0.0, reason=f"{path} is not writable ({writable}); the update "
-                            "locks the checkout there, in its git directory, which git must write too")
+        return UpdateHolder(
+            pid=0,
+            age_seconds=0.0,
+            reason=f"{path} is not writable ({writable}); the update "
+            "locks the checkout there, in its git directory, which git must write too",
+        )
     found = os.fstat(fd)
     if not S_ISREG(found.st_mode) or found.st_nlink != 1:
         # A hard link (or special file) at the name: truncating it would rewrite data outside
         # the install. Refuse; never unlink/recreate it (waiters need one stable inode).
         os.close(fd)
-        return UpdateHolder(pid=0, age_seconds=0.0, reason=f"{path} is not a regular single-link file; delete it")
+        return UpdateHolder(
+            pid=0,
+            age_seconds=0.0,
+            reason=f"{path} is not a regular single-link file; delete it",
+        )
     try:
         if not _lock_with_contention_wait(fd, path):
             if _held_by_our_windows_ancestor(path):
@@ -1118,8 +1252,13 @@ def _acquire_checkout(install_root: Path) -> UpdateHolder | None:
                 # while the owner is seen alive: it never covers a writer after a free lock.
                 lease = _take_lease(fd)
                 if _held_by_our_windows_ancestor(path):
-                    _HELD = {"path": str(path), "fd": None, "owned": False, "depth": 1,
-                             "lease": None if lease is None else (fd, lease)}
+                    _HELD = {
+                        "path": str(path),
+                        "fd": None,
+                        "owned": False,
+                        "depth": 1,
+                        "lease": None if lease is None else (fd, lease),
+                    }
                     if lease is None:
                         os.close(fd)
                     return None
@@ -1133,8 +1272,11 @@ def _acquire_checkout(install_root: Path) -> UpdateHolder | None:
             # would admit itself and then have its own children refused.
             _unlock(fd)
             os.close(fd)
-            return UpdateHolder(pid=0, age_seconds=0.0,
-                                reason=f"{path} is read-only; delete it or fix its permissions")
+            return UpdateHolder(
+                pid=0,
+                age_seconds=0.0,
+                reason=f"{path} is read-only; delete it or fix its permissions",
+            )
         if writable is True:
             record = f"{os.getpid()}\n{int(time.time())}\n{_identity_line()}\n".encode()
             os.lseek(fd, 0, os.SEEK_SET)
@@ -1143,7 +1285,9 @@ def _acquire_checkout(install_root: Path) -> UpdateHolder | None:
     except OSError as exc:
         _unlock(fd)
         os.close(fd)
-        return UpdateHolder(pid=0, age_seconds=0.0, reason=f"{path} could not be locked ({exc})")
+        return UpdateHolder(
+            pid=0, age_seconds=0.0, reason=f"{path} could not be locked ({exc})"
+        )
     _HELD = {"path": str(path), "fd": fd, "owned": True, "depth": 1}
     return None
 
@@ -1175,7 +1319,9 @@ def _held_by_our_windows_ancestor(path: Path) -> bool:
     record = _parse_marker(_read_bytes(path) or b"")
     if record.started_at is None or record.pid == os.getpid():
         return False
-    return incarnation_live(record.pid, record.create_time) is True and _is_ancestor_pid(record.pid)
+    return incarnation_live(
+        record.pid, record.create_time
+    ) is True and _is_ancestor_pid(record.pid)
 
 
 def _release_checkout() -> None:
@@ -1244,7 +1390,9 @@ def bind_child_to_update_tree(proc: subprocess.Popen) -> OSError | None:
     try:
         _bind_to_kill_on_close_job(proc)
     except OSError as exc:
-        logger.warning("Could not bind update child %s to the update's job: %s", proc.pid, exc)
+        logger.warning(
+            "Could not bind update child %s to the update's job: %s", proc.pid, exc
+        )
         return exc
     return None
 
@@ -1282,45 +1430,71 @@ def update_tree_job() -> int:
     from ctypes import wintypes
 
     class _Basic(ctypes.Structure):
-        _fields_ = [("PerProcessUserTimeLimit", ctypes.c_int64), ("PerJobUserTimeLimit", ctypes.c_int64),
-                    ("LimitFlags", wintypes.DWORD), ("MinimumWorkingSetSize", ctypes.c_size_t),
-                    ("MaximumWorkingSetSize", ctypes.c_size_t), ("ActiveProcessLimit", wintypes.DWORD),
-                    ("Affinity", ctypes.c_size_t), ("PriorityClass", wintypes.DWORD),
-                    ("SchedulingClass", wintypes.DWORD)]
+        _fields_ = [
+            ("PerProcessUserTimeLimit", ctypes.c_int64),
+            ("PerJobUserTimeLimit", ctypes.c_int64),
+            ("LimitFlags", wintypes.DWORD),
+            ("MinimumWorkingSetSize", ctypes.c_size_t),
+            ("MaximumWorkingSetSize", ctypes.c_size_t),
+            ("ActiveProcessLimit", wintypes.DWORD),
+            ("Affinity", ctypes.c_size_t),
+            ("PriorityClass", wintypes.DWORD),
+            ("SchedulingClass", wintypes.DWORD),
+        ]
 
     class _Extended(ctypes.Structure):
-        _fields_ = [("BasicLimitInformation", _Basic), ("IoInfo", ctypes.c_ulonglong * 6),
-                    ("ProcessMemoryLimit", ctypes.c_size_t), ("JobMemoryLimit", ctypes.c_size_t),
-                    ("PeakProcessMemoryUsed", ctypes.c_size_t), ("PeakJobMemoryUsed", ctypes.c_size_t)]
+        _fields_ = [
+            ("BasicLimitInformation", _Basic),
+            ("IoInfo", ctypes.c_ulonglong * 6),
+            ("ProcessMemoryLimit", ctypes.c_size_t),
+            ("JobMemoryLimit", ctypes.c_size_t),
+            ("PeakProcessMemoryUsed", ctypes.c_size_t),
+            ("PeakJobMemoryUsed", ctypes.c_size_t),
+        ]
 
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     kernel32.CreateJobObjectW.argtypes = [ctypes.c_void_p, wintypes.LPCWSTR]
     kernel32.CreateJobObjectW.restype = wintypes.HANDLE
-    kernel32.SetInformationJobObject.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD]
+    kernel32.SetInformationJobObject.argtypes = [
+        wintypes.HANDLE,
+        ctypes.c_int,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+    ]
     kernel32.SetInformationJobObject.restype = wintypes.BOOL
     kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
-    job = kernel32.CreateJobObjectW(None, None)  # unnamed, non-inheritable: only we hold it
+    job = kernel32.CreateJobObjectW(
+        None, None
+    )  # unnamed, non-inheritable: only we hold it
     if not job:
         raise ctypes.WinError(ctypes.get_last_error())
     limits = _Extended()
     # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK
     limits.BasicLimitInformation.LimitFlags = 0x2000 | 0x0800
-    if not kernel32.SetInformationJobObject(job, 9, ctypes.byref(limits), ctypes.sizeof(limits)):
+    if not kernel32.SetInformationJobObject(
+        job, 9, ctypes.byref(limits), ctypes.sizeof(limits)
+    ):
         error = ctypes.get_last_error()
         kernel32.CloseHandle(job)
         raise ctypes.WinError(error)
-    _JOBS.append(job)  # never closed: the handle closes when this process dies, killing the tree
+    _JOBS.append(
+        job
+    )  # never closed: the handle closes when this process dies, killing the tree
     return job
 
 
 def holds_checkout_lock(install_root: Path | str | None = None) -> bool:
     """True when this process holds (or joined) the checkout lock: it IS the running update."""
-    return _HELD is not None and os.path.realpath(_HELD["path"]) == os.path.realpath(checkout_lock_path(install_root))
+    return _HELD is not None and os.path.realpath(_HELD["path"]) == os.path.realpath(
+        checkout_lock_path(install_root)
+    )
 
 
 def update_in_progress(install_root: Path | str | None = None) -> bool:
     """True while an update owns this install: a LIVE marker or a held checkout lock."""
-    return read_live_update(install_root=install_root) is not None or checkout_lock_held(install_root)
+    return read_live_update(
+        install_root=install_root
+    ) is not None or checkout_lock_held(install_root)
 
 
 def checkout_lock_held(install_root: Path | str | None = None) -> bool:
@@ -1375,12 +1549,18 @@ def _publish_exclusive(path: Path, body: bytes) -> bool:
         except FileExistsError:
             return False
         except OSError as exc:
-            logger.debug("No hard link for the update marker (%s); exclusive create instead", exc)
+            logger.debug(
+                "No hard link for the update marker (%s); exclusive create instead", exc
+            )
     finally:
         with suppress(OSError):
             tmp.unlink()
     try:
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0), 0o644)
+        fd = os.open(
+            path,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0),
+            0o644,
+        )
     except FileExistsError:
         return False
     made = os.fstat(fd)
@@ -1404,8 +1584,10 @@ def _publish_exclusive(path: Path, body: bytes) -> bool:
 
 def _marker_unwritable(path: Path, exc: OSError) -> str:
     """Why an unwritable marker location refuses the update, not just that it is unwritable."""
-    return (f"{path} is not writable ({exc}); the update records itself there so the Desktop app, "
-            "gateways, installers and other updaters wait for it")
+    return (
+        f"{path} is not writable ({exc}); the update records itself there so the Desktop app, "
+        "gateways, installers and other updaters wait for it"
+    )
 
 
 # Per-process claim depth for each marker path: nested UpdateLocks (an update's completion run
@@ -1430,8 +1612,13 @@ class UpdateLock:
     process tree is refused as ``held`` and kept, never reclaimed (R6).
     """
 
-    def __init__(self, *, path: Path | None = None, install_root: Path | str | None = None,
-                 checkout_first: bool = True) -> None:
+    def __init__(
+        self,
+        *,
+        path: Path | None = None,
+        install_root: Path | str | None = None,
+        checkout_first: bool = True,
+    ) -> None:
         self.path = path or update_marker_path()
         self.install_root = None if install_root is None else Path(install_root)
         self.checkout_first = checkout_first
@@ -1441,8 +1628,11 @@ class UpdateLock:
         self._checkout = False
 
     def acquire(self) -> bool:
-        if self.install_root is not None and self.checkout_first \
-                and not self.acquire_checkout(self.install_root):
+        if (
+            self.install_root is not None
+            and self.checkout_first
+            and not self.acquire_checkout(self.install_root)
+        ):
             return False
         try:
             ok = self._claim_marker()
@@ -1473,12 +1663,17 @@ class UpdateLock:
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
         except OSError as exc:
-            self.holder = UpdateHolder(pid=0, age_seconds=0.0, reason=_marker_unwritable(self.path.parent, exc))
+            self.holder = UpdateHolder(
+                pid=0, age_seconds=0.0, reason=_marker_unwritable(self.path.parent, exc)
+            )
             return False
         _sweep_dead_tmp_siblings(self.path)
         if _CLAIMS.get(str(self.path)) is None:
-            legacy = [claim for claim in legacy_profile_claims(self.path.parent)
-                      if not self._is_partner(claim.pid)]
+            legacy = [
+                claim
+                for claim in legacy_profile_claims(self.path.parent)
+                if not self._is_partner(claim.pid)
+            ]
             if legacy:
                 self.holder = legacy[0]
                 return False
@@ -1500,8 +1695,12 @@ class UpdateLock:
                         # build, git) still holds the checkout. The update is not over: keep
                         # its marker and refuse as ``held``.
                         self.holder = UpdateHolder(
-                            pid=0, held=True,
-                            age_seconds=max(existing.age(), 0.0) if existing.started_at is not None else 0.0)
+                            pid=0,
+                            held=True,
+                            age_seconds=max(existing.age(), 0.0)
+                            if existing.started_at is not None
+                            else 0.0,
+                        )
                         return False
                     # Dead or malformed, judged under the mutex: reclaim and claim in one hold.
                     with suppress(FileNotFoundError):
@@ -1513,10 +1712,13 @@ class UpdateLock:
             self.holder = UpdateHolder(pid=0, age_seconds=0.0)
             return False
         except OSError as exc:
-            self.holder = UpdateHolder(pid=0, age_seconds=0.0, reason=_marker_unwritable(self.path, exc))
+            self.holder = UpdateHolder(
+                pid=0, age_seconds=0.0, reason=_marker_unwritable(self.path, exc)
+            )
             return False
-        self.holder = read_live_update(path=self.path, install_root=self.install_root) \
-            or UpdateHolder(pid=0, age_seconds=0.0)
+        self.holder = read_live_update(
+            path=self.path, install_root=self.install_root
+        ) or UpdateHolder(pid=0, age_seconds=0.0)
         return False
 
     def _checkout_held_elsewhere(self) -> bool:
@@ -1528,27 +1730,48 @@ class UpdateLock:
         if _HELD is not None and _HELD["path"] == str(path):
             return False
         # Only when held: a free lock is not taken by the inherited-fd lookup below.
-        return checkout_lock_held(self.install_root) and _inherited_lock_fd(path) is None
+        return (
+            checkout_lock_held(self.install_root) and _inherited_lock_fd(path) is None
+        )
 
     @staticmethod
     def _is_partner(pid: int) -> bool:
-        return pid == os.getpid() or (pid and (pid == _handoff_pid() or _is_ancestor_pid(pid)))
+        return pid == os.getpid() or (
+            pid and (pid == _handoff_pid() or _is_ancestor_pid(pid))
+        )
 
     def _adopt_or_refuse(self, existing: _Marker) -> bool:
         """C1 rule 4: a LIVE claim by us, an ancestor or the hand-off partner is run under.
         Called inside the marker mutex."""
         partners = _live_partners(existing)
-        if not any(self._is_partner(p) and (p == os.getpid() or not _runtime_host_below(p)) for p in partners):
-            self.holder = UpdateHolder(pid=partners[0], age_seconds=existing.age() if existing.started_at else 0.0)
+        if not any(
+            self._is_partner(p) and (p == os.getpid() or not _runtime_host_below(p))
+            for p in partners
+        ):
+            self.holder = UpdateHolder(
+                pid=partners[0],
+                age_seconds=existing.age() if existing.started_at else 0.0,
+            )
             return False
         own = _identity_line()
-        if os.getpid() not in partners and existing.delegate_pid not in partners \
-                and existing.create_time is not None and own:
+        if (
+            os.getpid() not in partners
+            and existing.delegate_pid not in partners
+            and existing.create_time is not None
+            and own
+        ):
             # Rule 6: name ourselves as the delegate (line 4) so the claim stays visible if the
             # partner (a hand-off script, the Tauri updater) dies while this update still runs.
-            base = existing.base if existing.base.endswith(b"\n") else existing.base + b"\n"
-            delegated = base + f"delegate:{os.getpid()} {own}\n".encode() \
+            base = (
+                existing.base
+                if existing.base.endswith(b"\n")
+                else existing.base + b"\n"
+            )
+            delegated = (
+                base
+                + f"delegate:{os.getpid()} {own}\n".encode()
                 + "".join(f"run:{run}\n" for run in existing.runs).encode()
+            )
             _compare_and_swap(self.path, existing.raw, delegated)
         return True
 

@@ -24,7 +24,9 @@ _MEMBER_EXCLUDE = frozenset({".git", ".venv", "venv", "node_modules", "__pycache
 
 
 def _member_ignored(directory, names):
-    return [name for name in names if name in _MEMBER_EXCLUDE or name.endswith(".egg-info")]
+    return [
+        name for name in names if name in _MEMBER_EXCLUDE or name.endswith(".egg-info")
+    ]
 
 
 # The uv failure classifier lives beside the uv runner (stdlib-only imports): the bootstrap
@@ -35,8 +37,14 @@ from pm.environment import ResolutionConflict, classify_uv_failure
 
 def member_sources(plugin_dirs) -> dict[Path, Path]:
     """Map installed identities to build inputs, including staged plugin updates."""
-    rows = plugin_dirs.items() if isinstance(plugin_dirs, Mapping) else ((path, path) for path in plugin_dirs)
-    return {Path(identity).resolve(): Path(source).resolve() for identity, source in rows}
+    rows = (
+        plugin_dirs.items()
+        if isinstance(plugin_dirs, Mapping)
+        else ((path, path) for path in plugin_dirs)
+    )
+    return {
+        Path(identity).resolve(): Path(source).resolve() for identity, source in rows
+    }
 
 
 def members_stamp(plugin_dirs) -> str:
@@ -57,7 +65,11 @@ def members_stamp(plugin_dirs) -> str:
                     path = Path(directory) / name
                     h.update(path.relative_to(entry).as_posix().encode())
                     h.update(b"\0")
-                    h.update(os.readlink(path).encode() if path.is_symlink() else path.read_bytes())
+                    h.update(
+                        os.readlink(path).encode()
+                        if path.is_symlink()
+                        else path.read_bytes()
+                    )
                     h.update(b"\0")
     return h.hexdigest()
 
@@ -67,7 +79,9 @@ def _copy_core_inputs(source: Path, destination: Path) -> None:
     import fnmatch
     import tomllib
 
-    metadata = tomllib.loads((source / "pyproject.toml").read_text(encoding="utf-8-sig"))
+    metadata = tomllib.loads(
+        (source / "pyproject.toml").read_text(encoding="utf-8-sig")
+    )
     project = metadata.get("project", {})
     setuptools = metadata.get("tool", {}).get("setuptools", {})
     patterns = setuptools.get("packages", {}).get("find", {}).get("include", ["*"])
@@ -84,18 +98,41 @@ def _copy_core_inputs(source: Path, destination: Path) -> None:
 
     # uv.lock is not excluded: the root lock is never copied (only ``files`` are; lock_and_sync
     # seeds or resolves it), and pm/uv.lock is the PM runtime's input (pm/runtime.py::_inputs).
-    excluded = {".git", ".venv", "venv", "node_modules", "__pycache__", "build", "dist", "release"}
+    excluded = {
+        ".git",
+        ".venv",
+        "venv",
+        "node_modules",
+        "__pycache__",
+        "build",
+        "dist",
+        "release",
+    }
     # A root dist/ is build output, but below a package root it is shipped: the managed
     # environment runs from this snapshot and serves bundled plugins' dashboard/dist/.
     nested_excluded = excluded - {"dist"}
+
     def ignore(directory, names):
-        return [name for name in names if name in nested_excluded or name.startswith(".")
-                or name.endswith(".egg-info") or (Path(directory) / name).is_symlink()]
+        return [
+            name
+            for name in names
+            if name in nested_excluded
+            or name.startswith(".")
+            or name.endswith(".egg-info")
+            or (Path(directory) / name).is_symlink()
+        ]
 
     for entry in source.iterdir():
-        if (entry.is_dir() and not entry.is_symlink() and entry.name not in excluded
-                and not entry.name.startswith(".") and entry.resolve() != destination.resolve()
-                and any(fnmatch.fnmatchcase(entry.name, pattern) for pattern in package_roots)):
+        if (
+            entry.is_dir()
+            and not entry.is_symlink()
+            and entry.name not in excluded
+            and not entry.name.startswith(".")
+            and entry.resolve() != destination.resolve()
+            and any(
+                fnmatch.fnmatchcase(entry.name, pattern) for pattern in package_roots
+            )
+        ):
             target = destination / entry.name
             shutil.copytree(entry, target, ignore=ignore)
     for name in files:
@@ -109,7 +146,9 @@ def _copy_core_inputs(source: Path, destination: Path) -> None:
         shutil.copy2(entry, target)
 
 
-def _generate_pyproject(plugin_dirs: list[Path] | Mapping[Path, Path], root: Path, *, source: Path) -> None:
+def _generate_pyproject(
+    plugin_dirs: list[Path] | Mapping[Path, Path], root: Path, *, source: Path
+) -> None:
     """Snapshot core and plugin build inputs into a fresh generation."""
     source = source.resolve()
     if root.resolve() == source or source.is_relative_to(root.resolve()):
@@ -119,9 +158,11 @@ def _generate_pyproject(plugin_dirs: list[Path] | Mapping[Path, Path], root: Pat
     core_pyproject = source / "pyproject.toml"
     core_text = core_pyproject.read_text(encoding="utf-8-sig")
 
-    members = [_workspace_member(source, root, identity=identity).relative_to(root).as_posix()
-               for identity, source in member_sources(plugin_dirs).items()
-               if _is_member_candidate(source)]
+    members = [
+        _workspace_member(source, root, identity=identity).relative_to(root).as_posix()
+        for identity, source in member_sources(plugin_dirs).items()
+        if _is_member_candidate(source)
+    ]
 
     if members:
         import tomllib
@@ -161,9 +202,14 @@ def _is_member_candidate(plugin_dir: Path) -> bool:
     return read_python_declaration(plugin_dir).installs_packages
 
 
-def enabled_plugin_entries(*, proposed_home=None, enabled=None, disabled=None,
-                           installing: Path | None = None,
-                           skip_invalid_secondary: bool = False) -> list[tuple[Path, str, Path]]:
+def enabled_plugin_entries(
+    *,
+    proposed_home=None,
+    enabled=None,
+    disabled=None,
+    installing: Path | None = None,
+    skip_invalid_secondary: bool = False,
+) -> list[tuple[Path, str, Path]]:
     """``(home plugins dir, selection key, plugin dir)`` for every selected plugin, in config order.
 
     The key is what the home's config names, so a caller can edit that home's selection.
@@ -171,7 +217,10 @@ def enabled_plugin_entries(*, proposed_home=None, enabled=None, disabled=None,
     from pm.plugins_state import _is_directory, enabled_plugins_ordered
 
     selection = enabled_plugins_ordered(
-        proposed_home=proposed_home, enabled=enabled, disabled=disabled, installing=installing,
+        proposed_home=proposed_home,
+        enabled=enabled,
+        disabled=disabled,
+        installing=installing,
         skip_invalid_secondary=skip_invalid_secondary,
     )
     entries = []
@@ -181,7 +230,9 @@ def enabled_plugin_entries(*, proposed_home=None, enabled=None, disabled=None,
             if relative.is_absolute() or ".." in relative.parts:
                 raise InstallError("venv", f"invalid plugin key: {name}")
             plugin_dir = plugins_dir / relative
-            proposed = installing is not None and plugin_dir.resolve() == installing.resolve()
+            proposed = (
+                installing is not None and plugin_dir.resolve() == installing.resolve()
+            )
             if not proposed and not _is_directory(plugin_dir):
                 plugin_dir = paths.repo_root() / "plugins" / relative
             if proposed or _is_directory(plugin_dir):
@@ -189,15 +240,30 @@ def enabled_plugin_entries(*, proposed_home=None, enabled=None, disabled=None,
     return entries
 
 
-def enabled_plugin_dirs(*, proposed_home=None, enabled=None, disabled=None,
-                        installing: Path | None = None, skip_invalid_secondary: bool = False) -> list[Path]:
+def enabled_plugin_dirs(
+    *,
+    proposed_home=None,
+    enabled=None,
+    disabled=None,
+    installing: Path | None = None,
+    skip_invalid_secondary: bool = False,
+) -> list[Path]:
     """Resolve the effective plugin selection without filtering dependency declarations."""
-    entries = enabled_plugin_entries(proposed_home=proposed_home, enabled=enabled, disabled=disabled,
-                                     installing=installing, skip_invalid_secondary=skip_invalid_secondary)
-    return list(dict.fromkeys(plugin_dir for _plugins_dir, _name, plugin_dir in entries))
+    entries = enabled_plugin_entries(
+        proposed_home=proposed_home,
+        enabled=enabled,
+        disabled=disabled,
+        installing=installing,
+        skip_invalid_secondary=skip_invalid_secondary,
+    )
+    return list(
+        dict.fromkeys(plugin_dir for _plugins_dir, _name, plugin_dir in entries)
+    )
 
 
-def enabled_member_dirs(*, proposed_home=None, enabled=None, disabled=None) -> list[Path]:
+def enabled_member_dirs(
+    *, proposed_home=None, enabled=None, disabled=None
+) -> list[Path]:
     """Keep every selected member or refuse an incompatible selection.
 
     A member whose requires_clawk rejects the running version sits out instead: the
@@ -205,8 +271,12 @@ def enabled_member_dirs(*, proposed_home=None, enabled=None, disabled=None) -> l
     as an older release), the loader skips that plugin anyway, and the member rejoins
     as soon as the verdict flips. Enabling one is still refused at admission.
     """
-    selected = enabled_plugin_dirs(proposed_home=proposed_home, enabled=enabled, disabled=disabled,
-                                   skip_invalid_secondary=proposed_home is None)
+    selected = enabled_plugin_dirs(
+        proposed_home=proposed_home,
+        enabled=enabled,
+        disabled=disabled,
+        skip_invalid_secondary=proposed_home is None,
+    )
     members = []
     for path in selected:
         # Per plugin: with none selected, PM must not import the application's manifest module.
@@ -244,8 +314,7 @@ def _workspace_member(plugin_dir: Path, root: Path, *, identity: Path) -> Path:
     pyproject = declaration.pyproject
     if pyproject is not None:
         member = root / "plugin-sources" / key
-        shutil.copytree(plugin_dir, member, symlinks=True,
-                        ignore=_member_ignored)
+        shutil.copytree(plugin_dir, member, symlinks=True, ignore=_member_ignored)
         document = tomllib.loads(pyproject.read_text(encoding="utf-8-sig"))
         # uv identifies a workspace member by [project].name, so the same virtual
         # plugin enabled in two profiles would declare one name twice and fail
@@ -254,11 +323,16 @@ def _workspace_member(plugin_dir: Path, root: Path, *, identity: Path) -> Path:
         # buildable member keeps its declared name — uv verifies it against the
         # package metadata its backend produces.
         # tool.uv.package = true opts into uv package mode: real build metadata, so buildable.
-        virtual = "build-system" not in document and document.get("tool", {}).get("uv", {}).get("package") is not True
+        virtual = (
+            "build-system" not in document
+            and document.get("tool", {}).get("uv", {}).get("package") is not True
+        )
         changed = declaration.install_requirements != declaration.requirements
         if changed:
             document["project"]["dependencies"] = list(declaration.install_requirements)
-        for sources in document.get("tool", {}).get("uv", {}).get("sources", {}).values():
+        for sources in (
+            document.get("tool", {}).get("uv", {}).get("sources", {}).values()
+        ):
             for spec in sources if isinstance(sources, list) else [sources]:
                 if not isinstance(spec, dict) or "path" not in spec:
                     continue
@@ -278,13 +352,19 @@ def _workspace_member(plugin_dir: Path, root: Path, *, identity: Path) -> Path:
         # every `uv lock` of the workspace. Give it the same inert version plugin-deps use.
         # PEP 621 forbids a static version while "version" is listed under
         # project.dynamic, so an explicitly dynamic version is left alone.
-        if project is not None and "version" not in project and "version" not in project.get("dynamic", ()):
+        if (
+            project is not None
+            and "version" not in project
+            and "version" not in project.get("dynamic", ())
+        ):
             project["version"] = "0.0.0"
             changed = True
         if virtual or changed:
             import tomli_w
 
-            (member / "pyproject.toml").write_text(tomli_w.dumps(document), encoding="utf-8")
+            (member / "pyproject.toml").write_text(
+                tomli_w.dumps(document), encoding="utf-8"
+            )
         return member
     specs = declaration.install_requirements
     member = root / "plugin-deps" / key
@@ -292,7 +372,7 @@ def _workspace_member(plugin_dir: Path, root: Path, *, identity: Path) -> Path:
     (member / "pyproject.toml").write_text(
         f'[project]\nname = "clawk-plugin-{key}"\nversion = "0.0.0"\n'
         'requires-python = ">=3.11"\n'
-        f'dependencies = {json.dumps(specs)}\n[tool.uv]\npackage = false\n',
+        f"dependencies = {json.dumps(specs)}\n[tool.uv]\npackage = false\n",
         encoding="utf-8",
     )
     return member
@@ -320,7 +400,9 @@ def install_node_sidecar(
         return "lazy installs are disabled — run `clawk plugins install` and approve Node dependencies"
 
     # a lockfile means reproducible `npm ci`; plain `npm install` otherwise
-    install_cmd = ["ci"] if (plugin_dir / "package-lock.json").is_file() else ["install"]
+    install_cmd = (
+        ["ci"] if (plugin_dir / "package-lock.json").is_file() else ["install"]
+    )
     try:
         runner = pm.ensure("npm", explicit=explicit)
         # Resolve inside the composed context, including npm.cmd on Windows;
@@ -369,7 +451,10 @@ def lock_and_sync(
         if seed_lock is not None:
             (root / "uv.lock").write_bytes(seed_lock.read_bytes())
     else:
-        if not (replay / "pyproject.toml").is_file() or not (replay / "uv.lock").is_file():
+        if (
+            not (replay / "pyproject.toml").is_file()
+            or not (replay / "uv.lock").is_file()
+        ):
             raise InstallError("venv", f"recorded workspace is missing: {replay}")
         # Sibling generations keep external relative paths at the same depth;
         # snapshotted members and their exact lock travel with the workspace.
@@ -377,7 +462,10 @@ def lock_and_sync(
         shutil.copytree(replay, root, symlinks=True, ignore=_member_ignored)
         # A generation recorded before the cutoff left the user's machine still carries it.
         manifest = root / "pyproject.toml"
-        manifest.write_text(_without_release_age(manifest.read_text(encoding="utf-8-sig")), encoding="utf-8")
+        manifest.write_text(
+            _without_release_age(manifest.read_text(encoding="utf-8-sig")),
+            encoding="utf-8",
+        )
         frozen = True
 
     environment.sync(root, extras=extras, frozen=frozen)

@@ -6,14 +6,14 @@ tests pin the config the writers produce and the invariant that the toolset
 resolver + tool-schema builder yield exactly the file/terminal tools.
 """
 
-
-from clawk_cli.setup_quick import _blank_slate_minimal_toolsets, _blank_slate_minimize_config
+from clawk_cli.setup_quick import (
+    _blank_slate_minimal_toolsets,
+    _blank_slate_minimize_config,
+)
 from clawk_cli import setup_quick
 
 
 class TestBlankSlateMinimalToolsets:
-
-
     def test_no_disabled_bundle_overlaps_kept_tools(self):
         """Invariant: ``disabled_toolsets`` is applied at *tool* granularity and
         a single tool can belong to several toolsets, so no disabled entry may
@@ -21,6 +21,7 @@ class TestBlankSlateMinimalToolsets:
         from the blank-slate agent (#57315, #58281).
         """
         from toolsets import resolve_toolset
+
         cfg = {}
         _blank_slate_minimal_toolsets(cfg)
         kept_tools = set()
@@ -32,7 +33,6 @@ class TestBlankSlateMinimalToolsets:
                 f"disabled toolset '{ts}' overlaps kept tools {sorted(overlap)}; "
                 "it would silently strip them from the blank-slate agent"
             )
-
 
     def test_tool_schema_survives_disabled_toolsets_from_config(self, monkeypatch):
         """Regression: disabled_toolsets must not erase the minimal Blank Slate
@@ -46,6 +46,7 @@ class TestBlankSlateMinimalToolsets:
         """
         import model_tools
         from tools.registry import registry as _tool_registry
+
         _entry = _tool_registry.get_entry("vision_analyze")
         monkeypatch.setattr(_entry, "check_fn", lambda: True)
         # This test pins disabled_toolsets SUBTRACTION, not deferral policy —
@@ -53,10 +54,12 @@ class TestBlankSlateMinimalToolsets:
         # list stays deferral-independent (#97979 defers process_manage by
         # default, which would swap it for the three bridge tools here).
         from tools.tool_search import ToolSearchConfig
+
         _legacy = ToolSearchConfig.from_raw({"enabled": "on", "defer": []})
         monkeypatch.setattr("tools.tool_search.load_config", lambda: _legacy)
         monkeypatch.setattr("tools.tool_search.load_config_readonly", lambda: _legacy)
         from clawk_cli.tools_config import _get_platform_tools
+
         cfg = {}
         _blank_slate_minimal_toolsets(cfg)
         _blank_slate_minimize_config(cfg)
@@ -70,7 +73,9 @@ class TestBlankSlateMinimalToolsets:
         names = sorted(
             {(d.get("function") or {}).get("name") or d.get("name") for d in defs}
         )
-        assert {"terminal", "read_file", "write_file", "patch", "search_files"} <= set(names)
+        assert {"terminal", "read_file", "write_file", "patch", "search_files"} <= set(
+            names
+        )
 
 
 class TestBlankSlateMinimizeConfig:
@@ -89,6 +94,7 @@ class TestBlankSlateFork:
 
     def _patch_common(self, monkeypatch):
         import clawk_cli.setup as s
+
         # Neutralize side-effecting setup steps and I/O.
         monkeypatch.setattr(s, "setup_model_provider", lambda cfg, **k: None)
         monkeypatch.setattr(s, "setup_terminal_backend", lambda cfg, **k: None)
@@ -101,21 +107,32 @@ class TestBlankSlateFork:
 
     def test_finish_now_skips_walkthrough(self, monkeypatch, tmp_path):
         import clawk_cli.setup as s
+
         self._patch_common(monkeypatch)
         # Fork prompt returns 0 = finish now.
         monkeypatch.setattr(s, "prompt_choice", lambda *a, **k: 0)
         walked = {"called": False}
-        monkeypatch.setattr(setup_quick, "_blank_slate_walkthrough",
-                            lambda cfg, home: walked.__setitem__("called", True))
+        monkeypatch.setattr(
+            setup_quick,
+            "_blank_slate_walkthrough",
+            lambda cfg, home: walked.__setitem__("called", True),
+        )
         opted_out = {"value": None}
-        monkeypatch.setattr("tools.skills_sync_bundled_ops.set_bundled_skills_opt_out",
-                            lambda enabled: opted_out.__setitem__("value", enabled))
+        monkeypatch.setattr(
+            "tools.skills_sync_bundled_ops.set_bundled_skills_opt_out",
+            lambda enabled: opted_out.__setitem__("value", enabled),
+        )
 
         cfg = {}
         setup_quick._run_blank_slate_setup(cfg, tmp_path, is_existing=False)
 
         # Minimal baseline was applied, walkthrough was NOT run.
-        assert cfg["platform_toolsets"]["cli"] == ["file", "skills", "terminal", "vision"]
+        assert cfg["platform_toolsets"]["cli"] == [
+            "file",
+            "skills",
+            "terminal",
+            "vision",
+        ]
         assert walked["called"] is False
         # Finish-now path records the skill opt-out (no bundled skills).
         assert opted_out["value"] is True

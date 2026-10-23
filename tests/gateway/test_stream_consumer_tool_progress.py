@@ -39,17 +39,21 @@ def _make_native_streaming_adapter(*, supports_native: bool = True):
 
     def _supports(chat_type=None, metadata=None):
         return bool(supports_native)
+
     adapter.supports_native_streaming = _supports
 
     async def _send_stream_frame(
         text, *, finalize=False, chat_id=None, reply_to=None, **kwargs
     ):
-        adapter.frames.append({
-            "text": text,
-            "finalize": finalize,
-            "chat_id": chat_id,
-        })
+        adapter.frames.append(
+            {
+                "text": text,
+                "finalize": finalize,
+                "chat_id": chat_id,
+            }
+        )
         return True
+
     adapter.send_stream_frame = _send_stream_frame
 
     adapter.send = AsyncMock(
@@ -72,14 +76,6 @@ def _make_consumer(*, native_streaming: bool = True) -> GatewayStreamConsumer:
 
 
 # === UNIT TESTS ===
-
-
-
-
-
-
-
-
 
 
 # === INTEGRATION TESTS (drain loop) ===
@@ -115,11 +111,9 @@ class TestToolProgressDrainLoop:
         assert len(frames) >= 2
         # Find mid-frames that contain tool progress
         non_finalize = [f for f in frames if not f["finalize"] and f["text"]]
-        assert any("Searching" in f["text"] or "terminal" in f["text"] for f in non_finalize), (
-            f"Expected tool progress in mid-frames, got: {[f['text'] for f in frames]}"
-        )
-
-
+        assert any(
+            "Searching" in f["text"] or "terminal" in f["text"] for f in non_finalize
+        ), f"Expected tool progress in mid-frames, got: {[f['text'] for f in frames]}"
 
     @pytest.mark.asyncio
     async def test_parallel_tool_calls_stacked(self):
@@ -145,7 +139,8 @@ class TestToolProgressDrainLoop:
         frames = consumer.adapter.frames
         # Find a frame that contains all three tools
         all_three = [
-            f for f in frames
+            f
+            for f in frames
             if "web_search" in f["text"]
             and "terminal" in f["text"]
             and "read_file" in f["text"]

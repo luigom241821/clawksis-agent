@@ -13,6 +13,7 @@ both empty-stream guards and executed the tool with empty input, no retry.
 The fix raises EmptyStreamError for a tool_use-bearing message with no
 stop_reason, riding the same bounded stream-retry the eventless case uses.
 """
+
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -42,7 +43,9 @@ def _make_anthropic_agent(**kwargs):
 def _stream_cm(final_message, events=()):
     cm = MagicMock()
     stream = MagicMock()
-    stream.__iter__ = MagicMock(side_effect=lambda *_a: iter(list(events)))  # fresh per retry
+    stream.__iter__ = MagicMock(
+        side_effect=lambda *_a: iter(list(events))
+    )  # fresh per retry
     stream.get_final_message = MagicMock(return_value=final_message)
     cm.__enter__ = MagicMock(return_value=stream)
     cm.__exit__ = MagicMock(return_value=False)
@@ -80,7 +83,9 @@ class TestAnthropicMidToolCallStreamDrop:
 
         agent = _make_anthropic_agent()
         agent._anthropic_client.messages.stream = MagicMock(
-            return_value=_stream_cm(dropped, events=[_tool_use_start_event(), _MESSAGE_STOP])
+            return_value=_stream_cm(
+                dropped, events=[_tool_use_start_event(), _MESSAGE_STOP]
+            )
         )
 
         with pytest.raises(EmptyStreamError, match="tool_use"):
@@ -95,12 +100,12 @@ class TestAnthropicMidToolCallStreamDrop:
 
         agent = _make_anthropic_agent()
         agent._anthropic_client.messages.stream = MagicMock(
-            return_value=_stream_cm(done, events=[_tool_use_start_event(), _MESSAGE_STOP])
+            return_value=_stream_cm(
+                done, events=[_tool_use_start_event(), _MESSAGE_STOP]
+            )
         )
 
-        response = agent._interruptible_streaming_api_call(
-            {"model": "claude-opus-4-7"}
-        )
+        response = agent._interruptible_streaming_api_call({"model": "claude-opus-4-7"})
         assert response is done
 
     def test_text_only_message_without_message_stop_raises_empty_stream(self):

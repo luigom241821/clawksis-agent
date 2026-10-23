@@ -127,9 +127,7 @@ def test_cmd_chat_allows_acknowledged_data_training_tier_noninteractively(
     monkeypatch.setattr(sys, "stdin", _NonInteractiveStdin())
     _set_startup_config(monkeypatch, ack=True)
 
-    main_mod.cmd_chat(
-        _chat_args(model="muse-spark-1.2-contributor", provider="custom")
-    )
+    main_mod.cmd_chat(_chat_args(model="muse-spark-1.2-contributor", provider="custom"))
 
     assert fake_cli["model"] == "muse-spark-1.2-contributor"
     err = capsys.readouterr().err
@@ -256,7 +254,9 @@ def test_cmd_chat_rejects_noninteractive_provider_only_override_when_default_is_
     monkeypatch.setattr(sys, "stdin", _NonInteractiveStdin())
     monkeypatch.setattr(
         "clawk_cli.config.load_config",
-        lambda: {"model": {"provider": "openai-codex", "default": "openai/gpt-5.5-pro"}},
+        lambda: {
+            "model": {"provider": "openai-codex", "default": "openai/gpt-5.5-pro"}
+        },
     )
 
     with pytest.raises(SystemExit) as excinfo:
@@ -286,7 +286,9 @@ def test_top_level_oneshot_rejects_noninteractive_gpt55_pro_startup_override(
     main_mod, codex_config, monkeypatch, capsys
 ):
     monkeypatch.setattr(sys, "stdin", _NonInteractiveStdin())
-    monkeypatch.setattr(sys, "argv", ["clawk", "-z", "hello", "-m", "openai/gpt-5.5-pro"])
+    monkeypatch.setattr(
+        sys, "argv", ["clawk", "-z", "hello", "-m", "openai/gpt-5.5-pro"]
+    )
     monkeypatch.setattr(main_mod, "_prepare_agent_startup", lambda _args: None)
 
     called = False

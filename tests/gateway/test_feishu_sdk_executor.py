@@ -42,8 +42,6 @@ def test_get_executor_recreates_after_shutdown():
     adapter._shutdown_sdk_executor()
 
 
-
-
 @pytest.mark.asyncio
 async def test_is_duplicate_flush_survives_default_executor_teardown(
     tmp_path, monkeypatch
@@ -91,12 +89,18 @@ async def test_run_blocking_propagates_caller_contextvars(tmp_path, monkeypatch)
     would flush dedup state / look up threads under the wrong profile."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     from gateway.config import PlatformConfig
-    from clawk_constants import get_clawk_home_override, reset_clawk_home_override, set_clawk_home_override
+    from clawk_constants import (
+        get_clawk_home_override,
+        reset_clawk_home_override,
+        set_clawk_home_override,
+    )
 
     adapter = FeishuAdapter(PlatformConfig())
     token = set_clawk_home_override(str(tmp_path / "profiles" / "secondary"))
     try:
-        assert await adapter._run_blocking(get_clawk_home_override) == str(tmp_path / "profiles" / "secondary")
+        assert await adapter._run_blocking(get_clawk_home_override) == str(
+            tmp_path / "profiles" / "secondary"
+        )
     finally:
         reset_clawk_home_override(token)
         adapter._shutdown_sdk_executor()

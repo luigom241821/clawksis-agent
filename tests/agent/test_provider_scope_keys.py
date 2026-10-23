@@ -1,4 +1,5 @@
 """Equivalent home paths address one provider slot and generation."""
+
 import logging
 
 from agent.provider_registry import ProviderRegistry
@@ -10,7 +11,9 @@ class Provider:
 
 
 def test_scoped_reads_and_restore_share_canonical_key(tmp_path, monkeypatch):
-    registry = ProviderRegistry(label="sample", provider_cls=Provider, logger=logging.getLogger(__name__))
+    registry = ProviderRegistry(
+        label="sample", provider_cls=Provider, logger=logging.getLogger(__name__)
+    )
     home = tmp_path / "Profile"
     home.mkdir()
     raw = str(home / ".." / home.name)

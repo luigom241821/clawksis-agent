@@ -35,18 +35,29 @@ def _make_db(path, sessions=2, messages=3):
     con = sqlite3.connect(str(path))
     con.execute("CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY)")
     con.execute("CREATE TABLE IF NOT EXISTS messages (id TEXT)")
-    con.executemany("INSERT OR REPLACE INTO sessions VALUES (?)",
-                    [(f"s{i}",) for i in range(sessions)])
-    con.executemany("INSERT INTO messages VALUES (?)",
-                    [(f"m{i}",) for i in range(messages)])
+    con.executemany(
+        "INSERT OR REPLACE INTO sessions VALUES (?)",
+        [(f"s{i}",) for i in range(sessions)],
+    )
+    con.executemany(
+        "INSERT INTO messages VALUES (?)", [(f"m{i}",) for i in range(messages)]
+    )
     con.commit()
     con.close()
 
 
 def _home(tmp_path):
     home = tmp_path / "home"
-    for rel in ("memories", "cron", "sessions", "skills/foo", "skills/.archive/mine",
-                "plugins/demo", "photon/sidecar", "profiles/work"):
+    for rel in (
+        "memories",
+        "cron",
+        "sessions",
+        "skills/foo",
+        "skills/.archive/mine",
+        "plugins/demo",
+        "photon/sidecar",
+        "profiles/work",
+    ):
         (home / rel).mkdir(parents=True, exist_ok=True)
     (home / "config.yaml").write_text("timezone: utc\n", encoding="utf-8")
     (home / ".env").write_text("NOUS_API_KEY=xxx\n", encoding="utf-8")
@@ -55,9 +66,15 @@ def _home(tmp_path):
     (home / "cron" / "jobs.json").write_text('{"jobs":[]}\n', encoding="utf-8")
     (home / "sessions" / "2026.jsonl").write_text('{"t":1}\n', encoding="utf-8")
     (home / "skills" / "foo" / "SKILL.md").write_text("bundled\n", encoding="utf-8")
-    (home / "skills" / ".archive" / "mine" / "SKILL.md").write_text("mine\n", encoding="utf-8")
-    (home / "plugins" / "demo" / "plugin.yaml").write_text("name: demo\n", encoding="utf-8")
-    (home / "photon" / "sidecar" / "package-lock.json").write_text("{}\n", encoding="utf-8")
+    (home / "skills" / ".archive" / "mine" / "SKILL.md").write_text(
+        "mine\n", encoding="utf-8"
+    )
+    (home / "plugins" / "demo" / "plugin.yaml").write_text(
+        "name: demo\n", encoding="utf-8"
+    )
+    (home / "photon" / "sidecar" / "package-lock.json").write_text(
+        "{}\n", encoding="utf-8"
+    )
     (home / "profiles" / "work" / "config.yaml").write_text("x: 1\n", encoding="utf-8")
     _make_db(home / "state.db")
     return home
@@ -73,6 +90,7 @@ def _verify(home, snap):
 
 # --- shape ------------------------------------------------------------------
 
+
 def test_snapshot_records_rows_not_bytes_for_state_db(tmp_path):
     home = _home(tmp_path)
     snap = _snapshot(home)
@@ -84,11 +102,17 @@ def test_snapshot_records_rows_not_bytes_for_state_db(tmp_path):
 
 def test_snapshot_is_read_only(tmp_path):
     home = _home(tmp_path)
-    before = sorted(os.path.relpath(os.path.join(dp, n), home)
-                    for dp, _, ns in os.walk(home) for n in ns)
+    before = sorted(
+        os.path.relpath(os.path.join(dp, n), home)
+        for dp, _, ns in os.walk(home)
+        for n in ns
+    )
     snap = _snapshot(home)
-    after = sorted(os.path.relpath(os.path.join(dp, n), home)
-                   for dp, _, ns in os.walk(home) for n in ns)
+    after = sorted(
+        os.path.relpath(os.path.join(dp, n), home)
+        for dp, _, ns in os.walk(home)
+        for n in ns
+    )
     assert before == after
     assert snap["entries"], "a used home must produce judged entries"
 
@@ -96,15 +120,18 @@ def test_snapshot_is_read_only(tmp_path):
 def test_plugins_and_bundled_skills_are_not_judged(tmp_path):
     home = _home(tmp_path)
     snap = _snapshot(home)
-    assert not [k for k in snap["entries"] if k.startswith("plugins/")], \
+    assert not [k for k in snap["entries"] if k.startswith("plugins/")], (
         "plugins/** is owned by verify-plugin-preservation.py"
+    )
     assert "skills/foo/SKILL.md" in snap["advisory"]
     assert "skills/foo/SKILL.md" not in snap["entries"]
-    assert "skills/.archive/mine/SKILL.md" in snap["entries"], \
+    assert "skills/.archive/mine/SKILL.md" in snap["entries"], (
         "the curator's archive holds USER skills and is judged"
+    )
 
 
 # --- the contract -----------------------------------------------------------
+
 
 def test_verify_passes_when_nothing_changed(tmp_path):
     home = _home(tmp_path)
@@ -144,11 +171,14 @@ def test_tolerates_config_yaml_rewrite(tmp_path):
     home = _home(tmp_path)
     snap = _snapshot(home)
     (home / "config.yaml").write_text("timezone: utc\nnew_key: 1\n", encoding="utf-8")
-    (home / "profiles" / "work" / "config.yaml").write_text("x: 1\ny: 2\n", encoding="utf-8")
+    (home / "profiles" / "work" / "config.yaml").write_text(
+        "x: 1\ny: 2\n", encoding="utf-8"
+    )
     report = _verify(home, snap)
     assert report["ok"] is True, "config migration rewrites config.yaml additively"
     assert sorted(report["tolerated_modified"]) == sorted(
-        ["config.yaml", "profiles/work/config.yaml"])
+        ["config.yaml", "profiles/work/config.yaml"]
+    )
 
 
 def test_fails_when_state_db_loses_rows(tmp_path):
@@ -180,7 +210,9 @@ def test_bundled_skill_resync_is_advisory_only(tmp_path):
     # A release adds a bundled skill and updates an existing one.
     (home / "skills" / "bar").mkdir()
     (home / "skills" / "bar" / "SKILL.md").write_text("new bundled\n", encoding="utf-8")
-    (home / "skills" / "foo" / "SKILL.md").write_text("updated bundled\n", encoding="utf-8")
+    (home / "skills" / "foo" / "SKILL.md").write_text(
+        "updated bundled\n", encoding="utf-8"
+    )
     report = _verify(home, snap)
     assert report["ok"] is True, "skills sync rewrites the bundled tree by design"
     assert "skills/foo/SKILL.md" in report["advisory"]["modified"]
@@ -235,9 +267,11 @@ def test_fails_when_a_profile_directory_disappears(tmp_path):
 
 # --- CLI contract -----------------------------------------------------------
 
+
 def _run(args):
-    return subprocess.run([sys.executable, VERIFIER, *args],
-                          capture_output=True, text=True, check=False)
+    return subprocess.run(
+        [sys.executable, VERIFIER, *args], capture_output=True, text=True, check=False
+    )
 
 
 def test_cli_snapshot_then_verify_round_trip(tmp_path):
@@ -247,8 +281,17 @@ def test_cli_snapshot_then_verify_round_trip(tmp_path):
     first = _run(["snapshot", "--home", str(home), "--out", str(snap)])
     assert first.returncode == 0, first.stderr
     assert snap.exists()
-    ok = _run(["verify", "--home", str(home), "--snapshot", str(snap),
-               "--report", str(report)])
+    ok = _run(
+        [
+            "verify",
+            "--home",
+            str(home),
+            "--snapshot",
+            str(snap),
+            "--report",
+            str(report),
+        ]
+    )
     assert ok.returncode == 0, ok.stderr
     assert json.loads(report.read_text(encoding="utf-8"))["ok"] is True
 
@@ -268,8 +311,15 @@ def test_cli_refuses_an_empty_snapshot_as_inconclusive(tmp_path):
 
 
 def test_cli_rejects_a_missing_home(tmp_path):
-    result = _run(["snapshot", "--home", str(tmp_path / "nope"),
-                   "--out", str(tmp_path / "s.json")])
+    result = _run(
+        [
+            "snapshot",
+            "--home",
+            str(tmp_path / "nope"),
+            "--out",
+            str(tmp_path / "s.json"),
+        ]
+    )
     assert result.returncode == 2
 
 
@@ -325,18 +375,24 @@ def test_cron_ticker_stamps_move_but_user_cron_state_still_fails(tmp_path):
     (home / "cron").mkdir(parents=True)
     (home / "profiles" / "p" / "cron").mkdir(parents=True)
     (home / "cron" / "ticker_heartbeat").write_text("100\n", encoding="utf-8")
-    (home / "profiles" / "p" / "cron" / "ticker_last_success").write_text("100\n", encoding="utf-8")
+    (home / "profiles" / "p" / "cron" / "ticker_last_success").write_text(
+        "100\n", encoding="utf-8"
+    )
     (home / "cron" / "jobs.json").write_text('{"jobs": []}\n', encoding="utf-8")
     snap = vus.snapshot_home(str(home))
 
     (home / "cron" / "ticker_heartbeat").write_text("200\n", encoding="utf-8")
-    (home / "profiles" / "p" / "cron" / "ticker_last_success").write_text("200\n", encoding="utf-8")
+    (home / "profiles" / "p" / "cron" / "ticker_last_success").write_text(
+        "200\n", encoding="utf-8"
+    )
     (home / "cron" / "jobs.json").write_text('{"jobs": [1]}\n', encoding="utf-8")
     report = vus.verify_home(str(home), snap)
 
     assert set(report["modified"]) == {"cron/jobs.json"}
     assert report["tolerated_modified"] == [
-        "cron/ticker_heartbeat", "profiles/p/cron/ticker_last_success"]
+        "cron/ticker_heartbeat",
+        "profiles/p/cron/ticker_last_success",
+    ]
     # The user's own cron DEFINITIONS are still state that must not move.
     assert report["ok"] is False
 
@@ -375,8 +431,10 @@ def test_snapshot_survives_a_byte_range_lock_held_by_another_handle(tmp_path):
 
 
 @pytest.mark.platforms("posix")
-@pytest.mark.skipif(os.geteuid() == 0 if hasattr(os, "geteuid") else False,
-                    reason="root reads a mode-000 file")
+@pytest.mark.skipif(
+    os.geteuid() == 0 if hasattr(os, "geteuid") else False,
+    reason="root reads a mode-000 file",
+)
 def test_an_unreadable_user_file_fails_the_scan_naming_the_path(tmp_path):
     """Skipping lock files must not hide a user file the verifier cannot read."""
     home = tmp_path / "home"
@@ -401,10 +459,14 @@ def test_a_dotenv_changed_only_in_comments_is_reported_as_such(tmp_path):
     """
     home = tmp_path / "home"
     home.mkdir()
-    (home / ".env").write_text("# one\nOPENAI_BASE_URL=http://127.0.0.1:9000/v1\n", encoding="utf-8")
+    (home / ".env").write_text(
+        "# one\nOPENAI_BASE_URL=http://127.0.0.1:9000/v1\n", encoding="utf-8"
+    )
     snap = vus.snapshot_home(str(home))
 
-    (home / ".env").write_text("# one\n# two\nOPENAI_BASE_URL=http://127.0.0.1:9000/v1\n", encoding="utf-8")
+    (home / ".env").write_text(
+        "# one\n# two\nOPENAI_BASE_URL=http://127.0.0.1:9000/v1\n", encoding="utf-8"
+    )
     report = vus.verify_home(str(home), snap)
 
     assert set(report["modified"]) == {".env"}
@@ -431,7 +493,10 @@ def test_sqlite_sidecars_may_vanish_but_the_database_may_not(tmp_path):
     os.remove(home / "cron" / "executions.db-shm")
     report = vus.verify_home(str(home), snap)
     assert report["deleted"] == []
-    assert report["tolerated_deleted"] == ["cron/executions.db-shm", "cron/executions.db-wal"]
+    assert report["tolerated_deleted"] == [
+        "cron/executions.db-shm",
+        "cron/executions.db-wal",
+    ]
     assert report["ok"] is True
 
     os.remove(home / "cron" / "executions.db")
@@ -485,7 +550,9 @@ def test_a_held_lock_file_is_recorded_without_reading_it(tmp_path, monkeypatch):
     assert snap["entries"]["profiles/p/gateway.lock"] == {"kind": "lock"}
     os.remove(home / "profiles" / "p" / "gateway.lock")
     report = vus.verify_home(str(home), snap)
-    assert report["ok"] is True and report["tolerated_deleted"] == ["profiles/p/gateway.lock"]
+    assert report["ok"] is True and report["tolerated_deleted"] == [
+        "profiles/p/gateway.lock"
+    ]
 
 
 def test_the_running_gateways_state_record_may_change_but_not_vanish(tmp_path):
@@ -516,14 +583,14 @@ def test_any_sqlite_database_is_judged_by_rows_not_bytes(tmp_path):
         conn.execute("insert into cron_jobs (at) values ('one')")
     snap = vus.snapshot_home(str(home))
 
-    with sqlite3.connect(db) as conn:          # rows added: bytes move, contract holds
+    with sqlite3.connect(db) as conn:  # rows added: bytes move, contract holds
         conn.execute("insert into cron_jobs (at) values ('two')")
     report = vus.verify_home(str(home), snap)
     assert report["modified"] == {}
     assert report["rows_shrank"] == []
     assert report["ok"] is True
 
-    with sqlite3.connect(db) as conn:          # rows lost: still fatal
+    with sqlite3.connect(db) as conn:  # rows lost: still fatal
         conn.execute("delete from cron_jobs")
     report = vus.verify_home(str(home), snap)
     assert report["rows_shrank"] == ["cron/executions.db"]
@@ -531,6 +598,7 @@ def test_any_sqlite_database_is_judged_by_rows_not_bytes(tmp_path):
 
 
 # --- retired provider vars ---------------------------------------------------
+
 
 def test_retired_env_vars_come_from_the_migration_source(tmp_path):
     """The set is read from clawk_cli/config_migrations.py, not invented here.
@@ -588,14 +656,18 @@ def test_a_live_key_cleared_by_an_upgrade_still_fails(tmp_path):
     report = vus.verify_home(str(home), snap)
 
     assert report["ok"] is False
-    assert report["modified"][".env"]["key_diff"]["keys_changed"] == ["OPENROUTER_API_KEY"]
+    assert report["modified"][".env"]["key_diff"]["keys_changed"] == [
+        "OPENROUTER_API_KEY"
+    ]
 
 
 def test_a_retired_var_removed_outright_still_fails(tmp_path):
     """Clearing a retired key is the migration; deleting the line is not it."""
     home = tmp_path / "home"
     home.mkdir()
-    (home / ".env").write_text("LLM_MODEL=anthropic/claude-opus-4.6\n", encoding="utf-8")
+    (home / ".env").write_text(
+        "LLM_MODEL=anthropic/claude-opus-4.6\n", encoding="utf-8"
+    )
     snap = vus.snapshot_home(str(home))
     (home / ".env").write_text("", encoding="utf-8")
 

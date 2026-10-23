@@ -37,9 +37,6 @@ def kanban_home(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-
-
-
 def test_legacy_db_migrates_goal_columns(tmp_path, monkeypatch):
     """A tasks table created without goal columns must gain them on init."""
     home = tmp_path / ".clawk"
@@ -95,10 +92,10 @@ def test_legacy_db_migrates_goal_columns(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-
 # ---------------------------------------------------------------------------
 # Goal loop logic (callback-injected, no live model)
 # ---------------------------------------------------------------------------
+
 
 def _patch_judge(monkeypatch, verdicts):
     """Make judge_goal return a scripted sequence of verdicts."""
@@ -132,6 +129,7 @@ def test_loop_stops_when_worker_already_completed(monkeypatch):
 def test_loop_stops_on_judge_transport_failure(monkeypatch):
     """Regression #91264: judge transport failure must stop the loop instead of
     being coerced to continue via WAIT."""
+
     def _failing_judge(*args, **kwargs):
         # 5-tuple: verdict, reason, parse_failed, wait, transport_failed
         return "wait", "judge transport unreachable", False, None, True
@@ -193,14 +191,10 @@ def test_loop_stops_on_worker_failed_flag_default_reason(monkeypatch):
     assert res["reason"] == "worker failed: unknown"
 
 
-
-
-
-
-
 # ---------------------------------------------------------------------------
 # CLI judge gate tests (clawk kanban complete bypass fix)
 # ---------------------------------------------------------------------------
+
 
 class TestCLIJudgeGate:
     """clawk kanban complete must apply the same goal_mode judge gate as the
@@ -210,8 +204,17 @@ class TestCLIJudgeGate:
     full kanban_db schema; the gate logic is the unit under test.
     """
 
-    def _run(self, monkeypatch, *, goal_mode=True, judge_available=True,
-             verdict="done", reason="", complete_ok=True, summary="done"):
+    def _run(
+        self,
+        monkeypatch,
+        *,
+        goal_mode=True,
+        judge_available=True,
+        verdict="done",
+        reason="",
+        complete_ok=True,
+        summary="done",
+    ):
         import argparse
         import types
         from unittest.mock import MagicMock
@@ -228,9 +231,11 @@ class TestCLIJudgeGate:
 
         def fake_connect_closing():
             from contextlib import contextmanager
+
             @contextmanager
             def _cm():
                 yield fake_conn
+
             return _cm()
 
         def fake_complete_task(conn, tid, **kw):
@@ -239,7 +244,9 @@ class TestCLIJudgeGate:
 
         monkeypatch.setattr("clawk_cli.kanban.kb.get_task", lambda conn, tid: fake_task)
         monkeypatch.setattr("clawk_cli.kanban.kb.complete_task", fake_complete_task)
-        monkeypatch.setattr("clawk_cli.kanban.kbc.connect_closing", fake_connect_closing)
+        monkeypatch.setattr(
+            "clawk_cli.kanban.kbc.connect_closing", fake_connect_closing
+        )
         monkeypatch.setattr("clawk_cli.kanban._worker_run_id_for", lambda _: None)
 
         _aux_client = (object(), "judge-model") if judge_available else (None, None)
@@ -254,7 +261,9 @@ class TestCLIJudgeGate:
             lambda **kw: (verdict, reason, False, None, False),
         )
 
-        args = argparse.Namespace(task_ids=["t1"], summary=summary, result=None, metadata=None)
+        args = argparse.Namespace(
+            task_ids=["t1"], summary=summary, result=None, metadata=None
+        )
         return _cmd_complete(args), complete_calls
 
     def test_judge_rejects_premature_completion(self, monkeypatch):
@@ -265,7 +274,6 @@ class TestCLIJudgeGate:
         assert complete_calls == [], (
             "complete_task must NOT be invoked when the judge rejects"
         )
-
 
     def test_non_goal_mode_task_skips_gate(self, monkeypatch):
         """Plain (non-goal_mode) tasks are never sent to the judge."""
@@ -285,4 +293,6 @@ class TestCLIJudgeGate:
             reason="the target repository does not exist",
         )
         assert rc != 0, "blocked verdict must reject the completion"
-        assert complete_calls == [], "an unachievable goal must never reach complete_task"
+        assert complete_calls == [], (
+            "an unachievable goal must never reach complete_task"
+        )

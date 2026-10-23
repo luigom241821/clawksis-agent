@@ -11,6 +11,7 @@ The CLI keeps no copy to resend. It remembers only which admissions it queued
 (``gateway_tools_notify.queue_admitted_turn`` adopts it), and ``/queue list|edit|rm|clear`` read and
 change the owner's queue (``prompt.receipt`` / ``prompt.replace_queued`` / ``prompt.cancel``).
 """
+
 from __future__ import annotations
 
 import logging
@@ -45,11 +46,17 @@ def submit_queued(cli, store, text: str) -> str:
     """
     from clawk_cli.gateway_client import GatewayRPCError
     from clawk_cli.gateway_connection import NOT_SENT
+
     submission = uuid.uuid4().hex
     for attempt in (1, 2):
         try:
-            receipt = store.call("prompt.submit", session_id=cli.session_id, submission_id=submission,
-                                 text=text, queued=True)
+            receipt = store.call(
+                "prompt.submit",
+                session_id=cli.session_id,
+                submission_id=submission,
+                text=text,
+                queued=True,
+            )
             break
         except GatewayRPCError:
             raise
@@ -58,7 +65,10 @@ def submit_queued(cli, store, text: str) -> str:
                 raise  # never reached a socket: nothing is in doubt
             if attempt == 2:
                 raise QueueOutcomeUnknown(str(exc)) from exc
-            logger.debug("prompt.submit answer lost (%s); asking again under the same identity", exc)
+            logger.debug(
+                "prompt.submit answer lost (%s); asking again under the same identity",
+                exc,
+            )
     admission = (receipt or {}).get("admission_id")
     if not admission:
         raise GatewayClientError("the gateway did not admit the queued prompt")
@@ -77,14 +87,25 @@ def queued_rows(cli, store) -> list[tuple[str, str]]:
     state = _state(cli, store)
     rows: dict[str, tuple[int, str]] = {}
     for row in state.pending or ():
-        if isinstance(row, dict) and row.get("status") == "queued" and row.get("admission_id"):
-            rows[row["admission_id"]] = (int(row.get("sequence") or 0), str(row.get("text") or ""))
+        if (
+            isinstance(row, dict)
+            and row.get("status") == "queued"
+            and row.get("admission_id")
+        ):
+            rows[row["admission_id"]] = (
+                int(row.get("sequence") or 0),
+                str(row.get("text") or ""),
+            )
     for admission, text in list(state.queued_inputs.items()):
         try:
-            receipt = store.call("prompt.receipt", session_id=cli.session_id, admission_id=admission)
+            receipt = store.call(
+                "prompt.receipt", session_id=cli.session_id, admission_id=admission
+            )
         except GatewayClientError as exc:
             logger.debug("prompt.receipt %s failed: %s", admission, exc)
-            rows.setdefault(admission, (1 << 62, text))  # unread: still shown, never dropped
+            rows.setdefault(
+                admission, (1 << 62, text)
+            )  # unread: still shown, never dropped
             continue
         if receipt.get("status") == "queued":
             rows[admission] = (int(receipt.get("sequence") or 0), text)
@@ -93,7 +114,10 @@ def queued_rows(cli, store) -> list[tuple[str, str]]:
             # paints it (``gateway_tools_notify.recover_queued``); listing never erases that.
             rows.pop(admission, None)
             state.missed.add(admission)
-    return [(admission, text) for admission, (_, text) in sorted(rows.items(), key=lambda kv: kv[1][0])]
+    return [
+        (admission, text)
+        for admission, (_, text) in sorted(rows.items(), key=lambda kv: kv[1][0])
+    ]
 
 
 def published_queue(cli, store) -> list[str]:
@@ -104,13 +128,23 @@ def published_queue(cli, store) -> list[str]:
     steered by another client, or started) is not shown as queued, even while ``queued_inputs`` still
     owes its turn a paint."""
     state = _state(cli, store)
-    for gone in [admission for admission in state.queued_at if admission not in state.queued_inputs]:
+    for gone in [
+        admission
+        for admission in state.queued_at
+        if admission not in state.queued_inputs
+    ]:
         state.queued_at.pop(gone, None)
     rows = [row for row in state.pending or () if isinstance(row, dict)]
     known = {row.get("admission_id") for row in rows}
-    fresh = [text for admission, text in state.queued_inputs.items()
-             if admission not in known and state.queued_at.get(admission, -1) >= state.pending_seq]
-    return [str(row.get("text") or "") for row in rows if row.get("status") == "queued"] + fresh
+    fresh = [
+        text
+        for admission, text in state.queued_inputs.items()
+        if admission not in known
+        and state.queued_at.get(admission, -1) >= state.pending_seq
+    ]
+    return [
+        str(row.get("text") or "") for row in rows if row.get("status") == "queued"
+    ] + fresh
 
 
 # How long the input loop holds a local input behind this viewer's own ``/queue`` admission at most.
@@ -123,14 +157,26 @@ def _own_head(state):
     rows = [row for row in state.pending or () if isinstance(row, dict)]
     if any(row.get("status") == "unknown" for row in rows):
         return None  # paused until the owner resolves that row: never hold typing behind it
-    queued = sorted((row for row in rows if row.get("status") == "queued" and row.get("admission_id")),
-                    key=lambda row: int(row.get("sequence") or 0))
+    queued = sorted(
+        (
+            row
+            for row in rows
+            if row.get("status") == "queued" and row.get("admission_id")
+        ),
+        key=lambda row: int(row.get("sequence") or 0),
+    )
     if queued:
         head = queued[0]["admission_id"]
     else:  # submitted after the last published list (``published_queue``'s fresh rows)
         listed = {row.get("admission_id") for row in rows}
-        head = next((a for a in state.queued_inputs
-                     if a not in listed and state.queued_at.get(a, -1) >= state.pending_seq), None)
+        head = next(
+            (
+                a
+                for a in state.queued_inputs
+                if a not in listed and state.queued_at.get(a, -1) >= state.pending_seq
+            ),
+            None,
+        )
     return head if head in state.queued_inputs and head not in state.adopted else None
 
 
@@ -147,6 +193,7 @@ class OwnQueueHold:
 
     def __init__(self, item, state, admission):
         import time
+
         self.item, self.state, self.admission = item, state, admission
         self.seq = state.pending_seq
         # A turn the owner reports running settles with one idle list (still queuing this admission)
@@ -161,8 +208,13 @@ class OwnQueueHold:
         from cli import _SeededQueryMessage
         from clawk_cli.gateway_tools_notify import gateway_store
         from tools.process_registry_notifications import TimelineNotification
-        if getattr(cli, "_agent_running", False) or isinstance(item, (_SeededQueryMessage, TimelineNotification)):
-            return None  # a turn the owner already runs (or a seeded prompt) is never held
+
+        if getattr(cli, "_agent_running", False) or isinstance(
+            item, (_SeededQueryMessage, TimelineNotification)
+        ):
+            return (
+                None  # a turn the owner already runs (or a seeded prompt) is never held
+            )
         store = gateway_store(cli) if getattr(cli, "session_id", None) else None
         if store is None:
             return None
@@ -174,11 +226,15 @@ class OwnQueueHold:
         """Pop a turn the owner is running now (an adopted admission, a notification header) from the
         head of ``_pending_input``: those run before the held item, typed items stay behind it."""
         from tools.process_registry_notifications import TimelineNotification
+
         with pending.mutex:
             if not pending.queue:
                 return None
             head = pending.queue[0]
-            if not (getattr(head, "admission_id", None) or isinstance(head, TimelineNotification)):
+            if not (
+                getattr(head, "admission_id", None)
+                or isinstance(head, TimelineNotification)
+            ):
                 return None
             pending.queue.popleft()
             pending.unfinished_tasks = max(0, pending.unfinished_tasks - 1)
@@ -188,6 +244,7 @@ class OwnQueueHold:
 
     def done(self) -> bool:
         import time
+
         if self.taken or time.monotonic() >= self.deadline:
             return True
         state = self.state
@@ -199,7 +256,9 @@ class OwnQueueHold:
             self.seq = state.pending_seq
             if not state.info.get("running"):
                 self.idle_lists += 1
-        return self.idle_lists > self.allowed_idle_lists  # idle and still not claiming it: stop waiting
+        return (
+            self.idle_lists > self.allowed_idle_lists
+        )  # idle and still not claiming it: stop waiting
 
 
 STARTED_REFUSALS = frozenset({"stale_generation", "admission_started"})
@@ -210,7 +269,10 @@ def cancel(cli, store, admission: str) -> str:
     claimed it and the owner interrupted that run instead (``session_controls.cancel``), ``"started"``
     when it already ran. A turn that ran is still owed a paint, so only a cancelled one leaves
     ``queued_inputs``."""
-    receipt = store.call("prompt.cancel", session_id=cli.session_id, admission_id=admission) or {}
+    receipt = (
+        store.call("prompt.cancel", session_id=cli.session_id, admission_id=admission)
+        or {}
+    )
     if receipt.get("status") == "terminal" and receipt.get("outcome") == "cancelled":
         state = _state(cli, store)
         state.queued_inputs.pop(admission, None)
@@ -224,8 +286,13 @@ def cancel(cli, store, admission: str) -> str:
 
 def replace(cli, store, admission: str, text: str) -> str | None:
     """``prompt.replace_queued``: the edited prompt is a new admission at the back of the FIFO."""
-    receipt = store.call("prompt.replace_queued", session_id=cli.session_id, admission_id=admission,
-                         submission_id=uuid.uuid4().hex, text=text)
+    receipt = store.call(
+        "prompt.replace_queued",
+        session_id=cli.session_id,
+        admission_id=admission,
+        submission_id=uuid.uuid4().hex,
+        text=text,
+    )
     state = _state(cli, store)
     state.queued_inputs.pop(admission, None)
     new = (receipt or {}).get("admission_id")

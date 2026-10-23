@@ -122,13 +122,19 @@ def _parse_efforts(items: Any) -> Optional[dict[str, list[str]]]:
         if reasoning.get("supported") is False:
             efforts_by_id[mid] = []
             continue
-        values = [str(e.get("value") or "").strip() for e in reasoning.get("efforts") or [] if isinstance(e, dict)]
+        values = [
+            str(e.get("value") or "").strip()
+            for e in reasoning.get("efforts") or []
+            if isinstance(e, dict)
+        ]
         levels = [v for v in values if v]
         unknown = [level for level in levels if level not in EFFORT_LADDER]
         if unknown:
             logger.info(
                 "router: model %s publishes unrecognized reasoning effort level(s) %s; ignoring them "
-                "(update agent/reasoning_effort EFFORT_LADDER to adopt new vendor tiers)", mid, unknown,
+                "(update agent/reasoning_effort EFFORT_LADDER to adopt new vendor tiers)",
+                mid,
+                unknown,
             )
             levels = [level for level in levels if level in EFFORT_LADDER]
         if levels:
@@ -139,6 +145,7 @@ def _parse_efforts(items: Any) -> Optional[dict[str, list[str]]]:
 def _disk_path() -> Optional[Path]:
     try:
         from clawk_constants import get_clawk_home
+
         return get_clawk_home() / "cache" / "router_catalog.json"
     except Exception:
         return None
@@ -150,8 +157,12 @@ def _save_disk(efforts_by_id: dict[str, list[str]]) -> None:
         return
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".tmp")  # write-then-rename keeps readers from seeing a torn file
-        tmp.write_text(json.dumps({"ts": time.time(), "efforts": efforts_by_id}), encoding="utf-8")
+        tmp = path.with_suffix(
+            ".tmp"
+        )  # write-then-rename keeps readers from seeing a torn file
+        tmp.write_text(
+            json.dumps({"ts": time.time(), "efforts": efforts_by_id}), encoding="utf-8"
+        )
         tmp.replace(path)
     except Exception as exc:
         logger.debug("router: caps disk mirror write failed: %s", exc)
@@ -167,7 +178,11 @@ def _load_disk() -> tuple[Optional[dict[str, list[str]]], float]:
         efforts = data.get("efforts")
         if not isinstance(efforts, dict) or not efforts:
             return None, 0.0
-        parsed = {str(mid): [str(lv) for lv in levels] for mid, levels in efforts.items() if isinstance(levels, list)}
+        parsed = {
+            str(mid): [str(lv) for lv in levels]
+            for mid, levels in efforts.items()
+            if isinstance(levels, list)
+        }
         try:
             age = max(0.0, time.time() - float(data.get("ts") or 0))
         except (TypeError, ValueError):
@@ -188,7 +203,9 @@ def _seed_efforts(items: Any) -> Optional[dict[str, list[str]]]:
     return parsed
 
 
-def _fetch_catalog_items(*, api_key: str = "", base_url: str = "", timeout: float = 8.0) -> Optional[list]:
+def _fetch_catalog_items(
+    *, api_key: str = "", base_url: str = "", timeout: float = 8.0
+) -> Optional[list]:
     """Fetch the raw ``/v1/models`` ``data`` array. None on any failure."""
     import urllib.request
 
@@ -199,7 +216,9 @@ def _fetch_catalog_items(*, api_key: str = "", base_url: str = "", timeout: floa
     if key:
         req.add_header("Authorization", f"Bearer {key}")
     req.add_header("Accept", "application/json")
-    req.add_header("User-Agent", _profile_user_agent())  # Router's WAF rejects the default urllib UA
+    req.add_header(
+        "User-Agent", _profile_user_agent()
+    )  # Router's WAF rejects the default urllib UA
     try:
         with open_credentialed_url(req, timeout=timeout) as resp:
             data = json.loads(resp.read().decode())
@@ -250,11 +269,15 @@ def _warm_efforts_async() -> None:
         items = _fetch_catalog_items()
         if items is not None:
             _seed_efforts(items)
+
     try:
         # copy_context: the home override / secret scope are ContextVars, so a bare thread would
         # fetch with the launch profile's key and mirror into its cache dir.
         threading.Thread(
-            target=contextvars.copy_context().run, args=(_refresh,), name="router-caps-warm", daemon=True,
+            target=contextvars.copy_context().run,
+            args=(_refresh,),
+            name="router-caps-warm",
+            daemon=True,
         ).start()
     except Exception as exc:
         logger.debug("router: caps warmer failed to start: %s", exc)
@@ -264,17 +287,32 @@ class RouterProfile(ProviderProfile):
     """Ramp Router — Responses-only gateway with catalog-declared efforts."""
 
     def fetch_models(
-        self, *, api_key: Optional[str] = None, base_url: Optional[str] = None, timeout: float = 8.0
+        self,
+        *,
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+        timeout: float = 8.0,
     ) -> Optional[list[str]]:
         """Live, key-scoped catalog; the same payload seeds the caps cache.
         Deduped but not sorted: Router's listing order is deliberate presentation."""
-        items = _fetch_catalog_items(api_key=api_key or "", base_url=base_url or "", timeout=timeout)
+        items = _fetch_catalog_items(
+            api_key=api_key or "", base_url=base_url or "", timeout=timeout
+        )
         if items is None:
             return None
         _seed_efforts(items)
-        return list(dict.fromkeys(str(i["id"]) for i in items if isinstance(i, dict) and i.get("id"))) or None
+        return (
+            list(
+                dict.fromkeys(
+                    str(i["id"]) for i in items if isinstance(i, dict) and i.get("id")
+                )
+            )
+            or None
+        )
 
-    def supported_reasoning_efforts(self, model: Optional[str]) -> Optional[tuple[str, ...]]:
+    def supported_reasoning_efforts(
+        self, model: Optional[str]
+    ) -> Optional[tuple[str, ...]]:
         """Catalog-declared effort vocabulary (cache-only; cold cache -> None + warm)."""
         mid = str(model or "").strip()
         if not mid:
@@ -287,15 +325,19 @@ class RouterProfile(ProviderProfile):
 
 
 router = RouterProfile(
-    name="router", aliases=("ramp-router", "ramp", "router.com"), api_mode="codex_responses",
+    name="router",
+    aliases=("ramp-router", "ramp", "router.com"),
+    api_mode="codex_responses",
     display_name="Ramp Router",
     description="Ramp Router (router.com) — routes each request to the cheapest model that clears your quality bar",
     signup_url="https://app.router.com/keys",
-    env_vars=("RAMP_ROUTER_API_KEY", "ROUTER_API_KEY", "RAMP_ROUTER_BASE_URL"), base_url=_base_url(),
+    env_vars=("RAMP_ROUTER_API_KEY", "ROUTER_API_KEY", "RAMP_ROUTER_BASE_URL"),
+    base_url=_base_url(),
     auth_type="api_key",
     # Router attributes coding-agent clients by UA prefix; its WAF rejects default UAs.
     default_headers={"User-Agent": f"Clawksis/{get_version_info().base_version}"},
-    supports_vision=True, default_aux_model="gpt-5.4-mini",
+    supports_vision=True,
+    default_aux_model="gpt-5.4-mini",
     fallback_models=(),  # account-scoped IDs; the picker uses fetch_models()
 )
 

@@ -18,11 +18,14 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 def _completion_notes(home):
     """Background-process completions the owner wrote into its sessions as notes."""
     import sqlite3
+
     if not (home / "state.db").exists():
         return []
     with sqlite3.connect(f"file:{home / 'state.db'}?mode=ro", uri=True) as db:
-        return db.execute("SELECT content, display_kind FROM messages WHERE role = 'user' AND content LIKE ?",
-                          ("[IMPORTANT: Background process %",)).fetchall()
+        return db.execute(
+            "SELECT content, display_kind FROM messages WHERE role = 'user' AND content LIKE ?",
+            ("[IMPORTANT: Background process %",),
+        ).fetchall()
 
 
 def _process_receipts(home):
@@ -32,16 +35,23 @@ def _process_receipts(home):
 def _cli_closed(home):
     """The gateway processed the one-shot CLI's exit: its ``session.detach`` stamped the idle row."""
     import sqlite3
+
     if not (home / "state.db").exists():
         return False
     with sqlite3.connect(f"file:{home / 'state.db'}?mode=ro", uri=True) as db:
-        return db.execute("SELECT 1 FROM sessions WHERE end_reason = 'cli_close'").fetchone() is not None
+        return (
+            db.execute(
+                "SELECT 1 FROM sessions WHERE end_reason = 'cli_close'"
+            ).fetchone()
+            is not None
+        )
 
 
 def _new_background_notifications(messages, seen_counts):
     """Count new history occurrences, not positions shifted by request assembly."""
     counts = Counter(
-        m["content"] for m in messages
+        m["content"]
+        for m in messages
         if m["role"] == "user"
         and isinstance(m.get("content"), str)
         and m["content"].startswith("[IMPORTANT: Background process ")
@@ -56,14 +66,23 @@ def _new_background_notifications(messages, seen_counts):
 def test_background_notification_history_replay_is_not_new_delivery():
     notice = "[IMPORTANT: Background process proc_a exited (exit code 7).]"
     seen_counts = Counter()
-    first = [{"role": "system", "content": "first"}, {"role": "user", "content": notice}]
-    shifted = [{"role": "system", "content": "second"}, {"role": "user", "content": "query"}, *first[1:]]
+    first = [
+        {"role": "system", "content": "first"},
+        {"role": "user", "content": notice},
+    ]
+    shifted = [
+        {"role": "system", "content": "second"},
+        {"role": "user", "content": "query"},
+        *first[1:],
+    ]
     assert _new_background_notifications(first, seen_counts) == [notice]
     assert _new_background_notifications(shifted, seen_counts) == []
     assert _new_background_notifications([*shifted, first[1]], seen_counts) == [notice]
 
 
-def test_retained_result_lookup_does_not_initialize_session_store(tmp_path, monkeypatch):
+def test_retained_result_lookup_does_not_initialize_session_store(
+    tmp_path, monkeypatch
+):
     import clawk_state
     from gateway.session_context import scoped_current_session_id
     from tools import process_registry_results as receipts
@@ -73,12 +92,20 @@ def test_retained_result_lookup_does_not_initialize_session_store(tmp_path, monk
     monkeypatch.setattr(receipts, "get_clawk_home", lambda: tmp_path)
     directory = tmp_path / "logs" / "process-results"
     directory.mkdir(parents=True)
-    (directory / "proc_owned.json").write_text(json.dumps({
-        "id": "proc_owned", "parent_session_id": "departed-owner",
-    }), encoding="utf-8")
+    (directory / "proc_owned.json").write_text(
+        json.dumps(
+            {
+                "id": "proc_owned",
+                "parent_session_id": "departed-owner",
+            }
+        ),
+        encoding="utf-8",
+    )
     with scoped_current_session_id("unrelated-reader"):
         assert receipts.load_completed_results() == {}
-    assert not db_path.exists(), "Reading retained results initialized canonical storage"
+    assert not db_path.exists(), (
+        "Reading retained results initialized canonical storage"
+    )
 
 
 def test_headless_terminal_result_survives_cli_exit(tmp_path, request):
@@ -93,7 +120,8 @@ def test_headless_terminal_result_survives_cli_exit(tmp_path, request):
     )
     release = tmp_path / "release"
     child = tmp_path / "review.py"
-    child.write_text(textwrap.dedent('''
+    child.write_text(
+        textwrap.dedent("""
         import pathlib, sys, time
         deadline = time.monotonic() + 90
         while not pathlib.Path(sys.argv[1]).exists():
@@ -103,9 +131,13 @@ def test_headless_terminal_result_survives_cli_exit(tmp_path, request):
         print("SYNTHETIC_REVIEW_COMPLETE")
         print("review stderr", file=sys.stderr)
         sys.exit(7)
-    '''), encoding="utf-8")
+    """),
+        encoding="utf-8",
+    )
     # The local terminal backend uses bash, including Git Bash on Windows.
-    command = shlex.join(path.as_posix() for path in (Path(sys.executable), child, release))
+    command = shlex.join(
+        path.as_posix() for path in (Path(sys.executable), child, release)
+    )
     observed = []
     seen_tool = set()
     seen_follow_up_counts = Counter()
@@ -121,18 +153,36 @@ def test_headless_terminal_result_survives_cli_exit(tmp_path, request):
                 self.send_error(404)
                 return
             tool_results = [m for m in request["messages"] if m["role"] == "tool"]
-            follow_ups.extend(_new_background_notifications(request["messages"], seen_follow_up_counts))
-            has_terminal = any(t.get("function", {}).get("name") == "terminal"
-                               for t in request.get("tools", []))
+            follow_ups.extend(
+                _new_background_notifications(
+                    request["messages"], seen_follow_up_counts
+                )
+            )
+            has_terminal = any(
+                t.get("function", {}).get("name") == "terminal"
+                for t in request.get("tools", [])
+            )
             message = {"role": "assistant", "content": "Coordinator finished."}
             if has_terminal and not tool_results:
-                message.update(content=None, tool_calls=[{
-                    "id": "call_review", "type": "function", "function": {
-                        "name": "terminal", "arguments": json.dumps({
-                            "command": command, "background": True, "notify": True,
-                        }),
-                    },
-                }])
+                message.update(
+                    content=None,
+                    tool_calls=[
+                        {
+                            "id": "call_review",
+                            "type": "function",
+                            "function": {
+                                "name": "terminal",
+                                "arguments": json.dumps(
+                                    {
+                                        "command": command,
+                                        "background": True,
+                                        "notify": True,
+                                    }
+                                ),
+                            },
+                        }
+                    ],
+                )
             elif tool_results:
                 # Requests accumulate history, so a follow-up turn re-carries the start
                 # receipt: count each distinct tool message once.
@@ -142,11 +192,24 @@ def test_headless_terminal_result_survives_cli_exit(tmp_path, request):
                         seen_tool.add(key)
                         observed.append(json.loads(m["content"]))
             response = {
-                "id": "chatcmpl-local", "object": "chat.completion", "created": 1,
-                "model": "test-model", "choices": [{
-                    "index": 0, "message": message,
-                    "finish_reason": "tool_calls" if "tool_calls" in message else "stop",
-                }], "usage": {"prompt_tokens": 10, "completion_tokens": 10, "total_tokens": 20},
+                "id": "chatcmpl-local",
+                "object": "chat.completion",
+                "created": 1,
+                "model": "test-model",
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": message,
+                        "finish_reason": "tool_calls"
+                        if "tool_calls" in message
+                        else "stop",
+                    }
+                ],
+                "usage": {
+                    "prompt_tokens": 10,
+                    "completion_tokens": 10,
+                    "total_tokens": 20,
+                },
             }
             content_type = "application/json"
             if request.get("stream"):
@@ -154,7 +217,9 @@ def test_headless_terminal_result_survives_cli_exit(tmp_path, request):
                 response["choices"][0]["delta"] = response["choices"][0].pop("message")
                 for index, tool in enumerate(message.get("tool_calls", [])):
                     tool["index"] = index
-                raw = ("data: " + json.dumps(response) + "\n\ndata: [DONE]\n\n").encode()
+                raw = (
+                    "data: " + json.dumps(response) + "\n\ndata: [DONE]\n\n"
+                ).encode()
                 content_type = "text/event-stream"
             else:
                 raw = json.dumps(response).encode()
@@ -171,24 +236,41 @@ def test_headless_terminal_result_survives_cli_exit(tmp_path, request):
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     url = f"http://127.0.0.1:{server.server_port}/v1"
-    env = {**os.environ, "CLAWK_HOME": str(home), "HOME": str(tmp_path),
-           "USERPROFILE": str(tmp_path), "TERMINAL_CWD": str(tmp_path),
-           "OPENAI_BASE_URL": url, "OPENAI_API_KEY": "local-test-only",
-           "PYTHONPATH": str(REPO_ROOT)}
+    env = {
+        **os.environ,
+        "CLAWK_HOME": str(home),
+        "HOME": str(tmp_path),
+        "USERPROFILE": str(tmp_path),
+        "TERMINAL_CWD": str(tmp_path),
+        "OPENAI_BASE_URL": url,
+        "OPENAI_API_KEY": "local-test-only",
+        "PYTHONPATH": str(REPO_ROOT),
+    }
     # The canonical CLI detaches from a long-lived daemon. Own that daemon in
     # the fixture so it cannot outlive the temporary profile/SQLite files.
     from tests.gateway.fixtures.local_recovery_probe import daemon
+
     owner = daemon(REPO_ROOT, home, env, barrier=False)
     owner.__enter__()
     request.addfinalizer(lambda: owner.__exit__(None, None, None))
     try:
-        producer = subprocess.run([
-            sys.executable, "-c",
-            "import cli; cli.main(query='Run the background review', quiet=True, "
-            "oneshot=True, provider='custom', model='test-model', api_key='local-test-only', "
-            f"base_url={url!r}, toolsets='terminal', max_turns=3, ignore_rules=True)",
-        ], cwd=tmp_path, env=env, stdin=subprocess.DEVNULL,
-            capture_output=True, text=True, encoding="utf-8", timeout=60, check=False)
+        producer = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import cli; cli.main(query='Run the background review', quiet=True, "
+                "oneshot=True, provider='custom', model='test-model', api_key='local-test-only', "
+                f"base_url={url!r}, toolsets='terminal', max_turns=3, ignore_rules=True)",
+            ],
+            cwd=tmp_path,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=60,
+            check=False,
+        )
         # The canonical CLI is a finite client: it exits on its turn's terminal event while
         # the daemon that owns the child keeps its watcher. The child finishes only once the
         # gateway has processed the CLI's exit (its detach stamps the idle row ``cli_close``),
@@ -221,10 +303,14 @@ def test_headless_terminal_result_survives_cli_exit(tmp_path, request):
     assert follow_ups == [], follow_ups
     notes = _completion_notes(home)
     assert len(notes) == 1, notes
-    assert notes[0][0].startswith(f"[IMPORTANT: Background process {process_id} exited (exit code 7).")
-    assert "SYNTHETIC_REVIEW_COMPLETE" in notes[0][0] and notes[0][1] == "process_complete"
+    assert notes[0][0].startswith(
+        f"[IMPORTANT: Background process {process_id} exited (exit code 7)."
+    )
+    assert (
+        "SYNTHETIC_REVIEW_COMPLETE" in notes[0][0] and notes[0][1] == "process_complete"
+    )
 
-    consumer = textwrap.dedent('''
+    consumer = textwrap.dedent("""
         import json, sys
         import tools.process_registry as pr
         from tools.registry import registry
@@ -234,16 +320,30 @@ def test_headless_terminal_result_survives_cli_exit(tmp_path, request):
             {"action": "poll", "session_id": sys.argv[1]})
         print(json.dumps({"result": json.loads(result), "status": json.loads(status),
                           "replayed": not pr.process_registry.completion_queue.empty()}))
-    ''')
+    """)
+
     def read_result(profile):
-        result = subprocess.run([sys.executable, "-c", consumer, process_id],
-                                cwd=tmp_path, env={**env, "CLAWK_HOME": str(profile)},
-                                check=True, stdin=subprocess.DEVNULL, capture_output=True,
-                                text=True, encoding="utf-8", timeout=30)
+        result = subprocess.run(
+            [sys.executable, "-c", consumer, process_id],
+            cwd=tmp_path,
+            env={**env, "CLAWK_HOME": str(profile)},
+            check=True,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=30,
+        )
         return json.loads(result.stdout)
 
-    receipt = json.loads((home / "logs" / "process-results" / f"{process_id}.json").read_text(encoding="utf-8"))
-    assert receipt["parent_session_id"]  # CLI owner must be stamped before its reader starts.
+    receipt = json.loads(
+        (home / "logs" / "process-results" / f"{process_id}.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert receipt[
+        "parent_session_id"
+    ]  # CLI owner must be stamped before its reader starts.
     env["CLAWK_SESSION_ID"] = receipt["parent_session_id"]
     recovered = read_result(home)
     assert recovered["result"]["status"] == "exited", recovered
@@ -260,27 +360,34 @@ def test_receipts_are_bounded_redacted_and_session_scoped(tmp_path, monkeypatch)
     from tools.process_registry import MAX_OUTPUT_CHARS, ProcessRegistry, ProcessSession
 
     from agent import redact
+
     monkeypatch.setattr(redact, "_REDACT_ENABLED", False)
     monkeypatch.setattr(receipts, "MAX_RETAINED_RESULTS", 2)
     secret = "sk-" + "aB2cD3eF4gH5iJ6kL7mN8pQ9rS0tU1vW2xY3zA4bC5dE6fG7"
     from gateway.session_context import scoped_current_session_id
     from tools.process_registry_results import load_completed_results
+
     monkeypatch.setenv("CLAWK_SESSION_ID", "owner-session")
     sessions = []
     registry = ProcessRegistry()
     for index in range(3):
         session = ProcessSession(
-            id=f"proc_{index:012x}", command=f"echo {secret}", task_id=f"owner-{index}",
-            owner_task_id=f"owner-{index}", session_key=f"chat-{index}",
+            id=f"proc_{index:012x}",
+            command=f"echo {secret}",
+            task_id=f"owner-{index}",
+            owner_task_id=f"owner-{index}",
+            session_key=f"chat-{index}",
             parent_session_id="owner-session",
             started_at=time.time() - receipts.RESULT_RETENTION_SECONDS * 2,
             output_buffer="x" * MAX_OUTPUT_CHARS + "\nréponse 世界\n" + secret,
-            exited=True, exit_code=index,
+            exited=True,
+            exit_code=index,
         )
         registry._running[session.id] = session
         registry._move_to_finished(session)
         sessions.append(session)
     from clawk_constants import get_clawk_home
+
     paths = list((get_clawk_home() / "logs" / "process-results").glob("*.json"))
     assert len(paths) == 2
     assert all(secret not in path.read_text(encoding="utf-8") for path in paths)
@@ -297,18 +404,28 @@ def test_receipts_are_bounded_redacted_and_session_scoped(tmp_path, monkeypatch)
     assert recovered.owner_task_id == sessions[-1].owner_task_id
     assert len(recovered.output_buffer) <= MAX_OUTPUT_CHARS
     assert fresh.list_sessions() == []  # Status/liveness scans stay in memory.
-    assert [s["session_id"] for s in fresh.list_sessions(
-        task_id="owner-2", include_retained=True)] == [recovered.id]
-    assert fresh.list_sessions(task_id="unrelated", session_key="unrelated", include_retained=True) == []
+    assert [
+        s["session_id"]
+        for s in fresh.list_sessions(task_id="owner-2", include_retained=True)
+    ] == [recovered.id]
+    assert (
+        fresh.list_sessions(
+            task_id="unrelated", session_key="unrelated", include_retained=True
+        )
+        == []
+    )
     assert fresh.get("proc_0000") is None  # Ambiguous across durable results.
     with scoped_current_session_id("unrelated-session"):
         assert load_completed_results(recovered.id) == {}
         assert fresh.get(recovered.id) is None
     from clawk_state import SessionDB
+
     db = SessionDB()
     try:
         db.create_session("owner-session", "cli")
-        db.create_session("delegated-child", "subagent", parent_session_id="owner-session")
+        db.create_session(
+            "delegated-child", "subagent", parent_session_id="owner-session"
+        )
         with scoped_current_session_id("delegated-child"):
             assert fresh.get(recovered.id) is None
         db.end_session("owner-session", end_reason="compression")
@@ -325,17 +442,24 @@ def test_receipts_are_bounded_redacted_and_session_scoped(tmp_path, monkeypatch)
 
     # Multiplex readers must keep the producer's profile on native threads.
     from clawk_constants import set_clawk_home_override, reset_clawk_home_override
+
     profile = tmp_path / "thread-profile"
     token = set_clawk_home_override(profile)
     try:
         with scoped_current_session_id("thread-owner"):
             child = registry.spawn_local(
-                shlex.join([Path(sys.executable).as_posix(), "-c", "print('SCOPED_RESULT')"]),
-                cwd=str(tmp_path), task_id="thread-task")
+                shlex.join(
+                    [Path(sys.executable).as_posix(), "-c", "print('SCOPED_RESULT')"]
+                ),
+                cwd=str(tmp_path),
+                task_id="thread-task",
+            )
             child._reader_thread.join(timeout=20)
             assert not child._reader_thread.is_alive()
             assert (profile / "logs" / "process-results" / f"{child.id}.json").exists()
             assert "SCOPED_RESULT" in ProcessRegistry().read_log(child.id)["output"]
     finally:
         reset_clawk_home_override(token)
-    assert not (get_clawk_home() / "logs" / "process-results" / f"{child.id}.json").exists()
+    assert not (
+        get_clawk_home() / "logs" / "process-results" / f"{child.id}.json"
+    ).exists()

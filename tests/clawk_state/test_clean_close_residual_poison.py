@@ -7,6 +7,7 @@ branch of ``_execute_write`` probed outside it and could observe the mid-teardow
 unlinked, identity not yet cleared), setting the sticky ``_db_wal_generation_lost`` flag on a
 healthy handle. ``normal`` is the control.
 """
+
 import sqlite3
 import threading
 import pytest
@@ -14,14 +15,20 @@ from clawk_state import SessionDB
 
 
 @pytest.mark.requires_wal  # the sticky flag exists only for a recorded WAL/SHM generation; DELETE mode has none
-@pytest.mark.parametrize("entry", ["normal", "optimize", "rebuild", "vacuum", "error_branch"])
+@pytest.mark.parametrize(
+    "entry", ["normal", "optimize", "rebuild", "vacuum", "error_branch"]
+)
 def test_clean_close_never_causes_false_sticky_loss(tmp_path, monkeypatch, entry):
     path = tmp_path / "synthetic.db"
     db = SessionDB(db_path=path)
     db.create_session("synthetic", "cli")
     conn = db._conn
     assert db._db_sidecar_identity and path.with_name(path.name + "-wal").exists()
-    lock, close, guard = db._lock, db._close_connection_quietly, db._raise_if_db_replaced
+    lock, close, guard = (
+        db._lock,
+        db._close_connection_quietly,
+        db._raise_if_db_replaced,
+    )
     closed, progress, second = threading.Event(), threading.Event(), threading.Event()
     calls = 0
     errors = []
@@ -56,7 +63,9 @@ def test_clean_close_never_causes_false_sticky_loss(tmp_path, monkeypatch, entry
     def paused_close(connection):
         close(connection)
         if connection is conn:
-            assert not path.with_name(path.name + "-wal").exists(), "real close did not end WAL"
+            assert not path.with_name(path.name + "-wal").exists(), (
+                "real close did not end WAL"
+            )
             closed.set()
             assert progress.wait(10), "writer reached neither guard nor lock"
 
@@ -71,7 +80,9 @@ def test_clean_close_never_causes_false_sticky_loss(tmp_path, monkeypatch, entry
             close_errors.append(type(e).__name__ + ": " + str(e))
 
     def inject_error(c):
-        exc = sqlite3.DatabaseError("fts5: corrupt structure (deliberate synthetic injection)")
+        exc = sqlite3.DatabaseError(
+            "fts5: corrupt structure (deliberate synthetic injection)"
+        )
         exc.sqlite_errorcode = getattr(sqlite3, "SQLITE_CORRUPT_VTAB", 267)
         raise exc
 
@@ -103,7 +114,9 @@ def test_clean_close_never_causes_false_sticky_loss(tmp_path, monkeypatch, entry
             tw.start()
         tw.join(15)
         tc.join(15)
-        assert not tw.is_alive() and not tc.is_alive(), "barrier deadlock is not a safety pass"
+        assert not tw.is_alive() and not tc.is_alive(), (
+            "barrier deadlock is not a safety pass"
+        )
         assert not close_errors, close_errors
         assert not any("AssertionError" in x for x in errors), errors
         sticky = bool(db._db_wal_generation_lost)
@@ -116,8 +129,14 @@ def test_clean_close_never_causes_false_sticky_loss(tmp_path, monkeypatch, entry
             rows = reader.execute("SELECT count(*) FROM messages").fetchone()[0]
         finally:
             reader.close()
-        observed = {"entry": entry, "guard_calls": calls, "sticky": sticky, "errors": errors,
-                    "post_errors": post_errors, "rows": rows}
+        observed = {
+            "entry": entry,
+            "guard_calls": calls,
+            "sticky": sticky,
+            "errors": errors,
+            "post_errors": post_errors,
+            "rows": rows,
+        }
         # Full positive outcome: the handle stays writable and the post-close append landed.
         assert not sticky and not post_errors, observed
         assert rows == (2 if entry == "normal" else 1), observed

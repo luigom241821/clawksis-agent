@@ -34,8 +34,16 @@ def _write_home(home, config_text: str) -> None:
 def _store(home, provider: str) -> None:
     db = SessionDB(db_path=home / "state.db")
     try:
-        db.create_session(_STORED, "desktop", model="local-code",
-                          model_config={"model": "local-code", "provider": provider, "base_url": _BASE_URL})
+        db.create_session(
+            _STORED,
+            "desktop",
+            model="local-code",
+            model_config={
+                "model": "local-code",
+                "provider": provider,
+                "base_url": _BASE_URL,
+            },
+        )
         db.append_message(_STORED, "user", "hi")
         db.append_message(_STORED, "assistant", "hello")
     finally:
@@ -47,18 +55,30 @@ def homes(monkeypatch, tmp_path):
     """Launch home A owns ``custom_providers: Local-Code``; secondary B owns ``providers.local-vllm`` — the
     same endpoint under a different name, so a cross-profile heal is observable."""
     launch, secondary = tmp_path / "a", tmp_path / "b"
-    _write_home(launch, "model:\n  default: gpt-4o\n  provider: openai\n"
-                        f"custom_providers:\n  - name: Local-Code\n    base_url: {_BASE_URL}\n    api_key: k-a\n")
-    _write_home(secondary, "model:\n  default: local-code\n  provider: custom:local-vllm\n"
-                           f"providers:\n  local-vllm:\n    api: {_BASE_URL}\n    api_key: k-b\n")
+    _write_home(
+        launch,
+        "model:\n  default: gpt-4o\n  provider: openai\n"
+        f"custom_providers:\n  - name: Local-Code\n    base_url: {_BASE_URL}\n    api_key: k-a\n",
+    )
+    _write_home(
+        secondary,
+        "model:\n  default: local-code\n  provider: custom:local-vllm\n"
+        f"providers:\n  local-vllm:\n    api: {_BASE_URL}\n    api_key: k-b\n",
+    )
     monkeypatch.setenv("CLAWK_HOME", str(launch))
     monkeypatch.setattr(server, "_clawk_home", str(launch))
-    monkeypatch.setattr(server, "_profile_home", lambda p: secondary if p == "b" else None)
-    monkeypatch.setattr(server, "_get_db", lambda: SessionDB(db_path=launch / "state.db"))
+    monkeypatch.setattr(
+        server, "_profile_home", lambda p: secondary if p == "b" else None
+    )
+    monkeypatch.setattr(
+        server, "_get_db", lambda: SessionDB(db_path=launch / "state.db")
+    )
     monkeypatch.setattr(server, "_enable_gateway_prompts", lambda: None)
     monkeypatch.setattr(server, "_schedule_resume_hydration", _NoopHydration())
     monkeypatch.setattr(server, "_schedule_agent_build", lambda *a, **k: None)
-    monkeypatch.setattr(server, "_schedule_session_cap_enforcement", lambda *a, **k: None)
+    monkeypatch.setattr(
+        server, "_schedule_session_cap_enforcement", lambda *a, **k: None
+    )
     monkeypatch.setattr(server, "_maybe_schedule_auto_continue", lambda *a, **k: None)
     monkeypatch.setattr(server, "_default_session_cwd", lambda *a, **k: str(tmp_path))
     known = set(server._sessions)
@@ -69,13 +89,22 @@ def homes(monkeypatch, tmp_path):
 
 
 def _resume(**params):
-    resp = server.handle_request({"id": "1", "method": "session.resume",
-                                  "params": {"session_id": _STORED, "source": "desktop", **params}})
+    resp = server.handle_request(
+        {
+            "id": "1",
+            "method": "session.resume",
+            "params": {"session_id": _STORED, "source": "desktop", **params},
+        }
+    )
     assert "error" not in resp, resp
     return server._sessions[resp["result"]["session_id"]]["resume_runtime_overrides"]
 
 
-@pytest.mark.parametrize("path", [{"defer_history": True, "omit_messages": True}, {}], ids=["deferred", "cold"])
+@pytest.mark.parametrize(
+    "path",
+    [{"defer_history": True, "omit_messages": True}, {}],
+    ids=["deferred", "cold"],
+)
 def test_secondary_profile_overrides_resolve_against_its_own_config(homes, path):
     _store(homes["b"], "custom:local-vllm")
 

@@ -15,6 +15,7 @@ These tests assert convert_messages_to_converse never emits a blank text block
 (including inside toolResult content) and never uses a whitespace-only
 placeholder (a lone space would be rejected by the same validation).
 """
+
 import pytest
 
 from agent.bedrock_adapter import (
@@ -37,25 +38,20 @@ def _iter_text_blocks(msgs):
                         yield tb["text"]
 
 
-
-
-
-
 def test_safe_text_preserves_real_content():
     assert _safe_text("hello") == "hello"
     assert _safe_text("  padded  ") == "  padded  "  # inner content kept verbatim
 
 
-
-
-
-
 def test_real_content_is_preserved_alongside_blank_siblings():
     messages = [
-        {"role": "user", "content": [
-            {"type": "text", "text": "  "},
-            {"type": "text", "text": "real question"},
-        ]},
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "  "},
+                {"type": "text", "text": "real question"},
+            ],
+        },
     ]
     _system, msgs = convert_messages_to_converse(messages)
     texts = list(_iter_text_blocks(msgs))
@@ -65,10 +61,13 @@ def test_real_content_is_preserved_alongside_blank_siblings():
 
 def test_blank_system_blocks_dropped_not_blanked():
     messages = [
-        {"role": "system", "content": [
-            {"type": "text", "text": "keep me"},
-            {"type": "text", "text": "   "},
-        ]},
+        {
+            "role": "system",
+            "content": [
+                {"type": "text", "text": "keep me"},
+                {"type": "text", "text": "   "},
+            ],
+        },
         {"role": "user", "content": "hi"},
     ]
     system, _msgs = convert_messages_to_converse(messages)

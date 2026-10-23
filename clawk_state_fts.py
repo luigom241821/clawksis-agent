@@ -11,8 +11,15 @@ from pathlib import Path
 from typing import Sequence
 
 from clawk_constants import get_clawk_home
-from clawk_state_common import (FTS_CJK_STALE_KEY, FTS_SQL, FTS_STALE_KEY, FTS_TRIGRAM_SQL, _FTS_CJK_TRIGGERS,
-    _FTS_TRIGGERS, routed_sessions_setting)
+from clawk_state_common import (
+    FTS_CJK_STALE_KEY,
+    FTS_SQL,
+    FTS_STALE_KEY,
+    FTS_TRIGRAM_SQL,
+    _FTS_CJK_TRIGGERS,
+    _FTS_TRIGGERS,
+    routed_sessions_setting,
+)
 from clawk_state_errors import is_fts_scoped_corruption_error, is_sqlite_lock_error
 
 # caplog tests pin the "clawk_state" logger name.
@@ -101,13 +108,20 @@ END;
 def fts5_cjk_so_path() -> Path:
     """Location of the cjk_unicode61 loadable extension."""
     env = os.getenv("CLAWK_FTS5_CJK_SO")
-    return Path(env).expanduser() if env else get_clawk_home() / "lib" / "libfts5_cjk.so"
+    return (
+        Path(env).expanduser() if env else get_clawk_home() / "lib" / "libfts5_cjk.so"
+    )
 
 
 def _cjk_fts_config_enabled() -> bool:
     """config.yaml ``sessions.cjk_fts`` (default on) for the profile being served."""
     value = routed_sessions_setting("cjk_fts", "CLAWK_CJK_FTS")
-    return value is None or str(value).strip().lower() not in ("0", "false", "off", "no")
+    return value is None or str(value).strip().lower() not in (
+        "0",
+        "false",
+        "off",
+        "no",
+    )
 
 
 def load_fts5_cjk_extension(conn: sqlite3.Connection) -> bool:
@@ -179,7 +193,9 @@ FTS_VTABLE_LAYOUTS: dict[str, tuple[str, ...]] = {
 
 def _stored_vtables(cursor: sqlite3.Cursor) -> dict[str, str]:
     rows = cursor.execute(
-        "SELECT name, sql FROM sqlite_master WHERE type = 'table' AND name IN (?, ?)", _FTS_DDL_TABLES).fetchall()
+        "SELECT name, sql FROM sqlite_master WHERE type = 'table' AND name IN (?, ?)",
+        _FTS_DDL_TABLES,
+    ).fetchall()
     return {name: _stored_form(sql) for name, sql in rows}
 
 
@@ -196,7 +212,10 @@ def _is_older_layout(table: str, stored: str) -> bool:
 def base_index_recognised(cursor: sqlite3.Cursor) -> bool:
     """``messages_fts`` holds a definition this code or an earlier release created; the open-time realign
     replaces nothing else."""
-    return _stored_vtables(cursor).get("messages_fts") in FTS_VTABLE_LAYOUTS["messages_fts"]
+    return (
+        _stored_vtables(cursor).get("messages_fts")
+        in FTS_VTABLE_LAYOUTS["messages_fts"]
+    )
 
 
 def base_index_realigned_on_open(stored: str) -> bool:
@@ -212,9 +231,12 @@ def fts_layout_drift(cursor: sqlite3.Cursor) -> list[str]:
     (the trigram index is optional; the base index is created on open), nor is a base index the next open
     realigns, nor a definition this code does not recognise. The cjk index owns its own markers.
     """
-    return [table for table, stored in _stored_vtables(cursor).items()
-            if _is_older_layout(table, stored)
-            and not (table == "messages_fts" and base_index_realigned_on_open(stored))]
+    return [
+        table
+        for table, stored in _stored_vtables(cursor).items()
+        if _is_older_layout(table, stored)
+        and not (table == "messages_fts" and base_index_realigned_on_open(stored))
+    ]
 
 
 def fts_layout_current(cursor: sqlite3.Cursor) -> bool:
@@ -225,15 +247,23 @@ def fts_layout_current(cursor: sqlite3.Cursor) -> bool:
         return False
     if "messages_fts" not in stored:
         return True
-    row = cursor.execute("SELECT sql FROM sqlite_master WHERE type = 'view' AND name = 'messages_fts_src'").fetchone()
-    return row is not None and _stored_form(row[0]) == _expected_stored_sql(FTS_SQL, "VIEW", "messages_fts_src")
+    row = cursor.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'view' AND name = 'messages_fts_src'"
+    ).fetchone()
+    return row is not None and _stored_form(row[0]) == _expected_stored_sql(
+        FTS_SQL, "VIEW", "messages_fts_src"
+    )
 
 
 def base_source_view_is_stale(cursor: sqlite3.Cursor) -> bool:
     """``messages_fts_src`` exists but differs from what this code creates (``CREATE VIEW IF NOT EXISTS`` never
     replaces it)."""
-    row = cursor.execute("SELECT sql FROM sqlite_master WHERE type = 'view' AND name = 'messages_fts_src'").fetchone()
-    return row is not None and _stored_form(row[0]) != _expected_stored_sql(FTS_SQL, "VIEW", "messages_fts_src")
+    row = cursor.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'view' AND name = 'messages_fts_src'"
+    ).fetchone()
+    return row is not None and _stored_form(row[0]) != _expected_stored_sql(
+        FTS_SQL, "VIEW", "messages_fts_src"
+    )
 
 
 # FTS5 shadow tables the virtual-table engine owns. `sqlite3 .recover` re-emits them
@@ -243,7 +273,9 @@ def base_source_view_is_stale(cursor: sqlite3.Cursor) -> bool:
 _FTS5_SHADOW_SUFFIXES = ("content", "data", "docsize", "idx", "config")
 
 
-def _drop_orphan_fts_shadow_tables(cursor: sqlite3.Cursor, families: Sequence[str]) -> list[str]:
+def _drop_orphan_fts_shadow_tables(
+    cursor: sqlite3.Cursor, families: Sequence[str]
+) -> list[str]:
     """Drop, per family, shadow tables whose virtual table row is absent from sqlite_master.
 
     Matches exact shadow names only (never a prefix LIKE, so the base family cannot reach
@@ -261,17 +293,21 @@ def _drop_orphan_fts_shadow_tables(cursor: sqlite3.Cursor, families: Sequence[st
         if vtable_live:
             continue
         shadows = [f"{family}_{suffix}" for suffix in _FTS5_SHADOW_SUFFIXES]
-        orphans = [row[0] for row in cursor.execute(
-            f"SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ({','.join('?' for _ in shadows)})",
-            shadows,
-        ).fetchall()]
+        orphans = [
+            row[0]
+            for row in cursor.execute(
+                f"SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ({','.join('?' for _ in shadows)})",
+                shadows,
+            ).fetchall()
+        ]
         if not orphans:
             continue
         for name in orphans:
             cursor.execute(f'DROP TABLE "{name}"')
         logger.warning(
             "Dropped orphan FTS5 shadow tables of %s (%s); the index is recreated from messages",
-            family, ", ".join(orphans),
+            family,
+            ", ".join(orphans),
         )
         repaired.append(family)
     return repaired
@@ -284,14 +320,19 @@ class SessionFtsSetupMixin:
     def _is_fts5_unavailable_error(exc: sqlite3.OperationalError) -> bool:
         """No FTS5 module, or an optional tokenizer missing (same capability-error shape)."""
         err = str(exc).lower()
-        return ("no such module" in err and "fts5" in err) or SessionFtsSetupMixin._is_trigram_unavailable_error(exc)
+        return (
+            "no such module" in err and "fts5" in err
+        ) or SessionFtsSetupMixin._is_trigram_unavailable_error(exc)
 
     @staticmethod
     def _is_trigram_unavailable_error(exc: sqlite3.OperationalError) -> bool:
         """Only an optional tokenizer is missing (trigram needs SQLite >= 3.34;
         cjk_unicode61 is loadable): "this one index can't be served", never "disable FTS"."""
         err = str(exc).lower()
-        return "no such tokenizer: trigram" in err or "no such tokenizer: cjk_unicode61" in err
+        return (
+            "no such tokenizer: trigram" in err
+            or "no such tokenizer: cjk_unicode61" in err
+        )
 
     @staticmethod
     def _db_has_legacy_inline_fts(cursor: sqlite3.Cursor) -> bool:
@@ -324,7 +365,9 @@ class SessionFtsSetupMixin:
 
     def _warn_trigram_unavailable(self, exc: sqlite3.OperationalError) -> None:
         """Log once that the trigram tokenizer is missing; base FTS5 stays enabled."""
-        if getattr(self, "_trigram_unavailable_warned", False):  # attr is lazily created here
+        if getattr(
+            self, "_trigram_unavailable_warned", False
+        ):  # attr is lazily created here
             return
         self._trigram_unavailable_warned = True
         logger.info(
@@ -356,16 +399,21 @@ class SessionFtsSetupMixin:
         backfills); loaded + present → ensure triggers, honour the stale breadcrumb;
         NOT loaded + live triggers → drop them (INSERTs must not fail at trigger time)."""
         try:
-            cjk_present = bool(cursor.execute(
-                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'messages_fts_cjk'"
-            ).fetchone())
+            cjk_present = bool(
+                cursor.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'messages_fts_cjk'"
+                ).fetchone()
+            )
             if not self._fts_cjk_loaded:
                 if cjk_present:
-                    live = [r[0] for r in cursor.execute(
-                        "SELECT name FROM sqlite_master WHERE type = 'trigger' "
-                        f"AND name IN ({','.join('?' for _ in _FTS_CJK_TRIGGERS)})",
-                        _FTS_CJK_TRIGGERS,
-                    ).fetchall()]
+                    live = [
+                        r[0]
+                        for r in cursor.execute(
+                            "SELECT name FROM sqlite_master WHERE type = 'trigger' "
+                            f"AND name IN ({','.join('?' for _ in _FTS_CJK_TRIGGERS)})",
+                            _FTS_CJK_TRIGGERS,
+                        ).fetchall()
+                    ]
                     if live:
                         # Breadcrumb FIRST (a crash between the two is merely conservative).
                         logger.warning(
@@ -389,7 +437,8 @@ class SessionFtsSetupMixin:
         except sqlite3.OperationalError:
             logger.warning(
                 "messages_fts_cjk presence check failed; CJK search stays on "
-                "trigram/LIKE", exc_info=True,
+                "trigram/LIKE",
+                exc_info=True,
             )
             self._fts_cjk_available = False
             return
@@ -397,20 +446,32 @@ class SessionFtsSetupMixin:
             cursor.executescript(FTS_CJK_TABLE_SQL)
             if not cjk_present:
                 # An old stale breadcrumb refers to a table that no longer exists.
-                cursor.execute("DELETE FROM state_meta WHERE key = ?", (FTS_CJK_STALE_KEY,))
+                cursor.execute(
+                    "DELETE FROM state_meta WHERE key = ?", (FTS_CJK_STALE_KEY,)
+                )
                 # Empty DB: complete by construction, no markers. Populated DB: the
                 # marker pair keeps the id-gated triggers correct until backfill.
-                if cursor.execute("SELECT COUNT(*) FROM messages WHERE role <> 'tool'").fetchone()[0] > 0:
-                    hw = cursor.execute("SELECT COALESCE(MAX(id), 0) FROM messages").fetchone()[0]
+                if (
+                    cursor.execute(
+                        "SELECT COUNT(*) FROM messages WHERE role <> 'tool'"
+                    ).fetchone()[0]
+                    > 0
+                ):
+                    hw = cursor.execute(
+                        "SELECT COALESCE(MAX(id), 0) FROM messages"
+                    ).fetchone()[0]
                     for k, v in (
-                        ("fts_cjk_rebuild_high_water", str(hw)), ("fts_cjk_rebuild_progress", "0"),
+                        ("fts_cjk_rebuild_high_water", str(hw)),
+                        ("fts_cjk_rebuild_progress", "0"),
                     ):
                         cursor.execute(
                             "INSERT INTO state_meta (key, value) VALUES (?, ?) "
                             "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
                             (k, v),
                         )
-            if cursor.execute("SELECT 1 FROM state_meta WHERE key = ?", (FTS_CJK_STALE_KEY,)).fetchone():
+            if cursor.execute(
+                "SELECT 1 FROM state_meta WHERE key = ?", (FTS_CJK_STALE_KEY,)
+            ).fetchone():
                 # Gap of unknown extent: do NOT reinstall triggers (see module comment).
                 self._fts_cjk_available = False
                 return
@@ -419,10 +480,12 @@ class SessionFtsSetupMixin:
                 "SELECT 1 FROM state_meta WHERE key = 'fts_cjk_rebuild_high_water' LIMIT 1"
             ).fetchone()
             self._fts_cjk_available = not backfill_pending
-        except sqlite3.OperationalError:  # incl. "no such tokenizer" after a failed registration
+        except (
+            sqlite3.OperationalError
+        ):  # incl. "no such tokenizer" after a failed registration
             logger.warning(
-                "messages_fts_cjk ensure failed; CJK search stays on "
-                "trigram/LIKE", exc_info=True,
+                "messages_fts_cjk ensure failed; CJK search stays on trigram/LIKE",
+                exc_info=True,
             )
             self._fts_cjk_available = False
 
@@ -434,7 +497,9 @@ class SessionFtsSetupMixin:
             except sqlite3.OperationalError:
                 pass
 
-    def _ensure_fts_schema(self, cursor: sqlite3.Cursor, table_name: str, ddl: str) -> bool:
+    def _ensure_fts_schema(
+        self, cursor: sqlite3.Cursor, table_name: str, ddl: str
+    ) -> bool:
         status = self._fts_table_probe(cursor, table_name)
         if status is None:
             return False
@@ -461,7 +526,11 @@ class SessionFtsSetupMixin:
         return is_fts_scoped_corruption_error(exc)
 
     def _enter_fts_fail_open(
-        self, exc: sqlite3.DatabaseError, *, deadline: float | None = None, patience_s: float | None = None,
+        self,
+        exc: sqlite3.DatabaseError,
+        *,
+        deadline: float | None = None,
+        patience_s: float | None = None,
     ) -> bool:
         """Detach corrupt FTS indexes so canonical writes can continue. Breadcrumb +
         trigger drop commit atomically: once triggers are absent the index has a
@@ -513,7 +582,8 @@ class SessionFtsSetupMixin:
                 break
             except sqlite3.Error as detach_exc:
                 if (
-                    isinstance(detach_exc, sqlite3.OperationalError) and is_sqlite_lock_error(detach_exc)
+                    isinstance(detach_exc, sqlite3.OperationalError)
+                    and is_sqlite_lock_error(detach_exc)
                     and self._sleep_before_write_retry(deadline, patience_s)
                 ):
                     continue
@@ -541,8 +611,8 @@ class SessionFtsSetupMixin:
     # a pause of max(MIN_PAUSE, chunk cost x DUTY_FACTOR) caps the duty cycle
     # cross-process, unlike any same-process activity stamp.
     _FTS_REBUILD_CHUNK_ROWS = 500
-    _FTS_REBUILD_DUTY_FACTOR = 4.0      # sleep >= 4x chunk cost (≤20% duty)
-    _FTS_REBUILD_MIN_PAUSE = 0.2        # seconds — floor between chunks
+    _FTS_REBUILD_DUTY_FACTOR = 4.0  # sleep >= 4x chunk cost (≤20% duty)
+    _FTS_REBUILD_MIN_PAUSE = 0.2  # seconds — floor between chunks
 
     # Demoted v22 FTS shadow tables awaiting teardown: DROP of a multi-GB vtable
     # blocks for minutes, so the v23 migration renames the orphaned shadow tables
@@ -552,10 +622,12 @@ class SessionFtsSetupMixin:
     def _has_fts_trash(self, conn) -> bool:
         """True when demoted v22 shadow tables are still awaiting teardown.
         Caller must hold ``self._lock`` (or pass a migration-time cursor)."""
-        return bool(conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name LIKE ? ESCAPE '\\' LIMIT 1",
-            (self._FTS_TRASH_PREFIX.replace("_", "\\_") + "%",),
-        ).fetchone())
+        return bool(
+            conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name LIKE ? ESCAPE '\\' LIMIT 1",
+                (self._FTS_TRASH_PREFIX.replace("_", "\\_") + "%",),
+            ).fetchone()
+        )
 
     # FTS5 tables merged on optimize; each is probed before touching (trigram may
     # be disabled, cjk exists only with the loadable tokenizer).

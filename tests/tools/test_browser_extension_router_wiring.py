@@ -19,7 +19,9 @@ def _route_spy(monkeypatch):
     exercising real routing or a real browser backend."""
     calls = []
 
-    def spy(action, args, *, fallback, task_id=None, session_id=None, tool_call_id=None):
+    def spy(
+        action, args, *, fallback, task_id=None, session_id=None, tool_call_id=None
+    ):
         calls.append(
             {
                 "action": action,
@@ -64,15 +66,15 @@ def test_every_browser_registry_handler_routes_through_wrapper(_route_spy):
         _route_spy.clear()
         handler = registry.get_entry(name).handler
         args = {"url": "https://example.test", "ref": "@e1", "text": "hi"}
-        result = handler(dict(args), task_id="task-fixture", session_id="session-fixture")
+        result = handler(
+            dict(args), task_id="task-fixture", session_id="session-fixture"
+        )
         assert result is not None
         assert len(_route_spy) == 1, f"{name} did not route through the wrapper"
         route = _route_spy[0]
         assert route["action"] == name
         assert route["task_id"] == "task-fixture"
         assert route["session_id"] == "session-fixture"
-
-
 
 
 def test_browser_cdp_handler_routes_through_wrapper(_route_spy):

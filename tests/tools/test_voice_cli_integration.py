@@ -57,7 +57,6 @@ class TestMarkdownStripping:
         result = _strip_markdown_for_tts(text)
         assert result == ""
 
-
     def test_complex_response(self):
         text = (
             "## Answer\n\n"
@@ -83,6 +82,7 @@ class TestMarkdownStripping:
 # Real behavior tests — CLI voice methods via _make_voice_cli()
 # ============================================================================
 
+
 class TestHandleVoiceCommandReal:
     """Tests _handle_voice_command routing with real CLI instance."""
 
@@ -100,7 +100,6 @@ class TestHandleVoiceCommandReal:
         cli._handle_voice_command("/voice on")
         cli._enable_voice_mode.assert_called_once()
 
-
     @patch("cli._cprint")
     def test_unknown_subcommand(self, mock_cp):
         cli = self._cli()
@@ -108,8 +107,9 @@ class TestHandleVoiceCommandReal:
         cli._enable_voice_mode.assert_not_called()
         cli._disable_voice_mode.assert_not_called()
         # Should print usage via _cprint
-        assert any("Unknown" in str(c) or "unknown" in str(c)
-                    for c in mock_cp.call_args_list)
+        assert any(
+            "Unknown" in str(c) or "unknown" in str(c) for c in mock_cp.call_args_list
+        )
 
 
 class TestEnableVoiceModeReal:
@@ -117,22 +117,29 @@ class TestEnableVoiceModeReal:
 
     @patch("cli._cprint")
     @patch("clawk_cli.config.load_config", return_value={"voice": {}})
-    @patch("tools.voice_mode.check_voice_requirements",
-           return_value={"available": True, "details": "OK"})
-    @patch("tools.voice_mode.detect_audio_environment",
-           return_value={"available": True, "warnings": []})
+    @patch(
+        "tools.voice_mode.check_voice_requirements",
+        return_value={"available": True, "details": "OK"},
+    )
+    @patch(
+        "tools.voice_mode.detect_audio_environment",
+        return_value={"available": True, "warnings": []},
+    )
     def test_success_sets_voice_mode(self, _env, _req, _cfg, _cp):
         cli = _make_voice_cli()
         cli._enable_voice_mode()
         assert cli._voice_mode is True
 
-
     @patch("cli._cprint")
     @patch("clawk_cli.config.load_config", side_effect=Exception("broken config"))
-    @patch("tools.voice_mode.check_voice_requirements",
-           return_value={"available": True, "details": "OK"})
-    @patch("tools.voice_mode.detect_audio_environment",
-           return_value={"available": True, "warnings": []})
+    @patch(
+        "tools.voice_mode.check_voice_requirements",
+        return_value={"available": True, "details": "OK"},
+    )
+    @patch(
+        "tools.voice_mode.detect_audio_environment",
+        return_value={"available": True, "warnings": []},
+    )
     def test_config_exception_still_enables(self, _env, _req, _cfg, _cp):
         cli = _make_voice_cli()
         cli._enable_voice_mode()
@@ -142,7 +149,9 @@ class TestEnableVoiceModeReal:
 class TestVoiceBeepConfigReal:
     """Tests the CLI voice beep toggle."""
 
-    @patch("clawk_cli.config.load_config", return_value={"voice": {"beep_enabled": False}})
+    @patch(
+        "clawk_cli.config.load_config", return_value={"voice": {"beep_enabled": False}}
+    )
     def test_beeps_can_be_disabled(self, _cfg):
         cli = _make_voice_cli()
         assert cli._voice_beeps_enabled() is False
@@ -195,21 +204,23 @@ class TestMaxRecordingSecondsConfigReal:
     """
 
     def _start_with_voice_cfg(self, voice_cfg):
-        with patch("cli._cprint"), \
-             patch("cli.threading.Thread", return_value=MagicMock(start=MagicMock())), \
-             patch("tools.voice_mode.play_beep"), \
-             patch("tools.voice_mode.create_audio_recorder") as mock_create, \
-             patch(
-                 "tools.voice_mode.check_voice_requirements",
-                 return_value={
-                     "available": True,
-                     "audio_available": True,
-                     "stt_available": True,
-                     "details": "OK",
-                     "missing_packages": [],
-                 },
-             ), \
-             patch("clawk_cli.config.load_config", return_value={"voice": voice_cfg}):
+        with (
+            patch("cli._cprint"),
+            patch("cli.threading.Thread", return_value=MagicMock(start=MagicMock())),
+            patch("tools.voice_mode.play_beep"),
+            patch("tools.voice_mode.create_audio_recorder") as mock_create,
+            patch(
+                "tools.voice_mode.check_voice_requirements",
+                return_value={
+                    "available": True,
+                    "audio_available": True,
+                    "stt_available": True,
+                    "details": "OK",
+                    "missing_packages": [],
+                },
+            ),
+            patch("clawk_cli.config.load_config", return_value={"voice": voice_cfg}),
+        ):
             recorder = MagicMock()
             recorder.supports_silence_autostop = True
             mock_create.return_value = recorder
@@ -223,7 +234,6 @@ class TestMaxRecordingSecondsConfigReal:
         recorder = self._start_with_voice_cfg({"max_recording_seconds": 45})
         assert recorder._max_recording_seconds == 45
 
-
     def test_bool_falls_back_to_documented_default(self):
         # bool is a subclass of int — ``max_recording_seconds: true`` must not
         # become a 1-second cap; it falls back to the documented 120 default,
@@ -231,7 +241,11 @@ class TestMaxRecordingSecondsConfigReal:
         recorder = self._start_with_voice_cfg({"max_recording_seconds": True})
         from clawk_cli.config import DEFAULT_CONFIG
 
-        assert recorder._max_recording_seconds == DEFAULT_CONFIG["voice"]["max_recording_seconds"]
+        assert (
+            recorder._max_recording_seconds
+            == DEFAULT_CONFIG["voice"]["max_recording_seconds"]
+        )
+
 
 class TestDisableVoiceModeReal:
     """Tests _disable_voice_mode with real CLI instance."""
@@ -239,13 +253,11 @@ class TestDisableVoiceModeReal:
     @patch("cli._cprint")
     @patch("tools.voice_mode.stop_playback")
     def test_all_flags_reset(self, _sp, _cp):
-        cli = _make_voice_cli(_voice_mode=True, _voice_tts=True,
-                              _voice_continuous=True)
+        cli = _make_voice_cli(_voice_mode=True, _voice_tts=True, _voice_continuous=True)
         cli._disable_voice_mode()
         assert cli._voice_mode is False
         assert cli._voice_tts is False
         assert cli._voice_continuous is False
-
 
     @patch("cli._cprint")
     @patch("tools.voice_mode.stop_playback", side_effect=RuntimeError("boom"))
@@ -284,7 +296,6 @@ class TestVoiceSpeakResponseReal:
             cli._voice_speak_response("Hello")
             mock_tts.assert_not_called()
 
-
     @patch("cli._cprint")
     @patch("cli.os.unlink")
     @patch("cli.os.path.getsize", return_value=1000)
@@ -299,11 +310,13 @@ class TestVoiceSpeakResponseReal:
             mp3_path = kwargs["output_path"]
             ogg_path = mp3_path.rsplit(".", 1)[0] + ".ogg"
             # The tool result is authoritative — file_paths drives playback
-            return json.dumps({
-                "success": True,
-                "file_path": ogg_path,
-                "file_paths": [ogg_path],
-            })
+            return json.dumps(
+                {
+                    "success": True,
+                    "file_path": ogg_path,
+                    "file_paths": [ogg_path],
+                }
+            )
 
         mock_tts.side_effect = fake_tts
 
@@ -339,8 +352,10 @@ class TestVoiceStopAndTranscribeReal:
     @patch("cli.os.unlink")
     @patch("cli.os.path.isfile", return_value=True)
     @patch("clawk_cli.config.load_config", return_value={"stt": {}})
-    @patch("tools.voice_mode.transcribe_recording",
-           return_value={"success": True, "transcript": "hello world"})
+    @patch(
+        "tools.voice_mode.transcribe_recording",
+        return_value={"success": True, "transcript": "hello world"},
+    )
     @patch("tools.voice_mode.play_beep")
     def test_successful_transcription_queues_input(
         self, _beep, _tr, _cfg, _isf, _unl, _cp
@@ -353,24 +368,28 @@ class TestVoiceStopAndTranscribeReal:
         # Voice transcripts are wrapped in the _VoiceInputMessage sentinel so
         # only genuine STT output gets the voice prefix (#65827).
         from cli import _VoiceInputMessage
+
         assert isinstance(queued, _VoiceInputMessage)
         assert str(queued) == "hello world"
-
 
     def test_non_local_stt_keeps_generic_transcribing_status(self):
         recorder = MagicMock()
         recorder.stop.return_value = "/tmp/test.wav"
         cli = _make_voice_cli(_voice_recording=True, _voice_recorder=recorder)
 
-        with patch("cli._cprint") as mock_print, \
-             patch("cli.os.path.isfile", return_value=False), \
-             patch(
-                 "clawk_cli.config.load_config",
-                 return_value={"stt": {"provider": "openai", "model": "whisper-1"}},
-             ), \
-             patch("tools.voice_mode.transcribe_recording",
-                   return_value={"success": True, "transcript": "hello"}) as mock_transcribe, \
-             patch("tools.voice_mode.play_beep"):
+        with (
+            patch("cli._cprint") as mock_print,
+            patch("cli.os.path.isfile", return_value=False),
+            patch(
+                "clawk_cli.config.load_config",
+                return_value={"stt": {"provider": "openai", "model": "whisper-1"}},
+            ),
+            patch(
+                "tools.voice_mode.transcribe_recording",
+                return_value={"success": True, "transcript": "hello"},
+            ) as mock_transcribe,
+            patch("tools.voice_mode.play_beep"),
+        ):
             cli._voice_stop_and_transcribe()
 
         messages = [call.args[0] for call in mock_print.call_args_list]
@@ -396,13 +415,17 @@ class TestVoiceBargeCaptureSubmit:
 
         monkeypatch.setattr(
             "tools.voice_mode.transcribe_recording",
-            lambda path, model=None: {"success": True, "transcript": "stop, do it differently"},
+            lambda path, model=None: {
+                "success": True,
+                "transcript": "stop, do it differently",
+            },
         )
 
         cli._voice_submit_barge_utterance(str(wav))
 
         queued = cli._pending_input.get_nowait()
         from cli import _VoiceInputMessage
+
         assert isinstance(queued, _VoiceInputMessage)
         assert str(queued) == "stop, do it differently"
         assert not cli._voice_barge_capture.is_set()
@@ -418,7 +441,11 @@ class TestVoiceBargeCaptureSubmit:
 
         monkeypatch.setattr(
             "tools.voice_mode.transcribe_recording",
-            lambda path, model=None: {"success": True, "transcript": "", "no_speech": True},
+            lambda path, model=None: {
+                "success": True,
+                "transcript": "",
+                "no_speech": True,
+            },
         )
 
         cli._voice_submit_barge_utterance(str(wav))
@@ -453,9 +480,13 @@ class TestVoiceBargeCaptureSubmit:
 
         assert cli._pending_input.empty()  # not queued as a user turn
         assert not cli._voice_barge_capture.is_set()
-        assert restarted.wait(2.0)  # mic handed back instead of self-triggering another turn
+        assert restarted.wait(
+            2.0
+        )  # mic handed back instead of self-triggering another turn
 
-    def test_playback_phase_genuine_interjection_is_still_queued(self, tmp_path, monkeypatch):
+    def test_playback_phase_genuine_interjection_is_still_queued(
+        self, tmp_path, monkeypatch
+    ):
         """A real user interjection during playback -- unrelated to the TTS
         text -- must still reach the agent."""
         cli = _make_voice_cli()
@@ -490,7 +521,10 @@ class TestVoiceBargeCaptureSubmit:
 
         monkeypatch.setattr(
             "tools.voice_mode.transcribe_recording",
-            lambda path, model=None: {"success": True, "transcript": "stop, do it differently"},
+            lambda path, model=None: {
+                "success": True,
+                "transcript": "stop, do it differently",
+            },
         )
 
         cli._voice_submit_barge_utterance(str(wav))
@@ -510,9 +544,7 @@ class TestVoiceFullDuplexListener:
     cuts TTS; the capture is submitted either way."""
 
     def _cli(self, monkeypatch, *, listen, voice_cfg=None, **overrides):
-        cli = _make_voice_cli(
-            _voice_mode=True, _voice_continuous=True, **overrides
-        )
+        cli = _make_voice_cli(_voice_mode=True, _voice_continuous=True, **overrides)
         cli.agent = None
         monkeypatch.setattr(
             "clawk_cli.config.load_config",
@@ -548,11 +580,11 @@ class TestVoiceFullDuplexListener:
         assert interrupted.is_set()
         assert pipe_stop.is_set()  # stale reply's TTS can never play
         from cli import _VoiceInputMessage
+
         queued = cli._pending_input.get_nowait()
         assert isinstance(queued, _VoiceInputMessage)
         assert str(queued) == "actually wait"
         assert not cli._voice_barge_capture.is_set()
-
 
     def test_listener_arms_at_submit_and_survives_into_playback(self, monkeypatch):
         """Lifecycle: should_stop is False during generation AND during
@@ -580,8 +612,9 @@ class TestVoiceFullDuplexListener:
         assert probes["playback_pending"] is False  # same listener spans phases
         assert probes["done"] is True
 
-
-    def test_stop_phrase_mid_generation_interrupts_and_ends_chat(self, monkeypatch, tmp_path):
+    def test_stop_phrase_mid_generation_interrupts_and_ends_chat(
+        self, monkeypatch, tmp_path
+    ):
         """Bare 'stop' during generation = stop everything: the turn is
         interrupted at trip time AND the voice chat is disabled."""
         wav = tmp_path / "fd.wav"
@@ -607,8 +640,8 @@ class TestVoiceFullDuplexListener:
 
         cli._voice_full_duplex_listener()
 
-        assert interrupted.is_set()   # turn interrupted at trip
-        assert disabled == [True]     # chat ended by the stop phrase
+        assert interrupted.is_set()  # turn interrupted at trip
+        assert disabled == [True]  # chat ended by the stop phrase
         assert cli._pending_input.empty()  # stop phrase never reaches the agent
 
 
@@ -639,7 +672,6 @@ class TestTypedVoiceStop:
         assert cli._typed_voice_stop("stop") is True
         assert cli._disable_calls == [True]
 
-
     def test_longer_typed_message_passes_through_in_voice_mode(self):
         cli = self._cli(_voice_mode=True)
         assert cli._typed_voice_stop("stop the docker container") is False
@@ -649,6 +681,7 @@ class TestTypedVoiceStop:
 # ============================================================================
 # Fallback (whole-file) TTS path arms the full-duplex listener
 # ============================================================================
+
 
 class TestFallbackSpeakArmsBargeMonitor:
     """_voice_speak_response_async must arm _voice_full_duplex_listener in
@@ -681,4 +714,3 @@ class TestFallbackSpeakArmsBargeMonitor:
         # speak thread came and went without arming the mic.
         assert not cli._monitor_armed.wait(0.05)
         assert cli._monitor_calls == []
-

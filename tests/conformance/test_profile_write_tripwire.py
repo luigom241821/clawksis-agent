@@ -82,7 +82,9 @@ class ProfileTripwire:
                 p = d / name
                 st = p.stat()
                 snap[str(p.relative_to(self.root))] = (
-                    "file", st.st_mtime_ns, st.st_size,
+                    "file",
+                    st.st_mtime_ns,
+                    st.st_size,
                 )
         return snap
 
@@ -92,7 +94,8 @@ class ProfileTripwire:
         created = sorted(set(now) - set(self._baseline))
         deleted = sorted(set(self._baseline) - set(now))
         modified = sorted(
-            rel for rel in set(now) & set(self._baseline)
+            rel
+            for rel in set(now) & set(self._baseline)
             if now[rel] != self._baseline[rel]
         )
         problems = []
@@ -164,6 +167,7 @@ def profile_tripwire(tmp_path, monkeypatch):
 # Surface exercisers — each drives ONE real persistence surface end to end.
 # Add new surfaces here as the bug class produces new variants.
 # ---------------------------------------------------------------------------
+
 
 def _exercise_session_db(tripwire: ProfileTripwire) -> None:
     """SessionDB() argless construction + session + message (#88532)."""

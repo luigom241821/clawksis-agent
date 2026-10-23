@@ -43,7 +43,9 @@ _STATUS_DISMISSED = "dismissed"
 
 
 def _current_suggestions_file() -> Path:
-    return SUGGESTIONS_FILE or (get_clawk_home().resolve() / "cron" / "suggestions.json")
+    return SUGGESTIONS_FILE or (
+        get_clawk_home().resolve() / "cron" / "suggestions.json"
+    )
 
 
 def _ensure_dir() -> None:
@@ -91,7 +93,12 @@ def list_pending() -> list[dict[str, Any]]:
 
 
 def add_suggestion(
-    *, title: str, description: str, source: str, job_spec: dict[str, Any], dedup_key: str,
+    *,
+    title: str,
+    description: str,
+    source: str,
+    job_spec: dict[str, Any],
+    dedup_key: str,
 ) -> Optional[dict[str, Any]]:
     """Register a pending suggestion. Returns the record, or None when skipped: the same
     ``dedup_key`` was already decided on or is still pending (never re-offer, never duplicate), or
@@ -106,7 +113,8 @@ def add_suggestion(
         suggestions = _load_raw().get("suggestions", [])
         if any(
             existing.get("dedup_key") == dedup_key
-            and existing.get("status") in (_STATUS_DISMISSED, _STATUS_ACCEPTED, _STATUS_PENDING)
+            and existing.get("status")
+            in (_STATUS_DISMISSED, _STATUS_ACCEPTED, _STATUS_PENDING)
             for existing in suggestions
         ):
             return None
@@ -164,7 +172,9 @@ def dismiss_suggestion(ref: str) -> bool:
     return bool(s) and _set_status(s["id"], _STATUS_DISMISSED)
 
 
-def accept_suggestion(ref: str, *, origin: Optional[dict[str, Any]] = None) -> Optional[dict[str, Any]]:
+def accept_suggestion(
+    ref: str, *, origin: Optional[dict[str, Any]] = None
+) -> Optional[dict[str, Any]]:
     """Accept a suggestion: create the real cron job from its ``job_spec``. Returns the job dict, or
     None if not found / not pending. ``origin`` (platform/chat) is merged so "origin" delivery
     routes back to the chat where the user accepted."""
@@ -173,7 +183,8 @@ def accept_suggestion(ref: str, *, origin: Optional[dict[str, Any]] = None) -> O
         return None
 
     from cron.scheduler import (
-        CronSchedulerRegistrationError, create_job_with_scheduler_registration,
+        CronSchedulerRegistrationError,
+        create_job_with_scheduler_registration,
     )
 
     spec = dict(s.get("job_spec") or {})

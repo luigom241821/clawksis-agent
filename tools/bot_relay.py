@@ -40,15 +40,21 @@ LOCKS_DIR = "locks"
 
 # Config fallbacks (real knobs: ``bot_mode.turn_wait_seconds`` / ``bot_mode.envelope_ttl_seconds``).
 TURN_WAIT_SECONDS_FALLBACK = 120
-DEFAULT_ENVELOPE_TTL_SECONDS = 900  # older envelopes are refused at drain with 'queued_expired'
+DEFAULT_ENVELOPE_TTL_SECONDS = (
+    900  # older envelopes are refused at drain with 'queued_expired'
+)
 # Per-attempt turn budget and attempt ceiling of one relayed delivery: the owner admits the turn and, when it
 # settles failed with a transient error, ONE retry under a derived identity (``gateway.session_bot._maybe_retry``).
 TURN_ATTEMPT_TIMEOUT_SECONDS = 600
-TURN_MAX_ATTEMPTS = 2  # first admission + the owner's one transient-failure retry (gateway.session_bot)
+TURN_MAX_ATTEMPTS = (
+    2  # first admission + the owner's one transient-failure retry (gateway.session_bot)
+)
 # Mirrors RELAY_DELIVER_TIMEOUT_MS in apps/desktop/src/plugins/clawk-bots/relay-budget.ts; both test suites pin it.
 DESKTOP_DELIVER_SETTLEMENT_MARGIN_SECONDS = 180
 DESKTOP_DELIVER_TIMEOUT_SECONDS = (
-    TURN_WAIT_SECONDS_FALLBACK + TURN_ATTEMPT_TIMEOUT_SECONDS * TURN_MAX_ATTEMPTS + DESKTOP_DELIVER_SETTLEMENT_MARGIN_SECONDS
+    TURN_WAIT_SECONDS_FALLBACK
+    + TURN_ATTEMPT_TIMEOUT_SECONDS * TURN_MAX_ATTEMPTS
+    + DESKTOP_DELIVER_SETTLEMENT_MARGIN_SECONDS
 )
 # A claimed envelope is replayed on every drain until its reply lands (``_replay_unanswered``); the
 # budgets below only bound how long the sender-side waiter keeps watching. The longest a LIVE delivery
@@ -91,6 +97,7 @@ def _ensure_dirs(root: Path | str) -> Path:
     base = relay_root(root)
     for sub in (OUTBOX_DIR, CLAIMED_DIR, REPLIES_DIR):
         from clawk_constants import mkdir_under_clawk_home
+
         mkdir_under_clawk_home(base / sub)
     return base
 
@@ -118,12 +125,20 @@ def _normalize_roster_row(row: Any) -> Optional[dict]:
     if not isinstance(row, dict):
         return None
     profile = str(row.get("profile") or "").strip()
-    handle = str(row.get("handle") or "").strip().lstrip("@") or ("clawk" if profile == "default" else profile)
+    handle = str(row.get("handle") or "").strip().lstrip("@") or (
+        "clawk" if profile == "default" else profile
+    )
     connection_id = str(row.get("connection_id") or "").strip()
-    if not profile or not connection_id or not all(_HANDLE_RE.match(v) for v in (handle, profile, connection_id)):
+    if (
+        not profile
+        or not connection_id
+        or not all(_HANDLE_RE.match(v) for v in (handle, profile, connection_id))
+    ):
         return None
     out = {
-        "profile": profile, "handle": handle, "connection_id": connection_id,
+        "profile": profile,
+        "handle": handle,
+        "connection_id": connection_id,
         "connection_label": str(row.get("connection_label") or "").strip()[:80],
         "title": str(row.get("title") or "").strip()[:120],
         "description": " ".join(str(row.get("description") or "").split())[:160],
@@ -138,10 +153,16 @@ def write_remote_roster(root: Path | str, rows: Any) -> int:
     """Atomically persist the Desktop-pushed remote roster. Returns count."""
     base = _ensure_dirs(root)
     by_key: dict[tuple[str, str], dict] = {}
-    for norm in filter(None, map(_normalize_roster_row, rows if isinstance(rows, list) else [])):
+    for norm in filter(
+        None, map(_normalize_roster_row, rows if isinstance(rows, list) else [])
+    ):
         by_key.setdefault((norm["connection_id"], norm["profile"]), norm)
     cleaned = [by_key[k] for k in sorted(by_key)]
-    _atomic_write_json(base / ROSTER_FILE, {"updated_at": int(time.time()), "agents": cleaned}, sort_keys=True)
+    _atomic_write_json(
+        base / ROSTER_FILE,
+        {"updated_at": int(time.time()), "agents": cleaned},
+        sort_keys=True,
+    )
     return len(cleaned)
 
 
@@ -151,7 +172,11 @@ def read_remote_roster(root: Path | str) -> list[dict]:
         raw = (relay_root(root) / ROSTER_FILE).read_text(encoding="utf-8-sig")
         data = json.loads(raw)
         agents = data.get("agents") if isinstance(data, dict) else None
-        return [r for r in map(_normalize_roster_row, agents) if r] if isinstance(agents, list) else []
+        return (
+            [r for r in map(_normalize_roster_row, agents) if r]
+            if isinstance(agents, list)
+            else []
+        )
     except FileNotFoundError:
         return []
     except Exception:
@@ -176,12 +201,20 @@ def resolve_remote_target(raw_target: str, roster: list[dict]) -> Any:
     ``<handle|profile|title-slug>@<connection-id>``; ``"ambiguous"`` for a bare form on several
     connections; None otherwise. An exact handle/profile match beats a title slug, so a title
     colliding with another row's handle never steals it."""
-    want, at, conn = (p.strip() for p in str(raw_target or "").strip().lstrip("@").partition("@"))
+    want, at, conn = (
+        p.strip() for p in str(raw_target or "").strip().lstrip("@").partition("@")
+    )
     if not want or (at and not conn):
         return None
     want = want.lower()
-    rows = [row for row in roster if not conn or row["connection_id"].lower() == conn.lower()]
-    matches = [row for row in rows if want in _target_ids(row)] or [row for row in rows if want in _target_aliases(row)]
+    rows = [
+        row
+        for row in roster
+        if not conn or row["connection_id"].lower() == conn.lower()
+    ]
+    matches = [row for row in rows if want in _target_ids(row)] or [
+        row for row in rows if want in _target_aliases(row)
+    ]
     if not matches:
         return None
     return matches[0] if len(matches) == 1 else "ambiguous"
@@ -195,7 +228,9 @@ def _title_slug(row: dict) -> str:
     return slug if slug in alias_forms(title) else ""
 
 
-def remote_target_forms(roster: list[dict], local_taken: set[str] | frozenset[str] = frozenset()) -> list[str]:
+def remote_target_forms(
+    roster: list[dict], local_taken: set[str] | frozenset[str] = frozenset()
+) -> list[str]:
     """One unambiguous target string per row, shortest first: the bare handle when no other remote
     row and no LOCAL profile (``local_taken``: this gateway's handles and friendly-name slugs) answers
     to it; else the title slug under the same test (a remote ``default`` titled "CoS Bot" is
@@ -213,30 +248,57 @@ def remote_target_forms(roster: list[dict], local_taken: set[str] | frozenset[st
     def _form(row: dict) -> str:
         # The handle needs only be unique among routing ids (resolution gives it precedence over a
         # colliding title); a title slug must be unique among every alias.
-        for candidate, claims in ((row["handle"], id_claims), (_title_slug(row), alias_claims)):
-            if candidate and candidate.lower() not in taken and claims.get(candidate.lower(), 0) == 1:
+        for candidate, claims in (
+            (row["handle"], id_claims),
+            (_title_slug(row), alias_claims),
+        ):
+            if (
+                candidate
+                and candidate.lower() not in taken
+                and claims.get(candidate.lower(), 0) == 1
+            ):
                 return candidate
         return f"{row['handle']}@{row['connection_id']}"
 
     return [_form(row) for row in roster]
 
 
-_SENDER_STAMP_RE = re.compile(r"^(Message from 🤖 .+? \(@)([A-Za-z0-9_-]+)(\): )", re.DOTALL)
+_SENDER_STAMP_RE = re.compile(
+    r"^(Message from 🤖 .+? \(@)([A-Za-z0-9_-]+)(\): )", re.DOTALL
+)
 
 
-def qualify_sender_stamp(message: str, from_handle: Any, from_connection: Any, roster: list[dict],
-                         local_taken: set[str] | frozenset[str] = frozenset()) -> str:
+def qualify_sender_stamp(
+    message: str,
+    from_handle: Any,
+    from_connection: Any,
+    roster: list[dict],
+    local_taken: set[str] | frozenset[str] = frozenset(),
+) -> str:
     """Rewrite a relayed DM's ``Message from 🤖 <name> (@<handle>):`` stamp so the handle is the
     form THIS gateway can reply to: the sender's row in the local relay roster as
     ``remote_target_forms`` renders it, else ``handle@connection``. A relayed ``@clawk`` is another
     machine's default — left bare, a reply lands on the recipient's own default (#103731)."""
-    handle, conn = str(from_handle or "").strip().lstrip("@"), str(from_connection or "").strip()
+    handle, conn = (
+        str(from_handle or "").strip().lstrip("@"),
+        str(from_connection or "").strip(),
+    )
     match = _SENDER_STAMP_RE.match(str(message or ""))
-    if not match or not conn or not _HANDLE_RE.match(handle) or not _HANDLE_RE.match(conn):
+    if (
+        not match
+        or not conn
+        or not _HANDLE_RE.match(handle)
+        or not _HANDLE_RE.match(conn)
+    ):
         return message
-    forms = dict(zip(((r["connection_id"].lower(), r["handle"].lower()) for r in roster), remote_target_forms(roster, local_taken)))
+    forms = dict(
+        zip(
+            ((r["connection_id"].lower(), r["handle"].lower()) for r in roster),
+            remote_target_forms(roster, local_taken),
+        )
+    )
     form = forms.get((conn.lower(), handle.lower())) or f"{handle}@{conn}"
-    return f"{match.group(1)}{form}{match.group(3)}{message[match.end():]}"
+    return f"{match.group(1)}{form}{match.group(3)}{message[match.end() :]}"
 
 
 def _envelope_ttl_seconds() -> int:
@@ -265,7 +327,9 @@ def _target_liveness(root: Path | str, target: dict) -> Optional[bool]:
         if not roster:
             return None
         key = (str(target.get("connection_id") or ""), str(target.get("profile") or ""))
-        row = next((r for r in roster if (r["connection_id"], r["profile"]) == key), None)
+        row = next(
+            (r for r in roster if (r["connection_id"], r["profile"]) == key), None
+        )
         if row is None:
             return False  # fresh roster no longer lists the target — offline
         return row["online"] if isinstance(row.get("online"), bool) else None
@@ -274,21 +338,38 @@ def _target_liveness(root: Path | str, target: dict) -> Optional[bool]:
         return None
 
 
-def enqueue_envelope(root: Path | str, *, target: dict, message: str, sender_profile: str, sender_handle: str) -> dict:
+def enqueue_envelope(
+    root: Path | str,
+    *,
+    target: dict,
+    message: str,
+    sender_profile: str,
+    sender_handle: str,
+) -> dict:
     """Queue a cross-connection DM for the Desktop relay; returns the envelope. Raises
     ``EnvelopeRefusedError`` ('runtime_offline') without writing when the target is
     definitively offline; unknown liveness enqueues (fail-open)."""
     if _target_liveness(root, target) is False:
-        label = (f"@{target.get('handle') or target.get('profile') or '?'} on "
-                 f"{target.get('connection_label') or target.get('connection_id') or '?'}")
-        raise EnvelopeRefusedError("runtime_offline", f"{label} is offline right now — the message was NOT queued. "
-                                   "Try again once that machine reconnects to the Desktop.")
+        label = (
+            f"@{target.get('handle') or target.get('profile') or '?'} on "
+            f"{target.get('connection_label') or target.get('connection_id') or '?'}"
+        )
+        raise EnvelopeRefusedError(
+            "runtime_offline",
+            f"{label} is offline right now — the message was NOT queued. "
+            "Try again once that machine reconnects to the Desktop.",
+        )
     base = _ensure_dirs(root)
     envelope = {
-        "id": uuid.uuid4().hex, "created_at": int(time.time()), "canonical_delivery_v1": True,
-        "from_profile": sender_profile, "from_handle": sender_handle,
-        "target_connection": target["connection_id"], "target_profile": target["profile"],
-        "target_handle": target["handle"], "message": message,
+        "id": uuid.uuid4().hex,
+        "created_at": int(time.time()),
+        "canonical_delivery_v1": True,
+        "from_profile": sender_profile,
+        "from_handle": sender_handle,
+        "target_connection": target["connection_id"],
+        "target_profile": target["profile"],
+        "target_handle": target["handle"],
+        "message": message,
     }
     _atomic_write_json(base / OUTBOX_DIR / f"{envelope['id']}.json", envelope)
     return envelope
@@ -298,7 +379,9 @@ def _expire_if_stale(root: Path | str, path: Path, ttl: float, now: float) -> bo
     """True when the outbox envelope is older than ``ttl``; writes the 'queued_expired'
     reply so the sender's waiter resolves (best effort). Unreadable envelopes are left for the claim."""
     try:
-        env = json.loads(path.read_text(encoding="utf-8-sig"))  # BOM-tolerant (pm-era read fix)
+        env = json.loads(
+            path.read_text(encoding="utf-8-sig")
+        )  # BOM-tolerant (pm-era read fix)
         if not isinstance(env, dict):
             raise ValueError(f"expected a JSON object, got {type(env).__name__}")
         created = float(env.get("created_at") or path.stat().st_mtime)
@@ -307,10 +390,16 @@ def _expire_if_stale(root: Path | str, path: Path, ttl: float, now: float) -> bo
     if now - created <= ttl:
         return False
     with contextlib.suppress(OSError, ValueError):
-        write_reply(root, str(env.get("id") or ""), reason="queued_expired", error=(
-            f"queued message to @{env.get('target_handle') or '?'} on {env.get('target_connection') or '?'} "
-            f"expired after {ttl}s waiting for the Desktop to drain it — it was NOT delivered. "
-            "Resend once the Desktop reconnects."))
+        write_reply(
+            root,
+            str(env.get("id") or ""),
+            reason="queued_expired",
+            error=(
+                f"queued message to @{env.get('target_handle') or '?'} on {env.get('target_connection') or '?'} "
+                f"expired after {ttl}s waiting for the Desktop to drain it — it was NOT delivered. "
+                "Resend once the Desktop reconnects."
+            ),
+        )
     return True
 
 
@@ -347,10 +436,14 @@ def claim_pending_envelopes(root: Path | str) -> list[dict]:
         claimed = base / CLAIMED_DIR / path.name
         order = _queued_at(path)
         with contextlib.suppress(OSError, ValueError):
-            os.replace(path, claimed)  # atomic claim; the rename keeps the enqueue mtime
+            os.replace(
+                path, claimed
+            )  # atomic claim; the rename keeps the enqueue mtime
             envelope = json.loads(claimed.read_text(encoding="utf-8-sig"))
             if not isinstance(envelope, dict):
-                raise ValueError(f"expected a JSON object, got {type(envelope).__name__}")
+                raise ValueError(
+                    f"expected a JSON object, got {type(envelope).__name__}"
+                )
             out.append((order, envelope))
     seen = {row["id"] for _order, row in out}
     # One enqueue-ordered list: a claimed-but-unanswered DM (Desktop reconnected before its reply)
@@ -359,7 +452,9 @@ def claim_pending_envelopes(root: Path | str) -> list[dict]:
     return [envelope for _order, envelope in sorted(out, key=lambda item: item[0])]
 
 
-def _replay_unanswered(root: Path | str, base: Path, seen: set, now: float) -> list[tuple[tuple[float, str], dict]]:
+def _replay_unanswered(
+    root: Path | str, base: Path, seen: set, now: float
+) -> list[tuple[tuple[float, str], dict]]:
     """``claimed/`` canonical envelopes whose reply has not landed yet, replayed on EVERY drain.
 
     A drained envelope is not "delivered": its stable id is handed out again until the target's
@@ -379,7 +474,9 @@ def _replay_unanswered(root: Path | str, base: Path, seen: set, now: float) -> l
         with contextlib.suppress(OSError, ValueError):
             envelope = json.loads(path.read_text(encoding="utf-8-sig"))
             if not isinstance(envelope, dict):
-                raise ValueError(f"expected a JSON object, got {type(envelope).__name__}")
+                raise ValueError(
+                    f"expected a JSON object, got {type(envelope).__name__}"
+                )
             if envelope.get("id") in seen:
                 continue
             env_id = str(envelope.get("id") or "")
@@ -389,15 +486,23 @@ def _replay_unanswered(root: Path | str, base: Path, seen: set, now: float) -> l
                 continue
             created = float(envelope.get("created_at") or path.stat().st_mtime)
             if now - created > REPLY_WAIT_SECONDS:
-                write_reply(root, env_id, reason="delivery_timeout", error=(
-                    f"no reply from {label} within {REPLY_WAIT_SECONDS}s of sending — the Desktop picked "
-                    "the message up but never reported a delivery. It will not be retried; resend if it matters."))
+                write_reply(
+                    root,
+                    env_id,
+                    reason="delivery_timeout",
+                    error=(
+                        f"no reply from {label} within {REPLY_WAIT_SECONDS}s of sending — the Desktop picked "
+                        "the message up but never reported a delivery. It will not be retried; resend if it matters."
+                    ),
+                )
                 continue
             out.append((_queued_at(path), envelope))
     return out
 
 
-def _settle_pre_upgrade_claim(root: Path | str, path: Path, env_id: str, label: str, now: float) -> None:
+def _settle_pre_upgrade_claim(
+    root: Path | str, path: Path, env_id: str, label: str, now: float
+) -> None:
     """A ``claimed/`` envelope from before canonical delivery (no ``canonical_delivery_v1``) is never
     replayed: its old lane ran a CLI turn the authority has no record of, so re-admitting the id could
     run the DM twice. Left alone, though, its sender's waiter watched a reply that never came. Once the
@@ -408,13 +513,26 @@ def _settle_pre_upgrade_claim(root: Path | str, path: Path, env_id: str, label: 
 
     if now - path.stat().st_mtime < REOFFER_AFTER_SECONDS:
         return
-    write_reply(root, env_id, reason=UNKNOWN, error=(
-        f"the message to {label} was picked up before this gateway was upgraded and its delivery was "
-        "never reported — it may or may not have been delivered. It will not be retried; check with "
-        "the recipient before resending."))
+    write_reply(
+        root,
+        env_id,
+        reason=UNKNOWN,
+        error=(
+            f"the message to {label} was picked up before this gateway was upgraded and its delivery was "
+            "never reported — it may or may not have been delivered. It will not be retried; check with "
+            "the recipient before resending."
+        ),
+    )
 
 
-def write_reply(root: Path | str, envelope_id: str, *, reply: str = "", error: str = "", reason: str = "") -> Path:
+def write_reply(
+    root: Path | str,
+    envelope_id: str,
+    *,
+    reply: str = "",
+    error: str = "",
+    reason: str = "",
+) -> Path:
     """Persist the relayed reply (or delivery error) for the waiter. ``reason`` (typed
     code, ``tools.bot_failure_reasons``) is classified from ``error`` when omitted.
 
@@ -436,7 +554,16 @@ def write_reply(root: Path | str, envelope_id: str, *, reply: str = "", error: s
         from tools.bot_failure_reasons import classify_agent_error
 
         code = classify_agent_error(err)
-    _atomic_write_json(path, {"id": safe, "at": int(time.time()), "reply": str(reply or ""), "error": err, "reason": code})
+    _atomic_write_json(
+        path,
+        {
+            "id": safe,
+            "at": int(time.time()),
+            "reply": str(reply or ""),
+            "error": err,
+            "reason": code,
+        },
+    )
     return path
 
 
@@ -454,7 +581,10 @@ def unlink_files_older_than(directory: Path, pattern: str, cutoff: float) -> int
 
 def _sweep_stale(base: Path, *, now: float | None = None) -> int:
     cutoff = (time.time() if now is None else now) - STALE_AFTER_SECONDS
-    return sum(unlink_files_older_than(base / sub, "*.json", cutoff) for sub in (CLAIMED_DIR, REPLIES_DIR, OUTBOX_DIR))
+    return sum(
+        unlink_files_older_than(base / sub, "*.json", cutoff)
+        for sub in (CLAIMED_DIR, REPLIES_DIR, OUTBOX_DIR)
+    )
 
 
 def cleanup_bot_relay_artifacts(max_age_hours: float | None = None) -> int:
@@ -484,7 +614,14 @@ def waiter_command(root: Path | str, envelope: dict) -> str:
     reply_path = str(relay_root(root) / REPLIES_DIR / f"{envelope['id']}.json")
     label = f"@{envelope.get('target_handle', '')} on {envelope.get('target_connection', '')}"
     runner = str(Path(__file__).resolve().with_name("bot_mode_dm.py"))
-    argv = [sys.executable or "python3", runner, "--wait-reply", reply_path, label, str(REPLY_WAIT_SECONDS)]
+    argv = [
+        sys.executable or "python3",
+        runner,
+        "--wait-reply",
+        reply_path,
+        label,
+        str(REPLY_WAIT_SECONDS),
+    ]
     if sys.platform == "win32":
         # Same rewrite as the delivery runner: the tracked local backend uses Git Bash on native
         # Windows, where forward-slash drive paths run and backslash paths parse as command names.
@@ -527,7 +664,9 @@ class DeliveryAuthor:
         return f"DeliveryAuthor({self.author!r})"
 
 
-def delivery_turn_author(from_profile: Any, from_handle: Any, from_connection: Any = None) -> Optional[dict]:
+def delivery_turn_author(
+    from_profile: Any, from_handle: Any, from_connection: Any = None
+) -> Optional[dict]:
     """The author of a relayed DM's recipient turn, built from the sender fields as the relaying client reports
     them. A relayed DM always comes from another gateway, so the id carries the Desktop's id for the sender's
     connection (``local`` included) and only the recipient's own profiles are bare ``bot:<profile>``. None when
@@ -537,8 +676,11 @@ def delivery_turn_author(from_profile: Any, from_handle: Any, from_connection: A
     profile = str(from_profile or "").strip()
     if not profile:
         return None
-    return {"id": bot_author_id(profile, str(from_connection or "")), "name": str(from_handle or "").strip() or profile,
-            "is_bot": True}
+    return {
+        "id": bot_author_id(profile, str(from_connection or "")),
+        "name": str(from_handle or "").strip() or profile,
+        "is_bot": True,
+    }
 
 
 def _delivery_child_session_env_names() -> tuple[str, ...]:
@@ -562,10 +704,16 @@ def relaying_principal_author(principal: str) -> dict:
     human-facing signature stays in the message text the sender composed."""
     from agent.turn_author import bot_author_id
 
-    return {"id": bot_author_id("relay", str(principal or "").strip()), "name": "relayed teammate", "is_bot": True}
+    return {
+        "id": bot_author_id("relay", str(principal or "").strip()),
+        "name": "relayed teammate",
+        "is_bot": True,
+    }
 
 
-def delivery_env(author: Optional[dict], profile_home: str | Path | None = None) -> dict[str, str]:
+def delivery_env(
+    author: Optional[dict], profile_home: str | Path | None = None
+) -> dict[str, str]:
     """Environment for one delivery turn's ``clawk -p <profile>`` child. The dispatcher's own
     CLAWK_TURN_AUTHOR is dropped first so a delivery without an author never inherits the author of the turn
     that sent it. Dispatcher session identity (the canonical ``gateway.session_context`` session env names) is
@@ -587,10 +735,16 @@ def delivery_env(author: Optional[dict], profile_home: str | Path | None = None)
     # inside ``served_profile_child_env``, so fill it only when both are absent; a single-profile host
     # keeps its pass-through env.
     target_home = profile_home
-    if (not target_home and is_multiplex_active() and not get_clawk_home_override()
-            and current_secret_scope() is None):
+    if (
+        not target_home
+        and is_multiplex_active()
+        and not get_clawk_home_override()
+        and current_secret_scope() is None
+    ):
         target_home = get_routing_process_clawk_home()
-    env = served_profile_child_env(base=os.environ, target_home=target_home, inherit_credentials=True)
+    env = served_profile_child_env(
+        base=os.environ, target_home=target_home, inherit_credentials=True
+    )
     env.pop(TURN_AUTHOR_ENV, None)
     for name in _delivery_child_session_env_names():
         env.pop(name, None)
@@ -624,9 +778,11 @@ class TurnBusyError(RuntimeError):
 
     def __init__(self, profile: str, waited_seconds: float):
         self.profile, self.waited_seconds = profile, waited_seconds
-        super().__init__(f"target_busy: another delivery turn is already running for profile '{profile}' — "
-                         f"queued behind it for ~{round(waited_seconds)}s without it finishing. "
-                         "The message was NOT delivered; retry shortly.")
+        super().__init__(
+            f"target_busy: another delivery turn is already running for profile '{profile}' — "
+            f"queued behind it for ~{round(waited_seconds)}s without it finishing. "
+            "The message was NOT delivered; retry shortly."
+        )
 
 
 def turn_wait_seconds() -> float:
@@ -642,7 +798,9 @@ def turn_lock_path(root: Path | str, profile: str) -> Path:
 
 
 @contextlib.contextmanager
-def acquire_turn_lock(root: Path | str, profile: str, timeout_seconds: float | None = None) -> Iterator[Path]:
+def acquire_turn_lock(
+    root: Path | str, profile: str, timeout_seconds: float | None = None
+) -> Iterator[Path]:
     """Hold ``profile``'s cross-process turn lock for the ``with`` body: non-blocking
     flock probe + short-sleep retry up to the budget (``bot_mode.turn_wait_seconds``
     unless ``timeout_seconds``); raises :class:`TurnBusyError` when exhausted. No
@@ -655,7 +813,11 @@ def acquire_turn_lock(root: Path | str, profile: str, timeout_seconds: float | N
         yield turn_lock_path(root, profile)
         return
 
-    budget = turn_wait_seconds() if timeout_seconds is None else max(0.0, float(timeout_seconds))
+    budget = (
+        turn_wait_seconds()
+        if timeout_seconds is None
+        else max(0.0, float(timeout_seconds))
+    )
     path = turn_lock_path(root, profile)
     path.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)

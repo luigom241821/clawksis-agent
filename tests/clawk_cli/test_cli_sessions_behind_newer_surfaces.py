@@ -30,7 +30,9 @@ def _populate(db: SessionDB, rows: list[tuple[str, str, str, float]]) -> None:
         db._conn.commit()
 
 
-def _newer_locals(count: int, *, start: float, prefix: str) -> list[tuple[str, str, str, float]]:
+def _newer_locals(
+    count: int, *, start: float, prefix: str
+) -> list[tuple[str, str, str, float]]:
     """``count`` gateway rows newer than a CLI session, alternating Desktop and TUI."""
     return [
         (f"{prefix}-{index:03d}", "local", ("desktop", "tui")[index % 2], start + index)
@@ -54,11 +56,17 @@ def _recent_cli_ids(db: SessionDB) -> tuple[list[str], list[str]]:
 
     reader = SurfaceLabelReader(db)
     listed = query_session_listing(
-        reader, source="cli", current_session_id="other-session", include_all_sources=False,
-        include_unnamed=True, limit=10, exclude_sources=list(INTERNAL_LISTING_SOURCES),
+        reader,
+        source="cli",
+        current_session_id="other-session",
+        include_all_sources=False,
+        include_unnamed=True,
+        limit=10,
+        exclude_sources=list(INTERNAL_LISTING_SOURCES),
     )
     via_command = CLISessionMixin._list_recent_sessions(
-        SimpleNamespace(_session_db=reader, session_id="other-session"), limit=10,
+        SimpleNamespace(_session_db=reader, session_id="other-session"),
+        limit=10,
     )
     return [row["id"] for row in listed], [row["id"] for row in via_command]
 
@@ -67,10 +75,18 @@ def _ids(reader, method: str, **kwargs) -> list[str]:
     return [row["id"] for row in getattr(reader, method)(**kwargs)]
 
 
-def test_continue_and_sessions_find_cli_session_behind_newer_desktop_rows(tmp_path, monkeypatch):
+def test_continue_and_sessions_find_cli_session_behind_newer_desktop_rows(
+    tmp_path, monkeypatch
+):
     """Bare ``clawk -c``, ``/sessions`` and ``/resume`` reach the CLI session behind 200 newer rows."""
     db = SessionDB(db_path=tmp_path / "state.db")
-    _populate(db, [("cli-session", "local", "cli", 1_000_000), *_newer_locals(200, start=2_000_000, prefix="d")])
+    _populate(
+        db,
+        [
+            ("cli-session", "local", "cli", 1_000_000),
+            *_newer_locals(200, start=2_000_000, prefix="d"),
+        ],
+    )
     assert _recent_cli_ids(db) == (["cli-session"], ["cli-session"])
     db.close()
 
@@ -84,25 +100,38 @@ def test_surface_pages_are_exact_across_newer_local_rows(tmp_path):
     Desktop, TUI and an unrelated platform do not.
     """
     db = SessionDB(db_path=tmp_path / "state.db")
-    _populate(db, [
-        ("telegram-new", "telegram", "telegram", 2_100_000),
-        ("unknown-new", "local", "unknown", 2_000_000),
-        *_newer_locals(60, start=1_900_000, prefix="top"),
-        ("legacy-cli", "cli", "desktop", 1_800_000),
-        *_newer_locals(10, start=1_700_000, prefix="gap-a"),
-        ("cli-a", "local", "cli", 1_600_000),
-        *_newer_locals(10, start=1_500_000, prefix="gap-b"),
-        ("cli-b", "local", "cli", 1_400_000),
-        *_newer_locals(10, start=1_300_000, prefix="gap-c"),
-        ("cli-c", "local", "cli", 1_200_000),
-    ])
+    _populate(
+        db,
+        [
+            ("telegram-new", "telegram", "telegram", 2_100_000),
+            ("unknown-new", "local", "unknown", 2_000_000),
+            *_newer_locals(60, start=1_900_000, prefix="top"),
+            ("legacy-cli", "cli", "desktop", 1_800_000),
+            *_newer_locals(10, start=1_700_000, prefix="gap-a"),
+            ("cli-a", "local", "cli", 1_600_000),
+            *_newer_locals(10, start=1_500_000, prefix="gap-b"),
+            ("cli-b", "local", "cli", 1_400_000),
+            *_newer_locals(10, start=1_300_000, prefix="gap-c"),
+            ("cli-c", "local", "cli", 1_200_000),
+        ],
+    )
     reader = SurfaceLabelReader(db)
     for method in ("search_sessions", "list_sessions_rich"):
-        assert _ids(reader, method, source="cli", limit=10) == ["legacy-cli", "cli-a", "cli-b", "cli-c"]
+        assert _ids(reader, method, source="cli", limit=10) == [
+            "legacy-cli",
+            "cli-a",
+            "cli-b",
+            "cli-c",
+        ]
         assert _ids(reader, method, source="cli", limit=1, offset=1) == ["cli-a"]
-        assert _ids(reader, method, source="cli", limit=2, offset=2) == ["cli-b", "cli-c"]
+        assert _ids(reader, method, source="cli", limit=2, offset=2) == [
+            "cli-b",
+            "cli-c",
+        ]
     # ``clawk -c`` asks for the CLI family (cli + oneshot), still paged in SQL.
-    assert _ids(reader, "search_sessions", source=["cli", "oneshot"], limit=1) == ["legacy-cli"]
+    assert _ids(reader, "search_sessions", source=["cli", "oneshot"], limit=1) == [
+        "legacy-cli"
+    ]
     db.close()
 
 
@@ -129,7 +158,9 @@ def _pre_column_readonly(tmp_path) -> SessionDB:
     writer = SessionDB(db_path=path)
     writer.create_session("legacy-cli", source="cli")
     with writer._lock:
-        writer._conn.execute("UPDATE sessions SET message_count=1 WHERE id='legacy-cli'")
+        writer._conn.execute(
+            "UPDATE sessions SET message_count=1 WHERE id='legacy-cli'"
+        )
         writer._conn.execute("DROP INDEX IF EXISTS idx_sessions_local_created_started")
         writer._conn.execute("ALTER TABLE sessions DROP COLUMN created_source")
         writer._conn.commit()
@@ -157,14 +188,25 @@ def test_readonly_pre_column_store_finds_legacy_cli_session(tmp_path, monkeypatc
         ro.close()
 
 
-@pytest.mark.parametrize(("error", "failures", "first_call_raises"), [
-    ("disk I/O error", 1, False),         # transient: replayed like every other read
-    ("disk I/O error", 99, True),         # persistent: propagates, not remembered
-    ("database is locked", 1, True),      # a lock is not a missing column
-])
-def test_schema_probe_error_is_never_cached_as_absent(tmp_path, error, failures, first_call_raises):
+@pytest.mark.parametrize(
+    ("error", "failures", "first_call_raises"),
+    [
+        ("disk I/O error", 1, False),  # transient: replayed like every other read
+        ("disk I/O error", 99, True),  # persistent: propagates, not remembered
+        ("database is locked", 1, True),  # a lock is not a missing column
+    ],
+)
+def test_schema_probe_error_is_never_cached_as_absent(
+    tmp_path, error, failures, first_call_raises
+):
     db = SessionDB(db_path=tmp_path / "state.db")
-    _populate(db, [("legacy-cli", "cli", "cli", 1_000_000), ("local-cli", "local", "cli", 4_000_000_000)])
+    _populate(
+        db,
+        [
+            ("legacy-cli", "cli", "cli", 1_000_000),
+            ("local-cli", "local", "cli", 4_000_000_000),
+        ],
+    )
     left = {"n": failures}
     real_ctx = db._read_ctx
 
@@ -191,7 +233,9 @@ def test_schema_probe_error_is_never_cached_as_absent(tmp_path, error, failures,
         with pytest.raises(sqlite3.OperationalError, match=error):
             reader.search_sessions(source=["cli", "oneshot"], limit=1)
         left["n"] = 0
-    assert _ids(reader, "search_sessions", source=["cli", "oneshot"], limit=1) == ["local-cli"]
+    assert _ids(reader, "search_sessions", source=["cli", "oneshot"], limit=1) == [
+        "local-cli"
+    ]
     assert left["n"] == 0  # the probe went through the retrying reader
     db.close()
 

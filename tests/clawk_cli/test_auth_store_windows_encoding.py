@@ -25,6 +25,7 @@ from clawk_cli import auth
 
 # --- helpers ---------------------------------------------------------------
 
+
 @pytest.fixture
 def clawk_home(tmp_path, monkeypatch):
     """Point CLAWK_HOME at a tmp dir so we never touch the real auth store.
@@ -70,12 +71,13 @@ def windows_default_encoding(monkeypatch):
     monkeypatch.setattr(Path, "read_text", _windows_read_text)
 
 
-
-
 # --- the bug: a non-ASCII label must survive save → load -------------------
 
+
 class TestAuthStoreEncodingRoundTrip:
-    def test_load_reads_utf8_with_non_ascii_label(self, clawk_home, windows_default_encoding):
+    def test_load_reads_utf8_with_non_ascii_label(
+        self, clawk_home, windows_default_encoding
+    ):
         """A UTF-8 store with a CJK/emoji label loads intact (not wiped).
 
         Under the Windows-default-encoding fixture, a no-encoding read_text()
@@ -101,7 +103,9 @@ class TestAuthStoreEncodingRoundTrip:
         assert "openai-codex" in loaded["providers"]
         assert loaded["providers"]["openai-codex"]["label"] == "工作账号 🔥"
 
-    def test_load_does_not_corrupt_store_on_non_ascii(self, clawk_home, windows_default_encoding):
+    def test_load_does_not_corrupt_store_on_non_ascii(
+        self, clawk_home, windows_default_encoding
+    ):
         """The pre-fix bug wiped the store to empty on a UnicodeDecodeError.
 
         After the fix, loading a valid UTF-8 store must never produce the empty
@@ -124,7 +128,10 @@ class TestAuthStoreEncodingRoundTrip:
 
     def test_load_handles_utf8_with_bom(self, clawk_home):
         """A BOM (e.g. from Notepad editing) must not break the read."""
-        store = {"version": auth.AUTH_STORE_VERSION, "providers": {"x": {"label": "café"}}}
+        store = {
+            "version": auth.AUTH_STORE_VERSION,
+            "providers": {"x": {"label": "café"}},
+        }
         auth_path = clawk_home / "auth.json"
         payload = json.dumps(store)
         # write with utf-8-sig to prepend the BOM
@@ -137,15 +144,17 @@ class TestAuthStoreEncodingRoundTrip:
 # --- the fix: readers pass an explicit encoding ---------------------------
 
 
-
 # --- sibling readers of the same ~/.clawksis/auth.json in other modules -------
 #
 # _load_auth_store lives in clawk_cli/auth.py, but several other modules read
 # the same ~/.clawksis/auth.json directly. They had the same UTF-8-vs-cp1252
 # asymmetry on Windows — these tests pin the sibling reads too.
 
+
 class TestAuthJsonSiblingReaders:
-    def test_has_xai_credentials_reads_non_ascii_store(self, clawk_home, windows_default_encoding, monkeypatch):
+    def test_has_xai_credentials_reads_non_ascii_store(
+        self, clawk_home, windows_default_encoding, monkeypatch
+    ):
         """tools/xai_http.has_xai_credentials must read a non-ASCII auth.json.
 
         Pre-fix, a UTF-8 store with a non-ASCII label raised UnicodeDecodeError
@@ -171,7 +180,9 @@ class TestAuthJsonSiblingReaders:
 
         assert has_xai_credentials() is True
 
-    def test_auxiliary_nous_provider_reads_non_ascii_store(self, clawk_home, windows_default_encoding, monkeypatch):
+    def test_auxiliary_nous_provider_reads_non_ascii_store(
+        self, clawk_home, windows_default_encoding, monkeypatch
+    ):
         """agent/auxiliary_client's Nous-provider lookup reads the same store.
 
         The lookup returns None on any read failure, silently disabling Nous as
@@ -308,4 +319,3 @@ class TestAuthJsonSiblingReaders:
         assert nous.get("agent_key") == "k"
         # The non-ASCII label round-trips intact.
         assert nous.get("label") == "工作账号"
-

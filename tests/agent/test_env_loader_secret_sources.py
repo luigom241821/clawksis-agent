@@ -37,8 +37,6 @@ def test_get_secret_source_returns_none_for_untracked_var():
     assert env_loader.get_secret_source("ANTHROPIC_API_KEY") is None
 
 
-
-
 def test_get_secret_source_values_returns_home_snapshot_copy(tmp_path):
     home_a = tmp_path / "profile-a"
     home_b = tmp_path / "profile-b"
@@ -50,9 +48,7 @@ def test_get_secret_source_values_returns_home_snapshot_copy(tmp_path):
     }
 
     snapshot = env_loader.get_secret_source_values(home_a)
-    assert snapshot == {
-        "ANTHROPIC_API_KEY": "sk-profile-a"
-    }
+    assert snapshot == {"ANTHROPIC_API_KEY": "sk-profile-a"}
     assert env_loader.get_secret_source_values(home_b) == {}
     snapshot["ANTHROPIC_API_KEY"] = "mutated"
     assert env_loader.get_secret_source_values(home_a) == {
@@ -64,12 +60,6 @@ def test_format_secret_source_suffix_empty_for_untracked():
     # Credentials from .env or the shell shouldn't add noise — the
     # implicit case stays unlabeled.
     assert env_loader.format_secret_source_suffix("ANTHROPIC_API_KEY") == ""
-
-
-
-
-
-
 
 
 def test_apply_external_secret_sources_records_bitwarden_origin(tmp_path, monkeypatch):
@@ -244,9 +234,7 @@ def test_cold_profile_hydration_seeds_op_env_bootstrap(tmp_path, monkeypatch):
         "OP_SERVICE_ACCOUNT_TOKEN=ops_from-op-env\n", encoding="utf-8"
     )
     (tmp_path / "config.yaml").write_text(
-        "secrets:\n"
-        "  onepassword:\n"
-        "    enabled: true\n",
+        "secrets:\n  onepassword:\n    enabled: true\n",
         encoding="utf-8",
     )
 
@@ -256,6 +244,7 @@ def test_cold_profile_hydration_seeds_op_env_bootstrap(tmp_path, monkeypatch):
 
     def _capture_apply_all(_cfg, home_path, environ=None):
         from agent.secret_sources.registry import ApplyReport
+
         seen_env.update(environ or {})
         return ApplyReport(sources=[], provenance={})
 
@@ -279,9 +268,7 @@ def test_cold_profile_hydration_dotenv_wins_over_op_env(tmp_path, monkeypatch):
         "OP_SERVICE_ACCOUNT_TOKEN=ops_from-op-env\n", encoding="utf-8"
     )
     (tmp_path / "config.yaml").write_text(
-        "secrets:\n"
-        "  onepassword:\n"
-        "    enabled: true\n",
+        "secrets:\n  onepassword:\n    enabled: true\n",
         encoding="utf-8",
     )
 
@@ -291,6 +278,7 @@ def test_cold_profile_hydration_dotenv_wins_over_op_env(tmp_path, monkeypatch):
 
     def _capture_apply_all(_cfg, home_path, environ=None):
         from agent.secret_sources.registry import ApplyReport
+
         seen_env.update(environ or {})
         return ApplyReport(sources=[], provenance={})
 
@@ -411,9 +399,7 @@ def test_apply_external_secret_sources_noop_when_disabled(tmp_path, monkeypatch)
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "secrets:\n"
-        "  bitwarden:\n"
-        "    enabled: false\n",
+        "secrets:\n  bitwarden:\n    enabled: false\n",
         encoding="utf-8",
     )
 
@@ -445,11 +431,13 @@ def test_apply_external_secret_sources_dedupes_within_process(tmp_path, monkeypa
     )
 
     call_count = {"n": 0}
+
     def _fake_fetch(**_kwargs):
         call_count["n"] += 1
         return {"ANTHROPIC_API_KEY": "sk-ant-test"}, []
 
     import agent.secret_sources.bitwarden as bw_module
+
     monkeypatch.setattr(bw_module, "find_bws", lambda **_kw: Path("/fake/bws"))
     monkeypatch.setattr(bw_module, "fetch_bitwarden_secrets", _fake_fetch)
 
@@ -566,7 +554,7 @@ def test_external_secret_values_are_isolated_between_homes(tmp_path, monkeypatch
                     shape="mapped",
                     overrode_env=True,
                 )
-            }
+            },
         )
 
     monkeypatch.setattr(reg_module, "apply_all", _fake_apply_all)
@@ -575,21 +563,15 @@ def test_external_secret_values_are_isolated_between_homes(tmp_path, monkeypatch
     env_loader._apply_external_secret_sources(home_b)
 
     assert os.environ["SHARED_API_KEY"] == "value-b"
-    assert env_loader.get_secret_source_values(home_a) == {
-        "SHARED_API_KEY": "value-a"
-    }
-    assert env_loader.get_secret_source_values(home_b) == {
-        "SHARED_API_KEY": "value-b"
-    }
-    assert build_profile_secret_scope(home_a) == {
-        "SHARED_API_KEY": "value-a"
-    }
-    assert build_profile_secret_scope(home_b) == {
-        "SHARED_API_KEY": "value-b"
-    }
+    assert env_loader.get_secret_source_values(home_a) == {"SHARED_API_KEY": "value-a"}
+    assert env_loader.get_secret_source_values(home_b) == {"SHARED_API_KEY": "value-b"}
+    assert build_profile_secret_scope(home_a) == {"SHARED_API_KEY": "value-a"}
+    assert build_profile_secret_scope(home_b) == {"SHARED_API_KEY": "value-b"}
 
 
-def test_apply_external_secret_sources_records_onepassword_origin(tmp_path, monkeypatch):
+def test_apply_external_secret_sources_records_onepassword_origin(
+    tmp_path, monkeypatch
+):
     """When the 1Password source resolves refs, applied vars end up in
     ``_SECRET_SOURCES`` labeled ``onepassword``."""
 
@@ -636,9 +618,7 @@ def test_apply_external_secret_sources_survives_non_dict_section(tmp_path, monke
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     (tmp_path / "config.yaml").write_text(
-        "secrets:\n"
-        "  bitwarden: true\n"
-        "  onepassword: true\n",
+        "secrets:\n  bitwarden: true\n  onepassword: true\n",
         encoding="utf-8",
     )
 
@@ -668,6 +648,7 @@ def test_apply_external_secret_sources_bad_ttl_does_not_crash(tmp_path, monkeypa
         return {}, []
 
     import agent.secret_sources.onepassword as op_module
+
     monkeypatch.setattr(op_module, "find_op", lambda *_a, **_kw: Path("/fake/op"))
     monkeypatch.setattr(op_module, "fetch_onepassword_secrets", _fake_fetch)
 
@@ -708,7 +689,9 @@ def _register_fake_bulk_source(value_for_home):
     reg_module.register_source(_Fake(), replace=True)
 
 
-def test_env_shadowed_reapply_keeps_home_snapshot(tmp_path, monkeypatch, _fresh_registry):
+def test_env_shadowed_reapply_keeps_home_snapshot(
+    tmp_path, monkeypatch, _fresh_registry
+):
     """#102041: a re-apply whose every key is ``skipped_existing`` (the previous apply's own write-back,
     or a systemd ``EnvironmentFile=`` value) must still snapshot the home's effective values. Latching
     an empty snapshot made ``build_profile_secret_scope`` drop every vault credential for the process
@@ -717,7 +700,9 @@ def test_env_shadowed_reapply_keeps_home_snapshot(tmp_path, monkeypatch, _fresh_
 
     home = tmp_path / ".clawk"
     home.mkdir()
-    (home / "config.yaml").write_text("secrets:\n  fakebulk:\n    enabled: true\n", encoding="utf-8")
+    (home / "config.yaml").write_text(
+        "secrets:\n  fakebulk:\n    enabled: true\n", encoding="utf-8"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.delenv("GLM_API_KEY", raising=False)
     _register_fake_bulk_source(lambda _home: "vault-value")
@@ -730,24 +715,32 @@ def test_env_shadowed_reapply_keeps_home_snapshot(tmp_path, monkeypatch, _fresh_
     env_loader.load_clawk_dotenv(clawk_home=home)
 
     assert str(home.resolve()) in env_loader._APPLIED_HOMES
-    assert env_loader.hydrate_profile_secret_sources(home) == {"GLM_API_KEY": "vault-value"}
+    assert env_loader.hydrate_profile_secret_sources(home) == {
+        "GLM_API_KEY": "vault-value"
+    }
     assert build_profile_secret_scope(home)["GLM_API_KEY"] == "vault-value"
 
 
-def test_home_scoped_reset_preserves_sibling_snapshot(tmp_path, monkeypatch, _fresh_registry):
+def test_home_scoped_reset_preserves_sibling_snapshot(
+    tmp_path, monkeypatch, _fresh_registry
+):
     """A cron fire / discovery refresh for one profile resets only THAT home: a multiplex sibling's
     hydrated snapshot stays intact instead of running empty until it re-hydrates."""
     home = tmp_path / ".clawk"
     sibling = home / "profiles" / "b"
     sibling.mkdir(parents=True)
     for h in (home, sibling):
-        (h / "config.yaml").write_text("secrets:\n  fakebulk:\n    enabled: true\n", encoding="utf-8")
+        (h / "config.yaml").write_text(
+            "secrets:\n  fakebulk:\n    enabled: true\n", encoding="utf-8"
+        )
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.delenv("GLM_API_KEY", raising=False)
     _register_fake_bulk_source(lambda h: f"vault-{h.name}")
 
     env_loader.load_clawk_dotenv(clawk_home=home)
-    assert env_loader.hydrate_profile_secret_sources(sibling) == {"GLM_API_KEY": "vault-b"}
+    assert env_loader.hydrate_profile_secret_sources(sibling) == {
+        "GLM_API_KEY": "vault-b"
+    }
 
     env_loader.reset_secret_source_cache(home)
 

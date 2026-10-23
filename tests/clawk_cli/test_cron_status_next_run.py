@@ -18,11 +18,14 @@ def _frozen_clock(monkeypatch):
     monkeypatch.setattr("clawk_time.now", lambda: now)
 
 
-@pytest.mark.parametrize("later,earlier", [
-    ("2026-11-01T01:15:00-05:00", "2026-11-01T01:45:00-04:00"),
-    ("2026-11-02T09:00:00-05:00", "2026-11-02T08:00:00-05:00"),
-    ("2026-11-02T08:00:00-05:00", "2026-11-02T12:30:00+00:00"),
-])
+@pytest.mark.parametrize(
+    "later,earlier",
+    [
+        ("2026-11-01T01:15:00-05:00", "2026-11-01T01:45:00-04:00"),
+        ("2026-11-02T09:00:00-05:00", "2026-11-02T08:00:00-05:00"),
+        ("2026-11-02T08:00:00-05:00", "2026-11-02T12:30:00+00:00"),
+    ],
+)
 def test_status_earliest_persisted_instant(later, earlier, capsys):
     # Only the clock is frozen: creation, persistence, normalization and listing are real.
     late_job = job_store.create_job(prompt="later", schedule=later)
@@ -39,16 +42,25 @@ def test_status_earliest_persisted_instant(later, earlier, capsys):
     assert job_store.list_jobs() == jobs  # Rendering never reschedules a job.
 
 
-@pytest.mark.parametrize("jobs,expected", [
-    ([], "  No active jobs\n"),
-    ([{}, {"next_run_at": None}, {"next_run_at": ""}], "  3 active job(s)\n"),
-    ([{"next_run_at": "bad"}, {"next_run_at": 123}], "  2 active job(s)\n"),
-    ([{"next_run_at": "bad"}, {"next_run_at": "2026-11-01T06:15:00Z"}],
-     "  2 active job(s)\n  Next run: 2026-11-01T06:15:00Z\n"),
-    ([{"next_run_at": "2026-11-01T06:15:00Z"},
-      {"next_run_at": "2026-11-01T01:15:00-05:00"}],
-     "  2 active job(s)\n  Next run: 2026-11-01T06:15:00Z\n"),
-])
+@pytest.mark.parametrize(
+    "jobs,expected",
+    [
+        ([], "  No active jobs\n"),
+        ([{}, {"next_run_at": None}, {"next_run_at": ""}], "  3 active job(s)\n"),
+        ([{"next_run_at": "bad"}, {"next_run_at": 123}], "  2 active job(s)\n"),
+        (
+            [{"next_run_at": "bad"}, {"next_run_at": "2026-11-01T06:15:00Z"}],
+            "  2 active job(s)\n  Next run: 2026-11-01T06:15:00Z\n",
+        ),
+        (
+            [
+                {"next_run_at": "2026-11-01T06:15:00Z"},
+                {"next_run_at": "2026-11-01T01:15:00-05:00"},
+            ],
+            "  2 active job(s)\n  Next run: 2026-11-01T06:15:00Z\n",
+        ),
+    ],
+)
 def test_status_missing_invalid_and_equivalent_instants(jobs, expected, capsys):
     _print_active_jobs_summary(jobs)
     assert capsys.readouterr().out == expected

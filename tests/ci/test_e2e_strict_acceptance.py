@@ -21,7 +21,9 @@ from tests.e2e.core.delivery._pending_fixes import known_failure
         ("1", "other-batch: tracked gap", True),
     ],
 )
-def test_delivery_gap_respects_strict_owner_scope(monkeypatch, strict, reason, refuse_gap):
+def test_delivery_gap_respects_strict_owner_scope(
+    monkeypatch, strict, reason, refuse_gap
+):
     if strict is None:
         monkeypatch.delenv(STRICT_ACCEPTANCE_ENV, raising=False)
     else:
@@ -32,7 +34,9 @@ def test_delivery_gap_respects_strict_owner_scope(monkeypatch, strict, reason, r
 
     # Catch both outcomes so an unexpected xfail cannot excuse this regression test.
     with pytest.raises((AssertionError, pytest.xfail.Exception)) as caught:
-        with known_failure("marker survived", reason, on_xfail=lambda: callbacks.append("xfail")):
+        with known_failure(
+            "marker survived", reason, on_xfail=lambda: callbacks.append("xfail")
+        ):
             raise gap
 
     assert isinstance(caught.value, expected)
@@ -45,13 +49,22 @@ def test_delivery_gap_respects_strict_owner_scope(monkeypatch, strict, reason, r
 
 
 @pytest.mark.parametrize("strict", ["", "upd-txn", "1"])
-@pytest.mark.parametrize("failure", [None, AssertionError("unrelated failure"), ValueError("marker survived")])
-def test_delivery_guard_preserves_clean_passes_and_unrelated_errors(monkeypatch, strict, failure):
+@pytest.mark.parametrize(
+    "failure",
+    [None, AssertionError("unrelated failure"), ValueError("marker survived")],
+)
+def test_delivery_guard_preserves_clean_passes_and_unrelated_errors(
+    monkeypatch, strict, failure
+):
     monkeypatch.setenv(STRICT_ACCEPTANCE_ENV, strict)
     callbacks = []
 
     def run_cell():
-        with known_failure("marker survived", "upd-txn: tracked gap", on_xfail=lambda: callbacks.append("xfail")):
+        with known_failure(
+            "marker survived",
+            "upd-txn: tracked gap",
+            on_xfail=lambda: callbacks.append("xfail"),
+        ):
             if failure is not None:
                 raise failure
         return "passed"

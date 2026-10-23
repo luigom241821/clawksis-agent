@@ -84,14 +84,13 @@ def test_resolve_runtime_agent_kwargs_carries_request_overrides(monkeypatch):
         "clawk_cli.runtime_provider.resolve_runtime_provider",
         lambda *a, **k: dict(fake_runtime),
     )
-    monkeypatch.setattr(
-        "clawk_cli.runtime_provider._get_model_config", dict
-    )
+    monkeypatch.setattr("clawk_cli.runtime_provider._get_model_config", dict)
     rk = gateway_run._resolve_runtime_agent_kwargs()
     assert rk["request_overrides"] == PROVIDER_OVERRIDES
 
 
 # --- /model session-override follow-up: request_overrides must survive a switch ---
+
 
 def test_session_override_applies_request_overrides():
     """A /model switch to a custom provider carries its extra_body into runtime."""

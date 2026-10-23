@@ -7,14 +7,20 @@ import logging
 from collections import Counter
 from typing import Any
 
-from acp.schema import AvailableCommand, AvailableCommandsUpdate, UnstructuredCommandInput
+from acp.schema import (
+    AvailableCommand,
+    AvailableCommandsUpdate,
+    UnstructuredCommandInput,
+)
 
 from acp_adapter.session import SessionState, _expand_acp_enabled_toolsets
 
 logger = logging.getLogger("acp_adapter.server")
 
 
-def _estimate_tokens(history: list, agent: Any, system_prompt: str | None = None, tools: Any = None) -> int:
+def _estimate_tokens(
+    history: list, agent: Any, system_prompt: str | None = None, tools: Any = None
+) -> int:
     """Rough request-token estimate over history + system prompt + tool schemas."""
     from agent.model_metadata import estimate_request_tokens_rough
 
@@ -22,7 +28,9 @@ def _estimate_tokens(history: list, agent: Any, system_prompt: str | None = None
         system_prompt = getattr(agent, "_cached_system_prompt", "") or ""
     if tools is None:
         tools = getattr(agent, "tools", None) or None
-    return estimate_request_tokens_rough(history, system_prompt=system_prompt, tools=tools)
+    return estimate_request_tokens_rough(
+        history, system_prompt=system_prompt, tools=tools
+    )
 
 
 def _queue_prompt(state: SessionState, text: str) -> int:
@@ -52,10 +60,22 @@ class SlashCommandsMixin:
             "Show current model and provider, or switch models",
             "model name to switch to",
         ),
-        "tools": ("List available tools", "List available tools with descriptions", None),
-        "context": ("Show conversation context info", "Show conversation message counts by role", None),
+        "tools": (
+            "List available tools",
+            "List available tools with descriptions",
+            None,
+        ),
+        "context": (
+            "Show conversation context info",
+            "Show conversation message counts by role",
+            None,
+        ),
         "reset": ("Clear conversation history", "Clear conversation history", None),
-        "compress": ("Compress conversation context", "Compress conversation context", None),
+        "compress": (
+            "Compress conversation context",
+            "Compress conversation context",
+            None,
+        ),
         "steer": (
             "Inject guidance into the currently running agent turn",
             "Inject guidance into the currently running agent turn",
@@ -69,11 +89,14 @@ class SlashCommandsMixin:
         "version": ("Show Clawksis version", "Show Clawksis version", None),
     }
 
-
     @classmethod
     def _available_commands(cls) -> list[AvailableCommand]:
         return [
-            AvailableCommand(name=name, description=desc, input=UnstructuredCommandInput(hint=hint) if hint else None)
+            AvailableCommand(
+                name=name,
+                description=desc,
+                input=UnstructuredCommandInput(hint=hint) if hint else None,
+            )
             for name, (_help, desc, hint) in cls._COMMANDS.items()
         ]
 
@@ -82,9 +105,14 @@ class SlashCommandsMixin:
         if not self._conn:
             return
         update = AvailableCommandsUpdate(
-            session_update="available_commands_update", available_commands=self._available_commands()
+            session_update="available_commands_update",
+            available_commands=self._available_commands(),
         )
-        await self._send(session_id, update, fail_msg="Failed to advertise ACP slash commands for session %s")
+        await self._send(
+            session_id,
+            update,
+            fail_msg="Failed to advertise ACP slash commands for session %s",
+        )
 
     def _schedule_available_commands_update(self, session_id: str) -> None:
         self._schedule_soon(lambda: self._send_available_commands_update(session_id))
@@ -98,13 +126,16 @@ class SlashCommandsMixin:
         if cmd not in self._COMMANDS:
             return None
         from clawk_cli.observability.shared_metrics_events import record_slash_command
+
         record_slash_command(command=cmd, surface="acp")
         mutating = cmd in _MID_TURN_BLOCKED_COMMANDS
         if mutating:
             with state.runtime_lock:
                 if state.is_running or state.command_op:
-                    return (f"⏳ Session is busy; /{cmd} only works while the session is "
-                            "idle. Wait for the current response or cancel first.")
+                    return (
+                        f"⏳ Session is busy; /{cmd} only works while the session is "
+                        "idle. Wait for the current response or cancel first."
+                    )
                 state.command_op = True
         handler = getattr(self, f"_cmd_{cmd}")
 
@@ -117,7 +148,9 @@ class SlashCommandsMixin:
 
                 set_session_cwd(state.cwd)
             except Exception:
-                logger.debug("Could not pin ACP session cwd for slash command", exc_info=True)
+                logger.debug(
+                    "Could not pin ACP session cwd for slash command", exc_info=True
+                )
             return handler(args, state)
 
         try:
@@ -132,8 +165,13 @@ class SlashCommandsMixin:
 
     def _cmd_help(self, args: str, state: SessionState) -> str:
         lines = ["Available commands:", ""]
-        lines.extend(f"  /{cmd:10s}  {desc}" for cmd, (desc, _adv, _hint) in self._COMMANDS.items())
-        lines.extend(["", "Unrecognized /commands are sent to the model as normal messages."])
+        lines.extend(
+            f"  /{cmd:10s}  {desc}"
+            for cmd, (desc, _adv, _hint) in self._COMMANDS.items()
+        )
+        lines.extend(
+            ["", "Unrecognized /commands are sent to the model as normal messages."]
+        )
         return "\n".join(lines)
 
     def _cmd_model(self, args: str, state: SessionState) -> str:
@@ -143,11 +181,21 @@ class SlashCommandsMixin:
             return f"Current model: {model}\nProvider: {provider}"
 
         current_provider, target_provider, new_model = self._switch_model(state, args)
-        provider_label = getattr(state.agent, "provider", None) or target_provider or current_provider or "openrouter"
+        provider_label = (
+            getattr(state.agent, "provider", None)
+            or target_provider
+            or current_provider
+            or "openrouter"
+        )
         logger.info("Session %s: model switched to %s", state.session_id, new_model)
         from clawk_cli.model_picker_usage import large_model_notice
-        notice = large_model_notice(new_model, target_provider or "", lang="en")  # window plans only; cache-only read; ACP text is English
-        return f"Model switched to: {new_model}\nProvider: {provider_label}" + (f"\n⚠ {notice}" if notice else "")
+
+        notice = large_model_notice(
+            new_model, target_provider or "", lang="en"
+        )  # window plans only; cache-only read; ACP text is English
+        return f"Model switched to: {new_model}\nProvider: {provider_label}" + (
+            f"\n⚠ {notice}" if notice else ""
+        )
 
     def _cmd_tools(self, args: str, state: SessionState) -> str:
         try:
@@ -155,7 +203,9 @@ class SlashCommandsMixin:
             from types import SimpleNamespace
             from agent.memory_manager_tools import inject_memory_provider_tools
 
-            toolsets = _expand_acp_enabled_toolsets(getattr(state.agent, "enabled_toolsets", None))
+            toolsets = _expand_acp_enabled_toolsets(
+                getattr(state.agent, "enabled_toolsets", None)
+            )
             tools = get_tool_definitions(
                 enabled_toolsets=toolsets,
                 disabled_toolsets=getattr(state.agent, "disabled_toolsets", None),
@@ -163,7 +213,11 @@ class SlashCommandsMixin:
             )
             tool_view = SimpleNamespace(
                 tools=list(tools or []),
-                valid_tool_names={t.get("function", {}).get("name") for t in tools or [] if isinstance(t, dict)},
+                valid_tool_names={
+                    t.get("function", {}).get("name")
+                    for t in tools or []
+                    if isinstance(t, dict)
+                },
                 enabled_toolsets=toolsets,
                 disabled_toolsets=getattr(state.agent, "disabled_toolsets", None),
                 _memory_manager=getattr(state.agent, "_memory_manager", None),
@@ -205,7 +259,9 @@ class SlashCommandsMixin:
             threshold_tokens = int(context_length * 0.80)
 
         lines = [
-            f"Conversation: {n_messages} messages" if n_messages else "Conversation is empty (no messages yet).",
+            f"Conversation: {n_messages} messages"
+            if n_messages
+            else "Conversation is empty (no messages yet).",
             f"  user: {roles.get('user', 0)}, assistant: {roles.get('assistant', 0)}, "
             f"tool: {roles.get('tool', 0)}, system: {roles.get('system', 0)}",
         ]
@@ -215,18 +271,26 @@ class SlashCommandsMixin:
 
         if approx_tokens > 0 and context_length > 0:
             usage_pct = (approx_tokens / context_length) * 100
-            lines.append(f"Context usage: ~{approx_tokens:,} / {context_length:,} tokens ({usage_pct:.1f}%)")
+            lines.append(
+                f"Context usage: ~{approx_tokens:,} / {context_length:,} tokens ({usage_pct:.1f}%)"
+            )
         elif approx_tokens > 0:
             lines.append(f"Context usage: ~{approx_tokens:,} tokens")
 
         if threshold_tokens > 0 and approx_tokens > 0:
-            threshold_pct = (threshold_tokens / context_length) * 100 if context_length > 0 else 0
+            threshold_pct = (
+                (threshold_tokens / context_length) * 100 if context_length > 0 else 0
+            )
             pct_note = f", {threshold_pct:.0f}%" if threshold_pct else ""
             if approx_tokens >= threshold_tokens:
-                lines.append(f"Compression: due now (threshold ~{threshold_tokens:,}{pct_note}). Run /compress.")
+                lines.append(
+                    f"Compression: due now (threshold ~{threshold_tokens:,}{pct_note}). Run /compress."
+                )
             else:
                 remaining = max(threshold_tokens - approx_tokens, 0)
-                lines.append(f"Compression: ~{remaining:,} tokens until threshold (~{threshold_tokens:,}{pct_note}).")
+                lines.append(
+                    f"Compression: ~{remaining:,} tokens until threshold (~{threshold_tokens:,}{pct_note})."
+                )
         elif threshold_tokens > 0:
             lines.append(f"Compression threshold: ~{threshold_tokens:,} tokens")
 
@@ -244,7 +308,9 @@ class SlashCommandsMixin:
             if callable(reset_session_state):
                 reset_session_state()
         except Exception:
-            logger.warning("ACP session state reset failed for %s", state.session_id, exc_info=True)
+            logger.warning(
+                "ACP session state reset failed for %s", state.session_id, exc_info=True
+            )
             return "Conversation history cleared. Agent session state reset failed; see logs."
         finally:
             self.session_manager.save_session(state.session_id)
@@ -252,9 +318,15 @@ class SlashCommandsMixin:
 
     def _cmd_compress(self, args: str, state: SessionState) -> str:
         """``/compress [here [N] | <focus>] [--preview] [--aggressive]`` through the shared core."""
-        from agent.conversation_compression import finalize_context_engine_compression_notification
+        from agent.conversation_compression import (
+            finalize_context_engine_compression_notification,
+        )
         from agent.conversation_compression_manual import (
-            AGGRESSIVE_UNSUPPORTED, compress_now, parse_compress_args, render_compress_result)
+            AGGRESSIVE_UNSUPPORTED,
+            compress_now,
+            parse_compress_args,
+            render_compress_result,
+        )
 
         if not state.history:
             return "Nothing to compress — conversation is empty."
@@ -270,8 +342,12 @@ class SlashCommandsMixin:
             # Stable ACP session id: suppress _compress_context's SQLite session split.
             agent._session_db = None
             result = compress_now(
-                agent, state.history, request, system_message=getattr(agent, "_cached_system_prompt", "") or "",
-                task_id=state.session_id)
+                agent,
+                state.history,
+                request,
+                system_message=getattr(agent, "_cached_system_prompt", "") or "",
+                task_id=state.session_id,
+            )
         except Exception as e:
             return f"Compression failed: {e}"
         finally:
@@ -297,7 +373,9 @@ class SlashCommandsMixin:
                     preview = steer_text[:80] + ("..." if len(steer_text) > 80 else "")
                     return f"⏩ Steer queued for the active turn: {preview}"
             except Exception as exc:
-                logger.warning("ACP steer failed for session %s: %s", state.session_id, exc)
+                logger.warning(
+                    "ACP steer failed for session %s: %s", state.session_id, exc
+                )
                 return f"⚠️ Steer failed: {exc}"
 
         return f"No active turn — queued for the next turn. ({_queue_prompt(state, steer_text)} queued)"

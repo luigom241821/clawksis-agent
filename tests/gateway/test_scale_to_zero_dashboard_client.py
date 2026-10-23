@@ -12,6 +12,7 @@ CLAWK_HOME, GatewayRunner._scale_to_zero_is_idle's composition, and
 tui_gateway.ws.handle_ws — rather than stubbing the collection under test
 (the F25 / #84327 lesson: bugs live at the call site, not in the pure predicate).
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -90,14 +91,18 @@ def test_last_seen_future_mtime_is_clamped_to_now(clawk_home):
 def test_last_seen_unreadable_marker_fails_awake(clawk_home, monkeypatch):
     s2z.touch_dashboard_client_heartbeat()
 
-    monkeypatch.setattr(s2z.os, "stat", _stat_denying(s2z.dashboard_client_heartbeat_path()))
+    monkeypatch.setattr(
+        s2z.os, "stat", _stat_denying(s2z.dashboard_client_heartbeat_path())
+    )
     now = 1_000_000.0
     # Unreadable (not missing) => counts as activity right now.
     assert s2z.dashboard_client_last_seen(now=now) == now
 
 
 def test_touch_never_raises(clawk_home, monkeypatch):
-    monkeypatch.setattr(s2z.os, "utime", lambda *a, **k: (_ for _ in ()).throw(OSError("ro")))
+    monkeypatch.setattr(
+        s2z.os, "utime", lambda *a, **k: (_ for _ in ()).throw(OSError("ro"))
+    )
     assert s2z.touch_dashboard_client_heartbeat() is False
 
 
@@ -111,8 +116,12 @@ def _runner(monkeypatch, *, last_inbound_at):
     r._running_agents = {}
     r._background_tasks = set()
     r.adapters = {}
-    monkeypatch.setattr(r, "_scale_to_zero_idle_timeout_seconds", lambda: 120.0, raising=False)
-    monkeypatch.setattr(r, "_scale_to_zero_has_live_background_work", lambda: False, raising=False)
+    monkeypatch.setattr(
+        r, "_scale_to_zero_idle_timeout_seconds", lambda: 120.0, raising=False
+    )
+    monkeypatch.setattr(
+        r, "_scale_to_zero_has_live_background_work", lambda: False, raising=False
+    )
     monkeypatch.setattr("cron.scheduler.get_running_job_ids", list)
     return r
 
@@ -174,7 +183,9 @@ def test_dashboard_client_seen_recently_extends_inbound_clock(clawk_home, monkey
 
 def test_newer_gateway_inbound_wins_over_older_marker(clawk_home, monkeypatch):
     r = _runner(monkeypatch, last_inbound_at=time.time() - 5)
-    monkeypatch.setattr(r, "_scale_to_zero_idle_timeout_seconds", lambda: 10.0, raising=False)
+    monkeypatch.setattr(
+        r, "_scale_to_zero_idle_timeout_seconds", lambda: 10.0, raising=False
+    )
     s2z.touch_dashboard_client_heartbeat()
     p = s2z.dashboard_client_heartbeat_path()
     t = time.time() - 40
@@ -188,7 +199,9 @@ def test_newer_gateway_inbound_wins_over_older_marker(clawk_home, monkeypatch):
 def test_unreadable_marker_keeps_gateway_awake(clawk_home, monkeypatch):
     r = _runner(monkeypatch, last_inbound_at=time.time() - 600)
     s2z.touch_dashboard_client_heartbeat()
-    monkeypatch.setattr(s2z.os, "stat", _stat_denying(s2z.dashboard_client_heartbeat_path()))
+    monkeypatch.setattr(
+        s2z.os, "stat", _stat_denying(s2z.dashboard_client_heartbeat_path())
+    )
     assert r._scale_to_zero_is_idle() is False
 
 
@@ -204,7 +217,9 @@ def _stub_ws_server(monkeypatch, ws_mod):
     from tui_gateway import server
 
     monkeypatch.setattr(server, "_start_backend_heartbeat_refresher", lambda: None)
-    monkeypatch.setattr(server, "_schedule_startup_orphan_sweep", lambda: None, raising=False)
+    monkeypatch.setattr(
+        server, "_schedule_startup_orphan_sweep", lambda: None, raising=False
+    )
     monkeypatch.setattr(server, "resolve_skin", lambda: "default")
     monkeypatch.setattr(server, "_ensure_skin_watcher", lambda: None)
     monkeypatch.setattr(server, "register_live_transport", lambda *_a, **_k: None)
@@ -268,7 +283,11 @@ def test_handle_ws_inbound_frames_refresh_marker(clawk_home, monkeypatch):
     monkeypatch.setattr(s2z, "touch_dashboard_client_heartbeat", _spy)
 
     # Let the previous write land before each frame so coalescing does not merge frame touches.
-    asyncio.run(ws_mod.handle_ws(_FakeWS(frames, before_receive=lambda: _drain_marker_writes(ws_mod))))
+    asyncio.run(
+        ws_mod.handle_ws(
+            _FakeWS(frames, before_receive=lambda: _drain_marker_writes(ws_mod))
+        )
+    )
     _drain_marker_writes(ws_mod)
     # 1 on connect + 1 per inbound frame.
     assert len(touches) == 3
@@ -280,7 +299,9 @@ def test_note_activity_is_throttled(clawk_home, monkeypatch):
 
     calls = {"n": 0}
     monkeypatch.setattr(
-        s2z, "touch_dashboard_client_heartbeat", lambda path=None: calls.__setitem__("n", calls["n"] + 1) or True
+        s2z,
+        "touch_dashboard_client_heartbeat",
+        lambda path=None: calls.__setitem__("n", calls["n"] + 1) or True,
     )
     monkeypatch.setattr(ws_mod, "_dashboard_client_touched_at", 0.0)
     ws_mod._note_dashboard_client_activity(force=True)
@@ -334,7 +355,9 @@ def test_refused_marker_write_does_not_wedge_its_path(clawk_home, monkeypatch):
     monkeypatch.setattr(ws_mod, "_dashboard_client_touched_at", 0.0)
     calls = {"n": 0}
     monkeypatch.setattr(
-        s2z, "touch_dashboard_client_heartbeat", lambda path=None: calls.__setitem__("n", calls["n"] + 1) or True
+        s2z,
+        "touch_dashboard_client_heartbeat",
+        lambda path=None: calls.__setitem__("n", calls["n"] + 1) or True,
     )
 
     class _RefusingPool:
@@ -344,7 +367,10 @@ def test_refused_marker_write_does_not_wedge_its_path(clawk_home, monkeypatch):
     real_pool = ws_mod._dashboard_client_touch_pool
     monkeypatch.setattr(ws_mod, "_dashboard_client_touch_pool", _RefusingPool())
     ws_mod._note_dashboard_client_activity(force=True)
-    assert s2z.dashboard_client_heartbeat_path() not in ws_mod._dashboard_client_touch_pending
+    assert (
+        s2z.dashboard_client_heartbeat_path()
+        not in ws_mod._dashboard_client_touch_pending
+    )
     monkeypatch.setattr(ws_mod, "_dashboard_client_touch_pool", real_pool)
     ws_mod._note_dashboard_client_activity(force=True)
     _drain_marker_writes(ws_mod)
@@ -393,5 +419,8 @@ def test_marker_write_lands_in_the_callers_profile_home(clawk_home, monkeypatch)
     finally:
         reset_clawk_home_override(token)
     _drain_marker_writes(ws_mod)
-    assert s2z.dashboard_client_last_seen(s2z.dashboard_client_heartbeat_path(served)) is not None
+    assert (
+        s2z.dashboard_client_last_seen(s2z.dashboard_client_heartbeat_path(served))
+        is not None
+    )
     assert s2z.dashboard_client_last_seen() is None

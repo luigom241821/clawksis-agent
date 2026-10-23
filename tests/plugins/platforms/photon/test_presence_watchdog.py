@@ -10,6 +10,7 @@ These tests exercise the watchdog's decision logic (probe -> count failures ->
 respawn; success resets; recent inbound traffic skips the probe) without
 spawning Node, binding ports, or hitting the network.
 """
+
 from __future__ import annotations
 
 import time
@@ -31,9 +32,9 @@ def _make_adapter(monkeypatch: pytest.MonkeyPatch, **extra: Any) -> PhotonAdapte
     return PhotonAdapter(cfg)
 
 
-
-
-def test_probe_config_explicit_zero_disables_watchdog(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_probe_config_explicit_zero_disables_watchdog(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # Explicit 0 in extra must NOT fall through to the default (``or`` bug):
     # a non-positive interval is the documented escape hatch that disables the watchdog.
     a = _make_adapter(monkeypatch, probe_interval_seconds=0)
@@ -41,10 +42,16 @@ def test_probe_config_explicit_zero_disables_watchdog(monkeypatch: pytest.Monkey
     assert a._probe_enabled is False
 
 
-def test_probe_config_invalid_values_fall_back_to_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_probe_config_invalid_values_fall_back_to_defaults(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # Unparseable values degrade to defaults instead of aborting construction.
-    a = _make_adapter(monkeypatch, probe_interval_seconds="soon", probe_timeout_seconds=None,
-                      probe_max_failures="lots")
+    a = _make_adapter(
+        monkeypatch,
+        probe_interval_seconds="soon",
+        probe_timeout_seconds=None,
+        probe_max_failures="lots",
+    )
     assert a._probe_interval == 600.0
     assert a._probe_timeout == 10.0
     assert a._probe_max_failures == 3
@@ -62,12 +69,15 @@ def test_note_activity_resets_failures(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("sequence,respawns,failures", [
-    (["hung", "hung", "hung"], 1, 3),
-    (["hung", "hung", "alive", "hung", "hung"], 0, 2),
-    (["hung", "inconclusive", "hung"], 0, 2),
-    (["recent", "hung"], 0, 1),
-])
+@pytest.mark.parametrize(
+    "sequence,respawns,failures",
+    [
+        (["hung", "hung", "hung"], 1, 3),
+        (["hung", "hung", "alive", "hung", "hung"], 0, 2),
+        (["hung", "inconclusive", "hung"], 0, 2),
+        (["recent", "hung"], 0, 1),
+    ],
+)
 async def test_watchdog_decisions(monkeypatch, sequence, respawns, failures):
     import plugins.platforms.photon.adapter as module
 
@@ -82,9 +92,15 @@ async def test_watchdog_decisions(monkeypatch, sequence, respawns, failures):
         step = next(steps, None)
         if step is None:
             raise asyncio.CancelledError
-        adapter._last_upstream_activity = time.monotonic() - (0 if step == "recent" else 999)
+        adapter._last_upstream_activity = time.monotonic() - (
+            0 if step == "recent" else 999
+        )
 
-    monkeypatch.setattr(module, "asyncio", SimpleNamespace(sleep=tick, CancelledError=asyncio.CancelledError))
+    monkeypatch.setattr(
+        module,
+        "asyncio",
+        SimpleNamespace(sleep=tick, CancelledError=asyncio.CancelledError),
+    )
     monkeypatch.setattr(adapter, "_probe_once", probe)
     monkeypatch.setattr(adapter, "_respawn_sidecar", respawn)
     task = asyncio.create_task(adapter._presence_watchdog())

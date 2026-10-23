@@ -49,9 +49,15 @@ def test_genuine_provider_timeout_with_no_fallback_configured(monkeypatch):
 
 
 def test_genuine_provider_timeout_with_fallback_configured(monkeypatch):
-    monkeypatch.setattr(scheduler, "load_config", lambda: {
-        "fallback_providers": [{"provider": "openrouter", "model": "anthropic/claude-sonnet-5"}]
-    })
+    monkeypatch.setattr(
+        scheduler,
+        "load_config",
+        lambda: {
+            "fallback_providers": [
+                {"provider": "openrouter", "model": "anthropic/claude-sonnet-5"}
+            ]
+        },
+    )
     monkeypatch.setattr(
         scheduler,
         "get_fallback_chain",
@@ -82,7 +88,9 @@ def test_readtimeout_error_still_classified_as_provider_timeout(monkeypatch):
     assert "did not respond in time" in msg
 
 
-def test_rate_limit_classification_still_takes_priority_over_inactivity_text(monkeypatch):
+def test_rate_limit_classification_still_takes_priority_over_inactivity_text(
+    monkeypatch,
+):
     # A rate-limit error mentioning "usage limit" must still classify as a
     # rate limit even though it could theoretically also contain "timeout"-
     # adjacent wording; rate-limit check runs first and should be unaffected

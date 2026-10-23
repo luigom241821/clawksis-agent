@@ -5,6 +5,7 @@
 the in-container S6ServiceManager instead of falling through to the
 host systemd/launchd/windows code path.
 """
+
 from __future__ import annotations
 
 
@@ -13,6 +14,7 @@ import pytest
 
 class _CallRecorder:
     """Minimal stand-in for S6ServiceManager."""
+
     kind = "s6"
 
     def __init__(self) -> None:
@@ -26,8 +28,6 @@ class _CallRecorder:
 
     def restart(self, name: str) -> None:
         self.calls.append(("restart", name))
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -62,10 +62,12 @@ def test_dispatch_all_handles_partial_failure(
 
     rec = _FailOnWriter(["coder", "writer", "assistant"])
     monkeypatch.setattr(
-        "clawk_cli.service_manager.detect_service_manager", lambda: "s6",
+        "clawk_cli.service_manager.detect_service_manager",
+        lambda: "s6",
     )
     monkeypatch.setattr(
-        "clawk_cli.service_manager.get_service_manager", lambda: rec,
+        "clawk_cli.service_manager.get_service_manager",
+        lambda: rec,
     )
     assert gw._dispatch_all_via_service_manager_if_s6("stop") is True
     # The two successful ones were called; writer raised before recording.
@@ -82,8 +84,6 @@ def test_dispatch_all_handles_partial_failure(
 # Friendly error rendering — GatewayNotRegisteredError / S6CommandError
 # (PR #30136 review item I2)
 # ---------------------------------------------------------------------------
-
-
 
 
 # =============================================================================
@@ -108,11 +108,10 @@ def _stub_s6(monkeypatch: pytest.MonkeyPatch, *, on_s6: bool) -> _CallRecorder:
         lambda: "s6" if on_s6 else "systemd",
     )
     monkeypatch.setattr(
-        "clawk_cli.service_manager.get_service_manager", lambda: rec,
+        "clawk_cli.service_manager.get_service_manager",
+        lambda: rec,
     )
     return rec
-
-
 
 
 def _raise_missing_sleep(file: str, args: list[str]) -> None:
@@ -120,7 +119,8 @@ def _raise_missing_sleep(file: str, args: list[str]) -> None:
 
 
 def test_redirect_falls_back_when_sleep_missing(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Regression guard for issue #36208: when ``os.execvp("sleep", ...)``
     raises (no `sleep` on a clobbered/empty PATH, or a minimal image
@@ -169,7 +169,8 @@ def _armed_watchdog(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_redirect_disarms_startup_watchdog_before_parking(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Issue #102000: the CMD process never reaches a GatewayRunner, so the #36208 in-process
     heartbeat must not park under an armed watchdog (it would os._exit(75) a healthy container)."""
@@ -194,7 +195,9 @@ def test_redirect_disarms_startup_watchdog_before_parking(
     capsys.readouterr()
 
 
-def test_redirect_not_taken_leaves_startup_watchdog_armed(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_redirect_not_taken_leaves_startup_watchdog_armed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Outside s6 the gateway still boots in-process, so GatewayRunner's own disarm must govern."""
     from clawk_cli import gateway as gw
 
@@ -224,6 +227,7 @@ class _UnregisteredRecorder(_CallRecorder):
 
     def _svc(self, action: str, name: str) -> None:
         from clawk_cli.service_manager import GatewayNotRegisteredError
+
         if name not in self._slots:
             raise GatewayNotRegisteredError(name.removeprefix("gateway-"))
         self.calls.append((action, name))
@@ -254,7 +258,9 @@ def _arrange(monkeypatch, tmp_path, mgr, *, profile: str, seed_soul: bool):
     return gw
 
 
-def test_start_registers_a_missing_slot_for_a_real_profile(monkeypatch, tmp_path, capsys):
+def test_start_registers_a_missing_slot_for_a_real_profile(
+    monkeypatch, tmp_path, capsys
+):
     """A profile created from the host against a bind-mounted home has a directory (SOUL.md) but
     no s6 slot. ``gateway start`` must register it and come up instead of demanding a container
     restart; the registration is ``down`` so the ordinary ``start`` owns the desired-state write."""

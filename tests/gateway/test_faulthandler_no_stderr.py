@@ -7,8 +7,6 @@ import sys
 import pytest
 
 
-
-
 _SIGUSR2_CHILD = """
 import os, signal, sys, time
 from types import SimpleNamespace
@@ -22,7 +20,9 @@ time.sleep(30)
 """
 
 
-@pytest.mark.skipif(not hasattr(__import__("signal"), "SIGUSR2"), reason="POSIX-only signal")
+@pytest.mark.skipif(
+    not hasattr(__import__("signal"), "SIGUSR2"), reason="POSIX-only signal"
+)
 def test_sigusr2_stack_dump_leaves_the_gateway_running(tmp_path):
     """#110437 — SIGUSR2 must dump stacks to the log and return; chaining to the
     signal's default disposition (terminate) killed the process being inspected."""
@@ -31,10 +31,14 @@ def test_sigusr2_stack_dump_leaves_the_gateway_running(tmp_path):
     import subprocess
     import time
 
-    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    repo_root = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
     child = subprocess.Popen(
         [sys.executable, "-c", _SIGUSR2_CHILD, str(tmp_path), repo_root],
-        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, text=True,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        text=True,
     )
     try:
         assert child.stdout.readline().strip() == "ready"

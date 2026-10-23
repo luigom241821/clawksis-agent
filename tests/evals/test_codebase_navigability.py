@@ -6,6 +6,7 @@ Two invariants the harness relies on (and that a future refactor could silently 
   2. a name defined in the facade itself resolves to the facade.
 Both are checked against real modules on the current tree, so they also pin the layout the eval documents.
 """
+
 from pathlib import Path
 
 import pytest
@@ -22,6 +23,7 @@ def mods():
 
 def test_tokenizer_falls_back_without_crashing(monkeypatch):
     import builtins
+
     real_import = builtins.__import__
 
     def no_tiktoken(name, *a, **k):

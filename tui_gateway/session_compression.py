@@ -15,10 +15,24 @@ def _tui_compression_config_signature(cfg: dict | None) -> tuple:
     """Stable snapshot of compression/context keys that must apply next turn: the messaging-gateway
     cache-busting extract plus ``idle_compact_after_seconds``/``tail_mode`` (live-TUI-only keys)."""
     from gateway.run import GatewayRunner
+
     keys = GatewayRunner._extract_cache_busting_config(cfg)
-    picked = {k: v for k, v in keys.items() if k.startswith("compression.") or k == "model.context_length"}
-    compression = cfg.get("compression") if isinstance(cfg, dict) and isinstance(cfg.get("compression"), dict) else {}
-    picked.update({f"compression.{k}": compression.get(k) for k in ("idle_compact_after_seconds", "tail_mode")})
+    picked = {
+        k: v
+        for k, v in keys.items()
+        if k.startswith("compression.") or k == "model.context_length"
+    }
+    compression = (
+        cfg.get("compression")
+        if isinstance(cfg, dict) and isinstance(cfg.get("compression"), dict)
+        else {}
+    )
+    picked.update(
+        {
+            f"compression.{k}": compression.get(k)
+            for k in ("idle_compact_after_seconds", "tail_mode")
+        }
+    )
     return tuple(sorted(picked.items()))
 
 
@@ -33,6 +47,7 @@ def _compressor_ctor_default(name: str, fallback: Any) -> Any:
     try:
         import inspect
         from agent.context_compressor import ContextCompressor
+
         default = inspect.signature(ContextCompressor.__init__).parameters[name].default
         return fallback if default is inspect.Parameter.empty else default
     except Exception:
@@ -61,12 +76,27 @@ def _derived_default_threshold_percent(agent: Any, compression: dict) -> float:
         pct = 0.50
     try:
         from agent.agent_init import _resolve_compression_threshold
-        from agent.auxiliary_client import _compression_threshold_for_model, _is_codex_gpt54_or_gpt55, _is_codex_spark
-        model, provider = getattr(agent, "model", "") or "", getattr(agent, "provider", "") or ""
-        autoraise_enabled = str(compression.get("codex_gpt55_autoraise", True)).lower() in {"true", "1", "yes"}
+        from agent.auxiliary_client import (
+            _compression_threshold_for_model,
+            _is_codex_gpt54_or_gpt55,
+            _is_codex_spark,
+        )
+
+        model, provider = (
+            getattr(agent, "model", "") or "",
+            getattr(agent, "provider", "") or "",
+        )
+        autoraise_enabled = str(
+            compression.get("codex_gpt55_autoraise", True)
+        ).lower() in {"true", "1", "yes"}
         pct, _notice = _resolve_compression_threshold(
-            pct, _compression_threshold_for_model(model, provider, allow_codex_gpt55_autoraise=autoraise_enabled),
-            model=model, is_codex_autoraise=_is_codex_gpt54_or_gpt55(model, provider) or _is_codex_spark(model, provider),
+            pct,
+            _compression_threshold_for_model(
+                model, provider, allow_codex_gpt55_autoraise=autoraise_enabled
+            ),
+            model=model,
+            is_codex_autoraise=_is_codex_gpt54_or_gpt55(model, provider)
+            or _is_codex_spark(model, provider),
         )
     except Exception:
         pass
@@ -95,28 +125,50 @@ def _apply_live_compression_config(agent: Any, cfg: dict | None) -> None:
     the deferred ``get_model_context_length`` resolution).
     """
     cfg = cfg if isinstance(cfg, dict) else {}
-    compression = cfg.get("compression") if isinstance(cfg.get("compression"), dict) else {}
-    from agent.agent_init import config_context_length_for_runtime, set_config_context_length
+    compression = (
+        cfg.get("compression") if isinstance(cfg.get("compression"), dict) else {}
+    )
+    from agent.agent_init import (
+        config_context_length_for_runtime,
+        set_config_context_length,
+    )
+
     enabled_raw = compression.get("enabled", True)
-    agent.compression_enabled = enabled_raw if isinstance(enabled_raw, bool) else str(enabled_raw).lower() in {"true", "1", "yes"}
-    agent.codex_responses_native_compaction = is_truthy_value(compression.get("codex_responses_native", False))
+    agent.compression_enabled = (
+        enabled_raw
+        if isinstance(enabled_raw, bool)
+        else str(enabled_raw).lower() in {"true", "1", "yes"}
+    )
+    agent.codex_responses_native_compaction = is_truthy_value(
+        compression.get("codex_responses_native", False)
+    )
     native_threshold_raw = compression.get("codex_responses_compact_threshold", 200_000)
     try:
-        if isinstance(native_threshold_raw, bool) or (native_threshold := int(native_threshold_raw)) <= 0:
+        if (
+            isinstance(native_threshold_raw, bool)
+            or (native_threshold := int(native_threshold_raw)) <= 0
+        ):
             raise ValueError
     except (TypeError, ValueError):
-        logger.warning("Invalid compression.codex_responses_compact_threshold=%r; using 200000.", native_threshold_raw)
+        logger.warning(
+            "Invalid compression.codex_responses_compact_threshold=%r; using 200000.",
+            native_threshold_raw,
+        )
         native_threshold = 200_000
     agent.codex_responses_compact_threshold = native_threshold
     # Absence restores the agent_init/config default (0 = disabled).
     with contextlib.suppress(TypeError, ValueError):
-        agent.compression_idle_compact_after_seconds = max(0, int(compression.get("idle_compact_after_seconds", 0) or 0))
+        agent.compression_idle_compact_after_seconds = max(
+            0, int(compression.get("idle_compact_after_seconds", 0) or 0)
+        )
     cc = getattr(agent, "context_compressor", None)
     if cc is None:
         return
     # tail_mode: unknown/absent values land on the ctor default ("lean"), matching agent_init.
     default_tail = str(_compressor_ctor_default("tail_mode", "lean"))
-    mode = str(compression.get("tail_mode", default_tail) or default_tail).strip().lower()
+    mode = (
+        str(compression.get("tail_mode", default_tail) or default_tail).strip().lower()
+    )
     cc.tail_mode = mode if mode in ("legacy", "lean") else default_tail
     for key, fallback, min_value in _COMPRESSION_INT_KEYS:
         default = int(_compressor_ctor_default(key, fallback))
@@ -124,16 +176,25 @@ def _apply_live_compression_config(agent: Any, cfg: dict | None) -> None:
         with contextlib.suppress(TypeError, ValueError):
             setattr(cc, key, max(min_value, default if raw is None else int(raw)))
     with contextlib.suppress(TypeError, ValueError):
-        ratio_raw = compression.get("target_ratio", _compressor_ctor_default("summary_target_ratio", 0.20))
+        ratio_raw = compression.get(
+            "target_ratio", _compressor_ctor_default("summary_target_ratio", 0.20)
+        )
         cc.summary_target_ratio = max(0.10, min(float(ratio_raw), 0.80))
     # Absent or invalid shape (agent_init treats both as empty): stale overrides must stop steering.
     raw_thresholds = compression.get("model_thresholds")
-    cc.model_thresholds = {
-        str(k): float(v) for k, v in raw_thresholds.items() if isinstance(v, (int, float)) and not isinstance(v, bool)
-    } if isinstance(raw_thresholds, dict) else {}
+    cc.model_thresholds = (
+        {
+            str(k): float(v)
+            for k, v in raw_thresholds.items()
+            if isinstance(v, (int, float)) and not isinstance(v, bool)
+        }
+        if isinstance(raw_thresholds, dict)
+        else {}
+    )
     # threshold: present value wins; absence derives via the agent_init resolution (default + autoraise).
     # resolve_model_threshold returns ``pct`` unchanged when model_thresholds is empty.
     from agent.context_compressor import resolve_model_threshold
+
     pct: float | None = None
     if "threshold" in compression:
         with contextlib.suppress(TypeError, ValueError):
@@ -142,7 +203,10 @@ def _apply_live_compression_config(agent: Any, cfg: dict | None) -> None:
         pct = _derived_default_threshold_percent(agent, compression)
     cc._config_threshold_percent = cc._configured_threshold_percent = pct
     base = cc._base_threshold_percent = resolve_model_threshold(
-        getattr(agent, "model", "") or "", cc.model_thresholds, pct, getattr(agent, "provider", "") or "",
+        getattr(agent, "model", "") or "",
+        cc.model_thresholds,
+        pct,
+        getattr(agent, "provider", "") or "",
     )
     try:
         cc.threshold_percent = cc._effective_threshold_percent(cc.context_length, base)
@@ -206,23 +270,44 @@ def _apply_pending_model_switch(sid: str, session: dict) -> None:
         return
     model = pending.get("display_model") or pending["raw"]
     try:
-        result = _apply_model_switch(sid, session, pending["raw"], confirm_expensive_model=bool(pending.get("confirm_expensive_model")))
+        result = _apply_model_switch(
+            sid,
+            session,
+            pending["raw"],
+            confirm_expensive_model=bool(pending.get("confirm_expensive_model")),
+        )
         # Honour the expensive-model confirm: drop the switch rather than spend on a model the user
         # never confirmed.
         if not result.get("confirm_required"):
             return
         detail = result.get("confirm_message") or result.get("warning") or ""
-        logger.warning("Queued model switch to %s dropped for session %s: %s", model, sid, detail.split("\n", 1)[0])
+        logger.warning(
+            "Queued model switch to %s dropped for session %s: %s",
+            model,
+            sid,
+            detail.split("\n", 1)[0],
+        )
         current = getattr(session["agent"], "model", "") or "the current model"
         # One line: the TUI status bar truncates and the Desktop toast collapses newlines. The full
         # guard text comes back in the confirm prompt when the user picks it again.
         text = f"Stayed on {current}: switching to {model} needs confirmation. Pick it again to confirm."
     except Exception as e:
-        logger.warning("Queued model switch to %s failed for session %s: %s", model, sid, e)
+        logger.warning(
+            "Queued model switch to %s failed for session %s: %s", model, sid, e
+        )
         text = f"Could not switch model: {e}"
-    _emit("notification.show", sid, {
-        "text": text.rstrip(), "level": "warn", "kind": "ttl", "ttl_ms": 12000,
-        "key": "model_switch.dropped", "id": "model_switch.dropped"})
+    _emit(
+        "notification.show",
+        sid,
+        {
+            "text": text.rstrip(),
+            "level": "warn",
+            "kind": "ttl",
+            "ttl_ms": 12000,
+            "key": "model_switch.dropped",
+            "id": "model_switch.dropped",
+        },
+    )
     _emit_session_info(sid, session)
 
 
@@ -246,7 +331,9 @@ def _manual_compress_turn(sid: str, session: dict):
     about to bump, which dropped the turn's reply (#133504). The queued prompt drains on release."""
     with session["history_lock"]:
         if session.get("running"):
-            raise CompressionBusy(busy_message("compress", bool(session.get("_manual_compress_active"))))
+            raise CompressionBusy(
+                busy_message("compress", bool(session.get("_manual_compress_active")))
+            )
         session["running"] = session["_manual_compress_active"] = True
     try:
         yield
@@ -260,22 +347,35 @@ def _manual_compress_turn(sid: str, session: dict):
 
 
 def _compress_session_history(
-    session: dict, focus_topic: str | None = None, approx_tokens: int | None = None,
-    before_messages: list | None = None, history_version: int | None = None,
+    session: dict,
+    focus_topic: str | None = None,
+    approx_tokens: int | None = None,
+    before_messages: list | None = None,
+    history_version: int | None = None,
 ) -> tuple[int, dict]:
     """Single choke point for all manual-compress routes. ``focus_topic`` is the RAW argument string after
     ``/compress``; the shared core (``agent.conversation_compression_manual``) parses boundary forms
     (``here [N]``, ``up to here``, ``--keep N``) so a partial compress triggers on EVERY route instead of a
     FULL compress focused on the literal text. ``--preview`` returns without touching history."""
-    from agent.conversation_compression import finalize_context_engine_compression_notification
+    from agent.conversation_compression import (
+        finalize_context_engine_compression_notification,
+    )
     from agent.conversation_compression_manual import (
-        AGGRESSIVE_UNSUPPORTED, MIN_MESSAGES, compress_now, parse_compress_args)
+        AGGRESSIVE_UNSUPPORTED,
+        MIN_MESSAGES,
+        compress_now,
+        parse_compress_args,
+    )
+
     agent = session["agent"]
     # Snapshot under the lock so the LLM-bound compression call does NOT hold history_lock for the
     # request — otherwise prompt.submit etc. block on the dispatcher loop while compaction runs.
     if before_messages is None or history_version is None:
         with session["history_lock"]:
-            before_messages, history_version = list(session.get("history", [])), int(session.get("history_version", 0))
+            before_messages, history_version = (
+                list(session.get("history", [])),
+                int(session.get("history_version", 0)),
+            )
     if len(before_messages) < MIN_MESSAGES:
         return 0, _get_usage(agent)
     request = parse_compress_args(focus_topic or "")
@@ -283,14 +383,22 @@ def _compress_session_history(
         raise ValueError(AGGRESSIVE_UNSUPPORTED)
     # RPC thread: bind the session cwd, or the boundary prompt rebuild resolves the backend's cwd and
     # persists a prompt every other process then rejects as stale runtime (fresh build, no tools pin).
-    tokens = _set_session_context(session.get("session_key") or "", cwd=_session_cwd(session))
+    tokens = _set_session_context(
+        session.get("session_key") or "", cwd=_session_cwd(session)
+    )
+
     def snapshot_is_current():
         with session["history_lock"]:
             return int(session.get("history_version", 0)) == history_version
 
     try:
-        result = compress_now(agent, before_messages, request, task_id=session.get("session_key") or "default",
-                              snapshot_is_current=snapshot_is_current)
+        result = compress_now(
+            agent,
+            before_messages,
+            request,
+            task_id=session.get("session_key") or "default",
+            snapshot_is_current=snapshot_is_current,
+        )
     finally:
         _clear_session_context(tokens)
     if result.status == "preview":
@@ -311,7 +419,11 @@ def _compress_session_history(
 
 
 def _sync_session_key_after_compress(
-    sid: str, session: dict, *, clear_pending_title: bool = True, restart_slash_worker: bool = True
+    sid: str,
+    session: dict,
+    *,
+    clear_pending_title: bool = True,
+    restart_slash_worker: bool = True,
 ) -> None:
     """Re-anchor the gateway-side ``session_key`` when _compress_context rotates ``agent.session_id``;
     otherwise approval routing, slash worker, DB lookups and yolo state keep targeting the ended parent.
@@ -325,21 +437,29 @@ def _sync_session_key_after_compress(
     if not _transfer_active_session_slot(sid, session, new_session_id=new_session_id):
         logger.warning(
             "Compression session lease did not re-anchor: sid=%s old_session_id=%s new_session_id=%s",
-            sid, old_key, new_session_id,
+            sid,
+            old_key,
+            new_session_id,
         )
     # Even if the approval module fails to import, anchor session_key on the continuation id.
     session["session_key"] = new_session_id
     with contextlib.suppress(Exception):
         from tools import approval
+
         with contextlib.suppress(Exception):
             approval.unregister_gateway_notify(old_key)
         from tools.approval_yolo import transfer_session_yolo
+
         transfer_session_yolo(old_key, new_session_id)
         with contextlib.suppress(Exception):
-            approval.register_gateway_notify(new_session_id, lambda data: _emit_approval_request(sid, data))
+            approval.register_gateway_notify(
+                new_session_id, lambda data: _emit_approval_request(sid, data)
+            )
     # Invalidate any in-flight ``_drain_queued_prompt`` claim taken under the pre-rotation key: a raced
     # drain must not dispatch on the continuation (its envelope is restored to the queue).
-    session["_queued_prompt_generation"] = int(session.get("_queued_prompt_generation", 0)) + 1
+    session["_queued_prompt_generation"] = (
+        int(session.get("_queued_prompt_generation", 0)) + 1
+    )
     if clear_pending_title:
         session["pending_title"] = None
     if restart_slash_worker:

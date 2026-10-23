@@ -4,6 +4,7 @@ Clawksis-Setup reruns install.sh with its baked ``--branch main``. A checkout wh
 config.yaml record (written by Clawksis itself) names ``stable`` must stay where
 ``clawk update`` put it; a ``main`` record still follows the branch.
 """
+
 from pathlib import Path
 import os
 import subprocess
@@ -17,9 +18,21 @@ pytestmark = pytest.mark.platforms("posix")
 
 def _git(cwd, *args):
     return subprocess.run(
-        ["git", "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
-         "-c", "commit.gpgsign=false", *args],
-        cwd=cwd, check=True, capture_output=True, text=True, stdin=subprocess.DEVNULL,
+        [
+            "git",
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "-c",
+            "commit.gpgsign=false",
+            *args,
+        ],
+        cwd=cwd,
+        check=True,
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
     ).stdout.strip()
 
 
@@ -34,18 +47,38 @@ def test_rerun_keeps_a_chosen_channel_checkout(tmp_path, monkeypatch, channel, m
     _git(origin, "init", "-b", "main")
     for label in ("release", "newer"):
         _git(origin, "commit", "--allow-empty", "-m", label)
-    release, tip = _git(origin, "rev-parse", "HEAD~1"), _git(origin, "rev-parse", "HEAD")
+    release, tip = (
+        _git(origin, "rev-parse", "HEAD~1"),
+        _git(origin, "rev-parse", "HEAD"),
+    )
     _git(tmp_path, "clone", "-q", str(origin), str(install))
     _git(install, "checkout", "-q", "--detach", release)
     monkeypatch.setenv("CLAWK_HOME", str(home))
     set_install_channel(channel, install)
 
     result = subprocess.run(
-        ["bash", str(ROOT / "scripts" / "install.sh"), "--stage", "repository",
-         "--branch", "main", "--dir", str(install), "--clawk-home", str(home), "--non-interactive"],
-        check=False, capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=120,
+        [
+            "bash",
+            str(ROOT / "scripts" / "install.sh"),
+            "--stage",
+            "repository",
+            "--branch",
+            "main",
+            "--dir",
+            str(install),
+            "--clawk-home",
+            str(home),
+            "--non-interactive",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+        timeout=120,
         env={"PATH": os.environ["PATH"], "HOME": str(tmp_path), "NO_COLOR": "1"},
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert _git(install, "rev-parse", "HEAD") == (tip if moves else release), result.stdout
+    assert _git(install, "rev-parse", "HEAD") == (tip if moves else release), (
+        result.stdout
+    )

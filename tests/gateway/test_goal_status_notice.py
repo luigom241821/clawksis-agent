@@ -28,7 +28,9 @@ class FakeAdapter:
         )
         return SimpleNamespace(success=True)
 
-    def register_post_delivery_callback(self, session_key, callback, *, generation=None):
+    def register_post_delivery_callback(
+        self, session_key, callback, *, generation=None
+    ):
         self.callbacks[session_key] = (generation, callback)
 
 
@@ -51,7 +53,9 @@ async def test_goal_status_notice_defers_until_post_delivery_callback():
     runner = GatewayRunner.__new__(GatewayRunner)
     adapter = FakeAdapter()
     runner.adapters = {Platform.DISCORD: adapter}
-    runner.config = SimpleNamespace(group_sessions_per_user=True, thread_sessions_per_user=False)
+    runner.config = SimpleNamespace(
+        group_sessions_per_user=True, thread_sessions_per_user=False
+    )
 
     source = SessionSource(
         platform=Platform.DISCORD,
@@ -60,7 +64,9 @@ async def test_goal_status_notice_defers_until_post_delivery_callback():
         user_id="user-1",
     )
 
-    await runner._defer_goal_status_notice_after_delivery(source, "✓ Goal achieved: done")
+    await runner._defer_goal_status_notice_after_delivery(
+        source, "✓ Goal achieved: done"
+    )
 
     assert adapter.calls == []
     assert len(adapter.callbacks) == 1
@@ -78,5 +84,3 @@ async def test_goal_status_notice_defers_until_post_delivery_callback():
             "metadata": {"thread_id": "thread-123"},
         }
     ]
-
-

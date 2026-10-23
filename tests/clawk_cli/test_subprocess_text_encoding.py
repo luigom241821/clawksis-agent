@@ -21,7 +21,11 @@ def _iter_call_text_nodes(tree: ast.AST) -> list[ast.Call]:
 
 @pytest.mark.parametrize(
     "path",
-    sorted(p for p in CLAWK_CLI.rglob("*.py") if "__pycache__" not in p.parts and "test" not in p.name),
+    sorted(
+        p
+        for p in CLAWK_CLI.rglob("*.py")
+        if "__pycache__" not in p.parts and "test" not in p.name
+    ),
     ids=lambda p: str(p.relative_to(CLAWK_CLI)),
 )
 def test_text_mode_subprocess_calls_pin_utf8(path: Path) -> None:

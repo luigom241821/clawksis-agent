@@ -35,8 +35,6 @@ def real_targz(tmp_path):
 
 
 class TestTrailingPunctuation:
-
-
     def test_multipart_extension_not_truncated(self, real_targz):
         media, _ = BasePlatformAdapter.extract_media(f"MEDIA:{real_targz}")
         assert [p for p, _ in media] == [real_targz]
@@ -66,5 +64,3 @@ class TestEmphasisAndDedupeIntegration:
         b.write_text("2")
         media, _ = BasePlatformAdapter.extract_media(f"MEDIA:{a} MEDIA:{b}")
         assert [p for p, _ in media] == [str(a), str(b)]
-
-

@@ -35,5 +35,4 @@ class TestSubdirectoryHintTrackerTildeRobustness:
         # Must not raise — return value can be None / empty
         tracker.check_tool_call("terminal", {"command": cmd})
 
-
         # No exception, no assertion required

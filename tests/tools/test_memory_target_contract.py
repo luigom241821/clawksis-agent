@@ -27,14 +27,20 @@ def _call(route, store, args):
 
 @pytest.mark.parametrize("route", ["registry", "inline", "store", "replay"])
 @pytest.mark.parametrize("origin", ["direct", "foreground", "background_review"])
-@pytest.mark.parametrize("target_fields,nested_fields", [
-    ({}, {}),
-    ({"target": None}, {}),
-    ({}, {"target": "user"}),
-    ({"target": "memory"}, {"target": "user"}),
-])
+@pytest.mark.parametrize(
+    "target_fields,nested_fields",
+    [
+        ({}, {}),
+        ({"target": None}, {}),
+        ({}, {"target": "user"}),
+        ({"target": "memory"}, {"target": "user"}),
+    ],
+)
 def test_invalid_targets_leave_files_and_pending_queue_unchanged(
-    route, origin, target_fields, nested_fields,
+    route,
+    origin,
+    target_fields,
+    nested_fields,
 ):
     store = MemoryStore()
     store.load_from_disk()
@@ -45,10 +51,13 @@ def test_invalid_targets_leave_files_and_pending_queue_unchanged(
     config.setdefault("memory", {})["write_approval"] = origin != "direct"
     save_config(config)
     # A bad target in a later operation must reject the entire batch.
-    args = {**target_fields, "operations": [
-        {"action": "add", "content": "First fact"},
-        {"action": "add", "content": "Second fact", **nested_fields},
-    ]}
+    args = {
+        **target_fields,
+        "operations": [
+            {"action": "add", "content": "First fact"},
+            {"action": "add", "content": "Second fact", **nested_fields},
+        ],
+    }
     original = copy.deepcopy(args)
     token = set_current_write_origin(origin)
     try:
@@ -72,7 +81,10 @@ def test_nested_target_matching_the_call_is_accepted(route, nested):
     for name in ("memory", "user"):
         assert store.add(name, f"Existing {name} fact")["success"]
     memory_before = store._path_for("memory").read_bytes()
-    args = {"target": "user", "operations": [{"action": "add", "content": "Fact", "target": nested}]}
+    args = {
+        "target": "user",
+        "operations": [{"action": "add", "content": "Fact", "target": nested}],
+    }
     assert _call(route, store, args)["success"] is True
     fresh = MemoryStore()
     fresh.load_from_disk()
@@ -83,7 +95,9 @@ def test_nested_target_matching_the_call_is_accepted(route, nested):
 @pytest.mark.parametrize("route", ["registry", "inline"])
 @pytest.mark.parametrize("batch", [False, True])
 @pytest.mark.parametrize("target", ["memory", "user"])
-def test_missing_target_can_be_corrected_without_writing_to_the_other_store(route, batch, target):
+def test_missing_target_can_be_corrected_without_writing_to_the_other_store(
+    route, batch, target
+):
     store = MemoryStore()
     store.load_from_disk()
     for name in ("memory", "user"):
@@ -99,6 +113,9 @@ def test_missing_target_can_be_corrected_without_writing_to_the_other_store(rout
     assert result["success"] is True, result
     fresh = MemoryStore()
     fresh.load_from_disk()
-    assert fresh._entries_for(target) == [f"Existing {target} fact", operation["content"]]
+    assert fresh._entries_for(target) == [
+        f"Existing {target} fact",
+        operation["content"],
+    ]
     assert store._path_for(other).read_bytes() == other_before
     assert store.format_for_system_prompt(target) == snapshot

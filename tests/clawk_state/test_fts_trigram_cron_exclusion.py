@@ -42,7 +42,9 @@ def _install_pre_v27_trigram(db: SessionDB, *, with_tool_calls: bool = False) ->
     behind, which is what the in-place v29 migration handles.
     """
     cols = "content, tool_name" + (", tool_calls" if with_tool_calls else "")
-    vals = "new.content, new.tool_name" + (", new.tool_calls" if with_tool_calls else "")
+    vals = "new.content, new.tool_name" + (
+        ", new.tool_calls" if with_tool_calls else ""
+    )
     db._conn.executescript(
         f"""
         DROP TRIGGER messages_fts_trigram_insert;
@@ -77,9 +79,12 @@ def test_fresh_trigram_indexes_conversations_but_not_cron(db: SessionDB):
 
     assert _trigram_rowids(db) == {cli_id}
     assert cron_id not in _trigram_rowids(db)
-    assert db._conn.execute(
-        "SELECT id FROM messages_fts_docsize WHERE id = ?", (cron_id,)
-    ).fetchone() is not None
+    assert (
+        db._conn.execute(
+            "SELECT id FROM messages_fts_docsize WHERE id = ?", (cron_id,)
+        ).fetchone()
+        is not None
+    )
 
 
 def test_cron_remains_searchable_via_standard_fts_and_explicit_cjk_fallback(
@@ -90,9 +95,7 @@ def test_cron_remains_searchable_via_standard_fts_and_explicit_cjk_fallback(
         "cron", role="assistant", content="quarterly archive 大别山项目 complete"
     )
 
-    assert [row["session_id"] for row in db.search_messages("quarterly")] == [
-        "cron"
-    ]
+    assert [row["session_id"] for row in db.search_messages("quarterly")] == ["cron"]
     assert [
         row["session_id"]
         for row in db.search_messages("大别山项目", source_filter=["cron"])
@@ -147,12 +150,18 @@ def test_existing_external_layout_rebuilds_trigram_on_upgrade(tmp_path, old_vers
         assert "sessions" in view_sql
         assert "cron" in view_sql
         assert [row["id"] for row in migrated.search_messages("互迁移")] == [cli_id]
-        assert [row["id"] for row in migrated.search_messages(
-            "定时迁移内容", source_filter=["cron"]
-        )] == [cron_id]
-        new_cron_id = migrated.append_message("cron", role="user", content="新增定时内容")
+        assert [
+            row["id"]
+            for row in migrated.search_messages("定时迁移内容", source_filter=["cron"])
+        ] == [cron_id]
+        new_cron_id = migrated.append_message(
+            "cron", role="user", content="新增定时内容"
+        )
         assert new_cron_id not in _trigram_rowids(migrated)
-        assert migrated._conn.execute("SELECT version FROM schema_version").fetchone()[0] == SCHEMA_VERSION
+        assert (
+            migrated._conn.execute("SELECT version FROM schema_version").fetchone()[0]
+            == SCHEMA_VERSION
+        )
         migrated._conn.execute(
             "INSERT INTO messages_fts_trigram(messages_fts_trigram) VALUES('integrity-check')"
         )
@@ -221,7 +230,10 @@ def test_v1_tool_calls_layout_is_left_for_optimize_storage(tmp_path):
         # … and the opt-in path completes the transition: v2 columns,
         # cron-filtered view, cron row purged.
         migrated.optimize_fts_storage()
-        cols = [r[1] for r in migrated._conn.execute("PRAGMA table_info(messages_fts_trigram)")]
+        cols = [
+            r[1]
+            for r in migrated._conn.execute("PRAGMA table_info(messages_fts_trigram)")
+        ]
         assert "tool_calls" not in cols
         assert _trigram_rowids(migrated) == {cli_id}
     finally:
@@ -262,9 +274,10 @@ def test_partial_upgrade_view_does_not_skip_historical_rebuild(tmp_path, old_ver
     try:
         assert _trigram_rowids(migrated) == {cli_id}
         assert [row["id"] for row in migrated.search_messages("互迁移")] == [cli_id]
-        assert [row["id"] for row in migrated.search_messages(
-            "迁移中断内容", source_filter=["cron"]
-        )] == [cron_id]
+        assert [
+            row["id"]
+            for row in migrated.search_messages("迁移中断内容", source_filter=["cron"])
+        ] == [cron_id]
         migrated._conn.execute(
             "INSERT INTO messages_fts_trigram(messages_fts_trigram, rank) "
             "VALUES('integrity-check', 1)"

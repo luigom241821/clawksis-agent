@@ -1,11 +1,14 @@
 """``clawk update`` from a PM environment's workspace goes to the checkout that owns it (#122627)."""
+
 import sys
 
 from clawk_cli.update_owning_install import owning_install_root
 from pm.environments import install_key
 
 
-def test_pm_generation_venv_is_owned_by_the_checkout_its_install_key_names(tmp_path, monkeypatch):
+def test_pm_generation_venv_is_owned_by_the_checkout_its_install_key_names(
+    tmp_path, monkeypatch
+):
     checkout = tmp_path / "clawksis-agent"
     (checkout / "clawk_cli").mkdir(parents=True)
     (checkout / "clawk_cli" / "main.py").write_text("", encoding="utf-8")
@@ -24,5 +27,7 @@ def test_pm_generation_venv_is_owned_by_the_checkout_its_install_key_names(tmp_p
 
     assert owning_install_root(workspace) == checkout.resolve()
 
-    record.write_text(str(tmp_path / "elsewhere"), encoding="utf-8")  # not the path the key hashes
+    record.write_text(
+        str(tmp_path / "elsewhere"), encoding="utf-8"
+    )  # not the path the key hashes
     assert owning_install_root(workspace) is None

@@ -16,6 +16,7 @@ class _DeadEnv:
 
 class _HealthyEmptyEnv:
     """Runs commands fine; the filesystem has no files."""
+
     cwd = "/workspace"
 
     def execute(self, command: str, cwd=None, **kwargs) -> dict:
@@ -28,11 +29,21 @@ class _HealthyEmptyEnv:
         return {"output": "", "returncode": 1}
 
 
-@pytest.mark.parametrize("op", ["read_file", "read_file_raw", "read_file_bytes", "search"])
+@pytest.mark.parametrize(
+    "op", ["read_file", "read_file_raw", "read_file_bytes", "search"]
+)
 def test_dead_environment_is_reported_as_unavailable_not_missing(op):
     ops = ShellFileOperations(_DeadEnv())
-    result = getattr(ops, op)("pattern", "state") if op == "search" else getattr(ops, op)("state/notes.md")
-    assert result.error and "File not found" not in result.error and "environment unavailable" in result.error.lower()
+    result = (
+        getattr(ops, op)("pattern", "state")
+        if op == "search"
+        else getattr(ops, op)("state/notes.md")
+    )
+    assert (
+        result.error
+        and "File not found" not in result.error
+        and "environment unavailable" in result.error.lower()
+    )
 
 
 @pytest.mark.parametrize("op", ["read_file", "read_file_raw", "read_file_bytes"])

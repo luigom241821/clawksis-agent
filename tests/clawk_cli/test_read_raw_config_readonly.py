@@ -39,8 +39,6 @@ def _write_config(home, data):
     return cfg
 
 
-
-
 def test_freshness_after_config_edit(isolated_clawk_home):
     from clawk_cli.config import read_raw_config_readonly
 
@@ -64,5 +62,3 @@ def test_missing_config_returns_empty(isolated_clawk_home):
     if cfg.exists():
         cfg.unlink()
     assert read_raw_config_readonly() == {}
-
-

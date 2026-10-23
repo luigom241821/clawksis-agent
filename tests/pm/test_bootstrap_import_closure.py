@@ -12,14 +12,20 @@ import pytest
 def test_minimal_bootstrap_closure_reaches_pm_paths_and_locks(tmp_path):
     repo = Path(__file__).resolve().parents[2]
     stage = tmp_path / "stage"
-    shutil.copytree(repo / "pm", stage / "pm", ignore=shutil.ignore_patterns("__pycache__"))
+    shutil.copytree(
+        repo / "pm", stage / "pm", ignore=shutil.ignore_patterns("__pycache__")
+    )
     shutil.copy2(repo / "clawk_constants.py", stage / "clawk_constants.py")
     (stage / "clawk_cli").mkdir()
     for name in ("__init__.py", "runtime_state.py"):
         shutil.copy2(repo / "clawk_cli" / name, stage / "clawk_cli" / name)
     store = stage / "tools"
-    env = dict(os.environ, CLAWK_HOME=str(tmp_path / "home"),
-               CLAWK_RUNTIME_DIR=str(store), PYTHONPATH=str(stage))
+    env = dict(
+        os.environ,
+        CLAWK_HOME=str(tmp_path / "home"),
+        CLAWK_RUNTIME_DIR=str(store),
+        PYTHONPATH=str(stage),
+    )
     script = """
 from pathlib import Path
 import pm.paths
@@ -32,18 +38,28 @@ with Store(root).install_lock():
 assert facts.path.is_file()
 print(root)
 """
-    result = subprocess.run([sys.executable, "-S", "-c", script], cwd=stage, env=env,
-                            capture_output=True, text=True, timeout=15, check=False)
+    result = subprocess.run(
+        [sys.executable, "-S", "-c", script],
+        cwd=stage,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=15,
+        check=False,
+    )
     assert result.returncode == 0, result.stdout + result.stderr
     assert Path(result.stdout.strip()) == store
-
 
 
 def _constants_stage(tmp_path, *, with_acl: bool) -> Path:
     repo = Path(__file__).resolve().parents[2]
     stage = tmp_path / "stage"
     stage.mkdir()
-    names = ["clawk_constants.py", "clawk_dir_acl.py"] if with_acl else ["clawk_constants.py"]
+    names = (
+        ["clawk_constants.py", "clawk_dir_acl.py"]
+        if with_acl
+        else ["clawk_constants.py"]
+    )
     for name in names:
         shutil.copy2(repo / name, stage / name)
     return stage
@@ -51,9 +67,15 @@ def _constants_stage(tmp_path, *, with_acl: bool) -> Path:
 
 def _mkdir_in_stage(stage: Path, home: Path) -> subprocess.CompletedProcess:
     script = "import clawk_constants, sys; print(clawk_constants.mkdir_under_clawk_home(sys.argv[1]))"
-    return subprocess.run([sys.executable, "-S", "-c", script, str(home / "logs")], cwd=stage,
-                          env=dict(os.environ, CLAWK_HOME=str(home), PYTHONPATH=str(stage)),
-                          capture_output=True, text=True, timeout=15, check=False)
+    return subprocess.run(
+        [sys.executable, "-S", "-c", script, str(home / "logs")],
+        cwd=stage,
+        env=dict(os.environ, CLAWK_HOME=str(home), PYTHONPATH=str(stage)),
+        capture_output=True,
+        text=True,
+        timeout=15,
+        check=False,
+    )
 
 
 def test_home_mkdir_carries_the_acl_module_in_the_closure(tmp_path):
@@ -72,12 +94,20 @@ def test_home_mkdir_never_silently_skips_the_elevated_grant(tmp_path):
     home = tmp_path / "home"
     home.mkdir()
     stage = _constants_stage(tmp_path, with_acl=False)
-    alone = subprocess.run([sys.executable, "-S", "-c", "import clawk_constants"], cwd=stage,
-                           env=dict(os.environ, PYTHONPATH=str(stage)), capture_output=True, text=True,
-                           timeout=15, check=False)
+    alone = subprocess.run(
+        [sys.executable, "-S", "-c", "import clawk_constants"],
+        cwd=stage,
+        env=dict(os.environ, PYTHONPATH=str(stage)),
+        capture_output=True,
+        text=True,
+        timeout=15,
+        check=False,
+    )
     assert alone.returncode == 0, alone.stderr
     result = _mkdir_in_stage(stage, home)
-    assert result.returncode != 0 and "clawk_dir_acl" in result.stderr, result.stdout + result.stderr
+    assert result.returncode != 0 and "clawk_dir_acl" in result.stderr, (
+        result.stdout + result.stderr
+    )
 
 
 def test_managed_python_signing_import_needs_no_pm_or_application(tmp_path):
@@ -92,9 +122,15 @@ sys.meta_path.insert(0, NoApplication())
 from clawk_cli.macos_signing import sign_managed_python
 assert callable(sign_managed_python)
 """
-    result = subprocess.run([sys.executable, "-S", "-c", script], cwd=repo,
-                            env=dict(os.environ, CLAWK_HOME=str(tmp_path / "home")),
-                            capture_output=True, text=True, timeout=15, check=False)
+    result = subprocess.run(
+        [sys.executable, "-S", "-c", script],
+        cwd=repo,
+        env=dict(os.environ, CLAWK_HOME=str(tmp_path / "home")),
+        capture_output=True,
+        text=True,
+        timeout=15,
+        check=False,
+    )
     assert result.returncode == 0, result.stderr
 
 
@@ -121,7 +157,13 @@ result = _run_streaming([sys.executable, '-c', 'print(\"no solution found\")'],
                         cwd='.', env={}, timeout=30, output=sys.stderr)
 assert result.returncode == 0, result
 """
-    result = subprocess.run([sys.executable, "-S", "-c", script], cwd=repo,
-                            env=dict(os.environ, CLAWK_HOME=str(tmp_path / "home")),
-                            capture_output=True, text=True, timeout=60, check=False)
+    result = subprocess.run(
+        [sys.executable, "-S", "-c", script],
+        cwd=repo,
+        env=dict(os.environ, CLAWK_HOME=str(tmp_path / "home")),
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
     assert result.returncode == 0, result.stdout + result.stderr

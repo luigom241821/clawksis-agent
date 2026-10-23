@@ -27,7 +27,10 @@ from tools.tts_tool_delivery import _origin, _remove_quietly as _unlink_quietly
 
 logger = logging.getLogger("tools.tts_tool")
 
-def _align_int16_chunks(chunks: Iterable[bytes], stop_evt: threading.Event, *, pad_tail: bool = True) -> Iterator[bytes]:
+
+def _align_int16_chunks(
+    chunks: Iterable[bytes], stop_evt: threading.Event, *, pad_tail: bool = True
+) -> Iterator[bytes]:
     """Yield int16-aligned byte chunks; a dangling odd byte is padded at the end (or dropped)."""
     leftover = b""
     for chunk in chunks:
@@ -42,11 +45,14 @@ def _align_int16_chunks(chunks: Iterable[bytes], stop_evt: threading.Event, *, p
         yield b"\x00"
 
 
-def _play_via_tempfile(audio_iter: Iterable[bytes], stop_evt: threading.Event, sample_rate: int = 24000) -> None:
+def _play_via_tempfile(
+    audio_iter: Iterable[bytes], stop_evt: threading.Event, sample_rate: int = 24000
+) -> None:
     """Write PCM chunks to a temp WAV file and play it with the system player."""
     tmp = tmp_path = None
     try:
         import wave
+
         tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
         tmp_path = tmp.name
         with wave.open(tmp, "wb") as wf:
@@ -59,6 +65,7 @@ def _play_via_tempfile(audio_iter: Iterable[bytes], stop_evt: threading.Event, s
         # handle blocks the player and the unlink below (WinError 32).
         tmp.close()
         from tools.voice_mode import play_audio_file
+
         play_audio_file(tmp_path)
     except Exception as exc:
         logger.warning("Temp-file TTS fallback failed: %s", exc)
@@ -86,7 +93,9 @@ def _first_written_artifact(raw: object, requested: str) -> str:
     try:
         payload = json.loads(raw) if isinstance(raw, str) else (raw or {})
         if isinstance(payload, dict):
-            reported = payload.get("file_paths") or ([payload["file_path"]] if payload.get("file_path") else [])
+            reported = payload.get("file_paths") or (
+                [payload["file_path"]] if payload.get("file_path") else []
+            )
             if isinstance(reported, list):
                 candidates = [p for p in reported if isinstance(p, str)]
     except (ValueError, TypeError):
@@ -107,15 +116,23 @@ class _SyncSentencePipeline:
 
     def __init__(self, stop_event: threading.Event, *, lookahead: int = 2):
         self._stop = stop_event
-        self._queue: queue.Queue[Optional[tuple[str, Future]]] = queue.Queue(maxsize=max(1, lookahead))
-        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="tts-sync-synth")
-        self._player = threading.Thread(target=self._drain, name="tts-sync-play", daemon=True)
+        self._queue: queue.Queue[Optional[tuple[str, Future]]] = queue.Queue(
+            maxsize=max(1, lookahead)
+        )
+        self._executor = ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="tts-sync-synth"
+        )
+        self._player = threading.Thread(
+            target=self._drain, name="tts-sync-play", daemon=True
+        )
         self._player.start()
 
     def speak(self, cleaned: str) -> None:
         """Queue one sentence. Blocks only when the lookahead bound is full."""
         if not self._stop.is_set():
-            self._queue.put((cleaned, self._executor.submit(self._synthesize_to_tmp, cleaned)))
+            self._queue.put(
+                (cleaned, self._executor.submit(self._synthesize_to_tmp, cleaned))
+            )
 
     def close(self) -> None:
         """Flush queued sentences in order (skipped if stopped), then join."""
@@ -133,7 +150,9 @@ class _SyncSentencePipeline:
             raw = _origin().text_to_speech_tool(text=cleaned, output_path=tmp_path)
             written = _first_written_artifact(raw, tmp_path)
             if os.path.abspath(written) != os.path.abspath(tmp_path):
-                _unlink_quietly(tmp_path)  # provider wrote elsewhere: the placeholder is empty
+                _unlink_quietly(
+                    tmp_path
+                )  # provider wrote elsewhere: the placeholder is empty
             return written
         except Exception as exc:
             logger.warning("Sync per-sentence TTS synthesis failed: %s", exc)
@@ -145,8 +164,14 @@ class _SyncSentencePipeline:
             tmp_path = None
             try:
                 tmp_path = future.result()
-                if tmp_path and not self._stop.is_set() and os.path.isfile(tmp_path) and os.path.getsize(tmp_path) > 0:
+                if (
+                    tmp_path
+                    and not self._stop.is_set()
+                    and os.path.isfile(tmp_path)
+                    and os.path.getsize(tmp_path) > 0
+                ):
                     from tools.voice_mode import play_audio_file
+
                     play_audio_file(tmp_path)
             except Exception as exc:
                 logger.warning("Sync per-sentence TTS failed: %s", exc)
@@ -172,7 +197,9 @@ class _StreamerPlayback:
         # ``streamer.sample_rate`` is only trustworthy after the request answered (#76466).
         self.output_stream = None
         self._use_device = self._device_usable()
-        self._audio_queue: queue.Queue[Optional[queue.Queue[Optional[bytes]]]] = queue.Queue()
+        self._audio_queue: queue.Queue[Optional[queue.Queue[Optional[bytes]]]] = (
+            queue.Queue()
+        )
         self._prefetch_threads: list[threading.Thread] = []
         self._prefetch_sem = threading.Semaphore(3)
         self._worker = threading.Thread(target=self._playback_worker, daemon=True)
@@ -181,7 +208,10 @@ class _StreamerPlayback:
     def _create_output_stream(self):
         sd = _origin()._import_sounddevice()
         stream = sd.OutputStream(
-            samplerate=self.streamer.sample_rate, channels=self.streamer.channels, dtype="int16")
+            samplerate=self.streamer.sample_rate,
+            channels=self.streamer.channels,
+            dtype="int16",
+        )
         stream.start()
         return stream
 
@@ -211,7 +241,10 @@ class _StreamerPlayback:
             self.output_stream = self._create_output_stream()
         except Exception as exc:
             logger.warning("sounddevice OutputStream failed: %s", exc)
-            self.output_stream, self._reinit_count = None, self._MAX_REINIT  # don't retry per sentence
+            self.output_stream, self._reinit_count = (
+                None,
+                self._MAX_REINIT,
+            )  # don't retry per sentence
         self._current_stream, self._current_rate = self.output_stream, rate
         return self._current_stream is not None
 
@@ -230,27 +263,43 @@ class _StreamerPlayback:
             logger.warning("Streaming TTS synthesis failed: %s", exc)
             return
         self._prefetch_sem.acquire()
-        chunk_queue: queue.Queue[Optional[bytes]] = queue.Queue(maxsize=self._CHUNK_QUEUE_MAX)
+        chunk_queue: queue.Queue[Optional[bytes]] = queue.Queue(
+            maxsize=self._CHUNK_QUEUE_MAX
+        )
         self._audio_queue.put(chunk_queue)
-        self._prefetch_threads.append(threading.Thread(
-            target=self._consume_to_queue, args=(audio_iter, chunk_queue), daemon=True))
+        self._prefetch_threads.append(
+            threading.Thread(
+                target=self._consume_to_queue,
+                args=(audio_iter, chunk_queue),
+                daemon=True,
+            )
+        )
         self._prefetch_threads[-1].start()
 
-    def _consume_to_queue(self, audio_iter: Iterator[bytes], chunk_queue: queue.Queue[Optional[bytes]]) -> None:
+    def _consume_to_queue(
+        self, audio_iter: Iterator[bytes], chunk_queue: queue.Queue[Optional[bytes]]
+    ) -> None:
         try:
             for chunk in audio_iter:
                 if self.stop_event.is_set():
-                    logger.info("TTS CUT: prefetch cancelled (stop_event set mid-sentence) — partial audio only")
+                    logger.info(
+                        "TTS CUT: prefetch cancelled (stop_event set mid-sentence) — partial audio only"
+                    )
                     break
                 chunk_queue.put(chunk, timeout=30.0)
         except Exception as exc:
-            logger.warning("TTS CUT: streaming TTS prefetch failed mid-sentence (partial audio only): %s", exc)
+            logger.warning(
+                "TTS CUT: streaming TTS prefetch failed mid-sentence (partial audio only): %s",
+                exc,
+            )
         finally:
             chunk_queue.put(None)  # sentinel: no more chunks
             self._prefetch_sem.release()
 
     def _play_sentence_via_tempfile(self, chunk_queue) -> None:
-        chunks = _drain_chunks(chunk_queue)  # drained first: the rate is final once chunks exist
+        chunks = _drain_chunks(
+            chunk_queue
+        )  # drained first: the rate is final once chunks exist
         _play_via_tempfile(chunks, self.stop_event, self.streamer.sample_rate)
 
     def _for_each_sentence(self, play: Callable[[queue.Queue], None]) -> None:
@@ -268,7 +317,8 @@ class _StreamerPlayback:
         if self._reinit_count >= self._MAX_REINIT:
             logger.warning(
                 "TTS: PortAudio reinit exhausted after %d attempts, falling back to tempfile for remaining sentences",
-                self._MAX_REINIT)
+                self._MAX_REINIT,
+            )
             self._current_stream = None
             return False
         self._reinit_count += 1
@@ -285,7 +335,9 @@ class _StreamerPlayback:
     def _play_sentence_via_stream(self, chunk_queue) -> None:
         """Write one sentence's PCM to PortAudio; after an unrecoverable write failure the rest is dropped."""
         chunks = iter(chunk_queue.get, None)
-        first = next(chunks, None)  # blocks until the endpoint answered: the rate is final now
+        first = next(
+            chunks, None
+        )  # blocks until the endpoint answered: the rate is final now
         if first is None:
             return
         chunks = itertools.chain([first], chunks)
@@ -296,7 +348,9 @@ class _StreamerPlayback:
             try:
                 self._write_pcm(aligned)
             except Exception as write_exc:
-                logger.warning("PortAudio write failed, attempting stream reinit: %s", write_exc)
+                logger.warning(
+                    "PortAudio write failed, attempting stream reinit: %s", write_exc
+                )
                 if not self._recover_stream():
                     return
                 with contextlib.suppress(Exception):
@@ -308,11 +362,17 @@ class _StreamerPlayback:
             self._for_each_sentence(self._play_sentence_via_tempfile)
             return
         import numpy as _np
+
         try:
             from tools.voice_mode import mark_audio_output_active
         except Exception:
             mark_audio_output_active = lambda _active: None
-        self._np, self._reinit_count, self._current_stream, self._current_rate = _np, 0, None, None
+        self._np, self._reinit_count, self._current_stream, self._current_rate = (
+            _np,
+            0,
+            None,
+            None,
+        )
         mark_audio_output_active(True)
         try:
             self._for_each_sentence(self._play_sentence_via_stream)
@@ -329,8 +389,12 @@ class _StreamerPlayback:
 
 
 def stream_tts_to_speaker(
-    text_queue: queue.Queue, stop_event: threading.Event, tts_done_event: threading.Event,
-    display_callback: Optional[Callable[[str], None]] = None, provider: Optional[str] = None):
+    text_queue: queue.Queue,
+    stop_event: threading.Event,
+    tts_done_event: threading.Event,
+    display_callback: Optional[Callable[[str], None]] = None,
+    provider: Optional[str] = None,
+):
     """Consume text deltas from *text_queue*, cut into sentences, speak each the moment it's ready.
 
     A registered streaming provider plays chunked PCM; every other provider is spoken
@@ -346,6 +410,7 @@ def stream_tts_to_speaker(
         # Prefer a chunked streamer for low time-to-first-audio; otherwise per-sentence sync
         # synthesis (universal — edge + every non-streamer).
         from tools.tts_streaming import SentenceChunker, resolve_streaming_provider
+
         streamer = resolve_streaming_provider(tts_config, preferred=provider)
         stream_max_len = 0
         if streamer is None:
@@ -353,10 +418,13 @@ def stream_tts_to_speaker(
         else:
             with contextlib.suppress(Exception):
                 stream_max_len = origin._resolve_max_text_length(
-                    provider or origin._get_provider(tts_config), tts_config)
+                    provider or origin._get_provider(tts_config), tts_config
+                )
             playback = _StreamerPlayback(streamer, stop_event)
         chunker = SentenceChunker.from_config(tts_config)
-        spoken_sentences: list[str] = []  # skip duplicate/near-duplicate sentences (LLM repetition)
+        spoken_sentences: list[
+            str
+        ] = []  # skip duplicate/near-duplicate sentences (LLM repetition)
 
         def _speak_sentence(sentence: str) -> None:
             if stop_event.is_set():
@@ -365,22 +433,29 @@ def stream_tts_to_speaker(
             if not cleaned:
                 return
             cleaned_lower = cleaned.lower().rstrip(".!,")
-            if any(prev.lower().rstrip(".!,") == cleaned_lower for prev in spoken_sentences):
+            if any(
+                prev.lower().rstrip(".!,") == cleaned_lower for prev in spoken_sentences
+            ):
                 return
             spoken_sentences.append(cleaned)
             if display_callback is not None:
-                display_callback(sentence)  # raw sentence on screen before TTS processing
+                display_callback(
+                    sentence
+                )  # raw sentence on screen before TTS processing
             if sync_pipeline is not None:
                 sync_pipeline.speak(cleaned)
                 return
             if stream_max_len and len(cleaned) > stream_max_len:
                 cleaned = cleaned[:stream_max_len]
             playback.speak(cleaned)
+
         while not stop_event.is_set():
             try:
                 delta = text_queue.get(timeout=0.5)
             except queue.Empty:
-                delta = ""  # idle producer: flush a long buffer instead of sitting on it
+                delta = (
+                    ""  # idle producer: flush a long buffer instead of sitting on it
+                )
                 sentences = chunker.flush() if len(chunker.buf) > 100 else ()
             else:
                 sentences = chunker.flush() if delta is None else chunker.feed(delta)

@@ -1,4 +1,5 @@
 """apply_managed_overlay() — the shared helper used by every standalone loader."""
+
 import textwrap
 
 import pytest
@@ -40,5 +41,3 @@ def test_overlay_preserves_user_siblings(managed):
     )
     assert out["display"]["skin"] == "charizard"
     assert out["display"]["show_reasoning"] is True
-
-

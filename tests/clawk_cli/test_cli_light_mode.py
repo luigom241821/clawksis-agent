@@ -141,7 +141,9 @@ class TestSkinConfigHook:
         self, cli_mod, monkeypatch, skin_name
     ):
         from clawk_cli.skin_engine import (
-            get_active_skin, get_prompt_toolkit_style_overrides, set_active_skin,
+            get_active_skin,
+            get_prompt_toolkit_style_overrides,
+            set_active_skin,
         )
 
         monkeypatch.setenv("CLAWK_LIGHT", "1")
@@ -149,15 +151,15 @@ class TestSkinConfigHook:
         try:
             set_active_skin(skin_name)
             skin = get_active_skin()
-            background = skin.colors.get("status_bar_strong", skin.colors.get("banner_title", "#FFD700"))
+            background = skin.colors.get(
+                "status_bar_strong", skin.colors.get("banner_title", "#FFD700")
+            )
             foreground = skin.colors.get("status_bar_bg", "#1a1a2e")
             assert get_prompt_toolkit_style_overrides()["status-bar-session-title"] == (
                 f"bg:{background} {foreground} bold"
             )
         finally:
             set_active_skin(previous)
-
-
 
     def test_hook_is_idempotent(self, cli_mod):
         # Calling the installer twice must not double-wrap (the marker
@@ -213,7 +215,7 @@ class TestOsc11DrainGuard:
 
         # Set up fake termios on the read end
         # We'll monkeypatch tcgetattr/tcsetattr to no-op
-        fake_attrs = [0, 0, 0, 0, 0, 0, [b'\x00'] * 32]
+        fake_attrs = [0, 0, 0, 0, 0, 0, [b"\x00"] * 32]
         monkeypatch.setattr(termios, "tcgetattr", lambda fd: fake_attrs)
         monkeypatch.setattr(termios, "tcsetattr", lambda fd, when, attrs: None)
         monkeypatch.setattr(_tty, "setcbreak", lambda fd: None)
@@ -233,6 +235,7 @@ class TestOsc11DrainGuard:
 
         def delayed_write():
             import time
+
             time.sleep(0.15)
             os.write(write_fd, b"\x1b]11;rgb:0c0c/0c0c/0c0c\x1b\\\x1b[?62;22c")
 
@@ -245,6 +248,7 @@ class TestOsc11DrainGuard:
 
         # Verify the pipe is drained — a non-blocking read should return empty
         import select
+
         r, _, _ = select.select([read_fd], [], [], 0)
         assert not r, "late OSC 11 bytes must be consumed, not left to leak"
 
@@ -258,7 +262,7 @@ class TestOsc11DrainGuard:
         import os, termios, tty as _tty
 
         read_fd, write_fd = os.pipe()
-        fake_attrs = [0, 0, 0, 0, 0, 0, [b'\x00'] * 32]
+        fake_attrs = [0, 0, 0, 0, 0, 0, [b"\x00"] * 32]
         monkeypatch.setattr(termios, "tcgetattr", lambda fd: fake_attrs)
         monkeypatch.setattr(termios, "tcsetattr", lambda fd, when, attrs: None)
         monkeypatch.setattr(_tty, "setcbreak", lambda fd: None)
@@ -276,6 +280,7 @@ class TestOsc11DrainGuard:
 
         def straggler():
             import time
+
             time.sleep(0.02)  # inside the 50ms drain window
             os.write(write_fd, b"\x1b]11;rgb:0c0c/0c0c/0c0c\x1b\\")
 
@@ -286,6 +291,7 @@ class TestOsc11DrainGuard:
         assert result is None  # OSC 11 was swallowed; only DA1 answered
 
         import select
+
         r, _, _ = select.select([read_fd], [], [], 0)
         assert not r, "drain loop should have consumed the straggler bytes"
 
@@ -395,6 +401,7 @@ def _run_osc11_child(reply_fn, repo_root, timeout=8.0):
 @pytest.fixture
 def repo_root():
     import pathlib
+
     return pathlib.Path(__file__).resolve().parents[2]
 
 
@@ -402,9 +409,7 @@ def repo_root():
 class TestOsc11Da1Fence:
     def test_herdr_style_da1_only_returns_none_without_leak(self, repo_root):
         """Terminal answers DA1 instantly but swallows OSC 11 (herdr)."""
-        result, leftover = _run_osc11_child(
-            lambda age: b"\x1b[?62;22c", repo_root
-        )
+        result, leftover = _run_osc11_child(lambda age: b"\x1b[?62;22c", repo_root)
         assert result == "None"
         assert leftover == "b''"
 
@@ -414,8 +419,7 @@ class TestOsc11Da1Fence:
         is detected and nothing leaks into the tty buffer."""
         result, leftover = _run_osc11_child(
             lambda age: (
-                b"\x1b]11;rgb:1e1e/1e1e/2e2e\x1b\\\x1b[?62;22c"
-                if age > 0.3 else None
+                b"\x1b]11;rgb:1e1e/1e1e/2e2e\x1b\\\x1b[?62;22c" if age > 0.3 else None
             ),
             repo_root,
         )

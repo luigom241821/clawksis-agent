@@ -33,7 +33,9 @@ class _StubClient:
         self.is_closed = True
 
 
-def _make_agent(provider="anthropic", base_url="https://api.anthropic.com", model="claude-sonnet-5"):
+def _make_agent(
+    provider="anthropic", base_url="https://api.anthropic.com", model="claude-sonnet-5"
+):
     agent = AIAgent.__new__(AIAgent)
     agent.provider = provider
     agent.model = model
@@ -61,7 +63,10 @@ class _Harness:
             return _StubClient()
 
         self._patchers = [
-            patch("agent.anthropic_adapter.build_anthropic_client", side_effect=_fake_build),
+            patch(
+                "agent.anthropic_adapter.build_anthropic_client",
+                side_effect=_fake_build,
+            ),
             patch.object(self.agent, "_force_close_tcp_sockets", return_value=0),
         ]
         for p in self._patchers:

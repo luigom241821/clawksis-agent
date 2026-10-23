@@ -71,6 +71,8 @@ def test_nested_dedup_is_distinct_entry():
 def test_render_markdown_omits_unchanged_lockfiles():
     changed = _mod.diff_locks({}, {"node_modules/x": "1.0.0"})
     unchanged = _mod.diff_locks({}, {})
-    md = _mod.render_markdown({"a/package-lock.json": changed, "b/package-lock.json": unchanged})
+    md = _mod.render_markdown(
+        {"a/package-lock.json": changed, "b/package-lock.json": unchanged}
+    )
     assert "a/package-lock.json" in md
     assert "b/package-lock.json" not in md

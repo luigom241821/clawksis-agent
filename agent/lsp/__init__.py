@@ -6,6 +6,7 @@ Real language servers (pyright, gopls, ...) run as subprocesses and their
 workspace detection** so user-home cwd's (e.g. Telegram gateway chats) never
 spawn daemons; ``get_service()`` returns the singleton or ``None`` when disabled.
 """
+
 from __future__ import annotations
 
 import atexit
@@ -48,6 +49,7 @@ def get_service() -> Optional[LSPService]:
     """
     global _service
     from clawk_constants import get_clawk_home_override, clawk_home_key
+
     if get_clawk_home_override() is not None:
         home_key = clawk_home_key()
         with _service_lock:
@@ -67,7 +69,9 @@ def release_workspace(path: str) -> int:
     """Shut down the LSP clients serving ``path`` (a worktree about to be removed) in every started
     service, without shutting down unrelated workspaces.  Never creates a service.  Returns the count."""
     with _service_lock:
-        services = [svc for svc in (_service, *_services_by_home.values()) if svc is not None]
+        services = [
+            svc for svc in (_service, *_services_by_home.values()) if svc is not None
+        ]
     released = 0
     for svc in services:
         try:

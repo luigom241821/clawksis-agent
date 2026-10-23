@@ -8,7 +8,13 @@ import pytest
 import clawk_yaml as yaml
 
 import clawk_cli.config as config_mod
-from clawk_cli.config import DEFAULT_CONFIG, load_config, migrate_config, read_raw_config, save_config
+from clawk_cli.config import (
+    DEFAULT_CONFIG,
+    load_config,
+    migrate_config,
+    read_raw_config,
+    save_config,
+)
 
 _CONFIG = """# hand-tuned
 model:
@@ -26,6 +32,7 @@ approvals:
 @pytest.fixture
 def home(tmp_path, monkeypatch):
     from tui_gateway import server
+
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     monkeypatch.setattr(server, "_clawk_home", tmp_path)
     server._cfg_cache = server._cfg_sig = server._cfg_path = None
@@ -38,7 +45,12 @@ class _ReadFaults:
     """Counts parses of config.yaml and fails the chosen one with a transient EMFILE (intact file)."""
 
     def __init__(self, monkeypatch, path):
-        self.path, self.count, self.fail_at, real = str(path), 0, 0, config_mod.fast_safe_load
+        self.path, self.count, self.fail_at, real = (
+            str(path),
+            0,
+            0,
+            config_mod.fast_safe_load,
+        )
 
         def flaky(stream):
             if getattr(stream, "name", None) == self.path:
@@ -46,6 +58,7 @@ class _ReadFaults:
                 if self.count == self.fail_at:
                     raise OSError(errno.EMFILE, "Too many open files")
             return real(stream)
+
         monkeypatch.setattr(config_mod, "fast_safe_load", flaky)
 
     def arm(self, fail_at=0):
@@ -55,6 +68,7 @@ class _ReadFaults:
 def _fresh_process(home, text, *, keep_last_known_good=False):
     """*text* on a new inode with cold caches (and no last-known-good copy unless asked)."""
     from tui_gateway import server
+
     config_mod._LOAD_CONFIG_CACHE.clear()
     config_mod._RAW_CONFIG_CACHE.clear()
     server._cfg_cache = server._cfg_sig = server._cfg_path = None
@@ -80,6 +94,7 @@ def _save_raw():  # the shape every migration step and ``write_platform_config_f
 
 def _tui_config_set():
     from tui_gateway import server
+
     reply = server._methods["config.set"](1, {"key": "skin", "value": "ares"})
     if "error" in reply:
         raise RuntimeError(reply["error"]["message"])
@@ -88,17 +103,26 @@ def _tui_config_set():
 def _dashboard_put():
     from starlette.testclient import TestClient
     from clawk_cli.web_server import _SESSION_HEADER_NAME, _SESSION_TOKEN, app
+
     client = TestClient(app, raise_server_exceptions=False)
-    r = client.put("/api/config", json={"config": {"display": {"skin": "ares"}}},
-                   headers={_SESSION_HEADER_NAME: _SESSION_TOKEN})
+    r = client.put(
+        "/api/config",
+        json={"config": {"display": {"skin": "ares"}}},
+        headers={_SESSION_HEADER_NAME: _SESSION_TOKEN},
+    )
     if r.status_code != 200:
         raise RuntimeError(r.text)
 
 
 @pytest.mark.parametrize("last_known_good", ["none", "stale"])
-@pytest.mark.parametrize("write", [_save_loaded, _save_raw, _tui_config_set, _dashboard_put],
-                         ids=["load_config", "read_raw_config", "tui-config.set", "dashboard-put"])
-def test_no_single_transient_read_error_reaches_the_file(write, last_known_good, home, monkeypatch):
+@pytest.mark.parametrize(
+    "write",
+    [_save_loaded, _save_raw, _tui_config_set, _dashboard_put],
+    ids=["load_config", "read_raw_config", "tui-config.set", "dashboard-put"],
+)
+def test_no_single_transient_read_error_reaches_the_file(
+    write, last_known_good, home, monkeypatch
+):
     """Fail each config read the write performs, one at a time: the write either lands exactly as
     it would have, or is refused with the file byte-identical, and the retry is not poisoned."""
     path = home / "config.yaml"
@@ -107,7 +131,9 @@ def test_no_single_transient_read_error_reaches_the_file(write, last_known_good,
 
     def run(k):
         _fresh_process(home, before)
-        if last_known_good == "stale":  # loaded earlier in this process, edited elsewhere since
+        if (
+            last_known_good == "stale"
+        ):  # loaded earlier in this process, edited elsewhere since
             _fresh_process(home, _CONFIG)
             load_config()
             _fresh_process(home, before, keep_last_known_good=True)
@@ -123,19 +149,31 @@ def test_no_single_transient_read_error_reaches_the_file(write, last_known_good,
     assert b"skin: ares" in good_after and reads >= 1
     for k in range(1, reads + 1):
         if run(k) == "refused":
-            assert path.read_text(encoding="utf-8") == before, f"read {k}/{reads} failed, file changed"
+            assert path.read_text(encoding="utf-8") == before, (
+                f"read {k}/{reads} failed, file changed"
+            )
             faults.arm()
             write()  # the retry is not poisoned by a cached fallback
-        assert path.read_bytes() == good_after, f"read {k}/{reads} failed, the saved file differs"
+        assert path.read_bytes() == good_after, (
+            f"read {k}/{reads} failed, the saved file differs"
+        )
 
 
-@pytest.mark.parametrize("read", [load_config, read_raw_config], ids=["load_config", "read_raw_config"])
-def test_transient_read_error_is_not_recorded_as_a_corrupt_config(read, home, monkeypatch, capsys):
+@pytest.mark.parametrize(
+    "read", [load_config, read_raw_config], ids=["load_config", "read_raw_config"]
+)
+def test_transient_read_error_is_not_recorded_as_a_corrupt_config(
+    read, home, monkeypatch, capsys
+):
     """One EMFILE on an intact file must not leave the process treating config.yaml as corrupt: the
     provider auto-resolution refusal (`corrupt_config`) keyed on the file signature would otherwise
     fire until the file is next edited, and the good file would be copied away as `.corrupt`."""
     from clawk_cli.auth import _refuse_env_adoption_if_config_corrupt
-    from clawk_cli.config_read_errors import _CONFIG_PARSE_WARNED, get_active_config_parse_failure
+    from clawk_cli.config_read_errors import (
+        _CONFIG_PARSE_WARNED,
+        get_active_config_parse_failure,
+    )
+
     path = home / "config.yaml"
     _fresh_process(home, _CONFIG)
     _CONFIG_PARSE_WARNED.clear()
@@ -143,7 +181,9 @@ def test_transient_read_error_is_not_recorded_as_a_corrupt_config(read, home, mo
     faults.arm(1)
 
     read()
-    assert get_active_config_parse_failure() is not None  # unreadable right now: the refusal holds
+    assert (
+        get_active_config_parse_failure() is not None
+    )  # unreadable right now: the refusal holds
     assert read()["display"]["skin"] == "mono"
 
     assert get_active_config_parse_failure() is None
@@ -159,6 +199,7 @@ def test_unreadable_config_serves_one_cached_fallback_until_it_reads(home, monke
     import builtins
     from clawk_cli import config_backups
     from clawk_cli.config_read_errors import FailedConfigRead
+
     path = home / "config.yaml"
     _fresh_process(home, _CONFIG)
     load_config()  # leaves the `good` backup a fresh process falls back to
@@ -170,8 +211,13 @@ def test_unreadable_config_serves_one_cached_fallback_until_it_reads(home, monke
         if blocked[0] and str(file) == str(path):
             raise OSError(errno.EMFILE, "Too many open files")
         return builtins.open(file, *args, **kwargs)
+
     monkeypatch.setattr(config_mod, "open", guarded_open, raising=False)
-    monkeypatch.setattr(config_backups, "load_newest_good_backup", lambda p: rebuilds.append(p) or real_backup(p))
+    monkeypatch.setattr(
+        config_backups,
+        "load_newest_good_backup",
+        lambda p: rebuilds.append(p) or real_backup(p),
+    )
 
     for _ in range(5):
         cfg = load_config()
@@ -187,7 +233,9 @@ def test_save_refusal_for_bad_yaml_asks_for_an_edit_not_a_retry(home):
     cfg["display"]["skin"] = "ares"
     with pytest.raises(RuntimeError, match="has a formatting error") as refusal:
         save_config(cfg)
-    assert "clawk config edit" in str(refusal.value) and "Try again" not in str(refusal.value)
+    assert "clawk config edit" in str(refusal.value) and "Try again" not in str(
+        refusal.value
+    )
     assert (home / "config.yaml").read_text(encoding="utf-8") == "model: [unclosed\n"
 
 

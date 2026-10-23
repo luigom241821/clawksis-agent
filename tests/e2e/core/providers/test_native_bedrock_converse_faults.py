@@ -20,25 +20,45 @@ pytest.importorskip("botocore")
 
 from tests.e2e.core._pending_fixes import known_gate
 from tests.e2e.core.providers._native_helpers import (
-    ChatResult, KnownSymptom, NativeHome, assert_no_duplicate_assistant_text, make_home, messages, run_chat,
+    ChatResult,
+    KnownSymptom,
+    NativeHome,
+    assert_no_duplicate_assistant_text,
+    make_home,
+    messages,
+    run_chat,
 )
 from tests.fakes.providers.bedrock_converse import (
-    ACCESS_KEY, REGION, SECRET_KEY, Drop, FakeBedrock, HttpError, Reasoning, Reply, StreamException, Text,
-    Turn, seq,
+    ACCESS_KEY,
+    REGION,
+    SECRET_KEY,
+    Drop,
+    FakeBedrock,
+    HttpError,
+    Reasoning,
+    Reply,
+    StreamException,
+    Text,
+    Turn,
+    seq,
 )
 
 MODEL = "deepseek.v3-v1:0"
 FINAL = "Recovered answer ZEBRA-7731 is complete and whole."
 REASONING = "Reasoning for the recovered answer, streamed in several deltas."
 VALIDATION_MARK = "FAKE-VALIDATION-9921"
-IAM_DENIAL = ("User: arn:aws:iam::123456789012:user/e2e is not authorized to perform: "
-              "bedrock:InvokeModelWithResponseStream on resource: arn:aws:bedrock:us-east-1::foundation-model/"
-              + MODEL)
+IAM_DENIAL = (
+    "User: arn:aws:iam::123456789012:user/e2e is not authorized to perform: "
+    "bedrock:InvokeModelWithResponseStream on resource: arn:aws:bedrock:us-east-1::foundation-model/"
+    + MODEL
+)
 
 # Red on current main for a tracked, open bug: key -> (the bug's own failure-message pattern, reason).
 KNOWN: dict[str, tuple[str, str]] = {
-    "validation_retried": (r"^400 ValidationException retried: fake saw [2-9]\d* requests",
-                           "#121294 a Bedrock 400 ValidationException is retried and reported as 'temporarily unavailable'"),
+    "validation_retried": (
+        r"^400 ValidationException retried: fake saw [2-9]\d* requests",
+        "#121294 a Bedrock 400 ValidationException is retried and reported as 'temporarily unavailable'",
+    ),
 }
 
 
@@ -61,19 +81,58 @@ class Scenario:
 # Each fault precedes a good answer: a retryable fault must be retried into it, a terminal one must not.
 SCENARIOS: dict[str, Scenario] = {
     # botocore's own retries are off (documented AWS_MAX_ATTEMPTS) so the 429 reaches Clawksis' loop.
-    "throttle_http": Scenario((HttpError("ThrottlingException", "Too many requests, please wait before trying again."),
-                               _answer()), env={"AWS_MAX_ATTEMPTS": "1"}),
-    "unavailable_http": Scenario((HttpError("ServiceUnavailableException", "Bedrock is unable to process your request."),
-                                  _answer()), env={"AWS_MAX_ATTEMPTS": "1"}),
-    "throttle_in_stream": Scenario((StreamException(_answer(), "throttlingException",
-                                                    "Too many tokens, please wait before trying again.", after=CUT_MID_TEXT),
-                                    _answer())),
+    "throttle_http": Scenario(
+        (
+            HttpError(
+                "ThrottlingException",
+                "Too many requests, please wait before trying again.",
+            ),
+            _answer(),
+        ),
+        env={"AWS_MAX_ATTEMPTS": "1"},
+    ),
+    "unavailable_http": Scenario(
+        (
+            HttpError(
+                "ServiceUnavailableException",
+                "Bedrock is unable to process your request.",
+            ),
+            _answer(),
+        ),
+        env={"AWS_MAX_ATTEMPTS": "1"},
+    ),
+    "throttle_in_stream": Scenario(
+        (
+            StreamException(
+                _answer(),
+                "throttlingException",
+                "Too many tokens, please wait before trying again.",
+                after=CUT_MID_TEXT,
+            ),
+            _answer(),
+        )
+    ),
     "drop_mid_stream": Scenario((Drop(_answer(), after=CUT_MID_TEXT), _answer())),
-    "eof_before_message_stop": Scenario((Drop(_answer(), after=CUT_MID_TEXT, clean=True), _answer())),
-    "validation": Scenario((HttpError("ValidationException", f"The model returned the following errors: "
-                                      f"malformed input request: {VALIDATION_MARK}"), _answer())),
-    "stream_denied_falls_back": Scenario((), by_op={
-        "ConverseStream": (HttpError("AccessDeniedException", IAM_DENIAL),), "Converse": (_answer(),)}),
+    "eof_before_message_stop": Scenario(
+        (Drop(_answer(), after=CUT_MID_TEXT, clean=True), _answer())
+    ),
+    "validation": Scenario(
+        (
+            HttpError(
+                "ValidationException",
+                f"The model returned the following errors: "
+                f"malformed input request: {VALIDATION_MARK}",
+            ),
+            _answer(),
+        )
+    ),
+    "stream_denied_falls_back": Scenario(
+        (),
+        by_op={
+            "ConverseStream": (HttpError("AccessDeniedException", IAM_DENIAL),),
+            "Converse": (_answer(),),
+        },
+    ),
 }
 
 
@@ -88,11 +147,20 @@ def _run(name: str, root: Path) -> dict[str, Any]:
     sc = SCENARIOS[name]
     fake = FakeBedrock(_responder(sc))
     with fake:
-        nh = make_home(root, {"provider": "bedrock", "default": MODEL, "context_length": 64000},
-                       env_file={"AWS_ACCESS_KEY_ID": ACCESS_KEY, "AWS_SECRET_ACCESS_KEY": SECRET_KEY,
-                                 "AWS_REGION": REGION})
-        result = run_chat(nh, "Give me the recovered answer.",
-                          env={"AWS_ENDPOINT_URL_BEDROCK_RUNTIME": fake.endpoint, **sc.env})
+        nh = make_home(
+            root,
+            {"provider": "bedrock", "default": MODEL, "context_length": 64000},
+            env_file={
+                "AWS_ACCESS_KEY_ID": ACCESS_KEY,
+                "AWS_SECRET_ACCESS_KEY": SECRET_KEY,
+                "AWS_REGION": REGION,
+            },
+        )
+        result = run_chat(
+            nh,
+            "Give me the recovered answer.",
+            env={"AWS_ENDPOINT_URL_BEDROCK_RUNTIME": fake.endpoint, **sc.env},
+        )
         return {"nh": nh, "result": result, "requests": fake.snapshot()}
 
 
@@ -114,27 +182,40 @@ def _recovered(run: dict[str, Any], expected_requests: int) -> None:
     assert result.returncode == 0, result.describe()
     requests = run["requests"]
     assert not [r["rejected"] for r in requests if r.get("rejected")], requests
-    assert len(requests) == expected_requests, f"fake saw {len(requests)} requests\n{result.describe()}"
-    assert all(r["body"]["messages"] == requests[0]["body"]["messages"] for r in requests), \
+    assert len(requests) == expected_requests, (
+        f"fake saw {len(requests)} requests\n{result.describe()}"
+    )
+    assert all(
+        r["body"]["messages"] == requests[0]["body"]["messages"] for r in requests
+    ), (
         "the retry did not re-send the original history (partial output leaked into the request?)"
+    )
     assert result.stdout.count(FINAL) == 1, result.describe()
     rows = _assistant_rows(run["nh"])
     assert_no_duplicate_assistant_text(rows, FINAL[:12])
     assert [r["content"] for r in rows] == [FINAL], rows
 
 
-@pytest.mark.parametrize("name", ["throttle_http", "unavailable_http", "throttle_in_stream"])
-def test_retryable_fault_is_retried_once_into_the_answer(name: str, runs: dict[str, Any]) -> None:
+@pytest.mark.parametrize(
+    "name", ["throttle_http", "unavailable_http", "throttle_in_stream"]
+)
+def test_retryable_fault_is_retried_once_into_the_answer(
+    name: str, runs: dict[str, Any]
+) -> None:
     _recovered(runs[name], expected_requests=2)
 
 
-def test_mid_stream_drop_retries_without_duplicated_persisted_content(runs: dict[str, Any]) -> None:
+def test_mid_stream_drop_retries_without_duplicated_persisted_content(
+    runs: dict[str, Any],
+) -> None:
     run = runs["drop_mid_stream"]
     _recovered(run, expected_requests=2)
     assert run["requests"][0]["reply"] == "Drop", run["requests"][0]
 
 
-def test_stream_ending_before_message_stop_is_not_accepted(runs: dict[str, Any]) -> None:
+def test_stream_ending_before_message_stop_is_not_accepted(
+    runs: dict[str, Any],
+) -> None:
     run = runs["eof_before_message_stop"]
     assert run["result"].returncode == 0, run["result"].describe()
     assert run["requests"] and run["requests"][0]["reply"] == "Drop", run["requests"]
@@ -144,7 +225,9 @@ def test_stream_ending_before_message_stop_is_not_accepted(runs: dict[str, Any])
     assert (sent, rows) == (2, [FINAL]), f"requests={sent} rows={rows}"
 
 
-def test_validation_exception_is_surfaced_once_without_retry(runs: dict[str, Any]) -> None:
+def test_validation_exception_is_surfaced_once_without_retry(
+    runs: dict[str, Any],
+) -> None:
     run = runs["validation"]
     result: ChatResult = run["result"]
     sent = len(run["requests"])
@@ -152,10 +235,14 @@ def test_validation_exception_is_surfaced_once_without_retry(runs: dict[str, Any
     # Symptom: the 400 is retried (the scripted success behind it is reached).
     with known_gate(KNOWN, "validation_retried", raises=KnownSymptom):
         if sent > 1:
-            raise KnownSymptom(f"400 ValidationException retried: fake saw {sent} requests")
+            raise KnownSymptom(
+                f"400 ValidationException retried: fake saw {sent} requests"
+            )
     shown = result.stdout + result.stderr
     assert result.returncode != 0 and FINAL not in shown, result.describe()
-    assert VALIDATION_MARK in shown and "ValidationException" in shown, result.describe()
+    assert VALIDATION_MARK in shown and "ValidationException" in shown, (
+        result.describe()
+    )
     assert "temporarily unavailable" not in shown, result.describe()
     assert [r["content"] for r in _assistant_rows(run["nh"])] != [FINAL]
 
@@ -165,8 +252,12 @@ def test_streaming_iam_denial_falls_back_to_converse(runs: dict[str, Any]) -> No
     result: ChatResult = run["result"]
     assert result.returncode == 0, result.describe()
     requests = run["requests"]
-    assert [r["op"] for r in requests] == ["ConverseStream", "Converse"], [r["op"] for r in requests]
+    assert [r["op"] for r in requests] == ["ConverseStream", "Converse"], [
+        r["op"] for r in requests
+    ]
     assert requests[1]["body"]["messages"] == requests[0]["body"]["messages"]
     assert FINAL in result.stdout, result.describe()
     rows = _assistant_rows(run["nh"])
-    assert [(r["content"], r["reasoning_content"]) for r in rows] == [(FINAL, REASONING)], rows
+    assert [(r["content"], r["reasoning_content"]) for r in rows] == [
+        (FINAL, REASONING)
+    ], rows

@@ -19,7 +19,10 @@ BOUNDED_MODES = frozenset({"auto", "cold"})
 DEFAULT_WINDOW_SECONDS = 60
 # Documented fast-mode rate-limit headers; a limit of 0 means the organization has no fast
 # capacity for the model (https://platform.claude.com/docs/en/build-with-claude/fast-mode).
-_FAST_LIMIT_HEADERS = ("anthropic-fast-input-tokens-limit", "anthropic-fast-output-tokens-limit")
+_FAST_LIMIT_HEADERS = (
+    "anthropic-fast-input-tokens-limit",
+    "anthropic-fast-output-tokens-limit",
+)
 #: Tiers sent on every request of the session (OpenAI ``service_tier`` values; ``priority`` also
 #: selects Anthropic/xAI fast mode). Ultrafast is OpenAI-only and gated per model.
 STATIC_TIERS = frozenset({"priority", "ultrafast"})
@@ -29,8 +32,13 @@ NORMAL_TIER_WORDS = frozenset({"", "normal", "default", "standard", "off", "none
 # User/config word -> agent.service_tier. The single table every surface (config loaders, /fast
 # on CLI / gateway / TUI) parses through, so a new tier is one edit.
 SERVICE_TIER_WORDS: dict[str, str] = {
-    "fast": "priority", "priority": "priority", "on": "priority",
-    "ultrafast": "ultrafast", "ultra": "ultrafast", "auto": "auto", "cold": "cold",
+    "fast": "priority",
+    "priority": "priority",
+    "on": "priority",
+    "ultrafast": "ultrafast",
+    "ultra": "ultrafast",
+    "auto": "auto",
+    "cold": "cold",
 }
 # Typed /fast shorthands -> canonical /fast word (pickers always send the canonical value).
 FAST_ARG_ALIASES: dict[str, str] = {"ultra": "ultrafast"}
@@ -78,17 +86,28 @@ def effective_request_overrides(agent: Any) -> dict[str, Any]:
     """``agent.request_overrides`` plus the fast override while the window is open, minus
     ``speed`` for a model this session learned has no fast capacity."""
     overrides = dict(getattr(agent, "request_overrides", None) or {})
-    if getattr(agent, "service_tier", None) in BOUNDED_MODES and time.monotonic() < getattr(agent, "_fast_until", 0.0):
+    if getattr(
+        agent, "service_tier", None
+    ) in BOUNDED_MODES and time.monotonic() < getattr(agent, "_fast_until", 0.0):
         from clawk_cli.models import resolve_fast_mode_overrides
+
         base_url = getattr(agent, "base_url", None)
         if getattr(agent, "api_mode", None) == "anthropic_messages":
             base_url = getattr(agent, "_anthropic_base_url", None) or base_url
         overrides.update(
-            resolve_fast_mode_overrides(getattr(agent, "model", None), provider=getattr(agent, "provider", None), base_url=base_url) or {}
+            resolve_fast_mode_overrides(
+                getattr(agent, "model", None),
+                provider=getattr(agent, "provider", None),
+                base_url=base_url,
+            )
+            or {}
         )
-    if "speed" in overrides and getattr(agent, "model", None) in (getattr(agent, "_fast_mode_unavailable_models", None) or ()):
+    if "speed" in overrides and getattr(agent, "model", None) in (
+        getattr(agent, "_fast_mode_unavailable_models", None) or ()
+    ):
         overrides.pop("speed", None)
     from agent.codex_service_tiers import negotiate_request_tier
+
     negotiate_request_tier(agent, overrides)
     return overrides
 
@@ -96,14 +115,18 @@ def effective_request_overrides(agent: Any) -> dict[str, Any]:
 def fast_mode_unprovisioned(api_error: Any, api_kwargs: Any) -> bool:
     """True for a 429 on a ``speed: "fast"`` request whose fast-mode limit header is 0. The
     organization has no fast capacity for the model, so waiting or rotating keys cannot help."""
-    if getattr(api_error, "status_code", None) != 429 or not isinstance(api_kwargs, dict):
+    if getattr(api_error, "status_code", None) != 429 or not isinstance(
+        api_kwargs, dict
+    ):
         return False
     if (api_kwargs.get("extra_body") or {}).get("speed") != "fast":
         return False
     headers = getattr(getattr(api_error, "response", None), "headers", None)
     if headers is None:
         return False
-    return any(str(headers.get(name, "")).strip() == "0" for name in _FAST_LIMIT_HEADERS)
+    return any(
+        str(headers.get(name, "")).strip() == "0" for name in _FAST_LIMIT_HEADERS
+    )
 
 
 def mark_fast_mode_unavailable(agent: Any) -> bool:

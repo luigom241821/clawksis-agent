@@ -30,11 +30,14 @@ _lock = threading.Lock()
 # ``contextvars.copy_context()``, so a guard chain moved onto that worker still honours
 # ``/stop`` aimed at the tool thread that spawned it (``is_interrupted`` checks both).
 acting_for_tid: contextvars.ContextVar[int | None] = contextvars.ContextVar(
-    "clawk_interrupt_acting_for_tid", default=None,
+    "clawk_interrupt_acting_for_tid",
+    default=None,
 )
 
 
-def set_interrupt(active: bool, thread_id: int | None = None, *, reason: str | None = None) -> None:
+def set_interrupt(
+    active: bool, thread_id: int | None = None, *, reason: str | None = None
+) -> None:
     """Set or clear the interrupt for *thread_id* (default: current thread); ``reason`` is
     an optional user-safe cause. Clearing also drops a pending yield request."""
     tid = thread_id if thread_id is not None else threading.current_thread().ident
@@ -51,11 +54,17 @@ def set_interrupt(active: bool, thread_id: int | None = None, *, reason: str | N
         logger.info(
             "[interrupt-debug] set_interrupt(active=%s, target_tid=%s) "
             "called_from_tid=%s current_set=%s",
-            active, tid, threading.current_thread().ident, _snapshot)
+            active,
+            tid,
+            threading.current_thread().ident,
+            _snapshot,
+        )
 
 
 def is_interrupted() -> bool:
-    return is_thread_interrupted(threading.current_thread().ident) or is_thread_interrupted(acting_for_tid.get())
+    return is_thread_interrupted(
+        threading.current_thread().ident
+    ) or is_thread_interrupted(acting_for_tid.get())
 
 
 def is_thread_interrupted(thread_id: int | None) -> bool:

@@ -47,8 +47,13 @@ def browser_store(tmp_path, monkeypatch):
         binary.write_text(content)
         binary.chmod(0o755)
         pm.Facts(store / "facts.json").record(
-            name, version, entry.name, package.env(entry, target), store,
-            target=target, artifacts=[a["sha256"] for a in lock.artifacts(name, target)],
+            name,
+            version,
+            entry.name,
+            package.env(entry, target),
+            store,
+            target=target,
+            artifacts=[a["sha256"] for a in lock.artifacts(name, target)],
         )
         installed = pm.installed_package(name)
         assert installed is not None and installed.binary == binary
@@ -85,7 +90,9 @@ def test_doctor_fix_publishes_and_reads_the_pm_browser(browser_store, monkeypatc
     assert requests == [("ensure", {"name": "agent-browser", "explicit": True})]
 
 
-def test_missing_browser_refuses_lazy_install_even_with_npx(browser_store, monkeypatch, tmp_path):
+def test_missing_browser_refuses_lazy_install_even_with_npx(
+    browser_store, monkeypatch, tmp_path
+):
     _, store, _ = browser_store
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
@@ -159,7 +166,9 @@ def test_cdp_override_does_not_require_pm_browser(browser_store, monkeypatch):
 
 
 @pytest.mark.platforms("posix")
-def test_external_browser_on_path_remains_supported_without_pm(browser_store, monkeypatch, tmp_path):
+def test_external_browser_on_path_remains_supported_without_pm(
+    browser_store, monkeypatch, tmp_path
+):
     _, store, _ = browser_store
     bin_dir = tmp_path / "external browser"
     bin_dir.mkdir()
@@ -183,21 +192,29 @@ def test_historical_warmer_is_inert(monkeypatch):
     assert browser_tool.warm_agent_browser_npx_cache(timeout=0.1) is False
 
 
-def test_external_chromium_override_survives_pm_composition(browser_store, monkeypatch, tmp_path):
+def test_external_chromium_override_survives_pm_composition(
+    browser_store, monkeypatch, tmp_path
+):
     _, _, publish = browser_store
     publish("chromium")
     override = tmp_path / "user browser"
     override.write_bytes(b"external")
     monkeypatch.setenv("AGENT_BROWSER_EXECUTABLE_PATH", str(override))
     assert install._chromium_installed()
-    assert session._agent_browser_command_env(str(tmp_path))["AGENT_BROWSER_EXECUTABLE_PATH"] == str(override)
+    assert session._agent_browser_command_env(str(tmp_path))[
+        "AGENT_BROWSER_EXECUTABLE_PATH"
+    ] == str(override)
 
 
-def test_restricted_path_discovers_external_browser_without_execution(browser_store, monkeypatch, tmp_path):
+def test_restricted_path_discovers_external_browser_without_execution(
+    browser_store, monkeypatch, tmp_path
+):
     _, store, _ = browser_store
     external_bin = tmp_path / "external-homebrew" / "bin"
     external_bin.mkdir(parents=True)
-    binary = external_bin / ("agent-browser.exe" if os.name == "nt" else "agent-browser")
+    binary = external_bin / (
+        "agent-browser.exe" if os.name == "nt" else "agent-browser"
+    )
     binary.write_bytes(b"external browser; presence check must not execute")
     binary.chmod(0o755)
     monkeypatch.setenv("PATH", str(tmp_path / "empty-path"))
@@ -228,11 +245,17 @@ def test_pm_browser_wins_over_legacy_and_ambient_installs(browser_store, monkeyp
 
 
 @pytest.mark.platforms("posix")
-def test_exact_pm_child_receives_composed_scrubbed_environment(browser_store, monkeypatch, tmp_path):
+def test_exact_pm_child_receives_composed_scrubbed_environment(
+    browser_store, monkeypatch, tmp_path
+):
     _, store, publish = browser_store
-    binary = publish("agent-browser", f"#!{sys.executable}\n" + '''import json, os, sys
+    binary = publish(
+        "agent-browser",
+        f"#!{sys.executable}\n"
+        + """import json, os, sys
 print(json.dumps({"argv": sys.argv, "env": dict(os.environ)}))
-''')
+""",
+    )
     chromium = publish("chromium")
     monkeypatch.setenv("PATH", str(tmp_path / "hostile-path"))
     system_bin = tmp_path / "external-system-bin"
@@ -245,9 +268,13 @@ print(json.dumps({"argv": sys.argv, "env": dict(os.environ)}))
     socket_dir.mkdir()
     command = install._find_agent_browser(validate=False)
     env = session._agent_browser_command_env(str(socket_dir))
-    proc = session._popen_agent_browser([command, "--json", "get", "url"], env, str(socket_dir), "probe")
+    proc = session._popen_agent_browser(
+        [command, "--json", "get", "url"], env, str(socket_dir), "probe"
+    )
     assert proc.wait(timeout=10) == 0
-    output, error = session._read_command_output_files(str(socket_dir / "_stdout_probe"), str(socket_dir / "_stderr_probe"))
+    output, error = session._read_command_output_files(
+        str(socket_dir / "_stdout_probe"), str(socket_dir / "_stderr_probe")
+    )
     assert error == ""
     child = json.loads(output)
     assert Path(child["argv"][0]) == binary
@@ -263,28 +290,40 @@ print(json.dumps({"argv": sys.argv, "env": dict(os.environ)}))
 
 
 @pytest.mark.platforms("posix")
-def test_runtime_and_chrome_fallback_launch_the_same_pm_binary(browser_store, monkeypatch, tmp_path):
+def test_runtime_and_chrome_fallback_launch_the_same_pm_binary(
+    browser_store, monkeypatch, tmp_path
+):
     from tools import browser_tool_cloud as cloud
     from tools import browser_tool_lightpanda_fallback as fallback
 
     _, _, publish = browser_store
-    binary = publish("agent-browser", f"#!{sys.executable}\n" + '''import json, os, sys
+    binary = publish(
+        "agent-browser",
+        f"#!{sys.executable}\n"
+        + """import json, os, sys
 print(json.dumps({"success": True, "data": {
     "url": "https://example.com/", "argv": sys.argv,
     "browser": os.environ.get("AGENT_BROWSER_EXECUTABLE_PATH")
 }}))
-''')
+""",
+    )
     chromium = publish("chromium")
     monkeypatch.setenv("PATH", "")
     monkeypatch.setattr(bt, "_socket_safe_tmpdir", lambda: str(tmp_path))
     monkeypatch.setattr(cloud, "_is_local_mode", lambda: True)
     monkeypatch.setattr(cloud, "_get_browser_engine", lambda: "auto")
     monkeypatch.setattr(cloud, "_is_headed_mode", lambda: False)
-    monkeypatch.setattr(session, "_get_session_info", lambda task_id: {"session_name": "fixture", "cdp_url": None})
+    monkeypatch.setattr(
+        session,
+        "_get_session_info",
+        lambda task_id: {"session_name": "fixture", "cdp_url": None},
+    )
     monkeypatch.setattr("tools.interrupt.is_interrupted", lambda: False)
 
     direct = session._run_browser_command("fixture", "get", ["url"])
-    chrome = fallback._run_chrome_fallback_command("fixture", "get", ["url"], timeout=10)
+    chrome = fallback._run_chrome_fallback_command(
+        "fixture", "get", ["url"], timeout=10
+    )
     for result in (direct, chrome):
         assert result["success"] is True
         assert result["data"]["argv"][0] == str(binary)
@@ -319,7 +358,9 @@ def test_chromium_acquisition_policy(browser_store, monkeypatch, policy, tmp_pat
     import pm.client
 
     monkeypatch.setattr(install, "_running_in_docker", lambda: policy == "docker")
-    monkeypatch.setenv("CLAWK_DISABLE_LAZY_INSTALLS", "1" if policy == "disabled" else "0")
+    monkeypatch.setenv(
+        "CLAWK_DISABLE_LAZY_INSTALLS", "1" if policy == "disabled" else "0"
+    )
     if policy == "termux":
         monkeypatch.setenv("TERMUX_VERSION", "test")
     if policy == "override":
@@ -329,12 +370,16 @@ def test_chromium_acquisition_policy(browser_store, monkeypatch, policy, tmp_pat
         assert install._chromium_installed()
         override.unlink()
         assert not install._chromium_installed()
-    monkeypatch.setattr(pm.client, "_request", lambda *a, **kw: pytest.fail("forbidden acquisition"))
+    monkeypatch.setattr(
+        pm.client, "_request", lambda *a, **kw: pytest.fail("forbidden acquisition")
+    )
     assert not install._maybe_autoinstall_chromium()
 
 
 @pytest.mark.parametrize("backend", ["local", "camofox", "cdp"])
-def test_browser_readiness_ignores_ambient_chromium(browser_store, monkeypatch, backend):
+def test_browser_readiness_ignores_ambient_chromium(
+    browser_store, monkeypatch, backend
+):
     from tools import browser_tool_cloud, browser_tool_lightpanda_fallback
 
     home, _, publish = browser_store
@@ -348,8 +393,12 @@ def test_browser_readiness_ignores_ambient_chromium(browser_store, monkeypatch, 
     monkeypatch.setattr(bt, "_is_browser_use_cli_mode", lambda: False)
     monkeypatch.setattr(bt, "_is_camofox_mode", lambda: backend == "camofox")
     monkeypatch.setattr(browser_tool_cloud, "_get_cloud_provider", lambda: None)
-    monkeypatch.setattr(browser_tool_lightpanda_fallback, "_using_lightpanda_engine", lambda: False)
-    monkeypatch.setenv("BROWSER_CDP_URL", "ws://example.test/cdp" if backend == "cdp" else "")
+    monkeypatch.setattr(
+        browser_tool_lightpanda_fallback, "_using_lightpanda_engine", lambda: False
+    )
+    monkeypatch.setenv(
+        "BROWSER_CDP_URL", "ws://example.test/cdp" if backend == "cdp" else ""
+    )
     assert install.check_browser_requirements() is (backend != "local")
     publish("chromium")
     assert install.check_browser_requirements()

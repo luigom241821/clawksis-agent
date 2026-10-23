@@ -48,10 +48,16 @@ def _no_memo():
 
 def _write_record(pid: int, home: Path, profiles: tuple[str, ...]) -> None:
     payload = {
-        "role": hr.ROLE_GATEWAY, "home": str(home), "pid": pid,
-        "createTime": hr.process_create_time(pid), "host": "", "port": None,
-        "protocolVersion": hr.HOST_PROTOCOL_VERSION, "tokenFingerprint": "",
-        "profiles": list(profiles), "updatedAt": "",
+        "role": hr.ROLE_GATEWAY,
+        "home": str(home),
+        "pid": pid,
+        "createTime": hr.process_create_time(pid),
+        "host": "",
+        "port": None,
+        "protocolVersion": hr.HOST_PROTOCOL_VERSION,
+        "tokenFingerprint": "",
+        "profiles": list(profiles),
+        "updatedAt": "",
     }
     path = hr.record_path(hr.ROLE_GATEWAY)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -69,8 +75,12 @@ def host_owner(tmp_path, monkeypatch):
     _write_record(child.pid, home, ("default", "ops", "coder"))
     monkeypatch.setattr(
         "gateway.control_socket.identify_gateway",
-        lambda dialled, **kw: {"pid": child.pid, "clawk_home": str(home),
-                               "served_profiles": ["default", "ops", "coder"]})
+        lambda dialled, **kw: {
+            "pid": child.pid,
+            "clawk_home": str(home),
+            "served_profiles": ["default", "ops", "coder"],
+        },
+    )
     try:
         yield SimpleNamespace(pid=child.pid, home=home, proc=child)
     finally:
@@ -79,13 +89,16 @@ def host_owner(tmp_path, monkeypatch):
         child.wait(timeout=10)
 
 
-def test_start_all_never_sweeps_a_live_host_multiplexer(host_owner, monkeypatch, capsys):
+def test_start_all_never_sweeps_a_live_host_multiplexer(
+    host_owner, monkeypatch, capsys
+):
     def _never(*a, **k):
         raise AssertionError("start --all SIGTERMed the host multiplexer")
 
     monkeypatch.setattr(gw, "kill_gateway_processes", _never)
     monkeypatch.setattr(
-        gw, "_guard_named_profile_under_multiplexer",
+        gw,
+        "_guard_named_profile_under_multiplexer",
         lambda **k: pytest.fail("the generic profile guard pre-empted start --all"),
     )
     monkeypatch.setattr(gw, "_dispatch_via_service_manager_if_s6", lambda verb: False)
@@ -119,7 +132,8 @@ def test_named_profile_start_all_starts_the_default_host_service(monkeypatch, tm
     monkeypatch.setenv("CLAWK_HOME", str(named))
     clawk_constants._default_clawk_root_memo = None
     monkeypatch.setattr(
-        gw, "_guard_named_profile_under_multiplexer",
+        gw,
+        "_guard_named_profile_under_multiplexer",
         lambda **k: pytest.fail("the generic profile guard pre-empted start --all"),
     )
     monkeypatch.setattr(gw, "_host_multiplexer_for_all_verb", lambda: None)
@@ -129,11 +143,13 @@ def test_named_profile_start_all_starts_the_default_host_service(monkeypatch, tm
     calls = []
 
     def _observe(step):
-        calls.append((
-            step,
-            Path(clawk_constants.get_clawk_home()),
-            os.environ.get("CLAWK_HOME"),
-        ))
+        calls.append(
+            (
+                step,
+                Path(clawk_constants.get_clawk_home()),
+                os.environ.get("CLAWK_HOME"),
+            )
+        )
 
     def _kill(**kwargs):
         assert kwargs == {"all_profiles": True}
@@ -141,16 +157,20 @@ def test_named_profile_start_all_starts_the_default_host_service(monkeypatch, tm
         return 1
 
     monkeypatch.setattr(gw, "kill_gateway_processes", _kill)
-    monkeypatch.setattr(gw, "_wait_for_gateway_exit",
-                        lambda **k: _observe("wait") or True)
-    monkeypatch.setattr(gw, "_wait_for_api_server_port_free",
-                        lambda **k: _observe("port") or True)
+    monkeypatch.setattr(
+        gw, "_wait_for_gateway_exit", lambda **k: _observe("wait") or True
+    )
+    monkeypatch.setattr(
+        gw, "_wait_for_api_server_port_free", lambda **k: _observe("port") or True
+    )
 
     def _windows_start():
         _observe("start")
 
     # Keep the real _service_call dispatch in the path; only replace the OS-specific leaf.
-    monkeypatch.setattr(gw, "_gw_windows", lambda: SimpleNamespace(start=_windows_start))
+    monkeypatch.setattr(
+        gw, "_gw_windows", lambda: SimpleNamespace(start=_windows_start)
+    )
 
     gw._cmd_start(SimpleNamespace(system=False, all=True, force=False))
 
@@ -165,7 +185,9 @@ def test_named_profile_start_all_starts_the_default_host_service(monkeypatch, tm
     assert os.environ["CLAWK_HOME"] == str(named)
 
 
-def test_named_profile_restart_all_with_host_down_restarts_the_default_root(monkeypatch, tmp_path):
+def test_named_profile_restart_all_with_host_down_restarts_the_default_root(
+    monkeypatch, tmp_path
+):
     """No live owner: `-p X gateway restart --all` must relaunch the host root, never X's gateway.
 
     Post-update the host is down, so the ownership refusal cannot fire; the sweep-and-relaunch
@@ -183,8 +205,10 @@ def test_named_profile_restart_all_with_host_down_restarts_the_default_root(monk
     (root / "config.yaml").write_text("{}\n", encoding="utf-8")
     (named / "config.yaml").write_text("{}\n", encoding="utf-8")
     (root / ".env").write_text("DISCORD_BOT_TOKEN=root-discord\n", encoding="utf-8")
-    (named / ".env").write_text("TELEGRAM_BOT_TOKEN=leinad-telegram\nOPENAI_API_KEY=leinad-openai\n",
-                                encoding="utf-8")
+    (named / ".env").write_text(
+        "TELEGRAM_BOT_TOKEN=leinad-telegram\nOPENAI_API_KEY=leinad-openai\n",
+        encoding="utf-8",
+    )
     # The CLI startup already loaded leinad's .env into this process.
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "leinad-telegram")
     monkeypatch.setenv("OPENAI_API_KEY", "leinad-openai")
@@ -198,13 +222,19 @@ def test_named_profile_restart_all_with_host_down_restarts_the_default_root(monk
     monkeypatch.setattr(gw, "_wait_for_api_server_port_free", lambda **k: True)
     monkeypatch.setattr(gw, "_discard_dead_host_record", lambda: False)
     monkeypatch.setattr(gw, "_installed_service_kind_for", lambda windows: None)
-    monkeypatch.setattr(gw, "run_gateway",
-                        lambda **k: pytest.fail("the root ran IN the named profile's process"))
+    monkeypatch.setattr(
+        gw,
+        "run_gateway",
+        lambda **k: pytest.fail("the root ran IN the named profile's process"),
+    )
     monkeypatch.setattr(gw, "get_python_path", lambda: sys.executable)
 
     spawned: list[tuple[list[str], dict]] = []
-    monkeypatch.setattr(gw.subprocess, "Popen",
-                        lambda cmd, **kw: spawned.append((cmd, kw)) or SimpleNamespace())
+    monkeypatch.setattr(
+        gw.subprocess,
+        "Popen",
+        lambda cmd, **kw: spawned.append((cmd, kw)) or SimpleNamespace(),
+    )
 
     gw._restart_all(system=False)
 
@@ -215,21 +245,27 @@ def test_named_profile_restart_all_with_host_down_restarts_the_default_root(monk
     env = kwargs["env"]
     assert Path(env["CLAWK_HOME"]) == root
     assert env.get("DISCORD_BOT_TOKEN") == "root-discord"
-    assert "TELEGRAM_BOT_TOKEN" not in env and "OPENAI_API_KEY" not in env, \
+    assert "TELEGRAM_BOT_TOKEN" not in env and "OPENAI_API_KEY" not in env, (
         "the host child inherited the named profile's credentials"
+    )
     assert clawk_constants.get_clawk_home() == named
     assert not clawk_constants.process_clawk_home_is_pinned()
 
 
 def test_restart_all_refuses_to_sweep_a_host_multiplexer_owned_by_another_profile(
-        host_owner, monkeypatch, tmp_path):
+    host_owner, monkeypatch, tmp_path
+):
     def _never(*a, **k):
-        raise AssertionError("restart --all SIGTERMed another profile's host multiplexer")
+        raise AssertionError(
+            "restart --all SIGTERMed another profile's host multiplexer"
+        )
 
     monkeypatch.setattr(gw, "kill_gateway_processes", _never)
     monkeypatch.setattr(gw, "_stop_installed_service", lambda system: False)
-    monkeypatch.setattr("gateway.status._get_process_clawk_home",
-                        lambda: Path(tmp_path / "root" / "profiles" / "ops"))
+    monkeypatch.setattr(
+        "gateway.status._get_process_clawk_home",
+        lambda: Path(tmp_path / "root" / "profiles" / "ops"),
+    )
 
     with pytest.raises(SystemExit) as exc:
         gw._restart_all(system=False)
@@ -237,13 +273,16 @@ def test_restart_all_refuses_to_sweep_a_host_multiplexer_owned_by_another_profil
 
 
 def test_restart_all_does_not_attach_to_the_process_it_just_stopped(
-        host_owner, monkeypatch, tmp_path):
+    host_owner, monkeypatch, tmp_path
+):
     """After a confirmed stop the record is retracted and the re-entry carries ``replace``.
 
     Without both, the re-entered ``gateway run`` read the corpse's record, decided ATTACH and
     exited 0 — a restart that silently left the host with no gateway at all.
     """
-    monkeypatch.setattr("gateway.status._get_process_clawk_home", lambda: host_owner.home)
+    monkeypatch.setattr(
+        "gateway.status._get_process_clawk_home", lambda: host_owner.home
+    )
     monkeypatch.setattr(gw, "_stop_installed_service", lambda system: False)
     monkeypatch.setattr(gw, "kill_gateway_processes", lambda **k: 1)
     monkeypatch.setattr(gw, "_wait_for_api_server_port_free", lambda *a, **k: None)
@@ -262,19 +301,27 @@ def test_restart_all_does_not_attach_to_the_process_it_just_stopped(
 
     gw._restart_all(system=False)
 
-    assert hr.read_record(hr.ROLE_GATEWAY, include_stale=True) is None, \
+    assert hr.read_record(hr.ROLE_GATEWAY, include_stale=True) is None, (
         "the stopped owner's record must be retracted"
+    )
     assert reentry and reentry[0].get("replace") is True
 
 
 def test_named_profile_restart_all_reaches_the_all_aware_branch(monkeypatch):
     """The generic guard ran first and printed a bare `gateway restart` (no --all)."""
     monkeypatch.setattr(gw, "_refuse_from_inside_gateway", lambda *a, **k: None)
-    monkeypatch.setattr(gw, "_dispatch_all_via_service_manager_if_s6", lambda verb: False)
-    monkeypatch.setattr(gw, "_guard_named_profile_under_multiplexer",
-                        lambda **k: pytest.fail("the generic guard pre-empted the --all branch"))
+    monkeypatch.setattr(
+        gw, "_dispatch_all_via_service_manager_if_s6", lambda verb: False
+    )
+    monkeypatch.setattr(
+        gw,
+        "_guard_named_profile_under_multiplexer",
+        lambda **k: pytest.fail("the generic guard pre-empted the --all branch"),
+    )
     called: list[bool] = []
-    monkeypatch.setattr(gw, "_restart_all", lambda system, detach=False: called.append(True))
+    monkeypatch.setattr(
+        gw, "_restart_all", lambda system, detach=False: called.append(True)
+    )
 
     gw._cmd_restart(SimpleNamespace(system=False, all=True, force=False))
 
@@ -287,7 +334,9 @@ def test_a_supervised_attach_is_retried_not_parked(monkeypatch, capsys):
     monkeypatch.setattr(
         "gateway.host_attach.decide",
         lambda home, replace=False: host_attach.HostAttachDecision(
-            host_attach.ATTACH, "attached", owner, transient=True))
+            host_attach.ATTACH, "attached", owner, transient=True
+        ),
+    )
     monkeypatch.setattr(gw, "_running_under_gateway_supervisor", lambda: True)
 
     with pytest.raises(SystemExit) as exc:
@@ -304,13 +353,22 @@ def test_a_refusal_lands_in_the_profile_logs_not_only_on_stdout(monkeypatch, cap
     monkeypatch.setattr(
         "gateway.host_attach.decide",
         lambda home, replace=False: host_attach.HostAttachDecision(
-            host_attach.REFUSE, host_attach._refuse_message(owner, "nous"), owner))
+            host_attach.REFUSE, host_attach._refuse_message(owner, "nous"), owner
+        ),
+    )
 
-    with caplog.at_level("WARNING", logger="clawk_cli.gateway"), pytest.raises(SystemExit) as exc:
+    with (
+        caplog.at_level("WARNING", logger="clawk_cli.gateway"),
+        pytest.raises(SystemExit) as exc,
+    ):
         gw._attach_to_host_gateway_or_guard(force=False)
 
     assert exc.value.code == gw.GATEWAY_FATAL_CONFIG_EXIT_CODE
-    warned = [r for r in caplog.records if r.levelno >= 30 and "migrate --multiplex" in r.getMessage()]
+    warned = [
+        r
+        for r in caplog.records
+        if r.levelno >= 30 and "migrate --multiplex" in r.getMessage()
+    ]
     assert warned, "a refusal must leave the remedy in the profile's own log"
 
 
@@ -322,12 +380,18 @@ def test_replace_is_not_eaten_by_the_cli_guard(monkeypatch):
     def _decide(home, replace=False):
         seen.append(replace)
         return host_attach.HostAttachDecision(
-            host_attach.REPLACE_HOST if replace else host_attach.ATTACH, "", owner)
+            host_attach.REPLACE_HOST if replace else host_attach.ATTACH, "", owner
+        )
 
     monkeypatch.setattr("gateway.host_attach.decide", _decide)
-    monkeypatch.setattr(gw, "_guard_named_profile_under_multiplexer",
-                        lambda **k: pytest.fail("--replace must not fall through to the guard"))
+    monkeypatch.setattr(
+        gw,
+        "_guard_named_profile_under_multiplexer",
+        lambda **k: pytest.fail("--replace must not fall through to the guard"),
+    )
 
-    gw._attach_to_host_gateway_or_guard(force=False, replace=True)  # must not raise SystemExit
+    gw._attach_to_host_gateway_or_guard(
+        force=False, replace=True
+    )  # must not raise SystemExit
 
     assert seen == [True], "the CLI guard must pass --replace into the host decision"

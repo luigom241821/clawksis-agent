@@ -112,7 +112,6 @@ class TestReadJournalMode:
         assert mode is None
         assert error == "file is empty"
 
-
     def test_corrupt_file_reports_error(self, tmp_path):
         db = tmp_path / "state.db"
         db.write_bytes(b"this is not a sqlite database" * 4)
@@ -122,9 +121,11 @@ class TestReadJournalMode:
         assert mode is None
         assert "not a database" in error
 
-
     @pytest.mark.platforms("posix")  # chmod is a no-op on Windows
-    @pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0, reason="root ignores file permissions")
+    @pytest.mark.skipif(
+        hasattr(os, "geteuid") and os.geteuid() == 0,
+        reason="root ignores file permissions",
+    )
     def test_read_only_directory_is_still_readable(self, tmp_path):
         db = tmp_path / "state.db"
         _make_db(db, journal_mode="WAL")
@@ -161,7 +162,6 @@ class TestLiveConnectionSafety:
     imports and calls it directly while holding live SessionDB connections),
     so the probe must defer to the registry rather than open the file.
     """
-
 
     def test_probe_is_refused_for_a_real_tracked_connection(
         self, tmp_path, clean_registry
@@ -287,7 +287,9 @@ class TestUnreadableReason:
 
 
 class TestReportDatabaseJournalModes:
-    def test_wal_db_on_cross_vm_fs_is_flagged_with_offline_remedy(self, tmp_path, capsys, monkeypatch):
+    def test_wal_db_on_cross_vm_fs_is_flagged_with_offline_remedy(
+        self, tmp_path, capsys, monkeypatch
+    ):
         # #110848: startup only refuses WAL for fresh databases on virtiofs/9p; doctor must surface an existing WAL
         # file there (with a non-vulnerable SQLite, where it used to print a plain info line).
         _make_db(tmp_path / "state.db", journal_mode="WAL")
@@ -308,7 +310,9 @@ class TestReportDatabaseJournalModes:
         assert "state.db is in WAL mode" in out
         assert EXPOSED_TEXT in out
 
-    def test_vulnerable_runtime_rollback_db_is_listed_not_exposed(self, tmp_path, capsys):
+    def test_vulnerable_runtime_rollback_db_is_listed_not_exposed(
+        self, tmp_path, capsys
+    ):
         _make_db(tmp_path / "state.db")
 
         doctor_platform._report_database_journal_modes(tmp_path, VULNERABLE)
@@ -367,7 +371,10 @@ class TestReportDatabaseJournalModes:
         assert "state.db: rollback journal mode" in out
 
     @pytest.mark.platforms("posix")  # chmod is a no-op on Windows
-    @pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0, reason="root ignores file permissions")
+    @pytest.mark.skipif(
+        hasattr(os, "geteuid") and os.geteuid() == 0,
+        reason="root ignores file permissions",
+    )
     def test_unreadable_database_does_not_crash(self, tmp_path, capsys):
         db = tmp_path / "state.db"
         _make_db(db)
@@ -415,34 +422,54 @@ class TestConfiguredDeleteNeverApplied:
     WARNING naming the unapplied setting (the runtime never live-downgrades and logs that once per
     process), not the informational line a healthy WAL database gets; a configured ``wal`` is unchanged."""
 
-    @pytest.mark.parametrize("version, exposed", [((3, 51, 3), False), (VULNERABLE, True)])
-    def test_wal_db_under_configured_delete_warns(self, tmp_path, capsys, monkeypatch, version, exposed):
+    @pytest.mark.parametrize(
+        "version, exposed", [((3, 51, 3), False), (VULNERABLE, True)]
+    )
+    def test_wal_db_under_configured_delete_warns(
+        self, tmp_path, capsys, monkeypatch, version, exposed
+    ):
         _make_db(tmp_path / "state.db", journal_mode="WAL")
         monkeypatch.setattr("clawk_state_wal.resolve_journal_mode", lambda: "delete")
 
         doctor_platform._report_database_journal_modes(tmp_path, version)
 
         out = capsys.readouterr().out
-        assert "state.db is in WAL mode" in out and "despite database.journal_mode=delete" in out
-        assert "never live-downgraded" in out and "clawk sessions set-journal-mode delete" in out
+        assert (
+            "state.db is in WAL mode" in out
+            and "despite database.journal_mode=delete" in out
+        )
+        assert (
+            "never live-downgraded" in out
+            and "clawk sessions set-journal-mode delete" in out
+        )
         assert "state.db: WAL journal mode" not in out
         assert ("To clear the exposure:" in out) is exposed
 
-    def test_wal_db_under_configured_delete_names_its_holders(self, tmp_path, capsys, monkeypatch):
+    def test_wal_db_under_configured_delete_names_its_holders(
+        self, tmp_path, capsys, monkeypatch
+    ):
         # The offline conversion needs the file quiet, so doctor must say WHICH process to stop — a
         # subprocess holding a real connection is named by PID; the doctor process itself is not a holder.
         db = tmp_path / "state.db"
         _make_db(db, journal_mode="WAL")
         monkeypatch.setattr("clawk_state_wal.resolve_journal_mode", lambda: "delete")
         holder = subprocess.Popen(
-            [sys.executable, "-c",
-             "import os, sqlite3, sys; c = sqlite3.connect(sys.argv[1]); c.execute('SELECT count(*) FROM t'); "
-             "print(f'held:{os.getpid()}', flush=True); sys.stdin.readline()", str(db)],
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
+            [
+                sys.executable,
+                "-c",
+                "import os, sqlite3, sys; c = sqlite3.connect(sys.argv[1]); c.execute('SELECT count(*) FROM t'); "
+                "print(f'held:{os.getpid()}', flush=True); sys.stdin.readline()",
+                str(db),
+            ],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            text=True,
         )
         try:
             marker, sqlite_pid = holder.stdout.readline().strip().split(":", 1)
-            assert marker == "held"  # child-reported: Popen.pid is the venv launcher on Windows
+            assert (
+                marker == "held"
+            )  # child-reported: Popen.pid is the venv launcher on Windows
             doctor_platform._report_database_journal_modes(tmp_path, (3, 51, 3))
         finally:
             holder.stdin.write("\n")
@@ -450,22 +477,34 @@ class TestConfiguredDeleteNeverApplied:
             holder.wait(timeout=30)
 
         out = capsys.readouterr().out
-        assert f"state.db is held by PID {sqlite_pid}" in out and "state.db" in out.split("held by PID")[1]
+        assert (
+            f"state.db is held by PID {sqlite_pid}" in out
+            and "state.db" in out.split("held by PID")[1]
+        )
         assert "no other process holds it" not in out and "cannot prove" not in out
 
-    def test_partial_holder_scan_is_never_an_all_clear(self, tmp_path, capsys, monkeypatch):
+    def test_partial_holder_scan_is_never_an_all_clear(
+        self, tmp_path, capsys, monkeypatch
+    ):
         _make_db(tmp_path / "state.db", journal_mode="WAL")
         monkeypatch.setattr("clawk_state_wal.resolve_journal_mode", lambda: "delete")
-        monkeypatch.setattr("clawk_state_holders.foreign_state_db_holders",
-                            lambda path: [(-1, "open-file scan unavailable")])
+        monkeypatch.setattr(
+            "clawk_state_holders.foreign_state_db_holders",
+            lambda path: [(-1, "open-file scan unavailable")],
+        )
 
         doctor_platform._report_database_journal_modes(tmp_path, (3, 51, 3))
 
         out = capsys.readouterr().out
-        assert "cannot prove the database is quiet" in out and "open-file scan unavailable" in out
+        assert (
+            "cannot prove the database is quiet" in out
+            and "open-file scan unavailable" in out
+        )
         assert "no other process holds it" not in out and "held by PID" not in out
 
-    def test_configured_wal_keeps_the_informational_line(self, tmp_path, capsys, monkeypatch):
+    def test_configured_wal_keeps_the_informational_line(
+        self, tmp_path, capsys, monkeypatch
+    ):
         _make_db(tmp_path / "state.db", journal_mode="WAL")
         monkeypatch.setattr("clawk_state_wal.resolve_journal_mode", lambda: "wal")
 

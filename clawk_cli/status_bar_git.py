@@ -53,12 +53,20 @@ def current_git_branch(cwd: Optional[str] = None) -> str:
     git_dir = _resolve_git_dir(base)
     if git_dir is not None:
         try:
-            head = (git_dir / "HEAD").read_text(encoding="utf-8-sig", errors="replace").strip()
+            head = (
+                (git_dir / "HEAD")
+                .read_text(encoding="utf-8-sig", errors="replace")
+                .strip()
+            )
         except OSError:
             head = ""
         if head.startswith("ref:"):
             ref = head.split(":", 1)[1].strip()
-            label = ref[len("refs/heads/"):] if ref.startswith("refs/heads/") else ref.rsplit("/", 1)[-1]
+            label = (
+                ref[len("refs/heads/") :]
+                if ref.startswith("refs/heads/")
+                else ref.rsplit("/", 1)[-1]
+            )
         elif head:
             label = f"{head[:8]}…"
     _cache[key] = (now, label)

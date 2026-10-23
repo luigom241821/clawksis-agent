@@ -23,6 +23,7 @@ from rich.console import Console
 from rich.text import Text as _RichText
 from typing import Any
 
+
 def _cli():
     """Late import of the ``cli`` facade: mutable CLI module state (and its test seams) lives there."""
     import cli
@@ -33,7 +34,13 @@ def _cli():
 _REASONING_TAGS = THINK_TAG_NAMES
 
 
-_TOOL_CALL_TAGS = ("tool_call", "tool_calls", "tool_result", "function_call", "function_calls")
+_TOOL_CALL_TAGS = (
+    "tool_call",
+    "tool_calls",
+    "tool_result",
+    "function_call",
+    "function_calls",
+)
 
 
 def _strip_reasoning_tags(text: str) -> str:
@@ -46,25 +53,36 @@ def _strip_reasoning_tags(text: str) -> str:
     openclaw/openclaw#67318.
     """
     from cli import _REASONING_TAGS, _TOOL_CALL_TAGS
+
     cleaned = text
     for tag in _REASONING_TAGS:
-        cleaned = re.sub(rf"<{tag}>.*?</{tag}>\s*", "", cleaned, flags=re.DOTALL | re.IGNORECASE)
+        cleaned = re.sub(
+            rf"<{tag}>.*?</{tag}>\s*", "", cleaned, flags=re.DOTALL | re.IGNORECASE
+        )
         cleaned = re.sub(rf"<{tag}>.*$", "", cleaned, flags=re.DOTALL | re.IGNORECASE)
         cleaned = re.sub(rf"</{tag}>\s*", "", cleaned, flags=re.IGNORECASE)
     for tc_tag in _TOOL_CALL_TAGS:
         cleaned = re.sub(
             rf"<(?:[\w.-]+:)?{tc_tag}\b[^>]*>.*?</(?:[\w.-]+:)?{tc_tag}>\s*",
-            "", cleaned, flags=re.DOTALL | re.IGNORECASE,
+            "",
+            cleaned,
+            flags=re.DOTALL | re.IGNORECASE,
         )
     # <function name="..."> — boundary + attribute gated to avoid prose false positives.
     cleaned = re.sub(
-        r'(?:(?<=^)|(?<=[\n\r.!?:]))[ \t]*<function\b[^>]*\bname\s*=[^>]*>(?:(?:(?!</function>).)*)</function>\s*',
-        '', cleaned, flags=re.DOTALL | re.IGNORECASE,
+        r"(?:(?<=^)|(?<=[\n\r.!?:]))[ \t]*<function\b[^>]*\bname\s*=[^>]*>(?:(?:(?!</function>).)*)</function>\s*",
+        "",
+        cleaned,
+        flags=re.DOTALL | re.IGNORECASE,
     )
     # Stray closers and cut tool-call fragments share storage's compiled patterns (#101899, #102303).
-    from agent.agent_runtime_helpers import _STRAY_TOOL_CALL_CLOSER_PATTERN, _UNTERMINATED_TOOL_CALL_PATTERN
-    cleaned = _STRAY_TOOL_CALL_CLOSER_PATTERN.sub('', cleaned)
-    cleaned = _UNTERMINATED_TOOL_CALL_PATTERN.sub('', cleaned)
+    from agent.agent_runtime_helpers import (
+        _STRAY_TOOL_CALL_CLOSER_PATTERN,
+        _UNTERMINATED_TOOL_CALL_PATTERN,
+    )
+
+    cleaned = _STRAY_TOOL_CALL_CLOSER_PATTERN.sub("", cleaned)
+    cleaned = _UNTERMINATED_TOOL_CALL_PATTERN.sub("", cleaned)
     return cleaned.strip()
 
 
@@ -74,17 +92,24 @@ def _assistant_content_as_text(content: Any) -> str:
     if isinstance(content, str):
         return content
     if isinstance(content, list):
-        parts = [str(part.get("text", "")) for part in content if isinstance(part, dict) and part.get("type") == "text"]
+        parts = [
+            str(part.get("text", ""))
+            for part in content
+            if isinstance(part, dict) and part.get("type") == "text"
+        ]
         return "\n".join(p for p in parts if p)
     return str(content)
 
 
 def _assistant_copy_text(content: Any) -> str:
     from cli import _assistant_content_as_text, _strip_reasoning_tags
+
     return _strip_reasoning_tags(_assistant_content_as_text(content))
 
 
-_ACCENT_ANSI_DEFAULT = "\033[1;38;2;141;112;240m"  # #8D70F0 bold fallback (Clawksis purple)
+_ACCENT_ANSI_DEFAULT = (
+    "\033[1;38;2;141;112;240m"  # #8D70F0 bold fallback (Clawksis purple)
+)
 
 
 _BOLD = "\033[1m"
@@ -102,9 +127,10 @@ _STREAM_PARTIAL_PREVIEW_LEN = 60  # tail of an unfinished line mirrored into the
 def _hex_to_ansi(hex_color: str, *, bold: bool = False) -> str:
     """Convert '#RRGGBB' to a true-color ANSI escape, remapping dark-tuned colors in light mode."""
     from cli import _ACCENT_ANSI_DEFAULT, _maybe_remap_for_light_mode
+
     hex_color = _maybe_remap_for_light_mode(hex_color)
     try:
-        r, g, b = (int(hex_color[i:i + 2], 16) for i in (1, 3, 5))
+        r, g, b = (int(hex_color[i : i + 2], 16) for i in (1, 3, 5))
         return f"\033[{'1;' if bold else ''}38;2;{r};{g};{b}m"
     except (ValueError, IndexError):
         return _ACCENT_ANSI_DEFAULT if bold else "\033[38;2;74;52;150m"
@@ -116,7 +142,9 @@ _TRUE_RE = re.compile(r"^(1|true|on|yes|y)$")
 _FALSE_RE = re.compile(r"^(0|false|off|no|n)$")
 
 
-_LIGHT_DEFAULT_TERM_PROGRAMS = frozenset()  # Apple_Terminal isn't reliable; require explicit config
+_LIGHT_DEFAULT_TERM_PROGRAMS = (
+    frozenset()
+)  # Apple_Terminal isn't reliable; require explicit config
 
 
 def _luminance_from_hex(hex_str: str) -> float | None:
@@ -148,6 +176,7 @@ def _query_osc11_background() -> str | None:
     past the flush — a race observed on VPS and container terminals under load (#40250).
     """
     from cli import _DA1_REPLY_RE
+
     if not sys.stdin.isatty() or not sys.stdout.isatty():
         return None
     if any(os.environ.get(v) for v in ("SSH_CONNECTION", "SSH_CLIENT", "SSH_TTY")):
@@ -156,6 +185,7 @@ def _query_osc11_background() -> str | None:
         import select
         import termios
         import tty
+
         fd = sys.stdin.fileno()
         old = termios.tcgetattr(fd)
     except Exception:
@@ -196,6 +226,7 @@ def _query_osc11_background() -> str | None:
             v = int(h, 16)
             bits = len(h) * 4
             return (v * 255) // ((1 << bits) - 1) if bits else 0
+
         r, g, b = norm(m.group(1)), norm(m.group(2)), norm(m.group(3))
         return f"#{r:02X}{g:02X}{b:02X}"
     finally:
@@ -221,6 +252,7 @@ def _heal_cooked_mode_drift(fd: int) -> bool:
     """
     try:
         import termios
+
         attrs = termios.tcgetattr(fd)
     except Exception:
         return False
@@ -228,7 +260,9 @@ def _heal_cooked_mode_drift(fd: int) -> bool:
     if not (lflag & (termios.ICANON | termios.ECHO)):
         return False  # still raw — nothing to do
     attrs[3] = lflag & ~(termios.ECHO | termios.ICANON | termios.IEXTEN | termios.ISIG)
-    attrs[0] = attrs[0] & ~(termios.IXON | termios.IXOFF | termios.ICRNL | termios.INLCR | termios.IGNCR)
+    attrs[0] = attrs[0] & ~(
+        termios.IXON | termios.IXOFF | termios.ICRNL | termios.INLCR | termios.IGNCR
+    )
     attrs[6][termios.VMIN] = 1
     try:
         termios.tcsetattr(fd, termios.TCSANOW, attrs)
@@ -239,7 +273,14 @@ def _heal_cooked_mode_drift(fd: int) -> bool:
 
 def _detect_light_mode_uncached() -> bool:
     """The detection ladder documented above; may raise (caller maps errors to dark)."""
-    from cli import _FALSE_RE, _LIGHT_DEFAULT_TERM_PROGRAMS, _TRUE_RE, _luminance_from_hex, _query_osc11_background
+    from cli import (
+        _FALSE_RE,
+        _LIGHT_DEFAULT_TERM_PROGRAMS,
+        _TRUE_RE,
+        _luminance_from_hex,
+        _query_osc11_background,
+    )
+
     for var in ("CLAWK_LIGHT", "CLAWK_TUI_LIGHT"):
         v = (os.environ.get(var) or "").strip().lower()
         if _TRUE_RE.match(v):
@@ -262,7 +303,9 @@ def _detect_light_mode_uncached() -> bool:
         lum = _luminance_from_hex(bg_color)
         if lum is not None:
             return lum >= 0.5
-    return (os.environ.get("TERM_PROGRAM") or "").strip() in _LIGHT_DEFAULT_TERM_PROGRAMS
+    return (
+        os.environ.get("TERM_PROGRAM") or ""
+    ).strip() in _LIGHT_DEFAULT_TERM_PROGRAMS
 
 
 # Light-mode equivalents of skin colors unreadable on cream backgrounds. Only colors used
@@ -270,10 +313,22 @@ def _detect_light_mode_uncached() -> bool:
 # become invisible the other direction, hence #C0C0C0/#888888/#555555/#8B8682 are skipped.
 _LIGHT_MODE_REMAP: dict[str, str] = {
     # Clawksis purples (dark-mode) -> deeper purples readable on light backgrounds.
-    "#E8E0FF": "#1A1A1A", "#8D70F0": "#4A2E8C", "#6C4FD6": "#3A2070", "#4A3496": "#2A1A5C",
-    "#FFF8DC": "#1A1A1A", "#FFD700": "#9A6B00", "#FFBF00": "#8A5A00", "#B8860B": "#5C4500",
-    "#DAA520": "#6B4F00", "#F1E6CF": "#1A1A1A", "#c9d1d9": "#24292F", "#EAF7FF": "#0F1B26",
-    "#F5F5F5": "#1A1A1A", "#FFF0D4": "#1A1A1A", "#CD7F32": "#8A4F1A", "#FFEFB5": "#3A2A00",
+    "#E8E0FF": "#1A1A1A",
+    "#8D70F0": "#4A2E8C",
+    "#6C4FD6": "#3A2070",
+    "#4A3496": "#2A1A5C",
+    "#FFF8DC": "#1A1A1A",
+    "#FFD700": "#9A6B00",
+    "#FFBF00": "#8A5A00",
+    "#B8860B": "#5C4500",
+    "#DAA520": "#6B4F00",
+    "#F1E6CF": "#1A1A1A",
+    "#c9d1d9": "#24292F",
+    "#EAF7FF": "#0F1B26",
+    "#F5F5F5": "#1A1A1A",
+    "#FFF0D4": "#1A1A1A",
+    "#CD7F32": "#8A4F1A",
+    "#FFEFB5": "#3A2A00",
 }
 
 
@@ -283,6 +338,7 @@ _LIGHT_MODE_REMAP_UPPER = {k.upper(): v for k, v in _LIGHT_MODE_REMAP.items()}
 def _maybe_remap_for_light_mode(hex_color: str) -> str:
     """In light mode, remap a dark-tuned color to its higher-contrast equivalent."""
     from cli import _LIGHT_MODE_REMAP_UPPER, _detect_light_mode
+
     if not _detect_light_mode():
         return hex_color
     if not hex_color or not hex_color.startswith("#"):
@@ -293,6 +349,7 @@ def _maybe_remap_for_light_mode(hex_color: str) -> str:
 def _install_skin_light_mode_hook() -> None:
     """Wrap SkinConfig.get_color so EVERY skin color read goes through the light-mode remap. Idempotent."""
     from cli import _maybe_remap_for_light_mode
+
     try:
         from clawk_cli.skin_engine import SkinConfig  # type: ignore[import]
     except Exception:
@@ -315,7 +372,9 @@ def _install_skin_light_mode_hook() -> None:
 class _SkinAwareAnsi:
     """Lazy ANSI escape resolved from the skin on first use; ``.reset()`` after a ``/skin`` switch."""
 
-    def __init__(self, skin_key: str, fallback_hex: str = "#8D70F0", *, bold: bool = False):
+    def __init__(
+        self, skin_key: str, fallback_hex: str = "#8D70F0", *, bold: bool = False
+    ):
         self._skin_key = skin_key
         self._fallback_hex = fallback_hex
         self._bold = bold
@@ -323,9 +382,11 @@ class _SkinAwareAnsi:
 
     def __str__(self) -> str:
         from cli import _hex_to_ansi
+
         if self._cached is None:
             try:
                 from clawk_cli.skin_engine import get_active_skin
+
                 self._cached = _hex_to_ansi(
                     get_active_skin().get_color(self._skin_key, self._fallback_hex),
                     bold=self._bold,
@@ -363,13 +424,16 @@ def _tty_wrap(s: str, sgr: str) -> str:
 _b = functools.partial(_tty_wrap, sgr="\x1b[1m")  # bold when stdout is a real TTY
 
 
-_d = functools.partial(_tty_wrap, sgr="\x1b[2;3m")  # dim-italic when stdout is a real TTY
+_d = functools.partial(
+    _tty_wrap, sgr="\x1b[2;3m"
+)  # dim-italic when stdout is a real TTY
 
 
 def _accent_hex() -> str:
     """Return the active skin accent color for legacy CLI output lines."""
     try:
         from clawk_cli.skin_engine import get_active_skin
+
         return get_active_skin().get_color("ui_accent", "#6C4FD6")
     except Exception:
         return "#6C4FD6"
@@ -383,6 +447,7 @@ def _rich_text_from_ansi(text: str) -> _RichText:
 def _strip_markdown_syntax(text: str) -> str:
     """Best-effort markdown marker removal for plain-text display."""
     from cli import _rich_text_from_ansi
+
     plain = _rich_text_from_ansi(text or "").plain
     # HR markers: "-"/"_" runs of 3+, but "*" only when exactly 3 (cron schedules "* * * * *").
     plain = re.sub(r"^\s{0,3}(?:[-_]\s*){3,}$", "", plain, flags=re.MULTILINE)
@@ -405,12 +470,15 @@ def _strip_markdown_syntax(text: str) -> str:
     return plain.strip("\n")
 
 
-_WINDOWS_PATH_WITH_DOT_SEGMENT_RE = re.compile(r"(?i)(?:\b[a-z]:\\|\\\\)[^\s`]*\\\.[^\s`]*")
+_WINDOWS_PATH_WITH_DOT_SEGMENT_RE = re.compile(
+    r"(?i)(?:\b[a-z]:\\|\\\\)[^\s`]*\\\.[^\s`]*"
+)
 
 
 def _preserve_windows_dot_segments_for_markdown(text: str) -> str:
     r"""Double the ``\`` before hidden dirs in Windows paths: CommonMark reads ``\.`` as an escaped dot."""
     from cli import _WINDOWS_PATH_WITH_DOT_SEGMENT_RE
+
     if "\\." not in text:
         return text
 
@@ -430,12 +498,19 @@ def _terminal_columns() -> int:
 def _terminal_width_for_streaming() -> int:
     """Display cells inside the streamed response box (small margin for resize races)."""
     from cli import _STREAM_PAD, _terminal_columns
+
     return max(20, _terminal_columns() - len(_STREAM_PAD) - 2)
 
 
 def _render_final_assistant_content(text: str, mode: str = "render"):
     """Render final assistant content as markdown, stripped text, or raw text."""
-    from cli import _preserve_windows_dot_segments_for_markdown, _rich_text_from_ansi, _strip_markdown_syntax, _terminal_columns, realign_markdown_tables
+    from cli import (
+        _preserve_windows_dot_segments_for_markdown,
+        _rich_text_from_ansi,
+        _strip_markdown_syntax,
+        _terminal_columns,
+        realign_markdown_tables,
+    )
     from rich.markdown import Markdown
 
     # 1 border cell each side + margin so resize races don't push a borderline table into soft-wrap.
@@ -444,7 +519,9 @@ def _render_final_assistant_content(text: str, mode: str = "render"):
     normalized_mode = str(mode or "render").strip().lower()
     if normalized_mode == "strip":
         # Strip first (inline markdown changes cell width), then re-align padding.
-        return _RichText(realign_markdown_tables(_strip_markdown_syntax(text), panel_width))
+        return _RichText(
+            realign_markdown_tables(_strip_markdown_syntax(text), panel_width)
+        )
     if normalized_mode == "raw":
         return _rich_text_from_ansi(text or "")
 
@@ -462,7 +539,7 @@ def _post_stream_transform_output(response: str, result: dict | None) -> str:
 
     original = result.get("pre_transform_response") or ""
     if original and response.startswith(original):
-        return response[len(original):]
+        return response[len(original) :]
 
     return f"\n{t('cli.render.response_transformed')}\n{response}"
 
@@ -480,11 +557,16 @@ def _clear_output_history() -> None:
 
 
 def _output_history_recording() -> bool:
-    return _cli()._OUTPUT_HISTORY_ENABLED and not _cli()._OUTPUT_HISTORY_REPLAYING and not _cli()._OUTPUT_HISTORY_SUPPRESSED
+    return (
+        _cli()._OUTPUT_HISTORY_ENABLED
+        and not _cli()._OUTPUT_HISTORY_REPLAYING
+        and not _cli()._OUTPUT_HISTORY_SUPPRESSED
+    )
 
 
 def _record_output_history_entry(entry) -> None:
     from cli import _output_history_recording
+
     if _output_history_recording():
         _cli()._OUTPUT_HISTORY.append(entry)
 
@@ -492,12 +574,14 @@ def _record_output_history_entry(entry) -> None:
 class _PaintedLine(str):
     """A recorded output line tagged with the terminal ``width`` it was painted at: a terminal
     that does not reflow keeps the rows it wrapped into then, whatever the width is now."""
+
     width = None
 
 
 def _painted_columns():
     """The width the terminal soft-wraps a print at right now, or ``None``."""
     from prompt_toolkit.application import get_app_or_none
+
     app = get_app_or_none()
     try:
         if app is not None:
@@ -511,6 +595,7 @@ def _record_output_history(text: str, *, force: bool = False) -> None:
     """Record ``text`` as painted now. ``force`` skips the recording check when the caller
     made it at print-request time (the print itself was deferred to the app loop)."""
     from cli import _output_history_recording
+
     if force or _output_history_recording():
         width = _painted_columns()
         lines = []
@@ -523,12 +608,15 @@ def _record_output_history(text: str, *, force: bool = False) -> None:
         _cli()._OUTPUT_HISTORY.extend(lines)
 
 
-_ANSI_SEQUENCE_RE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\)|[@-Z\\-_])")
+_ANSI_SEQUENCE_RE = re.compile(
+    r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\)|[@-Z\\-_])"
+)
 
 
 def _ansi_drop_cells(line: str, cells: int) -> str:
     """``line`` without its first ``cells`` visible cells; escape sequences are kept for their styling."""
     from prompt_toolkit.utils import get_cwidth
+
     out, pos = [], 0
     for match in [*_ANSI_SEQUENCE_RE.finditer(line), None]:
         end = match.start() if match else len(line)
@@ -550,15 +638,39 @@ def _ansi_drop_cells(line: str, cells: int) -> str:
 # TMUX/STY first there: tmux with `default-terminal xterm-256color` (a common setup) hands its
 # panes a generic TERM plus TMUX, while XTERM_VERSION is only inherited from the outer xterm. Then
 # XTERM_VERSION: an xterm started from a VTE shell inherits VTE_VERSION but sets XTERM_VERSION.
-_REFLOW_TERM_PREFIXES = ("tmux", "screen", "xterm-kitty", "alacritty", "foot", "xterm-ghostty", "wezterm",
-                         "contour", "vte")
+_REFLOW_TERM_PREFIXES = (
+    "tmux",
+    "screen",
+    "xterm-kitty",
+    "alacritty",
+    "foot",
+    "xterm-ghostty",
+    "wezterm",
+    "contour",
+    "vte",
+)
 # TERM is all that survives ssh; these prefixes name terminals that truncate rows in place.
 _NO_REFLOW_TERM_PREFIXES = ("linux", "st", "mosh", "vt", "cons", "rxvt")
 _MULTIPLEXER_ENV = ("TMUX", "STY")
 _NO_REFLOW_ENV = ("XTERM_VERSION",)
-_REFLOW_ENV = ("VTE_VERSION", "KITTY_WINDOW_ID", "WT_SESSION", "KONSOLE_VERSION",
-               "ALACRITTY_WINDOW_ID", "WEZTERM_PANE", "GHOSTTY_RESOURCES_DIR")
-_REFLOW_TERM_PROGRAMS = ("iTerm.app", "Apple_Terminal", "WezTerm", "vscode", "ghostty", "Tabby", "Hyper")
+_REFLOW_ENV = (
+    "VTE_VERSION",
+    "KITTY_WINDOW_ID",
+    "WT_SESSION",
+    "KONSOLE_VERSION",
+    "ALACRITTY_WINDOW_ID",
+    "WEZTERM_PANE",
+    "GHOSTTY_RESOURCES_DIR",
+)
+_REFLOW_TERM_PROGRAMS = (
+    "iTerm.app",
+    "Apple_Terminal",
+    "WezTerm",
+    "vscode",
+    "ghostty",
+    "Tabby",
+    "Hyper",
+)
 
 
 def _terminal_reflows() -> bool | None:
@@ -577,21 +689,33 @@ def _terminal_reflows() -> bool | None:
         return True
     if any(env.get(name) for name in _NO_REFLOW_ENV):
         return False
-    if any(env.get(name) for name in _REFLOW_ENV) or env.get("TERM_PROGRAM") in _REFLOW_TERM_PROGRAMS:
+    if (
+        any(env.get(name) for name in _REFLOW_ENV)
+        or env.get("TERM_PROGRAM") in _REFLOW_TERM_PROGRAMS
+    ):
         return True
-    if env.get("LC_TERMINAL") == "iTerm2":  # iTerm2 sets it so that ssh forwards it (LC_*)
+    if (
+        env.get("LC_TERMINAL") == "iTerm2"
+    ):  # iTerm2 sets it so that ssh forwards it (LC_*)
         return True
     return None
 
 
 def _line_rows(line: str, columns: int) -> int:
     """Rows ``line`` fills when the terminal soft-wraps it at ``columns``."""
-    from prompt_toolkit.formatted_text import ANSI, fragment_list_width, to_formatted_text
+    from prompt_toolkit.formatted_text import (
+        ANSI,
+        fragment_list_width,
+        to_formatted_text,
+    )
+
     width = fragment_list_width(to_formatted_text(ANSI(line)))
     return max(1, -(-width // columns)) if columns and columns > 0 else 1
 
 
-def _output_tail_fitting(lines: list[str], max_rows: int, columns: int, painted: bool = True) -> list[str]:
+def _output_tail_fitting(
+    lines: list[str], max_rows: int, columns: int, painted: bool = True
+) -> list[str]:
     """Newest ``lines`` filling ``max_rows`` rows, soft-wrapped at ``columns`` — or, with
     ``painted``, at the width each was painted at, as a terminal that does not reflow still
     shows it. The oldest one may only partly fit: its bottom rows are kept, the rows above
@@ -623,7 +747,9 @@ def _output_history_lines() -> list[str]:
                 continue
             if isinstance(lines, str):
                 lines = lines.splitlines()
-        rendered_lines.extend(line if isinstance(line, str) else str(line) for line in lines)
+        rendered_lines.extend(
+            line if isinstance(line, str) else str(line) for line in lines
+        )
     return rendered_lines
 
 
@@ -634,7 +760,9 @@ def _output_history_rows(limit: int, columns: int, painted: bool):
         return None
     total = 0
     for line in reversed(_output_history_lines()):
-        total += _line_rows(line, (getattr(line, "width", None) if painted else None) or columns)
+        total += _line_rows(
+            line, (getattr(line, "width", None) if painted else None) or columns
+        )
         if total >= limit:
             return None
     return total
@@ -643,6 +771,7 @@ def _output_history_rows(limit: int, columns: int, painted: bool):
 def _pt_print_ansi(text: str) -> None:
     """``_pt_print(ANSI(text))``, falling back to ``print`` when stdout is not a real console."""
     from cli import _PT_ANSI, _pt_print
+
     try:
         _pt_print(_PT_ANSI(text))
     except Exception:
@@ -741,7 +870,14 @@ def _cprint(text: str):
     From a background thread while an Application runs, a direct print races the input
     redraw and gets buried, so those are painted on the app's loop via ``call_soon_threadsafe``.
     """
-    from cli import _PT_ANSI, _output_history_recording, _pt_print, _pt_print_ansi, _record_output_history
+    from cli import (
+        _PT_ANSI,
+        _output_history_recording,
+        _pt_print,
+        _pt_print_ansi,
+        _record_output_history,
+    )
+
     recording = _output_history_recording()
     seq = next(_PAINT_SEQ)
 
@@ -752,7 +888,9 @@ def _cprint(text: str):
             if recording:
                 _record_output_history(text, force=True)
             paint()
+
         return _paint
+
     paint_pt = _painted(lambda: _pt_print(_PT_ANSI(text)))
     paint_fallback = _painted(lambda: _pt_print_ansi(text))
 
@@ -793,9 +931,15 @@ def _cprint(text: str):
 
     def _print_now():
         from prompt_toolkit.formatted_text import to_formatted_text
-        from prompt_toolkit.renderer import print_formatted_text as _paint_formatted_text
+        from prompt_toolkit.renderer import (
+            print_formatted_text as _paint_formatted_text,
+        )
         from prompt_toolkit.styles import Style
-        _paint_formatted_text(app.output, to_formatted_text(_PT_ANSI(text)) + [("", "\n")], Style([]))
+
+        _paint_formatted_text(
+            app.output, to_formatted_text(_PT_ANSI(text)) + [("", "\n")], Style([])
+        )
+
     paint_now = _painted(_print_now)
 
     def _schedule():
@@ -806,21 +950,34 @@ def _cprint(text: str):
             return
         with suppress(Exception):
             pending = getattr(app, "_running_in_terminal_f", None)
-            if getattr(app, "_running_in_terminal", False) or (pending is not None and not pending.done()):
+            if getattr(app, "_running_in_terminal", False) or (
+                pending is not None and not pending.done()
+            ):
                 # Another run_in_terminal body owns the terminal: paint after it. Never fall back
                 # to a bare print on error: run_in_terminal may already have painted.
                 import inspect as _inspect
-                coro = run_in_terminal(lambda: _paint_held(seq, _schedule, app) or paint_now())
-                if coro is not None and (_inspect.isawaitable(coro) or _inspect.iscoroutine(coro)):
+
+                coro = run_in_terminal(
+                    lambda: _paint_held(seq, _schedule, app) or paint_now()
+                )
+                if coro is not None and (
+                    _inspect.isawaitable(coro) or _inspect.iscoroutine(coro)
+                ):
                     _asyncio.ensure_future(coro)
                 return
             # What run_in_terminal does, but now: its erase and print would run a loop pass
             # later, when a resize may have landed after the check above (#95375).
             renderer = app.renderer
             floor = _CHROME_FLOOR
-            if floor is not None:  # the chrome, as tall as drawn, moves down by the rows printed
+            if (
+                floor is not None
+            ):  # the chrome, as tall as drawn, moves down by the rows printed
                 screen = renderer._last_screen
-                floor = max(floor, renderer._min_available_height, screen.height if screen else 0)
+                floor = max(
+                    floor,
+                    renderer._min_available_height,
+                    screen.height if screen else 0,
+                )
             columns = app.output.get_size().columns
             renderer.erase()
             paint_now()
@@ -865,6 +1022,7 @@ def _pt_app_is_running() -> bool:
     """Whether a prompt_toolkit Application currently owns the live terminal."""
     try:
         from prompt_toolkit.application import get_app_or_none
+
         app = get_app_or_none()
     except Exception:
         return False
@@ -874,6 +1032,7 @@ def _pt_app_is_running() -> bool:
 def _cli_visible_print(text: str = "") -> None:
     """``print`` unless a prompt_toolkit Application owns the terminal (patch_stdout swallows bare prints)."""
     from cli import _cprint, _pt_app_is_running
+
     if _pt_app_is_running():
         _cprint(text)
     else:
@@ -885,16 +1044,25 @@ class ChatConsole:
 
     def __init__(self):
         from io import StringIO
+
         self._buffer = StringIO()
-        self._inner = Console(file=self._buffer, force_terminal=True, color_system="truecolor", highlight=False)
+        self._inner = Console(
+            file=self._buffer,
+            force_terminal=True,
+            color_system="truecolor",
+            highlight=False,
+        )
 
     def print(self, *args, **kwargs):
         from cli import _OSC_ESCAPE_RE, _cprint
+
         self._buffer.seek(0)
         self._buffer.truncate()
         self._inner.width = shutil.get_terminal_size((80, 24)).columns
         self._inner.print(*args, **kwargs)
-        for line in _OSC_ESCAPE_RE.sub("", self._buffer.getvalue()).rstrip("\n").split("\n"):
+        for line in (
+            _OSC_ESCAPE_RE.sub("", self._buffer.getvalue()).rstrip("\n").split("\n")
+        ):
             _cprint(line)
 
     @contextmanager
@@ -907,6 +1075,7 @@ def _build_compact_banner() -> str:
     """Build a compact banner that fits the current terminal width."""
     try:
         from clawk_cli.skin_engine import get_active_skin
+
         _skin = get_active_skin()
     except Exception:
         _skin = None
@@ -921,14 +1090,20 @@ def _build_compact_banner() -> str:
     if (getattr(_skin, "name", "default") if _skin else "default") == "default":
         tiny_line = "∇ CLAWKSIS"
     else:
-        tiny_line = _skin.get_branding("agent_name", "Clawksis") if _skin else "Clawksis"
+        tiny_line = (
+            _skin.get_branding("agent_name", "Clawksis") if _skin else "Clawksis"
+        )
     line1 = t("cli.render.banner_tagline", name=tiny_line)
 
     if os.environ.get("CLAWK_FAST_STARTUP_BANNER") == "1":
         from clawk_cli import __release_date__ as _release_date
         from clawk_cli.version_info import get_version_info
 
-        version_line = t("cli.render.banner_version", version=get_version_info().derived_version, date=_release_date)
+        version_line = t(
+            "cli.render.banner_version",
+            version=get_version_info().derived_version,
+            date=_release_date,
+        )
     else:
         version_line = format_banner_version_label()
 
@@ -951,28 +1126,54 @@ def _build_compact_banner() -> str:
     )
 
 
-def _panel_box_width(title: str, content_lines: list[str], min_width: int = 46, max_width: int = 76) -> int:
+def _panel_box_width(
+    title: str, content_lines: list[str], min_width: int = 46, max_width: int = 76
+) -> int:
     """Stable TUI panel width wide enough for the title and content (incl. borders)."""
     term_cols = shutil.get_terminal_size((100, 20)).columns
-    longest = max([len(title)] + [len(line) for line in content_lines] + [min_width - 4])
+    longest = max(
+        [len(title)] + [len(line) for line in content_lines] + [min_width - 4]
+    )
     inner = min(max(longest + 4, min_width - 2), max_width - 2, max(24, term_cols - 6))
     return inner + 2  # leading/trailing space inside the borders
 
 
-def _wrap_panel_text(text: str, width: int, subsequent_indent: str = "", *, keep_ws: bool = False) -> list[str]:
+def _wrap_panel_text(
+    text: str, width: int, subsequent_indent: str = "", *, keep_ws: bool = False
+) -> list[str]:
     """Wrap panel text; ``keep_ws`` preserves whitespace (command/detail previews). Each source
     line wraps on its own: a newline inside a row would break the panel's right border."""
-    kw = dict(replace_whitespace=False, drop_whitespace=False) if keep_ws else dict(break_long_words=False, break_on_hyphens=False)
-    wrapped = [row for part in (text.expandtabs(4).splitlines() if keep_ws else [text])
-               for row in (textwrap.wrap(part, width=max(8, width), subsequent_indent=subsequent_indent, **kw) or [""])]
+    kw = (
+        dict(replace_whitespace=False, drop_whitespace=False)
+        if keep_ws
+        else dict(break_long_words=False, break_on_hyphens=False)
+    )
+    wrapped = [
+        row
+        for part in (text.expandtabs(4).splitlines() if keep_ws else [text])
+        for row in (
+            textwrap.wrap(
+                part, width=max(8, width), subsequent_indent=subsequent_indent, **kw
+            )
+            or [""]
+        )
+    ]
     return wrapped or [""]
 
 
 _wrap_panel_text_keep_ws = functools.partial(_wrap_panel_text, keep_ws=True)
 
 
-def _append_panel_line(lines, border_style: str, content_style: str, text: str, box_width: int) -> None:
-    lines.extend(((border_style, "│ "), (content_style, text.ljust(max(0, box_width - 2))), (border_style, " │\n")))
+def _append_panel_line(
+    lines, border_style: str, content_style: str, text: str, box_width: int
+) -> None:
+    lines.extend(
+        (
+            (border_style, "│ "),
+            (content_style, text.ljust(max(0, box_width - 2))),
+            (border_style, " │\n"),
+        )
+    )
 
 
 def _append_blank_panel_line(lines, border_style: str, box_width: int) -> None:

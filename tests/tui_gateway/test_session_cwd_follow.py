@@ -140,7 +140,9 @@ def test_an_unrelated_repo_is_not_a_move(session, repo_with_worktree, tmp_path):
     assert session["cwd"] == str(repo)
 
 
-def test_a_session_created_in_a_checkout_still_follows_its_agent(session, repo_with_worktree):
+def test_a_session_created_in_a_checkout_still_follows_its_agent(
+    session, repo_with_worktree
+):
     """The reported bug: an agent told to make a worktree and work in it left the chat on `main`.
 
     ``session.create`` marks `explicit_cwd` for ANY session whose cwd exists on disk, so every
@@ -154,11 +156,15 @@ def test_a_session_created_in_a_checkout_still_follows_its_agent(session, repo_w
     assert session["cwd"] == str(worktree)
 
 
-def test_a_deliberately_moved_workspace_is_never_overridden(session, repo_with_worktree):
+def test_a_deliberately_moved_workspace_is_never_overridden(
+    session, repo_with_worktree
+):
     """A workspace the chat was MOVED to (folder picker / project switch) survives a same-repo
     worktree settle: only another deliberate move re-homes it."""
     repo, worktree = repo_with_worktree
-    server._set_session_cwd(session, str(repo))  # what session.cwd.set / workspace.move do
+    server._set_session_cwd(
+        session, str(repo)
+    )  # what session.cwd.set / workspace.move do
     assert session["cwd_pinned"] is True
     terminal_tool.record_session_cwd(session["session_key"], str(worktree))
 
@@ -196,7 +202,11 @@ def test_settled_session_info_reports_the_worktree_branch(
     """End of turn: the emitted session.info is what the desktop follows."""
     _, worktree = repo_with_worktree
     emitted: list[tuple[str, str, dict]] = []
-    monkeypatch.setattr(server, "_emit", lambda ev, sid, payload=None: emitted.append((ev, sid, payload or {})))
+    monkeypatch.setattr(
+        server,
+        "_emit",
+        lambda ev, sid, payload=None: emitted.append((ev, sid, payload or {})),
+    )
     terminal_tool.record_session_cwd(session["session_key"], str(worktree))
 
     server._emit_settled_session_info("sid-1", session, agent=None)

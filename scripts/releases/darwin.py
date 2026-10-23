@@ -1,4 +1,5 @@
 """Validate and conditionally publish macOS update feeds."""
+
 from __future__ import annotations
 
 import re
@@ -14,15 +15,21 @@ _HASH_PATTERN = re.compile(r"^[A-Za-z0-9+/]{86}==$")
 
 def _darwin_feed(channel: str, light: bool = False) -> dict[str, Any]:
     """Legacy URL shape only, not a channel existence registry."""
-    if not isinstance(channel, str) or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", channel):
+    if not isinstance(channel, str) or not re.fullmatch(
+        r"[a-z0-9]+(?:-[a-z0-9]+)*", channel
+    ):
         raise ValueError("Invalid legacy feed path component")
-    return {"directory": f"releases/darwin/{'light/' if light else ''}{channel}",
-            "channel": channel, "fileName": f"{channel}-mac.yml"}
+    return {
+        "directory": f"releases/darwin/{'light/' if light else ''}{channel}",
+        "channel": channel,
+        "fileName": f"{channel}-mac.yml",
+    }
 
 
 # ---------------------------------------------------------------------------
 # Feed parsing / merging (pure)
 # ---------------------------------------------------------------------------
+
 
 def parse_mac_feed(text: str) -> dict[str, Any]:
     import clawk_yaml as yaml  # lazy: YAML support loads only on the feed path
@@ -77,15 +84,24 @@ def mac_feed_references(text: str) -> list[str]:
     return references
 
 
-def merge_mac_feeds(legs: dict[str, str], tag: str, light: bool = False,
-                    archive: str | None = None, arches: tuple[str, ...] | None = None) -> dict[str, Any]:
+def merge_mac_feeds(
+    legs: dict[str, str],
+    tag: str,
+    light: bool = False,
+    archive: str | None = None,
+    arches: tuple[str, ...] | None = None,
+) -> dict[str, Any]:
     """Validate both native legs, merge them, and rewrite artifact URLs into
     the immutable per-release tag namespace. `archive` keys that namespace
     (the attempt ref for stable attempts); `tag` stays the version identity.
     `arches` defaults to both; a stable release that did not opt into macOS
     Intel passes ("arm64",) and the feed then carries the arm64 leg alone."""
     arches = ARCHES if arches is None else tuple(arches)
-    if "arm64" not in arches or not set(arches) <= set(ARCHES) or len(set(arches)) != len(arches):
+    if (
+        "arm64" not in arches
+        or not set(arches) <= set(ARCHES)
+        or len(set(arches)) != len(arches)
+    ):
         raise ValueError("macOS feeds need the arm64 leg and only known architectures")
     arches = tuple(arch for arch in ARCHES if arch in arches)
     import clawk_yaml as yaml  # lazy
@@ -96,8 +112,11 @@ def merge_mac_feeds(legs: dict[str, str], tag: str, light: bool = False,
     selection = _darwin_feed("canary" if is_canary_tag(tag) else "stable", light)
     expected = [f"{arch}-{selection['fileName']}" for arch in arches]
     if sorted(legs.keys()) != sorted(expected):
-        raise ValueError("Expected exactly one ARM64 and one x64 macOS feed" if len(arches) == 2
-                         else "Expected exactly one ARM64 macOS feed")
+        raise ValueError(
+            "Expected exactly one ARM64 and one x64 macOS feed"
+            if len(arches) == 2
+            else "Expected exactly one ARM64 macOS feed"
+        )
     files: dict[str, dict[str, Any]] = {}
     first: dict[str, Any] | None = None
     for index, name in enumerate(expected):
@@ -109,8 +128,13 @@ def merge_mac_feeds(legs: dict[str, str], tag: str, light: bool = False,
             raise ValueError(f"Missing native ZIP for {arches[index]}")
         for file_entry in leg["files"]:
             if file_entry.get("url") not in (f"{prefix}.zip", f"{prefix}.dmg"):
-                raise ValueError(f"Wrong variant or architecture: {file_entry.get('url')}")
-            rewritten = {**file_entry, "url": f"/releases/tag/{archive or tag}/{file_entry['url']}"}
+                raise ValueError(
+                    f"Wrong variant or architecture: {file_entry.get('url')}"
+                )
+            rewritten = {
+                **file_entry,
+                "url": f"/releases/tag/{archive or tag}/{file_entry['url']}",
+            }
             prior = files.get(file_entry["url"])
             if prior is not None and prior != rewritten:
                 raise ValueError(f"Conflicting artifact: {file_entry['url']}")
@@ -121,7 +145,9 @@ def merge_mac_feeds(legs: dict[str, str], tag: str, light: bool = False,
     merged = {**first, "files": list(files.values())}
     if merged.get("path"):
         merged["path"] = f"/releases/tag/{archive or tag}/{merged['path']}"
-    text = yaml.safe_dump(merged, width=100000, default_flow_style=False, sort_keys=False)
+    text = yaml.safe_dump(
+        merged, width=100000, default_flow_style=False, sort_keys=False
+    )
     mac_feed_references(text)  # publish only a feed that parses back clean
     return {
         "key": f"{selection['directory']}/{selection['fileName']}",
@@ -135,6 +161,7 @@ def merge_mac_feeds(legs: dict[str, str], tag: str, light: bool = False,
 # ---------------------------------------------------------------------------
 # Publication (transport-verified)
 # ---------------------------------------------------------------------------
+
 
 def publish_mac_feed(
     plan: dict[str, Any],
@@ -162,7 +189,9 @@ def publish_mac_feed(
             raise ValueError("Refusing to move the macOS feed backward")
         if order == 0:
             if old_feed != next_feed:
-                raise ValueError("Refusing to replace published version with different artifacts")
+                raise ValueError(
+                    "Refusing to replace published version with different artifacts"
+                )
             return
     for file_entry in plan["files"]:
         verify(file_entry["url"][1:], file_entry)
@@ -176,8 +205,15 @@ def publish_mac_feed(
 # finalize (real signed transport)
 # ---------------------------------------------------------------------------
 
-def finalize(tag: str, dir: str, variant: str | None = None, archive: str | None = None,
-             arches: tuple[str, ...] | None = None, verify_bytes: bool = True) -> None:
+
+def finalize(
+    tag: str,
+    dir: str,
+    variant: str | None = None,
+    archive: str | None = None,
+    arches: tuple[str, ...] | None = None,
+    verify_bytes: bool = True,
+) -> None:
     """Validate both native legs, verify their streamed bytes, then replace
     the feed pointer (conditional write, then readback).
 
@@ -195,12 +231,17 @@ def finalize(tag: str, dir: str, variant: str | None = None, archive: str | None
         for name in sorted(os.listdir(dir))
         if name.endswith("-mac.yml")
     }
-    plan = merge_mac_feeds(legs, tag, variant == "light", archive=archive, arches=arches)
+    plan = merge_mac_feeds(
+        legs, tag, variant == "light", archive=archive, arches=arches
+    )
 
     def read(key: str) -> dict[str, str] | None:
         try:
             response = r2_module.signed_request(
-                "GET", f"{base}/{bucket}/{r2_module.encode_key_path(key)}", creds=creds, now=now
+                "GET",
+                f"{base}/{bucket}/{r2_module.encode_key_path(key)}",
+                creds=creds,
+                now=now,
             )
         except r2_module.R2RequestError as err:
             if err.status == 404:
@@ -216,18 +257,30 @@ def finalize(tag: str, dir: str, variant: str | None = None, archive: str | None
     def verify(key: str, file_entry: dict[str, Any]) -> None:
         if not verify_bytes:
             head = r2_module.signed_request(
-                "HEAD", f"{base}/{bucket}/{r2_module.encode_key_path(key)}", creds=creds, now=now)
+                "HEAD",
+                f"{base}/{bucket}/{r2_module.encode_key_path(key)}",
+                creds=creds,
+                now=now,
+            )
             if str(head.header("content-length")) != str(file_entry["size"]):
                 raise ValueError(f"Artifact size mismatch: {key}")
             return
         r2_module.verify_remote_artifact(
             f"{base}/{bucket}/{r2_module.encode_key_path(key)}",
-            creds, now, file_entry["size"], file_entry["sha512"],
+            creds,
+            now,
+            file_entry["size"],
+            file_entry["sha512"],
         )
 
     def write(key: str, text: str, etag: str | None) -> None:
         r2_module.put_object(
-            creds, base, bucket, key, text.encode("utf-8"), now,
+            creds,
+            base,
+            bucket,
+            key,
+            text.encode("utf-8"),
+            now,
             "application/yaml",
             {"If-Match": etag} if etag else {"If-None-Match": "*"},
         )

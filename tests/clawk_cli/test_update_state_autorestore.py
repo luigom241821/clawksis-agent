@@ -82,7 +82,9 @@ def snapshot_db(tmp_path):
 @pytest.fixture(autouse=True)
 def _isolate_database_holders(monkeypatch):
     # These fixtures own all DB connections. Do not scan other users' /proc FDs.
-    monkeypatch.setattr("clawk_cli.backup_restore._foreign_db_holder_pids", lambda path: [])
+    monkeypatch.setattr(
+        "clawk_cli.backup_restore._foreign_db_holder_pids", lambda path: []
+    )
 
 
 def _row_count(db_path: Path) -> int:
@@ -192,7 +194,9 @@ def test_post_update_guard_covers_sibling_profiles(tmp_path, monkeypatch, capsys
     state = sibling_home / "state.db"
     _make_valid_db(state, 3)
     with sqlite3.connect(state) as conn:
-        page = conn.execute("SELECT rootpage FROM sqlite_master WHERE name='sessions'").fetchone()[0]
+        page = conn.execute(
+            "SELECT rootpage FROM sqlite_master WHERE name='sessions'"
+        ).fetchone()[0]
         page_size = conn.execute("PRAGMA page_size").fetchone()[0]
     conn.close()
     with state.open("r+b") as stream:
@@ -217,7 +221,9 @@ def test_post_update_guard_covers_sibling_profiles(tmp_path, monkeypatch, capsys
     assert "✓ Auto-restored from snapshot" in out
 
 
-def test_post_update_guard_leaves_valid_sibling_dbs_alone(tmp_path, monkeypatch, capsys):
+def test_post_update_guard_leaves_valid_sibling_dbs_alone(
+    tmp_path, monkeypatch, capsys
+):
     """A healthy sibling profile must not be touched — the guard only acts
     on corruption."""
     from clawk_cli import update_cmd
@@ -244,7 +250,9 @@ def test_post_update_guard_leaves_valid_sibling_dbs_alone(tmp_path, monkeypatch,
     assert "corrupted" not in out
 
 
-def test_post_update_guard_survives_missing_sibling_snapshot(tmp_path, monkeypatch, capsys):
+def test_post_update_guard_survives_missing_sibling_snapshot(
+    tmp_path, monkeypatch, capsys
+):
     """Corrupt sibling with NO snapshot: guard must report and continue,
     never raise into the update tail."""
     from clawk_cli import update_cmd

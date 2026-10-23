@@ -4,6 +4,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
+
 def _import_cli():
     import clawk_cli.config as config_mod
 
@@ -17,6 +18,7 @@ def _import_cli():
     import cli as cli_mod
 
     return cli_mod
+
 
 class TestHandleBusyCommand(unittest.TestCase):
     def _make_cli(self, busy_input_mode="interrupt"):

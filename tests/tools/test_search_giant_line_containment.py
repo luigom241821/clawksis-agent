@@ -37,7 +37,9 @@ class RecordingEnv:
     def execute(self, command, timeout=60, **kwargs):
         proc = subprocess.run(
             ["bash", "-c", command],
-            capture_output=True, text=True, errors="replace",
+            capture_output=True,
+            text=True,
+            errors="replace",
             timeout=timeout + 30,
             check=False,
         )
@@ -90,12 +92,16 @@ def test_line_cap_skipped_for_path_and_count_modes(giant_dir, engine, output_mod
         pytest.skip(f"{engine} not installed")
     ops, env = _ops(giant_dir, engine)
 
-    result = ops.search("needle", path=str(giant_dir), target="content",
-                        output_mode=output_mode)
+    result = ops.search(
+        "needle", path=str(giant_dir), target="content", output_mode=output_mode
+    )
 
     assert result.error is None
     if output_mode == "files_only":
         assert {os.path.basename(f) for f in result.files} == {"trace.json", "small.py"}
     else:
-        assert {os.path.basename(k) for k in result.counts} == {"trace.json", "small.py"}
+        assert {os.path.basename(k) for k in result.counts} == {
+            "trace.json",
+            "small.py",
+        }
     assert env.max_stdout < STDOUT_CEILING

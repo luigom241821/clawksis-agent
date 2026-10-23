@@ -30,17 +30,26 @@ def managed_server(monkeypatch):
     """Write server.json for a real supervised child; yields write(port, key)."""
     monkeypatch.setattr(detect, "DEFAULT_PROBE_PORTS", ())  # no stray :8080 server
     monkeypatch.setenv("GEMINI_API_KEY", "cloud-key-must-not-be-used")
-    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"],
-                             stdin=subprocess.DEVNULL)
+    child = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(120)"], stdin=subprocess.DEVNULL
+    )
     proc = psutil.Process(child.pid)
 
     def write(port: int, key: str) -> None:
         state_path().parent.mkdir(parents=True, exist_ok=True)
-        state_path().write_text(json.dumps({
-            "base_url": f"http://127.0.0.1:{port}/v1", "api_key": key, "pid": child.pid,
-            "create_time": proc.create_time(), "executable": proc.exe(),
-            "owner_pid": os.getpid(), "owner_create_time": psutil.Process().create_time(),
-        }))
+        state_path().write_text(
+            json.dumps(
+                {
+                    "base_url": f"http://127.0.0.1:{port}/v1",
+                    "api_key": key,
+                    "pid": child.pid,
+                    "create_time": proc.create_time(),
+                    "executable": proc.exe(),
+                    "owner_pid": os.getpid(),
+                    "owner_create_time": psutil.Process().create_time(),
+                }
+            )
+        )
 
     aux._client_cache.clear()
     yield write
@@ -57,7 +66,10 @@ def test_fallback_resolution_uses_live_managed_server_or_nothing(managed_server)
     assert client.api_key == "key-a" and model == MODEL
 
     state_path().unlink()  # server off: not configured, never the credentialed cloud provider
-    assert aux.resolve_provider_client("llamacpp", model=MODEL, raw_codex=True) == (None, None)
+    assert aux.resolve_provider_client("llamacpp", model=MODEL, raw_codex=True) == (
+        None,
+        None,
+    )
 
 
 def test_cached_client_follows_managed_endpoint_restart(managed_server):
@@ -68,7 +80,13 @@ def test_cached_client_follows_managed_endpoint_restart(managed_server):
 
     managed_server(18002, "key-b")  # restart on a new port with a fresh per-install key
     second, _ = aux._get_cached_client("llama.cpp", MODEL, task="compression")
-    assert str(second.base_url).startswith("http://127.0.0.1:18002/v1") and second.api_key == "key-b"
+    assert (
+        str(second.base_url).startswith("http://127.0.0.1:18002/v1")
+        and second.api_key == "key-b"
+    )
 
     state_path().unlink()
-    assert aux._get_cached_client("llama.cpp", MODEL, task="compression") == (None, None)
+    assert aux._get_cached_client("llama.cpp", MODEL, task="compression") == (
+        None,
+        None,
+    )

@@ -14,6 +14,7 @@ hits for OpenAI Codex Responses API users — OpenAI's docs require the
 
 These tests pin the expanded whitelist so it doesn't regress.
 """
+
 from __future__ import annotations
 
 
@@ -41,7 +42,6 @@ class TestBuildReplayEntry:
         )
         assert entry == {"role": "tool", "content": "result"}
 
-
     def test_assistant_drops_falsy_reasoning(self):
         """Empty/None reasoning fields stay dropped (matching PR #2974
         behaviour) — empty strings/lists for these fields carry no info."""
@@ -56,7 +56,6 @@ class TestBuildReplayEntry:
         }
         entry = _build_replay_entry("assistant", "answer", msg)
         assert entry == {"role": "assistant", "content": "answer"}
-
 
     def test_assistant_preserves_all_six_fields_together(self):
         details = [{"type": "reasoning.summary", "summary": "s"}]
@@ -86,8 +85,6 @@ class TestBuildReplayEntry:
         assert entry["codex_reasoning_items"] == codex_items
         assert entry["codex_message_items"] == msg_items
         assert entry["finish_reason"] == "stop"
-
-
 
     def test_unrelated_keys_are_ignored(self):
         """Random keys on the message must not leak into the replay entry."""
@@ -127,12 +124,16 @@ class TestGatewayHistoryBuildForwardsSidecar:
         from gateway.run import _build_gateway_agent_history
 
         history = [
-            {"role": "user", "content": "hi", "api_content": "hi\n\nCTX", "timestamp": 123.0},
+            {
+                "role": "user",
+                "content": "hi",
+                "api_content": "hi\n\nCTX",
+                "timestamp": 123.0,
+            },
             {"role": "assistant", "content": "hello"},
         ]
         agent_history, _obs = _build_gateway_agent_history(history)
         assert agent_history[0]["api_content"] == "hi\n\nCTX"
-
 
 
 def test_gateway_history_keeps_sidecar_only_assistant_row():
@@ -142,7 +143,12 @@ def test_gateway_history_keeps_sidecar_only_assistant_row():
 
     history = [
         {"role": "user", "content": "2+2?"},
-        {"role": "assistant", "content": "", "reasoning": "The answer is 4.", "api_content": "The answer is 4."},
+        {
+            "role": "assistant",
+            "content": "",
+            "reasoning": "The answer is 4.",
+            "api_content": "The answer is 4.",
+        },
         {"role": "user", "content": "thanks"},
     ]
     agent_history, _ = _build_gateway_agent_history(history)
@@ -156,17 +162,45 @@ def test_replay_rebuilds_the_same_conversation_so_every_role_keeps_its_identity(
     user, assistant, tool-calling and tool rows all keep ``message_uid`` and the merge witness."""
     from gateway.run import _build_gateway_agent_history
 
-    call = {"id": "call_1", "type": "function", "function": {"name": "t", "arguments": "{}"}}
+    call = {
+        "id": "call_1",
+        "type": "function",
+        "function": {"name": "t", "arguments": "{}"},
+    }
     history = [
-        {"role": "user", "content": "a\n\nb", "message_uid": "1" * 32, "_absorbed_message_uids": ["b" * 32],
-         "timestamp": 1_700_000_000.0},
-        {"role": "assistant", "content": "", "tool_calls": [call], "message_uid": "2" * 32},
-        {"role": "tool", "content": "r", "tool_call_id": "call_1", "message_uid": "3" * 32},
-        {"role": "assistant", "content": "done", "message_uid": "4" * 32, "_absorbed_message_uids": ["c" * 32]},
+        {
+            "role": "user",
+            "content": "a\n\nb",
+            "message_uid": "1" * 32,
+            "_absorbed_message_uids": ["b" * 32],
+            "timestamp": 1_700_000_000.0,
+        },
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [call],
+            "message_uid": "2" * 32,
+        },
+        {
+            "role": "tool",
+            "content": "r",
+            "tool_call_id": "call_1",
+            "message_uid": "3" * 32,
+        },
+        {
+            "role": "assistant",
+            "content": "done",
+            "message_uid": "4" * 32,
+            "_absorbed_message_uids": ["c" * 32],
+        },
     ]
     replayed, _ = _build_gateway_agent_history(history)
-    assert [(m["role"], m.get("message_uid"), m.get("_absorbed_message_uids")) for m in replayed] == [
-        (m["role"], m["message_uid"], m.get("_absorbed_message_uids")) for m in history]
+    assert [
+        (m["role"], m.get("message_uid"), m.get("_absorbed_message_uids"))
+        for m in replayed
+    ] == [
+        (m["role"], m["message_uid"], m.get("_absorbed_message_uids")) for m in history
+    ]
 
 
 def test_a_plain_replay_row_does_not_carry_a_tool_call_uid_map_without_its_calls():
@@ -176,7 +210,12 @@ def test_a_plain_replay_row_does_not_carry_a_tool_call_uid_map_without_its_calls
 
     history = [
         {"role": "user", "content": "q", "message_uid": "1" * 32},
-        {"role": "assistant", "content": "done", "message_uid": "2" * 32, "_tool_call_uids": {"call_1": "5" * 32}},
+        {
+            "role": "assistant",
+            "content": "done",
+            "message_uid": "2" * 32,
+            "_tool_call_uids": {"call_1": "5" * 32},
+        },
     ]
     replayed, _ = _build_gateway_agent_history(history)
     assert replayed[1]["message_uid"] == "2" * 32

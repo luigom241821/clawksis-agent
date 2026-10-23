@@ -23,8 +23,11 @@ from tools.computer_use.backend import ActionResult, ComputerUseBackend
 from tools.computer_use.cua_backend_capture import _CaptureMixin
 from tools.computer_use.cua_backend_daemon import _EmbeddedCuaDaemon
 from tools.computer_use.cua_backend_driver import (
-    _CUA_DRIVER_CMD_ENV, cua_driver_binary_available, cua_driver_runtime_contract_status,
-    resolve_cua_driver_cmd)
+    _CUA_DRIVER_CMD_ENV,
+    cua_driver_binary_available,
+    cua_driver_runtime_contract_status,
+    resolve_cua_driver_cmd,
+)
 from tools.computer_use.cua_backend_input import _InputMixin
 from tools.computer_use.cua_backend_parse import _action_result_from
 from tools.computer_use.cua_backend_session import _AsyncBridge, _CuaDriverSession
@@ -39,8 +42,10 @@ def _computer_use_cfg() -> dict[str, Any]:
     """The ``computer_use`` config block, or ``{}`` when config is unreadable."""
     with contextlib.suppress(Exception):
         from clawk_cli.config import load_config
+
         return (load_config() or {}).get("computer_use") or {}
     return {}
+
 
 def _cua_no_overlay() -> bool:
     """Pass ``--no-overlay``? ``computer_use.no_overlay`` overrides; else off on macOS (cursor-overlay redraw
@@ -54,33 +59,46 @@ def _cua_no_overlay() -> bool:
     if val is not None or sys.platform != "linux":
         return bool(val) if val is not None else sys.platform == "darwin"
     wsl = is_wsl()
-    return wsl or not os.environ.get("DISPLAY") or (
-        # Linux/X11: the cursor overlay is a fullscreen, always-on-top, all-workspaces X11 window
-        # (save-unders path). An unclean session end (agent interrupted mid-capture, stale target window)
-        # can leave it stuck above every app on every workspace, wedging desktop input until the app
-        # restarts — the same failure class as the HUD window on Mutter/X11 (#83473). There is no
-        # compositor-owned surface to tear down with the client connection, so default the overlay off on
-        # X11 too; set computer_use.no_overlay: false to keep the cursor. Wayland keeps it: the compositor
-        # owns the overlay surface lifecycle there.
-        os.environ.get("XDG_SESSION_TYPE") != "wayland" and not os.environ.get("WAYLAND_DISPLAY"))
+    return (
+        wsl
+        or not os.environ.get("DISPLAY")
+        or (
+            # Linux/X11: the cursor overlay is a fullscreen, always-on-top, all-workspaces X11 window
+            # (save-unders path). An unclean session end (agent interrupted mid-capture, stale target window)
+            # can leave it stuck above every app on every workspace, wedging desktop input until the app
+            # restarts — the same failure class as the HUD window on Mutter/X11 (#83473). There is no
+            # compositor-owned surface to tear down with the client connection, so default the overlay off on
+            # X11 too; set computer_use.no_overlay: false to keep the cursor. Wayland keeps it: the compositor
+            # owns the overlay surface lifecycle there.
+            os.environ.get("XDG_SESSION_TYPE") != "wayland"
+            and not os.environ.get("WAYLAND_DISPLAY")
+        )
+    )
 
 
 def _cua_telemetry_disabled() -> bool:
     """True unless ``computer_use.cua_telemetry`` opts in (unreadable config fails SAFE toward disabling)."""
     return not bool(_computer_use_cfg().get("cua_telemetry", False))
 
+
 def _cua_configured_permission_mode() -> str:
     """``computer_use.permission_mode``: ``standard`` (default) or ``bounded``; unknown values fall closed to
     ``standard``. ``unrestricted`` is deliberately NOT a config value — it stays tied to the per-session YOLO
     toggle so a stale config line can never silently bypass approvals."""
-    raw = str(_computer_use_cfg().get("permission_mode", "standard") or "").strip().lower()
+    raw = (
+        str(_computer_use_cfg().get("permission_mode", "standard") or "")
+        .strip()
+        .lower()
+    )
     return "bounded" if raw == "bounded" else "standard"
+
 
 # ``computer_use.ax_max_elements``: bound on the DRIVER's accessibility-tree walk per capture. The
 # visible-element cap in tool.py (_DEFAULT_MAX_ELEMENTS) trims the RESPONSE only, so without this an
 # unbounded walk pays for nodes the model never sees; 0 disables the bound (driver default: 2,000
 # elements / depth 25).
 _DEFAULT_AX_MAX_ELEMENTS = 200
+
 
 def _cua_configured_ax_max_elements() -> int:
     """Bound on ``get_window_state``'s AX walk; 0 = no bound (driver default). Unreadable config fails to
@@ -98,6 +116,7 @@ def _cua_configured_ax_max_elements() -> int:
     except (TypeError, ValueError):
         return _DEFAULT_AX_MAX_ELEMENTS
 
+
 def _manifest_is_mode_independent(path: str) -> bool:
     """True when this manifest may accompany any permission mode: v1/v2 declare ``mode: bounded`` and abort
     startup under an unrestricted runtime; v3 has no mode and is the ceiling the driver accepts alongside any
@@ -114,6 +133,7 @@ def _manifest_is_mode_independent(path: str) -> bool:
     version = parsed.get("version") if isinstance(parsed, dict) else None
     return isinstance(version, int) and not isinstance(version, bool) and version >= 3
 
+
 def _computer_use_max_image_dimension() -> Optional[int]:
     """``computer_use.max_image_dimension`` longest-edge cap (default 1456 = aux-vision downscale); ``0``/negative -> None."""
     try:
@@ -121,6 +141,7 @@ def _computer_use_max_image_dimension() -> Optional[int]:
     except (TypeError, ValueError):
         dim = 1456
     return dim if dim > 0 else None
+
 
 def desktop_identity(env: Optional[dict[str, str]] = None) -> str:
     """The screen a backend spawned from ``env`` acts on: its DISPLAY (``''`` when none). Recorded next to the
@@ -143,12 +164,18 @@ def cua_driver_child_env(base_env: Optional[dict[str, str]] = None) -> dict[str,
     # A running Bot Desktop for this profile owns the agent's screen: DISPLAY/XAUTHORITY/DBUS point there so
     # cua-driver never acts on a seat the human is sitting at (#90374 class) and headless hosts get a display.
     from tools.bot_desktop.runtime import desktop_env as _bot_desktop_env
+
     env = _bot_desktop_env(env)
     if _cua_telemetry_disabled():
         env[_CUA_TELEMETRY_ENV_VAR] = "0"
-    if sys.platform == "linux" and env.get("WAYLAND_DISPLAY") and bool(_computer_use_cfg().get("native_wayland", False)):
+    if (
+        sys.platform == "linux"
+        and env.get("WAYLAND_DISPLAY")
+        and bool(_computer_use_cfg().get("native_wayland", False))
+    ):
         env[_CUA_NATIVE_WAYLAND_ENV_VAR] = "1"
     return env
+
 
 def sandbox_mcp_invocation() -> Optional[tuple[tuple[str, list[str]], dict[str, str]]]:
     """``((command, args), child_env)`` spawning ``cua-driver mcp`` INSIDE the terminal backend when the Bot
@@ -157,17 +184,24 @@ def sandbox_mcp_invocation() -> Optional[tuple[tuple[str, list[str]], dict[str, 
     placement gets its screen started here and a ``refused`` one raises — the host driver is never the
     fallback for a sandbox whose screen is down."""
     from tools.bot_desktop import placement, runtime as _bd_runtime
+
     if _bd_runtime.tool_placement() == placement.GATEWAY:
         return None
     published = _bd_runtime.published_env()
     if not published.get("DISPLAY"):
-        raise RuntimeError("the screen inside the terminal backend's sandbox is gone; start it again")
+        raise RuntimeError(
+            "the screen inside the terminal backend's sandbox is gone; start it again"
+        )
     from tools.bot_desktop import sandbox_host
+
     env = _bd_runtime._sandbox_env(create=True)
     if env is None:
-        raise RuntimeError("the terminal backend's sandbox is not running, so there is nowhere to run cua-driver")
-    command, args = sandbox_host.cua_mcp_invocation(env, _bd_runtime._profile_name(),
-                                                    {**published, _CUA_TELEMETRY_ENV_VAR: "0"})
+        raise RuntimeError(
+            "the terminal backend's sandbox is not running, so there is nowhere to run cua-driver"
+        )
+    command, args = sandbox_host.cua_mcp_invocation(
+        env, _bd_runtime._profile_name(), {**published, _CUA_TELEMETRY_ENV_VAR: "0"}
+    )
     _bd_runtime.touch_activity()
     return (command, args), {"PATH": os.environ.get("PATH", "")}
 
@@ -180,8 +214,10 @@ def sanitized_cua_driver_env() -> dict[str, str]:
         # cua-driver is a third-party binary — never hand it provider API keys via inherited env (same
         # policy as the manifest probe and MCP spawn; #53503/#55709/#58889 lineage).
         from tools.environments.local import _sanitize_subprocess_env
+
         return _sanitize_subprocess_env(env)
     return env
+
 
 def _run_quiet(argv: list[str], *, timeout: float, swallow: Any = (), **kw: Any) -> Any:
     """``subprocess.run`` for short probe verbs: text mode, stdin=DEVNULL unless overridden (older drivers fall into a
@@ -192,28 +228,52 @@ def _run_quiet(argv: list[str], *, timeout: float, swallow: Any = (), **kw: Any)
     kw.setdefault("errors", "replace")
     "stdout" in kw or kw.setdefault("capture_output", True)
     try:
-        return subprocess.run(argv, text=True, timeout=timeout, stdin=kw.pop("stdin"), encoding=kw.pop("encoding"),  # noqa: PLW1510 -- forwarding wrapper: callers pass subprocess kwargs via **kwargs (check may arrive through it); an explicit check=False would raise TypeError
-                              errors=kw.pop("errors"), **kw)
+        return subprocess.run(  # noqa: PLW1510 -- forwarding wrapper: callers pass subprocess kwargs via **kwargs (check may arrive through it); an explicit check=False would raise TypeError
+            argv,
+            text=True,
+            timeout=timeout,
+            stdin=kw.pop("stdin"),
+            encoding=kw.pop("encoding"),
+            errors=kw.pop("errors"),
+            **kw,
+        )
     except swallow:
         return None
 
+
 def _run_driver(driver_cmd: str, *args: str, timeout: float, swallow: Any = ()) -> Any:
     """Run a short cua-driver verb with the sanitized env and hidden window."""
-    return _run_quiet([driver_cmd, *args], timeout=timeout, swallow=swallow, encoding="utf-8",
-                      errors="replace", creationflags=windows_hide_flags(), env=sanitized_cua_driver_env())
+    return _run_quiet(
+        [driver_cmd, *args],
+        timeout=timeout,
+        swallow=swallow,
+        encoding="utf-8",
+        errors="replace",
+        creationflags=windows_hide_flags(),
+        env=sanitized_cua_driver_env(),
+    )
 
-def cua_daemon_listening(driver_cmd: str, socket_path: Optional[str] = None, *, timeout: float = 3.0) -> Optional[bool]:
+
+def cua_daemon_listening(
+    driver_cmd: str, socket_path: Optional[str] = None, *, timeout: float = 3.0
+) -> Optional[bool]:
     """Socket-level liveness of a ``cua-driver serve`` daemon: ``cua-driver status`` connects to the daemon
     socket (the driver's default, or ``socket_path``) and exits 0 only when a daemon answers. False when the
     CLI reports the daemon is not running, None when the probe itself failed (unknown). Never raises.
     The binary-level runtime contract (``manifest``) cannot see this — a dead daemon looks healthy there (#114748)."""
     args = ("status", "--socket", socket_path) if socket_path else ("status",)
-    proc = _run_driver(driver_cmd, *args, timeout=timeout, swallow=(OSError, subprocess.SubprocessError))
+    proc = _run_driver(
+        driver_cmd,
+        *args,
+        timeout=timeout,
+        swallow=(OSError, subprocess.SubprocessError),
+    )
     if proc is None:
         return None
     if proc.returncode == 0:
         return True
     return False if "not running" in f"{proc.stdout}\n{proc.stderr}".lower() else None
+
 
 def _linux_session_locked() -> Optional[bool]:
     """Is the graphical session locked? (Linux; best-effort.) A locked KDE/GNOME session freezes renderers and
@@ -225,32 +285,51 @@ def _linux_session_locked() -> Optional[bool]:
         return None
     try:
         proc = _run_quiet(["loginctl", "list-sessions", "--no-legend"], timeout=2.0)
-        seats = [line.split()[0] for line in proc.stdout.splitlines() if len(line.split()) >= 2 and "seat" in line]
+        seats = [
+            line.split()[0]
+            for line in proc.stdout.splitlines()
+            if len(line.split()) >= 2 and "seat" in line
+        ]
         if proc.returncode != 0 or not seats:
             return None
-        return not any("LockedHint=no" in _run_quiet(["loginctl", "show-session", s, "-p", "LockedHint"], timeout=2.0).stdout
-                       for s in seats)
+        return not any(
+            "LockedHint=no"
+            in _run_quiet(
+                ["loginctl", "show-session", s, "-p", "LockedHint"], timeout=2.0
+            ).stdout
+            for s in seats
+        )
     except Exception:
         return None
+
 
 def _empty_discovery_reason() -> str:
     """One-line diagnosis for 'window discovery found nothing'."""
     if _linux_session_locked() is True:
-        return ("the desktop session is LOCKED (loginctl LockedHint=yes) — unlock the screen; "
-                "a locked compositor hides windows and freezes app renderers")
+        return (
+            "the desktop session is LOCKED (loginctl LockedHint=yes) — unlock the screen; "
+            "a locked compositor hides windows and freezes app renderers"
+        )
     if sys.platform == "linux" and not os.environ.get("DISPLAY"):
         return "no DISPLAY is set — X11/XWayland is not reachable from this process"
-    if sys.platform == "darwin":  # headless Mac / asleep panel: ScreenCaptureKit has 0 shareable displays while TCC looks fine
-        return ("window discovery returned no windows; on macOS this usually means no shareable display (headless Mac or "
-                "panel asleep) — wake the display or attach a monitor/HDMI dummy, then run `clawk computer-use doctor`")
+    if (
+        sys.platform == "darwin"
+    ):  # headless Mac / asleep panel: ScreenCaptureKit has 0 shareable displays while TCC looks fine
+        return (
+            "window discovery returned no windows; on macOS this usually means no shareable display (headless Mac or "
+            "panel asleep) — wake the display or attach a monitor/HDMI dummy, then run `clawk computer-use doctor`"
+        )
     return "window discovery returned no windows; run `clawk computer-use doctor` (display reachability, AX capability)"
+
 
 class CuaDriverBackend(_CaptureMixin, _InputMixin, ComputerUseBackend):
     """Default computer-use backend. Cross-platform via cua-driver MCP."""
 
     def __init__(self, permission_mode: str = "standard") -> None:
         if permission_mode not in {"standard", "bounded", "unrestricted"}:
-            raise ValueError(f"unsupported cua-driver permission mode: {permission_mode}")
+            raise ValueError(
+                f"unsupported cua-driver permission mode: {permission_mode}"
+            )
         self.permission_mode = permission_mode
         self._embedded_daemon: Optional[_EmbeddedCuaDaemon] = None
         if permission_mode != "standard":
@@ -259,8 +338,12 @@ class CuaDriverBackend(_CaptureMixin, _InputMixin, ComputerUseBackend):
             raw = _computer_use_cfg().get("capability_manifest")
             # Resolve at daemon launch, after start() reconciles the PM pin.
             self._embedded_daemon = _EmbeddedCuaDaemon(
-                "", permission_mode,
-                capability_manifest=raw.strip() if isinstance(raw, str) and raw.strip() else None)
+                "",
+                permission_mode,
+                capability_manifest=raw.strip()
+                if isinstance(raw, str) and raw.strip()
+                else None,
+            )
         self._bridge = _AsyncBridge()
         self._session = _CuaDriverSession(self._bridge, self._embedded_daemon)
         # Sticky target (set by capture()/focus_app(), used by actions): `_active_pid`, `_active_window_id`, `_last_app`,
@@ -287,12 +370,18 @@ class CuaDriverBackend(_CaptureMixin, _InputMixin, ComputerUseBackend):
         else:
             if not os.environ.get(_CUA_DRIVER_CMD_ENV, "").strip():
                 from pm import ensure
+
                 ensure("cua-driver")
             contract = cua_driver_runtime_contract_status()
         if not contract.get("ready"):
-            raise RuntimeError(f"cua-driver is not ready: {contract.get('reason') or 'runtime contract is incomplete'}. "
-                               + ("Update the binary selected by CLAWK_CUA_DRIVER_CMD or remove that override."
-                                  if os.environ.get(_CUA_DRIVER_CMD_ENV, "").strip() else "Run `clawk computer-use install` to repair it."))
+            raise RuntimeError(
+                f"cua-driver is not ready: {contract.get('reason') or 'runtime contract is incomplete'}. "
+                + (
+                    "Update the binary selected by CLAWK_CUA_DRIVER_CMD or remove that override."
+                    if os.environ.get(_CUA_DRIVER_CMD_ENV, "").strip()
+                    else "Run `clawk computer-use install` to repair it."
+                )
+            )
 
         # The MCP client SDK (`mcp`) is an optional dependency (the
         # `computer-use` / `mcp` extras), not part of Clawksis' minimal core.
@@ -303,38 +392,67 @@ class CuaDriverBackend(_CaptureMixin, _InputMixin, ComputerUseBackend):
         # InstallError explaining why PM could not enable the SDK,
         # which surfaces via the backend-unavailable path in tool.py.
         from pm import ensure_import
+
         ensure_import("computer-use")
         # A just-installed package may not be importable until the import
         # machinery's caches are refreshed within this process.
         import importlib
+
         importlib.invalidate_caches()
-        with contextlib.ExitStack() as rollback:  # a failed start stops the private daemon, then re-raises
+        with (
+            contextlib.ExitStack() as rollback
+        ):  # a failed start stops the private daemon, then re-raises
             if self._embedded_daemon is not None:
-                rollback.callback(self._embedded_daemon.stop) and self._embedded_daemon.start()
+                rollback.callback(
+                    self._embedded_daemon.stop
+                ) and self._embedded_daemon.start()
             self._session.start()
             rollback.pop_all()
         # Declare this run's identity. Non-fatal: cua-driver accepts anonymous calls (cursor won't render), so degrade.
-        self._best_effort("start_session failed (continuing anonymous)",
-                          self._session.call_tool, "start_session", {"session": self._session_id})
+        self._best_effort(
+            "start_session failed (continuing anonymous)",
+            self._session.call_tool,
+            "start_session",
+            {"session": self._session_id},
+        )
         # Post-handshake tuning guards on `_started`: before the handshake flips it, call_tool would re-enter
         # session.start() (stubbed start() recurses).
         if self._session._started:
             max_dim = _computer_use_max_image_dimension()
-            if max_dim:  # smaller screenshots cost less over the daemon socket and per turn
-                self._best_effort("set_config(max_image_dimension) failed",
-                                  self.set_config, max_image_dimension=max_dim)
-            if _cua_no_overlay():  # belt-and-suspenders when --no-overlay is unsupported or ignored
-                self._best_effort("set_agent_cursor_enabled failed",
-                                  self.set_agent_cursor_enabled, False, cursor_id=self._session_id)
+            if (
+                max_dim
+            ):  # smaller screenshots cost less over the daemon socket and per turn
+                self._best_effort(
+                    "set_config(max_image_dimension) failed",
+                    self.set_config,
+                    max_image_dimension=max_dim,
+                )
+            if (
+                _cua_no_overlay()
+            ):  # belt-and-suspenders when --no-overlay is unsupported or ignored
+                self._best_effort(
+                    "set_agent_cursor_enabled failed",
+                    self.set_agent_cursor_enabled,
+                    False,
+                    cursor_id=self._session_id,
+                )
 
     def stop(self) -> None:
         # Best-effort end_session so the driver cleans per-session state (cursor overlay, recording ownership,
         # config overrides); the connection drop below releases daemon-side state regardless.
         if self._session._started:
-            self._best_effort("end_session failed (continuing teardown)",
-                              self._session.call_tool, "end_session", {"session": self._session_id})
-        with contextlib.ExitStack() as teardown:  # every step runs even if one raised (LIFO: session, bridge, daemon)
-            self._embedded_daemon is None or teardown.callback(self._embedded_daemon.stop)
+            self._best_effort(
+                "end_session failed (continuing teardown)",
+                self._session.call_tool,
+                "end_session",
+                {"session": self._session_id},
+            )
+        with (
+            contextlib.ExitStack() as teardown
+        ):  # every step runs even if one raised (LIFO: session, bridge, daemon)
+            self._embedded_daemon is None or teardown.callback(
+                self._embedded_daemon.stop
+            )
             teardown.callback(self._bridge.stop)
             teardown.callback(self._session.stop)
 
@@ -347,11 +465,16 @@ class CuaDriverBackend(_CaptureMixin, _InputMixin, ComputerUseBackend):
             logger.debug("cua-driver %s: %s", what, e)
 
     def is_available(self) -> bool:
-        return sys.platform in ("darwin", "win32", "linux") and cua_driver_binary_available()  # other Unix-likes untested E2E
+        return (
+            sys.platform in ("darwin", "win32", "linux")
+            and cua_driver_binary_available()
+        )  # other Unix-likes untested E2E
 
     def _clear_active_target(self) -> None:
         """Forget a capture/focus target so a failed lookup cannot misroute input."""
-        self._active_pid = self._active_window_id = self._last_app = self._last_target = None
+        self._active_pid = self._active_window_id = self._last_app = (
+            self._last_target
+        ) = None
         # Surface 6 of samuelgradientai-sys/clawksis-agent#47072: per-snapshot `element_index -> element_token` map
         # populated on capture(). Action tools (click/scroll/set_value/...) attach the matching token
         # alongside `element_index` so cua-driver detects "stale" explicitly instead of silently
@@ -363,45 +486,86 @@ class CuaDriverBackend(_CaptureMixin, _InputMixin, ComputerUseBackend):
         self._active_pid = target["pid"]
         self._active_window_id = target["window_id"]
         self._snapshot_tokens = {}  # prior snapshot's tokens: disarm before any capture so an exception can't pair them
-        self._last_target = {"pid": self._active_pid, "window_id": self._active_window_id}
+        self._last_target = {
+            "pid": self._active_pid,
+            "window_id": self._active_window_id,
+        }
 
-    def launch_app(self, *, bundle_id: Optional[str] = None, name: Optional[str] = None,
-                   urls: Optional[list[str]] = None, additional_arguments: Optional[list[str]] = None,
-                   creates_new_application_instance: bool = False) -> dict[str, Any]:
+    def launch_app(
+        self,
+        *,
+        bundle_id: Optional[str] = None,
+        name: Optional[str] = None,
+        urls: Optional[list[str]] = None,
+        additional_arguments: Optional[list[str]] = None,
+        creates_new_application_instance: bool = False,
+    ) -> dict[str, Any]:
         """Idempotent launch returning ``{pid, bundle_id, name, windows[]}``. ``creates_new_application_instance=True``
         forces a fresh instance so concurrent runs touching the same app get isolated windows."""
         if not bundle_id and not name:
             raise ValueError("launch_app requires either bundle_id or name")
-        args: dict[str, Any] = {"session": self._session_id, **{k: v for k, v in (
-            ("bundle_id", bundle_id), ("name", name), ("urls", urls and list(urls)),
-            ("additional_arguments", additional_arguments and list(additional_arguments)),
-            ("creates_new_application_instance", creates_new_application_instance or None)) if v}}
+        args: dict[str, Any] = {
+            "session": self._session_id,
+            **{
+                k: v
+                for k, v in (
+                    ("bundle_id", bundle_id),
+                    ("name", name),
+                    ("urls", urls and list(urls)),
+                    (
+                        "additional_arguments",
+                        additional_arguments and list(additional_arguments),
+                    ),
+                    (
+                        "creates_new_application_instance",
+                        creates_new_application_instance or None,
+                    ),
+                )
+                if v
+            },
+        }
         out = self._session.call_tool("launch_app", args)
         return out["structuredContent"] or {"data": out["data"]}
 
-    def bring_to_front(self, *, pid: int, window_id: Optional[int] = None) -> ActionResult:
+    def bring_to_front(
+        self, *, pid: int, window_id: Optional[int] = None
+    ) -> ActionResult:
         """Activate a window so subsequent foreground-dispatched input lands on it."""
-        args: dict[str, Any] = {"pid": int(pid), **({} if window_id is None else {"window_id": int(window_id)})}
+        args: dict[str, Any] = {
+            "pid": int(pid),
+            **({} if window_id is None else {"window_id": int(window_id)}),
+        }
         # Strict live schema with no session property: a standalone native focus op, not a session-scoped input action.
         return self._action("bring_to_front", args, inject_session=False)
 
-    def set_agent_cursor_enabled(self, enabled: bool, *, cursor_id: Optional[str] = None) -> ActionResult:
+    def set_agent_cursor_enabled(
+        self, enabled: bool, *, cursor_id: Optional[str] = None
+    ) -> ActionResult:
         """Toggle the agent cursor overlay's visibility for this run."""
-        return self._action("set_agent_cursor_enabled",
-                            {"enabled": bool(enabled), **({"cursor_id": cursor_id} if cursor_id else {})})
+        return self._action(
+            "set_agent_cursor_enabled",
+            {
+                "enabled": bool(enabled),
+                **({"cursor_id": cursor_id} if cursor_id else {}),
+            },
+        )
 
     def set_config(self, **config) -> ActionResult:
         """Set cua-driver config keys (e.g. ``max_image_dimension``); unknown keys pass through — cua-driver validates."""
         return self._action("set_config", dict(config))
 
-    def call_tool(self, name: str, args: Optional[dict[str, Any]] = None, *, timeout: float = 30.0) -> dict[str, Any]:
+    def call_tool(
+        self, name: str, args: Optional[dict[str, Any]] = None, *, timeout: float = 30.0
+    ) -> dict[str, Any]:
         """Generic escape hatch: call any cua-driver MCP tool by name. ``session`` is injected via setdefault, so
         this is the supported path for tools the wrapper does not type-wrap (preferred over ``self._session.call_tool``)."""
         payload = dict(args) if args else {}
         payload.setdefault("session", self._session_id)
         return self._session.call_tool(name, payload, timeout=timeout)
 
-    def _action(self, name: str, args: dict[str, Any], *, inject_session: bool = True) -> ActionResult:
+    def _action(
+        self, name: str, args: dict[str, Any], *, inject_session: bool = True
+    ) -> ActionResult:
         # Attach the snapshot's `element_token` to an `element_index` call so a superseded snapshot yields an explicit
         # 'stale' error. Two ways to establish support, the live input schema first: cua-driver 0.21+ stopped
         # publishing per-tool `capabilities[]` while still accepting `element_token` in its schema, and it REFUSES a
@@ -410,10 +574,16 @@ class CuaDriverBackend(_CaptureMixin, _InputMixin, ComputerUseBackend):
         # working; drivers advertising neither (`additionalProperties: false`) must never see the property.
         idx = args.get("element_index")
         token = self._snapshot_tokens.get(idx) if isinstance(idx, int) else None
-        if token and (self._session.supports_input_property(name, "element_token")
-                      or self._session.supports_capability("accessibility.element_tokens", tool=name)):
+        if token and (
+            self._session.supports_input_property(name, "element_token")
+            or self._session.supports_capability(
+                "accessibility.element_tokens", tool=name
+            )
+        ):
             args["element_token"] = token
-        if inject_session:  # setdefault preserves any explicit session a caller already supplied
+        if (
+            inject_session
+        ):  # setdefault preserves any explicit session a caller already supplied
             args.setdefault("session", self._session_id)
         try:
             out = self._session.call_tool(name, args)
@@ -422,9 +592,27 @@ class CuaDriverBackend(_CaptureMixin, _InputMixin, ComputerUseBackend):
             return ActionResult(ok=False, action=name, message=f"cua-driver error: {e}")
         data = out["data"]
         structured = out.get("structuredContent") or {}
-        message = (str(data.get("message", "")) if isinstance(data, dict) else data if isinstance(data, str) else "") \
-            or (str(structured.get("message", "")) if isinstance(structured, dict) else "")
+        message = (
+            str(data.get("message", ""))
+            if isinstance(data, dict)
+            else data
+            if isinstance(data, str)
+            else ""
+        ) or (
+            str(structured.get("message", "")) if isinstance(structured, dict) else ""
+        )
         # Merge data + structuredContent into meta, structured winning on overlap (canonical verdict surface).
-        meta = {k: v for part in (data, structured) if isinstance(part, dict) for k, v in part.items()}
-        return _action_result_from(name, not out["isError"], message, meta, structured,
-                                   requested_delivery=args.get("delivery_mode"))
+        meta = {
+            k: v
+            for part in (data, structured)
+            if isinstance(part, dict)
+            for k, v in part.items()
+        }
+        return _action_result_from(
+            name,
+            not out["isError"],
+            message,
+            meta,
+            structured,
+            requested_delivery=args.get("delivery_mode"),
+        )

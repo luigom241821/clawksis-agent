@@ -13,6 +13,7 @@ DB handle and makes the Windows removal succeed). We assert the callback ran via
 a sentinel written outside the temp home, so the test catches the regression on
 every platform — not only where the filesystem locks open files.
 """
+
 from __future__ import annotations
 
 import os

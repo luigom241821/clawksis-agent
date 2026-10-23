@@ -17,10 +17,6 @@ def _tool_call(name: str, args: dict, call_id: str) -> SimpleNamespace:
     )
 
 
-
-
-
-
 def test_image_generate_parallel_worker_cap_can_be_configured_lower():
     runnable_calls = [
         (

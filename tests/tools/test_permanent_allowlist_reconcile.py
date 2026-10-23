@@ -73,7 +73,7 @@ def test_an_entry_the_operator_added_on_disk_survives_a_save(fake_config):
 
 def test_an_entry_the_operator_revoked_on_disk_is_not_resurrected(fake_config):
     _start_process_with(fake_config, ["git status", "ls *"])
-    fake_config["command_allowlist"] = ["ls *"]          # operator revokes it
+    fake_config["command_allowlist"] = ["ls *"]  # operator revokes it
 
     approval.approve_permanent("docker *")
     approval.save_permanent_allowlist(approval._permanent_approved)
@@ -118,7 +118,9 @@ def test_save_failure_is_logged_not_raised(fake_config, monkeypatch, caplog):
     monkeypatch.setattr("clawk_cli.config.load_config", _boom, raising=False)
     approval.approve_permanent("docker *")
     with caplog.at_level(logging.WARNING, logger=approval.logger.name):
-        approval.save_permanent_allowlist(approval._permanent_approved)   # must not raise
+        approval.save_permanent_allowlist(
+            approval._permanent_approved
+        )  # must not raise
     assert "docker *" in approval._permanent_approved
 
 
@@ -131,6 +133,6 @@ def test_a_caller_that_passes_a_smaller_set_does_not_remove(fake_config):
     """
     _start_process_with(fake_config, ["ls *", "docker *"])
 
-    approval.save_permanent_allowlist({"ls *"})          # tries to drop docker *
+    approval.save_permanent_allowlist({"ls *"})  # tries to drop docker *
 
     assert "docker *" in fake_config["command_allowlist"]

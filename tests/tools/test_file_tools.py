@@ -16,13 +16,12 @@ from tools.file_tools import (
 
 
 class TestReadFileHandler:
-
-
     @patch("tools.file_tools._get_file_ops")
     def test_dispatch_without_limit_uses_schema_default(self, mock_get):
         """The model omits ``limit`` on most reads; the dispatch handler must fall
         back to the SAME default the schema advertises (drifted to 500 vs 2000)."""
         from tools.file_tools import READ_FILE_SCHEMA, _handle_read_file
+
         mock_ops = MagicMock()
         result_obj = MagicMock()
         result_obj.content = "x"
@@ -31,7 +30,9 @@ class TestReadFileHandler:
         mock_get.return_value = mock_ops
 
         _handle_read_file({"path": "/tmp/test.txt"}, task_id="t-default")
-        schema_default = READ_FILE_SCHEMA["parameters"]["properties"]["limit"]["default"]
+        schema_default = READ_FILE_SCHEMA["parameters"]["properties"]["limit"][
+            "default"
+        ]
         assert mock_ops.read_file.call_args.args[2] == schema_default
 
     @patch("tools.file_tools._get_file_ops")
@@ -39,18 +40,21 @@ class TestReadFileHandler:
         mock_get.side_effect = RuntimeError("terminal not available")
 
         from tools.file_tools import read_file_tool
+
         result = json.loads(read_file_tool("/tmp/test.txt"))
         assert "error" in result
         assert "terminal not available" in result["error"]
 
 
 class TestWriteFileHandler:
-
     @patch("tools.file_tools._get_file_ops")
-    def test_permission_error_returns_error_json_without_error_log(self, mock_get, caplog):
+    def test_permission_error_returns_error_json_without_error_log(
+        self, mock_get, caplog
+    ):
         mock_get.side_effect = PermissionError("read-only filesystem")
 
         from tools.file_tools import write_file_tool
+
         with caplog.at_level(logging.DEBUG, logger="tools.file_tools"):
             result = json.loads(write_file_tool("/tmp/out.txt", "data"))
         assert "error" in result
@@ -68,8 +72,6 @@ class TestWriteFileHandler:
         assert "error" in result
         assert "line-number" in result["error"].lower()
         mock_get.assert_not_called()
-
-
 
     def test_missing_content_key_returns_error(self):
         """#19096 — handler must reject tool calls where 'content' key is absent."""
@@ -93,30 +95,37 @@ class TestWriteFileHandler:
         with patch("tools.file_tools._get_file_ops") as mock_get:
             mock_ops = MagicMock()
             result_obj = MagicMock()
-            result_obj.to_dict.return_value = {"status": "ok", "path": "/tmp/empty.txt", "bytes": 0}
+            result_obj.to_dict.return_value = {
+                "status": "ok",
+                "path": "/tmp/empty.txt",
+                "bytes": 0,
+            }
             mock_ops.write_file.return_value = result_obj
             mock_get.return_value = mock_ops
 
-            result = json.loads(_handle_write_file({"path": "/tmp/empty.txt", "content": ""}))
+            result = json.loads(
+                _handle_write_file({"path": "/tmp/empty.txt", "content": ""})
+            )
             assert result["status"] == "ok"
 
     def test_non_string_content_returns_error(self):
         """#19096 — content must be a string, not a dict or list."""
         from tools.file_tools import _handle_write_file
 
-        result = json.loads(_handle_write_file({"path": "/tmp/x.txt", "content": {"nested": "dict"}}))
+        result = json.loads(
+            _handle_write_file({"path": "/tmp/x.txt", "content": {"nested": "dict"}})
+        )
         assert "error" in result
-        assert "string" in result["error"].lower() or "content" in result["error"].lower()
+        assert (
+            "string" in result["error"].lower() or "content" in result["error"].lower()
+        )
 
 
 class TestPatchHandler:
-
-
-
-
     @patch("tools.file_tools._get_file_ops")
     def test_unknown_mode_errors(self, mock_get):
         from tools.file_tools import patch_tool
+
         result = json.loads(patch_tool(mode="invalid_mode"))
         assert "error" in result
 
@@ -128,17 +137,20 @@ class TestPatchHandler:
         applied, even though the explicit ``path=`` arg is allowed to use
         ``..`` for legitimate cross-worktree edits."""
         from tools.file_tools import patch_tool
-        result = json.loads(patch_tool(
-            mode="patch",
-            patch=(
-                "*** Begin Patch\n"
-                "*** Update File: ../../../etc/shadow\n"
-                "@@ -1,3 +1,3 @@\n"
-                "-old\n"
-                "+new\n"
-                "*** End Patch\n"
-            ),
-        ))
+
+        result = json.loads(
+            patch_tool(
+                mode="patch",
+                patch=(
+                    "*** Begin Patch\n"
+                    "*** Update File: ../../../etc/shadow\n"
+                    "@@ -1,3 +1,3 @@\n"
+                    "-old\n"
+                    "+new\n"
+                    "*** End Patch\n"
+                ),
+            )
+        )
         assert "error" in result
         assert "traversal" in result["error"].lower()
         # patch_v4a must not be invoked when the header is rejected
@@ -147,15 +159,18 @@ class TestPatchHandler:
     @patch("tools.file_tools._get_file_ops")
     def test_patch_v4a_rejects_traversal_in_add_header(self, mock_get):
         from tools.file_tools import patch_tool
-        result = json.loads(patch_tool(
-            mode="patch",
-            patch=(
-                "*** Begin Patch\n"
-                "*** Add File: ../../../tmp/dropped.py\n"
-                "+print('pwned')\n"
-                "*** End Patch\n"
-            ),
-        ))
+
+        result = json.loads(
+            patch_tool(
+                mode="patch",
+                patch=(
+                    "*** Begin Patch\n"
+                    "*** Add File: ../../../tmp/dropped.py\n"
+                    "+print('pwned')\n"
+                    "*** End Patch\n"
+                ),
+            )
+        )
         assert "error" in result
         assert "traversal" in result["error"].lower()
 
@@ -178,6 +193,7 @@ class TestPatchSensitivePathExtraction:
     @patch("tools.file_tools._get_file_ops")
     def test_patch_move_to_sensitive_dst_blocked(self, mock_get):
         from tools.file_tools import patch_tool
+
         patch_text = (
             "*** Begin Patch\n"
             "*** Move File: /tmp/work.txt -> /etc/crontab\n"
@@ -188,7 +204,6 @@ class TestPatchSensitivePathExtraction:
         assert "sensitive" in result["error"].lower()
         mock_get.assert_not_called()
 
-
     @patch("tools.file_tools._get_file_ops")
     def test_patch_update_no_space_after_asterisks_blocked(self, mock_get):
         """``***Update File:`` (no space after asterisks) must also be caught.
@@ -198,6 +213,7 @@ class TestPatchSensitivePathExtraction:
         is bypassed.
         """
         from tools.file_tools import patch_tool
+
         patch_text = (
             "*** Begin Patch\n"
             "***Update File: /etc/resolv.conf\n"
@@ -211,7 +227,6 @@ class TestPatchSensitivePathExtraction:
         assert "sensitive" in result["error"].lower()
         mock_get.assert_not_called()
 
-
     @patch("tools.file_tools._get_file_ops")
     def test_patch_move_safe_paths_not_blocked(self, mock_get):
         """Safe Move operations should still reach the file_ops dispatch."""
@@ -222,10 +237,9 @@ class TestPatchSensitivePathExtraction:
         mock_get.return_value = mock_ops
 
         from tools.file_tools import patch_tool
+
         patch_text = (
-            "*** Begin Patch\n"
-            "*** Move File: /tmp/a.txt -> /tmp/b.txt\n"
-            "*** End Patch\n"
+            "*** Begin Patch\n*** Move File: /tmp/a.txt -> /tmp/b.txt\n*** End Patch\n"
         )
         result = json.loads(patch_tool(mode="patch", patch=patch_text))
         assert "error" not in result
@@ -233,13 +247,12 @@ class TestPatchSensitivePathExtraction:
 
 
 class TestSearchHandler:
-
-
     @patch("tools.file_tools._get_file_ops")
     def test_search_exception_returns_error(self, mock_get):
         mock_get.side_effect = RuntimeError("no terminal")
 
         from tools.file_tools import search_tool
+
         result = json.loads(search_tool(pattern="x"))
         assert "error" in result
 
@@ -247,6 +260,7 @@ class TestSearchHandler:
 # ---------------------------------------------------------------------------
 # Windows MSYS path resolution (salvage of #50488 / #46995)
 # ---------------------------------------------------------------------------
+
 
 class TestWindowsMsysPathResolution:
     """File tools must translate Git Bash drive paths before Path resolution."""
@@ -258,11 +272,12 @@ class TestWindowsMsysPathResolution:
         ``C:\\Users\\...`` — faking ``sys.platform`` left PosixPath in place."""
         import tools.file_tools_paths as file_tools
 
-        monkeypatch.setattr(file_tools, "_uses_container_paths", lambda task_id="default": False)
+        monkeypatch.setattr(
+            file_tools, "_uses_container_paths", lambda task_id="default": False
+        )
 
         resolved = file_tools._resolve_path_for_task("/c/Users/Mark/project/app.py")
         assert str(resolved) == r"C:\Users\Mark\project\app.py"
-
 
     @pytest.mark.platforms("windows")
     def test_container_paths_skip_msys_translation(self, monkeypatch):
@@ -273,7 +288,9 @@ class TestWindowsMsysPathResolution:
         """
         import tools.file_tools_paths as file_tools
 
-        monkeypatch.setattr(file_tools, "_uses_container_paths", lambda task_id="default": True)
+        monkeypatch.setattr(
+            file_tools, "_uses_container_paths", lambda task_id="default": True
+        )
         monkeypatch.setattr(
             file_tools,
             "_authoritative_workspace_root",
@@ -287,6 +304,7 @@ class TestWindowsMsysPathResolution:
 # ---------------------------------------------------------------------------
 # Tool result hint tests (#722)
 # ---------------------------------------------------------------------------
+
 
 class TestPatchHints:
     """Patch tool should hint when old_string is not found."""
@@ -302,6 +320,7 @@ class TestPatchHints:
         mock_get.return_value = mock_ops
 
         from tools.file_tools import patch_tool
+
         raw = patch_tool(mode="replace", path="foo.py", old_string="x", new_string="y")
         # patch_tool surfaces the hint as a structured "_hint" field on the
         # JSON error payload (not an inline "[Hint: ..." tail).
@@ -316,6 +335,7 @@ class TestPatchHints:
         mock_get.return_value = mock_ops
 
         from tools.file_tools import patch_tool
+
         raw = patch_tool(mode="replace", path="foo.py", old_string="x", new_string="y")
         assert "_hint" not in raw
 
@@ -326,9 +346,8 @@ class TestSearchHints:
     def setup_method(self):
         """Clear read/search tracker between tests to avoid cross-test state."""
         from tools.file_tools_read_tracking import _read_tracker
+
         _read_tracker.clear()
-
-
 
     @patch("tools.file_tools._get_file_ops")
     def test_truncated_hint_with_nonzero_offset(self, mock_get):
@@ -343,6 +362,7 @@ class TestSearchHints:
         mock_get.return_value = mock_ops
 
         from tools.file_tools import search_tool
+
         raw = search_tool(pattern="foo", offset=50, limit=50)
         parsed = json.loads(raw)
         assert "offset=100" in parsed["_hint"]
@@ -358,21 +378,31 @@ class TestSensitivePathCheck:
 
     def test_clawk_config_blocked_for_write_file(self, tmp_path, monkeypatch):
         fake_config = tmp_path / "config.yaml"
-        monkeypatch.setattr("tools.file_tools_write_guards._clawk_config_resolved", str(fake_config))
-        monkeypatch.setattr("tools.file_tools_write_guards._clawk_config_resolved_loaded", True)
+        monkeypatch.setattr(
+            "tools.file_tools_write_guards._clawk_config_resolved", str(fake_config)
+        )
+        monkeypatch.setattr(
+            "tools.file_tools_write_guards._clawk_config_resolved_loaded", True
+        )
 
         from tools.file_tools import write_file_tool
-        result = json.loads(write_file_tool(str(fake_config), "approvals:\n  mode: off\n"))
+
+        result = json.loads(
+            write_file_tool(str(fake_config), "approvals:\n  mode: off\n")
+        )
         assert "error" in result
         assert "Clawksis config" in result["error"]
 
-
-
     def test_system_path_still_blocked(self, monkeypatch):
-        monkeypatch.setattr("tools.file_tools_write_guards._clawk_config_resolved", "/some/other/path")
-        monkeypatch.setattr("tools.file_tools_write_guards._clawk_config_resolved_loaded", True)
+        monkeypatch.setattr(
+            "tools.file_tools_write_guards._clawk_config_resolved", "/some/other/path"
+        )
+        monkeypatch.setattr(
+            "tools.file_tools_write_guards._clawk_config_resolved_loaded", True
+        )
 
         from tools.file_tools import write_file_tool
+
         result = json.loads(write_file_tool("/etc/passwd", "evil"))
         assert "error" in result
         assert "sensitive system path" in result["error"]
@@ -393,15 +423,25 @@ class TestSensitivePathCheck:
 
     @patch("tools.file_tools._get_file_ops")
     def test_normal_file_not_blocked(self, mock_get, monkeypatch):
-        monkeypatch.setattr("tools.file_tools_write_guards._clawk_config_resolved", "/home/user/.clawksis/config.yaml")
-        monkeypatch.setattr("tools.file_tools_write_guards._clawk_config_resolved_loaded", True)
+        monkeypatch.setattr(
+            "tools.file_tools_write_guards._clawk_config_resolved",
+            "/home/user/.clawksis/config.yaml",
+        )
+        monkeypatch.setattr(
+            "tools.file_tools_write_guards._clawk_config_resolved_loaded", True
+        )
         mock_ops = MagicMock()
         result_obj = MagicMock()
-        result_obj.to_dict.return_value = {"status": "ok", "path": "/tmp/other.txt", "bytes": 5}
+        result_obj.to_dict.return_value = {
+            "status": "ok",
+            "path": "/tmp/other.txt",
+            "bytes": 5,
+        }
         mock_ops.write_file.return_value = result_obj
         mock_get.return_value = mock_ops
 
         from tools.file_tools import write_file_tool
+
         result = json.loads(write_file_tool("/tmp/other.txt", "hello"))
         assert result["status"] == "ok"
 
@@ -412,7 +452,6 @@ class TestPatchSchemaShape:
     kimi-k2.x per-mode-description concern now applies to the V4A LAYER,
     whose composed variant still documents both modes' requirements."""
 
-
     def test_v4a_layer_keeps_per_mode_documentation(self):
         """When the V4A layer IS rendered (OpenAI-family), the strict-model
         guidance survives: per-mode requirements in description text, no
@@ -421,12 +460,16 @@ class TestPatchSchemaShape:
 
         import tools.file_tools as ft
 
-        with _p("agent.auxiliary_client._read_main_provider", return_value="openai"), \
-             _p("agent.auxiliary_client._read_main_model", return_value="gpt-5.2"):
+        with (
+            _p("agent.auxiliary_client._read_main_provider", return_value="openai"),
+            _p("agent.auxiliary_client._read_main_model", return_value="gpt-5.2"),
+        ):
             o = ft._patch_schema_overrides()
         params = o["parameters"]
         assert params["required"] == ["mode"]
-        assert {"mode", "patch", "path", "old_string", "new_string"} <= set(params["properties"])
+        assert {"mode", "patch", "path", "old_string", "new_string"} <= set(
+            params["properties"]
+        )
         assert "anyOf" not in params and "oneOf" not in params
 
 
@@ -436,6 +479,7 @@ class TestPatchSchemaShape:
 # record in terminal_tool; env cleanup cannot lose it because it never lived
 # on the env.
 # ---------------------------------------------------------------------------
+
 
 class TestSessionCwdSurvivesEnvRecreation:
     """
@@ -481,11 +525,11 @@ class TestSessionCwdSurvivesEnvRecreation:
                 if len(args) >= 3:
                     cwd_passed = args[2]
 
-            assert cwd_passed == "/Users/user/project", \
+            assert cwd_passed == "/Users/user/project", (
                 f"Expected cwd='/Users/user/project', got {cwd_passed!r}"
+            )
         finally:
             tt.clear_session_cwd(task_id)
-
 
     @patch("tools.terminal_tool._active_environments", new_callable=dict)
     @patch("tools.file_tools._file_ops_cache", new_callable=dict)
@@ -531,8 +575,9 @@ class TestSessionCwdSurvivesEnvRecreation:
                     cwd_passed = args[2]
 
             # Rebuilt env restored the rescued cwd, NOT the config default.
-            assert cwd_passed == "/Users/user/project", \
+            assert cwd_passed == "/Users/user/project", (
                 f"Expected restored cwd='/Users/user/project', got {cwd_passed!r}"
+            )
         finally:
             tt.clear_session_cwd(task_id)
 
@@ -548,7 +593,9 @@ class TestSilentFileMisplacementE2E:
     makes the resolved path correct.
     """
 
-    def test_relative_write_after_env_cleanup_lands_in_user_cwd(self, tmp_path, monkeypatch):
+    def test_relative_write_after_env_cleanup_lands_in_user_cwd(
+        self, tmp_path, monkeypatch
+    ):
         import tools.terminal_tool as tt
         import tools.file_tools as ft
 
@@ -560,7 +607,8 @@ class TestSilentFileMisplacementE2E:
 
         _orig = tt._get_env_config
         monkeypatch.setattr(
-            tt, "_get_env_config",
+            tt,
+            "_get_env_config",
             lambda: {**_orig(), "env_type": "local", "cwd": str(config_default)},
         )
 
@@ -586,8 +634,9 @@ class TestSilentFileMisplacementE2E:
         res = json.loads(ft.write_file_tool("report.txt", "hello\n", task_id))
         assert res.get("resolved_path") == str(project / "report.txt"), res
         assert (project / "report.txt").exists(), "file should be in the user's cwd"
-        assert not (config_default / "report.txt").exists(), \
+        assert not (config_default / "report.txt").exists(), (
             "file silently misplaced into config default (the #26211 bug)"
+        )
 
         tt.clear_session_cwd(task_id)
 
@@ -615,13 +664,16 @@ class TestDedupInvalidationTaskResolution:
         monkeypatch.chdir(proc)  # process cwd != task workspace
 
         task_id = "acp-dedup"
-        monkeypatch.setattr(tt, "_task_env_overrides", {task_id: {"cwd": str(workspace)}})
+        monkeypatch.setattr(
+            tt, "_task_env_overrides", {task_id: {"cwd": str(workspace)}}
+        )
         (workspace / "data.txt").write_text("v1\n", encoding="utf-8")
 
         # The task resolves the relative path into the workspace; the default
         # task (the old buggy resolution) would resolve into proc.
         from tools.file_tools_paths import _resolve_path_for_task
         from tools.file_tools_read_tracking import _read_tracker
+
         correct = str(_resolve_path_for_task("data.txt", task_id))
         buggy = str(_resolve_path_for_task("data.txt"))
         assert correct != buggy, "test precondition: cwds must diverge"
@@ -633,6 +685,7 @@ class TestDedupInvalidationTaskResolution:
 
         # Invalidate as write_file_tool does; the entry must be gone.
         from tools.file_tools_read_tracking import _invalidate_dedup_for_path
+
         _invalidate_dedup_for_path("data.txt", task_id)
         remaining = [k[0] for k in _read_tracker.get(task_id, {}).get("dedup", {})]
         assert correct not in remaining, remaining
@@ -647,6 +700,7 @@ class TestDedupInvalidationTaskResolution:
 # spawned 13 wc -c subprocesses + 13 ls walks for the "did you mean..." hint.
 # The cache returns the same error JSON immediately and skips both shells.
 # ---------------------------------------------------------------------------
+
 
 class TestNotFoundCache:
     @patch("tools.file_tools._get_file_ops")
@@ -664,6 +718,7 @@ class TestNotFoundCache:
 
         from tools.file_tools import read_file_tool
         from tools.file_tools_read_tracking import _read_tracker
+
         # Use a unique task_id so we don't collide with other tests.
         tid = "neg-cache-read-1"
         _read_tracker.pop(tid, None)
@@ -674,7 +729,9 @@ class TestNotFoundCache:
         assert mock_ops.read_file.call_count == 1
 
         # Second call: same path → cache hit → no new subprocess call.
-        second = json.loads(read_file_tool("/tmp/does-not-exist-neg-1.txt", task_id=tid))
+        second = json.loads(
+            read_file_tool("/tmp/does-not-exist-neg-1.txt", task_id=tid)
+        )
         assert "File not found" in second["error"]
         assert mock_ops.read_file.call_count == 1, (
             "Negative cache hit must skip the subprocess on retry"
@@ -693,6 +750,7 @@ class TestNotFoundCache:
 
         from tools.file_tools import read_file_tool
         from tools.file_tools_read_tracking import _read_tracker
+
         for tid in ("neg-cache-iso-A", "neg-cache-iso-B"):
             _read_tracker.pop(tid, None)
 
@@ -700,7 +758,6 @@ class TestNotFoundCache:
         read_file_tool("/tmp/does-not-exist-neg-2.txt", task_id="neg-cache-iso-B")
         # Each task gets its own miss; B doesn't reuse A's cache entry.
         assert mock_ops.read_file.call_count == 2
-
 
     @patch("tools.file_tools._get_file_ops")
     def test_search_caches_path_not_found_and_skips_subprocess_on_retry(self, mock_get):
@@ -716,14 +773,19 @@ class TestNotFoundCache:
 
         from tools.file_tools import search_tool
         from tools.file_tools_read_tracking import _read_tracker
+
         tid = "neg-cache-search-3"
         _read_tracker.pop(tid, None)
 
-        first = json.loads(search_tool("foo", path="/tmp/does-not-exist-search-3", task_id=tid))
+        first = json.loads(
+            search_tool("foo", path="/tmp/does-not-exist-search-3", task_id=tid)
+        )
         assert "Path not found" in first["error"]
         assert mock_ops.search.call_count == 1
 
-        second = json.loads(search_tool("foo", path="/tmp/does-not-exist-search-3", task_id=tid))
+        second = json.loads(
+            search_tool("foo", path="/tmp/does-not-exist-search-3", task_id=tid)
+        )
         assert "Path not found" in second["error"]
         assert mock_ops.search.call_count == 1, (
             "Search negative cache hit must skip the subprocess on retry"
@@ -753,6 +815,7 @@ class TestNotFoundCache:
 
         from tools.file_tools import read_file_tool, search_tool
         from tools.file_tools_read_tracking import _read_tracker
+
         tid = "neg-cache-namespace-4"
         _read_tracker.pop(tid, None)
 
@@ -786,15 +849,20 @@ class TestNotFoundCache:
 
         from tools.file_tools import read_file_tool, write_file_tool
         from tools.file_tools_read_tracking import _read_tracker
+
         tid = "neg-cache-write-invalidate-5"
         _read_tracker.pop(tid, None)
 
-        first = json.loads(read_file_tool("/tmp/will-be-created-neg-5.txt", task_id=tid))
+        first = json.loads(
+            read_file_tool("/tmp/will-be-created-neg-5.txt", task_id=tid)
+        )
         assert "File not found" in first["error"]
 
         write_file_tool("/tmp/will-be-created-neg-5.txt", "after write", task_id=tid)
 
-        second = json.loads(read_file_tool("/tmp/will-be-created-neg-5.txt", task_id=tid))
+        second = json.loads(
+            read_file_tool("/tmp/will-be-created-neg-5.txt", task_id=tid)
+        )
         assert second.get("content") == "after write", (
             "write_file must invalidate the negative cache so the next read "
             "hits the now-existing file instead of returning a stale stub"
@@ -804,8 +872,12 @@ class TestNotFoundCache:
     def test_not_found_ttl_expires(self):
         # A cache entry older than _NOT_FOUND_TTL_SECONDS must be discarded.
         from tools.file_tools_read_tracking import (
-            _NOT_FOUND_TTL_SECONDS, _check_not_found_cache, _read_tracker, _read_tracker_lock,
-            _record_not_found)
+            _NOT_FOUND_TTL_SECONDS,
+            _check_not_found_cache,
+            _read_tracker,
+            _read_tracker_lock,
+            _record_not_found,
+        )
 
         tid = "neg-cache-ttl-6"
         _read_tracker.pop(tid, None)
@@ -823,14 +895,20 @@ class TestNotFoundCache:
         # Stale entry: cache miss, also evicted.
         assert _check_not_found_cache("read", "/tmp/ttl-test", tid) is None
         with _read_tracker_lock:
-            assert ("read", "/tmp/ttl-test") not in _read_tracker[tid].get("not_found", {})
+            assert ("read", "/tmp/ttl-test") not in _read_tracker[tid].get(
+                "not_found", {}
+            )
 
     def test_out_of_band_creation_defeats_cached_miss(self, tmp_path):
         """CRITICAL staleness contract: a file created AFTER a cached miss —
         by a terminal command or any external process, NOT write_file_tool —
         must be served for real on the next read. The agent pattern
         'check for file → create it → read it' breaks otherwise."""
-        from tools.file_tools_read_tracking import _check_not_found_cache, _record_not_found, _read_tracker
+        from tools.file_tools_read_tracking import (
+            _check_not_found_cache,
+            _record_not_found,
+            _read_tracker,
+        )
 
         tid = "neg-cache-oob-read"
         _read_tracker.pop(tid, None)
@@ -854,13 +932,19 @@ class TestNotFoundCache:
     def test_out_of_band_creation_defeats_cached_search_miss(self, tmp_path):
         """Same contract for search roots: creating a file under a
         previously-missing directory must defeat the cached 'Path not found'."""
-        from tools.file_tools_read_tracking import _check_not_found_cache, _record_not_found, _read_tracker
+        from tools.file_tools_read_tracking import (
+            _check_not_found_cache,
+            _record_not_found,
+            _read_tracker,
+        )
 
         tid = "neg-cache-oob-search"
         _read_tracker.pop(tid, None)
         missing_dir = tmp_path / "later-dir"
 
-        _record_not_found("search", str(missing_dir), tid, '{"error":"Path not found: x"}')
+        _record_not_found(
+            "search", str(missing_dir), tid, '{"error":"Path not found: x"}'
+        )
         assert _check_not_found_cache("search", str(missing_dir), tid) is not None
 
         missing_dir.mkdir()
@@ -873,21 +957,25 @@ class TestNotFoundCache:
     def test_notify_other_tool_call_clears_not_found(self):
         """Belt-and-suspenders: any non-read tool (terminal etc.) invalidates
         the task's negative cache via the dispatcher's notify hook."""
-        from tools.file_tools_read_tracking import _check_not_found_cache, _record_not_found, _read_tracker
+        from tools.file_tools_read_tracking import (
+            _check_not_found_cache,
+            _record_not_found,
+            _read_tracker,
+        )
         from tools.file_tools_read_tracking import notify_other_tool_call
 
         tid = "neg-cache-notify"
         _read_tracker.pop(tid, None)
         _record_not_found("read", "/tmp/never-exists-notify", tid, '{"error":"x"}')
-        assert _check_not_found_cache("read", "/tmp/never-exists-notify", tid) is not None
+        assert (
+            _check_not_found_cache("read", "/tmp/never-exists-notify", tid) is not None
+        )
 
         notify_other_tool_call(tid)
 
-        assert _check_not_found_cache("read", "/tmp/never-exists-notify", tid) is None, (
-            "notify_other_tool_call must clear cached misses"
-        )
-
-
+        assert (
+            _check_not_found_cache("read", "/tmp/never-exists-notify", tid) is None
+        ), "notify_other_tool_call must clear cached misses"
 
 
 class TestSSHConfigWriteGate:
@@ -904,22 +992,29 @@ class TestSSHConfigWriteGate:
     def test_no_human_present_blocks_and_writes_nothing(self, ssh_config):
         from tools.file_tools import write_file_tool
 
-        result = json.loads(write_file_tool(str(ssh_config), "Host x\n  ProxyCommand evil\n"))
+        result = json.loads(
+            write_file_tool(str(ssh_config), "Host x\n  ProxyCommand evil\n")
+        )
         assert "BLOCKED" in result["error"]
         assert not ssh_config.exists()
 
-    def test_single_query_session_denies_with_the_q_mode_message(self, ssh_config, monkeypatch):
+    def test_single_query_session_denies_with_the_q_mode_message(
+        self, ssh_config, monkeypatch
+    ):
         monkeypatch.setenv("CLAWK_SINGLE_QUERY_SESSION", "1")
         monkeypatch.setenv("CLAWK_INTERACTIVE", "1")  # `clawk chat -q` exports it too
         from tools.file_tools import write_file_tool
 
-        result = json.loads(write_file_tool(str(ssh_config), "Host x\n  ProxyCommand evil\n"))
+        result = json.loads(
+            write_file_tool(str(ssh_config), "Host x\n  ProxyCommand evil\n")
+        )
         assert "BLOCKED" in result["error"]
         assert "single-query" in result["error"]
         assert not ssh_config.exists()
 
-    def test_relative_path_is_gated_from_the_task_cwd_not_the_process_cwd(self, ssh_config, tmp_path,
-                                                                           monkeypatch):
+    def test_relative_path_is_gated_from_the_task_cwd_not_the_process_cwd(
+        self, ssh_config, tmp_path, monkeypatch
+    ):
         """A gateway-hosted turn's workspace is not the process cwd: the gate must judge the path
         the write will actually land on, or a relative spelling skips approval."""
         ws, elsewhere = tmp_path / "ws", tmp_path / "elsewhere"
@@ -930,7 +1025,9 @@ class TestSSHConfigWriteGate:
         monkeypatch.chdir(elsewhere)
         from tools.file_tools_write_guards import _check_approval_required_write
 
-        assert "BLOCKED" in (_check_approval_required_write(["sshdir/config"], "ssh-gate-task") or "")
+        assert "BLOCKED" in (
+            _check_approval_required_write(["sshdir/config"], "ssh-gate-task") or ""
+        )
 
 
 class TestSecretFileReadRedaction:
@@ -955,7 +1052,9 @@ class TestSecretFileReadRedaction:
         def to_dict(self, densify=False):
             return {
                 "total_count": len(self.matches),
-                "matches": [{"path": m.path, "content": m.content} for m in self.matches],
+                "matches": [
+                    {"path": m.path, "content": m.content} for m in self.matches
+                ],
             }
 
     @pytest.fixture
@@ -974,7 +1073,10 @@ class TestSecretFileReadRedaction:
         ops = MagicMock()
         result_obj = MagicMock()
         result_obj.content = body
-        result_obj.to_dict.return_value = {"content": body, "total_lines": body.count("\n")}
+        result_obj.to_dict.return_value = {
+            "content": body,
+            "total_lines": body.count("\n"),
+        }
         ops.read_file.return_value = result_obj
         return ops
 
@@ -983,20 +1085,31 @@ class TestSecretFileReadRedaction:
         # read_file renders line-numbered content ("5|      ADS_API_TOKEN: …"); the gutter is
         # part of the text the redactor sees, so the fixture must carry it (a gutter-free
         # fixture would pass even though the real read leaks).
-        body = (f"1|mcp_servers:\n2|  nasa_ads:\n3|    env:\n"
-                f"4|      ADS_API_TOKEN: {self.SYNTH}\n5|MAX_TOKENS: 100\n")
+        body = (
+            f"1|mcp_servers:\n2|  nasa_ads:\n3|    env:\n"
+            f"4|      ADS_API_TOKEN: {self.SYNTH}\n5|MAX_TOKENS: 100\n"
+        )
         mock_get.return_value = self._read_ops(body)
 
         from tools.file_tools import read_file_tool
-        out = json.loads(read_file_tool(str(clawk_home / "config.yaml"), task_id="secret-read"))
+
+        out = json.loads(
+            read_file_tool(str(clawk_home / "config.yaml"), task_id="secret-read")
+        )
 
         assert self.SYNTH not in out["content"]
         assert "«redacted" in out["content"]
-        assert "5|MAX_TOKENS: 100" in out["content"]  # non-secret scalar and rendered gutter survive
+        assert (
+            "5|MAX_TOKENS: 100" in out["content"]
+        )  # non-secret scalar and rendered gutter survive
 
         # A project's own config.yaml is NOT secret-bearing: source dumps are never mangled.
         mock_get.return_value = self._read_ops(f"4|      ADS_API_TOKEN: {self.SYNTH}\n")
-        out = json.loads(read_file_tool(str(clawk_home.parent / "proj-config.yaml"), task_id="plain-read"))
+        out = json.loads(
+            read_file_tool(
+                str(clawk_home.parent / "proj-config.yaml"), task_id="plain-read"
+            )
+        )
         assert self.SYNTH in out["content"]
 
     @patch("tools.file_tools._get_file_ops")
@@ -1004,12 +1117,15 @@ class TestSecretFileReadRedaction:
         config = clawk_home / "config.yaml"
         ops = MagicMock()
         ops.search.return_value = self._SearchResult(
-            [self._Match(str(config), f"      ADS_API_TOKEN: {self.SYNTH}")])
+            [self._Match(str(config), f"      ADS_API_TOKEN: {self.SYNTH}")]
+        )
         mock_get.return_value = ops
 
         from tools.file_tools import search_tool
-        raw = search_tool(pattern="ADS_API_TOKEN", path=str(clawk_home),
-                          task_id="secret-search")
+
+        raw = search_tool(
+            pattern="ADS_API_TOKEN", path=str(clawk_home), task_id="secret-search"
+        )
 
         assert self.SYNTH not in raw
         assert "«redacted" in raw
@@ -1018,7 +1134,10 @@ class TestSecretFileReadRedaction:
 class TestConflictMarkerFlag:
     def test_read_flags_balanced_conflict_blocks_only(self, tmp_path):
         conflicted = tmp_path / "c.py"
-        conflicted.write_text("x=1\n<<<<<<< HEAD\ny=2\n=======\ny=3\n>>>>>>> feature\nz=4\n", encoding="utf-8")
+        conflicted.write_text(
+            "x=1\n<<<<<<< HEAD\ny=2\n=======\ny=3\n>>>>>>> feature\nz=4\n",
+            encoding="utf-8",
+        )
         result = json.loads(read_file_tool(str(conflicted)))
         assert result["conflict_blocks"] == 1
         assert "merge-conflict" in result["_hint"]
@@ -1026,4 +1145,3 @@ class TestConflictMarkerFlag:
         prose = tmp_path / "p.py"
         prose.write_text("print('<<<<<<< not a conflict')\n", encoding="utf-8")
         assert "conflict_blocks" not in json.loads(read_file_tool(str(prose)))
-

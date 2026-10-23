@@ -61,7 +61,6 @@ class TestDeclaredConversationResolution:
         _seed(db, "sess-live")
         assert a._declared_conversation_session(KEY) == "sess-live"
 
-
     def test_no_declared_key_resolves_nothing(self, adapter):
         """Undeclared clients keep today's per-request identity."""
         a, db = adapter
@@ -116,8 +115,14 @@ class TestConversationBoundariesRotate:
 
     @pytest.mark.parametrize(
         "reason",
-        ["session_reset", "session_switch", "idle", "daily", "suspended",
-         "resume_pending_expired"],
+        [
+            "session_reset",
+            "session_switch",
+            "idle",
+            "daily",
+            "suspended",
+            "resume_pending_expired",
+        ],
     )
     def test_boundary_rotates_the_conversation(self, adapter, reason):
         a, db = adapter
@@ -259,12 +264,16 @@ API_KEY = "test-api-key"
 def live(tmp_path):
     """A real adapter behind real routes, with a scratch state.db attached."""
     adapter = APIServerAdapter(
-        PlatformConfig(enabled=True, extra={"host": "127.0.0.1", "port": 0, "key": API_KEY})
+        PlatformConfig(
+            enabled=True, extra={"host": "127.0.0.1", "port": 0, "key": API_KEY}
+        )
     )
     db = SessionDB(tmp_path / "state.db")
     adapter._session_db = db
 
-    mws = [mw for mw in (cors_middleware, security_headers_middleware) if mw is not None]
+    mws = [
+        mw for mw in (cors_middleware, security_headers_middleware) if mw is not None
+    ]
     app = web.Application(middlewares=mws)
     app["api_server_adapter"] = adapter
     app.router.add_post("/v1/responses", adapter._handle_responses)
@@ -312,7 +321,6 @@ def _headers(session_key=None):
 
 class TestResponsesHandlerPrecedence:
     """POST /v1/responses driven end to end, not a restated gate."""
-
 
     @pytest.mark.asyncio
     async def test_undeclared_request_keeps_a_per_request_id(self, live):
@@ -386,8 +394,11 @@ class TestRunsHandlerPrecedence:
         async with TestClient(TestServer(app)) as cli:
             resp = await cli.post(
                 "/v1/runs",
-                json={"model": "clawksis-agent", "input": "hi",
-                      "session_id": "explicit-session"},
+                json={
+                    "model": "clawksis-agent",
+                    "input": "hi",
+                    "session_id": "explicit-session",
+                },
                 headers=_headers(KEY),
             )
             assert resp.status in (200, 202)
@@ -507,8 +518,11 @@ class TestRealRunAgentSettlement:
         async with TestClient(TestServer(app)) as cli:
             resp = await cli.post(
                 "/v1/responses",
-                json={"model": "clawksis-agent", "input": "hi",
-                      "previous_response_id": "resp_A"},
+                json={
+                    "model": "clawksis-agent",
+                    "input": "hi",
+                    "previous_response_id": "resp_A",
+                },
                 headers=_headers(OTHER_KEY),
             )
             assert resp.status == 200
@@ -539,8 +553,11 @@ class TestRealRunAgentSettlement:
         async with TestClient(TestServer(app)) as cli:
             resp = await cli.post(
                 "/v1/runs",
-                json={"model": "clawksis-agent", "input": "hi",
-                      "session_id": "explicit-session"},
+                json={
+                    "model": "clawksis-agent",
+                    "input": "hi",
+                    "session_id": "explicit-session",
+                },
                 headers=_headers(KEY),
             )
             assert resp.status in (200, 202)

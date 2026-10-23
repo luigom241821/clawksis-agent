@@ -43,14 +43,13 @@ _FAKES = (
     # a host-honest READ (`if sys.platform == "darwin":`) is not a fake and does not match.
     re.compile(r"""\bplatform["']?\s*,\s*["']darwin["']"""),
     re.compile(r"""\.platform\s*=\s*["']darwin["']"""),
-    re.compile(r"""\bplatform\.system\b.*(?:lambda[^:]*:|return_value\s*=)\s*["']Darwin["']"""),
+    re.compile(
+        r"""\bplatform\.system\b.*(?:lambda[^:]*:|return_value\s*=)\s*["']Darwin["']"""
+    ),
 )
 
 # Files that faked macOS before this check existed (#111866). Burn down, never extend.
-_BASELINE = frozenset(
-    {
-    }
-)
+_BASELINE = frozenset({})
 
 
 def _code_lines(text: str) -> list[tuple[int, str, str]]:
@@ -66,7 +65,9 @@ def _code_lines(text: str) -> list[tuple[int, str, str]]:
     return out
 
 
-def find_unmarked_fakes(root: Path, repo_root: Path) -> dict[str, list[tuple[int, str]]]:
+def find_unmarked_fakes(
+    root: Path, repo_root: Path
+) -> dict[str, list[tuple[int, str]]]:
     """Map repo-relative test path -> ``[(lineno, line)]`` of un-opted-out macOS fakes."""
     marker_pat = re.compile(r'platforms\(\s*[^)]*?"[^")]*\bmacos\b[^")]*"')
     hits: dict[str, list[tuple[int, str]]] = {}
@@ -88,7 +89,9 @@ def find_unmarked_fakes(root: Path, repo_root: Path) -> dict[str, list[tuple[int
             ]
             if lines:
                 resolved = path.resolve()
-                base = repo_root if resolved.is_relative_to(repo_root) else root.resolve()
+                base = (
+                    repo_root if resolved.is_relative_to(repo_root) else root.resolve()
+                )
                 hits[resolved.relative_to(base).as_posix()] = lines
     return hits
 
@@ -114,7 +117,9 @@ def main(argv: list[str]) -> int:
             file=sys.stderr,
         )
     for rel in stale:
-        print(f"{rel}: listed in _BASELINE but no longer fakes macOS — remove the entry")
+        print(
+            f"{rel}: listed in _BASELINE but no longer fakes macOS — remove the entry"
+        )
     return 1 if new or stale else 0
 
 

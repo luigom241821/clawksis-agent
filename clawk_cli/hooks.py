@@ -25,6 +25,7 @@ def hooks_command(args) -> None:
 # list
 # ---------------------------------------------------------------------------
 
+
 def _cmd_list(_args) -> None:
     from clawk_cli.config import load_config
     from agent import outbound_webhooks, shell_hooks
@@ -34,7 +35,9 @@ def _cmd_list(_args) -> None:
     outbound = outbound_webhooks.iter_configured_targets(cfg)
 
     if not specs and not outbound:
-        print("No shell hooks or outbound webhooks configured in ~/.clawksis/config.yaml.")
+        print(
+            "No shell hooks or outbound webhooks configured in ~/.clawksis/config.yaml."
+        )
         print("See `clawk hooks --help` or")
         print("    website/docs/user-guide/features/hooks.md")
         print("for the config schema and worked examples.")
@@ -53,8 +56,14 @@ def _cmd_list(_args) -> None:
             for spec in by_event[event]:
                 is_approved = (spec.event, spec.command) in approved
                 status = "✓ allowed" if is_approved else "✗ not allowlisted"
-                print(f"    - {spec.command}{_matcher_part(spec)} (timeout={spec.timeout}s, {status})")
-                entry = shell_hooks.allowlist_entry_for(spec.event, spec.command) if is_approved else None
+                print(
+                    f"    - {spec.command}{_matcher_part(spec)} (timeout={spec.timeout}s, {status})"
+                )
+                entry = (
+                    shell_hooks.allowlist_entry_for(spec.event, spec.command)
+                    if is_approved
+                    else None
+                )
                 if entry and entry.get("approved_at"):
                     print(f"      approved_at: {entry['approved_at']}")
                     drift, mtime_at, mtime_now = _mtime_drift(shell_hooks, spec, entry)
@@ -72,7 +81,9 @@ def _cmd_list(_args) -> None:
             signed = "signed" if target.secret else "UNSIGNED"
             print(f"  - {target.label}")
             print(f"      url:     {target.url}")
-            print(f"      events:  {', '.join(target.events)}{_matcher_part(target)} (timeout={target.timeout}s, {signed})")
+            print(
+                f"      events:  {', '.join(target.events)}{_matcher_part(target)} (timeout={target.timeout}s, {signed})"
+            )
         print()
 
 
@@ -101,79 +112,163 @@ def _mtime_drift(shell_hooks, spec, entry) -> tuple[bool | None, str, str]:
 # stdin a script sees under `hooks test` / `hooks doctor` has the runtime shape.
 _DEFAULT_PAYLOADS = {
     "pre_tool_call": {
-        "tool_name": "terminal", "args": {"command": "echo hello"},
-        "session_id": "test-session", "task_id": "test-task", "tool_call_id": "test-call",
+        "tool_name": "terminal",
+        "args": {"command": "echo hello"},
+        "session_id": "test-session",
+        "task_id": "test-task",
+        "tool_call_id": "test-call",
     },
     "post_tool_call": {
-        "tool_name": "terminal", "args": {"command": "echo hello"},
-        "session_id": "test-session", "task_id": "test-task", "tool_call_id": "test-call",
-        "result": '{"output": "hello"}', "duration_ms": 42,
+        "tool_name": "terminal",
+        "args": {"command": "echo hello"},
+        "session_id": "test-session",
+        "task_id": "test-task",
+        "tool_call_id": "test-call",
+        "result": '{"output": "hello"}',
+        "duration_ms": 42,
     },
     "pre_llm_call": {
-        "session_id": "test-session", "user_message": "What is the weather?",
-        "conversation_history": [], "is_first_turn": True, "model": "gpt-4", "platform": "cli",
+        "session_id": "test-session",
+        "user_message": "What is the weather?",
+        "conversation_history": [],
+        "is_first_turn": True,
+        "model": "gpt-4",
+        "platform": "cli",
     },
-    "post_llm_call": {"session_id": "test-session", "model": "gpt-4", "platform": "cli"},
+    "post_llm_call": {
+        "session_id": "test-session",
+        "model": "gpt-4",
+        "platform": "cli",
+    },
     "pre_verify": {
-        "session_id": "test-session", "platform": "cli", "model": "gpt-4", "coding": True,
-        "attempt": 0, "final_response": "All done — the change is applied.",
+        "session_id": "test-session",
+        "platform": "cli",
+        "model": "gpt-4",
+        "coding": True,
+        "attempt": 0,
+        "final_response": "All done — the change is applied.",
         "changed_paths": ["src/app.tsx"],
     },
     "on_session_start": {"session_id": "test-session"},
     "on_session_end": {
-        "session_id": "test-session", "task_id": "test-task", "turn_id": "test-turn",
-        "completed": True, "failed": False, "interrupted": False,
-        "turn_exit_reason": "text_response(stop)", "model": "gpt-4", "platform": "cli",
+        "session_id": "test-session",
+        "task_id": "test-task",
+        "turn_id": "test-turn",
+        "completed": True,
+        "failed": False,
+        "interrupted": False,
+        "turn_exit_reason": "text_response(stop)",
+        "model": "gpt-4",
+        "platform": "cli",
     },
     "on_session_finalize": {"session_id": "test-session"},
     "on_session_reset": {"session_id": "test-session"},
-    "on_session_delete": {"session_id": "test-session", "reason": "delete", "profile": "default"},
+    "on_session_delete": {
+        "session_id": "test-session",
+        "reason": "delete",
+        "profile": "default",
+    },
     "pre_api_request": {
-        "session_id": "test-session", "task_id": "test-task", "platform": "cli",
-        "model": "claude-sonnet-4-6", "provider": "anthropic",
-        "base_url": "https://api.anthropic.com", "api_mode": "anthropic_messages",
-        "api_call_count": 1, "message_count": 4, "tool_count": 12,
-        "approx_input_tokens": 2048, "request_char_count": 8192, "max_tokens": 4096,
+        "session_id": "test-session",
+        "task_id": "test-task",
+        "platform": "cli",
+        "model": "claude-sonnet-4-6",
+        "provider": "anthropic",
+        "base_url": "https://api.anthropic.com",
+        "api_mode": "anthropic_messages",
+        "api_call_count": 1,
+        "message_count": 4,
+        "tool_count": 12,
+        "approx_input_tokens": 2048,
+        "request_char_count": 8192,
+        "max_tokens": 4096,
     },
     "post_api_request": {
-        "session_id": "test-session", "task_id": "test-task", "platform": "cli",
-        "model": "claude-sonnet-4-6", "provider": "anthropic",
-        "base_url": "https://api.anthropic.com", "api_mode": "anthropic_messages",
-        "api_call_count": 1, "api_duration": 1.234,
-        "started_at": 1756000000.0, "ended_at": 1756000001.234, "first_chunk_at": 1756000000.512,
-        "finish_reason": "stop", "message_count": 4, "response_model": "claude-sonnet-4-6",
-        "usage": {"input_tokens": 2048, "output_tokens": 512}, "context_length": 200000,
-        "assistant_content_chars": 1200, "assistant_tool_call_count": 0,
+        "session_id": "test-session",
+        "task_id": "test-task",
+        "platform": "cli",
+        "model": "claude-sonnet-4-6",
+        "provider": "anthropic",
+        "base_url": "https://api.anthropic.com",
+        "api_mode": "anthropic_messages",
+        "api_call_count": 1,
+        "api_duration": 1.234,
+        "started_at": 1756000000.0,
+        "ended_at": 1756000001.234,
+        "first_chunk_at": 1756000000.512,
+        "finish_reason": "stop",
+        "message_count": 4,
+        "response_model": "claude-sonnet-4-6",
+        "usage": {"input_tokens": 2048, "output_tokens": 512},
+        "context_length": 200000,
+        "assistant_content_chars": 1200,
+        "assistant_tool_call_count": 0,
         # Per-advisor metrics on a MoA turn, None otherwise: MoA returns only the aggregator's
         # response, so without this an observer cannot see or price the fan-out.
         "moa_references": None,
     },
     "pre_auxiliary_call": {
-        "aux_task": "title_generation", "session_id": "test-session", "task_id": "test-task",
-        "turn_id": "test-turn", "api_request_id": "aux-0123abcd", "platform": "cli",
-        "model": "claude-haiku-4-5", "provider": "anthropic",
-        "base_url": "https://api.anthropic.com", "api_mode": "anthropic_messages",
-        "api_call_count": 1, "retry_count": 0, "streaming": False, "message_count": 2,
-        "tool_count": 0, "approx_input_tokens": 256, "request_char_count": 1024, "max_tokens": 64,
+        "aux_task": "title_generation",
+        "session_id": "test-session",
+        "task_id": "test-task",
+        "turn_id": "test-turn",
+        "api_request_id": "aux-0123abcd",
+        "platform": "cli",
+        "model": "claude-haiku-4-5",
+        "provider": "anthropic",
+        "base_url": "https://api.anthropic.com",
+        "api_mode": "anthropic_messages",
+        "api_call_count": 1,
+        "retry_count": 0,
+        "streaming": False,
+        "message_count": 2,
+        "tool_count": 0,
+        "approx_input_tokens": 256,
+        "request_char_count": 1024,
+        "max_tokens": 64,
     },
     "post_auxiliary_call": {
-        "aux_task": "title_generation", "session_id": "test-session", "task_id": "test-task",
-        "turn_id": "test-turn", "api_request_id": "aux-0123abcd", "platform": "cli",
-        "model": "claude-haiku-4-5", "provider": "anthropic",
-        "base_url": "https://api.anthropic.com", "api_mode": "anthropic_messages",
-        "api_call_count": 1, "retry_count": 0, "streaming": False, "api_duration": 0.42,
-        "started_at": 1756000000.0, "ended_at": 1756000000.42, "finish_reason": "stop",
-        "response_model": "claude-haiku-4-5", "usage": {"input_tokens": 256, "output_tokens": 12},
-        "assistant_content_chars": 40, "assistant_tool_call_count": 0, "error": None, "error_type": None,
+        "aux_task": "title_generation",
+        "session_id": "test-session",
+        "task_id": "test-task",
+        "turn_id": "test-turn",
+        "api_request_id": "aux-0123abcd",
+        "platform": "cli",
+        "model": "claude-haiku-4-5",
+        "provider": "anthropic",
+        "base_url": "https://api.anthropic.com",
+        "api_mode": "anthropic_messages",
+        "api_call_count": 1,
+        "retry_count": 0,
+        "streaming": False,
+        "api_duration": 0.42,
+        "started_at": 1756000000.0,
+        "ended_at": 1756000000.42,
+        "finish_reason": "stop",
+        "response_model": "claude-haiku-4-5",
+        "usage": {"input_tokens": 256, "output_tokens": 12},
+        "assistant_content_chars": 40,
+        "assistant_tool_call_count": 0,
+        "error": None,
+        "error_type": None,
     },
     "subagent_stop": {
-        "parent_session_id": "parent-sess", "child_role": None,
-        "child_summary": "Synthetic summary for hooks test", "child_status": "completed",
-        "tool_call_history": [{
-            "tool_name": "write_file",
-            "tool_input": {"argument_keys": ["content", "path"], "targets": {"path": "notes/report.txt"}},
-            "input_bytes": 128, "output_bytes": 32, "status": "ok",
-        }],
+        "parent_session_id": "parent-sess",
+        "child_role": None,
+        "child_summary": "Synthetic summary for hooks test",
+        "child_status": "completed",
+        "tool_call_history": [
+            {
+                "tool_name": "write_file",
+                "tool_input": {
+                    "argument_keys": ["content", "path"],
+                    "targets": {"path": "notes/report.txt"},
+                },
+                "input_bytes": 128,
+                "output_bytes": 32,
+                "status": "ok",
+            }
+        ],
         "duration_ms": 1234,
     },
 }
@@ -206,9 +301,16 @@ def _cmd_test(args) -> None:
             print(f"Error reading payload file: {exc}")
             return
 
-    specs = [s for s in shell_hooks.iter_configured_hooks(load_config()) if s.event == event]
+    specs = [
+        s for s in shell_hooks.iter_configured_hooks(load_config()) if s.event == event
+    ]
     if for_tool:
-        specs = [s for s in specs if s.event not in {"pre_tool_call", "post_tool_call"} or s.matches_tool(for_tool)]
+        specs = [
+            s
+            for s in specs
+            if s.event not in {"pre_tool_call", "post_tool_call"}
+            or s.matches_tool(for_tool)
+        ]
     if not specs:
         print(f"No shell hooks configured for event: {event}")
         if for_tool:
@@ -228,7 +330,9 @@ def _print_run_result(result: dict[str, Any]) -> None:
     elif result.get("timed_out"):
         print(f"      ✗ timed out after {result['elapsed_seconds']}s")
     else:
-        print(f"      exit={result.get('returncode')}  elapsed={result.get('elapsed_seconds', 0)}s")
+        print(
+            f"      exit={result.get('returncode')}  elapsed={result.get('elapsed_seconds', 0)}s"
+        )
         for stream in ("stdout", "stderr"):
             text = (result.get(stream) or "").strip()
             if text:
@@ -250,6 +354,7 @@ def _truncate(s: str, n: int) -> str:
 # ---------------------------------------------------------------------------
 # revoke / doctor
 # ---------------------------------------------------------------------------
+
 
 def _cmd_revoke(args) -> None:
     from agent import shell_hooks
@@ -280,7 +385,11 @@ def _cmd_doctor(_args) -> None:
         print(f"  [{spec.event}] {spec.command}")
         problems += _doctor_one(spec, shell_hooks)
         print()
-    print(f"{problems} issue(s) found.  Fix before relying on these hooks." if problems else "All shell hooks look healthy.")
+    print(
+        f"{problems} issue(s) found.  Fix before relying on these hooks."
+        if problems
+        else "All shell hooks look healthy."
+    )
 
 
 def _doctor_one(spec, shell_hooks) -> int:
@@ -290,39 +399,51 @@ def _doctor_one(spec, shell_hooks) -> int:
         print("      ✓ script exists and is executable")
     else:
         problems += 1
-        print("      ✗ script missing or not executable "
-              "(chmod +x the file, or fix the path)")
+        print(
+            "      ✗ script missing or not executable "
+            "(chmod +x the file, or fix the path)"
+        )
     # 2. Allowlist status
     entry = shell_hooks.allowlist_entry_for(spec.event, spec.command)
     if entry:
         print(f"      ✓ allowlisted (approved {entry.get('approved_at', '?')})")
     else:
         problems += 1
-        print("      ✗ not allowlisted — hook will NOT fire at runtime "
-              "(run with --accept-hooks once, or confirm at the TTY prompt)")
+        print(
+            "      ✗ not allowlisted — hook will NOT fire at runtime "
+            "(run with --accept-hooks once, or confirm at the TTY prompt)"
+        )
     # 3. Mtime drift
     if entry and entry.get("script_mtime_at_approval"):
         drift, mtime_at, mtime_now = _mtime_drift(shell_hooks, spec, entry)
         if drift is True:
             problems += 1
-            print(f"      ⚠ script modified since approval "
-                  f"(was {mtime_at}, now {mtime_now}) — review changes, "
-                  f"then `clawk hooks revoke` + re-approve to refresh")
+            print(
+                f"      ⚠ script modified since approval "
+                f"(was {mtime_at}, now {mtime_now}) — review changes, "
+                f"then `clawk hooks revoke` + re-approve to refresh"
+            )
         elif drift is False:
             print("      ✓ script unchanged since approval")
     # 4. JSON smoke test on a synthetic payload — ONLY when already allowlisted. Otherwise doctor
     # would execute every script in a freshly-pulled config before the user reviewed it, which
     # contradicts the documented workflow ("spot newly-added hooks *before they register*").
     if not entry:
-        print("      ℹ skipped JSON smoke test — not allowlisted yet. "
-              "Approve the hook first (via TTY prompt or --accept-hooks), "
-              "then re-run `clawk hooks doctor`.")
+        print(
+            "      ℹ skipped JSON smoke test — not allowlisted yet. "
+            "Approve the hook first (via TTY prompt or --accept-hooks), "
+            "then re-run `clawk hooks doctor`."
+        )
     elif shell_hooks.script_is_executable(spec.command):
-        result = shell_hooks.run_once(spec, _DEFAULT_PAYLOADS.get(spec.event, {"extra": {}}))
+        result = shell_hooks.run_once(
+            spec, _DEFAULT_PAYLOADS.get(spec.event, {"extra": {}})
+        )
         if result.get("timed_out"):
             problems += 1
-            print(f"      ✗ timed out after {result['elapsed_seconds']}s "
-                  f"on synthetic payload (timeout={spec.timeout}s)")
+            print(
+                f"      ✗ timed out after {result['elapsed_seconds']}s "
+                f"on synthetic payload (timeout={spec.timeout}s)"
+            )
         elif result.get("error"):
             problems += 1
             print(f"      ✗ execution error: {result['error']}")
@@ -331,23 +452,32 @@ def _doctor_one(spec, shell_hooks) -> int:
             elapsed = result.get("elapsed_seconds", 0)
             stdout = (result.get("stdout") or "").strip()
             if not stdout:
-                print(f"      ✓ ran clean with empty stdout "
-                      f"(exit={rc}, {elapsed}s) — hook is observer-only")
+                print(
+                    f"      ✓ ran clean with empty stdout "
+                    f"(exit={rc}, {elapsed}s) — hook is observer-only"
+                )
             else:
                 try:
                     json.loads(stdout)
-                    print(f"      ✓ produced valid JSON on synthetic payload "
-                          f"(exit={rc}, {elapsed}s)")
+                    print(
+                        f"      ✓ produced valid JSON on synthetic payload "
+                        f"(exit={rc}, {elapsed}s)"
+                    )
                 except json.JSONDecodeError:
                     problems += 1
-                    print(f"      ✗ stdout was not valid JSON (exit={rc}, "
-                          f"{elapsed}s): {_truncate(stdout, 120)}")
+                    print(
+                        f"      ✗ stdout was not valid JSON (exit={rc}, "
+                        f"{elapsed}s): {_truncate(stdout, 120)}"
+                    )
     return problems
 
 
 _ACTIONS = {
-    "list": _cmd_list, "ls": _cmd_list,
+    "list": _cmd_list,
+    "ls": _cmd_list,
     "test": _cmd_test,
-    "revoke": _cmd_revoke, "remove": _cmd_revoke, "rm": _cmd_revoke,
+    "revoke": _cmd_revoke,
+    "remove": _cmd_revoke,
+    "rm": _cmd_revoke,
     "doctor": _cmd_doctor,
 }

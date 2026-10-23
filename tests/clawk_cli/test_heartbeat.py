@@ -81,7 +81,9 @@ def test_is_due_anchors_on_created_then_last_fired():
 
 def test_paused_never_due():
     now = time.time()
-    s = HeartbeatState(prompt="p", interval_seconds=60, created_at=now - 3600, status="paused")
+    s = HeartbeatState(
+        prompt="p", interval_seconds=60, created_at=now - 3600, status="paused"
+    )
     assert s.is_due(now) is False
 
 

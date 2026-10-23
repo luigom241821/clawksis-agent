@@ -4,6 +4,7 @@ The conversation root is the Nous Portal ``conversation=`` tag value: one
 stable id per user-facing conversation, surviving context-compression
 session rotation and covering delegate subagent trees.
 """
+
 import pytest
 
 from clawk_state import SessionDB
@@ -19,15 +20,7 @@ def test_root_of_standalone_session_is_itself(db):
     assert db.get_conversation_root("solo") == "solo"
 
 
-
-
-
-
 def test_root_covers_delegate_child_sessions(db):
     db.create_session("parent", source="cli")
     db.create_session("child", source="delegate", parent_session_id="parent")
     assert db.get_conversation_root("child") == "parent"
-
-
-
-

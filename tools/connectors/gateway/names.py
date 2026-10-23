@@ -26,7 +26,6 @@ CONNECTOR_BATCH_SENTINEL = "connectors__execute"
 
 @dataclass(frozen=True)
 class ConnectorName:
-
     raw: str
     connector: str
     tool: str

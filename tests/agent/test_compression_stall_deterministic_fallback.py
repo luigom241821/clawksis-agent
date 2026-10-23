@@ -23,12 +23,18 @@ import pytest
 import agent.conversation_compression as cc
 from agent.auxiliary_client import AuxiliaryExplicitCancellation
 from agent.context_compressor import SUMMARY_PREFIX, pin_summary_route
-from agent.conversation_compression import CompressionCommitFence, run_compress_context_with_progress_timeout
+from agent.conversation_compression import (
+    CompressionCommitFence,
+    run_compress_context_with_progress_timeout,
+)
 from clawk_state import SessionDB
 
 CHAIN_ENTRY = {
-    "provider": "custom", "model": "backup-summarizer", "base_url": "https://fallback.invalid/v1",
-    "api_key": "sk-fallback", "timeout": 0.4,
+    "provider": "custom",
+    "model": "backup-summarizer",
+    "base_url": "https://fallback.invalid/v1",
+    "api_key": "sk-fallback",
+    "timeout": 0.4,
 }
 
 
@@ -40,8 +46,14 @@ def _make_agent(tmp_path, tag):
         from run_agent import AIAgent
 
         agent = AIAgent(
-            api_key="test-key", base_url="https://openrouter.ai/api/v1", model="test/model", quiet_mode=True,
-            session_db=db, session_id=session_id, skip_context_files=True, skip_memory=True,
+            api_key="test-key",
+            base_url="https://openrouter.ai/api/v1",
+            model="test/model",
+            quiet_mode=True,
+            session_db=db,
+            session_id=session_id,
+            skip_context_files=True,
+            skip_memory=True,
         )
     agent._compression_feasibility_checked = True
     agent.compression_in_place = True
@@ -52,13 +64,17 @@ def _make_agent(tmp_path, tag):
 
 def _transcript():
     return [
-        {"role": "user" if i % 2 == 0 else "assistant", "content": f"m{i} " + ("lorem ipsum " * 300)}
+        {
+            "role": "user" if i % 2 == 0 else "assistant",
+            "content": f"m{i} " + ("lorem ipsum " * 300),
+        }
         for i in range(40)
     ]
 
 
 def _stalling_call_llm(compressor, calls, *, fail_when_pinned=False):
     """Summary call that never streams: hangs until the host cancels the fence, like a held-open socket."""
+
     def _call(**kwargs):
         calls.append(kwargs.get("provider") or "primary")
         if fail_when_pinned and "provider" in kwargs:
@@ -75,7 +91,11 @@ def _stalling_call_llm(compressor, calls, *, fail_when_pinned=False):
 
 
 def _summary_rows(messages):
-    return [m for m in messages if isinstance(m.get("content"), str) and m["content"].startswith(SUMMARY_PREFIX)]
+    return [
+        m
+        for m in messages
+        if isinstance(m.get("content"), str) and m["content"].startswith(SUMMARY_PREFIX)
+    ]
 
 
 def _wait_cancelled_workers_settled():
@@ -85,7 +105,9 @@ def _wait_cancelled_workers_settled():
     deadline = time.monotonic() + 30.0
     while cc._compress_admitted_count and time.monotonic() < deadline:
         time.sleep(0.01)
-    assert cc._compress_admitted_count == 0, "a cancelled compression worker never finished unwinding"
+    assert cc._compress_admitted_count == 0, (
+        "a cancelled compression worker never finished unwinding"
+    )
 
 
 @pytest.fixture
@@ -93,10 +115,16 @@ def fast_timeouts(monkeypatch):
     # The idle window bounds each attempt INCLUDING the deterministic rung's no-LLM compress pass (prompt
     # rebuild, SQLite commit, malloc_trim), which outran a 0.4 s window on loaded CI runners. 2 s keeps a
     # stall cheap while leaving that work several times its normal cost.
-    monkeypatch.setattr(cc, "resolve_context_compression_timeouts", lambda compression_cfg=None: (2.0, 20.0))
+    monkeypatch.setattr(
+        cc,
+        "resolve_context_compression_timeouts",
+        lambda compression_cfg=None: (2.0, 20.0),
+    )
 
 
-def test_second_consecutive_stall_commits_the_deterministic_fallback_summary(tmp_path, fast_timeouts):
+def test_second_consecutive_stall_commits_the_deterministic_fallback_summary(
+    tmp_path, fast_timeouts
+):
     """Real AIAgent + real ``compress_context`` + facade timeout wrap; only ``call_llm`` is stubbed.
     Stall 1: backoff recorded, transcript untouched. Stall 2 (after the backoff lapsed): the deterministic
     rung commits a fallback summary instead of continuing without compression."""
@@ -104,13 +132,25 @@ def test_second_consecutive_stall_commits_the_deterministic_fallback_summary(tmp
     compressor = agent.context_compressor
     calls = []
     live = _transcript()
-    with patch("agent.context_compressor.call_llm", side_effect=_stalling_call_llm(compressor, calls)), \
-            patch("agent.auxiliary_client._get_auxiliary_task_config", return_value={"fallback_chain": []}):
+    with (
+        patch(
+            "agent.context_compressor.call_llm",
+            side_effect=_stalling_call_llm(compressor, calls),
+        ),
+        patch(
+            "agent.auxiliary_client._get_auxiliary_task_config",
+            return_value={"fallback_chain": []},
+        ),
+    ):
         first, _ = agent._compress_context(live, "sys", approx_tokens=50_000)
-        assert first is live, "a first stall keeps the transcript and only arms the backoff"
+        assert first is live, (
+            "a first stall keeps the transcript and only arms the backoff"
+        )
         assert compressor._consecutive_timeout_failures >= 1
         assert compressor._summary_failure_cooldown_until > time.monotonic()
-        assert calls == ["primary"], "no deterministic rung on the FIRST stall: the LLM route gets its backoff retry"
+        assert calls == ["primary"], (
+            "no deterministic rung on the FIRST stall: the LLM route gets its backoff retry"
+        )
 
         # The backoff lapses; the still-oversized context re-triggers compression (the reporter's next turn).
         # The first attempt's cancelled worker re-arms the cooldown from its own thread after
@@ -121,12 +161,16 @@ def test_second_consecutive_stall_commits_the_deterministic_fallback_summary(tmp
         # that makes escalation harder (e.g. a threshold of 3) from satisfying itself.
         compressor._consecutive_timeout_failures = 1
         compressor._summary_failure_cooldown_until = 0.0
-        compressor._session_db.clear_compression_failure_cooldown(compressor._session_id)
+        compressor._session_db.clear_compression_failure_cooldown(
+            compressor._session_id
+        )
         calls.clear()
         second, _ = agent._compress_context(live, "sys", approx_tokens=50_000)
 
     assert second is not live and len(second) < len(live)
-    assert len(_summary_rows(second)) == 1, "the deterministic fallback summary is committed as the handoff"
+    assert len(_summary_rows(second)) == 1, (
+        "the deterministic fallback summary is committed as the handoff"
+    )
     assert calls == ["primary"], "the deterministic rung makes no summary LLM call"
     assert getattr(agent, "_last_compression_timed_out", None) is not True
     # The stalled LLM route stays in its backoff even though the deterministic rung committed. This arm
@@ -138,11 +182,11 @@ def test_second_consecutive_stall_commits_the_deterministic_fallback_summary(tmp
     )
 
 
-
-
 def test_deterministic_pin_is_consumed_and_a_real_route_is_left_alone():
     from agent.context_compressor import (
-        DETERMINISTIC_SUMMARY_ROUTE, take_deterministic_summary_pin, take_pinned_summary_route,
+        DETERMINISTIC_SUMMARY_ROUTE,
+        take_deterministic_summary_pin,
+        take_pinned_summary_route,
     )
 
     with pin_summary_route(dict(CHAIN_ENTRY)):
@@ -169,10 +213,17 @@ def test_fence_level_retry_ladder_is_unchanged_without_a_prior_timeout():
 
     original = [{"role": "user", "content": "keep-me"}]
     try:
-        with patch("agent.auxiliary_client._get_auxiliary_task_config", return_value={"fallback_chain": []}):
+        with patch(
+            "agent.auxiliary_client._get_auxiliary_task_config",
+            return_value={"fallback_chain": []},
+        ):
             msgs, prompt = run_compress_context_with_progress_timeout(
-                worker=worker, messages=original, system_prompt_fallback="degraded-prompt",
-                idle_timeout_seconds=0.05, total_ceiling_seconds=2.0, on_timeout=lambda *a: None,
+                worker=worker,
+                messages=original,
+                system_prompt_fallback="degraded-prompt",
+                idle_timeout_seconds=0.05,
+                total_ceiling_seconds=2.0,
+                on_timeout=lambda *a: None,
             )
         assert msgs is original and prompt == "degraded-prompt"
         assert len(attempts) == 1
@@ -199,11 +250,18 @@ def test_deadline_observed_by_worker_still_runs_first_stall_fallback():
         attempts.append("fallback")
         return recovered, "compressed-prompt"
 
-    with patch("agent.auxiliary_client._get_auxiliary_task_config", return_value={"fallback_chain": []}):
+    with patch(
+        "agent.auxiliary_client._get_auxiliary_task_config",
+        return_value={"fallback_chain": []},
+    ):
         msgs, prompt = run_compress_context_with_progress_timeout(
-            worker=primary_worker, fallback_worker=fallback_worker, messages=original,
-            system_prompt_fallback="degraded-prompt", idle_timeout_seconds=0.05,
-            total_ceiling_seconds=2.0, request_exceeds_window=True,
+            worker=primary_worker,
+            fallback_worker=fallback_worker,
+            messages=original,
+            system_prompt_fallback="degraded-prompt",
+            idle_timeout_seconds=0.05,
+            total_ceiling_seconds=2.0,
+            request_exceeds_window=True,
             on_timeout_cause=lambda *cause: timeout_causes.append(cause),
             on_timeout=lambda *args: timeout_callbacks.append(args),
         )
@@ -263,14 +321,24 @@ def test_admitted_unchanged_commit_at_deadline_retries_without_overlap():
         retry_fences.append(fence)
         return fence
 
-    with patch.object(cc, "_await_worker_within_budget", side_effect=await_at_deadline), patch(
-        "agent.auxiliary_client._get_auxiliary_task_config", return_value={"fallback_chain": []}
+    with (
+        patch.object(cc, "_await_worker_within_budget", side_effect=await_at_deadline),
+        patch(
+            "agent.auxiliary_client._get_auxiliary_task_config",
+            return_value={"fallback_chain": []},
+        ),
     ):
         msgs, prompt = run_compress_context_with_progress_timeout(
-            worker=primary_worker, fallback_worker=fallback_worker, messages=original,
-            system_prompt_fallback="degraded-prompt", idle_timeout_seconds=0.05,
-            total_ceiling_seconds=0.05, request_exceeds_window=True, fence=primary_fence,
-            new_fence=new_fence, on_timeout_cause=lambda *cause: timeout_causes.append(cause),
+            worker=primary_worker,
+            fallback_worker=fallback_worker,
+            messages=original,
+            system_prompt_fallback="degraded-prompt",
+            idle_timeout_seconds=0.05,
+            total_ceiling_seconds=0.05,
+            request_exceeds_window=True,
+            fence=primary_fence,
+            new_fence=new_fence,
+            on_timeout_cause=lambda *cause: timeout_causes.append(cause),
             on_timeout=lambda *args: timeout_callbacks.append(args),
         )
 
@@ -282,7 +350,9 @@ def test_admitted_unchanged_commit_at_deadline_retries_without_overlap():
     assert timeout_callbacks == []
 
 
-def test_over_window_request_commits_the_deterministic_fallback_on_the_first_stall(tmp_path, fast_timeouts):
+def test_over_window_request_commits_the_deterministic_fallback_on_the_first_stall(
+    tmp_path, fast_timeouts
+):
     """A request above the model's context window cannot be sent unchanged, so waiting for a SECOND stall
     (which on the messaging gateway never comes — the first one auto-reset the session) is a dead end:
     the deterministic rung runs on the first stall and the transcript is committed (#114594)."""
@@ -291,11 +361,23 @@ def test_over_window_request_commits_the_deterministic_fallback_on_the_first_sta
     compressor.context_length = 64_000
     calls = []
     live = _transcript()
-    with patch("agent.context_compressor.call_llm", side_effect=_stalling_call_llm(compressor, calls)), \
-            patch("agent.auxiliary_client._get_auxiliary_task_config", return_value={"fallback_chain": []}):
+    with (
+        patch(
+            "agent.context_compressor.call_llm",
+            side_effect=_stalling_call_llm(compressor, calls),
+        ),
+        patch(
+            "agent.auxiliary_client._get_auxiliary_task_config",
+            return_value={"fallback_chain": []},
+        ),
+    ):
         out, _ = agent._compress_context(live, "sys", approx_tokens=70_000)
 
-    assert calls == ["primary"], "the deterministic rung makes no second summary LLM call"
+    assert calls == ["primary"], (
+        "the deterministic rung makes no second summary LLM call"
+    )
     assert out is not live and len(out) < len(live)
-    assert len(_summary_rows(out)) == 1, "the over-window request got a committed deterministic handoff"
+    assert len(_summary_rows(out)) == 1, (
+        "the over-window request got a committed deterministic handoff"
+    )
     assert getattr(agent, "_last_compression_timed_out", None) is not True

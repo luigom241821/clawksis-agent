@@ -1,4 +1,5 @@
 """`clawk sessions archive --include-open`: archive (reversible) may reach never-ended sessions (#139597)."""
+
 import pytest
 
 from clawk_state import SessionDB
@@ -24,8 +25,10 @@ def test_archive_include_open_reaches_never_ended_sessions(db):
 
     assert db.archive_sessions(source="desktop", include_open=True) == 1
     assert db.get_session("never-ended")["archived"] == 1
-    assert db.count_open_prune_matches(
-        source="desktop", archived=False, include_open=True) == 0
+    assert (
+        db.count_open_prune_matches(source="desktop", archived=False, include_open=True)
+        == 0
+    )
 
 
 def test_prune_rejects_include_open_fail_closed(db):

@@ -34,11 +34,22 @@ class _RelayStub:
         value = getattr(platform, "value", platform)
         return str(value) in self._fronted
 
-    async def send_for_platform(self, logical_platform, chat_id, content, reply_to=None, metadata=None):
-        self.sent.append((getattr(logical_platform, "value", logical_platform), chat_id, content, metadata))
+    async def send_for_platform(
+        self, logical_platform, chat_id, content, reply_to=None, metadata=None
+    ):
+        self.sent.append(
+            (
+                getattr(logical_platform, "value", logical_platform),
+                chat_id,
+                content,
+                metadata,
+            )
+        )
         return type("R", (), {"success": True, "message_id": "m-1", "error": None})()
 
-    async def send(self, chat_id, content, reply_to=None, metadata=None):  # pragma: no cover
+    async def send(
+        self, chat_id, content, reply_to=None, metadata=None
+    ):  # pragma: no cover
         raise AssertionError("relay transport must use send_for_platform, not send")
 
 
@@ -73,4 +84,3 @@ class TestCliHandoffFrontedSet:
         assert "discord" in fronted
         assert "telegram" in fronted
         assert "slack" not in fronted
-

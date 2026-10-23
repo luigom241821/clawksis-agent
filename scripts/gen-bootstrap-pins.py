@@ -34,7 +34,14 @@ from pm.artifact_mirror import mirror_url
 BEGIN_MARK = "# --- BEGIN GENERATED: bootstrap pins (scripts/gen-bootstrap-pins.py) ---"
 END_MARK = "# --- END GENERATED: bootstrap pins ---"
 
-_POSIX_TARGETS = ("linux-x64", "linux-arm64", "linux-x64-musl", "linux-arm64-musl", "darwin-x64", "darwin-arm64")
+_POSIX_TARGETS = (
+    "linux-x64",
+    "linux-arm64",
+    "linux-x64-musl",
+    "linux-arm64-musl",
+    "darwin-x64",
+    "darwin-arm64",
+)
 _WINDOWS_TARGETS = ("win32-x64", "win32-arm64")
 
 
@@ -163,7 +170,9 @@ def _splice(path: Path, fragment: str, check: bool) -> bool:
     if updated == text:
         return True
     if not check:
-        path.write_bytes((b"\xef\xbb\xbf" if had_bom else b"") + updated.encode("utf-8"))
+        path.write_bytes(
+            (b"\xef\xbb\xbf" if had_bom else b"") + updated.encode("utf-8")
+        )
     return False
 
 

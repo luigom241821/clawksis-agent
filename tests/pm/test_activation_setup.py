@@ -5,6 +5,7 @@ interpreter, then delegates every dependency operation to real, offline uv.
 The real PM stage builder seeds its locked dependencies online before activation.
 PM/activation/setup code is copied unmodified; all state is disposable.
 """
+
 from __future__ import annotations
 
 import json
@@ -35,7 +36,8 @@ def _snapshot(paths):
             if path.exists():
                 info = path.stat()
                 result[str(path)] = (
-                    stat.S_IMODE(info.st_mode), info.st_mtime_ns,
+                    stat.S_IMODE(info.st_mode),
+                    info.st_mtime_ns,
                     path.read_bytes() if path.is_file() else None,
                 )
     return result
@@ -54,34 +56,68 @@ def test_activation_real_setup_pm_lifecycle(tmp_path, served):
     scratch = tmp_path / "tmp"
     scratch.mkdir()
     env = {
-        "PATH": os.environ["PATH"], "HOME": str(home), "CLAWK_HOME": str(clawk_home),
-        "CLAWK_RUNTIME_DIR": str(runtime), "SHELL": bash, "TMPDIR": str(scratch),
-        "XDG_CONFIG_HOME": str(home / ".config"), "XDG_CACHE_HOME": str(home / ".cache"),
-        "LANG": "C.UTF-8", "PYTHONNOUSERSITE": "1", "UV_OFFLINE": "1",
-        "UV_CACHE_DIR": str(home / ".cache" / "uv"), "UV_PYTHON_DOWNLOADS": "never",
+        "PATH": os.environ["PATH"],
+        "HOME": str(home),
+        "CLAWK_HOME": str(clawk_home),
+        "CLAWK_RUNTIME_DIR": str(runtime),
+        "SHELL": bash,
+        "TMPDIR": str(scratch),
+        "XDG_CONFIG_HOME": str(home / ".config"),
+        "XDG_CACHE_HOME": str(home / ".cache"),
+        "LANG": "C.UTF-8",
+        "PYTHONNOUSERSITE": "1",
+        "UV_OFFLINE": "1",
+        "UV_CACHE_DIR": str(home / ".cache" / "uv"),
+        "UV_PYTHON_DOWNLOADS": "never",
     }
-    for name in ("activate", "setup-clawk.sh", "clawk_constants.py", "clawk_yaml.py", "utils.py",
-                 "scripts/_activation.sh"):
+    for name in (
+        "activate",
+        "setup-clawk.sh",
+        "clawk_constants.py",
+        "clawk_yaml.py",
+        "utils.py",
+        "scripts/_activation.sh",
+    ):
         (core / name).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(REPO / name, core / name)
     for name in ("pm", "clawk_cli"):
-        shutil.copytree(REPO / name, core / name, ignore=shutil.ignore_patterns("__pycache__"))
+        shutil.copytree(
+            REPO / name, core / name, ignore=shutil.ignore_patterns("__pycache__")
+        )
     # Plugin selection imports the real CLI config reader even with no plugins.
     # Supply its installed YAML dependency, not a stub parser or config module.
     import ruamel.yaml
-    shutil.copytree(Path(ruamel.yaml.__file__).parent, core / "ruamel" / "yaml", ignore=shutil.ignore_patterns("__pycache__"))
+
+    shutil.copytree(
+        Path(ruamel.yaml.__file__).parent,
+        core / "ruamel" / "yaml",
+        ignore=shutil.ignore_patterns("__pycache__"),
+    )
 
     # Never copy real user files: these are deliberately public fixture sentinels.
-    protected = [core / ".env", home / ".local" / "bin", clawk_home / "skills",
-                 home / ".bashrc", home / ".bash_profile", home / ".zshrc"]
-    for path in (home / ".local" / "bin" / "clawk", clawk_home / "skills" / "keep.md",
-                 home / ".bashrc", home / ".bash_profile", home / ".zshrc"):
+    protected = [
+        core / ".env",
+        home / ".local" / "bin",
+        clawk_home / "skills",
+        home / ".bashrc",
+        home / ".bash_profile",
+        home / ".zshrc",
+    ]
+    for path in (
+        home / ".local" / "bin" / "clawk",
+        clawk_home / "skills" / "keep.md",
+        home / ".bashrc",
+        home / ".bash_profile",
+        home / ".zshrc",
+    ):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("user-owned fixture\n", encoding="utf-8")
     (clawk_home / "skills").chmod(0o755)
     (core / ".env.example").write_text("FIXTURE_ONLY=example\n", encoding="utf-8")
     (core / "skills").mkdir()
-    (core / "skills" / "bundled.md").write_text("must not be seeded\n", encoding="utf-8")
+    (core / "skills" / "bundled.md").write_text(
+        "must not be seeded\n", encoding="utf-8"
+    )
     untouched = _snapshot(protected)
 
     wheels = tmp_path / "wheels"
@@ -93,12 +129,17 @@ def test_activation_real_setup_pm_lifecycle(tmp_path, served):
         '[project]\nname="activation-proof"\nversion="1"\nrequires-python=">=3.11"\n'
         'dependencies=["activation-dep==1.0"]\n[project.optional-dependencies]\nall=[]\n'
         '[dependency-groups]\ndev=["dev-fixture==1.0"]\ntest=["test-fixture==1.0"]\n'
-        '[tool.uv]\npackage=false\nno-index=true\ndefault-groups=[]\n'
-        f'find-links=[{json.dumps(wheels.as_posix())}]\n', encoding="utf-8",
+        "[tool.uv]\npackage=false\nno-index=true\ndefault-groups=[]\n"
+        f"find-links=[{json.dumps(wheels.as_posix())}]\n",
+        encoding="utf-8",
     )
     locked = subprocess.run(
-        [uv, "lock", "--offline", "--python", interpreter], cwd=core, env=env,
-        capture_output=True, text=True, timeout=60,
+        [uv, "lock", "--offline", "--python", interpreter],
+        cwd=core,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=60,
         check=False,
     )
     assert locked.returncode == 0, locked.stdout + locked.stderr
@@ -113,13 +154,25 @@ def test_activation_real_setup_pm_lifecycle(tmp_path, served):
         if key in os.environ:
             seed_env[key] = os.environ[key]
     seeded = subprocess.run(
-        [interpreter, "-I", "-B", "-c",
-         "import sys; from pathlib import Path; sys.path.insert(0, sys.argv[1]); "
-         "from pm.runtime_stage import stage_runtime; "
-         "stage_runtime(Path(sys.argv[2]), Path(sys.argv[3]), Path(sys.argv[4]), "
-         "project=Path(sys.argv[1]) / 'pm', offline=False)",
-         str(core), uv, interpreter, str(seed)],
-        cwd=tmp_path, env=seed_env, capture_output=True, text=True, timeout=180,
+        [
+            interpreter,
+            "-I",
+            "-B",
+            "-c",
+            "import sys; from pathlib import Path; sys.path.insert(0, sys.argv[1]); "
+            "from pm.runtime_stage import stage_runtime; "
+            "stage_runtime(Path(sys.argv[2]), Path(sys.argv[3]), Path(sys.argv[4]), "
+            "project=Path(sys.argv[1]) / 'pm', offline=False)",
+            str(core),
+            uv,
+            interpreter,
+            str(seed),
+        ],
+        cwd=tmp_path,
+        env=seed_env,
+        capture_output=True,
+        text=True,
+        timeout=180,
         check=False,
     )
     assert seeded.returncode == 0, seeded.stdout + seeded.stderr
@@ -138,7 +191,7 @@ def test_activation_real_setup_pm_lifecycle(tmp_path, served):
         f"printf '%s\\n' \"$*\" >> {shlex.quote(str(calls))}\n"
         'if [ "$1 $2" = "python install" ]; then exit 0; fi\n'
         f'if [ "$1 $2" = "python find" ]; then printf \'%s\\n\' {shlex.quote(interpreter)}; exit 0; fi\n'
-        f"exec {shlex.quote(uv)} --offline \"$@\"\n"
+        f'exec {shlex.quote(uv)} --offline "$@"\n'
     )
     _, uv_digest = make_tar(docroot, "uv.tar.gz", {"uv-fixture/uv": uv_script})
     python_script = f'#!{bash}\nexec {shlex.quote(interpreter)} "$@"\n'
@@ -151,20 +204,30 @@ def test_activation_real_setup_pm_lifecycle(tmp_path, served):
 
     def pin_python(revision):
         filename = f"python-{revision}.tar.gz"
-        _, digest = make_tar(docroot, filename, {
-            "python/bin/python3": python_script,
-            "python/revision": revision,
-        })
-        lock.set_pin("python", version, {target: {"url": f"{base_url}/{filename}", "sha256": digest}})
+        _, digest = make_tar(
+            docroot,
+            filename,
+            {
+                "python/bin/python3": python_script,
+                "python/revision": revision,
+            },
+        )
+        lock.set_pin(
+            "python",
+            version,
+            {target: {"url": f"{base_url}/{filename}", "sha256": digest}},
+        )
         lock.save()
         return digest
 
-    lock.set_pin("uv", "fixture", {target: {"url": f"{base_url}/uv.tar.gz", "sha256": uv_digest}})
+    lock.set_pin(
+        "uv", "fixture", {target: {"url": f"{base_url}/uv.tar.gz", "sha256": uv_digest}}
+    )
     first_digest = pin_python("first")
 
     def activate(*, succeeds=True):
         # No `set -e`: inspect source's status and prove the caller survives.
-        script = '''
+        script = """
 prior_path=$PATH
 prior_pythonpath=${PYTHONPATH-}
 source "$1/activate" --test-extras=all
@@ -182,10 +245,14 @@ python3 -c 'import importlib.util; assert importlib.util.find_spec("dev_fixture"
 deactivate
 test "$PATH" = "$prior_path" || exit 95
 test "${PYTHONPATH-}" = "$prior_pythonpath" || exit 96
-'''
+"""
         result = subprocess.run(
             [bash, "--noprofile", "--norc", "-c", script, "activation-test", str(core)],
-            cwd=tmp_path, env=env, capture_output=True, text=True, timeout=90,
+            cwd=tmp_path,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=90,
             check=False,
         )
         assert _snapshot(protected) == untouched, result.stdout + result.stderr
@@ -198,11 +265,16 @@ test "${PYTHONPATH-}" = "$prior_pythonpath" || exit 96
         return json.loads(records[0].read_text())["packages"]["venv"]
 
     def operations(name):
-        return [line for line in calls.read_text().splitlines() if line.split()[0] == name]
+        return [
+            line for line in calls.read_text().splitlines() if line.split()[0] == name
+        ]
 
     def app_syncs():
-        return [line for line in operations("sync")
-                if "--frozen --all-packages" in line and "--group dev" not in line]
+        return [
+            line
+            for line in operations("sync")
+            if "--frozen --all-packages" in line and "--group dev" not in line
+        ]
 
     cold = activate()
     first = selection()
@@ -230,7 +302,16 @@ test "${PYTHONPATH-}" = "$prior_pythonpath" || exit 96
     activate()
     assert selection() == first
     assert operations("sync") == prepared
-    assert len([line for line in operations("python") if line.startswith("python install ")]) == 3
+    assert (
+        len(
+            [
+                line
+                for line in operations("python")
+                if line.startswith("python install ")
+            ]
+        )
+        == 3
+    )
 
     second_digest = pin_python("second")
     activate()
@@ -252,4 +333,13 @@ test "${PYTHONPATH-}" = "$prior_pythonpath" || exit 96
     assert "CALLER_SURVIVED:" in failed.stdout
     assert selection() == second
     assert len(app_syncs()) == 3
-    assert len([line for line in operations("python") if line.startswith("python install ")]) == 5
+    assert (
+        len(
+            [
+                line
+                for line in operations("python")
+                if line.startswith("python install ")
+            ]
+        )
+        == 5
+    )

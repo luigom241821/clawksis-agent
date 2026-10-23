@@ -1,4 +1,5 @@
 """The ACP transport owns neither MCP discovery nor a surviving client socket."""
+
 import asyncio
 
 import acp
@@ -27,8 +28,10 @@ def test_entry_closes_transport_without_discovering_mcp(monkeypatch, crash):
     monkeypatch.setattr("acp_adapter.server.ClawksisACPAgent", lambda: agent)
     monkeypatch.setattr(agent, "aclose", close)
     monkeypatch.setattr(acp, "run_agent", serve)
-    monkeypatch.setattr("clawk_cli.mcp_startup.start_background_mcp_discovery",
-                        lambda **kw: calls.append(("mcp", None)))
+    monkeypatch.setattr(
+        "clawk_cli.mcp_startup.start_background_mcp_discovery",
+        lambda **kw: calls.append(("mcp", None)),
+    )
     monkeypatch.delenv("CLAWK_ACP_SKIP_CONFIGURED_MCP", raising=False)
     if crash:
         with pytest.raises(SystemExit):

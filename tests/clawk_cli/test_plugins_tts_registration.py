@@ -62,6 +62,7 @@ class TestRegisterTTSProvider:
         from clawk_cli.plugins import PluginManager
 
         from agent import tts_registry
+
         tts_registry._reset_for_tests()
 
         clawk_home = Path(os.environ["CLAWK_HOME"])
@@ -95,6 +96,7 @@ class TestRegisterTTSProvider:
         from clawk_cli.plugins import PluginManager
 
         from agent import tts_registry
+
         tts_registry._reset_for_tests()
 
         clawk_home = Path(os.environ["CLAWK_HOME"])
@@ -124,6 +126,7 @@ class TestRegisterTTSProvider:
         from clawk_cli.plugins import PluginManager
 
         from agent import tts_registry
+
         tts_registry._reset_for_tests()
 
         clawk_home = Path(os.environ["CLAWK_HOME"])

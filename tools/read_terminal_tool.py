@@ -20,7 +20,9 @@ def read_pane(callback: Optional[Callable], window, errors: tuple) -> str:
     if callback is None:
         return tool_error(errors[0])
     try:
-        kwargs = {key: max(floor, int(val)) for key, val, floor in window if val is not None}
+        kwargs = {
+            key: max(floor, int(val)) for key, val, floor in window if val is not None
+        }
     except (TypeError, ValueError):
         return tool_error(errors[1])
     try:
@@ -38,14 +40,18 @@ def read_terminal_tool(
     callback: Optional[Callable] = None,
 ) -> str:
     """Return the in-app terminal's contents (+ line metadata) as a JSON string."""
-    return read_pane(callback, (("start", start_line, 0), ("count", count, 1)), (
-        "read_terminal is only available in the Clawksis desktop app.",
-        "start_line and count must be integers.",
-        "Failed to read terminal: ",
-        "No in-app terminal answered: nothing is open, or the bridge timed out. "
-        "If the terminal pane IS open, the desktop app may be older than this "
-        "backend — update it and retry.",
-    ))
+    return read_pane(
+        callback,
+        (("start", start_line, 0), ("count", count, 1)),
+        (
+            "read_terminal is only available in the Clawksis desktop app.",
+            "start_line and count must be integers.",
+            "Failed to read terminal: ",
+            "No in-app terminal answered: nothing is open, or the bridge timed out. "
+            "If the terminal pane IS open, the desktop app may be older than this "
+            "backend — update it and retry.",
+        ),
+    )
 
 
 READ_TERMINAL_SCHEMA = {
@@ -77,7 +83,9 @@ registry.register(
     toolset="desktop_ui",
     schema=READ_TERMINAL_SCHEMA,
     handler=lambda args, **kw: read_terminal_tool(
-        start_line=args.get("start_line"), count=args.get("count"), callback=kw.get("callback")
+        start_line=args.get("start_line"),
+        count=args.get("count"),
+        callback=kw.get("callback"),
     ),
     emoji="🖥️",
 )

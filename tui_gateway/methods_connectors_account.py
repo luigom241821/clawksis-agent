@@ -14,10 +14,18 @@ method = _registry.method
 _profile_scoped = _registry.profile_scoped
 
 
-def _account_method(params_model=None, *, creates_guest, invalid="", invalid_reason=ConnectorErrorReason.invalid_params,
-                    unavailable, unavailable_message):
+def _account_method(
+    params_model=None,
+    *,
+    creates_guest,
+    invalid="",
+    invalid_reason=ConnectorErrorReason.invalid_params,
+    unavailable,
+    unavailable_message,
+):
     """``creates_guest``: whether this entry point may create the guest identity when the user has
     none. The page's reads never do; they answer from what a caller without a token can see."""
+
     def decorate(fn):
         def handler(rid, params):
             from pydantic import ValidationError
@@ -27,7 +35,11 @@ def _account_method(params_model=None, *, creates_guest, invalid="", invalid_rea
                 if gate_error := _account_gate_closed(rid):
                     return gate_error
                 try:
-                    request = params if params_model is None else params_model.model_validate(params)
+                    request = (
+                        params
+                        if params_model is None
+                        else params_model.model_validate(params)
+                    )
                 except ValidationError:
                     return _connector_rpc_error(rid, 4000, invalid_reason, invalid)
                 if creates_guest and (identity_error := _account_identity_error(rid)):
@@ -39,9 +51,14 @@ def _account_method(params_model=None, *, creates_guest, invalid="", invalid_rea
                 except Exception as exc:
                     if getattr(exc, "code", None) == "org_required":
                         return _connector_rpc_error(
-                            rid, 4090, ConnectorErrorReason.org_required, "Select an organization to manage connector rules."
+                            rid,
+                            4090,
+                            ConnectorErrorReason.org_required,
+                            "Select an organization to manage connector rules.",
                         )
-                    return _connector_rpc_error(rid, 5034, unavailable, unavailable_message)
+                    return _connector_rpc_error(
+                        rid, 5034, unavailable, unavailable_message
+                    )
 
         return handler
 
@@ -62,15 +79,25 @@ def _(rid, request):
     from tools.connectors.portal.client import PortalConnectorClient
     from tools.connectors.portal.errors import InvalidConnectorSlug
     from tools.connectors.portal.tools_cache import read_tools
-    from tui_gateway.contracts.connectors import ConnectorErrorReason, ConnectorToolsResult
+    from tui_gateway.contracts.connectors import (
+        ConnectorErrorReason,
+        ConnectorToolsResult,
+    )
 
     client = PortalConnectorClient()
     client.require_authentication()
     try:
         listing = read_tools(request.slug, client=client, refresh=request.refresh)
     except (InvalidConnectorSlug, GatewayUnavailable):
-        return _connector_rpc_error(rid, 4041, ConnectorErrorReason.connector_not_found, "Connector not found.")
-    return _ok(rid, ConnectorToolsResult.model_validate(listing, from_attributes=True).model_dump(mode="json"))
+        return _connector_rpc_error(
+            rid, 4041, ConnectorErrorReason.connector_not_found, "Connector not found."
+        )
+    return _ok(
+        rid,
+        ConnectorToolsResult.model_validate(listing, from_attributes=True).model_dump(
+            mode="json"
+        ),
+    )
 
 
 @method("connectors.catalog")
@@ -87,7 +114,12 @@ def _(rid, _params):
 
     client = PortalConnectorClient()
     catalog = client.catalog() if read_nous_access_token() else client.public_catalog()
-    return _ok(rid, ConnectorsCatalogResult.model_validate(catalog, from_attributes=True).model_dump(mode="json"))
+    return _ok(
+        rid,
+        ConnectorsCatalogResult.model_validate(
+            catalog, from_attributes=True
+        ).model_dump(mode="json"),
+    )
 
 
 @method("connectors.accounts")
@@ -102,11 +134,22 @@ def _(rid, _params):
 def _(rid, request):
     from tools.connectors.portal.client import PortalConnectorClient
     from tools.managed_tool_gateway import read_nous_access_token
-    from tui_gateway.contracts.connectors import ConnectorAccountRow, ConnectorAccountsResult
+    from tui_gateway.contracts.connectors import (
+        ConnectorAccountRow,
+        ConnectorAccountsResult,
+    )
 
-    accounts = PortalConnectorClient().list_accounts() if read_nous_access_token() else []
-    rows = [account for account in accounts if request.connector is None or account["connector"] == request.connector]
-    result = ConnectorAccountsResult(accounts=[_account_row(account) for account in rows])
+    accounts = (
+        PortalConnectorClient().list_accounts() if read_nous_access_token() else []
+    )
+    rows = [
+        account
+        for account in accounts
+        if request.connector is None or account["connector"] == request.connector
+    ]
+    result = ConnectorAccountsResult(
+        accounts=[_account_row(account) for account in rows]
+    )
     return _ok(rid, result.model_dump(mode="json"))
 
 
@@ -147,21 +190,42 @@ def _(rid, request):
     from tui_gateway.contracts.connectors import ConnectorErrorReason
 
     try:
-        account = PortalConnectorClient().rename_account(request.connection_id, request.alias)
+        account = PortalConnectorClient().rename_account(
+            request.connection_id, request.alias
+        )
     except IdempotencyConflict:
-        return _connector_rpc_error(rid, 4090, ConnectorErrorReason.alias_taken, "That name is already used.")
+        return _connector_rpc_error(
+            rid, 4090, ConnectorErrorReason.alias_taken, "That name is already used."
+        )
     except GatewayUnavailable as exc:
         if exc.code == "connection_not_found":
-            return _connector_rpc_error(rid, 4041, ConnectorErrorReason.connection_not_found, "Connector account not found.")
-        return _connector_rpc_error(rid, 5034, ConnectorErrorReason.accounts_unavailable, "Connector accounts are unavailable.")
+            return _connector_rpc_error(
+                rid,
+                4041,
+                ConnectorErrorReason.connection_not_found,
+                "Connector account not found.",
+            )
+        return _connector_rpc_error(
+            rid,
+            5034,
+            ConnectorErrorReason.accounts_unavailable,
+            "Connector accounts are unavailable.",
+        )
     except GatewayAuthError:
         raise
     except ToolGatewayError as exc:
         if exc.code == "org_required":
             raise
         if exc.status == 400:
-            return _connector_rpc_error(rid, 4000, ConnectorErrorReason.invalid_params, "That name is invalid.")
-        return _connector_rpc_error(rid, 5034, ConnectorErrorReason.accounts_unavailable, "Connector accounts are unavailable.")
+            return _connector_rpc_error(
+                rid, 4000, ConnectorErrorReason.invalid_params, "That name is invalid."
+            )
+        return _connector_rpc_error(
+            rid,
+            5034,
+            ConnectorErrorReason.accounts_unavailable,
+            "Connector accounts are unavailable.",
+        )
     return _ok(rid, _account_row(account).model_dump(mode="json"))
 
 
@@ -175,26 +239,55 @@ def _(rid, request):
     unavailable_message="Connector accounts are unavailable.",
 )
 def _(rid, request):
-    from tools.connectors.gateway.errors import GatewayAuthError, GatewayUnavailable, ToolGatewayError
+    from tools.connectors.gateway.errors import (
+        GatewayAuthError,
+        GatewayUnavailable,
+        ToolGatewayError,
+    )
     from tools.connectors.portal.client import PortalConnectorClient
-    from tui_gateway.contracts.connectors import ConnectorAccountsRemoveResult, ConnectorErrorReason
+    from tui_gateway.contracts.connectors import (
+        ConnectorAccountsRemoveResult,
+        ConnectorErrorReason,
+    )
 
     try:
         removed = PortalConnectorClient().delete_account(request.connection_id)
     except GatewayUnavailable as exc:
         if exc.code == "connection_not_found":
-            return _connector_rpc_error(rid, 4041, ConnectorErrorReason.connection_not_found, "Connector account not found.")
-        return _connector_rpc_error(rid, 5034, ConnectorErrorReason.accounts_unavailable, "Connector accounts are unavailable.")
+            return _connector_rpc_error(
+                rid,
+                4041,
+                ConnectorErrorReason.connection_not_found,
+                "Connector account not found.",
+            )
+        return _connector_rpc_error(
+            rid,
+            5034,
+            ConnectorErrorReason.accounts_unavailable,
+            "Connector accounts are unavailable.",
+        )
     except GatewayAuthError:
         raise
     except ToolGatewayError as exc:
         if exc.code == "org_required":
             raise
         if exc.code == "invalid_connection_id":
-            return _connector_rpc_error(rid, 4000, ConnectorErrorReason.invalid_params, "Connection id is invalid.")
-        return _connector_rpc_error(rid, 5034, ConnectorErrorReason.accounts_unavailable, "Connector accounts are unavailable.")
+            return _connector_rpc_error(
+                rid,
+                4000,
+                ConnectorErrorReason.invalid_params,
+                "Connection id is invalid.",
+            )
+        return _connector_rpc_error(
+            rid,
+            5034,
+            ConnectorErrorReason.accounts_unavailable,
+            "Connector accounts are unavailable.",
+        )
     result = ConnectorAccountsRemoveResult(
-        connection_id=removed["connectionId"], connector=removed["connector"], status=removed["status"]
+        connection_id=removed["connectionId"],
+        connector=removed["connector"],
+        status=removed["status"],
     )
     return _ok(rid, result.model_dump(mode="json"))
 
@@ -209,7 +302,11 @@ def _(rid, request):
 def _(rid, _params):
     from tools.connectors.gateway.errors import GatewayAuthError, ToolGatewayError
     from tools.connectors.portal.client import PortalConnectorClient
-    from tui_gateway.contracts.connectors import ConnectorErrorReason, ConnectorPolicyGetResult, ConnectorPolicyLayer
+    from tui_gateway.contracts.connectors import (
+        ConnectorErrorReason,
+        ConnectorPolicyGetResult,
+        ConnectorPolicyLayer,
+    )
 
     try:
         client = PortalConnectorClient()
@@ -221,7 +318,11 @@ def _(rid, _params):
         return _connector_rpc_error(rid, *_policy_error(exc, ConnectorErrorReason))
     result = ConnectorPolicyGetResult(
         layers=[
-            ConnectorPolicyLayer(kind=layer.kind, revision=layer.revision, body=_contract_policy_body(layer.body))
+            ConnectorPolicyLayer(
+                kind=layer.kind,
+                revision=layer.revision,
+                body=_contract_policy_body(layer.body),
+            )
             for layer in policy.layers
         ],
         effective=_contract_policy_effective(policy.effective),
@@ -241,27 +342,50 @@ def _(rid, _params):
 def _(rid, request):
     from tools.connectors.gateway.errors import GatewayAuthError, ToolGatewayError
     from tools.connectors.portal.client import PortalConnectorClient
-    from tools.connectors.portal.policy import InvalidMemberPolicy, compose_connector_write, compose_tools_write
-    from tui_gateway.contracts.connectors import ConnectorErrorReason, ConnectorPolicySetResult, ToolsChange
+    from tools.connectors.portal.policy import (
+        InvalidMemberPolicy,
+        compose_connector_write,
+        compose_tools_write,
+    )
+    from tui_gateway.contracts.connectors import (
+        ConnectorErrorReason,
+        ConnectorPolicySetResult,
+        ToolsChange,
+    )
 
     try:
         client = PortalConnectorClient()
         client.require_authentication()
         policy = client.policy()
-        member = next((layer.body for layer in policy.layers if layer.kind == "member"), None)
-        compose = compose_tools_write if isinstance(request.change, ToolsChange) else compose_connector_write
+        member = next(
+            (layer.body for layer in policy.layers if layer.kind == "member"), None
+        )
+        compose = (
+            compose_tools_write
+            if isinstance(request.change, ToolsChange)
+            else compose_connector_write
+        )
         body = compose(member, request.change)
         body["expectedRevision"] = request.expected_revision
         result = client.set_policy(body)
     except GatewayAuthError as exc:
         return _connector_rpc_error(rid, *_policy_auth_error(exc, ConnectorErrorReason))
     except InvalidMemberPolicy:
-        return _connector_rpc_error(rid, 4000, ConnectorErrorReason.invalid_policy, "Connector policy change is invalid.")
+        return _connector_rpc_error(
+            rid,
+            4000,
+            ConnectorErrorReason.invalid_policy,
+            "Connector policy change is invalid.",
+        )
     except ToolGatewayError as exc:
         return _connector_rpc_error(rid, *_policy_error(exc, ConnectorErrorReason))
-    return _ok(rid, ConnectorPolicySetResult(
-        revision=result.revision, effective=_contract_policy_effective(result.effective)
-    ).model_dump(mode="json"))
+    return _ok(
+        rid,
+        ConnectorPolicySetResult(
+            revision=result.revision,
+            effective=_contract_policy_effective(result.effective),
+        ).model_dump(mode="json"),
+    )
 
 
 def _policy_rule_fields(body):
@@ -269,8 +393,15 @@ def _policy_rule_fields(body):
 
     if body.mode in ("unrestricted", "deny-all"):
         return {}
-    tags = None if body.tags is None else ConnectorPolicyTags(enable=body.tags.enable, disable=body.tags.disable)
-    rules = {"tools": {connector: rule.disable for connector, rule in body.tools.items()}, "tags": tags}
+    tags = (
+        None
+        if body.tags is None
+        else ConnectorPolicyTags(enable=body.tags.enable, disable=body.tags.disable)
+    )
+    rules = {
+        "tools": {connector: rule.disable for connector, rule in body.tools.items()},
+        "tags": tags,
+    }
     if body.mode == "allow":
         return {"connectors": body.connectors, **rules}
     return {"disabled_connectors": body.disabled_connectors, **rules}
@@ -298,16 +429,27 @@ def _contract_policy_effective(effective):
         "deny": contract.ConnectorPolicyEffectiveDeny,
     }
     return models[effective.mode](
-        mode=effective.mode, version=effective.version, revision=effective.revision,
-        issued_at_ms=effective.issued_at_ms, **_policy_rule_fields(effective),
+        mode=effective.mode,
+        version=effective.version,
+        revision=effective.revision,
+        issued_at_ms=effective.issued_at_ms,
+        **_policy_rule_fields(effective),
     )
 
 
 def _policy_auth_error(exc, reasons):
     if exc.code in {"no_access", "ORG_ACCESS_DENIED"}:
-        return 4030, reasons.org_access_denied, "This account cannot manage connectors for this organization."
+        return (
+            4030,
+            reasons.org_access_denied,
+            "This account cannot manage connectors for this organization.",
+        )
     if exc.code == "forbidden":
-        return 4030, reasons.forbidden_scope, "Connector policy cannot be changed for this member."
+        return (
+            4030,
+            reasons.forbidden_scope,
+            "Connector policy cannot be changed for this member.",
+        )
     if exc.status == 401 or exc.code in {"invalid_token", "INVALID_TOKEN", "NO_TOKEN"}:
         return 4032, reasons.needs_nous_auth, "Sign in to use connectors."
     return 5034, reasons.policy_unavailable, "Connector policy is unavailable."
@@ -315,11 +457,31 @@ def _policy_auth_error(exc, reasons):
 
 def _policy_error(exc, reasons):
     by_code = {
-        "policy_changed": (4090, reasons.policy_conflict, "Connector policy changed. Refresh and try again."),
-        "org_required": (4090, reasons.org_required, "Select an organization to manage connector rules."),
-        "forbidden": (4030, reasons.forbidden_scope, "Connector policy cannot be changed for this member."),
-        "no_access": (4030, reasons.org_access_denied, "This account cannot manage connectors for this organization."),
-        "invalid_connector_policy": (4000, reasons.invalid_policy, "Connector policy change is invalid."),
+        "policy_changed": (
+            4090,
+            reasons.policy_conflict,
+            "Connector policy changed. Refresh and try again.",
+        ),
+        "org_required": (
+            4090,
+            reasons.org_required,
+            "Select an organization to manage connector rules.",
+        ),
+        "forbidden": (
+            4030,
+            reasons.forbidden_scope,
+            "Connector policy cannot be changed for this member.",
+        ),
+        "no_access": (
+            4030,
+            reasons.org_access_denied,
+            "This account cannot manage connectors for this organization.",
+        ),
+        "invalid_connector_policy": (
+            4000,
+            reasons.invalid_policy,
+            "Connector policy change is invalid.",
+        ),
     }
     if exc.code in by_code:
         return by_code[exc.code]

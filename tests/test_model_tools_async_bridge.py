@@ -23,6 +23,7 @@ import pytest
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 async def _get_current_loop():
     """Return the running event loop from inside a coroutine."""
     return asyncio.get_event_loop()
@@ -43,6 +44,7 @@ async def _create_and_return_transport():
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestRunAsyncLoopLifecycle:
     def test_cached_transport_survives_between_calls(self):
@@ -214,6 +216,7 @@ class TestRunAsyncWithRunningLoop:
                 raise
 
         import time as _time
+
         t0 = _time.time()
         with pytest.raises(_cf.TimeoutError):
             _run_async(_slow_cancellable())
@@ -240,6 +243,7 @@ class TestRunAsyncWithRunningLoop:
 # Integration: full vision_analyze dispatch chain
 # ---------------------------------------------------------------------------
 
+
 def _mock_vision_response():
     """Build a fake LLM response matching async_call_llm's return shape."""
     message = SimpleNamespace(content="A cat sitting on a chair.")
@@ -257,10 +261,16 @@ class TestVisionDispatchLoopSafety:
 
         image = io.BytesIO()
         Image.new("RGB", (8, 8), "blue").save(image, format="PNG")
-        args = {"image_url": "data:image/png;base64," + base64.b64encode(image.getvalue()).decode(),
-                "question": "Describe"}
-        with patch("tools.vision_tools.async_call_llm", new_callable=AsyncMock,
-                   return_value=_mock_vision_response()):
+        args = {
+            "image_url": "data:image/png;base64,"
+            + base64.b64encode(image.getvalue()).decode(),
+            "question": "Describe",
+        }
+        with patch(
+            "tools.vision_tools.async_call_llm",
+            new_callable=AsyncMock,
+            return_value=_mock_vision_response(),
+        ):
             first = json.loads(registry.dispatch("vision_analyze", args))
             loop = _get_tool_loop()
             second = json.loads(registry.dispatch("vision_analyze", args))

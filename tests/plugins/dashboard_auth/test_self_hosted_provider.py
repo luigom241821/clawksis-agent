@@ -65,9 +65,7 @@ def rsa_keypair() -> dict[str, Any]:
 
     def _b64url_uint(n: int) -> str:
         length = (n.bit_length() + 7) // 8
-        return (
-            base64.urlsafe_b64encode(n.to_bytes(length, "big")).rstrip(b"=").decode()
-        )
+        return base64.urlsafe_b64encode(n.to_bytes(length, "big")).rstrip(b"=").decode()
 
     jwk = {
         "kty": "RSA",
@@ -186,12 +184,9 @@ class TestConstruction:
     def test_protocol_compliance(self):
         assert_protocol_compliance(oidc_plugin.SelfHostedOIDCProvider)
 
-
-
     def test_requires_issuer(self):
         with pytest.raises(ValueError, match="issuer"):
             oidc_plugin.SelfHostedOIDCProvider(issuer="", client_id=_CLIENT_ID)
-
 
     def test_rejects_non_https_issuer(self):
         with pytest.raises(ProviderError, match="https"):
@@ -207,9 +202,7 @@ class TestConstruction:
 
 class TestDiscovery:
     def _provider(self):
-        return oidc_plugin.SelfHostedOIDCProvider(
-            issuer=_ISSUER, client_id=_CLIENT_ID
-        )
+        return oidc_plugin.SelfHostedOIDCProvider(issuer=_ISSUER, client_id=_CLIENT_ID)
 
     def _mock_get(self, status_code, body, *, ctype="application/json", url=None):
         resp = MagicMock(spec=httpx.Response)
@@ -219,7 +212,6 @@ class TestDiscovery:
         resp.text = json.dumps(body) if isinstance(body, dict) else str(body)
         resp.headers = {"content-type": ctype}
         return resp
-
 
     def test_fetches_and_caches(self):
         p = self._provider()
@@ -250,9 +242,7 @@ class TestDiscovery:
         resp = self._mock_get(
             200, forged, url="https://attacker.example/openid-configuration"
         )
-        with patch(
-            "plugins.dashboard_auth.self_hosted.httpx.get", return_value=resp
-        ):
+        with patch("plugins.dashboard_auth.self_hosted.httpx.get", return_value=resp):
             with pytest.raises(ProviderError, match="origin"):
                 p._fetch_discovery()
 
@@ -261,9 +251,7 @@ class TestDiscovery:
         resp = self._mock_get(
             200, dict(_DISCOVERY_DOC), url="http://auth.example.com/discovery"
         )
-        with patch(
-            "plugins.dashboard_auth.self_hosted.httpx.get", return_value=resp
-        ):
+        with patch("plugins.dashboard_auth.self_hosted.httpx.get", return_value=resp):
             with pytest.raises(ProviderError, match="origin"):
                 p._fetch_discovery()
 
@@ -271,12 +259,11 @@ class TestDiscovery:
         """Canonicalisation redirects on the issuer's own origin still pass."""
         p = self._provider()
         resp = self._mock_get(
-            200, dict(_DISCOVERY_DOC),
+            200,
+            dict(_DISCOVERY_DOC),
             url="https://auth.example.com/.well-known/openid-configuration/application/o/clawk",
         )
-        with patch(
-            "plugins.dashboard_auth.self_hosted.httpx.get", return_value=resp
-        ):
+        with patch("plugins.dashboard_auth.self_hosted.httpx.get", return_value=resp):
             disco = p._fetch_discovery()
         assert disco["token_endpoint"] == f"{_ISSUER}/token"
 
@@ -286,9 +273,7 @@ class TestDiscovery:
         resp = self._mock_get(
             200, dict(_DISCOVERY_DOC), url="https://auth.example.com:443/x"
         )
-        with patch(
-            "plugins.dashboard_auth.self_hosted.httpx.get", return_value=resp
-        ):
+        with patch("plugins.dashboard_auth.self_hosted.httpx.get", return_value=resp):
             assert p._fetch_discovery()["issuer"] == _ISSUER
 
 
@@ -349,15 +334,20 @@ class TestDiscoveryRealRedirect:
         httpd, port = self._serve(self._handler({}))
         try:
             issuer = f"http://127.0.0.1:{port}"
-            doc = json.dumps({
-                "issuer": issuer,
-                "authorization_endpoint": f"{issuer}/authorize",
-                "token_endpoint": f"{issuer}/token",
-                "jwks_uri": f"{issuer}/jwks",
-            }).encode()
+            doc = json.dumps(
+                {
+                    "issuer": issuer,
+                    "authorization_endpoint": f"{issuer}/authorize",
+                    "token_endpoint": f"{issuer}/token",
+                    "jwks_uri": f"{issuer}/jwks",
+                }
+            ).encode()
             httpd.RequestHandlerClass.routes = {
                 "/.well-known/openid-configuration": (
-                    302, {"Location": f"{issuer}/canonical"}, b""),
+                    302,
+                    {"Location": f"{issuer}/canonical"},
+                    b"",
+                ),
                 "/canonical": (200, {"Content-Type": "application/json"}, doc),
             }
             p = oidc_plugin.SelfHostedOIDCProvider(issuer=issuer, client_id=_CLIENT_ID)
@@ -373,18 +363,23 @@ class TestDiscoveryRealRedirect:
         redirect_httpd, redirect_port = self._serve(self._handler({}))
         try:
             issuer = f"http://127.0.0.1:{redirect_port}"
-            forged = json.dumps({
-                "issuer": issuer,  # self-asserted, attacker-controlled
-                "authorization_endpoint": "https://attacker.example/authorize",
-                "token_endpoint": "https://attacker.example/token",
-                "jwks_uri": "https://attacker.example/jwks",
-            }).encode()
+            forged = json.dumps(
+                {
+                    "issuer": issuer,  # self-asserted, attacker-controlled
+                    "authorization_endpoint": "https://attacker.example/authorize",
+                    "token_endpoint": "https://attacker.example/token",
+                    "jwks_uri": "https://attacker.example/jwks",
+                }
+            ).encode()
             forge_httpd.RequestHandlerClass.routes = {
                 "/doc": (200, {"Content-Type": "application/json"}, forged),
             }
             redirect_httpd.RequestHandlerClass.routes = {
                 "/.well-known/openid-configuration": (
-                    302, {"Location": f"http://127.0.0.1:{forge_port}/doc"}, b""),
+                    302,
+                    {"Location": f"http://127.0.0.1:{forge_port}/doc"},
+                    b"",
+                ),
             }
             p = oidc_plugin.SelfHostedOIDCProvider(issuer=issuer, client_id=_CLIENT_ID)
             with pytest.raises(ProviderError, match="origin"):
@@ -402,18 +397,23 @@ class TestDiscoveryRealRedirect:
         redirect_httpd, redirect_port = self._serve(self._handler({}))
         try:
             issuer = f"http://127.0.0.1:{redirect_port}"
-            forged = json.dumps({
-                "issuer": issuer,
-                "authorization_endpoint": "https://attacker.example/authorize",
-                "token_endpoint": "https://attacker.example/token",
-                "jwks_uri": "https://attacker.example/jwks",
-            }).encode()
+            forged = json.dumps(
+                {
+                    "issuer": issuer,
+                    "authorization_endpoint": "https://attacker.example/authorize",
+                    "token_endpoint": "https://attacker.example/token",
+                    "jwks_uri": "https://attacker.example/jwks",
+                }
+            ).encode()
             forge_httpd.RequestHandlerClass.routes = {
                 "/doc": (200, {"Content-Type": "application/json"}, forged),
             }
             redirect_httpd.RequestHandlerClass.routes = {
                 "/.well-known/openid-configuration": (
-                    302, {"Location": f"http://127.0.0.1:{forge_port}/doc"}, b""),
+                    302,
+                    {"Location": f"http://127.0.0.1:{forge_port}/doc"},
+                    b"",
+                ),
             }
             p = oidc_plugin.SelfHostedOIDCProvider(issuer=issuer, client_id=_CLIENT_ID)
             with pytest.raises(ProviderError, match="origin"):
@@ -433,8 +433,6 @@ class TestStartLogin:
     def provider(self, rsa_keypair):
         return _make_provider(rsa_keypair)
 
-
-
     def test_authorize_url_has_required_params(self, provider):
         result = provider.start_login(
             redirect_uri="https://clawk.example/auth/callback"
@@ -448,7 +446,6 @@ class TestStartLogin:
         assert params["code_challenge_method"] == "S256"
         assert "state" in params
         assert "code_challenge" in params
-
 
     def test_state_in_cookie_matches_url(self, provider):
         result = provider.start_login(
@@ -502,9 +499,7 @@ class TestCompleteLogin:
 
     def test_tolerates_missing_refresh_token(self, provider, rsa_keypair):
         id_token = _mint_id_token(rsa_keypair)
-        mock_resp = _mock_post(
-            200, {"id_token": id_token, "token_type": "Bearer"}
-        )
+        mock_resp = _mock_post(200, {"id_token": id_token, "token_type": "Bearer"})
         with patch(
             "plugins.dashboard_auth.self_hosted.httpx.post", return_value=mock_resp
         ):
@@ -517,9 +512,7 @@ class TestCompleteLogin:
         assert session.refresh_token == ""
 
     def test_missing_id_token_raises(self, provider):
-        mock_resp = _mock_post(
-            200, {"access_token": "opaque", "token_type": "Bearer"}
-        )
+        mock_resp = _mock_post(200, {"access_token": "opaque", "token_type": "Bearer"})
         with patch(
             "plugins.dashboard_auth.self_hosted.httpx.post", return_value=mock_resp
         ):
@@ -611,9 +604,7 @@ class TestConfidentialClient:
         # PKCE still sent alongside the secret.
         assert kwargs["data"]["code_verifier"] == "the-verifier"
 
-
     # -- post --------------------------------------------------------------
-
 
     # -- url-encoding of reserved chars ------------------------------------
 
@@ -631,7 +622,6 @@ class TestConfidentialClient:
         assert pw == tricky
 
     # -- blank secret is treated as public ---------------------------------
-
 
     # -- refresh grant also authenticates ----------------------------------
 
@@ -651,9 +641,7 @@ class TestConfidentialClient:
         assert kwargs["data"]["grant_type"] == "refresh_token"
         assert kwargs["data"]["client_secret"] == "s3cr3t"
 
-
     # -- revocation also authenticates -------------------------------------
-
 
     # -- the secret never appears in logs ----------------------------------
 
@@ -679,7 +667,6 @@ class TestVerifySession:
     def provider(self, rsa_keypair):
         return _make_provider(rsa_keypair)
 
-
     def test_expired_returns_none(self, provider, rsa_keypair):
         # Well past the 60s default leeway — a just-expired token is accepted
         # within the clock-skew window (RFC 7519 §4.1.4), a long-dead one is not.
@@ -691,7 +678,6 @@ class TestVerifySession:
         with pytest.raises(ProviderError, match="verification failed"):
             provider.verify_session(access_token=token)
 
-
     def test_failure_message_surfaces_claims(self, provider, rsa_keypair):
         token = _mint_id_token(rsa_keypair, iss="https://evil.example")
         with pytest.raises(ProviderError) as excinfo:
@@ -699,7 +685,6 @@ class TestVerifySession:
         msg = str(excinfo.value)
         assert "'https://evil.example'" in msg
         assert f"'{_ISSUER}'" in msg
-
 
     def test_jwks_unreachable_raises(self, provider, rsa_keypair):
         token = _mint_id_token(rsa_keypair)
@@ -712,12 +697,9 @@ class TestVerifySession:
             provider.verify_session(access_token=token)
 
 
-
 # ---------------------------------------------------------------------------
 # refresh_session + revoke_session
 # ---------------------------------------------------------------------------
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -754,7 +736,6 @@ class TestPluginRegister:
         assert "CLAWK_DASHBOARD_OIDC_ISSUER" in oidc_plugin.LAST_SKIP_REASON
         assert "self_hosted" in oidc_plugin.LAST_SKIP_REASON
 
-
     def test_registers_from_env(self, patch_config, monkeypatch):
         patch_config(None)
         monkeypatch.setenv("CLAWK_DASHBOARD_OIDC_ISSUER", _ISSUER)
@@ -768,7 +749,6 @@ class TestPluginRegister:
         assert registered._client_id == _CLIENT_ID
         assert registered._scopes == "openid profile email"
         assert oidc_plugin.LAST_SKIP_REASON == ""
-
 
     def test_env_overrides_config(self, patch_config, monkeypatch):
         patch_config(
@@ -787,7 +767,6 @@ class TestPluginRegister:
         assert registered._issuer == _ISSUER
         assert registered._client_id == _CLIENT_ID
 
-
     def test_config_load_failure_falls_through(self, monkeypatch):
         def _broken():
             raise OSError("unreadable")
@@ -797,9 +776,7 @@ class TestPluginRegister:
         oidc_plugin.register(ctx)  # must not raise
         ctx.register_dashboard_auth_provider.assert_not_called()
 
-
     # -- client_secret wiring ----------------------------------------------
-
 
     def test_secret_from_env(self, patch_config, monkeypatch):
         patch_config(None)
@@ -810,7 +787,6 @@ class TestPluginRegister:
         oidc_plugin.register(ctx)
         registered = ctx.register_dashboard_auth_provider.call_args.args[0]
         assert registered._client_secret == "env-secret"
-
 
     def test_env_secret_overrides_config(self, patch_config, monkeypatch):
         patch_config(
@@ -845,7 +821,6 @@ class TestPluginRegister:
         assert registered._client_secret == "cfg-secret"
 
 
-
 class TestForgedSignature:
     """A bearer whose signature does not verify is an invalid token, never a provider outage.
 
@@ -858,15 +833,30 @@ class TestForgedSignature:
         provider = _make_provider(rsa_keypair)
         token = _mint_id_token(rsa_keypair)
         head, body, sig = token.split(".")
-        forged = ".".join((head, body, sig[:-4] + ("AAAA" if not sig.endswith("AAAA") else "BBBB")))
+        forged = ".".join(
+            (head, body, sig[:-4] + ("AAAA" if not sig.endswith("AAAA") else "BBBB"))
+        )
         assert provider.verify_session(access_token=forged) is None
 
     def test_wrong_key_signature_is_invalid_token_not_unreachable(self, rsa_keypair):
         provider = _make_provider(rsa_keypair)
         other = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        pem = other.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
-                                  serialization.NoEncryption())
+        pem = other.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
         now = int(time.time())
-        token = jwt.encode({"iss": _ISSUER, "aud": _CLIENT_ID, "sub": "usr_abc", "iat": now, "exp": now + 900},
-                           pem, algorithm="RS256", headers={"kid": rsa_keypair["kid"]})
+        token = jwt.encode(
+            {
+                "iss": _ISSUER,
+                "aud": _CLIENT_ID,
+                "sub": "usr_abc",
+                "iat": now,
+                "exp": now + 900,
+            },
+            pem,
+            algorithm="RS256",
+            headers={"kid": rsa_keypair["kid"]},
+        )
         assert provider.verify_session(access_token=token) is None

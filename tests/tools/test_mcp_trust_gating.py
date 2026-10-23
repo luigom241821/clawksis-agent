@@ -46,11 +46,13 @@ def _fake_run_on_mcp_loop(coro_or_factory, timeout=30):
     coro = coro_or_factory() if callable(coro_or_factory) else coro_or_factory
     loop = asyncio.new_event_loop()
     try:
+
         async def _install_lock_and_run():
             for srv in list(mcp_tool._servers.values()):
                 if getattr(srv, "_rpc_lock", None) is None:
                     srv._rpc_lock = asyncio.Lock()
             return await coro
+
         return loop.run_until_complete(_install_lock_and_run())
     finally:
         loop.close()
@@ -64,18 +66,23 @@ def fake_session():
         return_value=_FakeCallToolResult(content=[_FakeContentBlock("ok")])
     )
     server = SimpleNamespace(session=session, _rpc_lock=None)
-    with patch.dict(mcp_tool._servers, {"srv": server}), \
-         patch("tools.mcp_tool_loop._run_on_mcp_loop",
-               side_effect=_fake_run_on_mcp_loop), \
-         patch.dict(mcp_tool._server_error_counts, {}, clear=True):
+    with (
+        patch.dict(mcp_tool._servers, {"srv": server}),
+        patch(
+            "tools.mcp_tool_loop._run_on_mcp_loop", side_effect=_fake_run_on_mcp_loop
+        ),
+        patch.dict(mcp_tool._server_error_counts, {}, clear=True),
+    ):
         yield session
 
 
 @pytest.fixture(autouse=True)
 def _clean_trust_state():
     """Isolate the module-level trust metadata between tests."""
-    with patch.dict(mcp_tool._server_trust_levels, {}, clear=True), \
-         patch.dict(mcp_tool._tool_read_only_hints, {}, clear=True):
+    with (
+        patch.dict(mcp_tool._server_trust_levels, {}, clear=True),
+        patch.dict(mcp_tool._tool_read_only_hints, {}, clear=True),
+    ):
         yield
 
 
@@ -90,9 +97,7 @@ def _set_read_only(server: str, tool: str, value: bool):
 class TestTrustGateAtCallTime:
     """The handler preamble consults the approval path when required."""
 
-    def test_write_capable_on_untrusted_server_requires_approval(
-        self, fake_session
-    ):
+    def test_write_capable_on_untrusted_server_requires_approval(self, fake_session):
         """Approval consulted; 'accept' lets the RPC through."""
         _set_trust("srv", "untrusted")
         # No readOnlyHint recorded for delete_repo → write-capable.
@@ -118,29 +123,21 @@ class TestTrustGateAtCallTime:
         fake_session.call_tool.assert_not_awaited()
         assert "error" in json.loads(raw)
 
-    def test_read_only_tool_on_untrusted_server_skips_approval(
-        self, fake_session
-    ):
+    def test_read_only_tool_on_untrusted_server_skips_approval(self, fake_session):
         """readOnlyHint=True tools pass without consulting approval."""
         _set_trust("srv", "untrusted")
         _set_read_only("srv", "list_repos", True)
         handler = _mcp_handlers._make_tool_handler("srv", "list_repos", 30.0)
-        with patch(
-            "tools.approval_prompt.request_elicitation_consent"
-        ) as consent:
+        with patch("tools.approval_prompt.request_elicitation_consent") as consent:
             raw = handler({})
         consent.assert_not_called()
         assert json.loads(raw) == {"result": "ok"}
 
-    def test_trusted_server_skips_approval_for_write_tools(
-        self, fake_session
-    ):
+    def test_trusted_server_skips_approval_for_write_tools(self, fake_session):
         """trust: full (and the default) never consults approval."""
         _set_trust("srv", "full")
         handler = _mcp_handlers._make_tool_handler("srv", "delete_repo", 30.0)
-        with patch(
-            "tools.approval_prompt.request_elicitation_consent"
-        ) as consent:
+        with patch("tools.approval_prompt.request_elicitation_consent") as consent:
             raw = handler({"repo": "x"})
         consent.assert_not_called()
         assert json.loads(raw) == {"result": "ok"}
@@ -148,9 +145,7 @@ class TestTrustGateAtCallTime:
     def test_unconfigured_server_defaults_to_full_trust(self, fake_session):
         """Backward compat: servers with no trust key behave as before."""
         handler = _mcp_handlers._make_tool_handler("srv", "delete_repo", 30.0)
-        with patch(
-            "tools.approval_prompt.request_elicitation_consent"
-        ) as consent:
+        with patch("tools.approval_prompt.request_elicitation_consent") as consent:
             raw = handler({"repo": "x"})
         consent.assert_not_called()
         assert json.loads(raw) == {"result": "ok"}
@@ -197,13 +192,20 @@ class TestTrustGateApprovalRouting:
         seen = []
         # If the API callback is not selected, fail fast instead of waiting for
         # the CLI input timeout in this non-interactive test process.
-        monkeypatch.setattr(approval_prompt, "prompt_dangerous_approval", lambda *_args, **_kwargs: "deny")
+        monkeypatch.setattr(
+            approval_prompt,
+            "prompt_dangerous_approval",
+            lambda *_args, **_kwargs: "deny",
+        )
 
         def notify(approval_data):
             seen.append(dict(approval_data))
-            assert approval.resolve_gateway_approval(
-                session_key, "once", request_id=approval_data["request_id"]
-            ) == 1
+            assert (
+                approval.resolve_gateway_approval(
+                    session_key, "once", request_id=approval_data["request_id"]
+                )
+                == 1
+            )
 
         session_tokens = set_session_vars(
             platform="api_server", session_key=session_key, async_delivery=False
@@ -211,10 +213,14 @@ class TestTrustGateApprovalRouting:
         key_token = set_current_session_key(session_key)
         approval.register_gateway_notify(session_key, notify)
         try:
-            assert approval_prompt.request_elicitation_consent(
-                "MCP tool 'write' on UNTRUSTED server 'srv' wants to run.",
-                "Approve once or deny.", surface="mcp-trust/srv",
-            ) == "accept"
+            assert (
+                approval_prompt.request_elicitation_consent(
+                    "MCP tool 'write' on UNTRUSTED server 'srv' wants to run.",
+                    "Approve once or deny.",
+                    surface="mcp-trust/srv",
+                )
+                == "accept"
+            )
         finally:
             approval.unregister_gateway_notify(session_key)
             reset_current_session_key(key_token)
@@ -224,12 +230,19 @@ class TestTrustGateApprovalRouting:
         assert seen[0]["pattern_key"] == "mcp_elicitation"
         assert seen[0]["request_id"]
 
-    @pytest.mark.parametrize("platform,cron,single_query", [
-        ("webhook", "", False),
-        ("telegram", "1", False),
-        ("api_server", "", True),
-        ("local", "", True),  # a `chat -q` turn admitted to the gateway: finite, nobody answers
-    ])
+    @pytest.mark.parametrize(
+        "platform,cron,single_query",
+        [
+            ("webhook", "", False),
+            ("telegram", "1", False),
+            ("api_server", "", True),
+            (
+                "local",
+                "",
+                True,
+            ),  # a `chat -q` turn admitted to the gateway: finite, nobody answers
+        ],
+    )
     def test_unattended_cron_and_single_query_contexts_do_not_use_callback(
         self, monkeypatch, platform, cron, single_query
     ):
@@ -247,18 +260,33 @@ class TestTrustGateApprovalRouting:
             platform=platform, session_key=session_key, cron_session=cron
         )
         key_token = set_current_session_key(session_key)
-        approval.register_gateway_notify(session_key, lambda data: notified.append(data))
-        monkeypatch.setattr(approval_prompt, "prompt_dangerous_approval", lambda *_args, **_kwargs: "deny")
+        approval.register_gateway_notify(
+            session_key, lambda data: notified.append(data)
+        )
+        monkeypatch.setattr(
+            approval_prompt,
+            "prompt_dangerous_approval",
+            lambda *_args, **_kwargs: "deny",
+        )
         gateway_waits = []
         monkeypatch.setattr(
             approval_prompt._gw,
             "_await_gateway_decision",
-            lambda *_args, **_kwargs: gateway_waits.append(_args) or {"resolved": True, "choice": "once"},
+            lambda *_args, **_kwargs: (
+                gateway_waits.append(_args) or {"resolved": True, "choice": "once"}
+            ),
         )
         if single_query:
-            monkeypatch.setattr(approval_prompt._ctx, "_is_single_query_approval_context", lambda: True)
+            monkeypatch.setattr(
+                approval_prompt._ctx, "_is_single_query_approval_context", lambda: True
+            )
         try:
-            assert approval_prompt.request_elicitation_consent("write", "Approve once or deny.") == "decline"
+            assert (
+                approval_prompt.request_elicitation_consent(
+                    "write", "Approve once or deny."
+                )
+                == "decline"
+            )
         finally:
             approval.unregister_gateway_notify(session_key)
             reset_current_session_key(key_token)
@@ -267,9 +295,10 @@ class TestTrustGateApprovalRouting:
         assert notified == []
         assert gateway_waits == []
 
-
     @pytest.mark.parametrize("context", ["single_query", "cron", "webhook"])
-    def test_cli_panel_callback_is_never_asked_without_a_user(self, monkeypatch, context):
+    def test_cli_panel_callback_is_never_asked_without_a_user(
+        self, monkeypatch, context
+    ):
         """`clawk chat -q`, cron and unattended platforms can keep the CLI panel callback registered, but
         nobody answers it: consent declines at once instead of waiting the approval timeout (the e2e
         hang after ef1faa4cf8)."""
@@ -277,7 +306,9 @@ class TestTrustGateApprovalRouting:
         from tools import approval_prompt
         from tools.terminal_tool import set_approval_callback
 
-        if context == "single_query":  # cli_single_query exports the marker into the process env
+        if (
+            context == "single_query"
+        ):  # cli_single_query exports the marker into the process env
             monkeypatch.setenv("CLAWK_SINGLE_QUERY_SESSION", "1")
             tokens = set_session_vars()
         elif context == "cron":  # the cron scheduler binds it per job
@@ -287,7 +318,12 @@ class TestTrustGateApprovalRouting:
         asked = []
         set_approval_callback(lambda *args, **kwargs: asked.append(args) or "once")
         try:
-            assert approval_prompt.request_elicitation_consent("write", "Approve once or deny.") == "decline"
+            assert (
+                approval_prompt.request_elicitation_consent(
+                    "write", "Approve once or deny."
+                )
+                == "decline"
+            )
         finally:
             set_approval_callback(None)
             clear_session_vars(tokens)
@@ -312,7 +348,9 @@ class TestAnnotationCaptureAtDiscovery:
 
     def _make_tool(self, name, annotations=None):
         return SimpleNamespace(
-            name=name, description="", inputSchema=None,
+            name=name,
+            description="",
+            inputSchema=None,
             annotations=annotations,
         )
 
@@ -322,20 +360,18 @@ class TestAnnotationCaptureAtDiscovery:
         server = mcp_tool.MCPServerTask("srv")
         server.session = MagicMock()
         server._tools = [
-            self._make_tool(
-                "list_repos", SimpleNamespace(readOnlyHint=True)
-            ),
-            self._make_tool(
-                "delete_repo", SimpleNamespace(readOnlyHint=False)
-            ),
+            self._make_tool("list_repos", SimpleNamespace(readOnlyHint=True)),
+            self._make_tool("delete_repo", SimpleNamespace(readOnlyHint=False)),
             self._make_tool("no_annotations", None),
         ]
         config = {
             "trust": "untrusted",
             "tools": {"resources": False, "prompts": False},
         }
-        with patch("tools.registry.registry", ToolRegistry()), \
-             patch("tools.mcp_tool_registration._track_mcp_tool_server"):
+        with (
+            patch("tools.registry.registry", ToolRegistry()),
+            patch("tools.mcp_tool_registration._track_mcp_tool_server"),
+        ):
             _mcp_registration._register_server_tools("srv", server, config)
 
         assert mcp_tool._server_trust_levels["srv"] == "untrusted"
@@ -347,35 +383,62 @@ class TestAnnotationCaptureAtDiscovery:
 
     def test_dict_annotations_supported(self):
         """Cached/JSON annotations arrive as plain dicts."""
-        assert _mcp_registration._annotation_read_only_hint(
-            SimpleNamespace(annotations={"readOnlyHint": True})
-        ) is True
-        assert _mcp_registration._annotation_read_only_hint(
-            SimpleNamespace(annotations={"readOnlyHint": "yes"})
-        ) is False  # non-bool truthy → NOT read-only (hint must be True)
-        assert _mcp_registration._annotation_read_only_hint(
-            SimpleNamespace(annotations=None)
-        ) is False
-        assert _mcp_registration._annotation_read_only_hint(
-            SimpleNamespace()
-        ) is False
+        assert (
+            _mcp_registration._annotation_read_only_hint(
+                SimpleNamespace(annotations={"readOnlyHint": True})
+            )
+            is True
+        )
+        assert (
+            _mcp_registration._annotation_read_only_hint(
+                SimpleNamespace(annotations={"readOnlyHint": "yes"})
+            )
+            is False
+        )  # non-bool truthy → NOT read-only (hint must be True)
+        assert (
+            _mcp_registration._annotation_read_only_hint(
+                SimpleNamespace(annotations=None)
+            )
+            is False
+        )
+        assert _mcp_registration._annotation_read_only_hint(SimpleNamespace()) is False
 
     def test_sdk2_snake_case_annotations_supported(self):
         """mcp 2.x models expose ``read_only_hint``; camelCase is only a serialization alias."""
         from mcp.types import ToolAnnotations
-        sdk2 = ToolAnnotations.model_validate({"readOnlyHint": True, "destructiveHint": False})
-        assert _mcp_registration._annotation_read_only_hint(SimpleNamespace(annotations=sdk2)) is True
-        assert _mcp_registration._annotation_read_only_hint(
-            SimpleNamespace(annotations=SimpleNamespace(read_only_hint=True))
-        ) is True
-        assert _mcp_registration._annotation_read_only_hint(
-            SimpleNamespace(annotations=SimpleNamespace(read_only_hint=False))
-        ) is False
+
+        sdk2 = ToolAnnotations.model_validate(
+            {"readOnlyHint": True, "destructiveHint": False}
+        )
+        assert (
+            _mcp_registration._annotation_read_only_hint(
+                SimpleNamespace(annotations=sdk2)
+            )
+            is True
+        )
+        assert (
+            _mcp_registration._annotation_read_only_hint(
+                SimpleNamespace(annotations=SimpleNamespace(read_only_hint=True))
+            )
+            is True
+        )
+        assert (
+            _mcp_registration._annotation_read_only_hint(
+                SimpleNamespace(annotations=SimpleNamespace(read_only_hint=False))
+            )
+            is False
+        )
         # 1.x-shaped object (camelCase attribute) still works.
-        assert _mcp_registration._annotation_read_only_hint(
-            SimpleNamespace(annotations=SimpleNamespace(readOnlyHint=True))
-        ) is True
+        assert (
+            _mcp_registration._annotation_read_only_hint(
+                SimpleNamespace(annotations=SimpleNamespace(readOnlyHint=True))
+            )
+            is True
+        )
         # Cache dict written by an older client in snake_case is honoured too.
-        assert _mcp_registration._annotation_read_only_hint(
-            SimpleNamespace(annotations={"read_only_hint": True})
-        ) is True
+        assert (
+            _mcp_registration._annotation_read_only_hint(
+                SimpleNamespace(annotations={"read_only_hint": True})
+            )
+            is True
+        )

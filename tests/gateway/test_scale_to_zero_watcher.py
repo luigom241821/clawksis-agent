@@ -92,8 +92,12 @@ def _runner_with(
         (lambda: next(readings, False)) if readings else (lambda: idle),
         raising=False,
     )
-    monkeypatch.setattr(r, "_relay_adapter_for_dormancy", lambda: adapter, raising=False)
-    monkeypatch.setattr(r, "_scale_to_zero_idle_timeout_seconds", lambda: 300.0, raising=False)
+    monkeypatch.setattr(
+        r, "_relay_adapter_for_dormancy", lambda: adapter, raising=False
+    )
+    monkeypatch.setattr(
+        r, "_scale_to_zero_idle_timeout_seconds", lambda: 300.0, raising=False
+    )
     r.states = []
     monkeypatch.setattr(
         r,
@@ -131,7 +135,9 @@ async def test_watcher_does_not_quiesce_when_no_suspend_lever_exists(
 
     await _run_one_iteration(r)
 
-    assert adapter.go_dormant_calls == 0, "must not flip/close on a platform-timed suspend"
+    assert adapter.go_dormant_calls == 0, (
+        "must not flip/close on a platform-timed suspend"
+    )
     assert suspends == []
     # No cooldown either: nothing was driven, so the next tick is free to act
     # the moment the platform picture changes.
@@ -223,15 +229,12 @@ async def test_watcher_honours_a_false_hold_from_the_adapter(monkeypatch):
     assert adapter.go_dormant_calls == 0
 
 
-
-
 @pytest.mark.asyncio
 async def test_hold_redial_reports_failure_when_there_is_no_adapter(monkeypatch):
     """The return value gates the suspend, so an absent adapter must read as 'not held' rather than silently as success."""
     r, _ = _runner_with(monkeypatch, idle=True, armed_adapter=False)
 
     assert r._scale_to_zero_hold_redial(True) is False
-
 
 
 @pytest.mark.asyncio
@@ -262,6 +265,7 @@ async def test_watcher_abandons_cleanly_when_it_must_not_suspend(
     assert suspends == [], case
     assert adapter.redial[-1] == "release", case
     assert r.states[:2] == ["draining", "running"], case
+
 
 @pytest.mark.asyncio
 async def test_in_guest_release_waits_for_the_freeze_gap(monkeypatch):
@@ -309,9 +313,7 @@ async def test_in_guest_fence_releases_at_once_after_a_resume(monkeypatch):
     # Read 1 sets the deadline; read 2 is the first post-"resume" check, with the
     # wall clock a freeze further on. asyncio.sleep would still owe ~30s here.
     reads = iter([1000.0, 1000.0 + 252.219])
-    monkeypatch.setattr(
-        "gateway.run.time.time", lambda: next(reads, 1000.0 + 252.219)
-    )
+    monkeypatch.setattr("gateway.run.time.time", lambda: next(reads, 1000.0 + 252.219))
 
     started = real_time()
     await r._scale_to_zero_self_suspend()
@@ -374,7 +376,6 @@ async def test_watcher_goes_dormant_when_idle(monkeypatch):
     # After driving dormant, a re-arm cooldown is set (0.F).
     assert r._scale_to_zero_cooldown_until > time.time()
 
-
     # No exception, loop exits cleanly — nothing to assert beyond survival.
 
 
@@ -430,7 +431,9 @@ def test_real_inbound_after_dormancy_restores_running_status(monkeypatch):
 # test_scale_to_zero.py pass bare names so they never exercised this call site.
 
 
-def _arm_runner(monkeypatch, platform_states, *, enabled=True, wake_url="https://wake.example"):
+def _arm_runner(
+    monkeypatch, platform_states, *, enabled=True, wake_url="https://wake.example"
+):
     """Build a GatewayRunner stand-in whose config.platforms mirrors a real load:
     `platform_states` is {Platform: enabled_bool}; everything runs the REAL
     _scale_to_zero_should_arm. Only the env flag + wake_url resolution are stubbed."""
@@ -442,7 +445,9 @@ def _arm_runner(monkeypatch, platform_states, *, enabled=True, wake_url="https:/
     platforms = {p: PlatformConfig(enabled=en) for p, en in platform_states.items()}
     r.config = SimpleNamespace(platforms=platforms)
 
-    monkeypatch.setattr("gateway.scale_to_zero.scale_to_zero_enabled", lambda *a, **k: enabled)
+    monkeypatch.setattr(
+        "gateway.scale_to_zero.scale_to_zero_enabled", lambda *a, **k: enabled
+    )
     monkeypatch.setattr("gateway.relay.relay_wake_url", lambda: wake_url)
     return r
 
@@ -476,7 +481,6 @@ def test_no_arm_when_a_direct_platform_is_actually_enabled(monkeypatch):
         {Platform.DISCORD: True, Platform.RELAY: True},
     )
     assert r._scale_to_zero_should_arm() is False
-
 
 
 # ── the self-suspend step: fires only after a clean quiesce, in order ─────────
@@ -747,9 +751,7 @@ def _work_count_runner(monkeypatch, *, agents=0, cron_ids=(), api_runs=0):
     monkeypatch.setattr(
         r, "_scale_to_zero_idle_timeout_seconds", lambda: 300.0, raising=False
     )
-    monkeypatch.setattr(
-        "cron.scheduler.get_running_job_ids", lambda: set(cron_ids)
-    )
+    monkeypatch.setattr("cron.scheduler.get_running_job_ids", lambda: set(cron_ids))
     api_adapter = SimpleNamespace(active_agent_work_count=lambda: api_runs)
     from gateway.platforms.base import Platform
 

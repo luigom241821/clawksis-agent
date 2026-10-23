@@ -18,22 +18,27 @@ from tests.e2e.core.platforms._suite import rig_fixtures, run_scenario, scenario
 
 pytestmark = [
     pytest.mark.spawns_gateway_lookalike,
-    pytest.mark.skipif(sys.platform == "win32", reason="POSIX process-group gateway harness"),
+    pytest.mark.skipif(
+        sys.platform == "win32", reason="POSIX process-group gateway harness"
+    ),
 ]
 
-_MIDWORD = (r"the continuation after a rejected finalize resumed mid-word",
-            "#124219 a stream reopened after message_not_in_streaming_state resumes mid-word (word split across "
-            "two messages)")
+_MIDWORD = (
+    r"the continuation after a rejected finalize resumed mid-word",
+    "#124219 a stream reopened after message_not_in_streaming_state resumes mid-word (word split across "
+    "two messages)",
+)
 KNOWN: dict[str, tuple[str, str]] = {
     "stream_finalize_rejected": _MIDWORD,
     "stream_finalize_rejected_group": _MIDWORD,
     "planned_restart_notice": (
         r"a redelivered /restart restarted the gateway again|a second restart ack means the replayed /restart was obeyed",
-        "#121325 a replayed /restart restarts the gateway again (guard needs Telegram update ids)"),
+        "#121325 a replayed /restart restarts the gateway again (guard needs Telegram update ids)",
+    ),
 }
 SKIP: dict[str, str] = {
     "heic_as_image": "the adapter only downloads https://*.slack.com file URLs (SSRF guard); a loopback "
-                     "stand-in cannot serve one",
+    "stand-in cannot serve one",
 }
 
 rig, rig_stream = rig_fixtures(SlackDriver)

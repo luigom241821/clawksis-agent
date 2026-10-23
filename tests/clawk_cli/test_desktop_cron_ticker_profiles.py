@@ -76,7 +76,9 @@ def test_multi_profile_homes_passed_to_builtin(monkeypatch, _providers, tmp_path
 
 
 @pytest.mark.parametrize("gateway_running", [True, False])
-def test_single_profile_ticks_only_without_gateway(monkeypatch, tmp_path, gateway_running):
+def test_single_profile_ticks_only_without_gateway(
+    monkeypatch, tmp_path, gateway_running
+):
     """Exercise Desktop startup through the real built-in scheduler loop."""
     from cron.scheduler_provider import InProcessCronScheduler
     from clawk_constants import get_clawk_home
@@ -84,8 +86,12 @@ def test_single_profile_ticks_only_without_gateway(monkeypatch, tmp_path, gatewa
 
     home = tmp_path / "root"
     home.mkdir()
-    monkeypatch.setattr(profiles_mod, "profiles_to_serve", lambda **_kw: [("default", home)])
-    monkeypatch.setattr(profiles_mod, "_check_gateway_running", lambda _home: gateway_running)
+    monkeypatch.setattr(
+        profiles_mod, "profiles_to_serve", lambda **_kw: [("default", home)]
+    )
+    monkeypatch.setattr(
+        profiles_mod, "_check_gateway_running", lambda _home: gateway_running
+    )
     monkeypatch.setattr(
         "cron.scheduler_provider.resolve_cron_scheduler", InProcessCronScheduler
     )
@@ -143,7 +149,9 @@ def test_external_provider_never_gets_profile_homes(monkeypatch, tmp_path):
     assert external.start_kwargs == {"interval": 13}
 
 
-def test_desktop_ticker_serves_every_profile_and_yields_to_owning_gateway(monkeypatch, _providers, tmp_path):
+def test_desktop_ticker_serves_every_profile_and_yields_to_owning_gateway(
+    monkeypatch, _providers, tmp_path
+):
     """The Desktop ticker mirrors the multiplexer's served set (default + every live profile dir)
     and stands down, per tick, for a profile already owned by a gateway: its own running gateway,
     or the live default multiplexer that already ticks it — such a satellite has no gateway.pid
@@ -156,21 +164,34 @@ def test_desktop_ticker_serves_every_profile_and_yields_to_owning_gateway(monkey
     root = tmp_path / ".clawk"
     for name in ("worker", "guest", "solo"):
         (root / "profiles" / name).mkdir(parents=True)
-        (root / "profiles" / name / "config.yaml").write_text("{}\n")  # identity marker: served
-    (root / "config.yaml").write_text(yaml.safe_dump({"gateway": {"multiplex_profiles": True}}))
+        (root / "profiles" / name / "config.yaml").write_text(
+            "{}\n"
+        )  # identity marker: served
+    (root / "config.yaml").write_text(
+        yaml.safe_dump({"gateway": {"multiplex_profiles": True}})
+    )
     monkeypatch.setattr("clawk_constants.get_default_clawk_root", lambda: root)
     monkeypatch.setattr(profiles_mod, "_get_default_clawk_home", lambda: root)
     monkeypatch.setattr(profiles_mod, "_get_profiles_root", lambda: root / "profiles")
     monkeypatch.setattr(
-        profiles_mod, "_check_gateway_running", lambda home: home == root / "profiles" / "solo")
-    monkeypatch.setattr(profiles_mod, "_served_by_running_multiplexer", lambda name: name == "worker")
+        profiles_mod,
+        "_check_gateway_running",
+        lambda home: home == root / "profiles" / "solo",
+    )
+    monkeypatch.setattr(
+        profiles_mod, "_served_by_running_multiplexer", lambda name: name == "worker"
+    )
 
     ws._start_desktop_cron_ticker(threading.Event(), interval=0)
 
     profile_homes = builtin.start_kwargs["profile_homes"]
     assert callable(profile_homes)
     assert [name for name, _ in profile_homes()] == [
-        "default", "guest", "solo", "worker"]
+        "default",
+        "guest",
+        "solo",
+        "worker",
+    ]
     gate = builtin.start_kwargs["profile_gate"]
     assert gate("default", root) is True
     assert gate("guest", root / "profiles" / "guest") is True

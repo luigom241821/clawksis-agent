@@ -31,6 +31,7 @@ from tools.tool_result_storage import (
 
 # ── generate_preview ──────────────────────────────────────────────────
 
+
 class TestGeneratePreview:
     def test_short_content_unchanged(self):
         text = "short result"
@@ -44,7 +45,9 @@ class TestGeneratePreview:
         assert preview == text
         assert has_more is False
 
+
 # ── _write_to_sandbox ─────────────────────────────────────────────────
+
 
 class TestWriteToSandbox:
     def test_success(self, tmp_path):
@@ -55,9 +58,16 @@ class TestWriteToSandbox:
             # Run the real commands so the owner-only modes are observed, not
             # pattern-matched.
             def _bash(cmd, timeout=None, stdin_data=None, **_kw):
-                r = subprocess.run(["bash", "-c", cmd], input=stdin_data or "",
-                                   capture_output=True, text=True, timeout=timeout, check=False)
+                r = subprocess.run(
+                    ["bash", "-c", cmd],
+                    input=stdin_data or "",
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                    check=False,
+                )
                 return {"output": r.stdout + r.stderr, "returncode": r.returncode}
+
             env.execute.side_effect = _bash
         result = _write_to_sandbox("hello world", remote, env)
         assert result is True
@@ -117,11 +127,15 @@ class TestWriteToSandbox:
     @pytest.mark.parametrize(
         "stdin_mode, probed, ok",
         [
-            ("pipe", 512, False),      # short write: bytes lost
-            ("pipe", 171, False),      # pipe backends must be exact
-            ("heredoc", 171, False),   # heredoc stdin is byte-exact too; a +1 is a loss, not the old newline
-            ("host", 3, False),        # host spillover: os.stat says only 3 bytes landed
-            ("host", None, True),      # host spillover: real write, real stat
+            ("pipe", 512, False),  # short write: bytes lost
+            ("pipe", 171, False),  # pipe backends must be exact
+            (
+                "heredoc",
+                171,
+                False,
+            ),  # heredoc stdin is byte-exact too; a +1 is a loss, not the old newline
+            ("host", 3, False),  # host spillover: os.stat says only 3 bytes landed
+            ("host", None, True),  # host spillover: real write, real stat
         ],
     )
     def test_size_probe_decides_lossless(self, stdin_mode, probed, ok):
@@ -154,9 +168,9 @@ class TestWriteToSandbox:
         env = MagicMock()
         env._stdin_mode = stdin_mode
         env.execute.side_effect = [
-            {"output": "", "returncode": 0},          # write
+            {"output": "", "returncode": 0},  # write
             {"output": f"{probed}\n", "returncode": 0},  # wc -c
-            {"output": "", "returncode": 0},          # rm -f cleanup (mismatch only)
+            {"output": "", "returncode": 0},  # rm -f cleanup (mismatch only)
         ]
         assert _write_to_sandbox(content, "/tmp/clawk-results/p.txt", env) is ok
         if not ok:
@@ -174,6 +188,7 @@ class TestWriteToSandbox:
         ]
         assert _write_to_sandbox("data", "/tmp/clawk-results/np.txt", env) is True
 
+
 class TestResolveStorageDir:
     def test_defaults_to_storage_dir_without_env(self):
         assert _resolve_storage_dir(None) == STORAGE_DIR
@@ -182,6 +197,7 @@ class TestResolveStorageDir:
         env = MagicMock()
         env.get_temp_dir.return_value = "/var/host/tmp"
         assert _resolve_storage_dir(env) == "/var/host/tmp/clawk-results"
+
 
 class TestSafeResultFilename:
     def test_preserves_normal_tool_call_id(self):
@@ -195,7 +211,9 @@ class TestSafeResultFilename:
         assert "$" not in filename
         assert ";" not in filename
 
+
 # ── _build_persisted_message ──────────────────────────────────────────
+
 
 class TestBuildPersistedMessage:
     def test_structure(self):
@@ -217,12 +235,17 @@ class TestBuildPersistedMessage:
         must never tell the model to blindly re-run the producing tool — that call may
         have been a mutation whose effect already landed."""
         msg = _build_persisted_message(
-            preview="preview", has_more=True, original_size=50_000,
-            file_path="/tmp/clawk-results/test123.txt")
+            preview="preview",
+            has_more=True,
+            original_size=50_000,
+            file_path="/tmp/clawk-results/test123.txt",
+        )
         assert "re-run the original tool" not in msg
         assert "inspect the current state before retrying" in msg
 
+
 # ── maybe_persist_tool_result ─────────────────────────────────────────
+
 
 class TestMaybePersistToolResult:
     def test_below_threshold_returns_unchanged(self):
@@ -254,6 +277,7 @@ class TestMaybePersistToolResult:
     def test_persists_full_content_as_is(self):
         """Content is persisted verbatim — no JSON extraction."""
         import json
+
         env = MagicMock()
         # Readability probe fails -> falls back to the in-sandbox write,
         # whose size probe returns unparseable output (best-effort success).
@@ -320,7 +344,9 @@ class TestMaybePersistToolResult:
         # Any non-empty content with threshold=0 should be persisted
         assert PERSISTED_OUTPUT_TAG in result
 
+
 # ── enforce_turn_budget ───────────────────────────────────────────────
+
 
 class TestEnforceTurnBudget:
     def test_under_budget_no_changes(self):
@@ -328,7 +354,9 @@ class TestEnforceTurnBudget:
             {"role": "tool", "tool_call_id": "t1", "content": "small"},
             {"role": "tool", "tool_call_id": "t2", "content": "also small"},
         ]
-        result = enforce_turn_budget(msgs, env=None, config=BudgetConfig(turn_budget=200_000))
+        result = enforce_turn_budget(
+            msgs, env=None, config=BudgetConfig(turn_budget=200_000)
+        )
         assert result[0]["content"] == "small"
         assert result[1]["content"] == "also small"
 
@@ -343,27 +371,41 @@ class TestEnforceTurnBudget:
         ]
         enforce_turn_budget(msgs, env=env, config=BudgetConfig(turn_budget=200_000))
         # At least some results should be persisted to get under 200K
-        persisted_count = sum(
-            1 for m in msgs if PERSISTED_OUTPUT_TAG in m["content"]
-        )
+        persisted_count = sum(1 for m in msgs if PERSISTED_OUTPUT_TAG in m["content"])
         assert persisted_count >= 2  # Need to shed at least ~52K
 
     def test_empty_messages(self):
-        result = enforce_turn_budget([], env=None, config=BudgetConfig(turn_budget=200_000))
+        result = enforce_turn_budget(
+            [], env=None, config=BudgetConfig(turn_budget=200_000)
+        )
         assert result == []
 
     def test_multimodal_results_count_their_text_and_spill_it(self):
         """Image-bearing results are part lists: the aggregate counts their text characters (not the number of
         parts) and spills the big text part, keeping images and the short notes inline."""
         img = {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,AAAA"}}
-        msgs = [{"role": "tool", "tool_call_id": f"mm{i}",
-                 "content": [{"type": "text", "text": "x" * 60_000}, {"type": "text", "text": "scale note"}, img]}
-                for i in range(6)]
+        msgs = [
+            {
+                "role": "tool",
+                "tool_call_id": f"mm{i}",
+                "content": [
+                    {"type": "text", "text": "x" * 60_000},
+                    {"type": "text", "text": "scale note"},
+                    img,
+                ],
+            }
+            for i in range(6)
+        ]
         enforce_turn_budget(msgs, env=None, config=BudgetConfig(turn_budget=200_000))
         assert sum(PERSISTED_OUTPUT_TAG in m["content"][0]["text"] for m in msgs) >= 2
-        assert all(m["content"][1]["text"] == "scale note" and m["content"][2] == img for m in msgs)
+        assert all(
+            m["content"][1]["text"] == "scale note" and m["content"][2] == img
+            for m in msgs
+        )
+
 
 # ── Per-tool threshold integration ────────────────────────────────────
+
 
 class TestPerToolThresholds:
     """Verify registry wiring for per-tool thresholds."""
@@ -371,8 +413,10 @@ class TestPerToolThresholds:
     def test_read_file_registry_cap_is_finite(self):
         """read_file must keep a finite registry cap (Layer 2 safety net)."""
         from tools.registry import registry
+
         try:
             import tools.file_tools
+
             val = registry.get_max_result_size("read_file")
             # float('inf') disables the Layer 2 result-size guard.
             assert 0 < val < float("inf"), val
@@ -381,14 +425,18 @@ class TestPerToolThresholds:
 
     def test_search_files_threshold(self):
         from tools.registry import registry
+
         try:
             import tools.file_tools
+
             val = registry.get_max_result_size("search_files")
             assert 0 < val < float("inf"), val
         except ImportError:
             pytest.skip("file_tools not importable in test env")
 
+
 # ── Host-side spillover ($CLAWK_HOME/cache/spillover) ────────────────
+
 
 class TestSpillover:
     @pytest.fixture(autouse=True)
@@ -396,6 +444,7 @@ class TestSpillover:
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
         # Reset the once-per-process prune flag so each test is independent.
         import tools.tool_result_storage as trs
+
         monkeypatch.setattr(trs, "_spillover_pruned_homes", set())
         yield
 
@@ -481,6 +530,7 @@ class TestSpillover:
 
     def test_spillover_write_failure_falls_back_to_inline(self, monkeypatch):
         import tools.tool_result_storage as trs
+
         monkeypatch.setattr(trs, "_write_to_spillover", lambda *a, **k: None)
         content = "w" * 60_000
         result = maybe_persist_tool_result(
@@ -512,7 +562,9 @@ class TestSpillover:
         assert not old.exists()
         assert new.exists()
 
-    def test_gateway_housekeeping_keeps_spills_for_the_retention_window(self, monkeypatch):
+    def test_gateway_housekeeping_keeps_spills_for_the_retention_window(
+        self, monkeypatch
+    ):
         """#126351: the hourly gateway sweep must not apply the 24h media age to spills — a
         25h-old unreferenced spill survives, a 100-day orphan is still reclaimed."""
         import os
@@ -520,6 +572,7 @@ class TestSpillover:
 
         import tools.tool_result_storage as trs
         from gateway.run_housekeeping_disk import housekeeping_media_caches
+
         spill_dir = get_spillover_dir()
         spill_dir.mkdir(parents=True, exist_ok=True)
         recent, orphan = spill_dir / "recent.txt", spill_dir / "orphan.txt"
@@ -539,8 +592,10 @@ class TestSpillover:
         import tools.tool_result_storage as trs
 
         monkeypatch.setattr(
-            clawk_cli.config, "load_config_readonly",
-            lambda: {"sessions": {"retention_days": 7}})
+            clawk_cli.config,
+            "load_config_readonly",
+            lambda: {"sessions": {"retention_days": 7}},
+        )
         assert trs._spillover_retention_hours() == 7 * 24
 
     def test_retention_hours_defaults_and_falls_back(self, monkeypatch):
@@ -557,26 +612,34 @@ class TestSpillover:
         assert trs._spillover_retention_hours() == trs.SPILLOVER_MAX_AGE_HOURS
 
         monkeypatch.setattr(
-            clawk_cli.config, "load_config_readonly",
-            lambda: {"sessions": {"retention_days": -5}})
+            clawk_cli.config,
+            "load_config_readonly",
+            lambda: {"sessions": {"retention_days": -5}},
+        )
         assert trs._spillover_retention_hours() == trs.SPILLOVER_MAX_AGE_HOURS
 
         # 0 is a legal prune setting (ended sessions go at once) but open sessions survive it;
         # a 0h spill window would delete the file the first spill just wrote.
         monkeypatch.setattr(
-            clawk_cli.config, "load_config_readonly",
-            lambda: {"sessions": {"retention_days": 0}})
+            clawk_cli.config,
+            "load_config_readonly",
+            lambda: {"sessions": {"retention_days": 0}},
+        )
         assert trs._spillover_retention_hours() == trs.SPILLOVER_MAX_AGE_HOURS
 
         # YAML ``.inf`` / ``.nan`` parse as floats; int() on them raises and used to
         # silently kill every sweep after the once-per-home flag was set.
         monkeypatch.setattr(
-            clawk_cli.config, "load_config_readonly",
-            lambda: {"sessions": {"retention_days": float("inf")}})
+            clawk_cli.config,
+            "load_config_readonly",
+            lambda: {"sessions": {"retention_days": float("inf")}},
+        )
         assert trs._spillover_retention_hours() == trs.SPILLOVER_MAX_AGE_HOURS
         monkeypatch.setattr(
-            clawk_cli.config, "load_config_readonly",
-            lambda: {"sessions": {"retention_days": float("nan")}})
+            clawk_cli.config,
+            "load_config_readonly",
+            lambda: {"sessions": {"retention_days": float("nan")}},
+        )
         assert trs._spillover_retention_hours() == trs.SPILLOVER_MAX_AGE_HOURS
 
     def test_cleanup_missing_dir_returns_zero(self):
@@ -588,6 +651,7 @@ class TestSpillover:
         import time as _time
 
         import tools.tool_result_storage as trs
+
         spill_dir = get_spillover_dir()
         spill_dir.mkdir(parents=True, exist_ok=True)
         old = spill_dir / "ancient.txt"
@@ -615,51 +679,69 @@ class TestSpillover:
         monkeypatch.setenv("TERMINAL_CWD", str(tmp_path))
         monkeypatch.chdir(tmp_path)
         from tools.file_tools import read_file_tool
-        out = maybe_persist_tool_result(content="z" * 50_000, tool_name="terminal",
-                                        tool_use_id="tc_expired_1", env=None, threshold=30_000)
+
+        out = maybe_persist_tool_result(
+            content="z" * 50_000,
+            tool_name="terminal",
+            tool_use_id="tc_expired_1",
+            env=None,
+            threshold=30_000,
+        )
         path = extract_persisted_path(out)
         assert path
         os.remove(path)
 
         expired = json.loads(read_file_tool(path, task_id="t_expired_archive"))
-        plain = json.loads(read_file_tool(str(tmp_path / "nope.txt"), task_id="t_expired_archive"))
+        plain = json.loads(
+            read_file_tool(str(tmp_path / "nope.txt"), task_id="t_expired_archive")
+        )
 
         assert expired["error"].startswith("File not found:")
         assert expired.get("expired") is True and "expired" in expired["hint"]
         assert "expired" not in plain and "expired" not in (plain.get("hint") or "")
 
+
 # ── recovery hint in the persisted preview ────────────────────────────
 
 # ── MCP envelope unwrapping (#90426) ──────────────────────────────────
+
 
 class TestPageableText:
     """Only the MCP handler's own envelope shape is unwrapped; every other JSON stays opaque."""
 
     def test_single_result_envelope_is_unwrapped(self):
-        assert _pageable_text(json.dumps({"result": "line one\nline two"})) == "line one\nline two"
+        assert (
+            _pageable_text(json.dumps({"result": "line one\nline two"}))
+            == "line one\nline two"
+        )
 
     def test_envelope_metadata_is_kept_after_the_text(self):
-        out = _pageable_text(json.dumps({"result": "text\n", "structuredContent": {"answer": 42}}))
+        out = _pageable_text(
+            json.dumps({"result": "text\n", "structuredContent": {"answer": 42}})
+        )
         text, marker, tail = out.partition("\n\n<mcp-result-metadata>\n")
         assert text == "text\n"
         assert marker
-        assert json.loads(tail.split("\n</mcp-result-metadata>")[0]) == {"structuredContent": {"answer": 42}}
+        assert json.loads(tail.split("\n</mcp-result-metadata>")[0]) == {
+            "structuredContent": {"answer": 42}
+        }
 
     @pytest.mark.parametrize(
         "content",
         [
-            json.dumps({"output": "line\n", "exit_code": 0}),      # ordinary tool JSON
-            json.dumps({"result": "line\n", "exit_code": 0}),      # unknown sibling key
-            json.dumps([{"result": "line\n"}]),                    # not an object
-            json.dumps({"result": {"blob": "line\n"}}),            # structuredContent-only style
-            json.dumps({"structuredContent": {"a": 1}}),           # no model-facing text at all
-            json.dumps({"result": ""}),                            # empty text
+            json.dumps({"output": "line\n", "exit_code": 0}),  # ordinary tool JSON
+            json.dumps({"result": "line\n", "exit_code": 0}),  # unknown sibling key
+            json.dumps([{"result": "line\n"}]),  # not an object
+            json.dumps({"result": {"blob": "line\n"}}),  # structuredContent-only style
+            json.dumps({"structuredContent": {"a": 1}}),  # no model-facing text at all
+            json.dumps({"result": ""}),  # empty text
             "not json at all",
             "plain text result",
         ],
     )
     def test_unrecognized_content_is_verbatim(self, content):
         assert _pageable_text(content) == content
+
 
 class TestMcpEnvelopeSpillover:
     """An oversized MCP result spills its pageable text, not one escaped JSON line (#90426)."""
@@ -668,6 +750,7 @@ class TestMcpEnvelopeSpillover:
     def _isolated_home(self, tmp_path, monkeypatch):
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
         import tools.tool_result_storage as trs
+
         monkeypatch.setattr(trs, "_spillover_pruned_homes", set())
         yield
 
@@ -677,8 +760,12 @@ class TestMcpEnvelopeSpillover:
         assert len(envelope) > 30_000
 
         result = maybe_persist_tool_result(
-            content=envelope, tool_name="mcp__archive__read_guide", tool_use_id="tc_mcp_text",
-            env=None, threshold=30_000)
+            content=envelope,
+            tool_name="mcp__archive__read_guide",
+            tool_use_id="tc_mcp_text",
+            env=None,
+            threshold=30_000,
+        )
 
         assert PERSISTED_OUTPUT_TAG in result
         spill_file = get_spillover_dir() / "tc_mcp_text.txt"
@@ -690,29 +777,49 @@ class TestMcpEnvelopeSpillover:
 
     def test_metadata_survives_after_the_text(self):
         markdown = "body line\n" * 5_000
-        envelope = json.dumps({"result": markdown, "structuredContent": {"count": 5_000}})
+        envelope = json.dumps(
+            {"result": markdown, "structuredContent": {"count": 5_000}}
+        )
         maybe_persist_tool_result(
-            content=envelope, tool_name="mcp__archive__structured", tool_use_id="tc_mcp_meta",
-            env=None, threshold=30_000)
+            content=envelope,
+            tool_name="mcp__archive__structured",
+            tool_use_id="tc_mcp_meta",
+            env=None,
+            threshold=30_000,
+        )
 
         spill = (get_spillover_dir() / "tc_mcp_meta.txt").read_text(encoding="utf-8")
         text, _, tail = spill.partition("\n\n<mcp-result-metadata>\n")
         assert text == markdown
-        assert json.loads(tail.split("\n</mcp-result-metadata>")[0]) == {"structuredContent": {"count": 5_000}}
+        assert json.loads(tail.split("\n</mcp-result-metadata>")[0]) == {
+            "structuredContent": {"count": 5_000}
+        }
 
     def test_non_envelope_json_still_verbatim(self):
         content = json.dumps({"output": "line\n" * 8_000, "exit_code": 0})
         maybe_persist_tool_result(
-            content=content, tool_name="terminal", tool_use_id="tc_json_verbatim",
-            env=None, threshold=30_000)
-        assert (get_spillover_dir() / "tc_json_verbatim.txt").read_text(encoding="utf-8") == content
+            content=content,
+            tool_name="terminal",
+            tool_use_id="tc_json_verbatim",
+            env=None,
+            threshold=30_000,
+        )
+        assert (get_spillover_dir() / "tc_json_verbatim.txt").read_text(
+            encoding="utf-8"
+        ) == content
 
     def test_structured_content_only_result_still_verbatim(self):
         content = json.dumps({"result": {"blob": "z" * 40_000}})
         maybe_persist_tool_result(
-            content=content, tool_name="mcp__archive__opaque", tool_use_id="tc_mcp_opaque",
-            env=None, threshold=30_000)
-        assert (get_spillover_dir() / "tc_mcp_opaque.txt").read_text(encoding="utf-8") == content
+            content=content,
+            tool_name="mcp__archive__opaque",
+            tool_use_id="tc_mcp_opaque",
+            env=None,
+            threshold=30_000,
+        )
+        assert (get_spillover_dir() / "tc_mcp_opaque.txt").read_text(
+            encoding="utf-8"
+        ) == content
 
     def test_sandbox_write_carries_pageable_text(self):
         env = MagicMock()  # not a LocalEnvironment -> remote path
@@ -724,20 +831,30 @@ class TestMcpEnvelopeSpillover:
         env.get_temp_dir.return_value = ""
         markdown = "remote line\n" * 5_000
         maybe_persist_tool_result(
-            content=json.dumps({"result": markdown}), tool_name="mcp__archive__remote",
-            tool_use_id="tc_mcp_remote", env=env, threshold=30_000)
+            content=json.dumps({"result": markdown}),
+            tool_name="mcp__archive__remote",
+            tool_use_id="tc_mcp_remote",
+            env=env,
+            threshold=30_000,
+        )
         assert env.execute.call_args_list[1][1]["stdin_data"] == markdown
 
     def test_turn_budget_spill_unwraps_envelope(self):
         """The aggregate layer persists under __budget_enforcement__, so a tool-name gate would
         miss the very results it must fix; the shape gate still applies."""
         markdown = "budgeted line\n" * 3_000
-        msgs = [{
-            "role": "tool", "name": "mcp__archive__read", "tool_call_id": "tc_budget_mcp",
-            "content": json.dumps({"result": markdown}),
-        }]
+        msgs = [
+            {
+                "role": "tool",
+                "name": "mcp__archive__read",
+                "tool_call_id": "tc_budget_mcp",
+                "content": json.dumps({"result": markdown}),
+            }
+        ]
 
         enforce_turn_budget(msgs, env=None, config=BudgetConfig(turn_budget=10_000))
 
         assert PERSISTED_OUTPUT_TAG in msgs[0]["content"]
-        assert (get_spillover_dir() / "tc_budget_mcp.txt").read_text(encoding="utf-8") == markdown
+        assert (get_spillover_dir() / "tc_budget_mcp.txt").read_text(
+            encoding="utf-8"
+        ) == markdown

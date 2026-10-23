@@ -82,21 +82,34 @@ class TestClassifyFetchFailure:
         assert "SSH authentication failed" in msg
         assert "https://github.com/samuelgradientai-sys/clawksis-agent.git" in msg
 
-    def test_only_a_checkout_git_rejects_gets_the_installer_repair(self, tmp_path, capsys):
+    def test_only_a_checkout_git_rejects_gets_the_installer_repair(
+        self, tmp_path, capsys
+    ):
         # The updater fetches only when .git exists; git rejecting the checkout itself (here an
         # empty .git) cannot be retried away. A remote with a dangling `.git` file makes git print
         # the same "fatal: not a git repository" line, and reinstalling Clawksis cannot fix that.
         def fetch(cwd: Path, *source: str) -> str:
-            return subprocess.run(["git", "fetch", *source], cwd=cwd, capture_output=True, check=False,
-                                  text=True, encoding="utf-8", errors="replace",
-                                  env={**os.environ, "GIT_CEILING_DIRECTORIES": str(tmp_path)}).stderr
+            return subprocess.run(
+                ["git", "fetch", *source],
+                cwd=cwd,
+                capture_output=True,
+                check=False,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                env={**os.environ, "GIT_CEILING_DIRECTORIES": str(tmp_path)},
+            ).stderr
 
         damaged = tmp_path / "custom-dir" / "clawksis-agent"
         (damaged / ".git").mkdir(parents=True)
-        update_cmd_git._print_fetch_failure(fetch(damaged, "origin"), git_cmd=["git"], root=damaged)
+        update_cmd_git._print_fetch_failure(
+            fetch(damaged, "origin"), git_cmd=["git"], root=damaged
+        )
         out = capsys.readouterr().out
         assert "damaged" in out and "clawksis-agent.nousresearch.com/install." in out
-        assert str(damaged) in out  # the repair targets THIS checkout, not the default directory
+        assert (
+            str(damaged) in out
+        )  # the repair targets THIS checkout, not the default directory
 
         healthy, remote = tmp_path / "healthy", tmp_path / "remote"
         subprocess.run(["git", "init", "-q", str(healthy)], check=True)
@@ -160,10 +173,14 @@ def test_update_network_git_calls_never_prompt_for_credentials():
     assert kw["env"]["GIT_TERMINAL_PROMPT"] == "0"
     # Only the prompt is disabled — credential helpers / askpass stay
     # configured so a private-fork origin still authenticates.
-    assert "GIT_CONFIG_COUNT" not in kw["env"] or kw["env"]["GIT_CONFIG_COUNT"] == os.environ.get("GIT_CONFIG_COUNT")
+    assert "GIT_CONFIG_COUNT" not in kw["env"] or kw["env"][
+        "GIT_CONFIG_COUNT"
+    ] == os.environ.get("GIT_CONFIG_COUNT")
 
 
-def test_update_and_upstream_network_calls_disable_terminal_prompts(monkeypatch, tmp_path):
+def test_update_and_upstream_network_calls_disable_terminal_prompts(
+    monkeypatch, tmp_path
+):
     """Exercise origin fetch and fork fetch/merge/push, not their source spelling."""
     import subprocess
     from clawk_cli import update_cmd_git
@@ -176,27 +193,49 @@ def test_update_and_upstream_network_calls_disable_terminal_prompts(monkeypatch,
     monkeypatch.setenv("GIT_CONFIG_VALUE_0", "fixture-helper")
     monkeypatch.setattr(update_cmd, "_has_upstream_remote", lambda *a: True)
     upstream = "c" * 40
-    monkeypatch.setattr(update_cmd, "_count_commits_between",
-                        lambda git, cwd, base, head: 2 if head == upstream else 0)
+    monkeypatch.setattr(
+        update_cmd,
+        "_count_commits_between",
+        lambda git, cwd, base, head: 2 if head == upstream else 0,
+    )
     calls = []
 
     def run(cmd, **kwargs):
         calls.append((cmd[1:], kwargs))
-        return subprocess.CompletedProcess(cmd, 0, upstream if "rev-parse" in cmd else "", "")
+        return subprocess.CompletedProcess(
+            cmd, 0, upstream if "rev-parse" in cmd else "", ""
+        )
 
     monkeypatch.setattr(subprocess, "run", run)
-    (tmp_path / ".git").mkdir()  # the fork ff's recovery marker lives there: no marker, no move
-    update_cmd._git_run(["git"], ["fetch", "origin", "main"], cwd=tmp_path, network=True, check=True)
-    assert update_cmd_git._sync_with_upstream_if_needed(["git"], tmp_path, assume_yes=True)
+    (
+        tmp_path / ".git"
+    ).mkdir()  # the fork ff's recovery marker lives there: no marker, no move
+    update_cmd._git_run(
+        ["git"], ["fetch", "origin", "main"], cwd=tmp_path, network=True, check=True
+    )
+    assert update_cmd_git._sync_with_upstream_if_needed(
+        ["git"], tmp_path, assume_yes=True
+    )
     from clawk_cli.update_custody import git_subcommand
 
     # The fork push runs only after the update is validated (_push_synced_fork), never inside the sync.
     update_cmd_git._sync_fork_with_upstream(["git"], tmp_path)
     # The fork's fast-forward is local (`merge --ff-only` after the fetch): no credential helper ever
     # runs under the checkout lock fd a mutator inherits (R2).
-    network = [(args, kwargs) for args, kwargs in calls if git_subcommand(args) in {"fetch", "pull", "push", "merge"}]
-    assert [git_subcommand(args) for args, _ in network] == ["fetch", "fetch", "merge", "push"]
-    assert network[2][0][-1] == upstream  # the counted commit, not a name a local branch can shadow
+    network = [
+        (args, kwargs)
+        for args, kwargs in calls
+        if git_subcommand(args) in {"fetch", "pull", "push", "merge"}
+    ]
+    assert [git_subcommand(args) for args, _ in network] == [
+        "fetch",
+        "fetch",
+        "merge",
+        "push",
+    ]
+    assert (
+        network[2][0][-1] == upstream
+    )  # the counted commit, not a name a local branch can shadow
     for args, kwargs in network:
         assert kwargs["stdin"] is subprocess.DEVNULL, args
         env = kwargs["env"]

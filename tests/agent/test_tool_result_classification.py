@@ -8,16 +8,14 @@ from agent.tool_result_classification import (
 
 
 def test_write_file_with_nested_lint_error_counts_as_landed():
-    result = json.dumps({
-        "bytes_written": 12,
-        "lint": {"status": "error", "output": "SyntaxError: invalid syntax"},
-    })
+    result = json.dumps(
+        {
+            "bytes_written": 12,
+            "lint": {"status": "error", "output": "SyntaxError: invalid syntax"},
+        }
+    )
 
     assert file_mutation_result_landed("write_file", result) is True
-
-
-
-
 
 
 def test_side_effect_classification_keeps_session_mutations():

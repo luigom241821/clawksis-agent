@@ -37,10 +37,24 @@ def _run(monkeypatch, *args):
     return main.main()
 
 
-def test_filtered_backup_covers_protected_sessions_before_retention_prune(store, tmp_path, monkeypatch):
+def test_filtered_backup_covers_protected_sessions_before_retention_prune(
+    store, tmp_path, monkeypatch
+):
     backup = tmp_path / "backup.jsonl"
-    _run(monkeypatch, "export", "--before", "2000-01-01", "--format", "jsonl", "--yes", str(backup))
-    exported = {row["id"]: row for row in map(json.loads, backup.read_text(encoding="utf-8").splitlines())}
+    _run(
+        monkeypatch,
+        "export",
+        "--before",
+        "2000-01-01",
+        "--format",
+        "jsonl",
+        "--yes",
+        str(backup),
+    )
+    exported = {
+        row["id"]: row
+        for row in map(json.loads, backup.read_text(encoding="utf-8").splitlines())
+    }
     with SessionDB() as db:
         assert Path(db.db_path).resolve().is_relative_to(tmp_path.resolve())
     assert set(exported) == {"normal", "pinned", "archived"}
@@ -49,16 +63,35 @@ def test_filtered_backup_covers_protected_sessions_before_retention_prune(store,
     assert exported["archived"]["archived"] == 1
 
     # This fixture is the sole writer; bypass the unrelated host-wide holder inventory.
-    _run(monkeypatch, "prune", "--before", "2000-01-01", "--include-archived", "--include-pinned", "--yes", "--force")
+    _run(
+        monkeypatch,
+        "prune",
+        "--before",
+        "2000-01-01",
+        "--include-archived",
+        "--include-pinned",
+        "--yes",
+        "--force",
+    )
     with SessionDB() as db:
         assert all(db.get_session(session_id) is None for session_id in exported)
 
 
-def test_explicit_missing_export_fails_without_creating_an_output(store, tmp_path, monkeypatch, capsys):
+def test_explicit_missing_export_fails_without_creating_an_output(
+    store, tmp_path, monkeypatch, capsys
+):
     for fmt in ("jsonl", "html", "md", "qmd", "trace"):
         output = tmp_path / f"missing-{fmt}"
         with pytest.raises(SystemExit) as error:
-            _run(monkeypatch, "export", "--session-id", "missing-session", "--format", fmt, str(output))
+            _run(
+                monkeypatch,
+                "export",
+                "--session-id",
+                "missing-session",
+                "--format",
+                fmt,
+                str(output),
+            )
         assert error.value.code != 0
         assert "missing-session" in capsys.readouterr().out
         assert not output.exists()

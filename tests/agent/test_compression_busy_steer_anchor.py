@@ -44,7 +44,9 @@ def _tool_turns(start: int, count: int, *, steer_at: int | None = None) -> list[
         content = f"tool output {idx}"
         if steer_at == idx:
             content += format_steer_marker(STEER_B)
-        turns.append({"role": "tool", "tool_call_id": f"call-{idx}", "content": content})
+        turns.append(
+            {"role": "tool", "tool_call_id": f"call-{idx}", "content": content}
+        )
     return turns
 
 
@@ -56,7 +58,9 @@ def _assert_alternation(messages: list[dict]) -> None:
     roles = [m.get("role") for m in messages]
     for left, right in itertools.pairwise(roles):
         assert not (left == right == "user"), f"user/user adjacency in {roles}"
-        assert not (left == right == "assistant"), f"assistant/assistant adjacency in {roles}"
+        assert not (left == right == "assistant"), (
+            f"assistant/assistant adjacency in {roles}"
+        )
 
 
 def _user_rows(messages: list[dict]) -> list[str]:
@@ -140,8 +144,15 @@ def test_newer_steer_outranks_older_real_user_turn():
 def test_compressed_steer_presence_only_counts_tool_rows(role):
     """A summary or assistant row that merely quotes the marker text is not a
     live steer delivery — only ``role=tool`` rows carry real steers."""
-    quoted = {"role": role, "content": f"{SUMMARY_PREFIX}\n{format_steer_marker(STEER_B)}"}
+    quoted = {
+        "role": role,
+        "content": f"{SUMMARY_PREFIX}\n{format_steer_marker(STEER_B)}",
+    }
     assert _compressed_has_busy_steer([quoted]) is False
     assert STEER_MARKER_OPEN in quoted["content"]
-    live = {"role": "tool", "tool_call_id": "c", "content": f"ok{format_steer_marker(STEER_B)}"}
+    live = {
+        "role": "tool",
+        "tool_call_id": "c",
+        "content": f"ok{format_steer_marker(STEER_B)}",
+    }
     assert _compressed_has_busy_steer([live]) is True

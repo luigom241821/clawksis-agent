@@ -109,7 +109,8 @@ def test_nous_free_models_render_across_partitioned_selects():
 
     # 37 models => 2 select rows of 25 + 12, plus Back/Cancel = 4 action rows.
     select_rows = [
-        c for c in view.children
+        c
+        for c in view.children
         if isinstance(getattr(c, "custom_id", ""), str)
         and c.custom_id.startswith("model_model_select")
     ]
@@ -149,7 +150,8 @@ def test_small_provider_single_select_unchanged():
     view._build_model_select("emoji")
 
     select_rows = [
-        c for c in view.children
+        c
+        for c in view.children
         if isinstance(getattr(c, "custom_id", ""), str)
         and c.custom_id.startswith("model_model_select")
     ]
@@ -161,17 +163,28 @@ def test_a_large_row_carries_its_tag_as_the_option_description():
     """Usage-window plans: ``model_labels`` (clawk_cli/model_switch_providers.py) becomes the option's
     second line (Large / Free only); every other row and every other account has no description."""
     view = ModelPickerView(
-        providers=[{
-            "slug": "nous", "name": "Nous Portal", "models": ["example/model-b", "example/model-free:free"],
-            "total_models": 2, "is_current": True,
-            "model_labels": {"example/model-b": "Large"},
-        }],
-        current_model="example/model-b", current_provider="nous", session_key="session-1",
-        on_model_selected=lambda *a, **k: None, allowed_user_ids={"123"},
+        providers=[
+            {
+                "slug": "nous",
+                "name": "Nous Portal",
+                "models": ["example/model-b", "example/model-free:free"],
+                "total_models": 2,
+                "is_current": True,
+                "model_labels": {"example/model-b": "Large"},
+            }
+        ],
+        current_model="example/model-b",
+        current_provider="nous",
+        session_key="session-1",
+        on_model_selected=lambda *a, **k: None,
+        allowed_user_ids={"123"},
     )
     view._selected_provider = "nous"
     view._build_model_select("nous")
-    options = {opt.value: opt.description for child in view.children
-               if str(getattr(child, "custom_id", "")).startswith("model_model_select")
-               for opt in getattr(child, "options", [])}
+    options = {
+        opt.value: opt.description
+        for child in view.children
+        if str(getattr(child, "custom_id", "")).startswith("model_model_select")
+        for opt in getattr(child, "options", [])
+    }
     assert options == {"example/model-b": "Large", "example/model-free:free": None}

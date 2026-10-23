@@ -10,14 +10,17 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+
 @pytest.fixture(autouse=True)
 def clean_env(monkeypatch):
     for key in ("OPENAI_API_KEY", "CLAWK_SESSION_PLATFORM"):
         monkeypatch.delenv(key, raising=False)
 
+
 # ---------------------------------------------------------------------------
 # Backend-level passthrough (_generate_openai_tts)
 # ---------------------------------------------------------------------------
+
 
 class TestOpenaiBackendInstructions:
     def _run(self, tmp_path, monkeypatch, *, tts_config=None, instructions=None):
@@ -26,10 +29,15 @@ class TestOpenaiBackendInstructions:
         mock_client.audio.speech.create.return_value = MagicMock()
         mock_cls = MagicMock(return_value=mock_client)
 
-        with patch("tools.tts_tool._import_openai_client", return_value=mock_cls), \
-             patch("tools.tts_tool_openai._resolve_openai_audio_client_config",
-                   return_value=("test-key", None, False)):
+        with (
+            patch("tools.tts_tool._import_openai_client", return_value=mock_cls),
+            patch(
+                "tools.tts_tool_openai._resolve_openai_audio_client_config",
+                return_value=("test-key", None, False),
+            ),
+        ):
             from tools.tts_tool import _generate_openai_tts
+
             kwargs = {}
             if instructions is not None:
                 kwargs["instructions"] = instructions
@@ -43,9 +51,11 @@ class TestOpenaiBackendInstructions:
         create = self._run(tmp_path, monkeypatch, instructions="")
         assert "instructions" not in create.call_args[1]
 
+
 # ---------------------------------------------------------------------------
 # Tool-level plumbing (text_to_speech_tool -> _generate_openai_tts)
 # ---------------------------------------------------------------------------
+
 
 class TestToolLevelInstructions:
     def _invoke_tool(self, tmp_path, monkeypatch, *, instructions=None):
@@ -64,33 +74,36 @@ class TestToolLevelInstructions:
 
         mock_cls = MagicMock(return_value=mock_client)
 
-        with patch("tools.tts_tool._import_openai_client", return_value=mock_cls), \
-             patch("tools.tts_tool_openai._resolve_openai_audio_client_config",
-                   return_value=("test-key", None, False)), \
-             patch("tools.tts_tool._load_tts_config",
-                   return_value={"provider": "openai"}):
+        with (
+            patch("tools.tts_tool._import_openai_client", return_value=mock_cls),
+            patch(
+                "tools.tts_tool_openai._resolve_openai_audio_client_config",
+                return_value=("test-key", None, False),
+            ),
+            patch(
+                "tools.tts_tool._load_tts_config", return_value={"provider": "openai"}
+            ),
+        ):
             from tools.tts_tool import text_to_speech_tool
+
             kwargs = {"output_path": str(tmp_path / "out.mp3")}
             if instructions is not None:
                 kwargs["instructions"] = instructions
             result = text_to_speech_tool("Hello world", **kwargs)
         return mock_client.audio.speech.create, json.loads(result)
 
-    def test_tool_threads_instructions_to_openai_create(
-        self, tmp_path, monkeypatch
-    ):
+    def test_tool_threads_instructions_to_openai_create(self, tmp_path, monkeypatch):
         create, result = self._invoke_tool(
             tmp_path, monkeypatch, instructions="Whisper conspiratorially."
         )
         assert result.get("success") is True
         assert create.call_args[1]["instructions"] == "Whisper conspiratorially."
 
-    def test_tool_omits_instructions_when_not_supplied(
-        self, tmp_path, monkeypatch
-    ):
+    def test_tool_omits_instructions_when_not_supplied(self, tmp_path, monkeypatch):
         create, result = self._invoke_tool(tmp_path, monkeypatch)
         assert result.get("success") is True
         assert "instructions" not in create.call_args[1]
+
 
 # ---------------------------------------------------------------------------
 # Schema

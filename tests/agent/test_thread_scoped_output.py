@@ -29,10 +29,6 @@ def _run_with_real_stream(fn):
     return real_out.getvalue()
 
 
-
-
-
-
 def test_stderr_is_also_routed_per_thread():
     real_err = io.StringIO()
     orig = sys.stderr
@@ -46,10 +42,6 @@ def test_stderr_is_also_routed_per_thread():
     out = real_err.getvalue()
     assert "err-dropped" not in out
     assert "err-kept" in out
-
-
-
-
 
 
 def test_many_concurrent_silenced_and_loud_threads():
@@ -77,7 +69,9 @@ def test_many_concurrent_silenced_and_loud_threads():
         start.set()
         for t in threads:
             t.join(timeout=15.0)
-        assert not any(t.is_alive() for t in threads), "straggler thread would truncate captured output"
+        assert not any(t.is_alive() for t in threads), (
+            "straggler thread would truncate captured output"
+        )
 
     captured = _run_with_real_stream(body)
     for i in range(5):
@@ -118,7 +112,10 @@ def test_temporary_global_redirects_do_not_allocate_new_sinks(monkeypatch):
         original_proxies = dict(thread_output._installed)
 
         for _ in range(20):
-            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            with (
+                contextlib.redirect_stdout(io.StringIO()),
+                contextlib.redirect_stderr(io.StringIO()),
+            ):
                 with thread_scoped_silence():
                     print("hidden")
 

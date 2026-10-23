@@ -81,9 +81,7 @@ def _write_turnhold_config(tmp_path):
 def _build_runner(gateway_run, adapter, fake_db):
     runner = object.__new__(gateway_run.GatewayRunner)
     runner.config = GatewayConfig(
-        platforms={
-            Platform.TELEGRAM: PlatformConfig(enabled=True, token="fake-token")
-        }
+        platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="fake-token")}
     )
     runner.adapters = {Platform.TELEGRAM: adapter}
     runner._voice_mode = {}
@@ -190,9 +188,7 @@ async def test_turn_hold_keeps_admission_and_adopts_watermark_fenced_summary(
             self.close = MagicMock(side_effect=cleanup_done.set)
             type(self).last_instance = self
 
-        def _compress_context(
-            self, messages, *_args, commit_fence=None, **_kwargs
-        ):
+        def _compress_context(self, messages, *_args, commit_fence=None, **_kwargs):
             # Real compress_context marks the fence right after capturing
             # the active-row watermark under the durable compression lock.
             if commit_fence is not None:
@@ -305,9 +301,7 @@ async def test_turn_hold_kept_admission_arms_flat_retry_only_when_nothing_commit
             self.shutdown_memory_provider = MagicMock()
             self.close = MagicMock()
 
-        def _compress_context(
-            self, messages, *_args, commit_fence=None, **_kwargs
-        ):
+        def _compress_context(self, messages, *_args, commit_fence=None, **_kwargs):
             if commit_fence is not None:
                 commit_fence.mark_commit_watermark_fenced()
             worker_started.set()
@@ -350,9 +344,7 @@ async def test_turn_hold_kept_admission_arms_flat_retry_only_when_nothing_commit
     )
     args = fake_db.record_compression_failure_cooldown.call_args[0]
     retry = args[1] - time.time()
-    assert retry <= 120, (
-        f"retry-after must stay flat (~60s), got {retry:.0f}s"
-    )
+    assert retry <= 120, f"retry-after must stay flat (~60s), got {retry:.0f}s"
     assert "turn-hold" in (args[2] or "")
     assert not fake_db.increment_hygiene_failure_streak.called, (
         "turn-hold deferral must never advance the failure streak"
@@ -360,9 +352,7 @@ async def test_turn_hold_kept_admission_arms_flat_retry_only_when_nothing_commit
 
 
 @pytest.mark.asyncio
-async def test_turn_hold_without_watermark_fence_still_cancels(
-    monkeypatch, tmp_path
-):
+async def test_turn_hold_without_watermark_fence_still_cancels(monkeypatch, tmp_path):
     """A worker whose commit is NOT watermark-fenced (no session_db /
     watermark capture failed) must still be cancelled at turn-hold expiry —
     a late unfenced commit could clobber newer turns. Never worse than the
@@ -387,9 +377,7 @@ async def test_turn_hold_without_watermark_fence_still_cancels(
             self.shutdown_memory_provider = MagicMock()
             self.close = MagicMock()
 
-        def _compress_context(
-            self, messages, *_args, commit_fence=None, **_kwargs
-        ):
+        def _compress_context(self, messages, *_args, commit_fence=None, **_kwargs):
             # Deliberately NO mark_commit_watermark_fenced().
             worker_started.set()
             _spin_started = time.monotonic()

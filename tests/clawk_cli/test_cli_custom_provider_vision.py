@@ -83,12 +83,15 @@ def test_real_cli_args_keep_transport_and_capability_identities_separate():
     assert cli.requested_provider == REQUESTED_PROVIDER
     assert runtime["provider"] == "custom"
     assert runtime["requested_provider"] == REQUESTED_PROVIDER
-    assert decide_image_input_mode(
-        runtime["provider"],
-        route["model"],
-        load_config(),
-        requested_provider=runtime["requested_provider"],
-    ) == "native"
+    assert (
+        decide_image_input_mode(
+            runtime["provider"],
+            route["model"],
+            load_config(),
+            requested_provider=runtime["requested_provider"],
+        )
+        == "native"
+    )
 
     # A credential refresh with the same two identities must retain the live
     # agent instead of treating canonicalization as a provider switch.

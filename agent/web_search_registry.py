@@ -28,9 +28,12 @@ logger = logging.getLogger(__name__)
 
 
 _registry: ProviderRegistry[WebSearchProvider] = ProviderRegistry(
-    label="Web", provider_cls=WebSearchProvider, logger=logger,
+    label="Web",
+    provider_cls=WebSearchProvider,
+    logger=logger,
 )
 _registry.export(globals())
+
 
 def _read_config_key(*path: str) -> Optional[str]:
     """Resolve a dotted config key from ``config.yaml``. Returns None on miss."""
@@ -52,7 +55,9 @@ def _read_config_key(*path: str) -> Optional[str]:
 def _configured_backend(capability: str) -> Optional[str]:
     """``web.<capability>_backend`` (preferred) or ``web.backend`` (shared fallback). The managed ``nous``
     selection names no provider: it is served by Perplexity (search) and Firecrawl (extract)."""
-    configured = _read_config_key("web", f"{capability}_backend") or _read_config_key("web", "backend")
+    configured = _read_config_key("web", f"{capability}_backend") or _read_config_key(
+        "web", "backend"
+    )
     if configured and configured.lower() == "nous":
         return "perplexity" if capability == "search" else "firecrawl"
     return configured
@@ -60,7 +65,16 @@ def _configured_backend(capability: str) -> Optional[str]:
 
 # Paid providers first so existing paid setups don't get downgraded to a free
 # tier on upgrade; filtered by ``is_available()`` at walk time.
-_LEGACY_PREFERENCE = ("firecrawl", "parallel", "tavily", "perplexity", "exa", "searxng", "brave-free", "ddgs")
+_LEGACY_PREFERENCE = (
+    "firecrawl",
+    "parallel",
+    "tavily",
+    "perplexity",
+    "exa",
+    "searxng",
+    "brave-free",
+    "ddgs",
+)
 
 # Anonymous public free tiers (see plugins/web/keyless_mcp.py); strictly last
 # resort, i.e. zero web credentials and no importable ddgs. Unpinned keyless
@@ -83,7 +97,9 @@ def _keyless_preference() -> tuple:
     return _KEYLESS_PREFERENCE
 
 
-def _resolve(configured: Optional[str], *, capability: str) -> Optional[WebSearchProvider]:
+def _resolve(
+    configured: Optional[str], *, capability: str
+) -> Optional[WebSearchProvider]:
     """Resolve the active provider for a capability ("search" | "extract").
 
     Rules, in order (see module docstring): explicit config wins even when
@@ -96,8 +112,11 @@ def _resolve(configured: Optional[str], *, capability: str) -> Optional[WebSearc
 
     def _capable(p: WebSearchProvider) -> bool:
         return bool(
-            p.supports_search() if capability == "search"
-            else p.supports_extract() if capability == "extract" else False
+            p.supports_search()
+            if capability == "search"
+            else p.supports_extract()
+            if capability == "extract"
+            else False
         )
 
     def _available(p: WebSearchProvider) -> bool:
@@ -108,10 +127,15 @@ def _resolve(configured: Optional[str], *, capability: str) -> Optional[WebSearc
         if provider is not None and _capable(provider):
             return provider
         if provider is None:
-            logger.debug("web backend '%s' configured but not registered; falling back", configured)
+            logger.debug(
+                "web backend '%s' configured but not registered; falling back",
+                configured,
+            )
         else:
             logger.debug(
-                "web backend '%s' configured but does not support '%s'; falling back", configured, capability
+                "web backend '%s' configured but does not support '%s'; falling back",
+                configured,
+                capability,
             )
 
     # Fallbacks are availability-filtered so a registered-but-keyless provider
@@ -154,7 +178,9 @@ def _keyless_tier_enabled() -> bool:
         return True
 
 
-def _disabled_web_plugin_for(configured: Optional[str] = None, *, capability: Optional[str] = None) -> Optional[str]:
+def _disabled_web_plugin_for(
+    configured: Optional[str] = None, *, capability: Optional[str] = None
+) -> Optional[str]:
     """Plugin key of a *disabled* bundled web plugin that would have provided
     the configured backend (``web.<capability>_backend`` → ``web.backend``), or None.
 
@@ -170,6 +196,7 @@ def _disabled_web_plugin_for(configured: Optional[str] = None, *, capability: Op
     even though the backend IS configured correctly. This helper detects that case so the dispatcher can
     point the user at the actual cause (issue #40190 follow-up: pi314's disabled-plugin symptom).
     """
+
     def _norm(s: str) -> str:
         return s.strip().lower().replace("-", "_")
 
@@ -185,8 +212,11 @@ def _disabled_web_plugin_for(configured: Optional[str] = None, *, capability: Op
         pm = get_plugin_manager()
         for key, loaded in pm._plugins.items():
             if (
-                isinstance(key, str) and key.startswith("web/") and not loaded.enabled
-                and loaded.error == "disabled via config" and _norm(key.split("/", 1)[1]) == want
+                isinstance(key, str)
+                and key.startswith("web/")
+                and not loaded.enabled
+                and loaded.error == "disabled via config"
+                and _norm(key.split("/", 1)[1]) == want
             ):
                 return key
     except Exception as exc:

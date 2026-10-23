@@ -12,6 +12,7 @@ the request once headers arrive. Both stay shutdown-only (never a cross-thread
 (``interruptible_streaming_api_call`` -> monitor ``_abort_for_interrupt`` ->
 ``on_stream_created`` wiring) on both streaming wires.
 """
+
 import socket as _socket
 import time
 from types import SimpleNamespace
@@ -24,26 +25,45 @@ from agent import chat_completion_helpers as helpers
 
 def _agent():
     return run_agent.AIAgent(
-        api_key="test-key", base_url="http://127.0.0.1:1/v1", model="m", provider="custom",
-        quiet_mode=True, skip_context_files=True, skip_memory=True, enabled_toolsets=[], max_iterations=1,
+        api_key="test-key",
+        base_url="http://127.0.0.1:1/v1",
+        model="m",
+        provider="custom",
+        quiet_mode=True,
+        skip_context_files=True,
+        skip_memory=True,
+        enabled_toolsets=[],
+        max_iterations=1,
     )
 
 
 def _call(agent):
-    call = helpers._StreamingCall(agent, {"model": "m", "messages": [{"role": "user", "content": "hi"}]}, None)
+    call = helpers._StreamingCall(
+        agent, {"model": "m", "messages": [{"role": "user", "content": "hi"}]}, None
+    )
     call._stream_stale_timeout = 5.0
     return call
 
 
 def _response_over(reader):
     """Live httpx 0.28 wrapper shape down to the socket; ``close`` must never run."""
+
     def _no_close():
         raise AssertionError("stranger thread must never close the response")
-    h11_conn = SimpleNamespace(_network_stream=SimpleNamespace(_sock=reader),
-                               _stream=None, _connection=None, _httpcore_stream=None)
-    pool_stream = SimpleNamespace(_stream=SimpleNamespace(_connection=h11_conn), _connection=None)
-    return SimpleNamespace(close=_no_close,
-                           stream=SimpleNamespace(_stream=SimpleNamespace(_httpcore_stream=pool_stream)))
+
+    h11_conn = SimpleNamespace(
+        _network_stream=SimpleNamespace(_sock=reader),
+        _stream=None,
+        _connection=None,
+        _httpcore_stream=None,
+    )
+    pool_stream = SimpleNamespace(
+        _stream=SimpleNamespace(_connection=h11_conn), _connection=None
+    )
+    return SimpleNamespace(
+        close=_no_close,
+        stream=SimpleNamespace(_stream=SimpleNamespace(_httpcore_stream=pool_stream)),
+    )
 
 
 def _assert_shut_down(reader, writer):
@@ -73,14 +93,19 @@ class _LateStream:
 
     def __init__(self, call, reader):
         self.response = _response_over(reader)
-        call.agent._interrupt_requested = True  # /stop lands while create() is connecting
+        call.agent._interrupt_requested = (
+            True  # /stop lands while create() is connecting
+        )
         deadline = time.time() + 5
         while not call._request_cancelled["value"] and time.time() < deadline:
             time.sleep(0.02)
-        assert call._request_cancelled["value"], "monitor never ran _abort_for_interrupt"
+        assert call._request_cancelled["value"], (
+            "monitor never ran _abort_for_interrupt"
+        )
 
     def __iter__(self):
         import httpx
+
         raise httpx.ReadError("socket shut down")
 
     def __enter__(self):
@@ -101,20 +126,33 @@ def _run_interrupted_during_connect(monkeypatch, agent, reader, api_mode):
             return _orig_wire(self, stream_attempt_id)
 
         def _fake_anthropic_client(**_kw):
-            return SimpleNamespace(messages=SimpleNamespace(stream=lambda **_k: _LateStream(holder["call"], reader)),
-                                   close=lambda: None)
+            return SimpleNamespace(
+                messages=SimpleNamespace(
+                    stream=lambda **_k: _LateStream(holder["call"], reader)
+                ),
+                close=lambda: None,
+            )
+
         monkeypatch.setattr(helpers._StreamingCall, "_call_wire", _wire)
-        monkeypatch.setattr(agent, "_create_request_anthropic_client", _fake_anthropic_client)
+        monkeypatch.setattr(
+            agent, "_create_request_anthropic_client", _fake_anthropic_client
+        )
     else:
-        monkeypatch.setattr(helpers._StreamingCall, "_open_chat_stream",
-                            lambda self, stream_kwargs: _LateStream(self, reader))
+        monkeypatch.setattr(
+            helpers._StreamingCall,
+            "_open_chat_stream",
+            lambda self, stream_kwargs: _LateStream(self, reader),
+        )
     with pytest.raises(InterruptedError):
         helpers.interruptible_streaming_api_call(
-            agent, {"model": "m", "messages": [{"role": "user", "content": "hi"}]})
+            agent, {"model": "m", "messages": [{"role": "user", "content": "hi"}]}
+        )
 
 
 @pytest.mark.parametrize("api_mode", ["chat_completions", "anthropic_messages"])
-def test_interrupt_during_connect_window_shuts_down_the_late_socket(monkeypatch, api_mode):
+def test_interrupt_during_connect_window_shuts_down_the_late_socket(
+    monkeypatch, api_mode
+):
     reader, writer = _socket.socketpair()
     try:
         _run_interrupted_during_connect(monkeypatch, _agent(), reader, api_mode)

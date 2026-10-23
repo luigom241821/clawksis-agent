@@ -15,8 +15,13 @@ from urllib.parse import urljoin
 
 from tools.managed_tool_gateway import resolve_managed_tool_gateway
 from tools.tool_backend_helpers import (
-    NOUS_MANAGED_PROVIDER, managed_nous_tools_enabled, nous_tool_gateway_unavailable_message,
-    read_selection, resolve_openai_audio_api_key, selection_error)
+    NOUS_MANAGED_PROVIDER,
+    managed_nous_tools_enabled,
+    nous_tool_gateway_unavailable_message,
+    read_selection,
+    resolve_openai_audio_api_key,
+    selection_error,
+)
 from tools.tts_tool_delivery import _origin, _section
 from tools.tts_tool_providers import _tts_response_format_from_path
 
@@ -35,7 +40,11 @@ def _managed_openai_audio_route() -> Optional[tuple]:
     gateway = resolve_managed_tool_gateway("openai-audio")
     if gateway is None:
         return None
-    return gateway.nous_user_token, urljoin(f"{gateway.gateway_origin.rstrip('/')}/", "v1"), True
+    return (
+        gateway.nous_user_token,
+        urljoin(f"{gateway.gateway_origin.rstrip('/')}/", "v1"),
+        True,
+    )
 
 
 def _resolve_openai_audio_client_config() -> tuple[str, str, bool]:
@@ -49,23 +58,36 @@ def _resolve_openai_audio_client_config() -> tuple[str, str, bool]:
     if selected == NOUS_MANAGED_PROVIDER:
         route = _managed_openai_audio_route()
         if route is None:
-            raise ValueError(selection_error(
-                "tts", NOUS_MANAGED_PROVIDER,
-                "the Nous Tool Gateway is not available (not entitled or unreachable)"))
+            raise ValueError(
+                selection_error(
+                    "tts",
+                    NOUS_MANAGED_PROVIDER,
+                    "the Nous Tool Gateway is not available (not entitled or unreachable)",
+                )
+            )
         return route
     direct_api_key = openai_cfg.get("api_key") or resolve_openai_audio_api_key()
     if direct_api_key:
-        return direct_api_key, openai_cfg.get("base_url") or DEFAULT_OPENAI_BASE_URL, False
+        return (
+            direct_api_key,
+            openai_cfg.get("base_url") or DEFAULT_OPENAI_BASE_URL,
+            False,
+        )
     if selected is not None:
-        raise ValueError(selection_error(
-            "tts", selected,
-            "neither tts.openai.api_key in config nor VOICE_TOOLS_OPENAI_KEY/OPENAI_API_KEY is set",
-        ))
+        raise ValueError(
+            selection_error(
+                "tts",
+                selected,
+                "neither tts.openai.api_key in config nor VOICE_TOOLS_OPENAI_KEY/OPENAI_API_KEY is set",
+            )
+        )
     route = _managed_openai_audio_route()
     if route is None:
         message = "Neither tts.openai.api_key in config nor VOICE_TOOLS_OPENAI_KEY/OPENAI_API_KEY is set"
         if managed_nous_tools_enabled():
-            message += ". " + nous_tool_gateway_unavailable_message("managed OpenAI audio for TTS")
+            message += ". " + nous_tool_gateway_unavailable_message(
+                "managed OpenAI audio for TTS"
+            )
         raise ValueError(message)
     return route
 
@@ -92,9 +114,17 @@ def _openai_extra_body(oai_config: dict[str, Any]) -> dict[str, Any]:
 
 
 def _generate_openai_tts(
-    text: str, output_path: str, tts_config: dict[str, Any], *, api_key: Optional[str] = None,
-    base_url: Optional[str] = None, model: Optional[str] = None, voice: Optional[str] = None,
-    speed: Optional[float] = None, instructions: Optional[str] = None) -> str:
+    text: str,
+    output_path: str,
+    tts_config: dict[str, Any],
+    *,
+    api_key: Optional[str] = None,
+    base_url: Optional[str] = None,
+    model: Optional[str] = None,
+    voice: Optional[str] = None,
+    speed: Optional[float] = None,
+    instructions: Optional[str] = None,
+) -> str:
     """Generate audio via the OpenAI ``audio.speech.create`` SDK shape.
 
     Explicit kwargs let OpenAI-compatible backends (DeepInfra) supply credentials/model/voice
@@ -112,24 +142,39 @@ def _generate_openai_tts(
     if voice is None:
         voice = oai_config.get("voice", DEFAULT_OPENAI_VOICE)
     config_base_url = oai_config.get("base_url")
-    if base_url is None:  # config override beats the auth-chain fallback; explicit arg wins
+    if (
+        base_url is None
+    ):  # config override beats the auth-chain fallback; explicit arg wins
         base_url = config_base_url or fallback_base or DEFAULT_OPENAI_BASE_URL
     if speed is None:
-        speed_default = tts_config.get("speed", 1.0) if isinstance(tts_config, dict) else 1.0
+        speed_default = (
+            tts_config.get("speed", 1.0) if isinstance(tts_config, dict) else 1.0
+        )
         speed = float(oai_config.get("speed", speed_default))
     # The managed gateway only proxies MANAGED_OPENAI_TTS_MODELS; coerce a direct-OpenAI
     # model (e.g. "tts-1-hd") unless the user redirected base_url to their own endpoint.
-    if is_managed and not explicit_base_url and not config_base_url and model not in MANAGED_OPENAI_TTS_MODELS:
+    if (
+        is_managed
+        and not explicit_base_url
+        and not config_base_url
+        and model not in MANAGED_OPENAI_TTS_MODELS
+    ):
         logger.warning(
             "TTS: managed OpenAI audio gateway does not support model %r; "
             "falling back to %s. Set VOICE_TOOLS_OPENAI_KEY or OPENAI_API_KEY "
             "to use %r directly.",
-            model, DEFAULT_OPENAI_MODEL, model)
+            model,
+            DEFAULT_OPENAI_MODEL,
+            model,
+        )
         model = DEFAULT_OPENAI_MODEL
     create_kwargs: dict[str, Any] = {
-        "model": model, "voice": voice, "input": text,
+        "model": model,
+        "voice": voice,
+        "input": text,
         "response_format": _tts_response_format_from_path(output_path),
-        "extra_headers": {"x-idempotency-key": str(uuid.uuid4())}}
+        "extra_headers": {"x-idempotency-key": str(uuid.uuid4())},
+    }
     if speed != 1.0:
         create_kwargs["speed"] = max(0.25, min(4.0, speed))
     if instructions:
@@ -146,14 +191,19 @@ def _generate_openai_tts(
             close()
 
 
-def _generate_deepinfra_tts(text: str, output_path: str, tts_config: dict[str, Any]) -> str:
+def _generate_deepinfra_tts(
+    text: str, output_path: str, tts_config: dict[str, Any]
+) -> str:
     """Resolve DeepInfra credentials/model (live ``clawk_cli.models`` catalog, no hardcoded ids), then
     delegate to the OpenAI-compatible handler."""
     api_key = _origin()._resolve_provider_key("DEEPINFRA_API_KEY", "deepinfra")
     if not api_key:
-        raise ValueError("DEEPINFRA_API_KEY not set. Run `clawk setup` to configure, or set the env var directly.")
+        raise ValueError(
+            "DEEPINFRA_API_KEY not set. Run `clawk setup` to configure, or set the env var directly."
+        )
     di_config = _section(tts_config, "deepinfra")
     from clawk_cli.models import deepinfra_base_url, deepinfra_model_ids
+
     model = di_config.get("model")
     if not isinstance(model, str) or not model.strip():
         candidates = deepinfra_model_ids("tts")
@@ -161,9 +211,16 @@ def _generate_deepinfra_tts(text: str, output_path: str, tts_config: dict[str, A
             raise ValueError(
                 "No DeepInfra TTS model available. Pin one in config.yaml "
                 "under tts.deepinfra.model, or check connectivity to "
-                "api.deepinfra.com so the live catalog can be fetched.")
+                "api.deepinfra.com so the live catalog can be fetched."
+            )
         model = candidates[0]
     return _origin()._generate_openai_tts(
-        text, output_path, tts_config, api_key=api_key, base_url=deepinfra_base_url(di_config),
-        model=model, voice=di_config.get("voice", DEFAULT_DEEPINFRA_TTS_VOICE),
-        speed=float(di_config.get("speed", tts_config.get("speed", 1.0))))
+        text,
+        output_path,
+        tts_config,
+        api_key=api_key,
+        base_url=deepinfra_base_url(di_config),
+        model=model,
+        voice=di_config.get("voice", DEFAULT_DEEPINFRA_TTS_VOICE),
+        speed=float(di_config.get("speed", tts_config.get("speed", 1.0))),
+    )

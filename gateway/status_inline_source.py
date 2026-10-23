@@ -80,56 +80,103 @@ _BOOTSTRAPS = (
     # clawk_cli._launchers.runtime_command (store launcher, the Windows updater's relaunch)
     ("module", re.compile(rf"import os, sys, runpy;.*\b{_RUN_MODULE}", re.DOTALL)),
     # clawk_cli.venv_sync.relaunch_command: argv is assigned inside the source
-    ("module", re.compile(rf"import sys, runpy; sys\.path\.insert\(.*\b{_RUN_MODULE}", re.DOTALL)),
-    ("path", re.compile(
-        rf"import sys, runpy; sys\.path\.insert\(.*\brunpy\.run_path\(\s*{_Q}(?P<target>[^'\"]+?){_Q}\s*,\s*run_name\s*=\s*{_MAIN}\s*\)",
-        re.DOTALL)),
+    (
+        "module",
+        re.compile(
+            rf"import sys, runpy; sys\.path\.insert\(.*\b{_RUN_MODULE}", re.DOTALL
+        ),
+    ),
+    (
+        "path",
+        re.compile(
+            rf"import sys, runpy; sys\.path\.insert\(.*\brunpy\.run_path\(\s*{_Q}(?P<target>[^'\"]+?){_Q}\s*,\s*run_name\s*=\s*{_MAIN}\s*\)",
+            re.DOTALL,
+        ),
+    ),
     # clawk_cli.venv_sync.relaunch_command re-entering a ``-c`` launcher: the launcher's source is
     # exec'd as a string literal, its argv assigned before it; resolved through the rows above/below
-    ("exec", re.compile(r"import sys, runpy; sys\.path\.insert\(.*?;\s*exec\((?P<target>.+)\)", re.DOTALL)),
+    (
+        "exec",
+        re.compile(
+            r"import sys, runpy; sys\.path\.insert\(.*?;\s*exec\((?P<target>.+)\)",
+            re.DOTALL,
+        ),
+    ),
     # clawk_cli._launchers._launcher_script (the published POSIX shell / Windows .cmd launcher)
-    ("entry", re.compile(r"import os, re, sys\s.*\bfrom\s+(?P<target>[\w.]+)\s+import\s+(?P<func>\w+)\b.*\bsys\.exit\(\s*(?P=func)\(\)\s*\)", re.DOTALL)),
+    (
+        "entry",
+        re.compile(
+            r"import os, re, sys\s.*\bfrom\s+(?P<target>[\w.]+)\s+import\s+(?P<func>\w+)\b.*\bsys\.exit\(\s*(?P=func)\(\)\s*\)",
+            re.DOTALL,
+        ),
+    ),
     # scripts/build/launchers.py::posix_launcher (the bundled/Docker payload's bin/clawk). Spelled out
     # statement by statement: a ``.*`` would span a carrier's source plus the launcher argv it carries.
     # Only the ``clawk`` entry: the same shape importing any other module is someone else's program.
-    ("module", re.compile(
-        rf"import os, site, sys;\s*sys\.argv\[0\]\s*=\s*{_Q}[\w.-]+{_Q};\s*"
-        rf"site\.addsitedir\(os\.environ\[{_Q}CLAWK_SITE{_Q}\]\);"
-        r"\s*from\s+(?P<target>clawk_cli\.main)\s+import\s+main\s*;\s*sys\.exit\(\s*main\(\)\s*\)")),
+    (
+        "module",
+        re.compile(
+            rf"import os, site, sys;\s*sys\.argv\[0\]\s*=\s*{_Q}[\w.-]+{_Q};\s*"
+            rf"site\.addsitedir\(os\.environ\[{_Q}CLAWK_SITE{_Q}\]\);"
+            r"\s*from\s+(?P<target>clawk_cli\.main)\s+import\s+main\s*;\s*sys\.exit\(\s*main\(\)\s*\)"
+        ),
+    ),
     # clawk_cli._launchers._write_cmd_launcher: the launcher script, base64-encoded
-    ("base64", re.compile(rf"import base64; exec\(base64\.b64decode\({_Q}(?P<target>[A-Za-z0-9+/=]+){_Q}\)\)")),
+    (
+        "base64",
+        re.compile(
+            rf"import base64; exec\(base64\.b64decode\({_Q}(?P<target>[A-Za-z0-9+/=]+){_Q}\)\)"
+        ),
+    ),
 )
 _ASSIGNED_ARGV = re.compile(r"\bsys\.argv\s*=\s*\[(.*?)\]\s*;")
 _EXEC_LAUNCHER = re.compile(
     # no ``\b`` before ``from``/``sys``: an escaped newline normalizes to ``/n`` and abuts them
-    r"import os, re, sys\W.*?from\s+(?P<target>[\w.]+)\s+import\s+(?P<func>\w+)\b.*sys\.exit\(\s*(?P=func)\(\)\s*\)", re.DOTALL)
-_EXEC_BASE64 = re.compile(r"import base64; exec\(base64\.b64decode\(\W*(?P<b64>[A-Za-z0-9+/=]+)")
+    r"import os, re, sys\W.*?from\s+(?P<target>[\w.]+)\s+import\s+(?P<func>\w+)\b.*sys\.exit\(\s*(?P=func)\(\)\s*\)",
+    re.DOTALL,
+)
+_EXEC_BASE64 = re.compile(
+    r"import base64; exec\(base64\.b64decode\(\W*(?P<b64>[A-Za-z0-9+/=]+)"
+)
 
 
 def _bootstrap_entry(source: str, argv: list[str]) -> list[str] | None:
     """``[-m, <module>, *argv]`` (or ``[<path>, *argv]``) the inline *source* runs in-process, else None."""
     source = source.strip()
-    kind, match = next(((k, m) for k, p in _BOOTSTRAPS if (m := p.fullmatch(source))), (None, None))
+    kind, match = next(
+        ((k, m) for k, p in _BOOTSTRAPS if (m := p.fullmatch(source))), (None, None)
+    )
     if match is None:
         return None
     target = match["target"]
     if kind == "base64":
         import base64
         import binascii
+
         try:
-            return _bootstrap_entry(base64.b64decode(target, validate=True).decode("utf-8"), argv)
+            return _bootstrap_entry(
+                base64.b64decode(target, validate=True).decode("utf-8"), argv
+            )
         except (binascii.Error, UnicodeDecodeError):
             return None
     if kind == "exec":
         # The launcher source is a string literal here, and readers normalize its escapes (``\\n`` ->
         # ``/n``), so it is matched in place by the launcher row's anchors, never decoded.
         if assigned := _ASSIGNED_ARGV.search(source):
-            argv = [item.strip().strip("'\"") for item in assigned.group(1).split(",")][1:]
-        if wrapped := _EXEC_BASE64.search(target):  # the .cmd launcher: its script, base64-encoded
+            argv = [item.strip().strip("'\"") for item in assigned.group(1).split(",")][
+                1:
+            ]
+        if wrapped := _EXEC_BASE64.search(
+            target
+        ):  # the .cmd launcher: its script, base64-encoded
             import base64
             import binascii
+
             try:
-                return _bootstrap_entry(base64.b64decode(wrapped["b64"], validate=True).decode("utf-8"), argv)
+                return _bootstrap_entry(
+                    base64.b64decode(wrapped["b64"], validate=True).decode("utf-8"),
+                    argv,
+                )
             except (binascii.Error, UnicodeDecodeError):
                 return None
         launcher = _EXEC_LAUNCHER.search(target)
@@ -137,7 +184,11 @@ def _bootstrap_entry(source: str, argv: list[str]) -> list[str] | None:
             return None
         kind, target = "entry", launcher["target"]
     if kind == "entry":  # the launcher script's own ``--run-module <module>`` switch
-        return ["-m", argv[1], *argv[2:]] if argv[:1] == ["--run-module"] and len(argv) > 1 else ["-m", target, *argv]
+        return (
+            ["-m", argv[1], *argv[2:]]
+            if argv[:1] == ["--run-module"] and len(argv) > 1
+            else ["-m", target, *argv]
+        )
     if assigned := _ASSIGNED_ARGV.search(source):
         argv = [item.strip().strip("'\"") for item in assigned.group(1).split(",")][1:]
     return [target, *argv] if kind == "path" else ["-m", target, *argv]
@@ -156,7 +207,9 @@ def inline_bootstrap_argv(tokens: list[str]) -> list[str] | None:
         return None
     for end in range(index + 1, len(tokens)):
         if tokens[end].rstrip().endswith(")"):
-            entry = _bootstrap_entry(" ".join(tokens[index + 1 : end + 1]), tokens[end + 1 :])
+            entry = _bootstrap_entry(
+                " ".join(tokens[index + 1 : end + 1]), tokens[end + 1 :]
+            )
             if entry is not None:
                 return [tokens[0], *entry]
     return None

@@ -45,14 +45,21 @@ def _dead_worker_with_log(conn, tid: str, pid: int, rc: int) -> None:
     log = kb.worker_log_path(tid)
     log.parent.mkdir(parents=True, exist_ok=True)
     with open(log, "a", encoding="utf-8") as f:
-        f.write(f"the model said something\n\nResume this session with:\n  clawk --resume x\n\n{KANBAN_WORKER_EXIT_TRAILER}{rc}\n")
+        f.write(
+            f"the model said something\n\nResume this session with:\n  clawk --resume x\n\n{KANBAN_WORKER_EXIT_TRAILER}{rc}\n"
+        )
 
 
 @pytest.mark.parametrize(
     "rc, event, failure_counted",
-    [(0, "protocol_violation", False), (kb.KANBAN_RATE_LIMIT_EXIT_CODE, "rate_limited", False)],
+    [
+        (0, "protocol_violation", False),
+        (kb.KANBAN_RATE_LIMIT_EXIT_CODE, "rate_limited", False),
+    ],
 )
-def test_fresh_process_sweep_books_the_logged_exit_code(kanban_home, rc, event, failure_counted):
+def test_fresh_process_sweep_books_the_logged_exit_code(
+    kanban_home, rc, event, failure_counted
+):
     """Empty reap registry + exit trailer in the log: a clean exit is the protocol violation
     (marker, streak, no unified-budget hit) and a 75 is a rate-limit requeue — not a bare
     ``pid N not alive`` crash that counts a failure."""
@@ -63,10 +70,13 @@ def test_fresh_process_sweep_books_the_logged_exit_code(kanban_home, rc, event, 
         kbd.detect_crashed_workers(conn)
 
         ev = conn.execute(
-            "SELECT kind FROM task_events WHERE task_id=? ORDER BY id DESC LIMIT 1", (tid,)).fetchone()
+            "SELECT kind FROM task_events WHERE task_id=? ORDER BY id DESC LIMIT 1",
+            (tid,),
+        ).fetchone()
         run = conn.execute(
             "SELECT outcome, error, metadata FROM task_runs WHERE task_id=? ORDER BY id DESC LIMIT 1",
-            (tid,)).fetchone()
+            (tid,),
+        ).fetchone()
         task = kb.get_task(conn, tid)
         assert ev["kind"] == event
         assert "not alive" not in (run["error"] or "")
@@ -108,12 +118,20 @@ def test_plain_budget_trip_still_auto_recovers(kanban_home):
     survive: raising the dispatcher ``failure_limit`` past the counter promotes the card, and
     ``assign_task`` to a fresh profile (counter reset by design) promotes it too."""
     with kbc.connect() as conn:
-        tids = [kb.create_task(conn, title=t, assignee="a") for t in ("raise-limit", "reassign")]
+        tids = [
+            kb.create_task(conn, title=t, assignee="a")
+            for t in ("raise-limit", "reassign")
+        ]
         for tid in tids:
             for i in range(2):
                 kbd._record_task_failure(
-                    conn, tid, error=f"boom{i}", outcome="crashed", failure_limit=2,
-                    release_claim=False, end_run=False,
+                    conn,
+                    tid,
+                    error=f"boom{i}",
+                    outcome="crashed",
+                    failure_limit=2,
+                    release_claim=False,
+                    end_run=False,
                 )
             assert kb.get_task(conn, tid).status == "blocked"
         assert kb.recompute_ready(conn, failure_limit=2) == 0
@@ -123,8 +141,13 @@ def test_plain_budget_trip_still_auto_recovers(kanban_home):
 
         for i in range(2):
             kbd._record_task_failure(
-                conn, tids[1], error=f"again{i}", outcome="crashed", failure_limit=2,
-                release_claim=False, end_run=False,
+                conn,
+                tids[1],
+                error=f"again{i}",
+                outcome="crashed",
+                failure_limit=2,
+                release_claim=False,
+                end_run=False,
             )
         assert kb.get_task(conn, tids[1]).status == "blocked"
         kb.assign_task(conn, tids[1], "other-profile")
@@ -143,4 +166,7 @@ def test_exit_single_query_writes_trailer_only_for_kanban_workers(monkeypatch, c
     with pytest.raises(SystemExit) as exc:
         exit_single_query(kb.KANBAN_RATE_LIMIT_EXIT_CODE)
     assert exc.value.code == kb.KANBAN_RATE_LIMIT_EXIT_CODE
-    assert f"{KANBAN_WORKER_EXIT_TRAILER}{kb.KANBAN_RATE_LIMIT_EXIT_CODE}" in capsys.readouterr().err
+    assert (
+        f"{KANBAN_WORKER_EXIT_TRAILER}{kb.KANBAN_RATE_LIMIT_EXIT_CODE}"
+        in capsys.readouterr().err
+    )

@@ -31,7 +31,9 @@ def check(out: Path = OUT) -> int:
     if committed == render():
         return 0
     rel = out.relative_to(ROOT) if out.is_relative_to(ROOT) else out
-    print(f"{rel} is stale — run scripts/dump_desktop_slash_registry.py", file=sys.stderr)
+    print(
+        f"{rel} is stale — run scripts/dump_desktop_slash_registry.py", file=sys.stderr
+    )
     return 1
 
 

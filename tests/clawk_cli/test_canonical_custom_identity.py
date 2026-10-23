@@ -52,7 +52,9 @@ def test_display_name_heals_to_the_config_key_identity(keyed_provider_config):
     assert rp.canonical_custom_identity(config_provider=DISPLAY_NAME) == CANONICAL
 
 
-def test_config_model_provider_display_name_heals_too(keyed_provider_config, monkeypatch):
+def test_config_model_provider_display_name_heals_too(
+    keyed_provider_config, monkeypatch
+):
     """Same path reached through ``config.model.provider`` rather than an argument."""
     monkeypatch.setattr(rp, "_get_model_config", lambda: {"provider": DISPLAY_NAME})
     assert rp.canonical_custom_identity() == CANONICAL
@@ -78,7 +80,9 @@ def test_all_recovery_sources_agree_on_one_identity(keyed_provider_config):
 
 def test_unconfigured_candidate_still_returns_none(keyed_provider_config):
     """Fail-closed contract: never invent an identity resolution can't honour."""
-    assert rp.canonical_custom_identity(config_provider="not-a-configured-entry") is None
+    assert (
+        rp.canonical_custom_identity(config_provider="not-a-configured-entry") is None
+    )
 
 
 def test_legacy_unkeyed_entry_keeps_its_name_identity(monkeypatch):
@@ -97,7 +101,10 @@ def test_legacy_unkeyed_entry_keeps_its_name_identity(monkeypatch):
     monkeypatch.setattr("clawk_cli.config.load_config", lambda *a, **k: config)
     monkeypatch.setattr(rp, "_get_model_config", dict)
 
-    assert rp.canonical_custom_identity(config_provider="Legacy Endpoint") == "custom:legacy-endpoint"
+    assert (
+        rp.canonical_custom_identity(config_provider="Legacy Endpoint")
+        == "custom:legacy-endpoint"
+    )
 
 
 class TestIsRoutableProvider:

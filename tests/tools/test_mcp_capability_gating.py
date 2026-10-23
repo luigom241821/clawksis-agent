@@ -15,6 +15,7 @@ servers like Unreal Engine's editor MCP). Its cadence is configurable via
 
 Discovery gating ported from anomalyco/opencode#31271.
 """
+
 import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -37,7 +38,6 @@ class TestAdvertisesTools:
         task.initialize_result = _caps(tools=SimpleNamespace(listChanged=True))
         assert task._advertises_tools() is True
 
-
     def test_legacy_fallback_no_capabilities_attr(self):
         task = MCPServerTask("test")
         task.initialize_result = SimpleNamespace()  # no .capabilities
@@ -56,7 +56,6 @@ class TestDiscoverToolsGating:
 
         task.session.list_tools.assert_not_called()
         assert task._tools == []
-
 
     async def test_legacy_fallback_still_calls_list_tools(self):
         task = MCPServerTask("test")
@@ -101,6 +100,7 @@ class TestKeepaliveProbe:
             )
 
         import tools.mcp_tool as mcp_mod
+
         orig = mcp_mod.asyncio.wait
         mcp_mod.asyncio.wait = fake_wait
         try:
@@ -122,7 +122,6 @@ class TestKeepaliveProbe:
         assert reason == "shutdown"
         task.session.send_ping.assert_awaited_once()
         task.session.list_tools.assert_not_called()
-
 
     async def test_keepalive_uses_ping_legacy_fallback(self):
         """No captured capabilities → still pings (no spurious list_tools)."""
@@ -172,9 +171,12 @@ class TestKeepaliveInterval:
 
         import tools.mcp_tool as mcp_mod
         import tools.mcp_tool_server_run as run_mod
+
         orig, orig_time = mcp_mod.asyncio.wait, run_mod.time
         mcp_mod.asyncio.wait = fake_wait
-        run_mod.time = SimpleNamespace(monotonic=lambda: orig_time.monotonic() + elapsed[0])
+        run_mod.time = SimpleNamespace(
+            monotonic=lambda: orig_time.monotonic() + elapsed[0]
+        )
         try:
             assert await task._wait_for_lifecycle_event() == "shutdown"
         finally:
@@ -184,21 +186,25 @@ class TestKeepaliveInterval:
     async def _captured_interval(self, config):
         """Capture the first ``asyncio.wait`` timeout of a remote (HTTP) server."""
         _task, timeouts = await self._run_lifecycle_cycles(
-            {"url": "https://example.test/mcp", **config})
+            {"url": "https://example.test/mcp", **config}
+        )
         return timeouts[0]
 
     @pytest.mark.asyncio
     async def test_default_interval_when_unset(self):
         from tools.mcp_tool import _DEFAULT_KEEPALIVE_INTERVAL
+
         assert await self._captured_interval({}) == _DEFAULT_KEEPALIVE_INTERVAL
         # An explicit interval is honoured on stdio too (where there is no default).
         _task, timeouts = await self._run_lifecycle_cycles(
-            {"command": "example-mcp", "keepalive_interval": 42})
+            {"command": "example-mcp", "keepalive_interval": 42}
+        )
         assert timeouts[0] == 42
 
     @pytest.mark.asyncio
     async def test_interval_clamped_to_floor(self):
         from tools.mcp_tool import _MIN_KEEPALIVE_INTERVAL
+
         # A sub-floor value must clamp up, never busy-loop the keepalive.
         assert (
             await self._captured_interval({"keepalive_interval": 0.1})
@@ -212,6 +218,7 @@ class TestKeepaliveInterval:
         once proven, the loop waits without any timeout. An earlier wake caused by a shorter
         idle limit is NOT proof: the budget stays armed until the full interval has passed."""
         from tools.mcp_tool import _DEFAULT_KEEPALIVE_INTERVAL
+
         task, timeouts = await self._run_lifecycle_cycles({"command": "example-mcp"})
 
         assert timeouts[0] == pytest.approx(_DEFAULT_KEEPALIVE_INTERVAL, abs=0.05)
@@ -219,8 +226,12 @@ class TestKeepaliveInterval:
         assert task._session_proven is True
         task.session.send_ping.assert_not_called()
 
-        task, timeouts = await self._run_lifecycle_cycles({"command": "example-mcp"}, idle_timeout=60)
-        assert timeouts[0] == pytest.approx(60, abs=0.05)  # woke for the idle deadline, not the proof
+        task, timeouts = await self._run_lifecycle_cycles(
+            {"command": "example-mcp"}, idle_timeout=60
+        )
+        assert timeouts[0] == pytest.approx(
+            60, abs=0.05
+        )  # woke for the idle deadline, not the proof
         assert task._session_proven is False
         task.session.send_ping.assert_not_called()
 
@@ -250,7 +261,9 @@ def _mcp_error(code, message="boom"):
     ``.error.code`` attribute ``_is_method_not_found_error`` inspects survives
     unchanged, which is the point of the structural check.
     """
-    exceptions = pytest.importorskip("mcp.shared.exceptions", reason="MCP SDK not installed")
+    exceptions = pytest.importorskip(
+        "mcp.shared.exceptions", reason="MCP SDK not installed"
+    )
     return exceptions.MCPError(code=code, message=message)
 
 
@@ -260,11 +273,12 @@ class TestMethodNotFoundDetection:
     @pytest.mark.usefixtures("require_mcp_2_sdk")
     def test_structural_code_match(self):
         from tools.mcp_tool_errors import _is_method_not_found_error
-        assert _is_method_not_found_error(_mcp_error(-32601)) is True
 
+        assert _is_method_not_found_error(_mcp_error(-32601)) is True
 
     def test_unrelated_exception_is_not_match(self):
         from tools.mcp_tool_errors import _is_method_not_found_error
+
         assert _is_method_not_found_error(TimeoutError()) is False
         assert _is_method_not_found_error(Exception("session terminated")) is False
 
@@ -289,7 +303,6 @@ class TestKeepaliveProbeFallback:
         task.session.list_tools.assert_not_called()
         assert task._ping_unsupported is False
 
-
     async def test_falls_back_on_unknown_method_string(self):
         """Regression for #50028: a server that surfaces method-not-found as a
         plain "Unknown method: ping" string (no structural -32601 code) must
@@ -306,7 +319,6 @@ class TestKeepaliveProbeFallback:
         task.session.send_ping.assert_awaited_once()
         task.session.list_tools.assert_awaited_once()
         assert task._ping_unsupported is True
-
 
     async def test_real_liveness_failure_propagates_not_swallowed(self):
         """A non-(-32601) ping error is a genuine connection failure: it must
@@ -404,4 +416,3 @@ class TestKeepaliveProbeFallback:
         # list_tools must not be called — no tools capability advertised.
         task.session.list_tools.assert_not_called()
         assert task._ping_unsupported is False
-

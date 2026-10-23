@@ -37,16 +37,21 @@ def _ensure_google_auth() -> bool:
         return True
     try:
         from pm import ensure_import
+
         ensure_import("vertex")
         import google.auth as _auth
         import google.auth.transport.requests
         from google.oauth2 import service_account as _service_account
     except Exception as exc:
-        logger.warning("google-auth package not installed (%s). Cannot use Vertex AI.", exc)
+        logger.warning(
+            "google-auth package not installed (%s). Cannot use Vertex AI.", exc
+        )
         return False
     import google as _google
+
     google, service_account = _google, _service_account
     return True
+
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +74,9 @@ def _vertex_config() -> dict:
 
 def _env_or_config(env_var: str, config_key: str) -> str:
     """Setting precedence: env/secret > config.yaml; "" when neither is set."""
-    return (_get_secret(env_var) or "").strip() or str(_vertex_config().get(config_key) or "").strip()
+    return (_get_secret(env_var) or "").strip() or str(
+        _vertex_config().get(config_key) or ""
+    ).strip()
 
 
 def _resolve_region(explicit: Optional[str] = None) -> str:
@@ -94,7 +101,9 @@ def _resolve_credentials_path(explicit: Optional[str]) -> Optional[str]:
     return None
 
 
-def _sa_snapshot(resolved_path: Optional[str]) -> tuple[Optional[bytes], tuple[Any, ...]]:
+def _sa_snapshot(
+    resolved_path: Optional[str],
+) -> tuple[Optional[bytes], tuple[Any, ...]]:
     """Resolve (bytes-or-None, cache key) for one credential attempt.
 
     - No path (ADC): (None, ("__adc__",)) sentinel key.
@@ -116,14 +125,20 @@ def _sa_snapshot(resolved_path: Optional[str]) -> tuple[Optional[bytes], tuple[A
     return raw, (resolved_path, hashlib.sha256(raw).hexdigest())
 
 
-def _load_credentials(resolved_path: Optional[str], sa_raw: Optional[bytes]) -> Optional[tuple[Any, Optional[str]]]:
+def _load_credentials(
+    resolved_path: Optional[str], sa_raw: Optional[bytes]
+) -> Optional[tuple[Any, Optional[str]]]:
     """Build (credentials, project_id) for a cache miss; None when ADC must be refused."""
     if resolved_path:
         if sa_raw is not None:
-            creds = service_account.Credentials.from_service_account_info(json.loads(sa_raw), scopes=_CLOUD_PLATFORM_SCOPES)
+            creds = service_account.Credentials.from_service_account_info(
+                json.loads(sa_raw), scopes=_CLOUD_PLATFORM_SCOPES
+            )
         else:
             # Unreadable at key time: let the SDK try the file directly.
-            creds = service_account.Credentials.from_service_account_file(resolved_path, scopes=_CLOUD_PLATFORM_SCOPES)
+            creds = service_account.Credentials.from_service_account_file(
+                resolved_path, scopes=_CLOUD_PLATFORM_SCOPES
+            )
         return creds, creds.project_id
     # google.auth.default() reads GOOGLE_APPLICATION_CREDENTIALS from os.environ (set by whichever
     # profile loaded first); this profile doesn't define it, so refuse a stranger's identity.
@@ -142,11 +157,16 @@ def _needs_refresh(creds) -> bool:
     return (
         not getattr(creds, "token", None)
         or getattr(creds, "expired", False)
-        or (getattr(creds, "expiry", None) is not None and (creds.expiry.timestamp() - time.time()) < 300)
+        or (
+            getattr(creds, "expiry", None) is not None
+            and (creds.expiry.timestamp() - time.time()) < 300
+        )
     )
 
 
-def _cached_credentials(resolved_path: Optional[str], sa_raw: Optional[bytes], cache_key: tuple[Any, ...]):
+def _cached_credentials(
+    resolved_path: Optional[str], sa_raw: Optional[bytes], cache_key: tuple[Any, ...]
+):
     """(credentials, project_id) from the per-content cache, loading on a miss; None when refused."""
     cached = _creds_cache.get(cache_key)
     if cached is None:
@@ -161,7 +181,9 @@ def _cached_credentials(resolved_path: Optional[str], sa_raw: Optional[bytes], c
     return cached
 
 
-def get_vertex_credentials(credentials_path: Optional[str] = None) -> tuple[Optional[str], Optional[str]]:
+def get_vertex_credentials(
+    credentials_path: Optional[str] = None,
+) -> tuple[Optional[str], Optional[str]]:
     """Return (fresh access_token, project_id) or (None, None); Credentials cached per file content."""
     if not _ensure_google_auth():
         return None, None
@@ -192,7 +214,11 @@ def get_vertex_credentials(credentials_path: Optional[str] = None) -> tuple[Opti
 
 def build_vertex_base_url(project_id: str, region: str = DEFAULT_REGION) -> str:
     """OpenAI-compatible Vertex base URL; ``global`` uses the bare host (Gemini 3.x preview is global-only)."""
-    host = "aiplatform.googleapis.com" if region == "global" else f"{region}-aiplatform.googleapis.com"
+    host = (
+        "aiplatform.googleapis.com"
+        if region == "global"
+        else f"{region}-aiplatform.googleapis.com"
+    )
     return f"https://{host}/v1beta1/projects/{project_id}/locations/{region}/endpoints/openapi"
 
 
@@ -206,7 +232,9 @@ def get_vertex_config(
     return token, build_vertex_base_url(project_id, _resolve_region(region))
 
 
-def get_vertex_base_url(credentials_path: Optional[str] = None, region: Optional[str] = None) -> Optional[str]:
+def get_vertex_base_url(
+    credentials_path: Optional[str] = None, region: Optional[str] = None
+) -> Optional[str]:
     """The Vertex base_url WITHOUT minting a token (no OAuth exchange), or None when the credentials
     cannot be loaded or no project resolves. For processes that route but never send — the
     gateway-backed CLI, whose gateway session mints its own token for the turn."""
@@ -221,7 +249,11 @@ def get_vertex_base_url(credentials_path: Optional[str] = None, region: Optional
         _creds_cache.pop(cache_key, None)
         return None
     project_id = _resolve_project_override() or (cached[1] if cached else None)
-    return build_vertex_base_url(project_id, _resolve_region(region)) if cached and project_id else None
+    return (
+        build_vertex_base_url(project_id, _resolve_region(region))
+        if cached and project_id
+        else None
+    )
 
 
 def vertex_access_token() -> str:
@@ -229,7 +261,9 @@ def vertex_access_token() -> str:
     One stable object, so a credential re-resolution never reads as a key change."""
     token, _project_id = get_vertex_credentials()
     if not token:
-        raise RuntimeError("Vertex AI OAuth token could not be minted (see the Vertex credential settings)")
+        raise RuntimeError(
+            "Vertex AI OAuth token could not be minted (see the Vertex credential settings)"
+        )
     return token
 
 

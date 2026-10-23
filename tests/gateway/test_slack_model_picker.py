@@ -113,6 +113,7 @@ def _interaction_body(msg_ts="1234.5678", channel_id="C1", user="alice", uid="U_
 # send_model_picker — Block Kit structure
 # ===========================================================================
 
+
 class TestSlackModelPickerSend:
     """Test send_model_picker sends the provider-stage Block Kit."""
 
@@ -190,8 +191,12 @@ class TestSlackModelPickerSend:
         adapter = _make_adapter()
         adapter._app = None
         result = await adapter.send_model_picker(
-            chat_id="C1", providers=[], current_model="", current_provider="",
-            session_key="s", on_model_selected=AsyncMock(),
+            chat_id="C1",
+            providers=[],
+            current_model="",
+            current_provider="",
+            session_key="s",
+            on_model_selected=AsyncMock(),
         )
         assert result.success is False
 
@@ -199,8 +204,12 @@ class TestSlackModelPickerSend:
     async def test_no_providers(self):
         adapter = _make_adapter()
         result = await adapter.send_model_picker(
-            chat_id="C1", providers=[], current_model="", current_provider="",
-            session_key="s", on_model_selected=AsyncMock(),
+            chat_id="C1",
+            providers=[],
+            current_model="",
+            current_provider="",
+            session_key="s",
+            on_model_selected=AsyncMock(),
         )
         assert result.success is False
 
@@ -215,19 +224,27 @@ class TestSlackModelPickerSend:
 
         long_slug = "custom-" + "x" * 100
         providers = _PROVIDERS + [
-            {"slug": long_slug, "name": "CustomCo", "models": ["m1"], "total_models": 1},
+            {
+                "slug": long_slug,
+                "name": "CustomCo",
+                "models": ["m1"],
+                "total_models": 1,
+            },
         ]
 
         result = await adapter.send_model_picker(
-            chat_id="C1", providers=providers, current_model="m",
-            current_provider="openrouter", session_key="s",
+            chat_id="C1",
+            providers=providers,
+            current_model="m",
+            current_provider="openrouter",
+            session_key="s",
             on_model_selected=AsyncMock(),
         )
 
         assert result.success is True
-        options = (
-            mock_client.chat_postMessage.call_args[1]["blocks"][1]["elements"][0]["options"]
-        )
+        options = mock_client.chat_postMessage.call_args[1]["blocks"][1]["elements"][0][
+            "options"
+        ]
         assert len(options) == 3
         assert all(len(o["value"]) <= 75 for o in options)
         assert [o["value"] for o in options] == ["0", "1", "2"]
@@ -245,8 +262,12 @@ class TestSlackModelPickerSend:
         ]
 
         result = await adapter.send_model_picker(
-            chat_id="C1", providers=providers, current_model="m",
-            current_provider="p0", session_key="s", on_model_selected=AsyncMock(),
+            chat_id="C1",
+            providers=providers,
+            current_model="m",
+            current_provider="p0",
+            session_key="s",
+            on_model_selected=AsyncMock(),
         )
 
         assert result.success is True
@@ -260,11 +281,20 @@ class TestSlackModelPickerSend:
 # _handle_model_picker_action — drill-down dispatch
 # ===========================================================================
 
+
 class TestSlackModelPickerAction:
     """Test the model picker action handler."""
 
-    def _seed_state(self, adapter, msg_ts="1234.5678", on_selected=None, stage="provider",
-                    selected_provider="", bare_ts=False, providers=None):
+    def _seed_state(
+        self,
+        adapter,
+        msg_ts="1234.5678",
+        on_selected=None,
+        stage="provider",
+        selected_provider="",
+        bare_ts=False,
+        providers=None,
+    ):
         # bare_ts=True mirrors the metadata-poor send path: no team id, so the
         # state is keyed by the raw ts instead of the (team_id, ts) marker.
         key = msg_ts if bare_ts else ("T1", msg_ts)
@@ -347,10 +377,15 @@ class TestSlackModelPickerAction:
         mock_client.chat_update = AsyncMock()
         self._seed_state(
             adapter,
-            providers=[{
-                "slug": "empty", "name": "EmptyCo", "models": [],
-                "total_models": 0, "is_current": False,
-            }],
+            providers=[
+                {
+                    "slug": "empty",
+                    "name": "EmptyCo",
+                    "models": [],
+                    "total_models": 0,
+                    "is_current": False,
+                }
+            ],
         )
 
         ack = AsyncMock()
@@ -380,7 +415,10 @@ class TestSlackModelPickerAction:
             return "✅ Switched to claude-sonnet-4"
 
         self._seed_state(
-            adapter, stage="model", selected_provider="openrouter", on_selected=on_selected
+            adapter,
+            stage="model",
+            selected_provider="openrouter",
+            on_selected=on_selected,
         )
 
         ack = AsyncMock()
@@ -414,7 +452,10 @@ class TestSlackModelPickerAction:
             raise RuntimeError("boom")
 
         self._seed_state(
-            adapter, stage="model", selected_provider="openrouter", on_selected=on_selected
+            adapter,
+            stage="model",
+            selected_provider="openrouter",
+            on_selected=on_selected,
         )
 
         ack = AsyncMock()
@@ -439,7 +480,10 @@ class TestSlackModelPickerAction:
             return f"Error: Model switch to {model_id} failed (boom); staying on old."
 
         self._seed_state(
-            adapter, stage="model", selected_provider="openrouter", on_selected=on_selected
+            adapter,
+            stage="model",
+            selected_provider="openrouter",
+            on_selected=on_selected,
         )
 
         ack = AsyncMock()
@@ -464,7 +508,10 @@ class TestSlackModelPickerAction:
         mock_client.chat_update = AsyncMock()
         on_selected = AsyncMock()
         self._seed_state(
-            adapter, stage="model", selected_provider="openrouter", on_selected=on_selected
+            adapter,
+            stage="model",
+            selected_provider="openrouter",
+            on_selected=on_selected,
         )
 
         ack = AsyncMock()
@@ -490,7 +537,10 @@ class TestSlackModelPickerAction:
         mock_client.chat_update = AsyncMock()
         on_selected = AsyncMock()
         self._seed_state(
-            adapter, stage="model", selected_provider="openrouter", on_selected=on_selected
+            adapter,
+            stage="model",
+            selected_provider="openrouter",
+            on_selected=on_selected,
         )
 
         for token in ("2", "-1"):
@@ -502,7 +552,9 @@ class TestSlackModelPickerAction:
             # Re-seed: the first miss pops the entry.
             if ("T1", "1234.5678") not in adapter._model_picker_state:
                 self._seed_state(
-                    adapter, stage="model", selected_provider="openrouter",
+                    adapter,
+                    stage="model",
+                    selected_provider="openrouter",
                     on_selected=on_selected,
                 )
 
@@ -584,7 +636,10 @@ class TestSlackModelPickerAction:
         mock_client = adapter._team_clients["T1"]
         mock_client.chat_update = AsyncMock()
         ack = AsyncMock()
-        action = {"action_id": "clawk_model_provider", "selected_option": {"value": "0"}}
+        action = {
+            "action_id": "clawk_model_provider",
+            "selected_option": {"value": "0"},
+        }
 
         await adapter._handle_model_picker_action(
             ack, _interaction_body(msg_ts="nonexistent"), action
@@ -602,7 +657,10 @@ class TestSlackModelPickerAction:
         self._seed_state(adapter)
 
         ack = AsyncMock()
-        action = {"action_id": "clawk_model_provider", "selected_option": {"value": "openrouter"}}
+        action = {
+            "action_id": "clawk_model_provider",
+            "selected_option": {"value": "openrouter"},
+        }
 
         await adapter._handle_model_picker_action(
             ack, _interaction_body(user="intruder", uid="U_BAD"), action
@@ -617,6 +675,7 @@ class TestSlackModelPickerAction:
 # ===========================================================================
 # Gateway integration — routes /model to the picker
 # ===========================================================================
+
 
 class TestSlackModelPickerGatewayIntegration:
     """Verify _handle_model_command detects the Slack picker capability."""
@@ -641,6 +700,7 @@ class TestSlackModelPickerGatewayIntegration:
         adapter = SlackPickerAdapter()
 
         from gateway.run import GatewayRunner
+
         runner = object.__new__(GatewayRunner)
         runner.adapters = {Platform.SLACK: adapter}
         runner._voice_mode = {}
@@ -651,19 +711,29 @@ class TestSlackModelPickerGatewayIntegration:
         clawk_home.mkdir()
         cfg_path = clawk_home / "config.yaml"
         cfg_path.write_text(
-            yaml.safe_dump({
-                "model": {"default": "old-model", "provider": "openrouter"},
-                "providers": {},
-            }),
+            yaml.safe_dump(
+                {
+                    "model": {"default": "old-model", "provider": "openrouter"},
+                    "providers": {},
+                }
+            ),
             encoding="utf-8",
         )
 
         import gateway.run as gateway_run
+
         monkeypatch.setattr(gateway_run, "_clawk_home", clawk_home)
         monkeypatch.setattr("agent.models_dev.fetch_models_dev", dict)
         monkeypatch.setattr(
             "clawk_cli.model_switch_providers.list_picker_providers",
-            lambda **kw: [{"slug": "openrouter", "name": "OR", "models": ["m1"], "total_models": 1}],
+            lambda **kw: [
+                {
+                    "slug": "openrouter",
+                    "name": "OR",
+                    "models": ["m1"],
+                    "total_models": 1,
+                }
+            ],
         )
 
         event = MessageEvent(
@@ -692,6 +762,7 @@ class TestSlackModelPickerGatewayIntegration:
         adapter = SlackNoPickerAdapter()
 
         from gateway.run import GatewayRunner
+
         runner = object.__new__(GatewayRunner)
         runner.adapters = {Platform.SLACK: adapter}
         runner._voice_mode = {}
@@ -702,14 +773,17 @@ class TestSlackModelPickerGatewayIntegration:
         clawk_home.mkdir()
         cfg_path = clawk_home / "config.yaml"
         cfg_path.write_text(
-            yaml.safe_dump({
-                "model": {"default": "old-model", "provider": "openrouter"},
-                "providers": {},
-            }),
+            yaml.safe_dump(
+                {
+                    "model": {"default": "old-model", "provider": "openrouter"},
+                    "providers": {},
+                }
+            ),
             encoding="utf-8",
         )
 
         import gateway.run as gateway_run
+
         monkeypatch.setattr(gateway_run, "_clawk_home", clawk_home)
         monkeypatch.setattr("agent.models_dev.fetch_models_dev", dict)
         monkeypatch.setattr(

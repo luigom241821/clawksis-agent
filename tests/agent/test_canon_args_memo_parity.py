@@ -19,6 +19,7 @@ assert:
      the fix, vs quadratic under the pre-fix logic — a deterministic proof
      (call counts, not wall clock) that the O(n^2) is gone.
 """
+
 import copy
 import json
 import random
@@ -56,12 +57,11 @@ def test_cache_bounded_by_bytes():
     unbounded memory: the byte budget evicts before the count bound."""
     big = json.dumps({"path": "/tmp/big.py", "content": "y" * 200_000})
     for i in range(300):  # 300 x ~400KB (key+value) >> 32MB budget
-        cl._canonicalize_tool_call_arguments(
-            big[:-1] + f',"n":{i}}}'
-        )
+        cl._canonicalize_tool_call_arguments(big[:-1] + f',"n":{i}}}')
     assert cl._canon_args_cache_bytes <= cl._CANON_ARGS_CACHE_MAX_BYTES, (
         f"cache holds {cl._canon_args_cache_bytes} bytes — byte budget "
-        "regressed; large tool-call args pin unbounded memory again")
+        "regressed; large tool-call args pin unbounded memory again"
+    )
     assert len(cl._CANON_ARGS_CACHE) >= 1  # still memoizes something
 
 
@@ -74,20 +74,40 @@ def build_history(n_tool_calls, arg_bytes=2048):
     msgs = []
     filler = "x" * (arg_bytes - 200)
     for i in range(n_tool_calls):
-        args = json.dumps({"path": f"/tmp/file_{i}.py", "content": filler,
-                           "u": UNI, "n": i, "mode": "write"})
+        args = json.dumps(
+            {
+                "path": f"/tmp/file_{i}.py",
+                "content": filler,
+                "u": UNI,
+                "n": i,
+                "mode": "write",
+            }
+        )
         if i % 9 == 8:
             args = '{"broken": tru'  # malformed -> repair path
         elif i % 6 == 5:
             args = ""  # empty -> repair path
-        msgs.append({
-            "role": "assistant", "content": "",
-            "tool_calls": [{"id": f"call_{i}", "type": "function",
-                            "function": {"name": "write_file",
-                                         "arguments": args}}],
-        })
-        msgs.append({"role": "tool", "tool_call_id": f"call_{i}",
-                     "name": "write_file", "content": f"result {i} {UNI}"})
+        msgs.append(
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": f"call_{i}",
+                        "type": "function",
+                        "function": {"name": "write_file", "arguments": args},
+                    }
+                ],
+            }
+        )
+        msgs.append(
+            {
+                "role": "tool",
+                "tool_call_id": f"call_{i}",
+                "name": "write_file",
+                "content": f"result {i} {UNI}",
+            }
+        )
     return msgs
 
 
@@ -102,13 +122,17 @@ def canonicalize_pass_OLD(api_messages):
             if isinstance(tc, dict) and "function" in tc:
                 try:
                     args_obj = json.loads(tc["function"]["arguments"])
-                    tc = {**tc, "function": {
-                        **tc["function"],
-                        "arguments": json.dumps(
-                            args_obj, separators=(",", ":"),
-                            sort_keys=True,
-                        ),
-                    }}
+                    tc = {
+                        **tc,
+                        "function": {
+                            **tc["function"],
+                            "arguments": json.dumps(
+                                args_obj,
+                                separators=(",", ":"),
+                                sort_keys=True,
+                            ),
+                        },
+                    }
                 except Exception:
                     tc["function"]["arguments"] = _repair_tool_call_arguments(
                         tc["function"]["arguments"],
@@ -142,8 +166,7 @@ class TestByteParity:
         for m in history:  # all-valid: canonicalize path only
             if m.get("tool_calls"):
                 fn = m["tool_calls"][0]["function"]
-                fn["arguments"] = json.dumps({"id": m["tool_calls"][0]["id"],
-                                              "u": UNI})
+                fn["arguments"] = json.dumps({"id": m["tool_calls"][0]["id"], "u": UNI})
         before = copy.deepcopy(history)
         api_messages = [dict(m) for m in history]  # shallow, like the loop
         cl._canonicalize_api_tool_calls(api_messages)
@@ -152,10 +175,19 @@ class TestByteParity:
     def test_non_string_arguments_parity(self):
         """A dict (not str) in 'arguments' takes the repair path in both
         implementations — the memo must not change that."""
-        msgs = [{"role": "assistant", "content": "",
-                 "tool_calls": [{"id": "c1", "type": "function",
-                                 "function": {"name": "t",
-                                              "arguments": {"a": 1}}}]}]
+        msgs = [
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "c1",
+                        "type": "function",
+                        "function": {"name": "t", "arguments": {"a": 1}},
+                    }
+                ],
+            }
+        ]
         old_msgs = copy.deepcopy(msgs)
         new_msgs = copy.deepcopy(msgs)
         canonicalize_pass_OLD(old_msgs)
@@ -170,10 +202,10 @@ class TestMemoSemantics:
         assert canon == cl._canonicalize_tool_call_arguments(raw)
         assert cl._canonicalize_tool_call_arguments(canon) == canon
         # exact canonical form: sorted keys, tight separators, ascii-escaped
-        assert canon == json.dumps(json.loads(raw), separators=(",", ":"),
-                                   sort_keys=True)
+        assert canon == json.dumps(
+            json.loads(raw), separators=(",", ":"), sort_keys=True
+        )
         assert canon == canon.encode().decode()  # pure ASCII wire form
-
 
     def test_malformed_never_memoized(self):
         with pytest.raises(Exception):
@@ -203,9 +235,9 @@ class TestComplexityProof:
         for m in history:
             if m.get("tool_calls"):
                 fn = m["tool_calls"][0]["function"]
-                fn["arguments"] = json.dumps({"name": fn["name"],
-                                              "id": m["tool_calls"][0]["id"],
-                                              "u": UNI})
+                fn["arguments"] = json.dumps(
+                    {"name": fn["name"], "id": m["tool_calls"][0]["id"], "u": UNI}
+                )
 
         def counting_loads(counter):
             real_loads = json.loads
@@ -213,6 +245,7 @@ class TestComplexityProof:
             def wrapper(*a, **kw):
                 counter[0] += 1
                 return real_loads(*a, **kw)
+
             return wrapper
 
         # OLD: quadratic — K(K+1)/2 loads over a K-iteration session
@@ -255,15 +288,19 @@ class TestUnrepairableArgsAreNotWrittenBackToHistory:
     def _history_with_truncated_write():
         # Exactly the incident shape: arguments cut off mid-string.
         truncated = '{"content": "# chapter draft\nline one\nline two'
-        history = [{
-            "role": "assistant",
-            "content": "",
-            "tool_calls": [{
-                "id": "call_1",
-                "type": "function",
-                "function": {"name": "write_file", "arguments": truncated},
-            }],
-        }]
+        history = [
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "call_1",
+                        "type": "function",
+                        "function": {"name": "write_file", "arguments": truncated},
+                    }
+                ],
+            }
+        ]
         return history, truncated
 
     def test_history_keeps_the_original_arguments(self):
@@ -276,9 +313,9 @@ class TestUnrepairableArgsAreNotWrittenBackToHistory:
         assert history == before, (
             "the send-path canonicalizer rewrote the persisted history"
         )
-        assert (
-            history[0]["tool_calls"][0]["function"]["arguments"] == truncated
-        ), "the model's streamed arguments were destroyed in the transcript"
+        assert history[0]["tool_calls"][0]["function"]["arguments"] == truncated, (
+            "the model's streamed arguments were destroyed in the transcript"
+        )
 
     def test_send_copy_is_still_repaired(self):
         """The API copy must still carry safe JSON — only the aliasing changes."""
@@ -294,16 +331,27 @@ class TestUnrepairableArgsAreNotWrittenBackToHistory:
     def test_valid_calls_alongside_a_broken_one_are_untouched(self):
         """A broken call must not disturb its siblings' history entries."""
         good = json.dumps({"path": "a.txt", "u": UNI})
-        history = [{
-            "role": "assistant",
-            "content": "",
-            "tool_calls": [
-                {"id": "c1", "type": "function",
-                 "function": {"name": "read_file", "arguments": good}},
-                {"id": "c2", "type": "function",
-                 "function": {"name": "write_file", "arguments": '{"content": "cut'}},
-            ],
-        }]
+        history = [
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "c1",
+                        "type": "function",
+                        "function": {"name": "read_file", "arguments": good},
+                    },
+                    {
+                        "id": "c2",
+                        "type": "function",
+                        "function": {
+                            "name": "write_file",
+                            "arguments": '{"content": "cut',
+                        },
+                    },
+                ],
+            }
+        ]
         before = copy.deepcopy(history)
 
         api_messages = [dict(m) for m in history]
@@ -321,6 +369,4 @@ class TestUnrepairableArgsAreNotWrittenBackToHistory:
             api_messages = [dict(m) for m in history]
             cl._canonicalize_api_tool_calls(api_messages)
             assert api_messages[0]["tool_calls"][0]["function"]["arguments"] == "{}"
-        assert (
-            history[0]["tool_calls"][0]["function"]["arguments"] == truncated
-        )
+        assert history[0]["tool_calls"][0]["function"]["arguments"] == truncated

@@ -1,6 +1,7 @@
 """A skill named like a built-in command is kept out of auto-registration (the 370ebf2d3 guard)
 and every listing surface says so where the user looks: the ``/skills`` table, ``/help skills``
 and the ``commands.catalog`` palette RPC. A non-colliding skill carries no note."""
+
 from __future__ import annotations
 
 import contextlib
@@ -16,7 +17,10 @@ NOTE = "slash command /handoff unavailable — name taken by built-in; use /skil
 def _write_skill(name: str) -> None:
     skill_dir = get_clawk_home() / "skills" / name
     skill_dir.mkdir(parents=True)
-    (skill_dir / "SKILL.md").write_text(f"---\nname: {name}\ndescription: {name} skill.\n---\n# {name}\n", encoding="utf-8")
+    (skill_dir / "SKILL.md").write_text(
+        f"---\nname: {name}\ndescription: {name} skill.\n---\n# {name}\n",
+        encoding="utf-8",
+    )
 
 
 def test_built_in_name_collision_is_visible_on_every_listing_surface(monkeypatch):
@@ -32,7 +36,9 @@ def test_built_in_name_collision_is_visible_on_every_listing_surface(monkeypatch
     monkeypatch.setattr(cli, "_skill_commands", None)
 
     sink = io.StringIO()
-    do_list(console=Console(file=sink, force_terminal=False, color_system=None, width=200))
+    do_list(
+        console=Console(file=sink, force_terminal=False, color_system=None, width=200)
+    )
     skills_table = sink.getvalue()
     assert NOTE in skills_table
     assert "tidy-notes" in skills_table and skills_table.count("unavailable") == 1
@@ -47,7 +53,10 @@ def test_built_in_name_collision_is_visible_on_every_listing_surface(monkeypatch
     with contextlib.redirect_stdout(help_out):
         _Cli().show_help("skills")
     assert NOTE in help_out.getvalue()
-    assert "/tidy-notes" in help_out.getvalue() and "/handoff" not in help_out.getvalue().replace(NOTE, "")
+    assert (
+        "/tidy-notes" in help_out.getvalue()
+        and "/handoff" not in help_out.getvalue().replace(NOTE, "")
+    )
 
     catalog = server._methods["commands.catalog"](1, {})["result"]
     assert catalog["warning"] == NOTE
@@ -55,7 +64,9 @@ def test_built_in_name_collision_is_visible_on_every_listing_surface(monkeypatch
 
     from clawk_cli.slash_exec import CommandContext, _exec_commands
 
-    gateway_commands = _exec_commands(CommandContext(args="", options={"page_size": 500})).text
+    gateway_commands = _exec_commands(
+        CommandContext(args="", options={"page_size": 500})
+    ).text
     assert f"⚠ {NOTE}" in gateway_commands and "`/tidy-notes`" in gateway_commands
 
 
@@ -74,5 +85,8 @@ def test_catalog_discovery_failure_warning_outranks_the_collision_note(monkeypat
     monkeypatch.setattr(server, "_load_cfg", _broken_cfg)
 
     catalog = server._methods["commands.catalog"](1, {})["result"]
-    assert catalog["warning"] == "quick_commands discovery unavailable: config.yaml unreadable"
+    assert (
+        catalog["warning"]
+        == "quick_commands discovery unavailable: config.yaml unreadable"
+    )
     assert "/tidy-notes" in catalog["skills"]

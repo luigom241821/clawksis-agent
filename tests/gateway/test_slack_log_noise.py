@@ -125,7 +125,6 @@ def _connect_and_capture_handlers():
 class TestCatchAllEventAck:
     """#6572 / Event Subscriptions auto-disable — catch-all fallback ack."""
 
-
     @pytest.mark.asyncio
     async def test_catchall_acks_unsubscribed_event_quietly(self, caplog):
         """The catch-all fires for an unhandled type, logs only at DEBUG,
@@ -157,8 +156,7 @@ class TestCatchAllEventAck:
             for r in listener_records
         ), "catch-all must keep a DEBUG line naming the unhandled event type"
         assert all(r.levelno <= logging.DEBUG for r in listener_records), (
-            "catch-all must not log above DEBUG (that's the noise it exists "
-            "to remove)"
+            "catch-all must not log above DEBUG (that's the noise it exists to remove)"
         )
         assert secret not in caplog.text
 
@@ -176,7 +174,6 @@ class TestInboundLogPrivacy:
         a._running = True
         a.handle_message = AsyncMock()
         return a
-
 
     @pytest.mark.asyncio
     async def test_entry_diagnostic_log_is_metadata_only(self, caplog):

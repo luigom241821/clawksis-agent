@@ -12,7 +12,7 @@ import pytest
 from clawk_cli import plugins as plugins_mod
 from clawk_cli.plugins import PluginManager
 
-BACKEND_PLUGIN = '''
+BACKEND_PLUGIN = """
 from pathlib import Path
 from agent.terminal_env_provider import TerminalEnvironmentProvider
 
@@ -36,18 +36,26 @@ class Box(TerminalEnvironmentProvider):
 
 def register(ctx):
     ctx.register_terminal_environment_provider(Box())
-'''
+"""
 
 
 def _load(tmp_path, monkeypatch, isolation):
     home = tmp_path / ".clawk"
     plugin_dir = home / "plugins" / "hostbox"
     plugin_dir.mkdir(parents=True)
-    (plugin_dir / "plugin.yaml").write_text(yaml.safe_dump({"name": "hostbox", "version": "1.0"}), encoding="utf-8")
+    (plugin_dir / "plugin.yaml").write_text(
+        yaml.safe_dump({"name": "hostbox", "version": "1.0"}), encoding="utf-8"
+    )
     (plugin_dir / "__init__.py").write_text(BACKEND_PLUGIN, encoding="utf-8")
-    (home / "config.yaml").write_text(yaml.safe_dump(
-        {"plugins": {"enabled": ["hostbox"], "isolation": isolation}, "terminal": {"backend": "hostbox"}}),
-        encoding="utf-8")
+    (home / "config.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "plugins": {"enabled": ["hostbox"], "isolation": isolation},
+                "terminal": {"backend": "hostbox"},
+            }
+        ),
+        encoding="utf-8",
+    )
     empty_bundled = tmp_path / "bundled"
     empty_bundled.mkdir()
     monkeypatch.setenv("HOME", str(tmp_path / "os-home"))
@@ -59,7 +67,9 @@ def _load(tmp_path, monkeypatch, isolation):
     return manager, plugin_dir / "created"
 
 
-def test_a_hosted_terminal_backend_refuses_with_the_isolation_setting(tmp_path, monkeypatch):
+def test_a_hosted_terminal_backend_refuses_with_the_isolation_setting(
+    tmp_path, monkeypatch
+):
     from tools.terminal_tool_backends import _create_environment
 
     manager, marker = _load(tmp_path, monkeypatch, "host")

@@ -25,27 +25,39 @@ from gateway.status import GatewayLiveness
 def _liveness(monkeypatch, liveness):
     from gateway import status as gateway_status
 
-    monkeypatch.setattr(gateway_status, "resolve_gateway_liveness", lambda **_kw: liveness)
+    monkeypatch.setattr(
+        gateway_status, "resolve_gateway_liveness", lambda **_kw: liveness
+    )
 
 
 class TestCronProfileGate:
-    def test_stands_down_for_a_profile_with_its_own_gateway(self, tmp_path, monkeypatch):
+    def test_stands_down_for_a_profile_with_its_own_gateway(
+        self, tmp_path, monkeypatch
+    ):
         """Another process owns this home's gateway -> this ticker must not visit it."""
-        _liveness(monkeypatch, GatewayLiveness(running=True, pid=os.getpid() + 1, source="pid"))
+        _liveness(
+            monkeypatch,
+            GatewayLiveness(running=True, pid=os.getpid() + 1, source="pid"),
+        )
         assert gw_run._cron_profile_gate("b", tmp_path / "home-b") is False
 
     def test_keeps_ticking_a_home_this_process_serves(self, tmp_path, monkeypatch):
         """Our OWN pid answering (launch home, or a served profile via the multiplexer rung) must
         never stand this ticker down — that would stop cron for every profile at once."""
         for source in ("pid", "multiplexer", "runtime_status"):
-            _liveness(monkeypatch, GatewayLiveness(running=True, pid=os.getpid(), source=source))
+            _liveness(
+                monkeypatch,
+                GatewayLiveness(running=True, pid=os.getpid(), source=source),
+            )
             assert gw_run._cron_profile_gate("b", tmp_path / "home-b") is True, source
 
     def test_keeps_ticking_a_home_with_no_gateway(self, tmp_path, monkeypatch):
         _liveness(monkeypatch, GatewayLiveness(running=False, pid=None, source="none"))
         assert gw_run._cron_profile_gate("b", tmp_path / "home-b") is True
 
-    def test_probe_failure_ticks_rather_than_silently_dropping_cron(self, tmp_path, monkeypatch):
+    def test_probe_failure_ticks_rather_than_silently_dropping_cron(
+        self, tmp_path, monkeypatch
+    ):
         """A raising probe must not be read as "another gateway owns it"."""
         from gateway import status as gateway_status
 
@@ -72,19 +84,35 @@ def test_gateway_passes_a_profile_gate_to_the_cron_ticker(tmp_path, monkeypatch)
             pass
 
     monkeypatch.setattr(
-        gw_run, "_cron_tick_profile_homes", lambda _cfg: [("default", tmp_path), ("b", home_b)])
+        gw_run,
+        "_cron_tick_profile_homes",
+        lambda _cfg: [("default", tmp_path), ("b", home_b)],
+    )
     monkeypatch.setattr(
-        scheduler_provider, "scheduler_for_profile_mode",
-        lambda _p, multiplex_profiles=False: scheduler_provider.InProcessCronScheduler())
+        scheduler_provider,
+        "scheduler_for_profile_mode",
+        lambda _p, multiplex_profiles=False: (
+            scheduler_provider.InProcessCronScheduler()
+        ),
+    )
     from cron import scheduler_thread
 
     monkeypatch.setattr(scheduler_thread, "SupervisedTickerThread", _Thread)
-    monkeypatch.setattr(gw_run, "_start_gateway_housekeeping_thread", lambda *_a, **_k: None,
-                        raising=False)
+    monkeypatch.setattr(
+        gw_run,
+        "_start_gateway_housekeeping_thread",
+        lambda *_a, **_k: None,
+        raising=False,
+    )
 
     runner = types.SimpleNamespace(
-        config={}, adapters={}, _profile_adapters=None, _primary_profile_name="default",
-        _draining=False, _external_drain_active=False)
+        config={},
+        adapters={},
+        _profile_adapters=None,
+        _primary_profile_name="default",
+        _draining=False,
+        _external_drain_active=False,
+    )
 
     async def _go():
         return gw_run._start_gateway_start_cron_and_housekeeping(runner)
@@ -97,6 +125,8 @@ def test_gateway_passes_a_profile_gate_to_the_cron_ticker(tmp_path, monkeypatch)
     from gateway import status as gateway_status
 
     monkeypatch.setattr(
-        gateway_status, "resolve_gateway_liveness",
-        lambda **_kw: GatewayLiveness(running=True, pid=os.getpid() + 1, source="pid"))
+        gateway_status,
+        "resolve_gateway_liveness",
+        lambda **_kw: GatewayLiveness(running=True, pid=os.getpid() + 1, source="pid"),
+    )
     assert gate("b", home_b) is False

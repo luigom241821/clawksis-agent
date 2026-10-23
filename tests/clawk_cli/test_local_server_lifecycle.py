@@ -30,10 +30,12 @@ def test_stop_disables_and_tears_down(client, monkeypatch):
     class _FakeSup:
         pass
 
-    monkeypatch.setattr("clawk_cli.local_runtime.bootstrap.get_supervisor",
-                        lambda: _FakeSup())
-    monkeypatch.setattr("clawk_cli.local_runtime.bootstrap.shutdown_local_runtime",
-                        _shutdown)
+    monkeypatch.setattr(
+        "clawk_cli.local_runtime.bootstrap.get_supervisor", lambda: _FakeSup()
+    )
+    monkeypatch.setattr(
+        "clawk_cli.local_runtime.bootstrap.shutdown_local_runtime", _shutdown
+    )
 
     r = client.post("/api/local-models/server", json={"action": "stop"})
     assert r.status_code == 200
@@ -55,8 +57,9 @@ def test_start_enables_and_boots(client, monkeypatch):
         assert force is True
         return _FakeSup()
 
-    monkeypatch.setattr("clawk_cli.local_runtime.bootstrap.ensure_local_runtime",
-                        _ensure)
+    monkeypatch.setattr(
+        "clawk_cli.local_runtime.bootstrap.ensure_local_runtime", _ensure
+    )
 
     r = client.post("/api/local-models/server", json={"action": "start"})
     assert r.status_code == 200
@@ -84,11 +87,15 @@ def test_status_reports_loaded_models_from_live_router(client, monkeypatch):
 
     class _Router(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
-            body = _json.dumps({"data": [
-                {"id": "m-loaded", "status": {"value": "loaded"}},
-                {"id": "m-loading", "status": {"value": "loading"}},
-                {"id": "m-cold", "status": {"value": "unloaded"}},
-            ]}).encode()
+            body = _json.dumps(
+                {
+                    "data": [
+                        {"id": "m-loaded", "status": {"value": "loaded"}},
+                        {"id": "m-loading", "status": {"value": "loading"}},
+                        {"id": "m-cold", "status": {"value": "unloaded"}},
+                    ]
+                }
+            ).encode()
             self.send_response(200)
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
@@ -106,16 +113,22 @@ def test_status_reports_loaded_models_from_live_router(client, monkeypatch):
         # attribute never reaches the name the route actually calls.
         monkeypatch.setattr(
             "clawk_cli.web_routers.local_models._state_endpoint",
-            lambda: {"base_url": f"http://127.0.0.1:{port}/v1", "api_key": "k"})
+            lambda: {"base_url": f"http://127.0.0.1:{port}/v1", "api_key": "k"},
+        )
         payload = client.get("/api/local-models/status").json()
         assert payload["server_running"] is True
-        assert payload["loaded_models"] == {"m-loaded": "loaded", "m-loading": "loading"}
+        assert payload["loaded_models"] == {
+            "m-loaded": "loaded",
+            "m-loading": "loading",
+        }
     finally:
         server.shutdown()
 
 
 @pytest.mark.parametrize("refuse", [False, True])
-def test_stop_forwards_recovery_and_preserves_conflict(client, tmp_path, monkeypatch, refuse):
+def test_stop_forwards_recovery_and_preserves_conflict(
+    client, tmp_path, monkeypatch, refuse
+):
     from fastapi import HTTPException
     from clawk_cli.web_routers import local_models
     from clawk_cli.local_runtime import supervisor
@@ -125,12 +138,19 @@ def test_stop_forwards_recovery_and_preserves_conflict(client, tmp_path, monkeyp
     monkeypatch.setattr(local_models.bootstrap, "get_supervisor", lambda: None)
     monkeypatch.setattr(local_models, "_state_endpoint", lambda: None)
     called, disabled = [], []
+
     def recover():
         called.append(True)
         if refuse:
-            raise HTTPException(409, "Another Clawksis process owns this server, or its ownership could not be verified")
+            raise HTTPException(
+                409,
+                "Another Clawksis process owns this server, or its ownership could not be verified",
+            )
+
     monkeypatch.setattr(local_models, "_terminate_state_pid", recover)
-    monkeypatch.setattr(local_models, "_set_runtime_enabled", lambda value: disabled.append(value))
+    monkeypatch.setattr(
+        local_models, "_set_runtime_enabled", lambda value: disabled.append(value)
+    )
     response = client.post("/api/local-models/server", json={"action": "stop"})
     assert response.status_code == (409 if refuse else 200), response.text
     assert called == [True]

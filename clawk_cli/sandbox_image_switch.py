@@ -26,9 +26,9 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class PendingSwitch:
-    current_image: str          # what the persisted container runs
-    target_image: str           # the effective default it would move to
-    containers: list[str] = field(default_factory=list)   # names, for the notice
+    current_image: str  # what the persisted container runs
+    target_image: str  # the effective default it would move to
+    containers: list[str] = field(default_factory=list)  # names, for the notice
 
 
 def pending() -> Optional[PendingSwitch]:
@@ -36,7 +36,11 @@ def pending() -> Optional[PendingSwitch]:
     unpinned default, and a container labeled for this profile runs another image. ``docker`` is
     consulted (one ``ps``); any failure is "nothing pending"."""
     from clawk_cli.config import load_config_readonly
-    from tools.environments.docker import _container_identity, _docker_query, find_docker
+    from tools.environments.docker import (
+        _container_identity,
+        _docker_query,
+        find_docker,
+    )
 
     terminal = (load_config_readonly() or {}).get("terminal") or {}
     if terminal.get("backend") != "docker":
@@ -48,10 +52,21 @@ def pending() -> Optional[PendingSwitch]:
     if not docker or not target:
         return None
     listing = _docker_query(
-        [docker, "ps", "-a", "--filter", "label=clawksis-agent=1",
-         "--filter", f"label=clawk-profile={_container_identity(str(terminal.get('docker_shared_container_key') or ''))}",
-         "--format", "{{.Names}}\t{{.Image}}"],
-        timeout=10, fail="sandbox image switch probe failed: %s", nonzero="docker ps exited %s: %s")
+        [
+            docker,
+            "ps",
+            "-a",
+            "--filter",
+            "label=clawksis-agent=1",
+            "--filter",
+            f"label=clawk-profile={_container_identity(str(terminal.get('docker_shared_container_key') or ''))}",
+            "--format",
+            "{{.Names}}\t{{.Image}}",
+        ],
+        timeout=10,
+        fail="sandbox image switch probe failed: %s",
+        nonzero="docker ps exited %s: %s",
+    )
     if listing is None:
         return None
     stale: dict[str, list[str]] = {}
@@ -62,8 +77,11 @@ def pending() -> Optional[PendingSwitch]:
     if not stale:
         return None
     current = max(stale, key=lambda img: len(stale[img]))
-    return PendingSwitch(current_image=current, target_image=target,
-                         containers=sorted(n for names in stale.values() for n in names))
+    return PendingSwitch(
+        current_image=current,
+        target_image=target,
+        containers=sorted(n for names in stale.values() for n in names),
+    )
 
 
 def _image_pinned(terminal_cfg: dict) -> bool:
@@ -73,6 +91,7 @@ def _image_pinned(terminal_cfg: dict) -> bool:
     is their choice."""
     from clawk_cli.config import read_raw_config
     from tools.terminal_scope import get_terminal_scope
+
     raw = read_raw_config().get("terminal")
     if isinstance(raw, dict) and "docker_image" in raw:
         return True
@@ -88,6 +107,7 @@ def decide(switch: PendingSwitch, approve: bool) -> str:
     re-bridge the live process so a long-running gateway/TUI backend acts on it without a
     restart. Returns the image now pinned."""
     from clawk_cli.config import apply_terminal_config_to_env, load_config, save_config
+
     image = switch.target_image if approve else switch.current_image
     config = load_config()
     terminal = config.setdefault("terminal", {})
@@ -99,6 +119,7 @@ def decide(switch: PendingSwitch, approve: bool) -> str:
         # terminal call reattaches, sees the pin and recreates. The container itself keeps running
         # until then (persistent), nothing is removed here.
         from tools.terminal_tool_lifecycle import _evict_environment_for_task
+
         _evict_environment_for_task(None)
     return image
 
@@ -126,17 +147,29 @@ def offer_interactive(*, cprint, ask=input) -> Optional[bool]:
     for line in explain_lines(switch):
         cprint(f"  {line}")
     try:
-        answer = ask("  Switch now? [y = switch / n = keep the current image / Enter = ask later]: ").strip().lower()
+        answer = (
+            ask(
+                "  Switch now? [y = switch / n = keep the current image / Enter = ask later]: "
+            )
+            .strip()
+            .lower()
+        )
     except (KeyboardInterrupt, EOFError):
         print()
         return None
     if answer in {"y", "yes"}:
         decide(switch, approve=True)
-        cprint(f"  ✓ terminal.docker_image = {switch.target_image}; the sandbox is recreated on its next use.")
+        cprint(
+            f"  ✓ terminal.docker_image = {switch.target_image}; the sandbox is recreated on its next use."
+        )
         return True
     if answer in {"n", "no"}:
         decide(switch, approve=False)
-        cprint(f"  ✓ terminal.docker_image = {switch.current_image}; unset it in config.yaml to be asked again.")
+        cprint(
+            f"  ✓ terminal.docker_image = {switch.current_image}; unset it in config.yaml to be asked again."
+        )
         return False
-    cprint("  Later. `clawk config set terminal.docker_image <image>` decides it any time.")
+    cprint(
+        "  Later. `clawk config set terminal.docker_image <image>` decides it any time."
+    )
     return None

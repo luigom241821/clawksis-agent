@@ -1,4 +1,5 @@
 """The stable lookup spends the user's GitHub credential, not the shared anonymous budget."""
+
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import threading
@@ -32,7 +33,9 @@ def github(monkeypatch):
                 self.send_header("x-ratelimit-remaining", "0")
                 self.send_header("x-ratelimit-reset", "9999999999")
             elif self.path.endswith("/releases/latest"):
-                body = json.dumps({"tag_name": "v0.21.6", "draft": False, "prerelease": False}).encode()
+                body = json.dumps(
+                    {"tag_name": "v0.21.6", "draft": False, "prerelease": False}
+                ).encode()
                 self.send_response(200)
             elif self.path.endswith("/commits/v0.21.6"):
                 body = json.dumps({"sha": SHA}).encode()
@@ -52,11 +55,20 @@ def github(monkeypatch):
     real = urllib.request.urlopen
 
     def local(request, *args, **kwargs):
-        url = request.full_url if isinstance(request, urllib.request.Request) else request
-        assert url.startswith("https://api.github.com/"), url  # the token must never leave GitHub
+        url = (
+            request.full_url if isinstance(request, urllib.request.Request) else request
+        )
+        assert url.startswith("https://api.github.com/"), (
+            url
+        )  # the token must never leave GitHub
         rerouted = urllib.request.Request(
-            url.replace("https://api.github.com", f"http://127.0.0.1:{server.server_port}"),
-            headers=dict(request.header_items()) if isinstance(request, urllib.request.Request) else {})
+            url.replace(
+                "https://api.github.com", f"http://127.0.0.1:{server.server_port}"
+            ),
+            headers=dict(request.header_items())
+            if isinstance(request, urllib.request.Request)
+            else {},
+        )
         return real(rerouted, *args, **kwargs)
 
     monkeypatch.setattr(urllib.request, "urlopen", local)
@@ -77,7 +89,9 @@ def test_stable_lookup_sends_the_configured_token(github, monkeypatch):
 
 
 @pytest.mark.parametrize("token", [None, "ghp_user"])
-def test_a_rate_limit_is_reported_as_one_not_as_a_missing_release(github, monkeypatch, token):
+def test_a_rate_limit_is_reported_as_one_not_as_a_missing_release(
+    github, monkeypatch, token
+):
     _, state = github
     state["limited"] = True
     if token:
@@ -91,7 +105,9 @@ def test_a_rate_limit_is_reported_as_one_not_as_a_missing_release(github, monkey
     assert ("GITHUB_TOKEN in the environment" in message) is (token is None)
 
 
-def test_a_rejected_token_then_anonymous_limit_names_the_anonymous_quota(github, monkeypatch):
+def test_a_rejected_token_then_anonymous_limit_names_the_anonymous_quota(
+    github, monkeypatch
+):
     seen, state = github
     state["limited"] = state["reject_token"] = True
     monkeypatch.setenv("GH_TOKEN", "ghp_revoked")

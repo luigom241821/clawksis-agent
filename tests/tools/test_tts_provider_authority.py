@@ -83,9 +83,11 @@ def openai_backend():
 # Schema
 # ---------------------------------------------------------------------------
 
+
 class TestSchema:
     def test_schema_does_not_advertise_provider(self):
         from tools.tts_tool import TTS_SCHEMA
+
         props = TTS_SCHEMA["parameters"]["properties"]
         assert "provider" not in props, (
             "The model-facing text_to_speech schema must not advertise a "
@@ -97,6 +99,7 @@ class TestSchema:
 # ---------------------------------------------------------------------------
 # Tool-level enforcement (text_to_speech_tool)
 # ---------------------------------------------------------------------------
+
 
 class TestToolLevelProviderAuthority:
     def test_disagreeing_override_is_ignored(
@@ -160,6 +163,7 @@ class TestToolLevelProviderAuthority:
 # Registered handler (the model-args path)
 # ---------------------------------------------------------------------------
 
+
 class TestRegisteredHandler:
     def test_handler_does_not_forward_provider_arg(
         self, tmp_path, monkeypatch, openai_backend
@@ -188,17 +192,24 @@ class TestRegisteredHandler:
 # Resolver (_apply_call_overrides) — the single provider-resolution point
 # ---------------------------------------------------------------------------
 
+
 class TestResolverAuthority:
-    def test_resolver_returns_configured_provider_despite_override(self, openai_backend):
+    def test_resolver_returns_configured_provider_despite_override(
+        self, openai_backend
+    ):
         from tools.tts_tool import _apply_call_overrides
 
-        _tts_config, provider = _apply_call_overrides({"provider": "openai"}, None, "xai")
+        _tts_config, provider = _apply_call_overrides(
+            {"provider": "openai"}, None, "xai"
+        )
         assert provider == "openai"
 
     def test_resolver_returns_configured_provider_when_unset(self, openai_backend):
         from tools.tts_tool import _apply_call_overrides
 
-        _tts_config, provider = _apply_call_overrides({"provider": "openai"}, None, None)
+        _tts_config, provider = _apply_call_overrides(
+            {"provider": "openai"}, None, None
+        )
         assert provider == "openai"
 
     def test_warning_is_emitted_once_per_distinct_value(self, openai_backend, caplog):
@@ -209,8 +220,11 @@ class TestResolverAuthority:
             _apply_call_overrides({"provider": "openai"}, None, "xai")
             _apply_call_overrides({"provider": "openai"}, None, "xai")
             _apply_call_overrides({"provider": "openai"}, None, "mistral")
-        warnings = [rec for rec in caplog.records
-                    if "Ignoring per-call TTS provider override" in rec.message]
+        warnings = [
+            rec
+            for rec in caplog.records
+            if "Ignoring per-call TTS provider override" in rec.message
+        ]
         assert len(warnings) == 2, (
             "The same requested value must warn once; a distinct value warns again."
         )

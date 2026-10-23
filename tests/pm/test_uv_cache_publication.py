@@ -50,7 +50,9 @@ def test_seed_publishes_only_a_complete_file(seed_paths, monkeypatch, previous):
 
 
 @pytest.mark.parametrize("previous", [None, b"old"])
-def test_interrupted_seed_preserves_readers_and_retries(seed_paths, monkeypatch, previous):
+def test_interrupted_seed_preserves_readers_and_retries(
+    seed_paths, monkeypatch, previous
+):
     source, destination = seed_paths
     destination.parent.mkdir(parents=True)
     if previous is not None:
@@ -70,7 +72,9 @@ def test_interrupted_seed_preserves_readers_and_retries(seed_paths, monkeypatch,
 
     assert (destination.read_bytes() if destination.exists() else None) == previous
     assert not (destination.parent / ".seeded").exists()
-    assert {p.name for p in destination.parent.iterdir()} == ({"entry"} if previous else set())
+    assert {p.name for p in destination.parent.iterdir()} == (
+        {"entry"} if previous else set()
+    )
 
     packages.uv_cache_dir()
 

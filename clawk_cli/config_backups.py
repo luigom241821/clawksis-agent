@@ -24,7 +24,11 @@ DEFAULT_KEEP = 5
 # Names earlier code wrote next to config.yaml (setup wizard, corrupt snapshot, xai migration).
 # Moved into the backups dir on first use so they stop accumulating in the home root; hand-named
 # copies (``config.yaml.bak-my-note``) are the user's and are never touched.
-_LEGACY_SIBLING_GLOBS = ("config.yaml.bak.[0-9]*", "config.yaml.corrupt.*.bak", "config.yaml.bak-pre-migrate-*")
+_LEGACY_SIBLING_GLOBS = (
+    "config.yaml.bak.[0-9]*",
+    "config.yaml.corrupt.*.bak",
+    "config.yaml.bak-pre-migrate-*",
+)
 
 
 def backups_dir(config_path: Path) -> Path:
@@ -37,11 +41,16 @@ def list_config_backups(config_path: Path, reason: Optional[str] = None) -> list
     if not root.is_dir():
         return []
     prefix = f"{config_path.name}.{reason}." if reason else f"{config_path.name}."
-    return sorted((p for p in root.iterdir() if p.is_file() and p.name.startswith(prefix)),
-                  key=lambda p: p.name, reverse=True)
+    return sorted(
+        (p for p in root.iterdir() if p.is_file() and p.name.startswith(prefix)),
+        key=lambda p: p.name,
+        reverse=True,
+    )
 
 
-def backup_config(config_path: Path, reason: str, *, keep: int = DEFAULT_KEEP) -> Optional[Path]:
+def backup_config(
+    config_path: Path, reason: str, *, keep: int = DEFAULT_KEEP
+) -> Optional[Path]:
     """Copy *config_path* to the backups dir; return the new path, or None when skipped/failed.
 
     Skips when the file is missing/empty, or when the newest backup for *reason* already holds
@@ -82,6 +91,7 @@ def load_newest_good_backup(config_path: Path) -> Optional[dict]:
         return None
     try:
         from utils import fast_safe_load
+
         with newest[0].open(encoding="utf-8") as f:
             data = fast_safe_load(f)
     except Exception as exc:

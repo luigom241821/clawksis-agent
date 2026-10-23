@@ -9,6 +9,7 @@ how many nested calls ever returned a result; what those sessions spent after th
 withheld by batch joins (concurrent child-hours, NOT critical path); and how many parent-side summaries
 carried the truncation footer.
 """
+
 from __future__ import annotations
 
 import collections
@@ -21,7 +22,9 @@ from evals.postmortem.forensics.common import Run
 
 _TIMEOUT = re.compile(r"timed out after ([\d.]+)s")
 _SLEEP = re.compile(r"\bsleep\s+(\d+)")
-_TRUNC = re.compile(r"\[SUMMARY TRUNCATED\]|middle omitted|trimmed to protect the parent")
+_TRUNC = re.compile(
+    r"\[SUMMARY TRUNCATED\]|middle omitted|trimmed to protect the parent"
+)
 
 
 def main(argv=None) -> int:
@@ -51,35 +54,57 @@ def main(argv=None) -> int:
                     total_summaries += 1
                     if _TRUNC.search(c):
                         truncated_summaries += 1
-            if m["role"] == "user" and (m.get("content") or "").startswith("[ASYNC DELEGATION"):
+            if m["role"] == "user" and (m.get("content") or "").startswith(
+                "[ASYNC DELEGATION"
+            ):
                 # background batches re-enter as a user-role completion block, one entry per child
                 c = m["content"]
-                entries = c.count("--- ✓ TASK") + c.count("--- ✗ TASK") + c.count("--- ⚠ TASK") or (1 if "COMPLETE" in c else 0)
+                entries = c.count("--- ✓ TASK") + c.count("--- ✗ TASK") + c.count(
+                    "--- ⚠ TASK"
+                ) or (1 if "COMPLETE" in c else 0)
                 total_summaries += entries
                 truncated_summaries += c.count("[SUMMARY TRUNCATED]")
-            if m["role"] == "assistant" and sid in first_timeout_ts and float(m.get("timestamp") or 0) >= first_timeout_ts[sid]:
+            if (
+                m["role"] == "assistant"
+                and sid in first_timeout_ts
+                and float(m.get("timestamp") or 0) >= first_timeout_ts[sid]
+            ):
                 for mt in _SLEEP.finditer(m.get("tool_calls") or ""):
                     sleep_seconds_after_timeout += int(mt.group(1))
 
     timeout_sessions = list(timeouts_by_sess)
     nested_timeout_sessions = [s for s in timeout_sessions if run.depth[s] >= 1]
     lifetime_cost = sum(run.cost(s) for s in timeout_sessions)
-    lifetime_cache_write = sum(float(run.sessions[s].get("cache_write_tokens") or 0) for s in timeout_sessions) * run.price_per_token["cache_write_tokens"]
+    lifetime_cache_write = (
+        sum(
+            float(run.sessions[s].get("cache_write_tokens") or 0)
+            for s in timeout_sessions
+        )
+        * run.price_per_token["cache_write_tokens"]
+    )
 
     # batch-join delivery delay: children of one parent dispatched within 60 s of each other = one batch
     withheld: dict[int, list[float]] = collections.defaultdict(list)
     for p, kids in children_of.items():
         kids = sorted(kids, key=lambda k: float(run.sessions[k].get("started_at") or 0))
         batch: list[str] = []
+
         def flush(batch: list[str]) -> None:
             if len(batch) < 2:
                 return
             ends = [float(run.sessions[k].get("ended_at") or 0) for k in batch]
             last = max(ends)
             withheld[run.depth.get(str(p), 0)].extend(last - e for e in ends if e)
+
         for k in kids:
-            if batch and float(run.sessions[k].get("started_at") or 0) - float(run.sessions[batch[-1]].get("started_at") or 0) > 60:
-                flush(batch); batch = []
+            if (
+                batch
+                and float(run.sessions[k].get("started_at") or 0)
+                - float(run.sessions[batch[-1]].get("started_at") or 0)
+                > 60
+            ):
+                flush(batch)
+                batch = []
             batch.append(k)
         flush(batch)
 
@@ -91,22 +116,37 @@ def main(argv=None) -> int:
             "sessions_with_timeouts": len(timeout_sessions),
             "nested_sessions_with_timeouts": len(nested_timeout_sessions),
             "delegate_task_results_that_carried_a_result": delegate_ok,
-            "sleep_hours_after_first_timeout": round(sleep_seconds_after_timeout / 3600, 1),
+            "sleep_hours_after_first_timeout": round(
+                sleep_seconds_after_timeout / 3600, 1
+            ),
             "timeout_sessions_lifetime_cost_usd": round(lifetime_cost, 2),
             "timeout_sessions_lifetime_cache_write_usd": round(lifetime_cache_write, 2),
             "lifetime_cost_caveat": "whole-session spend; includes legitimate work after the timeout, and its cache writes overlap the tokens lane's excess proxy",
-            "summaries_truncated": truncated_summaries, "summaries_total": total_summaries,
-            "batch_join_withheld_child_hours_by_parent_depth": {d: round(sum(v) / 3600, 1) for d, v in sorted(withheld.items())},
-            "batch_join_withheld_minutes_median_by_parent_depth": {d: round(statistics.median(v) / 60, 1) for d, v in sorted(withheld.items()) if v},
+            "summaries_truncated": truncated_summaries,
+            "summaries_total": total_summaries,
+            "batch_join_withheld_child_hours_by_parent_depth": {
+                d: round(sum(v) / 3600, 1) for d, v in sorted(withheld.items())
+            },
+            "batch_join_withheld_minutes_median_by_parent_depth": {
+                d: round(statistics.median(v) / 60, 1)
+                for d, v in sorted(withheld.items())
+                if v
+            },
             "withheld_caveat": "concurrent child-hours held back from the parent; not critical-path time",
         }
     }
     path = run.write("delegation.json", report)
     o = report["observed"]
-    print(f"[delegation] {o['orchestrators']} orchestrators; delegate_task results {o['delegate_task_results']:,}: timeouts {o['delegate_task_timeouts']} in {o['sessions_with_timeouts']} sessions "
-          f"({o['nested_sessions_with_timeouts']} nested); carried a result: {o['delegate_task_results_that_carried_a_result']}")
-    print(f"[delegation] after first timeout: sleep {o['sleep_hours_after_first_timeout']} h; those sessions' lifetime ${o['timeout_sessions_lifetime_cost_usd']:,} (cache writes ${o['timeout_sessions_lifetime_cache_write_usd']:,}; includes real work)")
-    print(f"[delegation] summaries truncated {o['summaries_truncated']}/{o['summaries_total']}; batch-join withheld child-hours by parent depth {o['batch_join_withheld_child_hours_by_parent_depth']}")
+    print(
+        f"[delegation] {o['orchestrators']} orchestrators; delegate_task results {o['delegate_task_results']:,}: timeouts {o['delegate_task_timeouts']} in {o['sessions_with_timeouts']} sessions "
+        f"({o['nested_sessions_with_timeouts']} nested); carried a result: {o['delegate_task_results_that_carried_a_result']}"
+    )
+    print(
+        f"[delegation] after first timeout: sleep {o['sleep_hours_after_first_timeout']} h; those sessions' lifetime ${o['timeout_sessions_lifetime_cost_usd']:,} (cache writes ${o['timeout_sessions_lifetime_cache_write_usd']:,}; includes real work)"
+    )
+    print(
+        f"[delegation] summaries truncated {o['summaries_truncated']}/{o['summaries_total']}; batch-join withheld child-hours by parent depth {o['batch_join_withheld_child_hours_by_parent_depth']}"
+    )
     print(f"[delegation] wrote {path}")
     return 0
 

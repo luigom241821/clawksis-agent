@@ -37,7 +37,6 @@ class TestIsLikelyBinary:
         sample = "Hello, world!\nThis is a normal text file.\n"
         assert ops._is_likely_binary("unknown.xyz", content_sample=sample) is False
 
-
     def test_just_above_threshold(self, ops):
         """301/1000 = 30.1% non-printable → should be binary."""
         sample = "\x00" * 301 + "a" * 699
@@ -74,11 +73,12 @@ class TestCheckLintBracePaths:
         obj._command_cache = {}
         return obj
 
-
     def test_path_with_curly_braces(self, ops):
         """Path containing ``{`` and ``}`` must not raise KeyError/ValueError."""
-        with patch.object(ops, "_has_command", return_value=True), \
-             patch.object(ops, "_exec") as mock_exec:
+        with (
+            patch.object(ops, "_has_command", return_value=True),
+            patch.object(ops, "_exec") as mock_exec,
+        ):
             mock_exec.return_value = MagicMock(exit_code=0, stdout="")
             # This would raise KeyError with .format() but works with .replace()
             result = ops._check_lint("/tmp/{test}_file.js")
@@ -86,7 +86,6 @@ class TestCheckLintBracePaths:
         assert result.success is True
         cmd_arg = mock_exec.call_args[0][0]
         assert "{test}" in cmd_arg
-
 
     def test_unsupported_extension_skipped(self, ops):
         """Extensions without a linter should return a skipped result."""
@@ -101,8 +100,10 @@ class TestCheckLintBracePaths:
 
     def test_lint_failure_returns_output(self, ops):
         """When the linter exits non-zero, result should capture output."""
-        with patch.object(ops, "_has_command", return_value=True), \
-             patch.object(ops, "_exec") as mock_exec:
+        with (
+            patch.object(ops, "_has_command", return_value=True),
+            patch.object(ops, "_exec") as mock_exec,
+        ):
             mock_exec.return_value = MagicMock(
                 exit_code=1,
                 stdout="SyntaxError: invalid syntax",
@@ -130,8 +131,16 @@ def test_local_js_lint_runs_pm_node_never_the_users(tmp_path, monkeypatch):
     user_bin = node_stand_in(tmp_path / "user-bin", "user-node")
     store_dirs = [node_stand_in(tmp_path / "store-node", "pm-node")]
     monkeypatch.setenv("PATH", os.pathsep.join([user_bin, os.environ.get("PATH", "")]))
-    monkeypatch.setattr(clawk_constants, "with_clawk_node_path", lambda env: {
-        **env, "PATH": os.pathsep.join([*store_dirs, env.get("PATH", "")]).strip(os.pathsep)})
+    monkeypatch.setattr(
+        clawk_constants,
+        "with_clawk_node_path",
+        lambda env: {
+            **env,
+            "PATH": os.pathsep.join([*store_dirs, env.get("PATH", "")]).strip(
+                os.pathsep
+            ),
+        },
+    )
     target = tmp_path / "a.js"
     target.write_text("x\n", encoding="utf-8")
     ops = ShellFileOperations(LocalEnvironment(cwd=str(tmp_path)), cwd=str(tmp_path))
@@ -164,11 +173,9 @@ class TestCheckLintInproc:
         assert not result.skipped
         assert result.output == ""
 
-
     def test_json_inproc_clean(self, ops):
         result = ops._check_lint("/tmp/a.json", content='{"a": 1}')
         assert result.success is True
-
 
     def test_toml_inproc_error(self, ops):
         result = ops._check_lint("/tmp/b.toml", content='[section\nk = "v"')
@@ -209,13 +216,11 @@ class TestCheckLintDelta:
         obj._command_cache = {}
         return obj
 
-
-
     def test_pre_existing_remains_flagged_but_not_new(self, ops):
         """Single-error parsers (ast) may miss that post is OK — be cautious."""
         # Pre has line-1 error, post keeps it (and doesn't add anything new)
-        pre = 'def a(:\n    pass\n'
-        post = 'def a(:\n    pass\n\nprint(42)\n'  # still line 1 broken
+        pre = "def a(:\n    pass\n"
+        post = "def a(:\n    pass\n\nprint(42)\n"  # still line 1 broken
         r = ops._check_lint_delta("/tmp/d.py", pre_content=pre, post_content=post)
         # File is still broken — don't lie and claim success — but flag it as pre-existing
         assert r.success is False
@@ -227,20 +232,16 @@ class TestCheckLintDelta:
 # =========================================================================
 
 
-
-
 # =========================================================================
 # Search context parsing
 # =========================================================================
 
 
 class TestSearchContextParsing:
-
     def test_parse_search_context_line_prefers_rightmost_numeric_separator(self):
         parsed = _parse_search_context_line("dir/file-12-name.py-8-context here")
 
         assert parsed == ("dir/file-12-name.py", 8, "context here")
-
 
     def test_search_with_grep_context_handles_filename_with_dash_digits(self):
         env = MagicMock()
@@ -284,7 +285,6 @@ class TestNoTrailingNewlineTotalLines:
 
         return ShellFileOperations(LocalEnvironment())
 
-
     def test_pagination_admits_final_unterminated_line(self, tmp_path, ops):
         target = tmp_path / "no_trailing.txt"
         target.write_bytes(b"line1\nline2\nline3")
@@ -321,11 +321,21 @@ class TestNoTrailingNewlineTotalLines:
         ops = ShellFileOperations.__new__(ShellFileOperations)
 
         proved = ops._assemble_read_result(
-            "a\nb\nc\n", offset=1, end_line=2000, total_lines=2,
-            file_size=5, file_ends_with_newline=False)
+            "a\nb\nc\n",
+            offset=1,
+            end_line=2000,
+            total_lines=2,
+            file_size=5,
+            file_ends_with_newline=False,
+        )
         assert proved.total_lines == 3
 
         unknown = ops._assemble_read_result(
-            "a\nb\nc\n", offset=1, end_line=2000, total_lines=2,
-            file_size=5, file_ends_with_newline=None)
+            "a\nb\nc\n",
+            offset=1,
+            end_line=2000,
+            total_lines=2,
+            file_size=5,
+            file_ends_with_newline=None,
+        )
         assert unknown.total_lines == 2

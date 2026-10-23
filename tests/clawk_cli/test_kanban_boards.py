@@ -37,6 +37,7 @@ from clawk_cli import kanban_db_dispatch as kbd
 # Fixture
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def fresh_home(tmp_path, monkeypatch):
     """Isolated CLAWK_HOME with no prior kanban state.
@@ -58,6 +59,7 @@ def fresh_home(tmp_path, monkeypatch):
     # Also reset clawk_constants cache so get_default_clawk_root() re-reads.
     try:
         import clawk_constants
+
         clawk_constants._cached_default_clawk_root = None  # type: ignore[attr-defined]
     except Exception:
         pass
@@ -70,14 +72,21 @@ def fresh_home(tmp_path, monkeypatch):
 # Slug validation
 # ---------------------------------------------------------------------------
 
+
 class TestSlugValidation:
-    @pytest.mark.parametrize("good", [
-        "default", "atm10-server", "clawksis-agent", "proj_1", "a",
-        "very-long-but-still-ok-slug-with-hyphens-and-numbers-1234",
-    ])
+    @pytest.mark.parametrize(
+        "good",
+        [
+            "default",
+            "atm10-server",
+            "clawksis-agent",
+            "proj_1",
+            "a",
+            "very-long-but-still-ok-slug-with-hyphens-and-numbers-1234",
+        ],
+    )
     def test_accepts_valid(self, good):
         assert kb._normalize_board_slug(good) == good
-
 
     def test_empty_returns_none(self):
         assert kb._normalize_board_slug(None) is None
@@ -89,6 +98,7 @@ class TestSlugValidation:
 # Path resolution
 # ---------------------------------------------------------------------------
 
+
 class TestPathResolution:
     def test_default_board_legacy_path(self, fresh_home):
         """The default board's DB lives at ``<root>/kanban.db`` for back-compat."""
@@ -98,7 +108,6 @@ class TestPathResolution:
     def test_named_board_under_boards_dir(self, fresh_home):
         p = kb.kanban_db_path(board="atm10-server")
         assert p == fresh_home / "kanban" / "boards" / "atm10-server" / "kanban.db"
-
 
     def test_env_var_db_override_still_wins(self, fresh_home, tmp_path, monkeypatch):
         """``CLAWK_KANBAN_DB`` pins the file regardless of ``board=`` arg for every
@@ -118,10 +127,13 @@ class TestPathResolution:
         assert kb.kanban_db_path(board="ignored") == forced
         # Delegated children / spawned descendants are fenced the same way.
         from agent.delegation_context import DELEGATED_CHILD_ENV_MARKER
+
         monkeypatch.setenv(DELEGATED_CHILD_ENV_MARKER, "1")
         assert kb.kanban_db_path(board="ignored") == forced
 
-    def test_env_var_db_override_wins_when_board_not_passed(self, fresh_home, tmp_path, monkeypatch):
+    def test_env_var_db_override_wins_when_board_not_passed(
+        self, fresh_home, tmp_path, monkeypatch
+    ):
         """``CLAWK_KANBAN_DB`` pins the file when no explicit ``board=`` is given
         (back-compat for dispatcher-spawned workers with no board override)."""
         forced = tmp_path / "custom.db"
@@ -129,7 +141,9 @@ class TestPathResolution:
         assert kb.kanban_db_path() == forced
         assert kb.kanban_db_path(board=None) == forced
 
-    def test_explicit_board_trumps_env_var_db_override(self, fresh_home, tmp_path, monkeypatch):
+    def test_explicit_board_trumps_env_var_db_override(
+        self, fresh_home, tmp_path, monkeypatch
+    ):
         """Documented priority (module docstring, predates this test): explicit
         ``board=`` arg > ``CLAWK_KANBAN_BOARD`` > ``CLAWK_KANBAN_DB`` > current >
         default — for UNFENCED callers. An explicit ``board=`` must resolve to that
@@ -149,10 +163,8 @@ class TestPathResolution:
 # Current-board resolution
 # ---------------------------------------------------------------------------
 
+
 class TestCurrentBoard:
-
-
-
     def test_stale_file_pointer_falls_back_to_default(self, fresh_home):
         current = fresh_home / "kanban" / "current"
         current.parent.mkdir(parents=True, exist_ok=True)
@@ -161,8 +173,6 @@ class TestCurrentBoard:
         assert kb.get_current_board() == "default"
         assert not kb.board_exists("missing-board")
         assert [b["slug"] for b in kb.list_boards()] == ["default"]
-
-
 
     def test_kanban_db_path_reads_current(self, fresh_home):
         """kanban_db_path() with no args respects the on-disk pointer."""
@@ -176,13 +186,8 @@ class TestCurrentBoard:
 # Board CRUD
 # ---------------------------------------------------------------------------
 
+
 class TestBoardCRUD:
-
-
-
-
-
-
     @pytest.mark.parametrize("archive", [True, False])
     def test_remove_clears_init_cache_for_recreated_db(self, fresh_home, archive):
         # Regression for #23833: a poll loop that re-creates a just-removed
@@ -220,10 +225,10 @@ class TestBoardCRUD:
         assert "tasks" in tables
 
 
-
 # ---------------------------------------------------------------------------
 # Connection isolation
 # ---------------------------------------------------------------------------
+
 
 class TestConnectionIsolation:
     def test_tasks_do_not_leak_across_boards(self, fresh_home):
@@ -273,6 +278,7 @@ class TestConnectionIsolation:
 # ---------------------------------------------------------------------------
 # Worker spawn env injection
 # ---------------------------------------------------------------------------
+
 
 class TestWorkerSpawnEnv:
     """Ensure the dispatcher pins ``CLAWK_KANBAN_BOARD`` / DB / workspaces on spawn.
@@ -329,6 +335,7 @@ class TestWorkerSpawnEnv:
 # CLI surface
 # ---------------------------------------------------------------------------
 
+
 def _cli(args: list[str], env_extra: dict | None = None) -> subprocess.CompletedProcess:
     """Run ``clawk kanban …`` with PYTHONPATH pinned to the worktree."""
     env = dict(os.environ)
@@ -347,17 +354,19 @@ def _cli(args: list[str], env_extra: dict | None = None) -> subprocess.Completed
 
 
 class TestCLI:
-
-
     def test_per_board_task_isolation_via_cli(self, tmp_path):
         env = {"CLAWK_HOME": str(tmp_path)}
         assert _cli(["boards", "create", "projA"], env_extra=env).returncode == 0
         assert _cli(["boards", "create", "projB"], env_extra=env).returncode == 0
 
         # Create one task on each via --board.
-        r = _cli(["--board", "projA", "create", "Task A", "--assignee", "dev"], env_extra=env)
+        r = _cli(
+            ["--board", "projA", "create", "Task A", "--assignee", "dev"], env_extra=env
+        )
         assert r.returncode == 0, r.stderr
-        r = _cli(["--board", "projB", "create", "Task B", "--assignee", "dev"], env_extra=env)
+        r = _cli(
+            ["--board", "projB", "create", "Task B", "--assignee", "dev"], env_extra=env
+        )
         assert r.returncode == 0, r.stderr
 
         # list on each board only shows its own.
@@ -374,12 +383,10 @@ class TestCLI:
         assert titlesD == []
 
 
-
-
-
 # ---------------------------------------------------------------------------
 # Archived / deleted board resurrection (#43243)
 # ---------------------------------------------------------------------------
+
 
 class TestBoardResurrection:
     """Read/watch paths must not resurrect archived or deleted boards.
@@ -429,4 +436,6 @@ class TestBoardResurrection:
         assert meta["archived"] is True
         assert meta["name"] == "My Board"
         assert "keepname" in [b["slug"] for b in kb.list_boards(include_archived=True)]
-        assert "keepname" not in [b["slug"] for b in kb.list_boards(include_archived=False)]
+        assert "keepname" not in [
+            b["slug"] for b in kb.list_boards(include_archived=False)
+        ]

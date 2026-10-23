@@ -11,12 +11,20 @@ text to a non-whitespace placeholder at two points on the Anthropic request path
 — ``_sanitize_replay_block`` (ordered-blocks replay) and the final content walk
 in ``_convert_assistant_message`` (main path). Ref #69512.
 """
+
 import pytest
-from agent.anthropic_message_convert import _EMPTY_TEXT_PLACEHOLDER, _safe_text, _sanitize_replay_block, _convert_assistant_message
+from agent.anthropic_message_convert import (
+    _EMPTY_TEXT_PLACEHOLDER,
+    _safe_text,
+    _sanitize_replay_block,
+    _convert_assistant_message,
+)
 
 
 def _text_blocks(msg):
-    return [b for b in msg["content"] if isinstance(b, dict) and b.get("type") == "text"]
+    return [
+        b for b in msg["content"] if isinstance(b, dict) and b.get("type") == "text"
+    ]
 
 
 def _assert_no_blank_text(msg):
@@ -30,12 +38,9 @@ class TestSafeText:
     def test_none_becomes_placeholder(self):
         assert _safe_text(None) == _EMPTY_TEXT_PLACEHOLDER
 
-
     @pytest.mark.parametrize("blank", ["   ", "\n", "\t", " \n\t "])
     def test_whitespace_only_becomes_placeholder(self, blank):
         assert _safe_text(blank) == _EMPTY_TEXT_PLACEHOLDER
-
-
 
 
 class TestSanitizeReplayBlockWhitespace:
@@ -46,7 +51,6 @@ class TestSanitizeReplayBlockWhitespace:
         # cacheable survives, so real thinking/tool_use blocks aren't
         # cluttered with "(empty)" noise. See _convert_assistant_message.
         assert _sanitize_replay_block({"type": "text", "text": "   \n"}) is None
-
 
     def test_none_text_block_dropped_without_crash(self):
         # text=None (invalid upstream payload) must not reach .strip().
@@ -73,9 +77,6 @@ class TestConvertAssistantMessageWhitespace:
         _assert_no_blank_text(out)
         assert _text_blocks(out) == [{"type": "text", "text": _EMPTY_TEXT_PLACEHOLDER}]
 
-
-
-
     def test_thinking_block_not_treated_as_text(self):
         # Only text blocks are coerced; thinking blocks are left untouched even
         # if their payload is whitespace (they obey a different schema rule).
@@ -88,4 +89,6 @@ class TestConvertAssistantMessageWhitespace:
         }
         out = _convert_assistant_message(msg)
         thinking = [b for b in out["content"] if b.get("type") == "thinking"]
-        assert thinking == [{"type": "thinking", "thinking": "  ", "signature": "sig-B"}]
+        assert thinking == [
+            {"type": "thinking", "thinking": "  ", "signature": "sig-B"}
+        ]

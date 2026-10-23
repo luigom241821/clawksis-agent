@@ -71,8 +71,12 @@ class TestUpdateConfigForProviderClearsStaleCustomFields:
         # Surviving a provider switch it routes the NEW provider's requests to the OLD
         # endpoint's env var, so it clears with the inline key — and, like the inline key,
         # survives the clear_api_key=False flavor (same-provider re-pick).
-        model_cfg = {"provider": "custom_x", "key_env": "CUSTOM_X_API_KEY",
-                     "api_key_env": "LEGACY_PTR", "api_mode": "openai"}
+        model_cfg = {
+            "provider": "custom_x",
+            "key_env": "CUSTOM_X_API_KEY",
+            "api_key_env": "LEGACY_PTR",
+            "api_mode": "openai",
+        }
 
         clear_model_endpoint_credentials(model_cfg, clear_api_key=False)
         assert model_cfg["key_env"] == "CUSTOM_X_API_KEY"
@@ -101,7 +105,6 @@ class TestUpdateConfigForProviderClearsStaleCustomFields:
             "Stale api_mode=anthropic_messages from MiniMax would mis-route "
             "OpenRouter requests to the Anthropic SDK — must be cleared"
         )
-
 
     def test_switching_clears_codex_responses_api_mode(self):
         """Also covers codex_responses, not just anthropic_messages."""

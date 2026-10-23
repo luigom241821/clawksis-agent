@@ -55,15 +55,22 @@ def source_install_packages(names: list[str]) -> list[str]:
     from pm.store import current_target
 
     target = current_target()
-    return [name for name in names
-            if not get_package(name).internal
-            and (name == "python" or not get_package(name).optional)
-            and get_package(name).missing_reason(target) is None]
+    return [
+        name
+        for name in names
+        if not get_package(name).internal
+        and (name == "python" or not get_package(name).optional)
+        and get_package(name).missing_reason(target) is None
+    ]
 
 
 def tool_roots(names: list[str]) -> list[str]:
     """Packages to publish before a venv sync. The venv is not one of them."""
-    return [name for name in source_install_packages(names) if not isinstance(get_package(name), StatePackage)]
+    return [
+        name
+        for name in source_install_packages(names)
+        if not isinstance(get_package(name), StatePackage)
+    ]
 
 
 def package_definitions(names: list[str] | None = None) -> list[dict[str, Any]]:
@@ -73,18 +80,29 @@ def package_definitions(names: list[str] | None = None) -> list[dict[str, Any]]:
     source bodies, or the application's import path. ``names`` selects a closure.
     """
     definitions = []
-    for package in walk(names) if names is not None else list(_builtins_loaded().values()):
+    for package in (
+        walk(names) if names is not None else list(_builtins_loaded().values())
+    ):
         cls = type(package)
         if cls.__module__ == "pm.packages":
             continue
-        definition = {"name": package.name, "module": cls.__module__, "qualname": cls.__qualname__}
+        definition = {
+            "name": package.name,
+            "module": cls.__module__,
+            "qualname": cls.__qualname__,
+        }
         module = sys.modules.get(cls.__module__)
         resolved = module
         for part in cls.__qualname__.split("."):
             resolved = getattr(resolved, part, None)
-        if cls.__module__ == "__main__" or "<locals>" in cls.__qualname__ or resolved is not cls:
+        if (
+            cls.__module__ == "__main__"
+            or "<locals>" in cls.__qualname__
+            or resolved is not cls
+        ):
             raise InstallError(
-                package.name, f"package definition {cls.__module__}.{cls.__qualname__} is not importable",
+                package.name,
+                f"package definition {cls.__module__}.{cls.__qualname__} is not importable",
                 "define and register a module-level Package subclass in an importable file",
             )
         source = getattr(module, "__file__", None)
@@ -94,8 +112,14 @@ def package_definitions(names: list[str] | None = None) -> list[dict[str, Any]]:
         parent = cls.__module__.rpartition(".")[0]
         while parent:
             loaded = sys.modules.get(parent)
-            if loaded is not None and not getattr(loaded, "__file__", None) and hasattr(loaded, "__path__"):
-                namespaces[parent] = [str(Path(path).resolve()) for path in loaded.__path__]
+            if (
+                loaded is not None
+                and not getattr(loaded, "__file__", None)
+                and hasattr(loaded, "__path__")
+            ):
+                namespaces[parent] = [
+                    str(Path(path).resolve()) for path in loaded.__path__
+                ]
             parent = parent.rpartition(".")[0]
         if namespaces:
             definition["namespaces"] = namespaces
@@ -121,9 +145,13 @@ def load_package_definitions(definitions: list[dict[str, Any]]) -> None:
             except ModuleNotFoundError as exc:
                 # Missing dependencies inside the definition are not evidence
                 # that its module is absent; never execute such a module twice.
-                if not exc.name or not (module_name == exc.name or module_name.startswith(exc.name + ".")):
+                if not exc.name or not (
+                    module_name == exc.name or module_name.startswith(exc.name + ".")
+                ):
                     raise
-                spec = importlib.util.spec_from_file_location(module_name, definition["path"])
+                spec = importlib.util.spec_from_file_location(
+                    module_name, definition["path"]
+                )
                 if spec is None or spec.loader is None:
                     raise ImportError(f"cannot load {module_name}")
                 module = importlib.util.module_from_spec(spec)
@@ -134,7 +162,11 @@ def load_package_definitions(definitions: list[dict[str, Any]]) -> None:
                     sys.modules.pop(module_name, None)
                     raise
             source = definition.get("path")
-            if source and Path(getattr(module, "__file__", "") or "").resolve() != Path(source).resolve():
+            if (
+                source
+                and Path(getattr(module, "__file__", "") or "").resolve()
+                != Path(source).resolve()
+            ):
                 raise ImportError(f"{module_name} resolved to a different source")
             cls = module
             for part in definition["qualname"].split("."):
@@ -147,7 +179,8 @@ def load_package_definitions(definitions: list[dict[str, Any]]) -> None:
             restored[instance.name] = instance
         except Exception as exc:
             raise InstallError(
-                definition["name"], f"cannot load package definition {module_name}.{definition['qualname']}: {exc}",
+                definition["name"],
+                f"cannot load package definition {module_name}.{definition['qualname']}: {exc}",
                 "keep the package definition and its dependencies importable in the isolated PM runtime",
             ) from exc
     # Import-time decorators must not override the caller's final selection:

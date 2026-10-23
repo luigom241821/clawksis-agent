@@ -23,6 +23,7 @@ Fix (mirrors the #67142 Anthropic ownership discipline):
    FD release is deferred to GC so it cannot happen under a borrowing
    thread's live SSL BIO.
 """
+
 import threading
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -31,6 +32,7 @@ import httpx
 import pytest
 
 from tests.agent.test_streaming import _make_stream_chunk
+
 
 def _make_agent():
     from run_agent import AIAgent
@@ -48,19 +50,23 @@ def _make_agent():
     agent._interrupt_requested = False
     return agent
 
+
 class TestStaleWatchdogNeverClosesSharedClient:
     """The stale watchdog / retry cleanups must not rebuild (and therefore
     must not close) the shared OpenAI client from inside a request."""
 
-    @pytest.mark.filterwarnings(
-        "ignore::pytest.PytestUnhandledThreadExceptionWarning"
-    )
+    @pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
     @patch("run_agent.AIAgent._replace_primary_openai_client")
     @patch("run_agent.AIAgent._abort_request_openai_client")
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
     def test_stale_stream_kill_does_not_replace_primary(
-        self, mock_close, mock_create, mock_abort, mock_replace, monkeypatch,
+        self,
+        mock_close,
+        mock_create,
+        mock_abort,
+        mock_replace,
+        monkeypatch,
     ):
         """Stale-stream watchdog fires → request-local client is aborted, the
         shared primary is never replaced (poll thread must not close it)."""
@@ -107,14 +113,16 @@ class TestStaleWatchdogNeverClosesSharedClient:
         # …and NEVER replaced/closed the shared primary client (#70773).
         mock_replace.assert_not_called()
 
-    @pytest.mark.filterwarnings(
-        "ignore::pytest.PytestUnhandledThreadExceptionWarning"
-    )
+    @pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
     @patch("run_agent.AIAgent._replace_primary_openai_client")
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
     def test_stream_retry_cleanup_does_not_replace_primary(
-        self, mock_close, mock_create, mock_replace, monkeypatch,
+        self,
+        mock_close,
+        mock_create,
+        mock_replace,
+        monkeypatch,
     ):
         """Connection drop before first delta → retry path closes only the
         request-local client; the shared primary is left alone."""
@@ -125,14 +133,18 @@ class TestStaleWatchdogNeverClosesSharedClient:
         def _pick_stream(*a, **kw):
             attempts["n"] += 1
             if attempts["n"] == 1:
+
                 def _dead():
                     raise httpx.ConnectError("connection reset by peer")
                     yield  # pragma: no cover
+
                 return _dead()
-            return iter([
-                _make_stream_chunk(content="ok"),
-                _make_stream_chunk(finish_reason="stop", model="test/model"),
-            ])
+            return iter(
+                [
+                    _make_stream_chunk(content="ok"),
+                    _make_stream_chunk(finish_reason="stop", model="test/model"),
+                ]
+            )
 
         mock_client = MagicMock()
         mock_client.chat.completions.create.side_effect = _pick_stream
@@ -147,14 +159,16 @@ class TestStaleWatchdogNeverClosesSharedClient:
         assert mock_close.call_count >= 1
         mock_replace.assert_not_called()
 
-    @pytest.mark.filterwarnings(
-        "ignore::pytest.PytestUnhandledThreadExceptionWarning"
-    )
+    @pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
     @patch("run_agent.AIAgent._replace_primary_openai_client")
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
     def test_mid_tool_retry_cleanup_does_not_replace_primary(
-        self, mock_close, mock_create, mock_replace, monkeypatch,
+        self,
+        mock_close,
+        mock_create,
+        mock_replace,
+        monkeypatch,
     ):
         """Connection drop mid tool-call → silent retry closes only the
         request-local client; the shared primary is left alone."""
@@ -166,18 +180,24 @@ class TestStaleWatchdogNeverClosesSharedClient:
 
         def _first_stream():
             yield _make_stream_chunk(content="Working: ")
-            yield _make_stream_chunk(tool_calls=[
-                _make_tool_call_delta(index=0, tc_id="call_1", name="terminal"),
-            ])
+            yield _make_stream_chunk(
+                tool_calls=[
+                    _make_tool_call_delta(index=0, tc_id="call_1", name="terminal"),
+                ]
+            )
             raise httpx.RemoteProtocolError("peer closed connection")
 
         def _second_stream():
-            yield _make_stream_chunk(tool_calls=[
-                _make_tool_call_delta(index=0, tc_id="call_1", name="terminal"),
-            ])
-            yield _make_stream_chunk(tool_calls=[
-                _make_tool_call_delta(index=0, arguments='{"command": "ls"}'),
-            ])
+            yield _make_stream_chunk(
+                tool_calls=[
+                    _make_tool_call_delta(index=0, tc_id="call_1", name="terminal"),
+                ]
+            )
+            yield _make_stream_chunk(
+                tool_calls=[
+                    _make_tool_call_delta(index=0, arguments='{"command": "ls"}'),
+                ]
+            )
             yield _make_stream_chunk(finish_reason="tool_calls")
 
         def _pick_stream(*a, **kw):
@@ -194,6 +214,7 @@ class TestStaleWatchdogNeverClosesSharedClient:
         assert attempts["n"] == 2
         assert response.choices[0].message.tool_calls
         mock_replace.assert_not_called()
+
 
 class TestReplacePrimaryRetiresInsteadOfClosing:
     """_replace_primary_openai_client (credential rotation / refresh /
@@ -212,7 +233,8 @@ class TestReplacePrimaryRetiresInsteadOfClosing:
 
         shutdown_calls = []
         with patch.object(
-            agent, "_force_close_tcp_sockets",
+            agent,
+            "_force_close_tcp_sockets",
             side_effect=lambda c: shutdown_calls.append(c) or 1,
         ):
             with patch("agent.process_bootstrap.OpenAI", MagicMock()):

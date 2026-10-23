@@ -42,8 +42,6 @@ def test_line_input_preserves_builtin_input_for_redirected_stdin(monkeypatch):
     assert seen["prompt"] == "Enter model name: "
 
 
-
-
 def test_line_input_falls_back_to_input_on_any_prompt_toolkit_failure(monkeypatch):
     """Any prompt_toolkit runtime failure — not just OSError — degrades to
     input() so the wizard keeps running.  ValueError and RuntimeError can

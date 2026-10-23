@@ -68,8 +68,9 @@ def test_management_token_path_is_single_authority(clawk_home):
     # Forced rotation mints a new token at the same single path.
     rotated = ip.ensure_management_token(force=True)
     assert rotated != token
-    assert ip._management_token_path().read_text(encoding="utf-8-sig").strip() == rotated
-
+    assert (
+        ip._management_token_path().read_text(encoding="utf-8-sig").strip() == rotated
+    )
 
     # Unknown providers (no entry in _BEARER_PROVIDERS) are skipped, not warned.
 
@@ -162,7 +163,10 @@ def test_load_mappings_handles_corrupt_json(clawk_home):
 
 # ── GPG release-signature verification (maxpetrusenko P1) ────────────────────
 
-def test_verify_checksums_signature_skips_without_gpg(clawk_home, monkeypatch, tmp_path):
+
+def test_verify_checksums_signature_skips_without_gpg(
+    clawk_home, monkeypatch, tmp_path
+):
     """No gpg on PATH → degrade gracefully (return False), do not raise."""
     monkeypatch.setattr(ip.shutil, "which", lambda name: None)
     cks = tmp_path / "checksums.txt"
@@ -245,16 +249,24 @@ def test_ca_key_created_with_0o600(clawk_home, monkeypatch):
         # First call: genrsa → -out is at args[-2]
         if args[1] == "genrsa":
             out = args[-2]
-            Path(out).write_bytes(b"-----BEGIN RSA PRIVATE KEY-----\nfake\n-----END RSA PRIVATE KEY-----\n")
+            Path(out).write_bytes(
+                b"-----BEGIN RSA PRIVATE KEY-----\nfake\n-----END RSA PRIVATE KEY-----\n"
+            )
         elif args[1] == "req":
             # Find -out path
             i = args.index("-out")
-            Path(args[i + 1]).write_bytes(b"-----BEGIN CERTIFICATE-----\nfake\n-----END CERTIFICATE-----\n")
+            Path(args[i + 1]).write_bytes(
+                b"-----BEGIN CERTIFICATE-----\nfake\n-----END CERTIFICATE-----\n"
+            )
         result = MagicMock()
         result.returncode = 0
         return result
 
-    monkeypatch.setattr(ip.shutil, "which", lambda name: "/usr/bin/openssl" if name == "openssl" else None)
+    monkeypatch.setattr(
+        ip.shutil,
+        "which",
+        lambda name: "/usr/bin/openssl" if name == "openssl" else None,
+    )
     monkeypatch.setattr(ip.subprocess, "run", fake_run)
 
     _ca_crt, ca_key = ip.ensure_ca_cert()
@@ -364,7 +376,8 @@ def test_reload_proxy_posts_bearer_to_management_endpoint(clawk_home, monkeypatc
     monkeypatch.setattr(ip, "_read_pid", lambda: 4242)
     monkeypatch.setattr(ip, "_pid_alive", lambda pid: True)
     monkeypatch.setattr(
-        ip, "_read_management_listen_from_config",
+        ip,
+        "_read_management_listen_from_config",
         lambda config_path=None: ("127.0.0.1", 9092),
     )
     ip.ensure_management_token()
@@ -373,8 +386,10 @@ def test_reload_proxy_posts_bearer_to_management_endpoint(clawk_home, monkeypatc
 
     class _FakeResp:
         status = 200
+
         def __enter__(self):
             return self
+
         def __exit__(self, *a):
             return False
 
@@ -385,6 +400,7 @@ def test_reload_proxy_posts_bearer_to_management_endpoint(clawk_home, monkeypatc
         return _FakeResp()
 
     import urllib.request
+
     monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
 
     assert ip.reload_proxy() is True
@@ -417,6 +433,7 @@ def test_start_proxy_injects_management_key_env(clawk_home, monkeypatch):
 
     class _FakeProc:
         pid = 99999
+
         def poll(self):
             return None
 
@@ -427,7 +444,9 @@ def test_start_proxy_injects_management_key_env(clawk_home, monkeypatch):
     monkeypatch.setattr(ip.subprocess, "Popen", fake_popen)
     monkeypatch.setattr(ip, "_write_pidfile_safely", lambda pf, pid: None)
     monkeypatch.setattr(ip, "_port_listening", lambda h, p: True)
-    monkeypatch.setattr(ip, "get_status", lambda: ip.ProxyStatus(pid=99999, listening=True))
+    monkeypatch.setattr(
+        ip, "get_status", lambda: ip.ProxyStatus(pid=99999, listening=True)
+    )
 
     ip.start_proxy(binary=fake_bin, config_path=cfg_path, install_if_missing=False)
     assert captured_env.get(ip._MGMT_API_KEY_ENV)
@@ -447,8 +466,6 @@ def test_start_proxy_injects_management_key_env(clawk_home, monkeypatch):
 # ---------------------------------------------------------------------------
 # v3: _reset_for_tests actually clears module state (P3 #1)
 # ---------------------------------------------------------------------------
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -476,7 +493,10 @@ def test_docker_egress_node_options_uses_sentinel(clawk_home, monkeypatch):
     (state / "ca.key").write_text("fake-key")
     mapping = _sample_mapping("OPENROUTER_API_KEY")
     proxy_cfg = ip.build_proxy_config(
-        mappings=[mapping], ca_cert=ca, ca_key=state / "ca.key", tunnel_port=9090,
+        mappings=[mapping],
+        ca_cert=ca,
+        ca_key=state / "ca.key",
+        tunnel_port=9090,
     )
     ip.write_proxy_config(proxy_cfg)
     ip.write_mappings([mapping])
@@ -555,7 +575,8 @@ def test_get_status_probes_configured_bind_host(clawk_home, monkeypatch):
 
 
 def test_partial_bitwarden_secrets_honor_allow_env_fallback(
-    clawk_home, monkeypatch,
+    clawk_home,
+    monkeypatch,
 ):
     """The missing-secret branch's own error message tells operators to
     set proxy.allow_env_fallback — so the flag must actually work there
@@ -565,8 +586,11 @@ def test_partial_bitwarden_secrets_honor_allow_env_fallback(
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-host-fallback")
 
     import agent.secret_sources.bitwarden as bw
+
     monkeypatch.setattr(
-        bw, "fetch_bitwarden_secrets", lambda **kw: ({}, []),
+        bw,
+        "fetch_bitwarden_secrets",
+        lambda **kw: ({}, []),
     )
     monkeypatch.setenv("BWS_ACCESS_TOKEN", "tok")
     bw_cfg = {
@@ -576,14 +600,16 @@ def test_partial_bitwarden_secrets_honor_allow_env_fallback(
     }
 
     env = ip._build_proxy_subprocess_env(
-        refresh_from_bitwarden=True, bitwarden_config=bw_cfg,
+        refresh_from_bitwarden=True,
+        bitwarden_config=bw_cfg,
     )
     # Falls back to the host env value instead of raising.
     assert env.get("OPENROUTER_API_KEY") == "sk-host-fallback"
 
 
 def test_partial_bitwarden_secrets_raise_without_fallback(
-    clawk_home, monkeypatch,
+    clawk_home,
+    monkeypatch,
 ):
     """Strict default: missing BWS secrets raise."""
 
@@ -591,20 +617,25 @@ def test_partial_bitwarden_secrets_raise_without_fallback(
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-host")
 
     import agent.secret_sources.bitwarden as bw
+
     monkeypatch.setattr(
-        bw, "fetch_bitwarden_secrets", lambda **kw: ({}, []),
+        bw,
+        "fetch_bitwarden_secrets",
+        lambda **kw: ({}, []),
     )
     monkeypatch.setenv("BWS_ACCESS_TOKEN", "tok")
     bw_cfg = {"project_id": "proj", "access_token_env": "BWS_ACCESS_TOKEN"}
 
     with pytest.raises(RuntimeError, match="did not return secrets"):
         ip._build_proxy_subprocess_env(
-            refresh_from_bitwarden=True, bitwarden_config=bw_cfg,
+            refresh_from_bitwarden=True,
+            bitwarden_config=bw_cfg,
         )
 
 
 def test_bitwarden_importerror_raise_without_fallback(
-    clawk_home, monkeypatch,
+    clawk_home,
+    monkeypatch,
 ):
     """Strict default: ImportError on BWS module raises when
     allow_env_fallback is unset, matching the sibling branches."""
@@ -620,8 +651,11 @@ def test_bitwarden_importerror_raise_without_fallback(
     #
     # In addition, block importlib.reload in case the test infra used it.
     import agent.secret_sources as ss
+
     monkeypatch.delitem(sys.modules, "agent.secret_sources.bitwarden", raising=False)
-    monkeypatch.delitem(sys.modules, "agent.secret_sources.bitwarden.bws", raising=False)
+    monkeypatch.delitem(
+        sys.modules, "agent.secret_sources.bitwarden.bws", raising=False
+    )
     monkeypatch.delattr(ss, "bitwarden", raising=False)
 
     # Now block the re-import.  ``from agent.secret_sources import
@@ -630,10 +664,13 @@ def test_bitwarden_importerror_raise_without_fallback(
     # trying to intercept __import__ at the C level.
     class _MissingBWS:
         """Sentinel: accessing any attribute raises ImportError."""
+
         def __getattr__(self, _name):
             raise ImportError("bws SDK not installed")
+
         def __call__(self, *a, **kw):
             raise ImportError("bws SDK not installed")
+
     monkeypatch.setattr(ss, "bitwarden", _MissingBWS(), raising=False)
 
     monkeypatch.setenv("BWS_ACCESS_TOKEN", "tok")
@@ -641,7 +678,6 @@ def test_bitwarden_importerror_raise_without_fallback(
 
     with pytest.raises(RuntimeError, match="Bitwarden refresh module unavailable"):
         ip._build_proxy_subprocess_env(
-            refresh_from_bitwarden=True, bitwarden_config=bw_cfg,
+            refresh_from_bitwarden=True,
+            bitwarden_config=bw_cfg,
         )
-
-

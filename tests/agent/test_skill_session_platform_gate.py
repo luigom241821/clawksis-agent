@@ -4,25 +4,46 @@ A skill whose metadata.clawk.session_platforms names gateway channels is
 hidden from the skills index on every other channel; unknown platform
 fails OPEN (offline builds/tests must not hide skills).
 """
+
 from agent.prompt_builder import _skill_should_show
 from agent.skill_utils import extract_skill_conditions
+
 
 def _conds(platforms):
     return extract_skill_conditions(
         {"metadata": {"clawk": {"session_platforms": platforms}}}
     )
 
+
 class TestSessionPlatformGate:
     def test_hidden_on_other_channel(self):
-        assert _skill_should_show(_conds(["teams", "cron"]), {"terminal"}, set(), "desktop") is False
-        assert _skill_should_show(_conds(["teams", "cron"]), {"terminal"}, set(), "telegram") is False
+        assert (
+            _skill_should_show(
+                _conds(["teams", "cron"]), {"terminal"}, set(), "desktop"
+            )
+            is False
+        )
+        assert (
+            _skill_should_show(
+                _conds(["teams", "cron"]), {"terminal"}, set(), "telegram"
+            )
+            is False
+        )
 
     def test_shown_on_named_channel(self):
-        assert _skill_should_show(_conds(["teams", "cron"]), {"terminal"}, set(), "teams") is True
-        assert _skill_should_show(_conds(["teams", "cron"]), {"terminal"}, set(), "cron") is True
+        assert (
+            _skill_should_show(_conds(["teams", "cron"]), {"terminal"}, set(), "teams")
+            is True
+        )
+        assert (
+            _skill_should_show(_conds(["teams", "cron"]), {"terminal"}, set(), "cron")
+            is True
+        )
 
     def test_case_insensitive(self):
-        assert _skill_should_show(_conds(["Teams"]), {"terminal"}, set(), "TEAMS") is True
+        assert (
+            _skill_should_show(_conds(["Teams"]), {"terminal"}, set(), "TEAMS") is True
+        )
 
     def test_unknown_platform_fails_open(self):
         assert _skill_should_show(_conds(["teams"]), {"terminal"}, set(), None) is True

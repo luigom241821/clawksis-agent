@@ -153,13 +153,11 @@ class TestRestoreSessionYolo:
 
 
 class TestToggleYoloPersists:
-
     def test_toggle_survives_missing_session_db(self):
         stand_in = SimpleNamespace(session_id=SESSION_ID, _session_db=None)
         with patch("cli._cprint"):
             ClawksisCLI._toggle_yolo(stand_in)  # must not raise
         assert approval_module.is_session_yolo_enabled(SESSION_ID) is True
-
 
 
 class TestEndToEndPersistAndRestore:
@@ -187,7 +185,8 @@ class TestEndToEndPersistAndRestore:
         token = approval_context.set_current_session_key(SESSION_ID)
         try:
             result = approval_module.check_all_command_guards(
-                "rm -rf /tmp/scratch-xyzzy", "local",
+                "rm -rf /tmp/scratch-xyzzy",
+                "local",
             )
             assert result["approved"] is True
         finally:

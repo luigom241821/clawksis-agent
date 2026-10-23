@@ -5,6 +5,7 @@ Drives the service through ``snapshot_baseline`` →
 delta filter that ``tools/file_operations._check_lint_delta`` relies
 on.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -124,6 +125,7 @@ def test_snapshot_baseline_honors_wait_timeout(mock_pyright_silent, monkeypatch)
     # The budget is read off the call, not inferred from wall time: server spawn and initialize
     # sit inside snapshot_baseline too, and on a loaded runner they ate the margin to 5s.
     from agent.lsp.client import LSPClient
+
     budgets = []
     real_wait = LSPClient.wait_for_diagnostics
 
@@ -145,7 +147,9 @@ def test_snapshot_baseline_honors_wait_timeout(mock_pyright_silent, monkeypatch)
         elapsed = time.monotonic() - start
 
         # The wait is deadline-based and the server never pushes, so it runs the full budget.
-        assert elapsed >= 1.5, f"baseline returned before the wait budget: {elapsed:.2f}s"
+        assert elapsed >= 1.5, (
+            f"baseline returned before the wait budget: {elapsed:.2f}s"
+        )
         assert budgets and all(b == pytest.approx(2.0) for b in budgets), (
             f"baseline must wait with wait_timeout=2.0, not the 5s fallback: {budgets}"
         )
@@ -190,9 +194,7 @@ def test_service_replaces_client_after_reader_failure(
     source = repo / "x.py"
     source.write_text("print('hi')\n")
     monkeypatch.chdir(str(repo))
-    server = _install_mock_server(
-        monkeypatch, [failed_script, "clean"], "pyright"
-    )
+    server = _install_mock_server(monkeypatch, [failed_script, "clean"], "pyright")
     spawn_count = next(server)
 
     svc = LSPService(
@@ -202,6 +204,7 @@ def test_service_replaces_client_after_reader_failure(
         install_strategy="manual",
     )
     try:
+
         async def _break_first_client():
             client = await svc._get_or_spawn(str(source))
             assert client is not None

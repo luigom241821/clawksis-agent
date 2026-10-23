@@ -61,8 +61,6 @@ class TestMoonshotModelDetection:
 class TestMissingTypeFilled:
     """Rule 1: every property must carry a type."""
 
-
-
     def test_nested_properties_are_repaired(self):
         params = {
             "type": "object",
@@ -77,7 +75,6 @@ class TestMissingTypeFilled:
         }
         out = sanitize_moonshot_tool_parameters(params)
         assert out["properties"]["filter"]["properties"]["field"]["type"] == "string"
-
 
     def test_ref_node_is_not_given_synthetic_type(self):
         """$ref nodes should NOT get a synthetic type — the referenced
@@ -191,7 +188,6 @@ class TestTopLevelGuarantees:
         assert sanitize_moonshot_tool_parameters("garbage") == empty
         assert sanitize_moonshot_tool_parameters([]) == empty
 
-
     def test_does_not_mutate_input(self):
         params = {
             "type": "object",
@@ -209,9 +205,6 @@ class TestTopLevelGuarantees:
 class TestRequiredArray:
     """Rule 4: every object schema must carry a ``required`` array (#66835)."""
 
-
-
-
     def test_dangling_required_pruned(self):
         params = {
             "type": "object",
@@ -220,7 +213,6 @@ class TestRequiredArray:
         }
         out = sanitize_moonshot_tool_parameters(params)
         assert out["required"] == ["q"]
-
 
     def test_nested_object_property_gets_required(self):
         params = {
@@ -269,7 +261,9 @@ class TestToolListSanitizer:
         assert out[0]["function"]["parameters"]["properties"]["q"]["type"] == "string"
         # Second tool: empty object gains the required-array Moonshot demands
         assert out[1]["function"]["parameters"] == {
-            "type": "object", "properties": {}, "required": []
+            "type": "object",
+            "properties": {},
+            "required": [],
         }
 
     def test_empty_list_is_passthrough(self):
@@ -319,9 +313,6 @@ class TestRealWorldMCPShape:
 class TestEnumNullStripping:
     """Rule 3: Moonshot rejects null/empty-string inside enum arrays."""
 
-
-
-
     def test_dataslayer_db_type_after_mcp_normalize(self):
         """Real-world: dataslayer db_type anyOf+enum after MCP normalization."""
         # This is the exact shape after _normalize_mcp_input_schema runs:
@@ -331,7 +322,15 @@ class TestEnumNullStripping:
             "properties": {
                 "datasource": {"type": "string"},
                 "db_type": {
-                    "enum": ["mysql", "mariadb", "postgresql", "sqlserver", "oracle", "", None],
+                    "enum": [
+                        "mysql",
+                        "mariadb",
+                        "postgresql",
+                        "sqlserver",
+                        "oracle",
+                        "",
+                        None,
+                    ],
                     "type": "string",
                     "nullable": True,
                     "default": None,
@@ -344,10 +343,14 @@ class TestEnumNullStripping:
         assert "nullable" not in db_type, "nullable keyword must be stripped"
         assert None not in db_type["enum"]
         assert "" not in db_type["enum"]
-        assert db_type["enum"] == ["mysql", "mariadb", "postgresql", "sqlserver", "oracle"]
+        assert db_type["enum"] == [
+            "mysql",
+            "mariadb",
+            "postgresql",
+            "sqlserver",
+            "oracle",
+        ]
         assert db_type["type"] == "string"
-
-
 
 
 class TestUnionTypeList:

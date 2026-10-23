@@ -1,4 +1,5 @@
 """Resume must expose the admission needed by the existing fenced discard control."""
+
 import argparse
 import asyncio
 from contextlib import nullcontext
@@ -8,7 +9,9 @@ import pytest
 
 
 @pytest.mark.asyncio
-async def test_resume_displays_unknown_and_queue_then_discards_with_refreshed_generation(monkeypatch, capsys):
+async def test_resume_displays_unknown_and_queue_then_discards_with_refreshed_generation(
+    monkeypatch, capsys
+):
     from websockets.asyncio.server import serve
 
     from clawk_cli import gateway_chat
@@ -19,14 +22,25 @@ async def test_resume_displays_unknown_and_queue_then_discards_with_refreshed_ge
         "stored_session_id": "stored",
         "execution_generation": 9,
         "pending": [
-            {"admission_id": unknown_id, "status": "unknown", "execution_generation": 4},
-            {"admission_id": queued_id, "status": "queued", "execution_generation": None},
+            {
+                "admission_id": unknown_id,
+                "status": "unknown",
+                "execution_generation": 4,
+            },
+            {
+                "admission_id": queued_id,
+                "status": "queued",
+                "execution_generation": None,
+            },
         ],
     }
     refreshed = {
         **snapshot,
         "execution_generation": 10,
-        "pending": [{**snapshot["pending"][0], "execution_generation": 5}, snapshot["pending"][1]],
+        "pending": [
+            {**snapshot["pending"][0], "execution_generation": 5},
+            snapshot["pending"][1],
+        ],
     }
     calls = []
 
@@ -39,7 +53,9 @@ async def test_resume_displays_unknown_and_queue_then_discards_with_refreshed_ge
             if method == "session.resume":
                 resumes = sum(name == "session.resume" for name, _ in calls)
                 result = snapshot if resumes == 1 else refreshed
-            await ws.send(json.dumps({"jsonrpc": "2.0", "id": request["id"], "result": result}))
+            await ws.send(
+                json.dumps({"jsonrpc": "2.0", "id": request["id"], "result": result})
+            )
 
     class Input:
         submitted = False
@@ -53,15 +69,24 @@ async def test_resume_displays_unknown_and_queue_then_discards_with_refreshed_ge
             output = capsys.readouterr()
             # The user must be able to copy the full admission ID, not guess it
             # from the session ID or inspect the gateway's storage.
-            commands = [line.strip() for line in output.err.splitlines() if line.strip().startswith("/discard ")]
+            commands = [
+                line.strip()
+                for line in output.err.splitlines()
+                if line.strip().startswith("/discard ")
+            ]
             assert commands == [f"/discard {unknown_id}"]
             assert "unknown" in output.err.lower()
-            assert any(queued_id in line and "queued" in line.lower() for line in output.err.splitlines())
+            assert any(
+                queued_id in line and "queued" in line.lower()
+                for line in output.err.splitlines()
+            )
             assert "waiting" in output.err.lower()
             assert "without replay" in output.err.lower()
             # stdout holds the REPL banner only: no transcript or replay is rendered before
             # the operator has chosen what to do with the unknown admission.
-            assert output.out.strip().splitlines() == ["Welcome to Clawksis! Type your message or /help for commands."]
+            assert output.out.strip().splitlines() == [
+                "Welcome to Clawksis! Type your message or /help for commands."
+            ]
             assert calls == [
                 ("runtime.describe", {}),
                 ("session.resume", {"session_id": snapshot["stored_session_id"]}),
@@ -74,17 +99,26 @@ async def test_resume_displays_unknown_and_queue_then_discards_with_refreshed_ge
     async with serve(peer, "127.0.0.1", 0) as server:
         port = server.sockets[0].getsockname()[1]
         monkeypatch.setenv("CLAWK_TUI_GATEWAY_URL", f"ws://127.0.0.1:{port}")
-        assert await asyncio.wait_for(
-            gateway_chat.run_gateway_chat(argparse.Namespace(resume=snapshot["stored_session_id"])), 5
-        ) == 0
+        assert (
+            await asyncio.wait_for(
+                gateway_chat.run_gateway_chat(
+                    argparse.Namespace(resume=snapshot["stored_session_id"])
+                ),
+                5,
+            )
+            == 0
+        )
 
     assert calls == [
         ("runtime.describe", {}),
         ("session.resume", {"session_id": snapshot["stored_session_id"]}),
         ("session.resume", {"session_id": snapshot["stored_session_id"]}),
-        ("prompt.resolve_unknown", {
-            "session_id": snapshot["stored_session_id"],
-            "admission_id": unknown_id,
-            "execution_generation": refreshed["pending"][0]["execution_generation"],
-        }),
+        (
+            "prompt.resolve_unknown",
+            {
+                "session_id": snapshot["stored_session_id"],
+                "admission_id": unknown_id,
+                "execution_generation": refreshed["pending"][0]["execution_generation"],
+            },
+        ),
     ]

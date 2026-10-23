@@ -5,7 +5,9 @@ from __future__ import annotations
 from typing import Any
 
 
-def stamp_origin_discriminators(t: Any, route_metadata: dict, media_metadata: dict) -> None:
+def stamp_origin_discriminators(
+    t: Any, route_metadata: dict, media_metadata: dict
+) -> None:
     """Stamp the origin's ``scope_id`` / ``user_id`` onto a live send's metadata.
 
     Relay egress is fail-closed on a discriminator and the RelayAdapter's caches are cold after every

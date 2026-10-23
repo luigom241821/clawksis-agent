@@ -25,9 +25,17 @@ def test_prior_turn_reasoning_items_survive_compaction():
     the wire builder filters per issuer/model, so no turn's items are pruned (only shadowed checkpoints)."""
     messages = [
         {"role": "user", "content": "turn 1"},
-        {"role": "assistant", "content": "a1", "codex_reasoning_items": [_compaction(), _reasoning("rs_a")]},
+        {
+            "role": "assistant",
+            "content": "a1",
+            "codex_reasoning_items": [_compaction(), _reasoning("rs_a")],
+        },
         {"role": "user", "content": "turn 2"},
-        {"role": "assistant", "content": "a2", "codex_reasoning_items": [_reasoning("rs_b")]},
+        {
+            "role": "assistant",
+            "content": "a2",
+            "codex_reasoning_items": [_reasoning("rs_b")],
+        },
     ]
     assert _prune_stale_reasoning_replay(messages) == 0
     assert messages[1]["codex_reasoning_items"] == [_compaction(), _reasoning("rs_a")]
@@ -37,7 +45,11 @@ def test_prior_turn_reasoning_items_survive_compaction():
 def test_checkpoint_only_sidecar_untouched_and_uncounted():
     messages = [
         {"role": "user", "content": "turn 1"},
-        {"role": "assistant", "content": "a1", "codex_reasoning_items": [_compaction()]},
+        {
+            "role": "assistant",
+            "content": "a1",
+            "codex_reasoning_items": [_compaction()],
+        },
         {"role": "user", "content": "turn 2"},
         {"role": "assistant", "content": "a2"},
     ]
@@ -48,8 +60,16 @@ def test_checkpoint_only_sidecar_untouched_and_uncounted():
 
 def test_no_user_boundary_prunes_nothing():
     messages = [
-        {"role": "assistant", "content": "a1", "codex_reasoning_items": [_reasoning("rs_a")]},
-        {"role": "assistant", "content": "a2", "codex_reasoning_items": [_reasoning("rs_b")]},
+        {
+            "role": "assistant",
+            "content": "a1",
+            "codex_reasoning_items": [_reasoning("rs_a")],
+        },
+        {
+            "role": "assistant",
+            "content": "a2",
+            "codex_reasoning_items": [_reasoning("rs_b")],
+        },
     ]
     assert _prune_stale_reasoning_replay(messages) == 0
     assert messages[0]["codex_reasoning_items"]
@@ -97,7 +117,10 @@ class TestInterimMergePreservesCheckpoints:
         from agent.native_compaction import merge_interim_reasoning_items
 
         prior = [{"type": "compaction", "encrypted_content": "old-ckpt"}]
-        newer = [{"type": "compaction", "encrypted_content": "new-ckpt"}, _reasoning("rs_new")]
+        newer = [
+            {"type": "compaction", "encrypted_content": "new-ckpt"},
+            _reasoning("rs_new"),
+        ]
         merged = merge_interim_reasoning_items(prior, newer)
         assert merged == newer
 
@@ -112,7 +135,9 @@ class TestInterimMergePreservesCheckpoints:
         from agent.native_compaction import merge_interim_reasoning_items
 
         assert merge_interim_reasoning_items(None, None) == []
-        assert merge_interim_reasoning_items(None, [_reasoning("r")]) == [_reasoning("r")]
+        assert merge_interim_reasoning_items(None, [_reasoning("r")]) == [
+            _reasoning("r")
+        ]
         assert merge_interim_reasoning_items([_compaction()], None) == [_compaction()]
 
 
@@ -132,14 +157,16 @@ class TestShadowedCheckpointsArePruned:
         messages = []
         for t in range(turns):
             messages.append({"role": "user", "content": f"u{t} " + "z" * size})
-            messages.append({
-                "role": "assistant",
-                "content": f"a{t} " + "z" * size,
-                "codex_reasoning_items": [
-                    _reasoning(f"rs_{t}"),
-                    self._checkpoint(t),
-                ],
-            })
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": f"a{t} " + "z" * size,
+                    "codex_reasoning_items": [
+                        _reasoning(f"rs_{t}"),
+                        self._checkpoint(t),
+                    ],
+                }
+            )
         messages.append({"role": "user", "content": "now"})
         return messages
 
@@ -155,11 +182,13 @@ class TestShadowedCheckpointsArePruned:
     def test_newest_carrier_inside_the_active_turn_shadows_every_stale_one(self):
         messages = self._transcript(2)
         # Active turn (after the last user message) mints its own checkpoint.
-        messages.append({
-            "role": "assistant",
-            "content": "live",
-            "codex_reasoning_items": [self._checkpoint("live")],
-        })
+        messages.append(
+            {
+                "role": "assistant",
+                "content": "live",
+                "codex_reasoning_items": [self._checkpoint("live")],
+            }
+        )
         _prune_stale_reasoning_replay(messages)
         # Shadowed checkpoints go; each turn's own reasoning stays (continuity, not dead weight).
         assert messages[1]["codex_reasoning_items"] == [_reasoning("rs_0")]
@@ -173,8 +202,13 @@ class TestShadowedCheckpointsArePruned:
         from agent.native_compaction import prune_pre_checkpoint_items
 
         cc = ContextCompressor(
-            model="test-model", threshold_percent=0.75, protect_first_n=1, protect_last_n=12,
-            quiet_mode=True, config_context_length=40960, provider="test",
+            model="test-model",
+            threshold_percent=0.75,
+            protect_first_n=1,
+            protect_last_n=12,
+            quiet_mode=True,
+            config_context_length=40960,
+            provider="test",
         )
         cc._generate_summary = lambda *a, **k: "Summary of earlier turns."
         messages = self._transcript(12, size=1500)
@@ -183,15 +217,23 @@ class TestShadowedCheckpointsArePruned:
         compressed = cc.compress(messages, current_tokens=100_000, force=True)
 
         retained = self._retained_checkpoints(compressed)
-        assert len(before) > len(retained) >= 1, "the protected tail must carry several shadowed checkpoints"
+        assert len(before) > len(retained) >= 1, (
+            "the protected tail must carry several shadowed checkpoints"
+        )
         items = []
         for msg in compressed:
             items.extend(dict(i) for i in (msg.get("codex_reasoning_items") or []))
             if msg["role"] == "user":
-                items.append({
-                    "type": "message",
-                    "role": "user",
-                    "content": [{"type": "input_text", "text": msg["content"]}],
-                })
-        wire = [i for i in prune_pre_checkpoint_items(items) if i.get("type") == "compaction"]
+                items.append(
+                    {
+                        "type": "message",
+                        "role": "user",
+                        "content": [{"type": "input_text", "text": msg["content"]}],
+                    }
+                )
+        wire = [
+            i
+            for i in prune_pre_checkpoint_items(items)
+            if i.get("type") == "compaction"
+        ]
         assert retained == wire == [self._checkpoint(11)]

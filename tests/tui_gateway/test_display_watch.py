@@ -19,9 +19,18 @@ REPO = Path(__file__).resolve().parents[2]
 def _other_process(home: Path, stmt: str) -> None:
     env = {**os.environ, "CLAWK_HOME": str(home)}
     subprocess.run(
-        [sys.executable, "-c", f"import sys; sys.path.insert(0, {str(REPO)!r}); "
-         f"from tools.bot_desktop import lease; {stmt}"],
-        cwd=str(REPO), env=env, check=True, timeout=60, stdin=subprocess.DEVNULL)
+        [
+            sys.executable,
+            "-c",
+            f"import sys; sys.path.insert(0, {str(REPO)!r}); "
+            f"from tools.bot_desktop import lease; {stmt}",
+        ],
+        cwd=str(REPO),
+        env=env,
+        check=True,
+        timeout=60,
+        stdin=subprocess.DEVNULL,
+    )
 
 
 def _wait_for(pred, timeout: float = 3.0) -> bool:
@@ -41,31 +50,46 @@ def _serialize_polls(server, monkeypatch) -> None:
     server globals on each tick) makes a hand-driven poll return only once any claimed transition is out."""
     lock = threading.Lock()
     for name in ("_poll_lease_files", "_poll_runtime_files"):
+
         def locked(real=getattr(server, name)) -> None:
             with lock:
                 real()
+
         monkeypatch.setattr(server, name, locked)
 
 
 def _watching(server, home: Path, monkeypatch) -> list:
     from clawk_constants import clawk_home_key
+
     events: list = []
     # Before the home is watched: no pass that can see it runs unlocked.
     _serialize_polls(server, monkeypatch)
-    monkeypatch.setattr(server, "_broadcast_global_event", lambda ev, payload=None: events.append((ev, payload)))
+    monkeypatch.setattr(
+        server,
+        "_broadcast_global_event",
+        lambda ev, payload=None: events.append((ev, payload)),
+    )
     monkeypatch.setattr(server, "_clawk_home", str(home))
     server._ensure_lease_watcher()
-    assert _wait_for(lambda: clawk_home_key(home) in server._lease_epochs), "watcher never seeded the home"
+    assert _wait_for(lambda: clawk_home_key(home) in server._lease_epochs), (
+        "watcher never seeded the home"
+    )
     return events
 
 
 def _lease_events(events, **want):
-    return [p for ev, p in events if ev == "display.lease" and all(p["lease"].get(k) == v for k, v in want.items())]
+    return [
+        p
+        for ev, p in events
+        if ev == "display.lease"
+        and all(p["lease"].get(k) == v for k, v in want.items())
+    ]
 
 
 def test_takeover_in_another_process_is_broadcast(tmp_path, monkeypatch):
     from tui_gateway import server
     from clawk_constants import clawk_home_key
+
     home = tmp_path / "home"
     home.mkdir()
     events = _watching(server, home, monkeypatch)
@@ -77,9 +101,12 @@ def test_takeover_in_another_process_is_broadcast(tmp_path, monkeypatch):
     assert payload["profile_key"] == clawk_home_key(home)
 
 
-def test_release_in_another_process_is_broadcast_and_local_transition_not_duplicated(tmp_path, monkeypatch):
+def test_release_in_another_process_is_broadcast_and_local_transition_not_duplicated(
+    tmp_path, monkeypatch
+):
     from tui_gateway import server
     from tools.bot_desktop import lease
+
     home = tmp_path / "home"
     home.mkdir()
     events = _watching(server, home, monkeypatch)
@@ -97,7 +124,9 @@ def test_release_in_another_process_is_broadcast_and_local_transition_not_duplic
     assert len(_lease_events(events, holder="agent")) == 1
 
 
-def test_screen_started_or_stopped_by_another_process_is_broadcast_as_status(tmp_path, monkeypatch):
+def test_screen_started_or_stopped_by_another_process_is_broadcast_as_status(
+    tmp_path, monkeypatch
+):
     """A start/stop made by the CLI or gateway process must reach an open Desktop: the portal's
     status was otherwise one-shot (fetched once, then only lease events)."""
     from tui_gateway import server
@@ -121,7 +150,9 @@ def test_screen_started_or_stopped_by_another_process_is_broadcast_as_status(tmp
     assert [p for e, p in events if e == "display.status"][-1]["running"] is False
 
 
-def test_launcher_dying_without_touching_its_files_is_broadcast_as_stopped(tmp_path, monkeypatch):
+def test_launcher_dying_without_touching_its_files_is_broadcast_as_stopped(
+    tmp_path, monkeypatch
+):
     """Xvnc/the launcher crashing leaves env and launcher.pid exactly as they were, so a watcher keyed
     on mtimes alone never told the Desktop the screen was gone. The mark must include liveness."""
     import psutil
@@ -129,15 +160,21 @@ def test_launcher_dying_without_touching_its_files_is_broadcast_as_stopped(tmp_p
 
     home = tmp_path / "home"
     (home / "bot-desktop").mkdir(parents=True)
-    launcher = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"], stdin=subprocess.DEVNULL)
+    launcher = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(30)"], stdin=subprocess.DEVNULL
+    )
     try:
         born = psutil.Process(launcher.pid).create_time()
-        (home / "bot-desktop" / "launcher.pid").write_text(f"{launcher.pid} {born!r}", encoding="utf-8")
+        (home / "bot-desktop" / "launcher.pid").write_text(
+            f"{launcher.pid} {born!r}", encoding="utf-8"
+        )
         (home / "bot-desktop" / "env").write_text("DISPLAY=:77\n", encoding="utf-8")
         events = _watching(server, home, monkeypatch)
         server._poll_runtime_files()  # seed: running
         server._poll_runtime_files()
-        assert not [e for e in events if e[0] == "display.status"], "unchanged state was re-broadcast"
+        assert not [e for e in events if e[0] == "display.status"], (
+            "unchanged state was re-broadcast"
+        )
 
         launcher.kill()
         launcher.wait(5)
@@ -167,29 +204,47 @@ def test_screen_start_and_stop_reach_the_models_turn_notes(tmp_path, monkeypatch
         _gateway_turn_context_notes = ""
 
     agent, other = _Agent(), _Agent()
-    server._sessions["ws-a"] = {"agent": agent, "profile_home": str(home), "transport": server._detached_ws_transport}
+    server._sessions["ws-a"] = {
+        "agent": agent,
+        "profile_home": str(home),
+        "transport": server._detached_ws_transport,
+    }
     other_home = tmp_path / "other"
     other_home.mkdir()
-    server._sessions["ws-b"] = {"agent": other, "profile_home": str(other_home), "transport": server._detached_ws_transport}
+    server._sessions["ws-b"] = {
+        "agent": other,
+        "profile_home": str(other_home),
+        "transport": server._detached_ws_transport,
+    }
     # the stub "launcher": a real live process with matching create_time, like runtime.start() records
-    launcher = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"], stdin=subprocess.DEVNULL)
+    launcher = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(30)"], stdin=subprocess.DEVNULL
+    )
     try:
         server._poll_runtime_files()  # seed: stopped
         assert not getattr(agent, "_gateway_turn_context_notes", "")
 
         born = psutil.Process(launcher.pid).create_time()
-        (home / "bot-desktop" / "launcher.pid").write_text(f"{launcher.pid} {born!r}", encoding="utf-8")
+        (home / "bot-desktop" / "launcher.pid").write_text(
+            f"{launcher.pid} {born!r}", encoding="utf-8"
+        )
         (home / "bot-desktop" / "env").write_text("DISPLAY=:77\n", encoding="utf-8")
         server._poll_runtime_files()
         note = getattr(agent, "_gateway_turn_context_notes", "")
-        assert "Bot Screen" in note and "display :77" in note and "RUNNING" in note, note
-        assert not getattr(other, "_gateway_turn_context_notes", ""), "another profile's session was told"
+        assert "Bot Screen" in note and "display :77" in note and "RUNNING" in note, (
+            note
+        )
+        assert not getattr(other, "_gateway_turn_context_notes", ""), (
+            "another profile's session was told"
+        )
 
         (home / "bot-desktop" / "env").unlink()  # stop() from another process
         server._poll_runtime_files()
         note = getattr(agent, "_gateway_turn_context_notes", "")
         assert "no longer running" in note, note
-        assert [e for e in events if e[0] == "display.status"]  # the broadcast still happened
+        assert [
+            e for e in events if e[0] == "display.status"
+        ]  # the broadcast still happened
     finally:
         with server._sessions_lock:
             server._sessions.pop("ws-a", None)

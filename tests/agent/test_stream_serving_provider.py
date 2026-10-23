@@ -30,7 +30,9 @@ from tests.agent.test_first_chunk_at_hook import (
 
 def _chunk_with_provider(content=None, finish_reason=None, model=None, provider=None):
     """Streaming chunk plus the relay's per-chunk ``provider`` field."""
-    chunk = _make_stream_chunk(content=content, finish_reason=finish_reason, model=model)
+    chunk = _make_stream_chunk(
+        content=content, finish_reason=finish_reason, model=model
+    )
     if provider is not None:
         chunk.provider = provider
     return chunk
@@ -38,14 +40,22 @@ def _chunk_with_provider(content=None, finish_reason=None, model=None, provider=
 
 @patch("run_agent.AIAgent._create_request_openai_client")
 @patch("run_agent.AIAgent._close_request_openai_client")
-def test_mid_stream_drop_retry_line_names_the_serving_provider(_mock_close, mock_create, agent, caplog):
+def test_mid_stream_drop_retry_line_names_the_serving_provider(
+    _mock_close, mock_create, agent, caplog
+):
     """A real stream: the first chunk says who served it, then the connection drops."""
 
     def _dropping_stream():
-        yield _chunk_with_provider(provider="Novita")  # no content: nothing delivered, so it retries
+        yield _chunk_with_provider(
+            provider="Novita"
+        )  # no content: nothing delivered, so it retries
         raise ConnectionError("peer closed connection mid-stream")
 
-    ok = [_chunk_with_provider(content="ok", finish_reason="stop", model="test-model", provider="Alibaba")]
+    ok = [
+        _chunk_with_provider(
+            content="ok", finish_reason="stop", model="test-model", provider="Alibaba"
+        )
+    ]
     mock_client = MagicMock()
     mock_client.chat.completions.create.side_effect = [_dropping_stream(), iter(ok)]
     mock_create.return_value = mock_client
@@ -68,10 +78,17 @@ class TestServingProviderReachesPostApiRequest:
 
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
-    def test_streamed_attempt_reports_the_serving_provider(self, _mock_close, mock_create, agent):
+    def test_streamed_attempt_reports_the_serving_provider(
+        self, _mock_close, mock_create, agent
+    ):
         chunks = [
             _chunk_with_provider(content="Hello", provider="Novita"),
-            _chunk_with_provider(content=" world", finish_reason="stop", model="test-model", provider="Novita"),
+            _chunk_with_provider(
+                content=" world",
+                finish_reason="stop",
+                model="test-model",
+                provider="Novita",
+            ),
         ]
         mock_client = MagicMock()
         mock_client.chat.completions.create.return_value = iter(chunks)

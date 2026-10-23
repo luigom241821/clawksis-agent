@@ -5,8 +5,9 @@ from pathlib import Path
 import sqlite3
 
 
-
-def test_search_does_not_create_current_storage_for_empty_or_foreign_reads(tmp_path, monkeypatch):
+def test_search_does_not_create_current_storage_for_empty_or_foreign_reads(
+    tmp_path, monkeypatch
+):
     from clawk_constants import reset_clawk_home_override, set_clawk_home_override
     from clawk_state import SessionDB
     import tools.session_search_tool
@@ -20,14 +21,18 @@ def test_search_does_not_create_current_storage_for_empty_or_foreign_reads(tmp_p
     handler = registry.get_entry("session_search").handler
     try:
         empty = json.loads(handler({}))
-        assert not (home / "state.db").exists(), "a reader created the canonical database"
+        assert not (home / "state.db").exists(), (
+            "a reader created the canonical database"
+        )
         assert empty["success"] is False
         other = home / "profiles" / "reader-target"
         other.mkdir(parents=True)
         db = SessionDB(other / "state.db")
         try:
             db.create_session("foreign-read", source="cli")
-            db.append_message("foreign-read", role="user", content="owned target marker")
+            db.append_message(
+                "foreign-read", role="user", content="owned target marker"
+            )
         finally:
             db.close()
         for args in [
@@ -58,7 +63,9 @@ def test_search_reads_live_storage_without_a_write_commit(tmp_path, monkeypatch)
         owner.create_session("live-read", source="cli")
         owner.append_message("live-read", role="user", content="live reader marker")
         before = observer.execute("PRAGMA data_version").fetchone()[0]
-        result = json.loads(registry.get_entry("session_search").handler({"session_id": "live-read"}))
+        result = json.loads(
+            registry.get_entry("session_search").handler({"session_id": "live-read"})
+        )
         assert result["success"] is True, result
         assert result["messages"][0]["content"] == "live reader marker"
         assert observer.execute("PRAGMA data_version").fetchone()[0] == before

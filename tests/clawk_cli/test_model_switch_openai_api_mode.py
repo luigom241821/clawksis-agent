@@ -100,6 +100,7 @@ def test_generic_endpoint_keeps_explicit_api_mode():
     assert host_mandated_api_mode("https://api.openai.com/v1") == "codex_responses"
     assert host_mandated_api_mode("https://api.anthropic.com") == "anthropic_messages"
 
+
 def test_stale_chat_overridden_on_meta_direct():
     """Stale chat_completions on api.meta.ai → codex_responses (like openai direct).
 

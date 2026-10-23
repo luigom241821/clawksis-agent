@@ -25,44 +25,97 @@ config_schema:
 def plugins_home(tmp_path, monkeypatch):
     home = tmp_path / "clawk-home"
     (home / "plugins" / "demo-plugin").mkdir(parents=True)
-    (home / "plugins" / "demo-plugin" / "plugin.yaml").write_text(MANIFEST, encoding="utf-8")
+    (home / "plugins" / "demo-plugin" / "plugin.yaml").write_text(
+        MANIFEST, encoding="utf-8"
+    )
     (home / "config.yaml").write_text(
-        "plugins:\n  entries:\n    demo-plugin:\n      settings:\n        retries: 7\n", encoding="utf-8")
+        "plugins:\n  entries:\n    demo-plugin:\n      settings:\n        retries: 7\n",
+        encoding="utf-8",
+    )
     monkeypatch.setenv("CLAWK_HOME", str(home))
     return home
 
 
 def _manage(**params):
-    return server.handle_request({"id": "1", "method": "plugins.manage", "params": params})
+    return server.handle_request(
+        {"id": "1", "method": "plugins.manage", "params": params}
+    )
 
 
-def test_list_carries_schema_fields_with_current_values_and_no_secret_values(plugins_home, monkeypatch):
+def test_list_carries_schema_fields_with_current_values_and_no_secret_values(
+    plugins_home, monkeypatch
+):
     monkeypatch.setenv("DEMO_PLUGIN_API_KEY", "shh")
 
     rows = _manage(action="list")["result"]["plugins"]
     row = next(r for r in rows if r["key"] == "demo-plugin")
     fields = {f["key"]: f for f in row["settings_schema"]}
 
-    assert fields["api_url"]["type"] == "string" and fields["api_url"]["value"] == "https://example.invalid"
-    assert fields["retries"]["type"] == "number" and fields["retries"]["value"] == 7  # config.yaml wins over default
-    assert fields["verbose"]["type"] == "boolean" and fields["verbose"]["value"] is False
-    assert fields["mode"]["type"] == "enum" and fields["mode"]["choices"] == ["fast", "careful"]
-    assert fields["api_key"] == {"key": "api_key", "type": "secret", "label": "api_key", "description": "Token",
-                                 "required": False, "env": "DEMO_PLUGIN_API_KEY", "has_value": True}
+    assert (
+        fields["api_url"]["type"] == "string"
+        and fields["api_url"]["value"] == "https://example.invalid"
+    )
+    assert (
+        fields["retries"]["type"] == "number" and fields["retries"]["value"] == 7
+    )  # config.yaml wins over default
+    assert (
+        fields["verbose"]["type"] == "boolean" and fields["verbose"]["value"] is False
+    )
+    assert fields["mode"]["type"] == "enum" and fields["mode"]["choices"] == [
+        "fast",
+        "careful",
+    ]
+    assert fields["api_key"] == {
+        "key": "api_key",
+        "type": "secret",
+        "label": "api_key",
+        "description": "Token",
+        "required": False,
+        "env": "DEMO_PLUGIN_API_KEY",
+        "has_value": True,
+    }
 
 
-def test_settings_writes_the_plugin_namespace_and_refuses_secrets_and_bad_types(plugins_home):
-    resp = _manage(action="settings", key="demo-plugin", values={"api_url": "https://real.invalid", "retries": 2, "mode": "careful"})
+def test_settings_writes_the_plugin_namespace_and_refuses_secrets_and_bad_types(
+    plugins_home,
+):
+    resp = _manage(
+        action="settings",
+        key="demo-plugin",
+        values={"api_url": "https://real.invalid", "retries": 2, "mode": "careful"},
+    )
 
-    assert resp["result"]["ok"] is True and sorted(resp["result"]["written"]) == ["api_url", "mode", "retries"]
+    assert resp["result"]["ok"] is True and sorted(resp["result"]["written"]) == [
+        "api_url",
+        "mode",
+        "retries",
+    ]
     from clawk_cli.config import load_config_readonly
+
     assert load_config_readonly()["plugins"]["entries"]["demo-plugin"]["settings"] == {
-        "api_url": "https://real.invalid", "retries": 2, "mode": "careful"}
-    refreshed = {f["key"]: f["value"] for f in resp["result"]["plugin"]["settings_schema"] if "value" in f}
+        "api_url": "https://real.invalid",
+        "retries": 2,
+        "mode": "careful",
+    }
+    refreshed = {
+        f["key"]: f["value"]
+        for f in resp["result"]["plugin"]["settings_schema"]
+        if "value" in f
+    }
     assert refreshed["retries"] == 2 and refreshed["mode"] == "careful"
 
-    for values in ({"api_key": "leak"}, {"retries": "two"}, {"mode": "reckless"}, {"unknown": 1}):
-        assert _manage(action="settings", key="demo-plugin", values=values)["error"]["code"] == 4021
+    for values in (
+        {"api_key": "leak"},
+        {"retries": "two"},
+        {"mode": "reckless"},
+        {"unknown": 1},
+    ):
+        assert (
+            _manage(action="settings", key="demo-plugin", values=values)["error"][
+                "code"
+            ]
+            == 4021
+        )
     assert "api_key" not in (plugins_home / "config.yaml").read_text(encoding="utf-8")
 
 
@@ -79,23 +132,50 @@ PORTABLE_MANIFEST = """\
 """
 
 
-def test_portable_plugin_json_schema_lists_and_saves_like_a_native_one(plugins_home, monkeypatch):
+def test_portable_plugin_json_schema_lists_and_saves_like_a_native_one(
+    plugins_home, monkeypatch
+):
     """Agent Plugins v1 forbids unknown top-level fields, so a portable package declares its form under
     ``extensions.com.nousresearch.clawk.config_schema``; it must get the same list + save path, and a
     save tells the plugin's Desktop half (``plugin.<id>.settings.changed``) so it applies without polling."""
     sent = []
-    monkeypatch.setattr(server, "_broadcast_global_event", lambda name, payload: sent.append((name, payload)))
+    monkeypatch.setattr(
+        server,
+        "_broadcast_global_event",
+        lambda name, payload: sent.append((name, payload)),
+    )
     (plugins_home / "plugins" / "portable-demo").mkdir()
-    (plugins_home / "plugins" / "portable-demo" / "plugin.json").write_text(PORTABLE_MANIFEST, encoding="utf-8")
+    (plugins_home / "plugins" / "portable-demo" / "plugin.json").write_text(
+        PORTABLE_MANIFEST, encoding="utf-8"
+    )
 
     rows = _manage(action="list")["result"]["plugins"]
-    fields = {f["key"]: f for f in next(r for r in rows if r["key"] == "portable-demo")["settings_schema"]}
-    assert fields["show_chip"]["type"] == "boolean" and fields["show_chip"]["value"] is True
-    assert fields["api_key"]["type"] == "secret" and fields["api_key"]["env"] == "PORTABLE_DEMO_KEY"
+    fields = {
+        f["key"]: f
+        for f in next(r for r in rows if r["key"] == "portable-demo")["settings_schema"]
+    }
+    assert (
+        fields["show_chip"]["type"] == "boolean"
+        and fields["show_chip"]["value"] is True
+    )
+    assert (
+        fields["api_key"]["type"] == "secret"
+        and fields["api_key"]["env"] == "PORTABLE_DEMO_KEY"
+    )
 
     resp = _manage(action="settings", key="portable-demo", values={"show_chip": False})
     assert resp["result"]["written"] == ["show_chip"]
     from clawk_cli.config import load_config_readonly
-    assert load_config_readonly()["plugins"]["entries"]["portable-demo"]["settings"] == {"show_chip": False}
-    assert sent == [("plugin.portable-demo.settings.changed", {"written": ["show_chip"]})]
-    assert _manage(action="settings", key="portable-demo", values={"api_key": "leak"})["error"]["code"] == 4021
+
+    assert load_config_readonly()["plugins"]["entries"]["portable-demo"][
+        "settings"
+    ] == {"show_chip": False}
+    assert sent == [
+        ("plugin.portable-demo.settings.changed", {"written": ["show_chip"]})
+    ]
+    assert (
+        _manage(action="settings", key="portable-demo", values={"api_key": "leak"})[
+            "error"
+        ]["code"]
+        == 4021
+    )

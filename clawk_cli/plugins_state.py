@@ -30,8 +30,15 @@ def _plugin_relative_segments(key: str) -> tuple[str, ...]:
     if not isinstance(key, str):
         raise ValueError("Expected a plugin-relative config key string")
     segments = tuple(key.split("."))
-    invalid = not key or "/" in key or "\\" in key or segments[0].lower() in _PLUGIN_SETTING_RESERVED_ROOTS
-    if invalid or not all(_PLUGIN_SETTING_SEGMENT_RE.fullmatch(segment) for segment in segments):
+    invalid = (
+        not key
+        or "/" in key
+        or "\\" in key
+        or segments[0].lower() in _PLUGIN_SETTING_RESERVED_ROOTS
+    )
+    if invalid or not all(
+        _PLUGIN_SETTING_SEGMENT_RE.fullmatch(segment) for segment in segments
+    ):
         raise ValueError(
             "Expected a plugin-relative config key such as 'endpoint' or "
             "'retry.policy'; global, cross-plugin, and traversal paths are forbidden"
@@ -79,8 +86,12 @@ def save_plugin_setting(plugin_id: str, segments: tuple[str, ...], value: Any) -
     full_path = ("plugins", "entries", plugin_id, "settings", *segments)
     dotted_path = ".".join(full_path)
     if managed_scope.is_key_managed(dotted_path):
-        raise PermissionError(f"Plugin setting {dotted_path!r} is administrator-managed")
-    partial = _nested_plugin_mapping(full_path[:4], _nested_plugin_mapping(segments, value))
+        raise PermissionError(
+            f"Plugin setting {dotted_path!r} is administrator-managed"
+        )
+    partial = _nested_plugin_mapping(
+        full_path[:4], _nested_plugin_mapping(segments, value)
+    )
     # The lock covers merge-read plus atomic save so sibling plugin writes (threads or
     # processes) cannot race between the two steps.
     with _locked_plugin_state(config_mod.get_config_path()), config_mod._CONFIG_LOCK:
@@ -107,12 +118,15 @@ def _locked_plugin_state(path: Path):
     sibling file because atomic replacement changes the target's inode."""
     lock_path = path.with_name(f".{path.name}.lock")
     with _PLUGIN_STATE_LOCKS_GUARD:
-        thread_lock = _PLUGIN_STATE_LOCKS.setdefault(str(lock_path.resolve(strict=False)), threading.RLock())
+        thread_lock = _PLUGIN_STATE_LOCKS.setdefault(
+            str(lock_path.resolve(strict=False)), threading.RLock()
+        )
     with thread_lock:
         lock_path.parent.mkdir(parents=True, exist_ok=True)
         with open(lock_path, "a+b") as handle:
             if os.name == "nt":  # pragma: no cover - exercised on Windows CI
                 import msvcrt
+
                 if handle.seek(0, os.SEEK_END) == 0:
                     handle.write(b"\0")
                     handle.flush()
@@ -120,6 +134,7 @@ def _locked_plugin_state(path: Path):
                 msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
             else:
                 import fcntl
+
                 fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
             try:
                 yield
@@ -152,7 +167,11 @@ class PluginState:
 
     @staticmethod
     def _validate_key(key: str) -> None:
-        if not isinstance(key, str) or not _PLUGIN_STATE_KEY_RE.fullmatch(key) or ".." in key:
+        if (
+            not isinstance(key, str)
+            or not _PLUGIN_STATE_KEY_RE.fullmatch(key)
+            or ".." in key
+        ):
             raise ValueError(
                 "Plugin state keys must be 1-128 characters using letters, "
                 "numbers, '_', '-', '.', or ':' (without '..')"
@@ -167,7 +186,9 @@ class PluginState:
         except (OSError, ValueError) as exc:
             raise RuntimeError(f"Cannot parse plugin state {self.path}: {exc}") from exc
         if not isinstance(data, dict):
-            raise RuntimeError(f"Cannot parse plugin state {self.path}: root must be an object")
+            raise RuntimeError(
+                f"Cannot parse plugin state {self.path}: root must be an object"
+            )
         return data
 
     def get(self, key: str, default: Any = None) -> Any:
@@ -185,11 +206,14 @@ class PluginState:
             try:
                 encoded = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
             except (TypeError, ValueError) as exc:
-                raise ValueError(f"Plugin state value for {key!r} is not JSON-serializable") from exc
+                raise ValueError(
+                    f"Plugin state value for {key!r} is not JSON-serializable"
+                ) from exc
             if len(encoded) > self.quota_bytes:
                 raise ValueError(
                     f"Plugin state quota exceeded: {len(encoded)} bytes is greater "
                     f"than the {self.quota_bytes}-byte per-plugin quota"
                 )
             from utils import atomic_json_write
+
             atomic_json_write(self.path, data, mode=0o600)

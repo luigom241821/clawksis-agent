@@ -48,17 +48,25 @@ class _RecordingTransport:
 
 
 def _dispatch(transport, request_id, method, params=None):
-    assert server.dispatch(
-        {"id": request_id, "method": method, "params": params or {}}, transport) is None
+    assert (
+        server.dispatch(
+            {"id": request_id, "method": method, "params": params or {}}, transport
+        )
+        is None
+    )
 
 
 def _patch_fast_probe_env(monkeypatch, resolve):
     monkeypatch.setattr("clawk_cli.runtime_provider.resolve_runtime_provider", resolve)
-    monkeypatch.setattr("clawk_cli.main._has_any_provider_configured", lambda **_kw: True)
+    monkeypatch.setattr(
+        "clawk_cli.main._has_any_provider_configured", lambda **_kw: True
+    )
     monkeypatch.setattr(server, "_resolve_startup_runtime", lambda: ("custom/m", None))
 
 
-def test_overlapping_runtime_checks_share_one_probe_and_keep_pool_responsive(monkeypatch):
+def test_overlapping_runtime_checks_share_one_probe_and_keep_pool_responsive(
+    monkeypatch,
+):
     """Same-key polls join the in-flight probe; the shared pool answers an unrelated RPC."""
     started = threading.Event()
     release = threading.Event()
@@ -85,16 +93,22 @@ def test_overlapping_runtime_checks_share_one_probe_and_keep_pool_responsive(mon
         # single-flight the overlapping polls joined instead of each running a
         # resolver, so they did not occupy the pool.
         monkeypatch.setitem(
-            server._methods, "process.list",
-            lambda rid, _params: server._ok(rid, {"processes": []}))
+            server._methods,
+            "process.list",
+            lambda rid, _params: server._ok(rid, {"processes": []}),
+        )
         before = time.monotonic()
         _dispatch(transport, "unrelated", "process.list", {"session_id": "x"})
         unrelated = transport.wait_for("unrelated", timeout=2)
         elapsed = time.monotonic() - before
 
         assert unrelated["result"] == {"processes": []}
-        assert elapsed < 1.0, f"unrelated RPC waited {elapsed:.2f}s — the shared pool saturated"
-        assert len(calls) == 1, "overlapping polls must not each run provider resolution"
+        assert elapsed < 1.0, (
+            f"unrelated RPC waited {elapsed:.2f}s — the shared pool saturated"
+        )
+        assert len(calls) == 1, (
+            "overlapping polls must not each run provider resolution"
+        )
 
         # An overlapping poll answered with the retryable unknown — a JSON-RPC
         # error, never a fabricated ok=False result.
@@ -153,7 +167,9 @@ def test_blocked_provider_does_not_serialize_a_healthy_provider_check(monkeypatc
     assert provider_a["result"]["provider"] == "provider-a"
 
 
-def test_probe_outliving_its_budget_answers_retryable_unknown_then_reprobes(monkeypatch):
+def test_probe_outliving_its_budget_answers_retryable_unknown_then_reprobes(
+    monkeypatch,
+):
     """A probe slower than the join budget answers the retryable error (unknown, not ok=False)
     while it keeps running; the next poll starts a fresh probe with the real answer."""
     monkeypatch.setattr(server, "_READINESS_SHARE_WAIT_SECONDS", 0.2)
@@ -200,6 +216,7 @@ def test_fast_probe_cannot_deadlock_the_share_lock(monkeypatch):
     owner still held when registering it (a probe settling in that window runs
     the callback inline on the RPC worker thread, freezing every later
     readiness call and hanging the desktop at "Gateway checking")."""
+
     def instant_resolve(requested=None, **kwargs):
         return {"provider": "custom", "api_key": "no-key-required", "source": "config"}
 
@@ -215,7 +232,10 @@ def test_fast_probe_cannot_deadlock_the_share_lock(monkeypatch):
         response = transport.wait_for(f"fast-{index}", timeout=5)
         # An overlapping poll may legitimately answer the retryable error while
         # the probe is in flight; it must NEVER hang the worker that owns it.
-        assert "result" in response or response["error"]["code"] == server._READINESS_IN_PROGRESS_ERR
+        assert (
+            "result" in response
+            or response["error"]["code"] == server._READINESS_IN_PROGRESS_ERR
+        )
 
     # The lock must be free: the inflight entry was cleared, and a further
     # readiness call neither blocks nor answers the retryable error.

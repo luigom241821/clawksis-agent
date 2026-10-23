@@ -67,8 +67,6 @@ def _minimal_env(**extra) -> dict:
     return env
 
 
-
-
 def test_marker_alone_reports_test_context(monkeypatch):
     monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
     monkeypatch.delenv("PYTEST_VERSION", raising=False)

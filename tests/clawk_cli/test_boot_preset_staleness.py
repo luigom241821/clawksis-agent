@@ -28,7 +28,10 @@ def _stage(home, name):
 def _write_presets(home, *model_ids):
     pdir = home / "runtimes" / "llamacpp"
     pdir.mkdir(parents=True, exist_ok=True)
-    body = "\n".join(f"[{m}]\nmodel = {home / 'models' / (m + '.gguf')}\nctx-size = 65536\n" for m in model_ids)
+    body = "\n".join(
+        f"[{m}]\nmodel = {home / 'models' / (m + '.gguf')}\nctx-size = 65536\n"
+        for m in model_ids
+    )
     (pdir / "presets.ini").write_text(body, encoding="utf-8")
 
 
@@ -79,8 +82,11 @@ def test_boot_replaces_incumbent_with_stale_presets(clawk_home, monkeypatch):
     stopped = {}
     monkeypatch.setattr(
         "clawk_cli.local_runtime.endpoint._state_endpoint",
-        lambda: {"base_url": "http://127.0.0.1:18434/v1", "api_key": "k"})
-    monkeypatch.setattr(boot, "_stop_state_server", lambda: stopped.setdefault("stopped", True))
+        lambda: {"base_url": "http://127.0.0.1:18434/v1", "api_key": "k"},
+    )
+    monkeypatch.setattr(
+        boot, "_stop_state_server", lambda: stopped.setdefault("stopped", True)
+    )
 
     sentinel = object()
 
@@ -91,8 +97,7 @@ def test_boot_replaces_incumbent_with_stale_presets(clawk_home, monkeypatch):
         pass
 
     # Fail fast once boot proper begins — reaching it IS the assertion.
-    monkeypatch.setattr(
-        "clawk_cli.local_runtime.binaries.installed_engine", fake_boot)
+    monkeypatch.setattr("clawk_cli.local_runtime.binaries.installed_engine", fake_boot)
 
     result = boot.ensure_local_runtime({"local_runtime": {"enabled": True}})
     assert stopped.get("stopped"), "stale incumbent was not stopped"
@@ -114,11 +119,17 @@ def test_refresh_bounces_an_adopted_server(clawk_home, monkeypatch):
     monkeypatch.setattr(boot, "_SUPERVISOR", None)
     monkeypatch.setattr(
         "clawk_cli.local_runtime.endpoint._state_endpoint",
-        lambda: {"base_url": "http://127.0.0.1:18434/v1", "api_key": "k"})
-    monkeypatch.setattr(boot, "_stop_state_server", lambda: stopped.setdefault("stopped", True))
+        lambda: {"base_url": "http://127.0.0.1:18434/v1", "api_key": "k"},
+    )
+    monkeypatch.setattr(
+        boot, "_stop_state_server", lambda: stopped.setdefault("stopped", True)
+    )
     booted = {}
-    monkeypatch.setattr(boot, "ensure_local_runtime",
-                        lambda cfg, force=False: booted.setdefault("force", force) or object())
+    monkeypatch.setattr(
+        boot,
+        "ensure_local_runtime",
+        lambda cfg, force=False: booted.setdefault("force", force) or object(),
+    )
 
     assert boot.refresh_local_runtime() is True
     assert stopped.get("stopped"), "adopted server was not stopped"
@@ -130,5 +141,6 @@ def test_refresh_no_server_anywhere_is_a_noop(clawk_home, monkeypatch):
 
     monkeypatch.setattr(boot, "_SUPERVISOR", None)
     monkeypatch.setattr(
-        "clawk_cli.local_runtime.endpoint._state_endpoint", lambda: None)
+        "clawk_cli.local_runtime.endpoint._state_endpoint", lambda: None
+    )
     assert boot.refresh_local_runtime() is False

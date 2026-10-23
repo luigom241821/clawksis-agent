@@ -6,6 +6,7 @@ from .method_ctx import HandlerRegistry, bind_module
 _registry = HandlerRegistry()
 method = _registry.method
 
+
 # onboarding.state and onboarding.set_run are unscoped on purpose: onboarding.run and the first-chat
 # flag live in the root profile's config.yaml whichever profile this backend was launched under.
 @method("onboarding.state")
@@ -16,10 +17,13 @@ def _(rid, params: dict) -> dict:
 @method("onboarding.set_run")
 def _(rid, params: dict) -> dict:
     from clawk_cli.onboarding_run import set_run
+
     if not isinstance(params.get("run"), bool):
         return _err(rid, 4002, "onboarding.set_run requires a boolean 'run'")
     try:
-        set_run(params["run"], mark_profile_offered=bool(params.get("mark_profile_offered")))
+        set_run(
+            params["run"], mark_profile_offered=bool(params.get("mark_profile_offered"))
+        )
     except Exception as e:
         logger.exception("onboarding.set_run failed")
         return _err(rid, 5077, str(e))
@@ -37,8 +41,16 @@ def _run_state(*, assume_fresh: bool = False) -> dict:
     from clawk_cli.onboarding_run import should_run
 
     if not on_local_desktop_backend():
-        return {"run": should_run(assume_fresh=assume_fresh), "eligible": False, **_active_run()}
-    due = _due_now(assume_fresh=True) if assume_fresh else onboarding_due.read(_due_now, stamp=_due_stamp)
+        return {
+            "run": should_run(assume_fresh=assume_fresh),
+            "eligible": False,
+            **_active_run(),
+        }
+    due = (
+        _due_now(assume_fresh=True)
+        if assume_fresh
+        else onboarding_due.read(_due_now, stamp=_due_stamp)
+    )
     return {**due, **_active_run()}
 
 
@@ -64,14 +76,21 @@ def _due_stamp() -> tuple:
 
     home = Path(_profile_home("default") or get_default_clawk_root())
     managed = managed_scope.get_managed_dir()
-    paths = (get_default_clawk_root() / "config.yaml", home / "config.yaml", home / ".env", home / "auth.json",
-             *_shared_nous_store(), *((managed / "config.yaml", managed / ".env") if managed else ()))
+    paths = (
+        get_default_clawk_root() / "config.yaml",
+        home / "config.yaml",
+        home / ".env",
+        home / "auth.json",
+        *_shared_nous_store(),
+        *((managed / "config.yaml", managed / ".env") if managed else ()),
+    )
     return tuple(file_signature(st) if (st := _stat(path)) else None for path in paths)
 
 
 def _shared_nous_store() -> tuple[Path, ...]:
     """The shared Nous store as ``_read_shared_nous_state`` finds it: none when the test seat belt trips."""
     from clawk_cli.auth_nous import _nous_shared_store_path
+
     try:
         return (_nous_shared_store_path(),)
     except RuntimeError:
@@ -119,9 +138,15 @@ def begin_local_desktop_boot() -> None:
     with _local_desktop_boot_lock:
         first, _local_desktop_boot_started = not _local_desktop_boot_started, True
     # The record and the latch are the launch profile's; the connecting profile may be another one.
-    with launch_profile_scope_if_multiplexed(), serving_local_desktop(True):  # threads copy this context
+    with (
+        launch_profile_scope_if_multiplexed(),
+        serving_local_desktop(True),
+    ):  # threads copy this context
         if not first:
-            spawn_context_thread(free_tier_bootstrap.resettle_after_failed_boot, name="free-tier-resettle").start()
+            spawn_context_thread(
+                free_tier_bootstrap.resettle_after_failed_boot,
+                name="free-tier-resettle",
+            ).start()
             return
         free_tier_bootstrap.start_background_bootstrap()
         start_due_boot()
@@ -138,9 +163,15 @@ _onboarding_start_lock = threading.Lock()
 def _active_run() -> dict:
     """The onboarding chat in progress and its run id, both None when no run is open."""
     from agent.onboarding_record import active_session_id, load
+
     with _profile_db(_ONBOARDING_PROFILE) as db:
         session_id = None if db is None else active_session_id(db)
-        return {"session_id": session_id, "run_id": (load(db, session_id) or {}).get("run_id") if session_id else None}
+        return {
+            "session_id": session_id,
+            "run_id": (load(db, session_id) or {}).get("run_id")
+            if session_id
+            else None,
+        }
 
 
 class _NoModelForTheRun(Exception):
@@ -156,13 +187,22 @@ def _claim_before_run(scope: dict, *, assume_fresh: bool):
     from clawk_cli import anon_auth
     from clawk_cli.onboarding_run import set_run
     from clawk_cli.welcome_trial import claim_desktop_free_tier, provider_configured
-    if not anon_auth.on_local_desktop_backend():  # gateway/session_onboarding.py::_claim_before_run
-        raise _NoModelForTheRun("First-run onboarding starts only in the Desktop app on this machine.")
+
+    if (
+        not anon_auth.on_local_desktop_backend()
+    ):  # gateway/session_onboarding.py::_claim_before_run
+        raise _NoModelForTheRun(
+            "First-run onboarding starts only in the Desktop app on this machine."
+        )
     set_run(True)
     with _session_profile_runtime_scope(scope):
         claimed = claim_desktop_free_tier(assume_fresh=assume_fresh)
-        if claimed is None and not (anon_auth.free_inference_active() or provider_configured()):
-            raise _NoModelForTheRun("The welcome trial is not available here, and no provider is set up.")
+        if claimed is None and not (
+            anon_auth.free_inference_active() or provider_configured()
+        ):
+            raise _NoModelForTheRun(
+                "The welcome trial is not available here, and no provider is set up."
+            )
     return claimed
 
 
@@ -174,6 +214,7 @@ def _(rid, params: dict) -> dict:
     from agent.onboarding_text import CHAT_TITLE, opening_prompt
     from clawk_cli.auth_constants import AuthError
     from clawk_cli import free_tier_bootstrap
+
     # The app's once-per-launch start: closing the app mid-run does not count, so that run's chat goes
     # and the run starts over. A second window or a reconnect sends no flag and gets the run back.
     fresh_launch = bool(params.get("fresh_launch"))
@@ -185,16 +226,27 @@ def _(rid, params: dict) -> dict:
                 if db is None:
                     return _db_unavailable_error(rid, code=5000)
                 open_ids = open_session_ids(db)
-                stored = None if params.get("rerun") or fresh_launch else next(iter(open_ids), None)
+                stored = (
+                    None
+                    if params.get("rerun") or fresh_launch
+                    else next(iter(open_ids), None)
+                )
                 created = stored is None
                 if created:
                     # The tours setting is the default profile's, whichever profile launched the backend.
                     home = _profile_home("default")
                     scope = {"profile_home": str(home) if home else None}
                     with _session_profile_runtime_scope(scope, hydrate_secrets=False):
-                        facts = read_facts(facts_source=params.get("facts_source") or "local", locale=params.get("locale"))
-                    if not params.get("rerun"):  # a rerun never claims: it runs on the configured model
-                        claimed = _claim_before_run(scope, assume_fresh=bool(params.get("assume_fresh")))
+                        facts = read_facts(
+                            facts_source=params.get("facts_source") or "local",
+                            locale=params.get("locale"),
+                        )
+                    if not params.get(
+                        "rerun"
+                    ):  # a rerun never claims: it runs on the configured model
+                        claimed = _claim_before_run(
+                            scope, assume_fresh=bool(params.get("assume_fresh"))
+                        )
                     stored = db.create_session(new_session_id(), "desktop")
                     # The record exists before the agent is built, so the build folds the onboarding toolset in.
                     start(db, stored, facts)
@@ -211,9 +263,15 @@ def _(rid, params: dict) -> dict:
                         advance(db, old, End("replaced"))
                 if created:
                     # After the discard, so a run started over keeps the title its deleted chat had.
-                    db.set_session_title(stored, db.get_next_title_in_lineage(CHAT_TITLE))
+                    db.set_session_title(
+                        stored, db.get_next_title_in_lineage(CHAT_TITLE)
+                    )
                 # A chat with no messages never got its opening (a restart between start and the first turn).
-                opening = None if (db.get_session(stored) or {}).get("message_count") else opening_prompt(facts)
+                opening = (
+                    None
+                    if (db.get_session(stored) or {}).get("message_count")
+                    else opening_prompt(facts)
+                )
         except AuthError as e:
             # The trial claim failed (portal down, rate limited): no guest and no chat, so the next
             # launch is still a first install and tries again.
@@ -229,22 +287,35 @@ def _(rid, params: dict) -> dict:
             # Outside the default-profile scope: setup.status serves the launch profile's record.
             free_tier_bootstrap.refresh_record()
         _withdraw_setup_cards([] if fresh_launch else replaced)
-        resumed = _methods["session.resume"](rid, {**_ONBOARDING_PROFILE, "session_id": stored, "source": "desktop"})
+        resumed = _methods["session.resume"](
+            rid, {**_ONBOARDING_PROFILE, "session_id": stored, "source": "desktop"}
+        )
         if "error" in resumed:
             return resumed
         sid = resumed["result"]["session_id"]
         if opening is not None:
             # The opening rules ride a hidden user turn; its prelude plays the greeting and the name card.
-            submitted = _methods["prompt.submit"](rid, {"session_id": sid, "text": opening, "display_kind": "hidden"})
+            submitted = _methods["prompt.submit"](
+                rid, {"session_id": sid, "text": opening, "display_kind": "hidden"}
+            )
             if "error" in submitted:
                 return submitted
-    return _ok(rid, {"session_id": sid, "stored_session_id": stored, "resumed": not created, "run_id": run_id})
+    return _ok(
+        rid,
+        {
+            "session_id": sid,
+            "stored_session_id": stored,
+            "resumed": not created,
+            "run_id": run_id,
+        },
+    )
 
 
 @method("onboarding.skip")
 def _(rid, params: dict) -> dict:
     from agent.onboarding_flow import End
     from agent.onboarding_record import advance, load
+
     session, err = _sess_nowait(params, rid)
     if err:
         return err
@@ -264,8 +335,15 @@ def _live_session_ids(stored_ids: list[str]) -> list[str]:
     if not stored_ids:
         return []
     with _sessions_lock:
-        return [sid for sid, sess in _sessions.items()
-                if (getattr(sess.get("agent"), "session_id", None) or sess.get("session_key")) in stored_ids]
+        return [
+            sid
+            for sid, sess in _sessions.items()
+            if (
+                getattr(sess.get("agent"), "session_id", None)
+                or sess.get("session_key")
+            )
+            in stored_ids
+        ]
 
 
 def _withdraw_setup_cards(stored_ids: list[str]) -> None:
@@ -281,15 +359,23 @@ def _discard_unfinished_runs(db, stored_ids: list[str]) -> None:
     messages, and its run ends as ``replaced`` so it is never resumed."""
     from agent.onboarding_flow import End
     from agent.onboarding_record import advance, delete_chat
+
     for sid in _live_session_ids(stored_ids):
         _close_session_by_id(sid, end_reason="onboarding_restart")
     sessions_dir = Path(_profile_home("default") or get_clawk_home()) / "sessions"
     for old in stored_ids:
         try:
-            deleted = delete_chat(db, old, lambda old=old: db.delete_session(
-                old, sessions_dir=sessions_dir, exclude_active_write_guards=True))
+            deleted = delete_chat(
+                db,
+                old,
+                lambda old=old: db.delete_session(
+                    old, sessions_dir=sessions_dir, exclude_active_write_guards=True
+                ),
+            )
         except Exception:
-            logger.exception("onboarding.start could not delete unfinished chat %s", old)
+            logger.exception(
+                "onboarding.start could not delete unfinished chat %s", old
+            )
             deleted = False
         if not deleted:
             advance(db, old, End("replaced"))
@@ -298,15 +384,25 @@ def _discard_unfinished_runs(db, stored_ids: list[str]) -> None:
 def _setup_beat_request(sid: str, payload: dict) -> dict | None:
     from agent.onboarding_flow import CARD_TIMEOUT_S
     from tui_gateway import server_requests
-    return server_requests.send("setup_beat", sid, dict(payload), timeout=CARD_TIMEOUT_S)
+
+    return server_requests.send(
+        "setup_beat", sid, dict(payload), timeout=CARD_TIMEOUT_S
+    )
 
 
 def _stage_onboarding_turn_note(sid: str, agent, history_empty: bool) -> None:
     """Before a user turn in the onboarding chat (``agent.onboarding_session.onboarding_turn_note``)."""
     from agent.onboarding_session import append_turn_note, onboarding_turn_note
     from tui_gateway import server_requests
-    append_turn_note(agent, onboarding_turn_note(
-        agent, history_empty=history_empty, card_waiting=server_requests.pending_kind(sid) == "setup_beat"))
+
+    append_turn_note(
+        agent,
+        onboarding_turn_note(
+            agent,
+            history_empty=history_empty,
+            card_waiting=server_requests.pending_kind(sid) == "setup_beat",
+        ),
+    )
 
 
 def register(server) -> None:

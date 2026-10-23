@@ -62,41 +62,88 @@ def _writers(home: Path, monkeypatch):
     vault = VaultStore(home / "vault")
     meet_node = NodeServer(token_path=home / "meetings" / "node_token.json")
     return [
-        ("auth.json", lambda: auth_mod._save_auth_store({"version": auth_mod.AUTH_STORE_VERSION, "providers": {}}),
-         auth_mod._auth_file_path()),
-        ("third-party credentials", lambda: anthropic_credentials._atomic_write_private_json(
-            home / "cc" / ".credentials.json", {"tok": 1}), home / "cc" / ".credentials.json"),
-        ("mcp oauth tokens", lambda: mcp_oauth._write_json(home / "mcp" / "probe.tokens.json", {"access_token": "x"}),
-         home / "mcp" / "probe.tokens.json"),
-        ("secret-source cache", lambda: cache.write("k", CachedFetch(secrets={"A": "b"}, fetched_at=1.0), 60, home),
-         cache.path(home)),
-        ("iron-proxy mappings", lambda: iron_proxy.write_mappings([]), home / "proxy" / "mappings.json"),
-        ("exchanged JWT store", lambda: copilot_auth._save_jwt_to_disk("fp", "jwt", 9e12, None),
-         copilot_auth._jwt_disk_path()),
-        ("photon sidecar record", lambda: photon_adapter._write_runtime_record(1, "tok", 2), photon_record),
-        ("pairing", lambda: pairing._save_json_file(home / "pairing" / "p.json", {"a": 1}), home / "pairing" / "p.json"),
+        (
+            "auth.json",
+            lambda: auth_mod._save_auth_store(
+                {"version": auth_mod.AUTH_STORE_VERSION, "providers": {}}
+            ),
+            auth_mod._auth_file_path(),
+        ),
+        (
+            "third-party credentials",
+            lambda: anthropic_credentials._atomic_write_private_json(
+                home / "cc" / ".credentials.json", {"tok": 1}
+            ),
+            home / "cc" / ".credentials.json",
+        ),
+        (
+            "mcp oauth tokens",
+            lambda: mcp_oauth._write_json(
+                home / "mcp" / "probe.tokens.json", {"access_token": "x"}
+            ),
+            home / "mcp" / "probe.tokens.json",
+        ),
+        (
+            "secret-source cache",
+            lambda: cache.write(
+                "k", CachedFetch(secrets={"A": "b"}, fetched_at=1.0), 60, home
+            ),
+            cache.path(home),
+        ),
+        (
+            "iron-proxy mappings",
+            lambda: iron_proxy.write_mappings([]),
+            home / "proxy" / "mappings.json",
+        ),
+        (
+            "exchanged JWT store",
+            lambda: copilot_auth._save_jwt_to_disk("fp", "jwt", 9e12, None),
+            copilot_auth._jwt_disk_path(),
+        ),
+        (
+            "photon sidecar record",
+            lambda: photon_adapter._write_runtime_record(1, "tok", 2),
+            photon_record,
+        ),
+        (
+            "pairing",
+            lambda: pairing._save_json_file(home / "pairing" / "p.json", {"a": 1}),
+            home / "pairing" / "p.json",
+        ),
         ("vault blob", lambda: vault._write_all([]), vault._vault_path),
         ("spawn ledger", lambda: process_identity.register_self("probe"), ledger),
         ("meet node token", meet_node.ensure_token, meet_node.token_path),
     ]
 
 
-def test_every_credential_writer_creates_its_temp_file_at_0600(tmp_path, monkeypatch, opens_spy):
+def test_every_credential_writer_creates_its_temp_file_at_0600(
+    tmp_path, monkeypatch, opens_spy
+):
     pytest.importorskip("cryptography")
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
-    old_umask = os.umask(0o022)  # a "write then chmod" regression would surface as 0o644
+    old_umask = os.umask(
+        0o022
+    )  # a "write then chmod" regression would surface as 0o644
     try:
         for label, write, target in _writers(home, monkeypatch):
             del opens_spy[:]
             write()
             assert target.exists(), f"{label}: nothing written at {target}"
-            assert stat.S_IMODE(target.stat().st_mode) == _PRIVATE, f"{label}: final file not 0600"
-            creates = [(p, m) for p, fl, m in opens_spy if Path(p).parent == target.parent]
-            assert creates, f"{label}: no temp file created in {target.parent}; opens={opens_spy!r}"
+            assert stat.S_IMODE(target.stat().st_mode) == _PRIVATE, (
+                f"{label}: final file not 0600"
+            )
+            creates = [
+                (p, m) for p, fl, m in opens_spy if Path(p).parent == target.parent
+            ]
+            assert creates, (
+                f"{label}: no temp file created in {target.parent}; opens={opens_spy!r}"
+            )
             for path, mode in creates:
-                assert mode == _PRIVATE, f"{label}: temp file {path} created 0o{mode:o}, not 0600"
+                assert mode == _PRIVATE, (
+                    f"{label}: temp file {path} created 0o{mode:o}, not 0600"
+                )
     finally:
         os.umask(old_umask)
 
@@ -117,4 +164,6 @@ def test_canonical_private_writers_round_trip_json_text_and_bytes(tmp_path):
     atomic_write_bytes(target, blob, mode=0o600, fsync_dir=True)
     assert target.read_bytes() == blob
     assert stat.S_IMODE(target.stat().st_mode) == 0o600
-    assert [p.name for p in target.parent.iterdir()] == ["creds.json"], "temp files must not survive"
+    assert [p.name for p in target.parent.iterdir()] == ["creds.json"], (
+        "temp files must not survive"
+    )

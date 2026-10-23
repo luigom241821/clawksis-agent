@@ -24,12 +24,15 @@ from unittest.mock import MagicMock, patch
 def _make_email_adapter(address="clawk@test.com"):
     from gateway.config import PlatformConfig
 
-    with patch.dict(os.environ, {
-        "EMAIL_ADDRESS": address,
-        "EMAIL_PASSWORD": "secret",
-        "EMAIL_IMAP_HOST": "imap.test.com",
-        "EMAIL_SMTP_HOST": "smtp.test.com",
-    }):
+    with patch.dict(
+        os.environ,
+        {
+            "EMAIL_ADDRESS": address,
+            "EMAIL_PASSWORD": "secret",
+            "EMAIL_IMAP_HOST": "imap.test.com",
+            "EMAIL_SMTP_HOST": "smtp.test.com",
+        },
+    ):
         from plugins.platforms.email.adapter import EmailAdapter
 
         return EmailAdapter(PlatformConfig(enabled=True))
@@ -37,7 +40,6 @@ def _make_email_adapter(address="clawk@test.com"):
 
 class TestCloseImap(unittest.TestCase):
     """_close_imap must guarantee socket teardown."""
-
 
     def test_logout_abort_falls_back_to_shutdown(self):
         from plugins.platforms.email.adapter import _close_imap
@@ -71,7 +73,6 @@ class TestEmailConnectClosesSocket(unittest.TestCase):
         # The failed handle must have been torn down (logout attempted;
         # abort fallback covered by TestCloseImap).
         mock_imap.logout.assert_called_once()
-
 
 
 class TestFetchClosesSocketOnBrokenLogout(unittest.TestCase):
@@ -137,7 +138,6 @@ class TestWeixinPollSessionRecycle(unittest.TestCase):
         self.assertIs(adapter._poll_session, new_session)
         self.assertTrue(closed["v"])
 
-
     def test_poll_loop_recycles_after_max_consecutive_failures(self):
         from plugins.platforms.weixin import adapter as weixin_mod
 
@@ -160,10 +160,12 @@ class TestWeixinPollSessionRecycle(unittest.TestCase):
         async def _no_sleep(_secs):
             return None
 
-        with patch.object(weixin_mod, "_get_updates", _failing_get_updates), \
-                patch.object(weixin_mod, "_load_sync_buf", return_value=""), \
-                patch.object(weixin_mod.asyncio, "sleep", _no_sleep), \
-                patch.object(adapter, "_recycle_poll_session", _fake_recycle):
+        with (
+            patch.object(weixin_mod, "_get_updates", _failing_get_updates),
+            patch.object(weixin_mod, "_load_sync_buf", return_value=""),
+            patch.object(weixin_mod.asyncio, "sleep", _no_sleep),
+            patch.object(adapter, "_recycle_poll_session", _fake_recycle),
+        ):
             asyncio.run(adapter._poll_loop())
 
         self.assertEqual(calls["recycled"], 1)

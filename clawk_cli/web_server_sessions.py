@@ -1,5 +1,4 @@
-"""Read-only session browsing, latest-descendant lookup and owner maintenance.
-"""
+"""Read-only session browsing, latest-descendant lookup and owner maintenance."""
 
 import logging
 import asyncio
@@ -23,9 +22,9 @@ _DESCENDANTS_SQL = f"""
                 -- Continuation edges only (same predicate as the session list's chain CTE): a subagent run,
                 -- a /branch fork, a /new reset child or a tool-owned row is its own conversation, and resuming
                 -- INTO one parks the user's chat in a row the sidebar never lists (#115092).
-                WHERE {_sql_json_extract('s.model_config', '$._delegate_from')} IS NULL
-                  AND {_sql_json_extract('s.model_config', '$._branched_from')} IS NULL
-                  AND NOT ({_RESET_CHILD_SQL.format(a='s')})
+                WHERE {_sql_json_extract("s.model_config", "$._delegate_from")} IS NULL
+                  AND {_sql_json_extract("s.model_config", "$._branched_from")} IS NULL
+                  AND NOT ({_RESET_CHILD_SQL.format(a="s")})
                   AND COALESCE(s.source, '') != 'tool'
             )
             SELECT id, parent_session_id, started_at FROM descendants
@@ -34,8 +33,10 @@ _DESCENDANTS_SQL = f"""
 
 # Desktop 0.22.2's ``readableError`` keeps the HTTP ``detail`` and shows its "app and backend are
 # on different versions" toast (with an Update action) for "out of sync (different versions)".
-CLIENT_UPGRADE_REQUIRED = ('client_upgrade_required: this app is out of sync (different versions) '
-                           'with the Clawksis backend; update the app to edit sessions')
+CLIENT_UPGRADE_REQUIRED = (
+    "client_upgrade_required: this app is out of sync (different versions) "
+    "with the Clawksis backend; update the app to edit sessions"
+)
 
 
 def _session_latest_descendant(session_id: str, db):
@@ -51,7 +52,10 @@ def _session_latest_descendant(session_id: str, db):
     conn = getattr(db, "_conn", None)
     if conn is not None:
         keys = ("id", "parent_session_id", "started_at")
-        rows = [dict(zip(keys, row)) for row in conn.execute(_DESCENDANTS_SQL, (sid,)).fetchall()]
+        rows = [
+            dict(zip(keys, row))
+            for row in conn.execute(_DESCENDANTS_SQL, (sid,)).fetchall()
+        ]
     else:
         rows = db.list_sessions_rich(limit=10000, offset=0, compact_rows=True)
 
@@ -90,61 +94,98 @@ def _session_mutation_context(request, profile):
     from clawk_cli.web_server_cron import _cron_profile_home
     from clawk_state import _default_db_path
 
-    native = getattr(request.state, 'native_http_principal', None)
-    session = getattr(request.state, 'session', None)
+    native = getattr(request.state, "native_http_principal", None)
+    session = getattr(request.state, "session", None)
     if native is not None:
-        subject = native['subject']
+        subject = native["subject"]
     elif session is not None:
         from gateway.session_identity import authenticated_subject
-        subject = authenticated_subject({"user_id": session.user_id,
-            "provider": session.provider, "issuer": session.issuer})
-    elif not getattr(request.app.state, 'auth_required', False) and _has_valid_session_token(request):
+
+        subject = authenticated_subject(
+            {
+                "user_id": session.user_id,
+                "provider": session.provider,
+                "issuer": session.issuer,
+            }
+        )
+    elif not getattr(
+        request.app.state, "auth_required", False
+    ) and _has_valid_session_token(request):
         from gateway.session_identity import authenticated_subject
-        subject = authenticated_subject({'user_id': 'legacy-token-owner', 'provider': 'session-token'})
+
+        subject = authenticated_subject(
+            {"user_id": "legacy-token-owner", "provider": "session-token"}
+        )
     else:
-        raise HTTPException(status_code=401, detail='Unauthorized')
-    authority = getattr(request.app.state, 'session_authority', None)
-    home = Path(_cron_profile_home(profile)[1]) if profile else Path(_default_db_path()).parent
-    capabilities = frozenset({'session:read', 'session:control', 'session:create', 'session:operator'})
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    authority = getattr(request.app.state, "session_authority", None)
+    home = (
+        Path(_cron_profile_home(profile)[1])
+        if profile
+        else Path(_default_db_path()).parent
+    )
+    capabilities = frozenset(
+        {"session:read", "session:control", "session:create", "session:operator"}
+    )
     if authority is None:
-        if getattr(request.app.state, 'gateway_runner', None) is not None:
-            raise HTTPException(status_code=503, detail='session_authority_unavailable')
+        if getattr(request.app.state, "gateway_runner", None) is not None:
+            raise HTTPException(status_code=503, detail="session_authority_unavailable")
         # Standalone ``serve``/``dashboard`` (no composed gateway; its owner cutover is a
         # follow-up): the store is the owner. Same principal id form as a gateway authority's
         # (``str(home)``), so import bindings written offline stay valid once one starts.
-        return None, Principal(subject, str(home.resolve()), capabilities, 'http')
+        return None, Principal(subject, str(home.resolve()), capabilities, "http")
     # ``?profile=`` selects a served home; its own authority (not the launch one) owns the mutation.
     from gateway.session_authorities import authority_for_home
-    runner = getattr(request.app.state, 'gateway_runner', None)
+
+    runner = getattr(request.app.state, "gateway_runner", None)
     owner = authority_for_home(runner, home) if runner is not None else None
     if owner is None and home.resolve() == Path(authority.db.db_path).parent.resolve():
         owner = authority
     if owner is None:
-        raise HTTPException(status_code=403, detail='profile_mismatch')
+        raise HTTPException(status_code=403, detail="profile_mismatch")
     authority = owner
-    if native is not None and native['profile_id'] != authority.profile_id:
-        raise HTTPException(status_code=403, detail='profile_mismatch')
+    if native is not None and native["profile_id"] != authority.profile_id:
+        raise HTTPException(status_code=403, detail="profile_mismatch")
     if native is not None:
         # One transport per verified native request, so the grant's own profile can claim its old
         # local history exactly as over the native socket (``require_history_claim``); a shared
         # 'http' id never can.
         import uuid
-        return authority, Principal(subject, authority.profile_id, capabilities, 'native-http:' + uuid.uuid4().hex)
-    return authority, Principal(subject, authority.profile_id, capabilities, 'http')
+
+        return authority, Principal(
+            subject,
+            authority.profile_id,
+            capabilities,
+            "native-http:" + uuid.uuid4().hex,
+        )
+    return authority, Principal(subject, authority.profile_id, capabilities, "http")
 
 
 @contextmanager
 def _native_history_transport(request, authority, actor):
     """Bind a verified native HTTP actor as a native legacy transport for one mutation."""
     native = None
-    if authority is not None and str(getattr(actor, 'transport_id', '')).startswith('native-http:'):
-        native = getattr(request.state, 'native_http_principal', None)
+    if authority is not None and str(getattr(actor, "transport_id", "")).startswith(
+        "native-http:"
+    ):
+        native = getattr(request.state, "native_http_principal", None)
     if native is None:
         yield
         return
-    from gateway.session_local_migration import bind_native_transport, unbind_native_transport
-    bind_native_transport(authority, actor, {'provider': 'local', 'profile_id': authority.profile_id,
-                                             'instance_id': native['instance_id']})
+    from gateway.session_local_migration import (
+        bind_native_transport,
+        unbind_native_transport,
+    )
+
+    bind_native_transport(
+        authority,
+        actor,
+        {
+            "provider": "local",
+            "profile_id": authority.profile_id,
+            "instance_id": native["instance_id"],
+        },
+    )
     try:
         yield
     finally:
@@ -164,24 +205,50 @@ def _mutate_offline_store(profile, actor, params):
         db = _open_session_db_for_profile(profile, read_only=False)
         try:
             write_guard = None
-            if params['operation'] == 'import':
-                normalized, errors = db._validate_import_payload(params['payload']['sessions'])
+            if params["operation"] == "import":
+                normalized, errors = db._validate_import_payload(
+                    params["payload"]["sessions"]
+                )
                 if errors:
-                    raise HTTPException(status_code=400, detail={'errors': errors})
+                    raise HTTPException(status_code=400, detail={"errors": errors})
                 from functools import partial
                 from clawk_state_mutation_binding import import_history_control
-                write_guard = partial(import_history_control, actor=actor,
-                                      session_ids=tuple(item['session']['id'] for item in normalized))
+
+                write_guard = partial(
+                    import_history_control,
+                    actor=actor,
+                    session_ids=tuple(item["session"]["id"] for item in normalized),
+                )
             with db._read_ctx() as conn:
-                row = conn.execute('SELECT epoch FROM runtime_epoch WHERE singleton=1').fetchone()
+                row = conn.execute(
+                    "SELECT epoch FROM runtime_epoch WHERE singleton=1"
+                ).fetchone()
             # The reservation held here is the ownership lock begin_runtime_epoch requires.
-            epoch = row[0] if row else begin_runtime_epoch(db, instance_id='dashboard-offline')
-            return mutate_runtime_session(db, epoch=epoch, principal_id=actor.subject,
-                expected_generation=params.get('expected_generation'), _authorize_write=write_guard,
-                **{key: params[key] for key in ('session_id', 'request_id', 'expected_revision',
-                                                'operation', 'payload')})
+            epoch = (
+                row[0]
+                if row
+                else begin_runtime_epoch(db, instance_id="dashboard-offline")
+            )
+            return mutate_runtime_session(
+                db,
+                epoch=epoch,
+                principal_id=actor.subject,
+                expected_generation=params.get("expected_generation"),
+                _authorize_write=write_guard,
+                **{
+                    key: params[key]
+                    for key in (
+                        "session_id",
+                        "request_id",
+                        "expected_revision",
+                        "operation",
+                        "payload",
+                    )
+                },
+            )
         finally:
             db.close()
+
     return _with_session_maintenance(profile, run)
 
 
@@ -208,31 +275,49 @@ async def _mutate_via_gateway_owner(profile, actor, params):
     the mutation when the forward acts as that account.
     """
     from fastapi import HTTPException
-    from clawk_cli.gateway_client import GatewayClientError, GatewayRPCError, connect_gateway
+    from clawk_cli.gateway_client import (
+        GatewayClientError,
+        GatewayRPCError,
+        connect_gateway,
+    )
     from clawk_cli.gateway_runtime import discover_gateway_endpoint
     from clawk_cli.gateway_runtime_discovery import DiscoveryError
     from clawk_cli.web_server_cron import _cron_profile_home
     from clawk_state import _default_db_path
 
-    home = Path(_cron_profile_home(profile)[1]) if profile else Path(_default_db_path()).parent
+    home = (
+        Path(_cron_profile_home(profile)[1])
+        if profile
+        else Path(_default_db_path()).parent
+    )
     # Discovery is read-only and never starts a gateway.
     discovery = await asyncio.to_thread(discover_gateway_endpoint, home, timeout=1.5)
-    endpoint = getattr(discovery, 'endpoint', None)
+    endpoint = getattr(discovery, "endpoint", None)
     if endpoint is None:
         return None
-    if not getattr(endpoint, 'control_home', True):
+    if not getattr(endpoint, "control_home", True):
         # The selected home answered on its own socket (a multiplexer-served profile already
         # names the multiplexer root). Pin it, so the ticket is minted on the socket that just
         # identified as this profile's owner, never on the dashboard launch home's.
         from dataclasses import replace
+
         endpoint = replace(endpoint, control_home=str(home.expanduser().resolve()))
-    call = {key: params[key] for key in
-            ('session_id', 'request_id', 'expected_revision', 'operation', 'payload') if key in params}
-    if params.get('expected_generation') is not None:
-        call['expected_generation'] = params['expected_generation']
+    call = {
+        key: params[key]
+        for key in (
+            "session_id",
+            "request_id",
+            "expected_revision",
+            "operation",
+            "payload",
+        )
+        if key in params
+    }
+    if params.get("expected_generation") is not None:
+        call["expected_generation"] = params["expected_generation"]
     try:
         async with connect_gateway(endpoint=endpoint, subject=actor.subject) as client:
-            return await client.rpc('session.mutate', **call)
+            return await client.rpc("session.mutate", **call)
     except GatewayRPCError:
         # The owner's own refusal frame: a verdict the caller maps to the direct path's status.
         raise
@@ -240,18 +325,33 @@ async def _mutate_via_gateway_owner(profile, actor, params):
         # Transport, not a verdict: a refused WebSocket dial (wrapped as GatewayClientError), a
         # control socket that refuses the mint after a restart (DiscoveryError), a raw socket error
         # or a timeout. Retrying is safe because the request reuses its request_id.
-        raise HTTPException(status_code=503, detail='owner_unreachable') from exc
+        raise HTTPException(status_code=503, detail="owner_unreachable") from exc
 
 
 # One reason -> HTTP status map for a session mutation refusal, shared by the direct path
 # (RuntimeStoreError) and the owner forward (GatewayClientError): a storage failure is a
 # server fault (503), never a session conflict.
-_MUTATION_REFUSAL_STATUS = {'permission_denied': 403, 'profile_mismatch': 403, 'not_found': 404,
-                            'invalid_params': 400, 'runtime_draining': 503, 'storage_unavailable': 503}
+_MUTATION_REFUSAL_STATUS = {
+    "permission_denied": 403,
+    "profile_mismatch": 403,
+    "not_found": 404,
+    "invalid_params": 400,
+    "runtime_draining": 503,
+    "storage_unavailable": 503,
+}
 
 
-async def _mutate_session_request(request, profile, session_id, *, request_id,
-                                  expected_revision, operation, payload, expected_generation=None):
+async def _mutate_session_request(
+    request,
+    profile,
+    session_id,
+    *,
+    request_id,
+    expected_revision,
+    operation,
+    payload,
+    expected_generation=None,
+):
     """Resolve the authenticated principal and owner; never open a second writer."""
     import sqlite3
     from fastapi import HTTPException
@@ -262,44 +362,60 @@ async def _mutate_session_request(request, profile, session_id, *, request_id,
     from clawk_state_runtime import RuntimeStoreError
 
     authority, actor = _session_mutation_context(request, profile)
-    if operation == 'import' and authority is not None:
-        _, errors = authority.db._validate_import_payload(payload['sessions'])
+    if operation == "import" and authority is not None:
+        _, errors = authority.db._validate_import_payload(payload["sessions"])
         if errors:
-            raise HTTPException(status_code=400, detail={'errors': errors})
+            raise HTTPException(status_code=400, detail={"errors": errors})
     if request_id is None and expected_revision is None and expected_generation is None:
         # A pre-fence client (Desktop <= 0.22.2) sends none of the identity. The owner never
         # commits an unfenced write, so name the upgrade; the wording is what those builds'
         # toast summariser maps to "different versions, update" (#139742).
         raise HTTPException(status_code=409, detail=CLIENT_UPGRADE_REQUIRED)
     if request_id is None or expected_revision is None:
-        raise HTTPException(status_code=409, detail='mutation_identity_required')
-    params = dict(session_id=session_id, request_id=request_id, expected_revision=expected_revision,
-        operation=operation, payload=payload)
+        raise HTTPException(status_code=409, detail="mutation_identity_required")
+    params = dict(
+        session_id=session_id,
+        request_id=request_id,
+        expected_revision=expected_revision,
+        operation=operation,
+        payload=payload,
+    )
     if expected_generation is not None:
-        params['expected_generation'] = expected_generation
+        params["expected_generation"] = expected_generation
     try:
         if authority is None:
             # A live gateway owner answers first; only an owner-less home takes
             # the offline store (whose reservation loses to that same owner).
             result = await _mutate_via_gateway_owner(profile, actor, params)
             if result is None:
-                result = await asyncio.to_thread(_mutate_offline_store, profile, actor, params)
+                result = await asyncio.to_thread(
+                    _mutate_offline_store, profile, actor, params
+                )
         else:
             with _native_history_transport(request, authority, actor):
-                result = await mutate_session(authority, actor, SessionRef(authority.profile_id, session_id), params)
-        return {'ok': True, **result}
+                result = await mutate_session(
+                    authority,
+                    actor,
+                    SessionRef(authority.profile_id, session_id),
+                    params,
+                )
+        return {"ok": True, **result}
     except RuntimeStoreError as exc:
-        raise HTTPException(status_code=_MUTATION_REFUSAL_STATUS.get(exc.reason, 409), detail=exc.reason) from exc
+        raise HTTPException(
+            status_code=_MUTATION_REFUSAL_STATUS.get(exc.reason, 409), detail=exc.reason
+        ) from exc
     except GatewayClientError as exc:
         # The owner's own refusal verdicts (transport failures already became 503 above),
         # wire-shaped like RuntimeStoreError's reasons, so a forwarded write answers as the direct path.
-        raise HTTPException(status_code=_MUTATION_REFUSAL_STATUS.get(str(exc), 409), detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=_MUTATION_REFUSAL_STATUS.get(str(exc), 409), detail=str(exc)
+        ) from exc
     except MUTATION_GUARD_REFUSALS as exc:
-        raise HTTPException(status_code=409, detail='session_busy') from exc
+        raise HTTPException(status_code=409, detail="session_busy") from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except sqlite3.Error as exc:
-        raise HTTPException(status_code=503, detail='storage_unavailable') from exc
+        raise HTTPException(status_code=503, detail="storage_unavailable") from exc
 
 
 def _with_session_maintenance(profile, operation, *args):
@@ -309,14 +425,18 @@ def _with_session_maintenance(profile, operation, *args):
     from clawk_cli.web_server_cron import _cron_profile_home
     from clawk_state import _default_db_path
 
-    home = Path(_cron_profile_home(profile)[1]) if profile else Path(_default_db_path()).parent
+    home = (
+        Path(_cron_profile_home(profile)[1])
+        if profile
+        else Path(_default_db_path()).parent
+    )
     try:
         with exclusive_maintenance([home]):
             return operation(*args)
     except OwnershipConflict as exc:
         # uvicorn runs at log_level=warning, so a handled 4xx leaves no server-side trace and the
         # refusal reads as a UI bug (#138915). Bulk store maintenance has no owner verb: name it.
-        _log.warning('session write refused for %s: %s', home, exc)
+        _log.warning("session write refused for %s: %s", home, exc)
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
@@ -353,10 +473,13 @@ def _open_session_db_at_path(db_path: Path, *, read_only: bool):
     if not initialized:
         raise HTTPException(
             status_code=503,
-            detail="Session store is not initialized. Start this profile's gateway to initialize it.")
+            detail="Session store is not initialized. Start this profile's gateway to initialize it.",
+        )
 
     from clawk_state_reconcile import (
-        DeclarativeDriftError, is_declarative_drift_error, reconcile_drift_for_browse,
+        DeclarativeDriftError,
+        is_declarative_drift_error,
+        reconcile_drift_for_browse,
     )
 
     def _open_probed():
@@ -383,15 +506,19 @@ def _open_session_db_at_path(db_path: Path, *, read_only: bool):
             try:
                 reconcile_drift_for_browse(db_path)
             except DeclarativeDriftError as drift:
-                _log.warning("session store at %s is behind SCHEMA_SQL: %s", db_path, drift)
+                _log.warning(
+                    "session store at %s is behind SCHEMA_SQL: %s", db_path, drift
+                )
                 raise HTTPException(status_code=503, detail=str(drift)) from exc
             return _open_probed()
     except (sqlite3.DatabaseError, UnicodeDecodeError) as exc:
         from clawk_state_errors import is_malformed_db_error
+
         if isinstance(exc, sqlite3.DatabaseError) and is_malformed_db_error(exc):
             # Same structured 503 the analytics routers publish (``corrupt_store_as_status``): a
             # corrupt image names the repair (`clawk doctor`), never a generic "schema unavailable".
             from clawk_cli.web_routers._common import corrupt_store_status
+
             raise corrupt_store_status(db_path, exc) from exc
         if isinstance(exc, sqlite3.OperationalError) and is_transient_sqlite_error(exc):
             detail = "Session store is busy (disk I/O or lock). Retry; the list was not cleared."
@@ -399,7 +526,8 @@ def _open_session_db_at_path(db_path: Path, *, read_only: bool):
             detail = (
                 "Session store schema is unavailable or corrupt. Start or restart this profile's "
                 "gateway to reconcile it; if it persists, run `clawk doctor` for diagnosis. "
-                "Browsing does not repair the store.")
+                "Browsing does not repair the store."
+            )
         raise HTTPException(status_code=503, detail=detail) from exc
 
 
@@ -419,7 +547,9 @@ def _open_session_db_for_profile(profile: Optional[str], *, read_only: bool):
 
     Access-mode semantics: see :func:`_open_session_db_at_path`.
     """
-    return _open_session_db_at_path(_session_db_path_for_profile(profile), read_only=read_only)
+    return _open_session_db_at_path(
+        _session_db_path_for_profile(profile), read_only=read_only
+    )
 
 
 # In-process throttle for the opportunistic auto-archive trigger, keyed by
@@ -453,7 +583,7 @@ def _maybe_auto_archive_for_profile(profile: Optional[str]) -> None:
         profile_home = _session_db_path_for_profile(profile).parent
         _home_token = set_clawk_home_override(str(profile_home))
         try:
-            cfg = (_load_full_config().get("sessions") or {})
+            cfg = _load_full_config().get("sessions") or {}
         finally:
             reset_clawk_home_override(_home_token)
         if not cfg.get("auto_archive", False):
@@ -474,7 +604,8 @@ def _maybe_auto_archive_for_profile(profile: Optional[str]) -> None:
         try:
             db.maybe_auto_archive(
                 idle_days=float(cfg.get("auto_archive_days", 3)),
-                min_interval_hours=int(cfg.get("min_interval_hours", 24)))
+                min_interval_hours=int(cfg.get("min_interval_hours", 24)),
+            )
         finally:
             db.close()
     except Exception as exc:
@@ -489,13 +620,17 @@ def _skill_maintenance_idle_for(started_at: float) -> Optional[float]:
 
     home = get_clawk_home().resolve()
     with gateway._sessions_lock:
-        sessions = [session for session in gateway._sessions.values()
-                    if Path(session.get("profile_home") or home).resolve() == home]
+        sessions = [
+            session
+            for session in gateway._sessions.values()
+            if Path(session.get("profile_home") or home).resolve() == home
+        ]
         if any(session.get("running") for session in sessions):
             return None
         last_active = max(
             [started_at, gateway._closed_session_activity.get(str(home), 0)]
-            + [float(session.get("last_active") or started_at) for session in sessions])
+            + [float(session.get("last_active") or started_at) for session in sessions]
+        )
     return max(0.0, time.time() - last_active)
 
 
@@ -518,7 +653,8 @@ def _maybe_run_skill_maintenance(started_at: float) -> None:
 
 
 async def _auto_archive_ticker_loop(
-    interval_s: float = 3600.0, initial_delay_s: float = 90.0) -> None:
+    interval_s: float = 3600.0, initial_delay_s: float = 90.0
+) -> None:
     """Poll maintenance for this serve profile, including Desktop-only installs.
 
     Individual chores own their config/interval gates. Curator additionally uses

@@ -20,7 +20,10 @@ class TestOwnCgroupPath:
             lambda p: proc_self if p == "/proc/self/cgroup" else Path(p),
         )
 
-        assert cgroup_cleanup._own_cgroup_path() == "/user.slice/user-1000.slice/clawk-gateway.service"
+        assert (
+            cgroup_cleanup._own_cgroup_path()
+            == "/user.slice/user-1000.slice/clawk-gateway.service"
+        )
 
 
 class TestReapCgroup:
@@ -71,7 +74,9 @@ class TestLiveGatewayGuard:
         import gateway.status
 
         cgroup_path = "/some.slice/some-gateway.service"
-        gateway_cmdline = f"/opt/clawksis/venv/bin/python -m clawk_cli.main gateway {verb}"
+        gateway_cmdline = (
+            f"/opt/clawksis/venv/bin/python -m clawk_cli.main gateway {verb}"
+        )
         monkeypatch.setattr(
             cgroup_cleanup, "_read_cgroup_pids", lambda _p: [777, os.getpid()]
         )
@@ -99,7 +104,9 @@ class TestLiveGatewayGuard:
             lambda pid: "bash -c adb forward tcp:8888 tcp:8889" if pid == 777 else None,
         )
         killed: list[int] = []
-        monkeypatch.setattr(cgroup_cleanup.os, "kill", lambda pid, sig: killed.append(pid))
+        monkeypatch.setattr(
+            cgroup_cleanup.os, "kill", lambda pid, sig: killed.append(pid)
+        )
         assert cgroup_cleanup.reap_cgroup(cgroup_path) == 1
         assert killed == [777]
 

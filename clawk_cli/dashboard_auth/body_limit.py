@@ -1,4 +1,5 @@
 """Bound public auth bodies before FastAPI assembles JSON for validation."""
+
 from __future__ import annotations
 
 from starlette.exceptions import HTTPException
@@ -22,9 +23,12 @@ class AuthBodyLimitMiddleware:
         self.app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if (scope["type"] != "http" or scope["method"] != "POST"
-                or not scope["path"].startswith("/auth/")
-                or not _path_is_public(scope["path"])):
+        if (
+            scope["type"] != "http"
+            or scope["method"] != "POST"
+            or not scope["path"].startswith("/auth/")
+            or not _path_is_public(scope["path"])
+        ):
             await self.app(scope, receive, send)
             return
 

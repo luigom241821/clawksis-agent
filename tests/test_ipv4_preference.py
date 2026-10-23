@@ -4,10 +4,10 @@ import importlib
 import socket
 
 
-
 def _reload_constants():
     """Reload clawk_constants to get a fresh apply_ipv4_preference."""
     import clawk_constants
+
     importlib.reload(clawk_constants)
     return clawk_constants
 
@@ -23,11 +23,10 @@ class TestApplyIPv4Preference:
         """Restore the original getaddrinfo after each test."""
         socket.getaddrinfo = self._original
 
-
-
     def test_double_patch_is_safe(self):
         """Calling apply twice doesn't double-wrap."""
         from clawk_constants import apply_ipv4_preference
+
         apply_ipv4_preference(force=True)
         first_patch = socket.getaddrinfo
         apply_ipv4_preference(force=True)
@@ -65,6 +64,3 @@ class TestApplyIPv4Preference:
 
         socket.getaddrinfo("example.com", 80, family=socket.AF_INET6)
         assert calls[-1] == socket.AF_INET6, "Explicit AF_INET6 should pass through"
-
-
-

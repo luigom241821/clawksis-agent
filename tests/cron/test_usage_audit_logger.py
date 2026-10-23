@@ -31,14 +31,17 @@ def tmp_clawk_home(tmp_path, monkeypatch):
 
 
 def _read_jsonl(path: Path) -> list[dict]:
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
+    return [
+        json.loads(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line
+    ]
 
 
 class TestUsageAuditPath:
     def test_resolves_through_get_clawk_home(self, tmp_clawk_home):
         p = scheduler._usage_audit_path()
         assert p == tmp_clawk_home / "cron" / "usage_audit.jsonl"
-
 
 
 class TestUtcnowIsoMs:
@@ -70,7 +73,6 @@ class TestWriteUsageAudit:
         lines = _read_jsonl(path)
         assert len(lines) == 1
         assert lines[0] == record
-
 
     def test_writer_exception_swallowed(self, tmp_clawk_home):
         # Force json.dumps to raise — writer must NOT propagate.

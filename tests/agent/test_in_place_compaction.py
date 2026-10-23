@@ -15,7 +15,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 
-
 def _make_agent(session_db, session_id, *, in_place):
     with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}):
         from run_agent import AIAgent
@@ -31,6 +30,7 @@ def _make_agent(session_db, session_id, *, in_place):
             skip_memory=True,
         )
     agent.compression_in_place = in_place
+
     # Mock the compressor to return a deterministic shrunk transcript so the
     # test exercises the DB-mutation path, not summarization quality.
     def _fake_compress(messages, current_tokens=None, focus_topic=None, force=False):
@@ -140,7 +140,6 @@ class TestInPlaceCompaction:
             roles = [m["role"] for m in compressed if m.get("role") != "system"]
             assert all(roles[i] != roles[i + 1] for i in range(len(roles) - 1))
 
-
     def test_rotation_still_preflushes(self):
         """Rotation MUST pre-flush so current-turn messages survive in the
         preserved old (parent) session before it is ended (#47202)."""
@@ -156,8 +155,10 @@ class TestInPlaceCompaction:
                 "n", calls["n"] + 1
             )
             compress_context(
-                agent, [{"role": "user", "content": "x"}] * 8,
-                approx_tokens=100_000, system_message="sys",
+                agent,
+                [{"role": "user", "content": "x"}] * 8,
+                approx_tokens=100_000,
+                system_message="sys",
             )
             assert calls["n"] == 1
 
@@ -198,7 +199,10 @@ class TestRotationFallbackWhenFlagOff:
             # boundary, so a headless process killed before finalization can
             # still resume it without duplicating the two handoff messages.
             assert agent._last_flushed_db_idx == 2
-            assert [m.get("content") for m in db.get_messages_as_conversation(agent.session_id)] == [
+            assert [
+                m.get("content")
+                for m in db.get_messages_as_conversation(agent.session_id)
+            ] == [
                 "[CONTEXT COMPACTION] summary of prior turns",
                 "recent reply",
             ]
@@ -226,7 +230,9 @@ class TestInPlaceAntiGrowthGuard:
             agent = _make_agent(db, sid, in_place=True)
             agent._last_flushed_db_idx = 5
 
-            def _growing_compress(messages, current_tokens=None, focus_topic=None, force=False):
+            def _growing_compress(
+                messages, current_tokens=None, focus_topic=None, force=False
+            ):
                 # A "summary" bigger than the entire input transcript.
                 return [
                     {"role": "user", "content": "X" * 200_000},
@@ -273,28 +279,64 @@ class TestInPlaceAntiGrowthGuard:
             ]
             original = [
                 {"role": "user", "content": "do the work"},
-                {"role": "assistant", "content": "calling tools", "tool_calls": tool_calls},
-                {"role": "tool", "tool_call_id": "c1", "content": "OLD1 " + ("x" * 8000)},
-                {"role": "tool", "tool_call_id": "c2", "content": "OLD2 " + ("y" * 8000)},
-                {"role": "tool", "tool_call_id": "c3", "content": "keep-me " + ("z" * 100)},
+                {
+                    "role": "assistant",
+                    "content": "calling tools",
+                    "tool_calls": tool_calls,
+                },
+                {
+                    "role": "tool",
+                    "tool_call_id": "c1",
+                    "content": "OLD1 " + ("x" * 8000),
+                },
+                {
+                    "role": "tool",
+                    "tool_call_id": "c2",
+                    "content": "OLD2 " + ("y" * 8000),
+                },
+                {
+                    "role": "tool",
+                    "tool_call_id": "c3",
+                    "content": "keep-me " + ("z" * 100),
+                },
                 {"role": "user", "content": "thanks"},
             ]
             grown = [
                 {"role": "user", "content": "[CONTEXT COMPACTION] " + ("S" * 200)},
-                {"role": "assistant", "content": "calling tools", "tool_calls": tool_calls},
-                {"role": "tool", "tool_call_id": "c1", "content": "OLD1 " + ("x" * 8000)},
-                {"role": "tool", "tool_call_id": "c2", "content": "OLD2 " + ("y" * 8000)},
-                {"role": "tool", "tool_call_id": "c3", "content": "keep-me " + ("z" * 100)},
+                {
+                    "role": "assistant",
+                    "content": "calling tools",
+                    "tool_calls": tool_calls,
+                },
+                {
+                    "role": "tool",
+                    "tool_call_id": "c1",
+                    "content": "OLD1 " + ("x" * 8000),
+                },
+                {
+                    "role": "tool",
+                    "tool_call_id": "c2",
+                    "content": "OLD2 " + ("y" * 8000),
+                },
+                {
+                    "role": "tool",
+                    "tool_call_id": "c3",
+                    "content": "keep-me " + ("z" * 100),
+                },
                 {
                     "role": "user",
                     "content": "Current todos:\n- [ ] leftover",
                     "_todo_snapshot_synthetic": True,
                 },
             ]
-            assert estimate_messages_tokens_rough(grown) > estimate_messages_tokens_rough(original)
+            assert estimate_messages_tokens_rough(
+                grown
+            ) > estimate_messages_tokens_rough(original)
             compressor = agent.context_compressor
             compressor.compress = (
-                lambda messages, current_tokens=None, focus_topic=None, force=False: grown
+                lambda messages, current_tokens=None, focus_topic=None, force=False: (
+                    grown
+                )
             )
 
             compressed, _sp = compress_context(
@@ -302,10 +344,19 @@ class TestInPlaceAntiGrowthGuard:
             )
 
             assert agent._last_compaction_in_place is True
-            assert estimate_messages_tokens_rough(compressed) < estimate_messages_tokens_rough(original)
-            tool_bodies = [m.get("content") for m in compressed if m.get("role") == "tool"]
-            assert any(isinstance(body, str) and body.startswith("keep-me") for body in tool_bodies)
-            assert any("cleared to save context space" in (body or "") for body in tool_bodies)
+            assert estimate_messages_tokens_rough(
+                compressed
+            ) < estimate_messages_tokens_rough(original)
+            tool_bodies = [
+                m.get("content") for m in compressed if m.get("role") == "tool"
+            ]
+            assert any(
+                isinstance(body, str) and body.startswith("keep-me")
+                for body in tool_bodies
+            )
+            assert any(
+                "cleared to save context space" in (body or "") for body in tool_bodies
+            )
             # Tool stubbing alone got under budget, so the todo snapshot (the
             # only in-transcript todo re-injection) survives the salvage.
             assert any(m.get("_todo_snapshot_synthetic") for m in compressed)
@@ -362,11 +413,15 @@ class TestCompactedTurnsStaySearchable:
             db = SessionDB(db_path=Path(tmp) / "t.db")
             sid = "20260619_undo"
             db.create_session(sid, "cli", model="test/model")
-            db.append_message(session_id=sid, role="user", content="ZEBRAWORD remember this")
+            db.append_message(
+                session_id=sid, role="user", content="ZEBRAWORD remember this"
+            )
             db.append_message(session_id=sid, role="assistant", content="noted")
             db.rewind_to_message(sid, db.get_messages(sid)[0]["id"])
 
-            assert db.search_messages("ZEBRAWORD", role_filter=["user", "assistant"]) == []
+            assert (
+                db.search_messages("ZEBRAWORD", role_filter=["user", "assistant"]) == []
+            )
             recovered = db.search_messages(
                 "ZEBRAWORD", role_filter=["user", "assistant"], include_inactive=True
             )

@@ -44,8 +44,10 @@ _REPLAYED_UNREMOVABLE: set[Path] = set()
 def _get_flush_dir():
     """Return the pending-messages flush directory under the active CLAWK_HOME."""
     from clawk_constants import get_clawk_home
+
     flush_dir = get_clawk_home() / "pending_messages"
     from clawk_constants import assert_named_profile_home_live
+
     assert_named_profile_home_live(flush_dir)
     make_user_dir(flush_dir, parents=True, exist_ok=True, mode=0o700)
     if os.name == "posix":
@@ -56,6 +58,7 @@ def _get_flush_dir():
 def _write_payload(flush_dir: Path, payload: dict[str, Any]) -> Path:
     """Atomically write one private, uniquely named recovery payload; return its path."""
     from utils import atomic_json_write
+
     final_path = flush_dir / f"pending-{uuid.uuid4().hex}.json"
     atomic_json_write(final_path, payload, mode=0o600, default=str)
     if os.name == "posix":
@@ -75,13 +78,17 @@ def _write_payload(flush_dir: Path, payload: dict[str, Any]) -> Path:
     return final_path
 
 
-def _flush_value(flush_dir: Path, kind: str, session_key: str, value: Any, **extra: Any) -> bool:
+def _flush_value(
+    flush_dir: Path, kind: str, session_key: str, value: Any, **extra: Any
+) -> bool:
     """Serialise and write one pending value; return True when a payload was written."""
     try:
         serialised = _serialise_value(value)
         if serialised is None:
             return False
-        _write_payload(flush_dir, {"session_key": session_key, **extra, "data": serialised})
+        _write_payload(
+            flush_dir, {"session_key": session_key, **extra, "data": serialised}
+        )
         return True
     except Exception as exc:
         logger.debug("Failed to flush %s message for %s: %s", kind, session_key, exc)
@@ -95,13 +102,22 @@ def flush_pending_to_file(pending: dict[str, Any], *, reason: str = "shutdown") 
     flush_dir, ts, flushed = _get_flush_dir(), int(time.time()), 0
     for session_key, value in list(pending.items()):
         if value is not None:
-            flushed += _flush_value(flush_dir, "pending", session_key, value, reason=reason, ts=ts)
+            flushed += _flush_value(
+                flush_dir, "pending", session_key, value, reason=reason, ts=ts
+            )
     if flushed:
-        logger.info("Flushed %d pending message(s) to %s (reason=%s)", flushed, flush_dir, reason)
+        logger.info(
+            "Flushed %d pending message(s) to %s (reason=%s)",
+            flushed,
+            flush_dir,
+            reason,
+        )
     return flushed
 
 
-def flush_overflow_to_file(overflow_by_session: dict[str, Any], *, reason: str = "shutdown") -> int:
+def flush_overflow_to_file(
+    overflow_by_session: dict[str, Any], *, reason: str = "shutdown"
+) -> int:
     """Serialise the FIFO overflow tails (``queued_events``) to disk; return events flushed.
 
     The adapter slot holds the queue head and ``SessionState.conversation.queued_events`` the
@@ -116,15 +132,28 @@ def flush_overflow_to_file(overflow_by_session: dict[str, Any], *, reason: str =
             continue
         for seq, value in enumerate(list(events)):
             if value is not None:
-                flushed += _flush_value(flush_dir, "overflow", session_key, value, reason=reason,
-                                        ts=ts, seq=seq)
+                flushed += _flush_value(
+                    flush_dir,
+                    "overflow",
+                    session_key,
+                    value,
+                    reason=reason,
+                    ts=ts,
+                    seq=seq,
+                )
     if flushed:
-        logger.info("Flushed %d queued overflow message(s) to %s (reason=%s)", flushed, flush_dir,
-                    reason)
+        logger.info(
+            "Flushed %d queued overflow message(s) to %s (reason=%s)",
+            flushed,
+            flush_dir,
+            reason,
+        )
     return flushed
 
 
-def spool_dropped_transcript_message(session_id: str, message: dict[str, Any]) -> Optional[Path]:
+def spool_dropped_transcript_message(
+    session_id: str, message: dict[str, Any]
+) -> Optional[Path]:
     """Spool a cap-evicted transcript message; ``None`` on failure (callers degrade to drop+log).
 
     Uses the same on-disk pending spool as :func:`flush_pending_to_file` (one atomic JSON payload per
@@ -132,17 +161,26 @@ def spool_dropped_transcript_message(session_id: str, message: dict[str, Any]) -
     discards user data while the process stays up (#78182).
     """
     try:
-        return _write_payload(_get_flush_dir(), {
-            "session_key": session_id, "reason": TRANSCRIPT_CAP_DROP_REASON, "ts": int(time.time()),
-            "seq": next(_TRANSCRIPT_SPOOL_SEQ),
-            "data": {"session_id": session_id, "message": message},
-        })
+        return _write_payload(
+            _get_flush_dir(),
+            {
+                "session_key": session_id,
+                "reason": TRANSCRIPT_CAP_DROP_REASON,
+                "ts": int(time.time()),
+                "seq": next(_TRANSCRIPT_SPOOL_SEQ),
+                "data": {"session_id": session_id, "message": message},
+            },
+        )
     except Exception as exc:
-        logger.debug("Failed to spool cap-dropped transcript message for %s: %s", session_id, exc)
+        logger.debug(
+            "Failed to spool cap-dropped transcript message for %s: %s", session_id, exc
+        )
         return None
 
 
-def drain_transcript_spool(session_id: str, replay, *, db_known_failing: bool = False) -> tuple[int, int]:
+def drain_transcript_spool(
+    session_id: str, replay, *, db_known_failing: bool = False
+) -> tuple[int, int]:
     """Replay cap-dropped transcript messages spooled for *session_id*; return ``(replayed,
     remaining)``. ``replay(message_dict)`` runs per message in drop order; a spool file is deleted
     only after its replay succeeds. The first failure stops the drain (the DB is likely still
@@ -167,13 +205,17 @@ def drain_transcript_spool(session_id: str, replay, *, db_known_failing: bool = 
             continue
         # A parseable non-object file (scalar/list) cannot be attributed to any session: skip it
         # like unparseable JSON instead of letting ``.get`` abort the whole drain.
-        if (not isinstance(payload, dict)
-                or payload.get("reason") != TRANSCRIPT_CAP_DROP_REASON
-                or payload.get("session_key") != session_id):
+        if (
+            not isinstance(payload, dict)
+            or payload.get("reason") != TRANSCRIPT_CAP_DROP_REASON
+            or payload.get("session_key") != session_id
+        ):
             continue
         message = (payload.get("data") or {}).get("message")
         if not isinstance(message, dict):
-            logger.warning("Removing structurally invalid transcript spool file %s", path)
+            logger.warning(
+                "Removing structurally invalid transcript spool file %s", path
+            )
             path.unlink(missing_ok=True)
             continue
         entries.append((_spool_sort_key(payload, path.name), path, message))
@@ -182,19 +224,28 @@ def drain_transcript_spool(session_id: str, replay, *, db_known_failing: bool = 
         try:
             replay(message)
         except Exception as exc:
-            if is_row_rejection(exc):  # no retry can write it, so it must not hold the session back
+            if is_row_rejection(
+                exc
+            ):  # no retry can write it, so it must not hold the session back
                 _quarantine_spool_file(path, session_id, exc)
                 continue
             (logger.debug if db_known_failing else logger.warning)(
                 "Replay of spooled transcript message %s for %s failed; "
-                "keeping spool file for retry: %s", path, session_id, exc)
+                "keeping spool file for retry: %s",
+                path,
+                session_id,
+                exc,
+            )
             remaining = len(ordered) - idx
             break
         _remove_replayed(path, session_id)
         replayed += 1
     if replayed:
-        logger.info("Replayed %d spooled transcript message(s) for %s after DB recovery", replayed,
-                    session_id)
+        logger.info(
+            "Replayed %d spooled transcript message(s) for %s after DB recovery",
+            replayed,
+            session_id,
+        )
     return replayed, remaining
 
 
@@ -210,8 +261,15 @@ def _serialise_value(value: Any) -> Optional[dict]:
     """Convert a pending message value to a JSON-serialisable dict."""
     if hasattr(value, "text"):  # MessageEvent-like object
         result: dict[str, Any] = {"text": getattr(value, "text", "")}
-        for attr in ("session_id", "platform", "sender_id", "sender_name", "reply_to", "media",
-                     "raw_event"):
+        for attr in (
+            "session_id",
+            "platform",
+            "sender_id",
+            "sender_name",
+            "reply_to",
+            "media",
+            "raw_event",
+        ):
             val = getattr(value, attr, None)
             if val is not None:
                 result[attr] = val if _json_safe(val) else str(val)
@@ -259,8 +317,10 @@ def is_row_rejection(exc: BaseException) -> bool:
     ``InterfaceError("no more rows available")`` is WAL contention that ``SessionDB`` retries and
     re-raises unchanged once its patience runs out."""
     if isinstance(exc, sqlite3.Error):
-        return (isinstance(exc, (sqlite3.InterfaceError, sqlite3.ProgrammingError))
-                and "binding parameter" in str(exc).lower())
+        return (
+            isinstance(exc, (sqlite3.InterfaceError, sqlite3.ProgrammingError))
+            and "binding parameter" in str(exc).lower()
+        )
     return isinstance(exc, (TypeError, ValueError, AttributeError, OverflowError))
 
 
@@ -272,8 +332,13 @@ def _remove_replayed(path: Path, session_id: str) -> None:
         path.unlink(missing_ok=True)
     except OSError as exc:
         _REPLAYED_UNREMOVABLE.add(path)
-        logger.error("Spooled transcript row for %s was written, but %s could not be deleted (%s); "
-                     "delete it by hand, or the next start writes that row again", session_id, path, exc)
+        logger.error(
+            "Spooled transcript row for %s was written, but %s could not be deleted (%s); "
+            "delete it by hand, or the next start writes that row again",
+            session_id,
+            path,
+            exc,
+        )
 
 
 def _quarantine_spool_file(path: Path, session_id: str, exc: BaseException) -> None:
@@ -283,12 +348,22 @@ def _quarantine_spool_file(path: Path, session_id: str, exc: BaseException) -> N
     try:
         path.replace(target)
     except OSError as move_exc:
-        logger.error("Spooled transcript row for %s in %s was rejected by the database (%s) and could "
-                     "not be quarantined: %s", session_id, path, exc, move_exc)
+        logger.error(
+            "Spooled transcript row for %s in %s was rejected by the database (%s) and could "
+            "not be quarantined: %s",
+            session_id,
+            path,
+            exc,
+            move_exc,
+        )
         return
-    logger.warning("Spooled transcript row for %s was rejected by the database (%s); moved it to %s "
-                   "for manual recovery and continuing with the session's later rows",
-                   session_id, exc, target)
+    logger.warning(
+        "Spooled transcript row for %s was rejected by the database (%s); moved it to %s "
+        "for manual recovery and continuing with the session's later rows",
+        session_id,
+        exc,
+        target,
+    )
 
 
 def _order_flush_files(paths) -> list[Path]:
@@ -320,7 +395,9 @@ def recover_pending_to_db(session_db=None, *, session_resolver=None) -> int:
     return recover_pending_spool(session_db, session_resolver=session_resolver)[0]
 
 
-def recover_pending_spool(session_db=None, *, session_resolver=None) -> tuple[int, set[str]]:
+def recover_pending_spool(
+    session_db=None, *, session_resolver=None
+) -> tuple[int, set[str]]:
     """Replay flush-dir ``*.json`` files via ``SessionDB.append_message``, deleting each on success.
 
     ``session_db=None`` opens (and afterwards releases) the shared default ``state.db``.
@@ -338,6 +415,7 @@ def recover_pending_spool(session_db=None, *, session_resolver=None) -> tuple[in
     own_db = session_db is None
     if own_db:
         from clawk_state_registry import acquire
+
         session_db = acquire()
     recovered = 0
     # Sessions whose spool replay already failed this pass -> files held back for them. Ordering is a
@@ -356,42 +434,61 @@ def recover_pending_spool(session_db=None, *, session_resolver=None) -> tuple[in
                 # not automatic DB insertion. Skip them silently.
                 if payload.get("reason") == AGENT_HISTORY_REASON:
                     continue
-                if _recover_one_payload(session_db, path, payload,
-                                        session_resolver=session_resolver,
-                                        blocked_sessions=blocked_sessions):
+                if _recover_one_payload(
+                    session_db,
+                    path,
+                    payload,
+                    session_resolver=session_resolver,
+                    blocked_sessions=blocked_sessions,
+                ):
                     recovered += 1
                     _remove_replayed(path, payload.get("session_key", ""))
             # health: allow BLE001 -- per-file boundary moved unchanged from recover_pending_to_db; a traceback per locked-DB file would only add noise
             except Exception as exc:
-                logger.warning("Failed to recover pending message from %s: %s", path, exc)
+                logger.warning(
+                    "Failed to recover pending message from %s: %s", path, exc
+                )
     finally:
         if own_db:  # shutdown cancellation/interrupt must not strand an owned DB
             with contextlib.suppress(Exception):
                 from clawk_state_registry import release_or_close
+
                 release_or_close(session_db)
     if recovered:
         logger.info("Recovered %d pending message(s) from shutdown flush", recovered)
     if blocked_sessions:
         # Otherwise a spool dir that never empties gives an operator no reason why.
-        logger.info("Held back %d spooled transcript file(s) for the next start after a failed replay: %s",
-                    sum(blocked_sessions.values()),
-                    ", ".join(f"{sid} ({count})" for sid, count in blocked_sessions.items()))
+        logger.info(
+            "Held back %d spooled transcript file(s) for the next start after a failed replay: %s",
+            sum(blocked_sessions.values()),
+            ", ".join(f"{sid} ({count})" for sid, count in blocked_sessions.items()),
+        )
     return recovered, set(blocked_sessions)
 
 
-def _recover_one_payload(session_db, path: Path, payload: dict[str, Any], *,
-                         session_resolver=None, blocked_sessions: dict[str, int]) -> bool:
+def _recover_one_payload(
+    session_db,
+    path: Path,
+    payload: dict[str, Any],
+    *,
+    session_resolver=None,
+    blocked_sessions: dict[str, int],
+) -> bool:
     """Append one flush payload to ``session_db``; False when it was not replayed (the file is kept,
     or quarantined when the database rejected the row itself)."""
     # Cap-dropped transcript payloads carry the full message dict keyed by session_id: replay it
     # directly (#78182). This handles spool files that were never drained before a restart.
     if payload.get("reason") == TRANSCRIPT_CAP_DROP_REASON:
         from gateway.session_transcript import transcript_append_kwargs
+
         data = payload.get("data", {}) or {}
         spooled_sid, message = data.get("session_id", ""), data.get("message")
         if not spooled_sid or not isinstance(message, dict):
-            logger.warning("Cannot recover structurally invalid transcript spool "
-                           "file %s; preserved for manual inspection", path)
+            logger.warning(
+                "Cannot recover structurally invalid transcript spool "
+                "file %s; preserved for manual inspection",
+                path,
+            )
             return False
         if spooled_sid in blocked_sessions:
             # An older message for this session could not be replayed. Writing this one now would give
@@ -400,9 +497,15 @@ def _recover_one_payload(session_db, path: Path, payload: dict[str, Any], *,
             blocked_sessions[spooled_sid] += 1
             return False
         try:
-            session_db.append_message(**transcript_append_kwargs(spooled_sid, message, fallback_ts=payload.get("ts")))
+            session_db.append_message(
+                **transcript_append_kwargs(
+                    spooled_sid, message, fallback_ts=payload.get("ts")
+                )
+            )
         except Exception as exc:
-            if is_row_rejection(exc):  # no retry can write it, so it must not hold the session back
+            if is_row_rejection(
+                exc
+            ):  # no retry can write it, so it must not hold the session back
                 _quarantine_spool_file(path, spooled_sid, exc)
                 return False
             # Same contract as drain_transcript_spool: stop this session's replay on the first failure
@@ -413,8 +516,11 @@ def _recover_one_payload(session_db, path: Path, payload: dict[str, Any], *,
     session_key, data = payload.get("session_key", ""), payload.get("data", {})
     text = data.get("text", "")
     if not text or not session_key:
-        logger.warning("Cannot recover structurally invalid pending message from %s; "
-                       "the flush file has been preserved", path)
+        logger.warning(
+            "Cannot recover structurally invalid pending message from %s; "
+            "the flush file has been preserved",
+            path,
+        )
         return False
     # session_key is a gateway routing key (e.g. "agent:main:telegram:..."); appending a row
     # needs the real session_id, which real payloads lack — the resolver supplies it together with
@@ -426,17 +532,27 @@ def _recover_one_payload(session_db, path: Path, payload: dict[str, Any], *,
         try:
             resolved = session_resolver(session_key, not_after=payload.get("ts"))
         except Exception as exc:
-            logger.debug("Session key->id resolution failed for %s: %s", session_key, exc)
+            logger.debug(
+                "Session key->id resolution failed for %s: %s", session_key, exc
+            )
             resolved = None
         if resolved and resolved[1] is not None:
             session_id, target_db = resolved
     if not session_id:
-        logger.warning("Cannot recover pending message for %s: no session_id in flush file and "
-                       "session_key-to-id resolution failed. "
-                       "The message text is preserved in %s", session_key, path)
+        logger.warning(
+            "Cannot recover pending message for %s: no session_id in flush file and "
+            "session_key-to-id resolution failed. "
+            "The message text is preserved in %s",
+            session_key,
+            path,
+        )
         return False
-    target_db.append_message(session_id=session_id, role="user", content=text,
-                             timestamp=payload.get("ts", int(time.time())))
+    target_db.append_message(
+        session_id=session_id,
+        role="user",
+        content=text,
+        timestamp=payload.get("ts", int(time.time())),
+    )
     return True
 
 
@@ -450,22 +566,35 @@ def recover_gateway_pending(runner) -> int:
     holds back are marked on the session store, so their next live row drains the spool first.
     """
     from gateway.run import _multiplex_profile_homes
-    from clawk_constants import get_clawk_home, reset_clawk_home_override, set_clawk_home_override
+    from clawk_constants import (
+        get_clawk_home,
+        reset_clawk_home_override,
+        set_clawk_home_override,
+    )
 
     store = runner.session_store
-    recovered, held_back = recover_pending_spool(session_resolver=store.resolve_session_id_for_key)
+    recovered, held_back = recover_pending_spool(
+        session_resolver=store.resolve_session_id_for_key
+    )
     store.mark_spooled_drop_sessions(held_back)
     if not getattr(runner.config, "multiplex_profiles", False):
         return recovered
     launch_home = Path(get_clawk_home()).resolve()
     for name, home in _multiplex_profile_homes(runner.config):
-        if Path(home).resolve() == launch_home or not (Path(home) / "pending_messages").is_dir():
+        if (
+            Path(home).resolve() == launch_home
+            or not (Path(home) / "pending_messages").is_dir()
+        ):
             continue
         token = set_clawk_home_override(str(home))
         try:
-            count, held_back = recover_pending_spool(session_resolver=store.resolve_session_id_for_key)
+            count, held_back = recover_pending_spool(
+                session_resolver=store.resolve_session_id_for_key
+            )
         except Exception:  # one profile's unreadable spool must not strand the others'
-            logger.warning("Pending-message recovery failed for profile %s", name, exc_info=True)
+            logger.warning(
+                "Pending-message recovery failed for profile %s", name, exc_info=True
+            )
             continue
         finally:
             reset_clawk_home_override(token)
@@ -490,13 +619,25 @@ def flush_agent_history_to_file(session_id: Optional[str], history: list) -> Non
                 snapshot.append(_m if plain else str(_m))
             except Exception:
                 continue
-        _write_payload(flush_dir, {
-            "reason": AGENT_HISTORY_REASON, "issue": "#72680",
-            "session_id": session_id, "count": len(snapshot), "messages": snapshot,
-        })
-        logger.warning("Preserved %d in-memory message(s) for session %s "
-                       "(possible FTS corruption — recover after repairing state.db)",
-                       len(snapshot), session_id)
+        _write_payload(
+            flush_dir,
+            {
+                "reason": AGENT_HISTORY_REASON,
+                "issue": "#72680",
+                "session_id": session_id,
+                "count": len(snapshot),
+                "messages": snapshot,
+            },
+        )
+        logger.warning(
+            "Preserved %d in-memory message(s) for session %s "
+            "(possible FTS corruption — recover after repairing state.db)",
+            len(snapshot),
+            session_id,
+        )
     except Exception as _e:
-        logger.warning("Agent-history shutdown preservation failed for session %s: %s", session_id,
-                       _e)
+        logger.warning(
+            "Agent-history shutdown preservation failed for session %s: %s",
+            session_id,
+            _e,
+        )

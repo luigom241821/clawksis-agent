@@ -167,8 +167,6 @@ def test_splice_none_response_fills_every_slot():
     assert entries[0]["error"]["code"] == "PROVIDER_ERROR"
 
 
-
-
 def test_fill_remote_failure_marks_all_planned_slots():
     planned = _plan(
         [
@@ -190,7 +188,11 @@ def test_assemble_recomputes_counts_over_merged_array():
     local = [{"index": 0, "name": "local_tool", "response": "local ok"}]
     remote = [
         {"index": 1, "name": "connectors__gmail__G", "response": "sent"},
-        {"index": 2, "name": "connectors__x__Y", "error": {"code": "PROVIDER_ERROR", "message": "boom"}},
+        {
+            "index": 2,
+            "name": "connectors__x__Y",
+            "error": {"code": "PROVIDER_ERROR", "message": "boom"},
+        },
     ]
     out = assemble_results(3, local, remote)
     assert [e["index"] for e in out["results"]] == [0, 1, 2]
@@ -240,7 +242,10 @@ def test_envelope_parser_maps_statuses_to_exception_family():
 def test_envelope_parser_reads_nested_envelope_and_is_total_on_garbage():
     err = parse_gateway_error(
         409,
-        {"error": {"code": "IDEMPOTENCY_CONFLICT", "message": "key reused"}, "requestId": "req_1"},
+        {
+            "error": {"code": "IDEMPOTENCY_CONFLICT", "message": "key reused"},
+            "requestId": "req_1",
+        },
     )
     assert err.code == "IDEMPOTENCY_CONFLICT"
     assert err.request_id == "req_1"
@@ -276,29 +281,43 @@ def test_connector_config_from_raw(raw, expected):
 def test_connectors_available_requires_both_legs_and_fails_closed():
     on = lambda: ConnectorConfig(enabled=True)
     off = lambda: ConnectorConfig(enabled=False)
-    assert connectors_available(config_loader=on, entitlement_check=lambda: True) is True
-    assert connectors_available(config_loader=on, entitlement_check=lambda: False) is False
-    assert connectors_available(config_loader=off, entitlement_check=lambda: True) is False
+    assert (
+        connectors_available(config_loader=on, entitlement_check=lambda: True) is True
+    )
+    assert (
+        connectors_available(config_loader=on, entitlement_check=lambda: False) is False
+    )
+    assert (
+        connectors_available(config_loader=off, entitlement_check=lambda: True) is False
+    )
 
     def boom():
         raise RuntimeError("portal exploded")
 
     assert connectors_available(config_loader=on, entitlement_check=boom) is False
-    assert connectors_available(config_loader=boom, entitlement_check=lambda: True) is False
+    assert (
+        connectors_available(config_loader=boom, entitlement_check=lambda: True)
+        is False
+    )
 
 
 @pytest.mark.parametrize(
     "claims, rolled_out",
     [
         # Paid access alone does not enable connectors: the gateway 404s this account.
-        ({"paid_access": True, "tool_access": {"enabled": True, "coverage": {}}}, False),
+        (
+            {"paid_access": True, "tool_access": {"enabled": True, "coverage": {}}},
+            False,
+        ),
         ({"paid_access": True, "managed_tools": True}, True),
         ({"paid_access": False, "managed_tools": True}, True),
         ({"managed_tools": False}, False),
         ({"managed_tools": "true"}, False),  # only a literal boolean counts
     ],
 )
-def test_account_gate_reads_the_portal_claim_not_entitlement(monkeypatch, claims, rolled_out):
+def test_account_gate_reads_the_portal_claim_not_entitlement(
+    monkeypatch, claims, rolled_out
+):
     """The account leg mirrors the gateway's own gate: the ``managed_tools`` claim the portal
     mints. A token without it is not enabled however entitled it is."""
     import time
@@ -307,11 +326,20 @@ def test_account_gate_reads_the_portal_claim_not_entitlement(monkeypatch, claims
     from tools.connectors.gateway.config import managed_tools_rolled_out
 
     monkeypatch.setattr(
-        "clawk_cli.auth._decode_jwt_claims", lambda token: {"exp": time.time() + 3600, **claims})
+        "clawk_cli.auth._decode_jwt_claims",
+        lambda token: {"exp": time.time() + 3600, **claims},
+    )
     account = nous_account._info_from_valid_jwt("tok", {}, None, 60)
     assert account is not None and account.logged_in
 
-    monkeypatch.setattr(nous_account, "get_nous_portal_account_info", lambda **kw: account)
+    monkeypatch.setattr(
+        nous_account, "get_nous_portal_account_info", lambda **kw: account
+    )
     assert managed_tools_rolled_out() is rolled_out
-    assert connectors_available(config_loader=lambda: ConnectorConfig(enabled=True),
-                                entitlement_check=managed_tools_rolled_out) is rolled_out
+    assert (
+        connectors_available(
+            config_loader=lambda: ConnectorConfig(enabled=True),
+            entitlement_check=managed_tools_rolled_out,
+        )
+        is rolled_out
+    )

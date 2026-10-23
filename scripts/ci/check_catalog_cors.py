@@ -41,12 +41,18 @@ class _HopByHop(urllib.request.HTTPRedirectHandler):
         return None  # surface each hop so its own headers are checked
 
 
-def _fetch(opener: urllib.request.OpenerDirector, url: str) -> tuple[int, Message, bytes]:
-    request = urllib.request.Request(url, headers={"Origin": ORIGIN, "Accept": "application/json"})
+def _fetch(
+    opener: urllib.request.OpenerDirector, url: str
+) -> tuple[int, Message, bytes]:
+    request = urllib.request.Request(
+        url, headers={"Origin": ORIGIN, "Accept": "application/json"}
+    )
     try:
         with opener.open(request, timeout=TIMEOUT_SECONDS) as response:
             return response.status, response.headers, response.read()
-    except urllib.error.HTTPError as exc:  # unfollowed redirects and error statuses land here
+    except (
+        urllib.error.HTTPError
+    ) as exc:  # unfollowed redirects and error statuses land here
         if exc.code >= 500:
             raise OSError(f"{url} answered {exc.code}") from exc
         return exc.code, exc.headers, exc.read()
@@ -58,8 +64,10 @@ def check(url: str) -> str:
         status, headers, body = _fetch(opener, url)
         allowed = headers.get("Access-Control-Allow-Origin")
         if allowed not in ("*", ORIGIN):
-            raise Rejected(f"{status} from {url} sends Access-Control-Allow-Origin {allowed!r}, "
-                           "so a browser blocks the fetch here")
+            raise Rejected(
+                f"{status} from {url} sends Access-Control-Allow-Origin {allowed!r}, "
+                "so a browser blocks the fetch here"
+            )
         if status in _REDIRECTS and headers.get("Location"):
             url = urljoin(url, headers["Location"])
             continue

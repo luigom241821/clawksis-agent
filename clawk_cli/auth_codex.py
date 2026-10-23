@@ -20,9 +20,18 @@ from contextlib import suppress
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple
 from clawk_cli.auth_constants import (
-    _decode_jwt_claims, AUTH_LOCK_TIMEOUT_SECONDS, AuthError,
-    CODEX_ACCESS_TOKEN_REFRESH_SKEW_SECONDS, CODEX_OAUTH_CLIENT_ID, CODEX_OAUTH_TOKEN_URL,
-    CODEX_OAUTH_USER_AGENT, CODEX_RATE_LIMITED_CODE, DEFAULT_CODEX_BASE_URL, _codex_err, httpx)
+    _decode_jwt_claims,
+    AUTH_LOCK_TIMEOUT_SECONDS,
+    AuthError,
+    CODEX_ACCESS_TOKEN_REFRESH_SKEW_SECONDS,
+    CODEX_OAUTH_CLIENT_ID,
+    CODEX_OAUTH_TOKEN_URL,
+    CODEX_OAUTH_USER_AGENT,
+    CODEX_RATE_LIMITED_CODE,
+    DEFAULT_CODEX_BASE_URL,
+    _codex_err,
+    httpx,
+)
 from utils import env_float, normalize_proxy_env_vars
 
 if TYPE_CHECKING:  # annotation-only; the runtime import would be a cycle
@@ -33,8 +42,12 @@ logger = logging.getLogger("clawk_cli.auth")
 
 # ``{relogin}`` is filled at raise time with the profile-aware sign-in command: a bare
 # ``clawk auth`` from a named profile re-signs the ROOT store (93889b770da, #114012).
-_MISSING_ACCESS_TOKEN_MSG = "Codex auth is missing access_token. Run `{relogin}` to re-authenticate."
-_MISSING_REFRESH_TOKEN_MSG = "Codex auth is missing refresh_token. Run `{relogin}` to re-authenticate."
+_MISSING_ACCESS_TOKEN_MSG = (
+    "Codex auth is missing access_token. Run `{relogin}` to re-authenticate."
+)
+_MISSING_REFRESH_TOKEN_MSG = (
+    "Codex auth is missing refresh_token. Run `{relogin}` to re-authenticate."
+)
 _NO_CREDENTIALS_MSG = "No Codex credentials stored. Run `{relogin}` to authenticate."
 
 
@@ -47,6 +60,7 @@ def _codex_relogin_command() -> str:
 def _parse_retry_after_seconds(headers: Any) -> Optional[int]:
     """Best-effort parse of a ``Retry-After`` header into whole seconds."""
     from agent.retry_utils import parse_retry_after_seconds
+
     seconds = parse_retry_after_seconds(headers)
     return None if seconds is None else int(seconds)
 
@@ -58,17 +72,23 @@ def _stripped(value: Any) -> str:
 def _clear_pool_entry_status(entry: dict[str, Any]) -> None:
     """Reset a pool entry's cooldown / last-error metadata to healthy."""
     from clawk_cli.auth import _POOL_STATUS_FIELDS
+
     for status_field in _POOL_STATUS_FIELDS:
         entry[status_field] = None
 
 
 def _codex_access_token_is_expiring(access_token: Any, skew_seconds: int) -> bool:
     exp = _decode_jwt_claims(access_token).get("exp")
-    return isinstance(exp, (int, float)) and float(exp) <= (time.time() + max(0, int(skew_seconds)))
+    return isinstance(exp, (int, float)) and float(exp) <= (
+        time.time() + max(0, int(skew_seconds))
+    )
 
 
 def _codex_base_url() -> str:
-    return os.getenv("CLAWK_CODEX_BASE_URL", "").strip().rstrip("/") or DEFAULT_CODEX_BASE_URL
+    return (
+        os.getenv("CLAWK_CODEX_BASE_URL", "").strip().rstrip("/")
+        or DEFAULT_CODEX_BASE_URL
+    )
 
 
 def _codex_pool_route_base_url(entry_base_url: Optional[str] = "") -> str:
@@ -80,28 +100,49 @@ def _codex_pool_route_base_url(entry_base_url: Optional[str] = "") -> str:
     try:
         from clawk_cli.config import load_config_readonly
         from clawk_cli.runtime_provider import _pool_entry_mode_and_url
+
         model_cfg = load_config_readonly().get("model")
         return _pool_entry_mode_and_url(
-            "openai-codex", None, model_cfg if isinstance(model_cfg, dict) else {}, "", base)[1]
+            "openai-codex",
+            None,
+            model_cfg if isinstance(model_cfg, dict) else {},
+            "",
+            base,
+        )[1]
     except Exception:
         logger.debug("Codex pool route base resolution failed", exc_info=True)
         # Profile-scoped override only (never the raw process env: a multiplexed sibling's gateway).
         with suppress(Exception):
             from agent.secret_scope import get_secret_str
-            base = _stripped(get_secret_str("CLAWK_CODEX_BASE_URL", "")).rstrip("/") or base
+
+            base = (
+                _stripped(get_secret_str("CLAWK_CODEX_BASE_URL", "")).rstrip("/")
+                or base
+            )
         return base or DEFAULT_CODEX_BASE_URL
 
 
 def _codex_runtime_result(
-    api_key: str, *, source: str, last_refresh: Optional[str], base_url: Optional[str] = None) -> dict[str, Any]:
+    api_key: str,
+    *,
+    source: str,
+    last_refresh: Optional[str],
+    base_url: Optional[str] = None,
+) -> dict[str, Any]:
     return {
-        "provider": "openai-codex", "base_url": base_url or _codex_base_url(), "api_key": api_key,
-        "source": source, "last_refresh": last_refresh, "auth_mode": "chatgpt"}
+        "provider": "openai-codex",
+        "base_url": base_url or _codex_base_url(),
+        "api_key": api_key,
+        "source": source,
+        "last_refresh": last_refresh,
+        "auth_mode": "chatgpt",
+    }
 
 
 def _load_auth_store_maybe_locked(lock: bool) -> dict[str, Any]:
     """Load the auth store, taking the cross-process lock unless the caller already holds it."""
     from clawk_cli.auth import _auth_store_lock, _load_auth_store
+
     if lock:
         with _auth_store_lock():
             return _load_auth_store()
@@ -111,28 +152,43 @@ def _load_auth_store_maybe_locked(lock: bool) -> dict[str, Any]:
 def _read_codex_tokens(*, _lock: bool = True) -> dict[str, Any]:
     """Read Codex OAuth tokens from Clawksis auth store (~/.clawksis/auth.json)."""
     from clawk_cli.auth import _load_provider_state, _nonempty_str
+
     auth_store = _load_auth_store_maybe_locked(_lock)
     state = _load_provider_state(auth_store, "openai-codex")
     if not state:
-        raise _codex_err(_NO_CREDENTIALS_MSG.format(relogin=_codex_relogin_command()),
-                         "codex_auth_missing", relogin=True)
+        raise _codex_err(
+            _NO_CREDENTIALS_MSG.format(relogin=_codex_relogin_command()),
+            "codex_auth_missing",
+            relogin=True,
+        )
     tokens = state.get("tokens")
     if not isinstance(tokens, dict):
         raise _codex_err(
             f"Codex auth state is missing tokens. Run `{_codex_relogin_command()}` to re-authenticate.",
-            "codex_auth_invalid_shape", relogin=True)
+            "codex_auth_invalid_shape",
+            relogin=True,
+        )
     if not _nonempty_str(tokens.get("access_token")):
-        raise _codex_err(_MISSING_ACCESS_TOKEN_MSG.format(relogin=_codex_relogin_command()),
-                         "codex_auth_missing_access_token", relogin=True)
+        raise _codex_err(
+            _MISSING_ACCESS_TOKEN_MSG.format(relogin=_codex_relogin_command()),
+            "codex_auth_missing_access_token",
+            relogin=True,
+        )
     if not _nonempty_str(tokens.get("refresh_token")):
-        raise _codex_err(_MISSING_REFRESH_TOKEN_MSG.format(relogin=_codex_relogin_command()),
-                         "codex_auth_missing_refresh_token", relogin=True)
+        raise _codex_err(
+            _MISSING_REFRESH_TOKEN_MSG.format(relogin=_codex_relogin_command()),
+            "codex_auth_missing_refresh_token",
+            relogin=True,
+        )
     return {"tokens": tokens, "last_refresh": state.get("last_refresh")}
 
 
 def _sync_codex_pool_entries(
-    auth_store: dict[str, Any], tokens: dict[str, str], last_refresh: Optional[str],
-    previous_singleton_tokens: Optional[dict[str, str]] = None) -> None:
+    auth_store: dict[str, Any],
+    tokens: dict[str, str],
+    last_refresh: Optional[str],
+    previous_singleton_tokens: Optional[dict[str, str]] = None,
+) -> None:
     """Mirror a fresh Codex re-auth into the credential_pool OAuth entries.
 
     ``device_code`` (the singleton-seeded entry from ``clawk setup`` / the model picker) is always
@@ -160,7 +216,8 @@ def _sync_codex_pool_entries(
     for entry in _codex_pool_dicts(entries):
         source = entry.get("source")
         is_alias = source == "manual:device_code" and bool(
-            prev_at and entry.get("access_token") == prev_at)
+            prev_at and entry.get("access_token") == prev_at
+        )
         if not (source == "device_code" or is_alias):
             continue
         entry["access_token"] = access_token
@@ -172,8 +229,12 @@ def _sync_codex_pool_entries(
 
 
 def _save_codex_tokens(
-    tokens: dict[str, str], last_refresh: str | None = None, label: str | None = None, *,
-    set_active: bool = True, write_through: bool = False,
+    tokens: dict[str, str],
+    last_refresh: str | None = None,
+    label: str | None = None,
+    *,
+    set_active: bool = True,
+    write_through: bool = False,
 ) -> None:
     """Save Codex OAuth tokens to the auth store the grant was resolved FROM.
 
@@ -190,32 +251,59 @@ def _save_codex_tokens(
     active inference provider.
     """
     from clawk_cli.auth import (
-        _auth_file_path, _load_auth_store, _provider_state_transaction, _same_path,
-        _save_auth_store, _store_provider_state, _utc_now_z)
+        _auth_file_path,
+        _load_auth_store,
+        _provider_state_transaction,
+        _same_path,
+        _save_auth_store,
+        _store_provider_state,
+        _utc_now_z,
+    )
+
     if last_refresh is None:
         last_refresh = _utc_now_z()
-    with _provider_state_transaction("openai-codex") as (auth_store, state, source_path):
+    with _provider_state_transaction("openai-codex") as (
+        auth_store,
+        state,
+        source_path,
+    ):
         state = dict(state) if state else {}
         # Capture the previous singleton tokens BEFORE overwriting: the pool sync uses them to
         # tell legacy singleton-aliases (refresh) from independent ``auth add`` accounts (keep).
         previous_singleton_tokens = (
-            state.get("tokens") if isinstance(state.get("tokens"), dict) else None)
+            state.get("tokens") if isinstance(state.get("tokens"), dict) else None
+        )
         state.update(tokens=tokens, last_refresh=last_refresh, auth_mode="chatgpt")
         if label and str(label).strip():
             state["label"] = str(label).strip()
         target_store, target_path = auth_store, None
-        if write_through and source_path is not None and not _same_path(source_path, _auth_file_path()):
+        if (
+            write_through
+            and source_path is not None
+            and not _same_path(source_path, _auth_file_path())
+        ):
             # Root-borrowed grant: the transaction already holds root's lock, so write the rotated
             # chain into ROOT's store (never set_active — a refresh is not a provider choice).
-            target_store, target_path, set_active = _load_auth_store(source_path), source_path, False
-        _store_provider_state(target_store, "openai-codex", state, set_active=set_active)
+            target_store, target_path, set_active = (
+                _load_auth_store(source_path),
+                source_path,
+                False,
+            )
+        _store_provider_state(
+            target_store, "openai-codex", state, set_active=set_active
+        )
         _sync_codex_pool_entries(
-            target_store, tokens, last_refresh, previous_singleton_tokens=previous_singleton_tokens)
+            target_store,
+            tokens,
+            last_refresh,
+            previous_singleton_tokens=previous_singleton_tokens,
+        )
         _save_auth_store(target_store, target_path=target_path)
 
 
 def _recover_codex_tokens_from_cli(
-        reason: str, observed_access_token: Optional[str] = None) -> Optional[dict[str, str]]:
+    reason: str, observed_access_token: Optional[str] = None
+) -> Optional[dict[str, str]]:
     """Adopt a valid Codex CLI token pair into Clawksis auth, if available.
 
     Automatic adoption only; the interactive import offer in ``_login_openai_codex`` asks first and is
@@ -228,28 +316,44 @@ def _recover_codex_tokens_from_cli(
     """
     from agent.credential_pool import _codex_principal_identity
     from agent.credential_sources import adopt_external_logins_enabled
-    from clawk_cli.auth import _import_codex_cli_tokens, _provider_state_transaction, _save_codex_tokens
+    from clawk_cli.auth import (
+        _import_codex_cli_tokens,
+        _provider_state_transaction,
+        _save_codex_tokens,
+    )
+
     if not adopt_external_logins_enabled():
         return None
     imported = _import_codex_cli_tokens()
     # Require BOTH tokens before adopting: persisting a payload without a usable refresh_token
     # would only break the next refresh cycle.
-    if not (imported and _stripped(imported.get("access_token"))
-            and _stripped(imported.get("refresh_token"))):
+    if not (
+        imported
+        and _stripped(imported.get("access_token"))
+        and _stripped(imported.get("refresh_token"))
+    ):
         return None
     observed = _stripped(observed_access_token) or None
     with _provider_state_transaction("openai-codex") as (_store, state, _source):
         stored = (state or {}).get("tokens")
         stored = stored if isinstance(stored, dict) else {}
         if (_stripped(stored.get("access_token")) or None) != observed:
-            logger.info("Codex CLI recovery skipped (%s): the credential was re-authenticated meanwhile.", reason)
+            logger.info(
+                "Codex CLI recovery skipped (%s): the credential was re-authenticated meanwhile.",
+                reason,
+            )
             return None
         known = _codex_principal_identity(observed)
-        if known and _codex_principal_identity(imported["access_token"]) not in (None, known):
+        if known and _codex_principal_identity(imported["access_token"]) not in (
+            None,
+            known,
+        ):
             logger.warning(
                 "Codex CLI recovery refused (%s): the Codex CLI login belongs to a different ChatGPT "
                 "workspace than the Clawksis credential. Run `%s` to re-authenticate it.",
-                reason, _codex_relogin_command())
+                reason,
+                _codex_relogin_command(),
+            )
             return None
         logger.info("Codex auth recovered from Codex CLI auth.json (%s).", reason)
         _save_codex_tokens(imported)  # nested: the per-path lock is reentrant
@@ -257,23 +361,34 @@ def _recover_codex_tokens_from_cli(
 
 
 def _refresh_payload_access_token(
-    response: httpx.Response, *, provider: str, invalid_json: tuple[str, str],
-    invalid_response: Optional[tuple[str, str]], missing_access: tuple[str, str],
-    relogin_required: bool = True, invalid_json_relogin: Optional[bool] = None,
-    strict_str: bool = True) -> tuple[dict[str, Any], str]:
+    response: httpx.Response,
+    *,
+    provider: str,
+    invalid_json: tuple[str, str],
+    invalid_response: Optional[tuple[str, str]],
+    missing_access: tuple[str, str],
+    relogin_required: bool = True,
+    invalid_json_relogin: Optional[bool] = None,
+    strict_str: bool = True,
+) -> tuple[dict[str, Any], str]:
     """Parse a 200 token-refresh response; return ``(payload, stripped access_token)``.
 
     Each ``(message, code)`` pair keeps the provider's historical wording; ``{exc}`` in
     *invalid_json*'s message is formatted with the JSON error. *strict_str* rejects non-string
     access tokens; otherwise they are ``str()``-coerced.
     """
+
     def _err(message: str, code: str, relogin: bool = relogin_required) -> AuthError:
-        return AuthError(message, provider=provider, code=code, relogin_required=relogin)
+        return AuthError(
+            message, provider=provider, code=code, relogin_required=relogin
+        )
 
     try:
         payload = response.json()
     except Exception as exc:
-        relogin = relogin_required if invalid_json_relogin is None else invalid_json_relogin
+        relogin = (
+            relogin_required if invalid_json_relogin is None else invalid_json_relogin
+        )
         raise _err(invalid_json[0].format(exc=exc), invalid_json[1], relogin) from exc
     if not isinstance(payload, dict):
         if invalid_response is not None:
@@ -305,8 +420,10 @@ def _ssl_interop_hint(exc: BaseException) -> str:
 
     chain = (exc, exc.__cause__, exc.__context__)
     if not any(
-        isinstance(err, ssl.SSLError) or any(marker in str(err) for marker in _SSL_TROUBLE_MARKERS)
-        for err in chain if err is not None
+        isinstance(err, ssl.SSLError)
+        or any(marker in str(err) for marker in _SSL_TROUBLE_MARKERS)
+        for err in chain
+        if err is not None
     ):
         return ""
     return (
@@ -335,7 +452,9 @@ def _is_transient_transport_error(exc: BaseException) -> bool:
     return False
 
 
-def _codex_login_post(url: str, *, failure: tuple[str, str], **kwargs: Any) -> httpx.Response:
+def _codex_login_post(
+    url: str, *, failure: tuple[str, str], **kwargs: Any
+) -> httpx.Response:
     """One 15s POST for the device-login flow; transport errors become ``_codex_err(*failure)``.
 
     A transient transport blip (a dropped connection mid-flow) is retried twice with a small
@@ -350,12 +469,15 @@ def _codex_login_post(url: str, *, failure: tuple[str, str], **kwargs: Any) -> h
         except Exception as exc:
             if attempt == attempts or not _is_transient_transport_error(exc):
                 raise _codex_err(
-                    f"{failure[0]}: {exc}{_ssl_interop_hint(exc)}", failure[1]) from exc
+                    f"{failure[0]}: {exc}{_ssl_interop_hint(exc)}", failure[1]
+                ) from exc
             time.sleep(attempt)
             attempt += 1
 
 
-_CODEX_AUTH_BODY_MAX_BYTES = 1024 * 1024  # real OAuth/device-auth payloads are a few hundred bytes
+_CODEX_AUTH_BODY_MAX_BYTES = (
+    1024 * 1024
+)  # real OAuth/device-auth payloads are a few hundred bytes
 
 
 def _capped_byte_stream_class() -> type:
@@ -388,7 +510,9 @@ def _capped_byte_stream_class() -> type:
                     raise _codex_err(
                         f"Codex auth response from {self._response.url.host} exceeded "
                         f"{_CODEX_AUTH_BODY_MAX_BYTES // 1024} KiB; refusing to parse it.",
-                        "codex_auth_response_too_large", relogin=False)
+                        "codex_auth_response_too_large",
+                        relogin=False,
+                    )
                 yield chunk
 
         def close(self) -> None:
@@ -423,9 +547,12 @@ def _codex_http_client(**kwargs: Any) -> httpx.Client:
     """
     normalize_proxy_env_vars()  # a bracketed-IPv6 NO_PROXY entry ([::1], Clash Verge/mihomo) makes the bare
     # trust_env client below raise InvalidURL at construction (#118159) — sanitize before building it.
-    client = httpx.Client(event_hooks={"response": [_cap_codex_response_body]}, **kwargs)
+    client = httpx.Client(
+        event_hooks={"response": [_cap_codex_response_body]}, **kwargs
+    )
     with suppress(Exception):
         from agent.process_bootstrap import enable_happy_eyeballs_on_client
+
         enable_happy_eyeballs_on_client(client)
     return client
 
@@ -434,15 +561,17 @@ def _codex_quota_exhausted_error(retry_after: Optional[int]) -> AuthError:
     message = (
         f"Codex provider quota exhausted (429); retry after {retry_after}s. "
         "Credentials are still valid."
-        if retry_after is not None else
-        "Codex provider quota exhausted (429). Credentials are still valid; "
-        "retry after the usage limit resets.")
+        if retry_after is not None
+        else "Codex provider quota exhausted (429). Credentials are still valid; "
+        "retry after the usage limit resets."
+    )
     return _codex_err(message, CODEX_RATE_LIMITED_CODE, relogin=False)
 
 
 def _codex_refresh_failure_error(response: httpx.Response) -> AuthError:
     """Decode a non-200 Codex token-refresh response into a shaped AuthError."""
     from clawk_cli.auth import _nonempty_str
+
     code = "codex_refresh_failed"
     message = f"Codex token refresh failed with status {response.status_code}."
     try:
@@ -470,56 +599,84 @@ def _codex_refresh_failure_error(response: httpx.Response) -> AuthError:
             "Codex refresh token was already consumed by another client "
             "(e.g. Codex CLI or VS Code extension). "
             "Run `codex` in your terminal to generate fresh tokens, "
-            f"then run `{_codex_relogin_command()}` to re-authenticate.")
+            f"then run `{_codex_relogin_command()}` to re-authenticate."
+        )
     # A 401/403 from the token endpoint always means the refresh token is invalid/expired —
     # force relogin even if the body error code wasn't one of the known strings.
-    relogin_required = (
-        code in {"invalid_grant", "invalid_token", "invalid_request", "refresh_token_reused"}
-        or response.status_code in {401, 403})
+    relogin_required = code in {
+        "invalid_grant",
+        "invalid_token",
+        "invalid_request",
+        "refresh_token_reused",
+    } or response.status_code in {401, 403}
     return _codex_err(message, code, relogin=relogin_required)
 
 
 def refresh_codex_oauth_pure(
-    access_token: str, refresh_token: str, *, timeout_seconds: float = 20.0) -> dict[str, Any]:
+    access_token: str, refresh_token: str, *, timeout_seconds: float = 20.0
+) -> dict[str, Any]:
     """Refresh Codex OAuth tokens without mutating Clawksis auth state."""
     from clawk_cli.auth import _nonempty_str, _utc_now_z
-    del access_token  # Access token is only used by callers to decide whether to refresh.
+
+    del (
+        access_token
+    )  # Access token is only used by callers to decide whether to refresh.
     if not _nonempty_str(refresh_token):
-        raise _codex_err(_MISSING_REFRESH_TOKEN_MSG.format(relogin=_codex_relogin_command()),
-                         "codex_auth_missing_refresh_token", relogin=True)
+        raise _codex_err(
+            _MISSING_REFRESH_TOKEN_MSG.format(relogin=_codex_relogin_command()),
+            "codex_auth_missing_refresh_token",
+            relogin=True,
+        )
     with _codex_http_client(
         timeout=httpx.Timeout(max(5.0, float(timeout_seconds))),
-        headers={"Accept": "application/json", "User-Agent": CODEX_OAUTH_USER_AGENT}) as client:
+        headers={"Accept": "application/json", "User-Agent": CODEX_OAUTH_USER_AGENT},
+    ) as client:
         response = client.post(
-            CODEX_OAUTH_TOKEN_URL, headers={"Content-Type": "application/x-www-form-urlencoded"},
+            CODEX_OAUTH_TOKEN_URL,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
             data={
-                "grant_type": "refresh_token", "refresh_token": refresh_token,
-                "client_id": CODEX_OAUTH_CLIENT_ID})
+                "grant_type": "refresh_token",
+                "refresh_token": refresh_token,
+                "client_id": CODEX_OAUTH_CLIENT_ID,
+            },
+        )
     if response.status_code == 429:
         # Quota exhaustion on the token endpoint: the refresh token is still valid and re-auth
         # cannot lift a quota cap, so classify distinctly from auth failures ("retry later").
         raise _codex_quota_exhausted_error(
-            _parse_retry_after_seconds(getattr(response, "headers", None)))
+            _parse_retry_after_seconds(getattr(response, "headers", None))
+        )
     if response.status_code != 200:
         raise _codex_refresh_failure_error(response)
     refresh_payload, refreshed_access = _refresh_payload_access_token(
-        response, provider="openai-codex", invalid_response=None,
-        invalid_json=("Codex token refresh returned invalid JSON.", "codex_refresh_invalid_json"),
+        response,
+        provider="openai-codex",
+        invalid_response=None,
+        invalid_json=(
+            "Codex token refresh returned invalid JSON.",
+            "codex_refresh_invalid_json",
+        ),
         # A 200 with a non-JSON body is an edge/proxy misfire, not a revoked grant: never relogin.
         invalid_json_relogin=False,
         missing_access=(
             "Codex token refresh response was missing access_token.",
-            "codex_refresh_missing_access_token"))
+            "codex_refresh_missing_access_token",
+        ),
+    )
     updated = {
-        "access_token": refreshed_access, "refresh_token": refresh_token.strip(),
-        "last_refresh": _utc_now_z()}
+        "access_token": refreshed_access,
+        "refresh_token": refresh_token.strip(),
+        "last_refresh": _utc_now_z(),
+    }
     next_refresh = refresh_payload.get("refresh_token")
     if _nonempty_str(next_refresh):
         updated["refresh_token"] = next_refresh.strip()
     return updated
 
 
-def _refresh_codex_auth_tokens(tokens: dict[str, str], timeout_seconds: float) -> dict[str, str]:
+def _refresh_codex_auth_tokens(
+    tokens: dict[str, str], timeout_seconds: float
+) -> dict[str, str]:
     """Refresh Codex access token using the refresh token.
 
     The whole re-read -> endpoint POST -> write-back runs inside the SOURCE store's transaction:
@@ -528,19 +685,39 @@ def _refresh_codex_auth_tokens(tokens: dict[str, str], timeout_seconds: float) -
     finds root already rotated by its peer adopts the stored pair instead of replaying the
     consumed token. Both locks wait out a full endpoint timeout so the waiter adopts, not times out.
     """
-    from clawk_cli.auth import _provider_state_transaction, _save_codex_tokens, refresh_codex_oauth_pure
+    from clawk_cli.auth import (
+        _provider_state_transaction,
+        _save_codex_tokens,
+        refresh_codex_oauth_pure,
+    )
+
     lock_timeout = max(float(AUTH_LOCK_TIMEOUT_SECONDS), float(timeout_seconds) + 5.0)
-    with _provider_state_transaction("openai-codex", lock_timeout) as (_store, state, _source):
+    with _provider_state_transaction("openai-codex", lock_timeout) as (
+        _store,
+        state,
+        _source,
+    ):
         stored = (state or {}).get("tokens")
         stored = stored if isinstance(stored, dict) else {}
-        stored_at, stored_rt = _stripped(stored.get("access_token")), _stripped(stored.get("refresh_token"))
-        if stored_at and stored_rt and stored_rt != _stripped(tokens.get("refresh_token")):
-            logger.info("Codex refresh token already rotated by a peer — adopting the stored pair.")
+        stored_at, stored_rt = (
+            _stripped(stored.get("access_token")),
+            _stripped(stored.get("refresh_token")),
+        )
+        if (
+            stored_at
+            and stored_rt
+            and stored_rt != _stripped(tokens.get("refresh_token"))
+        ):
+            logger.info(
+                "Codex refresh token already rotated by a peer — adopting the stored pair."
+            )
             return {**tokens, "access_token": stored_at, "refresh_token": stored_rt}
         try:
             refreshed = refresh_codex_oauth_pure(
-                str(tokens.get("access_token", "") or ""), str(tokens.get("refresh_token", "") or ""),
-                timeout_seconds=timeout_seconds)
+                str(tokens.get("access_token", "") or ""),
+                str(tokens.get("refresh_token", "") or ""),
+                timeout_seconds=timeout_seconds,
+            )
         except AuthError as exc:
             # Self-heal cross-store rotation: refresh_tokens are single-use, so when the Codex CLI
             # (or another Clawksis process) rotates the shared token this frozen copy fails with a
@@ -552,13 +729,16 @@ def _refresh_codex_auth_tokens(tokens: dict[str, str], timeout_seconds: float) -
                 raise
             imported = _recover_codex_tokens_from_cli(
                 f"refresh_token rejected: {getattr(exc, 'code', None) or 'auth_error'}",
-                observed_access_token=stored_at or None)
+                observed_access_token=stored_at or None,
+            )
             if not imported:
                 raise
             return imported
         updated_tokens = {
-            **tokens, "access_token": refreshed["access_token"],
-            "refresh_token": refreshed["refresh_token"]}
+            **tokens,
+            "access_token": refreshed["access_token"],
+            "refresh_token": refreshed["refresh_token"],
+        }
         # Nested transaction: the per-path lock is reentrant, and it re-reads under the held locks.
         _save_codex_tokens(updated_tokens, write_through=True)
     return updated_tokens
@@ -567,19 +747,25 @@ def _refresh_codex_auth_tokens(tokens: dict[str, str], timeout_seconds: float) -
 def _import_codex_cli_tokens() -> Optional[dict[str, str]]:
     """Read ~/.codex/auth.json (Codex CLI file) tokens if valid and not expired; never writes."""
     from clawk_cli.auth import _codex_access_token_is_expiring
+
     codex_home = os.getenv("CODEX_HOME", "").strip() or str(Path.home() / ".codex")
     auth_path = Path(codex_home).expanduser() / "auth.json"
     if not auth_path.is_file():
         return None
     try:
         tokens = json.loads(auth_path.read_text(encoding="utf-8-sig")).get("tokens")
-        if not (isinstance(tokens, dict) and tokens.get("access_token")
-                and tokens.get("refresh_token")):
+        if not (
+            isinstance(tokens, dict)
+            and tokens.get("access_token")
+            and tokens.get("refresh_token")
+        ):
             return None
         # Importing stale tokens that can't be refreshed would leave the user with
         # "Login successful!" but no working credentials.
         if _codex_access_token_is_expiring(tokens["access_token"], 0):
-            logger.debug("Codex CLI tokens at %s are expired — skipping import.", auth_path)
+            logger.debug(
+                "Codex CLI tokens at %s are expired — skipping import.", auth_path
+            )
             return None
         return dict(tokens)
     except Exception:
@@ -587,9 +773,12 @@ def _import_codex_cli_tokens() -> Optional[dict[str, str]]:
 
 
 def resolve_codex_runtime_credentials(
-    *, force_refresh: bool = False, refresh_if_expiring: bool = True,
+    *,
+    force_refresh: bool = False,
+    refresh_if_expiring: bool = True,
     refresh_skew_seconds: int = CODEX_ACCESS_TOKEN_REFRESH_SKEW_SECONDS,
-    read_only: bool = False) -> dict[str, Any]:
+    read_only: bool = False,
+) -> dict[str, Any]:
     """Resolve runtime credentials from Clawksis's own Codex token store.
 
     ``read_only=True`` (status / doctor / pickers) reports the stored state as-is: no Codex CLI
@@ -607,8 +796,12 @@ def resolve_codex_runtime_credentials(
     credential. See issue #32992.
     """
     from clawk_cli.auth import (
-        _auth_store_lock, _codex_access_token_is_expiring, _probe_codex_quota_restored,
-        _read_codex_tokens)
+        _auth_store_lock,
+        _codex_access_token_is_expiring,
+        _probe_codex_quota_restored,
+        _read_codex_tokens,
+    )
+
     read_error: Optional[AuthError] = None
     data = None
     observed: Optional[str] = None
@@ -623,51 +816,84 @@ def resolve_codex_runtime_credentials(
                 # Observe the singleton in the same locked snapshot the read validates, so recovery
                 # can compare-and-swap against exactly the credential it is repairing (#73667).
                 from clawk_cli.auth import _load_auth_store, _load_provider_state
-                raw = (_load_provider_state(_load_auth_store(), "openai-codex") or {}).get("tokens")
+
+                raw = (
+                    _load_provider_state(_load_auth_store(), "openai-codex") or {}
+                ).get("tokens")
                 observed = raw.get("access_token") if isinstance(raw, dict) else None
                 data = _read_codex_tokens(_lock=False)
     except AuthError as exc:
         read_error = exc
-        if not read_only and exc.relogin_required and exc.code in {
-            "codex_auth_missing_access_token", "codex_auth_missing_refresh_token",
-            "codex_auth_invalid_shape"}:
+        if (
+            not read_only
+            and exc.relogin_required
+            and exc.code
+            in {
+                "codex_auth_missing_access_token",
+                "codex_auth_missing_refresh_token",
+                "codex_auth_invalid_shape",
+            }
+        ):
             imported = _recover_codex_tokens_from_cli(
-                str(exc.code or "auth_error"), observed_access_token=observed)
+                str(exc.code or "auth_error"), observed_access_token=observed
+            )
             if imported:
-                data = {"tokens": imported, "last_refresh": imported.get("last_refresh")}
+                data = {
+                    "tokens": imported,
+                    "last_refresh": imported.get("last_refresh"),
+                }
     if data is None:
         pool_token, pool_base = _pool_codex_credential()
         if pool_token and force_refresh and not read_only:
             # Pool-only setup: a forced refresh must rotate the pool entry, not resend its token.
             from agent.credential_pool import load_pool
-            refreshed = load_pool("openai-codex").try_refresh_matching(api_key_hint=pool_token)
+
+            refreshed = load_pool("openai-codex").try_refresh_matching(
+                api_key_hint=pool_token
+            )
             pool_token = refreshed.runtime_api_key if refreshed is not None else ""
         if pool_token:
             # Report the host this row routes to, not the ambient default: a pooled gateway key
             # paired with chatgpt.com leaks to every consumer of this result (#121486).
-            return _codex_runtime_result(pool_token, source="credential_pool", last_refresh=None,
-                                         base_url=_codex_pool_route_base_url(pool_base))
+            return _codex_runtime_result(
+                pool_token,
+                source="credential_pool",
+                last_refresh=None,
+                base_url=_codex_pool_route_base_url(pool_base),
+            )
         pool_rate_limit = _codex_pool_rate_limit_status()
         if pool_rate_limit:
             # Before surfacing the persisted cooldown, ask the usage endpoint whether the quota
             # reset early (banked reset redeemed, plan upgraded): ``last_error_reset_at`` can be
             # days in the future while the account is already usable again. Never from a
             # read-only caller: the picker fingerprint resolves on every cache-only read.
-            if not read_only and _probe_codex_pool_entry_quota_restored(pool_rate_limit):
-                logger.info("Codex quota restored upstream — clearing stale pool cooldown(s).")
+            if not read_only and _probe_codex_pool_entry_quota_restored(
+                pool_rate_limit
+            ):
+                logger.info(
+                    "Codex quota restored upstream — clearing stale pool cooldown(s)."
+                )
                 clear_codex_pool_quota_cooldowns()
                 pool_token, pool_base = _pool_codex_credential()
                 if pool_token:
                     return _codex_runtime_result(
-                        pool_token, source="credential_pool", last_refresh=None,
-                        base_url=_codex_pool_route_base_url(pool_base))
+                        pool_token,
+                        source="credential_pool",
+                        last_refresh=None,
+                        base_url=_codex_pool_route_base_url(pool_base),
+                    )
             reset_at = pool_rate_limit.get("reset_at")
             in_future = isinstance(reset_at, (int, float)) and reset_at > time.time()
-            raise _codex_quota_exhausted_error(int(reset_at - time.time()) if in_future else None)
+            raise _codex_quota_exhausted_error(
+                int(reset_at - time.time()) if in_future else None
+            )
         if read_error is not None:
             raise read_error
-        raise _codex_err(_NO_CREDENTIALS_MSG.format(relogin=_codex_relogin_command()),
-                         "codex_auth_missing", relogin=True)
+        raise _codex_err(
+            _NO_CREDENTIALS_MSG.format(relogin=_codex_relogin_command()),
+            "codex_auth_missing",
+            relogin=True,
+        )
     tokens = dict(data["tokens"])
     access_token = _stripped(tokens.get("access_token"))
     refresh_timeout_seconds = env_float("CLAWK_CODEX_REFRESH_TIMEOUT_SECONDS", 20)
@@ -676,11 +902,15 @@ def resolve_codex_runtime_credentials(
         if read_only:
             return False
         return bool(force_refresh) or (
-            refresh_if_expiring and _codex_access_token_is_expiring(token, refresh_skew_seconds))
+            refresh_if_expiring
+            and _codex_access_token_is_expiring(token, refresh_skew_seconds)
+        )
 
     if _should_refresh(access_token):
         # Re-read under lock to avoid racing with other Clawksis processes
-        lock_timeout = max(float(AUTH_LOCK_TIMEOUT_SECONDS), refresh_timeout_seconds + 5.0)
+        lock_timeout = max(
+            float(AUTH_LOCK_TIMEOUT_SECONDS), refresh_timeout_seconds + 5.0
+        )
         with _auth_store_lock(timeout_seconds=lock_timeout):
             data = _read_codex_tokens(_lock=False)
             tokens = dict(data["tokens"])
@@ -688,7 +918,8 @@ def resolve_codex_runtime_credentials(
                 tokens = _refresh_codex_auth_tokens(tokens, refresh_timeout_seconds)
             access_token = _stripped(tokens.get("access_token"))
     return _codex_runtime_result(
-        access_token, source="clawk-auth-store", last_refresh=data.get("last_refresh"))
+        access_token, source="clawk-auth-store", last_refresh=data.get("last_refresh")
+    )
 
 
 def _is_codex_rate_limit_shaped(code: Any, reason: Any, message: Any) -> bool:
@@ -697,14 +928,17 @@ def _is_codex_rate_limit_shaped(code: Any, reason: Any, message: Any) -> bool:
     return (
         code == 429
         or any(k in reason_l for k in ("rate_limit", "usage_limit", "quota"))
-        or any(k in message_l for k in ("rate limit", "usage limit", "quota")))
+        or any(k in message_l for k in ("rate limit", "usage limit", "quota"))
+    )
 
 
 def _entry_is_rate_limit_exhausted(entry: dict[str, Any]) -> bool:
     """Pool entry frozen by a 429/quota stop (as opposed to an auth failure)."""
     return entry.get("last_status") == "exhausted" and _is_codex_rate_limit_shaped(
-        entry.get("last_error_code"), entry.get("last_error_reason"),
-        entry.get("last_error_message"))
+        entry.get("last_error_code"),
+        entry.get("last_error_reason"),
+        entry.get("last_error_message"),
+    )
 
 
 # Throttle for the live Codex quota probe. It runs on the hot credential-selection path while the
@@ -732,14 +966,18 @@ def _codex_usage_probe_url(base_url: Optional[str]) -> str:
 
 
 def _probe_codex_quota_restored(
-    access_token: Any, *, base_url: Optional[str] = None,
-    min_interval_seconds: float = CODEX_QUOTA_PROBE_MIN_INTERVAL_SECONDS) -> Optional[bool]:
+    access_token: Any,
+    *,
+    base_url: Optional[str] = None,
+    min_interval_seconds: float = CODEX_QUOTA_PROBE_MIN_INTERVAL_SECONDS,
+) -> Optional[bool]:
     """Ask the Codex usage endpoint whether this account's quota is usable again.
 
     Probes are throttled per access token (module-local cache) so the hot selection path can fire
     this freely.
     """
     from clawk_cli.auth import _codex_quota_probe_cache, _nonempty_str
+
     token = _stripped(access_token)
     # Real Codex access tokens are JWTs. Refusing to probe non-JWT tokens avoids pointless
     # network calls for corrupt/placeholder entries (and keeps hermetic test fixtures offline).
@@ -757,9 +995,13 @@ def _probe_codex_quota_restored(
     try:
         # Account/residency headers from the JWT (required for some account shapes).
         from agent.codex_headers import codex_account_headers
+
         headers = {
-            "Authorization": f"Bearer {token}", "Accept": "application/json",
-            "User-Agent": "codex-cli", **codex_account_headers(token)}
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json",
+            "User-Agent": "codex-cli",
+            **codex_account_headers(token),
+        }
         with _codex_http_client(timeout=10.0) as client:
             response = client.get(_codex_usage_probe_url(base_url), headers=headers)
         if response.status_code == 200:
@@ -769,7 +1011,8 @@ def _probe_codex_quota_restored(
             windows = [payload.get("rate_limit") or {}] + [
                 extra.get("rate_limit") or {}
                 for extra in (payload.get("additional_rate_limits") or [])
-                if isinstance(extra, dict)]
+                if isinstance(extra, dict)
+            ]
             worst_used: Optional[float] = None
             for rate_limit in windows:
                 for key in ("primary_window", "secondary_window"):
@@ -789,8 +1032,11 @@ def _probe_codex_quota_restored(
 
 
 def _refresh_expired_codex_probe_token(
-    access_token: Any, refresh_token: Any, *,
-    min_interval_seconds: float = CODEX_QUOTA_PROBE_MIN_INTERVAL_SECONDS) -> Optional[dict[str, Any]]:
+    access_token: Any,
+    refresh_token: Any,
+    *,
+    min_interval_seconds: float = CODEX_QUOTA_PROBE_MIN_INTERVAL_SECONDS,
+) -> Optional[dict[str, Any]]:
     """Refresh an EXPIRED stored access token so the quota probe can get a real answer.
 
     Exhausted pool entries are skipped by the proactive refresh chain (#44799), so by the time
@@ -807,6 +1053,7 @@ def _refresh_expired_codex_probe_token(
     until the interval has elapsed.
     """
     from clawk_cli.auth import _codex_quota_probe_cache
+
     token, refresh = _stripped(access_token), _stripped(refresh_token)
     if not token or not refresh or not _codex_access_token_is_expiring(token, 0):
         return None
@@ -828,6 +1075,7 @@ def _refresh_expired_codex_probe_token(
 def _probe_codex_pool_entry_quota_restored(entry: dict[str, Any]) -> Optional[bool]:
     """``_probe_codex_quota_restored`` for a persisted pool entry, refreshing an expired token first."""
     from clawk_cli.auth import _auth_store_lock, _load_auth_store, _save_auth_store
+
     token = _stripped(entry.get("access_token"))
     fresh = _refresh_expired_codex_probe_token(token, entry.get("refresh_token"))
     if fresh:
@@ -835,7 +1083,9 @@ def _probe_codex_pool_entry_quota_restored(entry: dict[str, Any]) -> Optional[bo
         try:
             with _auth_store_lock():
                 auth_store = _load_auth_store()
-                for disk_entry in _codex_pool_dicts(_pool_entries(auth_store, "openai-codex")):
+                for disk_entry in _codex_pool_dicts(
+                    _pool_entries(auth_store, "openai-codex")
+                ):
                     if disk_entry.get("id") == entry.get("id"):
                         disk_entry.update(fresh)
                         _save_auth_store(auth_store)
@@ -845,7 +1095,9 @@ def _probe_codex_pool_entry_quota_restored(entry: dict[str, Any]) -> Optional[bo
     if not token:
         return None
     # The row keeps the canonical URL; a gateway key belongs to its route host (#121486).
-    return _probe_codex_quota_restored(token, base_url=_codex_pool_route_base_url(entry.get("base_url")))
+    return _probe_codex_quota_restored(
+        token, base_url=_codex_pool_route_base_url(entry.get("base_url"))
+    )
 
 
 def clear_codex_pool_quota_cooldowns(access_token: Optional[str] = None) -> int:
@@ -857,17 +1109,28 @@ def clear_codex_pool_quota_cooldowns(access_token: Optional[str] = None) -> int:
     rate-limited entry does (a redeemed banked reset restores the whole account; a still-exhausted
     entry just re-freezes with fresh metadata on its next 429).
     """
-    from agent.credential_pool import _borrowed_single_use_pool_root, _profile_owns_pool_provider
+    from agent.credential_pool import (
+        _borrowed_single_use_pool_root,
+        _profile_owns_pool_provider,
+    )
     from clawk_cli.auth import _auth_store_lock, _load_auth_store, _save_auth_store
+
     cleared = 0
     try:
         # Same owner rule as ``persist_pool_entries``: a profile with no Codex rows of its own
         # borrows the global-root pool, so the cooldown must clear where the rows actually live.
-        target = None if _profile_owns_pool_provider("openai-codex") else _borrowed_single_use_pool_root()
+        target = (
+            None
+            if _profile_owns_pool_provider("openai-codex")
+            else _borrowed_single_use_pool_root()
+        )
         with _auth_store_lock(target_path=target):
             auth_store = _load_auth_store(target)
             for entry in _codex_pool_dicts(_pool_entries(auth_store, "openai-codex")):
-                if access_token and str(entry.get("access_token") or "") != access_token:
+                if (
+                    access_token
+                    and str(entry.get("access_token") or "") != access_token
+                ):
                     continue
                 if _entry_is_rate_limit_exhausted(entry):
                     _clear_pool_entry_status(entry)
@@ -892,6 +1155,7 @@ def _codex_pool_rate_limit_status() -> Optional[dict[str, Any]]:
     the global-root pool (the per-provider fallback every other pool read uses)."""
     from clawk_cli.auth import _nonempty_str, read_credential_pool
     from agent.credential_pool import _parse_absolute_timestamp
+
     try:
         now = time.time()
         for entry in _codex_pool_dicts(read_credential_pool("openai-codex")):
@@ -901,11 +1165,16 @@ def _codex_pool_rate_limit_status() -> Optional[dict[str, Any]]:
             reset_at = _parse_absolute_timestamp(entry.get("last_error_reset_at"))
             if reset_at is None or reset_at > now:
                 return {
-                    "label": entry.get("label"), "last_refresh": entry.get("last_refresh"),
-                    "reset_at": reset_at, "reason": entry.get("last_error_reason"),
-                    "message": entry.get("last_error_message"), "access_token": token.strip(),
-                    "refresh_token": entry.get("refresh_token"), "id": entry.get("id"),
-                    "base_url": entry.get("base_url")}
+                    "label": entry.get("label"),
+                    "last_refresh": entry.get("last_refresh"),
+                    "reset_at": reset_at,
+                    "reason": entry.get("last_error_reason"),
+                    "message": entry.get("last_error_message"),
+                    "access_token": token.strip(),
+                    "refresh_token": entry.get("refresh_token"),
+                    "id": entry.get("id"),
+                    "base_url": entry.get("base_url"),
+                }
     except Exception:
         logger.debug("Codex pool rate-limit lookup failed", exc_info=True)
     return None
@@ -927,6 +1196,7 @@ def _pool_codex_credential() -> tuple[str, str]:
     through ``read_credential_pool`` so a profile inherits the global-root pool (#34143)."""
     from agent.credential_pool import _parse_absolute_timestamp
     from clawk_cli.auth import _nonempty_str, read_credential_pool
+
     try:
         for entry in _codex_pool_dicts(read_credential_pool("openai-codex")):
             token = entry.get("access_token")
@@ -941,30 +1211,48 @@ def _pool_codex_credential() -> tuple[str, str]:
     return "", ""
 
 
-def _login_openai_codex(args, pconfig: ProviderConfig, *, force_new_login: bool = False) -> None:
+def _login_openai_codex(
+    args, pconfig: ProviderConfig, *, force_new_login: bool = False
+) -> None:
     """OpenAI Codex login: device code by default, browser PKCE when opted in (``--browser`` /
     ``auth.codex_login_flow``). Tokens stored in ~/.clawksis/auth.json."""
     from clawk_cli.auth import (
-        _codex_access_token_is_expiring, _import_codex_cli_tokens,
-        _offer_existing_oauth_credentials, _print_login_success, _prompt_yes_no, _save_codex_tokens,
-        _update_config_for_provider, resolve_codex_runtime_credentials)
+        _codex_access_token_is_expiring,
+        _import_codex_cli_tokens,
+        _offer_existing_oauth_credentials,
+        _print_login_success,
+        _prompt_yes_no,
+        _save_codex_tokens,
+        _update_config_for_provider,
+        resolve_codex_runtime_credentials,
+    )
     from clawk_cli.auth_codex_browser import codex_oauth_login
+
     del pconfig  # kept for parity with other provider login helpers
     if not force_new_login:
         if _offer_existing_oauth_credentials(
-            "openai-codex", resolve=resolve_codex_runtime_credentials,
-            is_expiring=_codex_access_token_is_expiring, display_name="Codex",
+            "openai-codex",
+            resolve=resolve_codex_runtime_credentials,
+            is_expiring=_codex_access_token_is_expiring,
+            display_name="Codex",
             default_base_url=DEFAULT_CODEX_BASE_URL,
-            expired_notice="Existing Codex credentials are expired. Starting fresh login..."):
+            expired_notice="Existing Codex credentials are expired. Starting fresh login...",
+        ):
             return
         cli_tokens = _import_codex_cli_tokens()
         if cli_tokens:
             print("Found existing Codex CLI credentials at ~/.codex/auth.json")
-            print("Clawksis will create its own session to avoid conflicts with Codex CLI / VS Code.")
+            print(
+                "Clawksis will create its own session to avoid conflicts with Codex CLI / VS Code."
+            )
             if _prompt_yes_no(
-                "Import these credentials? (a separate login is recommended) [y/N]: ", default="n"):
+                "Import these credentials? (a separate login is recommended) [y/N]: ",
+                default="n",
+            ):
                 _save_codex_tokens(cli_tokens)
-                config_path = _update_config_for_provider("openai-codex", _codex_base_url())
+                config_path = _update_config_for_provider(
+                    "openai-codex", _codex_base_url()
+                )
                 print()
                 print("Credentials imported. Note: if Codex CLI refreshes its token,")
                 print("Clawksis will keep working independently with its own session.")
@@ -977,11 +1265,14 @@ def _login_openai_codex(args, pconfig: ProviderConfig, *, force_new_login: bool 
     creds = codex_oauth_login(args)
     _save_codex_tokens(creds["tokens"], creds.get("last_refresh"))
     config_path = _update_config_for_provider(
-        "openai-codex", creds.get("base_url", DEFAULT_CODEX_BASE_URL))
+        "openai-codex", creds.get("base_url", DEFAULT_CODEX_BASE_URL)
+    )
     _print_login_success("openai-codex", config_path, show_auth_state=True)
 
 
-def _codex_login_rate_limited_error(response: httpx.Response, *, during: str = "") -> AuthError:
+def _codex_login_rate_limited_error(
+    response: httpx.Response, *, during: str = ""
+) -> AuthError:
     """AuthError for a 429 from OpenAI's device-auth endpoints (throttle, not credential fault)."""
     # Upstream rate-limit / usage-quota exhaustion on the token endpoint. The stored refresh token is still
     # valid here — re-authenticating cannot lift a quota cap. Classify distinctly from auth failures so
@@ -989,12 +1280,15 @@ def _codex_login_rate_limited_error(response: httpx.Response, *, during: str = "
     # #32790).
     retry_after = _parse_retry_after_seconds(getattr(response, "headers", None))
     wait_hint = (
-        f" Try again in about {retry_after}s." if retry_after is not None
-        else " Wait a minute and run the login again.")
+        f" Try again in about {retry_after}s."
+        if retry_after is not None
+        else " Wait a minute and run the login again."
+    )
     return _codex_err(
         f"OpenAI is rate-limiting Codex login requests (HTTP 429){during}. "
         f"This is a temporary throttle on OpenAI's side, not a credential problem.{wait_hint}",
-        CODEX_RATE_LIMITED_CODE)
+        CODEX_RATE_LIMITED_CODE,
+    )
 
 
 def _codex_request_device_code(issuer: str, client_id: str) -> dict[str, Any]:
@@ -1006,34 +1300,49 @@ def _codex_request_device_code(issuer: str, client_id: str) -> dict[str, Any]:
     max_attempts = 4
     for attempt in range(1, max_attempts + 1):
         resp = _codex_login_post(
-            f"{issuer}/api/accounts/deviceauth/usercode", json={"client_id": client_id},
+            f"{issuer}/api/accounts/deviceauth/usercode",
+            json={"client_id": client_id},
             headers={"Content-Type": "application/json"},
-            failure=("Failed to request device code", "device_code_request_failed"))
+            failure=("Failed to request device code", "device_code_request_failed"),
+        )
         if resp.status_code != 429:
             break
         if attempt < max_attempts:
             # Exponential backoff (2s, 4s, 8s) capped, preferring the server's Retry-After.
             retry_after = _parse_retry_after_seconds(getattr(resp, "headers", None))
-            delay = max(1, min(int(retry_after if retry_after is not None else 2 ** attempt), 60))
-            print(f"OpenAI is rate-limiting login requests (429); retrying in {delay}s...")
+            delay = max(
+                1, min(int(retry_after if retry_after is not None else 2**attempt), 60)
+            )
+            print(
+                f"OpenAI is rate-limiting login requests (429); retrying in {delay}s..."
+            )
             time.sleep(delay)
     if resp.status_code == 429:
         raise _codex_login_rate_limited_error(resp)
     if resp.status_code != 200:
         raise _codex_err(
-            f"Device code request returned status {resp.status_code}.", "device_code_request_error")
+            f"Device code request returned status {resp.status_code}.",
+            "device_code_request_error",
+        )
     device_data = resp.json()
     device_data["interval"] = max(3, int(device_data.get("interval", "5")))
-    if not device_data.get("user_code", "") or not device_data.get("device_auth_id", ""):
-        raise _codex_err("Device code response missing required fields.", "device_code_incomplete")
+    if not device_data.get("user_code", "") or not device_data.get(
+        "device_auth_id", ""
+    ):
+        raise _codex_err(
+            "Device code response missing required fields.", "device_code_incomplete"
+        )
     return device_data
 
 
 def _codex_poll_authorization_code(
-    issuer: str, *, device_auth_id: str, user_code: str, poll_interval: int) -> dict[str, Any]:
+    issuer: str, *, device_auth_id: str, user_code: str, poll_interval: int
+) -> dict[str, Any]:
     """Step 3 of the Codex device flow: poll until sign-in completes (403/404 = still pending)."""
     max_wait = 15 * 60  # 15 minutes
-    max_consecutive_blips = 6  # survives transient drops, still fails fast on a dead network
+    max_consecutive_blips = (
+        6  # survives transient drops, still fails fast on a dead network
+    )
     start = time.monotonic()
     code_resp = None
     try:
@@ -1045,28 +1354,37 @@ def _codex_poll_authorization_code(
                     poll_resp = client.post(
                         f"{issuer}/api/accounts/deviceauth/token",
                         json={"device_auth_id": device_auth_id, "user_code": user_code},
-                        headers={"Content-Type": "application/json"})
+                        headers={"Content-Type": "application/json"},
+                    )
                 except Exception as exc:
                     if not _is_transient_transport_error(exc):
                         raise _codex_err(
                             f"Device auth polling request failed: {exc}{_ssl_interop_hint(exc)}",
-                            "device_code_poll_error") from exc
+                            "device_code_poll_error",
+                        ) from exc
                     consecutive_blips += 1
                     if consecutive_blips >= max_consecutive_blips:
                         raise _codex_err(
                             f"Device auth polling request failed after {consecutive_blips} consecutive"
                             f" transport errors: {exc}{_ssl_interop_hint(exc)}",
-                            "device_code_poll_error") from exc
-                    print("Transient network error while waiting for sign-in; retrying...")
+                            "device_code_poll_error",
+                        ) from exc
+                    print(
+                        "Transient network error while waiting for sign-in; retrying..."
+                    )
                     continue
                 consecutive_blips = 0
                 if poll_resp.status_code == 200:
                     code_resp = poll_resp.json()
                     break
-                if poll_resp.status_code not in {403, 404}:  # 403/404 = user hasn't finished yet
+                if poll_resp.status_code not in {
+                    403,
+                    404,
+                }:  # 403/404 = user hasn't finished yet
                     raise _codex_err(
                         f"Device auth polling returned status {poll_resp.status_code}.",
-                        "device_code_poll_error")
+                        "device_code_poll_error",
+                    )
     except KeyboardInterrupt:
         print("\nLogin cancelled.")
         raise SystemExit(130)
@@ -1076,37 +1394,50 @@ def _codex_poll_authorization_code(
 
 
 def _codex_exchange_authorization_code(
-    issuer: str, client_id: str, code_resp: dict[str, Any]) -> dict[str, Any]:
+    issuer: str, client_id: str, code_resp: dict[str, Any]
+) -> dict[str, Any]:
     """Step 4 of the Codex device flow: swap the authorization code for tokens."""
     authorization_code = code_resp.get("authorization_code", "")
     code_verifier = code_resp.get("code_verifier", "")
     if not authorization_code or not code_verifier:
         raise _codex_err(
             "Device auth response missing authorization_code or code_verifier.",
-            "device_code_incomplete_exchange")
+            "device_code_incomplete_exchange",
+        )
     token_resp = _codex_login_post(
         CODEX_OAUTH_TOKEN_URL,
         data={
-            "grant_type": "authorization_code", "code": authorization_code,
-            "redirect_uri": f"{issuer}/deviceauth/callback", "client_id": client_id,
-            "code_verifier": code_verifier},
+            "grant_type": "authorization_code",
+            "code": authorization_code,
+            "redirect_uri": f"{issuer}/deviceauth/callback",
+            "client_id": client_id,
+            "code_verifier": code_verifier,
+        },
         headers={"Content-Type": "application/x-www-form-urlencoded"},
-        failure=("Token exchange failed", "token_exchange_failed"))
+        failure=("Token exchange failed", "token_exchange_failed"),
+    )
     if token_resp.status_code == 429:
-        raise _codex_login_rate_limited_error(token_resp, during=" during token exchange")
+        raise _codex_login_rate_limited_error(
+            token_resp, during=" during token exchange"
+        )
     if token_resp.status_code != 200:
         raise _codex_err(
-            f"Token exchange returned status {token_resp.status_code}.", "token_exchange_error")
+            f"Token exchange returned status {token_resp.status_code}.",
+            "token_exchange_error",
+        )
     tokens = token_resp.json()
     if not tokens.get("access_token", ""):
         raise _codex_err(
-            "Token exchange did not return an access_token.", "token_exchange_no_access_token")
+            "Token exchange did not return an access_token.",
+            "token_exchange_no_access_token",
+        )
     return tokens
 
 
 def _codex_device_code_login() -> dict[str, Any]:
     """Run the OpenAI device code login flow and return credentials dict."""
     from clawk_cli.auth import _utc_now_z
+
     issuer, client_id = "https://auth.openai.com", CODEX_OAUTH_CLIENT_ID
     device_data = _codex_request_device_code(issuer, client_id)
     user_code = device_data["user_code"]
@@ -1119,13 +1450,20 @@ def _codex_device_code_login() -> dict[str, Any]:
     print(f"     \033[94m{user_code}\033[0m\n")
     print("Waiting for sign-in... (press Ctrl+C to cancel)")
     code_resp = _codex_poll_authorization_code(
-        issuer, device_auth_id=device_data["device_auth_id"], user_code=user_code,
-        poll_interval=device_data["interval"])
+        issuer,
+        device_auth_id=device_data["device_auth_id"],
+        user_code=user_code,
+        poll_interval=device_data["interval"],
+    )
     tokens = _codex_exchange_authorization_code(issuer, client_id, code_resp)
     # Return tokens for the caller to persist (never writes to ~/.codex/)
     return {
         "tokens": {
             "access_token": tokens.get("access_token", ""),
-            "refresh_token": tokens.get("refresh_token", "")},
-        "base_url": _codex_base_url(), "last_refresh": _utc_now_z(), "auth_mode": "chatgpt",
-        "source": "device-code"}
+            "refresh_token": tokens.get("refresh_token", ""),
+        },
+        "base_url": _codex_base_url(),
+        "last_refresh": _utc_now_z(),
+        "auth_mode": "chatgpt",
+        "source": "device-code",
+    }

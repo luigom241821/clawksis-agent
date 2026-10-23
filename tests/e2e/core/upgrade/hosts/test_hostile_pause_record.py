@@ -53,14 +53,30 @@ lock.release()
 
 
 def _py(code: str, *args: str, env: dict, cwd: Path) -> subprocess.Popen:
-    return subprocess.Popen([sys.executable, "-c", textwrap.dedent(code), *args], env=env, cwd=cwd,
-                            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    return subprocess.Popen(
+        [sys.executable, "-c", textwrap.dedent(code), *args],
+        env=env,
+        cwd=cwd,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
 
 
 def test_update_under_a_partner_claim_merges_an_orphaned_pause(tmp_path):
     origin = I.make_origin(tmp_path, I.head_sha())
     checkout = tmp_path / "checkout"
-    I.git("clone", "-q", "--shared", "-b", "main", str(origin), str(checkout), cwd=tmp_path)
+    I.git(
+        "clone",
+        "-q",
+        "--shared",
+        "-b",
+        "main",
+        str(origin),
+        str(checkout),
+        cwd=tmp_path,
+    )
     env = H.isolated_env(tmp_path / "env", pythonpath=checkout)
 
     owner = _py(_ORPHAN, env=env, cwd=checkout)
@@ -68,10 +84,22 @@ def test_update_under_a_partner_claim_merges_an_orphaned_pause(tmp_path):
     owner.send_signal(signal.SIGKILL)  # windows-footgun: ok — linux-only cell
     owner.wait(timeout=10)
 
-    run = _py(_ORCHESTRATOR, textwrap.dedent(_UPDATE_CHILD), str(checkout), env=env, cwd=checkout)
+    run = _py(
+        _ORCHESTRATOR,
+        textwrap.dedent(_UPDATE_CHILD),
+        str(checkout),
+        env=env,
+        cwd=checkout,
+    )
     out, err = run.communicate(timeout=120)
     assert run.returncode == 0, f"{out}\n{err}"
     result = json.loads(out.strip().splitlines()[-1])
-    assert result["adopted_claim"], f"premise: the update child did not run under the orchestrator's claim: {result}"
-    assert result["saw_orphan"], "the update treated its own orchestrator as another update and skipped the orphan"
-    assert result["recorded"] == ["mine", "orphan"], f"the orphaned paused set was overwritten: {result}"
+    assert result["adopted_claim"], (
+        f"premise: the update child did not run under the orchestrator's claim: {result}"
+    )
+    assert result["saw_orphan"], (
+        "the update treated its own orchestrator as another update and skipped the orphan"
+    )
+    assert result["recorded"] == ["mine", "orphan"], (
+        f"the orphaned paused set was overwritten: {result}"
+    )

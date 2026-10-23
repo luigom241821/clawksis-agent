@@ -50,14 +50,18 @@ class _DispatchingBot(_LiveBot):
 
 
 def _dispatching_bot(**kwargs) -> _DispatchingBot:
-    bot = _DispatchingBot(intents=kwargs["intents"], allowed_mentions=kwargs.get("allowed_mentions"))
+    bot = _DispatchingBot(
+        intents=kwargs["intents"], allowed_mentions=kwargs.get("allowed_mentions")
+    )
     bot.fetch_user = AsyncMock()
     return bot
 
 
 def _transport_healthy(bot: _DispatchingBot, *, ack_age: float = 0.0) -> None:
     """Make every transport-side sample read healthy (incident 2's fingerprint)."""
-    _set_websocket_health(bot, ready=True, socket_open=True, latency=0.05, ack_age=ack_age)
+    _set_websocket_health(
+        bot, ready=True, socket_open=True, latency=0.05, ack_age=ack_age
+    )
 
 
 @pytest.mark.asyncio
@@ -69,7 +73,9 @@ async def test_deaf_socket_trips_event_silence_dimension(monkeypatch):
     ``not_ready`` — and must not read as silence, or fresh reconnects on quiet
     guilds would false-trip.
     """
-    adapter = _make_adapter(monkeypatch, interval=0.01, threshold=2, max_event_silence=0.05)
+    adapter = _make_adapter(
+        monkeypatch, interval=0.01, threshold=2, max_event_silence=0.05
+    )
     handler = AsyncMock()
     adapter.set_fatal_error_handler(handler)
 
@@ -89,7 +95,9 @@ async def test_deaf_socket_trips_event_silence_dimension(monkeypatch):
 
     # _liveness_loop sets the code, then a separate task closes the client (1s
     # budget) before notifying the runner — so wait for the handler itself.
-    await _wait_until(lambda: handler.await_count, "fatal handler never awaited", timeout=8.0)
+    await _wait_until(
+        lambda: handler.await_count, "fatal handler never awaited", timeout=8.0
+    )
     assert adapter._fatal_error_code == "discord_websocket_health_stale"
     assert "event_silence" in (adapter._fatal_error_message or "")
     assert adapter._fatal_error_retryable is True
@@ -105,7 +113,9 @@ async def test_zero_silence_bound_disables_only_that_dimension(monkeypatch):
     ack-age/latency guards. With a stale stamp AND a stale heartbeat ACK the
     probe must still run and trip on ``ack_stale``.
     """
-    adapter = _make_adapter(monkeypatch, interval=0.01, threshold=1, max_ack_age=60.0, max_event_silence=0)
+    adapter = _make_adapter(
+        monkeypatch, interval=0.01, threshold=1, max_ack_age=60.0, max_event_silence=0
+    )
     handler = AsyncMock()
     adapter.set_fatal_error_handler(handler)
 
@@ -122,7 +132,9 @@ async def test_zero_silence_bound_disables_only_that_dimension(monkeypatch):
     # still trip, and only the ack-age dimension is named.
     _transport_healthy(bot, ack_age=120.0)
 
-    await _wait_until(lambda: handler.await_count, "probe did not run with the knob at 0", timeout=8.0)
+    await _wait_until(
+        lambda: handler.await_count, "probe did not run with the knob at 0", timeout=8.0
+    )
     assert adapter._fatal_error_code == "discord_websocket_health_stale"
     assert "ack_stale" in (adapter._fatal_error_message or "")
     assert "event_silence" not in (adapter._fatal_error_message or "")

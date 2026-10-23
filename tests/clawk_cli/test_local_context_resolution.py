@@ -37,12 +37,16 @@ def router():
             if self.path.startswith("/props"):
                 body = {"default_generation_settings": {"n_ctx": GRANTED}}
             elif self.path == "/v1/models":
-                body = {"data": [{
-                    "id": "Qwen-Test-UD-Q4_K_M",
-                    "owned_by": "llamacpp",
-                    "meta": None,
-                    "status": {"value": "unloaded"},
-                }]}
+                body = {
+                    "data": [
+                        {
+                            "id": "Qwen-Test-UD-Q4_K_M",
+                            "owned_by": "llamacpp",
+                            "meta": None,
+                            "status": {"value": "unloaded"},
+                        }
+                    ]
+                }
             else:  # /v1/models/{id} -> 404, as the real router answers
                 self.send_response(404)
                 self.send_header("Content-Length", "0")
@@ -70,7 +74,8 @@ def test_unloaded_llamacpp_model_resolves_granted_window(router, monkeypatch):
     ctx = mm._query_local_context_length_uncached("Qwen-Test-UD-Q4_K_M", router)
     assert ctx == GRANTED, (
         f"resolved {ctx}; an unloaded model must resolve the preset window "
-        "from /props, not fall through to name-pattern catch-alls")
+        "from /props, not fall through to name-pattern catch-alls"
+    )
 
 
 def test_props_beats_meta_when_model_loaded(router, monkeypatch):
@@ -113,6 +118,7 @@ def test_non_llamacpp_servers_skip_props(monkeypatch):
             return _FakeResp()
 
     import httpx
+
     monkeypatch.setattr(httpx, "Client", _FakeClient)
     monkeypatch.setattr(mm, "detect_local_server_type", lambda *a, **k: "vllm")
     monkeypatch.setattr(mm, "_endpoint_blackholed", lambda *a, **k: False)

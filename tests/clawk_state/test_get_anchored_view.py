@@ -4,6 +4,7 @@ Used by the discovery shape of session_search: an FTS5 match becomes the
 anchor, the call returns goal (bookend_start) + match (window) + resolution
 (bookend_end) in a single round trip, no LLM.
 """
+
 import pytest
 
 from clawk_state import SessionDB
@@ -48,15 +49,15 @@ class TestWindowAndBookendShape:
         assert len(anchor_msgs) == 1
 
 
-
-
 class TestRoleFiltering:
     def test_tool_role_filtered_from_window(self, db):
         db.create_session("s1", source="cli")
         user_ids = []
         for i in range(5):
             user_ids.append(db.append_message("s1", role="user", content=f"u{i}"))
-            db.append_message("s1", role="tool", content=f"tool output {i}", tool_name="x")
+            db.append_message(
+                "s1", role="tool", content=f"tool output {i}", tool_name="x"
+            )
         # Anchor on user message
         view = db.get_anchored_view("s1", user_ids[2], window=5, bookend=0)
         # No tool messages should appear in the window
@@ -66,17 +67,14 @@ class TestRoleFiltering:
     def test_anchor_preserved_even_when_tool_role(self, db):
         db.create_session("s1", source="cli")
         db.append_message("s1", role="user", content="ask")
-        tool_id = db.append_message("s1", role="tool", content="tool output", tool_name="x")
+        tool_id = db.append_message(
+            "s1", role="tool", content="tool output", tool_name="x"
+        )
         db.append_message("s1", role="user", content="follow-up")
         # Anchor on the tool message — should still appear despite default filter
         view = db.get_anchored_view("s1", tool_id, window=5, bookend=0)
         ids_in_window = [m["id"] for m in view["window"]]
         assert tool_id in ids_in_window
-
-
-
-
-
 
 
 class TestSessionIsolation:

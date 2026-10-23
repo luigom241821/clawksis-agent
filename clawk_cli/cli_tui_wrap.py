@@ -3,7 +3,11 @@
 
 def _wrap_rows(wrap, items, width, indent) -> list[tuple[int, str]]:
     """``(index, wrapped_line)`` pairs so selected styling can be re-applied per row."""
-    return [(i, w) for i, label in enumerate(items) for w in wrap(label, width, subsequent_indent=indent)]
+    return [
+        (i, w)
+        for i, label in enumerate(items)
+        for w in wrap(label, width, subsequent_indent=indent)
+    ]
 
 
 def _prefix_wrapped_rows(wrap, label, width, first_prefix, indent) -> list[str]:

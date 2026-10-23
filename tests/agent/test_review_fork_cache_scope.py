@@ -20,8 +20,12 @@ SYS = [
 
 def _agent(provider, model="grok-4.3", tag=None, compactions=0):
     a = SimpleNamespace(
-        session_id="parent-sess", _session_db=None, provider=provider, model=model,
-        base_url="", context_compressor=SimpleNamespace(compression_count=compactions),
+        session_id="parent-sess",
+        _session_db=None,
+        provider=provider,
+        model=model,
+        base_url="",
+        context_compressor=SimpleNamespace(compression_count=compactions),
     )
     if tag is not None:
         a._prompt_cache_fork_tag = tag
@@ -44,12 +48,19 @@ def test_xai_fork_sends_distinct_conv_id_and_cache_key():
 
     def build(agent):
         return ResponsesApiTransport().build_kwargs(
-            model="grok-4.3", messages=SYS, tools=[], session_id=agent.session_id,
-            cache_scope_id=resolve_prompt_cache_scope(agent), is_xai_responses=True,
+            model="grok-4.3",
+            messages=SYS,
+            tools=[],
+            session_id=agent.session_id,
+            cache_scope_id=resolve_prompt_cache_scope(agent),
+            is_xai_responses=True,
         )
 
     parent = build(_agent("xai-oauth"))
     fork = build(_agent("xai-oauth", tag="review", compactions=1))
     assert parent["extra_headers"]["x-grok-conv-id"] == "parent-sess"
     assert fork["extra_headers"]["x-grok-conv-id"] == "parent-sess::review"
-    assert parent["extra_body"]["prompt_cache_key"] != fork["extra_body"]["prompt_cache_key"]
+    assert (
+        parent["extra_body"]["prompt_cache_key"]
+        != fork["extra_body"]["prompt_cache_key"]
+    )

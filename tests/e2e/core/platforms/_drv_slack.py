@@ -52,16 +52,27 @@ class SlackDriver:
         self.standin.stop()
 
     def gateway_config(self) -> dict[str, Any]:
-        return {"platforms": {"slack": {"enabled": True, "extra": {"require_mention": True}}}}
+        return {
+            "platforms": {
+                "slack": {"enabled": True, "extra": {"require_mention": True}}
+            }
+        }
 
     def gateway_env(self) -> dict[str, str]:
-        return {"SLACK_BOT_TOKEN": self.standin.bot_token, "SLACK_APP_TOKEN": self.standin.app_token,
-                "SLACK_ALLOWED_USERS": ",".join((self.user_id, *self.stream_users)), "SLACK_HOME_CHANNEL": self.home_channel,
-                "CLAWK_STANDIN_SLACK_API": self.standin.api_base, "PYTHONPATH_PREPEND": str(_SHIM)}
+        return {
+            "SLACK_BOT_TOKEN": self.standin.bot_token,
+            "SLACK_APP_TOKEN": self.standin.app_token,
+            "SLACK_ALLOWED_USERS": ",".join((self.user_id, *self.stream_users)),
+            "SLACK_HOME_CHANNEL": self.home_channel,
+            "CLAWK_STANDIN_SLACK_API": self.standin.api_base,
+            "PYTHONPATH_PREPEND": str(_SHIM),
+        }
 
     def connected(self) -> bool:
         # auth.test proves the shim redirected the SDK; an open socket proves Socket Mode is live.
-        return bool(self.standin.calls_of("auth.test")) and self.standin.socket_count() > 0
+        return (
+            bool(self.standin.calls_of("auth.test")) and self.standin.socket_count() > 0
+        )
 
     # inbound -----------------------------------------------------------------------------------
     @staticmethod
@@ -73,33 +84,58 @@ class SlackDriver:
         return self._wrap(self.standin.dm(user_id or self.user_id, text))
 
     def group(self, text: str, *, mention: bool) -> Inbound:
-        envelopes = self.standin.channel_post(self.group_chat_id, self.user_id, text, mention=mention)
+        envelopes = self.standin.channel_post(
+            self.group_chat_id, self.user_id, text, mention=mention
+        )
         return self._wrap(envelopes[0])
 
     def redeliver(self, inbound: Inbound) -> None:
         self.standin.redeliver(inbound.raw)
 
-    def document(self, filename: str, data: bytes, mime: str, caption: str = "") -> Inbound:
-        return self._wrap(self.standin.dm_file(self.user_id, filename, data, mime, caption))
+    def document(
+        self, filename: str, data: bytes, mime: str, caption: str = ""
+    ) -> Inbound:
+        return self._wrap(
+            self.standin.dm_file(self.user_id, filename, data, mime, caption)
+        )
 
     def buttons(self, chat_id: str) -> list[dict[str, Any]]:
         return self.standin.buttons(chat_id)
 
-    def click(self, chat_id: str, button: dict[str, Any], user_id: Optional[str] = None) -> dict[str, Any]:
-        return self.standin.block_action(user_id or self.user_id, chat_id, str(button["message_id"]), button)
+    def click(
+        self, chat_id: str, button: dict[str, Any], user_id: Optional[str] = None
+    ) -> dict[str, Any]:
+        return self.standin.block_action(
+            user_id or self.user_id, chat_id, str(button["message_id"]), button
+        )
 
     def click_answered(self, handle: dict[str, Any]) -> bool:
         """Bolt acks an interactive envelope first, then authorizes the clicker synchronously; a
         refused click is only logged, so the ack is the last platform-visible sign of it."""
         return self.standin.acked(handle)
 
-    def slash(self, command: str, text: str = "", chat_id: Optional[str] = None) -> dict[str, Any]:
-        return self.standin.slash(self.user_id, chat_id or self.standin.dm_channel(self.user_id), command, text)
+    def slash(
+        self, command: str, text: str = "", chat_id: Optional[str] = None
+    ) -> dict[str, Any]:
+        return self.standin.slash(
+            self.user_id,
+            chat_id or self.standin.dm_channel(self.user_id),
+            command,
+            text,
+        )
 
     def callback_answers(self) -> list[Call]:
         """Socket Mode acks for interactive envelopes (Slack's analogue of answerCallbackQuery)."""
-        ids = {e["envelope_id"] for e in self.standin.envelopes if e["type"] == "interactive"}
-        return [c for c in self.standin.calls_of("socket_ack") if c.params.get("envelope_id") in ids]
+        ids = {
+            e["envelope_id"]
+            for e in self.standin.envelopes
+            if e["type"] == "interactive"
+        }
+        return [
+            c
+            for c in self.standin.calls_of("socket_ack")
+            if c.params.get("envelope_id") in ids
+        ]
 
     # ground truth ------------------------------------------------------------------------------
     def visible(self, chat_id: str) -> list[Visible]:
@@ -110,8 +146,11 @@ class SlackDriver:
         return self.standin.ephemerals(chat_id)
 
     def _ok(self, methods: tuple, chat_id: str) -> list[Call]:
-        return [c for c in self.standin.calls_of(*methods)
-                if not c.faulted and str(c.params.get("channel")) == str(chat_id)]
+        return [
+            c
+            for c in self.standin.calls_of(*methods)
+            if not c.faulted and str(c.params.get("channel")) == str(chat_id)
+        ]
 
     def sends(self, chat_id: str) -> list[Call]:
         return self._ok(("chat.postMessage", "chat.startStream"), chat_id)
@@ -126,20 +165,45 @@ class SlackDriver:
         return self.standin.describe()
 
     # faults ------------------------------------------------------------------------------------
-    def fail_send(self, *, times: int = 1, match: Optional[Callable[[str], bool]] = None) -> list[Fault]:
+    def fail_send(
+        self, *, times: int = 1, match: Optional[Callable[[str], bool]] = None
+    ) -> list[Fault]:
         pred = (lambda p: match(str(p.get("text", "")))) if match else None
-        return [self.standin.fail("chat.postMessage", {"ok": False, "error": "channel_not_found"}, times=times,
-                                  match=pred)]
+        return [
+            self.standin.fail(
+                "chat.postMessage",
+                {"ok": False, "error": "channel_not_found"},
+                times=times,
+                match=pred,
+            )
+        ]
 
-    def fail_edit(self, *, times: int = 1, match: Optional[Callable[[str], bool]] = None) -> list[Fault]:
+    def fail_edit(
+        self, *, times: int = 1, match: Optional[Callable[[str], bool]] = None
+    ) -> list[Fault]:
         pred = (lambda p: match(str(p.get("text", "")))) if match else None
-        return [self.standin.fail("chat.update", {"ok": False, "error": "cant_update_message"}, times=times,
-                                  match=pred)]
+        return [
+            self.standin.fail(
+                "chat.update",
+                {"ok": False, "error": "cant_update_message"},
+                times=times,
+                match=pred,
+            )
+        ]
 
-    def fail_finalize(self, has_footer: Callable[[str], bool], *, group: bool) -> list[Fault]:
+    def fail_finalize(
+        self, has_footer: Callable[[str], bool], *, group: bool
+    ) -> list[Fault]:
         """Native streaming (startStream/appendStream/stopStream) is the transport in DMs and channels:
         refuse the stream call whose resulting text completes the reply (``_stream_text`` = what the
         message would read after it), however the deltas were cut."""
         pred = lambda p: has_footer(str(p.get("_stream_text", "")))
-        return [self.standin.fail(m, {"ok": False, "error": "message_not_in_streaming_state"}, times=50, match=pred)
-                for m in ("chat.appendStream", "chat.stopStream")]
+        return [
+            self.standin.fail(
+                m,
+                {"ok": False, "error": "message_not_in_streaming_state"},
+                times=50,
+                match=pred,
+            )
+            for m in ("chat.appendStream", "chat.stopStream")
+        ]

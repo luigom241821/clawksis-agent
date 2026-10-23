@@ -29,6 +29,7 @@ from plugins.platforms.telegram.adapter import (
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def adapter():
     config = PlatformConfig(enabled=True, token="fake-token")
@@ -42,17 +43,13 @@ def adapter():
 
 class TestEscapeMdv2:
     def test_escapes_all_special_characters(self):
-        special = r'_*[]()~`>#+-=|{}.!\ '
+        special = r"_*[]()~`>#+-=|{}.!\ "
         escaped = _escape_mdv2(special)
         # Every special char should be preceded by backslash
-        for ch in r'_*[]()~`>#+-=|{}.!\  ':
-            if ch == ' ':
+        for ch in r"_*[]()~`>#+-=|{}.!\  ":
+            if ch == " ":
                 continue
-            assert f'\\{ch}' in escaped
-
-
-
-
+            assert f"\\{ch}" in escaped
 
 
 # =========================================================================
@@ -61,8 +58,6 @@ class TestEscapeMdv2:
 
 
 class TestFormatMessageBasic:
-
-
     def test_plain_text_specials_escaped(self, adapter):
         result = adapter.format_message("Price is $5.00!")
         assert "\\." in result
@@ -75,7 +70,6 @@ class TestFormatMessageBasic:
 
 
 class TestFormatMessageCodeBlocks:
-
     def test_repeated_fenced_tool_progress_stays_a_code_block(self, adapter):
         """Regression for #138148: the dedup counter must not trail a closing fence, on both the
         queued progress bubble and the native stream-consumer path."""
@@ -85,9 +79,13 @@ class TestFormatMessageCodeBlocks:
 
         progress = "💻 terminal\n```\nssh -F /opt/data/home/.ssh/config fed...\n```"
         native_lines = []
-        sc = SimpleNamespace(accepts_tool_progress=True, on_tool_progress=native_lines.append)
+        sc = SimpleNamespace(
+            accepts_tool_progress=True, on_tool_progress=native_lines.append
+        )
         for consumer in (None, sc):
-            ctx = SimpleNamespace(last_progress_msg=[None], repeat_count=[0], progress_queue=queue.Queue())
+            ctx = SimpleNamespace(
+                last_progress_msg=[None], repeat_count=[0], progress_queue=queue.Queue()
+            )
             runner = SimpleNamespace(_ctx=ctx, _stream_consumer=lambda c=consumer: c)
             for _ in range(4):
                 M._progress_emit(runner, progress)
@@ -112,7 +110,6 @@ class TestFormatMessageCodeBlocks:
         text = "Run `rm -rf ./*` carefully"
         result = adapter.format_message(text)
         assert "`rm -rf ./*`" in result
-
 
     def test_inline_code_backslashes_escaped(self, adapter):
         r"""Backslashes in inline code must be escaped for MarkdownV2."""
@@ -259,7 +256,6 @@ class TestFormatMessageBoldItalic:
         # Original ** should be gone
         assert "**" not in result
 
-
     def test_reload_mcp_summary_escapes_dynamic_server_names(self, adapter):
         content = (
             "🔄 **MCP Servers Reloaded**\n"
@@ -287,7 +283,6 @@ class TestFormatMessageHeaders:
         # Hash should be removed
         assert "#" not in result
 
-
     def test_header_with_inner_bold_stripped(self, adapter):
         # Headers strip redundant **...** inside
         result = adapter.format_message("## **Important**")
@@ -304,7 +299,6 @@ class TestFormatMessageHeaders:
 
 
 class TestFormatMessageLinks:
-
     def test_link_display_text_escaped(self, adapter):
         result = adapter.format_message("[Hello!](https://example.com)")
         # The ! in display text should be escaped
@@ -337,7 +331,11 @@ class TestItalicNewlineBug:
         assert "Item two" in result
         assert "Item three" in result
         # Should NOT contain _ (italic markers) wrapping list items
-        assert "_" not in result or "Item" not in result.split("_")[1] if "_" in result else True
+        assert (
+            "_" not in result or "Item" not in result.split("_")[1]
+            if "_" in result
+            else True
+        )
 
 
 # =========================================================================
@@ -358,8 +356,6 @@ class TestFormatMessageStrikethrough:
 
 
 class TestFormatMessageSpoiler:
-
-
     def test_spoiler_pipes_not_escaped(self, adapter):
         """The || delimiters must not be escaped as \\|\\|."""
         result = adapter.format_message("||secret||")
@@ -373,8 +369,6 @@ class TestFormatMessageSpoiler:
 
 
 class TestFormatMessageBlockquote:
-
-
     def test_blockquote_multiline(self, adapter):
         text = "> Line one\n> Line two"
         result = adapter.format_message(text)
@@ -382,12 +376,10 @@ class TestFormatMessageBlockquote:
         assert "> Line two" in result
         assert "\\>" not in result
 
-
     def test_gt_in_middle_of_line_still_escaped(self, adapter):
         """Only > at line start is a blockquote; mid-line > should be escaped."""
         result = adapter.format_message("5 > 3")
         assert "\\>" in result
-
 
     def test_regular_blockquote_with_pipes_escaped(self, adapter):
         """Regular blockquote ending with || should escape the pipes."""
@@ -415,7 +407,6 @@ class TestFormatMessageComplex:
         result = adapter.format_message(text)
         assert "**not bold**" in result
 
-
     def test_empty_bold(self, adapter):
         """**** (empty bold) should not crash."""
         result = adapter.format_message("****")
@@ -431,15 +422,12 @@ class TestStripMdv2:
     def test_removes_escape_backslashes(self):
         assert _strip_mdv2(r"hello\.world\!") == "hello.world!"
 
-
     def test_removes_both_bold_and_italic(self):
         result = _strip_mdv2("*bold* and _italic_")
         assert result == "bold and italic"
 
     def test_preserves_snake_case(self):
         assert _strip_mdv2("my_variable_name") == "my_variable_name"
-
-
 
 
 # =========================================================================
@@ -475,12 +463,9 @@ class TestWrapMarkdownTables:
         assert out.startswith("Scores:")
         assert out.endswith("End.")
 
-
-
     def test_no_pipe_character_short_circuits(self):
         text = "Plain **bold** text with no table."
         assert _wrap_markdown_tables(text) == text
-
 
     def test_row_group_uses_single_newlines_within_group(self):
         """Regression: each bullet within a row-group must be separated by
@@ -520,12 +505,7 @@ class TestFormatMessageTables:
     of escaped pipe syntax or fenced code blocks."""
 
     def test_table_rendered_as_bullets(self, adapter):
-        text = (
-            "Data:\n\n"
-            "| Col1 | Col2 |\n"
-            "|------|------|\n"
-            "| A    | B    |\n"
-        )
+        text = "Data:\n\n| Col1 | Col2 |\n|------|------|\n| A    | B    |\n"
         out = adapter.format_message(text)
         assert "*A*" in out
         # Heading 'A' duplicates the Col1 value — skip that bullet.
@@ -565,10 +545,10 @@ async def test_send_escapes_chunk_indicator_for_markdownv2(adapter):
 
 
 class TestEditMessageStreamingSafety:
-
-
     @pytest.mark.asyncio
-    async def test_message_too_long_splits_into_continuations_not_silent_truncation(self):
+    async def test_message_too_long_splits_into_continuations_not_silent_truncation(
+        self,
+    ):
         """When edit_message_text exceeds Telegram's 4096 UTF-16 limit on
         finalize, the adapter must split the content across the existing
         message + new continuation messages so the user gets the full reply.
@@ -580,9 +560,11 @@ class TestEditMessageStreamingSafety:
         adapter._bot.edit_message_text = AsyncMock()
         # Continuation sends return monotonically increasing message ids.
         _next_id = [1000]
+
         async def _fake_send(**kwargs):
             _next_id[0] += 1
             return SimpleNamespace(message_id=_next_id[0])
+
         adapter._bot.send_message = AsyncMock(side_effect=_fake_send)
 
         # 6000-char content well over the 4096 UTF-16 limit.
@@ -602,8 +584,9 @@ class TestEditMessageStreamingSafety:
         first_edit = adapter._bot.edit_message_text.call_args
         assert first_edit.kwargs["message_id"] == 456
         # Continuations were sent threaded as replies for visual grouping.
-        assert adapter._bot.send_message.await_count == len(result.continuation_message_ids)
-
+        assert adapter._bot.send_message.await_count == len(
+            result.continuation_message_ids
+        )
 
     @pytest.mark.asyncio
     async def test_mid_stream_overflow_truncates_instead_of_splitting(self):
@@ -708,7 +691,9 @@ def _guest_test_adapter(*, guest_mode=True, require_mention=True, allowed_chats=
 
 
 def _guest_group_message(text, *, chat_id=-100201, entities=None, reply_to_bot=False):
-    reply_to_message = SimpleNamespace(from_user=SimpleNamespace(id=999)) if reply_to_bot else None
+    reply_to_message = (
+        SimpleNamespace(from_user=SimpleNamespace(id=999)) if reply_to_bot else None
+    )
     return SimpleNamespace(
         text=text,
         caption=None,
@@ -722,12 +707,12 @@ def _guest_group_message(text, *, chat_id=-100201, entities=None, reply_to_bot=F
 
 
 def _guest_mention_entity(text, mention="@clawk_bot"):
-    return SimpleNamespace(type="mention", offset=text.index(mention), length=len(mention))
+    return SimpleNamespace(
+        type="mention", offset=text.index(mention), length=len(mention)
+    )
 
 
 class TestTelegramGuestMentionGating:
-
-
     def test_guest_mode_allows_bot_command_entity_outside_allowed_chats(self):
         """``/cmd@botname`` is a ``bot_command`` entity, not ``mention``."""
         adapter = _guest_test_adapter(guest_mode=True, allowed_chats=["-100200"])
@@ -739,7 +724,6 @@ class TestTelegramGuestMentionGating:
         )
 
         assert adapter._should_process_message(message) is True
-
 
     def test_guest_mode_allows_mention_in_caption_outside_allowed_chats(self):
         """Media caption @mention should bypass allowed_chats via guest_mode."""

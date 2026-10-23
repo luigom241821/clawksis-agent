@@ -480,8 +480,14 @@ class TestConversationGenerationRotates:
 
     @pytest.mark.parametrize(
         "reason",
-        ["session_reset", "session_switch", "idle", "daily", "suspended",
-         "resume_pending_expired"],
+        [
+            "session_reset",
+            "session_switch",
+            "idle",
+            "daily",
+            "suspended",
+            "resume_pending_expired",
+        ],
     )
     def test_every_reset_boundary_rotates(self, db, reason):
         """Policy auto-resets are conversation replacements too.
@@ -512,8 +518,7 @@ class TestConversationGenerationRotates:
         reply reads the same (empty) generation and lands on one scope.
         """
         scopes = {
-            resolve_prompt_cache_scope(self._keyed(db, f"gc_run_{i}"))
-            for i in range(4)
+            resolve_prompt_cache_scope(self._keyed(db, f"gc_run_{i}")) for i in range(4)
         }
         assert len(scopes) == 1
         assert next(iter(scopes)).startswith("gwk_")
@@ -625,7 +630,9 @@ class TestPeerIdentityIsSourceQualified:
     def _row(self, db, sid, source):
         db.create_session(session_id=sid, source=source, session_key=self.KEY)
         return SimpleNamespace(
-            session_id=sid, _session_db=db, _gateway_session_key=self.KEY,
+            session_id=sid,
+            _session_db=db,
+            _gateway_session_key=self.KEY,
             platform=source,
         )
 
@@ -637,13 +644,17 @@ class TestPeerIdentityIsSourceQualified:
         self._row(db, "tg-1", "telegram")
         db.end_session("tg-1", "session_reset")
 
-        assert resolve_prompt_cache_scope(self._row(db, "api-2", "api_server")) == before
+        assert (
+            resolve_prompt_cache_scope(self._row(db, "api-2", "api_server")) == before
+        )
 
     def test_our_own_reset_still_rotates(self, db):
         mine = self._row(db, "api-1", "api_server")
         before = resolve_prompt_cache_scope(mine)
         db.end_session("api-1", "session_reset")
-        assert resolve_prompt_cache_scope(self._row(db, "api-2", "api_server")) != before
+        assert (
+            resolve_prompt_cache_scope(self._row(db, "api-2", "api_server")) != before
+        )
 
     def test_equal_keys_under_different_sources_never_share_a_scope(self, db):
         mine = resolve_prompt_cache_scope(self._row(db, "api-1", "api_server"))
@@ -678,7 +689,9 @@ class TestGenerationSurvivesPruning:
     def _keyed(self, db, sid):
         db.create_session(session_id=sid, source=self.SOURCE, session_key=self.KEY)
         return SimpleNamespace(
-            session_id=sid, _session_db=db, _gateway_session_key=self.KEY,
+            session_id=sid,
+            _session_db=db,
+            _gateway_session_key=self.KEY,
             platform=self.SOURCE,
         )
 
@@ -695,8 +708,8 @@ class TestGenerationSurvivesPruning:
         db.end_session("s-b", "session_reset")
         assert self._gen(db) == 2
 
-        db.delete_session("s-b")          # prune the newest boundary
-        assert self._gen(db) == 2         # counter is outside that rowset
+        db.delete_session("s-b")  # prune the newest boundary
+        assert self._gen(db) == 2  # counter is outside that rowset
 
         c = self._keyed(db, "s-c")
         scope_c = resolve_prompt_cache_scope(c)
@@ -787,7 +800,9 @@ class TestSourceOverrideDomain:
 
         monkeypatch.setenv("CLAWK_SESSION_SOURCE", "override-src")
         agent = SimpleNamespace(
-            session_id="s-none", _session_db=db, _gateway_session_key=self.KEY,
+            session_id="s-none",
+            _session_db=db,
+            _gateway_session_key=self.KEY,
             platform="telegram",
         )
         assert _agent_source(agent, "", db) == "override-src"
@@ -800,8 +815,10 @@ class TestSourceOverrideDomain:
                 session_id=sid, source="override-src", session_key=self.KEY
             )
             return SimpleNamespace(
-                session_id=sid, _session_db=db,
-                _gateway_session_key=self.KEY, platform="telegram",
+                session_id=sid,
+                _session_db=db,
+                _gateway_session_key=self.KEY,
+                platform="telegram",
             )
 
         before = resolve_prompt_cache_scope(keyed("s-a"))

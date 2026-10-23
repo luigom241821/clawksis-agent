@@ -28,8 +28,12 @@ pytestmark = [
     pytest.mark.platforms("linux"),
     # Every `clawk update` here targets a throwaway sandboxed install, never the real checkout.
     pytest.mark.live_system_guard_bypass,
-    pytest.mark.skipif(H.sandbox_required_reason() is not None, reason=str(H.sandbox_required_reason())),
-    pytest.mark.skipif(N.netns_required_reason() is not None, reason=str(N.netns_required_reason())),
+    pytest.mark.skipif(
+        H.sandbox_required_reason() is not None, reason=str(H.sandbox_required_reason())
+    ),
+    pytest.mark.skipif(
+        N.netns_required_reason() is not None, reason=str(N.netns_required_reason())
+    ),
     pytest.mark.skipif(shutil.which("git") is None, reason="git required"),
     pytest.mark.skipif(I.real_uv() is None, reason="uv required"),
 ]
@@ -46,15 +50,36 @@ def _assert_updated_through_proxy(inst: S.Installed, r: S.Result, new: str) -> N
     edge = r.edge
     assert edge is not None
     assert r.rc == 0, "update through the proxy failed\n" + r.report(inst)
-    assert inst.head() == new, f"update exited 0 but HEAD is {inst.head()}, not the published {new}\n" + r.report(inst)
-    channel = [h for h in edge.proxy.requests(S.ASSETS) if h.path.startswith("/releases/channels/")]
-    assert not channel, f"main read a release record (it follows the git branch): {channel}\n" + r.report(inst)
-    fetches = [h for h in edge.proxy.requests("github.com") if h.path.startswith(GIT_PATH) and h.status == 200]
-    assert any("git-upload-pack" in h.path for h in fetches), "no git fetch crossed the proxy\n" + r.report(inst)
+    assert inst.head() == new, (
+        f"update exited 0 but HEAD is {inst.head()}, not the published {new}\n"
+        + r.report(inst)
+    )
+    channel = [
+        h
+        for h in edge.proxy.requests(S.ASSETS)
+        if h.path.startswith("/releases/channels/")
+    ]
+    assert not channel, (
+        f"main read a release record (it follows the git branch): {channel}\n"
+        + r.report(inst)
+    )
+    fetches = [
+        h
+        for h in edge.proxy.requests("github.com")
+        if h.path.startswith(GIT_PATH) and h.status == 200
+    ]
+    assert any("git-upload-pack" in h.path for h in fetches), (
+        "no git fetch crossed the proxy\n" + r.report(inst)
+    )
     stray = sorted(edge.proxy.hosts("refused") | edge.proxy.hosts("tls-rejected"))
-    assert not stray, f"the update tried to reach hosts the proxy does not route: {stray}\n" + r.report(inst)
+    assert not stray, (
+        f"the update tried to reach hosts the proxy does not route: {stray}\n"
+        + r.report(inst)
+    )
     v = inst.version_works()
-    assert v.rc == 0 and I.TRACEBACK not in v.out, "`clawk --version` broken after the update\n" + I.describe(v.cp)
+    assert v.rc == 0 and I.TRACEBACK not in v.out, (
+        "`clawk --version` broken after the update\n" + I.describe(v.cp)
+    )
 
 
 def test_update_through_tls_inspecting_proxy_lands_on_the_new_commit(inst):
@@ -78,7 +103,9 @@ def test_update_through_authenticating_proxy_and_credentials_stay_private(inst):
     finally:
         edge.close()
     _assert_updated_through_proxy(inst, r, new)
-    assert "pr0xy-s3cret-e2e" not in r.out, "the proxy password was printed by the updater\n" + r.report(inst)
+    assert "pr0xy-s3cret-e2e" not in r.out, (
+        "the proxy password was printed by the updater\n" + r.report(inst)
+    )
 
 
 def test_update_with_corporate_root_only_in_ssl_cert_file(inst):
@@ -90,7 +117,13 @@ def test_update_with_corporate_root_only_in_ssl_cert_file(inst):
     bundle.write_bytes(N.SYSTEM_CA_BUNDLE.read_bytes() + b"\n" + inst.ca.pem)
     edge = inst.edge()
     try:
-        r = inst.clawk("update", "--yes", edge=edge, corporate_root=False, env={"SSL_CERT_FILE": str(bundle)})
+        r = inst.clawk(
+            "update",
+            "--yes",
+            edge=edge,
+            corporate_root=False,
+            env={"SSL_CERT_FILE": str(bundle)},
+        )
     finally:
         edge.close()
     _assert_updated_through_proxy(inst, r, new)
@@ -109,6 +142,9 @@ def test_tunnel_cut_to_the_git_host_fails_fast_and_changes_nothing(inst):
         edge.close()
     assert r.secs < 60, f"a cut tunnel took {r.secs:.0f}s to fail\n" + r.report(inst)
     S.assert_nothing_changed(inst, before, r, "tunnel cut to the git host")
-    assert "github.com" in edge.proxy.hosts("eof"), "the update failed before reaching the cut tunnel\n" + r.report(inst)
+    assert "github.com" in edge.proxy.hosts("eof"), (
+        "the update failed before reaching the cut tunnel\n" + r.report(inst)
+    )
     assert "fetch" in r.out.lower() or "github.com" in r.out, (
-        "the failure does not say the git fetch failed\n" + r.report(inst))
+        "the failure does not say the git fetch failed\n" + r.report(inst)
+    )

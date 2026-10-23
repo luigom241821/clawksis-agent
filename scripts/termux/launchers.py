@@ -1,4 +1,5 @@
 """APT maintainer hooks; agent entrypoints belong to scripts.build.launchers."""
+
 from __future__ import annotations
 
 import argparse
@@ -11,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 def write_maintainer_scripts(control: Path, names: list[str]) -> None:
     names_text = " ".join(shlex.quote(name) for name in names)
-    postinst = '''#!/data/data/com.termux/files/usr/bin/sh
+    postinst = """#!/data/data/com.termux/files/usr/bin/sh
 set -eu
 PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
 mkdir -p "$PREFIX/bin"
@@ -27,8 +28,8 @@ for name in __NAMES__; do
     fi
     ln -s "$target" "$link"
 done
-'''
-    prerm = '''#!/data/data/com.termux/files/usr/bin/sh
+"""
+    prerm = """#!/data/data/com.termux/files/usr/bin/sh
 set -eu
 PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
 case "${1:-remove}" in
@@ -41,7 +42,7 @@ for name in __NAMES__; do
         rm -f "$link"
     fi
 done
-'''
+"""
     for name, script in (("postinst", postinst), ("prerm", prerm)):
         path = control / name
         path.write_text(script.replace("__NAMES__", names_text), encoding="utf-8")
@@ -54,6 +55,7 @@ def main() -> None:
     parser.add_argument("--control", type=Path, required=True)
     args = parser.parse_args()
     from scripts.build.inputs import project_entries
+
     entries = project_entries(args.payload / "app/pyproject.toml")
     write_maintainer_scripts(args.control, list(entries))
 

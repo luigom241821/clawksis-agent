@@ -50,6 +50,7 @@ def _slack_source(thread_id=None):
 # SessionStore records prev_session_id on auto-reset
 # ---------------------------------------------------------------------------
 
+
 class TestPrevSessionIdCapture:
     def test_prev_session_id_set_on_auto_reset(self, _isolated_db, tmp_path):
         store = _make_store(tmp_path)
@@ -71,6 +72,7 @@ class TestPrevSessionIdCapture:
 # ---------------------------------------------------------------------------
 # build_channel_continuity_note
 # ---------------------------------------------------------------------------
+
 
 def _reset_entry(platform, prev="20260101_000000_abc", had_activity=True):
     return SessionEntry(
@@ -94,7 +96,6 @@ class TestBuildChannelContinuityNote:
         assert "session_search" in note
         assert entry.prev_session_id in note
         assert "channel" in note
-
 
     def test_no_activity_returns_none(self):
         entry = _reset_entry(Platform.SLACK, had_activity=False)

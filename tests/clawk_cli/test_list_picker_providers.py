@@ -28,8 +28,16 @@ def _disable_live_custom_provider_model_probe(monkeypatch):
     monkeypatch.setattr("clawk_cli.models.fetch_api_models", lambda *_a, **_kw: None)
 
 
-def _make_provider(slug, name=None, models=None, *, is_current=False,
-                   is_user_defined=False, source="built-in", api_url=None):
+def _make_provider(
+    slug,
+    name=None,
+    models=None,
+    *,
+    is_current=False,
+    is_user_defined=False,
+    source="built-in",
+    api_url=None,
+):
     """Build a dict shaped like ``list_authenticated_providers`` output."""
     entry = {
         "slug": slug,
@@ -43,22 +51,6 @@ def _make_provider(slug, name=None, models=None, *, is_current=False,
     if api_url is not None:
         entry["api_url"] = api_url
     return entry
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 def test_passthrough_kwargs_to_base(monkeypatch):
@@ -75,9 +67,10 @@ def test_passthrough_kwargs_to_base(monkeypatch):
         return []
 
     monkeypatch.setattr(model_switch, "list_authenticated_providers", _capture)
-    monkeypatch.setattr(clawk_cli_model_switch_providers, "list_authenticated_providers", _capture)
-    monkeypatch.setattr("clawk_cli.models.fetch_openrouter_models",
-                        lambda *a, **kw: [])
+    monkeypatch.setattr(
+        clawk_cli_model_switch_providers, "list_authenticated_providers", _capture
+    )
+    monkeypatch.setattr("clawk_cli.models.fetch_openrouter_models", lambda *a, **kw: [])
 
     model_switch_providers.list_picker_providers(
         current_provider="openrouter",
@@ -96,14 +89,12 @@ def test_passthrough_kwargs_to_base(monkeypatch):
     assert captured["max_models"] == 12
 
 
-
 def test_current_custom_endpoint_passthrough_marks_current_row(monkeypatch):
     """Interactive picker should preserve current custom endpoint semantics."""
     monkeypatch.setattr("agent.models_dev.fetch_models_dev", dict)
     monkeypatch.setattr("agent.models_dev.PROVIDER_TO_MODELS_DEV", {})
     monkeypatch.setattr("clawk_cli.providers.CLAWK_OVERLAYS", {})
-    monkeypatch.setattr("clawk_cli.models.fetch_openrouter_models",
-                        lambda *a, **kw: [])
+    monkeypatch.setattr("clawk_cli.models.fetch_openrouter_models", lambda *a, **kw: [])
 
     result = model_switch_providers.list_picker_providers(
         current_provider="custom:ollama",
@@ -135,7 +126,6 @@ def test_current_custom_endpoint_passthrough_marks_current_row(monkeypatch):
     assert row["slug"] == "custom:ollama"
     assert row["is_current"] is True
     assert row["models"] == ["glm-5.1", "qwen3"]
-
 
 
 # ---------------------------------------------------------------------------
@@ -173,7 +163,8 @@ def _stub_kimi_discovery(monkeypatch, *, canonical):
     }
     monkeypatch.setattr(md, "PROVIDER_TO_MODELS_DEV", kimi_map)
     monkeypatch.setattr(
-        md, "fetch_models_dev",
+        md,
+        "fetch_models_dev",
         lambda *a, **k: {
             "kimi-for-coding": {"name": "Kimi For Coding", "env": ["KIMI_API_KEY"]},
         },
@@ -185,9 +176,12 @@ def _stub_kimi_discovery(monkeypatch, *, canonical):
     monkeypatch.setattr(md, "get_provider_info", lambda _pid: _PInfo())
     monkeypatch.setattr("clawk_cli.providers.CLAWK_OVERLAYS", {})
     monkeypatch.setattr(hm, "CANONICAL_PROVIDERS", canonical)
-    monkeypatch.setattr(clawk_cli_models_catalog_static, "CANONICAL_PROVIDERS", canonical)
-    monkeypatch.setattr(hm, "cached_provider_model_ids",
-                        lambda *a, **k: ["kimi-k2.6", "kimi-k2.5"])
+    monkeypatch.setattr(
+        clawk_cli_models_catalog_static, "CANONICAL_PROVIDERS", canonical
+    )
+    monkeypatch.setattr(
+        hm, "cached_provider_model_ids", lambda *a, **k: ["kimi-k2.6", "kimi-k2.5"]
+    )
     monkeypatch.setattr(hm, "clear_provider_models_cache", lambda *a, **k: None)
 
 
@@ -198,7 +192,11 @@ def test_single_kimi_credential_yields_one_canonical_row(monkeypatch):
 
     _stub_kimi_discovery(
         monkeypatch,
-        canonical=[models_catalog_static.ProviderEntry("kimi-coding", "Kimi / Kimi Coding Plan", "desc")],
+        canonical=[
+            models_catalog_static.ProviderEntry(
+                "kimi-coding", "Kimi / Kimi Coding Plan", "desc"
+            )
+        ],
     )
     monkeypatch.setenv("KIMI_API_KEY", "sk-test-kimi")
 
@@ -227,8 +225,12 @@ def test_distinct_kimi_china_credential_still_listed(monkeypatch):
     _stub_kimi_discovery(
         monkeypatch,
         canonical=[
-            models_catalog_static.ProviderEntry("kimi-coding", "Kimi / Kimi Coding Plan", "desc"),
-            models_catalog_static.ProviderEntry("kimi-coding-cn", "Kimi / Moonshot (China)", "desc"),
+            models_catalog_static.ProviderEntry(
+                "kimi-coding", "Kimi / Kimi Coding Plan", "desc"
+            ),
+            models_catalog_static.ProviderEntry(
+                "kimi-coding-cn", "Kimi / Moonshot (China)", "desc"
+            ),
         ],
     )
     monkeypatch.setenv("KIMI_API_KEY", "sk-test-kimi")
@@ -237,10 +239,10 @@ def test_distinct_kimi_china_credential_still_listed(monkeypatch):
     rows = model_switch.list_authenticated_providers(max_models=10)
     slugs = [r["slug"] for r in rows]
 
-    assert "kimi-coding" in slugs       # canonical global row
+    assert "kimi-coding" in slugs  # canonical global row
     assert slugs.count("kimi-coding") == 1
-    assert "kimi" not in slugs          # alias collapsed into the canonical row
-    assert "kimi-coding-cn" in slugs    # distinct China endpoint preserved
+    assert "kimi" not in slugs  # alias collapsed into the canonical row
+    assert "kimi-coding-cn" in slugs  # distinct China endpoint preserved
 
 
 def test_non_blocking_listing_opens_no_socket(monkeypatch, tmp_path):
@@ -249,8 +251,15 @@ def test_non_blocking_listing_opens_no_socket(monkeypatch, tmp_path):
     even with several credentialed providers and an empty on-disk cache."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     monkeypatch.setattr(models_mod, "_openrouter_catalog_cache", None)
-    for key in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "DEEPSEEK_API_KEY", "GROQ_API_KEY",
-                "MISTRAL_API_KEY", "XAI_API_KEY", "OPENROUTER_API_KEY"):
+    for key in (
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "DEEPSEEK_API_KEY",
+        "GROQ_API_KEY",
+        "MISTRAL_API_KEY",
+        "XAI_API_KEY",
+        "OPENROUTER_API_KEY",
+    ):
         monkeypatch.setenv(key, "dummy")
     (tmp_path / "provider_models_cache.json").write_text("{}", encoding="utf-8")
     monkeypatch.setattr("agent.models_dev.fetch_models_dev", lambda *a, **k: {})
@@ -264,28 +273,48 @@ def test_non_blocking_listing_opens_no_socket(monkeypatch, tmp_path):
     monkeypatch.setattr(models_mod, "provider_model_ids", _live_probe)
     monkeypatch.setattr(models_mod, "fetch_api_models", _live_probe)
     monkeypatch.setattr(models_mod, "_fetch_live_catalog_index", _live_probe)
-    monkeypatch.setattr(models_mod, "_spawn_swr_refresh", lambda *a, **k: None)  # background warm is not "live"
+    monkeypatch.setattr(
+        models_mod, "_spawn_swr_refresh", lambda *a, **k: None
+    )  # background warm is not "live"
 
     rows = model_switch_providers.list_picker_providers(
-        max_models=50, include_moa=True, current_provider="openrouter", user_providers={},
-        custom_providers=[], excluded_providers=[], non_blocking_catalogs=True)
+        max_models=50,
+        include_moa=True,
+        current_provider="openrouter",
+        user_providers={},
+        custom_providers=[],
+        excluded_providers=[],
+        non_blocking_catalogs=True,
+    )
 
     assert live == [], f"cache-only listing ran live probes in the request path: {live}"
-    assert any(r.get("slug") == "openrouter" and r.get("models") for r in rows), "OpenRouter row lost its curated snapshot"
+    assert any(r.get("slug") == "openrouter" and r.get("models") for r in rows), (
+        "OpenRouter row lost its curated snapshot"
+    )
 
 
 def test_curated_openrouter_row_keeps_free_tail_past_max_models(monkeypatch):
     """The OpenRouter row is already curated; its bottom "Free tier" block must survive the picker cap
     while an ordinary provider row stays capped."""
-    curated = [(f"vendor/model-{i}", "") for i in range(55)] + [("stealth/free-model", "free, stealth model")]
+    curated = [(f"vendor/model-{i}", "") for i in range(55)] + [
+        ("stealth/free-model", "free, stealth model")
+    ]
     other = [f"other-{i}" for i in range(60)]
-    monkeypatch.setattr(model_switch, "list_authenticated_providers", lambda **_: [
-        _make_provider("openrouter", models=[mid for mid, _ in curated][:50]),
-        _make_provider("deepseek", models=other[:50]) | {"total_models": len(other)},
-    ])
+    monkeypatch.setattr(
+        model_switch,
+        "list_authenticated_providers",
+        lambda **_: [
+            _make_provider("openrouter", models=[mid for mid, _ in curated][:50]),
+            _make_provider("deepseek", models=other[:50])
+            | {"total_models": len(other)},
+        ],
+    )
     monkeypatch.setattr(models_mod, "fetch_openrouter_models", lambda **_: curated)
 
-    rows = {r["slug"]: r for r in model_switch_providers.list_picker_providers(max_models=50)}
+    rows = {
+        r["slug"]: r
+        for r in model_switch_providers.list_picker_providers(max_models=50)
+    }
 
     assert rows["openrouter"]["models"] == [mid for mid, _ in curated]
     assert len(rows["deepseek"]["models"]) == 50

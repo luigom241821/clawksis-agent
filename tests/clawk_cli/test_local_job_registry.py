@@ -31,7 +31,9 @@ def test_pause_request_prevents_transition_into_activation(client):
     job["phase"] = "downloading"
     pause = threading.Event()
     lm._RUNNING[job["job_id"]] = {"pause": pause}
-    assert client.post("/api/local-models/download/pause", json={"job_id": job["job_id"]}).json()["paused"]
+    assert client.post(
+        "/api/local-models/download/pause", json={"job_id": job["job_id"]}
+    ).json()["paused"]
     with pytest.raises(DownloadPaused):
         lm._step(job, "starting-server", "Starting")
     assert job["phase"] == "downloading"

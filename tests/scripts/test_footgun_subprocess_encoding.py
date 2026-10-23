@@ -92,14 +92,13 @@ class TestDetection:
         line = '    out = subprocess.check_output(["git", "status"], text=True)'
         assert _scan_line(linter, line, RULE_NAME)
 
-
     def test_flags_text_with_spaces_around_equals(self, linter):
-        line = '    subprocess.run(cmd, text = True, timeout=10)'
+        line = "    subprocess.run(cmd, text = True, timeout=10)"
         assert _scan_line(linter, line, RULE_NAME)
 
     def test_flags_bare_run_call(self, linter):
         # .run( without explicit subprocess. prefix — still a subprocess call
-        line = '    result = obj.run(cmd, text=True)'
+        line = "    result = obj.run(cmd, text=True)"
         assert _scan_line(linter, line, RULE_NAME)
 
 
@@ -110,7 +109,7 @@ class TestDetection:
 
 class TestSuppression:
     def test_does_not_flag_comment_only_line(self, linter):
-        line = '    # subprocess.run(cmd, text=True) — example'
+        line = "    # subprocess.run(cmd, text=True) — example"
         assert not _scan_line(linter, line, RULE_NAME)
 
 
@@ -126,15 +125,16 @@ class TestHelpers:
 
     def test_looks_like_string_literal_double_quotes(self, linter):
         import re
+
         line = '    msg = "use text=True carefully"'
         match = re.search(r"\btext\s*=\s*True\b", line)
         assert match is not None
         assert linter._looks_like_string_literal(line, match)
 
-
     def test_looks_like_string_literal_false_for_real_code(self, linter):
         import re
-        line = '    subprocess.run(cmd, text=True)'
+
+        line = "    subprocess.run(cmd, text=True)"
         match = re.search(r"\btext\s*=\s*True\b", line)
         assert match is not None
         assert not linter._looks_like_string_literal(line, match)
@@ -148,4 +148,4 @@ class TestHelpers:
 # ---------------------------------------------------------------------------
 
 
-        # All matches are the expected PR #60741 sites — OK on this branch.
+# All matches are the expected PR #60741 sites — OK on this branch.

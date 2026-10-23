@@ -44,8 +44,9 @@ def _long_snapshot(chars: int) -> str:
 
 
 def test_default_matches_browser_config(isolated_snapshot_threshold):
-    assert browser_tool.get_browser_snapshot_threshold() == (
-        DEFAULT_CONFIG["browser"]["snapshot_threshold"]
+    assert (
+        browser_tool.get_browser_snapshot_threshold()
+        == (DEFAULT_CONFIG["browser"]["snapshot_threshold"])
     )
 
 

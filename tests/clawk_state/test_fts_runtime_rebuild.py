@@ -25,8 +25,18 @@ import clawk_state
 import clawk_state_holders
 import clawk_state_schema
 from clawk_state import SessionDB
-from clawk_state_common import FTS_REBUILD_DEFERRAL_KEY, FTS_STALE_KEY, LEGACY_FTS_SQL, LEGACY_FTS_TRIGRAM_SQL, SCHEMA_SQL, _FTS_TRIGGERS
-from clawk_state_dbfile import _concrete_state_db_holder_pids, _is_inactive_orphan_desktop_holder
+from clawk_state_common import (
+    FTS_REBUILD_DEFERRAL_KEY,
+    FTS_STALE_KEY,
+    LEGACY_FTS_SQL,
+    LEGACY_FTS_TRIGRAM_SQL,
+    SCHEMA_SQL,
+    _FTS_TRIGGERS,
+)
+from clawk_state_dbfile import (
+    _concrete_state_db_holder_pids,
+    _is_inactive_orphan_desktop_holder,
+)
 
 
 @pytest.fixture
@@ -67,9 +77,7 @@ def _message_contents(db_path):
 
 def _meta_value(db_path, key):
     raw = sqlite3.connect(str(db_path))
-    row = raw.execute(
-        "SELECT value FROM state_meta WHERE key = ?", (key,)
-    ).fetchone()
+    row = raw.execute("SELECT value FROM state_meta WHERE key = ?", (key,)).fetchone()
     raw.close()
     return None if row is None else row[0]
 
@@ -86,18 +94,22 @@ def _base_fts_triggers(db_path):
 
 
 class TestRuntimeFtsRebuild:
-    def test_reap_candidates_exclude_uninspectable_holder_suspicions(
-        self, tmp_path
-    ):
+    def test_reap_candidates_exclude_uninspectable_holder_suspicions(self, tmp_path):
         db_path = tmp_path / "state.db"
 
-        assert _concrete_state_db_holder_pids(
-            db_path,
-            [
-                (222, "uninspectable holder: python -m clawk_cli.main serve --port 0"),
-                (-1, "open-file scan failed"),
-            ],
-        ) == []
+        assert (
+            _concrete_state_db_holder_pids(
+                db_path,
+                [
+                    (
+                        222,
+                        "uninspectable holder: python -m clawk_cli.main serve --port 0",
+                    ),
+                    (-1, "open-file scan failed"),
+                ],
+            )
+            == []
+        )
 
     def test_reap_candidates_deduplicate_multiple_proven_watched_fds(self, tmp_path):
         db_path = tmp_path / "state.db"
@@ -121,9 +133,7 @@ class TestRuntimeFtsRebuild:
         }
         assert _is_inactive_orphan_desktop_holder(**common)
         assert not _is_inactive_orphan_desktop_holder(**{**common, "ppid": 42})
-        assert not _is_inactive_orphan_desktop_holder(
-            **{**common, "age_seconds": 10.0}
-        )
+        assert not _is_inactive_orphan_desktop_holder(**{**common, "age_seconds": 10.0})
         assert not _is_inactive_orphan_desktop_holder(
             **{**common, "ephemeral_backend": False}
         )
@@ -211,17 +221,22 @@ class TestRuntimeFtsRebuild:
 
         monkeypatch.setattr(clawk_state_holders.os, "getpid", lambda: 111)
         real_listdir = os.listdir
+
         def _listdir(path):
             if isinstance(path, str):
                 path = path.replace("/proc", str(proc_root))
             return real_listdir(path)
+
         monkeypatch.setattr(clawk_state_holders.os, "listdir", _listdir)
         real_readlink = os.readlink
+
         def _readlink(path):
             path = path.replace("/proc", str(proc_root))
             return real_readlink(path)
+
         monkeypatch.setattr(clawk_state_holders.os, "readlink", _readlink)
         real_stat = os.stat
+
         def _stat(path, *args, **kwargs):
             path_s = str(path).replace("/proc", str(proc_root))
             if path_s.endswith("/222/fd/3"):
@@ -232,6 +247,7 @@ class TestRuntimeFtsRebuild:
                 fields[1] += 1000
                 return os.stat_result(fields)
             return real_stat(path_s, *args, **kwargs)
+
         monkeypatch.setattr(clawk_state_holders.os, "stat", _stat)
 
         holders = clawk_state_holders.foreign_state_db_holders(db_path)
@@ -252,19 +268,20 @@ class TestRuntimeFtsRebuild:
         os.chmod(proc_root / "222" / "fd", 0o000)
         # PID 222's cmdline is world-readable and looks like Clawksis
         cmdline_path = proc_root / "222" / "cmdline"
-        cmdline_path.write_bytes(
-            b"python3\x00-m\x00clawk_cli.main\x00chat\x00"
-        )
+        cmdline_path.write_bytes(b"python3\x00-m\x00clawk_cli.main\x00chat\x00")
 
         monkeypatch.setattr(clawk_state_holders.os, "getpid", lambda: 111)
         real_listdir = os.listdir
+
         def _listdir(path):
             if isinstance(path, str):
                 if path == "/proc/222/fd":
                     raise PermissionError(path)
                 path = path.replace("/proc", str(proc_root))
             return real_listdir(path)
+
         monkeypatch.setattr(clawk_state_holders.os, "listdir", _listdir)
+
         # _read_proc_argv opens /proc/<pid>/cmdline directly; redirect
         # it to our fake proc tree.
         def _fake_argv(pid):
@@ -277,6 +294,7 @@ class TestRuntimeFtsRebuild:
                 return raw.decode("utf-8", "replace").rstrip("\x00").split("\x00")
             except OSError:
                 return None
+
         monkeypatch.setattr(clawk_state_holders, "_read_proc_argv", _fake_argv)
 
         holders = clawk_state_holders.foreign_state_db_holders(db_path)
@@ -523,9 +541,7 @@ class TestRuntimeFtsRebuild:
         finally:
             reopened.close()
 
-    def test_non_fts_write_error_after_fail_open_raises_not_hangs(
-        self, db, tmp_path
-    ):
+    def test_non_fts_write_error_after_fail_open_raises_not_hangs(self, db, tmp_path):
         if not db._fts_enabled:
             pytest.skip("FTS5 unavailable in this build")
         db_path = tmp_path / "state.db"
@@ -540,9 +556,7 @@ class TestRuntimeFtsRebuild:
         with pytest.raises(sqlite3.DatabaseError, match="routine integrity"):
             db._execute_write(_persistent_non_fts_error)
 
-    def test_live_write_does_not_scan_foreign_holders(
-        self, db, tmp_path, monkeypatch
-    ):
+    def test_live_write_does_not_scan_foreign_holders(self, db, tmp_path, monkeypatch):
         if not db._fts_enabled:
             pytest.skip("FTS5 unavailable in this build")
         db_path = tmp_path / "state.db"
@@ -588,9 +602,7 @@ class TestRuntimeFtsRebuild:
         assert any("python language guide" in snippet for snippet in snippets)
         assert all("java" not in snippet for snippet in snippets)
 
-    def test_existing_peer_observes_fail_open_marker(
-        self, db, tmp_path, monkeypatch
-    ):
+    def test_existing_peer_observes_fail_open_marker(self, db, tmp_path, monkeypatch):
         if not db._fts_enabled:
             pytest.skip("FTS5 unavailable in this build")
         db_path = tmp_path / "state.db"
@@ -613,9 +625,7 @@ class TestRuntimeFtsRebuild:
         finally:
             peer.close()
 
-    def test_failed_startup_rebuild_keeps_fts_detached(
-        self, db, tmp_path, monkeypatch
-    ):
+    def test_failed_startup_rebuild_keeps_fts_detached(self, db, tmp_path, monkeypatch):
         if not db._fts_enabled:
             pytest.skip("FTS5 unavailable in this build")
         db_path = tmp_path / "state.db"
@@ -746,19 +756,28 @@ class TestRuntimeFtsRebuild:
         db.append_message("s1", "user", "seed")
         _corrupt_fts(db_path)
         monkeypatch.setattr(
-            db, "rebuild_fts", lambda: (_ for _ in ()).throw(sqlite3.DatabaseError("still corrupt")),
+            db,
+            "rebuild_fts",
+            lambda: (_ for _ in ()).throw(sqlite3.DatabaseError("still corrupt")),
         )
         db.append_message("s1", "user", "before restart")
         db.close()
 
         monkeypatch.setattr(
-            SessionDB, "_foreign_state_db_holders", lambda self: [(4242, str(db_path) + "-wal")],
+            SessionDB,
+            "_foreign_state_db_holders",
+            lambda self: [(4242, str(db_path) + "-wal")],
         )
         monkeypatch.setattr(
-            SessionDB, "_reap_inactive_orphan_desktop_holders", lambda self, holders, *, min_age_seconds: [],
+            SessionDB,
+            "_reap_inactive_orphan_desktop_holders",
+            lambda self, holders, *, min_age_seconds: [],
         )
         monkeypatch.setattr(
-            clawk_state_schema, "_read_proc_argv", lambda pid: ["python", "-m", "clawk_cli.main", "serve"], raising=False,
+            clawk_state_schema,
+            "_read_proc_argv",
+            lambda pid: ["python", "-m", "clawk_cli.main", "serve"],
+            raising=False,
         )
         clock = [1000.0]
         monkeypatch.setattr(clawk_state_schema.time, "time", lambda: clock[0])
@@ -767,11 +786,16 @@ class TestRuntimeFtsRebuild:
         from clawk_state_dbfile import collect_state_db_stats
 
         def doctor_blob():
-            return " ".join(" ".join(row) for row in _render_state_db_stats(collect_state_db_stats(db_path))).lower()
+            return " ".join(
+                " ".join(row)
+                for row in _render_state_db_stats(collect_state_db_stats(db_path))
+            ).lower()
 
         # Read via getattr so the red-on-base run reaches the behavioural assertion, not a NameError.
         futile_attempts = getattr(clawk_state_schema, "_FTS_HOLDER_FUTILE_ATTEMPTS", 10)
-        futile_seconds = getattr(clawk_state_schema, "_FTS_HOLDER_FUTILE_SECONDS", 1800.0)
+        futile_seconds = getattr(
+            clawk_state_schema, "_FTS_HOLDER_FUTILE_SECONDS", 1800.0
+        )
         reopened = SessionDB(db_path=db_path)
         try:
             cursor = reopened._conn.cursor()
@@ -779,25 +803,42 @@ class TestRuntimeFtsRebuild:
             for _ in range(futile_attempts - 2):
                 clock[0] += futile_seconds
                 caplog.clear()
-                assert reopened._recover_stale_fts(cursor, legacy=False, timeout_seconds=0.0) is False
+                assert (
+                    reopened._recover_stale_fts(
+                        cursor, legacy=False, timeout_seconds=0.0
+                    )
+                    is False
+                )
             reopened._conn.commit()
-            assert not json.loads(_meta_value(db_path, FTS_REBUILD_DEFERRAL_KEY)).get("futile")
+            assert not json.loads(_meta_value(db_path, FTS_REBUILD_DEFERRAL_KEY)).get(
+                "futile"
+            )
             assert "waiting is futile" not in caplog.text
             assert "futile" not in doctor_blob()
 
             clock[0] += futile_seconds
             caplog.clear()
-            assert reopened._recover_stale_fts(cursor, legacy=False, timeout_seconds=0.0) is False
+            assert (
+                reopened._recover_stale_fts(cursor, legacy=False, timeout_seconds=0.0)
+                is False
+            )
             reopened._conn.commit()
             record = json.loads(_meta_value(db_path, FTS_REBUILD_DEFERRAL_KEY))
             assert record.get("futile") is True and record["holder_pids"] == [4242]
-            futile_lines = [r for r in caplog.records if "waiting is futile" in r.getMessage()]
+            futile_lines = [
+                r for r in caplog.records if "waiting is futile" in r.getMessage()
+            ]
             assert len(futile_lines) == 1 and futile_lines[0].levelno == logging.ERROR
             msg = futile_lines[0].getMessage()
             assert "pid 4242: python -m clawk_cli.main serve" in msg
-            assert "Stop ONLY the other holder" in msg and "with the gateway stopped" not in msg
+            assert (
+                "Stop ONLY the other holder" in msg
+                and "with the gateway stopped" not in msg
+            )
             blob = doctor_blob()
-            assert "4242" in blob and "waiting is futile" in blob and "stop only" in blob
+            assert (
+                "4242" in blob and "waiting is futile" in blob and "stop only" in blob
+            )
             assert "gateway stopped" not in blob
         finally:
             reopened.close()
@@ -814,19 +855,27 @@ class TestRuntimeFtsRebuild:
         db.append_message("s1", "user", "seed")
         _corrupt_fts(db_path)
         monkeypatch.setattr(
-            db, "rebuild_fts", lambda: (_ for _ in ()).throw(sqlite3.DatabaseError("still corrupt")),
+            db,
+            "rebuild_fts",
+            lambda: (_ for _ in ()).throw(sqlite3.DatabaseError("still corrupt")),
         )
         db.append_message("s1", "user", "before restart")
         db.close()
 
         holders = [(4242, str(db_path) + "-wal")]
-        monkeypatch.setattr(SessionDB, "_foreign_state_db_holders", lambda self: list(holders))
+        monkeypatch.setattr(
+            SessionDB, "_foreign_state_db_holders", lambda self: list(holders)
+        )
         reopened = SessionDB(db_path=db_path)
         try:
             assert reopened._fts_stale is True
             # Backoff pinned at the cap by the same holder; the holder still there -> no retry.
-            reopened._fts_stale_retry_after = time.monotonic() + clawk_state_schema._FTS_STALE_RETRY_MAX_SECONDS
-            reopened._fts_stale_retry_interval = clawk_state_schema._FTS_STALE_RETRY_MAX_SECONDS
+            reopened._fts_stale_retry_after = (
+                time.monotonic() + clawk_state_schema._FTS_STALE_RETRY_MAX_SECONDS
+            )
+            reopened._fts_stale_retry_interval = (
+                clawk_state_schema._FTS_STALE_RETRY_MAX_SECONDS
+            )
             assert reopened.retry_deferred_fts_recovery() is False
             assert reopened._fts_stale is True
             # Holder leaves: the very next tick retries and rebuilds instead of waiting out the cap.
@@ -921,9 +970,7 @@ class TestPhysicalCorruptionAcceptance:
     the two corruption classes are handled differently end to end.
     """
 
-    def test_canonical_btree_corruption_fails_closed(
-        self, tmp_path, caplog
-    ):
+    def test_canonical_btree_corruption_fails_closed(self, tmp_path, caplog):
         """Bare SQLITE_CORRUPT from real canonical damage must propagate.
 
         No FTS rebuild attempt, no trigger detach, no stale marker, and —

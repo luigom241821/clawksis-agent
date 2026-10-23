@@ -67,11 +67,13 @@ class ModelProfile:
     weights_bytes: int
     embd_table_bytes: int
     n_ctx_train: int
-    layers: list[tuple[LayerKind, int]]   # (kind, kv_bytes_per_token_f16); SWA capped, recurrent ignored
+    layers: list[
+        tuple[LayerKind, int]
+    ]  # (kind, kv_bytes_per_token_f16); SWA capped, recurrent ignored
     swa_window: int = 0
     moe: bool = False
     architecture: str = ""
-    n_vocab: int = 0            # prices logits buffers (ubatch x vocab)
+    n_vocab: int = 0  # prices logits buffers (ubatch x vocab)
     # Context-cost multiplier. MTP spec decode keeps a small draft context beside the main one;
     # calibrated against four measured server-RSS points on Qwen3.8 Q4 (128K/221K/256K, both
     # postures): the draft adds ~17% to per-token KV; 1.2 rounds up so the error stays on the safe
@@ -110,12 +112,12 @@ class HardwareBudget:
     unified-memory devices must budget from OS free memory minus headroom (device queries observed
     off by 3x). Callers construct this accordingly; the estimator just consumes it."""
 
-    usable_vram_bytes: int      # live free (discrete) / derived (UMA)
+    usable_vram_bytes: int  # live free (discrete) / derived (UMA)
     total_device_bytes: int
     ram_available_bytes: int
     uma: bool = False
-    gpu_name: str = ""          # display name; legacy fallback for performance estimates
-    platform: str = ""          # sys.platform of the machine being priced
+    gpu_name: str = ""  # display name; legacy fallback for performance estimates
+    platform: str = ""  # sys.platform of the machine being priced
     gpu_pci_id: int | None = None  # nvidia-smi's packed PCI device/vendor ID
     # The engine reads lazy tensors from disk here. llama.cpp's own default does so everywhere
     # except integrated GPUs (b11370 #28160); Clawksis passes --lazy-mode on to NVIDIA's, so only
@@ -131,7 +133,11 @@ def as_loaded(profile: ModelProfile, budget: HardwareBudget) -> ModelProfile:
     """The profile as this machine loads it: on-demand tensors count as weights where the engine
     reads them up front."""
     if profile.lazy_bytes and not budget.lazy_reads:
-        return replace(profile, weights_bytes=profile.weights_bytes + profile.lazy_bytes, lazy_bytes=0)
+        return replace(
+            profile,
+            weights_bytes=profile.weights_bytes + profile.lazy_bytes,
+            lazy_bytes=0,
+        )
     return profile
 
 
@@ -147,10 +153,16 @@ def profile_from_gguf(header: GGUFHeader) -> ModelProfile:
     # priced as full attention (overestimate; safe).
     pattern = header.sliding_window_pattern
     if pattern is None and header.sliding_window_pattern_period > 0:
-        pattern = _expand_swa_period(header.sliding_window_pattern_period, header.n_layer,
-                                      header.architecture in _SWA_DENSE_FIRST_ARCHS)
-    has_pattern = (pattern is not None and header.sliding_window > 0
-                  and len(pattern) == len(kv_heads))
+        pattern = _expand_swa_period(
+            header.sliding_window_pattern_period,
+            header.n_layer,
+            header.architecture in _SWA_DENSE_FIRST_ARCHS,
+        )
+    has_pattern = (
+        pattern is not None
+        and header.sliding_window > 0
+        and len(pattern) == len(kv_heads)
+    )
     swa_fraction = _SWA_LAYER_FRACTION.get(header.architecture, 0.0)
     has_fraction = not has_pattern and header.sliding_window > 0 and swa_fraction > 0
     n_attn_total = sum(1 for h in kv_heads if h > 0)
@@ -174,12 +186,19 @@ def profile_from_gguf(header: GGUFHeader) -> ModelProfile:
         n_attn_seen += 1
 
     return ModelProfile(
-        name=header.path, weights_bytes=header.tensor_bytes - header.lazy_bytes,
+        name=header.path,
+        weights_bytes=header.tensor_bytes - header.lazy_bytes,
         embd_table_bytes=header.embd_table_bytes,
-        n_ctx_train=header.n_ctx_train, layers=layers, swa_window=header.sliding_window,
-        moe=header.expert_count > 0, architecture=header.architecture, n_vocab=header.n_vocab,
-        ffn_block_bytes=dict(header.ffn_block_bytes), lazy_bytes=header.lazy_bytes,
-        recurrent_state_bytes=header.recurrent_state_bytes)
+        n_ctx_train=header.n_ctx_train,
+        layers=layers,
+        swa_window=header.sliding_window,
+        moe=header.expert_count > 0,
+        architecture=header.architecture,
+        n_vocab=header.n_vocab,
+        ffn_block_bytes=dict(header.ffn_block_bytes),
+        lazy_bytes=header.lazy_bytes,
+        recurrent_state_bytes=header.recurrent_state_bytes,
+    )
 
 
 def kv_dtype_factor(flash_attention: bool) -> float:
@@ -188,7 +207,9 @@ def kv_dtype_factor(flash_attention: bool) -> float:
     return (_Q8_BYTES_PER_ELEM / _F16_BYTES_PER_ELEM) if flash_attention else 1.0
 
 
-def ctx_bytes(profile: ModelProfile, window: int, *, flash_attention: bool = True) -> int:
+def ctx_bytes(
+    profile: ModelProfile, window: int, *, flash_attention: bool = True
+) -> int:
     """Memory that grows with the window: full layers linear in T, SWA layers capped at the sliding
     window, recurrent layers constant, KV scaled by profile.kv_scale (MTP draft context), plus the
     posture's window-scaled compute buffers."""
@@ -214,24 +235,45 @@ class PhysicsRefusal:
     message: str
 
 
-def footprint_bytes(profile: ModelProfile, window: int, *, flash_attention: bool = True,
-                    overhead_bytes: int = 0) -> int:
+def footprint_bytes(
+    profile: ModelProfile,
+    window: int,
+    *,
+    flash_attention: bool = True,
+    overhead_bytes: int = 0,
+) -> int:
     """Complete estimated footprint; the hardware budget already excludes its reserve."""
-    return (profile.weights_bytes + ctx_bytes(profile, window, flash_attention=flash_attention)
-            + max(0, overhead_bytes))
+    return (
+        profile.weights_bytes
+        + ctx_bytes(profile, window, flash_attention=flash_attention)
+        + max(0, overhead_bytes)
+    )
 
 
-def physics_check(profile: ModelProfile, budget: HardwareBudget,
-                  floor: int, *, flash_attention: bool = True,
-                  overhead_bytes: int = 0) -> PhysicsRefusal | None:
-    needed = footprint_bytes(profile, min(floor, profile.n_ctx_train or floor),
-                             flash_attention=flash_attention, overhead_bytes=overhead_bytes)
+def physics_check(
+    profile: ModelProfile,
+    budget: HardwareBudget,
+    floor: int,
+    *,
+    flash_attention: bool = True,
+    overhead_bytes: int = 0,
+) -> PhysicsRefusal | None:
+    needed = footprint_bytes(
+        profile,
+        min(floor, profile.n_ctx_train or floor),
+        flash_attention=flash_attention,
+        overhead_bytes=overhead_bytes,
+    )
     available = budget.usable_vram_bytes + budget.ram_available_bytes
     if needed <= available:
         return None
     gib = 1 << 30
     return PhysicsRefusal(
-        needed_bytes=needed, available_bytes=available,
-        message=(f"{profile.name}: needs ~{needed / gib:.1f} GiB at the "
-                 f"{floor // 1024}K floor but only ~{available / gib:.1f} GiB "
-                 "of VRAM+RAM are available — try a smaller model or a supported smaller quant"))
+        needed_bytes=needed,
+        available_bytes=available,
+        message=(
+            f"{profile.name}: needs ~{needed / gib:.1f} GiB at the "
+            f"{floor // 1024}K floor but only ~{available / gib:.1f} GiB "
+            "of VRAM+RAM are available — try a smaller model or a supported smaller quant"
+        ),
+    )

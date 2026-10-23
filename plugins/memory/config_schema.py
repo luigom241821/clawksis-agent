@@ -103,11 +103,16 @@ def get_provider_config_schema(name: str) -> ProviderConfigSchema | None:
     try:
         from plugins.memory import _is_bundled
         from clawk_cli.plugin_isolation import user_plugin_host
+
         host = None if _is_bundled(provider_dir) else user_plugin_host()
-        if host is not None:  # plugins.isolation: host — a user schema file is user code too
+        if (
+            host is not None
+        ):  # plugins.isolation: host — a user schema file is user code too
             schema = _schema_from_record(host.config_schema(path))
         else:
-            spec = importlib.util.spec_from_file_location(f"_clawk_memory_config_schema.{name}", path)
+            spec = importlib.util.spec_from_file_location(
+                f"_clawk_memory_config_schema.{name}", path
+            )
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
             schema = getattr(module, "CONFIG_SCHEMA", None)
@@ -126,8 +131,16 @@ def _schema_from_record(record) -> ProviderConfigSchema | None:
     if not record:
         return None
     fields = tuple(
-        ProviderField(**{**f, "options": tuple(ProviderFieldOption(**o) for o in f.get("options") or ()),
-                         "aliases": tuple(f.get("aliases") or ()),
-                         "env_fallbacks": tuple(f.get("env_fallbacks") or ())})
-        for f in record.get("fields") or ())
+        ProviderField(
+            **{
+                **f,
+                "options": tuple(
+                    ProviderFieldOption(**o) for o in f.get("options") or ()
+                ),
+                "aliases": tuple(f.get("aliases") or ()),
+                "env_fallbacks": tuple(f.get("env_fallbacks") or ()),
+            }
+        )
+        for f in record.get("fields") or ()
+    )
     return ProviderConfigSchema(**{**record, "fields": fields})

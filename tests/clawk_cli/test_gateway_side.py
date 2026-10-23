@@ -1,5 +1,6 @@
 """/bg and /btw on the shared gateway: the side task runs in the gateway (prompt.background /
 prompt.btw) and its answer is routed off the event stream by task id, never built in the CLI."""
+
 import asyncio
 from contextlib import asynccontextmanager
 
@@ -19,10 +20,21 @@ class _Client:
 
     async def rpc(self, method, *, _timeout=None, **params):
         self.calls.append((method, params))
-        kind = "background.complete" if method == "prompt.background" else "btw.complete"
+        kind = (
+            "background.complete" if method == "prompt.background" else "btw.complete"
+        )
         # The answer can land before the verb's reply reaches the caller.
-        await self.events.put({"jsonrpc": "2.0", "method": "event", "params": {
-            "type": kind, "session_id": SID, "payload": {"task_id": "bg_1", "text": self.text}}})
+        await self.events.put(
+            {
+                "jsonrpc": "2.0",
+                "method": "event",
+                "params": {
+                    "type": kind,
+                    "session_id": SID,
+                    "payload": {"task_id": "bg_1", "text": self.text},
+                },
+            }
+        )
         return {"task_id": "bg_1"}
 
 
@@ -30,6 +42,7 @@ def _connection(client):
     @asynccontextmanager
     async def connect():
         yield client
+
     conn = GatewayConnection(connect=connect)
     conn.start(5)
     return conn
@@ -43,7 +56,9 @@ def test_side_task_runs_on_the_gateway_and_its_answer_is_routed_by_task_id(verb)
         task_id, wait = gateway_side.start(conn, SID, verb, "compute something")
         assert task_id == "bg_1"
         assert wait() == "DOG14 background answer"
-        assert client.calls == [(f"prompt.{verb}", {"session_id": SID, "text": "compute something"})]
+        assert client.calls == [
+            (f"prompt.{verb}", {"session_id": SID, "text": "compute something"})
+        ]
         assert conn.events.empty()  # never left for the turn pump / idle tick to drop
     finally:
         conn.close()

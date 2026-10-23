@@ -173,6 +173,5 @@ class SidebarCacheTests(unittest.TestCase):
         self.assertEqual(inspect.signature(wrapped), inspect.signature(scan))
 
 
-
 if __name__ == "__main__":
     unittest.main()

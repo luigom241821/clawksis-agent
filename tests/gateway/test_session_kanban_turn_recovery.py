@@ -1,4 +1,5 @@
 """Owner-side kanban workers retry a failed turn in place, proven from the bound frame's claim."""
+
 import json
 import os
 
@@ -7,8 +8,13 @@ from gateway import session_kanban
 from clawk_cli import kanban_db as kb
 from clawk_cli.kanban_db_connect import connect_closing
 
-FAILED = {"failed": True, "failure_retryable": True, "failure_reason": "timeout",
-          "error": "stream died", "messages": [{"role": "user", "content": "first"}]}
+FAILED = {
+    "failed": True,
+    "failure_retryable": True,
+    "failure_reason": "timeout",
+    "error": "stream died",
+    "messages": [{"role": "user", "content": "first"}],
+}
 
 
 class _Agent:
@@ -30,11 +36,18 @@ def _claimed_frame(tmp_path, monkeypatch, *, expired=False, goal_mode=False):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     monkeypatch.delenv("CLAWK_KANBAN_TURN_RECOVERY", raising=False)
     # The owner/gateway process carries a FOREIGN (stale) env carrier: the proof must ignore it.
-    for key, value in (("CLAWK_KANBAN_TASK", "t_foreign"), ("CLAWK_KANBAN_DB", str(tmp_path / "nope.db")),
-                       ("CLAWK_KANBAN_RUN_ID", "999"), ("CLAWK_KANBAN_CLAIM_LOCK", "foreign")):
+    for key, value in (
+        ("CLAWK_KANBAN_TASK", "t_foreign"),
+        ("CLAWK_KANBAN_DB", str(tmp_path / "nope.db")),
+        ("CLAWK_KANBAN_RUN_ID", "999"),
+        ("CLAWK_KANBAN_CLAIM_LOCK", "foreign"),
+    ):
         monkeypatch.setenv(key, value)
     monkeypatch.setattr(rec, "RECOVERY_DELAYS_SECONDS", (0.0,))
-    monkeypatch.setattr("agent.skill_commands.build_preloaded_skills_prompt", lambda *a, **k: ("", [], []))
+    monkeypatch.setattr(
+        "agent.skill_commands.build_preloaded_skills_prompt",
+        lambda *a, **k: ("", [], []),
+    )
     kb.init_db()
     path = kb.kanban_db_path()
     with connect_closing(path) as conn:
@@ -42,14 +55,39 @@ def _claimed_frame(tmp_path, monkeypatch, *, expired=False, goal_mode=False):
         task = kb.claim_task(conn, task_id, claimer="private-host:owner")
         assert task is not None
         with kb.write_txn(conn):
-            kb._append_event(conn, task_id, "worker_bound", {"pid": os.getpid(), "claim_lock": task.claim_lock},
-                             run_id=task.current_run_id)
-            if expired:  # lease lapsed but not yet reaped: status/run/lock all still match
-                conn.execute("UPDATE tasks SET claim_expires = 1 WHERE id = ?", (task_id,))
-                conn.execute("UPDATE task_runs SET claim_expires = 1 WHERE id = ?", (task.current_run_id,))
-    context = {"db": str(path), "task_id": task_id, "run_id": task.current_run_id, "claim_lock": task.claim_lock,
-               "skills": [], "context": "", "goal_mode": goal_mode, "goal_text": "g", "goal_max_turns": 2}
-    return path, context, {"text": "work", "policy": {"kanban_json": json.dumps(context)}}
+            kb._append_event(
+                conn,
+                task_id,
+                "worker_bound",
+                {"pid": os.getpid(), "claim_lock": task.claim_lock},
+                run_id=task.current_run_id,
+            )
+            if (
+                expired
+            ):  # lease lapsed but not yet reaped: status/run/lock all still match
+                conn.execute(
+                    "UPDATE tasks SET claim_expires = 1 WHERE id = ?", (task_id,)
+                )
+                conn.execute(
+                    "UPDATE task_runs SET claim_expires = 1 WHERE id = ?",
+                    (task.current_run_id,),
+                )
+    context = {
+        "db": str(path),
+        "task_id": task_id,
+        "run_id": task.current_run_id,
+        "claim_lock": task.claim_lock,
+        "skills": [],
+        "context": "",
+        "goal_mode": goal_mode,
+        "goal_text": "g",
+        "goal_max_turns": 2,
+    }
+    return (
+        path,
+        context,
+        {"text": "work", "policy": {"kanban_json": json.dumps(context)}},
+    )
 
 
 def test_failed_turn_retries_in_place_from_frame_carrier(tmp_path, monkeypatch):
@@ -66,12 +104,18 @@ def test_failed_turn_retries_in_place_from_frame_carrier(tmp_path, monkeypatch):
 
 
 def test_unprovable_claim_denies_retry_and_goal_continuation(tmp_path, monkeypatch):
-    path, context, frame = _claimed_frame(tmp_path, monkeypatch, expired=True, goal_mode=True)
+    path, context, frame = _claimed_frame(
+        tmp_path, monkeypatch, expired=True, goal_mode=True
+    )
     goal_calls = []
-    monkeypatch.setattr("clawk_cli.goals.run_kanban_goal_loop", lambda **kw: goal_calls.append(kw))
+    monkeypatch.setattr(
+        "clawk_cli.goals.run_kanban_goal_loop", lambda **kw: goal_calls.append(kw)
+    )
     agent = _Agent([dict(FAILED)])
 
     result = session_kanban.run_worker_turns(agent, frame, [])
 
     assert result["failed"] and len(agent.calls) == 1 and goal_calls == []
-    assert session_kanban.worker_exit_code(path, context) == kb.KANBAN_RATE_LIMIT_EXIT_CODE
+    assert (
+        session_kanban.worker_exit_code(path, context) == kb.KANBAN_RATE_LIMIT_EXIT_CODE
+    )

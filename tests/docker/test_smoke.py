@@ -10,6 +10,7 @@ The harness expects the ``built_image`` fixture from
 ``tests/docker/conftest.py``.  When Docker isn't available every test
 here is skipped at collection time.
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -27,7 +28,9 @@ def test_clawk_help(built_image: str) -> None:
     """
     r = subprocess.run(
         ["docker", "run", "--rm", built_image, "--help"],
-        capture_output=True, text=True, timeout=60,
+        capture_output=True,
+        text=True,
+        timeout=60,
         check=False,
     )
     assert r.returncode == 0, (
@@ -49,7 +52,9 @@ def test_dashboard_subcommand_present(built_image: str) -> None:
     """
     r = subprocess.run(
         ["docker", "run", "--rm", built_image, "dashboard", "--help"],
-        capture_output=True, text=True, timeout=60,
+        capture_output=True,
+        text=True,
+        timeout=60,
         check=False,
     )
     assert r.returncode == 0, (
@@ -74,7 +79,9 @@ def test_clawk_help_under_wrapped_init(built_image: str) -> None:
     """
     r = subprocess.run(
         ["docker", "run", "--init", "--rm", built_image, "--help"],
-        capture_output=True, text=True, timeout=120,
+        capture_output=True,
+        text=True,
+        timeout=120,
         check=False,
     )
     assert "can only run as pid 1" not in (r.stdout + r.stderr), (

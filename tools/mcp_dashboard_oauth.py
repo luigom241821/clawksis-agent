@@ -51,12 +51,22 @@ class DashboardOAuthFlow:
     # The user abandoned this flow: terminal for good, never re-minted (see publish_authorization_url).
     cancelled: bool = field(default=False, init=False)
     expected_state: str | None = field(default=None, init=False)
-    _callback: tuple[str, str | None, str | None] | None = field(default=None, init=False, repr=False)
+    _callback: tuple[str, str | None, str | None] | None = field(
+        default=None, init=False, repr=False
+    )
     _callback_error: str | None = field(default=None, init=False, repr=False)
-    _authorization_ready: threading.Event = field(default_factory=threading.Event, init=False, repr=False)
-    _callback_ready: threading.Event = field(default_factory=threading.Event, init=False, repr=False)
-    _worker_done: threading.Event = field(default_factory=threading.Event, init=False, repr=False)
-    _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
+    _authorization_ready: threading.Event = field(
+        default_factory=threading.Event, init=False, repr=False
+    )
+    _callback_ready: threading.Event = field(
+        default_factory=threading.Event, init=False, repr=False
+    )
+    _worker_done: threading.Event = field(
+        default_factory=threading.Event, init=False, repr=False
+    )
+    _lock: threading.Lock = field(
+        default_factory=threading.Lock, init=False, repr=False
+    )
 
     async def publish_authorization_url(self, url: str) -> None:
         """Record the SDK's authorization URL (with its ``state``) for the dashboard to show.
@@ -84,8 +94,12 @@ class DashboardOAuthFlow:
         """Reset an ended attempt so the next authorization URL mints a fresh state (caller holds
         ``self._lock``). The ended attempt's URL, state and spent authorization code are dropped —
         replaying them would hand the SDK a code the provider already burned."""
-        logger.info("MCP OAuth: dashboard flow %s for '%s' ended (%s); re-minting for the next attempt",
-                    self.flow_id, self.server_name, self.status)
+        logger.info(
+            "MCP OAuth: dashboard flow %s for '%s' ended (%s); re-minting for the next attempt",
+            self.flow_id,
+            self.server_name,
+            self.status,
+        )
         self.authorization_url = None
         self.expected_state = None
         self._callback = None
@@ -98,11 +112,18 @@ class DashboardOAuthFlow:
         if not await asyncio.to_thread(self._authorization_ready.wait, timeout):
             raise TimeoutError("Timed out waiting for MCP authorization URL")
         if not self.authorization_url:
-            raise RuntimeError(self.error or "MCP OAuth flow ended before authorization")
+            raise RuntimeError(
+                self.error or "MCP OAuth flow ended before authorization"
+            )
         return self.authorization_url
 
     def deliver_callback(
-        self, *, code: str | None, state: str | None, error: str | None, iss: str | None = None
+        self,
+        *,
+        code: str | None,
+        state: str | None,
+        error: str | None,
+        iss: str | None = None,
     ) -> None:
         """Hand the browser redirect to the waiting flow; ``state`` must match exactly.
 
@@ -111,7 +132,11 @@ class DashboardOAuthFlow:
         with self._lock:
             if self._callback_ready.is_set():
                 raise ValueError("OAuth callback already received")
-            if self.expected_state is None or state is None or not secrets.compare_digest(self.expected_state, state):
+            if (
+                self.expected_state is None
+                or state is None
+                or not secrets.compare_digest(self.expected_state, state)
+            ):
                 raise ValueError("OAuth callback state mismatch")
             if error:
                 self._callback_error = error
@@ -121,7 +146,9 @@ class DashboardOAuthFlow:
                 self._callback_error = "OAuth callback did not include code or error"
             self._callback_ready.set()
 
-    async def wait_for_callback(self, timeout: float = 300.0) -> tuple[str, str | None, str | None]:
+    async def wait_for_callback(
+        self, timeout: float = 300.0
+    ) -> tuple[str, str | None, str | None]:
         if not await asyncio.to_thread(self._callback_ready.wait, timeout):
             raise TimeoutError("Timed out waiting for MCP OAuth callback")
         if self._callback_error:
@@ -129,7 +156,8 @@ class DashboardOAuthFlow:
         if self._callback is None:
             raise RuntimeError(
                 f"MCP OAuth flow for '{self.server_name}' ended without an authorization code "
-                f"(status={self.status}, error={self.error!r})")
+                f"(status={self.status}, error={self.error!r})"
+            )
         return self._callback
 
     def mark_approved(self) -> None:
@@ -152,7 +180,10 @@ class DashboardOAuthFlow:
             if self.status in {"approved", "error"}:
                 return
             self.status = "error"
-            self.error = error or "MCP OAuth flow failed before the callback was received (empty error message)"
+            self.error = (
+                error
+                or "MCP OAuth flow failed before the callback was received (empty error message)"
+            )
             # The SDK's callback waiter reads _callback_error, not error — without
             # this copy, a failure marked before any browser redirect (worker
             # crash, authorization-URL timeout, user cancel) wakes the waiter
@@ -167,8 +198,13 @@ class DashboardOAuthFlow:
 
     def snapshot(self) -> dict:
         with self._lock:
-            return {"flow_id": self.flow_id, "server_name": self.server_name, "status": self.status,
-                    "authorization_url": self.authorization_url, "error": self.error}
+            return {
+                "flow_id": self.flow_id,
+                "server_name": self.server_name,
+                "status": self.status,
+                "authorization_url": self.authorization_url,
+                "error": self.error,
+            }
 
     def mark_worker_done(self) -> None:
         self._worker_done.set()
@@ -178,7 +214,9 @@ class DashboardOAuthFlow:
         return self._worker_done.is_set()
 
 
-_current_dashboard_flow: contextvars.ContextVar[DashboardOAuthFlow | None] = contextvars.ContextVar("mcp_dashboard_oauth_flow", default=None)
+_current_dashboard_flow: contextvars.ContextVar[DashboardOAuthFlow | None] = (
+    contextvars.ContextVar("mcp_dashboard_oauth_flow", default=None)
+)
 
 
 def dashboard_oauth_flow(flow: DashboardOAuthFlow):

@@ -40,6 +40,7 @@ def _env_file_has_key(env_path: Path, key: str) -> bool:
 def _render_distribution_plan(plan) -> None:
     """Print a human-readable summary of a pending distribution install."""
     from clawk_cli.profile_distribution import MANIFEST_FILENAME
+
     mf = plan.manifest
     print(f"\nDistribution: {mf.name} v{mf.version}")
     if mf.description:
@@ -70,7 +71,8 @@ def _render_distribution_plan(plan) -> None:
             tag = "required" if er.required else "optional"
             # Shell environment OR the target profile's .env — don't nag about set keys.
             already = os.environ.get(er.name) is not None or (
-                plan.target_dir.is_dir() and _env_file_has_key(plan.target_dir / ".env", er.name)
+                plan.target_dir.is_dir()
+                and _env_file_has_key(plan.target_dir / ".env", er.name)
             )
             status = "✓ set" if already else ("needs setting" if er.required else "—")
             line = f"    • {er.name} ({tag}, {status})"
@@ -87,7 +89,12 @@ def _render_distribution_plan(plan) -> None:
 def _profile_status(args):
     """Bare ``clawk profile`` — show current profile status."""
     from clawk_constants import display_clawk_home
-    from clawk_cli.profiles import format_profile_label, get_active_profile_name, list_profiles
+    from clawk_cli.profiles import (
+        format_profile_label,
+        get_active_profile_name,
+        list_profiles,
+    )
+
     profile_name = get_active_profile_name()
     dhh = display_clawk_home()
     current = next((p for p in list_profiles() if _is_active(p, profile_name)), None)
@@ -97,7 +104,10 @@ def _profile_status(args):
     if current is not None:
         p = current
         if p.model:
-            print(f"Model:          {p.model}" + (f" ({p.provider})" if p.provider else ""))
+            print(
+                f"Model:          {p.model}"
+                + (f" ({p.provider})" if p.provider else "")
+            )
         print(f"Gateway:        {'running' if p.gateway_running else 'stopped'}")
         print(f"Skills:         {p.skill_count} installed")
         if p.alias_path:
@@ -106,13 +116,20 @@ def _profile_status(args):
 
 
 def _profile_list(args):
-    from clawk_cli.profiles import format_profile_label, get_active_profile_name, list_profiles
+    from clawk_cli.profiles import (
+        format_profile_label,
+        get_active_profile_name,
+        list_profiles,
+    )
+
     profiles = list_profiles()
     active = get_active_profile_name()
     if not profiles:
         print("No profiles found.")
         return
-    print(f"\n {'Profile':<16} {'Model':<28} {'Gateway':<12} {'Alias':<12} {'Distribution'}")
+    print(
+        f"\n {'Profile':<16} {'Model':<28} {'Gateway':<12} {'Alias':<12} {'Distribution'}"
+    )
     print(f" {'─' * 15}    {'─' * 27}    {'─' * 11}    {'─' * 11}    {'─' * 20}")
     for p in profiles:
         marker = " ◆" if _is_active(p, active) else "  "
@@ -120,7 +137,11 @@ def _profile_list(args):
         model = (p.model or "—")[:26]
         gw = "running" if p.gateway_running else "stopped"
         alias = (p.alias_name or p.name) if p.alias_path and not p.is_default else "—"
-        dist = f"{p.distribution_name}@{p.distribution_version or '?'}"[:30] if p.distribution_name else "—"
+        dist = (
+            f"{p.distribution_name}@{p.distribution_version or '?'}"[:30]
+            if p.distribution_name
+            else "—"
+        )
         print(f"{marker}{name:<15} {model:<28} {gw:<12} {alias:<12} {dist}")
     print()
     for line in _shared_credential_warnings(profiles):
@@ -131,7 +152,11 @@ def _shared_credential_warnings(profiles) -> list:
     """One warning per named profile whose bot credential is byte-identical to the default's
     (typically an old ``--clone`` that copied .env): the collision that parks a multiplexed
     adapter or makes two standalone gateways fight over one bot."""
-    from clawk_cli.profile_channels import shared_channel_credentials, shared_credential_warning
+    from clawk_cli.profile_channels import (
+        shared_channel_credentials,
+        shared_credential_warning,
+    )
+
     default = next((p for p in profiles if p.is_default), None)
     if default is None:
         return []
@@ -150,34 +175,47 @@ def _shared_credential_warnings(profiles) -> list:
 
 def _profile_use(args):
     from clawk_cli.profiles import set_active_profile
+
     name = args.profile_name
     try:
         set_active_profile(name)
-        print("Switched to: default (~/.clawksis)" if name == "default" else f"Switched to: {name}")
+        print(
+            "Switched to: default (~/.clawksis)"
+            if name == "default"
+            else f"Switched to: {name}"
+        )
     except (ValueError, FileNotFoundError) as e:
         _die(f"Error: {e}")
 
 
 def _source_profile_dir(source_label: str) -> Path:
     from clawk_cli.profiles import get_profile_dir
+
     source_dir = get_profile_dir(source_label)
     if not source_dir.is_dir():
         raise FileNotFoundError(source_dir)
     return source_dir
 
 
-def _print_channel_clone_notice(name: str, source_label: str, clone_channels: bool, clone_flag: str) -> None:
+def _print_channel_clone_notice(
+    name: str, source_label: str, clone_channels: bool, clone_flag: str
+) -> None:
     from clawk_cli.profile_channels import (
-        channel_platforms_configured, format_stripped_notice, shared_channel_credentials,
+        channel_platforms_configured,
+        format_stripped_notice,
+        shared_channel_credentials,
         shared_credential_warning,
     )
     from clawk_cli.profiles import get_profile_dir
+
     try:
         source_dir = _source_profile_dir(source_label)
     except FileNotFoundError:
         return
     if not clone_channels:
-        for line in format_stripped_notice(name, channel_platforms_configured(source_dir), clone_flag):
+        for line in format_stripped_notice(
+            name, channel_platforms_configured(source_dir), clone_flag
+        ):
             print(line)
         return
     shared = shared_channel_credentials(get_profile_dir(name), source_dir)
@@ -187,9 +225,15 @@ def _print_channel_clone_notice(name: str, source_label: str, clone_channels: bo
 
 def _profile_create(args):
     from clawk_cli.profiles import (
-        _get_wrapper_dir, _is_wrapper_dir_in_path, check_alias_collision, create_profile,
-        create_wrapper_script, get_active_profile_name, seed_profile_skills,
+        _get_wrapper_dir,
+        _is_wrapper_dir_in_path,
+        check_alias_collision,
+        create_profile,
+        create_wrapper_script,
+        get_active_profile_name,
+        seed_profile_skills,
     )
+
     name = args.profile_name
     clone = getattr(args, "clone", False)
     clone_all = getattr(args, "clone_all", False)
@@ -203,33 +247,51 @@ def _profile_create(args):
     source_label = clone_from or get_active_profile_name()
     try:
         profile_dir = create_profile(
-            name=name, clone_from=clone_from, clone_all=clone_all, clone_config=clone_config,
-            no_alias=no_alias, no_skills=no_skills, description=getattr(args, "description", None),
-            clone_channels=clone_channels, sync_imports=sync_imports,
+            name=name,
+            clone_from=clone_from,
+            clone_all=clone_all,
+            clone_config=clone_config,
+            no_alias=no_alias,
+            no_skills=no_skills,
+            description=getattr(args, "description", None),
+            clone_channels=clone_channels,
+            sync_imports=sync_imports,
         )
     except (ValueError, FileExistsError, FileNotFoundError) as e:
         _die(f"Error: {e}")
     print(f"\nProfile '{name}' created at {profile_dir}")
     if cloned:
         if clone_all:
-            print(f"Full copy from {source_label} (excluding session history, cron jobs, backups, and snapshots).")
+            print(
+                f"Full copy from {source_label} (excluding session history, cron jobs, backups, and snapshots)."
+            )
         else:
             print(f"Cloned config, .env, SOUL.md, and skills from {source_label}.")
             from clawk_cli.profiles import cloned_plugin_names
+
             plugin_names = cloned_plugin_names(profile_dir)
             if plugin_names:
                 print(f"Cloned installed plugins too: {', '.join(plugin_names)}.")
             from clawk_cli.profile_memory_config import cloned_memory_provider
+
             memory_provider = cloned_memory_provider(profile_dir)
             if memory_provider:
                 print(f"Cloned memory provider config ({memory_provider}) too.")
         if sync_imports:
-            print(f"Import sources carried over — `clawk -p {name} import-agent --sync` "
-                  "keeps pulling the same Claude Code / Codex trees.")
-        _print_channel_clone_notice(name, source_label, clone_channels, "--clone-all" if clone_all else "--clone")
+            print(
+                f"Import sources carried over — `clawk -p {name} import-agent --sync` "
+                "keeps pulling the same Claude Code / Codex trees."
+            )
+        _print_channel_clone_notice(
+            name,
+            source_label,
+            clone_channels,
+            "--clone-all" if clone_all else "--clone",
+        )
         # Auto-clone Honcho config for the new profile (only with clone operations)
         try:
             from plugins.memory import import_provider_module
+
             honcho_cli = import_provider_module("honcho", "cli")
         except Exception:
             honcho_cli = None  # Honcho plugin not installed
@@ -245,7 +307,9 @@ def _profile_create(args):
         # Fresh profiles only: clones already carry the source's (user-curated) skills.
         result = seed_profile_skills(profile_dir)
         if result and result.get("skipped_opt_out"):
-            print("No bundled skills seeded (--no-skills). Delete .no-bundled-skills in the profile to opt back in.")
+            print(
+                "No bundled skills seeded (--no-skills). Delete .no-bundled-skills in the profile to opt back in."
+            )
         elif result:
             print(f"{len(result.get('copied', []))} bundled skills synced.")
         else:
@@ -254,7 +318,9 @@ def _profile_create(args):
         collision = check_alias_collision(name)
         if collision:
             print(f"\n⚠ Cannot create alias '{name}' — {collision}")
-            print(f"  Choose a custom alias:  clawk profile alias {name} --name <custom>")
+            print(
+                f"  Choose a custom alias:  clawk profile alias {name} --name <custom>"
+            )
             print(f"  Or access via flag:     clawk -p {name} chat")
         else:
             wrapper_path = create_wrapper_script(name)
@@ -271,14 +337,26 @@ def _profile_create(args):
     print("\nNext steps:")
     print(f"  {name} setup              Configure API keys and model")
     print(f"  {name} chat               Start chatting")
-    from clawk_cli.gateway_multiplex_served import live_default_gateway_pid, recorded_served_profiles
+    from clawk_cli.gateway_multiplex_served import (
+        live_default_gateway_pid,
+        recorded_served_profiles,
+    )
     from clawk_cli.profiles import normalize_profile_name
-    served = recorded_served_profiles() if live_default_gateway_pid() is not None else None
-    if served is not None and normalize_profile_name(name) in {normalize_profile_name(p) for p in served}:
-        print("  (served now by the running multiplexed gateway — add its bot token and it connects)")
+
+    served = (
+        recorded_served_profiles() if live_default_gateway_pid() is not None else None
+    )
+    if served is not None and normalize_profile_name(name) in {
+        normalize_profile_name(p) for p in served
+    }:
+        print(
+            "  (served now by the running multiplexed gateway — add its bot token and it connects)"
+        )
     elif served is not None:
         # The multiplexer did not pick the profile up (older gateway or the signal failed): a restart serves it.
-        print("  clawk gateway restart    Serve this profile from the running multiplexed gateway")
+        print(
+            "  clawk gateway restart    Serve this profile from the running multiplexed gateway"
+        )
     else:
         print(f"  {name} gateway start      Start the messaging gateway")
     if clone or clone_all:
@@ -293,6 +371,7 @@ def _profile_create(args):
 
 def _profile_delete(args):
     from clawk_cli.profiles import delete_profile
+
     try:
         delete_profile(args.profile_name, yes=getattr(args, "yes", False))
     except (ValueError, FileNotFoundError, RuntimeError) as e:
@@ -303,14 +382,17 @@ def _describe_target_dir(name: str) -> Path:
     """Profile dir for ``describe``: ``default`` maps to the CURRENT home (get_clawk_home),
     everything else to its named directory."""
     from clawk_cli import profiles as _profiles_mod
+
     if _profiles_mod.normalize_profile_name(name) == "default":
         from clawk_constants import get_clawk_home as _hh
+
         return Path(_hh())
     return _profiles_mod.get_profile_dir(name)
 
 
 def _profile_describe(args):
     from clawk_cli import profiles as _profiles_mod
+
     all_flag = bool(getattr(args, "all_missing", False))
     auto_flag = bool(getattr(args, "auto", False))
     overwrite_flag = bool(getattr(args, "overwrite", False))
@@ -319,9 +401,15 @@ def _profile_describe(args):
     if all_flag and not auto_flag:
         _die("profile describe: --all requires --auto", 2, err=True)
     if all_flag and (text_value or name):
-        _die("profile describe: --all is mutually exclusive with a profile name / --text", 2, err=True)
+        _die(
+            "profile describe: --all is mutually exclusive with a profile name / --text",
+            2,
+            err=True,
+        )
     if not all_flag and not name:
-        _die("profile describe: profile name is required (or --all --auto)", 2, err=True)
+        _die(
+            "profile describe: profile name is required (or --all --auto)", 2, err=True
+        )
     if text_value and auto_flag:
         _die("profile describe: --text is mutually exclusive with --auto", 2, err=True)
 
@@ -345,7 +433,11 @@ def _profile_describe(args):
     # --text path: just write the user-authored description.
     if text_value:
         try:
-            _profiles_mod.write_profile_meta(_describe_target_dir(name), description=text_value, description_auto=False)
+            _profiles_mod.write_profile_meta(
+                _describe_target_dir(name),
+                description=text_value,
+                description_auto=False,
+            )
             print(f"Description updated for '{name}'.")
         except Exception as exc:
             _die(f"Error: {exc}", err=True)
@@ -353,6 +445,7 @@ def _profile_describe(args):
 
     # --auto path: invoke the LLM describer.
     from clawk_cli import profile_describer as _pd
+
     if all_flag:
         targets = _pd.list_describable_profiles(missing_only=True)
         if not targets:
@@ -366,17 +459,29 @@ def _profile_describe(args):
             ok_count += 1
             print(f"Described '{outcome.profile_name}': {outcome.description}")
         else:
-            print(f"profile describe {outcome.profile_name}: {outcome.reason}", file=sys.stderr)
+            print(
+                f"profile describe {outcome.profile_name}: {outcome.reason}",
+                file=sys.stderr,
+            )
     sys.exit(0 if (ok_count > 0 if all_flag else ok_count == 1) else 1)
 
 
 def _profile_show(args):
     name = args.profile_name
     from clawk_cli.profiles import (
-        get_profile_dir, profile_exists, _read_config_model, _check_gateway_running,
-        _served_by_running_multiplexer, _count_skills, _read_distribution_meta, _wrapper_path,
-        find_alias_for_profile, format_profile_label, read_profile_meta,
+        get_profile_dir,
+        profile_exists,
+        _read_config_model,
+        _check_gateway_running,
+        _served_by_running_multiplexer,
+        _count_skills,
+        _read_distribution_meta,
+        _wrapper_path,
+        find_alias_for_profile,
+        format_profile_label,
+        read_profile_meta,
     )
+
     if not profile_exists(name):
         _die(f"Error: Profile '{name}' does not exist.")
     profile_dir = get_profile_dir(name)
@@ -391,8 +496,12 @@ def _profile_show(args):
         print(f"Model:   {model}" + (f" ({provider})" if provider else ""))
     print(f"Gateway: {'running' if gw else 'stopped'}")
     print(f"Skills:  {_count_skills(profile_dir)}")
-    print(f".env:    {'exists' if (profile_dir / '.env').exists() else 'not configured'}")
-    print(f"SOUL.md: {'exists' if (profile_dir / 'SOUL.md').exists() else 'not configured'}")
+    print(
+        f".env:    {'exists' if (profile_dir / '.env').exists() else 'not configured'}"
+    )
+    print(
+        f"SOUL.md: {'exists' if (profile_dir / 'SOUL.md').exists() else 'not configured'}"
+    )
     if dist_name:
         print(f"Distribution: {dist_name}@{dist_version or '?'}")
         if dist_source:
@@ -405,9 +514,15 @@ def _profile_show(args):
 
 def _profile_alias(args):
     from clawk_cli.profiles import (
-        _get_wrapper_dir, _is_wrapper_dir_in_path, check_alias_collision, create_wrapper_script,
-        profile_exists, remove_wrapper_script, validate_alias_name,
+        _get_wrapper_dir,
+        _is_wrapper_dir_in_path,
+        check_alias_collision,
+        create_wrapper_script,
+        profile_exists,
+        remove_wrapper_script,
+        validate_alias_name,
     )
+
     name = args.profile_name
     remove = getattr(args, "remove", False)
     custom_name = getattr(args, "alias_name", None)
@@ -423,7 +538,9 @@ def _profile_alias(args):
         if remove_wrapper_script(alias_name):
             print(f"✓ Removed alias '{alias_name}'")
         elif not exists:
-            _die(f"Error: No alias '{alias_name}' and no profile '{name}'. `clawk doctor` lists orphan aliases.")
+            _die(
+                f"Error: No alias '{alias_name}' and no profile '{name}'. `clawk doctor` lists orphan aliases."
+            )
         else:
             print(f"No alias '{alias_name}' found to remove.")
         return
@@ -432,7 +549,9 @@ def _profile_alias(args):
     collision = check_alias_collision(alias_name)
     if collision:
         _die(f"Error: {collision}")
-    wrapper_path = create_wrapper_script(alias_name, target=name if custom_name else None)
+    wrapper_path = create_wrapper_script(
+        alias_name, target=name if custom_name else None
+    )
     if wrapper_path:
         print(f"✓ Alias created: {wrapper_path}")
         if not _is_wrapper_dir_in_path():
@@ -441,6 +560,7 @@ def _profile_alias(args):
 
 def _profile_rename(args):
     from clawk_cli.profiles import normalize_profile_name, rename_profile
+
     try:
         new_dir = rename_profile(args.old_name, args.new_name)
         if normalize_profile_name(args.old_name) != "default":
@@ -455,13 +575,17 @@ def _profile_migrate_identity(args):
     live gateway would not migrate (it still owns the routing index in memory), or when a
     database rejected the rewrite (collision, lock, partial failure)."""
     from clawk_cli.profile_identity import migrate_profile_identity
+
     try:
         migrated = migrate_profile_identity(args.old_name, args.new_name)
     except (ValueError, FileNotFoundError) as e:
         _die(f"Error: {e}")
     if not migrated:
-        _die(f"Error: session identity was not migrated. Restart or stop the gateway, then run:\n"
-             f"    clawk profile migrate-identity {args.old_name} {args.new_name}", err=True)
+        _die(
+            f"Error: session identity was not migrated. Restart or stop the gateway, then run:\n"
+            f"    clawk profile migrate-identity {args.old_name} {args.new_name}",
+            err=True,
+        )
     print(f"✓ Session/routing identity migrated: {args.old_name} → {args.new_name}")
 
 
@@ -470,18 +594,23 @@ def _profile_purge_identity(args):
     gateway would not purge (it still owns the routing index in memory), or when a database rejected
     the delete (lock, partial failure)."""
     from clawk_cli.profile_identity import purge_profile_identity
+
     try:
         purged = purge_profile_identity(args.profile_name)
     except ValueError as e:
         _die(f"Error: {e}")
     if not purged:
-        _die(f"Error: session identity was not purged. Restart or stop the gateway, then run:\n"
-             f"    clawk profile purge-identity {args.profile_name}", err=True)
+        _die(
+            f"Error: session identity was not purged. Restart or stop the gateway, then run:\n"
+            f"    clawk profile purge-identity {args.profile_name}",
+            err=True,
+        )
     print(f"✓ Session/routing identity purged: {args.profile_name}")
 
 
 def _profile_export(args):
     from clawk_cli.profiles import export_profile, get_profile_export_path
+
     name = args.profile_name
     try:
         output = args.output or str(get_profile_export_path(name))
@@ -492,9 +621,16 @@ def _profile_export(args):
 
 
 def _profile_import(args):
-    from clawk_cli.profiles import check_alias_collision, create_wrapper_script, import_profile
+    from clawk_cli.profiles import (
+        check_alias_collision,
+        create_wrapper_script,
+        import_profile,
+    )
+
     try:
-        profile_dir = import_profile(args.archive, name=getattr(args, "import_name", None))
+        profile_dir = import_profile(
+            args.archive, name=getattr(args, "import_name", None)
+        )
         name = profile_dir.name
         print(f"✓ Imported profile '{name}' at {profile_dir}")
         if not check_alias_collision(name):
@@ -508,18 +644,31 @@ def _profile_import(args):
 
 def _profile_install(args):
     import tempfile
-    from clawk_cli.profile_distribution import DistributionError, install_distribution, plan_install
+    from clawk_cli.profile_distribution import (
+        DistributionError,
+        install_distribution,
+        plan_install,
+    )
+
     try:
         # Preview: stage into a scratch dir, show the manifest, then do the real install.
         # The double-stage avoids any side-effects if the user declines.
         with tempfile.TemporaryDirectory(prefix="clawk_dist_preview_") as tmp:
-            plan = plan_install(args.source, Path(tmp), override_name=getattr(args, "install_name", None))
+            plan = plan_install(
+                args.source,
+                Path(tmp),
+                override_name=getattr(args, "install_name", None),
+            )
             _render_distribution_plan(plan)
-            if not getattr(args, "yes", False) and not _confirm("\nProceed with install? [y/N] "):
+            if not getattr(args, "yes", False) and not _confirm(
+                "\nProceed with install? [y/N] "
+            ):
                 print("Install cancelled.")
                 return
         plan = install_distribution(
-            args.source, name=getattr(args, "install_name", None), force=getattr(args, "force", False),
+            args.source,
+            name=getattr(args, "install_name", None),
+            force=getattr(args, "force", False),
             create_alias=getattr(args, "alias", False),
         )
         print(f"\n✓ Installed '{plan.manifest.name}' v{plan.manifest.version}")
@@ -540,8 +689,13 @@ def _profile_install(args):
 
 
 def _profile_update(args):
-    from clawk_cli.profile_distribution import DistributionError, read_manifest, update_distribution
+    from clawk_cli.profile_distribution import (
+        DistributionError,
+        read_manifest,
+        update_distribution,
+    )
     from clawk_cli.profiles import get_profile_dir, normalize_profile_name
+
     try:
         canon = normalize_profile_name(args.profile_name)
         current = read_manifest(get_profile_dir(canon))
@@ -557,7 +711,9 @@ def _profile_update(args):
             if force_config:
                 print("  --force-config set: config.yaml WILL be overwritten.")
             else:
-                print("  config.yaml will be preserved (pass --force-config to overwrite).")
+                print(
+                    "  config.yaml will be preserved (pass --force-config to overwrite)."
+                )
             print("  User data (memories, sessions, auth, .env) will NOT be touched.")
             if not _confirm("\nProceed? [y/N] "):
                 print("Update cancelled.")
@@ -565,7 +721,9 @@ def _profile_update(args):
         plan = update_distribution(canon, force_config=force_config)
         print(f"\n✓ Updated '{plan.manifest.name}' → v{plan.manifest.version}")
         if plan.has_cron:
-            print(f"  Cron files were refreshed.  Review with:  clawk -p {plan.manifest.name} cron list")
+            print(
+                f"  Cron files were refreshed.  Review with:  clawk -p {plan.manifest.name} cron list"
+            )
     except (DistributionError, ValueError) as e:
         _die(f"Error: {e}")
 
@@ -582,12 +740,15 @@ _INFO_FIELDS = (
 
 def _profile_info(args):
     from clawk_cli.profile_distribution import describe_distribution, DistributionError
+
     try:
         data = describe_distribution(args.profile_name)
     except (DistributionError, ValueError) as e:
         _die(f"Error: {e}")
     if not data:
-        print(f"Profile '{args.profile_name}' is not a distribution (no distribution.yaml).")
+        print(
+            f"Profile '{args.profile_name}' is not a distribution (no distribution.yaml)."
+        )
         return
     print(f"\nDistribution: {data.get('name')}")
     print(f"Version:      {data.get('version', '?')}")
@@ -611,21 +772,21 @@ def _profile_info(args):
 # Order mirrors the original if/elif chain; None = bare ``clawk profile``.
 PROFILE_ACTIONS = {
     None: _profile_status,
-    'list': _profile_list,
-    'use': _profile_use,
-    'create': _profile_create,
-    'delete': _profile_delete,
-    'describe': _profile_describe,
-    'show': _profile_show,
-    'alias': _profile_alias,
-    'rename': _profile_rename,
-    'purge-identity': _profile_purge_identity,
-    'migrate-identity': _profile_migrate_identity,
-    'export': _profile_export,
-    'import': _profile_import,
-    'install': _profile_install,
-    'update': _profile_update,
-    'info': _profile_info,
+    "list": _profile_list,
+    "use": _profile_use,
+    "create": _profile_create,
+    "delete": _profile_delete,
+    "describe": _profile_describe,
+    "show": _profile_show,
+    "alias": _profile_alias,
+    "rename": _profile_rename,
+    "purge-identity": _profile_purge_identity,
+    "migrate-identity": _profile_migrate_identity,
+    "export": _profile_export,
+    "import": _profile_import,
+    "install": _profile_install,
+    "update": _profile_update,
+    "info": _profile_info,
 }
 
 

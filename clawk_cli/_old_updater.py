@@ -3,6 +3,7 @@
 This module must remain stdlib-only: the parent still has the old interpreter,
 modules and native extensions. Only the child imports the updated application.
 """
+
 from __future__ import annotations
 
 import dataclasses
@@ -30,8 +31,7 @@ _HISTORICAL_UPDATE_FRAMES = (
 
 def _is_historical_update_frame(frame: Any) -> bool:
     modules, names = _HISTORICAL_UPDATE_FRAMES
-    return (frame.f_globals.get("__name__") in modules
-            and frame.f_code.co_name in names)
+    return frame.f_globals.get("__name__") in modules and frame.f_code.co_name in names
 
 
 def in_historical_update() -> bool:
@@ -45,8 +45,10 @@ def in_historical_update() -> bool:
     frame = sys._getframe(1)
     try:
         while frame is not None:
-            if (_is_historical_update_frame(frame)
-                    and "_clawk_current_updater_frame" not in frame.f_code.co_varnames):
+            if (
+                _is_historical_update_frame(frame)
+                and "_clawk_current_updater_frame" not in frame.f_code.co_varnames
+            ):
                 return True
             frame = frame.f_back
     finally:
@@ -60,8 +62,14 @@ def _historical_context() -> tuple[dict, list[dict], Any]:
     Older callers did not pass a continuation object. Read only the historical
     updater's known local names; do not serialize frames or arbitrary globals.
     """
-    names = ("had_desktop_app_before_update", "pre_update_snapshot_id",
-             "pre_update_version", "gateway_mode", "assume_yes", "_pre_update_plan")
+    names = (
+        "had_desktop_app_before_update",
+        "pre_update_snapshot_id",
+        "pre_update_version",
+        "gateway_mode",
+        "assume_yes",
+        "_pre_update_plan",
+    )
     found = {}
     resumes = []
     restart_update = None
@@ -71,8 +79,11 @@ def _historical_context() -> tuple[dict, list[dict], Any]:
             # Capture hooks can be imported BEFORE the old updater has pulled.
             # A declared-but-unassigned version in its innermost known frame
             # proves early entry; a None value is still a post-capture value.
-            if (restart_update is None and _is_historical_update_frame(frame)
-                    and "pre_update_version" in frame.f_code.co_varnames):
+            if (
+                restart_update is None
+                and _is_historical_update_frame(frame)
+                and "pre_update_version" in frame.f_code.co_varnames
+            ):
                 restart_update = "pre_update_version" not in frame.f_locals
             for name in names:
                 if name not in found and name in frame.f_locals:
@@ -93,18 +104,22 @@ def _historical_context() -> tuple[dict, list[dict], Any]:
         plan = dataclasses.asdict(plan)
     elif not isinstance(plan, dict):
         plan = receipt.get("plan") if isinstance(receipt, dict) else None
-    return {
-        "restart_update": restart_update is True,
-        # Some old updaters reach this hook before checking Desktop at all.
-        "desktop": found.get("had_desktop_app_before_update"),
-        "pre_update_snapshot_id": found.get("pre_update_snapshot_id"),
-        "pre_update_version": found.get("pre_update_version"),
-        "gateway_mode": bool(found.get("gateway_mode", "--gateway" in sys.argv)),
-        "assume_yes": bool(found.get("assume_yes", "--yes" in sys.argv)),
-        "windows_resume": resumes[0] if resumes else None,
-        "plan": plan,
-        "receipt": receipt if isinstance(receipt, dict) else None,
-    }, resumes, receipt_slot
+    return (
+        {
+            "restart_update": restart_update is True,
+            # Some old updaters reach this hook before checking Desktop at all.
+            "desktop": found.get("had_desktop_app_before_update"),
+            "pre_update_snapshot_id": found.get("pre_update_snapshot_id"),
+            "pre_update_version": found.get("pre_update_version"),
+            "gateway_mode": bool(found.get("gateway_mode", "--gateway" in sys.argv)),
+            "assume_yes": bool(found.get("assume_yes", "--yes" in sys.argv)),
+            "windows_resume": resumes[0] if resumes else None,
+            "plan": plan,
+            "receipt": receipt if isinstance(receipt, dict) else None,
+        },
+        resumes,
+        receipt_slot,
+    )
 
 
 def _run_child(request: dict) -> tuple[int, dict]:
@@ -118,8 +133,11 @@ def _run_child(request: dict) -> tuple[int, dict]:
         if isinstance(value, (str, Path)) and value:
             home = str(value)
     request.update(root=str(root), home=home, argv=list(sys.argv))
-    env = {key: value for key, value in os.environ.items()
-           if not key.startswith(("PYTHON", "UV_")) and key != "VIRTUAL_ENV"}
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.startswith(("PYTHON", "UV_")) and key != "VIRTUAL_ENV"
+    }
     if home:
         env["CLAWK_HOME"] = home
     env.setdefault("CLAWK_UPDATE_HANDOFF_PID", str(os.getpid()))
@@ -128,16 +146,35 @@ def _run_child(request: dict) -> tuple[int, dict]:
     # ASCII only, like every line printed before the child starts: a Windows pipe encodes this
     # process's stdout in the ANSI code page, and a non-cp1252 character raised here, before the
     # takeover ever ran (review S1).
-    print("-> Handing off to the new updater (package manager) for the rest of this update...", flush=True)
+    print(
+        "-> Handing off to the new updater (package manager) for the rest of this update...",
+        flush=True,
+    )
     with tempfile.TemporaryDirectory(prefix="clawk-update-takeover-") as directory:
         context = Path(directory) / "request.json"
         result = Path(directory) / "result.json"
         context.write_text(json.dumps(request), encoding="utf-8")
         code = _run_in_custody(
-            [sys.executable, "-I", "-S", "-B", "-X", "utf8", str(root / "clawk_cli/_update_takeover.py"),
-             str(context), str(result)], root, cwd=root, env=env,
+            [
+                sys.executable,
+                "-I",
+                "-S",
+                "-B",
+                "-X",
+                "utf8",
+                str(root / "clawk_cli/_update_takeover.py"),
+                str(context),
+                str(result),
+            ],
+            root,
+            cwd=root,
+            env=env,
         )
-        completed = json.loads(result.read_text(encoding="utf-8-sig")) if result.is_file() else {}
+        completed = (
+            json.loads(result.read_text(encoding="utf-8-sig"))
+            if result.is_file()
+            else {}
+        )
         if not isinstance(completed, dict):
             raise ValueError("invalid update takeover acknowledgement")
         return code if code >= 0 else 1, completed
@@ -150,8 +187,16 @@ def _run_in_custody(argv: list, root: Path, **kwargs) -> int:
     (the update committed) and the takeover joins the lock holding its own lease. Releases
     without these helpers hold no checkout lock, and the takeover acquires it itself."""
     lock = sys.modules.get("clawk_cli.update_lock")
-    bind, resume = (getattr(lock, name, None) for name in ("bind_child_to_update_tree", "resume_suspended_child"))
-    if os.name != "nt" or bind is None or resume is None or getattr(lock, "_HELD", None) is None:
+    bind, resume = (
+        getattr(lock, name, None)
+        for name in ("bind_child_to_update_tree", "resume_suspended_child")
+    )
+    if (
+        os.name != "nt"
+        or bind is None
+        or resume is None
+        or getattr(lock, "_HELD", None) is None
+    ):
         # Unbounded for the same reason as the Windows wait below (review L7): the takeover is
         # the rest of a committed update (sync + build), and it holds the checkout lock fd, so the
         # checkout stays locked for as long as it runs, even past this updater's death.
@@ -161,8 +206,11 @@ def _run_in_custody(argv: list, root: Path, **kwargs) -> int:
     try:
         refusal = bind(proc)
         if refusal is not None:
-            print(f"  ! The update's job would not take the takeover ({refusal}); it runs outside the job, "
-                  "holding its own checkout lease.", flush=True)
+            print(
+                f"  ! The update's job would not take the takeover ({refusal}); it runs outside the job, "
+                "holding its own checkout lease.",
+                flush=True,
+            )
         resume(proc)
         # The takeover is the rest of a committed update (sync + build): a bound would abandon it
         # mid-write. It dies with this updater (kill-on-close job, or the except path below).
@@ -195,7 +243,9 @@ def stop_for_relaunch(*, incomplete: bool = False) -> NoReturn:
         # A newly retired completion hook has no complete captured worklist.
         # It must not start another update or invent a successful receipt. It names its stop on
         # the receipt the loaded update_receipt keeps open (an older one lacks the call: no-op).
-        record = getattr(sys.modules.get("clawk_cli.update_receipt"), "record_stop_reason", None)
+        record = getattr(
+            sys.modules.get("clawk_cli.update_receipt"), "record_stop_reason", None
+        )
         if record is not None:
             record("old_version_handoff")
         print(
@@ -237,5 +287,9 @@ def relaunch_stopped_serves(token: dict) -> None:
     except (OSError, ValueError, TypeError) as exc:
         print(f"Stopped serve recovery failed: {exc}", file=sys.stderr, flush=True)
     if code or token.get("pending"):
-        print("Stopped serve recovery did not complete; restart the affected "
-              "serve/dashboard backends manually.", file=sys.stderr, flush=True)
+        print(
+            "Stopped serve recovery did not complete; restart the affected "
+            "serve/dashboard backends manually.",
+            file=sys.stderr,
+            flush=True,
+        )

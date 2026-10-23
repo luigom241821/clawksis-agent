@@ -7,6 +7,7 @@ to resolve ``get_service_name()``. If that switch were invisible to ``get_clawk_
 would resolve to the launch home's bare ``clawk-gateway`` and the cleanup would disable, stop and
 unlink the HOST multiplexer's own unit.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -35,17 +36,28 @@ def two_homes(tmp_path, monkeypatch):
 
 
 @pytest.mark.platforms("linux")
-def test_delete_from_a_pinned_multiplexer_targets_the_victims_unit_only(two_homes, monkeypatch):
+def test_delete_from_a_pinned_multiplexer_targets_the_victims_unit_only(
+    two_homes, monkeypatch
+):
     launch, victim, host_unit, victim_unit = two_homes
     calls: list[list[str]] = []
-    monkeypatch.setattr(profiles.subprocess, "run", lambda cmd, **kw: calls.append(list(cmd)))
-    set_multiplex_active(True)  # the dashboard has served a second profile: launch home pinned
+    monkeypatch.setattr(
+        profiles.subprocess, "run", lambda cmd, **kw: calls.append(list(cmd))
+    )
+    set_multiplex_active(
+        True
+    )  # the dashboard has served a second profile: launch home pinned
 
     profiles._cleanup_gateway_service("victim", victim)
 
     assert not victim_unit.exists()
-    assert host_unit.exists(), "the host multiplexer's own unit must survive a profile delete"
+    assert host_unit.exists(), (
+        "the host multiplexer's own unit must survive a profile delete"
+    )
     assert ["systemctl", "--user", "disable", "clawk-gateway-victim"] in calls
-    assert not any(c[:3] == ["systemctl", "--user", "disable"] and c[3] == "clawk-gateway" for c in calls)
+    assert not any(
+        c[:3] == ["systemctl", "--user", "disable"] and c[3] == "clawk-gateway"
+        for c in calls
+    )
     # The caller's process home is restored: the process still is the launch profile afterwards.
     assert profiles.os.environ["CLAWK_HOME"] == str(launch)

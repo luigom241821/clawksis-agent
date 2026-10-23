@@ -66,19 +66,30 @@ def _make_agent(
     return agent
 
 
-@pytest.mark.parametrize("main_context,aux_context", [(1_000_000, 512_000), (400_000, 80_000)])
+@pytest.mark.parametrize(
+    "main_context,aux_context", [(1_000_000, 512_000), (400_000, 80_000)]
+)
 def test_aux_sync_keeps_lean_tail_policy(main_context, aux_context):
     """Lowering only the trigger must not change window-relative retention."""
     agent = _make_agent(main_context=main_context)
     compressor = agent.context_compressor = ContextCompressor(
-        "test-main-model", config_context_length=main_context,
-        threshold_percent=0.85, quiet_mode=True,
+        "test-main-model",
+        config_context_length=main_context,
+        threshold_percent=0.85,
+        quiet_mode=True,
     )
     before = compressor.tail_token_budget
     agent._emit_status = lambda message: None
     client = MagicMock(base_url="http://localhost/v1", api_key="test-key")
-    with patch("agent.auxiliary_client.get_text_auxiliary_client", return_value=(client, "aux")), \
-         patch("agent.model_metadata.get_model_context_length", return_value=aux_context):
+    with (
+        patch(
+            "agent.auxiliary_client.get_text_auxiliary_client",
+            return_value=(client, "aux"),
+        ),
+        patch(
+            "agent.model_metadata.get_model_context_length", return_value=aux_context
+        ),
+    ):
         agent._check_compression_model_feasibility()
         assert compressor.threshold_tokens == aux_context
         assert compressor.tail_token_budget == before
@@ -93,18 +104,28 @@ def test_aux_sync_legacy_tail_follows_lowered_threshold():
     """Explicit legacy retention follows the current trigger, not its old cache."""
     agent = _make_agent(main_context=1_000_000)
     compressor = agent.context_compressor = ContextCompressor(
-        "test-main-model", config_context_length=1_000_000,
-        threshold_percent=0.85, tail_mode="legacy", quiet_mode=True,
+        "test-main-model",
+        config_context_length=1_000_000,
+        threshold_percent=0.85,
+        tail_mode="legacy",
+        quiet_mode=True,
     )
     before = compressor.tail_token_budget
     agent._emit_status = lambda message: None
     client = MagicMock(base_url="http://localhost/v1", api_key="test-key")
-    with patch("agent.auxiliary_client.get_text_auxiliary_client", return_value=(client, "aux")), \
-         patch("agent.model_metadata.get_model_context_length", return_value=512_000):
+    with (
+        patch(
+            "agent.auxiliary_client.get_text_auxiliary_client",
+            return_value=(client, "aux"),
+        ),
+        patch("agent.model_metadata.get_model_context_length", return_value=512_000),
+    ):
         agent._check_compression_model_feasibility()
     assert compressor.threshold_tokens == 512_000
     assert compressor.tail_token_budget < before
-    assert compressor.tail_token_budget == int(compressor.threshold_tokens * compressor.summary_target_ratio)
+    assert compressor.tail_token_budget == int(
+        compressor.threshold_tokens * compressor.summary_target_ratio
+    )
 
 
 def test_fallback_activation_on_never_probed_session_stays_lazy():
@@ -114,12 +135,17 @@ def test_fallback_activation_on_never_probed_session_stays_lazy():
 
     agent = _make_agent(main_context=200_000)
     agent.context_compressor = ContextCompressor(
-        "test-main-model", config_context_length=200_000, threshold_percent=0.50, quiet_mode=True,
+        "test-main-model",
+        config_context_length=200_000,
+        threshold_percent=0.50,
+        quiet_mode=True,
     )
     agent._config_context_length = None
     agent.model = "fallback-model"
-    with patch("agent.auxiliary_client.get_text_auxiliary_client") as aux_client, \
-         patch("agent.model_metadata.get_model_context_length", return_value=1_000_000):
+    with (
+        patch("agent.auxiliary_client.get_text_auxiliary_client") as aux_client,
+        patch("agent.model_metadata.get_model_context_length", return_value=1_000_000),
+    ):
         _update_fallback_context_compressor(agent)
     aux_client.assert_not_called()
     assert getattr(agent, "_compression_feasibility_checked", False) is False
@@ -132,7 +158,10 @@ def test_fallback_activation_reprobes_aux_ceiling_and_keeps_it_durable():
 
     agent = _make_agent(main_context=200_000)
     compressor = agent.context_compressor = ContextCompressor(
-        "test-main-model", config_context_length=200_000, threshold_percent=0.50, quiet_mode=True,
+        "test-main-model",
+        config_context_length=200_000,
+        threshold_percent=0.50,
+        quiet_mode=True,
     )
     notices = 0
 
@@ -142,25 +171,49 @@ def test_fallback_activation_reprobes_aux_ceiling_and_keeps_it_durable():
 
     agent._emit_status = _count
     agent._config_context_length = None
-    agent._compression_feasibility_checked = True  # probed on the primary; aux fit there
+    agent._compression_feasibility_checked = (
+        True  # probed on the primary; aux fit there
+    )
     agent.model = "fallback-model"
     client = MagicMock(base_url="http://localhost/v1", api_key="test-key")
-    with patch("agent.auxiliary_client.get_text_auxiliary_client", return_value=(client, "aux")), \
-         patch("agent.model_metadata.get_model_context_length", side_effect=[1_000_000, 80_000]):
+    with (
+        patch(
+            "agent.auxiliary_client.get_text_auxiliary_client",
+            return_value=(client, "aux"),
+        ),
+        patch(
+            "agent.model_metadata.get_model_context_length",
+            side_effect=[1_000_000, 80_000],
+        ),
+    ):
         _update_fallback_context_compressor(agent)
     assert compressor.context_length == 1_000_000
     assert compressor.threshold_tokens == 80_000
     assert agent._compression_feasibility_checked is True
     # Same-runtime window correction (provider-reported limit) keeps the ceiling.
     compressor.update_model(
-        "fallback-model", context_length=800_000, base_url=agent.base_url, api_key=agent.api_key,
-        provider=agent.provider, api_mode=agent.api_mode,
+        "fallback-model",
+        context_length=800_000,
+        base_url=agent.base_url,
+        api_key=agent.api_key,
+        provider=agent.provider,
+        api_mode=agent.api_mode,
     )
     assert compressor.threshold_tokens == 80_000
     # An unchanged verdict is not re-announced on the next runtime change (fallback/restore cycles).
-    with patch("agent.auxiliary_client.get_text_auxiliary_client", return_value=(client, "aux")), \
-         patch("agent.model_metadata.get_model_context_length", side_effect=[1_000_000, 80_000]):
-        agent.base_url = "https://other-route.example/v1"  # runtime change, identical verdict text
+    with (
+        patch(
+            "agent.auxiliary_client.get_text_auxiliary_client",
+            return_value=(client, "aux"),
+        ),
+        patch(
+            "agent.model_metadata.get_model_context_length",
+            side_effect=[1_000_000, 80_000],
+        ),
+    ):
+        agent.base_url = (
+            "https://other-route.example/v1"  # runtime change, identical verdict text
+        )
         _update_fallback_context_compressor(agent)
     assert compressor.threshold_tokens == 80_000
     assert notices == 1
@@ -173,16 +226,30 @@ def test_unclamp_clears_stale_clamp_warning():
 
     agent = _make_agent(main_context=200_000)
     compressor = agent.context_compressor = ContextCompressor(
-        "test-main-model", config_context_length=200_000, threshold_percent=0.50, quiet_mode=True,
+        "test-main-model",
+        config_context_length=200_000,
+        threshold_percent=0.50,
+        quiet_mode=True,
     )
     agent._emit_status = lambda message: None
     agent._config_context_length = None
     agent._compression_feasibility_checked = True
     client = MagicMock(base_url="http://localhost/v1", api_key="test-key")
-    for main_ctx, aux_ctx, label in ((1_000_000, 80_000, "big"), (100_000, 80_000, "small")):
+    for main_ctx, aux_ctx, label in (
+        (1_000_000, 80_000, "big"),
+        (100_000, 80_000, "small"),
+    ):
         agent.model = label
-        with patch("agent.auxiliary_client.get_text_auxiliary_client", return_value=(client, "aux")), \
-             patch("agent.model_metadata.get_model_context_length", side_effect=[main_ctx, aux_ctx]):
+        with (
+            patch(
+                "agent.auxiliary_client.get_text_auxiliary_client",
+                return_value=(client, "aux"),
+            ),
+            patch(
+                "agent.model_metadata.get_model_context_length",
+                side_effect=[main_ctx, aux_ctx],
+            ),
+        ):
             _update_fallback_context_compressor(agent)
     assert compressor._aux_context_ceiling is None
     assert compressor.threshold_tokens == 75_000
@@ -199,13 +266,21 @@ def test_near_threshold_probe_clamps_before_first_compaction():
 
     agent = _make_agent(main_context=1_000_000)
     compressor = agent.context_compressor = ContextCompressor(
-        "test-main-model", config_context_length=1_000_000, threshold_percent=0.75, quiet_mode=True,
+        "test-main-model",
+        config_context_length=1_000_000,
+        threshold_percent=0.75,
+        quiet_mode=True,
     )
     agent._emit_status = lambda message: None
     agent._compression_feasibility_checked = False
     client = MagicMock(base_url="http://localhost/v1", api_key="test-key")
-    with patch("agent.auxiliary_client.get_text_auxiliary_client", return_value=(client, "aux")) as aux_client, \
-         patch("agent.model_metadata.get_model_context_length", return_value=80_000):
+    with (
+        patch(
+            "agent.auxiliary_client.get_text_auxiliary_client",
+            return_value=(client, "aux"),
+        ) as aux_client,
+        patch("agent.model_metadata.get_model_context_length", return_value=80_000),
+    ):
         ensure_compression_feasibility_checked(agent, MINIMUM_CONTEXT_LENGTH - 1)
         aux_client.assert_not_called()
         assert agent._compression_feasibility_checked is False
@@ -222,7 +297,9 @@ def test_near_threshold_probe_clamps_before_first_compaction():
 
 @patch("agent.model_metadata.get_model_context_length", return_value=80_000)
 @patch("agent.auxiliary_client.get_text_auxiliary_client")
-def test_auto_corrects_threshold_when_aux_context_below_threshold(mock_get_client, mock_ctx_len):
+def test_auto_corrects_threshold_when_aux_context_below_threshold(
+    mock_get_client, mock_ctx_len
+):
     """Auto-correction: aux >= 64K floor but < threshold → lower threshold
     to aux_context so compression still works this session."""
     agent = _make_agent(main_context=200_000, threshold_percent=0.50)
@@ -239,8 +316,8 @@ def test_auto_corrects_threshold_when_aux_context_below_threshold(mock_get_clien
 
     assert len(messages) == 1
     assert "Compression model" in messages[0]
-    assert "80,000" in messages[0]        # aux context
-    assert "100,000" in messages[0]       # old threshold
+    assert "80,000" in messages[0]  # aux context
+    assert "100,000" in messages[0]  # old threshold
     assert "Auto-lowered" in messages[0]
     # Actionable persistence guidance included
     assert "config.yaml" in messages[0]
@@ -282,8 +359,6 @@ def test_rejects_aux_below_minimum_context(mock_get_client, mock_ctx_len):
     assert "tiny-aux-model" in str(exc_info.value)
 
 
-
-
 def test_feasibility_check_passes_live_main_runtime():
     """Compression feasibility should probe using the live session runtime."""
     agent = _make_agent(main_context=200_000, threshold_percent=0.50)
@@ -297,8 +372,13 @@ def test_feasibility_check_passes_live_main_runtime():
     mock_client.base_url = "https://chatgpt.com/backend-api/codex"
     mock_client.api_key = "codex-token"
 
-    with patch("agent.auxiliary_client.get_text_auxiliary_client", return_value=(mock_client, "gpt-5.4")) as mock_get_client, \
-         patch("agent.model_metadata.get_model_context_length", return_value=200_000):
+    with (
+        patch(
+            "agent.auxiliary_client.get_text_auxiliary_client",
+            return_value=(mock_client, "gpt-5.4"),
+        ) as mock_get_client,
+        patch("agent.model_metadata.get_model_context_length", return_value=200_000),
+    ):
         agent._emit_status = lambda msg: None
         agent._check_compression_model_feasibility()
 
@@ -342,10 +422,6 @@ def test_feasibility_check_passes_config_context_length(mock_get_client, mock_ct
     )
 
 
-
-
-
-
 @patch("agent.auxiliary_client.get_text_auxiliary_client")
 def test_warns_when_no_auxiliary_provider(mock_get_client):
     """Warning emitted when no auxiliary provider is configured."""
@@ -371,19 +447,28 @@ def test_no_unavailable_warning_when_configured_fallback_chain_resolves():
     messages = []
     agent._emit_status = lambda msg: messages.append(msg)
 
-    with patch(
-        "agent.auxiliary_client._resolve_task_provider_model",
-        return_value=("ollama-cloud", "deepseek-v4-flash:cloud", None, None, None),
-    ), patch(
-        "agent.auxiliary_client.get_text_auxiliary_client",
-        return_value=(None, None),
-    ), patch(
-        "agent.auxiliary_client._try_configured_fallback_for_unavailable_client",
-        return_value=(fallback_client, "gpt-5.4-mini", "fallback_chain[0](openai-codex)"),
-    ) as mock_fallback, patch(
-        "agent.model_metadata.get_model_context_length",
-        return_value=200_000,
-    ) as mock_ctx_len:
+    with (
+        patch(
+            "agent.auxiliary_client._resolve_task_provider_model",
+            return_value=("ollama-cloud", "deepseek-v4-flash:cloud", None, None, None),
+        ),
+        patch(
+            "agent.auxiliary_client.get_text_auxiliary_client",
+            return_value=(None, None),
+        ),
+        patch(
+            "agent.auxiliary_client._try_configured_fallback_for_unavailable_client",
+            return_value=(
+                fallback_client,
+                "gpt-5.4-mini",
+                "fallback_chain[0](openai-codex)",
+            ),
+        ) as mock_fallback,
+        patch(
+            "agent.model_metadata.get_model_context_length",
+            return_value=200_000,
+        ) as mock_ctx_len,
+    ):
         agent._check_compression_model_feasibility()
 
     assert messages == []
@@ -392,14 +477,6 @@ def test_no_unavailable_warning_when_configured_fallback_chain_resolves():
     mock_ctx_len.assert_called_once()
     assert mock_ctx_len.call_args.args == ("gpt-5.4-mini",)
     assert mock_ctx_len.call_args.kwargs["provider"] == "openai-codex"
-
-
-
-
-
-
-
-
 
 
 # ── Two-phase: __init__ + run_conversation replay ───────────────────
@@ -456,18 +533,14 @@ def test_no_replay_when_no_warning(mock_get_client, mock_ctx_len):
     assert len(callback_events) == 0
 
 
-
-
-
-
 # ── #67422: threshold suggestion must survive the small-context floor ────────
-
-
 
 
 @patch("agent.model_metadata.get_model_context_length", return_value=300_000)
 @patch("agent.auxiliary_client.get_text_auxiliary_client")
-def test_threshold_suggestion_kept_for_large_context_main(mock_get_client, mock_ctx_len):
+def test_threshold_suggestion_kept_for_large_context_main(
+    mock_get_client, mock_ctx_len
+):
     """Main window >= 512K has no floor — any suggestion is honored, so the
     `threshold:` option stays even below 75%."""
     agent = _make_agent(main_context=1_000_000, threshold_percent=0.50)
@@ -484,7 +557,3 @@ def test_threshold_suggestion_kept_for_large_context_main(mock_get_client, mock_
 
     assert len(messages) == 1
     assert "threshold: 0.30" in messages[0]
-
-
-
-

@@ -238,8 +238,6 @@ async def test_run_in_executor_with_context_preserves_session_env(monkeypatch):
     }
 
 
-
-
 def test_cron_session_contextvar_preserves_legacy_env_fallback(monkeypatch):
     """Unset cron ContextVar keeps old env-only cron callers working."""
     monkeypatch.setenv("CLAWK_CRON_SESSION", "1")
@@ -287,11 +285,17 @@ async def test_plugin_slash_command_sees_session_env(monkeypatch):
     monkeypatch.delenv("CLAWK_SESSION_CHAT_ID", raising=False)
 
     runner = object.__new__(GatewayRunner)
-    runner.config = GatewayConfig(platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="***")})
+    runner.config = GatewayConfig(
+        platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="***")}
+    )
     runner._draining = False
 
     source = SessionSource(
-        platform=Platform.TELEGRAM, chat_id="c1", user_id="u1", user_name="tester", chat_type="dm",
+        platform=Platform.TELEGRAM,
+        chat_id="c1",
+        user_id="u1",
+        user_name="tester",
+        chat_type="dm",
     )
     event = MessageEvent(text="/gsd bind", source=source, message_id="m1")
 
@@ -303,10 +307,16 @@ async def test_plugin_slash_command_sees_session_env(monkeypatch):
         return f"Bound: {raw_args}"
 
     from clawk_cli import plugins as _plugins_mod
-    monkeypatch.setattr(_plugins_mod, "get_plugin_command_handler",
-                         lambda name: _handler if name == "gsd-bind" else None)
 
-    handled, result, _command = await runner._hm_dispatch_quick_and_plugin_commands(event, source, "gsd_bind")
+    monkeypatch.setattr(
+        _plugins_mod,
+        "get_plugin_command_handler",
+        lambda name: _handler if name == "gsd-bind" else None,
+    )
+
+    handled, result, _command = await runner._hm_dispatch_quick_and_plugin_commands(
+        event, source, "gsd_bind"
+    )
 
     assert handled is True
     assert result == "Bound: bind"
@@ -317,15 +327,21 @@ async def test_plugin_slash_command_sees_session_env(monkeypatch):
     assert get_session_env("CLAWK_SESSION_KEY") == ""
 
 
-
 def test_set_session_env_binds_the_turn_session_id(monkeypatch):
     """A cached agent sets CLAWK_SESSION_ID only on the turn that built it. Every later turn's
     task context must still carry the session id, or a command yielded to the background
     records no parent session and its completion is refused by the owner (admission_conflict)."""
     runner = object.__new__(GatewayRunner)
-    source = SessionSource(platform=Platform.LOCAL, chat_id="local-abc", chat_type="dm", user_id="uid:1")
-    context = SessionContext(source=source, connected_platforms=[], home_channels={},
-                             session_key="agent:main:local:dm:local-abc", session_id="20261006_x")
+    source = SessionSource(
+        platform=Platform.LOCAL, chat_id="local-abc", chat_type="dm", user_id="uid:1"
+    )
+    context = SessionContext(
+        source=source,
+        connected_platforms=[],
+        home_channels={},
+        session_key="agent:main:local:dm:local-abc",
+        session_id="20261006_x",
+    )
     monkeypatch.setenv("CLAWK_SESSION_ID", "stale-process-env")
     tokens = runner._set_session_env(context)
     assert get_session_env("CLAWK_SESSION_ID") == "20261006_x"
@@ -345,25 +361,52 @@ async def test_plugin_slash_command_receives_calling_session(monkeypatch):
     from gateway.session import SessionEntry
 
     runner = object.__new__(GatewayRunner)
-    runner.config = GatewayConfig(platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="***")})
+    runner.config = GatewayConfig(
+        platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="***")}
+    )
     runner._draining = False
-    source = SessionSource(platform=Platform.TELEGRAM, chat_id="c1", user_id="u1", chat_type="dm")
+    source = SessionSource(
+        platform=Platform.TELEGRAM, chat_id="c1", user_id="u1", chat_type="dm"
+    )
     key = runner._session_key_for_source(source)
     runner.session_store = MagicMock()
-    runner.session_store.lookup_by_session_key.side_effect = lambda k: SessionEntry(
-        session_key=k, session_id="20261018_live", created_at=datetime.now(), updated_at=datetime.now(),
-    ) if k == key else None
+    runner.session_store.lookup_by_session_key.side_effect = lambda k: (
+        SessionEntry(
+            session_key=k,
+            session_id="20261018_live",
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+        )
+        if k == key
+        else None
+    )
     seen = []
 
     def _handler(raw_args, *, source, session_id, session_key, platform):
-        seen.append((raw_args, source, session_id, session_key, platform, get_session_env("CLAWK_SESSION_ID")))
+        seen.append(
+            (
+                raw_args,
+                source,
+                session_id,
+                session_key,
+                platform,
+                get_session_env("CLAWK_SESSION_ID"),
+            )
+        )
         return "ok"
 
     from clawk_cli import plugins as _plugins_mod
-    monkeypatch.setattr(_plugins_mod, "get_plugin_command_handler", lambda name: _handler)
+
+    monkeypatch.setattr(
+        _plugins_mod, "get_plugin_command_handler", lambda name: _handler
+    )
 
     event = MessageEvent(text="/who details", source=source, message_id="m1")
-    handled, result, _command = await runner._hm_dispatch_quick_and_plugin_commands(event, source, "who")
+    handled, result, _command = await runner._hm_dispatch_quick_and_plugin_commands(
+        event, source, "who"
+    )
 
     assert (handled, result) == (True, "ok")
-    assert seen == [("details", source, "20261018_live", key, "telegram", "20261018_live")]
+    assert seen == [
+        ("details", source, "20261018_live", key, "telegram", "20261018_live")
+    ]

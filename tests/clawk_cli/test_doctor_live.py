@@ -31,8 +31,16 @@ _CLASH_NO_PROXY = "127.0.0.1,localhost,::1,[::1]"
 
 @pytest.fixture
 def clash_env(monkeypatch):
-    for key in ("NO_PROXY", "no_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY",
-                "http_proxy", "https_proxy", "all_proxy"):
+    for key in (
+        "NO_PROXY",
+        "no_proxy",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+    ):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("NO_PROXY", _CLASH_NO_PROXY)
     monkeypatch.setenv("no_proxy", _CLASH_NO_PROXY)
@@ -56,8 +64,13 @@ def _args(live: bool = True) -> argparse.Namespace:
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch):
     """Strip backend credentials so each test opts in explicitly."""
-    for var in ("FIRECRAWL_API_KEY", "FAL_KEY", "OPENAI_API_KEY",
-                "ELEVENLABS_API_KEY", "GROQ_API_KEY"):
+    for var in (
+        "FIRECRAWL_API_KEY",
+        "FAL_KEY",
+        "OPENAI_API_KEY",
+        "ELEVENLABS_API_KEY",
+        "GROQ_API_KEY",
+    ):
         monkeypatch.delenv(var, raising=False)
     # Default: empty config, no MCP servers, local tts/stt.
     monkeypatch.setattr("clawk_cli.config.load_config_readonly", dict)
@@ -66,17 +79,14 @@ def _clean_env(monkeypatch):
 
 
 class TestLiveFlagGating:
-
     def test_no_live_flag_means_zero_probes(self, monkeypatch):
         called = []
         monkeypatch.setattr(
-            doctor_live, "run_live_checks",
-            lambda *a, **k: called.append(True))
+            doctor_live, "run_live_checks", lambda *a, **k: called.append(True)
+        )
         result = maybe_run_live_checks(_args(live=False), [])
         assert result is None
         assert called == []
-
-
 
     def test_live_check_crash_never_propagates(self, monkeypatch, capsys):
         def _boom(*a, **k):
@@ -88,7 +98,7 @@ class TestLiveFlagGating:
 
 
 class TestConfiguredOnlySelection:
-        # No issues appended for skips.
+    # No issues appended for skips.
 
     def test_unconfigured_backends_do_not_touch_network(self, monkeypatch):
         def _no_net(*a, **k):
@@ -114,23 +124,29 @@ class TestConfiguredOnlySelection:
     def test_firecrawl_invalid_key_fails_and_appends_issue(self, monkeypatch):
         monkeypatch.setenv("FIRECRAWL_API_KEY", "fc-bad")
         monkeypatch.setattr(
-            doctor_live, "_http_get",
-            lambda *a, **k: SimpleNamespace(status_code=401))
+            doctor_live, "_http_get", lambda *a, **k: SimpleNamespace(status_code=401)
+        )
         issues: list[str] = []
         results = {r.name: r for r in run_live_checks(issues)}
         assert results["Firecrawl"].status == "fail"
         assert any("FIRECRAWL" in i or "Firecrawl" in i for i in issues)
 
-
     def test_mcp_servers_probed_per_configured_server(self, monkeypatch):
         monkeypatch.setattr(
             "clawk_cli.config.load_config_readonly",
-            lambda: {"mcp_servers": {"alpha": {"url": "https://x"},
-                                     "beta": {"command": "foo"}}})
+            lambda: {
+                "mcp_servers": {
+                    "alpha": {"url": "https://x"},
+                    "beta": {"command": "foo"},
+                }
+            },
+        )
         probed = []
         monkeypatch.setattr(
-            doctor_live, "_probe_mcp_server",
-            lambda name, cfg, timeout: probed.append(name) or [("t", "d")])
+            doctor_live,
+            "_probe_mcp_server",
+            lambda name, cfg, timeout: probed.append(name) or [("t", "d")],
+        )
         results = [r for r in run_live_checks([]) if r.name.startswith("MCP")]
         assert sorted(probed) == ["alpha", "beta"]
         assert len(results) == 2
@@ -139,7 +155,8 @@ class TestConfiguredOnlySelection:
     def test_tts_local_provider_skipped(self, monkeypatch):
         monkeypatch.setattr(
             "clawk_cli.config.load_config_readonly",
-            lambda: {"tts": {"provider": "edge"}})
+            lambda: {"tts": {"provider": "edge"}},
+        )
         results = {r.name: r for r in run_live_checks([])}
         assert results["TTS"].status == "skip"
 
@@ -147,10 +164,11 @@ class TestConfiguredOnlySelection:
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
         monkeypatch.setattr(
             "clawk_cli.config.load_config_readonly",
-            lambda: {"tts": {"provider": "openai"}})
+            lambda: {"tts": {"provider": "openai"}},
+        )
         monkeypatch.setattr(
-            doctor_live, "_http_get",
-            lambda *a, **k: SimpleNamespace(status_code=200))
+            doctor_live, "_http_get", lambda *a, **k: SimpleNamespace(status_code=200)
+        )
         results = {r.name: r for r in run_live_checks([])}
         assert results["TTS"].status == "pass"
 
@@ -158,25 +176,29 @@ class TestConfiguredOnlySelection:
         monkeypatch.setenv("GROQ_API_KEY", "gsk-test")
         monkeypatch.setattr(
             "clawk_cli.config.load_config_readonly",
-            lambda: {"stt": {"provider": "groq"}})
+            lambda: {"stt": {"provider": "groq"}},
+        )
         monkeypatch.setattr(
-            doctor_live, "_http_get",
-            lambda *a, **k: SimpleNamespace(status_code=200))
+            doctor_live, "_http_get", lambda *a, **k: SimpleNamespace(status_code=200)
+        )
         results = {r.name: r for r in run_live_checks([])}
         assert results["STT"].status == "pass"
 
     def test_stt_provider_configured_but_key_missing_warns(self, monkeypatch):
         monkeypatch.setattr(
             "clawk_cli.config.load_config_readonly",
-            lambda: {"stt": {"provider": "groq"}})
+            lambda: {"stt": {"provider": "groq"}},
+        )
         results = {r.name: r for r in run_live_checks([])}
         assert results["STT"].status == "warn"
 
     def test_browser_probed_when_available(self, monkeypatch):
         monkeypatch.setattr(doctor_live, "_browser_available", lambda: True)
         monkeypatch.setattr(
-            doctor_live, "_launch_browser_probe",
-            lambda timeout: (True, "about:blank ok"))
+            doctor_live,
+            "_launch_browser_probe",
+            lambda timeout: (True, "about:blank ok"),
+        )
         results = {r.name: r for r in run_live_checks([])}
         assert results["Browser"].status == "pass"
 
@@ -187,8 +209,16 @@ def test_http_get_sanitizes_bracketed_ipv6_no_proxy(monkeypatch, kind, entry):
     # The Clash Verge / mihomo export from #118159: httpx 0.28.1 turns a bracketed or
     # CIDR IPv6 NO_PROXY entry into an unparseable mount pattern and raises InvalidURL
     # at client construction, before any request. doctor --live's _http_get must not.
-    for key in ("NO_PROXY", "no_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY",
-                "http_proxy", "https_proxy", "all_proxy"):
+    for key in (
+        "NO_PROXY",
+        "no_proxy",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+    ):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv(kind, f"127.0.0.1,localhost,::1,{entry}")
     # A bare local-socket GET proves the client was constructible; 127.0.0.1's own
@@ -198,7 +228,8 @@ def test_http_get_sanitizes_bracketed_ipv6_no_proxy(monkeypatch, kind, entry):
         thread.start()
         try:
             resp = doctor_live._http_get(
-                f"http://127.0.0.1:{httpd.server_port}/", timeout=5.0)
+                f"http://127.0.0.1:{httpd.server_port}/", timeout=5.0
+            )
             assert resp.status_code == 200
         finally:
             httpd.shutdown()
@@ -219,9 +250,14 @@ def test_run_live_checks_sanitizes_clash_env_and_probes_pass(clash_env, monkeypa
         thread.start()
         try:
             monkeypatch.setitem(
-                doctor_live._KEYED_PROBES, "Firecrawl",
-                (f"http://127.0.0.1:{httpd.server_port}/v2/team/credit-usage",
-                 "FIRECRAWL_API_KEY", "Bearer"))
+                doctor_live._KEYED_PROBES,
+                "Firecrawl",
+                (
+                    f"http://127.0.0.1:{httpd.server_port}/v2/team/credit-usage",
+                    "FIRECRAWL_API_KEY",
+                    "Bearer",
+                ),
+            )
             issues: list[str] = []
             results = {r.name: r for r in run_live_checks(issues)}
             assert results["Firecrawl"].status == "pass"
@@ -237,8 +273,16 @@ def test_run_live_checks_sanitizes_clash_env_and_probes_pass(clash_env, monkeypa
 
 
 def test_run_live_checks_leaves_a_clean_environment_untouched(monkeypatch):
-    for key in ("NO_PROXY", "no_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY",
-                "http_proxy", "https_proxy", "all_proxy"):
+    for key in (
+        "NO_PROXY",
+        "no_proxy",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+    ):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("NO_PROXY", "example.com,10.0.0.0/8")
     # _http_get is untouched by the sanitize-once design; a socket-level 200 proves
@@ -247,8 +291,12 @@ def test_run_live_checks_leaves_a_clean_environment_untouched(monkeypatch):
         thread = threading.Thread(target=httpd.serve_forever, daemon=True)
         thread.start()
         try:
-            assert doctor_live._http_get(
-                f"http://127.0.0.1:{httpd.server_port}/", timeout=5.0).status_code == 200
+            assert (
+                doctor_live._http_get(
+                    f"http://127.0.0.1:{httpd.server_port}/", timeout=5.0
+                ).status_code
+                == 200
+            )
         finally:
             httpd.shutdown()
             thread.join(timeout=5)
@@ -266,7 +314,9 @@ class TestBrowserAvailable:
     def test_true_when_installed_browser_resolves(self, monkeypatch, tmp_path):
         self._block_path_and_node_modules_checks(monkeypatch, tmp_path)
 
-        monkeypatch.setattr(bt_install, "_find_agent_browser", lambda **_kw: "/pm/agent-browser")
+        monkeypatch.setattr(
+            bt_install, "_find_agent_browser", lambda **_kw: "/pm/agent-browser"
+        )
 
         assert _real_browser_available() is True
 
@@ -300,8 +350,13 @@ class TestFailureIsolation:
     def test_mcp_probe_failure_isolated_per_server(self, monkeypatch):
         monkeypatch.setattr(
             "clawk_cli.config.load_config_readonly",
-            lambda: {"mcp_servers": {"bad": {"url": "https://x"},
-                                     "good": {"url": "https://y"}}})
+            lambda: {
+                "mcp_servers": {
+                    "bad": {"url": "https://x"},
+                    "good": {"url": "https://y"},
+                }
+            },
+        )
 
         def _probe(name, cfg, timeout):
             if name == "bad":
@@ -330,7 +385,8 @@ class TestTimeoutHandling:
         monkeypatch.setenv("FIRECRAWL_API_KEY", "fc-test")
         monkeypatch.setattr(
             "clawk_cli.config.load_config_readonly",
-            lambda: {"doctor": {"live_probe_timeout": 3}})
+            lambda: {"doctor": {"live_probe_timeout": 3}},
+        )
         seen = {}
 
         def _get(url, headers=None, timeout=None):
@@ -342,9 +398,7 @@ class TestTimeoutHandling:
         assert seen["timeout"] == 3
 
 
-
 class TestReadOnly:
-
     def test_skips_never_append_issues(self, capsys):
         issues: list[str] = []
         run_live_checks(issues)

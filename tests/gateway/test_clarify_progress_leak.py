@@ -49,7 +49,9 @@ class ProgressCaptureAdapter(BasePlatformAdapter):
         return SendResult(success=True, message_id="m-1")
 
     async def edit_message(self, chat_id, message_id, content) -> SendResult:
-        self.edits.append({"chat_id": chat_id, "message_id": message_id, "content": content})
+        self.edits.append(
+            {"chat_id": chat_id, "message_id": message_id, "content": content}
+        )
         self._record(content)
         return SendResult(success=True, message_id=message_id)
 
@@ -85,7 +87,10 @@ class ClarifyThenToolAgent:
                 "tool.started",
                 "clarify",
                 "Which environment?",
-                {"question": "Which environment?", "choices": ["staging", "production"]},
+                {
+                    "question": "Which environment?",
+                    "choices": ["staging", "production"],
+                },
             )
             cb("tool.started", "terminal", "pwd", {})
             if not type(self).adapter.delivered.wait(timeout=5.0):
@@ -129,7 +134,9 @@ def _install_fakes(monkeypatch, mode):
     import tools.terminal_tool
 
     gateway_run = importlib.import_module("gateway.run")
-    monkeypatch.setattr(gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"})
+    monkeypatch.setattr(
+        gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"}
+    )
     return gateway_run
 
 

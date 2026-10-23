@@ -8,6 +8,7 @@ never gated.
 These call ``_dispatch_inbound`` directly (no aiohttp / ports) and assert
 on what reaches ``handle_message``.
 """
+
 from __future__ import annotations
 
 from typing import List
@@ -19,7 +20,9 @@ from gateway.platforms.event import MessageEvent
 from plugins.platforms.photon.adapter import PhotonAdapter
 
 
-def _make_adapter(monkeypatch: pytest.MonkeyPatch, extra: dict | None = None) -> PhotonAdapter:
+def _make_adapter(
+    monkeypatch: pytest.MonkeyPatch, extra: dict | None = None
+) -> PhotonAdapter:
     monkeypatch.setenv("PHOTON_PROJECT_ID", "test-project-id")
     monkeypatch.setenv("PHOTON_PROJECT_SECRET", "test-project-secret")
     monkeypatch.delenv("PHOTON_REQUIRE_MENTION", raising=False)
@@ -48,7 +51,9 @@ def _dm_payload(text: str) -> dict:
     }
 
 
-def _capture(adapter: PhotonAdapter, monkeypatch: pytest.MonkeyPatch) -> list[MessageEvent]:
+def _capture(
+    adapter: PhotonAdapter, monkeypatch: pytest.MonkeyPatch
+) -> list[MessageEvent]:
     captured: list[MessageEvent] = []
 
     async def fake_handle(event: MessageEvent) -> None:
@@ -58,10 +63,10 @@ def _capture(adapter: PhotonAdapter, monkeypatch: pytest.MonkeyPatch) -> list[Me
     return captured
 
 
-
-
 @pytest.mark.asyncio
-async def test_group_message_dropped_without_mention(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_group_message_dropped_without_mention(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     adapter = _make_adapter(monkeypatch, extra={"require_mention": True})
     captured = _capture(adapter, monkeypatch)
 
@@ -82,7 +87,10 @@ async def test_dm_never_gated(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_custom_mention_patterns_from_config(monkeypatch: pytest.MonkeyPatch) -> None:
     adapter = _make_adapter(
         monkeypatch,
-        extra={"require_mention": True, "mention_patterns": [r"(?<![\w@])@?amos\b[,:\-]?"]},
+        extra={
+            "require_mention": True,
+            "mention_patterns": [r"(?<![\w@])@?amos\b[,:\-]?"],
+        },
     )
     assert adapter.require_mention is True
     assert len(adapter._mention_patterns) == 1
@@ -113,12 +121,16 @@ def test_invalid_pattern_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("caption, cached_calls, dispatched", [
-    ("holiday pic", 0, 0),          # unmentioned group attachment: never persisted
-    ("clawk holiday pic", 1, 1),   # mentioned: cached and dispatched
-])
+@pytest.mark.parametrize(
+    "caption, cached_calls, dispatched",
+    [
+        ("holiday pic", 0, 0),  # unmentioned group attachment: never persisted
+        ("clawk holiday pic", 1, 1),  # mentioned: cached and dispatched
+    ],
+)
 async def test_unmentioned_group_attachment_is_not_cached(
-        monkeypatch: pytest.MonkeyPatch, caption: str, cached_calls: int, dispatched: int) -> None:
+    monkeypatch: pytest.MonkeyPatch, caption: str, cached_calls: int, dispatched: int
+) -> None:
     """The group mention gate must run BEFORE inline attachment bytes hit the media cache."""
     import plugins.platforms.photon.adapter as photon_adapter
 
@@ -132,11 +144,21 @@ async def test_unmentioned_group_attachment_is_not_cached(
 
     monkeypatch.setattr(photon_adapter, "_cache_inbound_attachment", fake_cache)
     payload = _group_payload(caption)
-    payload["content"] = {"type": "group", "items": [
-        {"content": {"type": "text", "text": caption}},
-        {"content": {"type": "attachment", "name": "pic.png", "mimeType": "image/png",
-                     "data": "aGVsbG8=", "encoding": "base64"}},
-    ]}
+    payload["content"] = {
+        "type": "group",
+        "items": [
+            {"content": {"type": "text", "text": caption}},
+            {
+                "content": {
+                    "type": "attachment",
+                    "name": "pic.png",
+                    "mimeType": "image/png",
+                    "data": "aGVsbG8=",
+                    "encoding": "base64",
+                }
+            },
+        ],
+    }
 
     await adapter._dispatch_inbound(payload)
     assert len(calls) == cached_calls

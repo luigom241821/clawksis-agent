@@ -15,11 +15,22 @@ from fastapi import APIRouter, HTTPException
 from clawk_cli.web_deps import late
 from clawk_cli.web_server_profiles import _hub_action_name, _installed_hub_identifiers
 from clawk_cli.web_models import (
-    SkillContentUpdate, SkillCreate, SkillInstallRequest, SkillToggle, SkillUninstallRequest,
-    SkillsUpdateRequest)
+    SkillContentUpdate,
+    SkillCreate,
+    SkillInstallRequest,
+    SkillToggle,
+    SkillUninstallRequest,
+    SkillsUpdateRequest,
+)
 from clawk_cli.web_routers._common import (
-    _profile_scope, config_write_scope, http_failure, log as _log, require, scoped_to_thread,
-    spawn_profile_action)
+    _profile_scope,
+    config_write_scope,
+    http_failure,
+    log as _log,
+    require,
+    scoped_to_thread,
+    spawn_profile_action,
+)
 
 hub_router = APIRouter()
 router = APIRouter()
@@ -76,9 +87,14 @@ def _flag(obj, attr: str) -> bool:
 
 def _skill_meta_to_payload(m) -> dict:
     return {
-        "name": m.name, "description": m.description, "source": m.source,
-        "identifier": m.identifier, "trust_level": m.trust_level, "repo": m.repo,
-        "tags": list(m.tags or [])}
+        "name": m.name,
+        "description": m.description,
+        "source": m.source,
+        "identifier": m.identifier,
+        "trust_level": m.trust_level,
+        "repo": m.repo,
+        "tags": list(m.tags or []),
+    }
 
 
 def _clear_skills_prompt_cache() -> None:
@@ -89,6 +105,7 @@ def _clear_skills_prompt_cache() -> None:
     """
     try:
         from agent.prompt_builder import clear_skills_system_prompt_cache
+
         clear_skills_system_prompt_cache(clear_snapshot=True)
     except Exception:
         pass
@@ -98,26 +115,39 @@ def _clear_skills_prompt_cache() -> None:
 async def install_skill_hub(body: SkillInstallRequest, profile: Optional[str] = None):
     identifier = require(body.identifier, "identifier is required")
     return spawn_profile_action(
-        body.profile or profile, ["skills", "install", identifier, "--yes"],
-        _hub_action_name("install", identifier), log_msg="Failed to spawn skills install",
-        prefix="Failed to install skill")
+        body.profile or profile,
+        ["skills", "install", identifier, "--yes"],
+        _hub_action_name("install", identifier),
+        log_msg="Failed to spawn skills install",
+        prefix="Failed to install skill",
+    )
 
 
 @hub_router.post("/api/skills/hub/uninstall")
-async def uninstall_skill_hub(body: SkillUninstallRequest, profile: Optional[str] = None):
+async def uninstall_skill_hub(
+    body: SkillUninstallRequest, profile: Optional[str] = None
+):
     name = require(body.name, "name is required")
     return spawn_profile_action(
-        body.profile or profile, ["skills", "uninstall", name, "--yes"],
-        _hub_action_name("uninstall", name), log_msg="Failed to spawn skills uninstall",
-        prefix="Failed to uninstall skill")
+        body.profile or profile,
+        ["skills", "uninstall", name, "--yes"],
+        _hub_action_name("uninstall", name),
+        log_msg="Failed to spawn skills uninstall",
+        prefix="Failed to uninstall skill",
+    )
 
 
 @hub_router.post("/api/skills/hub/update")
 async def update_skills_hub(
-    body: Optional[SkillsUpdateRequest] = None, profile: Optional[str] = None):
+    body: Optional[SkillsUpdateRequest] = None, profile: Optional[str] = None
+):
     return spawn_profile_action(
-        (body.profile if body else None) or profile, ["skills", "update"], "skills-update",
-        log_msg="Failed to spawn skills update", prefix="Failed to update skills")
+        (body.profile if body else None) or profile,
+        ["skills", "update"],
+        "skills-update",
+        log_msg="Failed to spawn skills update",
+        prefix="Failed to update skills",
+    )
 
 
 @hub_router.get("/api/skills/hub/official")
@@ -140,7 +170,9 @@ async def list_official_skills(profile: Optional[str] = None):
             out.append(payload)
         return {"skills": out}
 
-    with http_failure("official skills catalog listing failed", 502, "Official catalog failed"):
+    with http_failure(
+        "official skills catalog listing failed", 502, "Official catalog failed"
+    ):
         return await asyncio.to_thread(_run)
 
 
@@ -167,16 +199,22 @@ async def list_skills_hub_sources(profile: Optional[str] = None):
                 if index_available:
                     try:
                         featured = [
-                            _skill_meta_to_payload(m) for m in src.search("", limit=12)]
+                            _skill_meta_to_payload(m) for m in src.search("", limit=12)
+                        ]
                     except Exception:
                         featured = []
             out.append(entry)
         # Which sources are worth searching individually (see _API_SOURCE_IDS).
         for entry in out:
-            entry["searchable"] = not (index_available and entry["id"] in _API_SOURCE_IDS)
+            entry["searchable"] = not (
+                index_available and entry["id"] in _API_SOURCE_IDS
+            )
         return {
-            "sources": out, "index_available": index_available, "featured": featured,
-            "installed": _installed_hub_identifiers(profile)}
+            "sources": out,
+            "index_available": index_available,
+            "featured": featured,
+            "installed": _installed_hub_identifiers(profile),
+        }
 
     with http_failure("skills hub sources listing failed", 502, "Hub sources failed"):
         return await asyncio.to_thread(_run)
@@ -184,7 +222,8 @@ async def list_skills_hub_sources(profile: Optional[str] = None):
 
 @hub_router.get("/api/skills/hub/search")
 async def search_skills_hub(
-    q: str = "", source: str = "all", limit: int = 20, profile: Optional[str] = None):
+    q: str = "", source: str = "all", limit: int = 20, profile: Optional[str] = None
+):
     """Search the skill hub across all configured sources (network-bound)."""
     query = (q or "").strip()
     if not query:
@@ -196,20 +235,26 @@ async def search_skills_hub(
         sources = _hub_sources(profile)
         capped = min(max(limit, 1), 50)
         all_results, source_counts, timed_out = parallel_search_sources(
-            sources, query=query, source_filter=source or "all", overall_timeout=30)
+            sources, query=query, source_filter=source or "all", overall_timeout=30
+        )
 
         # Dedupe by identifier, preferring higher trust (mirrors unified_search).
         _rank = {"builtin": 2, "trusted": 1, "community": 0}
         seen = {}
         for r in all_results:
             prev = seen.get(r.identifier)
-            if prev is None or _rank.get(r.trust_level, 0) > _rank.get(prev.trust_level, 0):
+            if prev is None or _rank.get(r.trust_level, 0) > _rank.get(
+                prev.trust_level, 0
+            ):
                 seen[r.identifier] = r
         deduped = list(seen.values())[:capped]
 
         return {
-            "results": [_skill_meta_to_payload(m) for m in deduped], "source_counts": source_counts,
-            "timed_out": timed_out, "installed": _installed_hub_identifiers(profile)}
+            "results": [_skill_meta_to_payload(m) for m in deduped],
+            "source_counts": source_counts,
+            "timed_out": timed_out,
+            "installed": _installed_hub_identifiers(profile),
+        }
 
     with http_failure("skills hub search failed", 502, "Hub search failed"):
         return await asyncio.to_thread(_run)
@@ -252,14 +297,20 @@ async def preview_skill_hub(identifier: str = "", profile: Optional[str] = None)
 
         m = meta or bundle
         return {
-            "name": getattr(m, "name", ident), "description": getattr(m, "description", "") or "",
+            "name": getattr(m, "name", ident),
+            "description": getattr(m, "description", "") or "",
             "source": getattr(m, "source", "") or "",
             "identifier": getattr(m, "identifier", ident) or ident,
             "trust_level": getattr(m, "trust_level", "community") or "community",
-            "repo": getattr(m, "repo", None), "tags": list(getattr(m, "tags", None) or []),
-            "skill_md": skill_md, "files": sorted(files.keys())}
+            "repo": getattr(m, "repo", None),
+            "tags": list(getattr(m, "tags", None) or []),
+            "skill_md": skill_md,
+            "files": sorted(files.keys()),
+        }
 
-    return await _hub_lookup(_run, ident, "skills hub preview failed", "Hub preview failed")
+    return await _hub_lookup(
+        _run, ident, "skills hub preview failed", "Hub preview failed"
+    )
 
 
 @hub_router.get("/api/skills/hub/scan")
@@ -283,7 +334,10 @@ async def scan_skill_hub(identifier: str = "", profile: Optional[str] = None):
             scan_source = "official"
         else:
             scan_source = (
-                getattr(bundle, "identifier", "") or getattr(meta, "identifier", "") or ident)
+                getattr(bundle, "identifier", "")
+                or getattr(meta, "identifier", "")
+                or ident
+            )
 
         tier1 = None
         q_path = quarantine_bundle(bundle)
@@ -292,7 +346,11 @@ async def scan_skill_hub(identifier: str = "", profile: Optional[str] = None):
             # Advisory SkillEvaluator Tier 1 second opinion: optional binary,
             # never blocks, errors degrade to no data (same as the CLI installer).
             try:
-                from tools.skillevaluator_scan import run_tier1_scan, tier1_advisory_enabled
+                from tools.skillevaluator_scan import (
+                    run_tier1_scan,
+                    tier1_advisory_enabled,
+                )
+
                 if tier1_advisory_enabled():
                     t1 = run_tier1_scan(q_path)
                     if t1.available:
@@ -301,11 +359,17 @@ async def scan_skill_hub(identifier: str = "", profile: Optional[str] = None):
                             "incomplete_checks": t1.incomplete_checks,
                             "findings": [
                                 {
-                                    "check": f.check, "validator": f.validator,
-                                    "severity": f.severity, "message": f.message,
-                                    "file": f.file, "line": f.line,
-                                    "secrets_class": f.is_secrets_class}
-                                for f in t1.findings]}
+                                    "check": f.check,
+                                    "validator": f.validator,
+                                    "severity": f.severity,
+                                    "message": f.message,
+                                    "file": f.file,
+                                    "line": f.line,
+                                    "secrets_class": f.is_secrets_class,
+                                }
+                                for f in t1.findings
+                            ],
+                        }
             except Exception:
                 _log.debug("Tier 1 advisory scan skipped", exc_info=True)
         finally:
@@ -315,9 +379,14 @@ async def scan_skill_hub(identifier: str = "", profile: Optional[str] = None):
         allowed, reason = should_allow_install(result, force=False)
         findings = [
             {
-                "severity": f.severity, "category": f.category, "file": f.file,
-                "line": f.line, "description": f.description}
-            for f in result.findings]
+                "severity": f.severity,
+                "category": f.category,
+                "file": f.file,
+                "line": f.line,
+                "description": f.description,
+            }
+            for f in result.findings
+        ]
         counts = {sev: 0 for sev in ("critical", "high", "medium", "low")}
         for f in result.findings:
             if f.severity in counts:
@@ -330,7 +399,11 @@ async def scan_skill_hub(identifier: str = "", profile: Optional[str] = None):
             "trust_level": result.trust_level,
             "verdict": result.verdict,
             "summary": result.summary,
-            "policy": "allow" if allowed is True else "ask" if allowed is None else "block",
+            "policy": "allow"
+            if allowed is True
+            else "ask"
+            if allowed is None
+            else "block",
             "policy_reason": reason,
             "findings": findings,
             "severity_counts": counts,
@@ -345,7 +418,12 @@ async def get_skills(profile: Optional[str] = None):
     from tools.skills_tool import find_all_skills
     from clawk_cli.skills_config import get_disabled_skills
     from tools.skill_usage import (
-        _external_skill_names, _read_bundled_names, _read_hub_installed_names, activity_count, load_usage)
+        _external_skill_names,
+        _read_bundled_names,
+        _read_hub_installed_names,
+        activity_count,
+        load_usage,
+    )
 
     def _run():
         with _profile_scope(profile):
@@ -367,10 +445,14 @@ async def get_skills(profile: Optional[str] = None):
             s["enabled"] = s["name"] not in disabled
             s["usage"] = activity_count(usage.get(s["name"], {}))
             s["provenance"] = (
-                "hub" if s["name"] in hub_names
-                else "bundled" if s["name"] in bundled_names
-                else "external" if s["name"] in external_names
-                else "agent")
+                "hub"
+                if s["name"] in hub_names
+                else "bundled"
+                if s["name"] in bundled_names
+                else "external"
+                if s["name"] in external_names
+                else "agent"
+            )
         return skills
 
     return await asyncio.to_thread(_run)
@@ -405,7 +487,9 @@ async def get_skill_content(name: str, profile: Optional[str] = None):
             raise HTTPException(status_code=404, detail=f"Skill '{name}' not found.")
         skill_md = found["path"] / "SKILL.md"
         if not skill_md.exists():
-            raise HTTPException(status_code=404, detail=f"Skill '{name}' has no SKILL.md.")
+            raise HTTPException(
+                status_code=404, detail=f"Skill '{name}' has no SKILL.md."
+            )
         try:
             content = skill_md.read_text(encoding="utf-8-sig")
         except OSError as exc:
@@ -423,9 +507,13 @@ async def create_skill(body: SkillCreate, profile: Optional[str] = None):
     from tools.skill_manager_tool import _create_skill
 
     result = await scoped_to_thread(
-        body.profile or profile, lambda: _create_skill(body.name, body.content, body.category or None))
+        body.profile or profile,
+        lambda: _create_skill(body.name, body.content, body.category or None),
+    )
     if not result.get("success"):
-        raise HTTPException(status_code=400, detail=result.get("error", "Failed to create skill."))
+        raise HTTPException(
+            status_code=400, detail=result.get("error", "Failed to create skill.")
+        )
     _clear_skills_prompt_cache()
     return result
 
@@ -435,7 +523,9 @@ async def update_skill_content(body: SkillContentUpdate, profile: Optional[str] 
     """Replace the SKILL.md of an existing skill (full rewrite) from the editor."""
     from tools.skill_manager_tool import _edit_skill
 
-    result = await scoped_to_thread(body.profile or profile, lambda: _edit_skill(body.name, body.content))
+    result = await scoped_to_thread(
+        body.profile or profile, lambda: _edit_skill(body.name, body.content)
+    )
     if not result.get("success"):
         err = result.get("error", "Failed to update skill.")
         status = 404 if "not found" in str(err).lower() else 400

@@ -1,4 +1,5 @@
 """Real authority execution with an OS-full observer and independent reader."""
+
 import asyncio
 from http.server import ThreadingHTTPServer
 import json
@@ -12,15 +13,19 @@ from shared_authority_peer import ModelPeer
 
 
 def main():
-    peer = ThreadingHTTPServer(('127.0.0.1', 0), ModelPeer)
+    peer = ThreadingHTTPServer(("127.0.0.1", 0), ModelPeer)
     peer.requests, peer.metadata_requests = [], []
     threading.Thread(target=peer.serve_forever, daemon=True).start()
-    url = f'http://127.0.0.1:{peer.server_port}/v1'
-    os.environ.update(OPENAI_API_KEY='explicit-loopback-fixture', OPENAI_BASE_URL=url,
-                      TELEGRAM_ALLOWED_USERS='fixture-user')
-    Path(os.environ['CLAWK_HOME'], 'config.yaml').write_text(
-        f'model:\n  default: local-wire-stub\n  provider: custom\n  base_url: {url}\n'
-        'auxiliary:\n  title_generation:\n    enabled: false\n')
+    url = f"http://127.0.0.1:{peer.server_port}/v1"
+    os.environ.update(
+        OPENAI_API_KEY="explicit-loopback-fixture",
+        OPENAI_BASE_URL=url,
+        TELEGRAM_ALLOWED_USERS="fixture-user",
+    )
+    Path(os.environ["CLAWK_HOME"], "config.yaml").write_text(
+        f"model:\n  default: local-wire-stub\n  provider: custom\n  base_url: {url}\n"
+        "auxiliary:\n  title_generation:\n    enabled: false\n"
+    )
     from tui_gateway.transport import StdioTransport
 
     slow_read, slow_write = os.pipe()
@@ -29,18 +34,18 @@ def main():
     filled = 0
     try:
         while True:
-            filled += os.write(slow_write, b'x' * 4096)
+            filled += os.write(slow_write, b"x" * 4096)
     except BlockingIOError:
         pass
     os.set_blocking(slow_write, True)
-    slow_stream = os.fdopen(slow_write, 'w', encoding='utf-8')
-    healthy_stream = os.fdopen(healthy_write, 'w', encoding='utf-8')
+    slow_stream = os.fdopen(slow_write, "w", encoding="utf-8")
+    healthy_stream = os.fdopen(healthy_write, "w", encoding="utf-8")
     slow = StdioTransport(lambda: slow_stream, threading.Lock())
     healthy = StdioTransport(lambda: healthy_stream, threading.Lock())
     frames = queue.Queue()
 
     def read_healthy():
-        with os.fdopen(healthy_read, 'r', encoding='utf-8') as stream:
+        with os.fdopen(healthy_read, "r", encoding="utf-8") as stream:
             for line in stream:
                 frames.put(json.loads(line))
 
@@ -60,24 +65,42 @@ def main():
         from run_agent import AIAgent
 
         runner = GatewayRunner()
-        authority = await initialize_session_authority(runner, profile_id='fixture', instance_id='events-owner')
-        ref = authority.register(SessionSource(platform=Platform.TELEGRAM, chat_id='event-chat',
-                                               chat_type='dm', user_id='fixture-user'))
-        a, b = [AuthorityConnection(authority, t, {'user_id': 'fixture-user'}) for t in (slow, healthy)]
+        authority = await initialize_session_authority(
+            runner, profile_id="fixture", instance_id="events-owner"
+        )
+        ref = authority.register(
+            SessionSource(
+                platform=Platform.TELEGRAM,
+                chat_id="event-chat",
+                chat_type="dm",
+                user_id="fixture-user",
+            )
+        )
+        a, b = [
+            AuthorityConnection(authority, t, {"user_id": "fixture-user"})
+            for t in (slow, healthy)
+        ]
         for connection in (a, b):
             await connection.resume(ref, {})
             await connection.resume(ref, {})
         assert len(authority.sessions[ref.session_id].subscribers) == 2
         ready.set()
-        receipt = await authority.submit(b.actor, Submission('event-input', ref, {'text': 'WS_SHARED'}, 'queue'))
+        receipt = await authority.submit(
+            b.actor, Submission("event-input", ref, {"text": "WS_SHARED"}, "queue")
+        )
         await authority.sessions[ref.session_id].task
         assert isinstance(authority.agent(ref), AIAgent)
-        row = next(r for r in list_session_admissions(authority.db, session_id=ref.session_id,
-                                                     pending_only=False) if r['admission_id'] == receipt.admission_id)
-        assert row['outcome'] == 'completed', row
+        row = next(
+            r
+            for r in list_session_admissions(
+                authority.db, session_id=ref.session_id, pending_only=False
+            )
+            if r["admission_id"] == receipt.admission_id
+        )
+        assert row["outcome"] == "completed", row
         while True:
             frame = await asyncio.to_thread(frames.get, True, 5)
-            if frame['params']['type'] == 'message.complete':
+            if frame["params"]["type"] == "message.complete":
                 frames.put(frame)
                 break
         await a.close()
@@ -103,9 +126,11 @@ def main():
         if before_release:
             # The producer re-queued the completion; the idle session.info that follows it may
             # already sit ahead of it in the healthy peer's queue.
-            while (frame := frames.get(timeout=5))['params']['type'] != 'message.complete':
+            while (frame := frames.get(timeout=5))["params"][
+                "type"
+            ] != "message.complete":
                 pass
-            healthy_completed = 'LOCAL_ACK_WS_SHARED' in json.dumps(frame)
+            healthy_completed = "LOCAL_ACK_WS_SHARED" in json.dumps(frame)
     finally:
         os.close(slow_read)
         worker.join(timeout=15)
@@ -117,20 +142,32 @@ def main():
         reader.join(timeout=5)
         peer.shutdown()
         peer.server_close()
-    assert not worker.is_alive(), 'producer did not terminate after cleanup'
+    assert not worker.is_alive(), "producer did not terminate after cleanup"
     assert not errors, errors
-    assert before_release, 'OS-full observer blocked real authority producer before reader release'
-    assert healthy_completed, 'healthy observer did not complete before stalled reader release'
+    assert before_release, (
+        "OS-full observer blocked real authority producer before reader release"
+    )
+    assert healthy_completed, (
+        "healthy observer did not complete before stalled reader release"
+    )
     # TUI imports may replace stdout with their protocol-safe logger.
     import sys
-    sys.__stdout__.write(json.dumps({'os_buffer_full_bytes': filled,
-                                    'producer_returned_before_release': before_release,
-                                    'healthy_completed_before_release': healthy_completed,
-                                    'model_calls': len(peer.requests)}) + '\n')
+
+    sys.__stdout__.write(
+        json.dumps(
+            {
+                "os_buffer_full_bytes": filled,
+                "producer_returned_before_release": before_release,
+                "healthy_completed_before_release": healthy_completed,
+                "model_calls": len(peer.requests),
+            }
+        )
+        + "\n"
+    )
     sys.__stdout__.flush()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     status = 0
     try:
         main()

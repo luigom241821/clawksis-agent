@@ -14,7 +14,9 @@ from clawk_cli import main_desktop
 
 
 def _launch_env(tmp_path) -> dict:
-    env, _flags = main_desktop._desktop_launch_env(argparse.Namespace(cwd=str(tmp_path)))
+    env, _flags = main_desktop._desktop_launch_env(
+        argparse.Namespace(cwd=str(tmp_path))
+    )
     return env
 
 
@@ -30,7 +32,9 @@ def _bind_singleton_socket(tmpdir: str) -> None:
 
 
 @pytest.mark.platforms("linux")
-def test_long_scratch_tmpdir_hosts_the_singleton_socket_and_is_kept_for_children(monkeypatch, tmp_path):
+def test_long_scratch_tmpdir_hosts_the_singleton_socket_and_is_kept_for_children(
+    monkeypatch, tmp_path
+):
     scratch = tmp_path / ("long-home-" * 8) / "cache" / "scratch"
     scratch.mkdir(parents=True)
     for key in ("TMPDIR", "TMP", "TEMP", "CLAWK_SCRATCH_DIR"):

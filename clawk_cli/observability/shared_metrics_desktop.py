@@ -32,7 +32,9 @@ logger = logging.getLogger(__name__)
 FRICTION_DAILY_CAP = 50
 ONBOARDING_LATCH_DIRNAME = "desktop_onboarding"
 # Room for every distinct (action, via) the renderer can send once it collapses unknown ids to `other`.
-DAILY_ACTION_ROWS_MAX = len(contract.DESKTOP_ACTION_IDS) * len(contract.DESKTOP_ACTION_VIAS)
+DAILY_ACTION_ROWS_MAX = len(contract.DESKTOP_ACTION_IDS) * len(
+    contract.DESKTOP_ACTION_VIAS
+)
 DAILY_REPORT_STATE_KEY = "desktop_daily_reported"
 # The renderer holds a finished day for at most 7 days; anything older (or in the future) is settled
 # unrecorded, which keeps the durable per-day latch bounded.
@@ -96,14 +98,18 @@ def _store_and_resource() -> tuple[Any, dict[str, str]]:
     from .shared_metrics_install import detect_client_install_method
 
     return SharedMetricsStore(), contract.client_resource(
-        get_version_info().base_version, os_name=platform.system(), architecture=platform.machine(),
+        get_version_info().base_version,
+        os_name=platform.system(),
+        architecture=platform.machine(),
         install_method=detect_client_install_method(),
     )
 
 
 def _friction_fields(*, kind: Any, detail: Any) -> dict[str, str] | None:
     pair = friction_pair(kind, detail)
-    if pair is None or not _claim_daily(f"friction:{pair[0]}:{pair[1]}", cap=FRICTION_DAILY_CAP):
+    if pair is None or not _claim_daily(
+        f"friction:{pair[0]}:{pair[1]}", cap=FRICTION_DAILY_CAP
+    ):
         return None
     return {"detail": pair[1], "kind": pair[0]}
 
@@ -112,10 +118,14 @@ def _claim_onboarding(step: str, event: str) -> bool:
     """Once per (step, event) per profile, across processes: an O_EXCL latch file (≤ ~51 of them)."""
     from clawk_constants import get_clawk_home
 
-    directory = get_clawk_home() / "telemetry" / "shared_metrics" / ONBOARDING_LATCH_DIRNAME
+    directory = (
+        get_clawk_home() / "telemetry" / "shared_metrics" / ONBOARDING_LATCH_DIRNAME
+    )
     directory.mkdir(parents=True, exist_ok=True)
     try:
-        os.close(os.open(directory / f"{step}.{event}", os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+        os.close(
+            os.open(directory / f"{step}.{event}", os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        )
     except FileExistsError:
         return False
     return True
@@ -125,18 +135,34 @@ def purge_onboarding_latches() -> None:
     """Collection turned off: drop the per-profile onboarding latches like the renderer drops its copy."""
     from clawk_constants import get_clawk_home
 
-    shutil.rmtree(get_clawk_home() / "telemetry" / "shared_metrics" / ONBOARDING_LATCH_DIRNAME, ignore_errors=True)
+    shutil.rmtree(
+        get_clawk_home() / "telemetry" / "shared_metrics" / ONBOARDING_LATCH_DIRNAME,
+        ignore_errors=True,
+    )
 
 
 def _onboarding_fields(*, step: Any, event: Any) -> dict[str, str] | None:
     step_word, event_word = _word(step), _word(event)
-    if step_word not in contract.DESKTOP_ONBOARDING_STEPS or event_word not in contract.DESKTOP_ONBOARDING_EVENTS:
+    if (
+        step_word not in contract.DESKTOP_ONBOARDING_STEPS
+        or event_word not in contract.DESKTOP_ONBOARDING_EVENTS
+    ):
         return None
-    return {"event": event_word, "step": step_word} if _claim_onboarding(step_word, event_word) else None
+    return (
+        {"event": event_word, "step": step_word}
+        if _claim_onboarding(step_word, event_word)
+        else None
+    )
 
 
 def _count(value: Any) -> int:
-    return int(value) if isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0 else 0
+    return (
+        int(value)
+        if isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and value >= 0
+        else 0
+    )
 
 
 def action_id(action: Any) -> str:
@@ -182,51 +208,93 @@ def _dislike_fields(*, signal: Any, target: Any, setting: Any) -> dict[str, str]
         target_word = "setting"
     else:
         raw = target.strip() if isinstance(target, str) else ""
-        target_word = raw if signal_word == "rage_click" and raw in targets else _word(raw)
+        target_word = (
+            raw if signal_word == "rage_click" and raw in targets else _word(raw)
+        )
         target_word = target_word if target_word in targets else "other"
         setting_word, direction = "none", "none"
     if not _claim_daily(f"dislike:{signal_word}", cap=FRICTION_DAILY_CAP):
         return None
-    return {"direction": direction, "setting": setting_word, "signal": signal_word, "target": target_word}
+    return {
+        "direction": direction,
+        "setting": setting_word,
+        "signal": signal_word,
+        "target": target_word,
+    }
 
 
 def _mode_rows(modes: Any, bot_count: Any) -> list[tuple[str, dict[str, str]]]:
     rows: dict[str, tuple[str, dict[str, str]]] = {}
     for entry in modes if isinstance(modes, list) else []:
         mode = _word(entry.get("mode")) if isinstance(entry, dict) else ""
-        active_ms, messages = (_count(entry.get("active_ms")), _count(entry.get("messages_sent"))) if mode else (0, 0)
+        active_ms, messages = (
+            (_count(entry.get("active_ms")), _count(entry.get("messages_sent")))
+            if mode
+            else (0, 0)
+        )
         # Only modes actually used that day get a row.
-        if mode not in contract.DESKTOP_MODES or mode in rows or not (active_ms or messages):
+        if (
+            mode not in contract.DESKTOP_MODES
+            or mode in rows
+            or not (active_ms or messages)
+        ):
             continue
-        rows[mode] = (contract.DESKTOP_MODE_USE_MARK, {
-            "active_minutes_bucket": contract.desktop_active_minutes_bucket(active_ms),
-            "bot_count_bucket": contract.size_bucket(_count(bot_count)),
-            "messages_sent_bucket": contract.size_bucket(messages),
-            "mode": mode,
-        })
+        rows[mode] = (
+            contract.DESKTOP_MODE_USE_MARK,
+            {
+                "active_minutes_bucket": contract.desktop_active_minutes_bucket(
+                    active_ms
+                ),
+                "bot_count_bucket": contract.size_bucket(_count(bot_count)),
+                "messages_sent_bucket": contract.size_bucket(messages),
+                "mode": mode,
+            },
+        )
     return list(rows.values())
 
 
 def _action_rows(actions: Any) -> list[tuple[str, dict[str, str]]]:
     totals: dict[tuple[str, str], int] = {}
     for entry in (actions if isinstance(actions, list) else [])[:DAILY_ACTION_ROWS_MAX]:
-        if not isinstance(entry, dict) or _word(entry.get("via")) not in contract.DESKTOP_ACTION_VIAS:
+        if (
+            not isinstance(entry, dict)
+            or _word(entry.get("via")) not in contract.DESKTOP_ACTION_VIAS
+        ):
             continue
         key = (action_id(entry.get("action")), _word(entry.get("via")))
         totals[key] = totals.get(key, 0) + _count(entry.get("count"))
     return [
-        (contract.DESKTOP_ACTION_USE_MARK, {"action": action, "count_bucket": contract.size_bucket(count), "via": via})
-        for (action, via), count in sorted(totals.items()) if count
+        (
+            contract.DESKTOP_ACTION_USE_MARK,
+            {"action": action, "count_bucket": contract.size_bucket(count), "via": via},
+        )
+        for (action, via), count in sorted(totals.items())
+        if count
     ]
 
 
-def _daily_rollup(usage_day: str, oldest: str, marks: list[tuple[str, dict[str, str]]], resource: dict[str, str]):
+def _daily_rollup(
+    usage_day: str,
+    oldest: str,
+    marks: list[tuple[str, dict[str, str]]],
+    resource: dict[str, str],
+):
     """``update_rollup_state`` step: the usage day's rows, unless that day was already reported."""
-    def update(state: dict[str, Any] | None) -> tuple[dict[str, Any], list[tuple[str, dict, dict, str]]]:
-        days = [d for d in (state or {}).get("days", []) if isinstance(d, str) and d >= oldest]
+
+    def update(
+        state: dict[str, Any] | None,
+    ) -> tuple[dict[str, Any], list[tuple[str, dict, dict, str]]]:
+        days = [
+            d
+            for d in (state or {}).get("days", [])
+            if isinstance(d, str) and d >= oldest
+        ]
         if usage_day in days:
             return {"days": days}, []
-        return {"days": sorted([*days, usage_day])}, [(mark, data, resource, usage_day) for mark, data in marks]
+        return {"days": sorted([*days, usage_day])}, [
+            (mark, data, resource, usage_day) for mark, data in marks
+        ]
+
     return update
 
 
@@ -241,12 +309,23 @@ def record_desktop_daily(*, day: Any, modes: Any, actions: Any, bot_count: Any) 
         if not enabled():
             return False
         today = _utc_day()
-        oldest = (date.fromisoformat(today) - timedelta(days=DAILY_REPORT_WINDOW_DAYS)).isoformat()
-        usage_day = day if isinstance(day, str) and _DAY.fullmatch(day) and oldest <= day <= today else None
-        marks = _mode_rows(modes, bot_count) + _action_rows(actions) if usage_day else []
+        oldest = (
+            date.fromisoformat(today) - timedelta(days=DAILY_REPORT_WINDOW_DAYS)
+        ).isoformat()
+        usage_day = (
+            day
+            if isinstance(day, str) and _DAY.fullmatch(day) and oldest <= day <= today
+            else None
+        )
+        marks = (
+            _mode_rows(modes, bot_count) + _action_rows(actions) if usage_day else []
+        )
         if marks:
             store, resource = _store_and_resource()
-            store.update_rollup_state(DAILY_REPORT_STATE_KEY, _daily_rollup(usage_day, oldest, marks, resource))
+            store.update_rollup_state(
+                DAILY_REPORT_STATE_KEY,
+                _daily_rollup(usage_day, oldest, marks, resource),
+            )
         return True
     except Exception:
         logger.debug("Desktop daily report not recorded", exc_info=True)
@@ -260,7 +339,11 @@ def record_desktop_feature_use(*, area: Any) -> None:
 
         if enabled():
             store, resource = _store_and_resource()
-            store.record_counter_once_per_day(contract.DESKTOP_FEATURE_USE_METRIC, {"area": feature_area(area)}, resource)
+            store.record_counter_once_per_day(
+                contract.DESKTOP_FEATURE_USE_METRIC,
+                {"area": feature_area(area)},
+                resource,
+            )
     except Exception:
         logger.debug("Desktop feature use not recorded", exc_info=True)
 
@@ -274,4 +357,10 @@ def record_desktop_onboarding(*, step: Any, event: Any) -> None:
 
 
 def record_desktop_dislike(*, signal: Any, target: Any, setting: Any = None) -> None:
-    _emit(contract.DESKTOP_DISLIKE_MARK, _dislike_fields, signal=signal, target=target, setting=setting)
+    _emit(
+        contract.DESKTOP_DISLIKE_MARK,
+        _dislike_fields,
+        signal=signal,
+        target=target,
+        setting=setting,
+    )

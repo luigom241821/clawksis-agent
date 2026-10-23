@@ -26,8 +26,6 @@ def _simulate_auto_continue(agent_history: list, user_message: str) -> str:
     return message
 
 
-
-
 class TestInterruptedReplayFiltering:
     def test_interrupted_side_effect_is_replayed_as_unknown(self):
         from gateway.run import _build_gateway_agent_history
@@ -38,7 +36,10 @@ class TestInterruptedReplayFiltering:
                 "role": "assistant",
                 "content": None,
                 "tool_calls": [
-                    {"id": "call_1", "function": {"name": "terminal", "arguments": "{}"}},
+                    {
+                        "id": "call_1",
+                        "function": {"name": "terminal", "arguments": "{}"},
+                    },
                 ],
             },
             {
@@ -55,7 +56,6 @@ class TestInterruptedReplayFiltering:
         assert agent_history[-1]["role"] == "tool"
         assert agent_history[-1]["tool_call_id"] == "call_1"
         assert agent_history[-1]["effect_disposition"] == "unknown"
-
 
     def test_dangling_unanswered_side_effect_is_replayed_as_unknown(self):
         """A trailing side-effecting call gets an UNKNOWN result, not a retry.
@@ -91,5 +91,3 @@ class TestInterruptedReplayFiltering:
         assert agent_history[-1]["role"] == "tool"
         assert agent_history[-1]["tool_call_id"] == "call_1"
         assert agent_history[-1]["effect_disposition"] == "unknown"
-
-

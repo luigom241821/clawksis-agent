@@ -22,9 +22,16 @@ def _probe(args, **_kw):
 
 
 registry.register(
-    name=_PROBE, toolset="utility",
-    schema={"name": _PROBE, "description": "probe", "parameters": {"type": "object", "properties": {}}},
-    handler=_probe, override=True)
+    name=_PROBE,
+    toolset="utility",
+    schema={
+        "name": _PROBE,
+        "description": "probe",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    handler=_probe,
+    override=True,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -36,13 +43,27 @@ def _clear_tool_hooks():
 
 def _loop_agent():
     from run_agent import AIAgent
-    schema = {"type": "function", "function": {
-        "name": _PROBE, "description": "probe", "parameters": {"type": "object", "properties": {}}}}
-    with (patch("model_tools.get_tool_definitions", return_value=[schema]),
-          patch("model_tools.check_toolset_requirements", return_value={}),
-          patch("agent.process_bootstrap.OpenAI")):
-        agent = AIAgent(api_key="test-key-1234567890", base_url="https://openrouter.ai/api/v1",
-                        quiet_mode=True, skip_context_files=True, skip_memory=True)
+
+    schema = {
+        "type": "function",
+        "function": {
+            "name": _PROBE,
+            "description": "probe",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    }
+    with (
+        patch("model_tools.get_tool_definitions", return_value=[schema]),
+        patch("model_tools.check_toolset_requirements", return_value={}),
+        patch("agent.process_bootstrap.OpenAI"),
+    ):
+        agent = AIAgent(
+            api_key="test-key-1234567890",
+            base_url="https://openrouter.ai/api/v1",
+            quiet_mode=True,
+            skip_context_files=True,
+            skip_memory=True,
+        )
     agent.client = MagicMock()
     agent._disable_streaming = True
     agent._cached_system_prompt = "You are helpful."
@@ -55,8 +76,12 @@ def _loop_agent():
 
 def _run(agent, model_call, text="do the task"):
     agent._interruptible_api_call = model_call
-    with (patch.object(agent, "_flush_messages_to_session_db"), patch.object(agent, "_persist_session"),
-          patch.object(agent, "_save_trajectory"), patch.object(agent, "_cleanup_task_resources")):
+    with (
+        patch.object(agent, "_flush_messages_to_session_db"),
+        patch.object(agent, "_persist_session"),
+        patch.object(agent, "_save_trajectory"),
+        patch.object(agent, "_cleanup_task_resources"),
+    ):
         return agent.run_conversation(text)
 
 
@@ -66,8 +91,14 @@ def _tool_then_reply(agent, intervene):
     def model_call(api_kwargs):
         calls.append(1)
         if len(calls) == 1:
-            call = SimpleNamespace(id="c1", type="function", function=SimpleNamespace(name=_PROBE, arguments="{}"))
-            return _mock_response(content=None, finish_reason="tool_calls", tool_calls=[call])
+            call = SimpleNamespace(
+                id="c1",
+                type="function",
+                function=SimpleNamespace(name=_PROBE, arguments="{}"),
+            )
+            return _mock_response(
+                content=None, finish_reason="tool_calls", tool_calls=[call]
+            )
         if len(calls) == 2 and intervene == "redirect":
             assert agent.redirect("actually, do it differently") is True
             raise InterruptedError("redirect cancelled the in-flight request")
@@ -90,6 +121,10 @@ def test_absorbed_correction_still_marks_the_completed_turn(intervene):
 def test_next_untouched_turn_starts_clean():
     agent = _loop_agent()
     assert _run(agent, _tool_then_reply(agent, "redirect"))["user_intervened"] is True
-    result = _run(agent, lambda api_kwargs: _mock_response(content="hi", finish_reason="stop"), "hello")
+    result = _run(
+        agent,
+        lambda api_kwargs: _mock_response(content="hi", finish_reason="stop"),
+        "hello",
+    )
     assert result["completed"] is True
     assert result["user_intervened"] is False

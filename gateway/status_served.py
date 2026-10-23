@@ -19,7 +19,10 @@ def local_liveness_pid(liveness: Any) -> Optional[int]:
 
 
 def served_profile_runtime(
-    home: Path, own_runtime: Optional[dict[str, Any]], *, gateway_pid: Optional[int] = None
+    home: Path,
+    own_runtime: Optional[dict[str, Any]],
+    *,
+    gateway_pid: Optional[int] = None,
 ) -> Optional[dict[str, Any]]:
     """The multiplexer's record projected onto ``home``'s profile (bare platform keys, the shape a
     standalone gateway writes) when it is that profile's live runtime record, else None.
@@ -33,7 +36,11 @@ def served_profile_runtime(
     """
     from gateway import status
 
-    if own_runtime is not None and status.get_runtime_status_running_pid(own_runtime, expected_home=home) is not None:
+    if (
+        own_runtime is not None
+        and status.get_runtime_status_running_pid(own_runtime, expected_home=home)
+        is not None
+    ):
         return None
     served = status.multiplexer_liveness_for_profile(home)
     if served is None or not served[1]:
@@ -44,4 +51,7 @@ def served_profile_runtime(
     # Fold on the profile NAME, never ``home.name``: the default root's basename is ``.clawk`` (or
     # any custom CLAWK_HOME), so its flat keys never matched (#123088).
     name = status.profile_name_for_home(home) or "default"
-    return {**record, "platforms": status.profile_platforms_from_multiplexer(record, name)}
+    return {
+        **record,
+        "platforms": status.profile_platforms_from_multiplexer(record, name),
+    }

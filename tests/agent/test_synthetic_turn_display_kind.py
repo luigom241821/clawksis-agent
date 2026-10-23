@@ -89,7 +89,7 @@ def test_row_is_typed_by_the_turn_start_persist(agent_db):
         persist_user_display_metadata={"attempt": 2},
     )
 
-    row, = [r for r in db.get_messages_as_conversation(sid) if r["role"] == "user"]
+    (row,) = [r for r in db.get_messages_as_conversation(sid) if r["role"] == "user"]
     # Typed before the turn ran — a crash from here on still reads as an event.
     assert row["display_kind"] == "auto_continue"
     assert row["display_metadata"] == {"attempt": 2}
@@ -102,5 +102,5 @@ def test_a_real_user_turn_stays_untyped(agent_db):
 
     _build(agent, user_message="keep going")
 
-    row, = [r for r in db.get_messages_as_conversation(sid) if r["role"] == "user"]
+    (row,) = [r for r in db.get_messages_as_conversation(sid) if r["role"] == "user"]
     assert row.get("display_kind") is None

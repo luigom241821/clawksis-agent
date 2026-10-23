@@ -75,6 +75,7 @@ def _bare_agent() -> AIAgent:
     agent._user_profile_enabled = False
     agent._cached_system_prompt = "test-cached-system-prompt"
     import datetime as _dt
+
     agent.session_start = _dt.datetime(2026, 1, 1, 12, 0, 0)
     agent._MEMORY_REVIEW_PROMPT = "review memory"
     agent._SKILL_REVIEW_PROMPT = "review skills"
@@ -83,6 +84,7 @@ def _bare_agent() -> AIAgent:
     agent.status_callback = None
     agent._safe_print = lambda *_args, **_kwargs: None
     import threading as _threading
+
     agent._background_review_agent = None
     agent._background_review_run = None
     agent._background_review_lock = _threading.Lock()
@@ -170,9 +172,7 @@ def _install_relay_recorder(monkeypatch, review_run=None):
     monkeypatch.setattr(
         relay_shared_metrics,
         "start_task_run",
-        lambda **kwargs: calls.append(
-            ("start_task_run", review_acknowledged())
-        ),
+        lambda **kwargs: calls.append(("start_task_run", review_acknowledged())),
     )
     monkeypatch.setattr(
         relay_shared_metrics,
@@ -307,8 +307,6 @@ def test_background_review_skipped_in_delegation_subagent(monkeypatch):
     assert forks == [], "no review fork should be spawned inside a subagent"
 
 
-
-
 def test_background_review_disabled_skips_automatic_spawn(monkeypatch):
     """``auxiliary.background_review.enabled: false`` must skip automatic
     post-turn forks while leaving ``/refine`` (focus set) working (#87250)."""
@@ -432,14 +430,18 @@ def test_background_review_registers_before_start_runs_and_cleans_up(monkeypatch
 
 def test_background_review_snapshot_isolated_from_live_nested_messages():
     """A review must not mutate the persisted/live transcript through aliases."""
-    original = [{
-        "role": "assistant",
-        "content": [{"type": "text", "text": "answer"}],
-        "tool_calls": [{
-            "id": "call-1",
-            "function": {"name": "read_file", "arguments": '{"path":"x"}'},
-        }],
-    }]
+    original = [
+        {
+            "role": "assistant",
+            "content": [{"type": "text", "text": "answer"}],
+            "tool_calls": [
+                {
+                    "id": "call-1",
+                    "function": {"name": "read_file", "arguments": '{"path":"x"}'},
+                }
+            ],
+        }
+    ]
 
     from agent.turn_finalizer import _clone_background_review_messages
 
@@ -625,9 +627,7 @@ def test_live_turn_proceeds_when_review_acknowledgement_times_out(monkeypatch):
     assert review_entered.wait(2.0)
 
     boundary_calls = []
-    _install_live_turn_boundary(
-        monkeypatch, lambda: boundary_calls.append(True)
-    )
+    _install_live_turn_boundary(monkeypatch, lambda: boundary_calls.append(True))
     relay_calls = _install_relay_recorder(monkeypatch, run)
 
     started = time.monotonic()
@@ -677,9 +677,7 @@ def test_live_turn_interrupts_legacy_review_but_keeps_foreground_priority(monkey
     del agent._background_review_run
     agent._background_review_agent = LegacyReviewAgent()
     boundary_calls = []
-    _install_live_turn_boundary(
-        monkeypatch, lambda: boundary_calls.append(True)
-    )
+    _install_live_turn_boundary(monkeypatch, lambda: boundary_calls.append(True))
     relay_calls = _install_relay_recorder(monkeypatch)
 
     live_result = {}
@@ -759,6 +757,7 @@ def test_stale_review_cleanup_cannot_clear_or_signal_newer_review(monkeypatch):
     assert second_run.request_done.is_set()
     assert agent._background_review_run is None
 
+
 # ---------------------------------------------------------------------------
 # memory_notifications mode: off | on | verbose
 # ---------------------------------------------------------------------------
@@ -809,7 +808,12 @@ def _skill_patch_review():
                     "function": {
                         "name": "skill_manage",
                         "arguments": _json.dumps(
-                            {"action": "patch", "name": "demo", "old_string": "a", "new_string": "b"}
+                            {
+                                "action": "patch",
+                                "name": "demo",
+                                "old_string": "a",
+                                "new_string": "b",
+                            }
                         ),
                     },
                 }
@@ -827,14 +831,6 @@ def _skill_patch_review():
             ),
         },
     ]
-
-
-
-
-
-
-
-
 
 
 def test_skill_patch_off_silent_verbose_shows_diff():

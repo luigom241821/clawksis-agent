@@ -24,7 +24,9 @@ def test_gateway_housekeeping_runs_the_checkpoint_prune(monkeypatch):
     import tools.checkpoint_maintenance as cm
 
     calls = []
-    monkeypatch.setattr(cm, "auto_prune_from_config", lambda: calls.append(True) or {"skipped": False})
+    monkeypatch.setattr(
+        cm, "auto_prune_from_config", lambda: calls.append(True) or {"skipped": False}
+    )
 
     gateway_run._start_gateway_housekeeping(_OneTickStopEvent(), interval=0)
 

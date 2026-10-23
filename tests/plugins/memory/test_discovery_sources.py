@@ -76,7 +76,9 @@ def entry_points(monkeypatch):
 def _write_provider_dir(root: Path, name: str) -> Path:
     provider = root / name
     provider.mkdir(parents=True)
-    (provider / "__init__.py").write_text(PROVIDER_SOURCE.format(name=name), encoding="utf-8")
+    (provider / "__init__.py").write_text(
+        PROVIDER_SOURCE.format(name=name), encoding="utf-8"
+    )
     return provider
 
 
@@ -130,21 +132,29 @@ def test_entry_point_provider_is_listed(entry_points, tmp_path, monkeypatch):
     assert "pipmem" in memory_plugins.list_memory_provider_names()
 
 
-def test_find_provider_dir_resolves_a_package_entry_point(entry_points, tmp_path, monkeypatch):
+def test_find_provider_dir_resolves_a_package_entry_point(
+    entry_points, tmp_path, monkeypatch
+):
     """Without a directory, a pip-installed provider silently loses its
     dashboard config panel and its `clawk <provider>` subcommands — both are
     read from disk rather than imported."""
     package = tmp_path / "pipmem_pkg"
     package.mkdir()
-    (package / "__init__.py").write_text(PROVIDER_SOURCE.format(name="pipmem"), encoding="utf-8")
-    (package / "config_schema.py").write_text("CONFIG_SCHEMA = None\n", encoding="utf-8")
+    (package / "__init__.py").write_text(
+        PROVIDER_SOURCE.format(name="pipmem"), encoding="utf-8"
+    )
+    (package / "config_schema.py").write_text(
+        "CONFIG_SCHEMA = None\n", encoding="utf-8"
+    )
     monkeypatch.syspath_prepend(str(tmp_path))
     entry_points.append(FakeEntryPoint("pipmem", "pipmem_pkg:register"))
 
     assert memory_plugins.find_provider_dir("pipmem") == package
 
 
-def test_resolving_an_entry_point_does_not_import_it(entry_points, tmp_path, monkeypatch):
+def test_resolving_an_entry_point_does_not_import_it(
+    entry_points, tmp_path, monkeypatch
+):
     """Discovery runs before the operator has chosen a provider. Importing
     every installed candidate would execute third-party code on the strength of
     a package merely being present."""
@@ -170,7 +180,9 @@ def test_resolving_an_entry_point_does_not_import_it(entry_points, tmp_path, mon
 def test_bare_module_entry_point_has_no_directory(entry_points, tmp_path, monkeypatch):
     """A single-file provider has nowhere to put a sibling config_schema.py, so
     it resolves to None rather than handing back the whole site-packages root."""
-    (tmp_path / "flatmem.py").write_text(PROVIDER_SOURCE.format(name="flatmem"), encoding="utf-8")
+    (tmp_path / "flatmem.py").write_text(
+        PROVIDER_SOURCE.format(name="flatmem"), encoding="utf-8"
+    )
     monkeypatch.syspath_prepend(str(tmp_path))
     entry_points.append(FakeEntryPoint("flatmem", "flatmem"))
 
@@ -225,8 +237,12 @@ def test_provider_registered_past_the_first_8kb_is_discovered(tmp_path, monkeypa
     """A long module docstring must not push the registration out of discovery's view."""
     provider = tmp_path / "plugins" / "longdoc"
     provider.mkdir(parents=True)
-    docstring = '"""' + "Plain prose about storage.\n" * 400 + '"""\n'  # ~10.8 KB, no contract tokens
-    (provider / "__init__.py").write_text(docstring + PROVIDER_SOURCE.format(name="longdoc"), encoding="utf-8")
+    docstring = (
+        '"""' + "Plain prose about storage.\n" * 400 + '"""\n'
+    )  # ~10.8 KB, no contract tokens
+    (provider / "__init__.py").write_text(
+        docstring + PROVIDER_SOURCE.format(name="longdoc"), encoding="utf-8"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 
     assert "longdoc" in memory_plugins.list_memory_provider_names()
@@ -242,7 +258,9 @@ def test_unreadable_user_plugin_does_not_abort_memory_discovery(tmp_path, monkey
     denied.mkdir()
     (denied / "__init__.py").write_text("", encoding="utf-8")
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    real_stat = Path.stat  # chmod 000 does not bite as root; fail the child's stat instead
+    real_stat = (
+        Path.stat
+    )  # chmod 000 does not bite as root; fail the child's stat instead
 
     def stat(self, *args, **kwargs):
         if self.parent == denied:

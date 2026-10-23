@@ -15,8 +15,11 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from agent.message_metadata import append_message
-from agent.message_sanitization import (close_interrupted_tool_sequence, coalesce_tool_call_id,
-                                          normalize_provider_tool_call_ids)
+from agent.message_sanitization import (
+    close_interrupted_tool_sequence,
+    coalesce_tool_call_id,
+    normalize_provider_tool_call_ids,
+)
 from agent.turn_failure_copy import site_copy, stamp_failure
 from clawk_constants import FINISH_REASON_LENGTH
 
@@ -45,33 +48,48 @@ def _preview_name(name: str) -> str:
 def _append_tool_error_results(messages, tool_calls, content_for) -> None:
     """One tool-role result per call so every tool_call keeps a matching result."""
     for tc in tool_calls:
-        append_message(messages, {
-            "role": "tool",
-            "name": tc.function.name,
-            "tool_call_id": coalesce_tool_call_id(tc),
-            "content": content_for(tc),
-        })
+        append_message(
+            messages,
+            {
+                "role": "tool",
+                "name": tc.function.name,
+                "tool_call_id": coalesce_tool_call_id(tc),
+                "content": content_for(tc),
+            },
+        )
 
 
-def _partial_exit(agent, messages, conversation_history, api_call_count, final_response: str) -> dict[str, Any]:
+def _partial_exit(
+    agent, messages, conversation_history, api_call_count, final_response: str
+) -> dict[str, Any]:
     """Terminal partial result. Prior retries or an earlier tool batch leave a tool-result
     tail; close it as interrupt aborts do so the next turn is not tool→user (#48879).
     This path never reaches finalize_turn, so persist here."""
     close_interrupted_tool_sequence(messages, final_response)
     agent._persist_session(messages, conversation_history)
-    return stamp_failure({
-        "final_response": final_response,
-        "messages": messages,
-        "api_calls": api_call_count,
-        "completed": False,
-        "partial": True,
-        "error": final_response,
-    }, "truncated", True)
+    return stamp_failure(
+        {
+            "final_response": final_response,
+            "messages": messages,
+            "api_calls": api_call_count,
+            "completed": False,
+            "partial": True,
+            "error": final_response,
+        },
+        "truncated",
+        True,
+    )
 
 
 def validate_tool_calls(
-    agent: Any, assistant_message: Any, finish_reason: str, *, messages: list[dict[str, Any]],
-    conversation_history: Any, api_call_count: int, effective_task_id: Any,
+    agent: Any,
+    assistant_message: Any,
+    finish_reason: str,
+    *,
+    messages: list[dict[str, Any]],
+    conversation_history: Any,
+    api_call_count: int,
+    effective_task_id: Any,
 ) -> ToolValidationVerdict:
     """Validate ``assistant_message.tool_calls`` in place (ids uniquified, names
     repaired, dict/empty args normalized to JSON strings). Strikes for invalid names
@@ -83,8 +101,12 @@ def validate_tool_calls(
     tool_calls = assistant_message.tool_calls
     valid_names = agent.valid_tool_names
 
-    def _verdict(action: str, result: Optional[dict[str, Any]] = None) -> ToolValidationVerdict:
-        return ToolValidationVerdict(action=action, result=result, mixed_invalid_batch=_mixed_invalid_batch)
+    def _verdict(
+        action: str, result: Optional[dict[str, Any]] = None
+    ) -> ToolValidationVerdict:
+        return ToolValidationVerdict(
+            action=action, result=result, mixed_invalid_batch=_mixed_invalid_batch
+        )
 
     # Uniquify duplicate tool-call ids BEFORE any downstream consumer: the
     # pre-API sanitizer keeps only the first call/result per id, and the desktop
@@ -92,7 +114,8 @@ def validate_tool_calls(
     # "call_0", so an id already used earlier in the session counts as taken.
     taken = {
         coalesce_tool_call_id(tc)
-        for msg in messages if msg.get("role") == "assistant"
+        for msg in messages
+        if msg.get("role") == "assistant"
         for tc in msg.get("tool_calls") or ()
     }
     agent._uniquify_tool_call_ids(tool_calls, taken=taken)
@@ -104,14 +127,20 @@ def validate_tool_calls(
         if tc.function.name not in valid_names:
             repaired = agent._repair_tool_call(tc.function.name)
             if repaired:
-                agent._vprint(f"{agent.log_prefix}🔧 Auto-repaired tool name: '{tc.function.name}' -> '{repaired}'",
-                              force=True, diagnostic=True)
+                agent._vprint(
+                    f"{agent.log_prefix}🔧 Auto-repaired tool name: '{tc.function.name}' -> '{repaired}'",
+                    force=True,
+                    diagnostic=True,
+                )
                 tc.function.name = repaired
                 repaired_ids.add(id(tc))
     # Counted here, before any exit or normalization, so every emitted call is seen once as the model sent it.
     from clawk_cli.observability.shared_metrics_model import record_tool_call_quality
+
     record_tool_call_quality(agent, tool_calls, repaired_ids)
-    invalid_tool_calls = [tc.function.name for tc in tool_calls if tc.function.name not in valid_names]
+    invalid_tool_calls = [
+        tc.function.name for tc in tool_calls if tc.function.name not in valid_names
+    ]
     # Mixed batch: error-result ONLY the invalid calls and run the valid
     # ones; voiding the turn discards real work. Strikes advance only when a
     # turn has NO valid call, so a degenerate model still halts at 3.
@@ -129,21 +158,36 @@ def validate_tool_calls(
         agent._invalid_tool_retries += 1
         # Return helpful error to model — model can agent-correct next turn
         invalid_preview = _preview_name(invalid_tool_calls[0])
-        agent._buffer_vprint(f"⚠️  Unknown tool '{invalid_preview}' — sending error to model for agent-correction ({agent._invalid_tool_retries}/3)")
+        agent._buffer_vprint(
+            f"⚠️  Unknown tool '{invalid_preview}' — sending error to model for agent-correction ({agent._invalid_tool_retries}/3)"
+        )
 
         if agent._invalid_tool_retries >= 3:
             agent._flush_status_buffer()
-            agent._vprint(f"{agent.log_prefix}❌ Max retries (3) for invalid tool calls exceeded. Stopping as partial.", force=True, diagnostic=True)
+            agent._vprint(
+                f"{agent.log_prefix}❌ Max retries (3) for invalid tool calls exceeded. Stopping as partial.",
+                force=True,
+                diagnostic=True,
+            )
             agent._invalid_tool_retries = 0
-            return _verdict("return", _partial_exit(
-                agent, messages, conversation_history, api_call_count,
-                f"Model generated invalid tool call: {invalid_preview}",
-            ))
+            return _verdict(
+                "return",
+                _partial_exit(
+                    agent,
+                    messages,
+                    conversation_history,
+                    api_call_count,
+                    f"Model generated invalid tool call: {invalid_preview}",
+                ),
+            )
 
-        append_message(messages, agent._build_assistant_message(assistant_message, finish_reason))
+        append_message(
+            messages, agent._build_assistant_message(assistant_message, finish_reason)
+        )
         # See _invalid_tool_name_error_content for the blank-name anti-priming rationale (#47967).
         _append_tool_error_results(
-            messages, tool_calls,
+            messages,
+            tool_calls,
             lambda tc: (
                 _invalid_tool_name_error_content(tc.function.name, valid_names)
                 if tc.function.name not in valid_names
@@ -182,32 +226,46 @@ def validate_tool_calls(
         # mid-stream.
         _truncated = any(
             not (tc.function.arguments or "").rstrip().endswith(("}", "]"))
-            for tc in tool_calls if tc.function.name in invalid_names
+            for tc in tool_calls
+            if tc.function.name in invalid_names
         )
         if _truncated:
             agent._vprint(
                 f"{agent.log_prefix}⚠️  Truncated tool call arguments detected "
                 f"(finish_reason={finish_reason!r}) — refusing to execute.",
-                force=True, diagnostic=True,
+                force=True,
+                diagnostic=True,
             )
             agent._invalid_json_retries = 0
             agent._cleanup_task_resources(effective_task_id)
             # Blame the output cap only when the model reported one; otherwise the args
             # were cut by a stream break or a router rewriting finish_reason (#91717).
             _copy = (
-                site_copy("truncated") if finish_reason == FINISH_REASON_LENGTH
+                site_copy("truncated")
+                if finish_reason == FINISH_REASON_LENGTH
                 else site_copy("truncated_unreported")
             )
-            return _verdict("return", _partial_exit(
-                agent, messages, conversation_history, api_call_count, _copy,
-            ))
+            return _verdict(
+                "return",
+                _partial_exit(
+                    agent,
+                    messages,
+                    conversation_history,
+                    api_call_count,
+                    _copy,
+                ),
+            )
 
         agent._invalid_json_retries += 1
         tool_name, error_msg = invalid_json_args[0]
-        agent._buffer_vprint(f"⚠️  Invalid JSON in tool call arguments for '{tool_name}': {error_msg}")
+        agent._buffer_vprint(
+            f"⚠️  Invalid JSON in tool call arguments for '{tool_name}': {error_msg}"
+        )
 
         if agent._invalid_json_retries < 3:
-            agent._buffer_vprint(f"🔄 Retrying API call ({agent._invalid_json_retries}/3)...")
+            agent._buffer_vprint(
+                f"🔄 Retrying API call ({agent._invalid_json_retries}/3)..."
+            )
             # Don't add anything to messages, just retry the API call
             return _verdict("continue")
         # Instead of returning partial, inject tool error results so the model can recover.
@@ -216,7 +274,9 @@ def validate_tool_calls(
         agent._invalid_json_retries = 0  # Reset for next attempt
         # Append the assistant message with its (broken) tool_calls, then one
         # error result per call.
-        append_message(messages, agent._build_assistant_message(assistant_message, finish_reason))
+        append_message(
+            messages, agent._build_assistant_message(assistant_message, finish_reason)
+        )
 
         def _json_error_result(tc) -> str:
             if tc.function.name not in invalid_names:

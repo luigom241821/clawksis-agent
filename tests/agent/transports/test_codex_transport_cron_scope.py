@@ -8,6 +8,7 @@ from agent.transports import get_transport
 @pytest.fixture
 def transport():
     import agent.transports.codex
+
     return get_transport("codex_responses")
 
 
@@ -19,7 +20,9 @@ def execution_context():
 
     token = _execution.set(None)
     try:
-        yield lambda sid, job_id, execution_id="fire": bind_execution(object(), sid, job_id, execution_id)
+        yield lambda sid, job_id, execution_id="fire": bind_execution(
+            object(), sid, job_id, execution_id
+        )
     finally:
         _execution.reset(token)
 
@@ -29,7 +32,9 @@ def test_cache_key_stable_for_unified_cron_session_ids(transport, execution_cont
     messages = [{"role": "user", "content": "Hi"}]
 
     def build(sid):
-        return transport.build_kwargs(model="gpt-5.4", messages=messages, tools=[], session_id=sid)
+        return transport.build_kwargs(
+            model="gpt-5.4", messages=messages, tools=[], session_id=sid
+        )
 
     execution_context("local-first-fire", "job42", "fire-1")
     first = build("local-first-fire")
@@ -56,15 +61,24 @@ def test_cron_backend_headers_and_legacy_scope(transport, execution_context, ove
         {"role": "system", "content": "Keep this static instruction."},
         {"role": "user", "content": "Run the scheduled task."},
     ]
-    tools = [{"type": "function", "function": {
-        "name": "lookup", "description": "Read a value.",
-        "parameters": {"type": "object", "properties": {}},
-    }}]
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "lookup",
+                "description": "Read a value.",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        }
+    ]
     original = deepcopy((messages, tools))
 
     def build(sid):
         return transport.build_kwargs(
-            model="gpt-5.4", messages=messages, tools=tools, session_id=sid,
+            model="gpt-5.4",
+            messages=messages,
+            tools=tools,
+            session_id=sid,
             is_codex_backend=True,
             request_overrides={"prompt_cache_key": override} if override else {},
         )
@@ -78,7 +92,10 @@ def test_cron_backend_headers_and_legacy_scope(transport, execution_context, ove
         assert _cache_scope_from_session_id(sid) == "cron_job42"
         assert current["prompt_cache_key"] == legacy["prompt_cache_key"]
         assert current["extra_headers"]["session_id"] == sid
-        assert current["extra_headers"]["x-client-request-id"] == current["prompt_cache_key"]
+        assert (
+            current["extra_headers"]["x-client-request-id"]
+            == current["prompt_cache_key"]
+        )
         assert current["instructions"] == messages[0]["content"]
         assert current["input"] == legacy["input"]
         assert current["tools"] == legacy["tools"]
@@ -88,7 +105,9 @@ def test_cron_backend_headers_and_legacy_scope(transport, execution_context, ove
     assert (messages, tools) == original
 
 
-def test_cron_compression_rotation_resolves_admitted_scope(transport, execution_context, tmp_path):
+def test_cron_compression_rotation_resolves_admitted_scope(
+    transport, execution_context, tmp_path
+):
     """A real lineage lookup reconnects the rotated physical ID to the cron admission."""
     from types import SimpleNamespace
 
@@ -105,8 +124,11 @@ def test_cron_compression_rotation_resolves_admitted_scope(transport, execution_
             scope = resolve_prompt_cache_scope(agent)
             assert scope == root
             return transport.build_kwargs(
-                model="gpt-5.4", messages=[{"role": "user", "content": "Hi"}],
-                tools=[], session_id=agent.session_id, cache_scope_id=scope,
+                model="gpt-5.4",
+                messages=[{"role": "user", "content": "Hi"}],
+                tools=[],
+                session_id=agent.session_id,
+                cache_scope_id=scope,
                 is_codex_backend=True,
             )
 
@@ -122,14 +144,17 @@ def test_cron_compression_rotation_resolves_admitted_scope(transport, execution_
     assert after["extra_headers"]["x-client-request-id"] == after["prompt_cache_key"]
 
 
-@pytest.mark.parametrize("sid,admission", [
-    ("local-without-admission", None),
-    ("ordinary-session", None),
-    ("local-child", ("local-parent", "job42")),
-    ("local-empty-job", ("local-empty-job", "")),
-    ("local-blank-job", ("local-blank-job", "  ")),
-    ("local-missing-job", ("local-missing-job", None)),
-])
+@pytest.mark.parametrize(
+    "sid,admission",
+    [
+        ("local-without-admission", None),
+        ("ordinary-session", None),
+        ("local-child", ("local-parent", "job42")),
+        ("local-empty-job", ("local-empty-job", "")),
+        ("local-blank-job", ("local-blank-job", "  ")),
+        ("local-missing-job", ("local-missing-job", None)),
+    ],
+)
 def test_unadmitted_or_jobless_sessions_keep_scope(execution_context, sid, admission):
     from agent.transports.codex import _cache_scope_from_session_id
 

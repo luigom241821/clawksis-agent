@@ -44,18 +44,31 @@ def service_launch(tmp_path, monkeypatch):
     return _install(tmp_path / ".local" / "bin")
 
 
-@pytest.mark.platforms("posix")  # HOME-relative prefixes and the exec bit are the POSIX layout
-def test_external_process_provider_finds_claude_in_an_install_prefix(service_launch, tmp_path, monkeypatch):
-    from clawk_cli.auth import get_external_process_provider_status, resolve_external_process_provider_credentials
+@pytest.mark.platforms(
+    "posix"
+)  # HOME-relative prefixes and the exec bit are the POSIX layout
+def test_external_process_provider_finds_claude_in_an_install_prefix(
+    service_launch, tmp_path, monkeypatch
+):
+    from clawk_cli.auth import (
+        get_external_process_provider_status,
+        resolve_external_process_provider_credentials,
+    )
 
-    assert resolve_external_process_provider_credentials("claude-cli-acp-test")["command"] == service_launch
+    assert (
+        resolve_external_process_provider_credentials("claude-cli-acp-test")["command"]
+        == service_launch
+    )
     status = get_external_process_provider_status("claude-cli-acp-test")
     assert (status["configured"], status["resolved_command"]) == (True, service_launch)
 
     # A PATH hit is still what runs: the prefix probe only answers a PATH miss.
     on_path = _install(tmp_path / "path-bin")
     monkeypatch.setenv("PATH", str(tmp_path / "path-bin"))
-    assert resolve_external_process_provider_credentials("claude-cli-acp-test")["command"] == on_path
+    assert (
+        resolve_external_process_provider_credentials("claude-cli-acp-test")["command"]
+        == on_path
+    )
 
 
 @pytest.mark.platforms("posix")
@@ -63,7 +76,11 @@ def test_setup_token_runs_claude_from_an_install_prefix(service_launch, monkeypa
     import agent.anthropic_credentials as creds
 
     ran: list[list[str]] = []
-    monkeypatch.setattr(creds.subprocess, "run", lambda argv, *a, **k: ran.append(argv) or subprocess.CompletedProcess(argv, 0))
+    monkeypatch.setattr(
+        creds.subprocess,
+        "run",
+        lambda argv, *a, **k: ran.append(argv) or subprocess.CompletedProcess(argv, 0),
+    )
     monkeypatch.setattr(creds, "read_claude_code_credentials", lambda: None)
 
     creds.run_oauth_setup_token()

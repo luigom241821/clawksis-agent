@@ -22,8 +22,8 @@ from tools.mcp_tool import MCPServerTask
 # ── Jitter ───────────────────────────────────────────────────────────────────
 
 
-
 # ── Log levels: retry chatter DEBUG, transitions WARNING ─────────────────────
+
 
 @pytest.mark.no_isolate
 def test_retry_attempts_log_debug_transitions_warn(monkeypatch, tmp_path, caplog):
@@ -93,7 +93,8 @@ def test_retry_attempts_log_debug_transitions_warn(monkeypatch, tmp_path, caplog
     )
 
     park_warnings = [
-        r for r in caplog.records
+        r
+        for r in caplog.records
         if r.levelno == logging.WARNING and "parking" in r.getMessage()
     ]
     assert len(park_warnings) == 1, (
@@ -151,15 +152,16 @@ def test_initial_retry_attempts_log_debug(monkeypatch, tmp_path, caplog):
     asyncio.run(_scenario())
 
     attempt_records = [
-        r for r in caplog.records
+        r
+        for r in caplog.records
         if "initial connection failed (attempt" in r.getMessage()
     ]
     assert attempt_records
     assert all(r.levelno == logging.DEBUG for r in attempt_records)
 
     park_warnings = [
-        r for r in caplog.records
-        if r.levelno == logging.WARNING
-        and "connecting → parked" in r.getMessage()
+        r
+        for r in caplog.records
+        if r.levelno == logging.WARNING and "connecting → parked" in r.getMessage()
     ]
     assert len(park_warnings) == 1

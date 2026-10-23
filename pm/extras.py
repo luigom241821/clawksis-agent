@@ -52,7 +52,12 @@ ANCHORS: dict[str, str | tuple[str, ...]] = {
     "modal": "modal",
     "daytona": "daytona",
     "vercel": "vercel",
-    "google": ("googleapiclient", "google.auth", "google_auth_oauthlib.flow", "google_auth_httplib2"),
+    "google": (
+        "googleapiclient",
+        "google.auth",
+        "google_auth_oauthlib.flow",
+        "google_auth_httplib2",
+    ),
     "google-chat": "google.cloud.pubsub_v1",
     "google-meet": ("playwright.sync_api", "websockets"),
     "youtube": "youtube_transcript_api",
@@ -122,8 +127,12 @@ def _platform_gates() -> dict[str, str]:
 _PLATFORM_GATES: dict[str, str] | None = None
 
 
-def extra_supported(extra: str, *, environment: dict[str, str] | None = None,
-                    importable: Callable[[str], bool] | None = None) -> bool:
+def extra_supported(
+    extra: str,
+    *,
+    environment: dict[str, str] | None = None,
+    importable: Callable[[str], bool] | None = None,
+) -> bool:
     """Is this extra installable on THIS platform? True when the extra
     carries no gate, or its marker matches the running platform. An
     extra that IS present on this machine (anchors importable) is always
@@ -166,10 +175,18 @@ def _evaluate_in_runtime(marker: str, environment: dict[str, str]) -> bool:
     from pm.runtime import runtime_command, runtime_environment
 
     try:
-        command = runtime_command(Path(__file__).with_name("_marker_eval.py"),
-                                  [marker, json.dumps(environment)])
-        result = subprocess.run(command, env=runtime_environment(), capture_output=True,
-                                text=True, timeout=60, check=False)
+        command = runtime_command(
+            Path(__file__).with_name("_marker_eval.py"),
+            [marker, json.dumps(environment)],
+        )
+        result = subprocess.run(
+            command,
+            env=runtime_environment(),
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
     except Exception:
         return True  # same fallback as a malformed marker: the resolver decides
     if result.returncode != 0:
@@ -208,8 +225,14 @@ def ensure_import(extra: str) -> None:
         app_running = bool(getattr(get_app_or_none(), "is_running", False))
     if not app_running and sys.stdin.isatty() and sys.stdout.isatty():
         try:
-            answer = input(f"\nThis needs Clawksis' optional {extra!r} feature, which isn't installed yet.\n"
-                           "Install it now? [Y/n] ").strip().lower()
+            answer = (
+                input(
+                    f"\nThis needs Clawksis' optional {extra!r} feature, which isn't installed yet.\n"
+                    "Install it now? [Y/n] "
+                )
+                .strip()
+                .lower()
+            )
         except (EOFError, KeyboardInterrupt):
             answer = "n"
         if answer and answer not in {"y", "yes"}:
@@ -231,8 +254,13 @@ def ensure_import(extra: str) -> None:
         adopt_selected(root)
         selected = site_packages(selected_venv(root)).resolve()
         if selected not in {Path(entry).resolve() for entry in sys.path}:
-            reason = restart_needed(root) or "this process does not run from the install's dependency environment"
-            raise InstallError("venv", f"{extra} installed; restart Clawksis to activate it ({reason})")
+            reason = (
+                restart_needed(root)
+                or "this process does not run from the install's dependency environment"
+            )
+            raise InstallError(
+                "venv", f"{extra} installed; restart Clawksis to activate it ({reason})"
+            )
 
 
 def ensure_and_bind(extra, importer, target_globals) -> bool:
@@ -269,8 +297,10 @@ def _installed_in(site_packages: Path, anchor: str) -> bool:
     if (parent / leaf).is_dir():
         return True
     # A top-level module can be a plain file or a compiled extension.
-    return any(entry.name.rsplit(".", 1)[-1] in {"py", "so", "pyd"}
-               for entry in parent.glob(f"{leaf}.*"))
+    return any(
+        entry.name.rsplit(".", 1)[-1] in {"py", "so", "pyd"}
+        for entry in parent.glob(f"{leaf}.*")
+    )
 
 
 def legacy_selection(project_root: Path) -> list[str]:
@@ -284,16 +314,27 @@ def legacy_selection(project_root: Path) -> list[str]:
     not run from it.
     """
     root = Path(project_root)
-    trees = [tree for venv in (root / "venv", root / ".venv")
-             for tree in (*venv.glob("lib/python*/site-packages"), venv / "Lib" / "site-packages")
-             if tree.is_dir()]
+    trees = [
+        tree
+        for venv in (root / "venv", root / ".venv")
+        for tree in (
+            *venv.glob("lib/python*/site-packages"),
+            venv / "Lib" / "site-packages",
+        )
+        if tree.is_dir()
+    ]
     carried = sorted(
         # An umbrella extra shares its anchor with one member; carrying it
         # would install every sibling the user never chose.
-        extra for extra in ANCHORS if extra not in {"messaging", "voice", "wake"}
+        extra
+        for extra in ANCHORS
+        if extra not in {"messaging", "voice", "wake"}
         # PM refuses a gated extra outside its platform even if a hand-synced venv carried it.
         # Installed first: judging a gate may cost a PM-runtime subprocess.
-        if any(all(_installed_in(tree, anchor) for anchor in _anchors(extra)) for tree in trees)
+        if any(
+            all(_installed_in(tree, anchor) for anchor in _anchors(extra))
+            for tree in trees
+        )
         and extra_supported(extra, importable=lambda _anchor: False)
     )
     return ["all", *carried]

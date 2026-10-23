@@ -56,7 +56,9 @@ def _checkpoint_incapable(reason: str) -> CompressionCheckpointUnavailable:
     """Capability refusal: the gate can never pass with this provider set, so the
     message carries the config-level way out. Transient checkpoint failures keep
     the plain form — there the provider is capable and the right move is a retry."""
-    return _checkpoint_blocked(f"{reason}. Recover by {_CHECKPOINT_REQUIRED_REMEDIATION}")
+    return _checkpoint_blocked(
+        f"{reason}. Recover by {_CHECKPOINT_REQUIRED_REMEDIATION}"
+    )
 
 
 def _warn_checkpoint_required_without_capable_provider(agent: Any) -> None:
@@ -71,7 +73,9 @@ def _warn_checkpoint_required_without_capable_provider(agent: Any) -> None:
         return
     memory_manager = getattr(agent, "_memory_manager", None)
     if memory_manager is not None:
-        supports_checkpoint = getattr(memory_manager, "supports_pre_compress_checkpoint", None)
+        supports_checkpoint = getattr(
+            memory_manager, "supports_pre_compress_checkpoint", None
+        )
         if callable(supports_checkpoint):
             try:
                 if bool(supports_checkpoint(PRE_COMPRESS_CHECKPOINT_API_VERSION)):

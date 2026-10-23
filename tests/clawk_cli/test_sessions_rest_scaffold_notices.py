@@ -91,7 +91,12 @@ def test_rest_projection_unwraps_steer_rows_for_display():
         "display_kind": "steer",
         "timestamp": 6.0,
     }
-    plain_row = {"role": "user", "id": 22, "content": "unrelated text", "timestamp": 7.0}
+    plain_row = {
+        "role": "user",
+        "id": 22,
+        "content": "unrelated text",
+        "timestamp": 7.0,
+    }
 
     projected = _project_for_display([steer_row, plain_row])
 
@@ -111,8 +116,13 @@ def test_rest_projection_unwraps_steer_rows_for_display():
 def test_rest_projection_keeps_steer_row_without_marker_as_is():
     """A steer row whose content lost the marker wrapper (legacy persistence) falls through
     to the normal path instead of emitting an empty display_content."""
-    steer_row = {"role": "user", "id": 31, "content": "plain legacy text", "display_kind": "steer",
-                 "timestamp": 8.0}
+    steer_row = {
+        "role": "user",
+        "id": 31,
+        "content": "plain legacy text",
+        "display_kind": "steer",
+        "timestamp": 8.0,
+    }
 
     projected = _project_for_display([steer_row])
 

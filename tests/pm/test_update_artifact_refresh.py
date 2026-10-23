@@ -1,4 +1,5 @@
 """Minor-style updates follow advertised artifacts without dropping other pins."""
+
 from __future__ import annotations
 
 from argparse import Namespace
@@ -19,7 +20,10 @@ from tests.pm._range_server import RangeHandler, dl_server, url
 
 @pytest.mark.parametrize("next_version", ["1.2.3", "1.2.4"])
 def test_same_minor_refresh_updates_real_bytes_and_preserves_unresolved_targets(
-    tmp_path, dl_server, monkeypatch, next_version,
+    tmp_path,
+    dl_server,
+    monkeypatch,
+    next_version,
 ):
     class RollingPackage(Package):
         name = "rolling-tool"
@@ -47,13 +51,19 @@ def test_same_minor_refresh_updates_real_bytes_and_preserves_unresolved_targets(
 
     monkeypatch.setattr(RangeHandler, "do_GET", record)
     target = current_target()
-    held_target = "linux-arm64-bionic" if target != "linux-arm64-bionic" else "win32-arm64"
+    held_target = (
+        "linux-arm64-bionic" if target != "linux-arm64-bionic" else "win32-arm64"
+    )
     held = {"url": "https://upstream.invalid/held.deb", "sha256": "b" * 64}
     lock = Lockfile(tmp_path / "lock.json")
-    lock.set_pin("rolling-tool", "1.2.3", {
-        target: {"url": url(dl_server, "/old-build.zip"), "sha256": "a" * 64},
-        held_target: held,
-    })
+    lock.set_pin(
+        "rolling-tool",
+        "1.2.3",
+        {
+            target: {"url": url(dl_server, "/old-build.zip"), "sha256": "a" * 64},
+            held_target: held,
+        },
+    )
     lock.set_pin("unrelated", "2.0", {"any": held})
     lock.save()
     store = tmp_path / "tools"
@@ -66,7 +76,15 @@ def test_same_minor_refresh_updates_real_bytes_and_preserves_unresolved_targets(
     engine = importlib.import_module("pm.install")
     monkeypatch.setattr(engine, "sync_venv", lambda **kwargs: syncs.append(kwargs))
     before = lock.path.read_bytes()
-    args = Namespace(names=["rolling-tool"], target=None, skip_target=[], check=True, uv=False, npm=False, termux=False)
+    args = Namespace(
+        names=["rolling-tool"],
+        target=None,
+        skip_target=[],
+        check=True,
+        uv=False,
+        npm=False,
+        termux=False,
+    )
     assert cli.cmd_update(args) == 1
     assert lock.path.read_bytes() == before and not requests and not syncs
     assert not store.exists()
@@ -78,9 +96,12 @@ def test_same_minor_refresh_updates_real_bytes_and_preserves_unresolved_targets(
     assert after["unrelated"] == original["unrelated"]
     assert after["rolling-tool"]["version"] == original["rolling-tool"]["version"]
     assert after["rolling-tool"]["artifacts"][held_target] == held
-    assert Lockfile(lock.path).artifacts("rolling-tool", target) == [{
-        "url": url(dl_server, "/new-build.zip"), "sha256": hashlib.sha256(body).hexdigest(),
-    }]
+    assert Lockfile(lock.path).artifacts("rolling-tool", target) == [
+        {
+            "url": url(dl_server, "/new-build.zip"),
+            "sha256": hashlib.sha256(body).hexdigest(),
+        }
+    ]
     fact = Facts(store / "facts.json").get("rolling-tool")
     assert (store / fact["entry"] / "tool.txt").read_bytes() == b"new rolling build"
     assert syncs == [{"explicit": True}]

@@ -23,8 +23,13 @@ WORKER_PIN = ["file", "clarify"]
 def _pin(home, names):
     """Write the pin the way ``profiles.configure`` does (its writer, into that home's config.yaml)."""
     home.mkdir(parents=True, exist_ok=True)
-    _save_toolset_pin({}, names, save_config=lambda cfg: (home / "config.yaml").write_text(
-        yaml.safe_dump(cfg), encoding="utf-8"))
+    _save_toolset_pin(
+        {},
+        names,
+        save_config=lambda cfg: (home / "config.yaml").write_text(
+            yaml.safe_dump(cfg), encoding="utf-8"
+        ),
+    )
 
 
 @pytest.fixture
@@ -39,11 +44,22 @@ def two_homes(tmp_path, monkeypatch):
     monkeypatch.delenv("CLAWK_TUI_TOOLSETS", raising=False)
     monkeypatch.setattr(server, "_clawk_home", root)
     from agent import secret_scope
+
     monkeypatch.setattr(secret_scope, "_MULTIPLEX_ACTIVE", True)
     server._cfg_cache = server._cfg_mtime = server._cfg_path = None
     sessions = {
-        "launch": {"agent": None, "profile_home": None, "cwd": str(tmp_path), "source": "tui"},
-        "work": {"agent": None, "profile_home": str(worker), "cwd": str(tmp_path), "source": "tui"},
+        "launch": {
+            "agent": None,
+            "profile_home": None,
+            "cwd": str(tmp_path),
+            "source": "tui",
+        },
+        "work": {
+            "agent": None,
+            "profile_home": str(worker),
+            "cwd": str(tmp_path),
+            "source": "tui",
+        },
     }
     monkeypatch.setattr(server, "_sessions", sessions)
     return sessions

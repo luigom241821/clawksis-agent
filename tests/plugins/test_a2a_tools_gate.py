@@ -7,6 +7,7 @@ mechanism (bots talk over gateway RPCs); it is opt-in foreign-agent
 plumbing. Gate: serve only when a2a_agents is non-empty, the inbound
 platform is enabled, or A2A_PORT is set. Fail closed.
 """
+
 import os
 import sys
 import unittest

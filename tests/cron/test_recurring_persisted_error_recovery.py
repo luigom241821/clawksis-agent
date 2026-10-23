@@ -26,6 +26,7 @@ The scheduler then re-dispatches it on the next tick WITHOUT force-run/resume
 Deterministic RED/GREEN: on unfixed code the wedged job is left untouched (no
 execution row, no re-dispatch); with the recovery it re-fires and completes.
 """
+
 from __future__ import annotations
 
 import sys
@@ -49,6 +50,7 @@ def cron_env(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
     import cron.jobs as jobs_mod
+
     monkeypatch.setattr(jobs_mod, "CLAWK_DIR", clawk_home)
     monkeypatch.setattr(jobs_mod, "CRON_DIR", clawk_home / "cron")
     monkeypatch.setattr(jobs_mod, "JOBS_FILE", clawk_home / "cron" / "jobs.json")
@@ -114,9 +116,9 @@ class TestPersistedStaleErrorRecovery:
         assert latest["status"] == "completed"
         # The recovery must be countable / probe-visible.
         from cron import jobs as Jmod
+
         stats = Jmod.get_persisted_error_recovery_stats()
         assert stats["persisted_error_recoveries"] >= 1
-
 
     def test_recent_error_within_cadence_not_force_rearmed(self, cron_env, monkeypatch):
         """The discriminator must NOT re-arm a normal transient error whose
@@ -138,7 +140,9 @@ class TestPersistedStaleErrorRecovery:
             "force-re-armed onto an immediate fire"
         )
 
-    def test_live_fire_claim_from_other_process_not_rearmed(self, cron_env, monkeypatch):
+    def test_live_fire_claim_from_other_process_not_rearmed(
+        self, cron_env, monkeypatch
+    ):
         """A stale-error job whose ``fire_claim`` is being heartbeated by a run
         in ANOTHER process is running, not wedged. Re-arming it would make this
         ticker claim-fight the live run (2026-09-02 multi-Desktop-tab incident:
@@ -165,5 +169,7 @@ class TestPersistedStaleErrorRecovery:
 
         # Once the foreign claim has expired (owner died), recovery resumes.
         expired = (now - timedelta(seconds=J.FIRE_CLAIM_TTL_SECONDS + 1)).isoformat()
-        J.update_job(job_id, {"fire_claim": {"at": expired, "by": "other-host:deadbeef"}})
+        J.update_job(
+            job_id, {"fire_claim": {"at": expired, "by": "other-host:deadbeef"}}
+        )
         assert J._job_is_stale_error_recurring(J.get_job(job_id), job["schedule"], now)

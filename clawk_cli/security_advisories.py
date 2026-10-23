@@ -92,6 +92,7 @@ def _installed_version(pkg_name: str) -> Optional[str]:
     None if not installed or metadata is corrupt — never crash the CLI startup path.
     """
     from importlib.metadata import PackageNotFoundError, version
+
     try:
         return version(pkg_name)
     except PackageNotFoundError:
@@ -101,13 +102,16 @@ def _installed_version(pkg_name: str) -> Optional[str]:
         return None
 
 
-def detect_compromised(advisories: Iterable[Advisory] = ADVISORIES) -> list[AdvisoryHit]:
+def detect_compromised(
+    advisories: Iterable[Advisory] = ADVISORIES,
+) -> list[AdvisoryHit]:
     """All hits: package installed AND version in the compromised set (or the set is empty)."""
     return [
         AdvisoryHit(advisory, pkg_name, installed)
         for advisory in advisories
         for pkg_name, bad_versions in advisory.compromised
-        if (installed := _installed_version(pkg_name)) is not None and (not bad_versions or installed in bad_versions)
+        if (installed := _installed_version(pkg_name)) is not None
+        and (not bad_versions or installed in bad_versions)
     ]
 
 
@@ -115,17 +119,23 @@ def detect_compromised(advisories: Iterable[Advisory] = ADVISORIES) -> list[Advi
 # Acks live under ``security.acked_advisories`` in config.yaml as a list of advisory IDs — the only
 # state (no per-host data or timestamps), so a shared config.yaml dismisses everywhere.
 
+
 def get_acked_ids() -> set[str]:
     """Advisory IDs the user has dismissed; empty when config can't be loaded (never block startup —
     the advisory keeps firing until config is repaired).
     """
     try:
         from clawk_cli.config import load_config
+
         raw = (load_config().get("security") or {}).get("acked_advisories") or []
     except Exception:
         logger.debug("Could not load config for advisory acks", exc_info=True)
         return set()
-    return {str(x).strip() for x in raw if str(x).strip()} if isinstance(raw, list) else set()
+    return (
+        {str(x).strip() for x in raw if str(x).strip()}
+        if isinstance(raw, list)
+        else set()
+    )
 
 
 def ack_advisory(advisory_id: str) -> bool:
@@ -174,7 +184,10 @@ def short_banner_lines(hits: list[AdvisoryHit]) -> list[str]:
         "  Run 'clawk doctor' for remediation steps.",
     ]
     if len(hits) > 1:
-        lines.insert(1, f"  ({len(hits) - 1} additional advisor{'ies' if len(hits) > 2 else 'y'} also active.)")
+        lines.insert(
+            1,
+            f"  ({len(hits) - 1} additional advisor{'ies' if len(hits) > 2 else 'y'} also active.)",
+        )
     return lines
 
 
@@ -190,7 +203,10 @@ def full_remediation_text(hit: AdvisoryHit) -> list[str]:
         a.summary,
         "",
         "Remediation:",
-        *(f"  {i}. {step.format(clawk_home=display_clawk_home())}" for i, step in enumerate(a.remediation, 1)),
+        *(
+            f"  {i}. {step.format(clawk_home=display_clawk_home())}"
+            for i, step in enumerate(a.remediation, 1)
+        ),
     ]
 
 
@@ -206,6 +222,7 @@ _BANNER_REPEAT_HOURS = 24
 def _banner_cache_path() -> Optional[Path]:
     try:
         from clawk_constants import get_clawk_home
+
         cache_dir = Path(get_clawk_home()) / "cache"
         cache_dir.mkdir(parents=True, exist_ok=True)
         return cache_dir / _BANNER_CACHE_FILE
@@ -216,7 +233,11 @@ def _banner_cache_path() -> Optional[Path]:
 def _read_banner_cache() -> dict[str, float]:
     p = _banner_cache_path()
     try:
-        lines = p.read_text(encoding="utf-8-sig").splitlines() if p is not None and p.exists() else []
+        lines = (
+            p.read_text(encoding="utf-8-sig").splitlines()
+            if p is not None and p.exists()
+            else []
+        )
     except Exception:
         return {}
     out: dict[str, float] = {}
@@ -232,12 +253,17 @@ def _read_banner_cache() -> dict[str, float]:
 def _write_banner_cache(seen: dict[str, float]) -> None:
     try:
         if (p := _banner_cache_path()) is not None:
-            p.write_text("\n".join(f"{aid} {ts}" for aid, ts in seen.items()) + "\n", encoding="utf-8")
+            p.write_text(
+                "\n".join(f"{aid} {ts}" for aid, ts in seen.items()) + "\n",
+                encoding="utf-8",
+            )
     except Exception:
         logger.debug("Could not write advisory banner cache", exc_info=True)
 
 
-def hits_due_for_banner(hits: list[AdvisoryHit], *, repeat_hours: int = _BANNER_REPEAT_HOURS) -> list[AdvisoryHit]:
+def hits_due_for_banner(
+    hits: list[AdvisoryHit], *, repeat_hours: int = _BANNER_REPEAT_HOURS
+) -> list[AdvisoryHit]:
     """Hits whose banner is due (not acked, not recently shown). Side effect: stamps the banner
     cache for every returned hit, so callers must render the result.
     """
@@ -273,7 +299,11 @@ def gateway_log_message(hits: list[AdvisoryHit]) -> Optional[str]:
         return None
     if len(fresh) == 1:
         h = fresh[0]
-        return (f"Security advisory [{h.advisory.id}] active: {h.package}=={h.installed_version} "
-                f"matches {h.advisory.title}. See {h.advisory.url}")
-    return (f"{len(fresh)} security advisories active (IDs: {', '.join(h.advisory.id for h in fresh)}). "
-            "Run `clawk doctor` on the gateway host for details.")
+        return (
+            f"Security advisory [{h.advisory.id}] active: {h.package}=={h.installed_version} "
+            f"matches {h.advisory.title}. See {h.advisory.url}"
+        )
+    return (
+        f"{len(fresh)} security advisories active (IDs: {', '.join(h.advisory.id for h in fresh)}). "
+        "Run `clawk doctor` on the gateway host for details."
+    )

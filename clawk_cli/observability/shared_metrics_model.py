@@ -23,12 +23,17 @@ logger = logging.getLogger(__name__)
 QUICK_ABANDON_NS = 60 * 1_000_000_000
 # Lower bound inclusive, so 128k (128_000 and 131_072) and 1M windows land in one bucket each.
 _WINDOW_THRESHOLDS = (
-    (32_000, "lt_32k"), (128_000, "32k_to_128k"), (256_000, "128k_to_256k"), (1_000_000, "256k_to_1m"),
+    (32_000, "lt_32k"),
+    (128_000, "32k_to_128k"),
+    (256_000, "128k_to_256k"),
+    (1_000_000, "256k_to_1m"),
 )
 # The rejections Clawksis answers with a forced (overflow-triggered) compression.
 _LIMIT_ERROR_CLASSES = frozenset({"context_overflow", "payload_too_large"})
 # Unattended runs have no user to interrupt or abandon them.
-_UNATTENDED_ENTRYPOINTS = frozenset({"background", "batch", "delegated", "scheduled_task"})
+_UNATTENDED_ENTRYPOINTS = frozenset(
+    {"background", "batch", "delegated", "scheduled_task"}
+)
 
 
 def model_route(provider: Any, model: Any) -> dict[str, str]:
@@ -37,7 +42,9 @@ def model_route(provider: Any, model: Any) -> dict[str, str]:
 
 def window_bucket(context_length: Any) -> str:
     length = contract._non_negative_number(context_length)
-    return contract._bucket(length, _WINDOW_THRESHOLDS, "gte_1m") if length else "unknown"
+    return (
+        contract._bucket(length, _WINDOW_THRESHOLDS, "gte_1m") if length else "unknown"
+    )
 
 
 def friction_fields(signal: str, route: dict[str, str] | None) -> dict[str, str] | None:
@@ -50,7 +57,11 @@ def _prompt_tokens(usage: Any) -> float | None:
     if not isinstance(usage, dict):
         return None
     tokens = contract._non_negative_number(usage.get("prompt_tokens"))
-    return tokens if tokens is not None else contract._non_negative_number(usage.get("input_tokens"))
+    return (
+        tokens
+        if tokens is not None
+        else contract._non_negative_number(usage.get("input_tokens"))
+    )
 
 
 @dataclass
@@ -65,15 +76,23 @@ class ModelSessionState:
     failed_turn_ns: int = 0
     failed_route: dict[str, str] | None = None
 
-    def observe_call(self, route: dict[str, str], usage: Any, context_length: Any) -> None:
+    def observe_call(
+        self, route: dict[str, str], usage: Any, context_length: Any
+    ) -> None:
         """One finished primary call: remember its model and the fullest context seen."""
         self.last_route = route
-        tokens, window = _prompt_tokens(usage), contract._non_negative_number(context_length)
+        tokens, window = (
+            _prompt_tokens(usage),
+            contract._non_negative_number(context_length),
+        )
         if self.peak_route is None:
             self.peak_route = route
         if tokens is None or not window:
             return
-        if self.peak_window is None or tokens / window > self.peak_tokens / self.peak_window:
+        if (
+            self.peak_window is None
+            or tokens / window > self.peak_tokens / self.peak_window
+        ):
             self.peak_route, self.peak_tokens, self.peak_window = route, tokens, window
 
     def observe_error(self, route: dict[str, str], error_class: str) -> None:
@@ -85,7 +104,9 @@ class ModelSessionState:
         if error_class in _LIMIT_ERROR_CLASSES:
             self.limit_hit = True
 
-    def observe_turn(self, outcome: str, route: dict[str, str] | None, now_ns: int) -> None:
+    def observe_turn(
+        self, outcome: str, route: dict[str, str] | None, now_ns: int
+    ) -> None:
         """Only the trailing turn matters for abandonment: a later success clears it."""
         failed = outcome == "failed"
         self.failed_turn_ns = now_ns if failed else 0
@@ -105,17 +126,23 @@ class ModelSessionState:
             **self.peak_route,
             "limit_hit": "yes" if self.limit_hit else "no",
             "peak_fill_bucket": (
-                fields_.context_fill_bucket(self.peak_tokens, self.peak_window) if known else "unknown"
+                fields_.context_fill_bucket(self.peak_tokens, self.peak_window)
+                if known
+                else "unknown"
             ),
             "window_bucket": window_bucket(self.peak_window) if known else "unknown",
         }
 
 
 def attended(start_fields: dict[str, str] | None) -> bool:
-    return bool(start_fields) and start_fields.get("entrypoint") not in _UNATTENDED_ENTRYPOINTS
+    return (
+        bool(start_fields)
+        and start_fields.get("entrypoint") not in _UNATTENDED_ENTRYPOINTS
+    )
 
 
 # ---- tool-call quality -----------------------------------------------------------------------
+
 
 def _required_params(tools: Iterable[Any] | None) -> dict[str, tuple[str, ...]]:
     required: dict[str, tuple[str, ...]] = {}
@@ -125,12 +152,21 @@ def _required_params(tools: Iterable[Any] | None) -> dict[str, tuple[str, ...]]:
             continue
         params = fn.get("parameters")
         names = params.get("required") if isinstance(params, dict) else None
-        required[fn["name"]] = tuple(n for n in names if isinstance(n, str)) if isinstance(names, list) else ()
+        required[fn["name"]] = (
+            tuple(n for n in names if isinstance(n, str))
+            if isinstance(names, list)
+            else ()
+        )
     return required
 
 
 def tool_call_issue(
-    name: Any, raw_args: Any, *, valid_names: Any, required: dict[str, tuple[str, ...]], repaired: bool,
+    name: Any,
+    raw_args: Any,
+    *,
+    valid_names: Any,
+    required: dict[str, tuple[str, ...]],
+    repaired: bool,
 ) -> str:
     """The first problem with one emitted call, most severe first; ``none`` when clean.
 
@@ -154,7 +190,9 @@ def tool_call_issue(
     return "repaired" if repaired else "none"
 
 
-def record_tool_call_quality(agent: Any, tool_calls: Iterable[Any], repaired_ids: frozenset[int] | set[int]) -> None:
+def record_tool_call_quality(
+    agent: Any, tool_calls: Iterable[Any], repaired_ids: frozenset[int] | set[int]
+) -> None:
     """Count every tool call one primary response emitted, before Clawksis normalizes it.
 
     ``repaired_ids`` holds ``id(tc)`` of calls whose name Clawksis auto-repaired; streamed calls
@@ -167,7 +205,10 @@ def record_tool_call_quality(agent: Any, tool_calls: Iterable[Any], repaired_ids
             return
         from .shared_metrics_signals import tool_unavailable_fields
         from .shared_metrics_connectors import tool_batch_fields
-        route = model_route(getattr(agent, "provider", None), getattr(agent, "model", None))
+
+        route = model_route(
+            getattr(agent, "provider", None), getattr(agent, "model", None)
+        )
         valid_names = getattr(agent, "valid_tool_names", None) or frozenset()
         required = _required_params(getattr(agent, "tools", None))
         tool_calls = list(tool_calls)
@@ -176,11 +217,20 @@ def record_tool_call_quality(agent: Any, tool_calls: Iterable[Any], repaired_ids
         for tc in tool_calls:
             fn = tc.function
             issue = tool_call_issue(
-                fn.name, fn.arguments, valid_names=valid_names, required=required,
-                repaired=id(tc) in repaired_ids or getattr(fn, "args_repaired", False) is True,
+                fn.name,
+                fn.arguments,
+                valid_names=valid_names,
+                required=required,
+                repaired=id(tc) in repaired_ids
+                or getattr(fn, "args_repaired", False) is True,
             )
-            record_process_mark(contract.MODEL_TOOL_QUALITY_MARK, {**route, "call_role": "primary", "issue": issue})
-            if (unavailable := tool_unavailable_fields(agent, fn.name, issue, route)) is not None:
+            record_process_mark(
+                contract.MODEL_TOOL_QUALITY_MARK,
+                {**route, "call_role": "primary", "issue": issue},
+            )
+            if (
+                unavailable := tool_unavailable_fields(agent, fn.name, issue, route)
+            ) is not None:
                 record_process_mark(contract.TOOL_UNAVAILABLE_MARK, unavailable)
     except Exception:
         logger.debug("Shared-metrics tool-call quality not recorded", exc_info=True)
@@ -188,9 +238,16 @@ def record_tool_call_quality(agent: Any, tool_calls: Iterable[Any], repaired_ids
 
 # ---- friction --------------------------------------------------------------------------------
 
+
 def record_model_friction(
-    signal: str, *, session_id: Any = None, agent: Any = None, provider: Any = None, model: Any = None,
-    clawk_home: Any = None, turns: int = 1,
+    signal: str,
+    *,
+    session_id: Any = None,
+    agent: Any = None,
+    provider: Any = None,
+    model: Any = None,
+    clawk_home: Any = None,
+    turns: int = 1,
 ) -> None:
     """Count one user friction action against the model that produced the session's last turn.
     ``turns``: how many turns an /undo removed (their tokens count as wasted).
@@ -210,9 +267,14 @@ def record_model_friction(
         if signal not in contract.FRICTION_SIGNALS or not enabled():
             return
         if agent is not None:
-            provider, model = getattr(agent, "provider", provider), getattr(agent, "model", model)
+            provider, model = (
+                getattr(agent, "provider", provider),
+                getattr(agent, "model", model),
+            )
             session_id = getattr(agent, "session_id", None) or session_id
-        record_session_friction(signal, str(session_id or ""), model_route(provider, model), turns)
+        record_session_friction(
+            signal, str(session_id or ""), model_route(provider, model), turns
+        )
     except Exception:
         logger.debug("Shared-metrics %s friction not recorded", signal, exc_info=True)
     finally:

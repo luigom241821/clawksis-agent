@@ -85,5 +85,3 @@ def test_telegram_send_failure_populates_error_kind():
     # so a raw parse failure that still escapes is classified for consumers.
     assert result.error_kind in SEND_ERROR_KINDS
     assert result.error_kind != "unknown" or result.error
-
-

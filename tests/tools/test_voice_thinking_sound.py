@@ -44,8 +44,6 @@ def _reset():
 
 
 class TestConfigGate:
-
-
     def test_start_refuses_when_disabled(self):
         _reset()
         with patch.object(vm, "thinking_sound_enabled", return_value=False):
@@ -63,7 +61,6 @@ class TestBlipSynthesis:
         assert int(np.abs(blip).max()) <= int(0.3 * 0.5 * 32767) + 1
         assert int(np.abs(blip).max()) > 0
 
-
     def test_no_click_smooth_attack(self):
         blip = vm._synth_thinking_blip(np, 392.0)
         # First sample near zero (enveloped attack, no click).
@@ -75,9 +72,11 @@ class TestLoopLifecycle:
         _reset()
         fake = _FakeSD()
         stop = threading.Event()
-        with patch.object(vm, "_sounddevice_output_allowed", return_value=True), \
-             patch.object(vm, "_import_audio", return_value=(fake, np)), \
-             patch.object(vm, "_get_beep_volume", return_value=0.3):
+        with (
+            patch.object(vm, "_sounddevice_output_allowed", return_value=True),
+            patch.object(vm, "_import_audio", return_value=(fake, np)),
+            patch.object(vm, "_get_beep_volume", return_value=0.3),
+        ):
             t = threading.Thread(
                 target=vm._thinking_sound_loop, args=(stop, None), daemon=True
             )
@@ -90,11 +89,12 @@ class TestLoopLifecycle:
         assert fake.played, "loop never played a blip"
         assert not t.is_alive()
 
-
     def test_start_is_idempotent_and_stop_clears(self):
         _reset()
-        with patch.object(vm, "thinking_sound_enabled", return_value=True), \
-             patch.object(vm, "_sounddevice_output_allowed", return_value=False):
+        with (
+            patch.object(vm, "thinking_sound_enabled", return_value=True),
+            patch.object(vm, "_sounddevice_output_allowed", return_value=False),
+        ):
             assert vm.start_thinking_sound() is True
             first_stop = vm._thinking_stop
             assert vm.start_thinking_sound() is True

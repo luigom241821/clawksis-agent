@@ -27,10 +27,14 @@ def _one_shot_seams(monkeypatch):
 
 def _stub(**extra):
     return SimpleNamespace(
-        _single_query_mode=False, _claim_active_session=lambda *a, **k: True,
-        console=SimpleNamespace(print=lambda *a, **k: None), _show_security_advisories=lambda: None,
-        chat=lambda *a, **k: "response", _print_exit_summary=lambda **k: None,
-        _last_turn_result={"failed": False}, **extra,
+        _single_query_mode=False,
+        _claim_active_session=lambda *a, **k: True,
+        console=SimpleNamespace(print=lambda *a, **k: None),
+        _show_security_advisories=lambda: None,
+        chat=lambda *a, **k: "response",
+        _print_exit_summary=lambda **k: None,
+        _last_turn_result={"failed": False},
+        **extra,
     )
 
 
@@ -42,8 +46,12 @@ def test_one_shot_turn_binds_nothing_on_the_local_plugin_manager():
 
 
 def test_quiet_turn_binds_nothing_on_the_local_plugin_manager():
-    stub = _stub(_ensure_runtime_credentials=lambda: False, _credentials_rate_limited=False,
-                 session_id="s1", model="m")
+    stub = _stub(
+        _ensure_runtime_credentials=lambda: False,
+        _credentials_rate_limited=False,
+        session_id="s1",
+        model="m",
+    )
     with pytest.raises(SystemExit):
         cli._run_single_query_mode(stub, "do the thing", None, True, True)
     assert get_plugin_manager()._cli_ref is None

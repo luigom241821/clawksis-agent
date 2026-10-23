@@ -24,7 +24,10 @@ from clawk_constants import get_clawk_home
 from clawk_startup_watchdog import report_startup_progress
 from clawk_state_holders import read_only_db_uri
 from clawk_state_common import (
-    _acquire_db_flock, _clear_lock_holder_record, _describe_lock_holder, _read_lock_holder_record,
+    _acquire_db_flock,
+    _clear_lock_holder_record,
+    _describe_lock_holder,
+    _read_lock_holder_record,
     is_advisory_lock_contention,
 )
 
@@ -65,8 +68,10 @@ _FINGERPRINT_VOLATILE_HEADER_RANGES = ((24, 28), (92, 96))
 _REPAIR_BACKUP_MIN_FREE_BYTES = 256 * 1024 * 1024  # 256 MiB absolute floor
 _REPAIR_BACKUP_FREE_FRACTION = 0.02  # plus 2% of the volume
 _FTS_TABLES = ("messages_fts", "messages_fts_trigram", "messages_fts_cjk")
-_MANUAL_RECOVER_HINT = ("Free disk space, then retry (or recover manually with "
-                        "`clawk sessions recover --source {db_path} --inspect-only` first).")
+_MANUAL_RECOVER_HINT = (
+    "Free disk space, then retry (or recover manually with "
+    "`clawk sessions recover --source {db_path} --inspect-only` first)."
+)
 
 
 def _sidecars(db_path: Path):
@@ -84,7 +89,10 @@ def _read_offline(db_path: Path, what: str, reader) -> Optional[str]:
     try:
         from clawk_cli.sqlite_safe_read import LiveConnectionError, offline_file_access
     except ImportError:
-        offline_file_access, LiveConnectionError = (lambda _p, **_k: contextlib.nullcontext()), OSError
+        offline_file_access, LiveConnectionError = (
+            (lambda _p, **_k: contextlib.nullcontext()),
+            OSError,
+        )
     try:
         with offline_file_access(db_path, what=what):
             return reader()
@@ -96,6 +104,7 @@ def _claim_repair_attempt(db_path: Path) -> bool:
     """Claim the one-shot per-process repair attempt for *db_path*: True for the first caller, False
     afterwards (bounds the repair/reopen loop and stops concurrent callers racing surgery on one file)."""
     from clawk_state import _repair_attempt_lock, _repair_attempted_paths
+
     with _repair_attempt_lock:
         if str(db_path) in _repair_attempted_paths:
             return False
@@ -110,12 +119,15 @@ def _open_lock_file(db_path: Path, suffix: str, what: str, tail: str):
         lock_path.parent.mkdir(parents=True, exist_ok=True)
         return lock_path, lock_path.open("a+b")
     except OSError as exc:
-        logger.warning(f"Could not open state.db {what} lock %s (%s) — {tail}", lock_path, exc)
+        logger.warning(
+            f"Could not open state.db {what} lock %s (%s) — {tail}", lock_path, exc
+        )
         return lock_path, None
 
 
 def _msvcrt_lock(handle, flag_name: str) -> None:
     import msvcrt
+
     handle.seek(0)
     msvcrt.locking(handle.fileno(), getattr(msvcrt, flag_name), 1)  # type: ignore[attr-defined]
 
@@ -123,21 +135,28 @@ def _msvcrt_lock(handle, flag_name: str) -> None:
 def _try_lock_nonblocking(handle) -> None:
     """Take the advisory lock on *handle* without waiting (raises on contention)."""
     from clawk_state import _IS_WINDOWS
+
     if _IS_WINDOWS:
         _msvcrt_lock(handle, "LK_NBLCK")
     else:
         import fcntl
+
         fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
 
 
 def _release_lock_handle(handle, *, clear_record: bool = False) -> None:
     """Drop the advisory lock on *handle* (best effort) and close it."""
     from clawk_state import _IS_WINDOWS
-    with contextlib.closing(handle), contextlib.suppress(OSError):  # best-effort release; always close
+
+    with (
+        contextlib.closing(handle),
+        contextlib.suppress(OSError),
+    ):  # best-effort release; always close
         if _IS_WINDOWS:
             _msvcrt_lock(handle, "LK_UNLCK")
         else:
             import fcntl
+
             if clear_record:
                 _clear_lock_holder_record(handle)
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
@@ -152,8 +171,12 @@ def _acquire_repair_lock_windows(lock_path: Path, handle, timeout: float):
             return True
         except (BlockingIOError, OSError) as exc:
             if not is_advisory_lock_contention(exc):
-                logger.warning("Could not acquire state.db repair lock %s (%s) — skipping schema surgery on a "
-                               "non-contention error.", lock_path, exc)
+                logger.warning(
+                    "Could not acquire state.db repair lock %s (%s) — skipping schema surgery on a "
+                    "non-contention error.",
+                    lock_path,
+                    exc,
+                )
                 return None
             if time.monotonic() >= deadline:
                 return False
@@ -177,25 +200,42 @@ def _cross_process_repair_lock(db_path: Path):
     #36644).
     """
     from clawk_state import _IS_WINDOWS, _REPAIR_LOCK_TIMEOUT_SECONDS
+
     lock_path, handle = _open_lock_file(
-        db_path, ".repair.lock", "repair", "skipping schema surgery rather than running it without cross-process authority.")
+        db_path,
+        ".repair.lock",
+        "repair",
+        "skipping schema surgery rather than running it without cross-process authority.",
+    )
     if handle is None:
         yield False
         return
     acquired = False
     try:
         if _IS_WINDOWS:
-            acquired = _acquire_repair_lock_windows(lock_path, handle, _REPAIR_LOCK_TIMEOUT_SECONDS)
+            acquired = _acquire_repair_lock_windows(
+                lock_path, handle, _REPAIR_LOCK_TIMEOUT_SECONDS
+            )
         else:
-            acquired, handle = _acquire_db_flock(str(lock_path), handle, _REPAIR_LOCK_TIMEOUT_SECONDS,
-                                                 _REPAIR_LOCK_POLL_SECONDS, "state.db repair lock")
+            acquired, handle = _acquire_db_flock(
+                str(lock_path),
+                handle,
+                _REPAIR_LOCK_TIMEOUT_SECONDS,
+                _REPAIR_LOCK_POLL_SECONDS,
+                "state.db repair lock",
+            )
         if acquired is None:
             acquired = False  # non-contention failure already logged with its errno
         elif not acquired:
-            logger.warning("state.db repair lock %s held by another process for more than %.0fs — skipping schema "
-                           "surgery in this process to avoid racing the repairer. Recorded holder: %s.",
-                           lock_path, _REPAIR_LOCK_TIMEOUT_SECONDS,
-                           _describe_lock_holder(None if _IS_WINDOWS else _read_lock_holder_record(handle)))
+            logger.warning(
+                "state.db repair lock %s held by another process for more than %.0fs — skipping schema "
+                "surgery in this process to avoid racing the repairer. Recorded holder: %s.",
+                lock_path,
+                _REPAIR_LOCK_TIMEOUT_SECONDS,
+                _describe_lock_holder(
+                    None if _IS_WINDOWS else _read_lock_holder_record(handle)
+                ),
+            )
         yield acquired
     finally:
         if acquired:
@@ -207,7 +247,12 @@ def _cross_process_repair_lock(db_path: Path):
 def _try_acquire_auto_maintenance_lock(db_path: Path) -> Optional[Any]:
     """Non-blocking cross-process lock for one auto-maintenance pass (None = skip the pass: otherwise two startups
     both pass the interval check and the second prunes a row the first has only just closed recoverably)."""
-    _lock_path, handle = _open_lock_file(db_path, ".auto-maintenance.lock", "auto-maintenance", "skipping automatic maintenance.")
+    _lock_path, handle = _open_lock_file(
+        db_path,
+        ".auto-maintenance.lock",
+        "auto-maintenance",
+        "skipping automatic maintenance.",
+    )
     try:
         if handle is not None:
             _try_lock_nonblocking(handle)
@@ -217,7 +262,9 @@ def _try_acquire_auto_maintenance_lock(db_path: Path) -> Optional[Any]:
         return None
 
 
-_release_auto_maintenance_lock = _release_lock_handle  # release a _try_acquire_auto_maintenance_lock handle
+_release_auto_maintenance_lock = (
+    _release_lock_handle  # release a _try_acquire_auto_maintenance_lock handle
+)
 
 
 def _bump_schema_cookie(conn: sqlite3.Connection) -> None:
@@ -246,7 +293,9 @@ def _mask_volatile_header(head: bytes) -> bytes:
 
 def _repair_backup_headroom_bytes(total_bytes: int) -> int:
     """Free space required *beyond* the copy itself, for a volume of *total_bytes*."""
-    return max(_REPAIR_BACKUP_MIN_FREE_BYTES, int(total_bytes * _REPAIR_BACKUP_FREE_FRACTION))
+    return max(
+        _REPAIR_BACKUP_MIN_FREE_BYTES, int(total_bytes * _REPAIR_BACKUP_FREE_FRACTION)
+    )
 
 
 def _disk_budget(db_path: Path, refusal: str) -> tuple[Optional[str], int, int, int]:
@@ -254,11 +303,20 @@ def _disk_budget(db_path: Path, refusal: str) -> tuple[Optional[str], int, int, 
     sidecar); *error* is set (and the sizes zero) on stat()/disk_usage() failure. Fails CLOSED: the nearly-full
     volume these guards exist for is exactly where they are most likely to fail."""
     try:
-        need = db_path.stat().st_size + sum(p.stat().st_size for p in _sidecars(db_path) if p.exists())
+        need = db_path.stat().st_size + sum(
+            p.stat().st_size for p in _sidecars(db_path) if p.exists()
+        )
         usage = shutil.disk_usage(db_path.parent)
     except OSError as exc:
-        return (f"could not determine free space on {db_path.parent} ({exc}); refusing the {refusal} rather than risk "
-                "filling the volume"), 0, 0, 0
+        return (
+            (
+                f"could not determine free space on {db_path.parent} ({exc}); refusing the {refusal} rather than risk "
+                "filling the volume"
+            ),
+            0,
+            0,
+            0,
+        )
     return None, need, usage.free, _repair_backup_headroom_bytes(usage.total)
 
 
@@ -271,9 +329,11 @@ def _repair_scratch_space_error(db_path: Path) -> Optional[str]:
     # transactional promotion into the live DB.
     if free >= snapshot_bytes + (2 * snapshot_bytes) + headroom:
         return None
-    return (f"only {free / 1e9:.2f}GB free on {db_path.parent}; the repair snapshot needs up to "
-            f"{snapshot_bytes / 1e9:.2f}GB, VACUUM may need another {(2 * snapshot_bytes) / 1e9:.2f}GB, and "
-            f"{headroom / 1e9:.2f}GB must remain as headroom. Free disk space, then retry.")
+    return (
+        f"only {free / 1e9:.2f}GB free on {db_path.parent}; the repair snapshot needs up to "
+        f"{snapshot_bytes / 1e9:.2f}GB, VACUUM may need another {(2 * snapshot_bytes) / 1e9:.2f}GB, and "
+        f"{headroom / 1e9:.2f}GB must remain as headroom. Free disk space, then retry."
+    )
 
 
 def _backup_free_space_error(db_path: Path) -> Optional[str]:
@@ -285,19 +345,25 @@ def _backup_free_space_error(db_path: Path) -> Optional[str]:
         return f"{error}. {hint}"
     if free - need >= headroom:
         return None
-    return (f"only {free / 1e9:.2f}GB free on {db_path.parent}; copying the damaged DB needs {need / 1e9:.2f}GB and must "
-            f"leave {headroom / 1e9:.2f}GB headroom. {hint}")
+    return (
+        f"only {free / 1e9:.2f}GB free on {db_path.parent}; copying the damaged DB needs {need / 1e9:.2f}GB and must "
+        f"leave {headroom / 1e9:.2f}GB headroom. {hint}"
+    )
 
 
 def _repair_snapshot_timeout_seconds(source_path: Path) -> float:
     """Bound one SQLite snapshot by source size incl. sidecars (a WAL can hold committed rows not yet in the
     main file), so a healthy large-database copy is not cut off by the repair-lock timeout."""
     from clawk_state import _REPAIR_LOCK_TIMEOUT_SECONDS
+
     source_bytes = 0
     for candidate in (source_path, *_sidecars(source_path)):
         with contextlib.suppress(FileNotFoundError):  # a sidecar may vanish mid-walk
             source_bytes += candidate.stat().st_size
-    return max(_REPAIR_LOCK_TIMEOUT_SECONDS, source_bytes / _REPAIR_SNAPSHOT_MIN_THROUGHPUT_BYTES_PER_SECOND)
+    return max(
+        _REPAIR_LOCK_TIMEOUT_SECONDS,
+        source_bytes / _REPAIR_SNAPSHOT_MIN_THROUGHPUT_BYTES_PER_SECOND,
+    )
 
 
 def _repair_failure_consumes_attempt(exc: BaseException) -> bool:
@@ -312,7 +378,10 @@ def _repair_failure_consumes_attempt(exc: BaseException) -> bool:
         return (error_code & 0xFF) in (sqlite3.SQLITE_CORRUPT, sqlite3.SQLITE_NOTADB)
     # Older sqlite3 without result-code attributes: narrow message match only, never turning generic
     # "disk is full"/"readonly" into permanent failures.
-    return any(m in str(exc).lower() for m in ("file is not a database", "database disk image is malformed"))
+    return any(
+        m in str(exc).lower()
+        for m in ("file is not a database", "database disk image is malformed")
+    )
 
 
 def _repair_ledger_path(db_path: Path) -> Path:
@@ -330,13 +399,19 @@ def _db_fingerprint(db_path: Path) -> Optional[str]:
     ``None`` = identity unavailable (:func:`_read_offline`; a live peer is expected here since this runs
     BEFORE ``_backup_db_file``'s live-connection guard). Callers MUST NOT substitute a differently-shaped key:
     the ledger compares for equality, so alternating shapes never match and the unbounded loop returns."""
+
     def _sample() -> str:
         st = db_path.stat()
         with open(db_path, "rb") as fh:
             head = fh.read(_FINGERPRINT_SAMPLE_BYTES)
             fh.seek(max(0, st.st_size - _FINGERPRINT_SAMPLE_BYTES))
-            tail = fh.read(_FINGERPRINT_SAMPLE_BYTES) if st.st_size > _FINGERPRINT_SAMPLE_BYTES else b""
+            tail = (
+                fh.read(_FINGERPRINT_SAMPLE_BYTES)
+                if st.st_size > _FINGERPRINT_SAMPLE_BYTES
+                else b""
+            )
         return f"{st.st_size}:{hashlib.sha256(_mask_volatile_header(head) + tail).hexdigest()[:32]}"
+
     return _read_offline(db_path, "fingerprint", _sample)
 
 
@@ -352,9 +427,17 @@ def _backup_content_identity(db_path: Path) -> Optional[str]:
 
     See #87409.
     """
+
     def _digest() -> str:
         hasher = hashlib.sha256()
-        members = [("main", db_path), *((sfx, p) for sfx, p in zip(_DB_SIDECAR_SUFFIXES, _sidecars(db_path)) if p.exists())]
+        members = [
+            ("main", db_path),
+            *(
+                (sfx, p)
+                for sfx, p in zip(_DB_SIDECAR_SUFFIXES, _sidecars(db_path))
+                if p.exists()
+            ),
+        ]
         for label, path in members:
             # Length-delimit every member (main file included) so the concatenation is prefix-free; otherwise a
             # main-file tail could coincide with a main+sidecar split and dedupe two images together.
@@ -363,6 +446,7 @@ def _backup_content_identity(db_path: Path) -> Optional[str]:
                 for chunk in iter(lambda: fh.read(1024 * 1024), b""):
                     hasher.update(chunk)
         return hasher.hexdigest()
+
     return _read_offline(db_path, "backup-identity", _digest)
 
 
@@ -384,28 +468,42 @@ def _persistent_repair_attempts_exhausted(db_path: Path) -> bool:
     recorded = ledger.get("fingerprint")
     fp = _db_fingerprint(db_path)
     try:  # size is the one key component that needs no raw read
-        same = recorded == fp if fp is not None else (
-            isinstance(recorded, str) and recorded.startswith(f"{db_path.stat().st_size}:"))
+        same = (
+            recorded == fp
+            if fp is not None
+            else (
+                isinstance(recorded, str)
+                and recorded.startswith(f"{db_path.stat().st_size}:")
+            )
+        )
     except OSError:
         return False
-    return same and int(ledger.get("failed_attempts", 0)) >= _MAX_PERSISTENT_REPAIR_ATTEMPTS
+    return (
+        same
+        and int(ledger.get("failed_attempts", 0)) >= _MAX_PERSISTENT_REPAIR_ATTEMPTS
+    )
 
 
 def _persistent_repair_exhausted_error(db_path: Path) -> str:
     """The stable operator-facing diagnostic for an exhausted repair budget. The ``clawk`` commands
     carry the profile selector: a bare ``clawk`` follows ``active_profile`` (#105887)."""
     from clawk_constants import profile_cli_selector
+
     profile_arg = profile_cli_selector()
-    return (f"automatic repair has already failed {_MAX_PERSISTENT_REPAIR_ATTEMPTS} times on this exact file — the "
-            f"corruption is beyond the schema/FTS repair strategies (likely b-tree page damage). Manual recovery "
-            f"required: restore a backup, or salvage with `clawk {profile_arg}sessions recover --source {db_path} "
-            f"--inspect-only`, then (if it reports recoverable) `clawk {profile_arg}sessions recover --source {db_path} "
-            f"--output recovered-state.db` (recovery snapshots the damaged file first, then runs the page-level "
-            f"`.recover` lane on the copy; do NOT point a raw `sqlite3` shell at the live database). "
-            f"Delete {_repair_ledger_path(db_path).name} to force another automatic attempt.")
+    return (
+        f"automatic repair has already failed {_MAX_PERSISTENT_REPAIR_ATTEMPTS} times on this exact file — the "
+        f"corruption is beyond the schema/FTS repair strategies (likely b-tree page damage). Manual recovery "
+        f"required: restore a backup, or salvage with `clawk {profile_arg}sessions recover --source {db_path} "
+        f"--inspect-only`, then (if it reports recoverable) `clawk {profile_arg}sessions recover --source {db_path} "
+        f"--output recovered-state.db` (recovery snapshots the damaged file first, then runs the page-level "
+        f"`.recover` lane on the copy; do NOT point a raw `sqlite3` shell at the live database). "
+        f"Delete {_repair_ledger_path(db_path).name} to force another automatic attempt."
+    )
 
 
-def _record_repair_outcome(db_path: Path, *, repaired: bool, fingerprint: Optional[str] = None) -> None:
+def _record_repair_outcome(
+    db_path: Path, *, repaired: bool, fingerprint: Optional[str] = None
+) -> None:
     """Update the persistent attempt ledger after a repair pass. Never raises.
 
     Keys on the post-attempt fingerprint (what the NEXT exhaustion probe sees). If a live connection makes it
@@ -427,7 +525,12 @@ def _record_repair_outcome(db_path: Path, *, repaired: bool, fingerprint: Option
             fp = recorded
         attempts = int(ledger.get("failed_attempts", 0)) + 1 if recorded == fp else 1
         stamp = datetime.datetime.now().isoformat(timespec="seconds")
-        ledger_path.write_text(json.dumps({"fingerprint": fp, "failed_attempts": attempts, "last_attempt": stamp}), encoding="utf-8")
+        ledger_path.write_text(
+            json.dumps(
+                {"fingerprint": fp, "failed_attempts": attempts, "last_attempt": stamp}
+            ),
+            encoding="utf-8",
+        )
     except Exception as exc:  # pragma: no cover - best effort
         logger.warning("Could not update state.db repair ledger: %s", exc)
 
@@ -436,7 +539,11 @@ def _existing_malformed_backups(db_path: Path) -> list[Path]:
     """Timestamped forensic backups of *db_path*, newest first."""
     prefix = f"{db_path.name}.malformed-backup-"
     try:
-        found = [p for p in db_path.parent.iterdir() if p.name.startswith(prefix) and not p.name.endswith(_DB_SIDECAR_SUFFIXES)]
+        found = [
+            p
+            for p in db_path.parent.iterdir()
+            if p.name.startswith(prefix) and not p.name.endswith(_DB_SIDECAR_SUFFIXES)
+        ]
     except OSError:
         return []
     return sorted(found, key=lambda p: p.name, reverse=True)
@@ -459,8 +566,15 @@ def _publish_backup_bundle(db_path: Path, staging: Path, backup_path: Path) -> N
     counts), so sidecars publish FIRST and the main DB LAST — a failure partway never leaves a countable
     backup over a missing sidecar. On failure, staging files AND anything promoted are removed."""
     main = (db_path, staging, backup_path)
-    sidecars = [(sidecar, staging.with_name(staging.name + suffix), backup_path.with_name(backup_path.name + suffix))
-                for suffix, sidecar in zip(_DB_SIDECAR_SUFFIXES, _sidecars(db_path)) if sidecar.exists()]
+    sidecars = [
+        (
+            sidecar,
+            staging.with_name(staging.name + suffix),
+            backup_path.with_name(backup_path.name + suffix),
+        )
+        for suffix, sidecar in zip(_DB_SIDECAR_SUFFIXES, _sidecars(db_path))
+        if sidecar.exists()
+    ]
     published: list[Path] = []
     try:
         for src, staged, _dst in (main, *sidecars):
@@ -470,7 +584,9 @@ def _publish_backup_bundle(db_path: Path, staging: Path, backup_path: Path) -> N
             published.append(dst)
     except Exception:
         for victim in (*(staged for _s, staged, _d in (*sidecars, main)), *published):
-            with contextlib.suppress(OSError):  # best effort; a failure here is never the caller's error
+            with contextlib.suppress(
+                OSError
+            ):  # best effort; a failure here is never the caller's error
                 victim.unlink(missing_ok=True)
         raise
 
@@ -494,24 +610,36 @@ def _backup_db_file(db_path: Path) -> tuple[Optional[Path], Optional[str]]:
 
     See #69603.
     """
-    with contextlib.suppress(ImportError):  # scaffold/embed installs without clawk_cli track no connections
+    with contextlib.suppress(
+        ImportError
+    ):  # scaffold/embed installs without clawk_cli track no connections
         from clawk_cli.sqlite_safe_read import has_live_connection
+
         if has_live_connection(db_path):
-            reason = (f"a connection to {db_path} is still open in this process; raw-copying it would cancel that "
-                      "connection's POSIX advisory locks. Close all SessionDB handles first.")
+            reason = (
+                f"a connection to {db_path} is still open in this process; raw-copying it would cancel that "
+                "connection's POSIX advisory locks. Close all SessionDB handles first."
+            )
             logger.error("Refusing to raw-copy %s for backup: %s", db_path, reason)
             return None, reason
     stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_path = db_path.with_name(f"{db_path.name}.malformed-backup-{stamp}")
-    for seq in itertools.count(1):  # same-second collision must not overwrite the earlier forensic copy
+    for seq in itertools.count(
+        1
+    ):  # same-second collision must not overwrite the earlier forensic copy
         if not backup_path.exists():
             break
-        backup_path = db_path.with_name(f"{db_path.name}.malformed-backup-{stamp}_{seq}")
+        backup_path = db_path.with_name(
+            f"{db_path.name}.malformed-backup-{stamp}_{seq}"
+        )
     try:
         # Sweep staging debris from an interrupted pass BEFORE the dedupe (it is byte-identical to the damaged
         # DB, so dedupe would hand it back as a backup). Also the old ``.incomplete`` spelling, which
         # prefix-matches as a backup, sorts NEWEST and would otherwise survive prune forever.
-        for pattern in (f"{db_path.name}.backup-staging-*", f"{db_path.name}.malformed-backup-*.incomplete*"):
+        for pattern in (
+            f"{db_path.name}.backup-staging-*",
+            f"{db_path.name}.malformed-backup-*.incomplete*",
+        ):
             for old in db_path.parent.glob(pattern):
                 with contextlib.suppress(OSError):
                     old.unlink(missing_ok=True)
@@ -520,12 +648,19 @@ def _backup_db_file(db_path: Path) -> tuple[Optional[Path], Optional[str]]:
             if newest := _existing_malformed_backups(db_path)[:1]:
                 src_id = _backup_content_identity(db_path)
                 if src_id is not None and _backup_content_identity(newest[0]) == src_id:
-                    logger.info("Reusing existing forensic backup %s (identical to the damaged DB).", newest[0])
+                    logger.info(
+                        "Reusing existing forensic backup %s (identical to the damaged DB).",
+                        newest[0],
+                    )
                     return newest[0], None
         if (reason := _backup_free_space_error(db_path)) is not None:
             logger.error("Refusing forensic backup of %s: %s", db_path, reason)
             return None, reason
-        _publish_backup_bundle(db_path, db_path.with_name(f"{db_path.name}.backup-staging-{stamp}"), backup_path)
+        _publish_backup_bundle(
+            db_path,
+            db_path.with_name(f"{db_path.name}.backup-staging-{stamp}"),
+            backup_path,
+        )
         # Retention cap (#86747): keep only the newest few forensic copies.
         _prune_malformed_backups(db_path)
         return backup_path, None
@@ -546,7 +681,9 @@ def _rw_or_vanished(p: Path) -> bool:
     return os.access(p, mode) or not p.exists() or os.access(p, mode)
 
 
-def preflight_db_writability(db_path: Path, *, db_label: str = "state.db", directory_only: bool = False) -> None:
+def preflight_db_writability(
+    db_path: Path, *, db_label: str = "state.db", directory_only: bool = False
+) -> None:
     """Refuse-or-repair read-only DB files BEFORE the first connection opens.
 
     A stray read-only ``state.db`` / ``-wal`` / ``-shm`` (sudo run, restored backup, copied dotfiles) otherwise
@@ -564,8 +701,15 @@ def preflight_db_writability(db_path: Path, *, db_label: str = "state.db", direc
     with contextlib.suppress(Exception):  # pragma: no cover - defensive
         home = Path(get_clawk_home()).resolve()
     # SQLite needs a writable directory in every journal mode (WAL/SHM sidecars, or the DELETE-mode journal).
-    sidecars = (db_path.with_name(db_path.name + "-wal"), db_path.with_name(db_path.name + "-shm"))
-    files = () if directory_only else tuple((p, False) for p in (db_path, *sidecars) if p.is_file())
+    sidecars = (
+        db_path.with_name(db_path.name + "-wal"),
+        db_path.with_name(db_path.name + "-shm"),
+    )
+    files = (
+        ()
+        if directory_only
+        else tuple((p, False) for p in (db_path, *sidecars) if p.is_file())
+    )
     for p, is_dir in [(db_path.parent, True), *files]:
         if (is_dir and not p.is_dir()) or _rw_or_vanished(p):
             continue
@@ -574,19 +718,34 @@ def preflight_db_writability(db_path: Path, *, db_label: str = "state.db", direc
         with contextlib.suppress(OSError, ValueError):
             in_scope = home is not None and p.resolve().is_relative_to(home)
             if in_scope:
-                os.chmod(p, p.stat().st_mode | stat.S_IRUSR | stat.S_IWUSR | (stat.S_IXUSR if is_dir else 0))
+                os.chmod(
+                    p,
+                    p.stat().st_mode
+                    | stat.S_IRUSR
+                    | stat.S_IWUSR
+                    | (stat.S_IXUSR if is_dir else 0),
+                )
         if in_scope and os.access(p, os.R_OK | os.W_OK):
-            logger.info("%s preflight: repaired read-only %s (chmod u+rw%s)", db_label, p, x)
+            logger.info(
+                "%s preflight: repaired read-only %s (chmod u+rw%s)", db_label, p, x
+            )
             continue
-        wal_note = (" Do NOT delete the -wal file — it contains committed data that "
-                    "will be merged into the database once it is writable." if p.name.endswith("-wal") else "")
+        wal_note = (
+            " Do NOT delete the -wal file — it contains committed data that "
+            "will be merged into the database once it is writable."
+            if p.name.endswith("-wal")
+            else ""
+        )
         raise sqlite3.OperationalError(
             f"{db_label} is not writable: {'directory' if is_dir else 'file'} {p} is read-only for this user. Clawksis "
             f"needs read-write access to open the database. Fix with: chmod u+rw{x} '{p}' (files owned by another "
-            f"user may need sudo/chown).{wal_note}")
+            f"user may need sudo/chown).{wal_note}"
+        )
 
 
-def _connect_repair_durable(db_path: Path, *, timeout: float = 5.0) -> sqlite3.Connection:
+def _connect_repair_durable(
+    db_path: Path, *, timeout: float = 5.0
+) -> sqlite3.Connection:
     """``sqlite3.connect`` for the repair/probe paths, with macOS write barriers.
 
     These paths bypass ``SessionDB``/:func:`apply_wal_with_fallback`, so they inherited ``synchronous=NORMAL`` and
@@ -602,7 +761,9 @@ def _connect_repair_durable(db_path: Path, *, timeout: float = 5.0) -> sqlite3.C
     """
     from clawk_cli.sqlite_safe_read import connect_tracked
 
-    conn = connect_tracked(db_path, tracking_path=db_path, timeout=timeout, isolation_level=None)
+    conn = connect_tracked(
+        db_path, tracking_path=db_path, timeout=timeout, isolation_level=None
+    )
     _reapply_durability_barriers(conn)
     return conn
 
@@ -616,12 +777,18 @@ def _reapply_durability_barriers(conn: sqlite3.Connection) -> bool:
     """Best-effort (re)application of the macOS write barriers; True if accepted.
     Call before ``VACUUM``/``REINDEX`` once the schema parses: a connection opened
     on a malformed schema could not take them at open time. Never raises."""
-    from clawk_state_wal import _apply_macos_checkpoint_barrier, _enforce_macos_synchronous_full
+    from clawk_state_wal import (
+        _apply_macos_checkpoint_barrier,
+        _enforce_macos_synchronous_full,
+    )
+
     try:
         _apply_macos_checkpoint_barrier(conn)
         _enforce_macos_synchronous_full(conn)
         return True
-    except Exception:  # schema still unparseable, or anything else — pragmas cannot be set yet
+    except (
+        Exception
+    ):  # schema still unparseable, or anything else — pragmas cannot be set yet
         return False
 
 
@@ -630,11 +797,22 @@ def apply_durability_barriers(conn: sqlite3.Connection) -> bool:
     applies the configured ``database.synchronous`` level, a per-connection pragma that otherwise only
     rides on the journal-mode setup path guests must not run."""
     from clawk_state_wal import _apply_synchronous_pragma
+
     ok = _reapply_durability_barriers(conn)
     with contextlib.suppress(Exception):
-        from clawk_cli.config import cfg_get, load_config_readonly  # local: avoids an import cycle
-        if (raw_synchronous := cfg_get(load_config_readonly(), "database", "synchronous", default=None)) is not None:
-            _apply_synchronous_pragma(conn, raw_synchronous, db_label="state.db (guest)")
+        from clawk_cli.config import (
+            cfg_get,
+            load_config_readonly,
+        )  # local: avoids an import cycle
+
+        if (
+            raw_synchronous := cfg_get(
+                load_config_readonly(), "database", "synchronous", default=None
+            )
+        ) is not None:
+            _apply_synchronous_pragma(
+                conn, raw_synchronous, db_label="state.db (guest)"
+            )
     return ok
 
 
@@ -682,9 +860,13 @@ def _exclusive_repair_db_guard(db_path: Path):
         _close_unpinned(guard)
 
 
-def _copy_database_snapshot(source_path: Path, destination_path: Path, *,
-                            source_connection: Optional[sqlite3.Connection] = None,
-                            destination_connection: Optional[sqlite3.Connection] = None) -> None:
+def _copy_database_snapshot(
+    source_path: Path,
+    destination_path: Path,
+    *,
+    source_connection: Optional[sqlite3.Connection] = None,
+    destination_connection: Optional[sqlite3.Connection] = None,
+) -> None:
     """Copy one complete SQLite snapshot without replacing either file inode: the online backup API folds
     committed WAL frames into the source snapshot and writes the destination in one transaction (rolled
     back if interrupted), so ``state.db`` is never swapped out from under handles that refer to it."""
@@ -694,15 +876,28 @@ def _copy_database_snapshot(source_path: Path, destination_path: Path, *,
 
     def _check_deadline(_status: int, _remaining: int, _total: int) -> None:
         if time.monotonic() >= deadline:
-            raise TimeoutError(f"timed out copying SQLite repair snapshot after {deadline_seconds:.0f}s")
+            raise TimeoutError(
+                f"timed out copying SQLite repair snapshot after {deadline_seconds:.0f}s"
+            )
 
-    with contextlib.ExitStack() as owned:  # closes only connections opened here, destination first
+    with (
+        contextlib.ExitStack() as owned
+    ):  # closes only connections opened here, destination first
         source = source_connection or owned.enter_context(_repair_conn(source_path))
         if destination_connection is not None and destination_connection.in_transaction:
             # sqlite3_backup needs a transaction-free destination (the guard holds exclusion via locking_mode).
-            raise sqlite3.ProgrammingError("SQLite repair backup destination has an active transaction")
-        destination = destination_connection or owned.enter_context(_repair_conn(destination_path))
-        source.backup(destination, pages=256, progress=_check_deadline, sleep=_REPAIR_LOCK_POLL_SECONDS)
+            raise sqlite3.ProgrammingError(
+                "SQLite repair backup destination has an active transaction"
+            )
+        destination = destination_connection or owned.enter_context(
+            _repair_conn(destination_path)
+        )
+        source.backup(
+            destination,
+            pages=256,
+            progress=_check_deadline,
+            sleep=_REPAIR_LOCK_POLL_SECONDS,
+        )
 
 
 def _schema_not_built(exc: BaseException) -> bool:
@@ -753,8 +948,12 @@ def state_db_has_structural_damage(db_path: Path) -> bool:
     except sqlite3.Error:
         return False
     try:
-        master_rows = [tuple(r) for r in conn.execute(
-            "SELECT rootpage, type, name FROM sqlite_master WHERE rootpage > 0").fetchall()]
+        master_rows = [
+            tuple(r)
+            for r in conn.execute(
+                "SELECT rootpage, type, name FROM sqlite_master WHERE rootpage > 0"
+            ).fetchall()
+        ]
         lines = [str(r[0]) for r in conn.execute("PRAGMA integrity_check").fetchall()]
     except sqlite3.OperationalError:
         return False
@@ -763,7 +962,8 @@ def state_db_has_structural_damage(db_path: Path) -> bool:
     finally:
         conn.close()
     return integrity_damage_is_structural(
-        itertools.chain.from_iterable(line.splitlines() for line in lines), master_rows)
+        itertools.chain.from_iterable(line.splitlines() for line in lines), master_rows
+    )
 
 
 def _db_opens_cleanly(db_path: Path) -> Optional[str]:
@@ -777,6 +977,7 @@ def _db_opens_cleanly(db_path: Path) -> Optional[str]:
     See #50502.
     """
     from clawk_state import SessionDB, load_fts5_cjk_extension
+
     # ── Strategy 0.5: rebuild stale B-tree indexes (#63386) ── PRAGMA integrity_check can report "wrong #
     # of entries in index" when a B-tree index (e.g. idx_sessions_handoff_state) falls out of sync with its
     # base table. REINDEX rewrites the index b-tree from the canonical table rows using the existing index
@@ -798,12 +999,16 @@ def _db_opens_cleanly(db_path: Path) -> Optional[str]:
             # FTS5 rejects MATCH ''.
             for fts_table in _FTS_TABLES:
                 try:
-                    conn.execute(f"SELECT 1 FROM {fts_table} WHERE {fts_table} MATCH '\"\"' LIMIT 1").fetchone()
+                    conn.execute(
+                        f"SELECT 1 FROM {fts_table} WHERE {fts_table} MATCH '\"\"' LIMIT 1"
+                    ).fetchone()
                 except sqlite3.DatabaseError as exc:
                     # Builds without fts5/trigram raise "no such module|tokenizer"; calling that corruption would
                     # send the DB into repair, whose final fallback deletes messages_fts%. "no such table/column" =
                     # not built yet.
-                    benign = SessionDB._is_fts5_unavailable_error(exc) or _schema_not_built(exc)
+                    benign = SessionDB._is_fts5_unavailable_error(
+                        exc
+                    ) or _schema_not_built(exc)
                     if not (isinstance(exc, sqlite3.OperationalError) and benign):
                         # This is the corruption class #66724 actually wants caught: partial shadow-table
                         # damage where MATCH / snippet / rank queries raise DatabaseError("database disk
@@ -818,15 +1023,24 @@ def _db_opens_cleanly(db_path: Path) -> Optional[str]:
             probe_session_id = f"_clawk_fts_health_probe_{time.time_ns()}"
             try:
                 conn.execute("BEGIN IMMEDIATE")
-                conn.execute("INSERT INTO sessions (id, source, started_at) VALUES (?, ?, ?)",
-                             (probe_session_id, "_health_probe", time.time()))
-                conn.execute("INSERT INTO messages (session_id, role, content, timestamp) VALUES (?, ?, ?, ?)",
-                             (probe_session_id, "user", "_fts_health_probe", time.time()))
+                conn.execute(
+                    "INSERT INTO sessions (id, source, started_at) VALUES (?, ?, ?)",
+                    (probe_session_id, "_health_probe", time.time()),
+                )
+                conn.execute(
+                    "INSERT INTO messages (session_id, role, content, timestamp) VALUES (?, ?, ?, ?)",
+                    (probe_session_id, "user", "_fts_health_probe", time.time()),
+                )
                 for fts_table in _FTS_TABLES:
                     try:
-                        conn.execute(f"INSERT INTO {fts_table}({fts_table}) VALUES('flush')")
+                        conn.execute(
+                            f"INSERT INTO {fts_table}({fts_table}) VALUES('flush')"
+                        )
                     except sqlite3.OperationalError as exc:
-                        if not (SessionDB._is_fts5_unavailable_error(exc) or _schema_not_built(exc)):
+                        if not (
+                            SessionDB._is_fts5_unavailable_error(exc)
+                            or _schema_not_built(exc)
+                        ):
                             raise
             except sqlite3.DatabaseError as exc:
                 # IntegrityError is a DatabaseError sibling of OperationalError, not a child: catching only the
@@ -834,7 +1048,10 @@ def _db_opens_cleanly(db_path: Path) -> Optional[str]:
                 # Missing messages/sessions tables = brand new file mid-init, not corruption. "no such tokenizer":
                 # this process lacks the cjk extension the DB's index needs — capability gap; a tokenizer-less
                 # SessionDB drops the triggers itself.
-                if _schema_not_built(exc) or "no such tokenizer: cjk_unicode61" in str(exc).lower():
+                if (
+                    _schema_not_built(exc)
+                    or "no such tokenizer: cjk_unicode61" in str(exc).lower()
+                ):
                     return None
                 return f"fts5 write probe failed: {exc}"
             finally:
@@ -853,10 +1070,15 @@ def _live_writer_holds_db(db_path: Path) -> bool:
     probe (``locking_mode=EXCLUSIVE`` + ``BEGIN IMMEDIATE``) is only an additional positive signal — it cannot
     see a ``journal_mode=DELETE`` reader and cannot run on a malformed file, which is why the scan comes first."""
     import clawk_state_holders as _state_holders
-    return _state_holders.live_writer_holds_db(db_path, connect_repair_durable=_connect_repair_durable)
+
+    return _state_holders.live_writer_holds_db(
+        db_path, connect_repair_durable=_connect_repair_durable
+    )
 
 
-def _repair_skip(report: dict[str, Any], verb: str, error: str, exc: Optional[BaseException] = None) -> dict[str, Any]:
+def _repair_skip(
+    report: dict[str, Any], verb: str, error: str, exc: Optional[BaseException] = None
+) -> dict[str, Any]:
     """Record *error* on *report* and log it as ``state.db repair <verb>``. An
     *exc* proving deterministic corruption consumes the persistent repair budget
     (private ``_repair_attempted`` marker, popped by the caller)."""
@@ -880,7 +1102,12 @@ def repair_state_db_schema(db_path: Path, *, backup: bool = True) -> dict[str, A
 
     See #50502.
     """
-    report: dict[str, Any] = {"repaired": False, "strategy": None, "backup_path": None, "error": None}
+    report: dict[str, Any] = {
+        "repaired": False,
+        "strategy": None,
+        "backup_path": None,
+        "error": None,
+    }
     # Startup-watchdog lease: repair is I/O-bound (near-zero CPU), which the watchdog's CPU fallback would
     # misread as a parked deadlock. One lease (clamped to _MAX_LEASE_S=900) beats per-chunk renewal complexity.
     report_startup_progress(900.0, phase="state_db_repair")
@@ -896,17 +1123,24 @@ def repair_state_db_schema(db_path: Path, *, backup: bool = True) -> dict[str, A
     # _MAX_PERSISTENT_REPAIR_ATTEMPTS failures against the same damaged file, stop retrying and surface a
     # terminal, actionable error.
     if _persistent_repair_attempts_exhausted(db_path):
-        return _repair_skip(report, "skipped", _persistent_repair_exhausted_error(db_path))
+        return _repair_skip(
+            report, "skipped", _persistent_repair_exhausted_error(db_path)
+        )
 
     with _cross_process_repair_lock(db_path) as holding_lock:
         if not holding_lock:
             # Another process holds the lock (or the lock file was unopenable); it may have healed the file
             # already, so re-probe before failing.
             if _db_opens_cleanly(db_path) is None:
-                report["repaired"], report["strategy"] = True, "repaired_by_other_process"
+                report["repaired"], report["strategy"] = (
+                    True,
+                    "repaired_by_other_process",
+                )
             else:
-                report["error"] = ("could not obtain the state.db repair lock (held by another process, or the lock "
-                                   "file was unopenable); skipped schema surgery to avoid racing a concurrent repairer")
+                report["error"] = (
+                    "could not obtain the state.db repair lock (held by another process, or the lock "
+                    "file was unopenable); skipped schema surgery to avoid racing a concurrent repairer"
+                )
             return report
 
         result = report
@@ -917,16 +1151,21 @@ def repair_state_db_schema(db_path: Path, *, backup: bool = True) -> dict[str, A
         # WAL-holder preflight: fail closed for active readers before a backup is taken. Not the race defence — the
         # exclusive guard in the locked routine excludes writers through promotion and sees DELETE-mode readers too.
         elif _live_writer_holds_db(db_path):
-            _repair_skip(report, "skipped", "a live writer still holds state.db; skipped schema surgery to avoid tearing "
-                         "b-tree pages under a concurrent writer. Stop the gateway (clawk gateway stop) and retry.")
+            _repair_skip(
+                report,
+                "skipped",
+                "a live writer still holds state.db; skipped schema surgery to avoid tearing "
+                "b-tree pages under a concurrent writer. Stop the gateway (clawk gateway stop) and retry.",
+            )
         else:
             # Probe journal mode BEFORE surgery: a rebuilt file comes back in the default (delete) mode and nothing
             # else records the flip. Unprobeable (damaged file) -> database.journal_mode is the restore target.
             # The open-time WAL-reset gate never sees this flip because it happens inside the repair path
             # (distinct from the open-time flip #89393 warns about).
             before_mode = _probe_journal_mode_for_repair(db_path)
-            result = _repair_state_db_schema_locked(db_path, backup=backup, report=report,
-                                                    journal_mode_before=before_mode)
+            result = _repair_state_db_schema_locked(
+                db_path, backup=backup, report=report, journal_mode_before=before_mode
+            )
             if result.get("repaired"):
                 result["journal_mode_before"] = before_mode
         # Environmental aborts (before a strategy mutates the snapshot) are retriable, not proof of exhaustion;
@@ -942,6 +1181,7 @@ def _probe_journal_mode_for_repair(db_path: Path) -> Optional[str]:
     probed (malformed header, concurrent opener's locks — both expected on the repair path); callers then
     fall back to ``database.journal_mode``."""
     from clawk_state_wal import _on_disk_journal_mode
+
     try:
         with _repair_conn(db_path) as conn:
             return _on_disk_journal_mode(conn)
@@ -949,7 +1189,9 @@ def _probe_journal_mode_for_repair(db_path: Path) -> Optional[str]:
         return None
 
 
-def _restore_journal_mode_after_repair(db_path: Path, before_mode: Optional[str], *, conn=None) -> None:
+def _restore_journal_mode_after_repair(
+    db_path: Path, before_mode: Optional[str], *, conn=None
+) -> None:
     """Re-apply the journal mode after schema surgery.
 
     ``conn`` must be the exclusive repair guard connection when called from the repair path: opening a fresh
@@ -969,6 +1211,7 @@ def _restore_journal_mode_after_repair(db_path: Path, before_mode: Optional[str]
     is mostly the WAL-companion re-assertion; the reopen is the hazard, not the mode. See #101064.
     """
     from clawk_state_wal import apply_wal_with_fallback
+
     try:
         if conn is None:
             with _repair_conn(db_path) as owned:
@@ -976,16 +1219,28 @@ def _restore_journal_mode_after_repair(db_path: Path, before_mode: Optional[str]
         else:
             after = apply_wal_with_fallback(conn, db_label=db_path.name)
         if before_mode and after != before_mode:
-            logger.warning("state.db repair changed journal_mode %r -> %r (pre-surgery probe %r; restore resolved "
-                           "through apply_wal_with_fallback per database.journal_mode and the WAL-reset gate)",
-                           before_mode, after, before_mode)
+            logger.warning(
+                "state.db repair changed journal_mode %r -> %r (pre-surgery probe %r; restore resolved "
+                "through apply_wal_with_fallback per database.journal_mode and the WAL-reset gate)",
+                before_mode,
+                after,
+                before_mode,
+            )
     except (sqlite3.Error, OSError) as exc:
-        logger.warning("state.db repair at %s: post-surgery journal-mode restore failed (%s); verify with PRAGMA "
-                       "journal_mode on the next open", db_path, exc)
+        logger.warning(
+            "state.db repair at %s: post-surgery journal-mode restore failed (%s); verify with PRAGMA "
+            "journal_mode on the next open",
+            db_path,
+            exc,
+        )
 
 
 def _repair_state_db_schema_locked(
-    db_path: Path, *, backup: bool, report: dict[str, Any], journal_mode_before: Optional[str] = None,
+    db_path: Path,
+    *,
+    backup: bool,
+    report: dict[str, Any],
+    journal_mode_before: Optional[str] = None,
 ) -> dict[str, Any]:
     """Repair strategies for :func:`repair_state_db_schema`; caller holds the cross-process repair lock.
 
@@ -1002,7 +1257,11 @@ def _repair_state_db_schema_locked(
     """
     scratch = db_path.with_name(f"{db_path.name}.repair-scratch")
     if (cleanup_error := _unlink_db_triple(scratch)) is not None:
-        return _repair_skip(report, "aborted", f"could not remove a stale repair snapshot before probing state.db: {cleanup_error}")
+        return _repair_skip(
+            report,
+            "aborted",
+            f"could not remove a stale repair snapshot before probing state.db: {cleanup_error}",
+        )
     # Re-probe under the lock: a process we queued behind may have just repaired the file; redoing surgery
     # would undo it (the repair/re-corrupt cascade).
     if _db_opens_cleanly(db_path) is None:
@@ -1011,16 +1270,27 @@ def _repair_state_db_schema_locked(
     if backup:
         bpath, backup_error = _backup_db_file(db_path)
         report["backup_path"] = str(bpath) if bpath else None
-        if bpath is None:  # HARD STOP: the forensic image is the recovery path when every strategy fails.
-            return _repair_skip(report, "aborted", "pre-repair backup refused; aborting schema repair to avoid "
-                                f"mutating the only copy of the damaged DB: {backup_error}")
+        if (
+            bpath is None
+        ):  # HARD STOP: the forensic image is the recovery path when every strategy fails.
+            return _repair_skip(
+                report,
+                "aborted",
+                "pre-repair backup refused; aborting schema repair to avoid "
+                f"mutating the only copy of the damaged DB: {backup_error}",
+            )
     # The forensic copy precedes this guard on purpose: its live-holder checks would be poisoned by our own
     # exclusive connection. Everything touching the repair image or live promotion happens under writer exclusion.
     with _exclusive_repair_db_guard(db_path) as (live_guard, guard_error):
         if live_guard is None:
-            return _repair_skip(report, "skipped", "could not acquire exclusive state.db repair ownership; skipped "
-                                f"schema surgery to avoid overwriting a concurrent writer. Stop the gateway and retry: "
-                                f"{guard_error}", exc=guard_error)
+            return _repair_skip(
+                report,
+                "skipped",
+                "could not acquire exclusive state.db repair ownership; skipped "
+                f"schema surgery to avoid overwriting a concurrent writer. Stop the gateway and retry: "
+                f"{guard_error}",
+                exc=guard_error,
+            )
         if (space_error := _repair_scratch_space_error(db_path)) is not None:
             return _repair_skip(report, "aborted", space_error)
         try:
@@ -1029,7 +1299,12 @@ def _repair_state_db_schema_locked(
             _copy_database_snapshot(db_path, scratch, source_connection=live_guard)
         except (OSError, sqlite3.Error, TimeoutError) as exc:
             _unlink_db_triple(scratch)
-            return _repair_skip(report, "aborted", f"could not stage a complete SQLite repair snapshot of {db_path}: {exc}", exc=exc)
+            return _repair_skip(
+                report,
+                "aborted",
+                f"could not stage a complete SQLite repair snapshot of {db_path}: {exc}",
+                exc=exc,
+            )
         try:
             # Private marker for the outer wrapper: a strategy failure consumes the persistent budget; a
             # promotion failure is classified separately.
@@ -1039,32 +1314,51 @@ def _repair_state_db_schema_locked(
                 # Never ``os.replace`` the live DB: Windows rejects replacement under open handles and POSIX would
                 # leave those handles on the old inode. The guard keeps writer exclusion throughout.
                 try:
-                    _copy_database_snapshot(scratch, db_path, destination_connection=live_guard)
+                    _copy_database_snapshot(
+                        scratch, db_path, destination_connection=live_guard
+                    )
                 except (OSError, sqlite3.Error, TimeoutError) as exc:
-                    report.update(repaired=False, strategy=None,
-                                  _repair_attempted=_repair_failure_consumes_attempt(exc))
-                    report["error"] = f"repaired snapshot could not be promoted transactionally: {exc}"
+                    report.update(
+                        repaired=False,
+                        strategy=None,
+                        _repair_attempted=_repair_failure_consumes_attempt(exc),
+                    )
+                    report["error"] = (
+                        f"repaired snapshot could not be promoted transactionally: {exc}"
+                    )
                     logger.error("state.db repair promotion failed: %s", exc)
                 else:
-                    logger.warning("state.db repaired via '%s' and promoted transactionally: %s",
-                                   report.get("strategy"), db_path)
-                    _restore_journal_mode_after_repair(db_path, journal_mode_before, conn=live_guard)
+                    logger.warning(
+                        "state.db repaired via '%s' and promoted transactionally: %s",
+                        report.get("strategy"),
+                        db_path,
+                    )
+                    _restore_journal_mode_after_repair(
+                        db_path, journal_mode_before, conn=live_guard
+                    )
             if not report.get("repaired"):
                 # Logged HERE, not in the strategies: they see the scratch copy, and the message a human acts on
                 # must name a path that still exists.
-                logger.error("state.db schema repair could not recover %s automatically (no committed canonical data "
-                             "was modified or lost; backup: %s); manual restore from backup may be required.",
-                             db_path, report["backup_path"])
+                logger.error(
+                    "state.db schema repair could not recover %s automatically (no committed canonical data "
+                    "was modified or lost; backup: %s); manual restore from backup may be required.",
+                    db_path,
+                    report["backup_path"],
+                )
             return report
         finally:
             # Never leave a half-repaired file beside the DB to be mistaken for the real thing.
             if (cleanup_error := _unlink_db_triple(scratch)) is not None:
-                logger.warning("Could not remove state.db repair snapshot after repair: %s", cleanup_error)
+                logger.warning(
+                    "Could not remove state.db repair snapshot after repair: %s",
+                    cleanup_error,
+                )
 
 
 def _unlink_db_triple(path: Path) -> Optional[str]:
     """Remove *path* and every SQLite sidecar; return any cleanup failure."""
     from clawk_state import _IS_WINDOWS
+
     failures: list[str] = []
     for victim in (path, *_sidecars(path)):
         for attempt in range(10):
@@ -1082,6 +1376,7 @@ def _unlink_db_triple(path: Path) -> Optional[str]:
 
 # ── Repair strategies, least destructive first (each mutates its connection's DB) ──
 
+
 def _edit_sqlite_master(conn: sqlite3.Connection, edit) -> None:
     """Run *edit* under ``writable_schema=ON``; bump the schema cookie when it
     reports a change so live peers discard their cached schema."""
@@ -1096,10 +1391,13 @@ def _strategy_rebuild_fts(conn: sqlite3.Connection) -> None:
     """FTS5 'rebuild' rewrites each index from the content table: the least-
     destructive fix for an index that rejects writes while reads work."""
     from clawk_state import load_fts5_cjk_extension
+
     # The cjk index can only be rebuilt with its tokenizer loaded (best-effort).
     load_fts5_cjk_extension(conn)
     for table_name in _FTS_TABLES:
-        with contextlib.suppress(sqlite3.OperationalError):  # table absent (FTS disabled / trigram off / cjk absent)
+        with contextlib.suppress(
+            sqlite3.OperationalError
+        ):  # table absent (FTS disabled / trigram off / cjk absent)
             conn.execute(f"INSERT INTO {table_name}({table_name}) VALUES('rebuild')")
 
 
@@ -1114,13 +1412,16 @@ def _strategy_reindex(conn: sqlite3.Connection) -> None:
 
 def _strategy_dedup_schema(conn: sqlite3.Connection) -> None:
     """De-duplicate sqlite_master (lowest rowid per type/name wins), keeping FTS."""
+
     def _dedup() -> bool:
         dupes = conn.execute(
             "SELECT type, name, COUNT(*) AS c, MIN(rowid) AS keep FROM sqlite_master GROUP BY type, name HAVING c > 1"
         ).fetchall()
         for type_, name, _count, keep in dupes:
-            conn.execute("DELETE FROM sqlite_master WHERE type IS ? AND name IS ? AND rowid <> ?",
-                         (type_, name, keep))
+            conn.execute(
+                "DELETE FROM sqlite_master WHERE type IS ? AND name IS ? AND rowid <> ?",
+                (type_, name, keep),
+            )
         return bool(dupes)
 
     _edit_sqlite_master(conn, _dedup)
@@ -1130,7 +1431,13 @@ def _strategy_drop_fts_vacuum(conn: sqlite3.Connection) -> None:
     """Drop all FTS schema and VACUUM; indexes rebuild on the next open. The
     destructive one, and why strategies run on a scratch copy: on a damaged
     schema b-tree VACUUM silently drops every table hanging off the unreadable part."""
-    _edit_sqlite_master(conn, lambda: conn.execute("DELETE FROM sqlite_master WHERE name LIKE 'messages_fts%'") or True)
+    _edit_sqlite_master(
+        conn,
+        lambda: (
+            conn.execute("DELETE FROM sqlite_master WHERE name LIKE 'messages_fts%'")
+            or True
+        ),
+    )
     # The schema parses now, so the barriers can stick — VACUUM rewrites the whole file.
     _reapply_durability_barriers(conn)
     conn.execute("VACUUM")
@@ -1139,15 +1446,30 @@ def _strategy_drop_fts_vacuum(conn: sqlite3.Connection) -> None:
 # (name, body, success log, failure log) in escalation order. failure log None =
 # final strategy: its failure lands in report["error"] instead of logged-and-skipped.
 _REPAIR_STRATEGIES = (
-    ("rebuild_fts", _strategy_rebuild_fts, "state.db FTS indexes rebuilt in place (schema preserved): %s",
-     "state.db FTS in-place rebuild pass failed: %s"),
-    ("reindex_btree", _strategy_reindex, "state.db B-tree indexes rebuilt via REINDEX: %s",
-     "state.db REINDEX pass failed: %s"),
-    ("dedup_schema", _strategy_dedup_schema,
-     "state.db schema repaired by de-duplicating sqlite_master (FTS index preserved): %s",
-     "state.db dedup repair pass failed: %s"),
-    ("drop_fts_rebuild", _strategy_drop_fts_vacuum,
-     "state.db schema repaired by dropping FTS schema; indexes will rebuild from messages on next open: %s", None),
+    (
+        "rebuild_fts",
+        _strategy_rebuild_fts,
+        "state.db FTS indexes rebuilt in place (schema preserved): %s",
+        "state.db FTS in-place rebuild pass failed: %s",
+    ),
+    (
+        "reindex_btree",
+        _strategy_reindex,
+        "state.db B-tree indexes rebuilt via REINDEX: %s",
+        "state.db REINDEX pass failed: %s",
+    ),
+    (
+        "dedup_schema",
+        _strategy_dedup_schema,
+        "state.db schema repaired by de-duplicating sqlite_master (FTS index preserved): %s",
+        "state.db dedup repair pass failed: %s",
+    ),
+    (
+        "drop_fts_rebuild",
+        _strategy_drop_fts_vacuum,
+        "state.db schema repaired by dropping FTS schema; indexes will rebuild from messages on next open: %s",
+        None,
+    ),
 )
 
 

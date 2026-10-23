@@ -24,9 +24,7 @@ def test_turn_lease_serializes_separate_session_db_instances(tmp_path):
 
     first_holder = f"pid={os.getpid()}:turn=first"
     second_holder = f"pid={os.getpid()}:turn=second"
-    assert first.try_acquire_session_turn_lease(
-        "shared", first_holder, ttl_seconds=5
-    )
+    assert first.try_acquire_session_turn_lease("shared", first_holder, ttl_seconds=5)
 
     released = threading.Event()
 
@@ -63,12 +61,8 @@ def test_turn_lease_is_scoped_to_conversation_root(tmp_path):
 
     root_holder = f"pid={os.getpid()}:turn=root"
     child_holder = f"pid={os.getpid()}:turn=child"
-    assert db.try_acquire_session_turn_lease(
-        "root", root_holder, ttl_seconds=5
-    )
-    assert not db.try_acquire_session_turn_lease(
-        "child", child_holder, ttl_seconds=5
-    )
+    assert db.try_acquire_session_turn_lease("root", root_holder, ttl_seconds=5)
+    assert not db.try_acquire_session_turn_lease("child", child_holder, ttl_seconds=5)
     db.release_session_turn_lease("child", root_holder)
 
 
@@ -85,12 +79,8 @@ def test_turn_lease_does_not_serialize_delegate_child_with_parent(tmp_path):
 
     parent_holder = f"pid={os.getpid()}:turn=parent"
     delegate_holder = f"pid={os.getpid()}:turn=delegate"
-    assert db.try_acquire_session_turn_lease(
-        "parent", parent_holder, ttl_seconds=5
-    )
-    assert db.try_acquire_session_turn_lease(
-        "delegate", delegate_holder, ttl_seconds=5
-    )
+    assert db.try_acquire_session_turn_lease("parent", parent_holder, ttl_seconds=5)
+    assert db.try_acquire_session_turn_lease("delegate", delegate_holder, ttl_seconds=5)
 
 
 def test_turn_lease_walks_compression_child_that_inherited_fork_markers(tmp_path):
@@ -135,9 +125,7 @@ def test_turn_lease_walks_compression_child_that_inherited_fork_markers(tmp_path
     assert db._session_turn_lease_key("branch-continuation") == "branch"
 
     delegate_holder = f"pid={os.getpid()}:turn=delegate"
-    assert db.try_acquire_session_turn_lease(
-        "delegate", delegate_holder, ttl_seconds=5
-    )
+    assert db.try_acquire_session_turn_lease("delegate", delegate_holder, ttl_seconds=5)
     assert not db.try_acquire_session_turn_lease(
         "delegate-continuation",
         f"pid={os.getpid()}:turn=delegate-child",
@@ -148,9 +136,7 @@ def test_turn_lease_walks_compression_child_that_inherited_fork_markers(tmp_path
     )
 
     branch_holder = f"pid={os.getpid()}:turn=branch"
-    assert db.try_acquire_session_turn_lease(
-        "branch", branch_holder, ttl_seconds=5
-    )
+    assert db.try_acquire_session_turn_lease("branch", branch_holder, ttl_seconds=5)
     assert not db.try_acquire_session_turn_lease(
         "branch-continuation",
         f"pid={os.getpid()}:turn=branch-child",
@@ -195,17 +181,13 @@ def test_turn_lease_write_txn_does_not_trust_fail_open_key_helper(
 
     monkeypatch.setattr(db, "_session_turn_lease_key", lambda sid: sid)
     holder = f"pid={os.getpid()}:turn=delegate"
-    assert db.try_acquire_session_turn_lease(
-        "delegate", holder, ttl_seconds=5
-    )
+    assert db.try_acquire_session_turn_lease("delegate", holder, ttl_seconds=5)
     assert not db.try_acquire_session_turn_lease(
         "delegate-continuation",
         f"pid={os.getpid()}:turn=child",
         ttl_seconds=5,
     )
-    assert db.refresh_session_turn_lease(
-        "delegate-continuation", holder, ttl_seconds=5
-    )
+    assert db.refresh_session_turn_lease("delegate-continuation", holder, ttl_seconds=5)
     db.release_session_turn_lease("delegate-continuation", holder)
     assert db.try_acquire_session_turn_lease(
         "delegate", f"pid={os.getpid()}:turn=next", ttl_seconds=5
@@ -260,24 +242,14 @@ def test_turn_lease_refresh_and_release_are_owner_fenced(tmp_path):
     current_holder = f"pid={os.getpid()}:turn=current"
     stale_holder = f"pid={os.getpid()}:turn=stale"
     next_holder = f"pid={os.getpid()}:turn=next"
-    assert db.try_acquire_session_turn_lease(
-        "shared", current_holder, ttl_seconds=5
-    )
-    assert not db.refresh_session_turn_lease(
-        "shared", stale_holder, ttl_seconds=5
-    )
+    assert db.try_acquire_session_turn_lease("shared", current_holder, ttl_seconds=5)
+    assert not db.refresh_session_turn_lease("shared", stale_holder, ttl_seconds=5)
     db.release_session_turn_lease("shared", stale_holder)
-    assert not db.try_acquire_session_turn_lease(
-        "shared", next_holder, ttl_seconds=5
-    )
+    assert not db.try_acquire_session_turn_lease("shared", next_holder, ttl_seconds=5)
 
-    assert db.refresh_session_turn_lease(
-        "shared", current_holder, ttl_seconds=5
-    )
+    assert db.refresh_session_turn_lease("shared", current_holder, ttl_seconds=5)
     db.release_session_turn_lease("shared", current_holder)
-    assert db.try_acquire_session_turn_lease(
-        "shared", next_holder, ttl_seconds=5
-    )
+    assert db.try_acquire_session_turn_lease("shared", next_holder, ttl_seconds=5)
 
 
 def test_expired_turn_lease_is_reclaimed(tmp_path):
@@ -303,9 +275,7 @@ def test_acquire_turn_lease_notifies_wait_callback(tmp_path):
 
     first_holder = f"pid={os.getpid()}:turn=first"
     second_holder = f"pid={os.getpid()}:turn=second"
-    assert first.try_acquire_session_turn_lease(
-        "shared", first_holder, ttl_seconds=5
-    )
+    assert first.try_acquire_session_turn_lease("shared", first_holder, ttl_seconds=5)
 
     notices = []
 
@@ -342,9 +312,7 @@ def test_acquire_turn_lease_honors_should_abort(tmp_path):
 
     first_holder = f"pid={os.getpid()}:turn=first"
     second_holder = f"pid={os.getpid()}:turn=second"
-    assert first.try_acquire_session_turn_lease(
-        "shared", first_holder, ttl_seconds=60
-    )
+    assert first.try_acquire_session_turn_lease("shared", first_holder, ttl_seconds=60)
 
     abort_checks = {"count": 0}
 
@@ -412,7 +380,10 @@ def test_acquire_turn_lease_locked_for_the_whole_wait_times_out(tmp_path, monkey
     monkeypatch.setattr(db, "try_acquire_session_turn_lease", locked)
     notices = []
     assert not db.acquire_session_turn_lease(
-        "shared", f"pid={os.getpid()}:turn=waiter", wait_seconds=0.3, poll_interval_seconds=5,
+        "shared",
+        f"pid={os.getpid()}:turn=waiter",
+        wait_seconds=0.3,
+        poll_interval_seconds=5,
         on_wait=notices.append,
     )
     assert notices == []
@@ -447,10 +418,12 @@ def test_non_expired_turn_lease_from_dead_pid_is_reclaimed(
     db.create_session("shared", source="test")
 
     from clawk_state_pidns import holder_namespace_token
+
     dead_holder = f"pid=424242{holder_namespace_token()}:turn=dead:platform=test"
-    assert db.try_acquire_session_turn_lease(
-        "shared", dead_holder, ttl_seconds=300
-    ) is True
+    assert (
+        db.try_acquire_session_turn_lease("shared", dead_holder, ttl_seconds=300)
+        is True
+    )
 
     probed: list[int] = []
 
@@ -458,14 +431,13 @@ def test_non_expired_turn_lease_from_dead_pid_is_reclaimed(
         probed.append(pid)
         return False
 
-    monkeypatch.setattr(
-        clawk_state, "psutil", SimpleNamespace(pid_exists=pid_exists)
-    )
+    monkeypatch.setattr(clawk_state, "psutil", SimpleNamespace(pid_exists=pid_exists))
 
     fresh_holder = "pid=525252:turn=fresh:platform=test"
-    assert db.try_acquire_session_turn_lease(
-        "shared", fresh_holder, ttl_seconds=300
-    ) is True
+    assert (
+        db.try_acquire_session_turn_lease("shared", fresh_holder, ttl_seconds=300)
+        is True
+    )
     assert probed == [424242]
 
 
@@ -480,19 +452,18 @@ def test_turn_lease_fences_stale_transcript_flush_after_reclaim(tmp_path):
     stale_holder = f"pid={os.getpid()}:turn=stale"
     next_holder = f"pid={os.getpid()}:turn=next"
 
-    assert db.try_acquire_session_turn_lease(
-        "shared", stale_holder, ttl_seconds=5
+    assert db.try_acquire_session_turn_lease("shared", stale_holder, ttl_seconds=5)
+    assert (
+        db.append_messages_batch(
+            "shared",
+            [{"role": "user", "content": "stale-owned"}],
+            turn_lease_holder=stale_holder,
+        )
+        == 1
     )
-    assert db.append_messages_batch(
-        "shared",
-        [{"role": "user", "content": "stale-owned"}],
-        turn_lease_holder=stale_holder,
-    ) == 1
 
     db.release_session_turn_lease("shared", stale_holder)
-    assert db.try_acquire_session_turn_lease(
-        "shared", next_holder, ttl_seconds=5
-    )
+    assert db.try_acquire_session_turn_lease("shared", next_holder, ttl_seconds=5)
 
     with pytest.raises(SessionTurnLeaseLostError, match="turn lease lost"):
         db.append_messages_batch(
@@ -508,11 +479,14 @@ def test_turn_lease_fences_stale_transcript_flush_after_reclaim(tmp_path):
             turn_lease_holder=stale_holder,
         )
 
-    assert db.append_messages_batch(
-        "shared",
-        [{"role": "assistant", "content": "next reply"}],
-        turn_lease_holder=next_holder,
-    ) == 1
+    assert (
+        db.append_messages_batch(
+            "shared",
+            [{"role": "assistant", "content": "next reply"}],
+            turn_lease_holder=next_holder,
+        )
+        == 1
+    )
     assert [m["content"] for m in db.get_messages("shared")] == [
         "stale-owned",
         "next reply",
@@ -527,18 +501,23 @@ def test_turn_lease_revives_expired_row_still_owned_by_writer(tmp_path):
 
     assert db.try_acquire_session_turn_lease("shared", holder, ttl_seconds=0.05)
     time.sleep(0.12)
-    assert db.append_messages_batch(
-        "shared",
-        [{"role": "assistant", "content": "after ttl"}],
-        turn_lease_holder=holder,
-        turn_lease_ttl_seconds=0.2,
-    ) == 1
+    assert (
+        db.append_messages_batch(
+            "shared",
+            [{"role": "assistant", "content": "after ttl"}],
+            turn_lease_holder=holder,
+            turn_lease_ttl_seconds=0.2,
+        )
+        == 1
+    )
     assert not db.try_acquire_session_turn_lease(
         "shared", f"pid={os.getpid()}:turn=contender", ttl_seconds=5
     )
 
 
-def test_turn_lease_acquisition_sweeps_long_expired_rows_of_other_conversations(tmp_path):
+def test_turn_lease_acquisition_sweeps_long_expired_rows_of_other_conversations(
+    tmp_path,
+):
     """A holder that died without releasing leaves its row behind; the next acquisition anywhere
     removes rows expired past the grace, and keeps recent expiries their live owner may renew."""
     db = SessionDB(tmp_path / "state.db")
@@ -549,21 +528,52 @@ def test_turn_lease_acquisition_sweeps_long_expired_rows_of_other_conversations(
         raw.executemany(
             "INSERT INTO session_turn_leases (conversation_id, holder, acquired_at, expires_at) "
             "VALUES (?, ?, ?, ?)",
-            [("abandoned", "pid=1:turn=crashed", time.time() - 86400 - 120, time.time() - 86400 - 60),
-             ("recent", f"pid={os.getpid()}:turn=starved", time.time() - 60, time.time() - 10),
-             ("within-grace", "pid=1:turn=suspended", time.time() - 86400, time.time() - 86400 + 60)])
+            [
+                (
+                    "abandoned",
+                    "pid=1:turn=crashed",
+                    time.time() - 86400 - 120,
+                    time.time() - 86400 - 60,
+                ),
+                (
+                    "recent",
+                    f"pid={os.getpid()}:turn=starved",
+                    time.time() - 60,
+                    time.time() - 10,
+                ),
+                (
+                    "within-grace",
+                    "pid=1:turn=suspended",
+                    time.time() - 86400,
+                    time.time() - 86400 + 60,
+                ),
+            ],
+        )
 
-    assert db.try_acquire_session_turn_lease("fresh", f"pid={os.getpid()}:turn=next", ttl_seconds=5)
+    assert db.try_acquire_session_turn_lease(
+        "fresh", f"pid={os.getpid()}:turn=next", ttl_seconds=5
+    )
 
-    rows = dict(raw.execute("SELECT conversation_id, holder FROM session_turn_leases").fetchall())
+    rows = dict(
+        raw.execute(
+            "SELECT conversation_id, holder FROM session_turn_leases"
+        ).fetchall()
+    )
     raw.close()
-    assert rows == {"recent": f"pid={os.getpid()}:turn=starved",
-                    "within-grace": "pid=1:turn=suspended",
-                    "fresh": f"pid={os.getpid()}:turn=next"}
-    assert db.append_messages_batch(
-        "recent", [{"role": "assistant", "content": "after a starved refresher"}],
-        turn_lease_holder=f"pid={os.getpid()}:turn=starved", turn_lease_ttl_seconds=5,
-    ) == 1
+    assert rows == {
+        "recent": f"pid={os.getpid()}:turn=starved",
+        "within-grace": "pid=1:turn=suspended",
+        "fresh": f"pid={os.getpid()}:turn=next",
+    }
+    assert (
+        db.append_messages_batch(
+            "recent",
+            [{"role": "assistant", "content": "after a starved refresher"}],
+            turn_lease_holder=f"pid={os.getpid()}:turn=starved",
+            turn_lease_ttl_seconds=5,
+        )
+        == 1
+    )
 
 
 def test_turn_lease_fences_flush_when_row_is_absent(tmp_path):
@@ -589,14 +599,15 @@ def test_turn_lease_fence_walks_compression_child_to_root(tmp_path):
 
     root_holder = f"pid={os.getpid()}:turn=root"
     stale_holder = f"pid={os.getpid()}:turn=stale"
-    assert db.try_acquire_session_turn_lease(
-        "root", root_holder, ttl_seconds=5
+    assert db.try_acquire_session_turn_lease("root", root_holder, ttl_seconds=5)
+    assert (
+        db.append_messages_batch(
+            "child",
+            [{"role": "user", "content": "owner on tip"}],
+            turn_lease_holder=root_holder,
+        )
+        == 1
     )
-    assert db.append_messages_batch(
-        "child",
-        [{"role": "user", "content": "owner on tip"}],
-        turn_lease_holder=root_holder,
-    ) == 1
     with pytest.raises(SessionTurnLeaseLostError, match="turn lease lost"):
         db.append_messages_batch(
             "child",
@@ -618,13 +629,9 @@ def test_lost_turn_lease_flush_fails_fast_without_patience_retry(
     db.create_session("shared", source="test")
     stale_holder = f"pid={os.getpid()}:turn=stale"
     next_holder = f"pid={os.getpid()}:turn=next"
-    assert db.try_acquire_session_turn_lease(
-        "shared", stale_holder, ttl_seconds=5
-    )
+    assert db.try_acquire_session_turn_lease("shared", stale_holder, ttl_seconds=5)
     db.release_session_turn_lease("shared", stale_holder)
-    assert db.try_acquire_session_turn_lease(
-        "shared", next_holder, ttl_seconds=5
-    )
+    assert db.try_acquire_session_turn_lease("shared", next_holder, ttl_seconds=5)
 
     sleeps = []
     original = db._sleep_before_write_retry
@@ -686,14 +693,15 @@ def test_turn_lease_fence_walks_continuation_that_inherited_fork_markers(tmp_pat
     )
 
     delegate_holder = f"pid={os.getpid()}:turn=delegate"
-    assert db.try_acquire_session_turn_lease(
-        "delegate", delegate_holder, ttl_seconds=5
+    assert db.try_acquire_session_turn_lease("delegate", delegate_holder, ttl_seconds=5)
+    assert (
+        db.append_messages_batch(
+            "delegate-continuation",
+            [{"role": "user", "content": "owner on inherited tip"}],
+            turn_lease_holder=delegate_holder,
+        )
+        == 1
     )
-    assert db.append_messages_batch(
-        "delegate-continuation",
-        [{"role": "user", "content": "owner on inherited tip"}],
-        turn_lease_holder=delegate_holder,
-    ) == 1
     with pytest.raises(SessionTurnLeaseLostError, match="turn lease lost"):
         db.append_messages_batch(
             "delegate-continuation",
@@ -702,14 +710,15 @@ def test_turn_lease_fence_walks_continuation_that_inherited_fork_markers(tmp_pat
         )
 
     branch_holder = f"pid={os.getpid()}:turn=branch"
-    assert db.try_acquire_session_turn_lease(
-        "branch", branch_holder, ttl_seconds=5
+    assert db.try_acquire_session_turn_lease("branch", branch_holder, ttl_seconds=5)
+    assert (
+        db.append_messages_batch(
+            "branch-continuation",
+            [{"role": "user", "content": "branch owner on inherited tip"}],
+            turn_lease_holder=branch_holder,
+        )
+        == 1
     )
-    assert db.append_messages_batch(
-        "branch-continuation",
-        [{"role": "user", "content": "branch owner on inherited tip"}],
-        turn_lease_holder=branch_holder,
-    ) == 1
     with pytest.raises(SessionTurnLeaseLostError, match="turn lease lost"):
         db.append_messages_batch(
             "branch-continuation",

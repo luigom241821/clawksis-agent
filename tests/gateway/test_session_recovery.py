@@ -14,7 +14,9 @@ class _FakeGatewayDB:
         self.rows_by_key = rows_by_key
         self.queries = []
 
-    def find_latest_gateway_session_for_peer(self, *, source, session_key=None, **kwargs):
+    def find_latest_gateway_session_for_peer(
+        self, *, source, session_key=None, **kwargs
+    ):
         self.queries.append(session_key)
         return self.rows_by_key.get(session_key)
 
@@ -57,8 +59,15 @@ def test_resolve_db_fallback_rejects_row_started_after_flush(tmp_path):
     db = _FakeGatewayDB({key: {"id": "late-row", "started_at": 1700000100.0}})
     store = _store(tmp_path, db)
     assert store.resolve_session_id_for_key(key, not_after=1700000000) is None
-    assert store.resolve_session_id_for_key(key, not_after=1700000100) == ("late-row", db)
+    assert store.resolve_session_id_for_key(key, not_after=1700000100) == (
+        "late-row",
+        db,
+    )
     # The flush ``ts`` is a whole second while ``started_at`` is a REAL: a row minted later in the
     # SAME second as the flush is still a valid origin, not a post-flush row.
-    same_second = _FakeGatewayDB({key: {"id": "same-sec", "started_at": 1700000000.818}})
-    assert _store(tmp_path / "b", same_second).resolve_session_id_for_key(key, not_after=1700000000) == ("same-sec", same_second)
+    same_second = _FakeGatewayDB(
+        {key: {"id": "same-sec", "started_at": 1700000000.818}}
+    )
+    assert _store(tmp_path / "b", same_second).resolve_session_id_for_key(
+        key, not_after=1700000000
+    ) == ("same-sec", same_second)

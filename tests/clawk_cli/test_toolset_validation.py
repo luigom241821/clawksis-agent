@@ -25,8 +25,6 @@ def _is_valid(name):
     return name in _KNOWN
 
 
-
-
 def test_38798_corruption_warns_and_suggests_correct_name():
     # The exact reported shape: cli holds 'clawk' instead of 'clawk-cli'.
     warnings = validate_platform_toolsets({"cli": ["clawk"]}, _is_valid)
@@ -44,17 +42,9 @@ def test_mixed_valid_and_invalid_flags_only_the_invalid():
     # One valid entry exists, so no zero-valid warning.
     assert not any("zero valid toolsets" in w for w in warnings)
     assert any(
-        "platform 'discord'" in w and "unknown toolset 'bogus'" in w
-        for w in warnings
+        "platform 'discord'" in w and "unknown toolset 'bogus'" in w for w in warnings
     )
-    assert any(
-        "platform 'discord'" in w and "no valid toolsets" in w
-        for w in warnings
-    )
-
-
-
-
+    assert any("platform 'discord'" in w and "no valid toolsets" in w for w in warnings)
 
 
 def test_empty_list_on_a_platform_warns_even_when_others_are_valid():
@@ -121,8 +111,7 @@ def test_null_platform_uses_canonical_default_for_alias():
     warnings = validate_platform_toolsets(cfg, _is_valid)
 
     assert any(
-        "platform 'whatsapp_cloud'" in w
-        and "falling back to 'clawk-whatsapp'" in w
+        "platform 'whatsapp_cloud'" in w and "falling back to 'clawk-whatsapp'" in w
         for w in warnings
     )
     assert not any("zero valid toolsets" in w for w in warnings)
@@ -148,7 +137,9 @@ def test_list_literal_string_is_validated_as_the_list_it_encodes():
     assert validate_platform_toolsets({"cli": '["web", "terminal"]'}, _is_valid) == []
 
     warnings = validate_platform_toolsets({"cli": '["web", "nope"]'}, _is_valid)
-    assert any("platform 'cli' references unknown toolset 'nope'" in w for w in warnings)
+    assert any(
+        "platform 'cli' references unknown toolset 'nope'" in w for w in warnings
+    )
     assert not any("falling back" in w for w in warnings)
 
 
@@ -157,9 +148,7 @@ def test_platform_restricted_toolset_warns_when_other_platform_is_valid():
     warnings = validate_platform_toolsets(cfg, _is_valid)
 
     assert any(
-        "platform 'telegram'" in w
-        and "toolset 'discord'" in w
-        and "not available" in w
+        "platform 'telegram'" in w and "toolset 'discord'" in w and "not available" in w
         for w in warnings
     )
     assert not any("zero valid toolsets" in w for w in warnings)
@@ -184,8 +173,7 @@ def test_null_plugin_platform_uses_synthetic_default():
 
         assert resolve_toolset(f"clawk-{platform}")
         assert any(
-            f"platform '{platform}'" in w
-            and f"falling back to 'clawk-{platform}'" in w
+            f"platform '{platform}'" in w and f"falling back to 'clawk-{platform}'" in w
             for w in warnings
         )
         assert not any("zero valid toolsets" in w for w in warnings)
@@ -198,9 +186,7 @@ def test_all_invalid_platform_warns_even_when_others_are_valid():
     warnings = validate_platform_toolsets(cfg, _is_valid)
 
     assert any("unknown toolset 'bogus'" in w for w in warnings)
-    assert any(
-        "platform 'cli'" in w and "no valid toolsets" in w for w in warnings
-    )
+    assert any("platform 'cli'" in w and "no valid toolsets" in w for w in warnings)
     assert not any("zero valid toolsets" in w for w in warnings)
 
 

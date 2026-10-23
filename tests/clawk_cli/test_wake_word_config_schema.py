@@ -11,6 +11,6 @@ def test_wake_provider_schema_accepts_default_and_resolves_all_options():
     assert field["type"] == "select"
     assert cfg["provider"] in field["options"]
     assert "auto" in field["options"]
-    assert {_PROVIDERS[_provider({"provider": choice})][1] for choice in field["options"]} == {
-        entry[1] for entry in _PROVIDERS.values()
-    }
+    assert {
+        _PROVIDERS[_provider({"provider": choice})][1] for choice in field["options"]
+    } == {entry[1] for entry in _PROVIDERS.values()}

@@ -16,17 +16,22 @@ from clawk_cli import gateway as gw
 
 def _unit(path, home) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(f'[Service]\nEnvironment="CLAWK_HOME={home}"\nExecStart=/usr/bin/clawk gateway run\n',
-                    encoding="utf-8")
+    path.write_text(
+        f'[Service]\nEnvironment="CLAWK_HOME={home}"\nExecStart=/usr/bin/clawk gateway run\n',
+        encoding="utf-8",
+    )
 
 
 @pytest.mark.platforms("linux")
-def test_profile_delete_from_scratch_home_leaves_the_accounts_profile_unit(tmp_path, monkeypatch, capsys):
+def test_profile_delete_from_scratch_home_leaves_the_accounts_profile_unit(
+    tmp_path, monkeypatch, capsys
+):
     """``clawk profile delete|rename coder`` with HOME=<scratch>: the name resolves the ACCOUNT's real
     ``clawk-gateway-coder`` unit (account-anchored unit dir). It pins another home, so cleanup never
     disables, stops or unlinks it."""
     import clawk_constants
     from clawk_cli import profiles
+
     account, scratch = tmp_path / "account", tmp_path / "scratch"
     profile_dir = scratch / ".clawk" / "profiles" / "coder"
     profile_dir.mkdir(parents=True)
@@ -40,7 +45,9 @@ def test_profile_delete_from_scratch_home_leaves_the_accounts_profile_unit(tmp_p
     monkeypatch.setattr(clawk_constants, "_account_home", lambda: account)
     monkeypatch.setattr(gw, "_SYSTEM_UNIT_DIR", tmp_path / "no-system-units")
     calls: list = []
-    monkeypatch.setattr(profiles.subprocess, "run", lambda argv, *a, **k: calls.append(list(argv)))
+    monkeypatch.setattr(
+        profiles.subprocess, "run", lambda argv, *a, **k: calls.append(list(argv))
+    )
 
     assert profiles._cleanup_gateway_service("coder", profile_dir) is False
 

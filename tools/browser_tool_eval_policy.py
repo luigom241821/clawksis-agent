@@ -20,7 +20,11 @@ def _eval_ssrf_guard_active(effective_task_id: str) -> bool:
     browser-on-host reaches networks the terminal can't); skipped for local sidecars / ``allow_private_urls``.
     """
     _bt = _origin()
-    return not _cloud._is_local_backend() and not _bt._is_local_sidecar_key(effective_task_id) and not _cloud._allow_private_urls()
+    return (
+        not _cloud._is_local_backend()
+        and not _bt._is_local_sidecar_key(effective_task_id)
+        and not _cloud._allow_private_urls()
+    )
 
 
 def _url_blocked(_bt, url: str) -> bool:
@@ -37,8 +41,12 @@ _JS_URL_LITERAL_RE = re.compile(r"""https?://[^\s'"`)\]<>]+""", re.IGNORECASE)
 def _expression_targets_private_url(expression: str) -> Optional[str]:
     """Return the first private/always-blocked ``http(s)://`` literal in a JS expression (best-effort), else None."""
     _bt = _origin()
-    literals = _JS_URL_LITERAL_RE.findall(expression) if isinstance(expression, str) else []
-    return next((c for c in (m.rstrip(".,;") for m in literals) if _url_blocked(_bt, c)), None)
+    literals = (
+        _JS_URL_LITERAL_RE.findall(expression) if isinstance(expression, str) else []
+    )
+    return next(
+        (c for c in (m.rstrip(".,;") for m in literals) if _url_blocked(_bt, c)), None
+    )
 
 
 def _current_page_private_url(effective_task_id: str) -> Optional[str]:
@@ -46,9 +54,21 @@ def _current_page_private_url(effective_task_id: str) -> Optional[str]:
     ``location.href = '...'`` eval). Fail-open on probe failure, matching the snapshot/vision guards."""
     _bt = _origin()
     try:
-        url_result = _session._run_browser_command(effective_task_id, "eval", ["window.location.href"], timeout=5, _engine_override="auto")
+        url_result = _session._run_browser_command(
+            effective_task_id,
+            "eval",
+            ["window.location.href"],
+            timeout=5,
+            _engine_override="auto",
+        )
         if url_result.get("success"):
-            current_url = url_result.get("data", {}).get("result", "").strip().strip('"').strip("'")
+            current_url = (
+                url_result.get("data", {})
+                .get("result", "")
+                .strip()
+                .strip('"')
+                .strip("'")
+            )
             if current_url and _url_blocked(_bt, current_url):
                 return current_url
     except Exception as exc:
@@ -60,25 +80,58 @@ _RISKY_BROWSER_EVAL_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"\bdocument\s*\.\s*cookie\b", re.IGNORECASE), "document.cookie"),
     (re.compile(r"\b(?:localStorage|sessionStorage)\b", re.IGNORECASE), "web storage"),
     (re.compile(r"\bindexedDB\b", re.IGNORECASE), "IndexedDB"),
-    (re.compile(r"\bcaches\s*\.\s*(?:open|match|keys)\b", re.IGNORECASE), "Cache Storage"),
-    (re.compile(r"\bnavigator\s*\.\s*(?:clipboard|credentials|serviceWorker)\b", re.IGNORECASE), "navigator sensitive API"),
-    (re.compile(r"\b(?:fetch|XMLHttpRequest|WebSocket|EventSource)\s*\(", re.IGNORECASE), "network request"),
-    (re.compile(r"\bnavigator\s*\.\s*sendBeacon\s*\(", re.IGNORECASE), "network beacon"),
-    (re.compile(r"\bdocument\s*\.\s*forms\b.*\bvalue\b", re.IGNORECASE | re.DOTALL), "form value extraction"),
-    (re.compile(r"\bquerySelector(?:All)?\s*\([^)]*(?:input|textarea|password)[^)]*\).*\bvalue\b", re.IGNORECASE | re.DOTALL), "form value extraction"),
+    (
+        re.compile(r"\bcaches\s*\.\s*(?:open|match|keys)\b", re.IGNORECASE),
+        "Cache Storage",
+    ),
+    (
+        re.compile(
+            r"\bnavigator\s*\.\s*(?:clipboard|credentials|serviceWorker)\b",
+            re.IGNORECASE,
+        ),
+        "navigator sensitive API",
+    ),
+    (
+        re.compile(
+            r"\b(?:fetch|XMLHttpRequest|WebSocket|EventSource)\s*\(", re.IGNORECASE
+        ),
+        "network request",
+    ),
+    (
+        re.compile(r"\bnavigator\s*\.\s*sendBeacon\s*\(", re.IGNORECASE),
+        "network beacon",
+    ),
+    (
+        re.compile(r"\bdocument\s*\.\s*forms\b.*\bvalue\b", re.IGNORECASE | re.DOTALL),
+        "form value extraction",
+    ),
+    (
+        re.compile(
+            r"\bquerySelector(?:All)?\s*\([^)]*(?:input|textarea|password)[^)]*\).*\bvalue\b",
+            re.IGNORECASE | re.DOTALL,
+        ),
+        "form value extraction",
+    ),
 )
 
-_JS_STRING_LITERAL_RE = re.compile(r"""'(?:\\.|[^'\\])*'|\"(?:\\.|[^\"\\])*\"|`(?:\\.|[^`\\])*`""", re.DOTALL)
+_JS_STRING_LITERAL_RE = re.compile(
+    r"""'(?:\\.|[^'\\])*'|\"(?:\\.|[^\"\\])*\"|`(?:\\.|[^`\\])*`""", re.DOTALL
+)
 
 
 _SENSITIVE_BROWSER_EVAL_TOKENS: tuple[tuple[str, str], ...] = (
     ("cookie", "document.cookie"),
-    ("localStorage", "web storage"), ("sessionStorage", "web storage"),
-    ("indexedDB", "IndexedDB"), ("caches", "Cache Storage"),
-    ("clipboard", "navigator sensitive API"), ("credentials", "navigator sensitive API"),
+    ("localStorage", "web storage"),
+    ("sessionStorage", "web storage"),
+    ("indexedDB", "IndexedDB"),
+    ("caches", "Cache Storage"),
+    ("clipboard", "navigator sensitive API"),
+    ("credentials", "navigator sensitive API"),
     ("serviceWorker", "navigator sensitive API"),
-    ("fetch", "network request"), ("XMLHttpRequest", "network request"),
-    ("WebSocket", "network request"), ("EventSource", "network request"),
+    ("fetch", "network request"),
+    ("XMLHttpRequest", "network request"),
+    ("WebSocket", "network request"),
+    ("EventSource", "network request"),
     ("sendBeacon", "network beacon"),
 )
 
@@ -86,7 +139,12 @@ _SENSITIVE_BROWSER_EVAL_TOKENS: tuple[tuple[str, str], ...] = (
 def _browser_eval_flag(key: str) -> bool:
     """Read boolean ``browser.<key>`` (default False) through the origin's config reader."""
     _bt = _origin()
-    return _bt._browser_cfg(key, False, lambda v: is_truthy_value(v, default=False), f"browser.{key} from config")
+    return _bt._browser_cfg(
+        key,
+        False,
+        lambda v: is_truthy_value(v, default=False),
+        f"browser.{key} from config",
+    )
 
 
 def _allow_unsafe_browser_evaluate() -> bool:
@@ -116,7 +174,10 @@ def _decode_js_string_literal(literal: str) -> str:
 
 
 def _decoded_js_string_literals(expression: str) -> list[str]:
-    return [_decode_js_string_literal(match.group(0)) for match in _JS_STRING_LITERAL_RE.finditer(expression)]
+    return [
+        _decode_js_string_literal(match.group(0))
+        for match in _JS_STRING_LITERAL_RE.finditer(expression)
+    ]
 
 
 def _sensitive_browser_eval_token_reason(expression: str) -> Optional[str]:
@@ -124,15 +185,29 @@ def _sensitive_browser_eval_token_reason(expression: str) -> Optional[str]:
     ``document["cookie"]`` / ``globalThis["fetch"]``, so tokens are also matched inside the decoded,
     concatenated string literals (catches ``document["coo" + "kie"]``)."""
     literals = "".join(_decoded_js_string_literals(expression)).lower()
-    return next((reason for token, reason in _SENSITIVE_BROWSER_EVAL_TOKENS
-                 if re.search(rf"\b{re.escape(token)}\b", expression, re.IGNORECASE) or token.lower() in literals), None)
+    return next(
+        (
+            reason
+            for token, reason in _SENSITIVE_BROWSER_EVAL_TOKENS
+            if re.search(rf"\b{re.escape(token)}\b", expression, re.IGNORECASE)
+            or token.lower() in literals
+        ),
+        None,
+    )
 
 
 def _risky_browser_eval_reason(expression: str) -> Optional[str]:
     """Return a human-readable reason if a JS expression uses risky primitives."""
     if not expression:
         return None
-    hit = next((reason for pattern, reason in _RISKY_BROWSER_EVAL_PATTERNS if pattern.search(expression)), None)
+    hit = next(
+        (
+            reason
+            for pattern, reason in _RISKY_BROWSER_EVAL_PATTERNS
+            if pattern.search(expression)
+        ),
+        None,
+    )
     return hit or _sensitive_browser_eval_token_reason(expression)
 
 
@@ -144,11 +219,13 @@ def _enforce_browser_eval_policy(expression: str) -> Optional[str]:
     reason = _risky_browser_eval_reason(expression)
     if not reason:
         return None
-    return ("Blocked: browser_console(expression=...) tried to use sensitive browser "
-            f"JavaScript primitive ({reason}) while browser.restrict_evaluate is "
-            "enabled. Use browser_snapshot/browser_get_images/browser_console "
-            "without expression for normal inspection, or set "
-            "browser.restrict_evaluate: false in config.yaml to allow programmatic evaluation.")
+    return (
+        "Blocked: browser_console(expression=...) tried to use sensitive browser "
+        f"JavaScript primitive ({reason}) while browser.restrict_evaluate is "
+        "enabled. Use browser_snapshot/browser_get_images/browser_console "
+        "without expression for normal inspection, or set "
+        "browser.restrict_evaluate: false in config.yaml to allow programmatic evaluation."
+    )
 
 
 def _camofox_current_page_private_url(tab_id: str, user_id: str) -> Optional[str]:
@@ -157,7 +234,11 @@ def _camofox_current_page_private_url(tab_id: str, user_id: str) -> Optional[str
     _bt = _origin()
     try:
         from tools.browser_camofox import _post
-        data = _post(f"/tabs/{tab_id}/evaluate", body={"expression": "window.location.href", "userId": user_id})
+
+        data = _post(
+            f"/tabs/{tab_id}/evaluate",
+            body={"expression": "window.location.href", "userId": user_id},
+        )
         current_url = str(data.get("result") if isinstance(data, dict) else data or "")
         current_url = current_url.strip().strip('"').strip("'")
         if current_url and _url_blocked(_bt, current_url):

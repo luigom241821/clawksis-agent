@@ -32,7 +32,11 @@ blocked = []
 
 
 def _external(address):
-    return isinstance(address, tuple) and address[0] not in ("127.0.0.1", "::1", "localhost")
+    return isinstance(address, tuple) and address[0] not in (
+        "127.0.0.1",
+        "::1",
+        "localhost",
+    )
 
 
 def local_connect(self, address):
@@ -158,14 +162,24 @@ class ControlledAgent(AIAgent):
     def __init__(self, *args, **kwargs):
         if fault == "foreign-writer":
             result = subprocess.run(
-                [sys.executable, str(Path(__file__).with_name("foreign_writer.py")),
-                 str(ROOT), str(HOME / "state.db"), sid],
-                capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=20,
+                [
+                    sys.executable,
+                    str(Path(__file__).with_name("foreign_writer.py")),
+                    str(ROOT),
+                    str(HOME / "state.db"),
+                    sid,
+                ],
+                capture_output=True,
+                text=True,
+                stdin=subprocess.DEVNULL,
+                timeout=20,
                 check=False,
             )
             assert result.returncode == 0, result.stderr
             faults.append("foreign-writer-committed")
-            raise RuntimeError("controlled construction failure after independent write")
+            raise RuntimeError(
+                "controlled construction failure after independent write"
+            )
         if fault in ("pre-agent", "archive-memory"):
             faults.append("agent-construction")
             raise RuntimeError("controlled agent initialization failure")
@@ -203,7 +217,11 @@ original_get_messages = SessionDB.get_messages
 
 
 def observed_get_messages(self, session_id, *args, **kwargs):
-    if kwargs.get("include_inactive") or kwargs.get("include_compacted") or any(args[:2]):
+    if (
+        kwargs.get("include_inactive")
+        or kwargs.get("include_compacted")
+        or any(args[:2])
+    ):
         raw_reads.append(session_id)
     return original_get_messages(self, session_id, *args, **kwargs)
 
@@ -270,6 +288,7 @@ async def main():
     for text, pid, fault, accepted in cases:
         if text == "chat B distinct input":
             from dataclasses import replace
+
             source = replace(source, chat_id="chat-B")
             other = runner.session_store.get_or_create_session(source)
             entry = runner.session_store.switch_session(other.session_key, sid)
@@ -316,7 +335,9 @@ async def main():
                 and "history is temporarily unavailable" in response
             )
         elif fault == "foreign-writer":
-            reached = hit == ["foreign-writer-committed"] and len(requests) == before_requests
+            reached = (
+                hit == ["foreign-writer-committed"] and len(requests) == before_requests
+            )
         elif fault in ("pre-agent", "archive-memory"):
             reached = hit == ["agent-construction"] and len(requests) == before_requests
         elif fault == "post-agent":
@@ -334,7 +355,8 @@ async def main():
                 accepted=accepted,
                 expected_users=len(expected),
                 actual_users=len(actual),
-                pass_=actual == expected and len(raw_reads) == before_raw
+                pass_=actual == expected
+                and len(raw_reads) == before_raw
                 and (peak is None or peak < 8 * 1024 * 1024),
                 raw_reads=len(raw_reads) - before_raw,
                 archive_peak_bytes=peak,
@@ -345,13 +367,23 @@ async def main():
             )
         )
     users = [r for r in rows() if r["role"] == "user" and r["active"]]
-    markers = [json.loads(r["display_metadata"] or "{}").get("gateway_input_owner") for r in users]
-    observations.append(dict(
-        text="durable marker propagation", reached=bool(users),
-        pass_=all(isinstance(m, str) and m for m in markers) and len(set(markers)) == len(markers)
-        and all("display_metadata" not in m for request in requests
-                for m in request["body"].get("messages", [])),
-    ))
+    markers = [
+        json.loads(r["display_metadata"] or "{}").get("gateway_input_owner")
+        for r in users
+    ]
+    observations.append(
+        dict(
+            text="durable marker propagation",
+            reached=bool(users),
+            pass_=all(isinstance(m, str) and m for m in markers)
+            and len(set(markers)) == len(markers)
+            and all(
+                "display_metadata" not in m
+                for request in requests
+                for m in request["body"].get("messages", [])
+            ),
+        )
+    )
     receipt = dict(
         home=str(HOME),
         observations=observations,

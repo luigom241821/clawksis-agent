@@ -3,7 +3,10 @@
 import pytest
 
 from clawk_cli import plugins
-from clawk_cli.middleware import apply_llm_request_middleware, apply_tool_request_middleware
+from clawk_cli.middleware import (
+    apply_llm_request_middleware,
+    apply_tool_request_middleware,
+)
 from clawk_cli.plugins import PluginManager
 
 _REQUEST_KINDS = [
@@ -46,7 +49,9 @@ def seen(tmp_path, monkeypatch):
     return manager._plugins["request_chain"].module.SEEN
 
 
-@pytest.mark.parametrize("kind,apply", _REQUEST_KINDS, ids=[k for k, _ in _REQUEST_KINDS])
+@pytest.mark.parametrize(
+    "kind,apply", _REQUEST_KINDS, ids=[k for k, _ in _REQUEST_KINDS]
+)
 def test_request_middleware_rewrites_compose(seen, kind, apply):
     result = apply({"input": ["original"]})
 
@@ -56,7 +61,9 @@ def test_request_middleware_rewrites_compose(seen, kind, apply):
     assert [entry["source"] for entry in result.trace] == ["first", "second"]
 
 
-@pytest.mark.parametrize("kind,apply", _REQUEST_KINDS, ids=[k for k, _ in _REQUEST_KINDS])
+@pytest.mark.parametrize(
+    "kind,apply", _REQUEST_KINDS, ids=[k for k, _ in _REQUEST_KINDS]
+)
 def test_request_middleware_in_place_mutation_does_not_leak(seen, kind, apply):
     original = {"input": ["original"]}
 
@@ -64,4 +71,6 @@ def test_request_middleware_in_place_mutation_does_not_leak(seen, kind, apply):
 
     # Each callback gets its own copy of the payload and of the pre-middleware snapshot.
     assert "meddler" not in result.payload["steps"]
-    assert seen[kind][1] == result.original_payload == original == {"input": ["original"]}
+    assert (
+        seen[kind][1] == result.original_payload == original == {"input": ["original"]}
+    )

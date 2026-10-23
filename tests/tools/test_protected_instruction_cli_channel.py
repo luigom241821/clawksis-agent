@@ -15,19 +15,28 @@ import pytest
 def _gate_on(monkeypatch):
     import tools.file_tools_write_guards as guards
     from tools.terminal_tool import set_approval_callback
+
     monkeypatch.setattr(guards, "_protected_instruction_config", lambda: (True, []))
-    for name in ("CLAWK_SINGLE_QUERY_SESSION", "CLAWK_CRON_SESSION", "CLAWK_SESSION_PLATFORM"):
+    for name in (
+        "CLAWK_SINGLE_QUERY_SESSION",
+        "CLAWK_CRON_SESSION",
+        "CLAWK_SESSION_PLATFORM",
+    ):
         monkeypatch.delenv(name, raising=False)
     set_approval_callback(None)
     yield
     set_approval_callback(None)
 
 
-@pytest.mark.parametrize("env", [
-    {"CLAWK_SINGLE_QUERY_SESSION": "1"},
-    {"CLAWK_CRON_SESSION": "1"},
-    {"CLAWK_SESSION_PLATFORM": "webhook"},
-], ids=["single_query", "cron", "webhook"])
+@pytest.mark.parametrize(
+    "env",
+    [
+        {"CLAWK_SINGLE_QUERY_SESSION": "1"},
+        {"CLAWK_CRON_SESSION": "1"},
+        {"CLAWK_SESSION_PLATFORM": "webhook"},
+    ],
+    ids=["single_query", "cron", "webhook"],
+)
 def test_registered_callback_is_never_asked_without_a_user(tmp_path, monkeypatch, env):
     from tools.terminal_tool import set_approval_callback
     from tools.file_tools import write_file_tool
@@ -35,7 +44,9 @@ def test_registered_callback_is_never_asked_without_a_user(tmp_path, monkeypatch
     for name, value in env.items():
         monkeypatch.setenv(name, value)
     asked = []
-    set_approval_callback(lambda command, description, **kw: asked.append(command) or "once")
+    set_approval_callback(
+        lambda command, description, **kw: asked.append(command) or "once"
+    )
     target = tmp_path / "SOUL.md"
     res = json.loads(write_file_tool(str(target), "content"))
 
@@ -54,9 +65,13 @@ def test_single_query_mode_never_auto_approves_this_gate(tmp_path, monkeypatch, 
     from tools.terminal_tool import set_approval_callback
 
     monkeypatch.setenv("CLAWK_SINGLE_QUERY_SESSION", "1")
-    monkeypatch.setattr(approval_context, "_get_single_query_approval_mode", lambda: mode)
+    monkeypatch.setattr(
+        approval_context, "_get_single_query_approval_mode", lambda: mode
+    )
     asked = []
-    set_approval_callback(lambda command, description, **kw: asked.append(command) or "once")
+    set_approval_callback(
+        lambda command, description, **kw: asked.append(command) or "once"
+    )
     target = tmp_path / "SOUL.md"
     res = json.loads(write_file_tool(str(target), "content"))
 

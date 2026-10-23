@@ -1,4 +1,5 @@
 """Receipt-only adapter ingress: the authority, not an HTTP/WS task, owns execution."""
+
 import asyncio
 from contextlib import asynccontextmanager
 
@@ -11,33 +12,36 @@ async def producer_scope(adapter, event):
     from gateway.session_ingress_context import native_callback
 
     from gateway.session_authorities import authority_for_home
-    runner = getattr(adapter._message_handler, '__self__', None)
-    if getattr(runner, 'session_authority', None) is None:
-        raise RuntimeStoreError('not_found')
+
+    runner = getattr(adapter._message_handler, "__self__", None)
+    if getattr(runner, "session_authority", None) is None:
+        raise RuntimeStoreError("not_found")
     registered, profile = runner._owning_profile(adapter, adapter.platform)
-    home = getattr(runner, '_native_transport_homes', {}).get(profile)
+    home = getattr(runner, "_native_transport_homes", {}).get(profile)
     if not registered or home is None:
-        raise RuntimeStoreError('profile_mismatch')
+        raise RuntimeStoreError("profile_mismatch")
     source = event.source
     # Identity is pinned through the runner's single canonicalization seam (a secondary's own
     # bot, or the primary's routed profile); a rejected primary route is refused downstream.
     if profile:
         runner._canonicalize(source, transport_profile=profile)
-        runtime_home = runner._resolve_profile_home_for_source(source) if source.profile else home
+        runtime_home = (
+            runner._resolve_profile_home_for_source(source) if source.profile else home
+        )
     else:
         runtime_home = runner._admit_primary_source(source, home)
         if runtime_home is None:
-            _refuse_parked(runner, getattr(source, '_rejected_route_profile', None))
+            _refuse_parked(runner, getattr(source, "_rejected_route_profile", None))
             source.profile_route_rejected = True
             runtime_home = home
     source._authorization_profile_home = home
     # The routed profile's own ledger admits the delivery; an unserved route is refused. A park
     # can keep the profile's retiring authority (a turn outlived its Stop), which admits nothing.
     authority = authority_for_home(runner, runtime_home)
-    if authority is None or getattr(authority, 'retiring', False):
-        _refuse_parked(runner, getattr(source, 'profile', None) or profile)
+    if authority is None or getattr(authority, "retiring", False):
+        _refuse_parked(runner, getattr(source, "profile", None) or profile)
     if authority is None:
-        raise RuntimeStoreError('profile_mismatch')
+        raise RuntimeStoreError("profile_mismatch")
     with native_callback(runner, event, home, profile):
         async with _async_profile_runtime_scope(runtime_home):
             yield authority
@@ -49,8 +53,10 @@ def _refuse_parked(runner, profile):
     the sender, ``parked_route_refusal``), not the permanent ``profile_mismatch`` of a route to a
     profile this gateway does not serve."""
     from gateway.run_runtime import profile_parked
+
     if profile_parked(runner, profile):
         from gateway.parked_route_refusal import ParkedProfileRefusal
+
         raise ParkedProfileRefusal(profile)
 
 
@@ -66,18 +72,28 @@ def parked_profile_refusal(runner, profile, route_config, admission_source):
     (or without) an admission, so the in-memory id is their only replay guard, and a recorded id would
     answer the provider's retry as a duplicate once the profile is served again."""
     from aiohttp import web
+
     if _prefix_not_served(runner, profile):
-        error = f'Profile {profile} is not being served; retry this delivery'
+        error = f"Profile {profile} is not being served; retry this delivery"
     else:
-        refusal = _coalesced_route_refusal(runner, profile, route_config, admission_source)
+        refusal = _coalesced_route_refusal(
+            runner, profile, route_config, admission_source
+        )
         if refusal is None:
             return None
-        if refusal == 'refused':
+        if refusal == "refused":
             # ``WebhookAdapter._dispatch_agent_run``'s answer when admission refuses the delivery.
-            return web.json_response({'error': 'Admission unavailable; retry this delivery'}, status=503)
-        error = 'The routed profile is not being served right now; retry this delivery'
+            return web.json_response(
+                {"error": "Admission unavailable; retry this delivery"}, status=503
+            )
+        error = "The routed profile is not being served right now; retry this delivery"
     from gateway.parked_route_refusal import ParkedRouteRefused
-    return web.json_response({'error': error}, status=ParkedRouteRefused.status, headers=ParkedRouteRefused.headers)
+
+    return web.json_response(
+        {"error": error},
+        status=ParkedRouteRefused.status,
+        headers=ParkedRouteRefused.headers,
+    )
 
 
 def _prefix_not_served(runner, profile):
@@ -85,14 +101,16 @@ def _prefix_not_served(runner, profile):
     picked up yet): the URL prefix resolves against the profiles on disk, the registry says what is
     served."""
     from gateway.run_runtime import profile_parked
+
     if profile_parked(runner, profile):
         return True
-    if not profile or getattr(runner, 'session_authorities', None) is None:
+    if not profile or getattr(runner, "session_authorities", None) is None:
         return False
     from gateway.session_authorities import authority_for_home
     from clawk_cli.profiles import get_profile_dir
+
     authority = authority_for_home(runner, get_profile_dir(profile))
-    return authority is None or getattr(authority, 'retiring', False) is True
+    return authority is None or getattr(authority, "retiring", False) is True
 
 
 def _coalesced_route_refusal(runner, profile, route_config, admission_source):
@@ -102,21 +120,22 @@ def _coalesced_route_refusal(runner, profile, route_config, admission_source):
     resolved (``build_source`` asks ``GatewayRunner._profile_name_for_source`` on the same chat_id,
     user_id and names), so this edge and admission give one answer: an explicit ``/p/<profile>/``
     wins over ``profile_routes`` there, and routes apply only under multiplexing."""
-    if profile or not isinstance(route_config.get('coalesce'), dict):
+    if profile or not isinstance(route_config.get("coalesce"), dict):
         return None
     from gateway.run_runtime import profile_parked
+
     source = admission_source()
-    if getattr(source, 'profile_route_rejected', False):
+    if getattr(source, "profile_route_rejected", False):
         # A parked target leaves the served set, so the resolver rejects it; admission retries
         # that one (``_rejected_route_profile``) and refuses any other rejection for good.
-        rejected = getattr(source, '_rejected_route_profile', None)
-        return 'parked' if rejected and profile_parked(runner, rejected) else 'refused'
+        rejected = getattr(source, "_rejected_route_profile", None)
+        return "parked" if rejected and profile_parked(runner, rejected) else "refused"
     routed = source.profile
     if not routed:
         return None
     if profile_parked(runner, routed):
-        return 'parked'
-    return 'refused' if _prefix_not_served(runner, routed) else None
+        return "parked"
+    return "refused" if _prefix_not_served(runner, routed) else None
 
 
 async def admit_producer(adapter, event):
@@ -131,24 +150,34 @@ async def admit_producer(adapter, event):
         from gateway.config import Platform
         from gateway.run_inbound_consumer import POST_ADMISSION_HOOK
         from clawk_cli.lifecycle import has_hook
+
         webhook = adapter.platform == Platform.WEBHOOK
-        hooks = [name for name in ('pre_gateway_dispatch', POST_ADMISSION_HOOK) if has_hook(name)]
+        hooks = [
+            name
+            for name in ("pre_gateway_dispatch", POST_ADMISSION_HOOK)
+            if has_hook(name)
+        ]
         if not (webhook or hooks):
             return await authority.admit_native(event)
         from gateway.session_authority import native_write_started
+
         payload, principal = await _prepared(authority, event)
         writing = native_write_started.set(False)
         try:
             # An identical delivery (provider retry, relay re-send) overlapping this one waits here, then
             # rechecks the ledger: the retry check, the hooks and the commit run once per delivery.
-            async with _delivery_turn((authority.profile_id, principal, event.message_id)):
+            async with _delivery_turn(
+                (authority.profile_id, principal, event.message_id)
+            ):
                 committed = payload, _committed(authority, principal, event.message_id)
                 return await _admit_once(authority, event, webhook, hooks, committed)
         except (Exception, asyncio.CancelledError) as exc:
             # Refused after preparing (a command-shaped rewrite, a drain during the hooks, a conflict),
             # or cancelled (relay disconnect, shutdown) before the admission write began. A cancelled
             # write still commits (it is shielded): the bytes it commits are never released here.
-            if not (isinstance(exc, asyncio.CancelledError) and native_write_started.get()):
+            if not (
+                isinstance(exc, asyncio.CancelledError) and native_write_started.get()
+            ):
                 await asyncio.shield(_release_preparation(authority, payload))
             raise
         finally:
@@ -157,6 +186,7 @@ async def admit_producer(adapter, event):
 
 async def _admit_once(authority, event, webhook, hooks, committed):
     from gateway.run_inbound_consumer import POST_ADMISSION_HOOK
+
     if webhook:
         prior = await _webhook_retry(authority, event, *committed)
         if prior is not None:
@@ -164,7 +194,7 @@ async def _admit_once(authority, event, webhook, hooks, committed):
     admitted = event
     if hooks and (webhook or not committed[1]):
         runner = authority.runner
-        if 'pre_gateway_dispatch' in hooks:
+        if "pre_gateway_dispatch" in hooks:
             admitted = await runner._hm_pre_gateway_dispatch_hook(event, event.source)
             if admitted is None:
                 await _release_preparation(authority, committed[0])
@@ -173,11 +203,19 @@ async def _admit_once(authority, event, webhook, hooks, committed):
                 # The rewrite is committed with the fingerprint of the delivery as received:
                 # a provider retry or relay re-send resends that, and resolves to this row.
                 from gateway.session_ingress_media import ingress_fingerprint
-                admitted._ingress_sha256 = ingress_fingerprint(committed[0], event.raw_message)
+
+                admitted._ingress_sha256 = ingress_fingerprint(
+                    committed[0], event.raw_message
+                )
         if POST_ADMISSION_HOOK in hooks:
             from gateway.run_inbound_consumer import run_post_admission_hook
+
             consumed, event._consumer_reply = await run_post_admission_hook(
-                runner, admitted, admitted.source, runner._session_key_for_source(admitted.source))
+                runner,
+                admitted,
+                admitted.source,
+                runner._session_key_for_source(admitted.source),
+            )
             if consumed:
                 await _release_preparation(authority, committed[0])
                 return None
@@ -195,6 +233,7 @@ async def _delivery_turn(key):
         yield
         return
     from gateway.session_authority import keyed_turn
+
     async with keyed_turn(_deliveries, key):
         yield
 
@@ -204,8 +243,11 @@ async def _release_preparation(authority, payload):
     admitted: release the media its preparation (``_prepared``) copied into the retained store. A path
     another admission or an in-flight capture holds is kept, as for a refused admission."""
     from gateway.session_ingress_media import release_unheld_media
-    if media := payload['native_text_v1'].get('media'):
-        await asyncio.to_thread(release_unheld_media, authority.db, media, retain_history=False)
+
+    if media := payload["native_text_v1"].get("media"):
+        await asyncio.to_thread(
+            release_unheld_media, authority.db, media, retain_history=False
+        )
 
 
 async def _prepared(authority, event):
@@ -214,6 +256,7 @@ async def _prepared(authority, event):
     import json
     from gateway.session_envelope import prepare_native, restore_native
     from gateway.session_ingress_media import abandon_capture, capture_lease
+
     with capture_lease(authority) as scope:
         try:
             payload = await prepare_native(authority.runner, event)
@@ -221,39 +264,54 @@ async def _prepared(authority, event):
             await abandon_capture(scope)
             raise
     source = restore_native(payload).source
-    identity = json.dumps([source.profile, source.platform.value, source.chat_id,
-                           source.thread_id, source.user_id], separators=(',', ':'))
-    return payload, 'messaging:' + identity
+    identity = json.dumps(
+        [
+            source.profile,
+            source.platform.value,
+            source.chat_id,
+            source.thread_id,
+            source.user_id,
+        ],
+        separators=(",", ":"),
+    )
+    return payload, "messaging:" + identity
 
 
 def _committed(authority, principal, request_id):
     """The rows of this delivery's identity in the FIFO."""
-    return authority.db._read_all('SELECT admission_id FROM session_admissions '
-        'WHERE principal_id=? AND request_id=?', (principal, request_id))
+    return authority.db._read_all(
+        "SELECT admission_id FROM session_admissions "
+        "WHERE principal_id=? AND request_id=?",
+        (principal, request_id),
+    )
+
 
 async def _webhook_retry(authority, event, payload, rows):
     # One-shot finalization ends the route. Resolve an existing provider receipt
     # before SessionStore would rotate it into a new physical session.
     from gateway.session_ingress_media import ingress_fingerprint
     from clawk_state_runtime import get_session_admission
+
     if not rows:
         return None
-    row = get_session_admission(authority.db, admission_id=rows[0]['admission_id'])
-    retained = row['payload']['native_text_v1']
-    if 'ingress_sha256' in retained:
+    row = get_session_admission(authority.db, admission_id=rows[0]["admission_id"])
+    retained = row["payload"]["native_text_v1"]
+    if "ingress_sha256" in retained:
         # Committed rewritten: the provider resends the delivery as received.
-        same = retained['ingress_sha256'] == ingress_fingerprint(payload, event.raw_message)
+        same = retained["ingress_sha256"] == ingress_fingerprint(
+            payload, event.raw_message
+        )
     else:
-        if 'webhook_delivery' not in retained and 'webhook_route' not in retained:
+        if "webhook_delivery" not in retained and "webhook_route" not in retained:
             # A pre-destination receipt is still a receipt, not permission to infer
             # again. Do not retrofit today's destination into its queued execution.
-            payload['native_text_v1'].pop('webhook_delivery')
-            payload['native_text_v1'].pop('webhook_route')
-            if 'provenance' not in retained:
-                payload['native_text_v1'].pop('provenance', None)
-        same = row['payload'] == payload
+            payload["native_text_v1"].pop("webhook_delivery")
+            payload["native_text_v1"].pop("webhook_route")
+            if "provenance" not in retained:
+                payload["native_text_v1"].pop("provenance", None)
+        same = row["payload"] == payload
     if len(rows) != 1 or not same:
-        raise RuntimeStoreError('admission_conflict')
+        raise RuntimeStoreError("admission_conflict")
     event._webhook_duplicate = True
     receipt = authority._receipt(row)
     finalize_webhook(authority, receipt)
@@ -263,20 +321,38 @@ async def _webhook_retry(authority, event, payload, rows):
 def finalize_webhook(authority, receipt):
     """End only the settled admitted generation, atomically with the epoch fence."""
     import time
-    if receipt.status != 'terminal' or receipt.execution_generation is None:
+
+    if receipt.status != "terminal" or receipt.execution_generation is None:
         return False
     sid = receipt.ref.session_id
+
     def write(conn):
-        return authority.db._end_and_bump(conn, """
+        return authority.db._end_and_bump(
+            conn,
+            """
             UPDATE sessions SET ended_at=?, end_reason=?
             WHERE id=? AND ended_at IS NULL AND runtime_generation=?
               AND EXISTS (SELECT 1 FROM runtime_epoch WHERE singleton=1 AND epoch=?)
               AND EXISTS (SELECT 1 FROM session_admissions WHERE admission_id=?
                 AND target_session_id=? AND status='terminal' AND generation=? AND owner_epoch=?)
               AND NOT EXISTS (SELECT 1 FROM session_admissions WHERE target_session_id=? AND status!='terminal')
-            """, (time.time(), 'webhook_complete', sid, receipt.execution_generation,
-                  authority.epoch, receipt.admission_id, sid, receipt.execution_generation,
-                  receipt.authority_epoch, sid), sid, 'webhook_complete')
+            """,
+            (
+                time.time(),
+                "webhook_complete",
+                sid,
+                receipt.execution_generation,
+                authority.epoch,
+                receipt.admission_id,
+                sid,
+                receipt.execution_generation,
+                receipt.authority_epoch,
+                sid,
+            ),
+            sid,
+            "webhook_complete",
+        )
+
     return bool(authority.db._execute_write(write))
 
 
@@ -296,20 +372,33 @@ async def recover_webhook_finalizations(authority):
         """)
     results = {}
     for candidate in rows:
-        row = get_session_admission(authority.db, admission_id=candidate['admission_id'])
+        row = get_session_admission(
+            authority.db, admission_id=candidate["admission_id"]
+        )
         if row is None:
             continue
-        sid = row['target_session_id']
+        sid = row["target_session_id"]
         try:
-            envelope = row['payload']['native_text_v1']
-            entry = authority.runner.session_store.lookup_by_session_key(envelope['route'])
+            envelope = row["payload"]["native_text_v1"]
+            entry = authority.runner.session_store.lookup_by_session_key(
+                envelope["route"]
+            )
             if entry is None or authority.logical_owner(entry.session_id) != sid:
-                raise RuntimeStoreError('admission_conflict')
-            adapter = authority.runner._adapter_for_source(entry.origin) if entry.origin is not None else None
+                raise RuntimeStoreError("admission_conflict")
+            adapter = (
+                authority.runner._adapter_for_source(entry.origin)
+                if entry.origin is not None
+                else None
+            )
             target = authority.physical_target(SessionRef(authority.profile_id, sid))
-            await check_native_route(authority.runner, row['payload'], target, entry.origin, adapter)
-            results[sid] = 'finalized' if finalize_webhook(
-                authority, authority._receipt(row)) else 'unchanged'
+            await check_native_route(
+                authority.runner, row["payload"], target, entry.origin, adapter
+            )
+            results[sid] = (
+                "finalized"
+                if finalize_webhook(authority, authority._receipt(row))
+                else "unchanged"
+            )
         except (KeyError, RuntimeStoreError):
-            results[sid] = 'unavailable'
+            results[sid] = "unavailable"
     return results

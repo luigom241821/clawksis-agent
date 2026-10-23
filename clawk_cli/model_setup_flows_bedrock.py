@@ -8,7 +8,13 @@ Prompt strings and config write order are behavior.
 from __future__ import annotations
 
 from clawk_cli.model_setup_flows_common import (
-    _ask, _ensure_dict_section, _finish_model, _note_setup_failure, _pick_model_or_prompt, _say)
+    _ask,
+    _ensure_dict_section,
+    _finish_model,
+    _note_setup_failure,
+    _pick_model_or_prompt,
+    _say,
+)
 
 
 # AWS cross-region inference profile prefixes. A geo-prefixed profile only routes
@@ -17,8 +23,15 @@ from clawk_cli.model_setup_flows_common import (
 BEDROCK_GEO_PREFIXES = ("us.", "eu.", "ap.", "apac.", "jp.", "ca.", "sa.", "me.", "af.")
 
 # region-name prefixes -> inference-profile geo prefix
-_REGION_GEO = (("us.", ("us-", "us_gov")), ("eu.", ("eu-",)), ("ap.", ("ap-",)), ("ca.", ("ca-",)),
-               ("sa.", ("sa-",)), ("me.", ("me-",)), ("af.", ("af-",)))
+_REGION_GEO = (
+    ("us.", ("us-", "us_gov")),
+    ("eu.", ("eu-",)),
+    ("ap.", ("ap-",)),
+    ("ca.", ("ca-",)),
+    ("sa.", ("sa-",)),
+    ("me.", ("me-",)),
+    ("af.", ("af-",)),
+)
 
 
 def bedrock_region_geo_prefix(region_name: str) -> str:
@@ -50,14 +63,25 @@ def _model_flow_bedrock_api_key(config, region, current_model=""):
     from clawk_cli.auth import _resolve_api_key_provider_secret, ProviderConfig
     from clawk_cli.config import save_env_value
     from clawk_cli.models import _PROVIDER_MODELS
+
     mantle_base_url = f"https://bedrock-mantle.{region}.api.aws/v1"
 
     # Check env var and credential pool (keys added via `clawk auth`)
-    bedrock_pconfig = ProviderConfig(id="bedrock", name="Bedrock", auth_type="api_key", api_key_env_vars=("AWS_BEARER_TOKEN_BEDROCK",))
-    existing_key, existing_source = _resolve_api_key_provider_secret("bedrock", bedrock_pconfig)
+    bedrock_pconfig = ProviderConfig(
+        id="bedrock",
+        name="Bedrock",
+        auth_type="api_key",
+        api_key_env_vars=("AWS_BEARER_TOKEN_BEDROCK",),
+    )
+    existing_key, existing_source = _resolve_api_key_provider_secret(
+        "bedrock", bedrock_pconfig
+    )
     if existing_key:
         from clawk_cli.env_loader import format_secret_source_suffix
-        source_suffix = format_secret_source_suffix(existing_source or "AWS_BEARER_TOKEN_BEDROCK")
+
+        source_suffix = format_secret_source_suffix(
+            existing_source or "AWS_BEARER_TOKEN_BEDROCK"
+        )
         print(f"  Bedrock API Key: {existing_key[:12]}... ✓{source_suffix}")
     else:
         _say(f"  Endpoint: {mantle_base_url}", "")
@@ -76,8 +100,13 @@ def _model_flow_bedrock_api_key(config, region, current_model=""):
     model_list = _PROVIDER_MODELS.get("bedrock", [])
     print(f"  Showing {len(model_list)} curated models")
     selected = _pick_model_or_prompt(
-        model_list, "  Model ID: ", current_model=current_model, confirm_provider="custom",
-        confirm_base_url=mantle_base_url, confirm_api_key=existing_key)
+        model_list,
+        "  Model ID: ",
+        current_model=current_model,
+        confirm_provider="custom",
+        confirm_base_url=mantle_base_url,
+        confirm_api_key=existing_key,
+    )
 
     def _finish(cfg, _model):
         # The bearer token rides on a named provider entry: a bare ``provider: custom``
@@ -94,13 +123,31 @@ def _model_flow_bedrock_api_key(config, region, current_model=""):
         _ensure_dict_section(cfg, "bedrock")["region"] = region
 
     # Saved as a custom provider pointing to bedrock-mantle (no inline endpoint fields).
-    if _finish_model(selected, "custom:bedrock-mantle", f"  Default model set to: {selected} (via Bedrock API Key, {region})",
-                     no_change="  No change.", drop_base_url=True, drop_api_mode=True, finish=_finish) is not None:
+    if (
+        _finish_model(
+            selected,
+            "custom:bedrock-mantle",
+            f"  Default model set to: {selected} (via Bedrock API Key, {region})",
+            no_change="  No change.",
+            drop_base_url=True,
+            drop_api_mode=True,
+            finish=_finish,
+        )
+        is not None
+    ):
         print(f"  Endpoint: {mantle_base_url}")
 
 
-_BEDROCK_EXCLUDE_PREFIXES = ("stability.", "cohere.embed", "twelvelabs.", "us.stability.", "us.cohere.embed",
-                             "us.twelvelabs.", "global.cohere.embed", "global.twelvelabs.")
+_BEDROCK_EXCLUDE_PREFIXES = (
+    "stability.",
+    "cohere.embed",
+    "twelvelabs.",
+    "us.stability.",
+    "us.cohere.embed",
+    "us.twelvelabs.",
+    "global.cohere.embed",
+    "global.twelvelabs.",
+)
 
 _BEDROCK_EXCLUDE_SUBSTRINGS = ("safeguard", "voxtral", "palmyra-vision")
 
@@ -109,26 +156,46 @@ _BEDROCK_PROFILE_PREFIXES = BEDROCK_GEO_PREFIXES + ("global.",)
 # Recommended models, matched geo-agnostically so an EU (eu.*) or APAC (apac.*)
 # picker pins its own region's profile rather than a us.* one.
 _BEDROCK_RECOMMENDED_BASES = (
-    "anthropic.claude-sonnet-4-6", "anthropic.claude-opus-4-6", "anthropic.claude-haiku-4-5", "amazon.nova-pro",
-    "amazon.nova-lite", "amazon.nova-micro", "deepseek.v3", "meta.llama4-maverick", "meta.llama4-scout")
+    "anthropic.claude-sonnet-4-6",
+    "anthropic.claude-opus-4-6",
+    "anthropic.claude-haiku-4-5",
+    "amazon.nova-pro",
+    "amazon.nova-lite",
+    "amazon.nova-micro",
+    "deepseek.v3",
+    "meta.llama4-maverick",
+    "meta.llama4-scout",
+)
 
 
 def _bedrock_text_model_ids(live_models: list, region: str) -> list[str]:
     """Filter live Bedrock models to routable text models, dedupe bare ids against their
     inference profiles, and order: recommended (in-region profile before global.*),
     then other global.* profiles, then the rest."""
+
     def _base_id(mid: str) -> str:
         _pp = next((p for p in _BEDROCK_PROFILE_PREFIXES if mid.startswith(p)), None)
-        return mid[len(_pp):] if _pp else mid
+        return mid[len(_pp) :] if _pp else mid
 
     filtered = [
-        m for m in live_models
+        m
+        for m in live_models
         if not any(m["id"].startswith(p) for p in _BEDROCK_EXCLUDE_PREFIXES)
         and not any(s in m["id"].lower() for s in _BEDROCK_EXCLUDE_SUBSTRINGS)
-        and bedrock_model_routable_from_region(m["id"], region)]
+        and bedrock_model_routable_from_region(m["id"], region)
+    ]
     # Deduplicate: prefer inference profiles (geo-prefixed or global.*) over bare foundation model IDs.
-    profile_base_ids = {_base_id(m["id"]) for m in filtered if m["id"].startswith(_BEDROCK_PROFILE_PREFIXES)}
-    deduped = [m for m in filtered if m["id"].startswith(_BEDROCK_PROFILE_PREFIXES) or m["id"] not in profile_base_ids]
+    profile_base_ids = {
+        _base_id(m["id"])
+        for m in filtered
+        if m["id"].startswith(_BEDROCK_PROFILE_PREFIXES)
+    }
+    deduped = [
+        m
+        for m in filtered
+        if m["id"].startswith(_BEDROCK_PROFILE_PREFIXES)
+        or m["id"] not in profile_base_ids
+    ]
 
     def _sort_key(m):
         mid = m["id"]
@@ -152,17 +219,33 @@ def _model_flow_bedrock(config, current_model=""):
 
     # 1. Check for AWS credentials
     try:
-        from agent.bedrock_adapter import has_aws_credentials, resolve_aws_auth_env_var, resolve_bedrock_region, discover_bedrock_models
+        from agent.bedrock_adapter import (
+            has_aws_credentials,
+            resolve_aws_auth_env_var,
+            resolve_bedrock_region,
+            discover_bedrock_models,
+        )
     except ImportError:
-        _say("  ✗ Could not load the Bedrock adapter.", "  Run clawk pm repair, then restart Clawksis.", "")
+        _say(
+            "  ✗ Could not load the Bedrock adapter.",
+            "  Run clawk pm repair, then restart Clawksis.",
+            "",
+        )
         return
 
     if not has_aws_credentials():
-        _say("  ⚠ No AWS credentials detected via environment variables.",
-             "  Bedrock will use boto3's default credential chain (IMDS, SSO, etc.)", "")
+        _say(
+            "  ⚠ No AWS credentials detected via environment variables.",
+            "  Bedrock will use boto3's default credential chain (IMDS, SSO, etc.)",
+            "",
+        )
     auth_var = resolve_aws_auth_env_var()
-    _say(f"  AWS credentials: {auth_var} ✓" if auth_var else "  AWS credentials: boto3 default chain (instance role / SSO)",
-         "")
+    _say(
+        f"  AWS credentials: {auth_var} ✓"
+        if auth_var
+        else "  AWS credentials: boto3 default chain (instance role / SSO)",
+        "",
+    )
 
     # 2. Region selection
     current_region = resolve_bedrock_region()
@@ -172,10 +255,16 @@ def _model_flow_bedrock(config, current_model=""):
     region = region_input or current_region
 
     # 2b. Authentication mode
-    _say("  Choose authentication method:", "", "    1. IAM credential chain (recommended)",
-         "       Works with EC2 instance roles, SSO, env vars, aws configure", "    2. Bedrock API Key",
-         "       Enter your Bedrock API Key directly — also supports",
-         "       team scenarios where an admin distributes keys", "")
+    _say(
+        "  Choose authentication method:",
+        "",
+        "    1. IAM credential chain (recommended)",
+        "       Works with EC2 instance roles, SSO, env vars, aws configure",
+        "    2. Bedrock API Key",
+        "       Enter your Bedrock API Key directly — also supports",
+        "       team scenarios where an admin distributes keys",
+        "",
+    )
     auth_choice = _ask("  Choice [1]: ", raw=True, cancel_msg="")
     if auth_choice is None:
         return
@@ -188,19 +277,37 @@ def _model_flow_bedrock(config, current_model=""):
     live_models = discover_bedrock_models(region)
     if live_models:
         model_list = _bedrock_text_model_ids(live_models, region)
-        print(f"  Found {len(model_list)} text model(s) (filtered from {len(live_models)} total)")
+        print(
+            f"  Found {len(model_list)} text model(s) (filtered from {len(live_models)} total)"
+        )
     else:
         model_list = _PROVIDER_MODELS.get("bedrock", [])
         if not model_list:
-            print("  No models found. Check IAM permissions for bedrock:ListFoundationModels.")
+            print(
+                "  No models found. Check IAM permissions for bedrock:ListFoundationModels."
+            )
             _note_setup_failure("no_models")
             return
         print(f"  Using {len(model_list)} curated models (live discovery unavailable)")
 
     # 4. Model selection
     runtime_url = f"https://bedrock-runtime.{region}.amazonaws.com"
-    selected = _pick_model_or_prompt(model_list, "  Model ID: ", current_model=current_model, confirm_provider="bedrock", confirm_base_url=runtime_url)
+    selected = _pick_model_or_prompt(
+        model_list,
+        "  Model ID: ",
+        current_model=current_model,
+        confirm_provider="bedrock",
+        confirm_base_url=runtime_url,
+    )
     # api_mode is dropped: bedrock_converse is auto-detected.
-    _finish_model(selected, "bedrock", f"  Default model set to: {selected} (via AWS Bedrock, {region})", no_change="  No change.",
-                  base_url=runtime_url, drop_api_mode=True,
-                  finish=lambda cfg, _m: _ensure_dict_section(cfg, "bedrock").__setitem__("region", region))
+    _finish_model(
+        selected,
+        "bedrock",
+        f"  Default model set to: {selected} (via AWS Bedrock, {region})",
+        no_change="  No change.",
+        base_url=runtime_url,
+        drop_api_mode=True,
+        finish=lambda cfg, _m: _ensure_dict_section(cfg, "bedrock").__setitem__(
+            "region", region
+        ),
+    )

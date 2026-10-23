@@ -67,7 +67,9 @@ class TestCaptureDefaultLogSnapshots:
         assert "Desktop GUI build failed" in snaps["update"].tail_text
         assert "ELIFECYCLE" in snaps["handoff"].tail_text
 
-    def test_snapshots_read_the_root_home_update_logs_under_a_profile(self, tmp_path, monkeypatch):
+    def test_snapshots_read_the_root_home_update_logs_under_a_profile(
+        self, tmp_path, monkeypatch
+    ):
         """``clawk update`` and the hand-off scripts write the ROOT home's logs, whatever profile."""
         from clawk_cli.debug import _capture_default_log_snapshots
 
@@ -134,7 +136,9 @@ class TestCollectDebugReport:
         from clawk_cli.debug import LogSnapshot, collect_debug_report
 
         legacy_keys = ("agent", "errors", "gateway", "gui", "desktop")
-        legacy = {k: LogSnapshot(path=None, tail_text="", full_text="") for k in legacy_keys}
+        legacy = {
+            k: LogSnapshot(path=None, tail_text="", full_text="") for k in legacy_keys
+        }
 
         report = collect_debug_report(
             log_lines=50, dump_text="dump", log_snapshots=legacy
@@ -158,9 +162,7 @@ class TestCollectShareBundle:
         assert "desktop-update-handoff.log" in bundle
         assert "ELIFECYCLE" in bundle["desktop-update-handoff.log"]
 
-    def test_bundle_omits_update_keys_when_files_absent(
-        self, home_without_update_logs
-    ):
+    def test_bundle_omits_update_keys_when_files_absent(self, home_without_update_logs):
         from clawk_cli.debug import collect_share_bundle
 
         bundle = collect_share_bundle(log_lines=50, redact=False)

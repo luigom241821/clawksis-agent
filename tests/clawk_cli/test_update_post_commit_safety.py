@@ -6,6 +6,7 @@ interpreter's linked SQLite (a shim interpreter that answers the SQLite probe an
 Python for everything else), and the gateway fleet restart / dashboard / multiplex migration
 service calls, which are replaced by recorders so the test can never touch a host's services.
 """
+
 from __future__ import annotations
 
 import json
@@ -22,13 +23,18 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def _child_env(**values: str) -> dict[str, str]:
     """A fresh env for a child of THIS interpreter: same dependency path, no clawk state."""
-    env = {key: value for key, value in os.environ.items() if not key.startswith(("CLAWK_", "PYTEST_"))}
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.startswith(("CLAWK_", "PYTEST_"))
+    }
     # The test runner may provide dependencies through sys.path rather than site-packages.
     env["PYTHONPATH"] = os.pathsep.join(path for path in sys.path if path)
     env.update(values)
     return env
 
-_CHILD = textwrap.dedent('''
+
+_CHILD = textwrap.dedent("""
     import copy, json, os, subprocess, sys
     from pathlib import Path
     root_checkout, cell, mode = sys.argv[1:4]
@@ -143,7 +149,7 @@ _CHILD = textwrap.dedent('''
         "marker_at_verify": (cell / "marker-at-verify").read_text() if (cell / "marker-at-verify").exists() else None,
         "marker_final": marker.read_text() if marker.exists() else None,
         "migration_entered": entered.is_file()}))
-''')
+""")
 
 
 def _run_completion(tmp_path: Path, mode: str, *, sqlite: str | None = None) -> dict:
@@ -153,26 +159,47 @@ def _run_completion(tmp_path: Path, mode: str, *, sqlite: str | None = None) -> 
     profile = root_home / "profiles" / "probe"
     for name in ("logs/update_receipts", "skills", "cache", "profiles/probe"):
         (root_home / name).mkdir(parents=True, exist_ok=True)
-    env = _child_env(HOME=str(cell / "home"), CLAWK_HOME=str(profile), CLAWK_DISABLE_LAZY_INSTALLS="1",
-                     CLAWK_RUNTIME_DIR=str(tmp_path / "store"), PYTHONDONTWRITEBYTECODE="1",
-                     XDG_CONFIG_HOME=str(cell / "home/.config"), XDG_CACHE_HOME=str(cell / "home/.cache"),
-                     XDG_STATE_HOME=str(cell / "home/.local/state"),
-                     CLAWK_GATEWAY_LOCK_DIR=str(cell / "home/.local/state/clawk/gateway-locks"))
+    env = _child_env(
+        HOME=str(cell / "home"),
+        CLAWK_HOME=str(profile),
+        CLAWK_DISABLE_LAZY_INSTALLS="1",
+        CLAWK_RUNTIME_DIR=str(tmp_path / "store"),
+        PYTHONDONTWRITEBYTECODE="1",
+        XDG_CONFIG_HOME=str(cell / "home/.config"),
+        XDG_CACHE_HOME=str(cell / "home/.cache"),
+        XDG_STATE_HOME=str(cell / "home/.local/state"),
+        CLAWK_GATEWAY_LOCK_DIR=str(cell / "home/.local/state/clawk/gateway-locks"),
+    )
     if sqlite is not None:
-        payload = json.dumps({"base_prefix": sys.base_prefix, "executable": sys.executable,
-                              "python_version": list(sys.version_info[:3]),
-                              "sqlite_version": [int(p) for p in sqlite.split(".")],
-                              "sqlite_version_string": sqlite, "sqlite_source_id": "fixture"})
+        payload = json.dumps(
+            {
+                "base_prefix": sys.base_prefix,
+                "executable": sys.executable,
+                "python_version": list(sys.version_info[:3]),
+                "sqlite_version": [int(p) for p in sqlite.split(".")],
+                "sqlite_version_string": sqlite,
+                "sqlite_source_id": "fixture",
+            }
+        )
         shim = tmp_path / "python-shim"
-        script = (f"#!/bin/sh\ncase \"$3\" in *sqlite_source_id*) printf '%s\\n' '{payload}'; exit 0;; esac\n"
-                  f"exec '{sys.executable}' \"$@\"\n")
+        script = (
+            f"#!/bin/sh\ncase \"$3\" in *sqlite_source_id*) printf '%s\\n' '{payload}'; exit 0;; esac\n"
+            f"exec '{sys.executable}' \"$@\"\n"
+        )
         shim.write_text(script, encoding="utf-8")
         shim.chmod(0o755)
         env["PROBE_SHIM"] = str(shim)
     child = tmp_path / "child.py"
     child.write_text(_CHILD, encoding="utf-8")
-    done = subprocess.run([sys.executable, "-B", str(child), str(ROOT), str(cell), mode],
-                          env=env, cwd=tmp_path, capture_output=True, text=True, timeout=240, check=False)
+    done = subprocess.run(
+        [sys.executable, "-B", str(child), str(ROOT), str(cell), mode],
+        env=env,
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=240,
+        check=False,
+    )
     assert done.returncode == 0, done.stdout + done.stderr
     summary = json.loads((cell / "summary.json").read_text(encoding="utf-8-sig"))
     summary["output"] = done.stdout + done.stderr
@@ -181,7 +208,9 @@ def _run_completion(tmp_path: Path, mode: str, *, sqlite: str | None = None) -> 
 
 @pytest.mark.platforms("posix")
 @pytest.mark.parametrize("sqlite, safe", [("3.46.1", False), ("3.53.1", True)])
-def test_unsafe_sqlite_runtime_keeps_exit_zero_but_vetoes_topology_migration(tmp_path, sqlite, safe):
+def test_unsafe_sqlite_runtime_keeps_exit_zero_but_vetoes_topology_migration(
+    tmp_path, sqlite, safe
+):
     summary = _run_completion(tmp_path, f"sqlite-{sqlite}", sqlite=sqlite)
     # Committed code: success and exit 0 either way.
     assert summary["code"] == 0, summary["output"]
@@ -197,7 +226,9 @@ def test_unsafe_sqlite_runtime_keeps_exit_zero_but_vetoes_topology_migration(tmp
 
 
 @pytest.mark.platforms("posix")
-@pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0, reason="root ignores directory modes")
+@pytest.mark.skipif(
+    hasattr(os, "geteuid") and os.geteuid() == 0, reason="root ignores directory modes"
+)
 def test_config_format_write_failure_is_owed_not_reported_complete(tmp_path):
     summary = _run_completion(tmp_path, "config-ro")
     assert summary["code"] == 0, summary["output"]
@@ -211,7 +242,9 @@ def test_config_format_write_failure_is_owed_not_reported_complete(tmp_path):
 
 
 @pytest.mark.platforms("posix")
-@pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0, reason="root ignores directory modes")
+@pytest.mark.skipif(
+    hasattr(os, "geteuid") and os.geteuid() == 0, reason="root ignores directory modes"
+)
 def test_profile_sync_followup_keeps_the_tail_owed(tmp_path):
     summary = _run_completion(tmp_path, "profile-sync")
     assert summary["code"] == 0, summary["output"]
@@ -224,7 +257,9 @@ def test_profile_sync_followup_keeps_the_tail_owed(tmp_path):
 
 @pytest.mark.platforms("posix")
 @pytest.mark.parametrize("path", ["finish", "settle"])
-def test_receipt_store_failure_after_commit_keeps_exit_zero_and_a_correlated_receipt(tmp_path, path):
+def test_receipt_store_failure_after_commit_keeps_exit_zero_and_a_correlated_receipt(
+    tmp_path, path
+):
     """The receipt store is written after the commit point: losing it is loud, never exit 1."""
     summary = _run_completion(tmp_path, f"receipts-blocked-{path}")
     assert "Update receipt not written" in summary["output"]
@@ -245,7 +280,9 @@ def test_receipt_store_failure_after_commit_keeps_exit_zero_and_a_correlated_rec
 
 @pytest.mark.platforms("posix")
 @pytest.mark.parametrize("branch", ["failed-unit", "abort", "windows"])
-def test_restart_failure_is_owed_and_never_reported_as_a_failed_update(tmp_path, branch):
+def test_restart_failure_is_owed_and_never_reported_as_a_failed_update(
+    tmp_path, branch
+):
     """The gateway /update reader hears the committed success; the restart is a follow-up."""
     summary = _run_completion(tmp_path, f"ipc-{branch}")
     assert summary["code"] == 0, summary["output"]
@@ -259,7 +296,7 @@ def test_restart_failure_is_owed_and_never_reported_as_a_failed_update(tmp_path,
 # The NEW tree's completion child after a committed update whose Windows resume the service
 # manager refused (what _finish answers): the run is a success with a windows_resume follow-up,
 # and the token it hands back still owes the restart.
-_REFUSED_RESUME_COMPLETION = textwrap.dedent('''
+_REFUSED_RESUME_COMPLETION = textwrap.dedent("""
     import json, os, sys
     from pathlib import Path
     request = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8-sig"))
@@ -273,9 +310,9 @@ _REFUSED_RESUME_COMPLETION = textwrap.dedent('''
     Path(sys.argv[2]).write_text(json.dumps({
         "schema": 1, "update_id": receipt["update_id"], "exit_code": 0, "receipt": receipt,
         "windows_resume": dict(request["windows_resume"], resume_needed=True)}))
-''')
+""")
 
-_ZIP_PARENT = textwrap.dedent('''
+_ZIP_PARENT = textwrap.dedent("""
     import json, os, sys
     from pathlib import Path
     from types import SimpleNamespace
@@ -316,7 +353,7 @@ _ZIP_PARENT = textwrap.dedent('''
         def __getattr__(self, name):
             return None
     clawk_main.cmd_update(Args(gateway=True, branch="main", yes=True))
-''')
+""")
 
 
 @pytest.mark.platforms("posix")
@@ -329,25 +366,40 @@ def test_zip_update_never_replays_a_refused_resume_after_the_commit_point(tmp_pa
     completion = cell / "source" / "clawk_cli" / "update_completion.py"
     completion.parent.mkdir(parents=True)
     completion.write_text(_REFUSED_RESUME_COMPLETION, encoding="utf-8")
-    env = _child_env(HOME=str(cell / "home"), CLAWK_HOME=str(home), CLAWK_DISABLE_LAZY_INSTALLS="1",
-                     CLAWK_RUNTIME_DIR=str(tmp_path / "store"), PYTHONDONTWRITEBYTECODE="1",
-                     XDG_CONFIG_HOME=str(cell / "home/.config"), XDG_CACHE_HOME=str(cell / "home/.cache"),
-                     XDG_STATE_HOME=str(cell / "home/.local/state"))
+    env = _child_env(
+        HOME=str(cell / "home"),
+        CLAWK_HOME=str(home),
+        CLAWK_DISABLE_LAZY_INSTALLS="1",
+        CLAWK_RUNTIME_DIR=str(tmp_path / "store"),
+        PYTHONDONTWRITEBYTECODE="1",
+        XDG_CONFIG_HOME=str(cell / "home/.config"),
+        XDG_CACHE_HOME=str(cell / "home/.cache"),
+        XDG_STATE_HOME=str(cell / "home/.local/state"),
+    )
     driver = tmp_path / "zip_parent.py"
     driver.write_text(_ZIP_PARENT, encoding="utf-8")
-    done = subprocess.run([sys.executable, "-B", str(driver), str(ROOT), str(cell)],
-                          env=env, cwd=tmp_path, capture_output=True, text=True, timeout=240, check=False)
+    done = subprocess.run(
+        [sys.executable, "-B", str(driver), str(ROOT), str(cell)],
+        env=env,
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=240,
+        check=False,
+    )
     output = done.stdout + done.stderr
     assert done.returncode == 0, output
     assert (home / ".update_exit_code").read_text().strip() == "0", output
     calls = cell / "parent-resume-calls.jsonl"
     assert not calls.exists(), calls.read_text() + output
-    latest = json.loads((home / "logs/update_receipts/latest.json").read_text(encoding="utf-8-sig"))
+    latest = json.loads(
+        (home / "logs/update_receipts/latest.json").read_text(encoding="utf-8-sig")
+    )
     assert latest["outcome"] == "success"
     assert [row["step"] for row in latest["followups"]] == ["windows_resume"]
 
 
-_RECEIPT_CHILD = textwrap.dedent('''
+_RECEIPT_CHILD = textwrap.dedent("""
     import json, sys
     root_checkout, action = sys.argv[1:3]
     sys.path.insert(0, root_checkout)
@@ -361,7 +413,7 @@ _RECEIPT_CHILD = textwrap.dedent('''
         old.pop("carried_manual_serves", None)
         ur.begin_update_receipt(previous=old, correlation_id=old["update_id"])
     ur.finalize_pending_update_receipt(0)
-''')
+""")
 
 
 @pytest.mark.platforms("posix")
@@ -372,25 +424,53 @@ def test_old_schema_handoff_receipt_keeps_the_previous_runs_manual_serve_debt(tm
     home.mkdir(parents=True)
     # The durable reminder store is obstructed, so the receipt is the only record of the debt.
     (home / "serve_restart_pending").write_text("not a directory\n", encoding="utf-8")
-    env = _child_env(HOME=str(tmp_path / "home"), CLAWK_HOME=str(home), PYTHONDONTWRITEBYTECODE="1")
+    env = _child_env(
+        HOME=str(tmp_path / "home"), CLAWK_HOME=str(home), PYTHONDONTWRITEBYTECODE="1"
+    )
     child = tmp_path / "receipt_child.py"
     child.write_text(_RECEIPT_CHILD, encoding="utf-8")
-    serve = subprocess.Popen([sys.executable, "-I", "-c", "import time; print('ready', flush=True); time.sleep(120)"],
-                             stdout=subprocess.PIPE, text=True)
+    serve = subprocess.Popen(
+        [
+            sys.executable,
+            "-I",
+            "-c",
+            "import time; print('ready', flush=True); time.sleep(120)",
+        ],
+        stdout=subprocess.PIPE,
+        text=True,
+    )
     assert serve.stdout is not None
     try:
         assert serve.stdout.readline().strip() == "ready"
-        row = {"kind": "serve", "profile": "fixture", "supervisor": "manual-serve", "restart_via": "respawn-argv",
-               "pid": serve.pid, "detail": {"create_time": _process_create_time(serve.pid)}}
+        row = {
+            "kind": "serve",
+            "profile": "fixture",
+            "supervisor": "manual-serve",
+            "restart_via": "respawn-argv",
+            "pid": serve.pid,
+            "detail": {"create_time": _process_create_time(serve.pid)},
+        }
 
         def run(*args):
-            done = subprocess.run([sys.executable, "-B", str(child), str(ROOT), *args],
-                                  env=env, capture_output=True, text=True, timeout=120, check=False)
+            done = subprocess.run(
+                [sys.executable, "-B", str(child), str(ROOT), *args],
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=False,
+            )
             assert done.returncode == 0, done.stdout + done.stderr
 
         def owed():
-            receipt = json.loads((home / "logs/update_receipts/latest.json").read_text(encoding="utf-8-sig"))
-            rows = (receipt.get("plan") or {}).get("runtimes", []) + receipt.get("pending_manual_serves", [])
+            receipt = json.loads(
+                (home / "logs/update_receipts/latest.json").read_text(
+                    encoding="utf-8-sig"
+                )
+            )
+            rows = (receipt.get("plan") or {}).get("runtimes", []) + receipt.get(
+                "pending_manual_serves", []
+            )
             return [r["pid"] for r in rows if r.get("supervisor") == "manual-serve"]
 
         run("seed", json.dumps(row))

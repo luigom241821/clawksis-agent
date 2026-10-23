@@ -16,7 +16,10 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Request
 
-from clawk_cli.config import format_docker_update_message, recommended_update_command_for_method
+from clawk_cli.config import (
+    format_docker_update_message,
+    recommended_update_command_for_method,
+)
 from clawk_cli.update_contract import COMMIT_BUILD_UPDATE_MESSAGE, is_commit_build
 from clawk_cli.version_info import get_version_info
 from clawk_cli.web_deps import LateState, late
@@ -28,7 +31,9 @@ router = APIRouter()
 status_router = APIRouter()
 
 # Late-bound so a test's monkeypatch on the owning module wins at call time.
-_dashboard_local_update_managed_externally = late("_dashboard_local_update_managed_externally", "clawk_cli.web_server_files")
+_dashboard_local_update_managed_externally = late(
+    "_dashboard_local_update_managed_externally", "clawk_cli.web_server_files"
+)
 _spawn_gateway_restart = late("_spawn_gateway_restart")
 _spawn_clawk_action = late("_spawn_clawk_action", "clawk_cli.web_server_gateway")
 detect_install_method = late("detect_install_method", "clawk_cli.config")
@@ -45,6 +50,7 @@ def _server_path(name: str) -> Path:
     web_server; plain values are not proxied by LateState)."""
     import clawk_cli.web_server as ws
     import clawk_cli.web_server_gateway as gw
+
     return getattr(gw if name == "_ACTION_LOG_DIR" else ws, name)
 
 
@@ -52,15 +58,23 @@ _ACTION_LOG_TAIL_MAX_BYTES = 256 * 1024
 _ACTION_LOG_TAIL_INITIAL_CHUNK_BYTES = 8 * 1024
 _ACTION_LOG_TAIL_MAX_CHUNK_BYTES = 64 * 1024
 
-_UPDATE_ACTION_COMPLETED_RE = re.compile(r"^=== clawk-update completed ([0-9a-f]{32}) ===$")
-_UPDATE_ACTION_STARTED_RE = re.compile(r"^=== clawk-update started .* ([0-9a-f]{32}) ===$")
+_UPDATE_ACTION_COMPLETED_RE = re.compile(
+    r"^=== clawk-update completed ([0-9a-f]{32}) ===$"
+)
+_UPDATE_ACTION_STARTED_RE = re.compile(
+    r"^=== clawk-update started .* ([0-9a-f]{32}) ===$"
+)
 
-_MANAGED_EXTERNALLY_MESSAGE = "Clawksis updates are managed outside this dashboard in containerized environments."
+_MANAGED_EXTERNALLY_MESSAGE = (
+    "Clawksis updates are managed outside this dashboard in containerized environments."
+)
 
 # Per-kind dashboard error codes the UI keys on, by admission-refusal code.
 _UPDATE_REFUSAL_ERROR_CODES = {
-    "docker": "docker_update_unsupported", "image-marker": "docker_update_unsupported",
-    "image-marker-invalid": "docker_update_unsupported", "apt": "apt_update_required",
+    "docker": "docker_update_unsupported",
+    "image-marker": "docker_update_unsupported",
+    "image-marker-invalid": "docker_update_unsupported",
+    "apt": "apt_update_required",
     "nix": "nix_update_unsupported",
 }
 
@@ -77,7 +91,9 @@ def _record_completed_action(name: str, message: str, exit_code: int = 1) -> Non
     log_dir = _server_path("_ACTION_LOG_DIR")
     log_dir.mkdir(parents=True, exist_ok=True)
     with open(log_dir / _ACTION_LOG_FILES[name], "ab", buffering=0) as log_file:
-        log_file.write(f"\n=== {name} completed {time.strftime('%Y-%m-%d %H:%M:%S')} ===\n".encode())
+        log_file.write(
+            f"\n=== {name} completed {time.strftime('%Y-%m-%d %H:%M:%S')} ===\n".encode()
+        )
         log_file.write(message.encode("utf-8", errors="replace"))
         if not message.endswith("\n"):
             log_file.write(b"\n")
@@ -135,7 +151,11 @@ def _durable_completed_update_action_id(lines: list[str]) -> Optional[str]:
         if match:
             last_completed = index
             completed_action_id = match.group(1)
-    return completed_action_id if completed_action_id and last_completed > last_start else None
+    return (
+        completed_action_id
+        if completed_action_id and last_completed > last_start
+        else None
+    )
 
 
 def _latest_spawned_update_action_id(lines: list[str]) -> Optional[str]:
@@ -161,7 +181,9 @@ def _persisted_action_id(log_dir: Path, name: str) -> Optional[str]:
 async def restart_gateway(profile: Optional[str] = None):
     """Kick off a ``clawk gateway restart --interrupt`` in the background: the user-commanded force
     path that supersedes a drain (D6, 19b26244046), so live sessions do not refuse it."""
-    with http_failure("Failed to spawn gateway restart", 500, "Failed to restart gateway"):
+    with http_failure(
+        "Failed to spawn gateway restart", 500, "Failed to restart gateway"
+    ):
         proc, _reused = _spawn_gateway_restart(profile, interrupt=True)
     return {"ok": True, "pid": proc.pid, "name": "gateway-restart"}
 
@@ -170,6 +192,7 @@ async def restart_gateway(profile: Optional[str] = None):
 async def gateway_migrate_plan():
     """Preflight for folding per-profile gateways into one multiplexer (same JSON as the CLI plan)."""
     from clawk_cli.gateway_migrate import build_migration_plan
+
     plan = await asyncio.to_thread(build_migration_plan)
     return plan.to_dict()
 
@@ -179,8 +202,13 @@ async def gateway_migrate():
     """Run ``clawk gateway migrate --multiplex --yes`` detached; the CLI re-runs the preflight and
     refuses (exit 1 into the action log) when blocked, so the UI should gate on the plan first."""
     from clawk_cli.web_server_gateway import _spawn_clawk_action
-    with http_failure("Failed to spawn gateway migrate", 500, "Failed to start gateway migration"):
-        proc = _spawn_clawk_action(["gateway", "migrate", "--multiplex", "--yes"], "gateway-migrate")
+
+    with http_failure(
+        "Failed to spawn gateway migrate", 500, "Failed to start gateway migration"
+    ):
+        proc = _spawn_clawk_action(
+            ["gateway", "migrate", "--multiplex", "--yes"], "gateway-migrate"
+        )
     return {"ok": True, "pid": proc.pid, "name": "gateway-migrate"}
 
 
@@ -198,7 +226,11 @@ async def gateway_drain(request: Request):
     transition (the marker IS the control channel). Idempotent on both sides;
     ``POST /api/gateway/restart`` is the force-override that supersedes a drain.
     """
-    from gateway.drain_control import clear_drain_request, drain_requested, write_drain_request
+    from gateway.drain_control import (
+        clear_drain_request,
+        drain_requested,
+        write_drain_request,
+    )
 
     try:
         body = await request.json()
@@ -207,33 +239,51 @@ async def gateway_drain(request: Request):
     body = body or {}
     action = str(body.get("action", "drain")).strip().lower()
     # Attribute to the verified token principal when the token-auth seam attached one.
-    principal = getattr(getattr(request.state, "token_principal", None), "principal", None) or "dashboard"
+    principal = (
+        getattr(getattr(request.state, "token_principal", None), "principal", None)
+        or "dashboard"
+    )
 
     if action == "cancel":
         existed = clear_drain_request()
-        _log.info("Gateway drain CANCEL requested by %s (existed=%s)", principal, existed)
+        _log.info(
+            "Gateway drain CANCEL requested by %s (existed=%s)", principal, existed
+        )
         return {"ok": True, "action": "cancel", "was_draining": existed}
     if action != "drain":
-        raise HTTPException(status_code=400, detail=f"Unknown drain action {action!r}; expected 'drain' or 'cancel'")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown drain action {action!r}; expected 'drain' or 'cancel'",
+        )
 
     payload = write_drain_request(
-        principal=str(principal), suppress_notification=bool(body.get("suppress_notification", False)),
+        principal=str(principal),
+        suppress_notification=bool(body.get("suppress_notification", False)),
     )
     _log.info(
-        "Gateway drain BEGIN requested by %s (suppress_notification=%s)", principal, payload["suppress_notification"],
+        "Gateway drain BEGIN requested by %s (suppress_notification=%s)",
+        principal,
+        payload["suppress_notification"],
     )
     return {
-        "ok": True, "action": "drain", "requested_at": payload["requested_at"],
+        "ok": True,
+        "action": "drain",
+        "requested_at": payload["requested_at"],
         # Echo so a caller polling /api/status knows the marker is now set;
         # the gateway watcher flips gateway_state -> draining within ~1s.
-        "draining": drain_requested(), "suppress_notification": payload["suppress_notification"],
+        "draining": drain_requested(),
+        "suppress_notification": payload["suppress_notification"],
     }
 
 
 def _update_refused(error: str, message: str, update_command: str) -> dict[str, Any]:
     _record_completed_action("clawk-update", message, exit_code=1)
     return {
-        "ok": False, "pid": None, "name": "clawk-update", "error": error, "message": message,
+        "ok": False,
+        "pid": None,
+        "name": "clawk-update",
+        "error": error,
+        "message": message,
         "update_command": update_command,
     }
 
@@ -245,25 +295,38 @@ async def update_clawk():
         return _update_refused("commit-build", COMMIT_BUILD_UPDATE_MESSAGE, "")
 
     if _dashboard_local_update_managed_externally():
-        message = _MANAGED_EXTERNALLY_MESSAGE + " The built-in local updater is disabled here."
+        message = (
+            _MANAGED_EXTERNALLY_MESSAGE
+            + " The built-in local updater is disabled here."
+        )
         # No runnable command exists here: the outer launcher/image owns updates.
         return _update_refused("dashboard_update_managed_externally", message, "")
 
     # Shared admission gate: marker-first, then the docker/nix/apt heuristics —
     # one decision with the CLI paths.
-    from clawk_cli.update_contract import evaluate_update_admission, record_refusal_receipt
+    from clawk_cli.update_contract import (
+        evaluate_update_admission,
+        record_refusal_receipt,
+    )
 
     refusal = evaluate_update_admission(_server_path("PROJECT_ROOT"))
     if refusal is not None:
         response = _update_refused(
-            _UPDATE_REFUSAL_ERROR_CODES.get(refusal.code, "update_not_in_place"), refusal.message, refusal.update_command,
+            _UPDATE_REFUSAL_ERROR_CODES.get(refusal.code, "update_not_in_place"),
+            refusal.message,
+            refusal.update_command,
         )
         record_refusal_receipt(refusal)
         return response
 
     existing = _ACTION_PROCS.get("clawk-update")
     if existing is not None and existing.poll() is None:
-        response = {"ok": True, "pid": existing.pid, "name": "clawk-update", "already_running": True}
+        response = {
+            "ok": True,
+            "pid": existing.pid,
+            "name": "clawk-update",
+            "already_running": True,
+        }
         action_id = _ACTION_IDS.get("clawk-update")
         if action_id:
             response["action_id"] = action_id
@@ -271,19 +334,25 @@ async def update_clawk():
 
     action_id = secrets.token_hex(16)
     with http_failure("Failed to spawn clawk update", 500, "Failed to start update"):
-        proc = _spawn_clawk_action(["update"], "clawk-update", env_overrides={"CLAWK_ACTION_ID": action_id})
+        proc = _spawn_clawk_action(
+            ["update"], "clawk-update", env_overrides={"CLAWK_ACTION_ID": action_id}
+        )
     return {"ok": True, "pid": proc.pid, "name": "clawk-update", "action_id": action_id}
 
 
 _NON_APPLYABLE_MESSAGES = {
     "docker": format_docker_update_message,
-    "apt": lambda: "Clawksis is managed by Termux APT; run `pkg upgrade clawksis-agent`.",
+    "apt": lambda: (
+        "Clawksis is managed by Termux APT; run `pkg upgrade clawksis-agent`."
+    ),
 }
 
 
 def _source_release_label(status: dict[str, Any]) -> str:
     version = status.get("sourceVersion")
-    return f"{status.get('channel') or 'stable'} release" + (f" v{version}" if version else "")
+    return f"{status.get('channel') or 'stable'} release" + (
+        f" v{version}" if version else ""
+    )
 
 
 @router.get("/api/clawk/update/check")
@@ -301,8 +370,11 @@ async def check_clawk_update(force: bool = False, profile: Optional[str] = None)
         return {
             "install_method": "desktop-app",
             "current_version": get_version_info().derived_version,
-            "behind": None, "update_available": False, "can_apply": False,
-            "update_command": "", "message": COMMIT_BUILD_UPDATE_MESSAGE,
+            "behind": None,
+            "update_available": False,
+            "can_apply": False,
+            "update_command": "",
+            "message": COMMIT_BUILD_UPDATE_MESSAGE,
         }
 
     if _dashboard_local_update_managed_externally():
@@ -310,8 +382,10 @@ async def check_clawk_update(force: bool = False, profile: Optional[str] = None)
             "install_method": "managed-runtime",
             "current_version": get_version_info().derived_version,
             "behind": None,
-            "update_available": False, "can_apply": False,
-            "update_command": "", "message": _MANAGED_EXTERNALLY_MESSAGE,
+            "update_available": False,
+            "can_apply": False,
+            "update_command": "",
+            "message": _MANAGED_EXTERNALLY_MESSAGE,
         }
 
     install_method = detect_install_method(_server_path("PROJECT_ROOT"))
@@ -319,8 +393,10 @@ async def check_clawk_update(force: bool = False, profile: Optional[str] = None)
         "install_method": install_method,
         "current_version": get_version_info().derived_version,
         "behind": None,
-        "update_available": False, "can_apply": install_method == "git",
-        "update_command": recommended_update_command_for_method(install_method), "message": None,
+        "update_available": False,
+        "can_apply": install_method == "git",
+        "update_command": recommended_update_command_for_method(install_method),
+        "message": None,
     }
     non_applyable = _NON_APPLYABLE_MESSAGES.get(install_method)
     if non_applyable is not None:
@@ -345,29 +421,41 @@ async def check_clawk_update(force: bool = False, profile: Optional[str] = None)
         payload["message"] = "Couldn't reach the update source — try again later."
     elif behind == 0 and status.get("held"):
         version = status.get("sourceVersion")
-        payload.update(held=status["held"], source_version=version,
-                       message=f"This build is newer than {_source_release_label(status)}, which predates the gateway "
-                               "runtime its sessions use. It stays on this build until a newer release ships.")
+        payload.update(
+            held=status["held"],
+            source_version=version,
+            message=f"This build is newer than {_source_release_label(status)}, which predates the gateway "
+            "runtime its sessions use. It stays on this build until a newer release ships.",
+        )
     elif behind == 0:
         payload["message"] = "You're on the latest version."
     else:
         payload["update_available"] = True
         if status.get("rollback"):
             # A stable release this build already contains: applying it moves back.
-            payload.update(rollback_to=status.get("sourceVersion"),
-                           message=f"This build is newer than {_source_release_label(status)}. "
-                                   "Updating moves it back to that release.")
+            payload.update(
+                rollback_to=status.get("sourceVersion"),
+                message=f"This build is newer than {_source_release_label(status)}. "
+                "Updating moves it back to that release.",
+            )
         # "What's changed" for the desktop's remote update overlay; best-effort
         # (empty list on any failure). Channel + release name pick its notes source.
-        payload.update(channel=status.get("channel"), branch=status.get("branch"),
-                       source_version=status.get("sourceVersion"))
-        payload["commits"] = [{**row, "sha": row["sha"][:7], "at": row["at"] // 1000}
-                              for row in status.get("commits", [])[:20]]
+        payload.update(
+            channel=status.get("channel"),
+            branch=status.get("branch"),
+            source_version=status.get("sourceVersion"),
+        )
+        payload["commits"] = [
+            {**row, "sha": row["sha"][:7], "at": row["at"] // 1000}
+            for row in status.get("commits", [])[:20]
+        ]
     return payload
 
 
 def _completed_exit_code(
-    result: Optional[dict[str, Any]], durable_action_id: Optional[str], receipt: Optional[dict[str, Any]],
+    result: Optional[dict[str, Any]],
+    durable_action_id: Optional[str],
+    receipt: Optional[dict[str, Any]],
 ) -> Optional[int]:
     """Exit code for an action with no live process: in-memory result, else durable evidence."""
     if result is not None:
@@ -400,9 +488,14 @@ async def get_action_status(name: str, lines: int = 200):
         # dashboard's profile home: read it where it is written.
         from clawk_cli.logs import log_file_path
 
-        durable_update_action_id = _durable_completed_update_action_id(_tail_lines(log_file_path("update"), 2000))
-        spawned_action_id = (_latest_spawned_update_action_id(_tail_lines(log_dir / log_file_name, 2000))
-                             or _persisted_action_id(log_dir, name) or _ACTION_IDS.get(name))
+        durable_update_action_id = _durable_completed_update_action_id(
+            _tail_lines(log_file_path("update"), 2000)
+        )
+        spawned_action_id = (
+            _latest_spawned_update_action_id(_tail_lines(log_dir / log_file_name, 2000))
+            or _persisted_action_id(log_dir, name)
+            or _ACTION_IDS.get(name)
+        )
         if durable_update_action_id != spawned_action_id:
             # The root log is shared by every profile: another profile's (or an older) run's
             # completion never certifies the action this dashboard started.
@@ -418,7 +511,10 @@ async def get_action_status(name: str, lines: int = 200):
         # See #81193, #87359, #91277.
         # The store is root-wide (every profile's runs): show THIS action's receipt when one exists.
         update_receipt_summary = _latest_update_receipt_summary(spawned_action_id)
-        if spawned_action_id and (update_receipt_summary or {}).get("action_id") == spawned_action_id:
+        if (
+            spawned_action_id
+            and (update_receipt_summary or {}).get("action_id") == spawned_action_id
+        ):
             action_receipt_summary = update_receipt_summary
 
     proc = _ACTION_PROCS.get(name)
@@ -426,7 +522,9 @@ async def get_action_status(name: str, lines: int = 200):
         result = _ACTION_RESULTS.get(name)
         running = False
         pid = result.get("pid") if result else None
-        exit_code = _completed_exit_code(result, durable_update_action_id, action_receipt_summary)
+        exit_code = _completed_exit_code(
+            result, durable_update_action_id, action_receipt_summary
+        )
     else:
         exit_code = proc.poll()
         running = exit_code is None
@@ -436,7 +534,13 @@ async def get_action_status(name: str, lines: int = 200):
                 proc.wait(timeout=1)
             _finish_action(name, exit_code, pid)
 
-    response = {"name": name, "running": running, "exit_code": exit_code, "pid": pid, "lines": tail}
+    response = {
+        "name": name,
+        "running": running,
+        "exit_code": exit_code,
+        "pid": pid,
+        "lines": tail,
+    }
     if durable_update_action_id:
         response["action_id"] = durable_update_action_id
     if update_receipt_summary is not None:
@@ -448,12 +552,15 @@ def _read_latest_receipt() -> Optional[dict[str, Any]]:
     """Latest update receipt, or None on any failure (never raises)."""
     try:
         from clawk_cli.update_receipt import read_latest_receipt
+
         return read_latest_receipt() or None
     except Exception:
         return None
 
 
-def _latest_update_receipt_summary(action_id: Optional[str] = None) -> Optional[dict[str, Any]]:
+def _latest_update_receipt_summary(
+    action_id: Optional[str] = None,
+) -> Optional[dict[str, Any]]:
     """Compact summary of dashboard action ``action_id``'s receipt when one exists, else of the
     latest receipt (written by EVERY ``clawk update`` run, incl. refused/failed), or None; never
     raises. Steps/skips stay in the full endpoint. ``action_id`` names the writer so a client
@@ -467,6 +574,7 @@ def _latest_update_receipt_summary(action_id: Optional[str] = None) -> Optional[
     receipt = None
     if action_id:
         from clawk_cli.update_receipt import read_receipt_for_action
+
         receipt = read_receipt_for_action(action_id)
     receipt = receipt or _read_latest_receipt()
     if not receipt:
@@ -474,15 +582,30 @@ def _latest_update_receipt_summary(action_id: Optional[str] = None) -> Optional[
     try:
         post = receipt.get("post_update") or {}
         return {
-            **{k: receipt.get(k) for k in ("outcome", "started_at", "finished_at", "action_id")},
+            **{
+                k: receipt.get(k)
+                for k in ("outcome", "started_at", "finished_at", "action_id")
+            },
             "pre_sha": (receipt.get("pre_update") or {}).get("sha"),
-            "post_sha": post.get("sha"), "post_version": post.get("version"),
-            "fleet_states": sorted({str(e.get("state")) for e in receipt.get("fleet") or [] if isinstance(e, dict)}),
+            "post_sha": post.get("sha"),
+            "post_version": post.get("version"),
+            "fleet_states": sorted(
+                {
+                    str(e.get("state"))
+                    for e in receipt.get("fleet") or []
+                    if isinstance(e, dict)
+                }
+            ),
             # C3: a committed run is ``success`` even while post-commit steps are owed; carry them
             # so a client reports the owed step and its remedy instead of plain success.
-            "followups": [{"step": str(f.get("step")), "reason": str(f.get("reason") or "")}
-                          for f in receipt.get("followups") or [] if isinstance(f, dict)],
-            "user_action": receipt.get("user_action") if isinstance(receipt.get("user_action"), dict) else None,
+            "followups": [
+                {"step": str(f.get("step")), "reason": str(f.get("reason") or "")}
+                for f in receipt.get("followups") or []
+                if isinstance(f, dict)
+            ],
+            "user_action": receipt.get("user_action")
+            if isinstance(receipt.get("user_action"), dict)
+            else None,
         }
     except Exception:
         return None
@@ -499,5 +622,8 @@ async def get_update_receipt():
     """
     receipt = _read_latest_receipt()
     if not receipt:
-        raise HTTPException(status_code=404, detail="No update receipt found (no `clawk update` run recorded).")
+        raise HTTPException(
+            status_code=404,
+            detail="No update receipt found (no `clawk update` run recorded).",
+        )
     return {"receipt": receipt, "summary": _latest_update_receipt_summary()}

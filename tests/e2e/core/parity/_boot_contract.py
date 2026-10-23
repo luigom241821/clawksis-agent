@@ -28,8 +28,14 @@ def node_binary() -> str | None:
     node = shutil.which("node")
     if not node:
         return None
-    out = subprocess.run([node, "--version"], capture_output=True, text=True, timeout=30,
-                         stdin=subprocess.DEVNULL, check=False).stdout.strip()
+    out = subprocess.run(
+        [node, "--version"],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        stdin=subprocess.DEVNULL,
+        check=False,
+    ).stdout.strip()
     m = re.match(r"v(\d+)\.(\d+)", out)
     if not m or (int(m.group(1)), int(m.group(2))) < _MIN_NODE:
         return None
@@ -39,15 +45,20 @@ def node_binary() -> str | None:
 def require_node() -> str:
     node = node_binary()
     if node is None:
-        pytest.skip(f"needs node >= {'.'.join(map(str, _MIN_NODE))} to run the Desktop READY parser")
+        pytest.skip(
+            f"needs node >= {'.'.join(map(str, _MIN_NODE))} to run the Desktop READY parser"
+        )
     return node
 
 
 def desktop_parse(stdout_bytes: str) -> dict:
     """What ``waitForDashboardPort`` resolves/rejects with for this exact stdout stream."""
     proc = subprocess.run(
-        [require_node(), str(BRIDGE_MJS), str(PARSER_TS), "5000"], input=stdout_bytes,
-        capture_output=True, text=True, timeout=60,
+        [require_node(), str(BRIDGE_MJS), str(PARSER_TS), "5000"],
+        input=stdout_bytes,
+        capture_output=True,
+        text=True,
+        timeout=60,
         check=False,
     )
     assert proc.returncode == 0, f"desktop parser bridge crashed: {proc.stderr[-2000:]}"

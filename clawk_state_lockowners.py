@@ -46,7 +46,9 @@ def _describe_range(sidecar: str, start: int, end: int) -> str:
     return f"db bytes {start}-{end}"
 
 
-def parse_proc_locks(text: str, inodes: dict[tuple[int, int], str]) -> list[tuple[int, str, str]]:
+def parse_proc_locks(
+    text: str, inodes: dict[tuple[int, int], str]
+) -> list[tuple[int, str, str]]:
     """``(pid, lock kind, sidecar)`` for every WRITE lock on one of ``inodes``.
 
     ``inodes`` maps ``(st_dev, st_ino)`` to ``""`` (main file), ``"-wal"`` or ``"-shm"``. Read locks
@@ -102,12 +104,18 @@ def state_db_write_lock_holders(db_path) -> list[str]:
                 text = handle.read()
         except OSError:
             return []
-        held.extend(entry for entry in parse_proc_locks(text, inodes) if entry not in held)
+        held.extend(
+            entry for entry in parse_proc_locks(text, inodes) if entry not in held
+        )
     from clawk_state_holders import describe_holder_pid
 
     lines = []
     for pid, kind, sidecar in held:
-        who = describe_holder_pid(pid) if pid > 0 else "OFD lock, owner pid not exported by the kernel"
+        who = (
+            describe_holder_pid(pid)
+            if pid > 0
+            else "OFD lock, owner pid not exported by the kernel"
+        )
         lines.append(f"{who} holds {kind} lock on {Path(base + sidecar).name}")
     return lines
 
@@ -120,5 +128,8 @@ def log_write_lock_holders(db_path, patience_s: float) -> None:
     else:
         detail = "no write-class lock held at the deadline (the holder released just before it)"
     logger.warning(
-        "state.db write lock unavailable for %.0fs (%s): %s", patience_s, Path(db_path).name, detail
+        "state.db write lock unavailable for %.0fs (%s): %s",
+        patience_s,
+        Path(db_path).name,
+        detail,
     )

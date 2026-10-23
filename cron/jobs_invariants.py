@@ -3,6 +3,7 @@
 ``create_job`` and ``update_job`` (``cron/jobs.py``) both run these, so an update cannot
 bypass a rule the create door enforces.
 """
+
 from typing import Optional
 
 from clawk_constants import display_clawk_home
@@ -29,17 +30,22 @@ def _validate_job_mode_invariants(
     if monitor_script and monitor_url:
         raise ValueError(
             "monitor_script and monitor_url are mutually exclusive — a job "
-            "can only have one monitor source.")
+            "can only have one monitor source."
+        )
     if (monitor_script or monitor_url) and no_agent:
         raise ValueError(
             "monitor_script/monitor_url cannot be combined with no_agent=True — "
             "the whole point of a monitor job is to suppress or wake the AGENT "
-            "based on source changes. Use a plain no_agent script job instead.")
+            "based on source changes. Use a plain no_agent script job instead."
+        )
     if no_agent and not script:
         raise ValueError(NO_AGENT_WITHOUT_SCRIPT_ERROR)
     if script and _script_is_command_line(script):
-        raise ValueError(SCRIPT_IS_COMMAND_LINE_ERROR.format(
-            scripts_dir=display_clawk_home() + "/scripts/", script=script))
+        raise ValueError(
+            SCRIPT_IS_COMMAND_LINE_ERROR.format(
+                scripts_dir=display_clawk_home() + "/scripts/", script=script
+            )
+        )
 
 
 def _script_is_command_line(script: str) -> bool:
@@ -49,5 +55,6 @@ def _script_is_command_line(script: str) -> bool:
     if not any(ch.isspace() for ch in script.strip()):
         return False
     from cron.lifecycle_guard import _resolve_script_path
+
     path = _resolve_script_path(script)
     return path is None or not path.is_file()

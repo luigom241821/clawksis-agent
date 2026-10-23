@@ -145,8 +145,6 @@ def test_greedy_pack_overflow_callback():
 # ── canonical table-row splitter delegation ──────────────────────────────────
 
 
-
-
 # ── UTF-16 length units at the Telegram limit (#55844) ──────────────────────
 
 
@@ -183,6 +181,10 @@ def test_empty_fence_block_atoms_match_main():
     """An empty fenced block (``` immediately followed by ```) is its own
     atom and the following text starts a fresh one — main's chunk boundaries."""
     assert split_markdown_atoms("```\n```\ntext") == ["```\n```", "text"]
-    assert split_markdown_atoms("```\n```\ncode\n```\ntail") == ["```\n```", "code", "```\ntail"]
+    assert split_markdown_atoms("```\n```\ncode\n```\ntail") == [
+        "```\n```",
+        "code",
+        "```\ntail",
+    ]
     assert split_markdown_atoms("```py\n```\n\n```\n```") == ["```py\n```", "```\n```"]
     assert split_markdown_atoms("a\n```\ncode\n```\nb") == ["a", "```\ncode\n```", "b"]

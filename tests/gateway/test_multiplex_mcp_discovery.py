@@ -37,7 +37,9 @@ async def test_gateway_boot_discovers_mcp_under_every_profile_home(
     )
     monkeypatch.setattr(_mcp_discovery, "discover_mcp_tools", fake_discover)
 
-    await gateway_run._discover_gateway_mcp_tools(GatewayConfig(multiplex_profiles=True))
+    await gateway_run._discover_gateway_mcp_tools(
+        GatewayConfig(multiplex_profiles=True)
+    )
 
     # Ran once per profile, under that profile's home, off the loop thread.
     assert [home for home, _ in seen] == [home for _, home in homes]
@@ -66,9 +68,12 @@ async def test_reload_mcp_only_touches_requesting_profile(
         get_or_create_session=MagicMock(side_effect=RuntimeError("skip transcript")),
     )
 
-    monkeypatch.setattr(mcp_tool, "_servers", {"default-srv": object(), "worker-srv": object()})
     monkeypatch.setattr(
-        mcp_tool, "_server_scope_keys",
+        mcp_tool, "_servers", {"default-srv": object(), "worker-srv": object()}
+    )
+    monkeypatch.setattr(
+        mcp_tool,
+        "_server_scope_keys",
         {"default-srv": clawk_home_key(tmp_path), "worker-srv": worker_scope},
     )
     seen: list[tuple] = []
@@ -84,10 +89,14 @@ async def test_reload_mcp_only_touches_requesting_profile(
     monkeypatch.setattr(_mcp_discovery, "discover_mcp_tools", fake_discover)
 
     event = MessageEvent(
-        text="/reload-mcp", message_id="m1",
+        text="/reload-mcp",
+        message_id="m1",
         source=SessionSource(
-            platform=Platform.TELEGRAM, user_id="u1", chat_id="c1",
-            chat_type="dm", profile="worker",
+            platform=Platform.TELEGRAM,
+            user_id="u1",
+            chat_id="c1",
+            chat_type="dm",
+            profile="worker",
         ),
     )
     result = await runner._execute_mcp_reload(event)
@@ -127,19 +136,26 @@ async def test_reload_mcp_formats_scoped_connection_keys_before_refreshing_cache
         get_or_create_session=MagicMock(side_effect=RuntimeError("skip transcript")),
     )
 
-    monkeypatch.setattr(mcp_tool, "_servers", {launch_key: object(), worker_key: object()})
     monkeypatch.setattr(
-        mcp_tool, "_server_scope_keys",
+        mcp_tool, "_servers", {launch_key: object(), worker_key: object()}
+    )
+    monkeypatch.setattr(
+        mcp_tool,
+        "_server_scope_keys",
         {launch_key: launch_scope, worker_key: worker_scope},
     )
     monkeypatch.setattr(_mcp_lifecycle, "shutdown_mcp_servers", lambda **_kwargs: None)
     monkeypatch.setattr(_mcp_discovery, "discover_mcp_tools", list)
 
     event = MessageEvent(
-        text="/reload-mcp", message_id="m1",
+        text="/reload-mcp",
+        message_id="m1",
         source=SessionSource(
-            platform=Platform.TELEGRAM, user_id="u1", chat_id="c1",
-            chat_type="dm", profile="worker",
+            platform=Platform.TELEGRAM,
+            user_id="u1",
+            chat_id="c1",
+            chat_type="dm",
+            profile="worker",
         ),
     )
     result = await runner._execute_mcp_reload(event)
@@ -175,15 +191,27 @@ async def test_reload_mcp_reports_a_shared_server_to_a_non_owner_profile(
     )
 
     from tools import mcp_tool_registration as _mcp_registration
+
     # Premise: both profiles resolve the connection's inputs identically (the reload runs under
     # the worker's runtime scope, which this fake's owner never had).
-    monkeypatch.setattr(_mcp_registration, "_adopter_identity_digest", lambda *_args: "same-identity")
-    live_server = SimpleNamespace(name="shared", session=object(), _config={}, _tools=[], tool_timeout=30,
-                                  initialize_result=None, _registered_tool_names=[],
-                                  _resolved_identity="same-identity")
+    monkeypatch.setattr(
+        _mcp_registration, "_adopter_identity_digest", lambda *_args: "same-identity"
+    )
+    live_server = SimpleNamespace(
+        name="shared",
+        session=object(),
+        _config={},
+        _tools=[],
+        tool_timeout=30,
+        initialize_result=None,
+        _registered_tool_names=[],
+        _resolved_identity="same-identity",
+    )
     monkeypatch.setattr(mcp_tool, "_servers", {"shared": live_server})
     monkeypatch.setattr(mcp_tool, "_server_scope_keys", {"shared": launch_scope})
-    monkeypatch.setattr(mcp_tool, "_server_tool_scopes", {"shared": {launch_scope}}, raising=False)
+    monkeypatch.setattr(
+        mcp_tool, "_server_tool_scopes", {"shared": {launch_scope}}, raising=False
+    )
     monkeypatch.setattr(mcp_tool, "_server_connecting", set())
     monkeypatch.setattr(mcp_tool, "_server_connect_errors", {})
     monkeypatch.setattr(mcp_tool, "_lazy_server_configs", {})
@@ -191,6 +219,7 @@ async def test_reload_mcp_reports_a_shared_server_to_a_non_owner_profile(
 
     def fake_discover() -> list[str]:
         from tools import mcp_tool_registration as _mcp_registration
+
         _mcp_registration.register_connected_into_current_scope({"shared": {}})
         return ["mcp__shared__tool"]
 
@@ -198,10 +227,14 @@ async def test_reload_mcp_reports_a_shared_server_to_a_non_owner_profile(
     monkeypatch.setattr(_mcp_discovery, "discover_mcp_tools", fake_discover)
 
     event = MessageEvent(
-        text="/reload-mcp", message_id="m1",
+        text="/reload-mcp",
+        message_id="m1",
         source=SessionSource(
-            platform=Platform.TELEGRAM, user_id="u1", chat_id="c1",
-            chat_type="dm", profile="worker",
+            platform=Platform.TELEGRAM,
+            user_id="u1",
+            chat_id="c1",
+            chat_type="dm",
+            profile="worker",
         ),
     )
     result = await runner._execute_mcp_reload(event)
@@ -212,11 +245,17 @@ async def test_reload_mcp_reports_a_shared_server_to_a_non_owner_profile(
     assert mcp_tool._server_tool_scopes["shared"] == {launch_scope, worker_scope}
 
 
-@pytest.mark.parametrize("worker_cfg", [
-    {"url": "https://worker.example/mcp"},                                   # different route
-    {"url": "https://default.example/mcp", "headers": {"Authorization": "Bearer worker"}},  # same route, other credentials
-    {"url": "https://default.example/mcp", "env": {"API_TOKEN": "worker"}},
-])
+@pytest.mark.parametrize(
+    "worker_cfg",
+    [
+        {"url": "https://worker.example/mcp"},  # different route
+        {
+            "url": "https://default.example/mcp",
+            "headers": {"Authorization": "Bearer worker"},
+        },  # same route, other credentials
+        {"url": "https://default.example/mcp", "env": {"API_TOKEN": "worker"}},
+    ],
+)
 def test_scope_visibility_rejects_a_foreign_or_differently_authenticated_route(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, worker_cfg: dict
 ) -> None:
@@ -227,13 +266,20 @@ def test_scope_visibility_rejects_a_foreign_or_differently_authenticated_route(
 
     worker_scope = clawk_home_key(tmp_path / "worker")
     launch_scope = clawk_home_key(tmp_path / "default")
-    live_server = SimpleNamespace(session=object(), _config={"url": "https://default.example/mcp"})
+    live_server = SimpleNamespace(
+        session=object(), _config={"url": "https://default.example/mcp"}
+    )
     monkeypatch.setattr(mcp_tool, "_servers", {"shared": live_server})
     monkeypatch.setattr(mcp_tool, "_server_scope_keys", {"shared": launch_scope})
-    monkeypatch.setattr(mcp_tool, "_server_tool_scopes", {"shared": {launch_scope}}, raising=False)
+    monkeypatch.setattr(
+        mcp_tool, "_server_tool_scopes", {"shared": {launch_scope}}, raising=False
+    )
     monkeypatch.setattr(mcp_tool, "_mcp_registry_scope", lambda: worker_scope)
 
-    assert _mcp_registration.register_connected_into_current_scope({"shared": worker_cfg}) == 0
+    assert (
+        _mcp_registration.register_connected_into_current_scope({"shared": worker_cfg})
+        == 0
+    )
     assert mcp_tool._server_tool_scopes["shared"] == {launch_scope}
 
 
@@ -266,7 +312,9 @@ def test_shared_server_tools_are_callable_and_removed_on_non_owner_reload(
         inputSchema={"type": "object", "properties": {}},
         annotations=None,
     )
-    shared_cfg = {"url": "https://default.example/mcp"}  # connectable: the adopter resolves its identity
+    shared_cfg = {
+        "url": "https://default.example/mcp"
+    }  # connectable: the adopter resolves its identity
     server = SimpleNamespace(
         name="shared",
         session=object(),
@@ -275,7 +323,9 @@ def test_shared_server_tools_are_callable_and_removed_on_non_owner_reload(
         _registered_tool_names=[],
         _config=dict(shared_cfg),
         initialize_result=None,
-        _resolved_identity=_mcp_registration._adopter_identity_digest("shared", shared_cfg),
+        _resolved_identity=_mcp_registration._adopter_identity_digest(
+            "shared", shared_cfg
+        ),
     )
     owner_tool_name = "mcp__shared__echo"
     registry.register(
@@ -304,7 +354,9 @@ def test_shared_server_tools_are_callable_and_removed_on_non_owner_reload(
 
     try:
         monkeypatch.setattr(mcp_tool, "_ensure_mcp_sdk", lambda: True)
-        monkeypatch.setattr(_mcp_config, "_filter_suspicious_mcp_servers", lambda servers: servers)
+        monkeypatch.setattr(
+            _mcp_config, "_filter_suspicious_mcp_servers", lambda servers: servers
+        )
         assert _mcp_discovery.register_mcp_servers({"shared": dict(shared_cfg)})
         tool_names = registry.get_tool_names_for_toolset("mcp-shared")
         assert tool_names
@@ -312,15 +364,21 @@ def test_shared_server_tools_are_callable_and_removed_on_non_owner_reload(
 
         # Changing the worker route removes only the worker overlay; the shared
         # live connection and launch owner remain intact.
-        assert _mcp_discovery.register_mcp_servers(
-            {"shared": {"url": "https://worker.example/mcp"}}
-        ) == []
+        assert (
+            _mcp_discovery.register_mcp_servers(
+                {"shared": {"url": "https://worker.example/mcp"}}
+            )
+            == []
+        )
         assert registry.get_tool_names_for_toolset("mcp-shared") == []
         with mcp_tool._lock:
             assert mcp_tool._server_scope_keys["shared"] == launch_scope
             assert mcp_tool._server_tool_scopes["shared"] == {launch_scope}
             assert mcp_tool._servers["shared"] is server
-        assert registry.snapshot_registration(owner_tool_name, scope=launch_scope) is not None
+        assert (
+            registry.snapshot_registration(owner_tool_name, scope=launch_scope)
+            is not None
+        )
         assert registry.get_toolset_alias_target("shared") == "mcp-shared"
 
         # Removing the server from the worker config has the same scoped cleanup.
@@ -347,8 +405,13 @@ def test_deregister_scope_kwarg_targets_overlay_and_keeps_plugin_confinement() -
     from tools.registry import ToolRegistry
 
     reg = ToolRegistry()
-    reg.register("mcp__s__t", "mcp-s", {"name": "mcp__s__t", "description": "d"},
-                 lambda **kw: None, scope="/home/p1")
+    reg.register(
+        "mcp__s__t",
+        "mcp-s",
+        {"name": "mcp__s__t", "description": "d"},
+        lambda **kw: None,
+        scope="/home/p1",
+    )
     assert reg.snapshot_registration("mcp__s__t", scope="/home/p1") is not None
 
     reg.deregister("mcp__s__t")  # unscoped: global slot only, overlay untouched
@@ -359,6 +422,7 @@ def test_deregister_scope_kwarg_targets_overlay_and_keeps_plugin_confinement() -
 
     # A plugin module may not name another profile's overlay.
     from clawk_constants import clawk_home_key
+
     reg._plugin_module_scopes["clawk_plugins.p"] = {clawk_home_key("/home/p1")}
     reg._caller_module = staticmethod(lambda: "clawk_plugins.p")
     with pytest.raises(PermissionError):

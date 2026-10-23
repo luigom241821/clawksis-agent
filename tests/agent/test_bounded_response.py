@@ -92,9 +92,7 @@ def server_base():
 def client():
     # Generous read timeout so the bounding is provably done by our helper,
     # not by httpx's own timeout.
-    c = httpx.Client(
-        timeout=httpx.Timeout(connect=5.0, read=45.0, write=5.0, pool=5.0)
-    )
+    c = httpx.Client(timeout=httpx.Timeout(connect=5.0, read=45.0, write=5.0, pool=5.0))
     try:
         yield c
     finally:
@@ -104,9 +102,7 @@ def client():
 def test_oversize_body_is_capped(server_base, client):
     start = time.monotonic()
     with client.stream("POST", server_base + "/oversize") as response:
-        text = read_streaming_error_body(
-            response, max_bytes=64 * 1024, timeout_s=10.0
-        )
+        text = read_streaming_error_body(response, max_bytes=64 * 1024, timeout_s=10.0)
     elapsed = time.monotonic() - start
     assert 0 < len(text) <= 64 * 1024
     # Capping must return promptly, not after draining the whole body.

@@ -16,8 +16,14 @@ import pytest
 from clawk_cli import doctor_connectivity as dc
 
 # GitHub's documented 401 body for a bad/expired token (REST API "Authentication" docs).
-_BAD_CREDENTIALS = {"message": "Bad credentials", "documentation_url": "https://docs.github.com/rest"}
-_NOT_ACCESSIBLE = {"message": "Resource not accessible by integration", "documentation_url": "https://docs.github.com/rest"}
+_BAD_CREDENTIALS = {
+    "message": "Bad credentials",
+    "documentation_url": "https://docs.github.com/rest",
+}
+_NOT_ACCESSIBLE = {
+    "message": "Resource not accessible by integration",
+    "documentation_url": "https://docs.github.com/rest",
+}
 
 
 @pytest.fixture
@@ -31,11 +37,17 @@ def github_stand_in(monkeypatch):
             auth = self.headers.get("Authorization") or ""
             seen.append({"path": self.path, "authorization": auth})
             status = self.status
-            if status == 200 and self.path == "/user" and auth.startswith("Bearer ghs_"):
+            if (
+                status == 200
+                and self.path == "/user"
+                and auth.startswith("Bearer ghs_")
+            ):
                 # GitHub's documented answer for an App installation token on /user.
                 status, body = 403, json.dumps(_NOT_ACCESSIBLE).encode()
             else:
-                body = json.dumps(_BAD_CREDENTIALS if status == 401 else {"login": "octocat"}).encode()
+                body = json.dumps(
+                    _BAD_CREDENTIALS if status == 401 else {"login": "octocat"}
+                ).encode()
             self.send_response(status)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
@@ -49,8 +61,11 @@ def github_stand_in(monkeypatch):
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     # Keep the production path so the stand-in can tell /user from /rate_limit.
     from urllib.parse import urlsplit
+
     path = urlsplit(dc.GITHUB_API_PROBE_URL).path
-    monkeypatch.setattr(dc, "GITHUB_API_PROBE_URL", f"http://127.0.0.1:{srv.server_port}{path}")
+    monkeypatch.setattr(
+        dc, "GITHUB_API_PROBE_URL", f"http://127.0.0.1:{srv.server_port}{path}"
+    )
     yield Handler, seen
     srv.shutdown()
 
@@ -71,29 +86,49 @@ def _github_probe_row(monkeypatch, tmp_path, dotenv: str | None, *, name: str = 
     return result
 
 
-def test_expired_dotenv_token_is_rejected_and_the_env_file_is_named(monkeypatch, tmp_path, github_stand_in):
+def test_expired_dotenv_token_is_rejected_and_the_env_file_is_named(
+    monkeypatch, tmp_path, github_stand_in
+):
     handler, seen = github_stand_in
     handler.status = 401
-    result = _github_probe_row(monkeypatch, tmp_path, "GITHUB_TOKEN=ghp_expired000000000000000000000000000000\n")
+    result = _github_probe_row(
+        monkeypatch,
+        tmp_path,
+        "GITHUB_TOKEN=ghp_expired000000000000000000000000000000\n",
+    )
     ((glyph, _label, detail),) = result.lines
     assert "✗" in glyph
     assert "GITHUB_TOKEN" in detail and "/.env" in detail and "rejected" in detail
-    assert result.issues and "GITHUB_TOKEN" in result.issues[0] and "/.env" in result.issues[0]
+    assert (
+        result.issues
+        and "GITHUB_TOKEN" in result.issues[0]
+        and "/.env" in result.issues[0]
+    )
     # The real token went to the API (not a synthetic pass) and never leaks into the row text.
-    assert seen and seen[0]["authorization"] == "Bearer ghp_expired000000000000000000000000000000"
+    assert (
+        seen
+        and seen[0]["authorization"]
+        == "Bearer ghp_expired000000000000000000000000000000"
+    )
     assert "ghp_expired" not in detail and "ghp_expired" not in result.issues[0]
 
 
-def test_valid_token_is_ok_and_no_token_is_skipped(monkeypatch, tmp_path, github_stand_in):
+def test_valid_token_is_ok_and_no_token_is_skipped(
+    monkeypatch, tmp_path, github_stand_in
+):
     handler, seen = github_stand_in
     handler.status = 200
-    result = _github_probe_row(monkeypatch, tmp_path, "GH_TOKEN=gho_valid00000000000000000000000000000000\n")
+    result = _github_probe_row(
+        monkeypatch, tmp_path, "GH_TOKEN=gho_valid00000000000000000000000000000000\n"
+    )
     ((glyph, _label, detail),) = result.lines
     assert "✓" in glyph and "GH_TOKEN" in detail and not result.issues
 
     seen.clear()
     result = _github_probe_row(monkeypatch, tmp_path, None, name="home-without-token")
-    assert result.lines == [] and result.issues == [] and seen == []  # nothing configured: no request, no row
+    assert (
+        result.lines == [] and result.issues == [] and seen == []
+    )  # nothing configured: no request, no row
 
 
 def test_actions_installation_token_is_accepted(monkeypatch, tmp_path, github_stand_in):
@@ -101,6 +136,13 @@ def test_actions_installation_token_is_accepted(monkeypatch, tmp_path, github_st
     GitHub answers 403 on /user; the doctor must probe an endpoint every token type can reach."""
     handler, seen = github_stand_in
     handler.status = 200
-    result = _github_probe_row(monkeypatch, tmp_path, "GITHUB_TOKEN=ghs_install000000000000000000000000000000\n")
+    result = _github_probe_row(
+        monkeypatch,
+        tmp_path,
+        "GITHUB_TOKEN=ghs_install000000000000000000000000000000\n",
+    )
     ((glyph, _label, detail),) = result.lines
-    assert "✓" in glyph and "GITHUB_TOKEN" in detail and not result.issues, (detail, seen)
+    assert "✓" in glyph and "GITHUB_TOKEN" in detail and not result.issues, (
+        detail,
+        seen,
+    )

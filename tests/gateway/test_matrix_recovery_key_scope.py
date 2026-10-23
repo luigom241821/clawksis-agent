@@ -14,10 +14,14 @@ it still used a bare ``os.getenv``, so a secondary profile's freshly
 bootstrapped recovery key would either not be written at all, or be written
 to the default profile's configured path.
 """
+
 import pytest
 
 from agent import secret_scope as ss
-from plugins.platforms.matrix.adapter import _recovery_key_output_path, _scoped_recovery_key
+from plugins.platforms.matrix.adapter import (
+    _recovery_key_output_path,
+    _scoped_recovery_key,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -86,7 +90,9 @@ class TestScopedRecoveryKey:
 
 
 class TestScopedRecoveryKeyOutputPath:
-    def test_multiplex_active_scoped_uses_scope_not_environ(self, monkeypatch, tmp_path):
+    def test_multiplex_active_scoped_uses_scope_not_environ(
+        self, monkeypatch, tmp_path
+    ):
         """Secondary profile under multiplex must resolve its own output path.
 
         A bare ``os.getenv`` would have returned the default profile's path

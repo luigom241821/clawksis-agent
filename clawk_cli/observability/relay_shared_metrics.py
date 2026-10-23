@@ -51,10 +51,16 @@ def _session_pair(event: dict[str, Any], key: str) -> tuple[str, str] | None:
 def _retry_ordinal(event: dict[str, Any]) -> int:
     """Clawksis's provider-local retry ordinal; 0 when absent or malformed."""
     value = event.get("retry_count")
-    return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else 0
+    return (
+        value
+        if isinstance(value, int) and not isinstance(value, bool) and value > 0
+        else 0
+    )
 
 
-def _forget(index: dict[Any, _MetricsSession], key: Any, owner: _MetricsSession) -> None:
+def _forget(
+    index: dict[Any, _MetricsSession], key: Any, owner: _MetricsSession
+) -> None:
     """Drop ``key`` from ``index`` only while it still points at ``owner``."""
     if index.get(key) is owner:
         index.pop(key, None)
@@ -83,8 +89,12 @@ def _with_launch_entrypoint(event: dict[str, Any]) -> dict[str, Any]:
     ``CLAWK_SINGLE_QUERY_SESSION`` marker those paths set (the same one ``cache_ttl: auto`` and the session
     source read). ``background`` for a dispatcher-spawned child, else ``one_shot``; the REPL, other surfaces,
     delegated children and an already-declared entrypoint are untouched."""
-    if (event.get("entrypoint") or event.get("parent_task_id") or event.get("parent_session_id")
-            or contract.execution_surface(event) != "cli"):
+    if (
+        event.get("entrypoint")
+        or event.get("parent_task_id")
+        or event.get("parent_session_id")
+        or contract.execution_surface(event) != "cli"
+    ):
         return event
     from agent.oneshot_footprint import is_single_query_session
 
@@ -93,7 +103,10 @@ def _with_launch_entrypoint(event: dict[str, Any]) -> dict[str, Any]:
     from gateway.session_context import get_session_env
 
     source = str(get_session_env("CLAWK_SESSION_SOURCE", "") or "").strip().lower()
-    return {**event, "entrypoint": "background" if source in _DISPATCHED_SOURCES else "one_shot"}
+    return {
+        **event,
+        "entrypoint": "background" if source in _DISPATCHED_SOURCES else "one_shot",
+    }
 
 
 def _elapsed_ms(started_ns: int) -> int:
@@ -110,7 +123,9 @@ def _sole(items: Any) -> Any:
     return next(iter(unique.values())) if len(unique) == 1 else None
 
 
-def _identities_compatible(candidate: tuple[str, str, str], observed: tuple[str, str, str]) -> bool:
+def _identities_compatible(
+    candidate: tuple[str, str, str], observed: tuple[str, str, str]
+) -> bool:
     """Match partial hook context without crossing known call boundaries."""
     if not observed[2] or candidate[2] != observed[2]:
         return False
@@ -186,11 +201,15 @@ class _MetricsSession:
     last_outcome: str = "unknown"
     first_turn_ns: int = 0
     last_turn_ns: int = 0
-    model_state: model_.ModelSessionState = field(default_factory=model_.ModelSessionState)
+    model_state: model_.ModelSessionState = field(
+        default_factory=model_.ModelSessionState
+    )
     # Compression rotated this id away: close once its in-flight turn ends.
     retiring: bool = False
     efficiency: eff.SessionEfficiency = field(default_factory=eff.SessionEfficiency)
-    connectors: connectors_.ConnectorSessionState = field(default_factory=connectors_.ConnectorSessionState)
+    connectors: connectors_.ConnectorSessionState = field(
+        default_factory=connectors_.ConnectorSessionState
+    )
     route_run: engagement_.RouteRun = field(default_factory=engagement_.RouteRun)
     api_calls: int = 0
     tool_call_total: int = 0
@@ -215,16 +234,24 @@ class _PeakLineage:
 _MAX_LINEAGES = 512
 
 
-def _absorb_peak(into: model_.ModelSessionState, segment: model_.ModelSessionState) -> None:
+def _absorb_peak(
+    into: model_.ModelSessionState, segment: model_.ModelSessionState
+) -> None:
     """Merge one closed segment's context peak (fullest fill wins, a limit hit anywhere sticks)."""
     if segment.peak_route is None:
         return
     into.limit_hit = into.limit_hit or segment.limit_hit
     fuller = segment.peak_window is not None and (
-        into.peak_window is None or segment.peak_tokens / segment.peak_window > into.peak_tokens / into.peak_window
+        into.peak_window is None
+        or segment.peak_tokens / segment.peak_window
+        > into.peak_tokens / into.peak_window
     )
     if into.peak_route is None or fuller:
-        into.peak_route, into.peak_tokens, into.peak_window = segment.peak_route, segment.peak_tokens, segment.peak_window
+        into.peak_route, into.peak_tokens, into.peak_window = (
+            segment.peak_route,
+            segment.peak_tokens,
+            segment.peak_window,
+        )
 
 
 class _Runtime:
@@ -262,7 +289,9 @@ class _Runtime:
         self._snapshot_checked_ns: int | None = None
         self._subscriber_name = f"{SUBSCRIBER_NAME}.{self.host.runtime_id}"
         self.subscriber = SharedMetricsSubscriber(
-            SharedMetricsStore(), get_version_info().base_version, runtime_id=self.host.runtime_id
+            SharedMetricsStore(),
+            get_version_info().base_version,
+            runtime_id=self.host.runtime_id,
         )
         self.relay.subscribers.register(self._subscriber_name, self.subscriber)
         self.host.retain_managed_execution(self._subscriber_name)
@@ -281,7 +310,9 @@ class _Runtime:
                 return None
             session = self._sessions.get(session_id)
             if session is None:
-                session = _MetricsSession(session_id=session_id, relay_session=relay_session)
+                session = _MetricsSession(
+                    session_id=session_id, relay_session=relay_session
+                )
                 self._sessions[session_id] = session
                 self._share_spent(session)
         with session.lock:
@@ -301,7 +332,10 @@ class _Runtime:
 
     def _emit_install_snapshot_if_due(self, session: _MetricsSession) -> None:
         now = monotonic_ns()
-        if self._snapshot_checked_ns is not None and now - self._snapshot_checked_ns < _SNAPSHOT_RECHECK_NS:
+        if (
+            self._snapshot_checked_ns is not None
+            and now - self._snapshot_checked_ns < _SNAPSHOT_RECHECK_NS
+        ):
             return
         self._snapshot_checked_ns = now
         if not self.subscriber.store.install_snapshot_due():
@@ -312,12 +346,21 @@ class _Runtime:
         self._mark(session, None, contract.INSTALL_SNAPSHOT_MARK, fields)
 
     def _mark(
-        self, session: _MetricsSession, task: _TaskRun | None, name: str, data: dict[str, str]
+        self,
+        session: _MetricsSession,
+        task: _TaskRun | None,
+        name: str,
+        data: dict[str, str],
     ) -> None:
         """Emit one Relay mark under the task scope when given, else the session scope."""
         self._run_scoped(
-            session, task, self.relay.scope.event, name,
-            handle=_scope_handle(session, task), data=data, metadata=self._event_metadata(),
+            session,
+            task,
+            self.relay.scope.event,
+            name,
+            handle=_scope_handle(session, task),
+            data=data,
+            metadata=self._event_metadata(),
         )
 
     def start_task(self, event: dict[str, Any]) -> _TaskRun | None:
@@ -350,11 +393,16 @@ class _Runtime:
                     return None
                 self._emit_client_active(session)
                 task_context = session.relay_session.context.copy()
-                start_fields = contract.task_start_fields(_with_launch_entrypoint(event))
+                start_fields = contract.task_start_fields(
+                    _with_launch_entrypoint(event)
+                )
                 handle = task_context.run(
-                    self._with_scope_stack, self.relay.scope.push,
-                    TASK_SCOPE, self.relay.ScopeType.Function,
-                    handle=_task_parent_handle(session, task_id), input=start_fields,
+                    self._with_scope_stack,
+                    self.relay.scope.push,
+                    TASK_SCOPE,
+                    self.relay.ScopeType.Function,
+                    handle=_task_parent_handle(session, task_id),
+                    input=start_fields,
                     metadata=self._event_metadata(),
                 )
                 task = _TaskRun(
@@ -380,9 +428,13 @@ class _Runtime:
     def _run_in_task(
         self, task: _TaskRun, callback: Callable[..., Any], *args: Any, **kwargs: Any
     ) -> Any:
-        return task.context.copy().run(self._with_scope_stack, callback, *args, **kwargs)
+        return task.context.copy().run(
+            self._with_scope_stack, callback, *args, **kwargs
+        )
 
-    def _with_scope_stack(self, callback: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+    def _with_scope_stack(
+        self, callback: Callable[..., Any], *args: Any, **kwargs: Any
+    ) -> Any:
         self.relay.get_scope_stack()
         return callback(*args, **kwargs)
 
@@ -402,7 +454,9 @@ class _Runtime:
         with session.lock:
             if session.closing:
                 return
-            if task is not None and not self._admits(session, task, event, current=True):
+            if task is not None and not self._admits(
+                session, task, event, current=True
+            ):
                 return
             existing = session.model_calls.get(model_call_key)
             if existing is not None:
@@ -422,8 +476,13 @@ class _Runtime:
                     # retry ordinal. Count that physical attempt.
                     task.retry_count += 1
             handle = self._run_scoped(
-                session, task, self.relay.llm.call, MODEL_CALL_SCOPE, self.relay.LLMRequest({}, {}),
-                handle=_scope_handle(session, task), metadata=self._event_metadata(),
+                session,
+                task,
+                self.relay.llm.call,
+                MODEL_CALL_SCOPE,
+                self.relay.LLMRequest({}, {}),
+                handle=_scope_handle(session, task),
+                metadata=self._event_metadata(),
                 model_name=contract.MODEL_CALL_PROFILE_MODEL,
             )
             session.model_calls[model_call_key] = _ModelCall(handle, task_id, fields)
@@ -441,15 +500,21 @@ class _Runtime:
             if session.closing:
                 return
             model_call_key = self._existing_model_call_key(session, event)
-            model_call = session.model_calls.get(model_call_key) if model_call_key else None
+            model_call = (
+                session.model_calls.get(model_call_key) if model_call_key else None
+            )
             if model_call is None:
                 return
             model_call.fields = contract.model_call_fields(event)
             if finish:
                 task = session.tasks.get(model_call.task_id)
                 session.replies += task is not None and task.cost.user_turn
-                session.model_state.observe_call(model_call.fields, event.get("usage"), event.get("context_length"))
-                self._observe_turn_call(session, session.tasks.get(model_call.task_id), model_call, event)
+                session.model_state.observe_call(
+                    model_call.fields, event.get("usage"), event.get("context_length")
+                )
+                self._observe_turn_call(
+                    session, session.tasks.get(model_call.task_id), model_call, event
+                )
                 model_call.ttft_bucket = fields_.ttft_bucket(event)
                 self._finish_model_call(session, model_call_key, "success")
                 tokens = fields_.model_token_fields(
@@ -457,12 +522,18 @@ class _Runtime:
                 )
                 if tokens is not None:
                     self._guarded(
-                        "Clawksis shared-metrics token mark failed", self._mark,
-                        session, session.tasks.get(model_call.task_id), contract.MODEL_TOKENS_MARK, tokens,
+                        "Clawksis shared-metrics token mark failed",
+                        self._mark,
+                        session,
+                        session.tasks.get(model_call.task_id),
+                        contract.MODEL_TOKENS_MARK,
+                        tokens,
                     )
             else:
                 model_call.error_class = contract.model_error_class(event)
-                session.model_state.observe_error(model_call.fields, model_call.error_class)
+                session.model_state.observe_error(
+                    model_call.fields, model_call.error_class
+                )
 
     def start_tool_call(self, event: dict[str, Any]) -> None:
         """Open one privacy-safe Relay tool lifecycle under its task."""
@@ -496,13 +567,17 @@ class _Runtime:
                 identity = self._tool_call_identity(event)
                 tool_call = session.tool_calls.get((task.task_id, *identity))
                 if tool_call is None:
-                    key = _sole(_compatible_tool_call_keys(session, task.task_id, identity))
+                    key = _sole(
+                        _compatible_tool_call_keys(session, task.task_id, identity)
+                    )
                     tool_call = session.tool_calls[key] if key is not None else None
                 if tool_call is not None:
                     tool_call.approval_outcome = outcome
                     attribution = "tool_call"
             self._mark(
-                session, task, contract.TOOL_APPROVAL_MARK,
+                session,
+                task,
+                contract.TOOL_APPROVAL_MARK,
                 {"attribution": attribution, "outcome": outcome},
             )
 
@@ -518,7 +593,9 @@ class _Runtime:
             tool_call = None
             if _text(event, "tool_call_id"):
                 observed_identity = self._tool_call_identity(event)
-                if self._settle_connector_batch(session, task, observed_identity, event):
+                if self._settle_connector_batch(
+                    session, task, observed_identity, event
+                ):
                     return
                 if observed_identity in task.completed_tool_call_ids:
                     return
@@ -530,7 +607,9 @@ class _Runtime:
                         for completed in task.completed_tool_call_ids
                     ):
                         return
-                    matching_keys = _compatible_tool_call_keys(session, task_id, observed_identity)
+                    matching_keys = _compatible_tool_call_keys(
+                        session, task_id, observed_identity
+                    )
                     if len(matching_keys) > 1:
                         # Partial context cannot safely choose between concurrent calls
                         # that reused the provider-local ID.
@@ -545,23 +624,34 @@ class _Runtime:
             if tool_call is None:
                 tool_call = self._open_tool_call(task, event)
             if task.cost.user_turn:
-                session.efficiency.tools.used.add(eff.toolset_metric_name(event.get("toolset")))
+                session.efficiency.tools.used.add(
+                    eff.toolset_metric_name(event.get("toolset"))
+                )
             self._finish_tool_call(task, tool_call, event)
             chain = session.connectors.observe(event)
             if chain is not None:
                 self._mark(session, task, contract.CONNECTOR_CHAIN_MARK, chain)
 
     def _settle_connector_batch(
-        self, session: _MetricsSession, task: _TaskRun, wrapper: tuple[str, str, str], event: dict[str, Any],
+        self,
+        session: _MetricsSession,
+        task: _TaskRun,
+        wrapper: tuple[str, str, str],
+        event: dict[str, Any],
     ) -> bool:
         """A connector batch wrapper's post is not a call of its own once an entry started: entries
         still open (the executor timed out or abandoned the batch) end with the wrapper's outcome.
         True when the wrapper was settled this way; a batch refused before any entry counts as itself."""
         if not connectors_.is_connector_batch(event):
             return False
-        started = [key for key in session.tool_calls
-                   if key[0] == task.task_id and connectors_.is_batch_entry(key[1:], wrapper)]
-        if not started and not connectors_.batch_entry_ran(task.completed_tool_call_ids, wrapper):
+        started = [
+            key
+            for key in session.tool_calls
+            if key[0] == task.task_id and connectors_.is_batch_entry(key[1:], wrapper)
+        ]
+        if not started and not connectors_.batch_entry_ran(
+            task.completed_tool_call_ids, wrapper
+        ):
             return False
         for key in started:
             task.completed_tool_call_ids.add(key[1:])
@@ -574,7 +664,10 @@ class _Runtime:
         if _text(event, "action").strip().lower() == "loaded":
             mark, fields = contract.SKILL_LOAD_MARK, contract.skill_load_fields(event)
         else:
-            mark, fields = contract.SKILL_LIFECYCLE_MARK, contract.skill_lifecycle_fields(event)
+            mark, fields = (
+                contract.SKILL_LIFECYCLE_MARK,
+                contract.skill_lifecycle_fields(event),
+            )
         if fields is None:
             return
 
@@ -584,7 +677,10 @@ class _Runtime:
             if not (session_id and task_id):
                 # No owning task: a bare process-level mark.
                 self._with_scope_stack(
-                    self.relay.scope.event, mark, data=fields, metadata=self._event_metadata()
+                    self.relay.scope.event,
+                    mark,
+                    data=fields,
+                    metadata=self._event_metadata(),
                 )
             return
         if task is None:
@@ -697,27 +793,37 @@ class _Runtime:
 
     def _any_session(self, event: dict[str, Any]) -> _MetricsSession | None:
         """Owner session by task/turn correlation, else by session_id."""
-        return self._task_session(event, allow_task_id_fallback=True) or self._session(event)
+        return self._task_session(event, allow_task_id_fallback=True) or self._session(
+            event
+        )
 
     def _task_pair(
         self, event: dict[str, Any], *, start: bool = False, **lookup: Any
     ) -> tuple[_MetricsSession | None, _TaskRun | None]:
         """Resolve (session, task) for a task-scoped hook; ``start`` opens a missing task."""
         session = self._task_session(event, **lookup)
-        task = session.tasks.get(_text(event, "task_id")) if session is not None else None
+        task = (
+            session.tasks.get(_text(event, "task_id")) if session is not None else None
+        )
         if task is None and start:
             task = self.start_task(event)
             session = self._task_session(event) if task is not None else None
         return session, task
 
     def _run_scoped(
-        self, session: _MetricsSession, task: _TaskRun | None, callback: Callable[..., Any],
-        *args: Any, **kwargs: Any,
+        self,
+        session: _MetricsSession,
+        task: _TaskRun | None,
+        callback: Callable[..., Any],
+        *args: Any,
+        **kwargs: Any,
     ) -> Any:
         """Run under the task context when the call belongs to a task, else the session."""
         if task is not None:
             return self._run_in_task(task, callback, *args, **kwargs)
-        return self.host.run_in_session(session.relay_session, callback, *args, **kwargs)
+        return self.host.run_in_session(
+            session.relay_session, callback, *args, **kwargs
+        )
 
     def _schedule_flush_and_export(self, failure_message: str) -> None:
         """Schedule the process-wide Relay flush without blocking the finishing turn.
@@ -734,7 +840,9 @@ class _Runtime:
                 return
             # Context copy: the export reads the profile's send/consent config via contextvars.
             thread = spawn_context_thread(
-                self._run_flush_worker, name="clawk-shared-metrics-flush", args=(failure_message,)
+                self._run_flush_worker,
+                name="clawk-shared-metrics-flush",
+                args=(failure_message,),
             )
             # The worker's first act is taking this lock, so it cannot clear the slot before it is set.
             thread.start()
@@ -760,7 +868,9 @@ class _Runtime:
         else:
             self._export()
 
-    def _abort_session(self, session: _MetricsSession, base_event: dict[str, Any]) -> bool:
+    def _abort_session(
+        self, session: _MetricsSession, base_event: dict[str, Any]
+    ) -> bool:
         """Mark the session closing and system-abort its open tasks; False if already closing."""
         with session.lock:
             if session.closing:
@@ -785,7 +895,9 @@ class _Runtime:
             if owner is not None or not allow_task_id_fallback:
                 return owner
             return _sole(
-                session for (_, tid), session in self._task_sessions.items() if tid == task_id
+                session
+                for (_, tid), session in self._task_sessions.items()
+                if tid == task_id
             )
 
     def _remember_turn(
@@ -800,7 +912,11 @@ class _Runtime:
     @staticmethod
     def _tool_call_identity(event: dict[str, Any]) -> tuple[str, str, str]:
         """Identify one provider-local tool call without exporting its IDs."""
-        return _text(event, "api_request_id"), _text(event, "turn_id"), _text(event, "tool_call_id")
+        return (
+            _text(event, "api_request_id"),
+            _text(event, "turn_id"),
+            _text(event, "tool_call_id"),
+        )
 
     @staticmethod
     def _event_matches_task_turn(task: _TaskRun, event: dict[str, Any]) -> bool:
@@ -841,7 +957,11 @@ class _Runtime:
         active = relay_runtime.active_turn()
         if active is not None:
             session, task = self._task_pair(
-                {**event, "session_id": active.lease.session_id, "task_id": active.task_id}
+                {
+                    **event,
+                    "session_id": active.lease.session_id,
+                    "task_id": active.task_id,
+                }
             )
             if task is not None:
                 return session, task
@@ -856,34 +976,52 @@ class _Runtime:
             with self._task_sessions_lock:
                 session = _sole(
                     candidate
-                    for (owner_id, candidate_turn_id), candidate in self._turn_sessions.items()
-                    if candidate_turn_id == turn_id and self._sessions.get(owner_id) is candidate
+                    for (
+                        owner_id,
+                        candidate_turn_id,
+                    ), candidate in self._turn_sessions.items()
+                    if candidate_turn_id == turn_id
+                    and self._sessions.get(owner_id) is candidate
                 )
         if session is None:
             return None, None
-        task = _sole(task for task in session.tasks.values() if turn_id in task.turn_ids)
+        task = _sole(
+            task for task in session.tasks.values() if turn_id in task.turn_ids
+        )
         return (None, None) if task is None else (session, task)
 
     def _open_tool_call(self, task: _TaskRun, event: dict[str, Any]) -> _ToolCall:
         handle = self._run_in_task(
-            task, self.relay.tools.call, contract.TOOL_CALL_SCOPE, {},
-            handle=task.handle, metadata=self._event_metadata(),
+            task,
+            self.relay.tools.call,
+            contract.TOOL_CALL_SCOPE,
+            {},
+            handle=task.handle,
+            metadata=self._event_metadata(),
         )
         return _ToolCall(
-            handle, contract.tool_category(event), contract.tool_metric_name(event), monotonic_ns()
+            handle,
+            contract.tool_category(event),
+            contract.tool_metric_name(event),
+            monotonic_ns(),
         )
 
     def _finish_tool_call(
         self, task: _TaskRun, tool_call: _ToolCall, event: dict[str, Any]
     ) -> None:
         fields = contract.tool_terminal_fields(
-            event, category=tool_call.category, approval_outcome=tool_call.approval_outcome,
-            fallback_duration_ms=_elapsed_ms(tool_call.started_ns), tool_name=tool_call.tool_name,
+            event,
+            category=tool_call.category,
+            approval_outcome=tool_call.approval_outcome,
+            fallback_duration_ms=_elapsed_ms(tool_call.started_ns),
+            tool_name=tool_call.tool_name,
         )
         self._guarded(
             "Clawksis shared-metrics tool call close failed",
             lambda: self._run_in_task(
-                task, self.relay.tools.call_end, tool_call.handle,
+                task,
+                self.relay.tools.call_end,
+                tool_call.handle,
                 self.relay.ToolExecutionResult(fields),
                 metadata=self._event_metadata(),
             ),
@@ -893,9 +1031,13 @@ class _Runtime:
         self, session: _MetricsSession, task: _TaskRun, event: dict[str, Any]
     ) -> None:
         task_outcome, _, _ = contract.task_terminal_state(event)
-        status = {"cancelled": "cancelled", "timed_out": "timeout"}.get(task_outcome, "error")
+        status = {"cancelled": "cancelled", "timed_out": "timeout"}.get(
+            task_outcome, "error"
+        )
         for key in [key for key in session.tool_calls if key[0] == task.task_id]:
-            self._finish_tool_call(task, session.tool_calls.pop(key), {**event, "status": status})
+            self._finish_tool_call(
+                task, session.tool_calls.pop(key), {**event, "status": status}
+            )
 
     def _finish_model_call(
         self, session: _MetricsSession, model_call_key: tuple[str, str], outcome: str
@@ -907,23 +1049,38 @@ class _Runtime:
         if outcome == "failed" and error_class == "none":
             error_class = "unknown"
         fields = contract.model_route_fields(
-            model_call.fields, call_role="primary", outcome=outcome, error_class=error_class,
+            model_call.fields,
+            call_role="primary",
+            outcome=outcome,
+            error_class=error_class,
             ttft_bucket=model_call.ttft_bucket,
         )
         self._guarded(
             "Clawksis shared-metrics model call close failed",
-            self._run_scoped, session, session.tasks.get(model_call.task_id),
-            self.relay.llm.call_end, model_call.handle, fields,
+            self._run_scoped,
+            session,
+            session.tasks.get(model_call.task_id),
+            self.relay.llm.call_end,
+            model_call.handle,
+            fields,
             metadata=self._event_metadata(),
         )
 
-    def _end_pending_model_calls(self, session: _MetricsSession, event: dict[str, Any]) -> None:
+    def _end_pending_model_calls(
+        self, session: _MetricsSession, event: dict[str, Any]
+    ) -> None:
         """Close calls that never saw a successful response as failed or cancelled."""
         task_id = _text(event, "task_id")
         cancelled = contract.task_terminal_state(event)[0] == "cancelled"
-        pending = [k for k, c in session.model_calls.items() if not task_id or c.task_id == task_id]
+        pending = [
+            k
+            for k, c in session.model_calls.items()
+            if not task_id or c.task_id == task_id
+        ]
         for key in pending:
-            self._finish_model_call(session, key, "cancelled" if cancelled else "failed")
+            self._finish_model_call(
+                session, key, "cancelled" if cancelled else "failed"
+            )
 
     @staticmethod
     def _existing_model_call_key(
@@ -936,10 +1093,14 @@ class _Runtime:
         key = (_text(event, "task_id"), request_id)
         if key in session.model_calls or key[0]:
             return key if key in session.model_calls else None
-        candidates = [candidate for candidate in session.model_calls if candidate[1] == request_id]
+        candidates = [
+            candidate for candidate in session.model_calls if candidate[1] == request_id
+        ]
         return candidates[0] if len(candidates) == 1 else None
 
-    def _finish_task(self, session: _MetricsSession, task_id: str, event: dict[str, Any]) -> bool:
+    def _finish_task(
+        self, session: _MetricsSession, task_id: str, event: dict[str, Any]
+    ) -> bool:
         task = session.tasks.get(task_id)
         if task is None:
             return False
@@ -952,18 +1113,28 @@ class _Runtime:
             tool_call_count=len(task.tool_call_ids) + task.unidentified_tool_calls,
             retry_count=task.retry_count,
         )
-        if task.cost.user_turn:  # background review forks share the session id and never fire pre_llm_call
+        if (
+            task.cost.user_turn
+        ):  # background review forks share the session id and never fire pre_llm_call
             self._count_session_turn(session, task, fields["outcome"])
         if not session.closing:
             self._observe_model_turn(session, task, fields)
         try:
             popped = self._guarded(
                 "Clawksis shared-metrics task close failed",
-                self._run_in_task, task, relay_runtime.pop_relay_scope_if_top, self.relay, task.handle,
-                output=fields, metadata=self._event_metadata(),
+                self._run_in_task,
+                task,
+                relay_runtime.pop_relay_scope_if_top,
+                self.relay,
+                task.handle,
+                output=fields,
+                metadata=self._event_metadata(),
             )
             if popped is False:
-                logger.debug("Left shared-metrics task scope %s under a concurrent turn's scope; session close drains it", task_id)
+                logger.debug(
+                    "Left shared-metrics task scope %s under a concurrent turn's scope; session close drains it",
+                    task_id,
+                )
         finally:
             session.tasks.pop(task_id, None)
             session.retired_turn_ids.extend(task.turn_ids)
@@ -974,49 +1145,94 @@ class _Runtime:
         return True
 
     @staticmethod
-    def _count_session_turn(session: _MetricsSession, task: _TaskRun, outcome: str) -> None:
+    def _count_session_turn(
+        session: _MetricsSession, task: _TaskRun, outcome: str
+    ) -> None:
         if session.start_fields is None:
             session.start_fields = dict(task.start_fields)
             session.first_turn_ns = task.started_ns
         session.turns += 1
         session.failed_turns += outcome == "failed"
         session.api_calls += len(task.model_call_ids)
-        session.tool_call_total += len(task.tool_call_ids) + task.unidentified_tool_calls
+        session.tool_call_total += (
+            len(task.tool_call_ids) + task.unidentified_tool_calls
+        )
         session.last_outcome = outcome
         session.last_turn_ns = monotonic_ns()
 
-    def _observe_model_turn(self, session: _MetricsSession, task: _TaskRun, fields: dict[str, str]) -> None:
+    def _observe_model_turn(
+        self, session: _MetricsSession, task: _TaskRun, fields: dict[str, str]
+    ) -> None:
         """A turn the user saw end (session-close aborts excluded): trailing-failure state and interrupts."""
         route = task.model_route or session.model_state.last_route
         session.model_state.observe_turn(fields["outcome"], route, session.last_turn_ns)
         if task.selected_route is not None and task.cost.user_turn:
-            self._with_route_run(session.session_id, session.route_run, lambda run: run.observe(task.selected_route))
-        if task.model_route is not None and engagement_.engaged_turn(task.start_fields, task.cost.user_turn):
-            self._guarded(
-                "Clawksis shared-metrics engagement mark failed", self._mark,
-                session, None, contract.ENGAGEMENT_TURN_MARK, dict(task.model_route),
+            self._with_route_run(
+                session.session_id,
+                session.route_run,
+                lambda run: run.observe(task.selected_route),
             )
-        if fields["end_reason"] == "user_cancelled" and route is not None and model_.attended(task.start_fields):
+        if task.model_route is not None and engagement_.engaged_turn(
+            task.start_fields, task.cost.user_turn
+        ):
             self._guarded(
-                "Clawksis shared-metrics friction mark failed", self._mark,
-                session, None, contract.MODEL_FRICTION_MARK, model_.friction_fields("interrupt", route),
+                "Clawksis shared-metrics engagement mark failed",
+                self._mark,
+                session,
+                None,
+                contract.ENGAGEMENT_TURN_MARK,
+                dict(task.model_route),
+            )
+        if (
+            fields["end_reason"] == "user_cancelled"
+            and route is not None
+            and model_.attended(task.start_fields)
+        ):
+            self._guarded(
+                "Clawksis shared-metrics friction mark failed",
+                self._mark,
+                session,
+                None,
+                contract.MODEL_FRICTION_MARK,
+                model_.friction_fields("interrupt", route),
             )
         if task.cost.user_turn and model_.attended(task.start_fields):
             rows = session.efficiency.finish_turn(
-                task.cost, fields, route=route, model_calls=len(task.model_call_ids),
+                task.cost,
+                fields,
+                route=route,
+                model_calls=len(task.model_call_ids),
                 tool_calls=len(task.tool_call_ids) + task.unidentified_tool_calls,
             )
             self._emit_rows(session, rows)
 
-    def _emit_rows(self, session: _MetricsSession | None, rows: list[tuple[str, dict[str, str]]]) -> None:
+    def _emit_rows(
+        self, session: _MetricsSession | None, rows: list[tuple[str, dict[str, str]]]
+    ) -> None:
         for mark, data in rows:
             if session is None:
-                self._guarded("Clawksis shared-metrics efficiency mark failed", self.record_process_mark, mark, data)
+                self._guarded(
+                    "Clawksis shared-metrics efficiency mark failed",
+                    self.record_process_mark,
+                    mark,
+                    data,
+                )
             else:
-                self._guarded("Clawksis shared-metrics efficiency mark failed", self._mark, session, None, mark, data)
+                self._guarded(
+                    "Clawksis shared-metrics efficiency mark failed",
+                    self._mark,
+                    session,
+                    None,
+                    mark,
+                    data,
+                )
 
     def _observe_turn_call(
-        self, session: _MetricsSession, task: _TaskRun | None, model_call: _ModelCall, event: dict[str, Any]
+        self,
+        session: _MetricsSession,
+        task: _TaskRun | None,
+        model_call: _ModelCall,
+        event: dict[str, Any],
     ) -> None:
         """One finished primary call of a user turn: its tokens, and a cold cache read nobody announced."""
         if task is None or not task.cost.user_turn:
@@ -1024,7 +1240,9 @@ class _Runtime:
         route, usage = model_call.fields, event.get("usage")
         task.cost.add_call(route, usage)
         expected = self._consume_cold(self._cold_key(session.session_id))
-        cause = session.efficiency.observe_cache(route, usage, model_call.started_ns, monotonic_ns(), expected=expected)
+        cause = session.efficiency.observe_cache(
+            route, usage, model_call.started_ns, monotonic_ns(), expected=expected
+        )
         if cause is not None:
             self._emit_rows(session, [eff.cache_break_row(cause, route)])
 
@@ -1047,13 +1265,17 @@ class _Runtime:
         with self._cold_lock:
             return self._cold_expected.pop(key, False) is None
 
-    def record_known_cache_break(self, cause: str, route: dict[str, str], session_id: str) -> None:
+    def record_known_cache_break(
+        self, cause: str, route: dict[str, str], session_id: str
+    ) -> None:
         """Clawksis invalidated the prefix itself: count it, and don't recount the cold read it causes.
         Several causes before one cold read are one break (the first cause names it)."""
         if self._announce_cold(self._cold_key(session_id)):
             self._emit_rows(None, [eff.cache_break_row(cause, route)])
 
-    def record_session_tools(self, session_id: str, agent: Any, tools_for_api: list) -> None:
+    def record_session_tools(
+        self, session_id: str, agent: Any, tools_for_api: list
+    ) -> None:
         session = self._session({"session_id": session_id}) if session_id else None
         if session is None:
             return
@@ -1061,13 +1283,17 @@ class _Runtime:
         with session.lock:
             if session.closing or session.efficiency.tools_key == key:
                 return
-        snapshot = eff.tool_snapshot(agent, tools_for_api)  # registry + estimator: outside the lock
+        snapshot = eff.tool_snapshot(
+            agent, tools_for_api
+        )  # registry + estimator: outside the lock
         with session.lock:
             if session.closing:
                 return
             session.efficiency.tools_key = key
             changed = session.efficiency.tools.observe(*snapshot)
-        route = model_.model_route(getattr(agent, "provider", None), getattr(agent, "model", None))
+        route = model_.model_route(
+            getattr(agent, "provider", None), getattr(agent, "model", None)
+        )
         if changed and self._announce_cold(self._cold_key(session_id)):
             self._emit_rows(session, [eff.cache_break_row("toolset_change", route)])
 
@@ -1083,7 +1309,11 @@ class _Runtime:
                     return  # a segment this process never served: the new id is its own conversation
                 key = old_id
                 self._lineages[key] = _PeakLineage(
-                    open={old_id}, run=old.route_run, spent=old.efficiency.spent, connectors=old.connectors)
+                    open={old_id},
+                    run=old.route_run,
+                    spent=old.efficiency.spent,
+                    connectors=old.connectors,
+                )
                 self._lineage_of[old_id] = key
             self._lineages[key].open.add(new_id)
             self._lineage_of[new_id] = key
@@ -1117,7 +1347,10 @@ class _Runtime:
                 session.connectors = lineage.connectors
 
     def _with_route_run(
-        self, session_id: str, own: engagement_.RouteRun | None, update: Callable[[engagement_.RouteRun], Any],
+        self,
+        session_id: str,
+        own: engagement_.RouteRun | None,
+        update: Callable[[engagement_.RouteRun], Any],
     ) -> Any:
         """Apply ``update`` to the conversation's model-turn run (the lineage's, shared by its segments)."""
         with self._lineage_lock:
@@ -1126,9 +1359,16 @@ class _Runtime:
             return update(run) if run is not None else None
 
     def _close_segment(
-        self, session_id: str, state: model_.ModelSessionState | None, tally: engagement_.SessionTally | None,
+        self,
+        session_id: str,
+        state: model_.ModelSessionState | None,
+        tally: engagement_.SessionTally | None,
         tools: eff.ToolUsage,
-    ) -> tuple[model_.ModelSessionState | None, engagement_.SessionTally | None, eff.ToolUsage | None]:
+    ) -> tuple[
+        model_.ModelSessionState | None,
+        engagement_.SessionTally | None,
+        eff.ToolUsage | None,
+    ]:
         """This segment's context peak, tally and tool usage, or, for a lineage segment, the
         conversation's merged ones once its last open segment closes (None before that)."""
         with self._lineage_lock:
@@ -1149,7 +1389,9 @@ class _Runtime:
     def _close_unseen_segment(self, session_id: str) -> None:
         """A rotated-to segment closed (or the process ended) before it served a turn here."""
         if session_id:
-            self._emit_summary_rows(None, *self._close_segment(session_id, None, None, eff.ToolUsage()))
+            self._emit_summary_rows(
+                None, *self._close_segment(session_id, None, None, eff.ToolUsage())
+            )
 
     def _flush_lineage(self, key: str) -> None:
         """Backstop for a conversation a surface never closed: report what it holds, detach its segments."""
@@ -1161,34 +1403,74 @@ class _Runtime:
             self._emit_summary_rows(None, lineage.peak, lineage.tally, lineage.tools)
 
     def _emit_summary_rows(
-        self, session: _MetricsSession | None, peak: model_.ModelSessionState | None,
-        tally: engagement_.SessionTally | None, tools: eff.ToolUsage | None, *extra: tuple[str, Any],
+        self,
+        session: _MetricsSession | None,
+        peak: model_.ModelSessionState | None,
+        tally: engagement_.SessionTally | None,
+        tools: eff.ToolUsage | None,
+        *extra: tuple[str, Any],
     ) -> None:
         marks = [
-            (contract.CONTEXT_PEAK_MARK, peak.context_peak_fields() if peak is not None else None),
+            (
+                contract.CONTEXT_PEAK_MARK,
+                peak.context_peak_fields() if peak is not None else None,
+            ),
             (contract.SESSION_MARK, tally.fields() if tally is not None else None),
             *(tools.rows() if tools is not None else ()),
             *extra,
         ]
-        self._emit_rows(session, [(mark, data) for mark, data in marks if data is not None])
+        self._emit_rows(
+            session, [(mark, data) for mark, data in marks if data is not None]
+        )
 
     def _emit_session_summary(self, session: _MetricsSession) -> None:
         """One clawk.session.count and context-peak row per closed top-level conversation (delegated
         children excluded; compression-rotated segments merged), its tool usage, plus a quick-abandon friction."""
         start = session.start_fields
-        counted = bool(session.turns) and start is not None and start.get("entrypoint") != "delegated"
-        tally = engagement_.SessionTally(
-            session.start_fields, session.turns, session.failed_turns, session.last_outcome,
-            session.first_turn_ns, session.last_turn_ns, session.api_calls, session.tool_call_total, session.replies,
-        ) if counted else None
-        tools = session.efficiency.tools if counted and model_.attended(start) else eff.ToolUsage()
+        counted = (
+            bool(session.turns)
+            and start is not None
+            and start.get("entrypoint") != "delegated"
+        )
+        tally = (
+            engagement_.SessionTally(
+                session.start_fields,
+                session.turns,
+                session.failed_turns,
+                session.last_outcome,
+                session.first_turn_ns,
+                session.last_turn_ns,
+                session.api_calls,
+                session.tool_call_total,
+                session.replies,
+            )
+            if counted
+            else None
+        )
+        tools = (
+            session.efficiency.tools
+            if counted and model_.attended(start)
+            else eff.ToolUsage()
+        )
         tools.surface = (start or {}).get("execution_surface", "unknown")
-        merged = self._close_segment(session.session_id, session.model_state if counted else None, tally, tools)
+        merged = self._close_segment(
+            session.session_id, session.model_state if counted else None, tally, tools
+        )
         # A segment compression retired is not the user walking away.
-        abandoned = session.model_state.quick_abandon_route(monotonic_ns()) if counted and not session.retiring else None
+        abandoned = (
+            session.model_state.quick_abandon_route(monotonic_ns())
+            if counted and not session.retiring
+            else None
+        )
         friction = (
-            [(contract.MODEL_FRICTION_MARK, model_.friction_fields("quick_abandon", abandoned))]
-            if abandoned is not None and model_.attended(start) else []
+            [
+                (
+                    contract.MODEL_FRICTION_MARK,
+                    model_.friction_fields("quick_abandon", abandoned),
+                )
+            ]
+            if abandoned is not None and model_.attended(start)
+            else []
         )
         self._emit_summary_rows(session, *merged, *friction)
 
@@ -1197,12 +1479,23 @@ class _Runtime:
         session = self._session({"session_id": session_id})
         with session.lock if session is not None else contextlib.nullcontext():
             taken = self._with_route_run(
-                session_id, session.route_run if session is not None else None, lambda run: run.take()
+                session_id,
+                session.route_run if session is not None else None,
+                lambda run: run.take(),
             )
         if taken is not None:
-            self.record_process_mark(contract.MODEL_SWITCH_AFTER_MARK, engagement_.switch_after_fields(*taken))
+            self.record_process_mark(
+                contract.MODEL_SWITCH_AFTER_MARK,
+                engagement_.switch_after_fields(*taken),
+            )
 
-    def record_friction(self, signal: str, session_id: str, fallback_route: dict[str, str], turns: int = 1) -> None:
+    def record_friction(
+        self,
+        signal: str,
+        session_id: str,
+        fallback_route: dict[str, str],
+        turns: int = 1,
+    ) -> None:
         """A user friction action, attributed to the session's last primary model when known; an
         /undo or /retry also counts the tokens of the turns it threw away."""
         session = self._session({"session_id": session_id}) if session_id else None
@@ -1212,10 +1505,21 @@ class _Runtime:
             if session is not None:
                 route = session.model_state.last_route
             if signal in contract.WASTE_REASONS:
-                efficiency = session.efficiency if session is not None else eff.SessionEfficiency()
-                if session is None and (spent := self._lineage_spent(session_id)) is not None:
-                    efficiency.spent = spent  # a rotated-to segment that has not served a turn yet
-                wasted = efficiency.discard_turns(signal, turns, route or fallback_route)
+                efficiency = (
+                    session.efficiency
+                    if session is not None
+                    else eff.SessionEfficiency()
+                )
+                if (
+                    session is None
+                    and (spent := self._lineage_spent(session_id)) is not None
+                ):
+                    efficiency.spent = (
+                        spent  # a rotated-to segment that has not served a turn yet
+                    )
+                wasted = efficiency.discard_turns(
+                    signal, turns, route or fallback_route
+                )
         data = model_.friction_fields(signal, route or fallback_route)
         if data is not None:
             self.record_process_mark(contract.MODEL_FRICTION_MARK, data)
@@ -1224,25 +1528,36 @@ class _Runtime:
     def record_process_mark(self, mark: str, data: dict[str, Any]) -> None:
         """A process-level fact with no owning task (setup, installs, commands, switches)."""
         # No flush here: the next task close or the atexit shutdown drains the subscriber.
-        self._with_scope_stack(self.relay.scope.event, mark, data=data, metadata=self._event_metadata())
+        self._with_scope_stack(
+            self.relay.scope.event, mark, data=data, metadata=self._event_metadata()
+        )
 
-    def record_process_marks_saved(self, marks: list[tuple[str, dict[str, Any]]]) -> int:
+    def record_process_marks_saved(
+        self, marks: list[tuple[str, dict[str, Any]]]
+    ) -> int:
         """Emit ``marks`` and wait for the store; how many settled without a store error."""
         ticket = uuid.uuid4().hex
         metadata = {**self._event_metadata(), contract.COMMIT_TICKET_KEY: ticket}
         for mark, data in marks:
-            self._with_scope_stack(self.relay.scope.event, mark, data=data, metadata=metadata)
+            self._with_scope_stack(
+                self.relay.scope.event, mark, data=data, metadata=metadata
+            )
         self.relay.subscribers.flush()
         return self.subscriber.take_saved(ticket)
 
     def record_auxiliary_tokens(self, event: dict[str, Any]) -> None:
         tokens = fields_.model_token_fields(
-            event.get("usage"), call_role="auxiliary", aux_task=event.get("aux_task"),
-            model=event.get("response_model") or event.get("model"), provider=event.get("provider"),
+            event.get("usage"),
+            call_role="auxiliary",
+            aux_task=event.get("aux_task"),
+            model=event.get("response_model") or event.get("model"),
+            provider=event.get("provider"),
         )
         if tokens is not None:
             self._with_scope_stack(
-                self.relay.scope.event, contract.MODEL_TOKENS_MARK, data=tokens,
+                self.relay.scope.event,
+                contract.MODEL_TOKENS_MARK,
+                data=tokens,
                 metadata=self._event_metadata(),
             )
 
@@ -1265,7 +1580,9 @@ class _Runtime:
         # Failures never break the export hook but log at warning (privacy-relevant).
         self._guarded(
             "Unable to record a shared-metrics consent transition",
-            _reconcile_store_consent, self.subscriber.store, resolved.send,
+            _reconcile_store_consent,
+            self.subscriber.store,
+            resolved.send,
         )
         if not resolved.send:
             return
@@ -1274,8 +1591,10 @@ class _Runtime:
             # One in-flight pass per process; the next hook fire picks up what is pending.
             if self._send_thread is None or not self._send_thread.is_alive():
                 self._send_thread = threading.Thread(
-                    target=self._run_send_pass, args=(resolved.endpoint,),
-                    name="clawk-shared-metrics-send", daemon=True,
+                    target=self._run_send_pass,
+                    args=(resolved.endpoint,),
+                    name="clawk-shared-metrics-send",
+                    daemon=True,
                 )
                 self._send_thread.start()
 
@@ -1287,7 +1606,9 @@ class _Runtime:
             resolved = _resolved_send_config()
             return resolved.send and resolved.endpoint == endpoint
 
-        sender = SharedMetricsSender(self.subscriber.store, endpoint, consent_check=still_consented)
+        sender = SharedMetricsSender(
+            self.subscriber.store, endpoint, consent_check=still_consented
+        )
         self._guarded("Shared-metrics send pass failed", sender.send_pending)
 
     def _event_metadata(self) -> dict[str, str]:
@@ -1297,7 +1618,9 @@ class _Runtime:
         }
 
     @staticmethod
-    def _guarded(message: str, callback: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+    def _guarded(
+        message: str, callback: Callable[..., Any], *args: Any, **kwargs: Any
+    ) -> Any:
         """Run ``callback``; log-and-swallow any exception, returning None."""
         try:
             return callback(*args, **kwargs)
@@ -1307,7 +1630,9 @@ class _Runtime:
 
     @classmethod
     def _safe(cls, callback: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
-        return cls._guarded("Clawksis shared metrics operation failed", callback, *args, **kwargs)
+        return cls._guarded(
+            "Clawksis shared metrics operation failed", callback, *args, **kwargs
+        )
 
 
 def _raw_config() -> dict[str, Any]:
@@ -1350,7 +1675,9 @@ def enabled() -> bool:
         config = config.get(key) if isinstance(config, dict) else None
     if isinstance(config, dict) and config.get("enabled") is True:
         return True
-    if profile_key not in _RUNTIMES:  # the opted-out hot path: nothing to tear down, no lock
+    if (
+        profile_key not in _RUNTIMES
+    ):  # the opted-out hot path: nothing to tear down, no lock
         return False
     with _RUNTIME_LOCK:
         runtime = _RUNTIMES.pop(profile_key, None)
@@ -1386,7 +1713,9 @@ def _reconcile_send_consent_once() -> None:
         resolved = _resolved_send_config()
         # Probe WITHOUT constructing a store: the constructor creates the directory and
         # schema as a side effect, which would make the skip below dead code.
-        default_path = get_clawk_home() / "telemetry" / "shared_metrics" / "metrics.sqlite3"
+        default_path = (
+            get_clawk_home() / "telemetry" / "shared_metrics" / "metrics.sqlite3"
+        )
         if not resolved.send and not default_path.exists():
             return
         _reconcile_store_consent(SharedMetricsStore(), resolved.send)
@@ -1405,7 +1734,9 @@ def observe_lifecycle(hook_name: str, **kwargs: Any) -> None:
     try:
         _HOOK_HANDLERS[hook_name](runtime, kwargs)
     except Exception:
-        logger.warning("Clawksis shared metrics hook failed: %s", hook_name, exc_info=True)
+        logger.warning(
+            "Clawksis shared metrics hook failed: %s", hook_name, exc_info=True
+        )
 
 
 def _with_runtime_toolset(event: dict[str, Any]) -> dict[str, Any]:
@@ -1447,7 +1778,9 @@ _HOOK_HANDLERS: dict[str, Callable[[_Runtime, dict[str, Any]], Any]] = {
 HANDLED_HOOKS = frozenset(_HOOK_HANDLERS)
 
 
-def _prepare_core_session(host: relay_runtime.RelayRuntime, context: dict[str, Any]) -> None:
+def _prepare_core_session(
+    host: relay_runtime.RelayRuntime, context: dict[str, Any]
+) -> None:
     """Prepare the profile subscriber before the coordinator opens a scope."""
     del context
     if host.profile_key == relay_runtime.current_profile_key() and enabled():
@@ -1459,8 +1792,12 @@ def start_task_run(
 ) -> None:
     """Start task metrics at the outer Clawksis execution boundary."""
     _run_task_hook(
-        "start_task", retry_failed=True, session_id=session_id, task_id=task_id,
-        platform=platform, parent_session_id=parent_session_id,
+        "start_task",
+        retry_failed=True,
+        session_id=session_id,
+        task_id=task_id,
+        platform=platform,
+        parent_session_id=parent_session_id,
     )
 
 
@@ -1469,7 +1806,9 @@ def shutdown_runtimes() -> None:
     ``clawk -z`` exit) and so never reaches the atexit hook that closes sessions and writes
     ``task_run.finished`` / ``session.count``."""
     with _RUNTIME_LOCK:
-        runtimes = [runtime for runtime in _RUNTIMES.values() if isinstance(runtime, _Runtime)]
+        runtimes = [
+            runtime for runtime in _RUNTIMES.values() if isinstance(runtime, _Runtime)
+        ]
     for runtime in runtimes:
         runtime._safe(runtime.shutdown)
 
@@ -1487,7 +1826,12 @@ def close_session_run(session_id: str) -> None:
 def rotate_segment(old_session_id: str, new_session_id: str) -> None:
     """Compression rotated a conversation's session id (the one seam that continues a conversation
     under a new id). Never creates a runtime: a runtime that does not exist served no segment."""
-    if not old_session_id or not new_session_id or old_session_id == new_session_id or not enabled():
+    if (
+        not old_session_id
+        or not new_session_id
+        or old_session_id == new_session_id
+        or not enabled()
+    ):
         return
     runtime = _RUNTIMES.get(relay_runtime.current_profile_key())
     if isinstance(runtime, _Runtime):
@@ -1495,12 +1839,19 @@ def rotate_segment(old_session_id: str, new_session_id: str) -> None:
 
 
 def finish_task_run(
-    *, session_id: str, task_id: str, platform: str,
-    result: dict[str, Any] | None = None, error: BaseException | None = None,
+    *,
+    session_id: str,
+    task_id: str,
+    platform: str,
+    result: dict[str, Any] | None = None,
+    error: BaseException | None = None,
 ) -> None:
     """Finish task metrics for every return or exception path."""
     _run_task_hook(
-        "finish_task", session_id=session_id, task_id=task_id, platform=platform,
+        "finish_task",
+        session_id=session_id,
+        task_id=task_id,
+        platform=platform,
         **_terminal_flags(result, error),
     )
 
@@ -1521,16 +1872,24 @@ def record_process_marks_saved(marks: list[tuple[str, dict[str, Any]]]) -> int:
     if not enabled() or not relay_runtime.relay_instrumentation_enabled():
         return len(marks)
     runtime = _get_runtime(retry_failed=True)
-    return (runtime._safe(runtime.record_process_marks_saved, marks) or 0) if runtime is not None else 0
+    return (
+        (runtime._safe(runtime.record_process_marks_saved, marks) or 0)
+        if runtime is not None
+        else 0
+    )
 
 
-def record_session_friction(signal: str, session_id: str, fallback_route: dict[str, str], turns: int = 1) -> None:
+def record_session_friction(
+    signal: str, session_id: str, fallback_route: dict[str, str], turns: int = 1
+) -> None:
     """Record one friction signal in the active profile's runtime (callers already checked enabled())."""
     if not relay_runtime.relay_instrumentation_enabled():
         return
     runtime = _get_runtime(retry_failed=True)
     if runtime is not None:
-        runtime._safe(runtime.record_friction, signal, session_id, fallback_route, turns)
+        runtime._safe(
+            runtime.record_friction, signal, session_id, fallback_route, turns
+        )
 
 
 def record_session_tools(session_id: str, agent: Any, tools_for_api: list) -> None:
@@ -1540,7 +1899,9 @@ def record_session_tools(session_id: str, agent: Any, tools_for_api: list) -> No
         runtime._safe(runtime.record_session_tools, session_id, agent, tools_for_api)
 
 
-def record_known_cache_break(cause: str, route: dict[str, str], session_id: str) -> None:
+def record_known_cache_break(
+    cause: str, route: dict[str, str], session_id: str
+) -> None:
     """A prompt-cache break Clawksis caused (caller checked enabled())."""
     if not relay_runtime.relay_instrumentation_enabled():
         return
@@ -1552,7 +1913,11 @@ def record_known_cache_break(cause: str, route: dict[str, str], session_id: str)
 def record_model_switch_after(session_id: str) -> None:
     """Count turns-before-switch for a session this process served; never creates a runtime (a
     runtime that does not exist saw no turns). Callers are already in the owning profile's scope."""
-    if not session_id or not enabled() or not relay_runtime.relay_instrumentation_enabled():
+    if (
+        not session_id
+        or not enabled()
+        or not relay_runtime.relay_instrumentation_enabled()
+    ):
         return
     runtime = _RUNTIMES.get(relay_runtime.current_profile_key())
     if isinstance(runtime, _Runtime):
@@ -1567,7 +1932,9 @@ def _run_task_hook(method: str, *, retry_failed: bool = False, **event: Any) -> 
         runtime._safe(getattr(runtime, method), event)
 
 
-def _terminal_flags(result: dict[str, Any] | None, error: BaseException | None) -> dict[str, Any]:
+def _terminal_flags(
+    result: dict[str, Any] | None, error: BaseException | None
+) -> dict[str, Any]:
     """Bounded completed/failed/interrupted/turn_exit_reason for a task's return or raise."""
     if error is not None:
         interrupted = (
@@ -1577,14 +1944,21 @@ def _terminal_flags(result: dict[str, Any] | None, error: BaseException | None) 
         if interrupted:
             reason = "interrupted_by_user"
         else:
-            reason = "timed_out" if isinstance(error, TimeoutError) else "system_aborted"
+            reason = (
+                "timed_out" if isinstance(error, TimeoutError) else "system_aborted"
+            )
         return {
-            "completed": False, "failed": not interrupted, "interrupted": interrupted,
-            "turn_exit_reason": reason, "failure_class": "exception",
+            "completed": False,
+            "failed": not interrupted,
+            "interrupted": interrupted,
+            "turn_exit_reason": reason,
+            "failure_class": "exception",
         }
     terminal = result if isinstance(result, dict) else {}
     failed = terminal.get("failed") is True
-    reason = str(terminal.get("turn_exit_reason") or terminal.get("failure_reason") or "")
+    reason = str(
+        terminal.get("turn_exit_reason") or terminal.get("failure_reason") or ""
+    )
     return {
         "completed": terminal.get("completed") is True,
         "failed": failed,
@@ -1610,7 +1984,9 @@ def _get_runtime(
         try:
             _RUNTIMES[profile_key] = runtime = _Runtime(host=host)
         except Exception:
-            logger.warning("Clawksis shared metrics initialization failed", exc_info=True)
+            logger.warning(
+                "Clawksis shared metrics initialization failed", exc_info=True
+            )
             _RUNTIMES[profile_key] = _RUNTIME_FAILED
             return None
         return runtime

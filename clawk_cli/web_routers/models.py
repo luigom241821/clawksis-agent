@@ -13,13 +13,21 @@ from fastapi import APIRouter, HTTPException
 
 from clawk_cli.web_deps import LateState, late
 from clawk_cli.web_server_config import (
-    _AUX_TASK_SLOTS, _UNSET, _apply_model_assignment_sync, _dashboard_code_skew_guard,
-    _plugin_aux_tasks, _prepare_main_assignment,
+    _AUX_TASK_SLOTS,
+    _UNSET,
+    _apply_model_assignment_sync,
+    _dashboard_code_skew_guard,
+    _plugin_aux_tasks,
+    _prepare_main_assignment,
 )
 from agent.model_metadata import is_local_endpoint
 from starlette.concurrency import run_in_threadpool
 from clawk_cli.web_models import ModelAssignment, MoaConfigPayload, MoaModelSlot
-from clawk_cli.web_routers._common import _CONFIG_MUTATION_LOCK, config_write_scope, http_failure
+from clawk_cli.web_routers._common import (
+    _CONFIG_MUTATION_LOCK,
+    config_write_scope,
+    http_failure,
+)
 
 _log = logging.getLogger("clawk_cli.web_server")
 router = APIRouter()
@@ -29,21 +37,35 @@ _config_profile_scope = late("_config_profile_scope", "clawk_cli.web_server_prof
 _profile_scope = late("_profile_scope", "clawk_cli.web_server_profiles")
 load_config = late("load_config", "clawk_cli.config")
 save_config = late("save_config", "clawk_cli.config")
-require_readable_config_before_write = late("require_readable_config_before_write", "clawk_cli.config")
+require_readable_config_before_write = late(
+    "require_readable_config_before_write", "clawk_cli.config"
+)
 
 
 _EMPTY_MODEL_INFO: dict = {
-    "model": "", "provider": "", "auto_context_length": 0, "config_context_length": 0,
-    "effective_context_length": 0, "capabilities": {},
+    "model": "",
+    "provider": "",
+    "auto_context_length": 0,
+    "config_context_length": 0,
+    "effective_context_length": 0,
+    "capabilities": {},
 }
-_CAPABILITY_FIELDS = ("supports_tools", "supports_vision", "supports_reasoning", "context_window",
-                      "max_output_tokens", "model_family")
+_CAPABILITY_FIELDS = (
+    "supports_tools",
+    "supports_vision",
+    "supports_reasoning",
+    "context_window",
+    "max_output_tokens",
+    "model_family",
+)
 
 
 def _main_model_fields(model_cfg) -> tuple[str, str]:
     """(model, provider) from config's ``model`` section, which may be a plain string."""
     if isinstance(model_cfg, dict):
-        return model_cfg.get("default", model_cfg.get("name", "")), model_cfg.get("provider", "")
+        return model_cfg.get("default", model_cfg.get("name", "")), model_cfg.get(
+            "provider", ""
+        )
     return (str(model_cfg) if model_cfg else ""), ""
 
 
@@ -69,16 +91,23 @@ def _bounded_context_length_probe(model: str, base_url: str, provider: str) -> i
     """
     from agent.model_metadata import get_model_context_length
 
-    pool = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="model-info-probe")
+    pool = concurrent.futures.ThreadPoolExecutor(
+        max_workers=1, thread_name_prefix="model-info-probe"
+    )
     try:
         return pool.submit(
-            get_model_context_length, model=model, base_url=base_url, provider=provider,
-            config_context_length=None
+            get_model_context_length,
+            model=model,
+            base_url=base_url,
+            provider=provider,
+            config_context_length=None,
         ).result(timeout=_MODEL_INFO_PROBE_BUDGET_S)
     except concurrent.futures.TimeoutError:
         _log.warning(
             "GET /api/model/info: context-length probe for %r at %s exceeded %.1fs — returning unknown",
-            model, base_url or "<default>", _MODEL_INFO_PROBE_BUDGET_S,
+            model,
+            base_url or "<default>",
+            _MODEL_INFO_PROBE_BUDGET_S,
         )
         return 0
     finally:
@@ -96,7 +125,9 @@ def get_model_info(profile: Optional[str] = None):
         model_cfg = _load_config_scoped(profile).get("model", "")
         model_name, provider = _main_model_fields(model_cfg)
         base_url = model_cfg.get("base_url", "") if isinstance(model_cfg, dict) else ""
-        config_ctx = model_cfg.get("context_length") if isinstance(model_cfg, dict) else None
+        config_ctx = (
+            model_cfg.get("context_length") if isinstance(model_cfg, dict) else None
+        )
 
         if not model_name:
             return dict(_EMPTY_MODEL_INFO, provider=provider)
@@ -109,11 +140,14 @@ def get_model_info(profile: Optional[str] = None):
         except Exception:
             auto_ctx = 0
 
-        config_ctx_int = config_ctx if isinstance(config_ctx, int) and config_ctx > 0 else 0
+        config_ctx_int = (
+            config_ctx if isinstance(config_ctx, int) and config_ctx > 0 else 0
+        )
 
         caps = {}
         try:
             from agent.models_dev import get_model_capabilities
+
             mc = get_model_capabilities(provider=provider, model=model_name)
             if mc is not None:
                 caps = {name: getattr(mc, name) for name in _CAPABILITY_FIELDS}
@@ -121,9 +155,12 @@ def get_model_info(profile: Optional[str] = None):
             pass
 
         return {
-            "model": model_name, "provider": provider, "auto_context_length": auto_ctx,
+            "model": model_name,
+            "provider": provider,
+            "auto_context_length": auto_ctx,
             "config_context_length": config_ctx_int,
-            "effective_context_length": config_ctx_int or auto_ctx,  # what the agent actually uses
+            "effective_context_length": config_ctx_int
+            or auto_ctx,  # what the agent actually uses
             "capabilities": caps,
         }
     except HTTPException:
@@ -147,7 +184,9 @@ async def get_model_options(
     ``profile`` scopes the picker context so the Models page reads the SAME profile
     /api/model/set writes. ``refresh`` busts the per-provider model-id disk cache
     (picker's explicit "Refresh Models"); normal opens stay on the 1h cache."""
-    with http_failure("GET /api/model/options failed", 500, detail="Failed to list model options"):
+    with http_failure(
+        "GET /api/model/options failed", 500, detail="Failed to list model options"
+    ):
         skew_msg = _dashboard_code_skew_guard()
         if skew_msg:
             _log.warning("GET /api/model/options refused: %s", skew_msg)
@@ -162,14 +201,18 @@ async def get_model_options(
             # that starves concurrent /api/config and freezes the server.
             with _config_profile_scope(profile):
                 return build_model_options_payload(
-                    load_picker_context(), explicit_only=bool(explicit_only),
-                    include_unconfigured=bool(include_unconfigured), refresh=bool(refresh))
+                    load_picker_context(),
+                    explicit_only=bool(explicit_only),
+                    include_unconfigured=bool(include_unconfigured),
+                    refresh=bool(refresh),
+                )
 
         return await run_in_threadpool(_build_payload_scoped)
 
 
 def _nous_recommended_default() -> dict:
     from clawk_cli.models import recommended_nous_default_model
+
     return recommended_nous_default_model()
 
 
@@ -207,7 +250,11 @@ def get_recommended_default_model(provider: str = "", profile: Optional[str] = N
         for row in payload.get("providers", []):
             if str(row.get("slug", "")).lower() == slug:
                 models = [str(m) for m in (row.get("models") or [])]
-                return {"provider": slug, "model": pick_silent_default_model(models, provider=slug), "free_tier": None}
+                return {
+                    "provider": slug,
+                    "model": pick_silent_default_model(models, provider=slug),
+                    "free_tier": None,
+                }
         return {"provider": slug, "model": "", "free_tier": None}
     except HTTPException:
         raise  # an unknown ?profile= is the scope's 404, not an empty recommendation
@@ -230,49 +277,73 @@ def get_auxiliary_models(profile: Optional[str] = None):
     ``provider``/``model``/``base_url`` stay the slot's own stored values on every row."""
     from agent.auxiliary_client import _get_auxiliary_task_config
 
-    with http_failure("GET /api/model/auxiliary failed", 500, detail="Failed to read auxiliary config"):
+    with http_failure(
+        "GET /api/model/auxiliary failed", 500, detail="Failed to read auxiliary config"
+    ):
         with _profile_scope(profile):
             cfg = load_config()
             # Inside the scope on purpose: plugin discovery and the resolver key on the same
             # context-local home, so profile B's rows come from B's plugins and B's config.
             plugin_tasks = _plugin_aux_tasks()
-            effective = {entry["key"]: _get_auxiliary_task_config(entry["key"])
-                         for entry in plugin_tasks if entry.get("inherit_from")}
+            effective = {
+                entry["key"]: _get_auxiliary_task_config(entry["key"])
+                for entry in plugin_tasks
+                if entry.get("inherit_from")
+            }
         aux_cfg = cfg.get("auxiliary", {})
         if not isinstance(aux_cfg, dict):
             aux_cfg = {}
 
         def _row(slot: str) -> dict:
-            slot_cfg = aux_cfg.get(slot, {}) if isinstance(aux_cfg.get(slot), dict) else {}
+            slot_cfg = (
+                aux_cfg.get(slot, {}) if isinstance(aux_cfg.get(slot), dict) else {}
+            )
             base_url = str(slot_cfg.get("base_url", "") or "")
             return {
-                "task": slot, "provider": str(slot_cfg.get("provider", "auto") or "auto"),
-                "model": str(slot_cfg.get("model", "") or ""), "base_url": base_url,
+                "task": slot,
+                "provider": str(slot_cfg.get("provider", "auto") or "auto"),
+                "model": str(slot_cfg.get("model", "") or ""),
+                "base_url": base_url,
                 "reasoning_effort": str(slot_cfg.get("reasoning_effort") or "") or None,
                 # Lets the UI tell a free local/LAN pin from a forgotten paid-provider pin.
                 "local_endpoint": is_local_endpoint(base_url),
             }
 
         tasks = [_row(slot) for slot in _AUX_TASK_SLOTS]
-        tasks.extend({
-            **_row(entry["key"]),
-            "label": str(entry.get("display_name") or entry["key"]),
-            "hint": str(entry.get("description") or ""),
-            "plugin": str(entry.get("plugin") or ""),
-            "inherit_from": entry.get("inherit_from") or None,
-            **({"effective": {field: str(effective[entry["key"]].get(field) or "")
-                              for field in ("provider", "model", "base_url")}}
-               if entry["key"] in effective else {}),
-        } for entry in plugin_tasks)
+        tasks.extend(
+            {
+                **_row(entry["key"]),
+                "label": str(entry.get("display_name") or entry["key"]),
+                "hint": str(entry.get("description") or ""),
+                "plugin": str(entry.get("plugin") or ""),
+                "inherit_from": entry.get("inherit_from") or None,
+                **(
+                    {
+                        "effective": {
+                            field: str(effective[entry["key"]].get(field) or "")
+                            for field in ("provider", "model", "base_url")
+                        }
+                    }
+                    if entry["key"] in effective
+                    else {}
+                ),
+            }
+            for entry in plugin_tasks
+        )
 
         model, provider = _main_model_fields(cfg.get("model", {}))
-        return {"tasks": tasks, "main": {"provider": str(provider or ""), "model": str(model or "")}}
+        return {
+            "tasks": tasks,
+            "main": {"provider": str(provider or ""), "model": str(model or "")},
+        }
 
 
 @router.get("/api/model/moa")
 def get_moa_models(profile: Optional[str] = None):
     """Return the configured Mixture-of-Agents provider/model slots."""
-    with http_failure("GET /api/model/moa failed", 500, detail="Failed to read MoA config"):
+    with http_failure(
+        "GET /api/model/moa failed", 500, detail="Failed to read MoA config"
+    ):
         from clawk_cli.moa_config import normalize_moa_config
 
         with _profile_scope(profile):
@@ -281,8 +352,12 @@ def get_moa_models(profile: Optional[str] = None):
 
 
 _MOA_PRESET_FIELDS = (
-    "reference_temperature", "aggregator_temperature", "reference_timeout",
-    "degraded_reference_policy", "fanout", "enabled",
+    "reference_temperature",
+    "aggregator_temperature",
+    "reference_timeout",
+    "degraded_reference_policy",
+    "fanout",
+    "enabled",
 )
 
 
@@ -303,7 +378,9 @@ def _preset_dict(preset) -> dict:
 @router.put("/api/model/moa")
 def set_moa_models(body: MoaConfigPayload, profile: Optional[str] = None):
     """Persist the Mixture-of-Agents provider/model slots."""
-    with http_failure("PUT /api/model/moa failed", 500, detail="Failed to save MoA config"):
+    with http_failure(
+        "PUT /api/model/moa failed", 500, detail="Failed to save MoA config"
+    ):
         from clawk_cli import config as config_mod
         from clawk_cli.moa_config import normalize_moa_config, validate_moa_payload
 
@@ -315,7 +392,10 @@ def set_moa_models(body: MoaConfigPayload, profile: Optional[str] = None):
                 raw = {
                     "default_preset": body.default_preset,
                     "active_preset": body.active_preset,
-                    "presets": {name: _preset_dict(preset) for name, preset in body.presets.items()},
+                    "presets": {
+                        name: _preset_dict(preset)
+                        for name, preset in body.presets.items()
+                    },
                 }
             else:
                 raw = _preset_dict(body)  # legacy flat payload from older clients
@@ -327,7 +407,9 @@ def set_moa_models(body: MoaConfigPayload, profile: Optional[str] = None):
             # See #64156.
             problems = validate_moa_payload(raw)
             if problems:
-                raise HTTPException(status_code=422, detail="Invalid MoA config: " + "; ".join(problems))
+                raise HTTPException(
+                    status_code=422, detail="Invalid MoA config: " + "; ".join(problems)
+                )
 
             # Read the raw profile file because the effective config contains defaults and
             # ``merge_existing=True`` deep-merges dicts, which resurrects omitted preset names.
@@ -346,7 +428,10 @@ def set_moa_models(body: MoaConfigPayload, profile: Optional[str] = None):
                 existing_presets = existing_moa.get("presets")
                 existing_default = existing_moa.get("default_preset")
                 if isinstance(existing_presets, dict):
-                    if isinstance(existing_default, str) and existing_default in existing_presets:
+                    if (
+                        isinstance(existing_default, str)
+                        and existing_default in existing_presets
+                    ):
                         # Older clients update the flat default preset; keep the existing
                         # default name and any valid active selection from the stored map.
                         synthesized_default = normalized.get("default_preset")
@@ -354,12 +439,15 @@ def set_moa_models(body: MoaConfigPayload, profile: Optional[str] = None):
                             isinstance(synthesized_default, str)
                             and synthesized_default in normalized["presets"]
                         ):
-                            normalized["presets"][existing_default] = normalized["presets"].pop(
-                                synthesized_default
-                            )
+                            normalized["presets"][existing_default] = normalized[
+                                "presets"
+                            ].pop(synthesized_default)
                             normalized["default_preset"] = existing_default
                     existing_active = existing_moa.get("active_preset")
-                    if isinstance(existing_active, str) and existing_active in existing_presets:
+                    if (
+                        isinstance(existing_active, str)
+                        and existing_active in existing_presets
+                    ):
                         normalized["active_preset"] = existing_active
             updated = config_mod._merge_partial_save(raw_cfg, {"moa": normalized})
             if not legacy_flat_update:
@@ -383,9 +471,13 @@ async def set_model_assignment(body: ModelAssignment, profile: Optional[str] = N
     base_url, api_key = (body.base_url or "").strip(), (body.api_key or "").strip()
 
     if scope not in {"main", "auxiliary"}:
-        raise HTTPException(status_code=400, detail="scope must be 'main' or 'auxiliary'")
+        raise HTTPException(
+            status_code=400, detail="scope must be 'main' or 'auxiliary'"
+        )
 
-    with http_failure("POST /api/model/set failed", 500, detail="Failed to save model assignment"):
+    with http_failure(
+        "POST /api/model/set failed", 500, detail="Failed to save model assignment"
+    ):
         # #99859 (R2): the options picker already refuses on code skew; the WRITE path
         # must too — a stale process persisting a post-update model string is the
         # invalid-model-serving failure the reporter hit.
@@ -402,14 +494,29 @@ async def set_model_assignment(body: ModelAssignment, profile: Optional[str] = N
                 from clawk_cli.model_selection_guards import combined_selection_warning
 
                 # Pricing lookup can hit models.dev / a /models endpoint on a cache miss — off the loop.
-                warning = await asyncio.to_thread(combined_selection_warning, model, provider=provider, base_url=base_url)
+                warning = await asyncio.to_thread(
+                    combined_selection_warning,
+                    model,
+                    provider=provider,
+                    base_url=base_url,
+                )
             except Exception:
                 warning = None
             if warning is not None:
-                return {"ok": False, "scope": scope, "provider": provider, "model": model,
-                        "confirm_required": True, "confirm_message": warning.message}
+                return {
+                    "ok": False,
+                    "scope": scope,
+                    "provider": provider,
+                    "model": model,
+                    "confirm_required": True,
+                    "confirm_message": warning.message,
+                }
 
-        reasoning_effort = body.reasoning_effort if "reasoning_effort" in body.model_fields_set else _UNSET
+        reasoning_effort = (
+            body.reasoning_effort
+            if "reasoning_effort" in body.model_fields_set
+            else _UNSET
+        )
 
         def _apply_assignment():
             # Same RMW span as PUT /api/config: applyMainModel fires this while the
@@ -417,11 +524,23 @@ async def set_model_assignment(body: ModelAssignment, profile: Optional[str] = N
             # catalog fetches / endpoint probes are network I/O, so they run BEFORE the lock;
             # only load→apply→save holds it.
             with _profile_scope(body.profile or profile):
-                prepared = (_prepare_main_assignment(load_config(), provider, model, base_url, api_key)
-                            if scope == "main" else None)
+                prepared = (
+                    _prepare_main_assignment(
+                        load_config(), provider, model, base_url, api_key
+                    )
+                    if scope == "main"
+                    else None
+                )
                 with _CONFIG_MUTATION_LOCK:
                     return _apply_model_assignment_sync(
-                        scope, provider, model, task, base_url, api_key,
-                        reasoning_effort=reasoning_effort, prepared=prepared)
+                        scope,
+                        provider,
+                        model,
+                        task,
+                        base_url,
+                        api_key,
+                        reasoning_effort=reasoning_effort,
+                        prepared=prepared,
+                    )
 
         return await asyncio.to_thread(_apply_assignment)

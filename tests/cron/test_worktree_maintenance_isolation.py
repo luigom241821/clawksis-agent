@@ -9,13 +9,20 @@ import sys
 def test_cold_worktree_maintenance_preserves_terminal_cwd(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
-    subprocess.run(["git", "init", "--initial-branch=main", str(repo)], check=True,
-                   capture_output=True, timeout=15)
+    subprocess.run(
+        ["git", "init", "--initial-branch=main", str(repo)],
+        check=True,
+        capture_output=True,
+        timeout=15,
+    )
     (repo / ".worktrees").mkdir()
     workspace = tmp_path / "workspace"
     workspace.mkdir()
-    env = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[2]),
-               TERMINAL_CWD=str(workspace))
+    env = dict(
+        os.environ,
+        PYTHONPATH=str(Path(__file__).resolve().parents[2]),
+        TERMINAL_CWD=str(workspace),
+    )
     script = """
 import os
 import sys
@@ -44,6 +51,13 @@ assert finished.wait(30), 'maintenance did not finish'
 assert not errors, errors
 assert os.environ['TERMINAL_CWD'] == before
 """
-    result = subprocess.run([sys.executable, "-c", script, str(repo)], env=env,
-                            cwd=tmp_path, capture_output=True, text=True, timeout=45, check=False)
+    result = subprocess.run(
+        [sys.executable, "-c", script, str(repo)],
+        env=env,
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=45,
+        check=False,
+    )
     assert result.returncode == 0, result.stdout + result.stderr

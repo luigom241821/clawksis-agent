@@ -34,7 +34,10 @@ import pytest
 
 from gateway.config import PlatformConfig
 from plugins.platforms.wecom.adapter import WeComAdapter
-from plugins.platforms.wecom.streaming import STREAM_EXPIRED_ERRCODE, WeComStreamExpiredError
+from plugins.platforms.wecom.streaming import (
+    STREAM_EXPIRED_ERRCODE,
+    WeComStreamExpiredError,
+)
 
 
 CHAT_ID = "chat-dup"
@@ -95,7 +98,10 @@ class TestKeepaliveSuppressesClockDecline:
 
             # Open the turn (seed + first intermediate).
             await adapter._send_stream_frame_inner(
-                "partial answer", chat=CHAT_ID, finalize=False, turn_id=TURN_ID,
+                "partial answer",
+                chat=CHAT_ID,
+                finalize=False,
+                turn_id=TURN_ID,
             )
             turn = adapter._stream_turns[f"{CHAT_ID}:{TURN_ID}"]
 
@@ -104,7 +110,9 @@ class TestKeepaliveSuppressesClockDecline:
 
             ok = await adapter._send_stream_frame_inner(
                 "the complete final answer",
-                chat=CHAT_ID, finalize=True, turn_id=TURN_ID,
+                chat=CHAT_ID,
+                finalize=True,
+                turn_id=TURN_ID,
             )
 
             # Native finalize succeeded — consumer will suppress fallback.
@@ -134,14 +142,19 @@ class TestKeepaliveSuppressesClockDecline:
             adapter._send_stream_reply = reply
 
             await adapter._send_stream_frame_inner(
-                "partial answer", chat=CHAT_ID, finalize=False, turn_id=TURN_ID,
+                "partial answer",
+                chat=CHAT_ID,
+                finalize=False,
+                turn_id=TURN_ID,
             )
             turn = adapter._stream_turns[f"{CHAT_ID}:{TURN_ID}"]
             turn.start_time -= adapter._stream_safe_duration_seconds + 500
 
             ok = await adapter._send_stream_frame_inner(
                 "the complete final answer",
-                chat=CHAT_ID, finalize=True, turn_id=TURN_ID,
+                chat=CHAT_ID,
+                finalize=True,
+                turn_id=TURN_ID,
             )
 
             assert ok is False, "keep-alive off: old stream must decline finalize"
@@ -165,6 +178,7 @@ class TestKeepaliveSuppressesClockDecline:
         """
         adapter = _make_adapter(keepalive_enabled=True)
         try:
+
             async def _reply(req_id, stream_id, content, finish=False):
                 if finish:
                     raise WeComStreamExpiredError(errcode=STREAM_EXPIRED_ERRCODE)
@@ -173,14 +187,19 @@ class TestKeepaliveSuppressesClockDecline:
             adapter._send_stream_reply = AsyncMock(side_effect=_reply)
 
             await adapter._send_stream_frame_inner(
-                "partial answer", chat=CHAT_ID, finalize=False, turn_id=TURN_ID,
+                "partial answer",
+                chat=CHAT_ID,
+                finalize=False,
+                turn_id=TURN_ID,
             )
             turn = adapter._stream_turns[f"{CHAT_ID}:{TURN_ID}"]
             turn.start_time -= adapter._stream_safe_duration_seconds + 500
 
             ok = await adapter._send_stream_frame_inner(
                 "the complete final answer",
-                chat=CHAT_ID, finalize=True, turn_id=TURN_ID,
+                chat=CHAT_ID,
+                finalize=True,
+                turn_id=TURN_ID,
             )
 
             assert ok is False, "real 846608 on finalize must fall back"
@@ -226,7 +245,9 @@ class TestIntermediateFrameFailureIsFireAndForget:
             # (fire-and-forget: any content differing from the last frame).
             ok = await adapter._send_stream_frame_inner(
                 BLOCK_TEXT,
-                chat=CHAT_ID, finalize=False, turn_id=TURN_ID,
+                chat=CHAT_ID,
+                finalize=False,
+                turn_id=TURN_ID,
             )
 
             assert ok is True, "intermediate expiry must be fire-and-forget"
@@ -259,7 +280,9 @@ class TestIntermediateFrameFailureIsFireAndForget:
 
             ok = await adapter._send_stream_frame_inner(
                 BLOCK_TEXT,
-                chat=CHAT_ID, finalize=False, turn_id=TURN_ID,
+                chat=CHAT_ID,
+                finalize=False,
+                turn_id=TURN_ID,
             )
 
             assert ok is True
@@ -277,6 +300,7 @@ class TestIntermediateFrameFailureIsFireAndForget:
         proves the fix discriminates on finalize, not blanket-swallows."""
         adapter = _make_adapter(keepalive_enabled=True)
         try:
+
             async def _reply(req_id, stream_id, content, finish=False):
                 if finish:
                     raise WeComStreamExpiredError(errcode=STREAM_EXPIRED_ERRCODE)
@@ -285,12 +309,17 @@ class TestIntermediateFrameFailureIsFireAndForget:
             adapter._send_stream_reply = AsyncMock(side_effect=_reply)
 
             await adapter._send_stream_frame_inner(
-                "partial answer", chat=CHAT_ID, finalize=False, turn_id=TURN_ID,
+                "partial answer",
+                chat=CHAT_ID,
+                finalize=False,
+                turn_id=TURN_ID,
             )
 
             ok = await adapter._send_stream_frame_inner(
                 "the complete final answer",
-                chat=CHAT_ID, finalize=True, turn_id=TURN_ID,
+                chat=CHAT_ID,
+                finalize=True,
+                turn_id=TURN_ID,
             )
 
             assert ok is False, "final-frame expiry MUST fall back (return False)"
@@ -305,6 +334,7 @@ class TestIntermediateFrameFailureIsFireAndForget:
         the turn (consumer fallback)."""
         adapter = _make_adapter(keepalive_enabled=True)
         try:
+
             async def _reply(req_id, stream_id, content, finish=False):
                 if finish:
                     raise RuntimeError("wire down on finalize")
@@ -313,12 +343,17 @@ class TestIntermediateFrameFailureIsFireAndForget:
             adapter._send_stream_reply = AsyncMock(side_effect=_reply)
 
             await adapter._send_stream_frame_inner(
-                "partial answer", chat=CHAT_ID, finalize=False, turn_id=TURN_ID,
+                "partial answer",
+                chat=CHAT_ID,
+                finalize=False,
+                turn_id=TURN_ID,
             )
 
             ok = await adapter._send_stream_frame_inner(
                 "the complete final answer",
-                chat=CHAT_ID, finalize=True, turn_id=TURN_ID,
+                chat=CHAT_ID,
+                finalize=True,
+                turn_id=TURN_ID,
             )
 
             assert ok is False

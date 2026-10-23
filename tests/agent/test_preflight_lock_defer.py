@@ -52,7 +52,10 @@ def _make_agent():
     return agent
 
 
-_HISTORY = [{"role": "user", "content": "old"}, {"role": "assistant", "content": "older"}]
+_HISTORY = [
+    {"role": "user", "content": "old"},
+    {"role": "assistant", "content": "older"},
+]
 
 
 def test_preflight_lock_skip_does_not_set_blocked_flag():

@@ -4,8 +4,17 @@ import functools
 import logging
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from tools.connectors.gateway.bridge import NOT_SET_UP, NOT_SET_UP_MESSAGE, SIGN_IN_EXPIRED, UNREACHABLE
-from tools.connectors.gateway.names import format_connector_name, is_connector_name, vendor_slug_candidates
+from tools.connectors.gateway.bridge import (
+    NOT_SET_UP,
+    NOT_SET_UP_MESSAGE,
+    SIGN_IN_EXPIRED,
+    UNREACHABLE,
+)
+from tools.connectors.gateway.names import (
+    format_connector_name,
+    is_connector_name,
+    vendor_slug_candidates,
+)
 from tools.tool_search_catalog import CatalogEntry, _fn, _tokenize
 
 logger = logging.getLogger(__name__)
@@ -15,21 +24,26 @@ def connections_in_scope(tool_defs: Iterable[dict[str, Any]]) -> bool:
     return any(_fn(td).get("name") == "manage_connections" for td in tool_defs)
 
 
-def connectors_unavailable(failure: str, *, verb: str,
-                           names: Optional[list[str]] = None) -> dict[str, Any]:
+def connectors_unavailable(
+    failure: str, *, verb: str, names: Optional[list[str]] = None
+) -> dict[str, Any]:
     if failure == NOT_SET_UP:
         from tools.connectors.gateway.config import guest_setup_failure
 
-        hint = (f"{NOT_SET_UP_MESSAGE} Hosted apps (Gmail, Calendar, Notion and more) are then searchable. "
-                "If the request is better served by the tools above, use those instead.")
+        hint = (
+            f"{NOT_SET_UP_MESSAGE} Hosted apps (Gmail, Calendar, Notion and more) are then searchable. "
+            "If the request is better served by the tools above, use those instead."
+        )
         if last_failure := guest_setup_failure():
             hint += f" The last attempt failed, so tell the user before retrying: {last_failure}"
         field: dict[str, Any] = {"status": NOT_SET_UP, "hint": hint}
         if names:
             field["names"] = names
         return field
-    hint = (f"Hosted connector tools could not be {verb} right now. "
-            "Do not conclude the app is missing.")
+    hint = (
+        f"Hosted connector tools could not be {verb} right now. "
+        "Do not conclude the app is missing."
+    )
     if failure == SIGN_IN_EXPIRED:
         hint += " The user must sign in to Nous again."
     field = {"status": "unavailable", "reason": failure, "hint": hint}
@@ -38,16 +52,30 @@ def connectors_unavailable(failure: str, *, verb: str,
     return field
 
 
-def _connector_entry(name: str, connector: str, slug: str, schema: dict[str, Any]) -> CatalogEntry:
+def _connector_entry(
+    name: str, connector: str, slug: str, schema: dict[str, Any]
+) -> CatalogEntry:
     description = str(schema.get("description") or "")
     from tools.connectors.gateway.files import model_parameters
 
     parameters = model_parameters(name, schema.get("input_schema"))
-    tool_def = {"type": "function", "function": {
-        "name": name, "description": description, "parameters": parameters}}
+    tool_def = {
+        "type": "function",
+        "function": {
+            "name": name,
+            "description": description,
+            "parameters": parameters,
+        },
+    }
     text = f"{connector} {slug.replace('_', ' ')} {description}"
-    return CatalogEntry(name=name, description=description, schema=tool_def,
-                        source="connectors", source_name=connector, _tokens=_tokenize(text))
+    return CatalogEntry(
+        name=name,
+        description=description,
+        schema=tool_def,
+        source="connectors",
+        source_name=connector,
+        _tokens=_tokenize(text),
+    )
 
 
 def connector_entries_by_group(
@@ -88,14 +116,25 @@ def connector_entries_by_group(
                 prior = picked.get(name)
                 if prior is not None and prior[0] != slug:
                     # Keep the slug this composed name resolves to; its twin would execute differently.
-                    reaches = vendor_slug_candidates(connector, name.split("__", 2)[2])[0]
-                    logger.warning("connector %s: vendor slugs %s and %s both compose to %s, which reaches %s",
-                                   connector, prior[0], slug, name, reaches)
+                    reaches = vendor_slug_candidates(connector, name.split("__", 2)[2])[
+                        0
+                    ]
+                    logger.warning(
+                        "connector %s: vendor slugs %s and %s both compose to %s, which reaches %s",
+                        connector,
+                        prior[0],
+                        slug,
+                        name,
+                        reaches,
+                    )
                     if slug != reaches:
                         continue
                 elif prior is not None:
                     continue
-                picked[name] = (slug, _connector_entry(name, str(schema["connector"]), slug, schema))
+                picked[name] = (
+                    slug,
+                    _connector_entry(name, str(schema["connector"]), slug, schema),
+                )
             per_query[position] = [entry for _, entry in picked.values()]
     except Exception:
         logger.warning("connector search merge failed (D32)", exc_info=True)

@@ -34,6 +34,7 @@ from plugins.platforms.telegram.adapter import TelegramAdapter
 # Helpers to build mock Telegram objects
 # ---------------------------------------------------------------------------
 
+
 def _make_file_obj(data: bytes = b"hello"):
     """Create a mock Telegram File with download_as_bytearray."""
     f = AsyncMock()
@@ -103,6 +104,7 @@ def _make_video(file_obj=None):
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def adapter():
     config = PlatformConfig(enabled=True, token="fake-token")
@@ -135,6 +137,7 @@ def _redirect_cache(tmp_path, monkeypatch):
 # TestDocumentTypeDetection
 # ---------------------------------------------------------------------------
 
+
 class TestDocumentTypeDetection:
     @pytest.mark.asyncio
     async def test_document_detected_explicitly(self, adapter):
@@ -150,6 +153,7 @@ class TestDocumentTypeDetection:
 # TestDocumentDownloadBlock
 # ---------------------------------------------------------------------------
 
+
 def _make_photo(file_obj=None):
     photo = MagicMock()
     photo.get_file = AsyncMock(return_value=file_obj or _make_file_obj(b"photo-bytes"))
@@ -157,15 +161,15 @@ def _make_photo(file_obj=None):
 
 
 class TestDocumentDownloadBlock:
-
-
     @pytest.mark.asyncio
     async def test_supported_txt_injects_content(self, adapter):
         content = b"Hello from a text file"
         file_obj = _make_file_obj(content)
         doc = _make_document(
-            file_name="notes.txt", mime_type="text/plain",
-            file_size=len(content), file_obj=file_obj,
+            file_name="notes.txt",
+            mime_type="text/plain",
+            file_size=len(content),
+            file_obj=file_obj,
         )
         msg = _make_message(document=doc)
         update = _make_update(msg)
@@ -175,14 +179,15 @@ class TestDocumentDownloadBlock:
         assert "Hello from a text file" in event.text
         assert "[Content of notes.txt]" in event.text
 
-
     @pytest.mark.asyncio
     async def test_caption_preserved_with_injection(self, adapter):
         content = b"file text"
         file_obj = _make_file_obj(content)
         doc = _make_document(
-            file_name="doc.txt", mime_type="text/plain",
-            file_size=len(content), file_obj=file_obj,
+            file_name="doc.txt",
+            mime_type="text/plain",
+            file_size=len(content),
+            file_obj=file_obj,
         )
         msg = _make_message(document=doc, caption="Please summarize")
         update = _make_update(msg)
@@ -192,22 +197,27 @@ class TestDocumentDownloadBlock:
         assert "file text" in event.text
         assert "Please summarize" in event.text
 
-
-
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("content, inlined", [(b"small text", True), (b"x" * (200 * 1024), False)], ids=["small", "large"])
+    @pytest.mark.parametrize(
+        "content, inlined",
+        [(b"small text", True), (b"x" * (200 * 1024), False)],
+        ids=["small", "large"],
+    )
     async def test_document_marks_media_text_inlined(self, adapter, content, inlined):
         """The per-attachment flag must track whether the text was injected, so the document
         note never claims the content is inlined when the >100 KB gate skipped it."""
         doc = _make_document(
-            file_name="notes.txt", mime_type="text/plain",
-            file_size=len(content), file_obj=_make_file_obj(content),
+            file_name="notes.txt",
+            mime_type="text/plain",
+            file_size=len(content),
+            file_obj=_make_file_obj(content),
         )
-        await adapter._handle_media_message(_make_update(_make_message(document=doc)), MagicMock())
+        await adapter._handle_media_message(
+            _make_update(_make_message(document=doc)), MagicMock()
+        )
         event = adapter.handle_message.call_args[0][0]
         assert ("[Content of" in event.text) is inlined
         assert event.media_text_inlined == [inlined]
-
 
     @pytest.mark.asyncio
     async def test_document_cache_failure_replies_and_signals_agent(self, adapter):
@@ -218,7 +228,9 @@ class TestDocumentDownloadBlock:
         arrived, agent sees nothing. Now the user gets a Telegram reply AND the
         agent's event.text carries an attempted-attachment notice.
         """
-        doc = _make_document(file_name="notes.md", mime_type="text/markdown", file_size=100)
+        doc = _make_document(
+            file_name="notes.md", mime_type="text/markdown", file_size=100
+        )
         doc.get_file = AsyncMock(side_effect=RuntimeError("Telegram CDN down"))
         msg = _make_message(document=doc)
         update = _make_update(msg)
@@ -238,7 +250,6 @@ class TestDocumentDownloadBlock:
         assert event.media_urls == []  # nothing cached
         assert "could not be downloaded" in (event.text or "")
         assert "notes.md" in (event.text or "")
-
 
     @pytest.mark.asyncio
     async def test_voice_cache_failure_replies_and_signals_agent(self, adapter):
@@ -278,6 +289,7 @@ class TestVideoDownloadBlock:
 # TestMediaGroups — media group (album) buffering
 # ---------------------------------------------------------------------------
 
+
 class TestMediaGroups:
     @pytest.mark.asyncio
     async def test_non_album_photo_burst_is_buffered_and_combined(self, adapter):
@@ -306,6 +318,7 @@ class TestMediaGroups:
 # ---------------------------------------------------------------------------
 # TestSendVoice — outbound audio delivery
 # ---------------------------------------------------------------------------
+
 
 class TestSendVoice:
     """Tests for TelegramAdapter.send_voice() routing across audio formats."""
@@ -345,6 +358,7 @@ class TestSendVoice:
 # ---------------------------------------------------------------------------
 # TestSendDocument — outbound file attachment delivery
 # ---------------------------------------------------------------------------
+
 
 class TestSendDocument:
     """Tests for TelegramAdapter.send_document() — sending files to users."""
@@ -401,7 +415,6 @@ class TestSendDocument:
         call_kwargs = connected_adapter._bot.send_document.call_args[1]
         assert call_kwargs["filename"] == "clean_data.csv"
 
-
     @pytest.mark.asyncio
     async def test_send_document_caption_truncated(self, connected_adapter, tmp_path):
         """Captions longer than 1024 chars are truncated."""
@@ -423,7 +436,9 @@ class TestSendDocument:
         assert len(call_kwargs["caption"]) == 1024
 
     @pytest.mark.asyncio
-    async def test_send_document_api_error_falls_back(self, connected_adapter, tmp_path):
+    async def test_send_document_api_error_falls_back(
+        self, connected_adapter, tmp_path
+    ):
         """If Telegram API raises, falls back to base class text message."""
         test_file = tmp_path / "file.pdf"
         test_file.write_bytes(b"data")
@@ -464,7 +479,10 @@ class TestTelegramPhotoBatching:
         )
 
         with (
-            patch("plugins.platforms.telegram.adapter.asyncio.current_task", return_value=old_task),
+            patch(
+                "plugins.platforms.telegram.adapter.asyncio.current_task",
+                return_value=old_task,
+            ),
             patch("plugins.platforms.telegram.adapter.asyncio.sleep", new=AsyncMock()),
         ):
             await adapter._flush_photo_batch(batch_key)
@@ -476,6 +494,7 @@ class TestTelegramPhotoBatching:
 # TestSendVideo — outbound video delivery
 # ---------------------------------------------------------------------------
 
+
 class TestSendVideo:
     """Tests for TelegramAdapter.send_video() — sending videos to users."""
 
@@ -484,8 +503,6 @@ class TestSendVideo:
         bot = AsyncMock()
         adapter._bot = bot
         return adapter
-
-
 
     @pytest.mark.asyncio
     async def test_send_video_thread_id(self, connected_adapter, tmp_path):

@@ -1,4 +1,5 @@
 """Invariant: stale signal leak between consecutive compress_context calls."""
+
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -19,8 +20,10 @@ def test_signal_cleared_on_entry_between_calls(monkeypatch):
     agent._emit_warning = MagicMock()
 
     msgs = [
-        {"role": "user", "content": "a"}, {"role": "assistant", "content": "b"},
-        {"role": "user", "content": "c"}, {"role": "assistant", "content": "d"},
+        {"role": "user", "content": "a"},
+        {"role": "assistant", "content": "b"},
+        {"role": "user", "content": "c"},
+        {"role": "assistant", "content": "d"},
     ]
 
     monkeypatch.setattr(

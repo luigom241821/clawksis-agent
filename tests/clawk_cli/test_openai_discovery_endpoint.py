@@ -98,7 +98,9 @@ class TestFingerprintTracksEndpoint:
             fp_eu = models_mod._credential_fingerprint("openai-api")
         assert fp_us != fp_eu
 
-    def test_unrelated_provider_fingerprint_stable_across_openai_config(self, monkeypatch):
+    def test_unrelated_provider_fingerprint_stable_across_openai_config(
+        self, monkeypatch
+    ):
         monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
         with mock_patch.object(
             models_mod,

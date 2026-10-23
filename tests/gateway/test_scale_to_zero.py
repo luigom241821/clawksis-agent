@@ -74,7 +74,9 @@ def test_scale_to_zero_gate_accounts_for_secondary_profile_direct_adapter(monkey
     monkeypatch.setenv("CLAWK_SCALE_TO_ZERO", "1")
     monkeypatch.setenv("GATEWAY_RELAY_WAKE_URL", "https://wake.example.test/instance")
     runner = object.__new__(GatewayShutdownMixin)
-    runner.config = GatewayConfig(platforms={Platform.RELAY: PlatformConfig(enabled=True)})
+    runner.config = GatewayConfig(
+        platforms={Platform.RELAY: PlatformConfig(enabled=True)}
+    )
     runner.adapters = {Platform.RELAY: object()}
     runner._profile_adapters = {"imessage": {Platform("photon"): object()}}
 
@@ -112,11 +114,15 @@ def test_watcher_reasks_gate_before_dormant_sequence(monkeypatch):
 
         async def go_dormant(self):
             self.calls.append("go_dormant")
-            return False  # refuse the ack: the tick must abandon before any suspend call
+            return (
+                False  # refuse the ack: the tick must abandon before any suspend call
+            )
 
     class Runner(GatewayShutdownMixin):
         def __init__(self):
-            self.config = GatewayConfig(platforms={Platform.RELAY: PlatformConfig(enabled=True)})
+            self.config = GatewayConfig(
+                platforms={Platform.RELAY: PlatformConfig(enabled=True)}
+            )
             self.adapters = {Platform.RELAY: Relay()}
             self._profile_adapters = {}
             self._running = True
@@ -185,8 +191,6 @@ def test_idle_exactly_at_threshold():
     assert is_idle(**_idle_kwargs(seconds_since_last_inbound=300.0)) is True
 
 
-
-
 # ── suspend_self / self_suspend_available (the gateway-owned suspend call) ───
 #
 # Fly Proxy autostop is inbound-only and job-blind (and since mid-2026 no longer
@@ -235,7 +239,9 @@ def short_sock_dir():
             break
         shutil.rmtree(path, ignore_errors=True)
     else:
-        pytest.skip(f"no temp dir short enough for an AF_UNIX socket (tried {candidates})")
+        pytest.skip(
+            f"no temp dir short enough for an AF_UNIX socket (tried {candidates})"
+        )
     try:
         yield path
     finally:
@@ -309,6 +315,7 @@ def test_self_suspend_available_needs_identity_and_socket():
         assert self_suspend_available(_FLY_ENV) is False
     # Missing identity -> unavailable regardless of socket.
     assert self_suspend_available({}) is False
+
 
 # Brokered suspend: Azure's stop verb needs a credential the sandbox lacks, so
 # NAS stamps a signed sleep URL and stops the machine on our POST.

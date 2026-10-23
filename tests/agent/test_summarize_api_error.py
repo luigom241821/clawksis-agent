@@ -38,6 +38,7 @@ def test_empty_body_falls_back_to_response_json_error_message():
     assert "HTTP 400" in summary
     assert "model `foo` does not exist" in summary
 
+
 @pytest.mark.parametrize(
     "technical_message",
     [

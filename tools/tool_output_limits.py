@@ -10,9 +10,9 @@ from typing import Any, Dict
 
 from clawk_constants import clawk_home_key
 
-DEFAULT_MAX_BYTES = 50_000       # terminal_tool.MAX_OUTPUT_CHARS
-DEFAULT_MAX_LINES = 2000         # file_operations.MAX_LINES
-DEFAULT_MAX_LINE_LENGTH = 2000   # file_operations.MAX_LINE_LENGTH
+DEFAULT_MAX_BYTES = 50_000  # terminal_tool.MAX_OUTPUT_CHARS
+DEFAULT_MAX_LINES = 2000  # file_operations.MAX_LINES
+DEFAULT_MAX_LINE_LENGTH = 2000  # file_operations.MAX_LINE_LENGTH
 # Keyed by profile home: the multiplexed gateway serves every profile from one process, so a
 # single slot would hand the launch profile's limits to every other profile.
 _cached_limits: dict[str, dict[str, int]] = {}
@@ -40,6 +40,7 @@ def get_tool_output_limits() -> dict[str, int]:
         return cached
     try:
         from clawk_cli.config import load_config
+
         cfg = load_config() or {}
         section = cfg.get("tool_output") if isinstance(cfg, dict) else None
     except Exception:
@@ -50,7 +51,9 @@ def get_tool_output_limits() -> dict[str, int]:
         "max_bytes": _coerce_positive_int(section.get("max_bytes"), DEFAULT_MAX_BYTES),
         "max_lines": _coerce_positive_int(section.get("max_lines"), DEFAULT_MAX_LINES),
         "max_line_length": _coerce_positive_int(
-            section.get("max_line_length"), DEFAULT_MAX_LINE_LENGTH)}
+            section.get("max_line_length"), DEFAULT_MAX_LINE_LENGTH
+        ),
+    }
     return limits
 
 
@@ -59,6 +62,13 @@ def _reset_tool_output_limits_cache() -> None:
     _cached_limits.clear()
 
 
-def get_max_bytes() -> int: return get_tool_output_limits()["max_bytes"]
-def get_max_lines() -> int: return get_tool_output_limits()["max_lines"]
-def get_max_line_length() -> int: return get_tool_output_limits()["max_line_length"]
+def get_max_bytes() -> int:
+    return get_tool_output_limits()["max_bytes"]
+
+
+def get_max_lines() -> int:
+    return get_tool_output_limits()["max_lines"]
+
+
+def get_max_line_length() -> int:
+    return get_tool_output_limits()["max_line_length"]

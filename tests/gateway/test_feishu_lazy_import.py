@@ -31,6 +31,7 @@ def test_configured_feishu_dependency_check_does_not_load_sdk():
 def test_feishu_connect_loads_sdk_on_worker_thread():
     """The first SDK import is deferred until a configured adapter connects."""
     from gateway.config import PlatformConfig
+
     feishu_adapter = _feishu_adapter_module()
 
     adapter = feishu_adapter.FeishuAdapter(
@@ -46,7 +47,12 @@ def test_feishu_connect_loads_sdk_on_worker_thread():
     with (
         patch.object(feishu_adapter, "FEISHU_AVAILABLE", False),
         patch.object(feishu_adapter, "_load_lark_oapi", return_value=True) as load_sdk,
-        patch.object(feishu_adapter.asyncio, "to_thread", new_callable=AsyncMock, return_value=True) as to_thread,
+        patch.object(
+            feishu_adapter.asyncio,
+            "to_thread",
+            new_callable=AsyncMock,
+            return_value=True,
+        ) as to_thread,
         patch.object(adapter, "_connect_with_retry", new_callable=AsyncMock),
         patch.object(feishu_adapter, "acquire_scoped_lock", return_value=(True, {})),
     ):

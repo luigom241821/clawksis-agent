@@ -5,6 +5,7 @@ The external-scheduler mode (system crontab calling ``clawk cron tick``) used to
 unmanaged daemon when nothing owns the profile. Headless surfaces refuse rather than spawn:
 the agent job is skipped (not failed), keeps its due instant, and one warning names the fix.
 """
+
 from datetime import timedelta
 import os
 
@@ -38,17 +39,29 @@ def _make_due(job_id: str) -> None:
     J.save_jobs(stored)
 
 
-def test_tick_without_gateway_skips_agent_jobs_without_spawning_or_drift(cron_home, monkeypatch, caplog):
+def test_tick_without_gateway_skips_agent_jobs_without_spawning_or_drift(
+    cron_home, monkeypatch, caplog
+):
     from clawk_cli import gateway_runtime, gateway_runtime_start
 
     spawned = []
-    monkeypatch.setattr(gateway_runtime_start, "spawn_unmanaged_gateway",
-                        lambda *a, **k: spawned.append(a))
-    monkeypatch.setattr(gateway_runtime, "ensure_gateway_runtime",
-                        lambda *a, **k: pytest.fail("a headless tick must never ensure-or-spawn"))
+    monkeypatch.setattr(
+        gateway_runtime_start,
+        "spawn_unmanaged_gateway",
+        lambda *a, **k: spawned.append(a),
+    )
+    monkeypatch.setattr(
+        gateway_runtime,
+        "ensure_gateway_runtime",
+        lambda *a, **k: pytest.fail("a headless tick must never ensure-or-spawn"),
+    )
 
-    agent = J.create_job(prompt="summarise inbox", schedule="every 1h", name="agent", deliver="local")
-    other = J.create_job(prompt="digest", schedule="every 1h", name="agent-2", deliver="local")
+    agent = J.create_job(
+        prompt="summarise inbox", schedule="every 1h", name="agent", deliver="local"
+    )
+    other = J.create_job(
+        prompt="digest", schedule="every 1h", name="agent-2", deliver="local"
+    )
     _make_due(agent["id"])
     _make_due(other["id"])
     due_before = {j["id"]: j["next_run_at"] for j in J.load_jobs()}
@@ -67,12 +80,17 @@ def test_tick_without_gateway_skips_agent_jobs_without_spawning_or_drift(cron_ho
         assert "clawk gateway start" in stored[job_id]["last_fire_error"]["detail"]
     refusals = [r for r in caplog.records if "not running" in r.getMessage()]
     assert len(refusals) == 1, "one log line per tick, not one per job"
-    assert agent["id"] in refusals[0].getMessage() and "clawk gateway start" in refusals[0].getMessage()
+    assert (
+        agent["id"] in refusals[0].getMessage()
+        and "clawk gateway start" in refusals[0].getMessage()
+    )
 
 
 @pytest.mark.platforms("linux")
 @pytest.mark.parametrize("stand_in", ["starting_lock", "silent_socket"])
-def test_tick_holds_agent_jobs_while_gateway_is_starting_or_silent(cron_home, monkeypatch, caplog, stand_in):
+def test_tick_holds_agent_jobs_while_gateway_is_starting_or_silent(
+    cron_home, monkeypatch, caplog, stand_in
+):
     """A gateway mid-restart (lock held, no socket) or one whose control socket accepts but never
     answers is 'not ready', not 'failed': the tick must hold the slot exactly like ``absent`` —
     no run row, next_run_at kept — and decide well inside the crontab minute."""
@@ -85,7 +103,11 @@ def test_tick_holds_agent_jobs_while_gateway_is_starting_or_silent(cron_home, mo
 
     os.chmod(cron_home, 0o700)
     spawned = []
-    monkeypatch.setattr(gateway_runtime_start, "spawn_unmanaged_gateway", lambda *a, **k: spawned.append(a))
+    monkeypatch.setattr(
+        gateway_runtime_start,
+        "spawn_unmanaged_gateway",
+        lambda *a, **k: spawned.append(a),
+    )
     keep = []
     if stand_in == "starting_lock":
         lock = open(cron_home / "gateway.lock", "w")
@@ -94,7 +116,10 @@ def test_tick_holds_agent_jobs_while_gateway_is_starting_or_silent(cron_home, mo
         keep.append(lock)
     else:
         from gateway.control_socket import resolve_server_socket_path
-        bind_path, pointer = resolve_server_socket_path(cron_home)  # same sun_path fallback as the daemon
+
+        bind_path, pointer = resolve_server_socket_path(
+            cron_home
+        )  # same sun_path fallback as the daemon
         bind_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         server.bind(str(bind_path))
@@ -111,9 +136,12 @@ def test_tick_holds_agent_jobs_while_gateway_is_starting_or_silent(cron_home, mo
                     keep.append(server.accept()[0])
                 except OSError:
                     return
+
         threading.Thread(target=hold, daemon=True).start()
 
-    agent = J.create_job(prompt="summarise inbox", schedule="every 1h", name="agent", deliver="local")
+    agent = J.create_job(
+        prompt="summarise inbox", schedule="every 1h", name="agent", deliver="local"
+    )
     _make_due(agent["id"])
     due_before = J.load_jobs()[0]["next_run_at"]
     started = time.monotonic()
@@ -124,7 +152,9 @@ def test_tick_holds_agent_jobs_while_gateway_is_starting_or_silent(cron_home, mo
         handle.close()
 
     assert ran == 0 and spawned == []
-    assert elapsed < 20, f"headless probe must decide inside the crontab minute, took {elapsed:.1f}s"
+    assert elapsed < 20, (
+        f"headless probe must decide inside the crontab minute, took {elapsed:.1f}s"
+    )
     stored = J.load_jobs()[0]
     assert stored["last_run_at"] is None and stored["last_status"] is None
     assert stored["next_run_at"] == due_before, "the slot is held, not consumed"
@@ -137,19 +167,34 @@ def test_headless_receipt_recovery_never_connects_or_spawns(cron_home, monkeypat
     import json
     from clawk_cli import gateway_client
 
-    job = J.create_job(prompt="summarise inbox", schedule="every 1h", name="agent", deliver="local")
+    job = J.create_job(
+        prompt="summarise inbox", schedule="every 1h", name="agent", deliver="local"
+    )
     request_id = "prepared-fire"
     journal = scheduler_authority.journal_path(job["id"], request_id)
     journal.parent.mkdir(parents=True, exist_ok=True)
-    journal.write_text(json.dumps({
-        "params": {"job_id": job["id"], "request_id": request_id, "extra_prompt": None},
-        "receipt": None,
-    }), encoding="utf-8")
+    journal.write_text(
+        json.dumps(
+            {
+                "params": {
+                    "job_id": job["id"],
+                    "request_id": request_id,
+                    "extra_prompt": None,
+                },
+                "receipt": None,
+            }
+        ),
+        encoding="utf-8",
+    )
 
     monkeypatch.setattr("gateway.session_cron.owner_for_home", lambda home: None)
     monkeypatch.setattr(
-        gateway_client, "connect_gateway",
-        lambda *a, **k: pytest.fail("headless recovery must not connect/ensure a gateway"))
+        gateway_client,
+        "connect_gateway",
+        lambda *a, **k: pytest.fail(
+            "headless recovery must not connect/ensure a gateway"
+        ),
+    )
 
     scheduler_authority.reconcile_pending(allow_connect=False)
 
@@ -159,13 +204,21 @@ def test_headless_receipt_recovery_never_connects_or_spawns(cron_home, monkeypat
 def test_no_agent_jobs_still_fire_without_a_gateway(cron_home, monkeypatch):
     counter = cron_home / "fires.txt"
     script = cron_home / "scripts" / "fire.sh"
-    script.write_text(f"#!/bin/sh\necho fired >> {counter}\necho fired\n", encoding="utf-8")
+    script.write_text(
+        f"#!/bin/sh\necho fired >> {counter}\necho fired\n", encoding="utf-8"
+    )
     script.chmod(0o755)
     monkeypatch.setattr(
-        scheduler_authority, "reconcile_pending",
-        lambda *, allow_connect=True: None)
-    job = J.create_job(prompt=None, schedule="every 1h", name="script", script="fire.sh",
-                       no_agent=True, deliver="local")
+        scheduler_authority, "reconcile_pending", lambda *, allow_connect=True: None
+    )
+    job = J.create_job(
+        prompt=None,
+        schedule="every 1h",
+        name="script",
+        script="fire.sh",
+        no_agent=True,
+        deliver="local",
+    )
     _make_due(job["id"])
 
     assert S.tick(verbose=False, headless=True) == 1

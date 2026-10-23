@@ -96,6 +96,7 @@ def two_profile_homes(tmp_path, monkeypatch):
     monkeypatch.setenv("NO_PROXY", "*")
     yield {"default": default_home, "worker": worker_home}
     from tools.mcp_tool_lifecycle import shutdown_mcp_servers
+
     shutdown_mcp_servers()
 
 
@@ -104,7 +105,9 @@ def _discover_and_call(homes: dict, tool: str, args: dict) -> dict:
     from gateway.config import GatewayConfig
     from tools.registry import registry
 
-    asyncio.run(gateway_run._discover_gateway_mcp_tools(GatewayConfig(multiplex_profiles=True)))
+    asyncio.run(
+        gateway_run._discover_gateway_mcp_tools(GatewayConfig(multiplex_profiles=True))
+    )
     results = {}
     for name, home in homes.items():
         with gateway_run._profile_runtime_scope(home):
@@ -112,40 +115,76 @@ def _discover_and_call(homes: dict, tool: str, args: dict) -> dict:
     return results
 
 
-def test_profile_with_other_secret_source_value_gets_its_own_stdio_connection(two_profile_homes, tmp_path):
+def test_profile_with_other_secret_source_value_gets_its_own_stdio_connection(
+    two_profile_homes, tmp_path
+):
     server = tmp_path / "gh_server.py"
     server.write_text(textwrap.dedent(_STDIO_SERVER), encoding="utf-8")
     for name, home in two_profile_homes.items():
-        (home / "secrets.env").write_text(f"GH_TOKEN=fake-token-{name}\n", encoding="utf-8")
-        (home / "config.yaml").write_text(yaml.safe_dump({
-            "model": _MODEL,
-            "secrets": {"command": {"enabled": True, "command": f"cat {home / 'secrets.env'}"}},
-            "mcp_servers": {"gh": {"command": sys.executable, "args": [str(server)]}}}), encoding="utf-8")
+        (home / "secrets.env").write_text(
+            f"GH_TOKEN=fake-token-{name}\n", encoding="utf-8"
+        )
+        (home / "config.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "model": _MODEL,
+                    "secrets": {
+                        "command": {
+                            "enabled": True,
+                            "command": f"cat {home / 'secrets.env'}",
+                        }
+                    },
+                    "mcp_servers": {
+                        "gh": {"command": sys.executable, "args": [str(server)]}
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
 
     results = _discover_and_call(two_profile_homes, "mcp__gh__whoami", {})
 
-    assert results == {"default": "GH_TOKEN=fake-token-default", "worker": "GH_TOKEN=fake-token-worker"}
+    assert results == {
+        "default": "GH_TOKEN=fake-token-default",
+        "worker": "GH_TOKEN=fake-token-worker",
+    }
 
 
-def test_profile_with_other_profile_identity_header_gets_its_own_http_connection(two_profile_homes, tmp_path):
+def test_profile_with_other_profile_identity_header_gets_its_own_http_connection(
+    two_profile_homes, tmp_path
+):
     log, port_file = tmp_path / "calls.log", tmp_path / "port"
     script = tmp_path / "team_server.py"
     script.write_text(_HTTP_SERVER, encoding="utf-8")
     proc = subprocess.Popen([sys.executable, str(script), str(log), str(port_file)])
     try:
         deadline = time.monotonic() + 30
-        while not (port_file.exists() and port_file.read_text(encoding="utf-8-sig")) and time.monotonic() < deadline:
+        while (
+            not (port_file.exists() and port_file.read_text(encoding="utf-8-sig"))
+            and time.monotonic() < deadline
+        ):
             time.sleep(0.05)
         port = port_file.read_text(encoding="utf-8-sig")
-        team = {"url": f"http://127.0.0.1:{port}/mcp",
-                "identity_header": {"name": "X-Clawksis-Profile", "value_from": "profile"}}
+        team = {
+            "url": f"http://127.0.0.1:{port}/mcp",
+            "identity_header": {"name": "X-Clawksis-Profile", "value_from": "profile"},
+        }
         for home in two_profile_homes.values():
-            (home / "config.yaml").write_text(yaml.safe_dump({"model": _MODEL, "mcp_servers": {"team": team}}), encoding="utf-8")
+            (home / "config.yaml").write_text(
+                yaml.safe_dump({"model": _MODEL, "mcp_servers": {"team": team}}),
+                encoding="utf-8",
+            )
 
         _discover_and_call(two_profile_homes, "mcp__team__save_note", {"text": "hi"})
 
-        calls = [json.loads(line) for line in log.read_text(encoding="utf-8-sig").splitlines()]
-        assert [profile for method, profile in calls if method == "tools/call"] == ["default", "worker"]
+        calls = [
+            json.loads(line)
+            for line in log.read_text(encoding="utf-8-sig").splitlines()
+        ]
+        assert [profile for method, profile in calls if method == "tools/call"] == [
+            "default",
+            "worker",
+        ]
     finally:
         proc.terminate()
         proc.wait(10)

@@ -11,7 +11,9 @@ from typing import Optional
 class SessionTodoResultMixin:
     """Latest visible, paired and valid Todo tool result of a session's lineage."""
 
-    def get_latest_todo_result(self, session_id: str, *, max_chars: Optional[int] = None) -> Optional[str]:
+    def get_latest_todo_result(
+        self, session_id: str, *, max_chars: Optional[int] = None
+    ) -> Optional[str]:
         """Newest visible, paired and valid Todo result in the resume display scope.
 
         Search indexed, bounded pages rather than loading a potentially long transcript. A branch owns its
@@ -22,6 +24,7 @@ class SessionTodoResultMixin:
             return None
         if max_chars is None:
             from tools.todo_tool import MAX_TODO_RESULT_CHARS
+
             max_chars = MAX_TODO_RESULT_CHARS
         session_ids = self._resume_lineage_ids(session_id)
         with self._read_ctx() as conn:
@@ -50,9 +53,17 @@ class SessionTodoResultMixin:
                         if prior is None or prior["role"] != "assistant":
                             continue
                         try:
-                            calls = json.loads(prior["tool_calls"]) if prior["tool_calls"] else []
+                            calls = (
+                                json.loads(prior["tool_calls"])
+                                if prior["tool_calls"]
+                                else []
+                            )
+
                             def is_todo_call(call):
-                                if not isinstance(call, dict) or call.get("id") != call_id:
+                                if (
+                                    not isinstance(call, dict)
+                                    or call.get("id") != call_id
+                                ):
                                     return False
                                 function = call.get("function")
                                 if not isinstance(function, dict):
@@ -68,14 +79,20 @@ class SessionTodoResultMixin:
                                     return False
                                 inner_calls = arguments.get("calls")
                                 return isinstance(inner_calls, list) and any(
-                                    isinstance(inner, dict) and inner.get("name") in ("todo_list", "todo")
-                                    for inner in inner_calls)
+                                    isinstance(inner, dict)
+                                    and inner.get("name") in ("todo_list", "todo")
+                                    for inner in inner_calls
+                                )
 
-                            paired = isinstance(calls, list) and any(is_todo_call(call) for call in calls)
+                            paired = isinstance(calls, list) and any(
+                                is_todo_call(call) for call in calls
+                            )
                             if not paired:
                                 continue
                             data = json.loads(row["content"])
-                            if not isinstance(data, dict) or not isinstance(data.get("todos"), list):
+                            if not isinstance(data, dict) or not isinstance(
+                                data.get("todos"), list
+                            ):
                                 continue
                             int(data.get("revision") or 0)
                         except (ValueError, TypeError):

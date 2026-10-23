@@ -27,7 +27,9 @@ WATCHED = [*USER_CHOICES, "display.personality", "plugins.enabled"]
 def clawk_home(tmp_path, monkeypatch):
     home = tmp_path / ".clawk"
     home.mkdir()
-    monkeypatch.setattr(Path, "home", lambda: tmp_path)  # sibling-profile scan stays in tmp
+    monkeypatch.setattr(
+        Path, "home", lambda: tmp_path
+    )  # sibling-profile scan stays in tmp
     monkeypatch.setenv("CLAWK_HOME", str(home))
     return home
 
@@ -42,18 +44,24 @@ def _at(raw: dict, dotted: str):
     return raw
 
 
-def test_update_keeps_user_values_of_an_unversioned_config_and_migrates_legacy_keys(clawk_home):
+def test_update_keeps_user_values_of_an_unversioned_config_and_migrates_legacy_keys(
+    clawk_home,
+):
     from clawk_cli.config import DEFAULT_CONFIG, set_config_value
     from clawk_cli.personality import persist_personality
     from clawk_cli.update_cmd import _check_and_apply_config_migration
 
     # Seeded before the template carried a stamp; early-2026 templates shipped this retired key.
     (clawk_home / "config.yaml").write_text(
-        "compression:\n  summary_model: google/gemini-3-flash-preview\n", encoding="utf-8")
+        "compression:\n  summary_model: google/gemini-3-flash-preview\n",
+        encoding="utf-8",
+    )
     # Installed with `clawk plugins install` and never enabled.
     plugin = clawk_home / "plugins" / "notes-helper"
     plugin.mkdir(parents=True)
-    (plugin / "plugin.yaml").write_text("name: notes-helper\nversion: 0.1.0\n", encoding="utf-8")
+    (plugin / "plugin.yaml").write_text(
+        "name: notes-helper\nversion: 0.1.0\n", encoding="utf-8"
+    )
     # User-authored SOUL.md section that happens to carry the v41 heading.
     soul = "# Me\n\n## Messaging other agents\nmy own notes\n\n## Prefs\nkeep\n"
     (clawk_home / "SOUL.md").write_text(soul, encoding="utf-8")
@@ -67,7 +75,9 @@ def test_update_keeps_user_values_of_an_unversioned_config_and_migrates_legacy_k
     after = _raw(clawk_home)
     assert {k: _at(after, k) for k in WATCHED} == {k: _at(before, k) for k in WATCHED}
     assert "summary_model" not in after["compression"]
-    assert _at(after, "auxiliary.compression.model") == _at(before, "compression.summary_model")
+    assert _at(after, "auxiliary.compression.model") == _at(
+        before, "compression.summary_model"
+    )
     assert after["_config_version"] == DEFAULT_CONFIG["_config_version"]
     assert (clawk_home / "SOUL.md").read_text(encoding="utf-8") == soul
 

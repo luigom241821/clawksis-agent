@@ -41,8 +41,16 @@ class _Provider(TerminalEnvironmentProvider):
     def is_available(self):
         return True
 
-    def create_environment(self, *, cwd, timeout, task_id="default",
-                           image=None, container_config=None, **kwargs):
+    def create_environment(
+        self,
+        *,
+        cwd,
+        timeout,
+        task_id="default",
+        image=None,
+        container_config=None,
+        **kwargs,
+    ):
         return _Env()
 
 

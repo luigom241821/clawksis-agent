@@ -101,7 +101,10 @@ def test_explicit_merges_over_runtime_on_provider_alongside_base_url(mock_resolv
         "api_mode": "chat_completions",
         "request_overrides": {
             "service_tier": "default",
-            "extra_body": {"thinking": {"type": "disabled"}, "provider": {"sort": "price"}},
+            "extra_body": {
+                "thinking": {"type": "disabled"},
+                "provider": {"sort": "price"},
+            },
         },
         "max_output_tokens": 8192,
     }
@@ -168,7 +171,9 @@ def test_named_provider_branch_without_explicit_key_unchanged(mock_resolve):
     }
     cfg = {"model": "m", "provider": "openrouter"}
     creds = _resolve_delegation_credentials(cfg, parent_agent=None)
-    assert creds["request_overrides"] == {"extra_body": {"reasoning": {"enabled": True}}}
+    assert creds["request_overrides"] == {
+        "extra_body": {"reasoning": {"enabled": True}}
+    }
 
 
 # ── Branch 3: parent-inherit (no provider, no base_url) ────────────────────
@@ -229,16 +234,6 @@ def test_merge_helper_both_none():
     assert _merge_request_overrides("junk", 42) is None
 
 
-
-
-
-
-
-
-
-
 def test_merge_helper_non_dict_runtime_extra_body_replaced():
-    merged = _merge_request_overrides(
-        {"extra_body": "junk"}, {"extra_body": {"a": 1}}
-    )
+    merged = _merge_request_overrides({"extra_body": "junk"}, {"extra_body": {"a": 1}})
     assert merged == {"extra_body": {"a": 1}}

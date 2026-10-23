@@ -37,7 +37,9 @@ async def get_shared_metrics_consent(profile: Optional[str] = None):
 
 
 @router.put("/api/shared-metrics/consent")
-async def put_shared_metrics_consent(body: ConsentAnswer, profile: Optional[str] = None):
+async def put_shared_metrics_consent(
+    body: ConsentAnswer, profile: Optional[str] = None
+):
     from clawk_cli.observability.shared_metrics_consent import save_consent
 
     def _write() -> dict:

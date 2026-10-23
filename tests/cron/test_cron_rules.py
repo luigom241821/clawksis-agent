@@ -225,7 +225,9 @@ class TestStopAfterAlert:
 def test_format_job_surfaces_stop_after_alert_and_profile():
     from tools.cronjob_job_args import _format_job
 
-    shown = _format_job({"id": "abc", "prompt": "x", "stop_after_alert": True, "profile": "work"})
+    shown = _format_job(
+        {"id": "abc", "prompt": "x", "stop_after_alert": True, "profile": "work"}
+    )
     plain = _format_job({"id": "abc", "prompt": "x"})
 
     assert shown["stop_after_alert"] is True and shown["profile"] == "work"

@@ -36,7 +36,9 @@ class _Buttons(_Plain):
         super().__init__()
         self.prompts: list = []
 
-    async def _send_exec_approval_prompt(self, prompt: ExecApprovalPrompt) -> SendResult:
+    async def _send_exec_approval_prompt(
+        self, prompt: ExecApprovalPrompt
+    ) -> SendResult:
         self.prompts.append(prompt)
         return SendResult(success=True, message_id="m1")
 
@@ -46,17 +48,30 @@ class _Buttons(_Plain):
     [
         (True, True, False, ["once", "session", "always", "deny"]),
         (False, True, False, ["once", "session", "deny"]),
-        (True, False, False, ["once", "deny"]),          # no session tier → no permanent tier either
-        (True, True, True, ["once", "deny"]),            # smart deny: owner override is one-shot
+        (
+            True,
+            False,
+            False,
+            ["once", "deny"],
+        ),  # no session tier → no permanent tier either
+        (True, True, True, ["once", "deny"]),  # smart deny: owner override is one-shot
         (False, False, True, ["once", "deny"]),
     ],
 )
 @pytest.mark.asyncio
-async def test_choice_set_follows_the_shared_rule(allow_permanent, allow_session, smart_denied, expected):
+async def test_choice_set_follows_the_shared_rule(
+    allow_permanent, allow_session, smart_denied, expected
+):
     adapter = _Buttons()
     result = await adapter.send_exec_approval(
-        "chat", "rm -rf /tmp/x", "sess", description="cleanup",
-        allow_permanent=allow_permanent, allow_session=allow_session, smart_denied=smart_denied)
+        "chat",
+        "rm -rf /tmp/x",
+        "sess",
+        description="cleanup",
+        allow_permanent=allow_permanent,
+        allow_session=allow_session,
+        smart_denied=smart_denied,
+    )
     assert result.success
     (prompt,) = adapter.prompts
     assert prompt.choices == expected
@@ -72,7 +87,9 @@ async def test_command_is_truncated_to_the_platform_budget():
     await adapter.send_exec_approval("chat", "x" * 100, "sess")
     (prompt,) = adapter.prompts
     assert "x" * 20 + "..." in prompt.text and "x" * 21 not in prompt.text
-    assert prompt.command == "x" * 100  # the raw command stays available for embeds/cards
+    assert (
+        prompt.command == "x" * 100
+    )  # the raw command stays available for embeds/cards
 
 
 def test_runner_only_offers_buttons_to_adapters_that_render_them():

@@ -35,8 +35,12 @@ def docker_task(monkeypatch):
     monkeypatch.setenv("TERMINAL_DOCKER_PERSIST_ACROSS_PROCESSES", "false")
     monkeypatch.setenv("TERMINAL_DOCKER_ORPHAN_REAPER", "false")
     monkeypatch.setenv("TERMINAL_CONTAINER_DISK", "0")
-    monkeypatch.setenv("TERMINAL_DOCKER_ENV", json.dumps({"CLAWK_RB_STATIC": "from-config"}))
-    monkeypatch.setenv("TERMINAL_DOCKER_FORWARD_ENV", json.dumps(["CLAWK_RB_FORWARDED"]))
+    monkeypatch.setenv(
+        "TERMINAL_DOCKER_ENV", json.dumps({"CLAWK_RB_STATIC": "from-config"})
+    )
+    monkeypatch.setenv(
+        "TERMINAL_DOCKER_FORWARD_ENV", json.dumps(["CLAWK_RB_FORWARDED"])
+    )
     monkeypatch.setenv("CLAWK_RB_FORWARDED", "from-host")
     monkeypatch.setenv("CLAWK_RB_NOT_FORWARDED", "must-stay-on-host")
     task_id = f"rb-docker-{uuid.uuid4().hex[:8]}"
@@ -74,14 +78,23 @@ def _container_id(task_id) -> str | None:
     cid = getattr(env, "_container_id", None)
     if not cid:
         return None
-    state = subprocess.run(["docker", "inspect", "-f", "{{.State.Running}}", cid],
-                           capture_output=True, text=True, timeout=30, check=False)
+    state = subprocess.run(
+        ["docker", "inspect", "-f", "{{.State.Running}}", cid],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
     return cid if state.stdout.strip() == "true" else None
 
 
 def _container_exists(cid: str) -> bool:
-    return subprocess.run(["docker", "inspect", cid], capture_output=True, timeout=30,
-                          check=False).returncode == 0
+    return (
+        subprocess.run(
+            ["docker", "inspect", cid], capture_output=True, timeout=30, check=False
+        ).returncode
+        == 0
+    )
 
 
 def test_exec_runs_in_the_container_and_reports_exit_codes(docker_task):
@@ -108,19 +121,26 @@ def test_cwd_persists_and_workdir_does_not(docker_task):
 
 def test_exported_env_persists_between_commands(docker_task):
     _run("export CLAWK_RB_EXPORTED='kept value'", docker_task)
-    assert _run('echo "$CLAWK_RB_EXPORTED"', docker_task)["output"].strip() == "kept value"
+    assert (
+        _run('echo "$CLAWK_RB_EXPORTED"', docker_task)["output"].strip() == "kept value"
+    )
     _run("unset CLAWK_RB_EXPORTED", docker_task)
-    assert _run('echo "${CLAWK_RB_EXPORTED-gone}"', docker_task)["output"].strip() == "gone"
+    assert (
+        _run('echo "${CLAWK_RB_EXPORTED-gone}"', docker_task)["output"].strip()
+        == "gone"
+    )
 
 
 def test_configured_and_forwarded_env_reach_the_container_and_nothing_else(docker_task):
-    r = _run('echo "s=$CLAWK_RB_STATIC f=$CLAWK_RB_FORWARDED n=${CLAWK_RB_NOT_FORWARDED:-unset}"',
-             docker_task)
+    r = _run(
+        'echo "s=$CLAWK_RB_STATIC f=$CLAWK_RB_FORWARDED n=${CLAWK_RB_NOT_FORWARDED:-unset}"',
+        docker_task,
+    )
     assert r["output"].strip() == "s=from-config f=from-host n=unset"
 
 
 def test_quoting_survives_the_docker_exec_hop(docker_task):
-    payload = "it's \"quoted\" $HOME `tick` \\back"
+    payload = 'it\'s "quoted" $HOME `tick` \\back'
     r = _run(f"printf '%s\\n' {shlex.quote(payload)}", docker_task)
     assert r["output"].rstrip("\n") == payload
 
@@ -129,13 +149,18 @@ def test_file_tools_write_and_read_inside_the_container(docker_task):
     from tools.file_tools import read_file_tool, write_file_tool
 
     content = "first line\nsecond: ünïcödé ✓\n"
-    wrote = json.loads(write_file_tool("/workspace/notes.txt", content, task_id=docker_task))
+    wrote = json.loads(
+        write_file_tool("/workspace/notes.txt", content, task_id=docker_task)
+    )
     assert wrote.get("success", True) and "error" not in wrote, wrote
 
     # Byte-exact on disk (the tool output itself is trailing-newline-trimmed).
-    assert _run("cat /workspace/notes.txt; echo; wc -c < /workspace/notes.txt", docker_task)[
-        "output"].splitlines()[-1].strip() == str(len(content.encode()))
-    assert _run("cat /workspace/notes.txt", docker_task)["output"] == content.rstrip("\n")
+    assert _run(
+        "cat /workspace/notes.txt; echo; wc -c < /workspace/notes.txt", docker_task
+    )["output"].splitlines()[-1].strip() == str(len(content.encode()))
+    assert _run("cat /workspace/notes.txt", docker_task)["output"] == content.rstrip(
+        "\n"
+    )
     read = json.loads(read_file_tool("/workspace/notes.txt", task_id=docker_task))
     assert "second: ünïcödé ✓" in read["content"], read
 

@@ -18,6 +18,7 @@ from clawk_cli.logs import (
 # Timestamp parsing
 # ---------------------------------------------------------------------------
 
+
 class TestParseSince:
     def test_hours(self):
         cutoff = _parse_since("2h")
@@ -33,6 +34,7 @@ class TestParseSince:
         cutoff = _parse_since("  5m  ")
         assert cutoff is not None
 
+
 class TestParseLineTimestamp:
     def test_standard_format(self):
         ts = _parse_line_timestamp("2026-04-11 10:23:45 INFO gateway.run: msg")
@@ -40,20 +42,23 @@ class TestParseLineTimestamp:
 
     def test_iso_t_separated_update_and_handoff_stamps(self):
         # posix.sh: date +%Y-%m-%dT%H:%M:%S%z; windows.ps1: yyyy-MM-ddTHH:mm:ssK
-        assert _parse_line_timestamp("2026-09-29T21:36:18+08:00 update| step done") == datetime(
-            2026, 9, 29, 21, 36, 18
-        )
+        assert _parse_line_timestamp(
+            "2026-09-29T21:36:18+08:00 update| step done"
+        ) == datetime(2026, 9, 29, 21, 36, 18)
         assert _parse_line_timestamp("2026-09-29T21:36:18Z step stalled") == datetime(
             2026, 9, 29, 21, 36, 18
         )
+
 
 class TestExtractLevel:
     def test_info(self):
         assert _extract_level("2026-01-01 00:00:00 INFO gateway.run: msg") == "INFO"
 
+
 # ---------------------------------------------------------------------------
 # Logger name extraction (new for component filtering)
 # ---------------------------------------------------------------------------
+
 
 class TestExtractLoggerName:
     def test_standard_line(self):
@@ -63,8 +68,8 @@ class TestExtractLoggerName:
     def test_no_match(self):
         assert _extract_logger_name("random text") is None
 
-class TestLineMatchesComponent:
 
+class TestLineMatchesComponent:
     def test_gateway_nested(self):
         # Migrated platform adapters log under plugins.platforms.* (#41112) and
         # must still resolve to the gateway component. Use the real expanded
@@ -72,23 +77,27 @@ class TestLineMatchesComponent:
         # bare ("gateway",), since the logger name no longer literally starts
         # with "gateway".
         from clawk_logging import COMPONENT_PREFIXES
+
         line = "2026-04-11 10:23:45 INFO plugins.platforms.telegram.adapter: msg"
         assert _line_matches_component(line, COMPONENT_PREFIXES["gateway"])
 
     def test_unparseable_line(self):
         assert not _line_matches_component("random text", ("gateway",))
 
+
 # ---------------------------------------------------------------------------
 # Combined filter
 # ---------------------------------------------------------------------------
 
-class TestMatchesFilters:
 
+class TestMatchesFilters:
     def test_level_filter(self):
         assert _matches_filters(
-            "2026-01-01 00:00:00 WARNING x: msg", min_level="WARNING")
+            "2026-01-01 00:00:00 WARNING x: msg", min_level="WARNING"
+        )
         assert not _matches_filters(
-            "2026-01-01 00:00:00 INFO x: msg", min_level="WARNING")
+            "2026-01-01 00:00:00 INFO x: msg", min_level="WARNING"
+        )
 
     def test_combined_filters(self):
         """All filters must pass for a line to match."""
@@ -111,16 +120,19 @@ class TestMatchesFilters:
         # Line with a very old timestamp should be filtered out
         assert not _matches_filters(
             "2020-01-01 00:00:00 INFO x: old msg",
-            since=datetime.now() - timedelta(hours=1))
+            since=datetime.now() - timedelta(hours=1),
+        )
         # Line with a recent timestamp should pass
         recent = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         assert _matches_filters(
-            f"{recent} INFO x: recent msg",
-            since=datetime.now() - timedelta(hours=1))
+            f"{recent} INFO x: recent msg", since=datetime.now() - timedelta(hours=1)
+        )
+
 
 # ---------------------------------------------------------------------------
 # File reading
 # ---------------------------------------------------------------------------
+
 
 class TestReadTail:
     def test_read_small_file(self, tmp_path):
@@ -135,33 +147,60 @@ class TestReadTail:
     def test_unstamped_lines_share_the_verdict_of_the_record_above(self, tmp_path):
         old = (datetime.now() - timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S,000")
         new = datetime.now().strftime("%Y-%m-%d %H:%M:%S,000")
-        frames = ["Traceback (most recent call last):\n", '  File "x.py", line 1, in f\n']
+        frames = [
+            "Traceback (most recent call last):\n",
+            '  File "x.py", line 1, in f\n',
+        ]
         log_file = tmp_path / "errors.log"
-        log_file.write_text("".join([
-            "orphan tail of a record that started before the window\n",
-            f"{old} ERROR gateway.run: old failure\n", *frames, "ValueError: old\n",
-            f"{new} INFO tools.x: multi-line info\n", "  info continuation\n",
-            f"{new} ERROR gateway.run: new failure\n", *frames, "ValueError: new\n",
-        ]))
+        log_file.write_text(
+            "".join(
+                [
+                    "orphan tail of a record that started before the window\n",
+                    f"{old} ERROR gateway.run: old failure\n",
+                    *frames,
+                    "ValueError: old\n",
+                    f"{new} INFO tools.x: multi-line info\n",
+                    "  info continuation\n",
+                    f"{new} ERROR gateway.run: new failure\n",
+                    *frames,
+                    "ValueError: new\n",
+                ]
+            )
+        )
         since = datetime.now() - timedelta(hours=1)
         from clawk_logging import COMPONENT_PREFIXES
 
         def read(**filters):
             return "".join(_read_tail(log_file, 50, has_filters=True, **filters))
 
-        assert read(since=since) == "".join([
-            f"{new} INFO tools.x: multi-line info\n", "  info continuation\n",
-            f"{new} ERROR gateway.run: new failure\n", *frames, "ValueError: new\n",
-        ])
-        new_failure = "".join([f"{new} ERROR gateway.run: new failure\n", *frames, "ValueError: new\n"])
+        assert read(since=since) == "".join(
+            [
+                f"{new} INFO tools.x: multi-line info\n",
+                "  info continuation\n",
+                f"{new} ERROR gateway.run: new failure\n",
+                *frames,
+                "ValueError: new\n",
+            ]
+        )
+        new_failure = "".join(
+            [f"{new} ERROR gateway.run: new failure\n", *frames, "ValueError: new\n"]
+        )
         assert read(since=since, min_level="WARNING") == new_failure
-        assert read(since=since, component_prefixes=COMPONENT_PREFIXES["gateway"]) == new_failure
+        assert (
+            read(since=since, component_prefixes=COMPONENT_PREFIXES["gateway"])
+            == new_failure
+        )
         # No time/level filter: the orphan lines before the first stamp stay visible.
-        assert read(session_filter="orphan") == "orphan tail of a record that started before the window\n"
+        assert (
+            read(session_filter="orphan")
+            == "orphan tail of a record that started before the window\n"
+        )
+
 
 # ---------------------------------------------------------------------------
 # LOG_FILES registry
 # ---------------------------------------------------------------------------
+
 
 def _python_log_line(logger_name: str) -> str:
     import logging
@@ -169,7 +208,9 @@ def _python_log_line(logger_name: str) -> str:
     from agent.redact import RedactingFormatter
     from clawk_logging import _LOG_FORMAT
 
-    record = logging.LogRecord(logger_name, logging.WARNING, __file__, 1, "sample", None, None)
+    record = logging.LogRecord(
+        logger_name, logging.WARNING, __file__, 1, "sample", None, None
+    )
     record.session_tag = ""
     return RedactingFormatter(_LOG_FORMAT).format(record)
 
@@ -198,8 +239,14 @@ def _handoff_log_line() -> str:
     import subprocess
 
     line = subprocess.run(
-        ["bash", "-c", 'log() { echo "$(date +%Y-%m-%dT%H:%M:%S%z) $1"; }; log "update| → Checking if desktop app needs rebuilding..."'],
-        capture_output=True, text=True, check=True,
+        [
+            "bash",
+            "-c",
+            'log() { echo "$(date +%Y-%m-%dT%H:%M:%S%z) $1"; }; log "update| → Checking if desktop app needs rebuilding..."',
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
     ).stdout
     return line.rstrip("\n")
 
@@ -222,15 +269,20 @@ def _log_file_samples() -> dict:
 
 def test_every_log_file_writes_a_stamp_clawk_logs_since_can_read():
     samples = _log_file_samples()
-    assert set(samples) == set(LOG_FILES), "add a real sample line for each new LOG_FILES entry"
+    assert set(samples) == set(LOG_FILES), (
+        "add a real sample line for each new LOG_FILES entry"
+    )
     for name, line in samples.items():
         assert _parse_line_timestamp(line) is not None, (name, line)
     # gateway.error.log (launchd stderr, not in LOG_FILES) uses the shared stamper.
     from clawk_cli.stderr_timestamp import stamp_line
+
     assert _parse_line_timestamp(stamp_line("raw gateway stderr")) is not None
 
 
-def test_update_logs_are_read_from_the_root_home_under_a_profile(tmp_path, monkeypatch, capsys):
+def test_update_logs_are_read_from_the_root_home_under_a_profile(
+    tmp_path, monkeypatch, capsys
+):
     # ``clawk update`` mirrors to <root>/logs/update.log and the hand-off scripts write the root
     # too; `clawk logs update` under a sticky profile read the profile's (absent) copy.
     from clawk_cli.logs import list_logs, log_file_path, tail_log
@@ -239,8 +291,12 @@ def test_update_logs_are_read_from_the_root_home_under_a_profile(tmp_path, monke
     profile = root / "profiles" / "coder"
     (root / "logs").mkdir(parents=True)
     (profile / "logs").mkdir(parents=True)
-    (root / "logs" / "update.log").write_text("=== clawk update started 2026-10-03T10:00:00 ===\n✓ Update complete!\n")
-    (profile / "logs" / "agent.log").write_text("2026-10-03 10:00:00,000 INFO run_agent: hi\n")
+    (root / "logs" / "update.log").write_text(
+        "=== clawk update started 2026-10-03T10:00:00 ===\n✓ Update complete!\n"
+    )
+    (profile / "logs" / "agent.log").write_text(
+        "2026-10-03 10:00:00,000 INFO run_agent: hi\n"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(profile))
 
     assert log_file_path("update") == root / "logs" / "update.log"

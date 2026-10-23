@@ -5,9 +5,10 @@ argv and waits for it (the shape of uv's venv ``python.exe`` on Windows), so eve
 ``Popen([sys.executable, ...])`` child of this daemon is a launcher whose grandchild is
 the real Python. No other behaviour changes.
 """
+
 import os
 import runpy
 import sys
 
-sys.executable = os.environ['UGW_TRAMPOLINE']
-runpy.run_module('gateway.run', run_name='__main__')
+sys.executable = os.environ["UGW_TRAMPOLINE"]
+runpy.run_module("gateway.run", run_name="__main__")

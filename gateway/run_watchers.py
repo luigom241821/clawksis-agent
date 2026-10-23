@@ -67,8 +67,12 @@ class GatewaySessionWatchersMixin:
         prune_ts = getattr(self, "_last_session_store_prune_ts", 0.0)  # tests may omit
         if time.time() - prune_ts > _SESSION_STORE_PRUNE_INTERVAL:
             try:
-                max_age = int(getattr(self.config, "session_store_max_age_days", 0) or 0)
-                if max_age > 0 and (n := await self.async_session_store.prune_old_entries(max_age)):
+                max_age = int(
+                    getattr(self.config, "session_store_max_age_days", 0) or 0
+                )
+                if max_age > 0 and (
+                    n := await self.async_session_store.prune_old_entries(max_age)
+                ):
                     logger.info("SessionStore prune: dropped %d stale entries", n)
             except Exception as e:
                 logger.debug("SessionStore prune failed: %s", e)
@@ -77,6 +81,7 @@ class GatewaySessionWatchersMixin:
     def _session_stall_timeout_seconds(self) -> float:
         """Return configured stall timeout (seconds); 0 disables the watchdog."""
         from gateway.run import _float_env
+
         return _float_env("CLAWK_SESSION_STALL_TIMEOUT", 300)
 
     def _session_activity_for_stall(self, session_key: str) -> Optional[dict]:
@@ -85,6 +90,7 @@ class GatewaySessionWatchersMixin:
         See #72039.
         """
         from gateway.run import _AGENT_PENDING_SENTINEL
+
         agent = (getattr(self, "_running_agents", None) or {}).get(session_key)
         if agent is None or agent is _AGENT_PENDING_SENTINEL:
             return None
@@ -98,24 +104,34 @@ class GatewaySessionWatchersMixin:
         """session_key -> (adapter, pending event) from every live adapter's pending slot (default
         + multiplex profiles, deduped by identity), then the overflow queues; first one wins."""
         candidates: dict[str, tuple[Any, Any]] = {}
-        maps = (getattr(self, "adapters", {}), *getattr(self, "_profile_adapters", {}).values())
+        maps = (
+            getattr(self, "adapters", {}),
+            *getattr(self, "_profile_adapters", {}).values(),
+        )
         adapters = {id(a): a for m in maps for a in list(m.values()) if a is not None}
         for adapter in adapters.values():
             pending = getattr(adapter, "_pending_messages", None) or {}
             for session_key, event in list(pending.items()):
                 if session_key and session_key not in candidates and event is not None:
                     candidates[session_key] = (adapter, event)
-        for session_key, overflow in list((getattr(self, "_queued_events", None) or {}).items()):
+        for session_key, overflow in list(
+            (getattr(self, "_queued_events", None) or {}).items()
+        ):
             if not session_key or session_key in candidates or not overflow:
                 continue
             source = getattr(overflow[0], "source", None)
-            if source is not None and (adapter := self._delivery_adapter_for(source)) is not None:
+            if (
+                source is not None
+                and (adapter := self._delivery_adapter_for(source)) is not None
+            ):
                 candidates[session_key] = (adapter, overflow[0])
         return candidates
 
     async def _check_session_stalls(self, timeout_seconds: float) -> int:
         """Notify once per stall episode for pending inbound sessions; returns notices sent."""
-        if getattr(self, "_session_stall_notified", None) is None:  # tests may build bare runners
+        if (
+            getattr(self, "_session_stall_notified", None) is None
+        ):  # tests may build bare runners
             self._session_stall_notified = {}
         notified_map = self._session_stall_notified
         sent, now, candidates = 0, time.time(), self._stall_candidates()
@@ -124,17 +140,26 @@ class GatewaySessionWatchersMixin:
             activity = self._session_activity_for_stall(session_key)
             idle_seconds = resolve_session_idle_seconds_from_activity(activity, now=now)
             if should_clear_session_stall_notification(
-                timeout_seconds=timeout_seconds, idle_seconds=idle_seconds, has_pending_inbound=True
+                timeout_seconds=timeout_seconds,
+                idle_seconds=idle_seconds,
+                has_pending_inbound=True,
             ):
                 notified_map.pop(session_key, None)
             if idle_seconds is None or not should_emit_session_stall_notification(
-                timeout_seconds=timeout_seconds, idle_seconds=idle_seconds,
-                has_pending_inbound=True, already_notified=bool(notified_map.get(session_key)),
+                timeout_seconds=timeout_seconds,
+                idle_seconds=idle_seconds,
+                has_pending_inbound=True,
+                already_notified=bool(notified_map.get(session_key)),
             ):
                 continue
             if await self._notify_session_stall(
-                session_key, adapter, pending_event, idle_seconds, activity or {},
-                timeout_seconds, notified_map,
+                session_key,
+                adapter,
+                pending_event,
+                idle_seconds,
+                activity or {},
+                timeout_seconds,
+                notified_map,
             ):
                 sent += 1
         # Drop latches for sessions that no longer appear in any pending map.
@@ -142,47 +167,77 @@ class GatewaySessionWatchersMixin:
             notified_map.pop(key, None)
         return sent
 
-    async def _notify_session_stall(self, session_key: str, adapter, pending_event,
-                                    idle_seconds: float, activity: dict, timeout_seconds: float,
-                                    notified_map: dict) -> bool:
+    async def _notify_session_stall(
+        self,
+        session_key: str,
+        adapter,
+        pending_event,
+        idle_seconds: float,
+        activity: dict,
+        timeout_seconds: float,
+        notified_map: dict,
+    ) -> bool:
         """Log one stall episode and deliver the notice. True only when sent (latched);
         undeliverable (no chat_id) latches without sending; send failures never latch."""
         from gateway.run import _STALL_NOTIFY_SEND_TIMEOUT_SECONDS
+
         logger.warning(
             "Session stall detected: session=%s idle=%.0fs (timeout=%.0fs, ~%d min); pending "
             "inbound present | last_activity=%s | provenance=%s (agent.session_stall_timeout)",
-            session_key, idle_seconds, timeout_seconds, max(1, int(idle_seconds // 60)),
-            activity.get("last_activity_desc") or activity.get("last_activity_description")
+            session_key,
+            idle_seconds,
+            timeout_seconds,
+            max(1, int(idle_seconds // 60)),
+            activity.get("last_activity_desc")
+            or activity.get("last_activity_description")
             or "unknown",
-            activity.get("provenance") or activity.get("last_activity_provenance") or "unknown",
+            activity.get("provenance")
+            or activity.get("last_activity_provenance")
+            or "unknown",
         )
         source = getattr(pending_event, "source", None)
         if not getattr(source, "chat_id", None):
-            logger.warning("Session stall notify skipped (no chat_id): session=%s", session_key)
-            notified_map[session_key] = True  # cannot deliver; latch to avoid log spam every tick
+            logger.warning(
+                "Session stall notify skipped (no chat_id): session=%s", session_key
+            )
+            notified_map[session_key] = (
+                True  # cannot deliver; latch to avoid log spam every tick
+            )
             return False
         # Re-read pending state + activity IMMEDIATELY before delivery: the snapshot ages while
         # earlier candidates await sends; an agent that progressed (or drained its queue) must not
         # get a false stall notice. Abort with the latch un-set so the next tick re-evaluates.
         # See #76354.
-        still_pending = (
-            (getattr(adapter, "_pending_messages", None) or {}).get(session_key) is not None
-            or bool((getattr(self, "_queued_events", None) or {}).get(session_key))
+        still_pending = (getattr(adapter, "_pending_messages", None) or {}).get(
+            session_key
+        ) is not None or bool(
+            (getattr(self, "_queued_events", None) or {}).get(session_key)
         )
         fresh_idle = resolve_session_idle_seconds_from_activity(
             self._session_activity_for_stall(session_key), now=time.time()
         )
-        if not still_pending or (fresh_idle is not None and fresh_idle < timeout_seconds):
-            logger.info("Session stall notify aborted (no longer stale): session=%s pending=%s "
-                        "fresh_idle=%s", session_key, still_pending, fresh_idle)
-            notified_map.pop(session_key, None)  # re-arm so a FUTURE genuine stall notifies again
+        if not still_pending or (
+            fresh_idle is not None and fresh_idle < timeout_seconds
+        ):
+            logger.info(
+                "Session stall notify aborted (no longer stale): session=%s pending=%s "
+                "fresh_idle=%s",
+                session_key,
+                still_pending,
+                fresh_idle,
+            )
+            notified_map.pop(
+                session_key, None
+            )  # re-arm so a FUTURE genuine stall notifies again
             return False
         from gateway.warning_notifications import present_notification
         from gateway.run import _async_profile_runtime_scope
+
         try:
             metadata = self._thread_metadata_for_source(source)
             notice = format_session_stall_notification(idle_seconds)
             result = None
+
             async def send_notice():
                 nonlocal result
                 # Bound the send: a wedged adapter transport (network hang, dead websocket) must not
@@ -191,18 +246,28 @@ class GatewaySessionWatchersMixin:
                     adapter.send(str(source.chat_id), notice, metadata=metadata),
                     timeout=_STALL_NOTIFY_SEND_TIMEOUT_SECONDS,
                 )
-            async with _async_profile_runtime_scope(self._resolve_profile_home_for_source(source)):
-                presented = await present_notification(send_notice, platform=source.platform)
+
+            async with _async_profile_runtime_scope(
+                self._resolve_profile_home_for_source(source)
+            ):
+                presented = await present_notification(
+                    send_notice, platform=source.platform
+                )
             if not presented:
-                notified_map[session_key] = True  # suppressed: latch so the stall is not re-evaluated every tick
+                notified_map[session_key] = (
+                    True  # suppressed: latch so the stall is not re-evaluated every tick
+                )
                 return False
             # Adapters often return SendResult(success=False) instead of raising.
             if result is not None and getattr(result, "success", True) is False:
-                raise RuntimeError(getattr(result, "error", "send returned success=False"))
+                raise RuntimeError(
+                    getattr(result, "error", "send returned success=False")
+                )
         except TimeoutError:
             logger.warning(
                 "Session stall notify send timed out after %.0fs for %s; will retry next tick",
-                _STALL_NOTIFY_SEND_TIMEOUT_SECONDS, session_key,
+                _STALL_NOTIFY_SEND_TIMEOUT_SECONDS,
+                session_key,
             )
             return False
         except Exception as exc:
@@ -215,6 +280,7 @@ class GatewaySessionWatchersMixin:
         """Refresh the /model picker's remote catalogs every TTL window. The picker itself only
         refreshes on a cold/stale open, so if nobody opens ``/model`` the cache never updates."""
         from clawk_cli.model_catalog import refresh_catalogs, refresh_interval_seconds
+
         await asyncio.sleep(30)  # let startup settle
         while self._running:
             try:

@@ -29,10 +29,14 @@ _UNREACHABLE_PROBE = {
 def _patched(func):
     """Decorator: force fetch_api_models / probe_api_models to simulate an
     unreachable /models endpoint, proving the catalog path is used."""
+
     def wrapper(*args, **kwargs):
-        with patch("clawk_cli.models.fetch_api_models", return_value=None), \
-             patch("clawk_cli.models.probe_api_models", return_value=_UNREACHABLE_PROBE):
+        with (
+            patch("clawk_cli.models.fetch_api_models", return_value=None),
+            patch("clawk_cli.models.probe_api_models", return_value=_UNREACHABLE_PROBE),
+        ):
             return func(*args, **kwargs)
+
     wrapper.__name__ = func.__name__
     return wrapper
 
@@ -71,10 +75,6 @@ def test_opencode_go_totally_unknown_model_still_accepted():
 # ---------------------------------------------------------------------------
 
 
-
-
 # ---------------------------------------------------------------------------
 # Unknown provider with no catalog: soft-accept (honors the comment's intent)
 # ---------------------------------------------------------------------------
-
-

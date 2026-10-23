@@ -4,6 +4,7 @@ op sequence the connector sees (finding #4/#5 forensics — Alice canary).
 
 Run: python -m pytest tests/gateway/relay/test_live_cards_flow_trace.py -q -s
 """
+
 import asyncio
 import sys
 import types
@@ -30,9 +31,12 @@ class TraceTransport:
         return {"success": True, "message_id": f"{self._ts}.000"}
 
 
-def _mk_adapter(supported_ops=("send", "edit", "typing", "draft", "task_card", "task_card_stop")):
+def _mk_adapter(
+    supported_ops=("send", "edit", "typing", "draft", "task_card", "task_card_stop"),
+):
     # Reuse the live-cards test helper wiring (descriptor + config stubs).
     from tests.gateway.relay.test_relay_live_cards import _connected_adapter
+
     adapter, _ = _connected_adapter(supported_ops=supported_ops)
     t = TraceTransport()
     adapter._transport = t
@@ -73,8 +77,10 @@ def test_trace_multisegment_draft_flow():
     loop.run_until_complete(turn())
     print("\n--- OP TIMELINE ---")
     for i, op in enumerate(t.ops):
-        print(f"{i:2d} {op['op']:<16} final={op.get('final')} draft_id={op.get('draft_id')} "
-              f"content={str(op.get('content'))[:40]!r}")
+        print(
+            f"{i:2d} {op['op']:<16} final={op.get('final')} draft_id={op.get('draft_id')} "
+            f"content={str(op.get('content'))[:40]!r}"
+        )
     finals = [o for o in t.ops if o["op"] == "draft" and o.get("final")]
     plain_sends = [o for o in t.ops if o["op"] == "send"]
     print(f"seal frames: {len(finals)}, plain sends: {len(plain_sends)}")
@@ -106,11 +112,17 @@ def test_trace_parallel_turns_do_not_collide():
         await adapter.send_draft("C1", 12, "B partial", metadata=md_b)
         # A's card and B's card must be distinct card_ids
         await adapter.send_native_task_card_progress(
-            "C1", [{"id": "t1", "title": "x", "status": "in_progress"}],
-            reply_to=None, metadata=md_a)
+            "C1",
+            [{"id": "t1", "title": "x", "status": "in_progress"}],
+            reply_to=None,
+            metadata=md_a,
+        )
         await adapter.send_native_task_card_progress(
-            "C1", [{"id": "t2", "title": "y", "status": "in_progress"}],
-            reply_to=None, metadata=md_b)
+            "C1",
+            [{"id": "t2", "title": "y", "status": "in_progress"}],
+            reply_to=None,
+            metadata=md_b,
+        )
         # A seals; B keeps streaming — B's state must survive A's seal
         ra = await adapter.send("C1", "A final.", metadata=md_a)
         await adapter.send_draft("C1", 12, "B partial more", metadata=md_b)

@@ -6,6 +6,7 @@ gateways phrase an unknown ``reasoning`` field as "Extra inputs are not permitte
 Each rejected field must be stripped in whatever order the provider raises them, and a fallback
 candidate must get the same recovery as the primary request.
 """
+
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -23,7 +24,11 @@ class _Bad400(Exception):
 
 
 def _ok(text="ok"):
-    return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=text), finish_reason="stop")])
+    return SimpleNamespace(
+        choices=[
+            SimpleNamespace(message=SimpleNamespace(content=text), finish_reason="stop")
+        ]
+    )
 
 
 def _rejecting_client(*rejected_fields):
@@ -50,22 +55,43 @@ def _rejecting_client(*rejected_fields):
 
 def test_primary_rungs_chain_in_provider_order_and_strip_each_field_once():
     client = _rejecting_client("reasoning_effort", "temperature", "max_tokens")
-    kwargs = {"model": "m", "messages": [], "temperature": 0.3, "max_tokens": 64, "reasoning_effort": "none"}
-    route = _LadderRoute(**{**dict.fromkeys(_LadderRoute._fields), "client": client, "task": "title_generation",
-                            "tag": "", "async_mode": False, "base_info": "", "resolved_provider": ""})
-    first_err = _Bad400("Error code: 400 - Unsupported value: 'reasoning_effort' does not support 'none'")
+    kwargs = {
+        "model": "m",
+        "messages": [],
+        "temperature": 0.3,
+        "max_tokens": 64,
+        "reasoning_effort": "none",
+    }
+    route = _LadderRoute(
+        **{
+            **dict.fromkeys(_LadderRoute._fields),
+            "client": client,
+            "task": "title_generation",
+            "tag": "",
+            "async_mode": False,
+            "base_info": "",
+            "resolved_provider": "",
+        }
+    )
+    first_err = _Bad400(
+        "Error code: 400 - Unsupported value: 'reasoning_effort' does not support 'none'"
+    )
 
     def perform(step):
         step_client, step_kwargs = step.args
         return step_client.chat.completions.create(**step_kwargs)
 
-    resp, err, final_kwargs = _drive_ladder(_ladder_parameter_rungs(first_err, route, kwargs, 64), perform)
+    resp, err, final_kwargs = _drive_ladder(
+        _ladder_parameter_rungs(first_err, route, kwargs, 64), perform
+    )
 
     assert err is None and resp.choices[0].message.content == "ok"
     assert not {"temperature", "max_tokens", "reasoning_effort"} & set(final_kwargs)
     # One retry per rejected field: reasoning_effort → temperature → max_tokens, nothing re-sent unchanged.
     assert client.chat.completions.create.call_count == 3
-    assert _is_reasoning_field_rejection(_Bad400("Extra inputs are not permitted, field: 'reasoning'"))
+    assert _is_reasoning_field_rejection(
+        _Bad400("Extra inputs are not permitted, field: 'reasoning'")
+    )
 
 
 def test_reasoning_effort_none_unsupported_reversed_wording():
@@ -73,12 +99,16 @@ def test_reasoning_effort_none_unsupported_reversed_wording():
     strip-and-retry rung like the forward wordings do; route gating that merely names a thinking
     model, or an adjective-only "unsupported" far from any reasoning field, does not."""
     assert _is_reasoning_field_rejection(
-        _Bad400("Error code: 400 - reasoning_effort 'none' unsupported; use minimal|low|medium|high|xhigh")
+        _Bad400(
+            "Error code: 400 - reasoning_effort 'none' unsupported; use minimal|low|medium|high|xhigh"
+        )
     )
     assert not _is_reasoning_field_rejection(
         _Bad400("The model kimi-k2-thinking is not supported when using this account")
     )
-    assert not _is_reasoning_field_rejection(_Bad400("reasoning models: tool_choice 'required' is unsupported"))
+    assert not _is_reasoning_field_rejection(
+        _Bad400("reasoning models: tool_choice 'required' is unsupported")
+    )
 
 
 def test_structured_param_rejection_strips_reasoning_effort_on_retry():
@@ -100,9 +130,17 @@ def test_structured_param_rejection_strips_reasoning_effort_on_retry():
 
     client.chat.completions.create.side_effect = create
     resp = _call_fallback_candidate_sync(
-        client, "custom-relay", "fallback_chain[0](custom)", task="title_generation",
-        messages=[{"role": "user", "content": "hi"}], temperature=0.3, max_tokens=16, tools=None,
-        effective_timeout=30.0, effective_extra_body={}, reasoning_config={"enabled": True, "effort": "max"},
+        client,
+        "custom-relay",
+        "fallback_chain[0](custom)",
+        task="title_generation",
+        messages=[{"role": "user", "content": "hi"}],
+        temperature=0.3,
+        max_tokens=16,
+        tools=None,
+        effective_timeout=30.0,
+        effective_extra_body={},
+        reasoning_config={"enabled": True, "effort": "max"},
     )
     assert resp.choices[0].message.content == "ok"
     sent = [c.kwargs for c in client.chat.completions.create.call_args_list]
@@ -112,9 +150,17 @@ def test_structured_param_rejection_strips_reasoning_effort_on_retry():
 def test_fallback_candidate_recovers_from_rejected_temperature():
     client = _rejecting_client("temperature")
     resp = _call_fallback_candidate_sync(
-        client, "relay-model-x", "fallback_chain[0](openai)", task="title_generation",
-        messages=[{"role": "user", "content": "hi"}], temperature=0.3, max_tokens=16, tools=None,
-        effective_timeout=30.0, effective_extra_body={}, reasoning_config=None,
+        client,
+        "relay-model-x",
+        "fallback_chain[0](openai)",
+        task="title_generation",
+        messages=[{"role": "user", "content": "hi"}],
+        temperature=0.3,
+        max_tokens=16,
+        tools=None,
+        effective_timeout=30.0,
+        effective_extra_body={},
+        reasoning_config=None,
     )
     assert resp.choices[0].message.content == "ok"
     sent = [c.kwargs for c in client.chat.completions.create.call_args_list]
@@ -129,18 +175,34 @@ def test_rate_limit_after_parameter_strip_falls_through_to_later_rungs():
 
     request = httpx.Request("POST", "https://api.example/v1/chat/completions")
     rate_limited = openai.RateLimitError(
-        "Error code: 429 - Rate limit exceeded", body=None,
-        response=httpx.Response(429, request=request, json={"error": {"message": "Rate limit exceeded"}}))
+        "Error code: 429 - Rate limit exceeded",
+        body=None,
+        response=httpx.Response(
+            429, request=request, json={"error": {"message": "Rate limit exceeded"}}
+        ),
+    )
     client = MagicMock(base_url="https://api.example/v1")
     client.chat.completions.create.side_effect = rate_limited
-    route = _LadderRoute(**{**dict.fromkeys(_LadderRoute._fields), "client": client, "task": "title_generation",
-                            "tag": "", "async_mode": False, "base_info": "", "resolved_provider": ""})
+    route = _LadderRoute(
+        **{
+            **dict.fromkeys(_LadderRoute._fields),
+            "client": client,
+            "task": "title_generation",
+            "tag": "",
+            "async_mode": False,
+            "base_info": "",
+            "resolved_provider": "",
+        }
+    )
     kwargs = {"model": "m", "messages": [], "max_tokens": 64}
-    first_err = _Bad400("Error code: 400 - Unsupported parameter: 'max_tokens' is not supported with this model.")
+    first_err = _Bad400(
+        "Error code: 400 - Unsupported parameter: 'max_tokens' is not supported with this model."
+    )
 
     resp, err, final_kwargs = _drive_ladder(
         _ladder_parameter_rungs(first_err, route, kwargs, 64),
-        lambda step: step.args[0].chat.completions.create(**step.args[1]))
+        lambda step: step.args[0].chat.completions.create(**step.args[1]),
+    )
 
     assert resp is None and err is rate_limited
     assert "max_tokens" not in final_kwargs

@@ -21,8 +21,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+
 async def _noop_initialize():
     return None
+
 
 def _build_server_with_sse(oauth: bool = False):
     """Stand up an MCPServerTask configured for SSE transport, with mocks
@@ -34,6 +36,7 @@ def _build_server_with_sse(oauth: bool = False):
     server._auth_type = "oauth" if oauth else ""
     server._sampling = None
     return server
+
 
 @pytest.fixture
 def patch_sse_client():
@@ -71,9 +74,12 @@ def patch_sse_client():
         async def __aexit__(self, *a):
             return False
 
-    with patch("tools.mcp_tool.sse_client", new=fake_sse_client), \
-         patch("tools.mcp_tool.ClientSession", new=_FakeSession):
+    with (
+        patch("tools.mcp_tool.sse_client", new=fake_sse_client),
+        patch("tools.mcp_tool.ClientSession", new=_FakeSession),
+    ):
         yield captured_kwargs
+
 
 class TestSSEReadTimeout:
     def test_sse_read_timeout_is_300s_not_tool_timeout(self, patch_sse_client):
@@ -85,16 +91,23 @@ class TestSSEReadTimeout:
         server = _build_server_with_sse()
 
         async def drive():
-            with patch.object(MCPServerTask, "_wait_for_lifecycle_event",
-                              new=AsyncMock(return_value="shutdown")), \
-                 patch.object(MCPServerTask, "_discover_tools", new=AsyncMock()):
+            with (
+                patch.object(
+                    MCPServerTask,
+                    "_wait_for_lifecycle_event",
+                    new=AsyncMock(return_value="shutdown"),
+                ),
+                patch.object(MCPServerTask, "_discover_tools", new=AsyncMock()),
+            ):
                 try:
                     await asyncio.wait_for(
-                        server._run_http({
-                            "url": "https://example.com/mcp/sse",
-                            "transport": "sse",
-                            "timeout": 60,
-                        }),
+                        server._run_http(
+                            {
+                                "url": "https://example.com/mcp/sse",
+                                "transport": "sse",
+                                "timeout": 60,
+                            }
+                        ),
                         timeout=2.0,
                     )
                 except (TimeoutError, StopAsyncIteration, Exception):
@@ -106,6 +119,7 @@ class TestSSEReadTimeout:
             f"sse_read_timeout = {patch_sse_client.get('sse_read_timeout')} "
             f"(expected 300.0) — SSE idle disconnect regression"
         )
+
 
 class TestSSEOAuthForwarding:
     def test_sse_client_receives_oauth_auth_when_configured(self, patch_sse_client):
@@ -120,18 +134,25 @@ class TestSSEOAuthForwarding:
         fake_manager.get_or_build_provider.return_value = fake_oauth_provider
 
         async def drive():
-            with patch.object(MCPServerTask, "_wait_for_lifecycle_event",
-                              new=AsyncMock(return_value="shutdown")), \
-                 patch.object(MCPServerTask, "_discover_tools", new=AsyncMock()), \
-                 patch("tools.mcp_oauth_manager.get_manager", return_value=fake_manager):
+            with (
+                patch.object(
+                    MCPServerTask,
+                    "_wait_for_lifecycle_event",
+                    new=AsyncMock(return_value="shutdown"),
+                ),
+                patch.object(MCPServerTask, "_discover_tools", new=AsyncMock()),
+                patch("tools.mcp_oauth_manager.get_manager", return_value=fake_manager),
+            ):
                 try:
                     await asyncio.wait_for(
-                        server._run_http({
-                            "url": "https://example.com/mcp/sse",
-                            "transport": "sse",
-                            "auth": "oauth",
-                            "timeout": 60,
-                        }),
+                        server._run_http(
+                            {
+                                "url": "https://example.com/mcp/sse",
+                                "transport": "sse",
+                                "auth": "oauth",
+                                "timeout": 60,
+                            }
+                        ),
                         timeout=2.0,
                     )
                 except (TimeoutError, StopAsyncIteration, Exception):

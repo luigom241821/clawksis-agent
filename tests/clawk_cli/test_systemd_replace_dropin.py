@@ -23,17 +23,29 @@ def _current_unit_with_dropin(tmp_path, monkeypatch, dropin_text: str):
     unit = tmp_path / "clawk-gateway.service"
     unit.write_text("[Unit]\nDescription=current\n", encoding="utf-8")
     monkeypatch.setattr(gateway_cli, "get_systemd_unit_path", lambda system=False: unit)
-    monkeypatch.setattr(gateway_cli, "generate_systemd_unit", lambda **_: "[Unit]\nDescription=current\n")
-    monkeypatch.setattr(gateway_cli, "_sync_clawk_home_from_systemd_unit", lambda **_: None)
+    monkeypatch.setattr(
+        gateway_cli,
+        "generate_systemd_unit",
+        lambda **_: "[Unit]\nDescription=current\n",
+    )
+    monkeypatch.setattr(
+        gateway_cli, "_sync_clawk_home_from_systemd_unit", lambda **_: None
+    )
     calls = []
-    monkeypatch.setattr(gateway_cli, "_run_systemctl", lambda args, **kwargs: calls.append((args, kwargs)))
+    monkeypatch.setattr(
+        gateway_cli,
+        "_run_systemctl",
+        lambda args, **kwargs: calls.append((args, kwargs)),
+    )
     dropin = unit.parent / f"{unit.name}.d" / "20-replace.conf"
     dropin.parent.mkdir()
     dropin.write_text(dropin_text, encoding="utf-8")
     return unit, dropin, calls
 
 
-def test_refresh_retires_the_clawk_replace_dropin_even_when_the_unit_text_is_current(tmp_path, monkeypatch, capsys):
+def test_refresh_retires_the_clawk_replace_dropin_even_when_the_unit_text_is_current(
+    tmp_path, monkeypatch, capsys
+):
     """The base unit already matches the generator, so the old gate said "nothing to do" and the
     drop-in kept re-arming ``--replace`` on every restart."""
     unit, dropin, calls = _current_unit_with_dropin(tmp_path, monkeypatch, CLAWK_DROPIN)
@@ -43,14 +55,21 @@ def test_refresh_retires_the_clawk_replace_dropin_even_when_the_unit_text_is_cur
 
     assert not dropin.exists()
     assert unit.read_bytes() == before, "the current unit itself is left alone"
-    assert [args for args, _ in calls] == [["daemon-reload"]] and calls[0][1]["system"] is True
+    assert [args for args, _ in calls] == [["daemon-reload"]] and calls[0][1][
+        "system"
+    ] is True
     assert "--replace drop-in" in capsys.readouterr().out
 
 
-def test_refresh_keeps_an_operator_written_dropin_of_the_same_name(tmp_path, monkeypatch):
+def test_refresh_keeps_an_operator_written_dropin_of_the_same_name(
+    tmp_path, monkeypatch
+):
     """Only the file Clawksis authored (recognised by its own comment) is retired."""
     _unit, dropin, calls = _current_unit_with_dropin(
-        tmp_path, monkeypatch, "[Service]\nExecStart=\nExecStart=/opt/clawksis gateway run --replace\n")
+        tmp_path,
+        monkeypatch,
+        "[Service]\nExecStart=\nExecStart=/opt/clawksis gateway run --replace\n",
+    )
 
     assert gateway_cli.refresh_systemd_unit_if_needed() is False
 

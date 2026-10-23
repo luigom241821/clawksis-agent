@@ -22,7 +22,9 @@ def ctx(monkeypatch):
     return PluginContext(PluginManifest(name="compaction-observer", source="user"), mgr)
 
 
-@pytest.mark.parametrize("summary, committed", [("SANITIZED SUMMARY", True), (None, False)])
+@pytest.mark.parametrize(
+    "summary, committed", [("SANITIZED SUMMARY", True), (None, False)]
+)
 def test_post_compaction_fires_once_per_committed_compaction(ctx, summary, committed):
     fired = []
 
@@ -33,8 +35,12 @@ def test_post_compaction_fires_once_per_committed_compaction(ctx, summary, commi
     ctx.register_hook("post_compaction", boom)
     agent = _Agent(_compressor(abort_on_summary_failure=True))
 
-    with patch.object(agent.context_compressor, "_generate_summary", return_value=summary):
-        compressed, _ = compress_context(agent, _messages(), "system prompt", approx_tokens=80_000, trigger="pre_api")
+    with patch.object(
+        agent.context_compressor, "_generate_summary", return_value=summary
+    ):
+        compressed, _ = compress_context(
+            agent, _messages(), "system prompt", approx_tokens=80_000, trigger="pre_api"
+        )
 
     assert (len(compressed) < len(_messages())) is committed
     if not committed:
@@ -42,7 +48,10 @@ def test_post_compaction_fires_once_per_committed_compaction(ctx, summary, commi
         return
     [kw] = fired
     assert (kw["session_id"], kw["old_session_id"], kw["kind"], kw["reason"]) == (
-        "session-events-test", "", "summarize", "pre_api",
+        "session-events-test",
+        "",
+        "summarize",
+        "pre_api",
     )
     assert kw["messages_removed"] == len(_messages()) - len(compressed) > 0
     assert kw["before_tokens"] > kw["after_tokens"] > 0
@@ -59,7 +68,11 @@ def test_a_slow_callback_for_one_session_does_not_skip_another_sessions_compacti
             release.wait(10)
 
     ctx.register_hook("post_compaction", slow)
-    first = threading.Thread(target=ctx._manager.invoke_hook, args=("post_compaction",), kwargs={"session_id": "a"})
+    first = threading.Thread(
+        target=ctx._manager.invoke_hook,
+        args=("post_compaction",),
+        kwargs={"session_id": "a"},
+    )
     first.start()
     assert entered.wait(10)
     try:

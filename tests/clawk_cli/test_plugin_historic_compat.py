@@ -1,4 +1,5 @@
 """Shipped plugin callers keep their contract without owning PM publication."""
+
 from __future__ import annotations
 
 import base64
@@ -25,19 +26,25 @@ def _plugin(home, name, *, dependencies=True):
     path.mkdir(parents=True)
     (path / "plugin.yaml").write_text(f"name: {name}\n", encoding="utf-8")
     if dependencies:
-        (path / "pyproject.toml").write_text('[project]\ndependencies = ["requests>=2"]\n', encoding="utf-8")
+        (path / "pyproject.toml").write_text(
+            '[project]\ndependencies = ["requests>=2"]\n', encoding="utf-8"
+        )
     return path
 
 
 @pytest.mark.parametrize("active", [None, "default", "profile"])
-def test_candidate_member_dirs_preserves_proposed_home_order_and_extras(isolated_home, monkeypatch, active):
+def test_candidate_member_dirs_preserves_proposed_home_order_and_extras(
+    isolated_home, monkeypatch, active
+):
     from clawk_cli import plugins_admission
 
     home = isolated_home
     profile = home / "profiles" / "coder"
     profile.mkdir(parents=True)
     for directory in (home, profile):
-        (directory / "config.yaml").write_text("plugins:\n  enabled: [old]\n", encoding="utf-8")
+        (directory / "config.yaml").write_text(
+            "plugins:\n  enabled: [old]\n", encoding="utf-8"
+        )
         _plugin(directory, "old")
         _plugin(directory, "new")
         _plugin(directory, "blocked")
@@ -53,9 +60,18 @@ def test_candidate_member_dirs_preserves_proposed_home_order_and_extras(isolated
     monkeypatch.setitem(sys.modules, "clawk_cli.config", None)
     monkeypatch.setitem(sys.modules, "clawk_cli.plugins_cmd", None)
     result = plugins_admission.candidate_member_dirs(
-        iter(["new", "blocked", "plain", "new"]), iter(["blocked"]),
+        iter(["new", "blocked", "plain", "new"]),
+        iter(["blocked"]),
         active_plugins_dir=str(selected_home / "plugins") if active else None,
-        extra_dirs=iter([str(extra_existing), str(extra), str(extra), home / "plugins" / "plain", home / "missing"]),
+        extra_dirs=iter(
+            [
+                str(extra_existing),
+                str(extra),
+                str(extra),
+                home / "plugins" / "plain",
+                home / "missing",
+            ]
+        ),
     )
     assert isinstance(result, list)
     assert result == [*expected, extra]
@@ -82,8 +98,12 @@ def publication(isolated_home, tmp_path):
     canonical.parent.mkdir(parents=True)
     canonical.write_bytes(b"unrelated publication; do not read or remove")
     row = {
-        "kind": "plugin", "target": str(target), "backup": str(backup),
-        "metadata": str(metadata), "target_existed": True, "facts_before": None,
+        "kind": "plugin",
+        "target": str(target),
+        "backup": str(backup),
+        "metadata": str(metadata),
+        "target_existed": True,
+        "facts_before": None,
         "metadata_before": base64.b64encode(b'{"published": "old"}\n').decode(),
         "metadata_after": base64.b64encode(metadata.read_bytes()).decode(),
     }
@@ -108,25 +128,43 @@ plugins_transaction.recover_plugin_publication(
 )
 """
     return subprocess.run(
-        [sys.executable, "-I", "-S", "-c", script, str(Path(__file__).resolve().parents[2]), str(project), str(journal)],
-        input=json.dumps(row), text=True, capture_output=True, check=False,
+        [
+            sys.executable,
+            "-I",
+            "-S",
+            "-c",
+            script,
+            str(Path(__file__).resolve().parents[2]),
+            str(project),
+            str(journal),
+        ],
+        input=json.dumps(row),
+        text=True,
+        capture_output=True,
+        check=False,
         env={**os.environ, "CLAWK_HOME": str(Path(row["metadata"]).parent.parent)},
     )
 
 
 @pytest.mark.parametrize("commit", ["rollback", "explicit", "facts-changed"])
-def test_old_publication_recovers_in_stdlib_using_supplied_row_and_journal(publication, commit):
+def test_old_publication_recovers_in_stdlib_using_supplied_row_and_journal(
+    publication, commit
+):
     from pm.environments import runtime_facts_path
 
     project, row, journal, canonical = publication
-    target, backup, metadata = (Path(row[key]) for key in ("target", "backup", "metadata"))
+    target, backup, metadata = (
+        Path(row[key]) for key in ("target", "backup", "metadata")
+    )
     if commit == "explicit":
         row["committed"] = True
     elif commit == "facts-changed":
         runtime_facts_path(project).write_bytes(b"new facts")
     result = _recover_in_stdlib(publication)
     assert result.returncode == 0, result.stderr
-    assert (target / "version").read_bytes() == (b"old code" if commit == "rollback" else b"new code")
+    assert (target / "version").read_bytes() == (
+        b"old code" if commit == "rollback" else b"new code"
+    )
     expected = row["metadata_before"] if commit == "rollback" else row["metadata_after"]
     assert metadata.read_bytes() == base64.b64decode(expected)
     assert not backup.exists()
@@ -148,7 +186,9 @@ def test_old_publication_rolls_back_a_first_install(publication):
 
 
 @pytest.mark.parametrize("invalid", ["target", "backup", "metadata", "edited-metadata"])
-def test_old_publication_refuses_unsafe_or_changed_state_without_writes(publication, tmp_path, invalid):
+def test_old_publication_refuses_unsafe_or_changed_state_without_writes(
+    publication, tmp_path, invalid
+):
     from clawk_cli import plugins_transaction
 
     project, row, journal, _ = publication

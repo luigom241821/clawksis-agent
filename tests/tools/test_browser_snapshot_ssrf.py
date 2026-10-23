@@ -124,7 +124,6 @@ class TestBrowserSnapshotPrivateNetworkGuard:
         assert result["success"] is True
         assert "snapshot" in result
 
-
     def test_skips_check_when_private_urls_allowed(self, monkeypatch):
         """When allow_private_urls is enabled, SSRF check is skipped."""
         monkeypatch.setattr(bt_cloud, "_is_local_backend", lambda: False)
@@ -163,7 +162,6 @@ class TestBrowserSnapshotPrivateNetworkGuard:
         # Should succeed — eval failure means we can't determine URL, fail-open
         assert result["success"] is True
 
-
     def test_handles_eval_exception(self, monkeypatch):
         """If URL eval raises an exception, snapshot should succeed."""
         monkeypatch.setattr(bt_cloud, "_is_local_backend", lambda: False)
@@ -184,16 +182,16 @@ class TestBrowserSnapshotPrivateNetworkGuard:
         assert result["success"] is True
 
 
-
-
 # Helper to avoid name collision with the actual function
 def browser_browser_snapshot(**kwargs):
     from tools.browser_tool import browser_snapshot
+
     return browser_snapshot(**kwargs)
 
 
 def browser_browser_vision(**kwargs):
     from tools.browser_tool import browser_vision
+
     return browser_vision(**kwargs)
 
 
@@ -233,7 +231,9 @@ class TestBrowserVisionPrivateNetworkGuard:
             bt_session, "_run_browser_command", mock_run_browser_command
         )
 
-        result = json.loads(browser_browser_vision(question="what do you see", task_id="test"))
+        result = json.loads(
+            browser_browser_vision(question="what do you see", task_id="test")
+        )
         assert result["success"] is False
         assert "private or internal address" in result["error"]
         assert self.PRIVATE_URL in result["error"]
@@ -280,7 +280,6 @@ class TestBrowserVisionPrivateNetworkGuard:
         result_raw = browser_browser_vision(question="what", task_id="test")
         result = json.loads(result_raw)
         assert "private or internal address" not in result.get("error", "")
-
 
     def test_skips_check_when_private_urls_allowed(self, monkeypatch):
         """When allow_private_urls is enabled, SSRF check is skipped."""

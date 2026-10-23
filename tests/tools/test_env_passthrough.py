@@ -28,8 +28,6 @@ def _clean_passthrough():
 
 
 class TestSkillScopedPassthrough:
-
-
     def test_skips_empty(self):
         register_env_passthrough(["", "  ", "VALID_KEY"])
         assert is_env_passthrough("VALID_KEY")
@@ -56,14 +54,10 @@ class TestRegistrationVisibleAcrossToolContextSnapshots:
             # (mirrors a fresh gateway turn where only tools register). Each
             # worker snapshot therefore starts without a set of its own.
             tool_a_ctx = contextvars.copy_context()
-            tool_a_ctx.run(
-                lambda: register_env_passthrough(["NOTION_API_KEY"])
-            )
+            tool_a_ctx.run(lambda: register_env_passthrough(["NOTION_API_KEY"]))
             # The NEXT tool's submit-time snapshot must still see it.
             tool_b_ctx = contextvars.copy_context()
-            return tool_b_ctx.run(
-                lambda: is_env_passthrough("NOTION_API_KEY")
-            )
+            return tool_b_ctx.run(lambda: is_env_passthrough("NOTION_API_KEY"))
 
         # Run the whole scenario inside a pristine context so the module's
         # (test-fixture) current-context initialization cannot leak in.
@@ -98,7 +92,6 @@ class TestConfigPassthrough:
         assert is_env_passthrough("ANOTHER_TOKEN")
         assert not is_env_passthrough("UNRELATED_VAR")
 
-
     def test_union_of_skill_and_config(self, tmp_path, monkeypatch):
         config = {"terminal": {"env_passthrough": ["CONFIG_KEY"]}}
         config_path = tmp_path / "config.yaml"
@@ -117,7 +110,9 @@ class TestProfileScopedResolution:
         ss.set_multiplex_active(True)
         token = ss.set_secret_scope({"SERVICE_TOKEN": "profile-b"})
         try:
-            assert resolve_passthrough_value("SERVICE_TOKEN", "profile-a") == "profile-b"
+            assert (
+                resolve_passthrough_value("SERVICE_TOKEN", "profile-a") == "profile-b"
+            )
         finally:
             ss.reset_secret_scope(token)
 
@@ -150,8 +145,6 @@ class TestProfileScopedResolution:
 
 class TestExecuteCodeIntegration:
     """Verify that the passthrough is checked in execute_code's env filtering."""
-
-
 
     def test_execute_code_uses_active_profile_for_passthrough(self, monkeypatch):
         """The execute_code child must receive the routed profile's value."""
@@ -262,8 +255,12 @@ class TestTerminalIntegration:
         monkeypatch.delenv("SERVICE_TOKEN", raising=False)
         base = {"PATH": "/usr/bin", "HOME": "/home/user"}
         ss.set_multiplex_active(True)
-        token = ss.set_secret_scope({"SERVICE_TOKEN": "token-for-routed-profile",
-                                     "UNDECLARED_TOKEN": "never-forwarded"})
+        token = ss.set_secret_scope(
+            {
+                "SERVICE_TOKEN": "token-for-routed-profile",
+                "UNDECLARED_TOKEN": "never-forwarded",
+            }
+        )
         try:
             terminal_env = _sanitize_subprocess_env(dict(base))
             sandbox_env = _scrub_child_env(dict(base))
@@ -293,7 +290,9 @@ class TestTerminalIntegration:
         with pytest.raises(RuntimeError, match="scope lookup failed"):
             _scrub_child_env({"PATH": "/usr/bin"})
 
-    def test_shared_local_snapshot_re_resolves_current_profile(self, monkeypatch, tmp_path):
+    def test_shared_local_snapshot_re_resolves_current_profile(
+        self, monkeypatch, tmp_path
+    ):
         """A persistent shell snapshot must not retain the previous profile's value."""
         from tools.environments.local import LocalEnvironment
 
@@ -307,7 +306,10 @@ class TestTerminalIntegration:
             token_a = ss.set_secret_scope({"SERVICE_TOKEN": "token-for-profile-a"})
             try:
                 env = LocalEnvironment(cwd=str(tmp_path))
-                assert env.execute("printf '%s' \"$SERVICE_TOKEN\"")["output"] == "token-for-profile-a"
+                assert (
+                    env.execute("printf '%s' \"$SERVICE_TOKEN\"")["output"]
+                    == "token-for-profile-a"
+                )
             finally:
                 ss.reset_secret_scope(token_a)
 
@@ -368,11 +370,16 @@ class TestTerminalIntegration:
         registered name via ``os.getenv``, which is case-insensitive on Windows,
         so a variant would tunnel the real ``OPENAI_API_KEY`` value into
         SSH/Docker children: the same GHSA-rhgp-j443-p4rf primitive."""
-        for var in ("openai_api_key", "OpenAi_Api_Key", "anthropic_api_key",
-                    "Aws_Bearer_Token_Bedrock"):
+        for var in (
+            "openai_api_key",
+            "OpenAi_Api_Key",
+            "anthropic_api_key",
+            "Aws_Bearer_Token_Bedrock",
+        ):
             register_env_passthrough([var])
             assert not is_env_passthrough(var), (
-                f"{var} should be refused passthrough registration")
+                f"{var} should be refused passthrough registration"
+            )
 
     def test_passthrough_case_variant_via_config_rejected(self, tmp_path, monkeypatch):
         """The config-based allowlist (terminal.env_passthrough) must refuse
@@ -404,7 +411,8 @@ class TestTerminalIntegration:
         monkeypatch.setenv("MY_OWN_KEY", "own-value")
         monkeypatch.setattr(
             "tools.env_passthrough.get_all_passthrough",
-            lambda: {"openai_api_key", "MY_OWN_KEY"})
+            lambda: {"openai_api_key", "MY_OWN_KEY"},
+        )
         exec_env, _unset = remote_common.resolve_passthrough_env(set())
         assert "openai_api_key" not in exec_env
         assert exec_env.get("MY_OWN_KEY") == "own-value"
@@ -418,7 +426,9 @@ class TestTerminalIntegration:
         register_env_passthrough(["openai_api_key"])
         child_env = _scrub_child_env(
             {"openai_api_key": "sk-real", "PATH": "/usr/bin"},
-            is_passthrough=is_env_passthrough, is_windows=False)
+            is_passthrough=is_env_passthrough,
+            is_windows=False,
+        )
         assert "openai_api_key" not in child_env
         assert child_env["PATH"] == "/usr/bin"
 
@@ -476,11 +486,13 @@ class TestTerminalIntegration:
     def test_passthrough_allows_auxiliary_non_secret_routing(self):
         """AUXILIARY_*_PROVIDER / _MODEL and GATEWAY_RELAY routing hints are not
         secrets, so a skill may still register them (they're not protected)."""
-        register_env_passthrough([
-            "AUXILIARY_VISION_PROVIDER",
-            "AUXILIARY_VISION_MODEL",
-            "GATEWAY_RELAY_URL",
-        ])
+        register_env_passthrough(
+            [
+                "AUXILIARY_VISION_PROVIDER",
+                "AUXILIARY_VISION_MODEL",
+                "GATEWAY_RELAY_URL",
+            ]
+        )
         assert is_env_passthrough("AUXILIARY_VISION_PROVIDER")
         assert is_env_passthrough("AUXILIARY_VISION_MODEL")
         assert is_env_passthrough("GATEWAY_RELAY_URL")

@@ -47,6 +47,7 @@ def activate_multi_profile_hosting() -> None:
     """This process now hosts a profile home other than its launch home: freeze the launch env
     and make unscoped credential reads fail closed (``get_secret`` raises instead of borrowing)."""
     from agent.secret_scope import set_multiplex_active
+
     capture_launch_env()
     set_multiplex_active(True)
 
@@ -62,8 +63,13 @@ def _servable_profile_homes() -> set:
     from clawk_constants import named_profile_has_servable_identity
     from clawk_cli.profiles import profiles_to_serve
 
-    homes = {Path(home).resolve() for name, home in profiles_to_serve(multiplex=True, include_standalone=True, include_parked=True)
-             if name == "default" or named_profile_has_servable_identity(home)}
+    homes = {
+        Path(home).resolve()
+        for name, home in profiles_to_serve(
+            multiplex=True, include_standalone=True, include_parked=True
+        )
+        if name == "default" or named_profile_has_servable_identity(home)
+    }
     homes.add(Path(os.environ.get("CLAWK_HOME") or Path.home() / ".clawksis").resolve())
     return homes
 
@@ -91,6 +97,7 @@ def activate_multi_profile_hosting_eagerly() -> bool:
     Returns True when this call activated hosting.
     """
     from agent.secret_scope import is_multiplex_active
+
     if is_multiplex_active():
         return False
     try:
@@ -99,17 +106,23 @@ def activate_multi_profile_hosting_eagerly() -> bool:
         logger.warning(
             "Could not enumerate this host's profile homes; activating multi-profile hosting "
             "fail-closed (unscoped credential reads will raise instead of borrowing the launch "
-            "profile's)", exc_info=True)
+            "profile's)",
+            exc_info=True,
+        )
         activate_multi_profile_hosting()
         return True
     if len(homes) < 2:
         return False
-    logger.info("Multi-profile hosting activated at startup (%d servable profile homes)", len(homes))
+    logger.info(
+        "Multi-profile hosting activated at startup (%d servable profile homes)",
+        len(homes),
+    )
     activate_multi_profile_hosting()
     # Route each home's records to its own logs/ now: the Desktop cron ticker used to be the only
     # caller, and it stands down when a live gateway owns cron, leaving every secondary profile's
     # model/cwd lines in the launch profile's agent.log.
     from clawk_logging import enable_profile_log_routing
+
     enable_profile_log_routing(sorted(homes))
     return True
 
@@ -119,6 +132,7 @@ def _launch_env() -> dict[str, str]:
     (no secondary has run yet, so it is provably the launch profile's, and freezing it early would
     miss values the launch process still bridges at startup)."""
     from agent.secret_scope import is_multiplex_active
+
     return capture_launch_env() if is_multiplex_active() else dict(os.environ)
 
 
@@ -148,10 +162,10 @@ def launch_secret_scope(launch_home: str | Path) -> dict[str, str]:
     nothing in the files shadows them.
     """
     from agent.secret_scope import _is_global_env, build_profile_secret_scope
+
     scope = {k: v for k, v in _launch_env().items() if not _is_global_env(k)}
     scope.update(build_profile_secret_scope(Path(launch_home)))
     return scope
-
 
 
 def owner_secret_scope(home: str | Path) -> dict[str, str]:
@@ -162,6 +176,7 @@ def owner_secret_scope(home: str | Path) -> dict[str, str]:
     the launch profile keeps its env-only credentials when a single-profile gateway starts
     multiplexing in place."""
     from agent.secret_scope import _is_process_home, build_profile_secret_scope
+
     if _is_process_home(Path(home)):
         return launch_secret_scope(home)
     return build_profile_secret_scope(Path(home))
@@ -175,6 +190,7 @@ def launch_body() -> Iterator[None]:
     ``launch_secret_scope`` (frozen env + ``.env``) instead of raising ``UnscopedSecretError``."""
     from agent.secret_scope import reset_launch_body_scope, set_launch_body_scope
     from clawk_constants import get_process_clawk_home
+
     home = get_process_clawk_home()
     token = set_launch_body_scope(lambda: launch_secret_scope(home))
     try:
@@ -198,14 +214,21 @@ def launch_profile_runtime_scope(launch_home: str | Path) -> Iterator[None]:
     (``gateway/run.py::_profile_runtime_scope``); the launch profile is a tenant like any other."""
     from agent.secret_scope import reset_secret_scope, set_secret_scope
     from clawk_constants import reset_clawk_home_override, set_clawk_home_override
-    from tools.terminal_scope import install_profile_terminal_scope, reset_terminal_scope
+    from tools.terminal_scope import (
+        install_profile_terminal_scope,
+        reset_terminal_scope,
+    )
 
     home = Path(launch_home)
     home_token = secret_token = terminal_token = None
     try:
         home_token = set_clawk_home_override(str(home))
-        secret_token = set_secret_scope(launch_secret_scope(home))  # own home: no foreign stamp
-        terminal_token = install_profile_terminal_scope(home, env_overlay=launch_terminal_env())
+        secret_token = set_secret_scope(
+            launch_secret_scope(home)
+        )  # own home: no foreign stamp
+        terminal_token = install_profile_terminal_scope(
+            home, env_overlay=launch_terminal_env()
+        )
         yield
     finally:
         if terminal_token is not None:
@@ -229,9 +252,11 @@ def launch_profile_scope_if_multiplexed():
     callers assert the returned object is literally a ``nullcontext``).
     """
     from agent.secret_scope import is_multiplex_active
+
     if not is_multiplex_active():
         return contextlib.nullcontext()
     from clawk_constants import get_process_clawk_home
+
     return launch_profile_runtime_scope(get_process_clawk_home())
 
 

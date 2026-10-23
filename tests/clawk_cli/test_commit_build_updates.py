@@ -14,16 +14,28 @@ MESSAGE = "This build doesn't get updates. Ask the developer who gave it to you 
 def commit_build(tmp_path, monkeypatch):
     root = tmp_path / "app"
     root.mkdir()
-    (root / "install-stamp.json").write_text(json.dumps({
-        "source": "commit-build", "distribution": "desktop-app", "payload": "bundled",
-        "updateMechanism": "external", "commit": "a" * 40,
-        "displayVersion": "1.2.3+gabcdef12", "baseVersion": "1.2.3", "channel": "canary",
-    }))
-    monkeypatch.setattr("clawk_cli.image_provenance.IMAGE_PROVENANCE_PATH", tmp_path / "absent")
+    (root / "install-stamp.json").write_text(
+        json.dumps(
+            {
+                "source": "commit-build",
+                "distribution": "desktop-app",
+                "payload": "bundled",
+                "updateMechanism": "external",
+                "commit": "a" * 40,
+                "displayVersion": "1.2.3+gabcdef12",
+                "baseVersion": "1.2.3",
+                "channel": "canary",
+            }
+        )
+    )
+    monkeypatch.setattr(
+        "clawk_cli.image_provenance.IMAGE_PROVENANCE_PATH", tmp_path / "absent"
+    )
     monkeypatch.setattr("clawk_cli.config.get_project_root", lambda: root)
     monkeypatch.setattr("pm.paths.repo_root", lambda: root)
     monkeypatch.delenv("CLAWK_INSTALL_ROOT", raising=False)
     from clawk_cli.version_info import _reset_version_info_cache
+
     _reset_version_info_cache()
     yield root
     _reset_version_info_cache()
@@ -41,7 +53,9 @@ def test_commit_build_refuses_without_gui_advice(commit_build, git_present):
 
 
 @pytest.mark.parametrize("passive", [False, True])
-def test_commit_build_never_checks_upstream_or_reuses_source_cache(commit_build, monkeypatch, passive):
+def test_commit_build_never_checks_upstream_or_reuses_source_cache(
+    commit_build, monkeypatch, passive
+):
     from clawk_cli import banner, source_check
 
     # Even a shared home's source-checkout cache and an embedded SHA cannot turn this into an update.
@@ -52,7 +66,9 @@ def test_commit_build_never_checks_upstream_or_reuses_source_cache(commit_build,
     check.assert_not_called()
 
 
-def test_commit_version_banner_uses_stamp_not_shared_checkout(commit_build, monkeypatch):
+def test_commit_version_banner_uses_stamp_not_shared_checkout(
+    commit_build, monkeypatch
+):
     from clawk_cli import banner, source_check
     from clawk_cli.version_info import get_version_info
 
@@ -66,7 +82,9 @@ def test_commit_version_banner_uses_stamp_not_shared_checkout(commit_build, monk
 
 
 @pytest.mark.parametrize("managed", [False, True])
-def test_commit_backend_update_routes_refuse_before_checks_or_spawns(commit_build, monkeypatch, tmp_path, managed):
+def test_commit_backend_update_routes_refuse_before_checks_or_spawns(
+    commit_build, monkeypatch, tmp_path, managed
+):
     from starlette.testclient import TestClient
     import clawk_cli.web_server as server
     import clawk_cli.web_server_gateway as gateway
@@ -75,7 +93,10 @@ def test_commit_backend_update_routes_refuse_before_checks_or_spawns(commit_buil
 
     monkeypatch.setattr(server, "PROJECT_ROOT", commit_build)
     monkeypatch.setattr(gateway, "_ACTION_LOG_DIR", tmp_path / "logs")
-    monkeypatch.setattr("clawk_cli.web_server_files._dashboard_local_update_managed_externally", lambda: managed)
+    monkeypatch.setattr(
+        "clawk_cli.web_server_files._dashboard_local_update_managed_externally",
+        lambda: managed,
+    )
     spawn = Mock(side_effect=AssertionError("no updater process"))
     monkeypatch.setattr(gateway, "_spawn_clawk_action", spawn)
     check = Mock(side_effect=AssertionError("no update check"))

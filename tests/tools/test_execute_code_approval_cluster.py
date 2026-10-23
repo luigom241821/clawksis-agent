@@ -27,13 +27,18 @@ from tools import approval_detection
 from tools import approval_context
 from tools import approval_smart
 from tools.thread_context import propagate_context_to_thread
-from gateway.session_context import clear_session_vars, reset_session_vars, set_session_vars
+from gateway.session_context import (
+    clear_session_vars,
+    reset_session_vars,
+    set_session_vars,
+)
 from tests.tools._child_env_fixtures import child_env
 
 
 # ---------------------------------------------------------------------------
 # 1. Context + callback propagation helper
 # ---------------------------------------------------------------------------
+
 
 def test_helper_propagates_contextvar_and_approval_callback():
     from tools import terminal_tool as TT
@@ -56,7 +61,7 @@ def test_helper_propagates_contextvar_and_approval_callback():
         t.join(timeout=5)
 
         assert seen["probe"] == "parent-value"  # ContextVar propagated
-        assert seen["cb"] is sentinel            # thread-local callback propagated
+        assert seen["cb"] is sentinel  # thread-local callback propagated
     finally:
         TT.set_approval_callback(None)
 
@@ -82,7 +87,7 @@ def test_helper_clears_callbacks_on_teardown():
             ex.submit(second).result(timeout=5)
 
         assert seen["during"] is sentinel  # installed for the wrapped target
-        assert seen["after"] is None       # cleared on teardown
+        assert seen["after"] is None  # cleared on teardown
     finally:
         TT.set_approval_callback(None)
 
@@ -118,9 +123,18 @@ def test_rpc_carries_authority_to_real_dispatch(child_env, monkeypatch, transpor
                 if transport == "local":
                     result = run_code(code, reset=(turn == "first"))
                 else:
-                    raw = json.loads(_run_remote_per_call(
-                        RunToCompletionEnv(child_env), "ssh", code, "authority-test",
-                        frozenset({"read_file"}), timeout=30, max_tool_calls=2, exec_start=time.monotonic()))
+                    raw = json.loads(
+                        _run_remote_per_call(
+                            RunToCompletionEnv(child_env),
+                            "ssh",
+                            code,
+                            "authority-test",
+                            frozenset({"read_file"}),
+                            timeout=30,
+                            max_tool_calls=2,
+                            exec_start=time.monotonic(),
+                        )
+                    )
                     assert raw["status"] == "success", raw
                     assert raw["tool_calls_made"] == 1
                     result = json.loads(raw["output"])
@@ -137,6 +151,7 @@ def test_rpc_carries_authority_to_real_dispatch(child_env, monkeypatch, transpor
 # ---------------------------------------------------------------------------
 # 3. check_execute_code_guard decision matrix
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def gw_session(monkeypatch):
@@ -170,6 +185,7 @@ def gw_session(monkeypatch):
 def _register_resolver(session_key: str, result):
     """Register a gateway notify callback that immediately resolves the most
     recent queued approval entry with *result* (simulating a user response)."""
+
     def cb(_approval_data):
         with A._lock:
             entries = A._gateway_queues.get(session_key, [])
@@ -177,6 +193,7 @@ def _register_resolver(session_key: str, result):
                 entry = entries[-1]
                 entry.result = result
                 entry.event.set()
+
     with A._lock:
         A._gateway_notify_cbs[session_key] = cb
 
@@ -314,7 +331,9 @@ def test_terminal_smart_deny_owner_override_is_one_operation(gw_session, monkeyp
         A._permanent_approved.discard("owner-override-test-danger")
         A._session_approved.get(gw_session, set()).discard("owner-override-test-danger")
     monkeypatch.setattr(approval_context, "_get_approval_mode", lambda: "smart")
-    monkeypatch.setattr(approval_smart, "_smart_approve", lambda _command, _description: "deny")
+    monkeypatch.setattr(
+        approval_smart, "_smart_approve", lambda _command, _description: "deny"
+    )
     monkeypatch.setattr(
         A,
         "detect_dangerous_command",
@@ -341,13 +360,17 @@ def test_terminal_smart_deny_owner_override_is_one_operation(gw_session, monkeyp
     assert changed["outcome"] == "denied"
 
 
-def test_execute_code_smart_deny_owner_override_is_one_operation(gw_session, monkeypatch):
+def test_execute_code_smart_deny_owner_override_is_one_operation(
+    gw_session, monkeypatch
+):
     """Never persist the coarse execute_code key after overriding smart DENY."""
     with A._lock:
         A._permanent_approved.discard("execute_code")
         A._session_approved.get(gw_session, set()).discard("execute_code")
     monkeypatch.setattr(approval_context, "_get_approval_mode", lambda: "smart")
-    monkeypatch.setattr(approval_smart, "_smart_approve", lambda _command, _description: "deny")
+    monkeypatch.setattr(
+        approval_smart, "_smart_approve", lambda _command, _description: "deny"
+    )
 
     shown = _register_capturing_resolver(gw_session, "session")
     result = A.check_execute_code_guard("print('first')", "local")
@@ -370,13 +393,17 @@ def test_smart_escalate_still_persists_session_choice(gw_session, monkeypatch):
     with A._lock:
         A._session_approved.get(gw_session, set()).discard(key)
     monkeypatch.setattr(approval_context, "_get_approval_mode", lambda: "smart")
-    monkeypatch.setattr(approval_smart, "_smart_approve", lambda _command, _description: "escalate")
     monkeypatch.setattr(
-        A, "detect_dangerous_command",
+        approval_smart, "_smart_approve", lambda _command, _description: "escalate"
+    )
+    monkeypatch.setattr(
+        A,
+        "detect_dangerous_command",
         lambda command: (True, key, f"risk:{command}"),
     )
     monkeypatch.setattr(
-        approval_detection, "detect_dangerous_command",
+        approval_detection,
+        "detect_dangerous_command",
         lambda command: (True, key, f"risk:{command}"),
     )
 
@@ -391,13 +418,17 @@ def test_smart_escalate_still_persists_session_choice(gw_session, monkeypatch):
 
 def test_terminal_smart_deny_pending_payload_is_one_operation(gw_session, monkeypatch):
     monkeypatch.setattr(approval_context, "_get_approval_mode", lambda: "smart")
-    monkeypatch.setattr(approval_smart, "_smart_approve", lambda _command, _description: "deny")
     monkeypatch.setattr(
-        A, "detect_dangerous_command",
+        approval_smart, "_smart_approve", lambda _command, _description: "deny"
+    )
+    monkeypatch.setattr(
+        A,
+        "detect_dangerous_command",
         lambda command: (True, "pending-smart-deny", f"risk:{command}"),
     )
     monkeypatch.setattr(
-        approval_detection, "detect_dangerous_command",
+        approval_detection,
+        "detect_dangerous_command",
         lambda command: (True, "pending-smart-deny", f"risk:{command}"),
     )
 
@@ -412,9 +443,13 @@ def test_terminal_smart_deny_pending_payload_is_one_operation(gw_session, monkey
     assert pending["allow_permanent"] is False
 
 
-def test_execute_code_smart_deny_pending_payload_is_one_operation(gw_session, monkeypatch):
+def test_execute_code_smart_deny_pending_payload_is_one_operation(
+    gw_session, monkeypatch
+):
     monkeypatch.setattr(approval_context, "_get_approval_mode", lambda: "smart")
-    monkeypatch.setattr(approval_smart, "_smart_approve", lambda _command, _description: "deny")
+    monkeypatch.setattr(
+        approval_smart, "_smart_approve", lambda _command, _description: "deny"
+    )
 
     result = A.check_execute_code_guard("print('pending')", "local")
 
@@ -464,33 +499,49 @@ def test_guard_session_yolo_bypasses(gw_session):
 # 4. Env scrubbing (#27303)
 # ---------------------------------------------------------------------------
 
+
 def test_env_scrub_clawk_allowlist_and_secret_blocks():
     from tools.code_execution_env import _scrub_child_env
 
     env = {
         # operational allowlist → kept
-        "CLAWK_HOME": "/h", "CLAWK_PROFILE": "p",
-        "CLAWK_CONFIG": "/c.yaml", "CLAWK_ENV": "/e",
+        "CLAWK_HOME": "/h",
+        "CLAWK_PROFILE": "p",
+        "CLAWK_CONFIG": "/c.yaml",
+        "CLAWK_ENV": "/e",
         "CLAWK_DELEGATED_CHILD_CONTEXT": "1",
         # other CLAWK_* → dropped (broad prefix removed)
-        "CLAWK_BASE_URL": "https://x", "CLAWK_INTERACTIVE": "1",
+        "CLAWK_BASE_URL": "https://x",
+        "CLAWK_INTERACTIVE": "1",
         "CLAWK_KANBAN_TASK": "t_parent",
         # secret substrings (incl. new DSN/WEBHOOK) → dropped
-        "SENTRY_DSN": "https://a@s.io/1", "SLACK_WEBHOOK": "https://h/x",
-        "OPENAI_API_KEY": "sk", "GITHUB_TOKEN": "ghp",
+        "SENTRY_DSN": "https://a@s.io/1",
+        "SLACK_WEBHOOK": "https://h/x",
+        "OPENAI_API_KEY": "sk",
+        "GITHUB_TOKEN": "ghp",
         # safe prefix → kept; uncategorized → dropped
-        "PATH": "/usr/bin", "RANDOM_X": "y",
+        "PATH": "/usr/bin",
+        "RANDOM_X": "y",
     }
     out = _scrub_child_env(env, is_passthrough=lambda _: False, is_windows=False)
 
     for kept in (
-        "CLAWK_HOME", "CLAWK_PROFILE", "CLAWK_CONFIG", "CLAWK_ENV",
-        "CLAWK_DELEGATED_CHILD_CONTEXT", "PATH",
+        "CLAWK_HOME",
+        "CLAWK_PROFILE",
+        "CLAWK_CONFIG",
+        "CLAWK_ENV",
+        "CLAWK_DELEGATED_CHILD_CONTEXT",
+        "PATH",
     ):
         assert kept in out, f"{kept} should be kept"
     for dropped in (
-        "CLAWK_BASE_URL", "CLAWK_INTERACTIVE", "CLAWK_KANBAN_TASK",
-        "SENTRY_DSN", "SLACK_WEBHOOK", "OPENAI_API_KEY", "GITHUB_TOKEN",
+        "CLAWK_BASE_URL",
+        "CLAWK_INTERACTIVE",
+        "CLAWK_KANBAN_TASK",
+        "SENTRY_DSN",
+        "SLACK_WEBHOOK",
+        "OPENAI_API_KEY",
+        "GITHUB_TOKEN",
         "RANDOM_X",
     ):
         assert dropped not in out, f"{dropped} should be dropped"
@@ -502,8 +553,9 @@ def test_env_scrub_passthrough_overrides_secret_block():
     from tools.code_execution_env import _scrub_child_env
 
     env = {"MY_SERVICE_DSN": "value"}
-    out = _scrub_child_env(env, is_passthrough=lambda k: k == "MY_SERVICE_DSN",
-                           is_windows=False)
+    out = _scrub_child_env(
+        env, is_passthrough=lambda k: k == "MY_SERVICE_DSN", is_windows=False
+    )
     assert out.get("MY_SERVICE_DSN") == "value"
 
 

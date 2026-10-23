@@ -43,7 +43,9 @@ def _write_plugin(directory: Path, *, name: str, manifest: str | None):
     if manifest is not None:
         (directory / "plugin.yaml").write_text(manifest, encoding="utf-8")
     # Registers a provider on import, so an unwanted import is *visible*.
-    (directory / "__init__.py").write_text(_PROFILE_SOURCE.format(name=name), encoding="utf-8")
+    (directory / "__init__.py").write_text(
+        _PROFILE_SOURCE.format(name=name), encoding="utf-8"
+    )
 
 
 @pytest.fixture
@@ -54,11 +56,19 @@ def clawk_home(tmp_path, monkeypatch):
     _clear_provider_caches()
 
 
-def test_flat_installed_model_provider_plugins_are_discovered_alongside_nested_ones(clawk_home):
-    _write_plugin(clawk_home / "plugins" / "installed-acp", name="installed-acp",
-                  manifest='name: installed-acp\nkind: "model-provider"\n')
-    _write_plugin(clawk_home / "plugins" / "model-providers" / "nested-acp", name="nested-acp",
-                  manifest="name: nested-acp\nkind: model-provider\n")
+def test_flat_installed_model_provider_plugins_are_discovered_alongside_nested_ones(
+    clawk_home,
+):
+    _write_plugin(
+        clawk_home / "plugins" / "installed-acp",
+        name="installed-acp",
+        manifest='name: installed-acp\nkind: "model-provider"\n',
+    )
+    _write_plugin(
+        clawk_home / "plugins" / "model-providers" / "nested-acp",
+        name="nested-acp",
+        manifest="name: nested-acp\nkind: model-provider\n",
+    )
     from providers import get_provider_profile
 
     assert get_provider_profile("installed-acp").base_url == "acp://installed-acp"
@@ -67,12 +77,24 @@ def test_flat_installed_model_provider_plugins_are_discovered_alongside_nested_o
 
 
 def test_other_plugins_in_the_flat_directory_are_left_to_the_plugin_manager(clawk_home):
-    _write_plugin(clawk_home / "plugins" / "other-standalone", name="other-standalone",
-                  manifest="name: other-standalone\nkind: standalone\n")
-    _write_plugin(clawk_home / "plugins" / "manifestless", name="manifestless", manifest=None)
-    _write_plugin(clawk_home / "plugins" / "broken-manifest", name="broken-manifest",
-                  manifest="kind: [this is: not valid\n")
+    _write_plugin(
+        clawk_home / "plugins" / "other-standalone",
+        name="other-standalone",
+        manifest="name: other-standalone\nkind: standalone\n",
+    )
+    _write_plugin(
+        clawk_home / "plugins" / "manifestless", name="manifestless", manifest=None
+    )
+    _write_plugin(
+        clawk_home / "plugins" / "broken-manifest",
+        name="broken-manifest",
+        manifest="kind: [this is: not valid\n",
+    )
     from providers import get_provider_profile, list_providers
 
-    assert not [p for p in list_providers() if p.name in ("other-standalone", "manifestless", "broken-manifest")]
+    assert not [
+        p
+        for p in list_providers()
+        if p.name in ("other-standalone", "manifestless", "broken-manifest")
+    ]
     assert get_provider_profile("copilot-acp") is not None  # bundled set still intact

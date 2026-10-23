@@ -15,7 +15,9 @@ _FIELDS = ("allowed_users_env", "allow_all_env", "allow_bots_env", "own_policy_e
 
 
 def _bundled_with_authz():
-    names = set(Platform._scan_bundled_plugin_platforms()[0]) | set(_BUNDLED_ENV_SIBLINGS)
+    names = set(Platform._scan_bundled_plugin_platforms()[0]) | set(
+        _BUNDLED_ENV_SIBLINGS
+    )
     return sorted(name for name in names if bundled_authz(name))
 
 
@@ -41,9 +43,15 @@ def test_override_without_fields_still_gates_on_bundled_names(name, monkeypatch)
 
     discover_plugins()
     bare = dataclasses.replace(
-        platform_registry.get(name), allowed_users_env="", allow_all_env="", allow_bots_env="",
-        own_policy_env=None)
-    monkeypatch.setattr(platform_registry, "get", lambda value: bare if value == name else None)
+        platform_registry.get(name),
+        allowed_users_env="",
+        allow_all_env="",
+        allow_bots_env="",
+        own_policy_env=None,
+    )
+    monkeypatch.setattr(
+        platform_registry, "get", lambda value: bare if value == name else None
+    )
 
     declared = bundled_authz(name)
     assert pairing._allowlist_env_for_platform(name) == declared["allowed_users_env"]

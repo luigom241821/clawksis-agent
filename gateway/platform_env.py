@@ -18,7 +18,13 @@ from functools import partial
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from gateway.config import GatewayConfig, HomeChannel, Platform, PlatformConfig, _getenv_str
+from gateway.config import (
+    GatewayConfig,
+    HomeChannel,
+    Platform,
+    PlatformConfig,
+    _getenv_str,
+)
 
 # Logger name parity with the origin module: records stay under "gateway.config".
 logger = logging.getLogger("gateway.config")
@@ -28,17 +34,20 @@ getenv = _getenv_str
 
 # --- small value parsers -----------------------------------------------------
 
+
 def csv_list(value: str) -> list:
     return [part.strip() for part in value.split(",") if part.strip()]
 
 
 def int_or(default: int) -> Callable[[str], int]:
     """``int(raw.strip(), 10)`` with *default* on malformed/blank input."""
+
     def parse(raw: str) -> int:
         try:
             return int(str(raw).strip(), 10)
         except (TypeError, ValueError):
             return default
+
     return parse
 
 
@@ -101,15 +110,19 @@ def env_extras(extra: dict[str, Any], spec, *, strip: bool = False) -> None:
             extra[key] = fn[0](value) if fn else value
 
 
-def env_home_channel(config: GatewayConfig, platform: Platform, env_base: str, *, strip: bool = False) -> None:
+def env_home_channel(
+    config: GatewayConfig, platform: Platform, env_base: str, *, strip: bool = False
+) -> None:
     """Set ``home_channel`` from ``<env_base>`` (+``_NAME``/``_THREAD_ID``) when the platform is configured."""
     chat_id = getenv(env_base)
     if strip:
         chat_id = chat_id.strip()
     if chat_id and platform in config.platforms:
         config.platforms[platform].home_channel = HomeChannel(
-            platform=platform, chat_id=chat_id,
-            name=getenv(f"{env_base}_NAME", "Home"), thread_id=getenv(f"{env_base}_THREAD_ID") or None,
+            platform=platform,
+            chat_id=chat_id,
+            name=getenv(f"{env_base}_NAME", "Home"),
+            thread_id=getenv(f"{env_base}_THREAD_ID") or None,
         )
 
 
@@ -132,7 +145,10 @@ def reply_mode_step(platform: Platform, env: str):
 def enable_from_env(config: GatewayConfig, platform: Platform) -> PlatformConfig:
     """Enable *platform* on env credentials unless config.yaml explicitly disabled it (warns once).
     Delegates to the core gate, which owns the explicit-disable marker and the one-time WARNING."""
-    from gateway.config_env import _enable_from_env  # lazy: config_env imports this module
+    from gateway.config_env import (
+        _enable_from_env,
+    )  # lazy: config_env imports this module
+
     return _enable_from_env(config, platform)
 
 
@@ -146,6 +162,7 @@ class EnvCred:
     specs. ``warn_missing``: ``(env, msg)`` logged BEFORE enabling when blank. ``then``: tail
     ``fn(config, platform_config)``. ``home``: ``env_home_channel`` env base applied only when the gate passed.
     """
+
     platform: Platform
     creds: tuple
     token: Optional[str] = None
@@ -168,7 +185,11 @@ class EnvCred:
         extra = platform_config.extra
         for key, env, *rest in self.fixed:
             default = rest[0] if rest else ""
-            value = env_first(env) or default if isinstance(env, tuple) else getenv(env, default)
+            value = (
+                env_first(env) or default
+                if isinstance(env, tuple)
+                else getenv(env, default)
+            )
             extra[key] = rest[1](value) if len(rest) > 1 else value
         env_extras(extra, self.optional)
         env_extras(extra, self.optional_stripped, strip=True)
@@ -190,12 +211,21 @@ def bundled_sibling(directory: str, stem: str = "gateway_env") -> Any:
     executed from its file under a private name: the plugin package (``__init__``, adapter,
     ``register()``) is never imported. None when absent or *directory* is not a bundled plugin."""
     from gateway.config import Platform
+
     if directory not in Platform._scan_bundled_plugin_platforms()[0]:
         return None
-    path = Path(__file__).resolve().parent.parent / "plugins" / "platforms" / directory / f"{stem}.py"
+    path = (
+        Path(__file__).resolve().parent.parent
+        / "plugins"
+        / "platforms"
+        / directory
+        / f"{stem}.py"
+    )
     if not path.is_file():
         return None
-    spec = importlib.util.spec_from_file_location(f"_clawk_bundled_{stem}_{directory}", path)
+    spec = importlib.util.spec_from_file_location(
+        f"_clawk_bundled_{stem}_{directory}", path
+    )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -210,8 +240,10 @@ def bundled_env_rows(name: str) -> Optional[tuple]:
     module = bundled_sibling(directory)
     if module is None:
         return None
-    return (tuple(getattr(module, f"{prefix}ENV_OVERRIDES", ()) or ()),
-            tuple(getattr(module, f"{prefix}ENV_ENABLE_CREDENTIALS", ()) or ()))
+    return (
+        tuple(getattr(module, f"{prefix}ENV_OVERRIDES", ()) or ()),
+        tuple(getattr(module, f"{prefix}ENV_ENABLE_CREDENTIALS", ()) or ()),
+    )
 
 
 def bundled_authz(name: str) -> dict:
@@ -219,7 +251,11 @@ def bundled_authz(name: str) -> dict:
     plugin declares in its ``gateway_env.py``, read without the plugin; {} for other names."""
     directory, prefix = _BUNDLED_ENV_SIBLINGS.get(name, (name, ""))
     module = bundled_sibling(directory)
-    return dict(getattr(module, f"{prefix}AUTHZ", None) or {}) if module is not None else {}
+    return (
+        dict(getattr(module, f"{prefix}AUTHZ", None) or {})
+        if module is not None
+        else {}
+    )
 
 
 def authz_field(name: str, field: str, entry: Any = None) -> Any:

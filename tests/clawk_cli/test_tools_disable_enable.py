@@ -1,4 +1,5 @@
 """Tests for clawk tools disable/enable/list command (backend)."""
+
 from argparse import Namespace
 from unittest.mock import MagicMock, patch
 
@@ -12,12 +13,15 @@ from clawk_cli.tools_config import tools_disable_enable_command
 
 
 class TestToolsDisableBuiltin:
-
     def test_disable_removes_toolset_from_platform(self):
         config = {"platform_toolsets": {"cli": ["web", "memory", "terminal"]}}
-        with patch("clawk_cli.tools_config.load_config", return_value=config), \
-             patch("clawk_cli.tools_config.save_config") as mock_save:
-            tools_disable_enable_command(Namespace(tools_action="disable", names=["web"], platform="cli"))
+        with (
+            patch("clawk_cli.tools_config.load_config", return_value=config),
+            patch("clawk_cli.tools_config.save_config") as mock_save,
+        ):
+            tools_disable_enable_command(
+                Namespace(tools_action="disable", names=["web"], platform="cli")
+            )
         saved = mock_save.call_args[0][0]
         assert "web" not in saved["platform_toolsets"]["cli"]
         assert "memory" in saved["platform_toolsets"]["cli"]
@@ -30,14 +34,16 @@ class TestToolsDisableBuiltin:
 
 
 class TestToolsDisableMcp:
-
-
     def test_disable_unknown_server_prints_error(self, capsys):
         config = {"mcp_servers": {}}
-        with patch("clawk_cli.tools_config.load_config", return_value=config), \
-             patch("clawk_cli.tools_config.save_config"):
+        with (
+            patch("clawk_cli.tools_config.load_config", return_value=config),
+            patch("clawk_cli.tools_config.save_config"),
+        ):
             tools_disable_enable_command(
-                Namespace(tools_action="disable", names=["unknown:tool"], platform="cli")
+                Namespace(
+                    tools_action="disable", names=["unknown:tool"], platform="cli"
+                )
             )
         out = capsys.readouterr().out
         assert "MCP server 'unknown' not found in config" in out
@@ -53,8 +59,6 @@ class TestToolsDisableMcp:
 
 
 class TestToolsList:
-
-
     def test_list_shows_mcp_excluded_tools(self, capsys):
         config = {
             "mcp_servers": {"github": {"tools": {"exclude": ["create_issue"]}}},
@@ -70,14 +74,16 @@ class TestToolsList:
 
 
 class TestToolsValidation:
-
-
     def test_mixed_valid_and_invalid_applies_valid_only(self):
         config = {"platform_toolsets": {"cli": ["web", "memory"]}}
-        with patch("clawk_cli.tools_config.load_config", return_value=config), \
-             patch("clawk_cli.tools_config.save_config") as mock_save:
+        with (
+            patch("clawk_cli.tools_config.load_config", return_value=config),
+            patch("clawk_cli.tools_config.save_config") as mock_save,
+        ):
             tools_disable_enable_command(
-                Namespace(tools_action="disable", names=["web", "bad_toolset"], platform="cli")
+                Namespace(
+                    tools_action="disable", names=["web", "bad_toolset"], platform="cli"
+                )
             )
         saved = mock_save.call_args[0][0]
         assert "web" not in saved["platform_toolsets"]["cli"]
@@ -98,12 +104,14 @@ def test_tools_action_accepts_deferred_plugin_without_materializing(action, caps
         platform_registry.register_deferred(platform, loader)
 
     try:
-        with patch(
-            "clawk_cli.plugins.discover_plugins",
-            side_effect=discover_deferred_platform,
-        ) as discover, \
-             patch("clawk_cli.tools_config.load_config", return_value=config), \
-             patch("clawk_cli.tools_config.save_config") as save:
+        with (
+            patch(
+                "clawk_cli.plugins.discover_plugins",
+                side_effect=discover_deferred_platform,
+            ) as discover,
+            patch("clawk_cli.tools_config.load_config", return_value=config),
+            patch("clawk_cli.tools_config.save_config") as save,
+        ):
             tools_disable_enable_command(args)
 
         out = capsys.readouterr().out

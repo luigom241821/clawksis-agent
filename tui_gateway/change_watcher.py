@@ -20,17 +20,23 @@ def skin_payload(config: dict) -> dict:
     skin engine fails). Pure of server state: the shared owner calls it under the profile's scope."""
     try:
         from clawk_cli.skin_engine import init_skin_from_config, get_active_skin
+
         init_skin_from_config(config)
         skin = get_active_skin()
         # light/dark are paired palettes: the TUI prefers the block matching terminal polarity.
         return {
-            "name": skin.name, "colors": skin.colors,
-            "light_colors": skin.light_colors, "dark_colors": skin.dark_colors,
-            "branding": skin.branding, "banner_logo": skin.banner_logo,
-            "banner_hero": skin.banner_hero, "tool_prefix": skin.tool_prefix,
+            "name": skin.name,
+            "colors": skin.colors,
+            "light_colors": skin.light_colors,
+            "dark_colors": skin.dark_colors,
+            "branding": skin.branding,
+            "banner_logo": skin.banner_logo,
+            "banner_hero": skin.banner_hero,
+            "tool_prefix": skin.tool_prefix,
             "help_header": (skin.branding or {}).get("help_header", ""),
             # Raw user CSS for the desktop GUI's <style> tag (32 KiB cap in the skin engine).
-            "customCSS": skin.custom_css}
+            "customCSS": skin.custom_css,
+        }
     except Exception:  # health: allow BLE001 -- moved unchanged from resolve_skin (main keeps the same handler): a broken skin file boots the default theme
         return {}
 
@@ -60,7 +66,9 @@ def _home_mtime_ns(*parts: str):
 
 def _newest_mtime_ns(paths) -> int | None:
     """Max ``st_mtime_ns`` across ``paths`` (unstat-able ignored); None when none stat'ed."""
-    return max((m for m in map(_watcher_mtime_ns, paths) if m is not None), default=None)
+    return max(
+        (m for m in map(_watcher_mtime_ns, paths) if m is not None), default=None
+    )
 
 
 def _files_sig(paths) -> tuple:
@@ -97,7 +105,11 @@ def _skin_home_for(profile_id) -> str | None:
     """The profile home a peer's skin follows, or None for the launch home (the ambient scope)."""
     with contextlib.suppress(Exception):
         home = Path(str(profile_id))
-        if home.is_absolute() and home.is_dir() and home.resolve() != Path(_clawk_home).resolve():
+        if (
+            home.is_absolute()
+            and home.is_dir()
+            and home.resolve() != Path(_clawk_home).resolve()
+        ):
             return str(home)
     return None
 
@@ -139,8 +151,11 @@ def _broadcast_skin_if_changed() -> None:
         sig = _skin_sig()
         if sig != _last_skin_sig:
             _last_skin_sig = sig
-            _broadcast_global_event("skin.changed", resolve_skin(),
-                                    skip={peer for peers in by_home.values() for peer in peers})
+            _broadcast_global_event(
+                "skin.changed",
+                resolve_skin(),
+                skip={peer for peers in by_home.values() for peer in peers},
+            )
     for home, peers in by_home.items():
         with contextlib.suppress(Exception):
             sig = _under_home(home, _skin_sig)
@@ -180,8 +195,13 @@ def _pet_changed_payload() -> dict:
     try:
         if active := _active_pet():
             pet, scale = active
-            return {"enabled": True, "slug": pet.slug, "displayName": pet.display_name,
-                    "scale": scale, "spritesheetRevision": _pet_sheet_revision(pet.spritesheet)}
+            return {
+                "enabled": True,
+                "slug": pet.slug,
+                "displayName": pet.display_name,
+                "scale": scale,
+                "spritesheetRevision": _pet_sheet_revision(pet.spritesheet),
+            }
     except Exception:
         pass
     return {"enabled": False}
@@ -191,10 +211,28 @@ def _pet_changed_payload() -> dict:
 # them mid-turn and on idle ticks, so hashing them re-fired sessions.changed every heartbeat window
 # (#98005). Liveness comes from session.active_list, and a real turn still moves message_count.
 _SESSION_SIGNATURE_FIELDS = (
-    "id", "source", "session_key", "display_name", "model", "parent_session_id",
-    "started_at", "ended_at", "end_reason", "message_count", "tool_call_count",
-    "cwd", "git_branch", "git_repo_root", "title", "title_source", "profile_name",
-    "archived", "pinned", "hidden", "last_read_at", "handoff_state",
+    "id",
+    "source",
+    "session_key",
+    "display_name",
+    "model",
+    "parent_session_id",
+    "started_at",
+    "ended_at",
+    "end_reason",
+    "message_count",
+    "tool_call_count",
+    "cwd",
+    "git_branch",
+    "git_repo_root",
+    "title",
+    "title_source",
+    "profile_name",
+    "archived",
+    "pinned",
+    "hidden",
+    "last_read_at",
+    "handoff_state",
 )
 # path -> (database/WAL mtime, session-table digest). The mtime guard keeps the
 # normal 0.5 s watch pass stat-only; SQLite is read only after another process
@@ -228,10 +266,13 @@ def _session_db_content_sig(db_path: Path):
         from clawk_state import _connect_tracked_db
         from clawk_state_holders import read_only_db_uri
 
-        conn = _connect_tracked_db(read_only_db_uri(db_path), tracking_path=db_path,
-                                   uri=True, timeout=0.05)
+        conn = _connect_tracked_db(
+            read_only_db_uri(db_path), tracking_path=db_path, uri=True, timeout=0.05
+        )
         available = {row[1] for row in conn.execute("PRAGMA table_info(sessions)")}
-        fields = tuple(field for field in _SESSION_SIGNATURE_FIELDS if field in available)
+        fields = tuple(
+            field for field in _SESSION_SIGNATURE_FIELDS if field in available
+        )
         if not fields:
             # A state.db without a readable sessions table (foreign schema, legacy
             # or transient file): keep the old mtime contract so any move still
@@ -248,7 +289,11 @@ def _session_db_content_sig(db_path: Path):
     except Exception:
         # A busy/locked read after a good one keeps the last digest and leaves the cached mtime
         # stale so the next pass re-reads: digest -> mtime -> digest would broadcast twice.
-        if cached is not None and cached[1] is not None and cached[1][0] != "mtime-fallback":
+        if (
+            cached is not None
+            and cached[1] is not None
+            and cached[1][0] != "mtime-fallback"
+        ):
             return cached[1]
         signature = ("mtime-fallback", mtime)
     finally:
@@ -269,7 +314,10 @@ _RACY_MTIME = object()
 
 def _settled_mtime(mtime):
     """``mtime`` when it is old enough to trust as a cache key, else a never-matching sentinel."""
-    from utils import mtime_is_racy  # function-local: bodies are rebound onto server.py's globals
+    from utils import (
+        mtime_is_racy,
+    )  # function-local: bodies are rebound onto server.py's globals
+
     if mtime is None or mtime_is_racy(mtime):
         return _RACY_MTIME
     return mtime
@@ -297,7 +345,8 @@ def _projects_sig():
     return _files_sig(
         root / name
         for root in (_watcher_home(), *_served_profile_homes)
-        for name in ("projects.db", "projects.db-wal"))
+        for name in ("projects.db", "projects.db-wal")
+    )
 
 
 def _pairing_sig():
@@ -309,7 +358,10 @@ def _pairing_sig():
         with contextlib.suppress(OSError):
             # Only the ledgers: _rate_limits.json moves on every unauthorized DM.
             entries += [
-                e for e in root.iterdir() if e.name.endswith(("-pending.json", "-approved.json"))]
+                e
+                for e in root.iterdir()
+                if e.name.endswith(("-pending.json", "-approved.json"))
+            ]
     return _files_sig(entries)
 
 
@@ -326,14 +378,23 @@ def _pairing_roots(home: Path) -> list:
     profiles_dir = home / "profiles"
     dir_mtime, now = _watcher_mtime_ns(profiles_dir), time.monotonic()
     cached = _pairing_roots_cache
-    if cached is not None and cached[0] == home and cached[1] == dir_mtime and now - cached[2] < _PAIRING_ROOTS_TTL_S:
+    if (
+        cached is not None
+        and cached[0] == home
+        and cached[1] == dir_mtime
+        and now - cached[2] < _PAIRING_ROOTS_TTL_S
+    ):
         return cached[3]
     from clawk_constants import named_profile_is_live
+
     roots = [home / "pairing", home / "platforms" / "pairing"]
     with contextlib.suppress(OSError):
         for profile_dir in profiles_dir.iterdir():
             if named_profile_is_live(profile_dir):
-                roots += [profile_dir / "pairing", profile_dir / "platforms" / "pairing"]
+                roots += [
+                    profile_dir / "pairing",
+                    profile_dir / "platforms" / "pairing",
+                ]
     _pairing_roots_cache = (home, dir_mtime, now, roots)
     return roots
 
@@ -357,7 +418,9 @@ def _bot_relay_outbox_sig():
     with contextlib.suppress(OSError):
         for entry in (root / "bot_relay" / "outbox").iterdir():
             if entry.name.endswith(".json"):
-                _bot_relay_outbox_seen = max(_bot_relay_outbox_seen, _watcher_mtime_ns(entry) or 0)
+                _bot_relay_outbox_seen = max(
+                    _bot_relay_outbox_seen, _watcher_mtime_ns(entry) or 0
+                )
     return _bot_relay_outbox_seen or None
 
 
@@ -368,6 +431,7 @@ def _skills_sig():
     nested under a category) moves it, and attached clients refetch ``commands.catalog`` from this
     gateway instead of rescanning disk."""
     from agent.skill_commands import published_scopes_signature
+
     return published_scopes_signature()
 
 
@@ -387,7 +451,8 @@ _CHANGE_WATCHES: dict[str, tuple[float, Any, Any]] = {
     "pairing.changed": (2.0, _pairing_sig, dict),
     "skills.changed": (2.0, _skills_sig, dict),
     # 1s so a queued DM envelope reaches the Desktop's push-triggered drain fast.
-    "bot_relay.outbox.pending": (1.0, _bot_relay_outbox_sig, dict)}
+    "bot_relay.outbox.pending": (1.0, _bot_relay_outbox_sig, dict),
+}
 
 # state.db moves on every append of a streaming turn and gateway_state.json on
 # in-flight bookkeeping; the floor coalesces bursts to one broadcast per window,
@@ -442,6 +507,7 @@ def _ensure_skin_watcher() -> None:
             time.sleep(0.5)
             _broadcast_skin_if_changed()
             _broadcast_watched_changes()
+
     threading.Thread(target=_loop, name="clawk-change-watcher", daemon=True).start()
 
 

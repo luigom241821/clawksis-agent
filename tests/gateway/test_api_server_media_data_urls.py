@@ -47,7 +47,10 @@ class TestResolveMediaToDataUrls(unittest.TestCase):
         response; the control token is dropped rather than returned to the HTTP client."""
         p = self._write_png()
         clean = f"Here you go: MEDIA:{p}"
-        self.assertEqual(_resolve_media_to_data_urls(clean + "<|eos|>"), _resolve_media_to_data_urls(clean))
+        self.assertEqual(
+            _resolve_media_to_data_urls(clean + "<|eos|>"),
+            _resolve_media_to_data_urls(clean),
+        )
 
     def test_missing_file_left_untouched(self):
         text = "MEDIA:/nonexistent/path/shot.png"

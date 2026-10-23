@@ -20,8 +20,16 @@ _holder = threading.local()
 @contextmanager
 def provider_models_cache_lock(path: Path):
     from clawk_cli.auth import _file_lock
-    with _thread_lock, _file_lock(path.with_name(path.name + ".lock"), _holder, 10.0,
-                                  f"Timed out waiting for the provider models cache lock ({path})"):
+
+    with (
+        _thread_lock,
+        _file_lock(
+            path.with_name(path.name + ".lock"),
+            _holder,
+            10.0,
+            f"Timed out waiting for the provider models cache lock ({path})",
+        ),
+    ):
         yield
 
 

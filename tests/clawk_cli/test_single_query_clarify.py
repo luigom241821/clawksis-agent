@@ -14,12 +14,21 @@ construction site that already knows it is in single-query mode.
 
 from __future__ import annotations
 
+
 def test_returns_immediate_undelivered_reply():
     from clawk_cli.cli_agent_setup_mixin import _single_query_clarify_callback
 
-    result = _single_query_clarify_callback([{
-        "qid": "q0", "question": "Which timezone should I use?", "choices": None,
-        "choices_offered": None, "multi_select": False}])
+    result = _single_query_clarify_callback(
+        [
+            {
+                "qid": "q0",
+                "question": "Which timezone should I use?",
+                "choices": None,
+                "choices_offered": None,
+                "multi_select": False,
+            }
+        ]
+    )
     assert result["answers"] == {}
     assert result["outcome"] == "undelivered"
     assert "no user available" in result["notice"]

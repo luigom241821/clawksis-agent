@@ -3,6 +3,7 @@ stop a thread), and MemoryManagers are rebuilt per agent. The process-wide gate 
 _MAX_STUCK_CALLS calls that started after the provider's last success are stuck, admits one half-open
 probe per interval while closed, and caps calls in flight, so a wedged backend pins a bounded number of
 threads and a recovered one keeps its memory."""
+
 import threading
 
 import pytest
@@ -44,7 +45,9 @@ class _HangingProvider(MemoryProvider):
     def queue_prefetch(self, query, *, session_id: str = "") -> None:
         self.prefetch_calls += 1
 
-    def sync_turn(self, user_content, assistant_content, *, session_id: str = "") -> None:
+    def sync_turn(
+        self, user_content, assistant_content, *, session_id: str = ""
+    ) -> None:
         self.sync_calls += 1
         if self.hang_next:
             self.hang_next = False
@@ -63,7 +66,9 @@ def _clear_gate():
 @pytest.fixture(autouse=True)
 def _short_stall(monkeypatch):
     monkeypatch.setattr(mm, "_BACKGROUND_CALL_STALL_S", 0.0)
-    monkeypatch.setattr(mm, "_PROBE_INTERVAL_S", 1e9)  # no half-open probe unless a test asks for one
+    monkeypatch.setattr(
+        mm, "_PROBE_INTERVAL_S", 1e9
+    )  # no half-open probe unless a test asks for one
     _clear_gate()
     yield
     _clear_gate()
@@ -105,7 +110,9 @@ def test_sustained_wedge_pins_at_most_max_stuck_threads():
         fresh = _manager(_HangingProvider())
         fresh.sync_all("again", "reply")
         fresh.queue_prefetch_all("query")
-        assert fresh.flush_pending(timeout=5)  # returns: nothing blocked behind the hung calls
+        assert fresh.flush_pending(
+            timeout=5
+        )  # returns: nothing blocked behind the hung calls
         fresh.shutdown_all()
 
     key = hung[0][0]._registry_key(hung[0][1])
@@ -113,7 +120,11 @@ def test_sustained_wedge_pins_at_most_max_stuck_threads():
         assert _GATE.skips[key] == 10
         assert len(_GATE.calls[key]) == mm._MAX_STUCK_CALLS
         # Idle workers of shut-down executors exit asynchronously.
-        wait_until(lambda: len(_mem_sync_threads()) <= before, timeout=5, what="idle mem-sync workers to exit")
+        wait_until(
+            lambda: len(_mem_sync_threads()) <= before,
+            timeout=5,
+            what="idle mem-sync workers to exit",
+        )
     finally:
         for _, provider in hung:
             provider.release.set()
@@ -151,7 +162,9 @@ def test_new_outage_warns_on_its_first_skip_even_with_an_orphan_alive(caplog):
     try:
         _skip(_manager(_HangingProvider()), "skipped")
         assert _GATE.skips[key] == 1
-        hung[-1][1].release.set()  # one returns: the gate reopens, three orphans keep the key alive
+        hung[-1][
+            1
+        ].release.set()  # one returns: the gate reopens, three orphans keep the key alive
         assert hung[-1][0].flush_pending(timeout=5)
         hung += [_hang_one_call() for _ in range(mm._MAX_STUCK_CALLS)]  # a new outage
         caplog.clear()
@@ -209,7 +222,9 @@ def test_closed_gate_admits_a_half_open_probe_that_reopens_it(monkeypatch):
         monkeypatch.setattr(mm, "_PROBE_INTERVAL_S", 0.0)
         _skip(_manager(healthy), "probe")
         assert healthy.sync_calls == 1
-        monkeypatch.setattr(mm, "_PROBE_INTERVAL_S", 1e9)  # no further probe: only a reopened gate admits
+        monkeypatch.setattr(
+            mm, "_PROBE_INTERVAL_S", 1e9
+        )  # no further probe: only a reopened gate admits
         _skip(_manager(healthy), "after the probe")
         assert healthy.sync_calls == 2
     finally:

@@ -68,12 +68,20 @@ class TestWatermarkCommit:
             "sess1",
             role="assistant",
             content="tool caller",
-            tool_calls=[{"id": "c1", "type": "function",
-                         "function": {"name": "terminal", "arguments": "{}"}}],
+            tool_calls=[
+                {
+                    "id": "c1",
+                    "type": "function",
+                    "function": {"name": "terminal", "arguments": "{}"},
+                }
+            ],
         )
         db.append_message(
-            "sess1", role="tool", content="tool output",
-            tool_call_id="c1", tool_name="terminal",
+            "sess1",
+            role="tool",
+            content="tool output",
+            tool_call_id="c1",
+            tool_name="terminal",
         )
 
         db.archive_and_compact("sess1", SUMMARY, watermark=watermark)
@@ -110,7 +118,8 @@ class TestWatermarkCommit:
         count = db.archive_and_compact("sess1", SUMMARY, watermark=watermark)
         assert count == 2
         assert [r["content"] for r in db.get_messages("sess1")] == [
-            SUMMARY[0]["content"], SUMMARY[1]["content"],
+            SUMMARY[0]["content"],
+            SUMMARY[1]["content"],
         ]
 
     def test_none_watermark_preserves_historical_behavior(self, db: SessionDB) -> None:
@@ -140,9 +149,16 @@ class TestWatermarkCommit:
         _seed(db)
         watermark = db.get_active_message_watermark("sess1")
         db.append_message(
-            "sess1", role="assistant", content="tail with tools",
-            tool_calls=[{"id": "t1", "type": "function",
-                         "function": {"name": "x", "arguments": "{}"}}],
+            "sess1",
+            role="assistant",
+            content="tail with tools",
+            tool_calls=[
+                {
+                    "id": "t1",
+                    "type": "function",
+                    "function": {"name": "x", "arguments": "{}"},
+                }
+            ],
         )
         db.archive_and_compact("sess1", SUMMARY, watermark=watermark)
         info = db.get_session("sess1")
@@ -170,9 +186,10 @@ class TestCommitFence:
 
     def test_commit_refused_when_lease_expired(self, db: SessionDB) -> None:
         _seed(db)
-        assert db.try_acquire_compression_lock(
-            "sess1", "worker-A", ttl_seconds=0.05
-        ) is True
+        assert (
+            db.try_acquire_compression_lock("sess1", "worker-A", ttl_seconds=0.05)
+            is True
+        )
         time.sleep(0.1)
         with pytest.raises(SessionCompressionInProgressError):
             db.archive_and_compact("sess1", SUMMARY, lock_holder="worker-A")
@@ -301,7 +318,9 @@ class TestRotationPathWatermark:
         ceiling = db.get_active_message_watermark("sess1")
         # Simulates the #47202 pre-publish flush of the rotator's own input.
         db.append_message(
-            "sess1", role="user", content="rotator's own flush",
+            "sess1",
+            role="user",
+            content="rotator's own flush",
             compression_lock_holder="rotator",
         )
 
@@ -336,5 +355,6 @@ class TestRotationPathWatermark:
         )
         child = db.get_messages_as_conversation("child1")
         assert [m["content"] for m in child] == [
-            SUMMARY[0]["content"], SUMMARY[1]["content"],
+            SUMMARY[0]["content"],
+            SUMMARY[1]["content"],
         ]

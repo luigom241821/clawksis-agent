@@ -20,9 +20,14 @@ REASONING = "Let me think about this carefully."
 
 def _result(user_text: str) -> dict:
     """Transcript-shaped agent result whose assistant message carries structured reasoning."""
-    return {"final_response": "42", "completed": True,
-            "messages": [{"role": "user", "content": user_text},
-                         {"role": "assistant", "content": "42", "reasoning": REASONING}]}
+    return {
+        "final_response": "42",
+        "completed": True,
+        "messages": [
+            {"role": "user", "content": user_text},
+            {"role": "assistant", "content": "42", "reasoning": REASONING},
+        ],
+    }
 
 
 def _app() -> tuple:
@@ -42,23 +47,38 @@ async def test_non_streaming_routes_carry_reasoning_once():
     before the message, also present on ``GET /v1/responses/{id}`` replay."""
     client, adapter = _app()
     async with client:
+
         async def _fake_run_agent(**kw):
-            return _result(kw["user_message"]), {"input_tokens": 1, "output_tokens": 1, "total_tokens": 2}
+            return _result(kw["user_message"]), {
+                "input_tokens": 1,
+                "output_tokens": 1,
+                "total_tokens": 2,
+            }
 
         with patch.object(adapter, "_run_agent", side_effect=_fake_run_agent):
-            r = await client.post("/v1/chat/completions", json={
-                "model": "clawksis-agent", "messages": [{"role": "user", "content": "q"}]})
+            r = await client.post(
+                "/v1/chat/completions",
+                json={
+                    "model": "clawksis-agent",
+                    "messages": [{"role": "user", "content": "q"}],
+                },
+            )
             assert r.status == 200
             message = (await r.json())["choices"][0]["message"]
             assert message["reasoning_content"] == REASONING
             assert REASONING not in message["content"]
 
-            r = await client.post("/v1/responses", json={"model": "clawksis-agent", "input": "q", "store": True})
+            r = await client.post(
+                "/v1/responses",
+                json={"model": "clawksis-agent", "input": "q", "store": True},
+            )
             assert r.status == 200
             data = await r.json()
             assert [o["type"] for o in data["output"]] == ["reasoning", "message"]
             assert data["output"][0]["status"] == "completed"
-            assert data["output"][0]["summary"] == [{"type": "summary_text", "text": REASONING}]
+            assert data["output"][0]["summary"] == [
+                {"type": "summary_text", "text": REASONING}
+            ]
             replay = await (await client.get(f"/v1/responses/{data['id']}")).json()
             assert [o["type"] for o in replay["output"]] == ["reasoning", "message"]
 
@@ -76,18 +96,39 @@ async def test_responses_input_ignores_echoed_reasoning_items():
             captured["user"] = kw["user_message"]
             return _result(kw["user_message"]), {}
 
-        reasoning_item = {"type": "reasoning", "id": "rs_1",
-                          "summary": [{"type": "summary_text", "text": "thought"}]}
+        reasoning_item = {
+            "type": "reasoning",
+            "id": "rs_1",
+            "summary": [{"type": "summary_text", "text": "thought"}],
+        }
         with patch.object(adapter, "_run_agent", side_effect=_fake_run_agent):
-            r = await client.post("/v1/responses", json={
-                "model": "clawksis-agent", "store": False,
-                "conversation_history": [{"role": "user", "content": "h0"}, reasoning_item,
-                                         {"role": "assistant", "content": "a0"}],
-                "input": [{"role": "user", "content": "first"}, reasoning_item,
-                          {"type": "message", "role": "assistant",
-                           "content": [{"type": "output_text", "text": "hi"}]},
-                          {"role": "user", "content": "second"}]})
+            r = await client.post(
+                "/v1/responses",
+                json={
+                    "model": "clawksis-agent",
+                    "store": False,
+                    "conversation_history": [
+                        {"role": "user", "content": "h0"},
+                        reasoning_item,
+                        {"role": "assistant", "content": "a0"},
+                    ],
+                    "input": [
+                        {"role": "user", "content": "first"},
+                        reasoning_item,
+                        {
+                            "type": "message",
+                            "role": "assistant",
+                            "content": [{"type": "output_text", "text": "hi"}],
+                        },
+                        {"role": "user", "content": "second"},
+                    ],
+                },
+            )
         assert r.status == 200, await r.text()
         assert captured["user"] == "second"
         assert [(m["role"], m["content"]) for m in captured["history"]] == [
-            ("user", "h0"), ("assistant", "a0"), ("user", "first"), ("assistant", "hi")]
+            ("user", "h0"),
+            ("assistant", "a0"),
+            ("user", "first"),
+            ("assistant", "hi"),
+        ]

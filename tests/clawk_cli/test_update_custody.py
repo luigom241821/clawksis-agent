@@ -24,13 +24,26 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _git(cwd: Path, *args: str) -> str:
-    return subprocess.run(["git", "-C", str(cwd), *args], check=True, capture_output=True,
-                          text=True, encoding="utf-8", env=_env(cwd)).stdout.strip()
+    return subprocess.run(
+        ["git", "-C", str(cwd), *args],
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        env=_env(cwd),
+    ).stdout.strip()
 
 
 def _env(base: Path) -> dict:
-    return dict(os.environ, GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull,
-                GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@e", GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@e")
+    return dict(
+        os.environ,
+        GIT_CONFIG_NOSYSTEM="1",
+        GIT_CONFIG_GLOBAL=os.devnull,
+        GIT_AUTHOR_NAME="t",
+        GIT_AUTHOR_EMAIL="t@e",
+        GIT_COMMITTER_NAME="t",
+        GIT_COMMITTER_EMAIL="t@e",
+    )
 
 
 @pytest.fixture
@@ -48,22 +61,48 @@ def repo(tmp_path, monkeypatch):
 
 def _runners(repo: Path):
     """Every updater git runner, as ``args -> stdout``."""
-    from clawk_cli import gitlock, update_cmd, update_cmd_check, update_cmd_git, update_cmd_stash
+    from clawk_cli import (
+        gitlock,
+        update_cmd,
+        update_cmd_check,
+        update_cmd_git,
+        update_cmd_stash,
+    )
 
-    yield "update_cmd._git_run", lambda a: update_cmd._git_run(["git"], a, cwd=repo).stdout
-    yield "update_cmd_git._git_run", lambda a: update_cmd_git._git_run(["git"], a, cwd=repo).stdout
-    yield "update_cmd_stash._git_quiet", lambda a: update_cmd_stash._git_quiet(["git"], a, repo, text=True).stdout
-    yield "update_cmd_check._git", lambda a: update_cmd_check._git(["git"], repo, a).stdout
-    yield "gitlock._git_stdout_lines", lambda a: "\n".join(gitlock._git_stdout_lines(repo, a))
+    yield (
+        "update_cmd._git_run",
+        lambda a: update_cmd._git_run(["git"], a, cwd=repo).stdout,
+    )
+    yield (
+        "update_cmd_git._git_run",
+        lambda a: update_cmd_git._git_run(["git"], a, cwd=repo).stdout,
+    )
+    yield (
+        "update_cmd_stash._git_quiet",
+        lambda a: update_cmd_stash._git_quiet(["git"], a, repo, text=True).stdout,
+    )
+    yield (
+        "update_cmd_check._git",
+        lambda a: update_cmd_check._git(["git"], repo, a).stdout,
+    )
+    yield (
+        "gitlock._git_stdout_lines",
+        lambda a: "\n".join(gitlock._git_stdout_lines(repo, a)),
+    )
 
 
 def test_every_updater_git_runner_forbids_detached_children(repo):
     missing = {}
     for name, run in _runners(repo):
-        seen = {key: run(["config", "--get", key]).strip() for key in ("gc.autoDetach", "maintenance.auto")}
+        seen = {
+            key: run(["config", "--get", key]).strip()
+            for key in ("gc.autoDetach", "maintenance.auto")
+        }
         if seen != {"gc.autoDetach": "false", "maintenance.auto": "false"}:
             missing[name] = seen
-    assert not missing, f"updater git runners that may fork a detached gc/maintenance child: {missing}"
+    assert not missing, (
+        f"updater git runners that may fork a detached gc/maintenance child: {missing}"
+    )
 
 
 # Records whether the checkout lock file is among this process's open fds, then hands over.
@@ -87,28 +126,46 @@ def test_lock_fd_reaches_local_mutators_only(repo, tmp_path, monkeypatch):
     recorder.write_text(_RECORDER, encoding="utf-8")
     recorder.chmod(0o755)
     remote = tmp_path / "remote.git"
-    subprocess.run(["git", "clone", "-q", "--bare", str(repo), str(remote)], check=True, env=_env(tmp_path))
+    subprocess.run(
+        ["git", "clone", "-q", "--bare", str(repo), str(remote)],
+        check=True,
+        env=_env(tmp_path),
+    )
     _git(repo, "remote", "add", "origin", str(remote))
     _git(repo, "config", "filter.rec.clean", f"{recorder} cat")
-    (repo / ".git" / "info" / "attributes").write_text("f.txt filter=rec\n", encoding="utf-8")
+    (repo / ".git" / "info" / "attributes").write_text(
+        "f.txt filter=rec\n", encoding="utf-8"
+    )
     out_fetch, out_stash = tmp_path / "fetch.out", tmp_path / "stash.out"
 
     lock = ul.UpdateLock(path=tmp_path / "marker", install_root=repo)
     assert lock.acquire()
     try:
-        monkeypatch.setenv("CLAWK_TEST_LOCK", os.path.realpath(ul.checkout_lock_path(repo)))
+        monkeypatch.setenv(
+            "CLAWK_TEST_LOCK", os.path.realpath(ul.checkout_lock_path(repo))
+        )
         monkeypatch.setenv("CLAWK_TEST_OUT", str(out_fetch))
-        fetched = update_cmd._git_run(["git"], ["fetch", f"--upload-pack={recorder} git-upload-pack", "origin"],
-                                      cwd=repo, network=True)
+        fetched = update_cmd._git_run(
+            ["git"],
+            ["fetch", f"--upload-pack={recorder} git-upload-pack", "origin"],
+            cwd=repo,
+            network=True,
+        )
         assert fetched.returncode == 0, fetched.stderr
         monkeypatch.setenv("CLAWK_TEST_OUT", str(out_stash))
         (repo / "f.txt").write_text("two\n", encoding="utf-8")
-        stashed = update_cmd._git_run(["git"], ["stash", "push", "-m", "custody"], cwd=repo)
+        stashed = update_cmd._git_run(
+            ["git"], ["stash", "push", "-m", "custody"], cwd=repo
+        )
         assert stashed.returncode == 0, stashed.stderr
     finally:
         lock.release()
-    assert out_fetch.read_text(encoding="utf-8-sig").split() == ["no"], "a fetch child (credential/daemon territory) held the lock"
-    assert "yes" in out_stash.read_text(encoding="utf-8-sig").split(), "a local mutator's child lost the checkout lock"
+    assert out_fetch.read_text(encoding="utf-8-sig").split() == ["no"], (
+        "a fetch child (credential/daemon territory) held the lock"
+    )
+    assert "yes" in out_stash.read_text(encoding="utf-8-sig").split(), (
+        "a local mutator's child lost the checkout lock"
+    )
 
 
 @pytest.mark.platforms("posix")
@@ -126,60 +183,103 @@ def test_a_background_hook_never_keeps_a_completed_update_locked(repo, tmp_path)
     _git(repo, "reset", "-q", "--hard", base)
     pid_file = tmp_path / "hook-child.pid"
     hook = repo / ".git" / "hooks" / "post-merge"
-    hook.write_text(f"#!/bin/sh\nsleep 60 </dev/null >/dev/null 2>&1 &\necho $! > {pid_file}\n", encoding="utf-8")
+    hook.write_text(
+        f"#!/bin/sh\nsleep 60 </dev/null >/dev/null 2>&1 &\necho $! > {pid_file}\n",
+        encoding="utf-8",
+    )
     hook.chmod(0o755)
     from clawk_cli.update_custody import run_git
 
     lock = ul.UpdateLock(path=tmp_path / "marker", install_root=repo)
     assert lock.acquire()
     try:
-        merged = run_git(["git"], ["merge", "--ff-only", target], cwd=repo, capture_output=True, text=True, timeout=30)
+        merged = run_git(
+            ["git"],
+            ["merge", "--ff-only", target],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
         assert merged.returncode == 0, merged.stderr
     finally:
         lock.release()
     contender = ul.UpdateLock(path=tmp_path / "next-marker", install_root=repo)
     try:
         assert (repo / "f.txt").read_text(encoding="utf-8") == "two\n"
-        assert contender.acquire(), f"a background git hook kept the completed update's checkout locked: {contender.holder}"
+        assert contender.acquire(), (
+            f"a background git hook kept the completed update's checkout locked: {contender.holder}"
+        )
     finally:
         contender.release()
         if pid_file.exists():
-            os.kill(int(pid_file.read_text(encoding="utf-8")), signal.SIGKILL)  # windows-footgun: ok - POSIX-only test
+            os.kill(
+                int(pid_file.read_text(encoding="utf-8")), signal.SIGKILL
+            )  # windows-footgun: ok - POSIX-only test
 
 
-@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="parent-death signal is Linux-only")
+@pytest.mark.skipif(
+    not sys.platform.startswith("linux"), reason="parent-death signal is Linux-only"
+)
 def test_network_git_dies_with_its_killed_owner(repo, tmp_path):
     """The fd-less fetch must not keep rewriting refs after the owner died (the next owner's lease)."""
     _assert_fetch_dies_with_killed_owner(repo, tmp_path, "")
 
 
-@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="reads the fetch's pid from /proc")
-def test_network_git_dies_with_its_killed_owner_without_a_parent_death_signal(repo, tmp_path):
+@pytest.mark.skipif(
+    not sys.platform.startswith("linux"), reason="reads the fetch's pid from /proc"
+)
+def test_network_git_dies_with_its_killed_owner_without_a_parent_death_signal(
+    repo, tmp_path
+):
     """R3: where there is no parent-death signal (macOS), the fetch must still die with its owner."""
     _assert_fetch_dies_with_killed_owner(
-        repo, tmp_path, "from clawk_cli import update_custody\nupdate_custody._death_signal_preexec = lambda: None\n")
+        repo,
+        tmp_path,
+        "from clawk_cli import update_custody\nupdate_custody._death_signal_preexec = lambda: None\n",
+    )
 
 
 def _assert_fetch_dies_with_killed_owner(repo, tmp_path, prelude: str) -> None:
-    script = textwrap.dedent(f"""
+    script = (
+        textwrap.dedent(f"""
         import sys
         sys.path.insert(0, {str(REPO_ROOT)!r})
         from pathlib import Path
         from clawk_cli import update_lock as ul, update_cmd
-    """) + prelude + textwrap.dedent("""
+    """)
+        + prelude
+        + textwrap.dedent("""
         lock = ul.UpdateLock(path=Path(sys.argv[2]), install_root=sys.argv[1])
         assert lock.acquire()
         update_cmd._git_run(["git"], ["fetch", "--upload-pack=" + sys.argv[3], "origin"], cwd=sys.argv[1], network=True)
     """)
+    )
     remote = tmp_path / "remote.git"
-    subprocess.run(["git", "clone", "-q", "--bare", str(repo), str(remote)], check=True, env=_env(tmp_path))
+    subprocess.run(
+        ["git", "clone", "-q", "--bare", str(repo), str(remote)],
+        check=True,
+        env=_env(tmp_path),
+    )
     _git(repo, "remote", "add", "origin", str(remote))
     started = tmp_path / "upload-pack.pid"
     blocker = tmp_path / "block.sh"
-    blocker.write_text(f"#!/bin/sh\necho $$ > {started}.self\necho $PPID > {started}\nsleep 60\nexec git-upload-pack \"$@\"\n", encoding="utf-8")
+    blocker.write_text(
+        f'#!/bin/sh\necho $$ > {started}.self\necho $PPID > {started}\nsleep 60\nexec git-upload-pack "$@"\n',
+        encoding="utf-8",
+    )
     blocker.chmod(0o755)
-    owner = subprocess.Popen([sys.executable, "-c", script, str(repo), str(tmp_path / "marker"), str(blocker)],
-                             env=_env(tmp_path))
+    owner = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            script,
+            str(repo),
+            str(tmp_path / "marker"),
+            str(blocker),
+        ],
+        env=_env(tmp_path),
+    )
     try:
         for _ in range(300):
             if started.exists() and started.read_text(encoding="utf-8-sig").strip():
@@ -187,23 +287,35 @@ def _assert_fetch_dies_with_killed_owner(repo, tmp_path, prelude: str) -> None:
             time.sleep(0.05)
         # git runs the upload-pack command through `sh -c`: the fetch is the shell's parent.
         shell = int(started.read_text(encoding="utf-8-sig"))
-        fetch_pid = next(int(line.split()[1]) for line in Path(f"/proc/{shell}/status").read_text(encoding="utf-8-sig").splitlines()
-                         if line.startswith("PPid:"))
-        assert "git" in Path(f"/proc/{fetch_pid}/cmdline").read_text(encoding="utf-8-sig", errors="replace")
+        fetch_pid = next(
+            int(line.split()[1])
+            for line in Path(f"/proc/{shell}/status")
+            .read_text(encoding="utf-8-sig")
+            .splitlines()
+            if line.startswith("PPid:")
+        )
+        assert "git" in Path(f"/proc/{fetch_pid}/cmdline").read_text(
+            encoding="utf-8-sig", errors="replace"
+        )
         owner.kill()
         owner.wait(timeout=10)
         for _ in range(100):
             if not Path(f"/proc/{fetch_pid}").exists() or "Z" in _state(fetch_pid):
                 break
             time.sleep(0.05)
-        assert not Path(f"/proc/{fetch_pid}").exists() or "Z" in _state(fetch_pid), \
+        assert not Path(f"/proc/{fetch_pid}").exists() or "Z" in _state(fetch_pid), (
             "git fetch outlived its killed update owner"
+        )
     finally:
         if owner.poll() is None:
             owner.kill()
         blocker_pid = Path(f"{started}.self")
         if blocker_pid.exists():
-            subprocess.run(["kill", "-9", blocker_pid.read_text(encoding="utf-8-sig").strip()], capture_output=True, check=False)
+            subprocess.run(
+                ["kill", "-9", blocker_pid.read_text(encoding="utf-8-sig").strip()],
+                capture_output=True,
+                check=False,
+            )
 
 
 def _state(pid: int) -> str:
@@ -211,10 +323,12 @@ def _state(pid: int) -> str:
         stat = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8-sig")
     except OSError:
         return "Z"
-    return stat[stat.rfind(")") + 2:][:1]
+    return stat[stat.rfind(")") + 2 :][:1]
 
 
-def test_a_refused_build_join_is_logged_and_noted_in_the_receipt(tmp_path, monkeypatch, caplog):
+def test_a_refused_build_join_is_logged_and_noted_in_the_receipt(
+    tmp_path, monkeypatch, caplog
+):
     """m1: the job-joining launcher's notice used to reach only the build's captured stderr
     (run_contained merges it into the output it drops on success). The report it leaves is now
     a warning (errors.log) and a receipt step; the build's outcome is untouched."""
@@ -233,16 +347,30 @@ def test_a_refused_build_join_is_logged_and_noted_in_the_receipt(tmp_path, monke
     with ur.update_receipt_scope():
         ur.begin_update_receipt()
         with caplog.at_level(logging.WARNING, logger="clawk_cli.update_custody"):
-            assert update_custody._report_refused_join(str(report), ["node", "scripts/build/tui.mjs"]) == note
-        payload = json.loads(ur.finalize_update_receipt("success").read_text(encoding="utf-8-sig"))
-    assert any(note in rec.getMessage() and "tui.mjs" in rec.getMessage() for rec in caplog.records)
+            assert (
+                update_custody._report_refused_join(
+                    str(report), ["node", "scripts/build/tui.mjs"]
+                )
+                == note
+            )
+        payload = json.loads(
+            ur.finalize_update_receipt("success").read_text(encoding="utf-8-sig")
+        )
+    assert any(
+        note in rec.getMessage() and "tui.mjs" in rec.getMessage()
+        for rec in caplog.records
+    )
     steps = [s for s in payload["steps"] if s["name"] == "update_custody"]
-    assert steps and steps[0]["ok"] is False and note in steps[0]["detail"], payload["steps"]
+    assert steps and steps[0]["ok"] is False and note in steps[0]["detail"], payload[
+        "steps"
+    ]
     assert payload["outcome"] == "success"
     assert not report.exists()
     empty = tmp_path / "joined.txt"
     empty.write_text("", encoding="utf-8")
-    assert update_custody._report_refused_join(str(empty), ["node"]) is None  # joined: silent
+    assert (
+        update_custody._report_refused_join(str(empty), ["node"]) is None
+    )  # joined: silent
 
 
 def test_a_swallowed_refusal_is_what_the_update_reports(tmp_path, monkeypatch, capsys):
@@ -256,7 +384,9 @@ def test_a_swallowed_refusal_is_what_the_update_reports(tmp_path, monkeypatch, c
     from clawk_cli import main, update_cmd, update_custody, update_owning_install
 
     monkeypatch.setattr(update_custody, "_RUN", {"ran": False, "refused": None})
-    monkeypatch.setattr(update_owning_install, "retarget_to_owning_install", lambda root: None)
+    monkeypatch.setattr(
+        update_owning_install, "retarget_to_owning_install", lambda root: None
+    )
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
     (tmp_path / "checkout").mkdir()
     monkeypatch.setattr(main, "PROJECT_ROOT", tmp_path / "checkout")
@@ -266,8 +396,12 @@ def test_a_swallowed_refusal_is_what_the_update_reports(tmp_path, monkeypatch, c
 
     def impl(args, gateway_mode):
         ur.begin_update_receipt()
-        with contextlib.suppress(OSError):  # a reader that swallows it, as _git_stdout does
-            raise update_custody._refuse(["git", "rev-parse"], OSError(6, "The handle is invalid"))
+        with contextlib.suppress(
+            OSError
+        ):  # a reader that swallows it, as _git_stdout does
+            raise update_custody._refuse(
+                ["git", "rev-parse"], OSError(6, "The handle is invalid")
+            )
         print("✗ Could not resolve HEAD")  # the downstream error it turned into
         raise SystemExit(1)
 
@@ -276,15 +410,25 @@ def test_a_swallowed_refusal_is_what_the_update_reports(tmp_path, monkeypatch, c
         main.cmd_update(SimpleNamespace(gateway=False))
     assert stop.value.code == 1
     out = capsys.readouterr().out
-    assert "`clawk update` stopped: Windows would not put `git` in this update's process job" in out, out
-    assert "Nothing was changed" in out and "Run `clawk update` again from a regular terminal" in out, out
+    assert (
+        "`clawk update` stopped: Windows would not put `git` in this update's process job"
+        in out
+    ), out
+    assert (
+        "Nothing was changed" in out
+        and "Run `clawk update` again from a regular terminal" in out
+    ), out
     payload = ur.read_latest_receipt()
     steps = [s for s in payload["steps"] if s["name"] == "update_custody"]
-    assert steps and steps[0]["ok"] is False and "rev-parse" in steps[0]["detail"], payload["steps"]
+    assert steps and steps[0]["ok"] is False and "rev-parse" in steps[0]["detail"], (
+        payload["steps"]
+    )
 
 
 @pytest.mark.skipif(not Path("/proc/self/fd").is_dir(), reason="needs /proc fd listing")
-def test_a_partial_clone_move_never_fetches_under_the_lock_fd(repo, tmp_path, monkeypatch):
+def test_a_partial_clone_move_never_fetches_under_the_lock_fd(
+    repo, tmp_path, monkeypatch
+):
     """m3: installer checkouts are partial clones, so `reset --hard <target>` used to fetch the
     target's missing objects itself — as a descendant holding the lock fd, with the user's
     credential helper (a `git credential-cache--daemon` then held the checkout for 900 s). The
@@ -293,22 +437,37 @@ def test_a_partial_clone_move_never_fetches_under_the_lock_fd(repo, tmp_path, mo
     recorder.write_text(_RECORDER, encoding="utf-8")
     recorder.chmod(0o755)
     origin = tmp_path / "origin.git"
-    subprocess.run(["git", "clone", "-q", "--bare", str(repo), str(origin)], check=True, env=_env(tmp_path))
+    subprocess.run(
+        ["git", "clone", "-q", "--bare", str(repo), str(origin)],
+        check=True,
+        env=_env(tmp_path),
+    )
     _git(origin, "config", "uploadpack.allowFilter", "true")
     _git(origin, "config", "uploadpack.allowAnySHA1InWant", "true")
     clone = tmp_path / "clone"
-    subprocess.run(["git", "clone", "-q", "--filter=blob:none", f"file://{origin}", str(clone)],
-                   check=True, env=_env(tmp_path))
+    subprocess.run(
+        ["git", "clone", "-q", "--filter=blob:none", f"file://{origin}", str(clone)],
+        check=True,
+        env=_env(tmp_path),
+    )
     (repo / "new.txt").write_text("only on the remote\n", encoding="utf-8")
     _git(repo, "add", "new.txt")
     _git(repo, "commit", "-qm", "two")
     _git(repo, "push", "-q", str(origin), "main")
     _git(clone, "fetch", "-q", "origin")
     _git(clone, "config", "remote.origin.uploadpack", f"{recorder} git-upload-pack")
-    missing = [o for o in _git(clone, "rev-list", "--objects", "--missing=print", "origin/main").split() if o[0] == "?"]
+    missing = [
+        o
+        for o in _git(
+            clone, "rev-list", "--objects", "--missing=print", "origin/main"
+        ).split()
+        if o[0] == "?"
+    ]
     assert missing, "fixture: the new blob must be missing locally"
     out = tmp_path / "upload-pack.out"
-    monkeypatch.setenv("CLAWK_TEST_LOCK", os.path.realpath(ul.checkout_lock_path(clone)))
+    monkeypatch.setenv(
+        "CLAWK_TEST_LOCK", os.path.realpath(ul.checkout_lock_path(clone))
+    )
     monkeypatch.setenv("CLAWK_TEST_OUT", str(out))
 
     from clawk_cli.update_custody import run_git
@@ -316,19 +475,31 @@ def test_a_partial_clone_move_never_fetches_under_the_lock_fd(repo, tmp_path, mo
     lock = ul.UpdateLock(path=tmp_path / "marker", install_root=clone)
     assert lock.acquire()
     try:
-        moved = run_git(["git"], ["reset", "--hard", "origin/main"], cwd=clone, capture_output=True, text=True)
+        moved = run_git(
+            ["git"],
+            ["reset", "--hard", "origin/main"],
+            cwd=clone,
+            capture_output=True,
+            text=True,
+        )
         assert moved.returncode == 0, moved.stderr
     finally:
         lock.release()
     assert (clone / "new.txt").read_text(encoding="utf-8-sig") == "only on the remote\n"
     served = out.read_text(encoding="utf-8-sig").split()
-    assert served and "yes" not in served, f"an upload-pack (a lazy fetch) ran holding the checkout lock: {served}"
+    assert served and "yes" not in served, (
+        f"an upload-pack (a lazy fetch) ran holding the checkout lock: {served}"
+    )
     assert "credential.helper=" in moved.args, moved.args
 
 
 @pytest.mark.skipif(not Path("/proc/self/fd").is_dir(), reason="needs /proc fd listing")
-@pytest.mark.parametrize(("args", "holds"), [(["gc", "--auto"], True), (["rev-parse", "HEAD"], False)])
-def test_run_git_hands_the_lock_fd_to_local_mutators_only(repo, tmp_path, monkeypatch, args, holds):
+@pytest.mark.parametrize(
+    ("args", "holds"), [(["gc", "--auto"], True), (["rev-parse", "HEAD"], False)]
+)
+def test_run_git_hands_the_lock_fd_to_local_mutators_only(
+    repo, tmp_path, monkeypatch, args, holds
+):
     """Through the production runner: `gc` (packs refs, repacks) is a local mutator and runs
     holding the checkout lock; a reader does not. `pull` is never one (its network half)."""
     from clawk_cli.update_custody import LOCAL_MUTATORS, run_git
@@ -347,7 +518,9 @@ def test_run_git_hands_the_lock_fd_to_local_mutators_only(repo, tmp_path, monkey
     finally:
         lock.release()
     assert ran.returncode == 0, ran.stderr
-    assert out.read_text(encoding="utf-8-sig").split() == (["yes"] if holds else ["no"]), args
+    assert out.read_text(encoding="utf-8-sig").split() == (
+        ["yes"] if holds else ["no"]
+    ), args
 
 
 class _Win32Sys:
@@ -370,11 +543,17 @@ def test_a_timed_out_child_never_waits_on_a_grandchild_holding_its_pipes(monkeyp
     # in this window (the suite's Popen guard imports gateway.status) down its Windows branch.
     monkeypatch.setattr(update_custody, "sys", _Win32Sys())
     monkeypatch.setattr(update_custody, "_held", lambda: {"fd": None})
-    monkeypatch.setattr(update_custody, "popen", lambda argv, **kw: subprocess.Popen(list(argv), **kw))
+    monkeypatch.setattr(
+        update_custody, "popen", lambda argv, **kw: subprocess.Popen(list(argv), **kw)
+    )
     started = time.monotonic()
     with pytest.raises(subprocess.TimeoutExpired):
-        update_custody.run(["sh", "-c", "sleep 20 & sleep 20"], capture_output=True, timeout=0.5)
-    assert time.monotonic() - started < 15, "run() waited on a grandchild after the timeout"
+        update_custody.run(
+            ["sh", "-c", "sleep 20 & sleep 20"], capture_output=True, timeout=0.5
+        )
+    assert time.monotonic() - started < 15, (
+        "run() waited on a grandchild after the timeout"
+    )
 
 
 def _held_lock_recorder(tmp_path: Path, name: str, body: str) -> Path:
@@ -396,26 +575,42 @@ def test_no_build_descendant_outlives_the_build_call(repo, tmp_path, monkeypatch
 
     late = tmp_path / "late"
     writer = f"import os, time; os.closerange(3, 4096); time.sleep(2); __import__('pathlib').Path({str(late)!r}).touch()"
-    node = _held_lock_recorder(tmp_path, "node", f"{sys.executable} -c \"{writer}\" >/dev/null 2>&1 &\nexit 1")
+    node = _held_lock_recorder(
+        tmp_path, "node", f'{sys.executable} -c "{writer}" >/dev/null 2>&1 &\nexit 1'
+    )
     monkeypatch.setenv("CLAWK_TEST_LOCK", os.path.realpath(ul.checkout_lock_path(repo)))
     monkeypatch.setenv("CLAWK_TEST_OUT", str(tmp_path / "node.out"))
     lock = ul.UpdateLock(path=tmp_path / "marker", install_root=repo)
     assert lock.acquire()
     try:
         with pytest.raises(subprocess.CalledProcessError):
-            run_source_script(repo, "build.mjs", env={**os.environ, "PATH": f"{node.parent}{os.pathsep}{os.environ['PATH']}"}, label="probe")
+            run_source_script(
+                repo,
+                "build.mjs",
+                env={
+                    **os.environ,
+                    "PATH": f"{node.parent}{os.pathsep}{os.environ['PATH']}",
+                },
+                label="probe",
+            )
     finally:
         lock.release()
     time.sleep(3)
-    assert not late.exists(), "a build descendant kept writing after the build call returned"
+    assert not late.exists(), (
+        "a build descendant kept writing after the build call returned"
+    )
 
 
 def _late_writer(late: Path, *, detach: bool = False, delay: float = 2.0) -> str:
     """Python source for a build descendant that writes ``late`` after ``delay`` seconds, holding
     no inherited fd and no pipe (so nothing but a kill stops it); ``detach`` starts its own session."""
-    detach_code = "os.setsid(); " if detach else ""  # windows-footgun: ok - the callers are POSIX-only
-    return (f"import os, pathlib, time; {detach_code}os.closerange(3, 4096); "
-            f"time.sleep({delay}); pathlib.Path({str(late)!r}).touch()")
+    detach_code = (
+        "os.setsid(); " if detach else ""
+    )  # windows-footgun: ok - the callers are POSIX-only
+    return (
+        f"import os, pathlib, time; {detach_code}os.closerange(3, 4096); "
+        f"time.sleep({delay}); pathlib.Path({str(late)!r}).touch()"
+    )
 
 
 def _heartbeat_writer(beat: Path) -> str:
@@ -424,20 +619,31 @@ def _heartbeat_writer(beat: Path) -> str:
     custody SIGKILLs this writer at an arbitrary instant, and an in-place ``write_text`` killed
     between its truncating open and its write leaves ``beat`` empty, so the test could no longer
     read the pid back out of it."""
-    return (f"import os, pathlib, time; os.setsid(); os.closerange(3, 4096); p = pathlib.Path({str(beat)!r})\n"  # windows-footgun: ok - Linux-only callers
-            "t = p.with_name(p.name + '.tmp')\n"
-            "for i in range(300):\n    t.write_text(f'{os.getpid()} {i}'); os.replace(t, p); time.sleep(0.1)")
+    return (
+        f"import os, pathlib, time; os.setsid(); os.closerange(3, 4096); p = pathlib.Path({str(beat)!r})\n"  # windows-footgun: ok - Linux-only callers
+        "t = p.with_name(p.name + '.tmp')\n"
+        "for i in range(300):\n    t.write_text(f'{os.getpid()} {i}'); os.replace(t, p); time.sleep(0.1)"
+    )
 
 
 def _node_starting(writer: str, *, then: str) -> list[str]:
     """A stand-in for node: starts ``writer`` (stdio detached), then runs ``then``."""
-    return [sys.executable, "-c",
-            "import subprocess, sys, time; d = subprocess.DEVNULL; "
-            f"subprocess.Popen([sys.executable, '-c', {writer!r}], stdin=d, stdout=d, stderr=d); {then}"]
+    return [
+        sys.executable,
+        "-c",
+        "import subprocess, sys, time; d = subprocess.DEVNULL; "
+        f"subprocess.Popen([sys.executable, '-c', {writer!r}], stdin=d, stdout=d, stderr=d); {then}",
+    ]
 
 
-def _launch_in_custody(repo: Path, tmp_path: Path, command: list[str], *, platform: str | None = None,
-                       **popen) -> subprocess.Popen:
+def _launch_in_custody(
+    repo: Path,
+    tmp_path: Path,
+    command: list[str],
+    *,
+    platform: str | None = None,
+    **popen,
+) -> subprocess.Popen:
     """Start ``command`` the way the build runner does (contained_command under a held checkout
     lock); ``platform`` makes the launcher see another ``sys.platform`` (its no-subreaper path)."""
     from clawk_cli.update_custody import contained_command
@@ -454,7 +660,9 @@ def _launch_in_custody(repo: Path, tmp_path: Path, command: list[str], *, platfo
         lock.release()
 
 
-@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="POSIX process groups + /proc")
+@pytest.mark.skipif(
+    not sys.platform.startswith("linux"), reason="POSIX process groups + /proc"
+)
 def test_a_group_kill_of_the_caller_stops_the_whole_build(repo, tmp_path):
     """L1: the completion child's Ctrl-C path ``killpg``s its own group and Desktop kills the
     backend's group; the build (node and what it starts) must be inside that group. A build
@@ -462,7 +670,10 @@ def test_a_group_kill_of_the_caller_stops_the_whole_build(repo, tmp_path):
     import signal
 
     late_node, late_child = tmp_path / "late-node", tmp_path / "late-child"
-    node = _node_starting(_late_writer(late_child), then=f"time.sleep(2); __import__('pathlib').Path({str(late_node)!r}).touch()")
+    node = _node_starting(
+        _late_writer(late_child),
+        then=f"time.sleep(2); __import__('pathlib').Path({str(late_node)!r}).touch()",
+    )
     # The launcher leads a fresh group here, as the completion child does for its build.
     launcher = _launch_in_custody(repo, tmp_path, node, start_new_session=True)
     time.sleep(1)
@@ -470,12 +681,18 @@ def test_a_group_kill_of_the_caller_stops_the_whole_build(repo, tmp_path):
     launcher.wait(timeout=10)
     time.sleep(3)
     assert not late_node.exists(), "node survived a group kill of its caller"
-    assert not late_child.exists(), "a build descendant survived a group kill of its caller"
+    assert not late_child.exists(), (
+        "a build descendant survived a group kill of its caller"
+    )
 
 
-@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="POSIX sessions + /proc")
+@pytest.mark.skipif(
+    not sys.platform.startswith("linux"), reason="POSIX sessions + /proc"
+)
 @pytest.mark.live_system_guard_bypass  # the caller's group kill is the scenario under test
-def test_a_group_kill_of_the_caller_keeps_custody_until_a_detached_writer_is_gone(repo, tmp_path):
+def test_a_group_kill_of_the_caller_keeps_custody_until_a_detached_writer_is_gone(
+    repo, tmp_path
+):
     """E: the completion child ``killpg``s its own group on interruption; the launcher holding
     the lock fd for node's tree was in that group and died with it, so a descendant in a session
     of its own kept writing while a contender owned the checkout. A contender must only acquire
@@ -507,22 +724,36 @@ def test_a_group_kill_of_the_caller_keeps_custody_until_a_detached_writer_is_gon
     contender = ul.UpdateLock(path=tmp_path / "next-marker", install_root=repo)
     deadline = time.monotonic() + 20
     while not contender.acquire():
-        assert time.monotonic() < deadline, "the checkout stayed locked after the group kill"
+        assert time.monotonic() < deadline, (
+            "the checkout stayed locked after the group kill"
+        )
         time.sleep(0.1)
     try:
         seen = beat.read_text(encoding="utf-8")
         time.sleep(1)
-        assert beat.read_text(encoding="utf-8") == seen, "a detached build writer kept writing under the next owner"
+        assert beat.read_text(encoding="utf-8") == seen, (
+            "a detached build writer kept writing under the next owner"
+        )
     finally:
         contender.release()
         with contextlib.suppress(ProcessLookupError):
-            os.kill(int(beat.read_text(encoding="utf-8").split()[0]), signal.SIGKILL)  # windows-footgun: ok - Linux-only test
+            os.kill(
+                int(beat.read_text(encoding="utf-8").split()[0]), signal.SIGKILL
+            )  # windows-footgun: ok - Linux-only test
 
 
-@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="POSIX sessions + /proc")
+@pytest.mark.skipif(
+    not sys.platform.startswith("linux"), reason="POSIX sessions + /proc"
+)
 @pytest.mark.live_system_guard_bypass  # Ctrl-C of the caller's own group is the scenario under test
-@pytest.mark.parametrize(("verbose", "cleanup"), [("1", 2), ("0", 0)], ids=["verbose-slow-cleanup", "captured-instant-exit"])
-def test_a_ctrl_c_keeps_custody_until_a_detached_writer_is_gone(repo, tmp_path, verbose, cleanup):
+@pytest.mark.parametrize(
+    ("verbose", "cleanup"),
+    [("1", 2), ("0", 0)],
+    ids=["verbose-slow-cleanup", "captured-instant-exit"],
+)
+def test_a_ctrl_c_keeps_custody_until_a_detached_writer_is_gone(
+    repo, tmp_path, verbose, cleanup
+):
     """R4: on Ctrl-C the build runner's ``subprocess.run`` SIGKILLs its own child, which was the
     launcher holding custody; a command still cleaning up from the interrupt then exited and
     dropped the last lock fd while a writer in a session of its own went on writing under the
@@ -533,13 +764,17 @@ def test_a_ctrl_c_keeps_custody_until_a_detached_writer_is_gone(repo, tmp_path, 
     beat, ready = tmp_path / "beat", tmp_path / "ready"
     writer = _heartbeat_writer(beat)
     # A build that cleans up for `cleanup` s after SIGINT (2 s: longer than subprocess.run's interrupt wait).
-    command = [sys.executable, "-c", textwrap.dedent(f"""
+    command = [
+        sys.executable,
+        "-c",
+        textwrap.dedent(f"""
         import pathlib, signal, subprocess, sys, time
         signal.signal(signal.SIGINT, lambda *_: (time.sleep({cleanup}), sys.exit(130)))
         subprocess.Popen([sys.executable, '-c', {writer!r}], stdin=subprocess.DEVNULL)
         pathlib.Path({str(ready)!r}).touch()
         while True: time.sleep(0.1)
-    """)]
+    """),
+    ]
     caller = textwrap.dedent(f"""
         import os, sys
         sys.path.insert(0, {str(REPO_ROOT)!r})
@@ -551,8 +786,12 @@ def test_a_ctrl_c_keeps_custody_until_a_detached_writer_is_gone(repo, tmp_path, 
         assert ul.UpdateLock(path=Path({str(tmp_path / "marker")!r}), install_root=repo).acquire()
         run_in_custody(repo, {command!r}, "probe build", stdin=__import__("subprocess").DEVNULL)
     """)
-    owner = subprocess.Popen([sys.executable, "-c", caller], start_new_session=True,
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    owner = subprocess.Popen(
+        [sys.executable, "-c", caller],
+        start_new_session=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
     deadline = time.monotonic() + 20
     while not (beat.exists() and ready.exists()) and time.monotonic() < deadline:
         time.sleep(0.1)
@@ -562,21 +801,31 @@ def test_a_ctrl_c_keeps_custody_until_a_detached_writer_is_gone(repo, tmp_path, 
     contender = ul.UpdateLock(path=tmp_path / "next-marker", install_root=repo)
     deadline = time.monotonic() + 30
     while not contender.acquire():
-        assert time.monotonic() < deadline, "the checkout stayed locked after the interrupted build settled"
+        assert time.monotonic() < deadline, (
+            "the checkout stayed locked after the interrupted build settled"
+        )
         time.sleep(0.1)
     try:
         seen = beat.read_text(encoding="utf-8")
         time.sleep(1)
-        assert beat.read_text(encoding="utf-8") == seen, "a detached build writer kept writing under the next owner"
+        assert beat.read_text(encoding="utf-8") == seen, (
+            "a detached build writer kept writing under the next owner"
+        )
     finally:
         contender.release()
         with contextlib.suppress(ProcessLookupError):
-            os.kill(int(beat.read_text(encoding="utf-8").split()[0]), signal.SIGKILL)  # windows-footgun: ok - Linux-only test
+            os.kill(
+                int(beat.read_text(encoding="utf-8").split()[0]), signal.SIGKILL
+            )  # windows-footgun: ok - Linux-only test
 
 
-@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="POSIX sessions + /proc")
+@pytest.mark.skipif(
+    not sys.platform.startswith("linux"), reason="POSIX sessions + /proc"
+)
 @pytest.mark.parametrize("platform", [None, "darwin"], ids=["subreaper", "ps-walk"])
-def test_a_detached_grandchild_outliving_node_dies_before_the_build_returns(repo, tmp_path, platform):
+def test_a_detached_grandchild_outliving_node_dies_before_the_build_returns(
+    repo, tmp_path, platform
+):
     """N13/L1: a descendant that left node's process group (its own session) and outlives node
     is still killed before the build call returns: Linux through the subreaper, elsewhere
     through the recorded descendant tree."""
@@ -585,10 +834,14 @@ def test_a_detached_grandchild_outliving_node_dies_before_the_build_returns(repo
     launcher = _launch_in_custody(repo, tmp_path, node, platform=platform)
     assert launcher.wait(timeout=30) == 0
     time.sleep(3)
-    assert not late.exists(), "a detached build descendant kept writing after the build call returned"
+    assert not late.exists(), (
+        "a detached build descendant kept writing after the build call returned"
+    )
 
 
-@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="POSIX signals + /proc")
+@pytest.mark.skipif(
+    not sys.platform.startswith("linux"), reason="POSIX signals + /proc"
+)
 def test_a_terminated_launcher_takes_node_and_its_descendants_with_it(repo, tmp_path):
     """L1: SIGTERM to the launcher (a service manager, the caller's polite stop) is forwarded to
     node, and what node started is killed too, before the launcher exits."""
@@ -601,7 +854,9 @@ def test_a_terminated_launcher_takes_node_and_its_descendants_with_it(repo, tmp_
     launcher.send_signal(signal.SIGTERM)
     assert launcher.wait(timeout=20) == 128 + signal.SIGTERM
     time.sleep(3)
-    assert not late.exists(), "a build descendant kept writing after its launcher was terminated"
+    assert not late.exists(), (
+        "a build descendant kept writing after its launcher was terminated"
+    )
 
 
 @pytest.mark.skipif(not Path("/proc/self/fd").is_dir(), reason="needs /proc fd listing")
@@ -619,14 +874,18 @@ def test_the_desktop_build_runs_in_checkout_custody(repo, tmp_path, monkeypatch)
     lock = ul.UpdateLock(path=tmp_path / "marker", install_root=repo)
     assert lock.acquire()
     try:
-        main_desktop.build_prepared_desktop(desktop, source_mode=True, npm=str(npm), env=dict(os.environ))
+        main_desktop.build_prepared_desktop(
+            desktop, source_mode=True, npm=str(npm), env=dict(os.environ)
+        )
     finally:
         lock.release()
-    assert out.read_text(encoding="utf-8-sig").split() == ["yes"], "the desktop build ran without the checkout lock"
-
+    assert out.read_text(encoding="utf-8-sig").split() == ["yes"], (
+        "the desktop build ran without the checkout lock"
+    )
 
 
 # --- C3: the Windows build launcher returns only once the command's whole tree is gone ---------
+
 
 class _FakeWinCall:
     def __init__(self, name, events, answer):
@@ -636,11 +895,18 @@ class _FakeWinCall:
     def __call__(self, *args):
         import ctypes
 
-        self.events.append((self.name, *(a.value if isinstance(a, ctypes.c_void_p) else a for a in args)))
+        self.events.append(
+            (
+                self.name,
+                *(a.value if isinstance(a, ctypes.c_void_p) else a for a in args),
+            )
+        )
         return self.answer(*args) if callable(self.answer) else self.answer
 
 
-def _run_join_launcher(monkeypatch, *, stray_polls: int, escaped: bool = False, rebind: int = 1):
+def _run_join_launcher(
+    monkeypatch, *, stray_polls: int, escaped: bool = False, rebind: int = 1
+):
     """Execute the real ``_JOIN_JOB`` launcher source against a recording kernel32/ntdll and a
     fake leader process. The command's job reports ``stray_polls`` live processes (a build
     grandchild still writing) before its tree is empty. ``escaped``: the suspended command
@@ -671,11 +937,24 @@ def _run_join_launcher(monkeypatch, *, stray_polls: int, escaped: bool = False, 
         inside._obj.value = int(placed["update job"])
         return 1
 
-    kernel32 = {"AssignProcessToJobObject": assign, "GetCurrentProcess": 7, "CloseHandle": 1, "CreateJobObjectW": 22,
-                "SetInformationJobObject": 1, "TerminateJobObject": 1, "QueryInformationJobObject": query,
-                "IsProcessInJob": in_job}
-    dlls = {"kernel32": types.SimpleNamespace(**{n: _FakeWinCall(n, events, a) for n, a in kernel32.items()}),
-            "ntdll": types.SimpleNamespace(NtResumeProcess=_FakeWinCall("NtResumeProcess", events, 0))}
+    kernel32 = {
+        "AssignProcessToJobObject": assign,
+        "GetCurrentProcess": 7,
+        "CloseHandle": 1,
+        "CreateJobObjectW": 22,
+        "SetInformationJobObject": 1,
+        "TerminateJobObject": 1,
+        "QueryInformationJobObject": query,
+        "IsProcessInJob": in_job,
+    }
+    dlls = {
+        "kernel32": types.SimpleNamespace(
+            **{n: _FakeWinCall(n, events, a) for n, a in kernel32.items()}
+        ),
+        "ntdll": types.SimpleNamespace(
+            NtResumeProcess=_FakeWinCall("NtResumeProcess", events, 0)
+        ),
+    }
     # The real ctypes (its Structure, byref, c_* types), with Windows' DLL loader recorded.
     monkeypatch.setattr(ctypes, "WinDLL", lambda name, **_kw: dlls[name], raising=False)
     monkeypatch.setattr(ctypes, "get_last_error", lambda: 0, raising=False)
@@ -694,7 +973,9 @@ def _run_join_launcher(monkeypatch, *, stray_polls: int, escaped: bool = False, 
             events.append(("kill",))
 
     monkeypatch.setattr(subprocess, "Popen", _Leader)
-    monkeypatch.setattr(sys, "argv", ["launcher", "11", "report.txt", "npm", "run", "build"])
+    monkeypatch.setattr(
+        sys, "argv", ["launcher", "11", "report.txt", "npm", "run", "build"]
+    )
     with pytest.raises(SystemExit) as exited:
         exec(compile(_JOIN_JOB, "<join-job>", "exec"), {"__name__": "__main__"})
     events.append(("exit", exited.value.code))
@@ -702,34 +983,51 @@ def _run_join_launcher(monkeypatch, *, stray_polls: int, escaped: bool = False, 
 
 
 def _index(events, name, *args):
-    return next(i for i, event in enumerate(events) if event[0] == name and event[1:1 + len(args)] == args)
+    return next(
+        i
+        for i, event in enumerate(events)
+        if event[0] == name and event[1 : 1 + len(args)] == args
+    )
 
 
-def test_the_windows_build_launcher_reaps_the_command_tree_before_it_returns(monkeypatch):
+def test_the_windows_build_launcher_reaps_the_command_tree_before_it_returns(
+    monkeypatch,
+):
     """C3: npm (the leader) exits while a build/builder descendant it started still writes. A
     normal return of the launcher lets the updater release the checkout, so the launcher must
     terminate the command's own job (never the update job, which holds the update's other
     children) and return only once no process of it is left, with the leader's exit status."""
     events = _run_join_launcher(monkeypatch, stray_polls=2)
     tree = 22
-    assert _index(events, "AssignProcessToJobObject", tree, 33) < _index(events, "NtResumeProcess"), \
-        "the command ran before it was held in its own job"
-    assert _index(events, "leader exited") < _index(events, "TerminateJobObject", tree), events
-    assert not any(e[0] == "TerminateJobObject" and e[1] != tree for e in events), "terminated the update job"
+    assert _index(events, "AssignProcessToJobObject", tree, 33) < _index(
+        events, "NtResumeProcess"
+    ), "the command ran before it was held in its own job"
+    assert _index(events, "leader exited") < _index(
+        events, "TerminateJobObject", tree
+    ), events
+    assert not any(e[0] == "TerminateJobObject" and e[1] != tree for e in events), (
+        "terminated the update job"
+    )
     polls = [i for i, e in enumerate(events) if e[0] == "QueryInformationJobObject"]
-    assert len(polls) == 3 and polls[0] > _index(events, "TerminateJobObject", tree), \
+    assert len(polls) == 3 and polls[0] > _index(events, "TerminateJobObject", tree), (
         "the launcher returned while a build descendant was still alive"
+    )
     assert events[-1] == ("exit", 3), events
 
 
-def test_a_build_command_that_starts_outside_the_update_job_is_put_in_it_before_it_runs(monkeypatch, tmp_path):
+def test_a_build_command_that_starts_outside_the_update_job_is_put_in_it_before_it_runs(
+    monkeypatch, tmp_path
+):
     """F80: under Store Python the suspended node starts outside the update job (desktop-app
     breakaway through a job that permits breakaway); refusing it made every Node build of the
     update fail. It is assigned to the update job while suspended and runs once it is in."""
-    monkeypatch.chdir(tmp_path)  # a refusal writes its report file (argv[2]) relative to here
+    monkeypatch.chdir(
+        tmp_path
+    )  # a refusal writes its report file (argv[2]) relative to here
     events = _run_join_launcher(monkeypatch, stray_polls=0, escaped=True)
-    assert _index(events, "AssignProcessToJobObject", 11, 33) < _index(events, "NtResumeProcess"), \
-        "the command ran before it was in the update job"
+    assert _index(events, "AssignProcessToJobObject", 11, 33) < _index(
+        events, "NtResumeProcess"
+    ), "the command ran before it was in the update job"
     assert events[-1] == ("exit", 3), events
 
 
@@ -740,12 +1038,16 @@ def test_a_build_command_the_update_job_will_not_take_never_runs(monkeypatch, tm
 
     monkeypatch.chdir(tmp_path)
     events = _run_join_launcher(monkeypatch, stray_polls=0, escaped=True, rebind=0)
-    assert not any(e[0] == "NtResumeProcess" for e in events) and ("kill",) in events, events
+    assert not any(e[0] == "NtResumeProcess" for e in events) and ("kill",) in events, (
+        events
+    )
     assert events[-1] == ("exit", _REFUSED_EXIT), events
 
 
 def test_the_windows_build_launcher_returns_at_once_when_nothing_was_left(monkeypatch):
     """C3 healthy control: a build whose descendants all exited with the leader costs one poll."""
     events = _run_join_launcher(monkeypatch, stray_polls=0)
-    assert [e[0] for e in events if e[0] == "QueryInformationJobObject"] == ["QueryInformationJobObject"]
+    assert [e[0] for e in events if e[0] == "QueryInformationJobObject"] == [
+        "QueryInformationJobObject"
+    ]
     assert events[-1] == ("exit", 3), events

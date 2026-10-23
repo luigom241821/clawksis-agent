@@ -28,34 +28,36 @@ def _reset_boot_fingerprint(monkeypatch):
 class TestDetectCodeSkew:
     def test_no_boot_fingerprint_means_no_skew(self, monkeypatch):
         # Nothing recorded (e.g. non-git install) -> never a false positive.
-        monkeypatch.setattr(code_skew, "_fingerprint", lambda: "git:refs/heads/main:def456")
+        monkeypatch.setattr(
+            code_skew, "_fingerprint", lambda: "git:refs/heads/main:def456"
+        )
         assert code_skew.detect_code_skew() is None
 
-
     def test_drift_is_detected_with_short_revs(self, monkeypatch):
-        monkeypatch.setattr(code_skew, "_fingerprint", lambda: "git:refs/heads/main:abc1234567890")
+        monkeypatch.setattr(
+            code_skew, "_fingerprint", lambda: "git:refs/heads/main:abc1234567890"
+        )
         code_skew.record_boot_fingerprint()
 
-        monkeypatch.setattr(code_skew, "_fingerprint", lambda: "git:refs/heads/main:def4567890123")
+        monkeypatch.setattr(
+            code_skew, "_fingerprint", lambda: "git:refs/heads/main:def4567890123"
+        )
         skew = code_skew.detect_code_skew()
         assert skew == ("abc1234567", "def4567890")
 
 
-
-
 class TestShort:
-
     def test_keeps_unresolved_marker(self):
         assert code_skew._short("git:refs/heads/main:unresolved") == "unresolved"
 
 
-
 class TestModelSwitchSkewGuard:
-
     def test_guard_message_names_revs_and_restart(self, monkeypatch):
         from gateway import slash_commands_model as slash_commands
 
-        monkeypatch.setattr(code_skew, "detect_code_skew", lambda: ("abc1234567", "def4567890"))
+        monkeypatch.setattr(
+            code_skew, "detect_code_skew", lambda: ("abc1234567", "def4567890")
+        )
         msg = slash_commands._model_switch_skew_guard()
         assert msg is not None
         assert "abc1234567" in msg
@@ -66,11 +68,12 @@ class TestModelSwitchSkewGuard:
 class TestDashboardCodeSkewGuard:
     """Dashboard mirror of the gateway's model-switch skew guard (#86207)."""
 
-
     def test_dashboard_guard_message_names_revs_and_restart(self, monkeypatch):
 
         monkeypatch.delenv("CLAWK_SERVE_HEADLESS", raising=False)
-        monkeypatch.setattr(code_skew, "detect_code_skew", lambda: ("abc1234567", "def4567890"))
+        monkeypatch.setattr(
+            code_skew, "detect_code_skew", lambda: ("abc1234567", "def4567890")
+        )
         msg = _web_server_config._dashboard_code_skew_guard()
         assert msg is not None
         assert "abc1234567" in msg
@@ -82,7 +85,9 @@ class TestDashboardCodeSkewGuard:
     def test_serve_guard_message_points_at_desktop_backend(self, monkeypatch):
 
         monkeypatch.setenv("CLAWK_SERVE_HEADLESS", "1")
-        monkeypatch.setattr(code_skew, "detect_code_skew", lambda: ("abc1234567", "def4567890"))
+        monkeypatch.setattr(
+            code_skew, "detect_code_skew", lambda: ("abc1234567", "def4567890")
+        )
         msg = _web_server_config._dashboard_code_skew_guard()
         assert msg is not None
         assert "Desktop-owned backend" in msg
@@ -103,7 +108,9 @@ class TestModelOptionsSkewGuard:
     def test_stale_dashboard_returns_503_and_skips_payload_build(self, monkeypatch):
         from fastapi import HTTPException
 
-        monkeypatch.setattr(code_skew, "detect_code_skew", lambda: ("abc1234567", "def4567890"))
+        monkeypatch.setattr(
+            code_skew, "detect_code_skew", lambda: ("abc1234567", "def4567890")
+        )
 
         payload_calls: list = []
         monkeypatch.setattr(
@@ -128,7 +135,9 @@ class TestModelOptionsSkewGuard:
 
         monkeypatch.setattr(_rt_models, "run_in_threadpool", _fake_run_in_threadpool)
         monkeypatch.setattr(
-            _web_server_profiles, "_profile_scope", lambda profile: contextlib.nullcontext()
+            _web_server_profiles,
+            "_profile_scope",
+            lambda profile: contextlib.nullcontext(),
         )
         monkeypatch.setattr("clawk_cli.inventory.load_picker_context", dict)
 
@@ -154,12 +163,20 @@ class TestModelSetSkewGuard:
     def test_stale_model_set_returns_503_and_skips_assignment(self, monkeypatch):
         from fastapi import HTTPException
 
-        monkeypatch.setattr(code_skew, "detect_code_skew", lambda: ("abc1234567", "def4567890"))
+        monkeypatch.setattr(
+            code_skew, "detect_code_skew", lambda: ("abc1234567", "def4567890")
+        )
 
         applied: list = []
-        monkeypatch.setattr(_rt_models, "_apply_model_assignment_sync", lambda *a, **k: applied.append(1))
+        monkeypatch.setattr(
+            _rt_models,
+            "_apply_model_assignment_sync",
+            lambda *a, **k: applied.append(1),
+        )
 
-        body = _rt_models.ModelAssignment(scope="main", provider="nous", model="some-model")
+        body = _rt_models.ModelAssignment(
+            scope="main", provider="nous", model="some-model"
+        )
         with pytest.raises(HTTPException) as excinfo:
             asyncio.run(_rt_models.set_model_assignment(body))
 
@@ -174,11 +191,22 @@ class TestModelSetSkewGuard:
             return fn()
 
         monkeypatch.setattr(_rt_models.asyncio, "to_thread", _to_thread)
-        monkeypatch.setattr(_web_server_profiles, "_profile_scope", lambda profile: contextlib.nullcontext())
-        monkeypatch.setattr(_rt_models, "_prepare_main_assignment", lambda cfg, *a: {"ok": True})
-        monkeypatch.setattr(_rt_models, "_apply_model_assignment_sync",
-                            lambda *a, **k: {"ok": True, "scope": "main"})
+        monkeypatch.setattr(
+            _web_server_profiles,
+            "_profile_scope",
+            lambda profile: contextlib.nullcontext(),
+        )
+        monkeypatch.setattr(
+            _rt_models, "_prepare_main_assignment", lambda cfg, *a: {"ok": True}
+        )
+        monkeypatch.setattr(
+            _rt_models,
+            "_apply_model_assignment_sync",
+            lambda *a, **k: {"ok": True, "scope": "main"},
+        )
 
-        body = _rt_models.ModelAssignment(scope="main", provider="nous", model="some-model")
+        body = _rt_models.ModelAssignment(
+            scope="main", provider="nous", model="some-model"
+        )
         result = asyncio.run(_rt_models.set_model_assignment(body))
         assert result["ok"] is True

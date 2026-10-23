@@ -20,12 +20,22 @@ import clawk_state_dbfile
 import clawk_state_readpool
 import clawk_state_wal
 from clawk_state import (
-    DeletedWalGenerationError, SessionDB, StateDbReplacedError, _close_time_checkpoint_configurable,
-    classify_persistence_error, refuse_deleted_wal_generation,
+    DeletedWalGenerationError,
+    SessionDB,
+    StateDbReplacedError,
+    _close_time_checkpoint_configurable,
+    classify_persistence_error,
+    refuse_deleted_wal_generation,
 )
 from clawk_state_dbfile import _pread_db_header, iter_deleted_sqlite_sidecar_holders
 from tests.clawk_state._wal_generation_harness import (
-    gateway_writer, integrity_ok_path, lose_sidecars, make_db, message_count, pin_wal, require_wal,
+    gateway_writer,
+    integrity_ok_path,
+    lose_sidecars,
+    make_db,
+    message_count,
+    pin_wal,
+    require_wal,
     write_second_generation,
 )
 
@@ -40,14 +50,14 @@ def test_classify_deleted_wal_separately_from_main_file_replacement():
         "FATAL: a live process holds a deleted state.db-wal or state.db-shm "
         "inode while the path names a different (or missing) generation."
     )
-    assert classify_persistence_error(DeletedWalGenerationError(message)) == "deleted_wal"
+    assert (
+        classify_persistence_error(DeletedWalGenerationError(message)) == "deleted_wal"
+    )
     assert classify_persistence_error(message) == "deleted_wal"
 
     replaced = StateDbReplacedError("state.db was replaced underneath this process")
     assert classify_persistence_error(replaced) == "replaced"
     assert classify_persistence_error(str(replaced)) == "replaced"
-
-
 
 
 def test_clean_open_and_second_open_still_work(tmp_path, force_wal):
@@ -67,7 +77,9 @@ def test_clean_open_and_second_open_still_work(tmp_path, force_wal):
 def test_delete_journal_two_writers_still_work(tmp_path, monkeypatch):
     monkeypatch.setattr(clawk_state_wal, "resolve_journal_mode", lambda: "delete")
     monkeypatch.setattr(
-        clawk_state_wal, "is_sqlite_wal_reset_vulnerable", lambda version_info=None: False
+        clawk_state_wal,
+        "is_sqlite_wal_reset_vulnerable",
+        lambda version_info=None: False,
     )
     path = tmp_path / "state.db"
     a = make_db(path, "s", "from-a")
@@ -199,7 +211,9 @@ def test_iter_holders_ignores_live_unhashed_dentry(tmp_path, force_wal, monkeypa
 
 
 @pytest.mark.parametrize("vanish_errno", [errno.ENOENT, errno.ESRCH])
-def test_iter_holders_ignores_descriptor_closed_during_scan(tmp_path, monkeypatch, vanish_errno):
+def test_iter_holders_ignores_descriptor_closed_during_scan(
+    tmp_path, monkeypatch, vanish_errno
+):
     """A descriptor (ENOENT) or its whole process (ESRCH) gone after ``readlink``
     cannot hold a retired generation."""
     path = tmp_path / "state.db"
@@ -265,11 +279,14 @@ def test_iter_holders_flags_orphan_kept_alive_by_hardlink(tmp_path, force_wal):
     os.link(wal, backup)  # keeps the old inode's nlink >= 1 after the unlink below
     try:
         lose_sidecars(path, rename=False)
-        wal.write_bytes(b"new-generation")  # watched path recreated on a different inode
+        wal.write_bytes(
+            b"new-generation"
+        )  # watched path recreated on a different inode
         assert backup.stat().st_nlink >= 1
         holders = iter_deleted_sqlite_sidecar_holders(path)
         assert any(
-            target.removesuffix(" (deleted)").endswith("-wal") for _pid, target in holders
+            target.removesuffix(" (deleted)").endswith("-wal")
+            for _pid, target in holders
         )
     finally:
         db.close()
@@ -293,9 +310,13 @@ def test_writer_halts_after_own_wal_unlinked(tmp_path, force_wal):
     db.close()
 
 
-@pytest.mark.skipif(_close_time_checkpoint_configurable(),
-                    reason="setconfig can switch the close-time checkpoint off: no retirement capability needed")
-def test_missing_retirement_capability_refuses_writer_before_open(tmp_path, monkeypatch):
+@pytest.mark.skipif(
+    _close_time_checkpoint_configurable(),
+    reason="setconfig can switch the close-time checkpoint off: no retirement capability needed",
+)
+def test_missing_retirement_capability_refuses_writer_before_open(
+    tmp_path, monkeypatch
+):
     import ctypes
 
     existing = tmp_path / "existing.db"
@@ -311,7 +332,10 @@ def test_missing_retirement_capability_refuses_writer_before_open(tmp_path, monk
         SessionDB(db_path=unopened)
     assert not unopened.parent.exists()
     with SessionDB(db_path=existing, read_only=True) as reader:
-        assert reader.get_messages("seed")[0]["content"] == "read-only access remains available"
+        assert (
+            reader.get_messages("seed")[0]["content"]
+            == "read-only access remains available"
+        )
 
 
 # ── Integrity across close/shutdown, not just "no explicit PRAGMA" ─────────────────────────────────
@@ -340,11 +364,15 @@ def _deleted_wal_descriptor(identity: tuple, fd_directory: str) -> int:
 
 def _descriptor_contents(fd: int, identity: tuple) -> bytes:
     stat = os.fstat(fd)
-    assert (stat.st_dev, stat.st_ino) == identity, "the retained descriptor was closed or reused"
+    assert (stat.st_dev, stat.st_ino) == identity, (
+        "the retained descriptor was closed or reused"
+    )
     return os.pread(fd, stat.st_size, 0)
 
 
-def _assert_retirement_preserves_recoverable_wal(tmp_path, *, fd_directory, also_corrupt):
+def _assert_retirement_preserves_recoverable_wal(
+    tmp_path, *, fd_directory, also_corrupt
+):
     """Keep committed old-WAL-only data recoverable across close().
 
     A second valid WAL uses the same deleted pathname but belongs to another
@@ -419,17 +447,23 @@ def _assert_retirement_preserves_recoverable_wal(tmp_path, *, fd_directory, also
         recovery_path.write_bytes(main_image)
         control = sqlite3.connect(recovery_path.as_uri() + "?immutable=1", uri=True)
         try:
-            assert control.execute(
-                "SELECT COUNT(*) FROM messages WHERE content = ?", (sentinel,)
-            ).fetchone()[0] == 0, "control transaction was already in the main database"
+            assert (
+                control.execute(
+                    "SELECT COUNT(*) FROM messages WHERE content = ?", (sentinel,)
+                ).fetchone()[0]
+                == 0
+            ), "control transaction was already in the main database"
         finally:
             control.close()
         Path(str(recovery_path) + "-wal").write_bytes(retired_wal_bytes)
         recovered = sqlite3.connect(str(recovery_path))
         try:
-            assert recovered.execute(
-                "SELECT COUNT(*) FROM messages WHERE content = ?", (sentinel,)
-            ).fetchone()[0] == 1
+            assert (
+                recovered.execute(
+                    "SELECT COUNT(*) FROM messages WHERE content = ?", (sentinel,)
+                ).fetchone()[0]
+                == 1
+            )
             assert recovered.execute("PRAGMA integrity_check").fetchall() == [("ok",)]
         finally:
             recovered.close()
@@ -439,9 +473,13 @@ def _assert_retirement_preserves_recoverable_wal(tmp_path, *, fd_directory, also
 
 @pytest.mark.platforms("linux")
 @pytest.mark.parametrize("also_corrupt", [False, True])
-def test_retirement_preserves_recoverable_wal_and_other_deleted_generation(tmp_path, force_wal, also_corrupt):
+def test_retirement_preserves_recoverable_wal_and_other_deleted_generation(
+    tmp_path, force_wal, also_corrupt
+):
     _assert_retirement_preserves_recoverable_wal(
-        tmp_path, fd_directory="/proc/self/fd", also_corrupt=also_corrupt,
+        tmp_path,
+        fd_directory="/proc/self/fd",
+        also_corrupt=also_corrupt,
     )
 
 
@@ -449,7 +487,9 @@ def test_retirement_preserves_recoverable_wal_and_other_deleted_generation(tmp_p
 @pytest.mark.parametrize("also_corrupt", [False, True])
 def test_retirement_preserves_unlinked_wal_on_macos(tmp_path, force_wal, also_corrupt):
     _assert_retirement_preserves_recoverable_wal(
-        tmp_path, fd_directory="/dev/fd", also_corrupt=also_corrupt,
+        tmp_path,
+        fd_directory="/dev/fd",
+        also_corrupt=also_corrupt,
     )
 
 
@@ -468,12 +508,16 @@ def _assert_new_generation_survives_retirement_and_exit(tmp_path, *, rename_side
 
         gw.send("close")
         gw.next_event("closed")
-        assert integrity_ok_path(path), "close/GC checkpointed the stale WAL over the main file"
+        assert integrity_ok_path(path), (
+            "close/GC checkpointed the stale WAL over the main file"
+        )
         assert message_count(path) == expected, "close/GC rolled back the newer rows"
 
         gw.send("quit")
         assert gw.wait_exit(timeout=20) == 0, gw.stderr_text()
-        assert integrity_ok_path(path), "normal exit checkpointed the stale WAL over the main file"
+        assert integrity_ok_path(path), (
+            "normal exit checkpointed the stale WAL over the main file"
+        )
         assert message_count(path) == expected, "normal exit rolled back the newer rows"
 
 
@@ -514,6 +558,7 @@ def test_refuse_helper_raises_while_deleted_wal_held(tmp_path, force_wal):
 # macOS has no /proc and no `` (deleted)`` suffix, so these exercise the libproc enumeration
 # (``proc_pidinfo(PROC_PIDLISTFDS)`` + ``proc_pidfdinfo(PROC_PIDFDVNODEPATHINFO)``) that supplies
 # each descriptor's ``(st_dev, st_ino)``. The judgement is unchanged: identity, never path text.
+
 
 @pytest.mark.platforms("macos")
 def test_iter_finds_self_after_wal_unlink_on_darwin(tmp_path, force_wal):

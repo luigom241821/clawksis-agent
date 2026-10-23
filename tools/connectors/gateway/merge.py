@@ -28,7 +28,6 @@ _CONNECTION_CODES = frozenset({"CONNECTION_REQUIRED", "CONNECTION_EXPIRED"})
 
 @dataclass(frozen=True)
 class PlannedCall:
-
     position: int
     name: str
     connector: str
@@ -38,7 +37,6 @@ class PlannedCall:
 
 @dataclass(frozen=True)
 class Partition:
-
     local: tuple[tuple[int, Mapping[str, Any]], ...]
     # Gateway request and response slots preserve this order.
     remote: tuple[PlannedCall, ...]
@@ -82,7 +80,9 @@ def partition_calls(calls: Sequence[Any]) -> Partition:
     return Partition(local=tuple(local), remote=tuple(remote), errors=tuple(errors))
 
 
-def render_remote_entry(planned: PlannedCall, remote: Mapping[str, Any]) -> dict[str, Any]:
+def render_remote_entry(
+    planned: PlannedCall, remote: Mapping[str, Any]
+) -> dict[str, Any]:
     """Use the shared connection shape so links render consistently.
 
     The model sees code, message, connector and the gateway's hint, plus ``family`` when the gateway
@@ -91,7 +91,9 @@ def render_remote_entry(planned: PlannedCall, remote: Mapping[str, Any]) -> dict
     account = _opt_str(remote.get("account")) if isinstance(remote, Mapping) else None
     if not isinstance(error, Mapping):
         data = remote.get("data") if isinstance(remote, Mapping) else None
-        entry = _with_account({"index": planned.position, "name": planned.name, "response": data}, account)
+        entry = _with_account(
+            {"index": planned.position, "name": planned.name, "response": data}, account
+        )
         # Message metadata, never model content: dispatch lifts it off before the result is rendered.
         if isinstance(remote, Mapping) and remote.get("data_use"):
             entry["data_use"] = list(remote["data_use"])
@@ -123,7 +125,9 @@ def render_remote_entry(planned: PlannedCall, remote: Mapping[str, Any]) -> dict
     family = _opt_str(error.get("family"))
     if family:
         payload["family"] = family
-    return _with_account({"index": planned.position, "name": planned.name, "error": payload}, account)
+    return _with_account(
+        {"index": planned.position, "name": planned.name, "error": payload}, account
+    )
 
 
 def _with_account(entry: dict[str, Any], account: Optional[str]) -> dict[str, Any]:
@@ -181,7 +185,11 @@ def assemble_results(
             if not isinstance(entry, Mapping):
                 continue
             index = entry.get("index")
-            if isinstance(index, int) and 0 <= index < len(slots) and slots[index] is None:
+            if (
+                isinstance(index, int)
+                and 0 <= index < len(slots)
+                and slots[index] is None
+            ):
                 slots[index] = dict(entry)
     merged: list[dict[str, Any]] = []
     for position, entry in enumerate(slots):
@@ -202,7 +210,9 @@ def assemble_results(
     }
 
 
-def _error_entry(position: int, name: str, *, code: str, message: str) -> dict[str, Any]:
+def _error_entry(
+    position: int, name: str, *, code: str, message: str
+) -> dict[str, Any]:
     return {
         "index": position,
         "name": name,

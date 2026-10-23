@@ -92,10 +92,12 @@ def test_anthropic_pool_api_key_overrides_conflicting_active_endpoint(monkeypatc
     requests = []
 
     def _open(request, *, timeout):
-        requests.append((
-            request.full_url,
-            {key.lower(): value for key, value in request.header_items()},
-        ))
+        requests.append(
+            (
+                request.full_url,
+                {key.lower(): value for key, value in request.header_items()},
+            )
+        )
         return _Response({"data": [{"id": "claude-proxy-model"}]})
 
     monkeypatch.setattr(models, "_urlopen_model_catalog_request", _open)

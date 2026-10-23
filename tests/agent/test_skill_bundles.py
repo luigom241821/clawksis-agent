@@ -20,8 +20,12 @@ from agent.skill_bundles import (
 
 
 def _make_bundle_yaml(
-    bundles_dir: Path, slug: str, skills: list[str],
-    description: str = "", instruction: str = "", name: str | None = None,
+    bundles_dir: Path,
+    slug: str,
+    skills: list[str],
+    description: str = "",
+    instruction: str = "",
+    name: str | None = None,
 ) -> Path:
     bundles_dir.mkdir(parents=True, exist_ok=True)
     lines = []
@@ -61,9 +65,11 @@ def bundles_env(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_BUNDLES_DIR", str(bundles_dir))
     # Patch SKILLS_DIR so skill loading hits our temp tree.
     import tools.skills_tool as skills_tool_module
+
     monkeypatch.setattr(skills_tool_module, "SKILLS_DIR", skills_dir)
     # Reset module-level cache between tests.
     import agent.skill_bundles as mod
+
     mod._bundles_cache = {}
     mod._bundles_cache_mtime = None
     return bundles_dir, skills_dir
@@ -73,16 +79,12 @@ class TestSlugify:
     def test_basic(self):
         assert _slugify("Backend Dev") == "backend-dev"
 
-
-
-
     def test_empty(self):
         assert _slugify("") == ""
         assert _slugify("!!!") == ""
 
 
 class TestScanBundles:
-
     def test_finds_bundle(self, bundles_env):
         bundles_dir, _ = bundles_env
         _make_bundle_yaml(bundles_dir, "backend", ["skill-a", "skill-b"])
@@ -101,17 +103,14 @@ class TestScanBundles:
         assert "/broken" not in result
 
 
-
-
-
 class TestGetSkillBundles:
-
     def test_rescans_on_change(self, bundles_env):
         bundles_dir, _ = bundles_env
         _make_bundle_yaml(bundles_dir, "a", ["s1"])
         assert "/a" in get_skill_bundles()
         # Add a second bundle and bump mtime.
         import time as _t
+
         _t.sleep(0.05)  # ensure mtime granularity is exceeded
         _make_bundle_yaml(bundles_dir, "b", ["s2"])
         os.utime(bundles_dir, None)
@@ -126,7 +125,6 @@ class TestResolveBundleCommandKey:
         _make_bundle_yaml(bundles_dir, "my-bundle", ["s1"])
         scan_bundles()
         assert resolve_bundle_command_key("my-bundle") == "/my-bundle"
-
 
     def test_unknown(self, bundles_env):
         scan_bundles()
@@ -152,7 +150,6 @@ class TestBuildBundleInvocationMessage:
         assert "Skill A content." in msg
         assert "Skill B content." in msg
         assert "combo" in msg
-
 
     def test_skips_missing_skills(self, bundles_env):
         bundles_dir, skills_dir = bundles_env
@@ -180,9 +177,8 @@ class TestBuildBundleInvocationMessage:
             return {"skill-b"} if platform == "telegram" else set()
 
         import agent.skill_utils as su_module
-        monkeypatch.setattr(
-            su_module, "get_disabled_skill_names", _fake_disabled
-        )
+
+        monkeypatch.setattr(su_module, "get_disabled_skill_names", _fake_disabled)
 
         result = build_bundle_invocation_message("/combo", platform="telegram")
         assert result is not None
@@ -200,16 +196,12 @@ class TestBuildBundleInvocationMessage:
         assert "SECRET DISABLED CONTENT." in msg2
 
 
-
-
-
-
-
-
 class TestSaveAndDeleteBundle:
     def test_save_creates_file(self, bundles_env):
         bundles_dir, _ = bundles_env
-        path = save_bundle("test-bundle", ["s1", "s2"], description="d", instruction="i")
+        path = save_bundle(
+            "test-bundle", ["s1", "s2"], description="d", instruction="i"
+        )
         assert path.exists()
         assert path.parent == bundles_dir
         content = path.read_text()
@@ -218,7 +210,6 @@ class TestSaveAndDeleteBundle:
         assert "s2" in content
         assert "description: d" in content
 
-
     def test_save_overwrites_with_force(self, bundles_env):
         save_bundle("dup", ["s1"])
         save_bundle("dup", ["s2"], overwrite=True)
@@ -226,15 +217,12 @@ class TestSaveAndDeleteBundle:
         assert info is not None
         assert info["skills"] == ["s2"]
 
-
-
     def test_delete_removes_file(self, bundles_env):
         _bundles_dir, _ = bundles_env
         save_bundle("doomed", ["s1"])
         assert get_bundle("doomed") is not None
         delete_bundle("doomed")
         assert get_bundle("doomed") is None
-
 
 
 class TestReloadBundles:
@@ -298,7 +286,9 @@ class TestBundleCacheRaces:
         self._pin(alpha)
         assert get_skill_bundles()["/alpha"]["skills"] == ["changed"]
 
-    def test_write_landing_during_scan_is_picked_up_next_call(self, bundles_env, monkeypatch):
+    def test_write_landing_during_scan_is_picked_up_next_call(
+        self, bundles_env, monkeypatch
+    ):
         import agent.skill_bundles as mod
 
         bundles_dir, _ = bundles_env
@@ -319,7 +309,9 @@ class TestBundleCacheRaces:
 
         assert get_skill_bundles()["/alpha"]["skills"] == ["after-parse"]
 
-    def test_same_size_in_place_rewrite_on_a_coarse_clock_is_seen(self, bundles_env, monkeypatch):
+    def test_same_size_in_place_rewrite_on_a_coarse_clock_is_seen(
+        self, bundles_env, monkeypatch
+    ):
         """A filesystem whose timestamps did not tick between two writes (coarse mtime AND ctime):
         an in-place rewrite of the same size keeps every stat field, so only content can tell."""
         import pathlib
@@ -331,13 +323,21 @@ class TestBundleCacheRaces:
 
         def frozen_clock_stat(path, *args, **kwargs):
             st = real_stat(path, *args, **kwargs)
-            return SimpleNamespace(st_mtime_ns=self.T, st_ctime_ns=self.T, st_size=st.st_size,
-                                   st_ino=st.st_ino, st_mode=st.st_mode, st_mtime=self.T / 1e9)
+            return SimpleNamespace(
+                st_mtime_ns=self.T,
+                st_ctime_ns=self.T,
+                st_size=st.st_size,
+                st_ino=st.st_ino,
+                st_mode=st.st_mode,
+                st_mtime=self.T / 1e9,
+            )
 
         monkeypatch.setattr(pathlib.Path, "stat", frozen_clock_stat)
         assert get_skill_bundles()["/alpha"]["skills"] == ["aa"]
 
-        alpha.write_text(alpha.read_text(encoding="utf-8").replace("aa", "bb"), encoding="utf-8")
+        alpha.write_text(
+            alpha.read_text(encoding="utf-8").replace("aa", "bb"), encoding="utf-8"
+        )
 
         assert get_skill_bundles()["/alpha"]["skills"] == ["bb"]
 
@@ -350,7 +350,9 @@ class TestBundleCacheRaces:
         seen = []
 
         # A reader at every write instant of the overwrite sees a whole bundle, old or new.
-        with observe_file_writes(lambda: seen.append((mod._load_bundle_file(target) or {}).get("skills"))):
+        with observe_file_writes(
+            lambda: seen.append((mod._load_bundle_file(target) or {}).get("skills"))
+        ):
             save_bundle("alpha", ["new-skill"], overwrite=True)
 
         assert seen

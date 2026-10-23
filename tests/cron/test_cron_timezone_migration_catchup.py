@@ -113,9 +113,7 @@ def test_genuine_expr_edit_still_reanchors_without_firing(temp_home, monkeypatch
 
     assert [j["id"] for j in due if j["id"] == jid] == []
     assert get_job(jid)["next_run_at"] == "2026-09-02T09:00:00+02:00"
-    assert (
-        get_timezone_migration_catchup_stats()["timezone_migration_catchups"] == 0
-    )
+    assert get_timezone_migration_catchup_stats()["timezone_migration_catchups"] == 0
 
 
 def test_expr_edit_on_a_legacy_offset_row_still_does_not_fire(temp_home, monkeypatch):
@@ -131,9 +129,7 @@ def test_expr_edit_on_a_legacy_offset_row_still_does_not_fire(temp_home, monkeyp
 
     assert [j["id"] for j in due if j["id"] == jid] == []
     assert get_job(jid)["next_run_at"] == "2026-09-02T09:00:00+02:00"
-    assert (
-        get_timezone_migration_catchup_stats()["timezone_migration_catchups"] == 0
-    )
+    assert get_timezone_migration_catchup_stats()["timezone_migration_catchups"] == 0
 
 
 def test_future_local_wall_clock_is_left_scheduled(temp_home, monkeypatch):
@@ -149,9 +145,7 @@ def test_future_local_wall_clock_is_left_scheduled(temp_home, monkeypatch):
 
     assert [j["id"] for j in due if j["id"] == jid] == []
     assert get_job(jid)["next_run_at"] == _LEGACY_UTC_NEXT_RUN
-    assert (
-        get_timezone_migration_catchup_stats()["timezone_migration_catchups"] == 0
-    )
+    assert get_timezone_migration_catchup_stats()["timezone_migration_catchups"] == 0
 
 
 def test_future_stored_wall_clock_still_takes_the_offset_repair_path(
@@ -170,9 +164,7 @@ def test_future_stored_wall_clock_still_takes_the_offset_repair_path(
 
     assert [j["id"] for j in due if j["id"] == jid] == []
     assert get_job(jid)["next_run_at"] == "2026-09-02T21:00:00+02:00"
-    assert (
-        get_timezone_migration_catchup_stats()["timezone_migration_catchups"] == 0
-    )
+    assert get_timezone_migration_catchup_stats()["timezone_migration_catchups"] == 0
 
 
 def test_classifier_separates_migration_from_edit(temp_home):
@@ -191,8 +183,7 @@ def test_classifier_separates_migration_from_edit(temp_home):
 
     # Stored instant already occurs under the current expression.
     assert (
-        _classify_stale_cron_next_run(daily, on_lattice, on_lattice)
-        == STALE_CRON_MATCH
+        _classify_stale_cron_next_run(daily, on_lattice, on_lattice) == STALE_CRON_MATCH
     )
     # Only the offset representation changed.
     assert (

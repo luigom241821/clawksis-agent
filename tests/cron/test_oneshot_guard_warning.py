@@ -23,6 +23,7 @@ from cron.jobs import (
     _clawk_now,
 )
 
+
 @pytest.fixture()
 def temp_home(tmp_path, monkeypatch):
     """Redirect cron storage to a temp dir (same pattern as the sibling
@@ -31,6 +32,7 @@ def temp_home(tmp_path, monkeypatch):
     monkeypatch.setattr("cron.jobs.JOBS_FILE", tmp_path / "cron" / "jobs.json")
     monkeypatch.setattr("cron.jobs.OUTPUT_DIR", tmp_path / "cron" / "output")
     return tmp_path
+
 
 def test_guard_warns_on_rearmed_consumed_record(temp_home, caplog):
     job = create_job(
@@ -58,7 +60,8 @@ def test_guard_warns_on_rearmed_consumed_record(temp_home, caplog):
     assert jid not in [d["id"] for d in due]
     assert jid not in [j["id"] for j in load_jobs()]
     warnings = [
-        r for r in caplog.records
+        r
+        for r in caplog.records
         if r.levelno == logging.WARNING and "WITHOUT firing" in r.getMessage()
     ]
     assert warnings, "expected WARNING on removal of a re-armed consumed one-shot"

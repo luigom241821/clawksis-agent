@@ -79,13 +79,15 @@ def _activate(agent, resolved_base_url, resolved_model, build_anthropic=None):
 
 class TestExplicitApiModeHonored:
     def test_explicit_anthropic_messages_honored(self):
-        fbs = [{
-            "provider": "custom",
-            "model": "claude-opus-4-6",
-            "base_url": "https://gateway.example.com/v1",
-            "api_key": "k",
-            "api_mode": "anthropic_messages",
-        }]
+        fbs = [
+            {
+                "provider": "custom",
+                "model": "claude-opus-4-6",
+                "base_url": "https://gateway.example.com/v1",
+                "api_key": "k",
+                "api_mode": "anthropic_messages",
+            }
+        ]
         agent = _make_agent(fallback_model=fbs)
         mock_rpc = _activate(agent, "https://gateway.example.com/v1", "claude-opus-4-6")
         assert agent.api_mode == "anthropic_messages"
@@ -98,24 +100,28 @@ class TestExplicitApiModeHonored:
         api.openai.com would normally re-detect to codex_responses via
         _is_direct_openai_url; the explicit config field must win.
         """
-        fbs = [{
-            "provider": "custom",
-            "model": "gpt-5.2",
-            "base_url": "https://api.openai.com/v1",
-            "api_key": "k",
-            "api_mode": "chat_completions",
-        }]
+        fbs = [
+            {
+                "provider": "custom",
+                "model": "gpt-5.2",
+                "base_url": "https://api.openai.com/v1",
+                "api_key": "k",
+                "api_mode": "chat_completions",
+            }
+        ]
         agent = _make_agent(fallback_model=fbs)
         _activate(agent, "https://api.openai.com/v1", "gpt-5.2")
         assert agent.api_mode == "chat_completions"
 
     def test_explicit_chat_completions_not_overridden_by_bedrock_redetection(self):
-        fbs = [{
-            "provider": "bedrock",
-            "model": "anthropic.claude-3-5-sonnet",
-            "api_key": "k",
-            "api_mode": "chat_completions",
-        }]
+        fbs = [
+            {
+                "provider": "bedrock",
+                "model": "anthropic.claude-3-5-sonnet",
+                "api_key": "k",
+                "api_mode": "chat_completions",
+            }
+        ]
         agent = _make_agent(fallback_model=fbs)
         _activate(
             agent,
@@ -130,24 +136,28 @@ class TestOriginalUrlDetection:
         """Dual-surface /anthropic base rewritten to /v1 by the resolver:
         detection must run on the ORIGINAL hint, not the rewritten client URL.
         """
-        fbs = [{
-            "provider": "custom",
-            "model": "MiniMax-M2.5",
-            "base_url": "https://api.minimax.io/anthropic",
-            "api_key": "k",
-        }]
+        fbs = [
+            {
+                "provider": "custom",
+                "model": "MiniMax-M2.5",
+                "base_url": "https://api.minimax.io/anthropic",
+                "api_key": "k",
+            }
+        ]
         agent = _make_agent(fallback_model=fbs)
         mock_rpc = _activate(agent, "https://api.minimax.io/v1", "MiniMax-M2.5")
         assert agent.api_mode == "anthropic_messages"
         assert mock_rpc.call_args.kwargs["api_mode"] == "anthropic_messages"
 
     def test_anthropic_host_hint_detected(self):
-        fbs = [{
-            "provider": "custom",
-            "model": "claude-opus-4-6",
-            "base_url": "https://api.anthropic.com",
-            "api_key": "k",
-        }]
+        fbs = [
+            {
+                "provider": "custom",
+                "model": "claude-opus-4-6",
+                "base_url": "https://api.anthropic.com",
+                "api_key": "k",
+            }
+        ]
         agent = _make_agent(fallback_model=fbs)
         _activate(agent, "https://api.anthropic.com", "claude-opus-4-6")
         assert agent.api_mode == "anthropic_messages"
@@ -164,8 +174,14 @@ class TestOriginalUrlDetection:
     def test_kimi_coding_hint_uses_the_messages_wire(self):
         """api.kimi.com/coding serves Anthropic Messages only; the fallback must not POST
         /chat/completions there (404, #77256)."""
-        fbs = [{"provider": "kimi-coding", "model": "kimi-for-coding",
-                "base_url": "https://api.kimi.com/coding/v1", "api_key": "k"}]
+        fbs = [
+            {
+                "provider": "kimi-coding",
+                "model": "kimi-for-coding",
+                "base_url": "https://api.kimi.com/coding/v1",
+                "api_key": "k",
+            }
+        ]
         agent = _make_agent(fallback_model=fbs)
         mock_rpc = _activate(agent, "https://api.kimi.com/coding", "kimi-for-coding")
         assert agent.api_mode == "anthropic_messages"
@@ -173,7 +189,16 @@ class TestOriginalUrlDetection:
 
     def test_kimi_lookalike_host_stays_chat_completions(self):
         lookalike = "https://api.kimi.com.attacker.test/coding/v1"
-        agent = _make_agent(fallback_model=[{"provider": "custom", "model": "m", "base_url": lookalike, "api_key": "k"}])
+        agent = _make_agent(
+            fallback_model=[
+                {
+                    "provider": "custom",
+                    "model": "m",
+                    "base_url": lookalike,
+                    "api_key": "k",
+                }
+            ]
+        )
         _activate(agent, lookalike, "m")
         assert agent.api_mode == "chat_completions"
 
@@ -187,16 +212,29 @@ class TestNamedProviderDeclaredWire:
         agent = _make_agent(fallback_model=fbs)
         with patch(
             "clawk_cli.runtime_provider._get_named_custom_provider",
-            return_value={"name": "ai-proxy", "base_url": "https://ai-proxy.example.com",
-                          "api_key": "k", "api_mode": "anthropic_messages"},
+            return_value={
+                "name": "ai-proxy",
+                "base_url": "https://ai-proxy.example.com",
+                "api_key": "k",
+                "api_mode": "anthropic_messages",
+            },
         ):
-            mock_rpc = _activate(agent, "https://ai-proxy.example.com", "claude-4.7-opus")
+            mock_rpc = _activate(
+                agent, "https://ai-proxy.example.com", "claude-4.7-opus"
+            )
         assert agent.api_mode == "anthropic_messages"
         assert mock_rpc.call_args.kwargs["api_mode"] == "anthropic_messages"
 
     def test_entry_transport_alias_is_honored(self):
-        fbs = [{"provider": "custom", "model": "custom/responses", "base_url": "https://gateway.example.com/v1",
-                "api_key": "k", "transport": "responses"}]
+        fbs = [
+            {
+                "provider": "custom",
+                "model": "custom/responses",
+                "base_url": "https://gateway.example.com/v1",
+                "api_key": "k",
+                "transport": "responses",
+            }
+        ]
         agent = _make_agent(fallback_model=fbs)
         _activate(agent, "https://gateway.example.com/v1", "custom/responses")
         assert agent.api_mode == "codex_responses"
@@ -204,11 +242,13 @@ class TestNamedProviderDeclaredWire:
 
 class TestPlainFallbackUnchanged:
     def test_plain_openrouter_fallback_stays_chat_completions(self):
-        fbs = [{
-            "provider": "openrouter",
-            "model": "z-ai/glm-5",
-            "api_key": "k",
-        }]
+        fbs = [
+            {
+                "provider": "openrouter",
+                "model": "z-ai/glm-5",
+                "api_key": "k",
+            }
+        ]
         agent = _make_agent(fallback_model=fbs)
         mock_rpc = _activate(agent, "https://openrouter.ai/api/v1", "z-ai/glm-5")
         assert agent.api_mode == "chat_completions"
@@ -218,7 +258,9 @@ class TestPlainFallbackUnchanged:
         """Named custom providers resolve api.anthropic.com from config, not
         the fallback entry — post-resolve detection must still catch it
         (#32243, #49247)."""
-        fbs = [{"provider": "cron-anthropic", "model": "claude-opus-4-6", "api_key": "k"}]
+        fbs = [
+            {"provider": "cron-anthropic", "model": "claude-opus-4-6", "api_key": "k"}
+        ]
         agent = _make_agent(fallback_model=fbs)
         _activate(agent, "https://api.anthropic.com/v1", "claude-opus-4-6")
         assert agent.api_mode == "anthropic_messages"
@@ -232,17 +274,46 @@ class TestOpenCodeFamilyPerModelWire:
     @pytest.mark.parametrize(
         ("entry", "resolved_base_url", "expected_mode"),
         [
-            ({"provider": "opencode-go", "model": "muse-spark-1.3-contributor"}, "https://opencode.ai/zen/go/v1", "codex_responses"),
-            ({"provider": "opencode-go", "model": "minimax-m2.7"}, "https://opencode.ai/zen/go/v1", "anthropic_messages"),
-            ({"provider": "custom", "model": "muse-spark-1.3-contributor", "base_url": "https://opencode.ai/zen/go/v1", "api_key": "k"},
-             "https://opencode.ai/zen/go/v1", "codex_responses"),
+            (
+                {"provider": "opencode-go", "model": "muse-spark-1.3-contributor"},
+                "https://opencode.ai/zen/go/v1",
+                "codex_responses",
+            ),
+            (
+                {"provider": "opencode-go", "model": "minimax-m2.7"},
+                "https://opencode.ai/zen/go/v1",
+                "anthropic_messages",
+            ),
+            (
+                {
+                    "provider": "custom",
+                    "model": "muse-spark-1.3-contributor",
+                    "base_url": "https://opencode.ai/zen/go/v1",
+                    "api_key": "k",
+                },
+                "https://opencode.ai/zen/go/v1",
+                "codex_responses",
+            ),
             # controls: a chat-completions model stays put; an explicit pin always wins.
-            ({"provider": "opencode-go", "model": "deepseek-v4-flash"}, "https://opencode.ai/zen/go/v1", "chat_completions"),
-            ({"provider": "opencode-go", "model": "muse-spark-1.3-contributor", "api_mode": "chat_completions"},
-             "https://opencode.ai/zen/go/v1", "chat_completions"),
+            (
+                {"provider": "opencode-go", "model": "deepseek-v4-flash"},
+                "https://opencode.ai/zen/go/v1",
+                "chat_completions",
+            ),
+            (
+                {
+                    "provider": "opencode-go",
+                    "model": "muse-spark-1.3-contributor",
+                    "api_mode": "chat_completions",
+                },
+                "https://opencode.ai/zen/go/v1",
+                "chat_completions",
+            ),
         ],
     )
-    def test_fallback_wire_matches_opencode_model_table(self, entry, resolved_base_url, expected_mode):
+    def test_fallback_wire_matches_opencode_model_table(
+        self, entry, resolved_base_url, expected_mode
+    ):
         agent = _make_agent(fallback_model=[entry])
         _activate(agent, resolved_base_url, entry["model"])
         assert agent.api_mode == expected_mode

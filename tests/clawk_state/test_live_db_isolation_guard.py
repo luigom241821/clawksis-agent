@@ -80,7 +80,6 @@ class TestProductionPathRefused:
 
 
 class TestHermeticPathsAllowed:
-
     def test_tmp_clawk_home_default_resolution_works(self, tmp_path, monkeypatch):
         """Argless SessionDB() under a hermetic CLAWK_HOME must succeed."""
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "hermetic-home"))
@@ -126,9 +125,7 @@ class TestSessionStoreLoudFailure:
         with pytest.raises(RuntimeError, match="live-system guard"):
             SessionStore(sessions_dir=tmp_path, config=GatewayConfig())
 
-    def test_ordinary_db_failure_still_degrades_to_jsonl(
-        self, tmp_path, monkeypatch
-    ):
+    def test_ordinary_db_failure_still_degrades_to_jsonl(self, tmp_path, monkeypatch):
         """Non-guard SQLite failures keep the existing graceful fallback."""
 
         def _boom(*args, **kwargs):
@@ -156,10 +153,7 @@ class TestSubprocessChildCovered:
         }
         env["PYTEST_CURRENT_TEST"] = "tests/fake.py::test_child (call)"
         env["PYTHONPATH"] = str(Path(__file__).resolve().parents[2])
-        code = (
-            "from clawk_state import SessionDB\n"
-            "SessionDB()\n"
-        )
+        code = "from clawk_state import SessionDB\nSessionDB()\n"
         proc = subprocess.run(
             [sys.executable, "-c", code],
             capture_output=True,

@@ -32,8 +32,12 @@ pytestmark = [
     pytest.mark.platforms("linux"),
     # Every `clawk update` here targets a throwaway sandboxed install, never the real checkout.
     pytest.mark.live_system_guard_bypass,
-    pytest.mark.skipif(H.sandbox_required_reason() is not None, reason=str(H.sandbox_required_reason())),
-    pytest.mark.skipif(N.netns_required_reason() is not None, reason=str(N.netns_required_reason())),
+    pytest.mark.skipif(
+        H.sandbox_required_reason() is not None, reason=str(H.sandbox_required_reason())
+    ),
+    pytest.mark.skipif(
+        N.netns_required_reason() is not None, reason=str(N.netns_required_reason())
+    ),
     pytest.mark.skipif(shutil.which("git") is None, reason="git required"),
     pytest.mark.skipif(I.real_uv() is None, reason="uv required"),
 ]
@@ -51,10 +55,14 @@ def test_offline_update_fails_fast_and_changes_nothing(inst):
     inst.publish("offline")
     before = inst.state()
     r = inst.clawk("update", "--yes", edge=None, timeout=300)
-    assert r.secs < FAST, f"an offline update took {r.secs:.0f}s to give up\n" + r.report(inst)
+    assert r.secs < FAST, (
+        f"an offline update took {r.secs:.0f}s to give up\n" + r.report(inst)
+    )
     S.assert_nothing_changed(inst, before, r, "offline update")
     assert "unavailable" in r.out.lower() or "cannot reach" in r.out.lower(), (
-        "the offline failure does not say the network was unreachable\n" + r.report(inst))
+        "the offline failure does not say the network was unreachable\n"
+        + r.report(inst)
+    )
 
 
 def test_offline_provisioning_of_a_missing_tool_fails_loudly(inst):
@@ -64,12 +72,17 @@ def test_offline_provisioning_of_a_missing_tool_fails_loudly(inst):
     with S.tool_missing(inst, "ripgrep") as tool:
         before = inst.state()
         r = inst.clawk("pm", "install", "ripgrep", edge=None, timeout=300)
-        assert r.secs < FAST, f"offline provisioning took {r.secs:.0f}s to give up\n" + r.report(inst)
+        assert r.secs < FAST, (
+            f"offline provisioning took {r.secs:.0f}s to give up\n" + r.report(inst)
+        )
         S.assert_nothing_changed(inst, before, r, "offline `clawk pm install ripgrep`")
         assert "ripgrep" in r.out and "download failed" in r.out, (
-            "the failure does not name the tool and the failed download\n" + r.report(inst))
+            "the failure does not name the tool and the failed download\n"
+            + r.report(inst)
+        )
         assert not (inst.sb.clawk_home / "tools" / tool["entry"]).exists(), (
-            "an offline install left a store entry behind\n" + r.report(inst))
+            "an offline install left a store entry behind\n" + r.report(inst)
+        )
 
 
 def test_main_update_reads_no_release_record_and_survives_a_release_host_outage(inst):
@@ -77,14 +90,22 @@ def test_main_update_reads_no_release_record_and_survives_a_release_host_outage(
     #128295): ``main`` follows the git branch and never reads a release record, so the update
     lands and the host sees zero record requests."""
     new = inst.publish("release-host-outage")
-    assets = N.static_app({}, always={MAIN_RECORD: N.Response(503, b"down\n", {"Retry-After": "1"})})
+    assets = N.static_app(
+        {}, always={MAIN_RECORD: N.Response(503, b"down\n", {"Retry-After": "1"})}
+    )
     edge = inst.edge(assets=assets)
     try:
         r = inst.clawk("update", "--yes", edge=edge)
     finally:
         edge.close()
-    assert r.rc == 0 and inst.head() == new, "a release-host outage blocked a main update\n" + r.report(inst)
-    reads = [h for h in edge.proxy.requests(S.ASSETS) if h.path.startswith("/releases/channels/")]
+    assert r.rc == 0 and inst.head() == new, (
+        "a release-host outage blocked a main update\n" + r.report(inst)
+    )
+    reads = [
+        h
+        for h in edge.proxy.requests(S.ASSETS)
+        if h.path.startswith("/releases/channels/")
+    ]
     assert not reads, f"main read a release record: {reads}\n" + r.report(inst)
 
 
@@ -93,21 +114,32 @@ def test_forge_rate_limit_fails_truthfully(inst):
     non-zero, say it was rate limited, and print no success banner (#106026)."""
     inst.publish("forge-429")
     before = inst.state()
-    git = N.git_app(inst.gitroot, faults=[N.Response(429, b"rate limited\n", {"Retry-After": "1"})] * 50)
+    git = N.git_app(
+        inst.gitroot,
+        faults=[N.Response(429, b"rate limited\n", {"Retry-After": "1"})] * 50,
+    )
     edge = inst.edge(git=git)
     try:
         r = inst.clawk("update", "--yes", edge=edge, timeout=300)
     finally:
         edge.close()
-    assert r.secs < FAST * 2, f"a rate-limited fetch took {r.secs:.0f}s to give up\n" + r.report(inst)
+    assert r.secs < FAST * 2, (
+        f"a rate-limited fetch took {r.secs:.0f}s to give up\n" + r.report(inst)
+    )
     S.assert_nothing_changed(inst, before, r, "forge rate limit")
-    assert "429" in r.out or "rate limit" in r.out.lower(), "the failure does not say the forge rate-limited\n" + r.report(inst)
+    assert "429" in r.out or "rate limit" in r.out.lower(), (
+        "the failure does not say the forge rate-limited\n" + r.report(inst)
+    )
 
 
 # Where each tool's pinned artifact is downloaded from, as the PM lock declares it; the edge
 # serves those hosts (and the content-addressed clawk-assets mirror) with wrong bytes.
 ARTIFACT_HOSTS = {
-    "ripgrep": ("github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com"),
+    "ripgrep": (
+        "github.com",
+        "objects.githubusercontent.com",
+        "release-assets.githubusercontent.com",
+    ),
     "node": ("nodejs.org",),
 }
 
@@ -118,19 +150,40 @@ def test_pm_download_retries_then_refuses_a_digest_mismatch(inst, tool_name):
     artifact. PM must refuse them, say so, and install nothing."""
     bad = b"not the pinned artifact\n" * 4096
     flaky = {"*": [N.Response(503, b"busy\n", {"Retry-After": "1"})] * 2}
-    extra = {host: N.static_app({"*": bad}, faults=flaky) for host in ARTIFACT_HOSTS[tool_name]}
+    extra = {
+        host: N.static_app({"*": bad}, faults=flaky)
+        for host in ARTIFACT_HOSTS[tool_name]
+    }
     with S.tool_missing(inst, tool_name) as tool:
         before = inst.state()
-        edge = inst.edge(assets=N.static_app({"*": bad}), git=extra.pop("github.com", None), extra=extra)
+        edge = inst.edge(
+            assets=N.static_app({"*": bad}),
+            git=extra.pop("github.com", None),
+            extra=extra,
+        )
         try:
             r = inst.clawk("pm", "install", tool_name, edge=edge, timeout=600)
         finally:
             edge.close()
-        served = [h for h in edge.proxy.hits if h.kind == "request" and h.host in ARTIFACT_HOSTS[tool_name]]
-        assert any(h.status == 503 for h in served) and any(h.status == 200 for h in served), (
-            f"the artifact host was not retried past its 503s: {[str(h) for h in served]}\n" + r.report(inst))
+        served = [
+            h
+            for h in edge.proxy.hits
+            if h.kind == "request" and h.host in ARTIFACT_HOSTS[tool_name]
+        ]
+        assert any(h.status == 503 for h in served) and any(
+            h.status == 200 for h in served
+        ), (
+            f"the artifact host was not retried past its 503s: {[str(h) for h in served]}\n"
+            + r.report(inst)
+        )
         assert "sha256 mismatch" in r.out or "digest" in r.out.lower(), (
-            f"{tool_name}: the failure does not say the download failed verification\n" + r.report(inst))
+            f"{tool_name}: the failure does not say the download failed verification\n"
+            + r.report(inst)
+        )
         assert not (inst.sb.clawk_home / "tools" / tool["entry"]).exists(), (
-            f"{tool_name}: unverified bytes were published to the tool store\n" + r.report(inst))
-        S.assert_nothing_changed(inst, before, r, f"`clawk pm install {tool_name}` with a digest mismatch")
+            f"{tool_name}: unverified bytes were published to the tool store\n"
+            + r.report(inst)
+        )
+        S.assert_nothing_changed(
+            inst, before, r, f"`clawk pm install {tool_name}` with a digest mismatch"
+        )

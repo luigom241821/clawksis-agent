@@ -18,7 +18,9 @@ from typing import Any, Iterator, Optional
 
 from agent.interrupt_compat import request_hard_interrupt
 
-_ACTIVE_SCOPE: ContextVar[Optional[InterruptScope]] = ContextVar("clawk_interrupt_scope", default=None)
+_ACTIVE_SCOPE: ContextVar[Optional[InterruptScope]] = ContextVar(
+    "clawk_interrupt_scope", default=None
+)
 
 
 _TOOL_REASON_HOST_CANCELLED = "host cancelled the command"
@@ -31,7 +33,9 @@ class InterruptScope:
         self.reason: Optional[str] = None
         self._tool_reason: Optional[str] = _TOOL_REASON_HOST_CANCELLED
 
-    def cancel(self, reason: str, *, tool_reason: Optional[str] = _TOOL_REASON_HOST_CANCELLED) -> None:
+    def cancel(
+        self, reason: str, *, tool_reason: Optional[str] = _TOOL_REASON_HOST_CANCELLED
+    ) -> None:
         """Latch ``reason`` and hard-interrupt every agent running under this scope.
 
         ``tool_reason`` names the system issuer; pass ``None`` for a human stop so the turn is

@@ -7,13 +7,14 @@ are client-submitted admissions with the client's own durable input id. So while
 runs a handler for a local session, both are captured here and returned to the client as one
 ``send`` directive (``notice`` + ``message``); the client submits it, the gateway never does.
 """
+
 from __future__ import annotations
 
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 
-_SINK: ContextVar = ContextVar('local_command_sink', default=None)
+_SINK: ContextVar = ContextVar("local_command_sink", default=None)
 
 
 @dataclass

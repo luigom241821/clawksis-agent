@@ -92,7 +92,9 @@ class _Adapter:
 def _runner(session_store):
     runner = object.__new__(gateway_run.GatewayRunner)
     runner.adapters = {Platform.TELEGRAM: _Adapter()}
-    runner.config = SimpleNamespace(streaming=None, group_sessions_per_user=True, thread_sessions_per_user=False)
+    runner.config = SimpleNamespace(
+        streaming=None, group_sessions_per_user=True, thread_sessions_per_user=False
+    )
     runner.hooks = SimpleNamespace(loaded_hooks=False, emit=AsyncMock())
     runner.session_store = session_store
     runner._session_db = MagicMock()
@@ -114,10 +116,18 @@ def _runner(session_store):
     runner._get_proxy_url = lambda: None
     runner._resolve_session_agent_runtime = lambda **_kwargs: (
         "gpt-5.4",
-        {"provider": "openai-codex", "api_mode": "codex_responses", "base_url": "https://chatgpt.com/backend-api/codex", "api_key": "token"},
+        {
+            "provider": "openai-codex",
+            "api_mode": "codex_responses",
+            "base_url": "https://chatgpt.com/backend-api/codex",
+            "api_key": "token",
+        },
     )
     runner._resolve_session_reasoning_config = lambda **_kwargs: None
-    runner._resolve_turn_agent_config = lambda message, model, runtime: {"model": model, "runtime": runtime}
+    runner._resolve_turn_agent_config = lambda message, model, runtime: {
+        "model": model,
+        "runtime": runtime,
+    }
     runner._load_service_tier = lambda: None
     runner._agent_config_signature = lambda *_args, **_kwargs: ("sig",)
     runner._extract_cache_busting_config = lambda _config: ()
@@ -127,18 +137,24 @@ def _runner(session_store):
     return runner
 
 
-def _install_compression_failure_agent(monkeypatch, agent_cls=_CompressionThenFailureAgent):
+def _install_compression_failure_agent(
+    monkeypatch, agent_cls=_CompressionThenFailureAgent
+):
     fake_run_agent = types.ModuleType("run_agent")
     fake_run_agent.AIAgent = agent_cls
     monkeypatch.setitem(sys.modules, "run_agent", fake_run_agent)
     monkeypatch.setenv("CLAWK_TOOL_PROGRESS_MODE", "off")
     monkeypatch.setenv("CLAWK_AGENT_TIMEOUT", "0")
     monkeypatch.setattr(gateway_run, "_load_gateway_config", dict)
-    monkeypatch.setattr("gateway.stream_consumer.GatewayStreamConsumer", _StreamConsumer)
+    monkeypatch.setattr(
+        "gateway.stream_consumer.GatewayStreamConsumer", _StreamConsumer
+    )
 
     from clawk_cli import tools_config
 
-    monkeypatch.setattr(tools_config, "_get_platform_tools", lambda *_args, **_kwargs: {"core"})
+    monkeypatch.setattr(
+        tools_config, "_get_platform_tools", lambda *_args, **_kwargs: {"core"}
+    )
 
 
 def _run_compression_failure_turn(runner, source, *, run_generation=None):
@@ -163,7 +179,9 @@ def test_failed_turn_still_syncs_compression_session_split(monkeypatch):
 
     session_store = _SessionStore()
     runner = _runner(session_store)
-    source = SessionSource(platform=Platform.TELEGRAM, chat_id="12345", chat_type="dm", user_id="user-1")
+    source = SessionSource(
+        platform=Platform.TELEGRAM, chat_id="12345", chat_type="dm", user_id="user-1"
+    )
 
     result = _run_compression_failure_turn(runner, source)
 
@@ -182,7 +200,9 @@ def test_failed_turn_still_syncs_compression_session_split(monkeypatch):
 
 
 class _RateLimitFailureAgent(_CompressionThenFailureAgent):
-    def run_conversation(self, user_message, conversation_history=None, task_id=None, **_kwargs):
+    def run_conversation(
+        self, user_message, conversation_history=None, task_id=None, **_kwargs
+    ):
         return {
             "final_response": "API call failed after 3 retries: 429 Too Many Requests",
             "failed": True,
@@ -198,7 +218,9 @@ class _RateLimitFailureAgent(_CompressionThenFailureAgent):
 
 
 class _EmptyRateLimitFailureAgent(_CompressionThenFailureAgent):
-    def run_conversation(self, user_message, conversation_history=None, task_id=None, **_kwargs):
+    def run_conversation(
+        self, user_message, conversation_history=None, task_id=None, **_kwargs
+    ):
         return {
             "final_response": "",
             "failed": True,
@@ -234,6 +256,7 @@ def test_empty_rate_limit_response_preserves_failure_metadata(monkeypatch):
     assert result["failed"] is True
     assert result["failure_reason"] == "rate_limit"
     assert result["completed"] is False
+
 
 class _ProviderSwitchAgent(_CompressionThenFailureAgent):
     created_providers = []
@@ -281,5 +304,3 @@ class _ProviderSwitchAgent(_CompressionThenFailureAgent):
             ],
             "api_calls": 1,
         }
-
-

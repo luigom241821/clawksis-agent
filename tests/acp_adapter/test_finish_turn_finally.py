@@ -37,7 +37,9 @@ async def _noop_coro(*args, **kwargs):
 def _make_server():
     # A bare ``ClawksisACPAgent()`` is the gateway viewer (``__new__`` dispatch); the in-process
     # turn tail under test lives on the session-manager-backed agent.
-    server = ClawksisACPAgent(session_manager=SimpleNamespace(save_session=lambda sid: None))
+    server = ClawksisACPAgent(
+        session_manager=SimpleNamespace(save_session=lambda sid: None)
+    )
     drained = []
 
     async def fake_prompt(*, prompt, session_id, **kwargs):

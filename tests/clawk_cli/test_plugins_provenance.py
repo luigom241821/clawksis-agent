@@ -47,7 +47,16 @@ def _manual_dir(plugin_dir: Path) -> None:
 
 
 def test_git_install_row_and_git(tmp_path):
-    _write_sidecar(tmp_path, {"plug": {"pinned": False, "revision": "a" * 40, "source": "https://example/o/r"}})
+    _write_sidecar(
+        tmp_path,
+        {
+            "plug": {
+                "pinned": False,
+                "revision": "a" * 40,
+                "source": "https://example/o/r",
+            }
+        },
+    )
     _fake_git_dir(tmp_path / "plugins" / "plug")
     prov = plugins_provenance(tmp_path / "plugins")
     assert len(prov) == 1
@@ -71,7 +80,16 @@ def test_self_cloned_git_without_row(tmp_path):
 
 
 def test_drift_row_without_git(tmp_path):
-    _write_sidecar(tmp_path, {"ghost": {"pinned": False, "revision": "b" * 40, "source": "https://example/g/r"}})
+    _write_sidecar(
+        tmp_path,
+        {
+            "ghost": {
+                "pinned": False,
+                "revision": "b" * 40,
+                "source": "https://example/g/r",
+            }
+        },
+    )
     _manual_dir(tmp_path / "plugins" / "ghost")
     prov = plugins_provenance(tmp_path / "plugins")
     assert prov[0].klass is ProvenanceClass.DRIFT
@@ -92,14 +110,23 @@ def test_update_url_tag_round_trips(tmp_path):
     # a saved update_url tag rides the row; the manifest is claims
     _write_sidecar(
         tmp_path,
-        {"plug": {"pinned": False, "revision": "c" * 40, "source": "https://example/o/r",
-                  "update_url": "https://example/feed.yml"}},
+        {
+            "plug": {
+                "pinned": False,
+                "revision": "c" * 40,
+                "source": "https://example/o/r",
+                "update_url": "https://example/feed.yml",
+            }
+        },
     )
     _fake_git_dir(tmp_path / "plugins" / "plug")
     prov = plugins_provenance(tmp_path / "plugins")
     assert prov[0].saved_update_url == "https://example/feed.yml"
 
-def test_origin_url_uses_the_resolved_git_and_survives_no_git_at_all(tmp_path, monkeypatch):
+
+def test_origin_url_uses_the_resolved_git_and_survives_no_git_at_all(
+    tmp_path, monkeypatch
+):
     """Provenance runs from the gateway service, where PATH can be minimal: the probe must use the
     same resolved git as install/update, and with no git anywhere the .git/config parse still
     yields the origin (never a bare ``git`` spawn that raises or picks up a stray binary)."""
@@ -121,6 +148,8 @@ def test_origin_url_uses_the_resolved_git_and_survives_no_git_at_all(tmp_path, m
     assert plugins_provenance._git_origin_url(plugin) == "https://example/from-config"
     assert spawned == []
 
-    monkeypatch.setattr(plugins_cmd, "_resolve_git_executable", lambda: "/nonexistent/resolved-git")
+    monkeypatch.setattr(
+        plugins_cmd, "_resolve_git_executable", lambda: "/nonexistent/resolved-git"
+    )
     assert plugins_provenance._git_origin_url(plugin) == "https://example/from-config"
     assert spawned == ["/nonexistent/resolved-git"]

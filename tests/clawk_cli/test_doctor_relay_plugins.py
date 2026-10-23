@@ -9,13 +9,13 @@ import pytest
 from agent import relay_runtime
 from clawk_cli.doctor_config import _check_relay_plugins
 
-ENABLED_OBSERVABILITY = (
-    "version = 1\n\n[[components]]\nkind = \"observability\"\nenabled = true\n\n[components.config]\nversion = 4\n"
-)
+ENABLED_OBSERVABILITY = 'version = 1\n\n[[components]]\nkind = "observability"\nenabled = true\n\n[components.config]\nversion = 4\n'
 
 
 @pytest.mark.parametrize("explicit", [False, True], ids=["discovered", "explicit"])
-def test_doctor_lists_the_files_the_runtime_loads(tmp_path, monkeypatch, capsys, explicit):
+def test_doctor_lists_the_files_the_runtime_loads(
+    tmp_path, monkeypatch, capsys, explicit
+):
     relay = pytest.importorskip("nemo_relay")
     if getattr(relay, "_native", None) is None:
         pytest.skip("NeMo Relay native binding is unavailable on this platform")
@@ -37,8 +37,13 @@ def test_doctor_lists_the_files_the_runtime_loads(tmp_path, monkeypatch, capsys,
     relay_runtime._reset_for_tests()
     host = relay_runtime.RelayRuntime(relay=relay, profile_key="profile")
     try:
-        assert host._plugin_configuration_state is relay_runtime._RelayPluginConfigurationState.ACTIVE
-        loaded = relay_runtime._activation_config_paths(relay_runtime._PLUGIN_CONFIGURATION._activation)
+        assert (
+            host._plugin_configuration_state
+            is relay_runtime._RelayPluginConfigurationState.ACTIVE
+        )
+        loaded = relay_runtime._activation_config_paths(
+            relay_runtime._PLUGIN_CONFIGURATION._activation
+        )
     finally:
         host.shutdown()
         relay_runtime._reset_for_tests()

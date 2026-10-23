@@ -18,7 +18,9 @@ from gateway.control_socket import (
     windows_pipe_name,
 )
 
-pytestmark = pytest.mark.platforms("posix")  # Unix-socket transport; the named-pipe half is covered on the wine2e lane
+pytestmark = pytest.mark.platforms(
+    "posix"
+)  # Unix-socket transport; the named-pipe half is covered on the wine2e lane
 
 
 def _run(coro):
@@ -40,6 +42,7 @@ def _serve(home: Path, handlers=None):
 # ---------------------------------------------------------------------------
 # Path resolution
 # ---------------------------------------------------------------------------
+
 
 def test_short_home_binds_in_home(tmp_path: Path):
     # A home short enough for sun_path binds in-home with no pointer.
@@ -97,6 +100,7 @@ def test_windows_pipe_name_is_stable_and_home_scoped(tmp_path: Path):
 # ---------------------------------------------------------------------------
 # Server lifecycle + verbs (real sockets, real event loop)
 # ---------------------------------------------------------------------------
+
 
 def test_server_answers_identify_and_status(home: Path):
     async def scenario():
@@ -172,15 +176,20 @@ def test_verb_handler_receives_params(home: Path):
 
     async def scenario():
         server = GatewayControlServer(
-            home, verb_handlers={"with-params": with_params, "bare": bare})
+            home, verb_handlers={"with-params": with_params, "bare": bare}
+        )
         assert await server.start()
         try:
             loop = asyncio.get_running_loop()
             got = await loop.run_in_executor(
-                None, lambda: query_gateway_control(
-                    home, "with-params", params={"old": "a", "new": "b"}))
+                None,
+                lambda: query_gateway_control(
+                    home, "with-params", params={"old": "a", "new": "b"}
+                ),
+            )
             bare_ok = await loop.run_in_executor(
-                None, lambda: query_gateway_control(home, "bare"))
+                None, lambda: query_gateway_control(home, "bare")
+            )
             return got, bare_ok
         finally:
             await server.stop()
@@ -288,6 +297,7 @@ def test_default_identify_payload_shape(home: Path, monkeypatch):
 # Consumer integration: fleet matrix + inventory prefer socket, fall back
 # ---------------------------------------------------------------------------
 
+
 def _fake_identity(pid: int, sha: str):
     return {
         "protocol": 1,
@@ -309,9 +319,7 @@ def test_collect_fleet_versions_prefers_socket(tmp_path: Path, monkeypatch):
         "clawk_cli.version_info.get_code_identity",
         lambda refresh=False: {"sha": "HEADSHA", "version": "1.0"},
     )
-    monkeypatch.setattr(
-        "clawk_cli.profiles._get_default_clawk_home", lambda: home
-    )
+    monkeypatch.setattr("clawk_cli.profiles._get_default_clawk_home", lambda: home)
     monkeypatch.setattr(
         "clawk_cli.profiles._get_profiles_root", lambda: tmp_path / "no-profiles"
     )
@@ -351,15 +359,11 @@ def test_collect_fleet_versions_falls_back_to_state_file(tmp_path: Path, monkeyp
         "clawk_cli.version_info.get_code_identity",
         lambda refresh=False: {"sha": "HEADSHA", "version": "1.0"},
     )
-    monkeypatch.setattr(
-        "clawk_cli.profiles._get_default_clawk_home", lambda: home
-    )
+    monkeypatch.setattr("clawk_cli.profiles._get_default_clawk_home", lambda: home)
     monkeypatch.setattr(
         "clawk_cli.profiles._get_profiles_root", lambda: tmp_path / "no-profiles"
     )
-    monkeypatch.setattr(
-        "gateway.control_socket.identify_gateway", lambda h, **kw: None
-    )
+    monkeypatch.setattr("gateway.control_socket.identify_gateway", lambda h, **kw: None)
     (home / "gateway_state.json").write_text(
         json.dumps(
             {
@@ -399,18 +403,12 @@ def test_runtime_inventory_dedupes_same_pid_across_homes(tmp_path: Path, monkeyp
     profiles_root = tmp_path / "profiles"
     (profiles_root / "coder").mkdir(parents=True)
 
-    monkeypatch.setattr(
-        "clawk_cli.profiles._get_default_clawk_home", lambda: home
-    )
-    monkeypatch.setattr(
-        "clawk_cli.profiles._get_profiles_root", lambda: profiles_root
-    )
+    monkeypatch.setattr("clawk_cli.profiles._get_default_clawk_home", lambda: home)
+    monkeypatch.setattr("clawk_cli.profiles._get_profiles_root", lambda: profiles_root)
     monkeypatch.setattr(
         "clawk_cli.gateway._get_service_pids", lambda all_profiles=False: set()
     )
-    monkeypatch.setattr(
-        "clawk_cli.gateway.find_profile_gateway_processes", list
-    )
+    monkeypatch.setattr("clawk_cli.gateway.find_profile_gateway_processes", list)
     monkeypatch.setattr(
         "gateway.control_socket.identify_gateway",
         lambda h, **kw: _fake_identity(777, "SHA777"),
@@ -428,18 +426,14 @@ def test_runtime_inventory_prefers_socket_supervisor(tmp_path: Path, monkeypatch
     home = tmp_path / ".clawk"
     home.mkdir()
 
-    monkeypatch.setattr(
-        "clawk_cli.profiles._get_default_clawk_home", lambda: home
-    )
+    monkeypatch.setattr("clawk_cli.profiles._get_default_clawk_home", lambda: home)
     monkeypatch.setattr(
         "clawk_cli.profiles._get_profiles_root", lambda: tmp_path / "no-profiles"
     )
     monkeypatch.setattr(
         "clawk_cli.gateway._get_service_pids", lambda all_profiles=False: set()
     )
-    monkeypatch.setattr(
-        "clawk_cli.gateway.find_profile_gateway_processes", list
-    )
+    monkeypatch.setattr("clawk_cli.gateway.find_profile_gateway_processes", list)
     monkeypatch.setattr(
         "gateway.control_socket.identify_gateway",
         lambda h, **kw: _fake_identity(555, "SHA555"),
@@ -454,7 +448,9 @@ def test_runtime_inventory_prefers_socket_supervisor(tmp_path: Path, monkeypatch
     assert gws[0].code_sha == "SHA555"
 
 
-def test_windows_pipe_query_is_bounded_when_the_peer_never_answers(home: Path, monkeypatch):
+def test_windows_pipe_query_is_bounded_when_the_peer_never_answers(
+    home: Path, monkeypatch
+):
     """#132547: a pipe handle read cannot time out on its own; the query must still return None at its bound."""
     import threading
     import time
@@ -463,11 +459,15 @@ def test_windows_pipe_query_is_bounded_when_the_peer_never_answers(home: Path, m
 
     released = threading.Event()
 
-    def _silent_native_client(_home, _request, _timeout):  # accepts the request, never answers
+    def _silent_native_client(
+        _home, _request, _timeout
+    ):  # accepts the request, never answers
         released.wait(10)
         return b""
 
-    monkeypatch.setattr("gateway.runtime_bootstrap_windows.query_runtime_control", _silent_native_client)
+    monkeypatch.setattr(
+        "gateway.runtime_bootstrap_windows.query_runtime_control", _silent_native_client
+    )
     start = time.monotonic()
     try:
         assert control_socket._query_windows_pipe(home, b"{}\n", 0.3) is None

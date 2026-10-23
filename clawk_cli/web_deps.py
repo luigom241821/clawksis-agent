@@ -51,8 +51,10 @@ class LateState:
         object.__setattr__(self, "_module", module)
 
     def _target(self) -> Any:
-        return getattr(_server(object.__getattribute__(self, "_module")),
-                       object.__getattribute__(self, "_name"))
+        return getattr(
+            _server(object.__getattribute__(self, "_module")),
+            object.__getattribute__(self, "_name"),
+        )
 
     def __getattr__(self, attr: str) -> Any:
         return getattr(self._target(), attr)

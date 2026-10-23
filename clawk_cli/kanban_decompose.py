@@ -27,7 +27,11 @@ from clawk_cli.kanban_db_graph import decompose_triage_task
 from clawk_cli import kanban_db_connect as kbc
 from clawk_cli import profiles as profiles_mod
 from clawk_cli.kanban_specify import (
-    _call_aux, _extract_json_blob, _load_triage_task, _task_prompt_fields, _title_body,
+    _call_aux,
+    _extract_json_blob,
+    _load_triage_task,
+    _task_prompt_fields,
+    _title_body,
 )
 from clawk_cli.kanban_specify import _profile_author as _specify_author
 
@@ -126,7 +130,9 @@ def _profile_author() -> str:
     return _specify_author("decomposer")
 
 
-def _resolve_profile_from_cfg(cfg: dict, key: str, *, fallback: Optional[str] = None) -> str:
+def _resolve_profile_from_cfg(
+    cfg: dict, key: str, *, fallback: Optional[str] = None
+) -> str:
     """``kanban.<key>`` if it names an existing profile, else ``fallback``
     (the root task's own assignee) if that does, else the active default
     profile — so a task is never stranded for lack of an owner.
@@ -164,11 +170,13 @@ def _build_roster() -> tuple[list[dict], set[str]]:
     roster = []
     for p in all_profiles:
         desc = (p.description or "").strip()
-        roster.append({
-            "name": p.name,
-            "description": desc or f"(no description; profile named {p.name!r})",
-            "has_description": bool(desc),
-        })
+        roster.append(
+            {
+                "name": p.name,
+                "description": desc or f"(no description; profile named {p.name!r})",
+                "has_description": bool(desc),
+            }
+        )
     return roster, {p.name for p in all_profiles}
 
 
@@ -181,7 +189,9 @@ def _format_roster(roster: list[dict]) -> str:
     )
 
 
-def _normalize_assignee_choice(assignee: object, *, default_assignee: str, valid_names: set[str]) -> str:
+def _normalize_assignee_choice(
+    assignee: object, *, default_assignee: str, valid_names: set[str]
+) -> str:
     """A valid assignee, else ``default_assignee`` — promoted work is never
     left unassigned."""
     if not isinstance(assignee, str) or not assignee.strip():
@@ -203,41 +213,65 @@ class _Routing:
 
 def _load_routing(*, root_assignee: Optional[str] = None) -> _Routing:
     from clawk_cli.config import load_config_readonly
+
     try:
         cfg = load_config_readonly()
-    except Exception:  # decompose_task promises ok=False, never a raise, on config trouble
+    except (
+        Exception
+    ):  # decompose_task promises ok=False, never a raise, on config trouble
         cfg = {}
     kanban_cfg = cfg.get("kanban", {}) if isinstance(cfg, dict) else {}
     roster, valid_names = _build_roster()
     return _Routing(
-        orchestrator=_resolve_profile_from_cfg(cfg, "orchestrator_profile", fallback=root_assignee),
-        default_assignee=_resolve_profile_from_cfg(cfg, "default_assignee", fallback=root_assignee),
+        orchestrator=_resolve_profile_from_cfg(
+            cfg, "orchestrator_profile", fallback=root_assignee
+        ),
+        default_assignee=_resolve_profile_from_cfg(
+            cfg, "default_assignee", fallback=root_assignee
+        ),
         auto_promote=bool(kanban_cfg.get("auto_promote_children", True)),
         roster=roster,
         valid_names=valid_names,
     )
 
 
-def _apply_single(task: kb.Task, parsed: dict, routing: _Routing, author: str) -> DecomposeOutcome:
+def _apply_single(
+    task: kb.Task, parsed: dict, routing: _Routing, author: str
+) -> DecomposeOutcome:
     """``fanout=false``: single-task spec promotion (same effect as specify)."""
     title_val, body_val = _title_body(parsed)
     assignee_val = None
     if not task.assignee:
         assignee_val = _normalize_assignee_choice(
-            parsed.get("assignee"), default_assignee=routing.default_assignee, valid_names=routing.valid_names,
+            parsed.get("assignee"),
+            default_assignee=routing.default_assignee,
+            valid_names=routing.valid_names,
         )
     if title_val is None and body_val is None:
-        return DecomposeOutcome(task.id, False, "decomposer returned fanout=false with no title/body")
+        return DecomposeOutcome(
+            task.id, False, "decomposer returned fanout=false with no title/body"
+        )
     with kbc.connect_closing() as conn:
         ok = kb.specify_triage_task(
-            conn, task.id, title=title_val, body=body_val, assignee=assignee_val, author=author,
+            conn,
+            task.id,
+            title=title_val,
+            body=body_val,
+            assignee=assignee_val,
+            author=author,
         )
     if not ok:
-        return DecomposeOutcome(task.id, False, "task moved out of triage before promotion")
-    return DecomposeOutcome(task.id, True, "single task (no fanout)", fanout=False, new_title=title_val)
+        return DecomposeOutcome(
+            task.id, False, "task moved out of triage before promotion"
+        )
+    return DecomposeOutcome(
+        task.id, True, "single task (no fanout)", fanout=False, new_title=title_val
+    )
 
 
-def _clean_children(task_id: str, raw_tasks: list, routing: _Routing) -> tuple[list[dict], str]:
+def _clean_children(
+    task_id: str, raw_tasks: list, routing: _Routing
+) -> tuple[list[dict], str]:
     """Validate/normalise the LLM's ``tasks`` list; ``(children, "")`` or ``([], reason)``.
     Unknown assignees route to the default; never assignee=None."""
     children: list[dict] = []
@@ -250,31 +284,50 @@ def _clean_children(task_id: str, raw_tasks: list, routing: _Routing) -> tuple[l
         body = entry.get("body")
         assignee = entry.get("assignee")
         chosen = _normalize_assignee_choice(
-            assignee, default_assignee=routing.default_assignee, valid_names=routing.valid_names,
+            assignee,
+            default_assignee=routing.default_assignee,
+            valid_names=routing.valid_names,
         )
-        if isinstance(assignee, str) and assignee.strip() and assignee.strip() not in routing.valid_names:
+        if (
+            isinstance(assignee, str)
+            and assignee.strip()
+            and assignee.strip() not in routing.valid_names
+        ):
             logger.info(
                 "decompose: task %s child %d picked unknown assignee %r — "
                 "routing to default_assignee %r",
-                task_id, idx, assignee, routing.default_assignee,
+                task_id,
+                idx,
+                assignee,
+                routing.default_assignee,
             )
         parents = entry.get("parents") or []
         if not isinstance(parents, list):
             parents = []
-        children.append({
-            "title": title.strip()[:200],
-            "body": body.strip() if isinstance(body, str) else "",
-            "assignee": chosen,
-            # Drop non-int, out-of-range and self parent indices.
-            "parents": [p for p in parents if isinstance(p, int) and 0 <= p < len(raw_tasks) and p != idx],
-        })
+        children.append(
+            {
+                "title": title.strip()[:200],
+                "body": body.strip() if isinstance(body, str) else "",
+                "assignee": chosen,
+                # Drop non-int, out-of-range and self parent indices.
+                "parents": [
+                    p
+                    for p in parents
+                    if isinstance(p, int) and 0 <= p < len(raw_tasks) and p != idx
+                ],
+            }
+        )
     return children, ""
 
 
-def _apply_fanout(task_id: str, parsed: dict, routing: _Routing, author: str) -> DecomposeOutcome:
+def _apply_fanout(
+    task_id: str, parsed: dict, routing: _Routing, author: str
+) -> DecomposeOutcome:
     raw_tasks = parsed.get("tasks") or []
     if not isinstance(raw_tasks, list) or not raw_tasks:
-        return DecomposeOutcome(task_id, False, "decomposer returned fanout=true with empty tasks list")
+        return DecomposeOutcome(
+            task_id, False, "decomposer returned fanout=true with empty tasks list"
+        )
     children, reason = _clean_children(task_id, raw_tasks, routing)
     if reason:
         return DecomposeOutcome(task_id, False, reason)
@@ -294,9 +347,15 @@ def _apply_fanout(task_id: str, parsed: dict, routing: _Routing, author: str) ->
         logger.exception("decompose: DB error on task %s", task_id)
         return DecomposeOutcome(task_id, False, f"DB error: {type(exc).__name__}")
     if child_ids is None:
-        return DecomposeOutcome(task_id, False, "task already decomposed or moved out of triage")
+        return DecomposeOutcome(
+            task_id, False, "task already decomposed or moved out of triage"
+        )
     return DecomposeOutcome(
-        task_id, True, f"decomposed into {len(child_ids)} children", fanout=True, child_ids=child_ids,
+        task_id,
+        True,
+        f"decomposed into {len(child_ids)} children",
+        fanout=True,
+        child_ids=child_ids,
     )
 
 
@@ -315,13 +374,18 @@ def decompose_task(
 
     routing = _load_routing(root_assignee=task.assignee)
     raw, reason = _call_aux(
-        "decompose", task_id, aux_task="kanban_decomposer", system=_SYSTEM_PROMPT,
+        "decompose",
+        task_id,
+        aux_task="kanban_decomposer",
+        system=_SYSTEM_PROMPT,
         user=_USER_TEMPLATE.format(
             **_task_prompt_fields(task),
             roster=_format_roster(routing.roster),
             default_assignee=routing.default_assignee,
         ),
-        max_tokens=4000, timeout=timeout or 180, log=logger,
+        max_tokens=4000,
+        timeout=timeout or 180,
+        log=logger,
     )
     if raw is None:
         return DecomposeOutcome(task_id, False, reason)

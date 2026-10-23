@@ -31,7 +31,9 @@ class CapturedCDPInvalid(RuntimeError):
 class CapturedCDP:
     """A CDP channel pinned to one supervisor connection. Build via ``SUPERVISOR_REGISTRY.capture``."""
 
-    def __init__(self, supervisor: CDPSupervisor, registry: _SupervisorRegistry) -> None:
+    def __init__(
+        self, supervisor: CDPSupervisor, registry: _SupervisorRegistry
+    ) -> None:
         # Runs on the supervisor loop (see ``capture``) so ws and session id are one snapshot.
         self._supervisor = supervisor
         self._registry = registry
@@ -46,16 +48,29 @@ class CapturedCDP:
     def is_valid(self) -> bool:
         """True while the captured connection is still the supervisor's live one."""
         sup = self._supervisor
-        return (self._registry.get(self.task_id) is sup and sup._active and not sup._stop_requested
-                and sup._ws is self._ws and self._loop.is_running())
+        return (
+            self._registry.get(self.task_id) is sup
+            and sup._active
+            and not sup._stop_requested
+            and sup._ws is self._ws
+            and self._loop.is_running()
+        )
 
     def _invalid(self) -> CapturedCDPInvalid:
-        return CapturedCDPInvalid(f"captured CDP connection for task {self.task_id!r} is gone "
-                                  "(supervisor reconnected, stopped or was replaced); capture again")
+        return CapturedCDPInvalid(
+            f"captured CDP connection for task {self.task_id!r} is gone "
+            "(supervisor reconnected, stopped or was replaced); capture again"
+        )
 
-    async def _send(self, method: str, params: Optional[dict[str, Any]],
-                    session_id: Optional[str], timeout: Optional[float],
-                    deadline: Optional[float], before_send: Optional[Callable[[], None]]) -> dict[str, Any]:
+    async def _send(
+        self,
+        method: str,
+        params: Optional[dict[str, Any]],
+        session_id: Optional[str],
+        timeout: Optional[float],
+        deadline: Optional[float],
+        before_send: Optional[Callable[[], None]],
+    ) -> dict[str, Any]:
         # ``_cdp`` reaches its send without awaiting, so this check and the send run in one
         # loop step: a reconnect cannot swap the socket in between.
         if not self.is_valid():
@@ -73,7 +88,9 @@ class CapturedCDP:
         if not self.is_valid():
             raise self._invalid()
         try:
-            return await self._supervisor._cdp(method, params, session_id=session_id, timeout=timeout)
+            return await self._supervisor._cdp(
+                method, params, session_id=session_id, timeout=timeout
+            )
         except Exception:
             # A reply lost to a dropped socket (timeout, ConnectionError, ConnectionClosed)
             # surfaces as invalidation; a CDP error on a live connection passes through.
@@ -81,9 +98,15 @@ class CapturedCDP:
                 raise self._invalid() from None
             raise
 
-    def call(self, method: str, params: Optional[dict[str, Any]] = None, *,
-             session_id: Optional[str] = None, timeout: Optional[float] = 10.0,
-             before_send: Optional[Callable[[], None]] = None) -> dict[str, Any]:
+    def call(
+        self,
+        method: str,
+        params: Optional[dict[str, Any]] = None,
+        *,
+        session_id: Optional[str] = None,
+        timeout: Optional[float] = 10.0,
+        before_send: Optional[Callable[[], None]] = None,
+    ) -> dict[str, Any]:
         """Send ``method`` on the captured connection and return the raw CDP reply
         (``{"id", "result"}``). ``session_id=None`` targets the browser endpoint;
         pass ``page_session_id`` (or a session you attached) for page domains.
@@ -105,10 +128,16 @@ class CapturedCDP:
         capture/CDP API. This is not origin or target-ownership authorization.
         """
         if timeout is not None:
-            if (isinstance(timeout, bool) or not isinstance(timeout, (int, float))
-                    or not math.isfinite(timeout) or timeout <= 0
-                    or timeout > threading.TIMEOUT_MAX - 1.0):
-                raise ValueError("Captured CDP timeout must be positive and finite, or None")
+            if (
+                isinstance(timeout, bool)
+                or not isinstance(timeout, (int, float))
+                or not math.isfinite(timeout)
+                or timeout <= 0
+                or timeout > threading.TIMEOUT_MAX - 1.0
+            ):
+                raise ValueError(
+                    "Captured CDP timeout must be positive and finite, or None"
+                )
         if before_send is not None and not callable(before_send):
             raise TypeError("before_send must be callable")
         deadline = None if timeout is None else time.monotonic() + timeout
@@ -117,12 +146,17 @@ class CapturedCDP:
         except RuntimeError:
             running = None
         if running is self._loop:
-            raise RuntimeError("CapturedCDP.call() blocks and cannot run on the supervisor loop")
+            raise RuntimeError(
+                "CapturedCDP.call() blocks and cannot run on the supervisor loop"
+            )
         if not self.is_valid():
             raise self._invalid()
         from agent.async_utils import safe_schedule_threadsafe
 
-        fut = safe_schedule_threadsafe(self._send(method, params, session_id, timeout, deadline, before_send), self._loop)
+        fut = safe_schedule_threadsafe(
+            self._send(method, params, session_id, timeout, deadline, before_send),
+            self._loop,
+        )
         if fut is None:
             raise self._invalid()
         while timeout is None:
@@ -140,7 +174,9 @@ class CapturedCDP:
             raise TimeoutError(f"CDP {method} got no reply within {timeout}s") from None
 
 
-def capture(registry: _SupervisorRegistry, task_id: str, *, timeout: float = 10.0) -> CapturedCDP:
+def capture(
+    registry: _SupervisorRegistry, task_id: str, *, timeout: float = 10.0
+) -> CapturedCDP:
     """Pin the running supervisor for ``task_id``; never starts, reconnects or refocuses one."""
     from tools.browser_supervisor import _LoopUnavailable, _schedule
 
@@ -152,10 +188,14 @@ def capture(registry: _SupervisorRegistry, task_id: str, *, timeout: float = 10.
 
     async def _snapshot() -> CapturedCDP:
         if not sup._active or sup._ws is None or not sup._page_session_id:
-            raise CapturedCDPInvalid(f"browser supervisor for task {task_id!r} has no attached page")
+            raise CapturedCDPInvalid(
+                f"browser supervisor for task {task_id!r} has no attached page"
+            )
         return CapturedCDP(sup, registry)
 
     try:
         return _schedule(_snapshot(), loop, timeout=timeout)
     except _LoopUnavailable:
-        raise CapturedCDPInvalid(f"no running browser supervisor for task {task_id!r}") from None
+        raise CapturedCDPInvalid(
+            f"no running browser supervisor for task {task_id!r}"
+        ) from None

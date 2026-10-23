@@ -64,20 +64,30 @@ def _local_repo(path: Path, *init_args):
     env = _git_env()
 
     def run(*args):
-        subprocess.run(
-            [git, *args], cwd=path, check=True, capture_output=True, env=env
-        )
+        subprocess.run([git, *args], cwd=path, check=True, capture_output=True, env=env)
 
     def head():
         return subprocess.run(
-            [git, "rev-parse", "HEAD"], cwd=path, check=True,
-            capture_output=True, text=True, env=env,
+            [git, "rev-parse", "HEAD"],
+            cwd=path,
+            check=True,
+            capture_output=True,
+            text=True,
+            env=env,
         ).stdout.strip()
 
     path.mkdir(parents=True)
     run("init", "-q", *init_args)
-    run("-c", "user.email=t@e", "-c", "user.name=t",
-        "commit", "--allow-empty", "-qm", "one")
+    run(
+        "-c",
+        "user.email=t@e",
+        "-c",
+        "user.name=t",
+        "commit",
+        "--allow-empty",
+        "-qm",
+        "one",
+    )
     return run, head
 
 
@@ -93,7 +103,8 @@ def test_manual_reports_not_updatable():
 def test_drift_reports_reinstall_remedy():
     r = check_provenanced(
         _prov(ProvenanceClass.DRIFT, row={"source": "https://x/y"}),
-        fetch=_no, ls_remote=_no,
+        fetch=_no,
+        ls_remote=_no,
     )
     assert "reinstall" in r.reason
 
@@ -265,9 +276,7 @@ def test_feed_git_sha_against_tagged_revision_is_unknown(tmp_path):
         encoding="utf-8",
     )
     feed = "version: 1.2.0\nartifacts:\n  git: %s\n" % ("c" * 40)
-    prov = _git_prov(
-        update_url="https://feed.example/f.yml", revision="v1.2.0"
-    )
+    prov = _git_prov(update_url="https://feed.example/f.yml", revision="v1.2.0")
     prov.path = plug
     r = check_provenanced(prov, fetch=lambda u: feed, ls_remote=_no)
     assert r.update_available is None
@@ -276,7 +285,9 @@ def test_feed_git_sha_against_tagged_revision_is_unknown(tmp_path):
 def test_malformed_yaml_feed_reports_unknown_row(tmp_path):
     plug = tmp_path / "plug"
     plug.mkdir()
-    (plug / "plugin.yaml").write_text("update_url: https://feed.example/f.yml\n", encoding="utf-8")
+    (plug / "plugin.yaml").write_text(
+        "update_url: https://feed.example/f.yml\n", encoding="utf-8"
+    )
     prov = _git_prov(update_url="https://feed.example/f.yml")
     prov.path = plug
     result = check_provenanced(prov, fetch=lambda _: "version: [", ls_remote=_no)
@@ -298,7 +309,8 @@ def test_ls_remote_lifecycle_current_available_applied(tmp_path, monkeypatch):
     run, head = _local_repo(repo, "-b", "main")
     sha1 = head()
     from clawk_cli.plugins_updates import default_ls_remote
-    monkeypatch.setattr('clawk_cli.plugins_cmd._resolve_git_executable', _git_exe)
+
+    monkeypatch.setattr("clawk_cli.plugins_cmd._resolve_git_executable", _git_exe)
     ls_remote = default_ls_remote
 
     plug = tmp_path / "plug"
@@ -312,8 +324,16 @@ def test_ls_remote_lifecycle_current_available_applied(tmp_path, monkeypatch):
 
     assert check().update_available is False  # current
 
-    run("-c", "user.email=t@e", "-c", "user.name=t",
-        "commit", "--allow-empty", "-qm", "two")
+    run(
+        "-c",
+        "user.email=t@e",
+        "-c",
+        "user.name=t",
+        "commit",
+        "--allow-empty",
+        "-qm",
+        "two",
+    )
     sha2 = head()
     assert sha2 != sha1
     r = check()
@@ -323,7 +343,10 @@ def test_ls_remote_lifecycle_current_available_applied(tmp_path, monkeypatch):
     # once the update pipeline has recorded the new revision, converged
     prov3 = _git_prov(revision=sha2, source=str(repo))
     prov3.path = plug
-    assert check_provenanced(prov3, fetch=_no, ls_remote=ls_remote).update_available is False
+    assert (
+        check_provenanced(prov3, fetch=_no, ls_remote=ls_remote).update_available
+        is False
+    )
 
 
 def test_feed_fetch_failure_is_row_level_reason(tmp_path):
@@ -371,10 +394,13 @@ def test_real_ls_remote_against_bare_repo(tmp_path, monkeypatch):
     env = _git_env()
     subprocess.run(
         [git, "init", "--bare", "-q", str(source)],
-        check=True, capture_output=True, env=env,
+        check=True,
+        capture_output=True,
+        env=env,
     )
     from clawk_cli.plugins_updates import default_ls_remote
-    monkeypatch.setattr('clawk_cli.plugins_cmd._resolve_git_executable', _git_exe)
+
+    monkeypatch.setattr("clawk_cli.plugins_cmd._resolve_git_executable", _git_exe)
     assert default_ls_remote(str(source)) == ""
 
 
@@ -453,8 +479,15 @@ def test_run_checks_never_mutates(tmp_path):
     plug = plugins / "plug"
     (plug / ".git").mkdir(parents=True)  # git-class, not drift
     (plugins / ".install-metadata.json").write_text(
-        json.dumps({"plug": {"pinned": False, "revision": "a" * 40,
-                             "source": "https://example/o/r"}}),
+        json.dumps(
+            {
+                "plug": {
+                    "pinned": False,
+                    "revision": "a" * 40,
+                    "source": "https://example/o/r",
+                }
+            }
+        ),
         encoding="utf-8",
     )
     before = (plugins / ".install-metadata.json").read_text(encoding="utf-8")
@@ -469,7 +502,9 @@ def test_run_checks_never_mutates(tmp_path):
     assert (plugins / ".install-metadata.json").read_text(encoding="utf-8") == before
 
 
-@pytest.mark.parametrize("url", ["http://feed.example/f.yml", "file:///etc/passwd", "ftp://x/f.yml", ""])
+@pytest.mark.parametrize(
+    "url", ["http://feed.example/f.yml", "file:///etc/passwd", "ftp://x/f.yml", ""]
+)
 def test_default_fetch_refuses_non_https_feeds_before_any_request(monkeypatch, url):
     """Rows saved before the https rule (or hand-edited) still reach the real fetcher from the
     gateway tick; the sink refuses them instead of opening the URL."""
@@ -516,7 +551,8 @@ def feed_redirect_server(monkeypatch):
     # Only the HTTPS transport is replaced; the redirect handler and HTTP
     # transport stay real, so the server can observe a forbidden HTTP hop.
     monkeypatch.setattr(
-        urllib.request.HTTPSHandler, "https_open",
+        urllib.request.HTTPSHandler,
+        "https_open",
         lambda self, req: self.do_open(http.client.HTTPConnection, req),
     )
     server = ThreadingHTTPServer(("127.0.0.1", 0), FeedHandler)

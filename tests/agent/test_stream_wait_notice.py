@@ -1,4 +1,5 @@
 """Resumed chunks clear only the stream monitor's own silence notice."""
+
 from types import SimpleNamespace
 
 import pytest
@@ -7,8 +8,12 @@ from agent import chat_completion_helpers as h
 from agent import chat_completion_local
 
 
-@pytest.mark.parametrize("local_loading,heartbeat_race", [(False, False), (True, False), (False, True)])
-def test_resumed_chunks_clear_wait_without_erasing_local_load(monkeypatch, local_loading, heartbeat_race):
+@pytest.mark.parametrize(
+    "local_loading,heartbeat_race", [(False, False), (True, False), (False, True)]
+)
+def test_resumed_chunks_clear_wait_without_erasing_local_load(
+    monkeypatch, local_loading, heartbeat_race
+):
     call = h._StreamingCall.__new__(h._StreamingCall)
     notices, touches = [], []
     now = [1000.0]
@@ -22,8 +27,11 @@ def test_resumed_chunks_clear_wait_without_erasing_local_load(monkeypatch, local
     call.last_chunk_time = {"t": now[0]}
     call._stream_stale_timeout = 180.0
     loading = "Loading local model weights"
-    monkeypatch.setattr(chat_completion_local, "_managed_local_load_notice",
-                        lambda *args: loading if now[0] >= 1060.6 else None)
+    monkeypatch.setattr(
+        chat_completion_local,
+        "_managed_local_load_notice",
+        lambda *args: loading if now[0] >= 1060.6 else None,
+    )
     monkeypatch.setattr(h.time, "time", lambda: now[0])
 
     if heartbeat_race:

@@ -13,15 +13,24 @@ from pm.lock import Lockfile
 from tests.pm.test_pm_authority import core_env, pm_env, served
 
 
-def test_installed_lookup_prefers_current_pin_then_recorded_fallback(pm_env, tmp_path, monkeypatch):
+def test_installed_lookup_prefers_current_pin_then_recorded_fallback(
+    pm_env, tmp_path, monkeypatch
+):
     ensure("faketool", explicit=True)
     original = pm.installed_package("faketool")
     assert original is not None and original.binary.is_file()
 
     lock = Lockfile(pm_env["lockfile_path"])
-    lock.set_pin("faketool", "2.0", {"any": {
-        "url": pm_env["base_url"] + "/faketool-2.0.tar.gz", "sha256": "b" * 64,
-    }})
+    lock.set_pin(
+        "faketool",
+        "2.0",
+        {
+            "any": {
+                "url": pm_env["base_url"] + "/faketool-2.0.tar.gz",
+                "sha256": "b" * 64,
+            }
+        },
+    )
     lock.save()
     assert pm.installed_package("faketool") is None
     assert pm.installed_package("faketool", allow_outdated=True) == original

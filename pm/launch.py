@@ -1,10 +1,12 @@
 """CLI entry after the isolated interpreter has been selected."""
+
 from pathlib import Path
 import sys
 
 import truststore
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 
 def main() -> int:
     # PM's import closure constructs HTTPS clients; install platform trust
@@ -15,6 +17,7 @@ def main() -> int:
 
     lease_current_runtime()
     return cli_main()
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

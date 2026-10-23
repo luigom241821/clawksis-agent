@@ -17,7 +17,10 @@ logger = logging.getLogger(__name__)
 _INSTALL_HINT = "Yuanbao: websockets not installed. Run: pip install websockets"
 
 _SETUP_PLATFORM = {
-    "key": "yuanbao", "label": "Yuanbao", "emoji": "💎", "token_var": "YUANBAO_APP_ID",
+    "key": "yuanbao",
+    "label": "Yuanbao",
+    "emoji": "💎",
+    "token_var": "YUANBAO_APP_ID",
     "setup_instructions": [
         "1. Download the Yuanbao app from https://yuanbao.tencent.com/",
         "2. In the app, go to PAI → My Bot and create a new bot",
@@ -25,10 +28,18 @@ _SETUP_PLATFORM = {
         "4. Enter them below and Clawksis will connect automatically over WebSocket",
     ],
     "vars": [
-        {"name": "YUANBAO_APP_ID", "prompt": "App ID", "password": False,
-         "help": "The App ID from your Yuanbao IM Bot credentials."},
-        {"name": "YUANBAO_APP_SECRET", "prompt": "App Secret", "password": True,
-         "help": "The App Secret (used for HMAC signing) from your Yuanbao IM Bot."},
+        {
+            "name": "YUANBAO_APP_ID",
+            "prompt": "App ID",
+            "password": False,
+            "help": "The App ID from your Yuanbao IM Bot credentials.",
+        },
+        {
+            "name": "YUANBAO_APP_SECRET",
+            "prompt": "App Secret",
+            "password": True,
+            "help": "The App Secret (used for HMAC signing) from your Yuanbao IM Bot.",
+        },
     ],
 }
 
@@ -41,6 +52,7 @@ def check_yuanbao_requirements() -> bool:
 def interactive_setup() -> None:
     """``clawk gateway setup`` flow: the standard App ID / App Secret prompts."""
     from clawk_cli import gateway as gateway_mod
+
     gateway_mod._setup_standard_platform(dict(_SETUP_PLATFORM))
 
 
@@ -48,18 +60,29 @@ def _is_connected(config) -> bool:
     """Configured = App ID (or legacy App Key) + App Secret, from config extras or env."""
     extra = getattr(config, "extra", {}) or {}
     import clawk_cli.gateway as gateway_mod
-    app_id = (extra.get("app_id") or gateway_mod.get_env_value("YUANBAO_APP_ID")
-              or gateway_mod.get_env_value("YUANBAO_APP_KEY") or "")
-    secret = extra.get("app_secret") or gateway_mod.get_env_value("YUANBAO_APP_SECRET") or ""
+
+    app_id = (
+        extra.get("app_id")
+        or gateway_mod.get_env_value("YUANBAO_APP_ID")
+        or gateway_mod.get_env_value("YUANBAO_APP_KEY")
+        or ""
+    )
+    secret = (
+        extra.get("app_secret") or gateway_mod.get_env_value("YUANBAO_APP_SECRET") or ""
+    )
     return bool(str(app_id).strip() and str(secret).strip())
 
 
-async def _standalone_send(pconfig, chat_id, message, *, thread_id=None, media_files=None, **_kwargs):
+async def _standalone_send(
+    pconfig, chat_id, message, *, thread_id=None, media_files=None, **_kwargs
+):
     """standalone_sender_fn: send via the running adapter's persistent WebSocket (no throwaway
     client possible — Yuanbao needs the live signed connection)."""
     adapter = YuanbaoAdapter.get_active()
     if adapter is None:
-        return send_error("Yuanbao adapter is not running. Start the gateway with yuanbao platform enabled first.")
+        return send_error(
+            "Yuanbao adapter is not running. Start the gateway with yuanbao platform enabled first."
+        )
     try:
         return await adapter._outbound.sender.send_direct(chat_id, message, media_files)
     except Exception as e:
@@ -93,19 +116,30 @@ def _parse_send_target(ref):
 def register(ctx) -> None:
     """Plugin entry point — called by the Clawksis plugin system."""
     from . import gateway_env  # env -> GatewayConfig bridge (gateway.config_env)
+
     ctx.register_platform(
         target_ref_syntax_fn=_parse_send_target,
-        standalone_send=StandaloneSendPolicy(label="Yuanbao", media=True, text_direct=True),
-        name="yuanbao", label="Yuanbao", adapter_factory=YuanbaoAdapter,
+        standalone_send=StandaloneSendPolicy(
+            label="Yuanbao", media=True, text_direct=True
+        ),
+        name="yuanbao",
+        label="Yuanbao",
+        adapter_factory=YuanbaoAdapter,
         dashboard_label="Yuanbao (元宝)",
         dashboard_description="Connect Clawksis to Tencent Yuanbao.",
         dashboard_required_env=(),
-        check_fn=check_yuanbao_requirements, is_connected=_is_connected,
+        check_fn=check_yuanbao_requirements,
+        is_connected=_is_connected,
         config_connected_fn=config_connected_extra("app_id", "app_secret"),
-        required_env=["YUANBAO_APP_ID", "YUANBAO_APP_SECRET"], install_hint=_INSTALL_HINT,
-        setup_fn=interactive_setup, cron_deliver_env_var="YUANBAO_HOME_CHANNEL",
-        standalone_sender_fn=_standalone_send, emoji="💎", allow_update_command=False,
+        required_env=["YUANBAO_APP_ID", "YUANBAO_APP_SECRET"],
+        install_hint=_INSTALL_HINT,
+        setup_fn=interactive_setup,
+        cron_deliver_env_var="YUANBAO_HOME_CHANNEL",
+        standalone_sender_fn=_standalone_send,
+        emoji="💎",
+        allow_update_command=False,
         platform_hint=_PLATFORM_HINT,
         env_overrides=gateway_env.ENV_OVERRIDES,
-        env_enable_credentials=gateway_env.ENV_ENABLE_CREDENTIALS, **gateway_env.AUTHZ,
+        env_enable_credentials=gateway_env.ENV_ENABLE_CREDENTIALS,
+        **gateway_env.AUTHZ,
     )

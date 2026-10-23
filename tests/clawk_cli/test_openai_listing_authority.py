@@ -24,7 +24,9 @@ from clawk_cli import models as models_mod
 from clawk_cli import models_validate
 
 
-def _validate(requested: str, base_url: str, live: list[str], provider: str = "openai-api"):
+def _validate(
+    requested: str, base_url: str, live: list[str], provider: str = "openai-api"
+):
     with mock_patch.object(models_mod, "fetch_api_models", return_value=live):
         return models_validate.validate_requested_model(
             requested,
@@ -48,7 +50,9 @@ class TestOfficialHostAuthority:
         assert result["accepted"] is False
 
     def test_present_model_accepted_on_regional_host(self):
-        result = _validate("gpt-5.6-terra", "https://us.api.openai.com/v1", live=["gpt-5.6-terra"])
+        result = _validate(
+            "gpt-5.6-terra", "https://us.api.openai.com/v1", live=["gpt-5.6-terra"]
+        )
         assert result["accepted"] is True
 
 
@@ -57,5 +61,7 @@ class TestCuratedFallbackPreserved:
         # A curated model absent from a custom proxy's (often incomplete)
         # listing keeps the #46850 soft-accept.
         curated = models_mod._PROVIDER_MODELS["openai-api"][0]
-        result = _validate(curated, "https://proxy.corp.test/v1", live=["some-other-model"])
+        result = _validate(
+            curated, "https://proxy.corp.test/v1", live=["some-other-model"]
+        )
         assert result["accepted"] is True

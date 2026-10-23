@@ -28,13 +28,27 @@ from pathlib import Path
 from typing import Optional
 
 # Dependency stores and caches: never descended, not even to look for an embedded repository.
-_OPAQUE_DIRS = frozenset({
-    "node_modules", ".venv", "venv", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache",
-    ".tox", ".next", ".turbo", ".cache", ".gradle",
-})
+_OPAQUE_DIRS = frozenset(
+    {
+        "node_modules",
+        ".venv",
+        "venv",
+        "__pycache__",
+        ".pytest_cache",
+        ".mypy_cache",
+        ".ruff_cache",
+        ".tox",
+        ".next",
+        ".turbo",
+        ".cache",
+        ".gradle",
+    }
+)
 _PER_WORKTREE_REFS = ("refs/worktree/", "refs/bisect/", "refs/rewritten/")
-_MAX_ENTRIES = 200_000   # per tree; past this an embedded repository cannot be ruled out -> keep
-_NAMED = 5               # offenders named in a reason
+_MAX_ENTRIES = (
+    200_000  # per tree; past this an embedded repository cannot be ruled out -> keep
+)
+_NAMED = 5  # offenders named in a reason
 
 KEEP_UNARCHIVABLE = "keep-unarchivable"
 KEEP_WORKTREE_REFS = "keep-worktree-refs"
@@ -44,11 +58,13 @@ KEEP_SUBMODULE_WORK = "keep-submodule-work"
 
 def _env(wt: Path) -> dict:
     from clawk_cli.worktree_archive import _env as archive_env
+
     return {**archive_env(wt), "GIT_OPTIONAL_LOCKS": "0"}
 
 
 def _git(args, wt: Path, env, timeout: float = 120) -> str:
     from clawk_cli.worktree_archive import _ok
+
     return _ok(args, wt, env, timeout=timeout)
 
 
@@ -86,13 +102,35 @@ def _ignored_entries(wt: Path, env) -> list[str]:
     hits an internal error on some trees (git 2.53: "directory entry not superset of prefix");
     ``status --ignored`` reports the same set."""
     from clawk_cli.worktree_archive import ArchiveError
+
     try:
-        out = _git(["ls-files", "--others", "--ignored", "--exclude-standard", "--directory",
-                    "--no-empty-directory", "-z"], wt, env)
+        out = _git(
+            [
+                "ls-files",
+                "--others",
+                "--ignored",
+                "--exclude-standard",
+                "--directory",
+                "--no-empty-directory",
+                "-z",
+            ],
+            wt,
+            env,
+        )
         return [p for p in out.split("\0") if p]
     except ArchiveError:
-        out = _git(["status", "--porcelain", "-z", "--ignored=traditional", "--untracked-files=normal",
-                    "--no-renames"], wt, env)
+        out = _git(
+            [
+                "status",
+                "--porcelain",
+                "-z",
+                "--ignored=traditional",
+                "--untracked-files=normal",
+                "--no-renames",
+            ],
+            wt,
+            env,
+        )
         return [e[3:] for e in out.split("\0") if e.startswith("!! ")]
 
 
@@ -112,7 +150,11 @@ def scan_tree(wt_path) -> _Scan:
     for rel in _ignored_entries(wt, env):
         rel_clean = rel.rstrip("/")
         path = wt / rel_clean
-        if not rel.endswith("/") or path.is_symlink() or rel_clean.rsplit("/", 1)[-1] in _OPAQUE_DIRS:
+        if (
+            not rel.endswith("/")
+            or path.is_symlink()
+            or rel_clean.rsplit("/", 1)[-1] in _OPAQUE_DIRS
+        ):
             continue
         if (path / ".git").exists():
             scan.embedded.append(rel_clean)
@@ -148,22 +190,42 @@ def hidden_index_edits(wt_path, env=None) -> list[str]:
     for rel, mode, sha in (f for f in flagged if not isinstance(f, str)):
         path = wt / rel
         if mode == "120000":
-            data = os.readlink(path).encode("utf-8", "surrogateescape") if path.is_symlink() else None
+            data = (
+                os.readlink(path).encode("utf-8", "surrogateescape")
+                if path.is_symlink()
+                else None
+            )
         else:
-            data = None if path.is_symlink() or not path.is_file() else path.read_bytes()
+            data = (
+                None if path.is_symlink() or not path.is_file() else path.read_bytes()
+            )
         if data is None:
             edits.append(rel)  # type changed
             continue
-        if _hash(wt, env, data, rel, raw=True) != sha and _hash(wt, env, data, rel, raw=False) != sha:
+        if (
+            _hash(wt, env, data, rel, raw=True) != sha
+            and _hash(wt, env, data, rel, raw=False) != sha
+        ):
             edits.append(rel)
     return edits
 
 
 def _hash(wt: Path, env, data: bytes, rel: str, *, raw: bool) -> str:
     args = ["hash-object", "--stdin"] + (["--no-filters"] if raw else [f"--path={rel}"])
-    result = subprocess.run(["git", *args], cwd=str(wt), env=env, input=data, capture_output=True,
-                            timeout=60, check=False)
-    return result.stdout.decode("ascii", "replace").strip() if result.returncode == 0 else ""
+    result = subprocess.run(
+        ["git", *args],
+        cwd=str(wt),
+        env=env,
+        input=data,
+        capture_output=True,
+        timeout=60,
+        check=False,
+    )
+    return (
+        result.stdout.decode("ascii", "replace").strip()
+        if result.returncode == 0
+        else ""
+    )
 
 
 def private_worktree_refs(wt_path, env=None) -> list[str]:
@@ -173,12 +235,31 @@ def private_worktree_refs(wt_path, env=None) -> list[str]:
     """
     wt = Path(wt_path)
     env = env or _env(wt)
-    out = _git(["for-each-ref", "--format=%(refname)%00%(objectname)", *_PER_WORKTREE_REFS], wt, env)
+    out = _git(
+        ["for-each-ref", "--format=%(refname)%00%(objectname)", *_PER_WORKTREE_REFS],
+        wt,
+        env,
+    )
     private = []
     for line in out.splitlines():
         name, _, sha = line.partition("\0")
-        if sha and _git(["rev-list", "--max-count=1", sha, "--not", "--branches", "--tags", "--remotes",
-                         "--glob=refs/clawk/archive/*"], wt, env).strip():
+        if (
+            sha
+            and _git(
+                [
+                    "rev-list",
+                    "--max-count=1",
+                    sha,
+                    "--not",
+                    "--branches",
+                    "--tags",
+                    "--remotes",
+                    "--glob=refs/clawk/archive/*",
+                ],
+                wt,
+                env,
+            ).strip()
+        ):
             private.append(name)
     return private
 
@@ -189,8 +270,9 @@ def _named(paths: list, more: bool = False) -> str:
     return ", ".join(paths[:_NAMED]) + tail
 
 
-def removal_blocker(wt_path, *, skipped: Optional[list] = None, gitlinks: bool = False
-                    ) -> Optional[tuple[str, str]]:
+def removal_blocker(
+    wt_path, *, skipped: Optional[list] = None, gitlinks: bool = False
+) -> Optional[tuple[str, str]]:
     """``(keep-action, reason)`` when removing *wt_path* would lose something, else None.
 
     *skipped* is the snapshot's ``skipped_untracked`` list (or the oversize files a preflight
@@ -198,20 +280,33 @@ def removal_blocker(wt_path, *, skipped: Optional[list] = None, gitlinks: bool =
     or retained module repository blocks. Any failure to verify blocks. Read-only.
     """
     from clawk_cli.worktree_archive import ArchiveError, submodule_work
+
     try:
         why = submodule_work(wt_path, gitlinks=gitlinks)
         if why:
             return KEEP_SUBMODULE_WORK, why
         scan = scan_tree(wt_path)
         if scan.embedded:
-            return KEEP_UNARCHIVABLE, f"embedded repository {scan.embedded[0]} cannot be archived"
+            return (
+                KEEP_UNARCHIVABLE,
+                f"embedded repository {scan.embedded[0]} cannot be archived",
+            )
         if scan.truncated:
-            return KEEP_UNARCHIVABLE, f"over {_MAX_ENTRIES} ignored entries; cannot rule out an embedded repository"
+            return (
+                KEEP_UNARCHIVABLE,
+                f"over {_MAX_ENTRIES} ignored entries; cannot rule out an embedded repository",
+            )
         refs = private_worktree_refs(wt_path)
         if refs:
-            return KEEP_WORKTREE_REFS, f"per-worktree ref {_named(refs)} holds commits no branch has"
+            return (
+                KEEP_WORKTREE_REFS,
+                f"per-worktree ref {_named(refs)} holds commits no branch has",
+            )
         if skipped:
-            return KEEP_LARGE_UNTRACKED, f"untracked file(s) over the archive size cap: {_named([s['path'] for s in skipped])}"
+            return (
+                KEEP_LARGE_UNTRACKED,
+                f"untracked file(s) over the archive size cap: {_named([s['path'] for s in skipped])}",
+            )
     except (ArchiveError, OSError, subprocess.SubprocessError) as exc:
         return KEEP_UNARCHIVABLE, f"could not verify the tree is safe to remove: {exc}"
     return None

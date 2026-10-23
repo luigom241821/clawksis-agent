@@ -5,6 +5,7 @@ SQLite guard detects damage without repairing it. Boot bounds these home
 steps per revision. The explicit scope CLI also provisions runtimes through
 PM. Launcher publication belongs to clawk_cli._launchers.
 """
+
 from __future__ import annotations
 
 import logging
@@ -20,10 +21,10 @@ from pm.paths import install_root
 logger = logging.getLogger(__name__)
 
 
-
 # ---------------------------------------------------------------------------
 # config migration (backup / migrate / verify / restore)
 # ---------------------------------------------------------------------------
+
 
 def _backup_path(path: Path, stamp: str) -> Path:
     base = path.with_name(f"{path.name}.bak-{stamp}")
@@ -106,6 +107,7 @@ def step_migrate_config() -> dict:
 # skills sync (this home only — profiles self-serve on their own boot)
 # ---------------------------------------------------------------------------
 
+
 def step_sync_skills() -> dict:
     """Sync bundled skills into the active home. Content-diffed, respects
     user modifications and deletions; converges on repeat runs."""
@@ -122,6 +124,7 @@ def step_sync_skills() -> dict:
 # ---------------------------------------------------------------------------
 # state.db integrity guard (#68474 — check-only variant)
 # ---------------------------------------------------------------------------
+
 
 def step_state_db_guard() -> dict:
     """Verify the active home's state.db is intact.
@@ -201,6 +204,7 @@ def step_adopt_blessed_checkout(project_root: Path | None = None) -> dict:
     if not (root / ".git").exists():
         return {"ok": True, "skipped": "not-a-checkout"}
     from pm.paths import install_stamp_path
+
     stamp_path = install_stamp_path(root)
     if stamp_path.exists():
         return {"ok": True, "skipped": "already-stamped"}
@@ -305,14 +309,11 @@ HOME_STEPS: tuple = (
 
 # Startup skill syncing belongs to each entry point. Boot bootstrap must
 # not repeat it. The explicit scope CLI includes the skills step.
-BOOT_HOME_STEPS: tuple = tuple(
-    step for step in HOME_STEPS if step[0] != "sync_skills"
-)
+BOOT_HOME_STEPS: tuple = tuple(step for step in HOME_STEPS if step[0] != "sync_skills")
 
 # Only the explicit scope CLI installs runtimes. Boot checks PM at startup.
-MACHINE_STEPS: tuple = (
-    ("provision_runtimes", step_provision_runtimes),
-)
+MACHINE_STEPS: tuple = (("provision_runtimes", step_provision_runtimes),)
+
 
 def run_steps(steps: Iterable) -> dict:
     """Run steps in order; one failure never stops the rest.

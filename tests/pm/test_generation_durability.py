@@ -3,6 +3,7 @@ written after the finished tree has been flushed to disk. Otherwise a power loss
 mid-publish can persist the (fsynced) record while the venv's files are still in
 the page cache, and the next boot selects a half-written environment.
 """
+
 from __future__ import annotations
 
 import os
@@ -16,7 +17,9 @@ def _flush_probe(monkeypatch, observe):
     return seen
 
 
-def test_install_selection_is_committed_only_after_its_tree_is_flushed(tmp_path, monkeypatch):
+def test_install_selection_is_committed_only_after_its_tree_is_flushed(
+    tmp_path, monkeypatch
+):
     from pm import install
     from pm import paths
     from pm.environments import install_state_dir, runtime_facts_path, selected_venv
@@ -39,16 +42,25 @@ def test_install_selection_is_committed_only_after_its_tree_is_flushed(tmp_path,
     monkeypatch.setattr(venv, "apply", apply)
 
     def committed() -> bool:
-        return runtime_facts_path(repo).is_file() and selected_venv(repo) == candidate.resolve()
+        return (
+            runtime_facts_path(repo).is_file()
+            and selected_venv(repo) == candidate.resolve()
+        )
 
-    flushes = _flush_probe(monkeypatch, lambda: (candidate / "pyvenv.cfg").is_file() and not committed())
+    flushes = _flush_probe(
+        monkeypatch, lambda: (candidate / "pyvenv.cfg").is_file() and not committed()
+    )
     install.sync_venv([], explicit=True)
 
-    assert flushes == [True], "the tree must be flushed after it is complete and before it is selected"
+    assert flushes == [True], (
+        "the tree must be flushed after it is complete and before it is selected"
+    )
     assert selected_venv(repo) == candidate.resolve()
 
 
-def test_side_environment_selection_is_committed_only_after_its_tree_is_flushed(tmp_path, monkeypatch):
+def test_side_environment_selection_is_committed_only_after_its_tree_is_flushed(
+    tmp_path, monkeypatch
+):
     from pm import _uv, operations
 
     base = tmp_path / "base" / "python"
@@ -67,8 +79,14 @@ def test_side_environment_selection_is_committed_only_after_its_tree_is_flushed(
         built.append(environment)
         return python
 
-    flushes = _flush_probe(monkeypatch, lambda: bool(built) and not (root / "active.json").exists())
-    python = operations._ensure_generation("proof", root, {}, build, record={}, explicit=True)
+    flushes = _flush_probe(
+        monkeypatch, lambda: bool(built) and not (root / "active.json").exists()
+    )
+    python = operations._ensure_generation(
+        "proof", root, {}, build, record={}, explicit=True
+    )
 
-    assert flushes == [True], "the tree must be flushed after it is complete and before it is selected"
+    assert flushes == [True], (
+        "the tree must be flushed after it is complete and before it is selected"
+    )
     assert operations.environment_python("proof", root=root) == python

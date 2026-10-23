@@ -28,6 +28,7 @@ def _get_mcp_stderr_log() -> Any:
     multiplexed gateway's secondary profile must log under ITS ``logs/``, not the launch profile's). Must
     expose a real fd (asyncio wires the child's stderr to it); falls back to ``/dev/null``, then real stderr."""
     from clawk_constants import get_clawk_home, clawk_home_key, mkdir_under_clawk_home
+
     home_key = clawk_home_key()
     with _mcp_stderr_log_lock:
         fh = _mcp_stderr_log_fh.get(home_key)
@@ -36,7 +37,13 @@ def _get_mcp_stderr_log() -> Any:
                 log_dir = get_clawk_home() / "logs"
                 mkdir_under_clawk_home(log_dir)
                 # Line-buffered so output lands promptly; errors="replace" tolerates garbled binary.
-                fh = open(log_dir / "mcp-stderr.log", "a", encoding="utf-8", errors="replace", buffering=1)
+                fh = open(
+                    log_dir / "mcp-stderr.log",
+                    "a",
+                    encoding="utf-8",
+                    errors="replace",
+                    buffering=1,
+                )
                 fh.fileno()  # confirm a real fd before committing
             except Exception as exc:  # pragma: no cover — best-effort fallback
                 logger.debug("Failed to open MCP stderr log, using devnull: %s", exc)
@@ -60,7 +67,9 @@ def _close_mcp_stderr_logs(*, scope: Optional[str] = None) -> None:
             try:
                 fh.close()
             except OSError:
-                logger.warning("Could not close MCP stderr log for %s", key, exc_info=True)
+                logger.warning(
+                    "Could not close MCP stderr log for %s", key, exc_info=True
+                )
 
 
 class _StderrTee:
@@ -74,7 +83,9 @@ class _StderrTee:
         read_fd, write_fd = os.pipe()
         self.sink = os.fdopen(write_fd, "wb", buffering=0)
         self._log, self._tail = log_fh, bytearray()
-        self._reader = threading.Thread(target=self._pump, args=(read_fd,), name="mcp-stderr", daemon=True)
+        self._reader = threading.Thread(
+            target=self._pump, args=(read_fd,), name="mcp-stderr", daemon=True
+        )
         self._reader.start()
 
     def _pump(self, read_fd: int) -> None:
@@ -82,7 +93,7 @@ class _StderrTee:
         pending = ""
         with os.fdopen(read_fd, "rb", buffering=0) as source:
             while chunk := source.read(65536):
-                self._tail = (self._tail + chunk)[-self._TAIL_BYTES:]
+                self._tail = (self._tail + chunk)[-self._TAIL_BYTES :]
                 # Stamp whole lines only; a partial line waits for its newline (or EOF).
                 *lines, pending = (pending + decoder.decode(chunk)).split("\n")
                 self._write_lines(lines)
@@ -117,7 +128,9 @@ def _write_stderr_log_header(server_name: str) -> None:
         pass
 
 
-def _tail_server_stderr(server_name: str, *, max_bytes: int = 8192, max_lines: int = 8) -> str:
+def _tail_server_stderr(
+    server_name: str, *, max_bytes: int = 8192, max_lines: int = 8
+) -> str:
     """Trailing lines this server last wrote to the shared stderr log; ``''`` when none.
 
     A connect failure that only says ``Connection closed`` hides why the child died
@@ -144,16 +157,42 @@ def _tail_server_stderr(server_name: str, *, max_bytes: int = 8192, max_lines: i
 
 
 # Env vars safe to pass to stdio subprocesses (no secrets).
-_SAFE_ENV_KEYS = frozenset({"PATH", "HOME", "USER", "LANG", "LC_ALL", "TERM", "SHELL", "TMPDIR"})
+_SAFE_ENV_KEYS = frozenset(
+    {"PATH", "HOME", "USER", "LANG", "LC_ALL", "TERM", "SHELL", "TMPDIR"}
+)
 
 # Windows process/location vars needed by launcher-style tools (e.g. Docker Desktop's MCP plugin discovery).
-_SAFE_ENV_KEYS_CASE_INSENSITIVE = frozenset({
-    "ALLUSERSPROFILE", "APPDATA", "COMMONPROGRAMFILES", "COMMONPROGRAMFILES(X86)",
-    "COMMONPROGRAMW6432", "COMPUTERNAME", "COMSPEC", "HOMEDRIVE", "HOMEPATH",
-    "LOCALAPPDATA", "NUMBER_OF_PROCESSORS", "OS", "PATHEXT", "PROCESSOR_ARCHITECTURE",
-    "PROGRAMDATA", "PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMW6432", "PUBLIC",
-    "SYSTEMDRIVE", "SYSTEMROOT", "TEMP", "TMP", "USERDOMAIN", "USERNAME",
-    "USERPROFILE", "WINDIR"})
+_SAFE_ENV_KEYS_CASE_INSENSITIVE = frozenset(
+    {
+        "ALLUSERSPROFILE",
+        "APPDATA",
+        "COMMONPROGRAMFILES",
+        "COMMONPROGRAMFILES(X86)",
+        "COMMONPROGRAMW6432",
+        "COMPUTERNAME",
+        "COMSPEC",
+        "HOMEDRIVE",
+        "HOMEPATH",
+        "LOCALAPPDATA",
+        "NUMBER_OF_PROCESSORS",
+        "OS",
+        "PATHEXT",
+        "PROCESSOR_ARCHITECTURE",
+        "PROGRAMDATA",
+        "PROGRAMFILES",
+        "PROGRAMFILES(X86)",
+        "PROGRAMW6432",
+        "PUBLIC",
+        "SYSTEMDRIVE",
+        "SYSTEMROOT",
+        "TEMP",
+        "TMP",
+        "USERDOMAIN",
+        "USERNAME",
+        "USERPROFILE",
+        "WINDIR",
+    }
+)
 
 # ${VAR_NAME} interpolation; any non-} chars allowed so MY-VAR / my.var work.
 _ENV_VAR_PATTERN = re.compile(r"\$\{([^}]+)\}")
@@ -164,6 +203,7 @@ def _workspace_folder() -> str:
     (terminal cwd / task override / $TERMINAL_CWD), else cwd."""
     try:
         from tools.file_tools_paths import _authoritative_workspace_root
+
         root = _authoritative_workspace_root()
     except Exception:
         root = None
@@ -177,8 +217,12 @@ def _workspace_basename() -> str:
 
 # Cursor's case-sensitive context vars -> resolver.
 _CONTEXT_VAR_RESOLVERS = {
-    "userHome": lambda: os.path.expanduser("~"), "workspaceFolder": lambda: _workspace_folder(),
-    "workspaceFolderBasename": _workspace_basename, "pathSeparator": lambda: os.sep, "/": lambda: os.sep}
+    "userHome": lambda: os.path.expanduser("~"),
+    "workspaceFolder": lambda: _workspace_folder(),
+    "workspaceFolderBasename": _workspace_basename,
+    "pathSeparator": lambda: os.sep,
+    "/": lambda: os.sep,
+}
 
 
 class _RenderedStr(str):
@@ -188,7 +232,13 @@ class _RenderedStr(str):
     scope) retries from ``template``, while a fully resolved value is final. ``unset_ref``: the
     template was one whole env reference that missed."""
 
-    def __new__(cls, text: str = "", template: Optional[str] = None, missed: bool = False, unset_ref: bool = False):
+    def __new__(
+        cls,
+        text: str = "",
+        template: Optional[str] = None,
+        missed: bool = False,
+        unset_ref: bool = False,
+    ):
         rendered = super().__new__(cls, text)
         rendered.template = text if template is None else template
         rendered.missed = missed
@@ -202,9 +252,14 @@ def _build_safe_env(user_env: Optional[dict]) -> dict:
     precisely so subprocesses can consume them), plus the server config's own ``env``."""
     from agent.secret_scope import get_secret
     from clawk_cli.env_loader import secret_source_names
+
     env = {
-        key: value for key, value in os.environ.items()
-        if key in _SAFE_ENV_KEYS or key.upper() in _SAFE_ENV_KEYS_CASE_INSENSITIVE or key.startswith("XDG_")}
+        key: value
+        for key, value in os.environ.items()
+        if key in _SAFE_ENV_KEYS
+        or key.upper() in _SAFE_ENV_KEYS_CASE_INSENSITIVE
+        or key.startswith("XDG_")
+    }
     # Source-tagged names are process-wide (any profile's hydration tags them) while os.environ
     # holds only the LAUNCH profile's values, so the value must come from the active profile's
     # secret scope; a profile that lacks the name gets nothing, never another profile's token.
@@ -224,6 +279,7 @@ def _build_safe_env(user_env: Optional[dict]) -> dict:
             if not getattr(value, "unset_ref", False):
                 env[key] = value
     from agent.delegation_context import delegated_child_subprocess_env
+
     return delegated_child_subprocess_env(env)
 
 
@@ -234,7 +290,14 @@ def _which_with_config_pathext(command: str, path_arg, env: dict):
     extensions in order) but reads nothing from and writes nothing to ``os.environ``: swapping
     the parent's PATHEXT around a ``which`` call would publish this server's per-profile value
     to every other thread for the duration, and a ``finally``-restore cannot undo that window."""
-    cfg_pathext = next((v for k, v in env.items() if k.upper() == "PATHEXT" and isinstance(v, str) and v.strip()), None)
+    cfg_pathext = next(
+        (
+            v
+            for k, v in env.items()
+            if k.upper() == "PATHEXT" and isinstance(v, str) and v.strip()
+        ),
+        None,
+    )
     if not cfg_pathext or cfg_pathext == os.environ.get("PATHEXT"):
         return None
     # PATHEXT is Windows-defined: ";"-separated even when resolved off-Windows
@@ -257,7 +320,13 @@ def _which_with_config_pathext(command: str, path_arg, env: dict):
 
 
 # Bare MCP launchers Clawksis ships through PM, keyed to the package that provides them.
-_MANAGED_LAUNCHERS = {"npx": "npm", "npm": "npm", "node": "npm", "uv": "uv", "uvx": "uv"}
+_MANAGED_LAUNCHERS = {
+    "npx": "npm",
+    "npm": "npm",
+    "node": "npm",
+    "uv": "uv",
+    "uvx": "uv",
+}
 
 
 def _managed_launcher(command: str) -> Optional[tuple[str, list[str]]]:
@@ -277,14 +346,20 @@ def _managed_launcher(command: str) -> Optional[tuple[str, list[str]]]:
     else:
         from clawk_constants import with_clawk_node_path
 
-        dirs = [d for d in with_clawk_node_path({"PATH": ""})["PATH"].split(os.pathsep) if d]
+        dirs = [
+            d for d in with_clawk_node_path({"PATH": ""})["PATH"].split(os.pathsep) if d
+        ]
     executable = shutil.which(command, path=os.pathsep.join(dirs)) if dirs else None
     if executable is None:
-        raise RuntimeError(f"Clawksis-managed {command} is not installed; run `clawk pm install {package}`")
+        raise RuntimeError(
+            f"Clawksis-managed {command} is not installed; run `clawk pm install {package}`"
+        )
     return executable, dirs
 
 
-def _outside_package(launcher: str, managed: str, dirs: list[str]) -> tuple[str, list[str]]:
+def _outside_package(
+    launcher: str, managed: str, dirs: list[str]
+) -> tuple[str, list[str]]:
     """Clawksis's npm/node *launcher* and toolchain *dirs*, swapped for PM's copies outside a
     sealed Windows payload (``pm.user_facing.copies``). npm starts each package bin through
     cmd.exe, and cmd.exe cannot start the packaged ``node.exe``."""
@@ -309,6 +384,7 @@ def _is_clawk_managed_bin_dir(directory: str) -> bool:
     if resolved == Path(sys.executable).resolve().parent:
         return True
     from clawk_constants import get_clawk_home
+
     try:
         home = Path(get_clawk_home()).resolve()
     except Exception:
@@ -319,7 +395,9 @@ def _is_clawk_managed_bin_dir(directory: str) -> bool:
 _WINDOWS_DEFAULT_PATHEXT = ".COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC"
 
 
-def _pathext_suffixes(env: Optional[dict] = None, *, windows: Optional[bool] = None) -> list:
+def _pathext_suffixes(
+    env: Optional[dict] = None, *, windows: Optional[bool] = None
+) -> list:
     """Executable suffixes a bare name resolves through, in order. The child env's PATHEXT
     comes first (``shutil.which`` reads the PARENT's, so a per-profile config value never
     reaches a plain ``which`` — same source as ``_which_with_config_pathext``), then the
@@ -329,8 +407,14 @@ def _pathext_suffixes(env: Optional[dict] = None, *, windows: Optional[bool] = N
     if not is_windows:
         return [""]
     for source in (env or {}, os.environ):
-        value = next((v for k, v in source.items()
-                      if k.upper() == "PATHEXT" and isinstance(v, str) and v.strip()), None)
+        value = next(
+            (
+                v
+                for k, v in source.items()
+                if k.upper() == "PATHEXT" and isinstance(v, str) and v.strip()
+            ),
+            None,
+        )
         if value:
             exts = [ext for ext in value.split(";") if ext]
             if exts:
@@ -338,8 +422,13 @@ def _pathext_suffixes(env: Optional[dict] = None, *, windows: Optional[bool] = N
     return [ext for ext in _WINDOWS_DEFAULT_PATHEXT.split(";") if ext]
 
 
-def _first_user_which_hit(command: str, path_arg: Optional[str],
-                          env: Optional[dict] = None, *, windows: Optional[bool] = None) -> Optional[str]:
+def _first_user_which_hit(
+    command: str,
+    path_arg: Optional[str],
+    env: Optional[dict] = None,
+    *,
+    windows: Optional[bool] = None,
+) -> Optional[str]:
     """First PATH hit for *command* OUTSIDE Clawksis-managed bin dirs, or ``None``.
 
     ``shutil.which`` stops at the first hit, and bootstrap prepends the managed runtime's
@@ -375,7 +464,9 @@ def _resolve_stdio_command(command: str, env: dict) -> tuple[str, dict]:
     ``execvp`` will see); a miss stays as-written for an honest spawn failure."""
     resolved_command = os.path.expanduser(str(command).strip())
     resolved_env = dict(env or {})
-    launcher = re.sub(r"\.(cmd|exe)$", "", resolved_command, flags=re.IGNORECASE)  # Windows spellings
+    launcher = re.sub(
+        r"\.(cmd|exe)$", "", resolved_command, flags=re.IGNORECASE
+    )  # Windows spellings
     managed = _managed_launcher(launcher) if launcher in _MANAGED_LAUNCHERS else None
     if managed is not None:
         resolved_command, dirs = managed
@@ -383,14 +474,24 @@ def _resolve_stdio_command(command: str, env: dict) -> tuple[str, dict]:
             resolved_command, dirs = _outside_package(launcher, resolved_command, dirs)
         # Moved to the front even when already on PATH behind a user's copy.
         keys = {os.path.normcase(d) for d in dirs}
-        rest = [p for p in resolved_env.get("PATH", "").split(os.pathsep) if p and os.path.normcase(p) not in keys]
+        rest = [
+            p
+            for p in resolved_env.get("PATH", "").split(os.pathsep)
+            if p and os.path.normcase(p) not in keys
+        ]
         resolved_env["PATH"] = os.pathsep.join([*dirs, *rest])
         return resolved_command, resolved_env
     if os.sep not in resolved_command:
         path_arg = resolved_env.get("PATH")
-        which_hit = shutil.which(resolved_command, path=path_arg) if path_arg is not None else None
+        which_hit = (
+            shutil.which(resolved_command, path=path_arg)
+            if path_arg is not None
+            else None
+        )
         if which_hit is None and sys.platform == "win32" and resolved_env:
-            which_hit = _which_with_config_pathext(resolved_command, path_arg, resolved_env)
+            which_hit = _which_with_config_pathext(
+                resolved_command, path_arg, resolved_env
+            )
         # A bare command keeps the USER's PATH semantics: bootstrap prepends the managed
         # runtime's bin dir to this process's PATH, so the first hit for a bare ``python3``
         # is Clawksis' bundled interpreter, which lacks the user's packages and dies on import
@@ -398,7 +499,10 @@ def _resolve_stdio_command(command: str, env: dict) -> tuple[str, dict]:
         # family keeps the managed-first resolution (that is the point of
         # ``_launcher_fallback``), and a managed-only PATH keeps the managed hit.
         if which_hit and resolved_command not in {"npx", "npm", "node", "uv", "uvx"}:
-            which_hit = _first_user_which_hit(resolved_command, path_arg, resolved_env) or which_hit
+            which_hit = (
+                _first_user_which_hit(resolved_command, path_arg, resolved_env)
+                or which_hit
+            )
         if which_hit:
             resolved_command = which_hit
     command_dir = os.path.dirname(resolved_command)
@@ -407,7 +511,9 @@ def _resolve_stdio_command(command: str, env: dict) -> tuple[str, dict]:
     return resolved_command, resolved_env
 
 
-def _npx_bin_candidates(bin_dir: str, name: str, *, windows: Optional[bool] = None) -> list:
+def _npx_bin_candidates(
+    bin_dir: str, name: str, *, windows: Optional[bool] = None
+) -> list:
     """Launcher paths to try for *name* inside an npx cache's ``.bin``, in order. On Windows that
     directory holds the extensionless sh script plus ``<name>.cmd``/``<name>.ps1``; the sh one
     cannot be spawned there and ``os.access(X_OK)`` is only an existence check, so select by
@@ -447,7 +553,9 @@ def _npx_cached_bin(args: list) -> Optional[tuple]:
     if not spec or spec.startswith("-"):
         return None
 
-    cache_root = os.environ.get("npm_config_cache") or os.path.join(os.path.expanduser("~"), ".npm")
+    cache_root = os.environ.get("npm_config_cache") or os.path.join(
+        os.path.expanduser("~"), ".npm"
+    )
     npx_root = os.path.join(cache_root, "_npx")
     if not os.path.isdir(npx_root):
         return None
@@ -514,38 +622,79 @@ def _packaged_npx_entry(command: str, args: list) -> Optional[tuple]:
     while rest and rest[0] in ("-y", "--yes"):
         rest.pop(0)
     spec = str(rest[0]) if rest else ""
-    if not spec or spec.startswith("-") or any(str(a) in ("-y", "--yes") for a in rest[1:]):
+    if (
+        not spec
+        or spec.startswith("-")
+        or any(str(a) in ("-y", "--yes") for a in rest[1:])
+    ):
         return None
-    if ":" in spec or spec.startswith((".", "/", "\\", "~")) or ("/" in spec and not spec.startswith("@")):
+    if (
+        ":" in spec
+        or spec.startswith((".", "/", "\\", "~"))
+        or ("/" in spec and not spec.startswith("@"))
+    ):
         return None
     scope, _, bare = spec.rpartition("/") if spec.startswith("@") else ("", "", spec)
     base, _, version = bare.partition("@")
     name = (f"{scope}/" if scope else "") + base
     from clawk_constants import get_clawk_home
 
-    prefix = Path(get_clawk_home()) / "cache" / "mcp-npx" / hashlib.sha256(spec.encode()).hexdigest()[:16]
+    prefix = (
+        Path(get_clawk_home())
+        / "cache"
+        / "mcp-npx"
+        / hashlib.sha256(spec.encode()).hexdigest()[:16]
+    )
     manifest = prefix / "node_modules" / name / "package.json"
     exact = re.fullmatch(r"\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]+)?", version) is not None
     if not (exact and manifest.is_file()):
-        install = [node, npm_cli, "install", "--prefix", str(prefix), "--no-save", "--ignore-scripts",
-                   "--no-audit", "--no-fund", "--loglevel=error", spec]
+        install = [
+            node,
+            npm_cli,
+            "install",
+            "--prefix",
+            str(prefix),
+            "--no-save",
+            "--ignore-scripts",
+            "--no-audit",
+            "--no-fund",
+            "--loglevel=error",
+            spec,
+        ]
         try:
-            result = subprocess.run(install, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                                    stdin=subprocess.DEVNULL, timeout=600, check=False)
-        except (subprocess.SubprocessError, OSError) as exc:  # hang, unwritable prefix, AV lock, node not startable
+            result = subprocess.run(
+                install,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                stdin=subprocess.DEVNULL,
+                timeout=600,
+                check=False,
+            )
+        except (
+            subprocess.SubprocessError,
+            OSError,
+        ) as exc:  # hang, unwritable prefix, AV lock, node not startable
             result = subprocess.CompletedProcess(install, 1, "", str(exc))
         if result.returncode != 0 or not manifest.is_file():
-            logger.warning("npm install of %s with the packaged node failed: %s", spec,
-                           (result.stderr or result.stdout).strip()[-500:])
+            logger.warning(
+                "npm install of %s with the packaged node failed: %s",
+                spec,
+                (result.stderr or result.stdout).strip()[-500:],
+            )
             if not manifest.is_file():
                 return None
     try:
-        bin_field = (json.loads(manifest.read_text(encoding="utf-8-sig")) or {}).get("bin")
+        bin_field = (json.loads(manifest.read_text(encoding="utf-8-sig")) or {}).get(
+            "bin"
+        )
     except (OSError, ValueError):
         return None
     if isinstance(bin_field, dict):
         bin_field = bin_field.get(base) or (
-            next(iter(bin_field.values())) if len(bin_field) == 1 else None)
+            next(iter(bin_field.values())) if len(bin_field) == 1 else None
+        )
     if not isinstance(bin_field, str):
         return None
     return node, [str(manifest.parent / bin_field), *rest[1:]]
@@ -557,6 +706,7 @@ def _interpolate_env_vars(value):
     value, not another profile's in ``os.environ``). Unset (or empty) vars keep the literal placeholder;
     a templated string comes back as a ``_RenderedStr`` recording how it resolved."""
     from agent.secret_scope import get_secret as _get_secret
+
     if isinstance(value, str):
         if isinstance(value, _RenderedStr) and not value.missed:
             return value
@@ -571,10 +721,13 @@ def _interpolate_env_vars(value):
             if not resolved:
                 missed.append(m.group(0))
             return resolved or m.group(0)
+
         if not _ENV_VAR_PATTERN.search(template):
             return value
         text = _ENV_VAR_PATTERN.sub(_replace, template)
-        return _RenderedStr(text, template, missed=bool(missed), unset_ref=missed == [template])
+        return _RenderedStr(
+            text, template, missed=bool(missed), unset_ref=missed == [template]
+        )
     if isinstance(value, dict):
         return {k: _interpolate_env_vars(v) for k, v in value.items()}
     if isinstance(value, list):
@@ -589,11 +742,15 @@ def _require_rendered_remote(server_name: str, config: dict) -> dict:
     if "url" not in config:
         return config
     values = [config.get("url") or "", *(config.get("headers") or {}).values()]
-    unresolved = sorted({m.group(1) for value in values for m in _ENV_VAR_PATTERN.finditer(str(value))})
+    unresolved = sorted(
+        {m.group(1) for value in values for m in _ENV_VAR_PATTERN.finditer(str(value))}
+    )
     if unresolved:
         refs = ", ".join(f"${{{ref}}}" for ref in unresolved)
-        unset = ValueError(f"MCP server '{server_name}': {refs} in url/headers is not set in this profile's "
-                           ".env or secret source")
+        unset = ValueError(
+            f"MCP server '{server_name}': {refs} in url/headers is not set in this profile's "
+            ".env or secret source"
+        )
         unset.failure_class = "missing_credentials"  # type: ignore[attr-defined]
         raise unset
     return config
@@ -618,6 +775,7 @@ def _warn_hidden_whitespace(server_name: str, config: dict) -> list[str]:
         elif isinstance(value, list):
             for i, v in enumerate(value):
                 _walk(v, f"{path}[{i}]")
+
     _walk(config, "")
     for key_path in flagged:
         if (server_name, key_path) not in _whitespace_warned:
@@ -625,7 +783,10 @@ def _warn_hidden_whitespace(server_name: str, config: dict) -> list[str]:
             logger.warning(
                 "MCP server '%s': config value '%s' has hidden leading or trailing whitespace — this often "
                 "causes authentication or connection failures. Check for stray spaces/newlines in config.yaml "
-                "(or the referenced env var).", server_name, key_path)
+                "(or the referenced env var).",
+                server_name,
+                key_path,
+            )
     return flagged
 
 
@@ -633,6 +794,7 @@ def _malformed_cost_table(name: str, cfg: Any) -> Optional[str]:
     """Why a server's ``tool_costs``/``spend_limit``/``cost_unit`` is unusable, else None. A budget the
     user declared must never be silently dropped while its server keeps spending, so the server is skipped."""
     from tools.mcp_tool_costs import config_cost_policy
+
     try:
         config_cost_policy(name, cfg if isinstance(cfg, dict) else None)
     except ValueError as exc:
@@ -648,39 +810,66 @@ def _filter_suspicious_mcp_servers(servers: dict[str, dict]) -> dict[str, dict]:
         validate_mcp_server_entry = None
     safe_servers = {}
     for name, cfg in servers.items():
-        issues = validate_mcp_server_entry(name, cfg) if validate_mcp_server_entry and isinstance(cfg, dict) else None
+        issues = (
+            validate_mcp_server_entry(name, cfg)
+            if validate_mcp_server_entry and isinstance(cfg, dict)
+            else None
+        )
         if issues:
-            logger.warning("Skipping suspicious MCP server '%s': %s", name, "; ".join(issues))
+            logger.warning(
+                "Skipping suspicious MCP server '%s': %s", name, "; ".join(issues)
+            )
         elif (bad_costs := _malformed_cost_table(name, cfg)) is not None:
-            logger.error("Skipping MCP server '%s': %s (fix tool_costs/spend_limit/cost_unit in config.yaml)",
-                         name, bad_costs)
+            logger.error(
+                "Skipping MCP server '%s': %s (fix tool_costs/spend_limit/cost_unit in config.yaml)",
+                name,
+                bad_costs,
+            )
         else:
             safe_servers[name] = cfg
     return safe_servers
 
 
-def _portable_mcp_servers(safe_servers: dict[str, dict], rejected: frozenset[str] = frozenset()) -> None:
+def _portable_mcp_servers(
+    safe_servers: dict[str, dict], rejected: frozenset[str] = frozenset()
+) -> None:
     """Merge plugin-provided (portable) MCP servers into *safe_servers*; native config wins on a clash. Never raises.
 
     The package's declared costs are facts about its server, so a same-name native entry (the way a user widens
     a package server's trust) keeps them unless it sets the cost key itself; ``spend_limit: 0`` turns the limit off."""
     from tools.mcp_tool_costs import CONFIG_KEYS
+
     try:
         from clawk_cli.plugins import discover_plugins, get_plugin_manager
+
         discover_plugins()
         portable = get_plugin_manager().get_portable_mcp_servers()
         for name, cfg in _filter_suspicious_mcp_servers(portable).items():
-            if name in rejected:  # the user's own entry for this name has a malformed budget: stay off
-                logger.warning("Portable MCP server '%s' skipped: the native entry of that name was rejected", name)
+            if (
+                name in rejected
+            ):  # the user's own entry for this name has a malformed budget: stay off
+                logger.warning(
+                    "Portable MCP server '%s' skipped: the native entry of that name was rejected",
+                    name,
+                )
             elif name in safe_servers:
                 native = safe_servers[name]
-                carried = {k: cfg[k] for k in CONFIG_KEYS if k in cfg and k not in native}
+                carried = {
+                    k: cfg[k] for k in CONFIG_KEYS if k in cfg and k not in native
+                }
                 if carried:
                     safe_servers[name] = {**native, **carried}
-                    logger.warning("Portable MCP server '%s' conflicts with native config; using the native entry "
-                                   "with the package's declared %s", name, ", ".join(carried))
+                    logger.warning(
+                        "Portable MCP server '%s' conflicts with native config; using the native entry "
+                        "with the package's declared %s",
+                        name,
+                        ", ".join(carried),
+                    )
                 else:
-                    logger.warning("Portable MCP server '%s' conflicts with native config; skipping", name)
+                    logger.warning(
+                        "Portable MCP server '%s' conflicts with native config; skipping",
+                        name,
+                    )
             else:
                 safe_servers[name] = dict(cfg)
     except Exception:
@@ -690,16 +879,19 @@ def _portable_mcp_servers(safe_servers: dict[str, dict], rejected: frozenset[str
 def _load_mcp_config() -> dict[str, dict]:
     """``mcp_servers`` from config.yaml as ``{name: config}`` (empty on error / safe mode), ``${VAR}`` interpolated."""
     from agent.safe_worker_policy import safe_worker_enabled
+
     if safe_worker_enabled():
         return {}
     try:
         from clawk_cli.config import load_config
         from utils import env_var_enabled as _env_enabled
+
         if _env_enabled("CLAWK_SAFE_MODE"):
             return {}
         servers = load_config().get("mcp_servers")
         try:  # ensure .env vars are available for interpolation
             from clawk_cli.env_loader import load_clawk_dotenv
+
             load_clawk_dotenv()
         except Exception:
             pass
@@ -713,7 +905,11 @@ def _load_mcp_config() -> dict[str, dict]:
                 safe_servers[name] = interpolated
         # A same-name package must not revive a server whose native budget was rejected (a mistyped
         # tighter limit would fall back to the package's looser one while the server keeps spending).
-        rejected = frozenset(n for n in servers if n not in kept and _malformed_cost_table(n, servers[n]) is not None)
+        rejected = frozenset(
+            n
+            for n in servers
+            if n not in kept and _malformed_cost_table(n, servers[n]) is not None
+        )
         _portable_mcp_servers(safe_servers, rejected)
         return safe_servers
     except Exception as exc:

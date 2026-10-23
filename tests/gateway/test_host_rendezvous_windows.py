@@ -28,8 +28,13 @@ def _assert_private_dacl(path):
     from clawk_cli import windows_ssh_runtime as wsr
 
     descriptor = win32security.GetFileSecurity(
-        str(path), win32security.OWNER_SECURITY_INFORMATION | win32security.DACL_SECURITY_INFORMATION)
-    assert wsr._sid_str(descriptor.GetSecurityDescriptorOwner()) == wsr._sid_str(wsr._current_sid())
+        str(path),
+        win32security.OWNER_SECURITY_INFORMATION
+        | win32security.DACL_SECURITY_INFORMATION,
+    )
+    assert wsr._sid_str(descriptor.GetSecurityDescriptorOwner()) == wsr._sid_str(
+        wsr._current_sid()
+    )
     dacl = descriptor.GetSecurityDescriptorDacl()
     assert dacl is not None, "a null DACL grants everyone"
     granted = set()
@@ -39,13 +44,17 @@ def _assert_private_dacl(path):
         assert ace[1] == ntsecuritycon.FILE_ALL_ACCESS
         granted.add(wsr._sid_str(ace[-1]))
     assert granted == wsr._allowed_sids()
-    assert descriptor.GetSecurityDescriptorControl()[0] & win32security.SE_DACL_PROTECTED
+    assert (
+        descriptor.GetSecurityDescriptorControl()[0] & win32security.SE_DACL_PROTECTED
+    )
 
 
 def test_host_token_is_written_with_a_protected_owner_only_dacl(host_dir):
     """Owner+SYSTEM only, and the DACL is protected so inheritable parent grants are not merged."""
     assert hr.claim_host_lock(hr.ROLE_SERVE)[0] is hr.HostLockOutcome.ACQUIRED
-    hr.publish_record(hr.ROLE_SERVE, host="127.0.0.1", port=9119, token="live-session-token")
+    hr.publish_record(
+        hr.ROLE_SERVE, host="127.0.0.1", port=9119, token="live-session-token"
+    )
 
     path = hr.token_path(hr.ROLE_SERVE)
     assert path.read_text(encoding="utf-8-sig").strip() == "live-session-token"
@@ -62,11 +71,20 @@ def test_rewriting_an_existing_token_keeps_it_private(host_dir):
     path = hr.token_path(hr.ROLE_SERVE)
     permissive = win32security.ACL()
     permissive.AddAccessAllowedAceEx(
-        win32security.ACL_REVISION, 0, ntsecuritycon.FILE_ALL_ACCESS,
-        win32security.ConvertStringSidToSid("S-1-1-0"))
+        win32security.ACL_REVISION,
+        0,
+        ntsecuritycon.FILE_ALL_ACCESS,
+        win32security.ConvertStringSidToSid("S-1-1-0"),
+    )
     win32security.SetNamedSecurityInfo(
-        str(path), win32security.SE_FILE_OBJECT, win32security.DACL_SECURITY_INFORMATION,
-        None, None, permissive, None)
+        str(path),
+        win32security.SE_FILE_OBJECT,
+        win32security.DACL_SECURITY_INFORMATION,
+        None,
+        None,
+        permissive,
+        None,
+    )
 
     hr.publish_record(hr.ROLE_SERVE, host="127.0.0.1", port=9119, token="second")
 

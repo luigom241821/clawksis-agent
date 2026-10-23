@@ -16,7 +16,12 @@ from tools.registry import registry
     [(1, 5, True), (1, 3, True), (2, 3, True), (1, 5, False)],
 )
 def test_dispatched_child_prompt_matches_depth_capability(
-    tmp_path, monkeypatch, legacy_role, parent_depth, max_depth, enabled,
+    tmp_path,
+    monkeypatch,
+    legacy_role,
+    parent_depth,
+    max_depth,
+    enabled,
 ):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     parent = MagicMock()
@@ -43,7 +48,10 @@ def test_dispatched_child_prompt_matches_depth_capability(
     child.session_completion_tokens = 0
     child.model = "fixture"
     child.run_conversation.return_value = {
-        "final_response": "done", "completed": True, "api_calls": 1, "messages": [],
+        "final_response": "done",
+        "completed": True,
+        "api_calls": 1,
+        "messages": [],
     }
     config = {"max_spawn_depth": max_depth, "orchestrator_enabled": enabled}
     args = {"tasks": [{"goal": "Inspect fixture"}], "background": False}
@@ -51,10 +59,14 @@ def test_dispatched_child_prompt_matches_depth_capability(
         args["role"] = legacy_role
     with (
         patch.object(delegate_tool, "_load_config", return_value=config),
-        patch.object(delegate_tool, "_resolve_workspace_hint", return_value=str(tmp_path)),
+        patch.object(
+            delegate_tool, "_resolve_workspace_hint", return_value=str(tmp_path)
+        ),
         patch("run_agent.AIAgent", return_value=child) as agent_class,
     ):
-        result = json.loads(registry.get_entry("delegate_task").handler(args, parent_agent=parent))
+        result = json.loads(
+            registry.get_entry("delegate_task").handler(args, parent_agent=parent)
+        )
 
     child.run_conversation.assert_called_once()
     assert "error" not in result

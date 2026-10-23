@@ -52,7 +52,9 @@ def test_the_users_answer_wins_in_both_directions(display_config):
         ("message_reactions", check_react_requirements, False),
     ],
 )
-def test_switching_a_feature_off_withdraws_its_tool(display_config, setting, check, default_on):
+def test_switching_a_feature_off_withdraws_its_tool(
+    display_config, setting, check, default_on
+):
     """The point of the mirror: off means the model is never told it exists."""
     assert check() is default_on
 

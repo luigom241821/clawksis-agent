@@ -58,7 +58,9 @@ def auto_continue_freshness_window() -> float:
 class SessionLifecycleMixin:
     """SessionStore explicit boundaries and crash-recovery markers."""
 
-    def _is_session_ended_in_db(self, session_id: str, session_key: Optional[str] = None) -> bool:
+    def _is_session_ended_in_db(
+        self, session_id: str, session_key: Optional[str] = None
+    ) -> bool:
         """True iff state.db says the session is gone: ended (non-null end_reason) or hard-deleted
         (no row in a readable owning DB). No DB or a DB error -> False (same failure mode as
         ``_prune_stale_sessions_locked``). Lets routing self-heal a session finalized or deleted
@@ -80,7 +82,11 @@ class SessionLifecycleMixin:
         after the self-heal re-homes the key, the id has no owner and would resolve to the launch
         store, which never holds a routed profile's rows (#118862).
         """
-        db = self._db_for_key(session_key) if session_key else self._db_for_session_id(session_id)
+        db = (
+            self._db_for_key(session_key)
+            if session_key
+            else self._db_for_session_id(session_id)
+        )
         if not db or not session_id:
             return False
         try:
@@ -99,7 +105,11 @@ class SessionLifecycleMixin:
         therefore never a stale route: dropping it minted a replacement id the authority refuses
         (``admission_conflict``) and stranded the conversation (#140642)."""
         origin = getattr(entry, "origin", None)
-        if origin is None or getattr(origin, "platform", None) is None or origin.platform.value != "local":
+        if (
+            origin is None
+            or getattr(origin, "platform", None) is None
+            or origin.platform.value != "local"
+        ):
             return None
         db = self._db_for_key(entry.session_key)
         if db is None or getattr(db, "_read_ctx", None) is None:
@@ -108,6 +118,7 @@ class SessionLifecycleMixin:
 
         from clawk_state_local import local_receipt
         from clawk_state_runtime import RuntimeStoreError
+
         try:
             receipt = local_receipt(db, str(origin.chat_id))
             if receipt.get("route") != entry.session_key:
@@ -147,7 +158,9 @@ class SessionLifecycleMixin:
         """
         return self._update_entry(session_key, lambda e: setattr(e, "suspended", True))
 
-    def _set_turn_marker_locked(self, session_key: str, entry: SessionEntry, token, started_at) -> None:
+    def _set_turn_marker_locked(
+        self, session_key: str, entry: SessionEntry, token, started_at
+    ) -> None:
         """Persist the active-turn pair BEFORE publishing it in memory, so a failed write can
         neither leak an unowned token nor drop a live one. Lock held."""
         candidate = entry.to_dict()
@@ -202,7 +215,8 @@ class SessionLifecycleMixin:
             started_at = entry.active_turn_started_at
             # Epoch arithmetic: a pre-upgrade naive marker reads as local time, an aware one exactly.
             marker_is_stale = started_at is None or (
-                max_age_seconds > 0 and epoch_now - started_at.timestamp() > max_age_seconds
+                max_age_seconds > 0
+                and epoch_now - started_at.timestamp() > max_age_seconds
             )
             if not marker_is_stale and not entry.suspended:
                 if entry.resume_pending:
@@ -223,33 +237,43 @@ class SessionLifecycleMixin:
 
     def discard_active_turn_markers(self) -> int:
         """Clear orphan turn markers after a verified clean shutdown."""
+
         def _discard(entry: SessionEntry) -> bool:
             if not entry.active_turn_token and entry.active_turn_started_at is None:
                 return False
             entry.active_turn_token = None
             entry.active_turn_started_at = None
             return True
+
         return self._update_all_entries_locked(_discard)
 
-    def mark_resume_pending(self, session_key: str, reason: str = "restart_timeout") -> bool:
+    def mark_resume_pending(
+        self, session_key: str, reason: str = "restart_timeout"
+    ) -> bool:
         """Mark a session resumable after a restart interruption (keeps the session_id/transcript,
         unlike ``suspend_session``). True if marked."""
+
         def _apply(entry: SessionEntry):
-            if entry.suspended:  # never override an explicit ``suspended`` (hard forced-wipe)
+            if (
+                entry.suspended
+            ):  # never override an explicit ``suspended`` (hard forced-wipe)
                 return False
             entry.resume_pending = True
             entry.resume_reason = reason
             entry.last_resume_marked_at = _now()
+
         return self._update_entry(session_key, _apply)
 
     def clear_resume_pending(self, session_key: str) -> bool:
         """Clear the resume-pending flag after a successful resumed turn; True if cleared."""
+
         def _apply(entry: SessionEntry):
             if not entry.resume_pending:
                 return False
             entry.resume_pending = False
             entry.resume_reason = None
             entry.last_resume_marked_at = None
+
         return self._update_entry(session_key, _apply)
 
     def prune_old_entries(self, max_age_days: int) -> int:
@@ -262,10 +286,13 @@ class SessionLifecycleMixin:
         with self._lock:
             self._ensure_loaded_locked()
             removed_keys = [
-                key for key, entry in list(self._entries.items())
+                key
+                for key, entry in list(self._entries.items())
                 if not entry.suspended
                 # The callback is keyed by session_key, NOT session_id.
-                and not self._has_active_processes_safe(entry.session_key, context="prune")
+                and not self._has_active_processes_safe(
+                    entry.session_key, context="prune"
+                )
                 and entry.updated_at < cutoff
             ]
             for key in removed_keys:
@@ -273,6 +300,9 @@ class SessionLifecycleMixin:
             if removed_keys:
                 self._save()
         if removed_keys:
-            logger.info("SessionStore pruned %d entries older than %d days",
-                        len(removed_keys), max_age_days)
+            logger.info(
+                "SessionStore pruned %d entries older than %d days",
+                len(removed_keys),
+                max_age_days,
+            )
         return len(removed_keys)

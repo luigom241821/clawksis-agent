@@ -201,7 +201,10 @@ def main(argv=None) -> int:
     # A dying parent's SIGINT/SIGHUP must not preempt the reap; the pipe's EOF
     # is our only shutdown signal. SIGHUP is POSIX-only, which is fine here --
     # this process is never spawned on Windows (see _reap's docstring).
-    for sig in (signal.SIGINT, signal.SIGHUP):  # windows-footgun: ok — POSIX-only process
+    for sig in (
+        signal.SIGINT,
+        signal.SIGHUP,
+    ):  # windows-footgun: ok — POSIX-only process
         try:
             signal.signal(sig, signal.SIG_IGN)
         except (ValueError, OSError):

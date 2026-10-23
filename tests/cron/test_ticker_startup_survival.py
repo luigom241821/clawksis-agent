@@ -20,8 +20,13 @@ def _wait_until(predicate, timeout=10.0, interval=0.005):
 
 
 def _run_ticker(provider, stop, **kwargs):
-    thread = threading.Thread(target=provider.start, args=(stop,), kwargs={"interval": 0, **kwargs},
-                              daemon=True, name="cron-scheduler")
+    thread = threading.Thread(
+        target=provider.start,
+        args=(stop,),
+        kwargs={"interval": 0, **kwargs},
+        daemon=True,
+        name="cron-scheduler",
+    )
     thread.start()
     return thread
 
@@ -46,7 +51,9 @@ def test_ticker_survives_a_corrupt_ledger_at_startup(tmp_path, monkeypatch):
     assert (tmp_path / "cron" / "ticker_heartbeat").exists()
 
 
-def test_multiplex_ticker_survives_a_raising_gate_without_ticking_ungated(tmp_path, caplog):
+def test_multiplex_ticker_survives_a_raising_gate_without_ticking_ungated(
+    tmp_path, caplog
+):
     """A ``profile_gate`` that raises (Desktop stand-down probe) must fail the CYCLE: thread alive,
     error logged, and — critically — zero ticks, since an unfiltered home list would tick the very
     profiles the gate stands down for (#100489)."""
@@ -60,10 +67,19 @@ def test_multiplex_ticker_survives_a_raising_gate_without_ticking_ungated(tmp_pa
     def broken_gate(name, h):
         raise RuntimeError("gate boom")
 
-    with patch("cron.scheduler.tick", side_effect=lambda **kw: ticks.append(1)), caplog.at_level("ERROR"):
-        thread = _run_ticker(InProcessCronScheduler(), stop,
-                             profile_homes=[("default", home)], profile_gate=broken_gate)
-        _wait_until(lambda: sum("gate boom" in r.getMessage() for r in caplog.records) >= 2)
+    with (
+        patch("cron.scheduler.tick", side_effect=lambda **kw: ticks.append(1)),
+        caplog.at_level("ERROR"),
+    ):
+        thread = _run_ticker(
+            InProcessCronScheduler(),
+            stop,
+            profile_homes=[("default", home)],
+            profile_gate=broken_gate,
+        )
+        _wait_until(
+            lambda: sum("gate boom" in r.getMessage() for r in caplog.records) >= 2
+        )
         alive = thread.is_alive()
         stop.set()
         thread.join(timeout=5)
@@ -99,11 +115,15 @@ def test_housekeeping_restarts_a_dead_ticker(monkeypatch):
     with patch("threading.excepthook", lambda args: None):
         ticker.start()
         _wait_until(lambda: not ticker.is_alive())
-        gateway_run._start_gateway_housekeeping(_OneTick(), interval=0, cron_thread=ticker)
+        gateway_run._start_gateway_housekeeping(
+            _OneTick(), interval=0, cron_thread=ticker
+        )
         _wait_until(lambda: len(starts) == 2 and not ticker.is_alive())
         assert len(starts) == 2 and ticker.restarts == 1
         stop.set()
-        gateway_run._start_gateway_housekeeping(_OneTick(), interval=0, cron_thread=ticker)
+        gateway_run._start_gateway_housekeeping(
+            _OneTick(), interval=0, cron_thread=ticker
+        )
         assert len(starts) == 2, "a stopped ticker must not be respawned"
 
 
@@ -115,7 +135,9 @@ def test_supervisor_leaves_a_returning_external_provider_alone():
 
     starts = []
     stop = threading.Event()
-    ticker = SupervisedTickerThread(lambda stop_event: starts.append(1), args=(stop,), stop_event=stop)
+    ticker = SupervisedTickerThread(
+        lambda stop_event: starts.append(1), args=(stop,), stop_event=stop
+    )
     ticker.start()
     _wait_until(lambda: not ticker.is_alive())
     assert ticker.restart_if_dead() is False and starts == [1] and ticker.restarts == 0

@@ -29,7 +29,9 @@ DEFAULT_MIN_FREE_MB = 1536
 @dataclass
 class MemoryInfo:
     available_mb: Optional[int]  # None when nothing readable (non-Linux, odd sandboxes)
-    limit_mb: Optional[int]  # the cgroup limit when there is one, else the machine's MemTotal
+    limit_mb: Optional[
+        int
+    ]  # the cgroup limit when there is one, else the machine's MemTotal
 
 
 def _read_int(path: Path) -> Optional[int]:
@@ -92,18 +94,27 @@ def memory_info() -> MemoryInfo:
     host_available = info.get("MemAvailable")
     host_total = info.get("MemTotal")
     limit, usage = _cgroup_limit_and_usage()
-    candidates = [x for x in (host_available, (limit - usage) if limit is not None and usage is not None else None)
-                  if x is not None]
+    candidates = [
+        x
+        for x in (
+            host_available,
+            (limit - usage) if limit is not None and usage is not None else None,
+        )
+        if x is not None
+    ]
     available = min(candidates) if candidates else None
     limit_bytes = limit if limit is not None else host_total
-    return MemoryInfo(available_mb=None if available is None else max(0, available // _MIB),
-                      limit_mb=None if limit_bytes is None else limit_bytes // _MIB)
+    return MemoryInfo(
+        available_mb=None if available is None else max(0, available // _MIB),
+        limit_mb=None if limit_bytes is None else limit_bytes // _MIB,
+    )
 
 
 def min_free_mb() -> int:
     """``bot_desktop.min_free_memory_mb``; 0 disables the gate. A hosted deployment sets it in the
     instance's config.yaml (or the managed overlay), not an env var."""
     from clawk_cli.config import load_config_readonly
+
     cfg = load_config_readonly().get("bot_desktop") or {}
     try:
         return max(0, int(cfg.get("min_free_memory_mb", DEFAULT_MIN_FREE_MB)))
@@ -118,7 +129,9 @@ def tight_headroom_mb(floor: Optional[int] = None) -> int:
     return floor + floor // 3
 
 
-def memory_blocker(info: Optional[MemoryInfo] = None, need: Optional[int] = None) -> Optional[str]:
+def memory_blocker(
+    info: Optional[MemoryInfo] = None, need: Optional[int] = None
+) -> Optional[str]:
     """Why the screen must not start now, or None. Unknown memory is not a blocker: a host we cannot
     read is not a host we know to be small. ``need`` lets a caller that also wants
     :func:`tight_headroom_mb` read the floor once instead of loading the config twice."""
@@ -129,5 +142,7 @@ def memory_blocker(info: Optional[MemoryInfo] = None, need: Optional[int] = None
     if info.available_mb is None or info.available_mb >= need:
         return None
     limit = f" of {info.limit_mb} MB" if info.limit_mb else ""
-    return (f"Not enough free memory for a desktop: {info.available_mb} MB available{limit}, "
-            f"{need} MB needed (bot_desktop.min_free_memory_mb)")
+    return (
+        f"Not enough free memory for a desktop: {info.available_mb} MB available{limit}, "
+        f"{need} MB needed (bot_desktop.min_free_memory_mb)"
+    )

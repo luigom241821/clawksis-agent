@@ -18,7 +18,9 @@ from agent.monitoring.emitter import MonitoringEmitter
 def _mem_provider():
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import SimpleSpanProcessor
-    from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
+        InMemorySpanExporter,
+    )
 
     exporter = InMemorySpanExporter()
     provider = TracerProvider()
@@ -28,11 +30,19 @@ def _mem_provider():
 
 def test_gateway_health_event_maps_to_span_with_attrs():
     provider, mem = _mem_provider()
-    n = OE.export_batch(provider, [{
-        "event": "gateway_health", "name": "gateway.lifecycle",
-        "old_state": "starting", "new_state": "running",
-        "active_agents": 2, "pid": 4242,
-    }])
+    n = OE.export_batch(
+        provider,
+        [
+            {
+                "event": "gateway_health",
+                "name": "gateway.lifecycle",
+                "old_state": "starting",
+                "new_state": "running",
+                "active_agents": 2,
+                "pid": 4242,
+            }
+        ],
+    )
     assert n == 1
     spans = mem.get_finished_spans()
     assert spans[0].name == "clawk.gateway_health"
@@ -42,16 +52,12 @@ def test_gateway_health_event_maps_to_span_with_attrs():
     assert attrs["clawk.active_agents"] == 2
 
 
-
-
-
-
 def test_headers_resolve_from_env_not_value(monkeypatch):
     monkeypatch.setenv("DD_KEY_ENV", "secret-value")
-    resolved = OE._resolve_headers({"DD-API-KEY": "DD_KEY_ENV", "X-Missing": "NOPE_ENV"})
+    resolved = OE._resolve_headers(
+        {"DD-API-KEY": "DD_KEY_ENV", "X-Missing": "NOPE_ENV"}
+    )
     assert resolved == {"DD-API-KEY": "secret-value"}
-
-
 
 
 def test_trace_resource_includes_stable_hashed_instance():
@@ -67,26 +73,29 @@ def test_trace_resource_includes_stable_hashed_instance():
 
 
 def test_trace_resource_includes_configured_deployment_environment():
-    attrs = OE._resource_attributes({
-        "monitoring": {
-            "install_id": "private-install-id",
-            "gateway_health_export": {
-                "resource_attributes": {"deployment.environment.name": "production"},
+    attrs = OE._resource_attributes(
+        {
+            "monitoring": {
+                "install_id": "private-install-id",
+                "gateway_health_export": {
+                    "resource_attributes": {
+                        "deployment.environment.name": "production"
+                    },
+                },
             },
-        },
-    })
+        }
+    )
 
     assert attrs["deployment.environment.name"] == "production"
     assert attrs["service.name"] == "clawk-gateway"
-
-
 
 
 def test_streamer_receives_events_and_respects_filter(monkeypatch):
     provider, mem = _mem_provider()
     monkeypatch.setattr(OE, "_make_provider", lambda cfg: (provider, None))
     streamer = OE.OTLPStreamer(
-        {}, event_filter=lambda ev: ev.get("event") == "gateway_health")
+        {}, event_filter=lambda ev: ev.get("event") == "gateway_health"
+    )
 
     em = MonitoringEmitter()
     em.subscribe(streamer)

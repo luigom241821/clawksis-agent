@@ -44,7 +44,14 @@ def test_macos_handoff_opens_no_browser_window_when_chrome_is_default(tmp_path):
     prefs.mkdir(parents=True)
     with open(prefs / "com.apple.launchservices.secure.plist", "wb") as f:
         plistlib.dump(
-            {"LSHandlers": [{"LSHandlerURLScheme": "https", "LSHandlerRoleAll": "com.google.chrome"}]},
+            {
+                "LSHandlers": [
+                    {
+                        "LSHandlerURLScheme": "https",
+                        "LSHandlerRoleAll": "com.google.chrome",
+                    }
+                ]
+            },
             f,
         )
     install = tmp_path / "clawksis-agent"

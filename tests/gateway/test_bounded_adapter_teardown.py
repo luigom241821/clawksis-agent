@@ -90,5 +90,3 @@ async def test_teardown_continues_after_cancellation_swallowing_background_cance
         release.set()
         await asyncio.wait({operation}, timeout=0.2)
         await asyncio.wait_for(finished.wait(), timeout=0.2)
-
-

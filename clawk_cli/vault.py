@@ -42,7 +42,10 @@ def _cmd_add(args) -> None:
 
     kind = (args.kind or "").strip().lower()
     while kind not in VAULT_KINDS:
-        kind = input(f"Kind ({'/'.join(VAULT_KINDS)}) [login]: ").strip().lower() or "login"
+        kind = (
+            input(f"Kind ({'/'.join(VAULT_KINDS)}) [login]: ").strip().lower()
+            or "login"
+        )
         if kind not in VAULT_KINDS:
             c.print(f"[red]Unknown kind {kind!r}[/]")
             kind = ""
@@ -59,7 +62,9 @@ def _cmd_add(args) -> None:
             id_type = ""
             while id_type not in LOGIN_IDENTIFIER_TYPES:
                 id_type = (
-                    input(f"Identifier type ({'/'.join(LOGIN_IDENTIFIER_TYPES)}) [email]: ")
+                    input(
+                        f"Identifier type ({'/'.join(LOGIN_IDENTIFIER_TYPES)}) [email]: "
+                    )
                     .strip()
                     .lower()
                     or "email"
@@ -71,7 +76,8 @@ def _cmd_add(args) -> None:
             while not password:
                 password = getpass.getpass("Password (hidden): ")
             otp_secret = getpass.getpass(
-                "Authenticator key (optional, hidden; the 2FA \"setup key\" or otpauth:// link — Enter to skip): ")
+                'Authenticator key (optional, hidden; the 2FA "setup key" or otpauth:// link — Enter to skip): '
+            )
             # identifier_type/identifier are stored as metadata (not secret);
             # add_item moves them out of the encrypted payload.
             secret = {
@@ -84,29 +90,43 @@ def _cmd_add(args) -> None:
                 kind="login", label=label, secret=secret, origin=origin
             )
         else:
-            from agent.vault_store import ADDRESS_FIELDS, PAYMENT_FIELDS, REQUIRED_FIELDS
+            from agent.vault_store import (
+                ADDRESS_FIELDS,
+                PAYMENT_FIELDS,
+                REQUIRED_FIELDS,
+            )
 
             fields = PAYMENT_FIELDS if kind == "payment" else ADDRESS_FIELDS
             origin = ""
             while not origin:
-                origin = input("Site origin the item may be filled on (e.g. https://shop.example.com): ").strip()
-            c.print(f"[dim]{kind} fields are filled only on that origin; card values are read hidden.[/]")
+                origin = input(
+                    "Site origin the item may be filled on (e.g. https://shop.example.com): "
+                ).strip()
+            c.print(
+                f"[dim]{kind} fields are filled only on that origin; card values are read hidden.[/]"
+            )
             secret = {}
             for field in fields:
                 required = field in REQUIRED_FIELDS[kind]
-                prompt = f"{field.replace('_', ' ')}{'' if required else ' (optional)'}: "
+                prompt = (
+                    f"{field.replace('_', ' ')}{'' if required else ' (optional)'}: "
+                )
                 read = getpass.getpass if kind == "payment" else input
                 value = read(prompt).strip()
                 while required and not value:
                     value = read(prompt).strip()
                 if value:
                     secret[field] = value
-            meta = get_vault_store().add_item(kind=kind, label=label, secret=secret, origin=origin)
+            meta = get_vault_store().add_item(
+                kind=kind, label=label, secret=secret, origin=origin
+            )
     except VaultError as exc:
         c.print(f"[red]Error:[/] {exc}")
         return
 
-    c.print(f"[green]Stored.[/] handle=[bold]{meta.id}[/] kind={meta.kind} origin={meta.origin or '-'}")
+    c.print(
+        f"[green]Stored.[/] handle=[bold]{meta.id}[/] kind={meta.kind} origin={meta.origin or '-'}"
+    )
 
 
 def _cmd_list(args) -> None:
@@ -131,11 +151,22 @@ def _cmd_list(args) -> None:
         for col in ("Handle", "Source", "Kind", "Label", "Identifier", "Origin"):
             table.add_column(col, style="bold" if col == "Handle" else None)
         for source, meta in rows:
-            table.add_row(meta.id, source, meta.kind, meta.label, meta.identifier or "-", meta.origin or "-")
+            table.add_row(
+                meta.id,
+                source,
+                meta.kind,
+                meta.label,
+                meta.identifier or "-",
+                meta.origin or "-",
+            )
         c.print(table)
-        c.print("[dim]Passwords are never shown; the agent fills them server-side from the handle.[/]")
+        c.print(
+            "[dim]Passwords are never shown; the agent fills them server-side from the handle.[/]"
+        )
     for name in locked:
-        c.print(f"[yellow]{name}[/] is enabled but locked — the agent will ask you to unlock it when it needs a login.")
+        c.print(
+            f"[yellow]{name}[/] is enabled but locked — the agent will ask you to unlock it when it needs a login."
+        )
 
 
 def _cmd_sources(args) -> None:
@@ -149,27 +180,37 @@ def _cmd_sources(args) -> None:
     if args.enable or args.disable:
         name = args.enable or args.disable
         if name not in classes:
-            c.print(f"[red]Unknown password manager {name!r}[/] (expected one of {', '.join(classes)})")
+            c.print(
+                f"[red]Unknown password manager {name!r}[/] (expected one of {', '.join(classes)})"
+            )
             return
         cfg = load_config()
         section = _ensure_dict(_ensure_dict(cfg, "vault"), name)
         if args.enable:
-            section.pop("enabled", None)  # detected managers are on by default; drop the opt-out
+            section.pop(
+                "enabled", None
+            )  # detected managers are on by default; drop the opt-out
         else:
             section["enabled"] = False
         save_config(cfg)
-        c.print(f"[green]{classes[name].display_name} {'on' if args.enable else 'off'}[/] for browser logins.")
+        c.print(
+            f"[green]{classes[name].display_name} {'on' if args.enable else 'off'}[/] for browser logins."
+        )
         return
     enabled = {b.name for b in enabled_backends()}
     for name, cls in classes.items():
         if name in enabled:
             status = "[green]detected[/] · the agent asks you to unlock it when it needs a login"
         elif is_installed(name):
-            status = f"[dim]turned off[/] (`clawk vault sources --enable {name}` to use it)"
+            status = (
+                f"[dim]turned off[/] (`clawk vault sources --enable {name}` to use it)"
+            )
         else:
             status = "[dim]not installed[/]"
         c.print(f"  {cls.display_name:<10} {status}")
-    c.print("[dim]Managers are picked up automatically when their CLI is installed and signed in.[/]")
+    c.print(
+        "[dim]Managers are picked up automatically when their CLI is installed and signed in.[/]"
+    )
 
 
 def _cmd_rm(args) -> None:
@@ -191,21 +232,32 @@ def register_cli(subparser) -> None:
         help="Save a login, card or address ahead of time (optional: the agent asks you on the page when it needs one)",
     )
     p_add.add_argument(
-        "--kind", choices=["login", "payment", "address"], default=None,
+        "--kind",
+        choices=["login", "payment", "address"],
+        default=None,
         help="Item kind (interactive prompt when omitted)",
     )
     p_add.set_defaults(_vault_handler=_cmd_add)
 
-    p_list = subs.add_parser("list", help="List vault items (metadata only, never values)")
+    p_list = subs.add_parser(
+        "list", help="List vault items (metadata only, never values)"
+    )
     p_list.set_defaults(_vault_handler=_cmd_list)
 
     p_rm = subs.add_parser("rm", help="Remove a vault item by handle")
     p_rm.add_argument("handle", help="Item handle (see `clawk vault list`)")
     p_rm.set_defaults(_vault_handler=_cmd_rm)
 
-    p_src = subs.add_parser("sources", help="Show detected password managers (1Password, Bitwarden); they are on automatically")
+    p_src = subs.add_parser(
+        "sources",
+        help="Show detected password managers (1Password, Bitwarden); they are on automatically",
+    )
     group = p_src.add_mutually_exclusive_group()
-    group.add_argument("--disable", metavar="NAME", help="Stop using a detected manager: onepassword | bitwarden")
+    group.add_argument(
+        "--disable",
+        metavar="NAME",
+        help="Stop using a detected manager: onepassword | bitwarden",
+    )
     group.add_argument("--enable", metavar="NAME", help="Undo --disable")
     p_src.set_defaults(_vault_handler=_cmd_sources)
 

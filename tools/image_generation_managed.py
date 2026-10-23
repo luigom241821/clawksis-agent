@@ -56,7 +56,10 @@ def managed_route(provider: Any, model_id: Any) -> Optional[str]:
 
     ``None`` when a direct/BYO provider owns the request. A Portal id reaches the Portal only under
     an explicit ``nous`` pick; with the provider unset it stays on the in-tree FAL path."""
-    provider, model_id = (v.strip() if isinstance(v, str) and v.strip() else None for v in (provider, model_id))
+    provider, model_id = (
+        v.strip() if isinstance(v, str) and v.strip() else None
+        for v in (provider, model_id)
+    )
     if provider is not None and provider != NOUS_MANAGED_PROVIDER:
         return None
     backend = managed_backend_for_model(model_id)
@@ -77,7 +80,9 @@ def _plugin_rows(name: str) -> list:
 
 
 def managed_image_catalog(
-    *, include_krea: bool = True, include_portal: bool = True,
+    *,
+    include_krea: bool = True,
+    include_portal: bool = True,
 ) -> tuple[dict[str, dict[str, Any]], str]:
     """``({model_id: metadata}, default_model)`` for the managed row's model picker.
 
@@ -88,8 +93,10 @@ def managed_image_catalog(
     from tools.image_generation_catalog import DEFAULT_MODEL, FAL_MODELS
 
     catalog: dict[str, dict[str, Any]] = {
-        mid: {**meta, "backend": FAL} for mid, meta in FAL_MODELS.items()
-        if not mid.startswith(_FAL_KREA_PREFIX)}
+        mid: {**meta, "backend": FAL}
+        for mid, meta in FAL_MODELS.items()
+        if not mid.startswith(_FAL_KREA_PREFIX)
+    }
     if include_krea:
         for row in _plugin_rows("krea"):
             catalog[row["id"]] = {**row, "backend": KREA}

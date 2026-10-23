@@ -14,7 +14,11 @@ _EOF_CHARS = {"\x04", "\x1a", ""}  # "" == stream closed
 
 
 def _collect_masked_input(
-    read_char: Callable[[], str], write: Callable[[str], object], prompt: str, *, mask: str = "*",
+    read_char: Callable[[], str],
+    write: Callable[[str], object],
+    prompt: str,
+    *,
+    mask: str = "*",
 ) -> str:
     """Read one secret line while writing a mask character per typed char."""
     value: list[str] = []
@@ -52,7 +56,11 @@ def masked_secret_prompt(prompt: str, *, mask: str = "*") -> str:
     """
     if not _stream_is_tty(sys.stdin) or not _stream_is_tty(sys.stdout):
         return getpass.getpass(prompt)
-    masked = _masked_secret_prompt_windows if os.name == "nt" else _masked_secret_prompt_posix
+    masked = (
+        _masked_secret_prompt_windows
+        if os.name == "nt"
+        else _masked_secret_prompt_posix
+    )
     try:
         return masked(prompt, mask=mask)
     except (KeyboardInterrupt, EOFError):
@@ -89,10 +97,13 @@ def _masked_secret_prompt_windows(prompt: str, *, mask: str) -> str:
 def _masked_secret_prompt_posix(prompt: str, *, mask: str) -> str:
     import termios
     import tty
+
     fd = sys.stdin.fileno()
     old_attrs = termios.tcgetattr(fd)
     try:
         tty.setraw(fd)
-        return _collect_masked_input(lambda: sys.stdin.read(1), _write, prompt, mask=mask)
+        return _collect_masked_input(
+            lambda: sys.stdin.read(1), _write, prompt, mask=mask
+        )
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_attrs)

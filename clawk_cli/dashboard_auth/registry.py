@@ -1,6 +1,7 @@
 """Module-level registry for DashboardAuthProvider instances. Plugins call ``register_provider``
 via the plugin context hook at startup; the auth gate iterates ``list_providers()`` and uses
 ``get_provider`` to dispatch on the session's ``provider`` field."""
+
 from __future__ import annotations
 
 import logging
@@ -8,7 +9,10 @@ import threading
 from typing import List, Optional
 
 from clawk_constants import clawk_home_key, normalize_scope
-from clawk_cli.dashboard_auth.base import DashboardAuthProvider, assert_protocol_compliance
+from clawk_cli.dashboard_auth.base import (
+    DashboardAuthProvider,
+    assert_protocol_compliance,
+)
 
 _log = logging.getLogger(__name__)
 _lock = threading.Lock()
@@ -26,14 +30,25 @@ def _target(scope: Optional[str], *, create: bool) -> dict[str, DashboardAuthPro
     """Global map for ``scope is None``, else that scope's overlay."""
     if scope is None:
         return _providers
-    return _scoped_providers.setdefault(scope, {}) if create else _scoped_providers.get(scope, {})
+    return (
+        _scoped_providers.setdefault(scope, {})
+        if create
+        else _scoped_providers.get(scope, {})
+    )
 
 
 def _log_registered(kind: str, provider: DashboardAuthProvider) -> None:
-    _log.info("dashboard-auth: registered %s%r (%s)", kind, provider.name, provider.display_name)
+    _log.info(
+        "dashboard-auth: registered %s%r (%s)",
+        kind,
+        provider.name,
+        provider.display_name,
+    )
 
 
-def register_provider(provider: DashboardAuthProvider, *, scope: Optional[str] = None) -> None:
+def register_provider(
+    provider: DashboardAuthProvider, *, scope: Optional[str] = None
+) -> None:
     """Raises ``TypeError`` on protocol violation, ``ValueError`` on a duplicate name."""
     assert_protocol_compliance(type(provider))
     with _lock:
@@ -41,27 +56,36 @@ def register_provider(provider: DashboardAuthProvider, *, scope: Optional[str] =
         target = _target(scope, create=True)
         effective = target if scope is None else _merged(scope)
         if provider.name in effective:
-            raise ValueError(f"dashboard-auth provider already registered: {provider.name!r}")
+            raise ValueError(
+                f"dashboard-auth provider already registered: {provider.name!r}"
+            )
         target[provider.name] = provider
     _log_registered("provider ", provider)
 
 
-def get_provider(name: str, *, scope: Optional[str] = None) -> Optional[DashboardAuthProvider]:
+def get_provider(
+    name: str, *, scope: Optional[str] = None
+) -> Optional[DashboardAuthProvider]:
     """Return the registered provider for ``name``, or None if unknown."""
     with _lock:
         return _merged(scope).get(name)
 
 
 def snapshot_registration(
-    name: str, *, scope: Optional[str] = None) -> Optional[DashboardAuthProvider]:
+    name: str, *, scope: Optional[str] = None
+) -> Optional[DashboardAuthProvider]:
     with _lock:
         scope = normalize_scope(scope)
         return _target(scope, create=False).get(name)
 
 
 def restore_registration(
-    name: str, current: DashboardAuthProvider, previous: Optional[DashboardAuthProvider],
-    *, scope: Optional[str] = None) -> bool:
+    name: str,
+    current: DashboardAuthProvider,
+    previous: Optional[DashboardAuthProvider],
+    *,
+    scope: Optional[str] = None,
+) -> bool:
     """Restore a host-owned provider registration if it is still current."""
     with _lock:
         scope = normalize_scope(scope)

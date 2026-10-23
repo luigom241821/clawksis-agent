@@ -12,13 +12,16 @@ Class under test (#98814 / #89614):
 - ``clawk_cli._subprocess_compat.pid_is_clawk`` fails closed on foreign
   processes and identity mismatches.
 """
+
 import subprocess
 import sys
 import time
 
 import pytest
 
-pytestmark = pytest.mark.platforms("windows")  # live taskkill-identity probes are Windows-only
+pytestmark = pytest.mark.platforms(
+    "windows"
+)  # live taskkill-identity probes are Windows-only
 
 
 def _spawn_sleeper(seconds: int = 60) -> subprocess.Popen:
@@ -84,9 +87,7 @@ class TestTerminatePidIdentityLive:
             if stale_start == live_start:
                 pytest.skip("fingerprints collided; cannot express mismatch")
             with pytest.raises(OSError, match="identity"):
-                terminate_pid(
-                    impostor.pid, force=True, expected_start_time=stale_start
-                )
+                terminate_pid(impostor.pid, force=True, expected_start_time=stale_start)
             assert impostor.poll() is None, "mismatch must never kill"
         finally:
             _cleanup(impostor)
@@ -131,9 +132,7 @@ class TestPidIsClawksisLive:
         try:
             live = get_process_start_time(proc.pid)
             assert live is not None
-            assert (
-                pid_is_clawk(proc.pid, expected_start_time=live + 12345) is False
-            )
+            assert pid_is_clawk(proc.pid, expected_start_time=live + 12345) is False
         finally:
             _cleanup(proc)
 

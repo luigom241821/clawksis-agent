@@ -2,6 +2,7 @@
 
 The checker lives in scripts/ci/check_docs_drift.py; this test is how CI runs it (the Python lane
 already carries the repo's dependencies). Only NEW gaps fail."""
+
 from __future__ import annotations
 
 import importlib.util
@@ -45,9 +46,21 @@ def test_detects_each_documentation_form(drift, monkeypatch):
         "This sentence has emphasis on *agent.* things.\n"
     )
     monkeypatch.setattr(drift, "_docs_text", lambda: docs)
-    monkeypatch.setattr(drift, "config_leaves", lambda: [
-        "agent.max_turns", "auxiliary.vision.timeout", "display.pet.size",
-        "compression.threshold", "agent.secret_knob", "auxiliary.vision.api_key",
-        "providers.nous.models.clawk.timeout_seconds"])
+    monkeypatch.setattr(
+        drift,
+        "config_leaves",
+        lambda: [
+            "agent.max_turns",
+            "auxiliary.vision.timeout",
+            "display.pet.size",
+            "compression.threshold",
+            "agent.secret_knob",
+            "auxiliary.vision.api_key",
+            "providers.nous.models.clawk.timeout_seconds",
+        ],
+    )
     monkeypatch.setattr(drift, "slash_commands", list)
-    assert drift.find_gaps()["config"] == ["agent.secret_knob", "auxiliary.vision.api_key"]
+    assert drift.find_gaps()["config"] == [
+        "agent.secret_knob",
+        "auxiliary.vision.api_key",
+    ]

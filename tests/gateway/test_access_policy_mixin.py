@@ -65,9 +65,14 @@ def _verdicts(host, name, dm_policy, group_policy):
 
 # Per-host opt-in var (the one ``clawk gateway setup`` writes). Setting only GATEWAY_ALLOW_ALL_USERS
 # would pass with a host whose prefix is missing — that is exactly how WeCom regressed once.
-PLATFORM_OPT_IN = {"weixin": "WEIXIN_ALLOW_ALL_USERS", "wecom": "WECOM_ALLOW_ALL_USERS",
-                   "qqbot": "QQ_ALLOW_ALL_USERS", "whatsapp": "WHATSAPP_ALLOW_ALL_USERS",
-                   "whatsapp_cloud": "WHATSAPP_CLOUD_ALLOW_ALL_USERS", "yuanbao": "YUANBAO_ALLOW_ALL_USERS"}
+PLATFORM_OPT_IN = {
+    "weixin": "WEIXIN_ALLOW_ALL_USERS",
+    "wecom": "WECOM_ALLOW_ALL_USERS",
+    "qqbot": "QQ_ALLOW_ALL_USERS",
+    "whatsapp": "WHATSAPP_ALLOW_ALL_USERS",
+    "whatsapp_cloud": "WHATSAPP_CLOUD_ALLOW_ALL_USERS",
+    "yuanbao": "YUANBAO_ALLOW_ALL_USERS",
+}
 # Hosts whose allowlists document ``*`` (weixin/yuanbao match literally, as before).
 WILDCARD_HOSTS = ("wecom", "qqbot", "whatsapp", "whatsapp_cloud")
 
@@ -82,8 +87,12 @@ def _all_agree(hosts, opt_in_for, label):
             assert verdicts == table["weixin"], (name, dm_policy, group_policy, label)
         expected_open = bool(opt_in_for("weixin")) and dm_policy == "open"
         assert table["weixin"][("dm", "stranger")] is expected_open
-        assert table["weixin"][("intake", "   ")] is False  # blank principal never admitted
-        assert table["weixin"][("intake", "stranger")] is (dm_policy == "pairing" or expected_open)
+        assert (
+            table["weixin"][("intake", "   ")] is False
+        )  # blank principal never admitted
+        assert table["weixin"][("intake", "stranger")] is (
+            dm_policy == "pairing" or expected_open
+        )
 
 
 @pytest.mark.parametrize("mode", ["none", "gateway", "platform"])
@@ -114,6 +123,7 @@ def test_wildcard_allowlist_admits_strangers_on_every_path(name):
 
 def test_mixin_host_without_prefix_is_rejected_at_class_creation():
     with pytest.raises(TypeError, match="ALLOW_ALL_ENV_PREFIX"):
+
         class Host(OwnAccessPolicyMixin):
             _dm_policy = "open"
 
@@ -121,11 +131,19 @@ def test_mixin_host_without_prefix_is_rejected_at_class_creation():
 def test_platform_prefix_env_name_is_scoped_and_fail_closed(monkeypatch):
     class Host(OwnAccessPolicyMixin):
         ALLOW_ALL_ENV_PREFIX = "DEMO"
-        _dm_policy, _group_policy, _allow_from, _group_allow_from = "open", "open", [], []
+        _dm_policy, _group_policy, _allow_from, _group_allow_from = (
+            "open",
+            "open",
+            [],
+            [],
+        )
 
     monkeypatch.setattr("agent.secret_scope._MULTIPLEX_ACTIVE", True)
     monkeypatch.setenv("DEMO_ALLOW_ALL_USERS", "true")  # the DEFAULT profile's opt-in
-    assert Host()._allow_all_env_names() == ("GATEWAY_ALLOW_ALL_USERS", "DEMO_ALLOW_ALL_USERS")
+    assert Host()._allow_all_env_names() == (
+        "GATEWAY_ALLOW_ALL_USERS",
+        "DEMO_ALLOW_ALL_USERS",
+    )
     with _scope({}):  # secondary profile: scope installed, key absent
         assert Host()._is_dm_allowed("anyone") is False
     with _scope({"DEMO_ALLOW_ALL_USERS": "yes"}):

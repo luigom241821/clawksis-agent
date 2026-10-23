@@ -16,7 +16,9 @@ class Unit:
     line: int
     metrics: dict[str, int]
     body_hash: str
-    parent: str | None = None  # nearest enclosing function (nested defs are their own units)
+    parent: str | None = (
+        None  # nearest enclosing function (nested defs are their own units)
+    )
     # Last line of the unit, for comparing bodies of units that are not byte-identical.
     # None when the measurer does not report it (the comparison then estimates the span).
     end_line: int | None = None

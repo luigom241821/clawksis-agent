@@ -36,7 +36,9 @@ def bridge(monkeypatch):
 
     def fake_block(event, sid, payload, timeout=None, **_kw):
         answer = fake_block.answers.pop(0) if fake_block.answers else ""
-        calls.append({"event": event, "sid": sid, "payload": payload, "timeout": timeout})
+        calls.append(
+            {"event": event, "sid": sid, "payload": payload, "timeout": timeout}
+        )
         return answer
 
     fake_block.answers = []
@@ -82,8 +84,12 @@ def test_unanswered_probe_returns_an_actionable_error(session, bridge):
 def test_repeat_actions_short_circuit_instead_of_stalling_again(session, bridge):
     server._preview_action_request("s1", {"action": "elements"})
     for action in ("click", "type", "scroll", "press"):
-        assert json.loads(
-            server._preview_action_request("s1", {"action": action, "ref": "btn"}))["success"] is False
+        assert (
+            json.loads(
+                server._preview_action_request("s1", {"action": action, "ref": "btn"})
+            )["success"]
+            is False
+        )
 
     assert len(bridge.calls) == 1
 
@@ -97,8 +103,12 @@ def test_cooldown_expiry_reprobes_once(session, bridge, monkeypatch):
     assert len(bridge.calls) == 1
 
     bridge.answers = [json.dumps({"success": True})]
-    assert json.loads(
-        server._preview_action_request("s1", {"action": "elements"}))["success"] is True
+    assert (
+        json.loads(server._preview_action_request("s1", {"action": "elements"}))[
+            "success"
+        ]
+        is True
+    )
     assert bridge.calls[1]["timeout"] == server._PREVIEW_ACTION_PROBE_TIMEOUT_S
 
     # Answered once: the full deadline is back.
@@ -116,8 +126,12 @@ def test_within_cooldown_a_second_caller_fails_fast(session, bridge):
     session["preview_action_bridge_retry_at"] = 0.0
     server._preview_action_reprobe["s1"] = object()
     assert len(bridge.calls) == 1
-    assert json.loads(
-        server._preview_action_request("s1", {"action": "scroll"}))["success"] is False
+    assert (
+        json.loads(server._preview_action_request("s1", {"action": "scroll"}))[
+            "success"
+        ]
+        is False
+    )
     assert len(bridge.calls) == 1
 
 
@@ -129,22 +143,32 @@ def test_a_new_session_reprobes(bridge, monkeypatch):
     server._preview_action_request("dead", {"action": "elements"})
     bridge.answers = [json.dumps({"success": True})]
 
-    assert json.loads(
-        server._preview_action_request("fresh", {"action": "elements"}))["success"] is True
+    assert (
+        json.loads(server._preview_action_request("fresh", {"action": "elements"}))[
+            "success"
+        ]
+        is True
+    )
 
 
 def test_a_session_with_no_record_still_bridges(bridge):
     """Detached callers have no session dict; they keep the plain bridge."""
     bridge.answers = [json.dumps({"success": True})]
-    assert json.loads(
-        server._preview_action_request("gone", {"action": "elements"}))["success"] is True
+    assert (
+        json.loads(server._preview_action_request("gone", {"action": "elements"}))[
+            "success"
+        ]
+        is True
+    )
 
 
 def test_a_window_decline_answer_passes_through(session, bridge):
     """The fast "no window is showing this chat" refusal (#119333) settles as
     a non-empty answer: it must reach the tool verbatim, not be re-labelled
     bridge-unavailable."""
-    decline = json.dumps({"success": False, "error": "No Clawksis Desktop window is showing this chat."})
+    decline = json.dumps(
+        {"success": False, "error": "No Clawksis Desktop window is showing this chat."}
+    )
     bridge.answers = [decline]
 
     assert server._preview_action_request("s1", {"action": "elements"}) == decline
@@ -159,8 +183,12 @@ def test_a_proven_client_is_not_condemned_by_one_slow_action(session, bridge):
 
     # Proven client goes quiet (cancelled / one-off miss): stays full-deadline
     # and is NOT flipped to unanswered.
-    assert json.loads(
-        server._preview_action_request("s1", {"action": "click", "ref": "btn"}))["success"] is False
+    assert (
+        json.loads(
+            server._preview_action_request("s1", {"action": "click", "ref": "btn"})
+        )["success"]
+        is False
+    )
     assert session["preview_action_bridge"] == "answered"
     server._preview_action_request("s1", {"action": "scroll"})
     assert bridge.calls[2]["timeout"] == server._PREVIEW_ACTION_TIMEOUT_S

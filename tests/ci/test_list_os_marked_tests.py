@@ -63,7 +63,7 @@ def test_finds_decorator_and_pytestmark_forms(tmp_path, platform):
     _write(
         tmp_path,
         "test_bare_identifier.py",
-        f"import pytest\n\n\n@pytest.mark.parametrize(\"kind\", [\"{platform}\"])\ndef test_v():\n    assert kind\n",
+        f'import pytest\n\n\n@pytest.mark.parametrize("kind", ["{platform}"])\ndef test_v():\n    assert kind\n',
     )
 
     result = _run(platform, str(tmp_path))
@@ -98,11 +98,18 @@ def test_negated_spec_lists_for_that_lane(tmp_path):
     assert any(p.endswith("test_negated.py") for p in listed)
 
 
-@pytest.mark.parametrize("spec,lanes", [
-    ("posix", {"linux", "macos"}), ("any", {"linux", "macos", "windows"}),
-    ("not linux", {"linux", "macos", "windows"}),  # admits the others; named lane keeps its import
-    ("macos", {"macos"}),
-])
+@pytest.mark.parametrize(
+    "spec,lanes",
+    [
+        ("posix", {"linux", "macos"}),
+        ("any", {"linux", "macos", "windows"}),
+        (
+            "not linux",
+            {"linux", "macos", "windows"},
+        ),  # admits the others; named lane keeps its import
+        ("macos", {"macos"}),
+    ],
+)
 def test_specs_resolve_to_every_lane_they_admit(tmp_path, spec, lanes):
     """The selector resolves specs like the conftest gate: ``platforms("posix")``
     files must reach the macOS lane, not just files spelling out ``"macos"``."""

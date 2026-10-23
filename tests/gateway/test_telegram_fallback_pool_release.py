@@ -91,9 +91,7 @@ async def test_failed_fallback_pool_is_discarded_and_closed(monkeypatch):
         tnet.httpx, "AsyncHTTPTransport", _factory(behavior, closed_log)
     )
 
-    transport = tnet.TelegramFallbackTransport(
-        ["149.154.167.220", "149.154.167.221"]
-    )
+    transport = tnet.TelegramFallbackTransport(["149.154.167.220", "149.154.167.221"])
 
     # All paths fail → the last error propagates.
     with pytest.raises((httpx.ConnectTimeout, httpx.ConnectError)):
@@ -119,8 +117,15 @@ async def test_failed_fallback_pool_is_discarded_and_closed(monkeypatch):
 async def test_failed_primary_pool_is_discarded_and_closed(monkeypatch):
     """A failed primary attempt must release its pool before fallback (#82920)."""
     for key in (
-        "HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "https_proxy",
-        "http_proxy", "all_proxy", "TELEGRAM_PROXY", "NO_PROXY", "no_proxy",
+        "HTTPS_PROXY",
+        "HTTP_PROXY",
+        "ALL_PROXY",
+        "https_proxy",
+        "http_proxy",
+        "all_proxy",
+        "TELEGRAM_PROXY",
+        "NO_PROXY",
+        "no_proxy",
     ):
         monkeypatch.delenv(key, raising=False)
 
@@ -148,20 +153,23 @@ async def test_failed_primary_pool_is_discarded_and_closed(monkeypatch):
         await transport.aclose()
 
 
-
-
 def test_pool_default_limits_applied_when_caller_omits(monkeypatch):
     """When the caller supplies no ``limits``, the bounded ``_POOL_LIMITS``
     default (max_connections=8) is applied via setdefault (#71593)."""
     kwargs_log: list = []
     for key in (
-        "HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "https_proxy",
-        "http_proxy", "all_proxy", "TELEGRAM_PROXY", "NO_PROXY", "no_proxy",
+        "HTTPS_PROXY",
+        "HTTP_PROXY",
+        "ALL_PROXY",
+        "https_proxy",
+        "http_proxy",
+        "all_proxy",
+        "TELEGRAM_PROXY",
+        "NO_PROXY",
+        "no_proxy",
     ):
         monkeypatch.delenv(key, raising=False)
-    monkeypatch.setattr(
-        tnet.httpx, "AsyncHTTPTransport", _factory({}, [], kwargs_log)
-    )
+    monkeypatch.setattr(tnet.httpx, "AsyncHTTPTransport", _factory({}, [], kwargs_log))
 
     transport = tnet.TelegramFallbackTransport(["149.154.167.220"])
     limits = kwargs_log[0]["limits"]

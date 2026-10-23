@@ -5,6 +5,7 @@ and then returning the aggregator's raw streaming iterator (from call_llm), so
 the acting model's output can stream to the user. stream=False is the original
 complete-response path and must stay byte-identical.
 """
+
 from types import SimpleNamespace
 
 import pytest
@@ -61,6 +62,7 @@ def _facade(monkeypatch, tmp_path, on_call=None):
 # Facade-level: create() stream branch
 # --------------------------------------------------------------------------
 
+
 def test_create_streams_aggregator_when_requested(monkeypatch, tmp_path):
     """stream=True: references still run, aggregator is called with stream=True
     and stream_options, and create() returns the aggregator call's result
@@ -90,7 +92,9 @@ def test_create_streams_aggregator_when_requested(monkeypatch, tmp_path):
     assert agg["tools"] is not None
 
 
-def test_build_moa_facade_ignores_fallback_model_name_when_restoring(monkeypatch, tmp_path):
+def test_build_moa_facade_ignores_fallback_model_name_when_restoring(
+    monkeypatch, tmp_path
+):
     """A fallback restore must not turn the temporary fallback model name into
     a MoA preset. Sessions that drifted to e.g. deepseek-v4-flash previously
     crashed on restore with MoAPresetNotFoundError because build_moa_facade()
@@ -113,7 +117,9 @@ def test_build_moa_facade_ignores_fallback_model_name_when_restoring(monkeypatch
     assert client.chat.completions.preset_name == "review"
 
 
-def test_create_wraps_completed_aggregator_response_as_delta_chunk(monkeypatch, tmp_path):
+def test_create_wraps_completed_aggregator_response_as_delta_chunk(
+    monkeypatch, tmp_path
+):
     """When an aggregator adapter returns a completed response despite
     stream=True (Codex Responses compatibility shape), MoA must return a
     one-chunk delta iterator for the outer streaming accumulator instead of
@@ -153,8 +159,6 @@ def test_create_wraps_completed_aggregator_response_as_delta_chunk(monkeypatch, 
     assert agg["stream"] is True
 
 
-
-
 def test_create_forwards_stream_read_timeout(monkeypatch, tmp_path):
     """The consumer's per-request (stream read) timeout is forwarded to the
     aggregator so it actually governs the stream."""
@@ -170,13 +174,10 @@ def test_create_forwards_stream_read_timeout(monkeypatch, tmp_path):
     assert agg["timeout"] is timeout_sentinel
 
 
-
-
-
-
 # --------------------------------------------------------------------------
 # call_llm-level: stream branch returns the raw SDK stream
 # --------------------------------------------------------------------------
+
 
 def test_call_llm_stream_returns_raw_stream_and_skips_validation(monkeypatch):
     """call_llm(stream=True) returns the client's raw stream object directly,
@@ -197,8 +198,15 @@ def test_call_llm_stream_returns_raw_stream_and_skips_validation(monkeypatch):
     )
 
     monkeypatch.setattr(
-        ac, "_resolve_task_provider_model",
-        lambda *a, **k: ("custom", "m", "http://localhost:8001/v1", "key", "chat_completions"),
+        ac,
+        "_resolve_task_provider_model",
+        lambda *a, **k: (
+            "custom",
+            "m",
+            "http://localhost:8001/v1",
+            "key",
+            "chat_completions",
+        ),
     )
     monkeypatch.setattr(ac, "_get_cached_client", lambda *a, **k: (fake_client, "m"))
 
@@ -218,5 +226,3 @@ def test_call_llm_stream_returns_raw_stream_and_skips_validation(monkeypatch):
     assert out == "RAW_STREAM"
     assert captured.get("stream") is True
     assert captured.get("stream_options") == {"include_usage": True}
-
-

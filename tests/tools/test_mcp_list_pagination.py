@@ -31,7 +31,6 @@ class TestPaginateFullList:
         assert [t.name for t in items] == ["a", "b"]
         list_method.assert_called_once_with()
 
-
     def test_runaway_cursor_capped(self):
         """A server that returns a cursor forever is bounded by the page cap."""
         calls = {"n": 0}

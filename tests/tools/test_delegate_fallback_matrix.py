@@ -22,57 +22,85 @@ def _parent(chain=None):
     return parent
 
 
-
 # (pinned, declared fallback_providers, expected) — the six cells plus the malformed edges.
 @pytest.mark.parametrize(
     ("pinned", "declared", "expected"),
     [
-        (True, "absent", None),                 # #80450: a pinned child fails loudly, never reroutes
+        (True, "absent", None),  # #80450: a pinned child fails loudly, never reroutes
         (True, None, None),
         (True, [], None),
         (True, DECLARED_CHAIN, DECLARED_CHAIN),
-        (False, "absent", PARENT_CHAIN),        # historical default preserved
+        (False, "absent", PARENT_CHAIN),  # historical default preserved
         (False, None, PARENT_CHAIN),
-        (False, [], None),                      # explicit [] disables fallback
-        (False, DECLARED_CHAIN, DECLARED_CHAIN),  # #65038: delegation.fallback_providers reaches the child
+        (False, [], None),  # explicit [] disables fallback
+        (
+            False,
+            DECLARED_CHAIN,
+            DECLARED_CHAIN,
+        ),  # #65038: delegation.fallback_providers reaches the child
         (True, "not-a-list", None),
         (False, "not-a-list", PARENT_CHAIN),
         (True, [{"provider": "deepseek"}], None),
         (False, [{"provider": "deepseek"}], PARENT_CHAIN),
-        (False, [{"provider": "deepseek", "model": "x"}, {"provider": "deepseek"}],
-         [{"provider": "deepseek", "model": "x"}]),  # a valid route survives a malformed neighbour
+        (
+            False,
+            [{"provider": "deepseek", "model": "x"}, {"provider": "deepseek"}],
+            [{"provider": "deepseek", "model": "x"}],
+        ),  # a valid route survives a malformed neighbour
     ],
 )
 def test_child_fallback_chain_matrix(pinned, declared, expected):
     cfg = {} if declared == "absent" else {"fallback_providers": declared}
-    assert _resolve_child_fallback_chain(_parent(list(PARENT_CHAIN)), cfg, pinned=pinned) == expected
+    assert (
+        _resolve_child_fallback_chain(_parent(list(PARENT_CHAIN)), cfg, pinned=pinned)
+        == expected
+    )
 
 
 def _spawn_kwargs(parent, cfg, **overrides):
     model = overrides.pop("model", None)
-    with patch("tools.delegate_tool._load_config", return_value=cfg), patch("run_agent.AIAgent") as MockAgent:
+    with (
+        patch("tools.delegate_tool._load_config", return_value=cfg),
+        patch("run_agent.AIAgent") as MockAgent,
+    ):
         MockAgent.return_value = MagicMock()
-        _build_child_agent(task_index=0, goal="matrix wiring", context=None, toolsets=None, model=model,
-                           max_iterations=10, parent_agent=parent, task_count=1, **overrides)
+        _build_child_agent(
+            task_index=0,
+            goal="matrix wiring",
+            context=None,
+            toolsets=None,
+            model=model,
+            max_iterations=10,
+            parent_agent=parent,
+            task_count=1,
+            **overrides,
+        )
     return MockAgent.call_args[1]
 
 
 @pytest.mark.parametrize(
     ("overrides", "expected"),
     [
-        ({}, PARENT_CHAIN),                                                    # unpinned inherits
-        ({"model": "deepseek-chat"}, None),                                    # model-only pin (#80450 model arm)
-        ({"override_provider": "minimax", "override_base_url": "https://api.minimax.example/v1",
-          "override_api_key": "sk-mm"}, None),                                 # provider pin
+        ({}, PARENT_CHAIN),  # unpinned inherits
+        ({"model": "deepseek-chat"}, None),  # model-only pin (#80450 model arm)
+        (
+            {
+                "override_provider": "minimax",
+                "override_base_url": "https://api.minimax.example/v1",
+                "override_api_key": "sk-mm",
+            },
+            None,
+        ),  # provider pin
     ],
 )
 def test_pin_is_derived_from_provider_base_url_or_model(overrides, expected):
-    assert _spawn_kwargs(_parent(list(PARENT_CHAIN)), {}, **overrides)["fallback_model"] == expected
+    assert (
+        _spawn_kwargs(_parent(list(PARENT_CHAIN)), {}, **overrides)["fallback_model"]
+        == expected
+    )
 
 
-def test_declared_chain_flows_through_real_profile_config_loader(
-    tmp_path, monkeypatch
-):
+def test_declared_chain_flows_through_real_profile_config_loader(tmp_path, monkeypatch):
     """The public key must survive DEFAULT_CONFIG/profile loading without
     patching ``_load_config`` and reach the child constructor."""
     import clawk_yaml as yaml
@@ -110,7 +138,9 @@ def test_declared_chain_flows_through_real_profile_config_loader(
     assert child_kwargs["fallback_model"] == DECLARED_CHAIN
 
 
-def test_explicit_empty_chain_survives_real_profile_config_loader(tmp_path, monkeypatch):
+def test_explicit_empty_chain_survives_real_profile_config_loader(
+    tmp_path, monkeypatch
+):
     """An explicit [] remains an authoritative disable after config loading."""
     import clawk_yaml as yaml
 

@@ -16,7 +16,9 @@ from clawk_cli.auth import (
 )
 
 
-def _setup_clawk_auth(clawk_home: Path, *, access_token: str = "access", refresh_token: str = "refresh"):
+def _setup_clawk_auth(
+    clawk_home: Path, *, access_token: str = "access", refresh_token: str = "refresh"
+):
     """Write Codex tokens into the Clawksis auth store."""
     clawk_home.mkdir(parents=True, exist_ok=True)
     auth_store = {
@@ -50,7 +52,9 @@ def test_resolve_codex_runtime_credentials_missing_access_token(tmp_path, monkey
     assert exc.value.relogin_required is True
 
 
-def test_resolve_codex_runtime_credentials_falls_back_to_pool_when_singleton_empty(tmp_path, monkeypatch):
+def test_resolve_codex_runtime_credentials_falls_back_to_pool_when_singleton_empty(
+    tmp_path, monkeypatch
+):
     """Regression for #32992 — chat path returns 401 when singleton is empty but pool has creds.
 
     The chat path historically went through ``resolve_codex_runtime_credentials`` which
@@ -98,42 +102,48 @@ def test_save_codex_tokens_syncs_credential_pool(tmp_path, monkeypatch):
     """
     clawk_home = tmp_path / "clawk"
     clawk_home.mkdir(parents=True, exist_ok=True)
-    (clawk_home / "auth.json").write_text(json.dumps({
-        "version": 1,
-        "providers": {
-            "openai-codex": {
-                "tokens": {"access_token": "old-at", "refresh_token": "old-rt"},
-                "last_refresh": "2026-01-01T00:00:00Z",
-                "auth_mode": "chatgpt",
-            },
-        },
-        "credential_pool": {
-            "openai-codex": [
-                {
-                    "id": "abc123",
-                    "source": "device_code",
-                    "auth_type": "oauth",
-                    "access_token": "old-at",
-                    "refresh_token": "old-rt",
-                    "last_status": "exhausted",
-                    "last_error_code": 401,
-                    "last_error_reason": "token_invalidated",
-                    "last_error_reset_at": 9999999999,
+    (clawk_home / "auth.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "providers": {
+                    "openai-codex": {
+                        "tokens": {"access_token": "old-at", "refresh_token": "old-rt"},
+                        "last_refresh": "2026-01-01T00:00:00Z",
+                        "auth_mode": "chatgpt",
+                    },
                 },
-                {
-                    "id": "manual1",
-                    "source": "manual:codex",
-                    "auth_type": "oauth",
-                    "access_token": "manual-at",
-                    "refresh_token": "manual-rt",
+                "credential_pool": {
+                    "openai-codex": [
+                        {
+                            "id": "abc123",
+                            "source": "device_code",
+                            "auth_type": "oauth",
+                            "access_token": "old-at",
+                            "refresh_token": "old-rt",
+                            "last_status": "exhausted",
+                            "last_error_code": 401,
+                            "last_error_reason": "token_invalidated",
+                            "last_error_reset_at": 9999999999,
+                        },
+                        {
+                            "id": "manual1",
+                            "source": "manual:codex",
+                            "auth_type": "oauth",
+                            "access_token": "manual-at",
+                            "refresh_token": "manual-rt",
+                        },
+                    ],
                 },
-            ],
-        },
-    }))
+            }
+        )
+    )
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
-    _save_codex_tokens({"access_token": "new-at", "refresh_token": "new-rt"},
-                       last_refresh="2026-05-27T00:00:00Z")
+    _save_codex_tokens(
+        {"access_token": "new-at", "refresh_token": "new-rt"},
+        last_refresh="2026-05-27T00:00:00Z",
+    )
 
     auth = json.loads((clawk_home / "auth.json").read_text())
     pool = auth["credential_pool"]["openai-codex"]
@@ -176,61 +186,67 @@ def test_save_codex_tokens_syncs_manual_device_code_entries(tmp_path, monkeypatc
     """
     clawk_home = tmp_path / "clawk"
     clawk_home.mkdir(parents=True, exist_ok=True)
-    (clawk_home / "auth.json").write_text(json.dumps({
-        "version": 1,
-        "providers": {
-            "openai-codex": {
-                "tokens": {"access_token": "old-at", "refresh_token": "old-rt"},
-                "last_refresh": "2026-01-01T00:00:00Z",
-                "auth_mode": "chatgpt",
-            },
-        },
-        "credential_pool": {
-            "openai-codex": [
-                {
-                    "id": "seeded",
-                    "source": "device_code",
-                    "auth_type": "oauth",
-                    "access_token": "old-at",
-                    "refresh_token": "old-rt",
+    (clawk_home / "auth.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "providers": {
+                    "openai-codex": {
+                        "tokens": {"access_token": "old-at", "refresh_token": "old-rt"},
+                        "last_refresh": "2026-01-01T00:00:00Z",
+                        "auth_mode": "chatgpt",
+                    },
                 },
-                # Legacy alias from the #33000 workaround era — its tokens
-                # match the singleton, so it is a true alias and SHOULD be
-                # refreshed (preserves #33538 behavior).
-                {
-                    "id": "legacy-alias",
-                    "source": "manual:device_code",
-                    "auth_type": "oauth",
-                    "access_token": "old-at",
-                    "refresh_token": "old-rt",
-                    "last_status": "exhausted",
-                    "last_error_code": 401,
-                    "last_error_reason": "token_invalidated",
+                "credential_pool": {
+                    "openai-codex": [
+                        {
+                            "id": "seeded",
+                            "source": "device_code",
+                            "auth_type": "oauth",
+                            "access_token": "old-at",
+                            "refresh_token": "old-rt",
+                        },
+                        # Legacy alias from the #33000 workaround era — its tokens
+                        # match the singleton, so it is a true alias and SHOULD be
+                        # refreshed (preserves #33538 behavior).
+                        {
+                            "id": "legacy-alias",
+                            "source": "manual:device_code",
+                            "auth_type": "oauth",
+                            "access_token": "old-at",
+                            "refresh_token": "old-rt",
+                            "last_status": "exhausted",
+                            "last_error_code": 401,
+                            "last_error_reason": "token_invalidated",
+                        },
+                        # Independent account from `clawk auth add openai-codex` —
+                        # its tokens are distinct from the singleton.  Must NOT be
+                        # overwritten by a re-auth that targeted a different account
+                        # (#39236).
+                        {
+                            "id": "independent",
+                            "source": "manual:device_code",
+                            "auth_type": "oauth",
+                            "access_token": "independent-at",
+                            "refresh_token": "independent-rt",
+                        },
+                        {
+                            "id": "api-key",
+                            "source": "manual:api_key",
+                            "auth_type": "api_key",
+                            "access_token": "user-api-key",
+                        },
+                    ],
                 },
-                # Independent account from `clawk auth add openai-codex` —
-                # its tokens are distinct from the singleton.  Must NOT be
-                # overwritten by a re-auth that targeted a different account
-                # (#39236).
-                {
-                    "id": "independent",
-                    "source": "manual:device_code",
-                    "auth_type": "oauth",
-                    "access_token": "independent-at",
-                    "refresh_token": "independent-rt",
-                },
-                {
-                    "id": "api-key",
-                    "source": "manual:api_key",
-                    "auth_type": "api_key",
-                    "access_token": "user-api-key",
-                },
-            ],
-        },
-    }))
+            }
+        )
+    )
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
-    _save_codex_tokens({"access_token": "fresh-at", "refresh_token": "fresh-rt"},
-                       last_refresh="2026-05-28T00:00:00Z")
+    _save_codex_tokens(
+        {"access_token": "fresh-at", "refresh_token": "fresh-rt"},
+        last_refresh="2026-05-28T00:00:00Z",
+    )
 
     auth = json.loads((clawk_home / "auth.json").read_text())
     pool = auth["credential_pool"]["openai-codex"]
@@ -260,7 +276,9 @@ def test_save_codex_tokens_syncs_manual_device_code_entries(tmp_path, monkeypatc
     assert "refresh_token" not in api_key or api_key.get("refresh_token") is None
 
 
-def test_save_codex_tokens_clears_error_markers_only_on_refreshed_entries(tmp_path, monkeypatch):
+def test_save_codex_tokens_clears_error_markers_only_on_refreshed_entries(
+    tmp_path, monkeypatch
+):
     """Error markers must be cleared only on entries that were actually
     refreshed by this re-auth.  Independent ``manual:device_code`` entries
     with their own stale-error markers must be left alone (their stale state
@@ -268,38 +286,45 @@ def test_save_codex_tokens_clears_error_markers_only_on_refreshed_entries(tmp_pa
     """
     clawk_home = tmp_path / "clawk"
     clawk_home.mkdir(parents=True, exist_ok=True)
-    (clawk_home / "auth.json").write_text(json.dumps({
-        "version": 1,
-        "providers": {
-            "openai-codex": {
-                "tokens": {"access_token": "acctA-at", "refresh_token": "acctA-rt"},
-                "auth_mode": "chatgpt",
-            },
-        },
-        "credential_pool": {
-            "openai-codex": [
-                {
-                    "id": "seeded",
-                    "source": "device_code",
-                    "auth_type": "oauth",
-                    "access_token": "acctA-at",
-                    "refresh_token": "acctA-rt",
-                    "last_status": "exhausted",
-                    "last_error_code": 401,
+    (clawk_home / "auth.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "providers": {
+                    "openai-codex": {
+                        "tokens": {
+                            "access_token": "acctA-at",
+                            "refresh_token": "acctA-rt",
+                        },
+                        "auth_mode": "chatgpt",
+                    },
                 },
-                {
-                    "id": "acctB",
-                    "source": "manual:device_code",
-                    "auth_type": "oauth",
-                    "access_token": "acctB-at",
-                    "refresh_token": "acctB-rt",
-                    "last_status": "exhausted",
-                    "last_error_code": 429,
-                    "last_error_reason": "quota_exhausted",
+                "credential_pool": {
+                    "openai-codex": [
+                        {
+                            "id": "seeded",
+                            "source": "device_code",
+                            "auth_type": "oauth",
+                            "access_token": "acctA-at",
+                            "refresh_token": "acctA-rt",
+                            "last_status": "exhausted",
+                            "last_error_code": 401,
+                        },
+                        {
+                            "id": "acctB",
+                            "source": "manual:device_code",
+                            "auth_type": "oauth",
+                            "access_token": "acctB-at",
+                            "refresh_token": "acctB-rt",
+                            "last_status": "exhausted",
+                            "last_error_code": 429,
+                            "last_error_reason": "quota_exhausted",
+                        },
+                    ],
                 },
-            ],
-        },
-    }))
+            }
+        )
+    )
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
     _save_codex_tokens(
@@ -362,7 +387,9 @@ class _StubHTTPResponse:
         self.status_code = status_code
         self._payload = payload
         self.headers = headers or {}
-        self.text = json.dumps(payload) if isinstance(payload, (dict, list)) else str(payload)
+        self.text = (
+            json.dumps(payload) if isinstance(payload, (dict, list)) else str(payload)
+        )
 
     def json(self):
         if isinstance(self._payload, Exception):
@@ -406,7 +433,12 @@ def test_refresh_429_classified_as_quota_not_auth_failure(monkeypatch):
 
     response = _StubHTTPResponse(
         429,
-        {"error": {"message": "You hit your usage limit.", "code": "usage_limit_reached"}},
+        {
+            "error": {
+                "message": "You hit your usage limit.",
+                "code": "usage_limit_reached",
+            }
+        },
         headers={"retry-after": "120"},
     )
     _patch_httpx(monkeypatch, response)
@@ -444,12 +476,25 @@ def test_pool_only_force_refresh_rotates_the_pool_entry(tmp_path, monkeypatch):
     instead of handing back the same token the caller just got a 401 for."""
     clawk_home = tmp_path / "clawk"
     clawk_home.mkdir(parents=True, exist_ok=True)
-    (clawk_home / "auth.json").write_text(json.dumps({
-        "version": 1, "providers": {},
-        "credential_pool": {"openai-codex": [{
-            "source": "device_code", "access_token": "pool-revoked", "refresh_token": "pool-refresh",
-            "last_status": "ok", "auth_type": "oauth"}]},
-    }))
+    (clawk_home / "auth.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "providers": {},
+                "credential_pool": {
+                    "openai-codex": [
+                        {
+                            "source": "device_code",
+                            "access_token": "pool-revoked",
+                            "refresh_token": "pool-refresh",
+                            "last_status": "ok",
+                            "auth_type": "oauth",
+                        }
+                    ]
+                },
+            }
+        )
+    )
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
     hints = []
 

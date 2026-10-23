@@ -20,19 +20,23 @@ def _agent_with_db(session_id: str = "sess-1"):
         max_iterations=10,
         iteration_budget=SimpleNamespace(used=0, max_total=10),
     )
-    agent._touch_activity = run_agent.AIAgent._touch_activity.__get__(agent, SimpleNamespace)
+    agent._touch_activity = run_agent.AIAgent._touch_activity.__get__(
+        agent, SimpleNamespace
+    )
     agent._persist_session_activity_if_due = (
-        run_agent.AIAgent._persist_session_activity_if_due.__get__(agent, SimpleNamespace)
+        run_agent.AIAgent._persist_session_activity_if_due.__get__(
+            agent, SimpleNamespace
+        )
     )
     agent._reset_activity_labels_after_turn = (
-        run_agent.AIAgent._reset_activity_labels_after_turn.__get__(agent, SimpleNamespace)
+        run_agent.AIAgent._reset_activity_labels_after_turn.__get__(
+            agent, SimpleNamespace
+        )
     )
     agent.get_activity_summary = run_agent.AIAgent.get_activity_summary.__get__(
         agent, SimpleNamespace
     )
     return agent
-
-
 
 
 def test_touch_activity_skips_persist_without_session_db(monkeypatch):
@@ -104,10 +108,6 @@ def test_touch_activity_persist_errors_are_swallowed(monkeypatch):
 
     agent._touch_activity("tool completed: terminal (1.0s)")
     assert agent._last_activity_desc == "tool completed: terminal (1.0s)"
-
-
-
-
 
 
 def test_heartbeat_respects_cadence_constant(monkeypatch):
@@ -196,7 +196,9 @@ def test_reset_activity_labels_after_turn_swallows_db_errors():
     agent._last_activity_ts = 99.0
     agent._last_activity_desc = "starting API call #1"
     agent._last_activity_provenance = ActivityProvenance.UNKNOWN
-    agent._session_db.clear_session_activity_labels.side_effect = RuntimeError("db locked")
+    agent._session_db.clear_session_activity_labels.side_effect = RuntimeError(
+        "db locked"
+    )
 
     agent._reset_activity_labels_after_turn()
 
@@ -220,7 +222,9 @@ def test_warn_context_overflow_blocked_stamps_compression_cooldown(monkeypatch):
         agent, "cooldown: 30s remaining", 80_000, 40_000
     )
 
-    assert agent._last_activity_provenance is ActivityProvenance.AGENT_COMPRESSION_COOLDOWN
+    assert (
+        agent._last_activity_provenance is ActivityProvenance.AGENT_COMPRESSION_COOLDOWN
+    )
     assert "compression blocked" in agent._last_activity_desc
     agent._emit_warning.assert_called_once()
 
@@ -249,7 +253,9 @@ def test_warn_context_overflow_blocked_stamps_cooldown_for_ineffective(monkeypat
         agent, "ineffective: last pass saved 0 tokens", 80_000, 40_000
     )
 
-    assert agent._last_activity_provenance is ActivityProvenance.AGENT_COMPRESSION_COOLDOWN
+    assert (
+        agent._last_activity_provenance is ActivityProvenance.AGENT_COMPRESSION_COOLDOWN
+    )
     agent._emit_warning.assert_called_once()
 
 

@@ -35,7 +35,12 @@ _SDK_MODULES: dict[str, tuple[str, ...]] = {
     "opentelemetry.exporter.otlp.proto.http.trace_exporter": ("OTLPSpanExporter",),
     "opentelemetry.exporter.otlp.proto.http._log_exporter": ("OTLPLogExporter",),
     "opentelemetry.exporter.otlp.proto.http.metric_exporter": ("OTLPMetricExporter",),
-    "opentelemetry.trace": ("SpanKind", "INVALID_SPAN_ID", "INVALID_TRACE_ID", "TraceFlags"),
+    "opentelemetry.trace": (
+        "SpanKind",
+        "INVALID_SPAN_ID",
+        "INVALID_TRACE_ID",
+        "TraceFlags",
+    ),
     "opentelemetry.metrics": ("Observation",),
     "opentelemetry._logs": ("LogRecord",),
     "opentelemetry._logs.severity": ("SeverityNumber",),
@@ -44,11 +49,21 @@ _SDK_MODULES: dict[str, tuple[str, ...]] = {
     "opentelemetry.sdk.metrics": ("MeterProvider",),
     "opentelemetry.sdk.metrics.export": ("PeriodicExportingMetricReader",),
 }
-_SDK_SYMBOLS: dict[str, str] = {name: module for module, names in _SDK_MODULES.items() for name in names}
-_SPAN_SDK = ("TracerProvider", "BatchSpanProcessor", "Resource", "OTLPSpanExporter", "SpanKind")
+_SDK_SYMBOLS: dict[str, str] = {
+    name: module for module, names in _SDK_MODULES.items() for name in names
+}
+_SPAN_SDK = (
+    "TracerProvider",
+    "BatchSpanProcessor",
+    "Resource",
+    "OTLPSpanExporter",
+    "SpanKind",
+)
 
 
-def _require_sdk(names: Iterable[str] = _SPAN_SDK, *, auto_install: bool = True) -> dict[str, Any]:
+def _require_sdk(
+    names: Iterable[str] = _SPAN_SDK, *, auto_install: bool = True
+) -> dict[str, Any]:
     """Import the named OTel SDK symbols, lazily installing the extra on first use.
 
     Routes through pm.ensure_import('otlp') so a missing SDK triggers the
@@ -59,11 +74,15 @@ def _require_sdk(names: Iterable[str] = _SPAN_SDK, *, auto_install: bool = True)
     if auto_install:
         try:
             from pm import ensure_import as _lazy_ensure
+
             _lazy_ensure("otlp")
         except Exception:
             pass
     try:
-        return {name: getattr(importlib.import_module(_SDK_SYMBOLS[name]), name) for name in names}
+        return {
+            name: getattr(importlib.import_module(_SDK_SYMBOLS[name]), name)
+            for name in names
+        }
     except Exception as e:  # ImportError or partial install
         raise OTLPUnavailable(
             "OTLP export requires the optional dependency. Install with:\n"
@@ -92,7 +111,9 @@ def _resolve_headers(headers_env: Optional[dict[str, str]]) -> dict[str, str]:
         if val:
             resolved[str(header_name)] = val
         else:
-            logger.debug("OTLP header %s: env var %s not set; skipping", header_name, env_name)
+            logger.debug(
+                "OTLP header %s: env var %s not set; skipping", header_name, env_name
+            )
     return resolved
 
 
@@ -108,16 +129,26 @@ def _signal_endpoint(endpoint: str, signal: str) -> str:
     return endpoint
 
 
-_RESOURCE_ATTRIBUTE_KEYS = frozenset({
-    "service.name", "service.namespace", "service.version", "service.instance.id",
-    "deployment.environment.name", "cloud.provider", "cloud.platform", "cloud.region", "telemetry.scope",
-})
+_RESOURCE_ATTRIBUTE_KEYS = frozenset(
+    {
+        "service.name",
+        "service.namespace",
+        "service.version",
+        "service.instance.id",
+        "deployment.environment.name",
+        "cloud.provider",
+        "cloud.platform",
+        "cloud.region",
+        "telemetry.scope",
+    }
+)
 _SAFE_RESOURCE_VALUE = re.compile(r"^[A-Za-z0-9._:/-]{1,128}$")
 
 
 def _install_id(config: dict[str, Any]) -> str:
     try:
         from agent.monitoring.policy import ensure_install_id
+
         return str(ensure_install_id(config))
     except Exception:
         return "unknown"
@@ -126,21 +157,28 @@ def _install_id(config: dict[str, Any]) -> str:
 def _safe_resource_attributes(raw: Any) -> dict[str, str]:
     """Allowlist bounded resource labels and reject values changed by redaction."""
     attrs: dict[str, str] = {}
-    for key, value in (raw.items() if isinstance(raw, dict) else ()):
+    for key, value in raw.items() if isinstance(raw, dict) else ():
         key = str(key)
         if key not in _RESOURCE_ATTRIBUTE_KEYS or value is None:
             continue
         text = str(value)
         if key == "service.instance.id":
             attrs[key] = _safe_instance_id(value)
-        elif _SAFE_RESOURCE_VALUE.fullmatch(text) and redact_bounded(text, limit=128) == text:
+        elif (
+            _SAFE_RESOURCE_VALUE.fullmatch(text)
+            and redact_bounded(text, limit=128) == text
+        ):
             attrs[key] = text
     return attrs
 
 
-def _runtime_resource_attributes(config: dict[str, Any], *, telemetry_scope: str) -> dict[str, str]:
+def _runtime_resource_attributes(
+    config: dict[str, Any], *, telemetry_scope: str
+) -> dict[str, str]:
     """Build the safe OTLP resource shared by spans, metrics and diagnostic logs."""
-    attrs = _safe_resource_attributes(_monitoring_section(config, "gateway_health_export").get("resource_attributes"))
+    attrs = _safe_resource_attributes(
+        _monitoring_section(config, "gateway_health_export").get("resource_attributes")
+    )
     attrs["service.name"] = "clawk-gateway"
     attrs["service.instance.id"] = _safe_instance_id(_install_id(config))
     attrs["telemetry.scope"] = telemetry_scope
@@ -154,7 +192,9 @@ def build_exporter(config: dict[str, Any]):
     endpoint = otlp.get("endpoint")
     if not endpoint:
         raise ValueError("monitoring.export.otlp.endpoint is not set")
-    return sdk["OTLPSpanExporter"](endpoint=endpoint, headers=_resolve_headers(otlp.get("headers_env")) or None)
+    return sdk["OTLPSpanExporter"](
+        endpoint=endpoint, headers=_resolve_headers(otlp.get("headers_env")) or None
+    )
 
 
 def _resource_attributes(config: dict[str, Any]) -> dict[str, str]:
@@ -163,7 +203,9 @@ def _resource_attributes(config: dict[str, Any]) -> dict[str, str]:
 
 def _make_provider(config: dict[str, Any]):
     sdk = _require_sdk()
-    provider = sdk["TracerProvider"](resource=sdk["Resource"].create(_resource_attributes(config)))
+    provider = sdk["TracerProvider"](
+        resource=sdk["Resource"].create(_resource_attributes(config))
+    )
     processor = sdk["BatchSpanProcessor"](build_exporter(config))
     provider.add_span_processor(processor)
     return provider, processor
@@ -173,11 +215,40 @@ def _make_provider(config: dict[str, Any]):
 # Per-kind attribute allowlists: everything else (profile, install_id, ...) never egresses.
 _KEEP_BY_KIND: dict[str, tuple[str, ...]] = {
     "gateway_health": (
-        "name", "gateway_state", "old_state", "new_state", "exit_reason", "restart_requested", "active_agents",
-        "gateway_busy", "gateway_drainable", "platform_count", "fatal_platform_count", "version", "supervision_mode", "pid",
+        "name",
+        "gateway_state",
+        "old_state",
+        "new_state",
+        "exit_reason",
+        "restart_requested",
+        "active_agents",
+        "gateway_busy",
+        "gateway_drainable",
+        "platform_count",
+        "fatal_platform_count",
+        "version",
+        "supervision_mode",
+        "pid",
     ),
-    "gateway_diagnostic": ("name", "subsystem", "error_class", "error_code", "platform", "old_state", "new_state", "version", "severity"),
-    "cron_execution": ("status", "job_key", "source", "duration_ms", "delivery_outcome", "error_class"),
+    "gateway_diagnostic": (
+        "name",
+        "subsystem",
+        "error_class",
+        "error_code",
+        "platform",
+        "old_state",
+        "new_state",
+        "version",
+        "severity",
+    ),
+    "cron_execution": (
+        "status",
+        "job_key",
+        "source",
+        "duration_ms",
+        "delivery_outcome",
+        "error_class",
+    ),
 }
 
 
@@ -205,7 +276,9 @@ def export_batch(provider, batch: list[dict[str, Any]]) -> int:
     n = 0
     for ev in batch:
         try:
-            tracer.start_span(f"clawk.{ev.get('event', 'event')}", attributes=_span_attrs(ev)).end()
+            tracer.start_span(
+                f"clawk.{ev.get('event', 'event')}", attributes=_span_attrs(ev)
+            ).end()
             n += 1
         except Exception:
             logger.debug("OTLP span map failed", exc_info=True)
@@ -216,6 +289,7 @@ def export_batch(provider, batch: list[dict[str, Any]]) -> int:
 class EmitterStreamer:
     """Base for emitter subscribers owning an OTel provider + batch processor.
     Register with ``emitter.subscribe(streamer)``. Fail-isolated by the emitter."""
+
     _provider: Any
     _processor: Any
     exported: int = 0
@@ -223,6 +297,7 @@ class EmitterStreamer:
     def shutdown(self) -> None:
         with suppress(Exception):
             from agent.monitoring.emitter import get_emitter
+
             get_emitter().unsubscribe(self)
         with suppress(Exception):
             self._processor.force_flush()
@@ -232,7 +307,12 @@ class EmitterStreamer:
 class OTLPStreamer(EmitterStreamer):
     """A live subscriber that pushes each emitter batch to OTLP as spans."""
 
-    def __init__(self, config: dict[str, Any], *, event_filter: Optional[Callable[[dict[str, Any]], bool]] = None):
+    def __init__(
+        self,
+        config: dict[str, Any],
+        *,
+        event_filter: Optional[Callable[[dict[str, Any]], bool]] = None,
+    ):
         self._provider, self._processor = _make_provider(config)
         self._event_filter = event_filter
         self.exported = 0
@@ -260,7 +340,9 @@ def is_enabled(config: dict[str, Any]) -> bool:
 
 
 def start_streaming(
-    config: dict[str, Any], *, event_filter: Optional[Callable[[dict[str, Any]], bool]] = None,
+    config: dict[str, Any],
+    *,
+    event_filter: Optional[Callable[[dict[str, Any]], bool]] = None,
 ) -> Optional[OTLPStreamer]:
     """If OTLP is enabled, attach a streamer to the singleton emitter.
 
@@ -273,10 +355,13 @@ def start_streaming(
     try:
         _require_sdk()
     except OTLPUnavailable:
-        logger.warning("monitoring.export.otlp.enabled but the OTel SDK could not "
-                       "be installed/imported; install 'clawksis-agent[otlp]'")
+        logger.warning(
+            "monitoring.export.otlp.enabled but the OTel SDK could not "
+            "be installed/imported; install 'clawksis-agent[otlp]'"
+        )
         return None
     from agent.monitoring.emitter import get_emitter
+
     streamer = OTLPStreamer(config, event_filter=event_filter)
     get_emitter().subscribe(streamer)
     return streamer

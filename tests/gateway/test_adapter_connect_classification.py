@@ -69,7 +69,6 @@ class TestTelegramAuthClassification:
     def test_network_error_is_not_auth_error(self):
         assert _telegram_classifier()(NetworkError("dns failure")) is False
 
-
     def test_generic_exception_is_not_auth_error(self):
         # Unknown types must stay retryable — a false terminal recreates the
         # "silently dead bot" problem the auto-pause removal fixed.
@@ -105,7 +104,9 @@ def _discord_classifier():
 
 class TestDiscordConnectClassification:
     def test_login_failure_is_terminal(self):
-        code, _message, retryable = _discord_classifier()(LoginFailure("Improper token"))
+        code, _message, retryable = _discord_classifier()(
+            LoginFailure("Improper token")
+        )
         assert code == "discord_auth_error"
         assert retryable is False
 
@@ -142,7 +143,9 @@ class TestPhotonSidecarStartupClassification:
         from plugins.platforms.photon.adapter import PhotonAdapter
 
         # Stand-in for PM's node; the user's PATH node is never picked up.
-        monkeypatch.setattr(photon_adapter, "find_node_executable", lambda _name: "/pm/node")
+        monkeypatch.setattr(
+            photon_adapter, "find_node_executable", lambda _name: "/pm/node"
+        )
 
         return PhotonAdapter(PlatformConfig(enabled=True, token="", extra={}))
 
@@ -280,8 +283,11 @@ def _set_attention_after(value) -> None:
     """Write ``agent.reconnect_attention_after`` into the test's isolated CLAWK_HOME config."""
     import clawk_yaml as yaml
     from clawk_constants import get_clawk_home
+
     (get_clawk_home() / "config.yaml").write_text(
-        yaml.safe_dump({"agent": {"reconnect_attention_after": value}}), encoding="utf-8")
+        yaml.safe_dump({"agent": {"reconnect_attention_after": value}}),
+        encoding="utf-8",
+    )
 
 
 class TestReconnectNeedsAttention:
@@ -337,7 +343,9 @@ def _make_runner():
 
 class TestWatcherAttentionEscalation:
     @pytest.mark.asyncio
-    async def test_watcher_flags_long_queued_platform_and_keeps_retrying(self, monkeypatch):
+    async def test_watcher_flags_long_queued_platform_and_keeps_retrying(
+        self, monkeypatch
+    ):
         runner = _make_runner()
         status_writes = []
         monkeypatch.setattr(
@@ -371,13 +379,17 @@ class TestWatcherAttentionEscalation:
             await runner._platform_reconnect_watcher()
 
         attention = [kw for _p, kw in status_writes if kw.get("needs_attention")]
-        assert attention, f"expected a needs_attention status write, got {status_writes!r}"
+        assert attention, (
+            f"expected a needs_attention status write, got {status_writes!r}"
+        )
         assert attention[0]["platform_state"] == "retrying"
         assert attention[0].get("retrying_since")
         # Platform must STILL be queued — escalation is a signal, never a
         # circuit breaker.
         assert Platform.TELEGRAM in runner._failed_platforms
-        assert runner._failed_platforms[Platform.TELEGRAM].get("attention_flagged") is True
+        assert (
+            runner._failed_platforms[Platform.TELEGRAM].get("attention_flagged") is True
+        )
 
     @pytest.mark.asyncio
     async def test_watcher_flags_only_once(self, monkeypatch):

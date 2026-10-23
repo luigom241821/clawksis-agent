@@ -8,7 +8,9 @@ from typing import Any, Dict, List, NamedTuple, Optional
 from utils import base_url_hostname, is_truthy_value
 from clawk_cli.fallback_config import scoped_fallback_chain
 
-logger = logging.getLogger("tools.delegate_tool")  # log-record parity with the origin module
+logger = logging.getLogger(
+    "tools.delegate_tool"
+)  # log-record parity with the origin module
 
 # Runtime-provider sentinel for providers that are not natively known; must
 # match clawk_cli.runtime_provider.RUNTIME_PROVIDER_TYPE_CUSTOM.
@@ -26,9 +28,11 @@ _LEGACY_MAX_ASYNC_WARNED = False
 # delegation.child_timeout_seconds opts back in.
 DEFAULT_CHILD_TIMEOUT: Optional[float] = None
 
+
 def _cfg() -> dict:
     """The ``delegation`` section, read through the origin so tests can patch it."""
     from tools.delegate_tool import _load_config
+
     return _load_config()
 
 
@@ -43,20 +47,26 @@ def _subagent_auto_deny(command: str, description: str, **kwargs) -> str:
     """Auto-deny (safe default): returns 'deny' so the child sees a recoverable refusal."""
     logger.warning(
         "Subagent auto-denied dangerous command: %s (%s). Set delegation.subagent_auto_approve: true to allow.",
-        command, description,
+        command,
+        description,
     )
     return "deny"
 
+
 def _subagent_auto_approve(command: str, description: str, **kwargs) -> str:
     """Auto-approve (opt-in YOLO via delegation.subagent_auto_approve): returns 'once'."""
-    logger.warning("Subagent auto-approved dangerous command: %s (%s)", command, description)
+    logger.warning(
+        "Subagent auto-approved dangerous command: %s (%s)", command, description
+    )
     return "once"
+
 
 def _get_subagent_approval_callback():
     """Callback for subagent worker threads per delegation.subagent_auto_approve (default False)."""
     if is_truthy_value(_cfg().get("subagent_auto_approve", False)):
         return _subagent_auto_approve
     return _subagent_auto_deny
+
 
 def _knob(key: str, env_var: Optional[str], parse, default, invalid_msg: str):
     """delegation.<key> > <env_var> > default. A config value that fails ``parse`` logs ``invalid_msg`` (``%r`` = the
@@ -76,16 +86,21 @@ def _knob(key: str, env_var: Optional[str], parse, default, invalid_msg: str):
             pass
     return default
 
+
 def _warn_once(flag_name: str, message: str, *args: Any) -> None:
     """Module-global one-shot warning (``flag_name`` is the ``_*_WARNED`` global)."""
     if not globals()[flag_name]:
         globals()[flag_name] = True
         logger.warning(message, *args)
 
+
 def _get_oneshot_max_children() -> int:
     """delegation.oneshot_max_children (total children per finite one-shot session; 0 = unlimited)."""
     return _knob(
-        "oneshot_max_children", None, lambda v: max(0, int(v)), 2,
+        "oneshot_max_children",
+        None,
+        lambda v: max(0, int(v)),
+        2,
         "delegation.oneshot_max_children=%r is not a valid integer; using default 2",
     )
 
@@ -96,21 +111,27 @@ def _get_max_concurrent_children() -> int:
     Floor of 1 is the only bound enforced; there is no ceiling.
     """
     result = _knob(
-        "max_concurrent_children", "DELEGATION_MAX_CONCURRENT_CHILDREN", lambda v: max(1, int(v)),
+        "max_concurrent_children",
+        "DELEGATION_MAX_CONCURRENT_CHILDREN",
+        lambda v: max(1, int(v)),
         _DEFAULT_MAX_CONCURRENT_CHILDREN,
         f"delegation.max_concurrent_children=%r is not a valid integer; using default {_DEFAULT_MAX_CONCURRENT_CHILDREN}",
     )
     if result > 10 and _cfg().get("max_concurrent_children") is not None:
         _warn_once(
-            "_HIGH_CONCURRENCY_WARNED", "delegation.max_concurrent_children=%d: each child consumes API tokens "
-            "independently. High values multiply cost linearly.", result,
+            "_HIGH_CONCURRENCY_WARNED",
+            "delegation.max_concurrent_children=%d: each child consumes API tokens "
+            "independently. High values multiply cost linearly.",
+            result,
         )
     return result
+
 
 def _get_independent_completions() -> bool:
     """delegation.independent_completions (bool, default False): split a background call into per-task / per-group
     completion messages that land as each finishes. Off = one consolidated message when the whole call is done."""
     return is_truthy_value(_cfg().get("independent_completions", False))
+
 
 def _get_worktree_isolation() -> bool:
     """delegation.worktree_isolation (bool, default False): each child gets its own
@@ -118,23 +139,28 @@ def _get_worktree_isolation() -> bool:
     working copy. Git-only and local-backend-only; otherwise silently ignored."""
     return bool(_cfg().get("worktree_isolation", False))
 
+
 def _get_max_async_children() -> int:
     """Concurrency cap for background delegations == delegation.max_concurrent_children. At capacity a new async
     dispatch is REJECTED (not queued) so a runaway model can't pile up unbounded background work; the caller then
     runs synchronously. A leftover ``delegation.max_async_children`` key is ignored with a one-time warning."""
     from tools.delegate_tool import _get_max_concurrent_children
+
     if _cfg().get("max_async_children") is not None:
         _warn_once(
-            "_LEGACY_MAX_ASYNC_WARNED", "delegation.max_async_children is deprecated and ignored; "
+            "_LEGACY_MAX_ASYNC_WARNED",
+            "delegation.max_async_children is deprecated and ignored; "
             "delegation.max_concurrent_children now caps background "
             "delegations too. Remove the stale key from config.yaml.",
         )
     return _get_max_concurrent_children()
 
+
 def _parse_timeout(raw: Any) -> Optional[float]:
     """Seconds → None (<= 0 disables) or max(30, value). Raises on non-numeric."""
     parsed = float(raw)
     return None if parsed <= 0 else max(30.0, parsed)
+
 
 def _get_child_timeout() -> Optional[float]:
     """Inactivity cap for one child (seconds of NO progress), or None (default: no cap). Failures should come from
@@ -144,23 +170,37 @@ def _get_child_timeout() -> Optional[float]:
     value pre-empts nothing the heartbeat staleness monitor would not also catch. delegation.child_timeout_seconds
     > 0 opts in (floor 30 s); 0 or negative disables. Env fallback: DELEGATION_CHILD_TIMEOUT_SECONDS."""
     return _knob(
-        "child_timeout_seconds", "DELEGATION_CHILD_TIMEOUT_SECONDS", _parse_timeout, DEFAULT_CHILD_TIMEOUT,
+        "child_timeout_seconds",
+        "DELEGATION_CHILD_TIMEOUT_SECONDS",
+        _parse_timeout,
+        DEFAULT_CHILD_TIMEOUT,
         "delegation.child_timeout_seconds=%r is not a valid number; using default (no timeout)",
     )
+
 
 def _get_max_spawn_depth() -> int:
     """delegation.max_spawn_depth floored at 1 (no ceiling). Depth 0 is the parent; agents at depths 0..N-1 may spawn,
     depth N is the leaf floor. Default 1 is flat. Each extra level multiplies API cost."""
+
     def _floored(v):
         ival = int(v)
         if ival < _MIN_SPAWN_DEPTH:
-            logger.warning("delegation.max_spawn_depth=%d below floor %d; using %d", ival, _MIN_SPAWN_DEPTH, _MIN_SPAWN_DEPTH)
+            logger.warning(
+                "delegation.max_spawn_depth=%d below floor %d; using %d",
+                ival,
+                _MIN_SPAWN_DEPTH,
+                _MIN_SPAWN_DEPTH,
+            )
         return max(_MIN_SPAWN_DEPTH, ival)
 
     return _knob(
-        "max_spawn_depth", None, _floored, MAX_DEPTH,
+        "max_spawn_depth",
+        None,
+        _floored,
+        MAX_DEPTH,
         f"delegation.max_spawn_depth=%r is not a valid integer; using default {MAX_DEPTH}",
     )
+
 
 def _get_orchestrator_enabled() -> bool:
     """delegation.orchestrator_enabled kill switch (default True): False forces every child to leaf."""
@@ -172,14 +212,19 @@ def _get_orchestrator_enabled() -> bool:
         return val.strip().lower() in {"true", "1", "yes", "on"}
     return True
 
+
 def _get_inherit_mcp_toolsets() -> bool:
     """Whether narrowed child toolsets should keep the parent's MCP toolsets."""
     return is_truthy_value(_cfg().get("inherit_mcp_toolsets"), default=True)
 
+
 def _normalized_runtime_url(value: Any) -> str:
     return str(value or "").strip().rstrip("/")
 
-def _inherit_parent_capabilities(parent_agent, override_provider, override_base_url) -> Optional[dict]:
+
+def _inherit_parent_capabilities(
+    parent_agent, override_provider, override_base_url
+) -> Optional[dict]:
     """Parent's endpoint-trust capability map for a child, or None. ``agent.capabilities`` is a trust decision scoped
     to one provider+endpoint: inherited ONLY when the child runs the parent's exact route; any provider or base_url
     override stays DEFAULT-DENY (matches the /model switch posture).
@@ -191,9 +236,16 @@ def _inherit_parent_capabilities(parent_agent, override_provider, override_base_
     parent_caps = getattr(parent_agent, "capabilities", None)
     if not isinstance(parent_caps, dict):
         return None
-    return {key: value for key, value in parent_caps.items() if isinstance(key, str) and isinstance(value, bool)}
+    return {
+        key: value
+        for key, value in parent_caps.items()
+        if isinstance(key, str) and isinstance(value, bool)
+    }
 
-def _inherit_parent_endpoint(parent_agent, surface_base_url: Optional[str], surface_api_key: Any) -> tuple:
+
+def _inherit_parent_endpoint(
+    parent_agent, surface_base_url: Optional[str], surface_api_key: Any
+) -> tuple:
     """``(base_url, api_key)`` the parent is actually calling, taken from ONE source. ``parent_agent.base_url`` /
     ``api_key`` can lag the live client (old OpenRouter URL vs local Ollama; a fallback runtime the surface attributes
     have not caught up with), and pairing the live endpoint with the surface key hands the child a (base_url, key)
@@ -203,9 +255,13 @@ def _inherit_parent_endpoint(parent_agent, surface_base_url: Optional[str], surf
     client_kwargs = getattr(parent_agent, "_client_kwargs", None)
     client = getattr(parent_agent, "client", None)
     live_candidates = (
-        (client_kwargs.get("base_url"), client_kwargs.get("api_key")) if isinstance(client_kwargs, dict) else (None, None),
+        (client_kwargs.get("base_url"), client_kwargs.get("api_key"))
+        if isinstance(client_kwargs, dict)
+        else (None, None),
         # OpenAI SDK exposes base_url as httpx.URL — coerce before comparing.
-        (getattr(client, "base_url", ""), getattr(client, "api_key", None)) if client is not None else (None, None),
+        (getattr(client, "base_url", ""), getattr(client, "api_key", None))
+        if client is not None
+        else (None, None),
     )
     for raw_url, live_key in live_candidates:
         url = _normalized_runtime_url(raw_url)
@@ -213,27 +269,39 @@ def _inherit_parent_endpoint(parent_agent, surface_base_url: Optional[str], surf
             return url, (live_key or surface_api_key)
     return (surface_base_url or None), surface_api_key
 
+
 def _loaded_pool(key: Any):
     """``load_pool(key)`` when it holds credentials, else None."""
     from agent.credential_pool import load_pool
+
     pool = load_pool(key)
     return pool if pool is not None and pool.has_credentials() else None
 
-def _pool_serves_endpoint(pool: Any, provider: Optional[str], base_url: Optional[str]) -> bool:
+
+def _pool_serves_endpoint(
+    pool: Any, provider: Optional[str], base_url: Optional[str]
+) -> bool:
     """Provider identity AND at least one entry for the child's endpoint; pools without entry metadata pass."""
     from agent.credential_pool import (
-        credential_pool_entry_serves_endpoint as _entry_serves_endpoint, credential_pool_matches_provider,
+        credential_pool_entry_serves_endpoint as _entry_serves_endpoint,
+        credential_pool_matches_provider,
     )
+
     if not credential_pool_matches_provider(pool, provider, base_url=base_url):
         return False
     entries_fn = getattr(pool, "entries", None)
     if not callable(entries_fn):
         return True
     entries = entries_fn()
-    return not isinstance(entries, list) or any(_entry_serves_endpoint(entry, base_url) for entry in entries)
+    return not isinstance(entries, list) or any(
+        _entry_serves_endpoint(entry, base_url) for entry in entries
+    )
+
 
 def _resolve_child_credential_pool(
-    effective_provider: Optional[str], parent_agent, effective_base_url: Optional[str] = None,
+    effective_provider: Optional[str],
+    parent_agent,
+    effective_base_url: Optional[str] = None,
     effective_requested_provider: Optional[str] = None,
 ):
     """Credential pool for the child: parent's pool (same provider), that provider's own pool, or None (child keeps
@@ -259,39 +327,74 @@ def _resolve_child_credential_pool(
     try:
         if effective_provider == "custom":
             from agent.credential_pool import get_custom_provider_pool_key
-            child_key = get_custom_provider_pool_key(effective_base_url, provider_name=effective_requested_provider)
+
+            child_key = get_custom_provider_pool_key(
+                effective_base_url, provider_name=effective_requested_provider
+            )
             if child_key is None:
                 return None
             parent_key = get_custom_provider_pool_key(
-                getattr(parent_agent, "base_url", None), provider_name=getattr(parent_agent, "requested_provider", None),
+                getattr(parent_agent, "base_url", None),
+                provider_name=getattr(parent_agent, "requested_provider", None),
             )
-            if parent_pool is not None and parent_provider == "custom" and parent_key is not None and parent_key == child_key:
+            if (
+                parent_pool is not None
+                and parent_provider == "custom"
+                and parent_key is not None
+                and parent_key == child_key
+            ):
                 return parent_pool
             # The entry's slug may also be a same-named built-in's pool: lease only the rows the entry
             # owns, or a fixed entry credential becomes the built-in's account on a shared endpoint.
-            from agent.custom_entry_pool import custom_entry_for_endpoint, entry_scoped_pool
-            owner = custom_entry_for_endpoint(effective_base_url, effective_requested_provider)
-            return entry_scoped_pool(_loaded_pool(child_key), child_key, owner[1] if owner else None)
+            from agent.custom_entry_pool import (
+                custom_entry_for_endpoint,
+                entry_scoped_pool,
+            )
+
+            owner = custom_entry_for_endpoint(
+                effective_base_url, effective_requested_provider
+            )
+            return entry_scoped_pool(
+                _loaded_pool(child_key), child_key, owner[1] if owner else None
+            )
         if effective_provider == parent_provider:
             # A same-provider parent with no pool is using a fixed credential.
             # Loading a separate provider pool here can replace the inherited
             # endpoint and key when the child acquires its startup lease (#71424).
             if parent_pool is None:
                 return None
-            if not effective_base_url or _pool_serves_endpoint(parent_pool, effective_provider, effective_base_url):
+            if not effective_base_url or _pool_serves_endpoint(
+                parent_pool, effective_provider, effective_base_url
+            ):
                 return parent_pool
-            logger.debug("Parent %s pool has no entry for child endpoint %s; not sharing it",
-                         effective_provider, effective_base_url)
+            logger.debug(
+                "Parent %s pool has no entry for child endpoint %s; not sharing it",
+                effective_provider,
+                effective_base_url,
+            )
         pool = _loaded_pool(effective_provider)
-        if pool is not None and effective_base_url and not _pool_serves_endpoint(pool, effective_provider, effective_base_url):
+        if (
+            pool is not None
+            and effective_base_url
+            and not _pool_serves_endpoint(pool, effective_provider, effective_base_url)
+        ):
             return None  # child keeps its fixed credential
         return pool
     except Exception as exc:
         if effective_provider == "custom":
-            logger.debug("Could not resolve custom credential pool for child endpoint '%s': %s", effective_base_url, exc)
+            logger.debug(
+                "Could not resolve custom credential pool for child endpoint '%s': %s",
+                effective_base_url,
+                exc,
+            )
         else:
-            logger.debug("Could not load credential pool for child provider '%s': %s", effective_provider, exc)
+            logger.debug(
+                "Could not load credential pool for child provider '%s': %s",
+                effective_provider,
+                exc,
+            )
     return None
+
 
 def _merge_request_overrides(runtime_overrides, explicit_overrides):
     """Merge explicit ``delegation.request_overrides`` OVER runtime-derived ones. Explicit top-level keys win;
@@ -299,8 +402,13 @@ def _merge_request_overrides(runtime_overrides, explicit_overrides):
     unless the explicit dict redefines that exact key. Both sides are deep-copied so transport-side mutation can't
     leak into the config/runtime cache. None when both are empty."""
     import copy as _copy
-    runtime_overrides = runtime_overrides if isinstance(runtime_overrides, dict) else None
-    explicit_overrides = explicit_overrides if isinstance(explicit_overrides, dict) else None
+
+    runtime_overrides = (
+        runtime_overrides if isinstance(runtime_overrides, dict) else None
+    )
+    explicit_overrides = (
+        explicit_overrides if isinstance(explicit_overrides, dict) else None
+    )
     if not runtime_overrides and not explicit_overrides:
         return None
     merged = _copy.deepcopy(runtime_overrides) if runtime_overrides else {}
@@ -315,24 +423,38 @@ def _merge_request_overrides(runtime_overrides, explicit_overrides):
         merged["extra_body"] = explicit_extra
     return merged or None
 
+
 # Native-SDK providers speak their own wire protocol and can't be reached via chat_completions against a base_url:
 # always take the runtime-provider path (a configured base_url still flows through it, e.g. a Bedrock region).
 _NATIVE_SDK_PROVIDERS = frozenset({"bedrock", "vertex", "google", "google-genai"})
-_EXPLICIT_API_MODES = frozenset({"chat_completions", "codex_responses", "anthropic_messages"})
+_EXPLICIT_API_MODES = frozenset(
+    {"chat_completions", "codex_responses", "anthropic_messages"}
+)
+
 
 def _require_pinned_command(command: Optional[str], message: str) -> None:
     """A pinned ACP transport command must exist on PATH — refuse loudly rather
     than let the child silently fall back to another transport."""
     import shutil as _shutil
+
     if command and not _shutil.which(command):
         raise ValueError(message)
 
-def _credential_bundle(model, provider, base_url, api_key, api_mode, request_overrides, **extra) -> dict:
+
+def _credential_bundle(
+    model, provider, base_url, api_key, api_mode, request_overrides, **extra
+) -> dict:
     """The child credential dict every branch of ``_resolve_delegation_credentials`` returns."""
     return {
-        "model": model, "provider": provider, "base_url": base_url, "api_key": api_key, "api_mode": api_mode,
-        "request_overrides": request_overrides, **extra,
+        "model": model,
+        "provider": provider,
+        "base_url": base_url,
+        "api_key": api_key,
+        "api_mode": api_mode,
+        "request_overrides": request_overrides,
+        **extra,
     }
+
 
 def _direct_endpoint_credentials(v: dict, explicit_request_overrides) -> dict:
     """``delegation.base_url`` branch: provider/api_mode from URL heuristics."""
@@ -341,6 +463,7 @@ def _direct_endpoint_credentials(v: dict, explicit_request_overrides) -> dict:
     # Without this, subagents would default to chat_completions and hit 404s on endpoints that only speak
     # the Anthropic Messages protocol. Fixes #10213.
     from clawk_cli.runtime_provider import _detect_api_mode_for_url
+
     base_lower = v["base_url"].lower()
     host = base_url_hostname(v["base_url"])
     provider = "custom"
@@ -354,7 +477,10 @@ def _direct_endpoint_credentials(v: dict, explicit_request_overrides) -> dict:
     # Explicit delegation.api_mode always wins over the URL heuristic; a provider plugin's
     # registered dialect counts as explicit.
     from agent.transports import registered_api_modes
-    if v["api_mode"] in _EXPLICIT_API_MODES or (v["api_mode"] and v["api_mode"] in registered_api_modes()):
+
+    if v["api_mode"] in _EXPLICIT_API_MODES or (
+        v["api_mode"] and v["api_mode"] in registered_api_modes()
+    ):
         api_mode = v["api_mode"]
 
     # Preserve the configured provider's request personality on an explicit endpoint.
@@ -362,26 +488,38 @@ def _direct_endpoint_credentials(v: dict, explicit_request_overrides) -> dict:
     if v["provider"]:
         try:
             from clawk_cli.runtime_provider import resolve_runtime_provider
-            runtime = resolve_runtime_provider(requested=v["provider"], target_model=v["model"])
+
+            runtime = resolve_runtime_provider(
+                requested=v["provider"], target_model=v["model"]
+            )
             request_overrides = dict(runtime.get("request_overrides") or {}) or None
 
         except Exception as exc:
             logger.debug(
                 "delegation.base_url: runtime resolution for provider '%s' failed; proceeding without request_overrides: %s",
-                v["provider"], exc,
+                v["provider"],
+                exc,
             )
     # api_key None → inherited from parent in _build_child_agent
     return _credential_bundle(
-        v["model"], provider, v["base_url"], v["api_key"], api_mode,
+        v["model"],
+        provider,
+        v["base_url"],
+        v["api_key"],
+        api_mode,
         _merge_request_overrides(request_overrides, explicit_request_overrides),
     )
+
 
 def _runtime_provider_credentials(v: dict, explicit_request_overrides) -> dict:
     """``delegation.provider`` branch: full bundle via the runtime provider system."""
     configured_provider = v["provider"]
     try:
         from clawk_cli.runtime_provider import resolve_runtime_provider
-        runtime = resolve_runtime_provider(requested=configured_provider, target_model=v["model"])
+
+        runtime = resolve_runtime_provider(
+            requested=configured_provider, target_model=v["model"]
+        )
     except Exception as exc:
         raise ValueError(
             f"Cannot resolve delegation provider '{configured_provider}': {exc}. "
@@ -400,15 +538,19 @@ def _runtime_provider_credentials(v: dict, explicit_request_overrides) -> dict:
     # silently fall back to another transport (#80450).
     pinned_command = runtime.get("command")
     _require_pinned_command(
-        pinned_command, f"Delegation provider '{configured_provider}' is pinned to the "
+        pinned_command,
+        f"Delegation provider '{configured_provider}' is pinned to the "
         f"'{pinned_command}' command, which was not found on PATH. "
         f"Install it or choose a different delegation provider.",
     )
     # A provider override is assembled into the child as one bundle (see _resolve_child_runtime), so it must
     # carry its own endpoint. ACP transports are addressed by command and native-SDK providers by their SDK,
     # so neither needs a URL; anything else without one would otherwise be built with no endpoint at all.
-    if (not runtime.get("base_url") and not pinned_command
-            and configured_provider.strip().lower() not in _NATIVE_SDK_PROVIDERS):
+    if (
+        not runtime.get("base_url")
+        and not pinned_command
+        and configured_provider.strip().lower() not in _NATIVE_SDK_PROVIDERS
+    ):
         raise ValueError(
             f"Delegation provider '{configured_provider}' resolved without a base_url. "
             f"Refusing to build a subagent with an incomplete credential bundle — check the provider's "
@@ -416,11 +558,20 @@ def _runtime_provider_credentials(v: dict, explicit_request_overrides) -> dict:
         )
     return _credential_bundle(
         v["model"] or runtime.get("model") or None,
-        configured_provider if runtime.get("provider") == _RUNTIME_PROVIDER_CUSTOM else runtime.get("provider"),
-        runtime.get("base_url"), api_key, runtime.get("api_mode"),
-        _merge_request_overrides(runtime.get("request_overrides"), explicit_request_overrides) or {},
-        command=pinned_command, args=list(runtime.get("args") or []),
+        configured_provider
+        if runtime.get("provider") == _RUNTIME_PROVIDER_CUSTOM
+        else runtime.get("provider"),
+        runtime.get("base_url"),
+        api_key,
+        runtime.get("api_mode"),
+        _merge_request_overrides(
+            runtime.get("request_overrides"), explicit_request_overrides
+        )
+        or {},
+        command=pinned_command,
+        args=list(runtime.get("args") or []),
     )
+
 
 def _resolve_delegation_credentials(cfg: dict, parent_agent) -> dict:
     """Child credential bundle from the ``delegation`` config section. Three branches: ``base_url`` set → direct
@@ -428,20 +579,37 @@ def _resolve_delegation_credentials(cfg: dict, parent_agent) -> dict:
     ``provider`` set → full bundle via the runtime provider system (same path as CLI/gateway startup); neither →
     None values, child inherits everything. ``request_overrides`` is honored on every branch. Raises ValueError
     with a user-facing message."""
-    values = {k: str(cfg.get(k) or "").strip() or None for k in ("model", "provider", "base_url", "api_key")}
+    values = {
+        k: str(cfg.get(k) or "").strip() or None
+        for k in ("model", "provider", "base_url", "api_key")
+    }
     values["api_mode"] = str(cfg.get("api_mode") or "").strip().lower() or None
-    explicit_request_overrides = cfg.get("request_overrides") if isinstance(cfg.get("request_overrides"), dict) else None
-    is_native_sdk_provider = (values["provider"] or "").strip().lower() in _NATIVE_SDK_PROVIDERS
+    explicit_request_overrides = (
+        cfg.get("request_overrides")
+        if isinstance(cfg.get("request_overrides"), dict)
+        else None
+    )
+    is_native_sdk_provider = (
+        values["provider"] or ""
+    ).strip().lower() in _NATIVE_SDK_PROVIDERS
 
     if values["base_url"] and not is_native_sdk_provider:
         return _direct_endpoint_credentials(values, explicit_request_overrides)
     if not values["provider"]:
         # Pure inherit; explicit request_overrides still merge OVER the parent's.
         return _credential_bundle(
-            values["model"], None, None, None, None,
-            _merge_request_overrides(getattr(parent_agent, "request_overrides", None), explicit_request_overrides),
+            values["model"],
+            None,
+            None,
+            None,
+            None,
+            _merge_request_overrides(
+                getattr(parent_agent, "request_overrides", None),
+                explicit_request_overrides,
+            ),
         )
     return _runtime_provider_credentials(values, explicit_request_overrides)
+
 
 def _load_config() -> dict:
     """The ``delegation`` config section (read-only — do NOT mutate). Prefers the shared ``load_config_readonly()``
@@ -451,6 +619,7 @@ def _load_config() -> dict:
     if os.environ.get("CLAWK_IGNORE_USER_CONFIG") != "1":
         try:
             from clawk_cli.config import load_config_readonly
+
             cfg = load_config_readonly().get("delegation") or {}
             if isinstance(cfg, dict):
                 return cfg
@@ -458,23 +627,31 @@ def _load_config() -> dict:
             pass
     try:
         from cli import CLI_CONFIG
+
         cfg = CLI_CONFIG.get("delegation") or {}
         return cfg if isinstance(cfg, dict) else {}
     except Exception:
         return {}
 
+
 # OpenRouter routing filters: inherited from the parent, but reset to these defaults under a pinned provider — parent
 # filters (e.g. only=["Anthropic"]) would silently force the child back onto the parent's provider.
 # openrouter_min_coding_score stays inherited: model-gated, no-op elsewhere.
 _ROUTING_FILTER_DEFAULTS = (
-    ("providers_allowed", None), ("providers_ignored", None), ("providers_order", None), ("provider_sort", None),
-    ("provider_require_parameters", False), ("provider_data_collection", ""),
+    ("providers_allowed", None),
+    ("providers_ignored", None),
+    ("providers_order", None),
+    ("provider_sort", None),
+    ("provider_require_parameters", False),
+    ("provider_data_collection", ""),
 )
 
 _NOUS_PROVIDERS = frozenset({"nous", "nous-portal", "nousresearch"})
 
 
-def _resolve_child_fallback_chain(parent_agent, routing_cfg: Any, pinned: bool) -> Optional[list[dict[str, Any]]]:
+def _resolve_child_fallback_chain(
+    parent_agent, routing_cfg: Any, pinned: bool
+) -> Optional[list[dict[str, Any]]]:
     """Fallback chain for a child, owned by the same config block as its route.
 
     Pinned children (provider, endpoint or model override) never borrow the parent chain;
@@ -484,8 +661,12 @@ def _resolve_child_fallback_chain(parent_agent, routing_cfg: Any, pinned: bool) 
     """
     return scoped_fallback_chain(
         getattr(parent_agent, "_fallback_chain", None),
-        routing_cfg.get("fallback_providers") if isinstance(routing_cfg, dict) else None,
-        pinned=pinned, owner="delegation")
+        routing_cfg.get("fallback_providers")
+        if isinstance(routing_cfg, dict)
+        else None,
+        pinned=pinned,
+        owner="delegation",
+    )
 
 
 class ResolvedReasoning(NamedTuple):
@@ -508,19 +689,32 @@ def _child_reasoning(parent_agent, delegation_cfg: dict, route_effort: Any) -> A
         delegation_effort = (delegation_cfg or {}).get("reasoning_effort")
     if delegation_effort or delegation_effort is False:
         from clawk_constants import parse_reasoning_effort
+
         parsed = parse_reasoning_effort(delegation_effort)
         if parsed is None:
-            logger.warning("Unknown delegation.reasoning_effort '%s', inheriting parent level", delegation_effort)
+            logger.warning(
+                "Unknown delegation.reasoning_effort '%s', inheriting parent level",
+                delegation_effort,
+            )
         else:
             child_reasoning = parsed
     return child_reasoning
 
 
 def _resolve_child_runtime(
-    parent_agent, delegation_cfg: dict, parent_api_key: Any, *, model: Optional[str], override_provider: Optional[str],
-    override_base_url: Optional[str], override_api_key: Optional[str], override_api_mode: Optional[str],
-    override_acp_command: Optional[str], override_acp_args: Optional[list[str]],
-    routing_cfg: Optional[dict[str, Any]] = None, override_reasoning_effort: Any = None,
+    parent_agent,
+    delegation_cfg: dict,
+    parent_api_key: Any,
+    *,
+    model: Optional[str],
+    override_provider: Optional[str],
+    override_base_url: Optional[str],
+    override_api_key: Optional[str],
+    override_api_mode: Optional[str],
+    override_acp_command: Optional[str],
+    override_acp_args: Optional[list[str]],
+    routing_cfg: Optional[dict[str, Any]] = None,
+    override_reasoning_effort: Any = None,
 ) -> dict[str, Any]:
     """Child credentials, transport and routing (config override > parent inherit) as ``AIAgent`` kwargs. Rules that
     are easy to break: api_mode is re-derived (not inherited) when the child's provider differs from the parent's
@@ -541,7 +735,9 @@ def _resolve_child_runtime(
         effective_base_url = override_base_url
     else:
         effective_provider = getattr(parent_agent, "provider", None)
-        effective_base_url, parent_api_key = _inherit_parent_endpoint(parent_agent, parent_agent.base_url, parent_api_key)
+        effective_base_url, parent_api_key = _inherit_parent_endpoint(
+            parent_agent, parent_agent.base_url, parent_api_key
+        )
     # api_mode: each provider has its own wire, so a different provider re-derives (None) instead of inheriting (404s
     # otherwise). Nous Portal is dual-wire within one provider (anthropic/* → Messages, else chat_completions), so
     # same-provider inheritance would pin the child on the wrong wire — re-derive.
@@ -556,6 +752,7 @@ def _resolve_child_runtime(
         effective_api_mode = override_api_mode
     elif (effective_provider or "").strip().lower() in _NOUS_PROVIDERS:
         from clawk_cli.providers import nous_api_mode
+
         effective_api_mode = nous_api_mode(effective_model)
     elif effective_provider != _parent_provider:
         effective_api_mode = None  # force re-derivation from provider's defaults
@@ -564,12 +761,17 @@ def _resolve_child_runtime(
     # A pinned transport that cannot run must fail the spawn loudly, never fall
     # back silently (delegate_task pre-validates; this covers direct callers).
     _require_pinned_command(
-        override_acp_command, f"Pinned delegation command '{override_acp_command}' was not "
+        override_acp_command,
+        f"Pinned delegation command '{override_acp_command}' was not "
         f"found on PATH. Install it or remove delegation.command from config.yaml.",
     )
-    effective_acp_command = override_acp_command or getattr(parent_agent, "acp_command", None)
+    effective_acp_command = override_acp_command or getattr(
+        parent_agent, "acp_command", None
+    )
     effective_acp_args = list(
-        override_acp_args if override_acp_args is not None else (getattr(parent_agent, "acp_args", []) or [])
+        override_acp_args
+        if override_acp_args is not None
+        else (getattr(parent_agent, "acp_args", []) or [])
     )
     # A pinned provider must use direct API calls; inheriting the parent's ACP
     # transport would bypass the override credentials entirely.
@@ -583,6 +785,7 @@ def _resolve_child_runtime(
     # via delegate_task, which pre-validates the command in _resolve_delegation_credentials.
     if override_acp_command:
         from providers import get_provider_profile
+
         profile = get_provider_profile(effective_provider or "")
         # A generic process command does not imply the legacy ACP protocol.
         if profile is None or profile.auth_type != "external_process":
@@ -597,22 +800,38 @@ def _resolve_child_runtime(
         )
 
     # Reasoning: the task route's effort (delegation provider) > delegation.reasoning_effort > parent.
-    child_reasoning = _child_reasoning(parent_agent, delegation_cfg, override_reasoning_effort)
+    child_reasoning = _child_reasoning(
+        parent_agent, delegation_cfg, override_reasoning_effort
+    )
 
     kwargs: dict[str, Any] = {
-        "base_url": effective_base_url, "api_key": override_api_key or parent_api_key, "model": effective_model,
-        "provider": effective_provider, "requested_provider": effective_requested_provider,
-        "capabilities": _inherit_parent_capabilities(parent_agent, override_provider, override_base_url),
-        "api_mode": effective_api_mode, "acp_command": effective_acp_command, "acp_args": effective_acp_args,
+        "base_url": effective_base_url,
+        "api_key": override_api_key or parent_api_key,
+        "model": effective_model,
+        "provider": effective_provider,
+        "requested_provider": effective_requested_provider,
+        "capabilities": _inherit_parent_capabilities(
+            parent_agent, override_provider, override_base_url
+        ),
+        "api_mode": effective_api_mode,
+        "acp_command": effective_acp_command,
+        "acp_args": effective_acp_args,
         "reasoning_config": child_reasoning,
         # Resolve routing and recovery policy from the same configuration owner. A pinned provider, endpoint, or
         # model never borrows the parent's chain; an explicitly declared child chain still remains available.
         "fallback_model": _resolve_child_fallback_chain(
-            parent_agent, delegation_cfg if routing_cfg is None else routing_cfg,
-            pinned=bool(override_provider or override_base_url or model)),
-        "openrouter_min_coding_score": getattr(parent_agent, "openrouter_min_coding_score", None),
+            parent_agent,
+            delegation_cfg if routing_cfg is None else routing_cfg,
+            pinned=bool(override_provider or override_base_url or model),
+        ),
+        "openrouter_min_coding_score": getattr(
+            parent_agent, "openrouter_min_coding_score", None
+        ),
         # Routing filters reset to their defaults under a pinned provider (see _ROUTING_FILTER_DEFAULTS).
-        **{a: d if override_provider else getattr(parent_agent, a, d) for a, d in _ROUTING_FILTER_DEFAULTS},
+        **{
+            a: d if override_provider else getattr(parent_agent, a, d)
+            for a, d in _ROUTING_FILTER_DEFAULTS
+        },
     }
     if not override_provider:
         kwargs["provider_data_collection"] = kwargs["provider_data_collection"] or ""

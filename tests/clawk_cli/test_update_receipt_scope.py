@@ -1,4 +1,5 @@
 """Nested command boundaries and copied contexts cannot close an outer receipt."""
+
 import contextvars
 
 from clawk_cli import update_receipt as receipts
@@ -25,7 +26,9 @@ def test_copied_context_finalize_does_not_mutate_parent(tmp_path, monkeypatch):
     monkeypatch.setattr(receipts, "_code_identity", lambda **kw: {})
     receipts.begin_update_receipt()
     try:
-        contextvars.copy_context().run(receipts.finalize_pending_update_receipt, 1, "child failed")
+        contextvars.copy_context().run(
+            receipts.finalize_pending_update_receipt, 1, "child failed"
+        )
         parent = receipts._current.get().data
         assert parent["outcome"] == "running"
         assert "exit_code" not in parent

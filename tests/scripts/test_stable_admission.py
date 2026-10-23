@@ -5,6 +5,7 @@
 ``rc.<N>-vX.Y.Z`` names the version and the attempt, and the only question
 about the commit is whether it is on ``main``.
 """
+
 import json
 import subprocess
 
@@ -26,8 +27,11 @@ def test_admission_reads_the_version_and_attempt_from_the_attempt_ref():
     admitted = admit_claim("rc.2-v0.21.5", commit, on_main=lambda sha: sha == commit)
 
     assert admitted == {
-        "claim_tag": "rc.2-v0.21.5", "tag": "v0.21.5",
-        "version": "0.21.5", "attempt": 2, "commit": commit,
+        "claim_tag": "rc.2-v0.21.5",
+        "tag": "v0.21.5",
+        "version": "0.21.5",
+        "attempt": 2,
+        "commit": commit,
     }
 
 
@@ -46,7 +50,9 @@ def test_admission_refuses_a_tag_that_is_not_an_attempt_ref(tag):
         admit_claim(tag, "a" * 40, on_main=lambda _sha: True)
 
 
-def test_a_signed_claim_tag_is_read_through_the_jobs_own_git_read(tmp_path, monkeypatch):
+def test_a_signed_claim_tag_is_read_through_the_jobs_own_git_read(
+    tmp_path, monkeypatch
+):
     """The job reads a claim with ``git tag -l --format=%(contents)``, and a
     signed tag appends its armor to that message. The reader has to parse the
     record before the armor, or every signed claim fails admission."""
@@ -54,27 +60,48 @@ def test_a_signed_claim_tag_is_read_through_the_jobs_own_git_read(tmp_path, monk
 
     monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "absent-config"))
     monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
-    record = {"schema": 1, "version": "0.21.5", "attempt": 19, "commit": "3" * 40,
-              "autopublish": False, "skipBundles": False, "skipTests": True,
-              "claimEpoch": 1790701941}
+    record = {
+        "schema": 1,
+        "version": "0.21.5",
+        "attempt": 19,
+        "commit": "3" * 40,
+        "autopublish": False,
+        "skipBundles": False,
+        "skipTests": True,
+        "claimEpoch": 1790701941,
+    }
     repo = tmp_path / "repo"
     repo.mkdir()
 
     def git(*args: str) -> None:
-        subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True, text=True)
+        subprocess.run(
+            ["git", *args], cwd=repo, check=True, capture_output=True, text=True
+        )
 
     git("init", "-q", "-b", "main")
     git("config", "user.name", "Fixture")
     git("config", "user.email", "fixture@example.invalid")
     git("commit", "--allow-empty", "-qm", "fixture")
-    git("tag", "-a", "rc.19-v0.21.5", "-m",
-        json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n" + SSH_SIGNATURE)
+    git(
+        "tag",
+        "-a",
+        "rc.19-v0.21.5",
+        "-m",
+        json.dumps(record, sort_keys=True, separators=(",", ":"))
+        + "\n"
+        + SSH_SIGNATURE,
+    )
 
     raw = subprocess.check_output(
-        ["git", "tag", "-l", "rc.19-v0.21.5", "--format=%(contents)"], cwd=repo, text=True).strip()
+        ["git", "tag", "-l", "rc.19-v0.21.5", "--format=%(contents)"],
+        cwd=repo,
+        text=True,
+    ).strip()
     assert "-----BEGIN SSH SIGNATURE-----" in raw
     with pytest.raises(json.JSONDecodeError):  # the shape that failed admission
         json.loads(raw)
     # The record predates lanes: skipTests=true reads as the build lanes alone.
     assert _claim_metadata(raw, version="0.21.5", attempt=19, commit="3" * 40) == {
-        **record, "lanes": frozenset({"docker", "windows", "windows-store", "macos-arm64"})}
+        **record,
+        "lanes": frozenset({"docker", "windows", "windows-store", "macos-arm64"}),
+    }

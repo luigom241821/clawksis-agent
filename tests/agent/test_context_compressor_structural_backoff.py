@@ -14,7 +14,9 @@ from agent.context_compressor import ContextCompressor
 
 
 def _compressor(protect_first_n: int = 1) -> ContextCompressor:
-    with patch("agent.context_compressor.get_model_context_length", return_value=100000):
+    with patch(
+        "agent.context_compressor.get_model_context_length", return_value=100000
+    ):
         return ContextCompressor(
             model="test/model",
             threshold_percent=0.85,
@@ -83,22 +85,16 @@ def test_gate_blocked_during_backoff_then_resumes():
 
     # While the structural backoff is live the gate must say blocked.
     compressor._structural_no_op_backoff_until = time.monotonic() + 300.0
-    with patch.object(
-        compressor, "_automatic_compression_blocked", return_value=True
-    ):
+    with patch.object(compressor, "_automatic_compression_blocked", return_value=True):
         should, reason = compressor.should_compress_info(prompt_tokens=300_000)
         assert should is False
         assert reason is not None
         assert reason.startswith("structural_backoff:")
-        assert compressor._compression_block_reason().startswith(
-            "structural_backoff:"
-        )
+        assert compressor._compression_block_reason().startswith("structural_backoff:")
 
     # After the backoff lapses nothing blocks: same over-threshold
     # transcript compresses again (real gate, real state).
-    compressor._structural_no_op_backoff_until = (
-        time.monotonic() - 1.0
-    )
+    compressor._structural_no_op_backoff_until = time.monotonic() - 1.0
     should, reason = compressor.should_compress_info(prompt_tokens=300_000)
     assert should is True
     assert reason is None
@@ -110,9 +106,10 @@ SUMMARY_RESPONSE = "fresh replacement summary body"
 def _messages_with_old_handoff():
     return [
         {"role": "system", "content": "system prompt"},
-        {"role": "user", "content": (
-            "CONTEXT SUMMARY (from previous session):\nold summary body"
-        )},
+        {
+            "role": "user",
+            "content": ("CONTEXT SUMMARY (from previous session):\nold summary body"),
+        },
         {"role": "assistant", "content": "handoff acknowledged after resume"},
         {"role": "user", "content": "new user turn after resume"},
         {"role": "assistant", "content": "new assistant work after resume"},
@@ -135,9 +132,7 @@ def test_forced_attempt_and_success_lift_the_backoff():
         "agent.context_compressor.call_llm",
         return_value=_response(SUMMARY_RESPONSE),
     ):
-        compressed = compressor.compress(
-            _messages_with_old_handoff(), force=True
-        )
+        compressed = compressor.compress(_messages_with_old_handoff(), force=True)
 
     assert compressor._structural_no_op_backoff_until == 0.0
     # The forced attempt actually committed a boundary.

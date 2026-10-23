@@ -119,10 +119,12 @@ def test_no_caption_non_forum_keeps_separate_text():
     _remember_channel_is_forum(chat_id, False)
     img = _tmpfile(".png")
     try:
-        session_ctx, calls = _session_with([
-            _resp(200, {"id": "t1"}),
-            _resp(200, {"id": "m1"}),
-        ])
+        session_ctx, calls = _session_with(
+            [
+                _resp(200, {"id": "t1"}),
+                _resp(200, {"id": "m1"}),
+            ]
+        )
         with patch("aiohttp.ClientSession", return_value=session_ctx):
             res = asyncio.run(
                 _standalone_send(

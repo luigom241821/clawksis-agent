@@ -21,16 +21,25 @@ class TestTuiApprovalEmitRedaction:
         from tui_gateway import server as tui_server, server_requests
 
         sent = {}
-        monkeypatch.setattr(server_requests, "send_async",
-                            lambda method, sid, params, on_result: (sent.update(method=method, sid=sid, params=params),
-                                                                    lambda reason: None)[1])
-        monkeypatch.setattr(tui_server, "_sessions", {"sess-1": {"session_key": "key-1"}})
+        monkeypatch.setattr(
+            server_requests,
+            "send_async",
+            lambda method, sid, params, on_result: (
+                sent.update(method=method, sid=sid, params=params),
+                lambda reason: None,
+            )[1],
+        )
+        monkeypatch.setattr(
+            tui_server, "_sessions", {"sess-1": {"session_key": "key-1"}}
+        )
         return tui_server, sent
 
     def test_emit_approval_request_redacts_command_in_payload(self, monkeypatch):
         tui_server, sent = self._sent(monkeypatch)
         raw = "curl -H 'Authorization: token ghp_01...6789' https://api.github.com"
-        tui_server._emit_approval_request("sess-1", {"command": raw, "description": "x"})
+        tui_server._emit_approval_request(
+            "sess-1", {"command": raw, "description": "x"}
+        )
 
         assert sent["method"] == "approval" and sent["sid"] == "sess-1"
         # credential removed, non-command field + command structure preserved
@@ -52,7 +61,11 @@ class TestTuiApprovalEmitRedaction:
         tui_server, sent = self._sent(monkeypatch)
         tui_server._emit_approval_request(
             "sess-1",
-            {"allow_permanent": allow_permanent, "allow_session": allow_session, "command": "<write to AGENTS.md>"},
+            {
+                "allow_permanent": allow_permanent,
+                "allow_session": allow_session,
+                "command": "<write to AGENTS.md>",
+            },
         )
 
         assert sent["params"]["choices"] == expected

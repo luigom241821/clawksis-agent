@@ -18,6 +18,7 @@ def _hold_gil(secs: int) -> None:
     """Block in a foreign call that keeps the GIL — mirrors native ``primp``.
     ``ctypes.PyDLL`` (unlike ``CDLL``/``WinDLL``) does not release the GIL."""
     import ctypes
+
     if sys.platform == "win32":
         sleep, secs = ctypes.PyDLL("kernel32").Sleep, secs * 1000
     else:
@@ -34,7 +35,11 @@ def _hang(block, name: str) -> dict:
     return {"ok": False, "error": f"{name} hook returned unexpectedly"}
 
 
-_TEST_HOOKS = {"sleep": lambda: _hang(time.sleep, "sleep"), "gil": lambda: _hang(_hold_gil, "gil"), "empty": lambda: {"ok": True, "results": []}}
+_TEST_HOOKS = {
+    "sleep": lambda: _hang(time.sleep, "sleep"),
+    "gil": lambda: _hang(_hold_gil, "gil"),
+    "empty": lambda: {"ok": True, "results": []},
+}
 
 
 def _write_envelope(envelope: dict) -> None:
@@ -57,12 +62,20 @@ def main() -> int:
         if os.environ.get("CLAWK_DDGS_ALLOW_TEST_HOOKS") != "1":
             return _fail("test_hook refused (hooks not enabled)", 3)
         fn = _TEST_HOOKS.get(str(hook))
-        envelope = fn() if fn else {"ok": False, "error": f"unknown test_hook: {hook!r}"}
+        envelope = (
+            fn() if fn else {"ok": False, "error": f"unknown test_hook: {hook!r}"}
+        )
         _write_envelope(envelope)
         return 0 if envelope.get("ok") else 1
-    query, safe_limit = str(request.get("query") or ""), max(1, int(request.get("safe_limit") or 1))
+    query, safe_limit = (
+        str(request.get("query") or ""),
+        max(1, int(request.get("safe_limit") or 1)),
+    )
     try:
-        from plugins.web.ddgs.provider import _run_ddgs_search  # lazy: light startup, patchable
+        from plugins.web.ddgs.provider import (
+            _run_ddgs_search,
+        )  # lazy: light startup, patchable
+
         _write_envelope({"ok": True, "results": _run_ddgs_search(query, safe_limit)})
         return 0
     except Exception as exc:

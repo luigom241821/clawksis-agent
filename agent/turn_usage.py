@@ -17,7 +17,11 @@ from typing import Any, Dict, List
 
 from agent.image_token_cost import calibrate_from_usage
 from agent.usage_anchor import capture_usage_anchor, set_usage_anchor
-from agent.usage_pricing import estimate_usage_cost, normalize_usage, with_served_service_tier
+from agent.usage_pricing import (
+    estimate_usage_cost,
+    normalize_usage,
+    with_served_service_tier,
+)
 
 logger = logging.getLogger("agent.conversation_loop")
 
@@ -26,6 +30,7 @@ def _agent_session_source(agent: Any) -> str:
     """The surface the agent's own row create would stamp (``_ensure_db_session``), so an
     accounting guard that wins the row-creation race never mints an anonymous session."""
     from agent.session_source import session_source_for
+
     return session_source_for(getattr(agent, "platform", None))
 
 
@@ -61,7 +66,9 @@ def _fold_moa_usage(agent, canonical_usage):
     if _moa_client is not None and hasattr(_moa_client, "consume_and_save_trace"):
         try:
             # Streaming path: pass the streamed acting text so the trace is self-contained.
-            _agg_streamed_text = getattr(agent, "_current_streamed_assistant_text", "") or ""
+            _agg_streamed_text = (
+                getattr(agent, "_current_streamed_assistant_text", "") or ""
+            )
             _moa_client.consume_and_save_trace(
                 agent.session_id, aggregator_output_fallback=_agg_streamed_text or None
             )
@@ -71,8 +78,14 @@ def _fold_moa_usage(agent, canonical_usage):
 
 
 def record_response_usage(
-    agent: Any, response: Any, *, messages: list[dict[str, Any]], api_call_count: int,
-    api_duration: float, compression_attempts: int, max_compression_attempts: int,
+    agent: Any,
+    response: Any,
+    *,
+    messages: list[dict[str, Any]],
+    api_call_count: int,
+    api_duration: float,
+    compression_attempts: int,
+    max_compression_attempts: int,
 ) -> ResponseUsageOutcome:
     """Fold ``response.usage`` into compressor, anchors, session counters, state.db
     and the API-call log line (see module docstring). No-usage responses only
@@ -83,7 +96,7 @@ def record_response_usage(
     # Token/cost accounting below stays gated on real usage, but the request itself
     # must remain observable.
     agent.session_api_calls += 1
-    if not (hasattr(response, 'usage') and response.usage):
+    if not (hasattr(response, "usage") and response.usage):
         if getattr(compressor, "awaiting_real_usage_after_compression", False):
             # No usage -> cannot adjudicate the prior compaction; consume the
             # pending verdict so later readings aren't charged to it and
@@ -94,34 +107,59 @@ def record_response_usage(
             _note_usage_less()
         logger.info(
             "API call #%d: model=%s provider=%s in=? out=? total=? latency=%.1fs usage=unavailable",
-            agent.session_api_calls, agent.model, agent.provider or "unknown", api_duration,
+            agent.session_api_calls,
+            agent.model,
+            agent.provider or "unknown",
+            api_duration,
         )
-        return ResponseUsageOutcome(compression_attempts=compression_attempts, rearmed=rearmed)
+        return ResponseUsageOutcome(
+            compression_attempts=compression_attempts, rearmed=rearmed
+        )
 
     canonical_usage = with_served_service_tier(
-        normalize_usage(response.usage, provider=agent.provider, api_mode=agent.api_mode), response)
+        normalize_usage(
+            response.usage, provider=agent.provider, api_mode=agent.api_mode
+        ),
+        response,
+    )
     # Aggregator-only usage kept for pricing: advisor tokens are priced at each advisor's
     # OWN model rate and added as dollars below.
     aggregator_usage = canonical_usage
-    _moa_client, canonical_usage, _moa_ref_cost = _fold_moa_usage(agent, canonical_usage)
+    _moa_client, canonical_usage, _moa_ref_cost = _fold_moa_usage(
+        agent, canonical_usage
+    )
     prompt_tokens = canonical_usage.prompt_tokens
     completion_tokens = canonical_usage.output_tokens
     total_tokens = canonical_usage.total_tokens
     # Gemini long decode sums every hop's re-sent prefix into prompt_tokens (billing, session totals);
     # the context actually in the window is the first hop's prompt: compaction and the meter read that.
     _initial_prompt = getattr(response.usage, "initial_prompt_tokens", None)
-    context_prompt_tokens = _initial_prompt if isinstance(_initial_prompt, int) and _initial_prompt > 0 else None
+    context_prompt_tokens = (
+        _initial_prompt
+        if isinstance(_initial_prompt, int) and _initial_prompt > 0
+        else None
+    )
     # The canonical buckets follow the same split, so engines reading them never see cache_read > prompt.
-    _initial_cached = getattr(response.usage, "initial_cached_tokens", 0) if context_prompt_tokens else None
+    _initial_cached = (
+        getattr(response.usage, "initial_cached_tokens", 0)
+        if context_prompt_tokens
+        else None
+    )
     context_cache_read = _initial_cached if isinstance(_initial_cached, int) else None
     # Canonical token + cache buckets for context engines; legacy keys stay for back-compat.
     usage_dict = {
         "prompt_tokens": context_prompt_tokens or prompt_tokens,
         "completion_tokens": completion_tokens,
-        "total_tokens": (context_prompt_tokens + completion_tokens) if context_prompt_tokens else total_tokens,
-        "input_tokens": (context_prompt_tokens - context_cache_read) if context_cache_read is not None else canonical_usage.input_tokens,
+        "total_tokens": (context_prompt_tokens + completion_tokens)
+        if context_prompt_tokens
+        else total_tokens,
+        "input_tokens": (context_prompt_tokens - context_cache_read)
+        if context_cache_read is not None
+        else canonical_usage.input_tokens,
         "output_tokens": canonical_usage.output_tokens,
-        "cache_read_tokens": canonical_usage.cache_read_tokens if context_cache_read is None else context_cache_read,
+        "cache_read_tokens": canonical_usage.cache_read_tokens
+        if context_cache_read is None
+        else context_cache_read,
         "cache_write_tokens": canonical_usage.cache_write_tokens,
         "reasoning_tokens": canonical_usage.reasoning_tokens,
     }
@@ -137,16 +175,22 @@ def record_response_usage(
     # prompt_tokens with replayed thinking. Display-only; compression math uses real usage.
     # The provider just priced this request exactly: if the delta since the previous anchor
     # introduced images, the residual is their real per-image cost (learned before re-anchoring).
-    calibrate_from_usage(agent, messages, context_prompt_tokens or aggregator_usage.prompt_tokens)
+    calibrate_from_usage(
+        agent, messages, context_prompt_tokens or aggregator_usage.prompt_tokens
+    )
     _new_anchor = capture_usage_anchor(
-        context_prompt_tokens or aggregator_usage.prompt_tokens, aggregator_usage.output_tokens, messages
+        context_prompt_tokens or aggregator_usage.prompt_tokens,
+        aggregator_usage.output_tokens,
+        messages,
     )
     if _new_anchor is not None:
         set_usage_anchor(agent, _new_anchor, turn_base=api_call_count == 1)
     _compression_threshold = int(getattr(compressor, "threshold_tokens", 0) or 0)
     if _loop_mod()._should_rearm_compression_budget(
-        compression_attempts, completed_compaction_pending=_completed_compaction_pending,
-        prompt_tokens=usage_dict["prompt_tokens"], threshold_tokens=_compression_threshold,
+        compression_attempts,
+        completed_compaction_pending=_completed_compaction_pending,
+        prompt_tokens=usage_dict["prompt_tokens"],
+        threshold_tokens=_compression_threshold,
     ):
         logger.info(
             "Compression budget rearmed after provider-confirmed "
@@ -165,7 +209,9 @@ def record_response_usage(
     agent._last_turn_usage = dict(usage_dict)
     # The parent's CURRENT prompt size for headroom math (delegate summary budgets): the
     # aggregator's own prompt, never the MoA-folded total (advisor prompts are not in this context).
-    agent._last_prompt_size_tokens = int(context_prompt_tokens or aggregator_usage.prompt_tokens or 0)
+    agent._last_prompt_size_tokens = int(
+        context_prompt_tokens or aggregator_usage.prompt_tokens or 0
+    )
 
     # Persist only provider-confirmed context lengths, not probe tiers.
     if getattr(compressor, "_context_probed", False):
@@ -173,8 +219,12 @@ def record_response_usage(
         if getattr(compressor, "_context_probe_persistable", False):
             from agent.model_metadata import save_provider_context_length
 
-            save_provider_context_length(agent.model, agent.base_url, ctx, agent.provider)
-            agent._safe_print(f"{agent.log_prefix}💾 Cached context length: {ctx:,} tokens for {agent.model}")
+            save_provider_context_length(
+                agent.model, agent.base_url, ctx, agent.provider
+            )
+            agent._safe_print(
+                f"{agent.log_prefix}💾 Cached context length: {ctx:,} tokens for {agent.model}"
+            )
         compressor._context_probed = False
         compressor._context_probe_persistable = False
 
@@ -197,7 +247,7 @@ def record_response_usage(
 
     _cache_pct = ""
     if canonical_usage.cache_read_tokens and prompt_tokens:
-        _cache_pct = f" cache={canonical_usage.cache_read_tokens}/{prompt_tokens} ({100*canonical_usage.cache_read_tokens/prompt_tokens:.0f}%)"
+        _cache_pct = f" cache={canonical_usage.cache_read_tokens}/{prompt_tokens} ({100 * canonical_usage.cache_read_tokens / prompt_tokens:.0f}%)"
     # write= is the money (cache writes cost 50x a read); id= is what a provider needs to look the
     # request up; upstream= is who actually served it when the route reports that (OpenRouter's
     # `provider`). Diagnosing the 1,393-agent run's cache misses took a DB join and a live probe
@@ -211,27 +261,47 @@ def record_response_usage(
         _ident += f" upstream={_upstream}"
     logger.info(
         "API call #%d: model=%s provider=%s in=%d out=%d total=%d latency=%.1fs%s%s",
-        agent.session_api_calls, agent.model, agent.provider or "unknown",
-        prompt_tokens, completion_tokens, total_tokens,
-        api_duration, _cache_pct, _ident,
+        agent.session_api_calls,
+        agent.model,
+        agent.provider or "unknown",
+        prompt_tokens,
+        completion_tokens,
+        total_tokens,
+        api_duration,
+        _cache_pct,
+        _ident,
     )
     # nous.anthropic_wire=auto: the session's wire is decided once, from this first response.
     if agent.session_api_calls == 1 and (agent.provider or "") == "nous":
         with suppress(Exception):
             from agent.nous_wire import maybe_switch_wire_after_first_response
-            maybe_switch_wire_after_first_response(agent, response, agent.session_api_calls)
+
+            maybe_switch_wire_after_first_response(
+                agent, response, agent.session_api_calls
+            )
 
     # MoA: agent.model/provider are the virtual preset/"moa" with no pricing entry, silently
     # dropping aggregator spend. Price at the REAL model/provider from the aggregator slot.
-    _agg_cost_model, _agg_cost_provider, _agg_cost_base_url = agent.model, agent.provider, agent.base_url
-    _agg_slot = getattr(_moa_client, "last_aggregator_slot", None) if _moa_client is not None else None
+    _agg_cost_model, _agg_cost_provider, _agg_cost_base_url = (
+        agent.model,
+        agent.provider,
+        agent.base_url,
+    )
+    _agg_slot = (
+        getattr(_moa_client, "last_aggregator_slot", None)
+        if _moa_client is not None
+        else None
+    )
     if _agg_slot and _agg_slot.get("model"):
         _agg_cost_model = _agg_slot["model"]
         _agg_cost_provider = _agg_slot.get("provider") or agent.provider
         _agg_cost_base_url = _agg_slot.get("base_url") or agent.base_url
     cost_result = estimate_usage_cost(
-        _agg_cost_model, aggregator_usage, provider=_agg_cost_provider,
-        base_url=_agg_cost_base_url, api_key=getattr(agent, "api_key", ""),
+        _agg_cost_model,
+        aggregator_usage,
+        provider=_agg_cost_provider,
+        base_url=_agg_cost_base_url,
+        api_key=getattr(agent, "api_key", ""),
     )
     # Cost delta = aggregator + MoA advisor cost (already priced per-advisor at each
     # advisor's own model rate), so state.db's estimated_cost_usd matches the folded
@@ -275,7 +345,8 @@ def record_response_usage(
                 billing_provider=agent.provider,
                 billing_base_url=agent.base_url,
                 billing_mode="subscription_included"
-                if cost_result.status == "included" else None,
+                if cost_result.status == "included"
+                else None,
                 model=agent.model,
                 api_call_count=1,
                 task=getattr(agent, "_turn_route_task", "") or "",
@@ -283,11 +354,15 @@ def record_response_usage(
         except Exception as e:  # silent loss here undercounts analytics
             logger.debug(
                 "Token persistence failed (session=%s, tokens=%d): %s",
-                agent.session_id, total_tokens, e,
+                agent.session_id,
+                total_tokens,
+                e,
             )
 
     if agent.verbose_logging:
-        logging.debug(f"Token usage: prompt={usage_dict['prompt_tokens']:,}, completion={usage_dict['completion_tokens']:,}, total={usage_dict['total_tokens']:,}")
+        logging.debug(
+            f"Token usage: prompt={usage_dict['prompt_tokens']:,}, completion={usage_dict['completion_tokens']:,}, total={usage_dict['total_tokens']:,}"
+        )
 
     # Report cache stats for any provider that returns ``prompt_tokens_details.cached_tokens``,
     # not only when we inject cache_control markers.
@@ -301,4 +376,6 @@ def record_response_usage(
             f"{cached:,}/{prompt:,} tokens "
             f"({hit_pct:.0f}% hit, {written:,} written)"
         )
-    return ResponseUsageOutcome(compression_attempts=compression_attempts, rearmed=rearmed)
+    return ResponseUsageOutcome(
+        compression_attempts=compression_attempts, rearmed=rearmed
+    )

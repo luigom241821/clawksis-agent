@@ -11,6 +11,7 @@ updates refuse their own claim with exit 2 (#134268, #134602).
 Runs on macOS too (the CI macOS lane), where the marker's creation times come from ``ps`` in
 whole seconds: that host is where the refusal was reported.
 """
+
 from __future__ import annotations
 
 import json
@@ -18,7 +19,12 @@ from pathlib import Path
 
 import pytest
 
-from tests.scripts.desktop_update.test_desktop_update_posix_marker import FAKE_CLI, _custodian, _install, _run
+from tests.scripts.desktop_update.test_desktop_update_posix_marker import (
+    FAKE_CLI,
+    _custodian,
+    _install,
+    _run,
+)
 
 pytestmark = pytest.mark.platforms("posix")
 
@@ -56,7 +62,9 @@ if sys.argv[1:2] == ['update'] and '--help' not in sys.argv:  # not the --keep-s
 
 def test_a_later_update_generation_adopts_the_handoffs_claim(tmp_path):
     home, install = _install(tmp_path)
-    (install / "clawk_cli" / "main.py").write_text(SECOND_GENERATION + FAKE_CLI, encoding="utf-8")
+    (install / "clawk_cli" / "main.py").write_text(
+        SECOND_GENERATION + FAKE_CLI, encoding="utf-8"
+    )
     out = tmp_path / "gen2.json"
 
     result = _run(tmp_path, home, install, GEN2_OUT=str(out), GEN2_REPO=str(REPOSITORY))
@@ -64,6 +72,10 @@ def test_a_later_update_generation_adopts_the_handoffs_claim(tmp_path):
     custodian = _custodian(home)
     assert custodian, "the hand-off never named a custodian"
     verdict = json.loads(out.read_text(encoding="utf-8-sig"))
-    assert verdict["adopted"], f"generation 2 refused its own hand-off's claim (holder {verdict['holder']})"
-    assert verdict["told"] == custodian, "the update must be told the marker's owner, not the hand-off script"
+    assert verdict["adopted"], (
+        f"generation 2 refused its own hand-off's claim (holder {verdict['holder']})"
+    )
+    assert verdict["told"] == custodian, (
+        "the update must be told the marker's owner, not the hand-off script"
+    )
     assert result.returncode == 0, result.stdout + result.stderr

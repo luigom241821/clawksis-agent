@@ -18,8 +18,6 @@ def _cleanup_env():
     os.environ.pop("CLAWK_SESSION_ID", None)
 
 
-
-
 def test_session_id_env_uses_provided_id():
     """When session_id is passed explicitly, CLAWK_SESSION_ID reflects it."""
     custom_id = "20260511_120000_abc12345"
@@ -33,5 +31,3 @@ def test_session_id_env_uses_provided_id():
     )
     assert os.environ["CLAWK_SESSION_ID"] == custom_id
     assert agent.session_id == custom_id
-
-

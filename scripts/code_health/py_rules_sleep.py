@@ -31,18 +31,30 @@ def _delay(call: ast.Call, names: tuple[str, ...]) -> ast.expr | None:
 
 def _zero(node: ast.expr | None) -> bool:
     """A literal ``0`` / ``0.0``: a scheduler yield, not a delay (``False`` is not a delay)."""
-    return (isinstance(node, ast.Constant) and type(node.value) in (int, float)
-            and node.value == 0)
+    return (
+        isinstance(node, ast.Constant)
+        and type(node.value) in (int, float)
+        and node.value == 0
+    )
 
 
-_CLOCKS = {"time.monotonic", "time.time", "time.perf_counter", "time.monotonic_ns", "time.time_ns"}
+_CLOCKS = {
+    "time.monotonic",
+    "time.time",
+    "time.perf_counter",
+    "time.monotonic_ns",
+    "time.time_ns",
+}
 
 
 def _reads_clock(node: ast.AST, clocks: frozenset[str] = frozenset()) -> bool:
     """A wall-clock read: ``time.monotonic()`` and friends, an event loop's ``.time()``, or a
     local in ``clocks`` (every binding of it is derived from one: ``end = time.monotonic() + 5``)."""
-    return any((isinstance(inner, ast.Name) and inner.id in clocks)
-               or (isinstance(inner, ast.Call) and _clock_call(inner)) for inner in _eager(node))
+    return any(
+        (isinstance(inner, ast.Name) and inner.id in clocks)
+        or (isinstance(inner, ast.Call) and _clock_call(inner))
+        for inner in _eager(node)
+    )
 
 
 def _clock_call(call: ast.Call) -> bool:
@@ -67,7 +79,11 @@ def _clock_value(node: ast.AST, clocks: frozenset[str]) -> bool:
     (``time.monotonic() + timeout``). ``time.time() - path.stat().st_mtime`` is an age, not a time."""
     if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Sub)):
         left, right = _clock_value(node.left, clocks), _clock_value(node.right, clocks)
-        return (left or right) and (left or _duration(node.left)) and (right or _duration(node.right))
+        return (
+            (left or right)
+            and (left or _duration(node.left))
+            and (right or _duration(node.right))
+        )
     if isinstance(node, ast.Name):
         return node.id in clocks
     return isinstance(node, ast.Call) and _clock_call(node)
@@ -110,21 +126,37 @@ def _clock_names(scope: ast.AST) -> frozenset[str]:
     plain: dict[int, ast.AST] = {}
     nodes = list(_own(scope))
     for node in nodes:
-        if isinstance(node, (ast.Assign, ast.AnnAssign, ast.NamedExpr)) and node.value is not None:
-            for target in node.targets if isinstance(node, ast.Assign) else [node.target]:
+        if (
+            isinstance(node, (ast.Assign, ast.AnnAssign, ast.NamedExpr))
+            and node.value is not None
+        ):
+            for target in (
+                node.targets if isinstance(node, ast.Assign) else [node.target]
+            ):
                 plain[id(target)] = node.value
     augmented = {id(node.target) for node in nodes if isinstance(node, ast.AugAssign)}
     values: dict[str, list[ast.AST | None]] = {}
     for node in nodes:
         if isinstance(node, ast.arg):
             values.setdefault(node.arg, []).append(None)
-        elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store) and id(node) not in augmented:
+        elif (
+            isinstance(node, ast.Name)
+            and isinstance(node.ctx, ast.Store)
+            and id(node) not in augmented
+        ):
             values.setdefault(node.id, []).append(plain.get(id(node)))
     clocks: frozenset[str] = frozenset()
     while True:
-        grown = frozenset(name for name, found in values.items() if all(
-            isinstance(v, ast.Constant) or (v is not None and _clock_value(v, clocks)) for v in found)
-            and not all(isinstance(v, ast.Constant) for v in found))
+        grown = frozenset(
+            name
+            for name, found in values.items()
+            if all(
+                isinstance(v, ast.Constant)
+                or (v is not None and _clock_value(v, clocks))
+                for v in found
+            )
+            and not all(isinstance(v, ast.Constant) for v in found)
+        )
         if grown == clocks:
             return clocks
         clocks = grown
@@ -154,8 +186,12 @@ def _blocks(stmt: ast.stmt) -> Iterator[list[ast.stmt]]:
         yield part.body
 
 
-def _exits_on_condition(body: list[ast.stmt], clocks: frozenset[str], conditioned: bool = False,
-                        own: bool = True) -> bool:
+def _exits_on_condition(
+    body: list[ast.stmt],
+    clocks: frozenset[str],
+    conditioned: bool = False,
+    own: bool = True,
+) -> bool:
     """A ``break`` that ends THIS loop, or a ``return``, in a branch taken on a non-clock
     condition. A ``break`` in a nested loop's body ends that loop (``own=False``), while one in
     its ``else:`` is ours again; nested defs and classes run elsewhere and are skipped."""
@@ -165,22 +201,40 @@ def _exits_on_condition(body: list[ast.stmt], clocks: frozenset[str], conditione
                 return True
         elif isinstance(stmt, ast.If):
             branches = ((stmt.body, True), (stmt.orelse, False))
-            if any(_exits_on_condition(block, clocks, conditioned or _turns_on_condition(stmt.test, taken, clocks),
-                                       own) for block, taken in branches):
+            if any(
+                _exits_on_condition(
+                    block,
+                    clocks,
+                    conditioned or _turns_on_condition(stmt.test, taken, clocks),
+                    own,
+                )
+                for block, taken in branches
+            ):
                 return True
         elif isinstance(stmt, _LOOPS):
-            if (_exits_on_condition(stmt.body, clocks, conditioned, own=False)
-                    or _exits_on_condition(stmt.orelse, clocks, conditioned, own)):
+            if _exits_on_condition(
+                stmt.body, clocks, conditioned, own=False
+            ) or _exits_on_condition(stmt.orelse, clocks, conditioned, own):
                 return True
         elif isinstance(stmt, (ast.Try, ast.TryStar)) and stmt.handlers:
             # the try body's exit is taken only when nothing raised: `try: return probe()` retries
-            probes = any(isinstance(node, ast.Call) and _call_name(node) not in _SLEEPS
-                         for part in stmt.body for node in _eager(part))
-            if (_exits_on_condition(stmt.body, clocks, conditioned or probes, own)
-                    or any(_exits_on_condition(block, clocks, conditioned, own) for block in _blocks(stmt))):
+            probes = any(
+                isinstance(node, ast.Call) and _call_name(node) not in _SLEEPS
+                for part in stmt.body
+                for node in _eager(part)
+            )
+            if _exits_on_condition(
+                stmt.body, clocks, conditioned or probes, own
+            ) or any(
+                _exits_on_condition(block, clocks, conditioned, own)
+                for block in _blocks(stmt)
+            ):
                 return True
         elif not isinstance(stmt, (*_FUNCS, ast.ClassDef)):
-            if any(_exits_on_condition(block, clocks, conditioned, own) for block in _blocks(stmt)):
+            if any(
+                _exits_on_condition(block, clocks, conditioned, own)
+                for block in _blocks(stmt)
+            ):
                 return True
     return False
 
@@ -194,11 +248,18 @@ def _deadline_poll(loop: ast.AST, clocks: frozenset[str]) -> bool:
         return bounded and _exits_on_condition(loop.body, clocks)
     if not isinstance(loop, ast.While):
         return False
-    clock = _reads_clock(loop.test, clocks) or any(_reads_clock(stmt, clocks) for stmt in loop.body)
-    return clock and (_turns_on_condition(loop.test, False, clocks) or _exits_on_condition(loop.body, clocks))
+    clock = _reads_clock(loop.test, clocks) or any(
+        _reads_clock(stmt, clocks) for stmt in loop.body
+    )
+    return clock and (
+        _turns_on_condition(loop.test, False, clocks)
+        or _exits_on_condition(loop.body, clocks)
+    )
 
 
-def _sleep_loops(tree: ast.Module) -> Iterator[tuple[ast.Call, ast.AST | None, ast.AST]]:
+def _sleep_loops(
+    tree: ast.Module,
+) -> Iterator[tuple[ast.Call, ast.AST | None, ast.AST]]:
     """Each call in ``tree`` with the loop whose BODY runs it in the same function (or None),
     and that function (or the module). A loop's ``else:``, ``for`` iterable and ``while`` test
     run outside its body, so they belong to the enclosing loop."""
@@ -230,8 +291,9 @@ def wall_clock_sleep(tree: ast.Module, ctx: Ctx) -> Iterable[int]:
         if names is None:
             continue
         delay = _delay(node, names)
-        if names == ("timeout",) and (delay is None or (
-                isinstance(delay, ast.Constant) and delay.value is None)):
+        if names == ("timeout",) and (
+            delay is None or (isinstance(delay, ast.Constant) and delay.value is None)
+        ):
             continue  # an Event wait without a deadline hangs; it does not sleep
         if _zero(delay):
             continue

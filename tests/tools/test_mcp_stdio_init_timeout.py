@@ -71,13 +71,20 @@ class TestStdioInitializeTimeout:
         config = {"command": "fake-mcp", "args": [], "connect_timeout": 0.2}
 
         async def drive():
-            with patch.object(mcp_tool, "stdio_client", _fake_stdio_client), \
-                 patch.object(mcp_tool, "ClientSession", _fake_client_session), \
-                 patch.object(_mcp_config, "_resolve_stdio_command", lambda c, e: (c, e)), \
-                 patch.object(_mcp_config, "_write_stderr_log_header", lambda *_a, **_k: None), \
-                 patch.object(mcp_tool, "_get_mcp_stderr_log", lambda: None), \
-                 patch("tools.osv_check.check_package_for_malware",
-                       lambda *_a, **_k: None):
+            with (
+                patch.object(mcp_tool, "stdio_client", _fake_stdio_client),
+                patch.object(mcp_tool, "ClientSession", _fake_client_session),
+                patch.object(
+                    _mcp_config, "_resolve_stdio_command", lambda c, e: (c, e)
+                ),
+                patch.object(
+                    _mcp_config, "_write_stderr_log_header", lambda *_a, **_k: None
+                ),
+                patch.object(mcp_tool, "_get_mcp_stderr_log", lambda: None),
+                patch(
+                    "tools.osv_check.check_package_for_malware", lambda *_a, **_k: None
+                ),
+            ):
                 start = time.monotonic()
                 # The outer 5s guard exists ONLY so a regression can't hang the
                 # whole suite. With the fix, the inner connect_timeout (0.2s)

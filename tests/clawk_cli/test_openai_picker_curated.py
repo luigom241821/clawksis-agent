@@ -26,6 +26,7 @@ from clawk_cli import models as M
 
 # --- Bug 1: default OpenAI endpoint filters to curated agentic models -------
 
+
 def test_default_openai_endpoint_filters_to_curated(monkeypatch):
     """The 126-model /v1/models dump is intersected with the curated list."""
     monkeypatch.setenv("OPENAI_API_KEY", "sk-fake")
@@ -34,8 +35,13 @@ def test_default_openai_endpoint_filters_to_curated(monkeypatch):
     curated = M._PROVIDER_MODELS["openai-api"]
     # Live catalog: every curated model PLUS a pile of non-agentic junk.
     live = list(curated) + [
-        "text-embedding-3-large", "whisper-1", "tts-1", "dall-e-3",
-        "gpt-3.5-turbo", "davinci-002", "omni-moderation-latest",
+        "text-embedding-3-large",
+        "whisper-1",
+        "tts-1",
+        "dall-e-3",
+        "gpt-3.5-turbo",
+        "davinci-002",
+        "omni-moderation-latest",
     ]
     with patch.object(M, "fetch_api_models", return_value=live):
         result = M.provider_model_ids("openai-api", force_refresh=True)
@@ -65,11 +71,15 @@ def test_astra_is_offered_only_by_successful_account_discovery(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "sk-fake")
     monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
 
-    with patch.object(M, "fetch_api_models", return_value=["gpt-5.6-sol", "gpt-6-astra"]):
+    with patch.object(
+        M, "fetch_api_models", return_value=["gpt-5.6-sol", "gpt-6-astra"]
+    ):
         discovered = M.provider_model_ids("openai-api", force_refresh=True)
     with patch.object(M, "fetch_api_models", return_value=["gpt-5.6-sol"]):
         not_entitled = M.provider_model_ids("openai-api", force_refresh=True)
-    with patch.object(M, "fetch_api_models", side_effect=RuntimeError("discovery unavailable")):
+    with patch.object(
+        M, "fetch_api_models", side_effect=RuntimeError("discovery unavailable")
+    ):
         discovery_failed = M.provider_model_ids("openai-api", force_refresh=True)
 
     assert "gpt-6-astra" in discovered

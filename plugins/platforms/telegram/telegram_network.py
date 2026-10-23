@@ -27,6 +27,7 @@ def _describe_transport_error(error: Exception) -> str:
     except Exception:
         return type(error).__name__
 
+
 # TCP keepalive so a half-open/CLOSE-WAIT long-poll errors out instead of blocking getUpdates forever
 # (Windows leaves SO_KEEPALIVE off). Idle/interval knobs are best-effort per Python/OS combo.
 # Windows does not enable SO_KEEPALIVE on new sockets by default, so a dead api.telegram.org peer can hang
@@ -40,21 +41,33 @@ def tcp_keepalive_socket_options() -> list[tuple[int, int, int]]:
     """``setsockopt`` tuples for httpx ``socket_options``: always SO_KEEPALIVE, plus idle/interval/count
     when the interpreter exposes those option names."""
     options: list[tuple[int, int, int]] = [(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)]
-    idle = getattr(socket, "TCP_KEEPIDLE", None) or getattr(socket, "TCP_KEEPALIVE", None)
-    for opt, value in ((idle, _TCP_KEEPALIVE_IDLE_S), (getattr(socket, "TCP_KEEPINTVL", None), _TCP_KEEPALIVE_INTERVAL_S),
-                       (getattr(socket, "TCP_KEEPCNT", None), _TCP_KEEPALIVE_COUNT)):
+    idle = getattr(socket, "TCP_KEEPIDLE", None) or getattr(
+        socket, "TCP_KEEPALIVE", None
+    )
+    for opt, value in (
+        (idle, _TCP_KEEPALIVE_IDLE_S),
+        (getattr(socket, "TCP_KEEPINTVL", None), _TCP_KEEPALIVE_INTERVAL_S),
+        (getattr(socket, "TCP_KEEPCNT", None), _TCP_KEEPALIVE_COUNT),
+    ):
         if opt is not None:
             options.append((socket.IPPROTO_TCP, opt, value))
     return options
+
 
 # DNS-over-HTTPS providers: discover Telegram API IPs the (possibly unreachable) local resolver may not
 # return. Bounded so connect() isn't delayed.
 _DOH_TIMEOUT = 4.0
 _DOH_PROVIDERS: list[dict] = [
-    {"url": "https://dns.google/resolve", "params": {"name": _TELEGRAM_API_HOST, "type": "A"}, "headers": {}},
     {
-        "url": "https://cloudflare-dns.com/dns-query", "params": {"name": _TELEGRAM_API_HOST, "type": "A"},
-        "headers": {"Accept": "application/dns-json"}},
+        "url": "https://dns.google/resolve",
+        "params": {"name": _TELEGRAM_API_HOST, "type": "A"},
+        "headers": {},
+    },
+    {
+        "url": "https://cloudflare-dns.com/dns-query",
+        "params": {"name": _TELEGRAM_API_HOST, "type": "A"},
+        "headers": {"Accept": "application/dns-json"},
+    },
 ]
 # Last-resort IPv4 Bot API endpoints (149.154.160.0/20). Used when DoH is blocked AND as
 # first-try connect targets so a blackholed IPv6 AAAA for the hostname can't pin initialize().
@@ -63,7 +76,10 @@ _UNSET = object()
 
 
 def _resolve_proxy_url(target_hosts=None) -> str | None:
-    from gateway.platforms.base import resolve_proxy_url  # env vars + macOS system proxy
+    from gateway.platforms.base import (
+        resolve_proxy_url,
+    )  # env vars + macOS system proxy
+
     return resolve_proxy_url("TELEGRAM_PROXY", target_hosts=target_hosts)
 
 
@@ -77,7 +93,9 @@ class TelegramFallbackTransport(httpx.AsyncBaseTransport):
 
     def __init__(self, fallback_ips: Iterable[str], **transport_kwargs):
         self._fallback_ips = list(dict.fromkeys(_normalize_fallback_ips(fallback_ips)))
-        proxy_url = _resolve_proxy_url(target_hosts=[_TELEGRAM_API_HOST, *self._fallback_ips])
+        proxy_url = _resolve_proxy_url(
+            target_hosts=[_TELEGRAM_API_HOST, *self._fallback_ips]
+        )
         if proxy_url and "proxy" not in transport_kwargs:
             transport_kwargs["proxy"] = proxy_url
         transport_kwargs.setdefault("limits", self._POOL_LIMITS)
@@ -163,8 +181,15 @@ class TelegramFallbackTransport(httpx.AsyncBaseTransport):
                         if self._sticky_ip is _UNSET or self._sticky_ip != ip:
                             self._sticky_ip = ip
                             if ip is not None:
-                                log = logger.warning if last_error is not None else logger.info
-                                log("[Telegram] Using sticky IPv4 Telegram API path %s (dual-stack hostname tried last — #87015)", ip)
+                                log = (
+                                    logger.warning
+                                    if last_error is not None
+                                    else logger.info
+                                )
+                                log(
+                                    "[Telegram] Using sticky IPv4 Telegram API path %s (dual-stack hostname tried last — #87015)",
+                                    ip,
+                                )
                 return response
             except Exception as exc:
                 last_error = exc
@@ -179,16 +204,24 @@ class TelegramFallbackTransport(httpx.AsyncBaseTransport):
                             self._sticky_ip = _UNSET
                             logger.warning(
                                 "[Telegram] Sticky Telegram path %s failed; re-walking IPv4 literals before the hostname",
-                                ip if ip is not None else "api.telegram.org")
+                                ip if ip is not None else "api.telegram.org",
+                            )
                 if ip is None:
                     await self._reset_primary(transport)
-                    logger.warning("[Telegram] Dual-stack api.telegram.org path failed (%s)", failure)
+                    logger.warning(
+                        "[Telegram] Dual-stack api.telegram.org path failed (%s)",
+                        failure,
+                    )
                     continue
-                logger.warning("[Telegram] IPv4 Telegram API IP %s failed: %s", ip, failure)
+                logger.warning(
+                    "[Telegram] IPv4 Telegram API IP %s failed: %s", ip, failure
+                )
                 await self._reset_fallback(ip)
                 continue
         if last_error is None:
-            raise RuntimeError("All Telegram fallback IPs exhausted but no error was recorded")
+            raise RuntimeError(
+                "All Telegram fallback IPs exhausted but no error was recorded"
+            )
         raise last_error
 
     async def aclose(self) -> None:
@@ -216,7 +249,12 @@ def _normalize_fallback_ips(values: Iterable[str]) -> list[str]:
             continue
         if addr.version != 4:
             logger.warning("Ignoring non-IPv4 Telegram fallback IP: %s", raw)
-        elif addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_unspecified:
+        elif (
+            addr.is_private
+            or addr.is_loopback
+            or addr.is_link_local
+            or addr.is_unspecified
+        ):
             logger.warning("Ignoring private/internal Telegram fallback IP: %s", raw)
         else:
             normalized.append(str(addr))
@@ -224,7 +262,11 @@ def _normalize_fallback_ips(values: Iterable[str]) -> list[str]:
 
 
 def parse_fallback_ip_env(value: str | None) -> list[str]:
-    return _normalize_fallback_ips(part.strip() for part in value.split(",")) if value else []
+    return (
+        _normalize_fallback_ips(part.strip() for part in value.split(","))
+        if value
+        else []
+    )
 
 
 def _resolve_system_dns() -> set[str]:
@@ -239,7 +281,9 @@ def _resolve_system_dns() -> set[str]:
 async def _query_doh_provider(client: httpx.AsyncClient, provider: dict) -> list[str]:
     """Query one DoH provider and return A-record IPs."""
     try:
-        resp = await client.get(provider["url"], params=provider["params"], headers=provider["headers"])
+        resp = await client.get(
+            provider["url"], params=provider["params"], headers=provider["headers"]
+        )
         resp.raise_for_status()
         data = resp.json()
         ips: list[str] = []
@@ -267,9 +311,14 @@ async def discover_fallback_ips() -> list[str]:
     IP is the most reliable path to api.telegram.org and a transient primary-path failure should be retried
     against the same address via the IP-rewrite path before the seed list is consulted (#14520).
     """
-    async with httpx.AsyncClient(timeout=httpx.Timeout(_DOH_TIMEOUT), verify=platform_ssl_context()) as client:
+    async with httpx.AsyncClient(
+        timeout=httpx.Timeout(_DOH_TIMEOUT), verify=platform_ssl_context()
+    ) as client:
         system_dns_task = asyncio.ensure_future(asyncio.to_thread(_resolve_system_dns))
-        results = await asyncio.gather(*[_query_doh_provider(client, p) for p in _DOH_PROVIDERS], return_exceptions=True)
+        results = await asyncio.gather(
+            *[_query_doh_provider(client, p) for p in _DOH_PROVIDERS],
+            return_exceptions=True,
+        )
     # The getaddrinfo leg has no timeout of its own and only feeds the log line below — bound it.
     # The system-resolver leg runs socket.getaddrinfo in a worker thread with no timeout of its own — a
     # wedged OS resolver (broken VPN/DNS) can sit for minutes. Its result only feeds the no-usable-answers
@@ -281,15 +330,23 @@ async def discover_fallback_ips() -> list[str]:
         if isinstance(system_result, set):
             system_ips = system_result
     except Exception:
-        logger.debug("System-DNS resolution for %s did not complete in time", _TELEGRAM_API_HOST)
+        logger.debug(
+            "System-DNS resolution for %s did not complete in time", _TELEGRAM_API_HOST
+        )
     doh_ips = [ip for r in results if isinstance(r, list) for ip in r]
-    validated = _normalize_fallback_ips(list(dict.fromkeys(doh_ips)))  # dedupe, keep order
+    validated = _normalize_fallback_ips(
+        list(dict.fromkeys(doh_ips))
+    )  # dedupe, keep order
     if validated:
-        logger.debug("Discovered Telegram fallback IPs via DoH: %s", ", ".join(validated))
+        logger.debug(
+            "Discovered Telegram fallback IPs via DoH: %s", ", ".join(validated)
+        )
         return validated
     logger.info(
         "DoH discovery yielded no usable IPs (system DNS: %s); using seed fallback IPs %s",
-        ", ".join(system_ips) or "unknown", ", ".join(SEED_FALLBACK_IPS))
+        ", ".join(system_ips) or "unknown",
+        ", ".join(SEED_FALLBACK_IPS),
+    )
     return list(SEED_FALLBACK_IPS)
 
 
@@ -300,7 +357,13 @@ def _rewrite_request_for_ip(request: httpx.Request, ip: str) -> httpx.Request:
     headers["host"] = original_host
     extensions = dict(request.extensions)
     extensions["sni_hostname"] = original_host
-    return httpx.Request(method=request.method, url=url, headers=headers, stream=request.stream, extensions=extensions)
+    return httpx.Request(
+        method=request.method,
+        url=url,
+        headers=headers,
+        stream=request.stream,
+        extensions=extensions,
+    )
 
 
 def _is_retryable_connect_error(exc: Exception) -> bool:

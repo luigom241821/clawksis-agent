@@ -126,9 +126,7 @@ class TestStreamHelperStashesFirstChunkAt:
 
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
-    def test_failed_stream_leaves_timestamp_none(
-        self, _mock_close, mock_create, agent
-    ):
+    def test_failed_stream_leaves_timestamp_none(self, _mock_close, mock_create, agent):
         """A stream that dies before any chunk must not stamp a timestamp."""
 
         def _dead_stream():
@@ -220,18 +218,22 @@ class TestPostApiRequestFirstChunkAtPayload:
         first-chunk timestamp — the payload reflects the latest attempt."""
         mock_client = MagicMock()
         mock_client.chat.completions.create.side_effect = [
-            iter([
-                _make_stream_chunk(content="first"),
-                _make_stream_chunk(
-                    content=" answer", finish_reason="stop", model="test-model"
-                ),
-            ]),
-            iter([
-                _make_stream_chunk(content="second"),
-                _make_stream_chunk(
-                    content=" answer", finish_reason="stop", model="test-model"
-                ),
-            ]),
+            iter(
+                [
+                    _make_stream_chunk(content="first"),
+                    _make_stream_chunk(
+                        content=" answer", finish_reason="stop", model="test-model"
+                    ),
+                ]
+            ),
+            iter(
+                [
+                    _make_stream_chunk(content="second"),
+                    _make_stream_chunk(
+                        content=" answer", finish_reason="stop", model="test-model"
+                    ),
+                ]
+            ),
         ]
         mock_create.return_value = mock_client
         agent.stream_delta_callback = lambda _text: None

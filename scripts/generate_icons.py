@@ -147,7 +147,12 @@ GIRL_BOXES = {
 # onto the 824 grid), so the same mac portrait lands in plate coordinates.
 _mx, _my, _mw, _mh = GIRL_BOXES["squircle-mac-light.svg"]
 _plate = 1024.0 / 824.0
-GIRL_BOXES["icon.icon"] = ((_mx - 100.0) * _plate, (_my - 100.0) * _plate, _mw * _plate, _mh * _plate)
+GIRL_BOXES["icon.icon"] = (
+    (_mx - 100.0) * _plate,
+    (_my - 100.0) * _plate,
+    _mw * _plate,
+    _mh * _plate,
+)
 # The brand-kit SVG canvas (both girl svgs share this viewBox).
 GIRL_VIEWBOX = 5487.0615
 
@@ -173,7 +178,11 @@ APPX_LOGOS: dict[str, int | tuple[int, int]] = {
 # Theme-qualified taskbar forms: (qualifier suffix, render kind). Dark theme
 # gets the dark tile like macOS dark mode does; the unqualified file stays the
 # light tile for hosts that ignore qualifiers.
-APPX_ALTFORMS = (("", "png"), ("_altform-unplated", "png_dark"), ("_altform-lightunplated", "png"))
+APPX_ALTFORMS = (
+    ("", "png"),
+    ("_altform-unplated", "png_dark"),
+    ("_altform-lightunplated", "png"),
+)
 
 
 def appx_scaled(base: int, scale: int) -> int:
@@ -188,13 +197,29 @@ def appx_targets() -> list[tuple[str, str, object]]:
             qualifier = "" if scale == 100 else f".scale-{scale}"
             if isinstance(base, tuple):
                 w, h = base
-                arg: object = (appx_scaled(w, scale), appx_scaled(h, scale), appx_scaled(100, scale))
+                arg: object = (
+                    appx_scaled(w, scale),
+                    appx_scaled(h, scale),
+                    appx_scaled(100, scale),
+                )
                 targets.append((f"{APPX_DIR}/{name}{qualifier}.png", "wide", arg))
             else:
-                targets.append((f"{APPX_DIR}/{name}{qualifier}.png", "png", appx_scaled(base, scale)))
+                targets.append(
+                    (
+                        f"{APPX_DIR}/{name}{qualifier}.png",
+                        "png",
+                        appx_scaled(base, scale),
+                    )
+                )
     for size in APPX_TARGET_SIZES:
         for suffix, kind in APPX_ALTFORMS:
-            targets.append((f"{APPX_DIR}/Square44x44Logo.targetsize-{size}{suffix}.png", kind, size))
+            targets.append(
+                (
+                    f"{APPX_DIR}/Square44x44Logo.targetsize-{size}{suffix}.png",
+                    kind,
+                    size,
+                )
+            )
     return targets
 
 
@@ -218,12 +243,33 @@ CHECK_SIZES: dict[str, tuple[str, tuple[int, int]]] = {
     "apps/desktop/assets/icon.png": ("PNG", (1024, 1024)),
     "apps/desktop/assets/icon-dark.png": ("PNG", (1024, 1024)),
     "apps/desktop/packaging/dmg-volume.icns": ("ICNS", (1024, 1024)),
-    **({"apps/desktop/assets/icon.icon/Assets/border-light.png": ("PNG", (1024, 1024)),
-        "apps/desktop/assets/icon.icon/Assets/border-dark.png": ("PNG", (1024, 1024))} if BORDER_ENABLED else {}),
+    **(
+        {
+            "apps/desktop/assets/icon.icon/Assets/border-light.png": (
+                "PNG",
+                (1024, 1024),
+            ),
+            "apps/desktop/assets/icon.icon/Assets/border-dark.png": (
+                "PNG",
+                (1024, 1024),
+            ),
+        }
+        if BORDER_ENABLED
+        else {}
+    ),
     "apps/desktop/assets/icon.icon/Assets/mono.png": ("PNG", (1024, 1024)),
-    "apps/bootstrap-installer/src-tauri/icons/icon.icon/Assets/art-light.png": ("PNG", (1024, 1024)),
-    "apps/bootstrap-installer/src-tauri/icons/icon.icon/Assets/art-dark.png": ("PNG", (1024, 1024)),
-    "apps/bootstrap-installer/src-tauri/icons/icon.icon/Assets/mono.png": ("PNG", (1024, 1024)),
+    "apps/bootstrap-installer/src-tauri/icons/icon.icon/Assets/art-light.png": (
+        "PNG",
+        (1024, 1024),
+    ),
+    "apps/bootstrap-installer/src-tauri/icons/icon.icon/Assets/art-dark.png": (
+        "PNG",
+        (1024, 1024),
+    ),
+    "apps/bootstrap-installer/src-tauri/icons/icon.icon/Assets/mono.png": (
+        "PNG",
+        (1024, 1024),
+    ),
     "apps/desktop/assets/icon.icon/Assets/art-light.png": ("PNG", (1024, 1024)),
     "apps/desktop/assets/icon.icon/Assets/art-dark.png": ("PNG", (1024, 1024)),
     "apps/desktop/public/apple-touch-icon.png": ("PNG", (1024, 1024)),
@@ -254,10 +300,28 @@ TARGETS: list[tuple[str, str, object]] = [
     ("apps/desktop/assets/icon-dark.icns", "icns_dark", None),
     # The DMG volume icon: our own drive artwork with the girl on its face,
     # one artwork for light and dark (volume icons have no appearance variants).
-    ("apps/desktop/packaging/dmg-volume.icns", "icns_from_png", "assets/dmg-volume.png"),
+    (
+        "apps/desktop/packaging/dmg-volume.icns",
+        "icns_from_png",
+        "assets/dmg-volume.png",
+    ),
     ("apps/desktop/assets/icon.icon/icon.json", "icon_manifest", None),
-    *([("apps/desktop/assets/icon.icon/Assets/border-light.png", "icon_border", "#000000"),
-       ("apps/desktop/assets/icon.icon/Assets/border-dark.png", "icon_border", "#ffffff")] if BORDER_ENABLED else []),
+    *(
+        [
+            (
+                "apps/desktop/assets/icon.icon/Assets/border-light.png",
+                "icon_border",
+                "#000000",
+            ),
+            (
+                "apps/desktop/assets/icon.icon/Assets/border-dark.png",
+                "icon_border",
+                "#ffffff",
+            ),
+        ]
+        if BORDER_ENABLED
+        else []
+    ),
     ("apps/desktop/assets/icon.icon/Assets/art-light.png", "icon_art", "black"),
     ("apps/desktop/assets/icon.icon/Assets/art-dark.png", "icon_art", "white"),
     ("apps/desktop/assets/icon.icon/Assets/mono.png", "icon_mono", None),
@@ -270,14 +334,34 @@ TARGETS: list[tuple[str, str, object]] = [
     ("apps/bootstrap-installer/src-tauri/icons/32x32.png", "png", 32),
     ("apps/bootstrap-installer/src-tauri/icons/128x128.png", "png", 128),
     ("apps/bootstrap-installer/src-tauri/icons/128x128@2x.png", "png", 256),
-    ("apps/bootstrap-installer/src-tauri/icons/icon.ico", "ico", [16, 32, 64, 128, 256]),
+    (
+        "apps/bootstrap-installer/src-tauri/icons/icon.ico",
+        "ico",
+        [16, 32, 64, 128, 256],
+    ),
     ("apps/bootstrap-installer/src-tauri/icons/icon.icns", "icns", None),
     # Tauri's bundler compiles an Icon Composer package from `bundle.icon`
     # (actool >= 26) into Assets.car; the unbranded twin of the desktop package.
-    ("apps/bootstrap-installer/src-tauri/icons/icon.icon/icon.json", "icon_manifest", None),
-    ("apps/bootstrap-installer/src-tauri/icons/icon.icon/Assets/art-light.png", "icon_art", "black"),
-    ("apps/bootstrap-installer/src-tauri/icons/icon.icon/Assets/art-dark.png", "icon_art", "white"),
-    ("apps/bootstrap-installer/src-tauri/icons/icon.icon/Assets/mono.png", "icon_mono", None),
+    (
+        "apps/bootstrap-installer/src-tauri/icons/icon.icon/icon.json",
+        "icon_manifest",
+        None,
+    ),
+    (
+        "apps/bootstrap-installer/src-tauri/icons/icon.icon/Assets/art-light.png",
+        "icon_art",
+        "black",
+    ),
+    (
+        "apps/bootstrap-installer/src-tauri/icons/icon.icon/Assets/art-dark.png",
+        "icon_art",
+        "white",
+    ),
+    (
+        "apps/bootstrap-installer/src-tauri/icons/icon.icon/Assets/mono.png",
+        "icon_mono",
+        None,
+    ),
     ("apps/bootstrap-installer/public/nous-girl.png", "girl_light", 256),
     ("website/static/img/logo.png", "logo", None),
     ("website/static/img/logo-dark.png", "logo_dark", None),
@@ -293,15 +377,20 @@ TARGETS: list[tuple[str, str, object]] = [
 
 # ─── girl art extraction ────────────────────────────────────────────────────
 
+
 class IconArt:
     """One generation's rendering inputs and caches; never writes to source."""
 
-    def __init__(self, source: Path, *, colors: tuple[str, str] | None = None, commit: str = ""):
+    def __init__(
+        self, source: Path, *, colors: tuple[str, str] | None = None, commit: str = ""
+    ):
         assets = source / "assets"
         self.source = source
         self.colors = colors
         self.commit = commit
-        self.girls = {color: assets / f"nous-girl-{color}.svg" for color in ("black", "white")}
+        self.girls = {
+            color: assets / f"nous-girl-{color}.svg" for color in ("black", "white")
+        }
         self.backgrounds = assets / "backgrounds"
         self.paths: dict[str, str] = {}
         self.bboxes: dict[str, tuple[float, float, float, float]] = {}
@@ -312,8 +401,12 @@ class IconArt:
         self.master_mac = compose_svg(self, "black", "squircle-mac-light.svg")
         self.master_mac_dark = compose_svg(self, "white", "squircle-mac-dark.svg")
         # Badge-free twins for direct renders below BADGE_MIN_SIZE.
-        self.master_small = compose_svg(self, "black", "squircle-light.svg", badge=False)
-        self.master_dark_small = compose_svg(self, "white", "squircle-dark.svg", badge=False)
+        self.master_small = compose_svg(
+            self, "black", "squircle-light.svg", badge=False
+        )
+        self.master_dark_small = compose_svg(
+            self, "white", "squircle-dark.svg", badge=False
+        )
 
 
 def girl_path(art: IconArt, girl: str) -> str:
@@ -332,17 +425,24 @@ def girl_bbox(art: IconArt, girl: str) -> tuple[float, float, float, float]:
     """Art bounding box in the girl SVG's coordinate space, measured by
     rendering once and taking the alpha bbox (robust to art changes)."""
     if girl not in art.bboxes:
-        data = resvg_py.svg_to_bytes(svg_path=str(art.girls[girl]), width=512, height=512)
+        data = resvg_py.svg_to_bytes(
+            svg_path=str(art.girls[girl]), width=512, height=512
+        )
         im = Image.open(io.BytesIO(data))
-        bx, by, bx2, by2 = im.getchannel("A").point(lambda v: 255 if v > 0 else 0).getbbox()
+        bx, by, bx2, by2 = (
+            im.getchannel("A").point(lambda v: 255 if v > 0 else 0).getbbox()
+        )
         s = GIRL_VIEWBOX / 512.0
         art.bboxes[girl] = (bx * s, by * s, (bx2 - bx) * s, (by2 - by) * s)
     return art.bboxes[girl]
 
 
 def girl_layer(
-    art: IconArt, girl: str, box: tuple[float, float, float, float],
-    *, align: str = "xMidYMid",
+    art: IconArt,
+    girl: str,
+    box: tuple[float, float, float, float],
+    *,
+    align: str = "xMidYMid",
 ) -> str:
     """Nested-svg layer: girl art (bbox as viewBox) placed into `box` — the
     box's aspect is preserved via 'meet', so the girl never distorts."""
@@ -414,7 +514,9 @@ def commit_layer(commit: str, bg: str) -> str:
                     x, y = gx + (index * 6 + col) * 16, gy + row * 16
                     cells.append(f"M{x} {y}h16v16h-16z")
     # The badge follows the tile's mac HIG inset, never the outer canvas.
-    transform = f' transform="translate(100 100) scale({824 / 1024})"' if "-mac-" in bg else ""
+    transform = (
+        f' transform="translate(100 100) scale({824 / 1024})"' if "-mac-" in bg else ""
+    )
     bx, by, bw, bh = BADGE_RECT
     return (
         f'<g{transform}><rect x="{bx}" y="{by}" width="{bw}" height="{bh}" rx="24" fill="#000000"/>'
@@ -422,7 +524,9 @@ def commit_layer(commit: str, bg: str) -> str:
     )
 
 
-def drag_bottom_nodes(path: ET.Element, *, cutoff: float, band: float, distance: float) -> None:
+def drag_bottom_nodes(
+    path: ET.Element, *, cutoff: float, band: float, distance: float
+) -> None:
     """Drag lower nodes and curve handles, tapering to zero above the bottom band."""
     y_scale, y_offset = 1.0, 0.0
     transform = path.get("transform")
@@ -430,19 +534,25 @@ def drag_bottom_nodes(path: ET.Element, *, cutoff: float, band: float, distance:
         matrix = re.fullmatch(r"matrix\(([^)]+)\)", transform)
         if matrix is None:
             raise ValueError("bottom node edits require an axis-aligned matrix")
-        _, b, c, y_scale, _, y_offset = map(float, re.split(r"[\s,]+", matrix[1].strip()))
+        _, b, c, y_scale, _, y_offset = map(
+            float, re.split(r"[\s,]+", matrix[1].strip())
+        )
         if b != 0 or c != 0 or y_scale <= 0:
             raise ValueError("bottom node edits require an upright axis-aligned matrix")
 
     # The brand exports use explicit absolute M/L/C commands. Reject other
     # commands rather than silently corrupting relative coordinates or arcs.
-    tokens = re.findall(r"[A-Za-z]|[-+]?(?:\d*\.\d+|\d+\.?\d*)(?:[eE][-+]?\d+)?", path.attrib["d"])
+    tokens = re.findall(
+        r"[A-Za-z]|[-+]?(?:\d*\.\d+|\d+\.?\d*)(?:[eE][-+]?\d+)?", path.attrib["d"]
+    )
     counts = {"M": 2, "L": 2, "C": 6, "z": 0, "Z": 0}
     index = 0
     while index < len(tokens):
         command = tokens[index]
         if command not in counts:
-            raise ValueError("bottom node edits require explicit absolute M/L/C commands")
+            raise ValueError(
+                "bottom node edits require explicit absolute M/L/C commands"
+            )
         count = counts[command]
         if index + count >= len(tokens):
             raise ValueError("incomplete SVG path command")
@@ -466,7 +576,9 @@ def portrait_layer(art: IconArt, girl: str, bg: str, join_bottom: float) -> ET.E
     _, by, bw, bh = girl_bbox(art, girl)
     scale = min(portrait_width / bw, portrait_height / bh)
     drag_bottom_nodes(
-        portrait[0], cutoff=by + bh * 0.97, band=bh * 0.02,
+        portrait[0],
+        cutoff=by + bh * 0.97,
+        band=bh * 0.02,
         distance=max(0.0, join_bottom - (y + portrait_height)) / scale,
     )
     # Keep the fitted viewBox fixed, but let edited nodes reach into the border.
@@ -482,8 +594,12 @@ def compose_svg(art: IconArt, girl: str, bg: str, *, badge: bool = True) -> str:
     background = ET.fromstring(f"<g>{inner}</g>")
     tile = background.find("{http://www.w3.org/2000/svg}rect")
     assert tile is not None, f"no background rectangle in {bg}"
-    geometry = {key: float(tile.attrib[key]) for key in ("x", "y", "width", "height", "rx")}
-    silhouette = ET.Element("rect", {key: str(value) for key, value in geometry.items()})
+    geometry = {
+        key: float(tile.attrib[key]) for key in ("x", "y", "width", "height", "rx")
+    }
+    silhouette = ET.Element(
+        "rect", {key: str(value) for key, value in geometry.items()}
+    )
     bottom = geometry["y"] + geometry["height"]
     if BORDER_ENABLED:
         thickness = geometry["width"] * BORDER_FRACTION
@@ -533,8 +649,10 @@ ICON_CANVAS = 1024
 
 def _cubic(p0, p1, p2, p3, t: float) -> tuple[float, float]:
     u = 1.0 - t
-    return (u ** 3 * p0[0] + 3 * u * u * t * p1[0] + 3 * u * t * t * p2[0] + t ** 3 * p3[0],
-            u ** 3 * p0[1] + 3 * u * u * t * p1[1] + 3 * u * t * t * p2[1] + t ** 3 * p3[1])
+    return (
+        u**3 * p0[0] + 3 * u * u * t * p1[0] + 3 * u * t * t * p2[0] + t**3 * p3[0],
+        u**3 * p0[1] + 3 * u * u * t * p1[1] + 3 * u * t * t * p2[1] + t**3 * p3[1],
+    )
 
 
 def _mask_corner(side: float, samples: int) -> list[tuple[float, float]]:
@@ -582,12 +700,17 @@ def mac_mask_outline(side: float, samples: int = 96) -> list[tuple[float, float]
     bl = [(y, side - x) for x, y in tl]
     outline: list[tuple[float, float]] = []
     for point in tl + tr + br + bl:
-        if not outline or math.hypot(point[0] - outline[-1][0], point[1] - outline[-1][1]) > 1e-9:
+        if (
+            not outline
+            or math.hypot(point[0] - outline[-1][0], point[1] - outline[-1][1]) > 1e-9
+        ):
             outline.append(point)
     return outline
 
 
-def offset_inward(points: list[tuple[float, float]], distance: float) -> list[tuple[float, float]]:
+def offset_inward(
+    points: list[tuple[float, float]], distance: float
+) -> list[tuple[float, float]]:
     """Parallel curve `distance` inside a convex closed outline."""
     count = len(points)
     cx = sum(x for x, _ in points) / count
@@ -614,7 +737,9 @@ def closed_path(points: list[tuple[float, float]]) -> str:
         p2, p3 = points[(i + 1) % count], points[(i + 2) % count]
         c1 = (p1[0] + (p2[0] - p0[0]) / 6.0, p1[1] + (p2[1] - p0[1]) / 6.0)
         c2 = (p2[0] - (p3[0] - p1[0]) / 6.0, p2[1] - (p3[1] - p1[1]) / 6.0)
-        parts.append(f"C{c1[0]:.3f} {c1[1]:.3f} {c2[0]:.3f} {c2[1]:.3f} {p2[0]:.3f} {p2[1]:.3f}")
+        parts.append(
+            f"C{c1[0]:.3f} {c1[1]:.3f} {c2[0]:.3f} {c2[1]:.3f} {p2[0]:.3f} {p2[1]:.3f}"
+        )
     parts.append("Z")
     return "".join(parts)
 
@@ -634,7 +759,11 @@ def icon_art_svg(art: IconArt, girl: str) -> str:
     """Art layer: the girl registered as on the canvas-filling squircle, joined
     to the border band; the commit badge rides along for commit builds."""
     bg = "icon.icon"  # the plate is the canvas; the system supplies the grid
-    join_bottom = ICON_CANVAS - ICON_CANVAS * BORDER_FRACTION + 10 if BORDER_ENABLED else ICON_CANVAS * (1 + EDGE_OVERSHOOT)
+    join_bottom = (
+        ICON_CANVAS - ICON_CANVAS * BORDER_FRACTION + 10
+        if BORDER_ENABLED
+        else ICON_CANVAS * (1 + EDGE_OVERSHOOT)
+    )
     portrait = portrait_layer(art, girl, bg, join_bottom)
     badge = f"  {commit_layer(art.commit, bg)}\n" if art.commit else ""
     return (
@@ -648,7 +777,7 @@ def icon_art_svg(art: IconArt, girl: str) -> str:
 def icon_color(hex_color: str) -> str:
     """Icon Composer colour literal for an opaque sRGB hex colour."""
     value = hex_color.lstrip("#")
-    r, g, b = (int(value[i:i + 2], 16) / 255.0 for i in (0, 2, 4))
+    r, g, b = (int(value[i : i + 2], 16) / 255.0 for i in (0, 2, 4))
     return f"srgb:{r:.5f},{g:.5f},{b:.5f},1.00000"
 
 
@@ -663,6 +792,7 @@ def icon_mono_image(art: IconArt) -> Image.Image:
     """The single grayscale layer behind Clear light/dark and Tinted light/dark
     (Apple's "tinted" specialization). One image, each pixel painted once, so
     translucent materials never stack where the girl meets the ring."""
+
     def coverage(svg: str) -> Image.Image:
         return render_svg(svg, ICON_CANVAS).convert("RGBA").getchannel("A")
 
@@ -673,12 +803,19 @@ def icon_mono_image(art: IconArt) -> Image.Image:
         return layer
 
     out = Image.new("RGBA", (ICON_CANVAS, ICON_CANVAS), (0, 0, 0, 0))
-    paints = [(coverage(icon_art_svg(art, "black")), MONO_INK), (coverage(icon_art_svg(art, "white")), (1.0, 1.0))]
+    paints = [
+        (coverage(icon_art_svg(art, "black")), MONO_INK),
+        (coverage(icon_art_svg(art, "white")), (1.0, 1.0)),
+    ]
     if BORDER_ENABLED:
         paints.append((coverage(icon_border_svg("#ffffff")), MONO_RING))
     for alpha, (tone, opacity) in paints:
         # paste, not composite: a later material replaces an earlier one
-        out.paste(material(tone, opacity, alpha), (0, 0), alpha.point(lambda v: 255 if v > 127 else 0))
+        out.paste(
+            material(tone, opacity, alpha),
+            (0, 0),
+            alpha.point(lambda v: 255 if v > 127 else 0),
+        )
     return out
 
 
@@ -699,7 +836,10 @@ def icon_manifest(art: IconArt) -> str:
                 {"appearance": "dark", "value": f"{name}-dark.png"},
             ],
             "glass": False,
-            "hidden-specializations": [{"value": False}, {"appearance": "tinted", "value": True}],
+            "hidden-specializations": [
+                {"value": False},
+                {"appearance": "tinted", "value": True},
+            ],
         }
 
     # "tinted" is the single mono annotation behind Clear light/dark and
@@ -708,7 +848,10 @@ def icon_manifest(art: IconArt) -> str:
         "name": "mono",
         "image-name": "mono.png",
         "glass": True,
-        "hidden-specializations": [{"value": True}, {"appearance": "tinted", "value": False}],
+        "hidden-specializations": [
+            {"value": True},
+            {"appearance": "tinted", "value": False},
+        ],
     }
     layers = ([layer("border")] if BORDER_ENABLED else []) + [layer("art"), mono]
 
@@ -717,20 +860,23 @@ def icon_manifest(art: IconArt) -> str:
             {"value": {"solid": icon_color(light)}},
             {"appearance": "dark", "value": {"solid": icon_color(dark)}},
         ],
-        "groups": [{
-            "lighting": "individual",
-            "specular": False,
-            "translucency": {"enabled": False, "value": 0},
-            "shadow": {"kind": "none", "opacity": 0},
-            "blur-material": None,
-            "layers": layers,
-        }],
+        "groups": [
+            {
+                "lighting": "individual",
+                "specular": False,
+                "translucency": {"enabled": False, "value": 0},
+                "shadow": {"kind": "none", "opacity": 0},
+                "blur-material": None,
+                "layers": layers,
+            }
+        ],
         "supported-platforms": {"squares": "shared"},
     }
     return json.dumps(manifest, indent=2) + "\n"
 
 
 # ─── rendering ──────────────────────────────────────────────────────────────
+
 
 def render(master: str, size: int, *, background: str | None = None) -> Image.Image:
     """Render a master to an RGBA PNG of `size`x`size`."""
@@ -802,15 +948,26 @@ def target_bytes(art: IconArt, kind: str, arg: object) -> bytes:
 
     buf = io.BytesIO()
     if kind == "png":
-        save_png(render(art.master if arg >= BADGE_MIN_SIZE else art.master_small, arg), buf)
+        save_png(
+            render(art.master if arg >= BADGE_MIN_SIZE else art.master_small, arg), buf
+        )
     elif kind == "png_mac":
         save_png(render(art.master_mac, arg), buf)
     elif kind == "png_dark":
-        save_png(render(art.master_dark if arg >= BADGE_MIN_SIZE else art.master_dark_small, arg), buf)
+        save_png(
+            render(
+                art.master_dark if arg >= BADGE_MIN_SIZE else art.master_dark_small, arg
+            ),
+            buf,
+        )
     elif kind == "png_white":
-        render(art.master, arg, background="#ffffff").convert("RGB").save(buf, "PNG", optimize=True)
+        render(art.master, arg, background="#ffffff").convert("RGB").save(
+            buf, "PNG", optimize=True
+        )
     elif kind == "png_dark_white":
-        render(art.master_dark, arg, background=DARK_HEX).convert("RGB").save(buf, "PNG", optimize=True)
+        render(art.master_dark, arg, background=DARK_HEX).convert("RGB").save(
+            buf, "PNG", optimize=True
+        )
     elif kind in ("girl_light", "girl_dark"):
         save_png(girl_mark(art, kind, arg), buf)
     elif kind == "icon_border":
@@ -827,17 +984,23 @@ def target_bytes(art: IconArt, kind: str, arg: object) -> bytes:
         img.save(buf, format="ICO", sizes=[(s, s) for s in arg])
     elif kind == "icns":
         img = render(art.master_mac, 1024)
-        frames = [img.resize((s, s), Image.LANCZOS) for s in (16, 32, 64, 128, 256, 512, 1024)]
+        frames = [
+            img.resize((s, s), Image.LANCZOS) for s in (16, 32, 64, 128, 256, 512, 1024)
+        ]
         img.save(buf, format="ICNS", append_images=frames[1:])
     elif kind == "icns_dark":
         img = render(art.master_mac_dark, 1024)
-        frames = [img.resize((s, s), Image.LANCZOS) for s in (16, 32, 64, 128, 256, 512, 1024)]
+        frames = [
+            img.resize((s, s), Image.LANCZOS) for s in (16, 32, 64, 128, 256, 512, 1024)
+        ]
         img.save(buf, format="ICNS", append_images=frames[1:])
     elif kind == "icns_from_png":
         # Hand-made artwork (the DMG volume: girl on a drive) shipped as ICNS.
         img = Image.open(art.source / arg).convert("RGBA")
         assert img.size == (1024, 1024), f"{arg} must be 1024x1024"
-        frames = [img.resize((s, s), Image.LANCZOS) for s in (16, 32, 64, 128, 256, 512, 1024)]
+        frames = [
+            img.resize((s, s), Image.LANCZOS) for s in (16, 32, 64, 128, 256, 512, 1024)
+        ]
         img.save(buf, format="ICNS", append_images=frames[1:])
     elif kind == "wide":
         w, h, tile = arg
@@ -862,7 +1025,9 @@ def build_art(source: Path) -> tuple[IconArt, IconArt]:
         if tag:
             raise ValueError("Commit builds cannot also select CLAWK_PAYLOAD_TAG")
         if not re.fullmatch(r"[a-f0-9]{40}", commit):
-            raise ValueError("CLAWK_BUILD_COMMIT requires an exact full 40-character SHA")
+            raise ValueError(
+                "CLAWK_BUILD_COMMIT requires an exact full 40-character SHA"
+            )
         return art, IconArt(source, colors=("#e34850", "#4a1117"), commit=commit)
     if _CANARY_TAG_RE.match(tag.strip()):
         return art, IconArt(source, colors=("#f5cc32", "#443808"))
@@ -891,7 +1056,9 @@ def cmd_write(source: Path, out: Path) -> int:
         path = out / rel
         try:
             if kind in ("svg", "svg_dark", "svg_copy", "icon_manifest"):
-                print(f"  {rel}: {path.stat().st_size} bytes {'JSON' if kind == 'icon_manifest' else 'SVG'}")
+                print(
+                    f"  {rel}: {path.stat().st_size} bytes {'JSON' if kind == 'icon_manifest' else 'SVG'}"
+                )
                 continue
             im = Image.open(path)
             if kind in ("ico", "ico_dark"):
@@ -938,7 +1105,9 @@ def cmd_check(source: Path, out: Path) -> int:
         try:
             im = Image.open(path)
             if im.format != fmt or im.size != size:
-                problems.append(f"{rel}: got {im.format} {im.size}, expected {fmt} {size}")
+                problems.append(
+                    f"{rel}: got {im.format} {im.size}, expected {fmt} {size}"
+                )
         except Exception as exc:
             problems.append(f"{rel}: UNREADABLE ({exc})")
 
@@ -956,7 +1125,9 @@ def cmd_check(source: Path, out: Path) -> int:
         alpha = Image.open(path).convert("RGBA").getchannel("A")
         lo, hi = alpha.getextrema()
         if lo != 0 or hi != 255:
-            problems.append(f"{rel}: alpha extrema {alpha.getextrema()}, expected (0, 255) transparent corners")
+            problems.append(
+                f"{rel}: alpha extrema {alpha.getextrema()}, expected (0, 255) transparent corners"
+            )
 
     # containers must have the right frame sets (parse ICO headers directly —
     # PIL's ICO n_frames is unreliable across versions)
@@ -998,8 +1169,12 @@ def cmd_check(source: Path, out: Path) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source", type=Path, default=Path(__file__).resolve().parent.parent)
-    parser.add_argument("--out", type=Path, help="Output root (defaults to source for developer builds)")
+    parser.add_argument(
+        "--source", type=Path, default=Path(__file__).resolve().parent.parent
+    )
+    parser.add_argument(
+        "--out", type=Path, help="Output root (defaults to source for developer builds)"
+    )
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     source = args.source.resolve()

@@ -16,20 +16,31 @@ def desktop_stamp(tmp_path, monkeypatch):
     def _stamp(payload, update_mechanism, tag=None):
         root = tmp_path / f"app-{payload}-{update_mechanism}"
         root.mkdir()
-        (root / "install-stamp.json").write_text(json.dumps({
-            "source": "local", "distribution": "desktop-app", "payload": payload,
-            "updateMechanism": update_mechanism, "commit": "a" * 40,
-            "displayVersion": "0.17.6", "baseVersion": "0.17.6", "tag": tag,
-        }))
+        (root / "install-stamp.json").write_text(
+            json.dumps(
+                {
+                    "source": "local",
+                    "distribution": "desktop-app",
+                    "payload": payload,
+                    "updateMechanism": update_mechanism,
+                    "commit": "a" * 40,
+                    "displayVersion": "0.17.6",
+                    "baseVersion": "0.17.6",
+                    "tag": tag,
+                }
+            )
+        )
         monkeypatch.setattr("clawk_cli.config.get_project_root", lambda: root)
         monkeypatch.setattr("pm.paths.repo_root", lambda: root)
         monkeypatch.delenv("CLAWK_INSTALL_ROOT", raising=False)
         from clawk_cli.version_info import _reset_version_info_cache
+
         _reset_version_info_cache()
         return root
 
     yield _stamp
     from clawk_cli.version_info import _reset_version_info_cache
+
     _reset_version_info_cache()
 
 

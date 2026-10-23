@@ -16,7 +16,11 @@ from pathlib import Path
 
 from tools.tts_text_normalize import prepare_spoken_text
 
-_CORPUS = Path(__file__).resolve().parent.parent / "fixtures" / "identifier_speech_corpus.json"
+_CORPUS = (
+    Path(__file__).resolve().parent.parent
+    / "fixtures"
+    / "identifier_speech_corpus.json"
+)
 
 
 def _cases() -> dict:
@@ -27,7 +31,9 @@ def test_identifier_tokens_become_silence_prose_survives():
     for text, must_not_contain, must_contain in _cases()["identifier_tokens"]:
         spoken = prepare_spoken_text(text)
         for needle in must_not_contain:
-            assert needle not in spoken, f"{needle!r} leaked from {text!r} into {spoken!r}"
+            assert needle not in spoken, (
+                f"{needle!r} leaked from {text!r} into {spoken!r}"
+            )
         for needle in must_contain:
             assert needle in spoken, f"{needle!r} lost from {text!r} -> {spoken!r}"
 
@@ -41,7 +47,8 @@ def test_ordinary_speech_passes_through():
 
 def test_issue_repro_filenames_are_not_spoken():
     spoken = prepare_spoken_text(
-        "Saved peyton-sample-20260922.wav and peyton-sample-20260922.ogg.")
+        "Saved peyton-sample-20260922.wav and peyton-sample-20260922.ogg."
+    )
     assert ".wav" not in spoken
     assert ".ogg" not in spoken
     assert "peyton" not in spoken
@@ -50,7 +57,8 @@ def test_issue_repro_filenames_are_not_spoken():
 
 def test_hash_and_uuid_summaries_do_not_spell_out():
     spoken = prepare_spoken_text(
-        "Commit 73688014f78 with trace 550e8400-e29b-41d4-a716-446655440000.")
+        "Commit 73688014f78 with trace 550e8400-e29b-41d4-a716-446655440000."
+    )
     assert "73688014f78" not in spoken
     assert "550e8400" not in spoken
     assert "Commit" in spoken and "trace" in spoken

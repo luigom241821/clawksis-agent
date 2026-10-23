@@ -59,9 +59,7 @@ class TestReadFileBinaryClassification:
 
     def test_utf8_sig_bom_cyrillic_reads_as_text(self, ops, tmp_path):
         # 80922: utf-8-sig BOM + Cyrillic body.
-        path = _write(
-            tmp_path, "bom.txt", ("Привет мир\n" * 100).encode("utf-8-sig")
-        )
+        path = _write(tmp_path, "bom.txt", ("Привет мир\n" * 100).encode("utf-8-sig"))
         r = ops.read_file(path)
         assert r.is_binary is False and r.error is None
         assert "Привет" in r.content
@@ -72,9 +70,7 @@ class TestReadFileBinaryClassification:
         assert r.is_binary is False and r.error is None
 
     def test_png_magic_stays_binary(self, ops, tmp_path):
-        path = _write(
-            tmp_path, "blob.dat", b"\x89PNG\r\n\x1a\n" + os.urandom(2048)
-        )
+        path = _write(tmp_path, "blob.dat", b"\x89PNG\r\n\x1a\n" + os.urandom(2048))
         r = ops.read_file(path)
         assert r.is_binary is True
 
@@ -115,7 +111,9 @@ class TestSiblingSites:
 
     def test_patch_replace_on_boundary_cut_cjk_file(self, ops, tmp_path):
         path = _write(
-            tmp_path, "doc.md", ("漢字テキスト" * 200 + "\nEND-MARKER\n").encode("utf-8")
+            tmp_path,
+            "doc.md",
+            ("漢字テキスト" * 200 + "\nEND-MARKER\n").encode("utf-8"),
         )
         r = ops.patch_replace(path, "END-MARKER", "END-PATCHED")
         assert r.success is True

@@ -4,6 +4,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+
 def _import_cli():
     import clawk_cli.config as config_mod
 
@@ -18,6 +19,7 @@ def _import_cli():
 
     return cli_mod
 
+
 class TestParseServiceTierConfig(unittest.TestCase):
     def _parse(self, raw):
         cli_mod = _import_cli()
@@ -26,6 +28,7 @@ class TestParseServiceTierConfig(unittest.TestCase):
     def test_fast_maps_to_priority(self):
         self.assertEqual(self._parse("fast"), "priority")
         self.assertEqual(self._parse("priority"), "priority")
+
 
 class TestHandleFastCommand(unittest.TestCase):
     def _make_cli(self, service_tier=None):
@@ -67,6 +70,7 @@ class TestHandleFastCommand(unittest.TestCase):
         self.assertIsNone(stub.service_tier)
         self.assertIsNone(stub.agent)
 
+
 class TestPriorityProcessingModels(unittest.TestCase):
     """Verify the expanded Priority Processing model registry."""
 
@@ -76,12 +80,24 @@ class TestPriorityProcessingModels(unittest.TestCase):
         # All OpenAI flagship models support Priority Processing — including
         # future releases (gpt-5.5, 5.6...) via pattern matching.
         supported = [
-            "gpt-5.5", "gpt-5.5-mini",
-            "gpt-5.4", "gpt-5.4-mini", "gpt-5.2",
-            "gpt-5.1", "gpt-5", "gpt-5-mini",
-            "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano",
-            "gpt-4o", "gpt-4o-mini",
-            "o1", "o1-mini", "o3", "o3-mini", "o4-mini",
+            "gpt-5.5",
+            "gpt-5.5-mini",
+            "gpt-5.4",
+            "gpt-5.4-mini",
+            "gpt-5.2",
+            "gpt-5.1",
+            "gpt-5",
+            "gpt-5-mini",
+            "gpt-4.1",
+            "gpt-4.1-mini",
+            "gpt-4.1-nano",
+            "gpt-4o",
+            "gpt-4o-mini",
+            "o1",
+            "o1-mini",
+            "o3",
+            "o3-mini",
+            "o4-mini",
         ]
         for model in supported:
             assert model_supports_fast_mode(model), f"{model} should support fast mode"
@@ -90,8 +106,15 @@ class TestPriorityProcessingModels(unittest.TestCase):
         """Codex models route through Responses API and don't accept service_tier."""
         from clawk_cli.models import model_supports_fast_mode
 
-        for model in ["gpt-5-codex", "gpt-5.2-codex", "gpt-5.3-codex", "gpt-5.1-codex-max"]:
-            assert not model_supports_fast_mode(model), f"{model} is codex — should not expose /fast"
+        for model in [
+            "gpt-5-codex",
+            "gpt-5.2-codex",
+            "gpt-5.3-codex",
+            "gpt-5.1-codex-max",
+        ]:
+            assert not model_supports_fast_mode(model), (
+                f"{model} is codex — should not expose /fast"
+            )
 
     def test_grok_46_supports_priority_processing(self):
         from clawk_cli.models import (
@@ -104,10 +127,13 @@ class TestPriorityProcessingModels(unittest.TestCase):
         assert model_supports_fast_mode("grok-4.5") is False
         assert resolve_fast_mode_overrides("grok-4.6") == {"service_tier": "priority"}
 
+
 class TestFastModeRouting(unittest.TestCase):
     def test_fast_command_exposed_for_model_even_when_provider_is_auto(self):
         cli_mod = _import_cli()
-        stub = SimpleNamespace(provider="auto", requested_provider="auto", model="gpt-5.4", agent=None)
+        stub = SimpleNamespace(
+            provider="auto", requested_provider="auto", model="gpt-5.4", agent=None
+        )
 
         assert cli_mod.ClawksisCLI._fast_command_available(stub) is True
 
@@ -137,7 +163,12 @@ class TestFastModeRouting(unittest.TestCase):
         # Proxied routes (OpenRouter etc.) strip/400 on the param — never sent.
         stub.base_url = "https://openrouter.ai/api/v1"
         stub.provider = "openrouter"
-        assert cli_mod.ClawksisCLI._resolve_turn_agent_config(stub, "hi")["request_overrides"] is None
+        assert (
+            cli_mod.ClawksisCLI._resolve_turn_agent_config(stub, "hi")[
+                "request_overrides"
+            ]
+            is None
+        )
 
     def test_turn_route_keeps_primary_runtime_when_model_has_no_fast_backend(self):
         cli_mod = _import_cli()
@@ -157,6 +188,7 @@ class TestFastModeRouting(unittest.TestCase):
 
         assert route["runtime"]["provider"] == "openrouter"
         assert route.get("request_overrides") is None
+
 
 class TestAnthropicFastMode(unittest.TestCase):
     """Verify Anthropic Fast Mode model support and override resolution."""
@@ -210,8 +242,10 @@ class TestAnthropicFastMode(unittest.TestCase):
         """Sonnet doesn't support fast mode (Opus 4.8/5/5.5 only) — /fast must be hidden."""
         cli_mod = _import_cli()
         stub = SimpleNamespace(
-            provider="anthropic", requested_provider="anthropic",
-            model="claude-sonnet-4-6", agent=None,
+            provider="anthropic",
+            requested_provider="anthropic",
+            model="claude-sonnet-4-6",
+            agent=None,
         )
         assert cli_mod.ClawksisCLI._fast_command_available(stub) is False
 
@@ -234,6 +268,7 @@ class TestAnthropicFastMode(unittest.TestCase):
 
         assert route["runtime"]["provider"] == "anthropic"
         assert route["request_overrides"] == {"speed": "fast"}
+
 
 class TestAnthropicFastModeAdapter(unittest.TestCase):
     """Verify build_anthropic_kwargs handles fast_mode parameter."""
@@ -258,10 +293,20 @@ class TestAnthropicFastModeAdapter(unittest.TestCase):
         from agent.anthropic_adapter import build_anthropic_kwargs
 
         def _speed(model):
-            return build_anthropic_kwargs(
-                model=model, messages=[{"role": "user", "content": [{"type": "text", "text": "hi"}]}],
-                tools=None, max_tokens=None, reasoning_config=None, fast_mode=True,
-            ).get("extra_body", {}).get("speed")
+            return (
+                build_anthropic_kwargs(
+                    model=model,
+                    messages=[
+                        {"role": "user", "content": [{"type": "text", "text": "hi"}]}
+                    ],
+                    tools=None,
+                    max_tokens=None,
+                    reasoning_config=None,
+                    fast_mode=True,
+                )
+                .get("extra_body", {})
+                .get("speed")
+            )
 
         assert _speed("claude-opus-5-5") == "fast"
         assert _speed("claude-opus-5") == "fast"

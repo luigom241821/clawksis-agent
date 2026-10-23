@@ -33,22 +33,42 @@ def kanban_home(tmp_path, monkeypatch):
 
 def _init_git_repo(repo: Path) -> None:
     repo.mkdir(parents=True, exist_ok=True)
-    subprocess.run(["git", "init", "-b", "main", str(repo)], check=True, capture_output=True, text=True)
-    subprocess.run(["git", "-C", str(repo), "config", "user.email", "kanban@example.com"], check=True, capture_output=True, text=True)
-    subprocess.run(["git", "-C", str(repo), "config", "user.name", "Kanban Test"], check=True, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "init", "-b", "main", str(repo)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repo), "config", "user.email", "kanban@example.com"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repo), "config", "user.name", "Kanban Test"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
     (repo / "README.md").write_text("hello\n", encoding="utf-8")
-    subprocess.run(["git", "-C", str(repo), "add", "README.md"], check=True, capture_output=True, text=True)
-    subprocess.run(["git", "-C", str(repo), "commit", "-m", "init"], check=True, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "-C", str(repo), "add", "README.md"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repo), "commit", "-m", "init"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
 
 
 # ---------------------------------------------------------------------------
 # Schema / init
 # ---------------------------------------------------------------------------
-
-
-
-
-
 
 
 @pytest.mark.platforms("windows")
@@ -146,8 +166,7 @@ def test_connect_migrates_legacy_db_before_optional_column_indexes(tmp_path):
             row["name"] for row in migrated.execute("PRAGMA table_info(tasks)")
         }
         event_columns = {
-            row["name"]
-            for row in migrated.execute("PRAGMA table_info(task_events)")
+            row["name"] for row in migrated.execute("PRAGMA table_info(task_events)")
         }
         indexes = {
             row["name"]
@@ -173,21 +192,14 @@ def test_connect_migrates_legacy_db_before_optional_column_indexes(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-
 # ---------------------------------------------------------------------------
 # Links + dependency resolution
 # ---------------------------------------------------------------------------
 
 
-
-
-
-
-
 # ---------------------------------------------------------------------------
 # Atomic claim (CAS)
 # ---------------------------------------------------------------------------
-
 
 
 def test_schedule_task_parks_time_delay_without_dispatching(kanban_home):
@@ -199,17 +211,15 @@ def test_schedule_task_parks_time_delay_without_dispatching(kanban_home):
         assert kb.claim_task(conn, t) is None
 
         events = kb.list_events(conn, t)
-        assert any(e.kind == "scheduled" and e.payload == {"reason": "run next week"} for e in events)
-
-
-
-
-
-
+        assert any(
+            e.kind == "scheduled" and e.payload == {"reason": "run next week"}
+            for e in events
+        )
 
 
 def test_stale_claim_reclaim_event_records_diagnostic_payload(
-    kanban_home, monkeypatch,
+    kanban_home,
+    monkeypatch,
 ):
     """``reclaimed`` events should carry claim_expires, last_heartbeat_at,
     and worker_pid so operators can diagnose why a claim went stale
@@ -226,16 +236,14 @@ def test_stale_claim_reclaim_event_records_diagnostic_payload(
         old_expires = int(time.time()) - 3600
         hb_at = int(time.time()) - 1800
         conn.execute(
-            "UPDATE tasks SET claim_expires = ?, last_heartbeat_at = ? "
-            "WHERE id = ?",
+            "UPDATE tasks SET claim_expires = ?, last_heartbeat_at = ? WHERE id = ?",
             (old_expires, hb_at, t),
         )
 
         monkeypatch.setattr(_kb, "_pid_alive", lambda _pid: False)
         kb.release_stale_claims(conn, signal_fn=lambda _p, _s: None)
         row = conn.execute(
-            "SELECT payload FROM task_events "
-            "WHERE task_id = ? AND kind = 'reclaimed'",
+            "SELECT payload FROM task_events WHERE task_id = ? AND kind = 'reclaimed'",
             (t,),
         ).fetchone()
         assert row is not None
@@ -261,11 +269,17 @@ def test_stale_claim_reclaim_without_spawn_counts_toward_breaker(kanban_home):
                 "UPDATE tasks SET claim_expires = ? WHERE id = ?",
                 (int(time.time()) - 3600, t),
             )
-            assert kb.release_stale_claims(
-                conn, signal_fn=lambda _p, _s: None, failure_limit=2,
-            ) == 1
+            assert (
+                kb.release_stale_claims(
+                    conn,
+                    signal_fn=lambda _p, _s: None,
+                    failure_limit=2,
+                )
+                == 1
+            )
             row = conn.execute(
-                "SELECT status, consecutive_failures FROM tasks WHERE id = ?", (t,),
+                "SELECT status, consecutive_failures FROM tasks WHERE id = ?",
+                (t,),
             ).fetchone()
             assert row["consecutive_failures"] == expected
         assert row["status"] == "blocked"
@@ -274,7 +288,8 @@ def test_stale_claim_reclaim_without_spawn_counts_toward_breaker(kanban_home):
 
 
 def test_stale_claim_extend_live_worker_does_not_count_failure(
-    kanban_home, monkeypatch,
+    kanban_home,
+    monkeypatch,
 ):
     """The live-worker extend path must NOT increment ``consecutive_failures``
     (#111306): extending a still-alive worker's claim is not a failure."""
@@ -301,10 +316,6 @@ def test_stale_claim_extend_live_worker_does_not_count_failure(
         assert row["consecutive_failures"] == 0
 
 
-
-
-
-
 # ---------------------------------------------------------------------------
 # Rate-limit requeue: a worker that bails on a provider quota wall must be
 # released back to ``ready`` WITHOUT counting a failure, so a long (e.g.
@@ -319,10 +330,9 @@ def _exited_status(code: int) -> int:
     return code << 8
 
 
-
-
 def test_rate_limit_exit_requeues_without_counting_failure(
-    kanban_home, monkeypatch,
+    kanban_home,
+    monkeypatch,
 ):
     """A rate-limit sentinel exit releases the task to ``ready`` and leaves
     ``consecutive_failures`` untouched — the breaker must never trip on a
@@ -346,8 +356,7 @@ def test_rate_limit_exit_requeues_without_counting_failure(
             # host + a dead pid so the crash path acts on it.
             kb.claim_task(conn, tid, claimer=f"{host}:w{i}")
             conn.execute(
-                "UPDATE tasks SET worker_pid=?, consecutive_failures=? "
-                "WHERE id=?",
+                "UPDATE tasks SET worker_pid=?, consecutive_failures=? WHERE id=?",
                 (pid, 0, tid),
             )
             conn.commit()
@@ -376,8 +385,10 @@ def test_rate_limit_exit_requeues_without_counting_failure(
 
         # A ``rate_limited`` run outcome was recorded (not ``crashed``).
         outcomes = [
-            r["outcome"] for r in conn.execute(
-                "SELECT outcome FROM task_runs WHERE task_id=?", (tid,),
+            r["outcome"]
+            for r in conn.execute(
+                "SELECT outcome FROM task_runs WHERE task_id=?",
+                (tid,),
             ).fetchall()
         ]
         assert "rate_limited" in outcomes
@@ -385,7 +396,9 @@ def test_rate_limit_exit_requeues_without_counting_failure(
 
 
 @pytest.mark.parametrize("lane", ["ready", "review"])
-def test_terminal_provider_exit_blocks_after_one_attempt_in_either_lane(kanban_home, monkeypatch, lane):
+def test_terminal_provider_exit_blocks_after_one_attempt_in_either_lane(
+    kanban_home, monkeypatch, lane
+):
     """A worker that exits ``KANBAN_TERMINAL_PROVIDER_EXIT_CODE`` (credential revoked, model
     gone) parks the card ``blocked`` on the FIRST death — well below ``failure_limit`` and the
     per-task ``max_retries`` — with the provider error as the reason, sticky against
@@ -401,13 +414,20 @@ def test_terminal_provider_exit_blocks_after_one_attempt_in_either_lane(kanban_h
         tid = kb.create_task(conn, title="terminal", assignee="a", max_retries=5)
         claimed = kb.claim_task(conn, tid, claimer=f"{host}:w0")
         if lane == "review":
-            assert kb.request_review(conn, tid, summary="done", reviewer="r",
-                                     expected_run_id=claimed.current_run_id)
+            assert kb.request_review(
+                conn,
+                tid,
+                summary="done",
+                reviewer="r",
+                expected_run_id=claimed.current_run_id,
+            )
             assert kb.claim_review_task(conn, tid, claimer=f"{host}:r0") is not None
         pid = 71000
         conn.execute("UPDATE tasks SET worker_pid=? WHERE id=?", (pid, tid))
         conn.commit()
-        _kbd._record_worker_exit(pid, _exited_status(_kb.KANBAN_TERMINAL_PROVIDER_EXIT_CODE))
+        _kbd._record_worker_exit(
+            pid, _exited_status(_kb.KANBAN_TERMINAL_PROVIDER_EXIT_CODE)
+        )
 
         crashed = kbd.detect_crashed_workers(conn)
         assert tid in crashed
@@ -415,10 +435,13 @@ def test_terminal_provider_exit_blocks_after_one_attempt_in_either_lane(kanban_h
 
         task = kb.get_task(conn, tid)
         assert task.status == "blocked"
-        assert task.consecutive_failures == 1  # one spawn, not failure_limit / max_retries of them
+        assert (
+            task.consecutive_failures == 1
+        )  # one spawn, not failure_limit / max_retries of them
         assert "terminal provider error" in (task.last_failure_error or "")
         gave_up = conn.execute(
-            "SELECT payload FROM task_events WHERE task_id=? AND kind='gave_up'", (tid,),
+            "SELECT payload FROM task_events WHERE task_id=? AND kind='gave_up'",
+            (tid,),
         ).fetchone()
         assert json.loads(gave_up["payload"])["terminal_provider"] is True
 
@@ -428,10 +451,9 @@ def test_terminal_provider_exit_blocks_after_one_attempt_in_either_lane(kanban_h
         assert kb.get_task(conn, tid).status == "blocked"
 
 
-
-
 def test_respawn_guard_defers_rate_limited_within_cooldown(
-    kanban_home, monkeypatch,
+    kanban_home,
+    monkeypatch,
 ):
     """Within the cooldown after a rate-limit requeue, the guard defers the
     respawn; after the cooldown it allows a probe — and crucially does NOT
@@ -486,7 +508,10 @@ def test_respawn_guard_defers_rate_limited_within_cooldown(
     ],
 )
 def test_respawn_guard_blocker_auth_curated_not_open_stem(
-    kanban_home, monkeypatch, error_text, expected,
+    kanban_home,
+    monkeypatch,
+    error_text,
+    expected,
 ):
     """``_RESPAWN_BLOCKER_RE`` used to use an open ``auth\\w*`` stem that matched
     ordinary English words like "author"/"authored"/"authoring"/"authoritative"
@@ -552,7 +577,9 @@ def test_respawn_guard_ignores_auth_words_in_crashed_worker_output(kanban_home):
 
 
 def test_infrastructure_spawn_refusal_never_charges_the_card(
-    kanban_home, monkeypatch, all_assignees_spawnable,
+    kanban_home,
+    monkeypatch,
+    all_assignees_spawnable,
 ):
     """The host refusing to place a worker (managed gateway, user bus gone —
     #114720) is not a card failure: through the REAL spawn boundary and the
@@ -562,27 +589,41 @@ def test_infrastructure_spawn_refusal_never_charges_the_card(
     failure on the same card still counts."""
     from tools import process_registry
 
-    monkeypatch.setattr(process_registry, "_is_supervised_gateway_process", lambda: True)
+    monkeypatch.setattr(
+        process_registry, "_is_supervised_gateway_process", lambda: True
+    )
     monkeypatch.setenv("INVOCATION_ID", "managed-gateway")
-    monkeypatch.setattr(process_registry, "_systemd_run_user_scope_available", lambda: False)
+    monkeypatch.setattr(
+        process_registry, "_systemd_run_user_scope_available", lambda: False
+    )
     monkeypatch.setenv("CLAWK_KANBAN_RATE_LIMIT_COOLDOWN_SECONDS", "0")
 
     def spawn_via_real_boundary(task, workspace, board=None):
-        kbd._restart_safe_worker_argv(task, ["clawk", "chat"])  # raises: real probe verdict, real _degrade()
+        kbd._restart_safe_worker_argv(
+            task, ["clawk", "chat"]
+        )  # raises: real probe verdict, real _degrade()
         raise AssertionError("unreachable")
 
     with kbc.connect() as conn:
         tid = kb.create_task(conn, title="bus is down", assignee="a")
         for _ in range(3):
-            res = kbd.dispatch_once(conn, spawn_fn=spawn_via_real_boundary, failure_limit=2)
+            res = kbd.dispatch_once(
+                conn, spawn_fn=spawn_via_real_boundary, failure_limit=2
+            )
             assert res.auto_blocked == []
         row = conn.execute(
-            "SELECT status, block_kind, consecutive_failures, last_failure_error FROM tasks WHERE id = ?", (tid,),
+            "SELECT status, block_kind, consecutive_failures, last_failure_error FROM tasks WHERE id = ?",
+            (tid,),
         ).fetchone()
-        assert (row["status"], row["block_kind"], row["consecutive_failures"]) == ("ready", None, 0)
+        assert (row["status"], row["block_kind"], row["consecutive_failures"]) == (
+            "ready",
+            None,
+            0,
+        )
         assert "enable-linger" in row["last_failure_error"]
         runs = conn.execute(
-            "SELECT outcome, metadata FROM task_runs WHERE task_id = ? ORDER BY id", (tid,),
+            "SELECT outcome, metadata FROM task_runs WHERE task_id = ? ORDER BY id",
+            (tid,),
         ).fetchall()
         assert [r["outcome"] for r in runs] == ["spawn_failed"] * 3
         assert all(json.loads(r["metadata"])["infrastructure"] is True for r in runs)
@@ -597,25 +638,18 @@ def test_infrastructure_spawn_refusal_never_charges_the_card(
             raise RuntimeError("profile launcher exploded")
 
         kbd.dispatch_once(conn, spawn_fn=spawn_broken, failure_limit=2)
-        assert conn.execute(
-            "SELECT consecutive_failures FROM tasks WHERE id = ?", (tid,),
-        ).fetchone()[0] == 1
-
-
-
-
-
-
+        assert (
+            conn.execute(
+                "SELECT consecutive_failures FROM tasks WHERE id = ?",
+                (tid,),
+            ).fetchone()[0]
+            == 1
+        )
 
 
 # ---------------------------------------------------------------------------
 # Complete / block / unblock / archive / assign
 # ---------------------------------------------------------------------------
-
-
-
-
-
 
 
 def test_recompute_ready_honours_dispatcher_failure_limit(kanban_home):
@@ -633,8 +667,7 @@ def test_recompute_ready_honours_dispatcher_failure_limit(kanban_home):
         # with failures below the configured limit must still recover.
         t = kb.create_task(conn, title="lenient", assignee="a")
         conn.execute(
-            "UPDATE tasks SET status='blocked', consecutive_failures=? "
-            "WHERE id=?",
+            "UPDATE tasks SET status='blocked', consecutive_failures=? WHERE id=?",
             (kb.DEFAULT_FAILURE_LIMIT, t),
         )
         conn.commit()
@@ -642,9 +675,7 @@ def test_recompute_ready_honours_dispatcher_failure_limit(kanban_home):
         assert kb.recompute_ready(conn) == 0
         assert kb.get_task(conn, t).status == "blocked"
         # Dispatcher configured a higher limit → recover, preserve counter.
-        promoted = kb.recompute_ready(
-            conn, failure_limit=kb.DEFAULT_FAILURE_LIMIT + 2
-        )
+        promoted = kb.recompute_ready(conn, failure_limit=kb.DEFAULT_FAILURE_LIMIT + 2)
         assert promoted == 1
         task = kb.get_task(conn, t)
         assert task.status == "ready"
@@ -654,8 +685,7 @@ def test_recompute_ready_honours_dispatcher_failure_limit(kanban_home):
         # stricter limit must stay blocked even though it's below default.
         t2 = kb.create_task(conn, title="strict", assignee="a")
         conn.execute(
-            "UPDATE tasks SET status='blocked', consecutive_failures=1 "
-            "WHERE id=?",
+            "UPDATE tasks SET status='blocked', consecutive_failures=1 WHERE id=?",
             (t2,),
         )
         conn.commit()
@@ -665,23 +695,9 @@ def test_recompute_ready_honours_dispatcher_failure_limit(kanban_home):
         assert kb.get_task(conn, t2).status == "blocked"
 
 
-
-
 # ---------------------------------------------------------------------------
 # Parent-completion invariant at the claim gate (RCA t_a6acd07d)
 # ---------------------------------------------------------------------------
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 def test_delete_archived_task_removes_related_rows(kanban_home):
@@ -701,11 +717,37 @@ def test_delete_archived_task_removes_related_rows(kanban_home):
 
         assert kb.delete_archived_task(conn, tid) is True
         assert kb.get_task(conn, tid) is None
-        assert conn.execute("SELECT COUNT(*) FROM task_links WHERE child_id = ? OR parent_id = ?", (tid, tid)).fetchone()[0] == 0
-        assert conn.execute("SELECT COUNT(*) FROM task_comments WHERE task_id = ?", (tid,)).fetchone()[0] == 0
-        assert conn.execute("SELECT COUNT(*) FROM task_events WHERE task_id = ?", (tid,)).fetchone()[0] == 0
-        assert conn.execute("SELECT COUNT(*) FROM task_runs WHERE task_id = ?", (tid,)).fetchone()[0] == 0
-        assert conn.execute("SELECT COUNT(*) FROM kanban_notify_subs WHERE task_id = ?", (tid,)).fetchone()[0] == 0
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) FROM task_links WHERE child_id = ? OR parent_id = ?",
+                (tid, tid),
+            ).fetchone()[0]
+            == 0
+        )
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) FROM task_comments WHERE task_id = ?", (tid,)
+            ).fetchone()[0]
+            == 0
+        )
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) FROM task_events WHERE task_id = ?", (tid,)
+            ).fetchone()[0]
+            == 0
+        )
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) FROM task_runs WHERE task_id = ?", (tid,)
+            ).fetchone()[0]
+            == 0
+        )
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) FROM kanban_notify_subs WHERE task_id = ?", (tid,)
+            ).fetchone()[0]
+            == 0
+        )
 
 
 def test_delete_task_removes_task_and_cascades(kanban_home):
@@ -720,16 +762,9 @@ def test_delete_task_removes_task_and_cascades(kanban_home):
         assert len(kb.list_runs(conn, t)) == 0
 
 
-
-
 # ---------------------------------------------------------------------------
 # Comments / events / worker context
 # ---------------------------------------------------------------------------
-
-
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -737,18 +772,9 @@ def test_delete_task_removes_task_and_cascades(kanban_home):
 # ---------------------------------------------------------------------------
 
 
-
-
-
 # ---------------------------------------------------------------------------
 # Respawn guard (check_respawn_guard + dispatch_once integration)
 # ---------------------------------------------------------------------------
-
-
-
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -756,14 +782,9 @@ def test_delete_task_removes_task_and_cascades(kanban_home):
 # ---------------------------------------------------------------------------
 
 
-
-
-
-
-
-
-
-def test_worktree_workspace_explicit_target_materializes_linked_worktree(kanban_home, tmp_path):
+def test_worktree_workspace_explicit_target_materializes_linked_worktree(
+    kanban_home, tmp_path
+):
     repo = tmp_path / "repo"
     _init_git_repo(repo)
     target = repo / ".worktrees" / "custom-task"
@@ -783,13 +804,27 @@ def test_worktree_workspace_explicit_target_materializes_linked_worktree(kanban_
     assert ws == target
     assert ws.exists()
     repo_common = subprocess.run(
-        ["git", "-C", str(repo), "rev-parse", "--path-format=absolute", "--git-common-dir"],
+        [
+            "git",
+            "-C",
+            str(repo),
+            "rev-parse",
+            "--path-format=absolute",
+            "--git-common-dir",
+        ],
         check=True,
         capture_output=True,
         text=True,
     ).stdout.strip()
     ws_common = subprocess.run(
-        ["git", "-C", str(ws), "rev-parse", "--path-format=absolute", "--git-common-dir"],
+        [
+            "git",
+            "-C",
+            str(ws),
+            "rev-parse",
+            "--path-format=absolute",
+            "--git-common-dir",
+        ],
         check=True,
         capture_output=True,
         text=True,
@@ -808,7 +843,6 @@ def test_worktree_workspace_explicit_target_materializes_linked_worktree(kanban_
 # ---------------------------------------------------------------------------
 # Scratch cleanup containment (#28818)
 # ---------------------------------------------------------------------------
-
 
 
 def test_complete_task_persists_scratch_artifacts_before_cleanup(kanban_home):
@@ -861,9 +895,15 @@ def test_review_bound_handoff_preserves_declared_artifacts(kanban_home):
         run_id = kb.get_task(conn, t).current_run_id
         assert run_id is not None
         assert kb.request_review(
-            conn, t, summary="ready for review",
-            metadata={"artifacts": [str(artifact)]}, expected_run_id=run_id)
-        handoff = [e for e in kb.list_events(conn, t) if e.kind == "review_requested"][-1]
+            conn,
+            t,
+            summary="ready for review",
+            metadata={"artifacts": [str(artifact)]},
+            expected_run_id=run_id,
+        )
+        handoff = [e for e in kb.list_events(conn, t) if e.kind == "review_requested"][
+            -1
+        ]
         assert kb.complete_task(conn, t, summary="approved")
         attachments = kb.list_attachments(conn, t)
     persisted = Path(handoff.payload["artifacts"][0])
@@ -887,7 +927,11 @@ def test_request_review_rollback_discards_staged_copies(kanban_home):
         artifact.write_bytes(b"{}")
         kb.claim_task(conn, t)
         run_id = kb.get_task(conn, t).current_run_id
-        kwargs = dict(summary="ready", metadata={"artifacts": [str(artifact)]}, expected_run_id=run_id)
+        kwargs = dict(
+            summary="ready",
+            metadata={"artifacts": [str(artifact)]},
+            expected_run_id=run_id,
+        )
 
         def _boom(*_a, **_k):
             raise RuntimeError("run bookkeeping failed")
@@ -909,8 +953,6 @@ def test_request_review_rollback_discards_staged_copies(kanban_home):
 # ---------------------------------------------------------------------------
 
 
-
-
 def test_dir_child_completion_unblocks_deferred_scratch_parent(kanban_home, tmp_path):
     """A non-scratch ('dir') child completing must still sweep its scratch parent.
 
@@ -923,7 +965,9 @@ def test_dir_child_completion_unblocks_deferred_scratch_parent(kanban_home, tmp_
     with kbc.connect() as conn:
         parent = kb.create_task(conn, title="scratch parent")
         child = kb.create_task(
-            conn, title="dir child", workspace_kind="dir",
+            conn,
+            title="dir child",
+            workspace_kind="dir",
             workspace_path=str(child_dir),
         )
         kb.link_tasks(conn, parent, child)
@@ -940,8 +984,6 @@ def test_dir_child_completion_unblocks_deferred_scratch_parent(kanban_home, tmp_
         "A 'dir' child completing must trigger the parent scratch sweep"
     )
     assert child_dir.exists(), "Non-scratch 'dir' child workspace is never deleted"
-
-
 
 
 def test_is_managed_scratch_path_rejects_kanban_metadata_subtrees(kanban_home):
@@ -986,7 +1028,9 @@ def test_is_managed_scratch_path_rejects_kanban_metadata_subtrees(kanban_home):
 
 
 @pytest.mark.require_symlinks
-def test_symlinked_workspaces_root_does_not_widen_scratch_cleanup(kanban_home, tmp_path):
+def test_symlinked_workspaces_root_does_not_widen_scratch_cleanup(
+    kanban_home, tmp_path
+):
     """A workspaces root that is a symlink to a broad directory must not make
     every path inside the symlink target "managed". Only paths that are
     lexically below the root (i.e. reached through it) are scratch; a path
@@ -1014,20 +1058,9 @@ def test_symlinked_workspaces_root_does_not_widen_scratch_cleanup(kanban_home, t
 # ---------------------------------------------------------------------------
 
 
-
-
-
-
-
-
-
 # ---------------------------------------------------------------------------
 # Originating session id (ACP propagation)
 # ---------------------------------------------------------------------------
-
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -1040,6 +1073,7 @@ def test_symlinked_workspaces_root_does_not_widen_scratch_cleanup(kanban_home, t
 # where `kanban_db_path()` resolved to the active profile's CLAWK_HOME.
 # ---------------------------------------------------------------------------
 
+
 class TestSharedBoardPaths:
     """`kanban_home`/`kanban_db_path`/`workspaces_root`/`worker_log_path`
     must anchor at the **shared root**, not the active profile's CLAWK_HOME."""
@@ -1049,10 +1083,7 @@ class TestSharedBoardPaths:
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
         monkeypatch.delenv("CLAWK_KANBAN_HOME", raising=False)
 
-
-    def test_profile_worker_resolves_to_shared_root(
-        self, tmp_path, monkeypatch
-    ):
+    def test_profile_worker_resolves_to_shared_root(self, tmp_path, monkeypatch):
         # Reproduces the bug: dispatcher uses ~/.clawksis/kanban.db,
         # worker spawned with -p <profile> previously resolved to
         # ~/.clawksis/profiles/<profile>/kanban.db. After the fix both
@@ -1077,14 +1108,7 @@ class TestSharedBoardPaths:
         # explicitly NOT what we resolve to anymore.
         assert kb.kanban_db_path() != profile_home / "kanban.db"
 
-
-
-
-
-
-    def test_dispatcher_and_worker_share_a_real_database(
-        self, tmp_path, monkeypatch
-    ):
+    def test_dispatcher_and_worker_share_a_real_database(self, tmp_path, monkeypatch):
         # Belt-and-suspenders: round-trip a task across the two
         # CLAWK_HOME perspectives via a real SQLite file. Without the
         # fix the worker would open a different file and see no rows.
@@ -1105,9 +1129,6 @@ class TestSharedBoardPaths:
             task = kb.get_task(conn, task_id)
         assert task is not None
         assert task.title == "cross-profile"
-
-
-
 
     def test_dispatcher_spawn_injects_kanban_paths_without_stale_session(
         self, tmp_path, monkeypatch
@@ -1180,17 +1201,14 @@ class TestSharedBoardPaths:
 # ---------------------------------------------------------------------------
 
 
-
-
-
-
-
-
 # ---------------------------------------------------------------------------
 # NFS / network-filesystem fallback (see clawk_state_wal.apply_wal_with_fallback)
 # ---------------------------------------------------------------------------
 
-def test_connect_falls_back_to_delete_on_locking_protocol(tmp_path, monkeypatch, caplog):
+
+def test_connect_falls_back_to_delete_on_locking_protocol(
+    tmp_path, monkeypatch, caplog
+):
     """kanban_db.connect() must handle ``locking protocol`` on NFS/SMB.
 
     Without this fallback, the gateway's kanban dispatcher crashes every
@@ -1218,8 +1236,10 @@ def test_connect_falls_back_to_delete_on_locking_protocol(tmp_path, monkeypatch,
     # These tests exercise the WAL-attempt path; assume a fixed SQLite so the
     # WAL-reset vulnerability gate doesn't short-circuit before the pragma.
     import clawk_state_wal as _clawk_state_wal
+
     monkeypatch.setattr(
-        _clawk_state_wal, "is_sqlite_wal_reset_vulnerable",
+        _clawk_state_wal,
+        "is_sqlite_wal_reset_vulnerable",
         lambda version_info=None: False,
     )
     _clawk_state_wal._wal_fallback_warned_paths.clear()
@@ -1241,11 +1261,11 @@ def test_connect_falls_back_to_delete_on_locking_protocol(tmp_path, monkeypatch,
         # substitute the double, which connect_tracked re-applies to the
         # returned instance.
         kwargs.pop("factory", None)
-        return real_connect(
-            *args, factory=_WalBlockingConnection, **kwargs
-        )
+        return real_connect(*args, factory=_WalBlockingConnection, **kwargs)
 
-    with _patch("clawk_cli.kanban_db.sqlite3.connect", side_effect=wal_blocking_connect):
+    with _patch(
+        "clawk_cli.kanban_db.sqlite3.connect", side_effect=wal_blocking_connect
+    ):
         with caplog.at_level("ERROR", logger="clawk_state"):
             conn = kbc.connect()
 
@@ -1280,7 +1300,8 @@ def test_connect_works_when_wal_is_silently_refused(tmp_path, monkeypatch, caplo
     clawk_state_wal._wal_fallback_warned_paths.clear()
     # Assume a fixed SQLite so the WAL-reset gate doesn't short-circuit.
     monkeypatch.setattr(
-        clawk_state_wal, "is_sqlite_wal_reset_vulnerable",
+        clawk_state_wal,
+        "is_sqlite_wal_reset_vulnerable",
         lambda version_info=None: False,
     )
 
@@ -1294,9 +1315,7 @@ def test_connect_works_when_wal_is_silently_refused(tmp_path, monkeypatch, caplo
 
     def wal_silent_noop_connect(*args, **kwargs):
         kwargs.pop("factory", None)
-        return real_connect(
-            *args, factory=_WalSilentNoOpConnection, **kwargs
-        )
+        return real_connect(*args, factory=_WalSilentNoOpConnection, **kwargs)
 
     with _patch(
         "clawk_cli.kanban_db.sqlite3.connect",
@@ -1475,10 +1494,10 @@ def test_unlink_tasks_triggers_recompute_ready(kanban_home):
         )
 
 
-
 # ---------------------------------------------------------------------------
 # _add_column_if_missing / _migrate_add_optional_columns idempotency (#21708)
 # ---------------------------------------------------------------------------
+
 
 def test_add_column_if_missing_is_idempotent_on_race(kanban_home):
     """``_add_column_if_missing`` must swallow 'duplicate column name' errors.
@@ -1496,9 +1515,7 @@ def test_add_column_if_missing_is_idempotent_on_race(kanban_home):
 
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
-    conn.execute(
-        "CREATE TABLE tasks (id INTEGER PRIMARY KEY, title TEXT NOT NULL)"
-    )
+    conn.execute("CREATE TABLE tasks (id INTEGER PRIMARY KEY, title TEXT NOT NULL)")
 
     # First call adds the column — returns True.
     added = _add_column_if_missing(conn, "tasks", "extra_col", "extra_col TEXT")
@@ -1508,14 +1525,10 @@ def test_add_column_if_missing_is_idempotent_on_race(kanban_home):
 
     # Second call on same connection — column already exists — must return
     # False without raising, simulating the race the dispatcher hits.
-    added_again = _add_column_if_missing(
-        conn, "tasks", "extra_col", "extra_col TEXT"
-    )
+    added_again = _add_column_if_missing(conn, "tasks", "extra_col", "extra_col TEXT")
     assert added_again is False
 
     conn.close()
-
-
 
 
 def test_connect_heals_reduced_tasks_schema_seeded_by_external_harness(kanban_home):
@@ -1537,8 +1550,16 @@ def test_connect_heals_reduced_tasks_schema_seeded_by_external_harness(kanban_ho
     seed.close()
 
     healed = {
-        "body", "assignee", "priority", "created_by", "started_at", "completed_at",
-        "workspace_kind", "workspace_path", "claim_lock", "claim_expires",
+        "body",
+        "assignee",
+        "priority",
+        "created_by",
+        "started_at",
+        "completed_at",
+        "workspace_kind",
+        "workspace_path",
+        "claim_lock",
+        "claim_expires",
     }
     conn = kbc.connect(db_path)
     try:
@@ -1548,7 +1569,9 @@ def test_connect_heals_reduced_tasks_schema_seeded_by_external_harness(kanban_ho
         fresh = sqlite3.connect(":memory:")
         fresh.executescript(kb.SCHEMA_SQL)
         fresh_info = {r[1]: r[2:] for r in fresh.execute("PRAGMA table_info(tasks)")}
-        healed_info = {r["name"]: tuple(r)[2:] for r in conn.execute("PRAGMA table_info(tasks)")}
+        healed_info = {
+            r["name"]: tuple(r)[2:] for r in conn.execute("PRAGMA table_info(tasks)")
+        }
         assert {c: healed_info[c] for c in healed} == {c: fresh_info[c] for c in healed}
     finally:
         conn.close()
@@ -1592,7 +1615,6 @@ def test_resolve_clawk_argv_prefers_module_form_over_path_shim(monkeypatch):
     assert kbd._resolve_clawk_argv() == ["/opt/clawksis/bin/clawk"]
 
 
-
 def test_resolve_clawk_argv_module_actually_runs():
     """The fallback module name must be importable + runnable.
 
@@ -1611,15 +1633,30 @@ def test_resolve_clawk_argv_module_actually_runs():
         os.environ.pop("CLAWK_BIN", None)
         with mock.patch.object(shutil, "which", return_value=None):
             argv = kbd._resolve_clawk_argv()
-    offline = {**os.environ, "HTTPS_PROXY": "http://127.0.0.1:9", "https_proxy": "http://127.0.0.1:9", "NO_PROXY": "", "no_proxy": ""}
-    r = subprocess.run(argv + ["--version"], capture_output=True, text=True, timeout=30, check=False, env=offline)
+    offline = {
+        **os.environ,
+        "HTTPS_PROXY": "http://127.0.0.1:9",
+        "https_proxy": "http://127.0.0.1:9",
+        "NO_PROXY": "",
+        "no_proxy": "",
+    }
+    r = subprocess.run(
+        argv + ["--version"],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+        env=offline,
+    )
     assert r.returncode == 0, (
         f"`{' '.join(argv)} --version` failed (rc={r.returncode}); "
         f"stderr={r.stderr[:200]!r}"
     )
 
 
-def test_default_spawn_pins_repo_root_on_module_worker_pythonpath(tmp_path, monkeypatch):
+def test_default_spawn_pins_repo_root_on_module_worker_pythonpath(
+    tmp_path, monkeypatch
+):
     """The dispatcher's worker must carry the import context of the install that spawned it.
 
     The worker is always ``sys.executable -m clawk_cli.kanban_worker_client`` (it only submits
@@ -1656,16 +1693,37 @@ def test_default_spawn_pins_repo_root_on_module_worker_pythonpath(tmp_path, monk
     monkeypatch.setattr("subprocess.Popen", _FakePopen)
 
     task = kb.Task(
-        id="t_import_root", title="x", body=None, assignee="coder", status="ready",
-        priority=0, created_by=None, created_at=0, started_at=None, completed_at=None,
-        workspace_kind="worktree", workspace_path=str(tmp_path / "ws"), claim_lock=None,
-        claim_expires=None, tenant=None, branch_name=None,
+        id="t_import_root",
+        title="x",
+        body=None,
+        assignee="coder",
+        status="ready",
+        priority=0,
+        created_by=None,
+        created_at=0,
+        started_at=None,
+        completed_at=None,
+        workspace_kind="worktree",
+        workspace_path=str(tmp_path / "ws"),
+        claim_lock=None,
+        claim_expires=None,
+        tenant=None,
+        branch_name=None,
     )
 
-    for resolved in ([sys.executable, "-m", "clawk_cli.main"], ["/opt/clawksis/bin/clawk"]):
-        monkeypatch.setattr(kbd, "_resolve_clawk_argv", lambda resolved=resolved: resolved)
+    for resolved in (
+        [sys.executable, "-m", "clawk_cli.main"],
+        ["/opt/clawksis/bin/clawk"],
+    ):
+        monkeypatch.setattr(
+            kbd, "_resolve_clawk_argv", lambda resolved=resolved: resolved
+        )
         kbd._default_spawn(task, str(tmp_path / "ws"))
-        assert captured["cmd"][-3:] == [sys.executable, "-m", "clawk_cli.kanban_worker_client"]
+        assert captured["cmd"][-3:] == [
+            sys.executable,
+            "-m",
+            "clawk_cli.kanban_worker_client",
+        ]
         assert captured["env"]["PYTHONPATH"].split(os.pathsep)[0] == root
 
 
@@ -1684,23 +1742,9 @@ def test_default_spawn_pins_repo_root_on_module_worker_pythonpath(tmp_path, monk
 # ---------------------------------------------------------------------------
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 # ---------------------------------------------------------------------------
 # Board-level default_workdir
 # ---------------------------------------------------------------------------
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -1709,7 +1753,8 @@ def test_default_spawn_pins_repo_root_on_module_worker_pythonpath(tmp_path, monk
 
 
 def test_dispatch_max_in_progress_blocks_review_when_at_limit(
-    kanban_home, all_assignees_spawnable,
+    kanban_home,
+    all_assignees_spawnable,
 ):
     """Review-only backlog must still respect max_in_progress."""
     spawns = []
@@ -1731,6 +1776,7 @@ def test_dispatch_max_in_progress_blocks_review_when_at_limit(
     assert review_task is not None
     assert review_task.status == "review"
 
+
 # Review column dispatch
 # ---------------------------------------------------------------------------
 
@@ -1740,21 +1786,14 @@ def _set_task_status(conn: sqlite3.Connection, task_id: str, status: str) -> Non
     conn.execute("UPDATE tasks SET status = ? WHERE id = ?", (status, task_id))
 
 
-
-
-
-
-
-
 # Stale detection — detect_stale_running
 # ---------------------------------------------------------------------------
-
-
 
 
 # ---------------------------------------------------------------------------
 # Corruption guard (issue #30687)
 # ---------------------------------------------------------------------------
+
 
 def _write_corrupt_db(path: Path) -> bytes:
     """Write a kanban DB with a VALID SQLite header but malformed page content.
@@ -1776,8 +1815,6 @@ def _write_corrupt_db(path: Path) -> bytes:
     blob = header + payload
     path.write_bytes(blob)
     return blob
-
-
 
 
 def test_repeated_corrupt_open_reuses_single_backup(tmp_path):
@@ -1808,7 +1845,7 @@ def test_repeated_corrupt_open_reuses_single_backup(tmp_path):
     # Mutate the corrupt bytes — fingerprint changes, separate backup preserved.
     with db_path.open("r+b") as f:
         f.seek(4096)
-        f.write(b"\xAB" * 64)
+        f.write(b"\xab" * 64)
     kb._INITIALIZED_PATHS.discard(str(db_path.resolve()))
     with pytest.raises(kbc.KanbanDbCorruptError) as excinfo2:
         kbc.connect(db_path=db_path)
@@ -1849,11 +1886,10 @@ def test_locked_healthy_db_does_not_classify_as_corrupt(tmp_path, monkeypatch):
     assert "still here" in titles
 
 
-
-
 # ---------------------------------------------------------------------------
 # First-use tip for scratch workspaces
 # ---------------------------------------------------------------------------
+
 
 def test_maybe_emit_scratch_tip_fires_once_per_install(kanban_home):
     """The first scratch workspace materialized on an install appends a
@@ -1887,8 +1923,6 @@ def test_maybe_emit_scratch_tip_fires_once_per_install(kanban_home):
     )
 
 
-
-
 # ---------------------------------------------------------------------------
 # Connection pragmas (secure_delete, cell_size_check, synchronous=FULL)
 # ---------------------------------------------------------------------------
@@ -1901,9 +1935,6 @@ def test_connect_sets_secure_delete_on(tmp_path):
     with kbc.connect(db_path=db_path) as conn:
         row = conn.execute("PRAGMA secure_delete").fetchone()
     assert row[0] == 1, f"expected secure_delete=1, got {row[0]}"
-
-
-
 
 
 # write_txn — rollback handler must not mask the original exception
@@ -2006,14 +2037,6 @@ def test_write_txn_check_reads_correct_header_fields(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-
-
-
-
-
-
-
-
 # ---------------------------------------------------------------------------
 # connect_closing(): context manager that actually closes the FD
 # Regression coverage for #33159 (kanban.db FD leak — gateway crashes after
@@ -2022,10 +2045,6 @@ def test_write_txn_check_reads_correct_header_fields(tmp_path):
 # long-lived processes (gateway run_slash, dashboard decompose handler).
 # `connect_closing()` is the leak-safe replacement.
 # ---------------------------------------------------------------------------
-
-
-
-
 
 
 def test_archive_running_task_terminates_worker(kanban_home, monkeypatch):
@@ -2046,9 +2065,14 @@ def test_archive_running_task_terminates_worker(kanban_home, monkeypatch):
 
         monkeypatch.setattr(kb, "_pid_alive", lambda _pid: False)
         signalled = []
-        assert kb.archive_task(
-            conn, t, signal_fn=lambda pid, sig: signalled.append((pid, sig)),
-        ) is True
+        assert (
+            kb.archive_task(
+                conn,
+                t,
+                signal_fn=lambda pid, sig: signalled.append((pid, sig)),
+            )
+            is True
+        )
 
         assert signalled and signalled[0][0] == 54321
 
@@ -2072,9 +2096,14 @@ def test_archive_non_running_task_does_not_attempt_termination(kanban_home):
     with kbc.connect() as conn:
         t = kb.create_task(conn, title="x", assignee="a")
         signalled = []
-        assert kb.archive_task(
-            conn, t, signal_fn=lambda pid, sig: signalled.append((pid, sig)),
-        ) is True
+        assert (
+            kb.archive_task(
+                conn,
+                t,
+                signal_fn=lambda pid, sig: signalled.append((pid, sig)),
+            )
+            is True
+        )
         assert signalled == []
         row = conn.execute(
             "SELECT 1 FROM task_events "

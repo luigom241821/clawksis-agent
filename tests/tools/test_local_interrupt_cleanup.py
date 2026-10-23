@@ -11,6 +11,7 @@ to the python process, sleep 300 survived with PPID=1 for the full 300 s
 because _wait_for_process never got to call _kill_process before python
 died.  See commit message for full context.
 """
+
 import contextlib
 import os
 import signal
@@ -124,12 +125,15 @@ def test_wait_for_process_kills_subprocess_on_keyboardinterrupt():
         # does init_session() (one spawn) before the real command, so we need
         # to wait until a sleep 30 is visible.  Use pgrep-style lookup via
         # /proc to find the bash process running our sleep.
-        deadline = time.monotonic() + 20.0  # generous: init_session + spawn dilate under CI load
+        deadline = (
+            time.monotonic() + 20.0
+        )  # generous: init_session + spawn dilate under CI load
         target_pid = None
         while time.monotonic() < deadline:
             # Walk our children and grand-children to find one running 'sleep 30'
             try:
                 import psutil  # optional — fall back if absent
+
                 for p in psutil.Process(os.getpid()).children(recursive=True):
                     try:
                         if "sleep 30" in " ".join(p.cmdline()):
@@ -140,7 +144,9 @@ def test_wait_for_process_kills_subprocess_on_keyboardinterrupt():
             except ImportError:
                 # Fall back to ps
                 ps = subprocess.run(
-                    ["ps", "-eo", "pid,ppid,pgid,cmd"], capture_output=True, text=True,
+                    ["ps", "-eo", "pid,ppid,pgid,cmd"],
+                    capture_output=True,
+                    text=True,
                     check=False,
                 )
                 for line in ps.stdout.splitlines():
@@ -163,12 +169,14 @@ def test_wait_for_process_kills_subprocess_on_keyboardinterrupt():
         # way CPython's signal machinery would.  We use ctypes.PyThreadState_SetAsyncExc
         # which is how signal delivery to non-main threads is simulated.
         import ctypes
+
         # py-thread-state exception targets need the ident, not the Thread
         tid = t.ident
         assert tid is not None
         # Fire KeyboardInterrupt into the worker thread
         ret = ctypes.pythonapi.PyThreadState_SetAsyncExc(
-            ctypes.c_ulong(tid), ctypes.py_object(KeyboardInterrupt),
+            ctypes.c_ulong(tid),
+            ctypes.py_object(KeyboardInterrupt),
         )
         assert ret == 1, f"SetAsyncExc returned {ret}, expected 1"
 
@@ -205,6 +213,7 @@ def test_wait_for_process_kills_subprocess_on_keyboardinterrupt():
 
 def _descendant_running(marker: str):
     import psutil
+
     for p in psutil.Process(os.getpid()).children(recursive=True):
         try:
             if marker in " ".join(p.cmdline()):
@@ -222,11 +231,16 @@ def test_exit_cleanup_kills_foreground_command_still_running(monkeypatch):
 
     env = LocalEnvironment(cwd="/tmp")
     result: dict = {}
-    t = threading.Thread(target=lambda: result.update(env.execute("sleep 3517", timeout=600)), daemon=True)
+    t = threading.Thread(
+        target=lambda: result.update(env.execute("sleep 3517", timeout=600)),
+        daemon=True,
+    )
     try:
         t.start()
         deadline = time.monotonic() + 20.0
-        while (proc := _descendant_running("sleep 3517")) is None and time.monotonic() < deadline:
+        while (
+            proc := _descendant_running("sleep 3517")
+        ) is None and time.monotonic() < deadline:
             time.sleep(0.05)
         assert proc is not None, "test setup: foreground sleep never started"
         pgid = os.getpgid(proc.pid)
@@ -234,7 +248,8 @@ def test_exit_cleanup_kills_foreground_command_still_running(monkeypatch):
         terminal_tool_lifecycle.cleanup_all_environments()
 
         assert _wait_for_pgid_exit(pgid, timeout=15.0), (
-            f"foreground command survived exit cleanup:\n{_process_group_snapshot(pgid)}")
+            f"foreground command survived exit cleanup:\n{_process_group_snapshot(pgid)}"
+        )
         t.join(timeout=15.0)
         assert not t.is_alive() and result.get("returncode") not in (None, 0), result
     finally:
@@ -285,15 +300,28 @@ def test_hard_exit_leaves_no_foreground_survivor_around_the_spawn(scenario, tmp_
 
     cmd = f"sleep {35000 + os.getpid() % 1000}.{len(scenario)}"
     repo = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    r = subprocess.run([sys.executable, "-c", _HARD_EXIT_RACE_CHILD, scenario, cmd], cwd=str(tmp_path),
-                       env={**os.environ, "PYTHONPATH": repo}, capture_output=True, text=True, timeout=120, check=False)
+    r = subprocess.run(
+        [sys.executable, "-c", _HARD_EXIT_RACE_CHILD, scenario, cmd],
+        cwd=str(tmp_path),
+        env={**os.environ, "PYTHONPATH": repo},
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
     assert r.returncode == 0, r.stderr[-2000:]
     time.sleep(0.3)
-    survivors = [p for p in psutil.process_iter(["cmdline"]) if cmd in " ".join(p.info["cmdline"] or [])]
+    survivors = [
+        p
+        for p in psutil.process_iter(["cmdline"])
+        if cmd in " ".join(p.info["cmdline"] or [])
+    ]
     for p in survivors:
         with contextlib.suppress(psutil.Error):
             p.kill()
-    assert not survivors, f"{scenario}: {[' '.join(p.info['cmdline']) for p in survivors]} outlived the hard exit"
+    assert not survivors, (
+        f"{scenario}: {[' '.join(p.info['cmdline']) for p in survivors]} outlived the hard exit"
+    )
 
 
 def test_hard_exit_kill_never_blocks_on_a_slow_remote_cancel(monkeypatch):
@@ -307,7 +335,9 @@ def test_hard_exit_kill_never_blocks_on_a_slow_remote_cancel(monkeypatch):
         _force_kill_process = base.BaseEnvironment._force_kill_process
 
     cancelled = threading.Event()
-    handle = _ThreadedProcessHandle(lambda: ("", 0), cancel_fn=lambda: (cancelled.set(), time.sleep(8)))
+    handle = _ThreadedProcessHandle(
+        lambda: ("", 0), cancel_fn=lambda: (cancelled.set(), time.sleep(8))
+    )
     monkeypatch.setitem(base._live_foreground, id(handle), (_SdkEnv(), handle))
     t0 = time.monotonic()
     base.kill_live_foreground_processes(now=True)

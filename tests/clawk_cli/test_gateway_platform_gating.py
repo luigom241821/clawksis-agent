@@ -14,8 +14,8 @@ Currently:
 
 import pytest
 
-class TestMatrixHiddenOnWindows:
 
+class TestMatrixHiddenOnWindows:
     @pytest.mark.platforms("windows")
     def test_matrix_absent_on_windows(self):
         """The gate itself: matrix must be dropped on a real Windows host.

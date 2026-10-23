@@ -137,14 +137,11 @@ DEPLETED_HEADERS = _base_headers(
 
 
 class TestHealthyState:
-
-
     def test_captured_at_set(self):
         before = time.time()
         state = parse_credits_headers(HEALTHY_HEADERS)
         after = time.time()
         assert before <= state.captured_at <= after
-
 
     def test_subscription_fields(self):
         state = parse_credits_headers(HEALTHY_HEADERS)
@@ -159,7 +156,6 @@ class TestHealthyState:
         assert state.purchased_micros == round(12.34 * 1_000_000)
         assert state.purchased_usd == "12.34"
 
-
     def test_denominator_and_access(self):
         state = parse_credits_headers(HEALTHY_HEADERS)
         assert state.denominator_kind == "subscription_cap"
@@ -167,20 +163,14 @@ class TestHealthyState:
         assert state.disabled_reason is None
 
 
-
-
-
-
 # ── State 2: sub_90pct ───────────────────────────────────────────────────────
 
 
 class TestSub90Pct:
-
     def test_used_fraction_90pct(self):
         state = parse_credits_headers(SUB_90PCT_HEADERS)
         # (20.00 - 2.00) / 20.00 = 0.90
         assert state.used_fraction == pytest.approx(0.90)
-
 
 
 # ── State 3: grant_exhausted ─────────────────────────────────────────────────
@@ -194,14 +184,10 @@ class TestGrantExhausted:
         assert state.used_fraction == pytest.approx(1.0)
 
 
-
 # ── State 4: purchased_only ──────────────────────────────────────────────────
 
 
 class TestPurchasedOnly:
-
-
-
     def test_no_limit_pair(self):
         state = parse_credits_headers(PURCHASED_ONLY_HEADERS)
         assert state.subscription_limit_micros is None
@@ -212,22 +198,15 @@ class TestPurchasedOnly:
 
 
 class TestToolPoolFree:
-
-
     def test_tool_pool_micros(self):
         state = parse_credits_headers(TOOL_POOL_FREE_HEADERS)
         assert state.tool_pool_micros == round(0.05 * 1_000_000)
 
 
-
 # ── State 6: depleted ────────────────────────────────────────────────────────
 
 
-
-
 # ── State 7: debt ────────────────────────────────────────────────────────────
-
-
 
 
 # ── State 8: missing ─────────────────────────────────────────────────────────
@@ -237,7 +216,6 @@ class TestMissing:
     def test_no_credits_headers_returns_none(self):
         state = parse_credits_headers({})
         assert state is None
-
 
 
 # ── State 9: no_org ──────────────────────────────────────────────────────────
@@ -254,7 +232,6 @@ class TestNoOrg:
         assert state is None
 
 
-
 # ── Version validation ───────────────────────────────────────────────────────
 
 
@@ -264,11 +241,6 @@ class TestVersionValidation:
         state = parse_credits_headers(headers)
         assert state is not None
         assert state.version == 1
-
-
-
-
-
 
 
 # ── Bool-string trap ─────────────────────────────────────────────────────────
@@ -293,10 +265,6 @@ class TestBoolStringTrap:
         assert state.depleted is False
 
 
-
-
-
-
 # ── Tool-pool optional headers ────────────────────────────────────────────────
 
 
@@ -310,13 +278,9 @@ class TestToolPoolOptional:
         h.pop("x-nous-tool-pool-gated-off", None)
         return h
 
-
-
     def test_absent_tool_pool_gated_off_defaults_to_false(self):
         state = parse_credits_headers(self._no_tool_pool_headers())
         assert state.tool_pool_gated_off is False
-
-
 
     def test_only_tool_pool_micros_absent_still_succeeds(self):
         """Only micros absent (gated-off still present) → tool_pool_micros = 0, parse succeeds."""
@@ -331,7 +295,6 @@ class TestToolPoolOptional:
 
 
 class TestHalfPairLimit:
-
     def test_only_limit_usd_present_both_absent(self):
         """Only -usd present → both None, parse SUCCEEDS."""
         headers = _base_headers(
@@ -344,7 +307,6 @@ class TestHalfPairLimit:
         assert state is not None
         assert state.subscription_limit_micros is None
         assert state.subscription_limit_usd is None
-
 
     def test_full_pair_present_parsed_correctly(self):
         """Both present → both populated, used_fraction computable."""
@@ -372,8 +334,6 @@ class TestNegativeValues:
         headers = _base_headers(**{"x-nous-credits-remaining-micros": "-1000"})
         assert parse_credits_headers(headers) is None
 
-
-
     def test_negative_limit_micros_returns_none(self):
         headers = _base_headers(
             **{
@@ -386,8 +346,12 @@ class TestNegativeValues:
 
     def test_negative_subscription_accepted(self):
         """subscription_micros is the ONLY field allowed to be negative."""
-        headers = _base_headers(**{"x-nous-credits-subscription-micros": "-5000000",
-                                   "x-nous-credits-subscription-usd": "-5.00"})
+        headers = _base_headers(
+            **{
+                "x-nous-credits-subscription-micros": "-5000000",
+                "x-nous-credits-subscription-usd": "-5.00",
+            }
+        )
         state = parse_credits_headers(headers)
         assert state is not None
         assert state.subscription_micros == -5_000_000
@@ -397,14 +361,10 @@ class TestNegativeValues:
 
 
 class TestUsdValidation:
-
     def test_usd_one_decimal_returns_none(self):
         r"""'18.0' does not match ^-?\d+\.\d{2}$"""
         headers = _base_headers(**{"x-nous-credits-remaining-usd": "18.0"})
         assert parse_credits_headers(headers) is None
-
-
-
 
     def test_usd_negative_valid(self):
         """Negative USD string should parse (e.g. subscription debt)."""
@@ -428,8 +388,6 @@ class TestMicrosValidation:
         assert parse_credits_headers(headers) is None
 
 
-
-
 # ── as_of_ms validation ───────────────────────────────────────────────────────
 
 
@@ -449,8 +407,6 @@ class TestAsOfMs:
 
 
 class TestDenominatorKind:
-
-
     def test_invalid_denominator_kind_returns_none(self):
         headers = _base_headers(**{"x-nous-credits-denominator-kind": "invalid_kind"})
         assert parse_credits_headers(headers) is None
@@ -489,12 +445,10 @@ class TestUnknownHeaders:
         assert state is not None
 
 
-
 # ── Header normalization ──────────────────────────────────────────────────────
 
 
 class TestHeaderNormalization:
-
     def test_mixed_case_headers_parsed(self):
         headers = {
             "X-Nous-Credits-Version": "1",
@@ -520,25 +474,21 @@ class TestHeaderNormalization:
 
 
 class TestCreditsStateDefaults:
-
-
     def test_age_seconds_inf_when_no_data(self):
         state = CreditsState()
         assert state.age_seconds == float("inf")
-
-
 
 
 # ── depleted property ─────────────────────────────────────────────────────────
 
 
 class TestDepletedProperty:
-
     def test_not_depleted_when_paid_access_true(self):
-        state = CreditsState(paid_access=True, remaining_micros=0, captured_at=time.time())
+        state = CreditsState(
+            paid_access=True, remaining_micros=0, captured_at=time.time()
+        )
         # remaining==0 but paid_access is True → NOT depleted
         assert state.depleted is False
-
 
 
 # ── used_fraction edge cases ──────────────────────────────────────────────────
@@ -553,8 +503,6 @@ class TestUsedFraction:
         )
         assert state.used_fraction is None
 
-
-
     def test_clamped_at_one(self):
         """If subscription_micros is very negative (debt), fraction clamps to 1.0."""
         state = CreditsState(
@@ -564,5 +512,3 @@ class TestUsedFraction:
             captured_at=time.time(),
         )
         assert state.used_fraction == pytest.approx(1.0)
-
-

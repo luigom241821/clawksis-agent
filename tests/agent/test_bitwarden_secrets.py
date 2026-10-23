@@ -41,6 +41,7 @@ def clawk_home(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(home))
     # Some modules cache get_clawk_home; clear if needed.
     import clawk_constants
+
     if hasattr(clawk_constants, "_CLAWK_HOME_CACHE"):
         clawk_constants._CLAWK_HOME_CACHE = None  # type: ignore[attr-defined]
     return home
@@ -53,18 +54,6 @@ def clawk_home(tmp_path, monkeypatch):
 
 def _fake_bws_payload(items):
     return json.dumps(items)
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 def test_fetch_server_url_sets_env(monkeypatch, tmp_path):
@@ -91,36 +80,14 @@ def test_fetch_server_url_sets_env(monkeypatch, tmp_path):
     assert captured_env.get("BWS_SERVER_URL") == "https://vault.bitwarden.eu"
 
 
-
-
-
-
-
-
 # ---------------------------------------------------------------------------
 # apply_bitwarden_secrets — the public entry point used by env_loader
 # ---------------------------------------------------------------------------
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # ---------------------------------------------------------------------------
 # env_loader integration
 # ---------------------------------------------------------------------------
-
-
 
 
 def test_env_loader_calls_bsm_when_enabled(tmp_path, monkeypatch):
@@ -160,6 +127,7 @@ def test_env_loader_calls_bsm_when_enabled(tmp_path, monkeypatch):
     reg_module._reset_registry_for_tests()
 
     from clawk_cli.env_loader import _apply_external_secret_sources
+
     _apply_external_secret_sources(home)
 
     assert called["n"] == 1
@@ -171,12 +139,6 @@ def test_env_loader_calls_bsm_when_enabled(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-
-
-
-
-
-
 def test_disk_cache_key_mismatch_triggers_refetch(monkeypatch, tmp_path):
     """Disk cache entry written by a different token/project is ignored."""
     home = tmp_path / ".clawk"
@@ -186,33 +148,38 @@ def test_disk_cache_key_mismatch_triggers_refetch(monkeypatch, tmp_path):
     payload = _fake_bws_payload([{"key": "K1", "value": "v1"}])
 
     call_count = {"n": 0}
+
     def fake_run(*a, **kw):
         call_count["n"] += 1
         return mock.Mock(returncode=0, stdout=payload, stderr="")
+
     monkeypatch.setattr(subprocess, "run", fake_run)
     bw._reset_cache_for_tests(home)
 
     # Write a cache entry for a DIFFERENT token/project pair
     cache_path = bw._disk_cache_path(home)
     cache_path.parent.mkdir(parents=True, exist_ok=True)
-    cache_path.write_text(json.dumps({
-        "key": "deadbeef00000000|other-project|",
-        "secrets": {"OTHER": "should-not-leak"},
-        "fetched_at": time.time(),
-    }))
+    cache_path.write_text(
+        json.dumps(
+            {
+                "key": "deadbeef00000000|other-project|",
+                "secrets": {"OTHER": "should-not-leak"},
+                "fetched_at": time.time(),
+            }
+        )
+    )
 
     secrets, _ = bw.fetch_bitwarden_secrets(
-        access_token="0.t", project_id="proj-1", binary=fake_binary,
-        cache_ttl_seconds=300, home_path=home,
+        access_token="0.t",
+        project_id="proj-1",
+        binary=fake_binary,
+        cache_ttl_seconds=300,
+        home_path=home,
     )
     # We must NOT have used the foreign cache entry
     assert secrets == {"K1": "v1"}
     assert "OTHER" not in secrets
     assert call_count["n"] == 1
-
-
-
-
 
 
 @pytest.mark.platforms("linux")
@@ -242,9 +209,13 @@ def test_encrypted_cache_writes_without_plaintext(monkeypatch, tmp_path):
     assert bw._disk_cache_path(home).exists()
 
     secrets, warnings = bw.fetch_bitwarden_secrets(
-        access_token="0.t", project_id="proj-1", binary=fake_binary,
-        cache_ttl_seconds=0, encrypted_cache_enabled=True,
-        encrypted_cache_max_stale_seconds=604800, home_path=home,
+        access_token="0.t",
+        project_id="proj-1",
+        binary=fake_binary,
+        cache_ttl_seconds=0,
+        encrypted_cache_enabled=True,
+        encrypted_cache_max_stale_seconds=604800,
+        home_path=home,
     )
 
     assert secrets == {"K1": "secret-value"}
@@ -259,11 +230,13 @@ def test_encrypted_cache_writes_without_plaintext(monkeypatch, tmp_path):
     assert "0.t" not in text
     payload_disk = json.loads(text)
     assert set(payload_disk.keys()) == {
-        "version", "key", "salt", "nonce", "ciphertext",
+        "version",
+        "key",
+        "salt",
+        "nonce",
+        "ciphertext",
     }
     assert not bw._disk_cache_path(home).exists()
-
-
 
 
 def test_encrypted_cache_falls_back_on_network_error(monkeypatch, tmp_path):
@@ -292,17 +265,25 @@ def test_encrypted_cache_falls_back_on_network_error(monkeypatch, tmp_path):
     bw._reset_cache_for_tests(home)
 
     first, _ = bw.fetch_bitwarden_secrets(
-        access_token="0.t", project_id="proj-1", binary=fake_binary,
-        cache_ttl_seconds=0, encrypted_cache_enabled=True,
-        encrypted_cache_max_stale_seconds=604800, home_path=home,
+        access_token="0.t",
+        project_id="proj-1",
+        binary=fake_binary,
+        cache_ttl_seconds=0,
+        encrypted_cache_enabled=True,
+        encrypted_cache_max_stale_seconds=604800,
+        home_path=home,
     )
     assert first == {"K1": "cached"}
     bw._CACHE.clear()
 
     second, warnings = bw.fetch_bitwarden_secrets(
-        access_token="0.t", project_id="proj-1", binary=fake_binary,
-        cache_ttl_seconds=0, encrypted_cache_enabled=True,
-        encrypted_cache_max_stale_seconds=604800, home_path=home,
+        access_token="0.t",
+        project_id="proj-1",
+        binary=fake_binary,
+        cache_ttl_seconds=0,
+        encrypted_cache_enabled=True,
+        encrypted_cache_max_stale_seconds=604800,
+        home_path=home,
     )
     assert second == {"K1": "cached"}
     assert calls["n"] == 2
@@ -311,32 +292,41 @@ def test_encrypted_cache_falls_back_on_network_error(monkeypatch, tmp_path):
     assert "bws live fetch failed" in warnings[0]
 
 
-
-
-
-
 # ---------------------------------------------------------------------------
 # Stale disk cache fallback when live bws fetch fails
 # ---------------------------------------------------------------------------
 
 
-def _seed_stale_disk_cache(home, *, secrets, age_seconds, project_id="proj-1",
-                           access_token="0.t", server_url=""):
+def _seed_stale_disk_cache(
+    home,
+    *,
+    secrets,
+    age_seconds,
+    project_id="proj-1",
+    access_token="0.t",
+    server_url="",
+):
     """Populate the disk cache as if a successful fetch happened `age_seconds`
     ago. Writes the JSON payload directly (same shape the shared DiskCache
     reads/writes) rather than going through DiskCache.write, since that
     would honor cache_ttl_seconds and refuse to persist an already-"stale"
     entry — this needs to land on disk regardless of TTL."""
     cache_key = (
-        bw._token_fingerprint(access_token), project_id, server_url,
+        bw._token_fingerprint(access_token),
+        project_id,
+        server_url,
     )
     cache_path = bw._disk_cache_path(home)
     cache_path.parent.mkdir(parents=True, exist_ok=True)
-    cache_path.write_text(json.dumps({
-        "key": bw._cache_key_str(cache_key),
-        "secrets": secrets,
-        "fetched_at": time.time() - age_seconds,
-    }))
+    cache_path.write_text(
+        json.dumps(
+            {
+                "key": bw._cache_key_str(cache_key),
+                "secrets": secrets,
+                "fetched_at": time.time() - age_seconds,
+            }
+        )
+    )
 
 
 def test_stale_disk_cache_returned_when_bws_fails(monkeypatch, tmp_path):
@@ -349,31 +339,25 @@ def test_stale_disk_cache_returned_when_bws_fails(monkeypatch, tmp_path):
     bw._reset_cache_for_tests(home)
 
     # Seed a stale (older than TTL) disk cache from a previous successful fetch
-    _seed_stale_disk_cache(home, secrets={"OPENAI_API_KEY": "sk-old"},
-                           age_seconds=3600)
+    _seed_stale_disk_cache(home, secrets={"OPENAI_API_KEY": "sk-old"}, age_seconds=3600)
 
     # Now simulate a BWS network failure
     def fail_run(*a, **kw):
-        return mock.Mock(returncode=1, stdout="",
-                         stderr="Error: dns resolution failed")
+        return mock.Mock(returncode=1, stdout="", stderr="Error: dns resolution failed")
+
     monkeypatch.setattr(subprocess, "run", fail_run)
 
     secrets, warnings = bw.fetch_bitwarden_secrets(
-        access_token="0.t", project_id="proj-1", binary=fake_binary,
-        cache_ttl_seconds=300, home_path=home,
+        access_token="0.t",
+        project_id="proj-1",
+        binary=fake_binary,
+        cache_ttl_seconds=300,
+        home_path=home,
     )
     assert secrets == {"OPENAI_API_KEY": "sk-old"}
     assert len(warnings) == 1
     assert "stale disk cache" in warnings[0]
     assert "dns resolution failed" in warnings[0]
-
-
-
-
-
-
-
-
 
 
 def test_stale_fallback_skipped_on_auth_failure(monkeypatch, tmp_path):
@@ -389,17 +373,18 @@ def test_stale_fallback_skipped_on_auth_failure(monkeypatch, tmp_path):
     _seed_stale_disk_cache(home, secrets={"K1": "v1"}, age_seconds=3600)
 
     monkeypatch.setattr(
-        subprocess, "run",
-        lambda *a, **kw: mock.Mock(returncode=1, stdout="",
-                                   stderr="Error: unauthorized (401)"),
+        subprocess,
+        "run",
+        lambda *a, **kw: mock.Mock(
+            returncode=1, stdout="", stderr="Error: unauthorized (401)"
+        ),
     )
 
     with pytest.raises(RuntimeError, match="unauthorized"):
         bw.fetch_bitwarden_secrets(
-            access_token="0.t", project_id="proj-1", binary=fake_binary,
-            cache_ttl_seconds=300, home_path=home,
+            access_token="0.t",
+            project_id="proj-1",
+            binary=fake_binary,
+            cache_ttl_seconds=300,
+            home_path=home,
         )
-
-
-
-

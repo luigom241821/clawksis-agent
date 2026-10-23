@@ -18,12 +18,14 @@ import pytest
 # Minimal stubs so we can import _get_cached_client without the full tree
 # ---------------------------------------------------------------------------
 
+
 def _stub_resolve_provider_client(provider, model, async_mode, **kw):
     """Return a unique mock client each time, simulating AsyncOpenAI creation."""
     client = MagicMock(name=f"client-{provider}-async={async_mode}")
     client.api_key = "test"
     client.base_url = kw.get("explicit_base_url", "http://localhost:8081/v1")
     return client, model or "test-model"
+
 
 @pytest.fixture(autouse=True)
 def _clean_client_cache():
@@ -33,9 +35,11 @@ def _clean_client_cache():
         pass
     # Import and clear
     import agent.auxiliary_client as ac
+
     ac._client_cache.clear()
     yield
     ac._client_cache.clear()
+
 
 class TestCrossLoopCacheIsolation:
     """Verify async clients are cached per-event-loop, not globally."""
@@ -49,17 +53,22 @@ class TestCrossLoopCacheIsolation:
         def _get_client_on_new_loop(name):
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            with patch("agent.auxiliary_client.resolve_provider_client",
-                        side_effect=_stub_resolve_provider_client):
-                client, _ = _get_cached_client("custom", "m1", async_mode=True,
-                                                 base_url="http://localhost:8081/v1")
+            with patch(
+                "agent.auxiliary_client.resolve_provider_client",
+                side_effect=_stub_resolve_provider_client,
+            ):
+                client, _ = _get_cached_client(
+                    "custom", "m1", async_mode=True, base_url="http://localhost:8081/v1"
+                )
             results[name] = (id(client), id(loop))
             # Don't close loop — simulates real usage where loops persist
 
         t1 = threading.Thread(target=_get_client_on_new_loop, args=("a",))
         t2 = threading.Thread(target=_get_client_on_new_loop, args=("b",))
-        t1.start(); t1.join()
-        t2.start(); t2.join()
+        t1.start()
+        t1.join()
+        t2.start()
+        t2.join()
 
         client_id_a, loop_id_a = results["a"]
         client_id_b, loop_id_b = results["b"]

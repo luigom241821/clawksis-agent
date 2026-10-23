@@ -1,4 +1,5 @@
 """Job-local native preparation admission; never a portable environment cache."""
+
 from __future__ import annotations
 
 from contextlib import contextmanager
@@ -25,8 +26,16 @@ def preparation_lock(out: Path):
 
     if out != out.resolve():
         raise ValueError("symlinked native output")
-    for name in ("clawksis-agent", "tools", "venv", "pm-runtime", "uv-cache", "bin",
-                 "enabled-features.json", "manifest.json"):
+    for name in (
+        "clawksis-agent",
+        "tools",
+        "venv",
+        "pm-runtime",
+        "uv-cache",
+        "bin",
+        "enabled-features.json",
+        "manifest.json",
+    ):
         path = out / name
         if path.is_symlink() or (path.exists() and is_junction(path)):
             raise ValueError(f"symlinked native output: {path}")
@@ -37,19 +46,33 @@ def preparation_lock(out: Path):
 
 
 def _digest(path: Path) -> str:
-    return tree_digest(path) if path.is_dir() else hashlib.sha256(path.read_bytes()).hexdigest()
+    return (
+        tree_digest(path)
+        if path.is_dir()
+        else hashlib.sha256(path.read_bytes()).hexdigest()
+    )
 
 
 def _source_digest(code: Path) -> str:
     """Ignore only assembly-owned products, leaving admitted source immutable."""
-    project = tomllib.loads((code / "pyproject.toml").read_text(encoding="utf-8-sig"))["project"]
+    project = tomllib.loads((code / "pyproject.toml").read_text(encoding="utf-8-sig"))[
+        "project"
+    ]
     dist = re.sub(r"[-_.]+", "_", project["name"])
-    generated = {"install-stamp.json", "clawk_cli/tui_dist", "clawk_cli/web_dist",
-                 f"{dist}-{project['version']}.dist-info"}
+    generated = {
+        "install-stamp.json",
+        "clawk_cli/tui_dist",
+        "clawk_cli/web_dist",
+        f"{dist}-{project['version']}.dist-info",
+    }
     files = {}
     for directory, dirs, names in os.walk(code):
-        dirs[:] = [name for name in dirs if name != "__pycache__"
-                   and (Path(directory) / name).relative_to(code).as_posix() not in generated]
+        dirs[:] = [
+            name
+            for name in dirs
+            if name != "__pycache__"
+            and (Path(directory) / name).relative_to(code).as_posix() not in generated
+        ]
         for name in dirs:
             path = Path(directory) / name
             if path.is_symlink():
@@ -58,12 +81,18 @@ def _source_digest(code: Path) -> str:
             path = Path(directory) / name
             relative = path.relative_to(code).as_posix()
             if relative not in generated:
-                files[relative] = os.readlink(path) if path.is_symlink() else _digest(path)
+                files[relative] = (
+                    os.readlink(path) if path.is_symlink() else _digest(path)
+                )
     return hashlib.sha256(json.dumps(files, sort_keys=True).encode()).hexdigest()
 
 
 def _owned(path: Path, out: Path) -> None:
-    if not path.is_absolute() or not path.exists() or not path.resolve().is_relative_to(out):
+    if (
+        not path.is_absolute()
+        or not path.exists()
+        or not path.resolve().is_relative_to(out)
+    ):
         raise ValueError(f"missing or escaped prepared path: {path}")
 
 
@@ -78,23 +107,48 @@ def _check_links(path: Path, out: Path) -> None:
 
 
 def _input_paths(inputs: AgentInputs, out: Path) -> list[Path]:
-    expected = {"code": out / "clawksis-agent", "project": out / "clawksis-agent/pyproject.toml",
-                "tools": out / "tools", "environment": out / "venv", "pm_runtime": out / "pm-runtime",
-                "features": out / "enabled-features.json"}
-    if (any(getattr(inputs, key) != path for key, path in expected.items())
-            or inputs.placement != "contained" or inputs.repo != "clawksis-agent"
-            or inputs.frontends or inputs.stamp or inputs.command_dir or inputs.env
-            or inputs.resources != {name: inputs.code / name for name in RESOURCE_ENV}
-            or not inputs.site_packages.is_relative_to(inputs.environment)):
+    expected = {
+        "code": out / "clawksis-agent",
+        "project": out / "clawksis-agent/pyproject.toml",
+        "tools": out / "tools",
+        "environment": out / "venv",
+        "pm_runtime": out / "pm-runtime",
+        "features": out / "enabled-features.json",
+    }
+    if (
+        any(getattr(inputs, key) != path for key, path in expected.items())
+        or inputs.placement != "contained"
+        or inputs.repo != "clawksis-agent"
+        or inputs.frontends
+        or inputs.stamp
+        or inputs.command_dir
+        or inputs.env
+        or inputs.resources != {name: inputs.code / name for name in RESOURCE_ENV}
+        or not inputs.site_packages.is_relative_to(inputs.environment)
+    ):
         raise ValueError("native prepared input layout changed")
-    paths = [inputs.code, inputs.tools, inputs.environment, inputs.pm_runtime,
-             inputs.python, inputs.features, out / "uv-cache"]
-    for path in [inputs.project, inputs.site_packages, *inputs.resources.values(), *paths]:
+    paths = [
+        inputs.code,
+        inputs.tools,
+        inputs.environment,
+        inputs.pm_runtime,
+        inputs.python,
+        inputs.features,
+        out / "uv-cache",
+    ]
+    for path in [
+        inputs.project,
+        inputs.site_packages,
+        *inputs.resources.values(),
+        *paths,
+    ]:
         _owned(path, out)
     return paths
 
 
-def publish_prepared(out: Path, source: Path, revision: str, inputs: AgentInputs) -> Path:
+def publish_prepared(
+    out: Path, source: Path, revision: str, inputs: AgentInputs
+) -> Path:
     from clawk_cli.runtime_state import _atomic_bytes
     from pm.paths import lockfile_path
 
@@ -104,9 +158,18 @@ def publish_prepared(out: Path, source: Path, revision: str, inputs: AgentInputs
     for path in paths:
         _owned(path, out)
         _check_links(path, out)
-        digests[path.relative_to(out).as_posix()] = _source_digest(path) if path == inputs.code else _digest(path)
-    data = {"schema": 1, "out": str(out), "source": str(source), "revision": revision,
-            "lock": _digest(lockfile_path()), "inputs": asdict(inputs), "digests": digests}
+        digests[path.relative_to(out).as_posix()] = (
+            _source_digest(path) if path == inputs.code else _digest(path)
+        )
+    data = {
+        "schema": 1,
+        "out": str(out),
+        "source": str(source),
+        "revision": revision,
+        "lock": _digest(lockfile_path()),
+        "inputs": asdict(inputs),
+        "digests": digests,
+    }
     prepared = prepared_path(out)
     _atomic_bytes(prepared, (json.dumps(data, default=str, indent=2) + "\n").encode())
     return prepared
@@ -118,15 +181,22 @@ def load_prepared(prepared: Path) -> AgentInputs:
     try:
         data = json.loads(prepared.read_text(encoding="utf-8-sig"))
         out = Path(data["out"])
-        if (prepared.is_symlink() or out != out.resolve() or data["schema"] != 1
-                or prepared != prepared_path(out) or data["lock"] != _digest(lockfile_path())
-                or not re.fullmatch(r"[a-f0-9]{40}", data["revision"])):
+        if (
+            prepared.is_symlink()
+            or out != out.resolve()
+            or data["schema"] != 1
+            or prepared != prepared_path(out)
+            or data["lock"] != _digest(lockfile_path())
+            or not re.fullmatch(r"[a-f0-9]{40}", data["revision"])
+        ):
             raise ValueError("native preparation identity changed")
         inputs = AgentInputs.from_dict(data["inputs"])
         if inputs.target != current_target() or not inputs.ref:
             raise ValueError("native preparation target/ref changed")
         inputs.validate(out)
-        required = {path.relative_to(out).as_posix() for path in _input_paths(inputs, out)}
+        required = {
+            path.relative_to(out).as_posix() for path in _input_paths(inputs, out)
+        }
         if set(data["digests"]) != required:
             raise ValueError("native preparation inventory changed")
         for index, (name, digest) in enumerate(data["digests"].items(), start=1):
@@ -142,4 +212,6 @@ def load_prepared(prepared: Path) -> AgentInputs:
         print("payload verification complete", flush=True)
         return inputs
     except (OSError, ValueError, KeyError, TypeError) as exc:
-        raise ValueError(f"invalid native preparation; run preparation again: {exc}") from exc
+        raise ValueError(
+            f"invalid native preparation; run preparation again: {exc}"
+        ) from exc

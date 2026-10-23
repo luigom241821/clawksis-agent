@@ -55,14 +55,24 @@ def _install_fake_slack_sender(monkeypatch, result_factory):
     """Register a fake slack standalone sender through the platform registry."""
     calls = []
 
-    async def fake_sender(pconfig, chat_id, message, *, thread_id=None,
-                          media_files=None, force_document=False, caption=None):
-        calls.append({
-            "chat_id": chat_id,
-            "message": message,
-            "media_files": list(media_files or []),
-            "caption": caption,
-        })
+    async def fake_sender(
+        pconfig,
+        chat_id,
+        message,
+        *,
+        thread_id=None,
+        media_files=None,
+        force_document=False,
+        caption=None,
+    ):
+        calls.append(
+            {
+                "chat_id": chat_id,
+                "message": message,
+                "media_files": list(media_files or []),
+                "caption": caption,
+            }
+        )
         return result_factory(calls[-1])
 
     import gateway.platform_registry as reg_mod
@@ -149,7 +159,6 @@ class TestStandaloneWarningsSurfaced:
         assert err is None
 
 
-
 class TestLiveAdapterMediaFailuresSurfaced:
     """Defect 2: _send_media_via_adapter must report failures to its caller."""
 
@@ -198,9 +207,12 @@ class TestLiveAdapterMediaFailuresSurfaced:
             t = threading.Thread(target=loop.run_forever, daemon=True)
             t.start()
             errors = _send_media_via_adapter(
-                NeverCalledAdapter(), "D01",
+                NeverCalledAdapter(),
+                "D01",
                 [("/nonexistent/definitely-missing.pdf", False)],
-                None, loop, slack_job,
+                None,
+                loop,
+                slack_job,
             )
             assert errors, "a filtered-out MEDIA path must be reported, not silent"
         finally:
@@ -211,7 +223,6 @@ class TestLiveAdapterMediaFailuresSurfaced:
 
 class TestMediaPolicyEnvBridge:
     """Defect 3: media-policy config must apply outside the gateway process."""
-
 
     def test_standalone_filter_honors_bridged_allowlist(self, monkeypatch, tmp_path):
         """End-to-end: strict-mode file inside allow_dirs passes validation
@@ -277,7 +288,11 @@ class TestMediaPolicyEnvBridge:
 
         calls = _install_fake_slack_sender(
             monkeypatch,
-            lambda call: {"success": True, "chat_id": call["chat_id"], "message_id": "1.2"},
+            lambda call: {
+                "success": True,
+                "chat_id": call["chat_id"],
+                "message_id": "1.2",
+            },
         )
         job = {
             "id": "job-media-3",

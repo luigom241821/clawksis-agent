@@ -34,8 +34,6 @@ def _descriptor_kwargs(**overrides):
 
 
 class TestDescriptorSupportsContext:
-
-
     def test_from_json_ignores_unknown_keys(self):
         # Forward-compat: a newer connector sending extra keys must not break.
         payload = (
@@ -82,5 +80,3 @@ class TestEventFromWireContext:
         )
         assert ev.channel_context is not None
         assert "alice: earlier" in ev.channel_context
-
-

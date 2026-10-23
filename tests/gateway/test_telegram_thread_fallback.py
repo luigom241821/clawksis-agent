@@ -222,7 +222,9 @@ def test_forum_general_topic_without_message_thread_id_keeps_thread_context():
         date=None,
     )
 
-    event = adapter._build_message_event(message, msg_type=SimpleNamespace(value="text"))
+    event = adapter._build_message_event(
+        message, msg_type=SimpleNamespace(value="text")
+    )
 
     assert event.source.chat_id == "-100123"
     assert event.source.chat_type == "group"
@@ -298,7 +300,9 @@ def test_base_gateway_metadata_marks_telegram_dm_topics_as_reply_fallback():
 
 
 @pytest.mark.asyncio
-async def test_gateway_runner_busy_ack_replies_to_triggering_message_for_telegram_dm_topic(monkeypatch, tmp_path):
+async def test_gateway_runner_busy_ack_replies_to_triggering_message_for_telegram_dm_topic(
+    monkeypatch, tmp_path
+):
     """GatewayRunner's duplicate thread metadata must match the base helper."""
     from gateway import run as gateway_run
 
@@ -501,7 +505,9 @@ async def test_media_group_dm_topic_reply_not_found_retry_drops_thread_id(tmp_pa
 
 
 @pytest.mark.asyncio
-async def test_send_image_upload_dm_topic_reply_not_found_retry_drops_thread_id(monkeypatch):
+async def test_send_image_upload_dm_topic_reply_not_found_retry_drops_thread_id(
+    monkeypatch,
+):
     adapter = _make_adapter()
     call_log = []
 
@@ -618,7 +624,9 @@ async def test_send_image_upload_fallback_blocks_connect_time_rebind(monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_slash_confirm_forum_callback_followup_keeps_existing_thread_behavior(monkeypatch):
+async def test_slash_confirm_forum_callback_followup_keeps_existing_thread_behavior(
+    monkeypatch,
+):
     adapter = _make_adapter()
     adapter._slash_confirm_state = {"confirm-1": "session-1"}
     adapter._is_callback_user_authorized = lambda *args, **kwargs: True
@@ -652,7 +660,9 @@ async def test_slash_confirm_forum_callback_followup_keeps_existing_thread_behav
         async def edit_message_text(self, **kwargs):
             return None
 
-    await adapter._handle_callback_query(SimpleNamespace(callback_query=Query()), SimpleNamespace())
+    await adapter._handle_callback_query(
+        SimpleNamespace(callback_query=Query()), SimpleNamespace()
+    )
 
     assert call_log
     assert call_log[0]["message_thread_id"] == 20197
@@ -722,5 +732,3 @@ async def test_thread_fallback_only_fires_once():
     # Second chunk: should use thread_id=None directly (effective_thread_id
     # was cleared per-chunk but the metadata doesn't change between chunks)
     # The key point: the message was delivered despite the invalid thread
-
-

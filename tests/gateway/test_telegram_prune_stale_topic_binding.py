@@ -63,18 +63,27 @@ class TestDeleteTelegramTopicBinding:
         db = SessionDB(db_path=tmp_path / "state.db")
         _seed_binding(db, thread_id="15287")
         # Sanity check — binding present before prune.
-        assert db.get_telegram_topic_binding(
-            chat_id="5595856929", thread_id="15287",
-        ) is not None
+        assert (
+            db.get_telegram_topic_binding(
+                chat_id="5595856929",
+                thread_id="15287",
+            )
+            is not None
+        )
 
         removed = db.delete_telegram_topic_binding(
-            chat_id="5595856929", thread_id="15287",
+            chat_id="5595856929",
+            thread_id="15287",
         )
 
         assert removed == 1
-        assert db.get_telegram_topic_binding(
-            chat_id="5595856929", thread_id="15287",
-        ) is None
+        assert (
+            db.get_telegram_topic_binding(
+                chat_id="5595856929",
+                thread_id="15287",
+            )
+            is None
+        )
         db.close()
 
     def test_does_not_touch_unrelated_bindings(self, tmp_path):
@@ -87,17 +96,26 @@ class TestDeleteTelegramTopicBinding:
         _seed_binding(db, thread_id="15418", session_id="sess-fresh")
 
         removed = db.delete_telegram_topic_binding(
-            chat_id="5595856929", thread_id="15287",
+            chat_id="5595856929",
+            thread_id="15287",
         )
         assert removed == 1
 
         # Stale binding is gone; the fresh one survives.
-        assert db.get_telegram_topic_binding(
-            chat_id="5595856929", thread_id="15287",
-        ) is None
-        assert db.get_telegram_topic_binding(
-            chat_id="5595856929", thread_id="15418",
-        ) is not None
+        assert (
+            db.get_telegram_topic_binding(
+                chat_id="5595856929",
+                thread_id="15287",
+            )
+            is None
+        )
+        assert (
+            db.get_telegram_topic_binding(
+                chat_id="5595856929",
+                thread_id="15418",
+            )
+            is not None
+        )
         db.close()
 
 
@@ -110,21 +128,31 @@ class TestPruneClearsTopicModeWhenLastBindingGone:
     def test_clears_enabled_when_last_binding_pruned(self, tmp_path):
         db = SessionDB(db_path=tmp_path / "state.db")
         db.enable_telegram_topic_mode(
-            chat_id="5595856929", user_id="5595856929",
+            chat_id="5595856929",
+            user_id="5595856929",
         )
         _seed_binding(db, thread_id="15287")
-        assert db.is_telegram_topic_mode_enabled(
-            chat_id="5595856929", user_id="5595856929",
-        ) is True
+        assert (
+            db.is_telegram_topic_mode_enabled(
+                chat_id="5595856929",
+                user_id="5595856929",
+            )
+            is True
+        )
 
         removed = db.delete_telegram_topic_binding(
-            chat_id="5595856929", thread_id="15287",
+            chat_id="5595856929",
+            thread_id="15287",
         )
 
         assert removed == 1
-        assert db.is_telegram_topic_mode_enabled(
-            chat_id="5595856929", user_id="5595856929",
-        ) is False
+        assert (
+            db.is_telegram_topic_mode_enabled(
+                chat_id="5595856929",
+                user_id="5595856929",
+            )
+            is False
+        )
         db.close()
 
 
@@ -159,19 +187,19 @@ class TestPruneStaleDmTopicBindingHelper:
         adapter = _bare_adapter(db)
         adapter._prune_stale_dm_topic_binding("5595856929", 15287)
 
-        assert db.get_telegram_topic_binding(
-            chat_id="5595856929", thread_id="15287",
-        ) is None
+        assert (
+            db.get_telegram_topic_binding(
+                chat_id="5595856929",
+                thread_id="15287",
+            )
+            is None
+        )
         db.close()
-
-
 
 
 # ---------------------------------------------------------------------------
 # Source-level wiring guards — both fallback sites must call the helper
 # ---------------------------------------------------------------------------
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -197,26 +225,30 @@ class TestRecoveryAfterPrune:
 
         db = SessionDB(db_path=tmp_path / "state.db")
         db.enable_telegram_topic_mode(
-            chat_id="5595856929", user_id="5595856929",
+            chat_id="5595856929",
+            user_id="5595856929",
         )
 
         for sid, thread in (("sess-A", "111"), ("sess-B", "222")):
             db.create_session(
-                session_id=sid, source="telegram",
+                session_id=sid,
+                source="telegram",
                 user_id="5595856929",
             )
             db.bind_telegram_topic(
                 chat_id="5595856929",
                 thread_id=thread,
                 user_id="5595856929",
-                session_key=build_session_key(SessionSource(
-                    platform=Platform.TELEGRAM,
-                    user_id="5595856929",
-                    chat_id="5595856929",
-                    user_name="tester",
-                    chat_type="dm",
-                    thread_id=thread,
-                )),
+                session_key=build_session_key(
+                    SessionSource(
+                        platform=Platform.TELEGRAM,
+                        user_id="5595856929",
+                        chat_id="5595856929",
+                        user_name="tester",
+                        chat_type="dm",
+                        thread_id=thread,
+                    )
+                ),
                 session_id=sid,
             )
 
@@ -234,31 +266,36 @@ class TestRecoveryAfterPrune:
         # message_thread_id or General topic "1"); a non-lobby
         # unknown thread is preserved as a brand-new topic. Use the
         # General topic id so the recovery walk actually runs.
-        before = runner._recover_telegram_topic_thread_id(SessionSource(
-            platform=Platform.TELEGRAM,
-            user_id="5595856929",
-            chat_id="5595856929",
-            user_name="tester",
-            chat_type="dm",
-            thread_id="1",  # General/stripped reply — triggers recovery
-        ))
+        before = runner._recover_telegram_topic_thread_id(
+            SessionSource(
+                platform=Platform.TELEGRAM,
+                user_id="5595856929",
+                chat_id="5595856929",
+                user_name="tester",
+                chat_type="dm",
+                thread_id="1",  # General/stripped reply — triggers recovery
+            )
+        )
         assert before == "222"
 
         # User deletes topic 222 in Telegram → adapter prunes.
         db.delete_telegram_topic_binding(
-            chat_id="5595856929", thread_id="222",
+            chat_id="5595856929",
+            thread_id="222",
         )
 
         # Now recovery falls back to topic 111 (the surviving
         # binding) instead of the dead one.  This is the exact
         # behaviour change the bug report asks for.
-        after = runner._recover_telegram_topic_thread_id(SessionSource(
-            platform=Platform.TELEGRAM,
-            user_id="5595856929",
-            chat_id="5595856929",
-            user_name="tester",
-            chat_type="dm",
-            thread_id="1",
-        ))
+        after = runner._recover_telegram_topic_thread_id(
+            SessionSource(
+                platform=Platform.TELEGRAM,
+                user_id="5595856929",
+                chat_id="5595856929",
+                user_name="tester",
+                chat_type="dm",
+                thread_id="1",
+            )
+        )
         assert after == "111"
         db.close()

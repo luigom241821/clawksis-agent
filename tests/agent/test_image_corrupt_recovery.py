@@ -46,6 +46,7 @@ from unittest.mock import MagicMock, patch
 from agent.error_classifier import FailoverReason, classify_api_error
 from agent.message_sanitization import _strip_images_from_messages
 
+
 class _FakeApiError(Exception):
     """Stand-in for an openai.BadRequestError with status_code + body."""
 
@@ -55,14 +56,16 @@ class _FakeApiError(Exception):
         self.body = body or {"error": {"message": message}}
         self.response = None
 
+
 # ─── Classifier: xAI corrupt-image wording ───────────────────────────────────
+
 
 class TestImageCorruptClassification:
     def test_xai_invalid_png_image_classifies_as_image_corrupt(self):
         err = _FakeApiError(
             status_code=400,
             message='{"code":"invalid-argument","error":"Request contains an '
-                     'invalid argument: Invalid PNG image."}',
+            'invalid argument: Invalid PNG image."}',
         )
         result = classify_api_error(err, provider="xai", model="grok-5")
         assert result.reason == FailoverReason.image_corrupt
@@ -80,7 +83,7 @@ class TestImageCorruptClassification:
         err = _FakeApiError(
             status_code=400,
             message='{"code":"invalid-argument","error":"The base64 string '
-                     'of provided image cannot be decoded."}',
+            'of provided image cannot be decoded."}',
         )
         result = classify_api_error(err, provider="xai", model="grok-5")
         assert result.reason == FailoverReason.image_corrupt
@@ -94,9 +97,9 @@ class TestImageCorruptClassification:
         err = _FakeApiError(
             status_code=400,
             message='{"code":"invalid-argument","error":"code: \'Client '
-                    'specified an invalid argument\', message: \\"Downloaded '
-                    'response does not contain a valid JPG, PNG, WebP, or '
-                    'ICO image.\\""}',
+            "specified an invalid argument', message: \\\"Downloaded "
+            "response does not contain a valid JPG, PNG, WebP, or "
+            'ICO image.\\""}',
         )
         result = classify_api_error(err, provider="xai", model="grok-5")
         assert result.reason == FailoverReason.image_corrupt
@@ -106,8 +109,7 @@ class TestImageCorruptClassification:
         """Same downloaded-response wording with no status_code must still
         classify via the message-pattern route (_classify_by_message)."""
         err = Exception(
-            "Downloaded response does not contain a valid JPG, PNG, WebP, "
-            "or ICO image."
+            "Downloaded response does not contain a valid JPG, PNG, WebP, or ICO image."
         )
         result = classify_api_error(err, provider="xai", model="grok-5")
         assert result.reason == FailoverReason.image_corrupt
@@ -122,8 +124,7 @@ class TestImageCorruptClassification:
         wording rather than a broader fragment of it."""
         err = _FakeApiError(
             status_code=400,
-            message="Downloaded response does not contain a valid "
-                    "certificate chain.",
+            message="Downloaded response does not contain a valid certificate chain.",
         )
         result = classify_api_error(err, provider="xai", model="grok-5")
         assert result.reason != FailoverReason.image_corrupt
@@ -167,7 +168,9 @@ class TestImageCorruptClassification:
         assert result.reason == FailoverReason.image_corrupt
         assert result.reason != FailoverReason.image_too_large
 
+
 # ─── Strip helper (reused, not reimplemented) ────────────────────────────────
+
 
 class TestStripHelperBehaviorBackingTheBranch:
     """The image_corrupt branch in conversation_loop.py only retries when
@@ -175,13 +178,18 @@ class TestStripHelperBehaviorBackingTheBranch:
     mechanism that makes a separate one-shot guard unnecessary."""
 
     def test_strips_and_reports_progress(self):
-        msgs = [{
-            "role": "user",
-            "content": [
-                {"type": "text", "text": "look"},
-                {"type": "image_url", "image_url": {"url": "data:image/png;base64,corrupt"}},
-            ],
-        }]
+        msgs = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "look"},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/png;base64,corrupt"},
+                    },
+                ],
+            }
+        ]
         assert _strip_images_from_messages(msgs) is True
         assert msgs[0]["content"] == [{"type": "text", "text": "look"}]
 
@@ -197,12 +205,15 @@ class TestStripHelperBehaviorBackingTheBranch:
         msgs = [{"role": "user", "content": "just text, no images"}]
         assert _strip_images_from_messages(msgs) is False
 
+
 # ─── Integration: run_conversation recovers from a corrupt-image 400 ─────────
+
 
 def _mock_response(content: str):
     msg = SimpleNamespace(content=content, tool_calls=None)
     choice = SimpleNamespace(message=msg, finish_reason="stop")
     return SimpleNamespace(choices=[choice], model="grok-5", usage=None)
+
 
 def _make_agent():
     """Build a minimal AIAgent, mirroring the idiom in
@@ -225,6 +236,7 @@ def _make_agent():
         )
         agent.client = MagicMock()
         return agent
+
 
 class TestRunConversationRecoversFromCorruptImage400:
     def test_strip_and_retry_succeeds_at_the_sequenced_provider_layer(self):
@@ -403,7 +415,9 @@ class TestRunConversationRecoversFromCorruptImage400:
             f"{only_call_msgs!r}"
         )
 
+
 # ─── History isolation: strip only the per-call payload copy (#69104) ────────
+
 
 class TestCanonicalHistoryIsolation:
     def test_payload_copy_strip_preserves_canonical_history(self):

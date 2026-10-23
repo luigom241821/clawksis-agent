@@ -38,7 +38,9 @@ from clawk_cli.update_cmd import (
 )
 
 
-pytestmark = pytest.mark.platforms("macos")  # launchd fleet restart is macOS-only; helpers use POSIX os.getuid
+pytestmark = pytest.mark.platforms(
+    "macos"
+)  # launchd fleet restart is macOS-only; helpers use POSIX os.getuid
 
 UID = 501
 
@@ -102,8 +104,6 @@ class TestLaunchdGatewayLabelsForInstall:
     def test_no_profiles_means_no_fleet(self, monkeypatch):
         monkeypatch.setattr(clawk_cli.profiles, "list_profiles", list)
         assert launchd_gateway_labels_for_install() == []
-
-
 
 
 class TestLocateLaunchdGatewayService:
@@ -221,11 +221,21 @@ class TestGetServicePidsScoping:
         assert gw._get_service_pids() == {100}
 
 
-
-def _fleet(monkeypatch, tmp_path, *, current, labels, located,
-           registered=None, plist_exists=True,
-           drain_results=None, kick_errors=None, wait_results=None,
-           current_supervised=True, legacy_labels=()):
+def _fleet(
+    monkeypatch,
+    tmp_path,
+    *,
+    current,
+    labels,
+    located,
+    registered=None,
+    plist_exists=True,
+    drain_results=None,
+    kick_errors=None,
+    wait_results=None,
+    current_supervised=True,
+    legacy_labels=(),
+):
     """Wire a fake launchd fleet through clawk_cli.gateway seams.
 
     ``located`` maps label -> (domain, pid) as ``_locate_launchd_gateway_service``
@@ -238,8 +248,13 @@ def _fleet(monkeypatch, tmp_path, *, current, labels, located,
     from types import SimpleNamespace
 
     rec = SimpleNamespace(
-        kickstarts=[], drains=[], current_restarts=[], waits=[],
-        locates=[], registered_checks=[], current_verifies=[],
+        kickstarts=[],
+        drains=[],
+        current_restarts=[],
+        waits=[],
+        locates=[],
+        registered_checks=[],
+        current_verifies=[],
     )
 
     plist = tmp_path / f"{current}.plist"
@@ -275,7 +290,10 @@ def _fleet(monkeypatch, tmp_path, *, current, labels, located,
     monkeypatch.setattr(
         gw,
         "_graceful_restart_via_sigusr1",
-        lambda pid, drain_timeout, **_: (rec.drains.append(pid), (drain_results or {}).get(pid, False))[1],
+        lambda pid, drain_timeout, **_: (
+            rec.drains.append(pid),
+            (drain_results or {}).get(pid, False),
+        )[1],
     )
 
     def fake_kickstart(label, domain):
@@ -303,9 +321,7 @@ def _fleet(monkeypatch, tmp_path, *, current, labels, located,
         rec.current_verifies.append(label)
         return current_supervised
 
-    monkeypatch.setattr(
-        gw, "wait_for_launchd_gateway_supervision", fake_verify_current
-    )
+    monkeypatch.setattr(gw, "wait_for_launchd_gateway_supervision", fake_verify_current)
     return rec
 
 
@@ -405,9 +421,7 @@ class TestRestartMacosLaunchdGateways:
         assert restarted == [current]
         assert failed == []
 
-    def test_unbootstrapped_sibling_is_skipped_not_failed(
-        self, monkeypatch, tmp_path
-    ):
+    def test_unbootstrapped_sibling_is_skipped_not_failed(self, monkeypatch, tmp_path):
         rec = _fleet(
             monkeypatch,
             tmp_path,
@@ -427,9 +441,7 @@ class TestRestartMacosLaunchdGateways:
         assert restarted == ["ai.clawk.gateway"]
         assert failed == []
 
-    def test_loaded_but_not_running_sibling_is_kickstarted(
-        self, monkeypatch, tmp_path
-    ):
+    def test_loaded_but_not_running_sibling_is_kickstarted(self, monkeypatch, tmp_path):
         """A bootstrapped service with no live process still holds the old
         code path for its next launch trigger — kickstart it (no drain)."""
         rec = _fleet(
@@ -596,7 +608,9 @@ class TestRestartMacosLaunchdGateways:
         assert failed == ["ai.clawk.gateway-zombie"]
 
 
-def _write_launchd_plist(agents_dir: Path, label: str, *, argv=(), clawk_home=None, raw=None):
+def _write_launchd_plist(
+    agents_dir: Path, label: str, *, argv=(), clawk_home=None, raw=None
+):
     """One gateway LaunchAgent plist under a fake account's LaunchAgents dir."""
     import plistlib
 
@@ -628,26 +642,55 @@ class TestLegacyLaunchdLabelsForInstall:
     from the plist's pinned CLAWK_HOME, fail-closed, so another install's fleet stays untouched
     (the #41403 boundary) and a sandboxed CLAWK_HOME never enumerates the account's real units."""
 
-    def test_only_units_pinned_to_this_installs_homes_are_credited(self, monkeypatch, tmp_path):
+    def test_only_units_pinned_to_this_installs_homes_are_credited(
+        self, monkeypatch, tmp_path
+    ):
         agents = _fake_launchd_account(monkeypatch, tmp_path)
         root = tmp_path / "clawk-root"
         import clawk_constants
+
         monkeypatch.setattr(clawk_constants, "get_default_clawk_root", lambda: root)
         venv_python = str(root.parent / "install" / ".venv" / "bin" / "python")
-        _write_launchd_plist(agents, "ai.clawk.gateway-398559f7", argv=[venv_python], clawk_home=root / "profiles" / "gopod")
-        _write_launchd_plist(agents, "ai.clawk.gateway-1a2b3c4d", argv=[venv_python], clawk_home=root)
-        _write_launchd_plist(agents, "ai.clawk.gateway-gopod", argv=[venv_python], clawk_home=root / "profiles" / "gopod")
+        _write_launchd_plist(
+            agents,
+            "ai.clawk.gateway-398559f7",
+            argv=[venv_python],
+            clawk_home=root / "profiles" / "gopod",
+        )
+        _write_launchd_plist(
+            agents, "ai.clawk.gateway-1a2b3c4d", argv=[venv_python], clawk_home=root
+        )
+        _write_launchd_plist(
+            agents,
+            "ai.clawk.gateway-gopod",
+            argv=[venv_python],
+            clawk_home=root / "profiles" / "gopod",
+        )
         # Another install's unit: same venv on disk, but its home lives under a different root.
-        _write_launchd_plist(agents, "ai.clawk.gateway-5db8084b", argv=[venv_python], clawk_home=tmp_path / "other-root" / "profiles" / "gopod")
-        _write_launchd_plist(agents, "ai.clawk.gateway-nohome", argv=[venv_python])  # no pinned home: unattributable
-        _write_launchd_plist(agents, "ai.clawk.gateway-broken", raw="not a plist at all")
-        assert gw.legacy_launchd_labels_for_install(exclude={"ai.clawk.gateway-gopod", "ai.clawk.gateway"}) == [
-            "ai.clawk.gateway-1a2b3c4d", "ai.clawk.gateway-398559f7",
+        _write_launchd_plist(
+            agents,
+            "ai.clawk.gateway-5db8084b",
+            argv=[venv_python],
+            clawk_home=tmp_path / "other-root" / "profiles" / "gopod",
+        )
+        _write_launchd_plist(
+            agents, "ai.clawk.gateway-nohome", argv=[venv_python]
+        )  # no pinned home: unattributable
+        _write_launchd_plist(
+            agents, "ai.clawk.gateway-broken", raw="not a plist at all"
+        )
+        assert gw.legacy_launchd_labels_for_install(
+            exclude={"ai.clawk.gateway-gopod", "ai.clawk.gateway"}
+        ) == [
+            "ai.clawk.gateway-1a2b3c4d",
+            "ai.clawk.gateway-398559f7",
         ]
 
 
 class TestRestartMacosLaunchdGatewaysLegacyUnits:
-    def test_legacy_labelled_sibling_is_restarted_like_any_other(self, monkeypatch, tmp_path, capsys):
+    def test_legacy_labelled_sibling_is_restarted_like_any_other(
+        self, monkeypatch, tmp_path, capsys
+    ):
         """The update restart pass iterates the derivation PLUS the install's
         legacy-labelled units (#115254): the hash-suffixed sibling is drained,
         kickstarted and verified in its own domain."""

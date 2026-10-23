@@ -13,16 +13,33 @@ from functools import lru_cache
 # `--profile` / `-p` is consumed by ``main._apply_profile_override`` before argparse runs
 # (it sets ``CLAWK_HOME`` and strips itself from ``sys.argv``), so it isn't on the parser.
 # Listed here so all "carry over on relaunch" metadata lives in one file.
-PRE_ARGPARSE_INHERITED_FLAGS: list[tuple[str, bool]] = [("--profile", True), ("-p", True)]
+PRE_ARGPARSE_INHERITED_FLAGS: list[tuple[str, bool]] = [
+    ("--profile", True),
+    ("-p", True),
+]
 
 # Static snapshot fallback for ``top_level_value_flag_sets`` — used only if introspecting the
 # live parser fails. The derived path is authoritative; tests/clawk_cli/
 # test_top_level_value_flags_parity.py fails CI if the parser grows a value-taking flag this
 # snapshot lacks AND derivation regresses.
-_VALUE_FLAGS_FALLBACK: frozenset[str] = frozenset({
-    "-z", "--oneshot", "-m", "--model", "--provider", "--reasoning", "-t", "--toolsets",
-    "-r", "--resume", "-s", "--skills", "--usage-file", "--in",
-})
+_VALUE_FLAGS_FALLBACK: frozenset[str] = frozenset(
+    {
+        "-z",
+        "--oneshot",
+        "-m",
+        "--model",
+        "--provider",
+        "--reasoning",
+        "-t",
+        "--toolsets",
+        "-r",
+        "--resume",
+        "-s",
+        "--skills",
+        "--usage-file",
+        "--in",
+    }
+)
 _OPTIONAL_VALUE_FLAGS_FALLBACK: frozenset[str] = frozenset({"-c", "--continue"})
 
 
@@ -68,12 +85,16 @@ def top_level_value_flag_sets() -> tuple[frozenset[str], frozenset[str]]:
 def command_argv(argv: list[str]) -> list[str]:
     """Subcommand and its arguments, excluding top-level flags and their values."""
     required, optional = top_level_value_flag_sets()
-    value_flags = required | optional | {flag for flag, takes_value in PRE_ARGPARSE_INHERITED_FLAGS if takes_value}
+    value_flags = (
+        required
+        | optional
+        | {flag for flag, takes_value in PRE_ARGPARSE_INHERITED_FLAGS if takes_value}
+    )
     i = 0
     while i < len(argv):
         token = argv[i]
         if token == "--":
-            return argv[i + 1:]
+            return argv[i + 1 :]
         if not token.startswith("-"):
             return argv[i:]
         i += 2 if "=" not in token and token in value_flags and i + 1 < len(argv) else 1
@@ -145,74 +166,208 @@ def _add_top_level_flags(parser: argparse.ArgumentParser) -> None:
     """Top-level (pre-subcommand) flags; ``-m/--provider`` pair with ``-z`` without ``chat``."""
     add, inherited = parser.add_argument, _inherited_flag
     add("--version", "-V", action="store_true", help="Show version and exit")
-    add("-z", "--oneshot", metavar="PROMPT", default=None, help=(
-        "One-shot mode: send a single prompt and print ONLY the final "
-        "response text to stdout. No banner, no spinner, no tool "
-        "previews, no session_id line. Tools, memory, rules, and "
-        "AGENTS.md in the CWD are loaded as normal; approvals are "
-        "auto-bypassed. Intended for scripts / pipes."))
-    add("--usage-file", metavar="PATH", default=None, help=(
-        "One-shot mode only: after the run, write a JSON usage report "
-        "(estimated cost, token counts, model, api_calls) to PATH. "
-        "The report is written even when the run fails, so pipelines "
-        "can always account for spend. No effect outside -z/--oneshot."))
+    add(
+        "-z",
+        "--oneshot",
+        metavar="PROMPT",
+        default=None,
+        help=(
+            "One-shot mode: send a single prompt and print ONLY the final "
+            "response text to stdout. No banner, no spinner, no tool "
+            "previews, no session_id line. Tools, memory, rules, and "
+            "AGENTS.md in the CWD are loaded as normal; approvals are "
+            "auto-bypassed. Intended for scripts / pipes."
+        ),
+    )
+    add(
+        "--usage-file",
+        metavar="PATH",
+        default=None,
+        help=(
+            "One-shot mode only: after the run, write a JSON usage report "
+            "(estimated cost, token counts, model, api_calls) to PATH. "
+            "The report is written even when the run fails, so pipelines "
+            "can always account for spend. No effect outside -z/--oneshot."
+        ),
+    )
     # --model / --provider are accepted at the top level so they can pair with -z without the
     # `chat` subcommand; if neither -z nor a subcommand consumes them, they fall through as None.
-    inherited(parser, "-m", "--model", default=None, help=(
-        "Model override for this invocation (e.g. anthropic/claude-sonnet-4.6). "
-        "Applies to -z/--oneshot and --tui. Also settable via CLAWK_INFERENCE_MODEL env var."))
-    inherited(parser, "--provider", default=None, help=(
-        "Provider override for this invocation (e.g. openrouter, anthropic). "
-        "Applies to -z/--oneshot and --tui. The persistent provider lives in config.yaml "
-        "under model.provider — use `clawk setup` or edit the file to change it."))
-    inherited(parser, "--reasoning", default=None, metavar="LEVEL", help=(
-        "Reasoning effort for this invocation: none, minimal, low, medium, "
-        "high, xhigh, max, or ultra. Overrides agent.reasoning_effort in "
-        "config.yaml for this run only; the persistent level lives there "
-        "(or per-model under agent.reasoning_overrides)."))
-    add("-t", "--toolsets", default=None,
-        help="Comma-separated toolsets to enable for this invocation. Applies to -z/--oneshot and --tui.")
-    add("--resume", "-r", metavar="SESSION", default=None, help=(
-        "Resume a previous session by ID or title, or pass 'latest' for "
-        "the most recent session (workspace-scoped, like -c with no name)"))
-    add("--no-restore-cwd", action="store_true", default=False,
-        help="Don't cd into a resumed session's recorded working directory.")
-    add("--in", dest="in_dir", metavar="DIR", default=None, help=(
-        "Change into DIR before starting or resuming. Combined with "
-        "'--resume latest' or -c, the most recent session for DIR's "
-        "workspace is picked, and the session stays in DIR (skips the "
-        "recorded-cwd restore)."))
-    add("--continue", "-c", dest="continue_last", nargs="?", const=True, default=None,
-        metavar="SESSION_NAME", help="Resume a session by name, or the most recent if no name given")
-    add("--worktree", "-w", action="store_true", default=False,
-        help="Run in an isolated git worktree (for parallel agents)")
-    inherited(parser, "--accept-hooks", action="store_true", default=False, help=(
-        "Auto-approve any unseen shell hooks declared in config.yaml "
-        "without a TTY prompt.  Equivalent to CLAWK_ACCEPT_HOOKS=1 or "
-        "hooks_auto_accept: true in config.yaml.  Use on CI / headless "
-        "runs that can't prompt."))
-    inherited(parser, "--skills", "-s", action="append", default=None,
-              help="Preload one or more skills for the session (repeat flag or comma-separate)")
-    inherited(parser, "--yolo", action="store_true", default=False,
-              help="Bypass all dangerous command approval prompts (use at your own risk)")
-    inherited(parser, "--pass-session-id", action="store_true", default=False,
-              help="Include the session ID in the agent's system prompt")
-    inherited(parser, "--checkpoints", action="store_true", default=False,
-              help="Enable filesystem checkpoints before destructive file operations (use /rollback to restore)")
-    inherited(parser, "--ignore-user-config", action="store_true", default=False,
-              help=f"Ignore {_cfg_path()} and fall back to built-in defaults (credentials in .env are still loaded)")
-    inherited(parser, "--ignore-rules", action="store_true", default=False,
-              help="Skip auto-injection of AGENTS.md, SOUL.md, .cursorrules, memory, and preloaded skills")
-    inherited(parser, "--safe-mode", action="store_true", default=False,
-              help="Troubleshooting mode: disable ALL customizations — user config, AGENTS.md/memory injection, plugins, and MCP servers (implies --ignore-user-config and --ignore-rules)")
-    inherited(parser, "--tui", action="store_true", default=False,
-              help="Launch the modern TUI instead of the classic REPL")
-    inherited(parser, "--native", "--tui-native", dest="tui_native", action="store_true", default=False,
-              help="With --tui: use native terminal scrollback and disable mouse tracking")
-    inherited(parser, "--cli", action="store_true", default=False,
-              help="Force the classic prompt_toolkit REPL (overrides display.interface=tui)")
-    inherited(parser, "--dev", dest="tui_dev", action="store_true", default=False,
-              help="With --tui: run TypeScript sources via tsx (skip dist build)")
+    inherited(
+        parser,
+        "-m",
+        "--model",
+        default=None,
+        help=(
+            "Model override for this invocation (e.g. anthropic/claude-sonnet-4.6). "
+            "Applies to -z/--oneshot and --tui. Also settable via CLAWK_INFERENCE_MODEL env var."
+        ),
+    )
+    inherited(
+        parser,
+        "--provider",
+        default=None,
+        help=(
+            "Provider override for this invocation (e.g. openrouter, anthropic). "
+            "Applies to -z/--oneshot and --tui. The persistent provider lives in config.yaml "
+            "under model.provider — use `clawk setup` or edit the file to change it."
+        ),
+    )
+    inherited(
+        parser,
+        "--reasoning",
+        default=None,
+        metavar="LEVEL",
+        help=(
+            "Reasoning effort for this invocation: none, minimal, low, medium, "
+            "high, xhigh, max, or ultra. Overrides agent.reasoning_effort in "
+            "config.yaml for this run only; the persistent level lives there "
+            "(or per-model under agent.reasoning_overrides)."
+        ),
+    )
+    add(
+        "-t",
+        "--toolsets",
+        default=None,
+        help="Comma-separated toolsets to enable for this invocation. Applies to -z/--oneshot and --tui.",
+    )
+    add(
+        "--resume",
+        "-r",
+        metavar="SESSION",
+        default=None,
+        help=(
+            "Resume a previous session by ID or title, or pass 'latest' for "
+            "the most recent session (workspace-scoped, like -c with no name)"
+        ),
+    )
+    add(
+        "--no-restore-cwd",
+        action="store_true",
+        default=False,
+        help="Don't cd into a resumed session's recorded working directory.",
+    )
+    add(
+        "--in",
+        dest="in_dir",
+        metavar="DIR",
+        default=None,
+        help=(
+            "Change into DIR before starting or resuming. Combined with "
+            "'--resume latest' or -c, the most recent session for DIR's "
+            "workspace is picked, and the session stays in DIR (skips the "
+            "recorded-cwd restore)."
+        ),
+    )
+    add(
+        "--continue",
+        "-c",
+        dest="continue_last",
+        nargs="?",
+        const=True,
+        default=None,
+        metavar="SESSION_NAME",
+        help="Resume a session by name, or the most recent if no name given",
+    )
+    add(
+        "--worktree",
+        "-w",
+        action="store_true",
+        default=False,
+        help="Run in an isolated git worktree (for parallel agents)",
+    )
+    inherited(
+        parser,
+        "--accept-hooks",
+        action="store_true",
+        default=False,
+        help=(
+            "Auto-approve any unseen shell hooks declared in config.yaml "
+            "without a TTY prompt.  Equivalent to CLAWK_ACCEPT_HOOKS=1 or "
+            "hooks_auto_accept: true in config.yaml.  Use on CI / headless "
+            "runs that can't prompt."
+        ),
+    )
+    inherited(
+        parser,
+        "--skills",
+        "-s",
+        action="append",
+        default=None,
+        help="Preload one or more skills for the session (repeat flag or comma-separate)",
+    )
+    inherited(
+        parser,
+        "--yolo",
+        action="store_true",
+        default=False,
+        help="Bypass all dangerous command approval prompts (use at your own risk)",
+    )
+    inherited(
+        parser,
+        "--pass-session-id",
+        action="store_true",
+        default=False,
+        help="Include the session ID in the agent's system prompt",
+    )
+    inherited(
+        parser,
+        "--checkpoints",
+        action="store_true",
+        default=False,
+        help="Enable filesystem checkpoints before destructive file operations (use /rollback to restore)",
+    )
+    inherited(
+        parser,
+        "--ignore-user-config",
+        action="store_true",
+        default=False,
+        help=f"Ignore {_cfg_path()} and fall back to built-in defaults (credentials in .env are still loaded)",
+    )
+    inherited(
+        parser,
+        "--ignore-rules",
+        action="store_true",
+        default=False,
+        help="Skip auto-injection of AGENTS.md, SOUL.md, .cursorrules, memory, and preloaded skills",
+    )
+    inherited(
+        parser,
+        "--safe-mode",
+        action="store_true",
+        default=False,
+        help="Troubleshooting mode: disable ALL customizations — user config, AGENTS.md/memory injection, plugins, and MCP servers (implies --ignore-user-config and --ignore-rules)",
+    )
+    inherited(
+        parser,
+        "--tui",
+        action="store_true",
+        default=False,
+        help="Launch the modern TUI instead of the classic REPL",
+    )
+    inherited(
+        parser,
+        "--native",
+        "--tui-native",
+        dest="tui_native",
+        action="store_true",
+        default=False,
+        help="With --tui: use native terminal scrollback and disable mouse tracking",
+    )
+    inherited(
+        parser,
+        "--cli",
+        action="store_true",
+        default=False,
+        help="Force the classic prompt_toolkit REPL (overrides display.interface=tui)",
+    )
+    inherited(
+        parser,
+        "--dev",
+        dest="tui_dev",
+        action="store_true",
+        default=False,
+        help="With --tui: run TypeScript sources via tsx (skip dist build)",
+    )
 
 
 def _build_chat_parser(subparsers) -> argparse.ArgumentParser:
@@ -226,104 +381,283 @@ def _build_chat_parser(subparsers) -> argparse.ArgumentParser:
     test_argparse_flag_propagation.py).
     """
     chat_parser = subparsers.add_parser(
-        "chat", help="Interactive chat with the agent",
-        description="Start an interactive chat session with Clawksis")
-    add, inherited, SUPPRESS = chat_parser.add_argument, _inherited_flag, argparse.SUPPRESS
+        "chat",
+        help="Interactive chat with the agent",
+        description="Start an interactive chat session with Clawksis",
+    )
+    add, inherited, SUPPRESS = (
+        chat_parser.add_argument,
+        _inherited_flag,
+        argparse.SUPPRESS,
+    )
     _query_group = chat_parser.add_mutually_exclusive_group()
-    _query_group.add_argument("-q", "--query", help=(
-        "Query to run. On a real TTY the prompt seeds an interactive "
-        "session (submitted literally as the first turn); combined with "
-        "--oneshot or -Q, or on a non-TTY, it answers and exits."))
-    _query_group.add_argument("--query-file", metavar="PATH", help=(
-        "Read the single query from a file instead of the command line "
-        "('-' reads stdin). Safe for arbitrary text: nothing is shell-"
-        "interpreted, so quotes, $(...), and backticks are preserved "
-        "verbatim. Mutually exclusive with -q."))
+    _query_group.add_argument(
+        "-q",
+        "--query",
+        help=(
+            "Query to run. On a real TTY the prompt seeds an interactive "
+            "session (submitted literally as the first turn); combined with "
+            "--oneshot or -Q, or on a non-TTY, it answers and exits."
+        ),
+    )
+    _query_group.add_argument(
+        "--query-file",
+        metavar="PATH",
+        help=(
+            "Read the single query from a file instead of the command line "
+            "('-' reads stdin). Safe for arbitrary text: nothing is shell-"
+            "interpreted, so quotes, $(...), and backticks are preserved "
+            "verbatim. Mutually exclusive with -q."
+        ),
+    )
     # Distinct dest: the top-level `-z/--oneshot PROMPT` is value-taking and its dispatch sites do
     # `if args.oneshot: _run_and_exit_oneshot(args.oneshot)` — a shared boolean dest would be
     # passed as the prompt.
-    add("--oneshot", dest="oneshot_exit", action="store_true", default=False, help=(
-        "With -q/--query-file: answer the query and exit (legacy "
-        "single-query behavior) instead of seeding an interactive "
-        "session. Implied on non-TTY stdio and by -Q/--quiet."))
+    add(
+        "--oneshot",
+        dest="oneshot_exit",
+        action="store_true",
+        default=False,
+        help=(
+            "With -q/--query-file: answer the query and exit (legacy "
+            "single-query behavior) instead of seeding an interactive "
+            "session. Implied on non-TTY stdio and by -Q/--quiet."
+        ),
+    )
     add("--image", help="Optional local image path to attach to a single query")
-    inherited(chat_parser, "-m", "--model", default=SUPPRESS,
-              help="Model to use (e.g., anthropic/claude-sonnet-4)")
+    inherited(
+        chat_parser,
+        "-m",
+        "--model",
+        default=SUPPRESS,
+        help="Model to use (e.g., anthropic/claude-sonnet-4)",
+    )
     add("-t", "--toolsets", default=SUPPRESS, help="Comma-separated toolsets to enable")
-    inherited(chat_parser, "--reasoning", default=SUPPRESS, metavar="LEVEL", help=(
-        "Reasoning effort for this session: none, minimal, low, medium, "
-        "high, xhigh, max, or ultra. Overrides agent.reasoning_effort for "
-        "this run only (same levels as the /reasoning slash command)."))
-    inherited(chat_parser, "-s", "--skills", action="append", default=SUPPRESS,
-              help="Preload one or more skills for the session (repeat flag or comma-separate)")
+    inherited(
+        chat_parser,
+        "--reasoning",
+        default=SUPPRESS,
+        metavar="LEVEL",
+        help=(
+            "Reasoning effort for this session: none, minimal, low, medium, "
+            "high, xhigh, max, or ultra. Overrides agent.reasoning_effort for "
+            "this run only (same levels as the /reasoning slash command)."
+        ),
+    )
+    inherited(
+        chat_parser,
+        "-s",
+        "--skills",
+        action="append",
+        default=SUPPRESS,
+        help="Preload one or more skills for the session (repeat flag or comma-separate)",
+    )
     # No `choices=` on --provider: user-defined providers from config.yaml `providers:` are valid
     # too; runtime resolution (resolve_runtime_provider) validates, same as the top-level flag.
-    inherited(chat_parser, "--provider", default=SUPPRESS,
-              help="Inference provider (default: auto). Built-in or a user-defined name from `providers:` in config.yaml.")
+    inherited(
+        chat_parser,
+        "--provider",
+        default=SUPPRESS,
+        help="Inference provider (default: auto). Built-in or a user-defined name from `providers:` in config.yaml.",
+    )
     # Explicit endpoint launches (custom provider, --safe-mode isolation) are frozen into the
     # session policy by the gateway; the key lives only in the authority's memory, never on disk.
-    add("--base-url", dest="base_url", default=SUPPRESS, metavar="URL",
-        help="OpenAI-compatible endpoint for --provider custom (e.g. http://127.0.0.1:8000/v1).")
-    add("--api-key", dest="api_key", default=SUPPRESS, metavar="KEY",
-        help="API key for this launch only; not persisted.")
+    add(
+        "--base-url",
+        dest="base_url",
+        default=SUPPRESS,
+        metavar="URL",
+        help="OpenAI-compatible endpoint for --provider custom (e.g. http://127.0.0.1:8000/v1).",
+    )
+    add(
+        "--api-key",
+        dest="api_key",
+        default=SUPPRESS,
+        metavar="KEY",
+        help="API key for this launch only; not persisted.",
+    )
     add("-v", "--verbose", action="store_true", default=SUPPRESS, help="Verbose output")
-    add("-Q", "--quiet", action="store_true",
-        help="Quiet mode for programmatic use: suppress banner, spinner, and tool previews. Only output the final response and session info.")
-    add("--format", choices=["text", "stream-json"], default="text", dest="output_format", help=(
-        "Output format for single-query mode (-q). 'text' prints the final response as plain text (default). "
-        "'stream-json' emits newline-delimited JSON events (JSONL), implies --quiet, and cannot be combined with --tui."))
-    add("--resume", "-r", metavar="SESSION_ID", default=SUPPRESS, help=(
-        "Resume a previous session by ID (shown on exit), or 'latest' "
-        "for the most recent session"))
-    add("--no-restore-cwd", action="store_true", default=SUPPRESS,
-        help="Don't cd into a resumed session's recorded working directory.")
-    add("--in", dest="in_dir", metavar="DIR", default=SUPPRESS, help=(
-        "Change into DIR before starting or resuming (scopes "
-        "'--resume latest' / -c lookups to DIR's workspace)."))
-    add("--continue", "-c", dest="continue_last", nargs="?", const=True, default=SUPPRESS,
-        metavar="SESSION_NAME", help="Resume a session by name, or the most recent if no name given")
-    add("--create-if-missing", action="store_true", default=SUPPRESS, help=(
-        "With -c/--continue <name>: if no session matches the name, "
-        "create a new session with that title and proceed (instead of "
-        "failing with a not-found error). Programmatic callers that "
-        "want 'send to this named thread, making it if needed'."))
-    add("--worktree", "-w", action="store_true", default=SUPPRESS,
-        help="Run in an isolated git worktree (for parallel agents on the same repo)")
-    inherited(chat_parser, "--accept-hooks", action="store_true", default=SUPPRESS, help=(
-        "Auto-approve any unseen shell hooks declared in config.yaml "
-        "without a TTY prompt (see also CLAWK_ACCEPT_HOOKS env var and "
-        "hooks_auto_accept: in config.yaml)."))
-    inherited(chat_parser, "--checkpoints", action="store_true", default=SUPPRESS,
-              help="Enable filesystem checkpoints before destructive file operations (use /rollback to restore)")
-    add("--max-turns", type=int, default=None, metavar="N",
-        help="Maximum tool-calling iterations per conversation turn (default: 500, or agent.max_turns in config)")
-    add("--run-budget", type=float, default=None, metavar="SECONDS", dest="run_budget", help=(
-        "Optional wall-clock budget in seconds for each conversation run. "
-        "At 80%% elapsed the agent gets a one-time wrap-up notice, and "
-        "implicit provider stale timeouts are capped to the remaining "
-        "budget so one hung call can't consume the run. Unset = off. "
-        "Also configurable as agent.run_budget_seconds in config.yaml. "
-        "Intended for one-shot/eval invocations with a hard ceiling."))
-    inherited(chat_parser, "--yolo", action="store_true", default=SUPPRESS,
-              help="Bypass all dangerous command approval prompts (use at your own risk)")
-    inherited(chat_parser, "--pass-session-id", action="store_true", default=SUPPRESS,
-              help="Include the session ID in the agent's system prompt")
-    inherited(chat_parser, "--ignore-user-config", action="store_true", default=SUPPRESS,
-              help=f"Ignore {_cfg_path()} and fall back to built-in defaults (credentials in .env are still loaded). Useful for isolated CI runs, reproduction, and third-party integrations.")
-    inherited(chat_parser, "--ignore-rules", action="store_true", default=SUPPRESS,
-              help="Skip auto-injection of AGENTS.md, SOUL.md, .cursorrules, memory, and preloaded skills. Combine with --ignore-user-config for a fully isolated run.")
-    inherited(chat_parser, "--safe-mode", action="store_true", default=SUPPRESS,
-              help="Troubleshooting mode: disable ALL customizations — user config, AGENTS.md/memory injection, plugins, and MCP servers (implies --ignore-user-config and --ignore-rules). Use to isolate whether a problem comes from your setup or from Clawksis itself.")
-    add("--source", default=None,
-        help="Session source tag for filtering (default: cli). Use 'tool' for third-party integrations that should not appear in user session lists.")
-    inherited(chat_parser, "--tui", action="store_true", default=SUPPRESS,
-              help="Launch the modern TUI instead of the classic REPL")
-    inherited(chat_parser, "--native", "--tui-native", dest="tui_native", action="store_true", default=SUPPRESS,
-              help="Use native terminal scrollback and disable mouse tracking")
-    inherited(chat_parser, "--cli", action="store_true", default=SUPPRESS,
-              help="Force the classic prompt_toolkit REPL (overrides display.interface=tui)")
-    inherited(chat_parser, "--dev", dest="tui_dev", action="store_true", default=SUPPRESS,
-              help="With --tui: run TypeScript sources via tsx (skip dist build)")
+    add(
+        "-Q",
+        "--quiet",
+        action="store_true",
+        help="Quiet mode for programmatic use: suppress banner, spinner, and tool previews. Only output the final response and session info.",
+    )
+    add(
+        "--format",
+        choices=["text", "stream-json"],
+        default="text",
+        dest="output_format",
+        help=(
+            "Output format for single-query mode (-q). 'text' prints the final response as plain text (default). "
+            "'stream-json' emits newline-delimited JSON events (JSONL), implies --quiet, and cannot be combined with --tui."
+        ),
+    )
+    add(
+        "--resume",
+        "-r",
+        metavar="SESSION_ID",
+        default=SUPPRESS,
+        help=(
+            "Resume a previous session by ID (shown on exit), or 'latest' "
+            "for the most recent session"
+        ),
+    )
+    add(
+        "--no-restore-cwd",
+        action="store_true",
+        default=SUPPRESS,
+        help="Don't cd into a resumed session's recorded working directory.",
+    )
+    add(
+        "--in",
+        dest="in_dir",
+        metavar="DIR",
+        default=SUPPRESS,
+        help=(
+            "Change into DIR before starting or resuming (scopes "
+            "'--resume latest' / -c lookups to DIR's workspace)."
+        ),
+    )
+    add(
+        "--continue",
+        "-c",
+        dest="continue_last",
+        nargs="?",
+        const=True,
+        default=SUPPRESS,
+        metavar="SESSION_NAME",
+        help="Resume a session by name, or the most recent if no name given",
+    )
+    add(
+        "--create-if-missing",
+        action="store_true",
+        default=SUPPRESS,
+        help=(
+            "With -c/--continue <name>: if no session matches the name, "
+            "create a new session with that title and proceed (instead of "
+            "failing with a not-found error). Programmatic callers that "
+            "want 'send to this named thread, making it if needed'."
+        ),
+    )
+    add(
+        "--worktree",
+        "-w",
+        action="store_true",
+        default=SUPPRESS,
+        help="Run in an isolated git worktree (for parallel agents on the same repo)",
+    )
+    inherited(
+        chat_parser,
+        "--accept-hooks",
+        action="store_true",
+        default=SUPPRESS,
+        help=(
+            "Auto-approve any unseen shell hooks declared in config.yaml "
+            "without a TTY prompt (see also CLAWK_ACCEPT_HOOKS env var and "
+            "hooks_auto_accept: in config.yaml)."
+        ),
+    )
+    inherited(
+        chat_parser,
+        "--checkpoints",
+        action="store_true",
+        default=SUPPRESS,
+        help="Enable filesystem checkpoints before destructive file operations (use /rollback to restore)",
+    )
+    add(
+        "--max-turns",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Maximum tool-calling iterations per conversation turn (default: 500, or agent.max_turns in config)",
+    )
+    add(
+        "--run-budget",
+        type=float,
+        default=None,
+        metavar="SECONDS",
+        dest="run_budget",
+        help=(
+            "Optional wall-clock budget in seconds for each conversation run. "
+            "At 80%% elapsed the agent gets a one-time wrap-up notice, and "
+            "implicit provider stale timeouts are capped to the remaining "
+            "budget so one hung call can't consume the run. Unset = off. "
+            "Also configurable as agent.run_budget_seconds in config.yaml. "
+            "Intended for one-shot/eval invocations with a hard ceiling."
+        ),
+    )
+    inherited(
+        chat_parser,
+        "--yolo",
+        action="store_true",
+        default=SUPPRESS,
+        help="Bypass all dangerous command approval prompts (use at your own risk)",
+    )
+    inherited(
+        chat_parser,
+        "--pass-session-id",
+        action="store_true",
+        default=SUPPRESS,
+        help="Include the session ID in the agent's system prompt",
+    )
+    inherited(
+        chat_parser,
+        "--ignore-user-config",
+        action="store_true",
+        default=SUPPRESS,
+        help=f"Ignore {_cfg_path()} and fall back to built-in defaults (credentials in .env are still loaded). Useful for isolated CI runs, reproduction, and third-party integrations.",
+    )
+    inherited(
+        chat_parser,
+        "--ignore-rules",
+        action="store_true",
+        default=SUPPRESS,
+        help="Skip auto-injection of AGENTS.md, SOUL.md, .cursorrules, memory, and preloaded skills. Combine with --ignore-user-config for a fully isolated run.",
+    )
+    inherited(
+        chat_parser,
+        "--safe-mode",
+        action="store_true",
+        default=SUPPRESS,
+        help="Troubleshooting mode: disable ALL customizations — user config, AGENTS.md/memory injection, plugins, and MCP servers (implies --ignore-user-config and --ignore-rules). Use to isolate whether a problem comes from your setup or from Clawksis itself.",
+    )
+    add(
+        "--source",
+        default=None,
+        help="Session source tag for filtering (default: cli). Use 'tool' for third-party integrations that should not appear in user session lists.",
+    )
+    inherited(
+        chat_parser,
+        "--tui",
+        action="store_true",
+        default=SUPPRESS,
+        help="Launch the modern TUI instead of the classic REPL",
+    )
+    inherited(
+        chat_parser,
+        "--native",
+        "--tui-native",
+        dest="tui_native",
+        action="store_true",
+        default=SUPPRESS,
+        help="Use native terminal scrollback and disable mouse tracking",
+    )
+    inherited(
+        chat_parser,
+        "--cli",
+        action="store_true",
+        default=SUPPRESS,
+        help="Force the classic prompt_toolkit REPL (overrides display.interface=tui)",
+    )
+    inherited(
+        chat_parser,
+        "--dev",
+        dest="tui_dev",
+        action="store_true",
+        default=SUPPRESS,
+        help="With --tui: run TypeScript sources via tsx (skip dist build)",
+    )
     return chat_parser
 
 
@@ -334,9 +668,11 @@ def _plugin_command_install_hint(prog: str, value: str):
         return None
     try:
         from plugins.memory import find_provider_dir
+
         if find_provider_dir(value) is not None:
             return None
         from clawk_cli.memory_provider_migration import catalog_install_hint
+
         return catalog_install_hint(value, category="memory")
     except Exception:
         return None
@@ -345,6 +681,7 @@ def _plugin_command_install_hint(prog: str, value: str):
 def _moved_command_hint(prog: str, value: str) -> str:
     """Where a command that left core went (``clawk auth spotify``, ``clawk mcp serve``, ...)."""
     from clawk_cli.left_core_migration import moved_command_hint
+
     return moved_command_hint(prog, value)
 
 
@@ -358,16 +695,23 @@ class ClawksisArgumentParser(argparse.ArgumentParser):
     """
 
     def _check_value(self, action, value):
-        if isinstance(action, argparse._SubParsersAction) and value not in action.choices:
+        if (
+            isinstance(action, argparse._SubParsersAction)
+            and value not in action.choices
+        ):
             # ``self.prog`` is "clawk" at the top level and "clawk gateway" for a nested group
             # (argparse hands add_parser() the parent's class), so the copy stays correct for both.
             lines = [f"{self.prog}: '{value}' is not a `{self.prog}` command."]
-            close = difflib.get_close_matches(str(value), list(action.choices), n=3, cutoff=0.6)
+            close = difflib.get_close_matches(
+                str(value), list(action.choices), n=3, cutoff=0.6
+            )
             install = _plugin_command_install_hint(self.prog, str(value))
             moved = "" if install else _moved_command_hint(self.prog, str(value))
             if install:
                 # A provider that left core (``clawk honcho``) registers its command only once installed.
-                lines.append(f"The '{value}' memory plugin is not installed. Install it with: {install}")
+                lines.append(
+                    f"The '{value}' memory plugin is not installed. Install it with: {install}"
+                )
             elif moved:
                 lines.append(moved)
             elif close:
@@ -385,10 +729,15 @@ def build_top_level_parser():
     ``subparsers.add_parser(...)``.
     """
     parser = ClawksisArgumentParser(
-        prog="clawk", description="Clawksis - AI assistant with tool-calling capabilities",
-        formatter_class=argparse.RawDescriptionHelpFormatter, epilog=_EPILOGUE)
+        prog="clawk",
+        description="Clawksis - AI assistant with tool-calling capabilities",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=_EPILOGUE,
+    )
     _add_top_level_flags(parser)
     # metavar keeps the usage line to ``clawk [...] <command>`` instead of the brace list of
     # every subcommand name; ``clawk --help`` still lists each command with its help row.
-    subparsers = parser.add_subparsers(dest="command", help="Command to run", metavar="<command>")
+    subparsers = parser.add_subparsers(
+        dest="command", help="Command to run", metavar="<command>"
+    )
     return parser, subparsers, _build_chat_parser(subparsers)

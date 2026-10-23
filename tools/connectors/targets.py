@@ -48,16 +48,26 @@ def normalize_targets(raw: Any) -> tuple[list[HostedTarget], list[str], Optional
         if isinstance(item, dict):
             unknown = sorted(set(item) - _TARGET_FIELDS)
             if unknown:
-                return [], [], (
-                    f"unknown target field(s) {', '.join(unknown)}: a target is "
-                    "{\"name\": \"<slug>\"} or {\"name\": \"<server>\", \"mcp\": true}. Transport, "
-                    "URLs and credentials come from the catalog manifest, never from the call."
+                return (
+                    [],
+                    [],
+                    (
+                        f"unknown target field(s) {', '.join(unknown)}: a target is "
+                        '{"name": "<slug>"} or {"name": "<server>", "mcp": true}. Transport, '
+                        "URLs and credentials come from the catalog manifest, never from the call."
+                    ),
                 )
             name = str(item.get("name") or "").strip().lower()
             is_mcp = bool(item.get("mcp", False))
             if is_mcp and ("alias" in item or "to" in item):
-                return [], [], "'alias' and 'to' name hosted connector accounts; an MCP target takes neither."
-            alias = str(item["alias"]).strip() if item.get("alias") is not None else None
+                return (
+                    [],
+                    [],
+                    "'alias' and 'to' name hosted connector accounts; an MCP target takes neither.",
+                )
+            alias = (
+                str(item["alias"]).strip() if item.get("alias") is not None else None
+            )
             to = str(item["to"]).strip() if item.get("to") is not None else None
         else:
             name, is_mcp = str(item or "").strip().lower(), False
@@ -73,12 +83,14 @@ def normalize_targets(raw: Any) -> tuple[list[HostedTarget], list[str], Optional
     return managed, mcp, None
 
 
-def validate_action(action: str, managed: list[HostedTarget], mcp: list[str]) -> Optional[str]:
+def validate_action(
+    action: str, managed: list[HostedTarget], mcp: list[str]
+) -> Optional[str]:
     if action not in ALL_ACTIONS:
         return (
             f"action must be one of {', '.join(ALL_ACTIONS)}. "
             f"{', '.join(MCP_ACTIONS)} apply to local MCP servers "
-            "(targets {\"name\": ..., \"mcp\": true}); the rest apply to managed connectors. "
+            '(targets {"name": ..., "mcp": true}); the rest apply to managed connectors. '
             "Disconnecting an account is done by the user in the Nous Portal dashboard, not "
             "through this tool."
         )
@@ -92,7 +104,7 @@ def validate_action(action: str, managed: list[HostedTarget], mcp: list[str]) ->
         if not mcp:
             return (
                 f"'{action}' requires 'connectors': the MCP server name(s), e.g. "
-                "[{\"name\": \"linear\", \"mcp\": true}]."
+                '[{"name": "linear", "mcp": true}].'
             )
     elif mcp:
         return (
@@ -106,11 +118,13 @@ def _validate_accounts(action: str, managed: list[HostedTarget]) -> Optional[str
     if action != "rename" and any(t.to for t in managed):
         return "'to' is the new name of an account and applies to action rename only."
     if action == "display" and any(t.alias for t in managed):
-        return "display takes connector slugs to suggest (e.g. [\"gmail\"]); accounts are named on connect."
+        return 'display takes connector slugs to suggest (e.g. ["gmail"]); accounts are named on connect.'
     if action == "rename":
         if len(managed) != 1 or not managed[0].alias or not managed[0].to:
-            return ("rename takes exactly one target {\"name\": \"<slug>\", \"alias\": \"<current name>\", "
-                    "\"to\": \"<new name>\"}. Use action status to list each connector's accounts.")
+            return (
+                'rename takes exactly one target {"name": "<slug>", "alias": "<current name>", '
+                '"to": "<new name>"}. Use action status to list each connector\'s accounts.'
+            )
         # The current name may be the vendor's label of an unnamed account, so only the new one is checked.
         return _bad_alias("to", managed[0].to)
     if any(t.alias for t in managed) and len(managed) > 1:
@@ -138,8 +152,11 @@ def hosted_names() -> Optional[set[str]]:
 
         if not connectors_available():
             return None
-        return {str(item.get("connector", "")).lower()
-                for item in ConnectorClient().list_connectors() if isinstance(item, dict)}
+        return {
+            str(item.get("connector", "")).lower()
+            for item in ConnectorClient().list_connectors()
+            if isinstance(item, dict)
+        }
     except Exception as exc:
         logger.debug("connector list for the routing check failed: %s", exc)
         return None
@@ -149,12 +166,12 @@ def misrouted_to_hosted_error(name: str) -> str:
     return (
         f"{name} is a local MCP server, not a hosted connector account. "
         f"Call manage_connections with action install and connectors "
-        f"[{{\"name\": \"{name}\", \"mcp\": true}}]."
+        f'[{{"name": "{name}", "mcp": true}}].'
     )
 
 
 def misrouted_to_mcp_error(action: str, name: str) -> str:
     return (
         f"{name} is a hosted connector account, not a local MCP server, so '{action}' "
-        f"does not apply. Call manage_connections with action connect and connectors [\"{name}\"]."
+        f'does not apply. Call manage_connections with action connect and connectors ["{name}"].'
     )

@@ -20,7 +20,9 @@ logger = logging.getLogger("tools.mcp_tool")
 _JSONRPC_UNSUPPORTED_PROTOCOL_VERSION = -32022
 
 
-def _jsonrpc_matches(exc: BaseException, codes: tuple, markers: tuple, code=None) -> bool:
+def _jsonrpc_matches(
+    exc: BaseException, codes: tuple, markers: tuple, code=None
+) -> bool:
     """Structural ``MCPError.error.code`` (or *code*) in *codes*, else any *marker* in ``str(exc).lower()``. Never
     ``isinstance`` on SDK exception types: they arrive wrapped in ExceptionGroups and drift across generations."""
     code = getattr(getattr(exc, "error", None), "code", None) or code
@@ -30,16 +32,21 @@ def _jsonrpc_matches(exc: BaseException, codes: tuple, markers: tuple, code=None
 def _handshake_rejected_as_modern(exc: BaseException) -> bool:
     """True when a failed ``initialize`` signals a stateless-only (2026-07-28) server."""
     return _jsonrpc_matches(
-        exc, (_JSONRPC_UNSUPPORTED_PROTOCOL_VERSION, _core._JSONRPC_METHOD_NOT_FOUND),
+        exc,
+        (_JSONRPC_UNSUPPORTED_PROTOCOL_VERSION, _core._JSONRPC_METHOD_NOT_FOUND),
         ("unsupported protocol version", str(_JSONRPC_UNSUPPORTED_PROTOCOL_VERSION)),
-        code=getattr(exc, "code", None)) or _is_method_not_found_error(exc)
+        code=getattr(exc, "code", None),
+    ) or _is_method_not_found_error(exc)
 
 
 def _handshake_answered_with_unsupported_version(exc: BaseException) -> bool:
     """True when ``initialize`` SUCCEEDED on the wire (HTTP 200, a valid InitializeResult) but the SDK
     refused the ``protocolVersion`` the server named — its ``RuntimeError("Unsupported protocol version
     from the server: ...")``. Distinct from a JSON-RPC -32022 rejection, where the server refused us."""
-    return "unsupported protocol version from the server" in str(_unwrap_exception_group(exc)).lower()
+    return (
+        "unsupported protocol version from the server"
+        in str(_unwrap_exception_group(exc)).lower()
+    )
 
 
 def _is_method_not_found_error(exc: BaseException) -> bool:
@@ -53,8 +60,15 @@ def _is_method_not_found_error(exc: BaseException) -> bool:
     case (#50028).
     """
     return _jsonrpc_matches(
-        exc, (_core._JSONRPC_METHOD_NOT_FOUND,),
-        (str(_core._JSONRPC_METHOD_NOT_FOUND), "method not found", "unknown method", "not found: ping"))
+        exc,
+        (_core._JSONRPC_METHOD_NOT_FOUND,),
+        (
+            str(_core._JSONRPC_METHOD_NOT_FOUND),
+            "method not found",
+            "unknown method",
+            "not found: ping",
+        ),
+    )
 
 
 class InvalidMcpUrlError(ValueError):
@@ -84,7 +98,10 @@ def _is_streamable_http_rejection(exc: BaseException) -> bool:
     these markers — so a slow or 401ing server is not retried on the wrong transport.
     """
     root = _unwrap_exception_group(exc)
-    if getattr(getattr(root, "response", None), "status_code", None) in _STREAMABLE_REJECT_STATUSES:
+    if (
+        getattr(getattr(root, "response", None), "status_code", None)
+        in _STREAMABLE_REJECT_STATUSES
+    ):
         return True
     code = getattr(getattr(root, "error", None), "code", None)
     return code == -32603 and "server returned an error response" in str(root).lower()
@@ -105,14 +122,29 @@ def _make_http_rejection_recorder(sink: dict):
         if response.status_code < 400:
             return
         body = ""
-        if response.headers.get("content-type", "").split(";")[0].strip().lower() != "text/event-stream":
+        if (
+            response.headers.get("content-type", "").split(";")[0].strip().lower()
+            != "text/event-stream"
+        ):
             try:
-                raw = await response.aread()  # buffered: the SDK's own aread() afterwards sees the same bytes
-                body = " ".join(raw[:_HTTP_REJECTION_BODY_CHARS * 4].decode("utf-8", "replace").split())
-            except Exception:  # the failure itself is still reported, just without the body
+                raw = (
+                    await response.aread()
+                )  # buffered: the SDK's own aread() afterwards sees the same bytes
+                body = " ".join(
+                    raw[: _HTTP_REJECTION_BODY_CHARS * 4]
+                    .decode("utf-8", "replace")
+                    .split()
+                )
+            except (
+                Exception
+            ):  # the failure itself is still reported, just without the body
                 body = ""
-        sink.update(status=response.status_code, method=response.request.method,
-                    url=str(response.request.url), body=body[:_HTTP_REJECTION_BODY_CHARS])
+        sink.update(
+            status=response.status_code,
+            method=response.request.method,
+            url=str(response.request.url),
+            body=body[:_HTTP_REJECTION_BODY_CHARS],
+        )
 
     return _record
 
@@ -123,8 +155,10 @@ def _describe_http_failure(exc: BaseException, rejection: dict) -> str:
     request URL and body head are appended so the message names what the server actually said."""
     root = _unwrap_exception_group(exc)
     text = str(root)
-    opaque = (getattr(getattr(root, "error", None), "code", None) == -32603
-              and "server returned an error response" in text.lower())
+    opaque = (
+        getattr(getattr(root, "error", None), "code", None) == -32603
+        and "server returned an error response" in text.lower()
+    )
     if not (opaque and rejection):
         return text
     detail = f"HTTP {rejection['status']} from {rejection['method']} {rejection['url']}"
@@ -143,7 +177,10 @@ def _unwrap_exception_group(exc: BaseException) -> BaseException:
             while isinstance(leaf, BaseExceptionGroup) and leaf.exceptions:
                 leaf = leaf.exceptions[0]
             raise leaf
-        exc = next((sub for sub in exc.exceptions if not _contains_only_cancellation(sub)), exc.exceptions[0])
+        exc = next(
+            (sub for sub in exc.exceptions if not _contains_only_cancellation(sub)),
+            exc.exceptions[0],
+        )
     return exc
 
 
@@ -179,19 +216,31 @@ def _classify_mcp_failure(exc: BaseException) -> str:
     NonMcpEndpointError, InvalidMcpUrlError, missing stdio command, native addon built for another
     Node) or ``'transient'`` (backoff retry)."""
     root = _unwrap_exception_group(exc)
-    permanent = (_is_auth_error(root)
-                 or isinstance(root, (NonMcpEndpointError, InvalidMcpUrlError, FileNotFoundError, NodeAbiMismatchError))
-                 or (isinstance(root, OSError) and getattr(root, "errno", None) == errno.ENOENT)
-                 # 401/403 HTTPStatusError that _is_auth_error's type-gate missed (auth types not importable here)
-                 or getattr(getattr(root, "response", None), "status_code", None) in (401, 403))
+    permanent = (
+        _is_auth_error(root)
+        or isinstance(
+            root,
+            (
+                NonMcpEndpointError,
+                InvalidMcpUrlError,
+                FileNotFoundError,
+                NodeAbiMismatchError,
+            ),
+        )
+        or (isinstance(root, OSError) and getattr(root, "errno", None) == errno.ENOENT)
+        # 401/403 HTTPStatusError that _is_auth_error's type-gate missed (auth types not importable here)
+        or getattr(getattr(root, "response", None), "status_code", None) in (401, 403)
+    )
     return "permanent" if permanent else "transient"
 
 
 def _validate_remote_mcp_url(server_name: str, url: Any) -> str:
     """The stripped URL if valid http(s); else InvalidMcpUrlError naming the server (non-string, other scheme —
     stdio servers use ``command`` — or empty host)."""
+
     def _bad(detail: str) -> InvalidMcpUrlError:
         return InvalidMcpUrlError(f"Invalid MCP URL for '{server_name}': {detail}")
+
     if not isinstance(url, str):
         raise _bad(f"expected a string, got {type(url).__name__}")
     stripped = url.strip()
@@ -202,10 +251,14 @@ def _validate_remote_mcp_url(server_name: str, url: Any) -> str:
     except Exception as exc:  # urlparse is very permissive — belt and braces
         raise _bad(f"{stripped!r} ({exc})") from exc
     if parsed.scheme.lower() not in {"http", "https"}:
-        raise _bad(f"scheme must be http or https, got {parsed.scheme!r} ({stripped!r})")
+        raise _bad(
+            f"scheme must be http or https, got {parsed.scheme!r} ({stripped!r})"
+        )
     if not parsed.netloc:
         raise _bad(f"missing host ({stripped!r})")
-    if not parsed.hostname:  # ``urlparse`` accepts ``http://:8080`` (empty host, explicit port)
+    if (
+        not parsed.hostname
+    ):  # ``urlparse`` accepts ``http://:8080`` (empty host, explicit port)
         raise _bad(f"missing hostname ({stripped!r})")
     return stripped
 
@@ -222,19 +275,33 @@ def _resolve_client_cert(server_name: str, config: dict):
 
     def _expand(path: Any, label: str) -> str:
         if not isinstance(path, str) or not path.strip():
-            raise ValueError(f"{prefix}{label} must be a non-empty string path (got {type(path).__name__})")
+            raise ValueError(
+                f"{prefix}{label} must be a non-empty string path (got {type(path).__name__})"
+            )
         expanded = os.path.expanduser(path.strip())
         if not os.path.isfile(expanded):
             raise FileNotFoundError(f"{prefix}{label} not found at {expanded!r}")
         return expanded
+
     if not isinstance(raw_cert, (list, tuple)):
         cert_path = _expand(raw_cert, "client_cert")
-        return (cert_path, _expand(raw_key, "client_key")) if raw_key is not None else cert_path  # combined PEM
+        return (
+            (cert_path, _expand(raw_key, "client_key"))
+            if raw_key is not None
+            else cert_path
+        )  # combined PEM
     if raw_key is not None:
-        raise ValueError(f"{prefix}specify either client_cert as a list [cert, key] OR client_cert + client_key, not both")
+        raise ValueError(
+            f"{prefix}specify either client_cert as a list [cert, key] OR client_cert + client_key, not both"
+        )
     if len(raw_cert) not in (2, 3):
-        raise ValueError(f"{prefix}client_cert list form must have 2 or 3 elements (got {len(raw_cert)})")
-    pair = (_expand(raw_cert[0], "client_cert[0]"), _expand(raw_cert[1], "client_cert[1]"))
+        raise ValueError(
+            f"{prefix}client_cert list form must have 2 or 3 elements (got {len(raw_cert)})"
+        )
+    pair = (
+        _expand(raw_cert[0], "client_cert[0]"),
+        _expand(raw_cert[1], "client_cert[1]"),
+    )
     if len(raw_cert) == 2:
         return pair
     if not isinstance(raw_cert[2], str):
@@ -251,15 +318,24 @@ def _resolve_identity_header(server_name: str, config: dict):
         return None
 
     def _ignore(detail: str, *args):
-        logger.warning("MCP server '%s': identity_header " + detail + " — ignoring", server_name, *args)
+        logger.warning(
+            "MCP server '%s': identity_header " + detail + " — ignoring",
+            server_name,
+            *args,
+        )
+
     if not isinstance(raw, dict):
-        return _ignore("must be a mapping with 'name' and 'value'/'value_from' keys (got %s)", type(raw).__name__)
+        return _ignore(
+            "must be a mapping with 'name' and 'value'/'value_from' keys (got %s)",
+            type(raw).__name__,
+        )
     name = raw.get("name")
     if not isinstance(name, str) or not name.strip():
         return _ignore("requires a non-empty 'name'")
     value_from = (raw.get("value_from") or "static").strip().lower()
     if value_from == "profile":
         from clawk_cli.profiles import get_active_profile_name
+
         return (name.strip(), get_active_profile_name())
     if value_from != "static":
         return _ignore("value_from must be 'static' or 'profile' (got %r)", value_from)
@@ -276,15 +352,24 @@ def _apply_identity_header(server_name: str, config: dict, headers: dict) -> dic
     if name is None:
         return headers
     if any(key.lower() == name.lower() for key in headers):
-        logger.debug("MCP server '%s': identity_header '%s' already set via explicit "
-                     "headers config — keeping the explicit value", server_name, name)
+        logger.debug(
+            "MCP server '%s': identity_header '%s' already set via explicit "
+            "headers config — keeping the explicit value",
+            server_name,
+            name,
+        )
     else:
         headers[name] = value
     return headers
 
 
-def _make_redirect_header_stripper(httpx_mod, original_url, *, strict: bool = False,
-                                   configured_header_names: set[str] | frozenset[str] = frozenset()):
+def _make_redirect_header_stripper(
+    httpx_mod,
+    original_url,
+    *,
+    strict: bool = False,
+    configured_header_names: set[str] | frozenset[str] = frozenset(),
+):
     """Client factory enforcing the redirect credential boundary: on a cross-origin redirect
     follow-up it strips ``Authorization``; with *strict* (Agent Plugins v1 ``strict_redirect_headers``)
     every configured header (lowercase names in *configured_header_names*) is stripped too — v1 forbids
@@ -338,7 +423,9 @@ _SSE_BOUNDARY_RE = re.compile(rb"(?:\r\n|\r(?!\n)|\n){2}")
 _SSE_BOUNDARY_CARRY = 3  # longest boundary ("\r\n\r\n") minus one byte
 
 
-def _make_mcp_body_cap_transport(httpx_mod, inner_transport, limit: int = _MCP_HTTP_MAX_BODY_BYTES):
+def _make_mcp_body_cap_transport(
+    httpx_mod, inner_transport, limit: int = _MCP_HTTP_MAX_BODY_BYTES
+):
     """Wrap ``inner_transport`` so every response body is size-capped. ``httpx_mod`` must be the SDK's
     own httpx module (``sdk_httpx()``): the transport is handed to that SDK's ``AsyncClient``."""
 
@@ -347,7 +434,9 @@ def _make_mcp_body_cap_transport(httpx_mod, inner_transport, limit: int = _MCP_H
             self._inner, self._is_sse, self._url = inner, is_sse, url
 
         def _reject(self, kind: str):
-            return httpx_mod.ReadError(f"MCP {kind} exceeds {limit} bytes (from {self._url})")
+            return httpx_mod.ReadError(
+                f"MCP {kind} exceeds {limit} bytes (from {self._url})"
+            )
 
         async def __aiter__(self):
             counted = 0
@@ -385,12 +474,18 @@ def _make_mcp_body_cap_transport(httpx_mod, inner_transport, limit: int = _MCP_H
         async def handle_async_request(self, request):
             response = await self._inner.handle_async_request(request)
             declared = response.headers.get("content-length")
-            with contextlib.suppress(ValueError):  # malformed header: the streamed cap still applies
+            with contextlib.suppress(
+                ValueError
+            ):  # malformed header: the streamed cap still applies
                 if declared is not None and int(declared) > limit:
                     await response.aclose()
-                    raise httpx_mod.ReadError(f"MCP HTTP response declares Content-Length {declared} > {limit} "
-                                              f"bytes cap (from {request.url})")
-            is_sse = "text/event-stream" in response.headers.get("content-type", "").lower()
+                    raise httpx_mod.ReadError(
+                        f"MCP HTTP response declares Content-Length {declared} > {limit} "
+                        f"bytes cap (from {request.url})"
+                    )
+            is_sse = (
+                "text/event-stream" in response.headers.get("content-type", "").lower()
+            )
             response.stream = _CappedStream(response.stream, is_sse, str(request.url))
             return response
 
@@ -410,7 +505,10 @@ def _exc_children(exc: BaseException) -> list[BaseException]:
     group raised inside an ``except`` block carries the caught error as ``__context__``, so the chain is never
     skipped."""
     nested = getattr(exc, "exceptions", None) or ()
-    return [*nested, *(c for c in (exc.__cause__, exc.__context__) if isinstance(c, BaseException))]
+    return [
+        *nested,
+        *(c for c in (exc.__cause__, exc.__context__) if isinstance(c, BaseException)),
+    ]
 
 
 def _iter_exception_nodes(exc: BaseException) -> list[BaseException]:
@@ -458,16 +556,20 @@ def _format_connect_error(exc: BaseException) -> str:
         return messages or [exc.__class__.__name__]
 
     abi = next((node for node in nodes if isinstance(node, NodeAbiMismatchError)), None)
-    if abi is not None:  # already the whole story, remedy included; the SDK's "Connection closed" adds nothing
+    if (
+        abi is not None
+    ):  # already the whole story, remedy included; the SDK's "Connection closed" adds nothing
         return _sanitize_error(str(abi))
     missing = _find_missing()
     if not missing:
         return _sanitize_error("; ".join(list(dict.fromkeys(_flatten_messages()))[:3]))
     message = f"missing executable '{missing}'"
     if os.path.basename(missing) in {"npx", "npm", "node"}:
-        message += (" (ensure Node.js is installed and PATH includes its bin directory, "
-                    "or set mcp_servers.<name>.command to an absolute path and include "
-                    "that directory in mcp_servers.<name>.env.PATH)")
+        message += (
+            " (ensure Node.js is installed and PATH includes its bin directory, "
+            "or set mcp_servers.<name>.command to an absolute path and include "
+            "that directory in mcp_servers.<name>.env.PATH)"
+        )
     return _sanitize_error(message)
 
 
@@ -490,13 +592,22 @@ def _get_auth_error_types() -> tuple:
     flavours — a 401 may come from the SDK's own stack (``httpx2`` on mcp >= 2.0) or Clawksis' pinned
     ``httpx``; the classes are unrelated and still need the 401 check in :func:`_is_auth_error`."""
     global _AUTH_ERROR_TYPES
-    if not (_AUTH_ERROR_TYPES and _AUTH_ERROR_TYPES[0]):  # retry while empty (SDK may import later)
+    if not (
+        _AUTH_ERROR_TYPES and _AUTH_ERROR_TYPES[0]
+    ):  # retry while empty (SDK may import later)
         sdk_mod = _core.sdk_httpx()
-        http_types = tuple(dict.fromkeys(
-            ([sdk_mod.HTTPStatusError] if sdk_mod is not None else []) + _optional_types("httpx", "HTTPStatusError")))
-        auth_types = (*_optional_types("mcp.client.auth", "OAuthFlowError", "OAuthTokenError"),
-                      *_optional_types("mcp.client.auth", "UnauthorizedError"),  # older SDKs
-                      *_optional_types("tools.mcp_oauth", "OAuthNonInteractiveError"), *http_types)
+        http_types = tuple(
+            dict.fromkeys(
+                ([sdk_mod.HTTPStatusError] if sdk_mod is not None else [])
+                + _optional_types("httpx", "HTTPStatusError")
+            )
+        )
+        auth_types = (
+            *_optional_types("mcp.client.auth", "OAuthFlowError", "OAuthTokenError"),
+            *_optional_types("mcp.client.auth", "UnauthorizedError"),  # older SDKs
+            *_optional_types("tools.mcp_oauth", "OAuthNonInteractiveError"),
+            *http_types,
+        )
         _AUTH_ERROR_TYPES = (auth_types, http_types)
     return _AUTH_ERROR_TYPES
 
@@ -506,16 +617,30 @@ def _is_auth_error(exc: BaseException) -> bool:
     auth_types, http_types = _get_auth_error_types()
     if not isinstance(exc, auth_types):
         return False
-    return getattr(exc.response, "status_code", None) == 401 if isinstance(exc, http_types) else True
+    return (
+        getattr(exc.response, "status_code", None) == 401
+        if isinstance(exc, http_types)
+        else True
+    )
 
 
 # Lower-cased substrings meaning the transport session expired / was GC'd (OAuth token still valid).
 # Substrings (lower-cased match) that indicate the MCP server rejected the request because its server-side
 # transport session expired / was garbage-collected. See #13383.
 _SESSION_EXPIRED_MARKERS: tuple = (
-    "invalid or expired session", "expired session", "session expired", "session not found",
-    "unknown session", "session terminated", "closedresourceerror", "closed resource",
-    "transport is closed", "connection closed", "broken pipe", "end of file")
+    "invalid or expired session",
+    "expired session",
+    "session expired",
+    "session not found",
+    "unknown session",
+    "session terminated",
+    "closedresourceerror",
+    "closed resource",
+    "transport is closed",
+    "connection closed",
+    "broken pipe",
+    "end of file",
+)
 
 
 def _is_session_expired_error(exc: BaseException) -> bool:
@@ -525,12 +650,20 @@ def _is_session_expired_error(exc: BaseException) -> bool:
     transport markers; the chain walk matters because SDK wrappers raise a generic RuntimeError *from* a
     message-less ClosedResourceError."""
     # AnyIO stream exceptions are often message-less, so type checks complement marker matching.
-    transport_error_types = tuple(_optional_types("anyio", "BrokenResourceError", "ClosedResourceError", "EndOfStream"))
+    transport_error_types = tuple(
+        _optional_types(
+            "anyio", "BrokenResourceError", "ClosedResourceError", "EndOfStream"
+        )
+    )
     found = False
     for current in _iter_exception_nodes(exc):
         if isinstance(current, InterruptedError):
             return False
         # Messages vary across SDK versions/servers: a narrow allow-list of stable substrings avoids false positives.
         msg = str(current).lower()
-        found = found or isinstance(current, transport_error_types) or any(m in msg for m in _SESSION_EXPIRED_MARKERS)
+        found = (
+            found
+            or isinstance(current, transport_error_types)
+            or any(m in msg for m in _SESSION_EXPIRED_MARKERS)
+        )
     return found

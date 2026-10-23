@@ -6,6 +6,7 @@ browser or ``urllib`` can parse. Covers the dashboard attach URL, the
 browser auto-open URL, the startup banner, and the shared host formatter
 (#67367).
 """
+
 import contextlib
 import types
 
@@ -72,7 +73,6 @@ def _stub_uvicorn(monkeypatch):
 
 
 class TestFormatUrlHost:
-
     def test_brackets_ipv6_literal_with_port_following(self):
         from clawk_cli.url_utils import format_url_host
 
@@ -98,7 +98,6 @@ class TestFormatUrlHost:
 
 
 class TestBrowserOpenUrl:
-
     def test_maybe_open_browser_brackets_ipv6_loopback(self, monkeypatch):
         """The browser auto-open URL needs brackets around an IPv6 authority."""
         import webbrowser
@@ -131,7 +130,6 @@ class TestBrowserOpenUrl:
 
 
 class TestAttachUrl:
-
     def test_attach_brackets_ipv6_host_in_browser_url(self, monkeypatch):
         """Named-profile attach to a running IPv6 dashboard must open a valid URL."""
         import webbrowser
@@ -139,11 +137,15 @@ class TestAttachUrl:
 
         opened = []
         monkeypatch.setattr(webbrowser, "open", lambda url: opened.append(url))
-        record = types.SimpleNamespace(host="::1", port=9119, pid=4242, role="dashboard")
+        record = types.SimpleNamespace(
+            host="::1", port=9119, pid=4242, role="dashboard"
+        )
         monkeypatch.setattr(main_dashboard, "_host_backend_attachment", lambda: record)
         monkeypatch.setattr(main_dashboard, "_is_desktop_owned_backend", lambda: False)
         monkeypatch.setattr(main_dashboard, "_explicit_endpoint_flags", lambda: set())
-        monkeypatch.setattr(hr, "probe_owner", lambda _r: {"servesSpa": True, "pid": 4242})
+        monkeypatch.setattr(
+            hr, "probe_owner", lambda _r: {"servesSpa": True, "pid": 4242}
+        )
         monkeypatch.setattr(
             "clawk_cli.profiles.get_active_profile_name", lambda: "worker_x"
         )

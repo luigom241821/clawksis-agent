@@ -16,7 +16,9 @@ from typing import Any
 def same_registration(left: Any, right: Any) -> bool:
     """Compare opaque registry snapshots using identity only (element-wise for tuples)."""
     if isinstance(left, tuple) and isinstance(right, tuple):
-        return len(left) == len(right) and all(same_registration(a, b) for a, b in zip(left, right))
+        return len(left) == len(right) and all(
+            same_registration(a, b) for a, b in zip(left, right)
+        )
     return left is right
 
 
@@ -50,13 +52,29 @@ class ReplacementCoordinator:
         with self._lock:
             yield
 
-    def acquire(self, slot: Hashable, *, current: Any, previous: Any, restore: Callable[[Any], bool],
-                finalize: Callable[[], None] | None = None) -> ReplacementLease:
+    def acquire(
+        self,
+        slot: Hashable,
+        *,
+        current: Any,
+        previous: Any,
+        restore: Callable[[Any], bool],
+        finalize: Callable[[], None] | None = None,
+    ) -> ReplacementLease:
         """Attach a new live generation to the matching active predecessor."""
         with self._lock:
             leases = self._active.setdefault(slot, [])
-            predecessor = next((c for c in reversed(leases) if c.active and same_registration(c.current, previous)), None)
-            lease = ReplacementLease(self, slot, current, previous, restore, finalize, predecessor)
+            predecessor = next(
+                (
+                    c
+                    for c in reversed(leases)
+                    if c.active and same_registration(c.current, previous)
+                ),
+                None,
+            )
+            lease = ReplacementLease(
+                self, slot, current, previous, restore, finalize, predecessor
+            )
             leases.append(lease)
             return lease
 
@@ -79,8 +97,15 @@ class ReplacementCoordinator:
                         # Restore the nearest still-live predecessor, else the last dead generation's previous.
                         replacement, predecessor = lease.previous, lease.predecessor
                         while predecessor is not None and not predecessor.active:
-                            replacement, predecessor = predecessor.previous, predecessor.predecessor
-                        lease.restore(predecessor.current if predecessor is not None else replacement)
+                            replacement, predecessor = (
+                                predecessor.previous,
+                                predecessor.predecessor,
+                            )
+                        lease.restore(
+                            predecessor.current
+                            if predecessor is not None
+                            else replacement
+                        )
                 finally:
                     if lease.finalize is not None:
                         lease.finalize()

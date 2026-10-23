@@ -1,4 +1,5 @@
 """HTTP admission regression: board bursts must not consume every worker."""
+
 import asyncio
 import importlib.util
 import os
@@ -32,10 +33,15 @@ async def test_board_burst_preserves_http_worker_capacity(tmp_path, monkeypatch)
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     kb.init_db()
-    plugin_path = Path(os.environ.get(
-        "CLAWK_TEST_KANBAN_PLUGIN",
-        str(Path(__file__).resolve().parents[2] / "plugins/kanban/dashboard/plugin_api.py"),
-    ))
+    plugin_path = Path(
+        os.environ.get(
+            "CLAWK_TEST_KANBAN_PLUGIN",
+            str(
+                Path(__file__).resolve().parents[2]
+                / "plugins/kanban/dashboard/plugin_api.py"
+            ),
+        )
+    )
     spec = importlib.util.spec_from_file_location("kanban_admission_test", plugin_path)
     plugin = importlib.util.module_from_spec(spec)
     monkeypatch.setitem(sys.modules, spec.name, plugin)
@@ -67,8 +73,12 @@ async def test_board_burst_preserves_http_worker_capacity(tmp_path, monkeypatch)
     limiter.total_tokens = 2
     requests = []
     try:
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-            requests = [asyncio.create_task(client.get(BOARD_PATH)) for _ in range(BURST_SIZE)]
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            requests = [
+                asyncio.create_task(client.get(BOARD_PATH)) for _ in range(BURST_SIZE)
+            ]
             for _ in range(200):
                 if entered.is_set():
                     break

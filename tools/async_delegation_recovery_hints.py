@@ -22,13 +22,17 @@ TAIL_CHARS = 2_000
 _GIT_TIMEOUT_S = 5
 
 
-def transcript_tail(path: str, *, lines: int = TAIL_LINES, chars: int = TAIL_CHARS) -> Optional[str]:
+def transcript_tail(
+    path: str, *, lines: int = TAIL_LINES, chars: int = TAIL_CHARS
+) -> Optional[str]:
     """Last ``lines`` lines (at most ``chars`` characters) of a live transcript; None when unreadable."""
     try:
         with open(path, "rb") as fh:
             fh.seek(0, os.SEEK_END)
             size = fh.tell()
-            fh.seek(max(0, size - chars * 4))  # a few bytes per char of headroom; bounded read
+            fh.seek(
+                max(0, size - chars * 4)
+            )  # a few bytes per char of headroom; bounded read
             raw = fh.read().decode("utf-8", errors="replace")
     except OSError:
         return None
@@ -39,7 +43,11 @@ def transcript_tail(path: str, *, lines: int = TAIL_LINES, chars: int = TAIL_CHA
 
 
 def transcript_tails(paths: dict[str, str]) -> dict[str, str]:
-    return {index: tail for index, path in (paths or {}).items() if (tail := transcript_tail(path))}
+    return {
+        index: tail
+        for index, path in (paths or {}).items()
+        if (tail := transcript_tail(path))
+    }
 
 
 def git_state_hint(cwd: Optional[str]) -> Optional[str]:
@@ -55,9 +63,17 @@ def git_state_hint(cwd: Optional[str]) -> Optional[str]:
 
     def run(*args: str) -> Optional[str]:
         try:
-            out = subprocess.run(["git", "-C", cwd, *harden_git_argv(args)], capture_output=True,
-                                 text=True, encoding="utf-8", errors="replace",
-                                 stdin=subprocess.DEVNULL, timeout=_GIT_TIMEOUT_S, env=env, check=False)
+            out = subprocess.run(
+                ["git", "-C", cwd, *harden_git_argv(args)],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                stdin=subprocess.DEVNULL,
+                timeout=_GIT_TIMEOUT_S,
+                env=env,
+                check=False,
+            )
         except (OSError, subprocess.SubprocessError):
             return None
         return out.stdout if out.returncode == 0 else None

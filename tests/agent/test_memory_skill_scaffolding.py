@@ -72,7 +72,9 @@ class _RecordingProvider(MemoryProvider):
     def queue_prefetch(self, query, *, session_id: str = "") -> None:
         self.queued.append(query)
 
-    def sync_turn(self, user_content, assistant_content, *, session_id: str = "", messages=None) -> None:
+    def sync_turn(
+        self, user_content, assistant_content, *, session_id: str = "", messages=None
+    ) -> None:
         self.synced.append(user_content)
 
     def get_tool_schemas(self):
@@ -92,8 +94,6 @@ class TestExtractUserInstruction:
         assert extract_user_instruction_from_skill_message(123) is None
         assert extract_user_instruction_from_skill_message([{"text": "hi"}]) is None
 
-
-
     def test_bundle_with_instruction(self):
         assert (
             extract_user_instruction_from_skill_message(_BUNDLE_TURN)
@@ -101,10 +101,7 @@ class TestExtractUserInstruction:
         )
 
 
-
-
 class TestMemoryManagerStripsScaffolding:
-
     def test_prefetch_all_skips_bare_skill(self):
         mgr, provider = _manager_with_recorder()
         result = mgr.prefetch_all(_BARE_SKILL_TURN)
@@ -117,11 +114,8 @@ class TestMemoryManagerStripsScaffolding:
         mgr.flush_pending(timeout=5.0)
         assert provider.queued == ["fix the failing retrieval test"]
 
-
-
     def test_sync_all_skips_bare_skill(self):
         mgr, provider = _manager_with_recorder()
         mgr.sync_all(_BARE_SKILL_TURN, "Done.")
         mgr.flush_pending(timeout=5.0)
         assert provider.synced == []
-

@@ -37,6 +37,7 @@ def _assert_unchanged(command, system="Darwin"):
 
 # --- Darwin: file-opening `open` invocations ARE transformed ---------------
 
+
 def test_bare_open_file_is_transformed_on_darwin():
     _assert_transformed("open /path/to/file.pdf")
 
@@ -53,6 +54,7 @@ def test_open_dash_a_app_with_spaces_is_transformed_on_darwin():
 
 # --- Non-Darwin: pure no-op ------------------------------------------------
 
+
 def test_bare_open_file_unchanged_on_linux():
     _assert_unchanged("open /path/to/file.pdf", system="Linux")
 
@@ -62,6 +64,7 @@ def test_open_dash_a_file_unchanged_on_linux():
 
 
 # --- Darwin: non-file-opening `open` invocations are NOT transformed -------
+
 
 def test_open_with_no_args_not_transformed():
     _assert_unchanged("open")
@@ -113,6 +116,7 @@ def test_open_dash_a_with_no_file_not_transformed():
 
 # --- Darwin: non-`open` commands are NOT transformed ------------------------
 
+
 def test_echo_not_transformed():
     _assert_unchanged("echo hello")
 
@@ -135,6 +139,7 @@ def test_none_input_returns_none():
 
 # --- Outcome reporting: distinct open-but-not-front outcome ----------------
 
+
 def test_ladder_reports_distinct_outcomes_from_final_state():
     transformed = _assert_transformed("open -a Preview /path/to/file.pdf")
     # Success and open-but-not-front are two distinct, observable outcomes
@@ -144,6 +149,7 @@ def test_ladder_reports_distinct_outcomes_from_final_state():
     assert "opened but another application holds focus" in transformed
     # The not-front branch names whichever application actually holds focus.
     assert "name of first application process whose frontmost is true" in transformed
+
 
 def test_ladder_is_valid_shell_syntax_for_quoting_edge_cases():
     import subprocess
@@ -157,7 +163,9 @@ def test_ladder_is_valid_shell_syntax_for_quoting_edge_cases():
         transformed = macos_open._transform_macos_open_command(command, system="Darwin")
         assert transformed is not None and transformed != command, command
         result = subprocess.run(
-            ["bash", "-n", "-c", transformed], capture_output=True, text=True,
+            ["bash", "-n", "-c", transformed],
+            capture_output=True,
+            text=True,
             check=False,
         )
         assert result.returncode == 0, (command, result.stderr)

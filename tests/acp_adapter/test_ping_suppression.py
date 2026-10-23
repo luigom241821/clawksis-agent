@@ -52,20 +52,12 @@ def test_filter_suppresses_benign_probe(method: str) -> None:
     assert f.filter(record) is False
 
 
-
-
-
-
 def test_filter_allows_different_message_even_for_ping() -> None:
     """Only 'Background task failed' is muted — other messages pass through."""
     f = _BenignProbeMethodFilter()
     exc = _bake_tb(RequestError.method_not_found("ping"))
     record = _make_record("Some other context", exc)
     assert f.filter(record) is True
-
-
-
-
 
 
 # -- End-to-end: drive a real JSON-RPC `ping` through acp.run_agent ---------
@@ -77,7 +69,9 @@ class _FakeAgent:
     async def initialize(self, **kwargs):
         from acp.schema import AgentCapabilities, InitializeResponse
 
-        return InitializeResponse(protocol_version=1, agent_capabilities=AgentCapabilities())
+        return InitializeResponse(
+            protocol_version=1, agent_capabilities=AgentCapabilities()
+        )
 
     async def new_session(self, cwd, mcp_servers=None, **kwargs):
         from acp.schema import NewSessionResponse

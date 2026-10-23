@@ -1,9 +1,11 @@
 """Unit tests for clawk_cli.managed_scope (resolver + loaders + key helpers)."""
+
 import textwrap
 
 # ── Directory resolver ───────────────────────────────────────────────────────
 
 # ── Loaders + key helpers ────────────────────────────────────────────────────
+
 
 def _write_managed(tmp_path, monkeypatch, *, config=None, env=None):
     from clawk_cli import managed_scope
@@ -17,6 +19,7 @@ def _write_managed(tmp_path, monkeypatch, *, config=None, env=None):
     monkeypatch.setenv("CLAWK_MANAGED_DIR", str(managed))
     managed_scope.invalidate_managed_cache()
     return managed
+
 
 def test_load_managed_env_and_is_env_managed(tmp_path, monkeypatch):
     from clawk_cli import managed_scope

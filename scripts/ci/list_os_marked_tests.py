@@ -80,7 +80,8 @@ def spec_hosts(spec: str) -> frozenset[str]:
 def file_gates_on(text: str, platform: str) -> bool:
     """True when some spec covers *platform* — or is negated (see module docstring)."""
     return any(
-        platform in spec_hosts(spec) or spec.startswith("not ") for spec in gated_specs(text)
+        platform in spec_hosts(spec) or spec.startswith("not ")
+        for spec in gated_specs(text)
     )
 
 

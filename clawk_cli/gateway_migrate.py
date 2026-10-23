@@ -45,6 +45,7 @@ _SERVED_WAIT_SECONDS = 90.0
 @dataclass
 class ProfileGateway:
     """One profile's standalone gateway footprint: live PID and/or installed service."""
+
     name: str
     home: Path
     pid: Optional[int] = None
@@ -52,8 +53,12 @@ class ProfileGateway:
     # system unit at once; recording only the first found left the other live beside the multiplexer.
     services: list[tuple[str, bool]] = field(default_factory=list)
     run_as_user: Optional[str] = None  # User= recorded by a system-scope systemd unit
-    uid: Optional[int] = None  # owner of the gateway process/unit; None = unknown (never "different")
-    runtime_home: Optional[Path] = None  # CLAWK_HOME the installed unit pins, when it differs from ``home``
+    uid: Optional[int] = (
+        None  # owner of the gateway process/unit; None = unknown (never "different")
+    )
+    runtime_home: Optional[Path] = (
+        None  # CLAWK_HOME the installed unit pins, when it differs from ``home``
+    )
 
     @property
     def is_default(self) -> bool:
@@ -73,15 +78,24 @@ class ProfileGateway:
         return ("systemd", True) in self.services
 
     def service_label(self) -> str:
-        return " + ".join(_service_label(s) for s in self.services) if self.services else "none"
+        return (
+            " + ".join(_service_label(s) for s in self.services)
+            if self.services
+            else "none"
+        )
 
     def to_dict(self) -> dict:
         return {
-            "profile": self.name, "home": str(self.home), "pid": self.pid,
+            "profile": self.name,
+            "home": str(self.home),
+            "pid": self.pid,
             "service": None if self.service is None else _service_dict(self.service),
             "services": [_service_dict(s) for s in self.services],
             "run_as_user": self.run_as_user,
-            "uid": self.uid, "runtime_home": None if self.runtime_home is None else str(self.runtime_home),
+            "uid": self.uid,
+            "runtime_home": None
+            if self.runtime_home is None
+            else str(self.runtime_home),
         }
 
 
@@ -109,7 +123,9 @@ class MigrationPlan:
     default_home: Path
     profiles: list[ProfileGateway]
     multiplex_flag_on: bool
-    live_served: Optional[list[str]]  # served_profiles the live default gateway recorded, if any
+    live_served: Optional[
+        list[str]
+    ]  # served_profiles the live default gateway recorded, if any
     # The migration manifest on disk, when one exists. Its PRESENCE is the "this host is already
     # mid-migration, with units removed" signal that turns every later gate from a refusal into a
     # finding (see :func:`apply_migration`): a resume compensates a destructive state, it never
@@ -144,7 +160,9 @@ class MigrationPlan:
         """
         if self.interrupted or self.standalone_secondaries:
             return False
-        return self.multiplex_flag_on or bool(self.live_served and len(self.live_served) > 1)
+        return self.multiplex_flag_on or bool(
+            self.live_served and len(self.live_served) > 1
+        )
 
     @property
     def standalone_secondaries(self) -> list[ProfileGateway]:
@@ -153,7 +171,12 @@ class MigrationPlan:
     @property
     def expected_served_names(self) -> set[str]:
         from clawk_cli.profiles import profile_is_parked
-        return {p.name for p in self.profiles if p.is_default or not profile_is_parked(p.home)}
+
+        return {
+            p.name
+            for p in self.profiles
+            if p.is_default or not profile_is_parked(p.home)
+        }
 
     @property
     def blocked(self) -> bool:
@@ -164,7 +187,9 @@ class MigrationPlan:
         secondaries used (so a systemd-managed fleet stays systemd-managed)."""
         if self.default.service is not None:
             return self.default.service
-        return next((p.service for p in self.secondaries if p.service is not None), None)
+        return next(
+            (p.service for p in self.secondaries if p.service is not None), None
+        )
 
     def target_run_as_user(self) -> Optional[str]:
         """Preserve the system unit identity that the default unit replaces."""
@@ -192,8 +217,10 @@ class MigrationPlan:
         This is the AUTO-migration (``clawk update``) bar; the explicit command also proceeds with
         zero standalone secondaries (see :func:`cmd_migrate`)."""
         return (
-            len(self.profiles) >= 2 and bool(self.standalone_secondaries)
-            and not self.already_multiplexed and not self.blocked
+            len(self.profiles) >= 2
+            and bool(self.standalone_secondaries)
+            and not self.already_multiplexed
+            and not self.blocked
         )
 
 
@@ -212,10 +239,14 @@ def _home_env(home: Path) -> Iterator[None]:
     checks read ``home`` as the launch profile and handed the launch profile's credentials to the
     default gateway."""
     from clawk_constants import (
-        get_routing_process_clawk_home, pin_process_clawk_home, process_clawk_home_is_pinned,
-        reset_clawk_home_override, set_clawk_home_override,
+        get_routing_process_clawk_home,
+        pin_process_clawk_home,
+        process_clawk_home_is_pinned,
+        reset_clawk_home_override,
+        set_clawk_home_override,
     )
     import clawk_constants
+
     previous = os.environ.get("CLAWK_HOME")
     pinned_here = not process_clawk_home_is_pinned()
     if pinned_here:
@@ -238,11 +269,13 @@ def _home_env(home: Path) -> Iterator[None]:
 
 def _default_home() -> Path:
     from clawk_constants import get_default_clawk_root
+
     return get_default_clawk_root()
 
 
 def _profile_homes() -> list[tuple[str, Path]]:
     from clawk_cli.profiles import profiles_to_serve
+
     return list(profiles_to_serve(multiplex=True, include_parked=True))
 
 
@@ -256,6 +289,7 @@ def _live_gateway_pid(home: Path) -> Optional[int]:
     question this command acts on.
     """
     from gateway.status import live_gateway_pid_for_home
+
     with contextlib.suppress(Exception):
         return live_gateway_pid_for_home(home)
     return None
@@ -265,6 +299,7 @@ def _host_gateway_owner():
     """The ONE live host gateway (``gateway.host_attach.HostGateway``) or None. Never raises."""
     with contextlib.suppress(Exception):
         from gateway.host_attach import host_gateway
+
         return host_gateway()
     return None
 
@@ -284,12 +319,16 @@ def _own_gateway_pid(home: Path, owner) -> Optional[int]:
         return pid
     with contextlib.suppress(Exception):
         from gateway.status import _same_clawk_home
+
         return pid if _same_clawk_home(Path(owner.home), Path(home)) else None
     return None
 
 
-def _gateway_identity(home: Path, pid: Optional[int], services: list[tuple[str, bool]]) -> tuple[Optional[int], Path]:
+def _gateway_identity(
+    home: Path, pid: Optional[int], services: list[tuple[str, bool]]
+) -> tuple[Optional[int], Path]:
     from clawk_cli.gateway_migrate_guards import gateway_identity
+
     return gateway_identity(home, pid, services)
 
 
@@ -300,11 +339,13 @@ def _installed_services(home: Path) -> list[tuple[str, bool]]:
     a named profile's slot only while it is UP — a registered-down slot is what the container's
     boot leaves behind for every named profile and is not a gateway."""
     from clawk_cli import gateway as gw
+
     found: list[tuple[str, bool]] = []
     if gw._running_under_s6():
         from clawk_cli.gateway_multiplex_s6 import named_slot_name, slot_is_up
         from clawk_cli.service_manager import S6ServiceManager
         from clawk_constants import profile_name_for_home
+
         name = profile_name_for_home(home) or "default"
         slot_dir = S6ServiceManager().scandir / named_slot_name(name)
         if slot_dir.is_dir() and (name == "default" or slot_is_up(name)):
@@ -312,7 +353,11 @@ def _installed_services(home: Path) -> list[tuple[str, bool]]:
         return found
     with _home_env(home):
         if gw.supports_systemd_services():
-            found.extend(("systemd", system) for system in (False, True) if gw.get_systemd_unit_path(system=system).exists())
+            found.extend(
+                ("systemd", system)
+                for system in (False, True)
+                if gw.get_systemd_unit_path(system=system).exists()
+            )
         if gw.is_macos() and gw.get_launchd_plist_path().exists():
             found.append(("launchd", False))
         if gw.is_windows() and _windows_task_installed():
@@ -329,25 +374,32 @@ def _windows_task_installed() -> bool:
     would leave the fallback launching a second gateway at the next logon.
     """
     from clawk_cli import gateway_windows as gww
+
     with contextlib.suppress(Exception):
         return bool(gww.is_task_registered() or gww.is_startup_entry_installed())
     return False
 
 
-def _systemd_service_user(home: Path, services: list[tuple[str, bool]]) -> Optional[str]:
+def _systemd_service_user(
+    home: Path, services: list[tuple[str, bool]]
+) -> Optional[str]:
     """Read ``User=`` before migration removes a system-scope unit."""
     if ("systemd", True) not in services:
         return None
     from clawk_cli import gateway as gw
+
     with _home_env(home):
         return gw._read_systemd_user_from_unit(gw.get_systemd_unit_path(system=True))
 
 
-def _service_op(kind: str, system: bool, verb: str, home: Path, *, run_as_user: Optional[str] = None) -> None:
+def _service_op(
+    kind: str, system: bool, verb: str, home: Path, *, run_as_user: Optional[str] = None
+) -> None:
     """``stop`` / ``uninstall`` / ``start`` / ``restart`` / ``install`` / ``enable`` on ``home``'s service."""
     if kind == "s6":
         return _s6_slot_op(verb, home)
     from clawk_cli import gateway as gw
+
     with _home_env(home):
         if verb == "install":
             if kind == "launchd":
@@ -356,9 +408,12 @@ def _service_op(kind: str, system: bool, verb: str, home: Path, *, run_as_user: 
                 # Non-interactive: the migration already asked; prompting here would hang a
                 # supervised/`--yes` run on a console that has no operator.
                 from clawk_cli import gateway_windows as gww
+
                 gww.install(start_now=True, start_on_login=True)
             else:
-                gw.systemd_install(system=system, run_as_user=run_as_user, non_interactive=True)
+                gw.systemd_install(
+                    system=system, run_as_user=run_as_user, non_interactive=True
+                )
             return
         if verb == "enable":
             # Boot enablement only: the migration's uninstall of every secondary destroys their
@@ -369,16 +424,24 @@ def _service_op(kind: str, system: bool, verb: str, home: Path, *, run_as_user: 
             # migration never removes the survivor's.
             if kind != "systemd":
                 return
-            enabled = gw._run_systemctl(["enable", gw.get_service_name()], system=system, check=False, timeout=30)
+            enabled = gw._run_systemctl(
+                ["enable", gw.get_service_name()],
+                system=system,
+                check=False,
+                timeout=30,
+            )
             if getattr(enabled, "returncode", 0) != 0:
-                raise RuntimeError(f"could not enable {gw.get_service_name()} at boot (systemctl enable "
-                                   f"exited {enabled.returncode}); a reboot would come up with no gateway")
+                raise RuntimeError(
+                    f"could not enable {gw.get_service_name()} at boot (systemctl enable "
+                    f"exited {enabled.returncode}); a reboot would come up with no gateway"
+                )
             return
         gw._service_call(kind, verb, system)
 
 
 def _stop_gateway_process(home: Path) -> None:
     from clawk_cli.profiles import _stop_gateway_process
+
     _stop_gateway_process(home)
 
 
@@ -388,6 +451,7 @@ def _s6_slot_op(verb: str, home: Path) -> None:
     the shape the container's boot produces. The root slot is (re)started so it re-reads its config."""
     from clawk_cli.gateway_multiplex_s6 import bring_root_slot_up, park_named_slot
     from clawk_constants import profile_name_for_home
+
     name = profile_name_for_home(home) or "default"
     if name == "default":
         if verb in ("start", "restart"):
@@ -399,6 +463,7 @@ def _s6_slot_op(verb: str, home: Path) -> None:
 
 def _spawn_detached_gateway(home: Path) -> bool:
     from clawk_cli import gateway as gw
+
     with _home_env(home):
         return gw._spawn_detached_gateway()
 
@@ -408,13 +473,19 @@ def _read_multiplex_flag(default_home: Path) -> bool:
     boot and refused while a secondary runs its own gateway — exactly the fleet this command folds —
     so the plan reads it as "not yet multiplexed" and the migration proceeds."""
     from clawk_cli.gateway_multiplex_mode import explicit_multiplex_flag
+
     return explicit_multiplex_flag(default_home) is True
 
 
 def _write_multiplex_flag(default_home: Path, value: bool) -> None:
     """Set ``gateway.multiplex_profiles`` in the DEFAULT profile's config.yaml through the config API
     (same read-guard + nested-set + atomic write ``clawk config set`` uses; no raw YAML edits)."""
-    from clawk_cli.config import _set_nested, _write_user_config, require_readable_config_before_write
+    from clawk_cli.config import (
+        _set_nested,
+        _write_user_config,
+        require_readable_config_before_write,
+    )
+
     cfg_path = default_home / "config.yaml"
     user_config = require_readable_config_before_write(cfg_path)
     # A stale top-level alias would shadow the nested key the docs describe.
@@ -441,7 +512,12 @@ def _profile_gateway_config(home: Path):
     from gateway.run import _profile_runtime_scope
     from clawk_cli.plugins_discovery import suppress_plugin_discovery
     from clawk_cli.profiles import profile_is_parked
-    scope = suppress_plugin_discovery() if profile_is_parked(home) else contextlib.nullcontext()
+
+    scope = (
+        suppress_plugin_discovery()
+        if profile_is_parked(home)
+        else contextlib.nullcontext()
+    )
     with _profile_runtime_scope(home), scope:
         return load_gateway_config()
 
@@ -449,6 +525,7 @@ def _profile_gateway_config(home: Path):
 @contextlib.contextmanager
 def _multiplex_read_mode() -> Iterator[None]:
     from agent.secret_scope import is_multiplex_active, set_multiplex_active
+
     previous = is_multiplex_active()
     set_multiplex_active(True)
     try:
@@ -462,20 +539,27 @@ def _credential_probe(platform_config) -> SimpleNamespace:
     adapter attributes): token/api_key plus the id-style credentials adapters expose from ``extra``."""
     extra = getattr(platform_config, "extra", None) or {}
     return SimpleNamespace(
-        token=getattr(platform_config, "token", None) or getattr(platform_config, "api_key", None),
-        _app_id=extra.get("app_id"), _client_id=extra.get("client_id"), _bot_id=extra.get("bot_id"),
-        _project_secret=extra.get("project_secret"), config=platform_config,
+        token=getattr(platform_config, "token", None)
+        or getattr(platform_config, "api_key", None),
+        _app_id=extra.get("app_id"),
+        _client_id=extra.get("client_id"),
+        _bot_id=extra.get("bot_id"),
+        _project_secret=extra.get("project_secret"),
+        config=platform_config,
     )
 
 
 def _credential_claims(config) -> dict[tuple, str]:
     """``(platform, fingerprint)`` for every enabled platform with a discoverable credential."""
     from gateway.run import GatewayRunner
+
     claims: dict[tuple, str] = {}
     for platform, platform_config in config.platforms.items():
         if not platform_config.enabled:
             continue
-        fp = GatewayRunner._adapter_credential_fingerprint(_credential_probe(platform_config))
+        fp = GatewayRunner._adapter_credential_fingerprint(
+            _credential_probe(platform_config)
+        )
         if fp is not None:
             claims[(platform.value, fp)] = platform.value
     return claims
@@ -485,7 +569,10 @@ def _credential_key_names(platform_value: str) -> str:
     """Env key NAMES (never values) that make ``platform_value`` connect as a bot, e.g.
     ``TELEGRAM_BOT_TOKEN``; the platform id when no key is registered (config.yaml-only token)."""
     from clawk_cli.profile_channels import credential_env_keys
-    names = sorted(key for key, pid in credential_env_keys().items() if pid == platform_value)
+
+    names = sorted(
+        key for key, pid in credential_env_keys().items() if pid == platform_value
+    )
     return "/".join(names) or f"the {platform_value} token"
 
 
@@ -495,7 +582,10 @@ def duplicate_credential_lines(configs: list[tuple[str, object]]) -> list[str]:
     name the same duplicates the same way: profile names + key names only, never a value or hash."""
     owners: dict[tuple, str] = {}
     lines: list[str] = []
-    for name, cfg in configs:  # default first: it wins the claim, like at multiplexer startup
+    for (
+        name,
+        cfg,
+    ) in configs:  # default first: it wins the claim, like at multiplexer startup
         for claim, platform_value in _credential_claims(cfg).items():
             owner = owners.setdefault(claim, name)
             if owner == name:
@@ -524,11 +614,16 @@ def duplicate_credential_findings() -> list[str]:
     return duplicate_credential_lines(configs)
 
 
-def _check_duplicate_credentials(plan: MigrationPlan, configs: dict[str, object]) -> None:
+def _check_duplicate_credentials(
+    plan: MigrationPlan, configs: dict[str, object]
+) -> None:
     """BLOCKER: the same bot credential configured on two profiles — the multiplexer would park
     the duplicate adapter, so one profile's bot would go silent after migration."""
-    plan.blockers.extend(duplicate_credential_lines(
-        [(p.name, configs[p.name]) for p in plan.profiles if p.name in configs]))
+    plan.blockers.extend(
+        duplicate_credential_lines(
+            [(p.name, configs[p.name]) for p in plan.profiles if p.name in configs]
+        )
+    )
 
 
 def platform_serves_profile_prefix(platform_value: str) -> bool:
@@ -538,12 +633,16 @@ def platform_serves_profile_prefix(platform_value: str) -> bool:
     from gateway.platforms.base import BasePlatformAdapter
 
     def _declares(cls) -> bool:
-        return isinstance(cls, type) and issubclass(cls, BasePlatformAdapter) and bool(
-            getattr(cls, "serves_profile_prefix", False))
+        return (
+            isinstance(cls, type)
+            and issubclass(cls, BasePlatformAdapter)
+            and bool(getattr(cls, "serves_profile_prefix", False))
+        )
 
     with contextlib.suppress(Exception):
         from gateway.config import Platform
         from gateway.run import _BUILTIN_ADAPTERS, _builtin_adapter_import
+
         spec = _BUILTIN_ADAPTERS.get(Platform(platform_value))
         if spec is not None:
             adapter_cls, _ok = _builtin_adapter_import(spec[0], spec[1], spec[2])
@@ -552,8 +651,10 @@ def platform_serves_profile_prefix(platform_value: str) -> bool:
         # Plugin-shipped adapters (sms, line, teams, feishu, wecom, ...) only exist in the registry
         # after discovery; a bare CLI process has not run it yet.
         from clawk_cli.plugins import discover_plugins
+
         discover_plugins()  # idempotent
         from gateway.platform_registry import platform_registry
+
         entry = platform_registry.get(platform_value)
         if entry is not None:
             factory = entry.adapter_factory
@@ -561,6 +662,7 @@ def platform_serves_profile_prefix(platform_value: str) -> bool:
                 return True
             # Lambda factories: the adapter class lives in the factory's module.
             import importlib
+
             module = importlib.import_module(factory.__module__)
             return any(_declares(getattr(module, name)) for name in dir(module))
     return False
@@ -568,30 +670,41 @@ def platform_serves_profile_prefix(platform_value: str) -> bool:
 
 def _listener_url(default_cfg, platform_value: str, profile: str) -> str:
     from gateway.config import Platform
+
     extra = {}
     with contextlib.suppress(Exception):
-        extra = (default_cfg.platforms.get(Platform(platform_value)) or SimpleNamespace(extra={})).extra or {}
+        extra = (
+            default_cfg.platforms.get(Platform(platform_value))
+            or SimpleNamespace(extra={})
+        ).extra or {}
     defaults = {"api_server": ("127.0.0.1", 8642), "webhook": ("0.0.0.0", 8644)}
     host, port = defaults.get(platform_value, ("<host>", "<port>"))
     host = extra.get("host") or host
     port = extra.get("port") or port
-    tail = {"api_server": "/v1/...", "webhook": "/webhooks/<route>"}.get(platform_value, "/...")
+    tail = {"api_server": "/v1/...", "webhook": "/webhooks/<route>"}.get(
+        platform_value, "/..."
+    )
     from clawk_cli.url_utils import format_url_host
 
     return f"http://{format_url_host(host)}:{port}/p/{profile}{tail}"
 
 
-def _check_secondary_port_binders(plan: MigrationPlan, configs: dict[str, object]) -> None:
+def _check_secondary_port_binders(
+    plan: MigrationPlan, configs: dict[str, object]
+) -> None:
     """BLOCKER when a secondary enables a port-binding platform with no ``/p/<profile>/`` ingress
     (the multiplexer skips the whole profile); NOTICE (URL changes) when the ingress exists."""
     from gateway.config import platform_binds_port
+
     default_cfg = configs.get("default")
     for profile in plan.secondaries:
         cfg = configs.get(profile.name)
         if cfg is None:
             continue
         for platform, platform_config in cfg.platforms.items():
-            if not platform_config.enabled or not platform_binds_port(platform.value, platform_config.extra):
+            if not platform_config.enabled or not platform_binds_port(
+                platform.value, platform_config.extra
+            ):
                 continue
             if platform_serves_profile_prefix(platform.value):
                 plan.notices.append(
@@ -620,14 +733,19 @@ def _load_profile_configs(plan: MigrationPlan) -> dict[str, object]:
         for profile in plan.profiles:
             try:
                 configs[profile.name] = _profile_gateway_config(profile.home)
-            except Exception as exc:  # unreadable config is itself a blocker, not a crash
-                plan.blockers.append(f"Profile '{profile.name}': could not load its gateway config ({exc}).")
+            except (
+                Exception
+            ) as exc:  # unreadable config is itself a blocker, not a crash
+                plan.blockers.append(
+                    f"Profile '{profile.name}': could not load its gateway config ({exc})."
+                )
     return configs
 
 
 def build_migration_plan() -> MigrationPlan:
     """Enumerate profiles + their OWN gateway footprint, then run every preflight check."""
     from clawk_cli.gateway_multiplex_served import recorded_served_profiles
+
     default_home = _default_home()
     # Probed ONCE: every profile's ownership verdict is relative to the same host process.
     owner = _host_gateway_owner()
@@ -635,21 +753,35 @@ def build_migration_plan() -> MigrationPlan:
     for name, home in _profile_homes():
         pid, services = _own_gateway_pid(home, owner), _installed_services(home)
         uid, runtime_home = _gateway_identity(home, pid, services)
-        profiles.append(ProfileGateway(name=name, home=home, pid=pid, services=services,
-                                       run_as_user=_systemd_service_user(home, services), uid=uid,
-                                       runtime_home=None if runtime_home == home else runtime_home))
+        profiles.append(
+            ProfileGateway(
+                name=name,
+                home=home,
+                pid=pid,
+                services=services,
+                run_as_user=_systemd_service_user(home, services),
+                uid=uid,
+                runtime_home=None if runtime_home == home else runtime_home,
+            )
+        )
     plan = MigrationPlan(
-        default_home=default_home, profiles=profiles,
+        default_home=default_home,
+        profiles=profiles,
         multiplex_flag_on=_read_multiplex_flag(default_home),
         live_served=recorded_served_profiles(default_home),
         manifest=_read_manifest(default_home),
     )
     from clawk_cli.profiles import profiles_to_serve
+
     foldable = {name for name, _home in _profile_homes()}
     plan.standalone_by_config = tuple(
-        name for name, _home in profiles_to_serve(True, include_standalone=True)
-        if name != "default" and name not in foldable)
-    plan.interrupted = plan.multiplex_flag_on and _manifest_not_yet_served(plan.manifest, plan.live_served)
+        name
+        for name, _home in profiles_to_serve(True, include_standalone=True)
+        if name != "default" and name not in foldable
+    )
+    plan.interrupted = plan.multiplex_flag_on and _manifest_not_yet_served(
+        plan.manifest, plan.live_served
+    )
     if len(plan.profiles) < 2:
         plan.notices.append("Only one profile exists: nothing to multiplex.")
         return plan
@@ -657,9 +789,13 @@ def build_migration_plan() -> MigrationPlan:
     for check in _PREFLIGHT_CHECKS:
         check(plan, configs)
     from clawk_cli.gateway_migrate_guards import auto_migration_blockers
+
     # Notices, not blockers: the explicit command is the operator's decision; only the update hook
     # refuses to cross these boundaries on its own.
-    plan.notices.extend(f"Not migrated automatically by `clawk update`: {b}" for b in auto_migration_blockers(plan))
+    plan.notices.extend(
+        f"Not migrated automatically by `clawk update`: {b}"
+        for b in auto_migration_blockers(plan)
+    )
     plan.notices.append(
         "Profiles created after the migration are served by the running multiplexer as soon as "
         "they exist (it rescans profiles/ on create/delete and every 30s)."
@@ -685,6 +821,7 @@ def _signalled_gateways(plan: MigrationPlan) -> list[str]:
     :func:`_restart_default`. A dry run that promises nothing will be stopped and then stops the
     host's only gateway breaks the contract this block exists to keep.
     """
+
     def _who(p: ProfileGateway, suffix: str = "") -> str:
         where = f"pid {p.pid}" if p.pid else f"supervised by {p.service_label()}"
         return f"{p.name} ({where}{suffix})"
@@ -698,51 +835,97 @@ def _signalled_gateways(plan: MigrationPlan) -> list[str]:
 
 def format_plan(plan: MigrationPlan, *, dry_run: bool) -> list[str]:
     head = "Migration plan (dry run — nothing changed)" if dry_run else "Migration plan"
-    lines = [head, f"  default home: {plan.default_home}", "", "  profile      gateway pid   service"]
+    lines = [
+        head,
+        f"  default home: {plan.default_home}",
+        "",
+        "  profile      gateway pid   service",
+    ]
     for p in plan.profiles:
         lines.append(f"  {p.name:<12} {p.pid or '-'!s:<13} {p.service_label()}")
     if plan.standalone_by_config:
-        lines.append(f"  Standalone by config (gateway.standalone: true), left alone: "
-                     f"{', '.join(plan.standalone_by_config)}")
-        lines.append("    (temporary compatibility shim; remove the key and re-run once the gaps it "
-                     "covers for you are fixed)")
+        lines.append(
+            f"  Standalone by config (gateway.standalone: true), left alone: "
+            f"{', '.join(plan.standalone_by_config)}"
+        )
+        lines.append(
+            "    (temporary compatibility shim; remove the key and re-run once the gaps it "
+            "covers for you are fixed)"
+        )
     lines.append("")
     if plan.already_multiplexed:
-        lines.append("  ✓ The default gateway is already multiplexing"
-                     + (f" (serving {', '.join(plan.live_served)})" if plan.live_served else " (flag on)") + ".")
+        lines.append(
+            "  ✓ The default gateway is already multiplexing"
+            + (
+                f" (serving {', '.join(plan.live_served)})"
+                if plan.live_served
+                else " (flag on)"
+            )
+            + "."
+        )
         return lines
     if plan.interrupted:
-        lines.append(f"  ↻ An earlier migration was interrupted before the default gateway came up "
-                     f"(flag on, no live multiplexer; manifest {plan.default_home / MANIFEST_NAME}); this run resumes it.")
+        lines.append(
+            f"  ↻ An earlier migration was interrupted before the default gateway came up "
+            f"(flag on, no live multiplexer; manifest {plan.default_home / MANIFEST_NAME}); this run resumes it."
+        )
     elif plan.multiplex_flag_on and plan.standalone_secondaries:
-        lines.append("  ↻ Half-migrated host: the flag is on, but the profile(s) below still own a "
-                     "gateway. This run converges them.")
+        lines.append(
+            "  ↻ Half-migrated host: the flag is on, but the profile(s) below still own a "
+            "gateway. This run converges them."
+        )
     steps = []
     signalled = _signalled_gateways(plan)
     for p in plan.standalone_secondaries:
-        what = " + ".join(x for x in (f"stop pid {p.pid}" if p.pid else "", " + ".join(f"{_remove_verb(s)} {_service_label(s)}" for s in p.services)) if x)
+        what = " + ".join(
+            x
+            for x in (
+                f"stop pid {p.pid}" if p.pid else "",
+                " + ".join(
+                    f"{_remove_verb(s)} {_service_label(s)}" for s in p.services
+                ),
+            )
+            if x
+        )
         steps.append(f"  - {p.name}: {what}")
     if len(plan.profiles) < 2:  # the notice already says "only one profile exists"
         return lines + _plan_tail(plan)
     if not steps:
-        lines.append("  No secondary profile runs its own gateway; the only step is turning the flag on:")
+        lines.append(
+            "  No secondary profile runs its own gateway; the only step is turning the flag on:"
+        )
     else:
         lines += ["  Steps:", *steps]
-    lines.append(f"  - default: set gateway.multiplex_profiles: true in {plan.default_home / 'config.yaml'}")
+    lines.append(
+        f"  - default: set gateway.multiplex_profiles: true in {plan.default_home / 'config.yaml'}"
+    )
     # A resume installs through the units the MANIFEST recorded (the live ones are already gone),
     # which is the mechanism ``apply_migration`` picks — printing this plan's guess contradicted it.
-    target = _resume_target(plan)[0] if plan.manifest is not None else plan.target_service_kind()
-    lines.append(f"  - default: {'restart' if plan.default.has_gateway else 'start'} the gateway"
-                 + (f" via {target[0]}" if target else " (detached)") + f", verify it serves {len(plan.expected_served_names)} profiles")
-    lines.append(f"  - record the previous state in {plan.default_home / MANIFEST_NAME} "
-                 f"(used to undo a FAILED apply, and to resume this command after a crash)")
+    target = (
+        _resume_target(plan)[0]
+        if plan.manifest is not None
+        else plan.target_service_kind()
+    )
+    lines.append(
+        f"  - default: {'restart' if plan.default.has_gateway else 'start'} the gateway"
+        + (f" via {target[0]}" if target else " (detached)")
+        + f", verify it serves {len(plan.expected_served_names)} profiles"
+    )
+    lines.append(
+        f"  - record the previous state in {plan.default_home / MANIFEST_NAME} "
+        f"(used to undo a FAILED apply, and to resume this command after a crash)"
+    )
     if signalled:
         # Never stop a running gateway without saying so first, and say it in the imperative
         # tense the operator can still act on: this block prints BEFORE anything is signalled.
-        lines += ["",
-                  "  ⚠ This SIGTERMs running gateway process(es): " + ", ".join(signalled) + ".",
-                  "    They drain in-flight turns and exit; their profiles are served by the host "
-                  "gateway afterwards."]
+        lines += [
+            "",
+            "  ⚠ This SIGTERMs running gateway process(es): "
+            + ", ".join(signalled)
+            + ".",
+            "    They drain in-flight turns and exit; their profiles are served by the host "
+            "gateway afterwards.",
+        ]
     return lines + _plan_tail(plan)
 
 
@@ -754,12 +937,14 @@ def _plan_tail(plan: MigrationPlan) -> list[str]:
         else:
             # This host is already mid-migration with units removed, so a blocker cannot be a
             # refusal any more: refusing would leave it with nobody serving and no way forward.
-            lines += ["",
-                      f"  ⚠ Blockers found, but a migration is already in progress on this host "
-                      f"(manifest {_manifest_path(plan.default_home)}).",
-                      "    This run RESUMES it and converges anyway — refusing would strand the "
-                      "profiles whose",
-                      "    gateways an earlier attempt already removed. Fix these afterwards:"]
+            lines += [
+                "",
+                f"  ⚠ Blockers found, but a migration is already in progress on this host "
+                f"(manifest {_manifest_path(plan.default_home)}).",
+                "    This run RESUMES it and converges anyway — refusing would strand the "
+                "profiles whose",
+                "    gateways an earlier attempt already removed. Fix these afterwards:",
+            ]
         lines += [f"    • {b}" for b in plan.blockers]
     if plan.notices:
         lines += ["", "  Notices:"]
@@ -770,7 +955,9 @@ def _plan_tail(plan: MigrationPlan) -> list[str]:
 def _manifest_secondaries(manifest: dict) -> Optional[list[dict]]:
     """The manifest's secondary records, or None when the (hand-edited) manifest is malformed."""
     recs = manifest.get("secondaries", [])
-    if not isinstance(recs, list) or not all(isinstance(r, dict) and r.get("profile") and r.get("home") for r in recs):
+    if not isinstance(recs, list) or not all(
+        isinstance(r, dict) and r.get("profile") and r.get("home") for r in recs
+    ):
         return None
     return recs
 
@@ -796,10 +983,16 @@ def _recorded_run_as_user(rec: dict) -> Optional[str]:
     return user if isinstance(user, str) and user else None
 
 
-def _target_from_manifest(manifest: dict) -> tuple[Optional[tuple[str, bool]], Optional[str]]:
+def _target_from_manifest(
+    manifest: dict,
+) -> tuple[Optional[tuple[str, bool]], Optional[str]]:
     """Service manager + ``User=`` the resumed default install should use, read from the recorded
     footprint (the units themselves are gone by the time an interrupted apply is re-run)."""
-    recs = [r for r in (manifest.get("default"), *(_manifest_secondaries(manifest) or [])) if isinstance(r, dict)]
+    recs = [
+        r
+        for r in (manifest.get("default"), *(_manifest_secondaries(manifest) or []))
+        if isinstance(r, dict)
+    ]
     target = next((s for r in recs for s in _recorded_services(r)), None)
     user = next((u for r in recs if (u := _recorded_run_as_user(r)) is not None), None)
     return target, user
@@ -836,7 +1029,9 @@ def _read_manifest(default_home: Path) -> Optional[dict]:
     return data if isinstance(data, dict) else None
 
 
-def _manifest_not_yet_served(manifest: Optional[dict], live_served: Optional[list[str]]) -> bool:
+def _manifest_not_yet_served(
+    manifest: Optional[dict], live_served: Optional[list[str]]
+) -> bool:
     """The postcondition ``apply_migration`` waits for, re-derived from live state: a LIVE default that
     recorded serving every unparked profile the manifest migrated. Anything less — no live gateway, an
     installed-but-dead unit (``systemd_install`` writes the unit before the start that can still fail),
@@ -845,9 +1040,17 @@ def _manifest_not_yet_served(manifest: Optional[dict], live_served: Optional[lis
     if manifest is None:
         return False
     from clawk_cli.profiles import profile_is_parked
-    recs = [r for r in (manifest.get("default"), *(_manifest_secondaries(manifest) or [])) if isinstance(r, dict)]
-    migrated = {str(r.get("profile") or "default") for r in recs
-                if not r.get("home") or not profile_is_parked(Path(r["home"]))} | {"default"}
+
+    recs = [
+        r
+        for r in (manifest.get("default"), *(_manifest_secondaries(manifest) or []))
+        if isinstance(r, dict)
+    ]
+    migrated = {
+        str(r.get("profile") or "default")
+        for r in recs
+        if not r.get("home") or not profile_is_parked(Path(r["home"]))
+    } | {"default"}
     return not migrated <= set(live_served or [])
 
 
@@ -857,7 +1060,9 @@ def _write_manifest(default_home: Path, data: dict) -> None:
     atomic_json_write(_manifest_path(default_home), data)
 
 
-def _reconcile_standalone_runtime(default_home: Path, secondary_names: set[str]) -> None:
+def _reconcile_standalone_runtime(
+    default_home: Path, secondary_names: set[str]
+) -> None:
     """Remove only status owned by multiplexing, without re-stamping gateway identity."""
     from gateway.status import read_runtime_status
     from utils import atomic_json_write
@@ -871,15 +1076,19 @@ def _reconcile_standalone_runtime(default_home: Path, secondary_names: set[str])
     if isinstance(platforms, dict):
         prefixes = tuple(f"{name}:" for name in secondary_names if name)
         runtime["platforms"] = {
-            key: value for key, value in platforms.items()
+            key: value
+            for key, value in platforms.items()
             if not (isinstance(key, str) and key.startswith(prefixes))
         }
     atomic_json_write(path, runtime, indent=None, separators=(",", ":"))
 
 
-def _wait_for_served(default_home: Path, expected: set[str], timeout: float) -> Optional[list[str]]:
+def _wait_for_served(
+    default_home: Path, expected: set[str], timeout: float
+) -> Optional[list[str]]:
     """Poll the default's ``gateway_state.json`` until ``served_profiles`` covers ``expected``."""
     from clawk_cli.gateway_multiplex_served import recorded_served_profiles
+
     deadline = time.monotonic() + timeout
     served: Optional[list[str]] = None
     while time.monotonic() < deadline:
@@ -947,24 +1156,31 @@ def _remove_secondary_gateways(plan: MigrationPlan) -> None:
             _service_op(kind, system, "stop", p.home)
             _service_op(kind, system, "uninstall", p.home)
             done = "parked (down file)" if kind == "s6" else "removed"
-            print(f"  ✓ {p.name}: stopped and {done} its {_service_label((kind, system))}")
+            print(
+                f"  ✓ {p.name}: stopped and {done} its {_service_label((kind, system))}"
+            )
         if p.pid is not None:
             _stop_gateway_process(p.home)
             print(f"  ✓ {p.name}: stopped standalone gateway (pid {p.pid})")
 
 
-def _preflight_apply(plan: MigrationPlan, target: Optional[tuple[str, bool]], run_as_user: Optional[str]) -> Optional[str]:
+def _preflight_apply(
+    plan: MigrationPlan, target: Optional[tuple[str, bool]], run_as_user: Optional[str]
+) -> Optional[str]:
     """A failure of the destructive phase that is knowable from the plan alone, refused BEFORE any
     working per-profile gateway is stopped: rollback is the fallback for surprises, not the plan.
     Mirrors the checks ``systemd_install``/``_service_call`` make on a system unit (root, resolvable
     ``User=``) and the config write's read-guard."""
     from clawk_cli import gateway as gw
     from clawk_cli.config import require_readable_config_before_write
+
     try:
         require_readable_config_before_write(plan.default_home / "config.yaml")
     except Exception as exc:
         return f"default: config.yaml cannot be updated ({exc})"
-    touches_system_unit = target == ("systemd", True) or any(p.has_system_unit for p in plan.standalone_secondaries)
+    touches_system_unit = target == ("systemd", True) or any(
+        p.has_system_unit for p in plan.standalone_secondaries
+    )
     if touches_system_unit:
         try:
             gw._require_root_for_system_service("migration")
@@ -978,6 +1194,7 @@ def _preflight_apply(plan: MigrationPlan, target: Optional[tuple[str, bool]], ru
                 return f"default: {exc}"
         else:
             import pwd
+
             try:
                 pwd.getpwnam(run_as_user)
             except KeyError:
@@ -985,7 +1202,9 @@ def _preflight_apply(plan: MigrationPlan, target: Optional[tuple[str, bool]], ru
     return None
 
 
-def _resume_target(plan: MigrationPlan) -> tuple[Optional[tuple[str, bool]], Optional[str]]:
+def _resume_target(
+    plan: MigrationPlan,
+) -> tuple[Optional[tuple[str, bool]], Optional[str]]:
     """Service manager + ``User=`` an apply will use: the manifest's record wins on a resume (the
     live units it describes are already gone), else what the plan can still see."""
     target, run_as_user = plan.target_service_kind(), plan.target_run_as_user()
@@ -1011,12 +1230,16 @@ def _resume_findings(plan: MigrationPlan, target, run_as_user) -> list[str]:
         findings.append(apply_blocker)
     if not findings:
         return []
-    return ["  ⚠ Preflight findings — resuming anyway (this host is mid-migration; refusing would",
-            "    leave its profiles with no gateway at all). Fix these once it is converged:",
-            *[f"    • {f}" for f in findings]]
+    return [
+        "  ⚠ Preflight findings — resuming anyway (this host is mid-migration; refusing would",
+        "    leave its profiles with no gateway at all). Fix these once it is converged:",
+        *[f"    • {f}" for f in findings],
+    ]
 
 
-def apply_migration(plan: MigrationPlan, *, served_wait: float = _SERVED_WAIT_SECONDS) -> bool:
+def apply_migration(
+    plan: MigrationPlan, *, served_wait: float = _SERVED_WAIT_SECONDS
+) -> bool:
     """Flip the flag, stop/uninstall every secondary gateway, bring up the multiplexer, verify.
     Returns True when the multiplexer verifiably serves every profile.
 
@@ -1043,7 +1266,9 @@ def apply_migration(plan: MigrationPlan, *, served_wait: float = _SERVED_WAIT_SE
         # died mid-way (``interrupted``) or its compensator did not finish. Either way the manifest
         # is the ONLY record of the units that existed, so resume from it and never overwrite it.
         # Re-running this command IS the recovery.
-        print(f"  ↻ resuming the migration recorded in {_manifest_path(plan.default_home)}")
+        print(
+            f"  ↻ resuming the migration recorded in {_manifest_path(plan.default_home)}"
+        )
         _print(_resume_findings(plan, target, run_as_user))
         enable_failure = _enable_default_at_boot(plan)
         if enable_failure is not None:
@@ -1052,12 +1277,15 @@ def apply_migration(plan: MigrationPlan, *, served_wait: float = _SERVED_WAIT_SE
         if plan.blocked:
             _print(["✗ Migration refused:", *[f"  • {b}" for b in plan.blockers]])
             return False
-        blocker = _preflight_apply(plan, target, run_as_user) or _enable_default_at_boot(plan)
+        blocker = _preflight_apply(
+            plan, target, run_as_user
+        ) or _enable_default_at_boot(plan)
         if blocker is not None:
             _print(["✗ Migration refused before changing anything:", f"  • {blocker}"])
             return False
         manifest = {
-            "version": 1, "migrated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            "version": 1,
+            "migrated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
             "flag_was": plan.multiplex_flag_on,
             "default": plan.default.to_dict(),
             "secondaries": [p.to_dict() for p in plan.standalone_secondaries],
@@ -1067,12 +1295,22 @@ def apply_migration(plan: MigrationPlan, *, served_wait: float = _SERVED_WAIT_SE
         _write_manifest(plan.default_home, manifest)
     try:
         _write_multiplex_flag(plan.default_home, True)
-        print(f"  ✓ default: gateway.multiplex_profiles: true ({plan.default_home / 'config.yaml'})")
-        _remove_secondary_gateways(plan)  # on resume: whatever an apply killed mid-removal left installed
-        print(f"  ✓ {_restart_default(plan.default, target, plan.default_home, run_as_user=run_as_user)}")
+        print(
+            f"  ✓ default: gateway.multiplex_profiles: true ({plan.default_home / 'config.yaml'})"
+        )
+        _remove_secondary_gateways(
+            plan
+        )  # on resume: whatever an apply killed mid-removal left installed
+        print(
+            f"  ✓ {_restart_default(plan.default, target, plan.default_home, run_as_user=run_as_user)}"
+        )
     except Exception as exc:
-        _print([f"  ✗ migration failed ({exc})",
-                "  ↩ Restoring one host gateway so this host is not left without one..."])
+        _print(
+            [
+                f"  ✗ migration failed ({exc})",
+                "  ↩ Restoring one host gateway so this host is not left without one...",
+            ]
+        )
         rolled_back = rollback_migration(plan.default_home)
         if not rolled_back:
             print(f"  Re-run {MIGRATE_COMMAND} to resume from the manifest.")
@@ -1085,13 +1323,23 @@ def apply_migration(plan: MigrationPlan, *, served_wait: float = _SERVED_WAIT_SE
         # (`MigrationPlan.interrupted`), so a CONFIRMED convergence must clear it -- otherwise the
         # host reports itself interrupted forever and never says "already multiplexing".
         _manifest_path(plan.default_home).unlink(missing_ok=True)
-        _print(["", f"✓ Migrated: the default gateway now serves {len(served)} profiles: {', '.join(served)}",
-                *[f"  • {n}" for n in plan.notices]])
+        _print(
+            [
+                "",
+                f"✓ Migrated: the default gateway now serves {len(served)} profiles: {', '.join(served)}",
+                *[f"  • {n}" for n in plan.notices],
+            ]
+        )
         return True
     missing = sorted(expected - set(served or []))
-    _print(["", f"⚠ Migration applied, but the default gateway has not confirmed serving: {', '.join(missing)}",
+    _print(
+        [
+            "",
+            f"⚠ Migration applied, but the default gateway has not confirmed serving: {', '.join(missing)}",
             "  Check `clawk gateway status` and the gateway log; the flag and manifest are in place.",
-            f"  Re-run {MIGRATE_COMMAND} once it is healthy — it resumes from the manifest."])
+            f"  Re-run {MIGRATE_COMMAND} once it is healthy — it resumes from the manifest.",
+        ]
+    )
     return False
 
 
@@ -1136,14 +1384,20 @@ def rollback_migration(default_home: Optional[Path] = None) -> bool:
     default_home = default_home or _default_home()
     manifest = _read_manifest(default_home)
     if manifest is None:
-        print(f"✗ No migration manifest at {_manifest_path(default_home)}; nothing to restore.")
+        print(
+            f"✗ No migration manifest at {_manifest_path(default_home)}; nothing to restore."
+        )
         return False
-    incomplete = (f"⚠ Compensation incomplete; manifest kept at {_manifest_path(default_home)}.\n"
-                  f"  Re-run {MIGRATE_COMMAND} — it resumes from the manifest.")
+    incomplete = (
+        f"⚠ Compensation incomplete; manifest kept at {_manifest_path(default_home)}.\n"
+        f"  Re-run {MIGRATE_COMMAND} — it resumes from the manifest."
+    )
     secondaries = _manifest_secondaries(manifest)
     if secondaries is None:
         # Refuse before touching anything: a hand-edited manifest is not a rollback authority.
-        print(f"✗ Malformed secondary records in {_manifest_path(default_home)}; fix or delete the manifest.")
+        print(
+            f"✗ Malformed secondary records in {_manifest_path(default_home)}; fix or delete the manifest."
+        )
         return False
     try:
         _write_multiplex_flag(default_home, bool(manifest.get("flag_was", False)))
@@ -1155,8 +1409,13 @@ def rollback_migration(default_home: Optional[Path] = None) -> bool:
 
     default_rec = manifest.get("default")
     default_gw = ProfileGateway(
-        "default", default_home, pid=_own_gateway_pid(default_home, _host_gateway_owner()),
-        services=(_recorded_services(default_rec) if isinstance(default_rec, dict) else []) or _installed_services(default_home),
+        "default",
+        default_home,
+        pid=_own_gateway_pid(default_home, _host_gateway_owner()),
+        services=(
+            _recorded_services(default_rec) if isinstance(default_rec, dict) else []
+        )
+        or _installed_services(default_home),
     )
     names = [str(rec["profile"]) for rec in secondaries]
     # The live multiplexer's record still claims every secondary, and every lifecycle verb reads it;
@@ -1169,20 +1428,28 @@ def rollback_migration(default_home: Optional[Path] = None) -> bool:
         print(incomplete)
         return False
 
-    if not default_gw.has_gateway and not any(rec.get("pid") or _recorded_services(rec) for rec in secondaries):
+    if not default_gw.has_gateway and not any(
+        rec.get("pid") or _recorded_services(rec) for rec in secondaries
+    ):
         _manifest_path(default_home).unlink(missing_ok=True)
-        print(f"✓ Nothing was running before this attempt ({_NOTHING_RECORDED}); the flag is restored.")
+        print(
+            f"✓ Nothing was running before this attempt ({_NOTHING_RECORDED}); the flag is restored."
+        )
         return True
 
     target, run_as_user = _target_from_manifest(manifest)
     try:
-        print(f"  ✓ {_restart_default(default_gw, target, default_home, run_as_user=run_as_user)}")
+        print(
+            f"  ✓ {_restart_default(default_gw, target, default_home, run_as_user=run_as_user)}"
+        )
     except Exception as exc:
         # The recorded service manager is exactly what the failed apply could not drive (a refused
         # system-unit install, a read-only unit dir). Falling back to a detached gateway still
         # honours one-gateway-per-host, and a host with a running gateway beats a correct unit.
-        print(f"  ✗ default: could not bring the host gateway back up via the recorded service "
-              f"manager ({exc}); falling back to a detached gateway")
+        print(
+            f"  ✗ default: could not bring the host gateway back up via the recorded service "
+            f"manager ({exc}); falling back to a detached gateway"
+        )
         try:
             spawned = _spawn_detached_gateway(default_home)
         except Exception as spawn_exc:
@@ -1194,17 +1461,23 @@ def rollback_migration(default_home: Optional[Path] = None) -> bool:
         print("  ✓ default: started the host gateway detached (no service manager)")
     live = _wait_for_live_gateway(default_home, _COMPENSATOR_WAIT_SECONDS)
     if live is None:
-        print(f"  ✗ default: no gateway confirmed serving this host within {_COMPENSATOR_WAIT_SECONDS:.0f}s "
-              f"(check `clawk gateway status` and the gateway log)")
+        print(
+            f"  ✗ default: no gateway confirmed serving this host within {_COMPENSATOR_WAIT_SECONDS:.0f}s "
+            f"(check `clawk gateway status` and the gateway log)"
+        )
         print(incomplete)
         return False
     _manifest_path(default_home).unlink(missing_ok=True)
-    print(f"✓ Compensated: one host gateway is running again (pid {live}) on the recorded flag.")
+    print(
+        f"✓ Compensated: one host gateway is running again (pid {live}) on the recorded flag."
+    )
     if names:
-        print(f"  Per-profile gateways this attempt had already removed: {', '.join(names)}. They are "
-              f"NOT reinstalled — one gateway per host is the only supported topology — and the host "
-              f"gateway serves them as soon as it multiplexes.\n"
-              f"  Run {MIGRATE_COMMAND} to finish converging.")
+        print(
+            f"  Per-profile gateways this attempt had already removed: {', '.join(names)}. They are "
+            f"NOT reinstalled — one gateway per host is the only supported topology — and the host "
+            f"gateway serves them as soon as it multiplexes.\n"
+            f"  Run {MIGRATE_COMMAND} to finish converging."
+        )
     return True
 
 
@@ -1221,14 +1494,18 @@ def _host_supports_migration() -> Optional[str]:
     done from here is register a slot the boot never created — that is the one refusal left.
     """
     from clawk_cli import gateway as gw
+
     if not gw._running_under_s6():
         return None
     from clawk_cli.gateway_multiplex_s6 import named_slot_name
     from clawk_cli.service_manager import S6ServiceManager
+
     scandir = S6ServiceManager().scandir
     if not (scandir / named_slot_name("default")).is_dir():
-        return (f"s6-supervised container without a root gateway slot ({scandir / named_slot_name('default')}); "
-                "the container's boot registers it — restart the container.")
+        return (
+            f"s6-supervised container without a root gateway slot ({scandir / named_slot_name('default')}); "
+            "the container's boot registers it — restart the container."
+        )
     return None
 
 
@@ -1254,6 +1531,7 @@ def cmd_migrate(args) -> None:
     # goes on and the default gateway restarts (the update hook keeps treating that case as a no-op).
     if not getattr(args, "yes", False) and sys.stdin.isatty():
         from clawk_cli.setup import prompt_yes_no
+
         if not prompt_yes_no("Apply this migration now?", True):
             print("Aborted; nothing changed.")
             return
@@ -1266,8 +1544,14 @@ def maybe_auto_migrate_after_update() -> None:
     migrate automatically when unblocked (deterministic, never prompts) or print the blocker block.
     ``gateway.auto_multiplex_migration: false`` on the default profile opts out; a secondary behind a
     service-domain / UNIX-user / CLAWK_HOME boundary blocks this path only (the explicit command decides)."""
-    from clawk_cli.gateway_migrate_guards import auto_migration_blockers, auto_migration_opted_out
-    if _host_supports_migration() is not None or auto_migration_opted_out(_default_home()):
+    from clawk_cli.gateway_migrate_guards import (
+        auto_migration_blockers,
+        auto_migration_opted_out,
+    )
+
+    if _host_supports_migration() is not None or auto_migration_opted_out(
+        _default_home()
+    ):
         return
     plan = build_migration_plan()
     if plan.already_multiplexed or len(plan.profiles) < 2:
@@ -1279,10 +1563,13 @@ def maybe_auto_migrate_after_update() -> None:
     if not plan.standalone_secondaries and not resuming:
         return
     from clawk_cli.gateway_migrate_guards import masked_default_unit
+
     masked = None if resuming else masked_default_unit(plan.default_home)
     if masked is not None:
-        print(f"\n  ℹ Per-profile gateways kept: the default gateway unit is masked ({masked}).\n"
-              f"    Unmask it and run {MIGRATE_COMMAND} to fold them into one gateway.")
+        print(
+            f"\n  ℹ Per-profile gateways kept: the default gateway unit is masked ({masked}).\n"
+            f"    Unmask it and run {MIGRATE_COMMAND} to fold them into one gateway."
+        )
         return
     print()
     auto_blockers = auto_migration_blockers(plan)

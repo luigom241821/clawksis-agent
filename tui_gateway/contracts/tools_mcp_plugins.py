@@ -41,11 +41,19 @@ class ToolsetsListResult(Result):
     toolsets: list[ToolsetRow]
 
 
-method("tools.list", params=_SessionScoped, result=ToolsetsListResult,
-       doc="Every toolset with its resolved tool names, flagged against the session's (or config's) enabled set.")
+method(
+    "tools.list",
+    params=_SessionScoped,
+    result=ToolsetsListResult,
+    doc="Every toolset with its resolved tool names, flagged against the session's (or config's) enabled set.",
+)
 
-method("toolsets.list", params=_SessionScoped, result=ToolsetsListResult,
-       doc="Toolset summaries (no tool names) for the desktop Toolsets tab.")
+method(
+    "toolsets.list",
+    params=_SessionScoped,
+    result=ToolsetsListResult,
+    doc="Toolset summaries (no tool names) for the desktop Toolsets tab.",
+)
 
 
 class ToolShowRow(Result):
@@ -63,8 +71,12 @@ class ToolsShowResult(Result):
     total: int
 
 
-method("tools.show", params=_SessionScoped, result=ToolsShowResult,
-       doc="The /tools listing grouped by toolset, including tools deferred behind the tool_search bridge.")
+method(
+    "tools.show",
+    params=_SessionScoped,
+    result=ToolsShowResult,
+    doc="The /tools listing grouped by toolset, including tools deferred behind the tool_search bridge.",
+)
 
 
 class ToolsAction(WireEnum):
@@ -91,8 +103,12 @@ class ToolsConfigureResult(Result):
     unknown: list[str]
 
 
-method("tools.configure", params=ToolsConfigureParams, result=ToolsConfigureResult,
-       doc="Persist a toolset / MCP enable-disable change and rebuild the session agent so it takes effect now.")
+method(
+    "tools.configure",
+    params=ToolsConfigureParams,
+    result=ToolsConfigureResult,
+    doc="Persist a toolset / MCP enable-disable change and rebuild the session agent so it takes effect now.",
+)
 
 
 # ── reload ────────────────────────────────────────────────────────────────────────────────────
@@ -109,8 +125,12 @@ class ReloadEnvResult(Result):
     updated: int
 
 
-method("reload.env", params=ReloadEnvParams, result=ReloadEnvResult,
-       doc="Re-read ~/.clawksis/.env (CLI /reload parity); built agents keep their pool until /new.")
+method(
+    "reload.env",
+    params=ReloadEnvParams,
+    result=ReloadEnvResult,
+    doc="Re-read ~/.clawksis/.env (CLI /reload parity); built agents keep their pool until /new.",
+)
 
 
 class ReloadMcpParams(Params):
@@ -150,8 +170,12 @@ class ReloadMcpResult(Result):
     session_servers: list[str] | None = None
 
 
-method("reload.mcp", params=ReloadMcpParams, result=ReloadMcpResult,
-       doc="Tear down and rediscover MCP servers for every live session (prompt cache is invalidated).")
+method(
+    "reload.mcp",
+    params=ReloadMcpParams,
+    result=ReloadMcpResult,
+    doc="Tear down and rediscover MCP servers for every live session (prompt cache is invalidated).",
+)
 
 
 # ── skills ────────────────────────────────────────────────────────────────────────────────────
@@ -216,8 +240,12 @@ class SkillsManageResult(Result):
     info: SkillInspectInfo | None = None
 
 
-method("skills.manage", params=SkillsManageParams, result=SkillsManageResult,
-       doc="Skills hub backend: list the profile's skills or search / browse / inspect / install from the hub.")
+method(
+    "skills.manage",
+    params=SkillsManageParams,
+    result=SkillsManageResult,
+    doc="Skills hub backend: list the profile's skills or search / browse / inspect / install from the hub.",
+)
 
 
 class SkillsReloadParams(Params):
@@ -248,8 +276,12 @@ class SkillsReloadResult(Result):
     result: SkillsReloadDiff
 
 
-method("skills.reload", params=SkillsReloadParams, result=SkillsReloadResult,
-       doc="Re-scan skill dirs; the pre-rendered ``output`` is what /reload-skills prints.")
+method(
+    "skills.reload",
+    params=SkillsReloadParams,
+    result=SkillsReloadResult,
+    doc="Re-scan skill dirs; the pre-rendered ``output`` is what /reload-skills prints.",
+)
 
 
 # ── learning graph (/journey) ─────────────────────────────────────────────────────────────────
@@ -318,8 +350,12 @@ class LearningFramesResult(Result):
     rows: int
 
 
-method("learning.frames", params=LearningFramesParams, result=LearningFramesResult,
-       doc="Pre-render the /journey timeline (frames + legend/summary) so the TUI walks it locally.")
+method(
+    "learning.frames",
+    params=LearningFramesParams,
+    result=LearningFramesResult,
+    doc="Pre-render the /journey timeline (frames + legend/summary) so the TUI walks it locally.",
+)
 
 
 class LearningNodeParams(Params):
@@ -344,14 +380,26 @@ class LearningDetailResult(LearningMutationResult):
     content: str | None = None
 
 
-method("learning.detail", params=LearningNodeParams, result=LearningDetailResult,
-       doc="Node content (SKILL.md or memory chunk) for an edit prefill.")
+method(
+    "learning.detail",
+    params=LearningNodeParams,
+    result=LearningDetailResult,
+    doc="Node content (SKILL.md or memory chunk) for an edit prefill.",
+)
 
-method("learning.delete", params=LearningNodeParams, result=LearningMutationResult,
-       doc="Archive a skill (restorable via curator) or remove a memory chunk.")
+method(
+    "learning.delete",
+    params=LearningNodeParams,
+    result=LearningMutationResult,
+    doc="Archive a skill (restorable via curator) or remove a memory chunk.",
+)
 
-method("learning.edit", params=LearningEditParams, result=LearningMutationResult,
-       doc="Rewrite a node's content (SKILL.md or memory chunk).")
+method(
+    "learning.edit",
+    params=LearningEditParams,
+    result=LearningMutationResult,
+    doc="Rewrite a node's content (SKILL.md or memory chunk).",
+)
 
 
 # ── MCP catalog + per-profile server lifecycle ────────────────────────────────────────────────
@@ -371,8 +419,12 @@ class McpCatalogResult(Result):
     servers: list[McpCatalogEntry]
 
 
-method("mcp.catalog", params=ProfileParams, result=McpCatalogResult,
-       doc="Curated MCP presets with per-profile installed/enabled state and the env keys each needs.")
+method(
+    "mcp.catalog",
+    params=ProfileParams,
+    result=McpCatalogResult,
+    doc="Curated MCP presets with per-profile installed/enabled state and the env keys each needs.",
+)
 
 
 class McpServerSource(WireEnum):
@@ -401,8 +453,12 @@ class McpServersListResult(Result):
     servers: list[McpServerSummary]
 
 
-method("mcp.servers.list", params=ProfileParams, result=McpServersListResult,
-       doc="Configured MCP servers for the (scoped) profile, secrets redacted to env-key names.")
+method(
+    "mcp.servers.list",
+    params=ProfileParams,
+    result=McpServersListResult,
+    doc="Configured MCP servers for the (scoped) profile, secrets redacted to env-key names.",
+)
 
 
 class McpRuntimeStatus(WireEnum):
@@ -432,8 +488,12 @@ class McpServersStatusResult(Result):
     checked_at: int
 
 
-method("mcp.servers.status", params=ProfileParams, result=McpServersStatusResult,
-       doc="Cached runtime state per configured server; never connects, probes, or starts auth.")
+method(
+    "mcp.servers.status",
+    params=ProfileParams,
+    result=McpServersStatusResult,
+    doc="Cached runtime state per configured server; never connects, probes, or starts auth.",
+)
 
 
 class McpServerNameParams(ProfileParams):
@@ -455,8 +515,12 @@ class McpServersAddResult(Result):
     server: McpServerSummary
 
 
-method("mcp.servers.add", params=McpServersAddParams, result=McpServersAddResult,
-       doc="Add a server to the profile's config from a catalog preset and/or an explicit config.")
+method(
+    "mcp.servers.add",
+    params=McpServersAddParams,
+    result=McpServersAddResult,
+    doc="Add a server to the profile's config from a catalog preset and/or an explicit config.",
+)
 
 
 class McpServersSetApiKeyParams(McpServerNameParams):
@@ -471,8 +535,12 @@ class McpServersSetApiKeyResult(Result):
     server: McpServerSummary
 
 
-method("mcp.servers.set_api_key", params=McpServersSetApiKeyParams, result=McpServersSetApiKeyResult,
-       doc="Store a credential in the profile's .env and reference it from the server config (header or env).")
+method(
+    "mcp.servers.set_api_key",
+    params=McpServersSetApiKeyParams,
+    result=McpServersSetApiKeyResult,
+    doc="Store a credential in the profile's .env and reference it from the server config (header or env).",
+)
 
 
 class McpProbeTool(Result):
@@ -492,8 +560,12 @@ class McpServersTestResult(Result):
     oauth_tokens_present: bool | None = None
 
 
-method("mcp.servers.test", params=McpServerNameParams, result=McpServersTestResult,
-       doc="Connect, list tools, disconnect — an OAuth server with no token on disk is reported as not ok.")
+method(
+    "mcp.servers.test",
+    params=McpServerNameParams,
+    result=McpServersTestResult,
+    doc="Connect, list tools, disconnect — an OAuth server with no token on disk is reported as not ok.",
+)
 
 
 class McpServersRemoveResult(Result):
@@ -501,8 +573,12 @@ class McpServersRemoveResult(Result):
     removed: bool
 
 
-method("mcp.servers.remove", params=McpServerNameParams, result=McpServersRemoveResult,
-       doc="Drop a server from the profile's config.yaml.")
+method(
+    "mcp.servers.remove",
+    params=McpServerNameParams,
+    result=McpServersRemoveResult,
+    doc="Drop a server from the profile's config.yaml.",
+)
 
 
 class McpOauthStartParams(McpServerNameParams):
@@ -519,8 +595,12 @@ class McpOauthStartResult(Result):
     flow: str
 
 
-method("mcp.servers.oauth.start", params=McpOauthStartParams, result=McpOauthStartResult,
-       doc="Begin a PKCE OAuth flow; the client opens auth_url and polls mcp.servers.oauth.poll.")
+method(
+    "mcp.servers.oauth.start",
+    params=McpOauthStartParams,
+    result=McpOauthStartResult,
+    doc="Begin a PKCE OAuth flow; the client opens auth_url and polls mcp.servers.oauth.poll.",
+)
 
 
 class McpOauthFlowParams(McpServerNameParams):
@@ -544,8 +624,12 @@ class McpOauthPollResult(Result):
     tools: list[McpProbeTool] | None = None
 
 
-method("mcp.servers.oauth.poll", params=McpOauthFlowParams, result=McpOauthPollResult,
-       doc="Poll a flow; approved persists tokens for the profile and returns the probed tools.")
+method(
+    "mcp.servers.oauth.poll",
+    params=McpOauthFlowParams,
+    result=McpOauthPollResult,
+    doc="Poll a flow; approved persists tokens for the profile and returns the probed tools.",
+)
 
 
 class McpOauthCancelResult(Result):
@@ -554,8 +638,12 @@ class McpOauthCancelResult(Result):
     error_message: str | None = None
 
 
-method("mcp.servers.oauth.cancel", params=McpOauthFlowParams, result=McpOauthCancelResult,
-       doc="Cancel a flow owned by the resolved profile, waking its callback worker.")
+method(
+    "mcp.servers.oauth.cancel",
+    params=McpOauthFlowParams,
+    result=McpOauthCancelResult,
+    doc="Cancel a flow owned by the resolved profile, waking its callback worker.",
+)
 
 
 class McpOauthCallbackParams(McpOauthFlowParams):
@@ -572,8 +660,12 @@ class McpOauthCallbackResult(Result):
     error_message: str | None = None
 
 
-method("mcp.servers.oauth.callback", params=McpOauthCallbackParams, result=McpOauthCallbackResult,
-       doc="Relay a client-captured redirect into a client_redirect_uri flow.")
+method(
+    "mcp.servers.oauth.callback",
+    params=McpOauthCallbackParams,
+    result=McpOauthCallbackResult,
+    doc="Relay a client-captured redirect into a client_redirect_uri flow.",
+)
 
 
 # ── plugins ───────────────────────────────────────────────────────────────────────────────────
@@ -608,8 +700,12 @@ class PluginsListResult(Result):
     portable_mcp_servers: list[str] | None = None
 
 
-method("plugins.list", params=PluginsListParams, result=PluginsListResult,
-       doc="Loaded plugin manager entries (legacy flat view); the Plugins Hub uses plugins.manage list.")
+method(
+    "plugins.list",
+    params=PluginsListParams,
+    result=PluginsListResult,
+    doc="Loaded plugin manager entries (legacy flat view); the Plugins Hub uses plugins.manage list.",
+)
 
 
 class PluginsAction(WireEnum):
@@ -838,9 +934,13 @@ class PluginsManageResult(Result):
     presence: list[CatalogPluginPresence] | None = None
 
 
-method("plugins.manage", params=PluginsManageParams, result=PluginsManageResult,
-       doc="Plugins Hub backend: list installed plugins, toggle, git-install, re-pin a catalog install, "
-           "or remove a user install.")
+method(
+    "plugins.manage",
+    params=PluginsManageParams,
+    result=PluginsManageResult,
+    doc="Plugins Hub backend: list installed plugins, toggle, git-install, re-pin a catalog install, "
+    "or remove a user install.",
+)
 
 
 class PluginCatalogLookupStatus(WireEnum):
@@ -872,6 +972,10 @@ class PluginCatalogLookupResult(Result):
     entry: PluginCatalogLookupEntry | None = None
 
 
-method("plugins.catalog.lookup", params=PluginCatalogLookupParams, result=PluginCatalogLookupResult,
-       doc="One curated plugin-catalog entry by name, from the backend's live catalog (cached, with the "
-           "in-tree fallback and kill list); backs clawk://plugin/install?catalog= deep links.")
+method(
+    "plugins.catalog.lookup",
+    params=PluginCatalogLookupParams,
+    result=PluginCatalogLookupResult,
+    doc="One curated plugin-catalog entry by name, from the backend's live catalog (cached, with the "
+    "in-tree fallback and kill list); backs clawk://plugin/install?catalog= deep links.",
+)

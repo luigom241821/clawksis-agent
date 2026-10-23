@@ -20,9 +20,15 @@ def test_packaged_console_output_drains_both_streams(caplog, monkeypatch):
     desktop_launch_notice("Starting Clawksis")
     with desktop_console_output(source_mode=False) as streams:
         result = subprocess.run(
-            [sys.executable, "-c", "import sys; sys.stdout.write('x'*131072); "
-             "sys.stdout.flush(); sys.stderr.write('diagnostic\\n'); sys.exit(7)"],
-            timeout=15, check=False, **streams,
+            [
+                sys.executable,
+                "-c",
+                "import sys; sys.stdout.write('x'*131072); "
+                "sys.stdout.flush(); sys.stderr.write('diagnostic\\n'); sys.exit(7)",
+            ],
+            timeout=15,
+            check=False,
+            **streams,
         )
     assert result.returncode == 7
     messages = [record.getMessage() for record in caplog.records]
@@ -36,9 +42,15 @@ def test_stderr_survives_logging_threshold(caplog, level):
     caplog.set_level(level, logger="clawk_cli.desktop")
     with desktop_console_output(source_mode=False) as streams:
         result = subprocess.run(
-            [sys.executable, "-c", "import sys; print('ordinary-output'); "
-             "sys.stderr.write('fatal-diagnostic\\n'); sys.exit(7)"],
-            timeout=15, check=False, **streams,
+            [
+                sys.executable,
+                "-c",
+                "import sys; print('ordinary-output'); "
+                "sys.stderr.write('fatal-diagnostic\\n'); sys.exit(7)",
+            ],
+            timeout=15,
+            check=False,
+            **streams,
         )
     assert result.returncode == 7
     messages = [record.getMessage() for record in caplog.records]
@@ -57,23 +69,39 @@ def test_complete_records_reach_redacted_logs(tmp_path, monkeypatch, caplog, str
     caplog.set_level(logging.INFO, logger="clawk_cli.desktop")
     secret = "synthetic-boundary-credential"
     payload = (
-        b" " * (8192 - len(b"API_KEY=")) + b"API_KEY=" + secret.encode() + b"\n"
-        + b"u" * 8191 + "\u20ac\n".encode()
-        + b"oversized-start API_KEY=" + secret.encode() + b"z" * 262144
-        + b"oversized-end\nrecovered\ntail " + "\u20ac".encode()
+        b" " * (8192 - len(b"API_KEY="))
+        + b"API_KEY="
+        + secret.encode()
+        + b"\n"
+        + b"u" * 8191
+        + "\u20ac\n".encode()
+        + b"oversized-start API_KEY="
+        + secret.encode()
+        + b"z" * 262144
+        + b"oversized-end\nrecovered\ntail "
+        + "\u20ac".encode()
     )
     payload_path = tmp_path / "child-output.bin"
     payload_path.write_bytes(payload)
     try:
-        log_dir = clawk_logging.setup_logging(clawk_home=tmp_path, log_level="INFO", mode="gui")
+        log_dir = clawk_logging.setup_logging(
+            clawk_home=tmp_path, log_level="INFO", mode="gui"
+        )
         with desktop_console_output(source_mode=False) as streams:
             result = subprocess.run(
-                [sys.executable, "-c", "import pathlib, sys; "
-                 "data = pathlib.Path(sys.argv[1]).read_bytes(); "
-                 "out = getattr(sys, sys.argv[2]).buffer; "
-                 "[(out.write(data[i:i+997]), out.flush()) for i in range(0, len(data), 997)]",
-                 str(payload_path), stream],
-                timeout=15, check=False, **streams,
+                [
+                    sys.executable,
+                    "-c",
+                    "import pathlib, sys; "
+                    "data = pathlib.Path(sys.argv[1]).read_bytes(); "
+                    "out = getattr(sys, sys.argv[2]).buffer; "
+                    "[(out.write(data[i:i+997]), out.flush()) for i in range(0, len(data), 997)]",
+                    str(payload_path),
+                    stream,
+                ],
+                timeout=15,
+                check=False,
+                **streams,
             )
         assert result.returncode == 0
         clawk_logging.flush_log_queue()

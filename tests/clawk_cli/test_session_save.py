@@ -23,8 +23,8 @@ SESSION = {
     ],
 }
 
-class TestNormalizeSaveFormat:
 
+class TestNormalizeSaveFormat:
     def test_aliases(self):
         assert normalize_save_format("markdown") == "md"
         assert normalize_save_format("MD") == "md"
@@ -38,6 +38,7 @@ class TestNormalizeSaveFormat:
     def test_all_declared_formats_normalize_to_themselves(self):
         for fmt in SAVE_FORMATS:
             assert normalize_save_format(fmt) == fmt
+
 
 class TestRenderSessionForSave:
     def test_json_round_trips(self):
@@ -60,8 +61,8 @@ class TestRenderSessionForSave:
         with pytest.raises(ValueError):
             render_session_for_save(SESSION, "pdf")
 
-class TestDefaultSaveFilename:
 
+class TestDefaultSaveFilename:
     def test_hostile_session_id_sanitized(self):
         name = default_save_filename("../../etc/passwd", "json")
         assert "/" not in name

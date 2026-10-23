@@ -34,7 +34,10 @@ def answer_in_reasoning_capability(agent: Any) -> bool:
         return False
 
     # Returns None on unreadable config, so no guard is needed here.
-    from clawk_cli.config import _entries_for_route, get_custom_provider_model_capability
+    from clawk_cli.config import (
+        _entries_for_route,
+        get_custom_provider_model_capability,
+    )
 
     model = str(getattr(agent, "model", "") or "")
     custom_providers = getattr(agent, "_custom_providers", None)
@@ -54,12 +57,25 @@ def answer_in_reasoning_capability(agent: Any) -> bool:
     from clawk_cli.providers import custom_provider_slug
 
     requested = str(getattr(agent, "requested_provider", "") or "").strip().lower()
-    ids = {custom_provider_slug(p) for p in (provider, requested) if p.startswith("custom:")}
+    ids = {
+        custom_provider_slug(p)
+        for p in (provider, requested)
+        if p.startswith("custom:")
+    }
     entries = list(_entries_for_route(base_url, custom_providers, None))
-    live = [e for e in entries
-            if custom_provider_slug(e.get("name"), e.get("provider_key")) in ids]
-    flags = {v for e in live or entries
-             if isinstance(v := (e.get("capabilities") or {}).get(_ANSWER_IN_REASONING_CAPABILITY), bool)}
+    live = [
+        e
+        for e in entries
+        if custom_provider_slug(e.get("name"), e.get("provider_key")) in ids
+    ]
+    flags = {
+        v
+        for e in live or entries
+        if isinstance(
+            v := (e.get("capabilities") or {}).get(_ANSWER_IN_REASONING_CAPABILITY),
+            bool,
+        )
+    }
     if flags:
         return flags == {True}
 

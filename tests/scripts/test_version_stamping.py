@@ -1,4 +1,5 @@
 """Release stamping changes only metadata consumed by external builders."""
+
 import json
 from pathlib import Path
 
@@ -8,7 +9,8 @@ import pytest
 def _tree(root: Path) -> None:
     (root / "clawk_cli").mkdir()
     (root / "clawk_cli" / "__init__.py").write_text(
-        '__release_date__ = "2026.1.1"\n', encoding="utf-8")
+        '__release_date__ = "2026.1.1"\n', encoding="utf-8"
+    )
     (root / "pyproject.toml").write_text('version = "0.0.0"\n', encoding="utf-8")
     desktop = root / "apps" / "desktop"
     desktop.mkdir(parents=True)
@@ -17,22 +19,32 @@ def _tree(root: Path) -> None:
         '{"version": "0.0.0", "packages": {'
         '"apps/desktop": {"name": "clawk", "version": "0.0.0"}, '
         '"apps/bootstrap-installer": {"name": "@clawk/bootstrap-installer", "version": "0.0.0"}}}\n',
-        encoding="utf-8")
+        encoding="utf-8",
+    )
     (root / "uv.lock").write_text(
         '[[package]]\nname = "clawksis-agent"\nversion = "0.0.0"\n'
-        '[[package]]\nname = "other"\nversion = "0.0.0"\n', encoding="utf-8")
+        '[[package]]\nname = "other"\nversion = "0.0.0"\n',
+        encoding="utf-8",
+    )
     (root / "nix").mkdir()
     (root / "nix" / "clawksis-agent.nix").write_text(
-        '{\n  version ? "0.0.0",\n}: version\n', encoding="utf-8")
+        '{\n  version ? "0.0.0",\n}: version\n', encoding="utf-8"
+    )
     installer = root / "apps" / "bootstrap-installer" / "src-tauri"
     installer.mkdir(parents=True)
     (root / "apps" / "bootstrap-installer" / "package.json").write_text(
-        '{"name": "x", "version": "0.0.0"}\n', encoding="utf-8")
+        '{"name": "x", "version": "0.0.0"}\n', encoding="utf-8"
+    )
     (installer / "tauri.conf.json").write_text(
-        '{"productName": "Clawksis", "version": "0.0.0"}\n', encoding="utf-8")
-    (installer / "Cargo.toml").write_text('[package]\nversion = "0.0.0"\n', encoding="utf-8")
+        '{"productName": "Clawksis", "version": "0.0.0"}\n', encoding="utf-8"
+    )
+    (installer / "Cargo.toml").write_text(
+        '[package]\nversion = "0.0.0"\n', encoding="utf-8"
+    )
     (installer / "Cargo.lock").write_text(
-        '[[package]]\nname = "bootstrap-installer"\nversion = "0.21.1"\n', encoding="utf-8")
+        '[[package]]\nname = "bootstrap-installer"\nversion = "0.21.1"\n',
+        encoding="utf-8",
+    )
 
 
 def test_stamping_only_writes_external_builder_inputs(tmp_path):
@@ -65,6 +77,7 @@ def test_stamping_only_writes_external_builder_inputs(tmp_path):
 
     tauri.write_text('{"version": "0.0.0"}\n', encoding="utf-8")
     from scripts.releases.stamping import validate_bootstrap_version
+
     with pytest.raises(ValueError, match="Tauri config"):
         validate_bootstrap_version(build, "0.21.5")
 

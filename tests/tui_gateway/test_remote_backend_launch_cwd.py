@@ -24,7 +24,11 @@ def launch_dir(tmp_path, monkeypatch):
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr(server, "_clawk_home", home)
-    for name in ("TERMINAL_ENV", "TERMINAL_CWD", "TERMINAL_DOCKER_MOUNT_CWD_TO_WORKSPACE"):
+    for name in (
+        "TERMINAL_ENV",
+        "TERMINAL_CWD",
+        "TERMINAL_DOCKER_MOUNT_CWD_TO_WORKSPACE",
+    ):
         monkeypatch.delenv(name, raising=False)
     launch = tmp_path / "opt-data"
     launch.mkdir()
@@ -41,7 +45,13 @@ def _backend(monkeypatch, name: str, **env: str) -> None:
 def _fresh_session(key: str) -> dict:
     """What ``session.create`` stores for a TUI session that sent no cwd (no ``CLAWK_TUI_CWD``)."""
     explicit, cwd, _remote = server._resolve_create_cwd({}, "tui", None)
-    return {"session_key": key, "cwd": cwd, "explicit_cwd": explicit, "profile_home": None, "source": "tui"}
+    return {
+        "session_key": key,
+        "cwd": cwd,
+        "explicit_cwd": explicit,
+        "profile_home": None,
+        "source": "tui",
+    }
 
 
 class _Sprites(TerminalEnvironmentProvider):
@@ -82,7 +92,9 @@ def clean_registry():
 
 
 @pytest.mark.parametrize("backend", ["modal", "daytona"])
-def test_sandbox_session_does_not_register_the_launch_dir(launch_dir, monkeypatch, backend):
+def test_sandbox_session_does_not_register_the_launch_dir(
+    launch_dir, monkeypatch, backend
+):
     _backend(monkeypatch, backend)
     session = _fresh_session(f"launch-{backend}")
     assert session["cwd"] == str(launch_dir) and not session["explicit_cwd"]
@@ -93,13 +105,22 @@ def test_sandbox_session_does_not_register_the_launch_dir(launch_dir, monkeypatc
     try:
         assert terminal_tool.get_session_cwd(session["session_key"]) is None
         # The per-command cwd is the backend default, never the host launch dir.
-        assert terminal_tool._resolve_command_cwd(
-            workdir=None, default_cwd="/root", session_key=session["session_key"], env_type=backend) == "/root"
+        assert (
+            terminal_tool._resolve_command_cwd(
+                workdir=None,
+                default_cwd="/root",
+                session_key=session["session_key"],
+                env_type=backend,
+            )
+            == "/root"
+        )
     finally:
         terminal_tool.clear_task_env_overrides(session["session_key"])
 
 
-def test_plugin_sandbox_backend_does_not_register_the_launch_dir(launch_dir, monkeypatch, clean_registry):
+def test_plugin_sandbox_backend_does_not_register_the_launch_dir(
+    launch_dir, monkeypatch, clean_registry
+):
     """A plugin backend (sprites) declaring ``is_remote``/``is_container``."""
     _backend(monkeypatch, "sprites")
     clean_registry.register_provider(_Sprites())
@@ -109,38 +130,64 @@ def test_plugin_sandbox_backend_does_not_register_the_launch_dir(launch_dir, mon
     assert server._persisted_session_cwd(session) is None
 
 
-def test_plugin_host_backend_keeps_the_launch_dir(launch_dir, monkeypatch, clean_registry):
+def test_plugin_host_backend_keeps_the_launch_dir(
+    launch_dir, monkeypatch, clean_registry
+):
     """A plugin backend declaring neither flag runs on this host: the launch dir stays its cwd."""
     _backend(monkeypatch, "hostrunner")
     clean_registry.register_provider(_HostRunner())
     session = _fresh_session("launch-hostrunner")
 
-    assert server._terminal_task_cwd_with_source(session) == (str(launch_dir), "session")
+    assert server._terminal_task_cwd_with_source(session) == (
+        str(launch_dir),
+        "session",
+    )
 
 
-def test_plugin_classification_reads_the_bound_profiles_registry(launch_dir, tmp_path, clean_registry):
+def test_plugin_classification_reads_the_bound_profiles_registry(
+    launch_dir, tmp_path, clean_registry
+):
     """A provider registered only in a named profile's scope classifies that profile's sessions, even when the
     caller (session.create) has not bound the profile's home yet."""
     profile = tmp_path / "profiles" / "runner"
     profile.mkdir(parents=True)
-    (profile / "config.yaml").write_text("terminal:\n  backend: hostrunner\n", encoding="utf-8")
+    (profile / "config.yaml").write_text(
+        "terminal:\n  backend: hostrunner\n", encoding="utf-8"
+    )
     clean_registry.register_provider(_HostRunner(), scope=str(profile))
-    session = {"session_key": "named-runner", "cwd": str(launch_dir), "explicit_cwd": False,
-               "profile_home": str(profile), "source": "tui"}
+    session = {
+        "session_key": "named-runner",
+        "cwd": str(launch_dir),
+        "explicit_cwd": False,
+        "profile_home": str(profile),
+        "source": "tui",
+    }
 
     assert server._host_cwd_is_terminal_cwd(str(profile))
-    assert server._terminal_task_cwd_with_source(session) == (str(launch_dir), "session")
+    assert server._terminal_task_cwd_with_source(session) == (
+        str(launch_dir),
+        "session",
+    )
     # Unregistered in that scope: unknown plugin, treated as remote.
     clean_registry._reset_for_tests()
     assert not server._host_cwd_is_terminal_cwd(str(profile))
 
 
-def test_explicit_workspace_still_wins_on_a_sandbox_backend(launch_dir, monkeypatch, tmp_path):
+def test_explicit_workspace_still_wins_on_a_sandbox_backend(
+    launch_dir, monkeypatch, tmp_path
+):
     _backend(monkeypatch, "modal")
     project = tmp_path / "project"
     project.mkdir()
-    explicit, cwd, _remote = server._resolve_create_cwd({"cwd": str(project)}, "tui", None)
-    session = {"session_key": "explicit", "cwd": cwd, "explicit_cwd": explicit, "profile_home": None}
+    explicit, cwd, _remote = server._resolve_create_cwd(
+        {"cwd": str(project)}, "tui", None
+    )
+    session = {
+        "session_key": "explicit",
+        "cwd": cwd,
+        "explicit_cwd": explicit,
+        "profile_home": None,
+    }
 
     assert explicit
     assert server._terminal_task_cwd_with_source(session) == (str(project), "session")
@@ -156,7 +203,10 @@ def test_configured_sandbox_cwd_still_wins(launch_dir, monkeypatch):
 def test_local_backend_keeps_the_launch_dir(launch_dir, monkeypatch):
     session = _fresh_session("local")
 
-    assert server._terminal_task_cwd_with_source(session) == (str(launch_dir), "session")
+    assert server._terminal_task_cwd_with_source(session) == (
+        str(launch_dir),
+        "session",
+    )
     assert server._persisted_session_cwd(session) == str(launch_dir)
 
 
@@ -168,7 +218,10 @@ def test_docker_keeps_the_host_dir(launch_dir, monkeypatch, mount):
     _backend(monkeypatch, "docker", TERMINAL_DOCKER_MOUNT_CWD_TO_WORKSPACE=mount)
     session = _fresh_session(f"docker-mount-{mount}")
 
-    assert server._terminal_task_cwd_with_source(session) == (str(launch_dir), "session")
+    assert server._terminal_task_cwd_with_source(session) == (
+        str(launch_dir),
+        "session",
+    )
     assert server._persisted_session_cwd(session) == str(launch_dir)
 
 
@@ -188,7 +241,9 @@ def test_sandbox_resume_drops_a_stored_clawk_home_cwd(launch_dir, monkeypatch):
 
 
 @pytest.mark.parametrize("launch", ["os-home", "root"])
-def test_sandbox_resume_drops_a_stored_desktop_launch_dir(launch_dir, monkeypatch, tmp_path, launch):
+def test_sandbox_resume_drops_a_stored_desktop_launch_dir(
+    launch_dir, monkeypatch, tmp_path, launch
+):
     """Legacy rows holding a desktop launch dir (the OS home, ``/``) are not adopted as a sandbox workspace, by
     hydration or ``session.resume`` (both go through ``_resumable_stored_cwd``); local still adopts them."""
     from clawk_state import SessionDB
@@ -200,9 +255,19 @@ def test_sandbox_resume_drops_a_stored_desktop_launch_dir(launch_dir, monkeypatc
     db = SessionDB(db_path=tmp_path / "state.db")
     try:
         db.create_session("legacy", source="desktop", model="m", cwd=stored)
-        monkeypatch.setitem(server._sessions, "s-legacy", {"session_key": "legacy", "source": "desktop",
-                                                           "cwd": str(launch_dir), "profile_home": None})
-        monkeypatch.setattr(server, "_persist_session_cwd_and_schedule_git_meta", lambda *a, **k: None)
+        monkeypatch.setitem(
+            server._sessions,
+            "s-legacy",
+            {
+                "session_key": "legacy",
+                "source": "desktop",
+                "cwd": str(launch_dir),
+                "profile_home": None,
+            },
+        )
+        monkeypatch.setattr(
+            server, "_persist_session_cwd_and_schedule_git_meta", lambda *a, **k: None
+        )
         server._hydrate_session_cwd("s-legacy", "legacy", db, None)
         session = server._sessions["s-legacy"]
         assert not session.get("explicit_cwd")
@@ -214,20 +279,29 @@ def test_sandbox_resume_drops_a_stored_desktop_launch_dir(launch_dir, monkeypatc
     assert server._resumable_stored_cwd(stored, None) == stored
 
 
-def test_sandbox_resume_keeps_a_workspace_picked_under_the_clawk_root(launch_dir, monkeypatch):
+def test_sandbox_resume_keeps_a_workspace_picked_under_the_clawk_root(
+    launch_dir, monkeypatch
+):
     """A folder the user picked under the Clawksis root is a workspace, not a launch dir: it persists and resumes."""
     picked = server.get_clawk_home() / "projects" / "chosen"
     picked.mkdir(parents=True)
     _backend(monkeypatch, "modal")
-    session = {"session_key": "picked", "source": "desktop", "cwd": str(picked), "explicit_cwd": True,
-               "profile_home": None}
+    session = {
+        "session_key": "picked",
+        "source": "desktop",
+        "cwd": str(picked),
+        "explicit_cwd": True,
+        "profile_home": None,
+    }
 
     stored = server._persisted_session_cwd(session)
     assert stored == str(picked)
     assert server._resumable_stored_cwd(stored, None) == str(picked)
 
 
-def test_sandbox_hydrated_workspace_stays_the_terminal_cwd(launch_dir, monkeypatch, tmp_path):
+def test_sandbox_hydrated_workspace_stays_the_terminal_cwd(
+    launch_dir, monkeypatch, tmp_path
+):
     """A sandbox session hydrated from its stored workspace marks it explicit, so the terminal uses it rather than
     reading it as an unpicked launch dir."""
     from clawk_state import SessionDB
@@ -238,15 +312,27 @@ def test_sandbox_hydrated_workspace_stays_the_terminal_cwd(launch_dir, monkeypat
     try:
         _backend(monkeypatch, "modal")
         db.create_session("hydrated", source="tui", model="m", cwd=str(project))
-        monkeypatch.setitem(server._sessions, "s-hydrated",
-                            {"session_key": "hydrated", "source": "tui", "cwd": str(launch_dir),
-                             "profile_home": None})
-        monkeypatch.setattr(server, "_persist_session_cwd_and_schedule_git_meta", lambda *a, **k: None)
+        monkeypatch.setitem(
+            server._sessions,
+            "s-hydrated",
+            {
+                "session_key": "hydrated",
+                "source": "tui",
+                "cwd": str(launch_dir),
+                "profile_home": None,
+            },
+        )
+        monkeypatch.setattr(
+            server, "_persist_session_cwd_and_schedule_git_meta", lambda *a, **k: None
+        )
         server._hydrate_session_cwd("s-hydrated", "hydrated", db, None)
         session = server._sessions["s-hydrated"]
 
         assert session["cwd"] == str(project) and session["explicit_cwd"] is True
-        assert server._terminal_task_cwd_with_source(session) == (str(project), "session")
+        assert server._terminal_task_cwd_with_source(session) == (
+            str(project),
+            "session",
+        )
     finally:
         db.close()
 
@@ -262,8 +348,15 @@ def test_compute_host_carries_workspace_provenance(launch_dir, monkeypatch, tmp_
     project = tmp_path / "project"
     project.mkdir()
     _backend(monkeypatch, "modal")
-    parent = {"session_key": "picked", "cwd": str(project), "explicit_cwd": True, "history": [],
-              "history_lock": threading.Lock(), "profile_home": None, "source": "desktop"}
+    parent = {
+        "session_key": "picked",
+        "cwd": str(project),
+        "explicit_cwd": True,
+        "history": [],
+        "history_lock": threading.Lock(),
+        "profile_home": None,
+        "source": "desktop",
+    }
     frame = server._compute_host_turn_frame("rid", "child", parent, "hi")
     assert frame["explicit_cwd"] is True
 
@@ -271,22 +364,37 @@ def test_compute_host_carries_workspace_provenance(launch_dir, monkeypatch, tmp_
 
     def fake_init_session(sid, key, agent, history, **kwargs):
         captured.update(kwargs)
-        monkeypatch.setitem(server._sessions, sid, {"agent": agent, "session_key": key, "cwd": kwargs.get("cwd"),
-                                                    "explicit_cwd": kwargs.get("explicit_cwd", False),
-                                                    "profile_home": None})
+        monkeypatch.setitem(
+            server._sessions,
+            sid,
+            {
+                "agent": agent,
+                "session_key": key,
+                "cwd": kwargs.get("cwd"),
+                "explicit_cwd": kwargs.get("explicit_cwd", False),
+                "profile_home": None,
+            },
+        )
 
-    monkeypatch.setattr(server, "_make_agent", lambda sid, key, **kw: types.SimpleNamespace(session_id=key))
+    monkeypatch.setattr(
+        server,
+        "_make_agent",
+        lambda sid, key, **kw: types.SimpleNamespace(session_id=key),
+    )
     monkeypatch.setattr(server, "_transfer_db_to_agent", lambda agent, db: False)
     monkeypatch.setattr(server, "_init_session", fake_init_session)
     server._sessions.pop("child", None)
     child = ComputeHost(stdout=io.StringIO(), heartbeat_secs=0)._build_server_session(
-        server, {**frame, "sid": "child", "history": []}, "child")
+        server, {**frame, "sid": "child", "history": []}, "child"
+    )
 
     assert captured["explicit_cwd"] is True
     assert server._terminal_task_cwd_with_source(child) == (str(project), "session")
 
 
-def test_compute_host_minimal_record_keeps_workspace_provenance(launch_dir, monkeypatch, tmp_path):
+def test_compute_host_minimal_record_keeps_workspace_provenance(
+    launch_dir, monkeypatch, tmp_path
+):
     """When ``_init_session`` fails, the compute host's minimal record still carries the picked workspace."""
     import io
     import types
@@ -300,14 +408,26 @@ def test_compute_host_minimal_record_keeps_workspace_provenance(launch_dir, monk
     def failing_init_session(*_a, **_k):
         raise RuntimeError("side machinery unavailable")
 
-    monkeypatch.setattr(server, "_make_agent", lambda sid, key, **kw: types.SimpleNamespace(session_id=key))
+    monkeypatch.setattr(
+        server,
+        "_make_agent",
+        lambda sid, key, **kw: types.SimpleNamespace(session_id=key),
+    )
     monkeypatch.setattr(server, "_transfer_db_to_agent", lambda agent, db: False)
     monkeypatch.setattr(server, "_init_session", failing_init_session)
     server._sessions.pop("child-min", None)
-    frame = {"sid": "child-min", "session_key": "picked-min", "cwd": str(project), "explicit_cwd": True,
-             "history": [], "source": "desktop"}
+    frame = {
+        "sid": "child-min",
+        "session_key": "picked-min",
+        "cwd": str(project),
+        "explicit_cwd": True,
+        "history": [],
+        "source": "desktop",
+    }
     try:
-        child = ComputeHost(stdout=io.StringIO(), heartbeat_secs=0)._build_server_session(server, frame, "child-min")
+        child = ComputeHost(
+            stdout=io.StringIO(), heartbeat_secs=0
+        )._build_server_session(server, frame, "child-min")
         assert child["explicit_cwd"] is True and child["source"] == "desktop"
         assert server._terminal_task_cwd_with_source(child) == (str(project), "session")
     finally:
@@ -324,7 +444,9 @@ def test_sandbox_path_completion_lists_the_backend_cwd(launch_dir, monkeypatch):
         return [("notes.md", False)]
 
     monkeypatch.setattr(server, "_backend_dir_entries", fake_entries)
-    resp = server.handle_request({"id": "1", "method": "complete.path", "params": {"word": "no"}})
+    resp = server.handle_request(
+        {"id": "1", "method": "complete.path", "params": {"word": "no"}}
+    )
 
     assert seen["dir"] == "."
     assert [i["text"] for i in resp["result"]["items"]] == ["notes.md"]
@@ -332,6 +454,11 @@ def test_sandbox_path_completion_lists_the_backend_cwd(launch_dir, monkeypatch):
     # The TUI echoes session.info's cwd (the host launch dir nobody picked) back as params.cwd.
     session = _fresh_session("complete-echo")
     monkeypatch.setitem(server._sessions, "s-echo", session)
-    server.handle_request({"id": "2", "method": "complete.path",
-                           "params": {"word": "no", "session_id": "s-echo", "cwd": session["cwd"]}})
+    server.handle_request(
+        {
+            "id": "2",
+            "method": "complete.path",
+            "params": {"word": "no", "session_id": "s-echo", "cwd": session["cwd"]},
+        }
+    )
     assert seen["dir"] == "."

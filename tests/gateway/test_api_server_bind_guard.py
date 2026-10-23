@@ -24,7 +24,6 @@ class TestIsNetworkAccessible:
 
     # -- Loopback (safe, should return False) --
 
-
     def test_ipv4_mapped_loopback(self):
         # ::ffff:127.0.0.1 — Python's is_loopback returns False for mapped
         # addresses; the helper must unwrap and check ipv4_mapped.
@@ -32,21 +31,17 @@ class TestIsNetworkAccessible:
 
     # -- Network-accessible (should return True) --
 
-
     def test_ipv6_wildcard(self):
         # This is the bypass vector that the string-based check missed.
         assert is_network_accessible("::") is True
 
-
     def test_private_ipv4(self):
         assert is_network_accessible("10.0.0.1") is True
-
 
     def test_public_ipv4(self):
         assert is_network_accessible("8.8.8.8") is True
 
     # -- Hostname resolution --
-
 
     def test_hostname_mixed_resolution(self):
         """If a hostname resolves to both loopback and non-loopback, it's
@@ -55,7 +50,9 @@ class TestIsNetworkAccessible:
             (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("127.0.0.1", 0)),
             (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("10.0.0.1", 0)),
         ]
-        with patch("gateway.platforms.base._socket.getaddrinfo", return_value=mixed_result):
+        with patch(
+            "gateway.platforms.base._socket.getaddrinfo", return_value=mixed_result
+        ):
             assert is_network_accessible("dual-host.local") is True
 
 
@@ -67,18 +64,18 @@ class TestIsNetworkAccessible:
 class TestConnectBindGuard:
     """Verify that connect() refuses dangerous configurations."""
 
-
     @pytest.mark.asyncio
     async def test_refuses_loopback_without_key(self):
         """Loopback binds are still an auth boundary and require API_SERVER_KEY."""
-        adapter = APIServerAdapter(PlatformConfig(enabled=True, extra={"host": "127.0.0.1"}))
+        adapter = APIServerAdapter(
+            PlatformConfig(enabled=True, extra={"host": "127.0.0.1"})
+        )
         assert adapter._api_key == ""
         assert is_network_accessible(adapter._host) is False
         result = await adapter.connect()
         assert result is False
         assert adapter._app is None
         assert adapter._background_tasks == set()
-
 
         # Combined: the guard condition is False (key is set), so it passes
 
@@ -134,8 +131,9 @@ class TestBindMechanics:
         finally:
             await second.disconnect()
 
-
-    @pytest.mark.platforms("macos")  # the exclusive bind (reuse_address=False) is a Darwin-only path
+    @pytest.mark.platforms(
+        "macos"
+    )  # the exclusive bind (reuse_address=False) is a Darwin-only path
     @pytest.mark.asyncio
     async def test_rebind_over_time_wait(self):
         """A port held only by a server-side TIME_WAIT socket (the previous gateway closed a

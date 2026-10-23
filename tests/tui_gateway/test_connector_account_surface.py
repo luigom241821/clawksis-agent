@@ -21,7 +21,9 @@ def remote_backend(monkeypatch):
 
 
 def _dispatch(method, params):
-    return server.handle_request({"jsonrpc": "2.0", "id": 1, "method": method, "params": params})
+    return server.handle_request(
+        {"jsonrpc": "2.0", "id": 1, "method": method, "params": params}
+    )
 
 
 def test_account_reads_and_connects_name_the_desktop(remote_backend, monkeypatch):
@@ -41,12 +43,27 @@ def test_account_reads_and_connects_name_the_desktop(remote_backend, monkeypatch
             agents.append(user_agent())
             return {"results": [{"connector": n, "status": "active"} for n in names]}
 
-    monkeypatch.setattr("tools.connectors.portal.client.PortalConnectorClient.require_authentication", lambda self: None)
+    monkeypatch.setattr(
+        "tools.connectors.portal.client.PortalConnectorClient.require_authentication",
+        lambda self: None,
+    )
     monkeypatch.setattr("tools.connectors.portal.tools_cache.read_tools", read_tools)
     monkeypatch.setattr("tools.connectors.gateway.client.ConnectorClient", Client)
 
-    assert _dispatch("connectors.tools", {"slug": "gmail", "refresh": False})["error"]["code"] == 4041
-    connected = _dispatch("connectors.connect", {"owner": {"type": "account"}, "connectors": ["gmail"]})
+    assert (
+        _dispatch("connectors.tools", {"slug": "gmail", "refresh": False})["error"][
+            "code"
+        ]
+        == 4041
+    )
+    connected = _dispatch(
+        "connectors.connect", {"owner": {"type": "account"}, "connectors": ["gmail"]}
+    )
     assert "result" in connected, connected
-    assert user_agent().split(" (")[1].startswith("cli;")  # nothing leaks out of the request
-    assert [agent.split(" (")[1].split(";")[0] for agent in agents] == ["desktop", "desktop"]
+    assert (
+        user_agent().split(" (")[1].startswith("cli;")
+    )  # nothing leaks out of the request
+    assert [agent.split(" (")[1].split(";")[0] for agent in agents] == [
+        "desktop",
+        "desktop",
+    ]

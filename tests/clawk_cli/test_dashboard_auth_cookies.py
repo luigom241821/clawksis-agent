@@ -1,4 +1,5 @@
 """Tests for the dashboard-auth cookie helpers."""
+
 from __future__ import annotations
 
 from fastapi import FastAPI
@@ -28,9 +29,13 @@ def _build_app(use_https: bool = True, prefix: str = ""):
     def set_endpoint():
         r = Response("ok")
         set_session_cookies(
-            r, access_token="AT", refresh_token="RT",
-            access_token_expires_in=3600, use_https=use_https,
-            prefix=prefix, provider="nous",
+            r,
+            access_token="AT",
+            refresh_token="RT",
+            access_token_expires_in=3600,
+            use_https=use_https,
+            prefix=prefix,
+            provider="nous",
         )
         return r
 
@@ -40,7 +45,8 @@ def _build_app(use_https: bool = True, prefix: str = ""):
         set_pkce_cookie(
             r,
             payload={"provider": "stub", "state": "s", "verifier": "v"},
-            use_https=use_https, prefix=prefix,
+            use_https=use_https,
+            prefix=prefix,
         )
         return r
 
@@ -68,7 +74,9 @@ def test_session_cookies_use_host_prefix_on_https_direct():
     cookies = r.headers.get_list("set-cookie")
     at = next(c for c in cookies if c.startswith(f"__Host-{SESSION_AT_COOKIE}="))
     rt = next(c for c in cookies if c.startswith(f"__Host-{SESSION_RT_COOKIE}="))
-    provider = next(c for c in cookies if c.startswith(f"__Host-{SESSION_PROVIDER_COOKIE}=nous"))
+    provider = next(
+        c for c in cookies if c.startswith(f"__Host-{SESSION_PROVIDER_COOKIE}=nous")
+    )
     for c in (at, rt, provider):
         assert "HttpOnly" in c
         assert "samesite=lax" in c.lower()
@@ -86,9 +94,7 @@ def test_session_cookies_use_secure_prefix_when_proxied():
     assert "Path=/clawk" in at
     assert "Secure" in at
     # __Host- variant must NOT be emitted on the prefix path.
-    assert not any(
-        c.startswith(f"__Host-{SESSION_AT_COOKIE}=") for c in cookies
-    )
+    assert not any(c.startswith(f"__Host-{SESSION_AT_COOKIE}=") for c in cookies)
 
 
 def test_session_cookies_use_bare_name_on_http():
@@ -109,14 +115,6 @@ def test_session_cookies_use_bare_name_on_http():
     assert "; Secure" not in at
 
 
-
-
-
-
-
-
-
-
 def test_read_session_cookies_from_request_secure_prefix():
     """Reader also finds cookies set with the __Secure- variant
     (HTTPS behind a proxy prefix)."""
@@ -124,11 +122,13 @@ def test_read_session_cookies_from_request_secure_prefix():
         "type": "http",
         "method": "GET",
         "path": "/",
-        "headers": [(
-            b"cookie",
-            f"__Secure-{SESSION_AT_COOKIE}=at_value; "
-            f"__Secure-{SESSION_RT_COOKIE}=rt_value".encode(),
-        )],
+        "headers": [
+            (
+                b"cookie",
+                f"__Secure-{SESSION_AT_COOKIE}=at_value; "
+                f"__Secure-{SESSION_RT_COOKIE}=rt_value".encode(),
+            )
+        ],
     }
     req = Request(scope)
     at, rt = read_session_cookies(req)
@@ -174,16 +174,15 @@ def test_set_pkce_cookie_wire_value_is_cookie_octet_base64url_json():
     client = TestClient(_build_app(use_https=True, prefix=""))
     r = client.get("/set-pkce")
     pkce_set = next(
-        c for c in r.headers.get_list("set-cookie")
+        c
+        for c in r.headers.get_list("set-cookie")
         if c.startswith(f"__Host-{PKCE_COOKIE}=")
     )
     # Take just the cookie name=value pair, ignore the attributes.
     pkce_value = pkce_set.split(";", 1)[0]
     wire = pkce_value.split("=", 1)[1]
     # No unquoted literal ``;`` in the value (attribute terminator).
-    assert ";" not in wire, (
-        f"unquoted ; leaked into the cookie value: {pkce_value!r}"
-    )
+    assert ";" not in wire, f"unquoted ; leaked into the cookie value: {pkce_value!r}"
     # The real field failure (Traefik/Authentik): the http.cookies quoted
     # form ``"...\073..."`` is not made of cookie-octets, and Go's
     # net/http drops any cookie whose value contains ``"`` or ``\``.
@@ -201,17 +200,12 @@ def test_set_pkce_cookie_wire_value_is_cookie_octet_base64url_json():
     # And tighter than cookie-octets: pure urlsafe base64 (padding is
     # stripped by the encoder — ``=`` is outside http.cookies' legal
     # unquoted set and would trigger the quoted form).
-    b64url = (
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-        "0123456789-_"
-    )
+    b64url = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
     assert all(ch in b64url for ch in wire), (
         f"non-base64url chars in the wire value: {wire!r}"
     )
     # Round-trip the codec back to the original segment dict.
-    decoded = json.loads(
-        base64.urlsafe_b64decode(wire + "=" * (-len(wire) % 4))
-    )
+    decoded = json.loads(base64.urlsafe_b64decode(wire + "=" * (-len(wire) % 4)))
     assert decoded == {"provider": "stub", "state": "s", "verifier": "v"}, (
         f"base64url(JSON) payload didn't round-trip: got {decoded!r}"
     )
@@ -297,6 +291,7 @@ def test_pkce_cookie_round_trip_preserves_all_segments():
     """
     import sys
     from pathlib import Path
+
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from conftest_dashboard_auth import StubAuthProvider  # type: ignore
     from clawk_cli import web_server
@@ -313,18 +308,19 @@ def test_pkce_cookie_round_trip_preserves_all_segments():
     web_server.app.state.auth_required = True
     try:
         client = TestClient(
-            web_server.app, base_url="https://fly-app.fly.dev",
+            web_server.app,
+            base_url="https://fly-app.fly.dev",
         )
         # /auth/login sets the PKCE cookie with provider / state / verifier
         # packed by the login handler. Capture both the PKCE value and
         # the state that the IDP saw.
         r1 = client.get(
-            "/auth/login?provider=stub", follow_redirects=False,
+            "/auth/login?provider=stub",
+            follow_redirects=False,
         )
         assert r1.status_code == 302
         pkce_set = next(
-            c for c in r1.headers.get_list("set-cookie")
-            if "clawk_session_pkce" in c
+            c for c in r1.headers.get_list("set-cookie") if "clawk_session_pkce" in c
         )
         # Pull just the name=value portion so we can echo it back as
         # a Cookie header.
@@ -372,6 +368,7 @@ def test_pkce_callback_works_when_next_query_includes_encoded_path():
     for the redirect."""
     import sys
     from pathlib import Path
+
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from conftest_dashboard_auth import StubAuthProvider  # type: ignore
     from clawk_cli import web_server
@@ -388,7 +385,8 @@ def test_pkce_callback_works_when_next_query_includes_encoded_path():
     web_server.app.state.auth_required = True
     try:
         client = TestClient(
-            web_server.app, base_url="https://fly-app.fly.dev",
+            web_server.app,
+            base_url="https://fly-app.fly.dev",
         )
         # next= with a /sessions?view=recent&project=foo target.
         # The login handler URL-encodes the next= value once, then
@@ -402,8 +400,7 @@ def test_pkce_callback_works_when_next_query_includes_encoded_path():
         )
         assert r1.status_code == 302
         pkce_kv = next(
-            c for c in r1.headers.get_list("set-cookie")
-            if "clawk_session_pkce" in c
+            c for c in r1.headers.get_list("set-cookie") if "clawk_session_pkce" in c
         ).split(";", 1)[0]
         # Drive the callback — must succeed (302 to the post-login
         # target, NOT a 400 "Missing PKCE state cookie").
@@ -413,9 +410,7 @@ def test_pkce_callback_works_when_next_query_includes_encoded_path():
             headers={"cookie": pkce_kv},
             follow_redirects=False,
         )
-        assert r2.status_code == 302, (
-            f"callback failed with next= present: {r2.text!r}"
-        )
+        assert r2.status_code == 302, f"callback failed with next= present: {r2.text!r}"
         # The post-login redirect carries EXACTLY the original target:
         # login-side single-encode + setter whole-payload encode must be
         # symmetrically undone by parse_pkce_payload + the validator's
@@ -430,9 +425,6 @@ def test_pkce_callback_works_when_next_query_includes_encoded_path():
         web_server.app.state.bound_host = prev_host
         web_server.app.state.bound_port = prev_port
         web_server.app.state.auth_required = prev_required
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -494,9 +486,9 @@ def test_clear_pkce_cookie_http_bare_deletion_is_insecure_lax():
     client = TestClient(_build_app(use_https=False, prefix=""))
     cookies = client.get("/clear").headers.get_list("set-cookie")
     bare = next(
-        c for c in cookies
-        if c.startswith(f'{PKCE_COOKIE}="')
-        and not c.startswith("__")
+        c
+        for c in cookies
+        if c.startswith(f'{PKCE_COOKIE}="') and not c.startswith("__")
     )
     assert "Max-Age=0" in bare
     assert "samesite=lax" in bare.lower()
@@ -521,8 +513,7 @@ def test_clear_session_cookies_prefixed_deletions_carry_secure():
         secure = next(c for c in cookies if c.startswith(f'__Secure-{name}="'))
         assert "; Secure" in secure
         bare = next(
-            c for c in cookies
-            if c.startswith(f'{name}="') and not c.startswith("__")
+            c for c in cookies if c.startswith(f'{name}="') and not c.startswith("__")
         )
         # Bare-name deletion mirrors the bare setter (Lax, no Secure) so
         # it still works on plain-HTTP origins.

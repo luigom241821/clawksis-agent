@@ -1,4 +1,5 @@
 """Generated stubs and the production file poller over real shell/filesystem I/O."""
+
 import concurrent.futures
 import json
 import os
@@ -18,10 +19,26 @@ CALLS = {
     "web_extract": {"urls": ["https://example.test"], "char_limit": 3000},
     "read_file": {"path": "reference", "offset": 2, "limit": 4},
     "write_file": {"path": "output", "content": "café", "cross_profile": False},
-    "search_files": {"pattern": "x", "target": "files", "path": ".", "file_glob": "*.py",
-                     "limit": 4, "offset": 2, "output_mode": "count", "context": 3, "order": "modified"},
-    "patch": {"path": "output", "old_string": "old", "new_string": "new", "replace_all": True,
-              "mode": "replace", "patch": None, "cross_profile": False},
+    "search_files": {
+        "pattern": "x",
+        "target": "files",
+        "path": ".",
+        "file_glob": "*.py",
+        "limit": 4,
+        "offset": 2,
+        "output_mode": "count",
+        "context": 3,
+        "order": "modified",
+    },
+    "patch": {
+        "path": "output",
+        "old_string": "old",
+        "new_string": "new",
+        "replace_all": True,
+        "mode": "replace",
+        "patch": None,
+        "cross_profile": False,
+    },
     "terminal": {"command": "echo fixture", "timeout": 3, "workdir": "/tmp"},
 }
 
@@ -57,15 +74,36 @@ def test_generated_file_rpc_kwargs_correlation_and_authority(tmp_path, monkeypat
 
     class Shell:
         def execute(self, command, cwd=None, timeout=None, stdin_data=None):
-            result = subprocess.run([shell, "-c", command], cwd=cwd, timeout=timeout,
-                                    env=dict(os.environ), input=stdin_data or "", capture_output=True, text=True, check=False)
+            result = subprocess.run(
+                [shell, "-c", command],
+                cwd=cwd,
+                timeout=timeout,
+                env=dict(os.environ),
+                input=stdin_data or "",
+                capture_output=True,
+                text=True,
+                check=False,
+            )
             assert result.returncode == 0, result.stderr
             return {"output": result.stdout}
 
     stop = threading.Event()
     budget = len(CALLS) + 8
-    poller = threading.Thread(target=_rpc_poll_loop, args=(Shell(), str(rpc), "owner", log, counter,
-                               budget, frozenset(CALLS), stop, "right-token"), daemon=True)
+    poller = threading.Thread(
+        target=_rpc_poll_loop,
+        args=(
+            Shell(),
+            str(rpc),
+            "owner",
+            log,
+            counter,
+            budget,
+            frozenset(CALLS),
+            stop,
+            "right-token",
+        ),
+        daemon=True,
+    )
     poller.start()
     try:
         # Raw clients bypass stub visibility; neither missing nor wrong token may dispatch.
@@ -77,18 +115,37 @@ def test_generated_file_rpc_kwargs_correlation_and_authority(tmp_path, monkeypat
             path.write_text(json.dumps(request), encoding="utf-8")
             deadline = time.monotonic() + 5
             while path.exists() and time.monotonic() < deadline:
-                stop.wait(.01)
+                stop.wait(0.01)
             assert not path.exists()
             assert not (rpc / f"res_{seq:06d}").exists()
         assert seen == [] and counter == [0]
         for name, args in CALLS.items():
-            blocked = {"background", "heartbeat", "pty", "notify", "notify_on_complete", "watch_patterns", "persist_on_release"} if name == "terminal" else set()
-            schema_keys = set(registry.get_entry(name).schema["parameters"]["properties"]) - blocked
+            blocked = (
+                {
+                    "background",
+                    "heartbeat",
+                    "pty",
+                    "notify",
+                    "notify_on_complete",
+                    "watch_patterns",
+                    "persist_on_release",
+                }
+                if name == "terminal"
+                else set()
+            )
+            schema_keys = (
+                set(registry.get_entry(name).schema["parameters"]["properties"])
+                - blocked
+            )
             assert schema_keys <= set(args), (name, schema_keys - set(args))
             assert namespace[name](**args) == {"name": name, "args": args}
         assert seen == list(CALLS.items())
         with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
-            results = list(pool.map(lambda i: namespace["terminal"](f"tag-{i}", 3, "/tmp"), range(8)))
+            results = list(
+                pool.map(
+                    lambda i: namespace["terminal"](f"tag-{i}", 3, "/tmp"), range(8)
+                )
+            )
         assert [r["args"]["command"] for r in results] == [f"tag-{i}" for i in range(8)]
         assert "not available" in namespace["_call"]("unauthorized-tool", {})["error"]
         assert "limit reached" in namespace["terminal"]("over-budget")["error"]

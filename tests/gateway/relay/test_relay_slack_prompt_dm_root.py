@@ -257,8 +257,11 @@ async def test_typing_carries_live_status_phrase():
 def _wire_with_ts(chat_id, chat_type, message_id, **kw):
     adapter, stub = _wire(chat_id, chat_type, **kw)
     src = SessionSource(
-        platform=Platform.SLACK, chat_id=chat_id, chat_type=chat_type,
-        user_id="U1", scope_id=kw.get("scope_id"),
+        platform=Platform.SLACK,
+        chat_id=chat_id,
+        chat_type=chat_type,
+        user_id="U1",
+        scope_id=kw.get("scope_id"),
     )
     ev = MessageEvent(
         text="hi", source=src, message_type=MessageType.TEXT, message_id=message_id
@@ -332,9 +335,7 @@ async def test_stop_typing_clear_targets_same_synthesized_thread():
     adapter, stub = _wire_with_ts("D1", "dm", "1700.0042")
     await adapter.send_typing("D1", metadata=None)
     await adapter.stop_typing("D1", metadata=None)
-    clears = [
-        f for f in stub.sent if f["op"] == "typing" and f.get("content") == ""
-    ]
+    clears = [f for f in stub.sent if f["op"] == "typing" and f.get("content") == ""]
     assert clears and clears[-1]["metadata"].get("thread_id") == "1700.0042"
 
 
@@ -345,11 +346,17 @@ async def test_stop_typing_clear_targets_same_synthesized_thread():
 # ---------------------------------------------------------------------------
 def _inbound_event(chat_id="D1", message_id="1700.0100", thread_id=None):
     src = SessionSource(
-        platform=Platform.SLACK, chat_id=chat_id, chat_type="dm",
-        user_id="U1", scope_id="T1", thread_id=thread_id,
+        platform=Platform.SLACK,
+        chat_id=chat_id,
+        chat_type="dm",
+        user_id="U1",
+        scope_id="T1",
+        thread_id=thread_id,
     )
     return MessageEvent(
-        text="hi", source=src, message_type=MessageType.TEXT,
+        text="hi",
+        source=src,
+        message_type=MessageType.TEXT,
         message_id=message_id,
     )
 
@@ -363,6 +370,7 @@ def test_top_level_dm_gets_session_thread_stamp():
 
 def test_two_top_level_messages_key_distinct_sessions():
     from gateway.session import build_session_key
+
     adapter, _ = _wire("D1", "dm")
     e1 = _inbound_event(message_id="1700.0100")
     e2 = _inbound_event(message_id="1700.0200")

@@ -82,7 +82,9 @@ def _managed_gateway(token_reader=None):
     return gw.resolve_free_search_gateway(token_reader=token_reader)
 
 
-def _perplexity_request(endpoint: str, payload: dict[str, Any], gateway=None) -> dict[str, Any]:
+def _perplexity_request(
+    endpoint: str, payload: dict[str, Any], gateway=None
+) -> dict[str, Any]:
     """POST to Perplexity or the supplied gateway; return parsed JSON.
 
     Raises ``ValueError`` when the key is missing or on any non-2xx status,
@@ -95,9 +97,15 @@ def _perplexity_request(endpoint: str, payload: dict[str, Any], gateway=None) ->
     headers = _HEADERS
     if gateway is not None:
         # Nous-owned key behind the gateway: identify the harness only, not a per-user integration.
-        base_url, api_key, headers = gateway.gateway_origin.rstrip("/"), gateway.nous_user_token, {"User-Agent": _HEADERS["User-Agent"]}
+        base_url, api_key, headers = (
+            gateway.gateway_origin.rstrip("/"),
+            gateway.nous_user_token,
+            {"User-Agent": _HEADERS["User-Agent"]},
+        )
     elif api_key:
-        base_url = (get_provider_env("PERPLEXITY_BASE_URL") or _DEFAULT_BASE_URL).rstrip("/")
+        base_url = (
+            get_provider_env("PERPLEXITY_BASE_URL") or _DEFAULT_BASE_URL
+        ).rstrip("/")
     else:
         raise ValueError(_missing_key_error())
     url = f"{base_url}/{endpoint.lstrip('/')}"
@@ -134,14 +142,20 @@ def _normalize_search_results(response: dict[str, Any]) -> dict[str, Any]:
     return {"success": True, "data": {"web": web_results}}
 
 
-def _normalize_snippets(response: dict[str, Any], urls: list[str]) -> list[dict[str, Any]]:
+def _normalize_snippets(
+    response: dict[str, Any], urls: list[str]
+) -> list[dict[str, Any]]:
     """Map ``{results: [{url,text?,tokens_count?,error?}]}`` to extract documents.
 
     One document per requested URL, in request order. A URL the backend
     omitted or flagged with ``error`` becomes a document carrying ``error``
     rather than raising — a 200 does not mean every page succeeded.
     """
-    by_url = {r.get("url", ""): r for r in (response.get("results") or []) if isinstance(r, dict)}
+    by_url = {
+        r.get("url", ""): r
+        for r in (response.get("results") or [])
+        if isinstance(r, dict)
+    }
     documents: list[dict[str, Any]] = []
     for url in urls:
         result = by_url.get(url, {})
@@ -165,7 +179,9 @@ def _query_for_urls(urls: list[str]) -> str:
     words: list[str] = []
     for url in urls:
         parsed = urlparse(url)
-        for token in parsed.path.replace("-", " ").replace("_", " ").replace("/", " ").split():
+        for token in (
+            parsed.path.replace("-", " ").replace("_", " ").replace("/", " ").split()
+        ):
             if token.lower() not in words and not token.isdigit():
                 words.append(token.lower())
         if not parsed.path.strip("/"):
@@ -189,7 +205,10 @@ class PerplexityWebSearchProvider(WebSearchProvider):
         from agent.web_search_provider import get_provider_env
         from tools.managed_tool_gateway import peek_nous_access_token
 
-        return bool(get_provider_env("PERPLEXITY_API_KEY")) or _managed_gateway(token_reader=peek_nous_access_token) is not None
+        return (
+            bool(get_provider_env("PERPLEXITY_API_KEY"))
+            or _managed_gateway(token_reader=peek_nous_access_token) is not None
+        )
 
     def supports_search(self) -> bool:
         return True
@@ -218,11 +237,24 @@ class PerplexityWebSearchProvider(WebSearchProvider):
             managed = False if direct else _managed_web_search()
             gateway = resolve_free_search_gateway() if managed else None
             if gateway is None and managed:
-                from tools.tool_backend_helpers import NOUS_MANAGED_PROVIDER, selection_error
+                from tools.tool_backend_helpers import (
+                    NOUS_MANAGED_PROVIDER,
+                    selection_error,
+                )
 
-                raise ValueError(selection_error(
-                    "web", NOUS_MANAGED_PROVIDER, "there is no usable Nous identity (sign in with `/login`)"))
-            logger.info("Perplexity search: '%s' (limit=%d%s)", query, limit, ", managed" if gateway else "")
+                raise ValueError(
+                    selection_error(
+                        "web",
+                        NOUS_MANAGED_PROVIDER,
+                        "there is no usable Nous identity (sign in with `/login`)",
+                    )
+                )
+            logger.info(
+                "Perplexity search: '%s' (limit=%d%s)",
+                query,
+                limit,
+                ", managed" if gateway else "",
+            )
             payload = {
                 "query": query,
                 "max_results": max(1, min(limit, _MAX_SEARCH_RESULTS)),
@@ -262,11 +294,18 @@ class PerplexityWebSearchProvider(WebSearchProvider):
             )
             return _normalize_snippets(raw, list(urls))
         except ValueError as exc:
-            return [{"url": u, "title": "", "content": "", "error": str(exc)} for u in urls]
+            return [
+                {"url": u, "title": "", "content": "", "error": str(exc)} for u in urls
+            ]
         except Exception as exc:
             logger.warning("Perplexity extract error: %s", exc)
             return [
-                {"url": u, "title": "", "content": "", "error": f"Perplexity extract failed: {exc}"}
+                {
+                    "url": u,
+                    "title": "",
+                    "content": "",
+                    "error": f"Perplexity extract failed: {exc}",
+                }
                 for u in urls
             ]
 

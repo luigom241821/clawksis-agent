@@ -36,6 +36,7 @@ def cron_env(tmp_path, monkeypatch):
 
     # Clear cached module-level paths
     import cron.jobs as jobs_mod
+
     monkeypatch.setattr(jobs_mod, "CLAWK_DIR", clawk_home)
     monkeypatch.setattr(jobs_mod, "CRON_DIR", clawk_home / "cron")
     monkeypatch.setattr(jobs_mod, "JOBS_FILE", clawk_home / "cron" / "jobs.json")
@@ -59,7 +60,6 @@ class TestJobScriptField:
 
         loaded = get_job(job["id"])
         assert loaded["script"] == "/path/to/monitor.py"
-
 
     def test_update_job_add_script(self, cron_env):
         from cron.jobs import create_job, update_job
@@ -98,18 +98,38 @@ class TestRunJobScript:
         assert output == "hello from script"
 
     @pytest.mark.platforms("posix")
-    @pytest.mark.parametrize("make_interpreter, expected", [
-        (lambda d: "python3", "absolute or ~-prefixed"),
-        (lambda d: str(d / "missing" / "python3"), "not found"),
-        (lambda d: str(d), "not a file"),
-        (lambda d: (d / "python3").write_text("") or str(d / "python3"), "not executable"),
-        (lambda d: "/bin/bash", "must be a Python executable"),
-        (lambda d: (d / "python").symlink_to("/bin/bash") or str(d / "python"),
-         "must be a Python executable"),
-        (lambda d: (d / "pythonw").symlink_to(sys.executable) or str(d / "pythonw"),
-         "must be a Python executable"),
-    ], ids=["bare-name", "missing", "directory", "not-executable", "bash",
-            "python-symlink-to-bash", "pythonw"])
+    @pytest.mark.parametrize(
+        "make_interpreter, expected",
+        [
+            (lambda d: "python3", "absolute or ~-prefixed"),
+            (lambda d: str(d / "missing" / "python3"), "not found"),
+            (lambda d: str(d), "not a file"),
+            (
+                lambda d: (d / "python3").write_text("") or str(d / "python3"),
+                "not executable",
+            ),
+            (lambda d: "/bin/bash", "must be a Python executable"),
+            (
+                lambda d: (d / "python").symlink_to("/bin/bash") or str(d / "python"),
+                "must be a Python executable",
+            ),
+            (
+                lambda d: (
+                    (d / "pythonw").symlink_to(sys.executable) or str(d / "pythonw")
+                ),
+                "must be a Python executable",
+            ),
+        ],
+        ids=[
+            "bare-name",
+            "missing",
+            "directory",
+            "not-executable",
+            "bash",
+            "python-symlink-to-bash",
+            "pythonw",
+        ],
+    )
     def test_configured_interpreter_is_refused_unless_a_python_path(
         self, cron_env, tmp_path, make_interpreter, expected
     ):
@@ -121,7 +141,9 @@ class TestRunJobScript:
         script = cron_env / "scripts" / "job.py"
         script.write_text('print("ran")\n')
 
-        success, output = _run_job_script(str(script), interpreter=make_interpreter(tmp_path))
+        success, output = _run_job_script(
+            str(script), interpreter=make_interpreter(tmp_path)
+        )
         assert success is False
         assert expected in output
 
@@ -137,8 +159,7 @@ class TestRunJobScript:
 
         script = cron_env / "scripts" / "binary_stdout.py"
         script.write_text(
-            "import sys\n"
-            'sys.stdout.buffer.write(b"alert before \\x80 after\\n")\n'
+            'import sys\nsys.stdout.buffer.write(b"alert before \\x80 after\\n")\n'
         )
 
         success, output = _run_job_script(str(script))
@@ -164,7 +185,6 @@ class TestRunJobScript:
         assert success is False
         assert "Script not found" in output
         assert str(cron_env / "scripts") in output
-
 
     def test_script_subprocess_env_sanitized(self, cron_env, monkeypatch):
         """Cron scripts must not inherit Clawksis provider env (SECURITY.md §2.3)."""
@@ -192,7 +212,9 @@ class TestRunJobScript:
         assert output == "ABSENT"
 
     @pytest.mark.platforms("windows")
-    def test_windows_uv_venv_python_script_bypasses_launcher(self, cron_env, tmp_path, monkeypatch):
+    def test_windows_uv_venv_python_script_bypasses_launcher(
+        self, cron_env, tmp_path, monkeypatch
+    ):
         # Windows-only: the fake ``sys.platform`` could not reproduce the
         # ``Scripts/python.exe`` launcher layout or the CREATE_NO_WINDOW
         # creationflags this branch exists for.
@@ -214,7 +236,9 @@ class TestRunJobScript:
         base_python = base / "python.exe"
         venv_python.write_text("", encoding="utf-8")
         base_python.write_text("", encoding="utf-8")
-        (venv / "pyvenv.cfg").write_text(f"home = {base}\nuv = true\n", encoding="utf-8")
+        (venv / "pyvenv.cfg").write_text(
+            f"home = {base}\nuv = true\n", encoding="utf-8"
+        )
 
         captured = {}
 
@@ -263,7 +287,9 @@ class TestRunJobScript:
         assert env["VIRTUAL_ENV"] == str(venv)
         assert str(site_packages) in env["PYTHONPATH"]
 
-    def test_bootstrap_argv_makes_pth_editable_installs_importable(self, cron_env, tmp_path):
+    def test_bootstrap_argv_makes_pth_editable_installs_importable(
+        self, cron_env, tmp_path
+    ):
         """The bootstrap must process .pth files — the whole reason the
         overlay mode exists is that PYTHONPATH alone cannot (editable
         installs would raise ModuleNotFoundError in cron scripts)."""
@@ -360,7 +386,8 @@ class TestRunJobScript:
         (deps / "snapshot.pth").write_text(f"{snapshot}\n", encoding="utf-8")
 
         monkeypatch.setattr(
-            "clawk_cli._launchers.resolve_store_python", lambda repo: Path(sys.executable)
+            "clawk_cli._launchers.resolve_store_python",
+            lambda repo: Path(sys.executable),
         )
         monkeypatch.setattr("pm.environments.selected_venv", lambda repo: venv)
         monkeypatch.delenv("PYTHONPATH", raising=False)
@@ -385,7 +412,9 @@ class TestRunJobScript:
         assert Path(constants_file).resolve() == repo / "clawk_constants.py"
         assert Path(path0).resolve() == script.parent.resolve()
         assert pythonpath == "PYTHONPATH="
-        assert pickled == "pickled True"  # __main__ outlives the body, as in a plain run
+        assert (
+            pickled == "pickled True"
+        )  # __main__ outlives the body, as in a plain run
 
     @pytest.mark.platforms("posix")
     @pytest.mark.parametrize("broken", ["selection_raises", "interpreter_missing"])
@@ -398,16 +427,23 @@ class TestRunJobScript:
         from cron.scheduler_script import _run_job_script
 
         def _broken(repo):
-            raise RuntimeError("dependency environment is missing or outside this install")
+            raise RuntimeError(
+                "dependency environment is missing or outside this install"
+            )
 
         monkeypatch.setattr(
-            "clawk_cli._launchers.resolve_store_python", lambda repo: Path(sys.executable)
+            "clawk_cli._launchers.resolve_store_python",
+            lambda repo: Path(sys.executable),
         )
         monkeypatch.setattr(
             "pm.environments.selected_venv",
-            _broken if broken == "selection_raises" else (lambda repo: tmp_path / "gone-venv"),
+            _broken
+            if broken == "selection_raises"
+            else (lambda repo: tmp_path / "gone-venv"),
         )
-        (cron_env / "scripts" / "probe.py").write_text('print("ok")\n', encoding="utf-8")
+        (cron_env / "scripts" / "probe.py").write_text(
+            'print("ok")\n', encoding="utf-8"
+        )
 
         success, output = _run_job_script("probe.py")
         assert success is False
@@ -425,7 +461,7 @@ class TestRunJobScript:
 
         script = cron_env / "scripts" / "emoji.py"
         script.write_text(
-            'import sys\n'
+            "import sys\n"
             'sys.stdout.buffer.write("backup done \\N{PARTY POPPER} 日次".encode("utf-8"))\n',
             encoding="utf-8",
         )
@@ -434,7 +470,6 @@ class TestRunJobScript:
 
         assert success is True
         assert "backup done 🎉 日次" == output
-
 
 
 class TestBuildJobPromptWithScript:
@@ -479,25 +514,28 @@ class TestBuildJobPromptWithScript:
 class TestCronjobToolScript:
     """Test the cronjob tool's script parameter."""
 
-
     def test_clear_script(self, cron_env, monkeypatch):
         monkeypatch.setenv("CLAWK_INTERACTIVE", "1")
         from tools.cronjob_tools import cronjob
 
         (cron_env / "scripts" / "some_script.py").write_text("print('hi')\n")
-        create_result = json.loads(cronjob(
-            action="create",
-            schedule="every 1h",
-            prompt="Monitor things",
-            script="some_script.py",
-        ))
+        create_result = json.loads(
+            cronjob(
+                action="create",
+                schedule="every 1h",
+                prompt="Monitor things",
+                script="some_script.py",
+            )
+        )
         job_id = create_result["job_id"]
 
-        update_result = json.loads(cronjob(
-            action="update",
-            job_id=job_id,
-            script="",
-        ))
+        update_result = json.loads(
+            cronjob(
+                action="update",
+                job_id=job_id,
+                script="",
+            )
+        )
         assert update_result["success"] is True
         assert "script" not in update_result["job"]
 
@@ -538,7 +576,6 @@ class TestScriptPathContainment:
         success, output = _run_job_script(str(outside_script))
         assert success is False
         assert "blocked" in output.lower() or "outside" in output.lower()
-
 
     def test_tilde_path_blocked(self, cron_env):
         """~ prefixed paths must be rejected (expanduser bypasses check)."""
@@ -588,7 +625,6 @@ class TestScriptPathContainment:
         assert success is True
         assert output == "sub ok"
 
-
     @pytest.mark.skipif(
         sys.platform == "win32",
         reason="Symlinks require elevated privileges on Windows",
@@ -613,19 +649,23 @@ class TestScriptPathContainment:
 class TestCronjobToolScriptValidation:
     """Test API-boundary validation of cron script paths in cronjob_tools."""
 
-
     def test_create_with_traversal_script_rejected(self, cron_env, monkeypatch):
         monkeypatch.setenv("CLAWK_INTERACTIVE", "1")
         from tools.cronjob_tools import cronjob
 
-        result = json.loads(cronjob(
-            action="create",
-            schedule="every 1h",
-            prompt="Monitor things",
-            script="../../etc/passwd",
-        ))
+        result = json.loads(
+            cronjob(
+                action="create",
+                schedule="every 1h",
+                prompt="Monitor things",
+                script="../../etc/passwd",
+            )
+        )
         assert result["success"] is False
-        assert "escapes" in result["error"].lower() or "traversal" in result["error"].lower()
+        assert (
+            "escapes" in result["error"].lower()
+            or "traversal" in result["error"].lower()
+        )
 
 
 class TestRunJobEnvVarCleanup:
@@ -680,10 +720,13 @@ class TestScriptTimeoutTreeKill:
 
         tree_kill_calls, fallback_calls = [], []
         monkeypatch.setattr(
-            deadline, "kill_process_tree",
+            deadline,
+            "kill_process_tree",
             lambda pid: tree_kill_calls.append(pid) or tree_kill_result,
         )
-        monkeypatch.setattr(sched_script, "_terminate_cron_script_process", fallback_calls.append)
+        monkeypatch.setattr(
+            sched_script, "_terminate_cron_script_process", fallback_calls.append
+        )
         return tree_kill_calls, fallback_calls
 
     def test_unified_tree_kill_failure_falls_back(self, monkeypatch):
@@ -738,7 +781,9 @@ class TestScriptTimeoutTreeKill:
             tree_calls.append(proc.pid)
             proc.kill()
 
-        monkeypatch.setattr(sched_script, "_terminate_cron_script_tree", _record_and_kill)
+        monkeypatch.setattr(
+            sched_script, "_terminate_cron_script_tree", _record_and_kill
+        )
 
         class _Cancelled:
             def is_set(self):
@@ -780,7 +825,9 @@ class TestScriptTimeoutTreeKill:
                 process = psutil.Process(pid)
                 # 'dead' = mid-reap (exited); see test_script_termination_reaps_descendants.
                 return process.is_running() and process.status() not in (
-                    psutil.STATUS_ZOMBIE, psutil.STATUS_DEAD)
+                    psutil.STATUS_ZOMBIE,
+                    psutil.STATUS_DEAD,
+                )
             except (psutil.NoSuchProcess, psutil.ZombieProcess):
                 return False
 

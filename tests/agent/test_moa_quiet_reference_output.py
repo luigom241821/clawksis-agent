@@ -4,6 +4,7 @@
 ``tool_progress_mode = "off"``; the MoA reference relay reads the callback at emit time, so
 quiet sessions must emit nothing and interactive sessions must relay every event.
 """
+
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -19,16 +20,30 @@ def _facade(agent):
 
 
 def test_quiet_cli_emits_no_moa_display_events():
-    agent = SimpleNamespace(platform="cli", tool_progress_mode="off", tool_progress_callback=None, provider="moa", model="default")
+    agent = SimpleNamespace(
+        platform="cli",
+        tool_progress_mode="off",
+        tool_progress_callback=None,
+        provider="moa",
+        model="default",
+    )
     relay = _facade(agent)
-    relay("moa.reference", label="m1", text="answer", index=0, count=2)  # must not raise
+    relay(
+        "moa.reference", label="m1", text="answer", index=0, count=2
+    )  # must not raise
     relay("moa.aggregating", aggregator="agg")
 
 
 @pytest.mark.parametrize("platform", ["cli", "telegram"])
 def test_interactive_surfaces_receive_moa_events(platform):
     cb = MagicMock()
-    agent = SimpleNamespace(platform=platform, tool_progress_mode="all", tool_progress_callback=cb, provider="moa", model="default")
+    agent = SimpleNamespace(
+        platform=platform,
+        tool_progress_mode="all",
+        tool_progress_callback=cb,
+        provider="moa",
+        model="default",
+    )
     relay = _facade(agent)
     relay("moa.reference", label="m1", text="answer", index=0, count=2)
     relay("moa.aggregating", aggregator="agg")

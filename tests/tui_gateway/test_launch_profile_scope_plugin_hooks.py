@@ -37,7 +37,8 @@ def two_homes(tmp_path, monkeypatch):
         home.mkdir(parents=True)
         (home / "config.yaml").write_text(
             f"plugins:\n  enabled: [stub]\n  entries:\n    stub:\n      settings:\n        x: {tag}\n",
-            encoding="utf-8")
+            encoding="utf-8",
+        )
         (home / ".env").write_text("", encoding="utf-8")
     monkeypatch.setenv("CLAWK_HOME", str(launch))
     monkeypatch.setattr(server, "_clawk_home", launch)
@@ -48,12 +49,21 @@ def two_homes(tmp_path, monkeypatch):
 
     def stub_pre_tool_call(**_kw):
         from clawk_cli.config import load_config_readonly
-        entry = ((load_config_readonly().get("plugins") or {}).get("entries") or {}).get("stub") or {}
-        seen.append({"home": get_clawk_home().name, "x": (entry.get("settings") or {}).get("x"),
-                     "bound": get_clawk_home_override() is not None})
+
+        entry = (
+            (load_config_readonly().get("plugins") or {}).get("entries") or {}
+        ).get("stub") or {}
+        seen.append(
+            {
+                "home": get_clawk_home().name,
+                "x": (entry.get("settings") or {}).get("x"),
+                "bound": get_clawk_home_override() is not None,
+            }
+        )
 
     # Plugin managers are keyed per home: each profile loads its own copy of the plugin.
     from clawk_constants import reset_clawk_home_override, set_clawk_home_override
+
     for home in (launch, routed):
         token = set_clawk_home_override(str(home))
         try:
@@ -71,9 +81,13 @@ def _fire_from_tool_worker():
     """The real hop: a tool worker thread + the bounded hook dispatcher."""
     pool = DaemonThreadPoolExecutor(max_workers=1)
     try:
-        return pool.submit(propagate_context_to_thread(
-            lambda: plugins_mod._dispatch_pre_tool_call_hooks(
-                "terminal", {"command": "true"}, tool_call_id="c1", turn_id="t1"))).result(10)
+        return pool.submit(
+            propagate_context_to_thread(
+                lambda: plugins_mod._dispatch_pre_tool_call_hooks(
+                    "terminal", {"command": "true"}, tool_call_id="c1", turn_id="t1"
+                )
+            )
+        ).result(10)
     finally:
         pool.shutdown(wait=False)
 
@@ -81,16 +95,24 @@ def _fire_from_tool_worker():
 def _fire_off_turn_workers(launch_manager_hook_seen):
     """The two worker-thread deliveries: stream observer queue and the plugin event bus."""
     from agent import plugin_stream_hooks
+
     manager = plugins_mod.get_plugin_manager()
     observed: list[dict] = []
 
     def observer(**_kw):
-        observed.append({"home": get_clawk_home().name, "bound": get_clawk_home_override() is not None})
+        observed.append(
+            {
+                "home": get_clawk_home().name,
+                "bound": get_clawk_home_override() is not None,
+            }
+        )
 
     manager._hooks.setdefault("on_stream_end", []).append(observer)
     manager._subscribe_event("stub", "stub:tick", observer)
     try:
-        assert plugin_stream_hooks.enqueue_plugin_stream_hook("on_stream_end", session_id="s")
+        assert plugin_stream_hooks.enqueue_plugin_stream_hook(
+            "on_stream_end", session_id="s"
+        )
         assert manager._dispatch_event("stub:tick", {}) == 1
         assert manager._wait_for_event_dispatch(timeout=5.0)
         plugin_stream_hooks.shutdown_plugin_stream_hook_dispatcher(timeout=5.0)
@@ -111,14 +133,19 @@ def test_launch_profile_turn_hooks_see_bound_scope_a_b_a(two_homes):
     with _profile_runtime_scope(routed, {}):
         _fire_from_tool_worker()
         off_turn_b = _fire_off_turn_workers(seen)
-    scopes = server._profile_runtime_scope_tokens(None)  # serve backend: launch-profile session
+    scopes = server._profile_runtime_scope_tokens(
+        None
+    )  # serve backend: launch-profile session
     try:
         _fire_from_tool_worker()
     finally:
         server._release_profile_runtime_scope_tokens(scopes)
 
     assert [(r["home"], r["x"]) for r in seen] == [
-        ("clawk_home", "alpha"), ("beta", "beta"), ("clawk_home", "alpha")]
+        ("clawk_home", "alpha"),
+        ("beta", "beta"),
+        ("clawk_home", "alpha"),
+    ]
     assert all(r["bound"] for r in seen), seen
     assert off_turn_a == [{"home": "clawk_home", "bound": True}] * 2, off_turn_a
     assert off_turn_b == [{"home": "beta", "bound": True}] * 2, off_turn_b

@@ -1,4 +1,5 @@
 """Regression for #140499: upstream admission survives credential-free hosting."""
+
 import os
 from types import SimpleNamespace
 
@@ -9,7 +10,7 @@ from tests.clawk_cli import test_plugin_secondary_profile_host as secondary
 
 daemon = secondary.daemon
 
-_API = '''
+_API = """
 import os
 from fastapi import APIRouter, Request
 from clawk_cli.web_deps import late
@@ -22,7 +23,7 @@ async def config(request: Request):
     return {"pid": os.getpid(), "saved": True,
             "credentials": [k for k in request.headers if k in
                 {"authorization", "cookie", "x-clawk-session-token", "x-clawk-gateway-ticket"}]}
-'''
+"""
 
 
 @pytest.mark.platforms("any")
@@ -51,8 +52,16 @@ def test_host_admission_does_not_leak_or_come_from_http_input(tmp_path):
     home = tmp_path / "home"
     home.mkdir()
     host = PluginHost(SimpleNamespace(home_path=home, _plugins={}))
-    args = ("guard-probe", str(api), "plugin_api.py", "PUT", "/config", "authenticated=true",
-            [("X-Hosted-Http-Authenticated", "true")], b'{"authenticated":true}')
+    args = (
+        "guard-probe",
+        str(api),
+        "plugin_api.py",
+        "PUT",
+        "/config",
+        "authenticated=true",
+        [("X-Hosted-Http-Authenticated", "true")],
+        b'{"authenticated":true}',
+    )
     try:
         assert host.asgi_request(*args, authenticated=True)["status"] == 200
         for marker in (False, None, "true", 1):
@@ -71,7 +80,9 @@ def test_launch_host_preserves_native_admission(daemon, monkeypatch):
     api = daemon.launch / "plugins" / "launch-guard" / "dashboard" / "plugin_api.py"
     api.write_text(_API, encoding="utf-8")
     try:
-        response = daemon.client.put("/api/plugins/launch-guard/config", headers=daemon.owner)
+        response = daemon.client.put(
+            "/api/plugins/launch-guard/config", headers=daemon.owner
+        )
         assert response.status_code == 200, response.text
         assert response.json()["pid"] != os.getpid()
     finally:
@@ -85,15 +96,38 @@ def test_admission_matches_normal_guard_and_preserves_unguarded_routes():
     from clawk_cli import web_server
 
     app = FastAPI()
-    scope = {"type": "http", "method": "PUT", "path": "/config", "headers": [], "app": app}
+    scope = {
+        "type": "http",
+        "method": "PUT",
+        "path": "/config",
+        "headers": [],
+        "app": app,
+    }
     assert not admitted_for_sensitive_route(Request(scope))
-    assert admitted_for_sensitive_route(Request({**scope, "headers": [
-        (web_server._SESSION_HEADER_NAME.lower().encode(), web_server._SESSION_TOKEN.encode())]}))
+    assert admitted_for_sensitive_route(
+        Request(
+            {
+                **scope,
+                "headers": [
+                    (
+                        web_server._SESSION_HEADER_NAME.lower().encode(),
+                        web_server._SESSION_TOKEN.encode(),
+                    )
+                ],
+            }
+        )
+    )
     app.state.auth_required = True
     assert not admitted_for_sensitive_route(Request(scope))
-    assert admitted_for_sensitive_route(Request({**scope, "state": {"session": object()}}))
-    assert admitted_for_sensitive_route(Request({**scope, "state": {"native_http_principal": object()}}))
+    assert admitted_for_sensitive_route(
+        Request({**scope, "state": {"session": object()}})
+    )
+    assert admitted_for_sensitive_route(
+        Request({**scope, "state": {"native_http_principal": object()}})
+    )
     for marker in (None, False, "true", 1):
         with pytest.raises(HTTPException) as error:
-            web_server._require_token(Request({**scope, "state": {"hosted_http_authenticated": marker}}))
+            web_server._require_token(
+                Request({**scope, "state": {"hosted_http_authenticated": marker}})
+            )
         assert error.value.status_code == 401

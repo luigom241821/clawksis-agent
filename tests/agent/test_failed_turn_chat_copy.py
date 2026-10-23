@@ -5,6 +5,7 @@ Behaviour contracts, not snapshots: each test asserts the relationship between a
 and what ``agent/error_surface.py`` derives from it, plus the presence of the exact command
 the user is told to run.
 """
+
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -12,9 +13,16 @@ from types import SimpleNamespace
 import pytest
 
 from agent.error_classifier import classify_api_error
-from agent.error_surface import LAYER_GATEWAY, LAYER_PROVIDER, build_error_surface_from_result
+from agent.error_surface import (
+    LAYER_GATEWAY,
+    LAYER_PROVIDER,
+    build_error_surface_from_result,
+)
 from agent.turn_loop_errors import handle_outer_loop_error
-from agent.turn_recovery import max_retries_exhausted_result, nonretryable_client_error_result
+from agent.turn_recovery import (
+    max_retries_exhausted_result,
+    nonretryable_client_error_result,
+)
 from agent.turn_failure_copy import SITE_FAILURE_CODES
 from agent.turn_response_check import retry_invalid_response
 
@@ -53,13 +61,25 @@ class _Http(Exception):
         self.status_code = status_code
 
 
-def _nonretryable(status, message, provider="openrouter", model="gpt-5-turbo", agent=None):
+def _nonretryable(
+    status, message, provider="openrouter", model="gpt-5-turbo", agent=None
+):
     error = _Http(status, message)
     classified = classify_api_error(error, provider=provider, model=model)
     return nonretryable_client_error_result(
-        agent or _Agent(), error, classified, status_code=status, api_kwargs=None, api_messages=[], messages=[],
-        conversation_history=None, api_call_count=1, approx_tokens=10, provider=provider,
-        base_url="https://openrouter.ai/api/v1", model=model,
+        agent or _Agent(),
+        error,
+        classified,
+        status_code=status,
+        api_kwargs=None,
+        api_messages=[],
+        messages=[],
+        conversation_history=None,
+        api_call_count=1,
+        approx_tokens=10,
+        provider=provider,
+        base_url="https://openrouter.ai/api/v1",
+        model=model,
     )
 
 
@@ -69,12 +89,15 @@ def test_model_not_found_chat_text_points_at_model_picker_not_http():
     assert "/model" in text and "gpt-5-turbo" in text
     assert not text.startswith("HTTP")
     assert result["failure_reason"] == "model_not_found"
-    assert build_error_surface_from_result(result, provider="openrouter")["retryable"] is False
+    assert (
+        build_error_surface_from_result(result, provider="openrouter")["retryable"]
+        is False
+    )
 
 
-
-
-def test_oauth_rejection_chat_text_names_the_provider_slug_and_the_failing_profile(tmp_path, monkeypatch):
+def test_oauth_rejection_chat_text_names_the_provider_slug_and_the_failing_profile(
+    tmp_path, monkeypatch
+):
     """A revoked Codex grant must send the user to THAT profile's own sign-in (profiles are
     islands, 93889b770da) and put the provider slug in the text the goal judge reads (#114012)."""
     profile_home = tmp_path / ".clawk" / "profiles" / "codex"
@@ -88,8 +111,11 @@ def test_oauth_rejection_chat_text_names_the_provider_slug_and_the_failing_profi
             hints.append(msg)
 
     result = _nonretryable(
-        401, "HTTP 401: Encountered invalidated oauth token for user, failing request (code: token_revoked)",
-        provider="openai-codex", model="gpt-5.6-sol", agent=_Recorder(),
+        401,
+        "HTTP 401: Encountered invalidated oauth token for user, failing request (code: token_revoked)",
+        provider="openai-codex",
+        model="gpt-5.6-sol",
+        agent=_Recorder(),
     )
     text = result["final_response"]
     assert "`clawk -p codex auth add openai-codex --type oauth`" in text
@@ -105,9 +131,21 @@ def test_max_retries_exhausted_chat_text_has_next_step_and_no_mechanism_lead():
     error = _Http(503, "HTTP 503: upstream unavailable")
     classified = classify_api_error(error, provider="openrouter", model="m")
     result = max_retries_exhausted_result(
-        _Agent(), error, classified, attempts=3, is_rate_limited=False, error_msg=str(error).lower(),
-        api_kwargs=None, api_messages=[], messages=[], conversation_history=None, api_call_count=1,
-        approx_tokens=10, provider="openrouter", base_url="https://openrouter.ai/api/v1", model="m",
+        _Agent(),
+        error,
+        classified,
+        attempts=3,
+        is_rate_limited=False,
+        error_msg=str(error).lower(),
+        api_kwargs=None,
+        api_messages=[],
+        messages=[],
+        conversation_history=None,
+        api_call_count=1,
+        approx_tokens=10,
+        provider="openrouter",
+        base_url="https://openrouter.ai/api/v1",
+        model="m",
     )
     text = result["final_response"]
     assert "/retry" in text and "/model" in text
@@ -122,17 +160,45 @@ def test_exhausted_plan_quota_429_names_the_reset_window_not_wait_a_minute():
     import openai
     from agent.api_error_summary import ApiErrorSummaryMixin
 
-    body = {"error": {"type": "usage_limit_reached", "message": "The usage limit has been reached",
-                      "resets_in_seconds": 30995, "plan_type": "pro"}}
-    response = httpx.Response(429, json=body, request=httpx.Request("POST", "https://chatgpt.com/backend-api/codex/responses"))
-    error = openai.RateLimitError(f"Error code: 429 - {body}", response=response, body=body)
-    classified = classify_api_error(error, provider="openai-codex", model="gpt-5.3-codex")
+    body = {
+        "error": {
+            "type": "usage_limit_reached",
+            "message": "The usage limit has been reached",
+            "resets_in_seconds": 30995,
+            "plan_type": "pro",
+        }
+    }
+    response = httpx.Response(
+        429,
+        json=body,
+        request=httpx.Request(
+            "POST", "https://chatgpt.com/backend-api/codex/responses"
+        ),
+    )
+    error = openai.RateLimitError(
+        f"Error code: 429 - {body}", response=response, body=body
+    )
+    classified = classify_api_error(
+        error, provider="openai-codex", model="gpt-5.3-codex"
+    )
     agent = _Agent()
     agent._summarize_api_error = ApiErrorSummaryMixin._summarize_api_error
     result = max_retries_exhausted_result(
-        agent, error, classified, attempts=3, is_rate_limited=True, error_msg=str(error).lower(),
-        api_kwargs=None, api_messages=[], messages=[], conversation_history=None, api_call_count=3,
-        approx_tokens=10, provider="openai-codex", base_url="https://chatgpt.com/backend-api/codex", model="gpt-5.3-codex",
+        agent,
+        error,
+        classified,
+        attempts=3,
+        is_rate_limited=True,
+        error_msg=str(error).lower(),
+        api_kwargs=None,
+        api_messages=[],
+        messages=[],
+        conversation_history=None,
+        api_call_count=3,
+        approx_tokens=10,
+        provider="openai-codex",
+        base_url="https://chatgpt.com/backend-api/codex",
+        model="gpt-5.3-codex",
     )
     text = result["final_response"]
     assert result["error"] == "HTTP 429: The usage limit has been reached"
@@ -141,24 +207,54 @@ def test_exhausted_plan_quota_429_names_the_reset_window_not_wait_a_minute():
     # A throttle with no reset window keeps the short-wait copy.
     short = _Http(429, "HTTP 429: Rate limit exceeded")
     plain = max_retries_exhausted_result(
-        _Agent(), short, classify_api_error(short, provider="openrouter", model="m"), attempts=3,
-        is_rate_limited=True, error_msg=str(short).lower(), api_kwargs=None, api_messages=[], messages=[],
-        conversation_history=None, api_call_count=3, approx_tokens=10, provider="openrouter",
-        base_url="https://openrouter.ai/api/v1", model="m",
+        _Agent(),
+        short,
+        classify_api_error(short, provider="openrouter", model="m"),
+        attempts=3,
+        is_rate_limited=True,
+        error_msg=str(short).lower(),
+        api_kwargs=None,
+        api_messages=[],
+        messages=[],
+        conversation_history=None,
+        api_call_count=3,
+        approx_tokens=10,
+        provider="openrouter",
+        base_url="https://openrouter.ai/api/v1",
+        model="m",
     )
-    assert "Wait a minute" in plain["final_response"] and "resets in" not in plain["final_response"]
+    assert (
+        "Wait a minute" in plain["final_response"]
+        and "resets in" not in plain["final_response"]
+    )
 
 
 def test_invalid_response_stamps_reason_from_embedded_provider_code():
     """An HTTP-200 body carrying a 429 is rate limiting for the UI, not 'unknown'."""
     agent = _Agent()
-    response = SimpleNamespace(error=SimpleNamespace(code=429, metadata={"provider_name": "Acme"}), choices=[])
+    response = SimpleNamespace(
+        error=SimpleNamespace(code=429, metadata={"provider_name": "Acme"}), choices=[]
+    )
     verdict = retry_invalid_response(
-        agent, response=response, error_details=["no choices"],
-        _retry=SimpleNamespace(restart_with_redirected_messages=False), thinking_spinner=None,
-        messages=[], api_messages=[], api_kwargs=None, active_system_prompt=None, conversation_history=None,
-        retry_count=2, max_retries=3, compression_attempts=0, api_call_count=1, api_request_id="r",
-        api_start_time=0.0, api_duration=0.4, effective_task_id="t", turn_id="turn",
+        agent,
+        response=response,
+        error_details=["no choices"],
+        _retry=SimpleNamespace(restart_with_redirected_messages=False),
+        thinking_spinner=None,
+        messages=[],
+        api_messages=[],
+        api_kwargs=None,
+        active_system_prompt=None,
+        conversation_history=None,
+        retry_count=2,
+        max_retries=3,
+        compression_attempts=0,
+        api_call_count=1,
+        api_request_id="r",
+        api_start_time=0.0,
+        api_duration=0.4,
+        effective_task_id="t",
+        turn_id="turn",
     )
     assert verdict.action == "return"
     result = verdict.result
@@ -173,32 +269,49 @@ def test_outer_loop_error_copy_has_no_apology_and_routes_to_gateway_layer():
         raise TypeError("expected str, got list")
     except TypeError as exc:
         verdict = handle_outer_loop_error(
-            agent, e=exc, _outer_error_count=7, api_call_count=2, messages=[], conversation_history=None,
-            _turn_exit_reason="unknown", failed=False, final_response=None,
+            agent,
+            e=exc,
+            _outer_error_count=7,
+            api_call_count=2,
+            messages=[],
+            conversation_history=None,
+            _turn_exit_reason="unknown",
+            failed=False,
+            final_response=None,
         )
     assert verdict.action == "break" and verdict.failed is True
     text = verdict.final_response
-    assert text.rstrip().endswith("expected str, got list")  # raw detail last, not first
+    assert text.rstrip().endswith(
+        "expected str, got list"
+    )  # raw detail last, not first
     from agent.turn_failure_copy import exit_reason_failure
 
     exit_failure = exit_reason_failure(verdict._turn_exit_reason)
     assert exit_failure.fails_turn is True  # the outer-error cap IS a failed turn
     surface = build_error_surface_from_result(
-        {"failed": True, "error": text, "failure_reason": exit_failure.reason,
-         "failure_retryable": exit_failure.retryable}
+        {
+            "failed": True,
+            "error": text,
+            "failure_reason": exit_failure.reason,
+            "failure_retryable": exit_failure.retryable,
+        }
     )
     assert surface["layer"] == LAYER_GATEWAY and surface["code"] == "loop_error"
-
-
 
 
 def test_interpreter_shutdown_copy_substitutes_the_real_session_id():
     agent = _Agent()
     agent.session_id = "20260914_abc"
     verdict = handle_outer_loop_error(
-        agent, e=RuntimeError("cannot schedule new futures after interpreter shutdown"),
-        _outer_error_count=0, api_call_count=1, messages=[], conversation_history=None,
-        _turn_exit_reason="unknown", failed=False, final_response=None,
+        agent,
+        e=RuntimeError("cannot schedule new futures after interpreter shutdown"),
+        _outer_error_count=0,
+        api_call_count=1,
+        messages=[],
+        conversation_history=None,
+        _turn_exit_reason="unknown",
+        failed=False,
+        final_response=None,
     )
     assert "clawk --resume 20260914_abc" in verdict.final_response
     assert "<session-id>" not in verdict.final_response
@@ -209,7 +322,9 @@ def test_site_failure_codes_never_collapse_to_unknown(code):
     """Every site code is listed in error_surface's layer table (no fall-through guesswork)."""
     from agent.error_surface import _REASON_TO_LAYER
 
-    surface = build_error_surface_from_result({"failed": True, "error": "x", "failure_reason": code})
+    surface = build_error_surface_from_result(
+        {"failed": True, "error": "x", "failure_reason": code}
+    )
     assert surface["code"] == code
     assert code in _REASON_TO_LAYER
     assert surface["layer"] in (LAYER_GATEWAY, LAYER_PROVIDER)
@@ -219,7 +334,22 @@ def test_model_caused_codes_stay_on_the_provider_layer_and_runtime_codes_on_gate
     """Cut-off / empty / broken replies come from the model (provider layer, so the client's
     per-code copy applies); a busy session or loop bug is Clawksis-side (gateway layer, so the
     client never offers Switch provider for it)."""
-    layers = {c: build_error_surface_from_result({"failed": True, "error": "x", "failure_reason": c})["layer"]
-              for c in ("truncated", "empty_response", "invalid_response", "session_busy", "loop_error")}
-    assert layers["truncated"] == layers["empty_response"] == layers["invalid_response"] == LAYER_PROVIDER
+    layers = {
+        c: build_error_surface_from_result(
+            {"failed": True, "error": "x", "failure_reason": c}
+        )["layer"]
+        for c in (
+            "truncated",
+            "empty_response",
+            "invalid_response",
+            "session_busy",
+            "loop_error",
+        )
+    }
+    assert (
+        layers["truncated"]
+        == layers["empty_response"]
+        == layers["invalid_response"]
+        == LAYER_PROVIDER
+    )
     assert layers["session_busy"] == layers["loop_error"] == LAYER_GATEWAY

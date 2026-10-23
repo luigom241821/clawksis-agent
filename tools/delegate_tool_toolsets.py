@@ -8,7 +8,9 @@ from typing import List, Optional
 from toolsets import TOOLSETS, resolve_toolset
 from tools.delegate_tool_config import _get_inherit_mcp_toolsets
 
-logger = logging.getLogger("tools.delegate_tool")  # log-record parity with the origin module
+logger = logging.getLogger(
+    "tools.delegate_tool"
+)  # log-record parity with the origin module
 
 # Tools that children must never have access to
 DELEGATE_BLOCKED_TOOLS = frozenset(
@@ -22,6 +24,7 @@ DELEGATE_BLOCKED_TOOLS = frozenset(
 )
 DEFAULT_TOOLSETS = ["terminal", "file", "web"]
 
+
 def _is_mcp_toolset_name(name: str) -> bool:
     """Return True for canonical MCP toolsets and their registered aliases."""
     if not name:
@@ -30,10 +33,12 @@ def _is_mcp_toolset_name(name: str) -> bool:
         return True
     try:
         from tools.registry import registry
+
         target = registry.get_toolset_alias_target(str(name))
     except Exception:
         target = None
     return bool(target and str(target).startswith("mcp-"))
+
 
 def _expand_parent_toolsets(parent_toolsets: set) -> set:
     """Add every toolset whose tools are a subset of the parent's tools: a parent on a composite like ``clawk-cli``
@@ -41,17 +46,22 @@ def _expand_parent_toolsets(parent_toolsets: set) -> set:
     the RESOLVED static surface: a composite's ``includes`` (``debugging`` -> ``web``/``file``, ``safe``) are tools
     the parent genuinely holds, and the child never gains a tool the parent lacks."""
     parent_tool_names = {
-        t for ts_name in parent_toolsets if ts_name in TOOLSETS for t in resolve_toolset(ts_name, include_registry=False)
+        t
+        for ts_name in parent_toolsets
+        if ts_name in TOOLSETS
+        for t in resolve_toolset(ts_name, include_registry=False)
     }
     expanded = set(parent_toolsets)
     if parent_tool_names:
         expanded.update(
-            ts_name for ts_name in TOOLSETS
+            ts_name
+            for ts_name in TOOLSETS
             if ts_name not in expanded
             and (resolved := resolve_toolset(ts_name, include_registry=False))
             and set(resolved).issubset(parent_tool_names)
         )
     return expanded
+
 
 def _strip_blocked_tools(toolsets: list[str]) -> list[str]:
     """Remove toolsets whose tools are ALL blocked (derived from DELEGATE_BLOCKED_TOOLS so the two can't drift) plus
@@ -64,6 +74,7 @@ def _strip_blocked_tools(toolsets: list[str]) -> list[str]:
     }
     return [t for t in toolsets if t not in blocked_toolset_names]
 
+
 def _blocked_toolsets_for_role(role: str) -> list[str]:
     """One-tool deny toolsets for the role; passed as ``disabled_toolsets`` so
     blocked names inside mixed bundles are subtracted AFTER composite expansion."""
@@ -71,8 +82,11 @@ def _blocked_toolsets_for_role(role: str) -> list[str]:
     if role == "orchestrator":
         blocked_names.discard("delegate_task")
     return sorted(
-        name for name, defn in TOOLSETS.items() if defn.get("tools") and set(defn.get("tools", ())).issubset(blocked_names)
+        name
+        for name, defn in TOOLSETS.items()
+        if defn.get("tools") and set(defn.get("tools", ())).issubset(blocked_names)
     )
+
 
 def _resolve_child_toolsets(
     parent_agent, toolsets: Optional[list[str]], effective_role: str
@@ -89,8 +103,11 @@ def _resolve_child_toolsets(
         parent_toolsets = set(parent_enabled)
     elif parent_agent and hasattr(parent_agent, "valid_tool_names"):
         import model_tools
+
         parent_toolsets = {
-            ts for name in parent_agent.valid_tool_names if (ts := model_tools.get_toolset_for_tool(name)) is not None
+            ts
+            for name in parent_agent.valid_tool_names
+            if (ts := model_tools.get_toolset_for_tool(name)) is not None
         }
     else:
         parent_toolsets = set(DEFAULT_TOOLSETS)
@@ -101,7 +118,9 @@ def _resolve_child_toolsets(
         if _get_inherit_mcp_toolsets():
             # Append any parent MCP toolsets missing from the narrowed child.
             child_toolsets += [
-                name for name in sorted(parent_toolsets) if _is_mcp_toolset_name(name) and name not in child_toolsets
+                name
+                for name in sorted(parent_toolsets)
+                if _is_mcp_toolset_name(name) and name not in child_toolsets
             ]
     elif parent_agent and parent_enabled is not None:
         child_toolsets = parent_enabled
@@ -111,13 +130,19 @@ def _resolve_child_toolsets(
 
     raw_parent_disabled = getattr(parent_agent, "disabled_toolsets", None)
     inherited_disabled = (
-        [str(name) for name in raw_parent_disabled] if isinstance(raw_parent_disabled, (list, tuple, set)) else []
+        [str(name) for name in raw_parent_disabled]
+        if isinstance(raw_parent_disabled, (list, tuple, set))
+        else []
     )
     if effective_role == "orchestrator":
-        inherited_disabled = [name for name in inherited_disabled if name != "delegation"]
+        inherited_disabled = [
+            name for name in inherited_disabled if name != "delegation"
+        ]
         if "delegation" not in child_toolsets:
             child_toolsets.append("delegation")
     child_disabled_toolsets = list(
-        dict.fromkeys(inherited_disabled + _blocked_toolsets_for_role(effective_role) + ["kanban"])
+        dict.fromkeys(
+            inherited_disabled + _blocked_toolsets_for_role(effective_role) + ["kanban"]
+        )
     )
     return child_toolsets, child_disabled_toolsets

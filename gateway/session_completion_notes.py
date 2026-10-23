@@ -11,12 +11,15 @@ history, where the next turn sees it, and settles the admission without a model 
 exactly-once are the admission contract's. With a viewer attached it runs as the turn it always was;
 messaging, cron, Kanban, ``/loop`` and heartbeat wakes never reach here.
 """
+
 import json
 from functools import partial
 
 # ``_completion_delivery_identity`` kinds: an async delegation's result, a background process's exit
 # and its watch-pattern notices.
-_NOTED_PRODUCERS = frozenset({'async_delegation', 'completion', 'watch_match', 'watch_disabled'})
+_NOTED_PRODUCERS = frozenset(
+    {"async_delegation", "completion", "watch_match", "watch_disabled"}
+)
 
 
 def _producer(identity):
@@ -28,8 +31,10 @@ def _producer(identity):
 
 def noted_completion(row):
     """*row* is a local completion admission: a note when it runs with no viewer attached."""
-    descriptor = (row or {}).get('payload', {}).get('local_automation_v1')
-    return descriptor is not None and _producer(descriptor['identity']) in _NOTED_PRODUCERS
+    descriptor = (row or {}).get("payload", {}).get("local_automation_v1")
+    return (
+        descriptor is not None and _producer(descriptor["identity"]) in _NOTED_PRODUCERS
+    )
 
 
 async def note_if_unviewed(authority, ref, row):
@@ -39,23 +44,49 @@ async def note_if_unviewed(authority, ref, row):
     if not noted_completion(row):
         return None
     from gateway.session_runtime_workers import tracked_write
+
     live = authority.sessions.get(ref.session_id)
     if live is None or live.subscribers:
         # The claim left a closed row closed for a note; the turn reopens it as any first turn does.
         from gateway.session_local_recovery import reopen_local_session
+
         await tracked_write(authority, partial(reopen_local_session, authority, ref))
         return None
     from gateway.session_viewer_close import _physical_target
-    descriptor = row['payload']['local_automation_v1']
-    metadata = {'completion_note': sorted(set(descriptor.get('identities') or ()) | {descriptor['identity']})}
-    metadata.update({key: descriptor[key] for key in ('display_text', 'notification_category') if key in descriptor})
+
+    descriptor = row["payload"]["local_automation_v1"]
+    metadata = {
+        "completion_note": sorted(
+            set(descriptor.get("identities") or ()) | {descriptor["identity"]}
+        )
+    }
+    metadata.update(
+        {
+            key: descriptor[key]
+            for key in ("display_text", "notification_category")
+            if key in descriptor
+        }
+    )
     target = _physical_target(authority, ref.session_id)
     # Keyed by its admission: a claim is never replayed, and this keeps a write retry exact.
-    await tracked_write(authority, partial(
-        authority.db.append_completion_note, target, row['admission_id'], row['payload']['text'],
-        descriptor.get('display_kind', 'internal_notification'), metadata))
-    refresh = getattr(authority.runner, '_refresh_agent_cache_message_count', None)
-    if refresh is not None:  # the owner's own row: a cached agent stays, as after a turn's writes
+    await tracked_write(
+        authority,
+        partial(
+            authority.db.append_completion_note,
+            target,
+            row["admission_id"],
+            row["payload"]["text"],
+            descriptor.get("display_kind", "internal_notification"),
+            metadata,
+        ),
+    )
+    refresh = getattr(authority.runner, "_refresh_agent_cache_message_count", None)
+    if (
+        refresh is not None
+    ):  # the owner's own row: a cached agent stays, as after a turn's writes
         await refresh(live.route, target)
-    authority.pending_results[row['admission_id']] = {'result': {'final_response': '', 'messages': []}, 'usage': {}}
-    return ''
+    authority.pending_results[row["admission_id"]] = {
+        "result": {"final_response": "", "messages": []},
+        "usage": {},
+    }
+    return ""

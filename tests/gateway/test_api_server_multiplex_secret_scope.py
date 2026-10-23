@@ -38,7 +38,10 @@ class TestProfileScopeDefaultFallback:
         monkeypatch.setenv("OPENROUTER_BASE_URL", "https://from-environ.example/v1")
         with adapter._profile_scope(None):
             # Legacy single-profile path: unscoped get_secret reads os.environ.
-            assert ss.get_secret("OPENROUTER_BASE_URL") == "https://from-environ.example/v1"
+            assert (
+                ss.get_secret("OPENROUTER_BASE_URL")
+                == "https://from-environ.example/v1"
+            )
         assert ss.current_secret_scope() is None
 
 
@@ -110,9 +113,7 @@ async def test_profile_middleware_binds_auth_before_handler(
     )()
     monkeypatch.setattr(
         "clawk_cli.profiles.profiles_to_serve",
-        lambda multiplex: [
-            ("default", tmp_path), ("worker", worker_home)
-        ],
+        lambda multiplex: [("default", tmp_path), ("worker", worker_home)],
     )
     monkeypatch.setattr(
         "clawk_cli.profiles.get_profile_dir",
@@ -124,13 +125,9 @@ async def test_profile_middleware_binds_auth_before_handler(
         auth_error = adapter._check_auth(request)
         if auth_error is not None:
             return auth_error
-        return web.json_response(
-            {"profile": _api_request_profile.get() or "default"}
-        )
+        return web.json_response({"profile": _api_request_profile.get() or "default"})
 
-    app = web.Application(
-        middlewares=[adapter._make_profile_prefix_middleware()]
-    )
+    app = web.Application(middlewares=[adapter._make_profile_prefix_middleware()])
     app.router.add_get("/v1/test", authenticated)
     app.router.add_get("/p/{profile}/v1/test", authenticated)
 
@@ -159,5 +156,3 @@ async def test_profile_middleware_binds_auth_before_handler(
         )
         assert accepted.status == 200
         assert (await accepted.json())["profile"] == "worker"
-
-

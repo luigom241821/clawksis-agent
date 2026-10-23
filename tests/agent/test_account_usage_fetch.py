@@ -126,19 +126,30 @@ def _register_profile(monkeypatch, profile):
     providers.register_provider(profile)
 
 
-def test_fetch_account_usage_reaches_registered_plugin_profile_and_fails_open(monkeypatch):
+def test_fetch_account_usage_reaches_registered_plugin_profile_and_fails_open(
+    monkeypatch,
+):
     """A profile registered through the public registry (as a plugin does) feeds /usage; a profile
     without the hook, or one whose hook raises, is indistinguishable from today's empty block."""
     snapshot = AccountUsageSnapshot(
-        provider="plugin-usage", source="plugin", fetched_at=datetime.now(UTC),
+        provider="plugin-usage",
+        source="plugin",
+        fetched_at=datetime.now(UTC),
         details=("Credit: 10/100",),
     )
     profile = _UsageProfile(snapshot)
     _register_profile(monkeypatch, profile)
     _register_profile(monkeypatch, ProviderProfile(name="plugin-silent"))
-    _register_profile(monkeypatch, _UsageProfile(error=RuntimeError("nope"), name="plugin-broken"))
+    _register_profile(
+        monkeypatch, _UsageProfile(error=RuntimeError("nope"), name="plugin-broken")
+    )
 
-    assert fetch_account_usage("plugin-usage", base_url="https://plugin.test", api_key="key") is snapshot
+    assert (
+        fetch_account_usage(
+            "plugin-usage", base_url="https://plugin.test", api_key="key"
+        )
+        is snapshot
+    )
     assert profile.calls == 1
     assert fetch_account_usage("plugin-silent") is None
     assert fetch_account_usage("plugin-broken") is None
@@ -146,20 +157,29 @@ def test_fetch_account_usage_reaches_registered_plugin_profile_and_fails_open(mo
 
 def test_fetch_account_usage_prefers_builtin_fetcher_over_profile(monkeypatch):
     builtin = AccountUsageSnapshot(
-        provider="openrouter", source="builtin", fetched_at=datetime.now(UTC),
+        provider="openrouter",
+        source="builtin",
+        fetched_at=datetime.now(UTC),
     )
     profile = _UsageProfile(
-        AccountUsageSnapshot(provider="openrouter", source="plugin", fetched_at=datetime.now(UTC)),
+        AccountUsageSnapshot(
+            provider="openrouter", source="plugin", fetched_at=datetime.now(UTC)
+        ),
         name="openrouter",
     )
-    monkeypatch.setattr("agent.account_usage._USAGE_FETCHERS", {"openrouter": lambda base_url, api_key: builtin})
+    monkeypatch.setattr(
+        "agent.account_usage._USAGE_FETCHERS",
+        {"openrouter": lambda base_url, api_key: builtin},
+    )
     _register_profile(monkeypatch, profile)
 
     assert fetch_account_usage("openrouter") is builtin
     assert profile.calls == 0
 
 
-def test_fetch_account_usage_openrouter_uses_limit_remaining_and_ignores_deprecated_rate_limit(monkeypatch):
+def test_fetch_account_usage_openrouter_uses_limit_remaining_and_ignores_deprecated_rate_limit(
+    monkeypatch,
+):
     monkeypatch.setattr(
         "agent.account_usage.resolve_runtime_provider",
         lambda requested, explicit_base_url=None, explicit_api_key=None: {
@@ -202,11 +222,18 @@ def test_fetch_account_usage_openrouter_uses_limit_remaining_and_ignores_depreca
         ),
     )
     assert "Credits balance: $289.08" in snapshot.details
-    assert "API key usage: $12.50 total • $0.50 today • $2.00 this week • $8.00 this month" in snapshot.details
-    assert all("-1 requests / 10s" not in line for line in render_account_usage_lines(snapshot))
+    assert (
+        "API key usage: $12.50 total • $0.50 today • $2.00 this week • $8.00 this month"
+        in snapshot.details
+    )
+    assert all(
+        "-1 requests / 10s" not in line for line in render_account_usage_lines(snapshot)
+    )
 
 
-def test_fetch_account_usage_openrouter_omits_quota_window_when_key_has_no_limit(monkeypatch):
+def test_fetch_account_usage_openrouter_omits_quota_window_when_key_has_no_limit(
+    monkeypatch,
+):
     monkeypatch.setattr(
         "agent.account_usage.resolve_runtime_provider",
         lambda requested, explicit_base_url=None, explicit_api_key=None: {
@@ -241,7 +268,10 @@ def test_fetch_account_usage_openrouter_omits_quota_window_when_key_has_no_limit
     assert snapshot is not None
     assert snapshot.windows == ()
     assert "Credits balance: $74.50" in snapshot.details
-    assert "API key usage: $25.50 total • $1.25 today • $4.50 this week • $18.00 this month" in snapshot.details
+    assert (
+        "API key usage: $25.50 total • $1.25 today • $4.50 this week • $18.00 this month"
+        in snapshot.details
+    )
 
 
 def test_plugin_usage_hook_is_bounded_and_fails_open(monkeypatch):
@@ -258,13 +288,18 @@ def test_plugin_usage_hook_is_bounded_and_fails_open(monkeypatch):
         def fetch_account_usage(self, *, base_url=None, api_key=None):
             started.set()
             time.sleep(5)
-            return AccountUsageSnapshot(provider=self.name, source="late", fetched_at=datetime.now(UTC))
+            return AccountUsageSnapshot(
+                provider=self.name, source="late", fetched_at=datetime.now(UTC)
+            )
 
     _register_profile(monkeypatch, _Hang(name="plugin-hang"))
     monkeypatch.setattr(account_usage, "PLUGIN_USAGE_HOOK_DEADLINE_S", 0.3)
     builtin_calls = []
-    monkeypatch.setattr(account_usage, "_USAGE_FETCHERS",
-                        {"openrouter": lambda base_url, api_key: builtin_calls.append(1)})
+    monkeypatch.setattr(
+        account_usage,
+        "_USAGE_FETCHERS",
+        {"openrouter": lambda base_url, api_key: builtin_calls.append(1)},
+    )
 
     t0 = time.monotonic()
     assert account_usage.fetch_account_usage("plugin-hang") is None
@@ -287,7 +322,9 @@ def test_plugin_usage_hook_failure_never_reaches_threading_excepthook(monkeypatc
     _register_profile(monkeypatch, _Boom(name="plugin-boom"))
     monkeypatch.setattr(account_usage, "_USAGE_FETCHERS", {})
     escaped = []
-    monkeypatch.setattr(threading, "excepthook", lambda args: escaped.append(args.exc_value))
+    monkeypatch.setattr(
+        threading, "excepthook", lambda args: escaped.append(args.exc_value)
+    )
 
     assert account_usage.fetch_account_usage("plugin-boom") is None
     for t in threading.enumerate():

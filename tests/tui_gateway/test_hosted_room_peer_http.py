@@ -48,9 +48,9 @@ class FakePeer(BaseHTTPRequestHandler):
             dispatch = body["hosted_room_dispatch"]
             logical_session = (
                 "roomlink_"
-                + __import__("hashlib").sha256(
-                    f"{dispatch['room_id']}\0{dispatch['target_profile']}".encode()
-                ).hexdigest()[:32]
+                + __import__("hashlib")
+                .sha256(f"{dispatch['room_id']}\0{dispatch['target_profile']}".encode())
+                .hexdigest()[:32]
             )
             type(self).idempotency.append(self.headers.get("Idempotency-Key"))
             run_id = "run-1"
@@ -162,10 +162,12 @@ def test_scoped_peer_runs_client_uses_logical_session_and_durable_run(peer_serve
         is True
     )
 
-    FakePeer.runs["run-1"].update({
-        "status": "completed",
-        "output": "Remote review complete.",
-    })
+    FakePeer.runs["run-1"].update(
+        {
+            "status": "completed",
+            "output": "Remote review complete.",
+        }
+    )
     now[0] = 0.1
     history = client.history(
         room_id="room-1",
@@ -242,10 +244,13 @@ def test_remote_run_receipt_does_not_cross_authority_epochs(tmp_path):
         "status": "running",
         "replayed": False,
     }
-    assert old.dispatch(
-        dispatch=_dispatch(authority_epoch=1),
-        grant="signed.room.grant",
-    )["run_id"] == "run-old"
+    assert (
+        old.dispatch(
+            dispatch=_dispatch(authority_epoch=1),
+            grant="signed.room.grant",
+        )["run_id"]
+        == "run-old"
+    )
 
     requests = []
     current = PeerRunsHTTPClient(
@@ -304,9 +309,12 @@ def test_ambiguous_admission_replays_the_identical_idempotency_key(tmp_path):
     restarted._request = lambda *_args, **_kwargs: pytest.fail(
         "durable receipt should avoid another admission"
     )
-    assert restarted.recover_dispatch(
-        dispatch=_dispatch(), grant="signed.room.grant"
-    )["run_id"] == "run-recovered"
+    assert (
+        restarted.recover_dispatch(dispatch=_dispatch(), grant="signed.room.grant")[
+            "run_id"
+        ]
+        == "run-recovered"
+    )
 
 
 def test_ambiguous_admission_recovery_is_bounded_and_backed_off(tmp_path):
@@ -346,9 +354,7 @@ def test_ambiguous_admission_recovery_is_bounded_and_backed_off(tmp_path):
         "status": "running",
         "replayed": True,
     }
-    recovered = client.recover_dispatch(
-        dispatch=_dispatch(), grant="signed.room.grant"
-    )
+    recovered = client.recover_dispatch(dispatch=_dispatch(), grant="signed.room.grant")
     assert recovered["run_id"] == "run-recovered"
 
 
@@ -440,12 +446,14 @@ def test_invalid_room_dispatch_http_403_is_definitively_not_admitted(monkeypatch
             "Forbidden",
             {},
             io.BytesIO(
-                json.dumps({
-                    "error": {
-                        "code": "room_capability_catalog_changed",
-                        "message": "room capability catalog changed",
+                json.dumps(
+                    {
+                        "error": {
+                            "code": "room_capability_catalog_changed",
+                            "message": "room capability catalog changed",
+                        }
                     }
-                }).encode()
+                ).encode()
             ),
         )
 
@@ -504,9 +512,7 @@ def test_peer_http_error_body_is_never_exposed_or_logged(monkeypatch, caplog):
             "Internal Server Error",
             {},
             io.BytesIO(
-                json.dumps(
-                    {"error": {"code": hostile, "message": hostile}}
-                ).encode()
+                json.dumps({"error": {"code": hostile, "message": hostile}}).encode()
             ),
         )
 
@@ -682,9 +688,7 @@ def test_peer_approval_sends_the_exact_request_id(peer_server, tmp_path):
     )
 
     assert result["resolved"] == 1
-    assert FakePeer.approvals == [
-        {"choice": "once", "request_id": "approval-exact-1"}
-    ]
+    assert FakePeer.approvals == [{"choice": "once", "request_id": "approval-exact-1"}]
 
 
 def test_exact_receipt_polling_is_constant_with_large_room_history():
@@ -724,18 +728,24 @@ def test_exact_receipt_polling_is_constant_with_large_room_history():
 
     client._request = status_response
     for _ in range(50):
-        assert client.history(
-            room_id="room-1",
-            profile="reviewer",
-            session_id=session_id,
-            grant="signed.room.grant",
-        ) == []
-        assert client.status(
-            room_id="room-1",
-            profile="reviewer",
-            session_id=session_id,
-            grant="signed.room.grant",
-        )["active"] is True
+        assert (
+            client.history(
+                room_id="room-1",
+                profile="reviewer",
+                session_id=session_id,
+                grant="signed.room.grant",
+            )
+            == []
+        )
+        assert (
+            client.status(
+                room_id="room-1",
+                profile="reviewer",
+                session_id=session_id,
+                grant="signed.room.grant",
+            )["active"]
+            is True
+        )
 
     assert requests == ["/v1/runs/run-199"]
     now[0] = 0.1
@@ -906,7 +916,7 @@ def test_grant_refresh_rejects_catalog_or_policy_drift(
         )
     )
     refreshed = catalog_mapping(
-            target_profile="reviewer",
+        target_profile="reviewer",
         installation_id="install-peer",
         persistent_process=True,
         attachments=capability_changed,
@@ -940,7 +950,7 @@ def test_grant_refresh_preserves_unchanged_catalog_and_policy():
     from gateway.hosted_room_peer import GatewayRoomCatalog, catalog_mapping
 
     raw_catalog = catalog_mapping(
-            target_profile="default",
+        target_profile="default",
         installation_id="install-peer",
         persistent_process=True,
     )
@@ -970,7 +980,7 @@ def test_grant_refresh_retries_old_grant_after_response_loss():
     from gateway.hosted_room_peer import GatewayRoomCatalog, catalog_mapping
 
     raw_catalog = catalog_mapping(
-            target_profile="default",
+        target_profile="default",
         installation_id="install-peer",
         persistent_process=True,
     )

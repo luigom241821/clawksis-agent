@@ -33,24 +33,41 @@ def test_launch_refuses_while_another_process_holds_the_checkout(tmp_path, monke
 
     root = tmp_path / "checkout"
     (root / ".git").mkdir(parents=True)
-    (root / "pyproject.toml").write_text("[project]\nname='example'\n", encoding="utf-8")
-    (root / "install-stamp.json").write_text('{"updateMechanism": "self"}', encoding="utf-8")
+    (root / "pyproject.toml").write_text(
+        "[project]\nname='example'\n", encoding="utf-8"
+    )
+    (root / "install-stamp.json").write_text(
+        '{"updateMechanism": "self"}', encoding="utf-8"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "home"))
     monkeypatch.delenv("CLAWK_DISABLE_LAZY_INSTALLS", raising=False)
-    monkeypatch.setattr(pm, "venv_is_current", lambda **kw: False)  # an interrupted update's tree
+    monkeypatch.setattr(
+        pm, "venv_is_current", lambda **kw: False
+    )  # an interrupted update's tree
     finished = []
-    monkeypatch.setattr(venv_sync, "_finish_source_update", lambda *a, **k: finished.append(a))
+    monkeypatch.setattr(
+        venv_sync, "_finish_source_update", lambda *a, **k: finished.append(a)
+    )
 
     # The orphaned completion child: a real process holding the checkout lock; its marker
     # lives elsewhere, so this home's marker is free.
-    holder = subprocess.Popen([sys.executable, "-c", _HOLDER, str(REPO), str(root), str(tmp_path / "gone")],
-                              stdout=subprocess.PIPE, stdin=subprocess.DEVNULL, text=True, encoding="utf-8")
+    holder = subprocess.Popen(
+        [sys.executable, "-c", _HOLDER, str(REPO), str(root), str(tmp_path / "gone")],
+        stdout=subprocess.PIPE,
+        stdin=subprocess.DEVNULL,
+        text=True,
+        encoding="utf-8",
+    )
     try:
         assert holder.stdout is not None and holder.stdout.readline().strip() == "held"
         with pytest.raises(RuntimeError, match="an update is still running"):
             venv_sync.prepare_launch(root, [])
-        assert finished == [], "a second completion tail ran beside the live update tree"
-        assert not (tmp_path / "home" / ".clawk-update-in-progress").exists(), "a refused launch left a claim"
+        assert finished == [], (
+            "a second completion tail ran beside the live update tree"
+        )
+        assert not (tmp_path / "home" / ".clawk-update-in-progress").exists(), (
+            "a refused launch left a claim"
+        )
     finally:
         holder.kill()
         holder.wait()
@@ -84,7 +101,9 @@ def test_a_tail_child_custody_refuses_never_runs_and_stays_owed(tmp_path, monkey
 
     monkeypatch.setattr(update_custody, "run", refused)
     with pytest.raises(RuntimeError, match="source update completion failed"):
-        venv_sync._finish_source_update(root, current=True, pending=root / ".update-pending")
+        venv_sync._finish_source_update(
+            root, current=True, pending=root / ".update-pending"
+        )
     assert not started.exists(), "the tail child ran outside the update's custody"
 
 
@@ -101,11 +120,15 @@ def test_a_tail_child_the_job_refuses_never_runs(tmp_path, monkeypatch):
     kernel32.CreateEventW.restype = ctypes.c_void_p
     event = kernel32.CreateEventW(None, True, False, None)
     monkeypatch.setattr(update_lock, "update_tree_job", lambda: event)
-    lock = update_lock.UpdateLock(path=tmp_path / "marker", install_root=root, checkout_first=False)
+    lock = update_lock.UpdateLock(
+        path=tmp_path / "marker", install_root=root, checkout_first=False
+    )
     assert lock.acquire_checkout(root)
     try:
         with pytest.raises(RuntimeError, match="source update completion failed"):
-            venv_sync._finish_source_update(root, current=True, pending=root / ".update-pending")
+            venv_sync._finish_source_update(
+                root, current=True, pending=root / ".update-pending"
+            )
     finally:
         lock.release()
     assert not started.exists(), "the tail child ran outside the update's job"

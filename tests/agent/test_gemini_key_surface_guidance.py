@@ -33,14 +33,16 @@ def _mock_response(status: int, body: str) -> MagicMock:
 
 
 def _permission_denied_body() -> str:
-    return json.dumps({
-        "error": {
-            "code": 403,
-            "message": "Requests to this API aiplatform.googleapis.com method "
-            "google.cloud.aiplatform.v1beta1.PredictionService.StreamGenerateContent are blocked.",
-            "status": "PERMISSION_DENIED",
+    return json.dumps(
+        {
+            "error": {
+                "code": 403,
+                "message": "Requests to this API aiplatform.googleapis.com method "
+                "google.cloud.aiplatform.v1beta1.PredictionService.StreamGenerateContent are blocked.",
+                "status": "PERMISSION_DENIED",
+            }
         }
-    })
+    )
 
 
 class TestWrongGeminiSurfaceGuidance:
@@ -86,15 +88,16 @@ class TestGeminiHttpErrorSurfaceGuidance:
         assert "aiplatform.googleapis.com/v1beta1" in str(err)
         assert err.status_code == 403
 
-
     def test_403_without_aq_key_keeps_raw_message(self):
-        body = json.dumps({
-            "error": {
-                "code": 403,
-                "message": "Location is not found",
-                "status": "PERMISSION_DENIED",
+        body = json.dumps(
+            {
+                "error": {
+                    "code": 403,
+                    "message": "Location is not found",
+                    "status": "PERMISSION_DENIED",
+                }
             }
-        })
+        )
         err = gemini_http_error(
             _mock_response(403, body), api_key=_AIZA_KEY, base_url=_STUDIO_BASE
         )

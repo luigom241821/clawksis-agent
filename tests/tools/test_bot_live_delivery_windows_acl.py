@@ -9,6 +9,7 @@ CPython opens dirs with FILE_FLAG_BACKUP_SEMANTICS, so a token with SeBackupPriv
 enabled (an elevated CI runner) bypasses every ACE. The reporter's token has neither. Each probe runs in a
 child that removes both privileges from its own token first, then exercises the production code.
 """
+
 import json
 import subprocess
 import sys
@@ -80,17 +81,33 @@ def test_mailbox_lock_survives_a_dir_whose_acl_denies_write_attributes(tmp_path)
     root = tmp_path / "runtime" / "bot_live_delivery"
     root.mkdir(parents=True)
     # Deny write-attributes to Everyone (S-1-1-0): no group or name form of the token escapes it.
-    subprocess.run(["icacls", str(root), "/deny", "*S-1-1-0:(WA)"], check=True, capture_output=True)
+    subprocess.run(
+        ["icacls", str(root), "/deny", "*S-1-1-0:(WA)"], check=True, capture_output=True
+    )
     try:
-        child = subprocess.run([sys.executable, "-c", _CHILD, str(tmp_path)], cwd=_REPO,
-                               capture_output=True, text=True, check=False, timeout=120)
-        assert child.returncode == 0, f"the production lock failed under the reporter's ACL:\n{child.stderr}"
+        child = subprocess.run(
+            [sys.executable, "-c", _CHILD, str(tmp_path)],
+            cwd=_REPO,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=120,
+        )
+        assert child.returncode == 0, (
+            f"the production lock failed under the reporter's ACL:\n{child.stderr}"
+        )
         result = json.loads(child.stdout.strip().splitlines()[-1])
-        assert result["denied"], f"chmod still succeeded without backup/restore privileges:\n{result['priv']}"
+        assert result["denied"], (
+            f"chmod still succeeded without backup/restore privileges:\n{result['priv']}"
+        )
         assert Path(result["locked"]) == root.resolve()
         assert result["read"] == {"status": "queued"}
     finally:
-        subprocess.run(["icacls", str(root), "/remove:d", "*S-1-1-0"], check=False, capture_output=True)
+        subprocess.run(
+            ["icacls", str(root), "/remove:d", "*S-1-1-0"],
+            check=False,
+            capture_output=True,
+        )
 
 
 _UNUSABLE_CHILD = _DROP_PRIVILEGES + textwrap.dedent(r"""
@@ -146,18 +163,37 @@ def test_startup_skips_bot_recovery_on_the_reporters_mailbox_acl(tmp_path):
     # A deny ACE for Everyone is definitive for every identity the runner might hold; with SeBackup and
     # SeRestore removed the child has no bypass, so os.open(.lock) fails as in the reports. The owner's
     # implicit WRITE_DAC is untouched, which is what lets the finally block lift the deny again.
-    subprocess.run(["icacls", str(root), "/deny", "*S-1-1-0:(F)"], check=True, capture_output=True)
+    subprocess.run(
+        ["icacls", str(root), "/deny", "*S-1-1-0:(F)"], check=True, capture_output=True
+    )
     try:
-        child = subprocess.run([sys.executable, "-c", _UNUSABLE_CHILD, str(tmp_path)], cwd=_REPO,
-                               capture_output=True, text=True, check=False, timeout=180)
-        assert child.returncode == 0, f"gateway startup aborted on the reporters' ACL:\n{child.stderr}"
+        child = subprocess.run(
+            [sys.executable, "-c", _UNUSABLE_CHILD, str(tmp_path)],
+            cwd=_REPO,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=180,
+        )
+        assert child.returncode == 0, (
+            f"gateway startup aborted on the reporters' ACL:\n{child.stderr}"
+        )
         result = json.loads(child.stdout.strip().splitlines()[-1])
-        assert result["denied"], f"os.open(.lock) succeeded without backup/restore privileges:\n{result['priv']}"
+        assert result["denied"], (
+            f"os.open(.lock) succeeded without backup/restore privileges:\n{result['priv']}"
+        )
         assert result["api_origin"] == "http://127.0.0.1:1"
-        warnings = [message for level, message in result["logs"]
-                    if level == "WARNING" and "not usable by this process" in message]
+        warnings = [
+            message
+            for level, message in result["logs"]
+            if level == "WARNING" and "not usable by this process" in message
+        ]
         assert len(warnings) == 1, result["logs"]
         assert str(root.resolve()) in warnings[0] and "(owner " in warnings[0]
         assert "icacls" in warnings[0] and "/reset" in warnings[0]
     finally:
-        subprocess.run(["icacls", str(root), "/remove:d", "*S-1-1-0"], check=False, capture_output=True)
+        subprocess.run(
+            ["icacls", str(root), "/remove:d", "*S-1-1-0"],
+            check=False,
+            capture_output=True,
+        )

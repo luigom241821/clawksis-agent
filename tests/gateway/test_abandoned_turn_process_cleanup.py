@@ -86,12 +86,17 @@ def test_thread_watchdog_times_out_before_agent_exists(monkeypatch):
     monkeypatch.setattr(
         process_registry,
         "kill_started_since",
-        lambda task_id, baseline, *, source: calls.append((task_id, baseline, source)) or 0,
+        lambda task_id, baseline, *, source: (
+            calls.append((task_id, baseline, source)) or 0
+        ),
     )
 
     _run_watchdog(
-        [None], "session-before-agent",
-        worker_done=worker_done, timeout_fired=timeout_fired, cleanup_lock=cleanup_lock,
+        [None],
+        "session-before-agent",
+        worker_done=worker_done,
+        timeout_fired=timeout_fired,
+        cleanup_lock=cleanup_lock,
     )
 
     assert timeout_fired.is_set()
@@ -107,12 +112,17 @@ def test_thread_watchdog_times_out_when_activity_snapshot_raises(monkeypatch):
     monkeypatch.setattr(
         process_registry,
         "kill_started_since",
-        lambda task_id, baseline, *, source: calls.append((task_id, baseline, source)) or 0,
+        lambda task_id, baseline, *, source: (
+            calls.append((task_id, baseline, source)) or 0
+        ),
     )
 
     _run_watchdog(
-        [agent], "session-snapshot-raises",
-        worker_done=worker_done, timeout_fired=timeout_fired, cleanup_lock=cleanup_lock,
+        [agent],
+        "session-snapshot-raises",
+        worker_done=worker_done,
+        timeout_fired=timeout_fired,
+        cleanup_lock=cleanup_lock,
     )
 
     assert timeout_fired.is_set()
@@ -127,10 +137,9 @@ def test_thread_watchdog_reaps_only_processes_created_by_timed_out_turn(monkeypa
     monkeypatch.setattr(
         process_registry,
         "kill_started_since",
-        lambda task_id, baseline, *, source: calls.append(
-            (task_id, baseline, source)
-        )
-        or 1,
+        lambda task_id, baseline, *, source: (
+            calls.append((task_id, baseline, source)) or 1
+        ),
     )
 
     watchdog = threading.Thread(
@@ -241,10 +250,9 @@ def test_reap_proceeds_when_this_turn_is_still_current(monkeypatch):
     monkeypatch.setattr(
         process_registry,
         "kill_started_since",
-        lambda task_id, baseline, *, source: calls.append(
-            (task_id, baseline, source)
-        )
-        or 1,
+        lambda task_id, baseline, *, source: (
+            calls.append((task_id, baseline, source)) or 1
+        ),
     )
 
     killed = _reap_gateway_turn_processes(
@@ -434,18 +442,29 @@ def test_dump_wedged_turn_stacks_never_raises(monkeypatch):
 def _plain_spawn(monkeypatch):
     """The systemd-run --user --scope wrapper is irrelevant here and stalls under pytest."""
     import tools.process_registry as _pr
+
     monkeypatch.setattr(_pr, "_SYSTEMD_SCOPE_AVAILABLE", False)
 
 
 def _bind_session(session_key, session_id, platform="telegram"):
-    set_session_vars(platform=platform, chat_id=session_id, user_id=session_id,
-                     session_key=session_key, session_id=session_id)
+    set_session_vars(
+        platform=platform,
+        chat_id=session_id,
+        user_id=session_id,
+        session_key=session_key,
+        session_id=session_id,
+    )
     set_current_session_key(session_key)
 
 
 def _spawn_background(turn_task_id, spawned):
-    out = json.loads(handle_function_call(
-        "terminal", {"command": "sleep 300", "background": True}, task_id=turn_task_id))
+    out = json.loads(
+        handle_function_call(
+            "terminal",
+            {"command": "sleep 300", "background": True},
+            task_id=turn_task_id,
+        )
+    )
     spawned.append(process_registry.get(out["session_id"]))
     return spawned[-1]
 
@@ -468,7 +487,9 @@ def test_stop_reaps_the_background_job_the_stopped_turn_started(_plain_spawn):
         # Turn start, as the gateway turn does it: baseline keyed by the turn's session id.
         agent = _IdleAgent()
         agent._gateway_turn_process_task_id = session_id
-        agent._gateway_turn_process_baseline = process_registry.snapshot_running_ids(session_id)
+        agent._gateway_turn_process_baseline = process_registry.snapshot_running_ids(
+            session_id
+        )
         job = _spawn_background(session_id, spawned)
         assert job.task_id != job.owner_task_id == session_id
 
@@ -476,7 +497,10 @@ def test_stop_reaps_the_background_job_the_stopped_turn_started(_plain_spawn):
         runner._sessions = {session_key: SessionState()}
         runner._sessions[session_key].turn.agent = agent
         runner._interrupt_running_turn(
-            session_key, interrupt_reason="Stop requested", invalidation_reason="stop_command_handler")
+            session_key,
+            interrupt_reason="Stop requested",
+            invalidation_reason="stop_command_handler",
+        )
 
         assert agent.interrupts == ["Stop requested"]
         assert process_registry.wait(job.id, timeout=30)["status"] == "exited"
@@ -501,17 +525,28 @@ def test_timed_out_turn_reaps_only_its_own_job_on_a_shared_container_key(_plain_
         mine = _spawn_background(turn_a, spawned)
         _bind_session("", turn_b, platform="api_server")
         sibling = _spawn_background(turn_b, spawned)
-        assert mine.task_id == sibling.task_id and mine.owner_task_id != sibling.owner_task_id
+        assert (
+            mine.task_id == sibling.task_id
+            and mine.owner_task_id != sibling.owner_task_id
+        )
 
         _bind_session("", turn_a, platform="api_server")
-        listed = json.loads(handle_function_call("process_manage", {"action": "list"}, task_id=turn_a))
+        listed = json.loads(
+            handle_function_call("process_manage", {"action": "list"}, task_id=turn_a)
+        )
         assert [p["session_id"] for p in listed["processes"]] == [mine.id]
 
         agent, worker_done, timeout_fired, cleanup_lock = _IdleAgent(), *_state()
         _watch_gateway_turn_inactivity(
-            agent_holder=[agent], task_id=turn_a, process_baseline=baseline, timeout=0.05,
-            worker_done=worker_done, timeout_fired=timeout_fired, cleanup_lock=cleanup_lock,
-            poll_interval=0.01)
+            agent_holder=[agent],
+            task_id=turn_a,
+            process_baseline=baseline,
+            timeout=0.05,
+            worker_done=worker_done,
+            timeout_fired=timeout_fired,
+            cleanup_lock=cleanup_lock,
+            poll_interval=0.01,
+        )
 
         assert timeout_fired.is_set()
         assert process_registry.wait(mine.id, timeout=30)["status"] == "exited"

@@ -1,4 +1,5 @@
 """A parked /goal resumes from the idle hook once its barrier lifts, without waiting for another turn."""
+
 import queue
 import time
 from unittest.mock import patch
@@ -12,7 +13,9 @@ from clawk_cli.cli_loops_mixin import CLILoopsMixin
 @pytest.fixture
 def clawk_home(tmp_path, monkeypatch):
     from pathlib import Path
-    home = tmp_path / ".clawk"; home.mkdir()
+
+    home = tmp_path / ".clawk"
+    home.mkdir()
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setenv("CLAWK_HOME", str(home))
     goals._DB_CACHE.clear()
@@ -36,14 +39,14 @@ def test_idle_hook_queues_the_continuation_when_a_timed_barrier_has_elapsed(claw
     cli = _Cli(mgr)
     with patch("cli._cprint"), patch("cli._DIM", ""), patch("cli._RST", ""):
         cli._maybe_resume_parked_goal()
-        assert cli._pending_input.empty()            # still parked
+        assert cli._pending_input.empty()  # still parked
         mgr.state.waiting_until = time.time() - 1
         mgr._save()
         cli._last_goal_barrier_check = 0.0
         cli._maybe_resume_parked_goal()
-    assert not cli._pending_input.empty()            # continuation queued
+    assert not cli._pending_input.empty()  # continuation queued
     assert "finish the thing" in cli._pending_input.get()
-    assert mgr.state.waiting_until == 0.0            # barrier cleared
+    assert mgr.state.waiting_until == 0.0  # barrier cleared
 
 
 def test_idle_hook_is_a_no_op_for_an_unparked_or_inactive_goal(clawk_home):

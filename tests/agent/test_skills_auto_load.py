@@ -8,7 +8,9 @@ from unittest.mock import patch
 def _write_skill(root, name, body):
     skill_dir = root / name
     skill_dir.mkdir(parents=True, exist_ok=True)
-    (skill_dir / "SKILL.md").write_text(f"---\nname: {name}\ndescription: Test.\n---\n\n{body}\n")
+    (skill_dir / "SKILL.md").write_text(
+        f"---\nname: {name}\ndescription: Test.\n---\n\n{body}\n"
+    )
     return skill_dir / "SKILL.md"
 
 
@@ -21,7 +23,9 @@ def _bare_agent(session_id="auto-load-test"):
     agent.provider = "test"
     agent.pass_session_id = False
     agent.skip_context_files = False
-    agent._context_cwd_is_launch_artifact = True  # no project-context walk; keeps the build tmp-home only
+    agent._context_cwd_is_launch_artifact = (
+        True  # no project-context walk; keeps the build tmp-home only
+    )
     agent.load_soul_identity = False
     agent._memory_enabled = False
     agent._user_profile_enabled = False
@@ -45,8 +49,12 @@ class TestBuildAutoLoadPrompt:
         home = tmp_path / "profile-home"
         _write_skill(home / "skills", "pinned-skill", "PINNED CONTENT")
         (home / "config.yaml").write_text(
-            "skills:\n  auto_load: ['pinned-skill', ' pinned-skill ', 'no-such-skill', 7]\n", encoding="utf-8")
-        prompt, loaded, missing = build_auto_load_prompt(task_id="s1", home_override=home)
+            "skills:\n  auto_load: ['pinned-skill', ' pinned-skill ', 'no-such-skill', 7]\n",
+            encoding="utf-8",
+        )
+        prompt, loaded, missing = build_auto_load_prompt(
+            task_id="s1", home_override=home
+        )
         assert loaded == ["pinned-skill"]
         assert missing == ["no-such-skill"]
         assert "PINNED CONTENT" in prompt
@@ -59,7 +67,9 @@ class TestBuildAutoLoadPrompt:
         _write_skill(tmp_path, "extra-skill", "EXTRA CONTENT")
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
             prompt, loaded, missing = build_preloaded_skills_prompt(
-                ["pinned-skill", "extra-skill"], task_id="s1", excluded_loaded_names={"pinned-skill"},
+                ["pinned-skill", "extra-skill"],
+                task_id="s1",
+                excluded_loaded_names={"pinned-skill"},
             )
         # Still counted as resolved (so a typo elsewhere degrades gracefully), but not rendered twice.
         assert loaded == ["pinned-skill", "extra-skill"] and missing == []
@@ -67,17 +77,25 @@ class TestBuildAutoLoadPrompt:
 
 
 class TestSharedPromptPath:
-    def test_prompt_is_byte_stable_after_config_and_skill_mutation(self, tmp_path, monkeypatch):
+    def test_prompt_is_byte_stable_after_config_and_skill_mutation(
+        self, tmp_path, monkeypatch
+    ):
         """The whole point: rebuilds (model switch, compression) reuse the first resolution."""
         monkeypatch.delenv("CLAWK_IGNORE_RULES", raising=False)
         skill_file = _write_skill(tmp_path, "stable-skill", "ORIGINAL SKILL BYTES")
         cfg = {"skills": {"auto_load": ["stable-skill"]}}
         agent = _bare_agent()
-        with patch("tools.skills_tool.SKILLS_DIR", tmp_path), \
-             patch("clawk_cli.config.load_config_readonly", return_value=cfg):
+        with (
+            patch("tools.skills_tool.SKILLS_DIR", tmp_path),
+            patch("clawk_cli.config.load_config_readonly", return_value=cfg),
+        ):
             first = agent._build_system_prompt()
-            assert "ORIGINAL SKILL BYTES" in first and agent._auto_load_skills_result[1] == ["stable-skill"]
-            skill_file.write_text("---\nname: stable-skill\ndescription: Test.\n---\n\nMUTATED BYTES\n")
+            assert "ORIGINAL SKILL BYTES" in first and agent._auto_load_skills_result[
+                1
+            ] == ["stable-skill"]
+            skill_file.write_text(
+                "---\nname: stable-skill\ndescription: Test.\n---\n\nMUTATED BYTES\n"
+            )
             cfg["skills"]["auto_load"] = []
             agent.model = "after-switch"
             agent._cached_system_prompt = None
@@ -89,12 +107,17 @@ class TestSharedPromptPath:
         the skills toolset all keep pinned skills out of the prompt."""
         _write_skill(tmp_path, "stable-skill", "ORIGINAL SKILL BYTES")
         cfg = {"skills": {"auto_load": ["stable-skill"]}}
-        with patch("tools.skills_tool.SKILLS_DIR", tmp_path), \
-             patch("clawk_cli.config.load_config_readonly", return_value=cfg):
+        with (
+            patch("tools.skills_tool.SKILLS_DIR", tmp_path),
+            patch("clawk_cli.config.load_config_readonly", return_value=cfg),
+        ):
             monkeypatch.setenv("CLAWK_IGNORE_RULES", "true")
             agent = _bare_agent()
             assert "ORIGINAL SKILL BYTES" not in agent._build_system_prompt()
-            assert agent._auto_load_skills_resolved is True and agent._auto_load_skills_result == ("", [], [])
+            assert (
+                agent._auto_load_skills_resolved is True
+                and agent._auto_load_skills_result == ("", [], [])
+            )
 
             monkeypatch.delenv("CLAWK_IGNORE_RULES")
             child = _bare_agent("child")

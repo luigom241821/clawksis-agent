@@ -13,11 +13,7 @@ These tests assert the compressor's reservation mirrors the adapter default
 on the native Gemini path, and ONLY there.
 """
 
-
-
-
 from unittest.mock import patch
-
 
 
 import agent.context_compressor as cc_mod
@@ -35,7 +31,8 @@ def _build_agent(model, base_url, provider="", max_tokens=None, window=131072):
         patch("clawk_cli.config.load_config", return_value=CFG),
         patch("clawk_cli.config.load_config_readonly", return_value=CFG),
         patch(
-            "agent.model_metadata.get_model_context_length", return_value=window,
+            "agent.model_metadata.get_model_context_length",
+            return_value=window,
         ),
         patch.object(cc_mod, "get_model_context_length", return_value=window),
     ):
@@ -66,7 +63,9 @@ def test_native_gemini_unset_max_tokens_reserves_adapter_default():
 
 def test_gemini_provider_name_also_reserves_default():
     agent = _build_agent(
-        "gemini-3.7-flash", "https://example-proxy.invalid/v1", provider="google",
+        "gemini-3.7-flash",
+        "https://example-proxy.invalid/v1",
+        provider="google",
     )
     assert agent.context_compressor.max_tokens == GEMINI_DEFAULT_MAX_OUTPUT_TOKENS
 
@@ -82,7 +81,8 @@ def test_explicit_max_tokens_wins_over_adapter_default():
 
 def test_non_gemini_paths_keep_no_reservation():
     agent = _build_agent(
-        "openai/gpt-4.1", "https://openrouter.ai/api/v1",
+        "openai/gpt-4.1",
+        "https://openrouter.ai/api/v1",
     )
     assert agent.context_compressor.max_tokens is None
 

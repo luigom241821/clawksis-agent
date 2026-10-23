@@ -1,5 +1,6 @@
 """Sibling regression test for #79178: background-PTY stdin must round-trip
 surrogateescape content instead of crashing on the strict UTF-8 encode."""
+
 import shlex
 import time
 

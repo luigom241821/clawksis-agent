@@ -55,10 +55,13 @@ def test_cli_running_injection_keeps_existing_interrupt_behaviour():
     assert cli._pending_input.empty()
 
 
-def test_key_less_gateway_injection_lets_the_gateway_pick_the_chat(tmp_path, monkeypatch):
+def test_key_less_gateway_injection_lets_the_gateway_pick_the_chat(
+    tmp_path, monkeypatch
+):
     """No key and no origin: the live gateway picks the chat (gateway/plugin_keyless_inject.py) from
     the session bound in the caller's own context, read here; none bound is passed as ``""``."""
     from gateway.session_context import scoped_session_key
+
     _write_plugin_config(
         tmp_path,
         monkeypatch,
@@ -73,8 +76,12 @@ def test_key_less_gateway_injection_lets_the_gateway_pick_the_chat(tmp_path, mon
         context.inject_message("for me")
     calls = [c.kwargs for c in injector.call_args_list]
     assert [(c["keyless"], c["calling_session_key"], c["content"]) for c in calls] == [
-        (True, "", "wake up"), (True, "agent:main:local:dm:local-1", "for me")]
-    assert all("session_key" not in c and c["plugin_home"] == manager.home_path for c in calls)
+        (True, "", "wake up"),
+        (True, "agent:main:local:dm:local-1", "for me"),
+    ]
+    assert all(
+        "session_key" not in c and c["plugin_home"] == manager.home_path for c in calls
+    )
 
 
 def test_key_less_injection_without_a_gateway_is_refused(tmp_path, monkeypatch):
@@ -212,14 +219,20 @@ def test_gateway_injection_fails_closed_on_host_exception(tmp_path, monkeypatch)
     )
 
 
-def test_published_gateway_host_reaches_existing_and_future_profile_managers(tmp_path, monkeypatch):
+def test_published_gateway_host_reaches_existing_and_future_profile_managers(
+    tmp_path, monkeypatch
+):
     homes = [tmp_path / name for name in ("launch", "secondary", "late")]
     for home in homes:
         home.mkdir()
         (home / "config.yaml").write_text(
-            yaml.safe_dump({
-                "plugins": {"entries": {"notify-plugin": {"allow_gateway_injection": True}}}
-            })
+            yaml.safe_dump(
+                {
+                    "plugins": {
+                        "entries": {"notify-plugin": {"allow_gateway_injection": True}}
+                    }
+                }
+            )
         )
     monkeypatch.setenv("CLAWK_HOME", str(homes[0]))
     plugins_mod._reset_plugin_managers_for_tests()
@@ -255,12 +268,17 @@ def test_published_gateway_host_reaches_existing_and_future_profile_managers(tmp
         token = set_clawk_home_override(str(homes[1]))
         try:
             context = PluginContext(
-                PluginManifest(name="notify-plugin", key="notify-plugin", source="user"),
+                PluginManifest(
+                    name="notify-plugin", key="notify-plugin", source="user"
+                ),
                 secondary_manager,
             )
-            assert context.inject_message(
-                "continue", session_key="agent:secondary:telegram:dm:42"
-            ) is True
+            assert (
+                context.inject_message(
+                    "continue", session_key="agent:secondary:telegram:dm:42"
+                )
+                is True
+            )
         finally:
             reset_clawk_home_override(token)
 
@@ -282,7 +300,13 @@ def test_published_gateway_host_reaches_existing_and_future_profile_managers(tmp
         secret_scope.set_multiplex_active(was_active)
 
 
-ORIGIN = {"platform": "discord", "chat_id": "42", "chat_type": "thread", "thread_id": "42", "user_id": "u1"}
+ORIGIN = {
+    "platform": "discord",
+    "chat_id": "42",
+    "chat_type": "thread",
+    "thread_id": "42",
+    "user_id": "u1",
+}
 
 
 def test_origin_injection_targets_the_plugins_own_home(tmp_path, monkeypatch):
@@ -300,11 +324,16 @@ def test_origin_injection_targets_the_plugins_own_home(tmp_path, monkeypatch):
     finally:
         reset_clawk_home_override(token)
     injector.assert_called_once_with(
-        origin=ORIGIN, plugin_home=manager.home_path, content="Kick off", plugin_id="notify-plugin",
+        origin=ORIGIN,
+        plugin_home=manager.home_path,
+        content="Kick off",
+        plugin_id="notify-plugin",
     )
 
 
-def test_origin_injection_permission_comes_from_the_plugins_own_profile(tmp_path, monkeypatch):
+def test_origin_injection_permission_comes_from_the_plugins_own_profile(
+    tmp_path, monkeypatch
+):
     """The allow_gateway_injection gate reads the plugin's profile config even when the calling
     thread's ambient home is another profile that grants it."""
     _write_plugin_config(tmp_path, monkeypatch, {"allow_gateway_injection": False})
@@ -314,7 +343,13 @@ def test_origin_injection_permission_comes_from_the_plugins_own_profile(tmp_path
     granting = tmp_path / "granting"
     granting.mkdir()
     (granting / "config.yaml").write_text(
-        yaml.safe_dump({"plugins": {"entries": {"notify-plugin": {"allow_gateway_injection": True}}}}),
+        yaml.safe_dump(
+            {
+                "plugins": {
+                    "entries": {"notify-plugin": {"allow_gateway_injection": True}}
+                }
+            }
+        ),
         encoding="utf-8",
     )
     token = set_clawk_home_override(granting)
@@ -331,7 +366,12 @@ def test_origin_injection_rejects_ambiguous_or_malformed_targets(tmp_path, monke
     injector = MagicMock(return_value=True)
     manager.set_gateway_message_injector(object(), injector)
 
-    assert context.inject_message("x", session_key="agent:main:discord:thread:42", origin=ORIGIN) is False
+    assert (
+        context.inject_message(
+            "x", session_key="agent:main:discord:thread:42", origin=ORIGIN
+        )
+        is False
+    )
     assert context.inject_message("x", origin="discord:42") is False
     injector.assert_not_called()
 
@@ -339,7 +379,11 @@ def test_origin_injection_rejects_ambiguous_or_malformed_targets(tmp_path, monke
 def test_origin_injection_never_lands_in_the_attached_cli():
     """An origin names a messaging chat; a CLI-hosted plugin gets False, not a REPL queue entry."""
     context, manager = _context()
-    cli = SimpleNamespace(_agent_running=False, _pending_input=SimpleQueue(), _interrupt_queue=SimpleQueue())
+    cli = SimpleNamespace(
+        _agent_running=False,
+        _pending_input=SimpleQueue(),
+        _interrupt_queue=SimpleQueue(),
+    )
     manager._cli_ref = cli
 
     assert context.inject_message("x", origin=ORIGIN) is False

@@ -4,6 +4,7 @@ Updated for the single-owner unification (clawk_cli.personality): built-ins
 always exist, resolution reads config (agent.personalities overlays), and
 persistence flows exclusively through persist_personality().
 """
+
 import os
 import pytest
 from unittest.mock import MagicMock, patch
@@ -11,8 +12,8 @@ import clawk_yaml as yaml
 
 # ── CLI tests ──────────────────────────────────────────────────────────────
 
-class TestCLIPersonalityNone:
 
+class TestCLIPersonalityNone:
     def _make_cli(self, personalities=None):
         from cli import ClawksisCLI
         from clawk_cli.personality import available_personalities
@@ -72,10 +73,11 @@ class TestCLIPersonalityNone:
             cli._handle_personality_command("/personality kawaii")
         assert "kawaii" in cli.system_prompt.lower()
 
+
 # ── Gateway tests ──────────────────────────────────────────────────────────
 
-class TestGatewayPersonalityNone:
 
+class TestGatewayPersonalityNone:
     def _make_event(self, args=""):
         event = MagicMock()
         event.get_command.return_value = "personality"
@@ -84,11 +86,10 @@ class TestGatewayPersonalityNone:
 
     def _make_runner(self, personalities=None):
         from gateway.run import GatewayRunner
+
         runner = GatewayRunner.__new__(GatewayRunner)
         runner.config = {
-            "agent": {
-                "personalities": personalities or {"helpful": "You are helpful."}
-            }
+            "agent": {"personalities": personalities or {"helpful": "You are helpful."}}
         }
         return runner
 
@@ -147,8 +148,11 @@ class TestGatewayPersonalityNone:
         assert saved["agent"]["system_prompt"] == "manual forever"
         assert saved["display"]["personality"] == "helpful"
         with p1, p2:
-            assert runner._get_system_prompt_for_channel(None, "c") == "You are helpful."
+            assert (
+                runner._get_system_prompt_for_channel(None, "c") == "You are helpful."
+            )
         assert "helpful" in result.lower()
+
 
 class TestPersonalityDictFormat:
     """Test dict-format custom personalities with description, tone, style."""
@@ -166,14 +170,16 @@ class TestPersonalityDictFormat:
         return cli
 
     def test_dict_personality_uses_system_prompt(self):
-        cli = self._make_cli({
-            "coder": {
-                "description": "Expert programmer",
-                "system_prompt": "You are an expert programmer.",
-                "tone": "technical",
-                "style": "concise",
+        cli = self._make_cli(
+            {
+                "coder": {
+                    "description": "Expert programmer",
+                    "system_prompt": "You are an expert programmer.",
+                    "tone": "technical",
+                    "style": "concise",
+                }
             }
-        })
+        )
         with patch("clawk_cli.personality.persist_personality", return_value=True):
             cli._handle_personality_command("/personality coder")
         assert "You are an expert programmer." in cli.system_prompt

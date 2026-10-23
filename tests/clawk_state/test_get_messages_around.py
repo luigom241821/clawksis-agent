@@ -5,6 +5,7 @@ and the scroll shape (user-supplied anchor). Returns a window of messages
 around the anchor plus before/after counts so callers can detect session
 boundaries.
 """
+
 import pytest
 
 from clawk_state import SessionDB
@@ -48,7 +49,6 @@ class TestBasicWindow:
         assert view["messages_after"] == 0
 
 
-
 class TestBoundaryDetection:
     """messages_before / messages_after tell the agent it's at start/end."""
 
@@ -60,10 +60,6 @@ class TestBoundaryDetection:
         assert view["messages_after"] == 5
         # window contains anchor + 5 after = 6 messages
         assert len(view["window"]) == 6
-
-
-
-
 
 
 class TestScrollPattern:
@@ -80,7 +76,6 @@ class TestScrollPattern:
         assert last_id in [m["id"] for m in v2["window"]]
         # v2's window extends beyond v1
         assert max(m["id"] for m in v2["window"]) > max(m["id"] for m in v1["window"])
-
 
 
 class TestContentHydration:

@@ -3,6 +3,7 @@
 Only child construction/conversation is synthetic: dispatch, parallel executor,
 child timeout/status conversion, interrupt propagation and cleanup are real.
 """
+
 from __future__ import annotations
 
 import json
@@ -53,16 +54,30 @@ class _Child:
                 assert self.interrupted.wait(5), "child never received stop"
                 self.unwinding.set()
                 assert self.allow_finish.wait(5), "child teardown was not released"
-                return {"final_response": "partial", "completed": False,
-                        "interrupted": True, "api_calls": 1, "messages": []}
+                return {
+                    "final_response": "partial",
+                    "completed": False,
+                    "interrupted": True,
+                    "api_calls": 1,
+                    "messages": [],
+                }
             if self.outcome == "error":
                 raise RuntimeError("synthetic child exception")
             if self.outcome == "failed":
-                return {"final_response": "provider rejection", "completed": False,
-                        "failed": True, "error": "synthetic provider rejection",
-                        "api_calls": 1, "messages": []}
-            return {"final_response": "sibling evidence", "completed": True,
-                    "api_calls": 1, "messages": []}
+                return {
+                    "final_response": "provider rejection",
+                    "completed": False,
+                    "failed": True,
+                    "error": "synthetic provider rejection",
+                    "api_calls": 1,
+                    "messages": [],
+                }
+            return {
+                "final_response": "sibling evidence",
+                "completed": True,
+                "api_calls": 1,
+                "messages": [],
+            }
         finally:
             self.finished.set()
 
@@ -82,13 +97,21 @@ def harness(monkeypatch, tmp_path):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     monkeypatch.setenv("CLAWK_SINGLE_QUERY_SESSION", "1")
     tokens = [(v, v.set(sc._UNSET)) for v in sc._VAR_MAP.values()]
-    tokens += [(v, v.set(sc._UNSET)) for v in
-               (sc._SESSION_ASYNC_DELIVERY, sc._SESSION_HISTORY_DELIVERY)]
+    tokens += [
+        (v, v.set(sc._UNSET))
+        for v in (sc._SESSION_ASYNC_DELIVERY, sc._SESSION_HISTORY_DELIVERY)
+    ]
     async_delegation._reset_for_tests()
-    parent = _Parent(session_id="finite-outcomes", _delegate_depth=0,
-                     _current_task_id=None, _interrupt_requested=False,
-                     _execution_thread_id=None, quiet_mode=True,
-                     _active_children=[], _active_children_lock=threading.Lock())
+    parent = _Parent(
+        session_id="finite-outcomes",
+        _delegate_depth=0,
+        _current_task_id=None,
+        _interrupt_requested=False,
+        _execution_thread_id=None,
+        quiet_mode=True,
+        _active_children=[],
+        _active_children_lock=threading.Lock(),
+    )
     children = []
 
     def build_child(task_index, parent_agent, **_kwargs):
@@ -101,17 +124,32 @@ def harness(monkeypatch, tmp_path):
     monkeypatch.setattr(dt, "_get_max_concurrent_children", lambda: 2)
     monkeypatch.setattr(dt, "_get_worktree_isolation", lambda: False)
     monkeypatch.setattr(dt, "_get_child_timeout", lambda: 4)
-    monkeypatch.setattr(dt, "_resolve_delegation_credentials", lambda *_a, **_k: {
-        "model": "test-model", "provider": None, "base_url": None,
-        "api_key": None, "api_mode": None, "command": None, "args": None,
-    })
+    monkeypatch.setattr(
+        dt,
+        "_resolve_delegation_credentials",
+        lambda *_a, **_k: {
+            "model": "test-model",
+            "provider": None,
+            "base_url": None,
+            "api_key": None,
+            "api_mode": None,
+            "command": None,
+            "args": None,
+        },
+    )
 
     def dispatch(*outcomes):
         children.extend(_Child(outcome) for outcome in outcomes)
-        return json.loads(dt.delegate_task(
-            tasks=[{"goal": f"Exercise child outcome {i}"} for i in range(len(children))],
-            background=True, parent_agent=parent,
-        ))
+        return json.loads(
+            dt.delegate_task(
+                tasks=[
+                    {"goal": f"Exercise child outcome {i}"}
+                    for i in range(len(children))
+                ],
+                background=True,
+                parent_agent=parent,
+            )
+        )
 
     yield parent, children, dispatch
     # Release on assertion failure too. Never leave conversation workers behind.
@@ -175,6 +213,7 @@ def test_finite_batch_returns_parent_interruption(harness, monkeypatch):
     # parent then can catch the sibling still pending and report it interrupted. Wait until the
     # parent has collected the completed sibling instead.
     from tools import delegate_tool_dispatch as dispatch_mod
+
     collected = threading.Event()
     report = dispatch_mod._report_child_done
 
@@ -210,9 +249,14 @@ def test_finite_batch_returns_parent_interruption(harness, monkeypatch):
 
 def test_finite_marker_overrides_api_history_continuation(harness):
     _parent, _children, dispatch = harness
-    sc.set_session_vars(platform="api_server", chat_id="history-session",
-                        session_key="history-session", session_id="history-session",
-                        session_history_delivery="1", async_delivery=False)
+    sc.set_session_vars(
+        platform="api_server",
+        chat_id="history-session",
+        session_key="history-session",
+        session_id="history-session",
+        session_history_delivery="1",
+        async_delivery=False,
+    )
     assert sc.session_history_delivery_supported()
     result = dispatch("completed", "error")
     _joined(result, ["completed", "error"])
@@ -220,16 +264,23 @@ def test_finite_marker_overrides_api_history_continuation(harness):
 
 @pytest.mark.parametrize("marker", [None, "0", "false"])
 @pytest.mark.parametrize("api_history", [False, True])
-def test_nonfinite_marker_preserves_background_dispatch(harness, monkeypatch, marker, api_history):
+def test_nonfinite_marker_preserves_background_dispatch(
+    harness, monkeypatch, marker, api_history
+):
     _parent, children, dispatch = harness
     if marker is None:
         monkeypatch.delenv("CLAWK_SINGLE_QUERY_SESSION")
     else:
         monkeypatch.setenv("CLAWK_SINGLE_QUERY_SESSION", marker)
     if api_history:
-        sc.set_session_vars(platform="api_server", chat_id="history-session",
-                            session_key="history-session", session_id="history-session",
-                            session_history_delivery="1", async_delivery=False)
+        sc.set_session_vars(
+            platform="api_server",
+            chat_id="history-session",
+            session_key="history-session",
+            session_id="history-session",
+            session_history_delivery="1",
+            async_delivery=False,
+        )
     result = dispatch("completed", "completed")
     assert result["status"] == "dispatched", result
     assert result["mode"] == "background"

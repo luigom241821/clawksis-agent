@@ -64,11 +64,22 @@ def install_plugin(clawk_home: Path) -> None:
     dash = clawk_home / "plugins" / PLUGIN_ID / "dashboard"
     dash.mkdir(parents=True, exist_ok=True)
     (clawk_home / "plugins" / PLUGIN_ID / "plugin.yaml").write_text(
-        f"name: {PLUGIN_ID}\nversion: 0.0.1\ndescription: secret-scope canary\n", encoding="utf-8")
-    (dash / "manifest.json").write_text(json.dumps({
-        "name": PLUGIN_ID, "label": "Scope canary", "version": "0.0.1",
-        "tab": {"path": f"/{PLUGIN_ID}", "hidden": True}, "entry": "dist/index.js", "api": "plugin_api.py",
-    }), encoding="utf-8")
+        f"name: {PLUGIN_ID}\nversion: 0.0.1\ndescription: secret-scope canary\n",
+        encoding="utf-8",
+    )
+    (dash / "manifest.json").write_text(
+        json.dumps(
+            {
+                "name": PLUGIN_ID,
+                "label": "Scope canary",
+                "version": "0.0.1",
+                "tab": {"path": f"/{PLUGIN_ID}", "hidden": True},
+                "entry": "dist/index.js",
+                "api": "plugin_api.py",
+            }
+        ),
+        encoding="utf-8",
+    )
     (dash / "dist").mkdir(exist_ok=True)
     (dash / "dist" / "index.js").write_text("// no UI\n", encoding="utf-8")
     (dash / "plugin_api.py").write_text(_PLUGIN_API, encoding="utf-8")
@@ -81,8 +92,10 @@ def write_env_dump_server(path: Path) -> Path:
 
 def mcp_config(server_script: Path, dump_file: Path) -> dict:
     """``mcp_servers`` entry: the profile passes exactly one secret, by reference to its own .env."""
-    return {MCP_SERVER_NAME: {
-        "command": sys.executable,
-        "args": [str(server_script), str(dump_file)],
-        "env": {MCP_ENV_KEY: "${" + SECRET_ENV + "}"},
-    }}
+    return {
+        MCP_SERVER_NAME: {
+            "command": sys.executable,
+            "args": [str(server_script), str(dump_file)],
+            "env": {MCP_ENV_KEY: "${" + SECRET_ENV + "}"},
+        }
+    }

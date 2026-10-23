@@ -124,7 +124,7 @@ def test_cron_job_prompt_survives_after_the_handoff():
     idx = _handoff_idx(compressed)
     assert idx >= 0, "expected a compaction handoff in the compressed transcript"
 
-    after = compressed[idx + 1:]
+    after = compressed[idx + 1 :]
     # The re-append may also land inside the handoff carrier itself, after the
     # end marker (the alternation-safe merge layout) — accept either shape.
     carrier_tail = _text(compressed[idx]).split(_SUMMARY_END_MARKER)[-1]
@@ -137,8 +137,6 @@ def test_cron_job_prompt_survives_after_the_handoff():
         "handoff summary — SUMMARY_PREFIX orders the model to do nothing "
         "otherwise (#100818)"
     )
-
-
 
 
 def test_role_alternation_and_head_are_preserved():
@@ -195,10 +193,10 @@ def test_completed_exchange_is_not_replayed():
     compressed = _compress(messages)
 
     idx = _handoff_idx(compressed)
-    after = compressed[idx + 1:]
-    assert not any(
-        JOB_SENTINEL in _text(m) for m in _actionable_user_rows(after)
-    ), "a completed exchange must not be re-appended as a new user instruction"
+    after = compressed[idx + 1 :]
+    assert not any(JOB_SENTINEL in _text(m) for m in _actionable_user_rows(after)), (
+        "a completed exchange must not be re-appended as a new user instruction"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -235,7 +233,8 @@ def test_pending_trailing_tool_call_survives_the_replay():
     ]
     assert pending, "trailing in-flight tool_calls were stripped"
     replay_idx = max(
-        i for i, m in enumerate(out)
+        i
+        for i, m in enumerate(out)
         if m.get("role") == "user" and JOB_SENTINEL in str(m.get("content"))
     )
     assert replay_idx > out.index(pending[0])
@@ -257,7 +256,9 @@ def _compress_with(protect_first_n: int, compression_count: int, messages):
     compressor.tail_token_budget = 500
     compressor.compression_count = compression_count
     with patch.object(
-        compressor, "_generate_summary", return_value=response.choices[0].message.content
+        compressor,
+        "_generate_summary",
+        return_value=response.choices[0].message.content,
     ):
         return compressor.compress(messages, current_tokens=90_000)
 
@@ -280,9 +281,9 @@ def test_merged_restatement_is_not_anchored_twice():
 
     original = [{"role": "user", "content": JOB_SENTINEL}, *_tool_pairs(40)]
     out = _compress_with(2, 1, original)
-    assert any(
-        ContextCompressor._has_merged_inflight_replay(m) for m in out
-    ), "expected merge layout"
+    assert any(ContextCompressor._has_merged_inflight_replay(m) for m in out), (
+        "expected merge layout"
+    )
     assert _job_copies(out) == 1
     assert _ensure_compressed_has_user_turn(original, out) == "already_present"
     assert _job_copies(out) == 1
@@ -299,9 +300,12 @@ def test_restatement_survives_repeated_compactions_without_stacking():
         out = _compress_with(2, cycle, out + extra)
         users = [m for m in out if m.get("role") == "user"]
         assert _job_copies(out) == 1, cycle
-        assert max(
-            str(m.get("content")).count(_INFLIGHT_TASK_REPLAY_HEADER) for m in users
-        ) == 1, cycle
+        assert (
+            max(
+                str(m.get("content")).count(_INFLIGHT_TASK_REPLAY_HEADER) for m in users
+            )
+            == 1
+        ), cycle
         last = str(users[-1].get("content"))
         assert last.rfind(JOB_SENTINEL) > last.rfind(_SUMMARY_END_MARKER), cycle
 
@@ -320,7 +324,9 @@ def test_replay_row_does_not_carry_the_original_timestamp():
     old_ts = 1757577257.0
     carrier = {
         "role": "assistant",
-        "content": SUMMARY_PREFIX + "\n## Summary\nran steps.\n\n" + _SUMMARY_END_MARKER,
+        "content": SUMMARY_PREFIX
+        + "\n## Summary\nran steps.\n\n"
+        + _SUMMARY_END_MARKER,
         COMPRESSED_SUMMARY_METADATA_KEY: True,
     }
     compressed = [
@@ -329,7 +335,9 @@ def test_replay_row_does_not_carry_the_original_timestamp():
         {
             "role": "assistant",
             "content": "step 0",
-            "tool_calls": [{"id": "c0", "function": {"name": "terminal", "arguments": "{}"}}],
+            "tool_calls": [
+                {"id": "c0", "function": {"name": "terminal", "arguments": "{}"}}
+            ],
         },
         {"role": "tool", "tool_call_id": "c0", "content": "tool output 0"},
     ]
@@ -337,8 +345,7 @@ def test_replay_row_does_not_carry_the_original_timestamp():
     before = time.time()
     out = _make_compressor()._reappend_inflight_user_task(compressed, inflight)
     replays = [
-        m for m in out
-        if m is not carrier and _INFLIGHT_TASK_REPLAY_HEADER in _text(m)
+        m for m in out if m is not carrier and _INFLIGHT_TASK_REPLAY_HEADER in _text(m)
     ]
     assert len(replays) == 1, "expected one standalone replay row"
     assert replays[0].get("timestamp", before) >= before, (
@@ -375,7 +382,9 @@ def test_replay_replaces_surviving_user_row_with_same_message_uid():
     uid = "request-uid"
     carrier = {
         "role": "assistant",
-        "content": SUMMARY_PREFIX + "\n## Summary\nran steps.\n\n" + _SUMMARY_END_MARKER,
+        "content": SUMMARY_PREFIX
+        + "\n## Summary\nran steps.\n\n"
+        + _SUMMARY_END_MARKER,
         COMPRESSED_SUMMARY_METADATA_KEY: True,
     }
     original = {"role": "user", "content": JOB_SENTINEL, "message_uid": uid}
@@ -384,7 +393,11 @@ def test_replay_replaces_surviving_user_row_with_same_message_uid():
     )
 
     def holders(rows):
-        return [m for m in rows if uid == m.get("message_uid") or uid in m.get(ABSORBED_MESSAGE_UIDS, ())]
+        return [
+            m
+            for m in rows
+            if uid == m.get("message_uid") or uid in m.get(ABSORBED_MESSAGE_UIDS, ())
+        ]
 
     matching = holders(out)
     assert len(matching) == 1
@@ -402,7 +415,10 @@ def test_replay_replaces_surviving_user_row_with_same_message_uid():
     visible = [r for r in map(_template_visible_role, compressed[1:]) if r is not None]
     assert visible[0] == "user", visible
     assert all(a != b for a, b in itertools.pairwise(visible)), visible
-    assert JOB_SENTINEL in _text(compressed[_handoff_idx(compressed)]).split(_SUMMARY_END_MARKER)[-1]
+    assert (
+        JOB_SENTINEL
+        in _text(compressed[_handoff_idx(compressed)]).split(_SUMMARY_END_MARKER)[-1]
+    )
 
     # Visible assistant text in the tail makes the summary merge into tail[0],
     # an assistant(tool_calls) row: it must stay adjacent to its tool results.
@@ -412,4 +428,6 @@ def test_replay_replaces_surviving_user_row_with_same_message_uid():
     for i, msg in enumerate(compressed):
         if msg.get("tool_calls"):
             ids = [c["id"] for c in msg["tool_calls"]]
-            assert [m.get("tool_call_id") for m in compressed[i + 1 : i + 1 + len(ids)]] == ids, i
+            assert [
+                m.get("tool_call_id") for m in compressed[i + 1 : i + 1 + len(ids)]
+            ] == ids, i

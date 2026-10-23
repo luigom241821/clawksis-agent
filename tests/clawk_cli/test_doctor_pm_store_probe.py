@@ -1,4 +1,5 @@
 """Doctor and launched commands share PM's read-only installed selection."""
+
 from __future__ import annotations
 
 import hashlib
@@ -23,7 +24,11 @@ def tool_store(tmp_path, monkeypatch):
     rg = shutil.which("rg")
     assert rg is not None, "this executable parity test requires ripgrep"
     version_output = subprocess.run(
-        [rg, "--version"], capture_output=True, text=True, check=True, timeout=10,
+        [rg, "--version"],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=10,
     ).stdout
     version = version_output.splitlines()[0].split()[1]
     home = tmp_path / "home"
@@ -40,7 +45,9 @@ def tool_store(tmp_path, monkeypatch):
     package = get_package("ripgrep")
     digest = hashlib.sha256(Path(rg).read_bytes()).hexdigest()
     lock = Lockfile(lock_path)
-    lock.set_pin("ripgrep", version, {target: {"url": Path(rg).as_uri(), "sha256": digest}})
+    lock.set_pin(
+        "ripgrep", version, {target: {"url": Path(rg).as_uri(), "sha256": digest}}
+    )
     lock.save()
 
     def publish(root):
@@ -50,15 +57,23 @@ def tool_store(tmp_path, monkeypatch):
         binary.parent.mkdir(parents=True)
         binary.symlink_to(rg)
         Facts(root / "facts.json").record(
-            "ripgrep", version, entry.name, package.env(entry, target), root,
-            target=target, artifacts=[digest], digest=tree_digest(entry),
+            "ripgrep",
+            version,
+            entry.name,
+            package.env(entry, target),
+            root,
+            target=target,
+            artifacts=[digest],
+            digest=tree_digest(entry),
         )
         return binary
 
     hostile = tmp_path / "hostile"
     hostile.mkdir()
     hostile_rg = hostile / "rg"
-    hostile_rg.write_text("#!/bin/sh\nprintf 'hostile PATH ripgrep\\n'\n", encoding="utf-8")
+    hostile_rg.write_text(
+        "#!/bin/sh\nprintf 'hostile PATH ripgrep\\n'\n", encoding="utf-8"
+    )
     hostile_rg.chmod(0o755)
     monkeypatch.setenv("PATH", str(hostile))
     return primary, publish, version_output, hostile_rg
@@ -66,7 +81,9 @@ def tool_store(tmp_path, monkeypatch):
 
 @pytest.mark.platforms("posix")
 @pytest.mark.parametrize("primary_state", ["absent", "stale"])
-def test_sealed_store_extension_matches_launched_tool(tool_store, primary_state, capsys):
+def test_sealed_store_extension_matches_launched_tool(
+    tool_store, primary_state, capsys
+):
     primary, publish, version_output, _hostile = tool_store
     if primary_state == "stale":
         publish(primary)
@@ -75,8 +92,12 @@ def test_sealed_store_extension_matches_launched_tool(tool_store, primary_state,
         data["packages"]["ripgrep"]["version"] = "0.0.0"
         facts_path.write_text(json.dumps(data), encoding="utf-8")
     binary = publish(paths.writable_store_root())
-    before = {p: p.read_bytes() for root in (primary, paths.writable_store_root())
-              for p in root.rglob("*") if p.is_file()}
+    before = {
+        p: p.read_bytes()
+        for root in (primary, paths.writable_store_root())
+        for p in root.rglob("*")
+        if p.is_file()
+    }
     # The selected writable extension must not require repairing the payload.
     sealed_paths = [primary, *(p for p in primary.rglob("*") if not p.is_symlink())]
     modes = {p: stat.S_IMODE(p.stat().st_mode) for p in sealed_paths}
@@ -87,22 +108,37 @@ def test_sealed_store_extension_matches_launched_tool(tool_store, primary_state,
         assert selected is not None and selected.binary == binary
         env = pm.env_for("ripgrep", base_env={"PATH": str(_hostile.parent)})
         assert shutil.which("rg", path=env["PATH"]) == str(binary)
-        child = subprocess.run(["rg", "--version"], env=env, capture_output=True,
-                               text=True, check=True, timeout=10)
+        child = subprocess.run(
+            ["rg", "--version"],
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10,
+        )
         assert child.stdout == version_output
         assert doctor_tools._doctor_tool("rg") == (str(binary), "(pm store)")
         doctor_tools._check_git_and_rg(False)
         assert "✓ ripgrep (rg) (pm store)" in capsys.readouterr().out
-        assert {p: p.read_bytes() for root in (primary, paths.writable_store_root())
-                for p in root.rglob("*") if p.is_file()} == before
+        assert {
+            p: p.read_bytes()
+            for root in (primary, paths.writable_store_root())
+            for p in root.rglob("*")
+            if p.is_file()
+        } == before
     finally:
         for path, mode in modes.items():
             path.chmod(mode)
 
 
 @pytest.mark.platforms("posix")
-@pytest.mark.parametrize("damage", ["version", "target", "artifacts", "missing-binary", "sparse", "malformed"])
-def test_rejected_store_is_not_reported_as_runtime_available(tool_store, damage, capsys):
+@pytest.mark.parametrize(
+    "damage",
+    ["version", "target", "artifacts", "missing-binary", "sparse", "malformed"],
+)
+def test_rejected_store_is_not_reported_as_runtime_available(
+    tool_store, damage, capsys
+):
     primary, publish, _version_output, hostile = tool_store
     binary = publish(primary)
     facts_path = primary / "facts.json"
@@ -114,14 +150,22 @@ def test_rejected_store_is_not_reported_as_runtime_available(tool_store, damage,
         data["packages"]["ripgrep"] = {"entry": fact["entry"]}
     elif damage != "malformed":
         fact[damage] = ["wrong-artifact"] if damage == "artifacts" else "outdated"
-    facts_path.write_text("not JSON" if damage == "malformed" else json.dumps(data), encoding="utf-8")
+    facts_path.write_text(
+        "not JSON" if damage == "malformed" else json.dumps(data), encoding="utf-8"
+    )
     before = facts_path.read_bytes()
 
     assert pm.installed_package("ripgrep") is None
     assert doctor_tools._pm_tool_path("ripgrep") is None
     assert doctor_tools._doctor_tool("rg") == (str(hostile), "")
-    child = subprocess.run(["rg", "--version"], env=pm.env_for("ripgrep"),
-                           capture_output=True, text=True, check=True, timeout=10)
+    child = subprocess.run(
+        ["rg", "--version"],
+        env=pm.env_for("ripgrep"),
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=10,
+    )
     assert child.stdout.strip() == "hostile PATH ripgrep"
     doctor_tools._check_git_and_rg(False)
     out = capsys.readouterr().out

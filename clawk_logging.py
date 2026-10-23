@@ -21,7 +21,10 @@ from time import monotonic as _monotonic
 from typing import Optional, Sequence
 
 from clawk_constants import (
-    get_config_path, get_clawk_home, mkdir_under_clawk_home, named_profile_is_deleted,
+    get_config_path,
+    get_clawk_home,
+    mkdir_under_clawk_home,
+    named_profile_is_deleted,
 )
 
 # setup_logging() is idempotent: a second call is a no-op unless ``force=True``.
@@ -105,7 +108,9 @@ _session_context = threading.local()
 
 # ``%(session_tag)s`` exists on every LogRecord via _install_session_record_factory().
 _LOG_FORMAT = "%(asctime)s %(levelname)s%(session_tag)s %(name)s: %(message)s"
-_LOG_FORMAT_VERBOSE = "%(asctime)s - %(name)s - %(levelname)s%(session_tag)s - %(message)s"
+_LOG_FORMAT_VERBOSE = (
+    "%(asctime)s - %(name)s - %(levelname)s%(session_tag)s - %(message)s"
+)
 
 
 # The stdout stream _line_buffer_piped_stdout() already reconfigured: setup_logging runs on every
@@ -155,7 +160,9 @@ def _safe_stderr():  # type: ignore[return]
     if encoding.lower().replace("-", "") in ("utf8", "utf8surrogateescape"):
         return stream
     try:
-        wrapped = io.TextIOWrapper(stream.buffer, encoding="utf-8", errors="replace", line_buffering=True)
+        wrapped = io.TextIOWrapper(
+            stream.buffer, encoding="utf-8", errors="replace", line_buffering=True
+        )
         # Prevent the wrapper from closing the underlying buffer when garbage-collected.
         wrapped.close = lambda: None  # type: ignore[assignment]
         return wrapped
@@ -173,7 +180,10 @@ class _RedactingStdio:
 
     def write(self, text):
         from agent.redact import redact_sensitive_text
-        return self._stream.write(redact_sensitive_text(text) if isinstance(text, str) else text)
+
+        return self._stream.write(
+            redact_sensitive_text(text) if isinstance(text, str) else text
+        )
 
     def __getattr__(self, name):
         return getattr(self._stream, name)
@@ -230,16 +240,26 @@ def _warn_windows_lock_timeout_once() -> None:
 
 def _is_unavailable_log_stream(exc: BaseException | None) -> bool:
     """True when a file handler lost its backing stream during teardown or I/O."""
-    return (
-        (isinstance(exc, OSError) and exc.errno == 5)
-        or (isinstance(exc, ValueError) and "closed file" in str(exc).lower())
+    return (isinstance(exc, OSError) and exc.errno == 5) or (
+        isinstance(exc, ValueError) and "closed file" in str(exc).lower()
     )
 
 
 # Third-party loggers that are noisy at DEBUG/INFO level.
 _NOISY_LOGGERS = (
-    "openai", "openai._base_client", "httpx", "httpcore", "asyncio", "hpack", "hpack.hpack",
-    "grpc", "modal", "urllib3", "urllib3.connectionpool", "websockets", "charset_normalizer",
+    "openai",
+    "openai._base_client",
+    "httpx",
+    "httpcore",
+    "asyncio",
+    "hpack",
+    "hpack.hpack",
+    "grpc",
+    "modal",
+    "urllib3",
+    "urllib3.connectionpool",
+    "websockets",
+    "charset_normalizer",
     "markdown_it",
 )
 
@@ -283,6 +303,7 @@ def _install_session_record_factory() -> None:
         except Exception:
             record.clawk_home = ""  # type: ignore[attr-defined]
         return record
+
     _session_record_factory._clawk_session_injector = True  # type: ignore[attr-defined]
     logging.setLogRecordFactory(_session_record_factory)
 
@@ -308,12 +329,23 @@ COMPONENT_PREFIXES = {
     # ``gateway/platforms/`` into bundled plugins (#41112) are still gateway
     # components and belong in gateway.log. ``agent.memory_caller_scope``: a multiplexed gateway's
     # memory-provider profile refusals (#140058), which the operator reads in gateway.log.
-    "gateway": ("gateway", "clawk_plugins", "plugins.platforms", "agent.memory_caller_scope"),
+    "gateway": (
+        "gateway",
+        "clawk_plugins",
+        "plugins.platforms",
+        "agent.memory_caller_scope",
+    ),
     "agent": ("agent", "run_agent", "model_tools", "batch_runner"),
     "tools": ("tools",),
     "cli": ("clawk_cli", "cli"),
     "cron": ("cron",),
-    "gui": ("clawk_cli.web_server", "clawk_cli.pty_bridge", "clawk_cli.desktop", "tui_gateway", "uvicorn"),
+    "gui": (
+        "clawk_cli.web_server",
+        "clawk_cli.pty_bridge",
+        "clawk_cli.desktop",
+        "tui_gateway",
+        "uvicorn",
+    ),
 }
 
 
@@ -403,9 +435,14 @@ def setup_logging(
         if component is not None and mode != component:
             continue
         _add_rotating_handler(
-            log_dir / filename, level=lvl, max_bytes=size, backup_count=count,
+            log_dir / filename,
+            level=lvl,
+            max_bytes=size,
+            backup_count=count,
             formatter=RedactingFormatter(_LOG_FORMAT),
-            log_filter=_ComponentFilter(COMPONENT_PREFIXES[component]) if component else None,
+            log_filter=_ComponentFilter(COMPONENT_PREFIXES[component])
+            if component
+            else None,
         )
 
     if _WINDOWS_CLH_FALLBACK and not _fallback_warned:
@@ -470,6 +507,7 @@ class _ManagedRotatingFileHandler(RotatingFileHandler):
 
     def __init__(self, *args, **kwargs):
         from clawk_cli.config import is_managed
+
         self._managed = is_managed()
         self._unavailable_reported = False
         # Set by _ProfileRoutingFileHandler: a vanished logs/ dir means the profile was deleted,
@@ -546,8 +584,12 @@ class _ManagedRotatingFileHandler(RotatingFileHandler):
         # Only when the file is gone (or its reopen just failed), so a healthy emit pays no extra
         # stat. ``stream is None`` alone is not a signal: on Windows concurrent-log-handler closes
         # the stream after every write.
-        if (self.stream is None and (had_stream or not file_exists) and self._skip_write_when_dir_missing
-                and not os.path.isdir(os.path.dirname(self.baseFilename))):
+        if (
+            self.stream is None
+            and (had_stream or not file_exists)
+            and self._skip_write_when_dir_missing
+            and not os.path.isdir(os.path.dirname(self.baseFilename))
+        ):
             self.skipped_missing_dir = True
             return
         super().emit(record)
@@ -575,9 +617,13 @@ class _ManagedRotatingFileHandler(RotatingFileHandler):
             # reopens it if the destination has recovered.
             if not self._unavailable_reported:
                 self._unavailable_reported = True
-                _quietly(lambda: print(
-                    f"clawk_logging: {self.baseFilename} unavailable ({exc}); "
-                    "file logging paused until it recovers", file=_safe_stderr()))
+                _quietly(
+                    lambda: print(
+                        f"clawk_logging: {self.baseFilename} unavailable ({exc}); "
+                        "file logging paused until it recovers",
+                        file=_safe_stderr(),
+                    )
+                )
             if self.stream is not None:
                 _quietly(self.stream.close)
             self.stream = None  # type: ignore[assignment]
@@ -644,14 +690,18 @@ class _ProfileRoutingFileHandler(logging.Handler):
     or dashboard event loop. Per-home handlers keep rotation, redaction and managed perms.
     """
 
-    def __init__(self, existing: RotatingFileHandler, profile_homes: Sequence[Path]) -> None:
+    def __init__(
+        self, existing: RotatingFileHandler, profile_homes: Sequence[Path]
+    ) -> None:
         """Take over *existing*'s path, level, rotation, formatter and filters."""
         super().__init__(level=existing.level)
         resolved = Path(existing.baseFilename).resolve()
         self.baseFilename = str(resolved)
         self._clawk_routed_log_path = resolved
         self._default_home = resolved.parent.parent.resolve()
-        self._profile_homes = {Path(home).expanduser().resolve() for home in profile_homes}
+        self._profile_homes = {
+            Path(home).expanduser().resolve() for home in profile_homes
+        }
         self._filename = resolved.name
         self._max_bytes = getattr(existing, "maxBytes", 0)
         self._backup_count = getattr(existing, "backupCount", 0)
@@ -707,16 +757,23 @@ class _ProfileRoutingFileHandler(logging.Handler):
         # handler's lock and closes it (``close`` takes ``_profile_handlers_lock``). Holding
         # either router lock here deadlocked the QueueListener against ``dictConfig`` (T23).
         built = _new_file_handler(
-            home / "logs" / self._filename, level=self.level, max_bytes=self._max_bytes,
-            backup_count=self._backup_count, formatter=self.formatter,
+            home / "logs" / self._filename,
+            level=self.level,
+            max_bytes=self._max_bytes,
+            backup_count=self._backup_count,
+            formatter=self.formatter,
         )
         built._skip_write_when_dir_missing = home != self._default_home
         built._never_reopen_after_close = True
         with self._profile_handlers_lock:
             # Closed (logging.shutdown) or released while this was built: publishing now would leak
             # the new handler's fd into a router nothing will close again.
-            retired = self._router_closed or (home != self._default_home and home not in self._profile_homes)
-            handler = None if retired else self._profile_handlers.setdefault(home, built)
+            retired = self._router_closed or (
+                home != self._default_home and home not in self._profile_homes
+            )
+            handler = (
+                None if retired else self._profile_handlers.setdefault(home, built)
+            )
         if handler is not built:  # retired, or another thread opened it first
             _quietly(built.close)
         return handler
@@ -738,7 +795,10 @@ class _ProfileRoutingFileHandler(logging.Handler):
             home = self._home_for_record(record)
             handler = self._handler_for_home(home)
             if handler is None and home != self._default_home:  # released in flight
-                home, handler = self._default_home, self._handler_for_home(self._default_home)
+                home, handler = (
+                    self._default_home,
+                    self._handler_for_home(self._default_home),
+                )
             if handler is None:  # the router is closed
                 return
             if home == self._default_home:
@@ -746,7 +806,11 @@ class _ProfileRoutingFileHandler(logging.Handler):
                 return
             # Formatted here, on the listener thread, where the record's profile scope is gone: bind its home so
             # RedactingFormatter applies THAT profile's redact_secrets policy and vault values, not the launch's.
-            from clawk_constants import reset_clawk_home_override, set_clawk_home_override
+            from clawk_constants import (
+                reset_clawk_home_override,
+                set_clawk_home_override,
+            )
+
             token = set_clawk_home_override(str(home))
             try:
                 handler.handle(record)
@@ -831,7 +895,9 @@ def _start_queue_listener_locked() -> None:
     global _queue_listener
     if _queue_listener is not None:
         _queue_listener.stop()
-    _queue_listener = QueueListener(_log_queue, *_queued_file_handlers, respect_handler_level=True)
+    _queue_listener = QueueListener(
+        _log_queue, *_queued_file_handlers, respect_handler_level=True
+    )
     _queue_listener.start()
 
 
@@ -882,7 +948,9 @@ def drain_log_queue(timeout: float = 1.0) -> None:
     listener = _queue_listener
     if listener is None:
         return
-    t = threading.Thread(target=lambda: _quietly(listener.stop), name="clawk-log-drain", daemon=True)
+    t = threading.Thread(
+        target=lambda: _quietly(listener.stop), name="clawk-log-drain", daemon=True
+    )
     t.start()
     t.join(timeout)
 
@@ -928,7 +996,11 @@ def enable_profile_log_routing(profile_homes: Sequence[str | Path]) -> bool:
     homes: list[Path] = []
     for entry in profile_homes:
         try:
-            resolved = Path(entry[1] if isinstance(entry, tuple) else entry).expanduser().resolve()
+            resolved = (
+                Path(entry[1] if isinstance(entry, tuple) else entry)
+                .expanduser()
+                .resolve()
+            )
         except (TypeError, ValueError, OSError):
             continue
         if resolved not in homes:
@@ -939,7 +1011,11 @@ def enable_profile_log_routing(profile_homes: Sequence[str | Path]) -> bool:
     with _queue_state_lock:
         if not _queued_file_handlers:
             return False
-        routers = [h for h in _queued_file_handlers if isinstance(h, _ProfileRoutingFileHandler)]
+        routers = [
+            h
+            for h in _queued_file_handlers
+            if isinstance(h, _ProfileRoutingFileHandler)
+        ]
         if routers:
             for handler in routers:
                 with handler._profile_handlers_lock:
@@ -996,18 +1072,29 @@ def _add_rotating_handler(
             and Path(getattr(existing, "baseFilename", "")).resolve() == resolved
         ):
             return
-        if isinstance(existing, _ProfileRoutingFileHandler) and existing._filename == resolved.name and (
-            resolved.parent.parent == existing._default_home or resolved.parent.parent in existing._profile_homes
+        if (
+            isinstance(existing, _ProfileRoutingFileHandler)
+            and existing._filename == resolved.name
+            and (
+                resolved.parent.parent == existing._default_home
+                or resolved.parent.parent in existing._profile_homes
+            )
         ):
             return
     handler = _new_file_handler(
-        path, level=level, max_bytes=max_bytes, backup_count=backup_count, formatter=formatter,
+        path,
+        level=level,
+        max_bytes=max_bytes,
+        backup_count=backup_count,
+        formatter=formatter,
     )
     if log_filter is not None:
         handler.addFilter(log_filter)
     # Routing already on (a second home adopted earlier): a component log added now —
     # ``mode="gateway"`` after the fact — must route too, or it takes every home's records.
-    routers = [h for h in _queued_file_handlers if isinstance(h, _ProfileRoutingFileHandler)]
+    routers = [
+        h for h in _queued_file_handlers if isinstance(h, _ProfileRoutingFileHandler)
+    ]
     if routers:
         homes: set[Path] = set()
         for router in routers:
@@ -1028,9 +1115,11 @@ def _read_logging_config():
         # per process); fall back to a direct parse for bare clawk_logging consumers.
         try:
             from clawk_cli.config_effective import load_user_config_effective
+
             cfg = load_user_config_effective(get_config_path())
         except Exception:
             from utils import fast_safe_load
+
             config_path = get_config_path()
             cfg = {}
             if config_path.exists():
@@ -1040,7 +1129,11 @@ def _read_logging_config():
             return (None, None, None)
         log_cfg = cfg.get("logging", {})
         if isinstance(log_cfg, dict):
-            return (log_cfg.get("level"), log_cfg.get("max_size_mb"), log_cfg.get("backup_count"))
+            return (
+                log_cfg.get("level"),
+                log_cfg.get("max_size_mb"),
+                log_cfg.get("backup_count"),
+            )
     except Exception:
         pass
     return (None, None, None)

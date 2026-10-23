@@ -58,7 +58,9 @@ async def test_new_session_exposes_edit_approvals_as_modes_not_config_options(ag
 
 
 @pytest.mark.asyncio
-async def test_set_config_option_persists_edit_approval_policy_without_advertising_config(agent):
+async def test_set_config_option_persists_edit_approval_policy_without_advertising_config(
+    agent,
+):
     resp = await agent.new_session(cwd="/tmp")
     update = await agent.set_config_option(
         "edit_approval_policy",
@@ -84,22 +86,27 @@ class TestInitialize:
         assert isinstance(resp, InitializeResponse)
         assert resp.protocol_version == acp.PROTOCOL_VERSION
 
-
-
-
     @pytest.mark.asyncio
-    async def test_initialize_advertises_provider_and_terminal_auth_methods(self, agent, monkeypatch):
+    async def test_initialize_advertises_provider_and_terminal_auth_methods(
+        self, agent, monkeypatch
+    ):
         monkeypatch.setattr("acp_adapter.auth.detect_provider", lambda: "openrouter")
         monkeypatch.setattr("acp_adapter.server.detect_provider", lambda: "openrouter")
 
         resp = await agent.initialize(protocol_version=1)
-        payloads = [method.model_dump(by_alias=True, exclude_none=True) for method in resp.auth_methods]
+        payloads = [
+            method.model_dump(by_alias=True, exclude_none=True)
+            for method in resp.auth_methods
+        ]
 
         assert payloads[0]["id"] == "openrouter"
-        terminal = next(payload for payload in payloads if payload["id"] == TERMINAL_SETUP_AUTH_METHOD_ID)
+        terminal = next(
+            payload
+            for payload in payloads
+            if payload["id"] == TERMINAL_SETUP_AUTH_METHOD_ID
+        )
         assert terminal["type"] == "terminal"
         assert terminal["args"] == ["--setup"]
-
 
 
 # ---------------------------------------------------------------------------
@@ -145,7 +152,9 @@ class TestAuthenticate:
         assert resp is None
 
     @pytest.mark.asyncio
-    async def test_authenticate_accepts_terminal_setup_after_provider_configured(self, agent, monkeypatch):
+    async def test_authenticate_accepts_terminal_setup_after_provider_configured(
+        self, agent, monkeypatch
+    ):
         monkeypatch.setattr(
             "acp_adapter.server.detect_provider",
             lambda: "openrouter",
@@ -154,14 +163,12 @@ class TestAuthenticate:
         assert isinstance(resp, AuthenticateResponse)
 
 
-
 # ---------------------------------------------------------------------------
 # new_session / cancel / load / resume
 # ---------------------------------------------------------------------------
 
 
 class TestSessionOps:
-
     @pytest.mark.asyncio
     async def test_new_session_returns_authenticated_cross_provider_model_state(self):
         manager = SessionManager(
@@ -193,7 +200,9 @@ class TestSessionOps:
         }
 
         with (
-            patch("clawk_cli.inventory.load_picker_context", return_value=picker_context),
+            patch(
+                "clawk_cli.inventory.load_picker_context", return_value=picker_context
+            ),
             patch("clawk_cli.inventory.build_models_payload", return_value=payload),
         ):
             resp = await acp_agent.new_session(cwd="/tmp")
@@ -210,10 +219,6 @@ class TestSessionOps:
             current_model="gpt-5.4",
             current_base_url="https://api.openai.com/v1",
         )
-
-
-
-
 
     def test_build_usage_update_for_zed_context_indicator(self, agent, mock_manager):
         state = mock_manager.create_session(cwd="/tmp")
@@ -233,18 +238,10 @@ class TestSessionOps:
         assert update.size == 100_000
         assert update.used == 25_000
 
-
-
-
     @pytest.mark.asyncio
     async def test_load_session_not_found_returns_none(self, agent):
         resp = await agent.load_session(cwd="/tmp", session_id="bogus")
         assert resp is None
-
-
-
-
-
 
     @pytest.mark.asyncio
     async def test_resume_session_replays_persisted_history_to_client(self, agent):
@@ -262,21 +259,14 @@ class TestSessionOps:
         await asyncio.sleep(0)
 
         assert isinstance(resp, ResumeSessionResponse)
-        updates = [call.kwargs["update"] for call in mock_conn.session_update.await_args_list]
+        updates = [
+            call.kwargs["update"] for call in mock_conn.session_update.await_args_list
+        ]
         assert any(
             isinstance(update, UserMessageChunk)
             and update.content.text == "So tell me the current state"
             for update in updates
         )
-
-
-
-
-
-
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -288,7 +278,9 @@ class TestListAndFork:
     @pytest.mark.asyncio
     async def test_fork_session(self, agent):
         new_resp = await agent.new_session(cwd="/original")
-        fork_resp = await agent.fork_session(cwd="/forked", session_id=new_resp.session_id)
+        fork_resp = await agent.fork_session(
+            cwd="/forked", session_id=new_resp.session_id
+        )
         assert fork_resp.session_id
         assert fork_resp.session_id != new_resp.session_id
 
@@ -313,17 +305,12 @@ class TestListAndFork:
         assert resp.sessions[0].updated_at == "123.0"
 
 
-
-
-
-
 # ---------------------------------------------------------------------------
 # session configuration / model routing
 # ---------------------------------------------------------------------------
 
 
 class TestSessionConfiguration:
-
     @pytest.mark.asyncio
     async def test_router_accepts_stable_session_config_methods(self, agent):
         new_resp = await agent.new_session(cwd="/tmp")
@@ -348,9 +335,6 @@ class TestSessionConfiguration:
         assert config_result["configOptions"] == []
 
 
-
-
-
 # ---------------------------------------------------------------------------
 # prompt
 # ---------------------------------------------------------------------------
@@ -365,7 +349,9 @@ class TestPrompt:
         assert resp.stop_reason == "refusal"
 
     @pytest.mark.asyncio
-    async def test_prompt_binds_session_id_into_subprocess_env(self, agent, mock_manager):
+    async def test_prompt_binds_session_id_into_subprocess_env(
+        self, agent, mock_manager
+    ):
         """The ACP prompt path must bridge the session id into child subprocesses.
 
         Regression: ``set_session_vars`` was called with ``session_key`` only,
@@ -402,42 +388,63 @@ class TestPrompt:
         assert captured.get("child") == resp.session_id
 
     @pytest.mark.asyncio
-    async def test_empty_messages_list_replaces_stale_history(self, agent, mock_manager):
+    async def test_empty_messages_list_replaces_stale_history(
+        self, agent, mock_manager
+    ):
         """``run_conversation`` returning ``messages=[]`` clears the ACP transcript instead of
         leaving the previous turn's history in place (#10844)."""
         resp = await agent.new_session(cwd=".")
         state = mock_manager.get_session(resp.session_id)
         state.history = [{"role": "user", "content": "old"}]
-        state.agent.run_conversation = MagicMock(return_value={"final_response": "done", "messages": []})
+        state.agent.run_conversation = MagicMock(
+            return_value={"final_response": "done", "messages": []}
+        )
         state.agent.model = "test-model"
         state.agent.provider = "openrouter"
         mock_conn = MagicMock(spec=acp.Client)
         mock_conn.session_update = AsyncMock()
         agent._conn = mock_conn
 
-        await agent.prompt(prompt=[TextContentBlock(type="text", text="hi")], session_id=resp.session_id)
+        await agent.prompt(
+            prompt=[TextContentBlock(type="text", text="hi")],
+            session_id=resp.session_id,
+        )
 
         assert state.history == []
 
     @pytest.mark.asyncio
-    async def test_prompt_after_tail_exception_runs_instead_of_queueing(self, agent, mock_manager, monkeypatch):
+    async def test_prompt_after_tail_exception_runs_instead_of_queueing(
+        self, agent, mock_manager, monkeypatch
+    ):
         """A raise in the post-turn tail (here ``save_session``) costs at most that one turn:
         the next prompt runs instead of queueing forever behind a turn that already ended (#115588)."""
         resp = await agent.new_session(cwd=".")
         state = mock_manager.get_session(resp.session_id)
-        state.agent.run_conversation = MagicMock(return_value={"final_response": "done", "messages": []})
+        state.agent.run_conversation = MagicMock(
+            return_value={"final_response": "done", "messages": []}
+        )
         state.agent.model = "test-model"
         state.agent.provider = "openrouter"
         mock_conn = MagicMock(spec=acp.Client)
         mock_conn.session_update = AsyncMock()
         agent._conn = mock_conn
-        monkeypatch.setattr(mock_manager, "save_session", MagicMock(side_effect=RuntimeError("disk full")))
+        monkeypatch.setattr(
+            mock_manager,
+            "save_session",
+            MagicMock(side_effect=RuntimeError("disk full")),
+        )
 
         with pytest.raises(RuntimeError, match="disk full"):
-            await agent.prompt(prompt=[TextContentBlock(type="text", text="first")], session_id=resp.session_id)
+            await agent.prompt(
+                prompt=[TextContentBlock(type="text", text="first")],
+                session_id=resp.session_id,
+            )
 
         monkeypatch.setattr(mock_manager, "save_session", MagicMock())
-        second = await agent.prompt(prompt=[TextContentBlock(type="text", text="second")], session_id=resp.session_id)
+        second = await agent.prompt(
+            prompt=[TextContentBlock(type="text", text="second")],
+            session_id=resp.session_id,
+        )
 
         assert second.stop_reason == "end_turn"
         assert state.queued_prompts == []
@@ -445,7 +452,9 @@ class TestPrompt:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("executor_raises", [False, True])
-    async def test_prompt_fails_tool_calls_left_open_before_responding(self, agent, mock_manager, executor_raises):
+    async def test_prompt_fails_tool_calls_left_open_before_responding(
+        self, agent, mock_manager, executor_raises
+    ):
         """A ``tool.started`` that never sees ``tool.completed`` (blocked/denied/crashed turn) must
         reach the client as a terminal ``failed`` update BEFORE the PromptResponse — on the normal
         return path and when the executor body itself raises."""
@@ -462,7 +471,9 @@ class TestPrompt:
         agent._conn = mock_conn
 
         def _turn(*args, **kwargs):
-            state.agent.tool_progress_callback("tool.started", "terminal", "ls", {"command": "ls"})
+            state.agent.tool_progress_callback(
+                "tool.started", "terminal", "ls", {"command": "ls"}
+            )
             if executor_raises:
                 raise RuntimeError("executor blew up")
             return {"final_response": "ok", "messages": []}
@@ -470,7 +481,10 @@ class TestPrompt:
         with patch.object(ClawksisACPAgent, "_run_agent_turn", side_effect=_turn):
             started = asyncio.get_running_loop().time()
             response = await asyncio.wait_for(
-                agent.prompt(prompt=[TextContentBlock(type="text", text="hi")], session_id=resp.session_id),
+                agent.prompt(
+                    prompt=[TextContentBlock(type="text", text="hi")],
+                    session_id=resp.session_id,
+                ),
                 timeout=3,
             )
             seen_before_response = list(events)
@@ -479,30 +493,17 @@ class TestPrompt:
 
         assert isinstance(response, PromptResponse)
         start = next(e for e in seen_before_response if isinstance(e, ToolCallStart))
-        closes = [e for e in seen_before_response if isinstance(e, ToolCallProgress) and e.tool_call_id == start.tool_call_id]
+        closes = [
+            e
+            for e in seen_before_response
+            if isinstance(e, ToolCallProgress) and e.tool_call_id == start.tool_call_id
+        ]
         assert [e.status for e in closes] == ["failed"]
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 # ---------------------------------------------------------------------------
 # on_connect
 # ---------------------------------------------------------------------------
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -520,24 +521,16 @@ class TestSlashCommands:
         state.model = "test-model"
         return state
 
-
     def test_model_shows_current(self, agent, mock_manager):
         state = self._make_state(mock_manager)
         result = agent._handle_slash_command("/model", state)
         assert "test-model" in result
-
-
-
-
 
     def test_reset_clears_history(self, agent, mock_manager):
         state = self._make_state(mock_manager)
         state.history = [{"role": "user", "content": "hello"}]
         agent._handle_slash_command("/reset", state)
         assert len(state.history) == 0
-
-
-
 
     def test_compact_compresses_context(self, agent, mock_manager):
         state = self._make_state(mock_manager)
@@ -553,7 +546,9 @@ class TestSlashCommands:
         original_session_db = object()
         state.agent._session_db = original_session_db
 
-        def _compress_context(messages, system_prompt, *, approx_tokens, task_id, force, **kwargs):
+        def _compress_context(
+            messages, system_prompt, *, approx_tokens, task_id, force, **kwargs
+        ):
             assert state.agent._session_db is None
             assert messages == state.history
             assert system_prompt == "system"
@@ -593,12 +588,10 @@ class TestSlashCommands:
         )
         mock_save.assert_called_once_with(state.session_id)
 
-
     def test_unknown_command_returns_none(self, agent, mock_manager):
         state = self._make_state(mock_manager)
         result = agent._handle_slash_command("/nonexistent", state)
         assert result is None
-
 
     def test_slash_handler_cwd_pin_does_not_leak(self, agent, mock_manager, tmp_path):
         """The pin is scoped to the handler's own context copy.
@@ -622,9 +615,6 @@ class TestSlashCommands:
         assert str(resolve_agent_cwd()) == before
 
 
-
-
-
 # ---------------------------------------------------------------------------
 # _register_session_mcp_servers
 # ---------------------------------------------------------------------------
@@ -632,7 +622,6 @@ class TestSlashCommands:
 
 class TestRegisterSessionMcpServers:
     """Tests for ACP MCP server registration in session lifecycle."""
-
 
     @pytest.mark.asyncio
     async def test_registers_stdio_servers(self, agent, mock_manager):
@@ -655,14 +644,23 @@ class TestRegisterSessionMcpServers:
 
         registered_config = {}
         pinned_cwd = {}
+
         def capture_register(config_map):
             from agent.runtime_cwd import resolve_context_cwd
+
             registered_config.update(config_map)
-            pinned_cwd["value"] = resolve_context_cwd()  # the stdio default cwd reads this pin
+            pinned_cwd["value"] = (
+                resolve_context_cwd()
+            )  # the stdio default cwd reads this pin
             return ["mcp_test_server_tool1"]
 
-        with patch("tools.mcp_tool_discovery.register_mcp_servers", side_effect=capture_register), \
-             patch("model_tools.get_tool_definitions", return_value=[]):
+        with (
+            patch(
+                "tools.mcp_tool_discovery.register_mcp_servers",
+                side_effect=capture_register,
+            ),
+            patch("model_tools.get_tool_definitions", return_value=[]),
+        ):
             await agent._register_session_mcp_servers(state, [server])
 
         assert "test-server" in registered_config
@@ -672,7 +670,6 @@ class TestRegisterSessionMcpServers:
         assert cfg["env"] == {"KEY": "val"}
         # Registration runs under the session's logical cwd so IDE-provided stdio servers spawn there.
         assert pinned_cwd["value"] == Path("/tmp")
-
 
     @pytest.mark.asyncio
     async def test_refreshes_agent_tool_surface(self, agent, mock_manager):
@@ -704,8 +701,15 @@ class TestRegisterSessionMcpServers:
             {"function": {"name": "terminal"}},
         ]
 
-        with patch("tools.mcp_tool_discovery.register_mcp_servers", return_value=["mcp_srv_search"]), \
-             patch("model_tools.get_tool_definitions", return_value=fake_tools) as mock_defs:
+        with (
+            patch(
+                "tools.mcp_tool_discovery.register_mcp_servers",
+                return_value=["mcp_srv_search"],
+            ),
+            patch(
+                "model_tools.get_tool_definitions", return_value=fake_tools
+            ) as mock_defs,
+        ):
             await agent._register_session_mcp_servers(state, [server])
 
         mock_defs.assert_called_once_with(
@@ -745,7 +749,10 @@ class TestRegisterSessionMcpServers:
             env=[],
         )
 
-        with patch("tools.mcp_tool_discovery.register_mcp_servers", side_effect=RuntimeError("boom")):
+        with patch(
+            "tools.mcp_tool_discovery.register_mcp_servers",
+            side_effect=RuntimeError("boom"),
+        ):
             # Should not raise
             await agent._register_session_mcp_servers(state, [server])
 
@@ -758,7 +765,10 @@ class TestDisabledToolsetsFilterToolSurface:
         state.agent._memory_manager = None
 
         def listed() -> set:
-            return {line.strip().split(":", 1)[0] for line in agent._cmd_tools("", state).splitlines()[1:]}
+            return {
+                line.strip().split(":", 1)[0]
+                for line in agent._cmd_tools("", state).splitlines()[1:]
+            }
 
         state.agent.disabled_toolsets = None
         assert "execute_code" in listed()

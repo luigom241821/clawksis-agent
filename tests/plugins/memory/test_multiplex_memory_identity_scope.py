@@ -5,6 +5,7 @@ profile's scope does not define RETAINDB_PROJECT /
 CLAWK_HONCHO_HOST, the provider must fall back to its own default
 (per-profile partition), NOT write the secondary's memories into the default profile's account.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -12,8 +13,10 @@ import pytest
 from agent import secret_scope
 
 _DEFAULT_ENV = {
-    "RETAINDB_PROJECT": "proj-default", "RETAINDB_BASE_URL": "https://rdb.default",
-    "CLAWK_HONCHO_HOST": "host-default", "HONCHO_BASE_URL": "https://honcho.default",
+    "RETAINDB_PROJECT": "proj-default",
+    "RETAINDB_BASE_URL": "https://rdb.default",
+    "CLAWK_HONCHO_HOST": "host-default",
+    "HONCHO_BASE_URL": "https://honcho.default",
 }
 
 
@@ -29,7 +32,9 @@ def secondary_profile(monkeypatch, tmp_path):
     (prof_b / "config.yaml").write_text("{}\n")
     monkeypatch.setenv("CLAWK_HOME", str(prof_b))
     secret_scope.set_multiplex_active(True)
-    token = secret_scope.set_secret_scope({"RETAINDB_API_KEY": "rdb-b", "HONCHO_API_KEY": "honcho-b"})
+    token = secret_scope.set_secret_scope(
+        {"RETAINDB_API_KEY": "rdb-b", "HONCHO_API_KEY": "honcho-b"}
+    )
     try:
         yield prof_b
     finally:
@@ -37,7 +42,9 @@ def secondary_profile(monkeypatch, tmp_path):
         secret_scope.set_multiplex_active(False)
 
 
-def test_secondary_profile_memory_identity_never_inherits_default_environ(secondary_profile):
+def test_secondary_profile_memory_identity_never_inherits_default_environ(
+    secondary_profile,
+):
     from plugins.memory import retaindb
 
     provider = retaindb.RetainDBMemoryProvider()

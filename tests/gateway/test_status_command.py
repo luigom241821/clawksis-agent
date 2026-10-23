@@ -1,4 +1,5 @@
 from clawk_state import AsyncSessionDB, SessionDB
+
 """Tests for gateway /status behavior and token persistence."""
 
 from datetime import datetime
@@ -38,7 +39,9 @@ def _make_event(text: str, *, platform: Platform = Platform.TELEGRAM) -> Message
     )
 
 
-def _make_runner(session_entry: SessionEntry, *, platform: Platform = Platform.TELEGRAM):
+def _make_runner(
+    session_entry: SessionEntry, *, platform: Platform = Platform.TELEGRAM
+):
     from gateway.run import GatewayRunner
 
     runner = object.__new__(GatewayRunner)
@@ -236,7 +239,9 @@ async def test_status_command_prefers_rehydrated_session_model_override(tmp_path
             result, switch_ctx, source=source, one_turn=False, picker=False
         )
         # Simulate a restart: /status must lazily recover the durable override.
-        runner._session_state(session_entry.session_key).conversation.model_override = None
+        runner._session_state(
+            session_entry.session_key
+        ).conversation.model_override = None
 
         status = await runner._handle_message(_make_event("/status"))
 
@@ -258,7 +263,9 @@ def _runner_with_session_override(override: dict, *, last_prompt_tokens: int):
     )
     session_entry.last_prompt_tokens = last_prompt_tokens
     runner = _make_runner(session_entry)
-    runner._session_state(session_entry.session_key).conversation.model_override = override
+    runner._session_state(
+        session_entry.session_key
+    ).conversation.model_override = override
     return runner
 
 
@@ -267,16 +274,28 @@ async def test_status_command_resolves_window_of_session_only_model_switch():
     """After a session-only /model switch with no turn yet, /status must show used / window for the
     switched-to route (looked up against THAT route's endpoint, and never the default route's
     ``model.context_length`` pin) instead of the occupancy-only line (#111436)."""
-    override = {"model": "kimi-k3", "provider": "kimi-coding",
-                "base_url": "https://api.kimi.com/coding", "api_key": "sk-override"}
+    override = {
+        "model": "kimi-k3",
+        "provider": "kimi-coding",
+        "base_url": "https://api.kimi.com/coding",
+        "api_key": "sk-override",
+    }
     runner = _runner_with_session_override(override, last_prompt_tokens=79_455)
-    config = {"model": {"default": "default-model", "provider": "openrouter", "context_length": 80_000}}
+    config = {
+        "model": {
+            "default": "default-model",
+            "provider": "openrouter",
+            "context_length": 80_000,
+        }
+    }
 
-    with patch("gateway.run._load_gateway_config", return_value=config), patch(
-        "gateway.run._resolve_runtime_agent_kwargs"
-    ) as default_runtime, patch(
-        "agent.model_metadata.get_model_context_length", return_value=1_048_576
-    ) as lookup:
+    with (
+        patch("gateway.run._load_gateway_config", return_value=config),
+        patch("gateway.run._resolve_runtime_agent_kwargs") as default_runtime,
+        patch(
+            "agent.model_metadata.get_model_context_length", return_value=1_048_576
+        ) as lookup,
+    ):
         result = await runner._handle_message(_make_event("/status"))
 
     assert "**Model:** `kimi-k3` (kimi-coding)" in result
@@ -285,7 +304,10 @@ async def test_status_command_resolves_window_of_session_only_model_switch():
     default_runtime.assert_not_called()
     kwargs = lookup.call_args.kwargs
     assert (kwargs["base_url"], kwargs["api_key"], kwargs["provider"]) == (
-        override["base_url"], override["api_key"], "kimi-coding")
+        override["base_url"],
+        override["api_key"],
+        "kimi-coding",
+    )
     assert kwargs["config_context_length"] is None
 
 
@@ -296,20 +318,33 @@ async def test_status_command_keeps_occupancy_only_for_unknown_model_window():
     from agent.model_metadata import DEFAULT_FALLBACK_CONTEXT
 
     runner = _runner_with_session_override(
-        {"model": "proxy-mystery-model", "provider": "custom:proxy", "base_url": "http://127.0.0.1:1/v1"},
+        {
+            "model": "proxy-mystery-model",
+            "provider": "custom:proxy",
+            "base_url": "http://127.0.0.1:1/v1",
+        },
         last_prompt_tokens=4_321,
     )
-    with patch("gateway.run._load_gateway_config", return_value={}), patch(
-        "agent.model_metadata.get_model_context_length", return_value=DEFAULT_FALLBACK_CONTEXT
+    with (
+        patch("gateway.run._load_gateway_config", return_value={}),
+        patch(
+            "agent.model_metadata.get_model_context_length",
+            return_value=DEFAULT_FALLBACK_CONTEXT,
+        ),
     ):
         result = await runner._handle_message(_make_event("/status"))
     assert "**Context:** ~4,321 tokens" in result
     assert f"{DEFAULT_FALLBACK_CONTEXT:,}" not in result
 
     runner = _runner_with_session_override(
-        {"model": "grok-4", "provider": "xai", "base_url": ""}, last_prompt_tokens=4_321)
-    with patch("gateway.run._load_gateway_config", return_value={}), patch(
-        "agent.model_metadata.get_model_context_length", return_value=DEFAULT_FALLBACK_CONTEXT
+        {"model": "grok-4", "provider": "xai", "base_url": ""}, last_prompt_tokens=4_321
+    )
+    with (
+        patch("gateway.run._load_gateway_config", return_value={}),
+        patch(
+            "agent.model_metadata.get_model_context_length",
+            return_value=DEFAULT_FALLBACK_CONTEXT,
+        ),
     ):
         result = await runner._handle_message(_make_event("/status"))
     assert f"**Context:** 4,321 / {DEFAULT_FALLBACK_CONTEXT:,} (2%)" in result
@@ -321,10 +356,20 @@ async def test_status_command_default_route_keeps_runtime_endpoint_and_context_p
     persisted route or the SessionDB row, which carry no endpoint of their own. The window must then
     be resolved against the default runtime route (custom base_url + key, ``model.context_length``
     pin intact) exactly as /context does, not against an empty endpoint that drops the pin."""
-    config = {"model": {"default": "my-local-model", "provider": "custom",
-                        "base_url": "http://127.0.0.1:1/v1", "context_length": 32_768}}
-    runtime = {"model": "my-local-model", "provider": "custom",
-               "base_url": "http://127.0.0.1:1/v1", "api_key": "local-key"}
+    config = {
+        "model": {
+            "default": "my-local-model",
+            "provider": "custom",
+            "base_url": "http://127.0.0.1:1/v1",
+            "context_length": 32_768,
+        }
+    }
+    runtime = {
+        "model": "my-local-model",
+        "provider": "custom",
+        "base_url": "http://127.0.0.1:1/v1",
+        "api_key": "local-key",
+    }
     route = {"model": "my-local-model", "billing_provider": "custom"}
     for persisted_route, session_row in ((route, None), ({}, dict(route))):
         session_entry = SessionEntry(
@@ -338,22 +383,31 @@ async def test_status_command_default_route_keeps_runtime_endpoint_and_context_p
         session_entry.last_prompt_tokens = 9_000
         runner = _make_runner(session_entry)
         runner._session_db._db.get_session.return_value = session_row
-        runner._session_db._db.get_recent_session_model_route.return_value = persisted_route
+        runner._session_db._db.get_recent_session_model_route.return_value = (
+            persisted_route
+        )
 
-        with patch("gateway.run._load_gateway_config", return_value=config), patch(
-            "gateway.run._resolve_runtime_agent_kwargs", return_value=runtime
-        ) as default_runtime, patch(
-            "agent.model_metadata.get_model_context_length",
-            side_effect=lambda _model, **kw: kw["config_context_length"] or 8_192,
-        ) as lookup:
+        with (
+            patch("gateway.run._load_gateway_config", return_value=config),
+            patch(
+                "gateway.run._resolve_runtime_agent_kwargs", return_value=runtime
+            ) as default_runtime,
+            patch(
+                "agent.model_metadata.get_model_context_length",
+                side_effect=lambda _model, **kw: kw["config_context_length"] or 8_192,
+            ) as lookup,
+        ):
             result = await runner._handle_message(_make_event("/status"))
 
         assert "**Model:** `my-local-model` (custom)" in result
         assert "**Context:** 9,000 / 32,768 (27%)" in result
         default_runtime.assert_called_once()
         kwargs = lookup.call_args.kwargs
-        assert (kwargs["base_url"], kwargs["api_key"], kwargs["config_context_length"]) == (
-            runtime["base_url"], runtime["api_key"], 32_768)
+        assert (
+            kwargs["base_url"],
+            kwargs["api_key"],
+            kwargs["config_context_length"],
+        ) == (runtime["base_url"], runtime["api_key"], 32_768)
 
 
 @pytest.mark.asyncio
@@ -454,7 +508,9 @@ async def test_first_run_slack_home_channel_onboarding_uses_parent_command(monke
     )
 
     monkeypatch.delenv("SLACK_HOME_CHANNEL", raising=False)
-    monkeypatch.setattr(gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"})
+    monkeypatch.setattr(
+        gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"}
+    )
     monkeypatch.setattr(
         "agent.model_metadata.get_model_context_length",
         lambda *_args, **_kwargs: 100000,
@@ -503,7 +559,9 @@ async def test_handle_message_stale_result_keeps_newer_generation_callback(monke
         chat_type="dm",
     )
     runner = _make_runner(session_entry)
-    runner.session_store.load_transcript.return_value = [{"role": "user", "content": "earlier"}]
+    runner.session_store.load_transcript.return_value = [
+        {"role": "user", "content": "earlier"}
+    ]
     session_key = session_entry.session_key
     adapter = _Adapter()
     runner.adapters[Platform.TELEGRAM] = adapter
@@ -525,7 +583,9 @@ async def test_handle_message_stale_result_keeps_newer_generation_callback(monke
 
     runner._run_agent = AsyncMock(side_effect=_stale_result)
 
-    monkeypatch.setattr(gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"})
+    monkeypatch.setattr(
+        gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"}
+    )
     monkeypatch.setattr(
         "agent.model_metadata.get_model_context_length",
         lambda *_args, **_kwargs: 100000,
@@ -561,10 +621,17 @@ async def test_status_command_bypasses_active_session_guard():
     class _ConcreteAdapter(BasePlatformAdapter):
         platform = Platform.TELEGRAM
 
-        async def connect(self, *, is_reconnect: bool = False): pass
-        async def disconnect(self): pass
-        async def send(self, chat_id, content, **kwargs): pass
-        async def get_chat_info(self, chat_id): return {}
+        async def connect(self, *, is_reconnect: bool = False):
+            pass
+
+        async def disconnect(self):
+            pass
+
+        async def send(self, chat_id, content, **kwargs):
+            pass
+
+        async def get_chat_info(self, chat_id):
+            return {}
 
     platform_config = PlatformConfig(enabled=True, token="***")
     adapter = _ConcreteAdapter(platform_config, Platform.TELEGRAM)
@@ -589,11 +656,17 @@ async def test_status_command_bypasses_active_session_guard():
     )
     await adapter.handle_message(event)
 
-    assert handler_called_with, "/status handler was never called (event was queued or dropped)"
+    assert handler_called_with, (
+        "/status handler was never called (event was queued or dropped)"
+    )
     assert sent, "/status response was never sent"
     assert "Agent Running" in sent[0]
-    assert not interrupt_event.is_set(), "/status incorrectly triggered an agent interrupt"
-    assert session_key not in adapter._pending_messages, "/status was incorrectly queued"
+    assert not interrupt_event.is_set(), (
+        "/status incorrectly triggered an agent interrupt"
+    )
+    assert session_key not in adapter._pending_messages, (
+        "/status was incorrectly queued"
+    )
 
 
 @pytest.mark.asyncio
@@ -605,7 +678,9 @@ async def test_profile_command_reports_source_stamped_profile(monkeypatch, tmp_p
     clawk_home = tmp_path / ".clawk"
     profile_home = clawk_home / "profiles" / "milo"
     profile_home.mkdir(parents=True)
-    (profile_home / "config.yaml").write_text("{}\n")  # identity marker: a bare dir is not a profile
+    (profile_home / "config.yaml").write_text(
+        "{}\n"
+    )  # identity marker: a bare dir is not a profile
 
     session_entry = SessionEntry(
         session_key=build_session_key(_make_source()),
@@ -674,15 +749,20 @@ async def test_context_command_keeps_configured_window_without_resident_agent():
         "api_key": "",
     }
 
-    with patch("gateway.run._load_gateway_config", return_value=config), patch(
-        "gateway.run._resolve_runtime_agent_kwargs", return_value=runtime
-    ), patch(
-        "clawk_cli.config.get_compatible_custom_providers",
-        return_value=config["custom_providers"],
-    ), patch(
-        "agent.model_metadata.get_model_context_length",
-        side_effect=lambda *args, **kwargs: kwargs.get("config_context_length") or 131_072,
-    ) as context_lookup:
+    with (
+        patch("gateway.run._load_gateway_config", return_value=config),
+        patch("gateway.run._resolve_runtime_agent_kwargs", return_value=runtime),
+        patch(
+            "clawk_cli.config.get_compatible_custom_providers",
+            return_value=config["custom_providers"],
+        ),
+        patch(
+            "agent.model_metadata.get_model_context_length",
+            side_effect=lambda *args, **kwargs: (
+                kwargs.get("config_context_length") or 131_072
+            ),
+        ) as context_lookup,
+    ):
         result = await runner._handle_context_command(_make_event("/context"))
 
     assert "Window: 262,144 tokens" in result
@@ -750,12 +830,16 @@ async def test_context_all_appends_expanded_listings():
         ],
     }
     from unittest.mock import patch as _patch
-    with _patch(
-        "agent.context_breakdown.compute_session_context_breakdown",
-        return_value=fake_payload,
-    ), _patch(
-        "agent.context_breakdown.compute_context_details",
-        return_value=fake_details,
+
+    with (
+        _patch(
+            "agent.context_breakdown.compute_session_context_breakdown",
+            return_value=fake_payload,
+        ),
+        _patch(
+            "agent.context_breakdown.compute_context_details",
+            return_value=fake_details,
+        ),
     ):
         result = await runner._handle_context_command(_make_event("/context all"))
 

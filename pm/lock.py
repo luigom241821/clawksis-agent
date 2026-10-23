@@ -41,7 +41,11 @@ def _read(path: Path, *, strict: bool = False) -> dict:
         return {"schema": SCHEMA, "packages": {}}
     try:
         data = json.loads(text)
-        if isinstance(data, dict) and data.get("schema") == SCHEMA and isinstance(data.get("packages"), dict):
+        if (
+            isinstance(data, dict)
+            and data.get("schema") == SCHEMA
+            and isinstance(data.get("packages"), dict)
+        ):
             return data
     except ValueError:
         pass
@@ -54,11 +58,17 @@ def _read(path: Path, *, strict: bool = False) -> dict:
         try:
             from pm.filesystem import long_root
             from pm.paths import store_root
+
             # A Store-built facts path carries the store's long spelling; compare like with like.
-            if (long_root(path.parent) == long_root(store_root())
-                    and (store_root().parent / "manifest.json").is_file()):
+            if (
+                long_root(path.parent) == long_root(store_root())
+                and (store_root().parent / "manifest.json").is_file()
+            ):
                 import logging
-                logging.getLogger(__name__).warning("invalid shipped state file: %s", path)
+
+                logging.getLogger(__name__).warning(
+                    "invalid shipped state file: %s", path
+                )
             else:
                 path.with_suffix(".corrupt").write_text(text, encoding="utf-8")
         except OSError:
@@ -68,7 +78,10 @@ def _read(path: Path, *, strict: bool = False) -> dict:
 
 def _write(path: Path, data: dict) -> None:
     from pm.filesystem import durable_write_bytes
-    durable_write_bytes(path, (json.dumps(data, indent=2, sort_keys=True) + "\n").encode("utf-8"))
+
+    durable_write_bytes(
+        path, (json.dumps(data, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    )
 
 
 class StaleLockRow(RuntimeError):
@@ -115,15 +128,24 @@ class Lockfile:
         from pm.filesystem import lock_fd
 
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        fd = os.open(self.path.with_name(f".{self.path.name}.lock"), os.O_CREAT | os.O_RDWR, 0o600)
+        fd = os.open(
+            self.path.with_name(f".{self.path.name}.lock"),
+            os.O_CREAT | os.O_RDWR,
+            0o600,
+        )
         try:
             lock_fd(fd, wait=True)
             current = _read(self.path, strict=True)["packages"]
             updated = dict(current)
             for name in self._touched:
                 intended = self._packages[name]
-                if current.get(name) != self._base.get(name) and current.get(name) != intended:
-                    raise StaleLockRow(f"{name} changed in {self.path}; read the lockfile again and retry")
+                if (
+                    current.get(name) != self._base.get(name)
+                    and current.get(name) != intended
+                ):
+                    raise StaleLockRow(
+                        f"{name} changed in {self.path}; read the lockfile again and retry"
+                    )
                 updated[name] = intended
             if updated != current or not self.path.exists():
                 _write(self.path, {"schema": SCHEMA, "packages": updated})
@@ -176,13 +198,21 @@ class Facts:
                 continue
             entry_name = fact.get("entry")
             artifacts = fact.get("artifacts")
-            if (not isinstance(entry_name, str) or entry_name in ("", ".", "..")
-                    or any(c in entry_name for c in "/\\:")
-                    or not isinstance(fact.get("version"), str) or not fact["version"]
-                    or not isinstance(fact.get("target"), str) or not fact["target"]
-                    or not isinstance(artifacts, list) or not artifacts
-                    or any(not isinstance(sha, str) or not re.fullmatch(r"[a-f0-9]{64}", sha)
-                           for sha in artifacts)):
+            if (
+                not isinstance(entry_name, str)
+                or entry_name in ("", ".", "..")
+                or any(c in entry_name for c in "/\\:")
+                or not isinstance(fact.get("version"), str)
+                or not fact["version"]
+                or not isinstance(fact.get("target"), str)
+                or not fact["target"]
+                or not isinstance(artifacts, list)
+                or not artifacts
+                or any(
+                    not isinstance(sha, str) or not re.fullmatch(r"[a-f0-9]{64}", sha)
+                    for sha in artifacts
+                )
+            ):
                 raise ValueError(f"incomplete payload tool: {name}")
             entry = root / entry_name
             if not entry.is_dir() or not entry.resolve().is_relative_to(root):
@@ -267,8 +297,13 @@ class Facts:
         self._merge_and_write(name, fact)
 
     def record_state(
-        self, name: str, stamp: str, extras: list[str], *,
-        environment: Path | None = None, resolved_lock: Path | None = None,
+        self,
+        name: str,
+        stamp: str,
+        extras: list[str],
+        *,
+        environment: Path | None = None,
+        resolved_lock: Path | None = None,
     ) -> None:
         """Commit a verified state package and its selected environment atomically."""
         fact = {"stamp": stamp, "extras": extras}

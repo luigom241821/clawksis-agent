@@ -6,6 +6,7 @@ The interactive_setup wizard lazy-imports its CLI helpers from
 source modules. Covers the home-channel clear-on-blank behavior added in
 PR #58421 and extended in the follow-up.
 """
+
 import clawk_cli.config as config_mod
 import clawk_cli.cli_output as cli_output_mod
 from plugins.platforms.mattermost.adapter import interactive_setup
@@ -28,7 +29,12 @@ def _patch_setup_io(monkeypatch, prompts, saved, removed, existing):
 
 
 # Mattermost prompts: server_url, bot_token (password), allowed_users, home_channel.
-_PROMPTS_NONEMPTY = ["https://mm.example.com", "«redacted:mm-token»", "", "town-square-id"]
+_PROMPTS_NONEMPTY = [
+    "https://mm.example.com",
+    "«redacted:mm-token»",
+    "",
+    "town-square-id",
+]
 _PROMPTS_BLANK = ["https://mm.example.com", "«redacted:mm-token»", "", ""]
 _PROMPTS_WHITESPACE = ["https://mm.example.com", "«redacted:mm-token»", "", "   "]
 
@@ -49,5 +55,3 @@ class TestMattermostHomeChannelClear:
         interactive_setup()
         assert "MATTERMOST_HOME_CHANNEL" in removed
         assert "MATTERMOST_HOME_CHANNEL" not in saved
-
-

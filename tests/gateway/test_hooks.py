@@ -12,14 +12,10 @@ def _create_hook(hooks_dir, hook_name, events, handler_code):
     hook_dir = hooks_dir / hook_name
     hook_dir.mkdir(parents=True)
     (hook_dir / "HOOK.yaml").write_text(
-        f"name: {hook_name}\n"
-        f"description: Test hook\n"
-        f"events: {events}\n"
+        f"name: {hook_name}\ndescription: Test hook\nevents: {events}\n"
     )
     (hook_dir / "handler.py").write_text(handler_code)
     return hook_dir
-
-
 
 
 def _patch_no_builtins(reg):
@@ -29,8 +25,12 @@ def _patch_no_builtins(reg):
 
 class TestDiscoverAndLoad:
     def test_loads_valid_hook(self, tmp_path):
-        _create_hook(tmp_path, "my-hook", '["agent:start"]',
-                      "def handle(event_type, context):\n    pass\n")
+        _create_hook(
+            tmp_path,
+            "my-hook",
+            '["agent:start"]',
+            "def handle(event_type, context):\n    pass\n",
+        )
 
         reg = HookRegistry()
         with patch("gateway.hooks.HOOKS_DIR", tmp_path), _patch_no_builtins(reg):
@@ -39,7 +39,6 @@ class TestDiscoverAndLoad:
         assert len(reg.loaded_hooks) == 1
         assert reg.loaded_hooks[0]["name"] == "my-hook"
         assert "agent:start" in reg.loaded_hooks[0]["events"]
-
 
     def test_skips_no_events(self, tmp_path):
         hook_dir = tmp_path / "empty-hook"
@@ -55,16 +54,13 @@ class TestDiscoverAndLoad:
 
 
 class TestEmit:
-
     @pytest.mark.asyncio
     async def test_emit_calls_async_handler(self, tmp_path):
         results = []
 
         hook_dir = tmp_path / "async-hook"
         hook_dir.mkdir()
-        (hook_dir / "HOOK.yaml").write_text(
-            "name: async-hook\nevents: ['agent:end']\n"
-        )
+        (hook_dir / "HOOK.yaml").write_text("name: async-hook\nevents: ['agent:end']\n")
         (hook_dir / "handler.py").write_text(
             "import asyncio\n"
             "results = []\n"
@@ -86,10 +82,14 @@ class TestEmit:
     async def test_wildcard_matching(self, tmp_path):
         results = []
 
-        _create_hook(tmp_path, "wildcard-hook", '["command:*"]',
-                      "results = []\n"
-                      "def handle(event_type, context):\n"
-                      "    results.append(event_type)\n")
+        _create_hook(
+            tmp_path,
+            "wildcard-hook",
+            '["command:*"]',
+            "results = []\n"
+            "def handle(event_type, context):\n"
+            "    results.append(event_type)\n",
+        )
 
         reg = HookRegistry()
         with patch("gateway.hooks.HOOKS_DIR", tmp_path):
@@ -120,7 +120,6 @@ class TestEmitCollect:
             {"decision": "deny", "message": "nope"},
         ]
 
-
     @pytest.mark.asyncio
     async def test_drops_none_return_values(self):
         reg = HookRegistry()
@@ -133,5 +132,3 @@ class TestEmitCollect:
         results = await reg.emit_collect("command:x", {})
 
         assert results == [{"decision": "deny"}]
-
-

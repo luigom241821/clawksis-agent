@@ -24,7 +24,9 @@ def _normalize_target(raw: str) -> str:
     v = raw.strip().strip("`").strip()
     if not v or "://" in v or v.startswith(("/", "./", "../", "~", "file:")):
         return v
-    if re.match(r"^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:\d+)?(/|$)", v, re.IGNORECASE):
+    if re.match(
+        r"^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:\d+)?(/|$)", v, re.IGNORECASE
+    ):
         return "http://" + v
     if re.match(r"^[\w.-]+\.[a-z]{2,}(:\d+)?(/.*)?$", v, re.IGNORECASE):
         return "https://" + v
@@ -43,12 +45,7 @@ def _local_fs_path(target: str) -> Path | None:
         path = unquote(parsed.path or "")
         if parsed.netloc and parsed.netloc not in {"", "localhost"}:
             path = f"//{parsed.netloc}{path}"
-        elif (
-            os.name == "nt"
-            and len(path) >= 3
-            and path[0] == "/"
-            and path[2] == ":"
-        ):
+        elif os.name == "nt" and len(path) >= 3 and path[0] == "/" and path[2] == ":":
             path = path[1:]
         return Path(path) if path else None
     return Path(raw).expanduser()
@@ -73,7 +70,8 @@ def open_preview_tool(url: str, label: str = "") -> str:
     if not target:
         return tool_error(
             "url is required — a web URL (https://…), a localhost dev server, or a "
-            "file path to show in the preview pane.")
+            "file path to show in the preview pane."
+        )
     if _is_existing_directory(target):
         return tool_error(
             "directories are not previewable — pass a file path or a URL. "
@@ -86,4 +84,5 @@ def open_preview_tool(url: str, label: str = "") -> str:
         {"url": target, "label": label},
         "Failed to open the preview pane: ",
         "The preview pane is only available in the Clawksis desktop app.",
-        {"success": True, "url": target, "label": label})
+        {"success": True, "url": target, "label": label},
+    )

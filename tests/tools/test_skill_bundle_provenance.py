@@ -64,7 +64,16 @@ def served_repo(tmp_path, monkeypatch):
     subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
     subprocess.run(["git", "add", "."], cwd=repo, check=True)
     subprocess.run(
-        ["git", "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "fixture"],
+        [
+            "git",
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-qm",
+            "fixture",
+        ],
         cwd=repo,
         check=True,
     )
@@ -81,7 +90,9 @@ def served_repo(tmp_path, monkeypatch):
         thread.join()
 
 
-def test_url_source_fetches_only_referenced_allowed_support_directories(served_repo, monkeypatch):
+def test_url_source_fetches_only_referenced_allowed_support_directories(
+    served_repo, monkeypatch
+):
     _repo, url = served_repo
     monkeypatch.setattr("tools.skills_hub.is_safe_url", lambda _url: True)
     monkeypatch.setattr("tools.skills_hub.check_website_access", lambda _url: None)
@@ -108,7 +119,9 @@ def test_url_source_fetches_only_referenced_allowed_support_directories(served_r
 
 def test_url_source_rejects_traversal_reference(monkeypatch):
     source = UrlSource()
-    skill = "---\nname: bad\ndescription: bad\n---\n[bad](references/../../secret.txt)\n"
+    skill = (
+        "---\nname: bad\ndescription: bad\n---\n[bad](references/../../secret.txt)\n"
+    )
     monkeypatch.setattr(source, "_fetch_text", lambda _url: skill)
 
     assert source.fetch("https://example.com/bad/SKILL.md") is None
@@ -120,7 +133,10 @@ def test_same_dir_linked_siblings_are_fetched(served_repo, monkeypatch):
     repo, url = served_repo
     (repo / "CONTEXT-FORMAT.md").write_text("format\n", newline="\n")
     (repo / "DEEPENING.md").write_text("deepening\n", newline="\n")
-    (repo / "SKILL.md").write_text(SKILL_MD + "See [the format](./CONTEXT-FORMAT.md) and [deepening](DEEPENING.md).\n")
+    (repo / "SKILL.md").write_text(
+        SKILL_MD
+        + "See [the format](./CONTEXT-FORMAT.md) and [deepening](DEEPENING.md).\n"
+    )
     monkeypatch.setattr("tools.skills_hub.is_safe_url", lambda _url: True)
     monkeypatch.setattr("tools.skills_hub.check_website_access", lambda _url: None)
 
@@ -141,7 +157,9 @@ def test_same_dir_link_outside_skill_dir_is_skipped_not_fatal(served_repo, monke
     """
     repo, url = served_repo
     (repo / "DEFS.md").write_text("defs\n")
-    (repo / "SKILL.md").write_text(SKILL_MD + "[registry](../../tools/REGISTRY.md) and [defs](./DEFS.md)\n")
+    (repo / "SKILL.md").write_text(
+        SKILL_MD + "[registry](../../tools/REGISTRY.md) and [defs](./DEFS.md)\n"
+    )
     monkeypatch.setattr("tools.skills_hub.is_safe_url", lambda _url: True)
     monkeypatch.setattr("tools.skills_hub.check_website_access", lambda _url: None)
 
@@ -200,7 +218,9 @@ def test_github_fetches_pin_to_the_tree_revision(monkeypatch):
     monkeypatch.setattr(
         source,
         "_fetch_file_bytes",
-        lambda repo, path, ref=None: fetched.append((path, {"ref": ref} if ref else None)) or b"x",
+        lambda repo, path, ref=None: (
+            fetched.append((path, {"ref": ref} if ref else None)) or b"x"
+        ),
     )
     source._tree_cache["owner/repo"] = (
         "main",
@@ -211,10 +231,15 @@ def test_github_fetches_pin_to_the_tree_revision(monkeypatch):
     )
     source._tree_revisions["owner/repo"] = "treesha123"
 
-    minimal_skill = "---\nname: x\ndescription: x\n---\nSee [the format](CONTEXT-FORMAT.md).\n"
+    minimal_skill = (
+        "---\nname: x\ndescription: x\n---\nSee [the format](CONTEXT-FORMAT.md).\n"
+    )
     monkeypatch.setattr(
-        source, "_fetch_file_content",
-        lambda repo, path, ref=None: fetched.append((path, {"ref": ref} if ref else None)) or minimal_skill,
+        source,
+        "_fetch_file_content",
+        lambda repo, path, ref=None: (
+            fetched.append((path, {"ref": ref} if ref else None)) or minimal_skill
+        ),
     )
 
     bundle = source.fetch("owner/repo/skill")
@@ -227,7 +252,11 @@ def test_github_fetches_pin_to_the_tree_revision(monkeypatch):
 
 def test_github_source_rejects_symlink_in_referenced_directory(monkeypatch):
     source = GitHubSource(GitHubAuth())
-    monkeypatch.setattr(source, "_fetch_file_content", lambda _repo, path, ref=None: SKILL_MD if path.endswith("SKILL.md") else "x")
+    monkeypatch.setattr(
+        source,
+        "_fetch_file_content",
+        lambda _repo, path, ref=None: SKILL_MD if path.endswith("SKILL.md") else "x",
+    )
     source._tree_cache["owner/repo"] = (
         "main",
         [
@@ -252,17 +281,26 @@ def test_github_source_fetch_downloads_full_skill_directory(monkeypatch):
         "See [audit](reference/audit.md) and run `node scripts/pin.mjs`.\n"
     )
     fetched: list = []
-    monkeypatch.setattr(source, "_fetch_file_content", lambda _repo, path, ref=None: skill_md)
     monkeypatch.setattr(
-        source, "_fetch_file_bytes",
-        lambda _repo, path, ref=None: fetched.append(path) or b"content-of-" + path.encode(),
+        source, "_fetch_file_content", lambda _repo, path, ref=None: skill_md
+    )
+    monkeypatch.setattr(
+        source,
+        "_fetch_file_bytes",
+        lambda _repo, path, ref=None: (
+            fetched.append(path) or b"content-of-" + path.encode()
+        ),
     )
     source._tree_cache["owner/repo"] = (
         "main",
         [
             {"path": "skill/SKILL.md", "type": "blob", "mode": "100644"},
             {"path": "skill/reference/audit.md", "type": "blob", "mode": "100644"},
-            {"path": "skill/reference/deep/native.md", "type": "blob", "mode": "100644"},
+            {
+                "path": "skill/reference/deep/native.md",
+                "type": "blob",
+                "mode": "100644",
+            },
             {"path": "skill/scripts/pin.mjs", "type": "blob", "mode": "100644"},
             {"path": "skill/LICENSE", "type": "blob", "mode": "100644"},
             # skipped: symlink, hidden file, pyc, out-of-prefix
@@ -294,7 +332,9 @@ def test_github_source_fetch_dangling_linked_reference_warns_not_aborts(monkeypa
         "---\nname: dangling\ndescription: d\n---\n"
         "Read [the guide](references/guide.md).\n"
     )
-    monkeypatch.setattr(source, "_fetch_file_content", lambda _repo, path, ref=None: skill_md)
+    monkeypatch.setattr(
+        source, "_fetch_file_content", lambda _repo, path, ref=None: skill_md
+    )
     monkeypatch.setattr(source, "_fetch_file_bytes", lambda _repo, path, ref=None: b"x")
 
     # Missing entirely -> installs without it.
@@ -325,21 +365,29 @@ def test_real_temp_repo_and_home_install_e2e(served_repo, monkeypatch, tmp_path)
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr("tools.skills_hub.is_safe_url", lambda _url: True)
     monkeypatch.setattr("tools.skills_hub.check_website_access", lambda _url: None)
-    monkeypatch.setattr("tools.skills_hub_search.create_source_router", lambda auth=None: [UrlSource()])
+    monkeypatch.setattr(
+        "tools.skills_hub_search.create_source_router", lambda auth=None: [UrlSource()]
+    )
 
     sink = StringIO()
     do_install(url, console=Console(file=sink, force_terminal=False), skip_confirm=True)
 
     installed = home / "skills" / "demo-bundle"
     assert (installed / "references" / "guide.md").read_text() == "safe guide\n"
-    assert (installed / "references" / "foo#bar.md").read_text() == "encoded delimiter\n"
+    assert (
+        installed / "references" / "foo#bar.md"
+    ).read_text() == "encoded delimiter\n"
     assert (installed / "references" / "my guide.md").read_text() == "encoded space\n"
     assert (installed / "templates" / "report.md").is_file()
     assert (installed / "scripts" / "run.py").is_file()
     assert (installed / "examples" / "endpoint-inventory.md").is_file()
     assert not (installed / "examples" / "not-installed.md").exists()
-    assert (installed / "assets" / "logo.png").read_bytes() == b"\x89PNG\r\n\x1a\n\x00\xff"
-    entry = json.loads((home / "skills" / ".hub" / "lock.json").read_text())["installed"]["demo-bundle"]
+    assert (
+        installed / "assets" / "logo.png"
+    ).read_bytes() == b"\x89PNG\r\n\x1a\n\x00\xff"
+    entry = json.loads((home / "skills" / ".hub" / "lock.json").read_text())[
+        "installed"
+    ]["demo-bundle"]
     assert entry["scan_provenance"]["source_url"] == url
     assert entry["scan_provenance"]["fresh"] is True
 
@@ -387,7 +435,9 @@ def test_install_with_junctioned_skills_dir(served_repo, monkeypatch, tmp_path):
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr("tools.skills_hub.is_safe_url", lambda _url: True)
     monkeypatch.setattr("tools.skills_hub.check_website_access", lambda _url: None)
-    monkeypatch.setattr("tools.skills_hub_search.create_source_router", lambda auth=None: [UrlSource()])
+    monkeypatch.setattr(
+        "tools.skills_hub_search.create_source_router", lambda auth=None: [UrlSource()]
+    )
 
     sink = StringIO()
     do_install(url, console=Console(file=sink, force_terminal=False), skip_confirm=True)
@@ -398,7 +448,9 @@ def test_install_with_junctioned_skills_dir(served_repo, monkeypatch, tmp_path):
     assert (installed / "references" / "guide.md").read_text() == "safe guide\n"
     # Lock entry got a valid relative install_path AND the content hash — the
     # record_install call the pre-fix ValueError used to skip.
-    entry = json.loads((home / "skills" / ".hub" / "lock.json").read_text())["installed"]["demo-bundle"]
+    entry = json.loads((home / "skills" / ".hub" / "lock.json").read_text())[
+        "installed"
+    ]["demo-bundle"]
     assert entry["install_path"] == "demo-bundle"
     assert entry["content_hash"].startswith("sha256:")
     # The post-install "Installed:" line (relative_to on the display path)
@@ -449,7 +501,9 @@ def served_repo_missing_support(tmp_path, monkeypatch):
         thread.join()
 
 
-def test_install_skips_unreachable_support_file_e2e(served_repo_missing_support, monkeypatch, tmp_path):
+def test_install_skips_unreachable_support_file_e2e(
+    served_repo_missing_support, monkeypatch, tmp_path
+):
     """A referenced support file that 404s is skipped rather than aborting the
     whole URL install: the bundle still installs end-to-end through quarantine,
     scan, install, and lock provenance, with only the reachable files landing
@@ -461,7 +515,9 @@ def test_install_skips_unreachable_support_file_e2e(served_repo_missing_support,
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr("tools.skills_hub.is_safe_url", lambda _url: True)
     monkeypatch.setattr("tools.skills_hub.check_website_access", lambda _url: None)
-    monkeypatch.setattr("tools.skills_hub_search.create_source_router", lambda auth=None: [UrlSource()])
+    monkeypatch.setattr(
+        "tools.skills_hub_search.create_source_router", lambda auth=None: [UrlSource()]
+    )
 
     sink = StringIO()
     do_install(url, console=Console(file=sink, force_terminal=False), skip_confirm=True)
@@ -473,7 +529,9 @@ def test_install_skips_unreachable_support_file_e2e(served_repo_missing_support,
     # The unreachable reference neither blocked the install nor was written.
     assert not (installed / "references" / "absent.md").exists()
 
-    entry = json.loads((home / "skills" / ".hub" / "lock.json").read_text())["installed"]["partial-bundle"]
+    entry = json.loads((home / "skills" / ".hub" / "lock.json").read_text())[
+        "installed"
+    ]["partial-bundle"]
     assert entry["scan_provenance"]["source_url"] == url
     assert "references/present.md" in entry["files"]
     assert "references/absent.md" not in entry["files"]
@@ -485,7 +543,9 @@ def test_bundled_optional_source_still_includes_support_files(tmp_path, monkeypa
     root = tmp_path / "optional-skills"
     skill = root / "category" / "official-demo"
     (skill / "references").mkdir(parents=True)
-    (skill / "SKILL.md").write_text("---\nname: official-demo\ndescription: demo\n---\n")
+    (skill / "SKILL.md").write_text(
+        "---\nname: official-demo\ndescription: demo\n---\n"
+    )
     (skill / "references" / "all.md").write_text("all")
     source = OptionalSkillSource()
     source._optional_dir = root
@@ -508,7 +568,9 @@ metadata:
 """
 
 
-def test_optional_source_upstream_stub_fetches_from_external_repo(tmp_path, monkeypatch):
+def test_optional_source_upstream_stub_fetches_from_external_repo(
+    tmp_path, monkeypatch
+):
     """A catalog stub with metadata.clawk.upstream installs the upstream repo's
     content (relabelled official/trusted), not the stub itself."""
     from tools.skills_hub_official import OptionalSkillSource
@@ -528,8 +590,10 @@ def test_optional_source_upstream_stub_fetches_from_external_repo(tmp_path, monk
             fetched_ids.append(identifier)
             return SkillBundle(
                 name="design",
-                files={"SKILL.md": "---\nname: design\ndescription: real\n---\nreal body",
-                       "reference/audit.md": "audit"},
+                files={
+                    "SKILL.md": "---\nname: design\ndescription: real\n---\nreal body",
+                    "reference/audit.md": "audit",
+                },
                 source="github",
                 identifier=identifier,
                 trust_level="community",
@@ -554,11 +618,11 @@ def test_optional_source_upstream_pointer_rejects_malformed(tmp_path):
 
     source = OptionalSkillSource()
     bad = [
-        "---\nname: x\nmetadata:\n  clawk:\n    upstream:\n      repo: acme\n      path: skills/x\n---\n",          # repo not owner/name
-        "---\nname: x\nmetadata:\n  clawk:\n    upstream:\n      repo: a/b/c\n      path: skills/x\n---\n",        # repo too deep
+        "---\nname: x\nmetadata:\n  clawk:\n    upstream:\n      repo: acme\n      path: skills/x\n---\n",  # repo not owner/name
+        "---\nname: x\nmetadata:\n  clawk:\n    upstream:\n      repo: a/b/c\n      path: skills/x\n---\n",  # repo too deep
         "---\nname: x\nmetadata:\n  clawk:\n    upstream:\n      repo: acme/skill\n      path: ../../etc\n---\n",  # traversal
-        "---\nname: x\nmetadata:\n  clawk:\n    upstream:\n      repo: acme/skill\n---\n",                          # missing path
-        "---\nname: x\n---\n",                                                                                       # no pointer
+        "---\nname: x\nmetadata:\n  clawk:\n    upstream:\n      repo: acme/skill\n---\n",  # missing path
+        "---\nname: x\n---\n",  # no pointer
     ]
     for content in bad:
         assert source._upstream_pointer_from_content(content) is None
@@ -572,15 +636,29 @@ def test_unified_search_trust_rank_survives_limit_cut():
     from tools.skills_hub_search import unified_search
 
     community = [
-        SkillMeta(name=f"s{i}", description="", source="skills.sh",
-                  identifier=f"skills-sh/x/s{i}", trust_level="community")
+        SkillMeta(
+            name=f"s{i}",
+            description="",
+            source="skills.sh",
+            identifier=f"skills-sh/x/s{i}",
+            trust_level="community",
+        )
         for i in range(20)
     ]
-    official = [SkillMeta(name="s-official", description="", source="official",
-                          identifier="official/cat/s-official", trust_level="builtin")]
+    official = [
+        SkillMeta(
+            name="s-official",
+            description="",
+            source="official",
+            identifier="official/cat/s-official",
+            trust_level="builtin",
+        )
+    ]
 
-    with _patch("tools.skills_hub_search.parallel_search_sources",
-                return_value=(community + official, {}, [])):
+    with _patch(
+        "tools.skills_hub_search.parallel_search_sources",
+        return_value=(community + official, {}, []),
+    ):
         results = unified_search("s", [], source_filter="all", limit=10)
 
     assert results[0].identifier == "official/cat/s-official"

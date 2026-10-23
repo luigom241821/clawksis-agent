@@ -69,7 +69,12 @@ def test_slash_exec_spawns_with_the_live_agent_provider(monkeypatch):
             pass
 
     agent = SimpleNamespace(model="default", provider="moa")
-    session = {"session_key": "s-key", "agent": agent, "profile_home": None, "running": False}
+    session = {
+        "session_key": "s-key",
+        "agent": agent,
+        "profile_home": None,
+        "running": False,
+    }
 
     monkeypatch.setattr(server, "_sessions", {"sid": session})
     monkeypatch.setattr(server, "_SlashWorker", _RecordingWorker)
@@ -101,12 +106,17 @@ def test_slash_worker_child_forwards_provider_to_clawk_cli(monkeypatch):
             built.update(kwargs)
 
     # main() resolves ClawksisCLI from ``cli`` only after arming the watchdog, so patch it there.
-    monkeypatch.setitem(_sys.modules, "cli", types.SimpleNamespace(ClawksisCLI=_FakeCLI))
+    monkeypatch.setitem(
+        _sys.modules, "cli", types.SimpleNamespace(ClawksisCLI=_FakeCLI)
+    )
     monkeypatch.setattr(sw, "_start_parent_death_watchdog", lambda *a: None)
     monkeypatch.setattr(sw, "_prepare_slash_worker_runtime", lambda: None)
     monkeypatch.setattr(sw.sys, "stdin", type("S", (), {"readline": lambda self: ""})())
-    monkeypatch.setattr(_sys, "argv", ["slash_worker", "--session-key", "s", "--model", "m",
-                                       "--provider", "moa"])
+    monkeypatch.setattr(
+        _sys,
+        "argv",
+        ["slash_worker", "--session-key", "s", "--model", "m", "--provider", "moa"],
+    )
 
     sw.main()
 

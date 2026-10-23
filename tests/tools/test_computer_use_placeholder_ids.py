@@ -17,6 +17,7 @@ from unittest.mock import MagicMock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+
 def _backend_with_windows(windows: list[dict[str, Any]]):
     from tools.computer_use.cua_backend import CuaDriverBackend
 
@@ -32,10 +33,22 @@ def _backend_with_windows(windows: list[dict[str, Any]]):
 
 
 _WINDOWS = [
-    {"app_name": "Fuwari", "pid": 100, "window_id": 1,
-     "is_on_screen": True, "title": "menu bar", "z_index": 0},
-    {"app_name": "Comet", "pid": 200, "window_id": 2,
-     "is_on_screen": True, "title": "Comet Browser", "z_index": 1},
+    {
+        "app_name": "Fuwari",
+        "pid": 100,
+        "window_id": 1,
+        "is_on_screen": True,
+        "title": "menu bar",
+        "z_index": 0,
+    },
+    {
+        "app_name": "Comet",
+        "pid": 200,
+        "window_id": 2,
+        "is_on_screen": True,
+        "title": "Comet Browser",
+        "z_index": 1,
+    },
 ]
 
 
@@ -69,7 +82,9 @@ def test_real_exact_target_still_wins_over_app():
     # this label, so it proves discovery was bypassed rather than consulted.
     cap = backend.capture(mode="som", app="Ghost", pid=999, window_id=99)
 
-    assert cap.app == "Ghost", f"exact targeting was bypassed; detail={cap.window_title!r}"
+    assert cap.app == "Ghost", (
+        f"exact targeting was bypassed; detail={cap.window_title!r}"
+    )
 
 
 def test_partial_target_still_reports_the_missing_half():

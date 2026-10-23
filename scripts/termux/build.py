@@ -4,6 +4,7 @@
 Tool staging and wheelhouse preparation remain separate prerequisites. This
 sequence owns only the shared frontend build and the native .deb handoff.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -41,22 +42,48 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as exc:
         parser.error(str(exc))
 
-    repo, payload, out = (path.resolve() for path in (args.repo, args.payload, args.out))
+    repo, payload, out = (
+        path.resolve() for path in (args.repo, args.payload, args.out)
+    )
     for option, path in (("--repo", repo), ("--payload", payload)):
         if not path.is_dir():
             parser.error(f"{option} must name an existing directory: {path}")
     product = repo / ".build/termux/tui"
-    revision = ["--tag", args.tag] if args.tag is not None else ["--commit", args.commit]
+    revision = (
+        ["--tag", args.tag] if args.tag is not None else ["--commit", args.commit]
+    )
     if args.release_commit is not None:
         revision.extend(["--release-commit", args.release_commit])
     commands = [
-        ["node", str(repo / "scripts/build/node-deps.mjs"),
-         "--source", str(repo), "--workspace", "ui-tui"],
-        ["node", str(repo / "scripts/build/tui.mjs"),
-         "--source", str(repo), "--out", str(product)],
-        ["bash", str(repo / "scripts/termux/build_deb.sh"),
-         "--repo", str(repo), "--payload", str(payload), "--out", str(out),
-         "--tui-product", str(product), *revision],
+        [
+            "node",
+            str(repo / "scripts/build/node-deps.mjs"),
+            "--source",
+            str(repo),
+            "--workspace",
+            "ui-tui",
+        ],
+        [
+            "node",
+            str(repo / "scripts/build/tui.mjs"),
+            "--source",
+            str(repo),
+            "--out",
+            str(product),
+        ],
+        [
+            "bash",
+            str(repo / "scripts/termux/build_deb.sh"),
+            "--repo",
+            str(repo),
+            "--payload",
+            str(payload),
+            "--out",
+            str(out),
+            "--tui-product",
+            str(product),
+            *revision,
+        ],
     ]
     try:
         for command in commands:

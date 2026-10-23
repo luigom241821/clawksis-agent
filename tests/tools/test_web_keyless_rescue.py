@@ -44,7 +44,12 @@ class _KeyedBoomProvider:
 
     def extract(self, urls, **kwargs):
         return [
-            {"url": u, "title": "", "content": "", "error": "HTTP 500 upstream exploded"}
+            {
+                "url": u,
+                "title": "",
+                "content": "",
+                "error": "HTTP 500 upstream exploded",
+            }
             for u in urls
         ]
 
@@ -69,9 +74,7 @@ def _keyed_keenable_env(monkeypatch):
         lambda name: "kn-real" if name == "KEENABLE_API_KEY" else "",
     )
     monkeypatch.setattr(web_tools, "_load_web_config", lambda: {"backend": "keenable"})
-    monkeypatch.setattr(
-        "agent.web_search_registry._keyless_tier_enabled", lambda: True
-    )
+    monkeypatch.setattr("agent.web_search_registry._keyless_tier_enabled", lambda: True)
     yield
 
 
@@ -90,23 +93,34 @@ class TestEligibility:
         )
         assert web_tools_rescue._rescue_eligible(KeenableWebSearchProvider()) is False
 
-    def test_gateway_selected_ring_vendor_is_eligible_without_direct_key(self, monkeypatch):
+    def test_gateway_selected_ring_vendor_is_eligible_without_direct_key(
+        self, monkeypatch
+    ):
         # The persisted Nous route uses its subscriber token, not the keyless ring — eligible.
         # The same keyless Firecrawl selected directly DID walk the ring — not eligible.
         monkeypatch.setattr(
             "agent.web_search_provider.get_provider_env", lambda name: ""
         )
         monkeypatch.setattr("plugins.web.firecrawl.provider._env", lambda name: "")
-        monkeypatch.setattr("plugins.web.firecrawl.provider._is_tool_gateway_ready", lambda: True)
+        monkeypatch.setattr(
+            "plugins.web.firecrawl.provider._is_tool_gateway_ready", lambda: True
+        )
         monkeypatch.setattr(
             "tools.tool_backend_helpers.read_selection", lambda kind: "nous"
         )
-        assert web_tools_rescue._rescue_eligible(_GatewayFirecrawlBoomProvider()) is True
+        assert (
+            web_tools_rescue._rescue_eligible(_GatewayFirecrawlBoomProvider()) is True
+        )
         monkeypatch.setattr(
             "tools.tool_backend_helpers.read_selection", lambda kind: "firecrawl"
         )
-        monkeypatch.setattr("plugins.web.keyless_mcp._web_config_selects", lambda name: name == "firecrawl")
-        assert web_tools_rescue._rescue_eligible(_GatewayFirecrawlBoomProvider()) is False
+        monkeypatch.setattr(
+            "plugins.web.keyless_mcp._web_config_selects",
+            lambda name: name == "firecrawl",
+        )
+        assert (
+            web_tools_rescue._rescue_eligible(_GatewayFirecrawlBoomProvider()) is False
+        )
 
     def test_non_ring_backend_is_eligible(self):
         class _SearxProvider(_KeyedBoomProvider):
@@ -116,7 +130,8 @@ class TestEligibility:
 
     def test_config_gate_disables(self, monkeypatch):
         monkeypatch.setattr(
-            web_tools, "_load_web_config",
+            web_tools,
+            "_load_web_config",
             lambda: {"backend": "keenable", "keyless_rescue": False},
         )
         assert web_tools_rescue._rescue_eligible(_KeyedBoomProvider()) is False
@@ -148,15 +163,15 @@ class TestSearchRescue:
         ring.assert_called_once()
 
     def test_raised_exception_rescued(self, monkeypatch):
-        with patch.object(
-            keyless_mcp, "search_with_failover", return_value=_ring_ok()
-        ):
+        with patch.object(keyless_mcp, "search_with_failover", return_value=_ring_ok()):
             out = self._dispatch(monkeypatch, _RaisingProvider())
         assert out["success"] is True
         assert "connection reset" in out["data"]["backend_error"]
 
     def test_gateway_selected_firecrawl_failure_is_rescued(self, monkeypatch):
-        monkeypatch.setattr(web_tools, "_load_web_config", lambda: {"backend": "firecrawl"})
+        monkeypatch.setattr(
+            web_tools, "_load_web_config", lambda: {"backend": "firecrawl"}
+        )
         monkeypatch.setattr(
             "agent.web_search_provider.get_provider_env", lambda name: ""
         )
@@ -192,7 +207,8 @@ class TestSearchRescue:
 
     def test_rescue_failure_keeps_original_error(self, monkeypatch):
         with patch.object(
-            keyless_mcp, "search_with_failover",
+            keyless_mcp,
+            "search_with_failover",
             return_value={"success": False, "error": "all throttled"},
         ):
             out = self._dispatch(monkeypatch, _KeyedBoomProvider())
@@ -202,7 +218,8 @@ class TestSearchRescue:
 
     def test_no_rescue_when_disabled(self, monkeypatch):
         monkeypatch.setattr(
-            web_tools, "_load_web_config",
+            web_tools,
+            "_load_web_config",
             lambda: {"backend": "keenable", "keyless_rescue": False},
         )
         with patch.object(keyless_mcp, "search_with_failover") as ring:
@@ -229,10 +246,20 @@ class TestExtractRescue:
     @pytest.mark.asyncio
     async def test_whole_batch_failure_rescued(self, monkeypatch):
         good = [
-            {"url": "https://a", "title": "A", "content": "x" * 50,
-             "raw_content": "x" * 50, "metadata": {"sourceURL": "https://a"}},
-            {"url": "https://b", "title": "B", "content": "y" * 50,
-             "raw_content": "y" * 50, "metadata": {"sourceURL": "https://b"}},
+            {
+                "url": "https://a",
+                "title": "A",
+                "content": "x" * 50,
+                "raw_content": "x" * 50,
+                "metadata": {"sourceURL": "https://a"},
+            },
+            {
+                "url": "https://b",
+                "title": "B",
+                "content": "y" * 50,
+                "raw_content": "y" * 50,
+                "metadata": {"sourceURL": "https://b"},
+            },
         ]
         with patch.object(
             keyless_mcp, "extract_with_failover", return_value=good
@@ -246,13 +273,16 @@ class TestExtractRescue:
 
     def test_rescue_extract_annotates_results(self, monkeypatch):
         good = [
-            {"url": "https://a", "title": "A", "content": "x",
-             "raw_content": "x", "metadata": {"sourceURL": "https://a"}},
+            {
+                "url": "https://a",
+                "title": "A",
+                "content": "x",
+                "raw_content": "x",
+                "metadata": {"sourceURL": "https://a"},
+            },
         ]
         failed = [{"url": "https://a", "title": "", "content": "", "error": "HTTP 500"}]
-        with patch.object(
-            keyless_mcp, "extract_with_failover", return_value=good
-        ):
+        with patch.object(keyless_mcp, "extract_with_failover", return_value=good):
             out = web_tools_rescue._rescue_extract("keenable", ["https://a"], failed)
         assert out[0]["metadata"]["rescued_from"] == "keenable"
         assert "HTTP 500" in out[0]["metadata"]["backend_error"]
@@ -262,8 +292,13 @@ class TestExtractRescue:
         class _Partial(_KeyedBoomProvider):
             def extract(self, urls, **kwargs):
                 return [
-                    {"url": urls[0], "title": "A", "content": "fine",
-                     "raw_content": "fine", "metadata": {}},
+                    {
+                        "url": urls[0],
+                        "title": "A",
+                        "content": "fine",
+                        "raw_content": "fine",
+                        "metadata": {},
+                    },
                     {"url": urls[1], "title": "", "content": "", "error": "404"},
                 ]
 
@@ -280,9 +315,7 @@ class TestExtractRescue:
             {"url": "https://a", "title": "", "content": "", "error": "ring dead"},
             {"url": "https://b", "title": "", "content": "", "error": "ring dead"},
         ]
-        with patch.object(
-            keyless_mcp, "extract_with_failover", return_value=still_bad
-        ):
+        with patch.object(keyless_mcp, "extract_with_failover", return_value=still_bad):
             results = await self._dispatch(
                 monkeypatch, _KeyedBoomProvider(), ["https://a", "https://b"]
             )

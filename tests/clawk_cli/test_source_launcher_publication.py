@@ -1,4 +1,5 @@
 """Source launchers keep custom-home and selected-generation state at boot."""
+
 import json
 import os
 from pathlib import Path
@@ -16,10 +17,18 @@ from pm.environments import install_state_dir, site_packages
 
 ROOT = Path(__file__).resolve().parents[2]
 BOOT_FILES = (
-    "clawk_bootstrap.py", "clawk_constants.py", "clawk_cli/__init__.py", "clawk_cli/_launchers.py",
-    "pm/environments.py", "pm/filesystem.py", "pm/paths.py", "clawk_cli/runtime_state.py",
-    "clawk_cli/_early_recovery.py", "clawk_cli/_parser.py",
-    "clawk_cli/venv_sync.py", "clawk_cli/steward.py",
+    "clawk_bootstrap.py",
+    "clawk_constants.py",
+    "clawk_cli/__init__.py",
+    "clawk_cli/_launchers.py",
+    "pm/environments.py",
+    "pm/filesystem.py",
+    "pm/paths.py",
+    "clawk_cli/runtime_state.py",
+    "clawk_cli/_early_recovery.py",
+    "clawk_cli/_parser.py",
+    "clawk_cli/venv_sync.py",
+    "clawk_cli/steward.py",
     "clawk_cli/stderr_timestamp.py",
     "scripts/clawk-gateway",
 )
@@ -54,9 +63,24 @@ def fixture_tree(tmp_path, monkeypatch):
     store = home / "tools"
     store.mkdir(parents=True)
     interpreter = Path(sys._base_executable).resolve()
-    (store / "facts.json").write_text(json.dumps({"schema": 1, "packages": {"python": {
-        "version": "fixture", "entry": str(interpreter.parent if os.name == "nt" else interpreter.parents[1])
-    }}}), encoding="utf-8")
+    (store / "facts.json").write_text(
+        json.dumps(
+            {
+                "schema": 1,
+                "packages": {
+                    "python": {
+                        "version": "fixture",
+                        "entry": str(
+                            interpreter.parent
+                            if os.name == "nt"
+                            else interpreter.parents[1]
+                        ),
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
     return repo, home, interpreter
 
 
@@ -67,19 +91,23 @@ def without_distlib(monkeypatch):
 
 
 def select_generation(repo, name, value):
-    selected = install_state_dir(repo) / 'environments' / str(name) / 'venv'
+    selected = install_state_dir(repo) / "environments" / str(name) / "venv"
     site = site_packages(selected)
     site.mkdir(parents=True)
-    (selected / 'pyvenv.cfg').write_text('home = fixture\n', encoding='utf-8')
-    (site / 'selected_probe.py').write_text(f'VALUE = {value!r}\n', encoding='utf-8')
-    (install_state_dir(repo) / 'facts.json').write_text(
-        json.dumps({'packages': {'venv': {'environment': str(selected)}}}), encoding='utf-8')
+    (selected / "pyvenv.cfg").write_text("home = fixture\n", encoding="utf-8")
+    (site / "selected_probe.py").write_text(f"VALUE = {value!r}\n", encoding="utf-8")
+    (install_state_dir(repo) / "facts.json").write_text(
+        json.dumps({"packages": {"venv": {"environment": str(selected)}}}),
+        encoding="utf-8",
+    )
     return selected
 
 
 @pytest.mark.platforms("windows", "posix")
 @pytest.mark.parametrize("form", ["native", "shell"])
-def test_source_launchers_boot_selected_generation_from_custom_home(tmp_path, monkeypatch, form, real_bash):
+def test_source_launchers_boot_selected_generation_from_custom_home(
+    tmp_path, monkeypatch, form, real_bash
+):
     repo, home, interpreter = fixture_tree(tmp_path, monkeypatch)
     out = tmp_path / "commands"
     out.mkdir()
@@ -90,11 +118,15 @@ def test_source_launchers_boot_selected_generation_from_custom_home(tmp_path, mo
         shell_out = tmp_path / "shell-commands"
         shell_out.mkdir()
         launchers = [
-            _launchers._mint_shell_launcher(name, shell_out, interpreter,
-                                            _launchers._launcher_script(name, repo, None))
+            _launchers._mint_shell_launcher(
+                name,
+                shell_out,
+                interpreter,
+                _launchers._launcher_script(name, repo, None),
+            )
             for name in _launchers.ENTRY_POINTS
         ]
-    args = ['spaces and café', 'apostrophe\'s', r'one\two', '$HOME; echo no', '']
+    args = ["spaces and café", "apostrophe's", r"one\two", "$HOME; echo no", ""]
     for number in (1, 2):
         select_generation(repo, number, number)
         env = dict(os.environ)
@@ -105,9 +137,22 @@ def test_source_launchers_boot_selected_generation_from_custom_home(tmp_path, mo
         for launcher in launchers:
             assert launcher is not None
             command = [real_bash, "-s"] if form == "shell" else [str(launcher), *args]
-            script = "exec " + shlex.join([real_bash, str(launcher), *args]) + "\n" if form == "shell" else None
-            result = subprocess.run(command, input=script, cwd=tmp_path, env=env,
-                                    capture_output=True, text=True, encoding="utf-8", timeout=30, check=False)
+            script = (
+                "exec " + shlex.join([real_bash, str(launcher), *args]) + "\n"
+                if form == "shell"
+                else None
+            )
+            result = subprocess.run(
+                command,
+                input=script,
+                cwd=tmp_path,
+                env=env,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=30,
+                check=False,
+            )
             assert result.returncode == 7, result.stdout + result.stderr
             receipt = json.loads(result.stdout)
             assert receipt["value"] == number
@@ -128,21 +173,34 @@ def test_launcher_resolves_default_home_at_use_not_publication(tmp_path, monkeyp
     select_generation(repo, "second", "from-second-user")
     env = dict(os.environ)
     env.pop("CLAWK_HOME")
-    result = subprocess.run([str(launcher)], cwd=tmp_path, env=env,
-                            capture_output=True, text=True, encoding="utf-8", timeout=30, check=False)
+    result = subprocess.run(
+        [str(launcher)],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=30,
+        check=False,
+    )
     assert result.returncode == 7, result.stdout + result.stderr
     assert json.loads(result.stdout)["home"] == str(new_user_home / ".clawksis")
     assert json.loads(result.stdout)["value"] == "from-second-user"
     assert published_home != new_user_home / ".clawksis"
 
 
-@pytest.mark.parametrize("publisher", [
-    pytest.param("boot", marks=pytest.mark.platforms("posix")),
-    pytest.param("repair", marks=pytest.mark.platforms("posix")),
-    pytest.param("native", marks=pytest.mark.platforms("windows")),
-    pytest.param("cmd", marks=pytest.mark.platforms("windows")),
-])
-def test_profile_publication_preserves_shared_launcher_default_home(tmp_path, monkeypatch, publisher):
+@pytest.mark.parametrize(
+    "publisher",
+    [
+        pytest.param("boot", marks=pytest.mark.platforms("posix")),
+        pytest.param("repair", marks=pytest.mark.platforms("posix")),
+        pytest.param("native", marks=pytest.mark.platforms("windows")),
+        pytest.param("cmd", marks=pytest.mark.platforms("windows")),
+    ],
+)
+def test_profile_publication_preserves_shared_launcher_default_home(
+    tmp_path, monkeypatch, publisher
+):
     from clawk_cli import boot_bootstrap, post_update
 
     repo, home, interpreter = fixture_tree(tmp_path, monkeypatch)
@@ -151,9 +209,16 @@ def test_profile_publication_preserves_shared_launcher_default_home(tmp_path, mo
     profile = home / "profiles" / "coder"
     profile.mkdir(parents=True)
     (home / "active_profile").write_text("default\n", encoding="utf-8")
-    (repo / "install-stamp.json").write_text(json.dumps({
-        "commit": "abcdef012345", "updateMechanism": "git", "runtimeDir": str(home / "tools"),
-    }), encoding="utf-8")
+    (repo / "install-stamp.json").write_text(
+        json.dumps(
+            {
+                "commit": "abcdef012345",
+                "updateMechanism": "git",
+                "runtimeDir": str(home / "tools"),
+            }
+        ),
+        encoding="utf-8",
+    )
     select_generation(repo, "shared", "ready")
     out = tmp_path / ".local" / "bin"
     if publisher == "cmd":
@@ -169,8 +234,16 @@ def test_profile_publication_preserves_shared_launcher_default_home(tmp_path, mo
         if override is not None:
             env["CLAWK_HOME"] = str(override)
         for launcher in launchers:
-            result = subprocess.run([str(launcher)], cwd=tmp_path, env=env,
-                                    capture_output=True, text=True, encoding="utf-8", timeout=30, check=False)
+            result = subprocess.run(
+                [str(launcher)],
+                cwd=tmp_path,
+                env=env,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=30,
+                check=False,
+            )
             assert result.returncode == 7, result.stdout + result.stderr
             receipt = json.loads(result.stdout)
             assert Path(receipt["home"]) == expected
@@ -182,9 +255,13 @@ def test_profile_publication_preserves_shared_launcher_default_home(tmp_path, mo
     if publisher == "boot":
         # Keep the real per-profile boot gate and exposure step, not unrelated
         # migrations. A named profile's first boot republishes the shared files.
-        monkeypatch.setattr(post_update, "BOOT_HOME_STEPS", tuple(
-            step for step in post_update.BOOT_HOME_STEPS if step[0] == "expose_cli"
-        ))
+        monkeypatch.setattr(
+            post_update,
+            "BOOT_HOME_STEPS",
+            tuple(
+                step for step in post_update.BOOT_HOME_STEPS if step[0] == "expose_cli"
+            ),
+        )
         result = boot_bootstrap.run_boot_bootstrap(repo)
         assert result["home"]["expose_cli"]["ok"], result
         assert boot_bootstrap.record_path(repo).is_file()
@@ -205,7 +282,9 @@ def test_profile_publication_preserves_shared_launcher_default_home(tmp_path, mo
 
 @pytest.mark.platforms("posix")
 @pytest.mark.parametrize("corruption", ["bom", "crlf"])
-def test_posix_materializer_publishes_only_executable_shell_launchers(tmp_path, monkeypatch, corruption):
+def test_posix_materializer_publishes_only_executable_shell_launchers(
+    tmp_path, monkeypatch, corruption
+):
     repo, _home, _interpreter = fixture_tree(tmp_path, monkeypatch)
     out = tmp_path / "bin"
     out.mkdir()
@@ -217,13 +296,23 @@ def test_posix_materializer_publishes_only_executable_shell_launchers(tmp_path, 
     assert {p.name for p in local.iterdir()} == set(_launchers.ENTRY_POINTS)
     launcher = local / "clawk"
     expected = launcher.read_bytes()
-    launcher.write_bytes(b"\xef\xbb\xbf" + expected if corruption == "bom" else expected.replace(b"\n", b"\r\n"))
+    launcher.write_bytes(
+        b"\xef\xbb\xbf" + expected
+        if corruption == "bom"
+        else expected.replace(b"\n", b"\r\n")
+    )
     assert _launchers.ensure_install_launchers(repo, out)
     # Shell executables need exact bytes: neither a BOM before #! nor CRLF is
     # interchangeable with the generated script, even if text decoding agrees.
     assert launcher.read_bytes() == expected
-    result = subprocess.run([str(out / "clawk"), "--print-runtime-command"],
-                            capture_output=True, text=True, encoding="utf-8", timeout=30, check=False)
+    result = subprocess.run(
+        [str(out / "clawk"), "--print-runtime-command"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=30,
+        check=False,
+    )
     assert result.returncode == 0, result.stderr
     assert Path(json.loads(result.stdout)[0]).samefile(_interpreter)
     before = launcher.stat().st_mtime_ns
@@ -231,15 +320,29 @@ def test_posix_materializer_publishes_only_executable_shell_launchers(tmp_path, 
     assert launcher.stat().st_mtime_ns == before
 
 
-def test_materializer_cli_refuses_missing_store_without_publishing(tmp_path, monkeypatch):
+def test_materializer_cli_refuses_missing_store_without_publishing(
+    tmp_path, monkeypatch
+):
     repo, home, _interpreter = fixture_tree(tmp_path, monkeypatch)
     (home / "tools" / "facts.json").unlink()
-    orphan = home / "tools" / "python-unrecorded" / ("python.exe" if os.name == "nt" else "bin/python3")
+    orphan = (
+        home
+        / "tools"
+        / "python-unrecorded"
+        / ("python.exe" if os.name == "nt" else "bin/python3")
+    )
     orphan.parent.mkdir(parents=True)
     orphan.touch()  # uncommitted tool bytes are not an installed interpreter
     out = tmp_path / "bin"
-    result = subprocess.run([sys.executable, "-I", str(repo / "clawk_cli/_launchers.py"), str(out)],
-                            cwd=tmp_path, capture_output=True, text=True, encoding="utf-8", timeout=30, check=False)
+    result = subprocess.run(
+        [sys.executable, "-I", str(repo / "clawk_cli/_launchers.py"), str(out)],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=30,
+        check=False,
+    )
     assert result.returncode == 1, result.stdout + result.stderr
     assert "store interpreter" in result.stderr
     assert not out.exists() or not list(out.iterdir())
@@ -247,22 +350,28 @@ def test_materializer_cli_refuses_missing_store_without_publishing(tmp_path, mon
 
 @pytest.mark.platforms("posix")
 @pytest.mark.parametrize("legacy_clawk", ["venv-python", "venv-console-script"])
-def test_boot_migrates_legacy_conveniences_to_selected_runtime(tmp_path, monkeypatch, legacy_clawk):
+def test_boot_migrates_legacy_conveniences_to_selected_runtime(
+    tmp_path, monkeypatch, legacy_clawk
+):
     repo, home, interpreter = fixture_tree(tmp_path, monkeypatch)
     monkeypatch.setattr(Path, "home", lambda: home)
     monkeypatch.setenv("CLAWK_INSTALL_ROOT", str(repo))
-    select_generation(repo, 'current', 'migrated')
+    select_generation(repo, "current", "migrated")
     out = home / ".local" / "bin"
     out.mkdir(parents=True)
     # Old venv and sibling-ACP wrappers, with an unrelated command sharing bin.
-    old_wrapper = (f'#!/bin/sh\nexec "{repo}/venv/bin/python" "{repo}/clawk" "$@"\n'
-                   if legacy_clawk == "venv-python" else
-                   f'#!/usr/bin/env bash\nunset PYTHONPATH\nunset PYTHONHOME\n'
-                   f'exec "{repo}/venv/bin/clawk" "$@"\n')
+    old_wrapper = (
+        f'#!/bin/sh\nexec "{repo}/venv/bin/python" "{repo}/clawk" "$@"\n'
+        if legacy_clawk == "venv-python"
+        else f"#!/usr/bin/env bash\nunset PYTHONPATH\nunset PYTHONHOME\n"
+        f'exec "{repo}/venv/bin/clawk" "$@"\n'
+    )
     (out / "clawk").write_text(old_wrapper, encoding="utf-8")
     (out / "clawk-acp").write_text(
-        '#!/usr/bin/env bash\n# Clawksis — ACP launcher (written by `clawk update`).\n'
-        f'exec "{out}/clawk" acp "$@"\n', encoding="utf-8")
+        "#!/usr/bin/env bash\n# Clawksis — ACP launcher (written by `clawk update`).\n"
+        f'exec "{out}/clawk" acp "$@"\n',
+        encoding="utf-8",
+    )
     # Mentions this install only in a comment and runs another checkout's venv.
     foreign = f'#!/bin/sh\n# user note about {repo}/venv/bin/clawk\nexec "{tmp_path}/other/venv/bin/clawk" "$@"\n'
     (out / "clawksis-agent").write_text(foreign, encoding="utf-8")
@@ -271,8 +380,15 @@ def test_boot_migrates_legacy_conveniences_to_selected_runtime(tmp_path, monkeyp
     assert result["ok"], result
     assert set(result["written"]) == {"clawk", "clawk-acp"}
     for name in ("clawk", "clawk-acp"):
-        run = subprocess.run([str(out / name), "quoted argument"], cwd=tmp_path,
-                             capture_output=True, text=True, timeout=30, encoding="utf-8", check=False)
+        run = subprocess.run(
+            [str(out / name), "quoted argument"],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            encoding="utf-8",
+            check=False,
+        )
         assert run.returncode == 7, run.stderr
         receipt = json.loads(run.stdout)
         assert receipt["value"] == "migrated"
@@ -299,37 +415,70 @@ def _command_survives_generation_collection(tmp_path, monkeypatch, surface):
         (selected.parent / ".lease-managed").touch()
         if value == "old":
             if surface == "legacy":
-                command = [sys.executable, "-I", str(repo / "scripts/clawk-gateway"), "--help"]
+                command = [
+                    sys.executable,
+                    "-I",
+                    str(repo / "scripts/clawk-gateway"),
+                    "--help",
+                ]
                 args = ["gateway", "--help"]
             elif surface == "ssh":
                 from clawk_cli.windows_ssh_runtime import _resolve_direct_command
+
                 command = [*_resolve_direct_command(str(launcher)), *args]
             elif surface == "published":
-                result = subprocess.run([str(launcher), "--print-runtime-command", "--", *args],
-                                        capture_output=True, text=True, timeout=30, encoding="utf-8", check=False)
+                result = subprocess.run(
+                    [str(launcher), "--print-runtime-command", "--", *args],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                    encoding="utf-8",
+                    check=False,
+                )
                 assert result.returncode == 0, result.stderr
                 command = json.loads(result.stdout)
             else:
                 from clawk_cli import gateway
+
                 monkeypatch.setattr(gateway, "PROJECT_ROOT", repo)
                 if surface == "launchd":
                     import plistlib
-                    from tests.clawk_cli.test_gateway_service import _osascript_exec_argv
+                    from tests.clawk_cli.test_gateway_service import (
+                        _osascript_exec_argv,
+                    )
+
                     unit = gateway.generate_launchd_plist()
                     # The job runs through osascript (#71206); exec the child it would spawn, minus the
                     # `>> log 2>> log` tail that only means something to the shell.
-                    command = _osascript_exec_argv(plistlib.loads(unit.encode())["ProgramArguments"])[:-4]
+                    command = _osascript_exec_argv(
+                        plistlib.loads(unit.encode())["ProgramArguments"]
+                    )[:-4]
                     args = ["gateway", "run", "--external-supervisor"]
                 else:
                     unit = gateway.generate_systemd_unit()
-                    command = shlex.split(next(line.removeprefix("ExecStart=") for line in unit.splitlines()
-                                               if line.startswith("ExecStart=")))
+                    command = shlex.split(
+                        next(
+                            line.removeprefix("ExecStart=")
+                            for line in unit.splitlines()
+                            if line.startswith("ExecStart=")
+                        )
+                    )
                     args = ["gateway", "run"]
                 assert str(selected.parent) not in unit
             if surface not in ("legacy", "systemd", "launchd"):
                 assert Path(command[0]).samefile(interpreter)
-    assert collect_generations(repo, min_age_seconds=0) == [selected.parent.parent / "old"]
-    result = subprocess.run(command, cwd=tmp_path, capture_output=True, text=True, timeout=30, encoding="utf-8", check=False)
+    assert collect_generations(repo, min_age_seconds=0) == [
+        selected.parent.parent / "old"
+    ]
+    result = subprocess.run(
+        command,
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        encoding="utf-8",
+        check=False,
+    )
     assert result.returncode == 7, result.stderr
     receipt = result.stdout
     if surface == "launchd":
@@ -339,7 +488,9 @@ def _command_survives_generation_collection(tmp_path, monkeypatch, surface):
     assert json.loads(receipt)["argv"] == args
 
 
-@pytest.mark.parametrize("surface", ["published", "systemd", "launchd", "ssh", "legacy"])
+@pytest.mark.parametrize(
+    "surface", ["published", "systemd", "launchd", "ssh", "legacy"]
+)
 @pytest.mark.platforms("posix")
 @pytest.mark.spawns_gateway_lookalike
 def test_posix_commands_survive_generation_collection(tmp_path, monkeypatch, surface):
@@ -354,13 +505,17 @@ def test_windows_commands_survive_generation_collection(tmp_path, monkeypatch, s
 
 @pytest.mark.platforms("windows")
 @pytest.mark.parametrize("launcher_form", ["native", "cmd", "native-with-maker"])
-def test_running_source_launcher_can_republish_itself(tmp_path, monkeypatch, launcher_form):
+def test_running_source_launcher_can_republish_itself(
+    tmp_path, monkeypatch, launcher_form
+):
     repo, _home, interpreter = fixture_tree(tmp_path, monkeypatch)
     selected = select_generation(repo, "selected", "ready")
     if launcher_form == "native-with-maker":
         import distlib
 
-        shutil.copytree(Path(distlib.__file__).parent, site_packages(selected) / "distlib")
+        shutil.copytree(
+            Path(distlib.__file__).parent, site_packages(selected) / "distlib"
+        )
     entry = repo / "clawk_cli/main.py"
     entry.write_text(
         "from pathlib import Path\n"
@@ -379,8 +534,15 @@ def test_running_source_launcher_can_republish_itself(tmp_path, monkeypatch, lau
     assert len(launchers) == len(_launchers.ENTRY_POINTS)
     command = next(Path(p) for p in launchers if Path(p).stem == "clawk")
     assert command.suffix == (".cmd" if launcher_form == "cmd" else ".exe")
-    result = subprocess.run([str(command)], cwd=tmp_path, capture_output=True,
-                            text=True, encoding="utf-8", timeout=30, check=False)
+    result = subprocess.run(
+        [str(command)],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=30,
+        check=False,
+    )
     assert result.returncode == 0, result.stdout + result.stderr
     assert "published 2 2" in result.stdout
     assert _launchers.ensure_install_launchers(repo, out)
@@ -389,13 +551,19 @@ def test_running_source_launcher_can_republish_itself(tmp_path, monkeypatch, lau
 
 
 @pytest.mark.platforms("windows")
-@pytest.mark.parametrize("running, store_pip", [(False, False), (True, False), (True, True)],
-                         ids=["idle", "running", "running-store-pip"])
-def test_repin_without_distlib_retires_stale_native_launcher(tmp_path, monkeypatch, running, store_pip):
+@pytest.mark.parametrize(
+    "running, store_pip",
+    [(False, False), (True, False), (True, True)],
+    ids=["idle", "running", "running-store-pip"],
+)
+def test_repin_without_distlib_retires_stale_native_launcher(
+    tmp_path, monkeypatch, running, store_pip
+):
     repo, home, _interpreter = fixture_tree(tmp_path, monkeypatch)
     (repo / "clawk_cli/main.py").write_text(
         "import sys\ndef main():\n    print('ready', flush=True)\n    sys.stdin.read()\n    return 0\n",
-        encoding="utf-8")
+        encoding="utf-8",
+    )
     local = repo / ".clawk/bin"
     original = Path(_launchers.ensure_install_launchers(repo, local)[0])
     assert original.suffix == ".exe"
@@ -406,20 +574,31 @@ def test_repin_without_distlib_retires_stale_native_launcher(tmp_path, monkeypat
         # python-build-standalone ships pip; the activated update process cannot import it.
         import distlib
 
-        shutil.copytree(Path(distlib.__file__).parent,
-                        new_python.parent / "Lib" / "site-packages" / "pip" / "_vendor" / "distlib")
+        shutil.copytree(
+            Path(distlib.__file__).parent,
+            new_python.parent / "Lib" / "site-packages" / "pip" / "_vendor" / "distlib",
+        )
     (home / "tools/facts.json").write_text(
-        json.dumps({"packages": {"python": {"entry": "repinned"}}}), encoding="utf-8")
+        json.dumps({"packages": {"python": {"entry": "repinned"}}}), encoding="utf-8"
+    )
     real_maker = _launchers._load_script_maker
     monkeypatch.setattr(_launchers, "_load_script_maker", lambda: None)
     process = None
     try:
         if running:
             # The launcher a repin retires is the one running `clawk update`.
-            process = subprocess.Popen([str(original)], cwd=tmp_path, stdin=subprocess.PIPE,
-                                       stdout=subprocess.PIPE, text=True, encoding="utf-8")
+            process = subprocess.Popen(
+                [str(original)],
+                cwd=tmp_path,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+            )
             first = queue.Queue()
-            threading.Thread(target=lambda: first.put(process.stdout.readline()), daemon=True).start()
+            threading.Thread(
+                target=lambda: first.put(process.stdout.readline()), daemon=True
+            ).start()
             assert first.get(timeout=60).strip() == "ready"
         result = _launchers.stage_launcher("clawk", repo, local)
     finally:
@@ -437,7 +616,9 @@ def test_repin_without_distlib_retires_stale_native_launcher(tmp_path, monkeypat
     else:
         assert result == local / "clawk.cmd"
         assert not original.exists()  # cmd.exe must not run the old exe first
-        assert result is not None and str(new_python) in result.read_text(encoding="utf-8-sig")
+        assert result is not None and str(new_python) in result.read_text(
+            encoding="utf-8-sig"
+        )
     if process is not None:
         assert process.returncode == 0  # the retired launcher finished its own run
         # distlib is back for the next publication: the aside copy still goes.
@@ -447,7 +628,9 @@ def test_repin_without_distlib_retires_stale_native_launcher(tmp_path, monkeypat
 
 
 @pytest.mark.platforms("windows")
-def test_windows_repair_upgrades_healthy_old_pm_external_launchers(tmp_path, monkeypatch):
+def test_windows_repair_upgrades_healthy_old_pm_external_launchers(
+    tmp_path, monkeypatch
+):
     from clawk_cli._install_repair import ensure_windows_bin_launchers
 
     repo, home, interpreter = fixture_tree(tmp_path, monkeypatch)
@@ -456,14 +639,22 @@ def test_windows_repair_upgrades_healthy_old_pm_external_launchers(tmp_path, mon
     external = home / "bin"
     external.mkdir()
     for name in _launchers.ENTRY_POINTS:
-        (external / f"{name}.exe").write_bytes(b"old PM launcher without a venv binding")
+        (external / f"{name}.exe").write_bytes(
+            b"old PM launcher without a venv binding"
+        )
     assert ensure_windows_bin_launchers(managed, user_path_entries=[])
     local = managed / ".clawk" / "bin"
     launcher = local / "clawk.exe"
     if not launcher.exists():
         launcher = local / "clawk.cmd"
-    result = subprocess.run([str(launcher), "--print-runtime-command"], capture_output=True,
-                            text=True, timeout=30, encoding="utf-8", check=False)
+    result = subprocess.run(
+        [str(launcher), "--print-runtime-command"],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        encoding="utf-8",
+        check=False,
+    )
     assert result.returncode == 0, result.stderr
     assert Path(json.loads(result.stdout)[0]).samefile(interpreter)
 
@@ -472,13 +663,15 @@ def test_dashboard_action_boots_selected_dependencies(tmp_path, monkeypatch):
     from clawk_cli import web_server, web_server_gateway
 
     repo, home, _ = fixture_tree(tmp_path, monkeypatch)
-    select_generation(repo, 'current', 'selected')
+    select_generation(repo, "current", "selected")
     monkeypatch.setattr(web_server, "PROJECT_ROOT", repo)
     monkeypatch.setattr(web_server_gateway, "_ACTION_LOG_DIR", home / "logs")
     proc = web_server_gateway._spawn_clawk_action(["--version"], "gateway-restart")
     try:
         assert proc.wait(timeout=30) == 7
-        log = (home / "logs" / web_server_gateway._ACTION_LOG_FILES["gateway-restart"]).read_text(encoding="utf-8-sig")
+        log = (
+            home / "logs" / web_server_gateway._ACTION_LOG_FILES["gateway-restart"]
+        ).read_text(encoding="utf-8-sig")
         assert json.loads(log.splitlines()[-1])["value"] == "selected"
     finally:
         if proc.poll() is None:
@@ -491,16 +684,33 @@ def test_pre_pm_base_dependencies_activate_only_at_boot(tmp_path, monkeypatch):
     repo, home, _ = fixture_tree(tmp_path, monkeypatch)
     environment = repo.parent / "payload-deps"
     (repo.parent / "manifest.json").write_text(
-        json.dumps({"repo": repo.name, "venv": environment.name,
-                    "store": (home / "tools").relative_to(repo.parent).as_posix()}), encoding="utf-8")
+        json.dumps(
+            {
+                "repo": repo.name,
+                "venv": environment.name,
+                "store": (home / "tools").relative_to(repo.parent).as_posix(),
+            }
+        ),
+        encoding="utf-8",
+    )
     site = site_packages(environment)
     site.mkdir(parents=True)
     editable = tmp_path / "editable"
     editable.mkdir()
-    (editable / "selected_probe.py").write_text("VALUE = 'base-pth'\n", encoding="utf-8")
+    (editable / "selected_probe.py").write_text(
+        "VALUE = 'base-pth'\n", encoding="utf-8"
+    )
     (site / "member.pth").write_text(str(editable) + "\n", encoding="utf-8")
     command = _launchers.runtime_command(repo)
-    result = subprocess.run(command, cwd=tmp_path, capture_output=True, text=True, timeout=30, encoding="utf-8", check=False)
+    result = subprocess.run(
+        command,
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        encoding="utf-8",
+        check=False,
+    )
     assert result.returncode == 7, result.stderr
     assert json.loads(result.stdout)["value"] == "base-pth"
 
@@ -508,8 +718,18 @@ def test_pre_pm_base_dependencies_activate_only_at_boot(tmp_path, monkeypatch):
 def test_external_interpreter_keeps_its_owned_dependencies(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "home"))
     monkeypatch.setenv("CLAWK_RUNTIME_DIR", str(tmp_path / "empty-store"))
-    command = _launchers.runtime_command(ROOT, code="import ruamel.yaml; print('external-runtime-ready')")
-    result = subprocess.run(command, cwd=tmp_path, capture_output=True, text=True, timeout=30, encoding="utf-8", check=False)
+    command = _launchers.runtime_command(
+        ROOT, code="import ruamel.yaml; print('external-runtime-ready')"
+    )
+    result = subprocess.run(
+        command,
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        encoding="utf-8",
+        check=False,
+    )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "external-runtime-ready"
 
@@ -527,21 +747,39 @@ def test_service_survives_python_tool_replacement(tmp_path, monkeypatch):
         python = store / version / "bin" / "python3"
         python.parent.mkdir(parents=True)
         python.symlink_to(interpreter)
-        (store / "facts.json").write_text(json.dumps({"packages": {"python": {"entry": version}}}), encoding="utf-8")
+        (store / "facts.json").write_text(
+            json.dumps({"packages": {"python": {"entry": version}}}), encoding="utf-8"
+        )
         gateway._prepare_service_launcher()
         if version == "python-A":
             unit = gateway.generate_systemd_unit()
             assert str(store / version) not in unit
-            command = shlex.split(next(line.split("=", 1)[1] for line in unit.splitlines() if line.startswith("ExecStart=")))
+            command = shlex.split(
+                next(
+                    line.split("=", 1)[1]
+                    for line in unit.splitlines()
+                    if line.startswith("ExecStart=")
+                )
+            )
     shutil.rmtree(store / "python-A")
-    result = subprocess.run(command, cwd=tmp_path, capture_output=True, text=True, timeout=30, encoding="utf-8", check=False)
+    result = subprocess.run(
+        command,
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        encoding="utf-8",
+        check=False,
+    )
     assert result.returncode == 7, result.stderr
     assert json.loads(result.stdout)["value"] == "ready"
 
 
 @pytest.mark.platforms("posix")
 @pytest.mark.parametrize("create", [True, False])
-def test_sync_migrates_old_store_wrapper_before_python_collection(tmp_path, monkeypatch, create):
+def test_sync_migrates_old_store_wrapper_before_python_collection(
+    tmp_path, monkeypatch, create
+):
     import builtins
 
     from clawk_cli.venv_sync import publish_launchers
@@ -555,7 +793,9 @@ def test_sync_migrates_old_store_wrapper_before_python_collection(tmp_path, monk
         original_import = builtins.__import__
 
         def without_config(name, *args, **kwargs):
-            assert name != "clawk_cli.config", "bootstrap publication imported application config"
+            assert name != "clawk_cli.config", (
+                "bootstrap publication imported application config"
+            )
             return original_import(name, *args, **kwargs)
 
         monkeypatch.setattr(builtins, "__import__", without_config)
@@ -564,7 +804,10 @@ def test_sync_migrates_old_store_wrapper_before_python_collection(tmp_path, monk
         python = store / version / "bin/python3"
         python.parent.mkdir(parents=True)
         python.symlink_to(interpreter)
-        (store / "facts.json").write_text(json.dumps({"schema": 1, "packages": {"python": {"entry": version}}}), encoding="utf-8")
+        (store / "facts.json").write_text(
+            json.dumps({"schema": 1, "packages": {"python": {"entry": version}}}),
+            encoding="utf-8",
+        )
         if version == "python-A":
             _launchers.mint_launcher("clawk", repo, out, python, None)
         else:
@@ -577,11 +820,19 @@ def test_sync_migrates_old_store_wrapper_before_python_collection(tmp_path, monk
                 assert not (home / "config.yaml").exists()
                 assert not (home / "skills").exists()
     shutil.rmtree(store / "python-A")
-    result = subprocess.run([str(out / "clawk")], cwd=tmp_path,
-                            capture_output=True, text=True, timeout=30, encoding="utf-8", check=False)
+    result = subprocess.run(
+        [str(out / "clawk")],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        encoding="utf-8",
+        check=False,
+    )
     assert result.returncode == 7, result.stderr
     assert json.loads(result.stdout)["value"] == "ready"
     assert Path(json.loads(result.stdout)["exe"]) == store / "python-B/bin/python3"
+
 
 def _torn_by_a_killed_merge(tmp_path, monkeypatch):
     """A git install whose update was killed mid-merge while git rewrote ``clawk_constants.py``.
@@ -594,8 +845,13 @@ def _torn_by_a_killed_merge(tmp_path, monkeypatch):
         shutil.copy2(ROOT / relative, repo / relative)
 
     def git(*args):
-        return subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True,
-                              text=True, encoding="utf-8").stdout.strip()
+        return subprocess.run(
+            ["git", "-C", str(repo), *args],
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        ).stdout.strip()
 
     git("init", "-q", "-b", "main")
     git("config", "user.email", "t@example.invalid")
@@ -614,8 +870,11 @@ def _torn_by_a_killed_merge(tmp_path, monkeypatch):
     marker = _early_recovery.interrupted_pull_marker(repo)
     # The updater records the git it moved the tree with: a Windows install's only git is PM's
     # store copy, which the repair cannot look up through ``pm`` (it imports clawk_constants).
-    marker.write_text(f"pid=0\npre={pre}\ntarget={target}\nstash=\ngit={shutil.which('git')}\n",
-                      encoding="utf-8", newline="")
+    marker.write_text(
+        f"pid=0\npre={pre}\ntarget={target}\nstash=\ngit={shutil.which('git')}\n",
+        encoding="utf-8",
+        newline="",
+    )
     constants.unlink()
     (repo / ".git" / "index.lock").touch()
     select_generation(repo, "one", "repaired")
@@ -624,37 +883,68 @@ def _torn_by_a_killed_merge(tmp_path, monkeypatch):
 
 @pytest.mark.platforms("posix")
 @pytest.mark.parametrize("surface", ["launcher", "runtime-command"])
-def test_a_merge_killed_writing_clawk_constants_is_repaired_by_the_next_launch(tmp_path, monkeypatch, surface):
+def test_a_merge_killed_writing_clawk_constants_is_repaired_by_the_next_launch(
+    tmp_path, monkeypatch, surface
+):
     """C1 recovery reachability: the launcher reaches the repair before importing any other
     checkout module, so a torn ``clawk_constants.py`` is put back instead of killing every launch."""
-    repo, home, interpreter, pre, original, marker = _torn_by_a_killed_merge(tmp_path, monkeypatch)
+    repo, home, interpreter, pre, original, marker = _torn_by_a_killed_merge(
+        tmp_path, monkeypatch
+    )
     env = dict(os.environ)
     env.pop("CLAWK_HOME", None)  # the default-home pin itself needs clawk_constants
     env.pop("CLAWK_RUNTIME_DIR", None)
-    env.pop("PYTEST_CURRENT_TEST", None)  # the repair stands down in a checkout pytest itself runs from
+    env.pop(
+        "PYTEST_CURRENT_TEST", None
+    )  # the repair stands down in a checkout pytest itself runs from
     no_git = tmp_path / "path-without-git"
     no_git.mkdir()
-    env["PATH"] = str(no_git)  # as on that Windows install: no git on PATH outside the updater
+    env["PATH"] = str(
+        no_git
+    )  # as on that Windows install: no git on PATH outside the updater
     if surface == "launcher":
         out = tmp_path / "commands"
         out.mkdir()
-        command = [str(_launchers._mint_shell_launcher("clawk", out, interpreter,
-                                                       _launchers._launcher_script("clawk", repo, None)))]
+        command = [
+            str(
+                _launchers._mint_shell_launcher(
+                    "clawk",
+                    out,
+                    interpreter,
+                    _launchers._launcher_script("clawk", repo, None),
+                )
+            )
+        ]
     else:
         command = _launchers.runtime_command(repo, python=interpreter)
-    result = subprocess.run(command, cwd=tmp_path, env=env, capture_output=True,
-                            text=True, encoding="utf-8", errors="replace", timeout=60, check=False)
+    result = subprocess.run(
+        command,
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=60,
+        check=False,
+    )
     assert "No module named 'clawk_constants'" not in result.stderr, result.stderr
     assert result.returncode == 7, result.stdout + result.stderr
     receipt = json.loads(result.stdout.strip().splitlines()[-1])
     assert receipt["value"] == "repaired"
-    assert Path(receipt["home"]) == home, "the default home is still pinned, after the repair"
+    assert Path(receipt["home"]) == home, (
+        "the default home is still pinned, after the repair"
+    )
     assert (repo / "clawk_constants.py").read_bytes() == original
     assert not marker.exists() and not (repo / ".git" / "index.lock").exists()
-    head = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"], capture_output=True,
-                          text=True, encoding="utf-8", check=True).stdout.strip()
+    head = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=True,
+    ).stdout.strip()
     assert head == pre
-
 
 
 def test_update_import_probe_uses_selected_dependencies(tmp_path, monkeypatch):
@@ -667,10 +957,21 @@ def test_update_import_probe_uses_selected_dependencies(tmp_path, monkeypatch):
     (selected / "pyvenv.cfg").write_text("home = fixture\n", encoding="utf-8")
     (site / "selected_probe.py").write_text("VALUE = 'selected'\n", encoding="utf-8")
     (install_state_dir(repo) / "facts.json").write_text(
-        json.dumps({"packages": {"venv": {"environment": str(selected)}}}), encoding="utf-8")
-    (repo / "clawk_integrity_probe.py").write_text("import selected_probe\n", encoding="utf-8")
-    monkeypatch.setattr(update_cmd, "_UPDATE_CRITICAL_MODULES", ("clawk_integrity_probe",))
-    assert update_cmd_validation._critical_module_import_failures(repo, report_runtime_errors=True) == {}
+        json.dumps({"packages": {"venv": {"environment": str(selected)}}}),
+        encoding="utf-8",
+    )
+    (repo / "clawk_integrity_probe.py").write_text(
+        "import selected_probe\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(
+        update_cmd, "_UPDATE_CRITICAL_MODULES", ("clawk_integrity_probe",)
+    )
+    assert (
+        update_cmd_validation._critical_module_import_failures(
+            repo, report_runtime_errors=True
+        )
+        == {}
+    )
 
 
 @pytest.mark.platforms("posix")
@@ -686,14 +987,17 @@ def test_stage_launcher_ignores_an_inherited_runtime_directory(tmp_path, monkeyp
     tree_python.parent.mkdir(parents=True)
     tree_python.symlink_to(interpreter)
     (store / "facts.json").write_text(
-        json.dumps({"packages": {"python": {"entry": "python-A"}}}), encoding="utf-8")
+        json.dumps({"packages": {"python": {"entry": "python-A"}}}), encoding="utf-8"
+    )
     foreign_store = tmp_path / "foreign" / "tools"
     foreign_store.mkdir(parents=True)
     foreign_python = foreign_store / "python-foreign" / "bin" / "python3"
     foreign_python.parent.mkdir(parents=True)
     foreign_python.symlink_to(interpreter)
     (foreign_store / "facts.json").write_text(
-        json.dumps({"packages": {"python": {"entry": "python-foreign"}}}), encoding="utf-8")
+        json.dumps({"packages": {"python": {"entry": "python-foreign"}}}),
+        encoding="utf-8",
+    )
     monkeypatch.setenv("CLAWK_RUNTIME_DIR", str(foreign_store))
 
     # Publication callers create the bin dir before staging (see
@@ -709,7 +1013,9 @@ def test_stage_launcher_ignores_an_inherited_runtime_directory(tmp_path, monkeyp
 
 
 @pytest.mark.platforms("posix")
-def test_service_launcher_binds_the_tree_store_despite_inherited_runtime_override(tmp_path, monkeypatch):
+def test_service_launcher_binds_the_tree_store_despite_inherited_runtime_override(
+    tmp_path, monkeypatch
+):
     from clawk_cli import gateway
 
     repo, home, interpreter = fixture_tree(tmp_path, monkeypatch)
@@ -719,14 +1025,17 @@ def test_service_launcher_binds_the_tree_store_despite_inherited_runtime_overrid
     tree_python.parent.mkdir(parents=True)
     tree_python.symlink_to(interpreter)
     (store / "facts.json").write_text(
-        json.dumps({"packages": {"python": {"entry": "python-A"}}}), encoding="utf-8")
+        json.dumps({"packages": {"python": {"entry": "python-A"}}}), encoding="utf-8"
+    )
     foreign_store = tmp_path / "foreign" / "tools"
     foreign_store.mkdir(parents=True)
     foreign_python = foreign_store / "python-foreign" / "bin" / "python3"
     foreign_python.parent.mkdir(parents=True)
     foreign_python.symlink_to(interpreter)
     (foreign_store / "facts.json").write_text(
-        json.dumps({"packages": {"python": {"entry": "python-foreign"}}}), encoding="utf-8")
+        json.dumps({"packages": {"python": {"entry": "python-foreign"}}}),
+        encoding="utf-8",
+    )
     monkeypatch.setenv("CLAWK_RUNTIME_DIR", str(foreign_store))
 
     gateway._prepare_service_launcher()
@@ -747,7 +1056,9 @@ def test_runtime_override_still_selects_the_runtime_python(tmp_path, monkeypatch
     foreign_python.parent.mkdir(parents=True)
     foreign_python.symlink_to(interpreter)
     (foreign_store / "facts.json").write_text(
-        json.dumps({"packages": {"python": {"entry": "python-foreign"}}}), encoding="utf-8")
+        json.dumps({"packages": {"python": {"entry": "python-foreign"}}}),
+        encoding="utf-8",
+    )
     monkeypatch.setenv("CLAWK_RUNTIME_DIR", str(foreign_store))
 
     selected = _launchers.resolve_store_python(repo)
@@ -760,18 +1071,29 @@ def _record_store_python(store: Path, interpreter: Path) -> Path:
     python.parent.mkdir(parents=True)
     python.symlink_to(interpreter)
     (store / "facts.json").write_text(
-        json.dumps({"packages": {"python": {"entry": "python-fixture"}}}), encoding="utf-8")
+        json.dumps({"packages": {"python": {"entry": "python-fixture"}}}),
+        encoding="utf-8",
+    )
     return python
 
 
 @pytest.mark.platforms("posix")
-def test_install_launchers_never_bind_a_fixture_store_under_scratch(tmp_path, monkeypatch):
+def test_install_launchers_never_bind_a_fixture_store_under_scratch(
+    tmp_path, monkeypatch
+):
     # #131745's layout: a process aimed at an e2e fixture home under the
     # install's own cache/scratch republishes the real install's launchers.
     # Idle pruning later deletes that store, and the service exits 127.
     repo, home, interpreter = fixture_tree(tmp_path, monkeypatch)
     own = _launchers.resolve_store_python(repo)
-    fixture = home / "cache" / "scratch" / "clawk-e2e-media-overlap-run" / "clawk-home" / "tools"
+    fixture = (
+        home
+        / "cache"
+        / "scratch"
+        / "clawk-e2e-media-overlap-run"
+        / "clawk-home"
+        / "tools"
+    )
     _record_store_python(fixture, interpreter)
     monkeypatch.setenv("CLAWK_RUNTIME_DIR", str(fixture))
 
@@ -785,7 +1107,9 @@ def test_install_launchers_never_bind_a_fixture_store_under_scratch(tmp_path, mo
 
 
 @pytest.mark.platforms("posix")
-def test_publication_uses_the_runtime_store_when_the_tree_records_none(tmp_path, monkeypatch):
+def test_publication_uses_the_runtime_store_when_the_tree_records_none(
+    tmp_path, monkeypatch
+):
     # The desktop source-backend contract keeps its store beside CLAWK_HOME
     # and names it through CLAWK_RUNTIME_DIR. A tree with no store of its own
     # still publishes from that one.

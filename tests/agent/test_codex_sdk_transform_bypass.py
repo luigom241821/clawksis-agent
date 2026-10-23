@@ -40,8 +40,6 @@ def _wire_kwargs():
 
 
 class TestIsPlainJsonData:
-
-
     def test_rejects_non_string_dict_keys(self):
         assert not _is_plain_json_data({1: "a"})
 

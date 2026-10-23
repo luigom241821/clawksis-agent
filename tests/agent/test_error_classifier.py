@@ -20,8 +20,10 @@ from tests.clawk_cli.anon_portal import make_jwt
 
 # ── Helper: mock API errors ────────────────────────────────────────────
 
+
 class MockAPIError(Exception):
     """Simulates an OpenAI SDK APIStatusError."""
+
     def __init__(self, message, status_code=None, body=None, headers=None):
         super().__init__(message)
         self.status_code = status_code
@@ -52,8 +54,8 @@ class ServerDisconnectedError(MockTransportError):
 # ── Test: FailoverReason enum ──────────────────────────────────────────
 
 
-
 # ── Test: ClassifiedError ──────────────────────────────────────────────
+
 
 class TestClassifiedError:
     def test_is_auth_property(self):
@@ -67,14 +69,14 @@ class TestClassifiedError:
         assert e3.is_auth is False
 
 
-
 # ── Test: Status code extraction ───────────────────────────────────────
 
-class TestExtractStatusCode:
 
+class TestExtractStatusCode:
     def test_from_status_attr(self):
         class ErrWithStatus(Exception):
             status = 503
+
         assert _extract_status_code(ErrWithStatus()) == 503
 
     def test_from_cause_chain(self):
@@ -84,12 +86,10 @@ class TestExtractStatusCode:
         assert _extract_status_code(outer) == 401
 
 
-
-
 # ── Test: Error body extraction ────────────────────────────────────────
 
-class TestExtractErrorBody:
 
+class TestExtractErrorBody:
     def test_from_cause_chain_body_attr(self):
         inner = MockAPIError(
             "inner",
@@ -108,13 +108,11 @@ class TestExtractErrorBody:
 
 # ── Test: Error code extraction ────────────────────────────────────────
 
+
 class TestExtractErrorCode:
-
-
     def test_from_top_level_code(self):
         body = {"code": "model_not_found"}
         assert _extract_error_code(body) == "model_not_found"
-
 
     def test_empty_when_no_code(self):
         assert _extract_error_code({}) == ""
@@ -122,6 +120,7 @@ class TestExtractErrorCode:
 
 
 # ── Test: 402 disambiguation ───────────────────────────────────────────
+
 
 class TestClassify402:
     """The critical 402 billing vs rate_limit disambiguation."""
@@ -135,7 +134,6 @@ class TestClassify402:
         assert result.reason == FailoverReason.billing
         assert result.should_rotate_credential is True
 
-
     def test_quota_with_retry(self):
         """402 with 'quota' + 'retry' = rate limit."""
         result = _classify_402(
@@ -145,9 +143,8 @@ class TestClassify402:
         assert result.reason == FailoverReason.rate_limit
 
 
-
-
 # ── Test: Full classification pipeline ─────────────────────────────────
+
 
 class TestClassifyApiError:
     """End-to-end classification tests."""
@@ -173,16 +170,19 @@ class TestClassifyApiError:
     def test_403_upstream_unavailable_code_is_transient_not_auth(self):
         """A gateway 403 stamped ``code=upstream_unavailable`` is a transient upstream
         outage: retried with backoff, credential untouched (#75388)."""
-        body = {"error": {"message": "Upstream service temporarily unavailable. Please retry later.",
-                          "type": "upstream_unavailable", "code": "upstream_unavailable"}}
-        result = classify_api_error(MockAPIError("Forbidden", status_code=403, body=body), provider="custom")
+        body = {
+            "error": {
+                "message": "Upstream service temporarily unavailable. Please retry later.",
+                "type": "upstream_unavailable",
+                "code": "upstream_unavailable",
+            }
+        }
+        result = classify_api_error(
+            MockAPIError("Forbidden", status_code=403, body=body), provider="custom"
+        )
         assert result.reason == FailoverReason.overloaded
         assert result.retryable is True
         assert result.should_rotate_credential is False
-
-
-
-
 
     # ── Billing ──
 
@@ -191,9 +191,6 @@ class TestClassifyApiError:
         result = classify_api_error(e)
         assert result.reason == FailoverReason.billing
         assert result.retryable is False
-
-
-
 
     def test_404_free_tier_model_block_is_billing(self):
         e = MockAPIError(
@@ -245,7 +242,9 @@ class TestClassifyApiError:
                 ),
             },
         )
-        result = classify_api_error(e, provider="nous", model="meituan/longcat-2.0:free")
+        result = classify_api_error(
+            e, provider="nous", model="meituan/longcat-2.0:free"
+        )
         assert result.reason == FailoverReason.model_not_found
         assert result.retryable is False
         assert result.should_fallback is True
@@ -273,12 +272,15 @@ class TestClassifyApiError:
         assert result.reason == FailoverReason.rate_limit
         assert result.should_fallback is True
 
-    @pytest.mark.parametrize("spelling", [
-        "resource exhausted",
-        "RESOURCE_EXHAUSTED",
-        "ResourceExhausted",
-        "resource-exhausted",
-    ])
+    @pytest.mark.parametrize(
+        "spelling",
+        [
+            "resource exhausted",
+            "RESOURCE_EXHAUSTED",
+            "ResourceExhausted",
+            "resource-exhausted",
+        ],
+    )
     def test_resource_exhausted_separator_variants_without_status(self, spelling):
         result = classify_api_error(
             Exception(f"{spelling}: Worker local total request limit reached (32/32)"),
@@ -446,7 +448,9 @@ class TestClassifyApiError:
             "usage limit reached; 20 requests per minute",
         ],
     )
-    def test_429_usage_limit_with_extra_transient_phrases_stays_rate_limit(self, phrase):
+    def test_429_usage_limit_with_extra_transient_phrases_stays_rate_limit(
+        self, phrase
+    ):
         # Additional transient signals. (credit #74785)
         e = MockAPIError(phrase, status_code=429)
         result = classify_api_error(e, provider="anthropic", model="claude-opus-5")
@@ -486,7 +490,6 @@ class TestClassifyApiError:
         e = MockAPIError("Service Unavailable", status_code=503)
         result = classify_api_error(e)
         assert result.reason == FailoverReason.overloaded
-
 
     def test_408_request_timeout_is_retryable_timeout(self):
         """HTTP 408 Request Timeout is a transient timing failure the server
@@ -543,8 +546,12 @@ class TestClassifyApiError:
         e = MockAPIError(
             "server overload, please try again later",
             status_code=429,
-            body={"error": {"message": "server overload, please try again later",
-                            "type": "server_overload"}},
+            body={
+                "error": {
+                    "message": "server overload, please try again later",
+                    "type": "server_overload",
+                }
+            },
         )
         result = classify_api_error(e, provider="custom:novita")
         assert result.reason == FailoverReason.overloaded
@@ -555,9 +562,7 @@ class TestClassifyApiError:
     def test_429_normal_rate_limit_still_rotates(self):
         """Guard: a genuine 429 rate limit (no overload language) must still
         classify as rate_limit and rotate the credential. (#14038)"""
-        e = MockAPIError(
-            "Rate limit exceeded: too many requests", status_code=429
-        )
+        e = MockAPIError("Rate limit exceeded: too many requests", status_code=429)
         result = classify_api_error(e, provider="zai")
         assert result.reason == FailoverReason.rate_limit
         assert result.should_rotate_credential is True
@@ -569,8 +574,14 @@ class TestClassifyApiError:
         (upstream this respawned duplicate subagents; ported from
         code-yeongyu/oh-my-openagent#6677)."""
         e = MockAPIError(
-            "request failed", status_code=429,
-            body={"error": {"code": "terminal_quota_exhausted", "message": "request failed"}},
+            "request failed",
+            status_code=429,
+            body={
+                "error": {
+                    "code": "terminal_quota_exhausted",
+                    "message": "request failed",
+                }
+            },
         )
         result = classify_api_error(e)
         assert result.reason == FailoverReason.billing
@@ -591,9 +602,6 @@ class TestClassifyApiError:
     # request-validation failures with a 5xx status. These are
     # deterministic, so they must NOT be retried — otherwise the retry
     # loop hammers the identical bad request into a flood.
-
-
-
 
     def test_non_json_stream_validation_error_is_non_retryable(self):
         e = MockAPIError(
@@ -639,9 +647,6 @@ class TestClassifyApiError:
     # status instead of the standard 400/413. These must route into the
     # compression-and-retry path, not the blind server_error/overloaded retry
     # that exhausts and drops the turn.
-
-
-
 
     # ── Model not found ──
 
@@ -698,9 +703,6 @@ class TestClassifyApiError:
 
     # ── Provider policy-block (OpenRouter privacy/guardrail) ──
 
-
-
-
     # ── Provider content-policy block (per-prompt safety filter) ──
     #
     # Distinct from ``provider_policy_blocked`` above — these are upstream
@@ -738,9 +740,12 @@ class TestClassifyApiError:
                 "message": "Content Exists Risk",
                 "type": "AI_APICallError",
                 "param": {
-                    "error": "Content Exists Risk", "statusCode": 400,
-                    "name": "AI_APICallError", "message": "Content Exists Risk",
-                    "isRetryable": False, "type": "AI_APICallError",
+                    "error": "Content Exists Risk",
+                    "statusCode": 400,
+                    "name": "AI_APICallError",
+                    "message": "Content Exists Risk",
+                    "isRetryable": False,
+                    "type": "AI_APICallError",
                 },
             }
         }
@@ -757,11 +762,6 @@ class TestClassifyApiError:
         assert result.should_fallback is True
         assert result.should_compress is False
 
-
-
-
-
-
     # ── Payload too large ──
 
     def test_413_payload_too_large(self):
@@ -772,33 +772,57 @@ class TestClassifyApiError:
 
     # ── Context overflow ──
 
-
-
-
-
-
-
     # ── Local-inference memory ceiling (oMLX/MLX prefill guard, #52261) ──
 
-    @pytest.mark.parametrize("message, status_code, body", [
-        # 0.5.6 prefill guard: a memory peak in BYTES whose remediation tail says "Reduce context
-        # length" — the phrase that used to route it into the compress loop.
-        ("Prefill memory guard rejected request: Prefill would require ~13.87 GB peak, "
-         "dynamic ceiling is 13.50 GB. Reduce context length or lower memory_guard_tier.", 400, None),
-        # 0.5.7 rewording ("predicted peak would require"); cap names survive the verb change.
-        ("process memory limit exceeded: predicted peak would require ~78.57 GB, prefill "
-         "safety cap is 77.76 GB (90% of metal_cap ceiling 86.40 GB). Reduce context size.", 400, None),
-        # Mid-stream the guard exits as a generic 500 (streaming generator drops the code).
-        ("predicted peak would exceed prefill safety cap 77.8GB. Reduce context length.", 500, None),
-        # Status-less: "memory limit exceeded" contains "limit exceeded" and would otherwise read
-        # as billing in the usage-limit disambiguation — the memory rule runs in the message HEAD.
-        ("process memory limit exceeded: predicted peak would require ~78.57 GB. "
-         "Reduce context size.", None, None),
-        # Proxy flattened the wording; only the structured code survives (400 must read it, since
-        # _by_status runs before _by_error_code).
-        ("Request failed.", 400, {"error": {"message": "Request failed.", "code": "prefill_memory_exceeded"}}),
-    ])
-    def test_memory_ceiling_rejection_is_overloaded_not_overflow(self, message, status_code, body):
+    @pytest.mark.parametrize(
+        "message, status_code, body",
+        [
+            # 0.5.6 prefill guard: a memory peak in BYTES whose remediation tail says "Reduce context
+            # length" — the phrase that used to route it into the compress loop.
+            (
+                "Prefill memory guard rejected request: Prefill would require ~13.87 GB peak, "
+                "dynamic ceiling is 13.50 GB. Reduce context length or lower memory_guard_tier.",
+                400,
+                None,
+            ),
+            # 0.5.7 rewording ("predicted peak would require"); cap names survive the verb change.
+            (
+                "process memory limit exceeded: predicted peak would require ~78.57 GB, prefill "
+                "safety cap is 77.76 GB (90% of metal_cap ceiling 86.40 GB). Reduce context size.",
+                400,
+                None,
+            ),
+            # Mid-stream the guard exits as a generic 500 (streaming generator drops the code).
+            (
+                "predicted peak would exceed prefill safety cap 77.8GB. Reduce context length.",
+                500,
+                None,
+            ),
+            # Status-less: "memory limit exceeded" contains "limit exceeded" and would otherwise read
+            # as billing in the usage-limit disambiguation — the memory rule runs in the message HEAD.
+            (
+                "process memory limit exceeded: predicted peak would require ~78.57 GB. "
+                "Reduce context size.",
+                None,
+                None,
+            ),
+            # Proxy flattened the wording; only the structured code survives (400 must read it, since
+            # _by_status runs before _by_error_code).
+            (
+                "Request failed.",
+                400,
+                {
+                    "error": {
+                        "message": "Request failed.",
+                        "code": "prefill_memory_exceeded",
+                    }
+                },
+            ),
+        ],
+    )
+    def test_memory_ceiling_rejection_is_overloaded_not_overflow(
+        self, message, status_code, body
+    ):
         kwargs = {"status_code": status_code} if status_code is not None else {}
         if body is not None:
             kwargs["body"] = body
@@ -821,21 +845,14 @@ class TestClassifyApiError:
 
     # ── Server disconnect + large session ──
 
-
-
-
     # ── Provider-specific: Anthropic thinking signature ──
 
-
-
-
-
-
-
-
-
-    @pytest.mark.parametrize("error_code", ["Invalid_Encrypted_Content", "INVALID_ENCRYPTED_CONTENT"])
-    def test_invalid_encrypted_content_code_is_case_insensitive_for_400(self, error_code):
+    @pytest.mark.parametrize(
+        "error_code", ["Invalid_Encrypted_Content", "INVALID_ENCRYPTED_CONTENT"]
+    )
+    def test_invalid_encrypted_content_code_is_case_insensitive_for_400(
+        self, error_code
+    ):
         e = MockAPIError(
             "Error code: 400 - bad request",
             status_code=400,
@@ -853,69 +870,164 @@ class TestClassifyApiError:
             "[invalid_request_error] reasoning `encrypted_content` was not issued to this caller",
             status_code=400,
         )
-        result = classify_api_error(e, provider="opencode-zen", model="muse-spark-1.3-contributor-free")
+        result = classify_api_error(
+            e, provider="opencode-zen", model="muse-spark-1.3-contributor-free"
+        )
         assert result.reason == FailoverReason.invalid_encrypted_content
         assert result.retryable is True
         assert result.should_fallback is False
 
     # ── Codex masked encrypted-reasoning replay rejection (#92353) ──
 
-    _CODEX_MASKED = {"message": "Request blocked.", "type": "invalid_request_error", "param": None, "code": "invalid_prompt"}
+    _CODEX_MASKED = {
+        "message": "Request blocked.",
+        "type": "invalid_request_error",
+        "param": None,
+        "code": "invalid_prompt",
+    }
 
-    @pytest.mark.parametrize("error", [
-        MockAPIError("Error code: 400 - Request blocked.", status_code=400, body=_CODEX_MASKED),  # SDK unwraps body["error"]
-        MockAPIError("Request blocked.", status_code=None, body={"error": _CODEX_MASKED}),  # SSE ``error`` frame
-        RuntimeError("invalid_prompt: Request blocked."),  # ``response.failed`` terminal frame
-    ], ids=["http400", "sse-frame", "response-failed"])
+    @pytest.mark.parametrize(
+        "error",
+        [
+            MockAPIError(
+                "Error code: 400 - Request blocked.",
+                status_code=400,
+                body=_CODEX_MASKED,
+            ),  # SDK unwraps body["error"]
+            MockAPIError(
+                "Request blocked.", status_code=None, body={"error": _CODEX_MASKED}
+            ),  # SSE ``error`` frame
+            RuntimeError(
+                "invalid_prompt: Request blocked."
+            ),  # ``response.failed`` terminal frame
+        ],
+        ids=["http400", "sse-frame", "response-failed"],
+    )
     def test_codex_masked_replay_rejection_reaches_replay_strip(self, error):
         result = classify_api_error(error, provider="openai-codex", model="gpt-5.5")
         assert result.reason == FailoverReason.invalid_encrypted_content
-        assert result.retryable is False and result.should_fallback is True  # format_error's terminal hints kept
+        assert (
+            result.retryable is False and result.should_fallback is True
+        )  # format_error's terminal hints kept
 
-    @pytest.mark.parametrize(("provider", "body", "expected"), [
-        ("custom", _CODEX_MASKED, FailoverReason.format_error),  # same envelope, other provider
-        ("openai-codex", {**_CODEX_MASKED, "message": "Invalid prompt: too long."}, FailoverReason.format_error),
-        ("openai-codex", {**_CODEX_MASKED, "code": "server_error"}, FailoverReason.format_error),
-        ("openai-codex", {**_CODEX_MASKED, "message": "Request blocked. Your request was flagged by our safety system."},
-         FailoverReason.content_policy_blocked),  # #18028 refusal still wins
-    ], ids=["other-provider", "other-message", "other-code", "safety-refusal"])
+    @pytest.mark.parametrize(
+        ("provider", "body", "expected"),
+        [
+            (
+                "custom",
+                _CODEX_MASKED,
+                FailoverReason.format_error,
+            ),  # same envelope, other provider
+            (
+                "openai-codex",
+                {**_CODEX_MASKED, "message": "Invalid prompt: too long."},
+                FailoverReason.format_error,
+            ),
+            (
+                "openai-codex",
+                {**_CODEX_MASKED, "code": "server_error"},
+                FailoverReason.format_error,
+            ),
+            (
+                "openai-codex",
+                {
+                    **_CODEX_MASKED,
+                    "message": "Request blocked. Your request was flagged by our safety system.",
+                },
+                FailoverReason.content_policy_blocked,
+            ),  # #18028 refusal still wins
+        ],
+        ids=["other-provider", "other-message", "other-code", "safety-refusal"],
+    )
     def test_codex_masked_replay_rejection_stays_narrow(self, provider, body, expected):
-        e = MockAPIError("Error code: 400 - " + body["message"], status_code=400, body=body)
-        assert classify_api_error(e, provider=provider, model="gpt-5.5").reason == expected
+        e = MockAPIError(
+            "Error code: 400 - " + body["message"], status_code=400, body=body
+        )
+        assert (
+            classify_api_error(e, provider=provider, model="gpt-5.5").reason == expected
+        )
 
-    @pytest.mark.parametrize(("provider", "body", "expected"), [
-        ("openai-codex", {"detail": "Unsupported content type"}, FailoverReason.invalid_encrypted_content),
-        # Some SDK paths surface only the wrapped message text, no parsed body.
-        ("openai-codex", None, FailoverReason.invalid_encrypted_content),
-        ("openai", {"detail": "Unsupported content type"}, FailoverReason.format_error),  # elsewhere a genuine shape 400
-    ], ids=["codex-dict-body", "codex-message-only", "other-provider"])
-    def test_codex_unsupported_content_type_detail_reaches_replay_strip(self, provider, body, expected):
+    @pytest.mark.parametrize(
+        ("provider", "body", "expected"),
+        [
+            (
+                "openai-codex",
+                {"detail": "Unsupported content type"},
+                FailoverReason.invalid_encrypted_content,
+            ),
+            # Some SDK paths surface only the wrapped message text, no parsed body.
+            ("openai-codex", None, FailoverReason.invalid_encrypted_content),
+            (
+                "openai",
+                {"detail": "Unsupported content type"},
+                FailoverReason.format_error,
+            ),  # elsewhere a genuine shape 400
+        ],
+        ids=["codex-dict-body", "codex-message-only", "other-provider"],
+    )
+    def test_codex_unsupported_content_type_detail_reaches_replay_strip(
+        self, provider, body, expected
+    ):
         """#51512: the ChatGPT Codex backend rejects a replayed encrypted-reasoning item as a bare
         ``{"detail": "Unsupported content type"}`` 400; only the codex provider maps it to the replay strip."""
-        e = MockAPIError("Error code: 400 - {'detail': 'Unsupported content type'}", status_code=400, body=body)
-        assert classify_api_error(e, provider=provider, model="gpt-5.5").reason == expected
+        e = MockAPIError(
+            "Error code: 400 - {'detail': 'Unsupported content type'}",
+            status_code=400,
+            body=body,
+        )
+        assert (
+            classify_api_error(e, provider=provider, model="gpt-5.5").reason == expected
+        )
 
     def test_thinking_signature_invalid_uses_encrypted_replay_recovery(self):
         """#70595: the OpenAI code contains "thinking" + "signature", so it must beat the Anthropic
         thinking-block heuristic and reach the one-shot encrypted-replay strip (retry, no fallback)."""
-        body = {"error": {"code": "thinking_signature_invalid", "message": "The reasoning signature is no longer valid."}}
+        body = {
+            "error": {
+                "code": "thinking_signature_invalid",
+                "message": "The reasoning signature is no longer valid.",
+            }
+        }
         e = MockAPIError(f"Error code: 400 - {body}", status_code=400, body=body)
         result = classify_api_error(e, provider="openai", model="gpt-5.5")
         assert result.reason == FailoverReason.invalid_encrypted_content
         assert result.retryable is True and result.should_fallback is False
 
-    @pytest.mark.parametrize(("provider", "model", "message", "code"), [
-        ("azure-foundry", "gpt-6-astra", "Conflicting authenticated continuation identities.", "invalid_value"),
-        # Custom Responses endpoint wraps the replay rejection in a generic bad_request (#95834).
-        ("custom", "gpt-5.6", "The encrypted content could not be decrypted or parsed.", "bad_request"),
-    ], ids=["azure-continuation-identities", "custom-decrypted-or-parsed"])
-    def test_message_only_replay_rejection_is_invalid_encrypted_content(self, provider, model, message, code):
+    @pytest.mark.parametrize(
+        ("provider", "model", "message", "code"),
+        [
+            (
+                "azure-foundry",
+                "gpt-6-astra",
+                "Conflicting authenticated continuation identities.",
+                "invalid_value",
+            ),
+            # Custom Responses endpoint wraps the replay rejection in a generic bad_request (#95834).
+            (
+                "custom",
+                "gpt-5.6",
+                "The encrypted content could not be decrypted or parsed.",
+                "bad_request",
+            ),
+        ],
+        ids=["azure-continuation-identities", "custom-decrypted-or-parsed"],
+    )
+    def test_message_only_replay_rejection_is_invalid_encrypted_content(
+        self, provider, model, message, code
+    ):
         """Endpoints whose ``code`` is generic; the message wording alone must decide."""
         e = MockAPIError(
             f"Error code: 400 - {{'error': {{'message': '{message}', 'type': 'invalid_request_error', "
             f"'param': 'input', 'code': '{code}'}}",
             status_code=400,
-            body={"error": {"message": message, "type": "invalid_request_error", "param": "input", "code": code}},
+            body={
+                "error": {
+                    "message": message,
+                    "type": "invalid_request_error",
+                    "param": "input",
+                    "code": code,
+                }
+            },
         )
         result = classify_api_error(e, provider=provider, model=model)
         assert result.reason == FailoverReason.invalid_encrypted_content
@@ -947,15 +1059,21 @@ class TestClassifyApiError:
             "Error code: 400 - reasoning_effort 'none' unsupported; use minimal|low|medium|high|xhigh",
             "Unrecognized request argument supplied: reasoning_effort",
             "Error code: 400 - {'error': {'message': 'Invalid option: expected one of "
-            "\"low\"|\"medium\"|\"high\"|\"xhigh\"|\"max\"', 'type': 'invalid_request_error', "
+            '"low"|"medium"|"high"|"xhigh"|"max"\', \'type\': \'invalid_request_error\', '
             "'param': 'reasoning_effort'}}",
         ):
-            result = classify_api_error(MockAPIError(msg, status_code=400), provider="custom", model="m")
+            result = classify_api_error(
+                MockAPIError(msg, status_code=400), provider="custom", model="m"
+            )
             assert result.reason == FailoverReason.reasoning_mandatory, msg
             assert result.retryable is True and result.should_fallback is False
         gated = classify_api_error(
-            MockAPIError("The model kimi-k2-thinking is not supported when using this account", status_code=400),
-            provider="custom", model="kimi-k2-thinking",
+            MockAPIError(
+                "The model kimi-k2-thinking is not supported when using this account",
+                status_code=400,
+            ),
+            provider="custom",
+            model="kimi-k2-thinking",
         )
         assert gated.reason != FailoverReason.reasoning_mandatory
 
@@ -965,32 +1083,60 @@ class TestClassifyApiError:
         can match it; before, the empty message fell to the large-session overflow heuristic and the
         loop compressed a tiny conversation. Now it is a reasoning-field rejection with
         ``should_compress`` off on every session size; a genuine context-window 400 still compresses."""
-        body = {"error": {"param": "reasoning.effort", "error_code": "invalid_reasoning_effort", "retryable": False}}
+        body = {
+            "error": {
+                "param": "reasoning.effort",
+                "error_code": "invalid_reasoning_effort",
+                "retryable": False,
+            }
+        }
         for approx_tokens, num_messages in ((77, 3), (90000, 100)):
             result = classify_api_error(
                 MockAPIError(f"Error code: 400 - {body}", status_code=400, body=body),
-                provider="custom", model="m", approx_tokens=approx_tokens, context_length=200000,
+                provider="custom",
+                model="m",
+                approx_tokens=approx_tokens,
+                context_length=200000,
                 num_messages=num_messages,
             )
             assert result.reason == FailoverReason.reasoning_mandatory, approx_tokens
             assert result.should_compress is False
         overflow = classify_api_error(
-            MockAPIError("This model's maximum context length is 128000 tokens. Please reduce the length "
-                         "of the messages.", status_code=400),
-            provider="custom", model="m", approx_tokens=77, num_messages=3,
+            MockAPIError(
+                "This model's maximum context length is 128000 tokens. Please reduce the length "
+                "of the messages.",
+                status_code=400,
+            ),
+            provider="custom",
+            model="m",
+            approx_tokens=77,
+            num_messages=3,
         )
-        assert overflow.reason == FailoverReason.context_overflow and overflow.should_compress is True
+        assert (
+            overflow.reason == FailoverReason.context_overflow
+            and overflow.should_compress is True
+        )
 
     def test_openai_unsupported_none_effort_body_is_reasoning_mandatory(self):
         """OpenAI's real 400 for ``reasoning.effort: none`` on a model whose ladder has no ``none`` (o3/o4-mini,
         gpt-5/gpt-5-codex; ``none`` is gpt-5.1+): the SDK message carries the body — ``param: reasoning.effort``
         plus ``code: unsupported_value`` — and must take the drop-the-disable retry rung, not a format abort."""
-        body = {"error": {"message": "Unsupported value: 'none' is not supported with this model. Supported values "
-                                     "are: 'low', 'medium', and 'high'.",
-                          "type": "invalid_request_error", "param": "reasoning.effort", "code": "unsupported_value"}}
+        body = {
+            "error": {
+                "message": "Unsupported value: 'none' is not supported with this model. Supported values "
+                "are: 'low', 'medium', and 'high'.",
+                "type": "invalid_request_error",
+                "param": "reasoning.effort",
+                "code": "unsupported_value",
+            }
+        }
         msg = f"Error code: 400 - {body}"
         assert is_reasoning_field_rejection(msg)
-        result = classify_api_error(MockAPIError(msg, status_code=400, body=body), provider="openai-api", model="o4-mini")
+        result = classify_api_error(
+            MockAPIError(msg, status_code=400, body=body),
+            provider="openai-api",
+            model="o4-mini",
+        )
         assert result.reason == FailoverReason.reasoning_mandatory
         assert result.retryable is True and result.should_fallback is False
 
@@ -1020,16 +1166,23 @@ class TestClassifyApiError:
             provider = "custom"
             model = "gpt-5.5"
             base_url = "http://relay.example/v1"
-            tools = [{
-                "type": "function",
-                "function": {
-                    "name": "send",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {"email": {"type": "string", "pattern": r"^(?!no-reply).+@.+$"}},
+            tools = [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "send",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "email": {
+                                    "type": "string",
+                                    "pattern": r"^(?!no-reply).+@.+$",
+                                }
+                            },
+                        },
                     },
-                },
-            }]
+                }
+            ]
 
             def _recover_with_credential_pool(self, **kwargs):
                 return False, False
@@ -1045,14 +1198,26 @@ class TestClassifyApiError:
         assert classified.reason == FailoverReason.llama_cpp_grammar_pattern
         agent = _Agent()
         retry_now, _ = recover_after_classification(
-            agent, e, classified, TurnRetryState(),
-            status_code=400, error_context=None, messages=[], api_messages=[],
+            agent,
+            e,
+            classified,
+            TurnRetryState(),
+            status_code=400,
+            error_context=None,
+            messages=[],
+            api_messages=[],
         )
         assert retry_now is True
-        assert "pattern" not in agent.tools[0]["function"]["parameters"]["properties"]["email"]
+        assert (
+            "pattern"
+            not in agent.tools[0]["function"]["parameters"]["properties"]["email"]
+        )
         # A generic schema 400 without the lookaround sentence stays a plain client error.
         other = classify_api_error(
-            MockAPIError("Invalid JSON schema: regex syntax error in pattern", status_code=400), provider="custom"
+            MockAPIError(
+                "Invalid JSON schema: regex syntax error in pattern", status_code=400
+            ),
+            provider="custom",
         )
         assert other.reason != FailoverReason.llama_cpp_grammar_pattern
 
@@ -1106,11 +1271,7 @@ class TestClassifyApiError:
         assert result.reason == FailoverReason.long_context_tier
         assert result.should_compress is True
 
-
     # ── Provider-specific: Anthropic OAuth 1M-context beta forbidden ──
-
-
-
 
     # ── Transport errors ──
 
@@ -1135,20 +1296,9 @@ class TestClassifyApiError:
         result = classify_api_error(e)
         assert result.reason == FailoverReason.timeout
 
-
-
-
     # ── Error code classification ──
 
-
-
-
-
     # ── Message-only patterns (no status code) ──
-
-
-
-
 
     def test_message_account_id_token_extraction_failure_is_auth(self):
         """Codex 'Failed to extract accountId from token' without a status is an
@@ -1160,27 +1310,11 @@ class TestClassifyApiError:
         assert result.should_rotate_credential is True
         assert result.should_fallback is True
 
-
     # ── Message-only usage limit disambiguation (no status code) ──
-
-
-
-
 
     # ── Unknown / fallback ──
 
-
     # ── Format error ──
-
-
-
-
-
-
-
-
-
-
 
     def test_400_litellm_invalid_request_body_shape(self, caplog):
         """litellm/Bedrock proxy shape (errorMessage/errorCode) → format_error.
@@ -1195,9 +1329,12 @@ class TestClassifyApiError:
         observable in the field.
         """
         import logging
-        proxy_msg = ("The provided request body is invalid: claude "
-                     "messages.208: all messages must have non-empty content "
-                     "except for the optional final assistant message")
+
+        proxy_msg = (
+            "The provided request body is invalid: claude "
+            "messages.208: all messages must have non-empty content "
+            "except for the optional final assistant message"
+        )
         e = MockAPIError(
             proxy_msg,
             status_code=400,
@@ -1210,7 +1347,10 @@ class TestClassifyApiError:
         )
         with caplog.at_level(logging.WARNING, logger="agent.error_classifier"):
             result = classify_api_error(
-                e, approx_tokens=66000, context_length=200000, num_messages=219,
+                e,
+                approx_tokens=66000,
+                context_length=200000,
+                num_messages=219,
             )
         assert result.reason == FailoverReason.format_error
         assert result.retryable is False
@@ -1223,8 +1363,13 @@ class TestClassifyApiError:
         ``str(error)`` is the SDK's ``Error code: 400 - {...}`` form, exactly as on the wire.
         Salvaged from #100783 (@i-Hun)."""
         detail = "The 'gpt-5.5-codex' model is not supported when using Codex with a ChatGPT account."
-        large = dict(provider="openai-codex", model="gpt-5.5-codex",
-                     approx_tokens=109_962, context_length=272_000, num_messages=223)
+        large = dict(
+            provider="openai-codex",
+            model="gpt-5.5-codex",
+            approx_tokens=109_962,
+            context_length=272_000,
+            num_messages=223,
+        )
         for body in ({"detail": detail}, {"detail": {"message": detail}}):
             e = MockAPIError(f"Error code: 400 - {body!r}", status_code=400, body=body)
             result = classify_api_error(e, **large)  # type: ignore[arg-type]
@@ -1234,16 +1379,18 @@ class TestClassifyApiError:
             assert result.message == detail
         # Control: the genuinely bare body the heuristic exists for still compresses.
         bare = classify_api_error(
-            MockAPIError("Error code: 400 - {'error': {'message': 'Error'}}", status_code=400,
-                         body={"error": {"message": "Error"}}), **large)  # type: ignore[arg-type]
+            MockAPIError(
+                "Error code: 400 - {'error': {'message': 'Error'}}",
+                status_code=400,
+                body={"error": {"message": "Error"}},
+            ),
+            **large,
+        )  # type: ignore[arg-type]
         assert bare.reason is FailoverReason.context_overflow
-
 
     # ── Peer closed + large session ──
 
-
     # ── Chinese error messages ──
-
 
     # ── Z.AI / Zhipu GLM error messages ──
 
@@ -1261,13 +1408,7 @@ class TestClassifyApiError:
 
     # ── vLLM / local inference server error messages ──
 
-
-
-
-
-
     # ── Result metadata ──
-
 
     def test_message_extracted(self):
         e = MockAPIError(
@@ -1281,9 +1422,9 @@ class TestClassifyApiError:
 
 # ── Test: Adversarial / edge cases (from live testing) ─────────────────
 
+
 class TestAdversarialEdgeCases:
     """Edge cases discovered during live testing with real SDK objects."""
-
 
     def test_500_with_none_body(self):
         e = MockAPIError("fail", status_code=500, body=None)
@@ -1292,13 +1433,13 @@ class TestAdversarialEdgeCases:
 
     def test_non_dict_body(self):
         """Some providers return strings instead of JSON."""
+
         class StringBodyError(Exception):
             status_code = 400
             body = "just a string"
+
         result = classify_api_error(StringBodyError("bad"))
         assert result.reason == FailoverReason.format_error
-
-
 
     def test_three_level_cause_chain(self):
         inner = MockAPIError("inner", status_code=429)
@@ -1320,7 +1461,6 @@ class TestAdversarialEdgeCases:
         result = classify_api_error(e, provider="openrouter")
         assert result.reason == FailoverReason.rate_limit
 
-
     def test_400_anthropic_extra_usage_exhausted(self):
         """Anthropic returns 400 with 'out of extra usage' when the user's
         extra-usage allowance is depleted. Must classify as billing so the
@@ -1335,10 +1475,12 @@ class TestAdversarialEdgeCases:
         e = MockAPIError(
             "You're out of extra usage. Add more at claude.ai/settings/usage and keep going.",
             status_code=400,
-            body={"error": {
-                "type": "invalid_request_error",
-                "message": "You're out of extra usage. Add more at claude.ai/settings/usage and keep going.",
-            }},
+            body={
+                "error": {
+                    "type": "invalid_request_error",
+                    "message": "You're out of extra usage. Add more at claude.ai/settings/usage and keep going.",
+                }
+            },
         )
         result = classify_api_error(e, provider="anthropic")
         assert result.reason == FailoverReason.billing
@@ -1354,10 +1496,12 @@ class TestAdversarialEdgeCases:
         e = MockAPIError(
             "Your credit balance is too low to access the Anthropic API.",
             status_code=400,
-            body={"error": {
-                "type": "invalid_request_error",
-                "message": "Your credit balance is too low to access the Anthropic API.",
-            }},
+            body={
+                "error": {
+                    "type": "invalid_request_error",
+                    "message": "Your credit balance is too low to access the Anthropic API.",
+                }
+            },
         )
         result = classify_api_error(e, provider="anthropic")
         assert result.reason == FailoverReason.billing
@@ -1375,29 +1519,30 @@ class TestAdversarialEdgeCases:
 
     def test_200_with_error_body(self):
         """200 status with error in body — should be unknown, not crash."""
+
         class WeirdSuccess(Exception):
             status_code = 200
             body = {"error": {"message": "loading"}}
+
         result = classify_api_error(WeirdSuccess("model loading"))
         assert result.reason == FailoverReason.unknown
-
 
     def test_connection_refused_error(self):
         e = ConnectionRefusedError("Connection refused: localhost:11434")
         result = classify_api_error(e, provider="ollama")
         assert result.reason == FailoverReason.timeout
 
-
     def test_disconnect_pattern_ordering(self):
         """Disconnect + large session must beat generic transport catch."""
+
         class FakeRemoteProtocol(Exception):
             pass
+
         # Type name isn't in _TRANSPORT_ERROR_TYPES but message has disconnect pattern
         e = Exception("peer closed connection without sending complete message")
         result = classify_api_error(e, approx_tokens=150000, context_length=200000)
         assert result.reason == FailoverReason.context_overflow
         assert result.should_compress is True
-
 
     def test_deepseek_402_chinese(self):
         """Chinese billing message should still match billing patterns."""
@@ -1406,24 +1551,13 @@ class TestAdversarialEdgeCases:
         result = classify_api_error(e, provider="deepseek")
         assert result.reason == FailoverReason.billing
 
-
-
-
-
-
-
     # ── Regression: dict-typed message field (Issue #11233) ──
-
-
-
 
     # Broader non-string type guards — defense against other provider quirks.
 
 
-
-
-
 # ── Test: SSL/TLS transient errors ─────────────────────────────────────
+
 
 class TestSSLTransientPatterns:
     """SSL/TLS alerts mid-stream should retry as timeout, not unknown, and
@@ -1443,11 +1577,6 @@ class TestSSLTransientPatterns:
         assert result.retryable is True
         assert result.should_compress is False
 
-
-
-
-
-
     def test_plain_disconnect_on_large_session_still_compresses(self):
         """Regression guard: the context-overflow-via-disconnect path
         (non-SSL disconnects on large sessions) must still trigger
@@ -1464,8 +1593,8 @@ class TestSSLTransientPatterns:
         assert result.should_compress is True
 
 
-
 # ── Test: SSL certificate verification failures (fail fast) ────────────
+
 
 class TestSSLCertVerificationFailFast:
     """Certificate verification failures are deterministic for the host —
@@ -1479,6 +1608,7 @@ class TestSSLCertVerificationFailFast:
 
     def test_python_cert_verify_failed_is_non_retryable(self):
         import ssl
+
         e = ssl.SSLCertVerificationError(
             1,
             "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: "
@@ -1488,10 +1618,6 @@ class TestSSLCertVerificationFailFast:
         assert result.reason == FailoverReason.ssl_cert_verification
         assert result.retryable is False
         assert result.should_compress is False
-
-
-
-
 
     def test_transient_ssl_alert_still_retries(self):
         """Regression guard: genuine transient alerts keep retrying."""
@@ -1503,18 +1629,24 @@ class TestSSLCertVerificationFailFast:
 
 # ── Test: RateLimitError without status_code (Copilot/GitHub Models) ──────────
 
+
 class TestProviderCodeOnlyErrors:
     """Bare ``{"error": {"code": …}}`` bodies with no HTTP status map to the
     provider's structured reason instead of ``unknown`` (#70414)."""
 
-    @pytest.mark.parametrize("provider, code, reason", [
-        ("gemini", "UNAVAILABLE", FailoverReason.overloaded),
-        ("google", "DEADLINE_EXCEEDED", FailoverReason.timeout),
-        ("vertex", "INTERNAL", FailoverReason.server_error),
-        ("anthropic", "API_ERROR", FailoverReason.server_error),
-        ("openai-codex", "SERVER_ERROR", FailoverReason.server_error),
-    ])
-    def test_provider_native_code_maps_to_structured_reason(self, provider, code, reason):
+    @pytest.mark.parametrize(
+        "provider, code, reason",
+        [
+            ("gemini", "UNAVAILABLE", FailoverReason.overloaded),
+            ("google", "DEADLINE_EXCEEDED", FailoverReason.timeout),
+            ("vertex", "INTERNAL", FailoverReason.server_error),
+            ("anthropic", "API_ERROR", FailoverReason.server_error),
+            ("openai-codex", "SERVER_ERROR", FailoverReason.server_error),
+        ],
+    )
+    def test_provider_native_code_maps_to_structured_reason(
+        self, provider, code, reason
+    ):
         e = MockAPIError(code, body={"error": {"code": code}})
         result = classify_api_error(e, provider=provider)
         assert result.reason == reason
@@ -1528,9 +1660,17 @@ class TestProviderCodeOnlyErrors:
     def test_gemini_wire_body_numeric_code_falls_back_to_status(self):
         """Gemini's real body carries the HTTP status in ``error.code`` and the
         symbolic code in ``error.status``; the numeric code must not shadow it."""
-        body = {"error": {"code": 503, "status": "UNAVAILABLE", "message": "Service unavailable."}}
+        body = {
+            "error": {
+                "code": 503,
+                "status": "UNAVAILABLE",
+                "message": "Service unavailable.",
+            }
+        }
         e = MockAPIError("Service unavailable.", body=body)
-        assert classify_api_error(e, provider="gemini").reason == FailoverReason.overloaded
+        assert (
+            classify_api_error(e, provider="gemini").reason == FailoverReason.overloaded
+        )
 
     def test_anthropic_rate_limit_error_code_rotates_credential(self):
         e = MockAPIError("rate limited", body={"error": {"code": "rate_limit_error"}})
@@ -1573,8 +1713,8 @@ class TestRateLimitErrorWithoutStatusCode:
         assert result.reason != FailoverReason.rate_limit
 
 
-
 # ── Test: multimodal_tool_content_unsupported pattern ───────────────────
+
 
 class TestMultimodalToolContentUnsupported:
     """Issue #27344 — providers that reject list-type tool message content
@@ -1592,14 +1732,12 @@ class TestMultimodalToolContentUnsupported:
         assert result.reason == FailoverReason.multimodal_tool_content_unsupported
         assert result.retryable is True
 
-
-
-
-
     def test_unrelated_400_is_not_misclassified(self):
         """Make sure the patterns don't false-positive on normal 400s."""
         e = MockAPIError("bad request: missing field 'model'", status_code=400)
-        result = classify_api_error(e, provider="openrouter", model="anthropic/claude-sonnet-4")
+        result = classify_api_error(
+            e, provider="openrouter", model="anthropic/claude-sonnet-4"
+        )
         assert result.reason != FailoverReason.multimodal_tool_content_unsupported
 
 
@@ -1628,12 +1766,13 @@ class TestOpenRouterUpstreamRateLimit:
                 }
             },
         )
-        result = classify_api_error(e, provider="openrouter", model="deepseek/deepseek-v4-flash")
+        result = classify_api_error(
+            e, provider="openrouter", model="deepseek/deepseek-v4-flash"
+        )
         assert result.reason == FailoverReason.upstream_rate_limit
         assert result.should_rotate_credential is False
         assert result.should_fallback is True
         assert result.error_context.get("upstream_provider") == "DeepSeek"
-
 
     def test_account_level_429_still_rotates_credential(self):
         """A real account-level 429 (no upstream wrapper) → rate_limit, rotates."""
@@ -1647,7 +1786,9 @@ class TestOpenRouterUpstreamRateLimit:
                 }
             },
         )
-        result = classify_api_error(e, provider="openrouter", model="deepseek/deepseek-v4-flash")
+        result = classify_api_error(
+            e, provider="openrouter", model="deepseek/deepseek-v4-flash"
+        )
         assert result.reason == FailoverReason.rate_limit
         assert result.should_rotate_credential is True
 
@@ -1670,7 +1811,9 @@ class TestCommandCodeUpstreamUnavailable:
             status_code=status_code,
         )
 
-        result = classify_api_error(e, provider=provider, model="deepseek/deepseek-v4-flash")
+        result = classify_api_error(
+            e, provider=provider, model="deepseek/deepseek-v4-flash"
+        )
 
         assert result.reason == FailoverReason.overloaded
         assert result.should_rotate_credential is False
@@ -1693,10 +1836,8 @@ class TestCommandCodeUpstreamUnavailable:
         assert result.should_rotate_credential is True
 
 
-
-
-
 # ── HTTP 408 request timeout ────────────────────────────────────────────
+
 
 class Test408RequestTimeout:
     """HTTP 408 must never fall through to the non-retryable 'other 4xx'
@@ -1724,17 +1865,18 @@ class Test408RequestTimeout:
             "request body. Try again, or use a smaller request size.', "
             "'code': 'user_request_timeout'}}",
             status_code=408,
-            body={"error": {"message": "Timed out reading request body. "
-                            "Try again, or use a smaller request size.",
-                            "code": "user_request_timeout"}},
+            body={
+                "error": {
+                    "message": "Timed out reading request body. "
+                    "Try again, or use a smaller request size.",
+                    "code": "user_request_timeout",
+                }
+            },
         )
         result = classify_api_error(e, provider="copilot", model="claude-opus-4.8")
         assert result.reason == FailoverReason.timeout
         assert result.retryable is True
         assert result.should_compress is False
-
-
-
 
     def test_stale_breaker_runtime_error_triggers_fallback_not_retry(self):
         # The cross-turn stale-call circuit breaker (_check_stale_giveup in
@@ -1751,8 +1893,12 @@ class Test408RequestTimeout:
             "session, then retry."
         )
         result = classify_api_error(
-            e, provider="openrouter", model="anthropic/claude-fable-5",
-            approx_tokens=126327, context_length=200000, num_messages=274,
+            e,
+            provider="openrouter",
+            model="anthropic/claude-fable-5",
+            approx_tokens=126327,
+            context_length=200000,
+            num_messages=274,
         )
         assert result.reason == FailoverReason.timeout
         assert result.retryable is False
@@ -1766,24 +1912,28 @@ class Test408RequestTimeout:
 # re-raising SDKs) but whose MESSAGE carries a connection-establishment or DNS
 # failure must classify as retryable transport, not FailoverReason.unknown.
 
+
 class TestConnectionMessagePatterns:
     """Generic-typed connect/DNS failures route to the transport bucket."""
 
-    @pytest.mark.parametrize("message", [
-        "connect ECONNREFUSED 127.0.0.1:11434",
-        "Connection refused by proxy",
-        "getaddrinfo failed",
-        "getaddrinfo ENOTFOUND api.example.com",
-        "[Errno -3] Temporary failure in name resolution",
-        "[Errno 8] nodename nor servname provided, or not known",
-        "getaddrinfo EAI_AGAIN openrouter.ai",
-        "Name or service not known",
-        "No route to host",
-        "[Errno 101] Network is unreachable",
-        "fetch failed",
-        "TypeError: Failed to fetch",
-        "upstream connect error or disconnect/reset before headers",
-    ])
+    @pytest.mark.parametrize(
+        "message",
+        [
+            "connect ECONNREFUSED 127.0.0.1:11434",
+            "Connection refused by proxy",
+            "getaddrinfo failed",
+            "getaddrinfo ENOTFOUND api.example.com",
+            "[Errno -3] Temporary failure in name resolution",
+            "[Errno 8] nodename nor servname provided, or not known",
+            "getaddrinfo EAI_AGAIN openrouter.ai",
+            "Name or service not known",
+            "No route to host",
+            "[Errno 101] Network is unreachable",
+            "fetch failed",
+            "TypeError: Failed to fetch",
+            "upstream connect error or disconnect/reset before headers",
+        ],
+    )
     def test_generic_exception_with_connect_failure_message_is_timeout(self, message):
         # RuntimeError — NOT in _TRANSPORT_ERROR_TYPES, not a ConnectionError
         # subclass, no status code. Without message matching this falls to
@@ -1799,7 +1949,9 @@ class TestConnectionMessagePatterns:
         # heuristic must not apply to connect-phase failures).
         result = classify_api_error(
             RuntimeError("connect ECONNREFUSED 10.0.0.5:443"),
-            approx_tokens=180000, context_length=200000, num_messages=400,
+            approx_tokens=180000,
+            context_length=200000,
+            num_messages=400,
         )
         assert result.reason == FailoverReason.timeout
         assert result.should_compress is False
@@ -1810,7 +1962,9 @@ class TestConnectionMessagePatterns:
         # routes large sessions to context-overflow compression.
         result = classify_api_error(
             RuntimeError("Connection reset by peer"),
-            approx_tokens=180000, context_length=200000, num_messages=400,
+            approx_tokens=180000,
+            context_length=200000,
+            num_messages=400,
         )
         assert result.reason == FailoverReason.context_overflow
         assert result.should_compress is True
@@ -1824,6 +1978,7 @@ class TestConnectionMessagePatterns:
 # ── Test: throttle vs overflow disambiguation + new overflow shapes ─────
 # Port of anomalyco/opencode#37848 (expand context overflow patterns +
 # rate-limit exclusion guard).
+
 
 class TestThrottleVsOverflowDisambiguation:
     """Throttle messages that mention tokens must NOT route to compression."""
@@ -1931,7 +2086,9 @@ class TestServerInjectedParameterRejection:
             body={"error": dict(self.RETENTION_BODY)},
         )
         result = classify_api_error(
-            e, provider="openai-codex", model="gpt-5.6-sol",
+            e,
+            provider="openai-codex",
+            model="gpt-5.6-sol",
         )
         assert result.reason == FailoverReason.server_error
         assert result.retryable is True
@@ -1944,7 +2101,9 @@ class TestServerInjectedParameterRejection:
             body={"detail": "Unsupported parameter: prompt_cache_retention"},
         )
         result = classify_api_error(
-            e, provider="openai-codex", model="gpt-5.6-sol",
+            e,
+            provider="openai-codex",
+            model="gpt-5.6-sol",
         )
         assert result.reason == FailoverReason.server_error
         assert result.retryable is True
@@ -1982,7 +2141,9 @@ class TestServerInjectedParameterRejection:
             },
         )
         result = classify_api_error(
-            e, provider="openai-codex", model="gpt-5.6-sol",
+            e,
+            provider="openai-codex",
+            model="gpt-5.6-sol",
         )
         assert result.reason == FailoverReason.format_error
         assert result.retryable is False
@@ -1997,7 +2158,9 @@ class TestServerInjectedParameterRejection:
             body=dict(self.RETENTION_BODY),
         )
         result = classify_api_error(
-            e, provider="meta-ai", model="muse-spark-1.2",
+            e,
+            provider="meta-ai",
+            model="muse-spark-1.2",
         )
         assert result.reason == FailoverReason.format_error
         assert result.retryable is False
@@ -2013,7 +2176,9 @@ class TestServerInjectedParameterRejection:
             body={"error": dict(self.RETENTION_BODY)},
         )
         result = classify_api_error(
-            e, provider="openai-codex", model="gpt-5.6-sol",
+            e,
+            provider="openai-codex",
+            model="gpt-5.6-sol",
         )
         assert result.reason == FailoverReason.server_error
         assert result.retryable is True
@@ -2025,17 +2190,20 @@ class TestServerInjectedParameterRejection:
         e = MockAPIError(
             "Unknown parameter: 'frequency_penalty'",
             status_code=status_code,
-            body={"error": {"message": "Unknown parameter: 'frequency_penalty'",
-                            "code": "unknown_parameter"}},
+            body={
+                "error": {
+                    "message": "Unknown parameter: 'frequency_penalty'",
+                    "code": "unknown_parameter",
+                }
+            },
         )
         result = classify_api_error(e, provider="custom", model="m")
         assert result.reason == FailoverReason.format_error
         assert result.retryable is False
 
 
-
-
 # ── Test: Nous welcome tier (free tier) refusals ───────────────────────
+
 
 class TestNousWelcomeTier:
     """The Nous gateway's welcome-tier contract: a structured 429 body carries ``reason`` /
@@ -2044,13 +2212,29 @@ class TestNousWelcomeTier:
 
     @staticmethod
     def _refusal(reason, retry_after=0, **extra):
-        body = {"status": 429, "message": "refused", "reason": reason, "retry_after": retry_after, **extra}
-        return MockAPIError(f"Error code: 429 - {body}", status_code=429, body=body,
-                            headers={"retry-after": str(retry_after)})
+        body = {
+            "status": 429,
+            "message": "refused",
+            "reason": reason,
+            "retry_after": retry_after,
+            **extra,
+        }
+        return MockAPIError(
+            f"Error code: 429 - {body}",
+            status_code=429,
+            body=body,
+            headers={"retry-after": str(retry_after)},
+        )
 
     def test_model_not_free_is_a_non_retryable_gate_with_fallback(self):
-        err = self._refusal("model_not_free", alternates=["nous/welcome"], upgrade_url="https://portal.example/upgrade")
-        result = classify_api_error(err, provider="nous", api_key=make_jwt(), model="gpt-5")
+        err = self._refusal(
+            "model_not_free",
+            alternates=["nous/welcome"],
+            upgrade_url="https://portal.example/upgrade",
+        )
+        result = classify_api_error(
+            err, provider="nous", api_key=make_jwt(), model="gpt-5"
+        )
         assert result.reason == FailoverReason.model_not_found
         assert result.retryable is False
         assert result.should_fallback is True
@@ -2061,13 +2245,22 @@ class TestNousWelcomeTier:
         assert refusal["upgrade_url"] == "https://portal.example/upgrade"
 
     def test_feature_not_free_is_the_same_gate(self):
-        result = classify_api_error(self._refusal("feature_not_free"), provider="nous", api_key=make_jwt())
+        result = classify_api_error(
+            self._refusal("feature_not_free"), provider="nous", api_key=make_jwt()
+        )
         assert result.reason == FailoverReason.model_not_found
         assert result.retryable is False
 
-    @pytest.mark.parametrize("reason", ["at_capacity", "admission_closed", "rate_limited"])
+    @pytest.mark.parametrize(
+        "reason", ["at_capacity", "admission_closed", "rate_limited"]
+    )
     def test_capacity_refusals_are_rate_limits_that_honour_retry_after(self, reason):
-        result = classify_api_error(self._refusal(reason, retry_after=30), provider="nous", api_key=make_jwt(), model="nous/welcome")
+        result = classify_api_error(
+            self._refusal(reason, retry_after=30),
+            provider="nous",
+            api_key=make_jwt(),
+            model="nous/welcome",
+        )
         assert result.reason == FailoverReason.rate_limit
         assert result.retryable is True
         assert result.should_fallback is True
@@ -2076,35 +2269,58 @@ class TestNousWelcomeTier:
         assert ctx["reset_at"] > 0
 
     def test_retry_after_zero_carries_no_reset(self):
-        result = classify_api_error(self._refusal("at_capacity", retry_after=0), provider="nous", api_key=make_jwt())
+        result = classify_api_error(
+            self._refusal("at_capacity", retry_after=0),
+            provider="nous",
+            api_key=make_jwt(),
+        )
         assert "reset_at" not in result.error_context
 
     def test_anonymous_jwt_on_the_paid_host_is_deterministic(self):
-        body = {"status": 400, "message": "Anonymous accounts must use https://welcome-api.nousresearch.com for inference."}
+        body = {
+            "status": 400,
+            "message": "Anonymous accounts must use https://welcome-api.nousresearch.com for inference.",
+        }
         err = MockAPIError(f"Error code: 400 - {body}", status_code=400, body=body)
-        result = classify_api_error(err, provider="nous", api_key=make_jwt(), model="nous/welcome")
+        result = classify_api_error(
+            err, provider="nous", api_key=make_jwt(), model="nous/welcome"
+        )
         assert result.reason == FailoverReason.format_error
         assert result.retryable is False and result.should_fallback is True
         assert result.error_context["welcome_route"] == "anon_on_paid_host"
 
     def test_named_caller_on_the_welcome_host_is_deterministic(self):
-        body = {"status": 400, "message": "This endpoint serves anonymous Clawksis accounts only. Use https://inference-api.nousresearch.com with your API key or signed-in account."}
+        body = {
+            "status": 400,
+            "message": "This endpoint serves anonymous Clawksis accounts only. Use https://inference-api.nousresearch.com with your API key or signed-in account.",
+        }
         err = MockAPIError(f"Error code: 400 - {body}", status_code=400, body=body)
-        result = classify_api_error(err, provider="nous", api_key=make_jwt(account_tier="free"))
+        result = classify_api_error(
+            err, provider="nous", api_key=make_jwt(account_tier="free")
+        )
         assert result.error_context["welcome_route"] == "named_on_welcome_host"
         assert result.retryable is False
 
     def test_dark_tier_403_never_triggers_a_credential_refresh(self):
-        body = {"status": 403, "message": "Anonymous accounts are not accepted by this API right now."}
+        body = {
+            "status": 403,
+            "message": "Anonymous accounts are not accepted by this API right now.",
+        }
         err = MockAPIError(f"Error code: 403 - {body}", status_code=403, body=body)
-        result = classify_api_error(err, provider="nous", api_key=make_jwt(), model="nous/welcome")
+        result = classify_api_error(
+            err, provider="nous", api_key=make_jwt(), model="nous/welcome"
+        )
         assert result.reason == FailoverReason.auth_permanent
         assert result.retryable is False and result.should_fallback is True
         assert result.should_rotate_credential is False
         assert result.error_context["welcome_route"] == "tier_disabled"
 
     def test_ordinary_403_is_untouched(self):
-        result = classify_api_error(MockAPIError("forbidden", status_code=403, body={"message": "forbidden"}), provider="nous", api_key=make_jwt())
+        result = classify_api_error(
+            MockAPIError("forbidden", status_code=403, body={"message": "forbidden"}),
+            provider="nous",
+            api_key=make_jwt(),
+        )
         assert result.reason == FailoverReason.auth
         assert "welcome_route" not in result.error_context
 
@@ -2112,19 +2328,36 @@ class TestNousWelcomeTier:
 class TestAuthErrorNamesOffRouteEndpoint:
     """#113719: an auth refusal from a route that is not the provider's own endpoint names the host."""
 
-    _BODY = {"error": {"code": "api_key_not_supported", "message": "API keys are not supported by this endpoint."}}
+    _BODY = {
+        "error": {
+            "code": "api_key_not_supported",
+            "message": "API keys are not supported by this endpoint.",
+        }
+    }
 
     def test_stale_base_url_names_contacted_host(self):
         e = MockAPIError("Unauthorized", status_code=401, body=self._BODY)
-        result = classify_api_error(e, provider="anthropic", model="claude", base_url="https://chatgpt.com/backend-api/codex")
+        result = classify_api_error(
+            e,
+            provider="anthropic",
+            model="claude",
+            base_url="https://chatgpt.com/backend-api/codex",
+        )
         assert result.reason == FailoverReason.auth
-        assert result.message == "API keys are not supported by this endpoint. (endpoint: chatgpt.com)"
+        assert (
+            result.message
+            == "API keys are not supported by this endpoint. (endpoint: chatgpt.com)"
+        )
 
     def test_stock_endpoint_and_no_base_url_keep_plain_message(self):
         e = MockAPIError("Unauthorized", status_code=401, body=self._BODY)
         for base_url in ("", "https://api.anthropic.com/v1"):
-            result = classify_api_error(e, provider="anthropic", model="claude", base_url=base_url)
-            assert result.message == "API keys are not supported by this endpoint.", base_url
+            result = classify_api_error(
+                e, provider="anthropic", model="claude", base_url=base_url
+            )
+            assert result.message == "API keys are not supported by this endpoint.", (
+                base_url
+            )
 
 
 class TestBodyCarriedStatus:
@@ -2133,12 +2366,24 @@ class TestBodyCarriedStatus:
 
     def test_top_level_code_and_status_keys_also_count(self):
         assert _extract_status_code(MockAPIError("x", body={"code": 503})) == 503
-        assert _extract_status_code(MockAPIError("x", body={"error": {"http_status": 502}})) == 502
+        assert (
+            _extract_status_code(
+                MockAPIError("x", body={"error": {"http_status": 502}})
+            )
+            == 502
+        )
 
     def test_403_ban_is_auth_not_transient_retry(self):
-        body = {"error": {"code": 403, "message": "Your account has been banned by the upstream provider",
-                          "metadata": {"provider_name": "acme"}}}
-        result = classify_api_error(MockAPIError("Error code: 403", body=body), provider="custom")
+        body = {
+            "error": {
+                "code": 403,
+                "message": "Your account has been banned by the upstream provider",
+                "metadata": {"provider_name": "acme"},
+            }
+        }
+        result = classify_api_error(
+            MockAPIError("Error code: 403", body=body), provider="custom"
+        )
         assert result.status_code == 403
         assert result.reason == FailoverReason.auth
         assert result.retryable is False
@@ -2156,6 +2401,8 @@ class TestStreamingRenderFormatError:
         assert result.should_fallback is True
 
     def test_render_message_with_status_uses_http_path(self):
-        e = MockAPIError("Error rendering prompt with jinja template: ...", status_code=500)
+        e = MockAPIError(
+            "Error rendering prompt with jinja template: ...", status_code=500
+        )
         result = classify_api_error(e, provider="lm-studio", model="x")
         assert result.reason != FailoverReason.format_error

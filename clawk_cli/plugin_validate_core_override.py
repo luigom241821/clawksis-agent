@@ -23,14 +23,27 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Dict, Iterable, List, Sequence, Set, Tuple
 
-_SKIP_DIRS = frozenset({"tests", "test", "node_modules", ".git", "__pycache__", ".venv", "venv", "site-packages"})
+_SKIP_DIRS = frozenset(
+    {
+        "tests",
+        "test",
+        "node_modules",
+        ".git",
+        "__pycache__",
+        ".venv",
+        "venv",
+        "site-packages",
+    }
+)
 
 
 @lru_cache(maxsize=1)
 def _clawk_top_level() -> frozenset:
     """Top-level importable names shipped by this Clawksis checkout (packages and root modules)."""
     root = Path(__file__).resolve().parents[1]
-    names = {p.name for p in root.iterdir() if p.is_dir() and (p / "__init__.py").is_file()}
+    names = {
+        p.name for p in root.iterdir() if p.is_dir() and (p / "__init__.py").is_file()
+    }
     names |= {p.stem for p in root.glob("*.py")}
     # ``clawk_plugins.*`` is where the loader imports plugins (bundled platform adapters included):
     # rebinding another plugin's module is the same collision as rebinding core.
@@ -39,7 +52,9 @@ def _clawk_top_level() -> frozenset:
 
 def _is_test_file(rel: Path) -> bool:
     name = rel.name
-    return name.startswith("test_") or name.endswith("_test.py") or name == "conftest.py"
+    return (
+        name.startswith("test_") or name.endswith("_test.py") or name == "conftest.py"
+    )
 
 
 def _python_files(plugin_dir: Path) -> Iterable[tuple[Path, Path]]:
@@ -50,7 +65,9 @@ def _python_files(plugin_dir: Path) -> Iterable[tuple[Path, Path]]:
         yield path, rel
 
 
-def _runtime_files(plugin_dir: Path, files: dict[Path, ast.AST], local: set[str]) -> set[Path]:
+def _runtime_files(
+    plugin_dir: Path, files: dict[Path, ast.AST], local: set[str]
+) -> set[Path]:
     """The import closure of what Clawksis loads: ``__init__.py`` (``register``) and ``dashboard/*.py``
     (dashboard plugin API). Benchmarks, CI and smoke scripts shipped beside them never run inside
     Clawksis, so a stub they install into ``sys.modules`` is not a runtime override."""
@@ -68,18 +85,33 @@ def _runtime_files(plugin_dir: Path, files: dict[Path, ast.AST], local: set[str]
             names = [a.name for a in node.names]
         elif isinstance(node, ast.ImportFrom):
             if node.level:
-                base = rel.parent.parts[: len(rel.parent.parts) - (node.level - 1)] if node.level > 1 else rel.parent.parts
-                prefix = ".".join(base + tuple((node.module or "").split("."))).strip(".")
+                base = (
+                    rel.parent.parts[: len(rel.parent.parts) - (node.level - 1)]
+                    if node.level > 1
+                    else rel.parent.parts
+                )
+                prefix = ".".join(base + tuple((node.module or "").split("."))).strip(
+                    "."
+                )
                 names = [prefix] + [f"{prefix}.{a.name}".strip(".") for a in node.names]
             elif node.module:
                 names = [node.module] + [f"{node.module}.{a.name}" for a in node.names]
         found: set[Path] = set()
         for name in names:
-            if name.split(".")[0] in local or isinstance(node, ast.ImportFrom) and node.level:
+            if (
+                name.split(".")[0] in local
+                or isinstance(node, ast.ImportFrom)
+                and node.level
+            ):
                 found |= by_module.get(name, set())
         return found
 
-    roots = {rel for rel in files if rel == Path("__init__.py") or (len(rel.parts) == 2 and rel.parts[0] == "dashboard")}
+    roots = {
+        rel
+        for rel in files
+        if rel == Path("__init__.py")
+        or (len(rel.parts) == 2 and rel.parts[0] == "dashboard")
+    }
     seen: set[Path] = set()
     stack = list(roots)
     while stack:
@@ -125,7 +157,9 @@ class _Analysis:
         self.core_roots = core_roots - local
         self.core_returners: set[str] = set()
         self.param_patchers: dict[str, set[int]] = {}
-        self.aliases: dict[str, str] = {}  # ``from .compat import server as gateway_server``
+        self.aliases: dict[
+            str, str
+        ] = {}  # ``from .compat import server as gateway_server``
         self.constants: dict[str, str] = {}  # module-level ``NAME = "module.path"``
 
     def _func_key(self, call: ast.Call) -> str:
@@ -147,7 +181,10 @@ class _Analysis:
             return self.is_core(node.value, tainted)
         if isinstance(node, ast.Call):
             name = _call_name(node)
-            if name in ("importlib.import_module", "import_module", "__import__") and node.args:
+            if (
+                name in ("importlib.import_module", "import_module", "__import__")
+                and node.args
+            ):
                 return self._lookup_is_core(node.args[0])
             if name == "sys.modules.get" and node.args:
                 return self._lookup_is_core(node.args[0])
@@ -164,7 +201,11 @@ class _Analysis:
         A name computed some other way (the plugin locating its own package) is not judged."""
         if isinstance(arg, ast.Name):
             arg = ast.Constant(self.constants.get(arg.id))
-        if isinstance(arg, ast.JoinedStr) and arg.values and isinstance(arg.values[0], ast.Constant):
+        if (
+            isinstance(arg, ast.JoinedStr)
+            and arg.values
+            and isinstance(arg.values[0], ast.Constant)
+        ):
             head = str(arg.values[0].value)
             return "." in head and self._core_module_name(head)
         return isinstance(arg, ast.Constant) and self._core_module_name(arg.value)
@@ -180,11 +221,22 @@ class _Analysis:
                     for alias in node.names:
                         if self._core_module_name(alias.name):
                             tainted.add((alias.asname or alias.name).split(".")[0])
-                elif isinstance(node, ast.ImportFrom) and node.level == 0 and self._core_module_name(node.module):
+                elif (
+                    isinstance(node, ast.ImportFrom)
+                    and node.level == 0
+                    and self._core_module_name(node.module)
+                ):
                     tainted.update(a.asname or a.name for a in node.names)
-                elif isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value is not None:
+                elif (
+                    isinstance(node, (ast.Assign, ast.AnnAssign))
+                    and node.value is not None
+                ):
                     if self.is_core(node.value, tainted):
-                        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                        targets = (
+                            node.targets
+                            if isinstance(node, ast.Assign)
+                            else [node.target]
+                        )
                         tainted.update(_bound_names(targets))
                 elif isinstance(node, (ast.For, ast.AsyncFor, ast.comprehension)):
                     if self.is_core(node.iter, tainted):
@@ -204,28 +256,51 @@ class _Analysis:
         elif isinstance(node, ast.Delete):
             targets = node.targets
         for target in targets:
-            for t in (target.elts if isinstance(target, (ast.Tuple, ast.List)) else [target]):
+            for t in (
+                target.elts if isinstance(target, (ast.Tuple, ast.List)) else [target]
+            ):
                 if isinstance(t, ast.Attribute) and self.is_core(t.value, tainted):
                     hits.append(_dotted(t) or t.attr)
                 elif isinstance(t, ast.Subscript) and _dotted(t.value) == "sys.modules":
-                    if isinstance(t.slice, ast.Constant) and self._core_module_name(t.slice.value):
+                    if isinstance(t.slice, ast.Constant) and self._core_module_name(
+                        t.slice.value
+                    ):
                         hits.append(f"sys.modules[{t.slice.value!r}]")
-                elif isinstance(t, ast.Subscript) and isinstance(t.value, ast.Attribute) \
-                        and self.is_core(t.value.value, tainted):
+                elif (
+                    isinstance(t, ast.Subscript)
+                    and isinstance(t.value, ast.Attribute)
+                    and self.is_core(t.value.value, tainted)
+                ):
                     hits.append(f"{_dotted(t.value) or t.value.attr}[...]")
         if isinstance(node, ast.Call):
             name = _call_name(node)
-            if name in ("setattr", "delattr") and node.args and self.is_core(node.args[0], tainted):
+            if (
+                name in ("setattr", "delattr")
+                and node.args
+                and self.is_core(node.args[0], tainted)
+            ):
                 hits.append(f"{name}({_dotted(node.args[0]) or '<core>'}, ...)")
-            elif name.endswith("patch.object") and node.args and self.is_core(node.args[0], tainted):
+            elif (
+                name.endswith("patch.object")
+                and node.args
+                and self.is_core(node.args[0], tainted)
+            ):
                 hits.append(f"patch.object({_dotted(node.args[0])}, ...)")
-            elif name.split(".")[-1] == "patch" and node.args and isinstance(node.args[0], ast.Constant) \
-                    and self._core_module_name(node.args[0].value):
+            elif (
+                name.split(".")[-1] == "patch"
+                and node.args
+                and isinstance(node.args[0], ast.Constant)
+                and self._core_module_name(node.args[0].value)
+            ):
                 hits.append(f"patch({node.args[0].value!r})")
             else:
                 for index in self.param_patchers.get(self._func_key(node), ()):
-                    if index < len(node.args) and self.is_core(node.args[index], tainted):
-                        hits.append(f"{name}({_dotted(node.args[index]) or '<core>'}, ...)")
+                    if index < len(node.args) and self.is_core(
+                        node.args[index], tainted
+                    ):
+                        hits.append(
+                            f"{name}({_dotted(node.args[index]) or '<core>'}, ...)"
+                        )
         return hits
 
 
@@ -236,7 +311,9 @@ def _walk_scope(stmt: ast.AST):
         node = stack.pop()
         yield node
         for child in ast.iter_child_nodes(node):
-            if not isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)):
+            if not isinstance(
+                child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
+            ):
                 stack.append(child)
 
 
@@ -252,6 +329,7 @@ def _bound_names(targets: Iterable[ast.AST]) -> set[str]:
 
 def _functions(tree: ast.AST):
     """``(func, is_method)`` for every function in the module, nested ones included."""
+
     def visit(node, in_class):
         for child in ast.iter_child_nodes(node):
             if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -262,6 +340,7 @@ def _functions(tree: ast.AST):
                 yield from visit(child, True)
             else:
                 yield from visit(child, in_class)
+
     yield from visit(tree, False)
 
 
@@ -271,7 +350,9 @@ def core_override_findings(plugin_dir: Path) -> list[str]:
     parsed: dict[Path, ast.AST] = {}
     for path, rel in _python_files(plugin_dir):
         try:
-            parsed[rel] = ast.parse(path.read_text(encoding="utf-8-sig", errors="replace"))
+            parsed[rel] = ast.parse(
+                path.read_text(encoding="utf-8-sig", errors="replace")
+            )
         except (SyntaxError, ValueError):
             continue
     local = _local_names(plugin_dir)
@@ -280,30 +361,54 @@ def core_override_findings(plugin_dir: Path) -> list[str]:
     analysis = _Analysis(_clawk_top_level(), local)
     for _rel, tree in trees:
         for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom) and (node.level or (node.module or "").split(".")[0] in local):
-                analysis.aliases.update({a.asname: a.name for a in node.names if a.asname})
+            if isinstance(node, ast.ImportFrom) and (
+                node.level or (node.module or "").split(".")[0] in local
+            ):
+                analysis.aliases.update(
+                    {a.asname: a.name for a in node.names if a.asname}
+                )
         for node in tree.body:
-            if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant) \
-                    and isinstance(node.value.value, str):
-                analysis.constants.update({n: node.value.value for n in _bound_names(node.targets)})
+            if (
+                isinstance(node, ast.Assign)
+                and isinstance(node.value, ast.Constant)
+                and isinstance(node.value.value, str)
+            ):
+                analysis.constants.update(
+                    {n: node.value.value for n in _bound_names(node.targets)}
+                )
 
     # Fixpoint over the whole plugin: which helpers return core values / rebind a parameter.
     for _ in range(4):
-        before = (len(analysis.core_returners), sum(len(v) for v in analysis.param_patchers.values()))
+        before = (
+            len(analysis.core_returners),
+            sum(len(v) for v in analysis.param_patchers.values()),
+        )
         for _rel, tree in trees:
             module_taint = analysis.scope_taint(tree.body, set())
             for func, is_method in _functions(tree):
                 taint = analysis.scope_taint(func.body, module_taint)
-                if any(isinstance(n, ast.Return) and n.value is not None and analysis.is_core(n.value, taint)
-                       for stmt in func.body for n in _walk_scope(stmt)):
+                if any(
+                    isinstance(n, ast.Return)
+                    and n.value is not None
+                    and analysis.is_core(n.value, taint)
+                    for stmt in func.body
+                    for n in _walk_scope(stmt)
+                ):
                     analysis.core_returners.add(func.name)
                 params = [a.arg for a in func.args.posonlyargs + func.args.args]
                 # A method is called as ``obj.bind(module, ...)``: its call-site args start after ``self``.
                 offset = 1 if is_method else 0
                 for index, param in enumerate(params[offset:]):
-                    if any(analysis.rebinds(n, {param}) for stmt in func.body for n in _walk_scope(stmt)):
+                    if any(
+                        analysis.rebinds(n, {param})
+                        for stmt in func.body
+                        for n in _walk_scope(stmt)
+                    ):
                         analysis.param_patchers.setdefault(func.name, set()).add(index)
-        after = (len(analysis.core_returners), sum(len(v) for v in analysis.param_patchers.values()))
+        after = (
+            len(analysis.core_returners),
+            sum(len(v) for v in analysis.param_patchers.values()),
+        )
         if after == before:
             break
 
@@ -311,12 +416,17 @@ def core_override_findings(plugin_dir: Path) -> list[str]:
     for rel, tree in trees:
         module_taint = analysis.scope_taint(tree.body, set())
         scopes = [(tree.body, module_taint)]
-        scopes += [(f.body, analysis.scope_taint(f.body, module_taint)) for f, _ in _functions(tree)]
+        scopes += [
+            (f.body, analysis.scope_taint(f.body, module_taint))
+            for f, _ in _functions(tree)
+        ]
         for body, taint in scopes:
             for stmt in body:
                 for node in _walk_scope(stmt):
                     for target in analysis.rebinds(node, taint):
-                        findings.append((rel.as_posix(), getattr(node, "lineno", 0), target))
+                        findings.append(
+                            (rel.as_posix(), getattr(node, "lineno", 0), target)
+                        )
     return [f"{target} ({rel}:{line})" for rel, line, target in sorted(set(findings))]
 
 
@@ -324,8 +434,11 @@ def check_core_override(report, plugin_dir: Path) -> None:
     """Fail the report when the plugin's Python rebinds Clawksis core at runtime."""
     hits = core_override_findings(plugin_dir)
     report.add(
-        "no core override", not hits,
+        "no core override",
+        not hits,
         "rebinds Clawksis core at runtime (use a public hook, middleware or provider profile): "
-        + "; ".join(hits[:8]) + (f" (+{len(hits) - 8} more)" if len(hits) > 8 else "")
-        if hits else "no runtime rebinds of Clawksis core",
+        + "; ".join(hits[:8])
+        + (f" (+{len(hits) - 8} more)" if len(hits) > 8 else "")
+        if hits
+        else "no runtime rebinds of Clawksis core",
     )

@@ -124,6 +124,7 @@ def relay():
 
 # ── the classifier itself ────────────────────────────────────────────────
 
+
 def test_decline_is_recognised_by_code_and_by_uniform_text():
     # The wire contract, pinned as a LITERAL. Asserting against the imported
     # constant is a tautology — it cannot fail when the constant changes, and
@@ -149,7 +150,6 @@ def test_decline_is_recognised_by_code_and_by_uniform_text():
         assert is_egress_decline({"success": False, "error": variant}) is True, variant
 
 
-
 def test_an_ambiguous_failure_is_not_a_decline():
     """A lost ack may well have been APPLIED — it is a transport outcome.
 
@@ -157,9 +157,7 @@ def test_an_ambiguous_failure_is_not_a_decline():
     optimistic-retry behaviour into a hard error on a message that landed.
     """
     assert (
-        is_egress_decline(
-            {"success": False, "error": DECLINE_TEXT, "ambiguous": True}
-        )
+        is_egress_decline({"success": False, "error": DECLINE_TEXT, "ambiguous": True})
         is False
     )
 
@@ -176,6 +174,7 @@ def test_decline_error_is_the_connector_text_verbatim():
 
 
 # ── lanes that must report the decline to their caller ───────────────────
+
 
 def test_send_reports_the_decline(relay):
     adapter, connector = relay
@@ -203,7 +202,7 @@ def test_media_decline_does_not_fall_back_to_a_text_send(relay):
 
 
 def test_exec_approval_decline_is_not_reported_as_op_unavailable(relay):
-    """"prompt op unavailable" is a WRONG reason that triggers a text fallback.
+    """ "prompt op unavailable" is a WRONG reason that triggers a text fallback.
 
     The whole observable: the refusal reaches the caller verbatim, exactly one
     op is emitted, and the minted prompt is UNREGISTERED — a prompt left
@@ -234,9 +233,7 @@ def test_slash_confirm_decline_is_not_reported_as_op_unavailable(relay):
 def test_clarify_decline_does_not_fall_back_to_a_numbered_text_send(relay):
     """The base class's numbered-text clarify would `send()` into the refused chat."""
     adapter, connector = relay
-    result = asyncio.run(
-        adapter.send_clarify("C1", "Which?", ["a", "b"], "cl1", "sk1")
-    )
+    result = asyncio.run(adapter.send_clarify("C1", "Which?", ["a", "b"], "cl1", "sk1"))
 
     assert result.success is False
     assert result.error == DECLINE_TEXT
@@ -271,6 +268,7 @@ def test_task_card_stop_decline_carries_the_error(relay):
 
 
 # ── lanes that legitimately degrade, but must still SAY so ───────────────
+
 
 @pytest.mark.parametrize(
     "lane,call,expected",
@@ -540,6 +538,7 @@ def test_code_only_media_decline_does_not_fall_back(code_only_relay):
     assert isinstance(result.raw_response, dict)
     assert is_egress_decline(result.raw_response)
 
+
 def _code_only_adapter():
     descriptor = CapabilityDescriptor(
         contract_version=CONTRACT_VERSION,
@@ -796,7 +795,9 @@ def test_follow_up_carries_the_structured_decline():
 
     connector.send_follow_up = _declining_follow_up
 
-    result = asyncio.run(adapter.send_follow_up("sess-1", "discord.interaction_token", "SECRET"))
+    result = asyncio.run(
+        adapter.send_follow_up("sess-1", "discord.interaction_token", "SECRET")
+    )
 
     assert not result.success
     assert is_egress_decline(result.raw_response)
@@ -833,7 +834,11 @@ def test_declined_send_accepts_both_wire_shapes():
         SendResult(
             success=False,
             error="lost ack",
-            raw_response={"success": False, "ambiguous": True, "code": EGRESS_DECLINE_CODE},
+            raw_response={
+                "success": False,
+                "ambiguous": True,
+                "code": EGRESS_DECLINE_CODE,
+            },
         )
     )
     # Ordinary failures stay ordinary — over-refusal is the larger risk now.

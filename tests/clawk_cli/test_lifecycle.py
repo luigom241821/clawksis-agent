@@ -7,7 +7,9 @@ from clawk_cli import lifecycle, observability, plugins
 def test_invoke_hook_notifies_builtin_observers_before_plugins(monkeypatch):
     calls = []
     manager = SimpleNamespace(
-        invoke_hook=lambda name, **kwargs: calls.append(("plugin", name, kwargs)) or ["ok"]
+        invoke_hook=lambda name, **kwargs: (
+            calls.append(("plugin", name, kwargs)) or ["ok"]
+        )
     )
     monkeypatch.setattr(
         observability,

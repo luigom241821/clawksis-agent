@@ -1413,7 +1413,9 @@ def _translate_docker_container_media_path(
     # Synthetic /root mounts catch stray home writes (/root/out.png; cache mounts are longer
     # prefixes). /root/.clawksis/* that missed a cache mount is the container's credential surface —
     # translating it via the home mount would dodge the host denylist.
-    if "/root" not in mounted and not candidate.as_posix().startswith("/root/.clawksis"):
+    if "/root" not in mounted and not candidate.as_posix().startswith(
+        "/root/.clawksis"
+    ):
         mounts.extend(
             (root, Path("/root"))
             for root in _docker_persistent_sandbox_roots(session_key, "home")

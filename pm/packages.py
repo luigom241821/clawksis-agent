@@ -23,7 +23,14 @@ from pm.package import (
     unpack_deb,
 )
 from pm.registry import register
-from pm.store import ALL_TARGETS, MUSL_TARGETS, Store, current_target, flatten_single_dir, merge_tree
+from pm.store import (
+    ALL_TARGETS,
+    MUSL_TARGETS,
+    Store,
+    current_target,
+    flatten_single_dir,
+    merge_tree,
+)
 from pm.update import (
     btbn_index,
     btbn_versions,
@@ -142,7 +149,11 @@ class Dmgbuild(BinaryPackage):
     flatten = False
     probe_version = False
     binary_rel = {"posix": "dmgbuild"}
-    gaps = {target: "DMG creation requires macOS" for target in ALL_TARGETS if not target.startswith("darwin-")}
+    gaps = {
+        target: "DMG creation requires macOS"
+        for target in ALL_TARGETS
+        if not target.startswith("darwin-")
+    }
 
     def fetch_url(self, version: str, target: str) -> str:
         release, _, revision = version.partition("+")
@@ -153,7 +164,9 @@ class Dmgbuild(BinaryPackage):
         )
 
     def verify(self, entry: Path, target: str) -> str:
-        return super().verify(entry, target) or self._binary_reason(entry / "python/bin/python3", entry, target)
+        return super().verify(entry, target) or self._binary_reason(
+            entry / "python/bin/python3", entry, target
+        )
 
 
 class _BionicDebArm:
@@ -268,7 +281,9 @@ class Python(_BionicDebArm, BinaryPackage, DebPackage):
         # lock version is "<python>+<release tag>", e.g. "3.14.7+20260901"
         pyver, _, tag = version.partition("+")
         if not tag:
-            raise InstallError(self.name, f"version {version!r} needs the +<release> tag")
+            raise InstallError(
+                self.name, f"version {version!r} needs the +<release> tag"
+            )
         triple = _RUST_TRIPLE[target]
         return (
             "https://github.com/astral-sh/python-build-standalone/releases/download/"
@@ -303,7 +318,9 @@ def _uv_lock_digest(path: Path) -> bytes:
 _uv_lock_digest_cache: dict[Path, tuple] = {}
 
 
-def _copy_seed_file(src: str | os.PathLike, dst: str | os.PathLike) -> str | os.PathLike:
+def _copy_seed_file(
+    src: str | os.PathLike, dst: str | os.PathLike
+) -> str | os.PathLike:
     """Copy one payload cache file unless an earlier seed already copied it whole.
 
     A copy cut short leaves the file in place with too few bytes, so a matching
@@ -375,11 +392,18 @@ def uv_cache_dir() -> Path:
                     # Merge into whatever an earlier failed or killed seed left: skipping
                     # an existing directory would record that partial copy as complete.
                     if entry.is_dir():
-                        shutil.copytree(entry, dest, dirs_exist_ok=True, copy_function=_copy_seed_file)
+                        shutil.copytree(
+                            entry,
+                            dest,
+                            dirs_exist_ok=True,
+                            copy_function=_copy_seed_file,
+                        )
                     else:
                         _copy_seed_file(entry, dest)
         except OSError as exc:
-            LOG.warning("uv cache seed incomplete, retrying on the next install: %s", exc)
+            LOG.warning(
+                "uv cache seed incomplete, retrying on the next install: %s", exc
+            )
         else:
             try:
                 marker.parent.mkdir(parents=True, exist_ok=True)
@@ -419,8 +443,11 @@ class Venv(StatePackage):
 
         lock = Lockfile(lockfile_path())
         target = current_target()
-        python = (lock.version("python"), target,
-                  [artifact["sha256"] for artifact in lock.artifacts("python", target)])
+        python = (
+            lock.version("python"),
+            target,
+            [artifact["sha256"] for artifact in lock.artifacts("python", target)],
+        )
         h = hashlib.sha256()
         h.update(_uv_lock_digest(self.project_root() / "uv.lock"))
         h.update(",".join(sorted(extras)).encode())
@@ -429,11 +456,22 @@ class Venv(StatePackage):
         # re-sync even when extras and core lock are unchanged.
         from pm.workspace import enabled_member_dirs, members_stamp
 
-        h.update(members_stamp(enabled_member_dirs() if plugin_dirs is None else plugin_dirs).encode())
+        h.update(
+            members_stamp(
+                enabled_member_dirs() if plugin_dirs is None else plugin_dirs
+            ).encode()
+        )
         return h.hexdigest()
 
-    def apply(self, extras: list[str], *, plugin_dirs=None, repair: bool = False, explicit: bool = False,
-              skip_invalid_secondary: bool = False) -> dict:
+    def apply(
+        self,
+        extras: list[str],
+        *,
+        plugin_dirs=None,
+        repair: bool = False,
+        explicit: bool = False,
+        skip_invalid_secondary: bool = False,
+    ) -> dict:
         """Prepare one complete environment; the caller commits its selection.
 
         ``skip_invalid_secondary`` is the update's contract: an unreadable secondary profile
@@ -449,15 +487,24 @@ class Venv(StatePackage):
         project = self.project_root()
         generation = install_state_dir(project) / "environments" / uuid.uuid4().hex
         candidate = generation / "venv"
-        environment = managed_environment(candidate, env=source_build_environment(project),
-                                          explicit=explicit or repair, output=sys.stderr)
+        environment = managed_environment(
+            candidate,
+            env=source_build_environment(project),
+            explicit=explicit or repair,
+            output=sys.stderr,
+        )
         if not repair:
             # Inspection may skip a broken secondary profile, but publishing a replacement
             # graph must not silently evict its recorded members (including passed candidates).
             # An update does evict them, loudly: it must not fail on another profile's config.
             from pm.plugins_state import enabled_plugins_ordered
+
             enabled_plugins_ordered(skip_invalid_secondary=skip_invalid_secondary)
-        members = [] if repair else (enabled_member_dirs() if plugin_dirs is None else plugin_dirs)
+        members = (
+            []
+            if repair
+            else (enabled_member_dirs() if plugin_dirs is None else plugin_dirs)
+        )
         try:
             generation.mkdir(parents=True)
             (generation / ".lease-managed").touch()
@@ -465,27 +512,53 @@ class Venv(StatePackage):
             prior = Facts(runtime_facts_path(project), strict=repair).get("venv") or {}
             replay = None
             if repair and ("environment" in prior or "resolved_lock" in prior):
-                if not all(isinstance(prior.get(key), str) and prior[key] for key in ("environment", "resolved_lock")):
-                    raise InstallError(self.name, "recorded dependency paths are incomplete; refusing to drop plugins")
+                if not all(
+                    isinstance(prior.get(key), str) and prior[key]
+                    for key in ("environment", "resolved_lock")
+                ):
+                    raise InstallError(
+                        self.name,
+                        "recorded dependency paths are incomplete; refusing to drop plugins",
+                    )
                 recorded = Path(prior["resolved_lock"]).resolve()
                 previous = Path(prior["environment"]).resolve().parent
                 generations = install_state_dir(project) / "environments"
-                if (previous.parent != generations.resolve() or recorded != previous / "workspace" / "uv.lock"
-                        or not recorded.is_file()):
-                    raise InstallError(self.name, "recorded dependency lock is missing; refusing to drop plugins")
+                if (
+                    previous.parent != generations.resolve()
+                    or recorded != previous / "workspace" / "uv.lock"
+                    or not recorded.is_file()
+                ):
+                    raise InstallError(
+                        self.name,
+                        "recorded dependency lock is missing; refusing to drop plugins",
+                    )
                 replay = recorded.parent
-            seed = (Path(prior["resolved_lock"]) if members and prior.get("resolved_lock")
-                    else project / "uv.lock")
-            lock_and_sync(members, extras, root=generation / "workspace",
-                          seed_lock=seed, frozen=repair or not members, replay=replay,
-                          source=project, environment=environment)
+            seed = (
+                Path(prior["resolved_lock"])
+                if members and prior.get("resolved_lock")
+                else project / "uv.lock"
+            )
+            lock_and_sync(
+                members,
+                extras,
+                root=generation / "workspace",
+                seed_lock=seed,
+                frozen=repair or not members,
+                replay=replay,
+                source=project,
+                environment=environment,
+            )
             resolved_lock = generation / "workspace" / "uv.lock"
             environment.check(resolved_lock)
             if repair:
                 from pm.environments import venv_command
                 from pm.recovery import validate_environment
-                validate_environment(venv_command(project, candidate, ("-I",)),
-                                     env=dict(environment.env), cwd=resolved_lock.parent)
+
+                validate_environment(
+                    venv_command(project, candidate, ("-I",)),
+                    env=dict(environment.env),
+                    cwd=resolved_lock.parent,
+                )
         except BaseException:
             shutil.rmtree(generation, ignore_errors=True)
             raise
@@ -527,13 +600,19 @@ class Nodejs(_BionicDebArm, BinaryPackage, DebPackage):
         # lockfile is written rather than selecting glibc bytes on musl.
         return node_latest_versions()
 
-    def repair_staged_verification(self, entry: Path, target: str, reason: str) -> tuple[str, str]:
+    def repair_staged_verification(
+        self, entry: Path, target: str, reason: str
+    ) -> tuple[str, str]:
         """Repair the host library needed by official Linux Node, then re-probe.
 
         Keep this out of verify(): doctor/status checks call verify and must
         never gain permission to install host packages.
         """
-        if target != current_target() or not target.startswith("linux") or "libatomic.so.1" not in reason:
+        if (
+            target != current_target()
+            or not target.startswith("linux")
+            or "libatomic.so.1" not in reason
+        ):
             return reason, ""
         from pm.libatomic import try_install_libatomic
 
@@ -542,7 +621,10 @@ class Nodejs(_BionicDebArm, BinaryPackage, DebPackage):
             return reason, remedy
         retried = self.verify(entry, target)
         if "libatomic.so.1" in retried:
-            return retried, "the libatomic package installed, but Node still cannot load libatomic.so.1; check the loader path"
+            return (
+                retried,
+                "the libatomic package installed, but Node still cannot load libatomic.so.1; check the loader path",
+            )
         return retried, ""
 
 
@@ -565,13 +647,19 @@ class TermuxDocker(Package):
     pin_only = True
 
     def missing_reason(self, target: str) -> Optional[str]:
-        return None if target == "linux-arm64-bionic" else "docker image target is linux-arm64-bionic"
+        return (
+            None
+            if target == "linux-arm64-bionic"
+            else "docker image target is linux-arm64-bionic"
+        )
 
     def fetch_url(self, version: str, target: str) -> str:
         return f"docker://termux/termux-docker@{version}"
 
     def unpack(self, archive: Path, staged: Path, target: str) -> None:
-        raise InstallError(self.name, "a docker image digest is a pin, not a downloadable artifact")
+        raise InstallError(
+            self.name, "a docker image digest is a pin, not a downloadable artifact"
+        )
 
     def verify(self, entry: Path, target: str) -> str:
         return ""
@@ -644,10 +732,17 @@ class Npm(BinaryPackage):
         bundled_cli = (
             node_bin.parent / "node_modules" / "npm" / "bin" / "npm-cli.js"
             if win
-            else node_bin.parent.parent / "lib" / "node_modules" / "npm" / "bin" / "npm-cli.js"
+            else node_bin.parent.parent
+            / "lib"
+            / "node_modules"
+            / "npm"
+            / "bin"
+            / "npm-cli.js"
         )
         if not bundled_cli.is_file():
-            raise InstallError(self.name, "node's entry is missing its bundled npm-cli.js")
+            raise InstallError(
+                self.name, "node's entry is missing its bundled npm-cli.js"
+            )
 
         staged.mkdir(parents=True, exist_ok=True)
         # npm caches the tarball it installs. The archive's directory is the
@@ -655,12 +750,22 @@ class Npm(BinaryPackage):
         # there turns its removal into a tree delete that fails on Windows
         # while Defender still holds the fresh copy (WinError 145). Cleanup
         # of this throwaway cache must never fail the install.
-        with tempfile.TemporaryDirectory(prefix="clawk-npm-cache-", ignore_cleanup_errors=True) as cache:
+        with tempfile.TemporaryDirectory(
+            prefix="clawk-npm-cache-", ignore_cleanup_errors=True
+        ) as cache:
             proc = subprocess.run(
                 [
-                    native(node_bin), native(bundled_cli), "install", "--global",
-                    "--prefix", native(staged), "--offline", "--ignore-scripts",
-                    "--no-audit", "--no-fund", native(archive),
+                    native(node_bin),
+                    native(bundled_cli),
+                    "install",
+                    "--global",
+                    "--prefix",
+                    native(staged),
+                    "--offline",
+                    "--ignore-scripts",
+                    "--no-audit",
+                    "--no-fund",
+                    native(archive),
                 ],
                 capture_output=True,
                 text=True,
@@ -670,7 +775,8 @@ class Npm(BinaryPackage):
             )
         if proc.returncode != 0:
             raise InstallError(
-                self.name, f"self-install exited {proc.returncode}: {proc.stderr[-400:]}"
+                self.name,
+                f"self-install exited {proc.returncode}: {proc.stderr[-400:]}",
             )
 
     def latest_versions(self, target: str, locked=None) -> list[str]:
@@ -776,7 +882,9 @@ class Gh(BinaryPackage):
     def fetch_url(self, version: str, target: str) -> str:
         # GitHub CLI's Linux release matrix is built with CGO_ENABLED=0,
         # so the generic Linux archive is libc-independent.
-        lookup_target = target.removesuffix("-musl") if target in MUSL_TARGETS else target
+        lookup_target = (
+            target.removesuffix("-musl") if target in MUSL_TARGETS else target
+        )
         osname, arch = lookup_target.split("-")
         plat = {"win32": "windows", "linux": "linux", "darwin": "macOS"}[osname]
         arch = {"x64": "amd64", "arm64": "arm64"}[arch]
@@ -808,7 +916,9 @@ class Ffmpeg(_BionicDebArm, BinaryPackage, DebPackage):
     name = "ffmpeg"
     deb_package = "ffmpeg"
     optional = False
-    gaps = {target: "BtbN Linux builds link glibc dynamically" for target in MUSL_TARGETS}
+    gaps = {
+        target: "BtbN Linux builds link glibc dynamically" for target in MUSL_TARGETS
+    }
 
     def main_rel(self, target: str) -> str:
         return "bin/ffmpeg"
@@ -837,7 +947,9 @@ class Ffmpeg(_BionicDebArm, BinaryPackage, DebPackage):
         if target == "linux-arm64-bionic":
             return f"https://packages.termux.dev/apt/termux-main/pool/main/f/ffmpeg/ffmpeg_{version}_aarch64.deb"
         if target in MUSL_TARGETS:
-            raise InstallError(self.name, f"unavailable on {target}: {self.missing_reason(target)}")
+            raise InstallError(
+                self.name, f"unavailable on {target}: {self.missing_reason(target)}"
+            )
         osname, arch = target.split("-")
         if osname in ("win32", "linux"):
             artifact = btbn_index().get(target, {}).get(version)
@@ -851,8 +963,11 @@ class Ffmpeg(_BionicDebArm, BinaryPackage, DebPackage):
                 return f"https://ffmpeg.martin-riedl.de/download/macos/{source_arch}/{epoch}_{version}/ffmpeg.zip"
         # Existing installs read exact URLs from the lockfile. Re-pinning
         # must never silently substitute a different version or target.
-        raise InstallError(self.name, f"no advertised {version} artifact for {target}",
-                           "retry when the upstream index is available, or keep the existing pin")
+        raise InstallError(
+            self.name,
+            f"no advertised {version} artifact for {target}",
+            "retry when the upstream index is available, or keep the existing pin",
+        )
 
     def latest_versions(self, target: str, locked=None) -> list[str]:
         if target in MUSL_TARGETS:
@@ -882,7 +997,10 @@ class Ripgrep(BinaryPackage):
         location = _installed_location(python, _lockfile(), target)
         fact = location[0].get("python") if location is not None else None
         if fact is None:
-            raise InstallError(self.name, "ARM64 rg.exe needs vcruntime140.dll from python, which is not installed")
+            raise InstallError(
+                self.name,
+                "ARM64 rg.exe needs vcruntime140.dll from python, which is not installed",
+            )
         runtime = location[1].entry(fact["entry"]) / "vcruntime140.dll"
         if not runtime.is_file():
             raise InstallError(self.name, f"python's entry has no {runtime.name}")
@@ -897,8 +1015,12 @@ class Ripgrep(BinaryPackage):
 
     def fetch_url(self, version: str, target: str) -> str:
         if target == "linux-arm64-bionic":
-            target = "linux-arm64"  # This upstream artifact is a static musl executable.
-        triple = _RUST_TRIPLE[target].replace("-unknown-linux-gnu", "-unknown-linux-musl")
+            target = (
+                "linux-arm64"  # This upstream artifact is a static musl executable.
+            )
+        triple = _RUST_TRIPLE[target].replace(
+            "-unknown-linux-gnu", "-unknown-linux-musl"
+        )
         ext = "zip" if target.startswith("win32") else "tar.gz"
         return (
             f"https://github.com/BurntSushi/ripgrep/releases/download/{version}/"
@@ -915,8 +1037,13 @@ class CuaDriver(BinaryPackage):
     optional = True
     # Computer use's only OS path, so the default install carries it.
     default = True
-    gaps = {**{target: "cua-driver does not publish a musl build" for target in MUSL_TARGETS},
-            "linux-arm64-bionic": "cua-driver does not publish an Android build"}
+    gaps = {
+        **{
+            target: "cua-driver does not publish a musl build"
+            for target in MUSL_TARGETS
+        },
+        "linux-arm64-bionic": "cua-driver does not publish an Android build",
+    }
     binary_rel = {
         "darwin-arm64": "CuaDriver.app/Contents/MacOS/cua-driver",
         "darwin-x64": "CuaDriver.app/Contents/MacOS/cua-driver",
@@ -976,7 +1103,10 @@ class AgentBrowser(BinaryPackage):
     # tools/browser_tool_install.py), and PM has no bionic Chromium to drive.
     gaps = {
         "linux-arm64-bionic": "Termux installs agent-browser through npm",
-        **{target: "agent-browser has no musl Chromium runtime" for target in MUSL_TARGETS},
+        **{
+            target: "agent-browser has no musl Chromium runtime"
+            for target in MUSL_TARGETS
+        },
     }
     flatten = True
     probe_version = False
@@ -1013,7 +1143,11 @@ class AgentBrowser(BinaryPackage):
         if not (bin_dir / keep).is_file():
             raise InstallError(self.name, f"{keep} missing from the staged tarball")
         for item in bin_dir.iterdir():
-            if item.is_file() and item.name.startswith("agent-browser-") and item.name != keep:
+            if (
+                item.is_file()
+                and item.name.startswith("agent-browser-")
+                and item.name != keep
+            ):
                 item.unlink()
         # The npm tarball ships every native binary as 0644; agent-browser's
         # own postinstall sets the exec bit, and pm runs no postinstall.
@@ -1040,7 +1174,10 @@ class Chromium(Package):
     # Neither Chrome-for-Testing nor Playwright's mirror builds for Android.
     gaps = {
         "linux-arm64-bionic": "no Chromium build for Android/Termux",
-        **{target: "Playwright/Chrome-for-Testing publishes no musl build" for target in MUSL_TARGETS},
+        **{
+            target: "Playwright/Chrome-for-Testing publishes no musl build"
+            for target in MUSL_TARGETS
+        },
     }
     emulated_arch_targets = frozenset({"win32-arm64"})
     _CDN = "https://cdn.playwright.dev"
@@ -1077,8 +1214,15 @@ class Chromium(Package):
     def binary(self, entry: Path, target: str) -> Optional[Path]:
         # CfT and Playwright's ARM Linux archive use different enclosing
         # directories. Resolve the executable within the selected entry.
-        names = {"chrome.exe"} if target.startswith("win32") else {"chrome", "chromium", "Google Chrome for Testing", "Chromium"}
-        return next((p for p in sorted(entry.rglob("*")) if p.name in names and p.is_file()), None)
+        names = (
+            {"chrome.exe"}
+            if target.startswith("win32")
+            else {"chrome", "chromium", "Google Chrome for Testing", "Chromium"}
+        )
+        return next(
+            (p for p in sorted(entry.rglob("*")) if p.name in names and p.is_file()),
+            None,
+        )
 
     def stage(self, store: Store, staged: Path, version: str, target: str) -> None:
         (staged / "INSTALLATION_COMPLETE").write_text("", encoding="utf-8")
@@ -1095,7 +1239,9 @@ class Chromium(Package):
     def env(self, entry: Path, target: str) -> dict:
         binary = self.binary(entry, target)
         if binary is None:
-            raise InstallError(self.name, f"Chromium executable missing under {native(entry)}")
+            raise InstallError(
+                self.name, f"Chromium executable missing under {native(entry)}"
+            )
         return {
             "PLAYWRIGHT_BROWSERS_PATH": str(entry.parent),
             "AGENT_BROWSER_EXECUTABLE_PATH": str(binary),
@@ -1320,8 +1466,11 @@ class WhisperCppCpu(BinaryPackage):
 
     name = "whispercpp-cpu"
     optional = True
-    gaps = {target: "uses the existing faster-whisper provider" for target in ALL_TARGETS
-            if target != "win32-arm64"}
+    gaps = {
+        target: "uses the existing faster-whisper provider"
+        for target in ALL_TARGETS
+        if target != "win32-arm64"
+    }
     binary_rel = {"win32-arm64": "whisper-cli.exe"}
     probe_args = ["--help"]
     url = "https://github.com/ggml-org/whisper.cpp/releases/download/{version}/whisper-bin-win-cpu-arm64.zip"

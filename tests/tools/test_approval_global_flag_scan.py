@@ -2,6 +2,7 @@
 
 Subprocess timeout bounds regressions without hanging pytest on the GIL.
 """
+
 import os
 import subprocess
 import sys
@@ -13,11 +14,13 @@ def _run(code):
     # Pin the checkout under test: a bare `python -c` resolves `tools` through the venv's editable
     # install (the primary clone), not through the worktree pytest is running in.
     env = {**os.environ, "PYTHONPATH": REPO_ROOT}
-    subprocess.run([sys.executable, '-c', code], check=True, timeout=10, cwd=REPO_ROOT, env=env)
+    subprocess.run(
+        [sys.executable, "-c", code], check=True, timeout=10, cwd=REPO_ROOT, env=env
+    )
 
 
 def test_long_flag_runs_still_reach_the_target():
-    _run('''
+    _run("""
 from tools.approval_detection import detect_dangerous_command
 run = "--opt val --flag=x -q - " * 58
 cases = {
@@ -31,23 +34,23 @@ cases = {
 }
 for command, description in cases.items():
     assert detect_dangerous_command(command) == (True, description, description), command[:40]
-''')
+""")
 
 
 def test_nonmatching_flag_runs_finish():
-    _run('''
+    _run("""
 from tools.approval_detection import detect_dangerous_command
 for prefix in ("rclone lsf $HOME/.clawksis --recursive --files-only", "clawk", "docker",
                "docker compose", "podman"):
     for run in ("--exclude " * 58, "--opt val " * 58, "--opt=val " * 58, "--opt" + " " * 100 + "val "):
         assert detect_dangerous_command(f"{prefix} {run}ps 2>/dev/null")[0] is False, prefix
-''')
+""")
 
 
 def test_value_whitespace_decisions_are_unchanged():
     # The fix must not move any approval decision: docker/podman values follow exactly one
     # whitespace character, as before, while clawk values may follow a whitespace run.
-    _run('''
+    _run("""
 from tools.approval_detection import detect_dangerous_command
 cases = {
     "docker --log-level debug stop app": True,
@@ -63,4 +66,4 @@ cases = {
 }
 for command, dangerous in cases.items():
     assert detect_dangerous_command(command)[0] is dangerous, command
-''')
+""")

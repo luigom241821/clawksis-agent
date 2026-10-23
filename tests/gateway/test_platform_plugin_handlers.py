@@ -36,11 +36,13 @@ from clawk_cli.plugins import (
     PluginManifest,
 )
 
+
 def _make_ctx(name: str = "test_plugin") -> tuple[PluginManager, PluginContext]:
     mgr = PluginManager()
     manifest = PluginManifest(name=name, version="0.1.0", description="test")
     ctx = PluginContext(manifest=manifest, manager=mgr)
     return mgr, ctx
+
 
 def _make_adapter() -> TelegramAdapter:
     config = PlatformConfig(enabled=True, token="test-token", extra={})
@@ -49,9 +51,11 @@ def _make_adapter() -> TelegramAdapter:
     adapter._bot = MagicMock()
     return adapter
 
+
 # ===========================================================================
 # PluginContext.register_platform_handler — validation + queuing
 # ===========================================================================
+
 
 class TestRegisterPlatformHandlerAPI:
     def test_factory_is_queued_with_plugin_name(self):
@@ -110,9 +114,11 @@ class TestRegisterPlatformHandlerAPI:
         mgr.discover_and_load(force=True)
         assert mgr.get_platform_handler_factories("telegram") == []
 
+
 # ===========================================================================
 # Telegram back-compat alias
 # ===========================================================================
+
 
 class TestTelegramAlias:
     def test_register_telegram_handler_routes_to_telegram_bucket(self):
@@ -127,9 +133,11 @@ class TestTelegramAlias:
             (factory, "test_plugin")
         ]
 
+
 # ===========================================================================
 # BasePlatformAdapter._wire_plugin_handlers (via TelegramAdapter)
 # ===========================================================================
+
 
 class TestAdapterPluginWiring:
     def test_factory_invoked_with_native_and_adapter(self):
@@ -192,6 +200,7 @@ class TestAdapterPluginWiring:
         with patch("clawk_cli.plugins.get_plugin_manager", return_value=mgr):
             adapter._wire_plugin_handlers(None)
         assert seen == [None]
+
 
 # ===========================================================================
 # Every adapter calls _wire_plugin_handlers in connect() — source invariant

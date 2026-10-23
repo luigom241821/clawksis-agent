@@ -87,8 +87,6 @@ def _zai_pool_fixture():
 # ---------------------------------------------------------------------------
 
 
-
-
 def test_delete_clears_provider_models_cache(clawk_home):
     _write_env(clawk_home, ZAI_API_KEY=FAKE_ZAI_KEY)
     _write_auth(clawk_home, {"zai": [_zai_pool_fixture()["zai"][0]]})
@@ -141,8 +139,6 @@ def test_update_rotates_config_yaml_model_mirror(clawk_home):
     from clawk_cli.config import load_env
 
     assert load_env()["OPENAI_API_KEY"] == new
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -200,9 +196,9 @@ def test_put_api_env_materializes_credential_pool_entry(clawk_home):
     entries = pool["opencode-go"]
     assert isinstance(entries, list) and entries, pool
     matched_disk = [
-        e for e in entries
-        if isinstance(e.get("source"), str)
-        and e["source"] == "env:OPENCODE_GO_API_KEY"
+        e
+        for e in entries
+        if isinstance(e.get("source"), str) and e["source"] == "env:OPENCODE_GO_API_KEY"
     ]
     assert matched_disk, (
         f"credential_pool.opencode-go env-seeded reference missing on disk; "
@@ -212,10 +208,12 @@ def test_put_api_env_materializes_credential_pool_entry(clawk_home):
     # runtime. This is the actual end-to-end contract — anything weaker
     # means the OpenAI client will 401 because it never receives the new key.
     from agent.credential_pool import load_pool
+
     pool_obj = load_pool("opencode-go")
     runtime_entries = pool_obj.entries()
     matched_runtime = [
-        e for e in runtime_entries
+        e
+        for e in runtime_entries
         if e.access_token == OPENCODE_KEY_NEW
         and isinstance(e.source, str)
         and e.source == "env:OPENCODE_GO_API_KEY"
@@ -226,8 +224,6 @@ def test_put_api_env_materializes_credential_pool_entry(clawk_home):
         f"Got sources: {[e.source for e in runtime_entries]!r}"
     )
     assert matched_runtime[0].auth_type == "api_key"
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -257,7 +253,9 @@ def test_update_rotates_keyed_providers_mirror(clawk_home):
     assert "providers.myendpoint.api_key" in resp.json().get("config_updates", [])
 
     cfg_text = clawk_home.joinpath("config.yaml").read_text(encoding="utf-8")
-    assert old not in cfg_text, "stale key in providers.<id> shadows the rotation (#62269)"
+    assert old not in cfg_text, (
+        "stale key in providers.<id> shadows the rotation (#62269)"
+    )
     assert new in cfg_text, "keyed providers mirror not rotated to the new key"
 
 
@@ -291,7 +289,7 @@ def test_scrub_never_touches_providers_base_url_alias(clawk_home):
         clawk_home,
         "providers:\n"
         "  myendpoint:\n"
-        f"    api: {old}\n"          # base_url alias — must be preserved
+        f"    api: {old}\n"  # base_url alias — must be preserved
         "    model: my-model\n",
     )
 
@@ -307,8 +305,6 @@ def test_scrub_never_touches_providers_base_url_alias(clawk_home):
 # ---------------------------------------------------------------------------
 # Suppression round-trip: delete sticks, re-add lifts it
 # ---------------------------------------------------------------------------
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -334,9 +330,7 @@ def test_get_api_env_passes_provider_primary_through(clawk_home):
     # DASHSCOPE_API_KEY alias joins the card marked primary=False.
     assert env["ALIBABA_CODING_PLAN_CN_API_KEY"]["provider_primary"] is True
     dashscope = env["DASHSCOPE_API_KEY"]["provider_profiles"]
-    cn_profile = next(
-        p for p in dashscope if p["provider"] == "alibaba-coding-plan-cn"
-    )
+    cn_profile = next(p for p in dashscope if p["provider"] == "alibaba-coding-plan-cn")
     assert cn_profile["primary"] is False, (
         "DASHSCOPE_API_KEY is a fallback alias for alibaba-coding-plan-cn; "
         "marking it primary would re-point the card's main field away from "

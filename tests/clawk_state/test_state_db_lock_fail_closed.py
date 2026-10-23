@@ -89,9 +89,7 @@ def test_rebuild_fts_defers_when_lock_file_is_unopenable(tmp_path):
         # is the deferral and not an unrelated no-op.
         assert db.rebuild_fts() >= 1
 
-        _make_unopenable(
-            db.db_path.with_name(db.db_path.name + ".fts_rebuild.lock")
-        )
+        _make_unopenable(db.db_path.with_name(db.db_path.name + ".fts_rebuild.lock"))
         assert db.rebuild_fts() == 0
     finally:
         try:

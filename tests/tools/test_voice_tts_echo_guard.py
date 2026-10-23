@@ -79,9 +79,7 @@ class TestIsTtsEcho:
         # The fragment fallback must work without relying on whitespace
         # word-splitting, since some languages (e.g. Chinese, Japanese)
         # don't delimit words with spaces (#75792 review).
-        spoken = (
-            "部署已经成功完成。所有三个服务都正常运行状态良好,冒烟测试也全部通过,没有发现任何错误。"
-        )
+        spoken = "部署已经成功完成。所有三个服务都正常运行状态良好,冒烟测试也全部通过,没有发现任何错误。"
         transcript = "所有三个服务都正常运行状态良好"
         assert is_tts_echo(transcript, spoken) is True
 

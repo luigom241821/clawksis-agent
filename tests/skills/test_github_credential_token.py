@@ -8,7 +8,9 @@ import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-HELPER = REPO_ROOT / "skills/software-development/github/scripts/git-credential-token.py"
+HELPER = (
+    REPO_ROOT / "skills/software-development/github/scripts/git-credential-token.py"
+)
 
 
 def _extract(path: Path) -> subprocess.CompletedProcess[str]:

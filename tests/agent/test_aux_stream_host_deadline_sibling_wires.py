@@ -39,10 +39,12 @@ def _consume_codex(stream, *, model, on_event):
     for event in stream:
         on_event(event)
     return SimpleNamespace(
-        output=[SimpleNamespace(
-            type="message",
-            content=[SimpleNamespace(type="output_text", text="summary")],
-        )],
+        output=[
+            SimpleNamespace(
+                type="message",
+                content=[SimpleNamespace(type="output_text", text="summary")],
+            )
+        ],
         usage=None,
     )
 
@@ -92,7 +94,8 @@ def test_codex_stream_without_host_deadline_keeps_its_ceiling():
     adapter = _make_codex_adapter(_short())
     with patch("agent.codex_runtime._consume_codex_event_stream", _consume_codex):
         response = adapter.create(
-            messages=[{"role": "user", "content": "summarize"}], timeout=300,
+            messages=[{"role": "user", "content": "summarize"}],
+            timeout=300,
         )
     assert response.choices[0].message.content == "summary"
 
@@ -119,7 +122,8 @@ class _AnthropicStream:
             time.sleep(self._delay)
             self.yielded += 1
             yield SimpleNamespace(
-                type="content_block_delta", delta=SimpleNamespace(text="tok"),
+                type="content_block_delta",
+                delta=SimpleNamespace(text="tok"),
             )
         yield SimpleNamespace(type="message_stop")
 
@@ -145,9 +149,12 @@ def test_anthropic_stream_stops_at_the_host_deadline():
     ):
         hook = aux._anthropic_aux_stream_event_hook()
         start = time.monotonic()
-        with pytest.raises(TimeoutError, match="timed out at the host compression deadline"):
+        with pytest.raises(
+            TimeoutError, match="timed out at the host compression deadline"
+        ):
             create_anthropic_message(
-                _anthropic_client(stream), {"model": "m", "messages": []},
+                _anthropic_client(stream),
+                {"model": "m", "messages": []},
                 on_stream_event=hook,
             )
     assert time.monotonic() - start < 5.0
@@ -171,7 +178,8 @@ def test_anthropic_stream_honours_an_explicit_hard_cancel():
 
         with pytest.raises(aux.AuxiliaryExplicitCancellation):
             create_anthropic_message(
-                _anthropic_client(stream), {"model": "m", "messages": []},
+                _anthropic_client(stream),
+                {"model": "m", "messages": []},
                 on_stream_event=_flip_after_first,
             )
     assert stream.yielded == 1
@@ -183,7 +191,8 @@ def test_anthropic_stream_without_host_deadline_runs_to_completion():
     with aux.aux_progress_hook(lambda: None):
         hook = aux._anthropic_aux_stream_event_hook()
         message = create_anthropic_message(
-            _anthropic_client(stream), {"model": "m", "messages": []},
+            _anthropic_client(stream),
+            {"model": "m", "messages": []},
             on_stream_event=hook,
         )
     assert message.content[0].text == "summary"

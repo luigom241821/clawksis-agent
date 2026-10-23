@@ -86,9 +86,7 @@ class TestBusyCommandPersistence:
     async def test_save_failure_preserves_mode(self, monkeypatch):
         """When save_config_value returns False, mode is unchanged."""
         runner = _make_runner(busy_mode="steer")
-        monkeypatch.setattr(
-            "cli.save_config_value", lambda k, v: False
-        )
+        monkeypatch.setattr("cli.save_config_value", lambda k, v: False)
         event = _make_event("/busy queue")
         result = await runner._handle_busy_command(event)
         assert "unchanged" in str(result).lower()

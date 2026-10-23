@@ -72,7 +72,9 @@ _upgrade_thread: list[threading.Thread] = []
 def test_slow_title_upgrade_thread_is_left_running_within_the_test():
     from agent.title_generator import _UPGRADE_THREADS
 
-    thread = threading.Thread(target=time.sleep, args=(1.5,), name="auto-title", daemon=True)
+    thread = threading.Thread(
+        target=time.sleep, args=(1.5,), name="auto-title", daemon=True
+    )
     _UPGRADE_THREADS.add(thread)
     thread.start()
     assert thread.is_alive()
@@ -80,5 +82,7 @@ def test_slow_title_upgrade_thread_is_left_running_within_the_test():
 
 
 def test_title_upgrade_thread_was_joined_before_the_sweep_closed_stores():
-    assert _upgrade_thread, "expected the previous test to have started an upgrade thread"
+    assert _upgrade_thread, (
+        "expected the previous test to have started an upgrade thread"
+    )
     assert not _upgrade_thread.pop().is_alive()

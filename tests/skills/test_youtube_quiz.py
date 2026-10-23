@@ -7,7 +7,13 @@ from unittest import mock
 
 import pytest
 
-SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "optional-skills" / "productivity" / "memento-flashcards" / "scripts"
+SCRIPTS_DIR = (
+    Path(__file__).resolve().parents[2]
+    / "optional-skills"
+    / "productivity"
+    / "memento-flashcards"
+    / "scripts"
+)
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 import youtube_quiz
@@ -26,15 +32,12 @@ class TestNormalizeSegments:
         segments = [{"text": "hello "}, {"text": " world"}]
         assert youtube_quiz._normalize_segments(segments) == "hello world"
 
-
     def test_whitespace_only(self):
         assert youtube_quiz._normalize_segments([{"text": "   "}, {"text": "  "}]) == ""
 
     def test_collapses_multiple_spaces(self):
         segments = [{"text": "a   b"}, {"text": "c  d"}]
         assert youtube_quiz._normalize_segments(segments) == "a b c d"
-
-
 
 
 class TestFetchWithMockedAPI:
@@ -77,5 +80,3 @@ class TestFetchWithMockedAPI:
         result = json.loads(captured.out)
         assert result["ok"] is False
         assert result["error"] == "transcript_unavailable"
-
-

@@ -6,15 +6,23 @@ Default off: a 1M-window child compacts at the same 0.50 x window as its parent 
 compaction is a chance to lose detail, so the cap is opt-in. The validation matters because YAML
 ``true`` coerces to int 1 (a one-token trigger) and ``"200k"`` would silently read as no cap.
 """
+
 from types import SimpleNamespace
 
 from agent.context_compressor import ContextCompressor
-from tools.delegate_tool import _apply_child_compression_cap, _child_compression_cap_tokens
+from tools.delegate_tool import (
+    _apply_child_compression_cap,
+    _child_compression_cap_tokens,
+)
 
 
 def _child(window=1_000_000, threshold=0.50, cap=None):
-    cc = ContextCompressor(model="anthropic/claude-fable-5.1", threshold_percent=threshold,
-                           config_context_length=window, threshold_tokens_cap=cap)
+    cc = ContextCompressor(
+        model="anthropic/claude-fable-5.1",
+        threshold_percent=threshold,
+        config_context_length=window,
+        threshold_tokens_cap=cap,
+    )
     return SimpleNamespace(context_compressor=cc)
 
 
@@ -36,7 +44,9 @@ def test_explicit_cap_is_the_lower_of_delegation_and_global_and_never_raises():
     small = _child(window=128_000)
     before = small.context_compressor.threshold_tokens
     _apply_child_compression_cap(small, {"compression_threshold_tokens": 200_000})
-    assert small.context_compressor.threshold_tokens == before  # cap above the ratio trigger: no effect
+    assert (
+        small.context_compressor.threshold_tokens == before
+    )  # cap above the ratio trigger: no effect
 
 
 def test_config_values_are_validated_not_coerced():

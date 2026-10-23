@@ -23,8 +23,6 @@ class CopilotACPClientSafetyTests(unittest.TestCase):
     def setUp(self) -> None:
         self.client = CopilotACPClient(acp_cwd="/tmp")
 
-
-
     def test_stream_true_preserves_tool_call_deltas(self) -> None:
         tool_response = (
             "<tool_call>"
@@ -55,7 +53,6 @@ class CopilotACPClientSafetyTests(unittest.TestCase):
         )
         self.assertEqual(chunks[1].choices, [])
 
-
     def _dispatch(self, message: dict, *, cwd: str) -> dict:
         process = _FakeProcess()
         handled = self.client._handle_server_message(
@@ -70,13 +67,13 @@ class CopilotACPClientSafetyTests(unittest.TestCase):
         self.assertTrue(payload)
         return json.loads(payload)
 
-
-
     def test_read_text_file_redacts_sensitive_content(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             secret_file = root / "config.env"
-            secret_file.write_text("OPENAI_API_KEY=sk-proj-abc123def456ghi789jkl012", encoding="utf-8")
+            secret_file.write_text(
+                "OPENAI_API_KEY=sk-proj-abc123def456ghi789jkl012", encoding="utf-8"
+            )
 
             # agent.redact snapshots CLAWK_REDACT_SECRETS at import time into
             # _REDACT_ENABLED, so patching os.environ is a no-op. Flip the
@@ -92,7 +89,7 @@ class CopilotACPClientSafetyTests(unittest.TestCase):
                     cwd=str(root),
                 )
 
-        content = ((response.get("result") or {}).get("content") or "")
+        content = (response.get("result") or {}).get("content") or ""
         self.assertNotIn("abc123def456", content)
         self.assertIn("OPENAI_API_KEY=", content)
 
@@ -132,11 +129,9 @@ class CopilotACPClientSafetyTests(unittest.TestCase):
                 )
 
         self.assertNotIn("error", response)
-        content = ((response.get("result") or {}).get("content") or "")
+        content = (response.get("result") or {}).get("content") or ""
         self.assertIn("中文标题", content)
         self.assertIn("em dash —", content)
-
-
 
     def test_write_text_file_respects_safe_root(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -145,7 +140,9 @@ class CopilotACPClientSafetyTests(unittest.TestCase):
             safe_root.mkdir()
             outside = root / "outside.txt"
 
-            with patch.dict(os.environ, {"CLAWK_WRITE_SAFE_ROOT": str(safe_root)}, clear=False):
+            with patch.dict(
+                os.environ, {"CLAWK_WRITE_SAFE_ROOT": str(safe_root)}, clear=False
+            ):
                 response = self._dispatch(
                     {
                         "jsonrpc": "2.0",
@@ -189,10 +186,13 @@ def _fake_popen_capture(captured):
         captured["cmd"] = cmd
         captured["kwargs"] = kwargs
         raise FileNotFoundError("copilot not found")
+
     return _fake
 
 
-def test_run_prompt_preserves_real_home_when_profile_home_available(monkeypatch, tmp_path):
+def test_run_prompt_preserves_real_home_when_profile_home_available(
+    monkeypatch, tmp_path
+):
     clawk_home = tmp_path / "clawk"
     (clawk_home / "home").mkdir(parents=True)
     real_home = tmp_path / "real-home"
@@ -217,9 +217,16 @@ def test_run_prompt_preserves_real_home_when_profile_home_available(monkeypatch,
     # Hermeticity: the --acp support probe (PR #87308) calls subprocess.run
     # before Popen; stub it inconclusive so no real CLI on the host box can
     # flip the resolution this test asserts.
-    with _patch("agent.copilot_acp_client.subprocess.run", side_effect=FileNotFoundError):
-        with _patch("agent.copilot_acp_client.subprocess.Popen", side_effect=_fake_popen_capture(captured)):
-            with pytest.raises(RuntimeError, match="Could not start Copilot ACP command"):
+    with _patch(
+        "agent.copilot_acp_client.subprocess.run", side_effect=FileNotFoundError
+    ):
+        with _patch(
+            "agent.copilot_acp_client.subprocess.Popen",
+            side_effect=_fake_popen_capture(captured),
+        ):
+            with pytest.raises(
+                RuntimeError, match="Could not start Copilot ACP command"
+            ):
                 client._run_prompt("hello", timeout_seconds=1)
 
     assert captured["kwargs"]["env"]["HOME"] == str(real_home)
@@ -236,9 +243,16 @@ def test_run_prompt_passes_home_when_parent_env_is_clean(monkeypatch, tmp_path):
     # Hermeticity: the --acp support probe (PR #87308) calls subprocess.run
     # before Popen; stub it inconclusive so no real CLI on the host box can
     # flip the resolution this test asserts.
-    with _patch("agent.copilot_acp_client.subprocess.run", side_effect=FileNotFoundError):
-        with _patch("agent.copilot_acp_client.subprocess.Popen", side_effect=_fake_popen_capture(captured)):
-            with pytest.raises(RuntimeError, match="Could not start Copilot ACP command"):
+    with _patch(
+        "agent.copilot_acp_client.subprocess.run", side_effect=FileNotFoundError
+    ):
+        with _patch(
+            "agent.copilot_acp_client.subprocess.Popen",
+            side_effect=_fake_popen_capture(captured),
+        ):
+            with pytest.raises(
+                RuntimeError, match="Could not start Copilot ACP command"
+            ):
                 client._run_prompt("hello", timeout_seconds=1)
 
     assert "env" in captured["kwargs"]
@@ -260,7 +274,9 @@ def _clear_probe_cache():
 
 
 def _completed(returncode=0, stdout=""):
-    return _subprocess.CompletedProcess(args=[], returncode=returncode, stdout=stdout, stderr="")
+    return _subprocess.CompletedProcess(
+        args=[], returncode=returncode, stdout=stdout, stderr=""
+    )
 
 
 def test_probe_true_when_help_advertises_acp():
@@ -292,12 +308,10 @@ def test_probe_inconclusive_falls_through_to_spawn_error(tmp_path):
             "agent.copilot_acp_client.subprocess.Popen",
             side_effect=FileNotFoundError("copilot not found"),
         ):
-            with pytest.raises(RuntimeError, match="Could not start Copilot ACP command"):
+            with pytest.raises(
+                RuntimeError, match="Could not start Copilot ACP command"
+            ):
                 client._run_prompt("hello", timeout_seconds=1)
-
-
-
-
 
 
 def test_probe_skipped_for_custom_args_without_acp():
@@ -354,17 +368,19 @@ def test_model_selection_prefers_stable_config_option():
 def test_model_selection_rejects_disabled_config_option():
     from agent.copilot_acp_client import _model_selection_request
 
-    assert _model_selection_request(
-        _session_with_config_options(), "claude-fable-5"
-    ) is None
+    assert (
+        _model_selection_request(_session_with_config_options(), "claude-fable-5")
+        is None
+    )
 
 
 def test_model_selection_rejects_unknown_config_option():
     from agent.copilot_acp_client import _model_selection_request
 
-    assert _model_selection_request(
-        _session_with_config_options(), "not-served-here"
-    ) is None
+    assert (
+        _model_selection_request(_session_with_config_options(), "not-served-here")
+        is None
+    )
 
 
 def test_model_selection_falls_back_to_legacy_extension():
@@ -388,9 +404,9 @@ def test_model_selection_falls_back_to_legacy_extension():
 def test_model_selection_skips_provider_virtual_slug():
     from agent.copilot_acp_client import _model_selection_request
 
-    assert _model_selection_request(
-        _session_with_config_options(), "copilot-acp"
-    ) is None
+    assert (
+        _model_selection_request(_session_with_config_options(), "copilot-acp") is None
+    )
 
 
 def test_run_prompt_receives_picker_model():
@@ -514,7 +530,9 @@ for line in sys.stdin:
 def _recording_client(tmp_path, spawned):
     server = tmp_path / "fake_copilot_acp.py"
     server.write_text(_FAKE_ACP_SERVER, encoding="utf-8")
-    client = CopilotACPClient(command=sys.executable, args=[str(server)], acp_cwd=str(tmp_path))
+    client = CopilotACPClient(
+        command=sys.executable, args=[str(server)], acp_cwd=str(tmp_path)
+    )
     real_spawn = client._spawn
 
     def record_spawn():
@@ -544,11 +562,15 @@ def test_overlapping_sessions_reap_their_own_process(tmp_path):
         f"session A teardown: own child leaked={leaked}, sibling process killed={killed}"
     )
 
-    assert client.is_closed is False, "a shared client is not closed while a sibling session is live"
+    assert client.is_closed is False, (
+        "a shared client is not closed while a sibling session is live"
+    )
 
     session_b.__exit__(None, None, None)
     assert proc_b.poll() is not None
-    assert client.is_closed is True, "the last session to drain still flips is_closed for single-session callers"
+    assert client.is_closed is True, (
+        "the last session to drain still flips is_closed for single-session callers"
+    )
 
 
 def test_close_terminates_every_live_session_process(tmp_path):
@@ -580,7 +602,9 @@ def test_cli_death_is_reported_as_a_crash_not_a_timeout(tmp_path):
     raised TimeoutError there, which the agent loop retries on a different (larger) budget."""
     server = tmp_path / "crashing_acp.py"
     server.write_text(_CRASHING_ACP_CLI, encoding="utf-8")
-    client = CopilotACPClient(command=sys.executable, args=[str(server)], acp_cwd=str(tmp_path))
+    client = CopilotACPClient(
+        command=sys.executable, args=[str(server)], acp_cwd=str(tmp_path)
+    )
     try:
         with client._session(30):
             pass

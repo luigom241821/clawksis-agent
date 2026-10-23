@@ -3,7 +3,9 @@
 import threading
 
 
-def test_async_delegations_hold_busy_accounting_through_finalization(tmp_path, monkeypatch):
+def test_async_delegations_hold_busy_accounting_through_finalization(
+    tmp_path, monkeypatch
+):
     from clawk_cli import backend_retirement
     from clawk_cli.web_server_idle_proof import idle_proof
     from tools import async_delegation
@@ -19,8 +21,14 @@ def test_async_delegations_hold_busy_accounting_through_finalization(tmp_path, m
 
     def dispatch():
         return async_delegation.dispatch_async_delegation(
-            goal="test", context=None, toolsets=None, role="leaf", model=None,
-            session_key="test", runner=runner)
+            goal="test",
+            context=None,
+            toolsets=None,
+            role="leaf",
+            model=None,
+            session_key="test",
+            runner=runner,
+        )
 
     token = fence.prepare()["token"]
     try:
@@ -34,7 +42,9 @@ def test_async_delegations_hold_busy_accounting_through_finalization(tmp_path, m
         assert idle_proof()["idle"] is False
         assert fence.prepare() == {"ok": False, "idle": False}
         # A stalled record may be force-finalized before its stuck runner really unwinds.
-        async_delegation._finalize(handle["delegation_id"], {"error": "test stall"}, "stalled")
+        async_delegation._finalize(
+            handle["delegation_id"], {"error": "test stall"}, "stalled"
+        )
         assert async_delegation.active_count() == 0
         assert fence.prepare() == {"ok": False, "idle": False}
     finally:

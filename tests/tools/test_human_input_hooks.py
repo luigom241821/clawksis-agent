@@ -12,7 +12,12 @@ from unittest.mock import patch
 import pytest
 
 from tools import approval as approval_module
-from tools import approval_context, approval_gateway_wait, terminal_tool, terminal_tool_sudo
+from tools import (
+    approval_context,
+    approval_gateway_wait,
+    terminal_tool,
+    terminal_tool_sudo,
+)
 from tools.approval_prompt import prompt_dangerous_approval
 from tools.clarify_tool import clarify_tool
 
@@ -64,7 +69,10 @@ class TestSudo:
     def test_callback_prompt_fires_pair_without_password(self, captured):
         terminal_tool.set_sudo_password_callback(lambda: PASSWORD)
 
-        assert terminal_tool_sudo._prompt_for_sudo_password(command=SECRET_COMMAND) == PASSWORD
+        assert (
+            terminal_tool_sudo._prompt_for_sudo_password(command=SECRET_COMMAND)
+            == PASSWORD
+        )
 
         request, resolved = _single_pair(captured, "sudo")
         assert resolved["outcome"] == "provided"
@@ -79,9 +87,16 @@ class TestSudo:
         assert _single_pair(captured, "sudo")[1]["outcome"] == "skipped"
 
     def test_tty_fallback_timeout_resolves_as_timeout(self, captured, monkeypatch):
-        monkeypatch.setattr(terminal_tool_sudo, "_read_hidden_password", lambda result: None)
+        monkeypatch.setattr(
+            terminal_tool_sudo, "_read_hidden_password", lambda result: None
+        )
 
-        assert terminal_tool_sudo._prompt_for_sudo_password(timeout_seconds=0, command="sudo true") == ""
+        assert (
+            terminal_tool_sudo._prompt_for_sudo_password(
+                timeout_seconds=0, command="sudo true"
+            )
+            == ""
+        )
 
         assert _single_pair(captured, "sudo")[1]["outcome"] == "timeout"
 
@@ -112,8 +127,11 @@ class TestClarify:
 
 class TestApproval:
     def test_cli_callback_prompt_redacts_command(self, captured):
-        choice = prompt_dangerous_approval(SECRET_COMMAND, "privileged install",
-                                           approval_callback=lambda *a, **k: "once")
+        choice = prompt_dangerous_approval(
+            SECRET_COMMAND,
+            "privileged install",
+            approval_callback=lambda *a, **k: "once",
+        )
 
         assert choice == "once"
         request, resolved = _single_pair(captured, "approval")
@@ -127,11 +145,19 @@ class TestApproval:
         approval_module._gateway_queues.pop(session_key, None)
 
         def notify(data):
-            threading.Timer(0.05, approval_module.resolve_gateway_approval, (session_key, "session")).start()
+            threading.Timer(
+                0.05, approval_module.resolve_gateway_approval, (session_key, "session")
+            ).start()
 
-        approval_data = {"command": SECRET_COMMAND, "description": "privileged install",
-                         "pattern_key": "sudo", "pattern_keys": ["sudo"]}
-        decision = approval_gateway_wait._await_gateway_decision(session_key, notify, approval_data)
+        approval_data = {
+            "command": SECRET_COMMAND,
+            "description": "privileged install",
+            "pattern_key": "sudo",
+            "pattern_keys": ["sudo"],
+        }
+        decision = approval_gateway_wait._await_gateway_decision(
+            session_key, notify, approval_data
+        )
 
         assert decision["choice"] == "session"
         request, resolved = _single_pair(captured, "approval")
@@ -143,8 +169,15 @@ class TestApproval:
         def notify(data):
             raise ConnectionError("adapter offline")
 
-        approval_data = {"command": "rm -rf build", "description": "d", "pattern_key": "rm", "pattern_keys": ["rm"]}
-        decision = approval_gateway_wait._await_gateway_decision("human-input-notify-fail", notify, approval_data)
+        approval_data = {
+            "command": "rm -rf build",
+            "description": "d",
+            "pattern_key": "rm",
+            "pattern_keys": ["rm"],
+        }
+        decision = approval_gateway_wait._await_gateway_decision(
+            "human-input-notify-fail", notify, approval_data
+        )
 
         assert decision.get("notify_failed") is True
         assert _single_pair(captured, "approval")[1]["outcome"] == "notify_failed"
@@ -154,14 +187,31 @@ class TestApproval:
         from tools import approval_prompt
 
         manager = PluginManager()
-        manifest = PluginManifest(name="phone-fixture", version="1.0.0", description="", source="user", key="phone")
-        PluginContext(manifest, manager).register_approval_transport("phone", lambda req: req.respond("deny"))
+        manifest = PluginManifest(
+            name="phone-fixture",
+            version="1.0.0",
+            description="",
+            source="user",
+            key="phone",
+        )
+        PluginContext(manifest, manager).register_approval_transport(
+            "phone", lambda req: req.respond("deny")
+        )
         monkeypatch.setattr(approval_prompt, "get_plugin_manager", lambda: manager)
-        monkeypatch.setattr(approval_context, "_get_approval_transport_config", lambda: ("phone", None))
+        monkeypatch.setattr(
+            approval_context, "_get_approval_transport_config", lambda: ("phone", None)
+        )
 
         attempt = approval_prompt._present_with_selected_transport(
-            command=SECRET_COMMAND, description="d", pattern_key="sudo", pattern_keys=["sudo"],
-            session_key="human-input-transport", surface="cli", allow_session=True, allow_permanent=True)
+            command=SECRET_COMMAND,
+            description="d",
+            pattern_key="sudo",
+            pattern_keys=["sudo"],
+            session_key="human-input-transport",
+            surface="cli",
+            allow_session=True,
+            allow_permanent=True,
+        )
 
         assert attempt["choice"] == "deny"
         request, resolved = _single_pair(captured, "approval")

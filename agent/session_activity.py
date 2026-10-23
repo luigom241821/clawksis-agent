@@ -52,7 +52,9 @@ TERMINAL_COMPRESSION_PROVENANCES = frozenset(
 )
 
 
-def is_terminal_compression_provenance(provenance: Optional[ActivityProvenance | str]) -> bool:
+def is_terminal_compression_provenance(
+    provenance: Optional[ActivityProvenance | str],
+) -> bool:
     """True when this stamp ends a compression phase and must bypass the persist rate limit."""
     return normalize_activity_provenance(provenance) in TERMINAL_COMPRESSION_PROVENANCES
 
@@ -60,10 +62,16 @@ def is_terminal_compression_provenance(provenance: Optional[ActivityProvenance |
 def bound_activity_description(description: Optional[str]) -> str:
     """Clamp free-form activity text to the shared description budget."""
     text = (description or "").strip()
-    return text if len(text) <= ACTIVITY_DESCRIPTION_MAX else text[: ACTIVITY_DESCRIPTION_MAX - 1] + "…"
+    return (
+        text
+        if len(text) <= ACTIVITY_DESCRIPTION_MAX
+        else text[: ACTIVITY_DESCRIPTION_MAX - 1] + "…"
+    )
 
 
-def normalize_activity_provenance(provenance: Optional[ActivityProvenance | str]) -> ActivityProvenance:
+def normalize_activity_provenance(
+    provenance: Optional[ActivityProvenance | str],
+) -> ActivityProvenance:
     """Return a known provenance, or ``UNKNOWN`` when unset/unrecognized."""
     if isinstance(provenance, ActivityProvenance):
         return provenance
@@ -113,7 +121,10 @@ def build_activity_snapshot(
         "last_activity_provenance": prov,
         "seconds_since_activity": round(clock - when, 1) if when is not None else None,
         # Short aliases used by existing gateway/delegate readers.
-        "last_activity_ts": when, "last_activity_desc": desc, "description": desc, "provenance": prov,
+        "last_activity_ts": when,
+        "last_activity_desc": desc,
+        "description": desc,
+        "provenance": prov,
         **(extra or {}),
     }
 

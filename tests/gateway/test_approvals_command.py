@@ -55,5 +55,3 @@ async def test_gateway_rejects_non_admin_persistent_approval_change():
 
     assert "admin" in output.lower()
     run.assert_not_called()
-
-

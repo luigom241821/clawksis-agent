@@ -134,7 +134,6 @@ def _make_parent_no_subagents() -> MagicMock:
 class TestAgentHasActiveSubagents:
     """The detection helper must be both precise and defensive."""
 
-
     def test_returns_false_when_attribute_missing(self) -> None:
         """Production AIAgents always have _active_children, but the helper
         must not blow up on test stubs or partial mocks."""
@@ -143,7 +142,6 @@ class TestAgentHasActiveSubagents:
             pass
 
         assert GatewayRunner._agent_has_active_subagents(StubAgent()) is False
-
 
     def test_works_without_lock(self) -> None:
         """``_active_children_lock`` is optional in test stubs."""
@@ -168,7 +166,6 @@ class TestAgentHasActiveSubagents:
 class TestBusyHandlerDemotesInterruptForSubagents:
     """The Phase-1 fix from #30170: parent.interrupt() must NOT fire when
     the parent is currently driving subagents."""
-
 
     @pytest.mark.asyncio
     async def test_interrupt_still_fires_when_no_subagents(self) -> None:
@@ -236,4 +233,3 @@ class TestBusyHandlerDemotesInterruptForSubagents:
         assert injected.endswith("course-correct")
         assert '"chat_id": "123"' in injected
         parent.interrupt.assert_not_called()
-

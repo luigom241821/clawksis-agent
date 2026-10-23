@@ -30,6 +30,7 @@ These tests pin the contract:
     typescript-language-server via ``_maybe_lsp_diagnostics`` — the
     diagnostics show up on ``lsp_diagnostics``, not ``lint``.
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -40,6 +41,7 @@ import pytest
 def _make_fops():
     from tools.environments.local import LocalEnvironment
     from tools.file_operations import ShellFileOperations
+
     return ShellFileOperations(LocalEnvironment())
 
 
@@ -56,13 +58,13 @@ def test_shell_linter_skipped_when_lsp_will_handle(ext, tmp_path):
     src.write_text("intentionally invalid content\n")
 
     def _exec_must_not_run(*args, **kwargs):  # pragma: no cover
-        raise AssertionError(
-            "shell linter was invoked despite LSP claiming the file"
-        )
+        raise AssertionError("shell linter was invoked despite LSP claiming the file")
 
-    with patch.object(fops, "_lsp_will_handle", return_value=True), \
-         patch.object(fops, "_exec", side_effect=_exec_must_not_run), \
-         patch.object(fops, "_has_command", return_value=True):
+    with (
+        patch.object(fops, "_lsp_will_handle", return_value=True),
+        patch.object(fops, "_exec", side_effect=_exec_must_not_run),
+        patch.object(fops, "_has_command", return_value=True),
+    ):
         result = fops._check_lint(str(src))
 
     assert result.skipped is True
@@ -80,8 +82,10 @@ def test_lsp_will_handle_swallows_enabled_for_exception(tmp_path):
     fake_svc = MagicMock()
     fake_svc.enabled_for.side_effect = RuntimeError("server crashed")
 
-    with patch.object(fops, "_lsp_local_only", return_value=True), \
-         patch("agent.lsp.get_service", return_value=fake_svc):
+    with (
+        patch.object(fops, "_lsp_local_only", return_value=True),
+        patch("agent.lsp.get_service", return_value=fake_svc),
+    ):
         assert fops._lsp_will_handle(str(src)) is False
 
 
@@ -104,10 +108,12 @@ def test_ts_shell_linter_skipped_when_ancestor_tsconfig_present(tmp_path):
     def _exec_must_not_run(*args, **kwargs):  # pragma: no cover
         raise AssertionError("shell tsc ran despite an ancestor tsconfig.json")
 
-    with patch.object(fops, "_lsp_local_only", return_value=True), \
-         patch.object(fops, "_lsp_will_handle", return_value=False), \
-         patch.object(fops, "_exec", side_effect=_exec_must_not_run), \
-         patch.object(fops, "_has_command", return_value=True):
+    with (
+        patch.object(fops, "_lsp_local_only", return_value=True),
+        patch.object(fops, "_lsp_will_handle", return_value=False),
+        patch.object(fops, "_exec", side_effect=_exec_must_not_run),
+        patch.object(fops, "_has_command", return_value=True),
+    ):
         result = fops._check_lint(str(src))
 
     assert result.skipped is True
@@ -126,10 +132,14 @@ def test_ts_shell_linter_runs_when_no_ancestor_tsconfig(tmp_path):
     exec_result.exit_code = 2
     exec_result.stdout = "loose.ts(1,7): error TS2322: Type 'string' ...\n"
 
-    with patch.object(fops, "_lsp_local_only", return_value=True), \
-         patch.object(fops, "_lsp_will_handle", return_value=False), \
-         patch.object(fops, "_local_workspace_untrusted", return_value=False), \
-         patch.object(fops, "_run_managed_node_linter", return_value=exec_result) as exec_mock:
+    with (
+        patch.object(fops, "_lsp_local_only", return_value=True),
+        patch.object(fops, "_lsp_will_handle", return_value=False),
+        patch.object(fops, "_local_workspace_untrusted", return_value=False),
+        patch.object(
+            fops, "_run_managed_node_linter", return_value=exec_result
+        ) as exec_mock,
+    ):
         fops._check_lint(str(src))
 
     assert exec_mock.called, "tsc should run when there's no project tsconfig"

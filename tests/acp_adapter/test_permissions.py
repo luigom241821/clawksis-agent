@@ -42,8 +42,12 @@ def _invoke_callback(
         scheduled["loop"] = passed_loop
         return future
 
-    with patch("agent.async_utils.asyncio.run_coroutine_threadsafe", side_effect=_schedule):
-        cb = make_approval_callback(request_permission, loop, session_id="s1", timeout=timeout)
+    with patch(
+        "agent.async_utils.asyncio.run_coroutine_threadsafe", side_effect=_schedule
+    ):
+        cb = make_approval_callback(
+            request_permission, loop, session_id="s1", timeout=timeout
+        )
         if use_prompt_path:
             result = prompt_dangerous_approval(
                 "rm -rf /",
@@ -113,7 +117,10 @@ class TestApprovalBridge:
             allow_session=False,
         )
 
-        assert [option.option_id for option in kwargs["options"]] == ["allow_once", "deny"]
+        assert [option.option_id for option in kwargs["options"]] == [
+            "allow_once",
+            "deny",
+        ]
 
     def test_tool_call_ids_are_unique(self):
         _, first_kwargs, _, _, _ = _invoke_callback(
@@ -123,11 +130,10 @@ class TestApprovalBridge:
             AllowedOutcome(option_id="allow_once", outcome="selected"),
         )
 
-        assert first_kwargs["tool_call"].tool_call_id != second_kwargs["tool_call"].tool_call_id
-
-
-
-
+        assert (
+            first_kwargs["tool_call"].tool_call_id
+            != second_kwargs["tool_call"].tool_call_id
+        )
 
     def test_allow_always_maps_correctly(self):
         result, _, _, _, _ = _invoke_callback(
@@ -136,7 +142,6 @@ class TestApprovalBridge:
         )
 
         assert result == "always"
-
 
     def test_timeout_returns_timeout_and_cancels_future(self):
         loop = MagicMock(spec=asyncio.AbstractEventLoop)
@@ -151,8 +156,12 @@ class TestApprovalBridge:
             scheduled["loop"] = passed_loop
             return future
 
-        with patch("agent.async_utils.asyncio.run_coroutine_threadsafe", side_effect=_schedule):
-            cb = make_approval_callback(request_permission, loop, session_id="s1", timeout=0.01)
+        with patch(
+            "agent.async_utils.asyncio.run_coroutine_threadsafe", side_effect=_schedule
+        ):
+            cb = make_approval_callback(
+                request_permission, loop, session_id="s1", timeout=0.01
+            )
             result = cb("rm -rf /", "dangerous command")
 
         scheduled["coro"].close()
@@ -162,7 +171,6 @@ class TestApprovalBridge:
         assert result == "timeout"
         assert scheduled["loop"] is loop
         assert future.cancel.call_count == 1
-
 
 
 # ---------------------------------------------------------------------------
@@ -180,7 +188,9 @@ class TestSchedulerFailure:
         created = {"coro": None}
 
         async def _response_coro(**kwargs):
-            return _make_response(AllowedOutcome(option_id="allow_once", outcome="selected"))
+            return _make_response(
+                AllowedOutcome(option_id="allow_once", outcome="selected")
+            )
 
         def _request_permission(**kwargs):
             created["coro"] = _response_coro(**kwargs)
@@ -192,7 +202,9 @@ class TestSchedulerFailure:
                 "agent.async_utils.asyncio.run_coroutine_threadsafe",
                 side_effect=RuntimeError("scheduler down"),
             ):
-                cb = make_approval_callback(_request_permission, loop, session_id="s1", timeout=0.01)
+                cb = make_approval_callback(
+                    _request_permission, loop, session_id="s1", timeout=0.01
+                )
                 result = cb("rm -rf /", "dangerous")
             gc.collect()
 
@@ -200,7 +212,8 @@ class TestSchedulerFailure:
         assert created["coro"] is not None
         assert created["coro"].cr_frame is None
         runtime_warnings = [
-            w for w in caught
+            w
+            for w in caught
             if issubclass(w.category, RuntimeWarning)
             and "was never awaited" in str(w.message)
             and "_response_coro" in str(w.message)
@@ -218,49 +231,94 @@ class TestPermissionRequestToolCallReachesATerminalStatus:
         future = MagicMock(spec=Future)
         future.result.return_value = _make_response(outcome)
         sent = []
-        with patch("agent.async_utils.asyncio.run_coroutine_threadsafe", return_value=future):
-            cb = factory(request_permission, MagicMock(spec=asyncio.AbstractEventLoop), "s1", send_update=sent.append)
+        with patch(
+            "agent.async_utils.asyncio.run_coroutine_threadsafe", return_value=future
+        ):
+            cb = factory(
+                request_permission,
+                MagicMock(spec=asyncio.AbstractEventLoop),
+                "s1",
+                send_update=sent.append,
+            )
             call(cb)
         requested = request_permission.call_args.kwargs["tool_call"]
         return requested, sent
 
-    @pytest.mark.parametrize("outcome, status", [
-        (AllowedOutcome(option_id="allow_once", outcome="selected"), "completed"),
-        (DeniedOutcome(outcome="cancelled"), "failed"),
-    ])
+    @pytest.mark.parametrize(
+        "outcome, status",
+        [
+            (AllowedOutcome(option_id="allow_once", outcome="selected"), "completed"),
+            (DeniedOutcome(outcome="cancelled"), "failed"),
+        ],
+    )
     def test_command_permission_request_is_closed_per_outcome(self, outcome, status):
-        requested, sent = self._run(make_approval_callback, outcome, lambda cb: cb("rm -rf /", "dangerous"))
-        assert [(u.tool_call_id, u.status) for u in sent] == [(requested.tool_call_id, status)]
+        requested, sent = self._run(
+            make_approval_callback, outcome, lambda cb: cb("rm -rf /", "dangerous")
+        )
+        assert [(u.tool_call_id, u.status) for u in sent] == [
+            (requested.tool_call_id, status)
+        ]
 
     def test_denied_edit_approval_request_is_closed_as_failed(self):
-        from acp_adapter.edit_approval import EditProposal, make_acp_edit_approval_requester
-
-        proposal = EditProposal(tool_name="write_file", path="/tmp/x", old_text="", new_text="y", arguments={})
-        requested, sent = self._run(
-            make_acp_edit_approval_requester, DeniedOutcome(outcome="cancelled"), lambda cb: cb(proposal),
+        from acp_adapter.edit_approval import (
+            EditProposal,
+            make_acp_edit_approval_requester,
         )
-        assert [(u.tool_call_id, u.status) for u in sent] == [(requested.tool_call_id, "failed")]
+
+        proposal = EditProposal(
+            tool_name="write_file",
+            path="/tmp/x",
+            old_text="",
+            new_text="y",
+            arguments={},
+        )
+        requested, sent = self._run(
+            make_acp_edit_approval_requester,
+            DeniedOutcome(outcome="cancelled"),
+            lambda cb: cb(proposal),
+        )
+        assert [(u.tool_call_id, u.status) for u in sent] == [
+            (requested.tool_call_id, "failed")
+        ]
 
     def test_allowed_edit_approval_request_is_closed_as_completed_once(self):
         """Live regression: a client answering with a plain ``selected`` outcome (not the SDK
         ``AllowedOutcome`` class) had the edit applied but the bubble closed ``failed``."""
-        from acp_adapter.edit_approval import EditProposal, make_acp_edit_approval_requester
+        from acp_adapter.edit_approval import (
+            EditProposal,
+            make_acp_edit_approval_requester,
+        )
 
-        proposal = EditProposal(tool_name="write_file", path="/tmp/x", old_text="", new_text="y", arguments={})
+        proposal = EditProposal(
+            tool_name="write_file",
+            path="/tmp/x",
+            old_text="",
+            new_text="y",
+            arguments={},
+        )
         decisions = []
-        response = SimpleNamespace(outcome=SimpleNamespace(outcome="selected", option_id="allow_once"))
+        response = SimpleNamespace(
+            outcome=SimpleNamespace(outcome="selected", option_id="allow_once")
+        )
         request_permission = AsyncMock(name="request_permission")
         future = MagicMock(spec=Future)
         future.result.return_value = response
         sent = []
-        with patch("agent.async_utils.asyncio.run_coroutine_threadsafe", return_value=future):
+        with patch(
+            "agent.async_utils.asyncio.run_coroutine_threadsafe", return_value=future
+        ):
             requester = make_acp_edit_approval_requester(
-                request_permission, MagicMock(spec=asyncio.AbstractEventLoop), "s1", send_update=sent.append,
+                request_permission,
+                MagicMock(spec=asyncio.AbstractEventLoop),
+                "s1",
+                send_update=sent.append,
             )
             decisions.append(requester(proposal))
         requested = request_permission.call_args.kwargs["tool_call"]
         assert decisions == [True]
-        assert [(u.tool_call_id, u.status) for u in sent] == [(requested.tool_call_id, "completed")]
+        assert [(u.tool_call_id, u.status) for u in sent] == [
+            (requested.tool_call_id, "completed")
+        ]
 
 
 def test_default_permission_timeout_follows_approvals_config(monkeypatch):
@@ -269,6 +327,8 @@ def test_default_permission_timeout_follows_approvals_config(monkeypatch):
     from acp_adapter import permissions
     from tools import approval_context
 
-    monkeypatch.setattr(approval_context, "_get_approval_config", lambda: {"timeout": 900})
+    monkeypatch.setattr(
+        approval_context, "_get_approval_config", lambda: {"timeout": 900}
+    )
     assert permissions.resolve_permission_timeout(None) == 900.0
     assert permissions.resolve_permission_timeout(0.5) == 0.5

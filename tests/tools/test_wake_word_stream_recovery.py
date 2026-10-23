@@ -13,9 +13,15 @@ def test_listener_recovers_after_transient_capture_failure(monkeypatch):
     recovered = threading.Event()
     closed = []
     opened = []
-    engine = SimpleNamespace(frame_length=1280, reset=lambda: None,
-                             close=lambda: None, process=lambda frame: False)
-    detector = ww.WakeWordDetector(engine, lambda: None, input_device="chosen microphone")
+    engine = SimpleNamespace(
+        frame_length=1280,
+        reset=lambda: None,
+        close=lambda: None,
+        process=lambda frame: False,
+    )
+    detector = ww.WakeWordDetector(
+        engine, lambda: None, input_device="chosen microphone"
+    )
 
     class Capture:
         rate = ww.SAMPLE_RATE
@@ -41,7 +47,9 @@ def test_listener_recovers_after_transient_capture_failure(monkeypatch):
     monkeypatch.setattr(detector, "_open_capture", open_capture)
     detector.start()
     try:
-        assert recovered.wait(3), "listener never reopened capture after a transient read failure"
+        assert recovered.wait(3), (
+            "listener never reopened capture after a transient read failure"
+        )
     finally:
         detector.stop()
     assert all(capture in closed for capture in opened)
@@ -50,10 +58,18 @@ def test_listener_recovers_after_transient_capture_failure(monkeypatch):
 @pytest.mark.parametrize("failure", ["read", "open", "cancel", "external"])
 def test_capture_recovery_is_bounded_and_cancellable(monkeypatch, failure):
     calls, closed, failures = [], [], []
-    engine = SimpleNamespace(frame_length=1280, reset=lambda: None,
-                             close=lambda: None, process=lambda frame: False)
-    detector = ww.WakeWordDetector(engine, lambda: None, on_failure=failures.append,
-                                   external_audio=failure == "external")
+    engine = SimpleNamespace(
+        frame_length=1280,
+        reset=lambda: None,
+        close=lambda: None,
+        process=lambda frame: False,
+    )
+    detector = ww.WakeWordDetector(
+        engine,
+        lambda: None,
+        on_failure=failures.append,
+        external_audio=failure == "external",
+    )
 
     class Capture:
         def read(self, stop):
@@ -93,8 +109,12 @@ def test_halt_releases_reader_wedged_in_recovered_capture(monkeypatch):
     be released by pause() — the halt hook must follow the recovered capture."""
     recovered = threading.Event()
     opened, closed = [], []
-    engine = SimpleNamespace(frame_length=1280, reset=lambda: None,
-                             close=lambda: None, process=lambda frame: False)
+    engine = SimpleNamespace(
+        frame_length=1280,
+        reset=lambda: None,
+        close=lambda: None,
+        process=lambda frame: False,
+    )
     detector = ww.WakeWordDetector(engine, lambda: None)
 
     class WedgedCapture:
@@ -111,7 +131,11 @@ def test_halt_releases_reader_wedged_in_recovered_capture(monkeypatch):
             closed.append(self)
             self._unblock.set()
 
-    monkeypatch.setattr(detector, "_open_capture", lambda frame_length: opened.append(WedgedCapture()) or opened[-1])
+    monkeypatch.setattr(
+        detector,
+        "_open_capture",
+        lambda frame_length: opened.append(WedgedCapture()) or opened[-1],
+    )
     monkeypatch.setattr(ww, "_HALT_JOIN_SECONDS", 0.2)
     detector.start()
     try:
@@ -122,7 +146,11 @@ def test_halt_releases_reader_wedged_in_recovered_capture(monkeypatch):
         assert len(opened) == 2, "listener never recovered a fresh capture"
         t0 = time.monotonic()
         detector.pause()
-        assert time.monotonic() - t0 < 2.5, "pause() must abort the wedged recovered reader, not block on it"
-        assert opened[1] in closed, "halt must abort the RECOVERED capture, not the dead one"
+        assert time.monotonic() - t0 < 2.5, (
+            "pause() must abort the wedged recovered reader, not block on it"
+        )
+        assert opened[1] in closed, (
+            "halt must abort the RECOVERED capture, not the dead one"
+        )
     finally:
         detector.stop()

@@ -2,6 +2,7 @@
 
 Re-exported from ``plugins.platforms.discord.adapter`` (callers and tests import them there).
 """
+
 from typing import Any, Optional
 
 
@@ -10,6 +11,7 @@ def _read_dm_role_auth_guild() -> Optional[int]:
     config.yaml ``discord.dm_role_auth_guild`` only (behavioral, not a secret); int or numeric string."""
     try:
         from clawk_cli.config import read_raw_config
+
         cfg = read_raw_config() or {}
         discord_cfg = cfg.get("discord", {}) or {}
         raw = discord_cfg.get("dm_role_auth_guild")
@@ -37,6 +39,7 @@ def _read_discord_prompt_timeout() -> int:
     raw: Any = None
     try:
         from clawk_cli.config import read_raw_config
+
         cfg = read_raw_config() or {}
         approvals_cfg = cfg.get("approvals", {}) or {}
         raw = approvals_cfg.get("discord_prompt_timeout")

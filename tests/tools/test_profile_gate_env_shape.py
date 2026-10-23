@@ -12,15 +12,27 @@ def test_operator_allowlist_shaped_vars_are_not_gates_but_platform_gates_are():
     assert not is_profile_gate_env("DEMO_ALLOWED_SENDER")
     assert not is_profile_gate_env("ACCESS_ALLOWED_CALLBACK_ACE_TYPE")
     assert not is_profile_gate_env("CLAWK_MEDIA_ALLOW_DIRS")
-    for gate in ("DISCORD_ALLOWED_CHANNELS", "TELEGRAM_GROUP_ALLOWED_CHATS", "GATEWAY_ALLOW_ALL_USERS",
-                 "WHATSAPP_GROUP_ALLOW_FROM", "QQ_GROUP_ALLOWED_USERS", "IRC_ALLOW_ALL_USERS"):
+    for gate in (
+        "DISCORD_ALLOWED_CHANNELS",
+        "TELEGRAM_GROUP_ALLOWED_CHATS",
+        "GATEWAY_ALLOW_ALL_USERS",
+        "WHATSAPP_GROUP_ALLOW_FROM",
+        "QQ_GROUP_ALLOWED_USERS",
+        "IRC_ALLOW_ALL_USERS",
+    ):
         assert is_profile_gate_env(gate), gate
 
 
-def test_routed_no_agent_script_env_keeps_operator_allowlist_and_drops_platform_gate(tmp_path, monkeypatch):
+def test_routed_no_agent_script_env_keeps_operator_allowlist_and_drops_platform_gate(
+    tmp_path, monkeypatch
+):
     """The cron ``no_agent`` spawn seam: a child built for ANOTHER profile drops Clawksis gates but
     keeps the operator's script data, whatever its name looks like."""
-    from agent.secret_scope import build_profile_secret_scope, reset_secret_scope, set_secret_scope
+    from agent.secret_scope import (
+        build_profile_secret_scope,
+        reset_secret_scope,
+        set_secret_scope,
+    )
     from clawk_constants import reset_clawk_home_override, set_clawk_home_override
 
     launch = tmp_path / ".clawk"
@@ -40,4 +52,6 @@ def test_routed_no_agent_script_env_keeps_operator_allowlist_and_drops_platform_
         reset_clawk_home_override(ht)
     assert env.get("DEMO_ALLOWED_SENDER") == "someone@example.com"
     assert "DISCORD_ALLOWED_CHANNELS" not in env
-    assert os.environ["DISCORD_ALLOWED_CHANNELS"] == "111"  # the strip never mutates the process env
+    assert (
+        os.environ["DISCORD_ALLOWED_CHANNELS"] == "111"
+    )  # the strip never mutates the process env

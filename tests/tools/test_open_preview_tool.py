@@ -15,8 +15,6 @@ def _reset_emitter():
     desktop_ui.set_emitter(None)
 
 
-
-
 def test_emitter_failure_is_reported():
     def _boom(*_a):
         raise RuntimeError("no window")

@@ -33,10 +33,12 @@ def update_scope_homes() -> set[Path]:
     homes: set[Path] = set()
     with suppress(Exception):
         from clawk_constants import get_clawk_home
+
         if (home := _resolved(get_clawk_home())) is not None:
             homes.add(home)
     with suppress(Exception):
         from clawk_cli.update_receipt import _profile_homes
+
         for _profile, home in _profile_homes():
             if (resolved := _resolved(home)) is not None:
                 homes.add(resolved)
@@ -59,6 +61,7 @@ def _ledger_gateway_home(pid: int) -> str | None:
     unreadable (elevated, or another account's service) while its create time still is."""
     with suppress(Exception):
         from clawk_cli.process_identity import ledger_entries
+
         for entry in ledger_entries(verified_only=True):
             if entry.get("pid") == pid and entry.get("purpose") == "gateway":
                 return entry.get("clawk_home") or None
@@ -70,6 +73,7 @@ def gateway_pid_home(pid: int) -> str | None:
     ``None`` when neither proves one. Discovery, the Windows pause record and its readiness check
     share it, so the home discovery proved is the home the restart debt keeps."""
     from clawk_cli.dashboard_procs import _clawk_home_for_pid
+
     try:
         home = _clawk_home_for_pid(pid)
     except Exception:  # health: allow BLE001 -- tri-state resolver: any environment-read failure is "unknown" and the ledger witness decides
@@ -77,7 +81,9 @@ def gateway_pid_home(pid: int) -> str | None:
     return home or _ledger_gateway_home(pid)
 
 
-def gateway_pid_in_update_scope(pid: int, scope: set[Path] | None = None) -> bool | None:
+def gateway_pid_in_update_scope(
+    pid: int, scope: set[Path] | None = None
+) -> bool | None:
     """Does gateway *pid* run on a home this update owns? ``None`` when its home cannot be read."""
     home = gateway_pid_home(pid)
     if home is None:
@@ -85,7 +91,9 @@ def gateway_pid_in_update_scope(pid: int, scope: set[Path] | None = None) -> boo
     return home_in_update_scope(home, scope)
 
 
-def partition_gateway_pids_by_scope(pids, scope: set[Path] | None = None) -> tuple[list[int], list[tuple[int, str | None]]]:
+def partition_gateway_pids_by_scope(
+    pids, scope: set[Path] | None = None
+) -> tuple[list[int], list[tuple[int, str | None]]]:
     """``(owned, foreign)`` split of *pids*; ``foreign`` pairs each PID with its home (None = unreadable)."""
     scope = update_scope_homes() if scope is None else scope
     owned: list[int] = []
@@ -99,6 +107,7 @@ def partition_gateway_pids_by_scope(pids, scope: set[Path] | None = None) -> tup
             if verdict is False:
                 with suppress(Exception):
                     from clawk_cli.dashboard_procs import _clawk_home_for_pid
+
                     home = _clawk_home_for_pid(pid)
             foreign.append((pid, home))
     return owned, foreign
@@ -114,10 +123,14 @@ def systemd_unit_clawk_home(scope_cmd: list, svc_name: str) -> str | None:
     if pid > 0:
         with suppress(Exception):
             from clawk_cli.dashboard_procs import _clawk_home_for_pid
+
             if (home := _clawk_home_for_pid(pid)) is not None:
                 return home
     try:
-        shown = _systemctl(list(scope_cmd) + ["show", svc_name, "--property=Environment", "--value"], timeout=10)
+        shown = _systemctl(
+            list(scope_cmd) + ["show", svc_name, "--property=Environment", "--value"],
+            timeout=10,
+        )
     except Exception:
         return None
     if getattr(shown, "returncode", 1) != 0:
@@ -136,7 +149,9 @@ def systemd_unit_clawk_home(scope_cmd: list, svc_name: str) -> str | None:
     return None
 
 
-def systemd_unit_in_update_scope(scope_cmd: list, svc_name: str, scope: set[Path] | None = None) -> bool | None:
+def systemd_unit_in_update_scope(
+    scope_cmd: list, svc_name: str, scope: set[Path] | None = None
+) -> bool | None:
     """Does unit *svc_name* belong to this update? ``None`` = ownership unreadable (leave it alone)."""
     home = systemd_unit_clawk_home(scope_cmd, svc_name)
     if home is None:
@@ -144,14 +159,18 @@ def systemd_unit_in_update_scope(scope_cmd: list, svc_name: str, scope: set[Path
     return home_in_update_scope(home, scope)
 
 
-def launchd_label_foreign_home(label: str, scope: set[Path] | None = None) -> str | None:
+def launchd_label_foreign_home(
+    label: str, scope: set[Path] | None = None
+) -> str | None:
     """The CLAWK_HOME a derived launchd label's installed plist pins when that home is NOT one of
     this update's — labels are account-global, so root B's default profile derives the same bare
     ``ai.clawk.gateway`` root A installed. ``None`` = ours, or no/unreadable plist (the locate step
     decides whether a job exists; only a proven foreign home is refused)."""
     import plistlib
+
     with suppress(Exception):
         from clawk_cli.gateway import get_launchd_plist_path
+
         plist_path = get_launchd_plist_path().with_name(f"{label}.plist")
         if not plist_path.exists():
             return None

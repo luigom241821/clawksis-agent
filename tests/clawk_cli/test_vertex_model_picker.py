@@ -32,7 +32,9 @@ def test_vertex_has_curated_model_list():
 def test_vertex_appears_when_credentials_configured():
     """has_vertex_credentials() == True must surface vertex in the picker."""
     with patch("agent.vertex_adapter.has_vertex_credentials", return_value=True):
-        providers = list_authenticated_providers(current_provider="openrouter", max_models=50)
+        providers = list_authenticated_providers(
+            current_provider="openrouter", max_models=50
+        )
 
     vertex = next((p for p in providers if p["slug"] == "vertex"), None)
     assert vertex is not None, "vertex should appear when credentials are configured"
@@ -43,7 +45,9 @@ def test_vertex_appears_when_credentials_configured():
 def test_vertex_hidden_without_credentials():
     """No service-account path / project override → vertex stays hidden."""
     with patch("agent.vertex_adapter.has_vertex_credentials", return_value=False):
-        providers = list_authenticated_providers(current_provider="openrouter", max_models=50)
+        providers = list_authenticated_providers(
+            current_provider="openrouter", max_models=50
+        )
 
     vertex = next((p for p in providers if p["slug"] == "vertex"), None)
     assert vertex is None, "vertex should not appear without credentials"

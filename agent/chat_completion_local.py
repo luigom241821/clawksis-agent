@@ -28,7 +28,10 @@ def _streams_llamacpp(agent) -> bool:
         return False
     from clawk_cli.local_runtime.capabilities import is_managed_provider
 
-    return is_managed_provider(str(getattr(agent, "provider", "") or ""), str(getattr(agent, "base_url", "") or ""))
+    return is_managed_provider(
+        str(getattr(agent, "provider", "") or ""),
+        str(getattr(agent, "base_url", "") or ""),
+    )
 
 
 def stale_giveup() -> int:
@@ -42,7 +45,11 @@ def _local_server_answers(agent) -> bool:
     if not parts.scheme or not parts.hostname:
         return False
     # "localhost" can resolve to ::1 first and wait out a timeout on a server bound to IPv4.
-    netloc = parts.netloc.replace("localhost", "127.0.0.1", 1) if parts.hostname == "localhost" else parts.netloc
+    netloc = (
+        parts.netloc.replace("localhost", "127.0.0.1", 1)
+        if parts.hostname == "localhost"
+        else parts.netloc
+    )
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     try:
         with opener.open(f"{parts.scheme}://{netloc}/health", timeout=3) as response:
@@ -60,9 +67,17 @@ def retry_recovered_local_server(agent) -> bool:
     from agent.chat_completion_helpers import _stale_streak
 
     giveup, streak = stale_giveup(), _stale_streak(agent)
-    if giveup <= 0 or streak < giveup or not _streams_llamacpp(agent) or not _local_server_answers(agent):
+    if (
+        giveup <= 0
+        or streak < giveup
+        or not _streams_llamacpp(agent)
+        or not _local_server_answers(agent)
+    ):
         return False
-    logger.info("Local model server answers its health check after %d stale attempts; trying once more.", streak)
+    logger.info(
+        "Local model server answers its health check after %d stale attempts; trying once more.",
+        streak,
+    )
     agent._consecutive_stale_streams = giveup - 1
     return True
 
@@ -76,8 +91,12 @@ def _managed_local_load_notice(agent, api_kwargs: dict) -> Optional[str]:
         if not base:
             return None
         from agent.chat_completion_helpers import estimate_request_context_tokens
-        from clawk_cli.local_runtime.load_progress import get_loading_progress, get_prefill_progress
+        from clawk_cli.local_runtime.load_progress import (
+            get_loading_progress,
+            get_prefill_progress,
+        )
         from clawk_cli.local_runtime.supervisor import state_path
+
         state = json.loads(state_path().read_text(encoding="utf-8-sig"))
         managed = urlparse(str(state.get("base_url", ""))).netloc.lower()
         if not managed or urlparse(base).netloc.lower() != managed:
@@ -85,8 +104,10 @@ def _managed_local_load_notice(agent, api_kwargs: dict) -> Optional[str]:
         model = str(api_kwargs.get("model", ""))
         progress = get_loading_progress().get(model)
         if progress is not None:
-            return (f"⏳ loading {model} into memory — {progress['percent']}% "
-                "(responses start once the model is loaded)")
+            return (
+                f"⏳ loading {model} into memory — {progress['percent']}% "
+                "(responses start once the model is loaded)"
+            )
         prefill = get_prefill_progress(model)
         if prefill is None:
             return None

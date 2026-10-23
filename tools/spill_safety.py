@@ -34,8 +34,14 @@ def ensure_spill_dir(path: Path, *, private: bool = True) -> Path:
     return path
 
 
-def open_exclusive(path: Path, *, private: bool = True, overwrite: bool = False,
-                   encoding: str = "utf-8", errors: str = "strict") -> IO[str]:
+def open_exclusive(
+    path: Path,
+    *,
+    private: bool = True,
+    overwrite: bool = False,
+    encoding: str = "utf-8",
+    errors: str = "strict",
+) -> IO[str]:
     """Open ``path`` for writing via exclusive create; never follows a link. ``overwrite=True``
     first unlinks an existing path (``lstat``-checked, so only the link itself is removed and
     directories are refused), then creates exclusively — the overwrite path cannot be
@@ -59,9 +65,17 @@ def open_exclusive(path: Path, *, private: bool = True, overwrite: bool = False,
         raise
 
 
-def write_text_exclusive(path: Path, text: str, *, private: bool = True, overwrite: bool = False,
-                         encoding: str = "utf-8", errors: str = "strict") -> None:
+def write_text_exclusive(
+    path: Path,
+    text: str,
+    *,
+    private: bool = True,
+    overwrite: bool = False,
+    encoding: str = "utf-8",
+    errors: str = "strict",
+) -> None:
     """``Path.write_text`` equivalent that refuses to follow symlinks."""
-    with open_exclusive(path, private=private, overwrite=overwrite, encoding=encoding,
-                        errors=errors) as fh:
+    with open_exclusive(
+        path, private=private, overwrite=overwrite, encoding=encoding, errors=errors
+    ) as fh:
         fh.write(text)

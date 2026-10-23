@@ -1,4 +1,5 @@
 """Real-home guards are exercised against disposable protected roots only."""
+
 from __future__ import annotations
 
 import io
@@ -72,14 +73,18 @@ _OPERATIONS = {
 
 @pytest.mark.parametrize("operation", _OPERATIONS, ids=_OPERATIONS)
 def test_io_guard_denies_protected_roots_before_mutation(protected_home, operation):
-    with pytest.raises((AssertionError, pytest.fail.Exception), match="REAL clawk home"):
+    with pytest.raises(
+        (AssertionError, pytest.fail.Exception), match="REAL clawk home"
+    ):
         _OPERATIONS[operation](protected_home / "file.txt")
 
 
 def test_rename_cannot_overwrite_a_protected_destination(protected_home, tmp_path):
     source = tmp_path / "source.txt"
     source.write_text("external", encoding="utf-8")
-    with pytest.raises((AssertionError, pytest.fail.Exception), match="REAL clawk home"):
+    with pytest.raises(
+        (AssertionError, pytest.fail.Exception), match="REAL clawk home"
+    ):
         source.replace(protected_home / "file.txt")
     assert source.read_text(encoding="utf-8") == "external"
 
@@ -93,17 +98,25 @@ def test_installed_desktop_app_can_be_read_but_never_changed(tmp_path, monkeypat
     plist.write_text("unchanged", encoding="utf-8")
     replacement = tmp_path / "Clawksis.app.new"
     replacement.mkdir()
-    changes = [lambda: shutil.rmtree(app), plist.unlink, lambda: replacement.replace(app),
-               lambda: plist.write_text("clobbered", encoding="utf-8")]
+    changes = [
+        lambda: shutil.rmtree(app),
+        plist.unlink,
+        lambda: replacement.replace(app),
+        lambda: plist.write_text("clobbered", encoding="utf-8"),
+    ]
     try:  # Windows without Developer Mode cannot create symlinks
         (tmp_path / "linked").symlink_to(app.parent, target_is_directory=True)
         changes.append(lambda: shutil.rmtree(tmp_path / "linked" / "Clawksis.app"))
     except OSError:
         pass
-    monkeypatch.setattr(conftest, "_REAL_INSTALLED_GUI_APPS", [os.path.normcase(os.path.realpath(app))])
+    monkeypatch.setattr(
+        conftest, "_REAL_INSTALLED_GUI_APPS", [os.path.normcase(os.path.realpath(app))]
+    )
     assert plist.read_text(encoding="utf-8") == "unchanged"
     for change in changes:
-        with pytest.raises(pytest.fail.Exception, match="REAL installed Clawksis desktop app"):
+        with pytest.raises(
+            pytest.fail.Exception, match="REAL installed Clawksis desktop app"
+        ):
             change()
     assert plist.read_text(encoding="utf-8") == "unchanged"
 
@@ -170,7 +183,9 @@ def test_path_metadata_exemption_tracks_path_changes(protected_home, monkeypatch
         guard.check(target, metadata=True)
 
 
-def test_relative_path_metadata_exemption_tracks_working_directory(protected_home, tmp_path, monkeypatch):
+def test_relative_path_metadata_exemption_tracks_working_directory(
+    protected_home, tmp_path, monkeypatch
+):
     from tests.home_io_guard import HomeIOGuard
 
     target = protected_home / "file.txt"
@@ -186,7 +201,9 @@ def test_relative_path_metadata_exemption_tracks_working_directory(protected_hom
         guard.check(target, metadata=True)
 
 
-def test_resolving_a_path_entry_under_the_home_is_command_lookup(protected_home, monkeypatch):
+def test_resolving_a_path_entry_under_the_home_is_command_lookup(
+    protected_home, monkeypatch
+):
     """Command resolution realpath()s a PATH entry under the home (``~/.clawksis/tools/<tool>``)
     to tell Clawksis-managed bin dirs apart; that lstats the entry and each of its ancestors."""
     from tests.home_io_guard import HomeIOGuard
@@ -228,7 +245,12 @@ def test_pm_generation_dir_around_the_running_venv_is_the_interpreter(tmp_path, 
     venv.mkdir(parents=True)
     assert _pm_generation_dirs([venv]) == {generation.resolve()}
     # Only a generation venv: a checkout's .venv or a venv elsewhere adds nothing new.
-    assert _pm_generation_dirs([tmp_path / "checkout" / ".venv", tmp_path / "other" / "venv"]) == set()
+    assert (
+        _pm_generation_dirs(
+            [tmp_path / "checkout" / ".venv", tmp_path / "other" / "venv"]
+        )
+        == set()
+    )
 
 
 def test_clawk_exported_scratch_tmp_is_not_the_test_temp_root(tmp_path):
@@ -240,7 +262,8 @@ def test_clawk_exported_scratch_tmp_is_not_the_test_temp_root(tmp_path):
     scratch = home / "cache" / "scratch"
     scratch.mkdir(parents=True)
     probe = tmp_path / "test_probe.py"
-    probe.write_text(textwrap.dedent(f"""
+    probe.write_text(
+        textwrap.dedent(f"""
         import tempfile
         from pathlib import Path
 
@@ -249,13 +272,35 @@ def test_clawk_exported_scratch_tmp_is_not_the_test_temp_root(tmp_path):
             assert not Path(tempfile.gettempdir()).resolve().is_relative_to(home)
             with tempfile.TemporaryDirectory() as made:
                 assert not Path(made).resolve().is_relative_to(home)
-        """), encoding="utf-8")
-    env = {k: v for k, v in os.environ.items()
-           if k not in ("TMPDIR", "TMP", "TEMP", "CLAWK_SCRATCH_DIR", "CLAWK_TEST_SANDBOX_HOME")}
-    env.update(CLAWK_HOME=str(home), TMPDIR=str(scratch), CLAWK_SCRATCH_DIR=str(scratch))
+        """),
+        encoding="utf-8",
+    )
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k
+        not in ("TMPDIR", "TMP", "TEMP", "CLAWK_SCRATCH_DIR", "CLAWK_TEST_SANDBOX_HOME")
+    }
+    env.update(
+        CLAWK_HOME=str(home), TMPDIR=str(scratch), CLAWK_SCRATCH_DIR=str(scratch)
+    )
     result = subprocess.run(
-        [sys.executable, "-m", "pytest", "-p", "tests.conftest", "-p", "no:cacheprovider", "-q", str(probe)],
-        cwd=PROJECT_ROOT, env=env, capture_output=True, text=True, timeout=120,
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "-p",
+            "tests.conftest",
+            "-p",
+            "no:cacheprovider",
+            "-q",
+            str(probe),
+        ],
+        cwd=PROJECT_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr

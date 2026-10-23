@@ -1,4 +1,5 @@
 """Stream-level reconnects back off exponentially and stay interruptible (#60029)."""
+
 import threading
 import time
 from types import SimpleNamespace
@@ -43,9 +44,17 @@ def test_transient_drops_retry_with_capped_exponential_backoff():
     waits = []
     call = _bare_call(_agent())
     req = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
-    errors = [anthropic.APIConnectionError(request=req), httpx.ConnectError("reset"),
-              httpx.ReadError("reset"), httpx.RemoteProtocolError("closed")]
-    with patch.object(cch, "_wait_stream_retry_backoff", lambda agent, delay: waits.append(delay) or True):
+    errors = [
+        anthropic.APIConnectionError(request=req),
+        httpx.ConnectError("reset"),
+        httpx.ReadError("reset"),
+        httpx.RemoteProtocolError("closed"),
+    ]
+    with patch.object(
+        cch,
+        "_wait_stream_retry_backoff",
+        lambda agent, delay: waits.append(delay) or True,
+    ):
         for attempt, err in enumerate(errors):
             assert call._handle_stream_error(err, attempt, max_retries=10) is True
     assert waits == [1.0, 2.0, 4.0, 4.0]
@@ -59,5 +68,7 @@ def test_backoff_wait_returns_immediately_on_interrupt():
     call = _bare_call(agent)
     threading.Timer(0.2, lambda: setattr(agent, "_interrupt_requested", True)).start()
     start = time.monotonic()
-    call._retry_after_drop(httpx.ConnectError("x"), 5, 10, mid_tool_call=False, reason="t")
+    call._retry_after_drop(
+        httpx.ConnectError("x"), 5, 10, mid_tool_call=False, reason="t"
+    )
     assert time.monotonic() - start < 1.0

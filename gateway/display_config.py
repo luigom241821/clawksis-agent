@@ -37,14 +37,22 @@ _GLOBAL_DEFAULTS: dict[str, Any] = {
 # Tiers: HIGH = editing, personal/team use; MEDIUM = editing but customer-facing;
 # LOW = no edit support (progress messages are permanent); MINIMAL = batch delivery.
 _TIER_HIGH = {
-    "tool_progress": "all", "show_reasoning": False, "tool_preview_length": 40,
+    "tool_progress": "all",
+    "show_reasoning": False,
+    "tool_preview_length": 40,
     "streaming": None,  # follow global
-    "interim_assistant_messages": True, "long_running_notifications": True, "busy_ack_detail": True,
+    "interim_assistant_messages": True,
+    "long_running_notifications": True,
+    "busy_ack_detail": True,
 }
 _TIER_MEDIUM = {**_TIER_HIGH, "tool_progress": "new"}
 _TIER_LOW = {
-    **_TIER_HIGH, "tool_progress": "off", "streaming": False,
-    "interim_assistant_messages": False, "long_running_notifications": False, "busy_ack_detail": False,
+    **_TIER_HIGH,
+    "tool_progress": "off",
+    "streaming": False,
+    "interim_assistant_messages": False,
+    "long_running_notifications": False,
+    "busy_ack_detail": False,
 }
 _TIER_MINIMAL = {**_TIER_LOW, "tool_preview_length": 0}
 
@@ -55,7 +63,12 @@ _PLATFORM_DEFAULTS: dict[str, dict[str, Any]] = {
     "api_server": {**_TIER_HIGH, "tool_preview_length": 0},
 }
 
-_TIERS = {"high": _TIER_HIGH, "medium": _TIER_MEDIUM, "low": _TIER_LOW, "minimal": _TIER_MINIMAL}
+_TIERS = {
+    "high": _TIER_HIGH,
+    "medium": _TIER_MEDIUM,
+    "low": _TIER_LOW,
+    "minimal": _TIER_MINIMAL,
+}
 
 
 def _platform_defaults(platform_key: str) -> dict[str, Any]:
@@ -65,6 +78,7 @@ def _platform_defaults(platform_key: str) -> dict[str, Any]:
         return _PLATFORM_DEFAULTS[platform_key]
     try:
         from gateway.platform_registry import platform_registry
+
         entry = platform_registry.get(platform_key)
     except Exception:
         return {}
@@ -77,7 +91,9 @@ def _platform_defaults(platform_key: str) -> dict[str, Any]:
 OVERRIDEABLE_KEYS = frozenset(_GLOBAL_DEFAULTS.keys())
 
 
-def resolve_display_setting(user_config: dict, platform_key: str, setting: str, fallback: Any = None) -> Any:
+def resolve_display_setting(
+    user_config: dict, platform_key: str, setting: str, fallback: Any = None
+) -> Any:
     """Resolve a display setting with per-platform override support (see module docstring for order).
 
     ``platform_key`` is the platform config key (``"telegram"``; see ``_platform_config_key`` in
@@ -92,13 +108,17 @@ def resolve_display_setting(user_config: dict, platform_key: str, setting: str, 
     return fallback if val is None else val
 
 
-def _configured_display_value(user_config: dict, platform_key: str, setting: str) -> Any:
+def _configured_display_value(
+    user_config: dict, platform_key: str, setting: str
+) -> Any:
     """First non-None operator value, without introducing tier defaults."""
     display_cfg = user_config.get("display")
     if not isinstance(display_cfg, dict):
         return None
     platforms = display_cfg.get("platforms")
-    plat_overrides = platforms.get(platform_key) if isinstance(platforms, dict) else None
+    plat_overrides = (
+        platforms.get(platform_key) if isinstance(platforms, dict) else None
+    )
     if isinstance(plat_overrides, dict) and plat_overrides.get(setting) is not None:
         return plat_overrides[setting]
     if setting == "tool_progress":
@@ -110,7 +130,9 @@ def _configured_display_value(user_config: dict, platform_key: str, setting: str
     return None
 
 
-def resolve_tool_progress(user_config: dict, platform_key: str, env_mode: str | None = None) -> tuple[str, bool]:
+def resolve_tool_progress(
+    user_config: dict, platform_key: str, env_mode: str | None = None
+) -> tuple[str, bool]:
     """Return (mode, explicit intent) from the same winning source.
 
     Non-None YAML wins over the legacy env bridge. Null inherits through to env,
@@ -132,6 +154,7 @@ _FALSY = {"false", "0", "no"}
 
 def _norm_tristate(on: str, off: str, choices: set, extra_truthy: set = frozenset()):
     """Normaliser for bool-or-keyword settings: bools/truthy tokens → *on*, falsy → *off*, else a known choice or *on*."""
+
     def norm(value: Any) -> str:
         if isinstance(value, bool):
             return on if value else off
@@ -141,15 +164,24 @@ def _norm_tristate(on: str, off: str, choices: set, extra_truthy: set = frozense
         if val in _TRUTHY | extra_truthy:
             return on
         return val if val in choices else on
+
     return norm
 
 
 def _norm_bool(value: Any) -> bool:
-    return value.strip().lower() in _TRUTHY | {"raw", "verbose"} if isinstance(value, str) else bool(value)
+    return (
+        value.strip().lower() in _TRUTHY | {"raw", "verbose"}
+        if isinstance(value, str)
+        else bool(value)
+    )
 
 
 def _norm_long_running(value: Any) -> Any:
-    return "generic" if isinstance(value, str) and value.strip().lower() == "generic" else _norm_bool(value)
+    return (
+        "generic"
+        if isinstance(value, str) and value.strip().lower() == "generic"
+        else _norm_bool(value)
+    )
 
 
 def _norm_suppress_warning_notifications(value: Any) -> bool:
@@ -181,7 +213,9 @@ def _norm_int(value: Any) -> int:
 
 
 _NORMALISERS: dict[str, Any] = {
-    "tool_progress": _norm_tristate("all", "off", {"off", "new", "all", "verbose", "log"}),
+    "tool_progress": _norm_tristate(
+        "all", "off", {"off", "new", "all", "verbose", "log"}
+    ),
     "show_reasoning": _norm_bool,
     "streaming": _norm_bool,
     "interim_assistant_messages": _norm_bool,
@@ -191,7 +225,9 @@ _NORMALISERS: dict[str, Any] = {
     "busy_steer_ack_enabled": _norm_bool,
     "thinking_progress": _norm_bool,
     "cleanup_progress": _norm_cleanup_progress,
-    "live_status": _norm_tristate("full", "off", {"full", "verb", "off"}, extra_truthy={"all"}),
+    "live_status": _norm_tristate(
+        "full", "off", {"full", "verb", "off"}, extra_truthy={"all"}
+    ),
     "tool_progress_grouping": _norm_choice(("accumulate", "separate")),
     "reasoning_style": _norm_choice(("code", "blockquote", "subtext")),
     "tool_preview_length": _norm_int,

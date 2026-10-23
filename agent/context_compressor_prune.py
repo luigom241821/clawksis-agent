@@ -19,6 +19,7 @@ def _cc():
     """The origin module, resolved lazily: avoids the import cycle and keeps tests that patch
     ``agent.context_compressor.X`` effective (attributes are read at call time)."""
     from agent import context_compressor
+
     return context_compressor
 
 
@@ -26,7 +27,9 @@ class ProactivePruneMixin:
     """``ContextCompressor`` mixin: the deterministic, no-LLM tool-result prune and its commit."""
 
     def prune_tool_results_only(
-        self, messages: list[dict[str, Any]], current_tokens: int | None = None,
+        self,
+        messages: list[dict[str, Any]],
+        current_tokens: int | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
         """Deterministic, no-LLM tool-result prune gated on ``proactive_prune_tokens``.
 
@@ -57,16 +60,26 @@ class ProactivePruneMixin:
         _estimate_msg_budget_tokens = _cc()._estimate_msg_budget_tokens
         before = sum(_estimate_msg_budget_tokens(m) for m in messages)
         # Under-threshold runway skip is ordinary hysteresis (silent); above it the lockout is the bug.
-        if before < self._proactive_prune_rearm_tokens and not self._billed_basis_over_threshold(current_tokens):
+        if (
+            before < self._proactive_prune_rearm_tokens
+            and not self._billed_basis_over_threshold(current_tokens)
+        ):
             return messages, 0
         # Capability gate first: a store without archive_and_compact makes every prune a no-op.
         session_db = getattr(self, "_session_db", None)
         session_id = getattr(self, "_session_id", "")
-        if session_db and session_id and not callable(getattr(session_db, "archive_and_compact", None)):
+        if (
+            session_db
+            and session_id
+            and not callable(getattr(session_db, "archive_and_compact", None))
+        ):
             self._warn_reclamation_no_op("prune:store_cannot_persist", current_tokens)
             return messages, 0
         pruned_msgs, pruned_count = self._prune_old_tool_results(
-            messages, protect_tail_count=self.protect_last_n, protect_tail_tokens=None, min_prune_chars=self.proactive_prune_min_result_chars,
+            messages,
+            protect_tail_count=self.protect_last_n,
+            protect_tail_tokens=None,
+            min_prune_chars=self.proactive_prune_min_result_chars,
         )
         if not pruned_count:
             # No-op contract: return the INPUT object so callers can gate on `result is not input`.
@@ -76,46 +89,77 @@ class ProactivePruneMixin:
         after = sum(_estimate_msg_budget_tokens(m) for m in pruned_msgs)
         reclaimed = max(0, before - after)
         if reclaimed < self.proactive_prune_min_reclaim_tokens:
-            self._warn_reclamation_no_op("prune:reclaim_below_minimum", current_tokens, before=before)
+            self._warn_reclamation_no_op(
+                "prune:reclaim_below_minimum", current_tokens, before=before
+            )
             return messages, 0
         # Require a full trigger-sized regrowth before the next cache-breaking rewrite.
-        runway = max(reclaimed, self.proactive_prune_tokens, self.proactive_prune_min_reclaim_tokens)
+        runway = max(
+            reclaimed,
+            self.proactive_prune_tokens,
+            self.proactive_prune_min_reclaim_tokens,
+        )
         next_rearm_tokens = after + runway
         if session_db and session_id:
             _cc_ = _cc()
             from clawk_state_errors import HeldRowRewrittenError
-            model_config_patch = {_cc_.PROACTIVE_PRUNE_REARM_MODEL_CONFIG_KEY: next_rearm_tokens}
+
+            model_config_patch = {
+                _cc_.PROACTIVE_PRUNE_REARM_MODEL_CONFIG_KEY: next_rearm_tokens
+            }
             StaleHeldHistory = _cc_.StaleHeldHistory
             _DB_PERSISTED_MARKER = _cc_._DB_PERSISTED_MARKER
             rewritten = None
             try:
                 # Raises StaleHeldHistory when another compaction already won, for both commit paths.
-                watermark = _cc_._archive_watermark_for(session_db, session_id, messages)
+                watermark = _cc_._archive_watermark_for(
+                    session_db, session_id, messages
+                )
                 rewritten = self._rewrite_pruned_rows_in_place(
-                    session_db, session_id, messages, pruned_msgs, model_config_patch)
+                    session_db, session_id, messages, pruned_msgs, model_config_patch
+                )
                 if rewritten is None:
-                    from agent.conversation_compression_archive import coverage_for_commit
-                    covered_ids, unresolved_held = coverage_for_commit(session_db, session_id, messages)
+                    from agent.conversation_compression_archive import (
+                        coverage_for_commit,
+                    )
+
+                    covered_ids, unresolved_held = coverage_for_commit(
+                        session_db, session_id, messages
+                    )
                     session_db.archive_and_compact(
-                        session_id, pruned_msgs,
+                        session_id,
+                        pruned_msgs,
                         model_config_patch=model_config_patch,
                         watermark=watermark,
-                        covered_ids=covered_ids, unresolved_held=unresolved_held,
-                        held_for_cas=messages)
+                        covered_ids=covered_ids,
+                        unresolved_held=unresolved_held,
+                        held_for_cas=messages,
+                    )
             except StaleHeldHistory:
                 # Another compaction already committed this session's history; a lease-less prune of the
                 # generation this process holds would publish beside the winner. Leave the input alone.
-                logger.info("Proactive tool-result prune skipped: another compaction already committed this session")
-                self._warn_reclamation_no_op("prune:stale_generation", current_tokens, before=before)
+                logger.info(
+                    "Proactive tool-result prune skipped: another compaction already committed this session"
+                )
+                self._warn_reclamation_no_op(
+                    "prune:stale_generation", current_tokens, before=before
+                )
                 return messages, 0
             except HeldRowRewrittenError:
                 # The full writer's in-transaction CAS fence tripped: a held row changed between the
                 # precheck and the commit. Same disposition as StaleHeldHistory — nothing was written.
-                logger.info("Proactive tool-result prune skipped: a held row was rewritten in place before the commit")
-                self._warn_reclamation_no_op("prune:stale_generation", current_tokens, before=before)
+                logger.info(
+                    "Proactive tool-result prune skipped: a held row was rewritten in place before the commit"
+                )
+                self._warn_reclamation_no_op(
+                    "prune:stale_generation", current_tokens, before=before
+                )
                 return messages, 0
             except Exception as exc:  # health: allow BLE001 -- the commit boundary keeps the original transcript on any store failure (#124102)
-                logger.warning("Proactive tool-result prune DB commit failed; keeping the original transcript: %s", exc)
+                logger.warning(
+                    "Proactive tool-result prune DB commit failed; keeping the original transcript: %s",
+                    exc,
+                )
                 return messages, 0
             # Shared post-commit stamp site with the in-place commit and micro-compaction sync.
             # See #98450. The in-place rewrite wrote no new rows, so only already-durable messages
@@ -124,17 +168,25 @@ class ProactivePruneMixin:
             if rewritten is None:
                 stamp_db_persisted_markers(pruned_msgs)
             else:
-                stamp_db_persisted_markers([
-                    replacement for original, replacement in zip(messages, pruned_msgs)
-                    if original.get(_DB_PERSISTED_MARKER)])
+                stamp_db_persisted_markers(
+                    [
+                        replacement
+                        for original, replacement in zip(messages, pruned_msgs)
+                        if original.get(_DB_PERSISTED_MARKER)
+                    ]
+                )
         self._proactive_prune_rearm_tokens = next_rearm_tokens
         # Reclamation just ran: let a future lockout warn again.
         self._last_reclaim_block_warn = None
         return pruned_msgs, pruned_count
 
     def _rewrite_pruned_rows_in_place(
-        self, session_db: Any, session_id: str, messages: list[dict[str, Any]],
-        pruned_msgs: list[dict[str, Any]], model_config_patch: dict[str, Any],
+        self,
+        session_db: Any,
+        session_id: str,
+        messages: list[dict[str, Any]],
+        pruned_msgs: list[dict[str, Any]],
+        model_config_patch: dict[str, Any],
     ) -> Optional[int]:
         """Commit a prune by rewriting only its changed rows (#124102); ``None`` means use the full rewrite.
 
@@ -163,8 +215,9 @@ class ProactivePruneMixin:
                 continue
             if unwritten_seen:
                 return None
-            if ({k: v for k, v in original.items() if k not in ignored}
-                    != {k: v for k, v in replacement.items() if k not in ignored}):
+            if {k: v for k, v in original.items() if k not in ignored} != {
+                k: v for k, v in replacement.items() if k not in ignored
+            }:
                 changes.append((original, replacement))
         try:
             return rewrite(session_id, changes, model_config_patch=model_config_patch)
@@ -176,5 +229,8 @@ class ProactivePruneMixin:
             # over the newer one. Fail closed; the caller skips the pass.
             raise _cc().StaleHeldHistory(str(exc)) from exc
         except PruneRowUnresolvedError as exc:
-            logger.info("Proactive prune: in-place rewrite refused (%s); using the full rewrite", exc)
+            logger.info(
+                "Proactive prune: in-place rewrite refused (%s); using the full rewrite",
+                exc,
+            )
             return None

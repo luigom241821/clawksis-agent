@@ -42,30 +42,49 @@ _WIRE_BY_MODEL = [
 
 @pytest.mark.parametrize("model, expected", _WIRE_BY_MODEL)
 @pytest.mark.parametrize("stale_api_mode", [None, "chat_completions"])
-def test_builtin_opencode_go_client_follows_the_model_not_the_persisted_mode(model, expected, stale_api_mode):
-    client, resolved = aux.resolve_provider_client("opencode-go", model=model, api_mode=stale_api_mode)
+def test_builtin_opencode_go_client_follows_the_model_not_the_persisted_mode(
+    model, expected, stale_api_mode
+):
+    client, resolved = aux.resolve_provider_client(
+        "opencode-go", model=model, api_mode=stale_api_mode
+    )
     assert resolved == model
     assert type(client) is expected
-    async_client, _ = aux.resolve_provider_client("opencode-go", model=model, api_mode=stale_api_mode, async_mode=True)
-    assert (type(async_client) is aux.AsyncCodexAuxiliaryClient) == (expected is aux.CodexAuxiliaryClient)
+    async_client, _ = aux.resolve_provider_client(
+        "opencode-go", model=model, api_mode=stale_api_mode, async_mode=True
+    )
+    assert (type(async_client) is aux.AsyncCodexAuxiliaryClient) == (
+        expected is aux.CodexAuxiliaryClient
+    )
 
 
 @pytest.mark.parametrize("model, expected", _WIRE_BY_MODEL)
 def test_named_custom_opencode_family_entry_follows_the_model(model, expected):
     """An ``opencode-go-*`` custom entry without an api_mode of its own gets each model's wire, like main."""
-    client, resolved = aux.resolve_provider_client("custom:opencode-go-bridge", model=model)
+    client, resolved = aux.resolve_provider_client(
+        "custom:opencode-go-bridge", model=model
+    )
     assert resolved == model
     assert type(client) is expected
     if expected is aux.AnthropicAuxiliaryClient:
-        assert str(client._real_client.base_url).rstrip("/") == "https://opencode.ai/zen/go"
+        assert (
+            str(client._real_client.base_url).rstrip("/")
+            == "https://opencode.ai/zen/go"
+        )
     else:
-        base = client._real_client.base_url if expected is aux.CodexAuxiliaryClient else client.base_url
+        base = (
+            client._real_client.base_url
+            if expected is aux.CodexAuxiliaryClient
+            else client.base_url
+        )
         assert str(base).rstrip("/") == "https://opencode.ai/zen/go/v1"
 
 
 def test_named_custom_opencode_family_entry_with_declared_api_mode_is_honoured():
     """An entry that declares ``api_mode`` keeps it — the main runtime only re-derives when the entry has none."""
-    client, resolved = aux.resolve_provider_client("custom:opencode-go-pinned", model="gpt-5.6-luna")
+    client, resolved = aux.resolve_provider_client(
+        "custom:opencode-go-pinned", model="gpt-5.6-luna"
+    )
     assert resolved == "gpt-5.6-luna"
     assert type(client) is OpenAI
     assert str(client.base_url).rstrip("/") == "https://opencode.ai/zen/go/v1"

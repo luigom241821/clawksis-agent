@@ -18,10 +18,14 @@ from tui_gateway.transport import StdioTransport
 
 def _live_session(agent, *, session_key: str, history: list):
     return {
-        "agent": agent, "session_key": session_key, "history": list(history),
-        "history_lock": threading.Lock(), "running": False,
+        "agent": agent,
+        "session_key": session_key,
+        "history": list(history),
+        "history_lock": threading.Lock(),
+        "running": False,
         "transport": StdioTransport(lambda: None, threading.Lock()),
-        "cwd": "", "source": "desktop",
+        "cwd": "",
+        "source": "desktop",
     }
 
 
@@ -62,22 +66,26 @@ def test_refine_spawns_review_from_persisted_transcript():
             patch.object(server, "_session_uses_compute_host", return_value=False),
             patch.object(server, "_session_db", _fake_session_db),
         ):
-            out = server._live_slash_command_output(sid, session, "refine", "save the workflow")
+            out = server._live_slash_command_output(
+                sid, session, "refine", "save the workflow"
+            )
     finally:
         server._sessions.pop(sid, None)
 
     assert "Reviewing this conversation" in out
-    assert agent.spawned == [{
-        "messages_snapshot": [
-            {"role": "user", "content": "persisted question"},
-            {"role": "assistant", "content": "persisted answer"},
-        ],
-        "review_memory": True,
-        "review_skills": True,
-        "focus": "save the workflow",
-        # /refine is explicit: it must not be swallowed by the unattended-review gates.
-        "explicit": True,
-    }]
+    assert agent.spawned == [
+        {
+            "messages_snapshot": [
+                {"role": "user", "content": "persisted question"},
+                {"role": "assistant", "content": "persisted answer"},
+            ],
+            "review_memory": True,
+            "review_skills": True,
+            "focus": "save the workflow",
+            # /refine is explicit: it must not be swallowed by the unattended-review gates.
+            "explicit": True,
+        }
+    ]
 
 
 class _DBEmpty:
@@ -112,14 +120,16 @@ def test_refine_spawns_review_from_in_memory_history_mid_conversation():
         server._sessions.pop(sid, None)
 
     assert "Reviewing this conversation" in out
-    assert agent.spawned == [{
-        "messages_snapshot": [
-            {"role": "user", "content": "in-flight question"},
-            {"role": "assistant", "content": "in-flight answer"},
-        ],
-        "review_memory": True,
-        "review_skills": True,
-        "focus": None,
-        # /refine is explicit: it must not be swallowed by the unattended-review gates.
-        "explicit": True,
-    }]
+    assert agent.spawned == [
+        {
+            "messages_snapshot": [
+                {"role": "user", "content": "in-flight question"},
+                {"role": "assistant", "content": "in-flight answer"},
+            ],
+            "review_memory": True,
+            "review_skills": True,
+            "focus": None,
+            # /refine is explicit: it must not be swallowed by the unattended-review gates.
+            "explicit": True,
+        }
+    ]

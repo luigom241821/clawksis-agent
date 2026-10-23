@@ -41,10 +41,17 @@ def _run_stdio_with_mocks(os_name: str, attach_mock) -> None:
         return command, args
 
     with (
-        patch("clawk_cli.process_identity.attach_self_to_kill_on_close_job", attach_mock),
+        patch(
+            "clawk_cli.process_identity.attach_self_to_kill_on_close_job", attach_mock
+        ),
         patch("tools.mcp_tool.StdioServerParameters"),
-        patch("tools.mcp_tool.stdio_client", return_value=(mock_stdio_cm := MagicMock())),
-        patch("tools.mcp_tool.ClientSession", return_value=(mock_session_cm := MagicMock())),
+        patch(
+            "tools.mcp_tool.stdio_client", return_value=(mock_stdio_cm := MagicMock())
+        ),
+        patch(
+            "tools.mcp_tool.ClientSession",
+            return_value=(mock_session_cm := MagicMock()),
+        ),
         patch("tools.mcp_tool._preflight_stdio_command", fake_preflight),
         patch("tools.mcp_tool_lifecycle._snapshot_child_pids", return_value=set()),
         patch("tools.mcp_tool_lifecycle._kill_orphaned_mcp_children"),
@@ -116,7 +123,10 @@ class TestWindowsTreeKillHelpers:
 
         fake_psutil = MagicMock()
         fake_psutil.Process = FakeProc
-        fake_psutil.wait_procs = lambda procs, timeout: ([], [])  # all exited gracefully
+        fake_psutil.wait_procs = lambda procs, timeout: (
+            [],
+            [],
+        )  # all exited gracefully
         monkeypatch.setitem(__import__("sys").modules, "psutil", fake_psutil)
 
         lifecycle._kill_windows_process_tree(1, 15)

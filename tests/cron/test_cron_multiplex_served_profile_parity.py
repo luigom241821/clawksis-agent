@@ -11,7 +11,10 @@ from pathlib import Path
 import pytest
 
 from agent.secret_scope import (
-    build_profile_secret_scope, reset_secret_scope, set_multiplex_active, set_secret_scope,
+    build_profile_secret_scope,
+    reset_secret_scope,
+    set_multiplex_active,
+    set_secret_scope,
 )
 from clawk_constants import reset_clawk_home_override, set_clawk_home_override
 
@@ -24,13 +27,18 @@ def two_homes(tmp_path, monkeypatch):
         (home / "cron").mkdir(parents=True)
     (root / ".env").write_text(
         "CLAWK_CRON_TIMEOUT=111\nCLAWK_MODEL=default-model\nTERMINAL_ENV=docker\n"
-        "TERMINAL_DOCKER_IMAGE=default-only-image\nCLAWK_LANGUAGE=en\n")
+        "TERMINAL_DOCKER_IMAGE=default-only-image\nCLAWK_LANGUAGE=en\n"
+    )
     (alpha / ".env").write_text("CLAWK_CRON_TIMEOUT=222\nCLAWK_LANGUAGE=zh\n")
     # The launch (default) profile's .env is what the multiplexer process loaded into os.environ.
     monkeypatch.setenv("CLAWK_HOME", str(root))
-    for key, val in (("CLAWK_CRON_TIMEOUT", "111"), ("CLAWK_MODEL", "default-model"),
-                     ("TERMINAL_ENV", "docker"), ("TERMINAL_DOCKER_IMAGE", "default-only-image"),
-                     ("CLAWK_LANGUAGE", "en")):
+    for key, val in (
+        ("CLAWK_CRON_TIMEOUT", "111"),
+        ("CLAWK_MODEL", "default-model"),
+        ("TERMINAL_ENV", "docker"),
+        ("TERMINAL_DOCKER_IMAGE", "default-only-image"),
+        ("CLAWK_LANGUAGE", "en"),
+    ):
         monkeypatch.setenv(key, val)
     set_multiplex_active(True)
     home_token = set_clawk_home_override(str(alpha))
@@ -56,20 +64,27 @@ def test_cron_env_settings_resolve_from_the_served_profile(two_homes):
         return {}
 
     import clawk_cli.runtime_provider as rp
+
     original = rp.resolve_runtime_provider
     rp.resolve_runtime_provider = fake_resolve
     try:
         # Tick thread: home override only (due-job scan, pool sizing, claim TTL).
         assert sched._cron_inactivity_seconds() == 222.0
-        assert _oneshot_run_claim_ttl_seconds() == 1800.0  # 222*3 < floor -> floor, from alpha's value
+        assert (
+            _oneshot_run_claim_ttl_seconds() == 1800.0
+        )  # 222*3 < floor -> floor, from alpha's value
         # Fire: secret scope installed as _run_one_job_body does.
         token = set_secret_scope(build_profile_secret_scope(alpha))
         try:
             assert sched._cron_inactivity_seconds() == 222.0
             _preflight_check_provider_key({"id": "j"}, {"cron": {}})
-            assert captured["target_model"] == ""  # alpha has no CLAWK_MODEL; default's must not leak
+            assert (
+                captured["target_model"] == ""
+            )  # alpha has no CLAWK_MODEL; default's must not leak
             with pytest.raises(RuntimeError, match="no model configured"):
-                sched._load_cron_job_config({"id": "j", "name": "j", "prompt": "x"}, "j", "j")
+                sched._load_cron_job_config(
+                    {"id": "j", "name": "j", "prompt": "x"}, "j", "j"
+                )
         finally:
             reset_secret_scope(token)
     finally:
@@ -85,10 +100,18 @@ def test_child_env_for_served_profile_drops_launch_profile_settings(two_homes):
     root, alpha = two_homes
     token = set_secret_scope(build_profile_secret_scope(alpha))
     try:
-        env = strip_launch_profile_env(build_subprocess_env(scrub_secrets=True, inherit_profile_home=True))
+        env = strip_launch_profile_env(
+            build_subprocess_env(scrub_secrets=True, inherit_profile_home=True)
+        )
     finally:
         reset_secret_scope(token)
-    for key in ("CLAWK_MODEL", "TERMINAL_ENV", "TERMINAL_DOCKER_IMAGE", "CLAWK_LANGUAGE", "CLAWK_CRON_TIMEOUT"):
+    for key in (
+        "CLAWK_MODEL",
+        "TERMINAL_ENV",
+        "TERMINAL_DOCKER_IMAGE",
+        "CLAWK_LANGUAGE",
+        "CLAWK_CRON_TIMEOUT",
+    ):
         assert key not in env, key
     assert env["CLAWK_HOME"] == str(alpha)
     assert "PATH" in env
@@ -97,7 +120,9 @@ def test_child_env_for_served_profile_drops_launch_profile_settings(two_homes):
     reset_clawk_home_override(set_clawk_home_override(None))
     home_token = set_clawk_home_override(str(root))
     try:
-        env = strip_launch_profile_env(build_subprocess_env(scrub_secrets=True, inherit_profile_home=True))
+        env = strip_launch_profile_env(
+            build_subprocess_env(scrub_secrets=True, inherit_profile_home=True)
+        )
     finally:
         reset_clawk_home_override(home_token)
     assert env["TERMINAL_ENV"] == "docker"

@@ -205,7 +205,9 @@ def cmd_dashboard_service(args) -> None:
     if getattr(args, "status", False):
         if sys.platform != "linux" or shutil.which("systemctl") is None:
             _fail("Este comando requiere Linux con systemd.")
-        subprocess.run(["systemctl", "status", "clawk-dashboard", "--no-pager"], check=False)
+        subprocess.run(
+            ["systemctl", "status", "clawk-dashboard", "--no-pager"], check=False
+        )
         return
 
     if getattr(args, "uninstall", False):
@@ -384,7 +386,9 @@ def _write_caddy_block(domain: str, port: int) -> None:
         )
     _run(["systemctl", "enable", "--now", "caddy"], check=False)
     reload_res = subprocess.run(
-        ["systemctl", "reload", "caddy"], capture_output=True, text=True,
+        ["systemctl", "reload", "caddy"],
+        capture_output=True,
+        text=True,
         check=False,
     )
     if reload_res.returncode != 0:
@@ -413,7 +417,10 @@ def _port_holder(port: int) -> "str | None":
     """
     try:
         res = subprocess.run(
-            ["ss", "-tlnpH"], capture_output=True, text=True, timeout=5,
+            ["ss", "-tlnpH"],
+            capture_output=True,
+            text=True,
+            timeout=5,
             check=False,
         )
     except Exception:

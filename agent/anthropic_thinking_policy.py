@@ -53,7 +53,11 @@ def claude_family_version(model: Any) -> tuple[str, tuple[int, int]] | None:
 
 def model_preserves_prior_thinking(model: Any) -> bool:
     """Whether Anthropic keeps prior assistant thinking in model-visible context."""
-    if not isinstance(model, str) or "claude" not in model.lower() or _LAST_TURN_ONLY_RE.search(model):
+    if (
+        not isinstance(model, str)
+        or "claude" not in model.lower()
+        or _LAST_TURN_ONLY_RE.search(model)
+    ):
         return False
     parsed = claude_family_version(model)
     if parsed is None:
@@ -68,16 +72,28 @@ SIGNED_REPLAY_ROUTES = frozenset({"native", "minimax"})
 
 
 def _is_off_anthropic(base_url: Any) -> bool:
-    return _is_third_party_anthropic_endpoint(base_url) and not _is_nous_portal_endpoint(base_url)
+    return _is_third_party_anthropic_endpoint(
+        base_url
+    ) and not _is_nous_portal_endpoint(base_url)
 
 
 # First match wins; an unmatched relay host is ``third_party``. DeepSeek models never sign, so they keep
 # the unsigned-only contract on any host but Anthropic's own, Claude platforms included.
 _ROUTE_RULES = (
     ("kimi", lambda url, model: _is_kimi_family_endpoint(url, model)),
-    ("deepseek", lambda url, model: _is_deepseek_anthropic_endpoint(url)
-        or (_is_off_anthropic(url) and _model_name_is_deepseek_thinking(model))),
-    ("native", lambda url, model: not _is_off_anthropic(url) or _is_claude_platform_endpoint(url)),
+    (
+        "deepseek",
+        lambda url, model: (
+            _is_deepseek_anthropic_endpoint(url)
+            or (_is_off_anthropic(url) and _model_name_is_deepseek_thinking(model))
+        ),
+    ),
+    (
+        "native",
+        lambda url, model: (
+            not _is_off_anthropic(url) or _is_claude_platform_endpoint(url)
+        ),
+    ),
     ("minimax", lambda url, model: _is_minimax_anthropic_endpoint(url)),
 )
 
@@ -88,15 +104,22 @@ def anthropic_thinking_route(base_url: Any, model: Any) -> str:
     Bedrock, Vertex AI, Azure AI Foundry), ``minimax`` (its own signed blocks, returned unchanged on
     every turn as its docs require) or ``third_party`` (an unknown relay that cannot verify Anthropic
     signatures: strip all). The converter, accounting and signature-rejection state share this."""
-    return next((route for route, matches in _ROUTE_RULES if matches(base_url, model)), "third_party")
+    return next(
+        (route for route, matches in _ROUTE_RULES if matches(base_url, model)),
+        "third_party",
+    )
 
 
 def route_replays_prior_thinking(route: str, model: Any) -> bool:
     """Whether ``route`` replays signed thinking on assistant turns before the in-flight tool loop."""
-    return route == "minimax" or (route == "native" and model_preserves_prior_thinking(model))
+    return route == "minimax" or (
+        route == "native" and model_preserves_prior_thinking(model)
+    )
 
 
 def native_anthropic_preserves_prior_thinking(base_url: Any, model: Any) -> bool:
     """True when the route replays (and the model keeps) signed thinking from earlier turns, so stale
     thinking reaches the wire and accounting must charge the signed carriers."""
-    return route_replays_prior_thinking(anthropic_thinking_route(base_url, model), model)
+    return route_replays_prior_thinking(
+        anthropic_thinking_route(base_url, model), model
+    )

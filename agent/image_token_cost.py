@@ -25,7 +25,9 @@ DEFAULT_IMAGE_TOKEN_COST = 1500
 _MIN_PLAUSIBLE, _MAX_PLAUSIBLE = 64, 32_768
 _EMA_ALPHA = 0.5
 
-_image_cost_var: ContextVar[Optional[int]] = ContextVar("clawk_image_token_cost", default=None)
+_image_cost_var: ContextVar[Optional[int]] = ContextVar(
+    "clawk_image_token_cost", default=None
+)
 _LEARNED: dict[str, int] = {}
 _LOADED = False
 # Routed profiles (multiplexed gateway) keep their own table, loaded from THEIR cache file: the
@@ -48,8 +50,11 @@ def _key(model: Any, base_url: Any) -> str:
 def _read_cache() -> dict[str, int]:
     from agent.model_metadata import _load_json_dict
 
-    return {k: v for k, v in _load_json_dict(_cache_path()).items()
-            if isinstance(v, int) and _MIN_PLAUSIBLE <= v <= _MAX_PLAUSIBLE}
+    return {
+        k: v
+        for k, v in _load_json_dict(_cache_path()).items()
+        if isinstance(v, int) and _MIN_PLAUSIBLE <= v <= _MAX_PLAUSIBLE
+    }
 
 
 def _table() -> dict[str, int]:
@@ -91,7 +96,11 @@ def image_cost_context(cost: Optional[int]):
 
 def bind_image_token_cost(agent: Any) -> None:
     """Bind the agent's learned per-image cost to the current context for the rest of the turn."""
-    _image_cost_var.set(learned_image_token_cost(getattr(agent, "model", None), getattr(agent, "base_url", None)))
+    _image_cost_var.set(
+        learned_image_token_cost(
+            getattr(agent, "model", None), getattr(agent, "base_url", None)
+        )
+    )
 
 
 def count_images(messages: list[dict[str, Any]]) -> int:
@@ -100,7 +109,9 @@ def count_images(messages: list[dict[str, Any]]) -> int:
     return sum(_count_image_tokens(m, 1) for m in messages if isinstance(m, dict))
 
 
-def calibrate_from_usage(agent: Any, messages: list[dict[str, Any]], prompt_tokens: Any) -> Optional[int]:
+def calibrate_from_usage(
+    agent: Any, messages: list[dict[str, Any]], prompt_tokens: Any
+) -> Optional[int]:
     """Learn the per-image cost from the response that just priced ``messages``.
 
     Requires the PREVIOUS anchor (real count of the prior request) to still match: the residual
@@ -133,7 +144,9 @@ def calibrate_from_usage(agent: Any, messages: list[dict[str, Any]], prompt_toke
     key = _key(getattr(agent, "model", None), getattr(agent, "base_url", None))
     table = _table()
     prior = table.get(key)
-    learned = per_image if prior is None else int(prior + _EMA_ALPHA * (per_image - prior))
+    learned = (
+        per_image if prior is None else int(prior + _EMA_ALPHA * (per_image - prior))
+    )
     table[key] = learned
     _image_cost_var.set(learned)
     try:
@@ -144,6 +157,9 @@ def calibrate_from_usage(agent: Any, messages: list[dict[str, Any]], prompt_toke
         logger.debug("image token cost persist failed", exc_info=True)
     logger.info(
         "Image token cost calibrated from provider usage: %s images priced %s tokens each (learned %s for %s)",
-        n_images, f"{per_image:,}", f"{learned:,}", key,
+        n_images,
+        f"{per_image:,}",
+        f"{learned:,}",
+        key,
     )
     return learned

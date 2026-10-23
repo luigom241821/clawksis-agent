@@ -26,15 +26,24 @@ TIER1_CHECKS = "pii,unicode,lint,license,security"
 SCAN_TIMEOUT_SECONDS = 120
 
 # pii_patterns.yaml categories indicating a possible REAL credential (not PII hygiene) — the only prompt-worthy ones.
-SECRETS_CLASS_CHECKS = frozenset({"database_credentials", "hardcoded_secrets", "jwt_tokens", "webhook_urls",
-                                  "aws_identifiers", "github_tokens", "private_keys"})
+SECRETS_CLASS_CHECKS = frozenset(
+    {
+        "database_credentials",
+        "hardcoded_secrets",
+        "jwt_tokens",
+        "webhook_urls",
+        "aws_identifiers",
+        "github_tokens",
+        "private_keys",
+    }
+)
 
 
 @dataclass
 class Tier1Finding:
-    check: str          # e.g. "emails", "database_credentials"
-    validator: str      # e.g. "PII Scan"
-    severity: str       # "critical" | "high" | "medium" | "low" | "info"
+    check: str  # e.g. "emails", "database_credentials"
+    validator: str  # e.g. "PII Scan"
+    severity: str  # "critical" | "high" | "medium" | "low" | "info"
     message: str
     file: str = ""
     line: int = 0
@@ -45,16 +54,18 @@ class Tier1Finding:
         return self.check in SECRETS_CLASS_CHECKS
 
     def location(self) -> str:
-        return f"{self.file}:{self.line}" if self.file and self.line else self.file or "?"
+        return (
+            f"{self.file}:{self.line}" if self.file and self.line else self.file or "?"
+        )
 
 
 @dataclass
 class Tier1Report:
-    available: bool                 # scanner ran and produced a report
+    available: bool  # scanner ran and produced a report
     passed: bool = True
     findings: list[Tier1Finding] = field(default_factory=list)
     incomplete_checks: list[str] = field(default_factory=list)
-    error: str = ""                 # why the scan is unavailable (debug only)
+    error: str = ""  # why the scan is unavailable (debug only)
 
     @property
     def advisory_findings(self) -> list[Tier1Finding]:
@@ -69,9 +80,18 @@ def tier1_advisory_enabled() -> bool:
     """``skills.tier1_advisory`` (default True; safe because the scan is a no-op without the binary)."""
     try:
         from clawk_cli.config import load_config
+
         skills_cfg = load_config().get("skills") or {}
-        value = skills_cfg.get("tier1_advisory", True) if isinstance(skills_cfg, dict) else True
-        return value.strip().lower() not in ("false", "0", "no", "off") if isinstance(value, str) else bool(value)
+        value = (
+            skills_cfg.get("tier1_advisory", True)
+            if isinstance(skills_cfg, dict)
+            else True
+        )
+        return (
+            value.strip().lower() not in ("false", "0", "no", "off")
+            if isinstance(value, str)
+            else bool(value)
+        )
     except Exception:
         return True
 
@@ -88,13 +108,25 @@ def _parse_report(report: dict) -> Tier1Report:
             incomplete.append(validator)
         else:
             failed = failed or not res.get("passed", True)
-        findings.extend(Tier1Finding(
-            check=str(f.get("check_name", "")), validator=validator, severity=str(f.get("severity", "info")).lower(),
-            message=str(f.get("message", ""))[:200], file=str(f.get("file_path", "")),
-            line=int(f.get("line_number") or 0), suggestion=str(f.get("suggestion", ""))[:200])
-            for f in res.get("findings", []) or [] if isinstance(f, dict))
-    return Tier1Report(available=True, passed=not failed and not findings, findings=findings,
-                       incomplete_checks=incomplete)
+        findings.extend(
+            Tier1Finding(
+                check=str(f.get("check_name", "")),
+                validator=validator,
+                severity=str(f.get("severity", "info")).lower(),
+                message=str(f.get("message", ""))[:200],
+                file=str(f.get("file_path", "")),
+                line=int(f.get("line_number") or 0),
+                suggestion=str(f.get("suggestion", ""))[:200],
+            )
+            for f in res.get("findings", []) or []
+            if isinstance(f, dict)
+        )
+    return Tier1Report(
+        available=True,
+        passed=not failed and not findings,
+        findings=findings,
+        incomplete_checks=incomplete,
+    )
 
 
 def run_tier1_scan(skill_dir: Path, timeout: int = SCAN_TIMEOUT_SECONDS) -> Tier1Report:
@@ -104,9 +136,27 @@ def run_tier1_scan(skill_dir: Path, timeout: int = SCAN_TIMEOUT_SECONDS) -> Tier
         return unavailable("scanner not on PATH")
     with tempfile.TemporaryDirectory(prefix="se-tier1-") as outdir:
         try:
-            subprocess.run([SCANNER_BIN, "validate", str(skill_dir), "--checks", TIER1_CHECKS, "--no-dedup",
-                            "-r", "json", "-o", outdir], capture_output=True, text=True, encoding="utf-8", errors="replace",
-                           stdin=subprocess.DEVNULL, timeout=timeout, check=False)
+            subprocess.run(
+                [
+                    SCANNER_BIN,
+                    "validate",
+                    str(skill_dir),
+                    "--checks",
+                    TIER1_CHECKS,
+                    "--no-dedup",
+                    "-r",
+                    "json",
+                    "-o",
+                    outdir,
+                ],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                stdin=subprocess.DEVNULL,
+                timeout=timeout,
+                check=False,
+            )
         except subprocess.TimeoutExpired:
             return unavailable(f"scan timed out after {timeout}s")
         except OSError as exc:
@@ -117,7 +167,11 @@ def run_tier1_scan(skill_dir: Path, timeout: int = SCAN_TIMEOUT_SECONDS) -> Tier
             parsed = json.loads(reports[-1].read_text(encoding="utf-8-sig"))
         except (json.JSONDecodeError, OSError) as exc:
             return unavailable(f"unparseable report: {exc}")
-        return _parse_report(parsed) if isinstance(parsed, dict) else unavailable("unexpected report shape")
+        return (
+            _parse_report(parsed)
+            if isinstance(parsed, dict)
+            else unavailable("unexpected report shape")
+        )
 
 
 def format_tier1_report(report: Tier1Report, limit: int = 10) -> str:
@@ -126,16 +180,25 @@ def format_tier1_report(report: Tier1Report, limit: int = 10) -> str:
         return ""
     lines: list[str] = []
     if not report.findings:
-        lines.append("SkillEvaluator Tier 1: no findings from completed checks." if report.incomplete_checks
-                     else "SkillEvaluator Tier 1: no findings.")
+        lines.append(
+            "SkillEvaluator Tier 1: no findings from completed checks."
+            if report.incomplete_checks
+            else "SkillEvaluator Tier 1: no findings."
+        )
     else:
-        lines.append(f"SkillEvaluator Tier 1 (advisory): {len(report.findings)} finding(s) — informational, "
-                     "verify before relying on this skill.")
+        lines.append(
+            f"SkillEvaluator Tier 1 (advisory): {len(report.findings)} finding(s) — informational, "
+            "verify before relying on this skill."
+        )
         shown = report.secrets_findings + report.advisory_findings
-        lines.extend(f"  [{'SECRETS' if f.is_secrets_class else f.severity.upper()}] {f.location()} — {f.message}"
-                     for f in shown[:limit])
+        lines.extend(
+            f"  [{'SECRETS' if f.is_secrets_class else f.severity.upper()}] {f.location()} — {f.message}"
+            for f in shown[:limit]
+        )
         if len(shown) > limit:
             lines.append(f"  … and {len(shown) - limit} more")
     if report.incomplete_checks:
-        lines.append(f"  (not run: {', '.join(report.incomplete_checks)} — no opinion from these checks)")
+        lines.append(
+            f"  (not run: {', '.join(report.incomplete_checks)} — no opinion from these checks)"
+        )
     return "\n".join(lines)

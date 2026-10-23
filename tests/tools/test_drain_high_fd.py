@@ -49,7 +49,9 @@ def high_fds():
 
 
 @pytest.mark.platforms("posix")
-def test_command_output_survives_pipe_fd_above_fd_setsize(high_fds, tmp_path, monkeypatch):
+def test_command_output_survives_pipe_fd_above_fd_setsize(
+    high_fds, tmp_path, monkeypatch
+):
     """Foreground ``terminal`` drain and the background-process reader both keep output,
     including when the selector itself cannot be created (EMFILE: epoll/kqueue need an fd)."""
     import errno
@@ -74,10 +76,15 @@ def test_command_output_survives_pipe_fd_above_fd_setsize(high_fds, tmp_path, mo
     assert "still-here" in at_fd_limit["output"]
 
     registry = ProcessRegistry()
-    session = registry.spawn_local("echo bg-high-fd", cwd=str(tmp_path), task_id="high-fd")
+    session = registry.spawn_local(
+        "echo bg-high-fd", cwd=str(tmp_path), task_id="high-fd"
+    )
     wait_until(lambda: session.exited, timeout=10, what="background process exit")
-    wait_until(lambda: "bg-high-fd" in session.output_buffer, timeout=5,
-               what=f"background output (got {session.output_buffer!r})")
+    wait_until(
+        lambda: "bg-high-fd" in session.output_buffer,
+        timeout=5,
+        what=f"background output (got {session.output_buffer!r})",
+    )
 
 
 @pytest.mark.platforms("posix")
@@ -105,7 +112,9 @@ def test_pty_bridge_reads_and_waits_above_fd_setsize(high_fds, monkeypatch):
         deadline = time.monotonic() + 5
         while b"pty-high-fd" not in buf and time.monotonic() < deadline:
             chunk = bridge.read(timeout=0.2)
-            assert chunk is not None, f"PTY reported EOF before output (got {bytes(buf)!r})"
+            assert chunk is not None, (
+                f"PTY reported EOF before output (got {bytes(buf)!r})"
+            )
             buf.extend(chunk)
         assert b"pty-high-fd" in buf
         _assert_idle_read_waits(bridge)

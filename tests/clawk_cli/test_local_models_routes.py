@@ -105,19 +105,33 @@ def test_status_tracks_preset_spill_and_restored_window(client, tmp_path, monkey
 
     from clawk_cli.local_runtime import bootstrap, presets
     from clawk_cli.local_runtime.binaries import runtimes_root
-    from clawk_cli.local_runtime.context_policy import FLOOR, RUNTIME_OVERHEAD_BYTES, ub_logits_bytes
-    from clawk_cli.local_runtime.estimator import HardwareBudget, LayerKind, ModelProfile, ctx_bytes
+    from clawk_cli.local_runtime.context_policy import (
+        FLOOR,
+        RUNTIME_OVERHEAD_BYTES,
+        ub_logits_bytes,
+    )
+    from clawk_cli.local_runtime.estimator import (
+        HardwareBudget,
+        LayerKind,
+        ModelProfile,
+        ctx_bytes,
+    )
     from clawk_cli.local_runtime.growth import save_window_override
     from clawk_cli.web_routers import local_models
 
     # Dense spill has no override-tensor flag: status must use the recorded decision.
-    profile = ModelProfile("status-mtp", 16 << 30, 0, 262144,
-                           [(LayerKind.FULL, 4096)] * 32, n_vocab=151936)
+    profile = ModelProfile(
+        "status-mtp", 16 << 30, 0, 262144, [(LayerKind.FULL, 4096)] * 32, n_vocab=151936
+    )
     model_id = profile.name
     _write_fake_gguf(bootstrap.models_dir() / f"{model_id}.gguf")
-    monkeypatch.setattr(presets, "read_gguf_header", lambda p: SimpleNamespace(sampling_defaults={}))
+    monkeypatch.setattr(
+        presets, "read_gguf_header", lambda p: SimpleNamespace(sampling_defaults={})
+    )
     monkeypatch.setattr(presets, "profile_from_gguf", lambda h: profile)
-    monkeypatch.setattr(local_models, "_state_endpoint", lambda: {"base_url": "http://127.0.0.1:1/v1"})
+    monkeypatch.setattr(
+        local_models, "_state_endpoint", lambda: {"base_url": "http://127.0.0.1:1/v1"}
+    )
 
     server_window = FLOOR
 
@@ -128,16 +142,26 @@ def test_status_tracks_preset_spill_and_restored_window(client, tmp_path, monkey
         return {"default_generation_settings": {"n_ctx": server_window}}
 
     monkeypatch.setattr(local_models, "_router_request", router_response)
-    floor_need = profile.weights_bytes + ctx_bytes(replace(profile, kv_scale=1.2), FLOOR)
+    floor_need = profile.weights_bytes + ctx_bytes(
+        replace(profile, kv_scale=1.2), FLOOR
+    )
     lean = RUNTIME_OVERHEAD_BYTES + ub_logits_bytes(profile.n_vocab, mtp_capable=True)
-    stacked = RUNTIME_OVERHEAD_BYTES + ub_logits_bytes(profile.n_vocab, mtp_capable=True, mtp_prefill=True)
+    stacked = RUNTIME_OVERHEAD_BYTES + ub_logits_bytes(
+        profile.n_vocab, mtp_capable=True, mtp_prefill=True
+    )
     ini = runtimes_root() / "presets.ini"
     grown = 73728
-    for device, override, spilled in ((floor_need + lean - 1, FLOOR, True),
-                                      (floor_need + stacked, grown, False)):
+    for device, override, spilled in (
+        (floor_need + lean - 1, FLOOR, True),
+        (floor_need + stacked, grown, False),
+    ):
         save_window_override(model_id, override)
-        preset = presets.generate_presets(bootstrap.models_dir(),
-                                         HardwareBudget(device, device, 8 << 30), ini, {model_id})[0]
+        preset = presets.generate_presets(
+            bootstrap.models_dir(),
+            HardwareBudget(device, device, 8 << 30),
+            ini,
+            {model_id},
+        )[0]
         assert preset.window == override and preset.spilled is spilled
         assert preset.keys["spec-type"] == "draft-mtp"
         assert "ubatch-size" not in preset.keys and "override-tensor" not in preset.keys
@@ -163,7 +187,9 @@ def test_hardware_plain_facts(client):
     assert data["ram_total_bytes"] > 0
     assert data["vram_total_bytes"] >= 0
     # GPU fields are None-able (non-NVIDIA machines) but must exist.
-    assert "gpu_name" in data and "gpu_util_percent" in data and "vram_used_bytes" in data
+    assert (
+        "gpu_name" in data and "gpu_util_percent" in data and "vram_used_bytes" in data
+    )
 
 
 # ── catalog ──────────────────────────────────────────────────
@@ -174,9 +200,9 @@ def test_catalog_prices_every_entry_for_this_machine(client):
     assert len(data["models"]) >= 3
     for row in data["models"]:
         # The three user questions, answered on every row:
-        assert row["size_label"].endswith("GB")            # how big
-        assert isinstance(row["fits"], bool)               # will it fit
-        assert row["fit_summary"]                          # what shape
+        assert row["size_label"].endswith("GB")  # how big
+        assert isinstance(row["fits"], bool)  # will it fit
+        assert row["fit_summary"]  # what shape
         if row["fits"]:
             assert row["start_window"] >= 1
             assert row["start_window_label"].endswith("K")
@@ -185,26 +211,46 @@ def test_catalog_prices_every_entry_for_this_machine(client):
         assert isinstance(row["downloaded"], bool)
 
 
-@pytest.mark.parametrize("backend, expected", [
-    ("auto", "qwen3.8-27b"), ("cuda", "qwen3.8-27b"),
-    ("vulkan", "qwen3.6-35b-a3b"), ("cpu", "qwen3.6-35b-a3b"),
-])
-def test_calibrated_catalog_and_quickstart_respect_backend(client, monkeypatch, backend, expected):
+@pytest.mark.parametrize(
+    "backend, expected",
+    [
+        ("auto", "qwen3.8-27b"),
+        ("cuda", "qwen3.8-27b"),
+        ("vulkan", "qwen3.6-35b-a3b"),
+        ("cpu", "qwen3.6-35b-a3b"),
+    ],
+)
+def test_calibrated_catalog_and_quickstart_respect_backend(
+    client, monkeypatch, backend, expected
+):
     from clawk_cli.local_runtime import binaries, bootstrap, catalog, hardware
     from clawk_cli.local_runtime.estimator import HardwareBudget
     from clawk_cli.web_routers import local_models
 
-    budget = HardwareBudget(int(48 * (1 << 30) * .8), 48 << 30, 0, uma=True,
-                            gpu_name="NVIDIA RTX Spark N1X (5120-core Blackwell RTX GPU)", platform="win32")
+    budget = HardwareBudget(
+        int(48 * (1 << 30) * 0.8),
+        48 << 30,
+        0,
+        uma=True,
+        gpu_name="NVIDIA RTX Spark N1X (5120-core Blackwell RTX GPU)",
+        platform="win32",
+    )
     monkeypatch.setattr(hardware, "probe_budget", lambda **kw: budget)
     monkeypatch.setattr(catalog, "refresh_catalog_soon", lambda: None)
     monkeypatch.setattr(bootstrap, "staged_model_ids", lambda: set())
-    monkeypatch.setattr(binaries, "installed_engine",
-                        lambda *args, **kwargs: binaries.Engine("cuda", "b10964", Path("unused")))
-    monkeypatch.setattr(local_models, "_load_config", lambda: {"local_runtime": {"backend": backend}})
+    monkeypatch.setattr(
+        binaries,
+        "installed_engine",
+        lambda *args, **kwargs: binaries.Engine("cuda", "b10964", Path("unused")),
+    )
+    monkeypatch.setattr(
+        local_models, "_load_config", lambda: {"local_runtime": {"backend": backend}}
+    )
 
     def no_probe(*args, **kwargs):
-        raise AssertionError("recommendation must not launch a model or run another hardware probe")
+        raise AssertionError(
+            "recommendation must not launch a model or run another hardware probe"
+        )
 
     monkeypatch.setattr(bootstrap, "_detect_gpu_vendor", no_probe)
     monkeypatch.setattr(bootstrap, "ensure_local_runtime", no_probe)
@@ -212,7 +258,10 @@ def test_calibrated_catalog_and_quickstart_respect_backend(client, monkeypatch, 
     assert response.status_code == 200
     chosen = [row["id"] for row in response.json()["models"] if row["recommended"]]
     assert chosen == [expected]
-    assert local_models._quickstart_target(local_models.QuickstartBody(), budget)[0].id == expected
+    assert (
+        local_models._quickstart_target(local_models.QuickstartBody(), budget)[0].id
+        == expected
+    )
     explicit = local_models.QuickstartBody(model_id="qwen3.8-27b")
     assert local_models._quickstart_target(explicit, budget)[0].id == "qwen3.8-27b"
 
@@ -231,9 +280,16 @@ def test_quickstart_falls_back_past_entries_that_are_never_recommended(monkeypat
     the_27b = catalog.catalog_by_id()["qwen3.8-27b"]
     real_select = catalog.select_variant
     monkeypatch.setattr(local_models, "_engine_too_old", lambda min_engine: False)
-    monkeypatch.setattr(catalog, "recommended_entry", lambda *a, **kw: (the_27b, "best-quality-resident"))
-    monkeypatch.setattr(catalog, "select_variant",
-                        lambda entry, b: real_select(entry, b) if entry.id == bolt.id else None)
+    monkeypatch.setattr(
+        catalog,
+        "recommended_entry",
+        lambda *a, **kw: (the_27b, "best-quality-resident"),
+    )
+    monkeypatch.setattr(
+        catalog,
+        "select_variant",
+        lambda entry, b: real_select(entry, b) if entry.id == bolt.id else None,
+    )
 
     assert real_select(bolt, budget) is not None
     with pytest.raises(HTTPException) as refused:
@@ -248,10 +304,14 @@ def test_catalog_never_hides_unaffordable_models(client, monkeypatch):
     is how users conclude the feature is broken."""
     from clawk_cli.local_runtime.estimator import HardwareBudget
 
-    tiny = HardwareBudget(usable_vram_bytes=1 << 30, total_device_bytes=1 << 30,
-                          ram_available_bytes=1 << 30)
-    monkeypatch.setattr("clawk_cli.local_runtime.hardware.probe_budget",
-                        lambda **kw: tiny)
+    tiny = HardwareBudget(
+        usable_vram_bytes=1 << 30,
+        total_device_bytes=1 << 30,
+        ram_available_bytes=1 << 30,
+    )
+    monkeypatch.setattr(
+        "clawk_cli.local_runtime.hardware.probe_budget", lambda **kw: tiny
+    )
     data = client.get("/api/local-models/catalog").json()
     from clawk_cli.local_runtime.catalog import CATALOG
 
@@ -278,8 +338,10 @@ class _FakeRangeOpener:
 
         class _Resp(io.BytesIO):
             status = 200
-            headers = {"Content-Length": str(parent._length),
-                       "ETag": '"' + hashlib.sha256(parent._body).hexdigest() + '"'}
+            headers = {
+                "Content-Length": str(parent._length),
+                "ETag": '"' + hashlib.sha256(parent._body).hexdigest() + '"',
+            }
 
             def __enter__(self):
                 return self
@@ -289,7 +351,7 @@ class _FakeRangeOpener:
 
         rng = req.headers.get("Range") if req.headers else None
         if rng and rng.startswith("bytes="):
-            lo_hi = rng[len("bytes="):]
+            lo_hi = rng[len("bytes=") :]
             if lo_hi == "0-0":
                 # probe: 206 with full Content-Range so range support is detected
                 probe = _Resp(parent._body[:1])
@@ -301,7 +363,7 @@ class _FakeRangeOpener:
                 }
                 return probe
             lo, hi = (int(x) for x in lo_hi.split("-"))
-            part = parent._body[lo:hi + 1]
+            part = parent._body[lo : hi + 1]
             resp = _Resp(part)
             resp.status = 206
             resp.headers = {
@@ -318,7 +380,9 @@ def test_download_unknown_model_404s(client):
     assert r.status_code == 404
 
 
-def test_download_short_of_server_length_errors_and_cleans_up(client, monkeypatch, tmp_path):
+def test_download_short_of_server_length_errors_and_cleans_up(
+    client, monkeypatch, tmp_path
+):
     """Catalog sizes are advisory (upstream re-uploads may make them
     stale — a mismatch against the CATALOG must not fail a download).
     The server's own declared length is the only completeness check:
@@ -327,26 +391,38 @@ def test_download_short_of_server_length_errors_and_cleans_up(client, monkeypatc
 
     from clawk_cli.web_routers import local_models as lm
     from clawk_cli.local_runtime.bootstrap import models_dir
+
     requests = []
+
     class Truncated(_FakeRangeOpener):
         def open(self, req, timeout=None):
-            requests.append(req.headers.get('Range'))
+            requests.append(req.headers.get("Range"))
             return super().open(req, timeout)
-    monkeypatch.setattr("pm.downloader._OPENER", Truncated(b"not the real body", content_length=32))
-    destination = models_dir() / 'truncated.gguf'
-    monkeypatch.setattr(lm, '_download_plan', lambda *_: [('https://fixture.invalid/model', destination, 32)])
-    monkeypatch.setattr('pm.paths.partials_root', lambda: tmp_path / 'partials')
+
+    monkeypatch.setattr(
+        "pm.downloader._OPENER", Truncated(b"not the real body", content_length=32)
+    )
+    destination = models_dir() / "truncated.gguf"
+    monkeypatch.setattr(
+        lm,
+        "_download_plan",
+        lambda *_: [("https://fixture.invalid/model", destination, 32)],
+    )
+    monkeypatch.setattr("pm.paths.partials_root", lambda: tmp_path / "partials")
 
     # Pin a generous budget: variant selection prices against the machine
     # running the test, and a GPU-less CI runner honestly refuses every
     # build (409) — this test is about the download path, not selection.
     from clawk_cli.local_runtime.estimator import HardwareBudget
 
-    budget = HardwareBudget(usable_vram_bytes=64 << 30,
-                            total_device_bytes=64 << 30,
-                            ram_available_bytes=64 << 30)
-    monkeypatch.setattr("clawk_cli.local_runtime.hardware.probe_budget",
-                        lambda **kw: budget)
+    budget = HardwareBudget(
+        usable_vram_bytes=64 << 30,
+        total_device_bytes=64 << 30,
+        ram_available_bytes=64 << 30,
+    )
+    monkeypatch.setattr(
+        "clawk_cli.local_runtime.hardware.probe_budget", lambda **kw: budget
+    )
 
     from clawk_cli.local_runtime.catalog import CATALOG
 
@@ -364,11 +440,11 @@ def test_download_short_of_server_length_errors_and_cleans_up(client, monkeypatc
             break
         time.sleep(0.05)
     assert status is not None and status["status"] == "error"
-    assert 'bytes=0-0' in requests and any(value != 'bytes=0-0' for value in requests)
-    assert 'IncompleteRead' in status['error']
+    assert "bytes=0-0" in requests and any(value != "bytes=0-0" for value in requests)
+    assert "IncompleteRead" in status["error"]
     assert not destination.exists()
     assert job_id not in lm._RUNNING
-    assert not list(models_dir().glob('*.part'))
+    assert not list(models_dir().glob("*.part"))
 
 
 def test_download_already_downloaded_short_circuits(client, monkeypatch):
@@ -377,10 +453,14 @@ def test_download_already_downloaded_short_circuits(client, monkeypatch):
     from clawk_cli.local_runtime.estimator import HardwareBudget
 
     # Pin the budget so the selected variant is deterministic in the test.
-    budget = HardwareBudget(usable_vram_bytes=64 << 30, total_device_bytes=64 << 30,
-                            ram_available_bytes=64 << 30)
-    monkeypatch.setattr("clawk_cli.local_runtime.hardware.probe_budget",
-                        lambda **kw: budget)
+    budget = HardwareBudget(
+        usable_vram_bytes=64 << 30,
+        total_device_bytes=64 << 30,
+        ram_available_bytes=64 << 30,
+    )
+    monkeypatch.setattr(
+        "clawk_cli.local_runtime.hardware.probe_budget", lambda **kw: budget
+    )
     choice = select_variant(CATALOG[0], budget)
     assert choice is not None
     from clawk_cli.web_routers.local_models import _download_plan
@@ -431,11 +511,13 @@ def test_eject_without_supervisor_is_not_a_500(client, monkeypatch):
     status route, so eject raised NameError -> 500 for every adopted-
     server session."""
     monkeypatch.setattr(
-        "clawk_cli.local_runtime.bootstrap.get_supervisor", lambda: None)
+        "clawk_cli.local_runtime.bootstrap.get_supervisor", lambda: None
+    )
     # No running server either: the route must answer 409 (no server),
     # never a NameError 500.
     monkeypatch.setattr(
-        "clawk_cli.web_routers.local_models._state_endpoint", lambda: None)
+        "clawk_cli.web_routers.local_models._state_endpoint", lambda: None
+    )
     r = client.post("/api/local-models/eject", json={"model_id": "anything"})
     assert r.status_code == 409, (r.status_code, r.text)
 
@@ -449,20 +531,22 @@ def test_download_tolerates_stale_catalog_size(client, monkeypatch):
 
     body = b"x" * 48  # server-consistent: Content-Length == body length
 
-    monkeypatch.setattr(
-        "pm.downloader._OPENER", _FakeRangeOpener(body))
+    monkeypatch.setattr("pm.downloader._OPENER", _FakeRangeOpener(body))
 
     from clawk_cli.local_runtime.estimator import HardwareBudget
 
-    budget = HardwareBudget(usable_vram_bytes=64 << 30,
-                            total_device_bytes=64 << 30,
-                            ram_available_bytes=64 << 30)
-    monkeypatch.setattr("clawk_cli.local_runtime.hardware.probe_budget",
-                        lambda **kw: budget)
+    budget = HardwareBudget(
+        usable_vram_bytes=64 << 30,
+        total_device_bytes=64 << 30,
+        ram_available_bytes=64 << 30,
+    )
+    monkeypatch.setattr(
+        "clawk_cli.local_runtime.hardware.probe_budget", lambda **kw: budget
+    )
     # Keep the post-download server bounce out of this unit.
     monkeypatch.setattr(
-        "clawk_cli.local_runtime.bootstrap.refresh_local_runtime",
-        lambda: False)
+        "clawk_cli.local_runtime.bootstrap.refresh_local_runtime", lambda: False
+    )
 
     from clawk_cli.local_runtime.catalog import CATALOG
 
@@ -505,14 +589,17 @@ def test_download_survives_a_held_finished_file(client, monkeypatch):
 
     from clawk_cli.local_runtime.estimator import HardwareBudget
 
-    budget = HardwareBudget(usable_vram_bytes=64 << 30,
-                            total_device_bytes=64 << 30,
-                            ram_available_bytes=64 << 30)
-    monkeypatch.setattr("clawk_cli.local_runtime.hardware.probe_budget",
-                        lambda **kw: budget)
+    budget = HardwareBudget(
+        usable_vram_bytes=64 << 30,
+        total_device_bytes=64 << 30,
+        ram_available_bytes=64 << 30,
+    )
     monkeypatch.setattr(
-        "clawk_cli.local_runtime.bootstrap.refresh_local_runtime",
-        lambda: False)
+        "clawk_cli.local_runtime.hardware.probe_budget", lambda **kw: budget
+    )
+    monkeypatch.setattr(
+        "clawk_cli.local_runtime.bootstrap.refresh_local_runtime", lambda: False
+    )
 
     from clawk_cli.local_runtime.bootstrap import models_dir
     from clawk_cli.local_runtime.catalog import CATALOG
@@ -535,10 +622,18 @@ def test_download_survives_a_held_finished_file(client, monkeypatch):
 
 
 def test_download_pause_and_resume_unknown_404(client):
-    assert client.post("/api/local-models/download/pause",
-                       json={"job_id": "deadbeef"}).status_code == 404
-    assert client.post("/api/local-models/download/resume",
-                       json={"job_id": "deadbeef"}).status_code == 404
+    assert (
+        client.post(
+            "/api/local-models/download/pause", json={"job_id": "deadbeef"}
+        ).status_code
+        == 404
+    )
+    assert (
+        client.post(
+            "/api/local-models/download/resume", json={"job_id": "deadbeef"}
+        ).status_code
+        == 404
+    )
 
 
 # ── pause / resume against a real loopback range server ──────
@@ -549,11 +644,14 @@ def _pin_budget(monkeypatch):
     download path (not selection) is what the test exercises."""
     from clawk_cli.local_runtime.estimator import HardwareBudget
 
-    budget = HardwareBudget(usable_vram_bytes=64 << 30,
-                            total_device_bytes=64 << 30,
-                            ram_available_bytes=64 << 30)
-    monkeypatch.setattr("clawk_cli.local_runtime.hardware.probe_budget",
-                        lambda **kw: budget)
+    budget = HardwareBudget(
+        usable_vram_bytes=64 << 30,
+        total_device_bytes=64 << 30,
+        ram_available_bytes=64 << 30,
+    )
+    monkeypatch.setattr(
+        "clawk_cli.local_runtime.hardware.probe_budget", lambda **kw: budget
+    )
 
 
 def _serve_plan(monkeypatch, dl_server, tmp_partials, bodies):
@@ -576,8 +674,8 @@ def _serve_plan(monkeypatch, dl_server, tmp_partials, bodies):
     monkeypatch.setattr(pm_paths, "partials_root", lambda: Path(tmp_partials))
     monkeypatch.setattr(lm, "_download_plan", lambda entry, variant: plan)
     monkeypatch.setattr(
-        "clawk_cli.local_runtime.bootstrap.refresh_local_runtime",
-        lambda: False)
+        "clawk_cli.local_runtime.bootstrap.refresh_local_runtime", lambda: False
+    )
     return plan
 
 
@@ -603,8 +701,7 @@ def _pause_when_flowing(client, job_id):
         time.sleep(0.03)
     deadline = time.time() + 15
     while time.time() < deadline:
-        pr = client.post("/api/local-models/download/pause",
-                         json={"job_id": job_id})
+        pr = client.post("/api/local-models/download/pause", json={"job_id": job_id})
         if pr.status_code == 200 and pr.json().get("paused") is True:
             return
         time.sleep(0.03)
@@ -614,8 +711,7 @@ def _pause_when_flowing(client, job_id):
 _BIG_BODY = bytes(range(256)) * (8 * 1024 * 1024 // 256)  # 8 MiB, deterministic
 
 
-def test_download_resume_completes_bytes(client, monkeypatch, dl_server,
-                                         tmp_path):
+def test_download_resume_completes_bytes(client, monkeypatch, dl_server, tmp_path):
     """Resume after a mid-flight pause finishes the remaining ranges and
     stages the exact file the server serves."""
     _pin_budget(monkeypatch)
@@ -624,22 +720,26 @@ def test_download_resume_completes_bytes(client, monkeypatch, dl_server,
     from clawk_cli.local_runtime.catalog import CATALOG
     from clawk_cli.web_routers import local_models as lm
 
-    _serve_plan(monkeypatch, dl_server, tmp_path / "partials",
-                {"PartA": _BIG_BODY})
+    _serve_plan(monkeypatch, dl_server, tmp_path / "partials", {"PartA": _BIG_BODY})
 
-    job_id = client.post("/api/local-models/download",
-                         json={"model_id": CATALOG[0].id}).json()["job_id"]
+    job_id = client.post(
+        "/api/local-models/download", json={"model_id": CATALOG[0].id}
+    ).json()["job_id"]
     _pause_when_flowing(client, job_id)
     status = _poll_job(client, job_id)
     assert status["status"] == "paused", status
 
-    RangeHandler.slow_per_chunk = 0.0   # let the resume run at full speed
+    RangeHandler.slow_per_chunk = 0.0  # let the resume run at full speed
     assert status["error"] is None
     assert lm._RUNNING[job_id].get("resume") is not None
     partials = list((tmp_path / "partials").glob("*.part"))
     assert partials and any(p.stat().st_size > 0 for p in partials)
-    assert client.post("/api/local-models/download/resume",
-                       json={"job_id": job_id}).json()["resumed"] is True
+    assert (
+        client.post(
+            "/api/local-models/download/resume", json={"job_id": job_id}
+        ).json()["resumed"]
+        is True
+    )
 
     status = _poll_job(client, job_id, until=("done", "error"))
     assert status["status"] == "done", status
@@ -649,7 +749,8 @@ def test_download_resume_completes_bytes(client, monkeypatch, dl_server,
 
 
 def test_repeated_resume_never_spawns_concurrent_writers(
-        client, monkeypatch, dl_server, tmp_path):
+    client, monkeypatch, dl_server, tmp_path
+):
     """Spamming resume while a worker is already running must not build a
     second Download — one writer per job, ever."""
     import threading as _threading
@@ -659,11 +760,11 @@ def test_repeated_resume_never_spawns_concurrent_writers(
     from clawk_cli.local_runtime.catalog import CATALOG
     from clawk_cli.web_routers import local_models as lm
 
-    _serve_plan(monkeypatch, dl_server, tmp_path / "partials",
-                {"PartA": _BIG_BODY})
+    _serve_plan(monkeypatch, dl_server, tmp_path / "partials", {"PartA": _BIG_BODY})
 
-    job_id = client.post("/api/local-models/download",
-                         json={"model_id": CATALOG[0].id}).json()["job_id"]
+    job_id = client.post(
+        "/api/local-models/download", json={"model_id": CATALOG[0].id}
+    ).json()["job_id"]
     _pause_when_flowing(client, job_id)
     assert _poll_job(client, job_id)["status"] == "paused"
 
@@ -689,7 +790,9 @@ def test_repeated_resume_never_spawns_concurrent_writers(
         assert started.wait(timeout=15), "resume never built a Download"
         # Keep the real downloader parked while repeated requests contend.
         for _ in range(2):
-            response = client.post("/api/local-models/download/resume", json={"job_id": job_id})
+            response = client.post(
+                "/api/local-models/download/resume", json={"job_id": job_id}
+            )
             assert response.json()["resumed"] is False
         assert len(built) == 1
     finally:
@@ -699,8 +802,7 @@ def test_repeated_resume_never_spawns_concurrent_writers(
     assert status["status"] == "done", status
 
 
-def test_quickstart_pause_stops_the_sequence(client, monkeypatch, dl_server,
-                                             tmp_path):
+def test_quickstart_pause_stops_the_sequence(client, monkeypatch, dl_server, tmp_path):
     """A quickstart paused mid-download must stop dead: no second file, no
     server start, no default assignment — the job parks for a resume, and
     its resume handle stays registered."""
@@ -708,14 +810,19 @@ def test_quickstart_pause_stops_the_sequence(client, monkeypatch, dl_server,
     from tests.pm._range_server import RangeHandler
     from clawk_cli.web_routers import local_models as lm
 
-    _serve_plan(monkeypatch, dl_server, tmp_path / "partials",
-                {"QsPartA": _BIG_BODY, "QsPartB": _BIG_BODY})
+    _serve_plan(
+        monkeypatch,
+        dl_server,
+        tmp_path / "partials",
+        {"QsPartA": _BIG_BODY, "QsPartB": _BIG_BODY},
+    )
     from clawk_cli.local_runtime.binaries import Engine
 
-    monkeypatch.setattr("clawk_cli.local_runtime.binaries.installed_engine",
-                        lambda *args, **kwargs: Engine("cpu", "b99999", Path("unused")))
-    monkeypatch.setattr(lm, "_runtime_target",
-                        lambda requested=None: ("b1", "cpu"))
+    monkeypatch.setattr(
+        "clawk_cli.local_runtime.binaries.installed_engine",
+        lambda *args, **kwargs: Engine("cpu", "b99999", Path("unused")),
+    )
+    monkeypatch.setattr(lm, "_runtime_target", lambda requested=None: ("b1", "cpu"))
 
     calls = {"server": 0, "assign": 0}
 
@@ -724,7 +831,8 @@ def test_quickstart_pause_stops_the_sequence(client, monkeypatch, dl_server,
         raise RuntimeError("server must not start after a pause")
 
     monkeypatch.setattr(
-        "clawk_cli.local_runtime.bootstrap.ensure_local_runtime", _fail_server)
+        "clawk_cli.local_runtime.bootstrap.ensure_local_runtime", _fail_server
+    )
 
     class _RecordLate:
         def __call__(self, *a, **kw):
@@ -734,8 +842,9 @@ def test_quickstart_pause_stops_the_sequence(client, monkeypatch, dl_server,
 
     from clawk_cli.local_runtime.catalog import CATALOG
 
-    job_id = client.post("/api/local-models/quickstart",
-                         json={"model_id": CATALOG[0].id}).json()["job_id"]
+    job_id = client.post(
+        "/api/local-models/quickstart", json={"model_id": CATALOG[0].id}
+    ).json()["job_id"]
     _pause_when_flowing(client, job_id)
 
     status = _poll_job(client, job_id)
@@ -757,8 +866,15 @@ def test_quickstart_pause_stops_the_sequence(client, monkeypatch, dl_server,
     monkeypatch.setattr(lm, "_ensure_server", activate)
     monkeypatch.setattr(lm, "_assign_default", assign)
     RangeHandler.slow_per_chunk = 0
-    assert client.post("/api/local-models/quickstart", json={"model_id": CATALOG[0].id}).status_code == 409
-    assert client.post("/api/local-models/download/resume", json={"job_id": job_id}).json()["resumed"]
+    assert (
+        client.post(
+            "/api/local-models/quickstart", json={"model_id": CATALOG[0].id}
+        ).status_code
+        == 409
+    )
+    assert client.post(
+        "/api/local-models/download/resume", json={"job_id": job_id}
+    ).json()["resumed"]
     status = _poll_job(client, job_id, until=("done", "error"))
     assert status["status"] == "done", status
     assert calls == {"server": 1, "assign": 1}
@@ -779,7 +895,9 @@ def test_download_failure_releases_resume_handle(client, monkeypatch):
         raise OSError("download failed")
 
     monkeypatch.setattr(lm, "_download_job", fail)
-    job_id = client.post("/api/local-models/download", json={"model_id": CATALOG[0].id}).json()["job_id"]
+    job_id = client.post(
+        "/api/local-models/download", json={"model_id": CATALOG[0].id}
+    ).json()["job_id"]
     status = _poll_job(client, job_id)
     assert status["status"] == "error", status
     assert job_id not in lm._RUNNING

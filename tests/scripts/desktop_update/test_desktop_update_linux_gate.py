@@ -9,6 +9,7 @@ binary the rebuild just replaced as a foreign AppImage/deb and refuses to relaun
 Drives the real ``--self-test-gate`` entry point of ``posix.sh`` (the same one
 ``scripts/desktop-update/repro.sh gate`` uses).
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -16,16 +17,30 @@ from pathlib import Path
 
 import pytest
 
-POSIX_SH = Path(__file__).resolve().parent.parent.parent.parent / "scripts" / "desktop-update" / "posix.sh"
+POSIX_SH = (
+    Path(__file__).resolve().parent.parent.parent.parent
+    / "scripts"
+    / "desktop-update"
+    / "posix.sh"
+)
 
 pytestmark = pytest.mark.platforms("linux")
 
 
 def _gate(install_root: Path, relaunch_target: Path) -> str:
     out = subprocess.run(
-        ["bash", str(POSIX_SH), "--self-test-gate", "--install-root", str(install_root),
-         "--relaunch-target", str(relaunch_target)],
-        capture_output=True, text=True, check=True,
+        [
+            "bash",
+            str(POSIX_SH),
+            "--self-test-gate",
+            "--install-root",
+            str(install_root),
+            "--relaunch-target",
+            str(relaunch_target),
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
     )
     return out.stdout.strip().split(":", 1)[0]
 
@@ -37,13 +52,25 @@ def _checkout(root: Path) -> Path:
     return unpacked
 
 
-@pytest.mark.parametrize("root_spelling,target_spelling", [("link", "real"), ("real", "link")])
-def test_symlinked_spelling_on_either_side_still_relaunches(tmp_path, root_spelling, target_spelling):
+@pytest.mark.parametrize(
+    "root_spelling,target_spelling", [("link", "real"), ("real", "link")]
+)
+def test_symlinked_spelling_on_either_side_still_relaunches(
+    tmp_path, root_spelling, target_spelling
+):
     real = tmp_path / "real"
     _checkout(real)
     (tmp_path / "link").symlink_to(real)
     root = tmp_path / root_spelling
-    target = tmp_path / target_spelling / "apps" / "desktop" / "release" / "linux-unpacked" / "Clawksis"
+    target = (
+        tmp_path
+        / target_spelling
+        / "apps"
+        / "desktop"
+        / "release"
+        / "linux-unpacked"
+        / "Clawksis"
+    )
     assert _gate(root, target) == "relaunch"
 
 
@@ -56,4 +83,6 @@ def test_target_outside_the_checkout_is_still_skew(tmp_path):
     (foreign / "clawk").touch()
     assert _gate(tmp_path / "link", foreign / "clawk") == "skew"
     # A sibling directory sharing the prefix must not be mistaken for the checkout either.
-    assert _gate(tmp_path / "link", Path(str(unpacked) + "-evil") / "Clawksis") == "skew"
+    assert (
+        _gate(tmp_path / "link", Path(str(unpacked) + "-evil") / "Clawksis") == "skew"
+    )

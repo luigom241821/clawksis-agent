@@ -29,7 +29,10 @@ POWERSHELL = next(
 def _git(cwd: Path, *args: str) -> str:
     return subprocess.run(
         ["git", "-c", "user.email=t@t", "-c", "user.name=t", *args],
-        cwd=cwd, check=True, capture_output=True, text=True,
+        cwd=cwd,
+        check=True,
+        capture_output=True,
+        text=True,
     ).stdout.strip()
 
 
@@ -56,13 +59,20 @@ def _diverged_managed_checkout(tmp_path: Path) -> tuple[Path, str]:
 def _assert_local_commit_parked(repo: Path, local_sha: str, output: str) -> None:
     assert _git(repo, "rev-parse", "HEAD") == _git(repo, "rev-parse", "origin/main")
     refs = dict(
-        line.split()[::-1] for line in _git(
-            repo, "for-each-ref", "--format=%(refname) %(objectname)",
-            "refs/clawk-update-backups/").splitlines())
+        line.split()[::-1]
+        for line in _git(
+            repo,
+            "for-each-ref",
+            "--format=%(refname) %(objectname)",
+            "refs/clawk-update-backups/",
+        ).splitlines()
+    )
     ref = refs.get(local_sha)
     assert ref and ref.startswith("refs/clawk-update-backups/diverged-main-"), refs
     assert ref in output, "the installer must print where the commits went"
-    assert _git(repo, "log", "--format=%H", f"origin/main..{ref}").split() == [local_sha]
+    assert _git(repo, "log", "--format=%H", f"origin/main..{ref}").split() == [
+        local_sha
+    ]
 
 
 @pytest.mark.live_system_guard_bypass
@@ -70,7 +80,9 @@ def _assert_local_commit_parked(repo: Path, local_sha: str, output: str) -> None
     shutil.which("git") is None or shutil.which("bash") is None,
     reason="needs git and bash",
 )
-def test_install_sh_repository_stage_parks_local_commits_before_reset(tmp_path: Path) -> None:
+def test_install_sh_repository_stage_parks_local_commits_before_reset(
+    tmp_path: Path,
+) -> None:
     managed, local_sha = _diverged_managed_checkout(tmp_path)
     env = os.environ | {
         "CLAWK_HOME": str(tmp_path / "clawk-home"),
@@ -79,7 +91,10 @@ def test_install_sh_repository_stage_parks_local_commits_before_reset(tmp_path: 
 
     result = subprocess.run(
         ["bash", str(INSTALL_SH), "--stage", "repository", "--non-interactive"],
-        cwd=tmp_path, env=env, capture_output=True, text=True,
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
         check=False,
     )
 
@@ -92,7 +107,9 @@ def test_install_sh_repository_stage_parks_local_commits_before_reset(tmp_path: 
     shutil.which("git") is None or POWERSHELL is None,
     reason="needs git and PowerShell",
 )
-def test_install_ps1_repository_stage_parks_local_commits_before_reset(tmp_path: Path) -> None:
+def test_install_ps1_repository_stage_parks_local_commits_before_reset(
+    tmp_path: Path,
+) -> None:
     managed, local_sha = _diverged_managed_checkout(tmp_path)
     env = os.environ.copy()
     if os.name != "nt":
@@ -113,12 +130,22 @@ def test_install_ps1_repository_stage_parks_local_commits_before_reset(tmp_path:
 
     result = subprocess.run(
         [
-            POWERSHELL, "-NoProfile", "-File", str(INSTALL_PS1),
-            "-Stage", "repository", "-NonInteractive",
-            "-InstallDir", str(managed),
-            "-ClawkHome", str(tmp_path / "clawk-home"),
+            POWERSHELL,
+            "-NoProfile",
+            "-File",
+            str(INSTALL_PS1),
+            "-Stage",
+            "repository",
+            "-NonInteractive",
+            "-InstallDir",
+            str(managed),
+            "-ClawkHome",
+            str(tmp_path / "clawk-home"),
         ],
-        cwd=tmp_path, env=env, capture_output=True, text=True,
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
         check=False,
     )
 

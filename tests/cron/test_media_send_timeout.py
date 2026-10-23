@@ -77,7 +77,11 @@ class TestEmptyReasonFallback:
                 pass
 
         errors = _send_media_via_adapter(
-            _Adapter(), "C123", [(str(media), False)], None, loop=object(),
+            _Adapter(),
+            "C123",
+            [(str(media), False)],
+            None,
+            loop=object(),
             job={"id": "job-x"},
         )
         assert len(errors) == 1

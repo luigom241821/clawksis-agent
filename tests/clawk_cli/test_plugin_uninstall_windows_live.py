@@ -49,23 +49,44 @@ _HEADS = {
 def _native_extension() -> Path:
     found = sorted((Path(sys.base_prefix) / "DLLs").glob("select*.pyd"))
     if not found:
-        pytest.fail(f"no stdlib select*.pyd under {sys.base_prefix}\\DLLs to vendor into the plugin")
+        pytest.fail(
+            f"no stdlib select*.pyd under {sys.base_prefix}\\DLLs to vendor into the plugin"
+        )
     return found[0]
 
 
 def _child_env(home: Path) -> dict:
-    env = {k: v for k, v in os.environ.items()
-           if not k.startswith(("CLAWK_", "PYTEST_")) and not k.endswith(("_API_KEY", "_TOKEN"))}
-    env.update(HOME=str(home.parent), USERPROFILE=str(home.parent), CLAWK_HOME=str(home),
-               CLAWK_GATEWAY_LOCK_DIR=str(home.parent / "locks"), PYTHONPATH=str(PROJECT_ROOT),
-               PYTHONUTF8="1", NO_COLOR="1", CLAWK_ACCEPT_HOOKS="1")
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if not k.startswith(("CLAWK_", "PYTEST_"))
+        and not k.endswith(("_API_KEY", "_TOKEN"))
+    }
+    env.update(
+        HOME=str(home.parent),
+        USERPROFILE=str(home.parent),
+        CLAWK_HOME=str(home),
+        CLAWK_GATEWAY_LOCK_DIR=str(home.parent / "locks"),
+        PYTHONPATH=str(PROJECT_ROOT),
+        PYTHONUTF8="1",
+        NO_COLOR="1",
+        CLAWK_ACCEPT_HOOKS="1",
+    )
     return env
 
 
 def _clawk(home: Path, *argv: str, timeout: float = 180) -> subprocess.CompletedProcess:
-    return subprocess.run([sys.executable, "-m", "clawk_cli.main", *argv], cwd=str(home),
-                          env=_child_env(home), stdin=subprocess.DEVNULL, capture_output=True,
-                          encoding="utf-8", errors="replace", timeout=timeout, check=False)
+    return subprocess.run(
+        [sys.executable, "-m", "clawk_cli.main", *argv],
+        cwd=str(home),
+        env=_child_env(home),
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+        check=False,
+    )
 
 
 def _wait(pred, timeout: float) -> bool:
@@ -84,35 +105,63 @@ def live_gateway(tmp_path_factory):
     plugins = home / "plugins"
     plugins.mkdir(parents=True)
     (root / "fakehome" / "locks").mkdir()
-    (home / "config.yaml").write_text("plugins:\n  enabled:\n" + "".join(f"    - {n}\n" for n in _HEADS),
-                                      encoding="utf-8")
+    (home / "config.yaml").write_text(
+        "plugins:\n  enabled:\n" + "".join(f"    - {n}\n" for n in _HEADS),
+        encoding="utf-8",
+    )
     for name, head in _HEADS.items():
         d = plugins / name
         d.mkdir()
         tool = name.replace("-", "_")
-        (d / "plugin.yaml").write_text(f"name: {name}\nversion: '1.0'\nprovides_tools:\n  - {tool}\n",
-                                       encoding="utf-8")
-        (d / "__init__.py").write_text(head + _REGISTER.format(name=name, tool=tool), encoding="utf-8")
-    shutil.copy2(_native_extension(), plugins / "uninstall-native" / _native_extension().name)
+        (d / "plugin.yaml").write_text(
+            f"name: {name}\nversion: '1.0'\nprovides_tools:\n  - {tool}\n",
+            encoding="utf-8",
+        )
+        (d / "__init__.py").write_text(
+            head + _REGISTER.format(name=name, tool=tool), encoding="utf-8"
+        )
+    shutil.copy2(
+        _native_extension(), plugins / "uninstall-native" / _native_extension().name
+    )
     # Installed plugins carry an install record, which routes removal through the metadata-consistent path.
     (plugins / ".install-metadata.json").write_text(
-        "{" + ", ".join(f'"{n}": {{"source": "local", "sha": "0"}}' for n in _HEADS) + "}", encoding="utf-8")
+        "{"
+        + ", ".join(f'"{n}": {{"source": "local", "sha": "0"}}' for n in _HEADS)
+        + "}",
+        encoding="utf-8",
+    )
 
     log = open(root / "gateway.log", "w", encoding="utf-8")
-    proc = subprocess.Popen([sys.executable, "-m", "clawk_cli.main", "gateway", "run", "--force"],
-                            cwd=str(home), env=_child_env(home), stdin=subprocess.DEVNULL, stdout=log,
-                            stderr=subprocess.STDOUT, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "clawk_cli.main", "gateway", "run", "--force"],
+        cwd=str(home),
+        env=_child_env(home),
+        stdin=subprocess.DEVNULL,
+        stdout=log,
+        stderr=subprocess.STDOUT,
+        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+    )
     from gateway.control_socket import identify_gateway, reload_gateway_plugins
+
     try:
-        if not _wait(lambda: proc.poll() is not None or identify_gateway(home, timeout=2.0), 180):
+        if not _wait(
+            lambda: proc.poll() is not None or identify_gateway(home, timeout=2.0), 180
+        ):
             pytest.fail("gateway never answered identify")
-        assert proc.poll() is None, (root / "gateway.log").read_text(encoding="utf-8", errors="replace")[-3000:]
+        assert proc.poll() is None, (root / "gateway.log").read_text(
+            encoding="utf-8", errors="replace"
+        )[-3000:]
         answer = reload_gateway_plugins(home) or {}
         missing = set(_HEADS) - set(answer.get("plugins") or ())
         assert not missing, f"gateway did not load {missing}: {answer}"
         yield home, proc
     finally:
-        subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True, timeout=30, check=False)
+        subprocess.run(
+            ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+            capture_output=True,
+            timeout=30,
+            check=False,
+        )
         proc.wait(timeout=30)
         log.close()
 
@@ -121,12 +170,23 @@ def live_gateway(tmp_path_factory):
 def test_uninstall_while_gateway_has_plugin_loaded(live_gateway, name):
     home, proc = live_gateway
     result = _clawk(home, "plugins", "uninstall", name)
-    print(f"UNINSTALL {name}: rc={result.returncode}\n{result.stdout[-1500:]}\n{result.stderr[-1500:]}")
+    print(
+        f"UNINSTALL {name}: rc={result.returncode}\n{result.stdout[-1500:]}\n{result.stderr[-1500:]}"
+    )
 
     assert proc.poll() is None, "the gateway died during uninstall"
-    assert result.returncode == 0, f"uninstall failed: {result.stdout[-800:]} {result.stderr[-800:]}"
-    leftovers = sorted(str(p.relative_to(home / "plugins")) for p in (home / "plugins").rglob("plugin.yaml"))
-    assert not any(name in p for p in leftovers), f"a loadable copy stayed under plugins/: {leftovers}"
+    assert result.returncode == 0, (
+        f"uninstall failed: {result.stdout[-800:]} {result.stderr[-800:]}"
+    )
+    leftovers = sorted(
+        str(p.relative_to(home / "plugins"))
+        for p in (home / "plugins").rglob("plugin.yaml")
+    )
+    assert not any(name in p for p in leftovers), (
+        f"a loadable copy stayed under plugins/: {leftovers}"
+    )
     listing = _clawk(home, "plugins", "list")
-    assert name not in listing.stdout, f"the next process still sees {name}:\n{listing.stdout[-1500:]}"
+    assert name not in listing.stdout, (
+        f"the next process still sees {name}:\n{listing.stdout[-1500:]}"
+    )
     assert name not in (home / "config.yaml").read_text(encoding="utf-8")

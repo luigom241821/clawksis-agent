@@ -39,7 +39,9 @@ def test_alternating_project_env_and_none_stays_stable(home, tmp_path):
     counts = []
     for i in range(6):
         load_clawk_dotenv(
-            clawk_home=home, project_env=project_env if i % 2 else None, load_external_secrets=False
+            clawk_home=home,
+            project_env=project_env if i % 2 else None,
+            load_external_secrets=False,
         )
         counts.append(os.environ["PATH"].count("/x:"))
 
@@ -60,7 +62,13 @@ def test_alternating_homes_each_resolve_against_boot_path(tmp_path, monkeypatch)
         load_clawk_dotenv(clawk_home=h, load_external_secrets=False)
         seen.append(os.environ["PATH"])
 
-    assert seen == [f"/a:{BASE_PATH}", f"/b:{BASE_PATH}", f"/a:{BASE_PATH}", f"/b:{BASE_PATH}", f"/a:{BASE_PATH}"]
+    assert seen == [
+        f"/a:{BASE_PATH}",
+        f"/b:{BASE_PATH}",
+        f"/a:{BASE_PATH}",
+        f"/b:{BASE_PATH}",
+        f"/a:{BASE_PATH}",
+    ]
 
 
 def test_variable_unset_at_boot_and_default_syntax_resolve_once(home, monkeypatch):
@@ -96,7 +104,9 @@ def test_later_layer_in_the_same_load_still_sees_the_earlier_layer(home, tmp_pat
     project_env.write_text("YPATH=/p:${XPATH}\n")
 
     for _ in range(3):
-        load_clawk_dotenv(clawk_home=home, project_env=project_env, load_external_secrets=False)
+        load_clawk_dotenv(
+            clawk_home=home, project_env=project_env, load_external_secrets=False
+        )
 
     assert os.environ["XPATH"] == f"/x:{BASE_PATH}"
     assert os.environ["YPATH"] == f"/p:/x:{BASE_PATH}"

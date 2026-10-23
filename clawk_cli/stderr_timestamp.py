@@ -51,7 +51,9 @@ def _open_log(log_path: Path) -> TextIO:
 def _copy_stderr_with_timestamps(stderr: BinaryIO, log_path: Path) -> None:
     with _open_log(log_path) as log_file:
         for raw_line in iter(stderr.readline, b""):
-            _write_timestamped_line(log_file, raw_line.decode("utf-8", errors="replace"))
+            _write_timestamped_line(
+                log_file, raw_line.decode("utf-8", errors="replace")
+            )
 
 
 def _copy_stdout_with_timestamps(stdout: BinaryIO) -> None:
@@ -103,10 +105,14 @@ def _is_clawk_gateway_run_argv(command: Sequence[str]) -> bool:
         from gateway.status import looks_like_gateway_command_line
     except Exception:
         return False
-    return bool(looks_like_gateway_command_line(" ".join(str(part) for part in command)))
+    return bool(
+        looks_like_gateway_command_line(" ".join(str(part) for part in command))
+    )
 
 
-def _child_launchd_label_env(environ: Mapping[str, str] | None = None) -> dict[str, str]:
+def _child_launchd_label_env(
+    environ: Mapping[str, str] | None = None,
+) -> dict[str, str]:
     """Env vars that carry this wrapper's launchd identity to the grandchild.
 
     launchd stamps ``XPC_SERVICE_NAME=<job label>`` only on this wrapper (its direct child; an
@@ -124,7 +130,9 @@ def _child_launchd_label_env(environ: Mapping[str, str] | None = None) -> dict[s
     return {}
 
 
-def _prepare_child_command(command: Sequence[str], environ: Mapping[str, str] | None = None) -> list[str]:
+def _prepare_child_command(
+    command: Sequence[str], environ: Mapping[str, str] | None = None
+) -> list[str]:
     """Return the argv to exec, upgrading stale launchd-wrapped gateway commands.
 
     launchd stamps ``XPC_SERVICE_NAME=<job label>`` only on this wrapper (its direct child; an
@@ -135,7 +143,12 @@ def _prepare_child_command(command: Sequence[str], environ: Mapping[str, str] | 
     argv = [str(part) for part in command]
     env = os.environ if environ is None else environ
     xpc_service = str(env.get("XPC_SERVICE_NAME", "")).strip()
-    if EXTERNAL_SUPERVISOR_FLAG not in argv and xpc_service and xpc_service != "0" and _is_clawk_gateway_run_argv(argv):
+    if (
+        EXTERNAL_SUPERVISOR_FLAG not in argv
+        and xpc_service
+        and xpc_service != "0"
+        and _is_clawk_gateway_run_argv(argv)
+    ):
         argv.append(EXTERNAL_SUPERVISOR_FLAG)
     return argv
 
@@ -149,7 +162,9 @@ def _child_returncode_for_supervisor(command: Sequence[str], returncode: int) ->
     """
     if returncode < 0:
         return 128 + abs(returncode)
-    if returncode == _GATEWAY_FATAL_CONFIG_EXIT_CODE and _is_clawk_gateway_run_argv(command):
+    if returncode == _GATEWAY_FATAL_CONFIG_EXIT_CODE and _is_clawk_gateway_run_argv(
+        command
+    ):
         return 0
     return returncode
 
@@ -181,11 +196,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
     except OSError as exc:
         with _open_log(log_path) as log_file:
-            _write_timestamped_line(log_file, f"failed to start stderr-timestamped command: {exc}")
+            _write_timestamped_line(
+                log_file, f"failed to start stderr-timestamped command: {exc}"
+            )
         return 127
 
     assert proc.stdout is not None and proc.stderr is not None
-    stdout_pump = threading.Thread(target=_copy_stdout_with_timestamps, args=(proc.stdout,), daemon=True)
+    stdout_pump = threading.Thread(
+        target=_copy_stdout_with_timestamps, args=(proc.stdout,), daemon=True
+    )
     stdout_pump.start()
     previous_handlers = _install_signal_forwarders(proc)
     try:

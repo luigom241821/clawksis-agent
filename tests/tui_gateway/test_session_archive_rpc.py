@@ -51,7 +51,9 @@ def test_archive_resolves_stored_id_without_live_session(db):
     assert db.get_session("stored-chat")["archived"] == 1
 
     # And back — unarchive through the same durable path.
-    envelope = _call("session.archive", {"session_id": "stored-chat", "archived": False})
+    envelope = _call(
+        "session.archive", {"session_id": "stored-chat", "archived": False}
+    )
     assert "error" not in envelope, envelope
     assert envelope["result"]["archived"] is False
     assert db.get_session("stored-chat")["archived"] == 0
@@ -66,7 +68,9 @@ def test_archive_accepts_session_key_alias(db):
 
 
 def test_archive_unknown_id_still_errors(db):
-    envelope = _call("session.archive", {"session_id": "no-such-session", "archived": True})
+    envelope = _call(
+        "session.archive", {"session_id": "no-such-session", "archived": True}
+    )
     assert envelope.get("error"), envelope
 
 
@@ -76,14 +80,23 @@ def test_archive_through_the_dispatcher_validates_params(db):
     assert resp["error"]["code"] == 4006
 
     resp = srv.handle_request(
-        {"id": "2", "method": "session.archive", "params": {"session_id": "x", "bogus": 1}})
+        {
+            "id": "2",
+            "method": "session.archive",
+            "params": {"session_id": "x", "bogus": 1},
+        }
+    )
     assert resp["error"]["code"] == 4000
 
 
 def test_archive_live_runtime_session_defers_until_row_exists(db):
     """A live session with no state.db row yet queues ``pending_archived``; the row is born archived."""
     sid = "live-draft"
-    srv._sessions[sid] = {"session_key": "20260927_000000_draft", "history": [], "running": False}
+    srv._sessions[sid] = {
+        "session_key": "20260927_000000_draft",
+        "history": [],
+        "running": False,
+    }
     try:
         envelope = _call("session.archive", {"session_id": sid, "archived": True})
         assert "error" not in envelope, envelope

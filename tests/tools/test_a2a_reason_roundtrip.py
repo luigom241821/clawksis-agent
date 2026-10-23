@@ -31,7 +31,6 @@ def _reply_file(home, envelope_id):
     return bot_relay.relay_root(home) / bot_relay.REPLIES_DIR / f"{envelope_id}.json"
 
 
-
 def test_write_reply_classifies_when_reason_omitted(home):
     """Old senders that never forward a reason still get a classified code."""
     envelope_id = "b" * 32
@@ -57,7 +56,11 @@ def _run_waiter(home, envelope):
         env.setdefault("PATHEXT", ".COM;.EXE;.BAT;.CMD")
     return subprocess.run(
         [bash, "-c", cmd],
-        capture_output=True, text=True, timeout=30, env=env, cwd=home,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        env=env,
+        cwd=home,
         check=False,
     )
 

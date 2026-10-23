@@ -56,13 +56,19 @@ def is_managed_endpoint(base_url: str) -> bool:
 
         state = _state_endpoint()
         return state is not None and (
-            (base_url or "").rstrip("/") == str(state.get("base_url", "")).rstrip("/"))
+            (base_url or "").rstrip("/") == str(state.get("base_url", "")).rstrip("/")
+        )
     return False
 
 
-def maybe_grow_window(model_id: str, *, base_url: str, session_tokens: int,
-                      current_window: int,
-                      measured_decode_tok_s: float | None = None) -> int | None:
+def maybe_grow_window(
+    model_id: str,
+    *,
+    base_url: str,
+    session_tokens: int,
+    current_window: int,
+    measured_decode_tok_s: float | None = None,
+) -> int | None:
     """One growth evaluation + execution. Returns the NEW window when the ladder granted a bigger
     one, else None (hold / compress / not ours).
 
@@ -71,19 +77,28 @@ def maybe_grow_window(model_id: str, *, base_url: str, session_tokens: int,
     window — nothing rewinds.
     """
     from clawk_cli.local_runtime.bootstrap import (
-        _launch_budget, get_supervisor, refresh_local_runtime, staged_models)
+        _launch_budget,
+        get_supervisor,
+        refresh_local_runtime,
+        staged_models,
+    )
     from clawk_cli.local_runtime.context_policy import growth_decision
     from clawk_cli.local_runtime.estimator import as_loaded, profile_from_gguf
     from clawk_cli.local_runtime.gguf import model_id_from_stem, read_gguf_header
     from clawk_cli.local_runtime.hardware import probe_budget
     from clawk_cli.local_runtime.presets import (
-        preset_for_model, read_preset_decisions, resident_footprint)
+        preset_for_model,
+        read_preset_decisions,
+        resident_footprint,
+    )
 
     sup = get_supervisor()
     if sup is None or not is_managed_endpoint(base_url):
         return None
 
-    gguf = next((p for p in staged_models() if model_id_from_stem(p.stem) == model_id), None)
+    gguf = next(
+        (p for p in staged_models() if model_id_from_stem(p.stem) == model_id), None
+    )
     if gguf is None:
         return None
 
@@ -103,7 +118,8 @@ def maybe_grow_window(model_id: str, *, base_url: str, session_tokens: int,
         # Capacity budget, not live-free: growth executes via a server bounce, so the grown
         # instance loads onto a freed card. Live-free is distorted by the very model being grown
         # — it reads its own residency as unavailable and vetoes rungs that fit.
-        as_loaded(profile, budget), budget,
+        as_loaded(profile, budget),
+        budget,
         current_window=current_window,
         session_tokens=session_tokens,
         measured_decode_tok_s=measured_decode_tok_s,
@@ -121,13 +137,19 @@ def maybe_grow_window(model_id: str, *, base_url: str, session_tokens: int,
     # draft included when its running preset has one. Other loaded models still count as held,
     # which errs toward a smaller window.
     running = read_preset_decisions().get(model_id)
-    drafting = running is not None and (running.keys or {}).get("spec-type") == "draft-dflash"
+    drafting = (
+        running is not None and (running.keys or {}).get("spec-type") == "draft-dflash"
+    )
     own_bytes = resident_footprint(gguf, budget, current_window, drafting=drafting) or 0
     live = _launch_budget(budget, own_bytes=own_bytes)
-    plan = preset_for_model(gguf, budget, set(), requested_window=decision.next_window, live=live)
+    plan = preset_for_model(
+        gguf, budget, set(), requested_window=decision.next_window, live=live
+    )
     if plan is None or plan.refusal or plan.window < decision.next_window:
-        logger.debug("growth %s: the next rung does not fit beside other programs' GPU memory",
-                     model_id)
+        logger.debug(
+            "growth %s: the next rung does not fit beside other programs' GPU memory",
+            model_id,
+        )
         return None
 
     logger.info("context growth %s: %s", model_id, decision.reason)
@@ -135,10 +157,14 @@ def maybe_grow_window(model_id: str, *, base_url: str, session_tokens: int,
     if not refresh_local_runtime():
         # The override still lands at the next boot; report no growth NOW so the caller
         # compresses instead of overflowing a stale window.
-        logger.warning("growth %s: server refresh failed; compression proceeds", model_id)
+        logger.warning(
+            "growth %s: server refresh failed; compression proceeds", model_id
+        )
         return None
     materialized = read_preset_decisions().get(model_id)
     if materialized is None or materialized.window < decision.next_window:
-        logger.warning("growth %s: refreshed preset did not grant the requested window", model_id)
+        logger.warning(
+            "growth %s: refreshed preset did not grant the requested window", model_id
+        )
         return None
     return materialized.window

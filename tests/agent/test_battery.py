@@ -14,11 +14,13 @@ from agent.battery import (
     read_battery,
 )
 
+
 @pytest.fixture(autouse=True)
 def _clear_cache():
     battery_mod.clear_cache()
     yield
     battery_mod.clear_cache()
+
 
 def _fake_psutil(percent, plugged):
     """Install a fake psutil module whose sensors_battery returns a reading."""
@@ -26,6 +28,7 @@ def _fake_psutil(percent, plugged):
     reading = types.SimpleNamespace(percent=percent, power_plugged=plugged)
     mod.sensors_battery = lambda: reading  # type: ignore[attr-defined]
     return mod
+
 
 def test_read_battery_caches(monkeypatch):
     monkeypatch.setitem(sys.modules, "psutil", _fake_psutil(50, False))
@@ -40,6 +43,7 @@ def test_read_battery_caches(monkeypatch):
     # Bypassing the cache picks up the new reading.
     fresh = read_battery(use_cache=False)
     assert fresh.percent == 10
+
 
 @pytest.mark.parametrize(
     "percent,plugged,expected",

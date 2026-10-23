@@ -1,4 +1,5 @@
 """Commit-build entry points resolve real Git refs without publishing releases."""
+
 import json
 import os
 from pathlib import Path
@@ -12,33 +13,57 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def git(repo, *args):
-    return subprocess.run(['git', *args], cwd=repo, check=True, capture_output=True,
-                          text=True, encoding='utf-8', timeout=30).stdout.strip()
+    return subprocess.run(
+        ["git", *args],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=30,
+    ).stdout.strip()
 
 
 @pytest.fixture
 def fixture_repo(tmp_path):
-    upstream = tmp_path / 'upstream.git'
-    subprocess.run(['git', 'init', '--bare', '-q', '-b', 'main', str(upstream)], check=True)
-    repo = tmp_path / 'repo'
-    subprocess.run(['git', 'clone', '-q', str(upstream), str(repo)], check=True)
-    git(repo, 'config', 'user.name', 'Fixture')
-    git(repo, 'config', 'user.email', 'fixture@example.invalid')
-    (repo / 'pyproject.toml').write_text('[project]\nname="fixture"\nversion="1.2.3"\n', encoding='utf-8')
-    git(repo, 'add', 'pyproject.toml')
-    git(repo, 'commit', '-qm', 'fixture')
-    git(repo, 'push', '-q', 'origin', 'main')
-    git(repo, 'remote', 'set-url', 'origin', 'https://github.com/fixture-owner/fixture-repo.git')
-    shutil.copytree(ROOT / 'scripts/releases', repo / 'scripts/releases')
-    for relative in ('scripts/release.py', 'scripts/release-content-types.json',
-                     'clawk_cli/__init__.py', 'clawk_cli/update_channel.py',
-                     'clawk_cli/release_channels.py',
-                     'pm/paths.py', 'pm/environments.py', 'clawk_constants.py'):
+    upstream = tmp_path / "upstream.git"
+    subprocess.run(
+        ["git", "init", "--bare", "-q", "-b", "main", str(upstream)], check=True
+    )
+    repo = tmp_path / "repo"
+    subprocess.run(["git", "clone", "-q", str(upstream), str(repo)], check=True)
+    git(repo, "config", "user.name", "Fixture")
+    git(repo, "config", "user.email", "fixture@example.invalid")
+    (repo / "pyproject.toml").write_text(
+        '[project]\nname="fixture"\nversion="1.2.3"\n', encoding="utf-8"
+    )
+    git(repo, "add", "pyproject.toml")
+    git(repo, "commit", "-qm", "fixture")
+    git(repo, "push", "-q", "origin", "main")
+    git(
+        repo,
+        "remote",
+        "set-url",
+        "origin",
+        "https://github.com/fixture-owner/fixture-repo.git",
+    )
+    shutil.copytree(ROOT / "scripts/releases", repo / "scripts/releases")
+    for relative in (
+        "scripts/release.py",
+        "scripts/release-content-types.json",
+        "clawk_cli/__init__.py",
+        "clawk_cli/update_channel.py",
+        "clawk_cli/release_channels.py",
+        "pm/paths.py",
+        "pm/environments.py",
+        "clawk_constants.py",
+    ):
         dest = repo / relative
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / relative, dest)
-    driver = tmp_path / 'drive.py'
-    driver.write_text('''import json, os, pathlib, runpy, subprocess, sys
+    driver = tmp_path / "drive.py"
+    driver.write_text(
+        """import json, os, pathlib, runpy, subprocess, sys
 root = pathlib.Path(sys.argv[1])
 sys.path.insert(0, str(root))
 actual = subprocess.run
@@ -76,18 +101,41 @@ if sys.argv[2] == 'admit':
 else:
     sys.argv = ['release.py', *sys.argv[2:]]
     runpy.run_path(str(root / 'scripts/release.py'), run_name='__main__')
-''', encoding='utf-8')
-    calls = tmp_path / 'gh.jsonl'
-    env = {k: v for k, v in os.environ.items() if not k.startswith(('GITHUB_', 'GH_'))}
-    env.update({'PROBE_CALLS': str(calls), 'PROBE_REMOTE': upstream.as_uri(), 'GIT_ALLOW_PROTOCOL': 'file',
-                'GIT_TERMINAL_PROMPT': '0', 'CLAWK_HOME': str(tmp_path / 'home')})
+""",
+        encoding="utf-8",
+    )
+    calls = tmp_path / "gh.jsonl"
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("GITHUB_", "GH_"))}
+    env.update(
+        {
+            "PROBE_CALLS": str(calls),
+            "PROBE_REMOTE": upstream.as_uri(),
+            "GIT_ALLOW_PROTOCOL": "file",
+            "GIT_TERMINAL_PROMPT": "0",
+            "CLAWK_HOME": str(tmp_path / "home"),
+        }
+    )
 
     def invoke(*args, extra=None):
         calls.unlink(missing_ok=True)
-        result = subprocess.run([sys.executable, '-I', '-S', str(driver), str(repo), *args],
-                                cwd=repo, env={**env, **(extra or {})}, capture_output=True,
-                                text=True, encoding='utf-8', timeout=45, check=False)
-        recorded = [json.loads(line) for line in calls.read_text(encoding='utf-8').splitlines()] if calls.exists() else []
+        result = subprocess.run(
+            [sys.executable, "-I", "-S", str(driver), str(repo), *args],
+            cwd=repo,
+            env={**env, **(extra or {})},
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=45,
+            check=False,
+        )
+        recorded = (
+            [
+                json.loads(line)
+                for line in calls.read_text(encoding="utf-8").splitlines()
+            ]
+            if calls.exists()
+            else []
+        )
         return result, recorded
 
     return repo, upstream, invoke
@@ -95,48 +143,93 @@ else:
 
 def test_commit_build_cli_dispatches_only_the_resolved_remote_commit(fixture_repo):
     repo, upstream, invoke = fixture_repo
-    tip = git(repo, 'rev-parse', 'HEAD')
-    before = git(repo, 'show-ref', '--heads', '--tags')
-    for revision in (tip[:8], 'main'):
-        result, calls = invoke('--build-commit', revision)
+    tip = git(repo, "rev-parse", "HEAD")
+    before = git(repo, "show-ref", "--heads", "--tags")
+    for revision in (tip[:8], "main"):
+        result, calls = invoke("--build-commit", revision)
         assert result.returncode == 0, result.stderr
         assert tip in result.stdout
-        assert f'https://clawk-assets.nousresearch.com/releases/commit/{tip}/index.html' in result.stdout
-        assert not any(call[1:3] == ['workflow', 'run'] for call in calls)
-    result, calls = invoke('--build-commit', tip, '--publish')
+        assert (
+            f"https://clawk-assets.nousresearch.com/releases/commit/{tip}/index.html"
+            in result.stdout
+        )
+        assert not any(call[1:3] == ["workflow", "run"] for call in calls)
+    result, calls = invoke("--build-commit", tip, "--publish")
     assert result.returncode == 0, result.stderr
     # Repository identity no longer selects the dispatch: every commit build
     # is the same direct dispatch (disposable mode is an explicit opt-in).
-    dispatches = [call for call in calls if call[1:3] == ['workflow', 'run']]
+    dispatches = [call for call in calls if call[1:3] == ["workflow", "run"]]
     assert len(dispatches) == 1
-    assert f'build_commit={tip}' in dispatches[0]
-    assert not any(field.startswith('disposable_channel=') for field in dispatches[0])
-    assert git(repo, 'show-ref', '--heads', '--tags') == before
-    assert git(upstream, 'rev-parse', 'refs/heads/main') == tip
+    assert f"build_commit={tip}" in dispatches[0]
+    assert not any(field.startswith("disposable_channel=") for field in dispatches[0])
+    assert git(repo, "show-ref", "--heads", "--tags") == before
+    assert git(upstream, "rev-parse", "refs/heads/main") == tip
 
 
 def test_commit_build_dispatch_is_repository_independent(fixture_repo):
     repo, _, invoke = fixture_repo
-    tip = git(repo, 'rev-parse', 'HEAD')
-    expected = ['gh', 'workflow', 'run', 'desktop-bundled-release.yml',
-                '--ref', 'main', '--repo', 'fixture-owner/fixture-repo',
-                '-f', f'build_commit={tip}', '-f', 'tag=', '-f', 'upload_release=false',
-                '-f', 'termux_upgrade_from_tag=']
-    result, calls = invoke('--build-commit', tip, '--publish')
+    tip = git(repo, "rev-parse", "HEAD")
+    expected = [
+        "gh",
+        "workflow",
+        "run",
+        "desktop-bundled-release.yml",
+        "--ref",
+        "main",
+        "--repo",
+        "fixture-owner/fixture-repo",
+        "-f",
+        f"build_commit={tip}",
+        "-f",
+        "tag=",
+        "-f",
+        "upload_release=false",
+        "-f",
+        "termux_upgrade_from_tag=",
+    ]
+    result, calls = invoke("--build-commit", tip, "--publish")
     assert result.returncode == 0, result.stderr
-    dispatches = [call for call in calls if call[1:3] == ['workflow', 'run']]
+    dispatches = [call for call in calls if call[1:3] == ["workflow", "run"]]
     assert dispatches == [expected]
-    assert 'disposable' not in result.stdout.lower()
+    assert "disposable" not in result.stdout.lower()
     # The upstream URL used to select a different command shape; it no longer does.
-    git(repo, 'remote', 'set-url', 'origin', 'https://github.com/samuelgradientai-sys/clawksis-agent.git')
-    result, calls = invoke('--build-commit', tip, '--publish',
-                           extra={'PROBE_UPSTREAM_URL': 'https://github.com/samuelgradientai-sys/clawksis-agent.git'})
+    git(
+        repo,
+        "remote",
+        "set-url",
+        "origin",
+        "https://github.com/samuelgradientai-sys/clawksis-agent.git",
+    )
+    result, calls = invoke(
+        "--build-commit",
+        tip,
+        "--publish",
+        extra={
+            "PROBE_UPSTREAM_URL": "https://github.com/samuelgradientai-sys/clawksis-agent.git"
+        },
+    )
     assert result.returncode == 0, result.stderr
-    dispatches = [call for call in calls if call[1:3] == ['workflow', 'run']]
-    assert dispatches == [['gh', 'workflow', 'run', 'desktop-bundled-release.yml',
-                           '--ref', 'main', '--repo', 'samuelgradientai-sys/clawksis-agent',
-                           '-f', f'build_commit={tip}', '-f', 'tag=', '-f', 'upload_release=false',
-                           '-f', 'termux_upgrade_from_tag=']]
+    dispatches = [call for call in calls if call[1:3] == ["workflow", "run"]]
+    assert dispatches == [
+        [
+            "gh",
+            "workflow",
+            "run",
+            "desktop-bundled-release.yml",
+            "--ref",
+            "main",
+            "--repo",
+            "samuelgradientai-sys/clawksis-agent",
+            "-f",
+            f"build_commit={tip}",
+            "-f",
+            "tag=",
+            "-f",
+            "upload_release=false",
+            "-f",
+            "termux_upgrade_from_tag=",
+        ]
+    ]
 
 
 # (Fork-conditional removal) The disposable routing test retired with it: a
@@ -146,101 +239,161 @@ def test_commit_build_dispatch_is_repository_independent(fixture_repo):
 
 def test_commit_bundle_environment_is_literal_and_validated(fixture_repo):
     repo, _, invoke = fixture_repo
-    tip = git(repo, 'rev-parse', 'HEAD')
-    values = {'CLAWK_PREVIEW_FULL_CONNECTORS': '1', 'CLAWK_DATA_DIR_SUFFIX': 'magic-test',
-              'CLAWK_DESKTOP_USER_DATA_DIR': '', 'CLAWK_SHARED_AUTH_DIR': 'a=b "quote"\n$(not-a-command)'}
-    flags = [part for key, value in values.items() for part in ('--bundle-env', f'{key}={value}')]
-    result, calls = invoke('--build-commit', tip, '--publish', *flags)
+    tip = git(repo, "rev-parse", "HEAD")
+    values = {
+        "CLAWK_PREVIEW_FULL_CONNECTORS": "1",
+        "CLAWK_DATA_DIR_SUFFIX": "magic-test",
+        "CLAWK_DESKTOP_USER_DATA_DIR": "",
+        "CLAWK_SHARED_AUTH_DIR": 'a=b "quote"\n$(not-a-command)',
+    }
+    flags = [
+        part
+        for key, value in values.items()
+        for part in ("--bundle-env", f"{key}={value}")
+    ]
+    result, calls = invoke("--build-commit", tip, "--publish", *flags)
     assert result.returncode == 0, result.stderr
-    dispatch = next(call for call in calls if call[1:3] == ['workflow', 'run'])
-    assert json.loads(next(field.split('=', 1)[1] for field in dispatch if field.startswith('bundle_env='))) == values
-    for invalid in (['--bundle-env', 'MISSING'], ['--bundle-env', 'BAD-NAME=x'],
-                    ['--bundle-env', 'NODE_OPTIONS=--require=evil'], ['--bundle-env', 'CLAWK_SKIP_INTRO=1'],
-                    ['--bundle-env', 'CLAWK_GUEST_ONBOARDING=1'], ['--bundle-unset', 'PATH'],
-                    ['--bundle-env', 'CLAWK_HOME=x', '--bundle-env', 'CLAWK_HOME=y']):
-        result, calls = invoke('--build-commit', tip, '--publish', *invalid)
+    dispatch = next(call for call in calls if call[1:3] == ["workflow", "run"])
+    assert (
+        json.loads(
+            next(
+                field.split("=", 1)[1]
+                for field in dispatch
+                if field.startswith("bundle_env=")
+            )
+        )
+        == values
+    )
+    for invalid in (
+        ["--bundle-env", "MISSING"],
+        ["--bundle-env", "BAD-NAME=x"],
+        ["--bundle-env", "NODE_OPTIONS=--require=evil"],
+        ["--bundle-env", "CLAWK_SKIP_INTRO=1"],
+        ["--bundle-env", "CLAWK_GUEST_ONBOARDING=1"],
+        ["--bundle-unset", "PATH"],
+        ["--bundle-env", "CLAWK_HOME=x", "--bundle-env", "CLAWK_HOME=y"],
+    ):
+        result, calls = invoke("--build-commit", tip, "--publish", *invalid)
         assert result.returncode != 0 and not calls
-    result, calls = invoke('--bundle-env', 'NAME=value')
+    result, calls = invoke("--bundle-env", "NAME=value")
     assert result.returncode == 2 and not calls
 
-    result, calls = invoke('--build-commit', tip, '--publish', *flags,
-                           '--bundle-unset', 'CLAWK_HOME')
+    result, calls = invoke(
+        "--build-commit", tip, "--publish", *flags, "--bundle-unset", "CLAWK_HOME"
+    )
     assert result.returncode == 0, result.stderr
-    dispatch = next(call for call in calls if call[1:3] == ['workflow', 'run'])
-    assert json.loads(next(field.split('=', 1)[1] for field in dispatch if field.startswith('bundle_env='))) == {
-        **values, 'CLAWK_HOME': None}
-    for invalid in (['--bundle-unset', 'BAD-NAME'],
-                    ['--bundle-env', 'CLAWK_HOME=x', '--bundle-unset', 'CLAWK_HOME'],
-                    ['--bundle-unset', 'CLAWK_HOME', '--bundle-unset', 'CLAWK_HOME']):
-        result, calls = invoke('--build-commit', tip, '--publish', *invalid)
+    dispatch = next(call for call in calls if call[1:3] == ["workflow", "run"])
+    assert json.loads(
+        next(
+            field.split("=", 1)[1]
+            for field in dispatch
+            if field.startswith("bundle_env=")
+        )
+    ) == {**values, "CLAWK_HOME": None}
+    for invalid in (
+        ["--bundle-unset", "BAD-NAME"],
+        ["--bundle-env", "CLAWK_HOME=x", "--bundle-unset", "CLAWK_HOME"],
+        ["--bundle-unset", "CLAWK_HOME", "--bundle-unset", "CLAWK_HOME"],
+    ):
+        result, calls = invoke("--build-commit", tip, "--publish", *invalid)
         assert result.returncode != 0 and not calls
-    result, calls = invoke('--bundle-unset', 'CLAWK_HOME')
+    result, calls = invoke("--bundle-unset", "CLAWK_HOME")
     assert result.returncode == 2 and not calls
+
 
 def test_commit_build_requires_pushed_refs_and_github_origin(tmp_path, fixture_repo):
     repo, upstream, invoke = fixture_repo
-    tip = git(repo, 'rev-parse', 'HEAD')
-    git(repo, 'checkout', '-qb', 'feature')
-    (repo / 'feature').write_text('pushed feature', encoding='utf-8')
-    git(repo, 'add', 'feature')
-    git(repo, 'commit', '-qm', 'feature')
-    feature = git(repo, 'rev-parse', 'HEAD')
-    git(repo, 'tag', '-a', 'fixture-tag', '-m', 'fixture')
-    git(repo, 'push', '-q', str(upstream), 'feature', 'refs/tags/fixture-tag')
-    git(repo, 'checkout', '-q', 'main')
-    for revision in (feature[:8], 'origin/feature', 'fixture-tag'):
-        result, calls = invoke('--build-commit', revision)
+    tip = git(repo, "rev-parse", "HEAD")
+    git(repo, "checkout", "-qb", "feature")
+    (repo / "feature").write_text("pushed feature", encoding="utf-8")
+    git(repo, "add", "feature")
+    git(repo, "commit", "-qm", "feature")
+    feature = git(repo, "rev-parse", "HEAD")
+    git(repo, "tag", "-a", "fixture-tag", "-m", "fixture")
+    git(repo, "push", "-q", str(upstream), "feature", "refs/tags/fixture-tag")
+    git(repo, "checkout", "-q", "main")
+    for revision in (feature[:8], "origin/feature", "fixture-tag"):
+        result, calls = invoke("--build-commit", revision)
         assert result.returncode == 0, result.stderr
         assert feature in result.stdout
-        assert git(repo, 'rev-parse', 'HEAD') == tip
-        assert not any(call[1:3] == ['workflow', 'run'] for call in calls)
+        assert git(repo, "rev-parse", "HEAD") == tip
+        assert not any(call[1:3] == ["workflow", "run"] for call in calls)
 
-    for flags in (['--bump', 'patch'], ['--canary'], ['--first-release'], ['--prune-canaries'],
-                  ['--date', '2026.1.1'], ['--output', str(tmp_path / 'no-output')], ['--no-changelog']):
-        result, calls = invoke('--build-commit', tip, *flags)
+    for flags in (
+        ["--bump", "patch"],
+        ["--canary"],
+        ["--first-release"],
+        ["--prune-canaries"],
+        ["--date", "2026.1.1"],
+        ["--output", str(tmp_path / "no-output")],
+        ["--no-changelog"],
+    ):
+        result, calls = invoke("--build-commit", tip, *flags)
         assert result.returncode == 2 and not calls, result.stderr
-    assert not (tmp_path / 'no-output').exists()
-    for revision in ('', '--all', 'not-a-revision'):
-        result, calls = invoke('--build-commit=' + revision, '--publish')
+    assert not (tmp_path / "no-output").exists()
+    for revision in ("", "--all", "not-a-revision"):
+        result, calls = invoke("--build-commit=" + revision, "--publish")
         assert result.returncode != 0 and not calls
-        assert 'Traceback' not in result.stderr
-    result, calls = invoke('--build-commit', tip, extra={'PROBE_GH_MISSING': '1'})
-    assert result.returncode != 0 and 'Traceback' not in result.stderr
-    (repo / 'local-only').write_text('not pushed', encoding='utf-8')
-    git(repo, 'add', 'local-only')
-    git(repo, 'commit', '-qm', 'local only')
-    result, calls = invoke('--build-commit', 'HEAD', '--publish')
-    assert result.returncode != 0 and 'not reachable' in result.stderr and not calls
-    for url in (str(tmp_path / 'github.com/owner/repo'), 'https://notgithub.com/owner/repo',
-                'https://github.com/owner/repo/extra'):
-        git(repo, 'remote', 'set-url', 'origin', url)
-        result, calls = invoke('--build-commit', tip)
-        assert result.returncode != 0 and 'GitHub remote' in result.stderr and not calls
+        assert "Traceback" not in result.stderr
+    result, calls = invoke("--build-commit", tip, extra={"PROBE_GH_MISSING": "1"})
+    assert result.returncode != 0 and "Traceback" not in result.stderr
+    (repo / "local-only").write_text("not pushed", encoding="utf-8")
+    git(repo, "add", "local-only")
+    git(repo, "commit", "-qm", "local only")
+    result, calls = invoke("--build-commit", "HEAD", "--publish")
+    assert result.returncode != 0 and "not reachable" in result.stderr and not calls
+    for url in (
+        str(tmp_path / "github.com/owner/repo"),
+        "https://notgithub.com/owner/repo",
+        "https://github.com/owner/repo/extra",
+    ):
+        git(repo, "remote", "set-url", "origin", url)
+        result, calls = invoke("--build-commit", tip)
+        assert result.returncode != 0 and "GitHub remote" in result.stderr and not calls
 
 
-def test_workflow_admission_checks_trust_before_publishing_outputs(tmp_path, fixture_repo):
+def test_workflow_admission_checks_trust_before_publishing_outputs(
+    tmp_path, fixture_repo
+):
     repo, _, invoke = fixture_repo
-    tip = git(repo, 'rev-parse', 'HEAD')
-    output = tmp_path / 'output'
-    env = {'BUILD_COMMIT': tip, 'DEFAULT_BRANCH': 'main',
-           'GITHUB_REPOSITORY': 'fixture-owner/fixture-repo', 'GITHUB_EVENT_NAME': 'workflow_dispatch',
-           'GITHUB_REF': 'refs/heads/main',
-           'GITHUB_WORKFLOW_REF': 'fixture-owner/fixture-repo/.github/workflows/desktop-bundled-release.yml@refs/heads/main',
-           'GITHUB_ACTOR': 'maintainer', 'GITHUB_TRIGGERING_ACTOR': 'maintainer',
-           'GITHUB_OUTPUT': str(output), 'UPLOAD_RELEASE': 'false',
-           'BUNDLE_ENV_JSON': '{"CLAWK_PREVIEW_FULL_CONNECTORS":"1","CLAWK_HOME":null}'}
-    result, calls = invoke('admit', extra=env)
+    tip = git(repo, "rev-parse", "HEAD")
+    output = tmp_path / "output"
+    env = {
+        "BUILD_COMMIT": tip,
+        "DEFAULT_BRANCH": "main",
+        "GITHUB_REPOSITORY": "fixture-owner/fixture-repo",
+        "GITHUB_EVENT_NAME": "workflow_dispatch",
+        "GITHUB_REF": "refs/heads/main",
+        "GITHUB_WORKFLOW_REF": "fixture-owner/fixture-repo/.github/workflows/desktop-bundled-release.yml@refs/heads/main",
+        "GITHUB_ACTOR": "maintainer",
+        "GITHUB_TRIGGERING_ACTOR": "maintainer",
+        "GITHUB_OUTPUT": str(output),
+        "UPLOAD_RELEASE": "false",
+        "BUNDLE_ENV_JSON": '{"CLAWK_PREVIEW_FULL_CONNECTORS":"1","CLAWK_HOME":null}',
+    }
+    result, calls = invoke("admit", extra=env)
     assert result.returncode == 0, result.stderr
-    assert dict(line.split('=', 1) for line in output.read_text(encoding='utf-8').splitlines()) == {
-        'sha': tip, 'channel': 'commit', 'payload-version': '1.2.3'}
-    assert calls and all(call[1] == 'api' for call in calls)
+    assert dict(
+        line.split("=", 1) for line in output.read_text(encoding="utf-8").splitlines()
+    ) == {"sha": tip, "channel": "commit", "payload-version": "1.2.3"}
+    assert calls and all(call[1] == "api" for call in calls)
     original = output.read_bytes()
-    for key, value in [('BUILD_COMMIT', tip[:8]), ('TAG', 'v1.2.3'), ('UPLOAD_RELEASE', 'true'),
-                       ('RELEASE_PHASE', 'candidate'), ('TERMUX_UPGRADE_FROM_TAG', 'v1.0.0'),
-                       ('GITHUB_EVENT_NAME', 'workflow_call'), ('GITHUB_REF', 'refs/heads/other'),
-                       ('GITHUB_WORKFLOW_REF', 'fixture-owner/fixture-repo/.github/workflows/other.yml@refs/heads/main'),
-                       ('PROBE_PERMISSION', 'read'), ('BUNDLE_ENV_JSON', '[]'),
-                       ('BUNDLE_ENV_JSON', '{"X":1}')]:
-        result, _ = invoke('admit', extra={**env, key: value})
+    for key, value in [
+        ("BUILD_COMMIT", tip[:8]),
+        ("TAG", "v1.2.3"),
+        ("UPLOAD_RELEASE", "true"),
+        ("RELEASE_PHASE", "candidate"),
+        ("TERMUX_UPGRADE_FROM_TAG", "v1.0.0"),
+        ("GITHUB_EVENT_NAME", "workflow_call"),
+        ("GITHUB_REF", "refs/heads/other"),
+        (
+            "GITHUB_WORKFLOW_REF",
+            "fixture-owner/fixture-repo/.github/workflows/other.yml@refs/heads/main",
+        ),
+        ("PROBE_PERMISSION", "read"),
+        ("BUNDLE_ENV_JSON", "[]"),
+        ("BUNDLE_ENV_JSON", '{"X":1}'),
+    ]:
+        result, _ = invoke("admit", extra={**env, key: value})
         assert result.returncode != 0
         assert output.read_bytes() == original

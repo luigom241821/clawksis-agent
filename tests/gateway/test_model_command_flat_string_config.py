@@ -33,7 +33,9 @@ def _make_event(text):
     return MessageEvent(
         text=text,
         message_type=MessageType.TEXT,
-        source=SessionSource(platform=Platform.TELEGRAM, chat_id="12345", chat_type="dm"),
+        source=SessionSource(
+            platform=Platform.TELEGRAM, chat_id="12345", chat_type="dm"
+        ),
     )
 
 
@@ -79,7 +81,9 @@ def _setup_isolated_home(tmp_path, monkeypatch, model_yaml_value):
 
 
 @pytest.mark.asyncio
-async def test_model_global_persists_when_config_has_flat_string_model(tmp_path, monkeypatch):
+async def test_model_global_persists_when_config_has_flat_string_model(
+    tmp_path, monkeypatch
+):
     """Regression: ``model: deepseek-v4-flash`` (flat string) used to crash
     the gateway ``/model X --global`` persist branch with TypeError. After
     the fix, the flat string is coerced to ``{"default": ...}`` and the new
@@ -107,7 +111,9 @@ async def test_model_global_persists_when_config_has_flat_string_model(tmp_path,
 
 
 @pytest.mark.asyncio
-async def test_model_global_persists_when_config_has_missing_model(tmp_path, monkeypatch):
+async def test_model_global_persists_when_config_has_missing_model(
+    tmp_path, monkeypatch
+):
     """Companion case: ``model:`` key absent entirely. setdefault would have
     worked here, but the coercion branch also has to handle this cleanly.
     """
@@ -136,5 +142,3 @@ async def test_model_global_persists_when_config_has_missing_model(tmp_path, mon
     assert isinstance(written["model"], dict)
     assert written["model"]["default"] == "gpt-5.5"
     assert written["model"]["provider"] == "openrouter"
-
-

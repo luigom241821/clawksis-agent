@@ -3,23 +3,32 @@
 In one 1,393-agent run 661 read->whole-file-rewrites of >20k-char files cost ~25M output chars (~$155)
 while `patch` (1.3k chars/call) succeeded 99.7% of the time; the tool result is the only place to say so.
 """
+
 import json
 
 from tools.file_tools import read_file_tool, write_file_tool
 
 
 def _big(n_lines=800):
-    return "\n".join(f"line {i}: " + "x" * 40 for i in range(n_lines)) + "\n"  # ~40k chars
+    return (
+        "\n".join(f"line {i}: " + "x" * 40 for i in range(n_lines)) + "\n"
+    )  # ~40k chars
 
 
 def test_rewrite_of_a_large_file_with_few_changes_gets_a_patch_hint(tmp_path):
     f = tmp_path / "mod.py"
     old = _big()
     f.write_text(old, encoding="utf-8")
-    new = old.replace("line 400:", "line 400 (edited):").replace("line 401:", "line 401 (edited):")
-    assert "error" not in json.loads(read_file_tool(str(f), task_id="t"))  # the read→rewrite pattern the hint targets
+    new = old.replace("line 400:", "line 400 (edited):").replace(
+        "line 401:", "line 401 (edited):"
+    )
+    assert "error" not in json.loads(
+        read_file_tool(str(f), task_id="t")
+    )  # the read→rewrite pattern the hint targets
     r = json.loads(write_file_tool(str(f), new, task_id="t"))
-    assert r.get("error") is None and f.read_text(encoding="utf-8") == new  # the write still happens
+    assert (
+        r.get("error") is None and f.read_text(encoding="utf-8") == new
+    )  # the write still happens
     assert r.get("hint")  # wording is free to change; presence is the contract
 
 

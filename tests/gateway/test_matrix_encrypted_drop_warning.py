@@ -1,4 +1,5 @@
 """Matrix fails loud when encrypted room events arrive with no E2EE decryptor (#131778)."""
+
 import logging
 from unittest.mock import AsyncMock, MagicMock
 
@@ -9,6 +10,7 @@ from gateway.config import PlatformConfig
 
 def _make_adapter():
     from plugins.platforms.matrix.adapter import MatrixAdapter
+
     config = PlatformConfig(
         enabled=True,
         token="syt_test_token",
@@ -21,7 +23,6 @@ def _make_adapter():
 
 
 class TestMatrixEncryptedDropWarning:
-
     @staticmethod
     def _cryptoless_client():
         """Client with no decryptor attached (E2EE off, or the optional mode degraded)."""
@@ -33,11 +34,14 @@ class TestMatrixEncryptedDropWarning:
         return fake_client
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("mode, hint", [
-        ("off", "set MATRIX_E2EE_MODE=optional"),
-        # Degraded optional mode: the install/enable advice is wrong; point at the setup failure.
-        ("optional", "E2EE mode is optional but the decryptor was not set up"),
-    ])
+    @pytest.mark.parametrize(
+        "mode, hint",
+        [
+            ("off", "set MATRIX_E2EE_MODE=optional"),
+            # Degraded optional mode: the install/enable advice is wrong; point at the setup failure.
+            ("optional", "E2EE mode is optional but the decryptor was not set up"),
+        ],
+    )
     async def test_absorb_sync_warns_once_per_room_for_encrypted_events_without_crypto(
         self, caplog, mode, hint
     ):
@@ -49,19 +53,33 @@ class TestMatrixEncryptedDropWarning:
         adapter._client = fake_client
 
         sync_data = {
-            "rooms": {"join": {
-                "!enc:example.org": {"timeline": {"events": [
-                    {"type": "m.room.encrypted", "event_id": "$e1"}]}},
-                "!plain:example.org": {"timeline": {"events": [
-                    {"type": "m.room.message", "event_id": "$m1"}]}},
-            }},
+            "rooms": {
+                "join": {
+                    "!enc:example.org": {
+                        "timeline": {
+                            "events": [{"type": "m.room.encrypted", "event_id": "$e1"}]
+                        }
+                    },
+                    "!plain:example.org": {
+                        "timeline": {
+                            "events": [{"type": "m.room.message", "event_id": "$m1"}]
+                        }
+                    },
+                }
+            },
             "next_batch": "s1",
         }
-        with caplog.at_level(logging.WARNING, logger="plugins.platforms.matrix.adapter"):
+        with caplog.at_level(
+            logging.WARNING, logger="plugins.platforms.matrix.adapter"
+        ):
             await adapter._absorb_sync(fake_client, sync_data)
-            await adapter._absorb_sync(fake_client, sync_data)  # rate-limited: one warning per room
+            await adapter._absorb_sync(
+                fake_client, sync_data
+            )  # rate-limited: one warning per room
 
-        warnings = [r.getMessage() for r in caplog.records if "encrypted" in r.getMessage()]
+        warnings = [
+            r.getMessage() for r in caplog.records if "encrypted" in r.getMessage()
+        ]
         assert len(warnings) == 1
         assert "!enc:example.org" in warnings[0] and hint in warnings[0]
         assert (mode == "off") == ("pip install" in warnings[0])
@@ -77,11 +95,20 @@ class TestMatrixEncryptedDropWarning:
         adapter._client = fake_client
 
         sync_data = {
-            "rooms": {"join": {"!enc:example.org": {
-                "timeline": {"events": [{"type": "m.room.encrypted", "event_id": "$e1"}]}}}},
+            "rooms": {
+                "join": {
+                    "!enc:example.org": {
+                        "timeline": {
+                            "events": [{"type": "m.room.encrypted", "event_id": "$e1"}]
+                        }
+                    }
+                }
+            },
             "next_batch": "s1",
         }
-        with caplog.at_level(logging.WARNING, logger="plugins.platforms.matrix.adapter"):
+        with caplog.at_level(
+            logging.WARNING, logger="plugins.platforms.matrix.adapter"
+        ):
             await adapter._absorb_sync(fake_client, sync_data)
 
         assert not [r for r in caplog.records if "encrypted" in r.getMessage()]

@@ -19,14 +19,25 @@ from tests.pm._fixtures import client, isolated_python
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git not available")
 
-_GIT_ENV = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
-            "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+_GIT_ENV = {
+    **os.environ,
+    "GIT_AUTHOR_NAME": "t",
+    "GIT_AUTHOR_EMAIL": "t@t",
+    "GIT_COMMITTER_NAME": "t",
+    "GIT_COMMITTER_EMAIL": "t@t",
+}
 
 
 def _commit(repo: Path, msg: str) -> str:
     sp.run(["git", "add", "-A"], cwd=repo, check=True, env=_GIT_ENV)
     sp.run(["git", "commit", "-q", "-m", msg], cwd=repo, check=True, env=_GIT_ENV)
-    return sp.run(["git", "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True, text=True).stdout.strip()
+    return sp.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
 
 
 @pytest.fixture
@@ -34,7 +45,9 @@ def world(client, tmp_path, monkeypatch):
     """A file:// plugin repo with two commits, a catalog pinned to the FIRST, an isolated plugins dir."""
     repo = tmp_path / "repo"
     repo.mkdir()
-    (repo / "plugin.yaml").write_text("name: cat-plugin\nversion: 1.0.0\ndescription: d\n")
+    (repo / "plugin.yaml").write_text(
+        "name: cat-plugin\nversion: 1.0.0\ndescription: d\n"
+    )
     (repo / "__init__.py").write_text("def register(ctx):\n    pass\n")
     sp.run(["git", "init", "-q"], cwd=repo, check=True, env=_GIT_ENV)
     sha1 = _commit(repo, "v1")
@@ -47,7 +60,9 @@ def world(client, tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr(pc, "_plugins_dir", lambda: plugins_dir)
     monkeypatch.setattr(pc, "_scan_on_install_enabled", lambda: False)
-    monkeypatch.setattr(pc, "_console", lambda: type("C", (), {"print": lambda *a, **k: None})())
+    monkeypatch.setattr(
+        pc, "_console", lambda: type("C", (), {"print": lambda *a, **k: None})()
+    )
 
     def publish_without_environment(*_args, plugins=None, **_kwargs):
         from clawk_cli.runtime_state import finish_publication
@@ -71,26 +86,54 @@ def world(client, tmp_path, monkeypatch):
     state = {"pin": sha1, "removed": []}
 
     def _entries():
-        return [pc_cat.PluginCatalogEntry(name="cat-plugin", repo=repo.as_uri(), sha=state["pin"],
-                                          description="d", maintainer="t")]
+        return [
+            pc_cat.PluginCatalogEntry(
+                name="cat-plugin",
+                repo=repo.as_uri(),
+                sha=state["pin"],
+                description="d",
+                maintainer="t",
+            )
+        ]
 
     monkeypatch.setattr(pc_cat, "load_catalog", lambda catalog_dir=None: _entries())
-    monkeypatch.setattr(pc_cat, "fetch_live_catalog", lambda **_: None)  # in-tree only, no network
-    monkeypatch.setattr(pc_cat, "load_removed_list", lambda catalog_dir=None: list(state["removed"]))
-    return {"repo": repo, "sha1": sha1, "sha2": sha2, "plugins_dir": plugins_dir, "state": state}
+    monkeypatch.setattr(
+        pc_cat, "fetch_live_catalog", lambda **_: None
+    )  # in-tree only, no network
+    monkeypatch.setattr(
+        pc_cat, "load_removed_list", lambda catalog_dir=None: list(state["removed"])
+    )
+    return {
+        "repo": repo,
+        "sha1": sha1,
+        "sha2": sha2,
+        "plugins_dir": plugins_dir,
+        "state": state,
+    }
 
 
 def _head(path: Path) -> str:
-    return sp.run(["git", "rev-parse", "HEAD"], cwd=path, capture_output=True, text=True, check=False).stdout.strip()
+    return sp.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=path,
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout.strip()
 
 
 def test_catalog_platform_mismatch_refuses_before_install(world):
     from clawk_platform.host.facts import os_family
+
     host = os_family()
     other = "linux" if host == "windows" else "windows"
     entry = pc_cat.PluginCatalogEntry(
-        name="cat-plugin", repo=world["repo"].as_uri(), sha=world["sha1"],
-        description="d", maintainer="t", platforms=[other],
+        name="cat-plugin",
+        repo=world["repo"].as_uri(),
+        sha=world["sha1"],
+        description="d",
+        maintainer="t",
+        platforms=[other],
     )
 
     with pytest.raises(pc.PluginOperationError, match=f"cat-plugin.*{host}.*{other}"):
@@ -98,7 +141,9 @@ def test_catalog_platform_mismatch_refuses_before_install(world):
     assert not (world["plugins_dir"] / "cat-plugin").exists()
 
 
-def test_catalog_name_installs_pinned_sha_with_sidecar_then_update_repins(world, monkeypatch):
+def test_catalog_name_installs_pinned_sha_with_sidecar_then_update_repins(
+    world, monkeypatch
+):
     entry = pc_cat.get_live_catalog_entry("cat-plugin")
     assert entry is not None
     target, _m, name = cat.install_catalog_entry(entry, force=False)
@@ -110,8 +155,13 @@ def test_catalog_name_installs_pinned_sha_with_sidecar_then_update_repins(world,
 
     # Dashboard update on a catalog install = re-pin. Pin unchanged → no-op.
     assert pc.dashboard_update_user_plugin("cat-plugin") == {
-        "ok": True, "name": "cat-plugin", "sha": world["sha1"], "unchanged": True,
-        "python_dependencies": [], "warnings": []}
+        "ok": True,
+        "name": "cat-plugin",
+        "sha": world["sha1"],
+        "unchanged": True,
+        "python_dependencies": [],
+        "warnings": [],
+    }
     # Bump the catalog pin → the checkout moves to exactly that sha.
     world["state"]["pin"] = world["sha2"]
     assert pc.dashboard_update_user_plugin("cat-plugin")["unchanged"] is False
@@ -120,28 +170,53 @@ def test_catalog_name_installs_pinned_sha_with_sidecar_then_update_repins(world,
 
 def test_kill_list_blocks_cli_dashboard_and_tui_paths(world, monkeypatch):
     world["state"]["removed"].append(
-        pc_cat.RemovedEntry(name="cat-plugin", repo=world["repo"].as_uri(), reason="malware"))
+        pc_cat.RemovedEntry(
+            name="cat-plugin", repo=world["repo"].as_uri(), reason="malware"
+        )
+    )
     # Dashboard/TUI: catalog name AND raw repo URL both refused, no bypass parameter exists.
-    assert "malware" in pc.dashboard_install_plugin("", force=False, enable=False, catalog_name="cat-plugin")["error"]
-    assert "malware" in pc.dashboard_install_plugin(world["repo"].as_uri(), force=False, enable=False)["error"]
+    assert (
+        "malware"
+        in pc.dashboard_install_plugin(
+            "", force=False, enable=False, catalog_name="cat-plugin"
+        )["error"]
+    )
+    assert (
+        "malware"
+        in pc.dashboard_install_plugin(
+            world["repo"].as_uri(), force=False, enable=False
+        )["error"]
+    )
     assert not (world["plugins_dir"] / "cat-plugin").exists()
     # CLI: refused by default, `--allow-removed` installs anyway.
     with pytest.raises(SystemExit):
         pc.cmd_install("cat-plugin", enable=False)
     pc.cmd_install("cat-plugin", enable=False, allow_removed=True)
     assert cat.catalog_install_record(world["plugins_dir"] / "cat-plugin") is not None
-    assert cat.removed_annotation("cat-plugin", world["plugins_dir"] / "cat-plugin",
-                                  cat.resolved_removed_entries()) == "malware"
+    assert (
+        cat.removed_annotation(
+            "cat-plugin",
+            world["plugins_dir"] / "cat-plugin",
+            cat.resolved_removed_entries(),
+        )
+        == "malware"
+    )
 
 
-def test_the_catalog_name_you_installed_with_works_for_every_later_verb(world, tmp_path):
+def test_the_catalog_name_you_installed_with_works_for_every_later_verb(
+    world, tmp_path
+):
     """17 catalog entries install under a different manifest name (`clawk-memory-wiki` lands as
     `plugins/memory-wiki`). Every later verb must accept the name the user typed at install, resolved
     through the installer's own record; a URL install shipping a forged sidecar must not claim it."""
     repo = world["repo"]
-    (repo / "plugin.yaml").write_text("name: renamed-plugin\nversion: 1.0.0\ndescription: d\n")
+    (repo / "plugin.yaml").write_text(
+        "name: renamed-plugin\nversion: 1.0.0\ndescription: d\n"
+    )
     world["state"]["pin"] = _commit(repo, "manifest name differs from catalog name")
-    forged = json.dumps({"catalog_name": "cat-plugin", "tier": "official", "sha": "0" * 40, "repo": "x"})
+    forged = json.dumps(
+        {"catalog_name": "cat-plugin", "tier": "official", "sha": "0" * 40, "repo": "x"}
+    )
     _install_url(tmp_path / "evil", "evil-plugin", {cat.CATALOG_SIDECAR: forged})
     assert pc._find_plugin_entry("cat-plugin") is None
 
@@ -155,28 +230,44 @@ def test_the_catalog_name_you_installed_with_works_for_every_later_verb(world, t
     pc.cmd_capabilities("cat-plugin")
     pc.cmd_disable("cat-plugin")
     assert pc._get_disabled_set() == {"renamed-plugin"}
-    assert pc.dashboard_set_agent_plugin_enabled("cat-plugin", enabled=True)["name"] == "renamed-plugin"
+    assert (
+        pc.dashboard_set_agent_plugin_enabled("cat-plugin", enabled=True)["name"]
+        == "renamed-plugin"
+    )
     assert pc.dashboard_update_user_plugin("cat-plugin")["ok"] is True
     assert pc.dashboard_remove_user_plugin("cat-plugin")["ok"] is True
     assert not target.exists()
     assert "renamed-plugin" not in pc._get_enabled_set()
 
 
-def test_custom_install_records_an_anonymous_extension_install_and_reinstall_none(world, monkeypatch):
+def test_custom_install_records_an_anonymous_extension_install_and_reinstall_none(
+    world, monkeypatch
+):
     import clawk_cli.observability.shared_metrics_events as events
 
     calls = []
-    monkeypatch.setattr(events, "record_extension_install", lambda **kw: calls.append(kw))
-    assert pc.dashboard_install_plugin(world["repo"].as_uri(), force=False, enable=False)["ok"]
-    assert pc.dashboard_install_plugin("", force=True, enable=False, catalog_name="cat-plugin")["ok"]
+    monkeypatch.setattr(
+        events, "record_extension_install", lambda **kw: calls.append(kw)
+    )
+    assert pc.dashboard_install_plugin(
+        world["repo"].as_uri(), force=False, enable=False
+    )["ok"]
+    assert pc.dashboard_install_plugin(
+        "", force=True, enable=False, catalog_name="cat-plugin"
+    )["ok"]
 
-    assert calls == [{"kind": "plugin", "source": "local", "name": None, "outcome": "success"}]
+    assert calls == [
+        {"kind": "plugin", "source": "local", "name": None, "outcome": "success"}
+    ]
 
 
 def test_owner_repo_hash_subdir_shorthand_resolves_like_the_catalog_spelling():
     from clawk_cli.plugins_cmd import _resolve_git_url
+
     assert _resolve_git_url("plastic-labs/honcho#clawk-plugin-honcho") == (
-        "https://github.com/plastic-labs/honcho.git", "clawk-plugin-honcho")
+        "https://github.com/plastic-labs/honcho.git",
+        "clawk-plugin-honcho",
+    )
     assert _resolve_git_url("owner/repo") == ("https://github.com/owner/repo.git", None)
 
 
@@ -195,36 +286,59 @@ def _install_url(repo: Path, name: str, files: dict) -> Path:
 def test_in_tree_sidecar_cannot_forge_catalog_provenance(world, tmp_path):
     """Provenance is the installer's metadata record, never a file the repo ships: a URL install carrying
     its own .clawk-catalog.json is not a catalog install and does not mark the real entry installed."""
-    forged = json.dumps({"catalog_name": "cat-plugin", "tier": "official", "sha": "0" * 40, "repo": "x"})
-    target = _install_url(tmp_path / "evil", "evil-plugin", {cat.CATALOG_SIDECAR: forged})
+    forged = json.dumps(
+        {"catalog_name": "cat-plugin", "tier": "official", "sha": "0" * 40, "repo": "x"}
+    )
+    target = _install_url(
+        tmp_path / "evil", "evil-plugin", {cat.CATALOG_SIDECAR: forged}
+    )
     assert (target / cat.CATALOG_SIDECAR).exists()  # the file is there, and inert
     assert cat.read_catalog_sidecar(target) is None
     assert cat.catalog_annotation(target) is None
     assert cat.catalog_row_fields(target, cat.catalog_pins()) == {}
-    state = cat.installed_catalog_state({"evil-plugin": {"dir": str(target), "runtime_status": None}})
+    state = cat.installed_catalog_state(
+        {"evil-plugin": {"dir": str(target), "runtime_status": None}}
+    )
     assert state["entries"][0]["installed"] is False
     # Control: a real catalog install is still recognised through the metadata record.
-    real, _m, _n = cat.install_catalog_entry(pc_cat.get_live_catalog_entry("cat-plugin"), force=False)
+    real, _m, _n = cat.install_catalog_entry(
+        pc_cat.get_live_catalog_entry("cat-plugin"), force=False
+    )
     assert cat.catalog_annotation(real) == f"catalog:community@{world['sha1'][:8]}"
 
 
-def test_url_install_of_an_archived_handoff_repo_is_repinned_to_its_catalog_entry(world, tmp_path, monkeypatch):
+def test_url_install_of_an_archived_handoff_repo_is_repinned_to_its_catalog_entry(
+    world, tmp_path, monkeypatch
+):
     """A provider that left core was first handed off through a Nous repo that is now archived; a URL install of
     it has no catalog record, so `update` would keep pulling the archive. It is adopted as the catalog entry that
     superseded it, and `update` re-pins it to the maintained repo at the reviewed sha."""
     archived = tmp_path / "archived"
     target = _install_url(archived, "cat-plugin", {"ARCHIVED.md": "moved\n"})
-    assert cat.read_catalog_sidecar(target) is None  # control: an unknown repo stays a plain URL install
-    monkeypatch.setitem(cat._HANDOFF_REPOS, pc_cat._normalize_repo(archived.as_uri()), "cat-plugin")
+    assert (
+        cat.read_catalog_sidecar(target) is None
+    )  # control: an unknown repo stays a plain URL install
+    monkeypatch.setitem(
+        cat._HANDOFF_REPOS, pc_cat._normalize_repo(archived.as_uri()), "cat-plugin"
+    )
     assert cat.read_catalog_sidecar(target)["catalog_name"] == "cat-plugin"
     seen = {}
     real_scan = pc._scan_plugin_tree
-    monkeypatch.setattr(pc, "_scan_plugin_tree", lambda *a, **k: seen.update(k) or real_scan(*a, **k))
+    monkeypatch.setattr(
+        pc, "_scan_plugin_tree", lambda *a, **k: seen.update(k) or real_scan(*a, **k)
+    )
     result = pc.dashboard_update_user_plugin("cat-plugin")
-    assert result["ok"] and result["unchanged"] is False and _head(target) == world["sha1"]
-    assert seen["reviewed_pin"] is True  # the re-pinned tree IS the reviewed sha: caution findings don't block it
+    assert (
+        result["ok"] and result["unchanged"] is False and _head(target) == world["sha1"]
+    )
+    assert (
+        seen["reviewed_pin"] is True
+    )  # the re-pinned tree IS the reviewed sha: caution findings don't block it
     record = pc._read_install_metadata()["cat-plugin"]
-    assert record["source"] == world["repo"].as_uri() and record["catalog"]["repo"] == world["repo"].as_uri()
+    assert (
+        record["source"] == world["repo"].as_uri()
+        and record["catalog"]["repo"] == world["repo"].as_uri()
+    )
 
 
 def test_ref_install_records_installed_sha_so_update_is_offered(world):
@@ -234,43 +348,65 @@ def test_ref_install_records_installed_sha_so_update_is_offered(world):
     target, _m, _n = cat.install_catalog_entry(entry, force=False, ref=world["sha2"])
     assert _head(target) == world["sha2"]
     assert cat.read_catalog_sidecar(target)["sha"] == world["sha2"]
-    assert cat.catalog_row_fields(target, cat.catalog_pins())["update_available"] is True
+    assert (
+        cat.catalog_row_fields(target, cat.catalog_pins())["update_available"] is True
+    )
     result = pc.dashboard_update_user_plugin("cat-plugin")
     assert result["unchanged"] is False and _head(target) == world["sha1"]
 
 
-def test_repin_keeps_local_files_backs_up_edits_and_follows_manifest_rename(world, monkeypatch):
+def test_repin_keeps_local_files_backs_up_edits_and_follows_manifest_rename(
+    world, monkeypatch
+):
     entry = pc_cat.get_live_catalog_entry("cat-plugin")
     target, _m, _n = cat.install_catalog_entry(entry, force=False)
-    (target / "config.yaml").write_text("api_key: real\n")                      # installer/user data
-    (target / "__init__.py").write_text("def register(ctx):\n    pass  # mine\n")  # tracked edit
+    (target / "config.yaml").write_text("api_key: real\n")  # installer/user data
+    (target / "__init__.py").write_text(
+        "def register(ctx):\n    pass  # mine\n"
+    )  # tracked edit
     pc._write_config_value("plugins", "enabled", ["cat-plugin"])
     # New pin renames the manifest.
     repo = world["repo"]
-    (repo / "plugin.yaml").write_text("name: cat-plugin-v2\nversion: 2.0.0\ndescription: d\n")
+    (repo / "plugin.yaml").write_text(
+        "name: cat-plugin-v2\nversion: 2.0.0\ndescription: d\n"
+    )
     world["state"]["pin"] = _commit(repo, "rename")
     result = pc.dashboard_update_user_plugin("cat-plugin")
     new_target = world["plugins_dir"] / "cat-plugin-v2"
-    assert result["ok"] and result["name"] == "cat-plugin-v2" and _head(new_target) == world["state"]["pin"]
+    assert (
+        result["ok"]
+        and result["name"] == "cat-plugin-v2"
+        and _head(new_target) == world["state"]["pin"]
+    )
     assert (new_target / "config.yaml").read_text() == "api_key: real\n"
     assert not target.exists() and "cat-plugin" not in pc._read_install_metadata()
     assert pc._get_enabled_set() == {"cat-plugin-v2"}
-    backups = list((world["plugins_dir"].parent / "plugins-backup").glob("cat-plugin-*/__init__.py"))
+    backups = list(
+        (world["plugins_dir"].parent / "plugins-backup").glob(
+            "cat-plugin-*/__init__.py"
+        )
+    )
     assert backups and "# mine" in backups[0].read_text()
-    assert any("plugins-backup" in w for w in result["warnings"]) and any("renamed" in w for w in result["warnings"])
+    assert any("plugins-backup" in w for w in result["warnings"]) and any(
+        "renamed" in w for w in result["warnings"]
+    )
 
 
 @pytest.mark.parametrize("via", ["url", "catalog"])
-def test_update_of_a_subdir_install_keeps_files_the_user_created_or_edited(world, tmp_path, monkeypatch, via):
+def test_update_of_a_subdir_install_keeps_files_the_user_created_or_edited(
+    world, tmp_path, monkeypatch, via
+):
     """A subdirectory install carries no ``.git``; both update paths must preserve user config/data."""
     mono = tmp_path / "mono"
     src = mono / "plugins" / "sub-plugin"
     src.mkdir(parents=True)
-    (src / "plugin.yaml").write_text("name: sub-plugin\nversion: 1.0.0\ndescription: d\n")
+    (src / "plugin.yaml").write_text(
+        "name: sub-plugin\nversion: 1.0.0\ndescription: d\n"
+    )
     (src / "__init__.py").write_text("def register(ctx):\n    pass\n")
     (src / "config.yaml.example").write_text("endpoint: default\n")
     (src / "desktop").mkdir()
-    (src / "desktop" / "plugin.js").write_text("export default { id: \"v1\" }\n")
+    (src / "desktop" / "plugin.js").write_text('export default { id: "v1" }\n')
     (src / "server.js").write_text("console.log('v1')\n")
     (src / "dashboard").mkdir()
     (src / "dashboard" / "manifest.json").write_text("{}")
@@ -293,14 +429,18 @@ def test_update_of_a_subdir_install_keeps_files_the_user_created_or_edited(world
     if via == "catalog":
         target = cat.install_catalog_entry(entry(), force=False)[0]
     else:
-        target = pc._install_plugin_core(f"{mono.as_uri()}#plugins/sub-plugin", force=False)[0]
+        target = pc._install_plugin_core(
+            f"{mono.as_uri()}#plugins/sub-plugin", force=False
+        )[0]
     assert not (target / ".git").exists()
 
     (target / "config.yaml").write_text("endpoint: mine\n")
     (target / "data").mkdir()
     (target / "data" / "state.json").write_text("{}")
 
-    (src / "plugin.yaml").write_text("name: sub-plugin\nversion: 2.0.0\ndescription: d\n")
+    (src / "plugin.yaml").write_text(
+        "name: sub-plugin\nversion: 2.0.0\ndescription: d\n"
+    )
     (src / "config.yaml.example").write_text("endpoint: new-default\n")
     shutil.rmtree(src / "desktop")
     (src / "server.js").unlink()
@@ -314,7 +454,10 @@ def test_update_of_a_subdir_install_keeps_files_the_user_created_or_edited(world
     assert (target / "data" / "state.json").read_text() == "{}"
     assert not (target / "desktop").exists()
     assert not (target / "server.js").exists()
-    assert not (target / "dashboard").exists() and not (target / "hooks" / "run.cjs").exists()
+    assert (
+        not (target / "dashboard").exists()
+        and not (target / "hooks" / "run.cjs").exists()
+    )
 
 
 def test_repin_keeps_a_wholly_ignored_data_dir_in_a_git_checkout(world):
@@ -322,7 +465,9 @@ def test_repin_keeps_a_wholly_ignored_data_dir_in_a_git_checkout(world):
     repo = world["repo"]
     (repo / ".gitignore").write_text("data/\n.venv/\nnode_modules/\n")
     world["state"]["pin"] = _commit(repo, "ignore data")
-    target = cat.install_catalog_entry(pc_cat.get_live_catalog_entry("cat-plugin"), force=False)[0]
+    target = cat.install_catalog_entry(
+        pc_cat.get_live_catalog_entry("cat-plugin"), force=False
+    )[0]
     assert (target / ".git").exists()
 
     (target / "data" / "db").mkdir(parents=True)
@@ -358,22 +503,34 @@ def test_repin_keeps_a_wholly_ignored_data_dir_in_a_git_checkout(world):
     assert (target / "data" / "db" / "index.db").read_text() == "user data"
 
 
-def test_kill_list_covers_update_enable_and_load_of_an_installed_plugin(world, tmp_path, monkeypatch):
+def test_kill_list_covers_update_enable_and_load_of_an_installed_plugin(
+    world, tmp_path, monkeypatch
+):
     """A URL install whose name lands on the kill list AFTER install must stop pulling, cannot be enabled
     and is refused at load; an install made with --allow-removed keeps working."""
     from clawk_cli.plugins_discovery import gate_manifest
     from clawk_cli.plugins_manifest import PluginManifest
+
     target = _install_url(tmp_path / "later-killed", "killed", {})
-    world["state"]["removed"].append(pc_cat.RemovedEntry(name="killed", reason="backdoor"))
+    world["state"]["removed"].append(
+        pc_cat.RemovedEntry(name="killed", reason="backdoor")
+    )
     monkeypatch.setattr(pc_cat, "_live_cache_path", lambda: tmp_path / "no-cache.json")
     assert "backdoor" in pc.dashboard_update_user_plugin("killed")["error"]
     with pytest.raises(SystemExit):
         pc.cmd_enable("killed")
     assert "killed" not in pc._get_enabled_set()
-    manifest = PluginManifest(name="killed", source="user", path=str(target), key="killed")
+    manifest = PluginManifest(
+        name="killed", source="user", path=str(target), key="killed"
+    )
     assert gate_manifest(manifest, set(), {"killed"}).action != "load"
     # Explicit bypass at install time is remembered.
-    pc.cmd_install((tmp_path / "later-killed").as_uri(), force=True, enable=False, allow_removed=True)
+    pc.cmd_install(
+        (tmp_path / "later-killed").as_uri(),
+        force=True,
+        enable=False,
+        allow_removed=True,
+    )
     assert gate_manifest(manifest, set(), {"killed"}).action == "load"
 
 
@@ -383,14 +540,22 @@ _HOOK = "def register(ctx):\n    ctx.register_hook('pre_llm_call', print)\n"
 _PROVIDER = "def register(ctx):\n    ctx.register_memory_provider(object())\n"
 
 
-@pytest.mark.parametrize("init,enable", [
-    (_PROVIDER, True),
-    (_PROVIDER, False),
-    (_HOOK, True),
-    ('"""Recall hook. Not a MemoryProvider: it only injects context."""\n' + _HOOK, True),
-])
-def test_memory_category_install_activates_via_memory_provider_not_plugins_enable(world, monkeypatch,
-                                                                                  init, enable):
+@pytest.mark.parametrize(
+    "init,enable",
+    [
+        (_PROVIDER, True),
+        (_PROVIDER, False),
+        (_HOOK, True),
+        (
+            '"""Recall hook. Not a MemoryProvider: it only injects context."""\n'
+            + _HOOK,
+            True,
+        ),
+    ],
+)
+def test_memory_category_install_activates_via_memory_provider_not_plugins_enable(
+    world, monkeypatch, init, enable
+):
     """A memory provider activates through memory.provider alone — the loader never consults
     plugins.enabled — so "Enable now?" must select the provider, and a decline must point at
     `clawk memory setup`, never at the dead-end `plugins enable` hint. Catalog category "memory" also
@@ -402,22 +567,36 @@ def test_memory_category_install_activates_via_memory_provider_not_plugins_enabl
     world["state"]["pin"] = _commit(repo, "memory category plugin")
 
     def _memory_entries():
-        return [pc_cat.PluginCatalogEntry(name="cat-plugin", repo=repo.as_uri(), sha=world["state"]["pin"],
-                                          description="d", maintainer="t", category="memory")]
+        return [
+            pc_cat.PluginCatalogEntry(
+                name="cat-plugin",
+                repo=repo.as_uri(),
+                sha=world["state"]["pin"],
+                description="d",
+                maintainer="t",
+                category="memory",
+            )
+        ]
 
-    monkeypatch.setattr(pc_cat, "load_catalog", lambda catalog_dir=None: _memory_entries())
+    monkeypatch.setattr(
+        pc_cat, "load_catalog", lambda catalog_dir=None: _memory_entries()
+    )
     printed: list[str] = []
 
     def _capture(*args, **_kwargs):
         printed.extend(str(a) for a in args)
 
-    monkeypatch.setattr(pc, "_console",
-                        lambda: type("C", (), {"print": staticmethod(_capture)})())
+    monkeypatch.setattr(
+        pc, "_console", lambda: type("C", (), {"print": staticmethod(_capture)})()
+    )
 
     if not provider:
         pc._save_memory_provider("honcho")
         pc.cmd_install("cat-plugin", enable=enable)
-        assert (pc._get_current_memory_provider(), pc._get_enabled_set()) == ("honcho", {"cat-plugin"})
+        assert (pc._get_current_memory_provider(), pc._get_enabled_set()) == (
+            "honcho",
+            {"cat-plugin"},
+        )
         return
     pc.cmd_install("cat-plugin", enable=enable)
     assert pc._get_current_memory_provider() == ("cat-plugin" if enable else "")
@@ -427,7 +606,9 @@ def test_memory_category_install_activates_via_memory_provider_not_plugins_enabl
 
 
 @pytest.mark.parametrize("prior", [None, "disabled", "enabled"])
-def test_url_install_of_a_memory_provider_dir_gets_the_provider_hint(world, tmp_path, monkeypatch, prior):
+def test_url_install_of_a_memory_provider_dir_gets_the_provider_hint(
+    world, tmp_path, monkeypatch, prior
+):
     """A URL (non-catalog) install whose tree satisfies the memory-provider contract gets the same
     provider activation path — the catalog category is a shortcut, not the only trigger. An explicit
     --enable must leave the provider loadable: a plugins.disabled entry would make the loader refuse it,
@@ -437,9 +618,13 @@ def test_url_install_of_a_memory_provider_dir_gets_the_provider_hint(world, tmp_
 
     repo = tmp_path / "mem-repo"
     repo.mkdir()
-    (repo / "plugin.yaml").write_text("name: mem-plugin\nversion: 1.0.0\ndescription: d\n")
-    (repo / "__init__.py").write_text("from agent.memory_provider import MemoryProvider\n\n\n"
-                                      "class Mem(MemoryProvider):\n    pass\n")
+    (repo / "plugin.yaml").write_text(
+        "name: mem-plugin\nversion: 1.0.0\ndescription: d\n"
+    )
+    (repo / "__init__.py").write_text(
+        "from agent.memory_provider import MemoryProvider\n\n\n"
+        "class Mem(MemoryProvider):\n    pass\n"
+    )
     sp.run(["git", "init", "-q"], cwd=repo, check=True, env=_GIT_ENV)
     _commit(repo, "v1")
 
@@ -448,8 +633,9 @@ def test_url_install_of_a_memory_provider_dir_gets_the_provider_hint(world, tmp_
     def _capture(*args, **_kwargs):
         printed.extend(str(a) for a in args)
 
-    monkeypatch.setattr(pc, "_console",
-                        lambda: type("C", (), {"print": staticmethod(_capture)})())
+    monkeypatch.setattr(
+        pc, "_console", lambda: type("C", (), {"print": staticmethod(_capture)})()
+    )
 
     if prior == "enabled":
         pc.cmd_install(repo.as_uri(), enable=False)
@@ -469,34 +655,56 @@ def test_annotated_tag_pin_keeps_reviewed_trust_and_reads_as_at_pin(world, monke
     points at. Trust (scan skips the caution prompt) and the at-pin check must both use the peeled commit,
     or every tag-pinned entry prompts at install and shows 'update available' forever."""
     repo = world["repo"]
-    sp.run(["git", "tag", "-a", "v1", world["sha1"], "-m", "v1"], cwd=repo, check=True, env=_GIT_ENV)
-    tag_obj = sp.run(["git", "rev-parse", "v1"], cwd=repo, check=True, capture_output=True, text=True).stdout.strip()
+    sp.run(
+        ["git", "tag", "-a", "v1", world["sha1"], "-m", "v1"],
+        cwd=repo,
+        check=True,
+        env=_GIT_ENV,
+    )
+    tag_obj = sp.run(
+        ["git", "rev-parse", "v1"], cwd=repo, check=True, capture_output=True, text=True
+    ).stdout.strip()
     assert tag_obj != world["sha1"]
     world["state"]["pin"] = tag_obj
     seen = {}
     real_scan = pc._scan_plugin_tree
-    monkeypatch.setattr(pc, "_scan_plugin_tree", lambda *a, **k: seen.update(k) or real_scan(*a, **k))
+    monkeypatch.setattr(
+        pc, "_scan_plugin_tree", lambda *a, **k: seen.update(k) or real_scan(*a, **k)
+    )
     entry = pc_cat.get_live_catalog_entry("cat-plugin")
     target, _m, _n = cat.install_catalog_entry(entry, force=False)
     assert _head(target) == world["sha1"] and seen["reviewed_pin"] is True
     sidecar = cat.read_catalog_sidecar(target)
     assert (sidecar["sha"], sidecar["pin"]) == (world["sha1"], tag_obj)
-    assert cat.catalog_row_fields(target, cat.catalog_pins())["update_available"] is False
-    assert cat.installed_catalog_state({"cat-plugin": {"dir": str(target), "runtime_status": None}})["entries"][0]["update_available"] is False
+    assert (
+        cat.catalog_row_fields(target, cat.catalog_pins())["update_available"] is False
+    )
+    assert (
+        cat.installed_catalog_state(
+            {"cat-plugin": {"dir": str(target), "runtime_status": None}}
+        )["entries"][0]["update_available"]
+        is False
+    )
     assert pc.dashboard_update_user_plugin("cat-plugin")["unchanged"] is True
     # A bump to a commit sha is still an update.
     world["state"]["pin"] = world["sha2"]
-    assert cat.catalog_row_fields(target, cat.catalog_pins())["update_available"] is True
+    assert (
+        cat.catalog_row_fields(target, cat.catalog_pins())["update_available"] is True
+    )
 
 
-def test_repin_that_widens_the_plugin_requires_consent_on_every_surface(world, monkeypatch):
+def test_repin_that_widens_the_plugin_requires_consent_on_every_surface(
+    world, monkeypatch
+):
     """A new pin adding tools / a Desktop half is a new grant: the dashboard/TUI answer consent_required
     with the delta and touch nothing; a retry with consent applies it; the CLI asks y/N and a decline
     leaves the tree at the old pin. A pin that widens nothing (sha2) needs no consent."""
     entry = pc_cat.get_live_catalog_entry("cat-plugin")
     target, _m, _n = cat.install_catalog_entry(entry, force=False)
     repo = world["repo"]
-    (repo / "plugin.yaml").write_text("name: cat-plugin\nversion: 3.0.0\ndescription: d\nprovides_tools: [shell_out]\n")
+    (repo / "plugin.yaml").write_text(
+        "name: cat-plugin\nversion: 3.0.0\ndescription: d\nprovides_tools: [shell_out]\n"
+    )
     (repo / "desktop").mkdir()
     (repo / "desktop" / "plugin.js").write_text("export default {}\n")
     world["state"]["pin"] = wide = _commit(repo, "widen")
@@ -511,7 +719,12 @@ def test_repin_that_widens_the_plugin_requires_consent_on_every_surface(world, m
         pc.cmd_update("cat-plugin")
     assert _head(target) == world["sha1"]
     # Consent given → applied.
-    assert pc.dashboard_update_user_plugin("cat-plugin", accept_capabilities=True)["unchanged"] is False
+    assert (
+        pc.dashboard_update_user_plugin("cat-plugin", accept_capabilities=True)[
+            "unchanged"
+        ]
+        is False
+    )
     assert _head(target) == wide
 
 
@@ -524,13 +737,31 @@ def test_catalog_rows_maps_resolves_the_live_catalog_once(monkeypatch):
 
     def fake_live():
         calls.append(1)
-        return [pc_cat.PluginCatalogEntry(name="a", repo="https://github.com/o/r", sha="a" * 40,
-                                          description="d", maintainer="t", version="1.2.3", title="Alpha"),
-                pc_cat.PluginCatalogEntry(name="b", repo="https://github.com/o/r2", sha="b" * 40,
-                                          description="d", maintainer="t")]
+        return [
+            pc_cat.PluginCatalogEntry(
+                name="a",
+                repo="https://github.com/o/r",
+                sha="a" * 40,
+                description="d",
+                maintainer="t",
+                version="1.2.3",
+                title="Alpha",
+            ),
+            pc_cat.PluginCatalogEntry(
+                name="b",
+                repo="https://github.com/o/r2",
+                sha="b" * 40,
+                description="d",
+                maintainer="t",
+            ),
+        ]
 
     monkeypatch.setattr(cat, "load_catalog_live", fake_live)
-    assert cat.catalog_rows_maps() == ({"a": "a" * 40, "b": "b" * 40}, {"a": "1.2.3"}, {"a": "Alpha"})
+    assert cat.catalog_rows_maps() == (
+        {"a": "a" * 40, "b": "b" * 40},
+        {"a": "1.2.3"},
+        {"a": "Alpha"},
+    )
     assert len(calls) == 1
 
     def boom():
@@ -540,16 +771,26 @@ def test_catalog_rows_maps_resolves_the_live_catalog_once(monkeypatch):
     assert cat.catalog_rows_maps() == ({}, {}, {})
 
 
-@pytest.mark.parametrize("gateway_pid", [None, 4242], ids=["no-gateway", "gateway-running"])
+@pytest.mark.parametrize(
+    "gateway_pid", [None, 4242], ids=["no-gateway", "gateway-running"]
+)
 def test_brief_install_prints_the_pin_and_outcome_and_a_restart_hint_only_for_a_gateway(
-        world, monkeypatch, gateway_pid):
+    world, monkeypatch, gateway_pid
+):
     """First-time setup already said what it installs and why, so ``brief`` leaves out the catalog
     description, the clone line and the "Installed" panel; with no gateway running or installed (a
     first-time setup) there is nothing to restart, so no restart hint either."""
     from rich.panel import Panel
+
     printed: list = []
-    monkeypatch.setattr(pc, "_console", lambda: type("C", (), {"print": lambda self, *a, **k: printed.extend(a)})())
-    monkeypatch.setattr("gateway.status.get_running_pid", lambda *a, **k: gateway_pid)  # no reload answered
+    monkeypatch.setattr(
+        pc,
+        "_console",
+        lambda: type("C", (), {"print": lambda self, *a, **k: printed.extend(a)})(),
+    )
+    monkeypatch.setattr(
+        "gateway.status.get_running_pid", lambda *a, **k: gateway_pid
+    )  # no reload answered
     monkeypatch.setattr("clawk_cli.gateway._installed_service_kind", lambda: None)
 
     pc.cmd_install("cat-plugin", enable=True, brief=True)

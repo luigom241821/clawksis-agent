@@ -93,8 +93,6 @@ def test_finalize_turn_forwards_canonical_usage_when_available():
     assert captured["kwargs"]["turn_id"] == "turn-1"
 
 
-
-
 def test_finalization_seam_observes_interrupted_turn_with_none_usage():
     """Pins the documented coverage contract for on_turn_complete().
 

@@ -24,7 +24,8 @@ EA_REASON_LABEL_TEXT = "Why it was flagged"
 # Timeout notice posted when nobody answered the prompt (``{window}`` = "5 minutes").
 APPROVAL_TIMED_OUT_NOTICE = (
     "⌛ Approval timed out after {window} — the command was NOT run. "
-    "Ask me to try again if you still want it, or raise approvals.timeout in config.yaml.")
+    "Ask me to try again if you still want it, or raise approvals.timeout in config.yaml."
+)
 
 
 def ea_header_text() -> str:
@@ -65,6 +66,7 @@ def approval_timed_out_notice(window: str) -> str:
 def approval_timeout_seconds() -> int:
     """The configured ``approvals.timeout`` (default 300s); module attribute so tests can pin it."""
     from tools.approval_context import _get_approval_timeout
+
     return _get_approval_timeout()
 
 
@@ -72,6 +74,7 @@ def format_approval_window(seconds: int) -> str:
     """Human wording for a timeout (300 → "5 minutes"); one formatter shared with the CLI notice and
     the tool result's ``user_summary`` — see ``tools.approval_context.format_approval_window``."""
     from tools.approval_context import format_approval_window as _shared
+
     return _shared(seconds)
 
 

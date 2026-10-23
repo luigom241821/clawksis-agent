@@ -17,6 +17,7 @@ if "dotenv" not in sys.modules:
     fake_dotenv.load_dotenv = lambda *args, **kwargs: None
     sys.modules["dotenv"] = fake_dotenv
 
+
 class TestUpstageResolver:
     """The providers.py resolver must recognise upstage (the actual bug)."""
 

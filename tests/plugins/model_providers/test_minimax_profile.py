@@ -52,7 +52,6 @@ class TestMinimaxAuxModelM3:
     catalog order rather than the pre-M3 era.
     """
 
-
     def test_consumer_api_returns_non_empty_for_each_provider(self, minimax_profile):
         from agent.auxiliary_client import _get_aux_model_for_provider
 
@@ -71,8 +70,6 @@ class TestMinimaxAuxModelM3:
         )
 
 
-
-
 class TestMinimaxM3OpenAIReasoningWireShape:
     """MiniMax-M3 on api.minimax.io/v1 gets MiniMax's OpenAI-compatible knobs."""
 
@@ -89,7 +86,6 @@ class TestMinimaxM3OpenAIReasoningWireShape:
         )
         assert extra_body == {"reasoning_split": True}
         assert top_level == {}
-
 
     @pytest.mark.parametrize(
         "model,base_url",

@@ -14,8 +14,14 @@ Finding = tuple[str, int, str, str]
 
 _IGNORED_DIRS = {"__pycache__", ".venv", "venv", "node_modules"}
 # builtin name -> (index of the argument that must be a literal, pattern_id, description)
-_DYNAMIC_CALLS = {"__import__": (0, "dynamic_import_computed", "__import__ with non-literal module name"),
-                  "getattr": (1, "dynamic_getattr", "getattr with non-literal attribute name")}
+_DYNAMIC_CALLS = {
+    "__import__": (
+        0,
+        "dynamic_import_computed",
+        "__import__ with non-literal module name",
+    ),
+    "getattr": (1, "dynamic_getattr", "getattr with non-literal attribute name"),
+}
 
 
 def _is_importlib(name: str) -> bool:
@@ -34,31 +40,54 @@ def _scan_source(content: str, rel_path: str) -> list[Finding]:
         def visit_Call(self, node):
             f = node.func
             if isinstance(f, ast.Attribute) and f.attr == "import_module":
-                hit(node, "dynamic_import", "importlib.import_module() — loads arbitrary modules at runtime")
+                hit(
+                    node,
+                    "dynamic_import",
+                    "importlib.import_module() — loads arbitrary modules at runtime",
+                )
             elif isinstance(f, ast.Name) and f.id in _DYNAMIC_CALLS:
                 arg_index, pid, desc = _DYNAMIC_CALLS[f.id]
-                if len(node.args) > arg_index and not isinstance(node.args[arg_index], ast.Constant):
+                if len(node.args) > arg_index and not isinstance(
+                    node.args[arg_index], ast.Constant
+                ):
                     hit(node, pid, desc)
             self.generic_visit(node)
 
         def visit_Subscript(self, node):
-            if (isinstance(node.value, ast.Attribute) and node.value.attr == "__dict__"
-                    and not isinstance(node.slice, ast.Constant)):
-                hit(node, "dict_access", "__dict__[<computed>] — dynamic attribute access")
+            if (
+                isinstance(node.value, ast.Attribute)
+                and node.value.attr == "__dict__"
+                and not isinstance(node.slice, ast.Constant)
+            ):
+                hit(
+                    node,
+                    "dict_access",
+                    "__dict__[<computed>] — dynamic attribute access",
+                )
             self.generic_visit(node)
 
         def visit_Import(self, node):
             for a in node.names:
                 if _is_importlib(a.name):
-                    hit(node, "importlib_import", f"import {a.name} — enables dynamic module loading")
+                    hit(
+                        node,
+                        "importlib_import",
+                        f"import {a.name} — enables dynamic module loading",
+                    )
             self.generic_visit(node)
 
         def visit_ImportFrom(self, node):
             if _is_importlib(node.module or ""):
-                hit(node, "importlib_import", f"from {node.module} import ... — enables dynamic module loading")
+                hit(
+                    node,
+                    "importlib_import",
+                    f"from {node.module} import ... — enables dynamic module loading",
+                )
             self.generic_visit(node)
 
-    with suppress(RecursionError, ValueError, RuntimeError):  # hostile input: keep what was collected so far
+    with suppress(
+        RecursionError, ValueError, RuntimeError
+    ):  # hostile input: keep what was collected so far
         V().visit(tree)
     return findings
 
@@ -74,8 +103,16 @@ def ast_scan_path(path: Path) -> list[Finding]:
     """Scan one .py file or every .py under a directory; [] for non-Python/missing paths."""
     if path.is_file():
         return _scan_file(path, path.name) if path.suffix.lower() == ".py" else []
-    return [f for py in sorted(path.rglob("*.py")) if not set(py.parent.parts) & _IGNORED_DIRS
-            for f in _scan_file(py, py.relative_to(path).as_posix())] if path.is_dir() else []
+    return (
+        [
+            f
+            for py in sorted(path.rglob("*.py"))
+            if not set(py.parent.parts) & _IGNORED_DIRS
+            for f in _scan_file(py, py.relative_to(path).as_posix())
+        ]
+        if path.is_dir()
+        else []
+    )
 
 
 def format_ast_report(findings: list[Finding], skill_name: str = "") -> str:
@@ -89,4 +126,7 @@ def format_ast_report(findings: list[Finding], skill_name: str = "") -> str:
             current = f
             lines.append(f"  {f}")
         lines.append(f"    L{line}  {pid}  — {desc}")
-    return "\n".join(lines + ["", "  Note: diagnostic hints for human review, not security verdicts."])
+    return "\n".join(
+        lines
+        + ["", "  Note: diagnostic hints for human review, not security verdicts."]
+    )

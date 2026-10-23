@@ -28,7 +28,6 @@ class TestChatVerboseArg:
 
         assert not hasattr(args, "verbose")
 
-
     def test_cmd_chat_forwards_none_when_verbose_is_absent(self, monkeypatch):
         import types
         import sys
@@ -62,12 +61,27 @@ class TestChatVerboseArg:
         assert captured["quiet"] is False
         assert "verbose" not in captured
 
-    @pytest.mark.parametrize("argv, expected", [
-        (["chat", "--provider", "custom", "--base-url", "http://127.0.0.1:9/v1", "--api-key", "launch-key"],
-         {"api_key": "launch-key", "base_url": "http://127.0.0.1:9/v1"}),
-        (["chat"], {}),
-    ])
-    def test_cmd_chat_forwards_the_launch_key_and_endpoint_to_the_classic_cli(self, monkeypatch, argv, expected):
+    @pytest.mark.parametrize(
+        "argv, expected",
+        [
+            (
+                [
+                    "chat",
+                    "--provider",
+                    "custom",
+                    "--base-url",
+                    "http://127.0.0.1:9/v1",
+                    "--api-key",
+                    "launch-key",
+                ],
+                {"api_key": "launch-key", "base_url": "http://127.0.0.1:9/v1"},
+            ),
+            (["chat"], {}),
+        ],
+    )
+    def test_cmd_chat_forwards_the_launch_key_and_endpoint_to_the_classic_cli(
+        self, monkeypatch, argv, expected
+    ):
         """`clawk chat --cli --api-key K --base-url U` must launch the classic CLI on K and U, not on the
         profile's credential; the TUI refuses both flags and points here."""
         import types
@@ -94,7 +108,9 @@ class TestChatVerboseArg:
 
         main_mod.cmd_chat(args)
 
-        assert {k: captured[k] for k in ("api_key", "base_url") if k in captured} == expected
+        assert {
+            k: captured[k] for k in ("api_key", "base_url") if k in captured
+        } == expected
 
 
 class TestAcceptHooksOnAgentSubparsers:
@@ -152,6 +168,7 @@ print(json.dumps(results))
         with `unrecognized arguments`."""
         import json
         import subprocess
+
         result = subprocess.run(
             [sys.executable, "-c", self._DRIVER, json.dumps(self.ARGVS)],
             capture_output=True,
@@ -188,23 +205,27 @@ class TestChatSubparserInheritedValueFlags:
     @pytest.fixture
     def real_parser(self):
         from clawk_cli._parser import build_top_level_parser
+
         parser, _subparsers, _chat = build_top_level_parser()
         return parser
-
 
     def test_all_three_flags_before_chat(self, real_parser):
         """Issue #28780 reporter's case generalized: passing every inherited
         value flag before `chat` must preserve all of them simultaneously."""
-        args, _ = real_parser.parse_known_args([
-            "-t", "web",
-            "-m", "anthropic/claude-sonnet-4",
-            "--provider", "openrouter",
-            "chat",
-        ])
+        args, _ = real_parser.parse_known_args(
+            [
+                "-t",
+                "web",
+                "-m",
+                "anthropic/claude-sonnet-4",
+                "--provider",
+                "openrouter",
+                "chat",
+            ]
+        )
         assert args.toolsets == "web"
         assert args.model == "anthropic/claude-sonnet-4"
         assert args.provider == "openrouter"
-
 
     def test_chat_subparser_inherited_value_flags_use_suppress(self):
         """Contract test for the underlying invariant.
@@ -215,11 +236,11 @@ class TestChatSubparserInheritedValueFlags:
         default during dispatch. This is the structural class behind #28780.
         """
         from clawk_cli._parser import build_top_level_parser
+
         parser, _subparsers, chat_parser = build_top_level_parser()
 
         top_level_dests = {
-            a.dest for a in parser._actions
-            if a.option_strings and a.dest != "help"
+            a.dest for a in parser._actions if a.option_strings and a.dest != "help"
         }
 
         offenders = []
@@ -235,15 +256,23 @@ class TestChatSubparserInheritedValueFlags:
             "Chat subparser redeclares these top-level flags without "
             "default=argparse.SUPPRESS; they will silently clobber the "
             "top-level value when used as `clawk <flag> <value> chat`:\n  "
-            + "\n  ".join(f"{opts} dest={dest} default={d!r}"
-                          for opts, dest, d in offenders)
+            + "\n  ".join(
+                f"{opts} dest={dest} default={d!r}" for opts, dest, d in offenders
+            )
         )
 
 
-@pytest.mark.parametrize("argv", [
-    ["--tui", "--checkpoints"], ["--checkpoints", "chat"], ["chat", "--tui", "--checkpoints"]])
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--tui", "--checkpoints"],
+        ["--checkpoints", "chat"],
+        ["chat", "--tui", "--checkpoints"],
+    ],
+)
 def test_checkpoints_parses_at_the_top_level_and_survives_chat(argv):
     """`clawk --tui --checkpoints` is the TUI launch the docs and gateway refusals name; it was
     declared only on `chat`, so the top-level form failed with "unrecognized arguments"."""
     from clawk_cli._parser import build_top_level_parser
+
     assert build_top_level_parser()[0].parse_args(argv).checkpoints is True

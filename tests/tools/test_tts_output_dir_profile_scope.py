@@ -12,11 +12,13 @@ these pins keep the synthesis paths from re-freezing the launch profile.
 import importlib
 from pathlib import Path
 
+
 def _reload_tts_tool(import_home: Path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(import_home))
     from tools import tts_tool
 
     return importlib.reload(tts_tool)
+
 
 def test_default_output_dir_follows_contextvar_profile_override(tmp_path, monkeypatch):
     """The web server scopes profiles via set_clawk_home_override() rather
@@ -35,9 +37,7 @@ def test_default_output_dir_follows_contextvar_profile_override(tmp_path, monkey
 
     token = set_clawk_home_override(str(profile_home))
     try:
-        assert tts_tool._default_output_dir() == str(
-            profile_home / "cache" / "audio"
-        )
+        assert tts_tool._default_output_dir() == str(profile_home / "cache" / "audio")
     finally:
         reset_clawk_home_override(token)
 

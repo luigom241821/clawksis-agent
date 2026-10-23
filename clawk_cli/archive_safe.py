@@ -21,8 +21,14 @@ def normalize_archive_parts(member_name: str) -> list[str]:
     posix_path = PurePosixPath(normalized_name)
     windows_path = PureWindowsPath(member_name)
     parts = [part for part in posix_path.parts if part not in {"", "."}]
-    if (not normalized_name or posix_path.is_absolute() or windows_path.is_absolute()
-            or windows_path.drive or not parts or ".." in parts):
+    if (
+        not normalized_name
+        or posix_path.is_absolute()
+        or windows_path.is_absolute()
+        or windows_path.drive
+        or not parts
+        or ".." in parts
+    ):
         raise ValueError(f"Unsafe archive member path: {member_name}")
     return parts
 
@@ -34,10 +40,14 @@ def make_targz(base: str, root_dir: str, base_dir: str) -> str:
     """
     archive_path = f"{base}.tar.gz"
     dest_dir = os.path.dirname(archive_path) or "."
-    fd, tmp_path = tempfile.mkstemp(dir=dest_dir, prefix=".archive_", suffix=".tar.gz.tmp")
+    fd, tmp_path = tempfile.mkstemp(
+        dir=dest_dir, prefix=".archive_", suffix=".tar.gz.tmp"
+    )
     try:
-        with os.fdopen(fd, "wb") as f, \
-                tarfile.open(fileobj=f, mode="w:gz", format=tarfile.GNU_FORMAT) as tf:
+        with (
+            os.fdopen(fd, "wb") as f,
+            tarfile.open(fileobj=f, mode="w:gz", format=tarfile.GNU_FORMAT) as tf,
+        ):
             tf.add(str(Path(root_dir) / base_dir), arcname=base_dir)
         os.replace(tmp_path, archive_path)
     except BaseException:
@@ -80,9 +90,12 @@ def archive_root_dirs(archive: Path) -> set[str]:
     archive) without first mutating a live tree.
     """
     with tarfile.open(archive, "r:gz") as tf:
-        return {parts[0] for member in tf.getmembers()
-                for parts in [normalize_archive_parts(member.name)]
-                if len(parts) > 1 or member.isdir()}
+        return {
+            parts[0]
+            for member in tf.getmembers()
+            for parts in [normalize_archive_parts(member.name)]
+            if len(parts) > 1 or member.isdir()
+        }
 
 
 def copy_regular_files(src: Path, dst: Path) -> int:

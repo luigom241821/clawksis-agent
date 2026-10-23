@@ -70,7 +70,9 @@ def _chain_ending_at(boots: list[float], ts: float, gap: float) -> list[float]:
     chain: list[float] = []
     prev = ts
     for t in sorted(boots, reverse=True):
-        if t > ts:  # clock moved backwards (NTP step, restored file): future entry is adjacent, not a break
+        if (
+            t > ts
+        ):  # clock moved backwards (NTP step, restored file): future entry is adjacent, not a break
             chain.append(t)
             continue
         if prev - t > gap:
@@ -81,13 +83,17 @@ def _chain_ending_at(boots: list[float], ts: float, gap: float) -> list[float]:
 
 
 def record_restart_interrupted_boot(
-    window_seconds: int = DEFAULT_WINDOW_SECONDS, *, now: Optional[float] = None,
+    window_seconds: int = DEFAULT_WINDOW_SECONDS,
+    *,
+    now: Optional[float] = None,
     max_gap_seconds: int = DEFAULT_MAX_GAP_SECONDS,
 ) -> list[float]:
     """Record a restart-interrupted boot; return the pruned chain + now (most recent
     last).  A persistence failure returns the in-memory list without raising."""
     ts = time.time() if now is None else now
-    boots = _chain_ending_at(_load_boots(), ts, _chain_gap(window_seconds, max_gap_seconds)) + [ts]
+    boots = _chain_ending_at(
+        _load_boots(), ts, _chain_gap(window_seconds, max_gap_seconds)
+    ) + [ts]
     _save_boots(boots[-_MAX_STORED_BOOTS:])
     return boots
 
@@ -99,12 +105,17 @@ def clear() -> None:
 
 
 def check_and_record(
-    max_restarts: int = DEFAULT_MAX_RESTARTS, window_seconds: int = DEFAULT_WINDOW_SECONDS, *,
-    now: Optional[float] = None, max_gap_seconds: int = DEFAULT_MAX_GAP_SECONDS,
+    max_restarts: int = DEFAULT_MAX_RESTARTS,
+    window_seconds: int = DEFAULT_WINDOW_SECONDS,
+    *,
+    now: Optional[float] = None,
+    max_gap_seconds: int = DEFAULT_MAX_GAP_SECONDS,
 ) -> bool:
     """Gateway entry point: record this boot; True when the chain reached
     ``max_restarts`` and auto-resume should be SKIPPED."""
-    boots = record_restart_interrupted_boot(window_seconds, now=now, max_gap_seconds=max_gap_seconds)
+    boots = record_restart_interrupted_boot(
+        window_seconds, now=now, max_gap_seconds=max_gap_seconds
+    )
     tripped = max_restarts > 0 and len(boots) >= max_restarts
     if tripped:
         logger.warning(
@@ -112,6 +123,9 @@ def check_and_record(
             "threshold %d). Skipping auto-resume to break a suspected SIGTERM-respawn loop (#30719, #81642). "
             "Restart-interrupted sessions stay resume-pending and will continue on the next real user message. "
             "If this is a false positive, delete %s.",
-            len(boots), int(_chain_gap(window_seconds, max_gap_seconds)), max_restarts, _state_path(),
+            len(boots),
+            int(_chain_gap(window_seconds, max_gap_seconds)),
+            max_restarts,
+            _state_path(),
         )
     return tripped

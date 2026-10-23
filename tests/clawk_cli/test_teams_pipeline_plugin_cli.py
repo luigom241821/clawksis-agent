@@ -45,10 +45,6 @@ def _make_args(**kwargs):
     return Namespace(**defaults)
 
 
-
-
-
-
 def test_show_prints_job_json(capsys, tmp_path):
     store = TeamsPipelineStore(tmp_path / "teams_pipeline_store.json")
     store.upsert_job(
@@ -75,15 +71,9 @@ def test_show_prints_job_json(capsys, tmp_path):
     assert payload["meeting_ref"]["meeting_id"] == "meeting-1"
 
 
-
-
-
-
-
-
-
-
-def test_validate_accepts_msgraph_credentials_for_graph_delivery(monkeypatch, capsys, tmp_path):
+def test_validate_accepts_msgraph_credentials_for_graph_delivery(
+    monkeypatch, capsys, tmp_path
+):
     from gateway.config import Platform, PlatformConfig
 
     monkeypatch.setenv("MSGRAPH_TENANT_ID", "tenant")

@@ -33,7 +33,18 @@ _attempted: set[tuple[str, str]] = set()
 # Providers that shipped bundled in core. Unattended consent covers only these: their users already
 # accepted the deps when they picked the built-in. Any other catalog plugin named in memory.provider
 # (a synced config, a cloned profile) still needs an explicit install.
-_LEFT_CORE = frozenset({"hindsight", "honcho", "mem0", "supermemory", "openviking", "retaindb", "byterover", "holographic"})
+_LEFT_CORE = frozenset(
+    {
+        "hindsight",
+        "honcho",
+        "mem0",
+        "supermemory",
+        "openviking",
+        "retaindb",
+        "byterover",
+        "holographic",
+    }
+)
 
 # The startup retry window doubles with each consecutive failure, up to a week: a flat window had a
 # home whose install can never succeed (a version gate, a root-owned plugins dir, no route to GitHub)
@@ -72,7 +83,9 @@ def _failed_recently(home: Path, plugin: str) -> bool:
     except OSError:
         return False
     failures = min(_failure_count(stamp), 32)
-    return age < min(STARTUP_RETRY_SECONDS * 2 ** (failures - 1), STARTUP_RETRY_MAX_SECONDS)
+    return age < min(
+        STARTUP_RETRY_SECONDS * 2 ** (failures - 1), STARTUP_RETRY_MAX_SECONDS
+    )
 
 
 def _note_success(home: Path, plugin: str) -> None:
@@ -83,6 +96,7 @@ def _note_success(home: Path, plugin: str) -> None:
 def configured_provider(home: Path) -> str:
     """``memory.provider`` of *home*'s effective config, or ``""``."""
     from pm.plugins_state import read_home_selection
+
     memory = (read_home_selection(home) or {}).get("memory") or {}
     return str(memory.get("provider") or "").strip()
 
@@ -93,6 +107,7 @@ def provider_present(name: str, home: Path) -> bool:
     hook walks several profile homes from one process."""
     from plugins.memory import find_provider_dir
     from clawk_constants import reset_clawk_home_override, set_clawk_home_override
+
     token = set_clawk_home_override(home)
     try:
         return find_provider_dir(name) is not None
@@ -103,6 +118,7 @@ def provider_present(name: str, home: Path) -> bool:
 def catalog_source(name: str) -> Optional[str]:
     """The catalog entry that ships provider *name*, or None when the catalog has no such plugin."""
     from clawk_cli.plugin_catalog import get_live_catalog_entry
+
     entry = get_live_catalog_entry(name)
     return entry.name if entry is not None else None
 
@@ -117,12 +133,14 @@ def catalog_install_hint(name: str, *, category: Optional[str] = None) -> Option
     offline and on error paths."""
     try:
         from clawk_cli.plugin_catalog import get_catalog_entry
+
         entry = get_catalog_entry(name) if name else None
     except Exception:
         return None
     if entry is None or (category is not None and entry.category != category):
         return None
     from clawk_constants import get_clawk_home
+
     return _install_command(name, get_clawk_home())
 
 
@@ -131,11 +149,14 @@ def _pending_provider(home: Path, *, say: Callable[[str], None]) -> Optional[str
     reported through *say*). Read-only."""
     name = configured_provider(home)
     from agent.memory_provider import is_core_memory_provider
+
     if is_core_memory_provider(name) or provider_present(name, home):
         return None
     if catalog_source(name) is None:
-        say(f"  ⚠ Memory provider '{name}' is configured but not installed and not in the plugin catalog. "
-            f"Install it with `clawk plugins install <source>` or change memory.provider.")
+        say(
+            f"  ⚠ Memory provider '{name}' is configured but not installed and not in the plugin catalog. "
+            f"Install it with `clawk plugins install <source>` or change memory.provider."
+        )
         return None
     return name
 
@@ -146,30 +167,38 @@ def _install_command(name: str, home: Path) -> str:
     profile, never the home of the agent (Desktop, gateway, ``clawk -p``) that printed it."""
     from clawk_cli.profiles import get_active_profile
     from clawk_constants import profile_name_for_home
+
     profile = profile_name_for_home(home)
     if profile is None or (profile == "default" and get_active_profile() == "default"):
         return f"clawk plugins install {name}"
     return f"clawk -p {profile} plugins install {name}"
 
 
-def _install_pending(home: Path, name: str, *, install: Callable[[str], dict],
-                     say: Callable[[str], None]) -> bool:
+def _install_pending(
+    home: Path, name: str, *, install: Callable[[str], dict], say: Callable[[str], None]
+) -> bool:
     try:
         result = install(name)
     except Exception as exc:  # network, uv, kill list — report, do not raise
         result = {"ok": False, "error": str(exc)}
     if result.get("ok"):
-        say(f"  ✓ Memory provider '{name}' moved out of core — installed its plugin from the catalog "
+        say(
+            f"  ✓ Memory provider '{name}' moved out of core — installed its plugin from the catalog "
             f"(memory.provider and your stored memories are unchanged; check its settings with "
-            f"`clawk memory status`).")
+            f"`clawk memory status`)."
+        )
         return True
     error = str(result.get("error") or "unknown error").rstrip(". ")
-    say(f"  ⚠ Memory provider '{name}' moved out of core and could not be installed automatically: "
-        f"{error}. Run `{_install_command(name, home)}`.")
+    say(
+        f"  ⚠ Memory provider '{name}' moved out of core and could not be installed automatically: "
+        f"{error}. Run `{_install_command(name, home)}`."
+    )
     return False
 
 
-def migrate_home(home: Path, *, install: Callable[[str], dict], say: Callable[[str], None] = print) -> Optional[str]:
+def migrate_home(
+    home: Path, *, install: Callable[[str], dict], say: Callable[[str], None] = print
+) -> Optional[str]:
     """Install the configured provider's catalog plugin into *home* when the provider is gone.
 
     Returns the installed plugin name, or None when nothing needed doing or the install could not
@@ -183,7 +212,12 @@ def migrate_home(home: Path, *, install: Callable[[str], dict], say: Callable[[s
 
 
 def _interactive() -> bool:
-    return sys.stdin is not None and sys.stdout is not None and sys.stdin.isatty() and sys.stdout.isatty()
+    return (
+        sys.stdin is not None
+        and sys.stdout is not None
+        and sys.stdin.isatty()
+        and sys.stdout.isatty()
+    )
 
 
 def _unattended_consent() -> bool:
@@ -199,6 +233,7 @@ def _unattended_consent() -> bool:
 
 def _home_consent(home: Path) -> bool:
     from clawk_constants import reset_clawk_home_override, set_clawk_home_override
+
     token = set_clawk_home_override(home)
     try:
         return _unattended_consent()
@@ -206,22 +241,33 @@ def _home_consent(home: Path) -> bool:
         reset_clawk_home_override(token)
 
 
-def _install_into(home: Path, *, consent: Optional[bool] = None) -> Callable[[str], dict]:
+def _install_into(
+    home: Path, *, consent: Optional[bool] = None
+) -> Callable[[str], dict]:
     def _install(name: str) -> dict:
         from clawk_cli.plugins_cmd import dashboard_install_plugin
         from clawk_constants import reset_clawk_home_override, set_clawk_home_override
+
         token = set_clawk_home_override(home)
         try:
-            return dashboard_install_plugin("", force=False, enable=True, catalog_name=name,
-                                            assume_deps_consent=(name in _LEFT_CORE and _unattended_consent())
-                                            if consent is None else consent)
+            return dashboard_install_plugin(
+                "",
+                force=False,
+                enable=True,
+                catalog_name=name,
+                assume_deps_consent=(name in _LEFT_CORE and _unattended_consent())
+                if consent is None
+                else consent,
+            )
         finally:
             reset_clawk_home_override(token)
+
     return _install
 
 
 def _home_label(home: Path) -> str:
     from clawk_constants import profile_name_for_home
+
     profile = profile_name_for_home(home)
     return f"profile '{profile}'" if profile else str(home)
 
@@ -258,27 +304,38 @@ def migrate_all_homes(*, say: Callable[[str], None] = print) -> list[str]:
     try:
         for (name, _consent), homes in pending.items():
             if len(homes) > 1 and _interactive():
-                say(f"  Memory provider '{name}' is configured in {len(homes)} profiles "
+                say(
+                    f"  Memory provider '{name}' is configured in {len(homes)} profiles "
                     f"({', '.join(_home_label(h) for h in homes)}); your answers to its dependency "
-                    f"questions apply to all of them.")
+                    f"questions apply to all of them."
+                )
             with shared_dependency_answers():
                 for index, home in enumerate(homes):
-                    if _install_pending(home, name, install=_install_into(home), say=labelled(home)):
+                    if _install_pending(
+                        home, name, install=_install_into(home), say=labelled(home)
+                    ):
                         installed.append(name)
                         continue
-                    rest = homes[index + 1:]
+                    rest = homes[index + 1 :]
                     if rest:
-                        say(f"  ⚠ Memory provider '{name}' was not installed for "
+                        say(
+                            f"  ⚠ Memory provider '{name}' was not installed for "
                             f"{', '.join(_home_label(h) for h in rest)} either. Run "
-                            + ", ".join(f"`{_install_command(name, h)}`" for h in rest) + ".")
+                            + ", ".join(f"`{_install_command(name, h)}`" for h in rest)
+                            + "."
+                        )
                     break
     except KeyboardInterrupt:
-        say("  ⚠ Memory provider migration cancelled. Profiles already migrated keep their plugin; "
-            "run `clawk plugins install <name>` (with `-p <profile>`) for the rest.")
+        say(
+            "  ⚠ Memory provider migration cancelled. Profiles already migrated keep their plugin; "
+            "run `clawk plugins install <name>` (with `-p <profile>`) for the rest."
+        )
     return installed
 
 
-def recover_at_startup(name: str, *, say: Optional[Callable[[str], None]] = None) -> bool:
+def recover_at_startup(
+    name: str, *, say: Optional[Callable[[str], None]] = None
+) -> bool:
     """Agent-init hook for a configured provider that resolved nowhere. One attempt per process per
     home and name; honours ``security.allow_lazy_installs`` because it installs code. True when installed."""
     from clawk_constants import get_clawk_home, clawk_home_key
@@ -298,10 +355,13 @@ def recover_at_startup(name: str, *, say: Optional[Callable[[str], None]] = None
                 logger.debug("Memory migration notification failed", exc_info=True)
 
     from pm.install import lazy_installs_allowed
+
     if not lazy_installs_allowed():
-        report(f"⚠ Memory provider '{name}' is not installed, so external memory is off for this session. "
-               f"security.allow_lazy_installs is off, so Clawksis did not fetch it: "
-               f"run `{_install_command(name, home)}`.")
+        report(
+            f"⚠ Memory provider '{name}' is not installed, so external memory is off for this session. "
+            f"security.allow_lazy_installs is off, so Clawksis did not fetch it: "
+            f"run `{_install_command(name, home)}`."
+        )
         return False
     # Agent init cannot answer a dependency prompt: under the CLI the prompt_toolkit input owns the
     # terminal (the question hangs the turn), elsewhere there is no terminal (the install is refused,
@@ -309,15 +369,22 @@ def recover_at_startup(name: str, *, say: Optional[Callable[[str], None]] = None
     # carries the consent its built-in had; any other one needs the user's own install.
     if name not in _LEFT_CORE:
         if _pending_provider(home, say=report) == name:
-            report(f"⚠ Memory provider '{name}' is not installed, so external memory is off for this session. "
-                   f"It never shipped with Clawksis, so Clawksis installs it only when you ask: "
-                   f"run `{_install_command(name, home)}`.")
+            report(
+                f"⚠ Memory provider '{name}' is not installed, so external memory is off for this session. "
+                f"It never shipped with Clawksis, so Clawksis installs it only when you ask: "
+                f"run `{_install_command(name, home)}`."
+            )
         return False
     if _failed_recently(home, name):
-        report(f"⚠ Memory provider '{name}' is not installed, so external memory is off for this session. "
-               f"Its automatic install failed recently: run `{_install_command(name, home)}`.")
+        report(
+            f"⚠ Memory provider '{name}' is not installed, so external memory is off for this session. "
+            f"Its automatic install failed recently: run `{_install_command(name, home)}`."
+        )
         return False
-    installed = migrate_home(home, install=_install_into(home, consent=True), say=report) == name
+    installed = (
+        migrate_home(home, install=_install_into(home, consent=True), say=report)
+        == name
+    )
     if installed:
         _note_success(home, name)
     else:

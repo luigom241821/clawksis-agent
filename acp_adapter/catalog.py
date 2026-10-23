@@ -1,10 +1,14 @@
 """ACP historical catalog without storage initialization or an execution owner."""
+
 import json
 from pathlib import Path
 
 from clawk_state import SessionDB
 from acp_adapter.session import (
-    _normalize_cwd_for_compare, _parse_model_config, _session_info, _updated_at_sort_key,
+    _normalize_cwd_for_compare,
+    _parse_model_config,
+    _session_info,
+    _updated_at_sort_key,
 )
 
 
@@ -13,7 +17,10 @@ def read_catalog_rows(path):
     if not path.exists():
         return {}
     with SessionDB(db_path=path, read_only=True) as db:
-        return {str(row["id"]): dict(row) for row in db.list_sessions_rich(source="acp", limit=1000)}
+        return {
+            str(row["id"]): dict(row)
+            for row in db.list_sessions_rich(source="acp", limit=1000)
+        }
 
 
 def _local_owners(db):
@@ -21,16 +28,19 @@ def _local_owners(db):
     A canonical reset or compression advances the receipt's physical target but keeps policy/FIFO
     on the creation id. Legacy reset histories have no receipt and stay independent chats."""
     from clawk_state_local import POLICY_PREFIX
+
     owners = {}
     with db._read_ctx() as conn:
-        rows = conn.execute('SELECT value FROM state_meta WHERE key GLOB ?', (POLICY_PREFIX + '*',)).fetchall()
+        rows = conn.execute(
+            "SELECT value FROM state_meta WHERE key GLOB ?", (POLICY_PREFIX + "*",)
+        ).fetchall()
     for (raw,) in rows:
         try:
             receipt = json.loads(raw)
         except (TypeError, ValueError):
             continue
-        owner = receipt.get('session_id') if isinstance(receipt, dict) else None
-        lineage = receipt.get('lineage') if isinstance(owner, str) else None
+        owner = receipt.get("session_id") if isinstance(receipt, dict) else None
+        lineage = receipt.get("lineage") if isinstance(owner, str) else None
         for physical in lineage if isinstance(lineage, list) else ():
             if isinstance(physical, str):
                 owners[physical] = owner
@@ -67,13 +77,30 @@ def catalog_sessions(path, cwd=None):
         sid = row.get("_lineage_root_id") or sid
         sid = owners.get(sid, sid)
         count = int(row.get("message_count") or 0)
-        session_cwd = row.get('cwd') or _parse_model_config(row.get("model_config")).get("cwd", ".")
-        if count <= 0 or (normalized and _normalize_cwd_for_compare(session_cwd) != normalized):
+        session_cwd = row.get("cwd") or _parse_model_config(
+            row.get("model_config")
+        ).get("cwd", ".")
+        if count <= 0 or (
+            normalized and _normalize_cwd_for_compare(session_cwd) != normalized
+        ):
             continue
-        info = _session_info(sid, session_cwd, row.get("model") or "", count, row.get("title"),
-                             row.get("preview"), row.get("last_active") or row.get("started_at"))
+        info = _session_info(
+            sid,
+            session_cwd,
+            row.get("model") or "",
+            count,
+            row.get("title"),
+            row.get("preview"),
+            row.get("last_active") or row.get("started_at"),
+        )
         # One row per logical conversation: its most recently active segment represents it.
         held = results.get(sid)
-        if held is None or _updated_at_sort_key(info.get("updated_at")) > _updated_at_sort_key(held.get("updated_at")):
+        if held is None or _updated_at_sort_key(
+            info.get("updated_at")
+        ) > _updated_at_sort_key(held.get("updated_at")):
             results[sid] = info
-    return sorted(results.values(), key=lambda row: _updated_at_sort_key(row.get("updated_at")), reverse=True)
+    return sorted(
+        results.values(),
+        key=lambda row: _updated_at_sort_key(row.get("updated_at")),
+        reverse=True,
+    )

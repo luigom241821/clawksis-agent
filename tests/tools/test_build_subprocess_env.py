@@ -8,9 +8,14 @@ from tests.tools._child_env_fixtures import child_env, observe_child
 from tools.environments.local import build_subprocess_env
 
 
-@pytest.mark.parametrize("scrub,inherit_home", [(True, True), (True, False), (False, True), (False, False)])
-def test_factory_child_policy_and_profile_home(child_env, monkeypatch, scrub, inherit_home):
+@pytest.mark.parametrize(
+    "scrub,inherit_home", [(True, True), (True, False), (False, True), (False, False)]
+)
+def test_factory_child_policy_and_profile_home(
+    child_env, monkeypatch, scrub, inherit_home
+):
     from clawk_constants import set_clawk_home_override, reset_clawk_home_override
+
     routed = child_env / "profiles/coder"
     routed.mkdir(parents=True)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "fake-parent-secret")
@@ -19,29 +24,57 @@ def test_factory_child_policy_and_profile_home(child_env, monkeypatch, scrub, in
     before = dict(os.environ)
     token = set_clawk_home_override(str(routed))
     try:
-        env = build_subprocess_env(scrub_secrets=scrub, inherit_profile_home=inherit_home,
-                                   extra={"MY_HARMLESS_VAR": "caller", "ANTHROPIC_API_KEY": "fake-extra"})
-        result = observe_child(env, ["CLAWK_HOME", "ANTHROPIC_API_KEY", "AUXILIARY_FAKE_API_KEY",
-                                     "GATEWAY_RELAY_FOO_TOKEN", "MY_HARMLESS_VAR"])
+        env = build_subprocess_env(
+            scrub_secrets=scrub,
+            inherit_profile_home=inherit_home,
+            extra={"MY_HARMLESS_VAR": "caller", "ANTHROPIC_API_KEY": "fake-extra"},
+        )
+        result = observe_child(
+            env,
+            [
+                "CLAWK_HOME",
+                "ANTHROPIC_API_KEY",
+                "AUXILIARY_FAKE_API_KEY",
+                "GATEWAY_RELAY_FOO_TOKEN",
+                "MY_HARMLESS_VAR",
+            ],
+        )
     finally:
         reset_clawk_home_override(token)
     assert result == {
         "CLAWK_HOME": str(routed) if scrub or inherit_home else before["CLAWK_HOME"],
         "ANTHROPIC_API_KEY": None if scrub else "fake-extra",
         "AUXILIARY_FAKE_API_KEY": None if scrub else "fake-auxiliary",
-        "GATEWAY_RELAY_FOO_TOKEN": None if scrub else "fake-relay", "MY_HARMLESS_VAR": "caller",
+        "GATEWAY_RELAY_FOO_TOKEN": None if scrub else "fake-relay",
+        "MY_HARMLESS_VAR": "caller",
     }
     assert dict(os.environ) == before
 
 
 def test_no_scrub_is_byte_preserving_except_explicit_extra():
-    base = {"PATH": "/bin", "PYTHONHOME": "/poison", "VIRTUAL_ENV": "/venv",
-            "CONDA_PREFIX": "/conda", "SERVICE_TOKEN": "fake", "CLAWK_HOME": "/original"}
-    assert build_subprocess_env(base, scrub_secrets=False, inherit_profile_home=False) == base
-    assert build_subprocess_env(base, scrub_secrets=False, extra={"CLAWK_HOME": "/caller"})["CLAWK_HOME"] == "/caller"
+    base = {
+        "PATH": "/bin",
+        "PYTHONHOME": "/poison",
+        "VIRTUAL_ENV": "/venv",
+        "CONDA_PREFIX": "/conda",
+        "SERVICE_TOKEN": "fake",
+        "CLAWK_HOME": "/original",
+    }
+    assert (
+        build_subprocess_env(base, scrub_secrets=False, inherit_profile_home=False)
+        == base
+    )
+    assert (
+        build_subprocess_env(
+            base, scrub_secrets=False, extra={"CLAWK_HOME": "/caller"}
+        )["CLAWK_HOME"]
+        == "/caller"
+    )
 
 
-def test_e2e_scrubbed_env_resolves_bare_clawk_under_minimal_parent_path(monkeypatch, tmp_path):
+def test_e2e_scrubbed_env_resolves_bare_clawk_under_minimal_parent_path(
+    monkeypatch, tmp_path
+):
     """Regression for #92998/#93082: a gateway launched by systemd/cron with a
     minimal PATH (no clawk console-script dir) must still hand cron job
     children an env whose PATH resolves bare ``clawk``.

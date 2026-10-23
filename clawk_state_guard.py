@@ -31,7 +31,9 @@ def _real_platform_state_root() -> Optional[Path]:
         home = Path(os.path.expanduser("~"))
         if sys.platform == "win32":
             base = os.environ.get("LOCALAPPDATA", "").strip()
-            root = Path(base) / "clawk" if base else home / "AppData" / "Local" / "clawk"
+            root = (
+                Path(base) / "clawk" if base else home / "AppData" / "Local" / "clawk"
+            )
         else:
             root = home / ".clawksis"
         return root.resolve()
@@ -78,7 +80,14 @@ def _process_looks_like_pytest(proc: Any) -> bool:
     for arg in cmdline:
         try:
             # Split on both separators on every host so the answer is platform-independent.
-            name = str(arg).strip('"').strip("'").replace("\\", "/").rsplit("/", 1)[-1].lower()
+            name = (
+                str(arg)
+                .strip('"')
+                .strip("'")
+                .replace("\\", "/")
+                .rsplit("/", 1)[-1]
+                .lower()
+            )
         except Exception:
             continue
         if name in _PYTEST_LAUNCHER_NAMES:
@@ -102,7 +111,9 @@ def _has_pytest_ancestor() -> bool:
     found = False
     if psutil is not None:
         try:
-            found = any(_process_looks_like_pytest(p) for p in psutil.Process().parents())
+            found = any(
+                _process_looks_like_pytest(p) for p in psutil.Process().parents()
+            )
         except Exception:
             found = False
     _PYTEST_ANCESTOR = found

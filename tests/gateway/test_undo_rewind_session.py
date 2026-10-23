@@ -83,9 +83,7 @@ def test_rewind_pins_raw_active_ids_when_projection_hides_review_harness(store):
     ]
 
 
-def test_rewind_fails_closed_when_transcript_changes_after_snapshot(
-    store, monkeypatch
-):
+def test_rewind_fails_closed_when_transcript_changes_after_snapshot(store, monkeypatch):
     sid = _seed(store, "gw-cas", turns=2)
     sibling = SessionDB(db_path=store._db.db_path)
     original_rewind = store._db.rewind_to_message
@@ -99,8 +97,7 @@ def test_rewind_fails_closed_when_transcript_changes_after_snapshot(
     assert store.rewind_session(sid) is None
 
     rows = store._db._conn.execute(
-        "SELECT content, active FROM messages "
-        "WHERE session_id = ? ORDER BY id",
+        "SELECT content, active FROM messages WHERE session_id = ? ORDER BY id",
         (sid,),
     ).fetchall()
     assert [tuple(row) for row in rows] == [
@@ -113,9 +110,7 @@ def test_rewind_fails_closed_when_transcript_changes_after_snapshot(
     sibling.close()
 
 
-def test_rewind_fails_closed_when_new_turn_lands_after_id_snapshot(
-    store, monkeypatch
-):
+def test_rewind_fails_closed_when_new_turn_lands_after_id_snapshot(store, monkeypatch):
     sid = _seed(store, "gw-snapshot-order", turns=2)
     sibling = SessionDB(db_path=store._db.db_path)
     original_load = store._db.get_messages_as_conversation
@@ -135,8 +130,7 @@ def test_rewind_fails_closed_when_new_turn_lands_after_id_snapshot(
     assert store.rewind_session(sid) is None
 
     rows = store._db._conn.execute(
-        "SELECT content, active FROM messages "
-        "WHERE session_id = ? ORDER BY id",
+        "SELECT content, active FROM messages WHERE session_id = ? ORDER BY id",
         (sid,),
     ).fetchall()
     assert [tuple(row) for row in rows] == [
@@ -171,7 +165,9 @@ async def test_undo_evicts_cached_agent_under_profile_namespaced_key():
         async def rewind_session(self, sid, n):
             return {"target_text": "q3", "turns_undone": 1, "rewound_count": 2}
 
-    source = SessionSource(platform=Platform.TELEGRAM, chat_id="123", chat_type="dm", user_id="u1")
+    source = SessionSource(
+        platform=Platform.TELEGRAM, chat_id="123", chat_type="dm", user_id="u1"
+    )
     source.profile = "work"
     evicted = []
     runner = object.__new__(GatewayRunner)
@@ -182,6 +178,8 @@ async def test_undo_evicts_cached_agent_under_profile_namespaced_key():
     runner._evict_cached_agent = evicted.append
     runner._session_key_for_source = lambda s: build_session_key(s, profile=s.profile)
 
-    await runner._handle_undo_command(MessageEvent(text="/undo", message_type=MessageType.TEXT, source=source))
+    await runner._handle_undo_command(
+        MessageEvent(text="/undo", message_type=MessageType.TEXT, source=source)
+    )
 
     assert evicted == ["agent:work:telegram:dm:123"]

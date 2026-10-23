@@ -25,7 +25,9 @@ import clawk_yaml as yaml
 
 DOCS = REPO / "website" / "docs"
 SKILLS_PAGES = DOCS / "user-guide" / "skills"
-ZH_HANS_DOCS = REPO / "website" / "i18n" / "zh-Hans" / "docusaurus-plugin-content-docs" / "current"
+ZH_HANS_DOCS = (
+    REPO / "website" / "i18n" / "zh-Hans" / "docusaurus-plugin-content-docs" / "current"
+)
 
 SKILL_SOURCES = [
     ("bundled", REPO / "skills"),
@@ -59,9 +61,7 @@ def _wrap_ascii_art_code_blocks(code_segment: str) -> str:
     if not any(ch in _BOX_DRAWING_CHARS for ch in code_segment):
         return code_segment
     return (
-        "<!-- ascii-guard-ignore -->\n"
-        f"{code_segment}\n"
-        "<!-- ascii-guard-ignore-end -->"
+        f"<!-- ascii-guard-ignore -->\n{code_segment}\n<!-- ascii-guard-ignore-end -->"
     )
 
 
@@ -277,7 +277,9 @@ def sanitize_yaml_string(s: str) -> str:
     return s
 
 
-def derive_skill_meta(skill_path: Path, source_dir: Path, source_kind: str) -> dict[str, Any]:
+def derive_skill_meta(
+    skill_path: Path, source_dir: Path, source_kind: str
+) -> dict[str, Any]:
     """Extract category + skill slug from filesystem layout.
 
     skills/<cat>/<skill>/SKILL.md           -> cat=<cat>, slug=<skill>
@@ -315,12 +317,7 @@ def page_id(meta: dict[str, Any]) -> str:
 
 
 def page_output_path(meta: dict[str, Any]) -> Path:
-    return (
-        SKILLS_PAGES
-        / meta["source_kind"]
-        / meta["category"]
-        / f"{page_id(meta)}.md"
-    )
+    return SKILLS_PAGES / meta["source_kind"] / meta["category"] / f"{page_id(meta)}.md"
 
 
 def sidebar_doc_id(meta: dict[str, Any]) -> str:
@@ -336,7 +333,11 @@ def render_skill_page(
 ) -> str:
     name = fm.get("name", meta["slug"])
     description = fm.get("description", "").strip()
-    short_desc = re.split(r"\.(?:\s|$)", description, maxsplit=1)[0].strip() if description else name
+    short_desc = (
+        re.split(r"\.(?:\s|$)", description, maxsplit=1)[0].strip()
+        if description
+        else name
+    )
     if len(short_desc) > 160:
         short_desc = short_desc[:157] + "..."
 
@@ -408,9 +409,7 @@ def render_skill_page(
         info_rows.append(("Related skills", ", ".join(link_parts)))
 
     info_block = "\n".join(f"| {k} | {v} |" for k, v in info_rows)
-    info_table = (
-        "| | |\n|---|---|\n" + info_block
-    )
+    info_table = "| | |\n|---|---|\n" + info_block
 
     # Frontmatter for Docusaurus
     fm_title = sanitize_yaml_string(display_name + " — " + (short_desc or name))
@@ -462,7 +461,9 @@ def discover_skills() -> list[tuple[dict[str, Any], dict[str, Any]]]:
     return results
 
 
-def build_catalog_md_bundled(entries: list[tuple[dict[str, Any], dict[str, Any]]]) -> str:
+def build_catalog_md_bundled(
+    entries: list[tuple[dict[str, Any], dict[str, Any]]],
+) -> str:
     by_cat: dict[str, list[tuple[dict[str, Any], dict[str, Any]]]] = defaultdict(list)
     for meta, parsed in entries:
         if meta["source_kind"] != "bundled":
@@ -498,17 +499,19 @@ def build_catalog_md_bundled(entries: list[tuple[dict[str, Any], dict[str, Any]]
             desc = (fm.get("description") or "").strip()
             if len(desc) > 240:
                 desc = desc[:237].rstrip() + "..."
-            link_target = f"../user-guide/skills/bundled/{meta['category']}/{page_id(meta)}.md"
+            link_target = (
+                f"../user-guide/skills/bundled/{meta['category']}/{page_id(meta)}.md"
+            )
             path = f"`{meta['rel_path']}`"
             desc_esc = mdx_escape_body(desc).replace("|", "\\|").replace("\n", " ")
-            lines.append(
-                f"| [`{name}`]({link_target}) | {desc_esc} | {path} |"
-            )
+            lines.append(f"| [`{name}`]({link_target}) | {desc_esc} | {path} |")
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
 
-def build_catalog_md_optional(entries: list[tuple[dict[str, Any], dict[str, Any]]]) -> str:
+def build_catalog_md_optional(
+    entries: list[tuple[dict[str, Any], dict[str, Any]]],
+) -> str:
     by_cat: dict[str, list[tuple[dict[str, Any], dict[str, Any]]]] = defaultdict(list)
     for meta, parsed in entries:
         if meta["source_kind"] != "optional":
@@ -559,7 +562,9 @@ def build_catalog_md_optional(entries: list[tuple[dict[str, Any], dict[str, Any]
             desc = (fm.get("description") or "").strip()
             if len(desc) > 240:
                 desc = desc[:237].rstrip() + "..."
-            link_target = f"../user-guide/skills/optional/{meta['category']}/{page_id(meta)}.md"
+            link_target = (
+                f"../user-guide/skills/optional/{meta['category']}/{page_id(meta)}.md"
+            )
             desc_esc = mdx_escape_body(desc).replace("|", "\\|").replace("\n", " ")
             lines.append(f"| [**{name}**]({link_target}) | {desc_esc} |")
         lines.append("")
@@ -701,7 +706,9 @@ def write_sidebar(entries):
     text = sidebar_path.read_text(encoding="utf-8")
     # Replace the existing Skills block.
     # Safer: match the exact current block shape.
-    old_block_start = "        {\n          type: 'category',\n          label: 'Skills',\n"
+    old_block_start = (
+        "        {\n          type: 'category',\n          label: 'Skills',\n"
+    )
     i = text.find(old_block_start)
     if i == -1:
         raise RuntimeError("Could not find Skills sidebar block to replace")
@@ -785,11 +792,15 @@ def main():
 
     # Regenerate catalogs
     bundled_catalog = build_catalog_md_bundled(entries)
-    (DOCS / "reference" / "skills-catalog.md").write_text(bundled_catalog, encoding="utf-8")
+    (DOCS / "reference" / "skills-catalog.md").write_text(
+        bundled_catalog, encoding="utf-8"
+    )
     print("Updated reference/skills-catalog.md")
 
     optional_catalog = build_catalog_md_optional(entries)
-    (DOCS / "reference" / "optional-skills-catalog.md").write_text(optional_catalog, encoding="utf-8")
+    (DOCS / "reference" / "optional-skills-catalog.md").write_text(
+        optional_catalog, encoding="utf-8"
+    )
     print("Updated reference/optional-skills-catalog.md")
 
     # Update sidebar

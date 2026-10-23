@@ -178,9 +178,7 @@ def test_stream_execution_uses_canonical_relay_operation_name(relay_turn, monkey
         ("anthropic_messages", "anthropic.messages", "AnthropicMessagesCodec"),
     ],
 )
-def test_relay_protocol_drives_operation_and_codec(
-    api_mode, operation, codec_class
-):
+def test_relay_protocol_drives_operation_and_codec(api_mode, operation, codec_class):
     codec_type = type(codec_class, (), {})
     codecs = SimpleNamespace(**{codec_class: codec_type})
     relay = SimpleNamespace(codecs=codecs)
@@ -259,8 +257,7 @@ def test_provider_request_maps_headers_for_supported_sdk_modes(api_mode):
             content=relay_request_body,
             headers={
                 "traceparent": (
-                    "00-11111111111111111111111111111111-"
-                    "2222222222222222-01"
+                    "00-11111111111111111111111111111111-2222222222222222-01"
                 )
             },
         ),
@@ -270,9 +267,7 @@ def test_provider_request_maps_headers_for_supported_sdk_modes(api_mode):
     )
 
     assert provider_request["extra_headers"] == {
-        "traceparent": (
-            "00-11111111111111111111111111111111-2222222222222222-01"
-        )
+        "traceparent": ("00-11111111111111111111111111111111-2222222222222222-01")
     }
 
 
@@ -285,8 +280,7 @@ def test_provider_request_preserves_custom_headers_for_native_transport():
             content=original,
             headers={
                 "traceparent": (
-                    "00-11111111111111111111111111111111-"
-                    "2222222222222222-01"
+                    "00-11111111111111111111111111111111-2222222222222222-01"
                 ),
                 "x-custom-route": "private",
             },
@@ -296,9 +290,7 @@ def test_provider_request_preserves_custom_headers_for_native_transport():
         metadata={"api_mode": "strict_native"},
     )
 
-    assert provider_request["extra_headers"] == {
-        "x-custom-route": "private"
-    }
+    assert provider_request["extra_headers"] == {"x-custom-route": "private"}
 
 
 def test_provider_request_traces_custom_transport_with_header_capability():
@@ -306,9 +298,7 @@ def test_provider_request_traces_custom_transport_with_header_capability():
         "payload": "provider-native",
         "extra_headers": {"authorization": "Bearer provider-token"},
     }
-    traceparent = (
-        "00-11111111111111111111111111111111-2222222222222222-01"
-    )
+    traceparent = "00-11111111111111111111111111111111-2222222222222222-01"
 
     provider_request = relay_llm._provider_request(
         original,
@@ -377,14 +367,18 @@ def test_managed_stream_does_not_add_sdk_headers_to_strict_callback(relay_turn):
     assert observed == ["provider-native"]
 
 
-def test_managed_stream_delivers_each_chunk_before_the_provider_sends_the_next(relay_turn):
+def test_managed_stream_delivers_each_chunk_before_the_provider_sends_the_next(
+    relay_turn,
+):
     """Steering lost streamed text with Relay on: chunk N was withheld until chunk N+1 arrived."""
     del relay_turn
     release = threading.Event()
 
     def paused_provider(_request):
         yield {"delta": "first"}
-        assert release.wait(10), "first chunk never reached the consumer during the provider pause"
+        assert release.wait(10), (
+            "first chunk never reached the consumer during the provider pause"
+        )
         yield {"delta": "second"}
 
     stream = relay_llm.stream(
@@ -435,28 +429,30 @@ def test_stream_uses_rewritten_request_and_post_intercept_chunks(relay_turn):
 
     def raw_stream(request):
         captured_requests.append(request)
-        return iter([
-            SimpleNamespace(
-                model="test-model",
-                choices=[
-                    SimpleNamespace(
-                        delta=SimpleNamespace(content="hello", tool_calls=None),
-                        finish_reason=None,
-                    )
-                ],
-                usage=None,
-            ),
-            SimpleNamespace(
-                model="test-model",
-                choices=[
-                    SimpleNamespace(
-                        delta=SimpleNamespace(content=None, tool_calls=None),
-                        finish_reason="stop",
-                    )
-                ],
-                usage=None,
-            ),
-        ])
+        return iter(
+            [
+                SimpleNamespace(
+                    model="test-model",
+                    choices=[
+                        SimpleNamespace(
+                            delta=SimpleNamespace(content="hello", tool_calls=None),
+                            finish_reason=None,
+                        )
+                    ],
+                    usage=None,
+                ),
+                SimpleNamespace(
+                    model="test-model",
+                    choices=[
+                        SimpleNamespace(
+                            delta=SimpleNamespace(content=None, tool_calls=None),
+                            finish_reason="stop",
+                        )
+                    ],
+                    usage=None,
+                ),
+            ]
+        )
 
     relay.intercepts.register_llm_request(
         "clawk-test-request",
@@ -550,21 +546,25 @@ def test_live_stream_defers_runtime_shutdown_until_exhaustion(
 
 def test_anthropic_stream_accumulator_merges_plain_provider_object():
     accumulator = relay_llm.AnthropicStreamAccumulator()
-    accumulator.observe({
-        "type": "message_start",
-        "message": {
-            "id": "message-1",
-            "type": "message",
-            "role": "assistant",
-            "model": "claude-test",
-            "usage": {"input_tokens": 10},
-        },
-    })
-    accumulator.observe({
-        "type": "content_block_start",
-        "index": 0,
-        "content_block": {"type": "text", "text": "hello"},
-    })
+    accumulator.observe(
+        {
+            "type": "message_start",
+            "message": {
+                "id": "message-1",
+                "type": "message",
+                "role": "assistant",
+                "model": "claude-test",
+                "usage": {"input_tokens": 10},
+            },
+        }
+    )
+    accumulator.observe(
+        {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {"type": "text", "text": "hello"},
+        }
+    )
 
     response = accumulator.response(
         SimpleNamespace(
@@ -587,18 +587,41 @@ def test_anthropic_stream_accumulator_null_delta_usage_keeps_message_start_count
     """The SDK's ``MessageDeltaUsage`` serializes the fields message_delta omits as null; they
     must not erase the input / cache counts message_start reported (span token counts went null)."""
     accumulator = relay_llm.AnthropicStreamAccumulator()
-    accumulator.observe({"type": "message_start", "message": {
-        "id": "message-1", "type": "message", "role": "assistant", "model": "claude-test",
-        "usage": {"input_tokens": 12, "cache_read_input_tokens": 3000, "cache_creation_input_tokens": 200,
-                  "output_tokens": 1},
-    }})
-    accumulator.observe({"type": "message_delta", "delta": {"stop_reason": "end_turn"}, "usage": {
-        "output_tokens": 42, "input_tokens": None, "cache_read_input_tokens": None,
-        "cache_creation_input_tokens": None,
-    }})
+    accumulator.observe(
+        {
+            "type": "message_start",
+            "message": {
+                "id": "message-1",
+                "type": "message",
+                "role": "assistant",
+                "model": "claude-test",
+                "usage": {
+                    "input_tokens": 12,
+                    "cache_read_input_tokens": 3000,
+                    "cache_creation_input_tokens": 200,
+                    "output_tokens": 1,
+                },
+            },
+        }
+    )
+    accumulator.observe(
+        {
+            "type": "message_delta",
+            "delta": {"stop_reason": "end_turn"},
+            "usage": {
+                "output_tokens": 42,
+                "input_tokens": None,
+                "cache_read_input_tokens": None,
+                "cache_creation_input_tokens": None,
+            },
+        }
+    )
 
     assert accumulator.finalize()["usage"] == {
-        "input_tokens": 12, "cache_read_input_tokens": 3000, "cache_creation_input_tokens": 200, "output_tokens": 42,
+        "input_tokens": 12,
+        "cache_read_input_tokens": 3000,
+        "cache_creation_input_tokens": 200,
+        "output_tokens": 42,
     }
 
 
@@ -837,10 +860,16 @@ def test_logical_close_skips_pop_under_concurrent_turn_scope(relay_turn):
 
     # A concurrent turn's live scope sits above ours.
     sibling_handle = lease.host.run_in_session(
-        lease.session, relay.scope.push, relay_runtime.LOGICAL_LLM_SCOPE,
-        relay.ScopeType.Function, handle=None, input={},
+        lease.session,
+        relay.scope.push,
+        relay_runtime.LOGICAL_LLM_SCOPE,
+        relay.ScopeType.Function,
+        handle=None,
+        input={},
     )
-    assert relay_runtime._same_handle(observe_top(), sibling_handle), "sibling must be on top"
+    assert relay_runtime._same_handle(observe_top(), sibling_handle), (
+        "sibling must be on top"
+    )
 
     relay_llm.complete_logical_call("request-overlap", outcome="success")
 
@@ -934,9 +963,7 @@ def test_stream_flushes_buffered_provider_chunks_after_relay_failure(
     assert turn.logical_llm_calls == {}
 
 
-def test_wedged_relay_aclose_does_not_block_stream_close(
-    relay_turn, monkeypatch
-):
+def test_wedged_relay_aclose_does_not_block_stream_close(relay_turn, monkeypatch):
     """close() on a live managed stream whose Relay aclose() never finishes
     abandons the attempt instead of hanging the caller; the runtime lease is
     released either way."""
@@ -994,9 +1021,7 @@ def test_wedged_relay_aclose_does_not_block_stream_close(
     assert turn.lease.host._operations_idle.wait(timeout=1.0)
 
 
-def test_wedged_relay_aclose_does_not_block_provider_fallback(
-    relay_turn, monkeypatch
-):
+def test_wedged_relay_aclose_does_not_block_provider_fallback(relay_turn, monkeypatch):
     """A Relay stream whose aclose() never finishes must not wedge the provider
     fallback: the close is bounded, the private loop is abandoned rather than
     closed under a running attempt, pending provider chunks still deliver, and
@@ -1056,9 +1081,7 @@ def test_wedged_relay_aclose_does_not_block_provider_fallback(
     assert stream._runtime_lease is None
 
 
-def test_stream_refuses_replay_after_transformed_relay_output(
-    relay_turn, monkeypatch
-):
+def test_stream_refuses_replay_after_transformed_relay_output(relay_turn, monkeypatch):
     """A transformed delivered chunk consumes an unknown provider source; replaying the
     pending raw list would emit that source a second time after its transformed form."""
     relay, _turn = relay_turn
@@ -1109,9 +1132,7 @@ def test_stream_refuses_replay_after_transformed_relay_output(
         next(iterator)
 
 
-def test_stream_does_not_replay_chunks_relay_passed_over(
-    relay_turn, monkeypatch
-):
+def test_stream_does_not_replay_chunks_relay_passed_over(relay_turn, monkeypatch):
     """A match at index > 0 means Relay saw and skipped the earlier chunks — they were
     suppressed, not merely pending, and the fallback must not resurrect them."""
     relay, _turn = relay_turn
@@ -1430,7 +1451,9 @@ def test_stream_current_streams_iterators_with_predicate(tmp_path, monkeypatch):
         relay_runtime._reset_for_tests()
 
 
-def test_stream_current_completed_response_releases_managed_stream(relay_turn, monkeypatch):
+def test_stream_current_completed_response_releases_managed_stream(
+    relay_turn, monkeypatch
+):
     """A completed response detected while Relay still emitted an item leaves
     the managed stream open; returning final_response must close it
     deterministically rather than leaving the loop, Relay stream, and runtime
@@ -1456,14 +1479,16 @@ def test_stream_current_completed_response_releases_managed_stream(relay_turn, m
     pop_outputs = []
     real_pop = relay_runtime.pop_relay_scope
     monkeypatch.setattr(
-        relay_runtime, "pop_relay_scope",
+        relay_runtime,
+        "pop_relay_scope",
         lambda *a, **k: pop_outputs.append(k.get("output")) or real_pop(*a, **k),
     )
 
     captured = []
     real_stream = relay_llm.stream
     monkeypatch.setattr(
-        relay_llm, "stream",
+        relay_llm,
+        "stream",
         lambda *a, **k: captured.append(real_stream(*a, **k)) or captured[-1],
     )
 
@@ -1545,9 +1570,7 @@ def test_stream_current_unwraps_completed_response_with_real_interceptor(relay_t
 
         assert result is completed
     finally:
-        relay.intercepts.deregister_llm_stream_execution(
-            "clawk-test-prime-completed"
-        )
+        relay.intercepts.deregister_llm_stream_execution("clawk-test-prime-completed")
 
 
 def test_stream_current_preserves_real_relay_interceptor_chunks(relay_turn):
@@ -1583,9 +1606,7 @@ def test_stream_current_preserves_real_relay_interceptor_chunks(relay_turn):
         ]
         assert result.output_modified is True
     finally:
-        relay.intercepts.deregister_llm_stream_execution(
-            "clawk-test-prime-stream"
-        )
+        relay.intercepts.deregister_llm_stream_execution("clawk-test-prime-stream")
 
 
 def test_stream_current_surfaces_managed_factory_error_before_return(relay_turn):

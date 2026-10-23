@@ -37,7 +37,9 @@ def _delegation_state(db_path, delegation_id):
         conn.close()
 
 
-def test_stale_monitor_force_finalize_updates_origin_profile_ledger(tmp_path, monkeypatch):
+def test_stale_monitor_force_finalize_updates_origin_profile_ledger(
+    tmp_path, monkeypatch
+):
     """A bare monitor thread must settle the profile that dispatched the unit.
 
     Normal async workers carry the dispatching ContextVars via

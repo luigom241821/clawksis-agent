@@ -27,14 +27,24 @@ def two_homes(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(a))
     for name, home in (("a", a), ("b", b)):
         (home / f"cred_{name}.txt").write_text("x", encoding="utf-8")
-        (home / "config.yaml").write_text(yaml.safe_dump({
-            "terminal": {"backend": "local" if name == "a" else "docker",
-                         "credential_files": [f"cred_{name}.txt"]},
-            "command_allowlist": [f"{name}-only-cmd *"],
-            "security": {"redact_secrets": name == "b"},
-            "browser": {"engine": "chrome" if name == "a" else "lightpanda", "headed": name == "b"},
-            "lsp": {"enabled": name == "b"},
-        }), encoding="utf-8")
+        (home / "config.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "terminal": {
+                        "backend": "local" if name == "a" else "docker",
+                        "credential_files": [f"cred_{name}.txt"],
+                    },
+                    "command_allowlist": [f"{name}-only-cmd *"],
+                    "security": {"redact_secrets": name == "b"},
+                    "browser": {
+                        "engine": "chrome" if name == "a" else "lightpanda",
+                        "headed": name == "b",
+                    },
+                    "lsp": {"enabled": name == "b"},
+                }
+            ),
+            encoding="utf-8",
+        )
     return a, b
 
 
@@ -51,7 +61,10 @@ def test_routed_local_profile_cwd_matches_standalone_gateway(tmp_path, two_homes
     import; the routed profile's terminal scope must yield the same cwd, not the multiplexer's
     process cwd — otherwise the system prompt, context files and the terminal all start in
     wherever ``clawk gateway`` happened to be launched from."""
-    from tools.terminal_scope import build_profile_terminal_scope, install_and_reset_profile_terminal_scope
+    from tools.terminal_scope import (
+        build_profile_terminal_scope,
+        install_and_reset_profile_terminal_scope,
+    )
     from agent.runtime_cwd import resolve_agent_cwd
 
     a, _ = two_homes
@@ -64,7 +77,11 @@ def test_routed_local_profile_cwd_matches_standalone_gateway(tmp_path, two_homes
 
 def test_launch_artifact_context_cwd_follows_routed_profile(two_homes, tmp_path):
     """Ignoring a Desktop launch cwd must still resolve terminal.cwd from the profile whose turn is active."""
-    from agent.runtime_cwd import resolve_context_cwd, reset_session_cwd, set_session_cwd
+    from agent.runtime_cwd import (
+        resolve_context_cwd,
+        reset_session_cwd,
+        set_session_cwd,
+    )
     from tools.terminal_scope import install_and_reset_profile_terminal_scope
 
     a, b = two_homes
@@ -77,7 +94,11 @@ def test_launch_artifact_context_cwd_follows_routed_profile(two_homes, tmp_path)
 
     token = set_session_cwd(str(tmp_path))
     try:
-        for home, expected in ((a, workspaces["a"]), (b, workspaces["b"]), (a, workspaces["a"])):
+        for home, expected in (
+            (a, workspaces["a"]),
+            (b, workspaces["b"]),
+            (a, workspaces["a"]),
+        ):
             with install_and_reset_profile_terminal_scope(home):
                 assert resolve_context_cwd(include_session_override=False) == expected
     finally:
@@ -96,8 +117,13 @@ def test_terminal_backend_consumers_read_the_routed_scope(two_homes):
         return (
             image_source._is_local_terminal_backend(),
             image_generation_tool._agent_cache_base_for_env(None),
-            credential_files.to_agent_visible_cache_path("/host/.clawk/x.png", "/root/.clawksis"),
-            sorted(Path(m["host_path"]).name for m in credential_files.get_credential_file_mounts()),
+            credential_files.to_agent_visible_cache_path(
+                "/host/.clawk/x.png", "/root/.clawksis"
+            ),
+            sorted(
+                Path(m["host_path"]).name
+                for m in credential_files.get_credential_file_mounts()
+            ),
         )
 
     with _profile_runtime_scope(a):
@@ -141,8 +167,13 @@ def test_profile_scoped_process_caches_follow_routed_home(two_homes, monkeypatch
 
     auxiliary_client._reset_aux_unhealthy_cache()
     _under(a, lambda: auxiliary_client._mark_provider_unhealthy("openrouter"))
-    assert _under(a, lambda: auxiliary_client._is_provider_unhealthy("openrouter")) is True
-    assert _under(b, lambda: auxiliary_client._is_provider_unhealthy("openrouter")) is False
+    assert (
+        _under(a, lambda: auxiliary_client._is_provider_unhealthy("openrouter")) is True
+    )
+    assert (
+        _under(b, lambda: auxiliary_client._is_provider_unhealthy("openrouter"))
+        is False
+    )
 
     lsp.shutdown_service()
     try:
@@ -159,8 +190,14 @@ def test_profile_scoped_process_caches_follow_routed_home(two_homes, monkeypatch
 
     mcp_tool_config._mcp_stderr_log_fh.clear()
     try:
-        assert Path(_under(a, mcp_tool_config._get_mcp_stderr_log).name).parent == a / "logs"
-        assert Path(_under(b, mcp_tool_config._get_mcp_stderr_log).name).parent == b / "logs"
+        assert (
+            Path(_under(a, mcp_tool_config._get_mcp_stderr_log).name).parent
+            == a / "logs"
+        )
+        assert (
+            Path(_under(b, mcp_tool_config._get_mcp_stderr_log).name).parent
+            == b / "logs"
+        )
     finally:
         for fh in mcp_tool_config._mcp_stderr_log_fh.values():
             fh.close()

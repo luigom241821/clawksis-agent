@@ -24,9 +24,15 @@ pytestmark = pytest.mark.platforms("linux")
 
 def _foreign_open_close(db_path: Path) -> None:
     """Another process opens state.db, reads, closes: SQLite's last-connection WAL reset runs there."""
-    subprocess.run([sys.executable, "-c",
-                    f"import sqlite3; c = sqlite3.connect({str(db_path)!r}); "
-                    "c.execute('select count(*) from messages').fetchone(); c.close()"], check=True)
+    subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            f"import sqlite3; c = sqlite3.connect({str(db_path)!r}); "
+            "c.execute('select count(*) from messages').fetchone(); c.close()",
+        ],
+        check=True,
+    )
 
 
 def test_holder_survives_stray_close_then_sibling_closes(tmp_path, monkeypatch):
@@ -35,7 +41,10 @@ def test_holder_survives_stray_close_then_sibling_closes(tmp_path, monkeypatch):
     wal = require_wal(db)
     wal_inode = wal.stat().st_ino
     try:
-        for name in ("state.db", "state.db-shm"):  # the §2.2 bug, e.g. a raw header probe
+        for name in (
+            "state.db",
+            "state.db-shm",
+        ):  # the §2.2 bug, e.g. a raw header probe
             os.close(os.open(tmp_path / name, os.O_RDONLY))
         # Same-process second handle (Desktop backend / Herder tab shape) closing...
         sibling = SessionDB(db_path=db.db_path)
@@ -43,8 +52,17 @@ def test_holder_survives_stray_close_then_sibling_closes(tmp_path, monkeypatch):
         sibling.close()
         # ...and a foreign process (cron worker / one-shot CLI shape) closing.
         _foreign_open_close(db.db_path)
-        assert wal.exists() and wal.stat().st_ino == wal_inode, "a sibling close unlinked the live WAL"
-        db.append_message("s", role="user", content="after")  # would raise DeletedWalGenerationError
+        assert wal.exists() and wal.stat().st_ino == wal_inode, (
+            "a sibling close unlinked the live WAL"
+        )
+        db.append_message(
+            "s", role="user", content="after"
+        )  # would raise DeletedWalGenerationError
     finally:
         db.close()
-    assert sqlite3.connect(db.db_path).execute("SELECT COUNT(*) FROM messages").fetchone()[0] == 3
+    assert (
+        sqlite3.connect(db.db_path)
+        .execute("SELECT COUNT(*) FROM messages")
+        .fetchone()[0]
+        == 3
+    )

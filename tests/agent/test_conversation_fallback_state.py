@@ -1,4 +1,5 @@
 """Regression tests for conversation loop fallback state management."""
+
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -11,11 +12,12 @@ def _tool_defs(*names):
     """Helper: create minimal tool definitions for given names."""
     return [
         {
-            "type": "function", "function": {
+            "type": "function",
+            "function": {
                 "name": name,
                 "description": "test tool",
                 "parameters": {"type": "object", "properties": {}},
-            }
+            },
         }
         for name in names
     ]
@@ -24,7 +26,8 @@ def _tool_defs(*names):
 def _tool_call(name, call_id):
     """Helper: create a minimal tool call object."""
     return SimpleNamespace(
-        id=call_id, type="function",
+        id=call_id,
+        type="function",
         function=SimpleNamespace(name=name, arguments="{}"),
     )
 
@@ -66,7 +69,10 @@ def test_substantive_tool_only_turn_invalidates_older_housekeeping_fallback():
     - Step 4 returns the nudge response as the final answer
     """
     with (
-        patch("model_tools.get_tool_definitions", return_value=_tool_defs("todo", "web_search")),
+        patch(
+            "model_tools.get_tool_definitions",
+            return_value=_tool_defs("todo", "web_search"),
+        ),
         patch("model_tools.check_toolset_requirements", return_value={}),
         patch("agent.process_bootstrap.OpenAI"),
     ):
@@ -155,7 +161,9 @@ def test_bare_tool_marker_is_not_reused_as_final_response():
     - Step 3 returns the nudge response as the final answer.
     """
     with (
-        patch("model_tools.get_tool_definitions", return_value=_tool_defs("skill_manage")),
+        patch(
+            "model_tools.get_tool_definitions", return_value=_tool_defs("skill_manage")
+        ),
         patch("model_tools.check_toolset_requirements", return_value={}),
         patch("agent.process_bootstrap.OpenAI"),
     ):
@@ -204,4 +212,3 @@ def test_bare_tool_marker_is_not_reused_as_final_response():
     assert result["api_calls"] == 3, (
         f"Expected 3 API calls (including nudge), got: {result['api_calls']}."
     )
-

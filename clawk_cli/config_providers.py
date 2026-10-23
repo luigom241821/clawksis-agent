@@ -24,7 +24,9 @@ logger = logging.getLogger("clawk_cli.config")
 _PROVIDER_NORMALIZE_WARNED: set = set()
 
 
-def _warn_once_per_provider(provider_key: str, signature: str, msg: str, *args: Any) -> None:
+def _warn_once_per_provider(
+    provider_key: str, signature: str, msg: str, *args: Any
+) -> None:
     """Emit ``logger.warning(msg, *args)`` at most once per (provider, signature)."""
     dedup_key = (provider_key or "?", signature)
     if dedup_key in _PROVIDER_NORMALIZE_WARNED:
@@ -51,7 +53,8 @@ _API_MODE_ALIASES = {
     "anthropic-messages": "anthropic_messages",
     "messages": "anthropic_messages",
     "bedrock": "bedrock_converse",
-    "bedrock-converse": "bedrock_converse"}
+    "bedrock-converse": "bedrock_converse",
+}
 
 _FALSE_WORDS = frozenset({"false", "0", "no", "off"})
 _TRUE_WORDS = frozenset({"true", "1", "yes", "on"})
@@ -82,7 +85,9 @@ def stringify_provider_map(providers: Any) -> dict:
     return out
 
 
-def find_provider_entry(providers: Any, key: Any) -> tuple[Any, Optional[dict[str, Any]]]:
+def find_provider_entry(
+    providers: Any, key: Any
+) -> tuple[Any, Optional[dict[str, Any]]]:
     """Return ``(stored_key, entry)`` matching *key* by string identity (exact hit, then scan)."""
     if not isinstance(providers, dict):
         return None, None
@@ -108,18 +113,41 @@ _CAMEL_ALIASES: dict[str, str] = {
     "defaultModel": "default_model",
     "contextLength": "context_length",
     "rateLimitDelay": "rate_limit_delay",
-    "sessionAffinityHeader": "session_affinity_header"}
+    "sessionAffinityHeader": "session_affinity_header",
+}
 
 
 _KNOWN_PROVIDER_KEYS = {
     # ``provider`` duplicates the ``providers.<name>`` mapping key and is unused here, but Clawksis'
     # own config writer has historically emitted it. Accept it so self-written configs don't warn.
     "provider",
-    "name", "api", "url", "base_url", "api_key", "key_env", "api_key_env", "key_cmd",
-    "api_mode", "transport", "model", "default_model", "models", "models_discovered",
-    "context_length", "rate_limit_delay", "request_timeout_seconds", "stale_timeout_seconds",
-    "discover_models", "extra_body", "extra_headers", "capabilities", "ssl_ca_cert", "ssl_verify",
-    "catalog_provider", "session_affinity_header"}
+    "name",
+    "api",
+    "url",
+    "base_url",
+    "api_key",
+    "key_env",
+    "api_key_env",
+    "key_cmd",
+    "api_mode",
+    "transport",
+    "model",
+    "default_model",
+    "models",
+    "models_discovered",
+    "context_length",
+    "rate_limit_delay",
+    "request_timeout_seconds",
+    "stale_timeout_seconds",
+    "discover_models",
+    "extra_body",
+    "extra_headers",
+    "capabilities",
+    "ssl_ca_cert",
+    "ssl_verify",
+    "catalog_provider",
+    "session_affinity_header",
+}
 
 
 def _pick_provider_base_url(entry: dict[str, Any], provider_key: str) -> str:
@@ -141,14 +169,19 @@ def _pick_provider_base_url(entry: dict[str, Any], provider_key: str) -> str:
             return candidate
         try:
             parsed = urlparse(candidate)
-        except ValueError:  # e.g. "http://[::1/v1" — one bad entry must not break every caller
+        except (
+            ValueError
+        ):  # e.g. "http://[::1/v1" — one bad entry must not break every caller
             parsed = None
         if parsed and parsed.scheme and parsed.netloc:
             return candidate
         logger.warning(
             "providers.%s: '%s' value '%s' is not a valid URL "
             "(no scheme or host) — skipped",
-            provider_key or "?", url_key, candidate)
+            provider_key or "?",
+            url_key,
+            candidate,
+        )
     return ""
 
 
@@ -181,13 +214,15 @@ def _normalize_provider_models(models: Any) -> tuple[dict[str, Any], bool]:
             if not isinstance(model_id, str) or not model_id.strip():
                 continue
             normalized_models[model_id.strip()] = {
-                k: v for k, v in item.items() if k not in {"id", "name"}}
+                k: v for k, v in item.items() if k not in {"id", "name"}
+            }
         return normalized_models, discovered
     return {}, discovered
 
 
 def _normalize_custom_provider_entry(
-    entry: Any, *, provider_key: str = "") -> Optional[dict[str, Any]]:
+    entry: Any, *, provider_key: str = ""
+) -> Optional[dict[str, Any]]:
     """Return a runtime-compatible custom provider entry or ``None``."""
     if not isinstance(entry, dict):
         return None
@@ -202,17 +237,24 @@ def _normalize_custom_provider_entry(
     for camel, snake in _CAMEL_ALIASES.items():
         if camel in entry and snake not in entry:
             _warn_once_per_provider(
-                provider_key, f"camel:{camel}",
+                provider_key,
+                f"camel:{camel}",
                 "providers.%s: camelCase key '%s' auto-mapped to '%s' "
                 "(use snake_case to avoid this warning)",
-                provider_key or "?", camel, snake)
+                provider_key or "?",
+                camel,
+                snake,
+            )
             entry[snake] = entry[camel]
     unknown = set(entry.keys()) - _KNOWN_PROVIDER_KEYS - set(_CAMEL_ALIASES.keys())
     if unknown:
         _warn_once_per_provider(
-            provider_key, "unknown:" + ",".join(sorted(unknown)),
+            provider_key,
+            "unknown:" + ",".join(sorted(unknown)),
             "providers.%s: unknown config keys ignored: %s",
-            provider_key or "?", ", ".join(sorted(unknown)))
+            provider_key or "?",
+            ", ".join(sorted(unknown)),
+        )
 
     base_url = _pick_provider_base_url(entry, provider_key)
     name = coerce_provider_id(entry.get("name")) or provider_key
@@ -254,9 +296,14 @@ def _normalize_custom_provider_entry(
 
     capabilities = entry.get("capabilities")
     if isinstance(capabilities, dict):
-        _put("capabilities", {
-            key: value for key, value in capabilities.items()
-            if isinstance(key, str) and isinstance(value, bool)})
+        _put(
+            "capabilities",
+            {
+                key: value
+                for key, value in capabilities.items()
+                if isinstance(key, str) and isinstance(value, bool)
+            },
+        )
 
     for field, ok in (
         ("context_length", lambda v: isinstance(v, int) and v > 0),
@@ -283,7 +330,8 @@ def _normalize_custom_provider_entry(
 
 
 def _custom_provider_entry_to_provider_config(
-    entry: Any, *, provider_key: str = "") -> Optional[dict[str, Any]]:
+    entry: Any, *, provider_key: str = ""
+) -> Optional[dict[str, Any]]:
     """Translate a legacy custom provider entry to the v12 providers shape."""
     normalized = _normalize_custom_provider_entry(entry, provider_key=provider_key)
     if normalized is None:
@@ -291,9 +339,22 @@ def _custom_provider_entry_to_provider_config(
 
     provider_entry: dict[str, Any] = {"api": normalized["base_url"]}
     for field in (
-        "name", "api_key", "key_env", "key_cmd", "models", "models_discovered", "context_length",
-        "rate_limit_delay", "discover_models", "extra_body", "extra_headers",
-        "session_affinity_header", "ssl_ca_cert", "ssl_verify", "catalog_provider"):
+        "name",
+        "api_key",
+        "key_env",
+        "key_cmd",
+        "models",
+        "models_discovered",
+        "context_length",
+        "rate_limit_delay",
+        "discover_models",
+        "extra_body",
+        "extra_headers",
+        "session_affinity_header",
+        "ssl_ca_cert",
+        "ssl_verify",
+        "catalog_provider",
+    ):
         if field in normalized:
             provider_entry[field] = normalized[field]
     if "model" in normalized:
@@ -311,19 +372,23 @@ def providers_dict_to_custom_providers(providers_dict: Any) -> list[dict[str, An
     for key, entry in providers_dict.items():
         if isinstance(entry, dict) and not is_provider_enabled(entry):
             continue
-        normalized = _normalize_custom_provider_entry(entry, provider_key=coerce_provider_id(key))
+        normalized = _normalize_custom_provider_entry(
+            entry, provider_key=coerce_provider_id(key)
+        )
         if normalized is not None:
             custom_providers.append(normalized)
     return custom_providers
 
 
 def get_compatible_custom_providers(
-    config: Optional[dict[str, Any]] = None) -> list[dict[str, Any]]:
+    config: Optional[dict[str, Any]] = None,
+) -> list[dict[str, Any]]:
     """Deduplicated list view over legacy ``custom_providers`` and v12+ ``providers``.
 
     Never materialised back into config.yaml (it would duplicate entries in UIs).
     """
     from clawk_cli.config import load_config
+
     if config is None:
         config = load_config()
 
@@ -335,7 +400,8 @@ def get_compatible_custom_providers(
         logger.warning(
             "custom_providers is a %s, expected a list — skipping legacy entries; "
             "'providers:' entries are still used. Move provider configs to the 'providers:' section.",
-            type(custom_providers).__name__)
+            type(custom_providers).__name__,
+        )
         custom_providers = []
     candidates = [_normalize_custom_provider_entry(e) for e in (custom_providers or [])]
     candidates += providers_dict_to_custom_providers(config.get("providers"))
@@ -368,12 +434,14 @@ def get_compatible_custom_providers(
 def _entries_for_route(
     base_url: str,
     custom_providers: Optional[list[dict[str, Any]]],
-    config: Optional[dict[str, Any]]):
+    config: Optional[dict[str, Any]],
+):
     """Yield entries whose normalized route identity equals *base_url*.
 
     None *custom_providers* → ``get_compatible_custom_providers(config)`` (failure → none).
     """
     from clawk_cli.config import get_compatible_custom_providers
+
     if custom_providers is None:
         try:
             custom_providers = get_compatible_custom_providers(config)
@@ -424,7 +492,8 @@ def _route_model_cfgs(
     model: str,
     base_url: str,
     custom_providers: Optional[list[dict[str, Any]]],
-    config: Optional[dict[str, Any]]) -> Iterator[dict[str, Any]]:
+    config: Optional[dict[str, Any]],
+) -> Iterator[dict[str, Any]]:
     """Yield the ``models.<model>`` mapping of every entry matching *base_url*."""
     for entry in _entries_for_route(base_url, custom_providers, config):
         model_cfg = _route_model_cfg(entry, model)
@@ -439,14 +508,21 @@ def _coerce_ssl_verify(value: Any) -> Optional[bool]:
         return value
     if isinstance(value, str):
         lowered = value.strip().lower()
-        return False if lowered in _FALSE_WORDS else True if lowered in _TRUE_WORDS else None
+        return (
+            False
+            if lowered in _FALSE_WORDS
+            else True
+            if lowered in _TRUE_WORDS
+            else None
+        )
     return None
 
 
 def get_custom_provider_tls_settings(
     base_url: str,
     custom_providers: Optional[list[dict[str, Any]]] = None,
-    config: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    config: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
     """Return TLS settings from a matching ``custom_providers`` / ``providers`` entry."""
     for entry in _entries_for_route(base_url, custom_providers, config):
         out: dict[str, Any] = {}
@@ -464,7 +540,8 @@ def apply_custom_provider_tls_to_client_kwargs(
     client_kwargs: dict[str, Any],
     base_url: str,
     custom_providers: Optional[list[dict[str, Any]]] = None,
-    config: Optional[dict[str, Any]] = None) -> None:
+    config: Optional[dict[str, Any]] = None,
+) -> None:
     """Attach per-provider TLS knobs to OpenAI client kwargs when matched."""
     tls = get_custom_provider_tls_settings(base_url, custom_providers, config)
     if tls.get("ssl_ca_cert"):
@@ -487,7 +564,8 @@ def normalize_extra_headers(extra_headers: Any) -> dict[str, str]:
 def get_custom_provider_extra_headers(
     base_url: str,
     custom_providers: Optional[list[dict[str, Any]]] = None,
-    config: Optional[dict[str, Any]] = None) -> dict[str, str]:
+    config: Optional[dict[str, Any]] = None,
+) -> dict[str, str]:
     """``extra_headers`` of the first route-matching entry declaring any, else ``{}``.
     SECURITY: values may carry credentials — callers must never log them."""
     for entry in _entries_for_route(base_url, custom_providers, config):
@@ -501,10 +579,13 @@ def apply_custom_provider_extra_headers_to_client_kwargs(
     client_kwargs: dict[str, Any],
     base_url: str,
     custom_providers: Optional[list[dict[str, Any]]] = None,
-    config: Optional[dict[str, Any]] = None) -> None:
+    config: Optional[dict[str, Any]] = None,
+) -> None:
     """Merge per-provider ``extra_headers`` onto OpenAI client ``default_headers`` (provider wins
     over SDK defaults, most specific level). SECURITY: values may carry credentials; never log."""
-    extra_headers = get_custom_provider_extra_headers(base_url, custom_providers, config)
+    extra_headers = get_custom_provider_extra_headers(
+        base_url, custom_providers, config
+    )
     if not extra_headers:
         return
     merged = dict(client_kwargs.get("default_headers") or {})
@@ -515,7 +596,8 @@ def apply_custom_provider_extra_headers_to_client_kwargs(
 def get_custom_provider_session_affinity_header(
     base_url: str,
     custom_providers: Optional[list[dict[str, Any]]] = None,
-    config: Optional[dict[str, Any]] = None) -> str:
+    config: Optional[dict[str, Any]] = None,
+) -> str:
     """Header NAME declared as ``session_affinity_header`` on the route-matching entry, else "".
 
     Opt-in per provider (default off): Clawksis never ships a session identifier to an endpoint
@@ -532,20 +614,24 @@ def get_custom_provider_context_length(
     model: str,
     base_url: str,
     custom_providers: Optional[list[dict[str, Any]]] = None,
-    config: Optional[dict[str, Any]] = None) -> Optional[int]:
+    config: Optional[dict[str, Any]] = None,
+) -> Optional[int]:
     """Per-model ``context_length`` override from a route-matching entry, or ``None``.
 
     Before this helper existed, the lookup was duplicated in ``run_agent.py``'s startup path only; every
     other path (notably ``/model`` switch) fell back to the 128K default. See #15779.
     """
     from clawk_cli.config import get_compatible_custom_providers, load_config_readonly
+
     if not model or not base_url:
         return None
     if custom_providers is None:
         try:
             # Step 0c now runs for every route with a base_url; the read-only loader skips the
             # per-call deepcopy load_config() pays (same pattern as get_custom_provider_model_capability).
-            custom_providers = get_compatible_custom_providers(load_config_readonly() if config is None else config)
+            custom_providers = get_compatible_custom_providers(
+                load_config_readonly() if config is None else config
+            )
         except Exception:
             if config is None:
                 return None
@@ -578,10 +664,12 @@ def get_custom_provider_model_capability(
     base_url: str,
     capability: str,
     custom_providers: Optional[list[dict[str, Any]]] = None,
-    config: Optional[dict[str, Any]] = None) -> Optional[bool]:
+    config: Optional[dict[str, Any]] = None,
+) -> Optional[bool]:
     """Explicit boolean capability for one custom-provider model, or ``None``. Scoped to the
     normalized route + exact runtime model id so aliases can declare capabilities."""
     from clawk_cli.config import get_compatible_custom_providers, load_config_readonly
+
     if not model or not base_url or not capability:
         return None
     if custom_providers is None:

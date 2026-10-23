@@ -22,7 +22,8 @@ def _load_plugin_router():
     plugin_file = repo_root / "plugins" / "kanban" / "dashboard" / "plugin_api.py"
     assert plugin_file.exists(), f"plugin file missing: {plugin_file}"
     spec = importlib.util.spec_from_file_location(
-        "clawk_dashboard_plugin_kanban_linktasks_test", plugin_file,
+        "clawk_dashboard_plugin_kanban_linktasks_test",
+        plugin_file,
     )
     assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
@@ -60,13 +61,17 @@ def test_link_tasks_resolves_titles_both_sides(kanban_home, api):
     # The child's detail: parents resolve, children stay empty.
     detail = api.get(f"/api/plugins/kanban/tasks/{child}").json()
     assert detail["links"] == {"parents": [parent], "children": []}
-    assert [(row["id"], row["title"]) for row in detail["link_tasks"]] == [(parent, "Parent title")]
+    assert [(row["id"], row["title"]) for row in detail["link_tasks"]] == [
+        (parent, "Parent title")
+    ]
     assert detail["link_tasks"][0]["status"]
 
     # The parent's detail: children resolve.
     detail = api.get(f"/api/plugins/kanban/tasks/{parent}").json()
     assert detail["links"] == {"parents": [], "children": [child]}
-    assert [(row["id"], row["title"]) for row in detail["link_tasks"]] == [(child, "Child title")]
+    assert [(row["id"], row["title"]) for row in detail["link_tasks"]] == [
+        (child, "Child title")
+    ]
 
 
 def test_link_tasks_empty_when_no_links(kanban_home, api):

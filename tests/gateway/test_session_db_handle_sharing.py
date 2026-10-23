@@ -183,7 +183,9 @@ def test_a_handle_the_registry_tore_down_is_reopened_through_the_registry(store,
     assert first._conn is None, "the torn-down handle was revived outside the registry"
     acquired = registry.acquire(path)
     try:
-        assert acquired is second, "one file, one writer: the agent must share the store's handle"
+        assert acquired is second, (
+            "one file, one writer: the agent must share the store's handle"
+        )
     finally:
         registry.release(acquired)
     second_wrapper = runner._open_session_db_for_active_scope()

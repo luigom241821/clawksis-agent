@@ -48,9 +48,21 @@ def _home_resetting_profile_scripts() -> tuple[Path, ...]:
 
 
 # (host_path, sandbox_path) masks for login-shell probes: /dev/null over each HOME-resetting script.
-LOGIN_SHELL_RO_BINDS = tuple((Path("/dev/null"), s) for s in _home_resetting_profile_scripts())
+LOGIN_SHELL_RO_BINDS = tuple(
+    (Path("/dev/null"), s) for s in _home_resetting_profile_scripts()
+)
 
-_ENV_ALLOW = ("LANG", "LC_ALL", "TZ", "TERM", "SHELL", "USER", "LOGNAME", "TMPDIR", "SSL_CERT_FILE")
+_ENV_ALLOW = (
+    "LANG",
+    "LC_ALL",
+    "TZ",
+    "TERM",
+    "SHELL",
+    "USER",
+    "LOGNAME",
+    "TMPDIR",
+    "SSL_CERT_FILE",
+)
 _SHIMMED = ("systemctl", "launchctl", "sudo", "loginctl", "journalctl")
 
 
@@ -60,8 +72,19 @@ def _bwrap_usable() -> bool:
         return False
     try:
         r = subprocess.run(
-            [exe, "--dev-bind", "/", "/", "--unshare-pid", "--proc", "/proc", "--die-with-parent", "true"],
-            capture_output=True, timeout=30,
+            [
+                exe,
+                "--dev-bind",
+                "/",
+                "/",
+                "--unshare-pid",
+                "--proc",
+                "/proc",
+                "--die-with-parent",
+                "true",
+            ],
+            capture_output=True,
+            timeout=30,
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired):
@@ -138,8 +161,10 @@ def isolated_env(
         GIT_TERMINAL_PROMPT="0",
         GIT_CONFIG_NOSYSTEM="1",
         GIT_CONFIG_GLOBAL=str(home / ".gitconfig"),
-        GIT_AUTHOR_NAME="e2e", GIT_AUTHOR_EMAIL="e2e@example.invalid",
-        GIT_COMMITTER_NAME="e2e", GIT_COMMITTER_EMAIL="e2e@example.invalid",
+        GIT_AUTHOR_NAME="e2e",
+        GIT_AUTHOR_EMAIL="e2e@example.invalid",
+        GIT_COMMITTER_NAME="e2e",
+        GIT_COMMITTER_EMAIL="e2e@example.invalid",
     )
     (root / "run").mkdir(parents=True, exist_ok=True)
     # Reuse the host uv cache (read/write, uv is concurrency-safe) so dependency syncs are
@@ -148,7 +173,11 @@ def isolated_env(
     if real_uv_cache.is_dir():
         env["UV_CACHE_DIR"] = str(real_uv_cache)
     base_path = os.environ.get("PATH", "/usr/bin:/bin")
-    uv = shutil.which("uv") or (str(REAL_HOME / ".clawksis" / "bin" / "uv") if (REAL_HOME / ".clawksis" / "bin" / "uv").exists() else None)
+    uv = shutil.which("uv") or (
+        str(REAL_HOME / ".clawksis" / "bin" / "uv")
+        if (REAL_HOME / ".clawksis" / "bin" / "uv").exists()
+        else None
+    )
     path_parts = [str(shim_dir), *[str(p) for p in extra_path]]
     if uv:
         path_parts.append(str(Path(uv).parent))
@@ -160,8 +189,13 @@ def isolated_env(
     return env
 
 
-def sandbox_argv(argv: Sequence[str], *, writable: Iterable[Path], unshare_net: bool = False,
-                 ro_binds: Iterable[tuple[Path, Path]] = ()) -> list[str]:
+def sandbox_argv(
+    argv: Sequence[str],
+    *,
+    writable: Iterable[Path],
+    unshare_net: bool = False,
+    ro_binds: Iterable[tuple[Path, Path]] = (),
+) -> list[str]:
     """Wrap ``argv`` in the bwrap sandbox (no-op when bubblewrap is unusable).
 
     Opt-in: ``unshare_net`` gives the sandbox its own network namespace (loopback only; the
@@ -206,10 +240,15 @@ def run(
 ) -> subprocess.CompletedProcess:
     """Run one sandboxed process to completion; kills the whole sandbox on timeout."""
     proc = subprocess.Popen(
-        sandbox_argv(argv, writable=writable, unshare_net=unshare_net, ro_binds=ro_binds),
-        env=env, cwd=str(cwd), text=True,
+        sandbox_argv(
+            argv, writable=writable, unshare_net=unshare_net, ro_binds=ro_binds
+        ),
+        env=env,
+        cwd=str(cwd),
+        text=True,
         stdin=subprocess.PIPE if input is not None else subprocess.DEVNULL,
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         start_new_session=True,
     )
     try:
@@ -235,7 +274,9 @@ def kill_tree(proc: subprocess.Popen) -> None:
         pass
 
 
-def wait_for(predicate, *, timeout: float, interval: float = 0.1, what: str = "condition"):
+def wait_for(
+    predicate, *, timeout: float, interval: float = 0.1, what: str = "condition"
+):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         value = predicate()

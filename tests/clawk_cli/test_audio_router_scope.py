@@ -31,6 +31,7 @@ def _restore_process_scope_state():
 
 class _ExplodingScope(dict):
     """A bound secret scope whose resolution fails (resolver/backend error)."""
+
     def get(self, name, default=None):
         raise RuntimeError("resolver boom")
 
@@ -86,7 +87,9 @@ async def test_voices_route_bounds_response_read(monkeypatch, tmp_path):
             ).encode()
             return data if size < 0 else data[:size]
 
-    monkeypatch.setattr(audio.urllib.request, "urlopen", lambda req, timeout=None: _Resp())
+    monkeypatch.setattr(
+        audio.urllib.request, "urlopen", lambda req, timeout=None: _Resp()
+    )
     result = await audio.get_elevenlabs_voices()
     assert result["available"] is True
     assert result["voices"][0]["voice_id"] == "voice-1"
@@ -118,7 +121,9 @@ async def test_voices_route_rejects_oversized_response(monkeypatch, tmp_path):
         def read(self, size=-1):
             return b"x" * size
 
-    monkeypatch.setattr(audio.urllib.request, "urlopen", lambda req, timeout=None: _Resp())
+    monkeypatch.setattr(
+        audio.urllib.request, "urlopen", lambda req, timeout=None: _Resp()
+    )
     with pytest.raises(HTTPException) as exc_info:
         await audio.get_elevenlabs_voices()
     assert exc_info.value.status_code == 502

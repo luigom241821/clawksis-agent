@@ -15,7 +15,9 @@ import sys
 import os
 
 # 确保 clawksis-agent 根目录在 sys.path 中
-_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_REPO_ROOT = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
@@ -42,15 +44,12 @@ def make_config(**kwargs):
 # ===========================================================
 
 
-
-
 # ===========================================================
 # 2. Config / Platform 枚举
 # ===========================================================
 
+
 class TestYuanbaoConfig:
-
-
     def test_get_connected_platforms_requires_key_and_secret(self):
         # Only key, no secret → not in connected list
         gw_only_key = GatewayConfig(
@@ -81,8 +80,8 @@ class TestYuanbaoConfig:
 # 3. GatewayRunner 注册
 # ===========================================================
 
-class TestGatewayRunnerRegistration:
 
+class TestGatewayRunnerRegistration:
     def _make_minimal_runner(self, config):
         """通过 __new__ + 最小初始化绕过 run.py 的模块级 dotenv/ssl 副作用"""
         import sys
@@ -118,6 +117,7 @@ class TestGatewayRunnerRegistration:
     def test_runner_creates_yuanbao_adapter(self):
         """GatewayRunner._create_adapter 能为 YUANBAO 返回 YuanbaoAdapter 实例"""
         from gateway.config import GatewayConfig
+
         config = make_config(enabled=True)
         gw_config = GatewayConfig(platforms={Platform.YUANBAO: config})
 
@@ -125,6 +125,7 @@ class TestGatewayRunnerRegistration:
             runner, _ = self._make_minimal_runner(gw_config)
             # Yuanbao is a bundled platform plugin: the registry learns it through discovery.
             from clawk_cli.plugins import discover_plugins
+
             discover_plugins()
             # websockets 在测试环境可能未安装，mock 掉 WEBSOCKETS_AVAILABLE
             with patch("plugins.platforms.yuanbao.adapter.WEBSOCKETS_AVAILABLE", True):
@@ -136,12 +137,9 @@ class TestGatewayRunnerRegistration:
         assert isinstance(adapter, YuanbaoAdapter)
 
 
-
 # ===========================================================
 # 4. Proto round-trip
 # ===========================================================
-
-
 
 
 # ===========================================================
@@ -149,12 +147,9 @@ class TestGatewayRunnerRegistration:
 # ===========================================================
 
 
-
-
 # ===========================================================
 # 6. Sign Token 模块
 # ===========================================================
-
 
 
 # ===========================================================
@@ -162,11 +157,9 @@ class TestGatewayRunnerRegistration:
 # ===========================================================
 
 
-
 # ===========================================================
 # 7. Media 模块
 # ===========================================================
-
 
 
 # ===========================================================
@@ -174,12 +167,9 @@ class TestGatewayRunnerRegistration:
 # ===========================================================
 
 
-
-
 # ===========================================================
 # 9. platforms/__init__.py 导出
 # ===========================================================
-
 
 
 # ===========================================================
@@ -189,14 +179,11 @@ class TestGatewayRunnerRegistration:
 import asyncio
 
 
-        # No new task should be created because already reconnecting
-
-
+# No new task should be created because already reconnecting
 
 
 class TestP0ChatLockEviction:
     """P0-3: get_chat_lock uses OrderedDict and safe eviction."""
-
 
     def test_eviction_skips_locked(self):
         """When eviction is needed, locked entries are skipped."""
@@ -216,10 +203,10 @@ class TestP0ChatLockEviction:
         assert "new_chat" in adapter._outbound.sender._chat_locks
         assert isinstance(new_lock, asyncio.Lock)
         # The oldest unlocked entry should have been evicted
-        assert len(adapter._outbound.sender._chat_locks) == MessageSender.CHAT_DICT_MAX_SIZE
-
-
-
+        assert (
+            len(adapter._outbound.sender._chat_locks)
+            == MessageSender.CHAT_DICT_MAX_SIZE
+        )
 
 
 if __name__ == "__main__":

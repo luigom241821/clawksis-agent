@@ -23,7 +23,10 @@ _MESSAGE_KEYS = ("extra_content", "reasoning_opaque", "reasoning_text")
 def field(obj: Any, name: str) -> Any:
     """``obj.<name>``, else the same key from pydantic ``model_extra`` (unknown SDK fields park there)."""
     value = getattr(obj, name, None)
-    for side in ("model_extra", "provider_data"):  # pydantic unknown fields / normalized responses
+    for side in (
+        "model_extra",
+        "provider_data",
+    ):  # pydantic unknown fields / normalized responses
         if value is None and isinstance(getattr(obj, side, None), dict):
             value = getattr(obj, side).get(name)
     dump = getattr(value, "model_dump", None)
@@ -35,7 +38,11 @@ def thought_signature(extra: Any) -> Optional[str]:
     if not isinstance(extra, dict):
         return None
     google = extra.get("google")
-    sig = google.get("thought_signature") if isinstance(google, dict) else extra.get("thought_signature")
+    sig = (
+        google.get("thought_signature")
+        if isinstance(google, dict)
+        else extra.get("thought_signature")
+    )
     return sig if isinstance(sig, str) and sig.strip() else None
 
 
@@ -63,7 +70,9 @@ class StreamCarriers:
 
     def feed(self, delta: Any, reasoning: Optional[str]) -> Optional[str]:
         """Absorb one delta; returns ``reasoning``, else its ``reasoning_text`` fragment (Copilot's readable reasoning)."""
-        self.signature = thought_signature(field(delta, "extra_content")) or self.signature
+        self.signature = (
+            thought_signature(field(delta, "extra_content")) or self.signature
+        )
         opaque = field(delta, "reasoning_opaque")
         self.opaque = opaque if isinstance(opaque, str) and opaque else self.opaque
         text = field(delta, "reasoning_text")
@@ -92,14 +101,25 @@ def _route_reads(model: Any, base_url: Any) -> tuple[str, ...]:
 
     # Same gate as tool-call extra_content, so the two signature carriers can never disagree.
     gemini = ("extra_content",) if _model_consumes_thought_signature(model) else ()
-    copilot = ("reasoning_opaque", "reasoning_text") if base_url_host_matches(str(base_url or ""), "githubcopilot.com") else ()
+    copilot = (
+        ("reasoning_opaque", "reasoning_text")
+        if base_url_host_matches(str(base_url or ""), "githubcopilot.com")
+        else ()
+    )
     return gemini + copilot
 
 
 def _strip_function_signature(tool_calls: list) -> list:
     return [
-        {**tc, "function": {k: v for k, v in tc["function"].items() if k != "thought_signature"}}
-        if isinstance(tc, dict) and isinstance(tc.get("function"), dict) and "thought_signature" in tc["function"]
+        {
+            **tc,
+            "function": {
+                k: v for k, v in tc["function"].items() if k != "thought_signature"
+            },
+        }
+        if isinstance(tc, dict)
+        and isinstance(tc.get("function"), dict)
+        and "thought_signature" in tc["function"]
         else tc
         for tc in tool_calls
     ]
@@ -110,12 +130,18 @@ def _shape(msg: Any, reads: tuple[str, ...], copilot: bool) -> Any:
         return msg
     details = msg.get("reasoning_details")
     details = details if isinstance(details, list) else []
-    record = next((d for d in details if isinstance(d, dict) and d.get("type") == CARRIER_TYPE), None)
+    record = next(
+        (d for d in details if isinstance(d, dict) and d.get("type") == CARRIER_TYPE),
+        None,
+    )
     tool_calls = msg.get("tool_calls")
     tool_calls = tool_calls if isinstance(tool_calls, list) else []
     fn_sig = not copilot and any(
-        isinstance(tc, dict) and isinstance(tc.get("function"), dict) and "thought_signature" in tc["function"]
-        for tc in tool_calls)
+        isinstance(tc, dict)
+        and isinstance(tc.get("function"), dict)
+        and "thought_signature" in tc["function"]
+        for tc in tool_calls
+    )
     if record is None and not fn_sig and not any(k in msg for k in _MESSAGE_KEYS):
         return msg
     out = {k: v for k, v in msg.items() if k not in _MESSAGE_KEYS}
@@ -129,7 +155,9 @@ def _shape(msg: Any, reads: tuple[str, ...], copilot: bool) -> Any:
             out.pop("reasoning_details", None)
     for key in reads:
         # Copilot clients send reasoning_text only next to the opaque blob it belongs to.
-        if values.get(key) and (key != "reasoning_text" or values.get("reasoning_opaque")):
+        if values.get(key) and (
+            key != "reasoning_text" or values.get("reasoning_opaque")
+        ):
             out[key] = values[key]
     if fn_sig:
         out["tool_calls"] = _strip_function_signature(tool_calls)

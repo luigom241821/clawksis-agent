@@ -31,7 +31,16 @@ def _server(tmp_path: Path, *, failed: bool = False):
     output_path = tmp_path / "ui-delivery.log"
     with output_path.open("wb") as output:
         process = subprocess.Popen(
-            [powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(SCRIPT), "-SelfTestUi", "-NoUi"],
+            [
+                powershell,
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(SCRIPT),
+                "-SelfTestUi",
+                "-NoUi",
+            ],
             env=env,
             stdout=output,
             stderr=subprocess.STDOUT,
@@ -53,7 +62,9 @@ def _server(tmp_path: Path, *, failed: bool = False):
         if process.poll() is None:
             subprocess.run(
                 ["taskkill", "/PID", str(process.pid), "/T", "/F"],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=15,
                 check=False,
             )
             process.wait(timeout=15)
@@ -65,11 +76,15 @@ def _request(url: str, *, post: bool = False):
 
 
 @pytest.mark.parametrize("failed", [False, True], ids=["complete", "failed"])
-def test_delayed_client_receives_terminal_state_before_acknowledging(tmp_path: Path, failed: bool) -> None:
+def test_delayed_client_receives_terminal_state_before_acknowledging(
+    tmp_path: Path, failed: bool
+) -> None:
     with _server(tmp_path, failed=failed) as (process, url):
         # A background browser can miss the former 900ms terminal-state window.
         time.sleep(2)
-        assert process.poll() is None, "the updater discarded its final state before the delayed client received it"
+        assert process.poll() is None, (
+            "the updater discarded its final state before the delayed client received it"
+        )
         with _request(url + "progress") as response:
             state = json.load(response)
         assert state["status"] == ("error" if failed else "done")
@@ -79,9 +94,15 @@ def test_delayed_client_receives_terminal_state_before_acknowledging(tmp_path: P
         with pytest.raises(HTTPError) as wrong:
             _request(url + "ack/not-the-published-receipt", post=True)
         assert wrong.value.code == 409
-        assert process.poll() is None, "an unrelated acknowledgement must not dispose the window's state"
+        assert process.poll() is None, (
+            "an unrelated acknowledgement must not dispose the window's state"
+        )
 
-        for route, post in [("progress-other", False), ("ack/" + receipt, False), ("ack/" + receipt + "/extra", True)]:
+        for route, post in [
+            ("progress-other", False),
+            ("ack/" + receipt, False),
+            ("ack/" + receipt + "/extra", True),
+        ]:
             with pytest.raises(HTTPError) as invalid:
                 _request(url + route, post=post)
             assert invalid.value.code == 404
@@ -91,6 +112,8 @@ def test_delayed_client_receives_terminal_state_before_acknowledging(tmp_path: P
         assert process.wait(timeout=15) == 0
 
 
-def test_no_client_does_not_keep_the_update_process_alive_forever(tmp_path: Path) -> None:
+def test_no_client_does_not_keep_the_update_process_alive_forever(
+    tmp_path: Path,
+) -> None:
     with _server(tmp_path) as (process, _url):
         assert process.wait(timeout=25) == 0

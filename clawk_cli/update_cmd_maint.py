@@ -24,6 +24,7 @@ logger = logging.getLogger("clawk_cli.update_cmd")
 def _prepare_updated_checkout(project_root: Path, *, desktop: bool) -> None:
     """Historical updater hook: never complete inside the pre-swap interpreter."""
     from clawk_cli._old_updater import stop_for_relaunch
+
     stop_for_relaunch(incomplete=True)
 
 
@@ -46,6 +47,7 @@ def _sqlite_partial_completion_lines(sqlite_version: str) -> list[str]:
     two completion banners cannot drift. The lead names the consequence, the second line the
     exact fix command."""
     from clawk_cli.update_cmd import _m
+
     return [
         f"⚠ Update partially complete — your Python's SQLite ({sqlite_version}) has a known "
         "corruption bug. Clawksis works, but sessions could be damaged.",
@@ -57,6 +59,7 @@ def _sqlite_partial_completion_lines(sqlite_version: str) -> list[str]:
 def _load_updates_cfg() -> dict:
     """``updates`` section of config.yaml; ``{}`` on any failure."""
     from clawk_cli.config import load_config
+
     cfg = load_config() or {}
     updates = cfg.get("updates", {}) if isinstance(cfg, dict) else {}
     return updates if isinstance(updates, dict) else {}
@@ -65,6 +68,7 @@ def _load_updates_cfg() -> dict:
 def _purge_stale_clawk_modules() -> None:
     """Historical updater hook; module-graph surgery cannot complete an update."""
     from clawk_cli._old_updater import stop_for_relaunch
+
     stop_for_relaunch(incomplete=True)
 
 
@@ -81,6 +85,7 @@ def _print_curator_first_run_notice() -> None:
     disable it first. Silent on steady state."""
     try:
         from agent import curator
+
         if not curator.is_enabled():
             return
         state = curator.load_state()
@@ -102,7 +107,9 @@ def _print_curator_first_run_notice() -> None:
     )
     print("  Preview now:  clawk curator run --dry-run")
     print("  Pause it:     clawk curator pause")
-    print("  Docs:         https://samuelgradientai-sys.github.io/clawksis-agent/user-guide/features/curator")
+    print(
+        "  Docs:         https://samuelgradientai-sys.github.io/clawksis-agent/user-guide/features/curator"
+    )
 
 
 def _print_fts_optimize_available_notice() -> None:
@@ -112,7 +119,16 @@ def _print_fts_optimize_available_notice() -> None:
     """
     try:
         from clawk_cli.config import load_config
-        mode = str(((load_config() or {}).get("sessions") or {}).get("fts_optimize_notice", "advise")).strip().lower()
+
+        mode = (
+            str(
+                ((load_config() or {}).get("sessions") or {}).get(
+                    "fts_optimize_notice", "advise"
+                )
+            )
+            .strip()
+            .lower()
+        )
     except Exception:
         mode = "advise"
     if mode == "off":
@@ -127,7 +143,7 @@ def _print_fts_optimize_available_notice() -> None:
     if not db_path.exists():
         return
     try:
-        size_gb = db_path.stat().st_size / (1024 ** 3)
+        size_gb = db_path.stat().st_size / (1024**3)
     except OSError:
         return
     # Small DBs: the win isn't worth the nag.
@@ -140,14 +156,14 @@ def _print_fts_optimize_available_notice() -> None:
         db = SessionDB(db_path=db_path, read_only=True)
         # read_only opens skip schema init; probe the stored layout directly.
         from clawk_state_fts import fts_layout_drift
+
         drift = fts_layout_drift(db._conn)
         legacy_inline = db._db_has_legacy_inline_fts(db._conn)
         # Interrupted optimize-storage: v23 table shape but backfill markers / trash
         # tables remain. Re-running resumes it, so offer the command again.
         interrupted = bool(
             db._conn.execute(
-                "SELECT 1 FROM state_meta "
-                "WHERE key = 'fts_rebuild_high_water' LIMIT 1"
+                "SELECT 1 FROM state_meta WHERE key = 'fts_rebuild_high_water' LIMIT 1"
             ).fetchone()
             or db._conn.execute(
                 "SELECT 1 FROM sqlite_master WHERE type = 'table' "
@@ -219,6 +235,7 @@ def _print_curator_recent_run_notice() -> None:
     ``last_run_summary_shown_at``. Silent when never run, already shown, or no rename info."""
     try:
         from agent import curator
+
         state = curator.load_state()
     except Exception:
         return
@@ -238,7 +255,9 @@ def _print_curator_recent_run_notice() -> None:
         print(f"ℹ Skill curator — last run {_format_time_ago(last_run_at)}")
         for line in summary.splitlines():
             print(f"  {line}")
-        print("  (This message shows once per curator run. View anytime: clawk curator status)")
+        print(
+            "  (This message shows once per curator run. View anytime: clawk curator status)"
+        )
 
     with suppress(Exception):
         state["last_run_summary_shown_at"] = last_run_at
@@ -249,6 +268,7 @@ def _format_time_ago(iso_ts: str) -> str:
     """Render an ISO timestamp as `Xh ago` / `Xd ago` / `Xm ago`. Best effort."""
     try:
         from datetime import datetime, timezone
+
         ts = datetime.fromisoformat(iso_ts)
         if ts.tzinfo is None:
             ts = ts.replace(tzinfo=UTC)
@@ -267,6 +287,7 @@ def _format_time_ago(iso_ts: str) -> str:
 def _reload_process_scan_modules() -> None:
     """Historical updater hook; scans now run only in fresh completion Python."""
     from clawk_cli._old_updater import stop_for_relaunch
+
     stop_for_relaunch(incomplete=True)
 
 
@@ -279,7 +300,9 @@ def _finish_dashboard_update_cleanup(
     stop_for_relaunch()
 
 
-def _refresh_dashboard_after_update(*, already_restarted_units: set[str] | None = None) -> set[int]:
+def _refresh_dashboard_after_update(
+    *, already_restarted_units: set[str] | None = None
+) -> set[int]:
     """Refresh managed dashboards or stop stale manual ones after an update; returns the PIDs it
     stopped and could not bring back, so the receipt records them ``failed`` (#109290).
 
@@ -294,7 +317,8 @@ def _refresh_dashboard_after_update(*, already_restarted_units: set[str] | None 
 
     try:
         stop_result = _m()._kill_stale_dashboard_processes(
-            restart_managed=True, already_restarted_units=already_restarted_units,
+            restart_managed=True,
+            already_restarted_units=already_restarted_units,
             scope_home=str(get_clawk_home()),
         )
     except Exception as exc:
@@ -307,14 +331,18 @@ def _refresh_dashboard_after_update(*, already_restarted_units: set[str] | None 
         print()
         print(f"⚠ Could not refresh running dashboard/serve process(es): {exc}")
         print("  If one is still running, restart it so it serves the updated code:")
-        print("    clawk dashboard --port <port>   (or: systemctl --user restart clawksis-dashboard)")
+        print(
+            "    clawk dashboard --port <port>   (or: systemctl --user restart clawksis-dashboard)"
+        )
         return set()
     unrecovered = {int(pid) for pid in stop_result.get("unrecovered") or ()}
     if not unrecovered:
         return unrecovered
 
     print()
-    print("⚠ A web dashboard/serve process was stopped during update and could not be auto-restarted.")
+    print(
+        "⚠ A web dashboard/serve process was stopped during update and could not be auto-restarted."
+    )
     print("  Re-launch it when you want the web UI back:")
     print("    clawk dashboard --port <port>")
     return unrecovered
@@ -327,6 +355,7 @@ def _print_update_completion(message: str) -> None:
     See #47359, #58764.
     """
     from clawk_cli.update_cmd import _branch_head_suffix
+
     print(f"{message}{_branch_head_suffix()}")
     action_id = os.environ.get("CLAWK_ACTION_ID", "")
     if len(action_id) == 32 and all(char in "0123456789abcdef" for char in action_id):
@@ -337,9 +366,13 @@ def _read_project_version() -> str | None:
     """``version`` from the checkout's pyproject.toml (not importlib.metadata, which still
     describes the OLD version after a pull). None on any failure — cosmetic, never breaks."""
     from clawk_cli.update_cmd import _m
+
     try:
         import tomllib
-        with open(_m().PROJECT_ROOT / "pyproject.toml", "rb") as fh:  # windows-footgun: ok — binary mode, tomllib requires bytes
+
+        with open(
+            _m().PROJECT_ROOT / "pyproject.toml", "rb"
+        ) as fh:  # windows-footgun: ok — binary mode, tomllib requires bytes
             version = tomllib.load(fh).get("project", {}).get("version")
         return str(version) if version else None
     except Exception:
@@ -354,6 +387,7 @@ def _checkout_version() -> str | None:
     """
     from clawk_cli.update_cmd import _m
     from clawk_cli.version_info import _git_version_info
+
     info = _git_version_info(Path(_m().PROJECT_ROOT), include_untracked=True)
     return info.derived_version if info.commit else None
 
@@ -366,6 +400,7 @@ def _update_complete_message(pre_version: str | None) -> str:
     (``v0.19.4 → v0.20.0``) so the user can see what they actually got. Falls back to the plain message when
     either side is unknown or the version did not change.
     """
+
     def shown(version: str) -> str:
         # A tagless checkout's identity is ``git.<sha>``, not a release number.
         return f"v{version}" if version[:1].isdigit() else version
@@ -381,6 +416,7 @@ def _update_complete_message(pre_version: str | None) -> str:
 def _post_update_sqlite_runtime_status():
     """Return whether the interpreter used after update has safe SQLite."""
     from clawk_cli.sqlite_runtime import probe_sqlite_runtime
+
     # Completion already runs on PM's selected Python, not the obsolete repo venv.
     info = probe_sqlite_runtime(Path(sys.executable))
     return info is not None and not info.wal_reset_vulnerable, info
@@ -389,6 +425,7 @@ def _post_update_sqlite_runtime_status():
 def _print_verified_update_completion(message: str) -> bool:
     """Print a success completion only after probing the next Clawksis runtime."""
     from clawk_cli.update_cmd import _post_update_sqlite_runtime_status
+
     if not message.startswith("✓"):
         _print_update_completion(message)
         return False
@@ -406,7 +443,9 @@ def _print_verified_update_completion(message: str) -> bool:
     return False
 
 
-def _print_update_summary(*, node_failures: list, desktop_build_ok: bool, pre_update_version: str | None) -> bool:
+def _print_update_summary(
+    *, node_failures: list, desktop_build_ok: bool, pre_update_version: str | None
+) -> bool:
     """Historical updater hook; old soft-build results cannot establish completion."""
     from clawk_cli._old_updater import stop_for_relaunch
 
@@ -423,13 +462,19 @@ def _restore_state_db_from_snapshot(state_path: Path, snap_state: Path) -> bool:
     from clawk_cli.backup_restore import _safe_restore_db
 
     snap_state.stat()  # Preserve the caller's OSError reporting for missing snapshots.
-    if not verify_sqlite_integrity(snap_state, check_header=True, run_pragma=True).get("valid"):
+    if not verify_sqlite_integrity(snap_state, check_header=True, run_pragma=True).get(
+        "valid"
+    ):
         return False
     if not _safe_restore_db(snap_state, state_path):
         print("  ✗ Auto-restore refused or failed; state.db was not restored.")
         print("    Stop the owning runtime and close database handles before retrying.")
-        print("    If the canonical runtime epoch is unreadable, do not restore in place:")
-        print("    use `clawk sessions recover --source <snapshot> --output <separate-path>`")
+        print(
+            "    If the canonical runtime epoch is unreadable, do not restore in place:"
+        )
+        print(
+            "    use `clawk sessions recover --source <snapshot> --output <separate-path>`"
+        )
         print("    to salvage transcripts into a separate output.")
         return False
     restored = verify_sqlite_integrity(state_path, check_header=True, run_pragma=True)
@@ -441,30 +486,42 @@ def _verify_and_restore_one_state_db(home: Path, *, label: str) -> None:
     Never raises: a guard that crashes the update tail is worse than what it detects."""
     try:
         from clawk_cli.backup import _quick_snapshot_root, verify_sqlite_integrity
+
         state_path = home / "state.db"
         if not state_path.exists():
             return
         ok = verify_sqlite_integrity(state_path, check_header=True, run_pragma=True)
         if ok.get("valid"):
-            logger.debug("Post-update state.db integrity OK (%s): %s", label, ok.get("message"))
+            logger.debug(
+                "Post-update state.db integrity OK (%s): %s", label, ok.get("message")
+            )
             return
         print()
-        print(f"⚠ state.db is corrupted after update ({label}): " + ok.get("message", "unknown error"))
+        print(
+            f"⚠ state.db is corrupted after update ({label}): "
+            + ok.get("message", "unknown error")
+        )
         snap_root = _quick_snapshot_root(home)
         if not snap_root.exists():
             print("  ⚠ No pre-update snapshot for this home")
             return
-        for snap_dir in sorted((d for d in snap_root.iterdir() if d.is_dir()), reverse=True):
+        for snap_dir in sorted(
+            (d for d in snap_root.iterdir() if d.is_dir()), reverse=True
+        ):
             snap_state = snap_dir / "state.db"
             if not snap_state.exists():
                 continue
-            if not verify_sqlite_integrity(snap_state, check_header=True, run_pragma=True).get("valid"):
+            if not verify_sqlite_integrity(
+                snap_state, check_header=True, run_pragma=True
+            ).get("valid"):
                 continue
             try:
                 if _restore_state_db_from_snapshot(state_path, snap_state):
                     print(f"  ✓ Auto-restored from snapshot {snap_dir.name} ({label})")
                 else:
-                    print("  ✗ Auto-restore did not complete; see the restore diagnostic above.")
+                    print(
+                        "  ✗ Auto-restore did not complete; see the restore diagnostic above."
+                    )
             except OSError as exc:
                 print(f"  ✗ Auto-restore file copy failed: {exc}")
             return
@@ -480,10 +537,12 @@ def _verify_and_restore_state_dbs_post_update() -> None:
     See #97994.
     """
     from clawk_cli.update_cmd import get_clawk_home
+
     home = get_clawk_home()
     _verify_and_restore_one_state_db(home, label="default home")
-    with _best_effort('Sibling-profile state.db guard sweep failed: %s'):
+    with _best_effort("Sibling-profile state.db guard sweep failed: %s"):
         from clawk_cli.backup import _sibling_profile_homes
+
         for name, profile_home in _sibling_profile_homes(home):
             _verify_and_restore_one_state_db(profile_home, label=f"profile {name}")
 
@@ -498,11 +557,14 @@ def _invalidate_live_plugin_catalog_caches() -> None:
     :func:`plugin_catalog.invalidate_live_cache_for_home` is best-effort per home.
     """
     from clawk_cli.update_cmd import get_clawk_home
+
     home = get_clawk_home()
     from clawk_cli.plugin_catalog import invalidate_live_cache_for_home
+
     invalidate_live_cache_for_home(home)
     with suppress(Exception):
         from clawk_cli.backup import _sibling_profile_homes
+
         for _name, profile_home in _sibling_profile_homes(home):
             invalidate_live_cache_for_home(profile_home)
 
@@ -510,6 +572,7 @@ def _invalidate_live_plugin_catalog_caches() -> None:
 def _print_bundled_skills_sync_report() -> None:
     """Run ``sync_skills`` (copies new, updates changed, respects user deletions) and print its summary."""
     from tools.skills_sync import sync_skills
+
     result = sync_skills(quiet=True)
     if result["copied"]:
         print(f"  + {len(result['copied'])} new: {', '.join(result['copied'])}")
@@ -517,11 +580,15 @@ def _print_bundled_skills_sync_report() -> None:
         print(f"  ↑ {len(result['updated'])} updated: {', '.join(result['updated'])}")
     if result.get("user_modified"):
         print(f"  ~ {len(result['user_modified'])} user-modified (kept)")
-        print("    → see them: clawk skills list-modified  (diff/reset to resume updates)")
+        print(
+            "    → see them: clawk skills list-modified  (diff/reset to resume updates)"
+        )
     if result.get("cleaned"):
         print(f"  − {len(result['cleaned'])} removed from manifest")
     if result.get("relocated"):
-        print(f"  → {len(result['relocated'])} moved to new upstream paths: {', '.join(result['relocated'])}")
+        print(
+            f"  → {len(result['relocated'])} moved to new upstream paths: {', '.join(result['relocated'])}"
+        )
     if not result["copied"] and not result.get("updated"):
         print("  ✓ Skills are up to date")
 
@@ -531,10 +598,13 @@ def _ensure_fhs_path_guard() -> None:
     tmux), where neither /etc/bashrc nor .bash_profile adds it. Mirrors install.sh. Idempotent;
     no-op on non-Linux/non-root/non-FHS or when ``bash -i -c 'command -v clawk'`` resolves."""
     from clawk_cli.update_cmd import _m
+
     if _m().sys.platform != "linux":
         return
     try:
-        if os.geteuid() != 0:  # windows-footgun: ok — Linux FHS helper, guarded by sys.platform == "linux" above + AttributeError catch
+        if (
+            os.geteuid() != 0
+        ):  # windows-footgun: ok — Linux FHS helper, guarded by sys.platform == "linux" above + AttributeError catch
             return
     except AttributeError:
         return
@@ -566,7 +636,9 @@ def _ensure_fhs_path_guard() -> None:
             # leave the unit dead. Clearing the failed state first makes the restart idempotent. Mirrors the
             # recovery path in `clawk gateway restart` (`systemd_restart()`) as of PR #20949.
             capture_output=True,
-            text=True, encoding="utf-8", errors="replace",
+            text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=10,
             check=False,
         )
@@ -576,7 +648,9 @@ def _ensure_fhs_path_guard() -> None:
         return  # already on PATH, nothing to do
 
     path_line = 'export PATH="/usr/local/bin:$PATH"'
-    path_comment = "# Clawksis — ensure /usr/local/bin is on PATH (RHEL non-login shells)"
+    path_comment = (
+        "# Clawksis — ensure /usr/local/bin is on PATH (RHEL non-login shells)"
+    )
     wrote_any = False
     for candidate in (".bashrc", ".bash_profile"):
         cfg = Path(home) / candidate
@@ -588,7 +662,9 @@ def _ensure_fhs_path_guard() -> None:
             continue
         # Idempotency: any uncommented PATH line referencing /usr/local/bin (install.sh grep).
         if any(
-            "/usr/local/bin" in line and "PATH" in line and not line.lstrip().startswith("#")
+            "/usr/local/bin" in line
+            and "PATH" in line
+            and not line.lstrip().startswith("#")
             for line in existing.splitlines()
         ):
             continue
@@ -608,12 +684,18 @@ def _ensure_acp_launcher() -> None:
     """Historical export; launcher policy belongs to the launcher owner."""
     from clawk_cli import _launchers
     from clawk_cli.update_cmd import _m
+
     _launchers.expose_cli(_m().PROJECT_ROOT)
 
 
 _BACKUP_MODE_ALIASES = {
-    "off": "off", "false": "off", "none": "off", "disabled": "off",
-    "full": "full", "zip": "full", "true": "full",
+    "off": "off",
+    "false": "off",
+    "none": "off",
+    "disabled": "off",
+    "full": "full",
+    "zip": "full",
+    "true": "full",
     "quick": "quick",
 }
 
@@ -639,7 +721,9 @@ def _resolve_pre_update_backup_mode(args) -> str:
         return "off"
     mode = _BACKUP_MODE_ALIASES.get(str(raw).strip().lower())
     if mode is None:
-        logger.warning("Unknown updates.pre_update_backup value %r — using 'quick'", raw)
+        logger.warning(
+            "Unknown updates.pre_update_backup value %r — using 'quick'", raw
+        )
         return "quick"
     return mode
 
@@ -649,23 +733,33 @@ def _verify_state_db_after_snapshot(snapshot_id: str) -> None:
     gateway, Windows filter driver) can corrupt it and we'd otherwise exit 0 silently."""
     from clawk_cli.backup import _quick_snapshot_root, verify_sqlite_integrity
     from clawk_cli.config import get_clawk_home
+
     _src_path = get_clawk_home() / "state.db"
     if not _src_path.exists():
         return
     _integrity = verify_sqlite_integrity(
-        _src_path, check_header=True, run_pragma=True, max_bytes=_PRE_UPDATE_SNAPSHOT_MAX_FILE_SIZE,
+        _src_path,
+        check_header=True,
+        run_pragma=True,
+        max_bytes=_PRE_UPDATE_SNAPSHOT_MAX_FILE_SIZE,
     )
     if _integrity.get("valid"):
         return
-    print(f"  ⚠ state.db integrity check FAILED after snapshot: {_integrity.get('message', 'unknown error')}")
+    print(
+        f"  ⚠ state.db integrity check FAILED after snapshot: {_integrity.get('message', 'unknown error')}"
+    )
     _snap_state = _quick_snapshot_root(get_clawk_home()) / snapshot_id / "state.db"
     if not _snap_state.exists():
         print("  ⚠ Snapshot does not contain state.db (was skipped or too large).")
-    elif verify_sqlite_integrity(_snap_state, check_header=True, run_pragma=True).get("valid"):
+    elif verify_sqlite_integrity(_snap_state, check_header=True, run_pragma=True).get(
+        "valid"
+    ):
         print("  ✓ Snapshot copy is valid — continuing update.")
         print("    If state.db is lost after update it will be auto-restored.")
     else:
-        print("  ✗ Snapshot copy ALSO failed integrity — the source was already corrupted before the backup.")
+        print(
+            "  ✗ Snapshot copy ALSO failed integrity — the source was already corrupted before the backup."
+        )
     print()
 
 
@@ -673,8 +767,11 @@ def _run_quick_snapshots() -> Optional[str]:
     """Quick snapshot of the root home plus every sibling profile; returns the root snapshot id."""
     from clawk_cli.update_cmd import _record_update_step
     from clawk_cli.backup import create_quick_snapshot
+
     snapshot_id = create_quick_snapshot(
-        label="pre-update", keep=_PRE_UPDATE_SNAPSHOT_KEEP, max_file_size=_PRE_UPDATE_SNAPSHOT_MAX_FILE_SIZE,
+        label="pre-update",
+        keep=_PRE_UPDATE_SNAPSHOT_KEEP,
+        max_file_size=_PRE_UPDATE_SNAPSHOT_MAX_FILE_SIZE,
     )
     if snapshot_id:
         _verify_state_db_after_snapshot(snapshot_id)
@@ -682,10 +779,12 @@ def _run_quick_snapshots() -> Optional[str]:
 
     # The code swap + fleet restart touch EVERY profile, so each gets the same snapshot
     # under its own state-snapshots/. Best-effort per profile.
-    with _best_effort('Sibling profile snapshots failed: %s'):
+    with _best_effort("Sibling profile snapshots failed: %s"):
         from clawk_cli.backup import create_pre_update_snapshots_all_profiles
+
         _sibling_snaps = create_pre_update_snapshots_all_profiles(
-            keep=_PRE_UPDATE_SNAPSHOT_KEEP, max_file_size=_PRE_UPDATE_SNAPSHOT_MAX_FILE_SIZE,
+            keep=_PRE_UPDATE_SNAPSHOT_KEEP,
+            max_file_size=_PRE_UPDATE_SNAPSHOT_MAX_FILE_SIZE,
         )
         if _sibling_snaps:
             print("◆ Sibling profile snapshot(s): " + ", ".join(sorted(_sibling_snaps)))
@@ -695,6 +794,7 @@ def _run_quick_snapshots() -> Optional[str]:
                 ", ".join(f"{k}={v}" for k, v in sorted(_sibling_snaps.items())),
             )
             import clawk_cli.update_cmd_config as _cfg
+
             # The reader lives in update_cmd_config; write ITS module global, not ours.
             _cfg._LAST_SIBLING_SNAPSHOTS = _sibling_snaps
     return snapshot_id
@@ -705,7 +805,9 @@ def _run_full_backup() -> None:
     try:
         from clawk_cli.backup import create_pre_update_backup
     except Exception as exc:
-        print(f"⚠ Pre-update backup: could not load backup module ({exc}); continuing update.")
+        print(
+            f"⚠ Pre-update backup: could not load backup module ({exc}); continuing update."
+        )
         print()
         return
 
@@ -736,10 +838,14 @@ def _run_full_backup() -> None:
         size_bytes = 0
 
     from clawk_cli.sizefmt import format_bytes
+
     # display_clawk_home so the user sees ~/.clawksis/...
     try:
         from clawk_constants import get_clawk_home, display_clawk_home
-        display_path = f"{display_clawk_home()}/{out_path.relative_to(get_clawk_home())}"
+
+        display_path = (
+            f"{display_clawk_home()}/{out_path.relative_to(get_clawk_home())}"
+        )
     except Exception:
         display_path = str(out_path)
 
@@ -780,8 +886,12 @@ def _run_pre_update_backup(args) -> Optional[str]:
         # swallowed failure is how a user discovers post-hoc that the receipt says
         # ``ok: false`` and nothing was there to restore (#114592). Say it on stdout, once,
         # before any code moves.
-        print(f"  ⚠ Pre-update snapshot FAILED — no recovery point was saved{snapshot_detail}.")
-        print("  Continuing with update (set updates.pre_update_backup: off to silence this).")
+        print(
+            f"  ⚠ Pre-update snapshot FAILED — no recovery point was saved{snapshot_detail}."
+        )
+        print(
+            "  Continuing with update (set updates.pre_update_backup: off to silence this)."
+        )
         print()
 
     if mode != "full":
@@ -802,19 +912,29 @@ def _sweep_bytecode_after_update(branch: str) -> None:
     """
     from clawk_cli.update_cmd import _m
     from clawk_cli.update_receipt import record_followup
+
     # Timestamp-based .pyc validation can accept old bytecode after the source swap.
     try:
         removed = _m()._clear_bytecode_cache(_m().PROJECT_ROOT)
         if removed:
-            print(f"  ✓ Cleared {removed} stale __pycache__ director{'y' if removed == 1 else 'ies'}")
+            print(
+                f"  ✓ Cleared {removed} stale __pycache__ director{'y' if removed == 1 else 'ies'}"
+            )
         _m()._record_bytecode_fingerprint()
-    except Exception as exc:  # health: allow BLE001 -- owed to the next launch's fingerprint sweep
+    except (
+        Exception
+    ) as exc:  # health: allow BLE001 -- owed to the next launch's fingerprint sweep
         record_followup("bytecode_sweep", str(exc) or type(exc).__name__)
     try:
         _m()._refresh_bootstrap_cache_scripts(branch)
-    except Exception as exc:  # health: allow BLE001 -- refreshed again by the next update
-        record_followup("bootstrap_scripts", str(exc) or type(exc).__name__,
-                        retry="the next `clawk update` refreshes them")
+    except (
+        Exception
+    ) as exc:  # health: allow BLE001 -- refreshed again by the next update
+        record_followup(
+            "bootstrap_scripts",
+            str(exc) or type(exc).__name__,
+            retry="the next `clawk update` refreshes them",
+        )
 
 
 def _profile_skill_sync_status(r) -> str:
@@ -823,7 +943,11 @@ def _profile_skill_sync_status(r) -> str:
     if not r:
         return "sync failed"
     parts = []
-    for key, fmt in (("copied", "+{} new"), ("updated", "↑{} updated"), ("user_modified", "~{} user-modified")):
+    for key, fmt in (
+        ("copied", "+{} new"),
+        ("updated", "↑{} updated"),
+        ("user_modified", "~{} user-modified"),
+    ):
         count = len(r.get(key, []))
         if count:
             parts.append(fmt.format(count))
@@ -836,13 +960,16 @@ def _sync_profiles_after_update() -> None:
     # CLAWK_HOME, so sync_skills()'s module-level CLAWK_HOME cache can't skew it.
     with suppress(Exception):
         from clawk_cli.profiles import list_profiles, seed_profile_skills
+
         all_profiles = list_profiles()
         if all_profiles:
             print()
             print("→ Syncing bundled skills to all profiles...")
             for p in all_profiles:
                 try:
-                    print(f"  {p.name}: {_profile_skill_sync_status(seed_profile_skills(p.path, quiet=True))}")
+                    print(
+                        f"  {p.name}: {_profile_skill_sync_status(seed_profile_skills(p.path, quiet=True))}"
+                    )
                 except Exception as pe:
                     print(f"  {p.name}: error ({pe})")
 
@@ -851,13 +978,17 @@ def _sync_profiles_after_update() -> None:
     with suppress(Exception):
         # See #44792.
         from clawk_cli.profiles import backfill_profile_envs
+
         backfilled = backfill_profile_envs(quiet=True)
         if backfilled:
             print()
-            print(f"→ Seeded .env for {len(backfilled)} profile(s) (copied from default): {', '.join(backfilled)}")
+            print(
+                f"→ Seeded .env for {len(backfilled)} profile(s) (copied from default): {', '.join(backfilled)}"
+            )
 
     with suppress(Exception):
         from plugins.memory import import_provider_module
+
         synced = import_provider_module("honcho", "cli").sync_honcho_profiles_quiet()
         if synced:
             print(f"\n-> Honcho: synced {synced} profile(s)")
@@ -876,14 +1007,19 @@ def _refresh_cua_driver_after_update() -> None:
     if sys.platform == "win32":
         # The scheduled task targets a versioned binary. Selecting a new pin
         # without re-registering leaves it stale; registration requires UAC.
-        print("\n→ Windows cua-driver refresh deferred (autostart registration requires UAC).")
-        print("  Run `clawk computer-use install --upgrade` in an interactive terminal.")
+        print(
+            "\n→ Windows cua-driver refresh deferred (autostart registration requires UAC)."
+        )
+        print(
+            "  Run `clawk computer-use install --upgrade` in an interactive terminal."
+        )
         return
     print("\n→ Preparing pinned cua-driver (Computer Use)...")
     if sys.platform == "darwin":
         # PM preserves the signed app; setup validates and registers its new path
         # with LaunchServices. This path never requests permissions or elevation.
         from clawk_cli.tools_config_cua import install_cua_driver
+
         install_cua_driver(show_installer_progress=False)
     else:
         pm.ensure("cua-driver", explicit=True)
@@ -911,7 +1047,9 @@ def _install_default_tools_after_update() -> None:
     for name in default_packages(Lockfile(lockfile_path()).names()):
         if pm.installed_package(name) is not None:
             continue
-        print(f"\n→ Installing {name} (default tool; opt out with `clawk pm install --without {name}`)...")
+        print(
+            f"\n→ Installing {name} (default tool; opt out with `clawk pm install --without {name}`)..."
+        )
         try:
             pm.ensure(name, explicit=True)
         except (pm.InstallError, OSError) as exc:
@@ -922,6 +1060,7 @@ def _install_default_tools_after_update() -> None:
 def _print_checkpoint_footprint_notice() -> None:
     """Surface a GB-scale /rollback store the user may not know is on (see the helper's docstring)."""
     from tools.checkpoint_maintenance import checkpoint_footprint_notice
+
     notice = checkpoint_footprint_notice()
     if notice:
         print(f"\n\033[1;33mℹ  {notice}\033[0m")
@@ -930,29 +1069,37 @@ def _print_checkpoint_footprint_notice() -> None:
 def _print_post_update_notices_and_self_heals() -> None:
     """Best-effort notices (FTS optimize, curator) and self-heals (FHS PATH, ACP launcher,
     Windows bin launchers, cua-driver refresh) that run after the summary."""
-    from clawk_cli.update_cmd import _m, _print_curator_first_run_notice, _print_curator_recent_run_notice
+    from clawk_cli.update_cmd import (
+        _m,
+        _print_curator_first_run_notice,
+        _print_curator_recent_run_notice,
+    )
     from clawk_cli import _launchers
 
     def _migrate_windows_bin_path() -> None:
         # Windows launchers into the managed bin dir: in-checkout launchers were swept by the
         # autostash (--include-untracked) and updates never run install.ps1. No-op on POSIX.
         from clawk_cli._install_repair import migrate_windows_bin_path
+
         migrate_windows_bin_path(_m().PROJECT_ROOT)
 
     for message, step in (
         # v23 FTS layout is opt-in (existing indexes untouched); surface the command here.
-        ('FTS optimize notice failed: %s', _print_fts_optimize_available_notice),
-        ('Curator first-run notice failed: %s', _print_curator_first_run_notice),
-        ('Curator recent-run notice failed: %s', _print_curator_recent_run_notice),
-        ('FHS PATH guard check failed: %s', _ensure_fhs_path_guard),
-        ('CLI launcher exposure failed: %s', lambda: _launchers.expose_cli(_m().PROJECT_ROOT)),
-        ('Windows bin launcher migration failed: %s', _migrate_windows_bin_path),
-        ('cua-driver refresh failed: %s', _refresh_cua_driver_after_update),
-        ('Default PM tool install failed: %s', _install_default_tools_after_update),
-        ('Checkpoint footprint notice failed: %s', _print_checkpoint_footprint_notice),
+        ("FTS optimize notice failed: %s", _print_fts_optimize_available_notice),
+        ("Curator first-run notice failed: %s", _print_curator_first_run_notice),
+        ("Curator recent-run notice failed: %s", _print_curator_recent_run_notice),
+        ("FHS PATH guard check failed: %s", _ensure_fhs_path_guard),
+        (
+            "CLI launcher exposure failed: %s",
+            lambda: _launchers.expose_cli(_m().PROJECT_ROOT),
+        ),
+        ("Windows bin launcher migration failed: %s", _migrate_windows_bin_path),
+        ("cua-driver refresh failed: %s", _refresh_cua_driver_after_update),
+        ("Default PM tool install failed: %s", _install_default_tools_after_update),
+        ("Checkpoint footprint notice failed: %s", _print_checkpoint_footprint_notice),
         # Legacy CLAWK_NEMO_RELAY_ATIF_*/ATOF_* vars produce no traces since the Relay cutover;
         # generate each profile's relay-plugins.toml instead of leaving exports silently dead.
-        ('Relay exporter migration failed: %s', _migrate_relay_exporter_env),
+        ("Relay exporter migration failed: %s", _migrate_relay_exporter_env),
     ):
         with _best_effort(message):
             step()
@@ -960,12 +1107,19 @@ def _print_post_update_notices_and_self_heals() -> None:
 
 def _migrate_relay_exporter_env() -> None:
     from clawk_cli.relay_plugin_migrate import run_relay_migration_after_update
+
     run_relay_migration_after_update()
 
 
 def _run_post_update_maintenance(
-    *, assume_yes, gateway_mode, pre_update_snapshot_id, had_desktop_app_before_update,
-    pre_update_version, completion_message=None, followups=None,
+    *,
+    assume_yes,
+    gateway_mode,
+    pre_update_snapshot_id,
+    had_desktop_app_before_update,
+    pre_update_version,
+    completion_message=None,
+    followups=None,
 ) -> bool:
     """Post-build housekeeping and completion, returning the SQLite runtime verdict.
 
@@ -981,7 +1135,10 @@ def _run_post_update_maintenance(
     def owed_step(name, run):
         try:
             run()
-        except (Exception, SystemExit) as exc:  # health: allow BLE001 -- the code is committed; retry later
+        except (
+            Exception,
+            SystemExit,
+        ) as exc:  # health: allow BLE001 -- the code is committed; retry later
             reason = str(exc) or type(exc).__name__
             record_followup(name, reason)
             if followups is not None:
@@ -989,6 +1146,7 @@ def _run_post_update_maintenance(
 
     from clawk_cli.update_cmd import _check_and_apply_config_migration, _m
     from clawk_cli.update_windows_acl import repair_windows_home_acl
+
     owed_step("windows_home_acl", repair_windows_home_acl)
     # macOS TCC: Desktop bundles are re-signed each update, so old grants can go stale
     # (toggle ON, yet macOS re-prompts with no Allow button). Tell users how to re-grant.
@@ -1010,12 +1168,13 @@ def _run_post_update_maintenance(
     try:
         # See #95596.
         from clawk_cli.macos_tcc_anchor import ensure_tcc_anchor
+
         ensure_tcc_anchor()
     except Exception:
         logger.debug("macOS TCC anchor refresh skipped", exc_info=True)
 
     # state.db integrity guard for root home AND every profile; restore from own snapshot.
-    with _best_effort('Post-update state.db integrity check failed: %s'):
+    with _best_effort("Post-update state.db integrity check failed: %s"):
         _verify_and_restore_state_dbs_post_update()
 
     # Both shallow history and missing tags can hide the release identity.
@@ -1023,49 +1182,69 @@ def _run_post_update_maintenance(
     try:
         from clawk_cli.gitlock import fetch_full_commit_graph
         from clawk_cli.update_cmd import _no_prompt_git_kwargs
+
         if fetch_full_commit_graph(Path(_m().PROJECT_ROOT), **_no_prompt_git_kwargs()):
             print("  ✓ Fetched release history (commits only) for version identity")
     except (OSError, subprocess.SubprocessError) as exc:
-        detail = (getattr(exc, "stderr", None) or str(exc)).strip().splitlines()[-1:] or [type(exc).__name__]
-        print(f"  ⚠ Could not refresh release history ({detail[0]}); the version label may be stale or unknown until the next update")
+        detail = (getattr(exc, "stderr", None) or str(exc)).strip().splitlines()[
+            -1:
+        ] or [type(exc).__name__]
+        print(
+            f"  ⚠ Could not refresh release history ({detail[0]}); the version label may be stale or unknown until the next update"
+        )
 
     # Seed the model-catalog cache from the checkout instead of a bot-gated, flaky fetch.
-    with _best_effort('Model catalog seed during update failed: %s'):
+    with _best_effort("Model catalog seed during update failed: %s"):
         from clawk_cli.model_catalog import seed_cache_from_checkout
+
         if seed_cache_from_checkout(_m().PROJECT_ROOT):
             print("  ✓ Model catalog cache refreshed from checkout")
 
     # Drop the cached live plugin catalog under every profile: the checkout is shared, so a
     # pre-update snapshot must not out-vote the pins/entries this update just installed for the
     # rest of the cache TTL (#119340).
-    with _best_effort('Live plugin catalog cache invalidation failed: %s'):
+    with _best_effort("Live plugin catalog cache invalidation failed: %s"):
         _invalidate_live_plugin_catalog_caches()
 
-    with _best_effort('Skills sync during update failed: %s'):
+    with _best_effort("Skills sync during update failed: %s"):
         print()
         print("→ Syncing bundled skills...")
         _print_bundled_skills_sync_report()
 
     owed_step("profile_sync", _sync_profiles_after_update)
 
-    owed_step("config_migration", lambda: _check_and_apply_config_migration(
-        assume_yes=assume_yes, gateway_mode=gateway_mode, pre_update_snapshot_id=pre_update_snapshot_id,
-    ))
+    owed_step(
+        "config_migration",
+        lambda: _check_and_apply_config_migration(
+            assume_yes=assume_yes,
+            gateway_mode=gateway_mode,
+            pre_update_snapshot_id=pre_update_snapshot_id,
+        ),
+    )
 
     print()
-    update_complete = _print_verified_update_completion(completion_message or _update_complete_message(pre_update_version))
+    update_complete = _print_verified_update_completion(
+        completion_message or _update_complete_message(pre_update_version)
+    )
     # A multi-profile host whose gateway came back standalone on a guard says so here too — the
     # update summary is the one line operators read (the boot log under s6 is not).
     with suppress(Exception):
-        from clawk_cli.gateway_multiplex_mode import consume_rewritten_notice, recorded_standalone_warning_lines
+        from clawk_cli.gateway_multiplex_mode import (
+            consume_rewritten_notice,
+            recorded_standalone_warning_lines,
+        )
+
         for line in [*consume_rewritten_notice(), *recorded_standalone_warning_lines()]:
             print(line)
 
-    with _best_effort('Post-update notices failed: %s'):
+    with _best_effort("Post-update notices failed: %s"):
         _print_post_update_notices_and_self_heals()
     # A non-✓ completion message (parked local changes) withholds success on its own; only a
     # ✓ message that still came back False is the SQLite verdict.
     if not update_complete and (completion_message or "✓").startswith("✓"):
-        record_followup("sqlite_runtime", "the selected Python links an unsafe SQLite runtime",
-                        retry="run the installer again")
+        record_followup(
+            "sqlite_runtime",
+            "the selected Python links an unsafe SQLite runtime",
+            retry="run the installer again",
+        )
     return update_complete

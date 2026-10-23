@@ -19,6 +19,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+
 def _make_cli(**kwargs):
     """Create a ClawksisCLI with prompt_toolkit stubbed out."""
     _clean_config = {
@@ -49,23 +50,26 @@ def _make_cli(**kwargs):
         "prompt_toolkit.formatted_text": MagicMock(),
         "prompt_toolkit.auto_suggest": MagicMock(),
     }
-    with patch.dict(sys.modules, prompt_toolkit_stubs), patch.dict(
-        "os.environ", clean_env, clear=False
+    with (
+        patch.dict(sys.modules, prompt_toolkit_stubs),
+        patch.dict("os.environ", clean_env, clear=False),
     ):
         import cli as _cli_mod
 
         _cli_mod = importlib.reload(_cli_mod)
-        with patch.object(_cli_mod, "get_tool_definitions", return_value=[]), patch.dict(
-            _cli_mod.__dict__, {"CLI_CONFIG": _clean_config}
+        with (
+            patch.object(_cli_mod, "get_tool_definitions", return_value=[]),
+            patch.dict(_cli_mod.__dict__, {"CLI_CONFIG": _clean_config}),
         ):
             return _cli_mod.ClawksisCLI(**kwargs)
+
 
 @pytest.fixture(scope="module")
 def cli():
     return _make_cli()
 
-class TestStashStateInit:
 
+class TestStashStateInit:
     def test_stash_is_per_instance_not_shared(self):
         """Two CLIs must not share one stash — drafts would leak across sessions."""
         a = _make_cli()
@@ -73,6 +77,7 @@ class TestStashStateInit:
         a._prompt_stash.stash("only in a")
         assert len(a._prompt_stash) == 1
         assert len(b._prompt_stash) == 0
+
 
 class TestLayoutSlot:
     def test_layout_includes_stash_panel_when_present(self, cli):
@@ -117,6 +122,7 @@ class TestLayoutSlot:
             completions_menu="completions-menu",
         )
         assert None not in children
+
 
 class TestRenderStashPanel:
     """Contributor's panel renderer, now measured in display cells."""
@@ -165,10 +171,12 @@ class TestRenderStashPanel:
         stash.stash("a")
         stash.stash("b")
         rows = stash.panel_rows()
-        assert cli._render_stash_panel(rows, 0, 100) != cli._render_stash_panel(rows, 1, 100)
+        assert cli._render_stash_panel(rows, 0, 100) != cli._render_stash_panel(
+            rows, 1, 100
+        )
+
 
 class TestStatusBarIndicator:
-
     def test_indicator_appears_after_stashing(self, cli):
         cli._prompt_stash.clear()
         cli._status_bar_visible = True

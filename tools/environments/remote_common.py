@@ -8,21 +8,26 @@ import subprocess
 from typing import Callable, Iterable
 
 from tools.environments.base_session_env import _SHELL_ENV_NAME_RE
-from tools.environments.local_env_policy import _is_clawk_internal_secret, _is_provider_env_blocklisted
+from tools.environments.local_env_policy import (
+    _is_clawk_internal_secret,
+    _is_provider_env_blocklisted,
+)
 
 
 def load_clawk_env_vars() -> dict[str, str]:
     """``~/.clawksis/.env`` values, or ``{}`` — a broken .env must not fail command execution."""
     try:
         from clawk_cli.config import load_env
+
         return load_env() or {}
     except Exception:
         return {}
 
 
-def resolve_passthrough_env(explicit_forward: Iterable[str] = (),
-                            clawk_env_loader: Callable[[], dict[str, str]] = load_clawk_env_vars,
-                            ) -> tuple[dict[str, str], set[str]]:
+def resolve_passthrough_env(
+    explicit_forward: Iterable[str] = (),
+    clawk_env_loader: Callable[[], dict[str, str]] = load_clawk_env_vars,
+) -> tuple[dict[str, str], set[str]]:
     """Values to forward into a remote shell plus the scoped names that must be unset there.
 
     Implicit passthrough (skill ``required_environment_variables`` + ``terminal.env_passthrough``)
@@ -38,14 +43,19 @@ def resolve_passthrough_env(explicit_forward: Iterable[str] = (),
     is_global_env = lambda _name: False
     try:
         from tools.env_passthrough import get_all_passthrough, resolve_passthrough_value
-        from agent.secret_scope import _is_global_env as is_global_env, is_multiplex_active
+        from agent.secret_scope import (
+            _is_global_env as is_global_env,
+            is_multiplex_active,
+        )
+
         multiplex_active = is_multiplex_active()
         passthrough_keys = set(get_all_passthrough())
     except Exception:
         pass
     implicit_forward = {k for k in passthrough_keys if not _is_clawk_internal_secret(k)}
     forward_keys = set(explicit_forward) | {
-        k for k in implicit_forward if not _is_provider_env_blocklisted(k)}
+        k for k in implicit_forward if not _is_provider_env_blocklisted(k)
+    }
     clawk_env = clawk_env_loader() if forward_keys else {}
     exec_env: dict[str, str] = {}
     unset_names: set[str] = set()
@@ -55,7 +65,11 @@ def resolve_passthrough_env(explicit_forward: Iterable[str] = (),
             value = resolve_passthrough_value(key, value)
         if value is not None:
             exec_env[key] = value
-        elif multiplex_active and not is_global_env(key) and _SHELL_ENV_NAME_RE.fullmatch(key):
+        elif (
+            multiplex_active
+            and not is_global_env(key)
+            and _SHELL_ENV_NAME_RE.fullmatch(key)
+        ):
             unset_names.add(key)
     return exec_env, unset_names
 
@@ -74,13 +88,26 @@ def client_env_with(values: dict[str, str]) -> dict[str, str] | None:
     return {**os.environ, **values} if values else None
 
 
-def run_capture(cmd: list[str], *, timeout: float, check: bool = False, env: dict | None = None,
-                ) -> subprocess.CompletedProcess:
+def run_capture(
+    cmd: list[str],
+    *,
+    timeout: float,
+    check: bool = False,
+    env: dict | None = None,
+) -> subprocess.CompletedProcess:
     """``subprocess.run`` with the backend-standard capture settings: text mode with utf-8/replace
     decoding and stdin closed (DEVNULL) so a CLI that unexpectedly prompts cannot hang the agent."""
     return subprocess.run(
-        cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
-        timeout=timeout, check=check, stdin=subprocess.DEVNULL, env=env)
+        cmd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+        check=check,
+        stdin=subprocess.DEVNULL,
+        env=env,
+    )
 
 
 def bash_argv(cmd_string: str, login: bool = False) -> list[str]:

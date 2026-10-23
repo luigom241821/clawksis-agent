@@ -12,13 +12,9 @@ from __future__ import annotations
 import sys
 
 
-
-
-
-
-
-
-def test_one_shot_cli_path_reaps_dead_owner_row_before_returning_sync(tmp_path, monkeypatch):
+def test_one_shot_cli_path_reaps_dead_owner_row_before_returning_sync(
+    tmp_path, monkeypatch
+):
     """The real one-shot `clawk cron run` shape (``_SESSION_ASYNC_DELIVERY`` scoped to False,
     as clawk_cli/cron.py::_job_action does) must still reap a 'running' row whose owner pid
     is provably dead before falling back to the sync run — the early return used to skip it."""
@@ -37,12 +33,18 @@ def test_one_shot_cli_path_reaps_dead_owner_row_before_returning_sync(tmp_path, 
     with sqlite3.connect(tmp_path / "executions.db") as conn:
         conn.execute(
             "UPDATE executions SET status='running', process_id='other-process', pid=?, "
-            "process_started_at=1 WHERE id=?", (dead_pid, row["id"]))
+            "process_started_at=1 WHERE id=?",
+            (dead_pid, row["id"]),
+        )
 
     token = _SESSION_ASYNC_DELIVERY.set(False)
     try:
-        assert cronjob_tools._try_dispatch_background_run(
-            {"id": "dead-owner-job", "name": "dead owner job", "deliver": "local"}) is None
+        assert (
+            cronjob_tools._try_dispatch_background_run(
+                {"id": "dead-owner-job", "name": "dead owner job", "deliver": "local"}
+            )
+            is None
+        )
     finally:
         _SESSION_ASYNC_DELIVERY.reset(token)
 

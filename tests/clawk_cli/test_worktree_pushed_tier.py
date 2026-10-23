@@ -21,7 +21,11 @@ from clawk_cli import worktree_ops
 
 def _run(args, cwd):
     return subprocess.run(
-        args, cwd=cwd, capture_output=True, text=True, encoding="utf-8",
+        args,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
         check=False,
     )
 
@@ -50,8 +54,12 @@ def repo_with_bare_origin(tmp_path):
     _run(["git", "remote", "add", "origin", str(bare)], repo)
     # Managed-install shape: fetch refspec covers main ONLY.
     _run(
-        ["git", "config", "remote.origin.fetch",
-         "+refs/heads/main:refs/remotes/origin/main"],
+        [
+            "git",
+            "config",
+            "remote.origin.fetch",
+            "+refs/heads/main:refs/remotes/origin/main",
+        ],
         repo,
     )
     _run(["git", "push", "-u", "origin", "main"], repo)
@@ -64,7 +72,9 @@ def _age(path, hours=100):
     os.utime(path, (t, t))
 
 
-def _mk_worktree(repo, name, branch, commit=True, push=False, extra_commit_after_push=False):
+def _mk_worktree(
+    repo, name, branch, commit=True, push=False, extra_commit_after_push=False
+):
     """Create .worktrees/<name> on <branch> with an optional pushed commit."""
     (repo / ".worktrees").mkdir(exist_ok=True)
     p = repo / ".worktrees" / name
@@ -87,14 +97,18 @@ def _mk_worktree(repo, name, branch, commit=True, push=False, extra_commit_after
 
 
 def _branch_exists(repo, branch):
-    return _run(
-        ["git", "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"], repo
-    ).returncode == 0
+    return (
+        _run(
+            ["git", "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"], repo
+        ).returncode
+        == 0
+    )
 
 
 class TestFetchRemoteBranchHeads:
     def test_lists_pushed_branches(self, repo_with_bare_origin):
         import cli
+
         repo = repo_with_bare_origin
         _mk_worktree(repo, "clawk-a", "clawk/clawk-a", push=True)
         heads = worktree_ops._fetch_remote_branch_heads(str(repo))
@@ -104,6 +118,7 @@ class TestFetchRemoteBranchHeads:
 
     def test_unreachable_remote_returns_none(self, tmp_path):
         import cli
+
         repo = tmp_path / "r"
         repo.mkdir()
         _run(["git", "init"], repo)
@@ -114,6 +129,7 @@ class TestFetchRemoteBranchHeads:
 class TestBranchPushedExact:
     def test_exact_match_true(self, repo_with_bare_origin):
         import cli
+
         repo = repo_with_bare_origin
         wt = _mk_worktree(repo, "clawk-x", "clawk/clawk-x", push=True)
         heads = worktree_ops._fetch_remote_branch_heads(str(repo))
@@ -121,16 +137,21 @@ class TestBranchPushedExact:
 
     def test_local_ahead_of_push_false(self, repo_with_bare_origin):
         import cli
+
         repo = repo_with_bare_origin
         wt = _mk_worktree(
-            repo, "clawk-y", "clawk/clawk-y",
-            push=True, extra_commit_after_push=True,
+            repo,
+            "clawk-y",
+            "clawk/clawk-y",
+            push=True,
+            extra_commit_after_push=True,
         )
         heads = worktree_ops._fetch_remote_branch_heads(str(repo))
         assert worktree_ops._worktree_branch_pushed_exact(str(wt), heads) is False
 
     def test_never_pushed_false(self, repo_with_bare_origin):
         import cli
+
         repo = repo_with_bare_origin
         wt = _mk_worktree(repo, "clawk-z", "clawk/clawk-z", push=False)
         heads = worktree_ops._fetch_remote_branch_heads(str(repo))
@@ -138,6 +159,7 @@ class TestBranchPushedExact:
 
     def test_none_heads_false(self, repo_with_bare_origin):
         import cli
+
         repo = repo_with_bare_origin
         wt = _mk_worktree(repo, "clawk-n", "clawk/clawk-n", push=True)
         assert worktree_ops._worktree_branch_pushed_exact(str(wt), None) is False
@@ -149,6 +171,7 @@ class TestStartupPrunerPushedTier:
 
     def test_pushed_lane_tree_reaped_branch_kept(self, repo_with_bare_origin):
         import cli
+
         repo = repo_with_bare_origin
         wt = _mk_worktree(repo, "clawk-pushed", "clawk/clawk-pushed", push=True)
 
@@ -163,6 +186,7 @@ class TestStartupPrunerPushedTier:
 
     def test_unpushed_lane_still_preserved(self, repo_with_bare_origin):
         import cli
+
         repo = repo_with_bare_origin
         wt = _mk_worktree(repo, "clawk-unpushed", "clawk/clawk-unp", push=False)
 
@@ -172,10 +196,14 @@ class TestStartupPrunerPushedTier:
 
     def test_ahead_of_pushed_lane_preserved(self, repo_with_bare_origin):
         import cli
+
         repo = repo_with_bare_origin
         wt = _mk_worktree(
-            repo, "clawk-ahead", "clawk/clawk-ahead",
-            push=True, extra_commit_after_push=True,
+            repo,
+            "clawk-ahead",
+            "clawk/clawk-ahead",
+            push=True,
+            extra_commit_after_push=True,
         )
 
         cli._prune_stale_worktrees(str(repo))
@@ -186,6 +214,7 @@ class TestStartupPrunerPushedTier:
 
     def test_pushed_but_dirty_preserved(self, repo_with_bare_origin):
         import cli
+
         repo = repo_with_bare_origin
         wt = _mk_worktree(repo, "clawk-pdirty", "clawk/clawk-pdirty", push=True)
         (wt / "uncommitted.txt").write_text("in-flight\n")
@@ -197,6 +226,7 @@ class TestStartupPrunerPushedTier:
 
     def test_offline_remote_preserves(self, repo_with_bare_origin, tmp_path):
         import cli
+
         repo = repo_with_bare_origin
         wt = _mk_worktree(repo, "clawk-off", "clawk/clawk-off", push=True)
         # Sever the remote AFTER pushing: ls-remote now fails -> None ->
@@ -249,8 +279,11 @@ class TestCronWorktreeMaintenance:
         calls = []
         monkeypatch.setattr(sched, "_last_worktree_maintenance_at", None)
         monkeypatch.setattr(
-            sched.threading, "Thread",
-            lambda *a, **k: type("T", (), {"start": lambda self: calls.append(k.get("name"))})(),
+            sched.threading,
+            "Thread",
+            lambda *a, **k: type(
+                "T", (), {"start": lambda self: calls.append(k.get("name"))}
+            )(),
         )
 
         sched._maybe_run_worktree_maintenance()
@@ -277,16 +310,16 @@ class TestCronWorktreeMaintenance:
         repos = sched._worktree_maintenance_repos()
         assert repo in [Path(p) for p in repos]
 
-    def test_maintenance_prunes_via_real_pruner(self, repo_with_bare_origin, monkeypatch):
+    def test_maintenance_prunes_via_real_pruner(
+        self, repo_with_bare_origin, monkeypatch
+    ):
         import cron.scheduler as sched
 
         repo = repo_with_bare_origin
         wt = _mk_worktree(repo, "clawk-cronreap", "clawk/clawk-cronreap", push=True)
 
         monkeypatch.setattr(sched, "_last_worktree_maintenance_at", None)
-        monkeypatch.setattr(
-            sched, "_worktree_maintenance_repos", lambda: [str(repo)]
-        )
+        monkeypatch.setattr(sched, "_worktree_maintenance_repos", lambda: [str(repo)])
 
         sched._maybe_run_worktree_maintenance()
         # The sweep runs on a daemon thread — wait for it (bounded).

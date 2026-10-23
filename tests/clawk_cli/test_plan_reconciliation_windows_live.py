@@ -13,6 +13,7 @@ reconciliation. No mocks on the components under test.
  4. A running record naming a live NON-gateway process is not a runtime
     (verified identity, not bare PID existence — #109680).
 """
+
 import io, contextlib, json, os, subprocess, sys, tempfile, time
 from pathlib import Path
 
@@ -57,31 +58,45 @@ def test_plan_reconciliation_live_windows(tmp_path, monkeypatch):
     # stand-in wears one; a bare sleeper is recorded too and must NOT count.
     child = subprocess.Popen(
         [sys.executable, sleeper_script_path(), "clawk", "gateway", "run"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
     foreign = subprocess.Popen(
         [sys.executable, sleeper_script_path()],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
     try:
-        assert _wait_until(lambda: _argv_visible(child.pid, "gateway")), "stand-in argv never visible"
-        assert _wait_until(lambda: _argv_visible(foreign.pid, SLEEPER_MARKER)), "sleeper never visible"
+        assert _wait_until(lambda: _argv_visible(child.pid, "gateway")), (
+            "stand-in argv never visible"
+        )
+        assert _wait_until(lambda: _argv_visible(foreign.pid, SLEEPER_MARKER)), (
+            "sleeper never visible"
+        )
 
         import psutil
 
         create_time = psutil.Process(child.pid).create_time()
-        (home / "gateway_state.json").write_text(json.dumps({
-            "pid": child.pid,
-            "create_time": create_time,
-            "gateway_state": "running",
-            "kind": "clawk-gateway",
-            "code_sha": "f" * 40,
-            "code_version": "0.20.5",
-        }), encoding="utf-8")
+        (home / "gateway_state.json").write_text(
+            json.dumps(
+                {
+                    "pid": child.pid,
+                    "create_time": create_time,
+                    "gateway_state": "running",
+                    "kind": "clawk-gateway",
+                    "code_sha": "f" * 40,
+                    "code_version": "0.20.5",
+                }
+            ),
+            encoding="utf-8",
+        )
 
         import clawk_cli.profiles as profiles_mod
+
         monkeypatch.setattr(profiles_mod, "_get_default_clawk_home", lambda: home)
-        monkeypatch.setattr(profiles_mod, "_get_profiles_root", lambda: tmp_path / "none")
+        monkeypatch.setattr(
+            profiles_mod, "_get_profiles_root", lambda: tmp_path / "none"
+        )
 
         from clawk_cli.update_inventory import (
             collect_runtime_inventory,
@@ -101,8 +116,11 @@ def test_plan_reconciliation_live_windows(tmp_path, monkeypatch):
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             outcomes = match_runtime_outcomes(
-                plan, restarted_services=[], relaunched_profiles=[],
-                externally_supervised_profiles=[], killed_pids=set(),
+                plan,
+                restarted_services=[],
+                relaunched_profiles=[],
+                externally_supervised_profiles=[],
+                killed_pids=set(),
                 failed_units=[],
             )
             escalated = report_unaccounted_runtimes(outcomes)
@@ -113,8 +131,11 @@ def test_plan_reconciliation_live_windows(tmp_path, monkeypatch):
 
         # 3. accounted as stopped -> clean
         outcomes2 = match_runtime_outcomes(
-            plan, restarted_services=[], relaunched_profiles=[],
-            externally_supervised_profiles=[], killed_pids={child.pid},
+            plan,
+            restarted_services=[],
+            relaunched_profiles=[],
+            externally_supervised_profiles=[],
+            killed_pids={child.pid},
             failed_units=[],
         )
         mine2 = [o for o in outcomes2 if o["pid"] == child.pid]
@@ -123,18 +144,27 @@ def test_plan_reconciliation_live_windows(tmp_path, monkeypatch):
 
         # 4. The same running record naming a live NON-gateway process (a
         # recycled PID) is not a runtime: bare liveness is not identity.
-        (home / "gateway_state.json").write_text(json.dumps({
-            "pid": foreign.pid,
-            "create_time": psutil.Process(foreign.pid).create_time(),
-            "gateway_state": "running",
-            "kind": "clawk-gateway",
-            "code_sha": "f" * 40,
-        }), encoding="utf-8")
+        (home / "gateway_state.json").write_text(
+            json.dumps(
+                {
+                    "pid": foreign.pid,
+                    "create_time": psutil.Process(foreign.pid).create_time(),
+                    "gateway_state": "running",
+                    "kind": "clawk-gateway",
+                    "code_sha": "f" * 40,
+                }
+            ),
+            encoding="utf-8",
+        )
         plan2 = collect_runtime_inventory()
         assert [r for r in plan2.runtimes if r.pid == foreign.pid] == [], plan2.runtimes
     finally:
         for proc in (child, foreign):
             if proc.poll() is None:
                 # /T: uv's venv python.exe is a trampoline; kill the real interpreter too.
-                subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True, check=False)
+                subprocess.run(
+                    ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+                    capture_output=True,
+                    check=False,
+                )
             proc.wait()

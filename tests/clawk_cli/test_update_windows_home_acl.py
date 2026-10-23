@@ -16,12 +16,17 @@ def _fake_elevated(monkeypatch, tmp_path, elevated=True):
 
     def run(argv, **kw):
         runs.append(argv)
-        return subprocess.CompletedProcess(argv, 0, sid_row if argv[0] == "whoami" else "", "")
+        return subprocess.CompletedProcess(
+            argv, 0, sid_row if argv[0] == "whoami" else "", ""
+        )
 
     monkeypatch.setattr(subprocess, "run", run)
     monkeypatch.setattr(clawk_dir_acl, "process_is_elevated", lambda: elevated)
-    monkeypatch.setattr(clawk_dir_acl, "_grant_with_pywin32",
-                        lambda path, *_a, **_k: granted.append(os.path.realpath(path)))
+    monkeypatch.setattr(
+        clawk_dir_acl,
+        "_grant_with_pywin32",
+        lambda path, *_a, **_k: granted.append(os.path.realpath(path)),
+    )
     return granted, runs
 
 
@@ -76,11 +81,15 @@ def test_repair_walks_below_an_operator_linked_home(monkeypatch, tmp_path):
     granted, _runs = _fake_elevated(monkeypatch, tmp_path)
     (tmp_path / "home").symlink_to(real, target_is_directory=True)
     maint.repair_windows_home_acl()
-    assert sorted(granted) == sorted([str(real), str(real / "state"), str(real / "state" / "s.json")])
+    assert sorted(granted) == sorted(
+        [str(real), str(real / "state"), str(real / "state" / "s.json")]
+    )
 
 
 def test_repair_that_repaired_nothing_stays_owed(monkeypatch, tmp_path):
     _fake_elevated(monkeypatch, tmp_path)
-    (tmp_path / "home").symlink_to(tmp_path / "gone", target_is_directory=True)  # dangling
+    (tmp_path / "home").symlink_to(
+        tmp_path / "gone", target_is_directory=True
+    )  # dangling
     with pytest.raises(RuntimeError, match="nothing was repaired"):
         maint.repair_windows_home_acl()

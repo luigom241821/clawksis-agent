@@ -11,6 +11,7 @@ A catalog whose ``plugin_discovery_error`` is set lists no plugins because the g
 them, not because there are none: it is treated as a failed read and never cached. Off the gateway
 (tests, the TUI slash worker's shadow CLI) main's dispatch applies.
 """
+
 from __future__ import annotations
 
 import logging
@@ -21,8 +22,12 @@ from clawk_cli.gateway_client import GatewayClientError
 logger = logging.getLogger(__name__)
 
 _CATEGORY = "Plugin commands"  # tui_gateway/command_discovery.py
-GONE = object()  # run(): the gateway no longer has the command; the caller dispatches the name again
-STOPPED = object()  # call_unbounded(): Ctrl+C stopped the wait (the stopped line is printed)
+GONE = (
+    object()
+)  # run(): the gateway no longer has the command; the caller dispatches the name again
+STOPPED = (
+    object()
+)  # call_unbounded(): Ctrl+C stopped the wait (the stopped line is printed)
 _GONE_LINE = "  /{}: the gateway no longer has this plugin command; nothing was run."
 _CHOICE_POLL_S = 0.1  # how often a running command's clarify requests are looked for
 _STOPPED_LINE = "  /{}: stopped waiting. The command keeps running in the gateway and its reply will not be shown."
@@ -33,7 +38,11 @@ class CatalogUnavailable(Exception):
 
 
 def _boundary(cli, connection):
-    return connection, getattr(connection, "epoch", None), getattr(cli, "session_id", None)
+    return (
+        connection,
+        getattr(connection, "epoch", None),
+        getattr(cli, "session_id", None),
+    )
 
 
 def _read(cli, connection):
@@ -44,24 +53,42 @@ def _read(cli, connection):
     session = getattr(cli, "session_id", None)
     catalog, epoch = _catalog(cli, connection, session)
     catalog = catalog or {}
-    if catalog.get("plugin_discovery_error"):  # absent on older gateways: today's behaviour
-        raise GatewayClientError(f"plugin command discovery failed: {catalog['plugin_discovery_error']}")
+    if catalog.get(
+        "plugin_discovery_error"
+    ):  # absent on older gateways: today's behaviour
+        raise GatewayClientError(
+            f"plugin command discovery failed: {catalog['plugin_discovery_error']}"
+        )
     listed = catalog.get("plugin_commands")
-    if isinstance(listed, dict):  # every plugin command, also one a display row (Ink's /logs) hides
-        found = {str(name).lstrip("/"): str(desc or "") for name, desc in listed.items()}
+    if isinstance(
+        listed, dict
+    ):  # every plugin command, also one a display row (Ink's /logs) hides
+        found = {
+            str(name).lstrip("/"): str(desc or "") for name, desc in listed.items()
+        }
     else:  # older gateways: the display category
         found = {}
         for category in catalog.get("categories") or []:
             if isinstance(category, dict) and category.get("name") == _CATEGORY:
                 for row in category.get("pairs") or []:
-                    if isinstance(row, (list, tuple)) and len(row) == 2 and isinstance(row[0], str):
+                    if (
+                        isinstance(row, (list, tuple))
+                        and len(row) == 2
+                        and isinstance(row[0], str)
+                    ):
                         found[row[0].lstrip("/")] = str(row[1] or "")
     # The session's skill commands as the gateway resolved them (its plugin skills included): /help,
     # completion and dispatch read these, so this process never scans plugin skills to list them.
-    descriptions = {row[0]: str(row[1] or "") for row in catalog.get("pairs") or []
-                    if isinstance(row, (list, tuple)) and len(row) == 2 and isinstance(row[0], str)}
-    skills = {key: {"name": key.lstrip("/"), "description": descriptions.get(key) or "Skill"}
-              for key in catalog.get("skills") or {} if isinstance(key, str)}
+    descriptions = {
+        row[0]: str(row[1] or "")
+        for row in catalog.get("pairs") or []
+        if isinstance(row, (list, tuple)) and len(row) == 2 and isinstance(row[0], str)
+    }
+    skills = {
+        key: {"name": key.lstrip("/"), "description": descriptions.get(key) or "Skill"}
+        for key in catalog.get("skills") or {}
+        if isinstance(key, str)
+    }
     served = (connection, epoch, session)
     if _boundary(cli, connection) == served:
         cli._gateway_plugin_commands = (served, found)
@@ -74,6 +101,7 @@ def _catalog(cli, connection, session):
     folder (its trusted project skills), not the gateway's. A gateway older than this CLI refuses the
     ``session_id`` (``invalid_params``): it is asked again without it, as before."""
     from clawk_cli.gateway_client import GatewayRPCError
+
     if session and getattr(cli, "_gateway_session_open", False):
         try:
             return connection.call_tagged("commands.catalog", session_id=session)
@@ -107,6 +135,7 @@ def skills(cli, *, notes=False):
     (``notes``: its one-line notice instead, e.g. skills a built-in command shadows), or None off the
     gateway. A failed read is printed once per input and lists none; nothing is scanned here."""
     from clawk_cli.gateway_side import connection_for
+
     connection = connection_for(cli)
     if connection is None:
         return None
@@ -129,7 +158,12 @@ def skill_notes(cli):
         return [notice] if notice else []
     from agent.skill_commands import skill_command_collision_note
     from tools.skills_tool import find_all_skills
-    return list(filter(None, (skill_command_collision_note(s["name"]) for s in find_all_skills())))
+
+    return list(
+        filter(
+            None, (skill_command_collision_note(s["name"]) for s in find_all_skills())
+        )
+    )
 
 
 def run_skill(cli, base_cmd, rest):
@@ -137,19 +171,28 @@ def run_skill(cli, base_cmd, rest):
     skills and stacked skills too) and returns the message, which is queued as main queued it; True
     when answered there (False off the gateway: main's local load)."""
     from clawk_cli.gateway_side import connection_for
+
     connection = connection_for(cli)
     if connection is None:
         return False
     from agent.i18n import t
     from cli import _cprint
+
     command = base_cmd.lstrip("/") + (" " + rest if rest else "")
     try:
-        reply = connection.call("slash.exec", session_id=cli.session_id, command=command) or {}
+        reply = (
+            connection.call("slash.exec", session_id=cli.session_id, command=command)
+            or {}
+        )
     except GatewayClientError as exc:
         _cprint(f"  {base_cmd}: {exc}")
         return True
     if reply.get("type") == "skill" and reply.get("message"):
-        cli._queue_loaded_skills(reply["message"], t("cli.skills.loading_skill", name=reply.get("name") or command), None)
+        cli._queue_loaded_skills(
+            reply["message"],
+            t("cli.skills.loading_skill", name=reply.get("name") or command),
+            None,
+        )
     if reply.get("notice") or reply.get("output"):
         _cprint(f"  {reply.get('notice') or reply.get('output')}")
     return True
@@ -160,6 +203,7 @@ def toolsets(cli):
     profile (``plugins.list``), or None off the gateway (this process's own registry applies). An older
     gateway or a failed read gives none, never a local scan. Read once per gateway life."""
     from clawk_cli.gateway_side import connection_for
+
     connection = connection_for(cli)
     if connection is None:
         return None
@@ -172,9 +216,19 @@ def toolsets(cli):
     except GatewayClientError as exc:
         logger.debug("plugins.list unavailable: %s", exc)
         return [], set()
-    rows = [(str(r.get("key")), str(r.get("label") or r.get("key")), str(r.get("description") or ""))
-            for r in reply.get("toolsets") or [] if isinstance(r, dict) and isinstance(r.get("key"), str)]
-    found = (rows, {str(n) for n in reply.get("portable_mcp_servers") or [] if isinstance(n, str)})
+    rows = [
+        (
+            str(r.get("key")),
+            str(r.get("label") or r.get("key")),
+            str(r.get("description") or ""),
+        )
+        for r in reply.get("toolsets") or []
+        if isinstance(r, dict) and isinstance(r.get("key"), str)
+    ]
+    found = (
+        rows,
+        {str(n) for n in reply.get("portable_mcp_servers") or [] if isinstance(n, str)},
+    )
     cli._gateway_plugin_toolsets = (boundary, found)
     return found
 
@@ -183,6 +237,7 @@ def names(cli):
     """``{name: description}`` of the gateway's plugin commands for completion, or None off the
     gateway. A failed read degrades quietly to none; dispatch uses :func:`lookup`."""
     from clawk_cli.gateway_side import connection_for
+
     connection = connection_for(cli)
     if connection is None:
         return None
@@ -200,6 +255,7 @@ def lookup(cli, name):
     cached list lacks re-reads it once. A failed read is not evidence the name is no plugin: it is
     printed and :class:`CatalogUnavailable` raised, so no skill, bundle or expansion stands in."""
     from clawk_cli.gateway_side import connection_for
+
     connection = connection_for(cli)
     if connection is None:
         return None
@@ -210,7 +266,10 @@ def lookup(cli, name):
         return name in _read(cli, connection)
     except GatewayClientError as exc:
         from cli import _cprint
-        _cprint(f"  /{name}: the gateway's command list is unavailable ({exc}); nothing was run.")
+
+        _cprint(
+            f"  /{name}: the gateway's command list is unavailable ({exc}); nothing was run."
+        )
         raise CatalogUnavailable(name) from exc
 
 
@@ -220,12 +279,22 @@ def call_unbounded(cli, connection, name, command):
     line is printed and :data:`STOPPED` returned (a KeyboardInterrupt still propagates after it)."""
     from cli import _cprint
     from clawk_cli.gateway_connection import CallStopped
-    wake = cli._gateway_command_wait = threading.Event()  # set by Ctrl+C (cli_tui_mixin)
+
+    wake = cli._gateway_command_wait = (
+        threading.Event()
+    )  # set by Ctrl+C (cli_tui_mixin)
     from agent.memory_provider import spawn_context_thread
+
     answering: list = []  # the clarify request id the panel is answering, while it is open
-    spawn_context_thread(_answer_choices, args=(cli, connection, wake, answering), name="clawk-command-choices").start()
+    spawn_context_thread(
+        _answer_choices,
+        args=(cli, connection, wake, answering),
+        name="clawk-command-choices",
+    ).start()
     try:
-        return connection.call_until("slash.exec", wake, session_id=cli.session_id, command=command)
+        return connection.call_until(
+            "slash.exec", wake, session_id=cli.session_id, command=command
+        )
     except (CallStopped, KeyboardInterrupt) as exc:
         _cprint(_STOPPED_LINE.format(name))
         if isinstance(exc, KeyboardInterrupt):
@@ -243,6 +312,7 @@ def _answer_choices(cli, connection, wake, answering):
     pump reads the session's frames between turns, so they are taken here; every other frame stays
     queued, in order, for the turn that owns it."""
     from clawk_cli.gateway_agent import clarify_reply
+
     events, state = connection.events, connection.state(cli.session_id)
 
     def withdrawn(payload):
@@ -255,8 +325,14 @@ def _answer_choices(cli, connection, wake, answering):
     try:
         while not wake.wait(_CHOICE_POLL_S):
             with events.mutex:
-                asks = [frame for frame in events.queue if isinstance(frame, dict) and frame.get("method") == "clarify"
-                        and "id" in frame and (frame.get("params") or {}).get("session_id") == cli.session_id]
+                asks = [
+                    frame
+                    for frame in events.queue
+                    if isinstance(frame, dict)
+                    and frame.get("method") == "clarify"
+                    and "id" in frame
+                    and (frame.get("params") or {}).get("session_id") == cli.session_id
+                ]
                 for frame in asks:
                     events.queue.remove(frame)
             for frame in asks:
@@ -276,11 +352,13 @@ def run(cli, name, arg):
     ``clawk plugins disable``, dropped it in this session and gateway life, which no cache boundary
     sees): nothing ran, and the caller dispatches the name again (bundle, skill, prefix)."""
     from clawk_cli.gateway_side import connection_for
+
     connection = connection_for(cli)
     if connection is None:
         return False
     from cli import _cprint
     from clawk_cli.gateway_client import GatewayRPCError
+
     # No answer deadline: main's CLI waited for the handler, which may wait minutes (ctx.call_mcp).
     try:
         reply = call_unbounded(cli, connection, name, name + (" " + arg if arg else ""))
@@ -295,7 +373,9 @@ def run(cli, name, arg):
     if reply is STOPPED:
         return True
     reply = reply or {}
-    if reply.get("type", "exec") != "exec":  # it lost the plugin since lookup: a refusal or skill reply
+    if (
+        reply.get("type", "exec") != "exec"
+    ):  # it lost the plugin since lookup: a refusal or skill reply
         if _dropped(cli, connection, name):
             return GONE
         _cprint(_GONE_LINE.format(name))
@@ -320,9 +400,11 @@ def report_gone(name, *known):
     """Print that ``/name`` is no longer a plugin command, unless one of the built-in commands or a
     ``known`` skill or bundle name starts with it (then prefix expansion decides); True when printed."""
     from clawk_cli.commands import COMMANDS
+
     if any(key.startswith("/" + name) for group in (COMMANDS, *known) for key in group):
         return False
     from cli import _cprint
+
     _cprint(_GONE_LINE.format(name))
     return True
 
@@ -335,6 +417,7 @@ def observe(cli, name, arg, *, runs=True):
     line, and is not asked again on that connection life: local commands then reach no ``pre_command``
     observer, and this process still fires none itself."""
     from clawk_cli.gateway_side import connection_for
+
     connection = connection_for(cli)
     if connection is None:
         return False
@@ -344,8 +427,11 @@ def observe(cli, name, arg, *, runs=True):
     if getattr(cli, "_observe_unsupported", None) == (connection, epoch):
         return True
     from clawk_cli.gateway_client import GatewayRPCError
+
     try:
-        connection.call("command.observe", session_id=cli.session_id, name=name, arg=arg)
+        connection.call(
+            "command.observe", session_id=cli.session_id, name=name, arg=arg
+        )
     except GatewayRPCError as exc:
         if exc.code != -32601 and str(exc) != "unknown_method":
             logger.debug("command.observe /%s refused: %s", name, exc)
@@ -354,8 +440,11 @@ def observe(cli, name, arg, *, runs=True):
         if not getattr(cli, "_observe_notice_shown", False):
             cli._observe_notice_shown = True
             from cli import _cprint
-            _cprint("  This gateway predates this CLI: plugin pre_command hooks don't see the commands the CLI "
-                    "runs itself until it restarts.")
+
+            _cprint(
+                "  This gateway predates this CLI: plugin pre_command hooks don't see the commands the CLI "
+                "runs itself until it restarts."
+            )
     except GatewayClientError as exc:
         logger.debug("command.observe /%s not delivered: %s", name, exc)
     return True
@@ -367,19 +456,28 @@ def loaded(cli):
     than this CLI) or one that can't answer gets one printed line and ``{}``: the listing then shows
     no load details, and this process never loads plugins to fill them in."""
     from clawk_cli.gateway_side import connection_for
+
     connection = connection_for(cli)
     if connection is None:
         return None
     from cli import _cprint
     from clawk_cli.gateway_client import GatewayRPCError
+
     try:
         rows = (connection.call("plugins.list") or {}).get("plugins") or []
     except GatewayRPCError as exc:
         older = exc.code == -32601 or str(exc) == "unknown_method"
-        _cprint("  This gateway doesn't report its loaded plugins (it predates this CLI); restart it for load details."
-                if older else f"  The gateway's plugin list is unavailable ({exc}).")
+        _cprint(
+            "  This gateway doesn't report its loaded plugins (it predates this CLI); restart it for load details."
+            if older
+            else f"  The gateway's plugin list is unavailable ({exc})."
+        )
         return {}
     except GatewayClientError as exc:
         _cprint(f"  The gateway's plugin list is unavailable ({exc}).")
         return {}
-    return {row["name"]: row for row in rows if isinstance(row, dict) and isinstance(row.get("name"), str)}
+    return {
+        row["name"]: row
+        for row in rows
+        if isinstance(row, dict) and isinstance(row.get("name"), str)
+    }

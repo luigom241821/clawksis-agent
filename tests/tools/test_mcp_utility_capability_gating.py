@@ -93,7 +93,6 @@ class TestCapabilityGatedRegistration:
         selected = _select_utility_schemas("res-only", server, {})
         assert _handler_keys(selected) == {"list_resources", "read_resource"}
 
-
     def test_fully_capable_server_gets_all_four_stubs(self):
         from tools.mcp_tool_registration import _select_utility_schemas
 
@@ -102,7 +101,10 @@ class TestCapabilityGatedRegistration:
         )
         selected = _select_utility_schemas("full", server, {})
         assert _handler_keys(selected) == {
-            "list_resources", "read_resource", "list_prompts", "get_prompt",
+            "list_resources",
+            "read_resource",
+            "list_prompts",
+            "get_prompt",
         }
 
 
@@ -150,7 +152,10 @@ class TestLegacyFallback:
         # so all four stubs should register (old behavior).
         selected = _select_utility_schemas("legacy", server, {})
         assert _handler_keys(selected) == {
-            "list_resources", "read_resource", "list_prompts", "get_prompt",
+            "list_resources",
+            "read_resource",
+            "list_prompts",
+            "get_prompt",
         }
 
     def test_no_initialize_result_respects_session_spec(self):

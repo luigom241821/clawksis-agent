@@ -25,8 +25,11 @@ def client(_isolate_clawk_home, monkeypatch):
     from clawk_cli import nous_account
 
     # The launch profile's account is paid, the "freebie" profile's is free tier.
-    monkeypatch.setattr(nous_account, "get_nous_portal_account_info", lambda **_k: SimpleNamespace(
-        is_free_tier=get_clawk_home().name == "freebie"))
+    monkeypatch.setattr(
+        nous_account,
+        "get_nous_portal_account_info",
+        lambda **_k: SimpleNamespace(is_free_tier=get_clawk_home().name == "freebie"),
+    )
 
     from clawk_cli.web_server import app, _SESSION_HEADER_NAME, _SESSION_TOKEN
 
@@ -37,10 +40,14 @@ def client(_isolate_clawk_home, monkeypatch):
 
 def test_nous_recommendation_reads_the_requested_profile(client):
     launch = client.get("/api/model/recommended-default", params={"provider": "nous"})
-    named = client.get("/api/model/recommended-default",
-                       params={"provider": "nous", "profile": "freebie"})
-    unknown = client.get("/api/model/recommended-default",
-                         params={"provider": "nous", "profile": "no-such-profile"})
+    named = client.get(
+        "/api/model/recommended-default",
+        params={"provider": "nous", "profile": "freebie"},
+    )
+    unknown = client.get(
+        "/api/model/recommended-default",
+        params={"provider": "nous", "profile": "no-such-profile"},
+    )
 
     assert launch.status_code == named.status_code == 200
     assert launch.json()["free_tier"] is False

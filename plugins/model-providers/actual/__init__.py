@@ -54,11 +54,15 @@ class ActualProfile(ProviderProfile):
 
         # The relay accepts ``none`` as a real effort level: it switches thinking off AND
         # is echoed as reasoning_effort, unlike the Moonshot/DeepSeek wires.
-        effort_none = str(reasoning_config.get("effort") or "").strip().lower() == "none"
+        effort_none = (
+            str(reasoning_config.get("effort") or "").strip().lower() == "none"
+        )
         if reasoning_config.get("enabled") is not False and effort_none:
             return {"thinking": {"type": "disabled"}}, {"reasoning_effort": "none"}
         supported = self.supported_reasoning_efforts(context.get("model")) or ()
-        return thinking_toggle_extras(reasoning_config, supported, always_emit_toggle=True)
+        return thinking_toggle_extras(
+            reasoning_config, supported, always_emit_toggle=True
+        )
 
     def fetch_models(
         self,

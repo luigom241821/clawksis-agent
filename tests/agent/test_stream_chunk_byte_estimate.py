@@ -25,8 +25,6 @@ def _chunk(delta):
     )
 
 
-
-
 def test_reasoning_content_counted():
     base = _estimate_chunk_bytes(_chunk(ChoiceDelta()))
 
@@ -45,8 +43,6 @@ def test_reasoning_content_counted():
     assert _estimate_chunk_bytes(Chunk()) == base + len("thinking...")
 
 
-
-
 def test_unknown_shape_returns_floor_never_raises():
     class Weird:
         pass
@@ -55,5 +51,3 @@ def test_unknown_shape_returns_floor_never_raises():
     assert floor > 0
     assert _estimate_chunk_bytes(Weird()) == floor
     assert _estimate_chunk_bytes(object()) == floor
-
-

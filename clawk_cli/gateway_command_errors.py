@@ -45,7 +45,10 @@ def explain_service_failure(exc: BaseException) -> list[str] | None:
     if isinstance(exc, SystemctlUnavailableError):
         return list(_NO_SYSTEMCTL_LINES)
     if isinstance(exc, subprocess.CalledProcessError):
-        lines = [line.format(verb=_verb_for(exc), journal=_JOURNAL_HINT) for line in _SYSTEMCTL_FAILED_LINES]
+        lines = [
+            line.format(verb=_verb_for(exc), journal=_JOURNAL_HINT)
+            for line in _SYSTEMCTL_FAILED_LINES
+        ]
         lines.append(f"Details: {exc}")
         return lines
     return None

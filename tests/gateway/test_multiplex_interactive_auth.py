@@ -44,9 +44,13 @@ def _runner(home):
     runner = object.__new__(GatewayRunner)
     runner.config = GatewayConfig(multiplex_profiles=True)
     runner.config.profile_routes = [
-        ProfileRoute(name="r", platform="telegram", chat_id="-100555", profile="secondary")
+        ProfileRoute(
+            name="r", platform="telegram", chat_id="-100555", profile="secondary"
+        )
     ]
-    runner.config.platforms = {Platform.TELEGRAM: PlatformConfig(enabled=True, extra={})}
+    runner.config.platforms = {
+        Platform.TELEGRAM: PlatformConfig(enabled=True, extra={})
+    }
     runner.pairing_store = PairingStore(profile="default")
     runner.pairing_stores = {
         "default": runner.pairing_store,
@@ -69,7 +73,9 @@ def _telegram(runner):
     return tg
 
 
-def test_routed_primary_callback_uses_routed_pairing_store_and_transport_allowlist(mux_home):
+def test_routed_primary_callback_uses_routed_pairing_store_and_transport_allowlist(
+    mux_home,
+):
     """#86296: shared primary bot + profile_routes → the inline-button caller
     is authorized by the ROUTED profile's pairing store, while env allowlists
     resolve under the transport (launch) home, exactly like inbound messages."""
@@ -80,11 +86,31 @@ def test_routed_primary_callback_uses_routed_pairing_store_and_transport_allowli
     tg = _telegram(runner)
 
     # Paired only in the routed profile → allowed in the routed chat only.
-    assert tg._is_callback_user_authorized("777", chat_id="-100555", chat_type="supergroup") is True
-    assert tg._is_callback_user_authorized("777", chat_id="-100999", chat_type="supergroup") is False
+    assert (
+        tg._is_callback_user_authorized(
+            "777", chat_id="-100555", chat_type="supergroup"
+        )
+        is True
+    )
+    assert (
+        tg._is_callback_user_authorized(
+            "777", chat_id="-100999", chat_type="supergroup"
+        )
+        is False
+    )
     # Transport-home allowlist honored in the routed chat (not the routed profile's empty scope).
-    assert tg._is_callback_user_authorized("999", chat_id="-100555", chat_type="supergroup") is True
-    assert tg._is_callback_user_authorized("888", chat_id="-100555", chat_type="supergroup") is False
+    assert (
+        tg._is_callback_user_authorized(
+            "999", chat_id="-100555", chat_type="supergroup"
+        )
+        is True
+    )
+    assert (
+        tg._is_callback_user_authorized(
+            "888", chat_id="-100555", chat_type="supergroup"
+        )
+        is False
+    )
 
 
 def test_bot_sender_reaches_allow_bots_policy_through_callback(mux_home):
@@ -93,12 +119,16 @@ def test_bot_sender_reaches_allow_bots_policy_through_callback(mux_home):
     from gateway.run import _profile_runtime_scope
 
     runner = _runner(mux_home)
-    (mux_home / ".env").write_text("TELEGRAM_ALLOWED_USERS=999\nTELEGRAM_ALLOW_BOTS=all\n", encoding="utf-8")
+    (mux_home / ".env").write_text(
+        "TELEGRAM_ALLOWED_USERS=999\nTELEGRAM_ALLOW_BOTS=all\n", encoding="utf-8"
+    )
     tg = _telegram(runner)
 
     def msg(uid, is_bot):
         return SimpleNamespace(
-            from_user=SimpleNamespace(id=uid, is_bot=is_bot, username="x", full_name="X"),
+            from_user=SimpleNamespace(
+                id=uid, is_bot=is_bot, username="x", full_name="X"
+            ),
             chat=SimpleNamespace(id=-100777, type="supergroup", is_forum=False),
             sender_chat=None,
             message_thread_id=None,
@@ -123,8 +153,12 @@ def test_secondary_owned_callback_reads_own_profile_allowlist(mux_home, monkeypa
     monkeypatch.setattr(env_loader, "hydrate_profile_secret_sources", hydrated.append)
     runner = _runner(mux_home)
     (mux_home / ".env").write_text("TELEGRAM_ALLOWED_USERS=999\n", encoding="utf-8")
-    monkeypatch.setenv("TELEGRAM_ALLOWED_USERS", "999")  # the default profile's live os.environ
-    (mux_home / "profiles" / "secondary" / ".env").write_text("TELEGRAM_ALLOWED_USERS=555\n", encoding="utf-8")
+    monkeypatch.setenv(
+        "TELEGRAM_ALLOWED_USERS", "999"
+    )  # the default profile's live os.environ
+    (mux_home / "profiles" / "secondary" / ".env").write_text(
+        "TELEGRAM_ALLOWED_USERS=555\n", encoding="utf-8"
+    )
     tg = _telegram(runner)
     tg._clawk_profile_name = "secondary"
     runner._profile_adapters = {"secondary": {Platform.TELEGRAM: tg}}
@@ -133,8 +167,14 @@ def test_secondary_owned_callback_reads_own_profile_allowlist(mux_home, monkeypa
     )
 
     # No ambient profile scope: the adapter event loop invokes the callback bare.
-    assert tg._is_callback_user_authorized("555", chat_id="111", chat_type="private") is True
-    assert tg._is_callback_user_authorized("999", chat_id="111", chat_type="private") is False
+    assert (
+        tg._is_callback_user_authorized("555", chat_id="111", chat_type="private")
+        is True
+    )
+    assert (
+        tg._is_callback_user_authorized("999", chat_id="111", chat_type="private")
+        is False
+    )
     assert hydrated == []
 
 
@@ -154,9 +194,17 @@ def test_secondary_callback_allowlist_follows_env_edits(mux_home):
         runner._make_adapter_auth_check(Platform.TELEGRAM, profile_name="secondary")
     )
 
-    assert tg._is_callback_user_authorized("777", chat_id="111", chat_type="private") is False
-    env_path.write_text("TELEGRAM_ALLOWED_USERS=555,777\n", encoding="utf-8")  # operator adds a user at runtime
-    assert tg._is_callback_user_authorized("777", chat_id="111", chat_type="private") is True
+    assert (
+        tg._is_callback_user_authorized("777", chat_id="111", chat_type="private")
+        is False
+    )
+    env_path.write_text(
+        "TELEGRAM_ALLOWED_USERS=555,777\n", encoding="utf-8"
+    )  # operator adds a user at runtime
+    assert (
+        tg._is_callback_user_authorized("777", chat_id="111", chat_type="private")
+        is True
+    )
 
 
 def test_slack_interactive_auth_prefers_wired_profile_check(mux_home, monkeypatch):
@@ -181,7 +229,9 @@ def test_slack_interactive_auth_prefers_wired_profile_check(mux_home, monkeypatc
         if with_check:
             runner._profile_adapters = {"secondary": {Platform.SLACK: sl}}
             sl.set_authorization_check(
-                runner._make_adapter_auth_check(Platform.SLACK, profile_name="secondary")
+                runner._make_adapter_auth_check(
+                    Platform.SLACK, profile_name="secondary"
+                )
             )
         return sl
 
@@ -189,7 +239,10 @@ def test_slack_interactive_auth_prefers_wired_profile_check(mux_home, monkeypatc
         wired = slack(True)
         assert wired._is_interactive_user_authorized("U_SEC", channel_id="C1") is True
         assert wired._is_interactive_user_authorized("U_X", channel_id="C1") is False
-        assert slack(False)._is_interactive_user_authorized("U_X", channel_id="C1") is False
+        assert (
+            slack(False)._is_interactive_user_authorized("U_X", channel_id="C1")
+            is False
+        )
 
 
 def test_authorization_adapter_ignores_per_turn_active_profile(mux_home):
@@ -205,8 +258,14 @@ def test_authorization_adapter_ignores_per_turn_active_profile(mux_home):
     runner._profile_failed_platforms = {"secondary": {Platform.TELEGRAM: object()}}
 
     with _profile_runtime_scope(mux_home / "profiles" / "secondary"):
-        assert runner._authorization_adapter(Platform.TELEGRAM, profile="secondary") is None
-    assert runner._authorization_adapter(Platform.TELEGRAM, profile="default") is default_bot
+        assert (
+            runner._authorization_adapter(Platform.TELEGRAM, profile="secondary")
+            is None
+        )
+    assert (
+        runner._authorization_adapter(Platform.TELEGRAM, profile="default")
+        is default_bot
+    )
 
 
 def test_channel_directory_path_follows_current_home(mux_home):
@@ -217,5 +276,7 @@ def test_channel_directory_path_follows_current_home(mux_home):
 
     assert cd.DIRECTORY_PATH is None
     with _profile_runtime_scope(mux_home / "profiles" / "secondary"):
-        assert cd._directory_path() == Path(mux_home / "profiles" / "secondary" / "channel_directory.json")
+        assert cd._directory_path() == Path(
+            mux_home / "profiles" / "secondary" / "channel_directory.json"
+        )
     assert cd._directory_path() == Path(mux_home / "channel_directory.json")

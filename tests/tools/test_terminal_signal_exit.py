@@ -14,16 +14,18 @@ from tools.terminal_tool_result import _interpret_exit_code, _interpret_signal_e
 class TestInterpretSignalExit:
     # ---- negative codes: subprocess -signum semantics (definite) ----
 
-    @pytest.mark.parametrize("code,expect", [
-        (-9, "SIGKILL"),
-        (-11, "SIGSEGV"),
-        (-15, "SIGTERM"),
-    ])
+    @pytest.mark.parametrize(
+        "code,expect",
+        [
+            (-9, "SIGKILL"),
+            (-11, "SIGSEGV"),
+            (-15, "SIGTERM"),
+        ],
+    )
     def test_negative_known_signals(self, code, expect):
         note = _interpret_signal_exit(code)
         assert note is not None
         assert expect in note
-
 
     def test_negative_unknown_signal_still_reports(self):
         # signum without a curated note still yields a generic note.
@@ -33,11 +35,14 @@ class TestInterpretSignalExit:
 
     # ---- 128+signum band: shell convention (hedged) ----
 
-    @pytest.mark.parametrize("code,expect", [
-        (137, "SIGKILL"),
-        (139, "SIGSEGV"),
-        (143, "SIGTERM"),
-    ])
+    @pytest.mark.parametrize(
+        "code,expect",
+        [
+            (137, "SIGKILL"),
+            (139, "SIGSEGV"),
+            (143, "SIGTERM"),
+        ],
+    )
     def test_shell_band_known_signals(self, code, expect):
         note = _interpret_signal_exit(code)
         assert note is not None
@@ -66,7 +71,6 @@ class TestSignalExitWiring:
     def test_signal_note_via_interpret_exit_code(self):
         note = _interpret_exit_code("python3 crash.py", -11)
         assert note is not None and "SIGSEGV" in note
-
 
     def test_signal_note_wins_over_command_semantics(self):
         # A grep killed by SIGKILL must report the signal, not "no matches".

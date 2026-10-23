@@ -9,6 +9,7 @@ the launch profile's bridged allow-all grant was seeded into the served profile'
 the served profile's ``terminal.*`` config was bridged into the shared process env.
 ``clawk_constants.pin_process_clawk_home`` gives such hosts one stable anchor for all of them.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -33,11 +34,17 @@ def _under(home, fn):
 
 # name -> "does this decision treat *home* as a routed (non-launch) profile?"
 ROUTED = {
-    "secret_scope.serves_routed_profile": lambda home: _under(home, serves_routed_profile),
+    "secret_scope.serves_routed_profile": lambda home: _under(
+        home, serves_routed_profile
+    ),
     "secret_scope._is_process_home": lambda home: not _is_process_home(home),
     "environments.local._is_routed_home": lambda home: _is_routed_home(home),
-    "env_loader._process_clawk_home": lambda home: _process_clawk_home().resolve() != Path(home).resolve(),
-    "mcp_tool_scope._server_key": lambda home: _under(home, lambda: _server_key("atlassian")) != "atlassian",
+    "env_loader._process_clawk_home": lambda home: (
+        _process_clawk_home().resolve() != Path(home).resolve()
+    ),
+    "mcp_tool_scope._server_key": lambda home: (
+        _under(home, lambda: _server_key("atlassian")) != "atlassian"
+    ),
 }
 
 
@@ -53,7 +60,9 @@ def homes(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("decision", sorted(ROUTED))
-def test_pinned_launch_home_survives_a_mirrored_clawk_home(homes, monkeypatch, decision):
+def test_pinned_launch_home_survives_a_mirrored_clawk_home(
+    homes, monkeypatch, decision
+):
     launch, served = homes
     routed = ROUTED[decision]
     clawk_constants.pin_process_clawk_home(launch)
@@ -62,21 +71,28 @@ def test_pinned_launch_home_survives_a_mirrored_clawk_home(homes, monkeypatch, d
     assert routed(served) is True
     assert routed(launch) is False
     # The served profile's MCP connection is its own, keyed by its home, not a bare shared name.
-    assert _under(served, lambda: _server_key("atlassian")) == (clawk_constants.clawk_home_key(served), "atlassian")
+    assert _under(served, lambda: _server_key("atlassian")) == (
+        clawk_constants.clawk_home_key(served),
+        "atlassian",
+    )
     # Process-asset readers keep following the env var: only routing decisions use the pin.
     assert clawk_constants.get_process_clawk_home() == served
     assert clawk_constants.get_routing_process_clawk_home() == launch
 
 
 @pytest.mark.parametrize("decision", sorted(ROUTED))
-def test_unpinned_or_cleared_pin_keeps_clawk_home_semantics(homes, monkeypatch, decision):
+def test_unpinned_or_cleared_pin_keeps_clawk_home_semantics(
+    homes, monkeypatch, decision
+):
     launch, served = homes
     routed = ROUTED[decision]
     for _ in ("never pinned", "pinned then cleared"):
         monkeypatch.setenv("CLAWK_HOME", str(launch))
         assert routed(served) is True
         assert routed(launch) is False
-        monkeypatch.setenv("CLAWK_HOME", str(served))  # mirrored: the env var IS the launch home
+        monkeypatch.setenv(
+            "CLAWK_HOME", str(served)
+        )  # mirrored: the env var IS the launch home
         assert routed(served) is False
         clawk_constants.pin_process_clawk_home(launch)
         clawk_constants.pin_process_clawk_home(None)

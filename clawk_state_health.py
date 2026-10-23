@@ -39,7 +39,9 @@ STORAGE_OK = "ok"
 STORAGE_CORRUPT = "corrupt"
 
 _lock = threading.Lock()
-_corrupt: dict[str, str] = {}  # resolved db path -> first error text (log only, never served)
+_corrupt: dict[
+    str, str
+] = {}  # resolved db path -> first error text (log only, never served)
 
 
 def _key(db_path) -> str:
@@ -68,7 +70,9 @@ def mark_storage_corrupt(db_path, reason: object) -> None:
         "state.db at %s is structurally corrupt (%s); session storage is reported as corrupt "
         "until Clawksis restarts on a recovered or restored file. Stop Clawksis, then run "
         "`clawk sessions recover --source %s --inspect-only` or restore a snapshot.",
-        db_path, reason, db_path,
+        db_path,
+        reason,
+        db_path,
     )
 
 

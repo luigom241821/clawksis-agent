@@ -5,6 +5,7 @@ stale inode this user cannot write (left by a gateway that ran as root, #42685) 
 a read-only descriptor proves unheld; it is replaced once, and every winner checks that the path
 still names the inode it locked.
 """
+
 from __future__ import annotations
 
 from contextlib import contextmanager
@@ -33,19 +34,21 @@ def tighten_lock_mode(fd: int) -> None:
     chmodded, through the already-open NOFOLLOW descriptor (no path race); anything else is refused.
     """
     info = os.fstat(fd)
-    if os.name == 'nt':
+    if os.name == "nt":
         if not stat.S_ISREG(info.st_mode):
-            raise PermissionError('unsafe gateway lock owner or type')
+            raise PermissionError("unsafe gateway lock owner or type")
         return
-    if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid():  # windows-footgun: ok — POSIX branch
-        raise PermissionError('unsafe gateway lock owner or type')
+    if (
+        not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+    ):  # windows-footgun: ok — POSIX branch
+        raise PermissionError("unsafe gateway lock owner or type")
     if stat.S_IMODE(info.st_mode) & 0o077:
         if info.st_nlink != 1:
-            raise PermissionError('unsafe gateway lock link count')
+            raise PermissionError("unsafe gateway lock link count")
         os.fchmod(fd, 0o600)  # windows-footgun: ok — POSIX branch
 
 
-_LOCK_FLAGS = os.O_RDWR | os.O_CREAT | getattr(os, 'O_NOFOLLOW', 0)
+_LOCK_FLAGS = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
 
 
 def _open_checked(path: Path, flags: int) -> int:
@@ -65,18 +68,25 @@ def _unlink_stale_lock(path: Path) -> bool:
     An inode this user cannot even open is refused with the recovery command: an unheld snapshot
     (``/proc/locks``) does not stop a holder locking it between the read and the unlink."""
     from gateway.status import _live_pid_from_record, _read_pid_record
-    if os.name == 'nt':
+
+    if os.name == "nt":
         return False  # a sharing violation is a live holder there
     info = os.lstat(path)
     if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
         return False
-    if _live_pid_from_record(_read_pid_record(path.with_name('gateway.pid'))) is not None:
+    if (
+        _live_pid_from_record(_read_pid_record(path.with_name("gateway.pid")))
+        is not None
+    ):
         return False
     try:
-        probe = os.open(path, os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0) | os.O_NONBLOCK)
+        probe = os.open(
+            path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | os.O_NONBLOCK
+        )
     except PermissionError:
         raise PermissionError(foreign_lock_recovery(path)) from None
     import fcntl
+
     try:
         if not _same_inode(os.fstat(probe), info):
             return False
@@ -91,14 +101,18 @@ def _unlink_stale_lock(path: Path) -> bool:
 
 
 def foreign_lock_recovery(path: Path) -> str:
-    return (f'foreign_stale_lock: {path} is not readable by this user (left by a gateway run as root?) '
-            f'and cannot be proven unheld. If `sudo lsof {path}` lists no process, run `sudo rm {path}`.')
+    return (
+        f"foreign_stale_lock: {path} is not readable by this user (left by a gateway run as root?) "
+        f"and cannot be proven unheld. If `sudo lsof {path}` lists no process, run `sudo rm {path}`."
+    )
 
 
 def unreadable_lock_recovery(path: Path) -> str | None:
     """The recovery a client prints for a ``gateway.lock`` it cannot even open read-only."""
     try:
-        os.close(os.open(path, os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0) | os.O_NONBLOCK))
+        os.close(
+            os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | os.O_NONBLOCK)
+        )
     except PermissionError:
         return foreign_lock_recovery(path)
     except OSError:
@@ -130,7 +144,7 @@ def _open_lock(path: Path) -> int:
 
 def _still_names(path: Path, fd: int) -> bool:
     """True when *path* is still the inode *fd* locked (a stale-lock replacement unlinks it)."""
-    if os.name == 'nt':
+    if os.name == "nt":
         return True
     try:
         return _same_inode(os.lstat(path), os.fstat(fd))
@@ -153,6 +167,7 @@ class ProfileOwnership:
         """``purpose`` marks a maintenance reservation in the lock record, so a contender can tell
         a short maintenance holder from a gateway runtime owner (:func:`live_runtime_owner`)."""
         from gateway.status import _try_acquire_file_lock, _build_pid_record
+
         with self._mutex:
             added = []
             try:
@@ -160,15 +175,21 @@ class ProfileOwnership:
                     if home in self._handles:
                         continue
                     make_user_dir(home, mode=0o700, parents=True, exist_ok=True)
-                    path = home / 'gateway.lock'
+                    path = home / "gateway.lock"
                     fd = _open_lock(path)
-                    handle = os.fdopen(fd, 'r+', encoding='utf-8')  # windows-footgun: ok — write-only
+                    handle = os.fdopen(
+                        fd, "r+", encoding="utf-8"
+                    )  # windows-footgun: ok — write-only
                     try:
-                        if not _try_acquire_file_lock(handle) or not _still_names(path, handle.fileno()):
-                            raise OwnershipConflict(f'Gateway runtime already owns profile {home}')
-                        record = {**_build_pid_record(), 'clawk_home': str(home)}
+                        if not _try_acquire_file_lock(handle) or not _still_names(
+                            path, handle.fileno()
+                        ):
+                            raise OwnershipConflict(
+                                f"Gateway runtime already owns profile {home}"
+                            )
+                        record = {**_build_pid_record(), "clawk_home": str(home)}
                         if purpose:
-                            record['purpose'] = purpose
+                            record["purpose"] = purpose
                         handle.seek(0)
                         handle.truncate()
                         json.dump(record, handle)
@@ -190,6 +211,7 @@ class ProfileOwnership:
 
     def release(self, home: Path) -> None:
         from gateway.status import _release_file_lock
+
         with self._mutex:
             handle = self._handles.pop(canonical_home(home), None)
             if handle is not None:
@@ -222,8 +244,13 @@ def maintenance_holder(home: Path, purpose: str) -> dict | None:
     reservation (see :meth:`ProfileOwnership.reserve`), else None. Advisory only: it names the
     holder for a refusal or a short wait, it never grants the lock."""
     from gateway.status import _live_pid_from_record, _read_gateway_lock_record
-    record = _read_gateway_lock_record(canonical_home(home) / 'gateway.lock')
-    if not record or record.get('purpose') != purpose or _live_pid_from_record(record) is None:
+
+    record = _read_gateway_lock_record(canonical_home(home) / "gateway.lock")
+    if (
+        not record
+        or record.get("purpose") != purpose
+        or _live_pid_from_record(record) is None
+    ):
         return None
     return record
 
@@ -234,20 +261,26 @@ def lock_record_unpublished(home: Path) -> bool:
     so a contender that loses the flock in that window cannot tell maintenance from a gateway; it
     must retry (bounded) instead of reporting a runtime owner. Advisory only, never grants the lock."""
     from gateway.status import _live_pid_from_record, _read_gateway_lock_record
-    record = _read_gateway_lock_record(canonical_home(home) / 'gateway.lock')
+
+    record = _read_gateway_lock_record(canonical_home(home) / "gateway.lock")
     return not record or _live_pid_from_record(record) is None
 
 
 def live_runtime_owner(home: Path) -> int | None:
     """PID of a live runtime owner of *home* (a gateway, or a reservation that is not marked as
     maintenance), else None. A purpose-marked maintenance holder is never an owner."""
-    from gateway.status import _live_pid_from_record, _read_gateway_lock_record, get_running_pid
+    from gateway.status import (
+        _live_pid_from_record,
+        _read_gateway_lock_record,
+        get_running_pid,
+    )
+
     home = canonical_home(home)
-    record = _read_gateway_lock_record(home / 'gateway.lock')
+    record = _read_gateway_lock_record(home / "gateway.lock")
     live = _live_pid_from_record(record) if record else None
-    if live is not None and record.get('purpose'):
+    if live is not None and record.get("purpose"):
         return None  # the flock holder is maintenance, so no gateway can hold it too
-    return get_running_pid(home / 'gateway.pid', cleanup_stale=False) or live
+    return get_running_pid(home / "gateway.pid", cleanup_stale=False) or live
 
 
 @contextmanager
@@ -260,7 +293,7 @@ def exclusive_maintenance(homes, *, purpose: str | None = None):
     being the runtime owner (even in this process) never grants maintenance.
     Lock inodes must not be restored, removed, or replaced by callers.
     """
-    state = getattr(_maintenance, 'state', None)
+    state = getattr(_maintenance, "state", None)
     outermost = state is None or state[0] != os.getpid()
     owner = state[1] if state is not None and not outermost else ProfileOwnership()
     previous = set(owner.homes)
@@ -271,7 +304,7 @@ def exclusive_maintenance(homes, *, purpose: str | None = None):
         yield
     except OwnershipConflict as exc:
         raise OwnershipConflict(
-            f'Exclusive maintenance refused: {exc}. Drain and stop the gateway, then retry.'
+            f"Exclusive maintenance refused: {exc}. Drain and stop the gateway, then retry."
         ) from exc
     finally:
         for home in reversed(owner.homes):

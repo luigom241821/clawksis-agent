@@ -29,6 +29,7 @@ from gateway.platforms.webhook import WebhookAdapter, _INSECURE_NO_AUTH
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_adapter(routes, **extra_kw) -> WebhookAdapter:
     """Create a WebhookAdapter with the given routes."""
     extra = {"host": "0.0.0.0", "port": 0, "routes": routes}
@@ -41,6 +42,7 @@ def _create_app(adapter: WebhookAdapter) -> web.Application:
     """Build the aiohttp Application from the adapter."""
     app = web.Application()
     from tests.gateway.fixtures.webhook_route_authority import mount_authority
+
     mount_authority(app, adapter)
     app.router.add_get("/health", adapter._handle_health)
     app.router.add_post("/webhooks/{route_name}", adapter._handle_webhook)
@@ -49,9 +51,7 @@ def _create_app(adapter: WebhookAdapter) -> web.Application:
 
 def _github_signature(body: bytes, secret: str) -> str:
     """Compute X-Hub-Signature-256 for *body* using *secret*."""
-    return "sha256=" + hmac.new(
-        secret.encode(), body, hashlib.sha256
-    ).hexdigest()
+    return "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
 
 
 # A realistic GitHub pull_request event payload (trimmed)
@@ -78,8 +78,8 @@ GITHUB_PR_PAYLOAD = {
 # Test 1: GitHub PR webhook triggers agent
 # ===================================================================
 
-class TestGitHubPRWebhook:
 
+class TestGitHubPRWebhook:
     @pytest.mark.asyncio
     async def test_github_pr_webhook_triggers_agent(self):
         """POST with a realistic GitHub PR payload should:
@@ -149,8 +149,8 @@ class TestGitHubPRWebhook:
 # Test 3: Cross-platform delivery (webhook → Telegram)
 # ===================================================================
 
-class TestCrossPlatformDelivery:
 
+class TestCrossPlatformDelivery:
     @pytest.mark.asyncio
     async def test_cross_platform_delivery(self):
         """When deliver='telegram', the response is routed to the
@@ -173,7 +173,9 @@ class TestCrossPlatformDelivery:
         mock_runner = MagicMock()
         mock_runner._profile_name_for_source.return_value = None
         mock_runner.adapters = {Platform.TELEGRAM: mock_tg_adapter}
-        mock_runner._authorization_adapter = lambda platform, profile=None: mock_runner.adapters.get(platform)
+        mock_runner._authorization_adapter = lambda platform, profile=None: (
+            mock_runner.adapters.get(platform)
+        )
         mock_runner.config = GatewayConfig(
             platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="fake")}
         )

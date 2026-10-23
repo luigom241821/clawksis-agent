@@ -219,7 +219,9 @@ def _stop_after_truncate(server, monkeypatch):
     )
 
 
-def test_truncation_persists_to_the_profile_db(server, launch_db, profile_db, monkeypatch):
+def test_truncation_persists_to_the_profile_db(
+    server, launch_db, profile_db, monkeypatch
+):
     """An edit/resend must truncate the profile's transcript, not the launch one."""
     profile_home, pdb = profile_db
     user_row_ids: list = []
@@ -331,7 +333,9 @@ def test_truncation_surfaces_the_profile_dbs_live_row_ids(
     assert surviving == [user_row_ids[0]]
 
 
-def test_truncation_without_a_profile_uses_the_shared_handle(server, launch_db, monkeypatch):
+def test_truncation_without_a_profile_uses_the_shared_handle(
+    server, launch_db, monkeypatch
+):
     user_row_ids: list = []
     history = _seed(launch_db, _capture_user_row_ids=user_row_ids)
     _register(server, history)
@@ -378,7 +382,9 @@ def test_history_reads_the_profile_transcript(server, launch_db, profile_db):
     assert "answer 3" in output
 
 
-def test_context_reads_the_profile_transcript(server, launch_db, profile_db, monkeypatch):
+def test_context_reads_the_profile_transcript(
+    server, launch_db, profile_db, monkeypatch
+):
     """/context must count the profile session's own messages."""
     profile_home, pdb = profile_db
     _seed(pdb)

@@ -9,7 +9,9 @@ from pm import paths
 
 
 @pytest.mark.parametrize("record_executable", [False, True])
-def test_chromium_resolves_installed_binary_without_mutation(tmp_path, monkeypatch, record_executable):
+def test_chromium_resolves_installed_binary_without_mutation(
+    tmp_path, monkeypatch, record_executable
+):
     from clawk_cli.browser_runtime import chromium_executable
 
     home = tmp_path / "home"
@@ -23,7 +25,9 @@ def test_chromium_resolves_installed_binary_without_mutation(tmp_path, monkeypat
     version = lock.version("chromium")
     assert version is not None
     entry = store / package.store_entry(version, target)
-    binary = entry / "browser" / ("chrome.exe" if target.startswith("win32") else "chrome")
+    binary = (
+        entry / "browser" / ("chrome.exe" if target.startswith("win32") else "chrome")
+    )
     binary.parent.mkdir(parents=True)
     binary.write_bytes(b"browser-fixture")
     binary.chmod(0o755)
@@ -32,8 +36,13 @@ def test_chromium_resolves_installed_binary_without_mutation(tmp_path, monkeypat
         env["AGENT_BROWSER_EXECUTABLE_PATH"] = str(binary)
     facts = pm.Facts(store / "facts.json")
     facts.record(
-        "chromium", version, entry.name, env, store,
-        target=target, artifacts=[a["sha256"] for a in lock.artifacts("chromium", target)],
+        "chromium",
+        version,
+        entry.name,
+        env,
+        store,
+        target=target,
+        artifacts=[a["sha256"] for a in lock.artifacts("chromium", target)],
     )
     before = facts.path.read_bytes()
     environment = dict(os.environ)

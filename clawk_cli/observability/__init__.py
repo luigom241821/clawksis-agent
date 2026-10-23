@@ -15,7 +15,9 @@ def observe_lifecycle(hook_name: str, **kwargs: Any) -> None:
     try:
         relay_shared_metrics.observe_lifecycle(hook_name, **kwargs)
     except Exception:
-        logger.warning("Built-in observability hook failed: %s", hook_name, exc_info=True)
+        logger.warning(
+            "Built-in observability hook failed: %s", hook_name, exc_info=True
+        )
 
 
 def handles_hook(hook_name: str) -> bool:

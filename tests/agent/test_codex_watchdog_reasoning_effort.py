@@ -6,6 +6,7 @@ such a prompt 12s (event-idle) / 120s (TTFB) / 90s (stale) fuses — the client 
 requests three times in a row and reported the provider as unavailable. High effort now raises the
 IMPLICIT defaults to one shared silence floor; explicit operator values still win.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -19,15 +20,24 @@ def _codex_agent(tmp_path: Path, monkeypatch, effort: str, *, enabled: bool = Tr
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     (tmp_path / ".env").write_text("", encoding="utf-8")
     (tmp_path / "config.yaml").write_text("{}\n", encoding="utf-8")
-    for var in ("CLAWK_API_CALL_STALE_TIMEOUT", "CLAWK_CODEX_TTFB_TIMEOUT_SECONDS",
-                "CLAWK_CODEX_EVENT_STALE_TIMEOUT_SECONDS", "CLAWK_CODEX_TTFB_MAX_SECONDS"):
+    for var in (
+        "CLAWK_API_CALL_STALE_TIMEOUT",
+        "CLAWK_CODEX_TTFB_TIMEOUT_SECONDS",
+        "CLAWK_CODEX_EVENT_STALE_TIMEOUT_SECONDS",
+        "CLAWK_CODEX_TTFB_MAX_SECONDS",
+    ):
         monkeypatch.delenv(var, raising=False)
     from run_agent import AIAgent
 
     agent = AIAgent(
-        model="gpt-5.5", provider="openai-codex", api_key="sk-dummy",
-        base_url="https://chatgpt.com/backend-api/codex", quiet_mode=True,
-        skip_context_files=True, skip_memory=True, platform="cli",
+        model="gpt-5.5",
+        provider="openai-codex",
+        api_key="sk-dummy",
+        base_url="https://chatgpt.com/backend-api/codex",
+        quiet_mode=True,
+        skip_context_files=True,
+        skip_memory=True,
+        platform="cli",
     )
     agent.api_mode = "codex_responses"
     agent.reasoning_config = {"enabled": enabled, "effort": effort}
@@ -35,10 +45,17 @@ def _codex_agent(tmp_path: Path, monkeypatch, effort: str, *, enabled: bool = Tr
 
 
 @pytest.mark.parametrize("effort", ["high", "xhigh"])
-def test_high_effort_small_prompt_gets_the_silence_floor_on_all_three_fuses(tmp_path, monkeypatch, effort):
-    from agent.chat_completion_helpers import HIGH_EFFORT_SILENCE_FLOOR_SECONDS, _resolve_nonstream_watchdogs
+def test_high_effort_small_prompt_gets_the_silence_floor_on_all_three_fuses(
+    tmp_path, monkeypatch, effort
+):
+    from agent.chat_completion_helpers import (
+        HIGH_EFFORT_SILENCE_FLOOR_SECONDS,
+        _resolve_nonstream_watchdogs,
+    )
 
-    wd = _resolve_nonstream_watchdogs(_codex_agent(tmp_path, monkeypatch, effort), _SMALL_PROMPT)
+    wd = _resolve_nonstream_watchdogs(
+        _codex_agent(tmp_path, monkeypatch, effort), _SMALL_PROMPT
+    )
 
     assert wd.idle_enabled and wd.ttfb_enabled
     assert wd.idle_timeout >= HIGH_EFFORT_SILENCE_FLOOR_SECONDS
@@ -46,24 +63,41 @@ def test_high_effort_small_prompt_gets_the_silence_floor_on_all_three_fuses(tmp_
     assert wd.stale_timeout >= HIGH_EFFORT_SILENCE_FLOOR_SECONDS
 
 
-def test_default_effort_tiers_and_explicit_operator_values_are_untouched(tmp_path, monkeypatch):
+def test_default_effort_tiers_and_explicit_operator_values_are_untouched(
+    tmp_path, monkeypatch
+):
     """Control: medium effort (and disabled reasoning) keep the small-prompt tiers; an explicit
     env value for any fuse is never raised by the floor."""
-    from agent.chat_completion_helpers import HIGH_EFFORT_SILENCE_FLOOR_SECONDS, _resolve_nonstream_watchdogs
+    from agent.chat_completion_helpers import (
+        HIGH_EFFORT_SILENCE_FLOOR_SECONDS,
+        _resolve_nonstream_watchdogs,
+    )
 
-    medium = _resolve_nonstream_watchdogs(_codex_agent(tmp_path, monkeypatch, "medium"), _SMALL_PROMPT)
+    medium = _resolve_nonstream_watchdogs(
+        _codex_agent(tmp_path, monkeypatch, "medium"), _SMALL_PROMPT
+    )
     medium_fuses = (medium.idle_timeout, medium.ttfb_timeout, medium.stale_timeout)
     assert all(t < HIGH_EFFORT_SILENCE_FLOOR_SECONDS for t in medium_fuses)
 
-    disabled = _resolve_nonstream_watchdogs(_codex_agent(tmp_path, monkeypatch, "high", enabled=False), _SMALL_PROMPT)
-    assert (disabled.idle_timeout, disabled.ttfb_timeout, disabled.stale_timeout) == medium_fuses
+    disabled = _resolve_nonstream_watchdogs(
+        _codex_agent(tmp_path, monkeypatch, "high", enabled=False), _SMALL_PROMPT
+    )
+    assert (
+        disabled.idle_timeout,
+        disabled.ttfb_timeout,
+        disabled.stale_timeout,
+    ) == medium_fuses
 
     agent = _codex_agent(tmp_path, monkeypatch, "high")
     monkeypatch.setenv("CLAWK_CODEX_EVENT_STALE_TIMEOUT_SECONDS", "20")
     monkeypatch.setenv("CLAWK_CODEX_TTFB_TIMEOUT_SECONDS", "45")
     monkeypatch.setenv("CLAWK_API_CALL_STALE_TIMEOUT", "75")
     explicit = _resolve_nonstream_watchdogs(agent, _SMALL_PROMPT)
-    assert (explicit.idle_timeout, explicit.ttfb_timeout, explicit.stale_timeout) == (20.0, 45.0, 75.0)
+    assert (explicit.idle_timeout, explicit.ttfb_timeout, explicit.stale_timeout) == (
+        20.0,
+        45.0,
+        75.0,
+    )
 
 
 def test_effort_floor_never_outlives_the_run_budget_cap(tmp_path, monkeypatch):

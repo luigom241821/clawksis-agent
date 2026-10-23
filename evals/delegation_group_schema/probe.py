@@ -16,7 +16,9 @@ sys.path.insert(0, root)
 os.chdir(root)
 with tempfile.TemporaryDirectory(prefix="delegate-schema-") as home:
     os.environ.clear()
-    os.environ.update(HOME=home, CLAWK_HOME=home, PATH="/usr/bin:/bin", CLAWK_PLATFORM="cli")
+    os.environ.update(
+        HOME=home, CLAWK_HOME=home, PATH="/usr/bin:/bin", CLAWK_PLATFORM="cli"
+    )
     config = {"tools": {"tool_search": {"defer": []}}}
     if "--independent" in sys.argv:
         config["delegation"] = {"independent_completions": True}
@@ -35,7 +37,9 @@ with tempfile.TemporaryDirectory(prefix="delegate-schema-") as home:
     repeated = get_tool_definitions(enabled_toolsets=["clawk-cli"], quiet_mode=True)
     assert json.dumps(repeated, separators=(",", ":")) == serialized
     counts = {
-        definition["function"]["name"]: len(encoder.encode(json.dumps(definition, separators=(",", ":"))))
+        definition["function"]["name"]: len(
+            encoder.encode(json.dumps(definition, separators=(",", ":")))
+        )
         for definition in definitions
     }
     delegate = next(d for d in definitions if d["function"]["name"] == "delegate_task")
@@ -48,4 +52,12 @@ with tempfile.TemporaryDirectory(prefix="delegate-schema-") as home:
         "model_calls": 0,
     }
     Path(destination).write_text(json.dumps(receipt, indent=2), encoding="utf-8")
-    print(json.dumps({"destination": destination, "total_tokens": receipt["total_tokens"], "delegate_tokens": counts["delegate_task"]}))
+    print(
+        json.dumps(
+            {
+                "destination": destination,
+                "total_tokens": receipt["total_tokens"],
+                "delegate_tokens": counts["delegate_task"],
+            }
+        )
+    )

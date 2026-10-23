@@ -40,7 +40,9 @@ def classify_dead_error(error_text: Optional[str]) -> Optional[str]:
     except Exception:  # pragma: no cover - import guard
         return None
     kind = classify_send_error(None, error_text=error_text)
-    dead = kind in _DEAD_ERROR_KINDS and (kind != "not_found" or is_chat_level_not_found(error_text=error_text))
+    dead = kind in _DEAD_ERROR_KINDS and (
+        kind != "not_found" or is_chat_level_not_found(error_text=error_text)
+    )
     return kind if dead else None
 
 
@@ -51,17 +53,21 @@ class DeadTargetRegistry:
     def __init__(self, path: Optional[Path] = None) -> None:
         self._lock = threading.RLock()
         self._dead: dict[str, dict[str, object]] = {}
-        self._path = path if path is not None else get_clawk_home() / "gateway" / "dead_targets.json"
+        self._path = (
+            path
+            if path is not None
+            else get_clawk_home() / "gateway" / "dead_targets.json"
+        )
         try:
             if self._path.exists():
                 raw = json.loads(self._path.read_text(encoding="utf-8-sig"))
                 if isinstance(raw, dict):
                     # Only keep well-shaped entries.
-                    self._dead = {
-                        k: v for k, v in raw.items() if isinstance(v, dict)
-                    }
+                    self._dead = {k: v for k, v in raw.items() if isinstance(v, dict)}
         except (OSError, ValueError) as exc:
-            logger.debug("dead_targets: could not load %s (%s) — starting empty", self._path, exc)
+            logger.debug(
+                "dead_targets: could not load %s (%s) — starting empty", self._path, exc
+            )
 
     def _flush_locked(self) -> None:
         try:
@@ -69,26 +75,38 @@ class DeadTargetRegistry:
             tmp = self._path.with_suffix(self._path.suffix + ".tmp")
             tmp.write_text(json.dumps(self._dead, indent=2), encoding="utf-8")
             tmp.replace(self._path)
-        except OSError as exc:  # best-effort: keep in-memory state, never break delivery
+        except (
+            OSError
+        ) as exc:  # best-effort: keep in-memory state, never break delivery
             logger.debug("dead_targets: could not persist %s (%s)", self._path, exc)
 
     def is_dead(self, platform: str, chat_id: Optional[str]) -> bool:
         with self._lock:
             return bool(chat_id) and _normalize(platform, chat_id) in self._dead
 
-    def mark_dead(self, platform: str, chat_id: Optional[str], reason: str = "") -> bool:
+    def mark_dead(
+        self, platform: str, chat_id: Optional[str], reason: str = ""
+    ) -> bool:
         """Record a target as confirmed-dead. Returns True if newly added."""
         if not chat_id:
             return False
         key = _normalize(platform, chat_id)
         with self._lock:
             existed = key in self._dead
-            self._dead[key] = {"platform": str(platform).strip().lower(), "chat_id": str(chat_id),
-                               "reason": str(reason)[:200], "marked_at": time.time()}
+            self._dead[key] = {
+                "platform": str(platform).strip().lower(),
+                "chat_id": str(chat_id),
+                "reason": str(reason)[:200],
+                "marked_at": time.time(),
+            }
             self._flush_locked()
         if not existed:
-            logger.info("dead_targets: marked %s as unreachable (%s) — future deliveries "
-                        "to this target will be skipped until a send succeeds", key, reason or "no reason given")
+            logger.info(
+                "dead_targets: marked %s as unreachable (%s) — future deliveries "
+                "to this target will be skipped until a send succeeds",
+                key,
+                reason or "no reason given",
+            )
         return not existed
 
     def clear(self, platform: str, chat_id: Optional[str]) -> bool:

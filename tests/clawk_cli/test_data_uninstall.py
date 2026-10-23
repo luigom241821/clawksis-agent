@@ -1,4 +1,5 @@
 """Data deletion respects declared runtime ownership, confirmation and scope."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -17,24 +18,37 @@ def layout(tmp_path, monkeypatch):
     source = home / "workspace" / "custom-source"
     store = home / "machine" / "tool-store"
     userdata = user / "desktop-data"
-    witnesses = [source / "clawk_cli" / "__init__.py", store / "python" / "python.exe",
-                 home / "installs" / "other-install" / "facts.json", home / "bin" / "clawk.cmd",
-                 home / "profiles" / "sibling" / "config.yaml",
-                 home / "cache" / "partials" / ".locks" / "other-profile-transfer"]
+    witnesses = [
+        source / "clawk_cli" / "__init__.py",
+        store / "python" / "python.exe",
+        home / "installs" / "other-install" / "facts.json",
+        home / "bin" / "clawk.cmd",
+        home / "profiles" / "sibling" / "config.yaml",
+        home / "cache" / "partials" / ".locks" / "other-profile-transfer",
+    ]
     for path in witnesses:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("keep", encoding="utf-8")
-    data = [home / "config.yaml", home / "sessions" / "session.json", home / "workspace" / "notes.txt",
-            home / ".env", home / "logs" / "file"]
+    data = [
+        home / "config.yaml",
+        home / "sessions" / "session.json",
+        home / "workspace" / "notes.txt",
+        home / ".env",
+        home / "logs" / "file",
+    ]
     for path in data:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("{}" if path.suffix in {".yaml", ".json"} else "user data", encoding="utf-8")
+        path.write_text(
+            "{}" if path.suffix in {".yaml", ".json"} else "user data", encoding="utf-8"
+        )
     monkeypatch.setattr(Path, "home", lambda: user)
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setenv("CLAWK_RUNTIME_DIR", str(store))
     monkeypatch.setattr(uninstall, "get_project_root", lambda: source)
     monkeypatch.setattr(uninstall, "get_clawk_home", lambda: home)
-    monkeypatch.setattr("clawk_cli.gui_uninstall.desktop_userdata_dir", lambda: userdata)
+    monkeypatch.setattr(
+        "clawk_cli.gui_uninstall.desktop_userdata_dir", lambda: userdata
+    )
     return home, witnesses, data
 
 
@@ -48,10 +62,17 @@ def test_data_only_preserves_runtime_and_sibling_homes(layout, monkeypatch, mode
     source = uninstall.get_project_root()
     generation = install_state_dir(source) / "environments" / "selected"
     generation.mkdir(parents=True)
-    (generation / "pyvenv.cfg").write_text("include-system-site-packages = false", encoding="utf-8")
-    runtime_facts_path(source).write_text(json.dumps({"packages": {"venv": {"environment": str(generation)}}}), encoding="utf-8")
+    (generation / "pyvenv.cfg").write_text(
+        "include-system-site-packages = false", encoding="utf-8"
+    )
+    runtime_facts_path(source).write_text(
+        json.dumps({"packages": {"venv": {"environment": str(generation)}}}),
+        encoding="utf-8",
+    )
     monkeypatch.setattr("builtins.input", lambda *args: "no")
-    uninstall.run_data_uninstall(SimpleNamespace(yes=mode != "cancel", dry_run=mode == "dry-run"))
+    uninstall.run_data_uninstall(
+        SimpleNamespace(yes=mode != "cancel", dry_run=mode == "dry-run")
+    )
     assert selected_venv(source) == generation
     assert all(path.read_text(encoding="utf-8") == "keep" for path in witnesses)
     assert all(path.exists() is (mode != "confirmed") for path in data)
@@ -126,7 +147,9 @@ def test_data_only_preserves_the_containing_bundled_application(layout, monkeypa
     payload = app / "resources" / PAYLOAD_DIR_NAME
     project = payload / "repo"
     project.mkdir(parents=True)
-    (project / "install-stamp.json").write_text(json.dumps({"payload": "bundled"}), encoding="utf-8")
+    (project / "install-stamp.json").write_text(
+        json.dumps({"payload": "bundled"}), encoding="utf-8"
+    )
     shell = app / "Clawksis.exe"
     shell.write_bytes(b"retained app bytes")
     (payload / "venv").mkdir()
@@ -139,7 +162,9 @@ def test_data_only_preserves_the_containing_bundled_application(layout, monkeypa
     assert all(not path.exists() for path in data)
 
 
-def test_data_only_works_from_a_self_contained_runtime_without_an_app(layout, monkeypatch):
+def test_data_only_works_from_a_self_contained_runtime_without_an_app(
+    layout, monkeypatch
+):
     """A Termux-shaped runtime (sealed, APT-owned, no Electron app around it)
     must plan a data-only removal instead of hunting for a desktop app."""
     import json
@@ -149,8 +174,16 @@ def test_data_only_works_from_a_self_contained_runtime_without_an_app(layout, mo
     project = package / "app"
     (project / "clawk_cli").mkdir(parents=True)
     (project / "clawk_cli" / "__init__.py").write_text("", encoding="utf-8")
-    (project / "install-stamp.json").write_text(json.dumps(
-        {"payload": "runtime", "distribution": "apt-termux", "updateMechanism": "external"}), encoding="utf-8")
+    (project / "install-stamp.json").write_text(
+        json.dumps(
+            {
+                "payload": "runtime",
+                "distribution": "apt-termux",
+                "updateMechanism": "external",
+            }
+        ),
+        encoding="utf-8",
+    )
     (package / "venv").mkdir()
     monkeypatch.setattr(uninstall, "get_project_root", lambda: project)
     uninstall.run_data_uninstall(SimpleNamespace(yes=True))

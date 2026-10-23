@@ -1,4 +1,5 @@
 """Real-process deadline regression; the probe owns and reaps its whole subtree."""
+
 import os
 from pathlib import Path
 import subprocess
@@ -15,7 +16,10 @@ def test_cron_timeout_closes_the_descendant_snapshot_fork_window(tmp_path):
     result = subprocess.run(
         [sys.executable, str(probe)],
         env={**os.environ, "HOME": str(tmp_path), "CLAWK_HOME": str(tmp_path)},
-        stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=35,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=35,
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
@@ -23,13 +27,17 @@ def test_cron_timeout_closes_the_descendant_snapshot_fork_window(tmp_path):
 
 @pytest.mark.platforms("linux")
 @pytest.mark.parametrize("initially_stopped", [False, True])
-def test_refused_hard_kill_preserves_the_targets_original_run_state(monkeypatch, initially_stopped):
+def test_refused_hard_kill_preserves_the_targets_original_run_state(
+    monkeypatch, initially_stopped
+):
     import psutil
     from agent.deadline import kill_process_tree
 
     proc = subprocess.Popen(
         [sys.executable, "-c", "import time; time.sleep(30)"],
-        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
         start_new_session=True,
     )
     process = psutil.Process(proc.pid)
@@ -49,7 +57,9 @@ def test_refused_hard_kill_preserves_the_targets_original_run_state(monkeypatch,
 
     def wait_for_state(stopped):
         deadline = time.monotonic() + 5
-        while (process.status() == psutil.STATUS_STOPPED) != stopped and time.monotonic() < deadline:
+        while (
+            process.status() == psutil.STATUS_STOPPED
+        ) != stopped and time.monotonic() < deadline:
             time.sleep(0.005)
         assert (process.status() == psutil.STATUS_STOPPED) == stopped
 

@@ -1,26 +1,46 @@
 """Physical worker liveness and cooperative Stop across every served authority."""
+
 import asyncio
 
 from gateway.session_authorities import all_authorities
 
 
 def executing_sessions(authority):
-    for sid, live in getattr(authority, 'sessions', {}).items():
-        execution = getattr(getattr(live, 'event_stream', None), 'execution', None) or {}
+    for sid, live in getattr(authority, "sessions", {}).items():
+        execution = (
+            getattr(getattr(live, "event_stream", None), "execution", None) or {}
+        )
         task = live.task
-        if execution.get('execution_generation') is not None and task is not None and not task.done():
-            yield sid, live, execution['execution_generation']
+        if (
+            execution.get("execution_generation") is not None
+            and task is not None
+            and not task.done()
+        ):
+            yield sid, live, execution["execution_generation"]
 
 
 def uncounted_runtime_work(runner):
     """Count claims absent from the ordinary agent map, including pre-bootstrap managed turns."""
-    running = getattr(runner, '_running_agents', {})
+    running = getattr(runner, "_running_agents", {})
     authorities = all_authorities(runner)
-    managed = sum(not worker.closed.is_set() for authority in authorities
-                  for worker in getattr(authority, '_managed_workers', {}).values())
-    return (managed + sum(live.route not in running and sid not in getattr(authority, '_managed_workers', {})
-                for authority in authorities for sid, live, _ in executing_sessions(authority))
-            + sum(len(mutation_tasks(authority)) + len(side_agents(authority)) for authority in authorities))
+    managed = sum(
+        not worker.closed.is_set()
+        for authority in authorities
+        for worker in getattr(authority, "_managed_workers", {}).values()
+    )
+    return (
+        managed
+        + sum(
+            live.route not in running
+            and sid not in getattr(authority, "_managed_workers", {})
+            for authority in authorities
+            for sid, live, _ in executing_sessions(authority)
+        )
+        + sum(
+            len(mutation_tasks(authority)) + len(side_agents(authority))
+            for authority in authorities
+        )
+    )
 
 
 def side_agents(authority):
@@ -28,14 +48,19 @@ def side_agents(authority):
     has not unwound (``gateway/session_tui_side.py`` ``_spawn``). A stopped ``/btw`` whose fork
     is gone (``_SideQuestionStop.abandoned``) is no longer owner work."""
     from gateway.session_tui_side import _abandoned
-    return [(thread, holder) for thread, holder in list(getattr(authority, '_side_agents', {}).items())
-            if not _abandoned(holder)]
+
+    return [
+        (thread, holder)
+        for thread, holder in list(getattr(authority, "_side_agents", {}).items())
+        if not _abandoned(holder)
+    ]
 
 
 def interrupt_side_agents(runner, reason):
     """Hard-interrupt every counted side agent's holder across served authorities (the stop
     drain waits for them, so its timed-out interrupt must reach them). Returns how many."""
     from agent.interrupt_compat import request_hard_interrupt
+
     count = 0
     for authority in all_authorities(runner):
         for _, holder in side_agents(authority):
@@ -49,27 +74,34 @@ def persist_work_count(authority, _task=None):
     mutation, a mailbox operation) ends: the agent-slot release that last wrote
     ``gateway_state.json`` ran while that work was still live, so without this write the
     persisted count never returns to zero."""
-    persist = getattr(getattr(authority, 'runner', None), '_persist_active_agents', None)
+    persist = getattr(
+        getattr(authority, "runner", None), "_persist_active_agents", None
+    )
     if persist is not None:
         persist()
 
 
 def mutation_tasks(authority):
-    tasks = {*getattr(authority, '_mutation_tasks', ()), *getattr(authority, '_bot_mailbox_operations', ())}
+    tasks = {
+        *getattr(authority, "_mutation_tasks", ()),
+        *getattr(authority, "_bot_mailbox_operations", ()),
+    }
     return [task for task in tasks if not task.done()]
 
 
 def track_mutation(authority, operation):
-    tasks = getattr(authority, '_mutation_tasks', None)
+    tasks = getattr(authority, "_mutation_tasks", None)
     if tasks is None:
         tasks = authority._mutation_tasks = set()
     task = asyncio.create_task(operation)
     tasks.add(task)
+
     def finished(done):
         tasks.discard(done)
         if not done.cancelled():
             done.exception()  # the observer may already have disconnected
         persist_work_count(authority)
+
     task.add_done_callback(finished)
     return task
 
@@ -89,7 +121,7 @@ async def tracked_write(authority, write, then=None, *, ordered=False, after=Non
     waiter before any drain it scheduled can claim, settle or pause that admission. A caller
     cancelled while the commit is in flight hands ``after`` to the commit's completion instead,
     so a committed row is never stranded without a drain."""
-    order = getattr(authority, '_ordered_writes', None)
+    order = getattr(authority, "_ordered_writes", None)
     if ordered and order is None:
         order = authority._ordered_writes = asyncio.Lock()
 
@@ -103,15 +135,18 @@ async def tracked_write(authority, write, then=None, *, ordered=False, after=Non
             return result
         followed = then(result)
         return await followed if asyncio.iscoroutine(followed) else followed
+
     task = track_mutation(authority, run())
     if after is None:
         return await asyncio.shield(task)
     try:
         result = await asyncio.shield(task)
     except asyncio.CancelledError:
+
         def late(done):
             if not done.cancelled() and done.exception() is None:
                 after(done.result())
+
         task.add_done_callback(late)
         raise
     after(result)
@@ -120,18 +155,23 @@ async def tracked_write(authority, write, then=None, *, ordered=False, after=Non
 
 def start_turn_worker(runner, worker, agent_holder, run_sync):
     authority = track_turn_worker(runner, worker, agent_holder)
-    worker.executor_task = asyncio.ensure_future(runner._run_in_executor_with_context(run_sync))
+    worker.executor_task = asyncio.ensure_future(
+        runner._run_in_executor_with_context(run_sync)
+    )
     if authority is not None:
         # Normal settlement releases the retained agent promptly. A cancelled asyncio waiter is
         # not physical completion; leave that entry until worker_done proves the thread exited.
-        worker.executor_task.add_done_callback(lambda _: list(physical_workers(authority)))
+        worker.executor_task.add_done_callback(
+            lambda _: list(physical_workers(authority))
+        )
 
 
 def track_turn_worker(runner, worker, agent_holder):
     from gateway.session_authorities import active_authority
+
     authority = active_authority(runner)
     if authority is not None:
-        workers = getattr(authority, '_turn_workers', None)
+        workers = getattr(authority, "_turn_workers", None)
         if workers is None:
             workers = authority._turn_workers = {}
         list(physical_workers(authority))
@@ -140,7 +180,7 @@ def track_turn_worker(runner, worker, agent_holder):
 
 
 def physical_workers(authority):
-    workers = getattr(authority, '_turn_workers', {})
+    workers = getattr(authority, "_turn_workers", {})
     for key, (worker, holder) in list(workers.items()):
         if worker.worker_done.is_set():
             del workers[key]
@@ -151,11 +191,12 @@ def physical_workers(authority):
 def stop_authority_work(authority):
     from gateway.run_runtime import stop_authority_turns
     from agent.interrupt_compat import request_hard_interrupt
+
     stop_authority_turns(authority, in_process=True)
     for _, holder in [*physical_workers(authority), *side_agents(authority)]:
         if holder and holder[0] is not None:
-            request_hard_interrupt(holder[0], 'Profile runtime is stopping')
-    for cancel in getattr(authority, '_cron_cancellations', {}).values():
+            request_hard_interrupt(holder[0], "Profile runtime is stopping")
+    for cancel in getattr(authority, "_cron_cancellations", {}).values():
         cancel.set()
 
 
@@ -163,9 +204,13 @@ async def join_authority_work(authority, timeout):
     deadline = asyncio.get_running_loop().time() + timeout
     while True:
         stop_authority_work(authority)
-        if (not list(physical_workers(authority)) and not list(executing_sessions(authority))
-                and not mutation_tasks(authority) and not side_agents(authority)):
+        if (
+            not list(physical_workers(authority))
+            and not list(executing_sessions(authority))
+            and not mutation_tasks(authority)
+            and not side_agents(authority)
+        ):
             return
         if asyncio.get_running_loop().time() >= deadline:
-            raise TimeoutError('Profile workers did not stop; ownership retained')
-        await asyncio.sleep(.05)
+            raise TimeoutError("Profile workers did not stop; ownership retained")
+        await asyncio.sleep(0.05)

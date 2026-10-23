@@ -89,13 +89,16 @@ def test_concurrent_load_waits_for_the_first_load(tmp_path, monkeypatch):
         "gate.entered.set()\ngate.release.wait(10)\n",
         encoding="utf-8",
     )
-    (plugin_dir / "__init__.py").write_text("def register(ctx):\n    pass\n", encoding="utf-8")
+    (plugin_dir / "__init__.py").write_text(
+        "def register(ctx):\n    pass\n", encoding="utf-8"
+    )
     module_name = "test_plugin_loader_package.concurrent_load"
     results = {}
 
     def load(key):
-        results[key] = load_plugin_module(module_name, plugin_dir, parents=(),
-                                          logger=logging.getLogger(__name__))
+        results[key] = load_plugin_module(
+            module_name, plugin_dir, parents=(), logger=logging.getLogger(__name__)
+        )
 
     def bounded(key):
         with loader.bounded_load_wait():
@@ -109,12 +112,16 @@ def test_concurrent_load_waits_for_the_first_load(tmp_path, monkeypatch):
         assert gate.entered.wait(5)
         build.start()
         build.join(1)  # well past the bound
-        assert build.is_alive(), f"agent build gave up on a slow import: {results.get('build')!r}"
+        assert build.is_alive(), (
+            f"agent build gave up on a slow import: {results.get('build')!r}"
+        )
         turn.start()
         turn.join(5)
         assert not turn.is_alive(), "per-turn caller blocked on the hung first load"
         assert results["turn"] is None
-        bounded("stalled")  # later bounded callers refuse at once while the import is still hung
+        bounded(
+            "stalled"
+        )  # later bounded callers refuse at once while the import is still hung
         assert results["stalled"] is None
         gate.release.set()
         first.join(10)
@@ -136,19 +143,31 @@ def test_concurrent_load_waits_for_the_first_load(tmp_path, monkeypatch):
             f"import sys, logging, pathlib\nfrom plugins.plugin_loader import load_plugin_module\n"
             f"gate = sys.modules[{gate_name!r}]\ngate.helper.set()\ngate.loader.wait(10)\n"
             f"mod = load_plugin_module({cyc_name!r}, pathlib.Path({str(cyc_dir)!r}), parents=(),"
-            " logger=logging.getLogger('x'))\n", encoding="utf-8")
+            " logger=logging.getLogger('x'))\n",
+            encoding="utf-8",
+        )
         (cyc_dir / "__init__.py").write_text(
             f"import sys\nsys.modules[{gate_name!r}].loader.set()\nimport {helper}\n"
-            "def register(ctx):\n    pass\n", encoding="utf-8")
-        a = threading.Thread(target=importlib.import_module, args=(helper,), daemon=True)
-        b = threading.Thread(target=load_plugin_module, args=(cyc_name, cyc_dir),
-                             kwargs={"parents": (), "logger": logging.getLogger(__name__)}, daemon=True)
+            "def register(ctx):\n    pass\n",
+            encoding="utf-8",
+        )
+        a = threading.Thread(
+            target=importlib.import_module, args=(helper,), daemon=True
+        )
+        b = threading.Thread(
+            target=load_plugin_module,
+            args=(cyc_name, cyc_dir),
+            kwargs={"parents": (), "logger": logging.getLogger(__name__)},
+            daemon=True,
+        )
         a.start()
         assert gate.helper.wait(5)
         b.start()
         a.join(5)
         b.join(5)
-        assert not a.is_alive() and not b.is_alive(), "loader lock and import lock deadlocked"
+        assert not a.is_alive() and not b.is_alive(), (
+            "loader lock and import lock deadlocked"
+        )
         assert hasattr(sys.modules[cyc_name], "register")
     finally:
         gate.release.set()

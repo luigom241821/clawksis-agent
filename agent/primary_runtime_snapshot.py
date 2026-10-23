@@ -21,7 +21,9 @@ def _snapshot_primary_runtime(agent):
         "model": agent.model,
         "provider": agent.provider,
         "requested_provider": agent.requested_provider,
-        SNAPSHOT_OWNER_KEY: runtime_entry_owner(agent.provider, agent.requested_provider, agent.base_url),
+        SNAPSHOT_OWNER_KEY: runtime_entry_owner(
+            agent.provider, agent.requested_provider, agent.base_url
+        ),
         "base_url": agent.base_url,
         "api_mode": agent.api_mode,
         "api_key": getattr(agent, "api_key", ""),
@@ -39,11 +41,13 @@ def _snapshot_primary_runtime(agent):
         "compressor_threshold_tokens": _cc.threshold_tokens,
     }
     if agent.api_mode == "anthropic_messages":
-        agent._primary_runtime.update({
-            "anthropic_api_key": agent._anthropic_api_key,
-            "anthropic_base_url": agent._anthropic_base_url,
-            "is_anthropic_oauth": agent._is_anthropic_oauth,
-        })
+        agent._primary_runtime.update(
+            {
+                "anthropic_api_key": agent._anthropic_api_key,
+                "anthropic_base_url": agent._anthropic_base_url,
+                "is_anthropic_oauth": agent._is_anthropic_oauth,
+            }
+        )
 
 
 def _build_primary_runtime_snapshot(agent, api_mode) -> dict[str, Any]:
@@ -53,14 +57,18 @@ def _build_primary_runtime_snapshot(agent, api_mode) -> dict[str, Any]:
         "model": agent.model,
         "provider": agent.provider,
         "requested_provider": agent.requested_provider,
-        SNAPSHOT_OWNER_KEY: runtime_entry_owner(agent.provider, agent.requested_provider, agent.base_url),
+        SNAPSHOT_OWNER_KEY: runtime_entry_owner(
+            agent.provider, agent.requested_provider, agent.base_url
+        ),
         "base_url": agent.base_url,
         "api_mode": agent.api_mode,
         "api_key": getattr(agent, "api_key", ""),
         "client_kwargs": dict(agent._client_kwargs),
         "use_prompt_caching": agent._use_prompt_caching,
         "use_native_cache_layout": agent._use_native_cache_layout,
-        "reasoning_config": dict(agent.reasoning_config) if getattr(agent, "reasoning_config", None) else None,
+        "reasoning_config": dict(agent.reasoning_config)
+        if getattr(agent, "reasoning_config", None)
+        else None,
         "reasoning_echo_flag": getattr(agent, "_reasoning_echo_flag", False),
         # Overrides must travel with the switched-to identity or a later recovery/restore resurrects
         # PRE-switch overrides from the stale init snapshot.
@@ -76,9 +84,11 @@ def _build_primary_runtime_snapshot(agent, api_mode) -> dict[str, Any]:
         "compressor_threshold_tokens": cc.threshold_tokens if cc else 0,
     }
     if api_mode == "anthropic_messages":
-        rt.update({
-            "anthropic_api_key": agent._anthropic_api_key,
-            "anthropic_base_url": agent._anthropic_base_url,
-            "is_anthropic_oauth": agent._is_anthropic_oauth,
-        })
+        rt.update(
+            {
+                "anthropic_api_key": agent._anthropic_api_key,
+                "anthropic_base_url": agent._anthropic_base_url,
+                "is_anthropic_oauth": agent._is_anthropic_oauth,
+            }
+        )
     return rt

@@ -24,12 +24,23 @@ def _fake_install_core(identifier, *, force=False, ref=None, **_kwargs):
     returning ``(target, manifest, name)`` like the real core."""
     from clawk_cli.agent_plugins import MCP_SCHEMA_V1, PLUGIN_SCHEMA_V1
     from clawk_cli.plugins_cmd import _plugins_dir, _read_manifest
+
     target = _plugins_dir() / "late-mcp"
     (target / "skills" / "late").mkdir(parents=True)
-    (target / "plugin.json").write_text(json.dumps({"$schema": PLUGIN_SCHEMA_V1, "name": "late-mcp"}))
-    (target / "skills" / "late" / "SKILL.md").write_text("---\nname: late\ndescription: d\n---\nBody.\n")
-    (target / "mcp.json").write_text(json.dumps({
-        "$schema": MCP_SCHEMA_V1, "mcpServers": {"worker": {"type": "stdio", "command": "python"}}}))
+    (target / "plugin.json").write_text(
+        json.dumps({"$schema": PLUGIN_SCHEMA_V1, "name": "late-mcp"})
+    )
+    (target / "skills" / "late" / "SKILL.md").write_text(
+        "---\nname: late\ndescription: d\n---\nBody.\n"
+    )
+    (target / "mcp.json").write_text(
+        json.dumps(
+            {
+                "$schema": MCP_SCHEMA_V1,
+                "mcpServers": {"worker": {"type": "stdio", "command": "python"}},
+            }
+        )
+    )
     return target, _read_manifest(target), "late-mcp"
 
 
@@ -46,21 +57,38 @@ def test_plugins_manage_install_rescans_fires_on_plugin_loaded_and_exposes_mcp_s
     manager.discover_and_load()  # the serve process booted long before the install
     events: list = []
     manager.on_plugin_loaded(events.append)
-    with patch("clawk_cli.plugins_cmd._install_plugin_core", _fake_install_core), \
-         patch("clawk_cli.plugins_cmd._python_dependency_summary", return_value=[]), \
-         patch("clawk_cli.plugins_admission.admit_plugin_set_change", _commit_plugin_selection), \
-         patch("gateway.control_socket.reload_gateway_plugins", return_value=None), \
-         patch("tools.mcp_tool_discovery.register_mcp_servers", return_value=[]), \
-         patch("tools.connectors.mcp._registered_tool_names", return_value=[]):  # no gateway, no real server
-        resp = server.handle_request({"id": "1", "method": "plugins.manage",
-                                      "params": {"action": "install", "repo": "owner/late-mcp", "enable": True}})
+    with (
+        patch("clawk_cli.plugins_cmd._install_plugin_core", _fake_install_core),
+        patch("clawk_cli.plugins_cmd._python_dependency_summary", return_value=[]),
+        patch(
+            "clawk_cli.plugins_admission.admit_plugin_set_change",
+            _commit_plugin_selection,
+        ),
+        patch("gateway.control_socket.reload_gateway_plugins", return_value=None),
+        patch("tools.mcp_tool_discovery.register_mcp_servers", return_value=[]),
+        patch("tools.connectors.mcp._registered_tool_names", return_value=[]),
+    ):  # no gateway, no real server
+        resp = server.handle_request(
+            {
+                "id": "1",
+                "method": "plugins.manage",
+                "params": {
+                    "action": "install",
+                    "repo": "owner/late-mcp",
+                    "enable": True,
+                },
+            }
+        )
     result = resp["result"]
-    assert [e["name"] for e in events[-1]] == ["late-mcp"]  # fired from inside the rescan, newcomer only
+    assert [e["name"] for e in events[-1]] == [
+        "late-mcp"
+    ]  # fired from inside the rescan, newcomer only
     servers = [row["name"] for row in result["activation"]["live_now"]["mcp_servers"]]
     assert servers == ["worker"]  # exactly the mcp.json name, as mcp.servers.* know it
     assert result["gateway_reloaded"] is False and result["restart_required"] is True
     # The invariant that was broken: a later NON-forced discovery (what reload.mcp runs) sees the servers.
     from tools.mcp_tool_config import _portable_mcp_servers
+
     merged: dict = {}
     _portable_mcp_servers(merged)
     assert set(merged) == set(servers)

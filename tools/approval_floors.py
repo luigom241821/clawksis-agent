@@ -15,7 +15,10 @@ import time
 import uuid
 from tools import approval_context as _ctx
 from tools.approval_detection import (
-    _MALFORMED_EXEC_DESCRIPTION, _PARSER_LIMIT_DESCRIPTION, _deny_command_variants)
+    _MALFORMED_EXEC_DESCRIPTION,
+    _PARSER_LIMIT_DESCRIPTION,
+    _deny_command_variants,
+)
 
 logger = logging.getLogger("tools.approval")
 
@@ -44,11 +47,16 @@ def _match_user_deny_rule(command: str) -> str | None:
 
 def _user_deny_block_result(pattern: str) -> dict:
     """Build the standard block result for an ``approvals.deny`` match."""
-    return {"approved": False, "user_deny": True, "message": (
-        f"BLOCKED: this command matches the user-defined deny rule "
-        f"'{pattern}' (approvals.deny in config.yaml). It cannot be "
-        "executed via the agent — not even with --yolo, /yolo, or "
-        "approvals.mode=off. Do NOT retry or rephrase this command; the user has explicitly forbidden it.")}
+    return {
+        "approved": False,
+        "user_deny": True,
+        "message": (
+            f"BLOCKED: this command matches the user-defined deny rule "
+            f"'{pattern}' (approvals.deny in config.yaml). It cannot be "
+            "executed via the agent — not even with --yolo, /yolo, or "
+            "approvals.mode=off. Do NOT retry or rephrase this command; the user has explicitly forbidden it."
+        ),
+    }
 
 
 def _save_blocked_payload(command: str) -> str | None:
@@ -61,6 +69,7 @@ def _save_blocked_payload(command: str) -> str | None:
     back to write_file)."""
     try:
         from clawk_constants import get_clawk_home
+
         script_dir = get_clawk_home() / "cache" / "blocked-scripts"
         script_dir.mkdir(parents=True, exist_ok=True)
         # Opportunistic cleanup: blocked payloads older than 7 days.
@@ -74,14 +83,17 @@ def _save_blocked_payload(command: str) -> str | None:
             "#!/usr/bin/env bash\n"
             "# Auto-saved by Clawksis: this command exceeded the inline command\n"
             "# parser limit and was blocked from direct execution. Review it,\n"
-            f"# then run it via: bash {path}\n" + command + ("" if command.endswith("\n") else "\n"),
+            f"# then run it via: bash {path}\n"
+            + command
+            + ("" if command.endswith("\n") else "\n"),
             # Force UTF-8 + lossy decode so non-UTF-8 child output can't crash the gateway thread on
             # locale-mismatched Windows (#53137).
             # Force UTF-8 + lossy decode so non-UTF-8 child output can't crash the gateway thread on
             # locale-mismatched Windows (#53137).
             # Force UTF-8 + lossy decode so non-UTF-8 child output can't crash the gateway thread on
             # locale-mismatched Windows (#53137).
-            encoding="utf-8", errors="replace",
+            encoding="utf-8",
+            errors="replace",
         )
         return str(path)
     except Exception:
@@ -110,25 +122,29 @@ def _hardline_block_result(description: str, command: str = "") -> dict:
         saved = _save_blocked_payload(command) if command else None
         if saved:
             message += _RECOVERY_PREFIX + (
-                f"Your command was saved to {saved} — review it, then run: terminal(command=\"bash {saved}\"). "
+                f'Your command was saved to {saved} — review it, then run: terminal(command="bash {saved}"). '
                 "Do not retry inline."
             )
         else:
             message += _RECOVERY_PREFIX + (
                 "Write the script to a file with write_file, "
-                "then run it: terminal(command=\"bash /path/script.sh\") or "
-                "\"python3 /path/script.py\". Do not retry inline."
+                'then run it: terminal(command="bash /path/script.sh") or '
+                '"python3 /path/script.py". Do not retry inline.'
             )
     return {"approved": False, "hardline": True, "message": message}
 
 
 def _sudo_stdin_block_result(description: str) -> dict:
     """Build the standard block result for sudo stdin guard."""
-    return {"approved": False, "message": (
-        f"BLOCKED: {description}. "
-        "Do not pipe passwords to 'sudo -S' — this is a brute-force "
-        "attack vector. Set SUDO_PASSWORD in your .env file if the "
-        "agent needs passwordless sudo, or run the sudo command manually in your own terminal.")}
+    return {
+        "approved": False,
+        "message": (
+            f"BLOCKED: {description}. "
+            "Do not pipe passwords to 'sudo -S' — this is a brute-force "
+            "attack vector. Set SUDO_PASSWORD in your .env file if the "
+            "agent needs passwordless sudo, or run the sudo command manually in your own terminal."
+        ),
+    }
 
 
 # Shell control characters that make a command compound when they appear OUTSIDE quotes. Inside quotes they are
@@ -138,7 +154,9 @@ def _sudo_stdin_block_result(description: str) -> dict:
 # Port of can1357/oh-my-pi#7553.
 _SHELL_CONTROL_CHARS = frozenset("\n\r;&|<>`$()")
 
-_REINTERPRETED_ARGUMENT_RE = re.compile(r"(?:^|[ \t])(?:-[^-\s]*[ce]|--(?:command|eval))(?:[= \t]|$)")
+_REINTERPRETED_ARGUMENT_RE = re.compile(
+    r"(?:^|[ \t])(?:-[^-\s]*[ce]|--(?:command|eval))(?:[= \t]|$)"
+)
 
 
 def _has_allowlist_shell_operator(command: str) -> bool:
@@ -191,6 +209,7 @@ def _command_matches_permanent_allowlist(command: str) -> bool:
     ``recursive delete``; manual entries are command text, possibly with
     shell-style wildcards like ``podman *``."""
     from tools import approval as _a
+
     command = (command or "").strip()
     if not command or _has_allowlist_shell_operator(command):
         return False
@@ -198,7 +217,12 @@ def _command_matches_permanent_allowlist(command: str) -> bool:
         patterns = tuple(_a._permanent_set())
     for pattern in patterns:
         pattern = pattern.strip() if isinstance(pattern, str) else ""
-        if pattern and (command == pattern or (any(ch in pattern for ch in "*?[")
-                                               and fnmatch.fnmatchcase(command, pattern))):
+        if pattern and (
+            command == pattern
+            or (
+                any(ch in pattern for ch in "*?[")
+                and fnmatch.fnmatchcase(command, pattern)
+            )
+        ):
             return True
     return False

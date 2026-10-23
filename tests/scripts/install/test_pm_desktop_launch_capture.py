@@ -14,8 +14,14 @@ import pytest
 @pytest.mark.parametrize("packaged", [False, True])
 def test_isolated_pm_launch_captures_only_final_electron_spawn(tmp_path, packaged):
     launch_argv = (
-        [str(tmp_path / "apps/desktop/release/mac-arm64/Clawksis.app/Contents/MacOS/Clawksis")]
-        if packaged else ["npm", "exec", "--", "electron", "."]
+        [
+            str(
+                tmp_path
+                / "apps/desktop/release/mac-arm64/Clawksis.app/Contents/MacOS/Clawksis"
+            )
+        ]
+        if packaged
+        else ["npm", "exec", "--", "electron", "."]
     )
     root = Path(__file__).resolve().parents[3]
     helper = root / "tests/install/e2e-assets/launch-capture/pm-launch.py"
@@ -34,12 +40,14 @@ def test_isolated_pm_launch_captures_only_final_electron_spawn(tmp_path, package
     # Query emulates the published --print-runtime-command interface. The
     # returned command executes under a REAL isolated Python, not a patched
     # subprocess; the fake npm command proves builds still pass through.
-    code = ("import os, runpy; os.environ.pop('PYTHONPATH', None); "
-            f"runpy.run_path({str(app)!r}, run_name='__main__')")
+    code = (
+        "import os, runpy; os.environ.pop('PYTHONPATH', None); "
+        f"runpy.run_path({str(app)!r}, run_name='__main__')"
+    )
     command = [sys.executable, "-I", "-c", code, "desktop"]
     launcher.write_text(
         "#!/bin/sh\n"
-        "[ \"$1\" = --print-runtime-command ] || exit 90\n"
+        '[ "$1" = --print-runtime-command ] || exit 90\n'
         f"printf '%s\\n' {shlex.quote(json.dumps(command))}\n",
         encoding="utf-8",
     )
@@ -55,13 +63,23 @@ def test_isolated_pm_launch_captures_only_final_electron_spawn(tmp_path, package
     evil = tmp_path / "evil"
     evil.mkdir()
     (evil / "sitecustomize.py").write_text(
-        f"open({str(tmp_path / 'ambient-hook-ran')!r}, 'w').close()\n", encoding="utf-8",
+        f"open({str(tmp_path / 'ambient-hook-ran')!r}, 'w').close()\n",
+        encoding="utf-8",
     )
     spec = tmp_path / "launch.json"
-    env = {**os.environ, "PATH": str(tmp_path) + os.pathsep + os.environ["PATH"],
-           "PYTHONPATH": str(evil)}
-    result = subprocess.run([sys.executable, "-I", str(helper), str(launcher), str(spec)],
-                            cwd=tmp_path, env=env, capture_output=True, text=True, check=False)
+    env = {
+        **os.environ,
+        "PATH": str(tmp_path) + os.pathsep + os.environ["PATH"],
+        "PYTHONPATH": str(evil),
+    }
+    result = subprocess.run(
+        [sys.executable, "-I", str(helper), str(launcher), str(spec)],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
     assert result.returncode == 0, result.stderr
     assert (tmp_path / "build-ran").is_file()
     assert not (tmp_path / "ambient-hook-ran").exists()

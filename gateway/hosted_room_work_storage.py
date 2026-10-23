@@ -29,6 +29,7 @@ def initialize(conn):
 
 def _initialize_locked(conn):
     from gateway import hosted_room_work_records as work
+
     tables = (work.SOURCE_TABLE, work.PENDING_TABLE)
     # Orphans are opaque evidence, not snapshots. No FK or producer can honestly
     # be supplied for them. Preserve every original column and forbid mutation.
@@ -39,16 +40,29 @@ def _initialize_locked(conn):
         disposition TEXT NOT NULL CHECK(disposition='invalid'))""")
     for table in tables:
         pending = table == work.PENDING_TABLE
-        parent = "hosted_room_replicas" if table == work.TARGET_TABLE else "hosted_rooms"
+        parent = (
+            "hosted_room_replicas" if table == work.TARGET_TABLE else "hosted_rooms"
+        )
         columns = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
         legacy = bool(columns) and "producer_gateway_id" not in columns
         # Preserve surrounding cleanup triggers by recreating the same table name
         # inside this transaction, rather than renaming its referents.
         rows = conn.execute(f"SELECT * FROM {table}").fetchall() if legacy else []
-        triggers = conn.execute("SELECT sql FROM sqlite_master WHERE type='trigger' AND tbl_name=?", (table,)).fetchall() if legacy else []
+        triggers = (
+            conn.execute(
+                "SELECT sql FROM sqlite_master WHERE type='trigger' AND tbl_name=?",
+                (table,),
+            ).fetchall()
+            if legacy
+            else []
+        )
         if legacy:
             conn.execute(f"DROP TABLE {table}")
-        extra = "target_install_id TEXT NOT NULL, route_generation TEXT NOT NULL, status TEXT NOT NULL," if pending else ""
+        extra = (
+            "target_install_id TEXT NOT NULL, route_generation TEXT NOT NULL, status TEXT NOT NULL,"
+            if pending
+            else ""
+        )
         key = ",target_install_id" if pending else ""
         conn.execute(f"""CREATE TABLE IF NOT EXISTS {table} (
             room_id TEXT NOT NULL, revision INTEGER NOT NULL, digest TEXT NOT NULL, record_json TEXT NOT NULL,
@@ -57,30 +71,64 @@ def _initialize_locked(conn):
             {extra} PRIMARY KEY(room_id,producer_gateway_id,producer_epoch{key}),
             FOREIGN KEY(room_id) REFERENCES {parent}(room_id) ON DELETE CASCADE)""")
         for row in rows:
-            if not conn.execute(f"SELECT 1 FROM {parent} WHERE room_id=?", (row["room_id"],)).fetchone():
-                fields = ["source_table", "room_id", "revision", "digest", "record_json", "disposition"]
-                values = [table, row["room_id"], row["revision"], row["digest"], row["record_json"], "invalid"]
+            if not conn.execute(
+                f"SELECT 1 FROM {parent} WHERE room_id=?", (row["room_id"],)
+            ).fetchone():
+                fields = [
+                    "source_table",
+                    "room_id",
+                    "revision",
+                    "digest",
+                    "record_json",
+                    "disposition",
+                ]
+                values = [
+                    table,
+                    row["room_id"],
+                    row["revision"],
+                    row["digest"],
+                    row["record_json"],
+                    "invalid",
+                ]
                 if pending:
                     fields += ["target_install_id", "route_generation", "status"]
                     values += [row[k] for k in fields[-3:]]
-                conn.execute(f"INSERT INTO {INVALID_TABLE} ({','.join(fields)}) VALUES ({','.join('?' for _ in fields)})", values)
+                conn.execute(
+                    f"INSERT INTO {INVALID_TABLE} ({','.join(fields)}) VALUES ({','.join('?' for _ in fields)})",
+                    values,
+                )
                 continue
             producer, epoch, disposition = "", 0, "invalid"
             try:
                 record = work.validate(json.loads(row["record_json"]))
-                if (record["version"] != 1 or record["room_id"] != row["room_id"]
-                        or record["revision"] != row["revision"] or record["digest"] != row["digest"]):
+                if (
+                    record["version"] != 1
+                    or record["room_id"] != row["room_id"]
+                    or record["revision"] != row["revision"]
+                    or record["digest"] != row["digest"]
+                ):
                     raise work.WorkRecordError("legacy work scope conflicts")
                 producer, epoch, disposition = record["home_install_id"], 1, "current"
             except (ValueError, TypeError, KeyError):
                 pass  # Explicitly invalid, with original bytes and no invented producer.
-            fields = ["room_id", "revision", "digest", "record_json", "producer_gateway_id", "producer_epoch", "disposition"]
+            fields = [
+                "room_id",
+                "revision",
+                "digest",
+                "record_json",
+                "producer_gateway_id",
+                "producer_epoch",
+                "disposition",
+            ]
             values = [row[k] for k in fields[:4]] + [producer, epoch, disposition]
             if pending:
                 fields += ["target_install_id", "route_generation", "status"]
                 values += [row[k] for k in fields[-3:]]
             values[6] = scope_disposition(conn, table, dict(zip(fields, values)))
-            conn.execute(f"INSERT INTO {table} ({','.join(fields)}) VALUES ({','.join('?' for _ in fields)})", values)
+            conn.execute(
+                f"INSERT INTO {table} ({','.join(fields)}) VALUES ({','.join('?' for _ in fields)})",
+                values,
+            )
         for trigger in triggers:
             conn.execute(trigger[0])
     _guards(conn, work, tables)
@@ -93,14 +141,24 @@ def _initialize_locked(conn):
 def scope_disposition(conn, table, row):
     """Read-only authority projection, also used when inserting migrated rows."""
     from gateway import hosted_room_work_records as work
+
     if row["disposition"] != "current":
         return row["disposition"]
     current = None
-    current = conn.execute("SELECT authority_gateway_id,authority_epoch FROM hosted_rooms WHERE room_id=?",
-                           (row["room_id"],)).fetchone()
-    if current is None or tuple(current) == (row["producer_gateway_id"], row["producer_epoch"]):
+    current = conn.execute(
+        "SELECT authority_gateway_id,authority_epoch FROM hosted_rooms WHERE room_id=?",
+        (row["room_id"],),
+    ).fetchone()
+    if current is None or tuple(current) == (
+        row["producer_gateway_id"],
+        row["producer_epoch"],
+    ):
         return "current"
-    return "superseded_authority" if table == work.PENDING_TABLE and row["status"] != "acked" else "historical"
+    return (
+        "superseded_authority"
+        if table == work.PENDING_TABLE and row["status"] != "acked"
+        else "historical"
+    )
 
 
 def _guards(conn, work, tables):
@@ -110,13 +168,26 @@ def _guards(conn, work, tables):
             key = "room_id=NEW.room_id AND producer_gateway_id=NEW.producer_gateway_id AND producer_epoch=NEW.producer_epoch"
             if table == work.PENDING_TABLE:
                 key += " AND target_install_id=NEW.target_install_id"
-            old_size = (f"COALESCE((SELECT {row_size_sql(table)} FROM {table} WHERE {key}),0)"
-                        if operation == "INSERT" else row_size_sql(table, "OLD."))
+            old_size = (
+                f"COALESCE((SELECT {row_size_sql(table)} FROM {table} WHERE {key}),0)"
+                if operation == "INSERT"
+                else row_size_sql(table, "OLD.")
+            )
             new_size = row_size_sql(table, "NEW.")
-            old_count = f"(SELECT COUNT(*) FROM {table} WHERE {key})" if operation == "INSERT" else "1"
-            conn.execute(f"DROP TRIGGER IF EXISTS trg_{table}_budget_v2_{operation.lower()}")
-            conn.execute(f"DROP TRIGGER IF EXISTS trg_{table}_budget_v3_{operation.lower()}")
-            conn.execute(f"DROP TRIGGER IF EXISTS trg_{table}_budget_v4_{operation.lower()}")
+            old_count = (
+                f"(SELECT COUNT(*) FROM {table} WHERE {key})"
+                if operation == "INSERT"
+                else "1"
+            )
+            conn.execute(
+                f"DROP TRIGGER IF EXISTS trg_{table}_budget_v2_{operation.lower()}"
+            )
+            conn.execute(
+                f"DROP TRIGGER IF EXISTS trg_{table}_budget_v3_{operation.lower()}"
+            )
+            conn.execute(
+                f"DROP TRIGGER IF EXISTS trg_{table}_budget_v4_{operation.lower()}"
+            )
             conn.execute(f"""CREATE TRIGGER trg_{table}_budget_v4_{operation.lower()}
                 BEFORE {operation} ON {table} WHEN (
                     (({new_size})>({old_size}) AND ({total})-({old_size})+({new_size})>{work.MAX_STORE_BYTES})
@@ -135,7 +206,11 @@ def _guards(conn, work, tables):
             BEGIN SELECT RAISE(ABORT, 'historical work record is immutable'); END""")
         # INSERT OR REPLACE performs a delete internally. Refuse it before the
         # uniqueness conflict can remove an immutable snapshot.
-        extra = " AND p.target_install_id=NEW.target_install_id" if table == work.PENDING_TABLE else ""
+        extra = (
+            " AND p.target_install_id=NEW.target_install_id"
+            if table == work.PENDING_TABLE
+            else ""
+        )
         conn.execute(f"""CREATE TRIGGER IF NOT EXISTS trg_{table}_replace_v2
             BEFORE INSERT ON {table} WHEN EXISTS (SELECT 1 FROM {table} p WHERE p.room_id=NEW.room_id
                 AND p.producer_gateway_id=NEW.producer_gateway_id AND p.producer_epoch=NEW.producer_epoch
@@ -158,8 +233,13 @@ def _guards(conn, work, tables):
 
 def retained_fields(table):
     from gateway import hosted_room_work_records as work
+
     fields = ["room_id", "revision", "digest", "record_json"]
-    fields += ["source_table"] if table == INVALID_TABLE else ["producer_gateway_id", "producer_epoch"]
+    fields += (
+        ["source_table"]
+        if table == INVALID_TABLE
+        else ["producer_gateway_id", "producer_epoch"]
+    )
     if table in (work.PENDING_TABLE, INVALID_TABLE):
         fields += ["target_install_id", "route_generation", "status"]
     return fields
@@ -168,22 +248,35 @@ def retained_fields(table):
 def row_size_sql(table, prefix=""):
     # Reserve the longest bounded disposition up front so freezing/cleanup can
     # still run at capacity. Every original variable column is charged as bytes.
-    return "20+" + "+".join(f"COALESCE(length(CAST({prefix}{k} AS BLOB)),0)" for k in retained_fields(table))
+    return "20+" + "+".join(
+        f"COALESCE(length(CAST({prefix}{k} AS BLOB)),0)" for k in retained_fields(table)
+    )
 
 
 def usage_sql(tables):
-    return (" + ".join(f"(SELECT COALESCE(SUM({row_size_sql(t)}),0) FROM {t})" for t in tables),
-            " + ".join(f"(SELECT COUNT(*) FROM {t})" for t in tables))
+    return (
+        " + ".join(
+            f"(SELECT COALESCE(SUM({row_size_sql(t)}),0) FROM {t})" for t in tables
+        ),
+        " + ".join(f"(SELECT COUNT(*) FROM {t})" for t in tables),
+    )
 
 
 def validate_stored(row):
     from gateway import hosted_room_work_records as work
+
     try:
         record = work.validate(json.loads(row["record_json"]))
-        if (row["disposition"] == "invalid"
-                or scope(record) != (row["room_id"], row["producer_gateway_id"], row["producer_epoch"])
-                or record["revision"] != row["revision"] or record["digest"] != row["digest"]):
-            raise work.WorkRecordError("stored work metadata conflicts with record scope")
+        if (
+            row["disposition"] == "invalid"
+            or scope(record)
+            != (row["room_id"], row["producer_gateway_id"], row["producer_epoch"])
+            or record["revision"] != row["revision"]
+            or record["digest"] != row["digest"]
+        ):
+            raise work.WorkRecordError(
+                "stored work metadata conflicts with record scope"
+            )
     except (ValueError, TypeError, KeyError, RecursionError) as exc:
         raise work.InvalidStoredWorkRecord("stored work evidence is invalid") from exc
     return record
@@ -198,6 +291,7 @@ def validate_stored_locked(conn, table, row):
     rewritten, and read-only projections use validate_stored instead.
     """
     from gateway import hosted_room_work_records as work
+
     try:
         return validate_stored(row)
     except work.InvalidStoredWorkRecord:
@@ -208,7 +302,10 @@ def validate_stored_locked(conn, table, row):
             where = " AND ".join(f'"{k}" IS ?' for k in fields)
             conn.execute("SAVEPOINT work_record_invalidate")
             try:
-                conn.execute(f"UPDATE {table} SET disposition='invalid' WHERE {where}", [row[k] for k in fields])
+                conn.execute(
+                    f"UPDATE {table} SET disposition='invalid' WHERE {where}",
+                    [row[k] for k in fields],
+                )
             except BaseException:
                 conn.execute("ROLLBACK TO work_record_invalidate")
                 conn.execute("RELEASE work_record_invalidate")
@@ -218,13 +315,26 @@ def validate_stored_locked(conn, table, row):
 
 
 def scope(record):
-    return record["room_id"], record["authority"]["gateway_id"], record["authority"]["epoch"]
+    return (
+        record["room_id"],
+        record["authority"]["gateway_id"],
+        record["authority"]["epoch"],
+    )
 
 
 def save_locked(conn, table, record, *, target_install_id=None, route_generation=None):
     from gateway import hosted_room_work_records as work
+
     data = work.encode(record)
-    fields = ["room_id", "producer_gateway_id", "producer_epoch", "revision", "digest", "record_json", "disposition"]
+    fields = [
+        "room_id",
+        "producer_gateway_id",
+        "producer_epoch",
+        "revision",
+        "digest",
+        "record_json",
+        "disposition",
+    ]
     values = [*scope(record), record["revision"], record["digest"], data, "current"]
     keys = fields[:3]
     if target_install_id is not None:
@@ -232,10 +342,12 @@ def save_locked(conn, table, record, *, target_install_id=None, route_generation
         values += [target_install_id, route_generation, "pending"]
         keys += ["target_install_id"]
     work._budget(conn, table, dict(zip(fields, values)))
-    updates = ','.join(f'{k}=excluded.{k}' for k in fields if k not in keys)
-    conn.execute(f"INSERT INTO {table} ({','.join(fields)}) VALUES ({','.join('?' for _ in fields)}) "
-                 f"ON CONFLICT({','.join(keys)}) DO UPDATE SET {updates}", values)
-
+    updates = ",".join(f"{k}=excluded.{k}" for k in fields if k not in keys)
+    conn.execute(
+        f"INSERT INTO {table} ({','.join(fields)}) VALUES ({','.join('?' for _ in fields)}) "
+        f"ON CONFLICT({','.join(keys)}) DO UPDATE SET {updates}",
+        values,
+    )
 
 
 def _invalid_guards(conn):

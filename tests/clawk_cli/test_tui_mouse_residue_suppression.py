@@ -20,9 +20,8 @@ from unittest.mock import patch
 # their `patch("os.write")` context.
 from clawk_cli.main import _suppress_mouse_residue_early
 
+
 class TestEarlyMouseDisable:
-
-
     def test_respects_diagnostic_escape_hatch(self, monkeypatch):
         monkeypatch.setattr(sys, "argv", ["clawk", "--tui"])
         monkeypatch.delenv("CLAWK_TUI", raising=False)
@@ -32,7 +31,6 @@ class TestEarlyMouseDisable:
             _suppress_mouse_residue_early()
 
         mock_write.assert_not_called()
-
 
     def test_oserror_is_swallowed(self, monkeypatch):
         monkeypatch.setattr(sys, "argv", ["clawk", "--tui"])

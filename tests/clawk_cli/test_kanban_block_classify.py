@@ -1,4 +1,5 @@
 """block_task() classifies an untyped breaker block in place (#117363)."""
+
 import os
 import time
 from pathlib import Path
@@ -39,38 +40,70 @@ def test_typed_block_classifies_untyped_breaker_block(kanban_home, monkeypatch):
     attaches the kind without a status flap, a synthetic run, or lost evidence."""
     monkeypatch.setattr(kb, "_pid_alive", lambda pid: False)
     with kbc.connect() as conn:
-        tid = kb.create_task(conn, title="ceiling", assignee="worker", max_runtime_seconds=1)
+        tid = kb.create_task(
+            conn, title="ceiling", assignee="worker", max_runtime_seconds=1
+        )
         _time_out_once(conn, tid)
         assert kb.get_task(conn, tid).status == "ready"
         _time_out_once(conn, tid)
         parked = kb.get_task(conn, tid)
-        assert (parked.status, parked.block_kind, parked.block_recurrences) == ("blocked", None, 0)
+        assert (parked.status, parked.block_kind, parked.block_recurrences) == (
+            "blocked",
+            None,
+            0,
+        )
 
-        assert kb.block_task(conn, tid, reason="needs a human decision", kind="needs_input") is True
+        assert (
+            kb.block_task(
+                conn, tid, reason="needs a human decision", kind="needs_input"
+            )
+            is True
+        )
 
         after = kb.get_task(conn, tid)
-        assert (after.status, after.block_kind, after.block_recurrences) == ("blocked", "needs_input", 1)
+        assert (after.status, after.block_kind, after.block_recurrences) == (
+            "blocked",
+            "needs_input",
+            1,
+        )
         assert after.consecutive_failures == parked.consecutive_failures
         assert after.last_failure_error == parked.last_failure_error
         assert after.current_run_id is None
         kinds = [e.kind for e in kb.list_events(conn, tid)]
-        assert (kinds.count("blocked"), kinds.count("gave_up"), kinds.count("timed_out")) == (1, 1, 2)
+        assert (
+            kinds.count("blocked"),
+            kinds.count("gave_up"),
+            kinds.count("timed_out"),
+        ) == (1, 1, 2)
         assert len(kb.list_runs(conn, tid)) == 2
 
 
-def test_typed_block_still_refuses_typed_or_live_blocked_cards(kanban_home, monkeypatch):
+def test_typed_block_still_refuses_typed_or_live_blocked_cards(
+    kanban_home, monkeypatch
+):
     monkeypatch.setattr(kb, "_pid_alive", lambda pid: False)
     with kbc.connect() as conn:
-        parked = kb.create_task(conn, title="parked", assignee="worker", max_runtime_seconds=1)
+        parked = kb.create_task(
+            conn, title="parked", assignee="worker", max_runtime_seconds=1
+        )
         _time_out_once(conn, parked)
         _time_out_once(conn, parked)
         assert kb.get_task(conn, parked).status == "blocked"
         stale_run_id = conn.execute(
-            "SELECT MAX(id) FROM task_runs WHERE task_id = ?", (parked,)).fetchone()[0]
+            "SELECT MAX(id) FROM task_runs WHERE task_id = ?", (parked,)
+        ).fetchone()[0]
         assert stale_run_id is not None
         # A worker asserting ownership of its (ended) run cannot classify a parked card.
-        assert kb.block_task(conn, parked, reason="mine", kind="needs_input",
-                             expected_run_id=stale_run_id) is False
+        assert (
+            kb.block_task(
+                conn,
+                parked,
+                reason="mine",
+                kind="needs_input",
+                expected_run_id=stale_run_id,
+            )
+            is False
+        )
         assert kb.get_task(conn, parked).block_kind is None
 
         typed = kb.create_task(conn, title="typed once", assignee="worker")

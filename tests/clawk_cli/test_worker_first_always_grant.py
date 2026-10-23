@@ -12,6 +12,7 @@ Ordinary path: ``build_policy`` on the raw file, then ``_worker_config``, bound 
 with ``_bind_safe_worker_policy`` the way the worker bootstrap binds it. Always goes
 through ``tools.approval._persist_choice``.
 """
+
 import json
 import subprocess
 import sys
@@ -30,7 +31,10 @@ def _snapshot(home, monkeypatch):
     from gateway.run import _load_gateway_config
     from gateway.session_managed_worker import _worker_config
     from gateway.session_policy import build_policy
-    policy = build_policy({"source": "cli", "cwd": str(home)}, _load_gateway_config(home / "config.yaml"))
+
+    policy = build_policy(
+        {"source": "cli", "cwd": str(home)}, _load_gateway_config(home / "config.yaml")
+    )
     return _worker_config(SimpleNamespace(profile_id=str(home)), policy)
 
 
@@ -38,6 +42,7 @@ def _bypass_snapshot(home, monkeypatch, *, safe_mode):
     monkeypatch.setenv("CLAWK_HOME", str(home))
     from gateway.session_local import _bypass_policy
     from gateway.session_managed_worker import _worker_config
+
     params = {"source": "cli", "cwd": str(home), "model": "m"}
     if safe_mode:
         params["safe_mode"] = True
@@ -47,7 +52,9 @@ def _bypass_snapshot(home, monkeypatch, *, safe_mode):
     return _worker_config(SimpleNamespace(profile_id=str(home)), policy)
 
 
-def _always_in_worker(tmp_path, monkeypatch, live_yaml, bind=True, *, safe_mode=False, action="always"):
+def _always_in_worker(
+    tmp_path, monkeypatch, live_yaml, bind=True, *, safe_mode=False, action="always"
+):
     home = tmp_path / "home"
     home.mkdir()
     (home / "config.yaml").write_text(live_yaml, encoding="utf-8")
@@ -62,7 +69,8 @@ def _always_in_worker(tmp_path, monkeypatch, live_yaml, bind=True, *, safe_mode=
         bind_mode = "off"
     script = tmp_path / "grant.py"
     script.write_text(
-        f"import sys; sys.path.insert(0, {str(ROOT)!r})\n" + textwrap.dedent(
+        f"import sys; sys.path.insert(0, {str(ROOT)!r})\n"
+        + textwrap.dedent(
             """
             import json, os
             snap = json.loads(os.environ["GRANT_SNAPSHOT"])
@@ -92,20 +100,35 @@ def _always_in_worker(tmp_path, monkeypatch, live_yaml, bind=True, *, safe_mode=
         encoding="utf-8",
     )
     from tests.gateway.fixtures.local_recovery_probe import child_env
+
     env = child_env()
     env.update(
-        HOME=str(home), USERPROFILE=str(home), CLAWK_HOME=str(home), GRANT_KEY=KEY,
-        GRANT_SNAPSHOT=json.dumps(snapshot), GRANT_BIND=bind_mode,
-        GRANT_SAFE="1" if safe_mode else "0", GRANT_ACTION=action,
+        HOME=str(home),
+        USERPROFILE=str(home),
+        CLAWK_HOME=str(home),
+        GRANT_KEY=KEY,
+        GRANT_SNAPSHOT=json.dumps(snapshot),
+        GRANT_BIND=bind_mode,
+        GRANT_SAFE="1" if safe_mode else "0",
+        GRANT_ACTION=action,
         CLAWK_DISABLE_LAZY_INSTALLS="1",
     )
     proc = subprocess.run(
-        [sys.executable, str(script)], cwd=ROOT, env=env, stdin=subprocess.DEVNULL,
-        capture_output=True, text=True, timeout=90, check=False,
+        [sys.executable, str(script)],
+        cwd=ROOT,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=90,
+        check=False,
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
     import clawk_yaml
-    on_disk = clawk_yaml.safe_load((home / "config.yaml").read_text(encoding="utf-8")) or {}
+
+    on_disk = (
+        clawk_yaml.safe_load((home / "config.yaml").read_text(encoding="utf-8")) or {}
+    )
     return json.loads(proc.stdout.strip().splitlines()[-1]), on_disk, snapshot
 
 
@@ -116,7 +139,9 @@ def _assert_saved(on_disk, allowlist):
 
 
 def test_first_always_in_frozen_worker_persists(tmp_path, monkeypatch):
-    receipt, on_disk, snapshot = _always_in_worker(tmp_path, monkeypatch, "model:\n  default: m\n")
+    receipt, on_disk, snapshot = _always_in_worker(
+        tmp_path, monkeypatch, "model:\n  default: m\n"
+    )
     assert "command_allowlist" not in snapshot, snapshot
     assert receipt["in_memory"] is True
     _assert_saved(on_disk, [KEY])
@@ -140,12 +165,14 @@ def test_controls_persist(tmp_path, monkeypatch, live_yaml, bind, expected):
 def _bind_snapshot(monkeypatch, snapshot):
     import copy
     from clawk_cli import config as cfg
+
     monkeypatch.setattr(cfg, "_worker_config_snapshot", lambda: copy.deepcopy(snapshot))
     return cfg
 
 
 def test_rebase_applies_an_edit_to_a_default_only_list(monkeypatch):
     from clawk_cli.config_worker_save import rebase_for_save
+
     snapshot = {"model": {"default": "m"}}
     cfg = _bind_snapshot(monkeypatch, snapshot)
     desired = cfg.load_config()
@@ -156,6 +183,7 @@ def test_rebase_applies_an_edit_to_a_default_only_list(monkeypatch):
 
 def test_rebase_keeps_a_list_the_snapshot_carried_and_the_operator_deleted(monkeypatch):
     from clawk_cli.config_worker_save import rebase_for_save
+
     snapshot = {"model": {"default": "m"}, "command_allowlist": ["a *"]}
     cfg = _bind_snapshot(monkeypatch, snapshot)
     desired = cfg.load_config()
@@ -167,6 +195,7 @@ def test_rebase_keeps_a_list_the_snapshot_carried_and_the_operator_deleted(monke
 def test_rebase_applies_an_edit_to_a_default_only_mapping(monkeypatch):
     import copy
     from clawk_cli.config_worker_save import rebase_for_save
+
     snapshot = {"model": {"default": "m"}}
     cfg = _bind_snapshot(monkeypatch, snapshot)
     base = cfg.load_config()
@@ -180,8 +209,11 @@ def test_rebase_applies_an_edit_to_a_default_only_mapping(monkeypatch):
     assert set(saved) == {"model", "approvals"}
 
 
-def test_rebase_keeps_a_mapping_the_snapshot_carried_and_the_operator_deleted(monkeypatch):
+def test_rebase_keeps_a_mapping_the_snapshot_carried_and_the_operator_deleted(
+    monkeypatch,
+):
     from clawk_cli.config_worker_save import rebase_for_save
+
     snapshot = {"model": {"default": "m"}, "approvals": {"mode": "manual"}}
     cfg = _bind_snapshot(monkeypatch, snapshot)
     desired = cfg.load_config()
@@ -192,6 +224,7 @@ def test_rebase_keeps_a_mapping_the_snapshot_carried_and_the_operator_deleted(mo
 
 def test_rebase_applies_an_edit_to_a_nested_default_only_list(monkeypatch):
     from clawk_cli.config_worker_save import rebase_for_save
+
     # The parent is in the snapshot and the live file. ``deny`` is not: it comes
     # only from the schema defaults under that parent.
     snapshot = {"model": {"default": "m"}, "approvals": {"mode": "manual"}}
@@ -214,30 +247,50 @@ def _assert_kept(on_disk, **extra):
     assert set(on_disk) <= {"model", "display", "_config_version", *extra}, on_disk
 
 
-@pytest.mark.parametrize("safe_mode", [True, False], ids=["safe-mode", "ignore-user-config"])
+@pytest.mark.parametrize(
+    "safe_mode", [True, False], ids=["safe-mode", "ignore-user-config"]
+)
 def test_first_always_in_bypass_worker_persists(tmp_path, monkeypatch, safe_mode):
     receipt, on_disk, snapshot = _always_in_worker(
-        tmp_path, monkeypatch, _BYPASS_FRESH, bind="bypass", safe_mode=safe_mode,
+        tmp_path,
+        monkeypatch,
+        _BYPASS_FRESH,
+        bind="bypass",
+        safe_mode=safe_mode,
     )
     assert snapshot.get("command_allowlist") == []
     assert receipt["in_memory"] is True
     _assert_kept(on_disk, command_allowlist=[KEY])
 
 
-@pytest.mark.parametrize("safe_mode", [True, False], ids=["safe-mode", "ignore-user-config"])
-def test_bypass_worker_persists_a_default_only_mapping_edit(tmp_path, monkeypatch, safe_mode):
+@pytest.mark.parametrize(
+    "safe_mode", [True, False], ids=["safe-mode", "ignore-user-config"]
+)
+def test_bypass_worker_persists_a_default_only_mapping_edit(
+    tmp_path, monkeypatch, safe_mode
+):
     receipt, on_disk, snapshot = _always_in_worker(
-        tmp_path, monkeypatch, _BYPASS_FRESH, bind="bypass", safe_mode=safe_mode, action="approvals",
+        tmp_path,
+        monkeypatch,
+        _BYPASS_FRESH,
+        bind="bypass",
+        safe_mode=safe_mode,
+        action="approvals",
     )
     assert snapshot.get("approvals", {}).get("mode") == "smart"
     assert receipt == {"ok": True}
     _assert_kept(on_disk, approvals={"mode": "off"})
 
 
-def test_bypass_worker_keeps_an_existing_allowlist_and_unrelated_keys(tmp_path, monkeypatch):
+def test_bypass_worker_keeps_an_existing_allowlist_and_unrelated_keys(
+    tmp_path, monkeypatch
+):
     receipt, on_disk, snapshot = _always_in_worker(
-        tmp_path, monkeypatch, _BYPASS_FRESH + "command_allowlist:\n- other\n",
-        bind="bypass", safe_mode=True,
+        tmp_path,
+        monkeypatch,
+        _BYPASS_FRESH + "command_allowlist:\n- other\n",
+        bind="bypass",
+        safe_mode=True,
     )
     assert snapshot.get("command_allowlist") == []
     assert receipt["in_memory"] is True
@@ -246,6 +299,7 @@ def test_bypass_worker_keeps_an_existing_allowlist_and_unrelated_keys(tmp_path, 
 
 def test_rebase_keeps_an_explicit_empty_list_the_operator_deleted(monkeypatch):
     from clawk_cli.config_worker_save import rebase_for_save
+
     snapshot = {"model": {"default": "m"}, "command_allowlist": []}
     cfg = _bind_snapshot(monkeypatch, snapshot)
     desired = cfg.load_config()
@@ -254,9 +308,15 @@ def test_rebase_keeps_an_explicit_empty_list_the_operator_deleted(monkeypatch):
     assert "command_allowlist" not in saved
 
 
-def test_rebase_keeps_a_nested_list_the_snapshot_carried_and_the_operator_deleted(monkeypatch):
+def test_rebase_keeps_a_nested_list_the_snapshot_carried_and_the_operator_deleted(
+    monkeypatch,
+):
     from clawk_cli.config_worker_save import rebase_for_save
-    snapshot = {"model": {"default": "m"}, "approvals": {"mode": "manual", "deny": ["old"]}}
+
+    snapshot = {
+        "model": {"default": "m"},
+        "approvals": {"mode": "manual", "deny": ["old"]},
+    }
     live = {"model": {"default": "m"}, "approvals": {"mode": "manual"}}
     cfg = _bind_snapshot(monkeypatch, snapshot)
     desired = cfg.load_config()

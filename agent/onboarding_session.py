@@ -21,7 +21,10 @@ def with_onboarding(enabled) -> list[str]:
     is) is spelled out by name: the agent's other toolset gates read the names, as they read None."""
     if enabled is None:
         from toolsets import TOOLSET_SESSION_PLATFORMS, get_all_toolsets
-        enabled = [name for name in get_all_toolsets() if name not in TOOLSET_SESSION_PLATFORMS]
+
+        enabled = [
+            name for name in get_all_toolsets() if name not in TOOLSET_SESSION_PLATFORMS
+        ]
     return [*enabled, "onboarding"]
 
 
@@ -31,6 +34,7 @@ def onboarding_toolsets(enabled, db, session_id: str):
     until the session is rebuilt."""
     from agent.onboarding_flow import is_active
     from agent.onboarding_record import load
+
     if keeps_toolsets(enabled):
         return enabled
     return with_onboarding(enabled) if is_active(load(db, session_id)) else enabled
@@ -42,6 +46,7 @@ def onboarding_chat_toolsets(enabled, db, session_id: str):
     authority resolves toolsets every turn and the tool array is part of the cached prefix: a run that
     ends must not change it mid-conversation (setup_beat answers a finished run with a refusal)."""
     from agent.onboarding_record import load
+
     if keeps_toolsets(enabled) or db is None:
         return enabled
     tip = db.get_compression_tip(session_id) or session_id
@@ -50,27 +55,35 @@ def onboarding_chat_toolsets(enabled, db, session_id: str):
 
 def carry_onboarding_toolset(enabled, agent):
     """A tool refresh keeps the onboarding toolset the agent was built with."""
-    if keeps_toolsets(enabled) or "onboarding" not in (getattr(agent, "enabled_toolsets", None) or ()):
+    if keeps_toolsets(enabled) or "onboarding" not in (
+        getattr(agent, "enabled_toolsets", None) or ()
+    ):
         return enabled
     return with_onboarding(enabled)
 
 
-def onboarding_prelude(agent, history: Iterable[dict]) -> Iterator[tuple[str, str, dict]] | None:
+def onboarding_prelude(
+    agent, history: Iterable[dict]
+) -> Iterator[tuple[str, str, dict]] | None:
     """The opening's scripted step, greeting and name card, while the name beat was never shown. A
     greeting already in the chat (a relaunch) is not said twice."""
     from agent.onboarding_flow import PENDING, is_active
     from agent.onboarding_record import load
     from agent.onboarding_text import greeting
+
     if not builds_onboarding(agent):
         return None
     record = load(agent._session_db, agent.session_id)
     if record is None or not is_active(record) or record["beats"]["name"] != PENDING:
         return None
     hello = greeting((record.get("facts") or {}).get("locale"))
-    said = any(m.get("role") == "assistant" and m.get("content") == hello for m in history)
+    said = any(
+        m.get("role") == "assistant" and m.get("content") == hello for m in history
+    )
 
     def opening():
         yield ("" if said else hello), "setup_beat", {"beat": "name"}
+
     return opening()
 
 
@@ -80,6 +93,7 @@ def onboarding_turn_note(agent, *, history_empty: bool, card_waiting: bool) -> s
     from agent.onboarding_flow import is_active
     from agent.onboarding_record import load
     from agent.onboarding_text import turn_note
+
     if history_empty or card_waiting or not builds_onboarding(agent):
         return ""
     record = load(agent._session_db, agent.session_id)

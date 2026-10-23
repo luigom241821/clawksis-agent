@@ -5,6 +5,7 @@ subprocess — no mocks. They pin the round-trip byte contract (utf-8 +
 surrogateescape is the inverse of the decode that produced the content) and
 the always-close / error-capture guarantees of the writer thread.
 """
+
 import shlex
 import subprocess
 import time
@@ -192,9 +193,12 @@ class TestPipeStdinRemainingBranches:
         out = tmp_path / "out.bin"
         proc = subprocess.Popen(
             ["bash", "-c", f"cat > {shlex.quote(str(out))}"],
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT, text=True,
-            encoding="utf-8", errors="replace",
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         try:
             _pipe_stdin(proc, b"\x00\x01\xfe")
@@ -209,9 +213,12 @@ class TestPipeStdinRemainingBranches:
     def test_stdin_none_records_runtime_error(self, tmp_path):
         proc = subprocess.Popen(
             ["bash", "-c", "exit 0"],
-            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT, text=True,
-            encoding="utf-8", errors="replace",
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         _pipe_stdin(proc, "data")
         _wait_or_kill(proc)

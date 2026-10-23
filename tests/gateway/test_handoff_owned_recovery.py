@@ -29,8 +29,12 @@ def db(tmp_path):
 
 def _mk_handed_off(db, session_id, *, handoff_state):
     db.create_session(
-        session_id, PEER["source"], user_id=PEER["user_id"],
-        session_key=PEER["session_key"], chat_id=PEER["chat_id"], chat_type=PEER["chat_type"],
+        session_id,
+        PEER["source"],
+        user_id=PEER["user_id"],
+        session_key=PEER["session_key"],
+        chat_id=PEER["chat_id"],
+        chat_type=PEER["chat_type"],
     )
     for i in range(3):
         db.append_message(session_id, "user" if i % 2 == 0 else "assistant", f"m{i}")

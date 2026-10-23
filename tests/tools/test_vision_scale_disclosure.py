@@ -117,8 +117,12 @@ class TestBuildScaleNote:
 
     def test_scale_factor_math(self):
         note = _build_scale_note(
-            {"orig_width": 3024, "orig_height": 1964,
-             "new_width": 1512, "new_height": 982},
+            {
+                "orig_width": 3024,
+                "orig_height": 1964,
+                "new_width": 1512,
+                "new_height": 982,
+            },
             None,
         )
         assert note is not None
@@ -126,8 +130,9 @@ class TestBuildScaleNote:
         assert "2.00" in note
 
     def test_crop_offset_only(self):
-        note = _build_scale_note(None, {"x": 300, "y": 200,
-                                        "width": 500, "height": 400})
+        note = _build_scale_note(
+            None, {"x": 300, "y": 200, "width": 500, "height": 400}
+        )
         assert note is not None
         assert "(300, 200)" in note
         assert "crop" in note.lower()
@@ -216,7 +221,10 @@ class TestVisionAnalyzeScaleDisclosure:
         ):
             result = json.loads(
                 await vision_analyze_tool(
-                    str(img_path), "describe", "test/model", region=region,
+                    str(img_path),
+                    "describe",
+                    "test/model",
+                    region=region,
                 )
             )
 
@@ -245,7 +253,9 @@ class TestVisionAnalyzeScaleDisclosure:
         ):
             result = json.loads(
                 await vision_analyze_tool(
-                    str(img_path), "describe", "test/model",
+                    str(img_path),
+                    "describe",
+                    "test/model",
                     region=[100, 50, 400, 300],
                 )
             )

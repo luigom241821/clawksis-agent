@@ -21,6 +21,7 @@ from agent.context_compressor import ContextCompressor, _estimate_msg_budget_tok
 
 LARGE_WINDOW = 1_000_000
 
+
 def _compressor(**kw: Any) -> ContextCompressor:
     defaults = dict(
         model="test",
@@ -38,25 +39,33 @@ def _compressor(**kw: Any) -> ContextCompressor:
     ):
         return ContextCompressor(**defaults)
 
+
 def _history(n_pairs: int = 8, big: int = 9_000) -> list[dict[str, Any]]:
     msgs: list[dict[str, Any]] = [{"role": "system", "content": "sys"}]
     for i in range(n_pairs):
         cid = f"call_{i}"
-        msgs.append({
-            "role": "assistant",
-            "content": "",
-            "tool_calls": [{
-                "id": cid,
-                "type": "function",
-                "function": {"name": "terminal", "arguments": '{"cmd":"ls"}'},
-            }],
-        })
-        msgs.append({
-            "role": "tool",
-            "tool_call_id": cid,
-            "content": chr(65 + i) * big if i < 3 else "ok",
-        })
+        msgs.append(
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": cid,
+                        "type": "function",
+                        "function": {"name": "terminal", "arguments": '{"cmd":"ls"}'},
+                    }
+                ],
+            }
+        )
+        msgs.append(
+            {
+                "role": "tool",
+                "tool_call_id": cid,
+                "content": chr(65 + i) * big if i < 3 else "ok",
+            }
+        )
     return msgs
+
 
 def _park_rearm_just_above_messages(
     compressor: ContextCompressor, messages: list[dict[str, Any]]
@@ -68,12 +77,15 @@ def _park_rearm_just_above_messages(
     assert before < compressor._proactive_prune_rearm_tokens
     return before
 
+
 def _over_threshold_warnings(caplog) -> list:
     return [
-        r for r in caplog.records
+        r
+        for r in caplog.records
         if r.levelno >= logging.WARNING
         and "over the compression threshold" in r.getMessage()
     ]
+
 
 def test_billed_basis_over_threshold_defeats_message_only_rearm_lockout() -> None:
     """Over ``threshold_tokens`` on the provider-billed basis, the rearm gate
@@ -102,6 +114,7 @@ def test_billed_basis_over_threshold_defeats_message_only_rearm_lockout() -> Non
     assert pruned == 3
     assert result is not msgs
 
+
 def test_message_only_rearm_still_holds_below_threshold() -> None:
     """Prompt-cache hysteresis is intact while the real request is under the
     compression threshold — the rearm bypass is an overflow escape hatch only."""
@@ -121,6 +134,7 @@ def test_message_only_rearm_still_holds_below_threshold() -> None:
     assert result is msgs
     assert pruned == 0
 
+
 def test_no_op_below_the_prune_trigger() -> None:
     """Under ``proactive_prune_tokens`` nothing is reclaimed, rearm or not —
     the bypass must not turn into over-pruning of small sessions."""
@@ -139,6 +153,7 @@ def test_no_op_below_the_prune_trigger() -> None:
 
     assert result is msgs
     assert pruned == 0
+
 
 def test_over_threshold_reclamation_no_op_warns_once(caplog) -> None:
     """A session riding above the threshold with every reclamation path
@@ -161,6 +176,7 @@ def test_over_threshold_reclamation_no_op_warns_once(caplog) -> None:
     with caplog.at_level(logging.WARNING, logger="agent.context_compressor"):
         c.prune_tool_results_only(msgs, current_tokens=billed)
     assert len(_over_threshold_warnings(caplog)) == len(warnings)
+
 
 def test_under_threshold_no_op_is_not_warned(caplog) -> None:
     """Ordinary hysteresis below the threshold stays quiet."""

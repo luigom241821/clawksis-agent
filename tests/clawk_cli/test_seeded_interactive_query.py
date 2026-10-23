@@ -76,14 +76,10 @@ class TestShouldSeedInteractive:
         def _boom():
             raise OSError("no tty")
 
-        monkeypatch.setattr(
-            cli_mod.sys, "stdin", types.SimpleNamespace(isatty=_boom)
-        )
+        monkeypatch.setattr(cli_mod.sys, "stdin", types.SimpleNamespace(isatty=_boom))
         assert not cli_mod._should_seed_interactive(
             "hi", None, quiet=False, oneshot=False
         )
-
-
 
 
 class TestChatParserOneshotFlag:
@@ -101,7 +97,6 @@ class TestChatParserOneshotFlag:
         # Top-level -z prompt dest untouched — dispatch sites check
         # `args.oneshot` truthiness and would treat True as a prompt.
         assert getattr(args, "oneshot", None) in (None, False)
-
 
     def test_top_level_oneshot_prompt_unaffected(self):
         args = self._parse(["-z", "what is up"])

@@ -82,13 +82,17 @@ def busy_input_hint_cli(mode: str) -> str:
 
 
 def tool_progress_hint_gateway() -> str:
-    return ("💡 First-time tip — that tool took a while and I'm streaming every step. If the progress messages "
-            "feel noisy, send `/verbose` to cycle modes (all → new → off). This notice won't appear again.")
+    return (
+        "💡 First-time tip — that tool took a while and I'm streaming every step. If the progress messages "
+        "feel noisy, send `/verbose` to cycle modes (all → new → off). This notice won't appear again."
+    )
 
 
 def tool_progress_hint_cli() -> str:
-    return ("(tip) That tool ran for a while. Use /verbose to cycle tool-progress "
-            "display modes (all -> new -> off -> verbose). This tip only shows once.")
+    return (
+        "(tip) That tool ran for a while. Use /verbose to cycle tool-progress "
+        "display modes (all -> new -> off -> verbose). This tip only shows once."
+    )
 
 
 def openclaw_residue_hint_cli() -> str:
@@ -163,9 +167,8 @@ def first_contact_turn_note(
     if not session_history_empty or install_has_prior_sessions or onboarding_run_active:
         return None
     try:
-        if (
-            profile_build_mode(config) == "ask"
-            and not is_seen(config, PROFILE_BUILD_FLAG)
+        if profile_build_mode(config) == "ask" and not is_seen(
+            config, PROFILE_BUILD_FLAG
         ):
             mark_seen(config_path, PROFILE_BUILD_FLAG)
             return profile_build_directive().strip()
@@ -184,7 +187,8 @@ def profile_build_directive() -> str:
     """
     return (
         "\n\n"
-        "[System note: This is the user's very first message ever. " + TASK_FIRST_CLAUSE
+        "[System note: This is the user's very first message ever. "
+        + TASK_FIRST_CLAUSE
         + "What this note asks: after a one-sentence introduction (mention /help "
         "shows commands), OFFER — do not assume — to build a short profile of them so you can be more useful, and "
         "explain they can decline or do it later. If and ONLY IF they accept:\n"
@@ -194,7 +198,7 @@ def profile_build_directive() -> str:
         "read their connected accounts (email, calendar, etc.) silently — ask each time.\n"
         "  3. With consent, you may use web_search to confirm public details (e.g. employer, public profiles) from the "
         "data points they gave.\n"
-        "  4. Save each confirmed, durable fact with the memory tool using target=\"user\" — keep entries compact and "
+        '  4. Save each confirmed, durable fact with the memory tool using target="user" — keep entries compact and '
         "high-signal.\n"
         "If they decline at any point, stop immediately and continue normally. Keep the whole exchange light and "
         "conversational, not an interrogation.]"

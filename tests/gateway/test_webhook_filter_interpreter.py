@@ -1,4 +1,5 @@
 """Webhook filter scripts run under the Git-Bash-safe interpreter and log silent failures."""
+
 import logging
 import stat
 
@@ -10,6 +11,7 @@ from tools.environments import local
 
 def _filter_script(body: str):
     from clawk_constants import get_clawk_home
+
     scripts = get_clawk_home() / "scripts"
     scripts.mkdir(parents=True, exist_ok=True)
     filt = scripts / "filter.sh"
@@ -24,7 +26,9 @@ def _fake_bash(tmp_path, body: str):
     return script
 
 
-@pytest.mark.platforms("linux")  # POSIX shebang fixture; the Windows half is the wine2e receipt
+@pytest.mark.platforms(
+    "linux"
+)  # POSIX shebang fixture; the Windows half is the wine2e receipt
 def test_shell_filter_runs_under_find_bash_interpreter(tmp_path, monkeypatch):
     """The .sh filter must be spawned through ``_find_bash()``, never a PATH/``which`` lookup (#116818)."""
     marker = tmp_path / "ran"
@@ -32,13 +36,17 @@ def test_shell_filter_runs_under_find_bash_interpreter(tmp_path, monkeypatch):
     monkeypatch.setattr(local, "_find_bash", lambda: str(fake))
     filt = _filter_script("exit 99\n")  # would veto if run by a real bash
 
-    accepted, transformed = WebhookRouteProcessor().run_route_script(str(filt), {"a": 1})
+    accepted, transformed = WebhookRouteProcessor().run_route_script(
+        str(filt), {"a": 1}
+    )
 
     assert marker.exists()
     assert accepted is True and transformed == {"ok": True}
 
 
-@pytest.mark.platforms("linux")  # POSIX shebang fixture; the Windows half is the wine2e receipt
+@pytest.mark.platforms(
+    "linux"
+)  # POSIX shebang fixture; the Windows half is the wine2e receipt
 def test_silent_nonzero_exit_is_logged_as_warning(tmp_path, monkeypatch, caplog):
     """rc!=0 with no stdout AND no stderr is the interpreter-never-ran signature: WARNING, not INFO."""
     fake = _fake_bash(tmp_path, "exit 1\n")
@@ -49,5 +57,9 @@ def test_silent_nonzero_exit_is_logged_as_warning(tmp_path, monkeypatch, caplog)
         accepted, _ = WebhookRouteProcessor().run_route_script(str(filt), {})
 
     assert accepted is False
-    silent = [r for r in caplog.records if "script ignored webhook path=filter.sh" in r.getMessage()]
+    silent = [
+        r
+        for r in caplog.records
+        if "script ignored webhook path=filter.sh" in r.getMessage()
+    ]
     assert silent and silent[0].levelno == logging.WARNING

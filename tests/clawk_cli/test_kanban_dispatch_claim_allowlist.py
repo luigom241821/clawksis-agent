@@ -7,6 +7,7 @@ same predicate consumed by the spawn gate and the spawnable telemetry, so a
 foreign assignee lands in ``skipped_nonspawnable`` and does not keep the
 gateway wake-up loop hot.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -29,12 +30,15 @@ def kanban_home(tmp_path, monkeypatch):
     return home
 
 
-def test_allowlist_without_default_skips_default_card(kanban_home, all_assignees_spawnable):
+def test_allowlist_without_default_skips_default_card(
+    kanban_home, all_assignees_spawnable
+):
     """Fail-closed: the allowlist is set and ``default`` is not on it, so the
     card is neither spawnable (wake-up telemetry) nor claimed (spawn gate),
     even though every profile exists locally."""
     (kanban_home / "config.yaml").write_text(
-        "kanban:\n  dispatch_profiles:\n    - sage\n", encoding="utf-8",
+        "kanban:\n  dispatch_profiles:\n    - sage\n",
+        encoding="utf-8",
     )
     with kbc.connect() as conn:
         tid = kb.create_task(conn, title="foreign card", assignee="default")
@@ -45,7 +49,8 @@ def test_allowlist_without_default_skips_default_card(kanban_home, all_assignees
 
 
 def test_default_assignee_outside_allowlist_leaves_card_unassigned(
-    kanban_home, all_assignees_spawnable,
+    kanban_home,
+    all_assignees_spawnable,
 ):
     """Invariant: a ``default_assignee`` this home may not claim must not be
     persisted onto an unassigned shared-board card (no row write, no
@@ -57,7 +62,9 @@ def test_default_assignee_outside_allowlist_leaves_card_unassigned(
     with kbc.connect() as conn:
         tid = kb.create_task(conn, title="unassigned card")
         res = kbd.dispatch_once(
-            conn, dry_run=False, spawn_fn=lambda _t, _w: 4242,
+            conn,
+            dry_run=False,
+            spawn_fn=lambda _t, _w: 4242,
             default_assignee="default",
         )
         task = kb.get_task(conn, tid)
@@ -80,26 +87,37 @@ def test_unset_allowlist_keeps_default_claimable(kanban_home, all_assignees_spaw
 
 @pytest.mark.parametrize("value", ["", None], ids=["empty_string", "bare_key"])
 def test_present_blank_or_null_allowlist_skips_all_cards(
-    kanban_home, all_assignees_spawnable, value, caplog,
+    kanban_home,
+    all_assignees_spawnable,
+    value,
+    caplog,
 ):
     """A present key with no names must not fall back to unrestricted claims,
     and must say so once in the log so an upgraded home that copied the old
     ``dispatch_profiles: null`` example is not silently idle (#113620)."""
     rendered = "" if value is None else ' ""'
     (kanban_home / "config.yaml").write_text(
-        f"kanban:\n  dispatch_profiles:{rendered}\n", encoding="utf-8",
+        f"kanban:\n  dispatch_profiles:{rendered}\n",
+        encoding="utf-8",
     )
-    with kbc.connect() as conn, caplog.at_level("WARNING", logger="clawk_cli.kanban_db"):
+    with (
+        kbc.connect() as conn,
+        caplog.at_level("WARNING", logger="clawk_cli.kanban_db"),
+    ):
         tid = kb.create_task(conn, title="foreign card", assignee="default")
         res = kbd.dispatch_once(conn, dry_run=True)
     assert res.spawned == []
     assert res.skipped_nonspawnable == [tid]
-    assert any("present but empty" in r.getMessage() and "omit the key" in r.getMessage()
-               for r in caplog.records)
+    assert any(
+        "present but empty" in r.getMessage() and "omit the key" in r.getMessage()
+        for r in caplog.records
+    )
 
 
 def test_allowlist_config_read_failure_skips_all_cards(
-    kanban_home, all_assignees_spawnable, monkeypatch,
+    kanban_home,
+    all_assignees_spawnable,
+    monkeypatch,
 ):
     """A broken config read must not make this shared home claim every profile."""
     from clawk_cli import config_effective
@@ -107,7 +125,9 @@ def test_allowlist_config_read_failure_skips_all_cards(
     def raise_read_error(**_kwargs):
         raise OSError("config unavailable")
 
-    monkeypatch.setattr(config_effective, "load_user_config_effective", raise_read_error)
+    monkeypatch.setattr(
+        config_effective, "load_user_config_effective", raise_read_error
+    )
     with kbc.connect() as conn:
         tid = kb.create_task(conn, title="foreign card", assignee="default")
         res = kbd.dispatch_once(conn, dry_run=True)
@@ -115,11 +135,15 @@ def test_allowlist_config_read_failure_skips_all_cards(
     assert res.skipped_nonspawnable == [tid]
 
 
-@pytest.mark.parametrize("config, expected", [
-    ("", "any"),
-    ("kanban:\n  dispatch_profiles: [researcher, sage]\n", "researcher, sage"),
-    ("kanban:\n  dispatch_profiles: []\n", "none (fail-closed"),
-], ids=["absent", "listed", "empty_list"])
+@pytest.mark.parametrize(
+    "config, expected",
+    [
+        ("", "any"),
+        ("kanban:\n  dispatch_profiles: [researcher, sage]\n", "researcher, sage"),
+        ("kanban:\n  dispatch_profiles: []\n", "none (fail-closed"),
+    ],
+    ids=["absent", "listed", "empty_list"],
+)
 def test_diagnostics_reports_resolved_allowlist(kanban_home, capsys, config, expected):
     """`clawk kanban diagnostics` (text and --json) shows what this home may claim."""
     import argparse
@@ -129,10 +153,26 @@ def test_diagnostics_reports_resolved_allowlist(kanban_home, capsys, config, exp
 
     if config:
         (kanban_home / "config.yaml").write_text(config, encoding="utf-8")
-    assert kanban_cli._cmd_diagnostics(argparse.Namespace(task=None, severity=None, json=False)) == 0
+    assert (
+        kanban_cli._cmd_diagnostics(
+            argparse.Namespace(task=None, severity=None, json=False)
+        )
+        == 0
+    )
     text = capsys.readouterr().out
     assert f"kanban.dispatch_profiles: {expected}" in text
-    assert kanban_cli._cmd_diagnostics(argparse.Namespace(task=None, severity=None, json=True)) == 0
+    assert (
+        kanban_cli._cmd_diagnostics(
+            argparse.Namespace(task=None, severity=None, json=True)
+        )
+        == 0
+    )
     payload = json.loads(capsys.readouterr().out)
-    assert payload == [{"task_id": None, "dispatch_profiles": payload[-1]["dispatch_profiles"], "diagnostics": []}]
+    assert payload == [
+        {
+            "task_id": None,
+            "dispatch_profiles": payload[-1]["dispatch_profiles"],
+            "diagnostics": [],
+        }
+    ]
     assert payload[-1]["dispatch_profiles"].startswith(expected)

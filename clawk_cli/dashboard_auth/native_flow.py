@@ -38,6 +38,7 @@ _lock = threading.Lock()
 @dataclass
 class _Pending:
     """In-flight native authorization awaiting the upstream callback."""
+
     code_challenge: str  # the DESKTOP's S256 challenge (cc_d), base64url no-pad
     redirect_uri: str  # the desktop's loopback redirect (127.0.0.1:<port>/...)
     client_state: str  # the desktop's own ``state`` (echoed back on redirect)
@@ -48,6 +49,7 @@ class _Pending:
 @dataclass
 class _IssuedCode:
     """A minted one-time gateway authorization code bound to a Session."""
+
     code_challenge: str  # cc_d — verified against cv_d at redemption
     session: Session
     expires_at: int
@@ -99,8 +101,13 @@ def _pop_pending_locked(broker_state: str, *, consume: bool) -> _Pending:
 
 
 def register_pending(
-    *, code_challenge: str, redirect_uri: str, client_state: str, client_ip: str = "",
-    now: Optional[int] = None) -> str:
+    *,
+    code_challenge: str,
+    redirect_uri: str,
+    client_state: str,
+    client_ip: str = "",
+    now: Optional[int] = None,
+) -> str:
     """Stash a pending native authorization; return an opaque ``broker_state``. ``code_challenge``
     is the DESKTOP's cc_d. Raises ``NativeFlowError`` (fail closed) at store capacity or when
     ``client_ip`` holds ``_MAX_PENDING_PER_IP`` entries."""
@@ -112,10 +119,16 @@ def register_pending(
             raise NativeFlowError("native-flow authorization store at capacity")
         per_ip = sum(1 for v in _pending.values() if v.client_ip == client_ip)
         if client_ip and per_ip >= _MAX_PENDING_PER_IP:
-            raise NativeFlowError("too many pending native authorizations from this address")
+            raise NativeFlowError(
+                "too many pending native authorizations from this address"
+            )
         _pending[broker_state] = _Pending(
-            code_challenge=code_challenge, redirect_uri=redirect_uri, client_state=client_state,
-            client_ip=client_ip, expires_at=now + _PENDING_TTL_SECONDS)
+            code_challenge=code_challenge,
+            redirect_uri=redirect_uri,
+            client_state=client_state,
+            client_ip=client_ip,
+            expires_at=now + _PENDING_TTL_SECONDS,
+        )
     return broker_state
 
 
@@ -126,7 +139,9 @@ def get_pending(broker_state: str, *, now: Optional[int] = None) -> _Pending:
         return _pop_pending_locked(broker_state, consume=False)
 
 
-def complete_pending(broker_state: str, *, session: Session, now: Optional[int] = None) -> str:
+def complete_pending(
+    broker_state: str, *, session: Session, now: Optional[int] = None
+) -> str:
     """Consume a pending authorization (single use) and mint a one-time gateway code bound to the
     desktop's challenge + ``session``."""
     now = _now(now)
@@ -137,8 +152,10 @@ def complete_pending(broker_state: str, *, session: Session, now: Optional[int] 
             raise NativeFlowError("native-flow code store at capacity")
         gw_code = secrets.token_urlsafe(32)
         _issued[gw_code] = _IssuedCode(
-            code_challenge=pending.code_challenge, session=session,
-            expires_at=now + _CODE_TTL_SECONDS)
+            code_challenge=pending.code_challenge,
+            session=session,
+            expires_at=now + _CODE_TTL_SECONDS,
+        )
     return gw_code
 
 

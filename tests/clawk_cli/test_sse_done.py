@@ -59,7 +59,9 @@ def test_existing_done_is_not_duplicated():
 def test_error_event_blocks_done_synthesis():
     tracker = SseDoneTracker()
     tracker.feed(_data_line({"choices": [{"delta": {"content": "partial"}}]}))
-    tracker.feed(_data_line({"error": {"message": "upstream failed", "type": "api_error"}}))
+    tracker.feed(
+        _data_line({"error": {"message": "upstream failed", "type": "api_error"}})
+    )
     assert tracker.should_append_done() is False
 
 
@@ -108,7 +110,10 @@ def test_feed_preserves_chunk_boundaries_across_split_lines():
 
 def test_content_type_is_sse():
     assert content_type_is_sse({"Content-Type": "text/event-stream"}) is True
-    assert content_type_is_sse({"content-type": "text/event-stream; charset=utf-8"}) is True
+    assert (
+        content_type_is_sse({"content-type": "text/event-stream; charset=utf-8"})
+        is True
+    )
     assert content_type_is_sse({"Content-Type": "application/json"}) is False
 
 
@@ -116,11 +121,7 @@ def test_multiline_data_event_joins_per_sse_spec():
     """One JSON event split across consecutive data: lines (spec-legal) must
     parse as a single event, not two malformed fragments."""
     tracker = SseDoneTracker()
-    tracker.feed(
-        b'data: {"choices":[{"delta":{},\n'
-        b'data: "finish_reason":"stop"}]}\n'
-        b"\n"
-    )
+    tracker.feed(b'data: {"choices":[{"delta":{},\ndata: "finish_reason":"stop"}]}\n\n')
     assert tracker.saw_malformed_event is False
     assert tracker.should_append_done() is True
 

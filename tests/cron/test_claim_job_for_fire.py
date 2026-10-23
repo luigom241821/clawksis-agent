@@ -7,6 +7,7 @@ claim for a given fire. Single-machine deployments always win (unaffected).
 These exercise the real store against a temp CLAWK_HOME (no mocks) per the
 E2E-over-mocks discipline for file-touching code.
 """
+
 import threading
 import time
 
@@ -120,17 +121,23 @@ def test_fire_claim_heartbeat_refreshes_only_expected_owner(temp_home, monkeypat
         lambda: claimed_at + timedelta(seconds=30),
     )
 
-    assert jobs.heartbeat_fire_claim(
-        job["id"],
-        expected_owner=claimed["by"],
-    ) is True
+    assert (
+        jobs.heartbeat_fire_claim(
+            job["id"],
+            expected_owner=claimed["by"],
+        )
+        is True
+    )
     refreshed = jobs.get_job(job["id"])["fire_claim"]
     assert refreshed["at"] != claimed["at"]
     assert refreshed["by"] == claimed["by"]
-    assert jobs.heartbeat_fire_claim(
-        job["id"],
-        expected_owner="replacement-owner",
-    ) is False
+    assert (
+        jobs.heartbeat_fire_claim(
+            job["id"],
+            expected_owner="replacement-owner",
+        )
+        is False
+    )
 
 
 def test_reclaimed_fire_uses_new_owner_token(temp_home, monkeypatch):
@@ -151,10 +158,13 @@ def test_reclaimed_fire_uses_new_owner_token(temp_home, monkeypatch):
     assert jobs.claim_job_for_fire(job["id"]) is True
     replacement = dict(jobs.get_job(job["id"])["fire_claim"])
     assert replacement["by"] != original["by"]
-    assert jobs.heartbeat_fire_claim(
-        job["id"],
-        expected_owner=original["by"],
-    ) is False
+    assert (
+        jobs.heartbeat_fire_claim(
+            job["id"],
+            expected_owner=original["by"],
+        )
+        is False
+    )
     assert jobs.get_job(job["id"])["fire_claim"] == replacement
 
 
@@ -168,11 +178,14 @@ def test_stale_fire_owner_cannot_mark_replacement_run(temp_home):
     records[0]["fire_claim"] = {"at": original["at"], "by": "replacement"}
     jobs.save_jobs(records)
 
-    assert jobs.mark_job_run(
-        job["id"],
-        success=True,
-        expected_fire_owner=original["by"],
-    ) is False
+    assert (
+        jobs.mark_job_run(
+            job["id"],
+            success=True,
+            expected_fire_owner=original["by"],
+        )
+        is False
+    )
     persisted = jobs.get_job(job["id"])
     assert persisted["fire_claim"]["by"] == "replacement"
     assert persisted.get("last_run_at") is None
@@ -218,7 +231,9 @@ def test_fire_claim_fence_rejects_stale_owner(temp_home):
         assert owns_claim is False
 
 
-def test_same_process_fire_fence_refuses_second_claim_after_timeout(temp_home, monkeypatch):
+def test_same_process_fire_fence_refuses_second_claim_after_timeout(
+    temp_home, monkeypatch
+):
     """A wedged local holder must not indefinitely block another claimant."""
     from cron import jobs
 
@@ -235,7 +250,9 @@ def test_same_process_fire_fence_refuses_second_claim_after_timeout(temp_home, m
         assert acquired is True
         thread = threading.Thread(target=second_claimant)
         thread.start()
-        assert completed.wait(timeout=2), "same-process claimant waited past the fire-fence timeout"
+        assert completed.wait(timeout=2), (
+            "same-process claimant waited past the fire-fence timeout"
+        )
         assert result["claimed"] is False
 
     thread.join(timeout=2)
@@ -282,10 +299,13 @@ def test_manual_claim_does_not_stamp_a_future_occurrence(temp_home):
     claimed = claim_job_for_fire(job["id"], manual=True, return_job=True)
     assert isinstance(claimed, dict)
     assert claimed["_scheduled_instant"] is None, (
-        f"manual fire stamped the future occurrence {pending}")
+        f"manual fire stamped the future occurrence {pending}"
+    )
 
 
-def test_unclassified_off_tick_claim_does_not_stamp_a_future_occurrence(temp_home, monkeypatch):
+def test_unclassified_off_tick_claim_does_not_stamp_a_future_occurrence(
+    temp_home, monkeypatch
+):
     from datetime import datetime, timedelta
 
     from cron import jobs
@@ -293,7 +313,10 @@ def test_unclassified_off_tick_claim_does_not_stamp_a_future_occurrence(temp_hom
     job = jobs.create_job(prompt="x", schedule="every 5m", name="off-tick")
     pending = jobs.get_job(job["id"])["next_run_at"]
     monkeypatch.setattr(
-        jobs, "_clawk_now", lambda: datetime.fromisoformat(pending) - timedelta(minutes=1))
+        jobs,
+        "_clawk_now",
+        lambda: datetime.fromisoformat(pending) - timedelta(minutes=1),
+    )
 
     claimed = jobs.claim_job_for_fire(job["id"], return_job=True)
 
@@ -310,17 +333,22 @@ def test_claim_seconds_before_the_slot_owns_it_once(temp_home, monkeypatch):
     from cron import jobs
     from cron.occurrences import scheduled_instant
 
-    monkeypatch.setattr(executions, "EXECUTIONS_FILE", temp_home / "cron" / "executions.db")
+    monkeypatch.setattr(
+        executions, "EXECUTIONS_FILE", temp_home / "cron" / "executions.db"
+    )
     job = jobs.create_job(prompt="x", schedule="0 19 * * *", name="skew")
     slot = jobs.get_job(job["id"])["next_run_at"]
     slot_dt = datetime.fromisoformat(slot)
 
     monkeypatch.setattr(jobs, "_clawk_now", lambda: slot_dt - timedelta(seconds=2))
-    monkeypatch.setattr(executions, "_clawk_now", lambda: slot_dt - timedelta(seconds=2))
+    monkeypatch.setattr(
+        executions, "_clawk_now", lambda: slot_dt - timedelta(seconds=2)
+    )
     claimed = jobs.claim_job_for_fire(job["id"], return_job=True)
     assert claimed["_scheduled_instant"] == scheduled_instant(slot)
     row = executions.create_execution(
-        job["id"], source="chronos", scheduled_instant=claimed["_scheduled_instant"])
+        job["id"], source="chronos", scheduled_instant=claimed["_scheduled_instant"]
+    )
     executions.finish_execution(row["id"], success=True)
     jobs.mark_job_run(job["id"], True)
 
@@ -328,7 +356,8 @@ def test_claim_seconds_before_the_slot_owns_it_once(temp_home, monkeypatch):
     monkeypatch.setattr(jobs, "_clawk_now", lambda: backstop)
     monkeypatch.setattr(executions, "_clawk_now", lambda: backstop)
     assert jobs.claim_job_for_fire(job["id"], return_job=True) is False, (
-        "misfire backstop re-ran the slot a skewed early fire already completed")
+        "misfire backstop re-ran the slot a skewed early fire already completed"
+    )
     assert datetime.fromisoformat(jobs.get_job(job["id"])["next_run_at"]) > slot_dt
 
 
@@ -400,7 +429,10 @@ def test_heartbeat_does_not_wait_on_the_fence_its_own_run_holds(temp_home, monke
         assert fence_held.wait(timeout=5)
         assert jobs.heartbeat_fire_claim(job["id"], expected_owner=owner) is True
         # A genuine takeover is still detected while the fence is busy.
-        assert jobs.heartbeat_fire_claim(job["id"], expected_owner="replacement-owner") is False
+        assert (
+            jobs.heartbeat_fire_claim(job["id"], expected_owner="replacement-owner")
+            is False
+        )
     finally:
         release.set()
         holder.join(timeout=5)

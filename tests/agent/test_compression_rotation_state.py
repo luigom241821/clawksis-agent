@@ -26,7 +26,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from agent.context_compressor import SUMMARY_PREFIX, ContextCompressor, _DB_PERSISTED_MARKER
+from agent.context_compressor import (
+    SUMMARY_PREFIX,
+    ContextCompressor,
+    _DB_PERSISTED_MARKER,
+)
 from agent.conversation_compression import (
     CompressionCommitFence,
     _is_real_user_message,
@@ -147,6 +151,7 @@ class TestGoalMigratesOnRotation:
         with patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path / ".clawk")}):
             (tmp_path / ".clawk").mkdir(exist_ok=True)
             from clawk_cli import goals
+
             goals._DB_CACHE.clear()
             # Point the goal DB at the same state.db the agent uses.
             with patch.object(goals, "_get_session_db", return_value=db):
@@ -241,9 +246,7 @@ class TestWorkspaceMetadataFollowsRotation:
 
 
 class TestRotationChildFlushDedup:
-    def test_summary_handoff_row_is_persisted_once_in_child(
-        self, tmp_path: Path
-    ):
+    def test_summary_handoff_row_is_persisted_once_in_child(self, tmp_path: Path):
         db = SessionDB(db_path=tmp_path / "state.db")
         parent = "PARENT_ROT_LIVE_USER"
         db.create_session(parent, source="cli")
@@ -315,9 +318,12 @@ class TestRotationChildFlushDedup:
             agent.session_id, include_inactive=True
         )
         assert _count_rows(child_rows, content="live question", role="user") == 1
-        assert _count_rows(
-            child_rows, content="[CONTEXT COMPACTION] summary", role="assistant"
-        ) == 1
+        assert (
+            _count_rows(
+                child_rows, content="[CONTEXT COMPACTION] summary", role="assistant"
+            )
+            == 1
+        )
 
     def test_failed_publish_leaves_live_user_unmarked_for_later_flush(
         self, tmp_path: Path
@@ -415,15 +421,10 @@ class TestRotationChildFlushDedup:
         child_rows = db.get_messages_as_conversation(
             agent.session_id, include_inactive=True
         )
-        assert _count_rows(
-            child_rows, content="live tool question", role="user"
-        ) == 1
+        assert _count_rows(child_rows, content="live tool question", role="user") == 1
         assert _count_rows(child_rows, content="tool result", role="tool") == 1
 
-
-    def test_timestampless_duplicate_content_rows_are_all_stamped(
-        self, tmp_path: Path
-    ):
+    def test_timestampless_duplicate_content_rows_are_all_stamped(self, tmp_path: Path):
         db = SessionDB(db_path=tmp_path / "state.db")
         parent = "PARENT_ROT_DUPLICATE_CONTENT"
         db.create_session(parent, source="cli")
@@ -481,9 +482,7 @@ class TestRotationChildFlushDedup:
         child_rows = db.get_messages_as_conversation(
             agent.session_id, include_inactive=True
         )
-        assert _count_rows(
-            child_rows, content="live tool question", role="user"
-        ) == 1
+        assert _count_rows(child_rows, content="live tool question", role="user") == 1
         assert _count_rows(child_rows, content="", role="assistant") == 1
         assert _count_rows(child_rows, content="tool result", role="tool") == 1
 
@@ -527,7 +526,6 @@ class TestRotationChildFlushDedup:
     # twin (`_session_messages`) by scoped identity against that anchor
     # source with a marker-independent exact-hit two-phase scan.
     # ------------------------------------------------------------------
-
 
     def test_rotation_drifted_index_does_not_duplicate_live_question_in_child(
         self, tmp_path: Path
@@ -582,10 +580,7 @@ class TestRotationChildFlushDedup:
         # represents it.
         assert _count_rows(child_rows, content="live question") == 0
         assert (
-            _count_rows(
-                child_rows, content="live question\n\nhandoff scaffolding"
-            )
-            == 1
+            _count_rows(child_rows, content="live question\n\nhandoff scaffolding") == 1
         )
 
     def test_merged_outcome_still_stamps_live_question(self, tmp_path: Path):
@@ -627,13 +622,8 @@ class TestRotationChildFlushDedup:
         child_rows = db.get_messages_as_conversation(
             agent.session_id, include_inactive=True
         )
-        assert _count_rows(
-            child_rows, content="live question", role="user"
-        ) == 0
-        assert (
-            _count_rows(child_rows, content="live question\n\nscaffolding")
-            == 1
-        )
+        assert _count_rows(child_rows, content="live question", role="user") == 0
+        assert _count_rows(child_rows, content="live question\n\nscaffolding") == 1
 
     def test_adoption_divergence_merged_stamps_both_views_and_no_duplicate(
         self, tmp_path: Path
@@ -713,9 +703,7 @@ class TestRotationChildFlushDedup:
         assert adopted[-1]["content"] == "live question"
         assert adopted[-1].get("timestamp") is not None
         assert old_live_list[-1]["content"] == "live question"
-        assert (
-            old_live_list[-1].get("timestamp") == adopted[-1].get("timestamp")
-        )
+        assert old_live_list[-1].get("timestamp") == adopted[-1].get("timestamp")
 
         # (f) Markers on BOTH views. Note: the adopted view's rows are
         # "born durable" (clawk_state stamps _DB_PERSISTED_MARKER on rows
@@ -738,10 +726,7 @@ class TestRotationChildFlushDedup:
             for row in child_rows
         )
         assert (
-            _count_rows(
-                child_rows, content="live question\n\nhandoff scaffolding"
-            )
-            == 1
+            _count_rows(child_rows, content="live question\n\nhandoff scaffolding") == 1
         )
 
     def test_rotation_stamps_anchor_source_when_reanchor_fallback_rewrote_turn(
@@ -831,13 +816,10 @@ class TestRotationChildFlushDedup:
         assert (
             _count_rows(
                 child_rows,
-                content=(
-                    "current ask\n\n[merged summary]\n\nhandoff scaffolding"
-                ),
+                content=("current ask\n\n[merged summary]\n\nhandoff scaffolding"),
             )
             == 1
         )
-
 
     def test_list_content_merged_outcome_still_stamps_live_question(
         self, tmp_path: Path
@@ -910,9 +892,7 @@ class TestRotationChildFlushDedup:
             == 1
         )
 
-    def test_already_stamped_exact_twin_suppresses_broad_fallback(
-        self, tmp_path: Path
-    ):
+    def test_already_stamped_exact_twin_suppresses_broad_fallback(self, tmp_path: Path):
         """Two-phase edge (reviewer scenario): an already-stamped exact twin
         must still count as an exact hit (marker-INDEPENDENT), suppressing the
         broad fallback so a timestamp-less same-content historical row is NOT
@@ -1039,7 +1019,9 @@ class TestFallbackStreakFollowsRotation:
         resumed.bind_session_state(db, "CHILD_FALLBACK_ROT")
         assert resumed._fallback_compression_streak == 2
 
-    def test_real_rotation_records_fallback_after_lifecycle_rebind(self, tmp_path: Path):
+    def test_real_rotation_records_fallback_after_lifecycle_rebind(
+        self, tmp_path: Path
+    ):
         db = SessionDB(db_path=tmp_path / "state.db")
         parent = "PARENT_REAL_FALLBACK_ROT"
         db.create_session(parent, source="telegram")
@@ -1136,9 +1118,6 @@ class TestAutomaticCompressionStateRefreshAfterLock:
         compress.assert_not_called()
         assert db.get_compression_lock_holder(parent_id) is None
 
-
-
-
     def test_prebound_agent_drops_stale_cooldown_before_initial_gate(
         self,
         refresh_state_db: SessionDB,
@@ -1176,7 +1155,6 @@ class TestAutomaticCompressionStateRefreshAfterLock:
         assert db.get_compression_lock_holder(session_id) is None
 
 
-
 class TestGateLevelGuardRefresh:
     """The pre-gate uses the measured ineffective count, not summary type."""
 
@@ -1193,7 +1171,6 @@ class TestGateLevelGuardRefresh:
 
         # A previous run's fallback streak is diagnostic, so it never blocks.
         assert compressor.should_compress(10**9) is True
-
 
 
 class TestCooldownPersistFailureIsNotAClearedRow:
@@ -1275,13 +1252,11 @@ class TestTodoSnapshotMergedNotDuplicated:
         agent._todo_store._todos = [
             {"id": "t1", "content": "task A", "status": "pending"}
         ]
-        agent._todo_store.format_for_injection = (
-            lambda: "## Current Tasks\n- [ ] task A"
+        agent._todo_store.format_for_injection = lambda: (
+            "## Current Tasks\n- [ ] task A"
         )
 
-        compressed, _ = agent._compress_context(
-            _msgs(), "sys", approx_tokens=120_000
-        )
+        compressed, _ = agent._compress_context(_msgs(), "sys", approx_tokens=120_000)
 
         assert len(compressed) == 3
         tail = compressed[-1]
@@ -1292,9 +1267,6 @@ class TestTodoSnapshotMergedNotDuplicated:
             previous.get("role") == current.get("role") == "user"
             for previous, current in itertools.pairwise(compressed)
         )
-
-
-
 
     def test_multimodal_snapshot_merge_is_persisted_in_place(self, tmp_path: Path):
         db = SessionDB(db_path=tmp_path / "state.db")
@@ -1328,8 +1300,8 @@ class TestTodoSnapshotMergedNotDuplicated:
         agent._todo_store._todos = [
             {"id": "t1", "content": "inspect image", "status": "in_progress"}
         ]
-        agent._todo_store.format_for_injection = (
-            lambda: "## Current Tasks\n- [ ] inspect image"
+        agent._todo_store.format_for_injection = lambda: (
+            "## Current Tasks\n- [ ] inspect image"
         )
 
         # Input transcript must be large enough that the fake compressor's
@@ -1391,9 +1363,6 @@ class TestTodoSnapshotScaffoldingTails:
         )
         return agent
 
-
-
-
     def test_previously_merged_snapshot_is_stripped_before_reinjection(
         self, tmp_path: Path
     ):
@@ -1414,9 +1383,7 @@ class TestTodoSnapshotScaffoldingTails:
             },
         )
 
-        compressed, _ = agent._compress_context(
-            _msgs(), "sys", approx_tokens=120_000
-        )
+        compressed, _ = agent._compress_context(_msgs(), "sys", approx_tokens=120_000)
 
         tail = compressed[-1]
         assert tail["role"] == "user"
@@ -1449,15 +1416,20 @@ class TestTodoSnapshotScaffoldingTails:
             [{"id": "t1", "content": "done thing", "status": "completed"}]
         )
 
-        compressed, _ = agent._compress_context(
-            _msgs(), "sys", approx_tokens=120_000
-        )
+        compressed, _ = agent._compress_context(_msgs(), "sys", approx_tokens=120_000)
 
         assert [
             {
                 k: v
                 for k, v in m.items()
-                if k not in {"_row_id", "timestamp", "message_uid", _DB_PERSISTED_MARKER, DB_ROW_SNAPSHOT}
+                if k
+                not in {
+                    "_row_id",
+                    "timestamp",
+                    "message_uid",
+                    _DB_PERSISTED_MARKER,
+                    DB_ROW_SNAPSHOT,
+                }
             }
             for m in compressed
         ] == expected
@@ -1485,8 +1457,7 @@ class TestTodoSnapshotScaffoldingTails:
             {
                 "role": "user",
                 "content": (
-                    "Keep this user context.\n\n"
-                    f"{TODO_INJECTION_HEADER}\n{stale_task}"
+                    f"Keep this user context.\n\n{TODO_INJECTION_HEADER}\n{stale_task}"
                 ),
                 "api_content": "stale wire copy containing the old snapshot",
             },
@@ -1495,9 +1466,7 @@ class TestTodoSnapshotScaffoldingTails:
             [{"id": "done", "content": "done thing", "status": "completed"}]
         )
 
-        compressed, _ = agent._compress_context(
-            _msgs(), "sys", approx_tokens=120_000
-        )
+        compressed, _ = agent._compress_context(_msgs(), "sys", approx_tokens=120_000)
 
         combined = "\n".join(str(m.get("content") or "") for m in compressed)
         assert "Keep this user context." in combined
@@ -1531,9 +1500,7 @@ class TestTodoSnapshotScaffoldingTails:
             [{"id": "nope", "content": "obsolete task", "status": "cancelled"}]
         )
 
-        compressed, _ = agent._compress_context(
-            _msgs(), "sys", approx_tokens=120_000
-        )
+        compressed, _ = agent._compress_context(_msgs(), "sys", approx_tokens=120_000)
 
         assert [message.get("role") for message in compressed] == [
             "user",
@@ -1570,9 +1537,7 @@ class TestTodoSnapshotScaffoldingTails:
             [{"id": "done", "content": "stale task", "status": "completed"}]
         )
 
-        compressed, _ = agent._compress_context(
-            _msgs(), "sys", approx_tokens=120_000
-        )
+        compressed, _ = agent._compress_context(_msgs(), "sys", approx_tokens=120_000)
 
         assert [message.get("role") for message in compressed] == [
             "user",
@@ -1607,9 +1572,7 @@ class TestTodoSnapshotScaffoldingTails:
             [{"id": "done", "content": "stale task", "status": "completed"}]
         )
 
-        compressed, _ = agent._compress_context(
-            _msgs(), "sys", approx_tokens=120_000
-        )
+        compressed, _ = agent._compress_context(_msgs(), "sys", approx_tokens=120_000)
 
         assert [message.get("role") for message in compressed] == [
             "user",
@@ -1675,7 +1638,9 @@ class TestTodoSnapshotScaffoldingTails:
         )
 
         retained = next(
-            message for message in compressed if isinstance(message.get("content"), list)
+            message
+            for message in compressed
+            if isinstance(message.get("content"), list)
         )
         assert retained["content"] == surviving_parts
         assert retained["unrelated_metadata"] == "keep-me"
@@ -1713,11 +1678,11 @@ class TestTodoSnapshotScaffoldingTails:
             store.has_items = MagicMock(side_effect=RuntimeError("store unavailable"))
         agent._todo_store = store
 
-        compressed, _ = agent._compress_context(
-            _msgs(), "sys", approx_tokens=120_000
-        )
+        compressed, _ = agent._compress_context(_msgs(), "sys", approx_tokens=120_000)
 
-        combined = "\n".join(str(message.get("content") or "") for message in compressed)
+        combined = "\n".join(
+            str(message.get("content") or "") for message in compressed
+        )
         assert TODO_INJECTION_HEADER in combined
         assert pending_task in combined
 
@@ -1742,9 +1707,7 @@ class TestTodoSnapshotScaffoldingTails:
             },
         ]
 
-        compressed, _ = agent._compress_context(
-            _msgs(), "sys", approx_tokens=120_000
-        )
+        compressed, _ = agent._compress_context(_msgs(), "sys", approx_tokens=120_000)
 
         combined = "\n".join(str(m.get("content") or "") for m in compressed)
         assert TODO_INJECTION_HEADER in combined

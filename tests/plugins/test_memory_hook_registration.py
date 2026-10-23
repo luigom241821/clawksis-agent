@@ -19,9 +19,12 @@ def _install(home, monkeypatch, *, label="first", enabled=True):
     )
     plugin = home / "plugins" / "dual"
     plugin.mkdir(parents=True)
-    (plugin / "plugin.yaml").write_text("name: dual\nversion: 1.0.0\nkind: standalone\n")
+    (plugin / "plugin.yaml").write_text(
+        "name: dual\nversion: 1.0.0\nkind: standalone\n"
+    )
     (plugin / "values.py").write_text(f"LABEL = {label!r}\n")
-    (plugin / "__init__.py").write_text(textwrap.dedent('''\
+    (plugin / "__init__.py").write_text(
+        textwrap.dedent("""\
         from agent.memory_provider import MemoryProvider
         from .values import LABEL
 
@@ -40,7 +43,8 @@ def _install(home, monkeypatch, *, label="first", enabled=True):
             ctx.register_memory_provider(Provider())
             ctx.register_hook("pre_llm_call", make_hook(LABEL))
             ctx.register_hook("pre_llm_call", make_hook("second"))
-    '''))
+    """)
+    )
     return get_plugin_manager()
 
 
@@ -89,8 +93,10 @@ def test_same_name_different_sources_are_not_suppressed(tmp_path, monkeypatch):
         assert load_memory_provider("dual") is not None
         manager.discover_and_load()
         assert _contexts(manager) == [
-            {"context": "first"}, {"context": "second"},
-            {"context": "project"}, {"context": "second"},
+            {"context": "first"},
+            {"context": "second"},
+            {"context": "project"},
+            {"context": "second"},
         ]
     finally:
         manager.unload()
@@ -102,7 +108,9 @@ def test_reexported_register_uses_plugin_source(tmp_path, monkeypatch, order):
     plugin = tmp_path / "plugins" / "dual"
     original = plugin / "__init__.py"
     (plugin / "implementation.py").write_text(original.read_text())
-    original.write_text("from .implementation import register, Provider  # MemoryProvider\n")
+    original.write_text(
+        "from .implementation import register, Provider  # MemoryProvider\n"
+    )
     try:
         if order == "plugin-first":
             manager.discover_and_load()

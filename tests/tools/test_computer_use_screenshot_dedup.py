@@ -25,11 +25,15 @@ def _png_b64(seed: int) -> str:
         b"\x00" + bytes(((x + y + seed) % 256) for x in range(width * 3))
         for y in range(height)
     )
+
     def chunk(tag: bytes, data: bytes) -> bytes:
         return (
-            struct.pack(">I", len(data)) + tag + data
+            struct.pack(">I", len(data))
+            + tag
+            + data
             + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
         )
+
     png = (
         b"\x89PNG\r\n\x1a\n"
         + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
@@ -41,8 +45,13 @@ def _png_b64(seed: int) -> str:
 
 def _cap(seed: int = 1, app: str = "kate", title: str = "notes") -> CaptureResult:
     return CaptureResult(
-        mode="som", width=64, height=64, png_b64=_png_b64(seed),
-        elements=[], app=app, window_title=title,
+        mode="som",
+        width=64,
+        height=64,
+        png_b64=_png_b64(seed),
+        elements=[],
+        app=app,
+        window_title=title,
     )
 
 
@@ -120,8 +129,15 @@ class TestScreenshotDedup:
         assert not _is_multimodal(resp)  # dedups against the NEW frame
 
     def test_ax_mode_untouched(self):
-        cap = CaptureResult(mode="ax", width=64, height=64, png_b64=None,
-                            elements=[], app="kate", window_title="notes")
+        cap = CaptureResult(
+            mode="ax",
+            width=64,
+            height=64,
+            png_b64=None,
+            elements=[],
+            app="kate",
+            window_title="notes",
+        )
         resp = cu_tool._capture_response(cap, session_id="s1")
         assert not _is_multimodal(resp)
         assert "screen_unchanged" not in json.loads(resp)
@@ -134,12 +150,23 @@ class TestScreenshotDedup:
         backend.capture = lambda **kw: frame
         first = cu_tool._dispatch(backend, "capture", {"mode": "som"}, session_id="s1")
         assert _is_multimodal(first)
-        after_click = cu_tool._dispatch(backend, "click", {"element": 1, "capture_after": True}, session_id="s1")
-        assert not _is_multimodal(after_click) and json.loads(after_click)["screen_unchanged"] is True
-        assert json.loads(after_click)["ok"] is True  # action payload merged into the text capture
-        explicit = cu_tool._dispatch(backend, "capture", {"mode": "som"}, session_id="s1")
+        after_click = cu_tool._dispatch(
+            backend, "click", {"element": 1, "capture_after": True}, session_id="s1"
+        )
+        assert (
+            not _is_multimodal(after_click)
+            and json.loads(after_click)["screen_unchanged"] is True
+        )
+        assert (
+            json.loads(after_click)["ok"] is True
+        )  # action payload merged into the text capture
+        explicit = cu_tool._dispatch(
+            backend, "capture", {"mode": "som"}, session_id="s1"
+        )
         assert not _is_multimodal(explicit)
-        assert _is_multimodal(cu_tool._dispatch(backend, "capture", {"mode": "som"}, session_id="s1"))
+        assert _is_multimodal(
+            cu_tool._dispatch(backend, "capture", {"mode": "som"}, session_id="s1")
+        )
 
     def test_release_session_forgets_dedup_state(self):
         cu_tool._capture_response(_cap(seed=1), session_id="s1")
@@ -152,6 +179,8 @@ class TestScreenshotDedup:
         from agent.conversation_compression import _reset_read_dedup_caches
 
         cu_tool._capture_response(_cap(seed=1), session_id="s1")
-        assert not _is_multimodal(cu_tool._capture_response(_cap(seed=1), session_id="s1"))
+        assert not _is_multimodal(
+            cu_tool._capture_response(_cap(seed=1), session_id="s1")
+        )
         _reset_read_dedup_caches("task", session_id="s1")
         assert _is_multimodal(cu_tool._capture_response(_cap(seed=1), session_id="s1"))

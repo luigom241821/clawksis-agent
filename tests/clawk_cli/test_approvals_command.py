@@ -1,7 +1,11 @@
 """Cross-surface contract for the persistent /approvals mode command."""
 
-
-from clawk_cli.commands import GATEWAY_KNOWN_COMMANDS, SUBCOMMANDS, gateway_help_lines, resolve_command
+from clawk_cli.commands import (
+    GATEWAY_KNOWN_COMMANDS,
+    SUBCOMMANDS,
+    gateway_help_lines,
+    resolve_command,
+)
 from clawk_cli.commands_completion import SlashCommandCompleter
 from clawk_cli.commands_platforms import telegram_bot_commands
 from prompt_toolkit.completion import CompleteEvent
@@ -37,7 +41,9 @@ def test_shared_command_refuses_managed_mode_override(tmp_path, monkeypatch):
     managed.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setenv("CLAWK_MANAGED_DIR", str(managed))
-    (managed / "config.yaml").write_text("approvals:\n  mode: manual\n", encoding="utf-8")
+    (managed / "config.yaml").write_text(
+        "approvals:\n  mode: manual\n", encoding="utf-8"
+    )
     managed_scope.invalidate_managed_cache()
 
     result = run_approval_mode_command("off")
@@ -47,5 +53,3 @@ def test_shared_command_refuses_managed_mode_override(tmp_path, monkeypatch):
     assert result.changed is False
     assert "managed" in result.message.lower()
     assert not (home / "config.yaml").exists()
-
-

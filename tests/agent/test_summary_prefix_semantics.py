@@ -23,20 +23,6 @@ from agent.context_compressor import (
 )
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def test_replaced_prefixes_are_frozen_for_renormalization():
     """Every retired SUMMARY_PREFIX must be frozen into
     _HISTORICAL_SUMMARY_PREFIXES, otherwise summaries persisted by older
@@ -48,7 +34,8 @@ def test_replaced_prefixes_are_frozen_for_renormalization():
     )
 
     carveout_era = [
-        p for p in _HISTORICAL_SUMMARY_PREFIXES
+        p
+        for p in _HISTORICAL_SUMMARY_PREFIXES
         if "you may use the summary as background" in p
     ]
     assert carveout_era, "carveout-era prefix missing from frozen tuple"
@@ -199,8 +186,6 @@ _FROZEN_PREFIX_GENERATIONS = (
 _PRE_69619_LIVE_PREFIX = _FROZEN_PREFIX_GENERATIONS[1]
 
 
-
-
 def test_pre_69619_prefix_generation_is_frozen_and_stripped():
     """Regression for the #69619 review: the prefix generation live right
     before the section-header removal was never added to
@@ -230,5 +215,3 @@ def test_frozen_prefix_generations_match_historical_tuple():
     assert tuple(_HISTORICAL_SUMMARY_PREFIXES[: len(_FROZEN_PREFIX_GENERATIONS)]) == (
         _FROZEN_PREFIX_GENERATIONS
     )
-
-

@@ -5,6 +5,7 @@ Distro skeletons put ~/.local/bin on PATH with a bare assignment
 existing setup. The appended line must also be a no-op when PATH already has the
 entry, because Fedora's ~/.bash_profile sources ~/.bashrc in every login shell.
 """
+
 import os
 from pathlib import Path
 import shlex
@@ -53,11 +54,27 @@ fi
 
 def _wire(home: Path, runs: int = 1) -> None:
     env = {k: v for k, v in os.environ.items() if k not in ("CI", "GITHUB_ACTIONS")}
-    env.update(HOME=str(home), CLAWK_HOME=str(home / "clawk"), SHELL="/bin/bash",
-               NO_COLOR="1", TERM="dumb", CI="true")
-    script = f"source {shlex.quote(INSTALL_SH.as_posix())} --manifest\n" + "wire_shell_path\n" * runs
-    result = subprocess.run(["bash", "-c", script], env=env, stdin=subprocess.DEVNULL,
-                            capture_output=True, text=True, timeout=30, check=False)
+    env.update(
+        HOME=str(home),
+        CLAWK_HOME=str(home / "clawk"),
+        SHELL="/bin/bash",
+        NO_COLOR="1",
+        TERM="dumb",
+        CI="true",
+    )
+    script = (
+        f"source {shlex.quote(INSTALL_SH.as_posix())} --manifest\n"
+        + "wire_shell_path\n" * runs
+    )
+    result = subprocess.run(
+        ["bash", "-c", script],
+        env=env,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
     assert result.returncode == 0, result.stdout + result.stderr
 
 
@@ -70,9 +87,21 @@ _LOGIN_FILES = 'for f in ~/.bash_profile ~/.bash_login ~/.profile; do if [ -r "$
 
 def _login_path(home: Path) -> list[str]:
     # Absolute path: the pinned PATH below has no bash on hosts like NixOS.
-    result = subprocess.run([shutil.which("bash"), "--noprofile", "--norc", "-c", f'{_LOGIN_FILES}; printf %s "$PATH"'],
-                            env={"HOME": str(home), "PATH": "/usr/local/bin:/usr/bin:/bin"},
-                            stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30, check=False)
+    result = subprocess.run(
+        [
+            shutil.which("bash"),
+            "--noprofile",
+            "--norc",
+            "-c",
+            f'{_LOGIN_FILES}; printf %s "$PATH"',
+        ],
+        env={"HOME": str(home), "PATH": "/usr/local/bin:/usr/bin:/bin"},
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
     assert result.returncode == 0, result.stderr
     return result.stdout.split(":")
 
@@ -84,7 +113,9 @@ def _home(tmp_path: Path, **files: str) -> Path:
     return tmp_path
 
 
-@pytest.mark.parametrize("name, text", [(".bashrc", FEDORA_BASHRC), (".profile", DEBIAN_PROFILE)])
+@pytest.mark.parametrize(
+    "name, text", [(".bashrc", FEDORA_BASHRC), (".profile", DEBIAN_PROFILE)]
+)
 def test_bare_assignment_counts_as_existing_setup(tmp_path, name, text):
     home = _home(tmp_path, **{name: text})
     _wire(home)
@@ -92,7 +123,9 @@ def test_bare_assignment_counts_as_existing_setup(tmp_path, name, text):
 
 
 def test_fedora_login_shell_has_local_bin_once(tmp_path):
-    home = _home(tmp_path, **{".bashrc": FEDORA_BASHRC, ".bash_profile": FEDORA_BASH_PROFILE})
+    home = _home(
+        tmp_path, **{".bashrc": FEDORA_BASHRC, ".bash_profile": FEDORA_BASH_PROFILE}
+    )
     _wire(home, runs=2)
     assert (home / ".bash_profile").read_text(encoding="utf-8-sig").count(MARKER) == 1
     assert _login_path(home).count(str(home / ".local" / "bin")) == 1

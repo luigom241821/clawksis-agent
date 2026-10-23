@@ -42,24 +42,64 @@ class _LoopbackProvider:
                 provider.requests.append(body)
                 spec = provider.script.pop(0)
                 delta = {"role": "assistant", "content": spec["content"]}
-                usage = {"prompt_tokens": 10, "completion_tokens": 4, "total_tokens": 14}
+                usage = {
+                    "prompt_tokens": 10,
+                    "completion_tokens": 4,
+                    "total_tokens": 14,
+                }
                 if body.get("stream"):
                     chunks = [
-                        {"id": "c", "object": "chat.completion.chunk", "created": 1, "model": _MODEL,
-                         "choices": [{"index": 0, "delta": delta, "finish_reason": None}]},
-                        {"id": "c", "object": "chat.completion.chunk", "created": 1, "model": _MODEL,
-                         "choices": [{"index": 0, "delta": {}, "finish_reason": spec["finish_reason"]}],
-                         "usage": usage},
+                        {
+                            "id": "c",
+                            "object": "chat.completion.chunk",
+                            "created": 1,
+                            "model": _MODEL,
+                            "choices": [
+                                {"index": 0, "delta": delta, "finish_reason": None}
+                            ],
+                        },
+                        {
+                            "id": "c",
+                            "object": "chat.completion.chunk",
+                            "created": 1,
+                            "model": _MODEL,
+                            "choices": [
+                                {
+                                    "index": 0,
+                                    "delta": {},
+                                    "finish_reason": spec["finish_reason"],
+                                }
+                            ],
+                            "usage": usage,
+                        },
                     ]
-                    mime, payload = "text/event-stream", (
-                        "".join("data: " + json.dumps(c) + "\n\n" for c in chunks) + "data: [DONE]\n\n"
-                    ).encode()
+                    mime, payload = (
+                        "text/event-stream",
+                        (
+                            "".join("data: " + json.dumps(c) + "\n\n" for c in chunks)
+                            + "data: [DONE]\n\n"
+                        ).encode(),
+                    )
                 else:
-                    mime, payload = "application/json", json.dumps({
-                        "id": "c", "object": "chat.completion", "created": 1, "model": _MODEL,
-                        "choices": [{"index": 0, "message": delta, "finish_reason": spec["finish_reason"]}],
-                        "usage": usage,
-                    }).encode()
+                    mime, payload = (
+                        "application/json",
+                        json.dumps(
+                            {
+                                "id": "c",
+                                "object": "chat.completion",
+                                "created": 1,
+                                "model": _MODEL,
+                                "choices": [
+                                    {
+                                        "index": 0,
+                                        "message": delta,
+                                        "finish_reason": spec["finish_reason"],
+                                    }
+                                ],
+                                "usage": usage,
+                            }
+                        ).encode(),
+                    )
                 self.send_response(200)
                 self.send_header("Content-Type", mime)
                 self.send_header("Content-Length", str(len(payload)))
@@ -97,15 +137,32 @@ def acp(tmp_path, monkeypatch):
     from clawk_cli import mcp_startup
     from clawk_cli import runtime_provider
 
-    monkeypatch.setattr(cli_config, "load_config", lambda *a, **k: {
-        "model": {"provider": "openai-compat", "default": _MODEL, "context_length": 131072},
-        "agent": {"max_iterations": 2}, "compression": {"enabled": False},
-    })
-    monkeypatch.setattr(runtime_provider, "resolve_runtime_provider", lambda *a, **k: {
-        "provider": "openai-compat", "api_mode": "chat_completions",
-        "base_url": provider.base_url, "api_key": "fixture-only",
-    })
-    monkeypatch.setattr(mcp_startup, "ensure_mcp_discovery_before_agent_build", lambda **k: None)
+    monkeypatch.setattr(
+        cli_config,
+        "load_config",
+        lambda *a, **k: {
+            "model": {
+                "provider": "openai-compat",
+                "default": _MODEL,
+                "context_length": 131072,
+            },
+            "agent": {"max_iterations": 2},
+            "compression": {"enabled": False},
+        },
+    )
+    monkeypatch.setattr(
+        runtime_provider,
+        "resolve_runtime_provider",
+        lambda *a, **k: {
+            "provider": "openai-compat",
+            "api_mode": "chat_completions",
+            "base_url": provider.base_url,
+            "api_key": "fixture-only",
+        },
+    )
+    monkeypatch.setattr(
+        mcp_startup, "ensure_mcp_discovery_before_agent_build", lambda **k: None
+    )
     monkeypatch.setattr(acp_session, "_expand_acp_enabled_toolsets", lambda *a, **k: [])
 
     from acp_adapter.server import ClawksisACPAgent, TextContentBlock
@@ -120,13 +177,22 @@ def acp(tmp_path, monkeypatch):
     sid = server.session_manager.create_session(cwd=str(tmp_path)).session_id
 
     def prompt(text):
-        return asyncio.run(server.prompt(prompt=[TextContentBlock(type="text", text=text)], session_id=sid))
+        return asyncio.run(
+            server.prompt(
+                prompt=[TextContentBlock(type="text", text=text)], session_id=sid
+            )
+        )
 
     def conversation_rows():
         with sqlite3.connect(db_path) as c:
-            return [tuple(r) for r in c.execute(
-                "SELECT role, content FROM messages WHERE session_id = ? AND active = 1 "
-                "AND role NOT IN ('session_meta', 'system') ORDER BY id", (sid,))]
+            return [
+                tuple(r)
+                for r in c.execute(
+                    "SELECT role, content FROM messages WHERE session_id = ? AND active = 1 "
+                    "AND role NOT IN ('session_meta', 'system') ORDER BY id",
+                    (sid,),
+                )
+            ]
 
     yield provider, prompt, conversation_rows, db, sid, conn, server
     provider.shutdown()
@@ -153,16 +219,26 @@ def test_acp_refusal_closes_the_turn_and_is_not_replayed_into_the_next_prompt(ac
 
     rows = conversation_rows()
     assert [r[0] for r in rows] == ["user", "assistant"], rows
-    assert rows[1][1] == FAILED_TURN_NOTICE  # no tool ran: no hedging, no provider detail
+    assert (
+        rows[1][1] == FAILED_TURN_NOTICE
+    )  # no tool ran: no hedging, no provider detail
     assert db.latest_conversation_role(sid) == "assistant"
     # Typed, so a renderer or room poller never has to match the English copy to tell the
     # boundary from a model reply.
     with sqlite3.connect(db.db_path) as c:
-        kinds = [r[0] for r in c.execute(
-            "SELECT display_kind FROM messages WHERE session_id = ? AND role = 'assistant'", (sid,))]
+        kinds = [
+            r[0]
+            for r in c.execute(
+                "SELECT display_kind FROM messages WHERE session_id = ? AND role = 'assistant'",
+                (sid,),
+            )
+        ]
     assert kinds == [FAILED_TURN_DISPLAY_KIND]
     # The refusal reaches the ACP client, but never becomes canonical assistant history.
-    texts = [getattr(getattr(u, "content", None), "text", None) or getattr(u, "text", None) for u in conn.updates]
+    texts = [
+        getattr(getattr(u, "content", None), "text", None) or getattr(u, "text", None)
+        for u in conn.updates
+    ]
     assert any(_REFUSAL_DETAIL in (t or "") for t in texts)
 
     provider.script = [{"finish_reason": "stop", "content": "Paris."}]
@@ -170,8 +246,14 @@ def test_acp_refusal_closes_the_turn_and_is_not_replayed_into_the_next_prompt(ac
 
     sent = [m for m in provider.requests[-1]["messages"] if m["role"] != "system"]
     assert [m["role"] for m in sent] == ["user", "assistant", "user"], sent
-    assert [m["content"] for m in sent if m["role"] == "user"] == [_REFUSED, _NEW_REQUEST]
-    assert sent[1] == {"role": "assistant", "content": FAILED_TURN_NOTICE}  # the type never reaches the wire
+    assert [m["content"] for m in sent if m["role"] == "user"] == [
+        _REFUSED,
+        _NEW_REQUEST,
+    ]
+    assert sent[1] == {
+        "role": "assistant",
+        "content": FAILED_TURN_NOTICE,
+    }  # the type never reaches the wire
 
     # Turn 3: cancelled mid-turn. The interrupt envelope carries ``final_response=None``
     # (no assistant text yet); ``_finish_turn`` must still report ``cancelled`` — never crash
@@ -180,9 +262,15 @@ def test_acp_refusal_closes_the_turn_and_is_not_replayed_into_the_next_prompt(ac
     history_before = list(state.history)
 
     def interrupted_run_conversation(**kwargs):
-        asyncio.run(server.cancel(sid))  # the editor cancels while the turn is in flight
-        return {"final_response": None, "interrupted": True, "completed": False,
-                "messages": history_before + [{"role": "user", "content": "stop"}]}
+        asyncio.run(
+            server.cancel(sid)
+        )  # the editor cancels while the turn is in flight
+        return {
+            "final_response": None,
+            "interrupted": True,
+            "completed": False,
+            "messages": history_before + [{"role": "user", "content": "stop"}],
+        }
 
     state.agent.run_conversation = interrupted_run_conversation
     response = prompt("stop")
@@ -190,7 +278,9 @@ def test_acp_refusal_closes_the_turn_and_is_not_replayed_into_the_next_prompt(ac
     assert state.history[-1] == {"role": "user", "content": "stop"}
 
 
-def test_failed_turn_boundary_is_idempotent_on_the_durable_tail_and_skips_context_overflow(tmp_path, monkeypatch):
+def test_failed_turn_boundary_is_idempotent_on_the_durable_tail_and_skips_context_overflow(
+    tmp_path, monkeypatch
+):
     """Keyed on ``SessionDB.latest_conversation_role``: a redelivery of an already-closed turn
     writes no second row, an assistant tail is left alone, and the context-overflow class
     (whose repair is rotation, not a row — #1630) is never closed."""
@@ -212,24 +302,48 @@ def test_failed_turn_boundary_is_idempotent_on_the_durable_tail_and_skips_contex
         db.append_message(sid, messages[-1]["role"], messages[-1]["content"])
         written.append(list(messages))
 
-    agent = SimpleNamespace(_session_db=db, session_id=sid, _flush_messages_to_session_db=flush)
+    agent = SimpleNamespace(
+        _session_db=db, session_id=sid, _flush_messages_to_session_db=flush
+    )
     messages = [
         {"role": "user", "content": "delete the build directory"},
-        {"role": "assistant", "content": None, "tool_calls": [{"id": "t1", "type": "function",
-                                                               "function": {"name": "terminal", "arguments": "{}"}}]},
+        {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {
+                    "id": "t1",
+                    "type": "function",
+                    "function": {"name": "terminal", "arguments": "{}"},
+                }
+            ],
+        },
         {"role": "tool", "tool_call_id": "t1", "content": "removed"},
     ]
 
-    overflow = {"completed": False, "failed": True, "failure_reason": "context_overflow", "messages": list(messages)}
+    overflow = {
+        "completed": False,
+        "failed": True,
+        "failure_reason": "context_overflow",
+        "messages": list(messages),
+    }
     _close_durable_failed_turn(agent, overflow)
     assert written == [] and db.latest_conversation_role(sid) == "user"
 
-    failed = {"completed": False, "failed": True, "failure_reason": "server_error", "messages": messages,
-              "current_turn_user_idx": 0}
+    failed = {
+        "completed": False,
+        "failed": True,
+        "failure_reason": "server_error",
+        "messages": messages,
+        "current_turn_user_idx": 0,
+    }
     _close_durable_failed_turn(agent, failed)
     _close_durable_failed_turn(agent, failed)  # redelivery: tail is already assistant
     assert len(written) == 1
-    assert (messages[-1]["role"], messages[-1]["content"]) == ("assistant", PARTIAL_FAILED_TURN_NOTICE)  # a tool ran: hedge
+    assert (messages[-1]["role"], messages[-1]["content"]) == (
+        "assistant",
+        PARTIAL_FAILED_TURN_NOTICE,
+    )  # a tool ran: hedge
     assert db.latest_conversation_role(sid) == "assistant"
     db.close()
 
@@ -240,7 +354,9 @@ def test_prompt_after_cancel_keeps_the_unanswered_request(acp):
     state = server.session_manager.get_session(sid)
     before, real = list(state.history), state.agent.run_conversation
     state.agent.run_conversation = lambda **kw: {
-        "final_response": None, "interrupted": True, "completed": False,
+        "final_response": None,
+        "interrupted": True,
+        "completed": False,
         "messages": before + [{"role": "user", "content": "deploy build 42"}],
     }
     try:
@@ -256,14 +372,17 @@ def test_prompt_after_cancel_keeps_the_unanswered_request(acp):
     prompt("third")
     turn2 = provider.requests[-2]["messages"]
     turn3 = provider.requests[-1]["messages"]
-    assert turn3[:len(turn2)] == turn2
+    assert turn3[: len(turn2)] == turn2
     assert any(
-        msg["role"] == "user" and msg["content"] == "deploy build 42\n\nalso run the smoke tests"
+        msg["role"] == "user"
+        and msg["content"] == "deploy build 42\n\nalso run the smoke tests"
         for msg in turn2
     )
 
 
-def test_failed_turn_boundary_keeps_the_error_card_for_rehydration(tmp_path, monkeypatch):
+def test_failed_turn_boundary_keeps_the_error_card_for_rehydration(
+    tmp_path, monkeypatch
+):
     """The boundary row carries the failure's error text and ``error_surface`` so a client
     reopening the session after a restart redraws the error card, not only the notice."""
     from types import SimpleNamespace
@@ -278,44 +397,75 @@ def test_failed_turn_boundary_keeps_the_error_card_for_rehydration(tmp_path, mon
     db.append_message(sid, "user", "say hello")
 
     def flush(messages):
-        db.append_message(sid, messages[-1]["role"], messages[-1]["content"],
-                          display_metadata=messages[-1].get("display_metadata"))
+        db.append_message(
+            sid,
+            messages[-1]["role"],
+            messages[-1]["content"],
+            display_metadata=messages[-1].get("display_metadata"),
+        )
 
-    agent = SimpleNamespace(_session_db=db, session_id=sid, _flush_messages_to_session_db=flush,
-                            provider="opencode-go", model="deepseek-v4.1-flash")
+    agent = SimpleNamespace(
+        _session_db=db,
+        session_id=sid,
+        _flush_messages_to_session_db=flush,
+        provider="opencode-go",
+        model="deepseek-v4.1-flash",
+    )
     messages = [{"role": "user", "content": "say hello"}]
-    _close_durable_failed_turn(agent, {"completed": False, "failed": True, "failure_reason": "timeout",
-                                       "error": "Connection error.", "messages": messages})
+    _close_durable_failed_turn(
+        agent,
+        {
+            "completed": False,
+            "failed": True,
+            "failure_reason": "timeout",
+            "error": "Connection error.",
+            "messages": messages,
+        },
+    )
 
     metadata = messages[-1]["display_metadata"]
     assert metadata["error"] == "Connection error."
     assert metadata["error_surface"]["code"] == "timeout"
     assert metadata["error_surface"]["provider"] == "opencode-go"
     stored = db.get_messages(sid)[-1]["display_metadata"]
-    assert (stored if isinstance(stored, dict) else json.loads(stored))["error_surface"]["code"] == "timeout"
+    assert (stored if isinstance(stored, dict) else json.loads(stored))[
+        "error_surface"
+    ]["code"] == "timeout"
     db.close()
 
 
-def test_failed_turn_after_a_tool_row_is_closed_with_its_error_card(tmp_path, monkeypatch):
+def test_failed_turn_after_a_tool_row_is_closed_with_its_error_card(
+    tmp_path, monkeypatch
+):
     """A turn that fails after a tool already ran (an onboarding beat answered, then the provider
     429s) leaves a ``tool`` row as the durable tail. It is as open as a bare user tail: without the
     boundary a client reopening the session has no error card to draw for the turn."""
     from types import SimpleNamespace
 
     from agent.conversation_loop import _close_durable_failed_turn
-    from agent.turn_failure_copy import FAILED_TURN_DISPLAY_KIND, PARTIAL_FAILED_TURN_NOTICE
+    from agent.turn_failure_copy import (
+        FAILED_TURN_DISPLAY_KIND,
+        PARTIAL_FAILED_TURN_NOTICE,
+    )
     from clawk_state import SessionDB
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     db = SessionDB(tmp_path / "state.db")
     sid = "s1"
     db.create_session(session_id=sid, source="tui", model="m")
-    call = {"id": "call_setup_beat_name", "type": "function",
-            "function": {"name": "setup_beat", "arguments": '{"beat":"name"}'}}
+    call = {
+        "id": "call_setup_beat_name",
+        "type": "function",
+        "function": {"name": "setup_beat", "arguments": '{"beat":"name"}'},
+    }
     messages = [
         {"role": "user", "content": "opening"},
         {"role": "assistant", "content": "Hi!", "tool_calls": [call]},
-        {"role": "tool", "tool_call_id": call["id"], "content": '{"answer":{"name":"Austin"}}'},
+        {
+            "role": "tool",
+            "tool_call_id": call["id"],
+            "content": '{"answer":{"name":"Austin"}}',
+        },
     ]
     db.append_message(sid, "user", "opening")
     db.append_message(sid, "assistant", "Hi!", tool_calls=[call])
@@ -323,20 +473,43 @@ def test_failed_turn_after_a_tool_row_is_closed_with_its_error_card(tmp_path, mo
 
     def flush(rows):
         last = rows[-1]
-        db.append_message(sid, last["role"], last["content"], display_kind=last.get("display_kind"),
-                          display_metadata=last.get("display_metadata"))
+        db.append_message(
+            sid,
+            last["role"],
+            last["content"],
+            display_kind=last.get("display_kind"),
+            display_metadata=last.get("display_metadata"),
+        )
 
-    agent = SimpleNamespace(_session_db=db, session_id=sid, _flush_messages_to_session_db=flush,
-                            provider="nous", model="m")
-    failed = {"completed": False, "failed": True, "failure_reason": "rate_limit",
-              "error": "429 Too Many Requests", "messages": messages, "current_turn_user_idx": 0}
+    agent = SimpleNamespace(
+        _session_db=db,
+        session_id=sid,
+        _flush_messages_to_session_db=flush,
+        provider="nous",
+        model="m",
+    )
+    failed = {
+        "completed": False,
+        "failed": True,
+        "failure_reason": "rate_limit",
+        "error": "429 Too Many Requests",
+        "messages": messages,
+        "current_turn_user_idx": 0,
+    }
     _close_durable_failed_turn(agent, failed)
-    _close_durable_failed_turn(agent, failed)  # redelivery: the tail is now the boundary
+    _close_durable_failed_turn(
+        agent, failed
+    )  # redelivery: the tail is now the boundary
 
     stored = db.get_messages(sid)
     assert [row["role"] for row in stored] == ["user", "assistant", "tool", "assistant"]
     boundary = stored[-1]
-    assert (boundary["content"], boundary["display_kind"]) == (PARTIAL_FAILED_TURN_NOTICE, FAILED_TURN_DISPLAY_KIND)
+    assert (boundary["content"], boundary["display_kind"]) == (
+        PARTIAL_FAILED_TURN_NOTICE,
+        FAILED_TURN_DISPLAY_KIND,
+    )
     metadata = boundary["display_metadata"]
-    assert (metadata if isinstance(metadata, dict) else json.loads(metadata))["error_surface"]["code"] == "rate_limit"
+    assert (metadata if isinstance(metadata, dict) else json.loads(metadata))[
+        "error_surface"
+    ]["code"] == "rate_limit"
     db.close()

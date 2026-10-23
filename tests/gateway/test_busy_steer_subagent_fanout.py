@@ -15,6 +15,7 @@ from gateway.platforms.event import MessageEvent, MessageType
 from gateway.run import GatewayRunner
 from gateway.session import SessionSource
 
+
 class _Agent:
     def __init__(self, children=()):
         self.payload = None
@@ -25,9 +26,15 @@ class _Agent:
         self.payload = text
         return True
 
+
 def _event(text="focus on rows 10-20"):
-    source = SessionSource(platform=Platform.TELEGRAM, chat_id="c", user_id="u", chat_type="dm")
-    return MessageEvent(text=text, message_type=MessageType.TEXT, source=source, message_id="m")
+    source = SessionSource(
+        platform=Platform.TELEGRAM, chat_id="c", user_id="u", chat_type="dm"
+    )
+    return MessageEvent(
+        text=text, message_type=MessageType.TEXT, source=source, message_id="m"
+    )
+
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("route", ["busy_steer_mode", "priority", "explicit_command"])
@@ -37,10 +44,16 @@ async def test_busy_steer_fans_out_to_active_subagents(route, tmp_path, monkeypa
     child_a, child_b = _Agent(), _Agent()
     parent = _Agent(children=[child_a, child_b])
     runner._session_state("key").turn.agent = parent
-    event = _event("/steer focus on rows 10-20" if route == "explicit_command" else "focus on rows 10-20")
+    event = _event(
+        "/steer focus on rows 10-20"
+        if route == "explicit_command"
+        else "focus on rows 10-20"
+    )
 
     if route == "busy_steer_mode":
-        outcome = await runner._resolve_busy_steer_or_redirect(event, "key", "steer", parent)
+        outcome = await runner._resolve_busy_steer_or_redirect(
+            event, "key", "steer", parent
+        )
         assert outcome.steered is True
     elif route == "priority":
         runner._hm_busy_steer(event, parent, "key")

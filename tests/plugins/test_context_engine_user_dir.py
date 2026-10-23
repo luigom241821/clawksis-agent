@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from textwrap import dedent
 
-_ENGINE_SRC = dedent('''
+_ENGINE_SRC = dedent("""
     from agent.context_engine import ContextEngine
 
     class Demo(ContextEngine):
@@ -22,15 +22,19 @@ _ENGINE_SRC = dedent('''
 
     def register(ctx):
         ctx.register_context_engine(Demo())
-''')
+""")
 
 
 def test_user_installed_engine_is_selected_by_name(tmp_path: Path, monkeypatch, caplog):
     engine_dir = tmp_path / "plugins" / "ctx_demo"
     engine_dir.mkdir(parents=True)
     (engine_dir / "__init__.py").write_text(_ENGINE_SRC)
-    (tmp_path / "plugins" / "notes").mkdir()  # unrelated user plugin: never treated as an engine
-    (tmp_path / "plugins" / "notes" / "__init__.py").write_text("def register(ctx): pass\n")
+    (
+        tmp_path / "plugins" / "notes"
+    ).mkdir()  # unrelated user plugin: never treated as an engine
+    (tmp_path / "plugins" / "notes" / "__init__.py").write_text(
+        "def register(ctx): pass\n"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 
     from agent.agent_init import _select_context_engine

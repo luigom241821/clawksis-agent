@@ -24,11 +24,14 @@ def preview_close(url: str = "") -> str:
 
 
 _ACTIONS = {
-    "open": lambda args: open_preview_tool(url=args.get("url", ""), label=args.get("label", "")),
+    "open": lambda args: open_preview_tool(
+        url=args.get("url", ""), label=args.get("label", "")
+    ),
     "close": lambda args: preview_close(url=args.get("url", "")),
     # read needs the GUI callback and is dispatched at the agent level.
     "read": lambda args: tool_error(
-        "preview read must run inside a desktop session (no GUI callback here)."),
+        "preview read must run inside a desktop session (no GUI callback here)."
+    ),
 }
 
 
@@ -62,7 +65,10 @@ PREVIEW_SCHEMA = {
             },
             "label": {"type": "string", "description": "open: optional tab label."},
             "start": {"type": "integer", "description": "read: 0-indexed char offset."},
-            "count": {"type": "integer", "description": "read: chars to return (capped per read)."},
+            "count": {
+                "type": "integer",
+                "description": "read: chars to return (capped per read).",
+            },
         },
         "required": ["action"],
     },

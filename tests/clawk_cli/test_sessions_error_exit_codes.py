@@ -17,9 +17,18 @@ import clawk_cli.sessions_cmd as sc
 def _args(action, **kw):
     base = dict(
         sessions_action=action,
-        session_id=None, title=None, yes=True, source=None, path=None,
-        from_source=None, dry_run=False, older_than=None, newer_than=None,
-        before=None, after=None, limit=50,
+        session_id=None,
+        title=None,
+        yes=True,
+        source=None,
+        path=None,
+        from_source=None,
+        dry_run=False,
+        older_than=None,
+        newer_than=None,
+        before=None,
+        after=None,
+        limit=50,
     )
     base.update(kw)
     return Namespace(**base)
@@ -28,6 +37,7 @@ def _args(action, **kw):
 def test_delete_missing_returns_1(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     from clawk_state import SessionDB
+
     SessionDB(tmp_path / "state.db")  # initialize an empty store
     rc = sc.cmd_sessions(_args("delete", session_id="nope_xyz"))
     assert rc == 1
@@ -38,6 +48,7 @@ def test_delete_missing_returns_1(tmp_path, monkeypatch, capsys):
 def test_rename_missing_returns_1(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     from clawk_state import SessionDB
+
     SessionDB(tmp_path / "state.db")
     rc = sc.cmd_sessions(_args("rename", session_id="nope_xyz", title=["New"]))
     assert rc == 1

@@ -12,7 +12,10 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Optional
 
-from gateway.platforms._shared import coerce_port as _coerce_int, get_scoped_secret as _get_scoped_secret
+from gateway.platforms._shared import (
+    coerce_port as _coerce_int,
+    get_scoped_secret as _get_scoped_secret,
+)
 
 from . import protocol, security
 
@@ -25,6 +28,7 @@ _ORCHESTRATE_MAX_WORKERS = 6  # max parallel peers for fan-out
 def _load_config() -> dict:
     """Read-only view of config.yaml; peers are only read, never mutated (cache-safe)."""
     from clawk_cli.config import load_config_readonly
+
     return load_config_readonly() or {}
 
 
@@ -33,23 +37,46 @@ def _configured_peers() -> dict:
 
 
 def _peer_from_entry(entry: dict, **extra: Any) -> dict:
-    return {"url": entry.get("url", ""), "auth": entry.get("auth", {}) or {},
-            "timeout": int(entry.get("timeout", _DEFAULT_TIMEOUT)), **extra}
+    return {
+        "url": entry.get("url", ""),
+        "auth": entry.get("auth", {}) or {},
+        "timeout": int(entry.get("timeout", _DEFAULT_TIMEOUT)),
+        **extra,
+    }
 
 
 def _resolve_peer(agent: str) -> Optional[dict]:
     """Peer name -> {url, auth, timeout, capabilities, tenant}, or treat ``agent`` as a URL."""
     if agent.startswith(("http://", "https://")):
-        return {"url": agent, "auth": {}, "timeout": _DEFAULT_TIMEOUT, "capabilities": []}
+        return {
+            "url": agent,
+            "auth": {},
+            "timeout": _DEFAULT_TIMEOUT,
+            "capabilities": [],
+        }
     entry = _configured_peers().get(agent)
-    return _peer_from_entry(entry, capabilities=entry.get("capabilities", []) or [], tenant=entry.get("tenant", "")) if entry else None
+    return (
+        _peer_from_entry(
+            entry,
+            capabilities=entry.get("capabilities", []) or [],
+            tenant=entry.get("tenant", ""),
+        )
+        if entry
+        else None
+    )
 
 
 def _auth_header(auth: dict) -> dict:
-    return {"Authorization": f"Bearer {auth['token']}"} if auth and auth.get("type") == "bearer" and auth.get("token") else {}
+    return (
+        {"Authorization": f"Bearer {auth['token']}"}
+        if auth and auth.get("type") == "bearer" and auth.get("token")
+        else {}
+    )
 
 
-def _http_json(url: str, headers: dict, timeout: int, method: str, data: Optional[bytes] = None) -> dict:
+def _http_json(
+    url: str, headers: dict, timeout: int, method: str, data: Optional[bytes] = None
+) -> dict:
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return json.loads(resp.read().decode("utf-8"))
@@ -60,7 +87,11 @@ def _http_get_json(url: str, headers: dict, timeout: int) -> dict:
 
 
 def _http_post_json(url: str, body: dict, headers: dict, timeout: int) -> dict:
-    hdrs = {"Content-Type": "application/json", "A2A-Version": protocol.PROTOCOL_VERSION, **headers}
+    hdrs = {
+        "Content-Type": "application/json",
+        "A2A-Version": protocol.PROTOCOL_VERSION,
+        **headers,
+    }
     return _http_json(url, hdrs, timeout, "POST", json.dumps(body).encode("utf-8"))
 
 
@@ -78,7 +109,11 @@ def _fetch_card(base_url: str, headers: dict, timeout: int) -> dict:
 def _select_jsonrpc_interface(card: Optional[dict]) -> Optional[dict]:
     if isinstance(card, dict):
         for iface in card.get("supportedInterfaces", []) or []:
-            if isinstance(iface, dict) and iface.get("protocolBinding") == "JSONRPC" and iface.get("url"):
+            if (
+                isinstance(iface, dict)
+                and iface.get("protocolBinding") == "JSONRPC"
+                and iface.get("url")
+            ):
                 return iface
     return None
 
@@ -92,23 +127,39 @@ def _rpc_url(base_url: str, card: Optional[dict]) -> str:
     return base_url.rstrip("/")
 
 
-def _send_task(agent_label: str, peer: dict, message: str, context_id: str) -> tuple[str, str, str]:
+def _send_task(
+    agent_label: str, peer: dict, message: str, context_id: str
+) -> tuple[str, str, str]:
     """One SendMessage to a peer -> (reply_text, context_id, state). Raises urllib errors /
     ValueError for the caller to format; handles redaction, audit, persistence, metrics."""
     base_url = peer.get("url", "")
     headers = _auth_header(peer.get("auth", {}) or {})
     timeout = int(peer.get("timeout", _DEFAULT_TIMEOUT))
     try:
-        card = _fetch_card(base_url, headers, min(timeout, 30))  # best-effort, to learn the rpc URL
+        card = _fetch_card(
+            base_url, headers, min(timeout, 30)
+        )  # best-effort, to learn the rpc URL
     except Exception:
         card = None
     ctx = context_id or protocol.new_context_id()
     safe_message = security.redact_outbound(message)
     # v1.0: contextId lives inside the Message, not at the params top level.
-    rpc_body = {"jsonrpc": "2.0", "id": protocol.new_task_id(), "method": "SendMessage",
-                "params": {"message": protocol.text_message(protocol.ROLE_USER, safe_message, context_id=ctx)}}
+    rpc_body = {
+        "jsonrpc": "2.0",
+        "id": protocol.new_task_id(),
+        "method": "SendMessage",
+        "params": {
+            "message": protocol.text_message(
+                protocol.ROLE_USER, safe_message, context_id=ctx
+            )
+        },
+    }
     iface = _select_jsonrpc_interface(card)
-    tenant = str(iface["tenant"]) if iface and iface.get("tenant") else str(peer.get("tenant") or "")
+    tenant = (
+        str(iface["tenant"])
+        if iface and iface.get("tenant")
+        else str(peer.get("tenant") or "")
+    )
     if tenant:
         rpc_body["params"]["tenant"] = tenant
     security.audit("outbound", agent_label, rpc_body["id"], safe_message)
@@ -116,7 +167,9 @@ def _send_task(agent_label: str, peer: dict, message: str, context_id: str) -> t
     protocol.metrics.outbound_total += 1
     resp = _http_post_json(_rpc_url(base_url, card), rpc_body, headers, timeout)
     if "error" in resp:
-        raise ValueError(f"Peer '{agent_label}' returned an error: {resp['error'].get('message', resp['error'])}")
+        raise ValueError(
+            f"Peer '{agent_label}' returned an error: {resp['error'].get('message', resp['error'])}"
+        )
     payload = protocol.unwrap_send_message_response(resp.get("result", {}))
     reply = _reply_text_from_result(payload)
     reply_ctx, state = ctx, ""
@@ -137,11 +190,20 @@ def _reply_text_from_result(result: Any) -> str:
         txt = protocol.extract_text(artifact)
         if txt:
             return txt
-    return protocol.extract_text((result.get("status", {}) or {}).get("message") or result)
+    return protocol.extract_text(
+        (result.get("status", {}) or {}).get("message") or result
+    )
 
 
-_AUTH_ERR = "Error: peer '{agent}' rejected auth (HTTP {code}). Check the configured token."
-_HTTP_CALL_ERRORS = {401: _AUTH_ERR, 403: _AUTH_ERR, 429: "Error: peer '{agent}' rate limited us (HTTP 429). Retry later."}
+_AUTH_ERR = (
+    "Error: peer '{agent}' rejected auth (HTTP {code}). Check the configured token."
+)
+_HTTP_CALL_ERRORS = {
+    401: _AUTH_ERR,
+    403: _AUTH_ERR,
+    429: "Error: peer '{agent}' rate limited us (HTTP 429). Retry later.",
+}
+
 
 def a2a_discover(args: dict, **_: Any) -> str:
     """Fetch and summarize the Agent Card at ``url``."""
@@ -157,23 +219,38 @@ def a2a_discover(args: dict, **_: Any) -> str:
     caps = card.get("capabilities", {}) or {}
     skills = card.get("skills", []) or []
     auth = "yes" if card.get("security") else "no"
-    proto = ", ".join(
-        f"{i.get('protocolBinding', '?')} v{i.get('protocolVersion', '?')}"
-        for i in (card.get("supportedInterfaces", []) or []) if isinstance(i, dict)
-    ) or f"v{card.get('protocolVersion', '?')} (pre-1.0 card)"
-    lines = [f"Agent: {card.get('name', '?')}", f"Description: {card.get('description', '')}", f"URL: {_rpc_url(url, card)}",
-             f"Protocol: {proto}",
-             f"Streaming: {bool(caps.get('streaming'))}  Push: {bool(caps.get('pushNotifications'))}  Auth required: {auth}",
-             f"Skills ({len(skills)}):"]
-    lines.extend(f"  - {s.get('name', s.get('id', '?'))}: {s.get('description', '')}" for s in skills[:20])
+    proto = (
+        ", ".join(
+            f"{i.get('protocolBinding', '?')} v{i.get('protocolVersion', '?')}"
+            for i in (card.get("supportedInterfaces", []) or [])
+            if isinstance(i, dict)
+        )
+        or f"v{card.get('protocolVersion', '?')} (pre-1.0 card)"
+    )
+    lines = [
+        f"Agent: {card.get('name', '?')}",
+        f"Description: {card.get('description', '')}",
+        f"URL: {_rpc_url(url, card)}",
+        f"Protocol: {proto}",
+        f"Streaming: {bool(caps.get('streaming'))}  Push: {bool(caps.get('pushNotifications'))}  Auth required: {auth}",
+        f"Skills ({len(skills)}):",
+    ]
+    lines.extend(
+        f"  - {s.get('name', s.get('id', '?'))}: {s.get('description', '')}"
+        for s in skills[:20]
+    )
     return "\n".join(lines)
 
 
 def a2a_call(args: dict, **_: Any) -> str:
     """Send a task to a peer (configured name or direct URL); ``context_id`` continues a prior exchange."""
     # Accept common aliases models reach for (observed live: 'agent_name').
-    agent = str(args.get("agent") or args.get("agent_name") or args.get("name") or "").strip()
-    message = str(args.get("message") or args.get("text") or args.get("task") or "").strip()
+    agent = str(
+        args.get("agent") or args.get("agent_name") or args.get("name") or ""
+    ).strip()
+    message = str(
+        args.get("message") or args.get("text") or args.get("task") or ""
+    ).strip()
     context_id = str(args.get("context_id") or args.get("contextId") or "").strip()
     if not agent or not message:
         return "Error: both 'agent' and 'message' are required."
@@ -183,13 +260,19 @@ def a2a_call(args: dict, **_: Any) -> str:
     try:
         reply, reply_ctx, state = _send_task(agent, peer, message, context_id)
     except urllib.error.HTTPError as e:
-        return _HTTP_CALL_ERRORS.get(e.code, "Error: call to '{agent}' failed — HTTP {code}.").format(agent=agent, code=e.code)
+        return _HTTP_CALL_ERRORS.get(
+            e.code, "Error: call to '{agent}' failed — HTTP {code}."
+        ).format(agent=agent, code=e.code)
     except ValueError as e:
         return str(e)
     except Exception as e:
         return f"Error: call to '{agent}' failed — {e}."
-    short_state = state.replace("TASK_STATE_", "").replace("_", "-").lower()  # v0.3 states pass through
-    header = f"[{agent} · context {reply_ctx}" + (f" · {short_state}" if state else "") + "]"
+    short_state = (
+        state.replace("TASK_STATE_", "").replace("_", "-").lower()
+    )  # v0.3 states pass through
+    header = (
+        f"[{agent} · context {reply_ctx}" + (f" · {short_state}" if state else "") + "]"
+    )
     body = reply or "(no text reply)"
     if state == protocol.STATE_INPUT_REQUIRED:
         body += f"\n\n(The peer needs more input — answer by calling a2a_call again with context_id '{reply_ctx}'.)"
@@ -204,19 +287,25 @@ def a2a_list(args: dict | None = None, **_: Any) -> str:
         lines.append(f"Configured peers ({len(peers)}):")
         for name, entry in peers.items():
             caps = entry.get("capabilities", [])
-            lines.append(f"  - {name}: {entry.get('url', '?')} (auth: {(entry.get('auth') or {}).get('type', 'none')})"
-                         + (f" caps: {', '.join(caps)}" if caps else ""))
+            lines.append(
+                f"  - {name}: {entry.get('url', '?')} (auth: {(entry.get('auth') or {}).get('type', 'none')})"
+                + (f" caps: {', '.join(caps)}" if caps else "")
+            )
     else:
         lines.append("No peers configured. Add them under 'a2a_agents' in config.yaml.")
     if convos := protocol.list_conversations():
         lines.append("")
-        lines.append(f"Persisted conversations ({len(convos)}) — recall with a2a_history:")
+        lines.append(
+            f"Persisted conversations ({len(convos)}) — recall with a2a_history:"
+        )
         lines.extend(f"  - {c}" for c in convos[:25])
     m = protocol.metrics.snapshot()
     lines.append("")
-    lines.append(f"Metrics: {m['inbound_total']} in / {m['outbound_total']} out, {m['tasks_completed']} completed, "
-                 f"{m['tasks_failed']} failed, {m['streams_started']} streams, {m['push_sent']} push sent, "
-                 f"{m['anti_loop_triggers']} anti-loop, {m['rate_limit_triggers']} rate-limited, avg {m['avg_latency_ms']}ms")
+    lines.append(
+        f"Metrics: {m['inbound_total']} in / {m['outbound_total']} out, {m['tasks_completed']} completed, "
+        f"{m['tasks_failed']} failed, {m['streams_started']} streams, {m['push_sent']} push sent, "
+        f"{m['anti_loop_triggers']} anti-loop, {m['rate_limit_triggers']} rate-limited, avg {m['avg_latency_ms']}ms"
+    )
     return "\n".join(lines)
 
 
@@ -232,20 +321,29 @@ def a2a_history(args: dict, **_: Any) -> str:
     lines = [f"Conversation {context_id} (last {len(messages)} messages):"]
     for m in messages:
         text = (m.get("text") or "").strip()
-        lines.append(f"[{m.get('role', '?')}] {text[:1000] + ' …[truncated]' if len(text) > 1000 else text}")
+        lines.append(
+            f"[{m.get('role', '?')}] {text[:1000] + ' …[truncated]' if len(text) > 1000 else text}"
+        )
     return "\n".join(lines)
 
 
 def _match_peers_by_capability(capability: str) -> list[tuple[str, dict]]:
     """Configured peers that advertise the capability ('*' matches all)."""
-    return [(name, entry) for name, entry in _configured_peers().items()
-            if capability in (entry.get("capabilities", []) or []) or capability == "*"]
+    return [
+        (name, entry)
+        for name, entry in _configured_peers().items()
+        if capability in (entry.get("capabilities", []) or []) or capability == "*"
+    ]
 
 
-def _call_peer_sync(agent_name: str, peer_entry: dict, message: str, context_id: str = "") -> tuple[str, str]:
+def _call_peer_sync(
+    agent_name: str, peer_entry: dict, message: str, context_id: str = ""
+) -> tuple[str, str]:
     """Call a single peer synchronously -> (agent_name, reply_text)."""
     try:
-        reply, _ctx, _state = _send_task(agent_name, _peer_from_entry(peer_entry), message, context_id)
+        reply, _ctx, _state = _send_task(
+            agent_name, _peer_from_entry(peer_entry), message, context_id
+        )
         return (agent_name, reply or "(no reply)")
     except Exception as e:
         return (agent_name, f"Error: {e}")
@@ -266,8 +364,13 @@ def a2a_orchestrate(args: dict, **_: Any) -> str:
     if not (matches := _match_peers_by_capability(capability)):
         return f"Error: no configured peers advertise capability '{capability}'."
     results: list[tuple[str, str]] = []
-    with ThreadPoolExecutor(max_workers=min(len(matches), _ORCHESTRATE_MAX_WORKERS)) as pool:
-        futures = {pool.submit(_call_peer_sync, name, entry, message, context_id): name for name, entry in matches}
+    with ThreadPoolExecutor(
+        max_workers=min(len(matches), _ORCHESTRATE_MAX_WORKERS)
+    ) as pool:
+        futures = {
+            pool.submit(_call_peer_sync, name, entry, message, context_id): name
+            for name, entry in matches
+        }
         for fut in as_completed(futures):
             name = futures[fut]
             try:
@@ -279,14 +382,23 @@ def a2a_orchestrate(args: dict, **_: Any) -> str:
             except Exception as e:
                 results.append((name, f"Error: {e}"))
     results.sort(key=lambda r: r[0])  # deterministic output
-    successes = [(name, reply) for name, reply in results if not reply.startswith("Error:")]
+    successes = [
+        (name, reply) for name, reply in results if not reply.startswith("Error:")
+    ]
     if mode in ("best", "first"):
         if not successes:
-            return "\n".join(["All peers failed:"] + [f"  {name}: {reply}" for name, reply in results])
-        name, reply = max(successes, key=lambda r: len(r[1])) if mode == "best" else successes[0]
+            return "\n".join(
+                ["All peers failed:"]
+                + [f"  {name}: {reply}" for name, reply in results]
+            )
+        name, reply = (
+            max(successes, key=lambda r: len(r[1])) if mode == "best" else successes[0]
+        )
         return f"[{mode}: {name}]\n{reply}"
-    return "\n".join([f"Orchestrated '{capability}' to {len(matches)} peer(s):"]
-                     + [line for name, reply in results for line in (f"\n--- {name} ---", reply)])
+    return "\n".join(
+        [f"Orchestrated '{capability}' to {len(matches)} peer(s):"]
+        + [line for name, reply in results for line in (f"\n--- {name} ---", reply)]
+    )
 
 
 def _str(description: str) -> dict:
@@ -295,34 +407,69 @@ def _str(description: str) -> dict:
 
 # name -> (handler, description, properties, required)
 _TOOLS: dict[str, tuple[Any, str, dict, list[str]]] = {
-    "a2a_discover": (a2a_discover,
-                     "Fetch and summarize another agent's A2A Agent Card from a URL (its name, description, "
-                     "capabilities, and skills). Use this to find out what a remote agent can do before calling it.",
-                     {"url": _str("Base URL of the remote A2A agent, e.g. http://localhost:9999")}, ["url"]),
-    "a2a_call": (a2a_call,
-                 "Send a natural-language task to a remote A2A agent and return its reply. The agent is a peer "
-                 "(any A2A-compliant framework), not a sub-agent you control. Pass 'context_id' from a previous "
-                 "reply to continue a multi-turn exchange.",
-                 {"agent": _str("Configured peer name (from a2a_agents) or a full http(s):// URL."),
-                  "message": _str("The task / message to send the peer, in natural language."),
-                  "context_id": _str("Optional: context id from a prior reply, to continue the conversation.")},
-                 ["agent", "message"]),
-    "a2a_list": (a2a_list, "List configured A2A peer agents, persisted A2A conversations, and metrics.", {}, []),
-    "a2a_history": (a2a_history,
-                    "Recall a persisted A2A conversation transcript by context_id (survives restarts and "
-                    "context compaction). Use a2a_list to see known context ids.",
-                    {"context_id": _str("Context id of the conversation to recall."),
-                     "limit": {"type": "integer", "description": "Max messages to return (default 50, max 200)."}},
-                    ["context_id"]),
-    "a2a_orchestrate": (a2a_orchestrate,
-                        "Fan-out a task to multiple peer agents by capability. Peers are matched from config.yaml "
-                        "a2a_agents.*.capabilities. Modes: 'all' (return all replies), 'first' (first successful), "
-                        "'best' (longest successful reply).",
-                        {"capability": _str("Capability to match (e.g. 'research', 'code') or '*' for all peers."),
-                         "message": _str("The task to send to all matching peers."),
-                         "mode": {"type": "string", "enum": ["all", "first", "best"], "description": "How to aggregate results. Default: 'all'."},
-                         "context_id": _str("Optional: shared context id for all peers.")},
-                        ["capability", "message"]),
+    "a2a_discover": (
+        a2a_discover,
+        "Fetch and summarize another agent's A2A Agent Card from a URL (its name, description, "
+        "capabilities, and skills). Use this to find out what a remote agent can do before calling it.",
+        {"url": _str("Base URL of the remote A2A agent, e.g. http://localhost:9999")},
+        ["url"],
+    ),
+    "a2a_call": (
+        a2a_call,
+        "Send a natural-language task to a remote A2A agent and return its reply. The agent is a peer "
+        "(any A2A-compliant framework), not a sub-agent you control. Pass 'context_id' from a previous "
+        "reply to continue a multi-turn exchange.",
+        {
+            "agent": _str(
+                "Configured peer name (from a2a_agents) or a full http(s):// URL."
+            ),
+            "message": _str(
+                "The task / message to send the peer, in natural language."
+            ),
+            "context_id": _str(
+                "Optional: context id from a prior reply, to continue the conversation."
+            ),
+        },
+        ["agent", "message"],
+    ),
+    "a2a_list": (
+        a2a_list,
+        "List configured A2A peer agents, persisted A2A conversations, and metrics.",
+        {},
+        [],
+    ),
+    "a2a_history": (
+        a2a_history,
+        "Recall a persisted A2A conversation transcript by context_id (survives restarts and "
+        "context compaction). Use a2a_list to see known context ids.",
+        {
+            "context_id": _str("Context id of the conversation to recall."),
+            "limit": {
+                "type": "integer",
+                "description": "Max messages to return (default 50, max 200).",
+            },
+        },
+        ["context_id"],
+    ),
+    "a2a_orchestrate": (
+        a2a_orchestrate,
+        "Fan-out a task to multiple peer agents by capability. Peers are matched from config.yaml "
+        "a2a_agents.*.capabilities. Modes: 'all' (return all replies), 'first' (first successful), "
+        "'best' (longest successful reply).",
+        {
+            "capability": _str(
+                "Capability to match (e.g. 'research', 'code') or '*' for all peers."
+            ),
+            "message": _str("The task to send to all matching peers."),
+            "mode": {
+                "type": "string",
+                "enum": ["all", "first", "best"],
+                "description": "How to aggregate results. Default: 'all'.",
+            },
+            "context_id": _str("Optional: shared context id for all peers."),
+        },
+        ["capability", "message"],
+    ),
 }
 
 
@@ -356,6 +503,12 @@ def register_tools(ctx) -> None:
         parameters: dict[str, Any] = {"type": "object", "properties": properties}
         if required:
             parameters["required"] = required
-        ctx.register_tool(name=name, toolset="a2a", handler=handler, description=description,
-                          schema={"name": name, "description": description, "parameters": parameters},
-                          emoji="\U0001f9e9", check_fn=_a2a_tools_available)  # puzzle piece
+        ctx.register_tool(
+            name=name,
+            toolset="a2a",
+            handler=handler,
+            description=description,
+            schema={"name": name, "description": description, "parameters": parameters},
+            emoji="\U0001f9e9",
+            check_fn=_a2a_tools_available,
+        )  # puzzle piece

@@ -2968,7 +2968,10 @@ def _run_update_quiet(args, gateway_mode):
         git_cmd = ["git", "-c", "windows.appendAtomically=false"]
     # Same query the real update uses, fetched quietly, so the count matches.
     subprocess.run(
-        git_cmd + ["fetch", "origin"], cwd=PROJECT_ROOT, capture_output=True, text=True,
+        git_cmd + ["fetch", "origin"],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
         check=False,
     )
     rv = subprocess.run(

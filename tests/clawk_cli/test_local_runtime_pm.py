@@ -8,17 +8,22 @@ from pm import paths
 from pm.lock import Lockfile
 
 
-@pytest.mark.parametrize("target,vendor,expected", [
-    ("linux-x64", "nvidia", "cuda"),
-    ("linux-arm64", "nvidia", "cuda"),
-    ("win32-arm64", "nvidia", "cuda"),
-    ("win32-arm64", "AMD Radeon", "cpu"),
-    ("win32-x64", "AMD Radeon", "vulkan"),
-    ("win32-x64", None, "cpu"),
-    ("darwin-arm64", None, "metal"),
-])
+@pytest.mark.parametrize(
+    "target,vendor,expected",
+    [
+        ("linux-x64", "nvidia", "cuda"),
+        ("linux-arm64", "nvidia", "cuda"),
+        ("win32-arm64", "nvidia", "cuda"),
+        ("win32-arm64", "AMD Radeon", "cpu"),
+        ("win32-x64", "AMD Radeon", "vulkan"),
+        ("win32-x64", None, "cpu"),
+        ("darwin-arm64", None, "metal"),
+    ],
+)
 def test_auto_backend_uses_only_compatible_pins(target, vendor, expected):
-    assert binaries.resolve_backend("auto", gpu_vendor=vendor, target=target) == expected
+    assert (
+        binaries.resolve_backend("auto", gpu_vendor=vendor, target=target) == expected
+    )
     with pytest.raises(binaries.BinaryResolutionError):
         binaries.resolve_backend("cuda", target="darwin-arm64")
 
@@ -32,7 +37,9 @@ def test_linux_cuda_runtime_libraries_land_beside_the_server(tmp_path):
     (staged / "llama-b1").mkdir(parents=True)
     (staged / "llama-b1" / "llama-server").write_bytes(b"engine")
     (staged / "cudart-llama-b1-bin-ubuntu-cuda-13.4-x64").mkdir()
-    (staged / "cudart-llama-b1-bin-ubuntu-cuda-13.4-x64" / "libcudart.so.13").write_bytes(b"rt")
+    (
+        staged / "cudart-llama-b1-bin-ubuntu-cuda-13.4-x64" / "libcudart.so.13"
+    ).write_bytes(b"rt")
     gomp = staged / "usr" / "lib" / "x86_64-linux-gnu"
     gomp.mkdir(parents=True)
     (gomp / "libgomp.so.1.0.0").write_bytes(b"omp")
@@ -48,7 +55,9 @@ def test_linux_cuda_runtime_libraries_land_beside_the_server(tmp_path):
     assert not (staged / "usr").exists()
 
 
-def test_missing_pin_is_refused_instead_of_constructing_download_url(tmp_path, monkeypatch):
+def test_missing_pin_is_refused_instead_of_constructing_download_url(
+    tmp_path, monkeypatch
+):
     lock_path = tmp_path / "lock.json"
     monkeypatch.setattr(paths, "lockfile_path", lambda: lock_path)
     lock = Lockfile(lock_path)

@@ -67,19 +67,24 @@ class TestNativeAnthropic:
         )
         assert agent._direct_native_anthropic_tool_cache_capability() is True
 
-        assert agent._direct_native_anthropic_tool_cache_capability(
-            provider="custom",
-            base_url="https://api.minimax.io/anthropic",
-            api_mode="anthropic_messages",
-            model="claude-sonnet-4-6",
-        ) is False
-        assert agent._direct_native_anthropic_tool_cache_capability(
-            provider="openrouter",
-            base_url="https://openrouter.ai/api/v1",
-            api_mode="chat_completions",
-            model="anthropic/claude-sonnet-4.6",
-        ) is False
-
+        assert (
+            agent._direct_native_anthropic_tool_cache_capability(
+                provider="custom",
+                base_url="https://api.minimax.io/anthropic",
+                api_mode="anthropic_messages",
+                model="claude-sonnet-4-6",
+            )
+            is False
+        )
+        assert (
+            agent._direct_native_anthropic_tool_cache_capability(
+                provider="openrouter",
+                base_url="https://openrouter.ai/api/v1",
+                api_mode="chat_completions",
+                model="anthropic/claude-sonnet-4.6",
+            )
+            is False
+        )
 
 
 class TestOpenRouter:
@@ -116,8 +121,6 @@ class TestKimiMoonshotOnOpenRouter:
         )
         assert agent._anthropic_prompt_cache_policy() == (True, False)
 
-
-
     def test_kimi_bare_release_slug_on_openrouter_caches(self):
         """Bare release slugs (k2-thinking) lack the 'kimi'/'moonshot' substring;
         the canonical family matcher must still catch them."""
@@ -151,7 +154,9 @@ class TestThirdPartyAnthropicGateway:
         )
         should, native = agent._anthropic_prompt_cache_policy()
         assert should is True, "Third-party Anthropic gateway with Claude must cache"
-        assert native is True, "Third-party Anthropic gateway uses native cache_control layout"
+        assert native is True, (
+            "Third-party Anthropic gateway uses native cache_control layout"
+        )
 
     def test_third_party_anthropic_non_claude_unknown_provider_does_not_cache(self):
         # A provider exposing e.g. GLM via anthropic_messages transport from
@@ -164,7 +169,6 @@ class TestThirdPartyAnthropicGateway:
             model="glm-4.5",
         )
         assert agent._anthropic_prompt_cache_policy() == (False, False)
-
 
     def test_bare_alias_with_explicit_prompt_caching_capability_caches(self):
         agent = _make_agent(
@@ -403,9 +407,7 @@ class TestCustomProviderOpenAIWireCapability:
 
         assert agent._anthropic_prompt_cache_policy() == (True, False)
 
-    def test_early_init_probe_never_fetches_catalog_from_network(
-        self, monkeypatch
-    ):
+    def test_early_init_probe_never_fetches_catalog_from_network(self, monkeypatch):
         """The None-branch provider probe runs per request destination and
         must stay off the network: get_provider must be called with
         allow_network=False so a cold models.dev cache cannot trigger a
@@ -483,7 +485,6 @@ class TestMiniMaxAnthropicWire:
             model="minimax-m2.7",
         )
         assert agent._anthropic_prompt_cache_policy() == (True, True)
-
 
     def test_custom_provider_pointed_at_minimax_host_caches(self):
         # User wires a custom provider manually at MiniMax's Anthropic URL;
@@ -586,7 +587,6 @@ class TestMiniMaxAnthropicWire:
         assert agent._anthropic_prompt_cache_policy() == (True, True)
 
 
-
 class TestOpenAIWireFormatOnCustomProvider:
     """A custom provider using chat_completions (OpenAI wire) should NOT get caching."""
 
@@ -625,7 +625,6 @@ class TestQwenAlibabaFamily:
         assert should is True, "Qwen on opencode-go must cache"
         assert native is False, "opencode-go is OpenAI-wire; envelope layout"
 
-
     def test_qwen_on_opencode_zen_caches(self):
         agent = _make_agent(
             provider="opencode",
@@ -634,10 +633,6 @@ class TestQwenAlibabaFamily:
             model="qwen3-coder-plus",
         )
         assert agent._anthropic_prompt_cache_policy() == (True, False)
-
-
-
-
 
     def test_qwen_on_nous_portal_caches_with_envelope_layout(self):
         # Nous Portal Qwen takes the same envelope-layout cache_control
@@ -651,7 +646,6 @@ class TestQwenAlibabaFamily:
             model="qwen3.6-plus",
         )
         assert agent._anthropic_prompt_cache_policy() == (True, False)
-
 
     def test_non_qwen_non_claude_on_nous_portal_does_not_cache(self):
         # Portal scope is narrow: Claude OR Qwen only. Other models

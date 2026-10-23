@@ -16,7 +16,9 @@ from agent import onboarding_flow as flow
 from clawk_cli import plugins as plugins_mod
 from tools.setup_beat_tool import _result
 
-PC = flow.Facts(os="windows", arch="amd64", machine_kind="PC", nvidia_platform="discrete")
+PC = flow.Facts(
+    os="windows", arch="amd64", machine_kind="PC", nvidia_platform="discrete"
+)
 
 
 @pytest.fixture
@@ -39,19 +41,37 @@ def _install_blender_from_catalog(home):
 
     plugin = home / "plugins" / "blender"
     (plugin / "skills" / "blender").mkdir(parents=True)
-    (plugin / "plugin.json").write_text(json.dumps({"$schema": PLUGIN_SCHEMA_V1, "name": "blender"}))
+    (plugin / "plugin.json").write_text(
+        json.dumps({"$schema": PLUGIN_SCHEMA_V1, "name": "blender"})
+    )
     (plugin / "skills" / "blender" / "SKILL.md").write_text(
-        "---\nname: blender\ndescription: Drive Blender.\n---\nBody.\n")
-    (home / "plugins" / ".install-metadata.json").write_text(json.dumps({"blender": {
-        "source": "https://example.com/blender.git",
-        "catalog": {"name": "blender", "repo": "https://example.com/blender.git", "sha": "0" * 40}}}))
+        "---\nname: blender\ndescription: Drive Blender.\n---\nBody.\n"
+    )
+    (home / "plugins" / ".install-metadata.json").write_text(
+        json.dumps(
+            {
+                "blender": {
+                    "source": "https://example.com/blender.git",
+                    "catalog": {
+                        "name": "blender",
+                        "repo": "https://example.com/blender.git",
+                        "sha": "0" * 40,
+                    },
+                }
+            }
+        )
+    )
 
 
 def _build_skills_line() -> str:
     record = flow.new_record(PC)
     record["picks"]["installed"] = ["blender"]
-    reminder = json.loads(_result(flow.Step(record=record, result={}, reminder="build_blender")))["reminder"]
-    return next(line for line in reminder.split("\n") if line.startswith("Load these skills"))
+    reminder = json.loads(
+        _result(flow.Step(record=record, result={}, reminder="build_blender"))
+    )["reminder"]
+    return next(
+        line for line in reminder.split("\n") if line.startswith("Load these skills")
+    )
 
 
 def test_the_build_beat_names_an_installed_plugin_skill_by_its_registered_name(home):
@@ -59,7 +79,9 @@ def test_the_build_beat_names_an_installed_plugin_skill_by_its_registered_name(h
     manager = plugins_mod.get_plugin_manager()
     manager.discover_and_load(force=True)
     [registered] = [skill["name"] for skill in manager.list_plugin_skill_metadata()]
-    assert registered.startswith("agent-plugin-blender-") and registered.endswith(":blender")
+    assert registered.startswith("agent-plugin-blender-") and registered.endswith(
+        ":blender"
+    )
 
     line = _build_skills_line()
 

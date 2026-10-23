@@ -25,8 +25,12 @@ class _P(DebPackage):
     name = "evil-deb"
 
 
-
-def _build_deb(path: Path, members: list[tarfile.TarInfo | tuple[str, bytes]], *, zstd: bool = False) -> None:
+def _build_deb(
+    path: Path,
+    members: list[tarfile.TarInfo | tuple[str, bytes]],
+    *,
+    zstd: bool = False,
+) -> None:
     """A real ar archive with one data.tar (uncompressed, or zstd as Ubuntu ships) holding `members`."""
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w") as tf:
@@ -65,11 +69,14 @@ def test_chained_aliases_survive_without_symlink_support(tmp_path, monkeypatch):
     monkeypatch.setattr(os, "symlink", unavailable)
     deb = tmp_path / "aliases.deb"
     lib = "data/data/com.termux/files/usr/lib"
-    _build_deb(deb, [
-        _symlink_member(f"{lib}/libexample.so", "libexample.so.1"),
-        _symlink_member(f"{lib}/libexample.so.1", "libexample.so.1.2"),
-        (f"{lib}/libexample.so.1.2", b"library payload"),
-    ])
+    _build_deb(
+        deb,
+        [
+            _symlink_member(f"{lib}/libexample.so", "libexample.so.1"),
+            _symlink_member(f"{lib}/libexample.so.1", "libexample.so.1.2"),
+            (f"{lib}/libexample.so.1.2", b"library payload"),
+        ],
+    )
     staged = tmp_path / "staged"
     staged.mkdir()
     _P().unpack(deb, staged, "linux-arm64-bionic")

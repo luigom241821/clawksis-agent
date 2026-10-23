@@ -16,7 +16,12 @@ import pytest
 import cron.scheduler as sched
 from cron import quota_hold as qh
 from cron.jobs import (
-    _job_is_stale_error_recurring, create_job, get_due_jobs, get_job, mark_job_run, update_job,
+    _job_is_stale_error_recurring,
+    create_job,
+    get_due_jobs,
+    get_job,
+    mark_job_run,
+    update_job,
 )
 from clawk_cli.auth import CODEX_RATE_LIMITED_CODE, AuthError
 
@@ -45,15 +50,20 @@ def test_hold_seconds_only_from_rate_limited_auth_error_in_cause_chain():
         assert qh.hold_seconds_from_failure(wrapped) == 123518.0
 
     assert qh.hold_seconds_from_failure(RuntimeError(QUOTA_MSG)) is None
-    assert qh.hold_seconds_from_failure(RuntimeError("HTTP 429: retry after 60s")) is None
-    relogin = AuthError(QUOTA_MSG, provider="openai-codex", code="expired", relogin_required=True)
+    assert (
+        qh.hold_seconds_from_failure(RuntimeError("HTTP 429: retry after 60s")) is None
+    )
+    relogin = AuthError(
+        QUOTA_MSG, provider="openai-codex", code="expired", relogin_required=True
+    )
     assert qh.hold_seconds_from_failure(relogin) is None
     structured = AuthError("quota", code=CODEX_RATE_LIMITED_CODE, retry_after=900)
     assert qh.hold_seconds_from_failure(structured) == 900.0
 
 
 def test_weekly_cron_retries_when_quota_recovers_before_next_occurrence(
-    tmp_cron_home, monkeypatch,
+    tmp_cron_home,
+    monkeypatch,
 ):
     """A weekly fire blocked by a shorter quota window retries when the provider reopens;
     it is not silently deferred until the following week's natural occurrence."""
@@ -65,14 +75,21 @@ def test_weekly_cron_retries_when_quota_recovers_before_next_occurrence(
     assert datetime.fromisoformat(job["next_run_at"]) == natural_next
 
     assert mark_job_run(
-        job["id"], False, QUOTA_MSG, quota_hold_seconds=20 * 60 * 60,
+        job["id"],
+        False,
+        QUOTA_MSG,
+        quota_hold_seconds=20 * 60 * 60,
         recover_consumed_fire=True,
     )
 
     held = get_job(job["id"])
     assert held is not None
     retry_at = datetime.fromisoformat(held["next_run_at"])
-    assert retry_at == now + timedelta(hours=20, seconds=qh.HOLD_SLACK_SECONDS) < natural_next
+    assert (
+        retry_at
+        == now + timedelta(hours=20, seconds=qh.HOLD_SLACK_SECONDS)
+        < natural_next
+    )
     assert qh.is_recovery_fire(held, held["next_run_at"])
     edited = {**held, "schedule": {"kind": "cron", "expr": "0 9 * * *"}}
     assert not qh.is_recovery_fire(edited, edited["next_run_at"])
@@ -93,8 +110,9 @@ def test_recovery_fire_skips_dense_schedules_and_never_re_parks(monkeypatch):
         "next_run_at": datetime(2026, 9, 18, 13, 0, tzinfo=UTC).isoformat(),
     }
     natural = dense["next_run_at"]
-    assert not qh.plan_hold(dense, hold_seconds=57 * 60 - qh.HOLD_SLACK_SECONDS,
-                            recover_consumed_fire=True)
+    assert not qh.plan_hold(
+        dense, hold_seconds=57 * 60 - qh.HOLD_SLACK_SECONDS, recover_consumed_fire=True
+    )
     assert dense["next_run_at"] == natural
     assert qh.STATE_KEY not in dense
 
@@ -105,7 +123,9 @@ def test_recovery_fire_skips_dense_schedules_and_never_re_parks(monkeypatch):
         qh.SCHEDULE_EXPR_KEY: "0 12 * * 5",
     }
     natural = held_again["next_run_at"]
-    assert not qh.plan_hold(held_again, hold_seconds=20 * 60 * 60, recover_consumed_fire=True)
+    assert not qh.plan_hold(
+        held_again, hold_seconds=20 * 60 * 60, recover_consumed_fire=True
+    )
     assert held_again["next_run_at"] == natural
     assert qh.STATE_KEY not in held_again
 
@@ -116,22 +136,34 @@ def _raise_quota(**_kw):
 
 def _tick(job, home, deliveries, resolve):
     """One real scheduler tick (preflight ON) with the provider resolver replaced by *resolve*."""
-    with patch("cron.scheduler._clawk_home", home), \
-         patch("cron.scheduler_delivery._resolve_origin", return_value=None), \
-         patch("clawk_cli.env_loader.load_clawk_dotenv"), \
-         patch("clawk_cli.env_loader.reset_secret_source_cache"), \
-         patch("clawk_state_registry.acquire", return_value=MagicMock()), \
-         patch("tools.mcp_tool_discovery.discover_mcp_tools", return_value=[]), \
-         patch("clawk_cli.runtime_provider.resolve_runtime_provider", side_effect=resolve), \
-         patch("cron.delivery_queue.enqueue",
-               side_effect=lambda execution_id, jb, content, **kw: (
-                   deliveries.append(content), {"status": "pending"})[1]), \
-         patch("run_agent.AIAgent") as agent_cls:
-        agent_cls.return_value.run_conversation.side_effect = RuntimeError("model said no")
+    with (
+        patch("cron.scheduler._clawk_home", home),
+        patch("cron.scheduler_delivery._resolve_origin", return_value=None),
+        patch("clawk_cli.env_loader.load_clawk_dotenv"),
+        patch("clawk_cli.env_loader.reset_secret_source_cache"),
+        patch("clawk_state_registry.acquire", return_value=MagicMock()),
+        patch("tools.mcp_tool_discovery.discover_mcp_tools", return_value=[]),
+        patch(
+            "clawk_cli.runtime_provider.resolve_runtime_provider", side_effect=resolve
+        ),
+        patch(
+            "cron.delivery_queue.enqueue",
+            side_effect=lambda execution_id, jb, content, **kw: (
+                deliveries.append(content),
+                {"status": "pending"},
+            )[1],
+        ),
+        patch("run_agent.AIAgent") as agent_cls,
+    ):
+        agent_cls.return_value.run_conversation.side_effect = RuntimeError(
+            "model said no"
+        )
         sched.run_one_job(dict(job))
 
 
-def test_quota_hold_parks_past_window_survives_stale_rearm_and_clears_on_model_reach(tmp_cron_home, cron_owner):
+def test_quota_hold_parks_past_window_survives_stale_rearm_and_clears_on_model_reach(
+    tmp_cron_home, cron_owner
+):
     """A 30-minute job whose provider resolve raises the Codex quota AuthError ('retry after
     123518s') is parked by the real scheduler tick: preflight lets the rate-limited AuthError
     through (it is not a missing credential), the one delivered alert carries the hold notice,
@@ -139,7 +171,9 @@ def test_quota_hold_parks_past_window_survives_stale_rearm_and_clears_on_model_r
     cadence+grace). The marker clears once a run reaches the model."""
     # A real (non-local) lane: the alert rides the durable delivery queue, whose enqueue is the seam.
     (tmp_cron_home / "config.yaml").write_text(
-        "platforms:\n  slack:\n    enabled: true\n    token: xoxb-test\n", encoding="utf-8")
+        "platforms:\n  slack:\n    enabled: true\n    token: xoxb-test\n",
+        encoding="utf-8",
+    )
     job = create_job("portfolio triage", "every 30m", deliver="slack:alerts")
     job_id = job["id"]
     now = datetime.now(UTC)
@@ -150,7 +184,9 @@ def test_quota_hold_parks_past_window_survives_stale_rearm_and_clears_on_model_r
     assert j["last_status"] == "error"
     assert len(deliveries) == 1, deliveries
     parked = datetime.fromisoformat(j["next_run_at"])
-    assert parked - now >= timedelta(seconds=123518), "next_run_at must land past the window"
+    assert parked - now >= timedelta(seconds=123518), (
+        "next_run_at must land past the window"
+    )
     assert j[qh.STATE_KEY] == j["next_run_at"]
     assert "_quota_hold_seconds" not in j
 

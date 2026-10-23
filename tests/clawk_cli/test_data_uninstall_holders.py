@@ -1,4 +1,5 @@
 """Data deletion must establish quiescence, never infer it from a signal count."""
+
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -32,11 +33,17 @@ def test_unconfirmed_removal_never_contacts_the_gateway(layout, monkeypatch, mod
 
 
 def test_live_chat_lease_blocks_data_deletion(layout):
-    from clawk_cli.active_sessions import release_active_session, try_acquire_active_session
+    from clawk_cli.active_sessions import (
+        release_active_session,
+        try_acquire_active_session,
+    )
 
     home, _, data = layout
     lease, refusal = try_acquire_active_session(
-        session_id="fixture-session", surface="cli", config={}, registry_home=home,
+        session_id="fixture-session",
+        surface="cli",
+        config={},
+        registry_home=home,
         track_liveness=True,
     )
     assert lease is not None and refusal is None
@@ -59,15 +66,21 @@ def test_manual_gateway_drains_over_real_control_transport_before_deletion(layou
     home, _, data = layout
     # A disposable child is the declared process. Control dispatch is real;
     # the fixture handler stops only that child, never any running gateway.
-    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"], cwd=home)
+    child = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(120)"], cwd=home
+    )
     loop = asyncio.new_event_loop()
     ready = Event()
     paused = Event()
     holders = []
 
     def identify():
-        return {"pid": child.pid, "start_time": get_process_start_time(child.pid),
-                "clawk_home": str(home), "supervisor": "manual"}
+        return {
+            "pid": child.pid,
+            "start_time": get_process_start_time(child.pid),
+            "clawk_home": str(home),
+            "supervisor": "manual",
+        }
 
     def drain():
         paused.set()
@@ -76,7 +89,9 @@ def test_manual_gateway_drains_over_real_control_transport_before_deletion(layou
         loop.call_soon_threadsafe(loop.stop)
         return {"pid": child.pid, "pausing": True, "drain_timeout": 0}
 
-    server = GatewayControlServer(home, verb_handlers={"identify": identify, "pause-for-update": drain})
+    server = GatewayControlServer(
+        home, verb_handlers={"identify": identify, "pause-for-update": drain}
+    )
 
     def serve():
         asyncio.set_event_loop(loop)
@@ -113,18 +128,24 @@ def test_backend_initial_profile_is_not_its_write_scope(layout, profile):
     from clawk_cli.process_identity import register_self
 
     _, _, data = layout
-    assert register_self("serve", project_root=uninstall.get_project_root(), detail={"profile": profile})
+    assert register_self(
+        "serve", project_root=uninstall.get_project_root(), detail={"profile": profile}
+    )
     with pytest.raises(SystemExit):
         uninstall.run_data_uninstall(SimpleNamespace(yes=True))
     assert all(path.exists() for path in data)
 
 
 @pytest.mark.parametrize("terminal", [False, True])
-def test_detached_cron_attempt_must_finish_before_data_removal(layout, monkeypatch, terminal):
+def test_detached_cron_attempt_must_finish_before_data_removal(
+    layout, monkeypatch, terminal
+):
     from cron import executions
 
     _, _, data = layout
-    monkeypatch.setattr(executions, "_emit_execution_state", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        executions, "_emit_execution_state", lambda *args, **kwargs: None
+    )
     record = executions.create_execution("temporary-job", source="manual")
     if terminal:
         executions.finish_execution(record["id"], success=True)
@@ -136,7 +157,9 @@ def test_detached_cron_attempt_must_finish_before_data_removal(layout, monkeypat
         assert all(path.exists() for path in data)
 
 
-def test_named_profile_cannot_delete_data_served_by_the_default_multiplexer(layout, monkeypatch):
+def test_named_profile_cannot_delete_data_served_by_the_default_multiplexer(
+    layout, monkeypatch
+):
     home, _, _ = layout
     profile = home / "profiles" / "active"
     profile.mkdir()
@@ -151,8 +174,10 @@ def test_named_profile_cannot_delete_data_served_by_the_default_multiplexer(layo
         return None
 
     monkeypatch.setattr("gateway.control_socket.identify_gateway", identify)
-    monkeypatch.setattr("gateway.control_socket.pause_gateway_for_update",
-                        lambda *args, **kwargs: pytest.fail("must not stop other profiles' gateway"))
+    monkeypatch.setattr(
+        "gateway.control_socket.pause_gateway_for_update",
+        lambda *args, **kwargs: pytest.fail("must not stop other profiles' gateway"),
+    )
     with pytest.raises(SystemExit):
         uninstall.run_data_uninstall(SimpleNamespace(yes=True))
     assert config.read_text(encoding="utf-8") == "{}"

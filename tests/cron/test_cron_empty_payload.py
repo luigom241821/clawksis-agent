@@ -19,6 +19,7 @@ from unittest.mock import patch
 
 import pytest
 
+
 @pytest.fixture
 def clawk_env(tmp_path, monkeypatch):
     """Isolate CLAWK_HOME for each test so jobs/scripts don't leak."""
@@ -31,17 +32,22 @@ def clawk_env(tmp_path, monkeypatch):
 
     import importlib
     import clawk_constants
+
     importlib.reload(clawk_constants)
     import cron.jobs
+
     importlib.reload(cron.jobs)
     import cron.scheduler
+
     importlib.reload(cron.scheduler)
 
     return home
 
+
 # ---------------------------------------------------------------------------
 # create_job validation
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize("prompt", [None, "", "   ", "\n\t "])
 def test_create_job_rejects_empty_payload(clawk_env, prompt):
@@ -50,11 +56,13 @@ def test_create_job_rejects_empty_payload(clawk_env, prompt):
     with pytest.raises(ValueError, match="nothing to run"):
         create_job(prompt=prompt, schedule="every 5m")
 
+
 def test_create_job_rejects_blank_script_and_blank_skills(clawk_env):
     from cron.jobs import create_job
 
     with pytest.raises(ValueError, match="nothing to run"):
         create_job(prompt="  ", schedule="every 5m", script="   ", skills=["", "  "])
+
 
 def test_create_job_no_agent_error_still_wins(clawk_env):
     """no_agent=True without a script keeps its own, more specific message."""
@@ -63,9 +71,11 @@ def test_create_job_no_agent_error_still_wins(clawk_env):
     with pytest.raises(ValueError, match="no_agent=True requires a script"):
         create_job(prompt=None, schedule="every 5m", no_agent=True)
 
+
 # ---------------------------------------------------------------------------
 # Valid shapes stay valid
 # ---------------------------------------------------------------------------
+
 
 def test_valid_shapes_are_accepted(clawk_env):
     from cron.jobs import create_job
@@ -83,7 +93,9 @@ def test_valid_shapes_are_accepted(clawk_env):
     assert script_only_agent_job["script"] == "w.sh"
     assert script_only_agent_job["no_agent"] is False
 
-    prompt_job = create_job(prompt="check the news", schedule="every 5m", deliver="local")
+    prompt_job = create_job(
+        prompt="check the news", schedule="every 5m", deliver="local"
+    )
     assert prompt_job["prompt"] == "check the news"
 
     skills_job = create_job(
@@ -96,9 +108,11 @@ def test_valid_shapes_are_accepted(clawk_env):
     )
     assert legacy_skill_job["skill"] == "daily-report"
 
+
 # ---------------------------------------------------------------------------
 # update_job validation — the MERGED record is what counts
 # ---------------------------------------------------------------------------
+
 
 def test_update_job_rejects_clearing_the_only_payload(clawk_env):
     from cron.jobs import create_job, get_job, update_job
@@ -111,6 +125,7 @@ def test_update_job_rejects_clearing_the_only_payload(clawk_env):
     # Nothing was persisted.
     assert get_job(job["id"])["prompt"] == "check the news"
 
+
 def test_update_job_rejects_toggling_no_agent_on_without_a_script(clawk_env):
     """create_job enforces no_agent ⇒ script; update_job must too."""
     from cron.jobs import create_job, get_job, update_job
@@ -121,6 +136,7 @@ def test_update_job_rejects_toggling_no_agent_on_without_a_script(clawk_env):
         update_job(job["id"], {"no_agent": True})
 
     assert get_job(job["id"])["no_agent"] is False
+
 
 @pytest.mark.parametrize("blank", [None, "", "   "])
 def test_update_job_rejects_removing_script_from_a_no_agent_job(clawk_env, blank):
@@ -136,6 +152,7 @@ def test_update_job_rejects_removing_script_from_a_no_agent_job(clawk_env, blank
 
     assert get_job(job["id"])["script"] == "w.sh"
 
+
 def test_update_job_rejects_swapping_script_for_prompt_on_a_no_agent_job(clawk_env):
     """A prompt does not rescue no_agent — there is no agent to read it."""
     from cron.jobs import create_job, update_job
@@ -148,6 +165,7 @@ def test_update_job_rejects_swapping_script_for_prompt_on_a_no_agent_job(clawk_e
     with pytest.raises(ValueError, match="no_agent=True requires a script"):
         update_job(job["id"], {"script": "", "prompt": "do it yourself"})
 
+
 def test_update_job_allows_dropping_script_when_no_agent_is_turned_off(clawk_env):
     """Both fields in one update: the merged record is a valid prompt job."""
     from cron.jobs import create_job, get_job, update_job
@@ -157,11 +175,14 @@ def test_update_job_allows_dropping_script_when_no_agent_is_turned_off(clawk_env
         prompt=None, schedule="every 5m", script="w.sh", no_agent=True, deliver="local"
     )
 
-    update_job(job["id"], {"no_agent": False, "script": None, "prompt": "check the news"})
+    update_job(
+        job["id"], {"no_agent": False, "script": None, "prompt": "check the news"}
+    )
 
     stored = get_job(job["id"])
     assert stored["no_agent"] is False
     assert stored["prompt"] == "check the news"
+
 
 def test_update_job_allows_swapping_the_script_of_a_no_agent_job(clawk_env):
     from cron.jobs import create_job, get_job, update_job
@@ -173,6 +194,7 @@ def test_update_job_allows_swapping_the_script_of_a_no_agent_job(clawk_env):
 
     update_job(job["id"], {"script": "other.sh"})
     assert get_job(job["id"])["script"] == "other.sh"
+
 
 def test_update_job_allows_clearing_prompt_when_script_remains(clawk_env):
     """The merged record still has a script — that is a valid agent job."""
@@ -186,6 +208,7 @@ def test_update_job_allows_clearing_prompt_when_script_remains(clawk_env):
     update_job(job["id"], {"prompt": ""})
     assert get_job(job["id"])["script"] == "w.sh"
 
+
 def test_update_job_allows_swapping_prompt_for_skill(clawk_env):
     from cron.jobs import create_job, get_job, update_job
 
@@ -195,6 +218,7 @@ def test_update_job_allows_swapping_prompt_for_skill(clawk_env):
     stored = get_job(job["id"])
     assert stored["skills"] == ["daily-report"]
     assert not (stored["prompt"] or "").strip()
+
 
 def test_pause_job_still_works_on_an_already_empty_job(clawk_env):
     """Bookkeeping updates must not be blocked, or the fix can't pause the job."""
@@ -209,9 +233,11 @@ def test_pause_job_still_works_on_an_already_empty_job(clawk_env):
     assert stored["enabled"] is False
     assert stored["state"] == "paused"
 
+
 # ---------------------------------------------------------------------------
 # run_job runtime guard
 # ---------------------------------------------------------------------------
+
 
 def _legacy_empty_job(clawk_env):
     """Plant a jobs.json record predating the create/update guard.
@@ -222,7 +248,9 @@ def _legacy_empty_job(clawk_env):
     """
     from cron.jobs import create_job, load_jobs, save_jobs
 
-    job = create_job(prompt="used to say something", schedule="every 5m", deliver="local")
+    job = create_job(
+        prompt="used to say something", schedule="every 5m", deliver="local"
+    )
     jobs = load_jobs()
     for stored in jobs:
         if stored["id"] == job["id"]:
@@ -250,8 +278,6 @@ def test_run_job_fails_closed_and_never_builds_an_agent(clawk_env, cron_owner):
     assert "auto-paused" in final
 
 
-
-
 def test_run_one_job_does_not_resurrect_the_paused_job(clawk_env, cron_owner):
     """The real caller runs post-run bookkeeping (mark_job_run) after run_job
     returns. That must not undo the pause, or the job re-fires every tick."""
@@ -268,6 +294,7 @@ def test_run_one_job_does_not_resurrect_the_paused_job(clawk_env, cron_owner):
     # The whole point: it must never come up as due again.
     assert [j["id"] for j in get_due_jobs()] == []
 
+
 def _legacy_no_agent_scriptless_job(clawk_env, script_value=None):
     """Plant a no_agent job whose script went missing after creation."""
     from cron.jobs import create_job, load_jobs, save_jobs
@@ -282,6 +309,7 @@ def _legacy_no_agent_scriptless_job(clawk_env, script_value=None):
             stored["script"] = script_value
     save_jobs(jobs)
     return dict(job, script=script_value)
+
 
 @pytest.mark.parametrize("script_value", [None, "", "   "])
 def test_run_job_pauses_a_legacy_no_agent_job_without_a_script(clawk_env, script_value):
@@ -303,6 +331,7 @@ def test_run_job_pauses_a_legacy_no_agent_job_without_a_script(clawk_env, script
     assert stored["state"] == "paused"
     assert "no_agent=True requires a script" in (stored["paused_reason"] or "")
 
+
 def test_run_one_job_does_not_resurrect_the_paused_no_agent_job(clawk_env):
     """Post-run bookkeeping must not put it back in the due queue."""
     from cron import scheduler
@@ -317,6 +346,7 @@ def test_run_one_job_does_not_resurrect_the_paused_no_agent_job(clawk_env):
     assert stored["state"] == "paused"
     assert [j["id"] for j in get_due_jobs()] == []
 
+
 def test_run_job_does_not_block_a_valid_no_agent_job(clawk_env):
     """The guard sits after the no_agent short-circuit, which must still run."""
     from cron import scheduler
@@ -330,6 +360,7 @@ def test_run_job_does_not_block_a_valid_no_agent_job(clawk_env):
     assert success is True
     assert error is None
     assert "hello" in final
+
 
 # ---------------------------------------------------------------------------
 # The real destructive shape: incident t_36f4e9c8, 2026-08-03 10:47-10:53 KST,
@@ -362,11 +393,13 @@ DESTRUCTIVE_UPDATE_ARGS = {
     "attach_to_session": False,
 }
 
+
 def _cronjob(**kwargs):
     import json as _json
     from tools.cronjob_tools import cronjob
 
     return _json.loads(cronjob(**kwargs))
+
 
 def test_tool_update_rejects_the_2026_08_03_destructive_shape(clawk_env):
     """The exact call that wiped 43 jobs must now fail closed."""
@@ -388,10 +421,22 @@ def test_tool_update_rejects_the_2026_08_03_destructive_shape(clawk_env):
 
     # Atomicity: a guard that raises after a partial save is worse than none.
     after = get_job(job["id"])
-    for field in ("prompt", "name", "skills", "skill", "script",
-                  "enabled_toolsets", "workdir", "context_from",
-                  "schedule", "deliver", "enabled", "state"):
+    for field in (
+        "prompt",
+        "name",
+        "skills",
+        "skill",
+        "script",
+        "enabled_toolsets",
+        "workdir",
+        "context_from",
+        "schedule",
+        "deliver",
+        "enabled",
+        "state",
+    ):
         assert after.get(field) == before.get(field), f"{field} was clobbered"
+
 
 def test_tool_update_rejects_the_destructive_shape_on_a_script_job(clawk_env):
     """script:"" + prompt:"" + skills:[] empties an agent script job too."""
@@ -399,17 +444,22 @@ def test_tool_update_rejects_the_destructive_shape_on_a_script_job(clawk_env):
 
     (clawk_env / "scripts" / "w.sh").write_text("echo hi\n")
     job = create_job(
-        prompt=None, schedule="0 2 * * *", script="w.sh",
-        name="Daily Wiki Backup", deliver="local",
+        prompt=None,
+        schedule="0 2 * * *",
+        script="w.sh",
+        name="Daily Wiki Backup",
+        deliver="local",
     )
     before = dict(get_job(job["id"]))
 
-    result = _cronjob(job_id=job["id"], **dict(DESTRUCTIVE_UPDATE_ARGS,
-                                              schedule="0 2 * * *"))
+    result = _cronjob(
+        job_id=job["id"], **dict(DESTRUCTIVE_UPDATE_ARGS, schedule="0 2 * * *")
+    )
 
     assert result["success"] is False
     assert "nothing to run" in result["error"]
     assert get_job(job["id"]) == before
+
 
 def test_tool_update_rejects_the_destructive_shape_on_a_no_agent_job(clawk_env):
     """no_agent job: the more specific no_agent diagnosis reports first."""
@@ -417,18 +467,24 @@ def test_tool_update_rejects_the_destructive_shape_on_a_no_agent_job(clawk_env):
 
     (clawk_env / "scripts" / "w.sh").write_text("echo hi\n")
     job = create_job(
-        prompt=None, schedule="0 8 * * *", script="w.sh", no_agent=True,
-        name="Lil'Log RSS ingest watchdog", deliver="local",
+        prompt=None,
+        schedule="0 8 * * *",
+        script="w.sh",
+        no_agent=True,
+        name="Lil'Log RSS ingest watchdog",
+        deliver="local",
     )
     before = dict(get_job(job["id"]))
 
-    result = _cronjob(job_id=job["id"], **dict(DESTRUCTIVE_UPDATE_ARGS,
-                                              schedule="0 8 * * *",
-                                              no_agent=True))
+    result = _cronjob(
+        job_id=job["id"],
+        **dict(DESTRUCTIVE_UPDATE_ARGS, schedule="0 8 * * *", no_agent=True),
+    )
 
     assert result["success"] is False
     assert "script" in result["error"]
     assert get_job(job["id"]) == before
+
 
 def test_tool_update_blank_name_is_a_no_op(clawk_env):
     """`name` is identity, not payload — no empty-payload guard covers it.
@@ -441,8 +497,11 @@ def test_tool_update_blank_name_is_a_no_op(clawk_env):
 
     (clawk_env / "scripts" / "w.sh").write_text("echo hi\n")
     job = create_job(
-        prompt=None, schedule="0 2 * * *", script="w.sh",
-        name="Daily Wiki Backup", deliver="local",
+        prompt=None,
+        schedule="0 2 * * *",
+        script="w.sh",
+        name="Daily Wiki Backup",
+        deliver="local",
     )
 
     result = _cronjob(job_id=job["id"], action="update", name="", deliver="local")
@@ -450,11 +509,13 @@ def test_tool_update_blank_name_is_a_no_op(clawk_env):
     assert result["success"] is True
     assert get_job(job["id"])["name"] == "Daily Wiki Backup"
 
+
 def test_tool_update_still_renames_when_a_real_name_is_given(clawk_env):
     from cron.jobs import create_job, get_job
 
-    job = create_job(prompt="check the news", schedule="every 5m",
-                     name="old", deliver="local")
+    job = create_job(
+        prompt="check the news", schedule="every 5m", name="old", deliver="local"
+    )
 
     result = _cronjob(job_id=job["id"], action="update", name="new")
 

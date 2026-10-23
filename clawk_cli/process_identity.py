@@ -76,12 +76,15 @@ def process_birth(proc) -> float:
     Raises ``psutil.Error`` like ``create_time()``.
     """
     import psutil
+
     if getattr(psutil, "MACOS", False):
         platform_proc = getattr(proc, "_proc", None)
         if platform_proc is not None:
             try:
                 return float(platform_proc.create_time(monotonic=True))
-            except TypeError:  # a psutil without the monotonic read: fall back to the adjusted one
+            except (
+                TypeError
+            ):  # a psutil without the monotonic read: fall back to the adjusted one
                 pass
     return float(proc.create_time())
 
@@ -111,7 +114,9 @@ def build_spawn_tag(purpose: str, *, project_root: Optional[Path] = None) -> str
     """Value for the child's ``CLAWK_SPAWN`` env var, stamped by the spawner."""
     create = _process_create_time()
     create_part = f"{create:.3f}" if create is not None else "-"
-    return ":".join((_TAG_VERSION, install_id(project_root), purpose, str(os.getpid()), create_part))
+    return ":".join(
+        (_TAG_VERSION, install_id(project_root), purpose, str(os.getpid()), create_part)
+    )
 
 
 def spawn_env(purpose: str, *, project_root: Optional[Path] = None) -> dict[str, str]:
@@ -189,7 +194,9 @@ def _read_ledger(path: Path) -> Optional[list[dict]]:
         parsed = json.loads(text)
     except (ValueError, TypeError):
         return None
-    return [e for e in parsed if isinstance(e, dict)] if isinstance(parsed, list) else None
+    return (
+        [e for e in parsed if isinstance(e, dict)] if isinstance(parsed, list) else None
+    )
 
 
 def _read_ledger_or_quarantine(path: Path) -> Optional[list[dict]]:
@@ -210,7 +217,9 @@ def _same_incarnation(proc, create_time: Optional[float]) -> bool:
     return create_time is None or abs(process_birth(proc) - float(create_time)) < 2.0
 
 
-def _pid_alive_matches(pid: int, create_time: Optional[float], *, strict: bool = False) -> Optional[bool]:
+def _pid_alive_matches(
+    pid: int, create_time: Optional[float], *, strict: bool = False
+) -> Optional[bool]:
     """True/False when provable; ``None`` when psutil can't say."""
     try:
         import psutil
@@ -219,20 +228,28 @@ def _pid_alive_matches(pid: int, create_time: Optional[float], *, strict: bool =
     try:
         proc = psutil.Process(int(pid))
         if strict:
-            return (create_time is not None and process_birth(proc) == create_time
-                    and proc.is_running() and proc.status() != psutil.STATUS_ZOMBIE)
+            return (
+                create_time is not None
+                and process_birth(proc) == create_time
+                and proc.is_running()
+                and proc.status() != psutil.STATUS_ZOMBIE
+            )
         # A zombie keeps its create_time until its parent reaps it, but it is already dead: the
         # dashboard stop check (``gateway.status._pid_exists``) books it stopped, so the ledger must
         # not report it as a live pre-update survivor. Windows has no zombies (and status() is slow there).
         return _same_incarnation(proc, create_time) and (
-            os.name == "nt" or proc.status() != getattr(psutil, "STATUS_ZOMBIE", "zombie"))
+            os.name == "nt"
+            or proc.status() != getattr(psutil, "STATUS_ZOMBIE", "zombie")
+        )
     except psutil.NoSuchProcess:
         return False
     except Exception:
         return None
 
 
-def register_self(purpose: str, *, project_root: Optional[Path] = None, detail: Optional[dict] = None) -> bool:
+def register_self(
+    purpose: str, *, project_root: Optional[Path] = None, detail: Optional[dict] = None
+) -> bool:
     """Record this process in the machine spawn ledger. Best-effort.
 
     Called at the top of every long-lived entry point; dead ``(pid, create_time)`` entries are
@@ -243,8 +260,17 @@ def register_self(purpose: str, *, project_root: Optional[Path] = None, detail: 
     from clawk_constants import clawk_home_key
 
     tag = parse_spawn_tag(os.environ.get(SPAWN_ENV_VAR))
-    spawner_pid, spawner_create = (tag.spawner_pid, tag.spawner_create) if tag else _desktop_spawner_identity()
-    entry = _new_entry(os.getpid(), _process_create_time(), purpose, project_root, spawner_pid, spawner_create)
+    spawner_pid, spawner_create = (
+        (tag.spawner_pid, tag.spawner_create) if tag else _desktop_spawner_identity()
+    )
+    entry = _new_entry(
+        os.getpid(),
+        _process_create_time(),
+        purpose,
+        project_root,
+        spawner_pid,
+        spawner_create,
+    )
     entry.clawk_home = clawk_home_key()
     if detail:
         try:
@@ -287,7 +313,9 @@ def is_desktop_owned_backend(argv: Optional[Sequence[str]] = None) -> bool:
 # Set while this process works for the Desktop app on its own machine: one request from, or one turn of
 # a chat created by, a client ``local_desktop_client`` accepted. The gateway serves the Desktop, the CLI,
 # the TUI and bots from one process, so this is a property of the activity, never of the process.
-_SERVING_LOCAL_DESKTOP: ContextVar[bool] = ContextVar("clawk_serving_local_desktop", default=False)
+_SERVING_LOCAL_DESKTOP: ContextVar[bool] = ContextVar(
+    "clawk_serving_local_desktop", default=False
+)
 
 
 @contextmanager
@@ -309,8 +337,12 @@ def local_desktop_client(identity: Optional[dict], declared: object) -> bool:
     mode) AND it redeemed a native ticket, which only this machine's private control socket mints, for
     this OS user. Neither alone: the CLI and TUI hold native tickets too, and the claim is the client's
     word. A remote Desktop reaches a backend through SSH, URL or Cloud credentials, never a native ticket."""
-    return (declared is True and isinstance(identity, dict) and identity.get("provider") == "local"
-            and identity.get("native_bootstrap") is True)
+    return (
+        declared is True
+        and isinstance(identity, dict)
+        and identity.get("provider") == "local"
+        and identity.get("native_bootstrap") is True
+    )
 
 
 def _desktop_spawner_identity() -> tuple[Optional[int], Optional[float]]:
@@ -333,11 +365,22 @@ def _desktop_spawner_identity() -> tuple[Optional[int], Optional[float]]:
 
 
 def _new_entry(
-    pid: int, create_time: Optional[float], purpose: str, project_root: Optional[Path],
-    spawner_pid: Optional[int], spawner_create: Optional[float],
+    pid: int,
+    create_time: Optional[float],
+    purpose: str,
+    project_root: Optional[Path],
+    spawner_pid: Optional[int],
+    spawner_create: Optional[float],
 ) -> LedgerEntry:
     return LedgerEntry(
-        pid, create_time, purpose, install_id(project_root), spawner_pid, spawner_create, time.time(), argv=""
+        pid,
+        create_time,
+        purpose,
+        install_id(project_root),
+        spawner_pid,
+        spawner_create,
+        time.time(),
+        argv="",
     )
 
 
@@ -354,7 +397,8 @@ def _append_entry(entry: LedgerEntry) -> bool:
         entries = _read_ledger_or_quarantine(path) or []
         # Drop malformed entries, our own stale entry, and provably dead pids.
         pruned = [
-            e for e in entries
+            e
+            for e in entries
             if isinstance(e.get("pid"), int)
             and e["pid"] != entry.pid
             and _pid_alive_matches(e["pid"], e.get("create_time")) is not False
@@ -362,6 +406,7 @@ def _append_entry(entry: LedgerEntry) -> bool:
         pruned.append(asdict(entry))
         try:
             from clawk_constants import mkdir_under_clawk_home
+
             mkdir_under_clawk_home(path.parent)
             # argv may carry surrogate-escaped bytes (non-UTF-8 paths); ensure_ascii keeps the
             # utf-8 text handle from raising UnicodeEncodeError (a ValueError, not an OSError).
@@ -372,7 +417,9 @@ def _append_entry(entry: LedgerEntry) -> bool:
             return False
 
 
-def register_child(pid: int, purpose: str, *, project_root: Optional[Path] = None) -> bool:
+def register_child(
+    pid: int, purpose: str, *, project_root: Optional[Path] = None
+) -> bool:
     """Record a CHILD process this process just spawned. Best-effort.
 
     Mirror of :func:`register_self` for children that cannot register themselves (stdio MCP
@@ -387,7 +434,9 @@ def register_child(pid: int, purpose: str, *, project_root: Optional[Path] = Non
     child_create = _process_create_time(pid) if pid > 0 else None
     if child_create is None:
         return False
-    entry = _new_entry(pid, child_create, purpose, project_root, os.getpid(), _process_create_time())
+    entry = _new_entry(
+        pid, child_create, purpose, project_root, os.getpid(), _process_create_time()
+    )
     try:
         import psutil
 
@@ -398,7 +447,10 @@ def register_child(pid: int, purpose: str, *, project_root: Optional[Path] = Non
 
 
 def ledger_entries(
-    *, project_root: Optional[Path] = None, all_installs: bool = False, verified_only: bool = False,
+    *,
+    project_root: Optional[Path] = None,
+    all_installs: bool = False,
+    verified_only: bool = False,
 ) -> list[dict]:
     """Ledger entries for this install, or all installs when explicitly requested.
 
@@ -416,11 +468,15 @@ def ledger_entries(
     if entries is None:
         return []
     return [
-        e for e in entries
+        e
+        for e in entries
         if (all_installs or e.get("install") == want_install)
         and isinstance(e.get("pid"), int)
-        and (_pid_alive_matches(e["pid"], e.get("create_time"), strict=True) is True
-             if verified_only else _pid_alive_matches(e["pid"], e.get("create_time")) is not False)
+        and (
+            _pid_alive_matches(e["pid"], e.get("create_time"), strict=True) is True
+            if verified_only
+            else _pid_alive_matches(e["pid"], e.get("create_time")) is not False
+        )
     ]
 
 
@@ -462,7 +518,11 @@ def _reparented_orphan(pid: int) -> bool:
     """
     try:
         from clawk_cli.dashboard_procs import (
-            _REAP_MIN_AGE_SECONDS, _lock_owned_serve_pids, _process_ppid)
+            _REAP_MIN_AGE_SECONDS,
+            _lock_owned_serve_pids,
+            _process_ppid,
+        )
+
         if _process_ppid(pid) not in (0, 1):
             return False
         if pid in (_lock_owned_serve_pids() or ()):
@@ -470,13 +530,18 @@ def _reparented_orphan(pid: int) -> bool:
         import time as _time
 
         import psutil
-        return max(0.0, _time.time() - psutil.Process(pid).create_time()) >= _REAP_MIN_AGE_SECONDS
+
+        return (
+            max(0.0, _time.time() - psutil.Process(pid).create_time())
+            >= _REAP_MIN_AGE_SECONDS
+        )
     except Exception:
         return False  # unprovable → never touch
 
 
 def reap_orphaned_backend_owner(
-    pid: int, create_time: Optional[float], *, kill_fn=None) -> Optional[int]:
+    pid: int, create_time: Optional[float], *, kill_fn=None
+) -> Optional[int]:
     """Kill the conflicting host owner when the ledger PROVES it is a dead session's orphan.
 
     HELD_BY_OTHER rung for #121964: the owner PID is alive (re-parented to init), so
@@ -498,18 +563,26 @@ def reap_orphaned_backend_owner(
         return None
     try:
         entry = next(
-            (e for e in ledger_entries()
-             if e.get("pid") == pid
-             and e.get("purpose") in _BACKEND_OWNER_PURPOSES
-             and (e.get("create_time") is None or create_time is None
-                  or abs(float(e["create_time"]) - float(create_time)) < 2.0)),
-            None)
+            (
+                e
+                for e in ledger_entries()
+                if e.get("pid") == pid
+                and e.get("purpose") in _BACKEND_OWNER_PURPOSES
+                and (
+                    e.get("create_time") is None
+                    or create_time is None
+                    or abs(float(e["create_time"]) - float(create_time)) < 2.0
+                )
+            ),
+            None,
+        )
     except Exception:
         return None
     if entry is None:
         return None
     if spawner_is_dead(entry) is not True and not (
-            entry.get("spawner_pid") is None and _reparented_orphan(pid)):
+        entry.get("spawner_pid") is None and _reparented_orphan(pid)
+    ):
         return None  # live or unprovable spawner → never touch
     try:
         if kill_fn is not None:
@@ -523,7 +596,9 @@ def reap_orphaned_backend_owner(
     return pid
 
 
-def reap_orphaned_mcp_helpers(*, project_root: Optional[Path] = None, kill_fn=None) -> list[int]:
+def reap_orphaned_mcp_helpers(
+    *, project_root: Optional[Path] = None, kill_fn=None
+) -> list[int]:
     """Kill ledger-registered stdio MCP helpers whose spawner is provably dead.
 
     Ledger-driven startup-sweep rung (not cmdline-heuristic): a helper is reaped ONLY when it has a
@@ -539,7 +614,12 @@ def reap_orphaned_mcp_helpers(*, project_root: Optional[Path] = None, kill_fn=No
     for entry in entries:
         try:
             pid = entry.get("pid")
-            if entry.get("purpose") != "mcp-helper" or not isinstance(pid, int) or pid <= 0 or pid == own_pid:
+            if (
+                entry.get("purpose") != "mcp-helper"
+                or not isinstance(pid, int)
+                or pid <= 0
+                or pid == own_pid
+            ):
                 continue
             if spawner_is_dead(entry) is not True:
                 continue  # live or unprovable spawner → never touch
@@ -624,16 +704,28 @@ def attach_self_to_kill_on_close_job() -> bool:
         JobObjectExtendedLimitInformation = 9
 
         class IO_COUNTERS(ctypes.Structure):
-            _fields_ = [(n, ctypes.c_ulonglong) for n in (
-                "ReadOperationCount", "WriteOperationCount", "OtherOperationCount",
-                "ReadTransferCount", "WriteTransferCount", "OtherTransferCount")]
+            _fields_ = [
+                (n, ctypes.c_ulonglong)
+                for n in (
+                    "ReadOperationCount",
+                    "WriteOperationCount",
+                    "OtherOperationCount",
+                    "ReadTransferCount",
+                    "WriteTransferCount",
+                    "OtherTransferCount",
+                )
+            ]
 
         class JOBOBJECT_BASIC_LIMIT_INFORMATION(ctypes.Structure):
             _fields_ = [
-                ("PerProcessUserTimeLimit", wintypes.LARGE_INTEGER), ("PerJobUserTimeLimit", wintypes.LARGE_INTEGER),
-                ("LimitFlags", wintypes.DWORD), ("MinimumWorkingSetSize", ctypes.c_size_t),
-                ("MaximumWorkingSetSize", ctypes.c_size_t), ("ActiveProcessLimit", wintypes.DWORD),
-                ("Affinity", ctypes.POINTER(wintypes.ULONG)), ("PriorityClass", wintypes.DWORD),
+                ("PerProcessUserTimeLimit", wintypes.LARGE_INTEGER),
+                ("PerJobUserTimeLimit", wintypes.LARGE_INTEGER),
+                ("LimitFlags", wintypes.DWORD),
+                ("MinimumWorkingSetSize", ctypes.c_size_t),
+                ("MaximumWorkingSetSize", ctypes.c_size_t),
+                ("ActiveProcessLimit", wintypes.DWORD),
+                ("Affinity", ctypes.POINTER(wintypes.ULONG)),
+                ("PriorityClass", wintypes.DWORD),
                 ("SchedulingClass", wintypes.DWORD),
             ]
 
@@ -641,8 +733,15 @@ def attach_self_to_kill_on_close_job() -> bool:
             _fields_ = [
                 ("BasicLimitInformation", JOBOBJECT_BASIC_LIMIT_INFORMATION),
                 ("IoInfo", IO_COUNTERS),
-                *((n, ctypes.c_size_t) for n in (
-                    "ProcessMemoryLimit", "JobMemoryLimit", "PeakProcessMemoryUsed", "PeakJobMemoryUsed")),
+                *(
+                    (n, ctypes.c_size_t)
+                    for n in (
+                        "ProcessMemoryLimit",
+                        "JobMemoryLimit",
+                        "PeakProcessMemoryUsed",
+                        "PeakJobMemoryUsed",
+                    )
+                ),
             ]
 
         job = kernel32.CreateJobObjectW(None, None)
@@ -650,10 +749,19 @@ def attach_self_to_kill_on_close_job() -> bool:
             return False
         info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION()
         info.BasicLimitInformation.LimitFlags = (
-            JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK | JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK
+            JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+            | JOB_OBJECT_LIMIT_BREAKAWAY_OK
+            | JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK
         )
-        ok = kernel32.SetInformationJobObject(job, JobObjectExtendedLimitInformation, ctypes.byref(info), ctypes.sizeof(info))
-        if not ok or not kernel32.AssignProcessToJobObject(job, kernel32.GetCurrentProcess()):
+        ok = kernel32.SetInformationJobObject(
+            job,
+            JobObjectExtendedLimitInformation,
+            ctypes.byref(info),
+            ctypes.sizeof(info),
+        )
+        if not ok or not kernel32.AssignProcessToJobObject(
+            job, kernel32.GetCurrentProcess()
+        ):
             kernel32.CloseHandle(job)
             return False
         _JOB_HANDLE = job  # keep alive for the life of the process — never close

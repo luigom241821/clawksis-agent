@@ -22,6 +22,7 @@ from gateway.platforms.event import MessageEvent, MessageType
 # Helpers
 # =====================================================================
 
+
 def _make_event(
     text: str,
     platform: Platform,
@@ -38,6 +39,7 @@ def _make_event(
 # =====================================================================
 # Discord text batching
 # =====================================================================
+
 
 def _make_discord_adapter():
     """Create a minimal DiscordAdapter for testing text batching."""
@@ -83,7 +85,9 @@ class TestDiscordTextBatching:
 
         adapter._enqueue_text_event(_make_event("Part one of a long", Platform.DISCORD))
         await asyncio.sleep(0.02)
-        adapter._enqueue_text_event(_make_event("message that was split.", Platform.DISCORD))
+        adapter._enqueue_text_event(
+            _make_event("message that was split.", Platform.DISCORD)
+        )
 
         adapter.handle_message.assert_not_called()
 
@@ -98,6 +102,7 @@ class TestDiscordTextBatching:
 # =====================================================================
 # Matrix text batching
 # =====================================================================
+
 
 def _make_matrix_adapter():
     """Create a minimal MatrixAdapter for testing text batching."""
@@ -152,6 +157,7 @@ class TestMatrixTextBatching:
 # =====================================================================
 # WeCom text batching
 # =====================================================================
+
 
 def _make_wecom_adapter():
     """Create a minimal WeComAdapter for testing text batching."""

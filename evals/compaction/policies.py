@@ -8,6 +8,7 @@ Each policy is a name -> spec mapping. A spec has:
 The runner constructs one compressor per policy and calls
 compress(force=True) with the transcript's estimated tokens.
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict

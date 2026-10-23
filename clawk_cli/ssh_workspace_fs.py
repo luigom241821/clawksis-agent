@@ -63,7 +63,9 @@ class SshWorkspaceFs:
             raw = posixpath.join(self._env.cwd, raw)
         return posixpath.normpath(raw)
 
-    def _execute(self, command: str, *, stdin_data: str | None = None, timeout: int | None = None) -> dict:
+    def _execute(
+        self, command: str, *, stdin_data: str | None = None, timeout: int | None = None
+    ) -> dict:
         with self._lock:
             return self._env.execute(
                 command,
@@ -80,7 +82,9 @@ class SshWorkspaceFs:
                 return line[len(marker) :].strip() or fallback
         return fallback
 
-    def list_dir(self, path: str, hidden_names: set[str] | frozenset[str]) -> dict[str, Any]:
+    def list_dir(
+        self, path: str, hidden_names: set[str] | frozenset[str]
+    ) -> dict[str, Any]:
         target = self._normalize(path)
         quoted = shlex.quote(target)
         command = f"""
@@ -99,7 +103,10 @@ done
 """
         result = self._execute(command)
         if result.get("returncode") != 0:
-            return {"entries": [], "error": self._error_code(result.get("output", ""), "read-error")}
+            return {
+                "entries": [],
+                "error": self._error_code(result.get("output", ""), "read-error"),
+            }
 
         entries = []
         try:
@@ -107,15 +114,29 @@ done
                 if not line.strip():
                     continue
                 name64, path64, kind = line.split("\t", 2)
-                name = base64.b64decode(name64, validate=True).decode("utf-8", errors="replace")
-                child_path = base64.b64decode(path64, validate=True).decode("utf-8", errors="replace")
+                name = base64.b64decode(name64, validate=True).decode(
+                    "utf-8", errors="replace"
+                )
+                child_path = base64.b64decode(path64, validate=True).decode(
+                    "utf-8", errors="replace"
+                )
                 if name in hidden_names:
                     continue
-                entries.append({"name": name, "path": child_path, "isDirectory": kind == "d"})
+                entries.append(
+                    {"name": name, "path": child_path, "isDirectory": kind == "d"}
+                )
         except (ValueError, UnicodeError, binascii.Error) as exc:
-            raise SshWorkspaceFsError("EIO", "SSH filesystem returned an invalid directory listing") from exc
+            raise SshWorkspaceFsError(
+                "EIO", "SSH filesystem returned an invalid directory listing"
+            ) from exc
 
-        entries.sort(key=lambda item: (not item["isDirectory"], item["name"].lower(), item["name"]))
+        entries.sort(
+            key=lambda item: (
+                not item["isDirectory"],
+                item["name"].lower(),
+                item["name"],
+            )
+        )
         return {"entries": entries}
 
     def read_bytes(
@@ -128,7 +149,7 @@ done
         target = self._normalize(path)
         quoted = shlex.quote(target)
         read_command = (
-            f"set -o pipefail; head -c {int(read_limit)} < \"$p\" | base64"
+            f'set -o pipefail; head -c {int(read_limit)} < "$p" | base64'
             if read_limit is not None
             else 'base64 < "$p"'
         )
@@ -147,16 +168,22 @@ printf '__CLAWK_FS_SIZE__:%s\\n' "$size"
             raise SshWorkspaceFsError(self._error_code(output))
         lines = output.splitlines()
         if not lines or not lines[0].startswith("__CLAWK_FS_SIZE__:"):
-            raise SshWorkspaceFsError("EIO", "SSH filesystem did not return a file size")
+            raise SshWorkspaceFsError(
+                "EIO", "SSH filesystem did not return a file size"
+            )
         try:
             size = int(lines[0].split(":", 1)[1])
         except ValueError as exc:
-            raise SshWorkspaceFsError("EIO", "SSH filesystem returned an invalid file size") from exc
+            raise SshWorkspaceFsError(
+                "EIO", "SSH filesystem returned an invalid file size"
+            ) from exc
         encoded = "".join(lines[1:])
         try:
             data = base64.b64decode(encoded, validate=True)
         except (ValueError, binascii.Error) as exc:
-            raise SshWorkspaceFsError("EIO", "SSH filesystem returned invalid file data") from exc
+            raise SshWorkspaceFsError(
+                "EIO", "SSH filesystem returned invalid file data"
+            ) from exc
         return data, size, target
 
     def inspect_file(self, path: str) -> tuple[str, int]:
@@ -174,15 +201,35 @@ printf '__CLAWK_FS_SIZE__:%s\\n' "$size"
         output = result.get("output", "")
         if result.get("returncode") != 0:
             raise SshWorkspaceFsError(self._error_code(output))
-        target_line = next((line for line in output.splitlines() if line.startswith("__CLAWK_FS_TARGET__:")), "")
-        size_line = next((line for line in output.splitlines() if line.startswith("__CLAWK_FS_SIZE__:")), "")
+        target_line = next(
+            (
+                line
+                for line in output.splitlines()
+                if line.startswith("__CLAWK_FS_TARGET__:")
+            ),
+            "",
+        )
+        size_line = next(
+            (
+                line
+                for line in output.splitlines()
+                if line.startswith("__CLAWK_FS_SIZE__:")
+            ),
+            "",
+        )
         if not target_line or not size_line:
-            raise SshWorkspaceFsError("EIO", "SSH filesystem did not return file metadata")
+            raise SshWorkspaceFsError(
+                "EIO", "SSH filesystem did not return file metadata"
+            )
         try:
-            resolved = base64.b64decode(target_line.split(":", 1)[1], validate=True).decode("utf-8", errors="strict")
+            resolved = base64.b64decode(
+                target_line.split(":", 1)[1], validate=True
+            ).decode("utf-8", errors="strict")
             size = int(size_line.split(":", 1)[1])
         except (ValueError, UnicodeError, binascii.Error) as exc:
-            raise SshWorkspaceFsError("EIO", "SSH filesystem returned invalid file metadata") from exc
+            raise SshWorkspaceFsError(
+                "EIO", "SSH filesystem returned invalid file metadata"
+            ) from exc
         return resolved, size
 
     def stream_file(self, path: str, chunk_size: int = 64 * 1024) -> Iterator[bytes]:
@@ -212,7 +259,9 @@ printf '__CLAWK_FS_SIZE__:%s\\n' "$size"
         if encoded_size > max_bytes:
             raise SshWorkspaceFsError("EFBIG")
         parent = posixpath.dirname(target) or "/"
-        temp_path = posixpath.join(parent, f".{posixpath.basename(target)}.clawk-tmp-{uuid.uuid4().hex[:12]}")
+        temp_path = posixpath.join(
+            parent, f".{posixpath.basename(target)}.clawk-tmp-{uuid.uuid4().hex[:12]}"
+        )
         q_target = shlex.quote(target)
         q_parent = shlex.quote(parent)
         q_temp = shlex.quote(temp_path)
@@ -250,11 +299,19 @@ exit 1
 
     def git_branch(self, path: str) -> str:
         target = self._normalize(path)
-        result = self._execute(f"git -C {shlex.quote(target)} branch --show-current 2>/dev/null")
-        return (result.get("output") or "").strip() if result.get("returncode") == 0 else ""
+        result = self._execute(
+            f"git -C {shlex.quote(target)} branch --show-current 2>/dev/null"
+        )
+        return (
+            (result.get("output") or "").strip()
+            if result.get("returncode") == 0
+            else ""
+        )
 
 
-def get_ssh_workspace_fs(profile_key: str, terminal_config: dict[str, Any]) -> SshWorkspaceFs | None:
+def get_ssh_workspace_fs(
+    profile_key: str, terminal_config: dict[str, Any]
+) -> SshWorkspaceFs | None:
     """Return a cached adapter when this profile selects the SSH backend."""
     if str(terminal_config.get("backend") or "local").strip().lower() != "ssh":
         return None
@@ -287,7 +344,9 @@ def get_ssh_workspace_fs(profile_key: str, terminal_config: dict[str, Any]) -> S
                 sync_files=False,
             )
         except Exception as exc:
-            raise SshWorkspaceFsError("ECONN", "Could not connect to the SSH workspace") from exc
+            raise SshWorkspaceFsError(
+                "ECONN", "Could not connect to the SSH workspace"
+            ) from exc
         backend = SshWorkspaceFs(env)
         _BACKENDS[profile_key] = (config, backend)
         return backend

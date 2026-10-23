@@ -54,7 +54,9 @@ def plugin_event_name(plugin_id: str, event: str) -> str:
     mangled name would strand the desktop half waiting on a name nobody emits.
     """
     if not isinstance(plugin_id, str) or not _PLUGIN_ID_RE.match(plugin_id):
-        raise ValueError(f"invalid plugin id {plugin_id!r}: expected [a-z0-9_-]{{1,64}}")
+        raise ValueError(
+            f"invalid plugin id {plugin_id!r}: expected [a-z0-9_-]{{1,64}}"
+        )
     if not isinstance(event, str) or len(event) > 128 or not _EVENT_RE.match(event):
         raise ValueError(
             f"invalid plugin event {event!r}: expected dot-separated segments of [A-Za-z0-9_-] "
@@ -63,7 +65,9 @@ def plugin_event_name(plugin_id: str, event: str) -> str:
     return f"{PLUGIN_EVENT_PREFIX}{plugin_id}.{event}"
 
 
-def broadcast_plugin_event(plugin_id: str, event: str, payload: Optional[dict[str, Any]] = None) -> None:
+def broadcast_plugin_event(
+    plugin_id: str, event: str, payload: Optional[dict[str, Any]] = None
+) -> None:
     """Emit ``plugin.<plugin_id>.<event>`` to every connected client.
 
     Fire-and-forget and safe to call from any request handler: delivery fans out
@@ -71,7 +75,9 @@ def broadcast_plugin_event(plugin_id: str, event: str, payload: Optional[dict[st
     stalling the caller. ``payload`` must be a dict (or ``None`` for ``{}``).
     """
     if payload is not None and not isinstance(payload, dict):
-        raise TypeError(f"plugin event payload must be a dict or None, got {type(payload).__name__}")
+        raise TypeError(
+            f"plugin event payload must be a dict or None, got {type(payload).__name__}"
+        )
     name = plugin_event_name(plugin_id, event)
 
     # Late import: plugin backends load before the gateway server is up in some
@@ -82,7 +88,11 @@ def broadcast_plugin_event(plugin_id: str, event: str, payload: Optional[dict[st
     except ImportError:
         # A plugin-only process (``clawk plugins validate`` importing the backend, a trimmed
         # install) has no gateway at all: nobody to deliver to, and the handler must not die for it.
-        logger.warning("plugin event %s dropped: no tui_gateway in this process", name, exc_info=True)
+        logger.warning(
+            "plugin event %s dropped: no tui_gateway in this process",
+            name,
+            exc_info=True,
+        )
         return
 
     _broadcast_global_event(name, dict(payload or {}))

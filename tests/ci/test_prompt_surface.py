@@ -16,7 +16,9 @@ import shutil
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-_spec = importlib.util.spec_from_file_location("prompt_surface", REPO / "scripts" / "ci" / "prompt_surface.py")
+_spec = importlib.util.spec_from_file_location(
+    "prompt_surface", REPO / "scripts" / "ci" / "prompt_surface.py"
+)
 assert _spec is not None and _spec.loader is not None
 prompt_surface = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(prompt_surface)
@@ -24,7 +26,9 @@ _spec.loader.exec_module(prompt_surface)
 
 def _tree_differences(left: Path, right: Path) -> list[str]:
     cmp = filecmp.dircmp(left, right)
-    out = [f"only in committed: {n}" for n in cmp.left_only] + [f"not committed: {n}" for n in cmp.right_only]
+    out = [f"only in committed: {n}" for n in cmp.left_only] + [
+        f"not committed: {n}" for n in cmp.right_only
+    ]
     _, mismatch, errors = filecmp.cmpfiles(left, right, cmp.common_files, shallow=False)
     out += [f"stale: {n}" for n in mismatch + errors]
     for sub in cmp.common_dirs:
@@ -50,10 +54,15 @@ def test_summary_names_the_surface_and_tool_that_changed(tmp_path):
     shutil.copytree(base, head)
     prompt = head / "prompts" / "cli.claude.txt"
     text = prompt.read_text(encoding="utf-8-sig")
-    prompt.write_text(text.replace("# Finishing the job", "# Finish every job"), encoding="utf-8")
+    prompt.write_text(
+        text.replace("# Finishing the job", "# Finish every job"), encoding="utf-8"
+    )
     tool = head / "tools" / "write_file.json"
     text = tool.read_text(encoding="utf-8-sig")
-    tool.write_text(text.replace('"description": "', '"description": "Prefer patch. ', 1), encoding="utf-8")
+    tool.write_text(
+        text.replace('"description": "', '"description": "Prefer patch. ', 1),
+        encoding="utf-8",
+    )
 
     summary = prompt_surface.summarize(base, head)
 

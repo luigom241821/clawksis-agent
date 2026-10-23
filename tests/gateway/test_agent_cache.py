@@ -16,6 +16,7 @@ import pytest
 from clawk_cli.config import DEFAULT_CONFIG, cfg_get
 from tools import browser_tool_lifecycle as bt_lifecycle
 
+
 def _make_runner():
     """Create a minimal GatewayRunner with just the cache infrastructure."""
     from gateway.run import GatewayRunner
@@ -25,16 +26,24 @@ def _make_runner():
     runner._agent_cache_lock = threading.Lock()
     return runner
 
+
 class TestAgentConfigSignature:
     """Config signature produces stable, distinct keys."""
 
     def test_model_change_different_signature(self):
         from gateway.run import GatewayRunner
 
-        runtime = {"api_key": "sk-test12345678", "base_url": "https://openrouter.ai/api/v1",
-                    "provider": "openrouter"}
-        sig1 = GatewayRunner._agent_config_signature("claude-sonnet-4", runtime, ["clawk-telegram"], "")
-        sig2 = GatewayRunner._agent_config_signature("claude-opus-4.6", runtime, ["clawk-telegram"], "")
+        runtime = {
+            "api_key": "sk-test12345678",
+            "base_url": "https://openrouter.ai/api/v1",
+            "provider": "openrouter",
+        }
+        sig1 = GatewayRunner._agent_config_signature(
+            "claude-sonnet-4", runtime, ["clawk-telegram"], ""
+        )
+        sig2 = GatewayRunner._agent_config_signature(
+            "claude-opus-4.6", runtime, ["clawk-telegram"], ""
+        )
         assert sig1 != sig2
 
     def test_same_token_prefix_different_full_token_changes_signature(self):
@@ -55,23 +64,43 @@ class TestAgentConfigSignature:
         }
 
         assert rt1["api_key"][:8] == rt2["api_key"][:8]
-        sig1 = GatewayRunner._agent_config_signature("gpt-5.3-codex", rt1, ["clawk-telegram"], "")
-        sig2 = GatewayRunner._agent_config_signature("gpt-5.3-codex", rt2, ["clawk-telegram"], "")
+        sig1 = GatewayRunner._agent_config_signature(
+            "gpt-5.3-codex", rt1, ["clawk-telegram"], ""
+        )
+        sig2 = GatewayRunner._agent_config_signature(
+            "gpt-5.3-codex", rt2, ["clawk-telegram"], ""
+        )
         assert sig1 != sig2
 
     def test_provider_change_different_signature(self):
         from gateway.run import GatewayRunner
 
-        rt1 = {"api_key": "sk-test12345678", "base_url": "https://openrouter.ai/api/v1", "provider": "openrouter"}
-        rt2 = {"api_key": "sk-test12345678", "base_url": "https://api.anthropic.com", "provider": "anthropic"}
-        sig1 = GatewayRunner._agent_config_signature("claude-sonnet-4", rt1, ["clawk-telegram"], "")
-        sig2 = GatewayRunner._agent_config_signature("claude-sonnet-4", rt2, ["clawk-telegram"], "")
+        rt1 = {
+            "api_key": "sk-test12345678",
+            "base_url": "https://openrouter.ai/api/v1",
+            "provider": "openrouter",
+        }
+        rt2 = {
+            "api_key": "sk-test12345678",
+            "base_url": "https://api.anthropic.com",
+            "provider": "anthropic",
+        }
+        sig1 = GatewayRunner._agent_config_signature(
+            "claude-sonnet-4", rt1, ["clawk-telegram"], ""
+        )
+        sig2 = GatewayRunner._agent_config_signature(
+            "claude-sonnet-4", rt2, ["clawk-telegram"], ""
+        )
         assert sig1 != sig2
 
     def test_capability_change_different_signature(self):
         from gateway.run import GatewayRunner
 
-        runtime = {"api_key": "sk-test12345678", "base_url": "https://proxy.example/v1", "provider": "custom"}
+        runtime = {
+            "api_key": "sk-test12345678",
+            "base_url": "https://proxy.example/v1",
+            "provider": "custom",
+        }
         native = {**runtime, "capabilities": {"openai_native_compaction": True}}
         plain = {**runtime, "capabilities": {"openai_native_compaction": False}}
         assert GatewayRunner._agent_config_signature("gpt-5.6", native, [], "") != (
@@ -113,11 +142,17 @@ class TestAgentConfigSignature:
 
         runtime = {"api_key": "k", "base_url": "u", "provider": "p"}
         sig1 = GatewayRunner._agent_config_signature(
-            "m", runtime, [], "",
+            "m",
+            runtime,
+            [],
+            "",
             cache_keys={"compression.threshold": 0.50},
         )
         sig2 = GatewayRunner._agent_config_signature(
-            "m", runtime, [], "",
+            "m",
+            runtime,
+            [],
+            "",
             cache_keys={"compression.threshold": 0.75},
         )
         assert sig1 != sig2
@@ -128,14 +163,21 @@ class TestAgentConfigSignature:
 
         runtime = {"api_key": "k", "base_url": "u", "provider": "p"}
         sig_a = GatewayRunner._agent_config_signature(
-            "m", runtime, [], "",
+            "m",
+            runtime,
+            [],
+            "",
             cache_keys={"model.context_length": 200_000, "compression.threshold": 0.5},
         )
         sig_b = GatewayRunner._agent_config_signature(
-            "m", runtime, [], "",
+            "m",
+            runtime,
+            [],
+            "",
             cache_keys={"compression.threshold": 0.5, "model.context_length": 200_000},
         )
         assert sig_a == sig_b
+
 
 class TestExtractCacheBustingConfig:
     """Verify _extract_cache_busting_config pulls the documented subset of
@@ -156,9 +198,19 @@ class TestExtractCacheBustingConfig:
 
         default_cap = DEFAULT_CONFIG["compression"]["threshold_tokens"]
         other_cap = (default_cap or 0) + 100_000
-        sig = lambda cfg: GatewayRunner._extract_cache_busting_config(cfg)["compression.threshold_tokens"]
-        assert sig({}) == sig({"compression": {"threshold_tokens": default_cap}}) == default_cap
-        assert sig({"compression": {"threshold_tokens": other_cap}}) == other_cap != sig({})
+        sig = lambda cfg: GatewayRunner._extract_cache_busting_config(cfg)[
+            "compression.threshold_tokens"
+        ]
+        assert (
+            sig({})
+            == sig({"compression": {"threshold_tokens": default_cap}})
+            == default_cap
+        )
+        assert (
+            sig({"compression": {"threshold_tokens": other_cap}})
+            == other_cap
+            != sig({})
+        )
 
     def test_legacy_checkpoints_bool_carries_defaults_for_the_other_keys(self):
         """`checkpoints: true` builds the agent with DEFAULT_CONFIG's limits (`_checkpoint_agent_kwargs`), so
@@ -166,10 +218,13 @@ class TestExtractCacheBustingConfig:
         from gateway.run import GatewayRunner
 
         legacy = GatewayRunner._extract_cache_busting_config({"checkpoints": True})
-        explicit = GatewayRunner._extract_cache_busting_config({"checkpoints": {"enabled": True}})
+        explicit = GatewayRunner._extract_cache_busting_config(
+            {"checkpoints": {"enabled": True}}
+        )
         assert legacy["checkpoints.enabled"] is True
         assert {k: v for k, v in legacy.items() if k.startswith("checkpoints.")} == {
-            k: v for k, v in explicit.items() if k.startswith("checkpoints.")}
+            k: v for k, v in explicit.items() if k.startswith("checkpoints.")
+        }
 
     def test_non_dict_section_treated_as_missing(self):
         from gateway.run import GatewayRunner
@@ -179,7 +234,9 @@ class TestExtractCacheBustingConfig:
             {"compression": "broken", "model": {"context_length": 100_000}}
         )
         assert out["compression.enabled"] == DEFAULT_CONFIG["compression"]["enabled"]
-        assert out["compression.threshold"] == DEFAULT_CONFIG["compression"]["threshold"]
+        assert (
+            out["compression.threshold"] == DEFAULT_CONFIG["compression"]["threshold"]
+        )
         assert out["model.context_length"] == 100_000
 
     def test_none_config_is_safe(self):
@@ -207,7 +264,11 @@ class TestExtractCacheBustingConfig:
         """``memory.*`` keys a provider added, excluding the config.yaml keys already documented."""
         from gateway.run import GatewayRunner
 
-        documented = {f"{s}.{k}" for s, k in GatewayRunner._CACHE_BUSTING_CONFIG_KEYS if s == "memory"}
+        documented = {
+            f"{s}.{k}"
+            for s, k in GatewayRunner._CACHE_BUSTING_CONFIG_KEYS
+            if s == "memory"
+        }
         return sorted(k for k in out if k.startswith("memory.") and k not in documented)
 
     @staticmethod
@@ -223,10 +284,14 @@ class TestExtractCacheBustingConfig:
             return provider
 
         monkeypatch.setattr(plugins_memory, "load_memory_provider", _load)
-        monkeypatch.setattr(GatewayAgentCacheMixin, "_MEMORY_IDENTITY_PROVIDER_MEMO", {})
+        monkeypatch.setattr(
+            GatewayAgentCacheMixin, "_MEMORY_IDENTITY_PROVIDER_MEMO", {}
+        )
         return calls
 
-    def test_provider_identity_signature_enters_under_memory_prefix_and_is_re_read_from_one_instance(self, monkeypatch):
+    def test_provider_identity_signature_enters_under_memory_prefix_and_is_re_read_from_one_instance(
+        self, monkeypatch
+    ):
         from gateway.run import GatewayRunner
         from tests.agent.test_memory_provider import FakeMemoryProvider
 
@@ -234,7 +299,10 @@ class TestExtractCacheBustingConfig:
             writer = "alice"
 
             def identity_signature(self):
-                return {"fakeprov.writer": self.writer, "fakeprov.aliases": [("a", "b")]}
+                return {
+                    "fakeprov.writer": self.writer,
+                    "fakeprov.aliases": [("a", "b")],
+                }
 
         provider = IdentityProvider("fakeprov")
         calls = self._install_fake_provider(monkeypatch, provider)
@@ -244,13 +312,21 @@ class TestExtractCacheBustingConfig:
         provider.writer = "bob"
         second = GatewayRunner._extract_cache_busting_config(cfg)
 
-        assert self._provider_declared_keys(first) == ["memory.fakeprov.aliases", "memory.fakeprov.writer"]
+        assert self._provider_declared_keys(first) == [
+            "memory.fakeprov.aliases",
+            "memory.fakeprov.writer",
+        ]
         assert first["memory.fakeprov.aliases"] == [("a", "b")]
-        assert (first["memory.fakeprov.writer"], second["memory.fakeprov.writer"]) == ("alice", "bob")
+        assert (first["memory.fakeprov.writer"], second["memory.fakeprov.writer"]) == (
+            "alice",
+            "bob",
+        )
         assert calls == [("fakeprov", False)]
 
     @pytest.mark.parametrize("kind", ["no hook", "no provider", "raising hook"])
-    def test_provider_contributes_nothing_without_a_working_identity_hook(self, monkeypatch, kind):
+    def test_provider_contributes_nothing_without_a_working_identity_hook(
+        self, monkeypatch, kind
+    ):
         from gateway.run import GatewayRunner
         from tests.agent.test_memory_provider import FakeMemoryProvider
 
@@ -258,14 +334,21 @@ class TestExtractCacheBustingConfig:
             def identity_signature(self):
                 raise RuntimeError("boom")
 
-        provider = {"no hook": FakeMemoryProvider("p"), "no provider": None, "raising hook": BrokenProvider("p")}[kind]
+        provider = {
+            "no hook": FakeMemoryProvider("p"),
+            "no provider": None,
+            "raising hook": BrokenProvider("p"),
+        }[kind]
         calls = self._install_fake_provider(monkeypatch, provider)
 
-        out = GatewayRunner._extract_cache_busting_config({"memory": {"provider": "p"}} if provider else {})
+        out = GatewayRunner._extract_cache_busting_config(
+            {"memory": {"provider": "p"}} if provider else {}
+        )
 
         assert self._provider_declared_keys(out) == []
         assert "tools.registry_generation" in out
         assert calls == ([] if provider is None else [("p", False)])
+
 
 class TestAgentCacheLifecycle:
     """End-to-end cache behavior with real AIAgent construction."""
@@ -278,9 +361,13 @@ class TestAgentCacheLifecycle:
         session_key = "telegram:12345"
 
         agent = AIAgent(
-            model="anthropic/claude-sonnet-4", api_key="test",
-            base_url="https://openrouter.ai/api/v1", provider="openrouter",
-            max_iterations=5, quiet_mode=True, skip_context_files=True,
+            model="anthropic/claude-sonnet-4",
+            api_key="test",
+            base_url="https://openrouter.ai/api/v1",
+            provider="openrouter",
+            max_iterations=5,
+            quiet_mode=True,
+            skip_context_files=True,
             skip_memory=True,
         )
         with runner._agent_cache_lock:
@@ -290,6 +377,7 @@ class TestAgentCacheLifecycle:
 
         with runner._agent_cache_lock:
             assert session_key not in runner._agent_cache
+
 
 class TestAgentCacheBoundedGrowth:
     """LRU cap and idle-TTL eviction prevent unbounded cache growth."""
@@ -311,6 +399,7 @@ class TestAgentCacheBoundedGrowth:
             m._last_activity_ts = last_activity
         else:
             import time as _t
+
             m._last_activity_ts = _t.time()
         return m
 
@@ -340,12 +429,14 @@ class TestAgentCacheBoundedGrowth:
             runner._enforce_agent_cache_cap()
 
         import time as _t
+
         deadline = _t.time() + 2.0
         while _t.time() < deadline and not release_calls:
             _t.sleep(0.02)
         # Memory committed with the live transcript, THEN client released.
         assert commit_calls == [[{"role": "user", "content": "hi"}]]
         assert old_agent in release_calls
+
 
 class TestAgentCacheActiveSafety:
     """Safety: eviction must not tear down agents currently mid-turn.
@@ -369,6 +460,7 @@ class TestAgentCacheActiveSafety:
 
     def _fake_agent(self, idle_seconds: float = 0.0):
         import time as _t
+
         m = MagicMock()
         m._last_activity_ts = _t.time() - idle_seconds
         return m
@@ -428,6 +520,7 @@ class TestAgentCacheActiveSafety:
         assert "s1" in runner._agent_cache
         assert runner._cleanup_agent_resources.call_count == 0
 
+
 class TestAgentCacheSpilloverLive:
     """Live E2E: fill cache with real AIAgent instances and stress it."""
 
@@ -444,11 +537,16 @@ class TestAgentCacheSpilloverLive:
     def _real_agent(self):
         """A genuine AIAgent; no API calls are made during these tests."""
         from run_agent import AIAgent
+
         return AIAgent(
-            model="anthropic/claude-sonnet-4", api_key="test",
-            base_url="https://openrouter.ai/api/v1", provider="openrouter",
-            max_iterations=5, quiet_mode=True,
-            skip_context_files=True, skip_memory=True,
+            model="anthropic/claude-sonnet-4",
+            api_key="test",
+            base_url="https://openrouter.ai/api/v1",
+            provider="openrouter",
+            max_iterations=5,
+            quiet_mode=True,
+            skip_context_files=True,
+            skip_memory=True,
             platform="telegram",
         )
 
@@ -485,6 +583,7 @@ class TestAgentCacheSpilloverLive:
             except Exception:
                 pass
 
+
 class TestAgentCacheIdleResume:
     """End-to-end: idle-TTL-evicted session resumes cleanly with task state.
 
@@ -514,10 +613,14 @@ class TestAgentCacheIdleResume:
         from tools import terminal_tool_lifecycle as _tt
 
         agent = AIAgent(
-            model="anthropic/claude-sonnet-4", api_key="test",
-            base_url="https://openrouter.ai/api/v1", provider="openrouter",
-            max_iterations=5, quiet_mode=True,
-            skip_context_files=True, skip_memory=True,
+            model="anthropic/claude-sonnet-4",
+            api_key="test",
+            base_url="https://openrouter.ai/api/v1",
+            provider="openrouter",
+            max_iterations=5,
+            quiet_mode=True,
+            skip_context_files=True,
+            skip_memory=True,
             session_id="idle-resume-test-2",
         )
 
@@ -559,17 +662,25 @@ class TestAgentCacheIdleResume:
         # Agent A: evicted from cache (soft) — terminal survives.
         # Agent B: session expired (hard) — terminal torn down.
         agent_a = AIAgent(
-            model="anthropic/claude-sonnet-4", api_key="test",
-            base_url="https://openrouter.ai/api/v1", provider="openrouter",
-            max_iterations=5, quiet_mode=True,
-            skip_context_files=True, skip_memory=True,
+            model="anthropic/claude-sonnet-4",
+            api_key="test",
+            base_url="https://openrouter.ai/api/v1",
+            provider="openrouter",
+            max_iterations=5,
+            quiet_mode=True,
+            skip_context_files=True,
+            skip_memory=True,
             session_id="soft-session",
         )
         agent_b = AIAgent(
-            model="anthropic/claude-sonnet-4", api_key="test",
-            base_url="https://openrouter.ai/api/v1", provider="openrouter",
-            max_iterations=5, quiet_mode=True,
-            skip_context_files=True, skip_memory=True,
+            model="anthropic/claude-sonnet-4",
+            api_key="test",
+            base_url="https://openrouter.ai/api/v1",
+            provider="openrouter",
+            max_iterations=5,
+            quiet_mode=True,
+            skip_context_files=True,
+            skip_memory=True,
             session_id="hard-session",
         )
 
@@ -580,8 +691,8 @@ class TestAgentCacheIdleResume:
         original_vm = _ra.cleanup_vm
         _ra.cleanup_vm = lambda tid: vm_calls.append(tid)
         try:
-            agent_a.release_clients()   # cache eviction
-            agent_b.close()              # session expiry
+            agent_a.release_clients()  # cache eviction
+            agent_b.close()  # session expiry
         finally:
             _ra.cleanup_vm = original_vm
             try:
@@ -593,7 +704,9 @@ class TestAgentCacheIdleResume:
         assert "hard-session" in vm_calls
         assert "soft-session" not in vm_calls
 
+
 _FAKE_NOW = 10_000.0  # Fixed epoch for deterministic time assertions
+
 
 class TestCachedAgentInactivityReset:
     """Inactivity-clock reset must be gated on _interrupt_depth == 0.
@@ -705,6 +818,7 @@ class TestCachedAgentInactivityReset:
             "_flush_messages_to_session_db starts from index 0"
         )
 
+
 class TestAgentCacheMessageCountRebaseline:
     """The cross-process coherence guard (#45966) must NOT invalidate the
     cache on this process's OWN writes.
@@ -744,11 +858,7 @@ class TestAgentCacheMessageCountRebaseline:
         with runner._agent_cache_lock:
             cached = runner._agent_cache.get(session_key)
         cached_mc = cached[2] if cached and len(cached) > 2 else None
-        invalidate = (
-            cached_mc is not None
-            and live is not None
-            and live != cached_mc
-        )
+        invalidate = cached_mc is not None and live is not None and live != cached_mc
         return not invalidate
 
     @pytest.mark.asyncio
@@ -766,7 +876,9 @@ class TestAgentCacheMessageCountRebaseline:
         with runner._agent_cache_lock:
             _row = db.get_session("s1")
             runner._agent_cache["telegram:s1"] = (
-                agent, "sig", (_row.get("message_count", 0) if _row else 0),
+                agent,
+                "sig",
+                (_row.get("message_count", 0) if _row else 0),
             )
 
         # Our own turn + re-baseline -> reuse next turn.

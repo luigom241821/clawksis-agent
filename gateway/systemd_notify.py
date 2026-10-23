@@ -10,7 +10,11 @@ import socket
 
 
 def _notify_socket() -> str:
-    return os.environ.get("NOTIFY_SOCKET", "").strip() if hasattr(socket, "AF_UNIX") else ""
+    return (
+        os.environ.get("NOTIFY_SOCKET", "").strip()
+        if hasattr(socket, "AF_UNIX")
+        else ""
+    )
 
 
 def notify(message: str) -> bool:
@@ -19,7 +23,9 @@ def notify(message: str) -> bool:
         return False
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as sender:
-            sender.setblocking(False)  # a full receiver buffer must not stall the event loop
+            sender.setblocking(
+                False
+            )  # a full receiver buffer must not stall the event loop
             # systemd's ``@abstract`` notation -> Python's leading-NUL address form
             sender.connect("\0" + address[1:] if address.startswith("@") else address)
             sender.send(message.encode("utf-8"))
@@ -30,7 +36,9 @@ def notify(message: str) -> bool:
 
 def watchdog_interval_seconds() -> float | None:
     try:
-        interval = float(os.environ.get("WATCHDOG_USEC", "") if _notify_socket() else "") / 1e6
+        interval = (
+            float(os.environ.get("WATCHDOG_USEC", "") if _notify_socket() else "") / 1e6
+        )
     except (TypeError, ValueError):
         return None
     return interval if math.isfinite(interval) and interval > 0 else None
@@ -39,14 +47,18 @@ def watchdog_interval_seconds() -> float | None:
 class SystemdWatchdog:
     """Feed systemd while the asyncio event loop continues to make progress."""
 
-    def __init__(self, *, config_enabled: bool = True, lag_tolerance_seconds: float | None = None):
+    def __init__(
+        self, *, config_enabled: bool = True, lag_tolerance_seconds: float | None = None
+    ):
         self._config_enabled = bool(config_enabled)
         self.interval_seconds = watchdog_interval_seconds()
         self._lag_tolerance_seconds = lag_tolerance_seconds
         self._task: asyncio.Task[None] | None = None
         self._unhealthy = self._stopping = self._stopping_notified = False
 
-    enabled = property(lambda self: self._config_enabled and self.interval_seconds is not None)
+    enabled = property(
+        lambda self: self._config_enabled and self.interval_seconds is not None
+    )
     unhealthy = property(lambda self: self._unhealthy)
     task = property(lambda self: self._task)
 

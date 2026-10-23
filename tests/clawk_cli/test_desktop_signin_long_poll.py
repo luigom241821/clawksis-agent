@@ -23,14 +23,24 @@ __all__ = ["free_account", "portal"]  # fixtures imported from the CLI test modu
 
 
 def _poll(session_id: str, wait: float) -> dict:
-    resp = client.get(f"/api/providers/oauth/nous/poll/{session_id}", params={"wait": wait}, headers=HEADERS)
+    resp = client.get(
+        f"/api/providers/oauth/nous/poll/{session_id}",
+        params={"wait": wait},
+        headers=HEADERS,
+    )
     assert resp.status_code == 200, resp.text
     return resp.json()
 
 
-def test_one_long_poll_returns_the_finished_sign_in_with_the_handoff_as_fields(portal, free_account):
+def test_one_long_poll_returns_the_finished_sign_in_with_the_handoff_as_fields(
+    portal, free_account
+):
     anon_auth.ensure_portal_identity(explicit=True)
-    portal.claim_reply["connectors"] = {"kind": "moved", "moved_toolkits": ["gmail"], "dropped_toolkits": ["slack"]}
+    portal.claim_reply["connectors"] = {
+        "kind": "moved",
+        "moved_toolkits": ["gmail"],
+        "dropped_toolkits": ["slack"],
+    }
 
     start = client.post("/api/providers/oauth/nous/start", headers=HEADERS).json()
     body = _poll(start["session_id"], wait=25)
@@ -39,7 +49,9 @@ def test_one_long_poll_returns_the_finished_sign_in_with_the_handoff_as_fields(p
     handoff = body["handoff_status"]
     assert handoff["state"] == "claimed"
     assert handoff["account_email"] == EMAIL
-    assert handoff["moved_toolkits"] == ["gmail"] and handoff["dropped_toolkits"] == ["slack"]
+    assert handoff["moved_toolkits"] == ["gmail"] and handoff["dropped_toolkits"] == [
+        "slack"
+    ]
     # The fields' copy is the same lines every other sign-in surface prints.
     assert handoff["lines"] == body["handoff"] == guest_handoff.result_lines(handoff)
     assert "anon_token" not in handoff
@@ -52,7 +64,9 @@ def test_a_sign_in_that_replaced_no_free_tier_reports_no_handoff(portal, free_ac
     assert body["handoff_status"] is None and body["handoff"] == []
 
 
-def test_a_move_no_attempt_reached_still_reports_the_waiting_record(portal, free_account, monkeypatch):
+def test_a_move_no_attempt_reached_still_reports_the_waiting_record(
+    portal, free_account, monkeypatch
+):
     """Another process holds the claim, so this sign-in's own run attempts nothing: the poll still
     reports the replaced free tier's record (still moving) instead of no handoff at all."""
     anon_auth.ensure_portal_identity(explicit=True)
@@ -64,7 +78,9 @@ def test_a_move_no_attempt_reached_still_reports_the_waiting_record(portal, free
     assert body["status"] == "approved"
     # A move bound to this account and not yet attempted reads as retrying (handoff_status's rule).
     assert body["handoff_status"]["state"] == "retrying"
-    assert body["handoff_status"]["lines"] == guest_handoff.result_lines({"state": "retrying"})
+    assert body["handoff_status"]["lines"] == guest_handoff.result_lines(
+        {"state": "retrying"}
+    )
     assert not portal.claims
 
 
@@ -75,11 +91,15 @@ def test_a_long_poll_answers_pending_once_its_wait_runs_out(portal):
     try:
         assert _poll(start["session_id"], wait=0.3)["status"] == "pending"
     finally:
-        client.delete(f"/api/providers/oauth/sessions/{start['session_id']}", headers=HEADERS)
+        client.delete(
+            f"/api/providers/oauth/sessions/{start['session_id']}", headers=HEADERS
+        )
 
 
 def _handoff(**params) -> dict:
-    resp = client.get("/api/providers/oauth/nous/handoff", params=params, headers=HEADERS)
+    resp = client.get(
+        "/api/providers/oauth/nous/handoff", params=params, headers=HEADERS
+    )
     assert resp.status_code == 200, resp.text
     return resp.json()
 
@@ -96,9 +116,20 @@ def test_the_handoff_route_reads_the_record_the_sign_in_left(portal, free_accoun
 
 
 def test_the_handoff_long_poll_answers_when_the_record_changes(monkeypatch):
-    retrying = {"state": "retrying", "updated_at": "t1", "moved_toolkits": [], "dropped_toolkits": []}
-    claimed = {"state": "claimed", "updated_at": "t2", "account_email": EMAIL, "connectors_kind": "moved",
-               "moved_toolkits": ["gmail"], "dropped_toolkits": []}
+    retrying = {
+        "state": "retrying",
+        "updated_at": "t1",
+        "moved_toolkits": [],
+        "dropped_toolkits": [],
+    }
+    claimed = {
+        "state": "claimed",
+        "updated_at": "t2",
+        "account_email": EMAIL,
+        "connectors_kind": "moved",
+        "moved_toolkits": ["gmail"],
+        "dropped_toolkits": [],
+    }
     reads = iter([retrying, retrying, claimed])
     monkeypatch.setattr(guest_handoff, "handoff_status", lambda: next(reads, claimed))
 
@@ -109,7 +140,12 @@ def test_the_handoff_long_poll_answers_when_the_record_changes(monkeypatch):
 
 
 def test_the_handoff_long_poll_returns_the_unchanged_record_after_its_wait(monkeypatch):
-    retrying = {"state": "retrying", "updated_at": "t1", "moved_toolkits": [], "dropped_toolkits": []}
+    retrying = {
+        "state": "retrying",
+        "updated_at": "t1",
+        "moved_toolkits": [],
+        "dropped_toolkits": [],
+    }
     monkeypatch.setattr(guest_handoff, "handoff_status", lambda: retrying)
 
     status = _handoff(since="t1", wait=0.2)

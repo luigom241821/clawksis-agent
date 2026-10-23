@@ -75,6 +75,7 @@ class _HomeLayer:
     ``stamps`` are the plugin dirs' mtimes: a directory added by ``clawk plugins install`` while the
     process runs changes them, and the next lookup imports it without a restart.
     """
+
     registry: dict[str, ProviderProfile] = field(default_factory=dict)
     aliases: dict[str, str] = field(default_factory=dict)
     stamps: tuple = ()
@@ -87,7 +88,9 @@ _HOME_LAYERS_LOCK = threading.Lock()
 # two turn threads scanning two profile homes at once must not cross-register. Never a lock held
 # across the import itself — a thread mid-``import clawk_cli.auth`` (whose import calls
 # ``list_providers()``) would block on it while the scanning thread waits on that module's import lock.
-_REGISTRATION_TARGET: ContextVar[_HomeLayer | None] = ContextVar("_provider_registration_target", default=None)
+_REGISTRATION_TARGET: ContextVar[_HomeLayer | None] = ContextVar(
+    "_provider_registration_target", default=None
+)
 
 # Repo-root ``plugins/model-providers/`` — populated at discovery time.
 _BUNDLED_PLUGINS_DIR = (
@@ -139,7 +142,9 @@ def register_provider(profile: ProviderProfile) -> None:
         for alias in profile.aliases:
             _ALIASES[alias] = profile.name
         _PROVIDER_LIST_CACHE = None
-    if _discovered and not _discovering:  # post-discovery registration: mirror it immediately
+    if (
+        _discovered and not _discovering
+    ):  # post-discovery registration: mirror it immediately
         _sync_auth_registry()
 
 
@@ -173,11 +178,16 @@ def _has_named_custom_provider(name: str, home: Path | None, hkey: str) -> bool:
     from utils import file_signature
 
     try:
-        sig = file_signature((home / "config.yaml").stat()) if home is not None else None
+        sig = (
+            file_signature((home / "config.yaml").stat()) if home is not None else None
+        )
     except OSError:
         sig = None  # no readable config: nothing configured, stable until one appears
     memo = _NAMED_CUSTOM_MEMO.get(hkey)
-    if memo is None or _NAMED_CUSTOM_MEMO_SIG.get(hkey, _NAMED_CUSTOM_MEMO_NO_SIG) != sig:
+    if (
+        memo is None
+        or _NAMED_CUSTOM_MEMO_SIG.get(hkey, _NAMED_CUSTOM_MEMO_NO_SIG) != sig
+    ):
         memo = {}
         _NAMED_CUSTOM_MEMO[hkey] = memo
         _NAMED_CUSTOM_MEMO_SIG[hkey] = sig
@@ -247,6 +257,7 @@ def routed_model_rejects_vision_tool_messages(provider: str, model: str) -> bool
     # to the aggregator; the target provider can have stricter message-shape support than
     # the aggregator's generic OpenAI-compatible transport profile.
     from clawk_cli.providers import is_routing_aggregator
+
     if not is_routing_aggregator(provider_name):
         return False
 
@@ -254,7 +265,10 @@ def routed_model_rejects_vision_tool_messages(provider: str, model: str) -> bool
     if not separator or not target_name:
         return False
     target_profile = get_provider_profile(target_name.strip().lower())
-    return target_profile is not None and target_profile.supports_vision_tool_messages is False
+    return (
+        target_profile is not None
+        and target_profile.supports_vision_tool_messages is False
+    )
 
 
 def list_providers() -> list[ProviderProfile]:
@@ -296,7 +310,9 @@ def unlisted_provider_names() -> set[str]:
             if not profile.listed():
                 hidden.add(profile.name)
         except Exception:
-            logger.debug("provider %s listed() raised; hiding it", profile.name, exc_info=True)
+            logger.debug(
+                "provider %s listed() raised; hiding it", profile.name, exc_info=True
+            )
             hidden.add(profile.name)
     return hidden
 
@@ -323,7 +339,9 @@ def _bound_home_layer() -> tuple[_HomeLayer, Path | None, str]:
     return layer, home, key
 
 
-def _refresh_home_layer(layer: _HomeLayer, home: Path | None, key: str, *, force: bool = False) -> bool:
+def _refresh_home_layer(
+    layer: _HomeLayer, home: Path | None, key: str, *, force: bool = False
+) -> bool:
     """Re-stat the layer's plugin dirs when due (or *force*d); True when it stat'ed this call.
 
     Stamps are read before the scan: a plugin that lands mid-scan changes them and the next
@@ -354,11 +372,13 @@ def _refresh_home_layer(layer: _HomeLayer, home: Path | None, key: str, *, force
 
 def _plugin_dir_stamps(home: Path) -> tuple:
     """mtimes of ``plugins/`` and ``plugins/model-providers/``: they change when a child is added."""
+
     def stamp(path: Path):
         try:
             return os.stat(path).st_mtime_ns
         except OSError:
             return None
+
     return (stamp(home / "plugins"), stamp(home / "plugins" / "model-providers"))
 
 
@@ -444,7 +464,11 @@ def _scan_home_layer(layer: _HomeLayer, key: str) -> None:
         installed_dir = _installed_plugins_dir()
         if installed_dir is not None:
             for child in sorted(installed_dir.iterdir()):
-                if not child.is_dir() or child.name.startswith(("_", ".")) or child.name == "model-providers":
+                if (
+                    not child.is_dir()
+                    or child.name.startswith(("_", "."))
+                    or child.name == "model-providers"
+                ):
                     continue
                 if _declares_model_provider_kind(child):
                     _import_plugin_dir(child, "user", home_key=key)
@@ -469,15 +493,24 @@ def _import_plugin_dir(plugin_dir: Path, source: str, *, home_key: str = "") -> 
         return
     if source != "bundled":
         from clawk_cli.plugin_isolation import ISOLATION_HOST, isolation_mode
-        if isolation_mode() == ISOLATION_HOST:  # the plugin's code runs in the plugin host
+
+        if (
+            isolation_mode() == ISOLATION_HOST
+        ):  # the plugin's code runs in the plugin host
             from clawk_cli.plugin_host_profiles import load_hosted_profiles
+
             _current_source = source
             try:
-                for profile in load_hosted_profiles(plugin_dir, _user_module_name(plugin_dir, home_key)):
+                for profile in load_hosted_profiles(
+                    plugin_dir, _user_module_name(plugin_dir, home_key)
+                ):
                     register_provider(profile)
             except Exception as exc:
-                logger.warning("Failed to load user provider plugin %s in the plugin host: %s",
-                               plugin_dir.name, exc)
+                logger.warning(
+                    "Failed to load user provider plugin %s in the plugin host: %s",
+                    plugin_dir.name,
+                    exc,
+                )
             finally:
                 _current_source = None
             return
@@ -582,7 +615,10 @@ def _discover_entry_point_providers() -> None:
             )
             continue
         from clawk_cli.plugin_isolation import in_process_import_refusal
-        refusal = in_process_import_refusal(f"pip-installed model-provider plugin {ep.name!r}")
+
+        refusal = in_process_import_refusal(
+            f"pip-installed model-provider plugin {ep.name!r}"
+        )
         if refusal:
             logger.warning("%s", refusal)
             continue
@@ -631,11 +667,15 @@ def _requires_arguments(fn) -> bool:
     except (TypeError, ValueError):  # pragma: no cover — builtins/C callables
         return False
     for param in sig.parameters.values():
-        if param.kind in (
-            inspect.Parameter.POSITIONAL_ONLY,
-            inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            inspect.Parameter.KEYWORD_ONLY,
-        ) and param.default is inspect.Parameter.empty:
+        if (
+            param.kind
+            in (
+                inspect.Parameter.POSITIONAL_ONLY,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                inspect.Parameter.KEYWORD_ONLY,
+            )
+            and param.default is inspect.Parameter.empty
+        ):
             return True
     return False
 

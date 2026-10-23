@@ -28,19 +28,22 @@ from agent.transports.chat_completions import (
 @pytest.fixture
 def transport():
     import agent.transports.chat_completions
+
     return get_transport("chat_completions")
 
 
 class TestRenameToolSearchBridgeForXai:
     def test_tool_search_renamed_alias_value(self):
-        tools = [{
-            "type": "function",
-            "function": {
-                "name": "tool_search",
-                "description": "Search deferred tools",
-                "parameters": {"type": "object", "properties": {}},
-            },
-        }]
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "tool_search",
+                    "description": "Search deferred tools",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            }
+        ]
         out, alias_map = _rename_tool_search_bridge_for_xai(tools)
         assert out[0]["function"]["name"] == _XAI_TOOL_SEARCH_ALIAS
         assert out[0]["function"]["name"] == "clawk_tool_search"
@@ -50,9 +53,14 @@ class TestRenameToolSearchBridgeForXai:
         fn = {
             "name": "tool_search",
             "description": "Search the deferred tool catalog",
-            "parameters": {"type": "object", "properties": {"query": {"type": "string"}}},
+            "parameters": {
+                "type": "object",
+                "properties": {"query": {"type": "string"}},
+            },
         }
-        out, _ = _rename_tool_search_bridge_for_xai([{"type": "function", "function": fn}])
+        out, _ = _rename_tool_search_bridge_for_xai(
+            [{"type": "function", "function": fn}]
+        )
         assert out[0]["function"]["description"] == fn["description"]
         assert out[0]["function"]["parameters"] == fn["parameters"]
 

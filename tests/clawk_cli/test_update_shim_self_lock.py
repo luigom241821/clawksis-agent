@@ -17,7 +17,8 @@ import pytest
 def test_pending_rename_filter_drops_only_our_shim_pairs():
     shims = [Path(r"C:\clawk\venv\Scripts\clawk.exe")]
     entries = [
-        r"\??\C:\other\thing.dll", r"!\??\C:\other\thing.dll.bak",
+        r"\??\C:\other\thing.dll",
+        r"!\??\C:\other\thing.dll.bak",
         r"\??\C:\clawk\venv\Scripts\clawk.exe",
         r"!\??\C:\clawk\venv\Scripts\clawk.exe.old.1755624735000",
     ]
@@ -29,7 +30,10 @@ def test_pending_rename_filter_drops_only_our_shim_pairs():
 def test_pending_rename_filter_keeps_a_shim_pair_with_a_foreign_target():
     shims = [Path(r"C:\clawk\venv\Scripts\clawk.exe")]
     entries = [r"\??\C:\clawk\venv\Scripts\clawk.exe", r"!\??\C:\somewhere\else.exe"]
-    assert main_install_repair._filter_pending_shim_renames(entries, shims) == (entries, 0)
+    assert main_install_repair._filter_pending_shim_renames(entries, shims) == (
+        entries,
+        0,
+    )
 
 
 def test_pending_rename_filter_preserves_a_trailing_delete_entry():
@@ -50,7 +54,9 @@ def test_venv_scripts_dir_finds_both_layouts(tmp_path, monkeypatch, venv_name):
     whole Windows shim-lock preflight skipped itself. Uses the host's real bin
     dir name (``Scripts``/``bin``), so no OS is faked.
     """
-    scripts = venv_bin_dir(tmp_path / venv_name, windows=main_install_repair._is_windows())
+    scripts = venv_bin_dir(
+        tmp_path / venv_name, windows=main_install_repair._is_windows()
+    )
     scripts.mkdir(parents=True)
     monkeypatch.setattr(cli_main, "PROJECT_ROOT", tmp_path)
     assert main_install_repair._venv_scripts_dir() == scripts

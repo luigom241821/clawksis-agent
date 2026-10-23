@@ -37,7 +37,9 @@ def _make_event(text):
     return MessageEvent(
         text=text,
         message_type=MessageType.TEXT,
-        source=SessionSource(platform=Platform.TELEGRAM, chat_id="12345", chat_type="dm"),
+        source=SessionSource(
+            platform=Platform.TELEGRAM, chat_id="12345", chat_type="dm"
+        ),
     )
 
 
@@ -73,7 +75,12 @@ def _setup_isolated_home(tmp_path, monkeypatch, *, warn):
     clawk_home.mkdir()
     cfg_path = clawk_home / "config.yaml"
     cfg_path.write_text(
-        yaml.safe_dump({"model": {"default": "old-model", "provider": "openrouter"}, "providers": {}}),
+        yaml.safe_dump(
+            {
+                "model": {"default": "old-model", "provider": "openrouter"},
+                "providers": {},
+            }
+        ),
         encoding="utf-8",
     )
 
@@ -154,7 +161,9 @@ async def test_failed_inplace_swap_aborts_commit(tmp_path, monkeypatch):
     evicted = []
     runner._evict_cached_agent = lambda sk: evicted.append(sk)
 
-    result = await runner._handle_model_command(_make_event("/model openai/gpt-5.5-pro"))
+    result = await runner._handle_model_command(
+        _make_event("/model openai/gpt-5.5-pro")
+    )
 
     # Error surfaced to the user, not a success confirmation.
     assert result is not None

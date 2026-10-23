@@ -1,4 +1,5 @@
 """Read-only canonical admission fences for dispatcher reclaim paths."""
+
 from contextlib import closing
 import json
 from pathlib import Path
@@ -12,21 +13,27 @@ def owner_reclaim_paused(conn, task_id):
     marker = conn.execute(
         "SELECT e.payload FROM task_events e JOIN tasks t ON t.current_run_id=e.run_id "
         "WHERE t.id=? AND e.task_id=t.id AND e.kind='owner_admitted' ORDER BY e.id DESC LIMIT 1",
-        (task_id,)).fetchone()
+        (task_id,),
+    ).fetchone()
     if marker is None:
         return False
     try:
-        binding = json.loads(marker['payload'])
-        with closing(sqlite3.connect(Path(binding['db']).as_uri() + '?mode=ro', uri=True)) as owner:
-            row = owner.execute('SELECT status,outcome FROM session_admissions WHERE target_session_id=? AND request_id=?',
-                                (binding['session_id'], binding['request_id'])).fetchone()
-        if row is not None and row[0] == 'terminal':
+        binding = json.loads(marker["payload"])
+        with closing(
+            sqlite3.connect(Path(binding["db"]).as_uri() + "?mode=ro", uri=True)
+        ) as owner:
+            row = owner.execute(
+                "SELECT status,outcome FROM session_admissions WHERE target_session_id=? AND request_id=?",
+                (binding["session_id"], binding["request_id"]),
+            ).fetchone()
+        if row is not None and row[0] == "terminal":
             # Discard acknowledges uncertainty, not permission to repeat effects.
-            return row[1] == 'interrupted'
-        if row is None or row[0] in {'queued', 'unknown'}:
+            return row[1] == "interrupted"
+        if row is None or row[0] in {"queued", "unknown"}:
             return True
         from clawk_cli.process_identity import process_birth
-        return process_birth(psutil.Process(binding['pid'])) != binding['birth']
+
+        return process_birth(psutil.Process(binding["pid"])) != binding["birth"]
     except (OSError, ValueError, KeyError, sqlite3.Error):
         return True
     except psutil.Error:
@@ -42,9 +49,10 @@ def _latest_run_event(conn, task_id, kind):
     row = conn.execute(
         "SELECT e.payload FROM task_events e JOIN tasks t ON t.current_run_id=e.run_id "
         "WHERE t.id=? AND e.task_id=t.id AND e.kind=? ORDER BY e.id DESC LIMIT 1",
-        (task_id, kind)).fetchone()
+        (task_id, kind),
+    ).fetchone()
     try:
-        payload = json.loads(row['payload']) if row else {}
+        payload = json.loads(row["payload"]) if row else {}
     except (ValueError, TypeError):
         return {}
     return payload if isinstance(payload, dict) else {}
@@ -53,16 +61,18 @@ def _latest_run_event(conn, task_id, kind):
 def _host_local_lock(lock) -> bool:
     """True when ``lock`` was issued by this host — the only pids we can judge."""
     from clawk_cli import kanban_db as kb
+
     return bool(lock) and str(lock).startswith(kb._host_prefix())
 
 
 def bound_interpreter_gone(conn, task_id):
     """True when the owner bound an interpreter to the task's current run and it is dead."""
-    bound = _latest_run_event(conn, task_id, 'worker_bound')
+    bound = _latest_run_event(conn, task_id, "worker_bound")
     if not bound:
         return False
     from clawk_cli.kanban_db_dispatch import _worker_alive
-    return not _worker_alive(bound.get('pid'), bound.get('started_at'))
+
+    return not _worker_alive(bound.get("pid"), bound.get("started_at"))
 
 
 def _owner_process_gone(receipt) -> bool:
@@ -74,29 +84,31 @@ def _owner_process_gone(receipt) -> bool:
     recorded) and an unreadable one are never proof of death.
     """
     try:
-        pid = int(receipt['pid'])
+        pid = int(receipt["pid"])
     except (KeyError, TypeError, ValueError):
         return False
     from clawk_cli import kanban_db as kb
+
     if not kb._pid_alive(pid):
         return True  # absent, or an exited zombie still waiting to be reaped
     try:
         from clawk_cli.process_identity import process_birth
+
         current = process_birth(psutil.Process(pid))
     except psutil.NoSuchProcess:
         return True
     except psutil.Error:
         return False
-    birth = receipt.get('birth')
+    birth = receipt.get("birth")
     return birth is not None and current != birth
 
 
 def _run_worker_pids(conn, task_row, task_id):
     """Every worker pid recorded for the task's current run, with its spawn fingerprint."""
-    recorded = [(task_row['worker_pid'], task_row['worker_started_at'])]
-    for kind in ('spawned', 'worker_bound'):
+    recorded = [(task_row["worker_pid"], task_row["worker_started_at"])]
+    for kind in ("spawned", "worker_bound"):
         payload = _latest_run_event(conn, task_id, kind)
-        recorded.append((payload.get('pid'), payload.get('started_at')))
+        recorded.append((payload.get("pid"), payload.get("started_at")))
     return [(int(pid), fingerprint) for pid, fingerprint in recorded if pid]
 
 
@@ -122,21 +134,29 @@ def owner_attempt_provably_over(conn, task_id) -> bool:
     """
     from clawk_cli import kanban_db as kb
     from clawk_cli.kanban_db_dispatch import _worker_alive
-    if _latest_run_event(conn, task_id, 'worker_bound'):
-        return False  # a bound run is the crash sweep's to book (bound_interpreter_gone)
+
+    if _latest_run_event(conn, task_id, "worker_bound"):
+        return (
+            False  # a bound run is the crash sweep's to book (bound_interpreter_gone)
+        )
     row = conn.execute(
         "SELECT claim_lock, claim_expires, worker_pid, worker_started_at, last_heartbeat_at "
-        "FROM tasks WHERE id=?", (task_id,)).fetchone()
-    if row is None or not _host_local_lock(row['claim_lock']):
+        "FROM tasks WHERE id=?",
+        (task_id,),
+    ).fetchone()
+    if row is None or not _host_local_lock(row["claim_lock"]):
         return False
     now = int(time.time())
-    expires = kb._to_epoch(row['claim_expires'])
+    expires = kb._to_epoch(row["claim_expires"])
     if expires is None or expires >= now:
         return False
-    heartbeat = kb._to_epoch(row['last_heartbeat_at'])
-    if heartbeat is not None and now - heartbeat <= kb.DEFAULT_CLAIM_HEARTBEAT_MAX_STALE_SECONDS:
+    heartbeat = kb._to_epoch(row["last_heartbeat_at"])
+    if (
+        heartbeat is not None
+        and now - heartbeat <= kb.DEFAULT_CLAIM_HEARTBEAT_MAX_STALE_SECONDS
+    ):
         return False
-    if not _owner_process_gone(_latest_run_event(conn, task_id, 'owner_admitted')):
+    if not _owner_process_gone(_latest_run_event(conn, task_id, "owner_admitted")):
         return False
     pids = _run_worker_pids(conn, row, task_id)
     if not pids:
@@ -184,16 +204,26 @@ def managed_run_exit_code(conn, task_id, worker_pid, claim_lock):
     the dispatcher's own worker, or the owner-side interpreter ``worker_bound`` recorded under
     that claim — ``session_kanban._record_worker_result`` writes the interpreter's pid, never the
     spawned submitter's ``tasks.worker_pid``."""
+
     def latest(kind):
         row = conn.execute(
             "SELECT e.payload FROM task_events e JOIN tasks t ON t.current_run_id=e.run_id "
-            "WHERE t.id=? AND e.task_id=t.id AND e.kind=? ORDER BY e.id DESC LIMIT 1", (task_id, kind)).fetchone()
+            "WHERE t.id=? AND e.task_id=t.id AND e.kind=? ORDER BY e.id DESC LIMIT 1",
+            (task_id, kind),
+        ).fetchone()
         try:
-            payload = json.loads(row['payload']) if row else {}
+            payload = json.loads(row["payload"]) if row else {}
         except ValueError:
             return {}
         return payload if isinstance(payload, dict) else {}
 
-    result, bound = latest('worker_result'), latest('worker_bound')
-    pids = {worker_pid, *([bound.get('pid')] if bound.get('claim_lock') == claim_lock else [])}
-    return result.get('exit_code') if result.get('claim_lock') == claim_lock and result.get('pid') in pids else None
+    result, bound = latest("worker_result"), latest("worker_bound")
+    pids = {
+        worker_pid,
+        *([bound.get("pid")] if bound.get("claim_lock") == claim_lock else []),
+    }
+    return (
+        result.get("exit_code")
+        if result.get("claim_lock") == claim_lock and result.get("pid") in pids
+        else None
+    )

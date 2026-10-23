@@ -22,10 +22,17 @@ from typing import Callable, Iterable
 from clawk_constants import get_clawk_home
 from tools.interrupt import consume_yield, is_interrupted, is_thread_interrupted
 from tools.environments.base_output import (
-    ProcessHandle, _finalize_wait_result, _new_output_collector, _start_drain_thread,
+    ProcessHandle,
+    _finalize_wait_result,
+    _new_output_collector,
+    _start_drain_thread,
 )
 from tools.environments.base_session_env import (
-    _SHELL_ENV_NAME_RE, _SNAP_TMP_SUFFIX, _cwd_marker, _snapshot_bootstrap_script, _split_cwd_marker,
+    _SHELL_ENV_NAME_RE,
+    _SNAP_TMP_SUFFIX,
+    _cwd_marker,
+    _snapshot_bootstrap_script,
+    _split_cwd_marker,
     _wrap_command_script,
 )
 from tools.environments.base_wait import _WaitTrace
@@ -60,8 +67,12 @@ _live_foreground: "dict[int, tuple[BaseEnvironment, ProcessHandle]]" = {}
 # Reentrant, and the hard-exit path only ever takes it with a timeout: a signal handler can run
 # on a thread that already holds it.
 _live_foreground_cond = threading.Condition(threading.RLock())
-_exit_fenced = False  # one-way, set by the hard-exit kill: no foreground command spawns after it
-_spawns_in_flight = 0  # past the fence check, child maybe alive, not yet in _live_foreground
+_exit_fenced = (
+    False  # one-way, set by the hard-exit kill: no foreground command spawns after it
+)
+_spawns_in_flight = (
+    0  # past the fence check, child maybe alive, not yet in _live_foreground
+)
 _HARD_KILL_BUDGET_S = 0.5
 
 
@@ -111,7 +122,9 @@ def kill_live_foreground_processes(*, now: bool = False) -> int:
     _exit_fenced = True
     if _live_foreground_cond.acquire(timeout=_HARD_KILL_BUDGET_S):
         try:
-            _live_foreground_cond.wait_for(lambda: _spawns_in_flight == 0, max(0.0, deadline - time.monotonic()))
+            _live_foreground_cond.wait_for(
+                lambda: _spawns_in_flight == 0, max(0.0, deadline - time.monotonic())
+            )
             live = list(_live_foreground.values())
         finally:
             _live_foreground_cond.release()
@@ -122,7 +135,13 @@ def kill_live_foreground_processes(*, now: bool = False) -> int:
         if isinstance(proc, subprocess.Popen):  # killpg/kill: never blocks
             _quiet_kill(env._force_kill_process, proc)
         else:
-            remote.append(threading.Thread(target=_quiet_kill, args=(env._force_kill_process, proc), daemon=True))
+            remote.append(
+                threading.Thread(
+                    target=_quiet_kill,
+                    args=(env._force_kill_process, proc),
+                    daemon=True,
+                )
+            )
             remote[-1].start()
     for t in remote:
         t.join(max(0.0, deadline - time.monotonic()))
@@ -151,7 +170,8 @@ class EnvironmentConnectionError(RuntimeError):
             "This is an infrastructure failure, not a command failure. "
             "Verify the backend is reachable (network, service running, "
             "credentials), then retry the same command — recovery is "
-            "automatic once the backend is back.")
+            "automatic once the backend is back."
+        )
 
 
 def set_activity_callback(cb: Callable[[str], None] | None) -> None:
@@ -181,7 +201,9 @@ def touch_activity_if_due(state: dict, label: str) -> None:
         if cb:
             cb(f"{label} ({int(now - state['start'])}s elapsed)")
     except Exception:
-        logger.debug("activity callback failed during a long-running command", exc_info=True)
+        logger.debug(
+            "activity callback failed during a long-running command", exc_info=True
+        )
 
 
 def get_sandbox_dir() -> Path:
@@ -225,9 +247,14 @@ def _update_json_store(path: Path, update: Callable[[dict], None]) -> None:
     lock_path = path.with_name(f"{path.name}.lock")
     with ExitStack() as stack:
         try:
-            stack.enter_context(_file_lock(
-                lock_path, _JSON_STORE_LOCK_HOLDER, 10.0, f"Timed out waiting for the snapshot store lock ({path})",
-            ))
+            stack.enter_context(
+                _file_lock(
+                    lock_path,
+                    _JSON_STORE_LOCK_HOLDER,
+                    10.0,
+                    f"Timed out waiting for the snapshot store lock ({path})",
+                )
+            )
         except (OSError, TimeoutError):
             logger.warning("Updating %s without its lock", path, exc_info=True)
         data = _load_json_store(path)
@@ -293,7 +320,9 @@ class BaseEnvironment(ABC):
         """
         return "/tmp"  # no-tmp: ok — sandbox-side (remote container) temp dir, not the host
 
-    def __init__(self, cwd: str, timeout: int, env: dict | None = None, persist_env: bool = True):
+    def __init__(
+        self, cwd: str, timeout: int, env: dict | None = None, persist_env: bool = True
+    ):
         self.cwd = cwd
         self.timeout = timeout
         self.env = env or {}
@@ -314,7 +343,12 @@ class BaseEnvironment(ABC):
 
     # --- Abstract methods ---
     def _run_bash(
-        self, cmd_string: str, *, login: bool = False, timeout: int = 120, stdin_data: str | None = None,
+        self,
+        cmd_string: str,
+        *,
+        login: bool = False,
+        timeout: int = 120,
+        stdin_data: str | None = None,
     ) -> ProcessHandle:
         """Spawn a bash process to run *cmd_string*; every backend overrides this."""
         raise NotImplementedError(f"{type(self).__name__} must implement _run_bash()")
@@ -336,31 +370,52 @@ class BaseEnvironment(ABC):
         """
         import base64
         import binascii
+
         marker = f"__CLAWK_FETCH_{uuid.uuid4().hex[:12]}__"
         quoted = shlex.quote(remote_path)
         # ``[ -f ]`` follows symlinks, so a link to a denied host file is judged by the CALLER on
         # ``readlink -f`` output before any bytes move.
         result = self.execute(
             f"[ -f {quoted} ] && echo {marker} && head -c {max_bytes + 1} < {quoted} | base64 && echo {marker}",
-            timeout=_FETCH_TIMEOUT_SECONDS, rewrite_compound_background=False)
+            timeout=_FETCH_TIMEOUT_SECONDS,
+            rewrite_compound_background=False,
+        )
         output = result.get("output") or ""
         first, last = output.find(marker), output.rfind(marker)
         if int(result.get("returncode") or 0) != 0 or first == -1 or last <= first:
-            raise FileFetchError(f"could not read {remote_path!r} in the sandbox (missing, not a regular file, or unreadable)")
+            raise FileFetchError(
+                f"could not read {remote_path!r} in the sandbox (missing, not a regular file, or unreadable)"
+            )
         try:
-            data = base64.b64decode("".join(output[first + len(marker):last].split()), validate=True)
+            data = base64.b64decode(
+                "".join(output[first + len(marker) : last].split()), validate=True
+            )
         except (ValueError, binascii.Error) as exc:
-            raise FileFetchError(f"transfer of {remote_path!r} was corrupted in transit: {exc}") from exc
+            raise FileFetchError(
+                f"transfer of {remote_path!r} was corrupted in transit: {exc}"
+            ) from exc
         if len(data) > max_bytes:
-            raise FileFetchError(f"{remote_path!r} exceeds the {max_bytes // (1024 * 1024)} MB delivery limit")
+            raise FileFetchError(
+                f"{remote_path!r} exceeds the {max_bytes // (1024 * 1024)} MB delivery limit"
+            )
         Path(local_dest).write_bytes(data)
 
     def fetch_realpath(self, remote_path: str) -> str | None:
         """``readlink -f`` inside the backend, or None when it cannot be resolved."""
-        result = self.execute(f"readlink -f {shlex.quote(remote_path)} 2>/dev/null", rewrite_compound_background=False)
+        result = self.execute(
+            f"readlink -f {shlex.quote(remote_path)} 2>/dev/null",
+            rewrite_compound_background=False,
+        )
         if int(result.get("returncode") or 0) != 0:
             return None
-        return next((ln.strip() for ln in reversed((result.get("output") or "").splitlines()) if ln.strip().startswith("/")), None)
+        return next(
+            (
+                ln.strip()
+                for ln in reversed((result.get("output") or "").splitlines())
+                if ln.strip().startswith("/")
+            ),
+            None,
+        )
 
     # --- Session snapshot (init_session) ---
     def _additional_profile_scoped_passthrough_names(self) -> Iterable[str]:
@@ -375,13 +430,23 @@ class BaseEnvironment(ABC):
             return ()
         try:
             from agent.secret_scope import is_multiplex_active
+
             if is_multiplex_active():
                 from tools.env_passthrough import get_all_passthrough
-                names = (*get_all_passthrough(), *self._additional_profile_scoped_passthrough_names())
+
+                names = (
+                    *get_all_passthrough(),
+                    *self._additional_profile_scoped_passthrough_names(),
+                )
                 self._snapshot_passthrough_names.update(
-                    name for name in names if isinstance(name, str) and _SHELL_ENV_NAME_RE.fullmatch(name))
+                    name
+                    for name in names
+                    if isinstance(name, str) and _SHELL_ENV_NAME_RE.fullmatch(name)
+                )
         except Exception:
-            logger.debug("Could not refresh profile-scoped snapshot exclusions", exc_info=True)
+            logger.debug(
+                "Could not refresh profile-scoped snapshot exclusions", exc_info=True
+            )
         return tuple(sorted(self._snapshot_passthrough_names))
 
     def _snapshot_script_kwargs(self, cwd: str) -> dict:
@@ -391,8 +456,11 @@ class BaseEnvironment(ABC):
         return dict(
             quoted_cwd=self._quote_cwd_for_cd(cwd),
             quoted_snap=self._quote_shell_path(self._snapshot_path),
-            snap_tmp_template=self._quote_shell_path(self._snapshot_path + _SNAP_TMP_SUFFIX),
-            cwd_marker=self._cwd_marker)
+            snap_tmp_template=self._quote_shell_path(
+                self._snapshot_path + _SNAP_TMP_SUFFIX
+            ),
+            cwd_marker=self._cwd_marker,
+        )
 
     def init_session(self):
         """Capture the login shell environment into the snapshot file (once, after construction).
@@ -400,15 +468,23 @@ class BaseEnvironment(ABC):
         under ``bash -l``. On failure, fall back to ``bash -l`` per command — unless a non-login
         probe shows login bash itself is dead, in which case prefer ``bash -c``."""
         bootstrap = _snapshot_bootstrap_script(
-            excluded_names=self._snapshot_excluded_passthrough_names(), **self._snapshot_script_kwargs(self.cwd))
+            excluded_names=self._snapshot_excluded_passthrough_names(),
+            **self._snapshot_script_kwargs(self.cwd),
+        )
         try:
             proc = self._run_bash(bootstrap, login=True, timeout=self._snapshot_timeout)
             result = self._wait_for_process(proc, timeout=self._snapshot_timeout)
             if int(result.get("returncode") or 0) != 0:
-                raise RuntimeError(f"snapshot bootstrap failed with exit code {result.get('returncode')}")
+                raise RuntimeError(
+                    f"snapshot bootstrap failed with exit code {result.get('returncode')}"
+                )
             self._snapshot_ready = True
             self._update_cwd(result)
-            logger.info("Session snapshot created (session=%s, cwd=%s)", self._session_id, self.cwd)
+            logger.info(
+                "Session snapshot created (session=%s, cwd=%s)",
+                self._session_id,
+                self.cwd,
+            )
         except Exception as exc:
             self._snapshot_ready = False
             self._prefer_nonlogin, detail = self._probe_nonlogin_fallback(str(exc))
@@ -416,11 +492,15 @@ class BaseEnvironment(ABC):
                 logger.warning(
                     "init_session failed (session=%s): %s — "
                     "login bash unusable; falling back to non-login bash -c",
-                    self._session_id, exc)
+                    self._session_id,
+                    exc,
+                )
             else:
                 logger.warning(
                     "init_session failed (session=%s): %s — falling back to bash -l per command",
-                    self._session_id, detail)
+                    self._session_id,
+                    detail,
+                )
 
     def _probe_nonlogin_fallback(self, detail: str) -> tuple[bool, str]:
         """Run ``true`` under non-login bash; return ``(prefer_nonlogin, detail)``."""
@@ -460,7 +540,8 @@ class BaseEnvironment(ABC):
             passthrough_names=self._snapshot_excluded_passthrough_names(),
             snapshot_ready=self._snapshot_ready,
             persist_env=self._persist_env,
-            **self._snapshot_script_kwargs(cwd))
+            **self._snapshot_script_kwargs(cwd),
+        )
 
     @staticmethod
     def _embed_stdin_heredoc(command: str, stdin_data: str) -> str:
@@ -471,8 +552,10 @@ class BaseEnvironment(ABC):
         the heredoc stays outside ``<( )`` because bash 3.2 mis-parses bodies inside it. ``|| :``
         keeps an inherited ``set -e`` from killing the reader on read's EOF status."""
         delimiter = f"CLAWK_STDIN_{uuid.uuid4().hex[:12]}"
-        return (f"{{\n{command}\n}} << '{delimiter}' < <(IFS= read -r -d '' s || :; printf '%s' \"${{s%?}}\")\n"
-                f"{stdin_data}\n{delimiter}")
+        return (
+            f"{{\n{command}\n}} << '{delimiter}' < <(IFS= read -r -d '' s || :; printf '%s' \"${{s%?}}\")\n"
+            f"{stdin_data}\n{delimiter}"
+        )
 
     def _staged_stdin_path(self) -> str:
         """Unique sandbox path for staging a payload-mode stdin file."""
@@ -488,9 +571,15 @@ class BaseEnvironment(ABC):
 
     # --- Process lifecycle ---
     def _wait_for_process(
-        self, proc: ProcessHandle, timeout: int = 120, *,
-        bounded_capture: bool = False, watch_interrupt_tid: int | None = None,
-        output=None, yield_handler: Callable[[ProcessHandle, str], dict] | None = None) -> dict:
+        self,
+        proc: ProcessHandle,
+        timeout: int = 120,
+        *,
+        bounded_capture: bool = False,
+        watch_interrupt_tid: int | None = None,
+        output=None,
+        yield_handler: Callable[[ProcessHandle, str], dict] | None = None,
+    ) -> dict:
         """Poll-based wait with interrupt checking and stdout draining (shared, not overridden).
         ``yield_handler(proc, output_so_far)``: when the tool thread is asked to yield
         (``tools.interrupt.request_yield`` — a user message arrived mid-command), the drain
@@ -533,15 +622,22 @@ class BaseEnvironment(ABC):
                 if is_interrupted() or is_thread_interrupted(watch_interrupt_tid):
                     trace.interrupted()
                     _kill_and_join()
-                    return {**self._finalize_wait_result(output, output.render(suffix="\n[Command interrupted]"), 130),
-                            "clawk_interrupted": True}
+                    return {
+                        **self._finalize_wait_result(
+                            output, output.render(suffix="\n[Command interrupted]"), 130
+                        ),
+                        "clawk_interrupted": True,
+                    }
                 if yield_handler is not None and consume_yield(watch_interrupt_tid):
                     drain_stop.set()
                     drain_thread.join(timeout=1)
                     try:
                         handed = yield_handler(proc, output.render())
                     except Exception:
-                        logger.warning("yield-to-background handoff failed; continuing to wait", exc_info=True)
+                        logger.warning(
+                            "yield-to-background handoff failed; continuing to wait",
+                            exc_info=True,
+                        )
                         handed = None
                     if handed is not None:
                         output.close_spill()
@@ -551,11 +647,16 @@ class BaseEnvironment(ABC):
                 if time.monotonic() > deadline:
                     trace.timed_out()
                     _kill_and_join()
-                    rendered = output.render(suffix=f"\n[Command timed out after {timeout}s]")
+                    rendered = output.render(
+                        suffix=f"\n[Command timed out after {timeout}s]"
+                    )
                     if output.total_chars == 0:
                         rendered = rendered.lstrip()
                     # The flag tells Clawksis' own deadline apart from a command's own ``exit 124``.
-                    return {**self._finalize_wait_result(output, rendered, 124), "clawk_timed_out": True}
+                    return {
+                        **self._finalize_wait_result(output, rendered, 124),
+                        "clawk_timed_out": True,
+                    }
                 touch_activity_if_due(_activity_state, "terminal command running")
                 trace.heartbeat()
                 time.sleep(_poll_sleep)
@@ -649,7 +750,8 @@ class BaseEnvironment(ABC):
         stdin_data: str | None = None,
         rewrite_compound_background: bool = True,
         bounded_capture: bool = False,
-        yield_handler: Callable[[ProcessHandle, str], dict] | None = None) -> dict:
+        yield_handler: Callable[[ProcessHandle, str], dict] | None = None,
+    ) -> dict:
         """Execute a command, return {"output": str, "returncode": int}. ``bounded_capture=True``
         caps retention at ``tool_output.max_bytes`` WHILE draining; only the foreground terminal
         tool may set it — internal full-fidelity consumers (file-op ``cat`` reads feeding the
@@ -668,12 +770,15 @@ class BaseEnvironment(ABC):
         # that already produce shell-safe wrappers (spawn_via_env) pass False.
         if rewrite_compound_background:
             from tools.terminal_tool_sudo import _rewrite_compound_background
+
             exec_command = _rewrite_compound_background(exec_command)
         effective_timeout = timeout or self.timeout
         effective_cwd = cwd or self.cwd
 
         # Merge sudo stdin with caller stdin.
-        effective_stdin = sudo_stdin + (stdin_data or "") if sudo_stdin is not None else stdin_data
+        effective_stdin = (
+            sudo_stdin + (stdin_data or "") if sudo_stdin is not None else stdin_data
+        )
         if effective_stdin and self._stdin_mode == "heredoc":
             exec_command = self._embed_stdin_heredoc(exec_command, effective_stdin)
             effective_stdin = None
@@ -695,10 +800,18 @@ class BaseEnvironment(ABC):
             if parent_activity_cb is not None:
                 set_activity_callback(parent_activity_cb)
             if not _enter_foreground_spawn():
-                return {"output": "[host is exiting: command not started]", "returncode": 130}
+                return {
+                    "output": "[host is exiting: command not started]",
+                    "returncode": 130,
+                }
             spawned = None
             try:
-                spawned = self._run_bash(wrapped, login=login, timeout=effective_timeout, stdin_data=effective_stdin)
+                spawned = self._run_bash(
+                    wrapped,
+                    login=login,
+                    timeout=effective_timeout,
+                    stdin_data=effective_stdin,
+                )
             finally:
                 fenced = _leave_foreground_spawn(self, spawned)
             proc_holder.append(spawned)
@@ -708,9 +821,17 @@ class BaseEnvironment(ABC):
             output_holder.append(output)
             try:
                 return self._wait_for_process(
-                    spawned, timeout=effective_timeout, bounded_capture=bounded_capture,
-                    watch_interrupt_tid=parent_tid, output=output,
-                    **({"yield_handler": yield_handler} if yield_handler is not None else {}))
+                    spawned,
+                    timeout=effective_timeout,
+                    bounded_capture=bounded_capture,
+                    watch_interrupt_tid=parent_tid,
+                    output=output,
+                    **(
+                        {"yield_handler": yield_handler}
+                        if yield_handler is not None
+                        else {}
+                    ),
+                )
             finally:
                 with _live_foreground_cond:
                     _live_foreground.pop(id(spawned), None)
@@ -735,7 +856,11 @@ class BaseEnvironment(ABC):
 
         try:
             bounded = run_bounded_sync(
-                _spawn_and_wait, bound_s, label=f"terminal.wait:{type(self).__name__}", on_timeout=_on_timeout)
+                _spawn_and_wait,
+                bound_s,
+                label=f"terminal.wait:{type(self).__name__}",
+                on_timeout=_on_timeout,
+            )
         except (KeyboardInterrupt, SystemExit):
             _on_timeout()
             raise
@@ -744,7 +869,9 @@ class BaseEnvironment(ABC):
             suffix = f"\n[Command timed out after {effective_timeout}s]"
             if output_holder:
                 collector = output_holder[0]
-                result = self._finalize_wait_result(collector, collector.render(suffix=suffix).lstrip("\n"), 124)
+                result = self._finalize_wait_result(
+                    collector, collector.render(suffix=suffix).lstrip("\n"), 124
+                )
             else:
                 result = {"output": suffix.lstrip(), "returncode": 124}
             result["clawk_timed_out"] = True
@@ -767,6 +894,7 @@ class BaseEnvironment(ABC):
             return
         try:
             from agent.deadline import kill_process_tree
+
             kill_process_tree(int(pid))
         except Exception:
             logger.debug("terminal wait-bound kill_process_tree failed", exc_info=True)
@@ -787,6 +915,7 @@ class BaseEnvironment(ABC):
         """
         from tools.terminal_tool_macos_open import _transform_macos_open_command
         from tools.terminal_tool_sudo import _transform_sudo_command
+
         return _transform_sudo_command(
             _transform_macos_open_command(command),
             sudo_nopasswd_check=self._sudo_nopasswd_works,
@@ -801,6 +930,11 @@ class BaseEnvironment(ABC):
             return False
         try:
             proc = self._run_bash("sudo -n true", timeout=self._SUDO_PROBE_TIMEOUT_S)
-            return self._wait_for_process(proc, timeout=self._SUDO_PROBE_TIMEOUT_S).get("returncode") == 0
+            return (
+                self._wait_for_process(proc, timeout=self._SUDO_PROBE_TIMEOUT_S).get(
+                    "returncode"
+                )
+                == 0
+            )
         except Exception:
             return False

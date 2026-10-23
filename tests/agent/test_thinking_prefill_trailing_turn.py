@@ -31,6 +31,7 @@ def loop_agent():
     """AIAgent with a mocked OpenAI client, mirroring the fixture in
     ``test_dropped_tool_call_recovery.py``."""
     from run_agent import AIAgent
+
     with (
         patch("model_tools.get_tool_definitions", return_value=[]),
         patch("model_tools.check_toolset_requirements", return_value={}),
@@ -55,6 +56,7 @@ def loop_agent():
 def _thinking_only_response():
     """Reasoning tokens, no visible text, no clean stop — what triggers the prefill retry."""
     from tests.agent.test_run_agent import _mock_response
+
     return _mock_response(
         content="",
         finish_reason="tool_calls",
@@ -65,6 +67,7 @@ def _thinking_only_response():
 def _final_response(text="Here is the answer."):
     """An ordinary text turn that ends the loop."""
     from tests.agent.test_run_agent import _mock_response
+
     return _mock_response(content=text, finish_reason="stop")
 
 
@@ -74,7 +77,6 @@ def _sent_messages(create_mock, call_index):
 
 
 class TestThinkingPrefillTrailingTurn:
-
     def test_request_after_prefills_does_not_end_on_assistant(self, loop_agent):
         # Two thinking-only responses queue two prefill stubs, then the model
         # finally produces text. The third request is the one that used to go
@@ -120,7 +122,8 @@ class TestThinkingPrefillTrailingTurn:
 
         sent = _sent_messages(loop_agent.client.chat.completions.create, 1)
         empty_assistants = [
-            m for m in sent
+            m
+            for m in sent
             if m.get("role") == "assistant" and not (m.get("content") or "").strip()
         ]
         assert not empty_assistants, (
@@ -158,7 +161,8 @@ class TestThinkingPrefillTrailingTurn:
         assert not (stubs[0].get("content") or "").strip()
         assert stubs[0]["reasoning"] == reasoning
         assert not any(
-            m.get("role") == "assistant" and m.get("content") == reasoning for m in result["messages"]
+            m.get("role") == "assistant" and m.get("content") == reasoning
+            for m in result["messages"]
         )
 
     def test_internal_marker_never_reaches_the_wire(self, loop_agent):

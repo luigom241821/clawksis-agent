@@ -56,9 +56,12 @@ class ClarifyResult(Result):
     outcome: Literal["submitted", "timed_out", "cancelled"] | None = None
 
 
-server_request("clarify", params=ClarifyRequestParams, result=ClarifyResult,
-               doc="The clarify tool: ask the user 1-5 questions.")
-
+server_request(
+    "clarify",
+    params=ClarifyRequestParams,
+    result=ClarifyResult,
+    doc="The clarify tool: ask the user 1-5 questions.",
+)
 
 
 # ── setup_beat (first-run onboarding) ─────────────────────────────────────────────────────────
@@ -80,7 +83,9 @@ class SetupOption(Params):
 
 
 class SetupNameCard(Params):
-    suggested: str | None = None  # the OS account's name: shown on the card, never sent to the model
+    suggested: str | None = (
+        None  # the OS account's name: shown on the card, never sent to the model
+    )
 
 
 class SetupThemeCard(Params):
@@ -107,7 +112,13 @@ class SetupBeatRequestParams(ServerRequestParams):
     beat: SetupBeat
     question: str | None = None
     tool_call_id: str | None = None
-    card: SetupNameCard | SetupThemeCard | SetupOptionsCard | SetupConnectorsCard | SetupPluginsCard
+    card: (
+        SetupNameCard
+        | SetupThemeCard
+        | SetupOptionsCard
+        | SetupConnectorsCard
+        | SetupPluginsCard
+    )
 
 
 class SetupNameAnswer(Result):
@@ -150,14 +161,26 @@ class SetupBeatResult(Result):
     client sends that message as the next one. A response with none of these, or none within 300 s,
     closes the card unanswered."""
 
-    answer: (SetupNameAnswer | SetupThemeAnswer | SetupLayoutAnswer | SetupConnectorsAnswer | SetupPluginsAnswer
-             | SetupTourAnswer | SetupBuildAnswer | None) = None
+    answer: (
+        SetupNameAnswer
+        | SetupThemeAnswer
+        | SetupLayoutAnswer
+        | SetupConnectorsAnswer
+        | SetupPluginsAnswer
+        | SetupTourAnswer
+        | SetupBuildAnswer
+        | None
+    ) = None
     said: str | None = None
     wrote_instead: bool = False
 
 
-server_request("setup_beat", params=SetupBeatRequestParams, result=SetupBeatResult,
-               doc="The onboarding chat's card for one beat; blocks setup_beat until answered (300 s).")
+server_request(
+    "setup_beat",
+    params=SetupBeatRequestParams,
+    result=SetupBeatResult,
+    doc="The onboarding chat's card for one beat; blocks setup_beat until answered (300 s).",
+)
 
 
 # ── approval ──────────────────────────────────────────────────────────────────────────────────
@@ -192,8 +215,12 @@ class ApprovalResult(Result):
     all: bool | None = None
 
 
-server_request("approval", params=ApprovalRequestParams, result=ApprovalResult,
-               doc="A dangerous command awaits the user's decision.")
+server_request(
+    "approval",
+    params=ApprovalRequestParams,
+    result=ApprovalResult,
+    doc="A dangerous command awaits the user's decision.",
+)
 
 
 # ── one-string prompts ────────────────────────────────────────────────────────────────────────
@@ -209,8 +236,12 @@ class SudoRequestParams(ServerRequestParams):
     command: str = ""
 
 
-server_request("sudo", params=SudoRequestParams, result=ValueResult,
-               doc="Masked sudo password for the terminal tool.")
+server_request(
+    "sudo",
+    params=SudoRequestParams,
+    result=ValueResult,
+    doc="Masked sudo password for the terminal tool.",
+)
 
 
 class SecretRequestParams(ServerRequestParams):
@@ -219,8 +250,12 @@ class SecretRequestParams(ServerRequestParams):
     metadata: dict[str, JsonValue] | None = None
 
 
-server_request("secret", params=SecretRequestParams, result=ValueResult,
-               doc="Masked value for a named env var (skills / setup flows).")
+server_request(
+    "secret",
+    params=SecretRequestParams,
+    result=ValueResult,
+    doc="Masked value for a named env var (skills / setup flows).",
+)
 
 
 class VaultUnlockRequestParams(ServerRequestParams):
@@ -228,8 +263,12 @@ class VaultUnlockRequestParams(ServerRequestParams):
     display_name: str
 
 
-server_request("vault.unlock_prompt", params=VaultUnlockRequestParams, result=ValueResult,
-               doc="Master password to unlock an external password manager for this session.")
+server_request(
+    "vault.unlock_prompt",
+    params=VaultUnlockRequestParams,
+    result=ValueResult,
+    doc="Master password to unlock an external password manager for this session.",
+)
 
 
 class VaultSaveLoginRequestParams(ServerRequestParams):
@@ -237,8 +276,12 @@ class VaultSaveLoginRequestParams(ServerRequestParams):
     site: str
 
 
-server_request("vault.save_login", params=VaultSaveLoginRequestParams, result=ValueResult,
-               doc="Save a login for a site the agent is about to fill; the answer is JSON {identifier, password}.")
+server_request(
+    "vault.save_login",
+    params=VaultSaveLoginRequestParams,
+    result=ValueResult,
+    doc="Save a login for a site the agent is about to fill; the answer is JSON {identifier, password}.",
+)
 
 
 class VaultCodeRequestParams(ServerRequestParams):
@@ -246,8 +289,12 @@ class VaultCodeRequestParams(ServerRequestParams):
     hint: str | None = None
 
 
-server_request("vault.code", params=VaultCodeRequestParams, result=ValueResult,
-               doc="A one-time / 2FA code the user reads from their device.")
+server_request(
+    "vault.code",
+    params=VaultCodeRequestParams,
+    result=ValueResult,
+    doc="A one-time / 2FA code the user reads from their device.",
+)
 
 
 # ── desktop GUI bridges ───────────────────────────────────────────────────────────────────────
@@ -258,12 +305,24 @@ class ReadRangeRequestParams(ServerRequestParams):
     count: int | None = None
 
 
-server_request("terminal.read", params=ReadRangeRequestParams, result=ValueResult,
-               doc="Read the visible in-app terminal buffer (JSON text answer).")
-server_request("preview.read", params=ReadRangeRequestParams, result=ValueResult,
-               doc="Read the in-app browser preview's text (JSON text answer).")
-server_request("window.read", params=EmptyRequestParams, result=ValueResult,
-               doc="Enumerate the native window below the app (JSON text answer).")
+server_request(
+    "terminal.read",
+    params=ReadRangeRequestParams,
+    result=ValueResult,
+    doc="Read the visible in-app terminal buffer (JSON text answer).",
+)
+server_request(
+    "preview.read",
+    params=ReadRangeRequestParams,
+    result=ValueResult,
+    doc="Read the in-app browser preview's text (JSON text answer).",
+)
+server_request(
+    "window.read",
+    params=EmptyRequestParams,
+    result=ValueResult,
+    doc="Enumerate the native window below the app (JSON text answer).",
+)
 
 
 class PreviewActRequestParams(ServerRequestParams):
@@ -282,8 +341,12 @@ class PreviewActRequestParams(ServerRequestParams):
     allow_shortcut: bool | None = None
 
 
-server_request("preview.act", params=PreviewActRequestParams, result=ValueResult,
-               doc="Click / type / scroll / annotate inside the in-app browser preview.")
+server_request(
+    "preview.act",
+    params=PreviewActRequestParams,
+    result=ValueResult,
+    doc="Click / type / scroll / annotate inside the in-app browser preview.",
+)
 
 
 class TourStep(Params):
@@ -308,8 +371,12 @@ class TourRequestParams(ServerRequestParams):
     preset: TourPreset | None = None
 
 
-server_request("tour", params=TourRequestParams, result=ValueResult,
-               doc="Drive a guided tour highlight in the desktop renderer.")
+server_request(
+    "tour",
+    params=TourRequestParams,
+    result=ValueResult,
+    doc="Drive a guided tour highlight in the desktop renderer.",
+)
 
 
 class ThemeMode(WireEnum):
@@ -352,10 +419,18 @@ class ThemePickResult(Result):
     cancelled: bool | None = None
 
 
-server_request("theme.apply", params=ThemeApplyRequestParams, result=ValueResult,
-               doc="Apply set_theme values in the window showing the session (JSON text answer).")
-server_request("theme.pick", params=ThemePickRequestParams, result=ThemePickResult,
-               doc="Show an accent or layout picker card in the chat and wait for the pick.")
+server_request(
+    "theme.apply",
+    params=ThemeApplyRequestParams,
+    result=ValueResult,
+    doc="Apply set_theme values in the window showing the session (JSON text answer).",
+)
+server_request(
+    "theme.pick",
+    params=ThemePickRequestParams,
+    result=ThemePickResult,
+    doc="Show an accent or layout picker card in the chat and wait for the pick.",
+)
 
 
 # ── withdrawal ────────────────────────────────────────────────────────────────────────────────
@@ -375,5 +450,8 @@ class RequestCancelPayload(Payload):
     reason: str  # a RequestCancelReason value; callers in tools/approval may pass their own wording
 
 
-event("request.cancel", RequestCancelPayload,
-      doc="The backend withdrew an open server→client request; clear the matching card only.")
+event(
+    "request.cancel",
+    RequestCancelPayload,
+    doc="The backend withdrew an open server→client request; clear the matching card only.",
+)

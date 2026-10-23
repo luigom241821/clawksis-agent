@@ -5,8 +5,6 @@ import json
 from tools import read_window_tool as rw
 
 
-
-
 def test_requires_callback():
     """Outside the desktop GUI there is no bridge — a clear error, no crash."""
     result = json.loads(rw.read_window_below_tool(callback=None))
@@ -20,7 +18,12 @@ def test_empty_answer_means_unavailable():
 
 def test_passes_json_through():
     payload = {
-        "window": {"app": "Figma", "title": "", "bounds": {"x": 0, "y": 38, "width": 1470, "height": 870}, "id": 13937},
+        "window": {
+            "app": "Figma",
+            "title": "",
+            "bounds": {"x": 0, "y": 38, "width": 1470, "height": 870},
+            "id": 13937,
+        },
         "frontmost": {"app": "Figma", "title": ""},
         "platform": "darwin",
     }

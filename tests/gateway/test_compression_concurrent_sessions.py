@@ -32,6 +32,7 @@ from clawk_state import SessionDB
 # Shared helpers
 # ---------------------------------------------------------------------------
 
+
 def _build_agent_with_db(db: SessionDB, session_id: str):
     """Construct an AIAgent wired to *db* and pinned to *session_id*.
 
@@ -135,7 +136,9 @@ def test_concurrent_compressions_same_session_serialize(tmp_path: Path) -> None:
 
     def run(key, agent):
         try:
-            compressed, _sp = agent._compress_context(_MESSAGES, "sys", approx_tokens=120_000)
+            compressed, _sp = agent._compress_context(
+                _MESSAGES, "sys", approx_tokens=120_000
+            )
             results[key] = compressed
         except Exception as exc:
             errors.append(exc)
@@ -155,11 +158,13 @@ def test_concurrent_compressions_same_session_serialize(tmp_path: Path) -> None:
 
     # Count which agents actually compressed (returned fewer messages than input)
     compressed_count = sum(
-        1 for msgs in results.values()
+        1
+        for msgs in results.values()
         if msgs is not None and len(msgs) < len(_MESSAGES)
     )
     unchanged_count = sum(
-        1 for msgs in results.values()
+        1
+        for msgs in results.values()
         if msgs is not None and len(msgs) == len(_MESSAGES)
     )
 
@@ -174,9 +179,7 @@ def test_concurrent_compressions_same_session_serialize(tmp_path: Path) -> None:
     )
 
     # Exactly one session_id rotation must have occurred.
-    rotated = sum(
-        1 for a in (agent_a, agent_b) if a.session_id != shared_sid
-    )
+    rotated = sum(1 for a in (agent_a, agent_b) if a.session_id != shared_sid)
     assert rotated == 1, (
         f"Expected exactly one agent to rotate session_id, got {rotated}. "
         "Both agents rotating produces a session fork (Damien's incident shape)."

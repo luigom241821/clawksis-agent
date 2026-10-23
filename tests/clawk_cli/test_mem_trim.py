@@ -35,8 +35,6 @@ def test_config_kill_switch_overrides_force_from_config_file(monkeypatch, tmp_pa
         reset_clawk_home_override(token)
 
 
-
-
 def test_gc_collect_runs_even_without_platform_primitive(monkeypatch):
     # No page-release primitive (macOS, musl): the rate-limited gc.collect() still runs;
     # only the success flag stays False.
@@ -79,10 +77,6 @@ def test_success_collects_then_trims(monkeypatch):
     assert mem_trim._last_trim_monotonic == 100.0
 
 
-
-
-
-
 def test_cooldown_suppresses_repeated_collection(monkeypatch):
     collect = Mock()
     trim = Mock(return_value=1)
@@ -105,16 +99,12 @@ def test_config_cooldown_controls_rate_limit(monkeypatch):
     monkeypatch.setattr(
         "clawk_cli.config.load_config_readonly",
         lambda: {
-            "context": {
-                "memory_trim": {"enabled": True, "cooldown_seconds": 120.0}
-            }
+            "context": {"memory_trim": {"enabled": True, "cooldown_seconds": 120.0}}
         },
     )
 
     assert mem_trim.trim_memory() is False
     trim.assert_not_called()
-
-
 
 
 def test_libc_failure_is_fail_open_and_rate_limited(monkeypatch):

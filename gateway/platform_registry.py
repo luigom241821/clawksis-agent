@@ -26,6 +26,7 @@ def _plugin_scope_from_callable(callback: Callable) -> Optional[str]:
     """Infer a plugin profile from code registered outside PluginContext."""
     try:
         from tools.registry import registry as tool_registry
+
         return tool_registry.plugin_scope_for_callable(callback)
     except (ImportError, AttributeError):
         return None
@@ -45,7 +46,9 @@ class PlatformEntry:
 
     name: str  # config.yaml identifier (e.g. "irc")
     label: str  # human-readable
-    adapter_factory: Callable[[Any], Any]  # PlatformConfig -> adapter (factory allows custom init)
+    adapter_factory: Callable[
+        [Any], Any
+    ]  # PlatformConfig -> adapter (factory allows custom init)
     # PASSIVE dependency probe (deps importable RIGHT NOW); must be side-effect free since it
     # runs from status displays and the config enablement pass, which may never pip-install.
     check_fn: Callable[[], bool]
@@ -76,10 +79,16 @@ class PlatformEntry:
     is_connected: Optional[Callable[[Any], bool]] = None
     required_env: list = field(default_factory=list)  # ``clawk setup`` display
     install_hint: str = ""  # shown when check_fn is False
-    setup_fn: Optional[Callable[[], None]] = None  # None = _setup_standard_platform / env display
+    setup_fn: Optional[Callable[[], None]] = (
+        None  # None = _setup_standard_platform / env display
+    )
     source: str = "plugin"  # "builtin" or "plugin"
-    plugin_name: str = ""  # owning manifest so ``clawk gateway setup`` can auto-enable it
-    allowed_users_env: str = ""  # comma-separated allowed user IDs (_is_user_authorized)
+    plugin_name: str = (
+        ""  # owning manifest so ``clawk gateway setup`` can auto-enable it
+    )
+    allowed_users_env: str = (
+        ""  # comma-separated allowed user IDs (_is_user_authorized)
+    )
     allow_all_env: str = ""  # truthy "allow everyone" switch
     max_message_length: int = 0  # smart-chunking cap; 0 = no limit
     pii_safe: bool = False  # session descriptions redact PII (phone numbers, etc.)
@@ -95,10 +104,14 @@ class PlatformEntry:
     # and never under a multiplexed secondary's scope; a hand-rolled ``os.environ[...] =`` is
     # first-profile-wins. Contract: docs/developer-guide/adding-platform-adapters.md.
     apply_yaml_config_fn: Optional[Callable[[dict, dict], Optional[dict]]] = None
-    cron_deliver_env_var: str = ""  # home-channel env var read for cron ``deliver=<name>``
+    cron_deliver_env_var: str = (
+        ""  # home-channel env var read for cron ``deliver=<name>``
+    )
     # ``(target_ref) -> Optional[(chat_id, thread_id)]`` run before channel-directory
     # fallback so plugins can declare native target syntax; None = continue resolution.
-    parse_target_ref_fn: Optional[Callable[[str], Optional[tuple[str, Optional[str]]]]] = None
+    parse_target_ref_fn: Optional[
+        Callable[[str], Optional[tuple[str, Optional[str]]]]
+    ] = None
     # Post-resolution validation: True accept, False reject, non-empty str = reject + diagnostic.
     validate_target_ref_fn: Optional[Callable[[str], bool | str]] = None
     # Whole-request delivery ``(args, normalized_chat_id, platform_name, pconfig)``, sync or
@@ -156,8 +169,12 @@ class PlatformEntry:
     # Channels-page card metadata (clawk_cli/web_server_messaging.py, Desktop + web dashboard).
     # Every field defaults to "not declared": the card then falls back to ``label`` / ``install_hint``
     # / ``required_env`` + prefix-discovered env vars.
-    dashboard_label: str = ""  # card title when it differs from ``label`` (status/CLI keep ``label``)
-    dashboard_description: str = ""  # human description; ``install_hint`` is a dependency note
+    dashboard_label: str = (
+        ""  # card title when it differs from ``label`` (status/CLI keep ``label``)
+    )
+    dashboard_description: str = (
+        ""  # human description; ``install_hint`` is a dependency note
+    )
     docs_url: str = ""  # setup guide linked from the card
     dashboard_env_vars: tuple = ()  # card fields shown first, in this order, before discovered vars
     # Credentials the card treats as "configured"; None = ``required_env`` (which also drives
@@ -182,9 +199,11 @@ def core_ships_platform(name: str) -> bool:
     ``plugins/platforms/`` plugin. A user plugin may replace such an adapter but never mark it
     ``trusted_inbound``: its senders are people, and that flag waives allowlists and pairing."""
     from gateway.config import Platform
+
     value = str(name or "").strip().lower()
     return value in {Platform[member].value for member in Platform._member_names_} or (
-        value in Platform._scan_bundled_plugin_platforms()[0])
+        value in Platform._scan_bundled_plugin_platforms()[0]
+    )
 
 
 class PlatformRegistry:
@@ -193,7 +212,9 @@ class PlatformRegistry:
 
     def __init__(self) -> None:
         self._lock = threading.RLock()
-        self._entries: dict[str, PlatformEntry] = {}  # process-global (e.g. the built-in relay)
+        self._entries: dict[
+            str, PlatformEntry
+        ] = {}  # process-global (e.g. the built-in relay)
         # Plugin adapters are isolated per resolved CLAWK_HOME and overlay the
         # process-global entries for lookups in that profile's runtime scope.
         self._scoped_entries: dict[str, dict[str, PlatformEntry]] = {}
@@ -206,8 +227,10 @@ class PlatformRegistry:
         self._inflight_loaders: dict[_LoadKey, _Loader] = {}
         # Load keys whose loader is running in the current flow; copied into plugin deadline
         # workers, so a nested walk from register() sees its own parent's load as recursive.
-        self._loading: contextvars.ContextVar[frozenset[_LoadKey]] = contextvars.ContextVar(
-            f"platform_registry_loading_{id(self)}", default=frozenset()
+        self._loading: contextvars.ContextVar[frozenset[_LoadKey]] = (
+            contextvars.ContextVar(
+                f"platform_registry_loading_{id(self)}", default=frozenset()
+            )
         )
         self._cancelled_inflight: set[_LoadKey] = set()
         # A failed loader is no longer discoverable, but its identity remains
@@ -228,7 +251,9 @@ class PlatformRegistry:
         if scope is None:
             return self._entries, self._deferred
         if create:
-            return self._scoped_entries.setdefault(scope, {}), self._scoped_deferred.setdefault(scope, {})
+            return self._scoped_entries.setdefault(
+                scope, {}
+            ), self._scoped_deferred.setdefault(scope, {})
         return self._scoped_entries.get(scope, {}), self._scoped_deferred.get(scope, {})
 
     def _registration_state(
@@ -239,17 +264,23 @@ class PlatformRegistry:
         entry = entries.get(name)
         loader = deferred.get(name)
         if entry is None and loader is None:
-            loader = self._inflight_loaders.get((scope, name)) or self._consumed_loaders.get((scope, name))
+            loader = self._inflight_loaders.get(
+                (scope, name)
+            ) or self._consumed_loaders.get((scope, name))
         return entry, loader
 
     def _prune_scope(self, scope: Optional[str]) -> None:
-        for maps in (self._scoped_entries, self._scoped_deferred) if scope is not None else ():
+        for maps in (
+            (self._scoped_entries, self._scoped_deferred) if scope is not None else ()
+        ):
             if not maps.get(scope):
                 maps.pop(scope, None)
 
     # -- deferred loading ----------------------------------------------------
 
-    def register_deferred(self, name: str, loader: _Loader, *, scope: Optional[str] = None) -> None:
+    def register_deferred(
+        self, name: str, loader: _Loader, *, scope: Optional[str] = None
+    ) -> None:
         """Register a lazy loader (imports the plugin module, which must call :meth:`register`);
         runs at most once, on first lookup; a concrete registration drops it."""
         with self._lock:
@@ -262,7 +293,9 @@ class PlatformRegistry:
         """Record the env names a deferred platform's manifest declares (see ``_activation_env``)."""
         names = frozenset(str(n).strip() for n in env_names or () if str(n).strip())
         with self._lock:
-            self._activation_env[name] = self._activation_env.get(name, frozenset()) | names
+            self._activation_env[name] = (
+                self._activation_env.get(name, frozenset()) | names
+            )
 
     def activation_env(self, name: str) -> frozenset[str]:
         with self._lock:
@@ -277,8 +310,12 @@ class PlatformRegistry:
             return self._registration_state(scope, name)
 
     def restore_registration(
-        self, name: str, current: tuple[Optional[PlatformEntry], Optional[_Loader]],
-        previous: tuple[Optional[PlatformEntry], Optional[_Loader]], *, scope: Optional[str] = None,
+        self,
+        name: str,
+        current: tuple[Optional[PlatformEntry], Optional[_Loader]],
+        previous: tuple[Optional[PlatformEntry], Optional[_Loader]],
+        *,
+        scope: Optional[str] = None,
     ) -> bool:
         """Restore a registration if its full state is still *current* (CAS): a later
         registration is never removed, and deferred loaders are part of the state."""
@@ -311,6 +348,7 @@ class PlatformRegistry:
             load_key = scoped_key
             if event is None and name not in entries and self._loading.get():
                 from clawk_cli.plugins_loader import in_plugin_load_worker
+
                 if in_plugin_load_worker():
                     return  # on a deadline worker: never block on a sibling load the parent may hold the lock for; caller sees it unloaded
             if event is None and name not in entries:
@@ -328,7 +366,9 @@ class PlatformRegistry:
             if event is None:
                 return
             if not is_loader and load_key in self._loading.get():
-                logger.warning("Deferred platform '%s' recursively requested while loading", name)
+                logger.warning(
+                    "Deferred platform '%s' recursively requested while loading", name
+                )
                 return
         if not is_loader:
             event.wait()
@@ -340,7 +380,9 @@ class PlatformRegistry:
         try:
             loader()
         except Exception as e:
-            logger.warning("Deferred load of platform '%s' failed: %s", name, e, exc_info=True)
+            logger.warning(
+                "Deferred load of platform '%s' failed: %s", name, e, exc_info=True
+            )
         finally:
             self._loading.reset(token)
             with self._lock:
@@ -355,7 +397,9 @@ class PlatformRegistry:
         if was_cancelled:
             self._resolve(name, active_scope)
 
-    def is_deferred_load_cancelled(self, name: str, *, scope: Optional[str] = None) -> bool:
+    def is_deferred_load_cancelled(
+        self, name: str, *, scope: Optional[str] = None
+    ) -> bool:
         """Whether ownership teardown cancelled an in-flight loader."""
         with self._lock:
             return (scope, name) in self._cancelled_inflight
@@ -396,12 +440,22 @@ class PlatformRegistry:
         (or a test stub); entries that are already loaded are always returned."""
         self._resolve_all(wanted)
         with self._lock:
-            return list({**self._entries, **self._scoped_entries.get(self.current_scope_key(), {})}.values())
+            return list(
+                {
+                    **self._entries,
+                    **self._scoped_entries.get(self.current_scope_key(), {}),
+                }.values()
+            )
 
     def loaded_entries(self) -> list[PlatformEntry]:
         """Entries already materialized (never imports a deferred adapter)."""
         with self._lock:
-            return list({**self._entries, **self._scoped_entries.get(self.current_scope_key(), {})}.values())
+            return list(
+                {
+                    **self._entries,
+                    **self._scoped_entries.get(self.current_scope_key(), {}),
+                }.values()
+            )
 
     def register(self, entry: PlatformEntry, *, scope: Optional[str] = None) -> None:
         """Register a platform adapter entry (last writer wins on name clash)."""
@@ -418,9 +472,16 @@ class PlatformRegistry:
             deferred.pop(entry.name, None)
             prev = entries.get(entry.name)
             if prev is not None:
-                logger.info("Platform '%s' re-registered (was %s, now %s)", entry.name, prev.source, entry.source)
+                logger.info(
+                    "Platform '%s' re-registered (was %s, now %s)",
+                    entry.name,
+                    prev.source,
+                    entry.source,
+                )
             entries[entry.name] = entry
-            logger.debug("Registered platform adapter: %s (%s)", entry.name, entry.source)
+            logger.debug(
+                "Registered platform adapter: %s (%s)", entry.name, entry.source
+            )
 
     def unregister(self, name: str, *, scope: Optional[str] = None) -> bool:
         """Remove a platform entry. Returns True if it existed."""
@@ -440,8 +501,10 @@ class PlatformRegistry:
         """True when a lookup of *name* must run/await a deferred loader (lock held)."""
         _entries, deferred = self._scope_maps(scope)
         return (
-            name in deferred or (name not in self._entries and name in self._deferred)
-            or (scope, name) in self._inflight or (None, name) in self._inflight
+            name in deferred
+            or (name not in self._entries and name in self._deferred)
+            or (scope, name) in self._inflight
+            or (None, name) in self._inflight
         )
 
     def get(self, name: str) -> Optional[PlatformEntry]:
@@ -460,7 +523,12 @@ class PlatformRegistry:
         """Return all registered platform entries."""
         self._resolve_all()
         with self._lock:
-            return list({**self._entries, **self._scoped_entries.get(self.current_scope_key(), {})}.values())
+            return list(
+                {
+                    **self._entries,
+                    **self._scoped_entries.get(self.current_scope_key(), {}),
+                }.values()
+            )
 
     def plugin_entries(self) -> list[PlatformEntry]:
         """Return only plugin-registered platform entries."""
@@ -471,15 +539,24 @@ class PlatformRegistry:
         ``is_registered``) without loading adapters."""
         with self._lock:
             entries, deferred = self._scope_maps(self.current_scope_key())
-            return entries.keys() | deferred.keys() | self._entries.keys() | self._deferred.keys()
+            return (
+                entries.keys()
+                | deferred.keys()
+                | self._entries.keys()
+                | self._deferred.keys()
+            )
 
     def required_env_names(self) -> set[str]:
         """``required_env`` of every loaded entry (current profile scope AND process-global) without
         loading deferred adapters; the child-env scrub reads this on every spawn."""
         with self._lock:
             entries, _deferred = self._scope_maps(self.current_scope_key())
-            return {n for e in (*self._entries.values(), *entries.values())
-                    for n in e.required_env if isinstance(n, str)}
+            return {
+                n
+                for e in (*self._entries.values(), *entries.values())
+                for n in e.required_env
+                if isinstance(n, str)
+            }
 
     def is_registered(self, name: str) -> bool:
         # A deferred (not-yet-imported) platform still counts as registered so cheap membership
@@ -487,7 +564,11 @@ class PlatformRegistry:
         with self._lock:
             scope = self.current_scope_key()
             entries, _deferred = self._scope_maps(scope)
-            return name in entries or name in self._entries or self._load_pending(scope, name)
+            return (
+                name in entries
+                or name in self._entries
+                or self._load_pending(scope, name)
+            )
 
     def create_adapter(self, name: str, config: Any) -> Optional[Any]:
         """Create an adapter instance for *name*; None when no entry exists, deps are missing
@@ -495,18 +576,25 @@ class PlatformRegistry:
         entry = self.get(name)
         if entry is None:
             return None
+
         def _probe(fn: Callable[[], Any], failure_msg: str) -> bool:
             try:
                 return bool(fn())
             except Exception as e:
                 logger.warning(failure_msg, entry.label, e)
                 return False
+
         deps_ok = _probe(entry.check_fn, "Platform '%s' check_fn raised: %s")
         if not deps_ok and entry.ensure_deps_fn is not None:
             # The ONE place the active installer runs: the platform is enabled+configured
             # and about to connect, so an install is what the user wants.
-            logger.info("Platform '%s' dependencies missing — attempting install...", entry.label)
-            deps_ok = _probe(entry.ensure_deps_fn, "Platform '%s' dependency install raised: %s")
+            logger.info(
+                "Platform '%s' dependencies missing — attempting install...",
+                entry.label,
+            )
+            deps_ok = _probe(
+                entry.ensure_deps_fn, "Platform '%s' dependency install raised: %s"
+            )
         if not deps_ok:
             hint = f" ({entry.install_hint})" if entry.install_hint else ""
             logger.warning("Platform '%s' requirements not met%s", entry.label, hint)
@@ -514,15 +602,24 @@ class PlatformRegistry:
         if entry.validate_config is not None:
             try:
                 if not entry.validate_config(config):
-                    logger.warning("Platform '%s' config validation failed", entry.label)
+                    logger.warning(
+                        "Platform '%s' config validation failed", entry.label
+                    )
                     return None
             except Exception as e:
-                logger.warning("Platform '%s' config validation error: %s", entry.label, e)
+                logger.warning(
+                    "Platform '%s' config validation error: %s", entry.label, e
+                )
                 return None
         try:
             return entry.adapter_factory(config)
         except Exception as e:
-            logger.error("Failed to create adapter for platform '%s': %s", entry.label, e, exc_info=True)
+            logger.error(
+                "Failed to create adapter for platform '%s': %s",
+                entry.label,
+                e,
+                exc_info=True,
+            )
             return None
 
 

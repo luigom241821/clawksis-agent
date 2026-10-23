@@ -47,10 +47,6 @@ def _fast_git_probe(monkeypatch):
     git_probe.invalidate()
 
 
-
-
-
-
 def test_repo_root_cache_does_not_freeze_a_not_yet_repo(monkeypatch):
     # We `git init` a new project's folder on first worktree; the cache must not
     # have frozen the pre-init "" result, or the main lane mislabels by basename.
@@ -62,7 +58,9 @@ def test_repo_root_cache_does_not_freeze_a_not_yet_repo(monkeypatch):
     cwd = "/tmp/baby pics"
     git_probe.invalidate()
     state = {"root": ""}  # flips once the folder becomes a repo
-    monkeypatch.setattr(git_probe, "run_git", lambda c, *a: state["root"] if c == cwd else "")
+    monkeypatch.setattr(
+        git_probe, "run_git", lambda c, *a: state["root"] if c == cwd else ""
+    )
 
     assert git_probe.repo_root(cwd) == ""  # pre-init: not a repo (expires at once)
 
@@ -71,18 +69,10 @@ def test_repo_root_cache_does_not_freeze_a_not_yet_repo(monkeypatch):
     assert git_probe.repo_root(cwd) == cwd  # now cached
 
 
-
-
-
-
-
-
-
-
-
-
 def test_create_list_roundtrip(tmp_path):
-    created = _call("projects.create", {"name": "Demo", "folders": [str(tmp_path)], "use": True})
+    created = _call(
+        "projects.create", {"name": "Demo", "folders": [str(tmp_path)], "use": True}
+    )
     assert created["project"]["slug"] == "demo"
 
     listing = _call("projects.list")
@@ -93,7 +83,9 @@ def test_create_list_roundtrip(tmp_path):
 def test_add_folder_and_for_cwd(tmp_path):
     folder = tmp_path / "repo"
     folder.mkdir()
-    pid = _call("projects.create", {"name": "Repo", "folders": [str(folder)]})["project"]["id"]
+    pid = _call("projects.create", {"name": "Repo", "folders": [str(folder)]})[
+        "project"
+    ]["id"]
 
     nested = folder / "src"
     nested.mkdir()
@@ -108,7 +100,9 @@ def test_project_info_for_cwd_returns_status_payload(tmp_path):
     # nested cwd — the shape the TUI status label + /status read.
     folder = tmp_path / "repo"
     folder.mkdir()
-    created = _call("projects.create", {"name": "Repo", "folders": [str(folder)]})["project"]
+    created = _call("projects.create", {"name": "Repo", "folders": [str(folder)]})[
+        "project"
+    ]
 
     nested = folder / "src"
     nested.mkdir()
@@ -139,7 +133,9 @@ def test_session_info_carries_project_for_owned_cwd(tmp_path):
 
 
 def test_update_and_archive(tmp_path):
-    pid = _call("projects.create", {"name": "Orig", "folders": [str(tmp_path)]})["project"]["id"]
+    pid = _call("projects.create", {"name": "Orig", "folders": [str(tmp_path)]})[
+        "project"
+    ]["id"]
 
     updated = _call("projects.update", {"id": pid, "name": "Renamed"})
     assert updated["project"]["name"] == "Renamed"
@@ -154,12 +150,12 @@ def test_get_unknown_returns_error():
 
 
 def test_delete_removes_project(tmp_path):
-    pid = _call("projects.create", {"name": "Doomed", "folders": [str(tmp_path)]})["project"]["id"]
+    pid = _call("projects.create", {"name": "Doomed", "folders": [str(tmp_path)]})[
+        "project"
+    ]["id"]
     payload = _call("projects.delete", {"id": pid})
 
     assert all(p["id"] != pid for p in payload["projects"])
-
-
 
 
 def test_record_repos_persists_and_shows_zero_session_repo(tmp_path):
@@ -167,7 +163,9 @@ def test_record_repos_persists_and_shows_zero_session_repo(tmp_path):
     repo.mkdir()
 
     # Repo-first: a scanned repo with no clawk sessions still surfaces.
-    _call("projects.record_repos", {"repos": [{"root": str(repo), "label": "fresh-repo"}]})
+    _call(
+        "projects.record_repos", {"repos": [{"root": str(repo), "label": "fresh-repo"}]}
+    )
 
     by_label = {r["label"]: r for r in _call("projects.discover_repos")["repos"]}
     assert "fresh-repo" in by_label
@@ -347,35 +345,53 @@ def test_terminal_session_persists_its_launch_cwd():
     the session under its project.
     """
     for source in ("tui", "cli"):
-        assert server._persisted_session_cwd(
-            {"source": source, "cwd": "/somewhere/a-repo"}
-        ) == "/somewhere/a-repo"
+        assert (
+            server._persisted_session_cwd(
+                {"source": source, "cwd": "/somewhere/a-repo"}
+            )
+            == "/somewhere/a-repo"
+        )
 
 
 def test_desktop_launch_cwd_is_not_persisted_as_a_workspace():
     # The desktop launches from wherever the bundle was opened, so an unpicked
     # cwd is an artifact — those chats belong under "No workspace".
-    assert server._persisted_session_cwd({"source": "desktop", "cwd": "/opt/whatever"}) is None
+    assert (
+        server._persisted_session_cwd({"source": "desktop", "cwd": "/opt/whatever"})
+        is None
+    )
 
     # An explicit pick is always honored, desktop included.
-    assert server._persisted_session_cwd(
-        {"source": "desktop", "cwd": "/picked/repo", "explicit_cwd": True}
-    ) == "/picked/repo"
+    assert (
+        server._persisted_session_cwd(
+            {"source": "desktop", "cwd": "/picked/repo", "explicit_cwd": True}
+        )
+        == "/picked/repo"
+    )
 
 
 def test_desktop_launch_cwd_is_marked_as_context_artifact():
-    assert server._context_cwd_is_launch_artifact(
-        {"source": "desktop", "cwd": "/opt/clawksis"}
-    ) is True
+    assert (
+        server._context_cwd_is_launch_artifact(
+            {"source": "desktop", "cwd": "/opt/clawksis"}
+        )
+        is True
+    )
 
 
 def test_explicit_desktop_and_terminal_cwds_are_context_workspaces():
-    assert server._context_cwd_is_launch_artifact(
-        {"source": "desktop", "cwd": "/picked/repo", "explicit_cwd": True}
-    ) is False
-    assert server._context_cwd_is_launch_artifact(
-        {"source": "tui", "cwd": "/opt/clawksis"}
-    ) is False
+    assert (
+        server._context_cwd_is_launch_artifact(
+            {"source": "desktop", "cwd": "/picked/repo", "explicit_cwd": True}
+        )
+        is False
+    )
+    assert (
+        server._context_cwd_is_launch_artifact(
+            {"source": "tui", "cwd": "/opt/clawksis"}
+        )
+        is False
+    )
 
 
 @pytest.mark.parametrize(
@@ -450,9 +466,7 @@ def test_disabled_discovery_clears_cache_and_rejects_new_scan(monkeypatch, tmp_p
     repo.mkdir()
     session_repo = tmp_path / "session-repo"
     session_repo.mkdir()
-    subprocess.run(
-        ["git", "init"], cwd=session_repo, check=True, capture_output=True
-    )
+    subprocess.run(["git", "init"], cwd=session_repo, check=True, capture_output=True)
     server._get_db().create_session("session-repo", "cli", cwd=str(session_repo))
     _call("projects.record_repos", {"repos": [{"root": str(repo)}]})
 
@@ -582,7 +596,11 @@ def _serving_launch_profile(launch_home: Path):
         yield
     finally:
         server._db.close()
-        server._db, server._db_error, server._clawk_home = prev_db, prev_error, prev_home
+        server._db, server._db_error, server._clawk_home = (
+            prev_db,
+            prev_error,
+            prev_home,
+        )
         reset_clawk_home_override(token)
 
 
@@ -591,7 +609,9 @@ def _cached_repo_labels(home: Path) -> list[str]:
     from clawk_cli import projects_db as pdb
 
     with pdb.connect_closing(home / "projects.db") as conn:
-        return sorted(str(entry.get("label") or "") for entry in pdb.list_discovered_repos(conn))
+        return sorted(
+            str(entry.get("label") or "") for entry in pdb.list_discovered_repos(conn)
+        )
 
 
 def test_projects_reads_are_scoped_to_the_requested_profile(monkeypatch, tmp_path):
@@ -634,7 +654,9 @@ def test_projects_reads_are_scoped_to_the_requested_profile(monkeypatch, tmp_pat
     assert coder_tree["projects"][0]["sessionCount"] == 1
     assert launch_tree["scoped_session_ids"] == ["launch-session"]
     assert coder_tree["scoped_session_ids"] == ["coder-session"]
-    assert [s["profile"] for s in coder_tree["projects"][0]["previewSessions"]] == ["coder"]
+    assert [s["profile"] for s in coder_tree["projects"][0]["previewSessions"]] == [
+        "coder"
+    ]
 
     assert coder_sessions["project"]["id"] == coder_project["id"]
     assert coder_sessions["project"]["sessionCount"] == 1
@@ -702,7 +724,9 @@ def test_project_sessions_is_scoped_to_the_requested_profile(monkeypatch, tmp_pa
     assert [s["id"] for s in launch_lane["sessions"]] == ["drill-launch-session"]
 
 
-def test_record_repos_writes_to_the_requested_profiles_projects_db(monkeypatch, tmp_path):
+def test_record_repos_writes_to_the_requested_profiles_projects_db(
+    monkeypatch, tmp_path
+):
     """The scan cache is per-profile: a scoped write must not land on launch."""
     launch_home = _profile_dir(tmp_path, "launch")
     coder_home = _profile_dir(tmp_path, "coder")
@@ -713,10 +737,16 @@ def test_record_repos_writes_to_the_requested_profiles_projects_db(monkeypatch, 
     _bind_profiles(monkeypatch, tmp_path, {"default": launch_home, "coder": coder_home})
 
     with _serving_launch_profile(launch_home):
-        _call("projects.record_repos", {"repos": [{"root": str(launch_repo), "label": "launch"}]})
         _call(
             "projects.record_repos",
-            {"profile": "coder", "repos": [{"root": str(coder_repo), "label": "coder"}]},
+            {"repos": [{"root": str(launch_repo), "label": "launch"}]},
+        )
+        _call(
+            "projects.record_repos",
+            {
+                "profile": "coder",
+                "repos": [{"root": str(coder_repo), "label": "coder"}],
+            },
         )
 
         launch_repos = _call("projects.discover_repos")["repos"]
@@ -738,16 +768,21 @@ def test_projects_without_a_profile_stay_on_the_launch_home(monkeypatch, tmp_pat
 
     with _serving_launch_profile(launch_home):
         created = _call(
-            "projects.create", {"name": "Launch only", "folders": [str(repo)], "use": True}
+            "projects.create",
+            {"name": "Launch only", "folders": [str(repo)], "use": True},
         )["project"]
-        _call("projects.record_repos", {"repos": [{"root": str(repo), "label": "only"}]})
+        _call(
+            "projects.record_repos", {"repos": [{"root": str(repo), "label": "only"}]}
+        )
 
         omitted = _call("projects.list")
         blank = _call("projects.list", {"profile": ""})
         with pytest.raises(FileNotFoundError, match="not-a-profile"):
             _call("projects.list", {"profile": "not-a-profile"})
         with pytest.raises(FileNotFoundError, match="not-a-profile"):
-            _call("projects.create", {"profile": "not-a-profile", "name": "Wrong target"})
+            _call(
+                "projects.create", {"profile": "not-a-profile", "name": "Wrong target"}
+            )
         assert _call("projects.list") == omitted
 
     assert [p["name"] for p in omitted["projects"]] == ["Launch only"]
@@ -757,5 +792,3 @@ def test_projects_without_a_profile_stay_on_the_launch_home(monkeypatch, tmp_pat
     assert _cached_repo_labels(launch_home) == ["only"]
     assert not (coder_home / "projects.db").exists()
     assert not (Path(os.environ["CLAWK_HOME"]) / "projects.db").exists()
-
-

@@ -51,7 +51,9 @@ class ConnectorRow(Result):
     connector: str
     enabled: bool
     connected: bool
-    connection_status: Literal["pending", "active", "failed", "expired", "revoked", "inactive"] | None
+    connection_status: (
+        Literal["pending", "active", "failed", "expired", "revoked", "inactive"] | None
+    )
     status_reason: str | None
     gateway_disabled_tools: list[str]
 
@@ -81,9 +83,15 @@ class ConnectorsConnectParams(ProfileParams):
     @model_validator(mode="after")
     def _one_connector_per_alias(self):
         if self.alias is not None and len(self.connectors) != 1:
-            raise ValueError("alias names one account, so it takes exactly one connector")
-        if self.connection_id is not None and (not self.reconnect or len(self.connectors) != 1 or self.alias):
-            raise ValueError("connection_id repairs one account: it needs reconnect, one connector and no alias")
+            raise ValueError(
+                "alias names one account, so it takes exactly one connector"
+            )
+        if self.connection_id is not None and (
+            not self.reconnect or len(self.connectors) != 1 or self.alias
+        ):
+            raise ValueError(
+                "connection_id repairs one account: it needs reconnect, one connector and no alias"
+            )
         return self
 
 
@@ -356,7 +364,9 @@ class ConnectorChange(Result):
 
 
 ConnectorPolicyChange = ToolsChange | ConnectorChange
-ConnectorPolicyRevision = Annotated[str, Field(pattern=r"^[0-7][0-9A-HJKMNP-TV-Z]{25}$")]
+ConnectorPolicyRevision = Annotated[
+    str, Field(pattern=r"^[0-7][0-9A-HJKMNP-TV-Z]{25}$")
+]
 
 
 class ConnectorPolicySetParams(ProfileParams):

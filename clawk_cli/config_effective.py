@@ -32,24 +32,35 @@ _EFFECTIVE_CACHE: dict[str, tuple[Any, ...]] = {}
 
 def _effective(raw: dict[str, Any]) -> dict[str, Any]:
     expanded = _config._expand_env_vars(raw)
-    merged = managed_scope.apply_managed_overlay(expanded if isinstance(expanded, dict) else {})
-    return _config._normalize_root_model_keys(merged if isinstance(merged, dict) else {})
+    merged = managed_scope.apply_managed_overlay(
+        expanded if isinstance(expanded, dict) else {}
+    )
+    return _config._normalize_root_model_keys(
+        merged if isinstance(merged, dict) else {}
+    )
 
 
-def _recover_user_raw(config_path: Path, path_key: str, exc: Exception) -> dict[str, Any]:
+def _recover_user_raw(
+    config_path: Path, path_key: str, exc: Exception
+) -> dict[str, Any]:
     """Last-known-good raw user mapping after a parse failure: this process's last good parse,
     else the newest ``good`` copy in backups/config/, else ``{}`` (warned as defaults)."""
     raw = _LAST_GOOD_USER_RAW.get(path_key)
     fallback = "last-known-good"
     if raw is None:
         from clawk_cli.config_backups import load_newest_good_backup
+
         raw = load_newest_good_backup(config_path)
         fallback = "last-known-good-backup"
-    _warn_config_parse_failure(config_path, exc, fallback=fallback if raw is not None else "defaults")
+    _warn_config_parse_failure(
+        config_path, exc, fallback=fallback if raw is not None else "defaults"
+    )
     return copy.deepcopy(raw) if raw is not None else {}
 
 
-def load_user_config_effective(config_path: Optional[Path] = None, *, fail_closed: bool = False) -> dict[str, Any]:
+def load_user_config_effective(
+    config_path: Optional[Path] = None, *, fail_closed: bool = False
+) -> dict[str, Any]:
     """User ``config.yaml`` → ``${VAR}`` expansion → managed overlay → model-key canonicalization.
     NO ``DEFAULT_CONFIG`` merge: a key absent from the file (and from the managed layer) is absent
     here, so ``{}`` sentinels and presence-sensitive bridges keep working. An absent file is an
@@ -81,7 +92,9 @@ def load_user_config_effective(config_path: Optional[Path] = None, *, fail_close
         recovered = False
         raw_hit = _config._RAW_CONFIG_CACHE.get(path_key)
         if user_sig is not None and raw_hit is not None and raw_hit[:4] == user_sig:
-            raw = copy.deepcopy(raw_hit[4])  # one parse per process, shared with read_raw_config()
+            raw = copy.deepcopy(
+                raw_hit[4]
+            )  # one parse per process, shared with read_raw_config()
             _LAST_GOOD_USER_RAW.setdefault(path_key, copy.deepcopy(raw))
         elif user_sig is not None:
             try:
@@ -100,6 +113,7 @@ def load_user_config_effective(config_path: Optional[Path] = None, *, fail_close
                 # must not create backups/ inside that profile.
                 if config_path == _config.get_config_path():
                     from clawk_cli.config_backups import backup_config
+
                     backup_config(config_path, "good")
 
         env_snapshot = _config._env_ref_snapshot(raw)
@@ -110,7 +124,11 @@ def load_user_config_effective(config_path: Optional[Path] = None, *, fail_close
         # A recovered result is never cached under the corrupt file's signature: a later
         # ``fail_closed`` caller must still see the parse error, not a cache hit.
         if cache_sig is not None and not recovered:
-            _EFFECTIVE_CACHE[path_key] = (*cache_sig, copy.deepcopy(effective), env_snapshot)
+            _EFFECTIVE_CACHE[path_key] = (
+                *cache_sig,
+                copy.deepcopy(effective),
+                env_snapshot,
+            )
         else:
             _EFFECTIVE_CACHE.pop(path_key, None)
         return effective

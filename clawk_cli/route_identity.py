@@ -44,7 +44,9 @@ def normalize_route_base_url(base_url: Any) -> str:
     return normalized
 
 
-def provider_owns_route(provider: Any, base_url: Any, config: Any = None) -> Optional[bool]:
+def provider_owns_route(
+    provider: Any, base_url: Any, config: Any = None
+) -> Optional[bool]:
     """Whether ``model.base_url`` is *provider*'s own endpoint.
 
     ``True``: the host is the provider's registry/plugin endpoint or the endpoint of a
@@ -54,7 +56,12 @@ def provider_owns_route(provider: Any, base_url: Any, config: Any = None) -> Opt
     host (a proxy, a LAN server) — nothing here can say whose it is. Offline: the registry lookup
     never fetches the models.dev catalog.
     """
-    from clawk_cli.providers import get_provider, normalize_provider, resolve_custom_provider, resolve_user_provider
+    from clawk_cli.providers import (
+        get_provider,
+        normalize_provider,
+        resolve_custom_provider,
+        resolve_user_provider,
+    )
     from utils import base_url_hostname
 
     host = base_url_hostname(str(base_url or ""))
@@ -67,8 +74,9 @@ def provider_owns_route(provider: Any, base_url: Any, config: Any = None) -> Opt
         # resolve_custom_provider would also self-heal bare "custom" to the first entry (#17478).
         return True
     cfg = config if isinstance(config, dict) else {}
-    user_pdef = resolve_user_provider(raw, cfg.get("providers") or {}) or resolve_custom_provider(
-        raw, cfg.get("custom_providers"))
+    user_pdef = resolve_user_provider(
+        raw, cfg.get("providers") or {}
+    ) or resolve_custom_provider(raw, cfg.get("custom_providers"))
     if user_pdef is not None and user_pdef.base_url:
         return base_url_hostname(user_pdef.base_url) == host
     pdef = get_provider(canonical, allow_network=False)
@@ -77,13 +85,16 @@ def provider_owns_route(provider: Any, base_url: Any, config: Any = None) -> Opt
     if pdef is None and user_pdef is None:
         return True
     from agent.model_metadata import _infer_provider_from_url
+
     inferred = _infer_provider_from_url(str(base_url))
     if inferred is None:
         return None
     return normalize_provider(inferred) == canonical
 
 
-def drop_stale_model_route(model_cfg: Any, provider: Any, config: Any = None) -> tuple[dict[str, Any], bool]:
+def drop_stale_model_route(
+    model_cfg: Any, provider: Any, config: Any = None
+) -> tuple[dict[str, Any], bool]:
     """Pop the route keys (``base_url``, ``api_mode``) a previous provider left in ``model:``
     when the block is re-pointed at *provider* without a fresh route (``clawk config set
     model.provider``). Mirrors what a persisted ``/model`` switch writes: the route is synced to
@@ -99,12 +110,22 @@ def drop_stale_model_route(model_cfg: Any, provider: Any, config: Any = None) ->
         return {}, False
     if owned is None:
         return {}, True
-    popped = {k: model_cfg.pop(k) for k in ("base_url", "api_mode") if model_cfg.get(k) not in (None, "")}
+    popped = {
+        k: model_cfg.pop(k)
+        for k in ("base_url", "api_mode")
+        if model_cfg.get(k) not in (None, "")
+    }
     return popped, False
 
 
-def should_clear_context_pin(configured_model: Any, active_model: Any, configured_base_url: Any, active_base_url: Any,
-                             configured_provider: Any, active_provider: Any) -> bool:
+def should_clear_context_pin(
+    configured_model: Any,
+    active_model: Any,
+    configured_base_url: Any,
+    active_base_url: Any,
+    configured_provider: Any,
+    active_provider: Any,
+) -> bool:
     """True when a configured ``model.context_length`` pin no longer matches its runtime route.
     Fail-closed: any error during route comparison returns ``True`` (drop the pin) so a stale window
     never silently inflates the compression threshold."""
@@ -113,7 +134,10 @@ def should_clear_context_pin(configured_model: Any, active_model: Any, configure
         return True
     try:
         from agent.agent_init import _context_route_mismatch
-        return _context_route_mismatch(configured_base_url, active_base_url, configured_provider, active_provider)
+
+        return _context_route_mismatch(
+            configured_base_url, active_base_url, configured_provider, active_provider
+        )
     except Exception:
         return True
 
@@ -123,4 +147,5 @@ async def should_clear_context_pin_async(*args: Any) -> bool:
     event loop — the resolution chain is cache-only (``allow_network=False``) but can still do
     cold-start disk I/O."""
     import asyncio
+
     return await asyncio.to_thread(should_clear_context_pin, *args)

@@ -13,7 +13,6 @@ and env var when a credential is newly ingested.
 import logging
 
 
-
 class TestAuxiliaryOpenrouterDefaultIsFree:
     def test_builtin_openrouter_default_is_free_sku(self):
         from agent import auxiliary_client as ac
@@ -22,7 +21,6 @@ class TestAuxiliaryOpenrouterDefaultIsFree:
             "the built-in auxiliary OpenRouter fallback model must be a :free "
             "SKU — a paid built-in default is silent real spend (#81952)"
         )
-
 
     def test_user_configured_model_still_honored(self, monkeypatch):
         """auxiliary.openrouter_model from config wins over the built-in default."""
@@ -58,7 +56,8 @@ class TestEnvIngestionWarning:
         warnings = [
             r.getMessage()
             for r in caplog.records
-            if r.levelno == logging.WARNING and "Ingested OPENROUTER_API_KEY" in r.getMessage()
+            if r.levelno == logging.WARNING
+            and "Ingested OPENROUTER_API_KEY" in r.getMessage()
         ]
         assert warnings, "expected a WARNING for env->pool openrouter ingestion"
 
@@ -73,7 +72,8 @@ class TestEnvIngestionWarning:
         warnings = [
             r
             for r in caplog.records
-            if r.levelno == logging.WARNING and "Ingested OPENROUTER_API_KEY" in r.getMessage()
+            if r.levelno == logging.WARNING
+            and "Ingested OPENROUTER_API_KEY" in r.getMessage()
         ]
         assert len(warnings) == 1
 

@@ -39,7 +39,12 @@ def normalize_export_only(only: Optional[str]) -> Optional[ExportOnly]:
     raise ValueError(f"Unsupported session export filter: {only}")
 
 
-def render_sessions_export(sessions: Iterable[dict[str, Any]], *, fmt: str = "jsonl", only: Optional[str] = None) -> str:
+def render_sessions_export(
+    sessions: Iterable[dict[str, Any]],
+    *,
+    fmt: str = "jsonl",
+    only: Optional[str] = None,
+) -> str:
     """Render exported sessions in a stable, reusable format.
 
     ``fmt=jsonl`` with no filter keeps the legacy shape (one full session object per line);
@@ -56,8 +61,10 @@ def render_sessions_export(sessions: Iterable[dict[str, Any]], *, fmt: str = "js
     # One session → its own H1 with body at H2; several → a shared H1, each session H2/H3.
     if prompts_only:
         multi_title, append_body = "User prompts export", _append_prompt_records
-        headings = (lambda s: f"User prompts for session {_heading_text(_session_id(s))}",
-                    lambda s: f"Session {_heading_text(_session_id(s))}")
+        headings = (
+            lambda s: f"User prompts for session {_heading_text(_session_id(s))}",
+            lambda s: f"Session {_heading_text(_session_id(s))}",
+        )
     else:
         multi_title, append_body = "Clawksis sessions export", _append_session_messages
         headings = (lambda s: f"Session: {_heading_text(_session_title_or_id(s))}",) * 2
@@ -67,7 +74,11 @@ def render_sessions_export(sessions: Iterable[dict[str, Any]], *, fmt: str = "js
         lines += [f"# {multi_title}", ""]
     for session in session_list:
         level = 1 if single else 2
-        lines += [f"{'#' * level} {headings[level - 1](session)}", *_session_metadata_lines(session), ""]
+        lines += [
+            f"{'#' * level} {headings[level - 1](session)}",
+            *_session_metadata_lines(session),
+            "",
+        ]
         append_body(lines, session, heading_level=level + 1)
     if prompts_only and not session_list:
         lines += ["_No user prompts found._", ""]
@@ -76,7 +87,9 @@ def render_sessions_export(sessions: Iterable[dict[str, Any]], *, fmt: str = "js
     return "\n".join(lines) + "\n"
 
 
-def export_record_count(sessions: Iterable[dict[str, Any]], *, only: Optional[str] = None) -> tuple[int, str]:
+def export_record_count(
+    sessions: Iterable[dict[str, Any]], *, only: Optional[str] = None
+) -> tuple[int, str]:
     """Return ``(count, noun)`` for status messages after an export."""
     session_list = list(sessions)
     if normalize_export_only(only) == "user-prompts":
@@ -84,7 +97,9 @@ def export_record_count(sessions: Iterable[dict[str, Any]], *, only: Optional[st
     return len(session_list), "session"
 
 
-def iter_user_prompt_records(sessions: Iterable[dict[str, Any]]) -> Iterator[dict[str, Any]]:
+def iter_user_prompt_records(
+    sessions: Iterable[dict[str, Any]],
+) -> Iterator[dict[str, Any]]:
     """Yield one normalized record for each user-authored prompt."""
     for session in sessions:
         session_id = str(session.get("id") or session.get("session_id") or "")
@@ -99,27 +114,37 @@ def iter_user_prompt_records(sessions: Iterable[dict[str, Any]]) -> Iterator[dic
             }
             if (message_id := message.get("id")) is not None:
                 record["message_id"] = message_id
-            if event_id := message.get("platform_message_id") or message.get("event_id"):
+            if event_id := message.get("platform_message_id") or message.get(
+                "event_id"
+            ):
                 record["event_id"] = event_id
             yield record
 
 
-def _append_prompt_records(lines: list[str], session: dict[str, Any], *, heading_level: int) -> None:
+def _append_prompt_records(
+    lines: list[str], session: dict[str, Any], *, heading_level: int
+) -> None:
     prompts = list(iter_user_prompt_records([session]))
     if not prompts:
         lines += ["_No user prompts found._", ""]
         return
     marker = "#" * heading_level
     for prompt in prompts:
-        lines.append(f"{marker} {prompt['index']}. {prompt.get('created_at') or 'timestamp unavailable'}")
+        lines.append(
+            f"{marker} {prompt['index']}. {prompt.get('created_at') or 'timestamp unavailable'}"
+        )
         if (message_id := prompt.get("message_id")) is not None:
             lines += [f"Message ID: `{message_id}`", ""]
         lines += [str(prompt.get("text") or ""), ""]
 
 
-def _append_session_messages(lines: list[str], session: dict[str, Any], *, heading_level: int) -> None:
+def _append_session_messages(
+    lines: list[str], session: dict[str, Any], *, heading_level: int
+) -> None:
     marker = "#" * heading_level
-    visible_messages = [message for message in _messages(session) if message.get("role") != "system"]
+    visible_messages = [
+        message for message in _messages(session) if message.get("role") != "system"
+    ]
     if not visible_messages:
         lines += ["_No messages found._", ""]
         return
@@ -131,9 +156,14 @@ def _append_session_messages(lines: list[str], session: dict[str, Any], *, headi
         if role == "tool":
             tool_name = str(message.get("tool_name") or message.get("name") or "tool")
             lines += [
-                f"{marker} Tool: {_heading_text(tool_name)}{suffix}", "",
-                f"<details><summary>{html_escape(tool_name)}</summary>", "",
-                _fenced_text(text), "", "</details>", "",
+                f"{marker} Tool: {_heading_text(tool_name)}{suffix}",
+                "",
+                f"<details><summary>{html_escape(tool_name)}</summary>",
+                "",
+                _fenced_text(text),
+                "",
+                "</details>",
+                "",
             ]
         else:
             label = {"user": "User", "assistant": "Assistant"}.get(role, role.title())
@@ -141,7 +171,11 @@ def _append_session_messages(lines: list[str], session: dict[str, Any], *, headi
 
 
 def _messages(session: dict[str, Any]) -> list[dict[str, Any]]:
-    return [message for message in session.get("messages") or [] if isinstance(message, dict)]
+    return [
+        message
+        for message in session.get("messages") or []
+        if isinstance(message, dict)
+    ]
 
 
 def _message_text(content: Any) -> str:
@@ -222,7 +256,10 @@ def drop_undone_rows(export: dict[str, Any]) -> dict[str, Any]:
     """Keep live and compaction-archived rows in a ``/save`` JSON snapshot; rows removed by /undo, rewind
     or edit stay out. ``timings`` is rebuilt from the kept rows so it names no dropped row."""
     from clawk_state_portability import _export_timings
-    export["messages"] = [m for m in export["messages"] if m["active"] or m["compacted"]]
+
+    export["messages"] = [
+        m for m in export["messages"] if m["active"] or m["compacted"]
+    ]
     export["timings"] = _export_timings(export["messages"], export.get("id"))
     return export
 
@@ -259,7 +296,13 @@ Examples:
   /save md notes.md
   /save html session.html redact"""
 
-_SAVE_FORMAT_ALIASES = {"json": "json", "snapshot": "json", "md": "md", "markdown": "md", "html": "html"}
+_SAVE_FORMAT_ALIASES = {
+    "json": "json",
+    "snapshot": "json",
+    "md": "md",
+    "markdown": "md",
+    "html": "html",
+}
 
 
 def normalize_save_format(fmt: Optional[str]) -> str:
@@ -277,7 +320,9 @@ def _render_html_for_save(session: dict[str, Any]) -> str:
 
 
 _SAVE_RENDERERS = {
-    "json": lambda session: json.dumps(session, indent=2, ensure_ascii=False, default=str),
+    "json": lambda session: json.dumps(
+        session, indent=2, ensure_ascii=False, default=str
+    ),
     "md": lambda session: render_sessions_export([session], fmt="markdown"),
     "html": _render_html_for_save,
 }
@@ -293,5 +338,8 @@ def render_session_for_save(session: dict[str, Any], fmt: str) -> str:
 
 def default_save_filename(session_id: str, fmt: str) -> str:
     """Default filename for a /save export of the given session."""
-    safe_id = "".join(ch for ch in str(session_id) if ch.isalnum() or ch in ("-", "_")) or "session"
+    safe_id = (
+        "".join(ch for ch in str(session_id) if ch.isalnum() or ch in ("-", "_"))
+        or "session"
+    )
     return f"clawk_session_{safe_id}.{fmt}"

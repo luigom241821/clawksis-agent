@@ -20,14 +20,22 @@ def test_model_info_degrades_when_the_context_probe_exceeds_its_budget(monkeypat
     from clawk_cli.web_routers import models as router
 
     monkeypatch.setattr(
-        router, "_load_config_scoped",
+        router,
+        "_load_config_scoped",
         lambda profile: _config("some-model", "custom-proxy", "http://localhost:9/v1"),
     )
     monkeypatch.setattr(router, "_MODEL_INFO_PROBE_BUDGET_S", 0.2)
 
     import agent.model_metadata as metadata
 
-    def _hanging_probe(model, base_url="", api_key="", config_context_length=None, provider="", custom_providers=None):
+    def _hanging_probe(
+        model,
+        base_url="",
+        api_key="",
+        config_context_length=None,
+        provider="",
+        custom_providers=None,
+    ):
         time.sleep(1.0)
         raise AssertionError("the abandoned probe should never be awaited")
 
@@ -49,13 +57,21 @@ def test_model_info_surfaces_the_context_value_when_the_probe_is_fast(monkeypatc
     from clawk_cli.web_routers import models as router
 
     monkeypatch.setattr(
-        router, "_load_config_scoped",
+        router,
+        "_load_config_scoped",
         lambda profile: _config("some-model", "custom-proxy", "http://localhost:9/v1"),
     )
 
     import agent.model_metadata as metadata
 
-    def _fast_probe(model, base_url="", api_key="", config_context_length=None, provider="", custom_providers=None):
+    def _fast_probe(
+        model,
+        base_url="",
+        api_key="",
+        config_context_length=None,
+        provider="",
+        custom_providers=None,
+    ):
         return 131072
 
     monkeypatch.setattr(metadata, "get_model_context_length", _fast_probe)

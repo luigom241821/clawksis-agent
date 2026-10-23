@@ -52,7 +52,6 @@ class TestExplicitRuntimeForAnthropic:
         assert result["provider"] == "anthropic"
         assert result["base_url"] == "https://api.anthropic.com"
 
-
     def test_no_explicit_args_returns_none(self):
         # Guard the gating contract — _resolve_explicit_runtime only
         # fires when an explicit override is present; without one it
@@ -146,7 +145,11 @@ class TestCustomProviderUrlFallback:
             def select(self, **_kwargs):
                 return _Entry()
 
-        monkeypatch.setattr(rp, "custom_provider_pool_key_candidates", lambda *a, **k: ["custom:my-claude"])
+        monkeypatch.setattr(
+            rp,
+            "custom_provider_pool_key_candidates",
+            lambda *a, **k: ["custom:my-claude"],
+        )
         monkeypatch.setattr(rp, "load_pool", lambda key: _Pool())
 
         resolved = rp._try_resolve_from_custom_pool(
@@ -156,4 +159,3 @@ class TestCustomProviderUrlFallback:
 
         assert resolved is not None
         assert resolved["api_mode"] == "anthropic_messages"
-

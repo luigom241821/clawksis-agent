@@ -9,7 +9,9 @@ import pytest
 
 
 @pytest.mark.no_isolate
-def test_auth_parked_oauth_server_ignores_discovery_until_credentials_change(monkeypatch, tmp_path):
+def test_auth_parked_oauth_server_ignores_discovery_until_credentials_change(
+    monkeypatch, tmp_path
+):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     from tools import mcp_tool
     from tools.mcp_oauth import ClawksisTokenStorage, OAuthNonInteractiveError
@@ -19,7 +21,11 @@ def test_auth_parked_oauth_server_ignores_discovery_until_credentials_change(mon
     cfg = {"url": "https://mcp.example.test/mcp", "auth": "oauth"}
     token_file = ClawksisTokenStorage("cloud")._tokens_path()
     token_file.parent.mkdir(parents=True)
-    token_file.write_text(json.dumps({"access_token": "a", "token_type": "Bearer", "refresh_token": "dead"}))
+    token_file.write_text(
+        json.dumps(
+            {"access_token": "a", "token_type": "Bearer", "refresh_token": "dead"}
+        )
+    )
     attempts = []
 
     class _Task(MCPServerTask):
@@ -28,7 +34,9 @@ def test_auth_parked_oauth_server_ignores_discovery_until_credentials_change(mon
 
         async def _run_http(self, config):
             attempts.append(config["url"])
-            raise OAuthNonInteractiveError("refresh token rejected; browser authorization required")
+            raise OAuthNonInteractiveError(
+                "refresh token rejected; browser authorization required"
+            )
 
     async def _settle():
         for _ in range(50):
@@ -46,8 +54,14 @@ def test_auth_parked_oauth_server_ignores_discovery_until_credentials_change(mon
             await _settle()
         assert len(attempts) == 1
 
-        token_file.write_text(json.dumps({"access_token": "b", "token_type": "Bearer", "refresh_token": "new"}))
-        _select_new_servers({"cloud": cfg})  # `clawk mcp login` landed: the next pass revives it
+        token_file.write_text(
+            json.dumps(
+                {"access_token": "b", "token_type": "Bearer", "refresh_token": "new"}
+            )
+        )
+        _select_new_servers(
+            {"cloud": cfg}
+        )  # `clawk mcp login` landed: the next pass revives it
         await _settle()
         assert len(attempts) == 2
 

@@ -13,23 +13,36 @@ from clawk_constants import get_clawk_home
 def homes(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     monkeypatch.setattr(webhook, "_is_webhook_enabled", lambda: True)
-    monkeypatch.setattr(webhook, "_get_webhook_base_url", lambda: "http://localhost:8644")
+    monkeypatch.setattr(
+        webhook, "_get_webhook_base_url", lambda: "http://localhost:8644"
+    )
     coder = tmp_path / "profiles" / "coder"
     coder.mkdir(parents=True)
     (coder / "config.yaml").write_text("{}\n", encoding="utf-8")
     for home, job_id in ((tmp_path, "default-job"), (coder, "coder-job")):
         cron = home / "cron"
         cron.mkdir()
-        (cron / "jobs.json").write_text(json.dumps({"jobs": [
-            {"id": job_id, "name": "daily", "enabled": True}
-        ]}), encoding="utf-8")
+        (cron / "jobs.json").write_text(
+            json.dumps({"jobs": [{"id": job_id, "name": "daily", "enabled": True}]}),
+            encoding="utf-8",
+        )
     return tmp_path, coder
 
 
 def subscribe(**kwargs):
-    args = dict(webhook_action="subscribe", name="route", secret="fixture-secret",
-                prompt="", events="", description="", skills="", deliver="log",
-                deliver_chat_id="", route_profile=None, cron_job="daily")
+    args = dict(
+        webhook_action="subscribe",
+        name="route",
+        secret="fixture-secret",
+        prompt="",
+        events="",
+        description="",
+        skills="",
+        deliver="log",
+        deliver_chat_id="",
+        route_profile=None,
+        cron_job="daily",
+    )
     args.update(kwargs)
     webhook.webhook_command(Namespace(**args))
 
@@ -67,9 +80,17 @@ def test_failed_target_lookup_preserves_route_and_restores_store(homes, failure)
     if failure == "missing":
         store.write_text('{"jobs": []}', encoding="utf-8")
     elif failure == "ambiguous":
-        store.write_text(json.dumps({"jobs": [
-            {"id": "one", "name": "daily"}, {"id": "two", "name": "daily"}
-        ]}), encoding="utf-8")
+        store.write_text(
+            json.dumps(
+                {
+                    "jobs": [
+                        {"id": "one", "name": "daily"},
+                        {"id": "two", "name": "daily"},
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
     else:
         store.write_text("not json", encoding="utf-8")
     if failure == "corrupt":
@@ -87,9 +108,9 @@ def test_bare_route_preserves_custom_caller_home(homes, monkeypatch):
     root, _ = homes
     custom = root / "standalone"
     (custom / "cron").mkdir(parents=True)
-    (custom / "cron" / "jobs.json").write_text(json.dumps({"jobs": [
-        {"id": "custom-job", "name": "daily"}
-    ]}), encoding="utf-8")
+    (custom / "cron" / "jobs.json").write_text(
+        json.dumps({"jobs": [{"id": "custom-job", "name": "daily"}]}), encoding="utf-8"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(custom))
     subscribe()
     assert webhook._load_subscriptions()["route"]["cron_job"] == "custom-job"
@@ -100,6 +121,7 @@ def _clawk(monkeypatch, *argv):
     """Run the real ``clawk`` entry point; return the process exit code."""
     import sys
     from clawk_cli import main as clawk_main
+
     monkeypatch.setattr(sys, "argv", ["clawk", *argv])
     try:
         clawk_main.main()
@@ -111,12 +133,34 @@ def _clawk(monkeypatch, *argv):
 def test_cli_refusal_exits_nonzero_and_writes_nothing(homes, monkeypatch):
     """#139332: a refused subscribe exited 0, so a script could not tell no route was created."""
     root, _ = homes
-    assert _clawk(monkeypatch, "webhook", "subscribe", "route", "--route-profile", "coder",
-                   "--cron-job", "no-such-job") == 1
+    assert (
+        _clawk(
+            monkeypatch,
+            "webhook",
+            "subscribe",
+            "route",
+            "--route-profile",
+            "coder",
+            "--cron-job",
+            "no-such-job",
+        )
+        == 1
+    )
     assert not (root / "webhook_subscriptions.json").exists()
 
 
 def test_cli_routed_cron_subscribe_exits_zero(homes, monkeypatch):
-    assert _clawk(monkeypatch, "webhook", "subscribe", "route", "--route-profile", "coder",
-                   "--cron-job", "coder-job") == 0
+    assert (
+        _clawk(
+            monkeypatch,
+            "webhook",
+            "subscribe",
+            "route",
+            "--route-profile",
+            "coder",
+            "--cron-job",
+            "coder-job",
+        )
+        == 0
+    )
     assert webhook._load_subscriptions()["route"]["cron_job"] == "coder-job"

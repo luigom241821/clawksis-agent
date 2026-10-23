@@ -15,8 +15,13 @@ import uuid
 from datetime import datetime, timezone, UTC
 from typing import Any, Callable, Dict, Optional, TYPE_CHECKING
 from clawk_cli.auth_constants import (
-    AuthError, MINIMAX_OAUTH_GRANT_TYPE, MINIMAX_OAUTH_REFRESH_SKEW_SECONDS, MINIMAX_OAUTH_SCOPE,
-    _FORM_JSON_HEADERS, _minimax_err, httpx,
+    AuthError,
+    MINIMAX_OAUTH_GRANT_TYPE,
+    MINIMAX_OAUTH_REFRESH_SKEW_SECONDS,
+    MINIMAX_OAUTH_SCOPE,
+    _FORM_JSON_HEADERS,
+    _minimax_err,
+    httpx,
 )
 
 if TYPE_CHECKING:  # annotation-only; the runtime import would be a cycle
@@ -26,7 +31,9 @@ logger = logging.getLogger("clawk_cli.auth")
 _MINIMAX_OAUTH_ERROR_BODY_LIMIT = 16 * 1024
 
 
-def _minimax_response_error_text(response: httpx.Response, *, limit: int = _MINIMAX_OAUTH_ERROR_BODY_LIMIT) -> str:
+def _minimax_response_error_text(
+    response: httpx.Response, *, limit: int = _MINIMAX_OAUTH_ERROR_BODY_LIMIT
+) -> str:
     """Return a bounded error body from a streamed MiniMax OAuth response."""
     limit = max(0, int(limit))
     try:
@@ -50,9 +57,13 @@ def _minimax_response_error_text(response: httpx.Response, *, limit: int = _MINI
         response.close()
 
 
-def _minimax_post_form(client: httpx.Client, url: str, *, data: dict[str, Any], headers: dict[str, str]) -> httpx.Response:
+def _minimax_post_form(
+    client: httpx.Client, url: str, *, data: dict[str, Any], headers: dict[str, str]
+) -> httpx.Response:
     """POST a MiniMax OAuth form without eagerly reading error bodies."""
-    response = client.send(client.build_request("POST", url, data=data, headers=headers), stream=True)
+    response = client.send(
+        client.build_request("POST", url, data=data, headers=headers), stream=True
+    )
     if response.status_code == 200:
         response.read()
     return response
@@ -61,32 +72,54 @@ def _minimax_post_form(client: httpx.Client, url: str, *, data: dict[str, Any], 
 def _minimax_pkce_pair() -> tuple:
     """Generate (code_verifier, code_challenge_S256, state) for MiniMax OAuth."""
     import secrets
+
     verifier = secrets.token_urlsafe(64)[:96]
-    challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
+    challenge = (
+        base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest())
+        .decode()
+        .rstrip("=")
+    )
     return verifier, challenge, secrets.token_urlsafe(16)
 
 
 def _minimax_request_user_code(
-    client: httpx.Client, *, portal_base_url: str, client_id: str, code_challenge: str, state: str
+    client: httpx.Client,
+    *,
+    portal_base_url: str,
+    client_id: str,
+    code_challenge: str,
+    state: str,
 ) -> dict[str, Any]:
     response = _minimax_post_form(
         client,
         f"{portal_base_url}/oauth/code",
         data={
-            "response_type": "code", "client_id": client_id, "scope": MINIMAX_OAUTH_SCOPE,
-            "code_challenge": code_challenge, "code_challenge_method": "S256", "state": state,
+            "response_type": "code",
+            "client_id": client_id,
+            "scope": MINIMAX_OAUTH_SCOPE,
+            "code_challenge": code_challenge,
+            "code_challenge_method": "S256",
+            "state": state,
         },
         headers={**_FORM_JSON_HEADERS, "x-request-id": str(uuid.uuid4())},
     )
     if response.status_code != 200:
         body = _minimax_response_error_text(response)
-        raise _minimax_err(f"MiniMax OAuth authorization failed: {body or response.reason_phrase}", "authorization_failed")
+        raise _minimax_err(
+            f"MiniMax OAuth authorization failed: {body or response.reason_phrase}",
+            "authorization_failed",
+        )
     payload = response.json()
     for field in ("user_code", "verification_uri", "expired_in"):
         if field not in payload:
-            raise _minimax_err(f"MiniMax OAuth response missing field: {field}", "authorization_incomplete")
+            raise _minimax_err(
+                f"MiniMax OAuth response missing field: {field}",
+                "authorization_incomplete",
+            )
     if payload.get("state") != state:
-        raise _minimax_err("MiniMax OAuth state mismatch (possible CSRF).", "state_mismatch")
+        raise _minimax_err(
+            "MiniMax OAuth state mismatch (possible CSRF).", "state_mismatch"
+        )
     return payload
 
 
@@ -115,8 +148,14 @@ def _minimax_expiry_fields(expired_in: Any) -> dict[str, Any]:
 
 
 def _minimax_poll_token(
-    client: httpx.Client, *, portal_base_url: str, client_id: str,
-    user_code: str, code_verifier: str, expired_in: int, interval_ms: Optional[int],
+    client: httpx.Client,
+    *,
+    portal_base_url: str,
+    client_id: str,
+    user_code: str,
+    code_verifier: str,
+    expired_in: int,
+    interval_ms: Optional[int],
 ) -> dict[str, Any]:
     # expired_in is a unix-ms timestamp upstream (OpenClaw) but small values are TTL seconds.
     deadline = _minimax_resolve_token_expiry_unix(expired_in, now=datetime.now(UTC))
@@ -127,8 +166,10 @@ def _minimax_poll_token(
             client,
             f"{portal_base_url}/oauth/token",
             data={
-                "grant_type": MINIMAX_OAUTH_GRANT_TYPE, "client_id": client_id,
-                "user_code": user_code, "code_verifier": code_verifier,
+                "grant_type": MINIMAX_OAUTH_GRANT_TYPE,
+                "client_id": client_id,
+                "user_code": user_code,
+                "code_verifier": code_verifier,
             },
             headers=_FORM_JSON_HEADERS,
         )
@@ -139,7 +180,9 @@ def _minimax_poll_token(
             except Exception:
                 payload = {}
             msg = (payload.get("base_resp", {}) or {}).get("status_msg") or error_text
-            raise _minimax_err(f"MiniMax OAuth error: {msg or 'unknown'}", "token_exchange_failed")
+            raise _minimax_err(
+                f"MiniMax OAuth error: {msg or 'unknown'}", "token_exchange_failed"
+            )
         try:
             payload = response.json() if response.text else {}
         except Exception:
@@ -147,18 +190,30 @@ def _minimax_poll_token(
 
         status = payload.get("status")
         if status == "error":
-            raise _minimax_err("MiniMax OAuth reported an error. Please try again later.", "authorization_denied")
+            raise _minimax_err(
+                "MiniMax OAuth reported an error. Please try again later.",
+                "authorization_denied",
+            )
         if status == "success":
-            if not all(payload.get(k) for k in ("access_token", "refresh_token", "expired_in")):
-                raise _minimax_err("MiniMax OAuth success payload missing required token fields.", "token_incomplete")
+            if not all(
+                payload.get(k) for k in ("access_token", "refresh_token", "expired_in")
+            ):
+                raise _minimax_err(
+                    "MiniMax OAuth success payload missing required token fields.",
+                    "token_incomplete",
+                )
             return payload
         # "pending" or any other status -> keep polling
         time.sleep(interval)
 
-    raise _minimax_err("MiniMax OAuth timed out before authorization completed.", "timeout")
+    raise _minimax_err(
+        "MiniMax OAuth timed out before authorization completed.", "timeout"
+    )
 
 
-def _minimax_save_auth_state(auth_state: dict[str, Any], *, set_active: bool = True) -> None:
+def _minimax_save_auth_state(
+    auth_state: dict[str, Any], *, set_active: bool = True
+) -> None:
     """Persist MiniMax OAuth state to Clawksis auth store (~/.clawksis/auth.json).
 
     ``set_active=False`` rewrites credentials without making minimax-oauth the
@@ -166,16 +221,35 @@ def _minimax_save_auth_state(auth_state: dict[str, Any], *, set_active: bool = T
     rewrites credentials, not the user's choice of provider); only
     ``_minimax_oauth_login`` — the user just chose the provider — sets active.
     """
-    from clawk_cli.auth import _auth_store_lock, _load_auth_store, _save_auth_store, _store_provider_state
+    from clawk_cli.auth import (
+        _auth_store_lock,
+        _load_auth_store,
+        _save_auth_store,
+        _store_provider_state,
+    )
+
     with _auth_store_lock():
         auth_store = _load_auth_store()
-        _store_provider_state(auth_store, "minimax-oauth", auth_state, set_active=set_active)
+        _store_provider_state(
+            auth_store, "minimax-oauth", auth_state, set_active=set_active
+        )
         _save_auth_store(auth_store)
 
 
-def _minimax_oauth_login(*, region: str = "global", open_browser: bool = True, timeout_seconds: float = 15.0) -> dict[str, Any]:
+def _minimax_oauth_login(
+    *, region: str = "global", open_browser: bool = True, timeout_seconds: float = 15.0
+) -> dict[str, Any]:
     """Run MiniMax OAuth flow, persist tokens, return auth state dict."""
-    from clawk_cli.auth import PROVIDER_REGISTRY, _can_open_graphical_browser, _is_remote_session, _minimax_pkce_pair, _minimax_request_user_code, _minimax_save_auth_state, _print_device_code_instructions
+    from clawk_cli.auth import (
+        PROVIDER_REGISTRY,
+        _can_open_graphical_browser,
+        _is_remote_session,
+        _minimax_pkce_pair,
+        _minimax_request_user_code,
+        _minimax_save_auth_state,
+        _print_device_code_instructions,
+    )
+
     pconfig = PROVIDER_REGISTRY["minimax-oauth"]
     if region == "cn":
         portal_base_url = pconfig.extra["cn_portal_base_url"]
@@ -192,13 +266,21 @@ def _minimax_oauth_login(*, region: str = "global", open_browser: bool = True, t
     print(f"Starting Clawksis login via MiniMax ({region}) OAuth...")
     print(f"Portal: {portal_base_url}")
 
-    with httpx.Client(timeout=httpx.Timeout(timeout_seconds), headers={"Accept": "application/json"},
-                      follow_redirects=True) as client:
+    with httpx.Client(
+        timeout=httpx.Timeout(timeout_seconds),
+        headers={"Accept": "application/json"},
+        follow_redirects=True,
+    ) as client:
         code_data = _minimax_request_user_code(
-            client, portal_base_url=portal_base_url, client_id=pconfig.client_id, code_challenge=challenge, state=state,
+            client,
+            portal_base_url=portal_base_url,
+            client_id=pconfig.client_id,
+            code_challenge=challenge,
+            state=state,
         )
         _print_device_code_instructions(
-            str(code_data["verification_uri"]), str(code_data["user_code"]),
+            str(code_data["verification_uri"]),
+            str(code_data["user_code"]),
             open_browser=open_browser and _can_open_graphical_browser(),
         )
 
@@ -206,8 +288,11 @@ def _minimax_oauth_login(*, region: str = "global", open_browser: bool = True, t
         print("Waiting for approval...")
 
         token_data = _minimax_poll_token(
-            client, portal_base_url=portal_base_url, client_id=pconfig.client_id,
-            user_code=str(code_data["user_code"]), code_verifier=verifier,
+            client,
+            portal_base_url=portal_base_url,
+            client_id=pconfig.client_id,
+            user_code=str(code_data["user_code"]),
+            code_verifier=verifier,
             expired_in=int(code_data["expired_in"]),
             interval_ms=int(interval_raw) if interval_raw is not None else None,
         )
@@ -233,11 +318,18 @@ def _minimax_oauth_login(*, region: str = "global", open_browser: bool = True, t
     return auth_state
 
 
-def _refresh_minimax_oauth_state(state: dict[str, Any], *, timeout_seconds: float = 15.0, force: bool = False) -> dict[str, Any]:
+def _refresh_minimax_oauth_state(
+    state: dict[str, Any], *, timeout_seconds: float = 15.0, force: bool = False
+) -> dict[str, Any]:
     """Refresh MiniMax OAuth access token if close to expiry (or forced)."""
     from clawk_cli.auth import _minimax_save_auth_state
+
     if not state.get("refresh_token"):
-        raise _minimax_err("MiniMax OAuth state has no refresh_token; please re-login.", "no_refresh_token", relogin=True)
+        raise _minimax_err(
+            "MiniMax OAuth state has no refresh_token; please re-login.",
+            "no_refresh_token",
+            relogin=True,
+        )
     try:
         expires_at = datetime.fromisoformat(state.get("expires_at", "")).timestamp()
     except Exception:
@@ -245,11 +337,17 @@ def _refresh_minimax_oauth_state(state: dict[str, Any], *, timeout_seconds: floa
     if not force and (expires_at - time.time()) > MINIMAX_OAUTH_REFRESH_SKEW_SECONDS:
         return state
 
-    with httpx.Client(timeout=httpx.Timeout(timeout_seconds), follow_redirects=True) as client:
+    with httpx.Client(
+        timeout=httpx.Timeout(timeout_seconds), follow_redirects=True
+    ) as client:
         response = _minimax_post_form(
             client,
             f"{state['portal_base_url']}/oauth/token",
-            data={"grant_type": "refresh_token", "client_id": state["client_id"], "refresh_token": state["refresh_token"]},
+            data={
+                "grant_type": "refresh_token",
+                "client_id": state["client_id"],
+                "refresh_token": state["refresh_token"],
+            },
             headers=_FORM_JSON_HEADERS,
         )
         # Non-200 reads a STREAMED body, so it must run inside the client context (iter_bytes()
@@ -257,13 +355,26 @@ def _refresh_minimax_oauth_state(state: dict[str, Any], *, timeout_seconds: floa
         if response.status_code != 200:
             body = _minimax_response_error_text(response)
             body_lower = body.lower()
-            relogin = any(m in body_lower for m in ("invalid_grant", "refresh_token_reused", "invalid_refresh_token"))
+            relogin = any(
+                m in body_lower
+                for m in (
+                    "invalid_grant",
+                    "refresh_token_reused",
+                    "invalid_refresh_token",
+                )
+            )
             raise _minimax_err(
-                f"MiniMax OAuth refresh failed: {body or response.reason_phrase}", "refresh_failed", relogin=relogin,
+                f"MiniMax OAuth refresh failed: {body or response.reason_phrase}",
+                "refresh_failed",
+                relogin=relogin,
             )
     payload = response.json()
     if payload.get("status") != "success":
-        raise _minimax_err("MiniMax OAuth refresh did not return success.", "refresh_failed", relogin=True)
+        raise _minimax_err(
+            "MiniMax OAuth refresh did not return success.",
+            "refresh_failed",
+            relogin=True,
+        )
     new_state = {
         **state,
         "access_token": payload["access_token"],
@@ -276,9 +387,12 @@ def _refresh_minimax_oauth_state(state: dict[str, Any], *, timeout_seconds: floa
     return new_state
 
 
-def _minimax_oauth_quarantine_on_terminal_refresh(state: dict[str, Any], exc: AuthError) -> None:
+def _minimax_oauth_quarantine_on_terminal_refresh(
+    state: dict[str, Any], exc: AuthError
+) -> None:
     """Wipe dead tokens from auth.json after a terminal refresh failure (fail fast, no network retry)."""
     from clawk_cli.auth import _minimax_save_auth_state, _quarantine_flat_oauth_state
+
     if not (exc.relogin_required and state.get("refresh_token")):
         return
     _quarantine_flat_oauth_state(state, "minimax-oauth", exc)
@@ -286,7 +400,9 @@ def _minimax_oauth_quarantine_on_terminal_refresh(state: dict[str, Any], exc: Au
         # set_active=False: wiping dead tokens is hygiene, not a provider choice.
         _minimax_save_auth_state(state, set_active=False)
     except Exception as _save_exc:
-        logger.debug("MiniMax OAuth: failed to persist quarantined state: %s", _save_exc)
+        logger.debug(
+            "MiniMax OAuth: failed to persist quarantined state: %s", _save_exc
+        )
 
 
 def _minimax_fresh_state() -> dict[str, Any]:
@@ -302,15 +418,19 @@ def _minimax_fresh_state() -> dict[str, Any]:
     a waiter adopts the rotated pair instead of timing out (codex pattern).
     """
     from clawk_cli.auth import (
-        AUTH_LOCK_TIMEOUT_SECONDS, _auth_store_lock, _refresh_minimax_oauth_state,
+        AUTH_LOCK_TIMEOUT_SECONDS,
+        _auth_store_lock,
+        _refresh_minimax_oauth_state,
         get_provider_auth_state,
     )
+
     with _auth_store_lock(timeout_seconds=max(AUTH_LOCK_TIMEOUT_SECONDS, 15.0 + 5.0)):
         state = get_provider_auth_state("minimax-oauth")
         if not state or not state.get("access_token"):
             raise _minimax_err(
                 "Not logged into MiniMax OAuth. Run `clawk model` and select MiniMax (OAuth).",
-                "not_logged_in", relogin=True,
+                "not_logged_in",
+                relogin=True,
             )
         try:
             return _refresh_minimax_oauth_state(state)
@@ -325,25 +445,34 @@ def build_minimax_oauth_token_provider() -> Callable[[], str]:
     The Anthropic SDK caches ``api_key`` at construction; MiniMax tokens live ~15 minutes, so a
     static bearer would start 401-ing mid-session.
     """
+
     def _provide() -> str:
         token = _minimax_fresh_state().get("access_token")
         if not token:
-            raise _minimax_err("MiniMax OAuth state has no access_token after refresh.", "no_access_token", relogin=True)
+            raise _minimax_err(
+                "MiniMax OAuth state has no access_token after refresh.",
+                "no_access_token",
+                relogin=True,
+            )
         return token
 
     from agent.credential_source import MINIMAX_OAUTH, tag_credential_source
+
     return tag_credential_source(_provide, MINIMAX_OAUTH)
 
 
 def resolve_minimax_oauth_runtime_credentials(
-    *, min_token_ttl_seconds: int = MINIMAX_OAUTH_REFRESH_SKEW_SECONDS,
+    *,
+    min_token_ttl_seconds: int = MINIMAX_OAUTH_REFRESH_SKEW_SECONDS,
     as_token_provider: bool = False,
 ) -> dict[str, Any]:
     """Return {provider, api_key, base_url, source}; string ``api_key`` by default (``clawk status`` contract)."""
     state = _minimax_fresh_state()
     return {
         "provider": "minimax-oauth",
-        "api_key": build_minimax_oauth_token_provider() if as_token_provider else state["access_token"],
+        "api_key": build_minimax_oauth_token_provider()
+        if as_token_provider
+        else state["access_token"],
         "base_url": state["inference_base_url"].rstrip("/"),
         "source": "oauth",
     }
@@ -352,6 +481,7 @@ def resolve_minimax_oauth_runtime_credentials(
 def _login_minimax_oauth(args, pconfig: ProviderConfig) -> None:
     """CLI entry for MiniMax OAuth login."""
     from clawk_cli.auth import format_auth_error
+
     try:
         _minimax_oauth_login(
             region=getattr(args, "region", None) or "global",

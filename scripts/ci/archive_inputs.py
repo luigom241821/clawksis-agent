@@ -1,4 +1,5 @@
 """Archive pinned binary inputs in R2 and seed existing CI consumers."""
+
 from __future__ import annotations
 
 import argparse
@@ -37,8 +38,17 @@ class InputPin:
             raise ValueError(f"Invalid input name: {self.name!r}")
         object_key(self.sha256)
         parsed = urlsplit(self.url)
-        loopback = parsed.scheme == "http" and parsed.hostname in ("127.0.0.1", "localhost", "::1")
-        if (parsed.scheme != "https" and not loopback) or not parsed.netloc or parsed.username or parsed.password:
+        loopback = parsed.scheme == "http" and parsed.hostname in (
+            "127.0.0.1",
+            "localhost",
+            "::1",
+        )
+        if (
+            (parsed.scheme != "https" and not loopback)
+            or not parsed.netloc
+            or parsed.username
+            or parsed.password
+        ):
             raise ValueError(f"{self.name}: pinned input needs an HTTPS URL")
         if self.kind not in ("library", "license", "tool"):
             raise ValueError(f"Invalid input kind: {self.kind}")
@@ -47,13 +57,19 @@ class InputPin:
 def historical_url(url: str) -> str | None:
     parsed = urlsplit(url)
     prefix = "/apt/termux-main/pool/main/"
-    if parsed.scheme != "https" or parsed.netloc != "packages.termux.dev" or not parsed.path.startswith(prefix):
+    if (
+        parsed.scheme != "https"
+        or parsed.netloc != "packages.termux.dev"
+        or not parsed.path.startswith(prefix)
+    ):
         return None
-    parts = parsed.path[len(prefix):].split("/")
+    parts = parsed.path[len(prefix) :].split("/")
     if len(parts) != 3 or any(not part or part in (".", "..") for part in parts):
         return None
     group, package, filename = (quote(part, safe="") for part in parts)
-    return f"https://archive.org/download/termux_pkgs_archive_{group}/{package}/{filename}"
+    return (
+        f"https://archive.org/download/termux_pkgs_archive_{group}/{package}/{filename}"
+    )
 
 
 def _pin(name: str, row: dict, kind: str) -> InputPin:
@@ -62,15 +78,23 @@ def _pin(name: str, row: dict, kind: str) -> InputPin:
     return InputPin(name, row["url"], row.get("sha256"), kind)
 
 
-def pinned_inputs(repo: Path, *, target: str | None = None, packages: set[str] | None = None) -> list[InputPin]:
+def pinned_inputs(
+    repo: Path, *, target: str | None = None, packages: set[str] | None = None
+) -> list[InputPin]:
     """All pin references, including shared bytes needed at different paths."""
     if target is not None and target not in ALL_TARGETS:
         raise ValueError(f"Unknown target: {target}")
     lock = json.loads((repo / "pm/lock.json").read_text(encoding="utf-8-sig"))
-    if not isinstance(lock, dict) or lock.get("schema") != SCHEMA or not isinstance(lock.get("packages"), dict):
+    if (
+        not isinstance(lock, dict)
+        or lock.get("schema") != SCHEMA
+        or not isinstance(lock.get("packages"), dict)
+    ):
         raise ValueError("Invalid PM lockfile")
     if packages is not None and packages - lock["packages"].keys():
-        raise ValueError(f"Unknown pinned packages: {sorted(packages - lock['packages'].keys())}")
+        raise ValueError(
+            f"Unknown pinned packages: {sorted(packages - lock['packages'].keys())}"
+        )
     pins = []
     for name, package in lock["packages"].items():
         if packages is not None and name not in packages:
@@ -82,11 +106,17 @@ def pinned_inputs(repo: Path, *, target: str | None = None, packages: set[str] |
         for row_target, rows in artifacts.items():
             for row in rows if isinstance(rows, list) else [rows]:
                 label = f"{name}@{row_target}"
-                if isinstance(row, dict) and isinstance(row.get("url"), str) and row["url"].startswith("docker://"):
+                if (
+                    isinstance(row, dict)
+                    and isinstance(row.get("url"), str)
+                    and row["url"].startswith("docker://")
+                ):
                     continue  # OCI digests belong to the container registry, not HTTP archives.
                 pins.append(_pin(label, row, "tool"))
     if packages is None and target in (None, TERMUX_TARGET):
-        table = json.loads((repo / "pm" / "termux_runtime_libs.json").read_text(encoding="utf-8-sig"))
+        table = json.loads(
+            (repo / "pm" / "termux_runtime_libs.json").read_text(encoding="utf-8-sig")
+        )
         pins.extend(_pin(name, row, "library") for name, row in table["libs"].items())
         if table.get("licenses") is not None:
             pins.append(_pin("termux-licenses", table["licenses"], "license"))
@@ -106,49 +136,80 @@ class Archive:
         key = object_key(pin.sha256)
         url = f"{self.base}/{self.bucket}/{r2.encode_key_path(key)}"
         try:
-            head = r2.signed_request("HEAD", url, creds=self.creds, now=r2.amz_timestamp())
+            head = r2.signed_request(
+                "HEAD", url, creds=self.creds, now=r2.amz_timestamp()
+            )
         except r2.R2RequestError as exc:
             if exc.status != 404:
                 raise
             head = None
         destination.parent.mkdir(parents=True, exist_ok=True)
-        with tempfile.TemporaryDirectory(prefix=".input-archive-", dir=destination.parent) as temporary:
+        with tempfile.TemporaryDirectory(
+            prefix=".input-archive-", dir=destination.parent
+        ) as temporary:
             work = Path(temporary)
             local = work / "input"
             origin = "R2"
             if head is None:
                 origin = _download_upstream(pin, local)
                 size = local.stat().st_size
-                r2.put_object(self.creds, self.base, self.bucket, key, str(local), r2.amz_timestamp(),
-                              "application/octet-stream", conditions={"If-None-Match": "*"})
+                r2.put_object(
+                    self.creds,
+                    self.base,
+                    self.bucket,
+                    key,
+                    str(local),
+                    r2.amz_timestamp(),
+                    "application/octet-stream",
+                    conditions={"If-None-Match": "*"},
+                )
             else:
                 length = head.header("content-length")
                 if length is None:
                     raise ValueError(f"R2 did not report the input size: {url}")
                 size = int(length)
             verified = work / "verified"
-            r2.download_object(self.creds, self.base, self.bucket, key, verified, r2.amz_timestamp(),
-                               expected_size=size, expected_sha256=pin.sha256)
+            r2.download_object(
+                self.creds,
+                self.base,
+                self.bucket,
+                key,
+                verified,
+                r2.amz_timestamp(),
+                expected_size=size,
+                expected_sha256=pin.sha256,
+            )
             verified.replace(destination)
         return origin
 
 
 def _download_upstream(pin: InputPin, local: Path) -> str:
     try:
-        Download([Source(pin.url, local, pin.sha256)], partials_dir=local.parent / "partials").run()
+        Download(
+            [Source(pin.url, local, pin.sha256)], partials_dir=local.parent / "partials"
+        ).run()
         return "upstream"
     except DownloadTransportError as exc:
         backup = historical_url(pin.url)
         if exc.status not in (404, 410) or backup is None:
             raise
         try:
-            Download([Source(backup, local, pin.sha256)], partials_dir=local.parent / "partials").run()
+            Download(
+                [Source(backup, local, pin.sha256)],
+                partials_dir=local.parent / "partials",
+            ).run()
         except DownloadError as failure:
             raise DownloadError(f"{exc}\n{failure}") from failure
         return "historical archive"
 
 
-def stage_inputs(pins: list[InputPin], *, archive: Archive, store: Store | None = None, payload: Path | None = None) -> int:
+def stage_inputs(
+    pins: list[InputPin],
+    *,
+    archive: Archive,
+    store: Store | None = None,
+    payload: Path | None = None,
+) -> int:
     """Archive all unique digests concurrently; optionally seed the stagers' inputs."""
     from scripts.termux.stage_runtime_libs import download_path
 
@@ -181,10 +242,15 @@ def stage_inputs(pins: list[InputPin], *, archive: Archive, store: Store | None 
                     if entry.exists():
                         shutil.rmtree(entry)
                     store.publish(staged, entry.name)
-            print(f"  {references[0].name}: {origin} -> {object_key(digest)}", flush=True)
+            print(
+                f"  {references[0].name}: {origin} -> {object_key(digest)}", flush=True
+            )
 
     with ThreadPoolExecutor(max_workers=len(groups)) as pool:
-        futures = [pool.submit(stage_digest, digest, references) for digest, references in groups.items()]
+        futures = [
+            pool.submit(stage_digest, digest, references)
+            for digest, references in groups.items()
+        ]
         for future in as_completed(futures):
             future.result()
     return len(groups)
@@ -195,13 +261,20 @@ def main(argv=None) -> int:
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--target", choices=ALL_TARGETS)
-    parser.add_argument("--payload", type=Path, help="seed Termux runtime-library downloads")
-    parser.add_argument("--store", type=Path, help="seed this PM store's disposable input cache")
+    parser.add_argument(
+        "--payload", type=Path, help="seed Termux runtime-library downloads"
+    )
+    parser.add_argument(
+        "--store", type=Path, help="seed this PM store's disposable input cache"
+    )
     args = parser.parse_args(argv)
     pins = pinned_inputs(paths.repo_root(), target=args.target)
-    count = stage_inputs(pins, archive=Archive(*r2.credentials()),
-                         store=Store(args.store.resolve()) if args.store else None,
-                         payload=args.payload.resolve() if args.payload else None)
+    count = stage_inputs(
+        pins,
+        archive=Archive(*r2.credentials()),
+        store=Store(args.store.resolve()) if args.store else None,
+        payload=args.payload.resolve() if args.payload else None,
+    )
     print(f"Verified {count} unique pinned inputs in R2.", flush=True)
     return 0
 

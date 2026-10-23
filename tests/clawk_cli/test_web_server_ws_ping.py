@@ -74,8 +74,10 @@ def _stub_uvicorn(monkeypatch):
 def test_start_server_applies_process_local_ssh_bootstrap_state(monkeypatch, tmp_path):
     captured = _stub_uvicorn(monkeypatch)
     owner_watchdogs: list[dict] = []
-    monkeypatch.setattr("clawk_cli.web_server_owner_exit.start_owner_watchdog",
-                        lambda server, **kw: owner_watchdogs.append(kw))
+    monkeypatch.setattr(
+        "clawk_cli.web_server_owner_exit.start_owner_watchdog",
+        lambda server, **kw: owner_watchdogs.append(kw),
+    )
     lock_path = tmp_path / "backend.lock.json"
 
     def serve(**extra):
@@ -121,7 +123,9 @@ def test_start_server_disables_ws_ping_on_loopback(monkeypatch):
     assert captured["ws_ping_timeout"] is None
 
 
-def test_start_server_accepts_base64_desktop_attachments_above_preview_limit(monkeypatch):
+def test_start_server_accepts_base64_desktop_attachments_above_preview_limit(
+    monkeypatch,
+):
     """The gateway frame cap must fit the Desktop attachment default after
     base64 expansion and JSON framing; uvicorn's 16 MiB default would reject
     the request before ``file.attach`` can stage it.
@@ -186,7 +190,9 @@ def test_start_server_runs_on_uvicorns_loop_factory(monkeypatch):
     # from get_loop_factory(). Pin a sentinel so we can assert it is threaded
     # through to the runner unchanged.
     sentinel_factory = object()
-    monkeypatch.setattr(uvicorn.Config, "_loop_factory", sentinel_factory, raising=False)
+    monkeypatch.setattr(
+        uvicorn.Config, "_loop_factory", sentinel_factory, raising=False
+    )
 
     seen: dict = {}
 
@@ -216,8 +222,6 @@ def test_start_server_runs_on_uvicorns_loop_factory(monkeypatch):
         "start_server must not fall back to bare asyncio.run when uvicorn's "
         "loop-factory runner is available"
     )
-
-
 
 
 def test_start_server_treats_posix_keyboardinterrupt_as_clean_shutdown(monkeypatch):

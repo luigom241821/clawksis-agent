@@ -1,5 +1,4 @@
-"""Managed-files policy for the dashboard file browser: root resolution, path containment, entry metadata.
-"""
+"""Managed-files policy for the dashboard file browser: root resolution, path containment, entry metadata."""
 
 import logging
 import mimetypes
@@ -30,12 +29,16 @@ def _resolve_fs_candidate(raw: str, *, cwd: str | None = None) -> Path:
     if not candidate.is_absolute():
         base = Path(cwd).expanduser() if cwd is not None else Path.cwd()
         if not base.is_absolute():
-            raise HTTPException(status_code=400, detail="Session working directory is unavailable")
+            raise HTTPException(
+                status_code=400, detail="Session working directory is unavailable"
+            )
         candidate = base / candidate
     return candidate.resolve(strict=False)
 
 
-def _fs_path(raw_path: str, *, cwd: str | None = None, decode_fallback: bool = True) -> Path:
+def _fs_path(
+    raw_path: str, *, cwd: str | None = None, decode_fallback: bool = True
+) -> Path:
     raw = str(raw_path or "").strip()
     if not raw:
         raise HTTPException(status_code=400, detail="Path is required")
@@ -76,7 +79,10 @@ def _translate_agent_path(candidate: Path) -> Path | None:
     The gate keeps a local-backend gateway with leftover ``docker_volumes`` from serving
     mount sources in place of real host files. Quiet: fs callers also see ordinary host
     paths, which are not MEDIA misses worth a warning."""
-    from gateway.platforms.base import _docker_env_active, _translate_docker_container_media_path
+    from gateway.platforms.base import (
+        _docker_env_active,
+        _translate_docker_container_media_path,
+    )
     from tools.terminal_tool import _ensure_terminal_env_bridged
 
     _ensure_terminal_env_bridged()
@@ -99,18 +105,31 @@ def _agent_path_scope(profile_home: Path | None = None) -> Iterator[None]:
     """
     from clawk_cli.config import get_clawk_home
     from clawk_constants import (
-        get_clawk_home_override, get_process_clawk_home, reset_clawk_home_override,
+        get_clawk_home_override,
+        get_process_clawk_home,
+        reset_clawk_home_override,
         set_clawk_home_override,
     )
-    from tools.terminal_scope import get_terminal_scope, install_profile_terminal_scope, reset_terminal_scope
+    from tools.terminal_scope import (
+        get_terminal_scope,
+        install_profile_terminal_scope,
+        reset_terminal_scope,
+    )
 
     home_token = scope_token = None
-    if profile_home is not None and Path(profile_home).resolve() != get_clawk_home().resolve():
+    if (
+        profile_home is not None
+        and Path(profile_home).resolve() != get_clawk_home().resolve()
+    ):
         home_token = set_clawk_home_override(str(profile_home))
     try:
-        foreign_override = (get_clawk_home_override() is not None
-                            and get_clawk_home().resolve() != get_process_clawk_home().resolve())
-        if home_token is not None or (foreign_override and get_terminal_scope() is None):
+        foreign_override = (
+            get_clawk_home_override() is not None
+            and get_clawk_home().resolve() != get_process_clawk_home().resolve()
+        )
+        if home_token is not None or (
+            foreign_override and get_terminal_scope() is None
+        ):
             scope_token = install_profile_terminal_scope(get_clawk_home())
         yield
     finally:
@@ -141,7 +160,10 @@ def _agent_container_path(raw: str, *, profile_home: Path | None = None) -> Path
     try:
         from clawk_cli.config import get_clawk_home
         from tools.terminal_scope import (
-            build_profile_terminal_scope, get_terminal_scope, reset_terminal_scope, set_terminal_scope,
+            build_profile_terminal_scope,
+            get_terminal_scope,
+            reset_terminal_scope,
+            set_terminal_scope,
         )
 
         candidate = Path(raw)
@@ -155,15 +177,22 @@ def _agent_container_path(raw: str, *, profile_home: Path | None = None) -> Path
             finally:
                 reset_terminal_scope(token)
     except Exception:  # fail open: translation is additive, the host path still serves
-        logger.debug("agent container path translation failed for %s", raw, exc_info=True)
+        logger.debug(
+            "agent container path translation failed for %s", raw, exc_info=True
+        )
         return None
 
 
-SANDBOX_NOT_FOUND = "File not found on the gateway host: the path may live inside the agent sandbox"
+SANDBOX_NOT_FOUND = (
+    "File not found on the gateway host: the path may live inside the agent sandbox"
+)
 
 
 def _agent_fs_path(
-    raw_path: str, *, cwd: str | None = None, profile_home: Path | None = None,
+    raw_path: str,
+    *,
+    cwd: str | None = None,
+    profile_home: Path | None = None,
 ) -> Path:
     """``_fs_path`` for agent-facing reads; container paths resolve to their host
     mount, so callers' boundary guards see the real host target.
@@ -195,13 +224,20 @@ def _is_unmapped_container_path(raw: str, *, profile_home: Path | None = None) -
     if not raw.startswith("/") or raw.startswith("//"):
         return False
     try:
-        from gateway.platforms.base import _docker_env_active, _parse_docker_volume_mounts
+        from gateway.platforms.base import (
+            _docker_env_active,
+            _parse_docker_volume_mounts,
+        )
         from tools.environments.local import _msys_to_windows_path
 
         with _agent_path_scope(profile_home):
             if not _docker_env_active() or _msys_to_windows_path(raw) != raw:
                 return False
-            roots = {"/workspace", "/root", *(c.as_posix() for _, c in _parse_docker_volume_mounts())}
+            roots = {
+                "/workspace",
+                "/root",
+                *(c.as_posix() for _, c in _parse_docker_volume_mounts()),
+            }
     except Exception:  # a refusal scope or import failure: just skip the hint
         logger.debug("container path classification failed for %s", raw, exc_info=True)
         return False
@@ -225,9 +261,13 @@ def _ensure_managed_root(raw_path: str | Path) -> Path:
         root.mkdir(parents=True, exist_ok=True)
         resolved = root.resolve()
     except (OSError, RuntimeError) as exc:
-        raise HTTPException(status_code=500, detail=f"Managed files root is unavailable: {exc}")
+        raise HTTPException(
+            status_code=500, detail=f"Managed files root is unavailable: {exc}"
+        )
     if not resolved.is_dir():
-        raise HTTPException(status_code=500, detail="Managed files root is not a directory")
+        raise HTTPException(
+            status_code=500, detail="Managed files root is not a directory"
+        )
     return resolved
 
 
@@ -265,6 +305,7 @@ def _dashboard_local_update_managed_externally() -> bool:
     """
     from clawk_cli.web_server import PROJECT_ROOT
     from clawk_cli.config import detect_install_method
+
     if _default_clawk_root_is_opt_data():
         return True
     try:
@@ -282,33 +323,54 @@ def _dashboard_local_update_managed_externally() -> bool:
     return True
 
 
-def _managed_files_policy(request: Optional[Request], *, create_root: bool = True) -> ManagedFilesPolicy:
+def _managed_files_policy(
+    request: Optional[Request], *, create_root: bool = True
+) -> ManagedFilesPolicy:
     raw_forced_root = os.environ.get(_MANAGED_FILES_ROOT_ENV, "").strip()
     if raw_forced_root:
-        root = _ensure_managed_root(raw_forced_root) if create_root else _canonical_path(Path(raw_forced_root))
-        return ManagedFilesPolicy(default_path=root, locked_root=root, can_change_path=False)
+        root = (
+            _ensure_managed_root(raw_forced_root)
+            if create_root
+            else _canonical_path(Path(raw_forced_root))
+        )
+        return ManagedFilesPolicy(
+            default_path=root, locked_root=root, can_change_path=False
+        )
 
     # Remote/OAuth access does not imply a hosted container (a gated macOS launchd
     # install still browses its home). Lock to /opt/data only when the Clawksis
     # root actually IS /opt/data or CLAWK_DASHBOARD_FILES_ROOT is set.
     if _default_clawk_root_is_opt_data():
-        root = _ensure_managed_root(_HOSTED_MANAGED_FILES_ROOT) if create_root else _HOSTED_MANAGED_FILES_ROOT
-        return ManagedFilesPolicy(default_path=root, locked_root=root, can_change_path=False)
+        root = (
+            _ensure_managed_root(_HOSTED_MANAGED_FILES_ROOT)
+            if create_root
+            else _HOSTED_MANAGED_FILES_ROOT
+        )
+        return ManagedFilesPolicy(
+            default_path=root, locked_root=root, can_change_path=False
+        )
 
     home = _canonical_path(Path.home())
     return ManagedFilesPolicy(default_path=home, locked_root=None, can_change_path=True)
 
 
 def _resolve_managed_path(
-    raw_path: str | None, request: Request, *, for_write: bool = False,
+    raw_path: str | None,
+    request: Request,
+    *,
+    for_write: bool = False,
     for_agent_read: bool = False,
 ) -> tuple[ManagedFilesPolicy, Path, str]:
     policy = _managed_files_policy(request)
     text = _path_text(raw_path)
     root = policy.locked_root
 
-    if for_agent_read and text and not text.startswith("file:") and (
-            os.name == "nt" or not os.access(text, os.R_OK)):
+    if (
+        for_agent_read
+        and text
+        and not text.startswith("file:")
+        and (os.name == "nt" or not os.access(text, os.R_OK))
+    ):
         # Agent-emitted container paths (/workspace/...) resolve to their host
         # bind mount before the root checks, so the locked-root refusal below
         # still governs the translated target (#85238). A readable host path wins.
@@ -350,18 +412,27 @@ def _resolve_managed_path(
 
 def _managed_response_meta(policy: ManagedFilesPolicy) -> dict[str, Any]:
     locked_root = str(policy.locked_root) if policy.locked_root is not None else None
-    return {"root": locked_root, "locked_root": locked_root, "can_change_path": policy.can_change_path}
+    return {
+        "root": locked_root,
+        "locked_root": locked_root,
+        "can_change_path": policy.can_change_path,
+    }
 
 
 def _hosted_fs_path_allowed(root: Path, target: Path) -> bool:
     from clawk_cli.web_routers.files import _is_sensitive_path
 
     resolved = _canonical_path(target)
-    return (_path_is_under(root, resolved)
-            and not _is_sensitive_path(target) and not _is_sensitive_path(resolved))
+    return (
+        _path_is_under(root, resolved)
+        and not _is_sensitive_path(target)
+        and not _is_sensitive_path(resolved)
+    )
 
 
-def _hosted_fs_read_guard(target: Path, request: Optional[Request] = None) -> Path | None:
+def _hosted_fs_read_guard(
+    target: Path, request: Optional[Request] = None
+) -> Path | None:
     """Preview and Git reads share managed-file restrictions on locked deployments.
 
     ``request`` is unused (the policy is env/home driven) and optional so the
@@ -369,7 +440,9 @@ def _hosted_fs_read_guard(target: Path, request: Optional[Request] = None) -> Pa
     """
     root = _managed_files_policy(request, create_root=False).locked_root
     if root is not None and not _hosted_fs_path_allowed(root, target):
-        raise HTTPException(status_code=403, detail="Path is outside the managed read boundary")
+        raise HTTPException(
+            status_code=403, detail="Path is outside the managed read boundary"
+        )
     return root
 
 
@@ -397,7 +470,9 @@ def _managed_file_entry(
             if policy.locked_root is not None and not _path_is_under(
                 policy.locked_root, target.parent.resolve() / target.name
             ):
-                raise HTTPException(status_code=403, detail="Path outside managed files root")
+                raise HTTPException(
+                    status_code=403, detail="Path outside managed files root"
+                )
             return {
                 "name": target.name or resolved.name or str(resolved),
                 "path": str(target),
@@ -410,7 +485,9 @@ def _managed_file_entry(
         except OSError:
             pass
 
-    if policy.locked_root is not None and not _path_is_under(policy.locked_root, resolved):
+    if policy.locked_root is not None and not _path_is_under(
+        policy.locked_root, resolved
+    ):
         raise HTTPException(status_code=403, detail="Path outside managed files root")
 
     if st is None:
@@ -424,7 +501,11 @@ def _managed_file_entry(
             raise HTTPException(status_code=500, detail=f"Could not stat path: {exc}")
 
     is_dir = stat.S_ISDIR(st.st_mode)
-    mime_type = None if is_dir else (mimetypes.guess_type(resolved.name)[0] or "application/octet-stream")
+    mime_type = (
+        None
+        if is_dir
+        else (mimetypes.guess_type(resolved.name)[0] or "application/octet-stream")
+    )
     return {
         "name": target.name or resolved.name or str(resolved),
         "path": str(resolved),

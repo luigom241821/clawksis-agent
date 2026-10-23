@@ -21,8 +21,16 @@ from clawk_constants import openrouter_variant_base
 
 # ── Verdicts ─────────────────────────────────────────────────────────────
 
-def _verdict(accepted: bool, persist: bool, recognized: bool, message: Optional[str]) -> dict[str, Any]:
-    return {"accepted": accepted, "persist": persist, "recognized": recognized, "message": message}
+
+def _verdict(
+    accepted: bool, persist: bool, recognized: bool, message: Optional[str]
+) -> dict[str, Any]:
+    return {
+        "accepted": accepted,
+        "persist": persist,
+        "recognized": recognized,
+        "message": message,
+    }
 
 
 def _accept() -> dict[str, Any]:
@@ -43,6 +51,7 @@ def _soft_accept(message: Optional[str]) -> dict[str, Any]:
 
 
 # ── Catalog matching ─────────────────────────────────────────────────────
+
 
 @dataclass
 class _Match:
@@ -88,16 +97,22 @@ def _match_in_catalog(
     suggestions = get_close_matches(suggest_query, pool, n=3, cutoff=suggest_cutoff)
     if not suggestions:
         return _Match()
-    return _Match(suggestion_text=f"\n  {suggest_label}: " + ", ".join(f"`{_show(s)}`" for s in suggestions))
+    return _Match(
+        suggestion_text=f"\n  {suggest_label}: "
+        + ", ".join(f"`{_show(s)}`" for s in suggestions)
+    )
 
 
 # ── Request context ──────────────────────────────────────────────────────
 
+
 @dataclass
 class _Request:
     requested: str
-    lookup: str                 # id used for catalog membership (copilot-normalized / preset base)
-    provider: Optional[str]     # raw caller value (Ollama checks look at this, not ``normalized``)
+    lookup: str  # id used for catalog membership (copilot-normalized / preset base)
+    provider: Optional[
+        str
+    ]  # raw caller value (Ollama checks look at this, not ``normalized``)
     normalized: str
     api_key: Optional[str]
     base_url: Optional[str]
@@ -107,6 +122,7 @@ class _Request:
 
 # ── Provider branches (None = not decided here) ─────────────────────────
 
+
 def _validate_moa(req: _Request) -> dict[str, Any]:
     try:
         from clawk_cli.config import load_config
@@ -115,7 +131,9 @@ def _validate_moa(req: _Request) -> dict[str, Any]:
         cfg = normalize_moa_config(load_config().get("moa") or {})
         if req.requested in cfg["presets"]:
             return _accept()
-        return _reject(f"MoA preset `{req.requested}` was not found. Run `clawk moa list`.")
+        return _reject(
+            f"MoA preset `{req.requested}` was not found. Run `clawk moa list`."
+        )
     except Exception as exc:
         return _reject(f"Could not read MoA presets: {exc}")
 
@@ -129,9 +147,17 @@ def _reject_whitespace(req: _Request) -> Optional[dict[str, Any]]:
     return None
 
 
-_SELF_HOSTED_PROVIDERS = frozenset({
-    "lmstudio", "ollama", "local", "vllm", "llamacpp", "llama.cpp", "llama-cpp",
-})
+_SELF_HOSTED_PROVIDERS = frozenset(
+    {
+        "lmstudio",
+        "ollama",
+        "local",
+        "vllm",
+        "llamacpp",
+        "llama.cpp",
+        "llama-cpp",
+    }
+)
 
 
 def _provider_token(provider: Optional[str]) -> str:
@@ -156,7 +182,11 @@ def _is_self_hosted_provider(provider: Optional[str]) -> bool:
 def _non_public_host(host: str) -> bool:
     """Loopback, LAN, and single-label hosts are a user's endpoint, never a vendor catalog."""
     host = (host or "").lower().rstrip(".")
-    if not host or host in {"localhost", "127.0.0.1", "::1", "0.0.0.0"} or host.endswith(".localhost"):
+    if (
+        not host
+        or host in {"localhost", "127.0.0.1", "::1", "0.0.0.0"}
+        or host.endswith(".localhost")
+    ):
         return bool(host)
     if host.endswith((".local", ".lan", ".internal", ".home", ".localdomain")):
         return True
@@ -194,7 +224,9 @@ def _stock_host(provider: str) -> str:
     return base_url_hostname(pdef.base_url or "")
 
 
-def provider_allows_model_whitespace(provider: Optional[str], base_url: Optional[str] = None) -> bool:
+def provider_allows_model_whitespace(
+    provider: Optional[str], base_url: Optional[str] = None
+) -> bool:
     """True when a spaced id is a real selection, not a cloud-catalog typo.
 
     Self-hosted providers always qualify. A base_url qualifies when the user
@@ -224,17 +256,27 @@ def provider_allows_model_whitespace(provider: Optional[str], base_url: Optional
 
 def _whitespace_allowed(req: _Request) -> bool:
     # The openrouter→custom rewrite lives on ``normalized``; aliases live on the raw value.
-    if _is_self_hosted_provider(req.normalized) or _is_self_hosted_provider(req.provider):
+    if _is_self_hosted_provider(req.normalized) or _is_self_hosted_provider(
+        req.provider
+    ):
         return True
-    return provider_allows_model_whitespace(req.provider or req.normalized, req.base_url)
+    return provider_allows_model_whitespace(
+        req.provider or req.normalized, req.base_url
+    )
 
 
-def offered_model_ids(models, provider: Optional[str], base_url: Optional[str] = None) -> list:
+def offered_model_ids(
+    models, provider: Optional[str], base_url: Optional[str] = None
+) -> list:
     """Ids a picker may show. Drops whitespace the validator will refuse; keeps the rest."""
     ids = list(models or [])
     if provider_allows_model_whitespace(provider, base_url):
         return ids
-    return [model_id for model_id in ids if not (isinstance(model_id, str) and any(ch.isspace() for ch in model_id))]
+    return [
+        model_id
+        for model_id in ids
+        if not (isinstance(model_id, str) and any(ch.isspace() for ch in model_id))
+    ]
 
 
 def drop_unofferable_model_ids(rows: list) -> None:
@@ -271,8 +313,10 @@ def _parse_openrouter_preset(req: _Request) -> Optional[dict[str, Any]]:
     else:
         preset_base, preset_slug = req.requested.split(marker, 1)
     if re.fullmatch(r"[A-Za-z0-9._~-]+", preset_slug) is None:
-        return _reject("OpenRouter preset slugs must be non-empty URL-safe identifiers using only "
-                       "letters, digits, '.', '_', '~', or '-'.")
+        return _reject(
+            "OpenRouter preset slugs must be non-empty URL-safe identifiers using only "
+            "letters, digits, '.', '_', '~', or '-'."
+        )
     if not preset_base:
         return _soft_accept(None)
     req.lookup = preset_base
@@ -288,15 +332,23 @@ def _validate_lmstudio(req: _Request) -> dict[str, Any]:
     try:
         models = _ml.probe_lmstudio_models(api_key=req.api_key, base_url=req.base_url)
     except AuthError as exc:
-        return _reject(f"{exc} Set `LM_API_KEY` (or update it) to match the server's bearer token.")
+        return _reject(
+            f"{exc} Set `LM_API_KEY` (or update it) to match the server's bearer token."
+        )
     if models is None:
-        return _reject(f"Could not reach LM Studio's `/api/v1/models` to validate `{req.requested}`.")
+        return _reject(
+            f"Could not reach LM Studio's `/api/v1/models` to validate `{req.requested}`."
+        )
     if not models:
-        return _reject("LM Studio is reachable but no chat-capable models are loaded. "
-                       f"Load `{req.requested}` in LM Studio (Developer tab → Load Model) and try again.")
+        return _reject(
+            "LM Studio is reachable but no chat-capable models are loaded. "
+            f"Load `{req.requested}` in LM Studio (Developer tab → Load Model) and try again."
+        )
     if req.lookup in set(models):
         return _accept()
-    return _reject(f"Model `{req.requested}` was not found in LM Studio's model listing.")
+    return _reject(
+        f"Model `{req.requested}` was not found in LM Studio's model listing."
+    )
 
 
 def _ollama_probe_headers(req: _Request) -> dict[str, str]:
@@ -308,8 +360,14 @@ def _ollama_probe_headers(req: _Request) -> dict[str, str]:
     from clawk_cli.models_local import _configured_ollama_base_url, _drop_authorization
 
     configured_base = _configured_ollama_base_url()
-    configured_allowed = not configured_base or _ml._same_ollama_native_root(req.base_url or "", configured_base)
-    configured = _m._get_ollama_native_headers(req.base_url, api_key=req.api_key) if configured_allowed else {}
+    configured_allowed = not configured_base or _ml._same_ollama_native_root(
+        req.base_url or "", configured_base
+    )
+    configured = (
+        _m._get_ollama_native_headers(req.base_url, api_key=req.api_key)
+        if configured_allowed
+        else {}
+    )
     if req.headers is None:
         return configured
     out = dict(configured)
@@ -331,20 +389,26 @@ def _validate_ollama_native(req: _Request) -> Optional[dict[str, Any]]:
     if str(req.provider or "").strip().lower() == "ollama" and not req.base_url:
         req.base_url = _m._get_ollama_base_url()
     headers = _ollama_probe_headers(req)
-    if not _ml.should_use_ollama_native_catalog(req.provider, req.base_url, headers=headers):
+    if not _ml.should_use_ollama_native_catalog(
+        req.provider, req.base_url, headers=headers
+    ):
         return None
     models = _ml.probe_ollama_local_models(req.base_url, headers=headers)
     if models is None:
         # A failed native probe is not authoritative; fall back to the OpenAI-compatible catalog.
         models = _m.probe_api_models(
-            req.api_key, _ml._normalize_openai_base_url(req.base_url), request_headers=headers,
+            req.api_key,
+            _ml._normalize_openai_base_url(req.base_url),
+            request_headers=headers,
         ).get("models")
     if models is None:
         return _soft_accept(
             f"Note: could not reach this Ollama endpoint's `/api/tags` model listing to validate `{req.requested}`. "
             "Clawksis will save the model name, but local Ollama model discovery could not verify it."
         )
-    match = _match_in_catalog(req.lookup, models, suggest_label="Similar local Ollama models")
+    match = _match_in_catalog(
+        req.lookup, models, suggest_label="Similar local Ollama models"
+    )
     if match.exact:
         return _accept()
     empty_hint = " No models are currently listed by `/api/tags`." if not models else ""
@@ -361,7 +425,9 @@ def _validate_custom(req: _Request) -> dict[str, Any]:
     # Probe with the auth shape the api_mode expects.
     anthropic_style = req.api_mode == "anthropic_messages"
     probe_kwargs = {"api_mode": req.api_mode} if anthropic_style else {}
-    probe = _m.probe_api_models(req.api_key, req.base_url, request_headers=req.headers, **probe_kwargs)
+    probe = _m.probe_api_models(
+        req.api_key, req.base_url, request_headers=req.headers, **probe_kwargs
+    )
     api_models = probe.get("models")
     if api_models is not None:
         match = _match_in_catalog(req.lookup, api_models, suggest_query=req.requested)
@@ -374,8 +440,10 @@ def _validate_custom(req: _Request) -> dict[str, Any]:
             f"{match.suggestion_text}"
         )
         if probe.get("used_fallback"):
-            message += (f"\n  Endpoint verification succeeded after trying `{probe.get('resolved_base_url')}`. "
-                        "Consider saving that as your base URL.")
+            message += (
+                f"\n  Endpoint verification succeeded after trying `{probe.get('resolved_base_url')}`. "
+                "Consider saving that as your base URL."
+            )
         return _soft_accept(message)
 
     # Many OpenAI-compatible and Anthropic-compatible proxies (DashScope coding plan, Cline,
@@ -384,8 +452,10 @@ def _validate_custom(req: _Request) -> dict[str, Any]:
     accepted = req.api_mode in ("chat_completions", "anthropic_messages")
     message = f"Note: could not reach this custom endpoint's model listing at `{probe.get('probed_url')}`. "
     if accepted:
-        message += (f"`{req.requested}` was accepted without verification — if this endpoint does not "
-                    "serve it, inference will fail; check the provider's model catalog or the model name.")
+        message += (
+            f"`{req.requested}` was accepted without verification — if this endpoint does not "
+            "serve it, inference will fail; check the provider's model catalog or the model name."
+        )
     else:
         message += f"`{req.requested}` was not saved; the endpoint should expose `/models` for verification."
     if probe.get("suggested_base_url"):
@@ -412,7 +482,10 @@ _STATIC_FAMILY_PREFIXES = {
     "openai-codex": ("gpt-", "codex-", "o1", "o3", "o4"),
     "xai-oauth": ("grok-",),
 }
-_STATIC_LABELS = {"openai-codex": "OpenAI Codex", "xai-oauth": "xAI Grok OAuth (SuperGrok / Premium+)"}
+_STATIC_LABELS = {
+    "openai-codex": "OpenAI Codex",
+    "xai-oauth": "xAI Grok OAuth (SuperGrok / Premium+)",
+}
 
 
 def _family_head(model_id: str) -> str:
@@ -420,7 +493,9 @@ def _family_head(model_id: str) -> str:
     return re.split(r"[-./:]", model_id.strip().lower(), maxsplit=1)[0]
 
 
-def static_model_provider_conflict(model_name: str, provider: Optional[str], *, limit: int = 5) -> Optional[dict[str, Any]]:
+def static_model_provider_conflict(
+    model_name: str, provider: Optional[str], *, limit: int = 5
+) -> Optional[dict[str, Any]]:
     """Offline model×provider coherence from the curated catalogs only (no network: this runs on
     ``session.create``). ``None`` = coherent or undecidable — custom / aggregator / catalog-less
     providers, names in the provider's own family (a newer ``gpt-*`` the curated list lacks) and
@@ -432,21 +507,35 @@ def static_model_provider_conflict(model_name: str, provider: Optional[str], *, 
     requested = (model_name or "").strip()
     normalized = _m.normalize_provider(provider)
     catalog = list(_m._PROVIDER_MODELS.get(normalized, ()))
-    if not requested or not catalog or normalized == "moa" or normalized in _m._AGGREGATOR_PROVIDERS:
+    if (
+        not requested
+        or not catalog
+        or normalized == "moa"
+        or normalized in _m._AGGREGATOR_PROVIDERS
+    ):
         return None
     if _m._model_in_provider_catalog(requested.lower(), _m._provider_keys(normalized)):
         return None
     if _family_head(requested) in {_family_head(m) for m in catalog}:
         return None
     strict = normalized in _STATIC_FAMILY_PREFIXES
-    if not strict and next(_m._static_catalog_matches(requested, normalized), None) is None:
+    if (
+        not strict
+        and next(_m._static_catalog_matches(requested, normalized), None) is None
+    ):
         return None
-    suggestions = get_close_matches(requested, catalog, n=limit, cutoff=0.4) or catalog[:limit]
+    suggestions = (
+        get_close_matches(requested, catalog, n=limit, cutoff=0.4) or catalog[:limit]
+    )
     label = _m._PROVIDER_LABELS.get(normalized, normalized)
     return {
-        "model": requested, "provider": normalized, "suggestions": suggestions,
-        "message": (f"Model `{requested}` is not served by provider `{normalized}` ({label}). "
-                    f"Closest {label} models: " + ", ".join(f"`{s}`" for s in suggestions) + "."),
+        "model": requested,
+        "provider": normalized,
+        "suggestions": suggestions,
+        "message": (
+            f"Model `{requested}` is not served by provider `{normalized}` ({label}). "
+            f"Closest {label} models: " + ", ".join(f"`{s}`" for s in suggestions) + "."
+        ),
     }
 
 
@@ -455,12 +544,17 @@ def _validate_static_catalog(req: _Request) -> Optional[dict[str, Any]]:
     Returns None (fall through) when the catalog is empty."""
     catalog = _static_catalog(req.normalized)
     if req.normalized == "openai-codex":
-        from agent.model_metadata import CODEX_CONTEXT_VARIANT_SUFFIX, is_codex_context_variant
+        from agent.model_metadata import (
+            CODEX_CONTEXT_VARIANT_SUFFIX,
+            is_codex_context_variant,
+        )
 
         # Ineligible ``-900k`` aliases must be rejected BEFORE the hidden-slug soft-accept:
         # the suffix is a Clawksis picker convention, so an unknown `*-900k` can never be a real
         # hidden provider slug — soft-accepting one silently runs at 272K on a different model.
-        if req.lookup.strip().lower().endswith(CODEX_CONTEXT_VARIANT_SUFFIX) and req.lookup not in set(catalog):
+        if req.lookup.strip().lower().endswith(
+            CODEX_CONTEXT_VARIANT_SUFFIX
+        ) and req.lookup not in set(catalog):
             if is_codex_context_variant(req.lookup):
                 # Valid variant a stale catalog hasn't synthesized yet.
                 return _accept()
@@ -517,7 +611,9 @@ def _validate_anthropic(req: _Request) -> Optional[dict[str, Any]]:
     resolvable or the network failed."""
     from clawk_cli import models as _m
 
-    models = _m._fetch_anthropic_models(base_url=req.base_url or None, api_key=req.api_key or None)
+    models = _m._fetch_anthropic_models(
+        base_url=req.base_url or None, api_key=req.api_key or None
+    )
     if models is None:
         return None
     match = _match_in_catalog(req.lookup, models, suggest_query=req.requested)
@@ -544,8 +640,13 @@ def _validate_anthropic_messages(req: _Request) -> dict[str, Any]:
             "without verification."
         )
     # Vendor alias pairs sit below the default 0.5 similarity cutoff (kimi-k3 vs k3 ≈ 0.44).
-    match = _match_in_catalog(req.lookup, models, case_insensitive=True, suggest_query=req.requested,
-                              suggest_cutoff=0.4)
+    match = _match_in_catalog(
+        req.lookup,
+        models,
+        case_insensitive=True,
+        suggest_query=req.requested,
+        suggest_cutoff=0.4,
+    )
     return match.verdict(req) or _soft_accept(
         f"Note: `{req.requested}` is not named in this endpoint's model listing (it may still serve it "
         f"under an alias).{match.suggestion_text}"
@@ -589,7 +690,9 @@ def _validate_managed_local(req: _Request) -> Optional[dict[str, Any]]:
     return None
 
 
-def _profile_catalog(normalized: str, base_url: Optional[str] = None) -> tuple[list[str], bool]:
+def _profile_catalog(
+    normalized: str, base_url: Optional[str] = None
+) -> tuple[list[str], bool]:
     """``(catalog, authoritative)`` for a profile whose catalog is not the generic
     ``{base_url}/models`` listing — it overrides ``fetch_models`` or points ``models_url``
     elsewhere — so that listing is not authoritative for it (a relay may 200 with a different
@@ -609,7 +712,9 @@ def _profile_catalog(normalized: str, base_url: Optional[str] = None) -> tuple[l
     if base_url and (base_url.rstrip("/") != (profile.base_url or "").rstrip("/")):
         return [], False
     generic = (profile.base_url or "").rstrip("/") + "/models"
-    own_endpoint = bool(profile.models_url) and profile.models_url.rstrip("/") != generic
+    own_endpoint = (
+        bool(profile.models_url) and profile.models_url.rstrip("/") != generic
+    )
     if not own_endpoint and type(profile).fetch_models is ProviderProfile.fetch_models:
         return [], False
     catalog = _static_catalog(normalized)
@@ -632,20 +737,26 @@ def _validate_live_listing(req: _Request) -> Optional[dict[str, Any]]:
             # an acceptance by the generic listing, which for such relays lists a different
             # product line.
             return _reject(
-                f"Model `{req.requested}` was not found in this provider's catalog.{match.suggestion_text}")
+                f"Model `{req.requested}` was not found in this provider's catalog.{match.suggestion_text}"
+            )
     api_models = _m.fetch_api_models(req.api_key, req.base_url)
     if api_models is None:
         return None
     if req.normalized == "gemini":
         # Gemini's OpenAI-compat listing prefixes ids with "models/"; curated list and user input
         # use the bare id, so strip before comparing.
-        api_models = [m[len("models/"):] if isinstance(m, str) and m.startswith("models/") else m for m in api_models]
+        api_models = [
+            m[len("models/") :] if isinstance(m, str) and m.startswith("models/") else m
+            for m in api_models
+        ]
     match = _match_in_catalog(req.lookup, api_models)
     if match.exact:
         return _accept()
     # OpenRouter routing variants (":nitro", ":floor", ...) are request-time modifiers, not
     # catalog entries — validate the BASE but keep the suffixed id.
-    variant_base = openrouter_variant_base(req.lookup) if req.normalized == "openrouter" else None
+    variant_base = (
+        openrouter_variant_base(req.lookup) if req.normalized == "openrouter" else None
+    )
     if variant_base is not None and variant_base in set(api_models):
         return _accept()
     # Listed but not found: the account may reach models absent from the public listing
@@ -663,26 +774,40 @@ def _validate_live_listing(req: _Request) -> Optional[dict[str, Any]]:
     if not listing_authoritative and _m._model_in_provider_catalog(
         (variant_base or req.lookup).lower(), _m._provider_keys(req.normalized)
     ):
-        return _accept_with_note(f"Note: `{req.requested}` was not found in the live /v1/models listing "
-                                 "but exists in the curated catalog — accepted.")
+        return _accept_with_note(
+            f"Note: `{req.requested}` was not found in the live /v1/models listing "
+            "but exists in the curated catalog — accepted."
+        )
     # Nous: the Portal's recommended-models feed can list a model before the curated list or the
     # docs-hosted manifest catches up; `clawk chat` already accepts those at model-list build
     # time, so mirror that source of truth for per-message /model validation.
-    if req.normalized == "nous" and req.lookup.lower() in _nous_portal_recommended_names():
-        return _accept_with_note(f"Note: `{req.requested}` was not found in the live /v1/models listing "
-                                 "but is a current Nous Portal recommendation — accepted.")
-    return _reject(f"Model `{req.requested}` was not found in this provider's model listing.{match.suggestion_text}")
+    if (
+        req.normalized == "nous"
+        and req.lookup.lower() in _nous_portal_recommended_names()
+    ):
+        return _accept_with_note(
+            f"Note: `{req.requested}` was not found in the live /v1/models listing "
+            "but is a current Nous Portal recommendation — accepted."
+        )
+    return _reject(
+        f"Model `{req.requested}` was not found in this provider's model listing.{match.suggestion_text}"
+    )
 
 
 def _validate_bedrock(req: _Request) -> Optional[dict[str, Any]]:
     """Bedrock's runtime URL has no /models; discovery goes through the AWS control plane
     (ListFoundationModels + ListInferenceProfiles). Any failure falls through (None)."""
     try:
-        from agent.bedrock_adapter import discover_bedrock_models, resolve_bedrock_runtime_region
+        from agent.bedrock_adapter import (
+            discover_bedrock_models,
+            resolve_bedrock_runtime_region,
+        )
 
         region = resolve_bedrock_runtime_region()
         discovered_ids = {m["id"] for m in discover_bedrock_models(region)}
-        match = _match_in_catalog(req.requested, list(discovered_ids), suggest_cutoff=0.4)
+        match = _match_in_catalog(
+            req.requested, list(discovered_ids), suggest_cutoff=0.4
+        )
         if match.exact:
             return _accept()
         # Still accept (custom inference profiles / cross-account access), but warn.
@@ -713,7 +838,8 @@ def _validate_external_process(req: _Request) -> Optional[dict[str, Any]]:
         return _accept()
     return match.verdict(req) or _soft_accept(
         f"Note: `{req.requested}` is not declared by {profile.display_name or profile.name}."
-        f"{match.suggestion_text}\n  The model may still work if the local client accepts it.")
+        f"{match.suggestion_text}\n  The model may still work if the local client accepts it."
+    )
 
 
 def _validate_catalog_fallback(req: _Request) -> dict[str, Any]:
@@ -725,15 +851,19 @@ def _validate_catalog_fallback(req: _Request) -> dict[str, Any]:
     label = _m._PROVIDER_LABELS.get(req.normalized, req.normalized)
     catalog = _static_catalog(req.normalized)
     if not catalog:
-        return _soft_accept(f"Note: could not reach the {label} API to validate `{req.requested}`. "
-                            "If the service isn't down, this model may not be valid.")
+        return _soft_accept(
+            f"Note: could not reach the {label} API to validate `{req.requested}`. "
+            "If the service isn't down, this model may not be valid."
+        )
     match = _match_in_catalog(req.lookup, catalog, case_insensitive=True)
     if match.exact:
         return _accept()
     # Same OpenRouter routing-variant rule as the live-listing path.
     if req.normalized == "openrouter":
         variant_base = openrouter_variant_base(req.lookup)
-        if variant_base is not None and variant_base.lower() in {m.lower() for m in catalog}:
+        if variant_base is not None and variant_base.lower() in {
+            m.lower() for m in catalog
+        }:
             return _accept()
     return _soft_accept(
         f"Note: `{req.requested}` was not found in the {label} curated catalog "
@@ -743,6 +873,7 @@ def _validate_catalog_fallback(req: _Request) -> dict[str, Any]:
 
 
 # ── Orchestrator ─────────────────────────────────────────────────────────
+
 
 def _is_custom(req: _Request) -> bool:
     return req.normalized == "custom" or req.normalized.startswith("custom:")
@@ -757,7 +888,10 @@ def _for(*providers: str) -> Callable[[_Request], bool]:
 # base_url) → OpenRouter preset parse → LM Studio → Ollama native → custom →
 # codex/xai static → MiniMax → managed local (staged library) → Anthropic native →
 # Anthropic Messages → external process → live listing → Bedrock → curated-catalog fallback (always decides).
-_LADDER: tuple[tuple[Callable[[_Request], bool], Callable[[_Request], Optional[dict[str, Any]]]], ...] = (
+_LADDER: tuple[
+    tuple[Callable[[_Request], bool], Callable[[_Request], Optional[dict[str, Any]]]],
+    ...,
+] = (
     (_for("moa"), _validate_moa),
     (lambda req: True, _reject_whitespace),
     (_for("openrouter"), _parse_openrouter_preset),
@@ -806,7 +940,11 @@ def validate_requested_model(
 
     requested = (model_name or "").strip()
     normalized = _m.normalize_provider(provider)
-    if normalized == "openrouter" and base_url and not base_url_host_matches(base_url, "openrouter.ai"):
+    if (
+        normalized == "openrouter"
+        and base_url
+        and not base_url_host_matches(base_url, "openrouter.ai")
+    ):
         normalized = "custom"
     lookup = requested
     if normalized == "copilot":
@@ -814,7 +952,9 @@ def validate_requested_model(
 
     if not requested:
         return _reject("Model name cannot be empty.")
-    req = _Request(requested, lookup, provider, normalized, api_key, base_url, api_mode, headers)
+    req = _Request(
+        requested, lookup, provider, normalized, api_key, base_url, api_mode, headers
+    )
     for gate, branch in _LADDER:
         if gate(req):
             verdict = branch(req)

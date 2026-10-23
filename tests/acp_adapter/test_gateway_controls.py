@@ -1,4 +1,5 @@
 """ACP controls retain generation fences and reject unavailable mutations."""
+
 import pytest
 
 from acp_adapter.server import ClawksisACPAgent
@@ -26,7 +27,10 @@ async def test_cancel_uses_observed_generation_and_mutations_fail_explicitly(tmp
     agent._admissions["shared"] = "adm-1"
     with pytest.raises(GatewayClientError, match="stale_generation"):
         await agent.cancel("shared")
-    assert calls[0] == ("prompt.cancel", {"session_id": "shared", "admission_id": "adm-1"})
+    assert calls[0] == (
+        "prompt.cancel",
+        {"session_id": "shared", "admission_id": "adm-1"},
+    )
     assert calls[1][0] == "prompt.receipt"
     calls.clear()
     # Model changes are prepared canonical mutations: a stale authority answer propagates
@@ -50,21 +54,43 @@ async def test_gateway_acp_catalog_does_not_boot_a_runtime(tmp_path, monkeypatch
     assert (await agent.list_sessions()).sessions == []
     assert not (tmp_path / "state.db").exists()
     with SessionDB(tmp_path / "state.db") as db:
-        db.create_session(session_id="persisted-acp", source="acp", model="fixture", model_config={"cwd": str(tmp_path)})
+        db.create_session(
+            session_id="persisted-acp",
+            source="acp",
+            model="fixture",
+            model_config={"cwd": str(tmp_path)},
+        )
         db.append_message("persisted-acp", "user", "picker history")
-    assert [row.session_id for row in (await agent.list_sessions(cwd=str(tmp_path))).sessions] == ["persisted-acp"]
+    assert [
+        row.session_id
+        for row in (await agent.list_sessions(cwd=str(tmp_path))).sessions
+    ] == ["persisted-acp"]
     assert agent._gateway is None
 
 
 @pytest.mark.asyncio
-async def test_gateway_acp_advertises_every_session_capability_it_implements(tmp_path, monkeypatch):
+async def test_gateway_acp_advertises_every_session_capability_it_implements(
+    tmp_path, monkeypatch
+):
     """Editors gate fork/list/resume UI on initialize; the gateway projection implements all three."""
     from acp_adapter.session import SessionManager
+
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     gateway = ClawksisACPAgent()
     in_process = ClawksisACPAgent(session_manager=SessionManager(agent_factory=object))
-    advertised = (await gateway.initialize(protocol_version=1)).agent_capabilities.session_capabilities
-    expected = (await in_process.initialize(protocol_version=1)).agent_capabilities.session_capabilities
-    assert advertised.model_dump(exclude_none=True) == expected.model_dump(exclude_none=True)
+    advertised = (
+        await gateway.initialize(protocol_version=1)
+    ).agent_capabilities.session_capabilities
+    expected = (
+        await in_process.initialize(protocol_version=1)
+    ).agent_capabilities.session_capabilities
+    assert advertised.model_dump(exclude_none=True) == expected.model_dump(
+        exclude_none=True
+    )
     for capability in advertised.model_dump(exclude_none=True):
-        assert callable(getattr(gateway, f"{capability}_session" if capability != "list" else "list_sessions"))
+        assert callable(
+            getattr(
+                gateway,
+                f"{capability}_session" if capability != "list" else "list_sessions",
+            )
+        )

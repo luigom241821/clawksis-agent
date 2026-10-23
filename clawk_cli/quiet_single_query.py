@@ -36,7 +36,11 @@ def exit_single_query(code: int) -> None:
         with contextlib.suppress(Exception):
             # stderr: stdout may be the ``--stream-json`` record stream, and the worker log
             # captures both streams.
-            print(f"\n{KANBAN_WORKER_EXIT_TRAILER}{int(code)}", file=sys.stderr, flush=True)
+            print(
+                f"\n{KANBAN_WORKER_EXIT_TRAILER}{int(code)}",
+                file=sys.stderr,
+                flush=True,
+            )
     sys.exit(code)
 
 
@@ -54,7 +58,9 @@ def take_turn_report_path(environ: MutableMapping[str, str] = os.environ) -> str
     return environ.pop(TURN_REPORT_FILE_ENV, None) or None
 
 
-def write_turn_report(path: str | None, *, exit_code: int, error: str = "", reply: str = "") -> None:
+def write_turn_report(
+    path: str | None, *, exit_code: int, error: str = "", reply: str = ""
+) -> None:
     """Atomically record ``{pid, exit_code, error, reply}`` at *path*; a no-op without a path. Never
     raises: the report is the spawner's convenience, the turn itself is already persisted. ``reply``
     is what the run will print — a spawner booking a lingering child from its report relays it."""
@@ -62,7 +68,12 @@ def write_turn_report(path: str | None, *, exit_code: int, error: str = "", repl
         return
     from utils import atomic_json_write
 
-    record = {"pid": os.getpid(), "exit_code": int(exit_code), "error": str(error or ""), "reply": str(reply or "")}
+    record = {
+        "pid": os.getpid(),
+        "exit_code": int(exit_code),
+        "error": str(error or ""),
+        "reply": str(reply or ""),
+    }
     # 0600 from creation: the record now carries the turn's answer, like the 0600 query file beside it.
     with contextlib.suppress(Exception):
         atomic_json_write(path, record, indent=None, mode=0o600)
@@ -86,9 +97,16 @@ def read_turn_report(path: str, pid: int) -> dict | None:
 REPORTED_TURN_EXIT_GRACE_SECONDS = 2.0
 
 
-def run_reported_turn(argv: list, *, env: MutableMapping[str, str], report_path: str, timeout: float,
-                      exit_grace: float | None = REPORTED_TURN_EXIT_GRACE_SECONDS, cwd: str | None = None,
-                      encoding: str | None = None) -> subprocess.CompletedProcess:
+def run_reported_turn(
+    argv: list,
+    *,
+    env: MutableMapping[str, str],
+    report_path: str,
+    timeout: float,
+    exit_grace: float | None = REPORTED_TURN_EXIT_GRACE_SECONDS,
+    cwd: str | None = None,
+    encoding: str | None = None,
+) -> subprocess.CompletedProcess:
     """Run one ``clawk chat -Q`` delivery child; *timeout* bounds the TURN, not the process.
 
     The child records its turn at *report_path* (``write_turn_report``) the moment the turn ends,
@@ -117,22 +135,38 @@ def run_reported_turn(argv: list, *, env: MutableMapping[str, str], report_path:
     if encoding is None and sys.platform == "win32":
         encoding = "utf-8"
     proc = subprocess.Popen(
-        argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-        encoding=encoding, errors="replace", env={**env, TURN_REPORT_FILE_ENV: report_path},
-        cwd=cwd, creationflags=windows_hide_flags())
+        argv,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding=encoding,
+        errors="replace",
+        env={**env, TURN_REPORT_FILE_ENV: report_path},
+        cwd=cwd,
+        creationflags=windows_hide_flags(),
+    )
     streams: dict = {}
 
     def _drain() -> None:
         streams["out"], streams["err"] = proc.communicate()
 
-    drain = threading.Thread(target=_drain, name=f"quiet-turn-drain-{proc.pid}", daemon=True)
+    drain = threading.Thread(
+        target=_drain, name=f"quiet-turn-drain-{proc.pid}", daemon=True
+    )
     drain.start()
     deadline = time.monotonic() + timeout
     report = None
     while True:
-        drain.join(timeout=exit_grace if report is not None and exit_grace is not None else 0.25)
+        drain.join(
+            timeout=exit_grace
+            if report is not None and exit_grace is not None
+            else 0.25
+        )
         if not drain.is_alive():
-            return subprocess.CompletedProcess(argv, proc.returncode, streams.get("out", ""), streams.get("err", ""))
+            return subprocess.CompletedProcess(
+                argv, proc.returncode, streams.get("out", ""), streams.get("err", "")
+            )
         if report is not None and exit_grace is not None:
             break
         # Re-read while waiting for the cap: a follow-up turn rewrites the report with its answer.
@@ -152,13 +186,20 @@ def run_reported_turn(argv: list, *, env: MutableMapping[str, str], report_path:
             raise subprocess.TimeoutExpired(argv, timeout)
     # Turn over, child still lingering for a nested reply: not this spawner's wait.
     return subprocess.CompletedProcess(
-        argv, int(report["exit_code"]), report.get("reply") or "", report.get("error") or "")
+        argv,
+        int(report["exit_code"]),
+        report.get("reply") or "",
+        report.get("error") or "",
+    )
 
 
 @contextlib.contextmanager
 def bind_quiet_session_key(session_id: str):
     """Bind the approval/session key to *this* quiet session for the enclosing ``with`` block."""
-    from tools.approval_context import reset_current_session_key, set_current_session_key
+    from tools.approval_context import (
+        reset_current_session_key,
+        set_current_session_key,
+    )
 
     token = set_current_session_key(session_id or "default")
     try:
@@ -172,7 +213,9 @@ def _diagnostic_only_wake_muted(events) -> bool:
     from agent.notification_presentation import diagnostic_process_event
     from gateway.warning_notifications import warning_notifications_enabled
 
-    if not events or not all(diagnostic_process_event(e) for e in events if isinstance(e, dict)):
+    if not events or not all(
+        diagnostic_process_event(e) for e in events if isinstance(e, dict)
+    ):
         return False
     return not warning_notifications_enabled("cli")
 
@@ -214,9 +257,13 @@ def continue_quiet_notify_completions(
         linger_budget = quiet_notify_linger_seconds()
     deadline = time.monotonic() + max(float(linger_budget), 0.0)
     for _ in range(max_rounds):
-        wait = process_registry.wait_for_pending_completions(None, timeout=max(deadline - time.monotonic(), 0.0))
+        wait = process_registry.wait_for_pending_completions(
+            None, timeout=max(deadline - time.monotonic(), 0.0)
+        )
         drained = []
-        for event, text in process_registry.drain_notifications(session_key=key, owns_event=owns_event):
+        for event, text in process_registry.drain_notifications(
+            session_key=key, owns_event=owns_event
+        ):
             # Durable async_delegation events carry a delivery ledger: without the
             # claim/complete handshake the row stays delivery_state='pending' and
             # restore_undelivered_completions re-queues it on the next process start,
@@ -236,7 +283,9 @@ def continue_quiet_notify_completions(
             # Same admission rule as the interactive CLI turn: a wake made ONLY of automatic
             # diagnostics (early failure / watch notices) still runs, but under suppression its
             # reply never displaces the requested one-shot answer on stdout.
-            if not _diagnostic_only_wake_muted([event for event, text in drained if text]):
+            if not _diagnostic_only_wake_muted(
+                [event for event, text in drained if text]
+            ):
                 last = follow
         if wait.get("timed_out"):
             break

@@ -33,6 +33,7 @@ Caps = dict[str, Optional[dict[str, Any]]]
 
 def _origin():
     from clawk_cli import models
+
     return models
 
 
@@ -56,8 +57,14 @@ def parse_openrouter_reasoning_capabilities(item: Any) -> Optional[dict[str, Any
     raw_efforts = reasoning.get("supported_efforts")
     efforts: Optional[list[str]] = None
     if isinstance(raw_efforts, list):
-        efforts = list(dict.fromkeys(str(e).strip().lower() for e in raw_efforts if str(e).strip()))
-    return {"supports_reasoning": True, "supported_efforts": efforts, "mandatory": reasoning.get("mandatory") is True}
+        efforts = list(
+            dict.fromkeys(str(e).strip().lower() for e in raw_efforts if str(e).strip())
+        )
+    return {
+        "supports_reasoning": True,
+        "supported_efforts": efforts,
+        "mandatory": reasoning.get("mandatory") is True,
+    }
 
 
 # ── Disk mirror ────────────────────────────────────────────────────────
@@ -72,11 +79,13 @@ _REASONING_CAPS_DISK_TTL_SECONDS = 24 * 3600
 
 def _reasoning_caps_disk_path() -> Path:
     from clawk_constants import get_clawk_home
+
     return get_clawk_home() / "cache" / "reasoning_caps.json"
 
 
 def _read_reasoning_caps_disk() -> dict[str, Any]:
     from clawk_cli.models import _read_json_cache
+
     return _read_json_cache(_reasoning_caps_disk_path()) or {}
 
 
@@ -96,10 +105,13 @@ def _load_reasoning_caps_disk(url: str) -> tuple[Optional[Caps], float]:
 def _save_reasoning_caps_disk(url: str, caps: Caps) -> None:
     """Merge *url*'s catalog into the shared disk mirror, atomically."""
     from clawk_cli.models import _write_json_cache
+
     try:
         data = _read_reasoning_caps_disk()
         data[url] = {"ts": time.time(), "caps": caps}
-        _write_json_cache(_reasoning_caps_disk_path(), data, indent=0, separators=(",", ":"))
+        _write_json_cache(
+            _reasoning_caps_disk_path(), data, indent=0, separators=(",", ":")
+        )
     except Exception as exc:
         logger.debug("Failed to save reasoning-caps disk cache: %s", exc)
 
@@ -111,7 +123,12 @@ def _warm_reasoning_caps_async(refresh) -> None:
     if os.environ.get("PYTEST_CURRENT_TEST"):
         return
     # copy_context: the Portal URL and disk mirror are the calling profile's, not the launch home's.
-    threading.Thread(target=contextvars.copy_context().run, args=(refresh,), name="reasoning-caps-warm", daemon=True).start()
+    threading.Thread(
+        target=contextvars.copy_context().run,
+        args=(refresh,),
+        name="reasoning-caps-warm",
+        daemon=True,
+    ).start()
 
 
 def _hydrate_reasoning_caps_from_disk(url: str, refresh) -> Optional[Caps]:
@@ -148,7 +165,10 @@ def _fetch_reasoning_caps_catalog(url: str, timeout: float) -> Optional[Caps]:
     empty so callers remember the failure. Sends a User-Agent: the Portal 403s anonymous reads."""
     m = _origin()
     try:
-        req = urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": m._CLAWK_USER_AGENT})
+        req = urllib.request.Request(
+            url,
+            headers={"Accept": "application/json", "User-Agent": m._CLAWK_USER_AGENT},
+        )
         with m._urlopen_model_catalog_request(req, timeout=timeout) as resp:
             payload = json.loads(resp.read().decode())
     except Exception:
@@ -157,6 +177,7 @@ def _fetch_reasoning_caps_catalog(url: str, timeout: float) -> Optional[Caps]:
 
 
 # ── Per-source cache (OpenRouter, Nous Portal) ─────────────────────────
+
 
 @dataclass(frozen=True)
 class _CapsSource:
@@ -167,6 +188,7 @@ class _CapsSource:
     per-turn callers for 60s (mirrors the LM Studio/Ollama probe caching). ``disk_checked`` /
     ``warm_started``: once-per-process guards for the disk hydrate and the background warm.
     """
+
     cache: str
     failed_at: str
     disk_checked: str
@@ -181,17 +203,25 @@ class _CapsSource:
         if not self.per_profile:
             return getattr(_origin(), getattr(self, slot))
         from clawk_cli.models_profile_cache import profile_slot_get
-        return profile_slot_get(_origin(), getattr(self, slot), False if slot in ("disk_checked", "warm_started") else None)
+
+        return profile_slot_get(
+            _origin(),
+            getattr(self, slot),
+            False if slot in ("disk_checked", "warm_started") else None,
+        )
 
     def set(self, slot: str, value) -> None:
         if not self.per_profile:
             setattr(_origin(), getattr(self, slot), value)
             return
         from clawk_cli.models_profile_cache import profile_slot_set
+
         profile_slot_set(_origin(), getattr(self, slot), value)
 
 
-def _fetch_caps(src: _CapsSource, timeout: float = 6.0, *, force: bool = False) -> Optional[Caps]:
+def _fetch_caps(
+    src: _CapsSource, timeout: float = 6.0, *, force: bool = False
+) -> Optional[Caps]:
     """Fetch + cache the source's per-model caps. None (without poisoning the cache) when
     unreachable, so callers retry later and fall back meanwhile."""
     cached = src.get("cache")
@@ -216,11 +246,18 @@ def _caps_cached(src: _CapsSource) -> Optional[Caps]:
     """
     if src.get("cache") is None and not src.get("disk_checked"):
         src.set("disk_checked", True)
-        src.set("cache", _hydrate_reasoning_caps_from_disk(src.url(), lambda: _fetch_caps(src, force=True)))
+        src.set(
+            "cache",
+            _hydrate_reasoning_caps_from_disk(
+                src.url(), lambda: _fetch_caps(src, force=True)
+            ),
+        )
     return src.get("cache")
 
 
-def _model_caps(src: _CapsSource, model_id: Optional[str], *, timeout: float, allow_fetch: bool) -> Optional[dict[str, Any]]:
+def _model_caps(
+    src: _CapsSource, model_id: Optional[str], *, timeout: float, allow_fetch: bool
+) -> Optional[dict[str, Any]]:
     model = str(model_id or "").strip()
     if not model:
         return None
@@ -245,8 +282,12 @@ def refresh_reasoning_caps_async(provider: Optional[str]) -> None:
     rejects. Called from the conversation loop's reasoning_mandatory recovery so the profile guard
     is right again on the next request; no-op for providers without a catalog.
     """
-    src = {"nous": _NOUS_CAPS, "nous-portal": _NOUS_CAPS, "nousresearch": _NOUS_CAPS,
-           "openrouter": _OPENROUTER_CAPS}.get(str(provider or "").strip().lower())
+    src = {
+        "nous": _NOUS_CAPS,
+        "nous-portal": _NOUS_CAPS,
+        "nousresearch": _NOUS_CAPS,
+        "openrouter": _OPENROUTER_CAPS,
+    }.get(str(provider or "").strip().lower())
     if src is not None:
         _warm_reasoning_caps_async(lambda: _fetch_caps(src, force=True))
 
@@ -254,16 +295,21 @@ def refresh_reasoning_caps_async(provider: Optional[str]) -> None:
 _OPENROUTER_CATALOG_URL = "https://openrouter.ai/api/v1/models"
 
 _OPENROUTER_CAPS = _CapsSource(
-    "_openrouter_reasoning_caps_cache", "_openrouter_reasoning_caps_failed_at",
-    "_openrouter_caps_disk_checked", "_openrouter_caps_warm_started",
+    "_openrouter_reasoning_caps_cache",
+    "_openrouter_reasoning_caps_failed_at",
+    "_openrouter_caps_disk_checked",
+    "_openrouter_caps_warm_started",
     lambda: _OPENROUTER_CATALOG_URL,
 )
 # Nous Portal serves OpenRouter's catalog schema, so the same parser and contract apply. Its own
 # cache because the two catalogs list different models (and different capabilities for shared ids).
 _NOUS_CAPS = _CapsSource(
-    "_nous_reasoning_caps_cache", "_nous_reasoning_caps_failed_at",
-    "_nous_caps_disk_checked", "_nous_caps_warm_started",
-    lambda: nous_catalog_url(), per_profile=True,
+    "_nous_reasoning_caps_cache",
+    "_nous_reasoning_caps_failed_at",
+    "_nous_caps_disk_checked",
+    "_nous_caps_warm_started",
+    lambda: nous_catalog_url(),
+    per_profile=True,
 )
 
 
@@ -271,6 +317,7 @@ def nous_catalog_url() -> str:
     """The Portal ``/v1/models`` URL for the endpoint we actually talk to (``NOUS_INFERENCE_BASE_URL``
     → resolved credential base → prod), so a staging profile reads staging's capabilities."""
     from clawk_cli.models_pricing import _resolve_nous_pricing_credentials
+
     return f"{_resolve_nous_pricing_credentials()[1]}/v1/models"
 
 
@@ -281,15 +328,23 @@ def nous_catalog_url() -> str:
 # it) — metadata makes new vendors work without a code change. One catalog fetch per process, cached;
 # unknown (catalog unreachable / unlisted model) falls back to the static list.
 def openrouter_model_reasoning_capabilities(
-    model_id: Optional[str], *, timeout: float = 6.0, allow_fetch: bool = False,
+    model_id: Optional[str],
+    *,
+    timeout: float = 6.0,
+    allow_fetch: bool = False,
 ) -> Optional[dict[str, Any]]:
     """Live-catalog reasoning capabilities for an OpenRouter model (tri-state, see module doc).
     CACHE-ONLY by default — safe on per-request hot paths (never blocks on HTTP)."""
-    return _model_caps(_OPENROUTER_CAPS, model_id, timeout=timeout, allow_fetch=allow_fetch)
+    return _model_caps(
+        _OPENROUTER_CAPS, model_id, timeout=timeout, allow_fetch=allow_fetch
+    )
 
 
 def nous_model_reasoning_capabilities(
-    model_id: Optional[str], *, timeout: float = 6.0, allow_fetch: bool = False,
+    model_id: Optional[str],
+    *,
+    timeout: float = 6.0,
+    allow_fetch: bool = False,
 ) -> Optional[dict[str, Any]]:
     """Nous Portal counterpart of :func:`openrouter_model_reasoning_capabilities`; warm the cache
     with :func:`warm_nous_reasoning_caps_async` from hot paths."""

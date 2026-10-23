@@ -72,19 +72,26 @@ def test_wal_probe_unknown_never_emits_set_pragma(monkeypatch, tmp_path, caplog)
         conn = sqlite3.connect(str(db_path), factory=_SpyConnection)
         try:
             with caplog.at_level(logging.WARNING, logger="clawk_state_wal"):
-                assert apply_wal_with_fallback(conn, db_label="probe-unknown.db") == "wal"
+                assert (
+                    apply_wal_with_fallback(conn, db_label="probe-unknown.db") == "wal"
+                )
             assert conn.pragmas == []  # nothing touched while ownership is unproven
             assert sibling.execute("PRAGMA journal_mode").fetchone()[0].lower() == "wal"
-            assert any("could not verify the on-disk journal mode" in r.getMessage() for r in caplog.records)
-            with pytest.raises(WalUnsupportedError, match="could not verify the on-disk journal mode"):
-                apply_wal_with_fallback(conn, db_label="probe-unknown.db", require_wal=True)
+            assert any(
+                "could not verify the on-disk journal mode" in r.getMessage()
+                for r in caplog.records
+            )
+            with pytest.raises(
+                WalUnsupportedError, match="could not verify the on-disk journal mode"
+            ):
+                apply_wal_with_fallback(
+                    conn, db_label="probe-unknown.db", require_wal=True
+                )
             assert conn.pragmas == []
         finally:
             conn.close()
     finally:
         sibling.close()
-
-
 
 
 def test_resolve_journal_mode_uses_real_database_config(monkeypatch, tmp_path):
@@ -111,9 +118,7 @@ def test_invalid_config_value_falls_back_to_wal(monkeypatch, tmp_path, value):
 
 
 @pytest.mark.parametrize("database", [[], "delete", 42, None])
-def test_malformed_database_section_falls_back_to_wal(
-    monkeypatch, tmp_path, database
-):
+def test_malformed_database_section_falls_back_to_wal(monkeypatch, tmp_path, database):
     from clawk_state_wal import resolve_journal_mode
 
     _write_config(monkeypatch, tmp_path, {"database": database})
@@ -164,7 +169,9 @@ def test_configured_delete_validates_vulnerable_sqlite_result(monkeypatch, tmp_p
         conn.close()
 
 
-def test_configured_delete_never_live_downgrades_existing_wal(monkeypatch, tmp_path, caplog):
+def test_configured_delete_never_live_downgrades_existing_wal(
+    monkeypatch, tmp_path, caplog
+):
     """Keeping WAL is correct, but the operator must be told their configured
     delete had no effect (otherwise the DB silently stays WAL and the protection
     they configured never applies)."""
@@ -191,7 +198,9 @@ def test_configured_delete_never_live_downgrades_existing_wal(monkeypatch, tmp_p
         conn.close()
 
 
-def test_configured_delete_overridden_warns_on_non_vulnerable_runtime_too(monkeypatch, tmp_path, caplog):
+def test_configured_delete_overridden_warns_on_non_vulnerable_runtime_too(
+    monkeypatch, tmp_path, caplog
+):
     """When the SQLite runtime is NOT WAL-reset-vulnerable (e.g. after a
     3.51.3+ upgrade), the on-disk WAL + configured-delete case reaches the
     read-only probe path instead of the vulnerability path. That path used to
@@ -209,7 +218,8 @@ def test_configured_delete_overridden_warns_on_non_vulnerable_runtime_too(monkey
             assert apply_wal_with_fallback(conn, db_label="existing-wal.db") == "wal"
         assert conn.execute("PRAGMA journal_mode").fetchone()[0].lower() == "wal"
         warnings = [
-            r for r in caplog.records
+            r
+            for r in caplog.records
             if "database.journal_mode=delete is configured" in r.message
         ]
         assert len(warnings) == 1, (
@@ -220,7 +230,9 @@ def test_configured_delete_overridden_warns_on_non_vulnerable_runtime_too(monkey
         conn.close()
 
 
-def test_configured_delete_overridden_warning_fires_once_per_db(monkeypatch, tmp_path, caplog):
+def test_configured_delete_overridden_warning_fires_once_per_db(
+    monkeypatch, tmp_path, caplog
+):
     """The override warning is deduped per process per db_label (same discipline
     as the WAL-fallback warning), so repeated connections don't flood the log."""
     from clawk_state_wal import apply_wal_with_fallback
@@ -239,15 +251,20 @@ def test_configured_delete_overridden_warning_fires_once_per_db(monkeypatch, tmp
             assert apply_wal_with_fallback(conn, db_label="once.db") == "wal"
             assert apply_wal_with_fallback(conn, db_label="once.db") == "wal"
         warnings = [
-            r for r in caplog.records
+            r
+            for r in caplog.records
             if "database.journal_mode=delete is configured" in r.message
         ]
-        assert len(warnings) == 1, "override warning must fire once per process per db_label"
+        assert len(warnings) == 1, (
+            "override warning must fire once per process per db_label"
+        )
     finally:
         conn.close()
 
 
-def test_configured_delete_with_require_wal_and_existing_wal_returns_wal(monkeypatch, tmp_path, caplog):
+def test_configured_delete_with_require_wal_and_existing_wal_returns_wal(
+    monkeypatch, tmp_path, caplog
+):
     """Pin the require_wal=True + configured=delete + on-disk WAL edge case: the
     existing-WAL probe branch returns "wal" unconditionally (require_wal only
     governs the WAL-refusal fallback paths), so the override warning fires and no
@@ -301,14 +318,16 @@ def test_real_db_openers_honor_configured_delete(monkeypatch, tmp_path):
         finally:
             conn.close()
 
-    monkeypatch.setattr(executions, "EXECUTIONS_FILE", tmp_path / "cron" / "executions.db")
+    monkeypatch.setattr(
+        executions, "EXECUTIONS_FILE", tmp_path / "cron" / "executions.db"
+    )
     executions.EXECUTIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
     cron_conn = executions._connect()
     try:
         executions._initialize_schema(cron_conn)
-        observed["cron_executions"] = cron_conn.execute(
-            "PRAGMA journal_mode"
-        ).fetchone()[0].lower()
+        observed["cron_executions"] = (
+            cron_conn.execute("PRAGMA journal_mode").fetchone()[0].lower()
+        )
     finally:
         cron_conn.close()
 
@@ -319,33 +338,33 @@ def test_real_db_openers_honor_configured_delete(monkeypatch, tmp_path):
 
     session_db = SessionDB(db_path=tmp_path / "state.db")
     try:
-        observed["session_db"] = session_db._conn.execute(
-            "PRAGMA journal_mode"
-        ).fetchone()[0].lower()
+        observed["session_db"] = (
+            session_db._conn.execute("PRAGMA journal_mode").fetchone()[0].lower()
+        )
     finally:
         session_db.close()
 
     kanban_conn = kbc.connect(db_path=tmp_path / "kanban.db")
     try:
-        observed["kanban"] = kanban_conn.execute(
-            "PRAGMA journal_mode"
-        ).fetchone()[0].lower()
+        observed["kanban"] = (
+            kanban_conn.execute("PRAGMA journal_mode").fetchone()[0].lower()
+        )
     finally:
         kanban_conn.close()
 
     projects_conn = projects_db.connect(db_path=tmp_path / "projects.db")
     try:
-        observed["projects"] = projects_conn.execute(
-            "PRAGMA journal_mode"
-        ).fetchone()[0].lower()
+        observed["projects"] = (
+            projects_conn.execute("PRAGMA journal_mode").fetchone()[0].lower()
+        )
     finally:
         projects_conn.close()
 
     response_store = ResponseStore(db_path=str(tmp_path / "response_store.db"))
     try:
-        observed["response_store"] = response_store._conn.execute(
-            "PRAGMA journal_mode"
-        ).fetchone()[0].lower()
+        observed["response_store"] = (
+            response_store._conn.execute("PRAGMA journal_mode").fetchone()[0].lower()
+        )
     finally:
         response_store.close()
 

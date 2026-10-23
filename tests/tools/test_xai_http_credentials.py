@@ -6,7 +6,9 @@ def _set_xai_oauth_unavailable(monkeypatch):
     from clawk_cli import auth_xai
 
     monkeypatch.setattr(auth, "resolve_xai_oauth_runtime_credentials", lambda **_: {})
-    monkeypatch.setattr(auth_xai, "resolve_xai_oauth_runtime_credentials", lambda **_: {})
+    monkeypatch.setattr(
+        auth_xai, "resolve_xai_oauth_runtime_credentials", lambda **_: {}
+    )
 
 
 def test_xai_credentials_fail_closed_without_profile_scope(tmp_path, monkeypatch):
@@ -198,21 +200,40 @@ def _write_auth_store(tmp_path, monkeypatch, suppressed):
     import time
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    (tmp_path / "auth.json").write_text(json.dumps({
-        "version": 1,
-        "providers": {"xai-oauth": {"tokens": {
-            "access_token": "oauth-live-token", "refresh_token": "r",
-            "expires_at": int(time.time() * 1000) + 3_600_000}}},
-        "credential_pool": {},
-        "suppressed_sources": suppressed,
-    }), encoding="utf-8")
+    (tmp_path / "auth.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "providers": {
+                    "xai-oauth": {
+                        "tokens": {
+                            "access_token": "oauth-live-token",
+                            "refresh_token": "r",
+                            "expires_at": int(time.time() * 1000) + 3_600_000,
+                        }
+                    }
+                },
+                "credential_pool": {},
+                "suppressed_sources": suppressed,
+            }
+        ),
+        encoding="utf-8",
+    )
 
 
-@pytest.mark.parametrize("suppressed, expected_provider", [
-    ({"xai": ["env:XAI_API_KEY"]}, "xai-oauth"),   # removed source is ignored -> OAuth serves
-    ({}, "xai"),                                    # control: the env key still wins when not removed
-])
-def test_suppressed_env_key_does_not_override_oauth(tmp_path, monkeypatch, suppressed, expected_provider):
+@pytest.mark.parametrize(
+    "suppressed, expected_provider",
+    [
+        (
+            {"xai": ["env:XAI_API_KEY"]},
+            "xai-oauth",
+        ),  # removed source is ignored -> OAuth serves
+        ({}, "xai"),  # control: the env key still wins when not removed
+    ],
+)
+def test_suppressed_env_key_does_not_override_oauth(
+    tmp_path, monkeypatch, suppressed, expected_provider
+):
     from clawk_cli.config import invalidate_env_cache
     from tools.xai_http import resolve_xai_http_credentials
 
@@ -222,7 +243,9 @@ def test_suppressed_env_key_does_not_override_oauth(tmp_path, monkeypatch, suppr
 
     creds = resolve_xai_http_credentials(prefer_api_key=True)
     assert creds["provider"] == expected_provider
-    assert (creds["api_key"] == "dead-creditless-team-key") is (expected_provider == "xai")
+    assert (creds["api_key"] == "dead-creditless-team-key") is (
+        expected_provider == "xai"
+    )
 
 
 def test_suppression_is_scoped_to_its_provider(tmp_path, monkeypatch):

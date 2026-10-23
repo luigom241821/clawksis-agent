@@ -17,6 +17,7 @@ def test_get_logs_yields_while_reading_and_filtering(tmp_path, monkeypatch):
         return ["fixture"]
 
     import clawk_cli.logs
+
     monkeypatch.setattr(clawk_cli.logs, "_read_tail", blocking_read)
 
     async def exercise():

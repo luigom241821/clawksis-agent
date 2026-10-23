@@ -31,6 +31,7 @@ These tests pin the contract for Fix A:
 Reference: Claude Code solves this via an ``OAuthTokens.expiresAt`` absolute
 timestamp persisted alongside the access_token (``auth.ts:~180``).
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -44,6 +45,7 @@ pytest.importorskip("mcp.client.auth.oauth2", reason="MCP SDK 1.26.0+ required")
 # ---------------------------------------------------------------------------
 # ClawksisTokenStorage — absolute expiry persistence
 # ---------------------------------------------------------------------------
+
 
 class TestSetTokensAbsoluteExpiry:
     def test_set_tokens_persists_absolute_expires_at(self, tmp_path, monkeypatch):
@@ -67,9 +69,7 @@ class TestSetTokensAbsoluteExpiry:
         )
         after = time.time()
 
-        on_disk = json.loads(
-            (tmp_path / "mcp-tokens" / "srv.json").read_text()
-        )
+        on_disk = json.loads((tmp_path / "mcp-tokens" / "srv.json").read_text())
         assert "expires_at" in on_disk, (
             "Fix A: set_tokens must record an absolute expires_at wall-clock "
             "timestamp alongside the SDK's serialized token so cold-loads "
@@ -97,15 +97,12 @@ class TestSetTokensAbsoluteExpiry:
             )
         )
 
-        on_disk = json.loads(
-            (tmp_path / "mcp-tokens" / "srv.json").read_text()
-        )
+        on_disk = json.loads((tmp_path / "mcp-tokens" / "srv.json").read_text())
         assert "expires_at" not in on_disk
 
+
 class TestGetTokensReconstructsExpiresIn:
-    def test_get_tokens_uses_expires_at_for_remaining_ttl(
-        self, tmp_path, monkeypatch
-    ):
+    def test_get_tokens_uses_expires_at_for_remaining_ttl(self, tmp_path, monkeypatch):
         """Round-trip: expires_in on read must reflect time remaining."""
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         from mcp.shared.auth import OAuthToken
@@ -133,9 +130,7 @@ class TestGetTokensReconstructsExpiresIn:
         # Should be slightly less than 3600 after the 50ms sleep.
         assert 3500 < reloaded.expires_in <= 3600
 
-    def test_get_tokens_returns_zero_ttl_for_expired_token(
-        self, tmp_path, monkeypatch
-    ):
+    def test_get_tokens_returns_zero_ttl_for_expired_token(self, tmp_path, monkeypatch):
         """An already-expired token reloaded from disk must report expires_in=0."""
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         from tools.mcp_oauth import ClawksisTokenStorage, _get_token_dir
@@ -205,9 +200,11 @@ class TestGetTokensReconstructsExpiresIn:
             "expires_in=0 so the SDK refreshes on next request."
         )
 
+
 # ---------------------------------------------------------------------------
 # ClawksisMCPOAuthProvider._initialize — seed token_expiry_time
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_initialize_seeds_token_expiry_time_from_stored_tokens(
@@ -273,6 +270,7 @@ async def test_initialize_seeds_token_expiry_time_from_stored_tokens(
     assert provider.context.token_expiry_time > time.time() + 7000
     assert provider.context.token_expiry_time <= time.time() + 7200 + 5
 
+
 @pytest.mark.asyncio
 async def test_initialize_marks_zero_ttl_cold_loaded_token_invalid(
     tmp_path, monkeypatch
@@ -285,7 +283,11 @@ async def test_initialize_marks_zero_ttl_cold_loaded_token_invalid(
     or authorization-code path.
     """
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    from mcp.shared.auth import OAuthClientInformationFull, OAuthClientMetadata, OAuthToken
+    from mcp.shared.auth import (
+        OAuthClientInformationFull,
+        OAuthClientMetadata,
+        OAuthToken,
+    )
     from pydantic import AnyUrl
 
     from tools.mcp_oauth import ClawksisTokenStorage, _get_token_dir
@@ -342,20 +344,22 @@ async def test_initialize_marks_zero_ttl_cold_loaded_token_invalid(
         "between refresh and authorization-code flow."
     )
 
+
 async def _noop_redirect(_url: str) -> None:
     return None
 
+
 async def _noop_callback() -> tuple[str, str | None]:
     raise AssertionError("callback handler should not be invoked in these tests")
+
 
 # ---------------------------------------------------------------------------
 # Pre-flight OAuth metadata discovery
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
-async def test_initialize_prefetches_oauth_metadata_when_missing(
-    tmp_path, monkeypatch
-):
+async def test_initialize_prefetches_oauth_metadata_when_missing(tmp_path, monkeypatch):
     """Cold-load must pre-flight PRM + ASM discovery so ``_refresh_token``
     has the correct ``token_endpoint`` before the first refresh attempt.
 
@@ -373,6 +377,7 @@ async def test_initialize_prefetches_oauth_metadata_when_missing(
     # builds its client from the same module, so the MockTransport and the
     # patched AsyncClient below have to come from there too.
     from tools.mcp_tool import sdk_httpx
+
     httpx = sdk_httpx()
     from mcp.shared.auth import (
         OAuthClientInformationFull,
@@ -484,4 +489,7 @@ async def test_initialize_prefetches_oauth_metadata_when_missing(
     # Pre-flight discovery requests are SDK-built (no client default headers merged),
     # so they must carry the stamped User-Agent or WAF-fronted providers 403 them (#113771).
     from tools.mcp_oauth_provider import DEFAULT_AUTH_REQUEST_USER_AGENT
-    assert seen_user_agents and set(seen_user_agents) == {DEFAULT_AUTH_REQUEST_USER_AGENT}
+
+    assert seen_user_agents and set(seen_user_agents) == {
+        DEFAULT_AUTH_REQUEST_USER_AGENT
+    }

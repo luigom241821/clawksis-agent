@@ -5,6 +5,7 @@ A reply past ``MAX_MESSAGE_LENGTH`` goes out as several ``sendMessage`` calls. W
 ``partial_overflow`` contract and ``_send_with_retry`` must resume from the undelivered remainder — never
 re-send chunk 1 (the reporter saw a duplicated head), never drop the tail.
 """
+
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
@@ -30,11 +31,15 @@ def _adapter(send_message: AsyncMock) -> TelegramAdapter:
 
 
 def _three_chunk_text() -> str:
-    return "\n".join(" ".join(f"w{i * 20 + j}" for j in range(20)) for i in range(80))  # ~9.5k chars, 3 chunks
+    return "\n".join(
+        " ".join(f"w{i * 20 + j}" for j in range(20)) for i in range(80)
+    )  # ~9.5k chars, 3 chunks
 
 
 @pytest.mark.asyncio
-async def test_split_send_resumes_from_undelivered_tail_without_resending_head(monkeypatch):
+async def test_split_send_resumes_from_undelivered_tail_without_resending_head(
+    monkeypatch,
+):
     """Chunk 2 refused with a 7s RetryAfter (> the 5s adapter cap, < the 60s base cap): the retry
     delivers chunks 2..3 only — every chunk exactly once, in order."""
     sent: list = []
@@ -50,19 +55,27 @@ async def test_split_send_resumes_from_undelivered_tail_without_resending_head(m
     adapter = _adapter(AsyncMock(side_effect=fake_send_message))
     monkeypatch.setattr("plugins.platforms.telegram.adapter.asyncio.sleep", AsyncMock())
 
-    async def _penalty_elapses(_delay):  # the base retry sleep is mocked; model the window having passed
+    async def _penalty_elapses(
+        _delay,
+    ):  # the base retry sleep is mocked; model the window having passed
         adapter._telegram_send_cooldown_until.clear()
 
     monkeypatch.setattr("gateway.platforms.base.asyncio.sleep", _penalty_elapses)
     content = _three_chunk_text()
-    expected = adapter.truncate_message(adapter.format_message(content), adapter.MAX_MESSAGE_LENGTH)
+    expected = adapter.truncate_message(
+        adapter.format_message(content), adapter.MAX_MESSAGE_LENGTH
+    )
     assert len(expected) >= 3
 
     result = await adapter._send_with_retry(chat_id="4242", content=content)
 
     assert result.success is True
-    assert [t.split()[0] for t in sent] == [c.split()[0] for c in expected]  # 1, 2, 3 — no duplicate head
-    assert result.raw_response["message_ids"] == ["1001"] + [str(1002 + i) for i in range(1, len(expected))]
+    assert [t.split()[0] for t in sent] == [
+        c.split()[0] for c in expected
+    ]  # 1, 2, 3 — no duplicate head
+    assert result.raw_response["message_ids"] == ["1001"] + [
+        str(1002 + i) for i in range(1, len(expected))
+    ]
 
 
 @pytest.mark.asyncio
@@ -81,17 +94,31 @@ async def test_over_cap_flood_returns_partial_overflow_and_arms_cooldown(monkeyp
     monkeypatch.setattr("plugins.platforms.telegram.adapter.asyncio.sleep", AsyncMock())
 
     content = _three_chunk_text()
-    total = len(adapter.truncate_message(adapter.format_message(content), adapter.MAX_MESSAGE_LENGTH))
+    total = len(
+        adapter.truncate_message(
+            adapter.format_message(content), adapter.MAX_MESSAGE_LENGTH
+        )
+    )
     result = await adapter._send_with_retry(chat_id="4242", content=content)
 
     assert result.success is False and result.error == "flood_control:120.0"
     raw = result.raw_response
-    assert raw["partial_overflow"] is True and raw["delivered_chunks"] == 1 and raw["total_chunks"] == total >= 3
-    assert raw["last_message_id"] == "1001" and len(raw["undelivered_chunks"]) == total - 1
+    assert (
+        raw["partial_overflow"] is True
+        and raw["delivered_chunks"] == 1
+        and raw["total_chunks"] == total >= 3
+    )
+    assert (
+        raw["last_message_id"] == "1001" and len(raw["undelivered_chunks"]) == total - 1
+    )
     assert calls["n"] == 2
     # Facet 3: a follow-up send inside the penalty window makes no API call; a different chat still sends.
     again = await adapter.send("4242", "hello again")
-    assert again.success is False and again.error.startswith("flood_control:") and calls["n"] == 2
+    assert (
+        again.success is False
+        and again.error.startswith("flood_control:")
+        and calls["n"] == 2
+    )
     other = await adapter.send("999", "hello other")
     assert other.success is True and calls["n"] == 3
 
@@ -102,14 +129,18 @@ async def test_concurrent_split_sends_to_one_chat_do_not_interleave():
     order: list = []
 
     async def fake_send_message(text: str, **_kw):
-        await asyncio.sleep(0)  # yield like a real round-trip so an unlocked loop interleaves
+        await asyncio.sleep(
+            0
+        )  # yield like a real round-trip so an unlocked loop interleaves
         order.append(text.split()[0])
         return MagicMock(message_id=len(order))
 
     adapter = _adapter(AsyncMock(side_effect=fake_send_message))
     long = lambda tag: "\n".join(" ".join([tag] * 30) for _ in range(90))
 
-    await asyncio.gather(adapter.send("1", long("REPORT")), adapter.send("1", long("ALERT")))
+    await asyncio.gather(
+        adapter.send("1", long("REPORT")), adapter.send("1", long("ALERT"))
+    )
 
     assert len(order) >= 4
     switches = sum(1 for a, b in itertools.pairwise(order) if a != b)

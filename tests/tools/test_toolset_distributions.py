@@ -1,15 +1,10 @@
 """Tests for toolset_distributions.py — distribution CRUD, sampling, validation."""
 
-
 from toolset_distributions import (
     DISTRIBUTIONS,
     list_distributions,
     sample_toolsets_from_distribution,
 )
-
-
-
-
 
 
 class TestListDistributions:
@@ -18,13 +13,6 @@ class TestListDistributions:
         d2 = list_distributions()
         assert d1 is not d2
         assert d1 == d2
-
-
-
-
-
-
-
 
 
 class TestDistributionStructure:
@@ -37,11 +25,13 @@ class TestDistributionStructure:
     def test_probabilities_are_valid_range(self):
         for name, dist in DISTRIBUTIONS.items():
             for ts_name, prob in dist["toolsets"].items():
-                assert 0 < prob <= 100, f"{name}.{ts_name} has invalid probability {prob}"
+                assert 0 < prob <= 100, (
+                    f"{name}.{ts_name} has invalid probability {prob}"
+                )
 
 
 class TestGroupedCompoundEntries:
-    """"+"-grouped entries roll once and select all members together (#64503)."""
+    """ "+"-grouped entries roll once and select all members together (#64503)."""
 
     def test_hit_roll_selects_all_members_together(self, monkeypatch):
         import toolset_distributions as td
@@ -70,7 +60,10 @@ class TestGroupedCompoundEntries:
         monkeypatch.setitem(
             td.DISTRIBUTIONS,
             "_test_compound_invalid",
-            {"description": "t", "toolsets": {"browser+__not_a_toolset__": 100, "web": 100}},
+            {
+                "description": "t",
+                "toolsets": {"browser+__not_a_toolset__": 100, "web": 100},
+            },
         )
         monkeypatch.setattr(td.random, "random", lambda: 0.0)
         result = sample_toolsets_from_distribution("_test_compound_invalid")

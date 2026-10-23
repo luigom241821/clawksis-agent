@@ -60,7 +60,9 @@ def launch_home(request, tmp_path, monkeypatch):
     else:
         # A default gateway run in the foreground has no CLAWK_HOME at all.
         monkeypatch.delenv("CLAWK_HOME", raising=False)
-        monkeypatch.setattr(clawk_constants, "_get_platform_default_clawk_home", lambda: root)
+        monkeypatch.setattr(
+            clawk_constants, "_get_platform_default_clawk_home", lambda: root
+        )
     return root
 
 
@@ -80,24 +82,40 @@ def _runner(adapter):
 
 
 @pytest.mark.asyncio
-async def test_boot_sweep_redelivers_a_reply_recorded_under_a_served_profile_scope(launch_home):
+async def test_boot_sweep_redelivers_a_reply_recorded_under_a_served_profile_scope(
+    launch_home,
+):
     from gateway.run import _profile_runtime_scope
 
     adapter = _ServedAdapter()
     event = MessageEvent(
-        text="hi", message_type=MessageType.TEXT, message_id="m-1",
-        source=SessionSource(platform=Platform.SLACK, chat_id="C1", chat_type="channel"))
+        text="hi",
+        message_type=MessageType.TEXT,
+        message_id="m-1",
+        source=SessionSource(
+            platform=Platform.SLACK, chat_id="C1", chat_type="channel"
+        ),
+    )
     # Stands in for the receive loop: a task created while the adapter connects under the scope.
-    with _profile_runtime_scope(launch_home / "profiles" / "research", hydrate_secrets=False):
+    with _profile_runtime_scope(
+        launch_home / "profiles" / "research", hydrate_secrets=False
+    ):
         record = asyncio.create_task(
-            adapter._record_delivery_obligation(event, SESSION_KEY, ANSWER, adapter, False))
+            adapter._record_delivery_obligation(
+                event, SESSION_KEY, ANSWER, adapter, False
+            )
+        )
     assert await record
 
     # The gateway died after the send began and before the platform acknowledged it.
     with dl._connect() as conn:
-        conn.execute("UPDATE delivery_obligations SET owner_pid=999999999, owner_started_at=1")
+        conn.execute(
+            "UPDATE delivery_obligations SET owner_pid=999999999, owner_started_at=1"
+        )
 
     runner = _runner(adapter)
     assert await runner._redeliver_pending_obligations() == 1
     assert adapter.sent == [dl.RECOVERED_MARKER + ANSWER]
-    runner._async_session_store.clear_resume_pending.assert_awaited_once_with(SESSION_KEY)
+    runner._async_session_store.clear_resume_pending.assert_awaited_once_with(
+        SESSION_KEY
+    )

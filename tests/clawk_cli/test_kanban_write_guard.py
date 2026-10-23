@@ -27,9 +27,7 @@ def test_connect_raises_when_kanban_home_is_real_root(monkeypatch):
     """When kanban paths resolve to the REAL root, connect raises RuntimeError."""
     import tests.conftest as _conftest
 
-    monkeypatch.setattr(
-        kanban_db, "kanban_home", lambda: _conftest._REAL_KANBAN_ROOT
-    )
+    monkeypatch.setattr(kanban_db, "kanban_home", lambda: _conftest._REAL_KANBAN_ROOT)
     monkeypatch.setattr(
         kanban_db,
         "kanban_db_path",

@@ -19,8 +19,15 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch):
-    for key in ("OPENAI_API_KEY", "OPENAI_BASE_URL", "ANTHROPIC_API_KEY", "ANTHROPIC_TOKEN",
-                "ANTHROPIC_BASE_URL", "OPENROUTER_API_KEY", "OPENROUTER_BASE_URL"):
+    for key in (
+        "OPENAI_API_KEY",
+        "OPENAI_BASE_URL",
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_TOKEN",
+        "ANTHROPIC_BASE_URL",
+        "OPENROUTER_API_KEY",
+        "OPENROUTER_BASE_URL",
+    ):
         monkeypatch.delenv(key, raising=False)
 
 
@@ -45,10 +52,16 @@ def test_anthropic_fallback_entry_base_url_is_the_resolved_endpoint():
     from agent.auxiliary_client import resolve_provider_client
 
     fake_anthropic = MagicMock(name="anthropic_sdk_client")
-    with patch("agent.anthropic_adapter.build_anthropic_client", return_value=fake_anthropic) as mock_build:
+    with patch(
+        "agent.anthropic_adapter.build_anthropic_client", return_value=fake_anthropic
+    ) as mock_build:
         client, _model = resolve_provider_client(
-            "anthropic", model="claude-haiku-4-5-20251001", raw_codex=True,
-            explicit_base_url=_RELAY_ANTHROPIC, explicit_api_key="sk-test-not-a-real-key")
+            "anthropic",
+            model="claude-haiku-4-5-20251001",
+            raw_codex=True,
+            explicit_base_url=_RELAY_ANTHROPIC,
+            explicit_api_key="sk-test-not-a-real-key",
+        )
 
     assert client is not None
     assert mock_build.call_args[0][1] == _RELAY_ANTHROPIC
@@ -64,13 +77,21 @@ def test_anthropic_fallback_entry_refuses_a_non_anthropic_endpoint():
     """
     from agent.auxiliary_client import resolve_provider_client
 
-    with patch("agent.anthropic_adapter.build_anthropic_client", return_value=MagicMock()) as mock_build:
+    with patch(
+        "agent.anthropic_adapter.build_anthropic_client", return_value=MagicMock()
+    ) as mock_build:
         client, _model = resolve_provider_client(
-            "anthropic", model="claude-haiku-4-5-20251001", raw_codex=True,
-            explicit_base_url="http://127.0.0.1:9002/openai/v1", explicit_api_key="sk-test-not-a-real-key")
+            "anthropic",
+            model="claude-haiku-4-5-20251001",
+            raw_codex=True,
+            explicit_base_url="http://127.0.0.1:9002/openai/v1",
+            explicit_api_key="sk-test-not-a-real-key",
+        )
 
     assert client is None, "an incompatible explicit endpoint must not yield a client"
-    assert mock_build.call_count == 0, "no canonical client may be constructed on refusal"
+    assert mock_build.call_count == 0, (
+        "no canonical client may be constructed on refusal"
+    )
 
 
 def test_openrouter_fallback_entry_base_url_is_the_resolved_endpoint():
@@ -78,8 +99,12 @@ def test_openrouter_fallback_entry_base_url_is_the_resolved_endpoint():
     from agent.auxiliary_client import resolve_provider_client
 
     client, _model = resolve_provider_client(
-        "openrouter", model="some/model", raw_codex=True,
-        explicit_base_url=_RELAY_OPENROUTER, explicit_api_key="sk-test-not-a-real-key")
+        "openrouter",
+        model="some/model",
+        raw_codex=True,
+        explicit_base_url=_RELAY_OPENROUTER,
+        explicit_api_key="sk-test-not-a-real-key",
+    )
 
     assert client is not None
     assert _client_base_url(client).rstrip("/") == _RELAY_OPENROUTER
@@ -90,7 +115,11 @@ def test_openrouter_without_an_entry_base_url_keeps_the_configured_default():
     from agent.auxiliary_client import OPENROUTER_BASE_URL, resolve_provider_client
 
     client, _model = resolve_provider_client(
-        "openrouter", model="some/model", raw_codex=True, explicit_api_key="sk-test-not-a-real-key")
+        "openrouter",
+        model="some/model",
+        raw_codex=True,
+        explicit_api_key="sk-test-not-a-real-key",
+    )
 
     assert client is not None
     assert _client_base_url(client).rstrip("/") == OPENROUTER_BASE_URL.rstrip("/")

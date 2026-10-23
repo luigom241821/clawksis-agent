@@ -1,4 +1,5 @@
 """Retired dependency hooks requested by already-running historical updaters."""
+
 from typing import NoReturn
 
 from clawk_cli._old_updater import stop_for_relaunch
@@ -29,7 +30,9 @@ def _update_node_dependencies() -> NoReturn:
     stop_for_relaunch()
 
 
-def _rebuild_desktop_after_update(desktop_dir, *, had_desktop_app_before_update) -> NoReturn:
+def _rebuild_desktop_after_update(
+    desktop_dir, *, had_desktop_app_before_update
+) -> NoReturn:
     # Old callers must not report completion after skipping the build.
     stop_for_relaunch()
 
@@ -51,6 +54,7 @@ def _ledger_manual_serve_holders(matches: list[tuple[int, str, str]]) -> NoRetur
 
 def _relaunch_stopped_serves(token: dict) -> None:
     from clawk_cli._old_updater import relaunch_stopped_serves
+
     relaunch_stopped_serves(token)
 
 

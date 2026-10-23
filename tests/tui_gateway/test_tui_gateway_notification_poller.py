@@ -7,10 +7,20 @@ from tui_gateway import server
 
 
 def _session():
-    return {"agent": types.SimpleNamespace(), "session_key": "session-key", "history": [],
-            "history_lock": threading.Lock(), "history_version": 0, "running": False,
-            "attached_images": [], "image_counter": 0, "cols": 80, "slash_worker": None,
-            "show_reasoning": False, "tool_progress_mode": "all"}
+    return {
+        "agent": types.SimpleNamespace(),
+        "session_key": "session-key",
+        "history": [],
+        "history_lock": threading.Lock(),
+        "history_version": 0,
+        "running": False,
+        "attached_images": [],
+        "image_counter": 0,
+        "cols": 80,
+        "slash_worker": None,
+        "show_reasoning": False,
+        "tool_progress_mode": "all",
+    }
 
 
 def test_session_rebuild_stops_previous_notification_poller(monkeypatch):
@@ -25,10 +35,16 @@ def test_session_rebuild_stops_previous_notification_poller(monkeypatch):
     try:
         server._start_session_services("sid_rebuild", "session-key", sess)
         first_stop = sess["_notif_stop"]
-        assert not first_stop.is_set()  # a fresh session really starts its poller running
+        assert (
+            not first_stop.is_set()
+        )  # a fresh session really starts its poller running
         # Identify the first poller by its stop event now: once it exits, the rebuild may prune it
         # and only the replacement would carry the shared thread name.
-        first_thread = next(thread for stop, thread in list(server._notification_pollers) if stop is first_stop)
+        first_thread = next(
+            thread
+            for stop, thread in list(server._notification_pollers)
+            if stop is first_stop
+        )
 
         # Agent rebuild for the SAME session (in-session /model switch, resume, late MCP refresh).
         server._start_session_services("sid_rebuild", "session-key", sess)

@@ -20,7 +20,9 @@ def _declared_now(table: str) -> tuple[str, ...]:
     conn = sqlite3.connect(":memory:")
     try:
         conn.executescript(SCHEMA_SQL)
-        return tuple(str(row[1]) for row in conn.execute(f'PRAGMA table_info("{table}")'))
+        return tuple(
+            str(row[1]) for row in conn.execute(f'PRAGMA table_info("{table}")')
+        )
     finally:
         conn.close()
 
@@ -34,7 +36,9 @@ def test_replayed_history_ends_at_current_schema(table: str) -> None:
     older events — real stores were shaped by them).
     """
 
-    labels = [int(label.split()[0]) for label, _ in history.SCHEMA_HISTORY[table].events]
+    labels = [
+        int(label.split()[0]) for label, _ in history.SCHEMA_HISTORY[table].events
+    ]
     assert labels == list(range(1, len(labels) + 1)), (
         f"SCHEMA_HISTORY[{table!r}].events is out of order: append new events at the END with the next "
         f"sequence number, never insert mid-list (got {labels})"

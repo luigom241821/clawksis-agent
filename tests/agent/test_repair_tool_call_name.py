@@ -9,6 +9,7 @@ strips trailing ``_tool`` / ``-tool`` / ``tool`` suffixes (up to
 twice to handle double-tacked suffixes like ``TodoTool_tool``), and
 falls back to fuzzy match.
 """
+
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -40,6 +41,7 @@ def repair():
     bind the unbound function.
     """
     from run_agent import AIAgent
+
     stub = SimpleNamespace(valid_tool_names=VALID)
     return AIAgent._repair_tool_call.__get__(stub, AIAgent)
 
@@ -51,11 +53,6 @@ class TestExistingBehaviorStillWorks:
         assert repair("browser_click") == "browser_click"
 
 
-
-
-
-
-
 class TestClassLikeEmissions:
     """Regression coverage for #14784 — CamelCase + _tool suffix variants."""
 
@@ -63,21 +60,11 @@ class TestClassLikeEmissions:
         assert repair("BrowserClick") == "browser_click"
 
 
-
-
-
-
-
-
-
 class TestEdgeCases:
     """Edge inputs that must not crash or produce surprising results."""
 
     def test_empty_string(self, repair):
         assert repair("") is None
-
-
-
 
 
 class TestVolcEngineXmlPollution:
@@ -99,14 +86,9 @@ class TestVolcEngineXmlPollution:
         polluted = 'terminal" parameter="command" string="true'
         assert repair(polluted) == "terminal"
 
-
-
-
     def test_tool_name_with_trailing_quote_only(self, repair):
         # Minimal leak — just a stray trailing quote, no full attribute.
         assert repair('terminal"') == "terminal"
-
-
 
     def test_clean_tool_name_unaffected_by_sanitizer(self, repair):
         # Pure passthrough — no XML/quote chars, no change.
@@ -117,7 +99,6 @@ class TestVolcEngineXmlPollution:
         # Critical: the XML strip must NOT consume whitespace, or the
         # legitimate ``"write file" -> write_file`` repair path breaks.
         assert repair("write file") == "write_file"
-
 
     def test_leading_quote_falls_through_to_fuzzy_match(self, repair):
         # Sanitizer only trims when the XML char is at idx > 0 — a

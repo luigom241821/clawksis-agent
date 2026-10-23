@@ -35,6 +35,7 @@ from tools.environments.base_session_env import (
 # Unit: the exclusion regex matches exactly the bridged vars, nothing else.
 # ---------------------------------------------------------------------------
 
+
 def test_regex_matches_bridged_session_vars():
     rx = re.compile(_SNAPSHOT_EXCLUDED_ENV_REGEX)
     # Every var the gateway bridges, and the delegate_task marker, must be excluded.
@@ -46,11 +47,10 @@ def test_regex_matches_bridged_session_vars():
         assert rx.search(line), f"{name} should be excluded from the snapshot"
 
 
-
-
 # ---------------------------------------------------------------------------
 # Integration: real LocalEnvironment, two sessions, no cross-contamination.
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.platforms("posix")  # POSIX bash snapshot path
 def test_shared_snapshot_no_cross_session_leak(tmp_path):
@@ -62,13 +62,16 @@ def test_shared_snapshot_no_cross_session_leak(tmp_path):
     env = LocalEnvironment(cwd=str(tmp_path), timeout=30)
     env.init_session()
     try:
+
         def run_as(sid):
             out = {}
 
             def worker():
                 for v in _VAR_MAP.values():
                     v.set(_UNSET)
-                set_session_vars(session_key="k" + sid, session_id=sid, source="desktop")
+                set_session_vars(
+                    session_key="k" + sid, session_id=sid, source="desktop"
+                )
                 out["r"] = env.execute('echo "[$CLAWK_SESSION_ID]"')
 
             t = threading.Thread(target=worker)
@@ -98,6 +101,7 @@ def test_shared_snapshot_no_cross_session_leak(tmp_path):
 # persist into the snapshot either.
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.platforms("posix")  # POSIX bash snapshot path
 def test_export_dump_drops_every_bridged_var_and_the_delegation_marker():
     """Run the real dump: nothing the gateway bridges per command, nor the
@@ -106,10 +110,20 @@ def test_export_dump_drops_every_bridged_var_and_the_delegation_marker():
     from gateway.session_context import _VAR_MAP
 
     scoped = [*_VAR_MAP, DELEGATED_CHILD_ENV_MARKER]
-    exports = "; ".join([f'export {n}="x"' for n in scoped] + ['export CLAWK_HOME="/h"', 'export MYVAR="keep"'])
+    exports = "; ".join(
+        [f'export {n}="x"' for n in scoped]
+        + ['export CLAWK_HOME="/h"', 'export MYVAR="keep"']
+    )
     out = subprocess.run(
-        ["bash", "-c", f"{exports}; {_export_dump_excluding_session_vars('/dev/stdout')}"],
-        capture_output=True, text=True, check=True).stdout
+        [
+            "bash",
+            "-c",
+            f"{exports}; {_export_dump_excluding_session_vars('/dev/stdout')}",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
     leaked = [n for n in scoped if f"declare -x {n}=" in out]
     assert not leaked, f"persisted into the snapshot: {leaked}"
     assert 'declare -x CLAWK_HOME="/h"' in out
@@ -120,7 +134,10 @@ def test_export_dump_drops_every_bridged_var_and_the_delegation_marker():
 def test_snapshot_does_not_turn_later_commands_into_delegated_children(tmp_path):
     """A snapshot re-dumped during a delegated child's command must not re-export
     the marker into the parent's next ``source`` (#90782)."""
-    from agent.delegation_context import DELEGATED_CHILD_ENV_MARKER, delegated_child_context
+    from agent.delegation_context import (
+        DELEGATED_CHILD_ENV_MARKER,
+        delegated_child_context,
+    )
     from tools.environments.local import LocalEnvironment
 
     probe = f'printf "[${{{DELEGATED_CHILD_ENV_MARKER}+set}}]"'
@@ -130,6 +147,8 @@ def test_snapshot_does_not_turn_later_commands_into_delegated_children(tmp_path)
             child = env.execute(probe)
         assert "[set]" in child["output"], f"delegated child lost its marker: {child!r}"
         parent = env.execute(probe)
-        assert "[]" in parent["output"], f"parent command inherited the marker: {parent!r}"
+        assert "[]" in parent["output"], (
+            f"parent command inherited the marker: {parent!r}"
+        )
     finally:
         env.cleanup()

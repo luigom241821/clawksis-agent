@@ -25,7 +25,6 @@ class TestApiModeRegistration:
         assert "codex_app_server" in _VALID_API_MODES
 
 
-
 class TestMaybeApplyCodexAppServerRuntime:
     """The opt-in helper that rewrites api_mode → codex_app_server."""
 
@@ -55,8 +54,6 @@ class TestMaybeApplyCodexAppServerRuntime:
         )
         assert got == "codex_app_server"
 
-
-
     @pytest.mark.parametrize(
         "provider",
         [
@@ -85,16 +82,12 @@ class TestMaybeApplyCodexAppServerRuntime:
 class TestCodexAppServerModule:
     """Module-surface tests for the JSON-RPC speaker. Don't require codex CLI."""
 
-
-
-
     def test_check_binary_handles_missing_executable(self) -> None:
         from agent.transports.codex_app_server import check_codex_binary
 
         ok, msg = check_codex_binary(codex_bin="/nonexistent/codex/binary/path")
         assert ok is False
         assert msg
-
 
 
 class TestCodexAppServerClose:
@@ -187,9 +180,14 @@ while True:
         proc = mock.MagicMock()
         proc.pid = 4242
         proc.stdin = None
-        proc.wait.side_effect = [subprocess.TimeoutExpired(cmd="codex", timeout=0.01), 0]
+        proc.wait.side_effect = [
+            subprocess.TimeoutExpired(cmd="codex", timeout=0.01),
+            0,
+        ]
         killed: list[int] = []
-        monkeypatch.setattr(mod, "kill_process_tree", lambda pid, **kw: killed.append(pid) or True)
+        monkeypatch.setattr(
+            mod, "kill_process_tree", lambda pid, **kw: killed.append(pid) or True
+        )
         monkeypatch.setattr(mod, "_snapshot_descendants", lambda pid: [])
 
         client = mod.CodexAppServerClient.__new__(mod.CodexAppServerClient)
@@ -199,7 +197,10 @@ while True:
         client.close(timeout=0.01)
 
         assert killed == [4242]
-        assert proc.wait.call_args_list == [mock.call(timeout=0.01), mock.call(timeout=1.0)]
+        assert proc.wait.call_args_list == [
+            mock.call(timeout=0.01),
+            mock.call(timeout=1.0),
+        ]
 
 
 class TestSpawnEnvIsolation:
@@ -214,7 +215,6 @@ class TestSpawnEnvIsolation:
     shell calls. We avoid the same bug by only overlaying CODEX_HOME and
     RUST_LOG on top of os.environ.copy().
     """
-
 
     def test_spawn_env_sets_CODEX_HOME_when_provided(self, monkeypatch):
         """CODEX_HOME isolation must still work — that's the whole point
@@ -375,9 +375,14 @@ class TestSpawnEnvSecretStripping:
 
         env = self._capture_spawn_env(monkeypatch)
         for var in (
-            "GH_TOKEN", "TELEGRAM_BOT_TOKEN", "MODAL_TOKEN_SECRET",
-            "CLAWK_DASHBOARD_SESSION_TOKEN", "AUXILIARY_VISION_API_KEY",
-            "GATEWAY_RELAY_SECRET", "GATEWAY_RELAY_ID", "GATEWAY_RELAY_DELIVERY_KEY",
+            "GH_TOKEN",
+            "TELEGRAM_BOT_TOKEN",
+            "MODAL_TOKEN_SECRET",
+            "CLAWK_DASHBOARD_SESSION_TOKEN",
+            "AUXILIARY_VISION_API_KEY",
+            "GATEWAY_RELAY_SECRET",
+            "GATEWAY_RELAY_ID",
+            "GATEWAY_RELAY_DELIVERY_KEY",
         ):
             assert var not in env, f"{var} leaked into codex app-server spawn env"
 
@@ -387,4 +392,3 @@ class TestSpawnEnvSecretStripping:
         monkeypatch.setenv("OPENAI_API_KEY", "sk-codex-needs-this")
         env = self._capture_spawn_env(monkeypatch)
         assert env.get("OPENAI_API_KEY") == "sk-codex-needs-this"
-

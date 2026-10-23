@@ -25,9 +25,7 @@ class TestDeprecatedCwdWarning:
 
         assert capsys.readouterr().err == ""
 
-    def test_both_deprecated_vars_in_dotenv_warn(
-        self, monkeypatch, tmp_path, capsys
-    ):
+    def test_both_deprecated_vars_in_dotenv_warn(self, monkeypatch, tmp_path, capsys):
         _write_env(
             monkeypatch,
             tmp_path,
@@ -49,9 +47,7 @@ class TestDeprecatedCwdWarning:
     def test_dotenv_terminal_cwd_warns_with_explicit_config(
         self, monkeypatch, tmp_path, capsys
     ):
-        clawk_home = _write_env(
-            monkeypatch, tmp_path, "TERMINAL_CWD=/legacy/path\n"
-        )
+        clawk_home = _write_env(monkeypatch, tmp_path, "TERMINAL_CWD=/legacy/path\n")
         (clawk_home / "config.yaml").write_text(
             "terminal:\n  cwd: /current/path\n", encoding="utf-8"
         )

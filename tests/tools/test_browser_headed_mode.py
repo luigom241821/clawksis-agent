@@ -14,6 +14,7 @@ from tools import browser_tool_session as bt_session
 def _reset_headed_cache():
     """Reset the module-level headed-mode cache so tests start clean."""
     import tools.browser_tool as bt
+
     bt._cached_headed_mode = None
     bt._headed_mode_resolved = False
 
@@ -34,20 +35,20 @@ def _clean_headed_cache(monkeypatch, tmp_path):
 # _is_headed_mode resolution
 # ---------------------------------------------------------------------------
 
-class TestIsHeadedMode:
 
+class TestIsHeadedMode:
     def test_config_true(self):
         from tools.browser_tool_cloud import _is_headed_mode
+
         cfg = {"browser": {"headed": True}}
         with patch("clawk_cli.config.read_raw_config", return_value=cfg):
             assert _is_headed_mode() is True
 
 
-
-
 # ---------------------------------------------------------------------------
 # Per-turn cleanup skip (agent/chat_completion_helpers.cleanup_task_resources)
 # ---------------------------------------------------------------------------
+
 
 def _make_agent(verbose=False):
     return SimpleNamespace(verbose_logging=verbose)
@@ -56,6 +57,7 @@ def _make_agent(verbose=False):
 class TestCleanupTaskResourcesHeadedSkip:
     def test_headless_still_cleans_browser(self):
         from agent.chat_completion_helpers import cleanup_task_resources
+
         with (
             patch("tools.browser_tool_cloud._is_headed_mode", return_value=False),
             patch("run_agent.cleanup_vm"),
@@ -68,10 +70,10 @@ class TestCleanupTaskResourcesHeadedSkip:
             cleanup_task_resources(_make_agent(), "task-x")
             mock_cb.assert_called_once_with("task-x")
 
-
     def test_headed_does_not_skip_vm_cleanup(self):
         """Headed mode only affects the browser; VM teardown is untouched."""
         from agent.chat_completion_helpers import cleanup_task_resources
+
         with (
             patch("tools.browser_tool_cloud._is_headed_mode", return_value=True),
             patch("run_agent.cleanup_vm") as mock_vm,
@@ -89,6 +91,7 @@ class TestCleanupTaskResourcesHeadedSkip:
 # --headed flag injection in local mode
 # ---------------------------------------------------------------------------
 
+
 class TestHeadedFlagInjection:
     def _run_and_capture(self, bt):
         """Run a snapshot command with Popen mocked; return captured argv."""
@@ -105,23 +108,38 @@ class TestHeadedFlagInjection:
             '{"success": true, "data": {"snapshot": '
             '"- heading \\"Hi\\" [ref=e1]", "refs": {"e1": {}}}}'
         )
-        with patch("subprocess.Popen", side_effect=capture_popen), \
-             patch("os.open", return_value=99), \
-             patch("os.close"), \
-             patch("os.unlink"), \
-             patch("os.makedirs"), \
-             patch("builtins.open", MagicMock(return_value=MagicMock(
-                 __enter__=MagicMock(return_value=MagicMock(
-                     read=MagicMock(return_value=mock_stdout))),
-                 __exit__=MagicMock(return_value=False),
-             ))), \
-             patch("tools.interrupt.is_interrupted", return_value=False), \
-             patch("tools.browser_tool_lifecycle._write_owner_pid"):
-            bt_session._run_browser_command("task1", "snapshot", [], _engine_override="auto")
+        with (
+            patch("subprocess.Popen", side_effect=capture_popen),
+            patch("os.open", return_value=99),
+            patch("os.close"),
+            patch("os.unlink"),
+            patch("os.makedirs"),
+            patch(
+                "builtins.open",
+                MagicMock(
+                    return_value=MagicMock(
+                        __enter__=MagicMock(
+                            return_value=MagicMock(
+                                read=MagicMock(return_value=mock_stdout)
+                            )
+                        ),
+                        __exit__=MagicMock(return_value=False),
+                    )
+                ),
+            ),
+            patch("tools.interrupt.is_interrupted", return_value=False),
+            patch("tools.browser_tool_lifecycle._write_owner_pid"),
+        ):
+            bt_session._run_browser_command(
+                "task1", "snapshot", [], _engine_override="auto"
+            )
         return captured_cmds
 
     @patch("tools.browser_tool_session._get_session_info")
-    @patch("tools.browser_tool_install._find_agent_browser", return_value="/usr/bin/agent-browser")
+    @patch(
+        "tools.browser_tool_install._find_agent_browser",
+        return_value="/usr/bin/agent-browser",
+    )
     @patch("tools.browser_tool_cloud._is_local_mode", return_value=True)
     @patch("tools.browser_tool_install._chromium_installed", return_value=True)
     @patch("tools.browser_tool_cloud._get_cloud_provider", return_value=None)
@@ -131,6 +149,7 @@ class TestHeadedFlagInjection:
         self, _camofox, _cdp, _cloud, _chromium, _local, _find, _session
     ):
         import tools.browser_tool as bt
+
         bt._cached_headed_mode = True
         bt._headed_mode_resolved = True
         _session.return_value = {"session_name": "test-sess"}
@@ -139,9 +158,11 @@ class TestHeadedFlagInjection:
         assert len(captured) == 1
         assert "--headed" in captured[0]
 
-
     @patch("tools.browser_tool_session._get_session_info")
-    @patch("tools.browser_tool_install._find_agent_browser", return_value="/usr/bin/agent-browser")
+    @patch(
+        "tools.browser_tool_install._find_agent_browser",
+        return_value="/usr/bin/agent-browser",
+    )
     @patch("tools.browser_tool_cloud._is_local_mode", return_value=True)
     @patch("tools.browser_tool_install._chromium_installed", return_value=True)
     @patch("tools.browser_tool_cloud._get_cloud_provider", return_value=None)
@@ -152,6 +173,7 @@ class TestHeadedFlagInjection:
     ):
         """Cloud (CDP) sessions never get --headed — it's a local-only flag."""
         import tools.browser_tool as bt
+
         bt._cached_headed_mode = True
         bt._headed_mode_resolved = True
         _session.return_value = {

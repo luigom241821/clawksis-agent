@@ -32,12 +32,24 @@ MODEL_UNAVAILABLE = "model_unavailable"
 TARGET_SCOPE_UNRESOLVED = "target_scope_unresolved"
 UNKNOWN = "unknown"
 
-ALL_REASONS = frozenset({
-    RUNTIME_OFFLINE, QUEUED_EXPIRED, DELIVERY_TIMEOUT, AGENT_BLOCKED, CANCELLED,
-    PROVIDER_AUTH_OR_ACCESS, PROVIDER_QUOTA_LIMIT, PROVIDER_RATE_LIMIT,
-    PROVIDER_SERVER_ERROR, CONTEXT_OVERFLOW, MISSING_CONFIG, MODEL_UNAVAILABLE,
-    TARGET_SCOPE_UNRESOLVED, UNKNOWN,
-})
+ALL_REASONS = frozenset(
+    {
+        RUNTIME_OFFLINE,
+        QUEUED_EXPIRED,
+        DELIVERY_TIMEOUT,
+        AGENT_BLOCKED,
+        CANCELLED,
+        PROVIDER_AUTH_OR_ACCESS,
+        PROVIDER_QUOTA_LIMIT,
+        PROVIDER_RATE_LIMIT,
+        PROVIDER_SERVER_ERROR,
+        CONTEXT_OVERFLOW,
+        MISSING_CONFIG,
+        MODEL_UNAVAILABLE,
+        TARGET_SCOPE_UNRESOLVED,
+        UNKNOWN,
+    }
+)
 
 # Not a bot-turn reason (kept out of ALL_REASONS): the runtime refusal code a Bot Chat delivery id's
 # settled not-sent receipt carries (``gateway/session_bot.py:_not_sent_record``). The Bot DM tool
@@ -45,7 +57,9 @@ ALL_REASONS = frozenset({
 HELD_NOT_SENT = "runtime_coordination_required"
 
 #: Reasons a supervisor may retry automatically without human intervention.
-AUTO_RETRYABLE = frozenset({RUNTIME_OFFLINE, DELIVERY_TIMEOUT, PROVIDER_RATE_LIMIT, PROVIDER_SERVER_ERROR})
+AUTO_RETRYABLE = frozenset(
+    {RUNTIME_OFFLINE, DELIVERY_TIMEOUT, PROVIDER_RATE_LIMIT, PROVIDER_SERVER_ERROR}
+)
 
 
 def is_auto_retryable(reason: str) -> bool:
@@ -81,9 +95,15 @@ _RULES: tuple[tuple[re.Pattern[str], str], ...] = tuple(
         # FIRST: the copy says "API key" and "restart", so it must be claimed before the auth rules.
         # ``UnscopedSecretError`` names the secret when it has one ("this profile's OPENROUTER_API_KEY");
         # the ``served_profile_child_env`` detail rides in tracebacks.
-        (r"could not read this profile's [^(]+\(an internal profile-scoping bug"
-         r"|served_profile_child_env\(inherit_credentials=true\)", TARGET_SCOPE_UNRESOLVED),
-        (rf"authentication_error|invalid api key|{_STATUS}(?:401|403)\b", PROVIDER_AUTH_OR_ACCESS),
+        (
+            r"could not read this profile's [^(]+\(an internal profile-scoping bug"
+            r"|served_profile_child_env\(inherit_credentials=true\)",
+            TARGET_SCOPE_UNRESOLVED,
+        ),
+        (
+            rf"authentication_error|invalid api key|{_STATUS}(?:401|403)\b",
+            PROVIDER_AUTH_OR_ACCESS,
+        ),
         (rf"{_STATUS}402\b|out of funds|quota|balance", PROVIDER_QUOTA_LIMIT),
         (rf"{_STATUS}429\b|rate.?limit", PROVIDER_RATE_LIMIT),
         # ``server[ _]?error`` / ``overloaded_error`` are the providers' own JSON spellings of the
@@ -120,8 +140,11 @@ def result_retry_action(result: Any) -> str:
     successful turn whose text happens to mention 429 is never re-run."""
     if not isinstance(result, dict) or not result.get("failed"):
         return RETRY_NONE
-    return retry_action(classify_agent_error(
-        turn_failure_text(result.get("error"), result.get("failure_reason"))))
+    return retry_action(
+        classify_agent_error(
+            turn_failure_text(result.get("error"), result.get("failure_reason"))
+        )
+    )
 
 
 def classify_agent_error(text: str) -> str:

@@ -1,4 +1,5 @@
 """The API token must not reach a redirected log download."""
+
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import threading
 
@@ -19,7 +20,9 @@ def test_log_redirect_does_not_forward_api_token(monkeypatch) -> None:
             self.wfile.write(b"log")
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-    monkeypatch.setattr(timings_report, "API_BASE", f"http://127.0.0.1:{server.server_port}")
+    monkeypatch.setattr(
+        timings_report, "API_BASE", f"http://127.0.0.1:{server.server_port}"
+    )
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:

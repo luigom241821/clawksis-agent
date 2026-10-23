@@ -26,6 +26,7 @@ import pytest
 from clawk_cli import mcp_startup
 from clawk_constants import clawk_home_key
 
+
 @pytest.fixture(autouse=True)
 def _reset_mcp_startup_state():
     saved_started = mcp_startup._mcp_discovery_started
@@ -41,7 +42,9 @@ def _reset_mcp_startup_state():
         mcp_startup._mcp_discovery_started = saved_started
         mcp_startup._mcp_discovery_thread = saved_thread
 
+
 # ── _resolve_discovery_timeout: single_query bound ──────────────────────────
+
 
 def test_resolve_discovery_timeout_single_query_uses_larger_bound(monkeypatch):
     """Single-query mode reads the larger mcp_single_query_discovery_timeout."""
@@ -57,6 +60,7 @@ def test_resolve_discovery_timeout_single_query_uses_larger_bound(monkeypatch):
     )
     assert mcp_startup._resolve_discovery_timeout(None) == 1.5
     assert mcp_startup._resolve_discovery_timeout(None, single_query=True) == 25.0
+
 
 def test_resolve_discovery_timeout_single_query_falls_back(monkeypatch):
     """Bad/absent single-query value falls back to DEFAULT_CONFIG, never hangs."""
@@ -76,11 +80,14 @@ def test_resolve_discovery_timeout_single_query_falls_back(monkeypatch):
     monkeypatch.setattr(cfg, "load_config", dict)
     assert mcp_startup._resolve_discovery_timeout(None, single_query=True) == default
 
+
 def test_resolve_discovery_timeout_explicit_overrides_single_query():
     """An explicit timeout always wins, even in single-query mode."""
     assert mcp_startup._resolve_discovery_timeout(5.0, single_query=True) == 5.0
 
+
 # ── ensure_mcp_discovery_before_agent_build ─────────────────────────────────
+
 
 def _stub_mcp_modules(monkeypatch):
     """Stub MCP-related modules for helper tests."""
@@ -90,13 +97,18 @@ def _stub_mcp_modules(monkeypatch):
         types.SimpleNamespace(
             read_raw_config=lambda: {"mcp_servers": {"demo": {"transport": "stdio"}}},
             load_config=dict,
-            DEFAULT_CONFIG={"mcp_discovery_timeout": 0.1, "mcp_single_query_discovery_timeout": 0.2},
+            DEFAULT_CONFIG={
+                "mcp_discovery_timeout": 0.1,
+                "mcp_single_query_discovery_timeout": 0.2,
+            },
         ),
     )
     monkeypatch.setitem(
         sys.modules,
         "tools.mcp_oauth",
-        types.SimpleNamespace(suppress_interactive_oauth=lambda: __import__("contextlib").nullcontext()),
+        types.SimpleNamespace(
+            suppress_interactive_oauth=lambda: __import__("contextlib").nullcontext()
+        ),
     )
     monkeypatch.setitem(
         sys.modules,
@@ -106,6 +118,7 @@ def _stub_mcp_modules(monkeypatch):
             get_mcp_status=lambda: [{"connected": True}],
         ),
     )
+
 
 def test_ensure_helper_starts_discovery_and_waits(monkeypatch):
     """The helper starts background discovery if not yet started, then waits."""
@@ -120,7 +133,9 @@ def test_ensure_helper_starts_discovery_and_waits(monkeypatch):
 
     monkeypatch.setattr(mcp_startup, "wait_for_mcp_discovery", _spy_wait)
 
-    logger = types.SimpleNamespace(debug=lambda *_a, **_k: None, warning=lambda *_a, **_k: None)
+    logger = types.SimpleNamespace(
+        debug=lambda *_a, **_k: None, warning=lambda *_a, **_k: None
+    )
 
     mcp_startup.ensure_mcp_discovery_before_agent_build(
         logger=logger,
@@ -137,6 +152,7 @@ def test_ensure_helper_starts_discovery_and_waits(monkeypatch):
     # get_mcp_status to return connected=True, so no retry.
     # The key invariant: no exception, no hang.
 
+
 def test_ensure_helper_swallows_errors(monkeypatch):
     """A broken MCP config never aborts agent construction."""
     monkeypatch.setitem(
@@ -148,21 +164,27 @@ def test_ensure_helper_swallows_errors(monkeypatch):
             DEFAULT_CONFIG={},
         ),
     )
-    logger = types.SimpleNamespace(debug=lambda *_a, **_k: None, warning=lambda *_a, **_k: None)
+    logger = types.SimpleNamespace(
+        debug=lambda *_a, **_k: None, warning=lambda *_a, **_k: None
+    )
 
     # Should not raise
     mcp_startup.ensure_mcp_discovery_before_agent_build(logger=logger)
+
 
 # The classic CLI's _init_agent no longer waits on MCP discovery: the gateway session owns MCP
 # (tests/clawk_cli/test_cli_startup_trim.py).
 
 # ── bounded wait: slow server doesn't freeze startup ────────────────────────
 
+
 def test_wait_stays_bounded_when_discovery_is_slow(monkeypatch):
     """A slow/dead MCP server must not freeze startup: the wait is capped."""
     import clawk_cli.config as cfg
 
-    monkeypatch.setattr(cfg, "load_config", lambda: {"mcp_single_query_discovery_timeout": 0.1})
+    monkeypatch.setattr(
+        cfg, "load_config", lambda: {"mcp_single_query_discovery_timeout": 0.1}
+    )
 
     stop = threading.Event()
     thread = threading.Thread(target=lambda: stop.wait(10), daemon=True)

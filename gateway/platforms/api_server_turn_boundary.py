@@ -4,6 +4,7 @@
 and the routes need the index where this turn starts to build Responses ``output`` items,
 ``run.completed`` turn transcripts and the stored ``previous_response_id`` history.
 """
+
 from typing import Any, Dict, List
 
 _TRANSCRIPT_IDENTITY_KEYS = ("role", "content", "tool_calls", "tool_call_id")
@@ -29,7 +30,9 @@ def _same_transcript_prefix(agent_messages: list[Any], prefix: list[Any]) -> boo
 
 
 def response_turn_start_index(
-    conversation_history: list[dict[str, Any]], user_message: Any, result: dict[str, Any],
+    conversation_history: list[dict[str, Any]],
+    user_message: Any,
+    result: dict[str, Any],
 ) -> int:
     """Index in ``result["messages"]`` where this turn's assistant/tool rows begin (0 = all).
 
@@ -49,7 +52,7 @@ def response_turn_start_index(
     agent_messages = result.get("messages") if isinstance(result, dict) else None
     if not isinstance(agent_messages, list) or not agent_messages:
         return 0
-    if result.get('_messages_are_turn_suffix'):
+    if result.get("_messages_are_turn_suffix"):
         return 0
     user_idx = reanchor_current_turn_user_idx(agent_messages, user_message)
     if user_idx >= 0:

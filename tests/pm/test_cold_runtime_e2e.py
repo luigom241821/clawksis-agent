@@ -5,6 +5,7 @@ PM recipe is unchanged; its small locked runtime is fetched from PyPI. The app
 recipe is deliberately tiny so this cannot install the production dependency
 set. Run through scripts/run_tests.sh with uv/uvx available on PATH.
 """
+
 from __future__ import annotations
 
 from functools import partial
@@ -36,8 +37,15 @@ class _ArchiveHandler(SimpleHTTPRequestHandler):
 
 
 def _run(command, *, cwd, env, expected=0, timeout=240):
-    result = subprocess.run(command, cwd=cwd, env=env, capture_output=True,
-                            text=True, timeout=timeout, check=False)
+    result = subprocess.run(
+        command,
+        cwd=cwd,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=False,
+    )
     assert result.returncode == expected, (
         f"{command!r}\nexit={result.returncode}\n{result.stdout}\n{result.stderr}"
     )
@@ -46,9 +54,17 @@ def _run(command, *, cwd, env, expected=0, timeout=240):
 
 def _bare(python, repo, code, *, env, expected=0):
     return _run(
-        [str(python), "-I", "-S", "-B", "-c",
-         f"import sys; sys.path.insert(0, {str(repo)!r});\n" + code],
-        cwd=repo.parent, env=env, expected=expected,
+        [
+            str(python),
+            "-I",
+            "-S",
+            "-B",
+            "-c",
+            f"import sys; sys.path.insert(0, {str(repo)!r});\n" + code,
+        ],
+        cwd=repo.parent,
+        env=env,
+        expected=expected,
     )
 
 
@@ -66,15 +82,19 @@ def _foreign_link(stdlib: Path) -> Path | None:
         dirnames[:] = [name for name in dirnames if name not in _UNSHIPPED]
         for name in (*dirnames, *filenames):
             path = Path(directory) / name
-            if path.is_symlink() and (os.path.isabs(os.readlink(path))
-                                      or not path.resolve().is_relative_to(stdlib)):
+            if path.is_symlink() and (
+                os.path.isabs(os.readlink(path))
+                or not path.resolve().is_relative_to(stdlib)
+            ):
                 return path
     return None
 
 
 @pytest.mark.platforms("linux")
 @pytest.mark.parametrize("bootstrap_name", [None, "python3.11"])
-def test_cold_cli_builds_own_runtime_discovers_plugins_and_repairs_app(tmp_path, bootstrap_name):
+def test_cold_cli_builds_own_runtime_discovers_plugins_and_repairs_app(
+    tmp_path, bootstrap_name
+):
     from pm.packages import Python, Uv
     from pm.store import current_target, tree_digest
 
@@ -87,10 +107,16 @@ def test_cold_cli_builds_own_runtime_discovers_plugins_and_repairs_app(tmp_path,
     python = Path(sys._base_executable).resolve()
     if sys.version_info[:2] != (3, 14):
         pytest.skip("the checked-in PM runtime currently requires Python 3.14")
-    stdlib = next(d for d in (Path(sys.base_prefix) / "lib").glob("python3.*") if (d / "os.py").is_file())
+    stdlib = next(
+        d
+        for d in (Path(sys.base_prefix) / "lib").glob("python3.*")
+        if (d / "os.py").is_file()
+    )
     foreign = _foreign_link(stdlib)
     if foreign is not None:
-        pytest.skip(f"host Python is not self-contained: {foreign} links outside its stdlib")
+        pytest.skip(
+            f"host Python is not self-contained: {foreign} links outside its stdlib"
+        )
     bootstrap_python = shutil.which(bootstrap_name) if bootstrap_name else python
     if bootstrap_python is None:
         pytest.skip(f"{bootstrap_name} must be on PATH for the legacy bootstrap test")
@@ -99,21 +125,32 @@ def test_cold_cli_builds_own_runtime_discovers_plugins_and_repairs_app(tmp_path,
     repo = tmp_path / "source"
     repo.mkdir()
     for name in ("pm", "clawk_cli"):
-        shutil.copytree(source / name, repo / name,
-                        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
-    for name in ("utils.py", "clawk_constants.py", "clawk_yaml.py",
-                 "clawk_bootstrap.py"):
+        shutil.copytree(
+            source / name,
+            repo / name,
+            ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+        )
+    for name in (
+        "utils.py",
+        "clawk_constants.py",
+        "clawk_yaml.py",
+        "clawk_bootstrap.py",
+    ):
         shutil.copy2(source / name, repo / name)
     # No production application lock or metadata enters this source snapshot.
     recipe = tomllib.loads((repo / "pm" / "pyproject.toml").read_text())
-    yaml_requirement = next(dep for dep in recipe["project"]["dependencies"]
-                            if dep.startswith("ruamel.yaml"))
+    yaml_requirement = next(
+        dep
+        for dep in recipe["project"]["dependencies"]
+        if dep.startswith("ruamel.yaml")
+    )
     (repo / "pyproject.toml").write_text(
         '[project]\nname="cold-pm-app"\nversion="0.0.0"\n'
         'requires-python=">=3.14,<3.15"\n'
-        f'dependencies=[{json.dumps(yaml_requirement)}]\n'
-        '[project.optional-dependencies]\nall=[]\n'
-        '[tool.uv]\npackage=false\n', encoding="utf-8",
+        f"dependencies=[{json.dumps(yaml_requirement)}]\n"
+        "[project.optional-dependencies]\nall=[]\n"
+        "[tool.uv]\npackage=false\n",
+        encoding="utf-8",
     )
     home = tmp_path / "home"
     clawk_home = home / ".clawksis"
@@ -129,18 +166,26 @@ def test_cold_cli_builds_own_runtime_discovers_plugins_and_repairs_app(tmp_path,
     scratch = tmp_path / "scratch"
     scratch.mkdir()
     env = {
-        "HOME": str(home), "CLAWK_HOME": str(clawk_home),
-        "CLAWK_RUNTIME_DIR": str(store), "PATH": os.defpath,
-        "TMPDIR": str(scratch), "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8",
-        "UV_PYTHON_DOWNLOADS": "never", "UV_NO_CONFIG": "1",
+        "HOME": str(home),
+        "CLAWK_HOME": str(clawk_home),
+        "CLAWK_RUNTIME_DIR": str(store),
+        "PATH": os.defpath,
+        "TMPDIR": str(scratch),
+        "LANG": "C.UTF-8",
+        "LC_ALL": "C.UTF-8",
+        "UV_PYTHON_DOWNLOADS": "never",
+        "UV_NO_CONFIG": "1",
         "UV_CACHE_DIR": str(tmp_path / "seed-cache"),
     }
     # Keep TLS functional on Nix without inheriting any application settings.
     for key in ("SSL_CERT_FILE", "SSL_CERT_DIR", "NIX_SSL_CERT_FILE"):
         if key in os.environ:
             env[key] = os.environ[key]
-    _run([str(uv), "lock", "--project", str(repo), "--python", str(python)],
-         cwd=tmp_path, env=env)
+    _run(
+        [str(uv), "lock", "--project", str(repo), "--python", str(python)],
+        cwd=tmp_path,
+        env=env,
+    )
 
     archives = tmp_path / "archives"
     archives.mkdir()
@@ -157,22 +202,39 @@ def test_cold_cli_builds_own_runtime_discovers_plugins_and_repairs_app(tmp_path,
             if package.name == "python":
                 # A relocatable python-build-standalone finds its stdlib beside the binary, not at
                 # the host's prefix: ship the host's stdlib the way the real archive does.
-                tar.add(stdlib, arcname=f"python/lib/{stdlib.name}",
-                        filter=lambda info: None if any(part in info.name.split("/") for part in ("site-packages", "test", "__pycache__")) else info)
-        version = _run([str(files[0][0]), "--version"], cwd=tmp_path,
-                       env=env).stdout.split()[1]
+                tar.add(
+                    stdlib,
+                    arcname=f"python/lib/{stdlib.name}",
+                    filter=lambda info: (
+                        None
+                        if any(
+                            part in info.name.split("/")
+                            for part in ("site-packages", "test", "__pycache__")
+                        )
+                        else info
+                    ),
+                )
+        version = _run(
+            [str(files[0][0]), "--version"], cwd=tmp_path, env=env
+        ).stdout.split()[1]
         rows[package.name] = {
             "version": version,
-            "artifacts": {target: {"sha256": hashlib.sha256(archive.read_bytes()).hexdigest()}},
+            "artifacts": {
+                target: {"sha256": hashlib.sha256(archive.read_bytes()).hexdigest()}
+            },
         }
-    server = ThreadingHTTPServer(("127.0.0.1", 0),
-                                 partial(_ArchiveHandler, directory=str(archives)))
+    server = ThreadingHTTPServer(
+        ("127.0.0.1", 0), partial(_ArchiveHandler, directory=str(archives))
+    )
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     for name, row in rows.items():
-        row["artifacts"][target]["url"] = f"http://127.0.0.1:{server.server_port}/{name}.tar.gz"
+        row["artifacts"][target]["url"] = (
+            f"http://127.0.0.1:{server.server_port}/{name}.tar.gz"
+        )
     (repo / "pm" / "lock.json").write_text(
-        json.dumps({"schema": 1, "packages": rows}), encoding="utf-8",
+        json.dumps({"schema": 1, "packages": rows}),
+        encoding="utf-8",
     )
 
     bootstrap = """
@@ -186,7 +248,9 @@ assert importlib.util.find_spec('idna') is None
     try:
         assert not store.exists()
         assert not (clawk_home / "installs").exists()
-        result = _bare(bootstrap_python, repo, bootstrap + cli.format(action="install"), env=env)
+        result = _bare(
+            bootstrap_python, repo, bootstrap + cli.format(action="install"), env=env
+        )
         assert "✓ venv" in result.stdout
         assert "Preparing the isolated Clawksis runtime" in result.stderr
         if bootstrap_name:
@@ -194,7 +258,8 @@ assert importlib.util.find_spec('idna') is None
             # a source swap. Completion must re-exec before importing the app.
             (repo / ".git").mkdir()
             (repo / "install-stamp.json").write_text(
-                json.dumps({"updateMechanism": "self"}), encoding="utf-8",
+                json.dumps({"updateMechanism": "self"}),
+                encoding="utf-8",
             )
             lock = repo / "uv.lock"
             lock.write_bytes(lock.read_bytes() + b"\n# source update\n")
@@ -203,9 +268,12 @@ assert importlib.util.find_spec('idna') is None
                 "import clawk_bootstrap\n"
                 "import idna, json, sys\n"
                 "print(json.dumps({'python': sys.executable, 'version': list(sys.version_info[:2]), "
-                "'idna': idna.__file__}))\n", encoding="utf-8",
+                "'idna': idna.__file__}))\n",
+                encoding="utf-8",
             )
-            launched = _run([str(bootstrap_python), "-B", str(entry)], cwd=repo, env=env)
+            launched = _run(
+                [str(bootstrap_python), "-B", str(entry)], cwd=repo, env=env
+            )
             launch_report = json.loads(launched.stdout)
             assert Path(launch_report["python"]).is_relative_to(store)
             assert launch_report["version"] == list(sys.version_info[:2])
@@ -244,7 +312,13 @@ print(json.dumps({'state': str(state), 'app': str(selected_venv(root)),
         assert fact["artifacts"] == [rows[name]["artifacts"][target]["sha256"]]
         assert tree_digest(store / fact["entry"]) == fact["digest"]
 
-    probe = _run([str(pm_python), "-I", "-B", "-c", f"""
+    probe = _run(
+        [
+            str(pm_python),
+            "-I",
+            "-B",
+            "-c",
+            f"""
 import importlib.util, json, sys
 from pathlib import Path
 sys.path.insert(0, {str(repo)!r})
@@ -255,7 +329,11 @@ assert enabled_member_dirs() == [Path({str(plugin)!r})]
 assert importlib.util.find_spec('idna') is None
 assert importlib.util.find_spec('openai') is None
 print(json.dumps({{'yaml': ruamel.yaml.__file__, 'prefix': sys.prefix}}))
-"""], cwd=tmp_path, env=env)
+""",
+        ],
+        cwd=tmp_path,
+        env=env,
+    )
     pm_report = json.loads(probe.stdout)
     assert Path(pm_report["yaml"]).is_relative_to(runtime)
     app_code = """
@@ -277,7 +355,7 @@ print(json.dumps({'yaml': ruamel.yaml.__file__, 'idna': idna.__file__,
     initial_fact = report["facts"]["packages"]["venv"]
     assert initial_fact["extras"] == ["all"]
     lock_before = Path(initial_fact["resolved_lock"]).read_bytes()
-    assert b'idna' in lock_before
+    assert b"idna" in lock_before
 
     # Real damage: the app no longer imports, while PM retains its independent YAML.
     shutil.rmtree(Path(app_report["yaml"]).parent)
@@ -303,4 +381,6 @@ print(json.dumps({'yaml': ruamel.yaml.__file__, 'idna': idna.__file__,
     assert not (state / ".repair-incomplete").exists()
     assert not (repo / "venv").exists()
     assert not (repo / ".venv").exists()
-    print(f"cold PM proof: runtime={runtime}; first_app={app}; repaired_app={repaired_app}")
+    print(
+        f"cold PM proof: runtime={runtime}; first_app={app}; repaired_app={repaired_app}"
+    )

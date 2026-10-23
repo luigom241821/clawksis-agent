@@ -45,9 +45,9 @@ def slash_command_names() -> frozenset[str]:
 def bundled_skill_names() -> frozenset[str]:
     from clawk_constants import get_bundled_skills_dir, get_optional_skills_dir
 
-    return _skill_dir_names(get_bundled_skills_dir(_REPO_ROOT / "skills")) | _skill_dir_names(
-        get_optional_skills_dir(_REPO_ROOT / "optional-skills")
-    )
+    return _skill_dir_names(
+        get_bundled_skills_dir(_REPO_ROOT / "skills")
+    ) | _skill_dir_names(get_optional_skills_dir(_REPO_ROOT / "optional-skills"))
 
 
 @functools.cache
@@ -90,11 +90,18 @@ def provider_names() -> frozenset[str]:
 
     providers.list_providers()  # runs discovery; bundled profiles land in the process-wide layer
     bundled = {
-        alias for name, profile in providers._REGISTRY.items() if providers._SOURCES.get(name) == "bundled"
+        alias
+        for name, profile in providers._REGISTRY.items()
+        if providers._SOURCES.get(name) == "bundled"
         for alias in (name, *profile.aliases)
     }
     return BUILTIN_PROVIDER_IDS.union(
-        CLAWK_OVERLAYS, ALIASES, _PROVIDER_ALIASES, _CATALOG_ALIASES, bundled, ("openrouter", CUSTOM)
+        CLAWK_OVERLAYS,
+        ALIASES,
+        _PROVIDER_ALIASES,
+        _CATALOG_ALIASES,
+        bundled,
+        ("openrouter", CUSTOM),
     )
 
 
@@ -108,12 +115,20 @@ def user_named_model_providers() -> frozenset[str]:
 
     hosts = {"localhost", "127.0.0.1", "::1", "0.0.0.0"}
     loopback = {
-        name for name, config in PROVIDER_REGISTRY.items()
-        if urlparse(str(getattr(config, "inference_base_url", "") or "")).hostname in hosts
+        name
+        for name, config in PROVIDER_REGISTRY.items()
+        if urlparse(str(getattr(config, "inference_base_url", "") or "")).hostname
+        in hosts
     }
     # Alias spellings (``lm-studio``) pass provider_metric_name as shipped names, so they must collapse too.
-    tables = (providers.ALIASES, getattr(auth, "_PROVIDER_ALIASES", {}), getattr(models, "_PROVIDER_ALIASES", {}))
-    aliases = {alias for table in tables for alias, canon in table.items() if canon in loopback}
+    tables = (
+        providers.ALIASES,
+        getattr(auth, "_PROVIDER_ALIASES", {}),
+        getattr(models, "_PROVIDER_ALIASES", {}),
+    )
+    aliases = {
+        alias for table in tables for alias, canon in table.items() if canon in loopback
+    }
     return frozenset(loopback | aliases | {CUSTOM})
 
 
@@ -123,8 +138,14 @@ def custom_provider_aliases() -> frozenset[str]:
     ``llamacpp``...): shipped names, but the server and its model ids are the user's own."""
     from clawk_cli import auth, models, providers
 
-    tables = (providers.ALIASES, getattr(auth, "_PROVIDER_ALIASES", {}), getattr(models, "_PROVIDER_ALIASES", {}))
-    return frozenset(alias for table in tables for alias, canon in table.items() if canon == CUSTOM)
+    tables = (
+        providers.ALIASES,
+        getattr(auth, "_PROVIDER_ALIASES", {}),
+        getattr(models, "_PROVIDER_ALIASES", {}),
+    )
+    return frozenset(
+        alias for table in tables for alias, canon in table.items() if canon == CUSTOM
+    )
 
 
 # ---- v4 gateway ----
@@ -133,7 +154,9 @@ def bundled_platform_names() -> frozenset[str]:
     """Messaging platforms Clawksis ships as ``plugins/platforms/<name>`` (the dir is the registered name)."""
     root = _REPO_ROOT / "plugins" / "platforms"
     try:
-        return frozenset(p.name.lower() for p in root.iterdir() if (p / "plugin.yaml").is_file())
+        return frozenset(
+            p.name.lower() for p in root.iterdir() if (p / "plugin.yaml").is_file()
+        )
     except OSError:
         return frozenset()
 
@@ -143,7 +166,11 @@ def catalog_platform_names() -> frozenset[str]:
     """``plugin-catalog/`` entries whose category is ``platform`` (in-tree only: never a network fetch)."""
     from clawk_cli.plugin_catalog import CATALOG_TIERS, load_catalog
 
-    return frozenset(e.name for e in load_catalog() if e.category == "platform" and e.tier in CATALOG_TIERS)
+    return frozenset(
+        e.name
+        for e in load_catalog()
+        if e.category == "platform" and e.tier in CATALOG_TIERS
+    )
 
 
 def platform_metric_name(raw: object, core: frozenset[str]) -> str:
@@ -179,10 +206,14 @@ def _catalog_platform_owner(home: str, platform: str) -> str | None:
         code_path = Path(inspect.getfile(entry.adapter_factory)).resolve()
         if not code_path.is_relative_to(plugins_dir) or code_path.parent == plugins_dir:
             return None
-        row = read_sidecar_rows(plugins_dir).get(code_path.relative_to(plugins_dir).parts[0])
+        row = read_sidecar_rows(plugins_dir).get(
+            code_path.relative_to(plugins_dir).parts[0]
+        )
         row = row if isinstance(row, dict) else {}
         block = row.get("catalog")
-        name = _norm(block.get("name") if isinstance(block, dict) else row.get("catalog_name"))
+        name = _norm(
+            block.get("name") if isinstance(block, dict) else row.get("catalog_name")
+        )
         return name if name in _safe(catalog_platform_names) else None
     except Exception:
         logger.debug("Shared-metrics platform provenance unavailable", exc_info=True)
@@ -197,7 +228,9 @@ def _safe(loader) -> frozenset[str]:
     try:
         return loader()
     except Exception:
-        logger.debug("Shared-metrics catalog %s unavailable", loader.__name__, exc_info=True)
+        logger.debug(
+            "Shared-metrics catalog %s unavailable", loader.__name__, exc_info=True
+        )
         return frozenset()
 
 
@@ -257,14 +290,19 @@ def aux_task_metric_name(raw: object) -> str:
 def provider_metric_name(raw: object) -> str:
     """A shipped provider id; user-named providers (``custom:<name>``, unknown ids) and the local
     server aliases of ``custom`` read ``custom``."""
-    from .shared_metrics_contract import PROVIDER_IDENTIFIER_MAX_LENGTH, _metric_identifier
+    from .shared_metrics_contract import (
+        PROVIDER_IDENTIFIER_MAX_LENGTH,
+        _metric_identifier,
+    )
 
     name = _metric_identifier(raw, max_length=PROVIDER_IDENTIFIER_MAX_LENGTH)
     if name == "unknown":
         return name
     if name.startswith(CUSTOM) or name in _safe(custom_provider_aliases):
         return CUSTOM
-    return name if name in _safe(provider_names) or _models_dev_provider(name) else CUSTOM
+    return (
+        name if name in _safe(provider_names) or _models_dev_provider(name) else CUSTOM
+    )
 
 
 @functools.lru_cache(maxsize=256)
@@ -308,8 +346,12 @@ def public_model_ids() -> frozenset[str]:
     for entry in fetch_models_dev(allow_network=False).values():
         if isinstance(entry, dict) and isinstance(entry.get("models"), dict):
             ids.update(entry["models"])
-    return frozenset(form.lower() for model in ids if isinstance(model, str)
-                     for form in (model, model.rsplit("/", 1)[-1]))
+    return frozenset(
+        form.lower()
+        for model in ids
+        if isinstance(model, str)
+        for form in (model, model.rsplit("/", 1)[-1])
+    )
 
 
 # The user's own server or account, never a public model id: a URL or path (``:/``), a weight file,

@@ -49,8 +49,6 @@ class TestApprovalTimeoutOverflowClamp:
         with _with_configured_timeout(1e18):
             assert _get_approval_timeout() == int(MAX_SAFE_TIMEOUT_S)
 
-
-
     def test_clamped_value_safe_for_lock_acquire(self):
         # The exact primitive that crashed in #83220: Lock.acquire on macOS
         # converts the relative timeout to an absolute time_t timestamp.
@@ -61,7 +59,6 @@ class TestApprovalTimeoutOverflowClamp:
         lock = threading.Lock()
         assert lock.acquire(timeout=timeout)  # would raise OverflowError unclamped
         lock.release()
-
 
     def test_human_wait_ceiling_inherits_clamp(self):
         from tools.approval_human_wait import human_wait_ceiling

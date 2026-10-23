@@ -28,6 +28,7 @@ from tools.discord_tool import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _mock_urlopen(response_data, status=200):
     """Create a mock for urllib.request.urlopen."""
     mock_resp = MagicMock()
@@ -42,8 +43,11 @@ def _mock_urlopen(response_data, status=200):
 # Token / check_fn
 # ---------------------------------------------------------------------------
 
+
 class TestCheckRequirements:
-    @pytest.mark.parametrize("token, expected", [(None, False), ("test-token-123", True)])
+    @pytest.mark.parametrize(
+        "token, expected", [(None, False), ("test-token-123", True)]
+    )
     def test_requirements_follow_token(self, monkeypatch, token, expected):
         if token is None:
             monkeypatch.delenv("DISCORD_BOT_TOKEN", raising=False)
@@ -87,7 +91,9 @@ class TestCheckRequirements:
             secret_scope.reset_secret_scope(scope_token)
             secret_scope.set_multiplex_active(False)
 
-    def test_non_multiplex_scope_miss_keeps_environment_compatibility(self, monkeypatch):
+    def test_non_multiplex_scope_miss_keeps_environment_compatibility(
+        self, monkeypatch
+    ):
         from agent import secret_scope
 
         monkeypatch.setenv("DISCORD_BOT_TOKEN", "process-token")
@@ -114,15 +120,16 @@ class TestCheckRequirements:
             secret_scope.reset_secret_scope(scope_token)
             secret_scope.set_multiplex_active(False)
 
+
 # ---------------------------------------------------------------------------
 # Channel type names
 # ---------------------------------------------------------------------------
 
 
-
 # ---------------------------------------------------------------------------
 # Discord API request helper
 # ---------------------------------------------------------------------------
+
 
 class TestDiscordRequest:
     @patch("tools.discord_tool.urllib.request.urlopen")
@@ -137,7 +144,6 @@ class TestDiscordRequest:
         assert "https://discord.com/api/v10/test" in req.full_url
         assert req.get_header("Authorization") == "Bot token123"
         assert req.get_method() == "GET"
-
 
     @patch("tools.discord_tool.urllib.request.urlopen")
     def test_response_body_size_limit(self, mock_urlopen_fn, monkeypatch):
@@ -161,13 +167,13 @@ class TestDiscordRequest:
 # Main handler: validation
 # ---------------------------------------------------------------------------
 
+
 class TestDiscordServerValidation:
     def test_no_token(self, monkeypatch):
         monkeypatch.delenv("DISCORD_BOT_TOKEN", raising=False)
         result = json.loads(discord_admin_handler(action="list_guilds"))
         assert "error" in result
         assert "DISCORD_BOT_TOKEN" in result["error"]
-
 
     def test_missing_multiple_params(self, monkeypatch):
         monkeypatch.setenv("DISCORD_BOT_TOKEN", "test-token")
@@ -182,17 +188,50 @@ class TestDiscordServerValidation:
 # Action: list_channels
 # ---------------------------------------------------------------------------
 
+
 class TestListChannels:
     @patch("tools.discord_tool._discord_request")
     def test_list_channels_organized(self, mock_req, monkeypatch):
         monkeypatch.setenv("DISCORD_BOT_TOKEN", "test-token")
         mock_req.return_value = [
-            {"id": "10", "name": "General", "type": 4, "position": 0, "parent_id": None},
-            {"id": "11", "name": "chat", "type": 0, "position": 0, "parent_id": "10", "topic": "Main chat", "nsfw": False},
-            {"id": "12", "name": "voice", "type": 2, "position": 1, "parent_id": "10", "topic": None, "nsfw": False},
-            {"id": "13", "name": "no-category", "type": 0, "position": 0, "parent_id": None, "topic": None, "nsfw": False},
+            {
+                "id": "10",
+                "name": "General",
+                "type": 4,
+                "position": 0,
+                "parent_id": None,
+            },
+            {
+                "id": "11",
+                "name": "chat",
+                "type": 0,
+                "position": 0,
+                "parent_id": "10",
+                "topic": "Main chat",
+                "nsfw": False,
+            },
+            {
+                "id": "12",
+                "name": "voice",
+                "type": 2,
+                "position": 1,
+                "parent_id": "10",
+                "topic": None,
+                "nsfw": False,
+            },
+            {
+                "id": "13",
+                "name": "no-category",
+                "type": 0,
+                "position": 0,
+                "parent_id": None,
+                "topic": None,
+                "nsfw": False,
+            },
         ]
-        result = json.loads(discord_admin_handler(action="list_channels", guild_id="111"))
+        result = json.loads(
+            discord_admin_handler(action="list_channels", guild_id="111")
+        )
         assert result["total_channels"] == 3  # excludes the category itself
         groups = result["channel_groups"]
         # Uncategorized first
@@ -208,14 +247,39 @@ class TestListChannels:
 # Action: list_roles
 # ---------------------------------------------------------------------------
 
+
 class TestListRoles:
     @patch("tools.discord_tool._discord_request")
     def test_list_roles_sorted(self, mock_req, monkeypatch):
         monkeypatch.setenv("DISCORD_BOT_TOKEN", "test-token")
         mock_req.return_value = [
-            {"id": "1", "name": "@everyone", "position": 0, "color": 0, "mentionable": False, "managed": False, "hoist": False},
-            {"id": "2", "name": "Admin", "position": 2, "color": 16711680, "mentionable": True, "managed": False, "hoist": True},
-            {"id": "3", "name": "Mod", "position": 1, "color": 255, "mentionable": True, "managed": False, "hoist": True},
+            {
+                "id": "1",
+                "name": "@everyone",
+                "position": 0,
+                "color": 0,
+                "mentionable": False,
+                "managed": False,
+                "hoist": False,
+            },
+            {
+                "id": "2",
+                "name": "Admin",
+                "position": 2,
+                "color": 16711680,
+                "mentionable": True,
+                "managed": False,
+                "hoist": True,
+            },
+            {
+                "id": "3",
+                "name": "Mod",
+                "position": 1,
+                "color": 255,
+                "mentionable": True,
+                "managed": False,
+                "hoist": True,
+            },
         ]
         result = json.loads(discord_admin_handler(action="list_roles", guild_id="111"))
         assert result["count"] == 3
@@ -229,6 +293,7 @@ class TestListRoles:
 # ---------------------------------------------------------------------------
 # Action: search_members
 # ---------------------------------------------------------------------------
+
 
 class TestSearchMembers:
     @patch("tools.discord_tool._discord_request")
@@ -244,6 +309,7 @@ class TestSearchMembers:
 # Action: fetch_messages
 # ---------------------------------------------------------------------------
 
+
 class TestFetchMessages:
     @patch("tools.discord_tool._discord_request")
     def test_fetch_messages(self, mock_req, monkeypatch):
@@ -252,7 +318,12 @@ class TestFetchMessages:
             {
                 "id": "1001",
                 "content": "Hello world",
-                "author": {"id": "42", "username": "user1", "global_name": "User One", "bot": False},
+                "author": {
+                    "id": "42",
+                    "username": "user1",
+                    "global_name": "User One",
+                    "bot": False,
+                },
                 "timestamp": "2024-01-01T12:00:00Z",
                 "edited_timestamp": None,
                 "attachments": [],
@@ -269,17 +340,22 @@ class TestFetchMessages:
 # Action: create_thread
 # ---------------------------------------------------------------------------
 
+
 class TestCreateThread:
     @patch("tools.discord_tool._discord_request")
     def test_create_standalone_thread(self, mock_req, monkeypatch):
         monkeypatch.setenv("DISCORD_BOT_TOKEN", "test-token")
         mock_req.return_value = {"id": "800", "name": "New Thread"}
-        result = json.loads(discord_core(action="create_thread", channel_id="11", name="New Thread"))
+        result = json.loads(
+            discord_core(action="create_thread", channel_id="11", name="New Thread")
+        )
         assert result["success"] is True
         assert result["thread_id"] == "800"
         # Verify the API call
         mock_req.assert_called_once_with(
-            "POST", "/channels/11/threads", "test-token",
+            "POST",
+            "/channels/11/threads",
+            "test-token",
             body={"name": "New Thread", "auto_archive_duration": 1440, "type": 11},
         )
 
@@ -287,12 +363,19 @@ class TestCreateThread:
     def test_create_thread_from_message(self, mock_req, monkeypatch):
         monkeypatch.setenv("DISCORD_BOT_TOKEN", "test-token")
         mock_req.return_value = {"id": "801", "name": "Discussion"}
-        result = json.loads(discord_core(
-            action="create_thread", channel_id="11", name="Discussion", message_id="1001",
-        ))
+        result = json.loads(
+            discord_core(
+                action="create_thread",
+                channel_id="11",
+                name="Discussion",
+                message_id="1001",
+            )
+        )
         assert result["success"] is True
         mock_req.assert_called_once_with(
-            "POST", "/channels/11/messages/1001/threads", "test-token",
+            "POST",
+            "/channels/11/messages/1001/threads",
+            "test-token",
             body={"name": "Discussion", "auto_archive_duration": 1440},
         )
 
@@ -300,6 +383,7 @@ class TestCreateThread:
 # ---------------------------------------------------------------------------
 # Error handling
 # ---------------------------------------------------------------------------
+
 
 class TestErrorHandling:
     @patch("tools.discord_tool._discord_request")
@@ -323,11 +407,13 @@ class TestErrorHandling:
 # Registration
 # ---------------------------------------------------------------------------
 
-class TestRegistration:
 
+class TestRegistration:
     def test_all_actions_covered(self):
         """Core + admin actions should cover all known actions."""
-        assert set(_CORE_ACTIONS.keys()) | set(_ADMIN_ACTIONS.keys()) == set(_ACTIONS.keys())
+        assert set(_CORE_ACTIONS.keys()) | set(_ADMIN_ACTIONS.keys()) == set(
+            _ACTIONS.keys()
+        )
         assert set(_CORE_ACTIONS.keys()) & set(_ADMIN_ACTIONS.keys()) == set()
 
 
@@ -336,10 +422,10 @@ class TestRegistration:
 # ---------------------------------------------------------------------------
 
 
-
 # ---------------------------------------------------------------------------
 # Capability detection (privileged intents)
 # ---------------------------------------------------------------------------
+
 
 class TestCapabilityDetection:
     def setup_method(self):
@@ -356,7 +442,6 @@ class TestCapabilityDetection:
         assert caps["has_members_intent"] is True
         assert caps["has_message_content"] is True
         assert caps["detected"] is True
-
 
     @patch("tools.discord_tool._discord_request")
     def test_detection_failure_is_permissive(self, mock_req):
@@ -385,27 +470,41 @@ class TestNonBlockingCapabilityDetection:
         _reset_capability_cache()
 
     def test_memory_cache_hit_no_network(self):
-        from tools.discord_tool import _capability_cache, _detect_capabilities_nonblocking
-        caps_in = {"has_members_intent": False, "has_message_content": True, "detected": True}
+        from tools.discord_tool import (
+            _capability_cache,
+            _detect_capabilities_nonblocking,
+        )
+
+        caps_in = {
+            "has_members_intent": False,
+            "has_message_content": True,
+            "detected": True,
+        }
         _capability_cache["tok"] = caps_in
         with patch("tools.discord_tool._discord_request") as mock_req:
             caps = _detect_capabilities_nonblocking("tok")
         assert caps == caps_in
         mock_req.assert_not_called()
 
-
     def test_disk_cache_expires(self, tmp_path, monkeypatch):
         import time as _time
 
         import tools.discord_tool as dt
+
         monkeypatch.setattr(
-            dt, "_capability_disk_cache_path",
+            dt,
+            "_capability_disk_cache_path",
             lambda: tmp_path / "discord_capabilities.json",
         )
-        caps_in = {"has_members_intent": True, "has_message_content": True, "detected": True}
+        caps_in = {
+            "has_members_intent": True,
+            "has_message_content": True,
+            "detected": True,
+        }
         dt._save_caps_to_disk("tok", caps_in)
         # Rewrite timestamp to be stale
         import json as _json
+
         p = tmp_path / "discord_capabilities.json"
         data = _json.loads(p.read_text())
         for entry in data.values():
@@ -420,9 +519,11 @@ class TestNonBlockingCapabilityDetection:
             "clawk_cli.config.load_config",
             lambda: {"discord": {"server_actions": ""}},
         )
-        with patch("tools.discord_tool._load_caps_from_disk", return_value=None), \
-             patch("tools.discord_tool.threading.Thread") as mock_thread, \
-             patch("tools.discord_tool._discord_request") as mock_req:
+        with (
+            patch("tools.discord_tool._load_caps_from_disk", return_value=None),
+            patch("tools.discord_tool.threading.Thread") as mock_thread,
+            patch("tools.discord_tool._discord_request") as mock_req,
+        ):
             schema = get_dynamic_schema_core()
         # No blocking HTTP call happened on the schema-build path
         mock_req.assert_not_called()
@@ -441,6 +542,7 @@ class TestNonBlockingCapabilityDetection:
         returned the same cached value, producing wrong schema gating for
         rotated or multi-token deployments.
         """
+
         def _per_token_flags(method, path, token, **_kwargs):
             # token A: both intents; token B: neither.
             if token == "tok_a":
@@ -469,6 +571,7 @@ class TestNonBlockingCapabilityDetection:
 # Config allowlist
 # ---------------------------------------------------------------------------
 
+
 class TestConfigAllowlist:
     @pytest.fixture(autouse=True)
     def _reset_tools_logger(self):
@@ -482,6 +585,7 @@ class TestConfigAllowlist:
         ``caplog`` can capture warnings regardless of earlier tests.
         """
         import logging as _logging
+
         _prev_tools = _logging.getLogger("tools").level
         _prev_dt = _logging.getLogger("tools.discord_tool").level
         _logging.getLogger("tools").setLevel(_logging.NOTSET)
@@ -503,16 +607,21 @@ class TestConfigAllowlist:
     def test_comma_separated_string(self, monkeypatch):
         monkeypatch.setattr(
             "clawk_cli.config.load_config",
-            lambda: {"discord": {"server_actions": "list_guilds,list_channels,fetch_messages"}},
+            lambda: {
+                "discord": {
+                    "server_actions": "list_guilds,list_channels,fetch_messages"
+                }
+            },
         )
         result = _load_allowed_actions_config()
         assert result == ["list_guilds", "list_channels", "fetch_messages"]
 
-
     def test_config_load_failure_is_permissive(self, monkeypatch):
         """If config can't be loaded at all, fall back to None (all allowed)."""
+
         def bad_load():
             raise RuntimeError("disk gone")
+
         monkeypatch.setattr("clawk_cli.config.load_config", bad_load)
         assert _load_allowed_actions_config() is None
 
@@ -521,13 +630,22 @@ class TestConfigAllowlist:
 # Action filtering combines intents + allowlist
 # ---------------------------------------------------------------------------
 
+
 class TestAvailableActions:
     def test_all_available_when_unrestricted(self):
-        caps = {"detected": True, "has_members_intent": True, "has_message_content": True}
+        caps = {
+            "detected": True,
+            "has_members_intent": True,
+            "has_message_content": True,
+        }
         assert _available_actions(caps, None) == list(_ACTIONS.keys())
 
     def test_no_members_intent_hides_member_actions(self):
-        caps = {"detected": True, "has_members_intent": False, "has_message_content": True}
+        caps = {
+            "detected": True,
+            "has_members_intent": False,
+            "has_message_content": True,
+        }
         actions = _available_actions(caps, None)
         assert "search_members" not in actions
         assert "member_info" not in actions
@@ -536,7 +654,11 @@ class TestAvailableActions:
 
     def test_allowlist_intersects_with_intents(self):
         """Allowlist can only narrow — not re-enable intent-gated actions."""
-        caps = {"detected": True, "has_members_intent": False, "has_message_content": True}
+        caps = {
+            "detected": True,
+            "has_members_intent": False,
+            "has_message_content": True,
+        }
         allowlist = ["list_guilds", "search_members", "fetch_messages"]
         actions = _available_actions(caps, allowlist)
         # search_members gated by intent → stripped even though allowlisted;
@@ -547,6 +669,7 @@ class TestAvailableActions:
 # ---------------------------------------------------------------------------
 # Dynamic schema build (integration of intents + config)
 # ---------------------------------------------------------------------------
+
 
 class TestDynamicSchema:
     def setup_method(self):
@@ -562,10 +685,11 @@ class TestDynamicSchema:
         assert get_dynamic_schema_admin() is None
         mock_req.assert_not_called()
 
-
     @patch("tools.discord_tool._discord_request")
     def test_no_members_intent_hides_search_members_from_core(
-        self, mock_req, monkeypatch,
+        self,
+        mock_req,
+        monkeypatch,
     ):
         """search_members is a core action gated by GUILD_MEMBERS intent."""
         monkeypatch.setenv("DISCORD_BOT_TOKEN", "tok")
@@ -612,6 +736,7 @@ class TestDynamicSchema:
 # Runtime allowlist enforcement (defense in depth — schema already filtered)
 # ---------------------------------------------------------------------------
 
+
 class TestRuntimeAllowlistEnforcement:
     @patch("tools.discord_tool._discord_request")
     def test_denied_action_blocked_at_runtime(self, mock_req, monkeypatch):
@@ -620,7 +745,11 @@ class TestRuntimeAllowlistEnforcement:
             "clawk_cli.config.load_config",
             lambda: {"discord": {"server_actions": "list_guilds"}},
         )
-        result = json.loads(discord_admin_handler(action="add_role", guild_id="1", user_id="2", role_id="3"))
+        result = json.loads(
+            discord_admin_handler(
+                action="add_role", guild_id="1", user_id="2", role_id="3"
+            )
+        )
         assert "error" in result
         assert "disabled by config" in result["error"]
         mock_req.assert_not_called()
@@ -641,6 +770,7 @@ class TestRuntimeAllowlistEnforcement:
 # 403 enrichment
 # ---------------------------------------------------------------------------
 
+
 class Test403Enrichment:
     @patch("tools.discord_tool._discord_request")
     def test_403_in_runtime_is_enriched(self, mock_req, monkeypatch):
@@ -650,9 +780,14 @@ class Test403Enrichment:
             lambda: {"discord": {"server_actions": ""}},
         )
         mock_req.side_effect = DiscordAPIError(403, '{"message":"Missing Permissions"}')
-        result = json.loads(discord_admin_handler(
-            action="add_role", guild_id="1", user_id="2", role_id="3",
-        ))
+        result = json.loads(
+            discord_admin_handler(
+                action="add_role",
+                guild_id="1",
+                user_id="2",
+                role_id="3",
+            )
+        )
         assert "error" in result
         assert "MANAGE_ROLES" in result["error"]
         assert "Missing Permissions" in result["error"]  # Raw body preserved
@@ -674,11 +809,13 @@ class Test403Enrichment:
 # model_tools integration — dynamic schema replaces static
 # ---------------------------------------------------------------------------
 
+
 class TestModelToolsIntegration:
     def setup_method(self):
         _reset_capability_cache()
         from model_tools import _clear_tool_defs_cache
         from tools.registry import invalidate_check_fn_cache
+
         _clear_tool_defs_cache()
         invalidate_check_fn_cache()
 
@@ -686,12 +823,15 @@ class TestModelToolsIntegration:
         _reset_capability_cache()
         from model_tools import _clear_tool_defs_cache
         from tools.registry import invalidate_check_fn_cache
+
         _clear_tool_defs_cache()
         invalidate_check_fn_cache()
 
     @patch("tools.discord_tool._discord_request")
     def test_discord_admin_schema_rebuilt_by_get_tool_definitions(
-        self, mock_req, monkeypatch,
+        self,
+        mock_req,
+        monkeypatch,
     ):
         """When model_tools.get_tool_definitions runs with discord_admin
         available, it should replace the static schema with the dynamic one."""
@@ -704,15 +844,21 @@ class TestModelToolsIntegration:
         mock_req.return_value = {"flags": 0}
 
         from model_tools import get_tool_definitions
+
         # skip_tool_search_assembly: this test exercises the dynamic schema
         # rebuild; under tiered disclosure the discord tools defer behind the
         # bridge, but the rebuilt schema is what tool_describe serves.
-        tools = get_tool_definitions(enabled_toolsets=["clawk-discord"], quiet_mode=True,
-                                     skip_tool_search_assembly=True)
+        tools = get_tool_definitions(
+            enabled_toolsets=["clawk-discord"],
+            quiet_mode=True,
+            skip_tool_search_assembly=True,
+        )
         discord_admin_tool = next(
             (t for t in tools if t.get("function", {}).get("name") == "discord_admin"),
             None,
         )
         assert discord_admin_tool is not None, "discord_admin should be in the schema"
-        actions = discord_admin_tool["function"]["parameters"]["properties"]["action"]["enum"]
+        actions = discord_admin_tool["function"]["parameters"]["properties"]["action"][
+            "enum"
+        ]
         assert actions == ["list_guilds", "server_info"]

@@ -19,20 +19,32 @@ WIRE = {"add": "pin", "hold": "hold", "remove": "unpin", "clear": "unpin"}
 
 
 def annotate_preview_tool(
-    action: str = "add", ref: Optional[str] = None, selector: Optional[str] = None,
-    label: Optional[str] = None, callback: Optional[Callable] = None,
+    action: str = "add",
+    ref: Optional[str] = None,
+    selector: Optional[str] = None,
+    label: Optional[str] = None,
+    callback: Optional[Callable] = None,
 ) -> str:
     """Put one annotation up, take one down, or clear them all."""
     if callback is None:
-        return tool_error("annotate_preview is only available in the Clawksis desktop app.")
+        return tool_error(
+            "annotate_preview is only available in the Clawksis desktop app."
+        )
     verb = (action or "add").strip().lower()
     if verb not in ACTIONS:
         return tool_error(f"action must be one of: {', '.join(ACTIONS)}.")
     if verb in ("add", "remove") and not (ref or selector):
-        return tool_error(f"{verb} needs a ref from drive_preview action='elements' (e.g. 'btn-sign-in') or a CSS selector.")
+        return tool_error(
+            f"{verb} needs a ref from drive_preview action='elements' (e.g. 'btn-sign-in') or a CSS selector."
+        )
 
     targeted = verb not in ("clear", "hold")
-    fields = (("action", WIRE[verb]), ("ref", ref if targeted else None), ("selector", selector if targeted else None), ("text", label))
+    fields = (
+        ("action", WIRE[verb]),
+        ("ref", ref if targeted else None),
+        ("selector", selector if targeted else None),
+        ("text", label),
+    )
     payload = {name: val for name, val in fields if val is not None}
     try:
         raw = callback(payload)
@@ -42,7 +54,8 @@ def annotate_preview_tool(
         return tool_error(
             "No GUI window answered with a page: no preview tab is open. "
             "Open a page with open_preview first. If the pane IS open, the desktop app "
-            "may be older than this backend — its bridge-unavailable error names that case.")
+            "may be older than this backend — its bridge-unavailable error names that case."
+        )
     try:
         return json.dumps(json.loads(raw), ensure_ascii=False)
     except (TypeError, ValueError):

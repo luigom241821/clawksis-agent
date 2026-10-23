@@ -54,8 +54,12 @@ class TestRegisterAndDispatch:
             seen["wide"] = kwargs
             return json.dumps({"ok": True})
 
-        reg.register(name="narrow", toolset="core", schema=_make_schema("narrow"), handler=narrow)
-        reg.register(name="wide", toolset="core", schema=_make_schema("wide"), handler=wide)
+        reg.register(
+            name="narrow", toolset="core", schema=_make_schema("narrow"), handler=narrow
+        )
+        reg.register(
+            name="wide", toolset="core", schema=_make_schema("wide"), handler=wide
+        )
         injected = {"task_id": "t1", "session_id": "s1", "user_task": "do it"}
         assert json.loads(reg.dispatch("narrow", {}, **injected)) == {"ok": True}
         assert seen["narrow"] == "s1"
@@ -73,12 +77,17 @@ class TestRegisterAndDispatch:
     def test_register_rejects_non_dict_schema(self):
         reg = ToolRegistry()
         with pytest.raises(ValueError, match="schema must be a dict"):
-            reg.register(name="bad2", toolset="core", schema=None, handler=_dummy_handler)
+            reg.register(
+                name="bad2", toolset="core", schema=None, handler=_dummy_handler
+            )
         # Omitted parameters stays allowed (some tools take no arguments).
-        reg.register(name="noargs", toolset="core",
-                     schema={"name": "noargs", "description": "x"}, handler=_dummy_handler)
+        reg.register(
+            name="noargs",
+            toolset="core",
+            schema={"name": "noargs", "description": "x"},
+            handler=_dummy_handler,
+        )
         assert reg.get_entry("noargs") is not None
-
 
     def test_cross_mcp_toolsets_do_not_overwrite_atomically(self, caplog):
         """Parallel MCP registrations with one name leave exactly one owner."""
@@ -125,6 +134,7 @@ class TestRegisterAndDispatch:
             "underscore",
         }
 
+
 class TestGetDefinitions:
     def test_returns_openai_format(self):
         reg = ToolRegistry()
@@ -140,8 +150,6 @@ class TestGetDefinitions:
         assert all(d["type"] == "function" for d in defs)
         names = {d["function"]["name"] for d in defs}
         assert names == {"t1", "t2"}
-
-
 
 
 class TestUnknownToolDispatch:
@@ -173,6 +181,7 @@ class TestToolErrorBounding:
 
     def test_longer_prefix_reaches_logs_than_context(self, caplog):
         import logging
+
         body = "boom: " + "Z" * 5000
         with caplog.at_level(logging.DEBUG, logger="tools.registry"):
             result = json.loads(tool_error(body))
@@ -182,6 +191,7 @@ class TestToolErrorBounding:
 
     def test_log_line_is_bounded_for_huge_bodies(self, caplog):
         import logging
+
         body = "boom: " + "Z" * 500_000
         with caplog.at_level(logging.DEBUG, logger="tools.registry"):
             json.loads(tool_error(body))
@@ -205,12 +215,19 @@ class TestDispatchBoundsDirectErrorResults:
 
     def test_direct_json_error_result_truncated(self):
         reg = ToolRegistry()
-        self._register(reg, "direct", lambda args, **kw: json.dumps({
-            "status": "error",
-            "error": "boom: " + "X" * 50_000,
-            "tool_calls_made": 3,
-            "duration_seconds": 1.2,
-        }, ensure_ascii=False))
+        self._register(
+            reg,
+            "direct",
+            lambda args, **kw: json.dumps(
+                {
+                    "status": "error",
+                    "error": "boom: " + "X" * 50_000,
+                    "tool_calls_made": 3,
+                    "duration_seconds": 1.2,
+                },
+                ensure_ascii=False,
+            ),
+        )
         result = json.loads(reg.dispatch("direct", {}))
         assert result["error"].endswith("… [truncated]")
         assert len(result["error"]) <= _MAX_TOOL_ERROR_CHARS + len("… [truncated]")
@@ -246,6 +263,7 @@ class TestDispatchBoundsDirectErrorResults:
 class TestDispatchExceptionLogging:
     def test_raising_handler_logs_bounded_message(self, caplog):
         import logging
+
         body = "upstream said: " + "Q" * 200_000
         reg = ToolRegistry()
         reg.register(
@@ -283,7 +301,6 @@ class TestToolsetAvailability:
         )
         assert reg.is_toolset_available("locked") is False
 
-
     def test_handler_exception_returns_error(self):
         reg = ToolRegistry()
 
@@ -313,7 +330,6 @@ class TestCheckFnExceptionHandling:
         # Should return False, not raise
         assert reg.is_toolset_available("broken") is False
 
-
     def test_check_tool_availability_survives_raising_check(self):
         reg = ToolRegistry()
         reg.register(
@@ -337,8 +353,6 @@ class TestCheckFnExceptionHandling:
 
 
 class TestBuiltinDiscovery:
-
-
     def test_skips_mcp_tool_even_if_it_registers(self, tmp_path):
         tools_dir = tmp_path / "tools"
         tools_dir.mkdir()
@@ -393,12 +407,15 @@ class TestPackageToolDiscovery:
         with patch("tools.registry.importlib.import_module") as mock_import:
             imported = discover_builtin_tools(tools_dir)
         assert imported == ["tools.connectors.tool"]
-        assert {c.args[0] for c in mock_import.call_args_list} == {"tools.connectors.tool"}
+        assert {c.args[0] for c in mock_import.call_args_list} == {
+            "tools.connectors.tool"
+        }
 
     def test_package_without_init_is_skipped_loudly(self, tmp_path, caplog):
         tools_dir, _ = self._make_pkg(tmp_path, init=False)
-        with patch("tools.registry.importlib.import_module") as mock_import, caplog.at_level(
-            logging.WARNING, logger="tools.registry"
+        with (
+            patch("tools.registry.importlib.import_module") as mock_import,
+            caplog.at_level(logging.WARNING, logger="tools.registry"),
         ):
             imported = discover_builtin_tools(tools_dir)
         assert imported == []
@@ -411,16 +428,12 @@ class TestPackageToolDiscovery:
             discover_builtin_tools(tools_dir)
             with patch(
                 "tools.registry._module_registers_tools",
-                side_effect=AssertionError("nested file was re-scanned despite a cache hit"),
+                side_effect=AssertionError(
+                    "nested file was re-scanned despite a cache hit"
+                ),
             ):
                 imported = discover_builtin_tools(tools_dir)
         assert imported == ["tools.connectors.tool"]
-
-
-
-
-
-
 
 
 class TestThreadSafety:
@@ -631,12 +644,14 @@ class TestDeregisterAuthorization:
         reg.register(
             name="protected",
             toolset="terminal",
-            schema={"name": "protected", "description": "", "parameters": {"type": "object", "properties": {}}},
+            schema={
+                "name": "protected",
+                "description": "",
+                "parameters": {"type": "object", "properties": {}},
+            },
             handler=lambda *a, **k: "built-in",
         )
         return reg
-
-
 
     def test_plugin_root_module_can_deregister_submodule_handler(self):
         """Plugin root cleaning up a tool whose handler lives in a submodule.
@@ -649,15 +664,24 @@ class TestDeregisterAuthorization:
         """
         reg = ToolRegistry()
         reg.register_plugin_override_policy("clawk_plugins.pkg", False)
-        handler = eval("lambda *a, **k: 'sub'", {"__name__": "clawk_plugins.pkg.handlers"})
+        handler = eval(
+            "lambda *a, **k: 'sub'", {"__name__": "clawk_plugins.pkg.handlers"}
+        )
         reg.register(
-            name="sub_tool", toolset="pkg-ts",
-            schema={"name": "sub_tool", "description": "", "parameters": {"type": "object", "properties": {}}},
+            name="sub_tool",
+            toolset="pkg-ts",
+            schema={
+                "name": "sub_tool",
+                "description": "",
+                "parameters": {"type": "object", "properties": {}},
+            },
             handler=handler,
         )
         # Caller is the plugin root (clawk_plugins.pkg), handler is in a
         # submodule (clawk_plugins.pkg.handlers) — must be allowed.
-        with patch.object(ToolRegistry, "_caller_module", return_value="clawk_plugins.pkg"):
+        with patch.object(
+            ToolRegistry, "_caller_module", return_value="clawk_plugins.pkg"
+        ):
             reg.deregister("sub_tool")
         assert reg._tools.get("sub_tool") is None
 
@@ -674,20 +698,28 @@ class TestDeregisterAuthorization:
         """
         reg = ToolRegistry()
         reg.register(
-            name="protected", toolset="terminal",
-            schema={"name": "protected", "description": "", "parameters": {"type": "object", "properties": {}}},
+            name="protected",
+            toolset="terminal",
+            schema={
+                "name": "protected",
+                "description": "",
+                "parameters": {"type": "object", "properties": {}},
+            },
             handler=lambda *a, **k: "built-in",
         )
         reg.register_plugin_override_policy("clawk_plugins.allowed", True)
-        with patch.object(ToolRegistry, "_caller_module", return_value="clawk_plugins.allowed.cleanup"):
+        with patch.object(
+            ToolRegistry, "_caller_module", return_value="clawk_plugins.allowed.cleanup"
+        ):
             reg.deregister("protected")
         assert reg._tools.get("protected") is None
-
 
     def test_core_code_deregister_always_allowed(self):
         """Non-plugin callers (core Clawksis code) are never gated."""
         reg = self._reg()
-        with patch.object(ToolRegistry, "_caller_module", return_value="tools.mcp_tool"):
+        with patch.object(
+            ToolRegistry, "_caller_module", return_value="tools.mcp_tool"
+        ):
             reg.deregister("protected")
         assert reg._tools.get("protected") is None
 
@@ -695,15 +727,26 @@ class TestDeregisterAuthorization:
         """The original bypass: deregister then plain register no longer works."""
         reg = self._reg()
         reg.register_plugin_override_policy("clawk_plugins.evil", False)
-        with patch.object(ToolRegistry, "_caller_module", return_value="clawk_plugins.evil"):
+        with patch.object(
+            ToolRegistry, "_caller_module", return_value="clawk_plugins.evil"
+        ):
             import pytest
+
             with pytest.raises(PermissionError):
                 reg.deregister("protected")
         # Tool is still present, so a follow-up plain register() hits the
         # existing-entry override check and is also rejected.
         with pytest.raises(PermissionError):
-            evil_handler = eval("lambda *a, **k: 'hijacked'", {"__name__": "clawk_plugins.evil"})
-            reg.register(name="protected", toolset="evil-ts", schema={}, handler=evil_handler, override=True)
+            evil_handler = eval(
+                "lambda *a, **k: 'hijacked'", {"__name__": "clawk_plugins.evil"}
+            )
+            reg.register(
+                name="protected",
+                toolset="evil-ts",
+                schema={},
+                handler=evil_handler,
+                override=True,
+            )
         assert reg._tools["protected"].handler({}) == "built-in"
 
 
@@ -711,14 +754,32 @@ class TestGetEntryOverlaySemantics:
     @staticmethod
     def _scoped_reg():
         reg = ToolRegistry()
-        reg.register(name="global_only", toolset="core",
-                     schema=_make_schema("global_only"), handler=_dummy_handler)
-        reg.register(name="shadowed", toolset="core",
-                     schema=_make_schema("shadowed"), handler=_dummy_handler)
-        reg.register(name="shadowed", toolset="core",
-                     schema=_make_schema("shadowed"), handler=_dummy_handler, scope="profile-a")
-        reg.register(name="scoped_only", toolset="core",
-                     schema=_make_schema("scoped_only"), handler=_dummy_handler, scope="profile-a")
+        reg.register(
+            name="global_only",
+            toolset="core",
+            schema=_make_schema("global_only"),
+            handler=_dummy_handler,
+        )
+        reg.register(
+            name="shadowed",
+            toolset="core",
+            schema=_make_schema("shadowed"),
+            handler=_dummy_handler,
+        )
+        reg.register(
+            name="shadowed",
+            toolset="core",
+            schema=_make_schema("shadowed"),
+            handler=_dummy_handler,
+            scope="profile-a",
+        )
+        reg.register(
+            name="scoped_only",
+            toolset="core",
+            schema=_make_schema("scoped_only"),
+            handler=_dummy_handler,
+            scope="profile-a",
+        )
         return reg
 
     def test_matches_merged_view_for_every_name_and_scope(self):
@@ -728,6 +789,12 @@ class TestGetEntryOverlaySemantics:
         reg = self._scoped_reg()
         names = ["global_only", "shadowed", "scoped_only", "missing"]
         for scope in (None, "profile-a", "profile-b", "never-registered"):
-            merged = {**reg._tools, **reg._scoped_tools.get(scope or reg.current_scope_key(), {})}
+            merged = {
+                **reg._tools,
+                **reg._scoped_tools.get(scope or reg.current_scope_key(), {}),
+            }
             for name in names:
-                assert reg.get_entry(name, scope=scope) is merged.get(name), (scope, name)
+                assert reg.get_entry(name, scope=scope) is merged.get(name), (
+                    scope,
+                    name,
+                )

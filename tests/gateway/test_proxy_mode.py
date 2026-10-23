@@ -10,6 +10,7 @@ from gateway.platforms.base import resolve_proxy_url
 from gateway.run import GatewayRunner
 from gateway.session import SessionSource
 
+
 def _make_runner(proxy_url=None):
     """Create a minimal GatewayRunner for proxy tests."""
     runner = object.__new__(GatewayRunner)
@@ -23,6 +24,7 @@ def _make_runner(proxy_url=None):
     runner._agent_cache_lock = None
     return runner
 
+
 def _make_source(platform=Platform.MATRIX):
     return SessionSource(
         platform=platform,
@@ -33,6 +35,7 @@ def _make_source(platform=Platform.MATRIX):
         user_name="testuser",
         thread_id=None,
     )
+
 
 class _FakeSSEResponse:
     """Simulates an aiohttp response with SSE streaming."""
@@ -60,6 +63,7 @@ class _FakeSSEResponse:
     async def __aexit__(self, *args):
         pass
 
+
 class _FakeSession:
     """Simulates an aiohttp.ClientSession with captured request args."""
 
@@ -81,6 +85,7 @@ class _FakeSession:
     async def __aexit__(self, *args):
         pass
 
+
 def _patch_aiohttp(session):
     """Install the optional aiohttp boundary without requiring the extra."""
     module = types.SimpleNamespace(
@@ -88,6 +93,7 @@ def _patch_aiohttp(session):
         ClientTimeout=MagicMock(),
     )
     return patch.dict("sys.modules", {"aiohttp": module})
+
 
 class TestGetProxyUrl:
     """Test _get_proxy_url() config resolution."""
@@ -105,8 +111,10 @@ class TestGetProxyUrl:
         with patch("gateway.run._load_gateway_config", return_value=cfg):
             assert runner._get_proxy_url() == "http://10.0.0.1:8642"
 
+
 class _SelectiveScope(dict):
     """Bound scope that resolves GATEWAY_PROXY_URL but fails on the KEY read."""
+
     def get(self, name, default=None):
         if name == "GATEWAY_PROXY_URL":
             return "http://proxy.local:8642"
@@ -132,17 +140,26 @@ class TestProxyKeyScopeFailure:
         try:
             with _patch_aiohttp(MagicMock()):
                 with pytest.raises(RuntimeError, match="resolver boom"):
-                    await runner._run_agent_via_proxy("hi", "ctx", [], _make_source(), "sess-1")
+                    await runner._run_agent_via_proxy(
+                        "hi", "ctx", [], _make_source(), "sess-1"
+                    )
         finally:
             ss.reset_secret_scope(token)
             ss.set_multiplex_active(False)
 
 
 class TestResolveProxyUrl:
-
     def test_no_proxy_bypasses_matching_host(self, monkeypatch):
-        for key in ("HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY",
-                    "https_proxy", "http_proxy", "all_proxy", "NO_PROXY", "no_proxy"):
+        for key in (
+            "HTTPS_PROXY",
+            "HTTP_PROXY",
+            "ALL_PROXY",
+            "https_proxy",
+            "http_proxy",
+            "all_proxy",
+            "NO_PROXY",
+            "no_proxy",
+        ):
             monkeypatch.delenv(key, raising=False)
         monkeypatch.setenv("HTTPS_PROXY", "http://proxy.example:8080")
         monkeypatch.setenv("NO_PROXY", "api.telegram.org")
@@ -150,42 +167,58 @@ class TestResolveProxyUrl:
         assert resolve_proxy_url(target_hosts="api.telegram.org") is None
 
     def test_no_proxy_bypasses_cidr_target(self, monkeypatch):
-        for key in ("HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY",
-                    "https_proxy", "http_proxy", "all_proxy", "NO_PROXY", "no_proxy"):
+        for key in (
+            "HTTPS_PROXY",
+            "HTTP_PROXY",
+            "ALL_PROXY",
+            "https_proxy",
+            "http_proxy",
+            "all_proxy",
+            "NO_PROXY",
+            "no_proxy",
+        ):
             monkeypatch.delenv(key, raising=False)
         monkeypatch.setenv("HTTPS_PROXY", "http://proxy.example:8080")
         monkeypatch.setenv("NO_PROXY", "149.154.160.0/20")
 
         assert resolve_proxy_url(target_hosts=["149.154.167.220"]) is None
 
+
 @pytest.mark.platforms("macos")
 class TestMacosProxyProbeCache:
     """``scutil --proxy`` is a ~11 ms fork and resolve_proxy_url runs it on the SEND path —
     per chunk of an outbound message and per media attachment."""
 
-    SCUTIL_OUT = "<dictionary> {\n  HTTPEnable : 1\n  HTTPProxy : 10.0.0.1\n  HTTPPort : 3128\n}"
+    SCUTIL_OUT = (
+        "<dictionary> {\n  HTTPEnable : 1\n  HTTPProxy : 10.0.0.1\n  HTTPPort : 3128\n}"
+    )
 
     @pytest.fixture(autouse=True)
     def _isolate(self):
         from gateway.platforms import base
+
         base.reset_macos_proxy_cache()
         yield
         base.reset_macos_proxy_cache()
 
     def _count_forks(self, monkeypatch):
         from gateway.platforms import base
+
         calls = []
 
         def fake(*a, **kw):
             calls.append(a)
             return self.SCUTIL_OUT
+
         monkeypatch.setattr(base.subprocess, "check_output", fake)
         return base, calls
 
     def test_repeated_probes_fork_scutil_once(self, monkeypatch):
         base, calls = self._count_forks(monkeypatch)
         results = [base._detect_macos_system_proxy() for _ in range(10)]
-        assert len(calls) == 1, f"expected 1 scutil fork for 10 probes, got {len(calls)}"
+        assert len(calls) == 1, (
+            f"expected 1 scutil fork for 10 probes, got {len(calls)}"
+        )
         assert results == ["http://10.0.0.1:3128"] * 10
 
     def test_expired_ttl_re_reads(self, monkeypatch):
@@ -232,6 +265,7 @@ class TestRunAgentProxyDispatch:
         assert result["final_response"] == "Hello from remote!"
         runner._run_agent_via_proxy.assert_called_once()
         assert runner._run_agent_via_proxy.call_args.kwargs["run_generation"] == 7
+
 
 class TestRunAgentViaProxy:
     """Test the actual proxy HTTP forwarding logic."""
@@ -329,7 +363,9 @@ class TestRunAgentViaProxy:
 
         resp = _FakeSSEResponse(
             status=200,
-            sse_chunks=[b'data: {"choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n\n'],
+            sse_chunks=[
+                b'data: {"choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n\n'
+            ],
         )
         session = _FakeSession(resp)
 
@@ -349,6 +385,7 @@ class TestRunAgentViaProxy:
         assert len(messages) == 1
         assert messages[0]["role"] == "user"
         assert messages[0]["content"] == "hello"
+
 
 class TestStreamingResilience:
     """Tests for SSE streaming robustness — hang avoidance and malformed-chunk tolerance."""
@@ -375,7 +412,7 @@ class TestStreamingResilience:
             status=200,
             sse_chunks=[
                 'data: {"choices":[{"delta":{"content":"Hello"}}]}\n',
-                'data: [DONE]\n',
+                "data: [DONE]\n",
                 'data: {"choices":[{"delta":{"content":" IGNORED"}}]}\n',
             ],
         )
@@ -474,7 +511,7 @@ class TestStreamingResilience:
         runner = _make_runner()
         source = _make_source()
 
-        resp = _FakeSSEResponse(status=200, sse_chunks=['data: [DONE]\n'])
+        resp = _FakeSSEResponse(status=200, sse_chunks=["data: [DONE]\n"])
         session = _FakeSession(resp)
 
         captured = {}
@@ -527,7 +564,7 @@ class TestStreamingResilience:
                 'data: {"choices":"wrong-type"}\n',
                 'data: {"choices":[{"delta":"wrong-type"}]}\n',
                 'data: {"choices":[{"delta":{"content":" world"}}]}\n',
-                'data: [DONE]\n',
+                "data: [DONE]\n",
             ],
         )
         session = _FakeSession(resp)

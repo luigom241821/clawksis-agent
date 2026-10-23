@@ -35,19 +35,26 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 def tree_predates_runtime(root: Path = _PROJECT_ROOT) -> bool:
     """True only when the checkout's state-store modules are readable and none defines the ledger."""
     try:
-        sources = [path.read_text(encoding="utf-8-sig", errors="replace") for path in root.glob("clawk_state*.py")]
+        sources = [
+            path.read_text(encoding="utf-8-sig", errors="replace")
+            for path in root.glob("clawk_state*.py")
+        ]
     except OSError:
         return False  # mid-checkout or unreadable: proves nothing
     return bool(sources) and not any(_RUNTIME_SCHEMA_MARKER in text for text in sources)
 
 
-def downgrade_reason(skew, *, update_in_progress: bool, predates: Callable[[], bool]) -> Optional[str]:
+def downgrade_reason(
+    skew, *, update_in_progress: bool, predates: Callable[[], bool]
+) -> Optional[str]:
     """The log line when this gateway must stop for a downgraded tree, else None."""
     if not skew or update_in_progress or not predates():
         return None
-    return ("This gateway loaded {}, but its checkout is now at {}, a release that predates the gateway "
-            "runtime. Downgrading is unsupported; stopping so the service manager starts the older "
-            "release's own gateway.".format(*tuple(skew)))
+    return (
+        "This gateway loaded {}, but its checkout is now at {}, a release that predates the gateway "
+        "runtime. Downgrading is unsupported; stopping so the service manager starts the older "
+        "release's own gateway.".format(*tuple(skew))
+    )
 
 
 async def _stop_or_exit(runner, *, hard_exit: Callable[[int], None] = os._exit) -> None:
@@ -61,8 +68,15 @@ async def _stop_or_exit(runner, *, hard_exit: Callable[[int], None] = os._exit) 
         hard_exit(1)
 
 
-async def runtime_downgrade_watcher(runner, *, poll_s: float = POLL_S, skew_fn=None, update_probe=None,
-                                    predates=tree_predates_runtime, max_polls: Optional[int] = None) -> None:
+async def runtime_downgrade_watcher(
+    runner,
+    *,
+    poll_s: float = POLL_S,
+    skew_fn=None,
+    update_probe=None,
+    predates=tree_predates_runtime,
+    max_polls: Optional[int] = None,
+) -> None:
     """Supervised gateway watcher: ``runner.stop()`` after ``_CONFIRMATIONS`` consecutive downgrade reads.
 
     The probes are bound here, at gateway start: a lazy import after the tree moved would load the
@@ -79,10 +93,14 @@ async def runtime_downgrade_watcher(runner, *, poll_s: float = POLL_S, skew_fn=N
             busy = observe_update()
         except Exception:  # health: allow BLE001 -- an unreadable update lock cannot prove the swap is over
             busy = True
-        return downgrade_reason(observe_skew(), update_in_progress=busy, predates=predates)
+        return downgrade_reason(
+            observe_skew(), update_in_progress=busy, predates=predates
+        )
 
     seen = polls = 0
-    while getattr(runner, "_running", False) and (max_polls is None or polls < max_polls):
+    while getattr(runner, "_running", False) and (
+        max_polls is None or polls < max_polls
+    ):
         polls += 1
         reason = await asyncio.to_thread(_read)
         seen = seen + 1 if reason else 0
@@ -99,6 +117,8 @@ async def runtime_downgrade_watcher(runner, *, poll_s: float = POLL_S, skew_fn=N
             runner._exit_code = GATEWAY_SERVICE_RESTART_EXIT_CODE
             # Detached, strongly held: stop() cancels every background task, this watcher included,
             # and a stop awaited from here would be cancelled with it (the #12875 class).
-            runner._runtime_downgrade_stop = asyncio.get_running_loop().create_task(_stop_or_exit(runner))
+            runner._runtime_downgrade_stop = asyncio.get_running_loop().create_task(
+                _stop_or_exit(runner)
+            )
             return
         await asyncio.sleep(poll_s)

@@ -25,12 +25,15 @@ class ProcessTerminationMixin:
         """True if a psutil.Process is running and not a zombie (already dead, just unreaped)."""
         try:
             import psutil
+
             return proc.is_running() and proc.status() != psutil.STATUS_ZOMBIE
         except Exception:
             return False
 
     @classmethod
-    def _terminate_host_pid(cls, pid: int, expected_start: Optional[int] = None) -> None:
+    def _terminate_host_pid(
+        cls, pid: int, expected_start: Optional[int] = None
+    ) -> None:
         """Terminate a host-visible PID and its descendants.
         ``expected_start`` (kernel start time at spawn) is re-validated first: a mismatch
         or dead PID means the number was recycled onto a stranger and we refuse to touch
@@ -42,25 +45,38 @@ class ProcessTerminationMixin:
         is the fallback."""
         from tools.process_registry import _IS_WINDOWS
 
-        if expected_start is not None and not cls._host_pid_is_ours(pid, expected_start):
+        if expected_start is not None and not cls._host_pid_is_ours(
+            pid, expected_start
+        ):
             logger.warning(
                 "Refusing to terminate host pid %d: start-time mismatch — "
-                "PID was recycled onto an unrelated process.", pid)
+                "PID was recycled onto an unrelated process.",
+                pid,
+            )
             return
 
         def _sigterm_quietly():
             with suppress(OSError, ProcessLookupError, PermissionError):
                 os.kill(pid, signal.SIGTERM)
+
         if _IS_WINDOWS:
             try:
                 subprocess.run(
-                    ["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True, text=True,
-                    encoding='utf-8', errors='replace', timeout=10, creationflags=windows_hide_flags(),
-                    stdin=subprocess.DEVNULL, check=False)
+                    ["taskkill", "/PID", str(pid), "/T", "/F"],
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=10,
+                    creationflags=windows_hide_flags(),
+                    stdin=subprocess.DEVNULL,
+                    check=False,
+                )
             except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
                 _sigterm_quietly()
             return
         import psutil
+
         gone = (psutil.NoSuchProcess, psutil.AccessDenied, OSError)
         try:
             parent = psutil.Process(pid)
@@ -88,7 +104,9 @@ class ProcessTerminationMixin:
             if grace <= 0:
                 return
             deadline = time.monotonic() + grace
-            while time.monotonic() < deadline and any(cls._proc_alive(p) for p in targets):
+            while time.monotonic() < deadline and any(
+                cls._proc_alive(p) for p in targets
+            ):
                 time.sleep(0.05)
 
         # Preserve descendants during the parent's configured shutdown window.
@@ -96,9 +114,11 @@ class ProcessTerminationMixin:
 
         # The snapshot is an anti-orphan guarantee: only descendants still alive
         # after the parent had its chance are asked to terminate themselves.
-        remaining = descendants if grace <= 0 else [
-            proc for proc in descendants if cls._proc_alive(proc)
-        ]
+        remaining = (
+            descendants
+            if grace <= 0
+            else [proc for proc in descendants if cls._proc_alive(proc)]
+        )
         for proc in remaining:
             with suppress(gone):
                 proc.terminate()
@@ -122,18 +142,25 @@ class ProcessTerminationMixin:
         with suppress(gone):
             if cls._proc_alive(parent):
                 known = {proc.pid for proc in targets}
-                targets.extend(p for p in parent.children(recursive=True) if p.pid not in known)
+                targets.extend(
+                    p for p in parent.children(recursive=True) if p.pid not in known
+                )
         for proc in targets:
             with suppress(gone):
                 if cls._proc_alive(proc):
                     proc.kill()  # SIGKILL on POSIX
-                    logger.info("Escalated to SIGKILL for pid %d (ignored SIGTERM within %.1fs grace)", proc.pid, grace)
+                    logger.info(
+                        "Escalated to SIGKILL for pid %d (ignored SIGTERM within %.1fs grace)",
+                        proc.pid,
+                        grace,
+                    )
 
     @staticmethod
     def _live_descendants(pid: int) -> list[int]:
         """PIDs of living non-zombie descendants of host PID ``pid`` (best-effort)."""
         try:
             import psutil
+
             children = psutil.Process(pid).children(recursive=True)
         except Exception:
             logger.debug("Could not list descendants of pid %s", pid, exc_info=True)
@@ -179,12 +206,17 @@ class ProcessTerminationMixin:
             if pty_alive:
                 survivors.append(session.pid)
         if session.pid_scope == "host" and session.pid:
-            if self._detached_host_fate(session.pid, session.host_start_time) == "running":
+            if (
+                self._detached_host_fate(session.pid, session.host_start_time)
+                == "running"
+            ):
                 if session.pid not in survivors:
                     survivors.append(session.pid)
                 survivors.extend(
-                    pid for pid in self._live_descendants(session.pid)
-                    if pid not in survivors)
+                    pid
+                    for pid in self._live_descendants(session.pid)
+                    if pid not in survivors
+                )
             # A dead/recycled root has no PID-scope descendants left to find:
             # reparented orphans are outside PID scope (systemd scope stop,
             # issued before this check, covers the cgroup case).

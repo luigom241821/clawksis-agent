@@ -60,9 +60,9 @@ def render_personality_prompt(value: Any) -> str:
     if isinstance(value, dict):
         parts = [value.get("system_prompt", "")]
         if value.get("tone"):
-            parts.append(f'Tone: {value["tone"]}')
+            parts.append(f"Tone: {value['tone']}")
         if value.get("style"):
-            parts.append(f'Style: {value["style"]}')
+            parts.append(f"Style: {value['style']}")
         return "\n".join(str(part).strip() for part in parts if str(part).strip())
     return prompt_text(value)
 
@@ -87,7 +87,10 @@ def available_personalities(cfg: Optional[dict[str, Any]] = None) -> dict[str, A
     """Built-ins overlaid by the user's personalities: root ``personalities`` then
     ``agent.personalities`` (later wins). Root entries were silently ignored (#9636)."""
     merged: dict[str, Any] = dict(BUILTIN_PERSONALITIES)
-    for user in (_get(cfg, "personalities", default={}), _get(cfg, "agent", "personalities", default={})):
+    for user in (
+        _get(cfg, "personalities", default={}),
+        _get(cfg, "agent", "personalities", default={}),
+    ):
         if not isinstance(user, dict):
             continue
         for name, definition in user.items():
@@ -97,7 +100,9 @@ def available_personalities(cfg: Optional[dict[str, Any]] = None) -> dict[str, A
     return merged
 
 
-def resolve_personality(value: Any, cfg: Optional[dict[str, Any]] = None) -> tuple[str, str]:
+def resolve_personality(
+    value: Any, cfg: Optional[dict[str, Any]] = None
+) -> tuple[str, str]:
     """Resolve a requested personality to ``(canonical_name, prompt_text)``."""
     name = normalize_personality_name(value)
     if not name:
@@ -105,7 +110,9 @@ def resolve_personality(value: Any, cfg: Optional[dict[str, Any]] = None) -> tup
     personalities = available_personalities(cfg)
     if name not in personalities:
         names = ", ".join(f"`{n}`" for n in sorted(personalities))
-        raise ValueError(f"Unknown personality: `{str(value).strip()}`.\n\nAvailable: `none`, {names}")
+        raise ValueError(
+            f"Unknown personality: `{str(value).strip()}`.\n\nAvailable: `none`, {names}"
+        )
     return name, render_personality_prompt(personalities[name])
 
 
@@ -135,6 +142,7 @@ def persist_personality(value: Any) -> bool:
 
         config_path = get_clawk_home() / "config.yaml"
         from clawk_constants import mkdir_under_clawk_home
+
         mkdir_under_clawk_home(config_path.parent)
         atomic_roundtrip_yaml_update(config_path, "display.personality", name)
         try:

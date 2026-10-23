@@ -30,7 +30,9 @@ class TestValidateCronScriptPath:
         error = _validate_cron_script_path("missing.py")
         assert str(scripts_dir) in error
 
-    def test_absolute_path_error_names_the_resolved_scripts_dir_not_global_literal(self):
+    def test_absolute_path_error_names_the_resolved_scripts_dir_not_global_literal(
+        self,
+    ):
         scripts_dir = get_clawk_home() / "scripts"
         error = _validate_cron_script_path("/etc/passwd")
         assert str(scripts_dir) in error

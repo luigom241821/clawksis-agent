@@ -42,7 +42,9 @@ def _fake_adapter(adapter_mod, extra, env_overrides=None):
 
 def test_adapter_reads_allow_bots_from_extra_without_env(adapter_mod, monkeypatch):
     monkeypatch.delenv("DISCORD_ALLOW_BOTS", raising=False)
-    monkeypatch.setattr(adapter_mod, "_scoped_gate_env", lambda name, default="": default)
+    monkeypatch.setattr(
+        adapter_mod, "_scoped_gate_env", lambda name, default="": default
+    )
 
     adapter = _fake_adapter(adapter_mod, {"allow_bots": "mentions"})
 

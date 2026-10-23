@@ -39,8 +39,6 @@ def test_create_list_show(capsys, tmp_path):
     assert "My App" in capsys.readouterr().out
 
 
-
-
 def test_rename_and_archive(tmp_path):
     _run(["create", "Old Name", str(tmp_path)])
     assert _run(["rename", "old-name", "New Name"]) == 0
@@ -55,7 +53,3 @@ def test_rename_and_archive(tmp_path):
     assert _run(["restore", "old-name"]) == 0
     with pdb.connect_closing() as conn:
         assert len(pdb.list_projects(conn)) == 1
-
-
-
-

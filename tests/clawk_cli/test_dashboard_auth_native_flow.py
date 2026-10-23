@@ -115,12 +115,6 @@ def _stub_session(exp_offset: int = 3600) -> Session:
     )
 
 
-
-
-
-
-
-
 # ---------------------------------------------------------------------------
 # Route-level E2E against StubAuthProvider
 # ---------------------------------------------------------------------------
@@ -138,7 +132,8 @@ def gated_client():
     web_server.app.state.auth_required = True
     # follow_redirects=False so we can inspect each 302 leg of the flow.
     client = TestClient(
-        web_server.app, base_url="https://fly-app.fly.dev",
+        web_server.app,
+        base_url="https://fly-app.fly.dev",
         follow_redirects=False,
     )
     yield client
@@ -180,8 +175,10 @@ def _walk_native_login(client, *, redirect_uri, challenge, state="cli-state"):
     assert r2.status_code == 302, r2.text
     # 3. The callback 302s to the desktop's loopback redirect_uri.
     loop = urlparse(r2.headers["location"])
-    assert f"{loop.scheme}://{loop.netloc}" == redirect_uri.rsplit("/", 1)[0] or \
-        loop.netloc in redirect_uri
+    assert (
+        f"{loop.scheme}://{loop.netloc}" == redirect_uri.rsplit("/", 1)[0]
+        or loop.netloc in redirect_uri
+    )
     loop_qs = parse_qs(loop.query)
     # No session cookie must be set on the native callback response.
     set_cookie = r2.headers.get("set-cookie", "")
@@ -189,8 +186,6 @@ def _walk_native_login(client, *, redirect_uri, challenge, state="cli-state"):
         f"native callback must NOT set a session cookie; got {set_cookie!r}"
     )
     return loop_qs["code"][0], loop_qs["state"][0]
-
-
 
 
 def test_native_authorize_rejects_non_loopback_redirect(gated_client):
@@ -226,10 +221,14 @@ def _native_authorize_params(challenge, **overrides):
     return params
 
 
-@pytest.mark.parametrize("forwarded_template", ["198.51.100.{i}", ", 198.51.100.{i}"],
-                         ids=["rotated-address", "empty-first-hop"])
+@pytest.mark.parametrize(
+    "forwarded_template",
+    ["198.51.100.{i}", ", 198.51.100.{i}"],
+    ids=["rotated-address", "empty-first-hop"],
+)
 def test_native_authorize_spoofed_forwarded_headers_cannot_bypass_pending_cap(
-    gated_client: TestClient, forwarded_template: str,
+    gated_client: TestClient,
+    forwarded_template: str,
 ) -> None:
     # The public OAuth entry point must limit one peer before allocating the
     # global pending store, even when XFF rotates or has an empty first hop.
@@ -237,22 +236,30 @@ def test_native_authorize_spoofed_forwarded_headers_cannot_bypass_pending_cap(
     params = _native_authorize_params(challenge, provider="stub")
     for i in range(native_flow._MAX_PENDING_PER_IP):
         response = gated_client.get(
-            "/auth/native/authorize", params=params,
+            "/auth/native/authorize",
+            params=params,
             headers={"X-Forwarded-For": forwarded_template.format(i=i)},
         )
         assert response.status_code == 302
 
     blocked = gated_client.get(
-        "/auth/native/authorize", params=params,
-        headers={"X-Forwarded-For": forwarded_template.format(i=native_flow._MAX_PENDING_PER_IP)},
+        "/auth/native/authorize",
+        params=params,
+        headers={
+            "X-Forwarded-For": forwarded_template.format(
+                i=native_flow._MAX_PENDING_PER_IP
+            )
+        },
     )
     assert blocked.status_code == 503
     assert "too many pending" in blocked.json()["detail"]
 
     # Exhausting one peer's allowance must leave room for another real peer.
     other_client = TestClient(
-        web_server.app, base_url=str(gated_client.base_url),
-        client=("203.0.113.10", 50000), follow_redirects=False,
+        web_server.app,
+        base_url=str(gated_client.base_url),
+        client=("203.0.113.10", 50000),
+        follow_redirects=False,
     )
     assert other_client.get("/auth/native/authorize", params=params).status_code == 302
 
@@ -265,11 +272,13 @@ def test_native_authorize_mixed_providers_offers_both_choices(gated_client):
     register_provider(_PasswordOnlyProvider())
     _verifier, challenge = _make_pkce()
     r = gated_client.get(
-        "/auth/native/authorize", params=_native_authorize_params(challenge))
+        "/auth/native/authorize", params=_native_authorize_params(challenge)
+    )
     assert r.status_code == 200, r.text
     hrefs = re.findall(r'<a class="provider-btn" href="([^"]+)"', r.text)
-    assert {parse_qs(urlparse(html.unescape(h)).query)["provider"][0] for h in hrefs} == {
-        "stub", "pwonly"}
+    assert {
+        parse_qs(urlparse(html.unescape(h)).query)["provider"][0] for h in hrefs
+    } == {"stub", "pwonly"}
     # Each link carries the desktop's PKCE inputs unchanged, and the chooser itself
     # allocates no broker state / sets no cookie.
     q = parse_qs(urlparse(html.unescape(hrefs[0])).query)
@@ -283,10 +292,13 @@ def test_native_authorize_chooser_link_completes_the_native_flow(gated_client):
     register_provider(_PasswordOnlyProvider())
     _verifier, challenge = _make_pkce()
     r = gated_client.get(
-        "/auth/native/authorize", params=_native_authorize_params(challenge))
-    href = next(html.unescape(h) for h in
-                re.findall(r'<a class="provider-btn" href="([^"]+)"', r.text)
-                if "provider=stub" in h)
+        "/auth/native/authorize", params=_native_authorize_params(challenge)
+    )
+    href = next(
+        html.unescape(h)
+        for h in re.findall(r'<a class="provider-btn" href="([^"]+)"', r.text)
+        if "provider=stub" in h
+    )
     follow = gated_client.get(href)
     assert follow.status_code == 302, follow.text
     assert "code=stub_code" in follow.headers["location"]
@@ -339,6 +351,7 @@ def test_native_authorize_empty_provider_password_only_brokers_to_login(
     # the real reader inverse before asserting the broker handle rides
     # in it.
     from clawk_cli.dashboard_auth.cookies import parse_pkce_payload
+
     wire_value = set_cookie.split("=", 1)[1].split(";", 1)[0]
     assert "broker" in parse_pkce_payload(wire_value)
 
@@ -353,7 +366,8 @@ def test_bearer_authenticates_gated_route_without_cookie(gated_client):
     ``Authorization: Bearer`` header — no cookie in the jar."""
     verifier, challenge = _make_pkce()
     code, _state = _walk_native_login(
-        gated_client, redirect_uri="http://127.0.0.1:53999/cb",
+        gated_client,
+        redirect_uri="http://127.0.0.1:53999/cb",
         challenge=challenge,
     )
     tokens = gated_client.post(
@@ -372,13 +386,9 @@ def test_bearer_authenticates_gated_route_without_cookie(gated_client):
     assert r.json()["user_id"] == "stub-user-1"
 
 
-
-
 # ---------------------------------------------------------------------------
 # Capability advertisement on /api/status
 # ---------------------------------------------------------------------------
-
-
 
 
 def test_status_loopback_mode_has_no_auth_flows():
@@ -423,7 +433,8 @@ def pw_gated_client():
     web_server.app.state.bound_port = 443
     web_server.app.state.auth_required = True
     client = TestClient(
-        web_server.app, base_url="https://fly-app.fly.dev",
+        web_server.app,
+        base_url="https://fly-app.fly.dev",
         follow_redirects=False,
     )
     yield client
@@ -464,6 +475,7 @@ def test_native_authorize_password_provider_redirects_to_login(
     assert "pkce" in set_cookie
     # Wire value is URL-encoded; decode through the reader inverse.
     from clawk_cli.dashboard_auth.cookies import parse_pkce_payload
+
     wire_value = set_cookie.split("=", 1)[1].split(";", 1)[0]
     assert "broker" in parse_pkce_payload(wire_value)
 
@@ -540,7 +552,11 @@ def test_native_redirect_uri_boundary_matches_browser_authority(gated_client):
                 "state": "desk-state",
             },
         )
-        assert started.status_code == 302, (redirect_uri, started.status_code, started.text)
+        assert started.status_code == 302, (
+            redirect_uri,
+            started.status_code,
+            started.text,
+        )
         upstream = urlparse(started.headers["location"])
         upstream_query = parse_qs(upstream.query)
         completed = gated_client.get(
@@ -676,7 +692,9 @@ def test_native_password_login_rejects_cross_provider_completion(
     r = pw_gated_client.post(
         "/auth/password-login",
         json={
-            "provider": "testpw2", "username": "admin", "password": "hunter2",
+            "provider": "testpw2",
+            "username": "admin",
+            "password": "hunter2",
         },
         cookies=cookies,
     )
@@ -689,7 +707,9 @@ def test_native_password_login_rejects_cross_provider_completion(
     r2 = pw_gated_client.post(
         "/auth/password-login",
         json={
-            "provider": "testpw", "username": "admin", "password": "hunter2",
+            "provider": "testpw",
+            "username": "admin",
+            "password": "hunter2",
         },
         cookies=cookies,
     )

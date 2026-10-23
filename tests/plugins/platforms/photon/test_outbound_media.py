@@ -6,6 +6,7 @@ Photon ships outbound attachments via spectrum-ts' ``attachment()`` /
 can assert the endpoint + body shape each ``send_*`` override produces
 without spawning Node or binding ports.
 """
+
 from __future__ import annotations
 
 import os

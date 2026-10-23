@@ -59,8 +59,11 @@ def _codex_auth(url: str) -> tuple[dict[str, str], str]:
     if not token:
         raise ProviderNotSignedIn(
             f"Not signed in to Codex in Clawksis. Run `{oauth_relogin_command('openai-codex')}` "
-            "or sign in to OpenAI Codex under Providers in the Clawksis desktop app.")
-    headers = codex_account_headers(token) if url_origin(url)[1] == "chatgpt.com" else {}
+            "or sign in to OpenAI Codex under Providers in the Clawksis desktop app."
+        )
+    headers = (
+        codex_account_headers(token) if url_origin(url)[1] == "chatgpt.com" else {}
+    )
     headers["Authorization"] = f"Bearer {token}"
     return headers, str(creds.get("base_url") or "")
 
@@ -68,17 +71,28 @@ def _codex_auth(url: str) -> tuple[dict[str, str], str]:
 # provider -> (origins its token may be sent to, auth resolver). chatgpt.com is the Codex backend
 # core itself calls; api.openai.com hosts the Realtime client-secret endpoint Codex clients use.
 _PROVIDERS: dict[str, tuple[frozenset, Callable[[str], tuple[dict[str, str], str]]]] = {
-    "openai-codex": (frozenset({("https", "chatgpt.com", 443), ("https", "api.openai.com", 443)}), _codex_auth),
+    "openai-codex": (
+        frozenset({("https", "chatgpt.com", 443), ("https", "api.openai.com", 443)}),
+        _codex_auth,
+    ),
 }
 
 
 def _plugin_roots() -> set[Path]:
     """Every plugins directory an installed plugin can live under, as given and resolved."""
     from clawk_cli.plugins import get_bundled_plugins_dir
-    from clawk_constants import get_default_clawk_root, get_clawk_home, get_process_clawk_home
+    from clawk_constants import (
+        get_default_clawk_root,
+        get_clawk_home,
+        get_process_clawk_home,
+    )
 
-    bases = (get_clawk_home() / "plugins", get_process_clawk_home() / "plugins",
-             get_default_clawk_root() / "plugins", get_bundled_plugins_dir())
+    bases = (
+        get_clawk_home() / "plugins",
+        get_process_clawk_home() / "plugins",
+        get_default_clawk_root() / "plugins",
+        get_bundled_plugins_dir(),
+    )
     return {r for base in bases for r in (base.absolute(), base.resolve())}
 
 
@@ -89,13 +103,17 @@ def _calling_plugin_dir() -> Optional[Path]:
     while frame is not None:
         raw = Path(frame.f_code.co_filename)
         for path in (raw.absolute(), raw.resolve()):
-            root = next((r for r in roots if path.is_relative_to(r) and path != r), None)
+            root = next(
+                (r for r in roots if path.is_relative_to(r) and path != r), None
+            )
             if root is None:
                 continue
             for parent in path.parents:
                 if parent == root:
                     break
-                if (parent / "plugin.yaml").is_file() or (parent / "plugin.yml").is_file():
+                if (parent / "plugin.yaml").is_file() or (
+                    parent / "plugin.yml"
+                ).is_file():
                     return parent
             return root / path.relative_to(root).parts[0]
         frame = frame.f_back
@@ -111,7 +129,9 @@ def _detached(exc: BaseException) -> BaseException:
 def declared_auth_providers(manifest: Mapping[str, Any]) -> list[str]:
     """``requires_auth`` from a manifest dict: the providers whose sign-in the plugin uses."""
     raw = (manifest or {}).get("requires_auth")
-    return [str(p).strip() for p in raw if str(p).strip()] if isinstance(raw, list) else []
+    return (
+        [str(p).strip() for p in raw if str(p).strip()] if isinstance(raw, list) else []
+    )
 
 
 def requires_auth_notice(manifest: Mapping[str, Any]) -> str:
@@ -119,8 +139,14 @@ def requires_auth_notice(manifest: Mapping[str, Any]) -> str:
     from clawk_cli.plugin_oauth import oauth_notice
 
     providers = declared_auth_providers(manifest)
-    sign_in = (f"Uses your sign-in for: {', '.join(providers)} (Clawksis sends the requests; "
-               "the plugin never receives the token)") if providers else ""
+    sign_in = (
+        (
+            f"Uses your sign-in for: {', '.join(providers)} (Clawksis sends the requests; "
+            "the plugin never receives the token)"
+        )
+        if providers
+        else ""
+    )
     return "; ".join(part for part in (sign_in, oauth_notice(manifest)) if part)
 
 
@@ -132,8 +158,13 @@ def _declared_providers(plugin_dir: Path) -> list[str]:
 
 
 def credentialed_provider_request(
-    provider: str, method: str, url: str, *, json: Any = None,
-    headers: Optional[Mapping[str, str]] = None, timeout: float = 30.0,
+    provider: str,
+    method: str,
+    url: str,
+    *,
+    json: Any = None,
+    headers: Optional[Mapping[str, str]] = None,
+    timeout: float = 30.0,
 ) -> ProviderResponse:
     """Send ``method url`` with the user's *provider* sign-in attached by Clawksis.
 
@@ -148,27 +179,36 @@ def credentialed_provider_request(
 
     plugin_dir = _calling_plugin_dir()
     if plugin_dir is None:
-        raise PermissionError("credentialed_provider_request must be called from an installed plugin's code")
+        raise PermissionError(
+            "credentialed_provider_request must be called from an installed plugin's code"
+        )
     # The plugin's own oauth: entry first, so a core provider added later under the same id cannot take it over.
     spec = _plugin_oauth_spec(plugin_dir, provider)
     if spec is None:
         spec = _PROVIDERS.get(provider)
         if spec is None:
-            raise ValueError(f"No signed-in requests for provider {provider!r} (supported: {', '.join(_PROVIDERS)}, "
-                             "or an id the plugin declares under oauth: in plugin.yaml)")
+            raise ValueError(
+                f"No signed-in requests for provider {provider!r} (supported: {', '.join(_PROVIDERS)}, "
+                "or an id the plugin declares under oauth: in plugin.yaml)"
+            )
         if provider not in _declared_providers(plugin_dir):
             raise PermissionError(
-                f"Plugin '{plugin_dir.name}' must declare `requires_auth: [{provider}]` in plugin.yaml")
+                f"Plugin '{plugin_dir.name}' must declare `requires_auth: [{provider}]` in plugin.yaml"
+            )
     origins, resolve = spec
     if url_origin(url) not in origins:
-        raise PermissionError(f"Refusing to send the {provider} sign-in to {url_origin(url)[1] or url!r}")
+        raise PermissionError(
+            f"Refusing to send the {provider} sign-in to {url_origin(url)[1] or url!r}"
+        )
     import httpx
 
     # Every error the plugin receives past this point is rebuilt without traceback, chain or request: those
     # reach the frames and httpx objects that hold the token, refresh token or client secret.
     refusal: Optional[BaseException] = None
     with httpx.Client(timeout=timeout, follow_redirects=False) as client:
-        request = client.build_request(method, url, json=json, headers=dict(headers or {}))  # no credential yet
+        request = client.build_request(
+            method, url, json=json, headers=dict(headers or {})
+        )  # no credential yet
         try:
             auth_headers, credential_base = resolve(url)
         except httpx.HTTPError as exc:  # a resolver's own refresh POST failed: its request holds the refresh token
@@ -179,7 +219,8 @@ def credentialed_provider_request(
             if url_origin(credential_base) not in origins:
                 # A pooled gateway key belongs to its own host only (#121486).
                 refusal = PermissionError(
-                    f"This profile's {provider} credential routes to a custom endpoint; refusing")
+                    f"This profile's {provider} credential routes to a custom endpoint; refusing"
+                )
             else:
                 for name in auth_headers:
                     request.headers.pop(name, None)
@@ -191,10 +232,15 @@ def credentialed_provider_request(
             auth_headers = request = None
     if refusal is not None:
         raise refusal
-    return ProviderResponse(response.status_code, dict(response.headers), response.content)
+    return ProviderResponse(
+        response.status_code, dict(response.headers), response.content
+    )
 
 
 __all__ = [
-    "ProviderNotSignedIn", "ProviderResponse", "credentialed_provider_request", "declared_auth_providers",
+    "ProviderNotSignedIn",
+    "ProviderResponse",
+    "credentialed_provider_request",
+    "declared_auth_providers",
     "requires_auth_notice",
 ]

@@ -39,7 +39,10 @@ def _done_parent_with_done_child(conn):
     parent_id = kb.create_task(conn, title="ancestor", assignee="planner")
     assert kb.complete_task(conn, parent_id, result="done")
     child_id = kb.create_task(
-        conn, title="child", assignee="builder", parents=[parent_id],
+        conn,
+        title="child",
+        assignee="builder",
+        parents=[parent_id],
     )
     assert kb.complete_task(conn, child_id, result="done")
     return parent_id, child_id
@@ -57,13 +60,18 @@ def _reopen_parent_directly(conn, parent_id: str) -> None:
 def test_reopen_demotes_done_descendants_with_events_and_comments(conn):
     parent_id, child_id = _done_parent_with_done_child(conn)
     grandchild_id = kb.create_task(
-        conn, title="grandchild", assignee="writer", parents=[child_id],
+        conn,
+        title="grandchild",
+        assignee="writer",
+        parents=[child_id],
     )
     assert kb.complete_task(conn, grandchild_id, result="done")
 
     _reopen_parent_directly(conn, parent_id)
     result = kb.invalidate_descendants_for_parent_reopen(
-        conn, parent_id, author="operator",
+        conn,
+        parent_id,
+        author="operator",
     )
 
     demoted = {entry["id"]: entry for entry in result["invalidated"]}
@@ -84,20 +92,25 @@ def test_reopen_demotes_done_descendants_with_events_and_comments(conn):
         assert payload["new_status"] == "todo"
 
         comments = kb.list_comments(conn, tid)
-        assert any(
-            parent_id in c.body and c.author == "operator" for c in comments
-        ), f"no invalidation comment naming {parent_id} on {tid}"
+        assert any(parent_id in c.body and c.author == "operator" for c in comments), (
+            f"no invalidation comment naming {parent_id} on {tid}"
+        )
 
     assert result["terminations"] == []
 
 
 def test_running_descendant_event_precedes_termination_via_reclaim_helper(
-    conn, tmp_path, monkeypatch,
+    conn,
+    tmp_path,
+    monkeypatch,
 ):
     parent_id = kb.create_task(conn, title="ancestor", assignee="planner")
     assert kb.complete_task(conn, parent_id, result="done")
     child_id = kb.create_task(
-        conn, title="running child", assignee="builder", parents=[parent_id],
+        conn,
+        title="running child",
+        assignee="builder",
+        parents=[parent_id],
     )
     claimed = kb.claim_task(conn, child_id)
     assert claimed is not None and claimed.status == "running"
@@ -121,7 +134,9 @@ def test_running_descendant_event_precedes_termination_via_reclaim_helper(
 
     _reopen_parent_directly(conn, parent_id)
     result = kb.invalidate_descendants_for_parent_reopen(
-        conn, parent_id, author="operator",
+        conn,
+        parent_id,
+        author="operator",
     )
 
     assert kills and kills[0][0] == 424242
@@ -167,7 +182,8 @@ def test_dashboard_and_db_paths_produce_identical_outcomes(tmp_path, monkeypatch
     repo_root = Path(__file__).resolve().parents[2]
     plugin_file = repo_root / "plugins" / "kanban" / "dashboard" / "plugin_api.py"
     spec = importlib.util.spec_from_file_location(
-        "clawk_dashboard_plugin_kanban_m3_test", plugin_file,
+        "clawk_dashboard_plugin_kanban_m3_test",
+        plugin_file,
     )
     assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
@@ -182,7 +198,10 @@ def test_dashboard_and_db_paths_produce_identical_outcomes(tmp_path, monkeypatch
             parent = kb.create_task(c, title=f"{tag}-parent", assignee="planner")
             assert kb.complete_task(c, parent, result="done")
             child = kb.create_task(
-                c, title=f"{tag}-child", assignee="builder", parents=[parent],
+                c,
+                title=f"{tag}-child",
+                assignee="builder",
+                parents=[parent],
             )
             assert kb.complete_task(c, child, result="done")
         return parent, child
@@ -192,7 +211,8 @@ def test_dashboard_and_db_paths_produce_identical_outcomes(tmp_path, monkeypatch
 
     # Surface 1: dashboard drag (done -> todo) via _set_status_direct.
     r = client.patch(
-        f"/api/plugins/kanban/tasks/{dash_parent}", json={"status": "todo"},
+        f"/api/plugins/kanban/tasks/{dash_parent}",
+        json={"status": "todo"},
     )
     assert r.status_code == 200, r.text
 
@@ -200,15 +220,17 @@ def test_dashboard_and_db_paths_produce_identical_outcomes(tmp_path, monkeypatch
     with kbc.connect() as c:
         with kb.write_txn(c):
             c.execute(
-                "UPDATE tasks SET status = 'todo', completed_at = NULL "
-                "WHERE id = ?",
+                "UPDATE tasks SET status = 'todo', completed_at = NULL WHERE id = ?",
                 (db_parent,),
             )
         kb.invalidate_descendants_for_parent_reopen(
-            c, db_parent, author="dashboard",
+            c,
+            db_parent,
+            author="dashboard",
         )
 
     with kbc.connect() as c:
+
         def snapshot(tid: str):
             t = kb.get_task(c, tid)
             assert t is not None

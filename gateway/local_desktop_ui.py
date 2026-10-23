@@ -24,6 +24,7 @@ are installed per turn on the cached agent and restored with the other turn sink
 
 Card for ``manage_connections``: ``connection_callback`` publishes ``connection.request`` on the turn, and each later change of an operation is published as ``connection.update`` on the session that owns it (looked up by its session key, the route); the card answers through ``connection.respond`` (``gateway/session_connections.py``).
 """
+
 from __future__ import annotations
 
 import json
@@ -34,9 +35,16 @@ import time
 logger = logging.getLogger(__name__)
 
 # Agent attributes ``wire`` installs for one local-viewer turn (restored by ``local_viewer_events``).
-CALLBACK_ATTRS = ("read_terminal_callback", "read_preview_callback", "drive_preview_callback",
-                  "read_window_below_callback", "theme_callback", "tour_callback", "setup_beat_callback",
-                  "connection_callback")
+CALLBACK_ATTRS = (
+    "read_terminal_callback",
+    "read_preview_callback",
+    "drive_preview_callback",
+    "read_window_below_callback",
+    "theme_callback",
+    "tour_callback",
+    "setup_beat_callback",
+    "connection_callback",
+)
 
 # main: tui_gateway/agent_callbacks.py ``_read_block`` budgets and tui_gateway/server.py's preview.act ladder.
 _TERMINAL_READ_TIMEOUT_S = 30
@@ -45,26 +53,39 @@ _WINDOW_READ_TIMEOUT_S = 30
 _PREVIEW_ACTION_TIMEOUT_S = 45
 _PREVIEW_ACTION_PROBE_TIMEOUT_S = 10
 _PREVIEW_ACTION_REPROBE_COOLDOWN_S = 30
-_PREVIEW_ACTION_BRIDGE_UNAVAILABLE = json.dumps({
-    "success": False,
-    "error": ("No Clawksis Desktop window answered the preview action request. The drive_preview / "
-              "annotate_preview bridge is served by the desktop app's renderer, which updates "
-              "separately from this backend, so an app build older than the tool has nothing "
-              "listening. Update the Clawksis Desktop app, open a page with open_preview, and try "
-              "again in this session after a short cooldown.")})
+_PREVIEW_ACTION_BRIDGE_UNAVAILABLE = json.dumps(
+    {
+        "success": False,
+        "error": (
+            "No Clawksis Desktop window answered the preview action request. The drive_preview / "
+            "annotate_preview bridge is served by the desktop app's renderer, which updates "
+            "separately from this backend, so an app build older than the tool has nothing "
+            "listening. Update the Clawksis Desktop app, open a page with open_preview, and try "
+            "again in this session after a short cooldown."
+        ),
+    }
+)
 
 # main: tui_gateway/theme_bridge.py and tui_gateway/server.py's tour ladder.
 _THEME_TIMEOUT_S = 15
 _THEME_PICK_TIMEOUT_S = 300
-_THEME_UNANSWERED = {"success": False, "error": "No Clawksis Desktop window answered the theme request."}
+_THEME_UNANSWERED = {
+    "success": False,
+    "error": "No Clawksis Desktop window answered the theme request.",
+}
 _TOUR_TIMEOUT_S = 45
 _TOUR_PROBE_TIMEOUT_S = 10
-_TOUR_BRIDGE_UNAVAILABLE = json.dumps({
-    "success": False,
-    "error": ("No Clawksis Desktop window answered the tour request. The tour is driven by the desktop app's "
-              "renderer, which updates separately from this backend, so an app build older than the tour tool "
-              "has nothing listening. Update the Clawksis Desktop app and start a new session. Do not retry tour "
-              "in this session.")})
+_TOUR_BRIDGE_UNAVAILABLE = json.dumps(
+    {
+        "success": False,
+        "error": (
+            "No Clawksis Desktop window answered the tour request. The tour is driven by the desktop app's "
+            "renderer, which updates separately from this backend, so an app build older than the tour tool "
+            "has nothing listening. Update the Clawksis Desktop app and start a new session. Do not retry tour "
+            "in this session."
+        ),
+    }
+)
 
 _lock = threading.Lock()
 # turn key (the turn's bound CLAWK_SESSION_ID) -> publish(event_type, payload) of the live turn
@@ -82,6 +103,7 @@ _process_sinks_installed = False
 def _emit(sid, event, payload) -> None:
     """``desktop_ui`` sink: publish *event* on the stream of the turn that raised it."""
     from gateway.session_context import get_session_env
+
     keys = [str(sid or ""), get_session_env("CLAWK_SESSION_ID", "")]
     with _lock:
         publish = next((_turns[key] for key in keys if key and key in _turns), None)
@@ -96,6 +118,7 @@ def _install_emitter() -> None:
     if _emitter_installed:
         return
     from tools import desktop_ui
+
     desktop_ui.set_emitter(_emit)
     _emitter_installed = True
 
@@ -120,24 +143,29 @@ def _install_process_sinks() -> None:
     if _process_sinks_installed:
         return
     from tools.process_registry import process_registry
+
     if getattr(process_registry, "on_output", None) is None:
         process_registry.on_output = lambda session, chunk: _publish_process(
-            session, "agent.terminal.output", {"process_id": session.id, "chunk": chunk})
+            session, "agent.terminal.output", {"process_id": session.id, "chunk": chunk}
+        )
     if getattr(process_registry, "on_close", None) is None:
         process_registry.on_close = lambda session, pid: _publish_process(
-            session, "terminal.close", {"process_id": pid})
+            session, "terminal.close", {"process_id": pid}
+        )
     _process_sinks_installed = True
 
 
 def _install_connection_hook() -> None:
     """``connection.update`` for an operation opened by one of our turns, on the session that owns it (same session key and profile, as the sidecar matches its own); any other operation goes to the hook this one wraps (the sidecar's, for its own sessions). Re-wraps whenever another hook replaced it, so install order does not matter."""
     from tools.connectors.operation import ConnectionOperation
+
     previous = ConnectionOperation.on_change
     if getattr(previous, "_local_desktop_ui", False):
         return
 
     def on_change(operation, change, snapshot):
         from clawk_constants import clawk_home_key
+
         with _lock:
             route = _process_routes.get(operation.session_key)
         live = route[0].sessions.get(route[1]) if route is not None else None
@@ -146,9 +174,16 @@ def _install_connection_hook() -> None:
                 previous(operation, change, snapshot)
             return
         from tui_gateway.connector_payload import connector_ui_payload
-        payload = {**snapshot, "settled": snapshot.get("settled_at") is not None, **(change or {}),
-                   "owner": {"type": "session", "session_id": route[1]}}
-        live.event_stream.publish(route[1], connector_ui_payload(payload), event_type="connection.update")
+
+        payload = {
+            **snapshot,
+            "settled": snapshot.get("settled_at") is not None,
+            **(change or {}),
+            "owner": {"type": "session", "session_id": route[1]},
+        }
+        live.event_stream.publish(
+            route[1], connector_ui_payload(payload), event_type="connection.update"
+        )
 
     on_change._local_desktop_ui = True
     ConnectionOperation.on_change = staticmethod(on_change)
@@ -157,12 +192,19 @@ def _install_connection_hook() -> None:
 def _ask_result(turn, agent, method, params, timeout):
     """One structured server request; the viewer's ``result`` dict, or None when none answered."""
     from gateway.session_server_requests import ask_viewer_result
+
     authority, session_id, _generation = turn._approval_owner
     live = authority.sessions.get(session_id)
     if live is None:
         return None
-    return ask_viewer_result(live.event_stream, session_id, method, dict(params), timeout=timeout,
-                             cancelled=lambda: bool(getattr(agent, "_interrupt_requested", False)))
+    return ask_viewer_result(
+        live.event_stream,
+        session_id,
+        method,
+        dict(params),
+        timeout=timeout,
+        cancelled=lambda: bool(getattr(agent, "_interrupt_requested", False)),
+    )
 
 
 def _theme(turn, agent, payload) -> dict:
@@ -178,7 +220,11 @@ def _theme(turn, agent, payload) -> dict:
     started = time.monotonic()
     result = _ask_result(turn, agent, "theme.pick", payload, _THEME_PICK_TIMEOUT_S)
     if result is None:
-        return {"timed_out": True} if time.monotonic() - started >= _THEME_PICK_TIMEOUT_S else {"cancelled": True}
+        return (
+            {"timed_out": True}
+            if time.monotonic() - started >= _THEME_PICK_TIMEOUT_S
+            else {"cancelled": True}
+        )
     if isinstance(result.get("picked"), dict):
         return {"success": True, "picked": result["picked"]}
     if isinstance(result.get("said"), str) and result["said"].strip():
@@ -193,7 +239,13 @@ def _tour(turn, agent, payload) -> str:
         state = _tour_bridge.get(session_id)
     if state == "unanswered":
         return _TOUR_BRIDGE_UNAVAILABLE
-    answer = _ask(turn, agent, "tour", payload, _TOUR_TIMEOUT_S if state == "answered" else _TOUR_PROBE_TIMEOUT_S)
+    answer = _ask(
+        turn,
+        agent,
+        "tour",
+        payload,
+        _TOUR_TIMEOUT_S if state == "answered" else _TOUR_PROBE_TIMEOUT_S,
+    )
     with _lock:
         if answer:
             _tour_bridge[session_id] = "answered"
@@ -204,24 +256,37 @@ def _tour(turn, agent, payload) -> str:
 
 def _setup_beat(turn, agent, payload):
     from agent.onboarding_flow import CARD_TIMEOUT_S
+
     return _ask_result(turn, agent, "setup_beat", payload, CARD_TIMEOUT_S)
 
 
 def _ask(turn, agent, method, params, timeout):
     """One ``ValueResult`` server request to the session's attached viewers; "" when none answered."""
     from gateway.session_server_requests import ask_viewer
+
     authority, session_id, _generation = turn._approval_owner
     live = authority.sessions.get(session_id)
     if live is None:
         return ""
-    value = ask_viewer(live.event_stream, session_id, method, dict(params), timeout=timeout,
-                       cancelled=lambda: bool(getattr(agent, "_interrupt_requested", False)))
+    value = ask_viewer(
+        live.event_stream,
+        session_id,
+        method,
+        dict(params),
+        timeout=timeout,
+        cancelled=lambda: bool(getattr(agent, "_interrupt_requested", False)),
+    )
     return value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
 
 
 def _read_block(turn, agent, method, timeout):
     return lambda start=None, count=None: _ask(
-        turn, agent, method, {k: v for k, v in (("start", start), ("count", count)) if v is not None}, timeout)
+        turn,
+        agent,
+        method,
+        {k: v for k, v in (("start", start), ("count", count)) if v is not None},
+        timeout,
+    )
 
 
 def _preview_action(turn, agent, payload) -> str:
@@ -236,12 +301,21 @@ def _preview_action(turn, agent, payload) -> str:
             return _PREVIEW_ACTION_BRIDGE_UNAVAILABLE
         if state == "unanswered":
             bridge["retry_at"] = now + _PREVIEW_ACTION_REPROBE_COOLDOWN_S
-    answer = _ask(turn, agent, "preview.act", payload,
-                  _PREVIEW_ACTION_TIMEOUT_S if state == "answered" else _PREVIEW_ACTION_PROBE_TIMEOUT_S)
+    answer = _ask(
+        turn,
+        agent,
+        "preview.act",
+        payload,
+        _PREVIEW_ACTION_TIMEOUT_S
+        if state == "answered"
+        else _PREVIEW_ACTION_PROBE_TIMEOUT_S,
+    )
     with _lock:
         if answer:
             bridge["state"] = "answered"
-        elif bridge.get("state") != "answered" and not getattr(agent, "_interrupt_requested", False):
+        elif bridge.get("state") != "answered" and not getattr(
+            agent, "_interrupt_requested", False
+        ):
             bridge["state"] = "unanswered"
             bridge["retry_at"] = time.monotonic() + _PREVIEW_ACTION_REPROBE_COOLDOWN_S
     return answer or _PREVIEW_ACTION_BRIDGE_UNAVAILABLE
@@ -256,7 +330,9 @@ def wire(turn, agent):
         _install_emitter()
         _install_process_sinks()
         _install_connection_hook()
-    except Exception:  # health: allow BLE001 -- the window bridges are optional; the turn must run
+    except (
+        Exception
+    ):  # health: allow BLE001 -- the window bridges are optional; the turn must run
         logger.warning("Desktop UI sink install failed", exc_info=True)
     key = str(getattr(turn._ctx, "session_id", "") or owner[1])
     publish = turn._publish_execution
@@ -265,15 +341,27 @@ def wire(turn, agent):
         _turns[key] = publish
         if process_key:
             _process_routes[process_key] = (owner[0], owner[1])
-    agent.read_terminal_callback = _read_block(turn, agent, "terminal.read", _TERMINAL_READ_TIMEOUT_S)
-    agent.read_preview_callback = _read_block(turn, agent, "preview.read", _PREVIEW_READ_TIMEOUT_S)
-    agent.drive_preview_callback = lambda payload: _preview_action(turn, agent, dict(payload or {}))
-    agent.read_window_below_callback = lambda: _ask(turn, agent, "window.read", {}, _WINDOW_READ_TIMEOUT_S)
+    agent.read_terminal_callback = _read_block(
+        turn, agent, "terminal.read", _TERMINAL_READ_TIMEOUT_S
+    )
+    agent.read_preview_callback = _read_block(
+        turn, agent, "preview.read", _PREVIEW_READ_TIMEOUT_S
+    )
+    agent.drive_preview_callback = lambda payload: _preview_action(
+        turn, agent, dict(payload or {})
+    )
+    agent.read_window_below_callback = lambda: _ask(
+        turn, agent, "window.read", {}, _WINDOW_READ_TIMEOUT_S
+    )
     agent.theme_callback = lambda payload: _theme(turn, agent, dict(payload or {}))
     agent.tour_callback = lambda payload: _tour(turn, agent, dict(payload or {}))
-    agent.setup_beat_callback = lambda payload: _setup_beat(turn, agent, dict(payload or {}))
+    agent.setup_beat_callback = lambda payload: _setup_beat(
+        turn, agent, dict(payload or {})
+    )
     # Fire-and-forget: the tool thread waits on its own operation; the card answers by op_id.
-    agent.connection_callback = lambda payload: publish("connection.request", dict(payload)) and None
+    agent.connection_callback = lambda payload: (
+        publish("connection.request", dict(payload)) and None
+    )
     return key, publish
 
 

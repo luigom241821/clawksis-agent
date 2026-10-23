@@ -53,14 +53,19 @@ class DetectionResult:
     is_anthropic: bool = False
 
 
-def _resolve_credential(api_key: Any, token_provider: TokenProvider = None) -> tuple[Optional[str], str]:
+def _resolve_credential(
+    api_key: Any, token_provider: TokenProvider = None
+) -> tuple[Optional[str], str]:
     """Coerce wizard inputs into ``(token_or_None, mode)``.
 
     ``mode`` is ``"entra_id"`` when a callable token provider was supplied (the token is a freshly
     minted bearer JWT, sent ONLY in ``Authorization: Bearer``), else ``"api_key"``.
     """
     # Token-provider path (callable wins when both supplied).
-    for provider, label in ((token_provider, "token_provider"), (api_key, "api_key callable")):
+    for provider, label in (
+        (token_provider, "token_provider"),
+        (api_key, "api_key callable"),
+    ):
         if callable(provider) and not isinstance(provider, str):
             try:
                 token = provider()
@@ -73,8 +78,14 @@ def _resolve_credential(api_key: Any, token_provider: TokenProvider = None) -> t
     return None, "api_key"
 
 
-def _authed_request(url: str, api_key: Any, token_provider, *, method: str = "GET",
-                    data: Optional[bytes] = None) -> urllib_request.Request:
+def _authed_request(
+    url: str,
+    api_key: Any,
+    token_provider,
+    *,
+    method: str = "GET",
+    data: Optional[bytes] = None,
+) -> urllib_request.Request:
     """Build a request carrying the right auth headers for the credential mode."""
     token, mode = _resolve_credential(api_key, token_provider)
     req = urllib_request.Request(url, method=method, data=data)
@@ -95,15 +106,22 @@ def _read_limited_response_body(resp: Any, limit: int, *, label: str) -> bytes:
     return body
 
 
-def _http_get_json(url: str, api_key: Any, timeout: float = 6.0, *,
-                   token_provider: TokenProvider = None) -> tuple[int, Optional[dict]]:
+def _http_get_json(
+    url: str,
+    api_key: Any,
+    timeout: float = 6.0,
+    *,
+    token_provider: TokenProvider = None,
+) -> tuple[int, Optional[dict]]:
     """GET with auth headers; return ``(status_code, parsed_json_or_None)``. Never raises."""
     req = _authed_request(url, api_key, token_provider)
     try:
         with open_credentialed_url(req, timeout=timeout) as resp:
             try:
                 body = _read_limited_response_body(
-                    resp, _AZURE_DETECT_JSON_BODY_MAX_BYTES, label="Azure detection JSON response body",
+                    resp,
+                    _AZURE_DETECT_JSON_BODY_MAX_BYTES,
+                    label="Azure detection JSON response body",
                 )
                 return resp.status, json.loads(body.decode("utf-8", errors="replace"))
             except Exception:
@@ -146,18 +164,24 @@ def _extract_model_ids(payload: dict) -> list[str]:
     return ids
 
 
-def _probe_openai_models(base_url: str, api_key: Any, *, token_provider: TokenProvider = None) -> tuple[bool, list[str]]:
+def _probe_openai_models(
+    base_url: str, api_key: Any, *, token_provider: TokenProvider = None
+) -> tuple[bool, list[str]]:
     """Probe ``<base>/models`` for an OpenAI-shaped response."""
     base_url = base_url.rstrip("/")
     # Azure OpenAI v1 needs no api-version for GA paths, so probe without first; then fall back to
     # explicit api-versions for pre-v1 resources.
-    candidates = [f"{base_url}/models"] + [f"{base_url}/models?api-version={v}" for v in _AZURE_OPENAI_PROBE_API_VERSIONS]
+    candidates = [f"{base_url}/models"] + [
+        f"{base_url}/models?api-version={v}" for v in _AZURE_OPENAI_PROBE_API_VERSIONS
+    ]
     for url in candidates:
         status, body = _http_get_json(url, api_key, token_provider=token_provider)
         if status == 200 and body is not None:
             ids = _extract_model_ids(body)
             if ids:
-                logger.info("azure_detect: /models probe OK at %s (%d models)", url, len(ids))
+                logger.info(
+                    "azure_detect: /models probe OK at %s (%d models)", url, len(ids)
+                )
                 return True, ids
             # 200 + empty list still counts as "OpenAI shape, no models listed".
             if isinstance(body, dict) and "data" in body:
@@ -165,14 +189,22 @@ def _probe_openai_models(base_url: str, api_key: Any, *, token_provider: TokenPr
     return False, []
 
 
-def _probe_anthropic_messages(base_url: str, api_key: Any, *, token_provider: TokenProvider = None) -> bool:
+def _probe_anthropic_messages(
+    base_url: str, api_key: Any, *, token_provider: TokenProvider = None
+) -> bool:
     """Zero-token POST to ``<base>/v1/messages``: does the endpoint *recognise* the Anthropic shape?
 
     Any 4xx mentioning ``messages``/``model``, or an Anthropic-shaped error body, counts. Never
     completes a real chat.
     """
     url = f"{_strip_trailing_v1(base_url)}/v1/messages?api-version={_AZURE_ANTHROPIC_API_VERSION}"
-    payload = json.dumps({"model": "probe", "max_tokens": 1, "messages": [{"role": "user", "content": "ping"}]}).encode("utf-8")
+    payload = json.dumps(
+        {
+            "model": "probe",
+            "max_tokens": 1,
+            "messages": [{"role": "user", "content": "ping"}],
+        }
+    ).encode("utf-8")
     req = _authed_request(url, api_key, token_provider, method="POST", data=payload)
     req.add_header("anthropic-version", "2023-06-01")
     req.add_header("content-type", "application/json")
@@ -184,7 +216,9 @@ def _probe_anthropic_messages(base_url: str, api_key: Any, *, token_provider: To
         try:
             with exc:
                 body = _read_limited_response_body(
-                    exc, _AZURE_DETECT_ERROR_BODY_MAX_BYTES, label="Azure Anthropic probe error response body",
+                    exc,
+                    _AZURE_DETECT_ERROR_BODY_MAX_BYTES,
+                    label="Azure Anthropic probe error response body",
                 )
             lowered = body.decode("utf-8", errors="replace").lower()
             if "anthropic" in lowered or '"type"' in lowered and '"error"' in lowered:
@@ -198,7 +232,9 @@ def _probe_anthropic_messages(base_url: str, api_key: Any, *, token_provider: To
         return False
 
 
-def detect(base_url: str, api_key: Any = "", *, token_provider: TokenProvider = None) -> DetectionResult:
+def detect(
+    base_url: str, api_key: Any = "", *, token_provider: TokenProvider = None
+) -> DetectionResult:
     """Inspect an Azure endpoint and describe its transport + models (advisory — None api_mode means ask the user).
 
     ``api_key`` may be a string (legacy API-key auth — sends both ``api-key:`` and ``Authorization:
@@ -225,7 +261,8 @@ def detect(base_url: str, api_key: Any = "", *, token_provider: TokenProvider = 
         result.models = models
         result.api_mode = "chat_completions"
         result.reason = (
-            f"GET /models returned {len(models)} model(s) — OpenAI-style endpoint" if models
+            f"GET /models returned {len(models)} model(s) — OpenAI-style endpoint"
+            if models
             else "GET /models returned an OpenAI-shaped empty list — OpenAI-style endpoint"
         )
         return result
@@ -244,8 +281,13 @@ def detect(base_url: str, api_key: Any = "", *, token_provider: TokenProvider = 
     return result
 
 
-def lookup_context_length(model: str, base_url: str, api_key: Any = "", *,
-                          token_provider: TokenProvider = None) -> Optional[int]:
+def lookup_context_length(
+    model: str,
+    base_url: str,
+    api_key: Any = "",
+    *,
+    token_provider: TokenProvider = None,
+) -> Optional[int]:
     """``get_model_context_length`` that returns None when only the fallback default would fire, so
     the wizard can distinguish "we actually know this" from "we guessed".
     """
@@ -253,7 +295,10 @@ def lookup_context_length(model: str, base_url: str, api_key: Any = "", *,
     if not model_id:
         return None
     try:
-        from agent.model_metadata import DEFAULT_FALLBACK_CONTEXT, get_model_context_length
+        from agent.model_metadata import (
+            DEFAULT_FALLBACK_CONTEXT,
+            get_model_context_length,
+        )
     except Exception:
         return None
 

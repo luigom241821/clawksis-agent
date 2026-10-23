@@ -9,6 +9,7 @@ image (faster local iteration); otherwise the ``built_image`` fixture builds
 the repo's Dockerfile once per session.
 
 """
+
 from __future__ import annotations
 
 import os
@@ -28,7 +29,9 @@ def _docker_available() -> bool:
         return False
     try:
         r = subprocess.run(
-            ["docker", "info"], capture_output=True, timeout=5,
+            ["docker", "info"],
+            capture_output=True,
+            timeout=5,
             check=False,
         )
         return r.returncode == 0
@@ -63,12 +66,12 @@ def built_image() -> str:
     )
     result = subprocess.run(
         ["docker", "build", "-t", IMAGE_TAG, repo_root],
-        capture_output=True, text=True, timeout=1200,
+        capture_output=True,
+        text=True,
+        timeout=1200,
         check=False,
     )
-    assert result.returncode == 0, (
-        f"docker build failed:\n{result.stderr[-2000:]}"
-    )
+    assert result.returncode == 0, f"docker build failed:\n{result.stderr[-2000:]}"
     return IMAGE_TAG
 
 
@@ -80,7 +83,8 @@ def container_name(request) -> Iterator[str]:
     yield name
     subprocess.run(
         ["docker", "rm", "-f", name],
-        capture_output=True, timeout=10,
+        capture_output=True,
+        timeout=10,
         check=False,
     )
 
@@ -121,7 +125,10 @@ def docker_exec(
     """
     cmd = ["docker", "exec", "-u", user, *extra_docker_args, container, *args]
     return subprocess.run(
-        cmd, capture_output=True, text=True, timeout=timeout,
+        cmd,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
         check=False,
     )
 
@@ -135,7 +142,12 @@ def docker_exec_sh(
 ) -> subprocess.CompletedProcess[str]:
     """Run ``sh -c <command>`` inside the container as ``user``."""
     return docker_exec(
-        container, "sh", "-c", command, user=user, timeout=timeout,
+        container,
+        "sh",
+        "-c",
+        command,
+        user=user,
+        timeout=timeout,
     )
 
 
@@ -162,7 +174,8 @@ def wait_for_container_ready(
     while time.monotonic() < end:
         r = docker_exec(
             container,
-            "sh", "-c",
+            "sh",
+            "-c",
             "cat /opt/data/logs/container-boot.log 2>/dev/null",
             timeout=5,
         )
@@ -215,12 +228,19 @@ def restart_container(container: str, timeout: int = 60) -> None:
     ``wait_for_container_ready`` would match the stale line from the
     previous boot and return before cont-init runs on the new boot.
     """
-    docker_exec(container, "sh", "-c",
-                "truncate -s 0 /opt/data/logs/container-boot.log 2>/dev/null || true",
-                user="root", timeout=5)
+    docker_exec(
+        container,
+        "sh",
+        "-c",
+        "truncate -s 0 /opt/data/logs/container-boot.log 2>/dev/null || true",
+        user="root",
+        timeout=5,
+    )
     subprocess.run(
         ["docker", "restart", container],
-        check=True, capture_output=True, timeout=timeout,
+        check=True,
+        capture_output=True,
+        timeout=timeout,
     )
     wait_for_container_ready(container)
 
@@ -264,8 +284,10 @@ def wait_for_path(
     ``'e'`` for existence. Returns ``True`` on success, ``False`` on timeout.
     """
     return poll_container(
-        container, f"test -{kind} {path}",
-        deadline_s=deadline_s, interval_s=interval_s,
+        container,
+        f"test -{kind} {path}",
+        deadline_s=deadline_s,
+        interval_s=interval_s,
     )[0]
 
 
@@ -285,19 +307,26 @@ def wait_for_log(
     last = ""
     while time.monotonic() < end:
         r = docker_exec_sh(
-            container, f"cat {log_path} 2>/dev/null", timeout=5,
+            container,
+            f"cat {log_path} 2>/dev/null",
+            timeout=5,
         )
         if r.returncode == 0:
             last = r.stdout
             if needle in last:
                 return last
         time.sleep(interval_s)
-    raise AssertionError(f"Didn't see `{needle}` in {log_path} within {deadline_s} in container {container}")
-
+    raise AssertionError(
+        f"Didn't see `{needle}` in {log_path} within {deadline_s} in container {container}"
+    )
 
 
 def wait_for_docker_logs(
-    container: str, needle: str, *, deadline_s: float = 30.0, interval_s: float = 0.5,
+    container: str,
+    needle: str,
+    *,
+    deadline_s: float = 30.0,
+    interval_s: float = 0.5,
 ) -> str:
     """Poll ``docker logs`` until ``needle`` appears or deadline expires.
 
@@ -308,11 +337,15 @@ def wait_for_docker_logs(
     while time.monotonic() < end:
         r = subprocess.run(
             ["docker", "logs", container],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
             check=False,
         )
         last = r.stdout + r.stderr
         if needle in last:
             return last
         time.sleep(interval_s)
-    raise AssertionError(f"Didn't see `{needle}` in docker logs within {deadline_s} in container {container}")
+    raise AssertionError(
+        f"Didn't see `{needle}` in docker logs within {deadline_s} in container {container}"
+    )

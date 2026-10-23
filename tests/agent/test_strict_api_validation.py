@@ -11,6 +11,7 @@ from run_agent import AIAgent
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
+
 def _tool_defs(*names):
     return [
         {
@@ -24,6 +25,7 @@ def _tool_defs(*names):
         for n in names
     ]
 
+
 class _FakeOpenAI:
     def __init__(self, **kw):
         self.api_key = kw.get("api_key", "test")
@@ -32,8 +34,17 @@ class _FakeOpenAI:
     def close(self):
         pass
 
-def _make_agent(monkeypatch, provider, api_mode="chat_completions", base_url="https://openrouter.ai/api/v1"):
-    monkeypatch.setattr("model_tools.get_tool_definitions", lambda **kw: _tool_defs("web_search", "terminal"))
+
+def _make_agent(
+    monkeypatch,
+    provider,
+    api_mode="chat_completions",
+    base_url="https://openrouter.ai/api/v1",
+):
+    monkeypatch.setattr(
+        "model_tools.get_tool_definitions",
+        lambda **kw: _tool_defs("web_search", "terminal"),
+    )
     monkeypatch.setattr("model_tools.check_toolset_requirements", dict)
     monkeypatch.setattr("agent.process_bootstrap.OpenAI", _FakeOpenAI)
     return AIAgent(
@@ -46,6 +57,7 @@ def _make_agent(monkeypatch, provider, api_mode="chat_completions", base_url="ht
         skip_context_files=True,
         skip_memory=True,
     )
+
 
 class TestStrictApiValidation:
     """Verify tool_call field sanitization prevents 400 errors on strict APIs."""
@@ -66,7 +78,10 @@ class TestStrictApiValidation:
                         "call_id": "call_123",  # Codex-only field
                         "response_item_id": "fc_123",  # Codex-only field
                         "type": "function",
-                        "function": {"name": "terminal", "arguments": '{"command":"pwd"}'},
+                        "function": {
+                            "name": "terminal",
+                            "arguments": '{"command":"pwd"}',
+                        },
                     }
                 ],
             },

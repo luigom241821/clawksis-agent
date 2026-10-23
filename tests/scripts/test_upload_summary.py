@@ -1,4 +1,5 @@
 """Every verified R2 upload lands in the GitHub step summary, with its public URL."""
+
 import json
 
 import pytest
@@ -29,8 +30,11 @@ def test_render_uses_the_public_asset_host(monkeypatch):
 
 
 def test_render_names_a_key_whose_url_cannot_be_built(monkeypatch):
-    monkeypatch.setattr(r2, "public_url_for",
-                        lambda base, key: (_ for _ in ()).throw(ValueError("bad key")))
+    monkeypatch.setattr(
+        r2,
+        "public_url_for",
+        lambda base, key: (_ for _ in ()).throw(ValueError("bad key")),
+    )
     text = upload_summary.render(["../escape"])
     assert "`../escape`" in text
     assert "| — |" in text
@@ -65,14 +69,28 @@ def test_put_object_records_only_after_the_size_check(monkeypatch):
 
     class Response:
         status = 200
+
         def header(self, name):
             return "11" if name == "content-length" else None
+
         def text(self):
             return ""
 
     monkeypatch.setattr(r2, "signed_request", lambda *args, **kwargs: Response())
-    monkeypatch.setattr(r2, "R2Scope", type("Scope", (), {"configured": staticmethod(lambda: R2Scope())}))
+    monkeypatch.setattr(
+        r2,
+        "R2Scope",
+        type("Scope", (), {"configured": staticmethod(lambda: R2Scope())}),
+    )
     with pytest.raises(r2.R2RequestError):
-        r2.put_object({"access_key_id": "k", "secret_key": "s"}, "https://example.r2.cloudflarestorage.com",
-                       "bucket", KEY, b"payload-bytes", "20000101T000000Z", "application/octet-stream", fetcher=None)
+        r2.put_object(
+            {"access_key_id": "k", "secret_key": "s"},
+            "https://example.r2.cloudflarestorage.com",
+            "bucket",
+            KEY,
+            b"payload-bytes",
+            "20000101T000000Z",
+            "application/octet-stream",
+            fetcher=None,
+        )
     assert recorded == []

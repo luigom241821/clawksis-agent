@@ -34,8 +34,17 @@ def test_explicit_non_reasoning_compression_route_is_certified():
 
 
 def test_inherited_auto_or_uncertified_compression_routes_remain_uncapped():
-    inherited = _resolve({"provider": "auto", "model": "", "reasoning_effort": "none", "max_output_tokens": 1400})
-    unknown = _resolve({"provider": "ollama", "model": "qwen3:8b", "max_output_tokens": 1400})
+    inherited = _resolve(
+        {
+            "provider": "auto",
+            "model": "",
+            "reasoning_effort": "none",
+            "max_output_tokens": 1400,
+        }
+    )
+    unknown = _resolve(
+        {"provider": "ollama", "model": "qwen3:8b", "max_output_tokens": 1400}
+    )
     reasoning = _resolve(
         {
             "provider": "ollama",
@@ -66,11 +75,15 @@ def test_inherited_reasoning_control_is_preserved_without_enabling_a_cap():
         "max_output_tokens": 1400,
     }
 
-    with patch("agent.auxiliary_client._get_auxiliary_task_config", return_value=certified):
+    with patch(
+        "agent.auxiliary_client._get_auxiliary_task_config", return_value=certified
+    ):
         assert _get_task_extra_body("compression")["reasoning"] == {
             "enabled": False,
         }
-    with patch("agent.auxiliary_client._get_auxiliary_task_config", return_value=inherited):
+    with patch(
+        "agent.auxiliary_client._get_auxiliary_task_config", return_value=inherited
+    ):
         assert _get_task_extra_body("compression")["reasoning"] == {
             "enabled": False,
         }
@@ -138,7 +151,10 @@ def test_compression_latency_records_delayed_first_provider_chunk():
     client.chat.completions.create.side_effect = lambda **_kwargs: _chunks()
 
     with (
-        patch("agent.auxiliary_client._acquire_sync_aux_semaphore", return_value=_DelayedSemaphore()),
+        patch(
+            "agent.auxiliary_client._acquire_sync_aux_semaphore",
+            return_value=_DelayedSemaphore(),
+        ),
         patch("agent.auxiliary_client._get_cached_client", side_effect=_resolve_client),
     ):
         response = call_llm(
@@ -171,13 +187,19 @@ def test_certified_fast_lane_ignores_legacy_cap_and_preserves_reasoning():
 
     with (
         patch("agent.auxiliary_client._get_auxiliary_task_config", return_value=config),
-        patch("agent.auxiliary_client._get_cached_client", return_value=(client, "qwen3:8b")),
+        patch(
+            "agent.auxiliary_client._get_cached_client",
+            return_value=(client, "qwen3:8b"),
+        ),
         patch("agent.auxiliary_client._validate_llm_response", return_value=response),
     ):
-        assert call_llm(
-            task="compression",
-            messages=[{"role": "user", "content": "summary request"}],
-        ) is response
+        assert (
+            call_llm(
+                task="compression",
+                messages=[{"role": "user", "content": "summary request"}],
+            )
+            is response
+        )
 
     request = client.chat.completions.create.call_args.kwargs
     assert "max_tokens" not in request
@@ -210,10 +232,13 @@ def test_uncertified_effective_primary_route_does_not_receive_fast_cap():
         ),
         patch("agent.auxiliary_client._validate_llm_response", return_value=response),
     ):
-        assert call_llm(
-            task="compression",
-            messages=[{"role": "user", "content": "summary request"}],
-        ) is response
+        assert (
+            call_llm(
+                task="compression",
+                messages=[{"role": "user", "content": "summary request"}],
+            )
+            is response
+        )
 
     request = client.chat.completions.create.call_args.kwargs
     assert "max_tokens" not in request
@@ -243,10 +268,13 @@ def test_legacy_boolean_cap_does_not_bypass_route_certification():
         ),
         patch("agent.auxiliary_client._validate_llm_response", return_value=response),
     ):
-        assert call_llm(
-            task="compression",
-            messages=[{"role": "user", "content": "summary request"}],
-        ) is response
+        assert (
+            call_llm(
+                task="compression",
+                messages=[{"role": "user", "content": "summary request"}],
+            )
+            is response
+        )
 
     request = client.chat.completions.create.call_args.kwargs
     assert "max_tokens" not in request
@@ -286,11 +314,14 @@ def test_bedrock_converse_ttfp_waits_for_the_nonstreaming_response():
         ),
         patch("agent.bedrock_adapter.call_converse", side_effect=_delayed_converse),
     ):
-        assert call_llm(
-            task="compression",
-            messages=[{"role": "user", "content": "summary request"}],
-            latency_info=timings,
-        ) is response
+        assert (
+            call_llm(
+                task="compression",
+                messages=[{"role": "user", "content": "summary request"}],
+                latency_info=timings,
+            )
+            is response
+        )
 
     assert timings["provider_dispatch_ms"] >= 0
     assert timings["time_to_first_progress_ms"] >= 15
@@ -313,14 +344,20 @@ def test_summary_model_override_cap_uses_the_actual_primary_request():
 
     with (
         patch("agent.auxiliary_client._get_auxiliary_task_config", return_value=config),
-        patch("agent.auxiliary_client._get_cached_client", return_value=(client, "qwen3:14b")),
+        patch(
+            "agent.auxiliary_client._get_cached_client",
+            return_value=(client, "qwen3:14b"),
+        ),
         patch("agent.auxiliary_client._validate_llm_response", return_value=response),
     ):
-        assert call_llm(
-            task="compression",
-            model="qwen3:14b",
-            messages=[{"role": "user", "content": "summary request"}],
-        ) is response
+        assert (
+            call_llm(
+                task="compression",
+                model="qwen3:14b",
+                messages=[{"role": "user", "content": "summary request"}],
+            )
+            is response
+        )
 
     request = client.chat.completions.create.call_args.kwargs
     assert request["model"] == "qwen3:14b"
@@ -344,22 +381,31 @@ def test_fallback_reasoning_requires_independent_route_certification():
         client.base_url = "http://127.0.0.1:11434/v1"
         client.chat.completions.create.return_value = response
         with (
-            patch("agent.auxiliary_client._get_auxiliary_task_config", return_value=config),
-            patch("agent.auxiliary_client._validate_llm_response", return_value=response),
+            patch(
+                "agent.auxiliary_client._get_auxiliary_task_config", return_value=config
+            ),
+            patch(
+                "agent.auxiliary_client._validate_llm_response", return_value=response
+            ),
         ):
-            assert _call_fallback_candidate_sync(
-                client,
-                "qwen3:14b",
-                "fallback_chain[0](ollama)",
-                task="compression",
-                messages=[{"role": "user", "content": "summary request"}],
-                temperature=None,
-                max_tokens=None,
-                tools=None,
-                effective_timeout=300,
-                effective_extra_body={"reasoning": {"enabled": False, "effort": "none"}},
-                reasoning_config=None,
-            ) is response
+            assert (
+                _call_fallback_candidate_sync(
+                    client,
+                    "qwen3:14b",
+                    "fallback_chain[0](ollama)",
+                    task="compression",
+                    messages=[{"role": "user", "content": "summary request"}],
+                    temperature=None,
+                    max_tokens=None,
+                    tools=None,
+                    effective_timeout=300,
+                    effective_extra_body={
+                        "reasoning": {"enabled": False, "effort": "none"}
+                    },
+                    reasoning_config=None,
+                )
+                is response
+            )
         return client.chat.completions.create.call_args.kwargs
 
     uncertified = _request_for({"provider": "ollama", "model": "qwen3:14b"})
@@ -465,14 +511,20 @@ def test_explicit_caller_max_tokens_keeps_provider_quirk_handling():
 
     with (
         patch("agent.auxiliary_client._get_auxiliary_task_config", return_value=config),
-        patch("agent.auxiliary_client._get_cached_client", return_value=(client, "qwen3:8b")),
+        patch(
+            "agent.auxiliary_client._get_cached_client",
+            return_value=(client, "qwen3:8b"),
+        ),
         patch("agent.auxiliary_client._validate_llm_response", return_value=response),
     ):
-        assert call_llm(
-            task="compression",
-            messages=[{"role": "user", "content": "summary request"}],
-            max_tokens=1500,
-        ) is response
+        assert (
+            call_llm(
+                task="compression",
+                messages=[{"role": "user", "content": "summary request"}],
+                max_tokens=1500,
+            )
+            is response
+        )
 
     request = client.chat.completions.create.call_args.kwargs
     assert "max_tokens" not in request

@@ -20,7 +20,9 @@ from clawk_state_ids import new_session_id
 _WRAPPER_TAG_RE = re.compile(
     r"^<(?:user_instructions|environment_context|recommended_plugins|"
     r"skills_instructions|permissions[_-]instructions|turn_context|"
-    r"command-name|command-message|local-command-stdout|system-reminder)\b", re.IGNORECASE)
+    r"command-name|command-message|local-command-stdout|system-reminder)\b",
+    re.IGNORECASE,
+)
 
 _TITLE_MAX = 60
 _SOURCE_LABELS = {"claude": "Claude Code", "codex": "Codex CLI"}
@@ -101,7 +103,13 @@ def _merge_turns(raw_turns: list[tuple[str, str]]) -> list[dict[str, str]]:
         else:
             merged.append({"role": role, "content": text})
     if merged and merged[0]["role"] == "assistant":
-        merged.insert(0, {"role": "user", "content": "(imported conversation begins with an assistant reply)"})
+        merged.insert(
+            0,
+            {
+                "role": "user",
+                "content": "(imported conversation begins with an assistant reply)",
+            },
+        )
     return merged
 
 
@@ -111,20 +119,32 @@ def _message_turn(message: Any) -> Optional[tuple[str, str]]:
     if role not in ("user", "assistant"):
         return None
     text = _flatten_blocks(message.get("content"))
-    return None if not text or (role == "user" and _WRAPPER_TAG_RE.match(text.lstrip())) else (role, text)
+    return (
+        None
+        if not text or (role == "user" and _WRAPPER_TAG_RE.match(text.lstrip()))
+        else (role, text)
+    )
 
 
 def _first_user_line(turns: list[tuple[str, str]]) -> Optional[str]:
     for role, text in turns:
         if role == "user" and (line := text.strip().partition("\n")[0].strip()):
-            return line[:_TITLE_MAX * 2]
+            return line[: _TITLE_MAX * 2]
     return None
 
 
-def _parsed(turns: list[tuple[str, str]], cwd: Optional[str], session_id: Optional[str],
-            title: Optional[str] = None) -> dict[str, Any]:
-    return {"turns": _merge_turns(turns), "cwd": cwd, "title_guess": title or _first_user_line(turns),
-            "session_id": session_id}
+def _parsed(
+    turns: list[tuple[str, str]],
+    cwd: Optional[str],
+    session_id: Optional[str],
+    title: Optional[str] = None,
+) -> dict[str, Any]:
+    return {
+        "turns": _merge_turns(turns),
+        "cwd": cwd,
+        "title_guess": title or _first_user_line(turns),
+        "session_id": session_id,
+    }
 
 
 def parse_claude_session(path: Path) -> dict[str, Any]:
@@ -136,7 +156,9 @@ def parse_claude_session(path: Path) -> dict[str, Any]:
         if otype == "summary":
             if isinstance(s := obj.get("summary"), str) and s.strip():
                 summary = s.strip()
-        elif otype in ("user", "assistant") and not (obj.get("isSidechain") or obj.get("isMeta")):
+        elif otype in ("user", "assistant") and not (
+            obj.get("isSidechain") or obj.get("isMeta")
+        ):
             if cwd is None and isinstance(obj.get("cwd"), str):
                 cwd = obj["cwd"]
             if session_id is None and isinstance(obj.get("sessionId"), str):
@@ -161,7 +183,9 @@ def parse_codex_session(path: Path) -> dict[str, Any]:
                 session_id = sid
         elif otype == "response_item":
             ptype = payload.get("type")
-            if ptype == "message" and (turn := _message_turn(payload)):  # developer/system payloads skipped
+            if ptype == "message" and (
+                turn := _message_turn(payload)
+            ):  # developer/system payloads skipped
                 turns.append(turn)
             elif ptype in ("custom_tool_call", "function_call", "local_shell_call"):
                 # Assistant activity; merged into neighbours later. Tool outputs / reasoning skipped.
@@ -173,10 +197,22 @@ def parse_codex_session(path: Path) -> dict[str, Any]:
 # source -> (default root under ~, env override var, subdir under the env root, glob pattern,
 #            recursive, parser)
 _SOURCES = {
-    "claude": ((".claude", "projects"), "CLAUDE_CONFIG_DIR", "projects", "*/*.jsonl", False,
-               parse_claude_session),
-    "codex": ((".codex", "sessions"), "CODEX_HOME", "sessions", "rollout-*.jsonl", True,
-              parse_codex_session),
+    "claude": (
+        (".claude", "projects"),
+        "CLAUDE_CONFIG_DIR",
+        "projects",
+        "*/*.jsonl",
+        False,
+        parse_claude_session,
+    ),
+    "codex": (
+        (".codex", "sessions"),
+        "CODEX_HOME",
+        "sessions",
+        "rollout-*.jsonl",
+        True,
+        parse_codex_session,
+    ),
 }
 
 
@@ -197,7 +233,9 @@ def _default_root(source: str) -> Path:
     return Path.home().joinpath(*default_parts)
 
 
-def _walk(source: str, root: Optional[Path] = None) -> list[tuple[Path, os.stat_result]]:
+def _walk(
+    source: str, root: Optional[Path] = None
+) -> list[tuple[Path, os.stat_result]]:
     """Regular log files of *source* under *root* (default: the tool's env-aware store, see
     ``_default_root``) as ``(path, stat)``, newest first. Symlinks escaping the root and
     unreadable/rotated entries are skipped, so one bad file never hides the rest. Shared by the
@@ -205,7 +243,11 @@ def _walk(source: str, root: Optional[Path] = None) -> list[tuple[Path, os.stat_
     pattern, recursive = _SOURCES[source][3], _SOURCES[source][4]
     root = (Path(root) if root else _default_root(source)).resolve()
     found: list[tuple[Path, os.stat_result]] = []
-    for path in (root.rglob(pattern) if recursive else root.glob(pattern)) if root.is_dir() else ():
+    for path in (
+        (root.rglob(pattern) if recursive else root.glob(pattern))
+        if root.is_dir()
+        else ()
+    ):
         try:
             resolved = path.resolve()
             st = resolved.stat()
@@ -223,8 +265,17 @@ def _list_sessions(source: str, root: Optional[Path]) -> list[ForeignSession]:
     for path, st in _walk(source, root):
         parsed = parse(path)
         if parsed["turns"]:
-            results.append(ForeignSession(source, path, st.st_mtime, parsed["cwd"], parsed["title_guess"],
-                                          len(parsed["turns"]), parsed["session_id"]))
+            results.append(
+                ForeignSession(
+                    source,
+                    path,
+                    st.st_mtime,
+                    parsed["cwd"],
+                    parsed["title_guess"],
+                    len(parsed["turns"]),
+                    parsed["session_id"],
+                )
+            )
     return results
 
 
@@ -242,22 +293,40 @@ def import_foreign_session(source: str, path, db=None) -> str:
     turns = parsed["turns"]
     if not turns:
         raise ValueError(f"No user/assistant conversation turns found in {path}")
-    first_user = _first_user_line([(t["role"], t["content"]) for t in turns]) or path.stem
+    first_user = (
+        _first_user_line([(t["role"], t["content"]) for t in turns]) or path.stem
+    )
     if len(first_user) > _TITLE_MAX:
         first_user = first_user[: _TITLE_MAX - 1] + "…"
     tool = _SOURCE_DB_NAMES[source]
     owns_db = db is None
     if owns_db:
         from clawk_state_registry import acquire
+
         db = acquire()  # the CLI resume that follows acquires this same handle
     try:
         session_id = new_session_id()
-        origin = {"imported_from": {"tool": tool, "path": str(path), "foreign_session_id": parsed.get("session_id")}}
-        db.create_session(session_id, source=tool, cwd=parsed.get("cwd"), origin_json=json.dumps(origin))
+        origin = {
+            "imported_from": {
+                "tool": tool,
+                "path": str(path),
+                "foreign_session_id": parsed.get("session_id"),
+            }
+        }
+        db.create_session(
+            session_id,
+            source=tool,
+            cwd=parsed.get("cwd"),
+            origin_json=json.dumps(origin),
+        )
         for turn in turns:
             db.append_message(session_id, turn["role"], turn["content"])
-        with contextlib.suppress(Exception):  # title is cosmetic; the import itself succeeded
-            db.set_session_title(session_id, f"Imported from {_SOURCE_LABELS[source]}: {first_user}")
+        with contextlib.suppress(
+            Exception
+        ):  # title is cosmetic; the import itself succeeded
+            db.set_session_title(
+                session_id, f"Imported from {_SOURCE_LABELS[source]}: {first_user}"
+            )
         return session_id
     finally:
         if owns_db:
@@ -265,16 +334,27 @@ def import_foreign_session(source: str, path, db=None) -> str:
                 db.close()
 
 
-def gather_foreign_sessions(source: Optional[str] = None, *, claude_root: Optional[Path] = None,
-                            codex_root: Optional[Path] = None, limit: int = 25) -> list[ForeignSession]:
+def gather_foreign_sessions(
+    source: Optional[str] = None,
+    *,
+    claude_root: Optional[Path] = None,
+    codex_root: Optional[Path] = None,
+    limit: int = 25,
+) -> list[ForeignSession]:
     """List foreign sessions across sources, newest first."""
-    sessions = [s for name, root in (("claude", claude_root), ("codex", codex_root)) if source in (None, name)
-                for s in _list_sessions(name, root)]
+    sessions = [
+        s
+        for name, root in (("claude", claude_root), ("codex", codex_root))
+        if source in (None, name)
+        for s in _list_sessions(name, root)
+    ]
     sessions.sort(key=lambda s: s.mtime, reverse=True)
     return sessions[:limit] if limit else sessions
 
 
-def pick_foreign_session(source: Optional[str] = None, *, limit: int = 25) -> Optional[ForeignSession]:
+def pick_foreign_session(
+    source: Optional[str] = None, *, limit: int = 25
+) -> Optional[ForeignSession]:
     """Interactive numbered picker. Returns None when nothing was chosen."""
     sessions = gather_foreign_sessions(source, limit=limit)
     if not sessions:
@@ -284,13 +364,19 @@ def pick_foreign_session(source: Optional[str] = None, *, limit: int = 25) -> Op
     print("Foreign sessions (newest first):")
     for i, s in enumerate(sessions, 1):
         ws = f"  ({os.path.basename(s.cwd.rstrip('/')) or s.cwd})" if s.cwd else ""
-        print(f"  {i:>2}. {datetime.fromtimestamp(s.mtime):%Y-%m-%d %H:%M}  {s.label}{ws}  [{s.turn_count} turns]")
+        print(
+            f"  {i:>2}. {datetime.fromtimestamp(s.mtime):%Y-%m-%d %H:%M}  {s.label}{ws}  [{s.turn_count} turns]"
+        )
     if not sys.stdin.isatty():
-        print("Non-interactive terminal — pass the file path directly:\n"
-              "  clawk sessions import --from claude|codex <path>")
+        print(
+            "Non-interactive terminal — pass the file path directly:\n"
+            "  clawk sessions import --from claude|codex <path>"
+        )
         return None
     try:
-        raw = input(f"Import which session? [1-{len(sessions)}, empty to cancel] ").strip()
+        raw = input(
+            f"Import which session? [1-{len(sessions)}, empty to cancel] "
+        ).strip()
         idx = int(raw) if raw else None
     except (EOFError, KeyboardInterrupt):
         return None
@@ -313,7 +399,9 @@ def run_sessions_import(args, db=None) -> Optional[str]:
         if not Path(path).exists():
             print(f"Error: file not found: {path}")
             return None
-        if not source:  # guess from the path shape; a codex match wins over a claude match
+        if (
+            not source
+        ):  # guess from the path shape; a codex match wins over a claude match
             p = str(path)
             if "/.claude/" in p or p.endswith(".jsonl") and "claude" in p:
                 source = "claude"

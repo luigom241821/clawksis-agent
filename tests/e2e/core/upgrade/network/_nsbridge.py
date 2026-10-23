@@ -62,7 +62,9 @@ def main():
         listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         listener.bind(("127.0.0.1", int(port)))
         listener.listen(128)
-        threading.Thread(target=_serve, args=(listener, f"/proc/self/fd/{dirfd}/{port}"), daemon=True).start()
+        threading.Thread(
+            target=_serve, args=(listener, f"/proc/self/fd/{dirfd}/{port}"), daemon=True
+        ).start()
     proc = subprocess.Popen(argv, pass_fds=())
     try:
         sys.exit(proc.wait())

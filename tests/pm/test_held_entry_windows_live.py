@@ -28,7 +28,9 @@ def test_mapped_dll_in_replaced_entry_does_not_fail_reinstall(pm_env):
     ensure("faketool", base_env={})
     entry = runtime / Facts(runtime / "facts.json").get("faketool")["entry"]
     dlls = Path(sys.base_prefix) / "DLLs"
-    source = next(iter(sorted(dlls.glob("libcrypto-3*.dll")) or sorted(dlls.glob("*.dll"))))
+    source = next(
+        iter(sorted(dlls.glob("libcrypto-3*.dll")) or sorted(dlls.glob("*.dll")))
+    )
     held = entry / "DLLs" / "held.dll"
     held.parent.mkdir()
     shutil.copy2(source, held)
@@ -67,4 +69,6 @@ def test_read_only_file_in_replaced_entry_is_removed_on_reinstall(pm_env):
     (entry / "bin/faketool").unlink()
     ensure("faketool", base_env={})
     assert not (runtime / f".previous-{entry.name}").exists()
-    assert not list(runtime.glob(".reclaim-*")), "a read-only file must not strand the replaced tree"
+    assert not list(runtime.glob(".reclaim-*")), (
+        "a read-only file must not strand the replaced tree"
+    )

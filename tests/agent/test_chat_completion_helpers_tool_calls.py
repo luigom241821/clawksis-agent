@@ -8,8 +8,15 @@ from agent.chat_completion_helpers_tool_calls import _ToolCallAccumulator
 def _calls(*deltas):
     acc = _ToolCallAccumulator()
     for tc_id, name, args in deltas:
-        acc.feed(SimpleNamespace(index=0, id=tc_id, function=SimpleNamespace(name=name, arguments=args)))
-    return [(e["function"]["name"], e["function"]["arguments"]) for _, e in sorted(acc.materialize().items())]
+        acc.feed(
+            SimpleNamespace(
+                index=0, id=tc_id, function=SimpleNamespace(name=name, arguments=args)
+            )
+        )
+    return [
+        (e["function"]["name"], e["function"]["arguments"])
+        for _, e in sorted(acc.materialize().items())
+    ]
 
 
 def test_nameless_fragments_with_fresh_ids_stay_one_call():

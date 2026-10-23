@@ -22,14 +22,20 @@ from tools.skillevaluator_scan import (
     tier1_advisory_enabled,
 )
 
+
 def _report_json(findings):
     return {
         "overall_passed": not findings,
         "results": [
             {"validator": "PII Scan", "passed": not findings, "findings": findings},
-            {"validator": "Unicode Smuggling Detection", "passed": True, "findings": []},
+            {
+                "validator": "Unicode Smuggling Detection",
+                "passed": True,
+                "findings": [],
+            },
         ],
     }
+
 
 def _finding(check, severity="high", message="msg", file="SKILL.md", line=3):
     return {
@@ -41,6 +47,7 @@ def _finding(check, severity="high", message="msg", file="SKILL.md", line=3):
         "suggestion": "fix it",
     }
 
+
 class TestParseReport:
     def test_clean_report(self):
         report = _parse_report(_report_json([]))
@@ -49,17 +56,28 @@ class TestParseReport:
         assert report.findings == []
 
     def test_pii_email_is_advisory_not_secrets(self):
-        report = _parse_report(_report_json([
-            _finding("emails", message="Non-placeholder email address: git@github.com"),
-        ]))
+        report = _parse_report(
+            _report_json(
+                [
+                    _finding(
+                        "emails",
+                        message="Non-placeholder email address: git@github.com",
+                    ),
+                ]
+            )
+        )
         assert len(report.findings) == 1
         assert report.advisory_findings == report.findings
         assert report.secrets_findings == []
 
     def test_database_credentials_is_secrets_class(self):
-        report = _parse_report(_report_json([
-            _finding("database_credentials", severity="critical"),
-        ]))
+        report = _parse_report(
+            _report_json(
+                [
+                    _finding("database_credentials", severity="critical"),
+                ]
+            )
+        )
         assert len(report.secrets_findings) == 1
         assert report.advisory_findings == []
 
@@ -73,12 +91,14 @@ class TestParseReport:
         """A fail-with-zero-findings incomplete validator (e.g. SkillSpector
         consistency-check trip) must not fail the advisory verdict."""
         raw = _report_json([])
-        raw["results"].append({
-            "validator": "Security Scan",
-            "passed": False,
-            "status": "incomplete",
-            "findings": [],
-        })
+        raw["results"].append(
+            {
+                "validator": "Security Scan",
+                "passed": False,
+                "status": "incomplete",
+                "findings": [],
+            }
+        )
         report = _parse_report(raw)
         assert report.passed
         assert report.findings == []
@@ -88,12 +108,14 @@ class TestParseReport:
         """Partial evidence from an incomplete validator is kept as findings
         (Nir Paz review) — only the validator's pass/fail verdict is excluded."""
         raw = _report_json([])
-        raw["results"].append({
-            "validator": "Security Scan",
-            "passed": False,
-            "status": "incomplete",
-            "findings": [_finding("hardcoded_secrets", severity="critical")],
-        })
+        raw["results"].append(
+            {
+                "validator": "Security Scan",
+                "passed": False,
+                "status": "incomplete",
+                "findings": [_finding("hardcoded_secrets", severity="critical")],
+            }
+        )
         report = _parse_report(raw)
         assert len(report.findings) == 1
         assert report.findings[0].is_secrets_class
@@ -101,6 +123,7 @@ class TestParseReport:
         # findings present -> report is not clean, even though the only
         # failing validator was incomplete
         assert not report.passed
+
 
 class TestRunTier1Scan:
     def test_scanner_missing_degrades(self, tmp_path):
@@ -110,22 +133,43 @@ class TestRunTier1Scan:
         assert report.findings == []
 
     def test_scanner_timeout_degrades(self, tmp_path):
-        with mock.patch("tools.skillevaluator_scan.shutil.which", return_value="/usr/bin/skillevaluator"), \
-             mock.patch("tools.skillevaluator_scan.subprocess.run",
-                        side_effect=subprocess.TimeoutExpired(cmd="x", timeout=1)):
+        with (
+            mock.patch(
+                "tools.skillevaluator_scan.shutil.which",
+                return_value="/usr/bin/skillevaluator",
+            ),
+            mock.patch(
+                "tools.skillevaluator_scan.subprocess.run",
+                side_effect=subprocess.TimeoutExpired(cmd="x", timeout=1),
+            ),
+        ):
             report = run_tier1_scan(tmp_path)
         assert not report.available
 
     def test_scanner_launch_failure_degrades(self, tmp_path):
-        with mock.patch("tools.skillevaluator_scan.shutil.which", return_value="/usr/bin/skillevaluator"), \
-             mock.patch("tools.skillevaluator_scan.subprocess.run", side_effect=OSError("boom")):
+        with (
+            mock.patch(
+                "tools.skillevaluator_scan.shutil.which",
+                return_value="/usr/bin/skillevaluator",
+            ),
+            mock.patch(
+                "tools.skillevaluator_scan.subprocess.run", side_effect=OSError("boom")
+            ),
+        ):
             report = run_tier1_scan(tmp_path)
         assert not report.available
 
     def test_no_json_report_degrades(self, tmp_path):
-        with mock.patch("tools.skillevaluator_scan.shutil.which", return_value="/usr/bin/skillevaluator"), \
-             mock.patch("tools.skillevaluator_scan.subprocess.run",
-                        return_value=subprocess.CompletedProcess([], 1, "", "")):
+        with (
+            mock.patch(
+                "tools.skillevaluator_scan.shutil.which",
+                return_value="/usr/bin/skillevaluator",
+            ),
+            mock.patch(
+                "tools.skillevaluator_scan.subprocess.run",
+                return_value=subprocess.CompletedProcess([], 1, "", ""),
+            ),
+        ):
             report = run_tier1_scan(tmp_path)
         assert not report.available
 
@@ -138,24 +182,43 @@ class TestRunTier1Scan:
             (outdir / "skillevaluator-output-1.json").write_text(json.dumps(payload))
             return subprocess.CompletedProcess(cmd, 1, "", "")
 
-        with mock.patch("tools.skillevaluator_scan.shutil.which", return_value="/usr/bin/skillevaluator"), \
-             mock.patch("tools.skillevaluator_scan.subprocess.run", side_effect=fake_run):
+        with (
+            mock.patch(
+                "tools.skillevaluator_scan.shutil.which",
+                return_value="/usr/bin/skillevaluator",
+            ),
+            mock.patch(
+                "tools.skillevaluator_scan.subprocess.run", side_effect=fake_run
+            ),
+        ):
             report = run_tier1_scan(tmp_path)
         assert report.available
         assert not report.passed
         assert len(report.findings) == 1
         assert report.findings[0].check == "emails"
 
+
 class TestFormatReport:
     def test_unavailable_is_empty(self):
         assert format_tier1_report(Tier1Report(available=False)) == ""
 
     def test_findings_show_location_and_secrets_tag(self):
-        report = _parse_report(_report_json([
-            _finding("database_credentials", severity="critical",
-                     message="Database connection string with credentials"),
-            _finding("emails", message="Non-placeholder email address: a@b.com", line=8),
-        ]))
+        report = _parse_report(
+            _report_json(
+                [
+                    _finding(
+                        "database_credentials",
+                        severity="critical",
+                        message="Database connection string with credentials",
+                    ),
+                    _finding(
+                        "emails",
+                        message="Non-placeholder email address: a@b.com",
+                        line=8,
+                    ),
+                ]
+            )
+        )
         text = format_tier1_report(report)
         assert "[SECRETS]" in text
         assert "SKILL.md:3" in text
@@ -163,12 +226,14 @@ class TestFormatReport:
 
     def test_incomplete_checks_noted(self):
         raw = _report_json([])
-        raw["results"].append({
-            "validator": "Security Scan",
-            "passed": False,
-            "status": "incomplete",
-            "findings": [],
-        })
+        raw["results"].append(
+            {
+                "validator": "Security Scan",
+                "passed": False,
+                "status": "incomplete",
+                "findings": [],
+            }
+        )
         text = format_tier1_report(_parse_report(raw))
         assert "Security Scan" in text
 
@@ -178,57 +243,77 @@ class TestFormatReport:
         text = format_tier1_report(report, limit=5)
         assert "9 more" in text
 
-class TestConfigGate:
 
+class TestConfigGate:
     def test_disabled_via_config(self):
-        with mock.patch("clawk_cli.config.load_config",
-                        return_value={"skills": {"tier1_advisory": False}}):
+        with mock.patch(
+            "clawk_cli.config.load_config",
+            return_value={"skills": {"tier1_advisory": False}},
+        ):
             assert not tier1_advisory_enabled()
 
     def test_string_false_disabled(self):
-        with mock.patch("clawk_cli.config.load_config",
-                        return_value={"skills": {"tier1_advisory": "false"}}):
+        with mock.patch(
+            "clawk_cli.config.load_config",
+            return_value={"skills": {"tier1_advisory": "false"}},
+        ):
             assert not tier1_advisory_enabled()
 
     def test_config_error_defaults_enabled(self):
         with mock.patch("clawk_cli.config.load_config", side_effect=RuntimeError):
             assert tier1_advisory_enabled()
 
+
 class TestInstallPathHelper:
     """_print_tier1_advisory must never raise and never block."""
 
     def test_helper_never_raises_on_scanner_error(self, tmp_path):
         from clawk_cli.skills_hub import _print_tier1_advisory
+
         console = mock.MagicMock()
-        with mock.patch("tools.skillevaluator_scan.run_tier1_scan",
-                        side_effect=RuntimeError("boom")):
+        with mock.patch(
+            "tools.skillevaluator_scan.run_tier1_scan", side_effect=RuntimeError("boom")
+        ):
             _print_tier1_advisory(tmp_path, console)  # must not raise
 
     def test_helper_silent_when_unavailable(self, tmp_path):
         from clawk_cli.skills_hub import _print_tier1_advisory
+
         console = mock.MagicMock()
-        with mock.patch("tools.skillevaluator_scan.run_tier1_scan",
-                        return_value=Tier1Report(available=False)):
+        with mock.patch(
+            "tools.skillevaluator_scan.run_tier1_scan",
+            return_value=Tier1Report(available=False),
+        ):
             _print_tier1_advisory(tmp_path, console)
         console.print.assert_not_called()
 
     def test_helper_silent_when_disabled(self, tmp_path):
         from clawk_cli.skills_hub import _print_tier1_advisory
+
         console = mock.MagicMock()
-        with mock.patch("tools.skillevaluator_scan.tier1_advisory_enabled",
-                        return_value=False), \
-             mock.patch("tools.skillevaluator_scan.run_tier1_scan") as scan:
+        with (
+            mock.patch(
+                "tools.skillevaluator_scan.tier1_advisory_enabled", return_value=False
+            ),
+            mock.patch("tools.skillevaluator_scan.run_tier1_scan") as scan,
+        ):
             _print_tier1_advisory(tmp_path, console)
         scan.assert_not_called()
         console.print.assert_not_called()
 
     def test_helper_prints_findings_and_continues(self, tmp_path):
         from clawk_cli.skills_hub import _print_tier1_advisory
+
         console = mock.MagicMock()
-        report = _parse_report(_report_json([
-            _finding("emails", message="Non-placeholder email: a@b.com"),
-        ]))
-        with mock.patch("tools.skillevaluator_scan.run_tier1_scan",
-                        return_value=report):
+        report = _parse_report(
+            _report_json(
+                [
+                    _finding("emails", message="Non-placeholder email: a@b.com"),
+                ]
+            )
+        )
+        with mock.patch(
+            "tools.skillevaluator_scan.run_tier1_scan", return_value=report
+        ):
             _print_tier1_advisory(tmp_path, console)
         assert console.print.called

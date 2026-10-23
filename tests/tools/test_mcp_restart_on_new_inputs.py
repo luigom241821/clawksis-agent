@@ -9,7 +9,7 @@ import textwrap
 
 import pytest
 
-SERVER = textwrap.dedent('''\
+SERVER = textwrap.dedent("""\
     import os
     from mcp.server.mcpserver import MCPServer
     app = MCPServer("envecho")
@@ -19,7 +19,7 @@ SERVER = textwrap.dedent('''\
         return os.environ.get("DEMO_KEY", "")
 
     app.run()
-''')
+""")
 
 
 def _pid_of(core, name):
@@ -39,16 +39,42 @@ def test_restart_only_when_resolved_launch_inputs_change(monkeypatch, tmp_path):
     plugin = home / "plugins" / "envecho"
     plugin.mkdir(parents=True)
     (plugin / "server.py").write_text(SERVER, encoding="utf-8")
-    launcher = plugin / "run.sh"  # portable commands are bare or ./-relative: wrap this interpreter
-    launcher.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$(dirname "$0")/server.py"\n', encoding="utf-8")
+    launcher = (
+        plugin / "run.sh"
+    )  # portable commands are bare or ./-relative: wrap this interpreter
+    launcher.write_text(
+        f'#!/bin/sh\nexec "{sys.executable}" "$(dirname "$0")/server.py"\n',
+        encoding="utf-8",
+    )
     launcher.chmod(0o755)
-    (plugin / "plugin.json").write_text(json.dumps({
-        "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "name": "envecho"}), encoding="utf-8")
-    (plugin / "mcp.json").write_text(json.dumps({
-        "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json", "mcpServers": {"envecho": {
-        "type": "stdio", "command": "./run.sh", "cwd": "${PLUGIN_ROOT}",
-        "env": {"DEMO_KEY": "${DEMO_KEY}"}}}}), encoding="utf-8")
-    (home / "config.yaml").write_text("plugins:\n  enabled: [envecho]\n", encoding="utf-8")
+    (plugin / "plugin.json").write_text(
+        json.dumps(
+            {
+                "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+                "name": "envecho",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (plugin / "mcp.json").write_text(
+        json.dumps(
+            {
+                "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+                "mcpServers": {
+                    "envecho": {
+                        "type": "stdio",
+                        "command": "./run.sh",
+                        "cwd": "${PLUGIN_ROOT}",
+                        "env": {"DEMO_KEY": "${DEMO_KEY}"},
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (home / "config.yaml").write_text(
+        "plugins:\n  enabled: [envecho]\n", encoding="utf-8"
+    )
     (home / ".env").write_text("DEMO_KEY=first\n", encoding="utf-8")
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setenv("DEMO_KEY", "first")
@@ -64,10 +90,14 @@ def test_restart_only_when_resolved_launch_inputs_change(monkeypatch, tmp_path):
         session = _pid_of(_core, "envecho")
         assert first and session
 
-        assert disc.restart_mcp_servers_with_new_inputs({"envecho"}) == []  # nothing it launches with moved
+        assert (
+            disc.restart_mcp_servers_with_new_inputs({"envecho"}) == []
+        )  # nothing it launches with moved
         assert _pid_of(_core, "envecho") == session
 
-        save_env_value("DEMO_KEY", "second")  # what the settings form's secret save does
+        save_env_value(
+            "DEMO_KEY", "second"
+        )  # what the settings form's secret save does
         assert disc.restart_mcp_servers_with_new_inputs({"envecho"}) == ["envecho"]
         # Returns only once reconnected, so a later save compares against THIS connection's inputs.
         assert _pid_of(_core, "envecho") not in (None, session)
@@ -75,5 +105,6 @@ def test_restart_only_when_resolved_launch_inputs_change(monkeypatch, tmp_path):
         assert os.environ["DEMO_KEY"] == "second"
     finally:
         from tools.mcp_tool_lifecycle import shutdown_mcp_servers
+
         shutdown_mcp_servers()
         _loop._stop_mcp_loop()

@@ -232,7 +232,6 @@ class TestSocketModeTeardown:
         )
         assert task.done(), "the old socket task outlived teardown"
 
-
     @pytest.mark.asyncio
     async def test_client_tasks_are_dead_before_the_session_closes(self, adapter):
         """Nothing may still be inside connect() when the shared session closes.
@@ -272,8 +271,6 @@ class TestSocketModeTeardown:
 
 
 class TestSocketModeRestart:
-
-
     @pytest.mark.asyncio
     async def test_watchdog_restarts_when_transport_disconnected(self, adapter):
         """A transport that reports itself down still triggers a reconnect."""

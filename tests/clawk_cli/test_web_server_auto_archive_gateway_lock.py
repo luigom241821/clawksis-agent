@@ -75,14 +75,18 @@ def test_serve_auto_archive_defers_to_a_live_gateway_for_the_profile(archive_pro
     lock_path = tmp_path / "gateway.lock"
     holder = subprocess.Popen(
         [sys.executable, str(entrypoint), str(lock_path), "gateway", "run"],
-        stdout=subprocess.PIPE, stdin=subprocess.DEVNULL, text=True,
+        stdout=subprocess.PIPE,
+        stdin=subprocess.DEVNULL,
+        text=True,
     )
     stdout = holder.stdout
     assert stdout is not None
     try:
         assert stdout.readline().strip() == "locked"
         (tmp_path / "gateway.pid").write_text(str(holder.pid), encoding="utf-8")
-        assert _check_gateway_running(tmp_path), "probe did not look like a live gateway"
+        assert _check_gateway_running(tmp_path), (
+            "probe did not look like a live gateway"
+        )
 
         wss._maybe_auto_archive_for_profile(None)
 

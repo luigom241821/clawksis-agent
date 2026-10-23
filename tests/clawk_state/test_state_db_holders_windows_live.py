@@ -50,6 +50,7 @@ def test_restart_manager_finds_real_foreign_state_db_holder(tmp_path):
 
     assert foreign_state_db_holders(db) == []
 
+
 @pytest.mark.parametrize("suffix", ["-wal", "-shm"])
 def test_restart_manager_finds_foreign_sqlite_sidecar_holder(tmp_path, suffix):
     """A foreign sidecar-only handle is still a holder of this SQLite resource family."""

@@ -10,39 +10,62 @@ from tools.environments.docker import docker_runtime_name, find_docker
 
 logger = logging.getLogger("clawk_cli.setup")
 
-from clawk_cli.config_defaults import DEFAULT_SANDBOX_IMAGE as _SANDBOX_IMAGE, DEFAULT_VERCEL_IMAGE
+from clawk_cli.config_defaults import (
+    DEFAULT_SANDBOX_IMAGE as _SANDBOX_IMAGE,
+    DEFAULT_VERCEL_IMAGE,
+)
+
 _RUN_KW = dict(capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 
 def _prompt_vercel_sandbox_settings(config: dict):
     """Prompt for Vercel Sandbox settings without exposing unsupported disk sizing."""
     terminal = config.setdefault("terminal", {})
-    _setup._info(None, "Vercel Sandbox settings:", "  Filesystem persistence uses Vercel snapshots.",
-                 "  Snapshots restore files only; live processes do not continue after sandbox recreation.")
+    _setup._info(
+        None,
+        "Vercel Sandbox settings:",
+        "  Filesystem persistence uses Vercel snapshots.",
+        "  Snapshots restore files only; live processes do not continue after sandbox recreation.",
+    )
     current_image = terminal.get("vercel_image") or DEFAULT_VERCEL_IMAGE
-    image = _setup.prompt("  Image (Vercel managed image or VCR repository[:tag])", current_image).strip() or current_image
+    image = (
+        _setup.prompt(
+            "  Image (Vercel managed image or VCR repository[:tag])", current_image
+        ).strip()
+        or current_image
+    )
     terminal["vercel_image"] = image
     _setup.save_env_value("TERMINAL_VERCEL_IMAGE", image)
     if terminal.get("vercel_runtime"):
         # Vercel deprecated runtimes; a pinned one still wins over the image until the user clears it.
-        _setup.print_warning(f"terminal.vercel_runtime={terminal['vercel_runtime']!r} is deprecated by Vercel and "
-                             "overrides the image; unset it to use the image above.")
+        _setup.print_warning(
+            f"terminal.vercel_runtime={terminal['vercel_runtime']!r} is deprecated by Vercel and "
+            "overrides the image; unset it to use the image above."
+        )
     persist_label = "yes" if terminal.get("container_persistent", True) else "no"
-    persist = _setup.prompt("  Persist filesystem with snapshots? (yes/no)", persist_label).lower()
+    persist = _setup.prompt(
+        "  Persist filesystem with snapshots? (yes/no)", persist_label
+    ).lower()
     terminal["container_persistent"] = persist in {"yes", "true", "y", "1"}
     # (key, prompt label, default, parser) — unparseable input leaves the value untouched.
     for key, label, default, parse in (
         ("container_cpu", "  CPU cores", 1, float),
-        ("container_memory", "  Memory in MB (5120 = 5GB)", 5120, int)):
+        ("container_memory", "  Memory in MB (5120 = 5GB)", 5120, int),
+    ):
         try:
             terminal[key] = parse(_setup.prompt(label, str(terminal.get(key, default))))
         except ValueError:
             pass
     if terminal.get("container_disk", 51200) not in {0, 51200}:
         _setup.print_warning(
-            "Vercel Sandbox does not support custom disk sizing; resetting container_disk to 51200.")
+            "Vercel Sandbox does not support custom disk sizing; resetting container_disk to 51200."
+        )
     terminal["container_disk"] = 51200
-    _setup._info(None, "Vercel authentication:", "  Use a long-lived Vercel access token plus project/team IDs.")
+    _setup._info(
+        None,
+        "Vercel authentication:",
+        "  Use a long-lived Vercel access token plus project/team IDs.",
+    )
     linked = _read_nearest_vercel_project()
     if linked:
         _setup.print_info("  Found defaults in nearest .vercel/project.json.")
@@ -51,8 +74,11 @@ def _prompt_vercel_sandbox_settings(config: dict):
     for label, env_var, linked_key, secret in (
         ("    Vercel access token", "VERCEL_TOKEN", None, True),
         ("    Vercel project ID", "VERCEL_PROJECT_ID", "projectId", False),
-        ("    Vercel team ID", "VERCEL_TEAM_ID", "orgId", False)):
-        default = _setup.get_env_value(env_var) or (linked.get(linked_key, "") if linked_key else "")
+        ("    Vercel team ID", "VERCEL_TEAM_ID", "orgId", False),
+    ):
+        default = _setup.get_env_value(env_var) or (
+            linked.get(linked_key, "") if linked_key else ""
+        )
         value = _setup.prompt(label, default, password=secret)
         if value:
             _setup.save_env_value(env_var, value)
@@ -73,8 +99,11 @@ def _read_nearest_vercel_project(start: Path | None = None) -> dict[str, str]:
             return {}
         if not isinstance(data, dict):
             return {}
-        return {key: data[key] for key in ("projectId", "orgId")
-                if isinstance(data.get(key), str) and data[key].strip()}
+        return {
+            key: data[key]
+            for key in ("projectId", "orgId")
+            if isinstance(data.get(key), str) and data[key].strip()
+        }
     return {}
 
 
@@ -112,7 +141,9 @@ def _ensure_sdk(extra: str) -> None:
             _setup.print_success(f"{extra} SDK installed. Restart Clawksis to use it.")
 
 
-def _report_binary(found: str | None, missing: str, install_hint: str, found_prefix: str = "Found: ") -> None:
+def _report_binary(
+    found: str | None, missing: str, install_hint: str, found_prefix: str = "Found: "
+) -> None:
     if found:
         _setup.print_info(f"{found_prefix}{found}")
     else:
@@ -130,36 +161,51 @@ def _setup_backend_local(config: dict) -> None:
 def _setup_backend_docker(config: dict) -> None:
     _setup.print_success("Terminal backend: Docker / Podman")
     docker_exe = find_docker()
-    _report_binary(docker_exe, "Docker or Podman not found in PATH!",
-                   "Install Docker: https://docs.docker.com/get-docker/ "
-                   "or Podman: https://podman.io/docs/installation",
-                   f"{docker_runtime_name(docker_exe)} found: " if docker_exe else "")
+    _report_binary(
+        docker_exe,
+        "Docker or Podman not found in PATH!",
+        "Install Docker: https://docs.docker.com/get-docker/ "
+        "or Podman: https://podman.io/docs/installation",
+        f"{docker_runtime_name(docker_exe)} found: " if docker_exe else "",
+    )
     # Image and resource limits use defaults; tune via `clawk setup terminal`.
     config["terminal"].setdefault("docker_image", _SANDBOX_IMAGE)
-    _setup._info(None, "Docker sandboxes can be protected with the egress credential firewall.",
-                 "It routes sandbox traffic through iron-proxy so containers receive "
-                 "proxy tokens instead of real API keys.",
-                 "   Docker only for now; Modal, SSH, Daytona and plugin backends are not wired yet.")
+    _setup._info(
+        None,
+        "Docker sandboxes can be protected with the egress credential firewall.",
+        "It routes sandbox traffic through iron-proxy so containers receive "
+        "proxy tokens instead of real API keys.",
+        "   Docker only for now; Modal, SSH, Daytona and plugin backends are not wired yet.",
+    )
     if _setup.prompt_yes_no("  Enable egress firewall for Docker sandboxes?", False):
         proxy_cfg = config.setdefault("proxy", {})
         proxy_cfg["enabled"] = True
         proxy_cfg.setdefault("enforce_on_docker", True)
         _setup.print_success("Egress firewall enabled in config")
         _setup.print_info(
-            "Run `clawk egress setup` then `clawk egress start` to mint tokens and launch the proxy.")
+            "Run `clawk egress setup` then `clawk egress start` to mint tokens and launch the proxy."
+        )
     else:
-        _setup.print_info("Skipping egress firewall. You can enable it later with `clawk egress setup`.")
+        _setup.print_info(
+            "Skipping egress firewall. You can enable it later with `clawk egress setup`."
+        )
 
 
 def _setup_backend_modal(config: dict) -> None:
     _setup.print_success("Terminal backend: Modal")
-    _setup.print_info("Serverless cloud sandboxes. Each session gets its own container.")
+    _setup.print_info(
+        "Serverless cloud sandboxes. Each session gets its own container."
+    )
     # Clawksis is BYOK: Modal always runs on your own Modal account (no managed gateway mode).
     config["terminal"]["modal_mode"] = "direct"
     _setup.print_info("Requires a Modal account: https://modal.com")
     _ensure_sdk("modal")
-    _setup._info(None, "Modal authentication:", "  Get your token at: https://modal.com/settings")
-    if _existing_secret_keeps("MODAL_TOKEN_ID", "Modal token", "  Update Modal credentials?"):
+    _setup._info(
+        None, "Modal authentication:", "  Get your token at: https://modal.com/settings"
+    )
+    if _existing_secret_keeps(
+        "MODAL_TOKEN_ID", "Modal token", "  Update Modal credentials?"
+    ):
         return
     _prompt_secret_env("    Modal Token ID", "MODAL_TOKEN_ID")
     _prompt_secret_env("    Modal Token Secret", "MODAL_TOKEN_SECRET")
@@ -167,22 +213,31 @@ def _setup_backend_modal(config: dict) -> None:
 
 def _setup_backend_daytona(config: dict) -> None:
     _setup.print_success("Terminal backend: Daytona")
-    _setup._info("Persistent cloud development environments.",
-                 "Each session gets a dedicated sandbox with filesystem persistence.",
-                 "Sign up at: https://daytona.io")
+    _setup._info(
+        "Persistent cloud development environments.",
+        "Each session gets a dedicated sandbox with filesystem persistence.",
+        "Sign up at: https://daytona.io",
+    )
     _ensure_sdk("daytona")
     print()
     had_key = bool(_setup.get_env_value("DAYTONA_API_KEY"))
-    if not _existing_secret_keeps("DAYTONA_API_KEY", "Daytona API key", "  Update API key?"):
-        _prompt_secret_env("    Daytona API key", "DAYTONA_API_KEY",
-                           confirm_msg="    Updated" if had_key else "    Configured")
+    if not _existing_secret_keeps(
+        "DAYTONA_API_KEY", "Daytona API key", "  Update API key?"
+    ):
+        _prompt_secret_env(
+            "    Daytona API key",
+            "DAYTONA_API_KEY",
+            confirm_msg="    Updated" if had_key else "    Configured",
+        )
     config["terminal"].setdefault("daytona_image", _SANDBOX_IMAGE)
 
 
 def _setup_backend_vercel(config: dict) -> None:
     _setup.print_success("Terminal backend: Vercel Sandbox")
-    _setup._info("Cloud microVM sandboxes with snapshot-backed filesystem persistence.",
-                 "Requires the optional Vercel SDK (installed through Clawksis PM).")
+    _setup._info(
+        "Cloud microVM sandboxes with snapshot-backed filesystem persistence.",
+        "Requires the optional Vercel SDK (installed through Clawksis PM).",
+    )
     _ensure_sdk("vercel")
     _prompt_vercel_sandbox_settings(config)
 
@@ -195,7 +250,12 @@ def _setup_backend_ssh(config: dict) -> None:
         ("  SSH host (hostname or IP)", "TERMINAL_SSH_HOST", ""),
         ("  SSH user", "TERMINAL_SSH_USER", os.getenv("USER", "")),
         ("  SSH port", "TERMINAL_SSH_PORT", "22"),
-        ("  SSH private key path", "TERMINAL_SSH_KEY", str(Path.home() / ".ssh" / "id_rsa")))
+        (
+            "  SSH private key path",
+            "TERMINAL_SSH_KEY",
+            str(Path.home() / ".ssh" / "id_rsa"),
+        ),
+    )
     values = []
     for label, env_var, default in fields:
         value = _setup.prompt(label, _setup.get_env_value(env_var) or default)
@@ -210,8 +270,18 @@ def _setup_backend_ssh(config: dict) -> None:
     if host and _setup.prompt_yes_no("  Test SSH connection?", True):
         _setup.print_info("  Testing connection...")
         import subprocess
-        ssh_cmd = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", *(["-i", ssh_key] if ssh_key else []),
-                   *(["-p", port] if port and port != "22" else []), f"{user}@{host}" if user else host, "echo ok"]
+
+        ssh_cmd = [
+            "ssh",
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "ConnectTimeout=5",
+            *(["-i", ssh_key] if ssh_key else []),
+            *(["-p", port] if port and port != "22" else []),
+            f"{user}@{host}" if user else host,
+            "echo ok",
+        ]
         result = subprocess.run(ssh_cmd, timeout=10, **_RUN_KW, check=False)
         if result.returncode == 0:
             _setup.print_success("  SSH connection successful!")
@@ -223,6 +293,7 @@ def _setup_backend_ssh(config: dict) -> None:
 def _setup_backend_plugin(config: dict, backend: str) -> None:
     try:
         from agent.terminal_env_registry import get_provider
+
         provider = get_provider(backend)
         _setup.print_success(f"Terminal backend: {provider.display_name}")
         for line in provider.setup_instructions():
@@ -235,24 +306,39 @@ def _setup_backend_plugin(config: dict, backend: str) -> None:
 _BUILTIN_TERMINAL_BACKENDS = [
     ("local", "Local - run directly on this machine (default)"),
     ("docker", "Docker/Podman - isolated container with configurable resources"),
-    ("modal", "Modal - serverless cloud sandbox"), ("ssh", "SSH - run on a remote machine"),
+    ("modal", "Modal - serverless cloud sandbox"),
+    ("ssh", "SSH - run on a remote machine"),
     ("daytona", "Daytona - persistent cloud development environment"),
-    ("vercel_sandbox", "Vercel Sandbox - cloud microVM with snapshot filesystem persistence")]
+    (
+        "vercel_sandbox",
+        "Vercel Sandbox - cloud microVM with snapshot filesystem persistence",
+    ),
+]
 _TERMINAL_BACKEND_SETUP = {
-    "local": _setup_backend_local, "docker": _setup_backend_docker, "modal": _setup_backend_modal,
-    "daytona": _setup_backend_daytona, "vercel_sandbox": _setup_backend_vercel, "ssh": _setup_backend_ssh}
+    "local": _setup_backend_local,
+    "docker": _setup_backend_docker,
+    "modal": _setup_backend_modal,
+    "daytona": _setup_backend_daytona,
+    "vercel_sandbox": _setup_backend_vercel,
+    "ssh": _setup_backend_ssh,
+}
 # Backend -> env var mirrored from config after setup (config.yaml is the source of truth, but
 # terminal_tool reads these from .env).
-_BACKEND_ENV_MIRROR = {"modal": ("TERMINAL_MODAL_MODE", "modal_mode", "auto"),
-                       "vercel_sandbox": ("TERMINAL_VERCEL_IMAGE", "vercel_image", DEFAULT_VERCEL_IMAGE)}
+_BACKEND_ENV_MIRROR = {
+    "modal": ("TERMINAL_MODAL_MODE", "modal_mode", "auto"),
+    "vercel_sandbox": ("TERMINAL_VERCEL_IMAGE", "vercel_image", DEFAULT_VERCEL_IMAGE),
+}
 
 
 def setup_terminal_backend(config: dict):
     """Configure the terminal execution backend."""
     _setup.print_header("Terminal Backend")
-    _setup._info("Choose where Clawksis runs shell commands and code.",
-                 "This affects tool execution, file access, and isolation.",
-                 f"   Guide: {_setup._DOCS_BASE}/user-guide/configuration#terminal-backend-configuration", None)
+    _setup._info(
+        "Choose where Clawksis runs shell commands and code.",
+        "This affects tool execution, file access, and isolation.",
+        f"   Guide: {_setup._DOCS_BASE}/user-guide/configuration#terminal-backend-configuration",
+        None,
+    )
     current_backend = _setup.cfg_get(config, "terminal", "backend", default="local")
     backends = list(_BUILTIN_TERMINAL_BACKENDS)
     # Plugin-registered backends (~/.clawksis/plugins/). Fail-soft: a broken plugin must not take
@@ -260,24 +346,36 @@ def setup_terminal_backend(config: dict):
     plugin_backend_names = []
     try:
         from clawk_cli.plugins import discover_plugins
+
         discover_plugins()  # idempotent — plugin state may not be loaded yet
         from agent.terminal_env_registry import list_providers
+
         for provider in list_providers():
             pname = provider.name.strip().lower()
-            backends.append((pname, f"{provider.display_name} - {provider.description}"))
+            backends.append(
+                (pname, f"{provider.display_name} - {provider.description}")
+            )
             plugin_backend_names.append(pname)
     except Exception:
         pass
-    terminal_choices = [label for _, label in backends] + [f"Keep current ({current_backend})"]
-    terminal_idx = _setup.prompt_choice("Select terminal backend:", terminal_choices, len(backends))
+    terminal_choices = [label for _, label in backends] + [
+        f"Keep current ({current_backend})"
+    ]
+    terminal_idx = _setup.prompt_choice(
+        "Select terminal backend:", terminal_choices, len(backends)
+    )
     if terminal_idx == len(backends):
         _setup.print_info(f"Keeping current backend: {current_backend}")
         return
-    selected_backend = backends[terminal_idx][0] if 0 <= terminal_idx < len(backends) else None
+    selected_backend = (
+        backends[terminal_idx][0] if 0 <= terminal_idx < len(backends) else None
+    )
     config.setdefault("terminal", {})["backend"] = selected_backend
     # Plugin names shadow only the ssh built-in (dispatch order of the original chain).
     handler = _TERMINAL_BACKEND_SETUP.get(selected_backend)
-    if handler is not None and (selected_backend != "ssh" or selected_backend not in plugin_backend_names):
+    if handler is not None and (
+        selected_backend != "ssh" or selected_backend not in plugin_backend_names
+    ):
         handler(config)
     elif selected_backend in plugin_backend_names:
         _setup_backend_plugin(config, selected_backend)

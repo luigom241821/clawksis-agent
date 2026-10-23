@@ -18,7 +18,15 @@ UNSEEN = [("user", "UNSEEN_USER", {}), ("assistant", "UNSEEN_REPLY", {})]
 
 
 def _call(call_id):
-    return {"tool_calls": [{"id": call_id, "type": "function", "function": {"name": "terminal", "arguments": "{}"}}]}
+    return {
+        "tool_calls": [
+            {
+                "id": call_id,
+                "type": "function",
+                "function": {"name": "terminal", "arguments": "{}"},
+            }
+        ]
+    }
 
 
 # behaviour -> (rows another surface writes before the held suffix, the held suffix, render the held
@@ -26,31 +34,87 @@ def _call(call_id):
 # how many held dicts the compaction carries verbatim)
 CASES = {
     "timestamp_rendered_merged_user_names_its_run": (
-        UNSEEN, [("user", "U2", {}), ("user", "U3", {}), ("assistant", "A3", {})], True, [],
-        [SUMMARY, "UNSEEN_USER", "UNSEEN_REPLY"], 0),
+        UNSEEN,
+        [("user", "U2", {}), ("user", "U3", {}), ("assistant", "A3", {})],
+        True,
+        [],
+        [SUMMARY, "UNSEEN_USER", "UNSEEN_REPLY"],
+        0,
+    ),
     "dropped_row_is_named_not_a_watermark_fallback": (
-        UNSEEN, [("user", "U2", {}), ("assistant", "A2", {}), ("tool", "ORPHAN", {"tool_call_id": "killed"}),
-                 ("user", "U3", {}), ("assistant", "A3", {})], False, [],
-        [SUMMARY, "UNSEEN_USER", "UNSEEN_REPLY"], 0),
+        UNSEEN,
+        [
+            ("user", "U2", {}),
+            ("assistant", "A2", {}),
+            ("tool", "ORPHAN", {"tool_call_id": "killed"}),
+            ("user", "U3", {}),
+            ("assistant", "A3", {}),
+        ],
+        False,
+        [],
+        [SUMMARY, "UNSEEN_USER", "UNSEEN_REPLY"],
+        0,
+    ),
     "composed_drops_record_the_original_row_once": (
-        UNSEEN, [("user", "U2", {}), ("assistant", "tool setup", _call("z")),
-                 ("tool", "answer z", {"tool_call_id": "z"}), ("assistant", "", _call("a")),
-                 ("assistant", "", _call("b")), ("user", "U3", {}), ("assistant", "A3", {})], False, [],
-        [SUMMARY, "UNSEEN_USER", "UNSEEN_REPLY"], 0),
+        UNSEEN,
+        [
+            ("user", "U2", {}),
+            ("assistant", "tool setup", _call("z")),
+            ("tool", "answer z", {"tool_call_id": "z"}),
+            ("assistant", "", _call("a")),
+            ("assistant", "", _call("b")),
+            ("user", "U3", {}),
+            ("assistant", "A3", {}),
+        ],
+        False,
+        [],
+        [SUMMARY, "UNSEEN_USER", "UNSEEN_REPLY"],
+        0,
+    ),
     "users_adjacent_only_after_a_drop_skip_the_dropped_row": (
-        UNSEEN, [("user", "U2", {}), ("tool", "orphan", {"tool_call_id": "orphan"}), ("user", "U3", {}),
-                 ("assistant", "A3", {})], False, [],
-        [SUMMARY, "UNSEEN_USER", "UNSEEN_REPLY"], 0),
+        UNSEEN,
+        [
+            ("user", "U2", {}),
+            ("tool", "orphan", {"tool_call_id": "orphan"}),
+            ("user", "U3", {}),
+            ("assistant", "A3", {}),
+        ],
+        False,
+        [],
+        [SUMMARY, "UNSEEN_USER", "UNSEEN_REPLY"],
+        0,
+    ),
     "folded_assistant_text_never_claims_a_later_row": (
-        [], [("user", "U2", {}), ("assistant", "A2", {}), ("assistant", "A2b", {}), ("user", "U3", {}),
-             ("assistant", "A3", {})], False, [("user", "UNSEEN_USER", {}), ("assistant", "A2\nA2b", {})],
-        [SUMMARY, "UNSEEN_USER", "A2\nA2b"], 0),
+        [],
+        [
+            ("user", "U2", {}),
+            ("assistant", "A2", {}),
+            ("assistant", "A2b", {}),
+            ("user", "U3", {}),
+            ("assistant", "A3", {}),
+        ],
+        False,
+        [("user", "UNSEEN_USER", {}), ("assistant", "A2\nA2b", {})],
+        [SUMMARY, "UNSEEN_USER", "A2\nA2b"],
+        0,
+    ),
     # Two equal orphans cannot be named apart, so the commit keeps the watermark: the carried tail's
     # rewind must widen by the rows counted behind A2, or A2's original stays summarized beside its copy.
     "watermark_tail_rewind_widens_by_rows_dropped_behind_a_carried_dict": (
-        [], [("user", "U2", {}), ("assistant", "A2", {}), ("tool", "ORPHAN", {"tool_call_id": "killed"}),
-             ("tool", "ORPHAN", {"tool_call_id": "killed"}), ("user", "U3", {}), ("assistant", "A3", {})],
-        False, [], [SUMMARY, "A2", "U3", "A3"], 3),
+        [],
+        [
+            ("user", "U2", {}),
+            ("assistant", "A2", {}),
+            ("tool", "ORPHAN", {"tool_call_id": "killed"}),
+            ("tool", "ORPHAN", {"tool_call_id": "killed"}),
+            ("user", "U3", {}),
+            ("assistant", "A3", {}),
+        ],
+        False,
+        [],
+        [SUMMARY, "A2", "U3", "A3"],
+        3,
+    ),
 }
 
 
@@ -67,7 +131,11 @@ def test_repaired_reload_commit_archives_only_held_rows(tmp_path, case):
         held = db.get_messages_as_conversation("sid", include_row_ids=True)
         for role, content, fields in [*unseen, *suffix]:
             db.append_message("sid", role, content, **fields)
-        held.extend(db.get_messages_as_conversation("sid", include_row_ids=False)[2 + len(unseen):])
+        held.extend(
+            db.get_messages_as_conversation("sid", include_row_ids=False)[
+                2 + len(unseen) :
+            ]
+        )
         watermark = db.get_active_message_watermark("sid")
         repair_message_sequence(None, held)
         if render:
@@ -77,14 +145,23 @@ def test_repaired_reload_commit_archives_only_held_rows(tmp_path, case):
 
         covered, unresolved = coverage_for_commit(db, "sid", held)
         db.archive_and_compact(
-            "sid", [{"role": "user", "content": SUMMARY}, *held[len(held) - tail_count:]],
-            watermark=watermark, tail_count=tail_count, covered_ids=covered, unresolved_held=unresolved)
+            "sid",
+            [{"role": "user", "content": SUMMARY}, *held[len(held) - tail_count :]],
+            watermark=watermark,
+            tail_count=tail_count,
+            covered_ids=covered,
+            unresolved_held=unresolved,
+        )
 
         live = [row["content"] for row in db.get_messages("sid")]
         assert live == expected
         # A live row is never also summarized away: recall would return it twice.
-        recalled = [row[0] for row in db._conn.execute(
-            "SELECT content FROM messages WHERE session_id = 'sid' AND (active = 1 OR compacted = 1)").fetchall()]
+        recalled = [
+            row[0]
+            for row in db._conn.execute(
+                "SELECT content FROM messages WHERE session_id = 'sid' AND (active = 1 OR compacted = 1)"
+            ).fetchall()
+        ]
         assert [recalled.count(content) for content in live] == [1] * len(live)
     finally:
         db.close()

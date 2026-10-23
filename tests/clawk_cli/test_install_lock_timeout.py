@@ -38,7 +38,9 @@ def install_tree(tmp_path, monkeypatch):
     (environment / "pyvenv.cfg").write_text("version = 3.14", encoding="utf-8")
     (environment.parent / ".lease-managed").touch()
     runtime_facts_path(repo).write_text(
-        json.dumps({"packages": {"venv": {"environment": str(environment)}}}), encoding="utf-8")
+        json.dumps({"packages": {"venv": {"environment": str(environment)}}}),
+        encoding="utf-8",
+    )
     return repo, site
 
 
@@ -46,9 +48,14 @@ def install_tree(tmp_path, monkeypatch):
 def locked_install(install_tree):
     """A live second process holding ``.install.lock``, the way a sibling backend does."""
     repo, site = install_tree
-    holder = subprocess.Popen([sys.executable, "-c", _HOLDER, str(repo)], env=dict(os.environ),
-                              stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                              stderr=subprocess.PIPE, text=True)
+    holder = subprocess.Popen(
+        [sys.executable, "-c", _HOLDER, str(repo)],
+        env=dict(os.environ),
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
     assert holder.stdout is not None and holder.stdin is not None
     assert holder.stdout.readline().strip() == "locked"
     try:
@@ -66,7 +73,9 @@ def test_runtime_lock_reports_a_lost_race(locked_install):
     # The blocked-install symptom: a bounded wait, then carry on — never the holder's rebuild.
 
 
-def test_boot_activation_proceeds_while_the_install_is_locked(locked_install, monkeypatch):
+def test_boot_activation_proceeds_while_the_install_is_locked(
+    locked_install, monkeypatch
+):
     """The issue's symptom, inverted: the backend reaches its dependency environment and can bind
     while a sibling holds the lock. Recovery belongs to whoever holds it, so it is skipped."""
     import pm.environments as runtime_paths
@@ -74,10 +83,15 @@ def test_boot_activation_proceeds_while_the_install_is_locked(locked_install, mo
 
     repo, site = locked_install
     real_lock = runtime_state.runtime_lock
-    monkeypatch.setattr(runtime_state, "runtime_lock",
-                        lambda project, **kw: real_lock(project, timeout=0.2))
+    monkeypatch.setattr(
+        runtime_state,
+        "runtime_lock",
+        lambda project, **kw: real_lock(project, timeout=0.2),
+    )
     recovered: list = []
-    monkeypatch.setattr(runtime_state, "recover_publication", lambda project: recovered.append(project))
+    monkeypatch.setattr(
+        runtime_state, "recover_publication", lambda project: recovered.append(project)
+    )
 
     saved_path = sys.path[:]
     try:

@@ -13,6 +13,7 @@ control socket does not answer) would otherwise send the tick into ``ensure_gate
 30 s wait and book the deadline as a FAILED run, consuming the slot — the crontab minute is the
 budget, and a slot lost to a restart window is a missed fire, not a job failure.
 """
+
 import logging
 import os
 
@@ -40,9 +41,13 @@ def _gateway_unavailable(home) -> str | None:
         return None
     if observed.state == "absent":
         return GATEWAY_DOWN_HINT
-    reason = observed.state + (f" ({observed.reason_code})" if observed.reason_code else "")
-    return (f"the gateway is {reason}, so agent jobs cannot fire; they run at the next tick once it "
-            "is ready. Check it with `clawk gateway status`.")
+    reason = observed.state + (
+        f" ({observed.reason_code})" if observed.reason_code else ""
+    )
+    return (
+        f"the gateway is {reason}, so agent jobs cannot fire; they run at the next tick once it "
+        "is ready. Check it with `clawk gateway status`."
+    )
 
 
 def _note_fire_refused(job_ids, detail: str) -> None:
@@ -56,7 +61,10 @@ def _note_fire_refused(job_ids, detail: str) -> None:
         for job in jobs:
             if job["id"] not in ids:
                 continue
-            job["last_fire_error"] = {"at": _clawk_now().isoformat(), "detail": detail[:500]}
+            job["last_fire_error"] = {
+                "at": _clawk_now().isoformat(),
+                "detail": detail[:500],
+            }
             job.pop("pending_slot", None)
             if job.get("run_claim") is not None:
                 job["run_claim"] = None
@@ -79,5 +87,9 @@ def refuse_agent_jobs_without_gateway(due_jobs: list) -> list:
     _note_fire_refused(ids, f"Skipped: {hint}")
     logger.warning(
         "Cron tick for %s skipped %d agent job(s) (%s): %s",
-        home, len(ids), ", ".join(ids), hint)
+        home,
+        len(ids),
+        ", ".join(ids),
+        hint,
+    )
     return [job for job in due_jobs if job.get("no_agent")]

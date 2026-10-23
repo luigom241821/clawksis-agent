@@ -98,9 +98,15 @@ def test_secretless_provision_response_is_not_an_error(monkeypatch):
 @pytest.mark.parametrize(
     "body",
     [
-        pytest.param('{"tenant": "org-x", "gatewayId": "gw-1"}', id="no-discriminator-pre-f004"),
-        pytest.param('{"secretIssued": true, "gatewayId": "gw-1"}', id="issued-true-but-absent"),
-        pytest.param('{"secretIssued": "false", "gatewayId": "gw-1"}', id="string-false"),
+        pytest.param(
+            '{"tenant": "org-x", "gatewayId": "gw-1"}', id="no-discriminator-pre-f004"
+        ),
+        pytest.param(
+            '{"secretIssued": true, "gatewayId": "gw-1"}', id="issued-true-but-absent"
+        ),
+        pytest.param(
+            '{"secretIssued": "false", "gatewayId": "gw-1"}', id="string-false"
+        ),
         pytest.param('{"secretIssued": 0, "gatewayId": "gw-1"}', id="falsy-non-bool"),
         pytest.param('{"secretIssued": null, "gatewayId": "gw-1"}', id="explicit-null"),
     ],
@@ -157,7 +163,9 @@ def test_multiplatform_boot_survives_a_secretless_second_platform(monkeypatch):
         }
 
     monkeypatch.setattr(relay, "_post_provision", _fake_post, raising=True)
-    monkeypatch.setattr(relay, "_resolve_relay_identity_token", lambda: "tok", raising=True)
+    monkeypatch.setattr(
+        relay, "_resolve_relay_identity_token", lambda: "tok", raising=True
+    )
     monkeypatch.setenv("GATEWAY_RELAY_URL", "https://connector.example")
     monkeypatch.setattr(
         relay,
@@ -169,7 +177,9 @@ def test_multiplatform_boot_survives_a_secretless_second_platform(monkeypatch):
     ok = relay.self_provision_relay()
 
     assert ok is True
-    assert calls == ["telegram", "discord"], "the secret-less platform must not abort the loop"
+    assert calls == ["telegram", "discord"], (
+        "the secret-less platform must not abort the loop"
+    )
     # THE POINT: platform 2's withheld response must not blank platform 1's creds.
     assert os.environ["GATEWAY_RELAY_SECRET"] == "a" * 64
     assert os.environ["GATEWAY_RELAY_DELIVERY_KEY"] == "b" * 64
@@ -204,7 +214,9 @@ def test_a_secretless_first_platform_does_not_write_empty_creds(monkeypatch):
         }
 
     monkeypatch.setattr(relay, "_post_provision", _fake_post, raising=True)
-    monkeypatch.setattr(relay, "_resolve_relay_identity_token", lambda: "tok", raising=True)
+    monkeypatch.setattr(
+        relay, "_resolve_relay_identity_token", lambda: "tok", raising=True
+    )
     monkeypatch.setenv("GATEWAY_RELAY_URL", "https://connector.example")
     monkeypatch.setattr(
         relay,
@@ -249,7 +261,9 @@ def test_a_withheld_response_never_overwrites_credentials_in_hand(monkeypatch):
         }
 
     monkeypatch.setattr(relay, "_post_provision", _fake_post, raising=True)
-    monkeypatch.setattr(relay, "_resolve_relay_identity_token", lambda: "tok", raising=True)
+    monkeypatch.setattr(
+        relay, "_resolve_relay_identity_token", lambda: "tok", raising=True
+    )
     monkeypatch.setenv("GATEWAY_RELAY_URL", "https://connector.example")
     monkeypatch.setattr(
         relay,
@@ -281,12 +295,24 @@ def test_all_platforms_withheld_warns_with_the_recovery_path(monkeypatch, caplog
     monkeypatch.setattr(
         relay,
         "_post_provision",
-        lambda **kw: {"secretIssued": False, "tenant": "org-x", "gatewayId": kw["gateway_id"], "routeKeys": []},
+        lambda **kw: {
+            "secretIssued": False,
+            "tenant": "org-x",
+            "gatewayId": kw["gateway_id"],
+            "routeKeys": [],
+        },
         raising=True,
     )
-    monkeypatch.setattr(relay, "_resolve_relay_identity_token", lambda: "tok", raising=True)
+    monkeypatch.setattr(
+        relay, "_resolve_relay_identity_token", lambda: "tok", raising=True
+    )
     monkeypatch.setenv("GATEWAY_RELAY_URL", "https://connector.example")
-    monkeypatch.setattr(relay, "relay_platform_identities", lambda: [("telegram", "BOT_T")], raising=False)
+    monkeypatch.setattr(
+        relay,
+        "relay_platform_identities",
+        lambda: [("telegram", "BOT_T")],
+        raising=False,
+    )
 
     import logging
 

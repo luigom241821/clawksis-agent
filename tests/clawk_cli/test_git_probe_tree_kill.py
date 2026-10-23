@@ -82,7 +82,9 @@ def test_timeout_kills_descendants(tmp_path):
 def test_posix_spawn_uses_own_process_group(tmp_path):
     """The probe child must lead its own process group (killpg precondition)."""
     script = tmp_path / "pgid.sh"
-    script.write_text("#!/usr/bin/env bash\necho \"$$ $(ps -o pgid= -p $$ | tr -d ' ')\"\n")
+    script.write_text(
+        "#!/usr/bin/env bash\necho \"$$ $(ps -o pgid= -p $$ | tr -d ' ')\"\n"
+    )
     script.chmod(0o755)
 
     out = bounded_git_probe([str(script)], timeout=5.0)
@@ -127,6 +129,7 @@ def test_kill_helper_swallow_all_failures():
 
     class _Dead:
         pid = 2**22  # extremely unlikely to exist
+
         def kill(self):
             raise OSError("already reaped")
 

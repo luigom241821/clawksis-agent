@@ -43,7 +43,9 @@ def _rpc(method, transport=None, **params):
     # A shared transport still holds the previous call's reply; read only this call's frames.
     transport.frames.clear()
     transport.arrived.clear()
-    reply = server.dispatch({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}, transport)
+    reply = server.dispatch(
+        {"jsonrpc": "2.0", "id": 1, "method": method, "params": params}, transport
+    )
     if reply is not None:
         return reply
     assert transport.arrived.wait(5), "no reply"
@@ -61,18 +63,34 @@ def test_account_connect_with_an_alias_mints_that_account(monkeypatch):
         def connections(self, names, *, reinitiate=False, alias=None, **_):
             mints.append((tuple(names), reinitiate, alias))
             minted.set()
-            return {"results": [{"connector": n, "status": "initiated", "connection_id": "ca_1",
-                                 "connect_url": "https://connect.example/1"} for n in names]}
+            return {
+                "results": [
+                    {
+                        "connector": n,
+                        "status": "initiated",
+                        "connection_id": "ca_1",
+                        "connect_url": "https://connect.example/1",
+                    }
+                    for n in names
+                ]
+            }
 
         def account_status(self, connection_id, *, timeout=None):
             return None
 
     monkeypatch.setattr("tools.connectors.managed.managed_client", Client)
-    reply = _rpc("connectors.connect", owner={"type": "account"}, connectors=["gmail"], alias="work")
+    reply = _rpc(
+        "connectors.connect",
+        owner={"type": "account"},
+        connectors=["gmail"],
+        alias="work",
+    )
     assert "result" in reply, reply
     assert minted.wait(2)
     assert mints == [(("gmail",), False, "work")]
-    assert [(t["name"], t.get("alias")) for t in reply["result"]["targets"]] == [("gmail", "work")]
+    assert [(t["name"], t.get("alias")) for t in reply["result"]["targets"]] == [
+        ("gmail", "work")
+    ]
 
 
 def test_a_session_retry_for_another_account_does_not_re_mint_the_open_one(monkeypatch):
@@ -80,15 +98,31 @@ def test_a_session_retry_for_another_account_does_not_re_mint_the_open_one(monke
     from tools.connectors.operation import ConnectionOperation, Target
 
     transport = _Transport()
-    session = dict(transport=transport, agent=None, session_key="alias-sid", history=[],
-                   history_lock=threading.Lock(), history_version=0, running=False, attached_images=[],
-                   source="desktop")
+    session = dict(
+        transport=transport,
+        agent=None,
+        session_key="alias-sid",
+        history=[],
+        history_lock=threading.Lock(),
+        history_version=0,
+        running=False,
+        attached_images=[],
+        source="desktop",
+    )
     monkeypatch.setitem(server._sessions, "alias-sid", session)
-    monkeypatch.setattr("model_tools._select_tool_names", lambda *a, **k: {"manage_connections"})
-    operation = ConnectionOperation([Target("gmail", "connector", "connect", alias="home")], session_key="alias-sid")
+    monkeypatch.setattr(
+        "model_tools._select_tool_names", lambda *a, **k: {"manage_connections"}
+    )
+    operation = ConnectionOperation(
+        [Target("gmail", "connector", "connect", alias="home")], session_key="alias-sid"
+    )
     live.open(operation)
-    operation.transition("gmail", TargetState.initiated, Actor.backend_watcher, connect_url="https://l/1")
-    operation.transition("gmail", TargetState.failed, Actor.backend_watcher, detail="expired")
+    operation.transition(
+        "gmail", TargetState.initiated, Actor.backend_watcher, connect_url="https://l/1"
+    )
+    operation.transition(
+        "gmail", TargetState.failed, Actor.backend_watcher, detail="expired"
+    )
     mints = []
 
     class Client:
@@ -100,16 +134,34 @@ def test_a_session_retry_for_another_account_does_not_re_mint_the_open_one(monke
             return {"results": []}
 
     monkeypatch.setattr("tools.connectors.managed.managed_client", Client)
-    reply = _rpc("connectors.connect", transport, owner={"type": "session", "session_id": "alias-sid"},
-                 connectors=["gmail"], alias="work")
+    reply = _rpc(
+        "connectors.connect",
+        transport,
+        owner={"type": "session", "session_id": "alias-sid"},
+        connectors=["gmail"],
+        alias="work",
+    )
     assert reply["error"]["code"] == 4004
     live.close(operation)
-    unnamed = ConnectionOperation([Target("gmail", "connector", "reconnect", repair_id="ca_home")], session_key="alias-sid")
+    unnamed = ConnectionOperation(
+        [Target("gmail", "connector", "reconnect", repair_id="ca_home")],
+        session_key="alias-sid",
+    )
     live.open(unnamed)
-    unnamed.transition("gmail", TargetState.initiated, Actor.backend_watcher, connect_url="https://l/2")
-    unnamed.transition("gmail", TargetState.failed, Actor.backend_watcher, detail="expired")
-    reply = _rpc("connectors.connect", transport, owner={"type": "session", "session_id": "alias-sid"},
-                 connectors=["gmail"], reconnect=True, connection_id="ca_work")
+    unnamed.transition(
+        "gmail", TargetState.initiated, Actor.backend_watcher, connect_url="https://l/2"
+    )
+    unnamed.transition(
+        "gmail", TargetState.failed, Actor.backend_watcher, detail="expired"
+    )
+    reply = _rpc(
+        "connectors.connect",
+        transport,
+        owner={"type": "session", "session_id": "alias-sid"},
+        connectors=["gmail"],
+        reconnect=True,
+        connection_id="ca_work",
+    )
     assert reply["error"]["code"] == 4004
     assert mints == []
 
@@ -119,16 +171,36 @@ def test_a_session_retry_with_the_open_accounts_id_reissues_it(monkeypatch):
     from tools.connectors.operation import ConnectionOperation, Target
 
     transport = _Transport()
-    session = dict(transport=transport, agent=None, session_key="retry-sid", history=[],
-                   history_lock=threading.Lock(), history_version=0, running=False, attached_images=[],
-                   source="desktop")
+    session = dict(
+        transport=transport,
+        agent=None,
+        session_key="retry-sid",
+        history=[],
+        history_lock=threading.Lock(),
+        history_version=0,
+        running=False,
+        attached_images=[],
+        source="desktop",
+    )
     monkeypatch.setitem(server._sessions, "retry-sid", session)
-    monkeypatch.setattr("model_tools._select_tool_names", lambda *a, **k: {"manage_connections"})
-    operation = ConnectionOperation([Target("gmail", "connector", "reconnect", alias="work")], session_key="retry-sid")
+    monkeypatch.setattr(
+        "model_tools._select_tool_names", lambda *a, **k: {"manage_connections"}
+    )
+    operation = ConnectionOperation(
+        [Target("gmail", "connector", "reconnect", alias="work")],
+        session_key="retry-sid",
+    )
     live.open(operation)
-    operation.transition("gmail", TargetState.initiated, Actor.backend_watcher, connect_url="https://l/1",
-                         connection_id="ca_work")
-    operation.transition("gmail", TargetState.failed, Actor.backend_watcher, detail="expired")
+    operation.transition(
+        "gmail",
+        TargetState.initiated,
+        Actor.backend_watcher,
+        connect_url="https://l/1",
+        connection_id="ca_work",
+    )
+    operation.transition(
+        "gmail", TargetState.failed, Actor.backend_watcher, detail="expired"
+    )
     mints = []
 
     class Client:
@@ -137,12 +209,27 @@ def test_a_session_retry_with_the_open_accounts_id_reissues_it(monkeypatch):
 
         def connections(self, names, **kwargs):
             mints.append((tuple(names), kwargs.get("connection_id")))
-            return {"results": [{"connector": n, "status": "initiated", "connect_url": "https://l/2",
-                                 "connection_id": "ca_work2"} for n in names]}
+            return {
+                "results": [
+                    {
+                        "connector": n,
+                        "status": "initiated",
+                        "connect_url": "https://l/2",
+                        "connection_id": "ca_work2",
+                    }
+                    for n in names
+                ]
+            }
 
     monkeypatch.setattr("tools.connectors.managed.managed_client", Client)
-    reply = _rpc("connectors.connect", transport, owner={"type": "session", "session_id": "retry-sid"},
-                 connectors=["gmail"], reconnect=True, connection_id="ca_work")
+    reply = _rpc(
+        "connectors.connect",
+        transport,
+        owner={"type": "session", "session_id": "retry-sid"},
+        connectors=["gmail"],
+        reconnect=True,
+        connection_id="ca_work",
+    )
     assert "result" in reply, reply
     assert mints == [(("gmail",), "ca_work")]
 
@@ -151,6 +238,8 @@ def test_rename_to_a_name_another_account_holds_is_alias_taken(monkeypatch):
     def taken(self, connection_id, alias):
         raise IdempotencyConflict("alias taken", code="alias_taken", status=409)
 
-    monkeypatch.setattr("tools.connectors.portal.client.PortalConnectorClient.rename_account", taken)
+    monkeypatch.setattr(
+        "tools.connectors.portal.client.PortalConnectorClient.rename_account", taken
+    )
     reply = _rpc("connectors.accounts.rename", connection_id="ca_1", alias="home")
     assert reply["error"]["data"]["reason"] == "ALIAS_TAKEN"

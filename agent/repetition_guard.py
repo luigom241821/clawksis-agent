@@ -26,7 +26,9 @@ _DOMINANCE_RATIO = 0.5
 # looped bytes (as the redirect's api_content or as the interrupted assistant row) re-seeds the
 # loop on the next request and the corruption survives restarts (#112764); the model only needs
 # to know the reply degenerated and was cut off.
-REPETITION_LOOP_INTERRUPTED = "[the reply degenerated into a repetition loop and was interrupted]"
+REPETITION_LOOP_INTERRUPTED = (
+    "[the reply degenerated into a repetition loop and was interrupted]"
+)
 
 # Sampling bounds keep the general path linear in output size with a small,
 # fixed multiplier. A dominant contiguous run necessarily crosses many of
@@ -120,13 +122,18 @@ def _periodic_run_dominated(text: str, n: int) -> bool:
             if any(lo <= start < hi and period % p == 0 for lo, hi, p in rejected):
                 continue
             left, right = _expand_run(text, n, start, period, window)
-            if right - left >= _MIN_REPEAT_COUNT * period and right - left >= n * _DOMINANCE_RATIO:
+            if (
+                right - left >= _MIN_REPEAT_COUNT * period
+                and right - left >= n * _DOMINANCE_RATIO
+            ):
                 return True
             rejected.append((left, right, period))
     return False
 
 
-def _expand_run(text: str, n: int, start: int, period: int, matched: int) -> tuple[int, int]:
+def _expand_run(
+    text: str, n: int, start: int, period: int, matched: int
+) -> tuple[int, int]:
     """Expand one known equal window to the ``[left, right)`` bounds of its exact periodic run."""
     left = start
     while left > 0 and text[left - 1] == text[left - 1 + period]:
@@ -156,8 +163,13 @@ def is_runaway_repetition(text: str) -> bool:
 
 def _line_repetition_dominated(text: str, n: int) -> bool:
     """True when a single normalized line covers half the fragment via repeats."""
-    counts = Counter(norm for norm in (line.strip() for line in text.splitlines()) if norm)
-    return any(c >= _MIN_REPEAT_COUNT and c * len(line) >= n * _DOMINANCE_RATIO for line, c in counts.items())
+    counts = Counter(
+        norm for norm in (line.strip() for line in text.splitlines()) if norm
+    )
+    return any(
+        c >= _MIN_REPEAT_COUNT and c * len(line) >= n * _DOMINANCE_RATIO
+        for line, c in counts.items()
+    )
 
 
 class RunawayStreamWatch:

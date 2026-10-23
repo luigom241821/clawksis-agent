@@ -35,7 +35,9 @@ from tests.e2e.core._pending_fixes import known_gate
 from tests.e2e.core.security._helpers import BoundaryBreach, run_clawk, write_home
 from tests.fakes.fake_llm_provider import FakeLLMServer, Text, ToolCall
 
-pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="POSIX shell variants + process-group harness")
+pytestmark = pytest.mark.skipif(
+    sys.platform == "win32", reason="POSIX shell variants + process-group harness"
+)
 
 MANUAL = "approvals:\n  mode: manual\n  timeout: 120\n"
 
@@ -88,7 +90,9 @@ def _tool_results(requests: list[dict]) -> dict[str, dict[str, Any]]:
                 args = json.loads(call["function"]["arguments"] or "{}")
                 commands[call["id"]] = args.get("command", "")
             if msg.get("role") == "tool" and msg.get("tool_call_id") in commands:
-                results[commands[msg["tool_call_id"]]] = _parse_tool_content(msg["content"])
+                results[commands[msg["tool_call_id"]]] = _parse_tool_content(
+                    msg["content"]
+                )
     return results
 
 
@@ -114,19 +118,35 @@ def _plant(root: Path) -> Path:
 def _single_query_run(root: Path, single_query_mode: str) -> dict[str, Any]:
     """One ``clawk chat -q`` whose model calls ``terminal`` once per variant, then the control."""
     home, victims = root / "home", _plant(root)
-    script: list[Any] = [ToolCall("terminal", {"command": t.format(X=n)}) for n, t in VARIANTS.items()]
+    script: list[Any] = [
+        ToolCall("terminal", {"command": t.format(X=n)}) for n, t in VARIANTS.items()
+    ]
     script += [ToolCall("terminal", {"command": CONTROL}), Text("done")]
     key = "sk-approval-cli"
     with FakeLLMServer(script, api_key=key) as srv:
-        write_home(home / ".clawksis", srv.base_url, api_key=key,
-                   config=MANUAL + f"  single_query_mode: {single_query_mode}\n")
-        proc = run_clawk(["chat", "-q", "run the maintenance commands", "-Q"], home, timeout=180, cwd=victims)
+        write_home(
+            home / ".clawksis",
+            srv.base_url,
+            api_key=key,
+            config=MANUAL + f"  single_query_mode: {single_query_mode}\n",
+        )
+        proc = run_clawk(
+            ["chat", "-q", "run the maintenance commands", "-Q"],
+            home,
+            timeout=180,
+            cwd=victims,
+        )
         requests = srv.main_requests()
-    assert proc.returncode == 0, f"clawk chat -q failed rc={proc.returncode}\n{proc.stdout[-2000:]}\n{proc.stderr[-2000:]}"
+    assert proc.returncode == 0, (
+        f"clawk chat -q failed rc={proc.returncode}\n{proc.stdout[-2000:]}\n{proc.stderr[-2000:]}"
+    )
     results = _tool_results(requests)
     missing = [n for n, t in VARIANTS.items() if t.format(X=n) not in results] + (
-        [] if CONTROL in results else ["control"])
-    assert not missing, f"the agent never reported a tool result for {missing}; stdout={proc.stdout[-1500:]}"
+        [] if CONTROL in results else ["control"]
+    )
+    assert not missing, (
+        f"the agent never reported a tool result for {missing}; stdout={proc.stdout[-1500:]}"
+    )
     return {"victims": victims, "results": results}
 
 
@@ -144,16 +164,22 @@ def test_cli_variants_are_live_deletes(cli_approve):
     """Discriminator for the table: approved, every spelling really deletes its victim."""
     victims = cli_approve["victims"]
     survived = [n for n in VARIANTS if (victims / n).exists()]
-    assert not survived, f"variants that do not delete even when approved (fix the table): {survived}"
+    assert not survived, (
+        f"variants that do not delete even when approved (fix the table): {survived}"
+    )
     control = cli_approve["results"][CONTROL]
-    assert control.get("exit_code") == 0 and (victims / "benign_marker").exists(), control
+    assert control.get("exit_code") == 0 and (victims / "benign_marker").exists(), (
+        control
+    )
 
 
 def test_cli_benign_control_runs(cli_deny):
     """A harmless command runs in the same -q session that blocks the dangerous ones."""
     result = cli_deny["results"][CONTROL]
     assert result.get("exit_code") == 0, result
-    assert (cli_deny["victims"] / "benign_marker").exists(), "benign control command did not run"
+    assert (cli_deny["victims"] / "benign_marker").exists(), (
+        "benign control command did not run"
+    )
 
 
 @pytest.mark.parametrize("variant", list(VARIANTS))
@@ -162,9 +188,13 @@ def test_cli_dangerous_variant_blocked_without_approval(cli_deny, variant):
     result = cli_deny["results"][VARIANTS[variant].format(X=variant)]
     with known_gate(KNOWN, variant, raises=BoundaryBreach):
         if not (victim / "keep.txt").exists():
-            raise BoundaryBreach(f"{variant!r} deleted its victim with nobody to approve it; tool result: {result}")
+            raise BoundaryBreach(
+                f"{variant!r} deleted its victim with nobody to approve it; tool result: {result}"
+            )
         if result.get("exit_code") == 0 or result.get("status") != "blocked":
-            raise BoundaryBreach(f"{variant!r}: tool result not marked blocked: {result}")
+            raise BoundaryBreach(
+                f"{variant!r}: tool result not marked blocked: {result}"
+            )
 
 
 # --- Gateway --------------------------------------------------------------------------------------
@@ -189,7 +219,11 @@ class ScriptedModel:
         user = next((m for m in reversed(msgs) if m.get("role") == "user"), {})
         content = user.get("content")
         found = _CMD.search(content) if isinstance(content, str) else None
-        return ToolCall("terminal", {"command": found.group(1)}) if found else Text("nothing to run")
+        return (
+            ToolCall("terminal", {"command": found.group(1)})
+            if found
+            else Text("nothing to run")
+        )
 
 
 @pytest.fixture(scope="module")
@@ -197,8 +231,12 @@ def gateway(tmp_path_factory):
     model = ScriptedModel()
     root = tmp_path_factory.mktemp("approval-gw")
     with FakeLLMServer(model) as srv:
-        gw = GatewayProcess(root, platforms={PLATFORM: "telegram"}, llm_base_url=srv.base_url,
-                            extra_config=MANUAL + "updates:\n  check: false\n")
+        gw = GatewayProcess(
+            root,
+            platforms={PLATFORM: "telegram"},
+            llm_base_url=srv.base_url,
+            extra_config=MANUAL + "updates:\n  check: false\n",
+        )
         gw.start()
         try:
             yield gw, model, root / "victims"
@@ -210,7 +248,9 @@ _ids = itertools.count(1)
 
 
 class Chat:
-    def __init__(self, gw: GatewayProcess, model: ScriptedModel, victims: Path, chat_id: str) -> None:
+    def __init__(
+        self, gw: GatewayProcess, model: ScriptedModel, victims: Path, chat_id: str
+    ) -> None:
         self.gw, self.model, self.chat_id = gw, model, chat_id
         self.victims = victims
         self.victims.mkdir(exist_ok=True)
@@ -236,14 +276,23 @@ class Chat:
 
     def await_pending(self, victim: Path, command: str) -> None:
         """Wait for this chat's approval prompt (or an early settle, which ``_pending`` reports)."""
-        wait_until(lambda: self.prompts() >= 1 or command in self.model.results,
-                   f"approval prompt for {command!r} in {self.chat_id}", timeout=60,
-                   proc=self.gw.proc, log=self.gw.log)
+        wait_until(
+            lambda: self.prompts() >= 1 or command in self.model.results,
+            f"approval prompt for {command!r} in {self.chat_id}",
+            timeout=60,
+            proc=self.gw.proc,
+            log=self.gw.log,
+        )
         _pending(self, victim, command)
 
     def wait_result(self, command: str) -> dict[str, Any]:
-        wait_until(lambda: command in self.model.results, f"tool result for {command!r}", timeout=60,
-                   proc=self.gw.proc, log=self.gw.log)
+        wait_until(
+            lambda: command in self.model.results,
+            f"tool result for {command!r}",
+            timeout=60,
+            proc=self.gw.proc,
+            log=self.gw.log,
+        )
         self.gw.wait_idle([self.chat_id], f"{self.chat_id} idle")
         return self.model.results[command]
 
@@ -259,11 +308,17 @@ def _chats(gateway, *names: str) -> list[Chat]:
 def _pending(chat: Chat, victim: Path, command: str) -> None:
     """``chat`` holds ``command`` pending: prompt shown, victim intact, turn still blocked."""
     if not (victim / "keep.txt").exists():
-        raise BoundaryBreach(f"{chat.chat_id}: {command!r} ran without an approval in its own chat")
+        raise BoundaryBreach(
+            f"{chat.chat_id}: {command!r} ran without an approval in its own chat"
+        )
     if command in chat.model.results:
-        raise BoundaryBreach(f"{chat.chat_id}: {command!r} was settled without an answer in its own chat: "
-                             f"{chat.model.results[command]}")
-    assert chat.blocked_on_approval(), f"{chat.chat_id} is no longer waiting on its approval: {chat.texts()}"
+        raise BoundaryBreach(
+            f"{chat.chat_id}: {command!r} was settled without an answer in its own chat: "
+            f"{chat.model.results[command]}"
+        )
+    assert chat.blocked_on_approval(), (
+        f"{chat.chat_id} is no longer waiting on its approval: {chat.texts()}"
+    )
 
 
 def _denied(victim: Path, result: dict[str, Any]) -> None:
@@ -279,14 +334,18 @@ def test_gateway_approve_once_settles_only_its_own_chat(gateway):
     a.await_pending(va, cmd_a)
     b.await_pending(vb, cmd_b)
 
-    c.say("/approve")  # a chat with nothing pending must not answer anyone else's prompt
+    c.say(
+        "/approve"
+    )  # a chat with nothing pending must not answer anyone else's prompt
     wait_until(lambda: c.texts(), "reply to /approve in the idle chat", timeout=30)
     _pending(a, va, cmd_a)
     _pending(b, vb, cmd_b)
 
     a.say("/approve")
     result_a = a.wait_result(cmd_a)
-    assert not va.exists() and result_a.get("exit_code") == 0, f"approved command did not run: {result_a}"
+    assert not va.exists() and result_a.get("exit_code") == 0, (
+        f"approved command did not run: {result_a}"
+    )
     _pending(b, vb, cmd_b)
 
     b.say("/deny")
@@ -306,7 +365,9 @@ def test_gateway_deny_settles_only_its_own_chat(gateway):
 
     b.say("/approve")
     result_b = b.wait_result(cmd_b)
-    assert not vb.exists() and result_b.get("exit_code") == 0, f"approved command did not run: {result_b}"
+    assert not vb.exists() and result_b.get("exit_code") == 0, (
+        f"approved command did not run: {result_b}"
+    )
 
 
 def test_gateway_session_scope_does_not_leak_to_other_chat(gateway):
@@ -320,9 +381,16 @@ def test_gateway_session_scope_does_not_leak_to_other_chat(gateway):
 
     # Control: the session grant is real — the same pattern in the SAME chat runs unprompted.
     cmd_a2 = a.run(f"rm -rf {va2}")
-    wait_until(lambda: a.prompts() >= 2 or cmd_a2 in a.model.results, f"{cmd_a2!r} to run or prompt again",
-               timeout=60, proc=a.gw.proc, log=a.gw.log)
-    assert a.prompts() == 1, f"/approve session did not stick in its own chat: {a.texts()}"
+    wait_until(
+        lambda: a.prompts() >= 2 or cmd_a2 in a.model.results,
+        f"{cmd_a2!r} to run or prompt again",
+        timeout=60,
+        proc=a.gw.proc,
+        log=a.gw.log,
+    )
+    assert a.prompts() == 1, (
+        f"/approve session did not stick in its own chat: {a.texts()}"
+    )
     result_a2 = a.wait_result(cmd_a2)
     assert result_a2.get("exit_code") == 0 and not va2.exists(), result_a2
 

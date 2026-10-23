@@ -21,8 +21,10 @@ from run_agent import AIAgent
 def _no_sleep(monkeypatch):
     """Short-circuit all time.sleep and jittered_backoff calls."""
     import time as _time
+
     monkeypatch.setattr(_time, "sleep", lambda *_a, **_k: None)
     from agent import retry_utils as _retry_utils
+
     monkeypatch.setattr(_retry_utils, "jittered_backoff", lambda *a, **k: 0.0)
 
 
@@ -56,7 +58,10 @@ def _mock_response(content="Hello", finish_reason="stop", tool_calls=None, usage
 @pytest.fixture()
 def agent():
     with (
-        patch("model_tools.get_tool_definitions", return_value=_make_tool_defs("web_search")),
+        patch(
+            "model_tools.get_tool_definitions",
+            return_value=_make_tool_defs("web_search"),
+        ),
         patch("model_tools.check_toolset_requirements", return_value={}),
         patch("agent.process_bootstrap.OpenAI"),
     ):
@@ -97,7 +102,7 @@ def _make_context_overflow_error():
         "Error code: 400 - {'error': {'message': "
         "\"This endpoint's maximum context length is 128000 tokens. "
         "However, you requested about 200000 tokens. "
-        "Please reduce the length of the messages.\"}}"
+        'Please reduce the length of the messages."}}'
     )
     err.status_code = 400
     return err
@@ -127,24 +132,45 @@ def _make_long_context_tier_error():
 @pytest.mark.parametrize("muted", [False, True])
 def test_long_context_retry_carrier_survives_failure_flush(agent, muted, monkeypatch):
     from gateway.warning_notifications import DiagnosticText
+
     agent._notification_config = {"display": {"suppress_warning_notifications": muted}}
     err = _make_long_context_tier_error()
-    agent.client.chat.completions.create.side_effect = [err, _mock_response(content="Recovered")]
+    agent.client.chat.completions.create.side_effect = [
+        err,
+        _mock_response(content="Recovered"),
+    ]
     captured = []
     original = agent._buffer_retry_message
+
     def capture(kind, text):
         captured.append((kind, text))
         original(kind, text)
+
     monkeypatch.setattr(agent, "_buffer_retry_message", capture)
-    with (patch("agent.model_metadata.estimate_request_tokens_rough", return_value=_SENTINEL_TOKENS),
-          patch.object(agent, "_compress_context", return_value=([{"role": "user", "content": "compressed"}], "compressed prompt")),
-          patch.object(agent, "_persist_session"), patch.object(agent, "_save_trajectory"),
-          patch.object(agent, "_cleanup_task_resources")):
+    with (
+        patch(
+            "agent.model_metadata.estimate_request_tokens_rough",
+            return_value=_SENTINEL_TOKENS,
+        ),
+        patch.object(
+            agent,
+            "_compress_context",
+            return_value=(
+                [{"role": "user", "content": "compressed"}],
+                "compressed prompt",
+            ),
+        ),
+        patch.object(agent, "_persist_session"),
+        patch.object(agent, "_save_trajectory"),
+        patch.object(agent, "_cleanup_task_resources"),
+    ):
         result = agent.run_conversation("hello", conversation_history=_prefill())
     assert result["final_response"] == "Recovered"
     assert captured
     assert any(kind == "status" for kind, _ in captured)
-    assert all(kind == "vprint" or isinstance(text, DiagnosticText) for kind, text in captured), captured
+    assert all(
+        kind == "vprint" or isinstance(text, DiagnosticText) for kind, text in captured
+    ), captured
     # Recovery clears buffered diagnostics; the same carriers must also work on
     # the terminal-failure flush instead of leaking their retry sibling copy.
     assert not agent._retry_status_buffer
@@ -189,7 +215,10 @@ def test_overflow_recovery_compresses_with_tool_overhead_counted(agent, make_err
         }
     ]
     history = _prefill()
-    assert estimate_messages_tokens_rough(history + [{"role": "user", "content": "hello"}]) < 500
+    assert (
+        estimate_messages_tokens_rough(history + [{"role": "user", "content": "hello"}])
+        < 500
+    )
 
     agent.client.chat.completions.create.side_effect = [
         make_error(),

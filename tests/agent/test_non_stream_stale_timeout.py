@@ -14,7 +14,6 @@ from __future__ import annotations
 from pathlib import Path
 
 
-
 def _write_config(tmp_path: Path, body: str) -> None:
     clawk_home = tmp_path
     (clawk_home / "config.yaml").write_text(body or "{}\n", encoding="utf-8")
@@ -22,6 +21,7 @@ def _write_config(tmp_path: Path, body: str) -> None:
 
 def _make_agent(tmp_path: Path, **overrides):
     from run_agent import AIAgent
+
     kwargs = dict(
         model="gpt-5.5",
         provider="openai-codex",
@@ -39,10 +39,9 @@ def _make_agent(tmp_path: Path, **overrides):
 # ── estimator ──────────────────────────────────────────────────────────────
 
 
-
-
 def test_estimator_responses_api_input():
     from agent.chat_completion_helpers import estimate_request_context_tokens
+
     payload = {
         "model": "gpt-5.5",
         "instructions": "i" * 1000,
@@ -54,45 +53,34 @@ def test_estimator_responses_api_input():
     assert tokens >= 1200, f"Responses API estimator returned {tokens}"
 
 
-
-
-
-
 def test_estimator_empty_inputs():
     from agent.chat_completion_helpers import estimate_request_context_tokens
+
     assert estimate_request_context_tokens({}) == 0
     assert estimate_request_context_tokens([]) == 0
     assert estimate_request_context_tokens(None) == 0
 
 
-
-
 # ── default base + tier scaling ────────────────────────────────────────────
-
-
-
-
-
-
-
-
-
-
 
 
 def test_explicit_user_config_overrides_default(monkeypatch, tmp_path):
     """If the user explicitly sets a stale_timeout, the new defaults don't apply."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     (tmp_path / ".env").write_text("", encoding="utf-8")
-    _write_config(tmp_path, """\
+    _write_config(
+        tmp_path,
+        """\
 providers:
   openai-codex:
     stale_timeout_seconds: 1800
-""")
+""",
+    )
     monkeypatch.delenv("CLAWK_API_CALL_STALE_TIMEOUT", raising=False)
 
     import importlib
     from clawk_cli import timeouts as to_mod
+
     importlib.reload(to_mod)
 
     agent = _make_agent(tmp_path)
@@ -102,11 +90,12 @@ providers:
 # ── openai-codex gateway-scale stale floor ────────────────────────────────
 
 
-
-
 def test_openai_codex_stale_floor_tiers():
     from agent.chat_completion_helpers import openai_codex_stale_timeout_floor
 
     # Contract, not literals: a bigger request never gets a shorter floor.
-    small, large = openai_codex_stale_timeout_floor(55_000), openai_codex_stale_timeout_floor(120_000)
+    small, large = (
+        openai_codex_stale_timeout_floor(55_000),
+        openai_codex_stale_timeout_floor(120_000),
+    )
     assert 0 < small <= large

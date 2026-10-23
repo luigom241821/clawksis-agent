@@ -142,38 +142,46 @@ class ScrapegraphWebProvider(WebSearchProvider):
                 # {"content": "NA"}, empty dict) instead of raising — surface
                 # an actionable hint rather than empty/"NA" content.
                 if looks_like_empty_result(data):
-                    results.append({
+                    results.append(
+                        {
+                            "url": url,
+                            "title": "",
+                            "content": "",
+                            "error": (
+                                "ScrapeGraphAI returned no useful content — use "
+                                "the `scrape` tool (Scrapling) for raw content "
+                                "from this page."
+                            ),
+                        }
+                    )
+                    continue
+                content = _stringify(data)
+                results.append(
+                    {
+                        "url": url,
+                        "title": "",
+                        "content": content,
+                        "raw_content": content,
+                        "metadata": {"sourceURL": url},
+                    }
+                )
+            except ScrapegraphUnavailable as exc:
+                results.append(
+                    {
                         "url": url,
                         "title": "",
                         "content": "",
-                        "error": (
-                            "ScrapeGraphAI returned no useful content — use "
-                            "the `scrape` tool (Scrapling) for raw content "
-                            "from this page."
-                        ),
-                    })
-                    continue
-                content = _stringify(data)
-                results.append({
-                    "url": url,
-                    "title": "",
-                    "content": content,
-                    "raw_content": content,
-                    "metadata": {"sourceURL": url},
-                })
-            except ScrapegraphUnavailable as exc:
-                results.append({
-                    "url": url,
-                    "title": "",
-                    "content": "",
-                    "error": str(exc),
-                })
+                        "error": str(exc),
+                    }
+                )
             except Exception as exc:
                 logger.warning("scrapegraph extract failed for %s: %s", url, exc)
-                results.append({
-                    "url": url,
-                    "title": "",
-                    "content": "",
-                    "error": classify_scrapegraph_error(exc),
-                })
+                results.append(
+                    {
+                        "url": url,
+                        "title": "",
+                        "content": "",
+                        "error": classify_scrapegraph_error(exc),
+                    }
+                )
         return results

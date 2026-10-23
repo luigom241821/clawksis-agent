@@ -16,11 +16,17 @@ from unittest.mock import patch
 from tools.process_registry import ProcessRegistry, ProcessSession
 
 
-def _owned_session(sid="proc_own1", container="default", owner="sa-1-abc123",
-                   command="sleep 30", **kw):
+def _owned_session(
+    sid="proc_own1", container="default", owner="sa-1-abc123", command="sleep 30", **kw
+):
     return ProcessSession(
-        id=sid, command=command, task_id=container, owner_task_id=owner,
-        started_at=kw.pop("started_at", time.time()), **kw)
+        id=sid,
+        command=command,
+        task_id=container,
+        owner_task_id=owner,
+        started_at=kw.pop("started_at", time.time()),
+        **kw,
+    )
 
 
 def test_list_surfaces_owner_spawned_process_despite_collapsed_container_key():
@@ -34,8 +40,11 @@ def test_list_surfaces_owner_spawned_process_despite_collapsed_container_key():
 def test_list_still_matches_container_key():
     reg = ProcessRegistry()
     reg._running["proc_c1"] = _owned_session(
-        sid="proc_c1", container="default", owner="default")
-    assert [e["session_id"] for e in reg.list_sessions(task_id="default")] == ["proc_c1"]
+        sid="proc_c1", container="default", owner="default"
+    )
+    assert [e["session_id"] for e in reg.list_sessions(task_id="default")] == [
+        "proc_c1"
+    ]
 
 
 def test_has_active_processes_matches_raw_owner():
@@ -55,16 +64,20 @@ def test_snapshot_running_ids_matches_raw_owner():
 def test_kill_all_targets_owner_spawned_process():
     reg = ProcessRegistry()
     reg._running["proc_own1"] = _owned_session()
-    with patch.object(reg, "kill_process",
-                      return_value={"status": "killed"}) as kill:
+    with patch.object(reg, "kill_process", return_value={"status": "killed"}) as kill:
         assert reg.kill_all("sa-1-abc123", source="t") == 1
     kill.assert_called_once_with("proc_own1", source="t", consume_output=False)
 
 
 def test_wsl_launcher_command_stamped_at_spawn():
     reg = ProcessRegistry()
-    wsl = reg._new_session("wsl.exe -e bash -lc 'ninfer-serve --port 8080'",
-                           "default", "sa-1-abc123", "", ".")
+    wsl = reg._new_session(
+        "wsl.exe -e bash -lc 'ninfer-serve --port 8080'",
+        "default",
+        "sa-1-abc123",
+        "",
+        ".",
+    )
     plain = reg._new_session("python -m pytest -x", "default", "sa-1-abc123", "", ".")
     assert wsl.wsl_chain is True
     assert plain.wsl_chain is False
@@ -72,8 +85,12 @@ def test_wsl_launcher_command_stamped_at_spawn():
 
 def test_wsl_launcher_forms_detected():
     reg = ProcessRegistry()
-    for cmd in ("wsl -e bash -c 'x'", "wsl --exec foo", "wsl -d Ubuntu -- bar",
-                "C:\\Windows\\System32\\wsl.exe -e foo"):
+    for cmd in (
+        "wsl -e bash -c 'x'",
+        "wsl --exec foo",
+        "wsl -d Ubuntu -- bar",
+        "C:\\Windows\\System32\\wsl.exe -e foo",
+    ):
         assert reg._new_session(cmd, "d", "o", "", ".").wsl_chain is True, cmd
     for cmd in ("python -m wsl_tool", "echo wsl.exe", "mywsl -e x"):
         assert reg._new_session(cmd, "d", "o", "", ".").wsl_chain is False, cmd
@@ -82,7 +99,8 @@ def test_wsl_launcher_forms_detected():
 def test_list_entry_surfaces_wsl_chain_hint():
     reg = ProcessRegistry()
     reg._running["proc_w"] = _owned_session(
-        sid="proc_w", command="wsl.exe -e bash -lc 'ninfer-serve'")
+        sid="proc_w", command="wsl.exe -e bash -lc 'ninfer-serve'"
+    )
     reg._running["proc_w"].wsl_chain = True
     (entry,) = reg.list_sessions(task_id="sa-1-abc123")
     assert entry["wsl_chain"] is True

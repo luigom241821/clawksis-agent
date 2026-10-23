@@ -83,8 +83,9 @@ def staged_in(models_dir: Path, *, require_complete: bool = True) -> list[Path]:
         if m.group(1) != "00001":
             continue
         stem, total = p.name[: m.start()], int(m.group(2))
-        if not require_complete or all(f"{stem}-{i:05d}-of-{m.group(2)}.gguf" in names
-                                       for i in range(2, total + 1)):
+        if not require_complete or all(
+            f"{stem}-{i:05d}-of-{m.group(2)}.gguf" in names for i in range(2, total + 1)
+        ):
             out.append(p)
     return out
 
@@ -108,13 +109,19 @@ def adopt_legacy_models() -> list[Path]:
     moved: list[Path] = []
     for home in sorted(profiles_root.iterdir()):
         old = home / "models"
-        if home.name.startswith(".") or not old.is_dir() or not named_profile_has_identity(home):
+        if (
+            home.name.startswith(".")
+            or not old.is_dir()
+            or not named_profile_has_identity(home)
+        ):
             continue
         for src_dir, dest_dir in ((old, models_dir()), (old / "assets", assets_dir())):
             for src in sorted(src_dir.glob("*.gguf")):
                 dest = dest_dir / src.name
                 if dest.exists():
-                    logger.warning("legacy model %s not moved: %s already exists", src, dest)
+                    logger.warning(
+                        "legacy model %s not moved: %s already exists", src, dest
+                    )
                     continue
                 try:
                     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -122,7 +129,9 @@ def adopt_legacy_models() -> list[Path]:
                 except FileNotFoundError:
                     continue
                 except OSError as exc:
-                    logger.warning("legacy model %s not moved to %s: %s", src, dest_dir, exc)
+                    logger.warning(
+                        "legacy model %s not moved to %s: %s", src, dest_dir, exc
+                    )
                     continue
                 moved.append(dest)
         for emptied in (old / "assets", old):
@@ -149,8 +158,11 @@ def _presets_stale() -> bool:
         from clawk_cli.local_runtime.presets import read_preset_decisions
 
         known = read_preset_decisions()
-        return any(mid not in known or (not known[mid].refusal and not (known[mid].keys or {}).get("model"))
-                   for mid in staged_model_ids())
+        return any(
+            mid not in known
+            or (not known[mid].refusal and not (known[mid].keys or {}).get("model"))
+            for mid in staged_model_ids()
+        )
     return False
 
 
@@ -171,7 +183,10 @@ def _stop_state_server() -> None:
     state = read_state()
     if is_modern(state):
         if not _owner_is_dead(state):
-            logger.info("llama-server pid=%s belongs to a live Clawksis process; leaving it", state.get("pid"))
+            logger.info(
+                "llama-server pid=%s belongs to a live Clawksis process; leaving it",
+                state.get("pid"),
+            )
             return
         proc = recorded_process(state)
     else:
@@ -182,7 +197,9 @@ def _stop_state_server() -> None:
         # Waits for the tree to exit, so the port and the GPU are free for the replacement.
         LlamaServerSupervisor._terminate_tree(proc, verified_root=True)
     except Exception as exc:
-        logger.warning("could not stop the incumbent llama-server (pid=%s): %s", proc.pid, exc)
+        logger.warning(
+            "could not stop the incumbent llama-server (pid=%s): %s", proc.pid, exc
+        )
 
 
 def refresh_local_runtime() -> bool:
@@ -208,7 +225,9 @@ def refresh_local_runtime() -> bool:
         return False
 
 
-def _admitted_models_max(mdir: Path, configured: int, engine_tag: str | None = None) -> int:
+def _admitted_models_max(
+    mdir: Path, configured: int, engine_tag: str | None = None
+) -> int:
     """Residency cap to hand the router: derived from the hardware budget, ``models_max`` as a ceiling.
 
     A cap of "four" on a card that holds one model is how a second child ends up paged (WDDM) and
@@ -222,18 +241,26 @@ def _admitted_models_max(mdir: Path, configured: int, engine_tag: str | None = N
 
         capacity = probe_budget(planning=True)
         live = _launch_budget(capacity) if capacity.uma else None
-        cap = admitted_residency_count(mdir, capacity, configured, live=live, engine_tag=engine_tag)
+        cap = admitted_residency_count(
+            mdir, capacity, configured, live=live, engine_tag=engine_tag
+        )
     except Exception as exc:
-        logger.warning("residency cap probe failed (%s); using models_max=%s", exc, configured)
+        logger.warning(
+            "residency cap probe failed (%s); using models_max=%s", exc, configured
+        )
         return configured
     if cap != configured:
-        logger.info("residency cap: %s resident model(s) on this card (models_max=%s)",
-                    cap, configured)
+        logger.info(
+            "residency cap: %s resident model(s) on this card (models_max=%s)",
+            cap,
+            configured,
+        )
     return cap
 
 
-def _generate_presets(mdir: Path, preset_path: Path, residents: int = 1, *,
-                      engine_tag: str | None = None) -> Path | None:
+def _generate_presets(
+    mdir: Path, preset_path: Path, residents: int = 1, *, engine_tag: str | None = None
+) -> Path | None:
     """Write the launch-policy INI for every staged model; returns the path to hand the router.
 
     Priced against CAPACITY, not live free VRAM: this runs while the outgoing server instance may
@@ -254,20 +281,32 @@ def _generate_presets(mdir: Path, preset_path: Path, residents: int = 1, *,
 
     try:
         capacity = probe_budget(planning=True)
-        for entry in generate_presets(mdir, capacity, preset_path, live=_launch_budget(capacity),
-                                      residents=residents, engine_tag=engine_tag):
+        for entry in generate_presets(
+            mdir,
+            capacity,
+            preset_path,
+            live=_launch_budget(capacity),
+            residents=residents,
+            engine_tag=engine_tag,
+        ):
             if entry.refusal:
                 logger.warning("model refused by physics check: %s", entry.refusal)
         return preset_path
     except Exception as exc:
         if preset_path.exists():
-            logger.error("preset generation failed (%s); serving with the "
-                         "PREVIOUS launch policies — models staged since "
-                         "the last successful generation run unpoliced "
-                         "until this is fixed", exc)
+            logger.error(
+                "preset generation failed (%s); serving with the "
+                "PREVIOUS launch policies — models staged since "
+                "the last successful generation run unpoliced "
+                "until this is fixed",
+                exc,
+            )
             return preset_path
-        logger.error("preset generation failed (%s) and no previous "
-                     "policy file exists; router runs stock fit", exc)
+        logger.error(
+            "preset generation failed (%s) and no previous "
+            "policy file exists; router runs stock fit",
+            exc,
+        )
         return None
 
 
@@ -278,7 +317,9 @@ def _launch_budget(capacity, own_bytes: int = 0):
     try:
         return launch_budget(capacity, own_bytes=own_bytes)
     except Exception as exc:
-        logger.warning("free GPU memory probe failed (%s); launch windows use capacity", exc)
+        logger.warning(
+            "free GPU memory probe failed (%s); launch windows use capacity", exc
+        )
         return None
 
 
@@ -309,8 +350,15 @@ def refit_idle_presets(sup) -> bool:
     last = sup._refit_usable
     if last is not None and abs(live.usable_vram_bytes - last) < _REFIT_STEP_BYTES:
         return False
-    text = render_presets(plan_presets(models_dir(), capacity, live=live, residents=sup.models_max,
-                                       engine_tag=_SERVING_ENGINE.tag if _SERVING_ENGINE is not None else None))
+    text = render_presets(
+        plan_presets(
+            models_dir(),
+            capacity,
+            live=live,
+            residents=sup.models_max,
+            engine_tag=_SERVING_ENGINE.tag if _SERVING_ENGINE is not None else None,
+        )
+    )
     # Held across the write and the reload so a restart can't spawn between them; everything
     # slow ran above.
     with sup._lifecycle_lock:
@@ -323,8 +371,10 @@ def refit_idle_presets(sup) -> bool:
 
         atomic_write_text(path, text, tmp_prefix=f".{path.name}_", mode=0o600)
         sup.reload_presets()
-    logger.info("launch windows re-planned for %.1f GiB of free GPU memory",
-                live.usable_vram_bytes / (1 << 30))
+    logger.info(
+        "launch windows re-planned for %.1f GiB of free GPU memory",
+        live.usable_vram_bytes / (1 << 30),
+    )
     return True
 
 
@@ -394,7 +444,9 @@ def _cross_process_boot_lock(timeout_s: float = 130.0):
         deadline = time.monotonic() + timeout_s
         while not _try_lock_boot_fd(fd):
             if time.monotonic() >= deadline:
-                logger.warning("boot lock contended past %.0fs; proceeding without it", timeout_s)
+                logger.warning(
+                    "boot lock contended past %.0fs; proceeding without it", timeout_s
+                )
                 break
             time.sleep(0.2)
         try:
@@ -419,7 +471,9 @@ def ensure_local_runtime(config: dict, force: bool = False) -> object | None:
 
     try:
         adopt_legacy_models()
-    except OSError as exc:  # an unreadable profiles dir must not block serving what's staged
+    except (
+        OSError
+    ) as exc:  # an unreadable profiles dir must not block serving what's staged
         logger.warning("legacy model adoption failed: %s", exc)
     # Residency: no staged models means nothing to serve — don't boot an empty server (delete
     # your last model and boots stop). force boots as ever.
@@ -444,8 +498,10 @@ def ensure_local_runtime(config: dict, force: bool = False) -> object | None:
             if not _presets_stale():
                 logger.info("managed llama-server already running (another process)")
                 return None
-            logger.info("running server's presets predate the staged models; "
-                        "replacing it so every model launches with a policy")
+            logger.info(
+                "running server's presets predate the staged models; "
+                "replacing it so every model launches with a policy"
+            )
             _stop_state_server()
 
         try:
@@ -454,19 +510,28 @@ def ensure_local_runtime(config: dict, force: bool = False) -> object | None:
 
             engine = installed_engine(section.get("backend", "auto"))
             if engine is None:
-                logger.info("local runtime enabled but no PM engine installed; use the Local Models pane")
+                logger.info(
+                    "local runtime enabled but no PM engine installed; use the Local Models pane"
+                )
                 return None
             _SERVING_ENGINE = engine
 
             mdir = models_dir()
             mdir.mkdir(parents=True, exist_ok=True)
-            models_max = _admitted_models_max(mdir, int(section.get("models_max", 4)), engine.tag)
-            preset_path = _generate_presets(mdir, runtimes_root() / "presets.ini", models_max,
-                                            engine_tag=engine.tag)
+            models_max = _admitted_models_max(
+                mdir, int(section.get("models_max", 4)), engine.tag
+            )
+            preset_path = _generate_presets(
+                mdir, runtimes_root() / "presets.ini", models_max, engine_tag=engine.tag
+            )
 
-            sup = LlamaServerSupervisor(engine.binary, mdir, preset_path=preset_path,
-                                        models_max=models_max,
-                                        port=int(section.get("port", 0)) or None)
+            sup = LlamaServerSupervisor(
+                engine.binary,
+                mdir,
+                preset_path=preset_path,
+                models_max=models_max,
+                port=int(section.get("port", 0)) or None,
+            )
             try:
                 sup.start()
             except Exception:
@@ -477,7 +542,12 @@ def ensure_local_runtime(config: dict, force: bool = False) -> object | None:
                 raise
             _SUPERVISOR = sup
             _stop_at_exit()
-            logger.info("managed llama-server up at %s (backend=%s tag=%s)", sup.base_url, engine.backend, engine.tag)
+            logger.info(
+                "managed llama-server up at %s (backend=%s tag=%s)",
+                sup.base_url,
+                engine.backend,
+                engine.tag,
+            )
             _start_idle_sweeper(sup)
             return sup
         except Exception as exc:

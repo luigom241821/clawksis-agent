@@ -23,6 +23,7 @@ _ATTACHMENT_REF_RE = re.compile(r"^(?:@(?:image|file|url):[^\n]+\n?)+", re.IGNOR
 
 class MessageType(Enum):
     """Types of incoming messages."""
+
     TEXT = "text"
     LOCATION = "location"
     PHOTO = "photo"
@@ -36,6 +37,7 @@ class MessageType(Enum):
 
 class ProcessingOutcome(Enum):
     """Result classification for message-processing lifecycle hooks."""
+
     SUCCESS = "success"
     FAILURE = "failure"
     CANCELLED = "cancelled"
@@ -44,6 +46,7 @@ class ProcessingOutcome(Enum):
 @dataclass
 class MessageEvent:
     """Incoming message from a platform — the normalized shape all adapters produce."""
+
     text: str
     message_type: MessageType = MessageType.TEXT
     # Author, mirrored from ``source`` for per-message prompt builders; None for non-IM sources.
@@ -75,10 +78,14 @@ class MessageEvent:
     # Per-attachment text-inlining contract; None = legacy "text/* already inlined into ``text``".
     media_text_inlined: list[Optional[bool]] = field(default_factory=list)
     reply_to_message_id: Optional[str] = None
-    reply_to_text: Optional[str] = None  # Text of the replied-to message (for context injection)
+    reply_to_text: Optional[str] = (
+        None  # Text of the replied-to message (for context injection)
+    )
     reply_to_author_id: Optional[str] = None
     reply_to_author_name: Optional[str] = None
-    reply_to_is_own_message: bool = False  # True when the user replied to this bot/assistant's message
+    reply_to_is_own_message: bool = (
+        False  # True when the user replied to this bot/assistant's message
+    )
     # Structured interactive-prompt reply (relay only): {prompt_id, option_id, label?,
     # prompt_message_id?}; routed to the approval/slash-confirm/clarify resolvers BEFORE dispatch.
     prompt_response: Optional[dict[str, Any]] = None
@@ -113,9 +120,13 @@ class MessageEvent:
     edit_revision: Optional[str] = None
 
     # Process-local admission receipt, never routing metadata or execution acknowledgement.
-    _gateway_accepted: bool = field(default=False, init=False, repr=False, compare=False)
+    _gateway_accepted: bool = field(
+        default=False, init=False, repr=False, compare=False
+    )
     # Run-owned final presentation snapshot; never deserialized from ingress metadata.
-    _notification_reply_muted: Optional[bool] = field(default=None, init=False, repr=False, compare=False)
+    _notification_reply_muted: Optional[bool] = field(
+        default=None, init=False, repr=False, compare=False
+    )
 
     def absorb_reply_expected(self, other: "MessageEvent") -> None:
         """One turn now answers *other* too: an addressed message wins, then an unknown one."""
@@ -151,4 +162,8 @@ class MessageEvent:
         parts = self._command_text().lstrip().split(maxsplit=1)
         args = parts[1] if len(parts) > 1 else ""
         # iOS auto-corrects -- to — (em dash) and - to – (en dash)
-        return args.replace("\u2014\u2014", "--").replace("\u2014", "--").replace("\u2013", "-")
+        return (
+            args.replace("\u2014\u2014", "--")
+            .replace("\u2014", "--")
+            .replace("\u2013", "-")
+        )

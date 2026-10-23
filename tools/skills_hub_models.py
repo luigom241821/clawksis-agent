@@ -20,17 +20,19 @@ def hub():
     """``tools.skills_hub`` resolved at call time: its cache / HTTP / index helpers are the test-patch targets
     (``patch("tools.skills_hub._read_index_cache")`` ...), so adapters look them up on every call, not at import."""
     import tools.skills_hub as mod
+
     return mod
 
 
 @dataclass
 class SkillMeta:
     """Minimal metadata returned by search results."""
+
     name: str
     description: str
-    source: str           # "official", "github", "clawhub", "lobehub"
-    identifier: str       # source-specific ID (e.g. "openai/skills/skill-creator")
-    trust_level: str      # "builtin" | "trusted" | "community"
+    source: str  # "official", "github", "clawhub", "lobehub"
+    identifier: str  # source-specific ID (e.g. "openai/skills/skill-creator")
+    trust_level: str  # "builtin" | "trusted" | "community"
     repo: Optional[str] = None
     path: Optional[str] = None
     tags: list[str] = field(default_factory=list)
@@ -40,8 +42,9 @@ class SkillMeta:
 @dataclass
 class SkillBundle:
     """A downloaded skill ready for quarantine/scanning/installation."""
+
     name: str
-    files: dict[str, str | bytes]   # relative_path -> file content
+    files: dict[str, str | bytes]  # relative_path -> file content
     source: str
     identifier: str
     trust_level: str
@@ -62,7 +65,11 @@ def _cache_metas(key: str, metas: list[SkillMeta]) -> None:
     hub()._write_index_cache(key, [_skill_meta_to_dict(m) for m in metas])
 
 
-def _memo_json(key: str, compute: Callable[[], Any], valid: Callable[[Any], bool] = lambda c: c is not None) -> Any:
+def _memo_json(
+    key: str,
+    compute: Callable[[], Any],
+    valid: Callable[[Any], bool] = lambda c: c is not None,
+) -> Any:
     """Shared-index-cache memo: a cached value passing ``valid`` is returned as-is; otherwise ``compute()``
     runs and a non-None result is written back."""
     cached = hub()._read_index_cache(key)
@@ -94,12 +101,19 @@ def _get_text(url: str, *, timeout: int = 20, **kwargs) -> Optional[str]:
 
 def _matches_query(query_lower: str, *fields: Any) -> bool:
     """Case-insensitive substring match against joined fields (lists space-joined; empty query matches all)."""
-    parts = [" ".join(str(t) for t in f) if isinstance(f, list) else str(f) for f in fields]
+    parts = [
+        " ".join(str(t) for t in f) if isinstance(f, list) else str(f) for f in fields
+    ]
     return query_lower in " ".join(parts).lower()
 
 
-def _first_matching(query_lower: str, items: Iterable[Any], fields_of: Callable[[Any], tuple],
-                    to_meta: Callable[[Any], Optional[SkillMeta]], limit: int) -> list[SkillMeta]:
+def _first_matching(
+    query_lower: str,
+    items: Iterable[Any],
+    fields_of: Callable[[Any], tuple],
+    to_meta: Callable[[Any], Optional[SkillMeta]],
+    limit: int,
+) -> list[SkillMeta]:
     """Substring-search ``items`` in order, converting hits with ``to_meta`` until ``limit``."""
     results: list[SkillMeta] = []
     for item in items:
@@ -119,7 +133,9 @@ def _dedupe_by_trust(results: Iterable[SkillMeta]) -> list[SkillMeta]:
     seen: dict[str, SkillMeta] = {}
     for r in results:
         kept = seen.get(r.identifier)
-        if kept is None or TRUST_RANK.get(r.trust_level, 0) > TRUST_RANK.get(kept.trust_level, 0):
+        if kept is None or TRUST_RANK.get(r.trust_level, 0) > TRUST_RANK.get(
+            kept.trust_level, 0
+        ):
             seen[r.identifier] = r
     return list(seen.values())
 
@@ -175,11 +191,11 @@ class GuardedFetchMixin:
 def _parse_frontmatter(content: str) -> dict:
     """Parse YAML frontmatter from SKILL.md content ({} when absent/invalid)."""
     content = content.lstrip("\ufeff")  # tolerate UTF-8 BOM (Windows editors)
-    match = re.search(r'\n---\s*\n', content[3:]) if content.startswith("---") else None
+    match = re.search(r"\n---\s*\n", content[3:]) if content.startswith("---") else None
     if not match:
         return {}
     try:
-        parsed = yaml.safe_load(content[3:match.start() + 3])
+        parsed = yaml.safe_load(content[3 : match.start() + 3])
         return parsed if isinstance(parsed, dict) else {}
     except yaml.YAMLError:
         return {}
@@ -206,7 +222,9 @@ def source_url_for_bundle(bundle: SkillBundle) -> str:
 
 
 # --- Bundle path validation -------------------------------------------------
-def _normalize_bundle_path(path_value: str, *, field_name: str, allow_nested: bool) -> str:
+def _normalize_bundle_path(
+    path_value: str, *, field_name: str, allow_nested: bool
+) -> str:
     """Normalize and validate bundle-controlled paths before touching disk."""
     if not isinstance(path_value, str):
         raise ValueError(f"Unsafe {field_name}: expected a string")
@@ -218,8 +236,14 @@ def _normalize_bundle_path(path_value: str, *, field_name: str, allow_nested: bo
     parts = [part for part in path.parts if part not in {"", "."}]
     # A colon in any component is rejected: on Windows it marks a drive (``C:foo``) or an NTFS Alternate Data
     # Stream (``file.py:payload`` writes scanner-invisible bytes); ``/`` is the only legal separator once normalized.
-    if (normalized.startswith("/") or path.is_absolute() or not parts or any(part == ".." for part in parts)
-            or any(":" in part for part in parts) or (not allow_nested and len(parts) != 1)):
+    if (
+        normalized.startswith("/")
+        or path.is_absolute()
+        or not parts
+        or any(part == ".." for part in parts)
+        or any(":" in part for part in parts)
+        or (not allow_nested and len(parts) != 1)
+    ):
         raise ValueError(f"Unsafe {field_name}: {path_value}")
     return "/".join(parts)
 
@@ -229,11 +253,15 @@ def _validate_skill_name(name: str) -> str:
 
 
 def _validate_install_parent_path(category: str) -> str:
-    return _normalize_bundle_path(category, field_name="install parent path", allow_nested=True)
+    return _normalize_bundle_path(
+        category, field_name="install parent path", allow_nested=True
+    )
 
 
 def _validate_bundle_rel_path(rel_path: str) -> str:
-    return _normalize_bundle_path(rel_path, field_name="bundle file path", allow_nested=True)
+    return _normalize_bundle_path(
+        rel_path, field_name="bundle file path", allow_nested=True
+    )
 
 
 def _normalize_lock_install_path(install_path: str, skill_name: str) -> str:
@@ -244,18 +272,25 @@ def _normalize_lock_install_path(install_path: str, skill_name: str) -> str:
     at the whole ``skills/`` tree or outside it.
     """
     safe_skill_name = _validate_skill_name(skill_name)
-    normalized = _normalize_bundle_path(install_path, field_name="install path", allow_nested=True)
+    normalized = _normalize_bundle_path(
+        install_path, field_name="install path", allow_nested=True
+    )
     if normalized.split("/")[-1] != safe_skill_name:
         raise ValueError(f"Unsafe install path: {install_path}")
     return normalized
 
 
 # --- Referenced support-file extraction from SKILL.md -----------------------
-_ALLOWED_SUPPORT_DIRS = frozenset({"references", "templates", "scripts", "assets", "examples"})
+_ALLOWED_SUPPORT_DIRS = frozenset(
+    {"references", "templates", "scripts", "assets", "examples"}
+)
 _LOCAL_LINK_RE = re.compile(
-    r"(?:\]\(|`|(?:^|[\s\"']))((?:references|templates|scripts|assets|examples)/[^\s)`\"'<>]+)", re.MULTILINE)
+    r"(?:\]\(|`|(?:^|[\s\"']))((?:references|templates|scripts|assets|examples)/[^\s)`\"'<>]+)",
+    re.MULTILINE,
+)
 _SUSPICIOUS_LOCAL_REF_RE = re.compile(
-    r"(?:references|templates|scripts|assets|examples)/(?:[^\s)`\"'<>]*/)?\.\.(?:/|$)")
+    r"(?:references|templates|scripts|assets|examples)/(?:[^\s)`\"'<>]*/)?\.\.(?:/|$)"
+)
 _VALUELESS_QUERY_FLAG_RE = re.compile(r"(?:[A-Za-z0-9_~-]|%[0-9A-Fa-f]{2})+\Z")
 # Same-directory links (``](./FILE.ext)`` / ``](FILE.ext)``): siblings of SKILL.md the document links
 # explicitly (e.g. ./CONTEXT-FORMAT.md). Dropping them made the install "succeed" with unresolved links.
@@ -274,8 +309,11 @@ def _query_is_concrete(query: str) -> bool:
     unreserved-token shaped (percent escapes ok); ``.``, brackets and extra ``?`` are excluded because
     ``?x.md`` / ``?.md`` is indistinguishable from a single-char glob finishing a filename in prose.
     """
-    return all(("=" in part and bool(part.split("=", 1)[0])) or bool(_VALUELESS_QUERY_FLAG_RE.fullmatch(part))
-               for part in query.split("&"))
+    return all(
+        ("=" in part and bool(part.split("=", 1)[0]))
+        or bool(_VALUELESS_QUERY_FLAG_RE.fullmatch(part))
+        for part in query.split("&")
+    )
 
 
 def _referenced_support_paths(skill_md: str) -> Optional[set[str]]:
@@ -288,8 +326,11 @@ def _referenced_support_paths(skill_md: str) -> Optional[set[str]]:
         candidate = match.group(1).rstrip(".,;:")
         parsed = urlsplit(candidate)
         raw = unquote(parsed.path)
-        if (candidate.endswith("?") or any(char in raw for char in "*?[]")
-                or (parsed.query and not _query_is_concrete(parsed.query))):
+        if (
+            candidate.endswith("?")
+            or any(char in raw for char in "*?[]")
+            or (parsed.query and not _query_is_concrete(parsed.query))
+        ):
             continue
         try:
             safe = _validate_bundle_rel_path(raw)
@@ -317,12 +358,19 @@ def _referenced_support_paths(skill_md: str) -> Optional[set[str]]:
             # it, so refusing the whole bundle protected nothing and made every skill that links a
             # sibling doc uninstallable with a misleading "files no longer exist upstream" (#115171).
             # The link is left dangling in the installed copy, like an absent support file.
-            logger.warning("SKILL.md links outside the skill directory; installing without it: %s", raw)
+            logger.warning(
+                "SKILL.md links outside the skill directory; installing without it: %s",
+                raw,
+            )
             continue
         # Only unambiguous file links: an extension, no internal slash, never SKILL.md itself (casefolded —
         # a ``skill.md`` entry would collide with the bundle root on macOS/Windows; skipped, not merged).
-        if ("/" in name or name.casefold() == "skill.md" or "." not in name.lstrip(".")
-                or not _SAMEDIR_NAME_RE.match(name)):
+        if (
+            "/" in name
+            or name.casefold() == "skill.md"
+            or "." not in name.lstrip(".")
+            or not _SAMEDIR_NAME_RE.match(name)
+        ):
             continue
         try:
             safe = _validate_bundle_rel_path(name)

@@ -17,5 +17,3 @@ def test_matrix_home_target_env_var_uses_home_room():
 
 def test_email_home_target_env_var_uses_home_address():
     assert _home_target_env_var("email") == "EMAIL_HOME_ADDRESS"
-
-

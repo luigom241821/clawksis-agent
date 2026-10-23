@@ -34,7 +34,9 @@ _REQUEST_TIMEOUT_S = 30.0
 
 # Discord's CDN (and other public hosts) 403 urllib's default UA, which
 # silently killed every CDN pass-through download. Always send a descriptive UA.
-_MEDIA_USER_AGENT = "ClawksisAgent-Relay/1.0 (+https://github.com/samuelgradientai-sys/clawksis-agent)"
+_MEDIA_USER_AGENT = (
+    "ClawksisAgent-Relay/1.0 (+https://github.com/samuelgradientai-sys/clawksis-agent)"
+)
 
 
 def media_base_url(relay_dial_url: str) -> str:
@@ -51,7 +53,9 @@ def media_base_url(relay_dial_url: str) -> str:
 class RelayMediaClient:
     """Authenticated client for the connector's ``/relay/media`` routes."""
 
-    def __init__(self, base_url: str, gateway_id: Optional[str], secret: Optional[str]) -> None:
+    def __init__(
+        self, base_url: str, gateway_id: Optional[str], secret: Optional[str]
+    ) -> None:
         self._base_url = base_url.rstrip("/")
         self._gateway_id = gateway_id or ""
         self._secret = secret or ""
@@ -69,7 +73,11 @@ class RelayMediaClient:
         return "/relay/media/" in (url or "")
 
     async def upload(
-        self, file_path: str, *, mime: Optional[str] = None, filename: Optional[str] = None
+        self,
+        file_path: str,
+        *,
+        mime: Optional[str] = None,
+        filename: Optional[str] = None,
     ) -> Optional[str]:
         """POST local file bytes to ``/relay/media``; return the reference URL or None on any failure."""
         if not self.enabled:
@@ -82,11 +90,16 @@ class RelayMediaClient:
             return None
         if not data or len(data) > MEDIA_MAX_BYTES:
             logger.warning(
-                "relay media upload: %s size %d outside (0, %d]", file_path, len(data), MEDIA_MAX_BYTES
+                "relay media upload: %s size %d outside (0, %d]",
+                file_path,
+                len(data),
+                MEDIA_MAX_BYTES,
             )
             return None
         content_type = (
-            mime or mimetypes.guess_type(filename or path.name)[0] or "application/octet-stream"
+            mime
+            or mimetypes.guess_type(filename or path.name)[0]
+            or "application/octet-stream"
         )
         headers = {
             "User-Agent": _MEDIA_USER_AGENT,
@@ -101,14 +114,18 @@ class RelayMediaClient:
             try:
                 with urllib.request.urlopen(req, timeout=_REQUEST_TIMEOUT_S) as resp:
                     media_id = json.loads(resp.read().decode("utf-8")).get("id")
-                    return f"{self._base_url}/relay/media/{media_id}" if media_id else None
+                    return (
+                        f"{self._base_url}/relay/media/{media_id}" if media_id else None
+                    )
             except (urllib.error.URLError, ValueError, OSError) as exc:
                 logger.warning("relay media upload failed: %s", exc)
                 return None
 
         return await asyncio.get_running_loop().run_in_executor(None, _post)
 
-    async def download(self, url: str, *, suggested_name: Optional[str] = None) -> Optional[str]:
+    async def download(
+        self, url: str, *, suggested_name: Optional[str] = None
+    ) -> Optional[str]:
         """GET an attachment to a local temp file; return its path or None on any failure.
 
         The bearer is presented only for connector re-host URLs; public URLs

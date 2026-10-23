@@ -186,12 +186,9 @@ class TestWorkerTeardownOnCeiling:
 
 
 class TestDurableAttemptBackoff:
-
     def test_backoff_blocks_same_strategy_reentry_next_turn(self, tmp_path: Path):
         _db, agent = _build_agent(tmp_path, "BACKOFF_REENTRY")
-        agent.context_compressor.record_timeout_failure(
-            "stall", failure_kind="stalled"
-        )
+        agent.context_compressor.record_timeout_failure("stall", failure_kind="stalled")
         # Precondition: over threshold, so only the backoff can block.
         assert 500_000 >= agent.context_compressor.threshold_tokens
         should, reason = agent.context_compressor.should_compress_info(500_000)
@@ -232,8 +229,9 @@ class TestDurableAttemptBackoff:
         assert db.get_compression_failure_cooldown("BACKOFF_CLEAR") is None
         assert compressor.should_compress_info(500_000)[0] is True
 
-
-    def test_stall_backoff_is_never_shorter_than_the_idle_window(self, tmp_path: Path, monkeypatch):
+    def test_stall_backoff_is_never_shorter_than_the_idle_window(
+        self, tmp_path: Path, monkeypatch
+    ):
         """The ladder's first rung (60s) undercut a 120s idle stall window, so the next oversized turn
         re-entered the same silent route ~1 min after burning the whole window (#112420). The recorded
         cooldown must cover at least one idle window; a window below the rung leaves the ladder as is."""
@@ -241,14 +239,22 @@ class TestDurableAttemptBackoff:
 
         db, agent = _build_agent(tmp_path, "BACKOFF_FLOOR")
         compressor = agent.context_compressor
-        monkeypatch.setattr(cc, "resolve_context_compression_timeouts", lambda compression_cfg=None: (120.0, 600.0))
+        monkeypatch.setattr(
+            cc,
+            "resolve_context_compression_timeouts",
+            lambda compression_cfg=None: (120.0, 600.0),
+        )
         compressor.record_timeout_failure("stall", failure_kind="stalled")
         assert compressor._summary_failure_cooldown_until - time.monotonic() >= 119.0
         durable = db.get_compression_failure_cooldown("BACKOFF_FLOOR")
         assert durable is not None and durable["remaining_seconds"] >= 119.0
 
         compressor._clear_compression_failure_cooldown()
-        monkeypatch.setattr(cc, "resolve_context_compression_timeouts", lambda compression_cfg=None: (0.05, 1.0))
+        monkeypatch.setattr(
+            cc,
+            "resolve_context_compression_timeouts",
+            lambda compression_cfg=None: (0.05, 1.0),
+        )
         compressor.record_timeout_failure("stall", failure_kind="stalled")
         remaining = compressor._summary_failure_cooldown_until - time.monotonic()
         assert 55.0 <= remaining <= 60.0
@@ -269,9 +275,7 @@ class TestSupersessionDiscardsLateResults:
             return [{"role": "assistant", "content": "stale summary"}]
 
         agent.context_compressor.compress = compress_and_get_superseded
-        out, _prompt = compress_context(
-            agent, live, "sys", approx_tokens=500_000
-        )
+        out, _prompt = compress_context(agent, live, "sys", approx_tokens=500_000)
         assert out == original, (
             "late candidate from a superseded attempt must be discarded, "
             "never committed over newer state (#97488)"
@@ -311,7 +315,6 @@ class TestTransientBlockIsNotExhaustion:
         assert compression_blocked_transiently(agent) is False
 
 
-
 def _summary_response(content: str):
     from unittest.mock import MagicMock
 
@@ -332,9 +335,7 @@ class TestProviderOverflowBypassesCooldown:
     def _armed_agent(self, tmp_path: Path, session_id: str):
         db, agent = _build_agent(tmp_path, session_id)
         # Realistic arming: a failed/stalled attempt recorded the ladder.
-        agent.context_compressor.record_timeout_failure(
-            "stall", failure_kind="stalled"
-        )
+        agent.context_compressor.record_timeout_failure("stall", failure_kind="stalled")
         assert agent.context_compressor.should_compress_info(500_000)[0] is False
         return db, agent
 

@@ -20,9 +20,7 @@ def homes(tmp_path, monkeypatch):
 
     import clawk_constants
 
-    monkeypatch.setattr(
-        clawk_constants, "get_default_clawk_root", lambda: default_home
-    )
+    monkeypatch.setattr(clawk_constants, "get_default_clawk_root", lambda: default_home)
     monkeypatch.setattr(pstate, "_profiles_root", lambda: tmp_path / "profiles")
     return default_home, profile_home
 
@@ -57,15 +55,29 @@ def test_only_live_profiles_join_the_dependency_union(homes):
     for name in (".work.staging-123", "Bad Name", "retired"):
         _write_config(profiles / name, [f"{name}-plug"])
     mark_named_profile_deleted(profiles / "retired")
-    (profiles / "ghost" / "plugins").mkdir()  # runtime side-effect dir, no identity marker
+    (
+        profiles / "ghost" / "plugins"
+    ).mkdir()  # runtime side-effect dir, no identity marker
 
     assert pstate.dependency_homes() == [default_home, profile_home]
     by_root = pstate.enabled_plugins_ordered()
     assert set(by_root) == {default_home / "plugins", profile_home / "plugins"}
 
 
-@pytest.mark.parametrize("boundary", ["profile-listing", "profile-stat", "plugin-stat", "manifest-read", "manifest-stat", "provider-stat"])
-def test_unreadable_profile_state_is_not_an_empty_selection(homes, monkeypatch, boundary):
+@pytest.mark.parametrize(
+    "boundary",
+    [
+        "profile-listing",
+        "profile-stat",
+        "plugin-stat",
+        "manifest-read",
+        "manifest-stat",
+        "provider-stat",
+    ],
+)
+def test_unreadable_profile_state_is_not_an_empty_selection(
+    homes, monkeypatch, boundary
+):
     from pm.workspace import enabled_member_dirs
 
     _default_home, profile_home = homes
@@ -75,7 +87,9 @@ def test_unreadable_profile_state_is_not_an_empty_selection(homes, monkeypatch, 
     manifest = plugin / "plugin.yaml"
     manifest.write_text("python_dependencies: [fixture-dep]\n", encoding="utf-8")
     if boundary == "provider-stat":
-        (profile_home / "config.yaml").write_text("memory:\n  provider: keep-plug\n", encoding="utf-8")
+        (profile_home / "config.yaml").write_text(
+            "memory:\n  provider: keep-plug\n", encoding="utf-8"
+        )
     method, target = {
         "profile-listing": ("iterdir", profile_home.parent),
         "profile-stat": ("stat", profile_home),
@@ -108,8 +122,16 @@ def test_missing_config_parser_is_not_an_empty_plugin_selection(homes, monkeypat
     assert (default_home / "config.yaml").read_bytes() == before
 
 
-
-@pytest.mark.parametrize("content", ["{ not yaml", "[]", "plugins: wrong", "plugins:\n  enabled: wrong", "memory: wrong"])
+@pytest.mark.parametrize(
+    "content",
+    [
+        "{ not yaml",
+        "[]",
+        "plugins: wrong",
+        "plugins:\n  enabled: wrong",
+        "memory: wrong",
+    ],
+)
 def test_enabled_read_refuses_invalid_existing_config(homes, content):
     default_home, _ = homes
     config = default_home / "config.yaml"
@@ -119,13 +141,16 @@ def test_enabled_read_refuses_invalid_existing_config(homes, content):
         pstate.enabled_plugins_ordered()
     assert config.read_bytes() == before
 
+
 def test_verify_skips_bad_secondary_but_admission_refuses_it(homes, caplog):
     from pm.workspace import enabled_member_dirs, enabled_plugin_dirs
 
     default_home, profile_home = homes
     plugin = default_home / "plugins" / "working"
     plugin.mkdir(parents=True)
-    (plugin / "plugin.yaml").write_text("name: working\npython_dependencies: [requests]\n", encoding="utf-8")
+    (plugin / "plugin.yaml").write_text(
+        "name: working\npython_dependencies: [requests]\n", encoding="utf-8"
+    )
     _write_config(default_home, ["working"])
     bad = profile_home / "config.yaml"
     bad.write_text("plugins: [invalid]\n", encoding="utf-8")
@@ -138,24 +163,42 @@ def test_verify_skips_bad_secondary_but_admission_refuses_it(homes, caplog):
     assert enabled_member_dirs() == [plugin]
 
 
-@pytest.mark.parametrize("content", ["", "# empty config\n", "null", "{}", "plugins: {}", "plugins:\n  enabled: []"])
+@pytest.mark.parametrize(
+    "content",
+    ["", "# empty config\n", "null", "{}", "plugins: {}", "plugins:\n  enabled: []"],
+)
 def test_empty_config_is_an_explicit_empty_selection(homes, content):
     default_home, _ = homes
     (default_home / "config.yaml").write_text(content, encoding="utf-8")
     assert pstate.enabled_plugins_ordered() == {}
 
 
-@pytest.mark.parametrize("enabled, provider, exists, expected", [
-    (["z-first", "a-second"], "provider", True, ["z-first", "a-second", "provider"]),
-    (["provider"], "provider", True, ["provider"]),
-    ([], "ghost", False, []),
-])
-def test_memory_provider_joins_ordered_selection(homes, enabled, provider, exists, expected):
+@pytest.mark.parametrize(
+    "enabled, provider, exists, expected",
+    [
+        (
+            ["z-first", "a-second"],
+            "provider",
+            True,
+            ["z-first", "a-second", "provider"],
+        ),
+        (["provider"], "provider", True, ["provider"]),
+        ([], "ghost", False, []),
+    ],
+)
+def test_memory_provider_joins_ordered_selection(
+    homes, enabled, provider, exists, expected
+):
     import clawk_yaml as yaml
+
     home, sibling = homes
     if exists:
         (home / "plugins" / provider).mkdir(parents=True)
-    (home / "config.yaml").write_text(yaml.safe_dump({"plugins": {"enabled": enabled}, "memory": {"provider": provider}}))
+    (home / "config.yaml").write_text(
+        yaml.safe_dump(
+            {"plugins": {"enabled": enabled}, "memory": {"provider": provider}}
+        )
+    )
     _write_config(sibling, ["sibling"])
     by_root = pstate.enabled_plugins_ordered()
     assert by_root.get(home / "plugins", []) == expected
@@ -164,6 +207,7 @@ def test_memory_provider_joins_ordered_selection(homes, enabled, provider, exist
 
 def test_member_discovery_uses_real_enabled_config(homes):
     from pm.workspace import enabled_member_dirs
+
     home, _ = homes
     manifests = {
         "modern/pyproject.toml": '[project]\ndependencies = ["requests>=2"]\n',
@@ -179,8 +223,6 @@ def test_member_discovery_uses_real_enabled_config(homes):
     assert enabled_member_dirs() == [home / "plugins/legacy", home / "plugins/modern"]
     _write_config(home, [])
     assert enabled_member_dirs() == []
-
-
 
 
 def test_read_parses_config_once_per_home(homes, monkeypatch):

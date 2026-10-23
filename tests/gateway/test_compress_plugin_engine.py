@@ -130,7 +130,9 @@ async def test_compress_works_with_plugin_context_engine():
     agent_instance._compression_skipped_due_to_lock = False
 
     with (
-        patch("gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "***"}),
+        patch(
+            "gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "***"}
+        ),
         patch("gateway.run._resolve_gateway_model", return_value="test-model"),
         patch("run_agent.AIAgent", return_value=agent_instance),
         patch("agent.model_metadata.estimate_messages_tokens_rough", return_value=100),
@@ -143,5 +145,3 @@ async def test_compress_works_with_plugin_context_engine():
     assert "_find_tail_cut_by_tokens" not in result
     # Happy path fired
     agent_instance._compress_context.assert_called_once()
-
-

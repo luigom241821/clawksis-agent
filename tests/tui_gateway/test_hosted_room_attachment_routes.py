@@ -27,18 +27,23 @@ from tests.tui_gateway.test_hosted_room_driver_runtime import (
     _wait_for,
 )
 from tui_gateway.hosted_room_driver import HostedRoomRuntime
-from tui_gateway.hosted_room_peer_transport import PeerHostedRoomTransport, PeerMemberRoute
+from tui_gateway.hosted_room_peer_transport import (
+    PeerHostedRoomTransport,
+    PeerMemberRoute,
+)
 from tui_gateway.hosted_room_server_rpc import HostedRoomServerRPC
 
 
-ATTACHMENTS = [{
-    "attachment_id": "att_" + "0" * 32,
-    "kind": "file",
-    "name": "note.txt",
-    "size": 11,
-    "mime": "text/plain",
-    "event_id": "event-1",
-}]
+ATTACHMENTS = [
+    {
+        "attachment_id": "att_" + "0" * 32,
+        "kind": "file",
+        "name": "note.txt",
+        "size": 11,
+        "mime": "text/plain",
+        "event_id": "event-1",
+    }
+]
 
 
 @pytest.fixture
@@ -72,9 +77,12 @@ def _admit(db: Path, *, attachments=None) -> state.TaskIdentity:
 def _run_until_settled_or_error(runtime: HostedRoomRuntime, db: Path, identity) -> dict:
     runtime.start()
     try:
-        _wait_for(lambda: (
-            state.get_task(db, identity)["status"] in state.TERMINAL_STATUSES
-            or runtime.status()["last_error"] is not None))
+        _wait_for(
+            lambda: (
+                state.get_task(db, identity)["status"] in state.TERMINAL_STATUSES
+                or runtime.status()["last_error"] is not None
+            )
+        )
     finally:
         assert runtime.stop(timeout=5.0)
     return state.get_task(db, identity)
@@ -109,8 +117,13 @@ def _server_module():
 
 def _legacy_runtime(db: Path, rpc: HostedRoomServerRPC) -> HostedRoomRuntime:
     return HostedRoomRuntime(
-        db_path=db, rooms=[BINDING], rpc=rpc, turn_lock=RecordingTurnLocks(),
-        lease_ttl_seconds=0.4, poll_interval_seconds=0.01)
+        db_path=db,
+        rooms=[BINDING],
+        rpc=rpc,
+        turn_lock=RecordingTurnLocks(),
+        lease_ttl_seconds=0.4,
+        poll_interval_seconds=0.01,
+    )
 
 
 class DispatchingPeerClient:
@@ -138,20 +151,35 @@ class DispatchingPeerClient:
 
 def _peer_runtime(db: Path, client: DispatchingPeerClient) -> HostedRoomRuntime:
     route = PeerMemberRoute(
-        home_install_id="install-home", member_id="member-ops", target_install_id="install-peer",
-        target_profile=PROFILE, capability_digest="a" * 64, execution_policy_digest="b" * 64,
-        cancellation_scope_id="cancel-peer", trace_id="trace-peer", grant="signed-room-grant")
+        home_install_id="install-home",
+        member_id="member-ops",
+        target_install_id="install-peer",
+        target_profile=PROFILE,
+        capability_digest="a" * 64,
+        execution_policy_digest="b" * 64,
+        cancellation_scope_id="cancel-peer",
+        trace_id="trace-peer",
+        grant="signed-room-grant",
+    )
 
     def resolve(binding, task):
         return PeerHostedRoomTransport(
-            binding=binding, route=route, client=client,
+            binding=binding,
+            route=route,
+            client=client,
             source_event_seq=int(task["payload"]["source_event_seq"]),
             task_id=task["identity"].task_id,
-            execution_generation=int(task["execution_generation"]))
+            execution_generation=int(task["execution_generation"]),
+        )
 
     return HostedRoomRuntime(
-        db_path=db, rooms=[BINDING], transport_resolver=resolve, turn_lock=RecordingTurnLocks(),
-        lease_ttl_seconds=0.4, poll_interval_seconds=0.01)
+        db_path=db,
+        rooms=[BINDING],
+        transport_resolver=resolve,
+        turn_lock=RecordingTurnLocks(),
+        lease_ttl_seconds=0.4,
+        poll_interval_seconds=0.01,
+    )
 
 
 def _assert_refused_as_proven_failure(task: dict, runtime: HostedRoomRuntime) -> None:

@@ -146,7 +146,9 @@ def test_load_force_reload_and_unload_remove_every_manager_registration(
 
     assert first_tool is not None
     assert first_platform is not None
-    assert set(registration.kind for registration in manager._ownership_ledger["ledger_probe"]) == {
+    assert set(
+        registration.kind for registration in manager._ownership_ledger["ledger_probe"]
+    ) == {
         "tool",
         "platform",
         "cli_command",
@@ -197,6 +199,7 @@ def test_load_force_reload_and_unload_remove_every_manager_registration(
     assert manager._plugins == {} or "ledger_probe" not in manager._plugins
     reloaded_module_name = None
     import sys as _sys
+
     for _name, _mod in list(_sys.modules.items()):
         if getattr(_mod, "UNLOADED", None) and "ledger_probe" in _mod.UNLOADED:
             reloaded_module_name = _name
@@ -204,9 +207,10 @@ def test_load_force_reload_and_unload_remove_every_manager_registration(
     assert reloaded_module_name is not None, "on_unload callback never fired"
     assert manager._aux_tasks == {}
     assert manager._ownership_ledger == {}
-    assert registry.snapshot_plugin_override_policy(
-        module_name, scope=manager.scope_key
-    ) is None
+    assert (
+        registry.snapshot_plugin_override_policy(module_name, scope=manager.scope_key)
+        is None
+    )
     assert registry.plugin_scope_for_module(module_name) == manager.scope_key
 
 
@@ -255,9 +259,7 @@ def test_reverse_unload_restores_an_overridden_platform_registration():
         # The test uses a deliberately unique name, but restore any state that
         # a surrounding test may have installed under it.
         current = platform_registry.snapshot_registration(name, scope=scope)
-        platform_registry.restore_registration(
-            name, current, previous, scope=scope
-        )
+        platform_registry.restore_registration(name, current, previous, scope=scope)
 
 
 def test_targeted_unload_does_not_resurrect_an_older_tool_override():
@@ -363,15 +365,18 @@ def test_plugin_context_cannot_shadow_same_toolset_global_with_core_callable():
         PluginManifest(name="core_callable", key="core_callable"), manager
     )
     try:
-        assert context.register_tool(
-            name=name,
-            toolset="ledger_same_toolset",
-            schema={
-                "name": name,
-                "parameters": {"type": "object", "properties": {}},
-            },
-            handler=str,
-        ) is None
+        assert (
+            context.register_tool(
+                name=name,
+                toolset="ledger_same_toolset",
+                schema={
+                    "name": name,
+                    "parameters": {"type": "object", "properties": {}},
+                },
+                handler=str,
+            )
+            is None
+        )
         assert registry.get_entry(name, scope=manager.scope_key) is base_entry
         assert registry.snapshot_registration(name, scope=manager.scope_key) is None
     finally:
@@ -393,22 +398,38 @@ def test_rejected_tool_registration_does_not_claim_local_predecessor():
 
     manager_a = PluginManager(scope_key=scope)
     manager_b = PluginManager(scope_key=scope)
-    context_a = PluginContext(PluginManifest(name="local_owner", key="local_owner"), manager_a)
-    context_b = PluginContext(PluginManifest(name="false_owner", key="false_owner"), manager_b)
+    context_a = PluginContext(
+        PluginManifest(name="local_owner", key="local_owner"), manager_a
+    )
+    context_b = PluginContext(
+        PluginManifest(name="false_owner", key="false_owner"), manager_b
+    )
     try:
-        assert context_a.register_tool(
-            name=name,
-            toolset="owner_toolset",
-            schema={"name": name, "parameters": {"type": "object", "properties": {}}},
-            handler=shared_handler,
-        ) is not None
+        assert (
+            context_a.register_tool(
+                name=name,
+                toolset="owner_toolset",
+                schema={
+                    "name": name,
+                    "parameters": {"type": "object", "properties": {}},
+                },
+                handler=shared_handler,
+            )
+            is not None
+        )
         owner_entry = registry.snapshot_registration(name, scope=scope)
-        assert context_b.register_tool(
-            name=name,
-            toolset="different_toolset",
-            schema={"name": name, "parameters": {"type": "object", "properties": {}}},
-            handler=shared_handler,
-        ) is None
+        assert (
+            context_b.register_tool(
+                name=name,
+                toolset="different_toolset",
+                schema={
+                    "name": name,
+                    "parameters": {"type": "object", "properties": {}},
+                },
+                handler=shared_handler,
+            )
+            is None
+        )
         assert manager_b._ownership_ledger == {}
         manager_a.unload("local_owner")
         assert registry.snapshot_registration(name, scope=scope) is previous
@@ -484,9 +505,13 @@ def test_shared_entrypoint_module_uses_the_active_profile_scope(tmp_path):
 
     register_in(home_a, "shared_entrypoint_a")
     register_in(home_b, "shared_entrypoint_b")
-    assert registry.snapshot_registration("shared_entrypoint_a", scope=home_a) is not None
+    assert (
+        registry.snapshot_registration("shared_entrypoint_a", scope=home_a) is not None
+    )
     assert registry.snapshot_registration("shared_entrypoint_a", scope=home_b) is None
-    assert registry.snapshot_registration("shared_entrypoint_b", scope=home_b) is not None
+    assert (
+        registry.snapshot_registration("shared_entrypoint_b", scope=home_b) is not None
+    )
     assert registry.snapshot_registration("shared_entrypoint_b") is None
 
     from unittest.mock import patch
@@ -498,16 +523,14 @@ def test_shared_entrypoint_module_uses_the_active_profile_scope(tmp_path):
     finally:
         reset_clawk_home_override(token)
     assert registry.snapshot_registration("shared_entrypoint_a", scope=home_a) is None
-    assert registry.snapshot_registration("shared_entrypoint_b", scope=home_b) is not None
+    assert (
+        registry.snapshot_registration("shared_entrypoint_b", scope=home_b) is not None
+    )
 
     # Policy unload revokes authorization but durable scope attribution keeps
     # a stale delayed callback out of the process-global registry.
-    registry.restore_plugin_override_policy(
-        module_name, policy_a, None, scope=home_a
-    )
-    registry.restore_plugin_override_policy(
-        module_name, policy_b, None, scope=home_b
-    )
+    registry.restore_plugin_override_policy(module_name, policy_a, None, scope=home_a)
+    registry.restore_plugin_override_policy(module_name, policy_b, None, scope=home_b)
     register_in(home_a, "shared_entrypoint_stale")
     assert registry.snapshot_registration("shared_entrypoint_stale", scope=home_a)
     assert registry.snapshot_registration("shared_entrypoint_stale") is None
@@ -528,9 +551,7 @@ def test_decorated_plugin_callable_keeps_its_defining_module_scope(tmp_path):
     registry.register_plugin_override_policy(module_name, False, scope=scope)
     namespace = {"__name__": module_name, "functools": functools}
     exec(
-        "@functools.wraps(str)\n"
-        "def handler(args, **kwargs):\n"
-        "    return 'decorated'\n",
+        "@functools.wraps(str)\ndef handler(args, **kwargs):\n    return 'decorated'\n",
         namespace,
     )
     handler = namespace["handler"]
@@ -544,9 +565,9 @@ def test_decorated_plugin_callable_keeps_its_defining_module_scope(tmp_path):
         handler=handler,
     )
 
-    assert registry.snapshot_registration(
-        "decorated_plugin_tool", scope=scope
-    ) is not None
+    assert (
+        registry.snapshot_registration("decorated_plugin_tool", scope=scope) is not None
+    )
     assert registry.snapshot_registration("decorated_plugin_tool") is None
 
 
@@ -558,9 +579,7 @@ def test_entrypoint_policy_uses_the_most_specific_module_prefix(tmp_path):
     broad_scope = str((tmp_path / "broad").resolve())
     narrow_scope = str((tmp_path / "narrow").resolve())
     registry.register_plugin_override_policy("vendor", True, scope=broad_scope)
-    registry.register_plugin_override_policy(
-        "vendor.plugin", False, scope=narrow_scope
-    )
+    registry.register_plugin_override_policy("vendor.plugin", False, scope=narrow_scope)
     handler = eval(
         "lambda args, **kwargs: 'narrow'",
         {"__name__": "vendor.plugin.handlers"},
@@ -579,12 +598,14 @@ def test_entrypoint_policy_uses_the_most_specific_module_prefix(tmp_path):
     finally:
         reset_clawk_home_override(token)
 
-    assert registry.snapshot_registration(
-        "specific_entrypoint_tool", scope=narrow_scope
-    ) is not None
-    assert registry.snapshot_registration(
-        "specific_entrypoint_tool", scope=broad_scope
-    ) is None
+    assert (
+        registry.snapshot_registration("specific_entrypoint_tool", scope=narrow_scope)
+        is not None
+    )
+    assert (
+        registry.snapshot_registration("specific_entrypoint_tool", scope=broad_scope)
+        is None
+    )
 
 
 def test_targeted_unload_does_not_resurrect_an_older_override():
@@ -629,9 +650,7 @@ def test_targeted_unload_does_not_resurrect_an_older_override():
         assert platform_registry.snapshot_registration(name, scope=scope) == previous
     finally:
         current = platform_registry.snapshot_registration(name, scope=scope)
-        platform_registry.restore_registration(
-            name, current, previous, scope=scope
-        )
+        platform_registry.restore_registration(name, current, previous, scope=scope)
 
 
 def test_manager_local_override_does_not_resurrect_after_targeted_unload():
@@ -681,8 +700,12 @@ def test_provider_overlay_switches_profiles_and_reveals_fresh_global_fallback(
     home_b = str((tmp_path / "provider-b").resolve())
     manager_a = PluginManager(scope_key=home_a)
     manager_b = PluginManager(scope_key=home_b)
-    context_a = PluginContext(PluginManifest(name="provider_a", key="provider_a"), manager_a)
-    context_b = PluginContext(PluginManifest(name="provider_b", key="provider_b"), manager_b)
+    context_a = PluginContext(
+        PluginManifest(name="provider_a", key="provider_a"), manager_a
+    )
+    context_b = PluginContext(
+        PluginManifest(name="provider_b", key="provider_b"), manager_b
+    )
     monkeypatch.setattr(
         "clawk_cli.config.load_config_readonly",
         lambda: {"image_gen": {"provider": name}},
@@ -802,8 +825,12 @@ def test_same_provider_singleton_can_have_two_live_owners():
     scope = manager_a.scope_key
     baseline = get_provider("ledger_shared_singleton", scope=scope)
     baseline_local = snapshot_registration("ledger_shared_singleton", scope=scope)
-    context_a = PluginContext(PluginManifest(name="shared_a", key="shared_a"), manager_a)
-    context_b = PluginContext(PluginManifest(name="shared_b", key="shared_b"), manager_b)
+    context_a = PluginContext(
+        PluginManifest(name="shared_a", key="shared_a"), manager_a
+    )
+    context_b = PluginContext(
+        PluginManifest(name="shared_b", key="shared_b"), manager_b
+    )
 
     try:
         assert context_a.register_image_gen_provider(provider) is not None
@@ -815,9 +842,7 @@ def test_same_provider_singleton_can_have_two_live_owners():
     finally:
         current = snapshot_registration(provider.name, scope=scope)
         if current is not baseline_local and current is not None:
-            restore_registration(
-                provider.name, current, baseline_local, scope=scope
-            )
+            restore_registration(provider.name, current, baseline_local, scope=scope)
 
 
 def test_provider_cleanup_uses_the_captured_normalized_name():
@@ -905,7 +930,9 @@ def test_registration_transaction_excludes_concurrent_disposal(monkeypatch):
     monkeypatch.setattr(image_registry, "register_provider", paused_register)
     try:
         with ThreadPoolExecutor(max_workers=2) as pool:
-            registration = pool.submit(context_b.register_image_gen_provider, provider_b)
+            registration = pool.submit(
+                context_b.register_image_gen_provider, provider_b
+            )
             assert wrote.wait(timeout=1)
             disposal = pool.submit(manager_a.unload, "tx_a")
             try:
@@ -913,7 +940,9 @@ def test_registration_transaction_excludes_concurrent_disposal(monkeypatch):
             except TimeoutError:
                 pass
             else:
-                raise AssertionError("dispose interleaved with registration transaction")
+                raise AssertionError(
+                    "dispose interleaved with registration transaction"
+                )
             release.set()
             assert registration.result(timeout=1) is not None
             assert disposal.result(timeout=1) is True
@@ -1043,9 +1072,7 @@ def test_resolved_deferred_platform_restores_its_displaced_loader():
         assert platform_registry.snapshot_registration(name, scope=scope) == displaced
     finally:
         current = platform_registry.snapshot_registration(name, scope=scope)
-        platform_registry.restore_registration(
-            name, current, previous, scope=scope
-        )
+        platform_registry.restore_registration(name, current, previous, scope=scope)
 
 
 def test_unload_cancels_a_deferred_platform_before_module_load():
@@ -1056,6 +1083,7 @@ def test_unload_cancels_a_deferred_platform_before_module_load():
     name = "ledger_cancel"
     scope = platform_registry.current_scope_key()
     previous = platform_registry.snapshot_registration(name, scope=scope)
+
     def old_loader():
         from gateway.platform_registry import PlatformEntry
 
@@ -1069,6 +1097,7 @@ def test_unload_cancels_a_deferred_platform_before_module_load():
             ),
             scope=scope,
         )
+
     platform_registry.register_deferred(name, old_loader, scope=scope)
     manager = PluginManager(scope_key=scope)
     manifest = PluginManifest(
@@ -1101,13 +1130,14 @@ def test_unload_cancels_a_deferred_platform_before_module_load():
             restored_entry = lookup.result(timeout=1)
         assert restored_entry is not None
         assert restored_entry.label == "Restored predecessor"
-        assert platform_registry.snapshot_registration(name, scope=scope)[0] is restored_entry
+        assert (
+            platform_registry.snapshot_registration(name, scope=scope)[0]
+            is restored_entry
+        )
         assert name not in manager._plugin_platform_names
     finally:
         current = platform_registry.snapshot_registration(name, scope=scope)
-        platform_registry.restore_registration(
-            name, current, previous, scope=scope
-        )
+        platform_registry.restore_registration(name, current, previous, scope=scope)
 
 
 def test_direct_plugin_platform_registration_infers_immutable_scope(tmp_path):
@@ -1201,7 +1231,11 @@ def test_same_name_tool_and_platform_are_isolated_by_clawk_home(
 
     assert manager_a is not manager_b
     assert tool_a is not None and tool_b is not None and tool_a is not tool_b
-    assert platform_a is not None and platform_b is not None and platform_a is not platform_b
+    assert (
+        platform_a is not None
+        and platform_b is not None
+        and platform_a is not platform_b
+    )
 
     token_a = set_clawk_home_override(home_a)
     try:
@@ -1260,9 +1294,12 @@ def test_manager_discovery_uses_its_home_not_the_ambient_profile(
     )[0]
     assert tool_a is not None and tool_a.handler({}) == "retained-a"
     assert platform_a is not None and platform_a.label == "retained-a"
-    assert registry.snapshot_registration(
-        "shared_profile_tool", scope=str(home_b.resolve())
-    ) is None
+    assert (
+        registry.snapshot_registration(
+            "shared_profile_tool", scope=str(home_b.resolve())
+        )
+        is None
+    )
     assert platform_registry.snapshot_registration(
         "shared_profile_platform", scope=str(home_b.resolve())
     ) == (None, None)
@@ -1294,7 +1331,9 @@ def test_same_slug_profiles_allocate_distinct_modules_concurrently(
     with ThreadPoolExecutor(max_workers=2) as pool:
         list(pool.map(lambda manager: manager.discover_and_load(), managers))
 
-    modules = [manager._plugins["profile_probe"].module.__name__ for manager in managers]
+    modules = [
+        manager._plugins["profile_probe"].module.__name__ for manager in managers
+    ]
     assert modules[0] != modules[1]
 
 
@@ -1306,7 +1345,10 @@ def test_spawned_supervised_task_is_cancelled_on_unload():
 
     manager = PluginManager()
     manifest = PluginManifest(
-        name="task_probe", version="0.1", description="", source="user",
+        name="task_probe",
+        version="0.1",
+        description="",
+        source="user",
     )
     ctx = PluginContext(manifest, manager)
     cancelled = []
@@ -1343,7 +1385,10 @@ def test_on_unload_exception_does_not_block_other_teardown():
 
     manager = PluginManager()
     manifest = PluginManifest(
-        name="boom_probe", version="0.1", description="", source="user",
+        name="boom_probe",
+        version="0.1",
+        description="",
+        source="user",
     )
     ctx = PluginContext(manifest, manager)
     order = []

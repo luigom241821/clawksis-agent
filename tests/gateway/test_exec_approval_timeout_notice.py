@@ -19,7 +19,11 @@ from tools import approval as _approval
 from tools.approval_gateway_wait import _ApprovalEntry
 
 SESSION = "agent:main:telegram:dm:1"
-APPROVAL = {"command": "rm -rf /tmp/x", "description": "recursive delete", "pattern_key": "k"}
+APPROVAL = {
+    "command": "rm -rf /tmp/x",
+    "description": "recursive delete",
+    "pattern_key": "k",
+}
 
 
 class _ButtonAdapter:
@@ -46,9 +50,13 @@ class _ButtonAdapter:
         self.send_metadata.append(k.get("metadata"))
         return SendResult(success=True, message_id="m2")
 
-    async def edit_message(self, chat_id: str, message_id: str, content: str, **k: Any) -> SendResult:
+    async def edit_message(
+        self, chat_id: str, message_id: str, content: str, **k: Any
+    ) -> SendResult:
         self.edits.append((message_id, content))
-        return SendResult(success=self._editable, error=None if self._editable else "cannot edit")
+        return SendResult(
+            success=self._editable, error=None if self._editable else "cannot edit"
+        )
 
 
 class _PlainAdapter(_ButtonAdapter):
@@ -62,13 +70,19 @@ def _runner(adapter):
 
     runner = object.__new__(TurnRunner)
     runner._ctx = SimpleNamespace(
-        _status_adapter=adapter, _status_chat_id="C1", _status_thread_metadata={"thread_id": "t1"},
-        session_key=SESSION, source=SimpleNamespace(chat_id="C1", platform="telegram", session_key=SESSION),
+        _status_adapter=adapter,
+        _status_chat_id="C1",
+        _status_thread_metadata={"thread_id": "t1"},
+        session_key=SESSION,
+        source=SimpleNamespace(chat_id="C1", platform="telegram", session_key=SESSION),
     )
 
     class _Fut:
-        def __init__(self, result): self._r = result
-        def result(self, timeout=None): return self._r
+        def __init__(self, result):
+            self._r = result
+
+        def result(self, timeout=None):
+            return self._r
 
     runner._schedule = lambda coro, _label: _Fut(asyncio.run(coro))
     runner._close_native_stream_boundary = lambda _why: None
@@ -78,7 +92,9 @@ def _runner(adapter):
 @pytest.fixture
 def pending_entry(monkeypatch):
     """A queued approval entry exactly as ``_await_gateway_decision`` registers it."""
-    monkeypatch.setattr("gateway.platforms.base_exec_approval.approval_timeout_seconds", lambda: 300)
+    monkeypatch.setattr(
+        "gateway.platforms.base_exec_approval.approval_timeout_seconds", lambda: 300
+    )
     entry = _ApprovalEntry(dict(APPROVAL))
     with _approval._lock:
         _approval._gateway_queues[SESSION] = [entry]
@@ -88,14 +104,23 @@ def pending_entry(monkeypatch):
 
 
 @pytest.mark.parametrize("warning_notifications", [True, False])
-def test_timeout_edits_the_card_to_say_the_command_did_not_run(pending_entry, tmp_path, monkeypatch, warning_notifications):
+def test_timeout_edits_the_card_to_say_the_command_did_not_run(
+    pending_entry, tmp_path, monkeypatch, warning_notifications
+):
     import gateway.run as gateway_run
-    (tmp_path / "config.yaml").write_text(f"display: {{suppress_warning_notifications: {str(not warning_notifications).lower()}}}")
+
+    (tmp_path / "config.yaml").write_text(
+        f"display: {{suppress_warning_notifications: {str(not warning_notifications).lower()}}}"
+    )
     monkeypatch.setattr(gateway_run, "_clawk_home", tmp_path)
     adapter = _ButtonAdapter()
-    _runner(adapter)._approval_notify_sync(dict(pending_entry.data))  # what notify_cb receives
+    _runner(adapter)._approval_notify_sync(
+        dict(pending_entry.data)
+    )  # what notify_cb receives
 
-    assert pending_entry.settle is not None, "settle hook must be registered for the request_id"
+    assert pending_entry.settle is not None, (
+        "settle hook must be registered for the request_id"
+    )
     pending_entry.settle("timeout")
 
     assert len(adapter.edits) == 1
@@ -104,17 +129,25 @@ def test_timeout_edits_the_card_to_say_the_command_did_not_run(pending_entry, tm
     assert "NOT run" in content and "5 minutes" in content
     assert adapter.sends == [], "an editable card needs no extra message"
     # ``notify`` is A2A's turn-final marker; an approval card must not carry it (#132516).
-    assert adapter.card_metadata == [{"thread_id": "t1"}]  # no notify: A2A's turn-final marker
+    assert adapter.card_metadata == [
+        {"thread_id": "t1"}
+    ]  # no notify: A2A's turn-final marker
 
 
 @pytest.mark.parametrize("text_fallback", [False, True])
-def test_timeout_falls_back_to_a_new_message_when_the_card_cannot_be_edited(pending_entry, text_fallback):
+def test_timeout_falls_back_to_a_new_message_when_the_card_cannot_be_edited(
+    pending_entry, text_fallback
+):
     adapter = _PlainAdapter() if text_fallback else _ButtonAdapter(editable=False)
-    _runner(adapter)._approval_notify_sync(dict(pending_entry.data))  # what notify_cb receives
+    _runner(adapter)._approval_notify_sync(
+        dict(pending_entry.data)
+    )  # what notify_cb receives
     if text_fallback:
         # The plain-text prompt is an interim approval prompt (Telegram pushes it, WeCom routes it
         # via the control lane), never ``notify``: A2A resolves the caller's task on that marker.
-        assert adapter.send_metadata == [{"thread_id": "t1", "is_approval_prompt": True, "_interim_send": True}]
+        assert adapter.send_metadata == [
+            {"thread_id": "t1", "is_approval_prompt": True, "_interim_send": True}
+        ]
 
     pending_entry.settle("timeout")
 
@@ -125,7 +158,9 @@ def test_timeout_falls_back_to_a_new_message_when_the_card_cannot_be_edited(pend
 @pytest.mark.parametrize("reason", ["answered", "interrupted", "notify_failed"])
 def test_other_settle_reasons_post_nothing(pending_entry, reason):
     adapter = _ButtonAdapter()
-    _runner(adapter)._approval_notify_sync(dict(pending_entry.data))  # what notify_cb receives
+    _runner(adapter)._approval_notify_sync(
+        dict(pending_entry.data)
+    )  # what notify_cb receives
 
     pending_entry.settle(reason)
 

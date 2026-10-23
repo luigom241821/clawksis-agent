@@ -38,7 +38,10 @@ def test_timestamps_on_sets_and_persists(tmp_path, monkeypatch):
     s = _Stub()
     s._handle_timestamps_command("/timestamps on")
     assert s.show_timestamps is True
-    assert yaml.safe_load((hh / "config.yaml").read_text())["display"]["timestamps"] is True
+    assert (
+        yaml.safe_load((hh / "config.yaml").read_text())["display"]["timestamps"]
+        is True
+    )
 
 
 def _render_history(history, show_ts):
@@ -71,5 +74,3 @@ def test_history_shows_timestamp_for_stored_turns():
     assert "[Clawksis #2]  [" in out
     # a turn with no stored timestamp must NOT get a fabricated time
     assert "[You #3]\n" in out
-
-

@@ -21,14 +21,15 @@ from tools.fal_common import (
 # import_fal_client
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def fake_fal_client(monkeypatch):
     module = types.ModuleType("fal_client")
     monkeypatch.setitem(sys.modules, "fal_client", module)
     return module
 
-class TestImportFalClient:
 
+class TestImportFalClient:
     def test_pm_ensure_import_error_is_swallowed(self, monkeypatch, fake_fal_client):
         """If pm.ensure_import raises ImportError, the plain import decides."""
         monkeypatch.setattr(
@@ -62,9 +63,11 @@ class TestImportFalClient:
             result = import_fal_client()
             assert result is fake_fal_client
 
+
 # ---------------------------------------------------------------------------
 # _normalize_fal_queue_url_format
 # ---------------------------------------------------------------------------
+
 
 class TestNormalizeFalQueueUrlFormat:
     def test_adds_trailing_slash(self):
@@ -93,9 +96,11 @@ class TestNormalizeFalQueueUrlFormat:
         with pytest.raises(ValueError, match="Managed FAL queue origin is required"):
             _normalize_fal_queue_url_format("   ")
 
+
 # ---------------------------------------------------------------------------
 # _extract_http_status
 # ---------------------------------------------------------------------------
+
 
 class TestExtractHttpStatus:
     def test_returns_status_from_response_attribute(self):
@@ -137,9 +142,11 @@ class TestExtractHttpStatus:
         exc.status_code = 503
         assert _extract_http_status(exc) == 503
 
+
 # ---------------------------------------------------------------------------
 # _ManagedFalSyncClient — __init__
 # ---------------------------------------------------------------------------
+
 
 def _make_fal_client_mock(
     *,
@@ -166,8 +173,8 @@ def _make_fal_client_mock(
     fal_client.client = client_module
     return fal_client, sync_client_instance
 
-class TestManagedFalSyncClientInit:
 
+class TestManagedFalSyncClientInit:
     def test_init_raises_when_sync_client_missing(self):
         fal_client = MagicMock()
         fal_client.SyncClient = None
@@ -189,9 +196,11 @@ class TestManagedFalSyncClientInit:
                 fal_client, key="k", queue_run_origin="https://q.example.com"
             )
 
+
 # ---------------------------------------------------------------------------
 # _ManagedFalSyncClient — submit
 # ---------------------------------------------------------------------------
+
 
 class TestManagedFalSyncClientSubmit:
     def _make_client(self, **kwargs):
@@ -249,13 +258,16 @@ class TestManagedFalSyncClientSubmit:
         client._request_handle_class = MagicMock()
 
         client.submit(
-            "my-app", {"prompt": "hello"},
+            "my-app",
+            {"prompt": "hello"},
             headers={"X-Idempotency-Key": "submission-1"},
         )
 
         http_client.request.assert_called_once_with(
-            "POST", "https://queue.example.com/my-app",
-            json={"prompt": "hello"}, timeout=120.0,
+            "POST",
+            "https://queue.example.com/my-app",
+            json={"prompt": "hello"},
+            timeout=120.0,
             headers={"X-Idempotency-Key": "submission-1"},
         )
         client._maybe_retry_request.assert_not_called()

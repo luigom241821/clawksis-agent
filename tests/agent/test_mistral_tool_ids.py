@@ -29,13 +29,25 @@ def _pair():
             "role": "assistant",
             "content": "",
             "tool_calls": [
-                {"id": _NATIVE_ID, "type": "function", "function": {"name": "tool_call", "arguments": "{}"}},
-                {"id": _BAD_ID, "call_id": _BAD_ID, "type": "function",
-                 "function": {"name": "tool_call", "arguments": "{}"}},
+                {
+                    "id": _NATIVE_ID,
+                    "type": "function",
+                    "function": {"name": "tool_call", "arguments": "{}"},
+                },
+                {
+                    "id": _BAD_ID,
+                    "call_id": _BAD_ID,
+                    "type": "function",
+                    "function": {"name": "tool_call", "arguments": "{}"},
+                },
                 # Composite Responses-bridge id (uniquify_tool_call_ids writes these); its result
                 # carries only the call half (tool_dispatch_helpers._normalize_tool_call_id).
-                {"id": "call_abc|fc_123", "call_id": "call_abc", "type": "function",
-                 "function": {"name": "tool_call", "arguments": "{}"}},
+                {
+                    "id": "call_abc|fc_123",
+                    "call_id": "call_abc",
+                    "type": "function",
+                    "function": {"name": "tool_call", "arguments": "{}"},
+                },
             ],
         },
         {"role": "tool", "tool_call_id": _NATIVE_ID, "content": "windows"},
@@ -50,8 +62,11 @@ def _wire(model, base_url="https://ollama.com/v1"):
 
     messages = _pair()
     kwargs = ChatCompletionsTransport().build_kwargs(
-        model=model, messages=messages, tools=None,
-        provider_profile=providers.get_provider_profile("ollama-cloud"), base_url=base_url,
+        model=model,
+        messages=messages,
+        tools=None,
+        provider_profile=providers.get_provider_profile("ollama-cloud"),
+        base_url=base_url,
     )
     return messages, kwargs["messages"]
 
@@ -67,7 +82,12 @@ def _wire(model, base_url="https://ollama.com/v1"):
         ("custom", "magistral-small", "http://localhost:8000/v1", True),
         ("custom", "mixtral-8x22b", "http://localhost:8000/v1", True),
         ("ollama-cloud", "glm-5.3-flash", "https://ollama.com/v1", False),
-        ("openrouter", "anthropic/claude-sonnet-4", "https://openrouter.ai/api/v1", False),
+        (
+            "openrouter",
+            "anthropic/claude-sonnet-4",
+            "https://openrouter.ai/api/v1",
+            False,
+        ),
     ],
 )
 def test_route_gate(provider, model, base_url, required):
@@ -93,5 +113,9 @@ def test_mistral_wire_pairs_every_call_with_its_result_and_leaves_history():
 
 def test_non_mistral_route_keeps_ids():
     _, sent = _wire("glm-5.3-flash")
-    assert [tc["id"] for tc in sent[0]["tool_calls"]] == [_NATIVE_ID, _BAD_ID, "call_abc|fc_123"]
+    assert [tc["id"] for tc in sent[0]["tool_calls"]] == [
+        _NATIVE_ID,
+        _BAD_ID,
+        "call_abc|fc_123",
+    ]
     assert [m["tool_call_id"] for m in sent[1:]] == [_NATIVE_ID, _BAD_ID, "call_abc"]

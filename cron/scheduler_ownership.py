@@ -51,7 +51,9 @@ def register_ticked_homes(homes) -> None:
     with _ticked_lock:
         departed = set(_ticked_homes) - set(resolved)
         # A store another still-ticked profile reaches (cron/ symlinked to one place) keeps its state.
-        departed_stores = {_ticked_stores[k] for k in departed if k in _ticked_stores} - set(stores.values())
+        departed_stores = {
+            _ticked_stores[k] for k in departed if k in _ticked_stores
+        } - set(stores.values())
         _ticked_homes.clear()
         _ticked_homes.update(resolved)
         _ticked_stores.clear()
@@ -59,6 +61,7 @@ def register_ticked_homes(homes) -> None:
     if departed:
         # Late import: cron.scheduler imports this module.
         from cron.scheduler import discard_parallel_pools
+
         discard_parallel_pools(departed)
         forget_stores(departed_stores)
 
@@ -102,7 +105,10 @@ def record_serves_profile(record: Any, home: Optional[Path | str] = None) -> boo
     if not isinstance(record, dict):
         return False
     from gateway.status import (
-        _get_process_clawk_home, _profile_label_for_home, _same_clawk_home)
+        _get_process_clawk_home,
+        _profile_label_for_home,
+        _same_clawk_home,
+    )
 
     try:
         target = Path(home) if home is not None else get_clawk_home()
@@ -157,9 +163,11 @@ def _claim_owner_is_dead(claim: dict[str, Any]) -> bool:
         return False
     try:
         import socket
+
         if parts[0] != socket.gethostname():
             return False
         from gateway.status import _pid_exists
+
         return not _pid_exists(int(parts[1]))
     except Exception:
         return False

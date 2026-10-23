@@ -45,13 +45,16 @@ class CLITuiRuntimeMixin:
                         self._tui_idle_tick()
                     continue
                 from clawk_cli.gateway_queue import OwnQueueHold
+
                 held = OwnQueueHold.begin(self, user_input)
                 if held is None:
                     self._tui_process_one_input(user_input)
             except Exception as e:
                 if isinstance(e, OSError) and e.errno == errno.EIO:
                     self._mark_terminal_io_broken("process_loop")
-                    logger.warning("process_loop EIO — freezing UI paints (#81521): %s", e)
+                    logger.warning(
+                        "process_loop EIO — freezing UI paints (#81521): %s", e
+                    )
                     continue
                 logger.warning("process_loop unhandled error (msg may be lost): %s", e)
 
@@ -60,7 +63,9 @@ class CLITuiRuntimeMixin:
         ``(hold or None, input to run now or None)``. A turn the owner runs now goes first; the held
         input runs once that admission was taken, left the queue, or the bounded wait ran out."""
         with suppress(Exception):
-            self._drain_process_notifications("cli-idle")  # adopts the admission on its message.start
+            self._drain_process_notifications(
+                "cli-idle"
+            )  # adopts the admission on its message.start
         item = hold.take_gateway_turn(self._pending_input)
         if item is not None:
             return hold, item
@@ -97,14 +102,28 @@ class CLITuiRuntimeMixin:
 
     def _tui_process_one_input(self, user_input):
         """Route one submitted input: file drop, /resume pick, ! shell, slash command, or a chat turn."""
-        from cli import _DIM, _PASTE_REF_RE, _RST, _cprint, _detect_file_drop, _looks_like_slash_command, _strip_leaked_bracketed_paste_wrappers, _strip_leaked_terminal_responses_with_meta
+        from cli import (
+            _DIM,
+            _PASTE_REF_RE,
+            _RST,
+            _cprint,
+            _detect_file_drop,
+            _looks_like_slash_command,
+            _strip_leaked_bracketed_paste_wrappers,
+            _strip_leaked_terminal_responses_with_meta,
+        )
         from tools.process_registry_notifications import TimelineNotification
+
         self._tui_dock_drop_dequeued()
         user_input, is_voice_input, is_seeded_query = self._tui_unwrap_input(user_input)
         if not user_input:
             return
-        notification_preview = user_input if isinstance(user_input, TimelineNotification) else None
-        self._status_bar_suppressed_after_resize = False  # input ends post-resize suppression
+        notification_preview = (
+            user_input if isinstance(user_input, TimelineNotification) else None
+        )
+        self._status_bar_suppressed_after_resize = (
+            False  # input ends post-resize suppression
+        )
 
         submit_images = []
         if isinstance(user_input, tuple):
@@ -112,16 +131,24 @@ class CLITuiRuntimeMixin:
 
         if isinstance(user_input, str):
             user_input = _strip_leaked_bracketed_paste_wrappers(user_input)
-            user_input, _had_mouse_reports = _strip_leaked_terminal_responses_with_meta(user_input)
+            user_input, _had_mouse_reports = _strip_leaked_terminal_responses_with_meta(
+                user_input
+            )
             if _had_mouse_reports:
-                self._recover_terminal_input_modes(reason="mouse reports leaked into submitted input")
+                self._recover_terminal_input_modes(
+                    reason="mouse reports leaked into submitted input"
+                )
 
         # A typed bare stop phrase ends an active voice chat (transcripts are checked earlier).
         if not is_voice_input and self._typed_voice_stop(user_input):
             return
 
         # File drops are detected before any dispatch; seeded -q prompts are literal text.
-        _file_drop = _detect_file_drop(user_input) if isinstance(user_input, str) and not is_seeded_query else None
+        _file_drop = (
+            _detect_file_drop(user_input)
+            if isinstance(user_input, str) and not is_seeded_query
+            else None
+        )
         if _file_drop:
             _drop_path = _file_drop["path"]
             _remainder = _file_drop["remainder"]
@@ -131,10 +158,14 @@ class CLITuiRuntimeMixin:
                 _cprint("  " + t("cli.tui.auto_attached_image", name=_drop_path.name))
             else:
                 _cprint("  " + t("cli.tui.detected_file", name=_drop_path.name))
-                user_input = f"[User attached file: {_drop_path}]" + (f"\n{_remainder}" if _remainder else "")
+                user_input = f"[User attached file: {_drop_path}]" + (
+                    f"\n{_remainder}" if _remainder else ""
+                )
         elif isinstance(user_input, str):
             # A bare number right after a bare `/resume` selects that session (never sent to the agent).
-            if self._pending_resume_sessions and self._consume_pending_resume_selection(user_input):
+            if self._pending_resume_sessions and self._consume_pending_resume_selection(
+                user_input
+            ):
                 return
             if not is_seeded_query:
                 if self.handle_bang_shell(user_input):
@@ -151,7 +182,12 @@ class CLITuiRuntimeMixin:
 
         if submit_images:
             n = len(submit_images)
-            _attached = t("cli.tui.images_attached_one" if n == 1 else "cli.tui.images_attached_other", count=n)
+            _attached = t(
+                "cli.tui.images_attached_one"
+                if n == 1
+                else "cli.tui.images_attached_other",
+                count=n,
+            )
             _cprint(f"  {_DIM}{_attached}{_RST}")
 
         self._agent_running = self._interactive_turn = True
@@ -159,13 +195,18 @@ class CLITuiRuntimeMixin:
         self._turn_summary_begin()
         self._app.invalidate()
         try:
-            self.chat(notification_preview or user_input, images=submit_images or None, voice_input=is_voice_input)
+            self.chat(
+                notification_preview or user_input,
+                images=submit_images or None,
+                voice_input=is_voice_input,
+            )
         finally:
             self._tui_after_turn()
 
     def _tui_run_slash_input(self, user_input: str):
         """Dispatch a slash command. Returns the pending agent seed to run as a chat turn, else None."""
         from cli import _cprint
+
         _cprint(f"\n⚙️  {user_input}")
         try:
             if not self.process_command(user_input):
@@ -182,6 +223,7 @@ class CLITuiRuntimeMixin:
     def _tui_after_turn(self):
         """Post-turn bookkeeping after chat() returns (normal, error, or interrupt)."""
         from cli import _DIM, _RST, _cprint
+
         self._agent_running = self._pet_reasoning = False
         self._spinner_text = self._last_scrollback_tool = ""
         self._tool_start_time = 0.0
@@ -215,6 +257,7 @@ class CLITuiRuntimeMixin:
 
         # Continuous voice: restart recording off-thread (beep + recorder start would block process_loop).
         if self._voice_mode and self._voice_continuous and not self._voice_recording:
+
             def _restart_recording():
                 try:
                     if self._voice_tts:
@@ -227,6 +270,7 @@ class CLITuiRuntimeMixin:
                     self._app.invalidate()
                 except Exception as e:
                     _cprint(f"{_DIM}{t('cli.voice.autorestart_failed', error=e)}{_RST}")
+
             threading.Thread(target=_restart_recording, daemon=True).start()
 
         with suppress(Exception):
@@ -240,7 +284,11 @@ class CLITuiRuntimeMixin:
         ``logger.debug`` is guarded: logging is not reentrant-safe and a shutdown race
         can raise ``KeyError`` inside the handler, bypassing prompt_toolkit's unwind.
         """
-        from cli import _arm_exit_watchdog_on_shutdown_signal, _interrupt_agent_for_signal
+        from cli import (
+            _arm_exit_watchdog_on_shutdown_signal,
+            _interrupt_agent_for_signal,
+        )
+
         with suppress(Exception):
             logger.debug("Received signal %s, triggering graceful shutdown", signum)
         # Arm the backstop IMMEDIATELY: if the unwind wedges, _run_cleanup never arms its own.
@@ -258,6 +306,7 @@ class CLITuiRuntimeMixin:
         # continue..."); call_soon_threadsafe lets the loop unwind normally.
         try:
             from prompt_toolkit.application.current import get_app_or_none
+
             _app = get_app_or_none()
             _loop = getattr(_app, "loop", None)
             if _loop is not None:
@@ -270,18 +319,25 @@ class CLITuiRuntimeMixin:
     def _show_startup_browser_notice(self):
         """Main's ``_show_browser_backend_notice``; on a gateway session the gateway computed the notice
         (and its once-per-24h stamp) with the session's tools, so it is printed from the snapshot."""
-        inventory = getattr(getattr(self, "_session_db", None), "banner_inventory", lambda: None)()
+        inventory = getattr(
+            getattr(self, "_session_db", None), "banner_inventory", lambda: None
+        )()
         if inventory is None or "browser_backend_notice" not in inventory:
             self._show_browser_backend_notice()
             return
         notice = inventory.get("browser_backend_notice")
         if notice:
             from gateway.warning_notifications import render_notification
-            render_notification(lambda: self._console_print(f"[yellow]⚠ {notice}[/yellow]"), platform="cli")
+
+            render_notification(
+                lambda: self._console_print(f"[yellow]⚠ {notice}[/yellow]"),
+                platform="cli",
+            )
 
     def _tui_print_startup(self):
         """Startup output: light-mode probe, banner, advisories, resume/welcome lines, tips."""
         from cli import _accent_hex, _detect_light_mode
+
         with suppress(Exception):  # light-mode probe before pt grabs the tty (cached)
             _detect_light_mode()
         # Scroll the cursor to the last row so banner, responses and prompt pin to the bottom.
@@ -291,6 +347,7 @@ class CLITuiRuntimeMixin:
                 print("\n" * (_term_lines - 1), end="", flush=True)
 
         from clawk_cli.gateway_client import GatewayClientError
+
         try:
             self._ensure_gateway_session()  # the banner shows the gateway session's id and inventory
         except GatewayClientError as exc:
@@ -314,13 +371,17 @@ class CLITuiRuntimeMixin:
             try:
                 from clawk_cli.sandbox_image_switch import offer_interactive
                 from cli import _cprint
+
                 offer_interactive(cprint=_cprint)
             except Exception:
                 logger.debug("sandbox image switch offer failed", exc_info=True)
             # Low disk + auto-prune never decided: ask once (either answer ends it for good).
             try:
-                from clawk_cli.prune_advisor import offer_interactive as _offer_auto_prune
+                from clawk_cli.prune_advisor import (
+                    offer_interactive as _offer_auto_prune,
+                )
                 from cli import _cprint
+
                 _offer_auto_prune(cprint=_cprint)
             except Exception:
                 logger.debug("auto-prune offer failed", exc_info=True)
@@ -333,6 +394,7 @@ class CLITuiRuntimeMixin:
         _welcome_color = "#E8E0FF"
         try:
             from clawk_cli.skin_engine import get_active_skin
+
             _welcome_skin = get_active_skin()
             _welcome_text = _welcome_skin.get_branding("welcome", _welcome_text)
             _welcome_color = _welcome_skin.get_color("banner_text", _welcome_color)
@@ -345,10 +407,13 @@ class CLITuiRuntimeMixin:
 
         self._tui_startup_background_maintenance()
         # Before the background preload is folded in (at agent init), show the REQUESTED names.
-        _skills_for_line = self.preloaded_skills or list(self._preload_skills_requested or [])
+        _skills_for_line = self.preloaded_skills or list(
+            self._preload_skills_requested or []
+        )
         if _skills_for_line and not self._startup_skills_line_shown:
             self._console_print(
-                f"[bold {_accent_hex()}]{t('cli.tui.activated_skills_label')}[/] {', '.join(_skills_for_line)}")
+                f"[bold {_accent_hex()}]{t('cli.tui.activated_skills_label')}[/] {', '.join(_skills_for_line)}"
+            )
             self._startup_skills_line_shown = True
         self._console_print()
 
@@ -357,12 +422,14 @@ class CLITuiRuntimeMixin:
         # Warm the /model picker cache off-thread (else its first open blocks ~1-2s).
         with suppress(Exception):
             from clawk_cli.model_switch_providers import prewarm_picker_cache_async
+
             prewarm_picker_cache_async()
 
         # Pre-import the agent runtime (~1.5s: run_agent + OpenAI SDK) off-thread; the import
         # lock makes an early submit block on the remaining work rather than redo it.
         # Skipped when Termux defers agent startup on purpose.
         if os.environ.get("CLAWK_DEFER_AGENT_STARTUP") != "1":
+
             def _prewarm_agent_runtime() -> None:
                 try:
                     import run_agent
@@ -370,7 +437,9 @@ class CLITuiRuntimeMixin:
                 except Exception:
                     logger.debug("agent runtime pre-import failed", exc_info=True)
 
-            threading.Thread(target=_prewarm_agent_runtime, name="agent-runtime-prewarm", daemon=True).start()
+            threading.Thread(
+                target=_prewarm_agent_runtime, name="agent-runtime-prewarm", daemon=True
+            ).start()
 
         # Redaction is ON by default; be loud when the operator turned it off.
         with suppress(Exception):
@@ -381,15 +450,26 @@ class CLITuiRuntimeMixin:
             if _redact_raw.lower() not in {"1", "true", "yes", "on"}:
                 self._console_print(
                     f"[bold red]{t('cli.tui.redaction_disabled_title')}[/] "
-                    + t("cli.tui.redaction_disabled_body", value=_escape(_redact_raw),
-                        setting="[cyan]security.redact_secrets: true[/]")
+                    + t(
+                        "cli.tui.redaction_disabled_body",
+                        value=_escape(_redact_raw),
+                        setting="[cyan]security.redact_secrets: true[/]",
+                    )
                 )
         # One-time banner when ~/.openclaw/ is left over from a migration.
         try:
             from agent.onboarding import (
-                OPENCLAW_RESIDUE_FLAG, detect_openclaw_residue, is_seen, mark_seen, openclaw_residue_hint_cli,
+                OPENCLAW_RESIDUE_FLAG,
+                detect_openclaw_residue,
+                is_seen,
+                mark_seen,
+                openclaw_residue_hint_cli,
             )
-            if not is_seen(self.config, OPENCLAW_RESIDUE_FLAG) and detect_openclaw_residue():
+
+            if (
+                not is_seen(self.config, OPENCLAW_RESIDUE_FLAG)
+                and detect_openclaw_residue()
+            ):
                 try:
                     _resid_color = _welcome_skin.get_color("banner_dim", "#4A3496")
                 except Exception:
@@ -397,6 +477,7 @@ class CLITuiRuntimeMixin:
                 self._console_print(f"[{_resid_color}]{openclaw_residue_hint_cli()}[/]")
                 try:
                     from clawk_cli.config import get_config_path as _get_cfg_path_resid
+
                     mark_seen(_get_cfg_path_resid(), OPENCLAW_RESIDUE_FLAG)
                 except Exception:
                     pass  # banner fires again next session
@@ -409,11 +490,16 @@ class CLITuiRuntimeMixin:
         Off the main thread: the curator's deterministic pass snapshots and prunes the whole
         skills tree (a due weekly pass held the prompt for 6 minutes on a large library), and
         the sync pulls can hit the network. The REPL must never wait on housekeeping."""
-        threading.Thread(target=self._run_startup_maintenance, name="startup-maintenance", daemon=True).start()
+        threading.Thread(
+            target=self._run_startup_maintenance,
+            name="startup-maintenance",
+            daemon=True,
+        ).start()
 
     def _run_startup_maintenance(self):
         with suppress(Exception):
             from agent.curator import maybe_run_curator
+
             maybe_run_curator(
                 idle_for_seconds=float("inf"),  # CLI startup = fully idle
                 on_summary=lambda msg: self._console_print(f"[dim #6b7684]💾 {msg}[/]"),
@@ -421,7 +507,13 @@ class CLITuiRuntimeMixin:
 
     def _tui_build_application(self, layout, kb, style):
         """Construct the prompt_toolkit Application for the REPL."""
-        from cli import CLI_CONFIG, EditingMode, _STEADY_CURSOR, _select_classic_cli_pt_output
+        from cli import (
+            CLI_CONFIG,
+            EditingMode,
+            _STEADY_CURSOR,
+            _select_classic_cli_pt_output,
+        )
+
         _cpr_disabled_output = _select_classic_cli_pt_output(sys.stdout)
 
         # Kitty placeholders encode the image id in exact foreground RGB, so the whole app
@@ -438,7 +530,9 @@ class CLITuiRuntimeMixin:
         if EditingMode is not None:
             # Vi editing mode when display.vim_mode is on.
             # EMACS is prompt_toolkit's own default, so non-opted-in behaviour is unchanged.
-            extra_kw["editing_mode"] = EditingMode.VI if self._vim_mode else EditingMode.EMACS
+            extra_kw["editing_mode"] = (
+                EditingMode.VI if self._vim_mode else EditingMode.EMACS
+            )
         return Application(
             layout=layout,
             key_bindings=kb,
@@ -446,7 +540,9 @@ class CLITuiRuntimeMixin:
             full_screen=False,
             mouse_support=False,
             # 0 (default) avoids fighting terminal auto-scroll in non-fullscreen mode.
-            refresh_interval=float(CLI_CONFIG.get("display", {}).get("cli_refresh_interval", 0)),
+            refresh_interval=float(
+                CLI_CONFIG.get("display", {}).get("cli_refresh_interval", 0)
+            ),
             # Erase the bottom chrome on exit instead of freezing a copy into scrollback.
             # Without this, prompt_toolkit's render_as_done teardown repaints the chrome one last time and
             # leaves it stranded above the exit summary — so a dead status bar + empty prompt sit between
@@ -462,8 +558,9 @@ class CLITuiRuntimeMixin:
         """SIGTERM/SIGHUP -> graceful shutdown; Windows absorbs SIGINT (see body)."""
         try:
             import signal as _signal
+
             _signal.signal(_signal.SIGTERM, self._tui_signal_handler)
-            if hasattr(_signal, 'SIGHUP'):
+            if hasattr(_signal, "SIGHUP"):
                 _signal.signal(_signal.SIGHUP, self._tui_signal_handler)
 
             # Windows: absorb SIGINT. Win32 delivers spurious CTRL_C_EVENT when children spawn
@@ -483,6 +580,7 @@ class CLITuiRuntimeMixin:
             return False
         if sys.platform == "darwin":
             import selectors as _selectors
+
             try:
                 if hasattr(_selectors, "KqueueSelector"):
                     _kq = _selectors.KqueueSelector()
@@ -506,19 +604,35 @@ class CLITuiRuntimeMixin:
         any agent was built. Main created its row lazily at the first turn, so with no agent it had none."""
         if self.agent:
             return self.agent.session_id
-        return self.session_id if getattr(self, "_gateway_session_open", False) else None
+        return (
+            self.session_id if getattr(self, "_gateway_session_open", False) else None
+        )
 
     def _tui_shutdown(self):
         """Teardown after the app exits: interrupt agent, stop voice/pet, persist + close session, cleanup, exit summary."""
-        from cli import _DIM, _RST, _cprint, _invoke_interrupted_session_end, _run_cleanup, set_approval_callback, set_secret_capture_callback, set_sudo_password_callback
+        from cli import (
+            _DIM,
+            _RST,
+            _cprint,
+            _invoke_interrupted_session_end,
+            _run_cleanup,
+            set_approval_callback,
+            set_secret_capture_callback,
+            set_sudo_password_callback,
+        )
+
         self._should_exit = True
         self._pet_stop_anim()
         # Without this line the terminal sits silent through the whole cleanup window.
         with suppress(Exception):
             print(f"{_DIM}{t('cli.tui.shutting_down')}{_RST}", flush=True)
         from clawk_cli.cli_shutdown import _gateway_owns_session_end
-        if self.agent and self._agent_running and not (
-                self._detach_on_exit and _gateway_owns_session_end(self.agent)):
+
+        if (
+            self.agent
+            and self._agent_running
+            and not (self._detach_on_exit and _gateway_owns_session_end(self.agent))
+        ):
             # A gateway turn left by Ctrl+D is not interrupted: ``end_session`` below detaches this
             # viewer and the owner closes the row once the turn settles (gateway/session_viewer_close).
             with suppress(Exception):
@@ -529,11 +643,23 @@ class CLITuiRuntimeMixin:
             self._voice_recorder = None
         with suppress(Exception):
             from tools.voice_mode import cleanup_temp_recordings
+
             cleanup_temp_recordings()
-        from agent.vault_backends.unlock import (lock as _vault_lock, set_code_prompt_callback,
-                                                 set_save_login_prompt_callback, set_unlock_prompt_callback)
-        for _unset in (set_sudo_password_callback, set_approval_callback, set_secret_capture_callback,
-                       set_unlock_prompt_callback, set_save_login_prompt_callback, set_code_prompt_callback):
+        from agent.vault_backends.unlock import (
+            lock as _vault_lock,
+            set_code_prompt_callback,
+            set_save_login_prompt_callback,
+            set_unlock_prompt_callback,
+        )
+
+        for _unset in (
+            set_sudo_password_callback,
+            set_approval_callback,
+            set_secret_capture_callback,
+            set_unlock_prompt_callback,
+            set_save_login_prompt_callback,
+            set_code_prompt_callback,
+        ):
             _unset(None)
         _vault_lock()  # session tokens for external password managers die with the session
         # On SIGHUP/SIGTERM the agent thread may be reaped before its own persistence runs.
@@ -555,21 +681,35 @@ class CLITuiRuntimeMixin:
                 # /exit --delete: remove transcripts + SQLite history.
                 try:
                     _sid = _closing_sid
-                    if self._session_db.delete_session(_sid, sessions_dir=get_clawk_home() / "sessions"):
-                        _cprint(f"  {_DIM}{t('cli.tui.session_deleted', session_id=_escape(_sid))}{_RST}")
+                    if self._session_db.delete_session(
+                        _sid, sessions_dir=get_clawk_home() / "sessions"
+                    ):
+                        _cprint(
+                            f"  {_DIM}{t('cli.tui.session_deleted', session_id=_escape(_sid))}{_RST}"
+                        )
                     else:
-                        _cprint(f"  {_DIM}{t('cli.tui.session_delete_missing', session_id=_escape(_sid))}{_RST}")
+                        _cprint(
+                            f"  {_DIM}{t('cli.tui.session_delete_missing', session_id=_escape(_sid))}{_RST}"
+                        )
                 except (Exception, KeyboardInterrupt) as e:
                     logger.debug("Could not delete session on exit: %s", e)
         # run_conversation() fires on_session_end on normal completion; only fire here mid-turn. A gateway
         # turn fires it in the gateway when the interrupted turn finalizes.
-        if self.agent and self._agent_running and not _gateway_owns_session_end(self.agent):
-            _invoke_interrupted_session_end(self.agent, self.agent.session_id, "shutdown")
+        if (
+            self.agent
+            and self._agent_running
+            and not _gateway_owns_session_end(self.agent)
+        ):
+            _invoke_interrupted_session_end(
+                self.agent, self.agent.session_id, "shutdown"
+            )
         # Ask AND apply before _run_cleanup arms the exit watchdog, so a large archive is never cut
         # short; a signal-driven exit never asks.
         import cli as _cli_mod
+
         if not _cli_mod._signal_watchdog_armed and _cli_mod._active_worktree:
             from clawk_cli.worktree_exit import apply_exit_choice, ask_exit_choice
+
             with suppress(Exception, KeyboardInterrupt):
                 ask_exit_choice(_cli_mod._active_worktree)
                 apply_exit_choice(_cli_mod._active_worktree, _cprint)

@@ -44,7 +44,9 @@ class Rig:
     drv: Any
     director: Director
     llm: FakeLLMServer
-    known: Optional[tuple[str, str]] = None  # (pattern, reason) for the running scenario's open bug
+    known: Optional[tuple[str, str]] = (
+        None  # (pattern, reason) for the running scenario's open bug
+    )
     _users: Optional[Iterator[str]] = field(default=None, repr=False)
 
     def ctx(self) -> str:
@@ -79,20 +81,37 @@ def norm(text: str) -> str:
 
 
 def copies(visible: list[Visible], aid: str) -> list[Visible]:
-    return [v for v in visible if head(aid) in norm(v.text) or foot(aid) in norm(v.text)]
+    return [
+        v for v in visible if head(aid) in norm(v.text) or foot(aid) in norm(v.text)
+    ]
 
 
 def complete(visible: list[Visible], aid: str) -> list[Visible]:
-    return [v for v in visible if head(aid) in norm(v.text) and foot(aid) in norm(v.text)]
+    return [
+        v for v in visible if head(aid) in norm(v.text) and foot(aid) in norm(v.text)
+    ]
 
 
-def wait_reply(rig: Rig, chat_id: str, aid: str, what: str = "", timeout: float = TURN_TIMEOUT) -> None:
+def wait_reply(
+    rig: Rig, chat_id: str, aid: str, what: str = "", timeout: float = TURN_TIMEOUT
+) -> None:
     """Until the reply's LAST piece (footer) is visible in ``chat_id``."""
-    wait_until(lambda: any(foot(aid) in norm(v.text) for v in rig.drv.visible(chat_id)),
-               what or f"reply {aid} visible in {chat_id}", timeout=timeout, on_timeout=rig.ctx)
+    wait_until(
+        lambda: any(foot(aid) in norm(v.text) for v in rig.drv.visible(chat_id)),
+        what or f"reply {aid} visible in {chat_id}",
+        timeout=timeout,
+        on_timeout=rig.ctx,
+    )
 
 
-def barrier(rig: Rig, token: str, *, group: bool = False, user_id: Optional[str] = None, attempts: int = 1) -> None:
+def barrier(
+    rig: Rig,
+    token: str,
+    *,
+    group: bool = False,
+    user_id: Optional[str] = None,
+    attempts: int = 1,
+) -> None:
     """One more inbound in the same chat, answered: everything queued before it has been handled.
 
     The gateway serializes a chat: an inbound arriving while a turn runs is drained only after that
@@ -107,12 +126,20 @@ def barrier(rig: Rig, token: str, *, group: bool = False, user_id: Optional[str]
         aid = f"B-{tok}"
         rig.director.script(tok, answer(aid, "barrier"))
         text = f"barrier [in:{tok}]"
-        inbound = rig.drv.group(text, mention=True) if group else rig.drv.dm(text, user_id=user_id)
+        inbound = (
+            rig.drv.group(text, mention=True)
+            if group
+            else rig.drv.dm(text, user_id=user_id)
+        )
         if n == attempts - 1:
             wait_reply(rig, inbound.chat_id, aid, f"barrier {tok} answered")
             return
         try:
-            wait_until(lambda: complete(rig.drv.visible(inbound.chat_id), aid), f"barrier {tok}", timeout=8.0)
+            wait_until(
+                lambda: complete(rig.drv.visible(inbound.chat_id), aid),
+                f"barrier {tok}",
+                timeout=8.0,
+            )
             return
         except AssertionError:
             continue  # dropped in the #121393 window: the next barrier still orders after the turn
@@ -132,13 +159,21 @@ def dm_gets_exactly_one_reply(rig: Rig, tag: str) -> None:
     barrier(rig, f"dmb-{tag}")
     vis = copies(rig.drv.visible(inbound.chat_id), aid)
     with rig.gate():
-        assert len(vis) == 1 and complete(vis, aid), f"expected one complete reply, got {vis}\n{rig.ctx()}"
-        assert "hello back (v1.2) - ok! #1 = {x}" in norm(vis[0].text), f"reply text mangled: {vis[0].text!r}"
-        assert turns(rig, token) == 1, f"inbound started {turns(rig, token)} model turns\n{rig.ctx()}"
+        assert len(vis) == 1 and complete(vis, aid), (
+            f"expected one complete reply, got {vis}\n{rig.ctx()}"
+        )
+        assert "hello back (v1.2) - ok! #1 = {x}" in norm(vis[0].text), (
+            f"reply text mangled: {vis[0].text!r}"
+        )
+        assert turns(rig, token) == 1, (
+            f"inbound started {turns(rig, token)} model turns\n{rig.ctx()}"
+        )
         assert len(rig.gw.user_rows(f"[in:{token}]")) == 1, "inbound persisted != once"
         refused = rig.drv.format_rejections(inbound.chat_id)
-        assert not refused, (f"the platform refused the reply's formatting (a plain-text fallback hid it): "
-                             f"{[c.response for c in refused]}\n{rig.ctx()}")
+        assert not refused, (
+            f"the platform refused the reply's formatting (a plain-text fallback hid it): "
+            f"{[c.response for c in refused]}\n{rig.ctx()}"
+        )
 
 
 # 2. group without mention obeys require_mention --------------------------------------------------
@@ -150,13 +185,26 @@ def group_obeys_require_mention(rig: Rig, tag: str) -> None:
     inbound = rig.drv.group(f"please answer [in:{loud}]", mention=True)
     wait_reply(rig, inbound.chat_id, f"A-{loud}")
     barrier(rig, f"gb-{tag}", group=True)
-    assert turns(rig, quiet) == 0, f"unmentioned group message started a model turn\n{rig.ctx()}"
+    assert turns(rig, quiet) == 0, (
+        f"unmentioned group message started a model turn\n{rig.ctx()}"
+    )
     # Rapid messages may be batched into one turn: the quiet text must not ride along in any prompt.
-    leaked = [t for t, reqs in rig.director.requests.items()
-              if any(f"[in:{quiet}]" in str(m.get("content")) for r in reqs for m in r.get("messages", [])
-                     if m.get("role") == "user")]
-    assert not leaked, f"unmentioned group message reached the model inside turn(s) {leaked}\n{rig.ctx()}"
-    assert not copies(rig.drv.visible(inbound.chat_id), f"A-{quiet}"), "unmentioned message was answered"
+    leaked = [
+        t
+        for t, reqs in rig.director.requests.items()
+        if any(
+            f"[in:{quiet}]" in str(m.get("content"))
+            for r in reqs
+            for m in r.get("messages", [])
+            if m.get("role") == "user"
+        )
+    ]
+    assert not leaked, (
+        f"unmentioned group message reached the model inside turn(s) {leaked}\n{rig.ctx()}"
+    )
+    assert not copies(rig.drv.visible(inbound.chat_id), f"A-{quiet}"), (
+        "unmentioned message was answered"
+    )
     assert len(complete(rig.drv.visible(inbound.chat_id), f"A-{loud}")) == 1, rig.ctx()
 
 
@@ -177,13 +225,19 @@ def long_reply_is_split_in_order(rig: Rig, tag: str) -> None:
     inbound = rig.drv.dm(f"write a lot [in:{token}]")
     wait_reply(rig, inbound.chat_id, aid)
     barrier(rig, f"longb-{tag}")
-    parts = [v for v in rig.drv.visible(inbound.chat_id) if _words(v.text) or head(aid) in norm(v.text)]
+    parts = [
+        v
+        for v in rig.drv.visible(inbound.chat_id)
+        if _words(v.text) or head(aid) in norm(v.text)
+    ]
     assert len(parts) >= 2, f"a {len(body)}-char reply was not split\n{rig.ctx()}"
     too_long = [len(v.text) for v in parts if len(v.text) > rig.drv.limit]
     assert not too_long, f"chunks over the {rig.drv.limit} cap: {too_long}"
     seen = [w for v in parts for w in _words(v.text)]
-    assert seen == _words(body), (f"split reply lost/reordered/duplicated words: got {len(seen)} of "
-                                  f"{len(_words(body))}\n{rig.ctx()}")
+    assert seen == _words(body), (
+        f"split reply lost/reordered/duplicated words: got {len(seen)} of "
+        f"{len(_words(body))}\n{rig.ctx()}"
+    )
 
 
 # 4. failed continuation chunk is not silently dropped (#120073) ----------------------------------
@@ -191,13 +245,20 @@ def failed_continuation_is_retried_or_reported(rig: Rig, tag: str) -> None:
     token, aid = f"gap-{tag}", f"A-gap-{tag}"
     body = long_body(rig.drv.limit)
     words = _words(body)
-    marker = words[int(len(words) * 0.75)]  # lands in a continuation chunk, never the first
+    marker = words[
+        int(len(words) * 0.75)
+    ]  # lands in a continuation chunk, never the first
     rig.director.script(token, answer(aid, body, chunk_chars=4000))
     # every attempt at that chunk is rejected (a plain-text/markdown fallback or a short retry ladder
     # must not paper over it): only a later retry or an honest notice satisfies the contract
     rig.drv.fail_send(times=3, match=lambda text: marker in text)
     inbound = rig.drv.dm(f"write a lot again [in:{token}]")
-    wait_until(lambda: turns(rig, token) >= 1, "model turn started", timeout=TURN_TIMEOUT, on_timeout=rig.ctx)
+    wait_until(
+        lambda: turns(rig, token) >= 1,
+        "model turn started",
+        timeout=TURN_TIMEOUT,
+        on_timeout=rig.ctx,
+    )
     barrier(rig, f"gapb-{tag}")
     visible = rig.drv.visible(inbound.chat_id)
     seen = [w for v in visible for w in _words(v.text)]
@@ -205,14 +266,23 @@ def failed_continuation_is_retried_or_reported(rig: Rig, tag: str) -> None:
     if not missing:
         return  # the rejected continuation was re-sent: nothing lost
     tail_idx = max(i for i, v in enumerate(visible) if _words(v.text))
-    notices = [v.text for v in visible[tail_idx + 1:]
-               if not _words(v.text) and "barrier" not in v.text and head(aid) not in norm(v.text)]
-    assert notices, (f"{len(missing)} words of the reply (from {missing[0]}) were never delivered and the "
-                     f"user was not told\n{rig.ctx()}")
+    notices = [
+        v.text
+        for v in visible[tail_idx + 1 :]
+        if not _words(v.text)
+        and "barrier" not in v.text
+        and head(aid) not in norm(v.text)
+    ]
+    assert notices, (
+        f"{len(missing)} words of the reply (from {missing[0]}) were never delivered and the "
+        f"user was not told\n{rig.ctx()}"
+    )
 
 
 # 5. stream finalize rejected -> exactly one complete copy (#121108 pattern) -----------------------
-def rejected_finalize_leaves_one_copy(rig: Rig, tag: str, *, group: bool = False) -> None:
+def rejected_finalize_leaves_one_copy(
+    rig: Rig, tag: str, *, group: bool = False
+) -> None:
     """The platform refuses the call that would complete a streamed reply (``drv.fail_finalize``:
     the finalize edit, the final send after draft previews, or the closing stream append)."""
     token, aid = f"fin-{tag}", f"A-fin-{tag}"
@@ -220,29 +290,46 @@ def rejected_finalize_leaves_one_copy(rig: Rig, tag: str, *, group: bool = False
     rig.director.script(token, answer(aid, body, chunk_chars=12, delay_per_chunk=0.03))
     faults = rig.drv.fail_finalize(lambda text: foot(aid) in norm(text), group=group)
     text, user = f"stream it [in:{token}]", rig.fresh_user()
-    inbound = rig.drv.group(text, mention=True) if group else rig.drv.dm(text, user_id=user)
+    inbound = (
+        rig.drv.group(text, mention=True) if group else rig.drv.dm(text, user_id=user)
+    )
     # settled once the ending is visible: whole, or completed by a continuation message
-    wait_until(lambda: (any(foot(aid) in norm(v.text) for v in rig.drv.visible(inbound.chat_id))
-                        or _split_seam(rig.drv.visible(inbound.chat_id), aid)),
-               f"reply {aid} visible in {inbound.chat_id}", timeout=TURN_TIMEOUT, on_timeout=rig.ctx)
+    wait_until(
+        lambda: (
+            any(foot(aid) in norm(v.text) for v in rig.drv.visible(inbound.chat_id))
+            or _split_seam(rig.drv.visible(inbound.chat_id), aid)
+        ),
+        f"reply {aid} visible in {inbound.chat_id}",
+        timeout=TURN_TIMEOUT,
+        on_timeout=rig.ctx,
+    )
     barrier(rig, f"finb-{tag}", group=group, user_id=user, attempts=3)
     rig.drv.standin.clear_faults()
-    assert any(f.fired for f in faults), f"the finalize fault never fired: nothing was rejected\n{rig.ctx()}"
+    assert any(f.fired for f in faults), (
+        f"the finalize fault never fired: nothing was rejected\n{rig.ctx()}"
+    )
     with rig.gate():
         seam = _split_seam(rig.drv.visible(inbound.chat_id), aid)
-        assert seam is None, (f"the continuation after a rejected finalize resumed mid-word: the answer's "
-                              f"last word is split across two messages ({seam})\n{rig.ctx()}")
+        assert seam is None, (
+            f"the continuation after a rejected finalize resumed mid-word: the answer's "
+            f"last word is split across two messages ({seam})\n{rig.ctx()}"
+        )
     shown = _shown(rig, inbound.chat_id, aid, "q")
     ctx = f"visible: {shown[:300]!r} ... {shown[-300:]!r}\n{rig.ctx()}"
     # the ending is shown exactly once: neither lost nor re-sent by a second final delivery
-    assert shown.count(foot(aid)) == 1, (f"answer ending shown {shown.count(foot(aid))}x after a rejected "
-                                         f"finalize (lost or re-sent)\n{ctx}")
+    assert shown.count(foot(aid)) == 1, (
+        f"answer ending shown {shown.count(foot(aid))}x after a rejected "
+        f"finalize (lost or re-sent)\n{ctx}"
+    )
     assert turns(rig, token) == 1, rig.ctx()
     with rig.gate():
         # ... and so is everything before it, in order: no stale partial copy left beside it
-        assert shown.count(head(aid)) == 1 and _seamless(_pwords(shown, "q")) == _pwords(body, "q"), (
+        assert shown.count(head(aid)) == 1 and _seamless(
+            _pwords(shown, "q")
+        ) == _pwords(body, "q"), (
             f"a partial copy of the answer was left visible after a rejected finalize "
-            f"(head shown {shown.count(head(aid))}x)\n{ctx}")
+            f"(head shown {shown.count(head(aid))}x)\n{ctx}"
+        )
 
 
 def _split_seam(visible: list[Visible], aid: str) -> Optional[str]:
@@ -269,8 +356,11 @@ def _seamless(words: list[str]) -> list[str]:
 
 def _shown(rig: Rig, chat_id: str, aid: str, prefix: str) -> str:
     """Everything visible that carries a piece of THIS answer (the chat is shared across scenarios)."""
-    return " ".join(norm(v.text) for v in rig.drv.visible(chat_id)
-                    if copies([v], aid) or _pwords(norm(v.text), prefix))
+    return " ".join(
+        norm(v.text)
+        for v in rig.drv.visible(chat_id)
+        if copies([v], aid) or _pwords(norm(v.text), prefix)
+    )
 
 
 def streamed_reply_shown_once(rig: Rig, tag: str) -> None:
@@ -286,8 +376,11 @@ def streamed_reply_shown_once(rig: Rig, tag: str) -> None:
     shown = _shown(rig, inbound.chat_id, aid, "s")
     with rig.gate():
         assert shown.count(head(aid)) == 1 and shown.count(foot(aid)) == 1, (
-            f"a streamed reply is shown != once: {shown[:300]!r}\n{rig.ctx()}")
-        assert _pwords(shown, "s") == _pwords(body, "s"), f"streamed words lost/duplicated: {shown[:300]!r}"
+            f"a streamed reply is shown != once: {shown[:300]!r}\n{rig.ctx()}"
+        )
+        assert _pwords(shown, "s") == _pwords(body, "s"), (
+            f"streamed words lost/duplicated: {shown[:300]!r}"
+        )
         assert turns(rig, token) == 1, rig.ctx()
 
 
@@ -295,7 +388,12 @@ def streamed_reply_ending_in_whitespace_shown_once(rig: Rig, tag: str) -> None:
     """Models routinely end on a newline; the streamed transport must still finalize ONE message."""
     token, aid = f"ws-{tag}", f"A-ws-{tag}"
     body = " ".join(f"w{i:03d}" for i in range(80))
-    rig.director.script(token, Text(f"{head(aid)} {body} {foot(aid)}\n\n", chunk_chars=12, delay_per_chunk=0.03))
+    rig.director.script(
+        token,
+        Text(
+            f"{head(aid)} {body} {foot(aid)}\n\n", chunk_chars=12, delay_per_chunk=0.03
+        ),
+    )
     user = rig.fresh_user()
     inbound = rig.drv.dm(f"stream with a trailing newline [in:{token}]", user_id=user)
     wait_reply(rig, inbound.chat_id, aid)
@@ -303,25 +401,34 @@ def streamed_reply_ending_in_whitespace_shown_once(rig: Rig, tag: str) -> None:
     shown = _shown(rig, inbound.chat_id, aid, "w")
     with rig.gate():
         assert shown.count(head(aid)) == 1 and shown.count(foot(aid)) == 1, (
-            f"a streamed reply ending in whitespace is shown != once: {shown[:400]!r}\n{rig.ctx()}")
+            f"a streamed reply ending in whitespace is shown != once: {shown[:400]!r}\n{rig.ctx()}"
+        )
 
 
 # 6. the platform redelivers the same inbound -> one reply (#119848 pattern) -----------------------
 def redelivered_inbound_gets_one_reply(rig: Rig, tag: str) -> None:
     token, aid = f"re-{tag}", f"A-re-{tag}"
-    rig.director.script(token, answer(aid, "first and only"), answer(f"{aid}-dup", "DUPLICATE"))
+    rig.director.script(
+        token, answer(aid, "first and only"), answer(f"{aid}-dup", "DUPLICATE")
+    )
     inbound = rig.drv.dm(f"once please [in:{token}]")
     wait_reply(rig, inbound.chat_id, aid)
     rig.drv.redeliver(inbound)
     barrier(rig, f"reb-{tag}")
     with rig.gate():
-        assert turns(rig, token) == 1, f"redelivered inbound started {turns(rig, token)} turns\n{rig.ctx()}"
-        assert not copies(rig.drv.visible(inbound.chat_id), f"{aid}-dup"), "a duplicate reply was sent"
+        assert turns(rig, token) == 1, (
+            f"redelivered inbound started {turns(rig, token)} turns\n{rig.ctx()}"
+        )
+        assert not copies(rig.drv.visible(inbound.chat_id), f"{aid}-dup"), (
+            "a duplicate reply was sent"
+        )
         assert len(copies(rig.drv.visible(inbound.chat_id), aid)) == 1, rig.ctx()
         # A replay that slips past dedup can ride INTO the barrier's turn (text batching merges the
         # two), which the turn/reply counts above cannot see: the transcript can.
         rows = rig.gw.user_rows(f"[in:{token}]")
-        assert len(rows) == 1, f"the redelivered inbound reached the transcript {len(rows)}x: {rows}\n{rig.ctx()}"
+        assert len(rows) == 1, (
+            f"the redelivered inbound reached the transcript {len(rows)}x: {rows}\n{rig.ctx()}"
+        )
 
 
 # 7. approval button click: allowlisted user accepted, stranger refused ----------------------------
@@ -333,28 +440,45 @@ def _button(rig: Rig, chat_id: str, label_re: str) -> dict[str, Any]:
             if re.search(label_re, label, re.IGNORECASE):
                 return b
         return None
-    return wait_until(pick, f"a {label_re!r} button under the approval prompt", timeout=TURN_TIMEOUT,
-                      on_timeout=rig.ctx)
+
+    return wait_until(
+        pick,
+        f"a {label_re!r} button under the approval prompt",
+        timeout=TURN_TIMEOUT,
+        on_timeout=rig.ctx,
+    )
 
 
-def approval_click_by_allowlisted_user_runs_command(rig: Rig, tag: str, victim: Path) -> None:
+def approval_click_by_allowlisted_user_runs_command(
+    rig: Rig, tag: str, victim: Path
+) -> None:
     """A stranger's DENY must be refused (else it would deny the command); the owner's approve runs it."""
     token, aid = f"ap-{tag}", f"A-ap-{tag}"
     victim.mkdir(parents=True, exist_ok=True)
     (victim / "f.txt").write_text("x")
-    rig.director.script(token, ToolCall("terminal", {"command": f"rm -rf {victim}"}), answer(aid, "cleaned"))
+    rig.director.script(
+        token,
+        ToolCall("terminal", {"command": f"rm -rf {victim}"}),
+        answer(aid, "cleaned"),
+    )
     inbound = rig.drv.dm(f"clean up [in:{token}]")
     approve = _button(rig, inbound.chat_id, r"once")
     deny = _button(rig, inbound.chat_id, r"deny")
     assert victim.exists(), "dangerous command ran before approval"
     stranger = rig.drv.click(inbound.chat_id, deny, user_id=rig.drv.other_user_id)
     # the adapter has handled (and answered) the stranger's click before the owner clicks
-    wait_until(lambda: rig.drv.click_answered(stranger), "the stranger's click answered", timeout=TURN_TIMEOUT,
-               on_timeout=rig.ctx)
+    wait_until(
+        lambda: rig.drv.click_answered(stranger),
+        "the stranger's click answered",
+        timeout=TURN_TIMEOUT,
+        on_timeout=rig.ctx,
+    )
     rig.drv.click(inbound.chat_id, approve)
     wait_reply(rig, inbound.chat_id, aid, "turn completed after the approval click")
-    assert not victim.exists(), (f"approved command did not run: the stranger's deny was obeyed or the "
-                                 f"owner's approval refused\n{rig.ctx()}")
+    assert not victim.exists(), (
+        f"approved command did not run: the stranger's deny was obeyed or the "
+        f"owner's approval refused\n{rig.ctx()}"
+    )
 
 
 # 8. platform_toolsets / disabled_toolsets honored (#121089) --------------------------------------
@@ -372,14 +496,20 @@ def _offered_tools(rig: Rig, tag: str) -> set:
 def platform_toolsets_are_honored(rig: Rig, tag: str) -> None:
     """``platform_toolsets.<platform>: [file]``: the file tools, and never the terminal."""
     names = _offered_tools(rig, tag)
-    assert "read_file" in names, f"the configured toolset (file) is missing: {sorted(names)}"
-    assert "terminal" not in names, f"terminal offered although platform_toolsets omits it: {sorted(names)}"
+    assert "read_file" in names, (
+        f"the configured toolset (file) is missing: {sorted(names)}"
+    )
+    assert "terminal" not in names, (
+        f"terminal offered although platform_toolsets omits it: {sorted(names)}"
+    )
 
 
 def disabled_toolsets_are_honored(rig: Rig, tag: str) -> None:
     """``agent.disabled_toolsets: [file]``: the file tools gone, the rest of the platform preset kept."""
     names = _offered_tools(rig, tag)
-    assert "terminal" in names, f"control: the platform preset lost terminal: {sorted(names)}"
+    assert "terminal" in names, (
+        f"control: the platform preset lost terminal: {sorted(names)}"
+    )
     leaked = sorted(names & {"read_file", "write_file", "patch", "search_files"})
     assert not leaked, f"disabled toolset 'file' still offered: {leaked}"
 
@@ -387,7 +517,11 @@ def disabled_toolsets_are_honored(rig: Rig, tag: str) -> None:
 def merge(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     out = dict(a)
     for k, v in b.items():
-        out[k] = merge(out[k], v) if isinstance(v, dict) and isinstance(out.get(k), dict) else v
+        out[k] = (
+            merge(out[k], v)
+            if isinstance(v, dict) and isinstance(out.get(k), dict)
+            else v
+        )
     return out
 
 
@@ -408,18 +542,26 @@ def _image(fmt: str) -> bytes:
 def _model_saw_image(req: dict) -> bool:
     for m in req.get("messages", []):
         content = m.get("content")
-        if isinstance(content, list) and any(p.get("type") in ("image_url", "input_image") for p in content
-                                             if isinstance(p, dict)):
+        if isinstance(content, list) and any(
+            p.get("type") in ("image_url", "input_image")
+            for p in content
+            if isinstance(p, dict)
+        ):
             return True
     return False
 
 
 def heic_document_reaches_agent_as_image(rig: Rig, tag: str) -> None:
     got: dict[str, bool] = {}
-    for fmt, name, mime in (("PNG", "control.png", "image/png"), ("HEIF", "IMG_0001.HEIC", "image/heic")):
+    for fmt, name, mime in (
+        ("PNG", "control.png", "image/png"),
+        ("HEIF", "IMG_0001.HEIC", "image/heic"),
+    ):
         token, aid = f"img-{fmt}-{tag}", f"A-img-{fmt}-{tag}"
         rig.director.script(token, answer(aid, "saw it"))
-        inbound = rig.drv.document(name, _image(fmt), mime, caption=f"look [in:{token}]")
+        inbound = rig.drv.document(
+            name, _image(fmt), mime, caption=f"look [in:{token}]"
+        )
         try:
             wait_reply(rig, inbound.chat_id, aid)
         except AssertionError:
@@ -427,38 +569,72 @@ def heic_document_reaches_agent_as_image(rig: Rig, tag: str) -> None:
             continue
         got[fmt] = _model_saw_image(rig.director.requests[token][0])
     log = rig.gw.grep(r"image|attach|heic|png|cache")
-    assert got["PNG"], f"control: a PNG sent as a file did not reach the model as an image\n{log}\n{rig.ctx()}"
+    assert got["PNG"], (
+        f"control: a PNG sent as a file did not reach the model as an image\n{log}\n{rig.ctx()}"
+    )
     with rig.gate():
-        assert got["HEIF"], f"a HEIC photo sent as a file did not reach the model as an image\n{log}"
+        assert got["HEIF"], (
+            f"a HEIC photo sent as a file did not reach the model as an image\n{log}"
+        )
 
 
 # 10. planned restart: notice delivered once; a redelivered /restart does not loop ----------------
-def planned_restart_notice_once(rig: Rig, tag: str, restart: Callable[[], None]) -> None:
+def planned_restart_notice_once(
+    rig: Rig, tag: str, restart: Callable[[], None]
+) -> None:
     inbound = rig.drv.dm("/restart")
-    wait_until(lambda: not rig.gw.alive(), "gateway exits for the planned restart", timeout=TURN_TIMEOUT,
-               on_timeout=rig.ctx)
+    wait_until(
+        lambda: not rig.gw.alive(),
+        "gateway exits for the planned restart",
+        timeout=TURN_TIMEOUT,
+        on_timeout=rig.ctx,
+    )
     rc = rig.gw.proc.returncode if rig.gw.proc else None
-    assert rc == 75, f"planned restart under a supervisor must exit 75 (got {rc})\n{rig.gw.tail()}"
+    assert rc == 75, (
+        f"planned restart under a supervisor must exit 75 (got {rc})\n{rig.gw.tail()}"
+    )
     reborn = time.monotonic()
     restart()  # what the supervisor does on exit 75
 
     def notices() -> list[str]:
-        texts = [str(c.params.get("text") or c.params.get("content") or c.params) for c in rig.drv.sends(inbound.chat_id)
-                 if c.at > reborn]
-        return [t for t in texts if "restart" in t.lower() and "<<" not in norm(t)]  # not a scripted reply
+        texts = [
+            str(c.params.get("text") or c.params.get("content") or c.params)
+            for c in rig.drv.sends(inbound.chat_id)
+            if c.at > reborn
+        ]
+        return [
+            t for t in texts if "restart" in t.lower() and "<<" not in norm(t)
+        ]  # not a scripted reply
 
-    wait_until(notices, "restart notice after the gateway came back", timeout=TURN_TIMEOUT, on_timeout=rig.ctx)
-    rig.drv.redeliver(inbound)  # the pre-restart /restart replayed (lost ack on the way out)
+    wait_until(
+        notices,
+        "restart notice after the gateway came back",
+        timeout=TURN_TIMEOUT,
+        on_timeout=rig.ctx,
+    )
+    rig.drv.redeliver(
+        inbound
+    )  # the pre-restart /restart replayed (lost ack on the way out)
     bid = f"B-rsb-{tag}"
     rig.director.script(f"rsb-{tag}", answer(bid, "barrier"))
     probe = rig.drv.dm(f"barrier [in:rsb-{tag}]")
-    wait_until(lambda: complete(rig.drv.visible(probe.chat_id), bid) or not rig.gw.alive(),
-               "barrier answered (or the gateway went down again)", timeout=TURN_TIMEOUT, on_timeout=rig.ctx)
+    wait_until(
+        lambda: complete(rig.drv.visible(probe.chat_id), bid) or not rig.gw.alive(),
+        "barrier answered (or the gateway went down again)",
+        timeout=TURN_TIMEOUT,
+        on_timeout=rig.ctx,
+    )
     rc = rig.gw.proc.returncode if rig.gw.proc else None
     # a crash is not the replay bug: only a second planned exit (75) is
-    assert rig.gw.alive() or rc == 75, f"gateway died (rc={rc}) after the replayed /restart\n{rig.ctx()}"
+    assert rig.gw.alive() or rc == 75, (
+        f"gateway died (rc={rc}) after the replayed /restart\n{rig.ctx()}"
+    )
     with rig.gate():
-        assert rig.gw.alive(), f"a redelivered /restart restarted the gateway again (exit 75)\n{rig.ctx()}"
-        assert len(notices()) == 1, (f"expected exactly one restart notice from the new process, got "
-                                     f"{notices()} (a second restart ack means the replayed /restart was obeyed)"
-                                     f"\n{rig.ctx()}")
+        assert rig.gw.alive(), (
+            f"a redelivered /restart restarted the gateway again (exit 75)\n{rig.ctx()}"
+        )
+        assert len(notices()) == 1, (
+            f"expected exactly one restart notice from the new process, got "
+            f"{notices()} (a second restart ack means the replayed /restart was obeyed)"
+            f"\n{rig.ctx()}"
+        )

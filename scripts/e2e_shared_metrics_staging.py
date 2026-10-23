@@ -67,9 +67,7 @@ def main() -> int:
     # today's period cannot be confirmed before it ends.
     from datetime import timedelta
 
-    period_day = (
-        datetime.now(UTC).date() - timedelta(days=1)
-    ).isoformat()
+    period_day = (datetime.now(UTC).date() - timedelta(days=1)).isoformat()
 
     # Open the consent window before the period, confirm it after — exactly
     # what the runtime reconciler does across two days of hook fires.
@@ -98,9 +96,7 @@ def main() -> int:
             "schema_version": "clawk.shared_metrics.v2",
             "package_id": package_id,
             "install_id": real_install_id,
-            "generated_at": datetime.now(UTC).isoformat().replace(
-                "+00:00", "Z"
-            ),
+            "generated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             "period_start": f"{period_day}T00:00:00Z",
             "period_end": f"{period_day}T23:59:59Z",
             "resource": {
@@ -147,8 +143,10 @@ def main() -> int:
     print()
 
     outcome = SharedMetricsSender(store, resolved.endpoint).send_pending()
-    print(f"outcome: sent={outcome.sent} rejected={outcome.rejected} "
-          f"deferred={outcome.deferred}")
+    print(
+        f"outcome: sent={outcome.sent} rejected={outcome.rejected} "
+        f"deferred={outcome.deferred}"
+    )
     print()
 
     failures = []
@@ -173,9 +171,7 @@ def main() -> int:
         # Product decision 2026-08-27: the stable install_id is transmitted
         # as-is; the transmitted value must be exactly the local id.
         if row[4] != real_install_id:
-            failures.append(
-                f"{row[0]} transmitted {row[4]!r}, expected the install_id"
-            )
+            failures.append(f"{row[0]} transmitted {row[4]!r}, expected the install_id")
         print()
 
     if failures:
@@ -187,9 +183,11 @@ def main() -> int:
     print("PASS: every package acknowledged 202 with the stable install_id.")
     print()
     print("Verify the objects in S3 with the package ids above:")
-    print("  aws s3 ls --recursive "
-          "s3://clawksis-agent-telemetry-staging-767397871023-us-west-2-an/raw/ "
-          "| tail -20")
+    print(
+        "  aws s3 ls --recursive "
+        "s3://clawksis-agent-telemetry-staging-767397871023-us-west-2-an/raw/ "
+        "| tail -20"
+    )
     return 0
 
 

@@ -43,11 +43,22 @@ class AgentPluginServerDeclaration:
     declaration: Declaration
     liveness: dict | None
 
+
 PLUGIN_SCHEMA_V1 = "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"
 MCP_SCHEMA_V1 = "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json"
 
-_PLUGIN_FIELDS = {"$schema", "name", "version", "description", "author", "homepage", "repository",
-                  "license", "keywords", "extensions"}
+_PLUGIN_FIELDS = {
+    "$schema",
+    "name",
+    "version",
+    "description",
+    "author",
+    "homepage",
+    "repository",
+    "license",
+    "keywords",
+    "extensions",
+}
 _AUTHOR_FIELDS = {"name", "email", "url"}
 _STDIO_FIELDS = {"type", "command", "args", "env", "cwd"}
 _REMOTE_FIELDS = {"type", "url", "headers"}
@@ -90,23 +101,41 @@ class AgentPluginPackage:
     diagnostics: tuple[AgentPluginDiagnostic, ...]
 
 
-_SERVER_DECLARATION_KEYS = frozenset({"app", "requires", "liveness", "trust", "timeout", "costs", "spend_limit", "cost_unit"})
+_SERVER_DECLARATION_KEYS = frozenset(
+    {
+        "app",
+        "requires",
+        "liveness",
+        "trust",
+        "timeout",
+        "costs",
+        "spend_limit",
+        "cost_unit",
+    }
+)
 # Clawksis call-policy keys: alone they configure a server, they do not declare an application.
-_SERVER_POLICY_KEYS = frozenset({"trust", "timeout", "costs", "spend_limit", "cost_unit"})
+_SERVER_POLICY_KEYS = frozenset(
+    {"trust", "timeout", "costs", "spend_limit", "cost_unit"}
+)
 
 
 def _server_declarations(
-    manifest: Mapping[str, Any], mcp_servers: Mapping[str, dict[str, Any]],
+    manifest: Mapping[str, Any],
+    mcp_servers: Mapping[str, dict[str, Any]],
     diagnostics: list[AgentPluginDiagnostic] | None = None,
 ) -> dict[str, AgentPluginServerDeclaration]:
     namespace = manifest.get("extensions", {}).get(_CLAWK_EXTENSION, {})
     raw_servers = namespace.get("servers", {})
     if not isinstance(raw_servers, dict):
-        raise AgentPluginError(f"extension '{_CLAWK_EXTENSION}'.servers must be an object")
+        raise AgentPluginError(
+            f"extension '{_CLAWK_EXTENSION}'.servers must be an object"
+        )
     declarations: dict[str, AgentPluginServerDeclaration] = {}
     for name, raw in raw_servers.items():
         if name not in mcp_servers:
-            raise AgentPluginError(f"server declaration '{name}' has no matching mcp.json server")
+            raise AgentPluginError(
+                f"server declaration '{name}' has no matching mcp.json server"
+            )
         if not isinstance(raw, dict):
             raise AgentPluginError(f"server declaration '{name}' must be an object")
         # A key added by a newer Clawksis must not make the package uninstallable here: the older
@@ -115,25 +144,35 @@ def _server_declarations(
         unknown = set(raw) - _SERVER_DECLARATION_KEYS
         if unknown:
             if diagnostics is not None:
-                diagnostics.append(AgentPluginDiagnostic(
-                    f"server:{name}", f"ignored unknown keys {sorted(unknown)} (needs a newer Clawksis)"))
+                diagnostics.append(
+                    AgentPluginDiagnostic(
+                        f"server:{name}",
+                        f"ignored unknown keys {sorted(unknown)} (needs a newer Clawksis)",
+                    )
+                )
             raw = {key: value for key, value in raw.items() if key not in unknown}
             if not raw:
                 continue
         if "liveness" in raw and "app" not in raw and "requires" not in raw:
-            raise AgentPluginError(f"server declaration '{name}' has liveness without app or requires")
+            raise AgentPluginError(
+                f"server declaration '{name}' has liveness without app or requires"
+            )
         if raw and set(raw) <= _SERVER_POLICY_KEYS:
             continue  # transport/policy settings alone do not declare an application
         try:
             declaration = parse_declaration(
-                name, raw.get("app"), raw.get("requires"),
+                name,
+                raw.get("app"),
+                raw.get("requires"),
                 where=f"plugin.json extension server {name!r}",
             )
         except ValueError as exc:
             raise AgentPluginError(str(exc)) from exc
         liveness = raw.get("liveness")
         if liveness is not None and not isinstance(liveness, dict):
-            raise AgentPluginError(f"server declaration '{name}' liveness must be an object")
+            raise AgentPluginError(
+                f"server declaration '{name}' liveness must be an object"
+            )
         declarations[name] = AgentPluginServerDeclaration(
             declaration=declaration,
             liveness=dict(liveness) if liveness is not None else None,
@@ -141,7 +180,9 @@ def _server_declarations(
     return declarations
 
 
-def _server_trust(manifest: Mapping[str, Any], mcp_servers: Mapping[str, dict[str, Any]]) -> dict[str, str]:
+def _server_trust(
+    manifest: Mapping[str, Any], mcp_servers: Mapping[str, dict[str, Any]]
+) -> dict[str, str]:
     """Servers the package asks Clawksis to gate: ``extensions.com.nousresearch.clawk.servers.<name>.trust``.
 
     The package may only narrow access. ``untrusted`` makes every write-capable call to that server
@@ -149,49 +190,74 @@ def _server_trust(manifest: Mapping[str, Any], mcp_servers: Mapping[str, dict[st
     nothing. A package can never widen a server the user configured: a ``config.yaml`` server with
     the same name replaces the package's entry, trust included.
     """
-    raw_servers = manifest.get("extensions", {}).get(_CLAWK_EXTENSION, {}).get("servers", {})
+    raw_servers = (
+        manifest.get("extensions", {}).get(_CLAWK_EXTENSION, {}).get("servers", {})
+    )
     trust: dict[str, str] = {}
-    for name, raw in (raw_servers.items() if isinstance(raw_servers, dict) else ()):
+    for name, raw in raw_servers.items() if isinstance(raw_servers, dict) else ():
         if not isinstance(raw, dict) or "trust" not in raw or name not in mcp_servers:
             continue  # shape errors are raised by _server_declarations
         value = raw["trust"]
         if value not in ("full", "untrusted"):
-            raise AgentPluginError(f"server declaration '{name}' trust must be 'untrusted' or 'full', not {value!r}")
+            raise AgentPluginError(
+                f"server declaration '{name}' trust must be 'untrusted' or 'full', not {value!r}"
+            )
         if value == "untrusted":
             trust[name] = value
     return trust
 
 
-def _server_timeouts(manifest: Mapping[str, Any], mcp_servers: Mapping[str, dict[str, Any]]) -> dict[str, float]:
+def _server_timeouts(
+    manifest: Mapping[str, Any], mcp_servers: Mapping[str, dict[str, Any]]
+) -> dict[str, float]:
     """Translate optional Clawksis call deadlines without changing other servers' defaults."""
-    raw_servers = manifest.get("extensions", {}).get(_CLAWK_EXTENSION, {}).get("servers", {})
+    raw_servers = (
+        manifest.get("extensions", {}).get(_CLAWK_EXTENSION, {}).get("servers", {})
+    )
     timeouts: dict[str, float] = {}
-    for name, raw in (raw_servers.items() if isinstance(raw_servers, dict) else ()):
+    for name, raw in raw_servers.items() if isinstance(raw_servers, dict) else ():
         if not isinstance(raw, dict) or "timeout" not in raw or name not in mcp_servers:
             continue
         value = raw["timeout"]
-        if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 < value <= threading.TIMEOUT_MAX:
-            raise AgentPluginError(f"server declaration '{name}' timeout must be positive seconds within the platform wait limit")
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not 0 < value <= threading.TIMEOUT_MAX
+        ):
+            raise AgentPluginError(
+                f"server declaration '{name}' timeout must be positive seconds within the platform wait limit"
+            )
         timeouts[name] = float(value)
     return timeouts
 
 
-def _server_costs(manifest: Mapping[str, Any], mcp_servers: Mapping[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+def _server_costs(
+    manifest: Mapping[str, Any], mcp_servers: Mapping[str, dict[str, Any]]
+) -> dict[str, dict[str, Any]]:
     """Translate ``costs``/``spend_limit``/``cost_unit`` into the native ``tool_costs``/``spend_limit``/``cost_unit``
     keys (``tools.mcp_tool_costs``). A malformed table disables the package: a budget the author declared must
     never be dropped while the server still spends."""
     from tools.mcp_tool_costs import parse_cost_policy
-    raw_servers = manifest.get("extensions", {}).get(_CLAWK_EXTENSION, {}).get("servers", {})
+
+    raw_servers = (
+        manifest.get("extensions", {}).get(_CLAWK_EXTENSION, {}).get("servers", {})
+    )
     translated: dict[str, dict[str, Any]] = {}
-    for name, raw in (raw_servers.items() if isinstance(raw_servers, dict) else ()):
+    for name, raw in raw_servers.items() if isinstance(raw_servers, dict) else ():
         if not isinstance(raw, dict) or name not in mcp_servers:
             continue
-        declared = {key: raw[key] for key in ("costs", "spend_limit", "cost_unit") if key in raw}
+        declared = {
+            key: raw[key] for key in ("costs", "spend_limit", "cost_unit") if key in raw
+        }
         if not declared:
             continue
         try:
-            parse_cost_policy(declared.get("costs"), declared.get("spend_limit"), declared.get("cost_unit"),
-                              where=f"server declaration '{name}'")
+            parse_cost_policy(
+                declared.get("costs"),
+                declared.get("spend_limit"),
+                declared.get("cost_unit"),
+                where=f"server declaration '{name}'",
+            )
         except ValueError as exc:
             raise AgentPluginError(str(exc)) from exc
         if "costs" in declared:
@@ -228,16 +294,28 @@ def _read_json_object(path: Path, *, label: str) -> dict:
 def _validate_manifest(root: Path) -> tuple[dict, list[AgentPluginDiagnostic]]:
     manifest_path = root / "plugin.json"
     if not _inside(manifest_path, root) or not manifest_path.is_file():
-        raise AgentPluginError("plugin.json must be a regular file within the plugin root")
+        raise AgentPluginError(
+            "plugin.json must be a regular file within the plugin root"
+        )
     manifest = _read_json_object(manifest_path, label="plugin.json")
     diagnostics: list[AgentPluginDiagnostic] = []
     for field in sorted(set(manifest) - _PLUGIN_FIELDS):
-        diagnostics.append(AgentPluginDiagnostic("manifest", f"ignored unknown top-level field: {field}"))
+        diagnostics.append(
+            AgentPluginDiagnostic(
+                "manifest", f"ignored unknown top-level field: {field}"
+            )
+        )
         manifest.pop(field)
     if manifest.get("$schema") != PLUGIN_SCHEMA_V1:
-        raise AgentPluginError("plugin.json declares an unsupported or missing Agent Plugins schema")
+        raise AgentPluginError(
+            "plugin.json declares an unsupported or missing Agent Plugins schema"
+        )
     name = manifest.get("name")
-    if not isinstance(name, str) or not 1 <= len(name) <= 64 or _PLUGIN_NAME_RE.fullmatch(name) is None:
+    if (
+        not isinstance(name, str)
+        or not 1 <= len(name) <= 64
+        or _PLUGIN_NAME_RE.fullmatch(name) is None
+    ):
         raise AgentPluginError("plugin.json name does not satisfy v1 constraints")
     for field in ("version", "description", "homepage", "repository", "license"):
         if field in manifest and not isinstance(manifest[field], str):
@@ -249,20 +327,30 @@ def _validate_manifest(root: Path) -> tuple[dict, list[AgentPluginDiagnostic]]:
     if not isinstance(author, dict):
         raise AgentPluginError("plugin.json author must be an object")
     if set(author) - _AUTHOR_FIELDS or not _all_str(author.values()):
-        raise AgentPluginError("plugin.json author may contain only string name, email, and url fields")
+        raise AgentPluginError(
+            "plugin.json author may contain only string name, email, and url fields"
+        )
     extensions = manifest.get("extensions", {})
     if not isinstance(extensions, dict):
-        diagnostics.append(AgentPluginDiagnostic("manifest", "ignored non-object extensions field"))
+        diagnostics.append(
+            AgentPluginDiagnostic("manifest", "ignored non-object extensions field")
+        )
         manifest.pop("extensions")
     elif any(not isinstance(value, dict) for value in extensions.values()):
         raise AgentPluginError("plugin.json extension namespace values must be objects")
     return manifest, diagnostics
 
 
-def _valid_skill_frontmatter(frontmatter: Mapping[str, Any], directory_name: str) -> str | None:
+def _valid_skill_frontmatter(
+    frontmatter: Mapping[str, Any], directory_name: str
+) -> str | None:
     name = frontmatter.get("name")
-    if (not isinstance(name, str) or name != directory_name or not 1 <= len(name) <= 64
-            or _SKILL_NAME_RE.fullmatch(name) is None):
+    if (
+        not isinstance(name, str)
+        or name != directory_name
+        or not 1 <= len(name) <= 64
+        or _SKILL_NAME_RE.fullmatch(name) is None
+    ):
         return "name must match the directory and satisfy Agent Skills constraints"
     description = frontmatter.get("description")
     if not isinstance(description, str) or not 1 <= len(description) <= 1024:
@@ -275,7 +363,9 @@ def _valid_skill_frontmatter(frontmatter: Mapping[str, Any], directory_name: str
             return "compatibility must be a string of 1 to 500 characters"
     if "metadata" in frontmatter and not _str_map(frontmatter["metadata"]):
         return "metadata must map string keys to string values"
-    if "allowed-tools" in frontmatter and not isinstance(frontmatter["allowed-tools"], str):
+    if "allowed-tools" in frontmatter and not isinstance(
+        frontmatter["allowed-tools"], str
+    ):
         return "allowed-tools must be a string"
     return None
 
@@ -297,17 +387,23 @@ def _parse_skill_frontmatter(skill_md: Path) -> dict:
     return parsed
 
 
-def _discover_skills(root: Path, diagnostics: list[AgentPluginDiagnostic]) -> tuple[AgentPluginSkill, ...]:
+def _discover_skills(
+    root: Path, diagnostics: list[AgentPluginDiagnostic]
+) -> tuple[AgentPluginSkill, ...]:
     skills_root = root / "skills"
     if not skills_root.exists() and not skills_root.is_symlink():
         return ()
     if not _inside(skills_root, root) or not skills_root.is_dir():
-        diagnostics.append(AgentPluginDiagnostic("skills", "skills must be an in-root directory"))
+        diagnostics.append(
+            AgentPluginDiagnostic("skills", "skills must be an in-root directory")
+        )
         return ()
     try:
         children = sorted(skills_root.iterdir(), key=lambda path: path.name)
     except OSError as exc:
-        diagnostics.append(AgentPluginDiagnostic("skills", f"cannot list skills: {exc}"))
+        diagnostics.append(
+            AgentPluginDiagnostic("skills", f"cannot list skills: {exc}")
+        )
         return ()
     skills: list[AgentPluginSkill] = []
     for child in children:
@@ -326,10 +422,15 @@ def _discover_skills(root: Path, diagnostics: list[AgentPluginDiagnostic]) -> tu
         if error:
             diagnostics.append(AgentPluginDiagnostic(f"skill:{child.name}", error))
             continue
-        skills.append(AgentPluginSkill(
-            name=child.name, description=frontmatter["description"],
-            root=child.resolve(strict=True), skill_md=skill_md.resolve(strict=True),
-            frontmatter=dict(frontmatter)))
+        skills.append(
+            AgentPluginSkill(
+                name=child.name,
+                description=frontmatter["description"],
+                root=child.resolve(strict=True),
+                skill_md=skill_md.resolve(strict=True),
+                frontmatter=dict(frontmatter),
+            )
+        )
     return tuple(skills)
 
 
@@ -338,8 +439,9 @@ def _expand(value: str, plugin_root: Path, data_root: Path) -> str:
     return _PLACEHOLDER_RE.sub(lambda match: replacements[match.group(1)], value)
 
 
-def _resolve_scoped_path(value: str, plugin_root: Path, data_root: Path, *,
-                         expand_placeholders: bool = True) -> Path:
+def _resolve_scoped_path(
+    value: str, plugin_root: Path, data_root: Path, *, expand_placeholders: bool = True
+) -> Path:
     expanded = _expand(value, plugin_root, data_root) if expand_placeholders else value
     if value.startswith("./"):
         base, candidate = plugin_root, plugin_root / expanded[2:]
@@ -360,10 +462,17 @@ def _resolve_scoped_path(value: str, plugin_root: Path, data_root: Path, *,
 def _validate_headers(headers: object) -> bool:
     if not isinstance(headers, dict):
         return headers is None
-    names = [name for name in headers if isinstance(name, str) and _HEADER_NAME_RE.fullmatch(name)]
+    names = [
+        name
+        for name in headers
+        if isinstance(name, str) and _HEADER_NAME_RE.fullmatch(name)
+    ]
     values = headers.values()
-    return (len(names) == len(headers) and len({name.lower() for name in names}) == len(names)
-            and all(isinstance(v, str) and "\r" not in v and "\n" not in v for v in values))
+    return (
+        len(names) == len(headers)
+        and len({name.lower() for name in names}) == len(names)
+        and all(isinstance(v, str) and "\r" not in v and "\n" not in v for v in values)
+    )
 
 
 def _validate_remote_url(url: object) -> str:
@@ -409,16 +518,23 @@ def _translate_remote(config: Mapping[str, Any]) -> dict[str, Any]:
     return translated
 
 
-def _translate_stdio(config: Mapping[str, Any], plugin_root: Path, data_root: Path,
-                     create_data: bool = False) -> dict[str, Any]:
+def _translate_stdio(
+    config: Mapping[str, Any],
+    plugin_root: Path,
+    data_root: Path,
+    create_data: bool = False,
+) -> dict[str, Any]:
     if set(config) - _STDIO_FIELDS:
         raise ValueError("unknown stdio field")
     command = config.get("command")
     if not isinstance(command, str) or not command or "\x00" in command:
         raise ValueError("command must be a non-empty executable token")
     if command.startswith("./"):
-        command = str(_resolve_scoped_path(command, plugin_root, data_root,
-                                           expand_placeholders=False))
+        command = str(
+            _resolve_scoped_path(
+                command, plugin_root, data_root, expand_placeholders=False
+            )
+        )
     elif any(character.isspace() for character in command):
         raise ValueError("command must contain one executable token")
     elif "/" in command or "\\" in command or command in {".", ".."}:
@@ -429,33 +545,55 @@ def _translate_stdio(config: Mapping[str, Any], plugin_root: Path, data_root: Pa
     env = config.get("env", {})
     if not _str_map(env):
         raise ValueError("env must map string keys to string values")
-    if {"PLUGIN_ROOT", "PLUGIN_DATA"} & {key.upper() if os.name == "nt" else key for key in env}:
+    if {"PLUGIN_ROOT", "PLUGIN_DATA"} & {
+        key.upper() if os.name == "nt" else key for key in env
+    }:
         raise ValueError("PLUGIN_ROOT and PLUGIN_DATA are reserved")
     cwd = config.get("cwd")
     if cwd is not None and not isinstance(cwd, str):
         raise ValueError("cwd must be a string")
-    cwd_path = plugin_root if cwd is None else _resolve_scoped_path(cwd, plugin_root, data_root)
+    cwd_path = (
+        plugin_root
+        if cwd is None
+        else _resolve_scoped_path(cwd, plugin_root, data_root)
+    )
     if create_data:
         data_root.mkdir(parents=True, exist_ok=True)
         # The MCP client starts stdio servers with this cwd. Create only data-root descendants;
         # plugin-root paths remain package-owned and are never made writable by discovery.
         if cwd_path.is_relative_to(data_root):
             cwd_path.mkdir(parents=True, exist_ok=True)
-    translated_env = {**{key: _expand(value, plugin_root, data_root) for key, value in env.items()},
-                      "PLUGIN_ROOT": str(plugin_root), "PLUGIN_DATA": str(data_root)}
-    return {"command": command, "args": [_expand(value, plugin_root, data_root) for value in args],
-            "env": translated_env, "cwd": str(cwd_path)}
+    translated_env = {
+        **{key: _expand(value, plugin_root, data_root) for key, value in env.items()},
+        "PLUGIN_ROOT": str(plugin_root),
+        "PLUGIN_DATA": str(data_root),
+    }
+    return {
+        "command": command,
+        "args": [_expand(value, plugin_root, data_root) for value in args],
+        "env": translated_env,
+        "cwd": str(cwd_path),
+    }
 
 
 def _reject_sse(server: Mapping[str, Any]) -> None:
-    if (set(server) - _REMOTE_FIELDS or not isinstance(server.get("url"), str)
-            or not server.get("url") or not _validate_headers(server.get("headers"))):
+    if (
+        set(server) - _REMOTE_FIELDS
+        or not isinstance(server.get("url"), str)
+        or not server.get("url")
+        or not _validate_headers(server.get("headers"))
+    ):
         raise ValueError("invalid remote entry")
     raise ValueError("portable sse transport is not supported")
 
 
-def _discover_mcp(root: Path, data_root: Path, diagnostics: list[AgentPluginDiagnostic], *,
-                  create_data: bool = True) -> dict[str, dict[str, Any]]:
+def _discover_mcp(
+    root: Path,
+    data_root: Path,
+    diagnostics: list[AgentPluginDiagnostic],
+    *,
+    create_data: bool = True,
+) -> dict[str, dict[str, Any]]:
     mcp_path = root / "mcp.json"
     if not mcp_path.exists() and not mcp_path.is_symlink():
         return {}
@@ -473,8 +611,11 @@ def _discover_mcp(root: Path, data_root: Path, diagnostics: list[AgentPluginDiag
     except ValueError as exc:
         diagnostics.append(AgentPluginDiagnostic("mcp", str(exc)))
         return {}
-    translators = {"stdio": lambda server: _translate_stdio(server, root, data_root, create_data),
-                   "streamable-http": _translate_remote, "sse": _reject_sse}
+    translators = {
+        "stdio": lambda server: _translate_stdio(server, root, data_root, create_data),
+        "streamable-http": _translate_remote,
+        "sse": _reject_sse,
+    }
     translated: dict[str, dict[str, Any]] = {}
     for name, server in servers.items():
         try:
@@ -510,9 +651,14 @@ def load_agent_plugin(plugin_root: Path, data_root: Path) -> AgentPluginPackage:
         mcp_servers[name] = {**mcp_servers[name], **costs}
     server_declarations = _server_declarations(manifest, mcp_servers, diagnostics)
     return AgentPluginPackage(
-        name=manifest["name"], version=manifest.get("version", ""),
-        description=manifest.get("description", ""), root=root, data_root=resolved_data,
-        manifest=dict(manifest), skills=skills, mcp_servers=mcp_servers,
+        name=manifest["name"],
+        version=manifest.get("version", ""),
+        description=manifest.get("description", ""),
+        root=root,
+        data_root=resolved_data,
+        manifest=dict(manifest),
+        skills=skills,
+        mcp_servers=mcp_servers,
         server_declarations=server_declarations,
         diagnostics=tuple(diagnostics),
     )
@@ -527,7 +673,9 @@ def manifest_config_schema(manifest: Any) -> Any:
     return clawk.get("config_schema") if isinstance(clawk, dict) else None
 
 
-def read_agent_plugin_manifest(plugin_root: Path) -> tuple[dict, tuple[AgentPluginDiagnostic, ...]]:
+def read_agent_plugin_manifest(
+    plugin_root: Path,
+) -> tuple[dict, tuple[AgentPluginDiagnostic, ...]]:
     """Validate only root ``plugin.json`` without discovering components."""
     _root, manifest, diagnostics = _validate_root(plugin_root)
     return manifest, tuple(diagnostics)
@@ -537,4 +685,5 @@ def has_enabled_agent_plugin_mcp(raw_config: Mapping[str, Any]) -> bool:
     """Import-compatible wrapper for the shared PluginManager MCP probe; directory scanning lives
     in :mod:`clawk_cli.plugins` so startup gating and full plugin discovery cannot drift apart."""
     from clawk_cli.plugins import has_enabled_agent_plugin_mcp as _probe
+
     return _probe(raw_config)

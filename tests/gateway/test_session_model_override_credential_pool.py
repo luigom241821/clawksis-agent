@@ -33,5 +33,3 @@ def test_fast_session_override_includes_credential_pool(monkeypatch):
 
     assert model == "kimi-k2.7"
     assert runtime.get("credential_pool") is fake_pool
-
-

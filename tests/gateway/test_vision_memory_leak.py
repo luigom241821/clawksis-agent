@@ -28,12 +28,14 @@ def gateway_runner():
 
 
 def _run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro) if False else asyncio.new_event_loop().run_until_complete(coro)
+    return (
+        asyncio.get_event_loop().run_until_complete(coro)
+        if False
+        else asyncio.new_event_loop().run_until_complete(coro)
+    )
 
 
 class TestEnrichMessageWithVision:
-
-
     def test_fenced_leak_stripped_plugin_header_preserved(self, gateway_runner):
         """The fenced wrapper is stripped; plugin-specific text outside the
         fence (e.g. a "## Honcho Context" header) is left to the plugin layer.
@@ -47,8 +49,13 @@ class TestEnrichMessageWithVision:
             "A photograph of a dog."
         )
         fake_result = json.dumps({"success": True, "analysis": leaked})
-        with patch("tools.vision_tools.vision_analyze_tool", new=AsyncMock(return_value=fake_result)):
-            out = _run(gateway_runner._enrich_message_with_vision("caption", ["/tmp/img.jpg"]))
+        with patch(
+            "tools.vision_tools.vision_analyze_tool",
+            new=AsyncMock(return_value=fake_result),
+        ):
+            out = _run(
+                gateway_runner._enrich_message_with_vision("caption", ["/tmp/img.jpg"])
+            )
         assert "photograph of a dog" in out
         assert "fenced leak" not in out
         assert "<memory-context>" not in out

@@ -54,8 +54,6 @@ class TestSendRequiresCollection:
         assert resolved.enabled is False
 
 
-
-
 class TestEndpointPrecedence:
     def test_config_endpoint_overrides_default(self):
         resolved = resolve_send_config(

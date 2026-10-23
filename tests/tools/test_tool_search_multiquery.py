@@ -43,17 +43,26 @@ def _register(name, toolset, desc="Deferred capability.", props=None, required=N
 def issue_defs():
     """A small deferred catalog registered under an MCP toolset."""
     return [
-        _register("mq_linear_create_issue", "mcp-mq-linear",
-                  "Create a new issue in a team.",
-                  {"title": {"type": "string"}, "team": {"type": "string"}},
-                  ["title", "team"]),
-        _register("mq_linear_list_issues", "mcp-mq-linear",
-                  "List issues in the workspace.",
-                  {"query": {"type": "string"}}),
-        _register("mq_slack_post_message", "mcp-mq-slack",
-                  "Post a message to a channel.",
-                  {"channel": {"type": "string"}, "text": {"type": "string"}},
-                  ["channel", "text"]),
+        _register(
+            "mq_linear_create_issue",
+            "mcp-mq-linear",
+            "Create a new issue in a team.",
+            {"title": {"type": "string"}, "team": {"type": "string"}},
+            ["title", "team"],
+        ),
+        _register(
+            "mq_linear_list_issues",
+            "mcp-mq-linear",
+            "List issues in the workspace.",
+            {"query": {"type": "string"}},
+        ),
+        _register(
+            "mq_slack_post_message",
+            "mcp-mq-slack",
+            "Post a message to a channel.",
+            {"channel": {"type": "string"}, "text": {"type": "string"}},
+            ["channel", "text"],
+        ),
     ]
 
 
@@ -65,6 +74,7 @@ def issue_defs():
 class TestStemming:
     def test_tokenize_stems_index_and_query_identically(self):
         from tools.tool_search_catalog import _tokenize
+
         # Same stem on both sides is the whole contract.
         assert _tokenize("issues") == _tokenize("issue")
         assert _tokenize("creating messages") == _tokenize("create message")
@@ -97,7 +107,6 @@ class TestStemming:
         catalog = build_catalog(issue_defs)
         assert search_catalog(catalog, "post gmail message", limit=5) == []
 
-
     def test_parallel_tokenize_search_and_dispatch_are_deterministic(self, issue_defs):
         from tools.tool_search import (
             ToolSearchConfig,
@@ -128,9 +137,11 @@ class TestStemming:
 
         def tokenize_and_search(index):
             text = corpus[index % len(corpus)]
-            return text, _tokenize(text), [
-                entry.name for entry in search_catalog(catalog, text, limit=3)
-            ]
+            return (
+                text,
+                _tokenize(text),
+                [entry.name for entry in search_catalog(catalog, text, limit=3)],
+            )
 
         _stem.cache_clear()
         misses_before = _stem.cache_info().misses
@@ -178,16 +189,14 @@ class TestStemming:
 
         def serial_baseline(salt):
             return [
-                _stem.__wrapped__(f"{word}x{salt}n{i}")
-                for i, word in enumerate(words)
+                _stem.__wrapped__(f"{word}x{salt}n{i}") for i, word in enumerate(words)
             ]
 
         expected = {salt: serial_baseline(salt) for salt in range(400)}
 
         def worker(salt):
             return salt, [
-                _stem.__wrapped__(f"{word}x{salt}n{i}")
-                for i, word in enumerate(words)
+                _stem.__wrapped__(f"{word}x{salt}n{i}") for i, word in enumerate(words)
             ]
 
         with ThreadPoolExecutor(max_workers=8) as pool:
@@ -209,22 +218,26 @@ class TestCatalogRanking:
             "Create a new issue with a title, body, assignees, labels, "
             "milestone, project metadata, and linked context for a repository.",
         )
-        catalog = build_catalog([
-            exact,
-            _td("github_create_issue_comment", "Comment."),
-            _td("github_create_issue_label", "Label."),
-        ])
+        catalog = build_catalog(
+            [
+                exact,
+                _td("github_create_issue_comment", "Comment."),
+                _td("github_create_issue_label", "Label."),
+            ]
+        )
 
         assert search_catalog(catalog, "github_create_issue", limit=1) == [catalog[0]]
 
     def test_exact_short_name_beats_prefixed_names(self):
         from tools.tool_search import build_catalog, search_catalog
 
-        catalog = build_catalog([
-            _td("list", "List one item."),
-            _td("list_x", "List x."),
-            _td("list_all_the_open_items", "List every open item."),
-        ])
+        catalog = build_catalog(
+            [
+                _td("list", "List one item."),
+                _td("list_x", "List x."),
+                _td("list_all_the_open_items", "List every open item."),
+            ]
+        )
 
         assert search_catalog(catalog, "list", limit=1) == [catalog[0]]
 
@@ -253,11 +266,13 @@ class TestMultiQuerySearch:
     def test_grouped_names_plus_shared_tool_map(self, issue_defs):
         from tools.tool_search import ToolSearchConfig, dispatch_tool_search
 
-        result = json.loads(dispatch_tool_search(
-            {"queries": ["create linear issue", "post slack message"]},
-            current_tool_defs=issue_defs,
-            config=ToolSearchConfig.from_raw({}),
-        ))
+        result = json.loads(
+            dispatch_tool_search(
+                {"queries": ["create linear issue", "post slack message"]},
+                current_tool_defs=issue_defs,
+                config=ToolSearchConfig.from_raw({}),
+            )
+        )
 
         assert result["queries"] == ["create linear issue", "post slack message"]
         assert result["total_available"] == 3
@@ -283,11 +298,13 @@ class TestMultiQuerySearch:
     def test_limit_applies_per_query(self, issue_defs):
         from tools.tool_search import ToolSearchConfig, dispatch_tool_search
 
-        result = json.loads(dispatch_tool_search(
-            {"queries": ["issues", "message"], "limit": 1},
-            current_tool_defs=issue_defs,
-            config=ToolSearchConfig.from_raw({}),
-        ))
+        result = json.loads(
+            dispatch_tool_search(
+                {"queries": ["issues", "message"], "limit": 1},
+                current_tool_defs=issue_defs,
+                config=ToolSearchConfig.from_raw({}),
+            )
+        )
         for group in result["results"]:
             assert len(group["matches"]) <= 1
 
@@ -297,20 +314,25 @@ class TestMultiQuerySearch:
         required = [f"field_{index}_" + ("x" * 5000) for index in range(200)]
         name = "mq_bounded_required_fields"
         tool_def = _register(name, "mcp-mq-bounds", required=required)
-        result = json.loads(dispatch_tool_search(
-            {"queries": [name]},
-            current_tool_defs=[tool_def],
-            config=ToolSearchConfig.from_raw({}),
-        ))
+        result = json.loads(
+            dispatch_tool_search(
+                {"queries": [name]},
+                current_tool_defs=[tool_def],
+                config=ToolSearchConfig.from_raw({}),
+            )
+        )
         record = result["tools"][name]
 
         assert len(record["required"]) <= 32
         assert all(len(item) <= 64 for item in record["required"])
 
-    @pytest.mark.parametrize("schema", [
-        {"function": "not an object"},
-        {"function": {"parameters": ["not", "an", "object"]}},
-    ])
+    @pytest.mark.parametrize(
+        "schema",
+        [
+            {"function": "not an object"},
+            {"function": {"parameters": ["not", "an", "object"]}},
+        ],
+    )
     def test_shared_record_handles_non_object_schema_fields(self, schema):
         from tools.tool_search import CatalogEntry, _shared_tool_record
 
@@ -327,11 +349,13 @@ class TestMultiQuerySearch:
     def test_partial_miss_adds_fallback_to_empty_group(self, issue_defs):
         from tools.tool_search import ToolSearchConfig, dispatch_tool_search
 
-        result = json.loads(dispatch_tool_search(
-            {"queries": ["issues", "zzzz nonsense qqqq"]},
-            current_tool_defs=issue_defs,
-            config=ToolSearchConfig.from_raw({}),
-        ))
+        result = json.loads(
+            dispatch_tool_search(
+                {"queries": ["issues", "zzzz nonsense qqqq"]},
+                current_tool_defs=issue_defs,
+                config=ToolSearchConfig.from_raw({}),
+            )
+        )
         assert result["results"][1]["matches"] == []
         assert "available_sources" not in result["results"][0]
         assert "hint" not in result["results"][0]
@@ -345,11 +369,13 @@ class TestMultiQuerySearch:
     def test_bare_string_query_coerced_to_single_query(self, issue_defs):
         from tools.tool_search import ToolSearchConfig, dispatch_tool_search
 
-        result = json.loads(dispatch_tool_search(
-            {"queries": "post slack message"},
-            current_tool_defs=issue_defs,
-            config=ToolSearchConfig.from_raw({}),
-        ))
+        result = json.loads(
+            dispatch_tool_search(
+                {"queries": "post slack message"},
+                current_tool_defs=issue_defs,
+                config=ToolSearchConfig.from_raw({}),
+            )
+        )
         assert result["queries"] == ["post slack message"]
 
     def test_max_query_cap_respected(self, issue_defs, monkeypatch):
@@ -357,11 +383,17 @@ class TestMultiQuerySearch:
 
         monkeypatch.setattr(tool_search, "_MAX_QUERIES_PER_CALL", 2)
         cfg = tool_search.ToolSearchConfig.from_raw({})
-        ok = json.loads(tool_search.dispatch_tool_search(
-            {"queries": ["a b", "c d"]}, current_tool_defs=issue_defs, config=cfg))
+        ok = json.loads(
+            tool_search.dispatch_tool_search(
+                {"queries": ["a b", "c d"]}, current_tool_defs=issue_defs, config=cfg
+            )
+        )
         assert "error" not in ok
-        over = json.loads(tool_search.dispatch_tool_search(
-            {"queries": ["a", "b", "c"]}, current_tool_defs=issue_defs, config=cfg))
+        over = json.loads(
+            tool_search.dispatch_tool_search(
+                {"queries": ["a", "b", "c"]}, current_tool_defs=issue_defs, config=cfg
+            )
+        )
         assert "error" in over
 
 
@@ -378,14 +410,24 @@ class TestBatchedDescribe:
         # the stale/out-of-scope case that lands in not_found.
         _register("mq_out_of_scope_op", "mcp-mq-elsewhere")
 
-        result = json.loads(dispatch_tool_describe(
-            {"names": ["mq_linear_create_issue", "mq_slack_post_message",
-                       "mq_out_of_scope_op", "mcp__bogus__missing"]},
-            current_tool_defs=issue_defs,
-            config=ToolSearchConfig.from_raw({}),
-        ))
-        assert set(result["tools"]) == {"mq_linear_create_issue",
-                                        "mq_slack_post_message"}
+        result = json.loads(
+            dispatch_tool_describe(
+                {
+                    "names": [
+                        "mq_linear_create_issue",
+                        "mq_slack_post_message",
+                        "mq_out_of_scope_op",
+                        "mcp__bogus__missing",
+                    ]
+                },
+                current_tool_defs=issue_defs,
+                config=ToolSearchConfig.from_raw({}),
+            )
+        )
+        assert set(result["tools"]) == {
+            "mq_linear_create_issue",
+            "mq_slack_post_message",
+        }
         schema = result["tools"]["mq_linear_create_issue"]
         assert schema["description"] == "Create a new issue in a team."
         assert schema["parameters"]["required"] == ["title", "team"]
@@ -402,17 +444,19 @@ class TestBatchedDescribe:
             _register("mcp__linear__get_issue", "mcp-linear"),
             _register("mcp__granola__list_meeting_folders", "mcp-granola"),
         ]
-        result = json.loads(dispatch_tool_describe(
-            {
-                "names": [
-                    "mcp__linear__get_issue",
-                    "mcp__granola__list_meeting_folders",
-                    "mcp__linear__does_not_exist_zzz",
-                ]
-            },
-            current_tool_defs=tool_defs,
-            config=ToolSearchConfig.from_raw({}),
-        ))
+        result = json.loads(
+            dispatch_tool_describe(
+                {
+                    "names": [
+                        "mcp__linear__get_issue",
+                        "mcp__granola__list_meeting_folders",
+                        "mcp__linear__does_not_exist_zzz",
+                    ]
+                },
+                current_tool_defs=tool_defs,
+                config=ToolSearchConfig.from_raw({}),
+            )
+        )
 
         assert set(result["tools"]) == {
             "mcp__linear__get_issue",
@@ -437,11 +481,13 @@ class TestBatchedDescribe:
             lambda name: None if name == "terminal" else real_get_entry(name),
         )
 
-        result = json.loads(dispatch_tool_describe(
-            {"names": ["terminal", "mq_linear_create_issue"]},
-            current_tool_defs=issue_defs,
-            config=ToolSearchConfig.from_raw({}),
-        ))
+        result = json.loads(
+            dispatch_tool_describe(
+                {"names": ["terminal", "mq_linear_create_issue"]},
+                current_tool_defs=issue_defs,
+                config=ToolSearchConfig.from_raw({}),
+            )
+        )
         assert "mq_linear_create_issue" in result["tools"]
         assert "terminal" in result["not_found"]
         assert "errors" not in result
@@ -451,11 +497,13 @@ class TestBatchedDescribe:
 
         name = "mq_desktop_direct_action"
         tool_def = _register(name, "desktop_ui")
-        result = json.loads(dispatch_tool_describe(
-            {"names": [name]},
-            current_tool_defs=[tool_def],
-            config=ToolSearchConfig.from_raw({}),
-        ))
+        result = json.loads(
+            dispatch_tool_describe(
+                {"names": [name]},
+                current_tool_defs=[tool_def],
+                config=ToolSearchConfig.from_raw({}),
+            )
+        )
 
         assert result["errors"][name]
         assert name not in result.get("not_found", [])
@@ -468,11 +516,13 @@ class TestBatchedDescribe:
             raise RuntimeError("registry unavailable")
 
         monkeypatch.setattr(registry, "get_entry", fail_lookup)
-        result = json.loads(dispatch_tool_describe(
-            {"names": ["mq_unknown_during_lookup"]},
-            current_tool_defs=[],
-            config=ToolSearchConfig.from_raw({}),
-        ))
+        result = json.loads(
+            dispatch_tool_describe(
+                {"names": ["mq_unknown_during_lookup"]},
+                current_tool_defs=[],
+                config=ToolSearchConfig.from_raw({}),
+            )
+        )
 
         assert result["not_found"] == ["mq_unknown_during_lookup"]
         assert "errors" not in result
@@ -480,11 +530,13 @@ class TestBatchedDescribe:
     def test_duplicates_deduped_silently(self, issue_defs):
         from tools.tool_search import ToolSearchConfig, dispatch_tool_describe
 
-        result = json.loads(dispatch_tool_describe(
-            {"names": ["mq_linear_create_issue", "mq_linear_create_issue"]},
-            current_tool_defs=issue_defs,
-            config=ToolSearchConfig.from_raw({}),
-        ))
+        result = json.loads(
+            dispatch_tool_describe(
+                {"names": ["mq_linear_create_issue", "mq_linear_create_issue"]},
+                current_tool_defs=issue_defs,
+                config=ToolSearchConfig.from_raw({}),
+            )
+        )
         assert list(result["tools"]) == ["mq_linear_create_issue"]
         assert "not_found" not in result
 
@@ -493,23 +545,34 @@ class TestBatchedDescribe:
 
         monkeypatch.setattr(tool_search, "_MAX_DESCRIBE_NAMES_PER_CALL", 2)
         cfg = tool_search.ToolSearchConfig.from_raw({})
-        assert "error" in json.loads(tool_search.dispatch_tool_describe(
-            {}, current_tool_defs=issue_defs, config=cfg))
-        assert "error" in json.loads(tool_search.dispatch_tool_describe(
-            {"names": []}, current_tool_defs=issue_defs, config=cfg))
-        over = [f'n{i:d}' for i in range(3)]
-        parsed = json.loads(tool_search.dispatch_tool_describe(
-            {"names": over}, current_tool_defs=issue_defs, config=cfg))
+        assert "error" in json.loads(
+            tool_search.dispatch_tool_describe(
+                {}, current_tool_defs=issue_defs, config=cfg
+            )
+        )
+        assert "error" in json.loads(
+            tool_search.dispatch_tool_describe(
+                {"names": []}, current_tool_defs=issue_defs, config=cfg
+            )
+        )
+        over = [f"n{i:d}" for i in range(3)]
+        parsed = json.loads(
+            tool_search.dispatch_tool_describe(
+                {"names": over}, current_tool_defs=issue_defs, config=cfg
+            )
+        )
         assert "error" in parsed
 
     def test_bare_string_name_coerced(self, issue_defs):
         from tools.tool_search import ToolSearchConfig, dispatch_tool_describe
 
-        result = json.loads(dispatch_tool_describe(
-            {"names": "mq_linear_create_issue"},
-            current_tool_defs=issue_defs,
-            config=ToolSearchConfig.from_raw({}),
-        ))
+        result = json.loads(
+            dispatch_tool_describe(
+                {"names": "mq_linear_create_issue"},
+                current_tool_defs=issue_defs,
+                config=ToolSearchConfig.from_raw({}),
+            )
+        )
         assert "mq_linear_create_issue" in result["tools"]
 
 

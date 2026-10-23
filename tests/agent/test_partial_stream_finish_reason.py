@@ -26,10 +26,13 @@ from agent.conversation_loop import _join_truncated_parts
 
 # ── Helpers (mirrors test_streaming.py) ────────────────────────────────────
 
+
 def _make_stream_chunk(content=None, tool_calls=None, finish_reason=None):
     delta = SimpleNamespace(
-        content=content, tool_calls=tool_calls,
-        reasoning_content=None, reasoning=None,
+        content=content,
+        tool_calls=tool_calls,
+        reasoning_content=None,
+        reasoning=None,
     )
     choice = SimpleNamespace(index=0, delta=delta, finish_reason=finish_reason)
     return SimpleNamespace(choices=[choice], model=None, usage=None)
@@ -42,6 +45,7 @@ def _make_tool_call_delta(index=0, tc_id=None, name=None, arguments=None):
 
 def _make_agent():
     from run_agent import AIAgent
+
     agent = AIAgent(
         api_key="test-key",
         base_url="https://example.com/v1",
@@ -57,13 +61,16 @@ def _make_agent():
 
 # ── Stub finish_reason ────────────────────────────────────────────────────
 
+
 class TestPartialStreamStubFinishReason:
     """The stub returned by interruptible_streaming_api_call when the
     upstream connection dies mid-flight."""
 
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
-    def test_text_only_partial_returns_length(self, _mock_close, mock_create, monkeypatch):
+    def test_text_only_partial_returns_length(
+        self, _mock_close, mock_create, monkeypatch
+    ):
         """#30963: text-only partials must classify as length so the loop
         keeps continuing instead of exiting with budget remaining."""
 
@@ -72,7 +79,9 @@ class TestPartialStreamStubFinishReason:
             raise RuntimeError("simulated upstream stall")
 
         mock_client = MagicMock()
-        mock_client.chat.completions.create.side_effect = lambda *a, **kw: _stalling_stream()
+        mock_client.chat.completions.create.side_effect = lambda *a, **kw: (
+            _stalling_stream()
+        )
         mock_create.return_value = mock_client
 
         agent = _make_agent()
@@ -107,7 +116,10 @@ class TestTerminalChunkFenceException:
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
     def test_superseded_writer_accepts_finish_reason_chunk(
-        self, _mock_close, mock_create, monkeypatch,
+        self,
+        _mock_close,
+        mock_create,
+        monkeypatch,
     ):
         monkeypatch.setenv("CLAWK_STREAM_RETRIES", "0")
         agent_box = {}
@@ -136,7 +148,10 @@ class TestTerminalChunkFenceException:
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
     def test_superseded_writer_still_fences_further_content(
-        self, _mock_close, mock_create, monkeypatch,
+        self,
+        _mock_close,
+        mock_create,
+        monkeypatch,
     ):
         monkeypatch.setenv("CLAWK_STREAM_RETRIES", "0")
         agent_box = {}
@@ -169,7 +184,10 @@ class TestTerminalChunkFenceException:
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
     def test_genuine_truncation_without_finish_still_drops(
-        self, _mock_close, mock_create, monkeypatch,
+        self,
+        _mock_close,
+        mock_create,
+        monkeypatch,
     ):
         monkeypatch.setenv("CLAWK_STREAM_RETRIES", "0")
 
@@ -194,6 +212,7 @@ class TestTerminalChunkFenceException:
 
 # ── Clean stream-end mid-tool-call (no exception, no finish_reason) ─────────
 
+
 class TestCleanStreamEndMidToolCall:
     """The upstream closes the SSE stream cleanly after delivering a tool
     name + the opening '{' of its arguments — NO exception, NO finish_reason,
@@ -210,24 +229,31 @@ class TestCleanStreamEndMidToolCall:
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
     def test_no_finish_reason_partial_tool_args_routes_to_stub(
-        self, _mock_close, mock_create, monkeypatch,
+        self,
+        _mock_close,
+        mock_create,
+        monkeypatch,
     ):
         def _clean_ending_stream():
             # Reasoning + tool name + the lone opening brace, then the
             # generator simply RETURNS (StopIteration) — no raise, no
             # finish_reason chunk, no [DONE].
             yield _make_stream_chunk(content="\n")
-            yield _make_stream_chunk(tool_calls=[
-                _make_tool_call_delta(index=0, tc_id="call_x", name="execute_code"),
-            ])
-            yield _make_stream_chunk(tool_calls=[
-                _make_tool_call_delta(index=0, arguments="{"),
-            ])
+            yield _make_stream_chunk(
+                tool_calls=[
+                    _make_tool_call_delta(index=0, tc_id="call_x", name="execute_code"),
+                ]
+            )
+            yield _make_stream_chunk(
+                tool_calls=[
+                    _make_tool_call_delta(index=0, arguments="{"),
+                ]
+            )
             # falls off the end — clean close, no terminator
 
         mock_client = MagicMock()
-        mock_client.chat.completions.create.side_effect = (
-            lambda *a, **kw: _clean_ending_stream()
+        mock_client.chat.completions.create.side_effect = lambda *a, **kw: (
+            _clean_ending_stream()
         )
         mock_create.return_value = mock_client
 
@@ -256,6 +282,7 @@ class TestCleanStreamEndMidToolCall:
 
 # ── Clean stream-end before any argument byte arrives (#80498) ─────────────
 
+
 class TestCleanStreamEndBeforeAnyToolArgs:
     """The upstream closes the SSE stream cleanly right after delivering the
     tool NAME — not a single byte of the arguments delta ever arrived, no
@@ -274,20 +301,25 @@ class TestCleanStreamEndBeforeAnyToolArgs:
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
     def test_empty_tool_args_routes_to_stub_not_silent_empty_object(
-        self, _mock_close, mock_create, monkeypatch,
+        self,
+        _mock_close,
+        mock_create,
+        monkeypatch,
     ):
         def _clean_ending_stream():
             # Tool name arrives, then the generator simply RETURNS
             # (StopIteration) before any arguments delta chunk — no raise,
             # no finish_reason chunk, no [DONE].
-            yield _make_stream_chunk(tool_calls=[
-                _make_tool_call_delta(index=0, tc_id="call_x", name="write_file"),
-            ])
+            yield _make_stream_chunk(
+                tool_calls=[
+                    _make_tool_call_delta(index=0, tc_id="call_x", name="write_file"),
+                ]
+            )
             # falls off the end — clean close, no terminator, zero args bytes
 
         mock_client = MagicMock()
-        mock_client.chat.completions.create.side_effect = (
-            lambda *a, **kw: _clean_ending_stream()
+        mock_client.chat.completions.create.side_effect = lambda *a, **kw: (
+            _clean_ending_stream()
         )
         mock_create.return_value = mock_client
 
@@ -312,6 +344,7 @@ class TestCleanStreamEndBeforeAnyToolArgs:
 
 # ── Mixed response: one complete call, one dropped (#80498) ─────────────────
 
+
 class TestMixedToolCallsOneDroppedOneComplete:
     """A single response can carry more than one tool call in parallel. If
     the stream dies before one call's arguments ever start while a sibling
@@ -329,26 +362,35 @@ class TestMixedToolCallsOneDroppedOneComplete:
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
     def test_valid_sibling_tool_call_is_discarded_with_dropped_one(
-        self, _mock_close, mock_create, monkeypatch,
+        self,
+        _mock_close,
+        mock_create,
+        monkeypatch,
     ):
         def _clean_ending_stream():
             # Tool call 0: complete, valid JSON arguments.
-            yield _make_stream_chunk(tool_calls=[
-                _make_tool_call_delta(index=0, tc_id="call_ok", name="read_file"),
-            ])
-            yield _make_stream_chunk(tool_calls=[
-                _make_tool_call_delta(index=0, arguments='{"path": "a.txt"}'),
-            ])
+            yield _make_stream_chunk(
+                tool_calls=[
+                    _make_tool_call_delta(index=0, tc_id="call_ok", name="read_file"),
+                ]
+            )
+            yield _make_stream_chunk(
+                tool_calls=[
+                    _make_tool_call_delta(index=0, arguments='{"path": "a.txt"}'),
+                ]
+            )
             # Tool call 1: name arrives, then the stream dies before a
             # single argument byte — the #80498 zero-byte case.
-            yield _make_stream_chunk(tool_calls=[
-                _make_tool_call_delta(index=1, tc_id="call_x", name="write_file"),
-            ])
+            yield _make_stream_chunk(
+                tool_calls=[
+                    _make_tool_call_delta(index=1, tc_id="call_x", name="write_file"),
+                ]
+            )
             # falls off the end — clean close, no terminator
 
         mock_client = MagicMock()
-        mock_client.chat.completions.create.side_effect = (
-            lambda *a, **kw: _clean_ending_stream()
+        mock_client.chat.completions.create.side_effect = lambda *a, **kw: (
+            _clean_ending_stream()
         )
         mock_create.return_value = mock_client
 
@@ -365,7 +407,8 @@ class TestMixedToolCallsOneDroppedOneComplete:
             "regenerates every call in it together."
         )
         assert getattr(response, "_dropped_tool_names", None) == [
-            "read_file", "write_file",
+            "read_file",
+            "write_file",
         ], (
             "_dropped_tool_names lists every tool call in the response, "
             "not just the one that actually failed to complete."
@@ -374,35 +417,36 @@ class TestMixedToolCallsOneDroppedOneComplete:
 
 # ── Length-continuation prompt branching ──────────────────────────────────
 
+
 class TestLengthContinuationAssembly:
     def test_distinct_continuation_is_preserved(self):
-        assert _join_truncated_parts([
-            ("The first half ends here", True),
-            ("and the second half adds new information.", False),
-        ]) == (
-            "The first half ends here\n"
-            "and the second half adds new information."
-        )
+        assert _join_truncated_parts(
+            [
+                ("The first half ends here", True),
+                ("and the second half adds new information.", False),
+            ]
+        ) == ("The first half ends here\nand the second half adds new information.")
 
     def test_repeated_tail_is_trimmed_without_losing_new_text(self):
         repeated = "A sufficiently long repeated transition sentence ends here."
 
-        assert _join_truncated_parts([
-            (f"Existing answer. {repeated}", True),
-            (f"{repeated} New inbound details remain visible.", False),
-        ]) == (
-            f"Existing answer. {repeated} New inbound details remain visible."
-        )
-
+        assert _join_truncated_parts(
+            [
+                (f"Existing answer. {repeated}", True),
+                (f"{repeated} New inbound details remain visible.", False),
+            ]
+        ) == (f"Existing answer. {repeated} New inbound details remain visible.")
 
 
 # ── Integration: live conversation loop ───────────────────────────────────
+
 
 @pytest.fixture()
 def loop_agent():
     """AIAgent with a mocked OpenAI client (mirrors test_run_agent's fixture)
     so we can stage a stub + continuation pair on .chat.completions.create."""
     from run_agent import AIAgent
+
     with (
         patch("model_tools.get_tool_definitions", return_value=[]),
         patch("model_tools.check_toolset_requirements", return_value={}),
@@ -443,23 +487,27 @@ class TestConversationLoopPartialStreamContinuation:
         partial_stub = SimpleNamespace(
             id=PARTIAL_STREAM_STUB_ID,
             model="test/model",
-            choices=[SimpleNamespace(
-                index=0,
-                message=_mock_assistant_msg(
-                    content=f"The first half of the answer is forty-two.\n\n{repeated_tail}"
-                ),
-                finish_reason=FINISH_REASON_LENGTH,
-            )],
+            choices=[
+                SimpleNamespace(
+                    index=0,
+                    message=_mock_assistant_msg(
+                        content=f"The first half of the answer is forty-two.\n\n{repeated_tail}"
+                    ),
+                    finish_reason=FINISH_REASON_LENGTH,
+                )
+            ],
             usage=None,
         )
         # Second API call: the model restarts from the complete-looking tail
         # even though the nudge said not to repeat it, then stops cleanly.
         continuation = _mock_response(
-            content=repeated_tail, finish_reason="stop",
+            content=repeated_tail,
+            finish_reason="stop",
         )
 
         loop_agent.client.chat.completions.create.side_effect = [
-            partial_stub, continuation,
+            partial_stub,
+            continuation,
         ]
 
         with (
@@ -479,9 +527,12 @@ class TestConversationLoopPartialStreamContinuation:
         # no-ops with "I wasn't truncated, I'm done."
         # We assert it indirectly by inspecting the second-call kwargs.
         second_call_kwargs = loop_agent.client.chat.completions.create.call_args_list[1]
-        msgs = second_call_kwargs.kwargs.get("messages") or second_call_kwargs.args[0].get("messages")
+        msgs = second_call_kwargs.kwargs.get("messages") or second_call_kwargs.args[
+            0
+        ].get("messages")
         last_user = next(
-            (m for m in reversed(msgs) if m.get("role") == "user"), None,
+            (m for m in reversed(msgs) if m.get("role") == "user"),
+            None,
         )
         assert last_user is not None
         assert "network error mid-stream" in (last_user.get("content") or ""), (
@@ -494,12 +545,17 @@ class TestConversationLoopPartialStreamContinuation:
         assert "forty-two" in result["final_response"]
         assert result["final_response"].count(repeated_tail) == 1
 
-    def test_output_limit_continuation_preserves_intentional_repetition(self, loop_agent):
+    def test_output_limit_continuation_preserves_intentional_repetition(
+        self, loop_agent
+    ):
         from tests.agent.test_run_agent import _mock_response
 
-        repeated = "This intentionally repeated sentence is longer than thirty-two characters."
+        repeated = (
+            "This intentionally repeated sentence is longer than thirty-two characters."
+        )
         first = _mock_response(
-            content=f"First copy: {repeated}", finish_reason=FINISH_REASON_LENGTH,
+            content=f"First copy: {repeated}",
+            finish_reason=FINISH_REASON_LENGTH,
         )
         continuation = _mock_response(content=repeated, finish_reason="stop")
         loop_agent.client.chat.completions.create.side_effect = [first, continuation]
@@ -537,24 +593,31 @@ class TestContentFilterStallActivatesFallback:
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
     def test_streaming_call_tags_content_filter_stub(
-        self, _mock_close, mock_create, monkeypatch,
+        self,
+        _mock_close,
+        mock_create,
+        monkeypatch,
     ):
         """Layer 2: the real streaming path stamps _content_filter_terminated
         when the swallowed error matches a content-filter pattern."""
 
         def _minimax_stall():
             yield _make_stream_chunk(content="Writing the file: ")
-            yield _make_stream_chunk(tool_calls=[
-                _make_tool_call_delta(index=0, tc_id="call_1", name="write_file"),
-            ])
-            yield _make_stream_chunk(tool_calls=[
-                _make_tool_call_delta(index=0, arguments='{"path": "/tmp/x", '),
-            ])
+            yield _make_stream_chunk(
+                tool_calls=[
+                    _make_tool_call_delta(index=0, tc_id="call_1", name="write_file"),
+                ]
+            )
+            yield _make_stream_chunk(
+                tool_calls=[
+                    _make_tool_call_delta(index=0, arguments='{"path": "/tmp/x", '),
+                ]
+            )
             raise RuntimeError("output new_sensitive (1027) [MiniMax-M2.7]")
 
         mock_client = MagicMock()
-        mock_client.chat.completions.create.side_effect = (
-            lambda *a, **kw: _minimax_stall()
+        mock_client.chat.completions.create.side_effect = lambda *a, **kw: (
+            _minimax_stall()
         )
         mock_create.return_value = mock_client
 
@@ -571,7 +634,6 @@ class TestContentFilterStallActivatesFallback:
             "can route to fallback (#32421)."
         )
 
-
     def test_tagged_stub_activates_fallback_first_pass(self, loop_agent):
         """Layer 3: a tagged stub activates fallback on the FIRST pass, with
         zero continuation retries burned, and the fallback provider then
@@ -582,21 +644,25 @@ class TestContentFilterStallActivatesFallback:
             return SimpleNamespace(
                 id=PARTIAL_STREAM_STUB_ID,
                 model="minimax/MiniMax-M2.7",
-                choices=[SimpleNamespace(
-                    index=0,
-                    message=_mock_assistant_msg(content="Writing the file..."),
-                    finish_reason=FINISH_REASON_LENGTH,
-                )],
+                choices=[
+                    SimpleNamespace(
+                        index=0,
+                        message=_mock_assistant_msg(content="Writing the file..."),
+                        finish_reason=FINISH_REASON_LENGTH,
+                    )
+                ],
                 usage=None,
                 _dropped_tool_names=["write_file"],
                 _content_filter_terminated=True,
             )
 
         recovery = _mock_response(
-            content="Done on the fallback provider.", finish_reason="stop",
+            content="Done on the fallback provider.",
+            finish_reason="stop",
         )
         loop_agent.client.chat.completions.create.side_effect = [
-            _filter_stub(), recovery,
+            _filter_stub(),
+            recovery,
         ]
         loop_agent._fallback_chain = [
             {"provider": "openrouter", "model": "anthropic/claude-sonnet-4.7"},
@@ -613,8 +679,9 @@ class TestContentFilterStallActivatesFallback:
             patch.object(loop_agent, "_persist_session"),
             patch.object(loop_agent, "_save_trajectory"),
             patch.object(loop_agent, "_cleanup_task_resources"),
-            patch.object(loop_agent, "_try_activate_fallback",
-                         side_effect=_fake_activate),
+            patch.object(
+                loop_agent, "_try_activate_fallback", side_effect=_fake_activate
+            ),
         ):
             result = loop_agent.run_conversation("write me a long file")
 
@@ -651,20 +718,24 @@ class TestEmptyPartialStreamStubNotPersisted:
         empty_stub = SimpleNamespace(
             id=PARTIAL_STREAM_STUB_ID,
             model="test/model",
-            choices=[SimpleNamespace(
-                index=0,
-                message=_mock_assistant_msg(content=""),
-                finish_reason=FINISH_REASON_LENGTH,
-            )],
+            choices=[
+                SimpleNamespace(
+                    index=0,
+                    message=_mock_assistant_msg(content=""),
+                    finish_reason=FINISH_REASON_LENGTH,
+                )
+            ],
             usage=None,
             _dropped_tool_names=["write_file"],
         )
         # Second API call: the model answers normally after the nudge.
-        recovery = _mock_response(content="Done — wrote it in chunks.",
-                                  finish_reason="stop")
+        recovery = _mock_response(
+            content="Done — wrote it in chunks.", finish_reason="stop"
+        )
 
         loop_agent.client.chat.completions.create.side_effect = [
-            empty_stub, recovery,
+            empty_stub,
+            recovery,
         ]
 
         with (
@@ -680,10 +751,11 @@ class TestEmptyPartialStreamStubNotPersisted:
         # empty-content assistant message anywhere — that is the exact shape
         # Moonshot 400s on.
         second_call_kwargs = loop_agent.client.chat.completions.create.call_args_list[1]
-        msgs = second_call_kwargs.kwargs.get("messages") or second_call_kwargs.args[0].get("messages")
+        msgs = second_call_kwargs.kwargs.get("messages") or second_call_kwargs.args[
+            0
+        ].get("messages")
         empty_assistants = [
-            m for m in msgs
-            if m.get("role") == "assistant" and not m.get("content")
+            m for m in msgs if m.get("role") == "assistant" and not m.get("content")
         ]
         assert empty_assistants == [], (
             "Empty partial-stream stub must not be persisted as an "
@@ -694,7 +766,8 @@ class TestEmptyPartialStreamStubNotPersisted:
         # The continuation nudge is still appended as a user message, and
         # it's the chunking variant (dropped tool call), not the length lie.
         last_user = next(
-            (m for m in reversed(msgs) if m.get("role") == "user"), None,
+            (m for m in reversed(msgs) if m.get("role") == "user"),
+            None,
         )
         assert last_user is not None
         assert "too large" in (last_user.get("content") or "")
@@ -712,6 +785,7 @@ class TestBuildAssistantMessageEmptyContentPad:
 
     def _agent_for_builder(self):
         from run_agent import AIAgent
+
         with (
             patch("model_tools.get_tool_definitions", return_value=[]),
             patch("model_tools.check_toolset_requirements", return_value={}),
@@ -737,7 +811,6 @@ class TestBuildAssistantMessageEmptyContentPad:
             "by repair_empty_non_final_messages at the send boundary."
         )
         assert isinstance(msg["timestamp"], float)
-
 
     def test_tool_call_turn_content_left_empty(self):
         from agent.chat_completion_helpers import build_assistant_message
@@ -768,8 +841,10 @@ class TestSendTimeEmptyAssistantPad:
 
     def _run_one_turn_with_history(self, loop_agent, history):
         from tests.agent.test_run_agent import _mock_response
+
         loop_agent.client.chat.completions.create.return_value = _mock_response(
-            content="ok", finish_reason="stop",
+            content="ok",
+            finish_reason="stop",
         )
         with (
             patch.object(loop_agent, "_persist_session"),
@@ -777,7 +852,8 @@ class TestSendTimeEmptyAssistantPad:
             patch.object(loop_agent, "_cleanup_task_resources"),
         ):
             loop_agent.run_conversation(
-                "continue", conversation_history=history,
+                "continue",
+                conversation_history=history,
             )
         kwargs = loop_agent.client.chat.completions.create.call_args_list[0]
         return kwargs.kwargs.get("messages") or kwargs.args[0].get("messages")
@@ -792,7 +868,8 @@ class TestSendTimeEmptyAssistantPad:
         ]
         sent = self._run_one_turn_with_history(loop_agent, poisoned)
         empties = [
-            m for m in sent
+            m
+            for m in sent
             if m.get("role") == "assistant"
             and not m.get("tool_calls")
             and not (m.get("content") or "").strip()
@@ -803,11 +880,15 @@ class TestSendTimeEmptyAssistantPad:
             "reject the replay with HTTP 400 otherwise."
         )
         stub = next(
-            (m for m in sent if m.get("role") == "assistant"
-             and not m.get("tool_calls")),
+            (
+                m
+                for m in sent
+                if m.get("role") == "assistant" and not m.get("tool_calls")
+            ),
             None,
         )
         from agent.agent_runtime_helpers_placeholders import _INTERRUPTED_PLACEHOLDER
+
         assert stub is not None and stub["content"] == _INTERRUPTED_PLACEHOLDER
 
     def test_tool_call_turn_not_padded_on_send(self, loop_agent):
@@ -816,10 +897,13 @@ class TestSendTimeEmptyAssistantPad:
             {
                 "role": "assistant",
                 "content": "",
-                "tool_calls": [{
-                    "id": "call_1", "type": "function",
-                    "function": {"name": "web_search", "arguments": "{}"},
-                }],
+                "tool_calls": [
+                    {
+                        "id": "call_1",
+                        "type": "function",
+                        "function": {"name": "web_search", "arguments": "{}"},
+                    }
+                ],
             },
             {"role": "tool", "tool_call_id": "call_1", "content": "result"},
             {"role": "user", "content": "and now?"},
@@ -852,18 +936,29 @@ class TestSendTimePadMultimodalSafety:
 
     def test_multimodal_assistant_content_not_touched(self, loop_agent):
         from tests.agent.test_run_agent import _mock_response
+
         multimodal = [
             {"role": "user", "content": "look at this"},
-            {"role": "assistant", "content": [
-                {"type": "text", "text": "I see an image"},
-            ]},
-            {"role": "user", "content": [
-                {"type": "text", "text": "animate it"},
-                {"type": "image_url", "image_url": {"url": "data:image/png;base64,iVBORw0KGgo="}},
-            ]},
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "text", "text": "I see an image"},
+                ],
+            },
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "animate it"},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/png;base64,iVBORw0KGgo="},
+                    },
+                ],
+            },
         ]
         loop_agent.client.chat.completions.create.return_value = _mock_response(
-            content="ok", finish_reason="stop",
+            content="ok",
+            finish_reason="stop",
         )
         with (
             patch.object(loop_agent, "_persist_session"),
@@ -871,7 +966,8 @@ class TestSendTimePadMultimodalSafety:
             patch.object(loop_agent, "_cleanup_task_resources"),
         ):
             result = loop_agent.run_conversation(
-                "animate it", conversation_history=multimodal,
+                "animate it",
+                conversation_history=multimodal,
             )
         assert result["completed"] is True
         kwargs = loop_agent.client.chat.completions.create.call_args_list[0]
@@ -879,8 +975,7 @@ class TestSendTimePadMultimodalSafety:
         # The assistant turn survives with its text intact — regardless of
         # whether upstream passes flattened it to a str or kept the list.
         mm = next(
-            m for m in sent
-            if m.get("role") == "assistant" and not m.get("tool_calls")
+            m for m in sent if m.get("role") == "assistant" and not m.get("tool_calls")
         )
         c = mm["content"]
         if isinstance(c, list):
@@ -898,6 +993,7 @@ class TestSendTimePadMultimodalSafety:
         str turn is repaired; tool-call turns are exempt."""
         from agent.agent_runtime_helpers import repair_empty_non_final_messages
         from agent.agent_runtime_helpers_placeholders import _INTERRUPTED_PLACEHOLDER
+
         api_messages = [
             {"role": "assistant", "content": [{"type": "text", "text": "hi"}]},
             {"role": "assistant", "content": ""},
@@ -929,8 +1025,8 @@ class TestPortalLastOneWithoutDone:
             )
 
         mock_client = MagicMock()
-        mock_client.chat.completions.create.side_effect = (
-            lambda *a, **kw: _portal_stream()
+        mock_client.chat.completions.create.side_effect = lambda *a, **kw: (
+            _portal_stream()
         )
         mock_create.return_value = mock_client
 
@@ -945,6 +1041,7 @@ class TestPortalLastOneWithoutDone:
 
 # ── Trailing usage chunk with no finish_reason (#91373) ───────────────────
 
+
 class TestStreamIncludeUsageFinalChunk:
     """OpenAI / vLLM streaming with stream_options={'include_usage': True} emits
     a final usage-only chunk with empty choices (choices=[]) and no finish_reason.
@@ -955,20 +1052,28 @@ class TestStreamIncludeUsageFinalChunk:
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
     def test_text_stream_with_final_usage_chunk_completes_as_stop(
-        self, _mock_close, mock_create, monkeypatch,
+        self,
+        _mock_close,
+        mock_create,
+        monkeypatch,
     ):
         """When text is streamed and the final chunk is a usage-only chunk
         without finish_reason, the completion must complete with finish_reason='stop'
         instead of returning PARTIAL_STREAM_STUB_ID."""
+
         def _vllm_stream():
             # Chunks 1 and 2: text deltas with finish_reason=None
             yield _make_stream_chunk(content="The final answer is 42.")
             # Chunk 3: trailing usage-only chunk (choices=[], usage present)
-            usage = SimpleNamespace(prompt_tokens=100, completion_tokens=10, total_tokens=110)
+            usage = SimpleNamespace(
+                prompt_tokens=100, completion_tokens=10, total_tokens=110
+            )
             yield SimpleNamespace(choices=[], model="vllm/test-model", usage=usage)
 
         mock_client = MagicMock()
-        mock_client.chat.completions.create.side_effect = lambda *a, **kw: _vllm_stream()
+        mock_client.chat.completions.create.side_effect = lambda *a, **kw: (
+            _vllm_stream()
+        )
         mock_create.return_value = mock_client
 
         agent = _make_agent()
@@ -985,17 +1090,23 @@ class TestStreamIncludeUsageFinalChunk:
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
     def test_text_stream_abrupt_drop_without_usage_still_returns_stub(
-        self, _mock_close, mock_create, monkeypatch,
+        self,
+        _mock_close,
+        mock_create,
+        monkeypatch,
     ):
         """When text is streamed but the connection is severed before any usage
         chunk arrives (usage is None and finish_reason is None), it remains
         correctly classified as a partial stream stub."""
+
         def _dropped_stream():
             yield _make_stream_chunk(content="Partial text before drop")
             # Stream ends abruptly without finish_reason and without usage
 
         mock_client = MagicMock()
-        mock_client.chat.completions.create.side_effect = lambda *a, **kw: _dropped_stream()
+        mock_client.chat.completions.create.side_effect = lambda *a, **kw: (
+            _dropped_stream()
+        )
         mock_create.return_value = mock_client
 
         agent = _make_agent()
@@ -1010,12 +1121,16 @@ class TestStreamIncludeUsageFinalChunk:
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
     def test_reasoning_only_abrupt_drop_without_usage_still_returns_stub(
-        self, _mock_close, mock_create, monkeypatch,
+        self,
+        _mock_close,
+        mock_create,
+        monkeypatch,
     ):
         """A stream severed while still reasoning (only ``delta.reasoning`` frames,
         no finish_reason, no usage) is a drop, not a clean stop: stamping "stop"
         would let the reasoning-only clean-stop promotion surface the truncated
         thought as the final answer instead of entering the continuation ladder."""
+
         def _dropped_stream():
             for text in ("Let me think about", " the question carefully, first"):
                 chunk = _make_stream_chunk()
@@ -1023,7 +1138,9 @@ class TestStreamIncludeUsageFinalChunk:
                 yield chunk
 
         mock_client = MagicMock()
-        mock_client.chat.completions.create.side_effect = lambda *a, **kw: _dropped_stream()
+        mock_client.chat.completions.create.side_effect = lambda *a, **kw: (
+            _dropped_stream()
+        )
         mock_create.return_value = mock_client
 
         agent = _make_agent()
@@ -1040,6 +1157,7 @@ class TestStreamIncludeUsageFinalChunk:
 
 # ── Merged-finish content chunk swallowed by the SSE-echo guard (#94614) ──
 
+
 class TestMergedFinishChunkSurvivesSSEGuard:
     """vLLM >= 0.1.dev20051 merges finish_reason into the final CONTENT
     chunk instead of a separate marker-only chunk. When the SSE-echo guard
@@ -1052,7 +1170,10 @@ class TestMergedFinishChunkSurvivesSSEGuard:
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
     def test_merged_finish_chunk_after_sse_lookalike_prefix_completes(
-        self, _mock_close, mock_create, monkeypatch,
+        self,
+        _mock_close,
+        mock_create,
+        monkeypatch,
     ):
         def _vllm_merged_finish_stream():
             # ':' then ' uniform' engage the SSE-echo guard (may_be_sse True)
@@ -1062,8 +1183,8 @@ class TestMergedFinishChunkSurvivesSSEGuard:
             yield _make_stream_chunk(content=".", finish_reason="stop")
 
         mock_client = MagicMock()
-        mock_client.chat.completions.create.side_effect = (
-            lambda *a, **kw: _vllm_merged_finish_stream()
+        mock_client.chat.completions.create.side_effect = lambda *a, **kw: (
+            _vllm_merged_finish_stream()
         )
         mock_create.return_value = mock_client
 
@@ -1078,7 +1199,10 @@ class TestMergedFinishChunkSurvivesSSEGuard:
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
     def test_merged_finish_chunk_without_sse_trigger_still_completes(
-        self, _mock_close, mock_create, monkeypatch,
+        self,
+        _mock_close,
+        mock_create,
+        monkeypatch,
     ):
         """Control: the same merged-finish shape without an SSE-lookalike
         prefix must keep completing (guard never engages)."""
@@ -1088,8 +1212,8 @@ class TestMergedFinishChunkSurvivesSSEGuard:
             yield _make_stream_chunk(content=".", finish_reason="stop")
 
         mock_client = MagicMock()
-        mock_client.chat.completions.create.side_effect = (
-            lambda *a, **kw: _plain_merged_finish_stream()
+        mock_client.chat.completions.create.side_effect = lambda *a, **kw: (
+            _plain_merged_finish_stream()
         )
         mock_create.return_value = mock_client
 
@@ -1124,27 +1248,35 @@ class TestRouterRewriteTruncationMessageIsHonest:
         msg = SimpleNamespace(
             role="assistant",
             content="",
-            tool_calls=[SimpleNamespace(
-                id="call_1", type="function",
-                function=SimpleNamespace(name="terminal", arguments='{"cmd": "ls'),
-            )],
+            tool_calls=[
+                SimpleNamespace(
+                    id="call_1",
+                    type="function",
+                    function=SimpleNamespace(name="terminal", arguments='{"cmd": "ls'),
+                )
+            ],
             reasoning_content=None,
         )
         return SimpleNamespace(
             id="gen-router-rewrite-xyz",
             model="deepseek/deepseek-v4-flash",
-            choices=[SimpleNamespace(
-                index=0, message=msg, finish_reason="tool_calls",
-            )],
+            choices=[
+                SimpleNamespace(
+                    index=0,
+                    message=msg,
+                    finish_reason="tool_calls",
+                )
+            ],
             usage=None,
         )
 
     def test_router_rewrite_truncation_does_not_claim_output_length_limit(
-        self, loop_agent,
+        self,
+        loop_agent,
     ):
         loop_agent.valid_tool_names = {"terminal"}
-        loop_agent.client.chat.completions.create.side_effect = (
-            lambda *a, **kw: self._router_rewrite_response()
+        loop_agent.client.chat.completions.create.side_effect = lambda *a, **kw: (
+            self._router_rewrite_response()
         )
 
         with (
@@ -1166,9 +1298,9 @@ class TestRouterRewriteTruncationMessageIsHonest:
         assert "output length limit" not in error
         # The honest message names the real suspect (raw finish_reason stays in the diagnostic log).
         assert "finish_reason" not in final
-        assert (
-            "transport" in final or "router" in final
-        ), "Honest message must point at transport/router corruption."
+        assert "transport" in final or "router" in final, (
+            "Honest message must point at transport/router corruption."
+        )
         # Recovery invariants preserved: incomplete tool args never execute.
         assert result["completed"] is False
         assert result["partial"] is True
@@ -1182,10 +1314,13 @@ class TestRouterRewriteTruncationMessageIsHonest:
         msg = SimpleNamespace(
             role="assistant",
             content="",
-            tool_calls=[SimpleNamespace(
-                id="call_1", type="function",
-                function=SimpleNamespace(name="terminal", arguments='{"cmd": "ls'),
-            )],
+            tool_calls=[
+                SimpleNamespace(
+                    id="call_1",
+                    type="function",
+                    function=SimpleNamespace(name="terminal", arguments='{"cmd": "ls'),
+                )
+            ],
             reasoning_content=None,
         )
         return SimpleNamespace(
@@ -1201,8 +1336,8 @@ class TestRouterRewriteTruncationMessageIsHonest:
         wording — scenario 1 in the issue's table is correct and must not
         regress from the honest-message fix."""
         loop_agent.valid_tool_names = {"terminal"}
-        loop_agent.client.chat.completions.create.side_effect = (
-            lambda *a, **kw: self._genuine_length_truncated_tool_call()
+        loop_agent.client.chat.completions.create.side_effect = lambda *a, **kw: (
+            self._genuine_length_truncated_tool_call()
         )
 
         with (

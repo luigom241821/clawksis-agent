@@ -5,7 +5,9 @@ from datetime import datetime, timezone, UTC
 import threading
 
 
-def test_passed_gate_tick_and_queued_job_remain_busy_until_real_worker_exit(tmp_path, monkeypatch):
+def test_passed_gate_tick_and_queued_job_remain_busy_until_real_worker_exit(
+    tmp_path, monkeypatch
+):
     from cron import jobs, scheduler
     from clawk_cli import backend_retirement
 
@@ -13,8 +15,17 @@ def test_passed_gate_tick_and_queued_job_remain_busy_until_real_worker_exit(tmp_
     monkeypatch.setattr(backend_retirement, "retirement", fence)
     script = tmp_path / "job.py"
     script.write_text("print('no model')\n")
-    job = jobs.create_job(prompt=None, schedule=datetime.now(UTC).isoformat(), script=str(script), no_agent=True)
-    for name in ("_maybe_run_worktree_maintenance", "_sweep_mcp_orphans", "_maybe_reap_dead_owners"):
+    job = jobs.create_job(
+        prompt=None,
+        schedule=datetime.now(UTC).isoformat(),
+        script=str(script),
+        no_agent=True,
+    )
+    for name in (
+        "_maybe_run_worktree_maintenance",
+        "_sweep_mcp_orphans",
+        "_maybe_reap_dead_owners",
+    ):
         monkeypatch.setattr(scheduler, name, lambda: None)
     monkeypatch.setattr(scheduler, "_should_yield_tick_to_fresh_gateway", lambda: None)
     reached, release_tick, running, release_job = (threading.Event() for _ in range(4))
@@ -33,9 +44,17 @@ def test_passed_gate_tick_and_queued_job_remain_busy_until_real_worker_exit(tmp_
 
     monkeypatch.setattr(scheduler, "get_due_jobs", get_due_jobs)
     monkeypatch.setattr(scheduler, "_process_due_job", process_job)
-    with ThreadPoolExecutor(max_workers=1) as pool, ThreadPoolExecutor(max_workers=1) as ticker:
+    with (
+        ThreadPoolExecutor(max_workers=1) as pool,
+        ThreadPoolExecutor(max_workers=1) as ticker,
+    ):
         monkeypatch.setattr(scheduler, "_get_parallel_pool", lambda *args: pool)
-        tick = ticker.submit(scheduler.tick, verbose=False, sync=False, can_dispatch=lambda: gate_calls.append(True) or True)
+        tick = ticker.submit(
+            scheduler.tick,
+            verbose=False,
+            sync=False,
+            can_dispatch=lambda: gate_calls.append(True) or True,
+        )
         try:
             assert reached.wait(10)
             assert gate_calls

@@ -15,7 +15,9 @@ import sys
 import os
 
 # 确保 clawksis-agent 根目录在 sys.path 中
-_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_REPO_ROOT = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
@@ -50,6 +52,7 @@ from plugins.platforms.yuanbao.yuanbao_proto import (
 # 1. varint 编解码
 # ===========================================================
 
+
 class TestVarint:
     def test_small_values(self):
         for v in [0, 1, 127, 128, 255, 300, 16383, 16384, 2**21, 2**28]:
@@ -58,13 +61,10 @@ class TestVarint:
             assert decoded == v, f"round-trip failed for {v}"
             assert pos == len(encoded)
 
-
-
     def test_known_values(self):
         # protobuf spec examples
         # 300 => 0xAC 0x02
         assert _encode_varint(300) == bytes([0xAC, 0x02])
-
 
     def test_partial_decode(self):
         # 在 offset 处解码
@@ -78,6 +78,7 @@ class TestVarint:
 # 2. conn 层 round-trip
 # ===========================================================
 
+
 class TestConnCodec:
     def test_basic_round_trip(self):
         payload = b"hello world"
@@ -86,10 +87,6 @@ class TestConnCodec:
         assert decoded["msg_type"] == 0
         assert decoded["seq_no"] == 42
         assert decoded["data"] == payload
-
-
-
-
 
     # 固定 bytes 常量测试——防协议悄悄改动
     def test_fixed_bytes_simple(self):
@@ -103,13 +100,14 @@ class TestConnCodec:
         # head: field 3 (seq_no=1) => tag=0x18, value=0x01
         head_content = bytes([0x18, 0x01])
         # outer field 1 (head message)
-        expected = bytes([0x0a, len(head_content)]) + head_content
+        expected = bytes([0x0A, len(head_content)]) + head_content
         assert enc == expected, f"got: {enc.hex()}, expected: {expected.hex()}"
 
 
 # ===========================================================
 # 3. biz 层 round-trip
 # ===========================================================
+
 
 class TestBizCodec:
     def test_round_trip(self):
@@ -141,10 +139,10 @@ class TestBizCodec:
         assert dec["is_response"] is True
 
 
-
 # ===========================================================
 # 4. MsgContent / MsgBodyElement 编解码
 # ===========================================================
+
 
 class TestMsgBodyElement:
     def test_text_elem_round_trip(self):
@@ -156,7 +154,6 @@ class TestMsgBodyElement:
         decoded = _decode_msg_body_element(encoded)
         assert decoded["msg_type"] == "TIMTextElem"
         assert decoded["msg_content"]["text"] == "Hello, 世界!"
-
 
     def test_file_elem_round_trip(self):
         el = {
@@ -171,8 +168,6 @@ class TestMsgBodyElement:
         dec = _decode_msg_body_element(enc)
         assert dec["msg_content"]["file_name"] == "document.pdf"
         assert dec["msg_content"]["file_size"] == 204800
-
-
 
     def test_fixed_text_elem_bytes(self):
         """
@@ -191,13 +186,15 @@ class TestMsgBodyElement:
         # msg_type = "TIMTextElem" (11 bytes)
         type_bytes = b"TIMTextElem"
         # MsgContent: field1(text="hi") = tag(0a) + len(02) + "hi"
-        content_inner = bytes([0x0a, 0x02]) + b"hi"
+        content_inner = bytes([0x0A, 0x02]) + b"hi"
         # MsgBodyElement:
         # field1: tag=0x0a, len=11, type_bytes
         # field2: tag=0x12, len=len(content_inner), content_inner
         expected = (
-            bytes([0x0a, len(type_bytes)]) + type_bytes
-            + bytes([0x12, len(content_inner)]) + content_inner
+            bytes([0x0A, len(type_bytes)])
+            + type_bytes
+            + bytes([0x12, len(content_inner)])
+            + content_inner
         )
         assert enc == expected, f"got {enc.hex()}, expected {expected.hex()}"
 
@@ -205,6 +202,7 @@ class TestMsgBodyElement:
 # ===========================================================
 # 5. decode_inbound_push 测试
 # ===========================================================
+
 
 class TestDecodeInboundPush:
     def _build_inbound_push_bytes(
@@ -218,9 +216,14 @@ class TestDecodeInboundPush:
     ) -> bytes:
         """手工构造 InboundMessagePush bytes（与 proto 字段顺序一致）"""
         from plugins.platforms.yuanbao.yuanbao_proto import (
-            _encode_field, _encode_string, _encode_message,
-            _encode_varint, WT_LEN, WT_VARINT,
+            _encode_field,
+            _encode_string,
+            _encode_message,
+            _encode_varint,
+            WT_LEN,
+            WT_VARINT,
         )
+
         el = {
             "msg_type": "TIMTextElem",
             "msg_content": {"text": text},
@@ -228,13 +231,13 @@ class TestDecodeInboundPush:
         el_bytes = _encode_msg_body_element(el)
 
         buf = b""
-        buf += _encode_field(2, WT_LEN, _encode_string(from_account))   # from_account
-        buf += _encode_field(3, WT_LEN, _encode_string(to_account))     # to_account
+        buf += _encode_field(2, WT_LEN, _encode_string(from_account))  # from_account
+        buf += _encode_field(3, WT_LEN, _encode_string(to_account))  # to_account
         if group_code:
-            buf += _encode_field(6, WT_LEN, _encode_string(group_code)) # group_code
-        buf += _encode_field(8, WT_VARINT, _encode_varint(msg_seq))     # msg_seq
-        buf += _encode_field(11, WT_LEN, _encode_string(msg_key))       # msg_key
-        buf += _encode_field(13, WT_LEN, _encode_message(el_bytes))     # msg_body[0]
+            buf += _encode_field(6, WT_LEN, _encode_string(group_code))  # group_code
+        buf += _encode_field(8, WT_VARINT, _encode_varint(msg_seq))  # msg_seq
+        buf += _encode_field(11, WT_LEN, _encode_string(msg_key))  # msg_key
+        buf += _encode_field(13, WT_LEN, _encode_message(el_bytes))  # msg_body[0]
         return buf
 
     def test_basic_c2c_text_message(self):
@@ -255,7 +258,6 @@ class TestDecodeInboundPush:
         assert result["msg_body"][0]["msg_type"] == "TIMTextElem"
         assert result["msg_body"][0]["msg_content"]["text"] == "你好"
 
-
     def test_returns_none_on_empty(self):
         # 空 bytes 应返回空字段 dict，而不是 None
         result = decode_inbound_push(b"")
@@ -264,8 +266,11 @@ class TestDecodeInboundPush:
 
     def test_multiple_msg_body_elements(self):
         from plugins.platforms.yuanbao.yuanbao_proto import (
-            _encode_field, _encode_message, WT_LEN,
+            _encode_field,
+            _encode_message,
+            WT_LEN,
         )
+
         el1 = _encode_msg_body_element(
             {"msg_type": "TIMTextElem", "msg_content": {"text": "part1"}}
         )
@@ -289,11 +294,10 @@ class TestDecodeInboundPush:
 # ===========================================================
 
 
-
-
 # ===========================================================
 # 7. AuthBind / Ping 编码
 # ===========================================================
+
 
 class TestAuthAndPing:
     def test_encode_auth_bind(self):
@@ -342,9 +346,8 @@ class TestAuthAndPing:
 # 8. 常量验证
 # ===========================================================
 
+
 class TestConstants:
-
-
     def test_cmd_type_values(self):
         assert CMD_TYPE["Request"] == 0
         assert CMD_TYPE["Response"] == 1
@@ -352,10 +355,10 @@ class TestConstants:
         assert CMD_TYPE["PushAck"] == 3
 
 
-
 # ===========================================================
 # 9. seq_no 生成
 # ===========================================================
+
 
 class TestSeqNo:
     def test_monotonic(self):
@@ -367,6 +370,7 @@ class TestSeqNo:
 
     def test_thread_safety(self):
         import threading
+
         results = []
         lock = threading.Lock()
 
@@ -390,6 +394,7 @@ class TestSeqNo:
 # 10. 完整端到端流程（模拟 send -> recv）
 # ===========================================================
 
+
 class TestEndToEnd:
     def test_send_recv_c2c(self):
         """模拟发送 C2C 消息，然后（在接收方）解码"""
@@ -410,19 +415,20 @@ class TestEndToEnd:
 
         # 从 biz payload 中读取 to_account 和 msg_body
         from plugins.platforms.yuanbao.yuanbao_proto import (
-            _get_string, _get_repeated_bytes
+            _get_string,
+            _get_repeated_bytes,
         )
+
         biz = dec["data"]
         fdict = _fields_to_dict(_parse_fields(biz))
-        assert _get_string(fdict, 2) == "recv_user"   # to_account
-        assert _get_string(fdict, 3) == "send_bot"    # from_account
+        assert _get_string(fdict, 2) == "recv_user"  # to_account
+        assert _get_string(fdict, 3) == "send_bot"  # from_account
 
-        el_list = _get_repeated_bytes(fdict, 5)       # msg_body repeated
+        el_list = _get_repeated_bytes(fdict, 5)  # msg_body repeated
         assert len(el_list) == 1
         el_dec = _decode_msg_body_element(el_list[0])
         assert el_dec["msg_type"] == "TIMTextElem"
         assert el_dec["msg_content"]["text"] == "端到端测试"
-
 
 
 if __name__ == "__main__":

@@ -68,9 +68,7 @@ def _drive_connect(monkeypatch, *, proxy_url, fallback_ips=None):
         return list(fallback_ips or [])
 
     monkeypatch.setattr(tg_adapter, "discover_fallback_ips", _no_fallback)
-    monkeypatch.setattr(
-        tg_adapter, "resolve_proxy_url", lambda *a, **k: proxy_url
-    )
+    monkeypatch.setattr(tg_adapter, "resolve_proxy_url", lambda *a, **k: proxy_url)
     # Replace the real HTTPXRequest with our recorder.
     monkeypatch.setattr(tg_adapter, "HTTPXRequest", _RecordingHTTPXRequest)
 
@@ -151,9 +149,13 @@ def test_all_ptb_clients_share_the_platform_ssl_context(monkeypatch):
     for proxy_url in ("http://127.0.0.1:9/", None):
         instances = _drive_connect(monkeypatch, proxy_url=proxy_url)
         assert len(instances) >= 2
-        assert all(inst.kwargs["httpx_kwargs"].get("verify") is shared for inst in instances)
+        assert all(
+            inst.kwargs["httpx_kwargs"].get("verify") is shared for inst in instances
+        )
 
-    instances = _drive_connect(monkeypatch, proxy_url=None, fallback_ips=["149.154.167.220"])
+    instances = _drive_connect(
+        monkeypatch, proxy_url=None, fallback_ips=["149.154.167.220"]
+    )
     assert len(instances) >= 2
     for inst in instances:
         transport = inst.kwargs["httpx_kwargs"]["transport"]
@@ -162,6 +164,7 @@ def test_all_ptb_clients_share_the_platform_ssl_context(monkeypatch):
 
     # The DoH discovery client verifies with the same context.
     from plugins.platforms.telegram import telegram_network as tg_net
+
     seen = {}
 
     def _record_client(**kwargs):

@@ -82,7 +82,9 @@ def _install_fake_tools_package():
 
 def _install_fake_fal_client(captured):
     def submit(model, arguments=None, headers=None):
-        raise AssertionError("managed FAL gateway mode should use fal_client.SyncClient")
+        raise AssertionError(
+            "managed FAL gateway mode should use fal_client.SyncClient"
+        )
 
     class FakeResponse:
         def json(self):
@@ -103,7 +105,9 @@ def _install_fake_fal_client(captured):
         captured["headers"] = headers
         return FakeResponse()
 
-    def _maybe_retry_request(client, method, url, json=None, timeout=None, headers=None):
+    def _maybe_retry_request(
+        client, method, url, json=None, timeout=None, headers=None
+    ):
         return _capture_request(client, method, url, json, timeout, headers)
 
     class FakeHttpClient:
@@ -160,12 +164,8 @@ def _install_fake_openai_module(captured, transcription_response=None):
                 return transcription_response
 
             self.audio = types.SimpleNamespace(
-                speech=types.SimpleNamespace(
-                    create=create_speech
-                ),
-                transcriptions=types.SimpleNamespace(
-                    create=create_transcription
-                ),
+                speech=types.SimpleNamespace(create=create_speech),
+                transcriptions=types.SimpleNamespace(create=create_transcription),
             )
 
         def close(self):
@@ -205,7 +205,7 @@ def test_managed_fal_submit_uses_gateway_origin_and_nous_token(monkeypatch):
         "image_generation_tool.py",
     )
     monkeypatch.setattr(image_generation_tool.uuid, "uuid4", lambda: "fal-submit-123")
-    
+
     image_generation_tool._submit_fal_request(
         "fal-ai/flux-2-pro",
         {"prompt": "test prompt", "num_images": 1},
@@ -220,7 +220,9 @@ def test_managed_fal_submit_uses_gateway_origin_and_nous_token(monkeypatch):
     assert captured["sync_client_inits"] == 1
 
 
-def test_openai_tts_uses_managed_audio_gateway_when_direct_key_absent(monkeypatch, tmp_path):
+def test_openai_tts_uses_managed_audio_gateway_when_direct_key_absent(
+    monkeypatch, tmp_path
+):
     captured = {}
     _install_fake_tools_package()
     _install_fake_openai_module(captured)
@@ -230,14 +232,18 @@ def test_openai_tts_uses_managed_audio_gateway_when_direct_key_absent(monkeypatc
     monkeypatch.setenv("TOOL_GATEWAY_USER_TOKEN", "nous-token")
 
     tts_tool = _load_tool_module("tools.tts_tool", "tts_tool.py")
-    monkeypatch.setattr(sys.modules["tools.tts_tool_openai"].uuid, "uuid4", lambda: "tts-call-123")
+    monkeypatch.setattr(
+        sys.modules["tools.tts_tool_openai"].uuid, "uuid4", lambda: "tts-call-123"
+    )
     output_path = tmp_path / "speech.mp3"
     tts_tool._generate_openai_tts("hello world", str(output_path), {"openai": {}})
 
     assert captured["api_key"] == "nous-token"
     assert captured["base_url"] == "https://openai-audio-gateway.nousresearch.com/v1"
     assert captured["speech_kwargs"]["model"] == "gpt-4o-mini-tts"
-    assert captured["speech_kwargs"]["extra_headers"] == {"x-idempotency-key": "tts-call-123"}
+    assert captured["speech_kwargs"]["extra_headers"] == {
+        "x-idempotency-key": "tts-call-123"
+    }
     assert captured["stream_to_file"] == str(output_path)
     assert captured["close_calls"] == 1
 
@@ -263,7 +269,9 @@ def test_openai_tts_accepts_openai_api_key_as_direct_fallback(monkeypatch, tmp_p
 def test_transcription_uses_model_specific_response_formats(monkeypatch, tmp_path):
     whisper_capture = {}
     _install_fake_tools_package()
-    _install_fake_openai_module(whisper_capture, transcription_response="hello from whisper")
+    _install_fake_openai_module(
+        whisper_capture, transcription_response="hello from whisper"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     # The managed audio route is the stored "nous" selection (strict model);
     # a stored "openai" selection now means direct credentials only.
@@ -281,9 +289,14 @@ def test_transcription_uses_model_specific_response_formats(monkeypatch, tmp_pat
     audio_path = tmp_path / "audio.wav"
     audio_path.write_bytes(b"RIFF0000WAVEfmt ")
 
-    whisper_result = transcription_tools.transcribe_audio(str(audio_path), model="whisper-1")
+    whisper_result = transcription_tools.transcribe_audio(
+        str(audio_path), model="whisper-1"
+    )
     assert whisper_result["success"] is True
-    assert whisper_capture["base_url"] == "https://openai-audio-gateway.nousresearch.com/v1"
+    assert (
+        whisper_capture["base_url"]
+        == "https://openai-audio-gateway.nousresearch.com/v1"
+    )
     assert whisper_capture["transcription_kwargs"]["response_format"] == "text"
     assert whisper_capture["close_calls"] == 1
 
@@ -357,5 +370,9 @@ def test_video_gen_happy_horse_uses_alibaba_namespace():
     spec.loader.exec_module(plugin_mod)
 
     hh = plugin_mod.FAL_FAMILIES["happy-horse"]
-    assert hh["text_endpoint"].startswith("alibaba/happy-horse/") and hh["text_endpoint"].endswith("/text-to-video")
-    assert hh["image_endpoint"].startswith("alibaba/happy-horse/") and hh["image_endpoint"].endswith("/image-to-video")
+    assert hh["text_endpoint"].startswith("alibaba/happy-horse/") and hh[
+        "text_endpoint"
+    ].endswith("/text-to-video")
+    assert hh["image_endpoint"].startswith("alibaba/happy-horse/") and hh[
+        "image_endpoint"
+    ].endswith("/image-to-video")

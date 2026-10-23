@@ -40,10 +40,14 @@ def _write_groq_provider_config(
 
 
 def _jwt_with_email(email: str) -> str:
-    header = base64.urlsafe_b64encode(b'{"alg":"RS256","typ":"JWT"}').rstrip(b"=").decode()
-    payload = base64.urlsafe_b64encode(
-        json.dumps({"email": email}).encode()
-    ).rstrip(b"=").decode()
+    header = (
+        base64.urlsafe_b64encode(b'{"alg":"RS256","typ":"JWT"}').rstrip(b"=").decode()
+    )
+    payload = (
+        base64.urlsafe_b64encode(json.dumps({"email": email}).encode())
+        .rstrip(b"=")
+        .decode()
+    )
     return f"{header}.{payload}.signature"
 
 
@@ -154,14 +158,13 @@ def test_auth_add_migrates_legacy_prefixed_key_for_configured_provider(
 
     payload = json.loads((clawk_home / "auth.json").read_text(encoding="utf-8"))
     assert "custom:groq" not in payload["credential_pool"]
-    assert {
-        entry["access_token"] for entry in payload["credential_pool"]["groq"]
-    } == {"gsk-legacy", "gsk-new"}
+    assert {entry["access_token"] for entry in payload["credential_pool"]["groq"]} == {
+        "gsk-legacy",
+        "gsk-new",
+    }
 
 
-def test_auth_add_migrates_display_name_derived_legacy_pool_key(
-    tmp_path, monkeypatch
-):
+def test_auth_add_migrates_display_name_derived_legacy_pool_key(tmp_path, monkeypatch):
     clawk_home = tmp_path / "clawk"
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
     monkeypatch.delenv("GROQ_API_KEY", raising=False)
@@ -200,8 +203,7 @@ def test_auth_add_migrates_display_name_derived_legacy_pool_key(
     payload = json.loads((clawk_home / "auth.json").read_text(encoding="utf-8"))
     assert "custom:groq" not in payload["credential_pool"]
     assert {
-        entry["access_token"]
-        for entry in payload["credential_pool"]["groq-cloud"]
+        entry["access_token"] for entry in payload["credential_pool"]["groq-cloud"]
     } == {"gsk-legacy", "gsk-new"}
 
 
@@ -283,7 +285,9 @@ def test_interactive_auth_add_normalizes_display_name_to_provider_key(
 
     answers = iter(["Groq Enterprise", "primary"])
     monkeypatch.setattr(auth_commands, "line_input", lambda _prompt: next(answers))
-    monkeypatch.setattr(auth_commands, "masked_secret_prompt", lambda _prompt: "gsk-test")
+    monkeypatch.setattr(
+        auth_commands, "masked_secret_prompt", lambda _prompt: "gsk-test"
+    )
 
     auth_commands._interactive_add()
 
@@ -370,9 +374,7 @@ def test_auth_add_nous_oauth_persists_pool_entry(tmp_path, monkeypatch):
     # pair of `manual:device_code` + `device_code` (the latter would be
     # materialised by _seed_from_singletons on every load_pool).
     entries = payload["credential_pool"]["nous"]
-    device_code_entries = [
-        item for item in entries if item["source"] == "device_code"
-    ]
+    device_code_entries = [item for item in entries if item["source"] == "device_code"]
     assert len(device_code_entries) == 1, entries
     assert not any(item["source"] == "manual:device_code" for item in entries)
     entry = device_code_entries[0]
@@ -526,20 +528,42 @@ def test_auth_add_codex_oauth_keeps_distinct_pool_accounts(tmp_path, monkeypatch
 
 
 def _codex_jwt(email: str, account_id: str, subject: str) -> str:
-    header = base64.urlsafe_b64encode(b'{"alg":"RS256","typ":"JWT"}').rstrip(b"=").decode()
-    claims = {"email": email, "sub": subject, "https://api.openai.com/auth": {"chatgpt_account_id": account_id}}
-    payload = base64.urlsafe_b64encode(json.dumps(claims).encode()).rstrip(b"=").decode()
+    header = (
+        base64.urlsafe_b64encode(b'{"alg":"RS256","typ":"JWT"}').rstrip(b"=").decode()
+    )
+    claims = {
+        "email": email,
+        "sub": subject,
+        "https://api.openai.com/auth": {"chatgpt_account_id": account_id},
+    }
+    payload = (
+        base64.urlsafe_b64encode(json.dumps(claims).encode()).rstrip(b"=").decode()
+    )
     return f"{header}.{payload}.signature"
 
 
 def _add_codex_twice(tmp_path, monkeypatch, capsys, second_token: str) -> str:
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk"))
     _write_auth_store(tmp_path, {"version": 1, "providers": {}})
-    codex_login = {"base_url": "https://chatgpt.com/backend-api/codex", "last_refresh": "2026-09-01T00:00:00Z"}
-    logins = iter([
-        {"tokens": {"access_token": _codex_jwt("me@example.com", "acct-A", "user-1"), "refresh_token": "rt-1"}, **codex_login},
-        {"tokens": {"access_token": second_token, "refresh_token": "rt-2"}, **codex_login},
-    ])
+    codex_login = {
+        "base_url": "https://chatgpt.com/backend-api/codex",
+        "last_refresh": "2026-09-01T00:00:00Z",
+    }
+    logins = iter(
+        [
+            {
+                "tokens": {
+                    "access_token": _codex_jwt("me@example.com", "acct-A", "user-1"),
+                    "refresh_token": "rt-1",
+                },
+                **codex_login,
+            },
+            {
+                "tokens": {"access_token": second_token, "refresh_token": "rt-2"},
+                **codex_login,
+            },
+        ]
+    )
     monkeypatch.setattr("clawk_cli.auth._codex_device_code_login", lambda: next(logins))
     from clawk_cli.auth_commands import auth_add_command
 
@@ -555,7 +579,9 @@ def _add_codex_twice(tmp_path, monkeypatch, capsys, second_token: str) -> str:
     return capsys.readouterr().err
 
 
-def test_auth_add_codex_warns_when_login_is_same_account_as_pooled_entry(tmp_path, monkeypatch, capsys):
+def test_auth_add_codex_warns_when_login_is_same_account_as_pooled_entry(
+    tmp_path, monkeypatch, capsys
+):
     """A second ``clawk auth add openai-codex`` for the SAME OpenAI account must tell the user
     which existing credential it duplicates (#47096): the two logins share one token family and
     the provider revokes the older one, so the extra entry buys no quota. Different accounts
@@ -563,7 +589,9 @@ def test_auth_add_codex_warns_when_login_is_same_account_as_pooled_entry(tmp_pat
     """
     from agent.credential_pool import load_pool
 
-    err = _add_codex_twice(tmp_path, monkeypatch, capsys, _codex_jwt("me@example.com", "acct-A", "user-1"))
+    err = _add_codex_twice(
+        tmp_path, monkeypatch, capsys, _codex_jwt("me@example.com", "acct-A", "user-1")
+    )
     assert "me@example.com" in err
     # The warning informs; it never blocks the add.
     assert len(load_pool("openai-codex").entries()) == 2
@@ -585,7 +613,11 @@ def test_codex_runtime_pool_only_rate_limit_is_not_missing_auth(tmp_path, monkey
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk"))
     _write_auth_store(tmp_path, _codex_pool_only_store(exhausted=True))
 
-    from clawk_cli.auth import AuthError, CODEX_RATE_LIMITED_CODE, resolve_codex_runtime_credentials
+    from clawk_cli.auth import (
+        AuthError,
+        CODEX_RATE_LIMITED_CODE,
+        resolve_codex_runtime_credentials,
+    )
 
     with pytest.raises(AuthError) as exc_info:
         resolve_codex_runtime_credentials()
@@ -811,7 +843,9 @@ def test_clear_provider_auth_removes_provider_pool_entries(tmp_path, monkeypatch
     assert "openrouter" in payload.get("credential_pool", {})
 
 
-def test_logout_resets_codex_config_when_auth_state_already_cleared(tmp_path, monkeypatch, capsys):
+def test_logout_resets_codex_config_when_auth_state_already_cleared(
+    tmp_path, monkeypatch, capsys
+):
     """`clawk logout --provider openai-codex` must still clear model.provider.
 
     Users can end up with auth.json already cleared but config.yaml still set to
@@ -843,7 +877,11 @@ def test_unsuppress_credential_source_clears_marker(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk"))
     _write_auth_store(tmp_path, {"version": 1})
 
-    from clawk_cli.auth import suppress_credential_source, unsuppress_credential_source, is_source_suppressed
+    from clawk_cli.auth import (
+        suppress_credential_source,
+        unsuppress_credential_source,
+        is_source_suppressed,
+    )
 
     suppress_credential_source("openai-codex", "device_code")
     assert is_source_suppressed("openai-codex", "device_code") is True
@@ -890,21 +928,36 @@ def test_seed_from_singletons_respects_clawk_pkce_suppression(tmp_path, monkeypa
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
     import clawk_yaml as yaml
-    (clawk_home / "config.yaml").write_text(yaml.safe_dump({"model": {"provider": "anthropic", "model": "claude"}}))
-    (clawk_home / "auth.json").write_text(json.dumps({
-        "version": 1,
-        "providers": {},
-        "suppressed_sources": {"anthropic": ["clawk_pkce"]},
-    }))
+
+    (clawk_home / "config.yaml").write_text(
+        yaml.safe_dump({"model": {"provider": "anthropic", "model": "claude"}})
+    )
+    (clawk_home / "auth.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "providers": {},
+                "suppressed_sources": {"anthropic": ["clawk_pkce"]},
+            }
+        )
+    )
 
     # Stub the readers so only clawk_pkce is "available"; claude_code returns None
     import agent.anthropic_credentials as aa
-    monkeypatch.setattr(aa, "read_clawk_oauth_credentials", lambda: {
-        "accessToken": "tok", "refreshToken": "r", "expiresAt": 9999999999000,
-    })
+
+    monkeypatch.setattr(
+        aa,
+        "read_clawk_oauth_credentials",
+        lambda: {
+            "accessToken": "tok",
+            "refreshToken": "r",
+            "expiresAt": 9999999999000,
+        },
+    )
     monkeypatch.setattr(aa, "read_claude_code_credentials", lambda: None)
 
     from agent.credential_pool import _seed_from_singletons
+
     entries = []
     _changed, active = _seed_from_singletons("anthropic", entries)
     # clawk_pkce suppressed, claude_code returns None → nothing should be seeded
@@ -937,12 +990,15 @@ def test_auth_remove_copilot_suppresses_all_variants(tmp_path, monkeypatch):
     from clawk_cli.auth import is_source_suppressed
     from clawk_cli.auth_commands import auth_remove_command
 
-    with patch(
-        "clawk_cli.copilot_auth.resolve_copilot_token",
-        return_value=("ghp_fake", "gh"),
-    ), patch(
-        "clawk_cli.copilot_auth.get_copilot_api_token",
-        return_value=("ghu_fake_api", None),
+    with (
+        patch(
+            "clawk_cli.copilot_auth.resolve_copilot_token",
+            return_value=("ghp_fake", "gh"),
+        ),
+        patch(
+            "clawk_cli.copilot_auth.get_copilot_api_token",
+            return_value=("ghu_fake_api", None),
+        ),
     ):
         auth_remove_command(SimpleNamespace(provider="copilot", target="1"))
 
@@ -952,7 +1008,9 @@ def test_auth_remove_copilot_suppresses_all_variants(tmp_path, monkeypatch):
     assert is_source_suppressed("copilot", "env:GITHUB_TOKEN")
 
 
-def test_auth_remove_env_seeded_dotenv_with_bom_no_shell_hint(tmp_path, monkeypatch, capsys):
+def test_auth_remove_env_seeded_dotenv_with_bom_no_shell_hint(
+    tmp_path, monkeypatch, capsys
+):
     """A Notepad-edited .env carries a UTF-8 BOM. The dotenv-vs-shell
     detector must still see the first variable as living in .env (and not
     warn about a phantom shell export). Regression for the reader that
@@ -964,9 +1022,7 @@ def test_auth_remove_env_seeded_dotenv_with_bom_no_shell_hint(tmp_path, monkeypa
 
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     # BOM prefix (utf-8-sig) + the target var as the FIRST line.
-    (clawk_home / ".env").write_bytes(
-        b"\xef\xbb\xbfDEEPSEEK_API_KEY=sk-ds-only\n"
-    )
+    (clawk_home / ".env").write_bytes(b"\xef\xbb\xbfDEEPSEEK_API_KEY=sk-ds-only\n")
     monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-ds-only")
 
     _write_auth_store(
@@ -974,28 +1030,35 @@ def test_auth_remove_env_seeded_dotenv_with_bom_no_shell_hint(tmp_path, monkeypa
         {
             "version": 1,
             "credential_pool": {
-                "deepseek": [{
-                    "id": "env-1",
-                    "label": "DEEPSEEK_API_KEY",
-                    "auth_type": "api_key",
-                    "priority": 0,
-                    "source": "env:DEEPSEEK_API_KEY",
-                    "access_token": "sk-ds-only",
-                }]
+                "deepseek": [
+                    {
+                        "id": "env-1",
+                        "label": "DEEPSEEK_API_KEY",
+                        "auth_type": "api_key",
+                        "priority": 0,
+                        "source": "env:DEEPSEEK_API_KEY",
+                        "access_token": "sk-ds-only",
+                    }
+                ]
             },
         },
     )
 
     from types import SimpleNamespace
     from clawk_cli.auth_commands import auth_remove_command
+
     auth_remove_command(SimpleNamespace(provider="deepseek", target="1"))
 
     out = capsys.readouterr().out
-    assert "DEEPSEEK_API_KEY" not in (clawk_home / ".env").read_text(encoding="utf-8-sig")
+    assert "DEEPSEEK_API_KEY" not in (clawk_home / ".env").read_text(
+        encoding="utf-8-sig"
+    )
     assert "still set in your shell environment" not in out
 
 
-def test_auth_add_openrouter_oauth_persists_pkce_key_without_touching_api_key_default(tmp_path, monkeypatch):
+def test_auth_add_openrouter_oauth_persists_pkce_key_without_touching_api_key_default(
+    tmp_path, monkeypatch
+):
     """`clawk auth add openrouter --type oauth` stores the PKCE-minted key as an ``api_key`` pool row
     (OpenRouter returns a plain key, no refresh pair) that ``resolve_provider("auto")`` picks up with no
     env var — same as a pasted key; the bare `--api-key` path keeps its API-key default."""
@@ -1003,7 +1066,10 @@ def test_auth_add_openrouter_oauth_persists_pkce_key_without_touching_api_key_de
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     _write_auth_store(tmp_path, {"version": 1, "providers": {}})
-    monkeypatch.setattr("clawk_cli.auth._openrouter_pkce_login", lambda **kw: {"api_key": "sk-or-v1-from-pkce"})
+    monkeypatch.setattr(
+        "clawk_cli.auth._openrouter_pkce_login",
+        lambda **kw: {"api_key": "sk-or-v1-from-pkce"},
+    )
 
     from clawk_cli.auth import resolve_provider
     from clawk_cli.auth_commands import auth_add_command
@@ -1031,11 +1097,16 @@ def test_auth_add_openrouter_oauth_persists_pkce_key_without_touching_api_key_de
     by_source = {e["source"]: e for e in payload["credential_pool"]["openrouter"]}
     assert by_source["manual:openrouter_pkce"]["auth_type"] == "api_key"
     assert by_source["manual:openrouter_pkce"]["access_token"] == "sk-or-v1-from-pkce"
-    assert by_source["manual:openrouter_pkce"]["base_url"] == "https://openrouter.ai/api/v1"
+    assert (
+        by_source["manual:openrouter_pkce"]["base_url"]
+        == "https://openrouter.ai/api/v1"
+    )
     assert by_source["manual"]["access_token"] == "sk-or-v1-pasted"
 
 
-def test_openrouter_loopback_callback_binds_nonce_path_and_rejects_forged_redirect(monkeypatch):
+def test_openrouter_loopback_callback_binds_nonce_path_and_rejects_forged_redirect(
+    monkeypatch,
+):
     """The CSRF nonce lives in the callback PATH (OpenRouter echoes no ``state``): a redirect that
     knows the port but not the nonce is a 404 and never yields a code; the genuine path does."""
     import threading
@@ -1048,7 +1119,9 @@ def test_openrouter_loopback_callback_binds_nonce_path_and_rejects_forged_redire
     seen: dict = {}
 
     def _browser(url):
-        callback = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["callback_url"][0]
+        callback = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)[
+            "callback_url"
+        ][0]
         seen["callback"] = callback
         forged = callback.rsplit("/", 1)[0] + "/forged-nonce?code=evil"
 
@@ -1057,7 +1130,9 @@ def test_openrouter_loopback_callback_binds_nonce_path_and_rejects_forged_redire
                 urllib.request.urlopen(forged, timeout=5)
             except urllib.error.HTTPError as exc:
                 seen["forged_status"] = exc.code
-            with urllib.request.urlopen(f"{callback}?code=good-code", timeout=5) as resp:
+            with urllib.request.urlopen(
+                f"{callback}?code=good-code", timeout=5
+            ) as resp:
                 seen["genuine_status"] = resp.status
 
         threading.Thread(target=_redirects, daemon=True).start()
@@ -1067,10 +1142,17 @@ def test_openrouter_loopback_callback_binds_nonce_path_and_rejects_forged_redire
     monkeypatch.setattr(orm.webbrowser, "open", _browser)
 
     code = orm._openrouter_loopback_code(
-        {"code_challenge": "c", "code_challenge_method": "S256"}, open_browser=True, timeout_seconds=10)
+        {"code_challenge": "c", "code_challenge_method": "S256"},
+        open_browser=True,
+        timeout_seconds=10,
+    )
 
     parsed = urllib.parse.urlparse(seen["callback"])
-    assert parsed.hostname == "127.0.0.1" and parsed.path.startswith("/callback/") and len(parsed.path) > 20
+    assert (
+        parsed.hostname == "127.0.0.1"
+        and parsed.path.startswith("/callback/")
+        and len(parsed.path) > 20
+    )
     assert seen["forged_status"] == 404
     assert seen["genuine_status"] == 200
     assert code == "good-code"

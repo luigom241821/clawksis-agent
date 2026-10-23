@@ -29,7 +29,9 @@ _PLUGIN = textwrap.dedent(
 def _install(home: Path, name: str) -> None:
     plugin = home / "plugins" / name
     plugin.mkdir(parents=True)
-    (plugin / "plugin.yaml").write_text(f"name: {name}\nkind: model-provider\n", encoding="utf-8")
+    (plugin / "plugin.yaml").write_text(
+        f"name: {name}\nkind: model-provider\n", encoding="utf-8"
+    )
     (plugin / "__init__.py").write_text(_PLUGIN.format(name=name), encoding="utf-8")
 
 
@@ -66,12 +68,24 @@ def test_secondary_profile_plugin_resolves_for_its_home_only(homes):
     _launch, secondary = homes
     _install(secondary, "scaleup-only")
 
-    assert providers.get_provider_profile("scaleup-only") is None  # launch home discovers first
+    assert (
+        providers.get_provider_profile("scaleup-only") is None
+    )  # launch home discovers first
 
-    assert _bound(secondary, lambda: providers.get_provider_profile("scaleup-only")) is not None
-    assert _bound(secondary, lambda: providers.get_provider_profile("scaleup-only-alias")) is not None
-    assert _bound(secondary, lambda: providers.provider_source("scaleup-only")) == "user"
-    assert "scaleup-only" in _bound(secondary, lambda: {p.name for p in providers.list_providers()})
+    assert (
+        _bound(secondary, lambda: providers.get_provider_profile("scaleup-only"))
+        is not None
+    )
+    assert (
+        _bound(secondary, lambda: providers.get_provider_profile("scaleup-only-alias"))
+        is not None
+    )
+    assert (
+        _bound(secondary, lambda: providers.provider_source("scaleup-only")) == "user"
+    )
+    assert "scaleup-only" in _bound(
+        secondary, lambda: {p.name for p in providers.list_providers()}
+    )
     # The agent-build gate Desktop hits (``Unknown provider`` came from here).
     assert _bound(secondary, lambda: resolve_provider("scaleup-only")) == "scaleup-only"
 

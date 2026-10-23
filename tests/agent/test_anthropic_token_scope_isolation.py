@@ -50,14 +50,23 @@ def _pin_file_and_pool_sources():
     This isolates the three os.getenv() call sites (sources 1, 2, 5) so each
     test exercises exactly the env-var reading behaviour under scope control.
     """
-    with patch("agent.anthropic_credentials.read_claude_code_credentials", return_value=None), \
-         patch("agent.anthropic_credentials._resolve_anthropic_pool_token", return_value=None):
+    with (
+        patch(
+            "agent.anthropic_credentials.read_claude_code_credentials",
+            return_value=None,
+        ),
+        patch(
+            "agent.anthropic_credentials._resolve_anthropic_pool_token",
+            return_value=None,
+        ),
+    ):
         yield
 
 
 # ---------------------------------------------------------------------------
 # Core isolation: scoped key must beat os.environ in multiplex mode
 # ---------------------------------------------------------------------------
+
 
 class TestApiKeyScopeIsolation:
     """ANTHROPIC_API_KEY (source 5, line 1245) must read from scope, not os.environ."""
@@ -126,6 +135,7 @@ class TestApiKeyScopeIsolation:
 # OAuth token leakage: ANTHROPIC_TOKEN (source 1, line 1218)
 # ---------------------------------------------------------------------------
 
+
 class TestOAuthTokenLeakageFromEnviron:
     """ANTHROPIC_TOKEN in os.environ must not override the active profile scope."""
 
@@ -185,6 +195,7 @@ class TestOAuthTokenLeakageFromEnviron:
 # Claude Code OAuth token leakage: CLAUDE_CODE_OAUTH_TOKEN (source 2, line 1226)
 # ---------------------------------------------------------------------------
 
+
 class TestClaudeCodeOAuthTokenLeakage:
     """CLAUDE_CODE_OAUTH_TOKEN in os.environ must not override the active profile scope."""
 
@@ -219,6 +230,7 @@ class TestClaudeCodeOAuthTokenLeakage:
 # Cron scheduler scenario: unscoped call in multiplex mode
 # ---------------------------------------------------------------------------
 
+
 class TestCronSchedulerUnscopedCall:
     """Cron scheduler in multiplex mode: resolve_anthropic_token() must fail closed.
 
@@ -243,7 +255,9 @@ class TestCronSchedulerUnscopedCall:
         Fix: use get_secret(), which raises UnscopedSecretError when multiplex is
         active and no scope is installed (matching secret_scope.py's fail-closed contract).
         """
-        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-api-PROCESS-LEVEL-SHOULD-NOT-LEAK")
+        monkeypatch.setenv(
+            "ANTHROPIC_API_KEY", "sk-ant-api-PROCESS-LEVEL-SHOULD-NOT-LEAK"
+        )
         monkeypatch.delenv("ANTHROPIC_TOKEN", raising=False)
         monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
 

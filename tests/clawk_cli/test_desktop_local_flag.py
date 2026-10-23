@@ -11,6 +11,7 @@ import argparse
 
 from clawk_cli.subcommands.gui import build_gui_parser
 
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="clawk")
     subparsers = parser.add_subparsers(dest="command")
@@ -18,10 +19,12 @@ def _parser() -> argparse.ArgumentParser:
 
     return parser
 
+
 def test_local_flag_parses():
     args = _parser().parse_args(["desktop", "--local"])
 
     assert args.local is True
+
 
 def test_local_flag_defaults_off():
     args = _parser().parse_args(["desktop"])

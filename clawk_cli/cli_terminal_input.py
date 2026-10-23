@@ -30,10 +30,20 @@ def _cli():
     return cli
 
 
-_IMAGE_EXTENSIONS = frozenset({
-    '.png', '.jpg', '.jpeg', '.gif', '.webp',
-    '.bmp', '.tiff', '.tif', '.svg', '.ico',
-})
+_IMAGE_EXTENSIONS = frozenset(
+    {
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".webp",
+        ".bmp",
+        ".tiff",
+        ".tif",
+        ".svg",
+        ".ico",
+    }
+)
 
 
 def _termux_example_image_path(filename: str = "cat.png") -> str:
@@ -62,7 +72,7 @@ def _split_path_input(raw: str) -> tuple[str, str]:
         pos = 1
         while pos < len(raw):
             ch = raw[pos]
-            if ch == '\\' and pos + 1 < len(raw):
+            if ch == "\\" and pos + 1 < len(raw):
                 pos += 2
                 continue
             if ch == quote:
@@ -73,14 +83,14 @@ def _split_path_input(raw: str) -> tuple[str, str]:
     pos = 0
     while pos < len(raw):
         ch = raw[pos]
-        if ch == '\\' and pos + 1 < len(raw) and raw[pos + 1] == ' ':
+        if ch == "\\" and pos + 1 < len(raw) and raw[pos + 1] == " ":
             pos += 2
-        elif ch == ' ':
+        elif ch == " ":
             break
         else:
             pos += 1
 
-    return raw[:pos].replace('\\ ', ' '), raw[pos:].strip()
+    return raw[:pos].replace("\\ ", " "), raw[pos:].strip()
 
 
 def _resolve_attachment_path(raw_path: str) -> Path | None:
@@ -94,7 +104,7 @@ def _resolve_attachment_path(raw_path: str) -> Path | None:
 
     if token[0] == token[-1] and token[0] in {'"', "'"}:
         token = token[1:-1].strip()
-    token = token.replace('\\ ', ' ')
+    token = token.replace("\\ ", " ")
     if not token:
         return None
 
@@ -106,7 +116,13 @@ def _resolve_attachment_path(raw_path: str) -> Path | None:
                 expanded = unquote(parsed.path or "")
                 if parsed.netloc and os.name == "nt":
                     expanded = f"//{parsed.netloc}{expanded}"
-                elif os.name == "nt" and len(expanded) >= 3 and expanded[0] == "/" and expanded[1].isalpha() and expanded[2] == ":":
+                elif (
+                    os.name == "nt"
+                    and len(expanded) >= 3
+                    and expanded[0] == "/"
+                    and expanded[1].isalpha()
+                    and expanded[2] == ":"
+                ):
                     # file:///C:/... parses to path "/C:/..." — drop the leading slash
                     # so it resolves as a drive-letter path.
                     expanded = expanded[1:]
@@ -115,7 +131,12 @@ def _resolve_attachment_path(raw_path: str) -> Path | None:
     expanded = os.path.expandvars(os.path.expanduser(expanded))
     if os.name != "nt":
         normalized = expanded.replace("\\", "/")
-        if len(normalized) >= 3 and normalized[1] == ":" and normalized[2] == "/" and normalized[0].isalpha():
+        if (
+            len(normalized) >= 3
+            and normalized[1] == ":"
+            and normalized[2] == "/"
+            and normalized[0].isalpha()
+        ):
             expanded = f"/mnt/{normalized[0].lower()}/{normalized[3:]}"
     path = Path(expanded)
     if not path.is_absolute():
@@ -139,12 +160,18 @@ def _resolve_attachment_path(raw_path: str) -> Path | None:
 
 def _file_drop_result(path: Path, remainder: str) -> dict:
     from cli import _IMAGE_EXTENSIONS
-    return {"path": path, "is_image": path.suffix.lower() in _IMAGE_EXTENSIONS, "remainder": remainder}
+
+    return {
+        "path": path,
+        "is_image": path.suffix.lower() in _IMAGE_EXTENSIONS,
+        "remainder": remainder,
+    }
 
 
 def _detect_file_drop(user_input: str) -> dict | None:
     """Detect a dragged/pasted file path at the start of *user_input* -> ``{path, is_image, remainder}`` or None."""
     from cli import _file_drop_result, _resolve_attachment_path, _split_path_input
+
     if not isinstance(user_input, str):
         return None
 
@@ -158,7 +185,12 @@ def _detect_file_drop(user_input: str) -> dict | None:
     starts_like_path = (
         unquoted.startswith(("/", "~", "./", "../"))
         or (not quoted and unquoted.startswith("file://"))
-        or (len(unquoted) >= 3 and unquoted[1] == ":" and unquoted[2] in {"\\", "/"} and unquoted[0].isalpha())
+        or (
+            len(unquoted) >= 3
+            and unquoted[1] == ":"
+            and unquoted[2] in {"\\", "/"}
+            and unquoted[0].isalpha()
+        )
     )
     if not starts_like_path:
         return None
@@ -180,7 +212,9 @@ def _detect_file_drop(user_input: str) -> dict | None:
     return _file_drop_result(drop_path, remainder)
 
 
-def _format_image_attachment_badges(attached_images: list[Path], image_counter: int, width: int | None = None) -> str:
+def _format_image_attachment_badges(
+    attached_images: list[Path], image_counter: int, width: int | None = None
+) -> str:
     """Attached-image badge row: compact summary on narrow terminals, per-image badges otherwise."""
     if not attached_images:
         return ""
@@ -198,10 +232,15 @@ def _format_image_attachment_badges(attached_images: list[Path], image_counter: 
     if width < 80:
         if len(attached_images) == 1:
             return f"[📎 {_trunc(attached_images[0].name, 32)}]"
-        return f"[📎 {_trunc(attached_images[0].name, 20)}] [+{len(attached_images) - 1}]"
+        return (
+            f"[📎 {_trunc(attached_images[0].name, 20)}] [+{len(attached_images) - 1}]"
+        )
 
     base = image_counter - len(attached_images) + 1
-    return " ".join(t("cli.terminal.image_badge_numbered", index=base + i) for i in range(len(attached_images)))
+    return " ".join(
+        t("cli.terminal.image_badge_numbered", index=base + i)
+        for i in range(len(attached_images))
+    )
 
 
 def _should_auto_attach_clipboard_image_on_paste(pasted_text: str) -> bool:
@@ -210,8 +249,20 @@ def _should_auto_attach_clipboard_image_on_paste(pasted_text: str) -> bool:
 
 
 def _clawk_call_output_screen_diff(
-    orig_osd, app, output, screen, current_pos, color_depth, previous_screen, last_style, is_done, full_screen,
-    attrs_for_style_string, style_string_has_style, size, previous_width,
+    orig_osd,
+    app,
+    output,
+    screen,
+    current_pos,
+    color_depth,
+    previous_screen,
+    last_style,
+    is_done,
+    full_screen,
+    attrs_for_style_string,
+    style_string_has_style,
+    size,
+    previous_width,
 ):
     """prompt_toolkit ``_output_screen_diff`` with resize guards.
 
@@ -224,7 +275,11 @@ def _clawk_call_output_screen_diff(
     event loop with ``'cell' object has no attribute 'char'``. See #26137.
     """
     try:
-        if previous_screen is not None and hasattr(previous_screen, "height") and previous_screen.height < screen.height:
+        if (
+            previous_screen is not None
+            and hasattr(previous_screen, "height")
+            and previous_screen.height < screen.height
+        ):
             previous_screen.height = screen.height
     except Exception:
         pass
@@ -262,9 +317,11 @@ def _apply_bracketed_paste_timeout_patch() -> None:
                 if end_mark in self_parser._paste_buffer:
                     end_index = self_parser._paste_buffer.index(end_mark)
                     paste_content = self_parser._paste_buffer[:end_index]
-                    self_parser.feed_key_callback(_PtKeyPress(_PtKeys.BracketedPaste, paste_content))
+                    self_parser.feed_key_callback(
+                        _PtKeyPress(_PtKeys.BracketedPaste, paste_content)
+                    )
                     self_parser._in_bracketed_paste = False
-                    remaining = self_parser._paste_buffer[end_index + len(end_mark):]
+                    remaining = self_parser._paste_buffer[end_index + len(end_mark) :]
                     self_parser._paste_buffer = ""
                     self_parser._clawk_bp_start = None
                     if remaining:
@@ -280,12 +337,15 @@ def _apply_bracketed_paste_timeout_patch() -> None:
                         self_parser._paste_buffer = ""
                         self_parser._clawk_bp_start = None
                         if paste_content:
-                            self_parser.feed_key_callback(_PtKeyPress(_PtKeys.BracketedPaste, paste_content))
+                            self_parser.feed_key_callback(
+                                _PtKeyPress(_PtKeys.BracketedPaste, paste_content)
+                            )
                             logger.warning(
                                 "Bracketed-paste timeout (%.1fs) — flushed %d bytes "
                                 "without end mark. Terminal may have dropped ESC[201~ "
                                 "(see #16263).",
-                                now - bp_start, len(paste_content),
+                                now - bp_start,
+                                len(paste_content),
                             )
             else:
                 # Re-inlined: calling the original would double-buffer after entering paste mode.
@@ -358,10 +418,14 @@ def _is_ghostty_terminal(env: Optional[Mapping[str, str]] = None) -> bool:
     also maps). See #87630.
     """
     env = os.environ if env is None else env
-    return (env.get("TERM_PROGRAM") or "").strip() == "ghostty" or (env.get("TERM") or "").strip().lower() == "xterm-ghostty"
+    return (env.get("TERM_PROGRAM") or "").strip() == "ghostty" or (
+        env.get("TERM") or ""
+    ).strip().lower() == "xterm-ghostty"
 
 
-def _terminal_supports_extended_enter_keys(env: Optional[Mapping[str, str]] = None) -> bool:
+def _terminal_supports_extended_enter_keys(
+    env: Optional[Mapping[str, str]] = None,
+) -> bool:
     """Allowlist of terminals where requesting modified-Enter reporting is safe (aligned with the Ink TUI)."""
     env = os.environ if env is None else env
     term_program = (env.get("TERM_PROGRAM") or "").strip()
@@ -369,13 +433,17 @@ def _terminal_supports_extended_enter_keys(env: Optional[Mapping[str, str]] = No
     return bool(
         env.get("WT_SESSION")
         or term_program in {"iTerm.app", "WezTerm", "ghostty", "vscode"}
-        or env.get("KITTY_WINDOW_ID") or "kitty" in term
+        or env.get("KITTY_WINDOW_ID")
+        or "kitty" in term
         or term == "xterm-ghostty"
-        or term.startswith("tmux") or term_program.lower() == "tmux"
+        or term.startswith("tmux")
+        or term_program.lower() == "tmux"
     )
 
 
-def _enable_extended_enter_keys(output=None, env: Optional[Mapping[str, str]] = None) -> bool:
+def _enable_extended_enter_keys(
+    output=None, env: Optional[Mapping[str, str]] = None
+) -> bool:
     """Ask allowlisted terminals to report modified keys distinctly.
 
     Pushes BOTH kitty keyboard protocol and xterm modifyOtherKeys (kitty dropped the
@@ -395,10 +463,20 @@ def _enable_extended_enter_keys(output=None, env: Optional[Mapping[str, str]] = 
     the CLI).
     See #87630.
     """
-    from cli import _EXTENDED_ENTER_KEYS_SEQ, _MODIFY_OTHER_KEYS_SEQ, _is_ghostty_terminal, _terminal_supports_extended_enter_keys
+    from cli import (
+        _EXTENDED_ENTER_KEYS_SEQ,
+        _MODIFY_OTHER_KEYS_SEQ,
+        _is_ghostty_terminal,
+        _terminal_supports_extended_enter_keys,
+    )
+
     if not _terminal_supports_extended_enter_keys(env):
         return False
-    seq = _MODIFY_OTHER_KEYS_SEQ if _is_ghostty_terminal(env) else _EXTENDED_ENTER_KEYS_SEQ
+    seq = (
+        _MODIFY_OTHER_KEYS_SEQ
+        if _is_ghostty_terminal(env)
+        else _EXTENDED_ENTER_KEYS_SEQ
+    )
     try:
         if output is not None and hasattr(output, "write_raw"):
             output.write_raw(seq)
@@ -418,21 +496,30 @@ def _cli_multiline_shortcuts_enabled(config: Optional[dict[str, Any]] = None) ->
     if config is None:
         config = _cli().CLI_CONFIG
     display = config.get("display") if isinstance(config, dict) else None
-    value = display.get("cli_multiline_shortcuts", True) if isinstance(display, dict) else True
+    value = (
+        display.get("cli_multiline_shortcuts", True)
+        if isinstance(display, dict)
+        else True
+    )
     if isinstance(value, bool):
         return value
-    return not (isinstance(value, str) and value.strip().lower() in {"0", "false", "no", "off", "disabled"})
+    return not (
+        isinstance(value, str)
+        and value.strip().lower() in {"0", "false", "no", "off", "disabled"}
+    )
 
 
 def _is_backslash_line_continuation(text: str) -> bool:
     """True when Enter should turn a trailing backslash into a newline."""
     from cli import _BACKSLASH_LINE_CONTINUATION_RE
+
     return bool(_BACKSLASH_LINE_CONTINUATION_RE.search(text or ""))
 
 
 def _apply_backslash_line_continuation(text: str) -> str:
     """Replace a trailing ``\\`` marker with an actual newline."""
     from cli import _BACKSLASH_LINE_CONTINUATION_RE
+
     return _BACKSLASH_LINE_CONTINUATION_RE.sub("", text or "") + "\n"
 
 
@@ -444,9 +531,19 @@ def _preserve_ctrl_enter_newline() -> bool:
     env = os.environ
     if (
         sys.platform == "win32"
-        or any(env.get(v) for v in ("SSH_CONNECTION", "SSH_CLIENT", "SSH_TTY", "WT_SESSION",
-                                    "GHOSTTY_RESOURCES_DIR", "GHOSTTY_BIN_DIR"))
-        or env.get("TERM", "").lower() == "xterm-ghostty" or env.get("TERM_PROGRAM", "").lower() == "ghostty"
+        or any(
+            env.get(v)
+            for v in (
+                "SSH_CONNECTION",
+                "SSH_CLIENT",
+                "SSH_TTY",
+                "WT_SESSION",
+                "GHOSTTY_RESOURCES_DIR",
+                "GHOSTTY_BIN_DIR",
+            )
+        )
+        or env.get("TERM", "").lower() == "xterm-ghostty"
+        or env.get("TERM_PROGRAM", "").lower() == "ghostty"
         or "microsoft" in env.get("WSL_DISTRO_NAME", "").lower()
     ):
         return True
@@ -461,7 +558,9 @@ def _preserve_ctrl_enter_newline() -> bool:
     return False
 
 
-def _bind_prompt_submit_keys(kb, handler, *, multiline_shortcuts_enabled: Optional[bool] = None) -> None:
+def _bind_prompt_submit_keys(
+    kb, handler, *, multiline_shortcuts_enabled: Optional[bool] = None
+) -> None:
     """Enter always submits; c-j submits only with multiline shortcuts off AND where Ctrl+Enter isn't c-j.
 
     Even when the setting is disabled, environments where Ctrl+Enter is known to arrive as c-j (Windows,
@@ -469,10 +568,15 @@ def _bind_prompt_submit_keys(kb, handler, *, multiline_shortcuts_enabled: Option
     of composing. See _preserve_ctrl_enter_newline() and issue #22379.
     """
     from cli import _cli_multiline_shortcuts_enabled, _preserve_ctrl_enter_newline
+
     if multiline_shortcuts_enabled is None:
         multiline_shortcuts_enabled = _cli_multiline_shortcuts_enabled()
     kb.add("enter")(handler)
-    if sys.platform != "win32" and not multiline_shortcuts_enabled and not _preserve_ctrl_enter_newline():
+    if (
+        sys.platform != "win32"
+        and not multiline_shortcuts_enabled
+        and not _preserve_ctrl_enter_newline()
+    ):
         kb.add("c-j")(handler)
 
 
@@ -521,12 +625,20 @@ def _build_cpr_disabled_output(stdout):
 def _select_classic_cli_pt_output(stdout):
     """CPR-disabled ``Vt100_Output`` when CPR may leak, else None (Application keeps pt's default)."""
     from cli import _build_cpr_disabled_output, _terminal_may_leak_cpr
+
     return _build_cpr_disabled_output(stdout) if _terminal_may_leak_cpr() else None
 
 
 def _strip_leaked_terminal_responses_with_meta(text: str) -> tuple[str, bool]:
     """Strip leaked CPR replies and mouse-report fragments -> ``(cleaned, had_mouse_reports)``."""
-    from cli import _DSR_CPR_ESC_RE, _DSR_CPR_VISIBLE_RE, _SGR_MOUSE_BARE_RE, _SGR_MOUSE_ESC_RE, _SGR_MOUSE_VISIBLE_RE
+    from cli import (
+        _DSR_CPR_ESC_RE,
+        _DSR_CPR_VISIBLE_RE,
+        _SGR_MOUSE_BARE_RE,
+        _SGR_MOUSE_ESC_RE,
+        _SGR_MOUSE_VISIBLE_RE,
+    )
+
     if not text:
         return text, False
 
@@ -534,7 +646,11 @@ def _strip_leaked_terminal_responses_with_meta(text: str) -> tuple[str, bool]:
     for present, cpr_re, mouse_re in (
         ("\x1b[" in text, _DSR_CPR_ESC_RE, _SGR_MOUSE_ESC_RE),
         ("^[" in text, _DSR_CPR_VISIBLE_RE, _SGR_MOUSE_VISIBLE_RE),
-        ("<" in text and ";" in text and ("M" in text or "m" in text), None, _SGR_MOUSE_BARE_RE),
+        (
+            "<" in text and ";" in text and ("M" in text or "m" in text),
+            None,
+            _SGR_MOUSE_BARE_RE,
+        ),
     ):
         if not present:
             continue
@@ -546,13 +662,18 @@ def _strip_leaked_terminal_responses_with_meta(text: str) -> tuple[str, bool]:
 
 
 def _estimate_tui_input_height(
-    lines: list[str] | tuple[str, ...], prompt_text: str, terminal_columns: int, *, max_height: int = 8,
+    lines: list[str] | tuple[str, ...],
+    prompt_text: str,
+    terminal_columns: int,
+    *,
+    max_height: int = 8,
 ) -> int:
     """Input rows from live terminal cells; the BeforeInput prompt consumes cells only on line 0.
 
     Never substitute a fake wide fallback: a mis-sized TextArea leaves stale cells at the bottom.
     """
     from cli import _int_or
+
     try:
         from prompt_toolkit.utils import get_cwidth
     except Exception:
@@ -573,15 +694,26 @@ def _status_bar_visible_from_display_config(display_config: object) -> bool:
     """Initial status-bar visibility; both YAML ``off`` (False) and strings like ``"hidden"`` mean off."""
     if not isinstance(display_config, dict):
         display_config = {}
-    statusbar_config = display_config.get("statusbar", display_config.get("tui_statusbar", "top"))
+    statusbar_config = display_config.get(
+        "statusbar", display_config.get("tui_statusbar", "top")
+    )
     if isinstance(statusbar_config, str):
-        return statusbar_config.strip().lower() not in {"0", "false", "hidden", "no", "off"}
+        return statusbar_config.strip().lower() not in {
+            "0",
+            "false",
+            "hidden",
+            "no",
+            "off",
+        }
     return statusbar_config is not False
 
 
-def _collect_query_images(query: str | None, image_arg: str | None = None) -> tuple[str, list[Path]]:
+def _collect_query_images(
+    query: str | None, image_arg: str | None = None
+) -> tuple[str, list[Path]]:
     """Collect local image attachments for single-query CLI flows."""
     from cli import _IMAGE_EXTENSIONS, _detect_file_drop, _resolve_attachment_path
+
     message = query or ""
     images: list[Path] = []
 
@@ -589,7 +721,9 @@ def _collect_query_images(query: str | None, image_arg: str | None = None) -> tu
         dropped = _detect_file_drop(message)
         if dropped and dropped.get("is_image"):
             images.append(dropped["path"])
-            message = dropped["remainder"] or f"[User attached image: {dropped['path'].name}]"
+            message = (
+                dropped["remainder"] or f"[User attached image: {dropped['path'].name}]"
+            )
 
     if image_arg:
         explicit_path = _resolve_attachment_path(image_arg)

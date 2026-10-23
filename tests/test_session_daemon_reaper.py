@@ -3,6 +3,7 @@
 A test that runs a real ``clawk chat -q`` child gets a grandchild ``gateway run`` in its own
 session; no per-test subprocess patch sees it, and pytest's tmp cleanup removes only directories.
 """
+
 from __future__ import annotations
 
 import os
@@ -19,8 +20,14 @@ from tests.waiting import wait_until
 def _detached(env_home, marker):
     code = "import time\nwhile True: time.sleep(0.2)\n"
     env = {**os.environ, "CLAWK_HOME": str(env_home), "LIVE_REAP_MARKER": marker}
-    return subprocess.Popen([sys.executable, "-c", code], env=env, start_new_session=True,
-                            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return subprocess.Popen(
+        [sys.executable, "-c", code],
+        env=env,
+        start_new_session=True,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
 
 
 @pytest.mark.platforms("linux")
@@ -33,13 +40,25 @@ def test_session_teardown_terminates_daemons_under_the_session_basetemp_only(tmp
     outside = _detached(elsewhere, "outside")
     try:
         # Both children have exec'd with their CLAWK_HOME (what the reaper reads from /proc).
-        wait_until(lambda: {inside.pid, outside.pid} <= set(suite_conftest._processes_with_clawk_home_under(
-            [basetemp, elsewhere])), timeout=10, what='both detached children started')
+        wait_until(
+            lambda: (
+                {inside.pid, outside.pid}
+                <= set(
+                    suite_conftest._processes_with_clawk_home_under(
+                        [basetemp, elsewhere]
+                    )
+                )
+            ),
+            timeout=10,
+            what="both detached children started",
+        )
         config = SimpleNamespace(_tmp_path_factory=SimpleNamespace(_basetemp=basetemp))
         reaped = suite_conftest._reap_session_clawk_processes(config)
         assert inside.pid in reaped and outside.pid not in reaped
         assert inside.wait(timeout=5) is not None
-        assert outside.poll() is None, "a process outside this session's homes was signalled"
+        assert outside.poll() is None, (
+            "a process outside this session's homes was signalled"
+        )
     finally:
         for proc in (inside, outside):
             if proc.poll() is None:

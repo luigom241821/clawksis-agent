@@ -10,7 +10,9 @@ from clawk_state import SessionDB
 
 
 @pytest.mark.parametrize("first_apply_fails", [False, True])
-def test_unhide_survives_next_session_row_persist(tmp_path, monkeypatch, first_apply_fails):
+def test_unhide_survives_next_session_row_persist(
+    tmp_path, monkeypatch, first_apply_fails
+):
     with SessionDB(tmp_path / "state.db") as db:
         monkeypatch.setattr(srv, "_get_db", lambda: db)
         monkeypatch.setattr(srv, "_schedule_agent_build", lambda sid: None)

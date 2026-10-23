@@ -25,8 +25,13 @@ class _FakeProvider(ImageGenProvider):
             "env_vars": [{"key": f"{name.upper()}_API_KEY", "prompt": f"{name} key"}],
         }
         self._models = models or [
-            {"id": f"{name}-model-v1", "display": f"{name} v1",
-             "speed": "~5s", "strengths": "test", "price": "$"},
+            {
+                "id": f"{name}-model-v1",
+                "display": f"{name} v1",
+                "speed": "~5s",
+                "strengths": "test",
+                "price": "$",
+            },
         ]
 
     @property
@@ -57,8 +62,6 @@ def _reset_registry():
 
 
 class TestPluginPickerInjection:
-
-
     def test_visible_providers_includes_plugins_for_image_gen(self, monkeypatch):
         from clawk_cli import tools_config
 
@@ -66,10 +69,12 @@ class TestPluginPickerInjection:
 
         cat = tools_config.TOOL_CATEGORIES["image_gen"]
         visible = tools_config._visible_providers(cat, {})
-        plugin_names = [p.get("image_gen_plugin_name") for p in visible if p.get("image_gen_plugin_name")]
+        plugin_names = [
+            p.get("image_gen_plugin_name")
+            for p in visible
+            if p.get("image_gen_plugin_name")
+        ]
         assert "someimg" in plugin_names
-
-
 
 
 class TestPluginCatalog:
@@ -94,23 +99,32 @@ class TestConfigPrompt:
 
         image_gen_registry.register_provider(_FakeProvider("avail-img", available=True))
 
-        assert tools_config._toolset_needs_configuration_prompt("image_gen", {}) is False
+        assert (
+            tools_config._toolset_needs_configuration_prompt("image_gen", {}) is False
+        )
 
 
 class TestConfigWriting:
-    def test_picking_plugin_provider_writes_provider_and_model(self, monkeypatch, tmp_path):
+    def test_picking_plugin_provider_writes_provider_and_model(
+        self, monkeypatch, tmp_path
+    ):
         """When a user picks a plugin-backed image_gen provider with no
         env vars needed, ``_configure_provider`` should write both
         ``image_gen.provider`` and ``image_gen.model``."""
         from clawk_cli import tools_config
 
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-        image_gen_registry.register_provider(_FakeProvider("noenv", schema={
-            "name": "NoEnv",
-            "badge": "free",
-            "tag": "",
-            "env_vars": [],
-        }))
+        image_gen_registry.register_provider(
+            _FakeProvider(
+                "noenv",
+                schema={
+                    "name": "NoEnv",
+                    "badge": "free",
+                    "tag": "",
+                    "env_vars": [],
+                },
+            )
+        )
 
         # Stub out the interactive model picker — no TTY in tests.
         monkeypatch.setattr(tools_config, "_prompt_choice", lambda *a, **kw: 0)
@@ -126,8 +140,9 @@ class TestConfigWriting:
         assert config["image_gen"]["provider"] == "noenv"
         assert config["image_gen"]["model"] == "noenv-model-v1"
 
-
-    def test_plugin_provider_active_overrides_managed_nous_active_label(self, monkeypatch):
+    def test_plugin_provider_active_overrides_managed_nous_active_label(
+        self, monkeypatch
+    ):
         from clawk_cli import tools_config
 
         monkeypatch.setattr(
@@ -152,7 +167,6 @@ class TestConfigWriting:
         assert tools_config._is_provider_active(nous_row, config) is False
 
 
-
 class TestCodexOAuthBootstrapHook:
     """#102144: the Image Generation 'OpenAI (Codex auth)' row is keyless, so its ``post_setup``
     hook is the only thing that can sign the user in. Selecting it with no Codex credentials must
@@ -160,15 +174,29 @@ class TestCodexOAuthBootstrapHook:
     credentials it must not re-prompt."""
 
     @pytest.mark.parametrize("logged_in", [False, True])
-    def test_hook_starts_codex_oauth_only_when_credentials_missing(self, monkeypatch, logged_in):
+    def test_hook_starts_codex_oauth_only_when_credentials_missing(
+        self, monkeypatch, logged_in
+    ):
         from clawk_cli import auth, tools_config_post_setup
 
-        monkeypatch.setattr(auth, "get_codex_auth_status", lambda: {"logged_in": logged_in})
+        monkeypatch.setattr(
+            auth, "get_codex_auth_status", lambda: {"logged_in": logged_in}
+        )
         monkeypatch.setattr("clawk_cli.setup.prompt_choice", lambda *a, **kw: 0)
         started, saved = [], []
-        monkeypatch.setattr(auth, "_codex_device_code_login",
-                            lambda: started.append(1) or {"tokens": {"access_token": "t"}, "last_refresh": "x"})
-        monkeypatch.setattr(auth, "_save_codex_tokens", lambda tokens, last_refresh=None, **kw: saved.append(kw))
+        monkeypatch.setattr(
+            auth,
+            "_codex_device_code_login",
+            lambda: (
+                started.append(1)
+                or {"tokens": {"access_token": "t"}, "last_refresh": "x"}
+            ),
+        )
+        monkeypatch.setattr(
+            auth,
+            "_save_codex_tokens",
+            lambda tokens, last_refresh=None, **kw: saved.append(kw),
+        )
 
         tools_config_post_setup._POST_SETUP_HOOKS["openai_codex"]()
 
@@ -176,7 +204,9 @@ class TestCodexOAuthBootstrapHook:
         # Side-tool sign-in must not make Codex the active inference provider.
         assert saved == ([] if logged_in else [{"set_active": False}])
 
-    def test_hook_prints_auth_command_instead_of_device_login_when_noninteractive(self, monkeypatch, capsys):
+    def test_hook_prints_auth_command_instead_of_device_login_when_noninteractive(
+        self, monkeypatch, capsys
+    ):
         """Desktop's PostSetupRunner spawns `clawk tools post-setup openai_codex` with stdin=DEVNULL and
         CLAWK_NONINTERACTIVE=1: nobody can complete a device-code login there, so the hook must name
         the real command and return instead of starting one."""
@@ -185,8 +215,11 @@ class TestCodexOAuthBootstrapHook:
         monkeypatch.setenv("CLAWK_NONINTERACTIVE", "1")
         monkeypatch.setattr(auth, "get_codex_auth_status", lambda: {"logged_in": False})
         monkeypatch.setattr("clawk_cli.setup.prompt_choice", lambda *a, **kw: 0)
-        monkeypatch.setattr(auth, "_codex_device_code_login",
-                            lambda: pytest.fail("device-code login must not start without a human"))
+        monkeypatch.setattr(
+            auth,
+            "_codex_device_code_login",
+            lambda: pytest.fail("device-code login must not start without a human"),
+        )
 
         tools_config_post_setup._POST_SETUP_HOOKS["openai_codex"]()
 
@@ -195,8 +228,12 @@ class TestCodexOAuthBootstrapHook:
     def test_readiness_reports_codex_row_from_auth_store(self, monkeypatch):
         from clawk_cli import auth, tools_config
 
-        row = {"name": "OpenAI (Codex auth)", "env_vars": [], "image_gen_plugin_name": "openai-codex",
-               "post_setup": "openai_codex"}
+        row = {
+            "name": "OpenAI (Codex auth)",
+            "env_vars": [],
+            "image_gen_plugin_name": "openai-codex",
+            "post_setup": "openai_codex",
+        }
         monkeypatch.setattr(auth, "get_codex_auth_status", lambda: {"logged_in": False})
         assert tools_config.provider_readiness_status(row, {}) == "needs_auth"
         monkeypatch.setattr(auth, "get_codex_auth_status", lambda: {"logged_in": True})

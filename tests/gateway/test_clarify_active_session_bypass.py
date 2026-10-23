@@ -73,8 +73,12 @@ async def test_active_session_routes_typed_choice_clarify_reply_to_runner_not_bu
     event = _event("None of those are valid options")
     session_key = build_session_key(
         event.source,
-        group_sessions_per_user=adapter.config.extra.get("group_sessions_per_user", True),
-        thread_sessions_per_user=adapter.config.extra.get("thread_sessions_per_user", False),
+        group_sessions_per_user=adapter.config.extra.get(
+            "group_sessions_per_user", True
+        ),
+        thread_sessions_per_user=adapter.config.extra.get(
+            "thread_sessions_per_user", False
+        ),
     )
     adapter._active_sessions[session_key] = asyncio.Event()
     cm.register("clarify-1", session_key, "Pick one", ["A", "B"])
@@ -112,8 +116,12 @@ async def test_active_session_bypass_uses_profile_namespaced_key_under_multiplex
 
     profile_namespaced_key = build_session_key(
         event.source,
-        group_sessions_per_user=adapter.config.extra.get("group_sessions_per_user", True),
-        thread_sessions_per_user=adapter.config.extra.get("thread_sessions_per_user", False),
+        group_sessions_per_user=adapter.config.extra.get(
+            "group_sessions_per_user", True
+        ),
+        thread_sessions_per_user=adapter.config.extra.get(
+            "thread_sessions_per_user", False
+        ),
         profile="ops",
     )
     # Sanity: the profile-namespaced key really is different from the
@@ -121,8 +129,12 @@ async def test_active_session_bypass_uses_profile_namespaced_key_under_multiplex
     # the fixed behavior from the bug.
     legacy_key = build_session_key(
         event.source,
-        group_sessions_per_user=adapter.config.extra.get("group_sessions_per_user", True),
-        thread_sessions_per_user=adapter.config.extra.get("thread_sessions_per_user", False),
+        group_sessions_per_user=adapter.config.extra.get(
+            "group_sessions_per_user", True
+        ),
+        thread_sessions_per_user=adapter.config.extra.get(
+            "thread_sessions_per_user", False
+        ),
     )
     assert profile_namespaced_key != legacy_key
 
@@ -137,5 +149,3 @@ async def test_active_session_bypass_uses_profile_namespaced_key_under_multiplex
     adapter._message_handler.assert_awaited_once_with(event)
     adapter._busy_session_handler.assert_not_awaited()
     assert adapter._pending_messages == {}
-
-

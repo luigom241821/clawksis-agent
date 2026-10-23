@@ -15,6 +15,7 @@ _Usage = namedtuple("_Usage", "total used free")
 @pytest.fixture
 def home(tmp_path, monkeypatch):
     from clawk_state import SessionDB
+
     h = tmp_path / "home"
     h.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(h))
@@ -28,7 +29,11 @@ def home(tmp_path, monkeypatch):
 
 def _disk(monkeypatch, free_gb, total_gb=100):
     gib = prune_advisor.GIB
-    monkeypatch.setattr(shutil, "disk_usage", lambda _p: _Usage(total_gb * gib, (total_gb - free_gb) * gib, free_gb * gib))
+    monkeypatch.setattr(
+        shutil,
+        "disk_usage",
+        lambda _p: _Usage(total_gb * gib, (total_gb - free_gb) * gib, free_gb * gib),
+    )
 
 
 def test_asks_only_when_low_and_undecided_and_either_answer_ends_it(home, monkeypatch):
@@ -41,21 +46,35 @@ def test_asks_only_when_low_and_undecided_and_either_answer_ends_it(home, monkey
     prune_advisor._snooze_path(home).unlink()
     for answer in (False, True):
         assert prune_advisor.decide(answer, home)
-        assert (home / "config.yaml").read_text(encoding="utf-8-sig").count("auto_prune") == 1
-        assert prune_advisor.should_ask(home) is None  # an explicit key ends the question
+        assert (home / "config.yaml").read_text(encoding="utf-8-sig").count(
+            "auto_prune"
+        ) == 1
+        assert (
+            prune_advisor.should_ask(home) is None
+        )  # an explicit key ends the question
 
 
-def test_prompt_says_pruning_will_not_help_when_nothing_is_old_enough(home, monkeypatch):
+def test_prompt_says_pruning_will_not_help_when_nothing_is_old_enough(
+    home, monkeypatch
+):
     _disk(monkeypatch, free_gb=1)
     advice = prune_advisor.advise(home)
-    assert advice is not None and advice.total_sessions == 1 and advice.prunable_sessions == 0
+    assert (
+        advice is not None
+        and advice.total_sessions == 1
+        and advice.prunable_sessions == 0
+    )
     assert not advice.helps
     assert "Pruning will not help" in "\n".join(prune_advisor.advice_lines(advice))
     # Backdate the session past retention: now it is prunable and the prompt offers it.
     import sqlite3
+
     old = time.time() - 200 * 86400
     with sqlite3.connect(home / "state.db") as conn:
-        conn.execute("UPDATE sessions SET started_at=?, ended_at=?, last_activity_at=?", (old, old, old))
+        conn.execute(
+            "UPDATE sessions SET started_at=?, ended_at=?, last_activity_at=?",
+            (old, old, old),
+        )
         conn.execute("UPDATE messages SET timestamp=?", (old,))
     advice = prune_advisor.advise(home)
     assert advice.prunable_sessions == 1
@@ -64,17 +83,24 @@ def test_prompt_says_pruning_will_not_help_when_nothing_is_old_enough(home, monk
     # env-referenced 0 must not be described as the 90-day default.
     monkeypatch.setenv("KEEP_DAYS", "0")
     for value in ("0", '"0"', "${KEEP_DAYS}"):
-        (home / "config.yaml").write_text(f"sessions:\n  retention_days: {value}\n", encoding="utf-8")
+        (home / "config.yaml").write_text(
+            f"sessions:\n  retention_days: {value}\n", encoding="utf-8"
+        )
         assert prune_advisor.advise(home).retention_days == 0, value
 
 
-def test_admin_managed_setting_is_never_asked_nor_overwritten(home, monkeypatch, tmp_path):
+def test_admin_managed_setting_is_never_asked_nor_overwritten(
+    home, monkeypatch, tmp_path
+):
     """An administrator-pinned auto_prune is already decided: no prompt, and /autoprune off must
     not claim to have turned pruning off while the managed true still applies."""
     from clawk_cli import managed_scope
+
     managed = tmp_path / "managed"
     managed.mkdir()
-    (managed / "config.yaml").write_text("sessions:\n  auto_prune: true\n", encoding="utf-8")
+    (managed / "config.yaml").write_text(
+        "sessions:\n  auto_prune: true\n", encoding="utf-8"
+    )
     monkeypatch.setenv("CLAWK_MANAGED_DIR", str(managed))
     managed_scope.invalidate_managed_cache()
     _disk(monkeypatch, free_gb=1)
@@ -83,7 +109,9 @@ def test_admin_managed_setting_is_never_asked_nor_overwritten(home, monkeypatch,
         reply = prune_advisor.run_command("off", home)
         assert "administrator" in reply
         cfg = home / "config.yaml"
-        assert not cfg.exists() or "auto_prune" not in cfg.read_text(encoding="utf-8-sig")
+        assert not cfg.exists() or "auto_prune" not in cfg.read_text(
+            encoding="utf-8-sig"
+        )
     finally:
         managed_scope.invalidate_managed_cache()
 
@@ -109,7 +137,9 @@ def test_only_a_settled_question_may_withdraw_the_notice(home, monkeypatch):
     assert prune_advisor.answered(home)
 
 
-def test_local_notice_is_neither_re_asked_after_an_answer_nor_spent_on_nobody(home, monkeypatch):
+def test_local_notice_is_neither_re_asked_after_an_answer_nor_spent_on_nobody(
+    home, monkeypatch
+):
     """Desktop/Ink path: an answer given while the estimate runs suppresses the publish, and a
     notice no viewer received releases its claim so the next window still asks."""
     import asyncio
@@ -117,22 +147,38 @@ def test_local_notice_is_neither_re_asked_after_an_answer_nor_spent_on_nobody(ho
     from gateway import run_housekeeping_disk as rhd
     from gateway.config import Platform
     from gateway.session_events import SessionEvents
-    monkeypatch.setattr("gateway.session_policy.policy_for_source", lambda *_: SimpleNamespace(source="gui"))
+
+    monkeypatch.setattr(
+        "gateway.session_policy.policy_for_source",
+        lambda *_: SimpleNamespace(source="gui"),
+    )
     _disk(monkeypatch, free_gb=1)
     events = SessionEvents()  # no viewer attached: publish delivers to nobody
-    live = SimpleNamespace(source=SimpleNamespace(platform=Platform.LOCAL), event_stream=events)
-    authority = SimpleNamespace(sessions={"s1": live}, runner=None, db=SimpleNamespace(db_path=home / "state.db"))
+    live = SimpleNamespace(
+        source=SimpleNamespace(platform=Platform.LOCAL), event_stream=events
+    )
+    authority = SimpleNamespace(
+        sessions={"s1": live},
+        runner=None,
+        db=SimpleNamespace(db_path=home / "state.db"),
+    )
     ref = SimpleNamespace(session_id="s1")
     rhd._LOCAL_NOTIFIED.clear()
 
     asyncio.run(rhd.publish_local_auto_prune_notice(authority, ref))
-    assert events.sequence == 1 and str(home) not in rhd._LOCAL_NOTIFIED  # undelivered: claim released
+    assert (
+        events.sequence == 1 and str(home) not in rhd._LOCAL_NOTIFIED
+    )  # undelivered: claim released
 
     real_advise = prune_advisor.advise
+
     def advise_then_answer(h):
         advice = real_advise(h)
-        prune_advisor.run_command("off", h)  # another window answers during the estimate
+        prune_advisor.run_command(
+            "off", h
+        )  # another window answers during the estimate
         return advice
+
     monkeypatch.setattr(prune_advisor, "advise", advise_then_answer)
     asyncio.run(rhd.publish_local_auto_prune_notice(authority, ref))
     assert events.sequence == 1  # nothing re-asked
@@ -144,6 +190,7 @@ def test_estimate_weights_by_stored_bytes_not_message_count(tmp_path, monkeypatc
     the bytes a real prune + VACUUM gives back."""
     import sqlite3
     from clawk_state import SessionDB
+
     h = tmp_path / "skewed"
     h.mkdir()
     db = SessionDB(db_path=h / "state.db")
@@ -160,9 +207,13 @@ def test_estimate_weights_by_stored_bytes_not_message_count(tmp_path, monkeypatc
         db.end_session(f"new{i}", "user_exit")
     db.close()
     with sqlite3.connect(h / "state.db") as conn:
-        conn.execute("UPDATE sessions SET started_at=?, ended_at=?, last_activity_at=? WHERE id LIKE 'old%'",
-                     (old, old, old))
-        conn.execute("UPDATE messages SET timestamp=? WHERE session_id LIKE 'old%'", (old,))
+        conn.execute(
+            "UPDATE sessions SET started_at=?, ended_at=?, last_activity_at=? WHERE id LIKE 'old%'",
+            (old, old, old),
+        )
+        conn.execute(
+            "UPDATE messages SET timestamp=? WHERE session_id LIKE 'old%'", (old,)
+        )
     _disk(monkeypatch, free_gb=1)
     advice = prune_advisor.advise(h)
     assert advice.prunable_sessions == 40
@@ -178,45 +229,77 @@ def test_estimate_weights_by_stored_bytes_not_message_count(tmp_path, monkeypatc
     assert "clawk sessions optimize" in "\n".join(prune_advisor.advice_lines(advice))
 
 
-def test_cli_startup_never_reads_the_store_and_asks_from_the_stored_estimate(home, monkeypatch):
+def test_cli_startup_never_reads_the_store_and_asks_from_the_stored_estimate(
+    home, monkeypatch
+):
     """The classic CLI asks only from a stored estimate: the first low-disk launch measures in the
     background and asks nothing; the next launch asks at once from that measurement."""
     import agent.memory_provider as mp
+
     _disk(monkeypatch, free_gb=1)
     started = []
-    monkeypatch.setattr(mp, "spawn_context_thread", lambda target, **kw: type(
-        "T", (), {"start": lambda self: started.append(target)})())
+    monkeypatch.setattr(
+        mp,
+        "spawn_context_thread",
+        lambda target, **kw: type(
+            "T", (), {"start": lambda self: started.append(target)}
+        )(),
+    )
     real_advise = prune_advisor.advise
+
     def must_not_read(*_a, **_k):
         raise AssertionError("startup read state.db")
+
     monkeypatch.setattr(prune_advisor, "advise", must_not_read)
     asked = []
-    assert prune_advisor.offer_interactive(cprint=lambda *_: None, ask=lambda q: asked.append(q) or "") is None
-    assert asked == [] and started == [must_not_read]  # measured off-thread, nothing asked
+    assert (
+        prune_advisor.offer_interactive(
+            cprint=lambda *_: None, ask=lambda q: asked.append(q) or ""
+        )
+        is None
+    )
+    assert asked == [] and started == [
+        must_not_read
+    ]  # measured off-thread, nothing asked
     real_advise(home)  # what that background thread does
     out = []
-    prune_advisor.offer_interactive(cprint=out.append, ask=lambda q: asked.append(q) or "")
+    prune_advisor.offer_interactive(
+        cprint=out.append, ask=lambda q: asked.append(q) or ""
+    )
     assert len(asked) == 1 and any("Low disk space" in line for line in out)
 
 
 def test_full_scan_total_is_measured_once_and_reused(home, monkeypatch):
     """The all-rows byte sum (a full scan) is cached; later estimates reuse it, scaled to the file."""
     import sqlite3
+
     _disk(monkeypatch, free_gb=1)
     old = time.time() - 200 * 86400
     with sqlite3.connect(home / "state.db") as conn:
-        conn.execute("UPDATE sessions SET started_at=?, ended_at=?, last_activity_at=?", (old, old, old))
+        conn.execute(
+            "UPDATE sessions SET started_at=?, ended_at=?, last_activity_at=?",
+            (old, old, old),
+        )
         conn.execute("UPDATE messages SET timestamp=?", (old,))
     first = prune_advisor.advise(home)
     measured = prune_advisor._read_estimate(home)
     assert measured["total_bytes"] > 0
     second = prune_advisor.advise(home)
-    assert prune_advisor._read_estimate(home)["total_bytes_at"] == measured["total_bytes_at"]  # no rescan
+    assert (
+        prune_advisor._read_estimate(home)["total_bytes_at"]
+        == measured["total_bytes_at"]
+    )  # no rescan
     assert second.reclaim_bytes == first.reclaim_bytes
-    stale = dict(measured, total_bytes_at=time.time() - prune_advisor.TOTAL_BYTES_TTL - 1)
-    (home / prune_advisor._ESTIMATE_FILE).write_text(__import__("json").dumps(stale), encoding="utf-8")
+    stale = dict(
+        measured, total_bytes_at=time.time() - prune_advisor.TOTAL_BYTES_TTL - 1
+    )
+    (home / prune_advisor._ESTIMATE_FILE).write_text(
+        __import__("json").dumps(stale), encoding="utf-8"
+    )
     prune_advisor.advise(home)
-    assert prune_advisor._read_estimate(home)["total_bytes_at"] > stale["total_bytes_at"]  # a week on: re-measured
+    assert (
+        prune_advisor._read_estimate(home)["total_bytes_at"] > stale["total_bytes_at"]
+    )  # a week on: re-measured
 
 
 def test_cli_launches_further_apart_than_the_estimate_ttl_still_ask(home, monkeypatch):
@@ -224,6 +307,7 @@ def test_cli_launches_further_apart_than_the_estimate_ttl_still_ask(home, monkey
     otherwise a user who launches every other day would never see the question."""
     import json
     import agent.memory_provider as mp
+
     _disk(monkeypatch, free_gb=1)
     prune_advisor.advise(home)
     path = home / prune_advisor._ESTIMATE_FILE
@@ -231,8 +315,15 @@ def test_cli_launches_further_apart_than_the_estimate_ttl_still_ask(home, monkey
     data["advice_at"] = time.time() - prune_advisor.CLI_ADVICE_TTL - 3600
     path.write_text(json.dumps(data), encoding="utf-8")
     started = []
-    monkeypatch.setattr(mp, "spawn_context_thread", lambda target, **kw: type(
-        "T", (), {"start": lambda self: started.append(target)})())
+    monkeypatch.setattr(
+        mp,
+        "spawn_context_thread",
+        lambda target, **kw: type(
+            "T", (), {"start": lambda self: started.append(target)}
+        )(),
+    )
     asked = []
-    prune_advisor.offer_interactive(cprint=lambda *_: None, ask=lambda q: asked.append(q) or "")
+    prune_advisor.offer_interactive(
+        cprint=lambda *_: None, ask=lambda q: asked.append(q) or ""
+    )
     assert len(asked) == 1 and len(started) == 1  # asked now, refreshed for next time

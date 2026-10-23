@@ -42,7 +42,6 @@ class TestCleanupContract:
         assert not old.exists()
         assert fresh.exists(), "a payload still in flight was reaped"
 
-
     def test_a_missing_dm_dir_is_not_an_error(self, temp_root):
         assert bot_mode_dm.cleanup_bot_dm_cache() == 0
 

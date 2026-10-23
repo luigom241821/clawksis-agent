@@ -7,6 +7,7 @@ kotlin-language-server evaluate them), and a ``node_modules/.bin/tsc`` or ``rust
 the post-write shell linters would pick up.  Nothing here executes those files: the tests record
 which servers Clawksis would start, the configuration it hands them, and the shell commands it runs.
 """
+
 from __future__ import annotations
 
 import json
@@ -17,9 +18,15 @@ from agent.lsp import manager
 from agent.lsp.servers import UNTRUSTED_SAFE_SERVERS
 from agent.lsp.workspace import clear_cache, is_inside_workspace
 
-_SERVERS = {"pyright": "a.py", "typescript": "a.ts", "vue-language-server": "a.vue",
-            "svelte-language-server": "a.svelte", "rust-analyzer": "a.rs", "jdtls": "A.java",
-            "kotlin-language-server": "a.kt"}
+_SERVERS = {
+    "pyright": "a.py",
+    "typescript": "a.ts",
+    "vue-language-server": "a.vue",
+    "svelte-language-server": "a.svelte",
+    "rust-analyzer": "a.rs",
+    "jdtls": "A.java",
+    "kotlin-language-server": "a.kt",
+}
 
 
 def _write(path, text: str = ""):
@@ -35,7 +42,10 @@ def _clawk_side_tree(tmp_path, monkeypatch) -> str:
     staging = tmp_path / "home" / "lsp" / "node_modules"
     _write(staging / "typescript" / "lib" / "typescript.js")
     _write(staging / "typescript" / "lib" / "tsserver.js")
-    _write(staging / "@vue" / "language-server" / "package.json", json.dumps({"version": "2.2.12"}))
+    _write(
+        staging / "@vue" / "language-server" / "package.json",
+        json.dumps({"version": "2.2.12"}),
+    )
     return str(_write(staging / "server-launcher"))
 
 
@@ -68,10 +78,17 @@ def _strings(value):
 def _record_spawns(tmp_path, monkeypatch, launcher, roots, *, trusted_workspaces=()):
     """Config → service → spawn for every ``_SERVERS`` file in every root, cwd inside ``tmp/launch``.
     Returns ``{(server_id, root): initialization_options}`` for the servers Clawksis would start, and the status."""
-    _write(tmp_path / "home" / "config.yaml", json.dumps({"lsp": {
-        "trusted_workspaces": [str(p) for p in trusted_workspaces],
-        "servers": {sid: {"command": [launcher]} for sid in _SERVERS},
-    }}))
+    _write(
+        tmp_path / "home" / "config.yaml",
+        json.dumps(
+            {
+                "lsp": {
+                    "trusted_workspaces": [str(p) for p in trusted_workspaces],
+                    "servers": {sid: {"command": [launcher]} for sid in _SERVERS},
+                }
+            }
+        ),
+    )
     (tmp_path / "launch" / "src").mkdir(parents=True, exist_ok=True)
     monkeypatch.chdir(tmp_path / "launch" / "src")
     clear_cache()
@@ -96,33 +113,53 @@ def _record_spawns(tmp_path, monkeypatch, launcher, roots, *, trusted_workspaces
     return handed, status
 
 
-def test_untrusted_checkout_starts_only_allowlisted_servers_pinned_to_clawk_code(tmp_path, monkeypatch):
+def test_untrusted_checkout_starts_only_allowlisted_servers_pinned_to_clawk_code(
+    tmp_path, monkeypatch
+):
     launcher = _clawk_side_tree(tmp_path, monkeypatch)
     launch, clone = tmp_path / "launch", tmp_path / "elsewhere" / "clone"
     for root in (launch, clone):
         _checkout_shipping_its_own_toolchain(root)
     handed, status = _record_spawns(tmp_path, monkeypatch, launcher, (launch, clone))
 
-    untrusted = {sid: init for (sid, root), init in handed.items() if root == str(clone)}
+    untrusted = {
+        sid: init for (sid, root), init in handed.items() if root == str(clone)
+    }
     # Deny by default: servers that evaluate build files (cargo, Gradle) never start in the clone.
     assert set(untrusted) == set(_SERVERS) & UNTRUSTED_SAFE_SERVERS
-    assert {("rust-analyzer", str(clone)), ("jdtls", str(clone)), ("vue-language-server", str(clone))} \
-        <= set(status["untrusted_skipped"])
+    assert {
+        ("rust-analyzer", str(clone)),
+        ("jdtls", str(clone)),
+        ("vue-language-server", str(clone)),
+    } <= set(status["untrusted_skipped"])
     for sid, init in untrusted.items():
-        leaked = [s for s in _strings(init) if os.path.isabs(s) and is_inside_workspace(s, str(clone))]
+        leaked = [
+            s
+            for s in _strings(init)
+            if os.path.isabs(s) and is_inside_workspace(s, str(clone))
+        ]
         assert not leaked, (sid, leaked)
     # Allowlisted servers that would fall back to project code by themselves are told not to.
-    assert os.path.isfile(os.path.join(untrusted["typescript"]["tsserver"]["path"], "tsserver.js"))
+    assert os.path.isfile(
+        os.path.join(untrusted["typescript"]["tsserver"]["path"], "tsserver.js")
+    )
     assert untrusted["svelte-language-server"]["isTrusted"] is False
 
     # The launch worktree is trusted: every server starts, pyright gets the project interpreter back.
     trusted = {sid: init for (sid, root), init in handed.items() if root == str(launch)}
     assert set(trusted) == set(_SERVERS)
-    assert is_inside_workspace(trusted["pyright"]["python"]["pythonPath"], str(launch / ".venv"))
-    assert all(trusted[sid] == {} for sid in ("typescript", "svelte-language-server", "rust-analyzer"))
+    assert is_inside_workspace(
+        trusted["pyright"]["python"]["pythonPath"], str(launch / ".venv")
+    )
+    assert all(
+        trusted[sid] == {}
+        for sid in ("typescript", "svelte-language-server", "rust-analyzer")
+    )
 
 
-def test_only_operator_workspaces_and_listed_directories_are_trusted(tmp_path, monkeypatch):
+def test_only_operator_workspaces_and_listed_directories_are_trusted(
+    tmp_path, monkeypatch
+):
     """The same trust decision gates the servers and the post-write shell linters that use the repo's toolchain."""
     launcher = _clawk_side_tree(tmp_path, monkeypatch)
     launch, listed = tmp_path / "launch", tmp_path / "listed" / "proj"
@@ -130,14 +167,25 @@ def test_only_operator_workspaces_and_listed_directories_are_trusted(tmp_path, m
     roots = (launch, nested, sibling, listed)
     for root in roots:
         _checkout_shipping_its_own_toolchain(root)
-    handed, _ = _record_spawns(tmp_path, monkeypatch, launcher, roots, trusted_workspaces=[tmp_path / "listed"])
+    handed, _ = _record_spawns(
+        tmp_path, monkeypatch, launcher, roots, trusted_workspaces=[tmp_path / "listed"]
+    )
 
     from tools.environments.local import LocalEnvironment
     from tools.file_operations import ShellFileOperations
+
     fops = ShellFileOperations(LocalEnvironment(cwd=str(launch / "src")))
     ran = []
-    monkeypatch.setattr(fops, "_exec", lambda cmd, **_: ran.append(cmd) or SimpleNamespace(exit_code=0, stdout=""))
-    monkeypatch.setattr(fops, "_run_managed_node_linter", lambda ext, path: ran.append(path) or SimpleNamespace(exit_code=0, stdout=""))
+    monkeypatch.setattr(
+        fops,
+        "_exec",
+        lambda cmd, **_: ran.append(cmd) or SimpleNamespace(exit_code=0, stdout=""),
+    )
+    monkeypatch.setattr(
+        fops,
+        "_run_managed_node_linter",
+        lambda ext, path: ran.append(path) or SimpleNamespace(exit_code=0, stdout=""),
+    )
     monkeypatch.setattr(fops, "_has_command", lambda _cmd: True)
     monkeypatch.setattr(fops, "_lsp_will_handle", lambda _path: False)
 
@@ -150,11 +198,16 @@ def test_only_operator_workspaces_and_listed_directories_are_trusted(tmp_path, m
         return len(ran)
 
     for root in (launch, listed):
-        assert is_inside_workspace(handed[("pyright", str(root))]["python"]["pythonPath"], str(root / ".venv"))
+        assert is_inside_workspace(
+            handed[("pyright", str(root))]["python"]["pythonPath"], str(root / ".venv")
+        )
         assert ("rust-analyzer", str(root)) in handed
         assert shell_linted(root) == 2, root
     for root in (nested, sibling):
-        assert not is_inside_workspace(handed[("pyright", str(root))].get("python", {}).get("pythonPath", ""), str(root)), root
+        assert not is_inside_workspace(
+            handed[("pyright", str(root))].get("python", {}).get("pythonPath", ""),
+            str(root),
+        ), root
         assert ("rust-analyzer", str(root)) not in handed
         assert shell_linted(root) == 0, root
 
@@ -163,6 +216,7 @@ def test_only_operator_workspaces_and_listed_directories_are_trusted(tmp_path, m
     assert shell_linted(sibling) == 2
     # ...but not one the model scheduled: a cron job's workdir or a kanban task's workspace...
     from gateway.session_context import clear_session_vars, set_session_vars
+
     tokens = set_session_vars(cron_session="1")
     try:
         assert shell_linted(sibling) == 0

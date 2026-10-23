@@ -36,15 +36,21 @@ def _auto_maintenance(db):
     # retention_days=0 makes the ended row prunable; the freelist floor is disabled so only the
     # holder scan can stop the VACUUM.
     return db.maybe_auto_prune_and_vacuum(
-        retention_days=0, min_interval_hours=0, min_vacuum_interval_days=0,
-        min_vacuum_freelist_ratio=-1.0)
+        retention_days=0,
+        min_interval_hours=0,
+        min_vacuum_interval_days=0,
+        min_vacuum_freelist_ratio=-1.0,
+    )
 
 
 def test_auto_vacuum_skips_while_a_foreign_process_holds_the_store(tmp_path):
     db = _seeded_db(tmp_path)
     holder = subprocess.Popen(
         [sys.executable, "-c", _HOLDER, str(db.db_path)],
-        stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
     try:
         assert holder.stdout.readline().strip() == "ready"
         result = _auto_maintenance(db)

@@ -37,9 +37,11 @@ from agent.relay_runtime import (
 # Fake relay: minimal surface the coordinator touches, with a wedgeable pop.
 # ---------------------------------------------------------------------------
 
+
 class _ScopeHandle:
     def __init__(self, name: str) -> None:
         self.name = name
+
 
 class _FakeScopeModule:
     """Stands in for ``nemo_relay.scope`` with a controllable pop."""
@@ -63,6 +65,7 @@ class _FakeScopeModule:
     def event(self, *args: Any, **kwargs: Any) -> None:
         return None
 
+
 class _FakeSubscribers:
     def __init__(self, wedge_event: threading.Event | None = None) -> None:
         self._wedge = wedge_event
@@ -73,9 +76,11 @@ class _FakeSubscribers:
             self._wedge.wait()
         self.flushed += 1
 
+
 class _FakeScopeType:
     Function = "function"
     Agent = "agent"
+
 
 class _FakeRelay:
     def __init__(
@@ -91,13 +96,16 @@ class _FakeRelay:
     def get_scope_stack(self) -> None:
         return None
 
+
 def _make_runtime(fake_relay: _FakeRelay) -> RelayRuntime:
     """Build a RelayRuntime around the fake relay without native imports."""
     runtime = RelayRuntime(relay=fake_relay, profile_key="/tmp/test-profile")
     _LIVE_FAKES.append((runtime, fake_relay))
     return runtime
 
+
 _LIVE_FAKES: list[tuple[RelayRuntime, _FakeRelay]] = []
+
 
 @pytest.fixture(autouse=True)
 def _release_wedges_after_test():
@@ -120,6 +128,7 @@ def _release_wedges_after_test():
         runtime.shutdown()
     _LIVE_FAKES.clear()
 
+
 def _run_with_join(fn, timeout: float = 5.0) -> tuple[bool, list[Any]]:
     """Run ``fn`` on a thread; return (returned_within_timeout, result)."""
     result: list[Any] = []
@@ -132,9 +141,11 @@ def _run_with_join(fn, timeout: float = 5.0) -> tuple[bool, list[Any]]:
     t.join(timeout)
     return (not t.is_alive(), result)
 
+
 @pytest.fixture()
 def coordinator() -> RelaySessionCoordinator:
     return RelaySessionCoordinator()
+
 
 @pytest.fixture(autouse=True)
 def _fast_scope_timeout(monkeypatch):
@@ -144,6 +155,7 @@ def _fast_scope_timeout(monkeypatch):
     tests only need 'bounded', not the specific bound.
     """
     monkeypatch.setattr(relay_runtime, "SCOPE_OP_TIMEOUT", 1.0)
+
 
 def _acquire(coordinator, runtime, session_id="sess-1", monkeypatch=None):
     """Acquire a conversation lease against the fake runtime."""
@@ -162,10 +174,12 @@ def _acquire(coordinator, runtime, session_id="sess-1", monkeypatch=None):
         platform="test",
     )
 
+
 # ---------------------------------------------------------------------------
 # RED tests: today these HANG (the fake pop blocks forever) and the join
 # times out.  Post-fix the coordinator bounds the native call and returns.
 # ---------------------------------------------------------------------------
+
 
 class TestBoundedScopeFinalization:
     def test_end_turn_returns_when_native_pop_wedges(self, coordinator):
@@ -197,9 +211,7 @@ class TestBoundedScopeFinalization:
             "close_session must return even when the native scope.pop wedges"
         )
 
-    def test_close_session_returns_when_subscriber_flush_wedges(
-        self, coordinator
-    ):
+    def test_close_session_returns_when_subscriber_flush_wedges(self, coordinator):
         wedge = threading.Event()
         runtime = _make_runtime(_FakeRelay(wedge_flush=wedge))
         lease = _acquire(coordinator, runtime)
@@ -208,13 +220,9 @@ class TestBoundedScopeFinalization:
         returned, _ = _run_with_join(
             lambda: runtime.close_session({"session_id": "sess-1"})
         )
-        assert returned, (
-            "close_session must return even when subscribers.flush wedges"
-        )
+        assert returned, "close_session must return even when subscribers.flush wedges"
 
-    def test_finish_logical_calls_returns_and_retains_prefix(
-        self, coordinator
-    ):
+    def test_finish_logical_calls_returns_and_retains_prefix(self, coordinator):
         wedge = threading.Event()
         runtime = _make_runtime(_FakeRelay(wedge_pop=wedge))
         lease = _acquire(coordinator, runtime)
@@ -228,15 +236,14 @@ class TestBoundedScopeFinalization:
         returned, _ = _run_with_join(
             lambda: coordinator.finish_logical_calls(turn, outcome="success")
         )
-        assert returned, (
-            "finish_logical_calls must return even when native pops wedge"
-        )
+        assert returned, "finish_logical_calls must return even when native pops wedge"
         # Existing diagnostic contract: the unclosed prefix is retained.
         with turn.logical_llm_lock:
             assert turn.logical_llm_calls, (
                 "wedged logical scopes must be retained for diagnostics, "
                 "not silently dropped"
             )
+
 
 class TestHealthyPathUnchanged:
     """The bound must be invisible when the native pipeline is healthy."""

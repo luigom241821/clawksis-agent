@@ -26,6 +26,7 @@ from tools.file_tools_read_tracking import notify_other_tool_call
 
 class _FakeReadResult:
     """Minimal stand-in for FileOperations.read_file return value."""
+
     def __init__(self, content="line1\nline2\n", total_lines=2):
         self.content = content
         self._total_lines = total_lines
@@ -40,6 +41,7 @@ def _fake_read_file(path, offset=1, limit=500):
 
 class _FakeSearchResult:
     """Minimal stand-in for FileOperations.search return value."""
+
     def __init__(self):
         self.matches = []
 
@@ -63,7 +65,6 @@ class TestReadLoopDetection(unittest.TestCase):
     def tearDown(self):
         _read_tracker.clear()
 
-
     @patch("tools.file_tools._get_file_ops", return_value=_make_fake_file_ops())
     def test_second_consecutive_read_no_warning(self, _mock_ops):
         """2nd consecutive read should NOT warn (threshold is 3)."""
@@ -74,7 +75,6 @@ class TestReadLoopDetection(unittest.TestCase):
         self.assertNotIn("_warning", result)
         self.assertIn("content", result)
 
-
     @patch("tools.file_tools._get_file_ops", return_value=_make_fake_file_ops())
     def test_fourth_consecutive_read_is_blocked(self, _mock_ops):
         """4th consecutive read of the same region is BLOCKED — no content."""
@@ -84,8 +84,6 @@ class TestReadLoopDetection(unittest.TestCase):
         self.assertIn("error", result)
         self.assertIn("BLOCKED", result["error"])
         self.assertNotIn("content", result)
-
-
 
     @patch("tools.file_tools._get_file_ops", return_value=_make_fake_file_ops())
     def test_warning_still_returns_content(self, _mock_ops):
@@ -132,7 +130,6 @@ class TestNotifyOtherToolCall(unittest.TestCase):
         self.assertIn("content", result)
 
 
-
 class TestSearchLoopDetection(unittest.TestCase):
     """Verify that search_tool detects and blocks consecutive repeated searches."""
 
@@ -142,7 +139,6 @@ class TestSearchLoopDetection(unittest.TestCase):
     def tearDown(self):
         _read_tracker.clear()
 
-
     @patch("tools.file_tools._get_file_ops", return_value=_make_fake_file_ops())
     def test_second_consecutive_search_no_warning(self, _mock_ops):
         """2nd consecutive search should NOT warn (threshold is 3)."""
@@ -150,7 +146,6 @@ class TestSearchLoopDetection(unittest.TestCase):
         result = json.loads(search_tool("def main", task_id="t1"))
         self.assertNotIn("_warning", result)
         self.assertNotIn("error", result)
-
 
     @patch("tools.file_tools._get_file_ops", return_value=_make_fake_file_ops())
     def test_fourth_consecutive_search_is_blocked(self, _mock_ops):
@@ -162,12 +157,13 @@ class TestSearchLoopDetection(unittest.TestCase):
         self.assertIn("BLOCKED", result["error"])
         self.assertNotIn("matches", result)
 
-
     @patch("tools.file_tools._get_file_ops", return_value=_make_fake_file_ops())
     def test_pagination_offset_does_not_count_as_repeat(self, _mock_ops):
         """Paginating truncated results should not be blocked as a repeat search."""
         for offset in (0, 50, 100, 150):
-            result = json.loads(search_tool("def main", task_id="t1", offset=offset, limit=50))
+            result = json.loads(
+                search_tool("def main", task_id="t1", offset=offset, limit=50)
+            )
             self.assertNotIn("_warning", result)
             self.assertNotIn("error", result)
 
@@ -188,20 +184,21 @@ class TestTodoInjectionFiltering(unittest.TestCase):
 
     def test_filters_completed_and_cancelled(self):
         from tools.todo_tool import TodoStore
+
         store = TodoStore()
-        store.write([
-            {"id": "1", "content": "Read codebase", "status": "completed"},
-            {"id": "2", "content": "Write fix", "status": "in_progress"},
-            {"id": "3", "content": "Run tests", "status": "pending"},
-            {"id": "4", "content": "Abandoned", "status": "cancelled"},
-        ])
+        store.write(
+            [
+                {"id": "1", "content": "Read codebase", "status": "completed"},
+                {"id": "2", "content": "Write fix", "status": "in_progress"},
+                {"id": "3", "content": "Run tests", "status": "pending"},
+                {"id": "4", "content": "Abandoned", "status": "cancelled"},
+            ]
+        )
         injection = store.format_for_injection()
         self.assertNotIn("Read codebase", injection)
         self.assertNotIn("Abandoned", injection)
         self.assertIn("Write fix", injection)
         self.assertIn("Run tests", injection)
-
-
 
 
 if __name__ == "__main__":

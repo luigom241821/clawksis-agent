@@ -26,7 +26,8 @@ def _load_plugin_module():
     plugin_file = repo_root / "plugins" / "kanban" / "dashboard" / "plugin_api.py"
     assert plugin_file.exists(), f"plugin file missing: {plugin_file}"
     spec = importlib.util.spec_from_file_location(
-        "clawk_dashboard_plugin_kanban_ws_test", plugin_file,
+        "clawk_dashboard_plugin_kanban_ws_test",
+        plugin_file,
     )
     assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
@@ -95,9 +96,7 @@ class _TrackingConnection:
             self.on_execute()
         poll_index = self.execute_calls - 1
         self._rows = (
-            self.rows_by_poll[poll_index]
-            if poll_index < len(self.rows_by_poll)
-            else []
+            self.rows_by_poll[poll_index] if poll_index < len(self.rows_by_poll) else []
         )
         return self
 
@@ -176,17 +175,21 @@ async def test_stream_events_reuses_connection_and_closes_after_disconnect(
     assert conn.execute_calls == 2
     assert conn.close_calls == 1
     assert len(set(connect_threads + conn.thread_ids)) == 1
-    assert ws.sent == [{
-        "events": [{
-            "id": 7,
-            "task_id": "task-1",
-            "run_id": None,
-            "kind": "updated",
-            "payload": {"status": "running"},
-            "created_at": 1234,
-        }],
-        "cursor": 7,
-    }]
+    assert ws.sent == [
+        {
+            "events": [
+                {
+                    "id": 7,
+                    "task_id": "task-1",
+                    "run_id": None,
+                    "kind": "updated",
+                    "payload": {"status": "running"},
+                    "created_at": 1234,
+                }
+            ],
+            "cursor": 7,
+        }
+    ]
 
 
 @pytest.mark.asyncio

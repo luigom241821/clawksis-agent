@@ -39,7 +39,12 @@ class CostPolicy:
 
 
 def _number(value: Any, where: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+        or value < 0
+    ):
         raise ValueError(f"{where} must be a non-negative number, not {value!r}")
     return float(value)
 
@@ -48,7 +53,9 @@ def _parse_cost(value: Any, where: str) -> ToolCost:
     note = ""
     if isinstance(value, dict):
         if "credits" not in value or set(value) - {"credits", "note"}:
-            raise ValueError(f"{where} must be a number, [min, max], or {{\"credits\": ..., \"note\": \"...\"}}")
+            raise ValueError(
+                f'{where} must be a number, [min, max], or {{"credits": ..., "note": "..."}}'
+            )
         note = value.get("note", "")
         if not isinstance(note, str):
             raise ValueError(f"{where} note must be a string")
@@ -64,12 +71,15 @@ def _parse_cost(value: Any, where: str) -> ToolCost:
     return ToolCost(amount, amount, note.strip())
 
 
-def parse_cost_policy(costs: Any = None, spend_limit: Any = None, cost_unit: Any = None, *,
-                      where: str) -> Optional[CostPolicy]:
+def parse_cost_policy(
+    costs: Any = None, spend_limit: Any = None, cost_unit: Any = None, *, where: str
+) -> Optional[CostPolicy]:
     """Validate one server's declaration. None when it declares no tool cost (a limit alone has
     nothing to count); raises ValueError naming the bad key otherwise, never a silent pass."""
     if costs is not None and not isinstance(costs, dict):
-        raise ValueError(f"{where} costs must be an object mapping MCP tool names to costs")
+        raise ValueError(
+            f"{where} costs must be an object mapping MCP tool names to costs"
+        )
     table: dict[str, ToolCost] = {}
     for tool, value in (costs or {}).items():
         if not isinstance(tool, str) or not tool:
@@ -78,21 +88,33 @@ def parse_cost_policy(costs: Any = None, spend_limit: Any = None, cost_unit: Any
     limit = 0.0 if spend_limit is None else _number(spend_limit, f"{where} spend_limit")
     unit = DEFAULT_UNIT if cost_unit is None else cost_unit
     if not isinstance(unit, str) or not unit.strip() or len(unit) > 32:
-        raise ValueError(f"{where} cost_unit must be a short non-empty label, not {cost_unit!r}")
+        raise ValueError(
+            f"{where} cost_unit must be a short non-empty label, not {cost_unit!r}"
+        )
     if not any(cost.high > 0 for cost in table.values()):
         return None
     return CostPolicy(table, limit, unit.strip())
 
 
-def config_cost_policy(server_name: str, config: Mapping[str, Any] | None) -> Optional[CostPolicy]:
+def config_cost_policy(
+    server_name: str, config: Mapping[str, Any] | None
+) -> Optional[CostPolicy]:
     """Policy of a native/translated ``mcp_servers`` entry (raises ValueError when malformed)."""
     config = config or {}
-    return parse_cost_policy(config.get("tool_costs"), config.get("spend_limit"), config.get("cost_unit"),
-                             where=f"MCP server '{server_name}'")
+    return parse_cost_policy(
+        config.get("tool_costs"),
+        config.get("spend_limit"),
+        config.get("cost_unit"),
+        where=f"MCP server '{server_name}'",
+    )
 
 
 def _fmt(amount: float) -> str:
-    return f"{int(amount):,}" if float(amount).is_integer() else f"{amount:,.2f}".rstrip("0").rstrip(".")
+    return (
+        f"{int(amount):,}"
+        if float(amount).is_integer()
+        else f"{amount:,.2f}".rstrip("0").rstrip(".")
+    )
 
 
 def _qty(amount: float, unit: str) -> str:
@@ -159,6 +181,7 @@ def _live(key: tuple) -> tuple:
 @dataclass(frozen=True)
 class Charge:
     """One costed call about to be admitted: what it costs and whose tally it lands on."""
+
     key: tuple
     server: str
     tool: str
@@ -204,38 +227,58 @@ class Charge:
 
     def cost_sentence(self) -> str:
         unit, cost = self.policy.unit, self.cost
-        text = (f"Costs about {_qty(cost.high, unit)}" if cost.low == cost.high
-                else f"Costs {_fmt(cost.low)}-{_qty(cost.high, unit)}")
+        text = (
+            f"Costs about {_qty(cost.high, unit)}"
+            if cost.low == cost.high
+            else f"Costs {_fmt(cost.low)}-{_qty(cost.high, unit)}"
+        )
         return f"{text} ({cost.note})." if cost.note else f"{text}."
 
     def spend_sentence(self, spent: float) -> str:
         unit, limit = self.policy.unit, self.policy.limit
         if spent > 0:
             cap = f" (limit {_fmt(limit)})" if limit > 0 else ""
-            return f"This chat has used about {_qty(spent, unit)} on '{self.server}'{cap}."
-        return f"Spend limit for this chat on '{self.server}': {_qty(limit, unit)}." if limit > 0 else ""
+            return (
+                f"This chat has used about {_qty(spent, unit)} on '{self.server}'{cap}."
+            )
+        return (
+            f"Spend limit for this chat on '{self.server}': {_qty(limit, unit)}."
+            if limit > 0
+            else ""
+        )
 
     def lines(self, spent: float) -> list[str]:
         return [s for s in (self.cost_sentence(), self.spend_sentence(spent)) if s]
 
     def refusal(self, spent: float) -> str:
         unit = self.policy.unit
-        return (f"MCP tool '{self.tool}' on server '{self.server}' was NOT run: this chat has used about "
-                f"{_qty(spent, unit)} on '{self.server}' and its spend limit is {_qty(self.policy.limit, unit)}. "
-                f"This call (about {_qty(self.cost.high, unit)}) needed an explicit approval and did not get "
-                f"one. Do not retry; tell the user the spend limit was reached.")
+        return (
+            f"MCP tool '{self.tool}' on server '{self.server}' was NOT run: this chat has used about "
+            f"{_qty(spent, unit)} on '{self.server}' and its spend limit is {_qty(self.policy.limit, unit)}. "
+            f"This call (about {_qty(self.cost.high, unit)}) needed an explicit approval and did not get "
+            f"one. Do not retry; tell the user the spend limit was reached."
+        )
 
 
-def pending_charge(policy_key: Any, server_name: str, tool_name: str, session_key: str) -> Optional[Charge]:
+def pending_charge(
+    policy_key: Any, server_name: str, tool_name: str, session_key: str
+) -> Optional[Charge]:
     """The charge a call to *tool_name* would add, or None for an undeclared/zero-cost tool."""
     from tools.mcp_tool_common import _core
+
     policy = _core._server_cost_policies.get(policy_key)
     if policy is None:
         return None
     cost = policy.costs.get(tool_name)
     if cost is None or cost.high <= 0:
         return None
-    return Charge((policy_key, _run_key.get() or session_key), server_name, tool_name, cost, policy)
+    return Charge(
+        (policy_key, _run_key.get() or session_key),
+        server_name,
+        tool_name,
+        cost,
+        policy,
+    )
 
 
 def unknown_cost_keys(policy: Optional[CostPolicy], tool_names: list[str]) -> list[str]:

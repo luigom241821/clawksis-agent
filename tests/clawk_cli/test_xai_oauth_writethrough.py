@@ -48,10 +48,6 @@ def profile_and_root(tmp_path, monkeypatch):
     return profile_path, root_path
 
 
-
-
-
-
 def test_write_through_is_noop_in_classic_mode(tmp_path, monkeypatch):
     """Classic mode (profile == root) already saves to root; no double write."""
     profile_path = tmp_path / "auth.json"
@@ -61,14 +57,14 @@ def test_write_through_is_noop_in_classic_mode(tmp_path, monkeypatch):
     _write_store(profile_path, {"version": 1, "providers": {}})
 
     # Should not raise and should persist to the single store.
-    auth._save_xai_oauth_tokens(
-        {"access_token": "a", "refresh_token": "r"}
-    )
+    auth._save_xai_oauth_tokens({"access_token": "a", "refresh_token": "r"})
     store = _read_store(profile_path)
     assert store["providers"]["xai-oauth"]["tokens"]["refresh_token"] == "r"
 
 
-def test_write_through_failure_does_not_break_profile_save(profile_and_root, monkeypatch):
+def test_write_through_failure_does_not_break_profile_save(
+    profile_and_root, monkeypatch
+):
     """A failed root write-through must not break the profile's own save."""
     profile_path, root_path = profile_and_root
     _write_store(profile_path, {"version": 1, "providers": {}})

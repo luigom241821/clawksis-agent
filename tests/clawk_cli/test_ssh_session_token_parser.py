@@ -6,8 +6,12 @@ from clawk_constants import set_clawk_home_override, reset_clawk_home_override
 from clawk_cli.main_dashboard import _read_ssh_session_token_file
 
 
-@pytest.mark.platforms("posix")  # POSIX fixture uses mode bits; Windows read_token requires protected DACLs
-def test_token_file_is_read_and_unlinked_through_private_directory(tmp_path, monkeypatch):
+@pytest.mark.platforms(
+    "posix"
+)  # POSIX fixture uses mode bits; Windows read_token requires protected DACLs
+def test_token_file_is_read_and_unlinked_through_private_directory(
+    tmp_path, monkeypatch
+):
     home = tmp_path / "home"
     monkeypatch.setenv("HOME", str(home))
     clawk_home = home / ".clawksis"
@@ -41,7 +45,10 @@ def test_token_anchor_is_os_home_not_active_profile(tmp_path, monkeypatch):
 
     # A sticky profile and a custom (Docker) root both point get_clawk_home()
     # away from $HOME/.clawk; the anchor must ignore both.
-    for elsewhere in (home / ".clawksis" / "profiles" / "coder", tmp_path / "opt" / "data"):
+    for elsewhere in (
+        home / ".clawksis" / "profiles" / "coder",
+        tmp_path / "opt" / "data",
+    ):
         token_path.write_text("b" * 64)
         token_path.chmod(0o600)
         override = set_clawk_home_override(elsewhere)
@@ -112,7 +119,9 @@ def test_token_file_rejects_parent_escape(tmp_path, monkeypatch):
         reset_clawk_home_override(override)
 
 
-def test_windows_runtime_root_stays_at_machine_root_for_named_profile(tmp_path, monkeypatch):
+def test_windows_runtime_root_stays_at_machine_root_for_named_profile(
+    tmp_path, monkeypatch
+):
     from clawk_cli import windows_ssh_runtime
 
     machine_root = tmp_path / "custom-clawk-root"

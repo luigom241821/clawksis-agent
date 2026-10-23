@@ -162,7 +162,9 @@ def _install_fake_tools_package():
 
     interrupt_event = threading.Event()
     sys.modules["tools.interrupt"] = types.SimpleNamespace(
-        set_interrupt=lambda value=True: interrupt_event.set() if value else interrupt_event.clear(),
+        set_interrupt=lambda value=True: (
+            interrupt_event.set() if value else interrupt_event.clear()
+        ),
         is_interrupted=lambda: interrupt_event.is_set(),
         _interrupt_event=interrupt_event,
     )
@@ -181,7 +183,8 @@ def _install_fake_tools_package():
     from tools.registry import tool_error
 
     sys.modules["tools.registry"] = types.SimpleNamespace(
-        registry=_Registry(), tool_error=tool_error,
+        registry=_Registry(),
+        tool_error=tool_error,
     )
 
     class _DummyEnvironment:
@@ -202,23 +205,39 @@ def _install_fake_tools_package():
         BaseEnvironment=_DummyEnvironment,
         EnvironmentConnectionError=_DummyConnectionError,
     )
-    sys.modules["tools.environments.local"] = types.SimpleNamespace(LocalEnvironment=_DummyEnvironment)
-    sys.modules["tools.environments.ssh"] = types.SimpleNamespace(SSHEnvironment=_DummyEnvironment)
-    sys.modules["tools.environments.docker"] = types.SimpleNamespace(DockerEnvironment=_DummyEnvironment)
-    sys.modules["tools.environments.modal"] = types.SimpleNamespace(ModalEnvironment=_DummyEnvironment)
-    sys.modules["tools.environments.managed_modal"] = types.SimpleNamespace(ManagedModalEnvironment=_DummyEnvironment)
+    sys.modules["tools.environments.local"] = types.SimpleNamespace(
+        LocalEnvironment=_DummyEnvironment
+    )
+    sys.modules["tools.environments.ssh"] = types.SimpleNamespace(
+        SSHEnvironment=_DummyEnvironment
+    )
+    sys.modules["tools.environments.docker"] = types.SimpleNamespace(
+        DockerEnvironment=_DummyEnvironment
+    )
+    sys.modules["tools.environments.modal"] = types.SimpleNamespace(
+        ModalEnvironment=_DummyEnvironment
+    )
+    sys.modules["tools.environments.managed_modal"] = types.SimpleNamespace(
+        ManagedModalEnvironment=_DummyEnvironment
+    )
 
 
-def test_browser_use_explicit_local_mode_stays_local_even_when_managed_gateway_is_ready(tmp_path):
+def test_browser_use_explicit_local_mode_stays_local_even_when_managed_gateway_is_ready(
+    tmp_path,
+):
     _install_fake_tools_package()
-    (tmp_path / "config.yaml").write_text("browser:\n  cloud_provider: local\n", encoding="utf-8")
+    (tmp_path / "config.yaml").write_text(
+        "browser:\n  cloud_provider: local\n", encoding="utf-8"
+    )
     env = os.environ.copy()
     env.pop("BROWSER_USE_API_KEY", None)
-    env.update({
-        "CLAWK_HOME": str(tmp_path),
-        "TOOL_GATEWAY_USER_TOKEN": "nous-token",
-        "BROWSER_USE_GATEWAY_URL": "http://127.0.0.1:3009",
-    })
+    env.update(
+        {
+            "CLAWK_HOME": str(tmp_path),
+            "TOOL_GATEWAY_USER_TOKEN": "nous-token",
+            "BROWSER_USE_GATEWAY_URL": "http://127.0.0.1:3009",
+        }
+    )
 
     with patch.dict(os.environ, env, clear=True):
         _load_tool_module("tools.browser_tool", "browser_tool.py")
@@ -236,10 +255,12 @@ def test_browserbase_does_not_use_gateway_only_configuration():
     env = os.environ.copy()
     env.pop("BROWSERBASE_API_KEY", None)
     env.pop("BROWSERBASE_PROJECT_ID", None)
-    env.update({
-        "TOOL_GATEWAY_USER_TOKEN": "nous-token",
-        "BROWSERBASE_GATEWAY_URL": "http://127.0.0.1:3009",
-    })
+    env.update(
+        {
+            "TOOL_GATEWAY_USER_TOKEN": "nous-token",
+            "BROWSERBASE_GATEWAY_URL": "http://127.0.0.1:3009",
+        }
+    )
 
     with patch.dict(os.environ, env, clear=True):
         browserbase_module = _load_plugin_module(
@@ -262,7 +283,11 @@ def test_terminal_tool_respects_direct_modal_mode_without_falling_back_to_manage
         terminal_tool_backends = sys.modules["tools.terminal_tool_backends"]
 
         with (
-            patch.object(terminal_tool_backends, "is_managed_tool_gateway_ready", return_value=True),
+            patch.object(
+                terminal_tool_backends,
+                "is_managed_tool_gateway_ready",
+                return_value=True,
+            ),
             patch.object(Path, "exists", return_value=False),
         ):
             with pytest.raises(ValueError, match="direct Modal credentials"):
@@ -289,18 +314,22 @@ class TestShellEscapeBypass:
 
     def test_backslash_escape_bypass_caught(self):
         from tools.approval import detect_dangerous_command
+
         # literal: r-backslash-m -rf /  (shell collapses r\m -> rm)
         assert detect_dangerous_command("r\\m -rf /")[0] is True
 
     def test_empty_string_literal_bypass_caught(self):
         from tools.approval import detect_dangerous_command
+
         assert detect_dangerous_command("r''m -rf /")[0] is True
         assert detect_dangerous_command('r""m -rf /')[0] is True
 
     def test_plain_dangerous_still_caught(self):
         from tools.approval import detect_dangerous_command
+
         assert detect_dangerous_command("rm -rf /")[0] is True
 
     def test_benign_command_not_flagged(self):
         from tools.approval import detect_dangerous_command
+
         assert detect_dangerous_command("ls -la")[0] is False

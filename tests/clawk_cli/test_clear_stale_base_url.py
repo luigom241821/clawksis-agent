@@ -43,7 +43,6 @@ class TestClearStaleOpenaiBaseUrl:
         _clear_stale_openai_base_url()
 
         result = get_env_value("OPENAI_BASE_URL")
-        assert result == "http://localhost:11434/v1", \
+        assert result == "http://localhost:11434/v1", (
             f"Expected OPENAI_BASE_URL to be preserved, got: {result!r}"
-
-
+        )

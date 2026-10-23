@@ -26,14 +26,22 @@ from clawk_cli import worktree_gc
 
 def _git(args, cwd, env=None):
     e = dict(os.environ)
-    e.update({
-        "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
-        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
-    })
+    e.update(
+        {
+            "GIT_AUTHOR_NAME": "t",
+            "GIT_AUTHOR_EMAIL": "t@t",
+            "GIT_COMMITTER_NAME": "t",
+            "GIT_COMMITTER_EMAIL": "t@t",
+        }
+    )
     if env:
         e.update(env)
     result = subprocess.run(
-        ["git", *args], capture_output=True, text=True, cwd=str(cwd), env=e,
+        ["git", *args],
+        capture_output=True,
+        text=True,
+        cwd=str(cwd),
+        env=e,
         check=False,
     )
     assert result.returncode == 0, f"git {args} failed: {result.stderr}"
@@ -164,7 +172,9 @@ class TestAuditVerdicts:
         assert by_name["orphan-unique"].verdict == "keep"
         assert "unique" in by_name["orphan-unique"].reason
         assert by_name["main"].verdict == "keep"
-        assert "clawk/clawk-squashed" not in by_name  # branch -D ran only on merged work
+        assert (
+            "clawk/clawk-squashed" not in by_name
+        )  # branch -D ran only on merged work
 
     def test_patch_equivalent_commits_reap(self, repo):
         """The squash/rebase-merge leak: local commit unreachable from any
@@ -177,16 +187,21 @@ class TestAuditVerdicts:
         # "Merge" it to main with a DIFFERENT committer so the cherry-pick
         # produces a distinct sha (same-second identical-committer cherry
         # picks can produce the identical sha — pitfall from the skill).
-        _git(["cherry-pick", sha], repo,
-             env={"GIT_COMMITTER_NAME": "other", "GIT_COMMITTER_EMAIL": "o@o"})
+        _git(
+            ["cherry-pick", sha],
+            repo,
+            env={"GIT_COMMITTER_NAME": "other", "GIT_COMMITTER_EMAIL": "o@o"},
+        )
         _git(["push", "origin", "main"], repo)
         records = worktree_gc.audit_worktrees(str(repo), with_sizes=False)
         assert _verdict(records, "clawk-merged").verdict == "reap"
 
     def test_live_locked_tree_keeps(self, repo):
         tree, _ = _add_worktree(repo, "clawk-live")
-        _git(["worktree", "lock", str(tree),
-              "--reason", f"clawk pid={os.getpid()}"], repo)
+        _git(
+            ["worktree", "lock", str(tree), "--reason", f"clawk pid={os.getpid()}"],
+            repo,
+        )
         records = worktree_gc.audit_worktrees(str(repo), with_sizes=False)
         record = _verdict(records, "clawk-live")
         assert record.verdict == "keep"
@@ -209,12 +224,16 @@ class TestReclaim:
         assert not tree.exists()
         probe = subprocess.run(
             ["git", "rev-parse", "--verify", "--quiet", branch],
-            capture_output=True, text=True, cwd=str(repo),
+            capture_output=True,
+            text=True,
+            cwd=str(repo),
             check=False,
         )
         assert probe.returncode != 0, "branch should be gone with its tree"
 
-    def test_untracked_files_archived_under_the_active_profile_home(self, repo, tmp_path, monkeypatch):
+    def test_untracked_files_archived_under_the_active_profile_home(
+        self, repo, tmp_path, monkeypatch
+    ):
         """The archive follows the active Clawksis home (a named profile here), never ~/.clawksis."""
         native_home = tmp_path / "native"
         profile_home = tmp_path / "root" / "profiles" / "work"
@@ -227,7 +246,9 @@ class TestReclaim:
         worktree_gc.reclaim_worktrees(str(repo), records=records)
         assert not tree.exists()
         archived = list((profile_home / "archive" / "worktree-prune").rglob("NOTES.md"))
-        assert archived, "untracked file must be archived under the profile home, not destroyed"
+        assert archived, (
+            "untracked file must be archived under the profile home, not destroyed"
+        )
         assert archived[0].read_text() == "important scribbles\n"
         assert not (native_home / ".clawksis").exists()
 
@@ -251,8 +272,7 @@ class TestReclaim:
 
     def test_dead_locked_tree_is_unlocked_and_reaped(self, repo):
         tree, _ = _add_worktree(repo, "clawk-zombie")
-        _git(["worktree", "lock", str(tree),
-              "--reason", "clawk pid=999999999"], repo)
+        _git(["worktree", "lock", str(tree), "--reason", "clawk pid=999999999"], repo)
         records = worktree_gc.audit_worktrees(str(repo), with_sizes=False)
         assert _verdict(records, "clawk-zombie").verdict == "reap"
         worktree_gc.reclaim_worktrees(str(repo), records=records)
@@ -294,8 +314,11 @@ class TestBranchGC:
         _git(["commit", "-m", "fix"], repo)
         sha = _git(["rev-parse", "HEAD"], repo)
         _git(["checkout", "main"], repo)
-        _git(["cherry-pick", sha], repo,
-             env={"GIT_COMMITTER_NAME": "other", "GIT_COMMITTER_EMAIL": "o@o"})
+        _git(
+            ["cherry-pick", sha],
+            repo,
+            env={"GIT_COMMITTER_NAME": "other", "GIT_COMMITTER_EMAIL": "o@o"},
+        )
         _git(["push", "origin", "main"], repo)
         records = worktree_gc.audit_branches(str(repo))
         by_name = {record.name: record for record in records}
@@ -314,7 +337,9 @@ class TestOlderThanGate:
     def test_young_reapable_tree_kept_under_older_than(self, repo):
         _add_worktree(repo, "clawk-young")
         records = worktree_gc.audit_worktrees(
-            str(repo), with_sizes=False, older_than_days=7,
+            str(repo),
+            with_sizes=False,
+            older_than_days=7,
         )
         record = _verdict(records, "clawk-young")
         assert record.verdict == "keep"
@@ -328,7 +353,9 @@ class TestOlderThanGate:
         old = _time.time() - 10 * 86400
         _os.utime(tree, (old, old))
         records = worktree_gc.audit_worktrees(
-            str(repo), with_sizes=False, older_than_days=7,
+            str(repo),
+            with_sizes=False,
+            older_than_days=7,
         )
         assert _verdict(records, "clawk-old").verdict == "reap"
 
@@ -343,7 +370,9 @@ class TestOlderThanGate:
         old = _time.time() - 30 * 86400
         _os.utime(tree, (old, old))
         records = worktree_gc.audit_worktrees(
-            str(repo), with_sizes=False, older_than_days=7,
+            str(repo),
+            with_sizes=False,
+            older_than_days=7,
         )
         record = _verdict(records, "clawk-old-work")
         assert record.verdict == "keep"
@@ -388,9 +417,7 @@ class TestExternalTrees:
         planned = worktree_gc.prune_missing_registrations(str(repo), dry_run=True)
         assert any("vanished-tree" in line for line in planned)
         # Dry-run changed nothing.
-        assert any(
-            r.missing for r in worktree_gc.audit_external_trees(str(repo))
-        )
+        assert any(r.missing for r in worktree_gc.audit_external_trees(str(repo)))
 
         done = worktree_gc.prune_missing_registrations(str(repo))
         assert any("pruned" in line for line in done)
@@ -405,8 +432,10 @@ class TestCmdWorktreeJson:
         import argparse
 
         return argparse.Namespace(
-            repo=str(repo), worktree_action=action,
-            json=True, older_than=kw.get("older_than"),
+            repo=str(repo),
+            worktree_action=action,
+            json=True,
+            older_than=kw.get("older_than"),
             dry_run=kw.get("dry_run", False),
             trees_only=kw.get("trees_only", False),
             branches_only=kw.get("branches_only", False),
@@ -420,7 +449,13 @@ class TestCmdWorktreeJson:
         _add_worktree(repo, "clawk-json")
         assert cmd_worktree(self._ns(repo, "list")) == 0
         payload = json.loads(capsys.readouterr().out)
-        assert set(payload) == {"repo", "trees", "external_trees", "branches", "archives"}
+        assert set(payload) == {
+            "repo",
+            "trees",
+            "external_trees",
+            "branches",
+            "archives",
+        }
         names = [t["name"] for t in payload["trees"]]
         assert "clawk-json" in names
         tree = next(t for t in payload["trees"] if t["name"] == "clawk-json")

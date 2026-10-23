@@ -46,10 +46,6 @@ def test_cleanup_forwards_session_messages(mock_invoke_hook):
     agent.shutdown_memory_provider.assert_called_once_with(transcript)
 
 
-
-
-
-
 @patch("clawk_cli.plugins.invoke_hook")
 def test_cleanup_provider_exception_is_swallowed(mock_invoke_hook):
     """A raising ``shutdown_memory_provider`` must not crash CLI exit."""
@@ -69,14 +65,6 @@ def test_cleanup_provider_exception_is_swallowed(mock_invoke_hook):
         cli_mod._cleanup_done = False
 
     agent.shutdown_memory_provider.assert_called_once()
-
-
-
-
-
-
-
-
 
 
 def _real_agent(db, session_id, session_messages):
@@ -101,8 +89,6 @@ def _real_agent(db, session_id, session_messages):
     agent._pending_cli_user_message = None
     agent._session_persist_lock = threading.RLock()
     return agent
-
-
 
 
 def test_cli_close_preflush_resumed_prefix_is_not_duplicated(tmp_path, monkeypatch):
@@ -198,8 +184,6 @@ def test_cli_close_preflush_resumed_prefix_is_not_duplicated(tmp_path, monkeypat
     ]
 
 
-
-
 def test_cli_close_hands_staged_user_marker_to_turn_start(tmp_path, monkeypatch):
     """A close before turn setup does not duplicate the CLI-staged user row."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
@@ -243,11 +227,9 @@ def test_cli_close_hands_staged_user_marker_to_turn_start(tmp_path, monkeypatch)
     ]
 
 
-
-
-
-
-def test_cli_close_uses_clean_override_for_shortened_pending_snapshot(tmp_path, monkeypatch):
+def test_cli_close_uses_clean_override_for_shortened_pending_snapshot(
+    tmp_path, monkeypatch
+):
     """Close retains the clean user text when its snapshot omits the prefix."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
 
@@ -292,9 +274,9 @@ def test_cli_close_uses_clean_override_for_shortened_pending_snapshot(tmp_path, 
     assert staged["_db_persisted"] is True
 
 
-
-
-def test_cli_close_builds_prompt_before_creating_first_session_row(tmp_path, monkeypatch):
+def test_cli_close_builds_prompt_before_creating_first_session_row(
+    tmp_path, monkeypatch
+):
     """First-turn close persistence must not leave a NULL prompt snapshot."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
 

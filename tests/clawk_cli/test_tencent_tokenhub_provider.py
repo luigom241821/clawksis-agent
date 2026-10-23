@@ -11,13 +11,28 @@ from clawk_cli.auth import (
 
 # Other provider env vars to clear during auto-detection tests
 _OTHER_PROVIDER_KEYS = (
-    "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "DEEPSEEK_API_KEY",
-    "GOOGLE_API_KEY", "GEMINI_API_KEY", "DASHSCOPE_API_KEY",
-    "XAI_API_KEY", "KIMI_API_KEY", "KIMI_CN_API_KEY",
-    "MINIMAX_API_KEY", "MINIMAX_CN_API_KEY", "AI_GATEWAY_API_KEY",
-    "KILOCODE_API_KEY", "HF_TOKEN", "GLM_API_KEY", "ZAI_API_KEY",
-    "XIAOMI_API_KEY", "OPENROUTER_API_KEY", "COPILOT_GITHUB_TOKEN",
-    "GH_TOKEN", "GITHUB_TOKEN", "ARCEEAI_API_KEY",
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "DEEPSEEK_API_KEY",
+    "GOOGLE_API_KEY",
+    "GEMINI_API_KEY",
+    "DASHSCOPE_API_KEY",
+    "XAI_API_KEY",
+    "KIMI_API_KEY",
+    "KIMI_CN_API_KEY",
+    "MINIMAX_API_KEY",
+    "MINIMAX_CN_API_KEY",
+    "AI_GATEWAY_API_KEY",
+    "KILOCODE_API_KEY",
+    "HF_TOKEN",
+    "GLM_API_KEY",
+    "ZAI_API_KEY",
+    "XIAOMI_API_KEY",
+    "OPENROUTER_API_KEY",
+    "COPILOT_GITHUB_TOKEN",
+    "GH_TOKEN",
+    "GITHUB_TOKEN",
+    "ARCEEAI_API_KEY",
 )
 
 # =============================================================================
@@ -28,12 +43,20 @@ _OTHER_PROVIDER_KEYS = (
 # Aliases
 # =============================================================================
 
+
 class TestTencentTokenhubAliases:
     """All aliases should resolve to 'tencent-tokenhub'."""
 
-    @pytest.mark.parametrize("alias", [
-        "tencent-tokenhub", "tencent", "tokenhub", "tencent-cloud", "tencentmaas",
-    ])
+    @pytest.mark.parametrize(
+        "alias",
+        [
+            "tencent-tokenhub",
+            "tencent",
+            "tokenhub",
+            "tencent-cloud",
+            "tencentmaas",
+        ],
+    )
     def test_alias_resolves(self, alias, monkeypatch):
         for key in _OTHER_PROVIDER_KEYS:
             monkeypatch.delenv(key, raising=False)
@@ -42,6 +65,7 @@ class TestTencentTokenhubAliases:
 
     def test_normalize_provider_models_py(self):
         from clawk_cli.models import normalize_provider
+
         assert normalize_provider("tencent") == "tencent-tokenhub"
         assert normalize_provider("tokenhub") == "tencent-tokenhub"
         assert normalize_provider("tencent-cloud") == "tencent-tokenhub"
@@ -49,10 +73,12 @@ class TestTencentTokenhubAliases:
 
     def test_normalize_provider_providers_py(self):
         from clawk_cli.providers import normalize_provider
+
         assert normalize_provider("tencent") == "tencent-tokenhub"
         assert normalize_provider("tokenhub") == "tencent-tokenhub"
         assert normalize_provider("tencent-cloud") == "tencent-tokenhub"
         assert normalize_provider("tencentmaas") == "tencent-tokenhub"
+
 
 # =============================================================================
 # Auto-detection
@@ -62,6 +88,7 @@ class TestTencentTokenhubAliases:
 # Credentials
 # =============================================================================
 
+
 class TestTencentTokenhubCredentials:
     """Test credential resolution for the tencent-tokenhub provider."""
 
@@ -70,7 +97,10 @@ class TestTencentTokenhubCredentials:
         monkeypatch.delenv("TOKENHUB_BASE_URL", raising=False)
         creds = resolve_api_key_provider_credentials("tencent-tokenhub")
         assert creds["api_key"] == "sk-test-12345678"
-        assert creds["base_url"] == PROVIDER_REGISTRY["tencent-tokenhub"].inference_base_url
+        assert (
+            creds["base_url"]
+            == PROVIDER_REGISTRY["tencent-tokenhub"].inference_base_url
+        )
 
     def test_openrouter_key_does_not_make_tokenhub_configured(self, monkeypatch):
         """OpenRouter users should NOT see tencent-tokenhub as configured."""
@@ -78,6 +108,7 @@ class TestTencentTokenhubCredentials:
         monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
         status = get_api_key_provider_status("tencent-tokenhub")
         assert not status["configured"]
+
 
 # =============================================================================
 # Model catalog
@@ -95,6 +126,7 @@ class TestTencentTokenhubCredentials:
 # Model normalization
 # =============================================================================
 
+
 class TestTencentTokenhubNormalization:
     """Model name normalization — Tencent TokenHub is a direct provider
     not in _MATCHING_PREFIX_STRIP_PROVIDERS, so names pass through as-is.
@@ -104,8 +136,10 @@ class TestTencentTokenhubNormalization:
     def test_normalize_empty_and_none(self, empty_input):
         """None, empty, and whitespace-only inputs return empty string."""
         from clawk_cli.model_normalize import normalize_model_for_provider
+
         result = normalize_model_for_provider(empty_input, "tencent-tokenhub")
         assert result == "" or result.strip() == ""
+
 
 # =============================================================================
 # Provider label
@@ -119,6 +153,7 @@ class TestTencentTokenhubNormalization:
 # Context length
 # =============================================================================
 
+
 class TestTencentTokenhubContextLength:
     """hy3-preview has a context-length entry registered.
 
@@ -131,9 +166,11 @@ class TestTencentTokenhubContextLength:
 
     def test_hy3_preview_has_registered_context_length(self):
         from agent.model_metadata import get_model_context_length
+
         ctx = get_model_context_length("hy3-preview")
         assert isinstance(ctx, int)
         assert ctx >= 4096, f"hy3-preview context length looks unset/wrong: {ctx}"
+
 
 # =============================================================================
 # providers.py (unified provider module)
@@ -163,13 +200,16 @@ class TestTencentTokenhubContextLength:
 # determine_api_mode (providers.py)
 # =============================================================================
 
+
 class TestTencentTokenhubApiMode:
     """Verify determine_api_mode routes tencent-tokenhub correctly."""
 
     def test_determine_api_mode_via_alias(self):
         from clawk_cli.providers import determine_api_mode
+
         mode = determine_api_mode("tencent")
         assert mode == "chat_completions"
+
 
 # =============================================================================
 # _KNOWN_PROVIDER_NAMES (models.py)

@@ -9,6 +9,7 @@ per-turn user-message channel instead: that lands after the cached prefix and is
 the byte-stable ``api_content`` sidecar so later turns replay it unchanged.  The prompt itself
 converges at the next rebuild boundary (compaction).
 """
+
 from __future__ import annotations
 
 import logging
@@ -19,7 +20,9 @@ from agent.prompt_builder import RUNTIME_ENVIRONMENT_END, RUNTIME_ENVIRONMENT_HE
 
 logger = logging.getLogger("run_agent")
 
-_SURFACE_SWITCH_NOTE_PREFIX = "[System: This conversation is now being answered on a different interface: "
+_SURFACE_SWITCH_NOTE_PREFIX = (
+    "[System: This conversation is now being answered on a different interface: "
+)
 # Closes the surface name in the note; platform names are free-form for plugin platforms, so the
 # terminator (not ".") delimits the parse.
 _SURFACE_NAME_END = " — any earlier interface guidance"
@@ -32,8 +35,14 @@ def split_runtime_boundary(prompt: str) -> tuple:
     """``(identity, runtime_marker, runtime)`` of a persisted prompt.  Legacy prose may quote
     the runtime heading, but only the new renderer ENDS in the boundary; when the marker is
     empty the whole prompt is identity."""
-    identity, runtime_marker, runtime = prompt.rpartition(f"\n\n{RUNTIME_ENVIRONMENT_HEADING}\n\n")
-    return (identity, runtime_marker, runtime) if prompt.endswith(RUNTIME_ENVIRONMENT_END) else (prompt, "", "")
+    identity, runtime_marker, runtime = prompt.rpartition(
+        f"\n\n{RUNTIME_ENVIRONMENT_HEADING}\n\n"
+    )
+    return (
+        (identity, runtime_marker, runtime)
+        if prompt.endswith(RUNTIME_ENVIRONMENT_END)
+        else (prompt, "", "")
+    )
 
 
 def runtime_host_value(prompt: str, label: str) -> str:
@@ -41,12 +50,14 @@ def runtime_host_value(prompt: str, label: str) -> str:
     new prompts delimit runtime hints, legacy prompts put them before context.  "" when absent."""
     _identity, runtime_marker, runtime = split_runtime_boundary(prompt)
     prefix = f"{label}:"
-    host_lines = (runtime.split("\n\n", 1)[0] if runtime_marker else prompt).splitlines()
+    host_lines = (
+        runtime.split("\n\n", 1)[0] if runtime_marker else prompt
+    ).splitlines()
     for idx, line in enumerate(host_lines):
         if line.startswith("User home directory:"):
-            for candidate in host_lines[idx + 1: idx + 4]:
+            for candidate in host_lines[idx + 1 : idx + 4]:
                 if candidate.startswith(prefix):
-                    return candidate[len(prefix):].strip()
+                    return candidate[len(prefix) :].strip()
     return ""
 
 
@@ -57,7 +68,11 @@ def identity_line_value(prompt: str, label: str) -> str:
     even when the trailer omits the label because its value is empty."""
     prefix = f"{label}:"
     trailer = split_runtime_boundary(prompt)[0].rsplit("\n\n", 1)[-1]
-    matches = [line[len(prefix):].strip() for line in trailer.splitlines() if line.startswith(prefix)]
+    matches = [
+        line[len(prefix) :].strip()
+        for line in trailer.splitlines()
+        if line.startswith(prefix)
+    ]
     return matches[-1] if matches else ""
 
 
@@ -73,7 +88,11 @@ def _last_announced_surface(conversation_history: Any) -> str:
         if not isinstance(msg, dict) or msg.get("role") != "user":
             continue
         sidecar = msg.get("api_content")
-        text = (sidecar if isinstance(sidecar, str) else "") + "\n" + flatten_message_text(msg.get("content"))
+        text = (
+            (sidecar if isinstance(sidecar, str) else "")
+            + "\n"
+            + flatten_message_text(msg.get("content"))
+        )
         if _SURFACE_SWITCH_NOTE_PREFIX in text:
             tail = text.rsplit(_SURFACE_SWITCH_NOTE_PREFIX, 1)[1]
             return tail.split(_SURFACE_NAME_END, 1)[0].strip()
@@ -88,6 +107,7 @@ def note_inert_pinned_tools(agent: Any, built_for_this_surface: list[str]) -> No
     to be TOLD they are inert here, or it plans around a ``focus_pane`` a terminal turn can only
     answer with ``tool_error("desktop only")``."""
     from tools.mcp_tool_agent import agent_tool_names
+
     surface_names = set(built_for_this_surface)
     inert = [name for name in agent_tool_names(agent) if name not in surface_names]
     note = getattr(agent, "_surface_switch_note", "") or ""
@@ -100,7 +120,9 @@ def note_inert_pinned_tools(agent: Any, built_for_this_surface: list[str]) -> No
     )
 
 
-def stage_surface_switch_note(agent: Any, prompt: str, conversation_history: Any) -> bool:
+def stage_surface_switch_note(
+    agent: Any, prompt: str, conversation_history: Any
+) -> bool:
     """Stage a one-shot correction when the request would otherwise misdescribe the surface.
 
     Compares the runtime surface against what the model was last told — the newest switch note
@@ -114,7 +136,10 @@ def stage_surface_switch_note(agent: Any, prompt: str, conversation_history: Any
     MoA and codex_app_server turns never stamp the ``api_content`` sidecar, so the note could not
     be read back and would be re-sent every turn; those modes keep the stored prompt and skip the
     note entirely."""
-    if getattr(agent, "provider", None) == "moa" or getattr(agent, "api_mode", None) == "codex_app_server":
+    if (
+        getattr(agent, "provider", None) == "moa"
+        or getattr(agent, "api_mode", None) == "codex_app_server"
+    ):
         return False
     current = str(getattr(agent, "platform", "") or "").strip()
     if not current:
@@ -124,8 +149,13 @@ def stage_surface_switch_note(agent: Any, prompt: str, conversation_history: Any
     if not told or told == current:
         return False
     from agent.system_prompt import platform_hint
+
     hint = platform_hint(agent) if described != current else ""
-    where = "the guidance below" if hint else "the interface section in the system prompt above"
+    where = (
+        "the guidance below"
+        if hint
+        else "the interface section in the system prompt above"
+    )
     note = (
         f"{_SURFACE_SWITCH_NOTE_PREFIX}{current}{_SURFACE_NAME_END} in this conversation is "
         f"superseded — follow {where} for formatting, file delivery and any interface-specific "
@@ -135,6 +165,8 @@ def stage_surface_switch_note(agent: Any, prompt: str, conversation_history: Any
     logger.info(
         "Session %s switched surface %s -> %s; keeping the stored system prompt and delivering "
         "the new surface guidance as a turn note (prefix cache preserved).",
-        agent.session_id, told, current,
+        agent.session_id,
+        told,
+        current,
     )
     return True

@@ -1,5 +1,4 @@
-"""Memory-provider dashboard helpers: manifest/schema loading, setup-env and dependency probes, configured-status discovery.
-"""
+"""Memory-provider dashboard helpers: manifest/schema loading, setup-env and dependency probes, configured-status discovery."""
 
 import logging
 import json
@@ -13,8 +12,10 @@ from typing import Any, Dict, List, Optional
 # Same logger the code used before extraction (record parity).
 _log = logging.getLogger("clawk_cli.web_server")
 
+
 def _normalize_memory_provider_name(name: Any) -> str:
     from agent.memory_provider import is_core_memory_provider
+
     provider = str(name or "").strip()
     return "" if is_core_memory_provider(provider) else provider
 
@@ -36,7 +37,9 @@ def _memory_provider_manifest(name: str) -> dict[str, Any]:
         manifest, _inputs = memory_provider_dependency_inputs(name)
         return manifest
     except Exception:
-        _log.debug("Failed to read memory provider manifest for %s", name, exc_info=True)
+        _log.debug(
+            "Failed to read memory provider manifest for %s", name, exc_info=True
+        )
         return {}
 
 
@@ -63,7 +66,11 @@ def _memory_provider_setup_manifest(name: str) -> tuple[dict, dict]:
     return {
         # Display only; neither import names nor these labels determine readiness. Shown from the
         # same declaration PM installs (an authored pyproject.toml wins over the manifest lists).
-        "pip_dependencies": list(read_python_declaration(plugin_dir).install_requirements) if plugin_dir else [],
+        "pip_dependencies": list(
+            read_python_declaration(plugin_dir).install_requirements
+        )
+        if plugin_dir
+        else [],
         "python_dependencies_declared": bool(inputs),
         "external_dependencies": external_dependencies,
         "required_env": _string_list(manifest.get("requires_env")),
@@ -77,14 +84,21 @@ def _memory_provider_setup_info(name: str) -> dict[str, Any]:
         setup, inputs = _memory_provider_setup_manifest(name)
     except Exception:
         _log.debug("Invalid dependency declaration for %s", name, exc_info=True)
-        return {"pip_dependencies": [], "python_dependencies_declared": True,
-                "external_dependencies": [], "required_env": [], "dependencies_installed": False}
+        return {
+            "pip_dependencies": [],
+            "python_dependencies_declared": True,
+            "external_dependencies": [],
+            "required_env": [],
+            "dependencies_installed": False,
+        }
     try:
         python_ready = not inputs or pm.venv_is_current(**inputs)
     except Exception:
         _log.debug("Could not read dependency state for %s", name, exc_info=True)
         python_ready = False
-    setup["dependencies_installed"] = python_ready and _memory_provider_external_dependencies_installed(setup)
+    setup["dependencies_installed"] = (
+        python_ready and _memory_provider_external_dependencies_installed(setup)
+    )
     return setup
 
 
@@ -92,9 +106,15 @@ def _memory_provider_setup_env() -> dict[str, str]:
     # External package-manager child (npm/uv/pip): exact env preservation —
     # scrubbing or HOME rewriting could break user tool auth/config.
     from tools.environments.local import build_subprocess_env
+
     env = build_subprocess_env(scrub_secrets=False, inherit_profile_home=False)
     home = Path.home()
-    extra_bins = [home / ".brv-cli" / "bin", home / ".local" / "bin", home / ".npm-global" / "bin", Path("/usr/local/bin")]
+    extra_bins = [
+        home / ".brv-cli" / "bin",
+        home / ".local" / "bin",
+        home / ".npm-global" / "bin",
+        Path("/usr/local/bin"),
+    ]
     prefix = os.pathsep.join(str(path) for path in extra_bins if path.exists())
     if prefix:
         env["PATH"] = prefix + os.pathsep + env.get("PATH", "")
@@ -133,7 +153,9 @@ def _memory_provider_external_dependencies_installed(setup: dict[str, Any]) -> b
                 external_ok = False
             continue
         try:
-            completed = _run_setup_command(shlex.split(check_cmd), display=check_cmd, timeout=20)
+            completed = _run_setup_command(
+                shlex.split(check_cmd), display=check_cmd, timeout=20
+            )
         except Exception:
             external_ok = False
             continue
@@ -152,7 +174,9 @@ def _schema_field_kind(raw: dict[str, Any], choices: list) -> str:
         return "select"
     if explicit_kind in {"bool", "boolean"} or isinstance(default, bool):
         return "boolean"
-    if explicit_kind in {"int", "integer"} or (isinstance(default, int) and not isinstance(default, bool)):
+    if explicit_kind in {"int", "integer"} or (
+        isinstance(default, int) and not isinstance(default, bool)
+    ):
         return "integer"
     if explicit_kind in {"float", "number"} or isinstance(default, float):
         return "number"
@@ -167,7 +191,9 @@ def _normalize_memory_provider_schema(name: str, provider: Any) -> list[dict[str
             if isinstance(raw, list):
                 raw_schema = [field for field in raw if isinstance(field, dict)]
         except Exception:
-            _log.warning("Failed to read memory provider schema for %s", name, exc_info=True)
+            _log.warning(
+                "Failed to read memory provider schema for %s", name, exc_info=True
+            )
 
     fields: list[dict[str, Any]] = []
     for raw in raw_schema:
@@ -177,22 +203,27 @@ def _normalize_memory_provider_schema(name: str, provider: Any) -> list[dict[str
         choices = raw.get("choices") or raw.get("options") or []
         if not isinstance(choices, list):
             choices = []
-        fields.append({
-            "key": key,
-            "label": str(raw.get("label") or key.replace("_", " ").title()),
-            "kind": _schema_field_kind(raw, choices),
-            "description": str(raw.get("description") or ""),
-            "placeholder": str(raw.get("placeholder") or ""),
-            "required": bool(raw.get("required", False)),
-            "default": raw.get("default", ""),
-            "options": [{"value": str(c), "label": str(c), "description": ""} for c in choices],
-            "url": str(raw.get("url") or ""),
-            "when": raw.get("when") if isinstance(raw.get("when"), dict) else None,
-            "minimum": raw.get("minimum"),
-            "maximum": raw.get("maximum"),
-            "step": raw.get("step"),
-            "_env_key": str(raw.get("env_var") or "") or None,
-        })
+        fields.append(
+            {
+                "key": key,
+                "label": str(raw.get("label") or key.replace("_", " ").title()),
+                "kind": _schema_field_kind(raw, choices),
+                "description": str(raw.get("description") or ""),
+                "placeholder": str(raw.get("placeholder") or ""),
+                "required": bool(raw.get("required", False)),
+                "default": raw.get("default", ""),
+                "options": [
+                    {"value": str(c), "label": str(c), "description": ""}
+                    for c in choices
+                ],
+                "url": str(raw.get("url") or ""),
+                "when": raw.get("when") if isinstance(raw.get("when"), dict) else None,
+                "minimum": raw.get("minimum"),
+                "maximum": raw.get("maximum"),
+                "step": raw.get("step"),
+                "_env_key": str(raw.get("env_var") or "") or None,
+            }
+        )
     return fields
 
 
@@ -241,6 +272,7 @@ def _read_memory_provider_existing_values(name: str) -> dict[str, Any]:
 
 def _env_lookup(env_key: Optional[str]) -> str:
     from clawk_cli.config import load_env
+
     if not env_key:
         return ""
     return str(load_env().get(env_key) or os.environ.get(env_key) or "")
@@ -282,7 +314,9 @@ def _field_value(field: dict[str, Any], data: dict[str, Any]) -> Any:
         value = str(value)
         return value if value in allowed else str(_field_default(field))
     if field["kind"] == "boolean":
-        return _coerce_bool(value, default=_coerce_bool(_field_default(field), default=False))
+        return _coerce_bool(
+            value, default=_coerce_bool(_field_default(field), default=False)
+        )
     return str(value)
 
 
@@ -293,14 +327,19 @@ def _field_is_set(field: dict[str, Any], data: dict[str, Any]) -> bool:
 
 
 def _field_visible(
-    field: dict[str, Any], data: dict[str, Any], fields_by_key: Optional[dict[str, dict[str, Any]]] = None
+    field: dict[str, Any],
+    data: dict[str, Any],
+    fields_by_key: Optional[dict[str, dict[str, Any]]] = None,
 ) -> bool:
     when = field.get("when")
     if not isinstance(when, dict) or not when:
         return True
     for dep_key, expected in when.items():
         dep_field = (fields_by_key or {}).get(str(dep_key)) or {
-            "key": str(dep_key), "kind": "text", "default": "", "_env_key": None
+            "key": str(dep_key),
+            "kind": "text",
+            "default": "",
+            "_env_key": None,
         }
         if str(_field_value(dep_field, data)) != str(expected):
             return False
@@ -318,7 +357,9 @@ def _memory_provider_is_configured(name: str, provider: Any) -> bool:
     )
 
 
-def _memory_provider_status(row: dict[str, Any], setup: dict[str, Any], configured: bool, schema_fields: list) -> str:
+def _memory_provider_status(
+    row: dict[str, Any], setup: dict[str, Any], configured: bool, schema_fields: list
+) -> str:
     if row["missing"]:
         return "missing"
     if not setup.get("dependencies_installed", True):
@@ -330,6 +371,7 @@ def _memory_provider_status(row: dict[str, Any], setup: dict[str, Any], configur
 
 def _discover_memory_provider_statuses() -> list[dict[str, Any]]:
     from clawk_cli.config import load_config
+
     discovered: dict[str, dict[str, Any]] = {}
     try:
         from plugins.memory import discover_memory_providers
@@ -345,7 +387,11 @@ def _discover_memory_provider_statuses() -> list[dict[str, Any]]:
         _log.exception("discover_memory_providers failed")
 
     mem = load_config().get("memory")
-    active = _normalize_memory_provider_name(mem.get("provider")) if isinstance(mem, dict) else ""
+    active = (
+        _normalize_memory_provider_name(mem.get("provider"))
+        if isinstance(mem, dict)
+        else ""
+    )
     if active and active not in discovered:
         discovered[active] = {
             "name": active,
@@ -360,25 +406,37 @@ def _discover_memory_provider_statuses() -> list[dict[str, Any]]:
         missing = row["missing"]
         provider = None if missing else _load_memory_provider(name)
         setup = _memory_provider_setup_info(name)
-        configured = False if missing else _memory_provider_is_configured(name, provider)
-        schema_fields = [] if missing else _normalize_memory_provider_schema(name, provider)
-        providers.append({
-            "name": name,
-            "description": row["description"],
-            "available": row["available"],
-            "configured": configured,
-            "status": _memory_provider_status(row, setup, configured, schema_fields),
-            "setup": setup,
-        })
+        configured = (
+            False if missing else _memory_provider_is_configured(name, provider)
+        )
+        schema_fields = (
+            [] if missing else _normalize_memory_provider_schema(name, provider)
+        )
+        providers.append(
+            {
+                "name": name,
+                "description": row["description"],
+                "available": row["available"],
+                "configured": configured,
+                "status": _memory_provider_status(
+                    row, setup, configured, schema_fields
+                ),
+                "setup": setup,
+            }
+        )
     return providers
 
 
 def _require_memory_provider_ready(name: str) -> None:
     if not name:
         return
-    row = next((r for r in _discover_memory_provider_statuses() if r["name"] == name), None)
+    row = next(
+        (r for r in _discover_memory_provider_statuses() if r["name"] == name), None
+    )
     if row is None:
-        raise HTTPException(status_code=400, detail=f"Unknown memory provider '{name}'.")
+        raise HTTPException(
+            status_code=400, detail=f"Unknown memory provider '{name}'."
+        )
     if row["status"] != "ready":
         raise HTTPException(
             status_code=400,

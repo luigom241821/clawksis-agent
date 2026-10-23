@@ -43,11 +43,13 @@ def test_reply_ping_alone_does_not_trigger_bot_by_default(monkeypatch, allow_bot
     adapter = _adapter(allow_bots=allow_bots)
 
     admitted, _ = adapter._discord_message_admission(
-        _reply_ping_from_bot(adapter, "reply without a typed mention"), claim=False)
+        _reply_ping_from_bot(adapter, "reply without a typed mention"), claim=False
+    )
     assert admitted is False
 
     admitted, _ = adapter._discord_message_admission(
-        _reply_ping_from_bot(adapter, "<@99> intentional handoff"), claim=False)
+        _reply_ping_from_bot(adapter, "<@99> intentional handoff"), claim=False
+    )
     assert admitted is True
 
 
@@ -56,5 +58,6 @@ def test_explicit_false_restores_reply_ping_compatibility(monkeypatch):
     adapter = _adapter(extra={"bots_require_inline_mention": False})
 
     admitted, _ = adapter._discord_message_admission(
-        _reply_ping_from_bot(adapter, "legacy reply handoff"), claim=False)
+        _reply_ping_from_bot(adapter, "legacy reply handoff"), claim=False
+    )
     assert admitted is True

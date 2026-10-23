@@ -31,8 +31,10 @@ def curator_env(tmp_path, monkeypatch):
 
     import importlib
     import clawk_constants
+
     importlib.reload(clawk_constants)
     from agent import curator
+
     importlib.reload(curator)
     yield curator
 
@@ -46,12 +48,14 @@ def test_classify_consolidated_via_write_file_evidence(curator_env):
         tool_calls=[
             {
                 "name": "skill_manage",
-                "arguments": json.dumps({
-                    "action": "write_file",
-                    "name": "training-platforms",
-                    "file_path": "references/axolotl-training.md",
-                    "file_content": "# Axolotl\n...",
-                }),
+                "arguments": json.dumps(
+                    {
+                        "action": "write_file",
+                        "name": "training-platforms",
+                        "file_path": "references/axolotl-training.md",
+                        "file_content": "# Axolotl\n...",
+                    }
+                ),
             },
         ],
     )
@@ -59,26 +63,6 @@ def test_classify_consolidated_via_write_file_evidence(curator_env):
     assert result["consolidated"][0]["name"] == "axolotl-training"
     assert result["consolidated"][0]["into"] == "training-platforms"
     assert result["pruned"] == []
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 def test_report_md_splits_consolidated_and_pruned_sections(curator_env):
@@ -113,11 +97,13 @@ def test_report_md_splits_consolidated_and_pruned_sections(curator_env):
             "tool_calls": [
                 {
                     "name": "skill_manage",
-                    "arguments": json.dumps({
-                        "action": "create",
-                        "name": "umbrella",
-                        "content": "# umbrella\n\nAbsorbed absorbed-skill.",
-                    }),
+                    "arguments": json.dumps(
+                        {
+                            "action": "create",
+                            "name": "umbrella",
+                            "content": "# umbrella\n\nAbsorbed absorbed-skill.",
+                        }
+                    ),
                 },
             ],
         },
@@ -181,27 +167,9 @@ def test_parse_structured_summary_missing_block(curator_env):
     assert out == {"consolidations": [], "prunings": []}
 
 
-
-
-
-
-
-
-
-
 # ---------------------------------------------------------------------------
 # _reconcile_classification — merging model block with heuristic
 # ---------------------------------------------------------------------------
-
-
-
-
-
-
-
-
-
-
 
 
 def test_reconcile_model_block_visible_in_full_report(curator_env):
@@ -245,11 +213,16 @@ def test_reconcile_model_block_visible_in_full_report(curator_env):
             "provider": "p",
             "error": None,
             "tool_calls": [
-                {"name": "skill_manage", "arguments": _json.dumps({
-                    "action": "create",
-                    "name": "llm-providers",
-                    "content": "# llm-providers\nIncludes anthropic-api",
-                })},
+                {
+                    "name": "skill_manage",
+                    "arguments": _json.dumps(
+                        {
+                            "action": "create",
+                            "name": "llm-providers",
+                            "content": "# llm-providers\nIncludes anthropic-api",
+                        }
+                    ),
+                },
             ],
         },
     )
@@ -277,48 +250,44 @@ def test_reconcile_model_block_visible_in_full_report(curator_env):
 
 def test_extract_absorbed_into_picks_up_consolidation(curator_env):
     """Delete call with absorbed_into=<umbrella> yields a declaration."""
-    declarations = curator_env._extract_absorbed_into_declarations([
-        {
-            "name": "skill_manage",
-            "arguments": json.dumps({
-                "action": "delete",
-                "name": "narrow-skill",
-                "absorbed_into": "umbrella",
-            }),
-        },
-    ])
+    declarations = curator_env._extract_absorbed_into_declarations(
+        [
+            {
+                "name": "skill_manage",
+                "arguments": json.dumps(
+                    {
+                        "action": "delete",
+                        "name": "narrow-skill",
+                        "absorbed_into": "umbrella",
+                    }
+                ),
+            },
+        ]
+    )
     assert declarations == {
         "narrow-skill": {"into": "umbrella", "declared": True},
     }
 
 
-
-
-
-
 def test_extract_absorbed_into_ignores_non_delete_actions(curator_env):
     """Patch, create, write_file etc. must not leak into declarations."""
-    declarations = curator_env._extract_absorbed_into_declarations([
-        {
-            "name": "skill_manage",
-            "arguments": json.dumps({
-                "action": "patch",
-                "name": "umbrella",
-                "old_string": "...",
-                "new_string": "...",
-                "absorbed_into": "something",  # bogus on non-delete, must be ignored
-            }),
-        },
-    ])
+    declarations = curator_env._extract_absorbed_into_declarations(
+        [
+            {
+                "name": "skill_manage",
+                "arguments": json.dumps(
+                    {
+                        "action": "patch",
+                        "name": "umbrella",
+                        "old_string": "...",
+                        "new_string": "...",
+                        "absorbed_into": "something",  # bogus on non-delete, must be ignored
+                    }
+                ),
+            },
+        ]
+    )
     assert declarations == {}
-
-
-
-
-
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -351,14 +320,6 @@ def test_reconcile_absorbed_into_beats_everything_else(curator_env):
     assert e["name"] == "pr-review-format"
     assert e["into"] == "clawksis-agent-dev"
     assert "absorbed_into" in e["source"]
-
-
-
-
-
-
-
-
 
 
 def test_reconcile_mixed_declarations_and_legacy_calls(curator_env):
@@ -416,12 +377,6 @@ def test_rename_summary_empty_when_nothing_archived(curator_env):
     assert result == ""
 
 
-
-
-
-
-
-
 def test_rename_summary_mixed_consolidation_and_pruning(curator_env):
     """Consolidated entries come first, pruned entries follow — matches REPORT.md ordering."""
     result = curator_env._build_rename_summary(
@@ -430,19 +385,23 @@ def test_rename_summary_mixed_consolidation_and_pruning(curator_env):
         tool_calls=[
             {
                 "name": "skill_manage",
-                "arguments": json.dumps({
-                    "action": "delete",
-                    "name": "merge-me",
-                    "absorbed_into": "umbrella",
-                }),
+                "arguments": json.dumps(
+                    {
+                        "action": "delete",
+                        "name": "merge-me",
+                        "absorbed_into": "umbrella",
+                    }
+                ),
             },
             {
                 "name": "skill_manage",
-                "arguments": json.dumps({
-                    "action": "delete",
-                    "name": "drop-me",
-                    "absorbed_into": "",
-                }),
+                "arguments": json.dumps(
+                    {
+                        "action": "delete",
+                        "name": "drop-me",
+                        "absorbed_into": "",
+                    }
+                ),
             },
         ],
         model_final="",
@@ -461,9 +420,3 @@ def test_rename_summary_mixed_consolidation_and_pruning(curator_env):
 # just landed against their library). The hint is gated on having at least
 # one umbrella destination — pruned-only runs skip it.
 # ---------------------------------------------------------------------------
-
-
-
-
-
-

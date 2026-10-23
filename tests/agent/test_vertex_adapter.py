@@ -15,8 +15,14 @@ import types
 import pytest
 
 
-def _install_fake_google_auth(monkeypatch, *, adc_ok=True, adc_project="adc-project",
-                              sa_project="sa-project", token="ya29.FAKE"):
+def _install_fake_google_auth(
+    monkeypatch,
+    *,
+    adc_ok=True,
+    adc_project="adc-project",
+    sa_project="sa-project",
+    token="ya29.FAKE",
+):
     """Register a fake google-auth tree in sys.modules and return the module set."""
     ga = types.ModuleType("google.auth")
     gt = types.ModuleType("google.auth.transport")
@@ -64,8 +70,11 @@ def _install_fake_google_auth(monkeypatch, *, adc_ok=True, adc_project="adc-proj
     gp.oauth2 = go
 
     for name, mod in [
-        ("google", gp), ("google.auth", ga), ("google.auth.transport", gt),
-        ("google.auth.transport.requests", gtr), ("google.oauth2", go),
+        ("google", gp),
+        ("google.auth", ga),
+        ("google.auth.transport", gt),
+        ("google.auth.transport.requests", gtr),
+        ("google.oauth2", go),
         ("google.oauth2.service_account", gsa),
     ]:
         monkeypatch.setitem(sys.modules, name, mod)
@@ -75,26 +84,22 @@ def _install_fake_google_auth(monkeypatch, *, adc_ok=True, adc_project="adc-proj
 @pytest.fixture
 def vertex_adapter(monkeypatch):
     """Fresh vertex_adapter with a fake google-auth and clean caches/env."""
-    for var in ("VERTEX_CREDENTIALS_PATH", "GOOGLE_APPLICATION_CREDENTIALS",
-                "VERTEX_PROJECT_ID", "VERTEX_REGION", "GOOGLE_CLOUD_PROJECT"):
+    for var in (
+        "VERTEX_CREDENTIALS_PATH",
+        "GOOGLE_APPLICATION_CREDENTIALS",
+        "VERTEX_PROJECT_ID",
+        "VERTEX_REGION",
+        "GOOGLE_CLOUD_PROJECT",
+    ):
         monkeypatch.delenv(var, raising=False)
     _install_fake_google_auth(monkeypatch)
     import agent.vertex_adapter as va
+
     va = importlib.reload(va)
     va._creds_cache.clear()
     # Neutralize config.yaml by default; individual tests re-patch _vertex_config.
     monkeypatch.setattr(va, "_vertex_config", dict)
     return va
-
-
-
-
-
-
-
-
-
-
 
 
 def test_has_vertex_credentials_via_config_project(vertex_adapter, monkeypatch):
@@ -104,8 +109,6 @@ def test_has_vertex_credentials_via_config_project(vertex_adapter, monkeypatch):
 
 def test_has_vertex_credentials_false_when_nothing_set(vertex_adapter):
     assert vertex_adapter.has_vertex_credentials() is False
-
-
 
 
 def test_multiplex_scope_takes_precedence_over_raw_environ(vertex_adapter, monkeypatch):
@@ -163,14 +166,12 @@ def test_adc_refuses_foreign_profile_google_application_credentials(
         secret_scope.set_multiplex_active(False)
 
 
-
-
-
-
 # --- Pattern D: credential-file rotation invalidates the cache ---
 
 
-def test_sa_file_rotation_invalidates_creds_cache(vertex_adapter, monkeypatch, tmp_path):
+def test_sa_file_rotation_invalidates_creds_cache(
+    vertex_adapter, monkeypatch, tmp_path
+):
     """Rotating the service-account file on disk must be picked up on the
     next call — the pre-signature cache served tokens minted from the OLD
     identity for the life of the process (Pattern D: stale cache after an
@@ -207,11 +208,9 @@ def test_sa_file_rotation_invalidates_creds_cache(vertex_adapter, monkeypatch, t
     assert vertex_adapter._creds_cache[key2][0] is not creds_obj_1
 
 
-
-
-
-
-def test_adc_failure_retries_with_late_added_sa_file(vertex_adapter, monkeypatch, tmp_path):
+def test_adc_failure_retries_with_late_added_sa_file(
+    vertex_adapter, monkeypatch, tmp_path
+):
     """ADC failure must fall back to a service-account file that appeared
     after startup. The signature-keyed cache turned keys into tuples and the
     old `cache_key == "__adc__"` string comparison silently disabled this
@@ -230,7 +229,8 @@ def test_adc_failure_retries_with_late_added_sa_file(vertex_adapter, monkeypatch
     monkeypatch.setattr(vertex_adapter, "_resolve_credentials_path", _resolve)
     # Make the ADC attempt itself raise.
     monkeypatch.setattr(
-        vertex_adapter.google.auth, "default",
+        vertex_adapter.google.auth,
+        "default",
         lambda scopes=None: (_ for _ in ()).throw(RuntimeError("ADC expired")),
     )
 
@@ -240,7 +240,9 @@ def test_adc_failure_retries_with_late_added_sa_file(vertex_adapter, monkeypatch
     assert calls["n"] >= 2
 
 
-def test_metadata_preserving_rotation_invalidates_creds_cache(vertex_adapter, monkeypatch, tmp_path):
+def test_metadata_preserving_rotation_invalidates_creds_cache(
+    vertex_adapter, monkeypatch, tmp_path
+):
     """Atomic replacement that keeps SIZE and MTIME identical (deployment
     tools that restore metadata; equal-length JSON) must still be picked up.
     Review finding on #97701: a (path, mtime_ns, size) stat signature keyed

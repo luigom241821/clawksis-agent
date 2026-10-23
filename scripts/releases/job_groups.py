@@ -6,12 +6,21 @@ group output. Channel callers use `selects_all` where they refused
 `TERMUX_ONLY=true` before, and the stable phase result uses `phase_jobs` to
 judge only the selected groups.
 """
+
 from __future__ import annotations
 
 import os
 
-JOB_GROUPS = ("darwin-arm64", "darwin-x64", "win32-arm64", "win32-x64",
-              "win32-bundle", "linux-x64", "linux-arm64", "termux")
+JOB_GROUPS = (
+    "darwin-arm64",
+    "darwin-x64",
+    "win32-arm64",
+    "win32-x64",
+    "win32-bundle",
+    "linux-x64",
+    "linux-arm64",
+    "termux",
+)
 ALL_JOBS = ",".join(JOB_GROUPS)
 
 # The workflow jobs each group runs, in the names desktop-bundled-release.yml
@@ -68,8 +77,14 @@ def selects_all(raw: str | None) -> bool:
     return all(parse_jobs(raw).values())
 
 
-def phase_jobs(selected: dict[str, bool], phase: str, *, skip_tests: bool = False,
-               skip_signed: bool = False, windows_smokes_with_bundle: bool = False) -> list[str]:
+def phase_jobs(
+    selected: dict[str, bool],
+    phase: str,
+    *,
+    skip_tests: bool = False,
+    skip_signed: bool = False,
+    windows_smokes_with_bundle: bool = False,
+) -> list[str]:
     """Jobs the stable phase result judges: an unselected group never fails it.
 
     B4 moved candidate-manifest into stable-release.yml, so the desktop

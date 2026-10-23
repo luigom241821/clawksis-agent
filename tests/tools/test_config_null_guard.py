@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 # ── TTS tool ──────────────────────────────────────────────────────────────
 
+
 class TestTTSProviderNullGuard:
     """tools/tts_tool.py — _get_provider()"""
 
@@ -25,7 +26,9 @@ class TestTTSProviderNullGuard:
 
         assert _get_provider({"provider": "edge"}) == "edge"
 
+
 # ── Web tools ─────────────────────────────────────────────────────────────
+
 
 class TestWebBackendNullGuard:
     """tools/web_tools.py — _get_backend()"""
@@ -39,9 +42,11 @@ class TestWebBackendNullGuard:
         result = _get_backend()
         assert isinstance(result, str)
 
+
 # ── MCP tool ──────────────────────────────────────────────────────────────
 
 # ── Trajectory compressor ─────────────────────────────────────────────────
+
 
 class TestTrajectoryCompressorNullGuard:
     """trajectory_compressor.py — _detect_provider() and config loading"""

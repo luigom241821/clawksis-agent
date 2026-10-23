@@ -9,6 +9,7 @@ HTTP 500 from the entire `/api/skills` endpoint, blanking the desktop Skills
 panel. The fix decodes with `errors="replace"`, so the offending byte degrades
 to U+FFFD and every skill name in the (structurally valid) lock stays readable.
 """
+
 from __future__ import annotations
 
 import importlib
@@ -25,6 +26,7 @@ def skills_home(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setenv("CLAWK_HOME", str(home))
     import tools.skill_usage as mod
+
     importlib.reload(mod)
     return home
 

@@ -8,6 +8,7 @@ also update the plain-attribute ``SessionState`` caches the status bar reads.
 Callers on any other thread use ``call()``, which blocks on the loop's future; calling it on
 the loop thread itself is a deadlock and raises.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -16,12 +17,19 @@ import queue
 import threading
 import time
 
-from clawk_cli.gateway_client import DEFAULT_RPC_TIMEOUT, RESUME_KEY_MISMATCH, GatewayClientError, GatewayRPCError
+from clawk_cli.gateway_client import (
+    DEFAULT_RPC_TIMEOUT,
+    RESUME_KEY_MISMATCH,
+    GatewayClientError,
+    GatewayRPCError,
+)
 
 logger = logging.getLogger(__name__)
 
-DISCONNECTED = ("Gateway disconnected; turn outcome is unknown. Resume the printed session ID to check "
-                "whether it completed or was interrupted; do not resend the work.")
+DISCONNECTED = (
+    "Gateway disconnected; turn outcome is unknown. Resume the printed session ID to check "
+    "whether it completed or was interrupted; do not resend the work."
+)
 # A request refused before it reached any socket: nothing is in doubt, so never the copy above.
 NOT_SENT = "Gateway disconnected before the request was sent; nothing was sent."
 # ``session.resume`` refusals that mean "this viewer may not open that session": the caller keeps the
@@ -50,14 +58,23 @@ def _resume_plain(exc, session_id, typed):
         raise GatewayClientError(RESUME_KEY_MISMATCH) from None
     if typed or str(exc) not in _KEY_NOT_TAKEN:
         raise exc
-    logger.debug("session.resume %s: launch key not taken (%s); resuming without it", session_id, exc)
+    logger.debug(
+        "session.resume %s: launch key not taken (%s); resuming without it",
+        session_id,
+        exc,
+    )
 
 
 def lost_before(frame, epoch) -> bool:
     """``frame`` is a transport error from a connection older than ``epoch``: a reconnect replaced it,
     so it is no outcome of anything submitted on ``epoch``."""
     lost = getattr(frame, "connection_epoch", None)
-    return isinstance(frame, Exception) and lost is not None and epoch is not None and lost < epoch
+    return (
+        isinstance(frame, Exception)
+        and lost is not None
+        and epoch is not None
+        and lost < epoch
+    )
 
 
 class SessionState:
@@ -68,7 +85,9 @@ class SessionState:
         self.session_id = session_id
         self.info: dict = {}
         self.title: str | None = None
-        self.todo_state: dict | None = None  # the session's {todos, revision}: resume snapshot, then todo.updated
+        self.todo_state: dict | None = (
+            None  # the session's {todos, revision}: resume snapshot, then todo.updated
+        )
         self.revision = None
         self.subscription_id = None
         self.execution_generation = None
@@ -108,9 +127,13 @@ class SessionState:
         self.info = dict(snapshot.get("info") or {})
         self.revision = snapshot.get("revision", self.revision)
         self.subscription_id = snapshot.get("subscription_id", self.subscription_id)
-        self.execution_generation = snapshot.get("execution_generation", self.execution_generation)
+        self.execution_generation = snapshot.get(
+            "execution_generation", self.execution_generation
+        )
         self.messages = list(snapshot.get("messages") or [])
-        if "todo_state" in snapshot:  # null clears an earlier plan; a missing key (older gateway) keeps it
+        if (
+            "todo_state" in snapshot
+        ):  # null clears an earlier plan; a missing key (older gateway) keeps it
             todo_state = snapshot["todo_state"]
             self.todo_state = dict(todo_state) if isinstance(todo_state, dict) else None
         if isinstance(snapshot.get("pending"), list):
@@ -122,8 +145,11 @@ class SessionState:
     def runs_route(self, model, provider=""):
         """Whether the session runs ``model`` (and ``provider``, when both sides name one)."""
         current, current_provider = self.info.get("model"), self.info.get("provider")
-        return bool(current) and model == current and not (
-            provider and current_provider and provider != current_provider)
+        return (
+            bool(current)
+            and model == current
+            and not (provider and current_provider and provider != current_provider)
+        )
 
     def apply_event(self, kind, payload):
         if kind in ("session.info", "session.updated") and isinstance(payload, dict):
@@ -134,12 +160,17 @@ class SessionState:
             if payload.get("title"):
                 self.title = payload["title"]
         elif kind == "todo.updated" and isinstance(payload, dict):
-            self.todo_state = {"todos": list(payload.get("todos") or []), "revision": payload.get("revision")}
+            self.todo_state = {
+                "todos": list(payload.get("todos") or []),
+                "revision": payload.get("revision"),
+            }
         elif kind == "session.usage" and isinstance(payload, dict):
             # The gateway's frame carries the flat counters next to a nested TUI ``usage`` view this
             # reader can't map (``session_usage.usage_frame``): the counters win when present.
             nested = payload.get("usage")
-            flat = isinstance(payload.get("api_calls"), int) or not isinstance(nested, dict)
+            flat = isinstance(payload.get("api_calls"), int) or not isinstance(
+                nested, dict
+            )
             self.apply_usage(payload if flat else nested)
         elif kind == "request.cancel" and isinstance(payload, dict):
             for listener in list(self.request_listeners):
@@ -221,7 +252,12 @@ class GatewayConnection:
                         raise self._error
                     return
                 thread = self._thread
-                if thread is not None and self.closed and thread.is_alive() and thread is not threading.current_thread():
+                if (
+                    thread is not None
+                    and self.closed
+                    and thread.is_alive()
+                    and thread is not threading.current_thread()
+                ):
                     # ``_run`` reports ready before its thread returns: that life is over, so let it
                     # end instead of reading it as a dial in progress (and re-raising its stale error).
                     thread.join(max(deadline - time.monotonic(), 0))
@@ -234,11 +270,15 @@ class GatewayConnection:
                         self._error = None
                         self._ready.clear()
                         self.closed = False
-                    thread = self._thread = spawn_context_thread(self._run, name="clawk-gateway-loop")
+                    thread = self._thread = spawn_context_thread(
+                        self._run, name="clawk-gateway-loop"
+                    )
                     thread.start()
             # Every caller waits out a dial in progress, its own or another thread's.
             if not self._ready.wait(max(deadline - time.monotonic(), 0)):
-                raise GatewayClientError("Gateway connection timed out; no local fallback")
+                raise GatewayClientError(
+                    "Gateway connection timed out; no local fallback"
+                )
             if self._error is not None:
                 raise self._error
             if self.client is not None or self.final:
@@ -246,15 +286,22 @@ class GatewayConnection:
             # Hung up right after that dial: let its loop end, then dial again.
             thread.join(max(deadline - time.monotonic(), 0))
             if time.monotonic() >= deadline:
-                raise GatewayClientError("Gateway connection timed out; no local fallback")
+                raise GatewayClientError(
+                    "Gateway connection timed out; no local fallback"
+                )
 
     def _run(self):
         try:
             asyncio.run(self._main())
         except BaseException as exc:  # health: allow BLE001 -- the loop thread reports every failure to the waiting caller
             if self._error is None:
-                self._error = exc if isinstance(exc, GatewayClientError) else GatewayClientError(
-                    "Gateway connection failed; no local fallback")
+                self._error = (
+                    exc
+                    if isinstance(exc, GatewayClientError)
+                    else GatewayClientError(
+                        "Gateway connection failed; no local fallback"
+                    )
+                )
         finally:
             self.closed = True
             self._ready.set()
@@ -265,6 +312,7 @@ class GatewayConnection:
         connect = self._connect
         if connect is None:
             from clawk_cli.gateway_client import connect_gateway
+
             connect = connect_gateway
         try:
             async with connect() as client:
@@ -281,8 +329,13 @@ class GatewayConnection:
                 stop.cancel()
         except Exception as exc:  # health: allow BLE001 -- a transport failure becomes the connect error or the disconnect frame
             if not self._ready.is_set():
-                self._error = exc if isinstance(exc, GatewayClientError) else GatewayClientError(
-                    f"Gateway connection failed; no local fallback ({type(exc).__name__})")
+                self._error = (
+                    exc
+                    if isinstance(exc, GatewayClientError)
+                    else GatewayClientError(
+                        f"Gateway connection failed; no local fallback ({type(exc).__name__})"
+                    )
+                )
             else:
                 self._put_loss(GatewayClientError(DISCONNECTED))
         finally:
@@ -327,7 +380,9 @@ class GatewayConnection:
         key = self.launch_api_key
         if key:
             try:
-                return await client.rpc("session.resume", session_id=session_id, api_key=key)
+                return await client.rpc(
+                    "session.resume", session_id=session_id, api_key=key
+                )
             except GatewayRPCError as exc:
                 _resume_plain(exc, session_id, typed=False)
         return await client.rpc("session.resume", session_id=session_id)
@@ -345,15 +400,24 @@ class GatewayConnection:
                 sid = params.get("session_id")
                 if sid in self.states:
                     try:
-                        self.states[sid].apply_event(params.get("type"), params.get("payload"))
-                    except Exception:  # pragma: no cover - a cache update must never stop the pump
+                        self.states[sid].apply_event(
+                            params.get("type"), params.get("payload")
+                        )
+                    except (
+                        Exception
+                    ):  # pragma: no cover - a cache update must never stop the pump
                         logger.debug("session state update failed", exc_info=True)
             self.events.put(frame)
 
     def _take_side(self, params):
         from clawk_cli.gateway_side import SIDE_EVENTS
+
         payload = params.get("payload")
-        if params.get("type") not in SIDE_EVENTS or not isinstance(payload, dict) or not payload.get("task_id"):
+        if (
+            params.get("type") not in SIDE_EVENTS
+            or not isinstance(payload, dict)
+            or not payload.get("task_id")
+        ):
             return False
         self.side_waiter(payload["task_id"]).put(payload)
         return True
@@ -386,13 +450,18 @@ class GatewayConnection:
         """Answer one of the gateway's server→client requests (the ``sudo`` prompt): a JSON-RPC
         response frame with the request's own id. Never raises; a lost reply times out gateway-side."""
         import json
+
         client, loop = self.client, self.loop
         if client is None or loop is None:
             return False
         frame = json.dumps({"jsonrpc": "2.0", "id": request_id, "result": result})
         try:
-            asyncio.run_coroutine_threadsafe(client.websocket.send(frame), loop).result(10)
-        except Exception as exc:  # health: allow BLE001 -- the gateway's own wait bounds a lost answer
+            asyncio.run_coroutine_threadsafe(client.websocket.send(frame), loop).result(
+                10
+            )
+        except (
+            Exception
+        ) as exc:  # health: allow BLE001 -- the gateway's own wait bounds a lost answer
             logger.debug("server request reply failed: %s", exc)
             return False
         return True
@@ -406,19 +475,25 @@ class GatewayConnection:
         gaps = state.gaps
         snapshot = self.call("session.resume", session_id=session_id, abandon=abandon)
         state.adopt_snapshot(snapshot)
-        state.attached_gaps = gaps  # a gap during this resume (or a wait given up) still owes one
+        state.attached_gaps = (
+            gaps  # a gap during this resume (or a wait given up) still owes one
+        )
         return snapshot
 
     def _send(self, method, budget, params):
         """``(future, epoch)`` of one request sent on the live socket (see :meth:`call_tagged`)."""
         if self._thread is not None and threading.current_thread() is self._thread:
-            raise RuntimeError("GatewayConnection.call() on the gateway loop thread would deadlock")
+            raise RuntimeError(
+                "GatewayConnection.call() on the gateway loop thread would deadlock"
+            )
         self.start()
         live, loop = self._live, self.loop
         if live is None or loop is None:
             raise GatewayClientError(NOT_SENT)
         client, epoch = live
-        return asyncio.run_coroutine_threadsafe(client.rpc(method, _timeout=budget, **params), loop), epoch
+        return asyncio.run_coroutine_threadsafe(
+            client.rpc(method, _timeout=budget, **params), loop
+        ), epoch
 
     def call_until(self, method, wake, **params):
         """``call`` with no answer deadline, for a verb that lasts as long as the work it runs (a plugin
@@ -431,15 +506,20 @@ class GatewayConnection:
         socket closes on any of these, and its thread is gone before this returns."""
         import concurrent.futures
         from agent.memory_provider import spawn_context_thread
+
         if self._thread is not None and threading.current_thread() is self._thread:
-            raise RuntimeError("GatewayConnection.call_until() on the gateway loop thread would deadlock")
+            raise RuntimeError(
+                "GatewayConnection.call_until() on the gateway loop thread would deadlock"
+            )
         self.start()  # this viewer's gateway, dialled (or redialled after a hang-up) as for any call
         if self.final:
             raise GatewayClientError(NOT_SENT)
         answer, sent = concurrent.futures.Future(), threading.Event()
         answer.add_done_callback(lambda _done: wake.set())
-        thread = spawn_context_thread(lambda: asyncio.run(self._command(method, params, wake, answer, sent)),
-                                      name="clawk-gateway-command")
+        thread = spawn_context_thread(
+            lambda: asyncio.run(self._command(method, params, wake, answer, sent)),
+            name="clawk-gateway-command",
+        )
         with self._side_lock:
             self._commands.add(wake)
         thread.start()
@@ -462,6 +542,7 @@ class GatewayConnection:
         connect = self._connect
         if connect is None:
             from clawk_cli.gateway_client import connect_gateway
+
             connect = connect_gateway
         task = asyncio.current_task()
         stop = asyncio.ensure_future(asyncio.to_thread(wake.wait))
@@ -469,7 +550,9 @@ class GatewayConnection:
         try:
             async with connect() as client:
                 sent.set()  # from here the request may have reached the gateway: never sent again
-                answer.set_result(await client.rpc(method, _timeout=float("inf"), **params))
+                answer.set_result(
+                    await client.rpc(method, _timeout=float("inf"), **params)
+                )
         except asyncio.CancelledError:
             pass
         except Exception as exc:  # health: allow BLE001 -- every transport failure is the caller's error
@@ -485,13 +568,18 @@ class GatewayConnection:
         is tied to that gateway life even if another caller redials before this one reads ``epoch``.
         ``abandon`` (polled) true stops the wait with :class:`CallStopped`; the answer is dropped."""
         from concurrent.futures import wait
+
         budget = DEFAULT_RPC_TIMEOUT if timeout is None else timeout
         if abandon is not None and abandon():
             raise CallStopped(method)
         future, epoch = self._send(method, budget, params)
         deadline = time.monotonic() + budget + 5
         try:
-            while abandon is not None and not wait([future], 0.1).done and time.monotonic() < deadline:
+            while (
+                abandon is not None
+                and not wait([future], 0.1).done
+                and time.monotonic() < deadline
+            ):
                 if abandon():
                     raise CallStopped(method)
             return future.result(max(deadline - time.monotonic(), 0)), epoch

@@ -102,8 +102,15 @@ class ParkedVoices:
                 for w in waits:
                     w.cancel()
 
-    def park(self, room_id: str, sender: str, gate: VoiceGate, event_id: str, content: dict,
-             relates_to: dict) -> None:
+    def park(
+        self,
+        room_id: str,
+        sender: str,
+        gate: VoiceGate,
+        event_id: str,
+        content: dict,
+        relates_to: dict,
+    ) -> None:
         key = (room_id, sender)
         if gate.seq <= self._floor.get(key, -1):
             return  # a newer voice from this sender was already claimed
@@ -124,7 +131,7 @@ class ParkedVoices:
         if idx is None:
             return None
         claimed = entries[idx]
-        del entries[:idx + 1]
+        del entries[: idx + 1]
         if not entries:
             del self._parked[key]
         if key in self._inflight:  # a late older voice must not park after this claim

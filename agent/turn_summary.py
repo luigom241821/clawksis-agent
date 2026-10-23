@@ -49,7 +49,9 @@ _VERB_GROUPS: dict[str, tuple[str, str, str]] = {
     "memory": ("updated", "memory", "memories"),
 }
 
-_EDIT_VERB = "edited"  # verb group that carries file-edit line deltas (+X -Y) when known
+_EDIT_VERB = (
+    "edited"  # verb group that carries file-edit line deltas (+X -Y) when known
+)
 # Render order: edits first, then reads, then commands; others in first-seen order.
 _VERB_PRIORITY: tuple[str, ...] = ("edited", "read", "ran")
 # Tools whose results may report a unified diff we can count lines from.
@@ -70,7 +72,9 @@ class TurnTally:
 
     @property
     def total_tools(self) -> int:
-        return sum(sum(nouns.values()) for nouns in self.verbs.values()) + self.other_tools
+        return (
+            sum(sum(nouns.values()) for nouns in self.verbs.values()) + self.other_tools
+        )
 
 
 def _extract_line_deltas(tool_name: str, result: Any) -> tuple[int, int] | None:
@@ -112,7 +116,9 @@ class TurnSummaryCollector:
         """Start a fresh turn (drops any prior tally)."""
         self._tally = TurnTally()
 
-    def record_tool(self, tool_name: str | None, *, result: Any = None, is_error: bool = False) -> None:
+    def record_tool(
+        self, tool_name: str | None, *, result: Any = None, is_error: bool = False
+    ) -> None:
         """Record one completed tool call. Failed calls are skipped: "edited 2 files"
         when one write was denied is exactly the over-claim to avoid."""
         # Internal/pseudo tools (``_thinking``) are not user-visible work.
@@ -159,20 +165,31 @@ def _pluralize(count: int, plural_noun: str) -> str:
         return f"{count} {plural_noun}"
     for suffix, singular_tail in (("ies", "y"), ("ses", "s"), ("s", "")):
         if plural_noun.endswith(suffix):
-            return f"1 {plural_noun[:-len(suffix)]}{singular_tail}"
+            return f"1 {plural_noun[: -len(suffix)]}{singular_tail}"
     return f"1 {plural_noun}"
 
 
-def format_turn_summary(elapsed_seconds: float, tally: TurnTally | None, *, max_segments: int = _MAX_SEGMENTS) -> str:
+def format_turn_summary(
+    elapsed_seconds: float,
+    tally: TurnTally | None,
+    *,
+    max_segments: int = _MAX_SEGMENTS,
+) -> str:
     """Render the per-turn accounting line, or ``""`` when there's nothing to say.
     Pure; gating (``display.turn_summary``, quiet mode, CLI-only) is the caller's job."""
     if tally is None:
         tally = TurnTally()
 
-    ordered = [v for v in _VERB_PRIORITY if v in tally.verbs] + [v for v in tally.verbs if v not in _VERB_PRIORITY]
+    ordered = [v for v in _VERB_PRIORITY if v in tally.verbs] + [
+        v for v in tally.verbs if v not in _VERB_PRIORITY
+    ]
     segments: list[str] = []
     for verb in ordered:
-        parts = [_pluralize(count, plural) for plural, count in tally.verbs[verb].items() if count]
+        parts = [
+            _pluralize(count, plural)
+            for plural, count in tally.verbs[verb].items()
+            if count
+        ]
         if not parts:
             continue
         segment = f"{verb} {', '.join(parts)}"
@@ -183,14 +200,20 @@ def format_turn_summary(elapsed_seconds: float, tally: TurnTally | None, *, max_
     if tally.other_tools:
         segments.append(f"called {_pluralize(tally.other_tools, 'tools')}")
 
-    if not segments and tally.total_tools == 0 and elapsed_seconds < _MIN_TOOLLESS_SECONDS:
+    if (
+        not segments
+        and tally.total_tools == 0
+        and elapsed_seconds < _MIN_TOOLLESS_SECONDS
+    ):
         return ""
 
     if max_segments > 0 and len(segments) > max_segments:
         hidden = len(segments) - max_segments
         segments = segments[:max_segments] + [f"+{hidden} more"]
 
-    return f"{SUMMARY_PREFIX} " + " · ".join([format_elapsed(elapsed_seconds)] + segments)
+    return f"{SUMMARY_PREFIX} " + " · ".join(
+        [format_elapsed(elapsed_seconds)] + segments
+    )
 
 
 def format_token_flow(output_tokens: Any, *, arrow: str = "↓") -> str:

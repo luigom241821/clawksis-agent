@@ -36,10 +36,26 @@ class _Ticks:
 def _profile(home: Path, base_url: str) -> None:
     home.mkdir(parents=True, exist_ok=True)
     (home / "config.yaml").write_text("model:\n  provider: nous\n", encoding="utf-8")
-    (home / ".env").write_text(f"NOUS_INFERENCE_BASE_URL={base_url}\n", encoding="utf-8")
-    (home / "auth.json").write_text(json.dumps({"version": 1, "providers": {"nous": {
-        "access_token": "x.y.z", "refresh_token": "r", "expires_at": 0,
-        "portal_base_url": "https://portal.nousresearch.com", "client_id": "c"}}}), encoding="utf-8")
+    (home / ".env").write_text(
+        f"NOUS_INFERENCE_BASE_URL={base_url}\n", encoding="utf-8"
+    )
+    (home / "auth.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "providers": {
+                    "nous": {
+                        "access_token": "x.y.z",
+                        "refresh_token": "r",
+                        "expires_at": 0,
+                        "portal_base_url": "https://portal.nousresearch.com",
+                        "client_id": "c",
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
 
 
 @pytest.fixture
@@ -58,11 +74,16 @@ def two_homes(tmp_path, monkeypatch):
     # ``_default_db_path()`` — exactly the per-profile resolution these tests exist to prove.
     # Restore the import-time sentinel so an argless ``acquire()`` resolves through the scope.
     import clawk_state
-    monkeypatch.setattr(clawk_state, "DEFAULT_DB_PATH", clawk_state._IMPORT_DEFAULT_DB_PATH)
+
+    monkeypatch.setattr(
+        clawk_state, "DEFAULT_DB_PATH", clawk_state._IMPORT_DEFAULT_DB_PATH
+    )
     # Disabling the hermetic pin is only safe while the sentinel still resolves INSIDE the sandbox:
     # a resolution that escaped to the real home would have these tests writing the live store.
     resolved = Path(clawk_state._default_db_path())
-    assert resolved.is_relative_to(tmp_path), f"unpinned store escaped the sandbox: {resolved}"
+    assert resolved.is_relative_to(tmp_path), (
+        f"unpinned store escaped the sandbox: {resolved}"
+    )
     return a, b
 
 
@@ -75,7 +96,9 @@ def _record_credential_chores(monkeypatch):
     seen: dict = {"curator": []}
 
     def _rec(key):
-        return lambda *a, **k: seen[key].append((get_clawk_home().name, _nous_inference_env_override()))
+        return lambda *a, **k: seen[key].append(
+            (get_clawk_home().name, _nous_inference_env_override())
+        )
 
     monkeypatch.setattr(curator, "maybe_run_curator", _rec("curator"))
     return seen
@@ -85,7 +108,9 @@ def _run_60_ticks(runner):
     gateway_run._start_gateway_housekeeping(_Ticks(60), interval=0, runner=runner)
 
 
-def test_multiplexed_credential_chores_run_once_per_profile_in_its_own_scope(two_homes, monkeypatch, caplog):
+def test_multiplexed_credential_chores_run_once_per_profile_in_its_own_scope(
+    two_homes, monkeypatch, caplog
+):
     """Under multiplex every credential-reading chore visits each served profile inside ITS scope:
     A's tick reads A's override, B's reads B's (B never sees A's), and no fail-closed credential
     read fires the ``no profile secret scope`` warning. The ambient home is untouched afterwards."""
@@ -97,17 +122,23 @@ def test_multiplexed_credential_chores_run_once_per_profile_in_its_own_scope(two
     set_multiplex_active(True)
     try:
         with caplog.at_level(logging.WARNING):
-            _run_60_ticks(SimpleNamespace(config=SimpleNamespace(multiplex_profiles=True)))
+            _run_60_ticks(
+                SimpleNamespace(config=SimpleNamespace(multiplex_profiles=True))
+            )
     finally:
         set_multiplex_active(False)
 
     expected = [(a.name, "https://a.example/v1"), (b.name, "https://b.example/v1")]
     assert seen == {"curator": expected}
-    assert not [r for r in caplog.records if "no profile secret scope" in r.getMessage()]
+    assert not [
+        r for r in caplog.records if "no profile secret scope" in r.getMessage()
+    ]
     assert get_clawk_home() == a
 
 
-def test_multiplexed_auto_archive_tick_sweeps_every_served_profile_store(two_homes, monkeypatch):
+def test_multiplexed_auto_archive_tick_sweeps_every_served_profile_store(
+    two_homes, monkeypatch
+):
     """The auto-archive sweep reaches each served profile's OWN state.db.
 
     ``acquire()`` resolves through ``get_clawk_home()``, so an unscoped tick archived the
@@ -120,10 +151,16 @@ def test_multiplexed_auto_archive_tick_sweeps_every_served_profile_store(two_hom
     a, b = two_homes
     swept: list = []
     monkeypatch.setattr(
-        SessionDB, "maybe_auto_archive", lambda self, **kw: swept.append(Path(self.db_path)))
+        SessionDB,
+        "maybe_auto_archive",
+        lambda self, **kw: swept.append(Path(self.db_path)),
+    )
     monkeypatch.setattr(
         "clawk_cli.config.load_config",
-        lambda *args, **kwargs: {"sessions": {"auto_archive": True, "min_interval_hours": 0}})
+        lambda *args, **kwargs: {
+            "sessions": {"auto_archive": True, "min_interval_hours": 0}
+        },
+    )
 
     set_multiplex_active(True)
     try:
@@ -134,7 +171,9 @@ def test_multiplexed_auto_archive_tick_sweeps_every_served_profile_store(two_hom
     assert swept == [a / "state.db", b / "state.db"]
 
 
-def test_multiplexed_maintenance_tick_prunes_every_served_profile_store(two_homes, monkeypatch):
+def test_multiplexed_maintenance_tick_prunes_every_served_profile_store(
+    two_homes, monkeypatch
+):
     """Prune/VACUUM reaches each served profile's OWN state.db, under its OWN ``sessions:`` config.
 
     Prune and VACUUM ran once in the gateway constructor against a handle pinned to the launch
@@ -154,7 +193,8 @@ def test_multiplexed_maintenance_tick_prunes_every_served_profile_store(two_home
             "  retention_days: 0\n"
             "  min_interval_hours: 0\n"
             "  vacuum_after_prune: false\n",
-            encoding="utf-8")
+            encoding="utf-8",
+        )
         db = SessionDB(db_path=home / "state.db")
         db.create_session("old", "cli")
         db.end_session("old", "done")
@@ -169,12 +209,16 @@ def test_multiplexed_maintenance_tick_prunes_every_served_profile_store(two_home
     for home in homes:
         db = SessionDB(db_path=home / "state.db")
         try:
-            assert db.get_session("old") is None, f"{home.name}'s store was never pruned"
+            assert db.get_session("old") is None, (
+                f"{home.name}'s store was never pruned"
+            )
         finally:
             db.close()
 
 
-def test_a_failing_profile_does_not_strand_the_profiles_after_it(two_homes, monkeypatch):
+def test_a_failing_profile_does_not_strand_the_profiles_after_it(
+    two_homes, monkeypatch
+):
     """One served profile's broken store must not cost every profile after it its maintenance.
 
     ``_housekeeping_chore`` catches at the tick level only, so the launch store raising in
@@ -198,10 +242,16 @@ def test_a_failing_profile_does_not_strand_the_profiles_after_it(two_homes, monk
 
     monkeypatch.setattr(registry, "acquire", _acquire)
     monkeypatch.setattr(
-        SessionDB, "maybe_auto_archive", lambda self, **kw: swept.append(Path(self.db_path)))
+        SessionDB,
+        "maybe_auto_archive",
+        lambda self, **kw: swept.append(Path(self.db_path)),
+    )
     monkeypatch.setattr(
         "clawk_cli.config.load_config",
-        lambda *args, **kwargs: {"sessions": {"auto_archive": True, "min_interval_hours": 0}})
+        lambda *args, **kwargs: {
+            "sessions": {"auto_archive": True, "min_interval_hours": 0}
+        },
+    )
 
     set_multiplex_active(True)
     try:
@@ -239,7 +289,9 @@ def test_profile_scope_setup_failure_restores_the_callers_home(two_homes, monkey
     assert current_secret_scope() == scope_before
 
 
-def test_prune_unlinks_transcripts_under_the_configured_sessions_dir(two_homes, tmp_path):
+def test_prune_unlinks_transcripts_under_the_configured_sessions_dir(
+    two_homes, tmp_path
+):
     """``gateway.sessions_dir`` governs the LAUNCH profile's transcripts; others use their own home.
 
     Hardcoding ``<home>/sessions`` made the prune unlink under a directory nothing writes to, so an
@@ -259,7 +311,8 @@ def test_prune_unlinks_transcripts_under_the_configured_sessions_dir(two_homes, 
             "  retention_days: 0\n"
             "  min_interval_hours: 0\n"
             "  vacuum_after_prune: false\n",
-            encoding="utf-8")
+            encoding="utf-8",
+        )
         db = SessionDB(db_path=home / "state.db")
         db.create_session("old", "cli")
         db.end_session("old", "done")
@@ -269,16 +322,25 @@ def test_prune_unlinks_transcripts_under_the_configured_sessions_dir(two_homes, 
 
     set_multiplex_active(True)
     try:
-        _run_60_ticks(SimpleNamespace(config=SimpleNamespace(
-            multiplex_profiles=True, sessions_dir=override)))
+        _run_60_ticks(
+            SimpleNamespace(
+                config=SimpleNamespace(multiplex_profiles=True, sessions_dir=override)
+            )
+        )
     finally:
         set_multiplex_active(False)
 
-    assert not (override / "old.jsonl").exists(), "launch profile's configured transcript survived"
-    assert not (b / "sessions" / "old.jsonl").exists(), "profile b's transcript survived"
+    assert not (override / "old.jsonl").exists(), (
+        "launch profile's configured transcript survived"
+    )
+    assert not (b / "sessions" / "old.jsonl").exists(), (
+        "profile b's transcript survived"
+    )
 
 
-def test_single_profile_credential_chores_run_once_against_the_process_home(two_homes, monkeypatch):
+def test_single_profile_credential_chores_run_once_against_the_process_home(
+    two_homes, monkeypatch
+):
     """Control: a single-profile gateway (multiplex off) still runs each chore exactly once against
     the process home — the named profile directory on disk is not visited."""
     a, _b = two_homes
@@ -289,7 +351,9 @@ def test_single_profile_credential_chores_run_once_against_the_process_home(two_
     assert {k: [h for h, _ in v] for k, v in seen.items()} == {"curator": [a.name]}
 
 
-def test_multiplexed_plugin_update_check_visits_every_served_profiles_plugins(two_homes, monkeypatch):
+def test_multiplexed_plugin_update_check_visits_every_served_profiles_plugins(
+    two_homes, monkeypatch
+):
     """The plugin update check runs once per served profile, against THAT profile's plugins dir
     and marker, under that profile's ``plugins:`` config. Unscoped it checked the launch home's
     plugins only, so B's plugins were never checked and B's ``plugins.auto_apply`` was ignored."""
@@ -297,9 +361,12 @@ def test_multiplexed_plugin_update_check_visits_every_served_profiles_plugins(tw
     from clawk_cli import plugins_cadence
 
     a, b = two_homes
-    (a / "config.yaml").write_text("plugins:\n  auto_update_check_hours: 1\n", encoding="utf-8")
+    (a / "config.yaml").write_text(
+        "plugins:\n  auto_update_check_hours: 1\n", encoding="utf-8"
+    )
     (b / "config.yaml").write_text(
-        "plugins:\n  auto_update_check_hours: 1\n  auto_apply: true\n", encoding="utf-8")
+        "plugins:\n  auto_update_check_hours: 1\n  auto_apply: true\n", encoding="utf-8"
+    )
     checked: list = []
 
     def _run_checks(plugins_dir, *a_, **k_):
@@ -307,6 +374,7 @@ def test_multiplexed_plugin_update_check_visits_every_served_profiles_plugins(tw
         return []
 
     import clawk_cli.plugins_updates as updates
+
     monkeypatch.setattr(updates, "run_checks", _run_checks)
 
     set_multiplex_active(True)

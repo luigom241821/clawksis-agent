@@ -6,7 +6,10 @@ import py_compile
 import pytest
 
 from tools import skills_sync as ss
-from tools.skills_sync_bundled_ops import diff_bundled_skill, list_user_modified_bundled_skills
+from tools.skills_sync_bundled_ops import (
+    diff_bundled_skill,
+    list_user_modified_bundled_skills,
+)
 from tools.skills_sync_optional import _skill_file_list
 
 
@@ -60,13 +63,17 @@ def test_real_python_compilation_does_not_freeze_update(skill_tree):
     assert ss._read_manifest()["demo"] == ss.dir_hash(src)
 
 
-@pytest.mark.parametrize("cache_path", [
-    "scripts/__pycache__/helper.cpython-311.pyc",
-    ".pytest_cache/v/cache/nodeids",
-    "scripts/.mypy_cache/3.11/helper.data.json",
-    "scripts/.ruff_cache/0.15.0/abc",
-    "scripts/helper.pyc", "scripts/helper.pyo",
-])
+@pytest.mark.parametrize(
+    "cache_path",
+    [
+        "scripts/__pycache__/helper.cpython-311.pyc",
+        ".pytest_cache/v/cache/nodeids",
+        "scripts/.mypy_cache/3.11/helper.data.json",
+        "scripts/.ruff_cache/0.15.0/abc",
+        "scripts/helper.pyc",
+        "scripts/helper.pyo",
+    ],
+)
 def test_runtime_cache_is_not_hash_or_diff_content(skill_tree, cache_path):
     src, dest = skill_tree
     _write(dest, cache_path, "generated")
@@ -75,7 +82,16 @@ def test_runtime_cache_is_not_hash_or_diff_content(skill_tree, cache_path):
     assert diff_bundled_skill("demo")["modified"] is False
 
 
-@pytest.mark.parametrize("edited_path", ["SKILL.md", "scripts/helper.py", "references/notes.md", "cache/data.json", "scripts/bytecode_only.pyc"])
+@pytest.mark.parametrize(
+    "edited_path",
+    [
+        "SKILL.md",
+        "scripts/helper.py",
+        "references/notes.md",
+        "cache/data.json",
+        "scripts/bytecode_only.pyc",
+    ],
+)
 def test_genuine_edits_next_to_cache_are_preserved(skill_tree, edited_path):
     src, dest = skill_tree
     _write(dest, "scripts/__pycache__/helper.cpython-311.pyc", "generated")
@@ -112,7 +128,9 @@ def test_legacy_cache_hash_migrates_only_with_matching_origin(skill_tree):
 
 def test_legacy_hash_mismatch_never_rebaselines_user_edits(skill_tree):
     src, dest = skill_tree
-    cache = _write(dest, "scripts/__pycache__/helper.cpython-311.pyc", "legacy generated")
+    cache = _write(
+        dest, "scripts/__pycache__/helper.cpython-311.pyc", "legacy generated"
+    )
     origin = _legacy_hash(dest)
     ss._write_manifest({"demo": origin})
     cache.unlink()
@@ -135,7 +153,9 @@ def test_runtime_cache_does_not_hide_dotfile_edit(skill_tree):
     _write(dest, ".pytest_cache/v/cache/nodeids", "[]")
     assert ss.dir_hash(dest) != ss.dir_hash(src)
     assert ".settings.json" in _skill_file_list(dest)
-    assert [e["path"] for e in diff_bundled_skill("demo")["diffs"]] == [".settings.json"]
+    assert [e["path"] for e in diff_bundled_skill("demo")["diffs"]] == [
+        ".settings.json"
+    ]
 
 
 def test_legacy_cache_origin_allows_rename_without_freezing(skill_tree):
@@ -149,7 +169,9 @@ def test_legacy_cache_origin_allows_rename_without_freezing(skill_tree):
     result = ss.sync_skills(quiet=True)
     assert result["updated"] == ["demo"]
     assert not dest.exists()
-    assert (ss._skills_dir() / "recategorized/demo/scripts/helper.py").read_text() == "ANSWER = 3\n"
+    assert (
+        ss._skills_dir() / "recategorized/demo/scripts/helper.py"
+    ).read_text() == "ANSWER = 3\n"
 
 
 def test_hash_filter_is_skill_relative(tmp_path):

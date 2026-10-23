@@ -7,7 +7,11 @@ vendors, which is expected to change over time.
 """
 
 from clawk_cli.models import CANONICAL_PROVIDERS
-from clawk_cli.models_catalog_static import PROVIDER_GROUPS, group_providers, provider_group_for_slug
+from clawk_cli.models_catalog_static import (
+    PROVIDER_GROUPS,
+    group_providers,
+    provider_group_for_slug,
+)
 
 
 def _slugs(rows):
@@ -21,16 +25,12 @@ def _slugs(rows):
     return out
 
 
-
-
 def test_reverse_index_matches_groups():
     for gid, (_label, _desc, members) in PROVIDER_GROUPS.items():
         for m in members:
             assert provider_group_for_slug(m) == gid
     assert provider_group_for_slug("openrouter") == ""
     assert provider_group_for_slug("") == ""
-
-
 
 
 def test_multi_member_group_folds_to_one_row():
@@ -43,11 +43,3 @@ def test_multi_member_group_folds_to_one_row():
     # group rows carry the short top-level description from PROVIDER_GROUPS
     assert row["description"] == PROVIDER_GROUPS["minimax"][1]
     assert row["description"]
-
-
-
-
-
-
-
-

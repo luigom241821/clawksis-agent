@@ -34,8 +34,15 @@ class RealtimeSession:
     """Minimal sync client for the OpenAI Realtime WebSocket API; ``speak`` and ``cancel_response``
     may run on different threads — a lock serializes WebSocket writes."""
 
-    def __init__(self, api_key: str, model: str = "gpt-realtime", voice: str = "alloy",
-                 instructions: str = "", audio_sink_path: Optional[Path] = None, sample_rate: int = 24000) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        model: str = "gpt-realtime",
+        voice: str = "alloy",
+        instructions: str = "",
+        audio_sink_path: Optional[Path] = None,
+        sample_rate: int = 24000,
+    ) -> None:
         self.api_key = api_key
         self.model = model
         self.voice = voice
@@ -52,18 +59,32 @@ class RealtimeSession:
         try:
             from websockets.sync.client import connect  # type: ignore
         except ImportError as exc:  # pragma: no cover - exercised via test
-            raise RuntimeError("websockets package is required for OpenAI Realtime; "
-                               "install with: pip install websockets") from exc
+            raise RuntimeError(
+                "websockets package is required for OpenAI Realtime; "
+                "install with: pip install websockets"
+            ) from exc
         url = f"{REALTIME_URL}?model={self.model}"
-        headers = [("Authorization", f"Bearer {self.api_key}"), ("OpenAI-Beta", "realtime=v1")]
+        headers = [
+            ("Authorization", f"Bearer {self.api_key}"),
+            ("OpenAI-Beta", "realtime=v1"),
+        ]
         # Newer websockets takes additional_headers=, older extra_headers=.
         try:
             self._ws = connect(url, additional_headers=headers)
         except TypeError:
             self._ws = connect(url, extra_headers=headers)
-        self._send_json({"type": "session.update", "session": {
-            "voice": self.voice, "instructions": self.instructions, "modalities": ["audio", "text"],
-            "output_audio_format": "pcm16", "input_audio_format": "pcm16"}})
+        self._send_json(
+            {
+                "type": "session.update",
+                "session": {
+                    "voice": self.voice,
+                    "instructions": self.instructions,
+                    "modalities": ["audio", "text"],
+                    "output_audio_format": "pcm16",
+                    "input_audio_format": "pcm16",
+                },
+            }
+        )
 
     def close(self) -> None:
         if self._ws is not None:
@@ -77,9 +98,19 @@ class RealtimeSession:
         if self._ws is None:
             raise RuntimeError("RealtimeSession.connect() must be called first")
         start = time.monotonic()
-        self._send_json({"type": "conversation.item.create", "item": {
-            "type": "message", "role": "user", "content": [{"type": "input_text", "text": text}]}})
-        self._send_json({"type": "response.create", "response": {"modalities": ["audio"]}})
+        self._send_json(
+            {
+                "type": "conversation.item.create",
+                "item": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": text}],
+                },
+            }
+        )
+        self._send_json(
+            {"type": "response.create", "response": {"modalities": ["audio"]}}
+        )
         bytes_written = 0
         with contextlib.ExitStack() as stack:
             sink_fp = None
@@ -88,20 +119,29 @@ class RealtimeSession:
                 sink_fp = stack.enter_context(open(self.audio_sink_path, "ab"))
             while True:
                 frame = self._recv_frame(start + timeout, timeout)
-                if frame is None or frame.get("type") in _TERMINAL_FRAMES:  # peer closed / response done
+                if (
+                    frame is None or frame.get("type") in _TERMINAL_FRAMES
+                ):  # peer closed / response done
                     break
                 ftype = frame.get("type")
                 if ftype == "error":
                     raise RuntimeError(f"realtime error: {frame.get('error') or frame}")
-                chunk = _decode_audio(frame.get("delta") or frame.get("audio") or "") if (
-                    ftype == "response.audio.delta" and sink_fp is not None) else b""
+                chunk = (
+                    _decode_audio(frame.get("delta") or frame.get("audio") or "")
+                    if (ftype == "response.audio.delta" and sink_fp is not None)
+                    else b""
+                )
                 if chunk:
                     sink_fp.write(chunk)
                     sink_fp.flush()
                     bytes_written += len(chunk)
                     self.audio_bytes_out += len(chunk)
                     self.last_audio_out_at = time.time()
-        return {"ok": True, "bytes_written": bytes_written, "duration_ms": (time.monotonic() - start) * 1000.0}
+        return {
+            "ok": True,
+            "bytes_written": bytes_written,
+            "duration_ms": (time.monotonic() - start) * 1000.0,
+        }
 
     def cancel_response(self) -> bool:
         """Barge-in: send ``response.cancel``. True if sent, False if nothing to cancel / socket closed."""
@@ -125,7 +165,9 @@ class RealtimeSession:
         while True:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                raise TimeoutError(f"realtime response did not complete within {timeout}s")
+                raise TimeoutError(
+                    f"realtime response did not complete within {timeout}s"
+                )
             try:
                 raw = self._ws.recv(timeout=remaining)
             except TypeError:  # older websockets: no timeout kwarg
@@ -133,7 +175,9 @@ class RealtimeSession:
             if raw is None:
                 return None
             with contextlib.suppress(TypeError, ValueError):
-                frame = json.loads(raw) if isinstance(raw, (str, bytes, bytearray)) else raw
+                frame = (
+                    json.loads(raw) if isinstance(raw, (str, bytes, bytearray)) else raw
+                )
                 if isinstance(frame, dict):
                     return frame
 
@@ -142,7 +186,12 @@ class RealtimeSpeaker:
     """JSONL queue (``{"id", "text"}`` per line) wrapper around :class:`RealtimeSession`; processed
     lines are appended to ``processed_path`` (if set) and removed from the queue."""
 
-    def __init__(self, session: RealtimeSession, queue_path: Path, processed_path: Optional[Path] = None) -> None:
+    def __init__(
+        self,
+        session: RealtimeSession,
+        queue_path: Path,
+        processed_path: Optional[Path] = None,
+    ) -> None:
         self.session = session
         self.queue_path = Path(queue_path)
         self.processed_path = Path(processed_path) if processed_path else None
@@ -169,11 +218,17 @@ class RealtimeSpeaker:
         if self.processed_path is None:
             return
         self.processed_path.parent.mkdir(parents=True, exist_ok=True)
-        record = {"id": entry.get("id"), "text": entry.get("text", ""), "result": result}
+        record = {
+            "id": entry.get("id"),
+            "text": entry.get("text", ""),
+            "result": result,
+        }
         with open(self.processed_path, "a", encoding="utf-8") as fp:
             fp.write(json.dumps(record) + "\n")
 
-    def run_until_stopped(self, stop_fn: Callable[[], bool], poll_interval: float = 0.5) -> None:
+    def run_until_stopped(
+        self, stop_fn: Callable[[], bool], poll_interval: float = 0.5
+    ) -> None:
         while not stop_fn():
             entries = self._read_queue()
             if not entries:
@@ -193,5 +248,8 @@ class RealtimeSpeaker:
             # queue lock, so a meet_say append cannot land between the re-read and the rewrite.
             with say_queue_lock(self.queue_path):
                 latest = self._read_queue()
-                self._rewrite_queue(latest[1:] if latest and latest[0].get("id") == head.get("id")
-                                    else [e for e in latest if e.get("id") != head.get("id")])
+                self._rewrite_queue(
+                    latest[1:]
+                    if latest and latest[0].get("id") == head.get("id")
+                    else [e for e in latest if e.get("id") != head.get("id")]
+                )

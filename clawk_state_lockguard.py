@@ -54,10 +54,14 @@ if os.name == "nt":
 else:
     try:
         import fcntl
+
         # CPython exports F_OFD_SETLK only from 3.12. The kernel ABI values are stable: 37 on every
         # Linux arch (asm-generic/fcntl.h), 90 on XNU (bsd/sys/fcntl.h, documented in fcntl(2)).
         _F_OFD_SETLK = getattr(
-            fcntl, "F_OFD_SETLK", {"linux": 37, "darwin": 90}.get(sys.platform.rstrip("0123456789")))
+            fcntl,
+            "F_OFD_SETLK",
+            {"linux": 37, "darwin": 90}.get(sys.platform.rstrip("0123456789")),
+        )
         _F_RDLCK, _F_UNLCK, _SEEK_SET = fcntl.F_RDLCK, fcntl.F_UNLCK, os.SEEK_SET
         _F_SETLK = fcntl.F_SETLK
         # The constants alone do not make the guard usable: _ofd_lock() calls fcntl.fcntl(), so a
@@ -71,10 +75,14 @@ else:
         _F_RDLCK = _F_UNLCK = _SEEK_SET = _F_SETLK = 0
 
 # struct flock differs per libc: glibc/musl put type+whence first, Darwin/BSD last.
-_FLOCK_FORMAT = "@qqihh" if sys.platform == "darwin" or "bsd" in sys.platform else "@hhqqi"
+_FLOCK_FORMAT = (
+    "@qqihh" if sys.platform == "darwin" or "bsd" in sys.platform else "@hhqqi"
+)
 
 Identity = tuple[int, int]
-Held = dict[Identity, tuple[int, int]]  # inode this handle guards -> its (start, length) range
+Held = dict[
+    Identity, tuple[int, int]
+]  # inode this handle guards -> its (start, length) range
 
 # Handles per guarded inode in this process. Several SessionDB handles on one file share the
 # same descriptors' locks (hold() locks every matching descriptor), so the LAST handle unlocks.
@@ -92,12 +100,16 @@ def _flock(lock_type: int, start: int, length: int) -> bytes:
     return struct.pack(_FLOCK_FORMAT, lock_type, _SEEK_SET, start, length, 0)
 
 
-def _ofd_lock(fd: int, lock_type: int, start: int, length: int, *, cmd: Optional[int] = None) -> bool:
+def _ofd_lock(
+    fd: int, lock_type: int, start: int, length: int, *, cmd: Optional[int] = None
+) -> bool:
     """Apply a non-blocking OFD lock (a process-owned POSIX one with ``cmd=_F_SETLK``); False when
     the range is held EXCLUSIVE elsewhere."""
     assert fcntl is not None and _F_OFD_SETLK is not None
     try:
-        fcntl.fcntl(fd, _F_OFD_SETLK if cmd is None else cmd, _flock(lock_type, start, length))
+        fcntl.fcntl(
+            fd, _F_OFD_SETLK if cmd is None else cmd, _flock(lock_type, start, length)
+        )
     except BlockingIOError:
         return False
     return True
@@ -136,7 +148,10 @@ def _own_fds_for(identities: set[Identity]):
 def _guard_ranges(db_path) -> Held:
     base = os.fspath(db_path)
     ranges: Held = {}
-    for path, rng in ((base, (_SHARED_FIRST, _SHARED_SIZE)), (base + "-shm", (_SHM_DMS_BYTE, 1))):
+    for path, rng in (
+        (base, (_SHARED_FIRST, _SHARED_SIZE)),
+        (base + "-shm", (_SHM_DMS_BYTE, 1)),
+    ):
         ident = _identity(path)
         if ident is not None:
             ranges[ident] = rng
@@ -160,7 +175,9 @@ def hold(db_path, held: Optional[Held] = None) -> Held:
                     held[ident] = ranges[ident]
                     _HANDLES[ident] = _HANDLES.get(ident, 0) + 1
     except OSError:
-        logger.debug("WAL lock guard unavailable for %s", os.fspath(db_path), exc_info=True)
+        logger.debug(
+            "WAL lock guard unavailable for %s", os.fspath(db_path), exc_info=True
+        )
     return held
 
 
@@ -191,7 +208,9 @@ def release(held: Held) -> None:
         try:
             for fd, ident in _own_fds_for(set(to_unlock)):
                 start, length = to_unlock[ident]
-                _ofd_lock(fd, _F_RDLCK, start, length, cmd=_F_SETLK)  # never refused: our OFD lock excludes writers
+                _ofd_lock(
+                    fd, _F_RDLCK, start, length, cmd=_F_SETLK
+                )  # never refused: our OFD lock excludes writers
                 _ofd_lock(fd, _F_UNLCK, start, length)
         except OSError:
             pass

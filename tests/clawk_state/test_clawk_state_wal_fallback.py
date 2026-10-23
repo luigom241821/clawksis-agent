@@ -95,7 +95,9 @@ def _reset_wal_fallback_warned_paths():
 def _assume_fixed_sqlite(monkeypatch):
     """NFS-fallback tests assume a SQLite build without the WAL-reset bug."""
     monkeypatch.setattr(
-        clawk_state_wal, "is_sqlite_wal_reset_vulnerable", lambda version_info=None: False
+        clawk_state_wal,
+        "is_sqlite_wal_reset_vulnerable",
+        lambda version_info=None: False,
     )
     clawk_state_wal._wal_reset_bug_warned_paths.clear()
     yield
@@ -389,10 +391,16 @@ class TestApplyWalWithFallback:
         assert mode == "delete"
         assert delete_attempts[0] == 1
 
-        msgs = [r.getMessage() for r in caplog.records if r.levelname in ("WARNING", "ERROR")]
+        msgs = [
+            r.getMessage()
+            for r in caplog.records
+            if r.levelname in ("WARNING", "ERROR")
+        ]
         assert any("apfs-test.db" in m and "WAL" in m for m in msgs)
         delete_warnings = [
-            m for m in msgs if "apfs-test.db" in m and "both WAL and DELETE journal_mode failed" in m
+            m
+            for m in msgs
+            if "apfs-test.db" in m and "both WAL and DELETE journal_mode failed" in m
         ]
         assert len(delete_warnings) == 1
         assert "disk I/O error" in delete_warnings[0]
@@ -431,14 +439,20 @@ class TestApplyWalWithFallback:
             mode = apply_wal_with_fallback(conn, db_label="readback.db")
 
         assert mode == "memory"
-        msgs = [r.getMessage() for r in caplog.records if r.levelname in ("WARNING", "ERROR")]
+        msgs = [
+            r.getMessage()
+            for r in caplog.records
+            if r.levelname in ("WARNING", "ERROR")
+        ]
         assert any(
             "readback.db" in m and "both WAL and DELETE journal_mode failed" in m
             for m in msgs
         )
         conn.close()
 
-    def test_delete_fallback_failure_warning_deduplicated_per_db_label(self, tmp_path, caplog):
+    def test_delete_fallback_failure_warning_deduplicated_per_db_label(
+        self, tmp_path, caplog
+    ):
         """Repeated both-fail calls with the same db_label log exactly ONE WARNING.
 
         kanban_db.connect() runs on every kanban operation; without dedup,
@@ -461,11 +475,14 @@ class TestApplyWalWithFallback:
                     factory=_BothPragmasFailConnection,
                     isolation_level=None,
                 )
-                assert apply_wal_with_fallback(conn, db_label="apfs-shared.db") == "delete"
+                assert (
+                    apply_wal_with_fallback(conn, db_label="apfs-shared.db") == "delete"
+                )
                 conn.close()
 
         delete_warnings = [
-            r for r in caplog.records
+            r
+            for r in caplog.records
             if r.levelname == "WARNING"
             and "apfs-shared.db" in r.getMessage()
             and "both WAL and DELETE journal_mode failed" in r.getMessage()
@@ -546,8 +563,6 @@ class TestRequireWal:
 
 
 class TestGetLastInitError:
-
-
     def test_captures_cause_on_failed_init(self, tmp_path):
         """When SessionDB() raises, the cause is preserved for slash commands.
 
@@ -573,7 +588,9 @@ class TestGetLastInitError:
             # connect_tracked passes a tracking-augmented factory; drop it and
             # substitute the double, which connect_tracked will re-augment.
             kwargs.pop("factory", None)
-            return real_connect(str(target), factory=_ForeignKeysFailConnection, **kwargs)
+            return real_connect(
+                str(target), factory=_ForeignKeysFailConnection, **kwargs
+            )
 
         with patch("clawk_state.sqlite3.connect", side_effect=gated_connect):
             with pytest.raises(sqlite3.OperationalError):
@@ -583,8 +600,6 @@ class TestGetLastInitError:
         assert cause is not None
         assert "OperationalError" in cause
         assert "read-only filesystem" in cause
-
-
 
 
 class TestSessionDbUsesWalFallback:
@@ -640,7 +655,10 @@ class TestSessionDbUsesWalFallback:
                 db = SessionDB(db_path=target)
 
         try:
-            assert db._conn.execute("PRAGMA journal_mode").fetchone()[0].lower() == "delete"
+            assert (
+                db._conn.execute("PRAGMA journal_mode").fetchone()[0].lower()
+                == "delete"
+            )
             db.create_session(session_id="s2", source="cli", model="test")
             sess = db.get_session("s2")
             assert sess is not None

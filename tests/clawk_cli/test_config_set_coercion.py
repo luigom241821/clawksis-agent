@@ -16,6 +16,7 @@ from clawk_cli import config as cfg
 def _read(tmp_path, *path):
     """Read a nested value straight from the on-disk config.yaml."""
     import clawk_yaml as yaml
+
     data = yaml.safe_load((tmp_path / "config.yaml").read_text()) or {}
     node = data
     for seg in path:
@@ -48,9 +49,7 @@ class TestNumericCoercion:
 
         cfg.set_config_value("mcp_servers.example.oauth.client_id", client_id)
 
-        saved = _read(
-            tmp_path, "mcp_servers", "example", "oauth", "client_id"
-        )
+        saved = _read(tmp_path, "mcp_servers", "example", "oauth", "client_id")
         assert saved == client_id
         assert isinstance(saved, str)
 

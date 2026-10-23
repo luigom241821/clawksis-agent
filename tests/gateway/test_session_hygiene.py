@@ -1605,5 +1605,9 @@ async def test_large_session_hygiene_sends_busy_notice(monkeypatch, tmp_path):
     runner = _build_count_trigger_runner(gateway_run, adapter, history)
 
     assert await runner._handle_message(_count_trigger_event()) == "ok"
-    notices = [s for s in adapter.sent if "Compacting a long conversation history" in s["content"]]
+    notices = [
+        s
+        for s in adapter.sent
+        if "Compacting a long conversation history" in s["content"]
+    ]
     assert len(notices) == 1

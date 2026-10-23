@@ -35,8 +35,6 @@ def _seed_wedged_session(db, session_id="s1"):
     db.append_message(session_id=session_id, role="assistant", content="next reply")
 
 
-
-
 def test_repair_alternation_merges_user_pair(db):
     _seed_wedged_session(db)
     messages = db.get_messages_as_conversation("s1", repair_alternation=True)
@@ -56,8 +54,6 @@ def test_repaired_load_is_stable_under_prerequest_repair(db):
     _seed_wedged_session(db)
     messages = db.get_messages_as_conversation("s1", repair_alternation=True)
     assert repair_message_sequence(None, messages) == 0
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -96,7 +92,9 @@ def test_acp_restore_heals_alternation_for_live_replay(db):
     # No consecutive user turns — the durable user;user wedge was healed.
     assert roles == ["user", "assistant", "user", "assistant"], roles
     for a, b in itertools.pairwise(roles):
-        assert not (a == "user" and b == "user"), "unhealed user;user in ACP live replay"
+        assert not (a == "user" and b == "user"), (
+            "unhealed user;user in ACP live replay"
+        )
     # No user input lost — both user texts survive, merged in order.
     merged = state.history[2]["content"]
     assert "unanswered turn" in merged and "next turn" in merged

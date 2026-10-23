@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 
 _cli_mod = None
 
+
 def _make_cli(user_message_preview=None):
     global _cli_mod
     clean_config = {
@@ -15,7 +16,8 @@ def _make_cli(user_message_preview=None):
         "display": {
             "compact": False,
             "tool_progress": "all",
-            "user_message_preview": user_message_preview or {"first_lines": 2, "last_lines": 2},
+            "user_message_preview": user_message_preview
+            or {"first_lines": 2, "last_lines": 2},
         },
         "agent": {},
         "terminal": {"env_type": "local"},
@@ -38,13 +40,20 @@ def _make_cli(user_message_preview=None):
         "prompt_toolkit.formatted_text": MagicMock(),
         "prompt_toolkit.auto_suggest": MagicMock(),
     }
-    with patch.dict(sys.modules, prompt_toolkit_stubs), patch.dict("os.environ", clean_env, clear=False):
+    with (
+        patch.dict(sys.modules, prompt_toolkit_stubs),
+        patch.dict("os.environ", clean_env, clear=False),
+    ):
         import cli as mod
 
         mod = importlib.reload(mod)
         _cli_mod = mod
-        with patch.object(mod, "get_tool_definitions", return_value=[]), patch.dict(mod.__dict__, {"CLI_CONFIG": clean_config}):
+        with (
+            patch.object(mod, "get_tool_definitions", return_value=[]),
+            patch.dict(mod.__dict__, {"CLI_CONFIG": clean_config}),
+        ):
             return mod.ClawksisCLI()
+
 
 class TestSubmittedUserMessagePreview:
     def test_default_preview_shows_first_two_lines_and_last_two_lines(self):

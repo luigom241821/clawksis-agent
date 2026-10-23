@@ -56,7 +56,9 @@ if sys.platform == "win32":
 
 pytestmark = [
     pytest.mark.asyncio,
-    pytest.mark.platforms("windows"),  # Windows-only live probe: CLOSE-WAIT reconnect behavior (#87057)
+    pytest.mark.platforms(
+        "windows"
+    ),  # Windows-only live probe: CLOSE-WAIT reconnect behavior (#87057)
 ]
 
 
@@ -78,9 +80,7 @@ class _LiveBotApiServer:
         self._writers = []
 
     async def start(self):
-        self.server = await asyncio.start_server(
-            self._handle, host="127.0.0.1", port=0
-        )
+        self.server = await asyncio.start_server(self._handle, host="127.0.0.1", port=0)
         self.port = self.server.sockets[0].getsockname()[1]
 
     async def stop(self):
@@ -203,8 +203,7 @@ async def test_drain_recovers_after_server_half_close_live(monkeypatch):
         code, payload = await polling_req.do_request(server.url, "POST")
         assert code == 200 and b'"ok"' in payload
         assert server.connections_accepted > before, (
-            "post-drain getUpdates must use a NEW connection, not the "
-            "CLOSE-WAIT one"
+            "post-drain getUpdates must use a NEW connection, not the CLOSE-WAIT one"
         )
         _diag(server, "after post-drain round-trip")
         await polling_req.shutdown()

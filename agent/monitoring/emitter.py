@@ -66,7 +66,9 @@ class MonitoringEmitter:
         with self._lock:
             if self._started:
                 return
-            self._thread = threading.Thread(target=self._run, name="clawk-monitoring-dispatch", daemon=True)
+            self._thread = threading.Thread(
+                target=self._run, name="clawk-monitoring-dispatch", daemon=True
+            )
             self._thread.start()
             self._started = True
 
@@ -119,11 +121,18 @@ class MonitoringEmitter:
             self._q.join()
             finished.set()
 
-        threading.Thread(target=_wait_for_completion, name="clawk-monitoring-flush", daemon=True).start()
+        threading.Thread(
+            target=_wait_for_completion, name="clawk-monitoring-flush", daemon=True
+        ).start()
         finished.wait(timeout=timeout)
 
     def stats(self) -> dict[str, int]:
-        return {"queued": self._q.qsize(), "dispatched": self._dispatched, "dropped": self._dropped, "subscribers": len(self._subscribers)}
+        return {
+            "queued": self._q.qsize(),
+            "dispatched": self._dispatched,
+            "dropped": self._dropped,
+            "subscribers": len(self._subscribers),
+        }
 
     def close(self) -> None:
         self._stop.set()

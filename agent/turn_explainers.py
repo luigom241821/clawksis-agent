@@ -3,6 +3,7 @@
 The footer tells the model (and user) when a claimed file mutation did not land; the explainer
 summarises why a turn ended without a final answer. Every method resolves through ``AIAgent``'s MRO.
 """
+
 import os
 import re
 from contextlib import suppress
@@ -10,10 +11,13 @@ from typing import Any, Dict, Optional
 
 from agent.i18n import t
 from agent.tool_dispatch_helpers import (
-    _extract_error_preview, _extract_file_mutation_targets, _extract_landed_file_mutation_paths
+    _extract_error_preview,
+    _extract_file_mutation_targets,
+    _extract_landed_file_mutation_paths,
 )
 from agent.tool_result_classification import (
-    FILE_MUTATING_TOOL_NAMES as _FILE_MUTATING_TOOLS, file_mutation_result_landed
+    FILE_MUTATING_TOOL_NAMES as _FILE_MUTATING_TOOLS,
+    file_mutation_result_landed,
 )
 
 # One text for "the model produced nothing after retries" on every surface (CLI explainer,
@@ -46,15 +50,38 @@ _EXIT_REASON_EXPLANATIONS: dict[str, str] = {
 # Parameterised reasons (``max_iterations_reached(3/3)`` …) matched by prefix.
 # ``interrupted_during_api_call(<issuer>)`` names a system watchdog (#112647).
 _EXIT_REASON_PREFIX_EXPLANATIONS = tuple(
-    (prefix, f"explainer.exit.{prefix}") for prefix in ("interrupted_during_api_call", "max_iterations_reached", "error_near_max_iterations", "repeated_outer_errors")
+    (prefix, f"explainer.exit.{prefix}")
+    for prefix in (
+        "interrupted_during_api_call",
+        "max_iterations_reached",
+        "error_near_max_iterations",
+        "repeated_outer_errors",
+    )
 )
 
 # ``session_persistence_failed`` refined by the classified cause (lock contention ≠ disk full).
-_PERSISTENCE_CAUSES = frozenset({"compression", "compression_closed", "turn_lease", "session_row_missing", "locked", "replaced", "deleted_wal", "corrupt", "fts_index", "disk"})
+_PERSISTENCE_CAUSES = frozenset(
+    {
+        "compression",
+        "compression_closed",
+        "turn_lease",
+        "session_row_missing",
+        "locked",
+        "replaced",
+        "deleted_wal",
+        "corrupt",
+        "fts_index",
+        "disk",
+    }
+)
 
 
 def _persistence_explanation_key(cause: Optional[str]) -> str:
-    return f"explainer.persistence.{cause}" if cause in _PERSISTENCE_CAUSES else "explainer.persistence.default"
+    return (
+        f"explainer.persistence.{cause}"
+        if cause in _PERSISTENCE_CAUSES
+        else "explainer.persistence.default"
+    )
 
 
 def _file_mutation_identity(path: str, task_id: Optional[str]) -> str:
@@ -79,7 +106,9 @@ def _file_stat_signature(identity: str) -> Optional[tuple]:
     return (st.st_mtime_ns, st.st_size)
 
 
-def _display_flag_enabled(agent, *, env_var: str, config_key: str, cache_attr: str) -> bool:
+def _display_flag_enabled(
+    agent, *, env_var: str, config_key: str, cache_attr: str
+) -> bool:
     """``display.<config_key>`` (default True), cached per agent on ``cache_attr``.
 
     ``env_var`` overrides on every call and is never cached. Reads the persisted config.yaml
@@ -94,6 +123,7 @@ def _display_flag_enabled(agent, *, env_var: str, config_key: str, cache_attr: s
             return cached
         try:
             from clawk_cli.config import load_config as _load_config
+
             _cfg = _load_config() or {}
         except Exception:
             _cfg = {}
@@ -112,8 +142,13 @@ class TurnExplainersMixin:
     """File-mutation failure footer + turn-completion explainer (see module docstring)."""
 
     def _record_file_mutation_result(
-        self, tool_name: str, args: dict[str, Any], result: Any, is_error: bool,
-        *, task_id: Optional[str] = None,
+        self,
+        tool_name: str,
+        args: dict[str, Any],
+        result: Any,
+        is_error: bool,
+        *,
+        task_id: Optional[str] = None,
     ) -> None:
         """Record a ``write_file`` / ``patch`` outcome for the turn-end verifier.
 
@@ -141,7 +176,10 @@ class TurnExplainersMixin:
             mgr = getattr(self, "_checkpoint_mgr", None)
             if mgr is not None and getattr(mgr, "enabled", False):
                 from tools.file_tools_paths import container_backend_for_task
-                if container_backend_for_task(task_id or "default") is None:  # container paths carry no host ledger entry
+
+                if (
+                    container_backend_for_task(task_id or "default") is None
+                ):  # container paths carry no host ledger entry
                     for _p in landed_paths:
                         with suppress(Exception):
                             mgr.record_agent_write(_p)
@@ -150,21 +188,31 @@ class TurnExplainersMixin:
             preview = _extract_error_preview(result)
             for path in targets:
                 identity = _file_mutation_identity(path, task_id)
-                state.setdefault(path, {
-                    "tool": tool_name, "error_preview": preview,
-                    "identity": identity, "stat": _file_stat_signature(identity),
-                })
+                state.setdefault(
+                    path,
+                    {
+                        "tool": tool_name,
+                        "error_preview": preview,
+                        "identity": identity,
+                        "stat": _file_stat_signature(identity),
+                    },
+                )
         else:
             cleared = {
                 _file_mutation_identity(p, task_id)
                 for p in (landed_paths if landed else targets)
             }
             for path, info in list(state.items()):
-                if info.get("identity", _file_mutation_identity(path, task_id)) in cleared:
+                if (
+                    info.get("identity", _file_mutation_identity(path, task_id))
+                    in cleared
+                ):
                     state.pop(path, None)
 
     @staticmethod
-    def _file_mutations_still_failed(failed: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    def _file_mutations_still_failed(
+        failed: dict[str, dict[str, Any]],
+    ) -> dict[str, dict[str, Any]]:
         """Drop entries whose target changed on disk since the failed call.
 
         The recorder only sees write_file/patch receipts; a terminal redirect or an
@@ -173,21 +221,27 @@ class TurnExplainersMixin:
         without a snapshot (hand-built dicts) are kept as-is.
         """
         return {
-            path: info for path, info in failed.items()
-            if "stat" not in info or _file_stat_signature(info["identity"]) == info["stat"]
+            path: info
+            for path, info in failed.items()
+            if "stat" not in info
+            or _file_stat_signature(info["identity"]) == info["stat"]
         }
 
     def _file_mutation_verifier_enabled(self) -> bool:
         """``display.file_mutation_verifier`` / ``CLAWK_FILE_MUTATION_VERIFIER`` (a patchable seam)."""
         return _display_flag_enabled(
-            self, env_var="CLAWK_FILE_MUTATION_VERIFIER", config_key="file_mutation_verifier",
+            self,
+            env_var="CLAWK_FILE_MUTATION_VERIFIER",
+            config_key="file_mutation_verifier",
             cache_attr="_file_mutation_verifier_enabled_cache",
         )
 
     def _turn_completion_explainer_enabled(self) -> bool:
         """``display.turn_completion_explainer`` / ``CLAWK_TURN_COMPLETION_EXPLAINER``."""
         return _display_flag_enabled(
-            self, env_var="CLAWK_TURN_COMPLETION_EXPLAINER", config_key="turn_completion_explainer",
+            self,
+            env_var="CLAWK_TURN_COMPLETION_EXPLAINER",
+            config_key="turn_completion_explainer",
             cache_attr="_turn_completion_explainer_enabled_cache",
         )
 
@@ -208,7 +262,9 @@ class TurnExplainersMixin:
         return cls._FOOTER_PATH_RE.sub(lambda m: f"`{m.group(0)}`", text)
 
     @classmethod
-    def _format_file_mutation_failure_footer(cls, failed: dict[str, dict[str, Any]]) -> str:
+    def _format_file_mutation_failure_footer(
+        cls, failed: dict[str, dict[str, Any]]
+    ) -> str:
         """Render the per-turn failed-mutation dict as a user-facing footer.
 
         Up to 10 paths with their first error preview, then an overflow count; "" when nothing failed.
@@ -222,8 +278,14 @@ class TurnExplainersMixin:
         for path, info in shown:
             preview = (info.get("error_preview") or "").strip()
             tool = info.get("tool") or "patch"
-            lines.append(t("explainer.file_mutation.entry", path=path, tool=tool,
-                           preview=preview or t("explainer.file_mutation.failed")))
+            lines.append(
+                t(
+                    "explainer.file_mutation.entry",
+                    path=path,
+                    tool=tool,
+                    preview=preview or t("explainer.file_mutation.failed"),
+                )
+            )
         remaining = len(failed) - len(shown)
         if remaining > 0:
             lines.append(t("explainer.shared.and_more", count=remaining))
@@ -232,7 +294,10 @@ class TurnExplainersMixin:
 
     @staticmethod
     def _format_turn_completion_explanation(
-        turn_exit_reason: str, persistence_cause: Optional[str] = None, db_path=None, model: str = "",
+        turn_exit_reason: str,
+        persistence_cause: Optional[str] = None,
+        db_path=None,
+        model: str = "",
     ) -> str:
         """User-facing explanation for an abnormal turn ending, or "" for normal / unknown reasons.
 
@@ -260,8 +325,11 @@ class TurnExplainersMixin:
             # a multi-profile backend (Desktop serve) hosts sessions whose state.db is NOT the
             # process default, and a bare `clawk` follows active_profile (#105887).
             fill: dict[str, str] = {
-                "home": display_clawk_home(), "profile_arg": profile_cli_selector(),
-                "recovery_docs": STORAGE_RECOVERY_DOCS_URL, "db_path": "", "backups_dir": "",
+                "home": display_clawk_home(),
+                "profile_arg": profile_cli_selector(),
+                "recovery_docs": STORAGE_RECOVERY_DOCS_URL,
+                "db_path": "",
+                "backups_dir": "",
             }
             if persistence_cause in ("corrupt", "fts_index"):
                 from clawk_constants import get_default_clawk_root

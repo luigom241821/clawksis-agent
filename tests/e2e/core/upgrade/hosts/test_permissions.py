@@ -34,19 +34,26 @@ from tests.fakes.fake_llm_provider import FakeLLMServer
 pytestmark = [
     pytest.mark.platforms("linux"),
     pytest.mark.live_system_guard_bypass,
-    pytest.mark.skipif(H.sandbox_required_reason() is not None, reason=str(H.sandbox_required_reason())),
+    pytest.mark.skipif(
+        H.sandbox_required_reason() is not None, reason=str(H.sandbox_required_reason())
+    ),
     pytest.mark.skipif(shutil.which("git") is None, reason="git required"),
     pytest.mark.skipif(I.real_uv() is None, reason="uv required"),
 ]
 
 # What the install owns; CLAWK_HOME itself (config, .env, sessions, logs) stays the user's.
 CODE_DIRS = ("clawksis-agent", "tools", "installs")
-ACTIONABLE = re.compile(r"(?i)permission denied|read-only|not writable|no write access|EACCES|Errno 13")
+ACTIONABLE = re.compile(
+    r"(?i)permission denied|read-only|not writable|no write access|EACCES|Errno 13"
+)
 
 
 def _chmod_code(sb: I.Sandbox, *, writable: bool) -> None:
     for name in CODE_DIRS:
-        subprocess.run(["chmod", "-R", "u+w" if writable else "a-w", str(sb.clawk_home / name)], check=True)
+        subprocess.run(
+            ["chmod", "-R", "u+w" if writable else "a-w", str(sb.clawk_home / name)],
+            check=True,
+        )
 
 
 @pytest.fixture(scope="module")
@@ -66,12 +73,18 @@ def world(tmp_path_factory, provider):
             X.configure(sb, provider)
             X.turn(sb, provider, "turn on a writable tree")
             out["before"] = I.git("rev-parse", "HEAD", cwd=sb.checkout)
-            out["target"] = I.publish_commit(origin, root, "release: permissions bump",
-                                             {"docs/e2e-host-perms-marker.txt": "release 1\n"})
+            out["target"] = I.publish_commit(
+                origin,
+                root,
+                "release: permissions bump",
+                {"docs/e2e-host-perms-marker.txt": "release 1\n"},
+            )
             n = len(provider.main_requests())
             _chmod_code(sb, writable=False)
             try:
-                out["ro_turn"] = sb.run([sb.clawk, "-z", "turn on a read-only install tree"], timeout=900)
+                out["ro_turn"] = sb.run(
+                    [sb.clawk, "-z", "turn on a read-only install tree"], timeout=900
+                )
                 out["ro_turn_requests"] = len(provider.main_requests()) - n
             finally:
                 _chmod_code(sb, writable=True)
@@ -79,11 +92,15 @@ def world(tmp_path_factory, provider):
             # this reaches `clawk update`'s own handling of a tree it cannot write.
             subprocess.run(["chmod", "-R", "a-w", str(sb.checkout)], check=True)
             try:
-                out["ro_update"] = sb.cli("update", "--yes", "--branch", "main", timeout=X.UPDATE_TIMEOUT)
+                out["ro_update"] = sb.cli(
+                    "update", "--yes", "--branch", "main", timeout=X.UPDATE_TIMEOUT
+                )
                 out["ro_head"] = I.git("rev-parse", "HEAD", cwd=sb.checkout)
             finally:
                 _chmod_code(sb, writable=True)
-            out["rw_update"] = sb.cli("update", "--yes", "--branch", "main", timeout=X.UPDATE_TIMEOUT)
+            out["rw_update"] = sb.cli(
+                "update", "--yes", "--branch", "main", timeout=X.UPDATE_TIMEOUT
+            )
         yield out
     finally:
         if sb.clawk_home.exists():
@@ -91,33 +108,57 @@ def world(tmp_path_factory, provider):
 
 
 def test_read_only_install_tree_still_runs_a_turn(world, provider):
-    assert world["install"].returncode == 0, "install.sh failed:\n" + I.describe(world["install"])
+    assert world["install"].returncode == 0, "install.sh failed:\n" + I.describe(
+        world["install"]
+    )
     cp = world["ro_turn"]
     err = cp.stdout + cp.stderr
-    assert I.TRACEBACK not in err, "a turn crashed on a read-only install tree:\n" + I.describe(cp)
+    assert I.TRACEBACK not in err, (
+        "a turn crashed on a read-only install tree:\n" + I.describe(cp)
+    )
     # Either it works, or it says the install is not writable by this user without sending them
     # to a remedy that needs the same write access (`clawk pm repair`, "finish the update").
     if cp.returncode != 0:
         misleading = re.findall(r"run `clawk (?:pm repair|update)`[^\n]*", err)
         assert ACTIONABLE.search(err) and not misleading, (
             f"read-only install tree: the turn failed (rc={cp.returncode}) and pointed at remedies that need the "
-            f"same write access {misleading}: {cp.stderr.strip()[-800:].replace(chr(10), ' | ')}\n" + I.describe(cp))
+            f"same write access {misleading}: {cp.stderr.strip()[-800:].replace(chr(10), ' | ')}\n"
+            + I.describe(cp)
+        )
     if cp.returncode == 0:
-        assert provider.default_text in cp.stdout, "the reply never reached stdout:\n" + I.describe(cp)
-        assert world["ro_turn_requests"] == 1, f"the turn reached the provider {world['ro_turn_requests']} times (want 1)"
+        assert provider.default_text in cp.stdout, (
+            "the reply never reached stdout:\n" + I.describe(cp)
+        )
+        assert world["ro_turn_requests"] == 1, (
+            f"the turn reached the provider {world['ro_turn_requests']} times (want 1)"
+        )
 
 
 def test_update_on_a_read_only_tree_refuses_with_a_reason_and_recovers(world, provider):
-    assert world["install"].returncode == 0, "install.sh failed:\n" + I.describe(world["install"])
+    assert world["install"].returncode == 0, "install.sh failed:\n" + I.describe(
+        world["install"]
+    )
     up = world["ro_update"]
     out = up.stdout + up.stderr
-    assert up.returncode != 0, "clawk update reported success on an install tree it cannot write:\n" + I.describe(up)
-    assert I.TRACEBACK not in out, "clawk update crashed on a read-only install tree:\n" + I.describe(up)
-    assert ACTIONABLE.search(out), "clawk update failed on a read-only tree without saying why:\n" + I.describe(up)
-    assert world["ro_head"] == world["before"], "a refused update still moved the checkout"
+    assert up.returncode != 0, (
+        "clawk update reported success on an install tree it cannot write:\n"
+        + I.describe(up)
+    )
+    assert I.TRACEBACK not in out, (
+        "clawk update crashed on a read-only install tree:\n" + I.describe(up)
+    )
+    assert ACTIONABLE.search(out), (
+        "clawk update failed on a read-only tree without saying why:\n" + I.describe(up)
+    )
+    assert world["ro_head"] == world["before"], (
+        "a refused update still moved the checkout"
+    )
     again = world["rw_update"]
     assert again.returncode == 0 and I.TRACEBACK not in again.stdout + again.stderr, (
-        "after the tree became writable again, clawk update still failed:\n" + I.describe(again))
+        "after the tree became writable again, clawk update still failed:\n"
+        + I.describe(again)
+    )
     assert I.git("rev-parse", "HEAD", cwd=world["sb"].checkout) == world["target"], (
-        "update exited 0 but HEAD is not the new release")
+        "update exited 0 but HEAD is not the new release"
+    )
     X.turn(world["sb"], provider, "turn after the recovered update")

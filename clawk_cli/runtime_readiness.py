@@ -6,7 +6,9 @@ failure (naming the configured pin, never the fallback chain's tail), ``free_tie
 """
 
 
-def check_runtime_readiness(requested=None, *, strict_profile_scope=False, resolve=None):
+def check_runtime_readiness(
+    requested=None, *, strict_profile_scope=False, resolve=None
+):
     """ok/error verdict for the runtime a session would be built with.
 
     Without ``requested`` the probe runs the SAME resolver as session creation (the configured
@@ -19,42 +21,80 @@ def check_runtime_readiness(requested=None, *, strict_profile_scope=False, resol
     from clawk_cli.auth import has_usable_secret
     from clawk_cli.config import load_config
     from clawk_cli.main import _has_any_provider_configured
-    from clawk_cli.runtime_provider import resolve_runtime_provider, resolve_runtime_with_fallback
+    from clawk_cli.runtime_provider import (
+        resolve_runtime_provider,
+        resolve_runtime_with_fallback,
+    )
 
     config = load_config()
-    cfg_model = config.get('model')
+    cfg_model = config.get("model")
     if isinstance(cfg_model, dict):
-        configured_model = str(cfg_model.get('default') or cfg_model.get('model') or '') or None
+        configured_model = (
+            str(cfg_model.get("default") or cfg_model.get("model") or "") or None
+        )
     else:
-        configured_model = cfg_model if isinstance(cfg_model, str) and cfg_model else None
+        configured_model = (
+            cfg_model if isinstance(cfg_model, str) and cfg_model else None
+        )
     if resolve is not None:
         model, runtime = resolve()
     elif requested:
         model = configured_model
-        runtime = resolve_runtime_provider(requested=requested, target_model=configured_model)
+        runtime = resolve_runtime_provider(
+            requested=requested, target_model=configured_model
+        )
     else:
-        runtime, entry = resolve_runtime_with_fallback(config, target_model=configured_model)
-        model = (entry or {}).get('model') or configured_model or runtime.get('model')
-    configured = bool(_has_any_provider_configured(strict_profile_scope=strict_profile_scope))
-    provider = runtime.get('provider') or 'provider'
-    source = str(runtime.get('source') or '')
+        runtime, entry = resolve_runtime_with_fallback(
+            config, target_model=configured_model
+        )
+        model = (entry or {}).get("model") or configured_model or runtime.get("model")
+    configured = bool(
+        _has_any_provider_configured(strict_profile_scope=strict_profile_scope)
+    )
+    provider = runtime.get("provider") or "provider"
+    source = str(runtime.get("source") or "")
     # When the chain only resolves at its tail the runtime stops there; a failure must name the
     # provider the user pinned, not a tail they never chose (#124939). Auto mode names the route.
-    pinned = requested or (str(cfg_model.get('provider') or '').strip() if isinstance(cfg_model, dict) else '')
+    pinned = requested or (
+        str(cfg_model.get("provider") or "").strip()
+        if isinstance(cfg_model, dict)
+        else ""
+    )
     blamed = pinned or provider
 
     def fail(error, src):
-        return {'ok': False, 'provider': blamed, 'model': model, 'source': src, 'error': error}
+        return {
+            "ok": False,
+            "provider": blamed,
+            "model": model,
+            "source": src,
+            "error": error,
+        }
 
-    if not configured and provider == 'bedrock' and source in {'iam-role', 'aws-sdk-default-chain'}:
-        return fail('No Clawksis provider is configured.', source)
-    api_key = runtime.get('api_key')
-    api_key_text = '' if callable(api_key) else str(api_key or '').strip()
-    if not (callable(api_key) or api_key_text in {'aws-sdk', 'no-key-required'}
-            or has_usable_secret(api_key_text) or bool(runtime.get('command'))):
-        return fail(f'No usable credentials found for {blamed}.', runtime.get('source'))
+    if (
+        not configured
+        and provider == "bedrock"
+        and source in {"iam-role", "aws-sdk-default-chain"}
+    ):
+        return fail("No Clawksis provider is configured.", source)
+    api_key = runtime.get("api_key")
+    api_key_text = "" if callable(api_key) else str(api_key or "").strip()
+    if not (
+        callable(api_key)
+        or api_key_text in {"aws-sdk", "no-key-required"}
+        or has_usable_secret(api_key_text)
+        or bool(runtime.get("command"))
+    ):
+        return fail(f"No usable credentials found for {blamed}.", runtime.get("source"))
     from clawk_cli.anon_auth import route_is_welcome_host
+
     # free_tier_route is keyed on the SELECTED route (the welcome host serves only nous/welcome), not
     # on profile state: a paid Nous key beside a free-tier identity must not read as free.
-    return {'ok': True, 'provider': runtime.get('provider'), 'model': model, 'source': runtime.get('source'),
-            'free_tier_route': provider == 'nous' and route_is_welcome_host(runtime.get('base_url'))}
+    return {
+        "ok": True,
+        "provider": runtime.get("provider"),
+        "model": model,
+        "source": runtime.get("source"),
+        "free_tier_route": provider == "nous"
+        and route_is_welcome_host(runtime.get("base_url")),
+    }

@@ -62,17 +62,26 @@ def _patch_list_profiles(names: list[str]):
     profiles_mod.list_profiles() to build the roster + valid-set, and
     profiles_mod.profile_exists() to resolve orchestrator/default."""
     from types import SimpleNamespace
+
     fake_profiles = [
         SimpleNamespace(
-            name=n, is_default=(i == 0), description=f"desc for {n}",
-            description_auto=False, model="m", provider="p", skill_count=1,
+            name=n,
+            is_default=(i == 0),
+            description=f"desc for {n}",
+            description_auto=False,
+            model="m",
+            provider="p",
+            skill_count=1,
         )
         for i, n in enumerate(names)
     ]
     return [
         patch("clawk_cli.profiles.list_profiles", return_value=fake_profiles),
         patch("clawk_cli.profiles.profile_exists", side_effect=lambda x: x in names),
-        patch("clawk_cli.profiles.get_active_profile_name", return_value=names[0] if names else "default"),
+        patch(
+            "clawk_cli.profiles.get_active_profile_name",
+            return_value=names[0] if names else "default",
+        ),
     ]
 
 
@@ -80,14 +89,26 @@ def test_decompose_with_fanout_creates_children(kanban_home):
     with kbc.connect() as conn:
         tid = kb.create_task(conn, title="ship a feature", triage=True)
 
-    llm_payload = jsonlib.dumps({
-        "fanout": True,
-        "rationale": "test split",
-        "tasks": [
-            {"title": "research", "body": "look it up", "assignee": "researcher", "parents": []},
-            {"title": "build", "body": "code it", "assignee": "engineer", "parents": [0]},
-        ],
-    })
+    llm_payload = jsonlib.dumps(
+        {
+            "fanout": True,
+            "rationale": "test split",
+            "tasks": [
+                {
+                    "title": "research",
+                    "body": "look it up",
+                    "assignee": "researcher",
+                    "parents": [],
+                },
+                {
+                    "title": "build",
+                    "body": "code it",
+                    "assignee": "engineer",
+                    "parents": [0],
+                },
+            ],
+        }
+    )
 
     patches = _patch_list_profiles(["orchestrator", "researcher", "engineer"])
     for p in patches:
@@ -122,14 +143,21 @@ def test_decompose_fanout_children_inherit_root_assignee_when_unrouted(kanban_ho
     with kbc.connect() as conn:
         tid = kb.create_task(conn, title="ship it", assignee="zdr", triage=True)
 
-    llm_payload = jsonlib.dumps({
-        "fanout": True,
-        "rationale": "test split",
-        "tasks": [
-            {"title": "research", "body": "look it up", "assignee": "made_up", "parents": []},
-            {"title": "build", "body": "code it", "assignee": None, "parents": [0]},
-        ],
-    })
+    llm_payload = jsonlib.dumps(
+        {
+            "fanout": True,
+            "rationale": "test split",
+            "tasks": [
+                {
+                    "title": "research",
+                    "body": "look it up",
+                    "assignee": "made_up",
+                    "parents": [],
+                },
+                {"title": "build", "body": "code it", "assignee": None, "parents": [0]},
+            ],
+        }
+    )
 
     # get_active_profile_name() is mocked to names[0] = "private" — the
     # global default chain would resolve there without kanban.default_assignee.
@@ -137,9 +165,13 @@ def test_decompose_fanout_children_inherit_root_assignee_when_unrouted(kanban_ho
     for p in patches:
         p.start()
     try:
-        with _patch_aux_client(llm_payload), _patch_extra_body(), patch(
-            "clawk_cli.config.load_config_readonly",
-            return_value={},
+        with (
+            _patch_aux_client(llm_payload),
+            _patch_extra_body(),
+            patch(
+                "clawk_cli.config.load_config_readonly",
+                return_value={},
+            ),
         ):
             outcome = decomp.decompose_task(tid, author="me")
     finally:
@@ -166,22 +198,33 @@ def test_decompose_explicit_default_assignee_wins_over_root_assignee(kanban_home
     with kbc.connect() as conn:
         tid = kb.create_task(conn, title="ship it", assignee="engineer", triage=True)
 
-    llm_payload = jsonlib.dumps({
-        "fanout": True,
-        "rationale": "test split",
-        "tasks": [
-            {"title": "research", "body": "look it up", "assignee": "made_up", "parents": []},
-            {"title": "build", "body": "code it", "assignee": None, "parents": [0]},
-        ],
-    })
+    llm_payload = jsonlib.dumps(
+        {
+            "fanout": True,
+            "rationale": "test split",
+            "tasks": [
+                {
+                    "title": "research",
+                    "body": "look it up",
+                    "assignee": "made_up",
+                    "parents": [],
+                },
+                {"title": "build", "body": "code it", "assignee": None, "parents": [0]},
+            ],
+        }
+    )
 
     patches = _patch_list_profiles(["engineer", "docs", "private"])
     for p in patches:
         p.start()
     try:
-        with _patch_aux_client(llm_payload), _patch_extra_body(), patch(
-            "clawk_cli.config.load_config_readonly",
-            return_value={"kanban": {"default_assignee": "docs"}},
+        with (
+            _patch_aux_client(llm_payload),
+            _patch_extra_body(),
+            patch(
+                "clawk_cli.config.load_config_readonly",
+                return_value={"kanban": {"default_assignee": "docs"}},
+            ),
         ):
             outcome = decomp.decompose_task(tid, author="me")
     finally:
@@ -200,21 +243,27 @@ def test_decompose_fanout_false_invalid_llm_assignee_uses_default(kanban_home):
     with kbc.connect() as conn:
         tid = kb.create_task(conn, title="route me safely", triage=True)
 
-    llm_payload = jsonlib.dumps({
-        "fanout": False,
-        "rationale": "single unit",
-        "title": "Tightened title",
-        "body": "Route to fallback.",
-        "assignee": "made_up",
-    })
+    llm_payload = jsonlib.dumps(
+        {
+            "fanout": False,
+            "rationale": "single unit",
+            "title": "Tightened title",
+            "body": "Route to fallback.",
+            "assignee": "made_up",
+        }
+    )
 
     patches = _patch_list_profiles(["orchestrator", "fallback"])
     for p in patches:
         p.start()
     try:
-        with _patch_aux_client(llm_payload), _patch_extra_body(), patch(
-            "clawk_cli.config.load_config_readonly",
-            return_value={"kanban": {"default_assignee": "fallback"}},
+        with (
+            _patch_aux_client(llm_payload),
+            _patch_extra_body(),
+            patch(
+                "clawk_cli.config.load_config_readonly",
+                return_value={"kanban": {"default_assignee": "fallback"}},
+            ),
         ):
             outcome = decomp.decompose_task(tid, author="me")
     finally:
@@ -228,7 +277,9 @@ def test_decompose_fanout_false_invalid_llm_assignee_uses_default(kanban_home):
     assert task.assignee == "fallback"
 
 
-def test_load_routing_falls_back_to_defaults_when_config_unreadable(kanban_home, monkeypatch):
+def test_load_routing_falls_back_to_defaults_when_config_unreadable(
+    kanban_home, monkeypatch
+):
     """decompose_task promises ok=False on expected failures; a config read that raises (missing
     profile home, HomeInitializationError) must not escape _load_routing as an exception."""
     from clawk_cli import config as config_mod
@@ -254,5 +305,3 @@ def test_decompose_returns_false_when_task_not_triage(kanban_home):
         for p in patches:
             p.stop()
     assert outcome.ok is False
-
-

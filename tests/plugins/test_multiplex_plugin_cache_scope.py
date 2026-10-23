@@ -19,7 +19,11 @@ from pathlib import Path
 
 import pytest
 
-from agent.secret_scope import build_profile_secret_scope, reset_secret_scope, set_secret_scope
+from agent.secret_scope import (
+    build_profile_secret_scope,
+    reset_secret_scope,
+    set_secret_scope,
+)
 from clawk_constants import reset_clawk_home_override, set_clawk_home_override
 
 REPO = Path(__file__).resolve().parents[2]
@@ -32,10 +36,13 @@ def homes(tmp_path, monkeypatch):
     a, b = root, root / "profiles" / "B"
     for home, tag in ((a, "A"), (b, "B")):
         home.mkdir(parents=True)
-        (home / "config.yaml").write_text(f"memory:\n  provider: prov{tag}\n", encoding="utf-8")
+        (home / "config.yaml").write_text(
+            f"memory:\n  provider: prov{tag}\n", encoding="utf-8"
+        )
         (home / ".env").write_text(
             f"RAMP_ROUTER_API_KEY=router-key-{tag}\nRAMP_ROUTER_BASE_URL=https://{tag.lower()}.router.test/v1\n",
-            encoding="utf-8")
+            encoding="utf-8",
+        )
     monkeypatch.setenv("CLAWK_HOME", str(a))
     for var in ("RAMP_ROUTER_API_KEY", "RAMP_ROUTER_BASE_URL", "PYTEST_CURRENT_TEST"):
         monkeypatch.delenv(var, raising=False)
@@ -81,7 +88,9 @@ def _router():
     return profile, sys.modules[type(profile).__module__]
 
 
-def test_router_efforts_cache_and_base_url_follow_the_active_profile(homes, monkeypatch):
+def test_router_efforts_cache_and_base_url_follow_the_active_profile(
+    homes, monkeypatch
+):
     """Efforts map + once-only flags are per home under an override (and the warm thread inherits the
     scope), while the unscoped path keeps using the module slots; the base URL comes from the
     profile's .env."""
@@ -94,8 +103,25 @@ def test_router_efforts_cache_and_base_url_follow_the_active_profile(homes, monk
     def fake_open(req, *, timeout, **_kw):
         tag = (req.get_header("Authorization") or "").rsplit("-", 1)[-1]
         fetched.append(req.full_url)
-        return _Resp({"data": [{"id": f"model-{tag}", "router": {"capabilities": {"reasoning": {
-            "supported": True, "efforts": [{"value": "low" if tag == "A" else "high"}]}}}}]})
+        return _Resp(
+            {
+                "data": [
+                    {
+                        "id": f"model-{tag}",
+                        "router": {
+                            "capabilities": {
+                                "reasoning": {
+                                    "supported": True,
+                                    "efforts": [
+                                        {"value": "low" if tag == "A" else "high"}
+                                    ],
+                                }
+                            }
+                        },
+                    }
+                ]
+            }
+        )
 
     monkeypatch.setattr(urllib_security, "open_credentialed_url", fake_open)
     monkeypatch.setattr(mod, "_efforts_cache", None)
@@ -144,8 +170,13 @@ def test_credentialed_catalog_probe_failure_is_not_cached_across_keys(monkeypatc
     monkeypatch.setattr(requests, "get", fake_get)
     orp._CATALOG_CACHE.clear()
     try:
-        assert orp._fetch_image_api_catalog("https://openrouter.ai/api/v1", "bad-key") == frozenset()
-        assert "google/gemini-image" in orp._fetch_image_api_catalog("https://openrouter.ai/api/v1", "good-key")
+        assert (
+            orp._fetch_image_api_catalog("https://openrouter.ai/api/v1", "bad-key")
+            == frozenset()
+        )
+        assert "google/gemini-image" in orp._fetch_image_api_catalog(
+            "https://openrouter.ai/api/v1", "good-key"
+        )
     finally:
         orp._CATALOG_CACHE.clear()
 
@@ -161,7 +192,9 @@ def test_memory_provider_skill_prune_only_touches_the_active_home(homes, monkeyp
     mem._REGISTERED_MEMORY_PROVIDER_SKILLS.clear()
     skill_dir = a / "plugins" / "provA" / "skills" / "maint"
     skill_dir.mkdir(parents=True)
-    (skill_dir / "SKILL.md").write_text("---\nname: maint\ndescription: x\n---\nbody\n", encoding="utf-8")
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: maint\ndescription: x\n---\nbody\n", encoding="utf-8"
+    )
     try:
         with scoped(a):
             mem._ProviderCollector("provA").register_skill("maint", skill_dir)
@@ -180,7 +213,8 @@ def test_memory_provider_skill_prune_only_touches_the_active_home(homes, monkeyp
 def test_disk_cleanup_protected_cron_paths_follow_the_active_home(homes):
     """The protected-path guard must protect the ACTIVE profile's cron dir, not the first one asked."""
     spec = importlib.util.spec_from_file_location(
-        "disk_cleanup_mux_scope", REPO / "plugins" / "disk-cleanup" / "disk_cleanup.py")
+        "disk_cleanup_mux_scope", REPO / "plugins" / "disk-cleanup" / "disk_cleanup.py"
+    )
     dc = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(dc)
     a, b = homes
@@ -212,7 +246,9 @@ def test_yuanbao_active_adapter_resolves_per_profile(homes, monkeypatch):
         assert YuanbaoAdapter.get_active() is adapter_a
     with scoped(b):
         assert YuanbaoAdapter.get_active() is adapter_b
-    assert YuanbaoAdapter.get_active() is None  # scoped adapters never claim the unscoped slot
+    assert (
+        YuanbaoAdapter.get_active() is None
+    )  # scoped adapters never claim the unscoped slot
     unscoped = YuanbaoAdapter(cfg)
     YuanbaoAdapter.set_active(unscoped)
     assert YuanbaoAdapter.get_active() is unscoped

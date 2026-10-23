@@ -37,11 +37,14 @@ class TestSplitPairingDirMigration:
         new = home / "platforms" / "pairing"
         legacy.mkdir(parents=True)
         new.mkdir(parents=True)
-        (new / "feishu-approved.json").write_text(json.dumps({
-            "ou_user": {"user_name": "Alice", "approved_at": 123.0}
-        }))
+        (new / "feishu-approved.json").write_text(
+            json.dumps({"ou_user": {"user_name": "Alice", "approved_at": 123.0}})
+        )
 
-        with patch("gateway.pairing.PAIRING_DIR", legacy), patch("gateway.pairing.get_clawk_home", return_value=home):
+        with (
+            patch("gateway.pairing.PAIRING_DIR", legacy),
+            patch("gateway.pairing.get_clawk_home", return_value=home),
+        ):
             store = PairingStore()
             assert store.is_approved("feishu", "ou_user") is True
 
@@ -65,8 +68,9 @@ class TestProfileScopedDiscovery:
         # CLAWK_HOME — the current home may itself be a profile, and nesting
         # profiles inside profiles is how a `-p work` CLI and its gateway end
         # up reading different files. Patch that seam, not get_clawk_home.
-        with patch("gateway.pairing.PAIRING_DIR", global_dir), patch(
-            "gateway.pairing.get_default_clawk_root", return_value=home
+        with (
+            patch("gateway.pairing.PAIRING_DIR", global_dir),
+            patch("gateway.pairing.get_default_clawk_root", return_value=home),
         ):
             store = PairingStore(profile="alice")
             # Scoped under the mocked root's profile dir, using the same
@@ -90,7 +94,6 @@ class TestProfileScopedDiscovery:
 
 
 class TestSaveJsonFile:
-
     @pytest.mark.platforms("posix")  # POSIX file modes are not enforced on Windows
     def test_sets_file_permissions(self, tmp_path):
         target = tmp_path / "secret.json"
@@ -105,7 +108,6 @@ class TestSaveJsonFile:
 
 
 class TestCodeGeneration:
-
     def test_code_uniqueness(self, tmp_path):
         """Multiple codes for different users should be distinct."""
         with patch("gateway.pairing.PAIRING_DIR", tmp_path):
@@ -174,6 +176,7 @@ class TestLegacyPendingFileCompat:
     def _write_legacy(tmp_path, code="ABCD1234", created_at=None):
         """Write a pre-hash pending.json with plaintext code as the key."""
         import time as _time
+
         if created_at is None:
             created_at = _time.time()
         legacy = {
@@ -187,16 +190,17 @@ class TestLegacyPendingFileCompat:
             json.dumps(legacy), encoding="utf-8"
         )
 
-
     def test_cleanup_expired_handles_malformed_entries(self, tmp_path):
         """Non-dict / missing-created_at entries get evicted, not crashed on."""
         with patch("gateway.pairing.PAIRING_DIR", tmp_path):
             (tmp_path / "telegram-pending.json").write_text(
-                json.dumps({
-                    "broken1": "not a dict",
-                    "broken2": {"user_id": "x"},  # no created_at
-                    "broken3": {"created_at": "not a number"},
-                }),
+                json.dumps(
+                    {
+                        "broken1": "not a dict",
+                        "broken2": {"user_id": "x"},  # no created_at
+                        "broken3": {"created_at": "not a number"},
+                    }
+                ),
                 encoding="utf-8",
             )
             store = PairingStore()
@@ -209,12 +213,19 @@ class TestLegacyPendingFileCompat:
     def test_approve_code_skips_malformed_entries(self, tmp_path):
         """Malformed entries must not crash approve_code's hash loop."""
         import time as _time
+
         with patch("gateway.pairing.PAIRING_DIR", tmp_path):
             (tmp_path / "telegram-pending.json").write_text(
-                json.dumps({
-                    "broken": {"user_id": "x", "created_at": _time.time(),
-                               "salt": "not-hex", "hash": "doesntmatter"},
-                }),
+                json.dumps(
+                    {
+                        "broken": {
+                            "user_id": "x",
+                            "created_at": _time.time(),
+                            "salt": "not-hex",
+                            "hash": "doesntmatter",
+                        },
+                    }
+                ),
                 encoding="utf-8",
             )
             store = PairingStore()
@@ -252,7 +263,10 @@ class TestMaxPending:
                 codes.append(code)
 
         # First MAX_PENDING_PER_PLATFORM should succeed
-        assert all(isinstance(c, str) and len(c) == CODE_LENGTH for c in codes[:MAX_PENDING_PER_PLATFORM])
+        assert all(
+            isinstance(c, str) and len(c) == CODE_LENGTH
+            for c in codes[:MAX_PENDING_PER_PLATFORM]
+        )
         # Next one should be blocked
         assert codes[MAX_PENDING_PER_PLATFORM] is None
 
@@ -331,9 +345,9 @@ class TestApprovalFlow:
             bot_code = store.generate_code("telegram", "user1", "Alice")
             entry = store.list_pending("telegram")[0]
 
-            digest = json.loads(
-                (tmp_path / "telegram-pending.json").read_text()
-            )[entry["request_id"]]["hash"]
+            digest = json.loads((tmp_path / "telegram-pending.json").read_text())[
+                entry["request_id"]
+            ]["hash"]
 
             assert set(entry) == {
                 "platform",
@@ -371,8 +385,9 @@ class TestApprovalFlow:
             assert store.approve_code("telegram", next_code) is not None
             assert code != next_code
 
-
-    def test_whatsapp_legacy_raw_jid_approval_survives_alias_flip(self, tmp_path, monkeypatch):
+    def test_whatsapp_legacy_raw_jid_approval_survives_alias_flip(
+        self, tmp_path, monkeypatch
+    ):
         mapping_dir = tmp_path / "whatsapp" / "session"
         mapping_dir.mkdir(parents=True, exist_ok=True)
         (mapping_dir / "lid-mapping-999999999999999.json").write_text(
@@ -406,8 +421,6 @@ class TestApprovalFlow:
 
 
 class TestLockout:
-
-
     def test_successful_approval_resets_failure_counter(self, tmp_path):
         """A successful approval clears the brute-force streak, so isolated
         typos across the gateway's lifetime don't accumulate into a spurious
@@ -509,11 +522,16 @@ class TestRevoke:
         with patch("gateway.pairing.PAIRING_DIR", tmp_path):
             assert store.is_approved("telegram", "user1") is False
 
-    def test_revoke_from_other_store_is_not_undone_by_inflight_approval(self, tmp_path, monkeypatch):
+    def test_revoke_from_other_store_is_not_undone_by_inflight_approval(
+        self, tmp_path, monkeypatch
+    ):
         """Dashboard requests and the ``clawk pairing`` CLI each build their own store, so
         an approval that read approved.json before a revoke landed must not write it back."""
-        with patch("gateway.pairing.PAIRING_DIR", tmp_path), \
-                patch("gateway.pairing._sync_allowlist_add"), patch("gateway.pairing._sync_allowlist_remove"):
+        with (
+            patch("gateway.pairing.PAIRING_DIR", tmp_path),
+            patch("gateway.pairing._sync_allowlist_add"),
+            patch("gateway.pairing._sync_allowlist_remove"),
+        ):
             seed = PairingStore()
             seed._approve_user("telegram", "carol")
             code = seed.generate_code("telegram", "alice", "Alice")
@@ -531,16 +549,24 @@ class TestRevoke:
 
         def load_then_let_revoke_run(path):
             data = real_load(path)
-            if path == approved_path and not revoke_result and threading.current_thread().name == "dashboard":
+            if (
+                path == approved_path
+                and not revoke_result
+                and threading.current_thread().name == "dashboard"
+            ):
                 threading.Thread(target=revoke_in_other_process, daemon=True).start()
                 # Unserialized stores let the revoke finish inside this window; serialized ones
                 # are seen blocking on the pairing lock instead.
-                wait_until(lambda: revoke_done.is_set() or contended.is_set(),
-                           what="the revoke finished or blocked on the pairing lock")
+                wait_until(
+                    lambda: revoke_done.is_set() or contended.is_set(),
+                    what="the revoke finished or blocked on the pairing lock",
+                )
             return data
 
         dashboard._load_json = load_then_let_revoke_run
-        approver = threading.Thread(target=dashboard.approve_code, args=("telegram", code), name="dashboard")
+        approver = threading.Thread(
+            target=dashboard.approve_code, args=("telegram", code), name="dashboard"
+        )
         approver.start()
         approver.join(10)
         assert revoke_done.wait(10)
@@ -590,15 +616,18 @@ class TestUnreadablePairingFile:
             # to mimic a 0600 file owned by a different uid.
             raise PermissionError(13, "Permission denied", str(self))
 
-        with patch("gateway.pairing.PAIRING_DIR", tmp_path), \
-             patch.object(Path, "read_text", fake_read_text), \
-             caplog.at_level(logging.WARNING, logger="gateway.pairing"):
+        with (
+            patch("gateway.pairing.PAIRING_DIR", tmp_path),
+            patch.object(Path, "read_text", fake_read_text),
+            caplog.at_level(logging.WARNING, logger="gateway.pairing"),
+        ):
             store = PairingStore()
             result = store._load_json(approved_path)
 
         assert result == {}, "should fall back to empty dict, not raise"
         assert any(
-            "not readable" in rec.getMessage() and "#10270" not in rec.getMessage()
+            "not readable" in rec.getMessage()
+            and "#10270" not in rec.getMessage()
             or "not readable" in rec.getMessage()
             for rec in caplog.records
         ), f"expected a warning about unreadable pairing file, got {caplog.records!r}"
@@ -606,6 +635,7 @@ class TestUnreadablePairingFile:
         msgs = " ".join(rec.getMessage() for rec in caplog.records)
         assert "docker exec" in msgs
         assert "-u clawk" in msgs
+
 
 # Profile-scoped storage (multiplexing gateway isolation)
 # ---------------------------------------------------------------------------
@@ -621,6 +651,7 @@ class TestProfileScopedStorage:
         """PairingStore() (no profile) keeps the legacy global path so the
         ``clawk pairing`` CLI continues to work without a profile context."""
         from clawk_constants import get_clawk_home
+
         monkeypatch.setattr("clawk_constants.get_clawk_home", lambda: tmp_path)
         # Re-import PAIRING_DIR (it's a module-level constant resolved at
         # import time) so the test exercises the right path. We patch it
@@ -698,9 +729,7 @@ class TestProfileScopedStorage:
         with patch("gateway.pairing.PAIRING_DIR", expected):
             assert PairingStore(profile="default")._dir == PairingStore()._dir
 
-    def test_profile_store_merges_split_pairing_layouts(
-        self, tmp_path, monkeypatch
-    ):
+    def test_profile_store_merges_split_pairing_layouts(self, tmp_path, monkeypatch):
         """Existing approvals survive either profile directory layout."""
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         profile_home = tmp_path / "profiles" / "coder"
@@ -760,8 +789,6 @@ class TestProfileScopedStorage:
         )
 
 
-
-
 def test_approval_cache_reuses_parse_and_observes_replacement(tmp_path, monkeypatch):
     store = _make_store(tmp_path)
     other = _make_store(tmp_path)
@@ -789,7 +816,9 @@ def test_approval_cache_reuses_parse_and_observes_replacement(tmp_path, monkeypa
         assert store.is_approved("telegram", "user3")
 
 
-def test_approval_cache_isolated_and_unreadable_files_fail_closed(tmp_path, monkeypatch):
+def test_approval_cache_isolated_and_unreadable_files_fail_closed(
+    tmp_path, monkeypatch
+):
     first = _make_store(tmp_path / "first")
     second = _make_store(tmp_path / "second")
     path = first._approved_path("telegram")

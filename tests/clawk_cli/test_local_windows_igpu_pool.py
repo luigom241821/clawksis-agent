@@ -21,11 +21,24 @@ from clawk_platform.host.gpu_adapters import Adapter
 
 GIB = 1 << 30
 RAM = int(31.5 * GIB)
-B390 = Adapter("Intel(R) Arc(TM) B390 GPU", 0x8086, 128 << 20, 18 * GIB - (128 << 20), software=False)
-ADRENO = Adapter("Qualcomm(R) Adreno(TM) X1-85 GPU", 0x4D4F4351, 0, 15 * GIB, software=False)
+B390 = Adapter(
+    "Intel(R) Arc(TM) B390 GPU",
+    0x8086,
+    128 << 20,
+    18 * GIB - (128 << 20),
+    software=False,
+)
+ADRENO = Adapter(
+    "Qualcomm(R) Adreno(TM) X1-85 GPU", 0x4D4F4351, 0, 15 * GIB, software=False
+)
 SOFTWARE = Adapter("Microsoft Basic Render Driver", 0x1414, 0, 16 * GIB, software=True)
 # ggml-vulkan sums every heap of an integrated GPU, so the engine reports more than Windows grants.
-ENGINE_B390 = {"description": B390.description, "type": GGML_DEVICE_IGPU, "total": 34 * GIB, "free": 30 * GIB}
+ENGINE_B390 = {
+    "description": B390.description,
+    "type": GGML_DEVICE_IGPU,
+    "total": 34 * GIB,
+    "free": 30 * GIB,
+}
 
 
 def _machine(monkeypatch, adapters, device, *, installed="vulkan", planned="vulkan"):
@@ -35,14 +48,21 @@ def _machine(monkeypatch, adapters, device, *, installed="vulkan", planned="vulk
     monkeypatch.setattr(hw, "_ram_bytes", lambda: (RAM, 20 * GIB))
     monkeypatch.setattr(hw, "_accelerator_device", lambda **_: device)
     monkeypatch.setattr(gpu_adapters, "windows_gpu_adapters", lambda: tuple(adapters))
-    engine = None if installed is None else Engine(installed, "b11370", Path("llama-server"))
+    engine = (
+        None if installed is None else Engine(installed, "b11370", Path("llama-server"))
+    )
     monkeypatch.setattr(hw, "_configured_engine", lambda: engine)
     monkeypatch.setattr(binaries, "resolve_backend", lambda *_, **__: planned)
 
 
-@pytest.mark.parametrize(("device", "installed"), [(ENGINE_B390, "vulkan"), (None, None)],
-                         ids=["engine-named", "before-the-engine"])
-def test_an_integrated_gpu_gets_what_windows_lets_it_allocate(monkeypatch, device, installed):
+@pytest.mark.parametrize(
+    ("device", "installed"),
+    [(ENGINE_B390, "vulkan"), (None, None)],
+    ids=["engine-named", "before-the-engine"],
+)
+def test_an_integrated_gpu_gets_what_windows_lets_it_allocate(
+    monkeypatch, device, installed
+):
     _machine(monkeypatch, [B390, SOFTWARE], device, installed=installed)
 
     capacity = hw.probe_budget(planning=True)
@@ -55,29 +75,52 @@ def test_an_integrated_gpu_gets_what_windows_lets_it_allocate(monkeypatch, devic
 
 
 def test_the_engine_named_adapter_wins_among_several(monkeypatch):
-    discrete = Adapter("Intel(R) Arc(TM) A380 Graphics", 0x8086, 6 * GIB, 15 * GIB, software=False)
+    discrete = Adapter(
+        "Intel(R) Arc(TM) A380 Graphics", 0x8086, 6 * GIB, 15 * GIB, software=False
+    )
 
     _machine(monkeypatch, [discrete, B390, SOFTWARE], ENGINE_B390)
     assert hw.probe_budget(planning=True).total_device_bytes == B390.memory_bytes
 
-    _machine(monkeypatch, [discrete, B390, SOFTWARE], None)  # ambiguous without the engine's answer
+    _machine(
+        monkeypatch, [discrete, B390, SOFTWARE], None
+    )  # ambiguous without the engine's answer
     assert hw.probe_budget(planning=True).total_device_bytes == RAM
 
 
-@pytest.mark.parametrize(("adapter", "installed", "planned"), [
-    (B390, "cpu", "cpu"),     # local_runtime.backend: cpu
-    (ADRENO, None, "cpu"),    # a Snapdragon: setup installs the CPU build
-], ids=["cpu-engine-installed", "cpu-engine-planned"])
+@pytest.mark.parametrize(
+    ("adapter", "installed", "planned"),
+    [
+        (B390, "cpu", "cpu"),  # local_runtime.backend: cpu
+        (ADRENO, None, "cpu"),  # a Snapdragon: setup installs the CPU build
+    ],
+    ids=["cpu-engine-installed", "cpu-engine-planned"],
+)
 def test_a_cpu_engine_keeps_the_ram_budget(monkeypatch, adapter, installed, planned):
-    _machine(monkeypatch, [adapter, SOFTWARE], None, installed=installed, planned=planned)
+    _machine(
+        monkeypatch, [adapter, SOFTWARE], None, installed=installed, planned=planned
+    )
     assert hw.probe_budget(planning=True).total_device_bytes == RAM
 
 
-@pytest.mark.parametrize("adapters", [
-    [SOFTWARE],                                                                 # no GPU: CPU inference
-    [Adapter("AMD Radeon(TM) 8060S Graphics", 0x1002, 96 * GIB, 16 * GIB, software=False), SOFTWARE],
-    [],                                                                         # DXGI did not answer
-], ids=["cpu-only", "allowance-above-ram", "no-dxgi"])
+@pytest.mark.parametrize(
+    "adapters",
+    [
+        [SOFTWARE],  # no GPU: CPU inference
+        [
+            Adapter(
+                "AMD Radeon(TM) 8060S Graphics",
+                0x1002,
+                96 * GIB,
+                16 * GIB,
+                software=False,
+            ),
+            SOFTWARE,
+        ],
+        [],  # DXGI did not answer
+    ],
+    ids=["cpu-only", "allowance-above-ram", "no-dxgi"],
+)
 def test_the_pool_never_grows_past_ram(monkeypatch, adapters):
     _machine(monkeypatch, adapters, None)
     assert hw.probe_budget(planning=True).total_device_bytes == RAM

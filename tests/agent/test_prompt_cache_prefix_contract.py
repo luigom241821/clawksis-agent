@@ -27,8 +27,18 @@ from typing import Any
 
 import pytest
 
-from tests.e2e.core.history._helpers import NO_BACKGROUND_REVIEW, OFFLINE_CONFIG, canon, prefix_breaks
-from tests.fakes.fake_llm_provider import FakeLLMServer, Text, ToolCall, write_clawk_home
+from tests.e2e.core.history._helpers import (
+    NO_BACKGROUND_REVIEW,
+    OFFLINE_CONFIG,
+    canon,
+    prefix_breaks,
+)
+from tests.fakes.fake_llm_provider import (
+    FakeLLMServer,
+    Text,
+    ToolCall,
+    write_clawk_home,
+)
 
 SKILL_BODY = "Follow these steps carefully. " * 300
 
@@ -37,7 +47,11 @@ def _cache_content(value: Any) -> Any:
     """What the cache keys on: markers dropped, a lone text part folded back to its string."""
     if isinstance(value, list):
         value = [_cache_content(v) for v in value]
-        if len(value) == 1 and isinstance(value[0], dict) and set(value[0]) == {"type", "text"}:
+        if (
+            len(value) == 1
+            and isinstance(value[0], dict)
+            and set(value[0]) == {"type", "text"}
+        ):
             return value[0]["text"]
         return value
     if isinstance(value, dict):
@@ -48,7 +62,9 @@ def _cache_content(value: Any) -> Any:
 def _prefix_breaks(requests: list[dict[str, Any]]) -> list[tuple[int, str]]:
     """``prefix_breaks`` over what the cache keys on, after asserting every request carried markers."""
     unmarked = [i for i, r in enumerate(requests) if "cache_control" not in canon(r)]
-    assert not unmarked, f"caching route sent requests without cache_control markers: {unmarked}"
+    assert not unmarked, (
+        f"caching route sent requests without cache_control markers: {unmarked}"
+    )
     return prefix_breaks([_cache_content(r) for r in requests])
 
 
@@ -58,11 +74,17 @@ def caching_route():
     home = Path(os.environ["CLAWK_HOME"])
     skill = home / "skills" / "demo"
     skill.mkdir(parents=True)
-    (skill / "SKILL.md").write_text(f"---\nname: demo\ndescription: Demo skill.\n---\n\n# Demo\n\n{SKILL_BODY}\n")
+    (skill / "SKILL.md").write_text(
+        f"---\nname: demo\ndescription: Demo skill.\n---\n\n# Demo\n\n{SKILL_BODY}\n"
+    )
     srv = FakeLLMServer([]).__enter__()
-    route = (f"custom_providers:\n  - name: cacherelay\n    base_url: {srv.base_url}\n    api_key: sk-fake-e2e\n"
-             "    models:\n      fake-model:\n        prompt_caching: true\n")
-    write_clawk_home(home, srv.base_url, extra_config=OFFLINE_CONFIG + NO_BACKGROUND_REVIEW + route)
+    route = (
+        f"custom_providers:\n  - name: cacherelay\n    base_url: {srv.base_url}\n    api_key: sk-fake-e2e\n"
+        "    models:\n      fake-model:\n        prompt_caching: true\n"
+    )
+    write_clawk_home(
+        home, srv.base_url, extra_config=OFFLINE_CONFIG + NO_BACKGROUND_REVIEW + route
+    )
     yield srv, home
     srv.__exit__(None, None, None)
 
@@ -71,21 +93,35 @@ def _agent(srv, home):
     from clawk_state import SessionDB
     from run_agent import AIAgent
 
-    agent = AIAgent(provider="custom:cacherelay", base_url=srv.base_url, api_key="sk-fake-e2e", model="fake-model",
-                    session_db=SessionDB(db_path=home / "state.db"), session_id="cache-contract", quiet_mode=True,
-                    platform="cli")
+    agent = AIAgent(
+        provider="custom:cacherelay",
+        base_url=srv.base_url,
+        api_key="sk-fake-e2e",
+        model="fake-model",
+        session_db=SessionDB(db_path=home / "state.db"),
+        session_id="cache-contract",
+        quiet_mode=True,
+        platform="cli",
+    )
     assert (agent._use_prompt_caching, agent._use_native_cache_layout) == (True, False)
     return agent
 
 
 def test_tool_rounds_and_follow_up_turns_only_append(caching_route):
     srv, home = caching_route
-    srv.push(ToolCall("terminal", {"command": "echo one"}), ToolCall("terminal", {"command": "echo two"}),
-             Text("first done"), ToolCall("terminal", {"command": "echo three"}), Text("second done"))
+    srv.push(
+        ToolCall("terminal", {"command": "echo one"}),
+        ToolCall("terminal", {"command": "echo two"}),
+        Text("first done"),
+        ToolCall("terminal", {"command": "echo three"}),
+        Text("second done"),
+    )
     agent = _agent(srv, home)
     history: list[dict[str, Any]] = []
     for text in ("run two commands", "and one more"):
-        history = agent.run_conversation(text, conversation_history=history, task_id="t")["messages"]
+        history = agent.run_conversation(
+            text, conversation_history=history, task_id="t"
+        )["messages"]
     agent.close()
     main = srv.main_requests()
     assert len(main) == 5
@@ -96,8 +132,11 @@ def test_skill_turn_keeps_its_scaffold_bytes_across_the_tool_loop(caching_route)
     from agent.skill_commands import build_skill_invocation_message, scan_skill_commands
 
     srv, home = caching_route
-    srv.push(ToolCall("terminal", {"command": "echo one"}), ToolCall("terminal", {"command": "echo two"}),
-             Text("done"))
+    srv.push(
+        ToolCall("terminal", {"command": "echo one"}),
+        ToolCall("terminal", {"command": "echo two"}),
+        Text("done"),
+    )
     scan_skill_commands()
     message = build_skill_invocation_message("/demo", "do the thing", task_id="t")
     assert message and SKILL_BODY.strip() in message
@@ -106,4 +145,6 @@ def test_skill_turn_keeps_its_scaffold_bytes_across_the_tool_loop(caching_route)
     agent.close()
     main = srv.main_requests()
     assert len(main) == 3
-    assert not _prefix_breaks(main), f"skill scaffold re-sent with different bytes: {_prefix_breaks(main)}"
+    assert not _prefix_breaks(main), (
+        f"skill scaffold re-sent with different bytes: {_prefix_breaks(main)}"
+    )

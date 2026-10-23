@@ -18,17 +18,33 @@ from tui_gateway.server import _is_gateway_owned_source, _teardown_session
 
 class TestIsGatewayOwnedSource:
     def test_builtin_gateway_platforms_are_owned(self):
-        for src in ("telegram", "discord", "whatsapp", "slack", "signal",
-                    "matrix", "mattermost", "bluebubbles", "sms", "email"):
+        for src in (
+            "telegram",
+            "discord",
+            "whatsapp",
+            "slack",
+            "signal",
+            "matrix",
+            "mattermost",
+            "bluebubbles",
+            "sms",
+            "email",
+        ):
             assert _is_gateway_owned_source(src) is True, src
 
-
     def test_tui_owned_sources_are_not(self):
-        for src in ("tui", "cli", "webui", "desktop", "cron", "subagent",
-                    "test", "acp", ""):
+        for src in (
+            "tui",
+            "cli",
+            "webui",
+            "desktop",
+            "cron",
+            "subagent",
+            "test",
+            "acp",
+            "",
+        ):
             assert _is_gateway_owned_source(src) is False, src
-
-
 
 
 def _make_session(session_id="sess_1"):
@@ -62,7 +78,9 @@ def _make_real_session(tmp_path, monkeypatch, *, source, session_id):
     agent._session_messages = []
     agent._active_children_lock = threading.Lock()
     agent._active_children = []
-    agent._memory_manager = None  # close() reads it directly; a stub must not rely on _quietly swallowing
+    agent._memory_manager = (
+        None  # close() reads it directly; a stub must not rely on _quietly swallowing
+    )
 
     session = _make_session(session_id)
     session["agent"] = agent
@@ -81,8 +99,6 @@ def _read_real_row(db_path, session_id):
         db.close()
 
 
-
-
 class TestGatewayOwnedSessionTeardown:
     def test_viewer_teardown_leaves_gateway_owned_row_open(self, tmp_path, monkeypatch):
         session_id = "gateway-owned-session"
@@ -96,7 +112,9 @@ class TestGatewayOwnedSessionTeardown:
         assert row["ended_at"] is None
         assert row["end_reason"] is None
         assert agent._end_session_on_close is False
-        assert agent._owns_session_db is False  # close() reached _finalize_owned_session_row
+        assert (
+            agent._owns_session_db is False
+        )  # close() reached _finalize_owned_session_row
 
 
 class TestDesktopAutomaticReclaimTeardown:
@@ -105,7 +123,9 @@ class TestDesktopAutomaticReclaimTeardown:
     as ``agent_close`` unless the spare decision reaches the agent."""
 
     @pytest.mark.parametrize("reason", ["ws_orphan_reap", "idle_timeout", "lru_evict"])
-    def test_automatic_reclaim_leaves_desktop_row_open(self, tmp_path, monkeypatch, reason):
+    def test_automatic_reclaim_leaves_desktop_row_open(
+        self, tmp_path, monkeypatch, reason
+    ):
         db_path, session, agent = _make_real_session(
             tmp_path, monkeypatch, source="desktop", session_id=f"desktop-{reason}"
         )
@@ -115,10 +135,16 @@ class TestDesktopAutomaticReclaimTeardown:
         row = _read_real_row(db_path, f"desktop-{reason}")
         assert (row["ended_at"], row["end_reason"]) == (None, None)
         assert agent._end_session_on_close is False
-        assert agent._owns_session_db is False  # close() reached _finalize_owned_session_row
+        assert (
+            agent._owns_session_db is False
+        )  # close() reached _finalize_owned_session_row
 
-    @pytest.mark.parametrize("source,reason", [("desktop", "tui_close"), ("tui", "ws_orphan_reap")])
-    def test_explicit_close_and_non_desktop_reap_still_end_row(self, tmp_path, monkeypatch, source, reason):
+    @pytest.mark.parametrize(
+        "source,reason", [("desktop", "tui_close"), ("tui", "ws_orphan_reap")]
+    )
+    def test_explicit_close_and_non_desktop_reap_still_end_row(
+        self, tmp_path, monkeypatch, source, reason
+    ):
         db_path, session, agent = _make_real_session(
             tmp_path, monkeypatch, source=source, session_id=f"{source}-{reason}"
         )
@@ -128,4 +154,6 @@ class TestDesktopAutomaticReclaimTeardown:
         row = _read_real_row(db_path, f"{source}-{reason}")
         assert row["ended_at"] is not None
         assert row["end_reason"] == reason
-        assert agent._end_session_on_close is True  # flag untouched when the row was ended here
+        assert (
+            agent._end_session_on_close is True
+        )  # flag untouched when the row was ended here

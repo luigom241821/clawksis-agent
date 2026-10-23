@@ -60,7 +60,9 @@ def _dead_pid() -> int:
 def _kill_owner(home: Path, execution_id: str) -> None:
     conn = sqlite3.connect(home / "cron" / "executions.db")
     try:
-        conn.execute("UPDATE executions SET pid=? WHERE id=?", (_dead_pid(), execution_id))
+        conn.execute(
+            "UPDATE executions SET pid=? WHERE id=?", (_dead_pid(), execution_id)
+        )
         conn.commit()
     finally:
         conn.close()
@@ -74,10 +76,13 @@ def _runs(monkeypatch, job_id: str, rows: list, profile: str = "default") -> dic
         def close(self):
             pass
 
-    monkeypatch.setattr(_rt_cron, "_open_session_db_for_profile", lambda _p, *, read_only: _FakeDB())
+    monkeypatch.setattr(
+        _rt_cron, "_open_session_db_for_profile", lambda _p, *, read_only: _FakeDB()
+    )
     monkeypatch.setattr(_rt_cron, "_job_owner_profile", lambda _j, _p: profile)
     monkeypatch.setattr(
-        _rt_cron, "_call_cron_for_profile",
+        _rt_cron,
+        "_call_cron_for_profile",
         lambda _p, cmd, *_a, **_k: {"id": job_id} if cmd == "get_job" else None,
     )
     result = _rt_cron._list_cron_job_runs_sync(job_id, limit=10)
@@ -87,8 +92,12 @@ def _runs(monkeypatch, job_id: str, rows: list, profile: str = "default") -> dic
 def _open_row(job_id: str, suffix: str, started_at: float) -> dict:
     # last_active far in the past: the activity window alone would call it dead.
     return {
-        "id": f"cron_{job_id}_{suffix}", "source": "cron", "started_at": started_at,
-        "last_active": started_at, "ended_at": None, "archived": False,
+        "id": f"cron_{job_id}_{suffix}",
+        "source": "cron",
+        "started_at": started_at,
+        "last_active": started_at,
+        "ended_at": None,
+        "archived": False,
     }
 
 
@@ -98,12 +107,16 @@ def test_owned_run_past_the_activity_window_is_scheduler_owned(homes, monkeypatc
     claimed = _claimed_epoch(execution)
     live = _open_row(job_id, "20260929_120000", claimed + 1)
     zombie = _open_row(job_id, "20260929_110000", claimed - 3600)
-    monkeypatch.setattr(_rt_cron.time, "time", lambda: claimed + 1800)  # 30 min without a tick
+    monkeypatch.setattr(
+        _rt_cron.time, "time", lambda: claimed + 1800
+    )  # 30 min without a tick
 
     runs = _runs(monkeypatch, job_id, [live, zombie])
 
     assert runs[live["id"]]["is_active"] is False  # the stale window
-    assert runs[live["id"]]["scheduler_owned"] is True  # ...but the scheduler still runs it
+    assert (
+        runs[live["id"]]["scheduler_owned"] is True
+    )  # ...but the scheduler still runs it
     # An older never-closed run of the same job predates the live claim: still a zombie.
     assert runs[zombie["id"]]["scheduler_owned"] is False
 
@@ -125,9 +138,14 @@ def test_finished_attempt_and_closed_run_are_not_owned(homes, monkeypatch):
     job_id = "done"
     execution = _claim(homes["default"], job_id)
     claimed = _claimed_epoch(execution)
-    closed = {**_open_row(job_id, "20260929_130000", claimed + 1), "ended_at": claimed + 60}
+    closed = {
+        **_open_row(job_id, "20260929_130000", claimed + 1),
+        "ended_at": claimed + 60,
+    }
 
-    assert _runs(monkeypatch, job_id, [closed])[closed["id"]]["scheduler_owned"] is False
+    assert (
+        _runs(monkeypatch, job_id, [closed])[closed["id"]]["scheduler_owned"] is False
+    )
 
     token = set_clawk_home_override(str(homes["default"]))
     try:
@@ -136,7 +154,10 @@ def test_finished_attempt_and_closed_run_are_not_owned(homes, monkeypatch):
         reset_clawk_home_override(token)
     open_row = _open_row(job_id, "20260929_120000", claimed + 1)
 
-    assert _runs(monkeypatch, job_id, [open_row])[open_row["id"]]["scheduler_owned"] is False
+    assert (
+        _runs(monkeypatch, job_id, [open_row])[open_row["id"]]["scheduler_owned"]
+        is False
+    )
 
 
 def test_ownership_reads_the_owner_profiles_ledger(homes, monkeypatch):
@@ -146,9 +167,24 @@ def test_ownership_reads_the_owner_profiles_ledger(homes, monkeypatch):
     claimed = _claimed_epoch(execution)
     row = _open_row(job_id, "20260929_120000", claimed + 1)
 
-    assert _runs(monkeypatch, job_id, [row], profile="worker_alpha")[row["id"]]["scheduler_owned"] is True
-    assert _runs(monkeypatch, job_id, [row], profile="default")[row["id"]]["scheduler_owned"] is False
-    assert _runs(monkeypatch, job_id, [row], profile="worker_alpha")[row["id"]]["scheduler_owned"] is True
+    assert (
+        _runs(monkeypatch, job_id, [row], profile="worker_alpha")[row["id"]][
+            "scheduler_owned"
+        ]
+        is True
+    )
+    assert (
+        _runs(monkeypatch, job_id, [row], profile="default")[row["id"]][
+            "scheduler_owned"
+        ]
+        is False
+    )
+    assert (
+        _runs(monkeypatch, job_id, [row], profile="worker_alpha")[row["id"]][
+            "scheduler_owned"
+        ]
+        is True
+    )
 
 
 def test_session_detail_stamps_the_same_answer_for_cron_runs_only(homes):
@@ -158,5 +194,8 @@ def test_session_detail_stamps_the_same_answer_for_cron_runs_only(homes):
     row = _open_row(job_id, "20260929_120000", claimed + 1)
 
     assert _rt_cron.cron_run_scheduler_owned(row, None) is True
-    assert _rt_cron.cron_run_scheduler_owned({**row, "ended_at": claimed + 5}, None) is False
+    assert (
+        _rt_cron.cron_run_scheduler_owned({**row, "ended_at": claimed + 5}, None)
+        is False
+    )
     assert _rt_cron.cron_run_scheduler_owned({**row, "source": "desktop"}, None) is None

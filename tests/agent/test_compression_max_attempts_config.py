@@ -67,7 +67,6 @@ def _make_agent(monkeypatch, tmp_path: Path, *, max_attempts=None):
 
 
 class TestCompressionMaxAttemptsConfig:
-
     def test_custom_value_is_honored(self, monkeypatch, tmp_path):
         agent = _make_agent(monkeypatch, tmp_path, max_attempts=6)
         assert agent.max_compression_attempts == 6

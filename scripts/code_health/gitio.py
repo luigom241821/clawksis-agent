@@ -43,7 +43,9 @@ def resolve_tree(repo: Path, rev: str) -> str:
 
 def commit_or_none(repo: Path, rev: str) -> str | None:
     """``rev`` as a commit sha, or None when it does not name a commit (a tree, a missing ref)."""
-    out = git(repo, "rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}", check=False)
+    out = git(
+        repo, "rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}", check=False
+    )
     return out.strip() or None
 
 
@@ -71,7 +73,9 @@ def _parse_name_status(out: str) -> list[Change]:
         code = fields[i][0]
         if code in "RC":
             old, new = fields[i + 1], fields[i + 2]
-            changes.append(Change("R" if code == "R" else "A", old if code == "R" else None, new))
+            changes.append(
+                Change("R" if code == "R" else "A", old if code == "R" else None, new)
+            )
             i += 3
             continue
         path = fields[i + 1]
@@ -119,7 +123,11 @@ def read_file(repo: Path, tree: str | None, path: str) -> str | None:
 def tracked_files(repo: Path, tree: str | None) -> list[str]:
     if tree is None:
         return [p for p in git(repo, "ls-files", "-z").split("\0") if p]
-    return [p for p in git(repo, "ls-tree", "-r", "--name-only", "-z", tree).split("\0") if p]
+    return [
+        p
+        for p in git(repo, "ls-tree", "-r", "--name-only", "-z", tree).split("\0")
+        if p
+    ]
 
 
 def known_env_names(repo: Path, tree: str | None) -> set[str]:

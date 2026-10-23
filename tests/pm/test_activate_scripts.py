@@ -13,15 +13,29 @@ from pathlib import Path
 import pytest
 
 from tests.pm.activation_support import (
-    ACTIVATE, ACTIVATE_PS1, CANARY, SETUP_CLAWK_PS1, SETUP_CLAWK_SH, bash, bash_env,
-    child_env, fake_store, isolated_checkout, posix, powershell, spawnable_python,
+    ACTIVATE,
+    ACTIVATE_PS1,
+    CANARY,
+    SETUP_CLAWK_PS1,
+    SETUP_CLAWK_SH,
+    bash,
+    bash_env,
+    child_env,
+    fake_store,
+    isolated_checkout,
+    posix,
+    powershell,
+    spawnable_python,
 )
 
 
 def test_bash_scripts_pass_syntax_check():
     for script in (ACTIVATE, SETUP_CLAWK_SH):
         result = subprocess.run(
-            [bash(), "-n", posix(script)], capture_output=True, text=True, env=child_env(),
+            [bash(), "-n", posix(script)],
+            capture_output=True,
+            text=True,
+            env=child_env(),
             check=False,
         )
         assert result.returncode == 0, f"{script.name}: {result.stderr}"
@@ -58,9 +72,9 @@ def test_activate_exports_the_sentinel_to_child_processes(tmp_path: Path):
     script = (
         f'source "{posix(root / "activate")}" && '
         f'"$BASH" -c \'test -n "$__CLAWK_ACTIVATED"\' && '
-        f'deactivate && '
+        f"deactivate && "
         f'! "$BASH" -c \'test -n "$__CLAWK_ACTIVATED"\' && '
-        f'echo exported-then-cleared'
+        f"echo exported-then-cleared"
     )
     result = subprocess.run(
         [bash(), "-c", script],
@@ -83,7 +97,7 @@ def test_deactivate_restores_the_prior_shell(tmp_path: Path):
         f'test -z "${{{CANARY}+set}}" && '
         f'test -z "${{__CLAWK_ACTIVATED+set}}" && '
         f"! declare -F deactivate >/dev/null && "
-        f'echo restored'
+        f"echo restored"
     )
     result = subprocess.run(
         [bash(), "-c", script],
@@ -107,10 +121,10 @@ def test_activate_leaves_the_shell_paths_in_posix_form(tmp_path: Path):
     script = (
         'prior_home="$HOME" prior_tmp="$TMP" && '
         f'source "{posix(root / "activate")}" && '
-        'command -v basename >/dev/null && '
+        "command -v basename >/dev/null && "
         'case "$PATH" in *";"*|*"\\\\"*) exit 3;; esac && '
         'test "$HOME" = "$prior_home" && test "$TMP" = "$prior_tmp" && '
-        'echo posix'
+        "echo posix"
     )
     result = subprocess.run(
         [bash(), "-c", script],
@@ -127,10 +141,7 @@ def test_activate_leaves_the_shell_paths_in_posix_form(tmp_path: Path):
 def test_activate_fails_cleanly_without_a_store(tmp_path: Path):
     env = bash_env(tmp_path / "empty-store")
     isolated = isolated_checkout(tmp_path) / "activate"
-    script = (
-        f'source "{posix(isolated)}" 2>/dev/null; '
-        f'test $? -ne 0 && echo refused'
-    )
+    script = f'source "{posix(isolated)}" 2>/dev/null; test $? -ne 0 && echo refused'
     result = subprocess.run(
         [bash(), "-c", script],
         capture_output=True,
@@ -177,17 +188,31 @@ def test_powershell_activate_exports_and_deactivates(tmp_path: Path):
     env = bash_env(tmp_path / "store")
     subprocess.run(
         [str(spawnable_python()), "-m", "venv", "--without-pip", str(root / ".venv")],
-        check=True, capture_output=True, env=env, timeout=60,
+        check=True,
+        capture_output=True,
+        env=env,
+        timeout=60,
     )
     ps = powershell()
     assert ps, "native Windows test requires PowerShell"
     result = subprocess.run(
-        [ps, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command",
-         f"$ErrorActionPreference='Stop'; $env:PYTHONPATH='caller-original'; "
-         f". '{root / 'activate.ps1'}'; "
-         "Write-Output ('active=' + $env:PYTHONPATH); deactivate; "
-         "Write-Output ('after=' + $env:PYTHONPATH)"],
-        capture_output=True, text=True, cwd=str(tmp_path), env=env, timeout=40,
+        [
+            ps,
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            f"$ErrorActionPreference='Stop'; $env:PYTHONPATH='caller-original'; "
+            f". '{root / 'activate.ps1'}'; "
+            "Write-Output ('active=' + $env:PYTHONPATH); deactivate; "
+            "Write-Output ('after=' + $env:PYTHONPATH)",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(tmp_path),
+        env=env,
+        timeout=40,
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr

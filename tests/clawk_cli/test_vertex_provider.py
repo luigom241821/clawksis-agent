@@ -74,26 +74,41 @@ def _vertex_cli_shell(monkeypatch, tmp_path, *, loadable: bool):
     va._creds_cache.clear()
     monkeypatch.setattr(va, "_ensure_google_auth", lambda: True)
     request_mod = types.SimpleNamespace(Request=lambda: None)
-    monkeypatch.setattr(va, "google", types.SimpleNamespace(auth=types.SimpleNamespace(
-        transport=types.SimpleNamespace(requests=request_mod))), raising=False)
+    monkeypatch.setattr(
+        va,
+        "google",
+        types.SimpleNamespace(
+            auth=types.SimpleNamespace(
+                transport=types.SimpleNamespace(requests=request_mod)
+            )
+        ),
+        raising=False,
+    )
     monkeypatch.setattr(va, "_resolve_credentials_path", lambda explicit=None: str(sa))
     monkeypatch.setattr(va, "_vertex_config", lambda: {"region": "us-central1"})
-    monkeypatch.setattr(va, "_load_credentials",
-                        lambda path, raw: (_CountingCreds(mints), "sa-proj") if loadable else None)
+    monkeypatch.setattr(
+        va,
+        "_load_credentials",
+        lambda path, raw: (_CountingCreds(mints), "sa-proj") if loadable else None,
+    )
 
     shell = CLIAgentSetupMixin.__new__(CLIAgentSetupMixin)
     shell.model, shell.requested_provider = "google/gemini-3-flash-preview", "vertex"
     shell._explicit_api_key = shell._explicit_base_url = None
     shell._fallback_model = []
     shell.tool_progress_mode = "off"
-    shell.agent = shell.api_key = shell.base_url = shell.provider = shell.acp_command = None
+    shell.agent = shell.api_key = shell.base_url = shell.provider = (
+        shell.acp_command
+    ) = None
     shell.api_mode, shell.acp_args = "chat_completions", []
     shell._normalize_model_for_provider = lambda _provider: False
     shell._maybe_print_free_tier_available_notice = lambda: None
     return shell, mints
 
 
-def test_gateway_backed_cli_resolves_vertex_route_without_minting(monkeypatch, tmp_path):
+def test_gateway_backed_cli_resolves_vertex_route_without_minting(
+    monkeypatch, tmp_path
+):
     """The classic CLI is a thin client: the gateway session mints the Vertex token for the turn it
     runs. Resolving the CLI's route must not run a second OAuth exchange per launch."""
     shell, mints = _vertex_cli_shell(monkeypatch, tmp_path, loadable=True)
@@ -102,18 +117,24 @@ def test_gateway_backed_cli_resolves_vertex_route_without_minting(monkeypatch, t
     assert mints == [], "the CLI process minted a Vertex token the gateway mints again"
     assert shell.provider == "vertex"
     assert shell.base_url == (
-        "https://us-central1-aiplatform.googleapis.com/v1beta1/projects/sa-proj/locations/us-central1/endpoints/openapi")
+        "https://us-central1-aiplatform.googleapis.com/v1beta1/projects/sa-proj/locations/us-central1/endpoints/openapi"
+    )
     assert callable(shell.api_key)
     # A caller that really sends from this process still gets a token, minted once and reused.
     assert shell.api_key() == shell.api_key() == "ya29.minted-1"
     assert mints == [1]
 
 
-def test_gateway_backed_cli_keeps_vertex_credential_failure_copy(monkeypatch, tmp_path, capsys):
+def test_gateway_backed_cli_keeps_vertex_credential_failure_copy(
+    monkeypatch, tmp_path, capsys
+):
     """Unloadable Vertex credentials still fail in the CLI with main's actionable copy."""
     shell, mints = _vertex_cli_shell(monkeypatch, tmp_path, loadable=False)
 
     assert shell._ensure_runtime_credentials() is False
     err = capsys.readouterr().err
-    assert "Vertex AI credentials could not be resolved" in err and "VERTEX_CREDENTIALS_PATH" in err, err
+    assert (
+        "Vertex AI credentials could not be resolved" in err
+        and "VERTEX_CREDENTIALS_PATH" in err
+    ), err
     assert mints == []

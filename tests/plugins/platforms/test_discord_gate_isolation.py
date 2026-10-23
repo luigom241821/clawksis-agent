@@ -190,9 +190,7 @@ class TestSlashGateIsolation:
     def test_evaluate_slash_channel_gate_per_adapter(self, monkeypatch):
         import types
 
-        pytest.importorskip(
-            "discord", reason="discord.py optional dep not installed"
-        )
+        pytest.importorskip("discord", reason="discord.py optional dep not installed")
 
         a = _adapter()
         b = _adapter()
@@ -202,16 +200,16 @@ class TestSlashGateIsolation:
         def _keys(self, chan, parent):
             return {str(getattr(chan, "id", ""))}
 
-        monkeypatch.setattr(
-            DiscordAdapter, "_discord_channel_keys_from_channel", _keys
-        )
+        monkeypatch.setattr(DiscordAdapter, "_discord_channel_keys_from_channel", _keys)
         monkeypatch.setattr(
             DiscordAdapter, "_get_parent_channel_id", lambda self, c: None
         )
 
         chan = types.SimpleNamespace(id=111)
         interaction = types.SimpleNamespace(
-            channel=chan, channel_id=111, user=types.SimpleNamespace(id=999, roles=[]),
+            channel=chan,
+            channel_id=111,
+            user=types.SimpleNamespace(id=999, roles=[]),
         )
         # channel 111: allowed for A's gate...
         _allowed_a, reason_a = a._evaluate_slash_authorization(interaction)
@@ -248,7 +246,9 @@ class TestUsernameResolutionEnvWrite:
             },
         )()
         guild = type(
-            "G", (), {"members": [member], "member_count": 1, "name": "g"},
+            "G",
+            (),
+            {"members": [member], "member_count": 1, "name": "g"},
         )()
         adapter._client = type("C", (), {"guilds": [guild]})()
 
@@ -282,7 +282,9 @@ class TestUsernameResolutionEnvWrite:
             },
         )()
         guild = type(
-            "G", (), {"members": [member], "member_count": 1, "name": "g"},
+            "G",
+            (),
+            {"members": [member], "member_count": 1, "name": "g"},
         )()
         adapter._client = type("C", (), {"guilds": [guild]})()
 
@@ -327,7 +329,8 @@ class TestYamlBridgeSeeding:
         token = secret_scope.set_secret_scope({"SOME": "scope"})
         try:
             seeded = _apply_yaml_config(
-                {}, {"allowed_channels": "222", "allow_from": "2001"},
+                {},
+                {"allowed_channels": "222", "allow_from": "2001"},
             )
         finally:
             secret_scope.reset_secret_scope(token)
@@ -383,9 +386,7 @@ class TestTelegramGateIsolation:
 
         monkeypatch.setenv("TELEGRAM_ALLOWED_USERS", "111111111")
         monkeypatch.setattr(secret_scope, "_MULTIPLEX_ACTIVE", True)
-        token = secret_scope.set_secret_scope(
-            {"TELEGRAM_ALLOWED_USERS": "222222222"}
-        )
+        token = secret_scope.set_secret_scope({"TELEGRAM_ALLOWED_USERS": "222222222"})
         try:
             assert _scoped_gate_env("TELEGRAM_ALLOWED_USERS") == "222222222"
         finally:
@@ -423,7 +424,8 @@ class TestTelegramGateIsolation:
         token = secret_scope.set_secret_scope({})
         try:
             extras = _apply_yaml_config(
-                {}, {"allowed_chats": ["-100200"], "allow_from": "222222222"},
+                {},
+                {"allowed_chats": ["-100200"], "allow_from": "222222222"},
             )
         finally:
             secret_scope.reset_secret_scope(token)

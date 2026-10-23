@@ -22,13 +22,19 @@ class UpstageProfile(ProviderProfile):
     """Upstage Solar — top-level ``reasoning_effort`` control (no reasoning_content echo needed)."""
 
     def build_api_kwargs_extras(
-        self, *, reasoning_config: dict | None = None, model: str | None = None, **context
+        self,
+        *,
+        reasoning_config: dict | None = None,
+        model: str | None = None,
+        **context,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         m = (model or "").strip().lower()
         if _NON_REASONING_MODEL_RE.search(m):
             return {}, {}
         if not reasoning_config or not isinstance(reasoning_config, dict):
-            return {}, {"reasoning_effort": "medium"}  # unset -> reasoning ON for agents
+            return {}, {
+                "reasoning_effort": "medium"
+            }  # unset -> reasoning ON for agents
         if reasoning_config.get("enabled") is False:
             return {}, {}  # explicitly disabled -> Solar's own default (minimal = off)
         # Map Clawksis' effort vocabulary onto Solar's accepted set via the shared clamp
@@ -48,9 +54,14 @@ class UpstageProfile(ProviderProfile):
 
 
 upstage = UpstageProfile(
-    name="upstage", aliases=("solar",), display_name="Upstage Solar", description="Upstage (Solar API)",
-    signup_url="https://console.upstage.ai/api-keys", env_vars=("UPSTAGE_API_KEY", "UPSTAGE_BASE_URL"),
-    base_url="https://api.upstage.ai/v1", auth_type="api_key",
+    name="upstage",
+    aliases=("solar",),
+    display_name="Upstage Solar",
+    description="Upstage (Solar API)",
+    signup_url="https://console.upstage.ai/api-keys",
+    env_vars=("UPSTAGE_API_KEY", "UPSTAGE_BASE_URL"),
+    base_url="https://api.upstage.ai/v1",
+    auth_type="api_key",
     # No default_aux_model: auxiliary tasks use the main model. [0] is the setup default.
     fallback_models=("solar-pro3",),
 )

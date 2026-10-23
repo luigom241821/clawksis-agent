@@ -63,11 +63,14 @@ def install_root() -> Path:
 
 
 def _install_key(root: Path | None = None) -> str:
-    return hashlib.sha256(os.path.normcase(str(root or install_root())).encode("utf-8")).hexdigest()[:12]
+    return hashlib.sha256(
+        os.path.normcase(str(root or install_root())).encode("utf-8")
+    ).hexdigest()[:12]
 
 
 def record_path() -> Path:
     from clawk_constants import get_default_clawk_root
+
     return get_default_clawk_root() / f"{RECORD_STEM}.{_install_key()}.json"
 
 
@@ -78,6 +81,7 @@ def identity(pid: int | None = None) -> dict:
     (``update_lock.process_create_time``: psutil, else stdlib), so a host without psutil still
     writes a provable identity instead of ``ct=None``."""
     from clawk_cli import update_lock
+
     pid = os.getpid() if pid is None else int(pid)
     created = update_lock.process_create_time(pid)
     return {"pid": pid, "ct": None if created is None else f"ct:{created:.3f}"}
@@ -90,8 +94,12 @@ def identity_is_live(ident: dict | None) -> bool:
     a paused process restarted over, a process that may still be the one recorded.
     """
     from clawk_cli import update_lock
+
     ident = ident or {}
-    return update_lock.incarnation_live(ident.get("pid") or 0, ident.get("ct") or None) is not False
+    return (
+        update_lock.incarnation_live(ident.get("pid") or 0, ident.get("ct") or None)
+        is not False
+    )
 
 
 class RecordConflict(OSError):
@@ -123,6 +131,7 @@ def _mutex(wait_s: float = _MUTEX_WAIT_S):
             _mutex_held.depth -= 1
         return
     from clawk_cli import update_lock
+
     path = record_path().with_name(MUTEX_NAME)
     path.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(path, os.O_RDWR | os.O_CREAT | getattr(os, "O_BINARY", 0), 0o644)
@@ -150,17 +159,25 @@ def _git_executable() -> str:
     found = shutil.which("git")
     if found:
         return found
-    with suppress(Exception):  # health: allow BLE001 -- no PM, no store, no Windows git package: PATH's answer ("git") stands
+    with suppress(
+        Exception
+    ):  # health: allow BLE001 -- no PM, no store, no Windows git package: PATH's answer ("git") stands
         import pm
         from pm import paths
         from pm.lock import Lockfile
 
         recorded = pm.installed_package("git", allow_outdated=True)
-        if recorded is not None and recorded.binary is not None and recorded.binary.is_file():
+        if (
+            recorded is not None
+            and recorded.binary is not None
+            and recorded.binary.is_file()
+        ):
             return str(recorded.binary)
         package, target = pm.get_package("git"), pm.current_target()
         version = Lockfile(paths.lockfile_path()).version("git")
-        staged = package.binary(paths.store_root() / package.store_entry(version, target), target)
+        staged = package.binary(
+            paths.store_root() / package.store_entry(version, target), target
+        )
         if staged is not None and staged.is_file():
             return str(staged)
     return "git"
@@ -170,9 +187,19 @@ def _git(root: Path, *args: str) -> subprocess.CompletedProcess | None:
     """A read-only git query in the updater's custody (``update_custody.run_git``: job-bound on
     Windows inside an update, custody config in argv); ``None`` when git cannot run."""
     from clawk_cli.update_custody import run_git
+
     try:
-        return run_git([_git_executable(), "-C", str(root)], args, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", stdin=subprocess.DEVNULL, timeout=30, check=False)
+        return run_git(
+            [_git_executable(), "-C", str(root)],
+            args,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stdin=subprocess.DEVNULL,
+            timeout=30,
+            check=False,
+        )
     except (OSError, ValueError, subprocess.SubprocessError):
         return None
 
@@ -209,7 +236,9 @@ def stamp_tree(token: dict, root: Path | None = None) -> dict:
     root = root or install_root()
     pause_id = token.setdefault("pause_id", uuid.uuid4().hex)
     baselines = token.setdefault("baselines", [])
-    if not any(b.get("pause_id") == pause_id for b in baselines) and (state := tree_state(root)):
+    if not any(b.get("pause_id") == pause_id for b in baselines) and (
+        state := tree_state(root)
+    ):
         baselines.append({"pause_id": pause_id, **state})
     return token
 
@@ -220,8 +249,11 @@ def tree_state(root: Path) -> dict | None:
         return None
     dirty = tracked_changes(root)
     # The bytes, not just the names: an autostashed edit and git's half-written bytes share a path.
-    return {"pre_sha": head_sha(root), "dirty_at_pause": dirty,
-            "dirty_digests": {path: _digest(root / path) for path in dirty or []}}
+    return {
+        "pre_sha": head_sha(root),
+        "dirty_at_pause": dirty,
+        "dirty_digests": {path: _digest(root / path) for path in dirty or []},
+    }
 
 
 def _digest(path: Path) -> str | None:
@@ -239,7 +271,9 @@ def mark_move(token: dict | None, target: str) -> None:
         return
     for baseline in token.get("baselines") or []:
         if baseline.get("pause_id") == token["pause_id"]:
-            baseline["move_targets"] = sorted({*baseline.get("move_targets", []), target})
+            baseline["move_targets"] = sorted(
+                {*baseline.get("move_targets", []), target}
+            )
     write({**token, "resume_needed": True})
 
 
@@ -251,7 +285,9 @@ def _paths_between(root: Path, targets) -> set[str] | None:
     merge toward them can write; ``None`` when git cannot say."""
     paths: set[str] = set()
     for target in sorted(targets):
-        diff = _git(root, "diff", "--name-only", "-z", "--no-renames", "HEAD", target, "--")
+        diff = _git(
+            root, "diff", "--name-only", "-z", "--no-renames", "HEAD", target, "--"
+        )
         if diff is None or diff.returncode != 0:
             return None
         paths.update(filter(None, diff.stdout.split("\0")))
@@ -267,12 +303,18 @@ def _paths_a_move_could_write(root: Path) -> set[str] | None:
     if where is None or where.returncode != 0 or refs is None or refs.returncode != 0:
         return None
     try:
-        fetched = (root / where.stdout.strip()).read_text(encoding="utf-8-sig", errors="replace").split("\n")
+        fetched = (
+            (root / where.stdout.strip())
+            .read_text(encoding="utf-8-sig", errors="replace")
+            .split("\n")
+        )
     except FileNotFoundError:
         fetched = []
     except OSError:
         return None
-    targets = {line.split()[0] for line in fetched if line.split()} | set(refs.stdout.split())
+    targets = {line.split()[0] for line in fetched if line.split()} | set(
+        refs.stdout.split()
+    )
     if not targets or len(targets) > _MAX_MOVE_TARGETS:
         return None
     return _paths_between(root, targets)
@@ -295,29 +337,51 @@ def _half_written(root: Path, changes: list[str], at_head: list[dict]) -> list[s
     The move is the one recorded before it ran, so a later fetch never narrows it; with none
     recorded the fetched refs stand in, and when even those are unknown every unseen change counts."""
     for baseline in at_head:
-        unexpected = sorted(path for path in changes if not _seen_at_pause(root, baseline, path))
+        unexpected = sorted(
+            path for path in changes if not _seen_at_pause(root, baseline, path)
+        )
         if not unexpected:
             continue
         # move_paths: files a step rewrote toward this HEAD (stash push/apply, reset, checkout --).
         targets, paths = baseline.get("move_targets"), baseline.get("move_paths")
-        writable = _paths_between(root, targets) if targets else set() if paths else _paths_a_move_could_write(root)
-        torn = unexpected if writable is None else [path for path in unexpected if path in {*writable, *(paths or ())}]
+        writable = (
+            _paths_between(root, targets)
+            if targets
+            else set()
+            if paths
+            else _paths_a_move_could_write(root)
+        )
+        torn = (
+            unexpected
+            if writable is None
+            else [path for path in unexpected if path in {*writable, *(paths or ())}]
+        )
         if torn:
             return torn
     return []
 
 
-def torn_by_move(root: Path, found: dict, changes: list[str] | None) -> list[str] | None:
+def torn_by_move(
+    root: Path, found: dict, changes: list[str] | None
+) -> list[str] | None:
     """Paths a move from *found*'s HEAD to the current one wrote that do not hold the current
     commit's bytes: tracked changes on them that were not already there, byte for byte, when the
     move started. ``None`` when git cannot say."""
-    writable = _paths_between(root, [found["pre_sha"]]) if found.get("pre_sha") else None
+    writable = (
+        _paths_between(root, [found["pre_sha"]]) if found.get("pre_sha") else None
+    )
     if writable is None or changes is None:
         return None
-    return sorted(path for path in changes if path in writable and not _seen_at_pause(root, found, path))
+    return sorted(
+        path
+        for path in changes
+        if path in writable and not _seen_at_pause(root, found, path)
+    )
 
 
-def _landed_torn(root: Path, head: str, changes: list[str], landed: list[dict]) -> list[str]:
+def _landed_torn(
+    root: Path, head: str, changes: list[str], landed: list[dict]
+) -> list[str]:
     """Tracked changes at a HEAD a recorded move reached that are not that commit's bytes. git can
     move HEAD past a file it failed to write (``checkout`` exits 0 after "unable to unlink old"),
     so a moved HEAD vouches for nothing by itself. The verdict the updater took the moment git
@@ -327,7 +391,11 @@ def _landed_torn(root: Path, head: str, changes: list[str], landed: list[dict]) 
         verdict = (baseline.get("landed") or {}).get(head)
         if verdict is None:
             verdict = torn_by_move(root, baseline, changes)
-        torn = list(changes) if verdict is None else [path for path in verdict if path in changes]
+        torn = (
+            list(changes)
+            if verdict is None
+            else [path for path in verdict if path in changes]
+        )
         if torn:
             return torn
     return []
@@ -343,14 +411,20 @@ def _deps_hold_resume(root: Path) -> bool:
     did before the pause was durable, and a currency the probe cannot establish never holds it
     either — the restarted gateway's own launch syncs or reports the remedy.
     """
-    if (os.environ.get("CLAWK_DISABLE_LAZY_INSTALLS", "").lower() in ("1", "true", "yes")
-            or not (root / ".git").exists() or not (root / "pyproject.toml").is_file()):
+    if (
+        os.environ.get("CLAWK_DISABLE_LAZY_INSTALLS", "").lower()
+        in ("1", "true", "yes")
+        or not (root / ".git").exists()
+        or not (root / "pyproject.toml").is_file()
+    ):
         return False  # prepare_launch skips the sync: waiting would never end
     try:
         from clawk_cli.steward import read_install_stamp
+
         if read_install_stamp(root).get("updateMechanism") != "self":
             return False
         import pm
+
         return not pm.venv_is_current(project_root=root)
     except Exception:  # health: allow BLE001 -- unknown currency must not strand the set: resume, the gateway's own launch syncs or names the remedy
         return False
@@ -366,13 +440,16 @@ def _paused_on_unreadable_head(token: dict) -> bool:
     """
     baselines = token.get("baselines") or []
     return bool(baselines) and all(
-        b.get("pre_sha") is None and not (b.get("move_targets") or b.get("move_paths") or b.get("landed"))
-        for b in baselines)
+        b.get("pre_sha") is None
+        and not (b.get("move_targets") or b.get("move_paths") or b.get("landed"))
+        for b in baselines
+    )
 
 
 def tree_is_whole(token: dict, root: Path | None = None) -> tuple[bool, str]:
     """May paused gateways start on this checkout now? ``(verdict, reason when not)``."""
     from clawk_cli._early_recovery import interrupted_pull_marker
+
     root = root or install_root()
     if (root / ".git").exists():
         if interrupted_pull_marker(root).exists():
@@ -385,8 +462,14 @@ def tree_is_whole(token: dict, root: Path | None = None) -> tuple[bool, str]:
         baselines = token.get("baselines") or []
         at_head = [b for b in baselines if b.get("pre_sha") == head]
         # HEAD reached by a move these pauses recorded: judged against that commit's tree.
-        landed = [b for b in baselines if b.get("pre_sha") != head
-                  and (head in (b.get("landed") or {}) or head in (b.get("move_targets") or []))]
+        landed = [
+            b
+            for b in baselines
+            if b.get("pre_sha") != head
+            and (
+                head in (b.get("landed") or {}) or head in (b.get("move_targets") or [])
+            )
+        ]
         if at_head or landed:
             # HEAD never moved for the at_head pauses: a tracked change one of them did not see is
             # git's half-written checkout. Each is judged on its own set — a killed run that moved
@@ -394,9 +477,14 @@ def tree_is_whole(token: dict, root: Path | None = None) -> tuple[bool, str]:
             changes = tracked_changes(root)
             if changes is None:
                 return False, "git cannot read the checkout state"
-            torn = _half_written(root, changes, at_head) or _landed_torn(root, head, changes, landed)
+            torn = _half_written(root, changes, at_head) or _landed_torn(
+                root, head, changes, landed
+            )
             if torn:
-                return False, f"the checkout has {len(torn)} file(s) git left half-written (e.g. {torn[0]})"
+                return (
+                    False,
+                    f"the checkout has {len(torn)} file(s) git left half-written (e.g. {torn[0]})",
+                )
             if at_head:
                 return True, ""
     if _deps_hold_resume(root):
@@ -432,13 +520,17 @@ def read(path: Path | None = None) -> dict | None:
     except FileNotFoundError:
         return None
     except OSError as exc:
-        raise RecordUnknown(f"cannot read the paused-gateway record {path}: {exc}") from exc
+        raise RecordUnknown(
+            f"cannot read the paused-gateway record {path}: {exc}"
+        ) from exc
     try:
         body = json.loads(text)
     except ValueError:
         body = None
     if not isinstance(body, dict) or not isinstance(body.get("token"), dict):
-        raise RecordUnknown(f"the paused-gateway record {path} is malformed; fix or remove it to resume")
+        raise RecordUnknown(
+            f"the paused-gateway record {path} is malformed; fix or remove it to resume"
+        )
     return body
 
 
@@ -451,16 +543,30 @@ def write(token: dict, *, owner: dict | None = None, path: Path | None = None) -
     path = path or record_path()
     with _mutex():
         existing = read(path)
-        same = existing is not None and existing["token"].get("pause_id") == token.get("pause_id")
+        same = existing is not None and existing["token"].get("pause_id") == token.get(
+            "pause_id"
+        )
         if existing is not None and not same:
             if existing.get("install_root") != str(install_root()):
-                raise RecordConflict(f"{path} holds gateways paused for another checkout ({existing.get('install_root')})")
+                raise RecordConflict(
+                    f"{path} holds gateways paused for another checkout ({existing.get('install_root')})"
+                )
             if identity_is_live(existing.get("owner")):
-                raise RecordConflict(f"{path} holds gateways paused by live process {existing['owner'].get('pid')}")
+                raise RecordConflict(
+                    f"{path} holds gateways paused by live process {existing['owner'].get('pid')}"
+                )
             merge_into(token, drop_never_stopped(dict(existing["token"])))
         if owner is None:
             owner = existing["owner"] if same and existing is not None else identity()
-        _atomic_write(path, {"schema": 1, "owner": owner, "install_root": str(install_root()), "token": token})
+        _atomic_write(
+            path,
+            {
+                "schema": 1,
+                "owner": owner,
+                "install_root": str(install_root()),
+                "token": token,
+            },
+        )
 
 
 def mark_stop_requested(token: dict, pids, markers: dict | None = None) -> None:
@@ -468,10 +574,15 @@ def mark_stop_requested(token: dict, pids, markers: dict | None = None) -> None:
     gateway's request (its planned-stop marker) will be written. Intent is not a request: a live
     process counts as asked only once the producer or consumer checkpoints it, or while the
     valid request this update wrote is still on disk (:func:`_asked`)."""
-    token["stop_requested"] = sorted({*map(str, token.get("stop_requested") or []), *(str(int(p)) for p in pids)})
+    token["stop_requested"] = sorted(
+        {*map(str, token.get("stop_requested") or []), *(str(int(p)) for p in pids)}
+    )
     token["stop_sent"] = sorted(map(str, token.get("stop_sent") or []))
     token["stopper_pid"] = os.getpid()
-    token["stop_markers"] = {**(token.get("stop_markers") or {}), **{str(int(p)): str(m) for p, m in (markers or {}).items()}}
+    token["stop_markers"] = {
+        **(token.get("stop_markers") or {}),
+        **{str(int(p)): str(m) for p, m in (markers or {}).items()},
+    }
     write(token, owner=identity())
 
 
@@ -480,7 +591,9 @@ def mark_stop_sent(token: dict, pid) -> None:
     POSIX pause records it just before its socket request): from here a live *pid* is draining and
     keeps its restart debt until it exits. Best effort: the marker itself is evidence until this
     lands; its consumer checkpoints before unlinking it."""
-    token["stop_sent"] = sorted({*map(str, token.get("stop_sent") or []), str(int(pid))})
+    token["stop_sent"] = sorted(
+        {*map(str, token.get("stop_sent") or []), str(int(pid))}
+    )
     try:
         write(token, owner=identity())
     except OSError as exc:
@@ -494,13 +607,17 @@ def mark_stop_consumed(path: Path, marker: dict) -> None:
     this is evidence of a stop, not a transfer of the updater's custody.
     """
     from gateway.status import _same_clawk_home
+
     pid = str(marker["target_pid"])
     for src, body in _files(record_path()):
         token = body["token"]
         recorded_path = (token.get("stop_markers") or {}).get(pid)
-        if (str(token.get("stopper_pid")) != str(marker.get("stopper_pid"))
-                or pid not in (token.get("stop_requested") or [])
-                or not recorded_path or not _same_clawk_home(recorded_path, path)):
+        if (
+            str(token.get("stopper_pid")) != str(marker.get("stopper_pid"))
+            or pid not in (token.get("stop_requested") or [])
+            or not recorded_path
+            or not _same_clawk_home(recorded_path, path)
+        ):
             continue
         token["stop_sent"] = sorted({*map(str, token.get("stop_sent") or []), pid})
         _atomic_write(src, body)  # Failure leaves the request intact for recovery.
@@ -524,13 +641,18 @@ def mark_stop_accepted(path: Path, marker: dict) -> None:
     except OSError as exc:
         refused = exc
     try:
-        with open(path, "r+", encoding="utf-8") as fh:  # r+: never creates a request that was not there
+        with open(
+            path, "r+", encoding="utf-8"
+        ) as fh:  # r+: never creates a request that was not there
             json.dump({**marker, "accepted": True}, fh)
             fh.truncate()
             fh.flush()
             os.fsync(fh.fileno())
     except OSError as exc:
-        print(f"  ⚠ Could not record the accepted stop request {path}: {refused}; {exc}", file=sys.stderr)
+        print(
+            f"  ⚠ Could not record the accepted stop request {path}: {refused}; {exc}",
+            file=sys.stderr,
+        )
 
 
 def discharge(token: dict, path: Path | None = None) -> None:
@@ -538,7 +660,9 @@ def discharge(token: dict, path: Path | None = None) -> None:
     path = path or record_path()
     with _mutex():
         existing = read(path)
-        if existing is not None and existing["token"].get("pause_id") == token.get("pause_id"):
+        if existing is not None and existing["token"].get("pause_id") == token.get(
+            "pause_id"
+        ):
             _retire(path, [(path, existing)])
 
 
@@ -561,8 +685,11 @@ def _live_update_elsewhere() -> bool:
     """A live update other than the one this process belongs to. The update tree holding the
     checkout lock (this process plus the partner whose marker it adopted) is not "elsewhere"."""
     from clawk_cli import update_lock
+
     root = install_root()
-    return not update_lock.holds_checkout_lock(root) and update_lock.update_in_progress(root)
+    return not update_lock.holds_checkout_lock(root) and update_lock.update_in_progress(
+        root
+    )
 
 
 def _claims(path: Path) -> list[Path]:
@@ -583,10 +710,15 @@ def _retired(path: Path) -> set[str]:
     except FileNotFoundError:
         return set()
     except OSError as exc:  # a refused read (sharing violation, AV scanner): unknown
-        raise RetiredUnknown(f"cannot read the retired paused-gateway list {target}: {exc}") from exc
+        raise RetiredUnknown(
+            f"cannot read the retired paused-gateway list {target}: {exc}"
+        ) from exc
     try:
         ids = json.loads(text).get("ids")
-    except (ValueError, AttributeError):  # not JSON / not an object: malformed, like a non-list
+    except (
+        ValueError,
+        AttributeError,
+    ):  # not JSON / not an object: malformed, like a non-list
         ids = None
     if not isinstance(ids, list):
         return _quarantine_retired(path, target)
@@ -603,9 +735,13 @@ def _quarantine_retired(path: Path, target: Path) -> set[str]:
     try:
         os.replace(target, corrupt)
     except OSError as exc:
-        raise RetiredUnknown(f"cannot set aside the malformed retired paused-gateway list {target}: {exc}") from exc
-    print(f"  ⚠ Set aside a malformed paused-gateway history (no paused set refers to it): {corrupt}",
-          file=sys.stderr)
+        raise RetiredUnknown(
+            f"cannot set aside the malformed retired paused-gateway list {target}: {exc}"
+        ) from exc
+    print(
+        f"  ⚠ Set aside a malformed paused-gateway history (no paused set refers to it): {corrupt}",
+        file=sys.stderr,
+    )
     return set()
 
 
@@ -613,8 +749,12 @@ def _retire(path: Path, carriers: list[tuple[Path, dict]]) -> None:
     """Complete the obligations *carriers* hold (call under the mutex): their ids (and every id
     they absorbed) go on the durable retired list FIRST; a failed read or write raises and deletes
     nothing. Then the files go; one that cannot be deleted is a redundant copy from here on."""
-    ids = {str(i) for _src, body in carriers
-           for i in [body["token"].get("pause_id"), *(body["token"].get("absorbed") or [])] if i}
+    ids = {
+        str(i)
+        for _src, body in carriers
+        for i in [body["token"].get("pause_id"), *(body["token"].get("absorbed") or [])]
+        if i
+    }
     retired = _retired(path)
     if not ids <= retired:
         _atomic_write(_retired_path(path), {"schema": 1, "ids": sorted(retired | ids)})
@@ -639,7 +779,9 @@ def _files(path: Path) -> list[tuple[Path, dict]]:
     return found
 
 
-def _redundant(found: list[tuple[Path, dict]], held: set[Path], retired: set[str] = frozenset()) -> set[Path]:
+def _redundant(
+    found: list[tuple[Path, dict]], held: set[Path], retired: set[str] = frozenset()
+) -> set[Path]:
     """Files that only copy an obligation another file carries or that was completed: a source an
     update absorbed but died before retiring, one of two same-id files a claim transfer left (the
     furthest-progressed copy is kept), a retired id's leftover. Never a held file."""
@@ -679,7 +821,9 @@ def orphans(path: Path | None = None) -> list[tuple[Path, dict]]:
         return []
     with _mutex():
         found, held, redundant = _survey(path)
-    found = [(src, body) for src, body in found if src not in held and src not in redundant]
+    found = [
+        (src, body) for src, body in found if src not in held and src not in redundant
+    ]
     if not found or _live_update_elsewhere():
         return []
     return found
@@ -728,7 +872,9 @@ def claim(src: Path) -> tuple[Path, dict] | None:
             if src in held or src in redundant or src not in {s for s, _ in _found}:
                 return None
             body["claimer"] = identity()
-            body["rev"] = int(body.get("rev") or 0) + 1  # a copy left behind is never the newer one
+            body["rev"] = (
+                int(body.get("rev") or 0) + 1
+            )  # a copy left behind is never the newer one
             _atomic_write(mine, body)
             with suppress(OSError):
                 src.unlink()
@@ -772,8 +918,16 @@ def record_pause(token: dict, adopted: dict | None, claims: list[Path]) -> dict:
     return token
 
 
-_CARRIED = ("pause_id", "baselines", "identities", "stop_requested", "stop_sent", "stopper_pid",
-            "stop_markers", "absorbed")
+_CARRIED = (
+    "pause_id",
+    "baselines",
+    "identities",
+    "stop_requested",
+    "stop_sent",
+    "stopper_pid",
+    "stop_markers",
+    "absorbed",
+)
 
 
 def finish_pause(token: dict, intended: dict, adopted: dict | None) -> dict:
@@ -791,20 +945,37 @@ def abandon_pause(intended: dict, adopted: dict | None) -> None:
     if adopted is None:
         discharge(intended)
         return
-    carried = {key: intended[key] for key in ("pause_id", "baselines", "absorbed") if key in intended}
+    carried = {
+        key: intended[key]
+        for key in ("pause_id", "baselines", "absorbed")
+        if key in intended
+    }
     write({**adopted, **carried}, owner=UNOWNED)
 
 
 def _live_pids(token: dict) -> set[str]:
-    return {str(pid) for pid, ct in (token.get("identities") or {}).items()
-            if identity_is_live({"pid": pid, "ct": ct})}
+    return {
+        str(pid)
+        for pid, ct in (token.get("identities") or {}).items()
+        if identity_is_live({"pid": pid, "ct": ct})
+    }
 
 
 def _without(token: dict, pids: set[str]) -> dict:
-    token["profiles"] = {p: pid for p, pid in (token.get("profiles") or {}).items() if str(pid) not in pids}
-    token["unmapped"] = [u for u in (token.get("unmapped") or []) if str(u.get("pid")) not in pids]
-    if "posix_units" in token:  # supervised POSIX entries (update_cmd_posix_pause) are judged like the rest
-        token["posix_units"] = [u for u in token["posix_units"] or [] if str(u.get("pid")) not in pids]
+    token["profiles"] = {
+        p: pid
+        for p, pid in (token.get("profiles") or {}).items()
+        if str(pid) not in pids
+    }
+    token["unmapped"] = [
+        u for u in (token.get("unmapped") or []) if str(u.get("pid")) not in pids
+    ]
+    if (
+        "posix_units" in token
+    ):  # supervised POSIX entries (update_cmd_posix_pause) are judged like the rest
+        token["posix_units"] = [
+            u for u in token["posix_units"] or [] if str(u.get("pid")) not in pids
+        ]
     return token
 
 
@@ -818,10 +989,13 @@ def _request_on_disk(token: dict, pid: str) -> bool | None:
     if not path:
         return False
     from gateway.status import _PLANNED_STOP_MARKER_TTL_S
+
     # An unconsumed request expires; the receipt of an accepted one is evidence for the whole drain
     # (only the accepting incarnation is ever judged: a later one is not this entry's live process).
-    verdicts = (_names_request(token, pid, Path(path), _PLANNED_STOP_MARKER_TTL_S),
-                _names_request(token, pid, _accepted_path(Path(path)), None))
+    verdicts = (
+        _names_request(token, pid, Path(path), _PLANNED_STOP_MARKER_TTL_S),
+        _names_request(token, pid, _accepted_path(Path(path)), None),
+    )
     return True if True in verdicts else None if None in verdicts else False
 
 
@@ -830,6 +1004,7 @@ def _names_request(token: dict, pid: str, path: Path, ttl_s: int | None) -> bool
     valid one naming something else is ``False``; refused (a sharing violation, an AV scanner) or
     malformed is ``None``, unknown."""
     from gateway.status import _marker_is_stale, get_process_start_time
+
     try:
         marker = json.loads(path.read_text(encoding="utf-8-sig"))
         target, stopper = int(marker["target_pid"]), int(marker["stopper_pid"])
@@ -837,9 +1012,15 @@ def _names_request(token: dict, pid: str, path: Path, ttl_s: int | None) -> bool
         return False
     except (OSError, ValueError, TypeError, KeyError):
         return None
-    if (target != int(pid) or stopper != int(token.get("stopper_pid") or 0)
-            or (ttl_s is not None and not marker.get("accepted")
-                and _marker_is_stale(marker.get("written_at") or "", ttl_s))):
+    if (
+        target != int(pid)
+        or stopper != int(token.get("stopper_pid") or 0)
+        or (
+            ttl_s is not None
+            and not marker.get("accepted")
+            and _marker_is_stale(marker.get("written_at") or "", ttl_s)
+        )
+    ):
         return False
     expected, actual = marker.get("target_start_time"), get_process_start_time(int(pid))
     # Match the consumer's optional birth fingerprint, including unavailable clocks.
@@ -850,8 +1031,14 @@ def _asked(token: dict) -> tuple[set[str], set[str]]:
     """``(asked, unknown)``: pids this update actually asked to stop (recorded as sent, or whose
     request is still on disk), and pids whose request evidence exists but cannot be read."""
     sent = {str(p) for p in token.get("stop_sent") or []}
-    verdicts = {str(p): _request_on_disk(token, str(p)) for p in token.get("stop_requested") or [] if str(p) not in sent}
-    return sent | {p for p, v in verdicts.items() if v}, {p for p, v in verdicts.items() if v is None}
+    verdicts = {
+        str(p): _request_on_disk(token, str(p))
+        for p in token.get("stop_requested") or []
+        if str(p) not in sent
+    }
+    return sent | {p for p, v in verdicts.items() if v}, {
+        p for p, v in verdicts.items() if v is None
+    }
 
 
 def drop_never_stopped(token: dict) -> dict:
@@ -874,9 +1061,19 @@ def split_draining(token: dict) -> dict:
     """Remove and return ``{"profiles", "unmapped", "posix_units"}`` whose recorded process is still
     running: it was asked to stop and has not exited yet, so it can only be restarted once it has."""
     live = _live_pids(token)
-    draining = {"profiles": {p: pid for p, pid in (token.get("profiles") or {}).items() if str(pid) in live},
-                "unmapped": [u for u in (token.get("unmapped") or []) if str(u.get("pid")) in live],
-                "posix_units": [u for u in (token.get("posix_units") or []) if str(u.get("pid")) in live]}
+    draining = {
+        "profiles": {
+            p: pid
+            for p, pid in (token.get("profiles") or {}).items()
+            if str(pid) in live
+        },
+        "unmapped": [
+            u for u in (token.get("unmapped") or []) if str(u.get("pid")) in live
+        ],
+        "posix_units": [
+            u for u in (token.get("posix_units") or []) if str(u.get("pid")) in live
+        ],
+    }
     _without(token, live)
     return draining
 
@@ -884,7 +1081,16 @@ def split_draining(token: dict) -> dict:
 def merge_into(token: dict | None, adopted: dict) -> dict:
     """Fold an orphaned pause into this update's token so its resume brings both sets back; its
     obligation id (and every id it absorbed) is recorded so a leftover copy is never resumed twice."""
-    token = token if token is not None else {"resume_needed": True, "profiles": {}, "unmapped_pids": [], "unmapped": []}
+    token = (
+        token
+        if token is not None
+        else {
+            "resume_needed": True,
+            "profiles": {},
+            "unmapped_pids": [],
+            "unmapped": [],
+        }
+    )
     token["resume_needed"] = True
     # Every pause keeps its own tree evidence: the adopted baseline stops this run's stamp from
     # certifying what a killed update left half-written as "dirty before the pause", and this
@@ -892,7 +1098,11 @@ def merge_into(token: dict | None, adopted: dict) -> dict:
     baselines = token.setdefault("baselines", [])
     baselines.extend(b for b in adopted.get("baselines") or [] if b not in baselines)
     absorbed = token.setdefault("absorbed", [])
-    absorbed.extend(i for i in [adopted.get("pause_id"), *(adopted.get("absorbed") or [])] if i and i not in absorbed)
+    absorbed.extend(
+        i
+        for i in [adopted.get("pause_id"), *(adopted.get("absorbed") or [])]
+        if i and i not in absorbed
+    )
     profiles = token.setdefault("profiles", {})
     for name, pid in (adopted.get("profiles") or {}).items():
         profiles.setdefault(name, pid)
@@ -903,10 +1113,16 @@ def merge_into(token: dict | None, adopted: dict) -> dict:
         identities.setdefault(pid, ct)
     if "stop_requested" in adopted or "stop_requested" in token:
         requested, sent = adopted.get("stop_requested"), adopted.get("stop_sent")
-        if requested is None:  # a set with no stop record keeps every live entry: all count as asked
+        if (
+            requested is None
+        ):  # a set with no stop record keeps every live entry: all count as asked
             requested = sent = list(adopted.get("identities") or {})
-        token["stop_requested"] = sorted({*map(str, token.get("stop_requested") or []), *map(str, requested)})
-        token["stop_sent"] = sorted({*map(str, token.get("stop_sent") or []), *map(str, sent or [])})
+        token["stop_requested"] = sorted(
+            {*map(str, token.get("stop_requested") or []), *map(str, requested)}
+        )
+        token["stop_sent"] = sorted(
+            {*map(str, token.get("stop_sent") or []), *map(str, sent or [])}
+        )
     cold = token.setdefault("cold_start_profiles", {})
     for name, generation in (adopted.get("cold_start_profiles") or {}).items():
         cold.setdefault(name, generation)
@@ -914,32 +1130,47 @@ def merge_into(token: dict | None, adopted: dict) -> dict:
         token["cold_start_if_installed"] = True
         if "attested_generation" in adopted:
             token.setdefault("attested_generation", adopted["attested_generation"])
-    if adopted.get("platform"):  # a POSIX set (update_cmd_posix_pause): its supervised units ride along
+    if adopted.get(
+        "platform"
+    ):  # a POSIX set (update_cmd_posix_pause): its supervised units ride along
         token["platform"] = adopted["platform"]
         units = token.setdefault("posix_units", [])
         units.extend(u for u in adopted.get("posix_units") or [] if u not in units)
     services = token.setdefault("services", [])
     services.extend(s for s in adopted.get("services") or [] if s not in services)
     if services:
-        token.setdefault("expected_services", []).extend(s for s in services if s not in token["expected_services"])
+        token.setdefault("expected_services", []).extend(
+            s for s in services if s not in token["expected_services"]
+        )
         token.setdefault("restarted_services", [])
-        token.setdefault("service_profiles", {}).update(adopted.get("service_profiles") or {})
+        token.setdefault("service_profiles", {}).update(
+            adopted.get("service_profiles") or {}
+        )
     return token
 
 
 def _has_work(token: dict) -> bool:
-    return bool(token.get("profiles") or any(u.get("argv") for u in token.get("unmapped") or [])
-                or token.get("services") or token.get("posix_units") or token.get("cold_start_if_installed") or token.get("cold_start_profiles"))
+    return bool(
+        token.get("profiles")
+        or any(u.get("argv") for u in token.get("unmapped") or [])
+        or token.get("services")
+        or token.get("posix_units")
+        or token.get("cold_start_if_installed")
+        or token.get("cold_start_profiles")
+    )
 
 
 def _resume_claimed(claim_path: Path, body: dict) -> None:
     """Resume under the checkout lock, so no update mutates the tree between the gate and the
     verified start; an update that took the checkout after our claim gets the set back untouched."""
     from clawk_cli.update_lock import UpdateLock
+
     fence = UpdateLock()
     if not fence.acquire_checkout(install_root()):
         with suppress(OSError), _mutex():
-            _atomic_write(claim_path, {**(read(claim_path) or body), "claimer": UNOWNED})
+            _atomic_write(
+                claim_path, {**(read(claim_path) or body), "claimer": UNOWNED}
+            )
         return
     try:
         _resume_fenced(claim_path, body)
@@ -958,16 +1189,25 @@ def _resume_fenced(claim_path: Path, body: dict) -> None:
     token.update(resume_needed=True, recovery=True)
     try:
         if _has_work(token):
-            print("→ Restarting gateway(s) paused by an interrupted `clawk update`...", file=sys.stderr)
-            from clawk_cli.update_cmd_windows import _resume_windows_gateways_after_update
+            print(
+                "→ Restarting gateway(s) paused by an interrupted `clawk update`...",
+                file=sys.stderr,
+            )
+            from clawk_cli.update_cmd_windows import (
+                _resume_windows_gateways_after_update,
+            )
+
             # Whatever command this launch runs owns stdout (``--json`` output, a Desktop pipe).
             with redirect_stdout(sys.stderr):
                 _resume_windows_gateways_after_update(token)
         else:
             token["resume_needed"] = False
     except Exception as exc:  # health: allow BLE001 -- recovery boundary: any resume error is reported and the claim handed back (finally), never raised into the launch
-        print(f"  ⚠ Could not restart every paused gateway: {exc}. Run `clawk update` or "
-              "`clawk gateway start`.", file=sys.stderr)
+        print(
+            f"  ⚠ Could not restart every paused gateway: {exc}. Run `clawk update` or "
+            "`clawk gateway start`.",
+            file=sys.stderr,
+        )
     finally:
         _back_off_unready(token, attempted, draining)
         _hand_back(claim_path, body, token, draining)
@@ -982,22 +1222,45 @@ _RELAUNCH_RETRY_MAX_S = 3600.0
 
 
 def _relaunch_keys(token: dict) -> set[str]:
-    return ({f"profile:{name}" for name in token.get("profiles") or {}}
-            | {f"unmapped:{u.get('pid')}" for u in token.get("unmapped") or [] if u.get("argv")}
-            | {f"unit:{u.get('unit') or u.get('label')}" for u in token.get("posix_units") or []})
+    return (
+        {f"profile:{name}" for name in token.get("profiles") or {}}
+        | {
+            f"unmapped:{u.get('pid')}"
+            for u in token.get("unmapped") or []
+            if u.get("argv")
+        }
+        | {
+            f"unit:{u.get('unit') or u.get('label')}"
+            for u in token.get("posix_units") or []
+        }
+    )
 
 
 def _hold_backing_off(token: dict, held: dict) -> None:
     """Move the profile/unmapped/supervised entries still inside their relaunch backoff from *token*
     into *held* (beside the draining ones): owed, not relaunched by this launch."""
     now = time.time()
-    waiting = {key for key, state in (token.get("relaunch_retry") or {}).items() if now < float(state.get("next_at") or 0)}
-    held["profiles"].update({n: p for n, p in token["profiles"].items() if f"profile:{n}" in waiting})
-    held["unmapped"].extend(u for u in token["unmapped"] if u.get("argv") and f"unmapped:{u.get('pid')}" in waiting)
-    token["profiles"] = {n: p for n, p in token["profiles"].items() if f"profile:{n}" not in waiting}
+    waiting = {
+        key
+        for key, state in (token.get("relaunch_retry") or {}).items()
+        if now < float(state.get("next_at") or 0)
+    }
+    held["profiles"].update(
+        {n: p for n, p in token["profiles"].items() if f"profile:{n}" in waiting}
+    )
+    held["unmapped"].extend(
+        u
+        for u in token["unmapped"]
+        if u.get("argv") and f"unmapped:{u.get('pid')}" in waiting
+    )
+    token["profiles"] = {
+        n: p for n, p in token["profiles"].items() if f"profile:{n}" not in waiting
+    }
     token["unmapped"] = [u for u in token["unmapped"] if u not in held["unmapped"]]
     if units := token.get("posix_units"):
-        held["posix_units"].extend(u for u in units if f"unit:{u.get('unit') or u.get('label')}" in waiting)
+        held["posix_units"].extend(
+            u for u in units if f"unit:{u.get('unit') or u.get('label')}" in waiting
+        )
         token["posix_units"] = [u for u in units if u not in held["posix_units"]]
 
 
@@ -1012,10 +1275,18 @@ def _back_off_unready(token: dict, attempted: set[str], held: dict) -> None:
                 retry.pop(key, None)
                 continue
             attempts = int((retry.get(key) or {}).get("attempts") or 0) + 1
-            retry[key] = {"attempts": attempts, "next_at": time.time() + min(
-                _RELAUNCH_RETRY_BASE_S * 2 ** min(attempts - 1, 6), _RELAUNCH_RETRY_MAX_S)}
+            retry[key] = {
+                "attempts": attempts,
+                "next_at": time.time()
+                + min(
+                    _RELAUNCH_RETRY_BASE_S * 2 ** min(attempts - 1, 6),
+                    _RELAUNCH_RETRY_MAX_S,
+                ),
+            }
     owed = _relaunch_keys(token) | _relaunch_keys(held)
-    token["relaunch_retry"] = {key: state for key, state in retry.items() if key in owed}
+    token["relaunch_retry"] = {
+        key: state for key, state in retry.items() if key in owed
+    }
 
 
 def _hand_back(claim_path: Path, body: dict, token: dict, draining: dict) -> None:
@@ -1026,13 +1297,28 @@ def _hand_back(claim_path: Path, body: dict, token: dict, draining: dict) -> Non
     token["profiles"] = {**(token.get("profiles") or {}), **draining["profiles"]}
     token["unmapped"] = [*(token.get("unmapped") or []), *draining["unmapped"]]
     if draining.get("posix_units"):
-        token["posix_units"] = [*(token.get("posix_units") or []), *draining["posix_units"]]
-    owed = bool(token.get("resume_needed") or token.get("resume_deferred") or draining["profiles"]
-                or draining["unmapped"] or draining.get("posix_units"))
+        token["posix_units"] = [
+            *(token.get("posix_units") or []),
+            *draining["posix_units"],
+        ]
+    owed = bool(
+        token.get("resume_needed")
+        or token.get("resume_deferred")
+        or draining["profiles"]
+        or draining["unmapped"]
+        or draining.get("posix_units")
+    )
     with suppress(OSError), _mutex():
         if owed:
-            kept = {key: value for key, value in token.items() if key not in ("recovery", "resume_deferred")}
-            _atomic_write(claim_path, {**body, "token": {**kept, "resume_needed": True}, "claimer": UNOWNED})
+            kept = {
+                key: value
+                for key, value in token.items()
+                if key not in ("recovery", "resume_deferred")
+            }
+            _atomic_write(
+                claim_path,
+                {**body, "token": {**kept, "resume_needed": True}, "claimer": UNOWNED},
+            )
         else:
             _retire(record_path(), [(claim_path, read(claim_path) or body)])
 
@@ -1040,6 +1326,7 @@ def _hand_back(claim_path: Path, body: dict, token: dict, draining: dict) -> Non
 def recover(argv: list[str] | None = None) -> None:
     """Start-of-run recovery: resume every orphaned pause. Never raises."""
     from clawk_cli._parser import command_argv
+
     command = command_argv(list(sys.argv[1:] if argv is None else argv))
     if command[:1] == ["update"] or command[:2] == ["gateway", "run"]:
         return  # the update adopts it itself; a booting gateway must not block on its siblings

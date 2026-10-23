@@ -15,6 +15,7 @@
 does acquire the profile's terminal environment (creating the container if needed) because a screen cannot
 exist before the sandbox does.
 """
+
 from __future__ import annotations
 
 import logging
@@ -31,13 +32,14 @@ _STREAM_BACKENDS = ("docker", "ssh")
 
 @dataclass(frozen=True)
 class Placement:
-    where: str            # GATEWAY | TERMINAL | REFUSED
-    backend: str          # terminal.backend as configured
-    reason: str = ""      # human sentence when REFUSED (or why TERMINAL was not possible)
+    where: str  # GATEWAY | TERMINAL | REFUSED
+    backend: str  # terminal.backend as configured
+    reason: str = ""  # human sentence when REFUSED (or why TERMINAL was not possible)
 
 
 def _setting() -> str:
     from clawk_cli.config import load_config_readonly
+
     cfg = load_config_readonly().get("bot_desktop") or {}
     value = str(cfg.get("placement") or "auto").strip().lower()
     return value if value in ("auto", TERMINAL, GATEWAY) else "auto"
@@ -45,11 +47,13 @@ def _setting() -> str:
 
 def _terminal_backend() -> str:
     from tools.terminal_tool import _get_env_config
+
     return str(_get_env_config().get("env_type") or "local")
 
 
 def _plugin_streams(backend: str) -> bool:
     from tools.terminal_tool_config import _plugin_env_flag
+
     return _plugin_env_flag(backend, "supports_streams") is True
 
 
@@ -58,6 +62,7 @@ def _plugin_host_isolated() -> bool:
     # exec_prefix() is unreachable. (No bundled plugin backend declares supports_streams, so bundled
     # plugins, which stay in-process, are not a case here.)
     from clawk_cli.plugin_isolation import ISOLATION_HOST, isolation_mode
+
     return isolation_mode() == ISOLATION_HOST
 
 
@@ -66,7 +71,11 @@ def resolve() -> Placement:
     # the common case — it must not cost a config load (this runs on every browser / cua-driver spawn).
     backend = _terminal_backend()
     if backend == "local":
-        return Placement(GATEWAY, backend, "terminal.backend is local, so the terminal IS the gateway host")
+        return Placement(
+            GATEWAY,
+            backend,
+            "terminal.backend is local, so the terminal IS the gateway host",
+        )
     setting = _setting()
     if setting == GATEWAY:
         return Placement(GATEWAY, backend)
@@ -75,14 +84,21 @@ def resolve() -> Placement:
     if _plugin_streams(backend):
         if not _plugin_host_isolated():
             return Placement(TERMINAL, backend)
-        return Placement(REFUSED, backend, (
-            f"terminal.backend is {backend}, a plugin that runs in the plugin host (plugins.isolation: host), "
-            f"and the host cannot hand its sandbox's exec channel to Clawksis, so the screen cannot follow it. "
-            f"Set plugins.isolation: in_process, or bot_desktop.placement: gateway to run the desktop on the "
-            f"gateway host."))
-    reason = (f"terminal.backend is {backend}, which cannot host a screen yet, and running the desktop on the "
-              f"gateway host would put the agent's screen, browser and computer_use outside the sandbox you chose "
-              f"for it. Set bot_desktop.placement: gateway to allow that explicitly.")
+        return Placement(
+            REFUSED,
+            backend,
+            (
+                f"terminal.backend is {backend}, a plugin that runs in the plugin host (plugins.isolation: host), "
+                f"and the host cannot hand its sandbox's exec channel to Clawksis, so the screen cannot follow it. "
+                f"Set plugins.isolation: in_process, or bot_desktop.placement: gateway to run the desktop on the "
+                f"gateway host."
+            ),
+        )
+    reason = (
+        f"terminal.backend is {backend}, which cannot host a screen yet, and running the desktop on the "
+        f"gateway host would put the agent's screen, browser and computer_use outside the sandbox you chose "
+        f"for it. Set bot_desktop.placement: gateway to allow that explicitly."
+    )
     return Placement(REFUSED, backend, reason)
 
 
@@ -90,6 +106,7 @@ def terminal_environment(*, create: bool = True) -> Optional[Any]:
     """This profile's terminal environment object (the one ``terminal`` runs commands in). ``create=False``
     only returns an already-running one."""
     from tools import terminal_tool as tt
+
     task_id = tt._resolve_container_task_id(None)
     with tt._env_lock:
         env = tt._lookup_active_env(task_id, None)

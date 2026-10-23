@@ -10,6 +10,7 @@ fix, ``_make_profile_busy_session_handler`` (the busy path) stamped
 fell through to ``os.environ`` and read the wrong profile's
 ``FEISHU_ALLOWED_USERS``.
 """
+
 from pathlib import Path
 
 import pytest
@@ -30,7 +31,11 @@ def mux_home(tmp_path, monkeypatch):
         "FEISHU_ALLOWED_USERS=secondary-user\n"
     )
     monkeypatch.setenv("CLAWK_HOME", str(home))
-    for key in ("FEISHU_ALLOWED_USERS", "GATEWAY_ALLOW_ALL_USERS", "GATEWAY_ALLOWED_USERS"):
+    for key in (
+        "FEISHU_ALLOWED_USERS",
+        "GATEWAY_ALLOW_ALL_USERS",
+        "GATEWAY_ALLOWED_USERS",
+    ):
         monkeypatch.delenv(key, raising=False)
     prev = secret_scope.is_multiplex_active()
     secret_scope.set_multiplex_active(True)
@@ -62,7 +67,9 @@ def _feishu_event(user_id):
         chat_type="dm",
         profile=None,
     )
-    return MessageEvent(text="follow-up", message_type=MessageType.TEXT, source=source, message_id="m1")
+    return MessageEvent(
+        text="follow-up", message_type=MessageType.TEXT, source=source, message_id="m1"
+    )
 
 
 @pytest.mark.asyncio

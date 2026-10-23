@@ -14,7 +14,9 @@ from agent.context_compressor import (
 
 
 def _compressor(protect_first_n: int = 1) -> ContextCompressor:
-    with patch("agent.context_compressor.get_model_context_length", return_value=100000):
+    with patch(
+        "agent.context_compressor.get_model_context_length", return_value=100000
+    ):
         return ContextCompressor(
             model="test/model",
             threshold_percent=0.85,
@@ -86,17 +88,13 @@ def _messages_with_summary_at_index(summary_index: int):
         msgs.append({"role": role, "content": f"probe filler {idx}"})
     role = "user" if summary_index % 2 else "assistant"
     msgs.append({"role": role, "content": f"{SUMMARY_PREFIX}\nboundary summary"})
-    msgs.extend([
-        {"role": "assistant", "content": "new answer"},
-        {"role": "user", "content": "tail request"},
-    ])
+    msgs.extend(
+        [
+            {"role": "assistant", "content": "new answer"},
+            {"role": "user", "content": "tail request"},
+        ]
+    )
     return msgs
-
-
-
-
-
-
 
 
 def test_handoff_in_protected_head_is_replaced_not_duplicated():
@@ -104,7 +102,10 @@ def test_handoff_in_protected_head_is_replaced_not_duplicated():
     compressor = _compressor()
     old_summary = "OLD-PROTECTED-HANDOFF unique old summary body"
 
-    with patch("agent.context_compressor.call_llm", return_value=_response("UPDATED summary body")):
+    with patch(
+        "agent.context_compressor.call_llm",
+        return_value=_response("UPDATED summary body"),
+    ):
         compressed = compressor.compress(_messages_with_handoff(old_summary))
 
     # The summary may be emitted standalone or merged into the first tail
@@ -119,11 +120,9 @@ def test_handoff_in_protected_head_is_replaced_not_duplicated():
     assert len(summary_messages) == 1
     assert "UPDATED summary body" in str(summary_messages[0]["content"])
     assert old_summary not in str(summary_messages[0]["content"])
-    assert old_summary not in "\n".join(str(msg.get("content") or "") for msg in compressed)
-
-
-
-
+    assert old_summary not in "\n".join(
+        str(msg.get("content") or "") for msg in compressed
+    )
 
 
 def test_recompression_of_current_merged_handoff_preserves_prior_tail_once():
@@ -144,9 +143,7 @@ def test_recompression_of_current_merged_handoff_preserves_prior_tail_once():
 
     def _capture(turns, **kwargs):
         seen_turns.extend(turns)
-        return ContextCompressor._with_summary_prefix(
-            "fresh replacement summary"
-        )
+        return ContextCompressor._with_summary_prefix("fresh replacement summary")
 
     with patch.object(
         compressor,
@@ -168,18 +165,14 @@ def test_recompression_of_current_merged_handoff_preserves_prior_tail_once():
     assert "fresh replacement summary" in joined
 
 
-
-
-
-
-
-
 def test_resume_handoff_after_default_protected_head_decays_initial_turns():
     """Default protect_first_n=3 should not fossilize old protected head turns."""
     compressor = _compressor(protect_first_n=3)
     old_summary = "DEFAULT-RESTART-SUMMARY durable facts from before restart"
 
-    with patch("agent.context_compressor.call_llm", return_value=_response("fresh summary")) as mock_call:
+    with patch(
+        "agent.context_compressor.call_llm", return_value=_response("fresh summary")
+    ) as mock_call:
         result = compressor.compress(_messages_with_default_handoff(old_summary))
 
     prompt = mock_call.call_args.kwargs["messages"][0]["content"]
@@ -202,10 +195,7 @@ def test_resume_handoff_after_default_protected_head_decays_initial_turns():
         "original answer before first compaction" not in str(msg.get("content", ""))
         for msg in result
     )
-    assert all(
-        old_summary not in str(msg.get("content", ""))
-        for msg in result
-    )
+    assert all(old_summary not in str(msg.get("content", "")) for msg in result)
 
 
 def test_restart_simulation_fresh_compressor_does_not_reprotect_head():
@@ -238,18 +228,14 @@ def test_restart_simulation_fresh_compressor_does_not_reprotect_head():
 
     # End-to-end: the first post-restart compaction must not preserve the
     # pre-restart head turns or the old handoff verbatim.
-    with patch("agent.context_compressor.call_llm", return_value=_response("fresh summary")):
+    with patch(
+        "agent.context_compressor.call_llm", return_value=_response("fresh summary")
+    ):
         result = restarted.compress(msgs)
     result_text = "\n".join(str(msg.get("content", "")) for msg in result)
     assert "PERSISTED-HANDOFF durable facts" not in result_text
     assert "original task before first compaction" not in result_text
     assert "original answer before first compaction" not in result_text
-
-
-
-
-
-
 
 
 def test_zero_protect_first_n_still_folds_restart_fossil():
@@ -265,17 +251,18 @@ def test_zero_protect_first_n_still_folds_restart_fossil():
         {"role": "user", "content": "active request"},
     ]
 
-    with patch("agent.context_compressor.call_llm", return_value=_response("fresh summary")):
+    with patch(
+        "agent.context_compressor.call_llm", return_value=_response("fresh summary")
+    ):
         result = compressor.compress(msgs)
 
     result_text = "\n".join(str(msg.get("content", "")) for msg in result)
     assert old_summary not in result_text
     assert result_text.index(_SUMMARY_END_MARKER) < result_text.index("active request")
-    assert sum(
-        1 for msg in result if ContextCompressor._is_context_summary_message(msg)
-    ) == 1
-
-
+    assert (
+        sum(1 for msg in result if ContextCompressor._is_context_summary_message(msg))
+        == 1
+    )
 
 
 def test_restart_fossil_survives_summary_abort_then_retry():
@@ -319,13 +306,16 @@ def test_restart_fossil_survives_summary_abort_then_retry():
 
     # Retry: the fossil beyond the narrow window is still folded, not copied
     # forward as a second stacked summary.
-    with patch("agent.context_compressor.call_llm", return_value=_response("fresh summary")):
+    with patch(
+        "agent.context_compressor.call_llm", return_value=_response("fresh summary")
+    ):
         result = compressor.compress([dict(m) for m in msgs])
 
     assert all(old_summary not in str(msg.get("content", "")) for msg in result)
-    assert sum(
-        1 for msg in result if ContextCompressor._is_context_summary_message(msg)
-    ) == 1
+    assert (
+        sum(1 for msg in result if ContextCompressor._is_context_summary_message(msg))
+        == 1
+    )
 
 
 def test_degenerate_compress_end_keeps_same_session_previous_summary():
@@ -384,34 +374,22 @@ def test_degenerate_compress_end_keeps_same_session_previous_summary():
     assert compressor._previous_summary is not None
     stored = compressor._previous_summary or ""
     assert (
-        "RICH-SAME-SESSION-HANDOFF" in stored
-        or "updated iterative summary" in stored
+        "RICH-SAME-SESSION-HANDOFF" in stored or "updated iterative summary" in stored
     )
-    assert sum(
-        1 for msg in result if ContextCompressor._is_context_summary_message(msg)
-    ) >= 1
-
-
+    assert (
+        sum(1 for msg in result if ContextCompressor._is_context_summary_message(msg))
+        >= 1
+    )
 
 
 def test_forced_leading_merged_summary_strips_live_tail_from_summary_body():
     """Rehydrating a forced-leading merged summary should ignore live tail."""
     merged = (
-        f"{SUMMARY_PREFIX}\nSUMMARY_BODY\n\n"
-        f"{_SUMMARY_END_MARKER}\n\n"
-        "LIVE_TAIL_REQUEST"
+        f"{SUMMARY_PREFIX}\nSUMMARY_BODY\n\n{_SUMMARY_END_MARKER}\n\nLIVE_TAIL_REQUEST"
     )
 
     assert ContextCompressor._is_context_summary_content(merged) is True
     assert ContextCompressor._strip_summary_prefix(merged) == "SUMMARY_BODY"
-
-
-
-
-
-
-
-
 
 
 def test_empty_post_handoff_window_noops_without_summary_call():
@@ -473,21 +451,30 @@ def test_fallback_handoff_anchors_reach_the_next_summarizer():
     handoff rows from its window as already folded. The next summarizer must therefore see the fallback's
     anchors, not only the stale in-memory summary from before the fallback."""
     compressor = _compressor()
-    with patch("agent.context_compressor.call_llm", return_value=_response("FIRST healthy summary")):
+    with patch(
+        "agent.context_compressor.call_llm",
+        return_value=_response("FIRST healthy summary"),
+    ):
         messages = compressor.compress(_messages_with_handoff("seed summary"))
     assert (compressor._previous_summary or "").endswith("FIRST healthy summary")
 
-    messages = messages + [
-        {"role": "user", "content": "FALLBACK-ANCHOR-ASK please fix the parser"},
-        {"role": "assistant", "content": "looking at it"},
-    ] + _turns("filler")
+    messages = (
+        messages
+        + [
+            {"role": "user", "content": "FALLBACK-ANCHOR-ASK please fix the parser"},
+            {"role": "assistant", "content": "looking at it"},
+        ]
+        + _turns("filler")
+    )
     with patch.object(compressor, "_generate_summary", lambda *a, **k: None):
         messages = compressor.compress(messages)
     assert compressor._last_summary_fallback_used is True
     assert any("FALLBACK-ANCHOR-ASK" in str(m.get("content")) for m in messages)
 
     messages = messages + _turns("later")
-    with patch("agent.context_compressor.call_llm", return_value=_response("THIRD summary")) as mock_call:
+    with patch(
+        "agent.context_compressor.call_llm", return_value=_response("THIRD summary")
+    ) as mock_call:
         compressor.compress(messages)
 
     prompt = mock_call.call_args.kwargs["messages"][0]["content"]

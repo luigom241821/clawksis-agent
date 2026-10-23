@@ -41,12 +41,6 @@ def test_acp_permission_tool_call_uses_edit_kind_and_diff_content():
     assert diff.newText == "new\n"
 
 
-
-
-
-
-
-
 def test_requester_exception_denies_and_does_not_mutate(tmp_path):
     target = tmp_path / "sample.txt"
     target.write_text("before\n", encoding="utf-8")
@@ -93,12 +87,6 @@ def test_patch_replace_rejection_does_not_mutate(tmp_path):
     assert target.read_text(encoding="utf-8") == "alpha\nbeta\n"
 
 
-
-
-
-
-
-
 def test_workspace_auto_approval_allows_workspace_and_tmp_but_not_sensitive(tmp_path):
     workspace_file = tmp_path / "src.py"
     # Use tempfile.gettempdir() so this test exercises the same code path on
@@ -124,10 +112,14 @@ def test_workspace_auto_approval_allows_workspace_and_tmp_but_not_sensitive(tmp_
     )
 
 
-def test_multifile_v4a_patch_checks_every_real_path_not_the_joined_display_string(tmp_path):
+def test_multifile_v4a_patch_checks_every_real_path_not_the_joined_display_string(
+    tmp_path,
+):
     """Multi-file V4A proposals carry a comma-joined ``path`` for the dialog; the auto-approve
     checks must run per real target so a sensitive or escaping file cannot hide in the join (#115213)."""
-    hidden_env = "*** Update File: .env\n@@\n+SECRET=x\n*** Update File: src/ok.py\n@@\n+ok\n"
+    hidden_env = (
+        "*** Update File: .env\n@@\n+SECRET=x\n*** Update File: src/ok.py\n@@\n+ok\n"
+    )
     proposal = build_edit_proposal("patch", {"mode": "patch", "patch": hidden_env})
     assert not should_auto_approve_edit(proposal, "session", str(tmp_path))
     assert not should_auto_approve_edit(proposal, "workspace_session", str(tmp_path))
@@ -163,7 +155,9 @@ def test_multifile_v4a_env_write_reaches_permission_prompt_e2e(tmp_path):
 
     set_edit_approval_requester(requester)
     result = json.loads(
-        handle_function_call("patch", {"mode": "patch", "patch": patch}, task_id="acp-v4a-e2e")
+        handle_function_call(
+            "patch", {"mode": "patch", "patch": patch}, task_id="acp-v4a-e2e"
+        )
     )
 
     assert prompted, "multi-file .env patch must reach the prompt, not auto-approve"

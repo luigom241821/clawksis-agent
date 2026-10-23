@@ -32,21 +32,36 @@ logger = logging.getLogger(__name__)
 
 CUSTOM = "custom"
 _COMMAND_SURFACES = {
-    None: "cli_slash", "chat": "cli_slash", "tools": "cli_tools", "config": "cli_config",
-    "skills": "cli_config", "plugins": "cli_config",
-    "dashboard": "web", "serve": "web", "gui": "web", "desktop": "web",
+    None: "cli_slash",
+    "chat": "cli_slash",
+    "tools": "cli_tools",
+    "config": "cli_config",
+    "skills": "cli_config",
+    "plugins": "cli_config",
+    "dashboard": "web",
+    "serve": "web",
+    "gui": "web",
+    "desktop": "web",
 }
-_SETTING_KINDS = {"memory": "memory", "curator": "curator", "compression": "compression"}
+_SETTING_KINDS = {
+    "memory": "memory",
+    "curator": "curator",
+    "compression": "compression",
+}
 _OFF = frozenset({"false", "off", "no", "0", "none", ""})
 _process_surface: str | None = None
-_clawk_write: ContextVar[bool] = ContextVar("clawk_feature_disabled_clawk_write", default=False)
+_clawk_write: ContextVar[bool] = ContextVar(
+    "clawk_feature_disabled_clawk_write", default=False
+)
 
 
 def set_process_surface(command: Any) -> None:
     """Called once by the ``clawk`` dispatch (``command`` is the subcommand, None for chat) or the
     TUI gateway (``"tui_gateway"``). Unknown commands clear it."""
     global _process_surface
-    _process_surface = "tui_gateway" if command == "tui_gateway" else _COMMAND_SURFACES.get(command)
+    _process_surface = (
+        "tui_gateway" if command == "tui_gateway" else _COMMAND_SURFACES.get(command)
+    )
 
 
 def current_surface() -> str | None:
@@ -67,6 +82,7 @@ def current_surface() -> str | None:
 
 # ---- names -----------------------------------------------------------------------------------
 
+
 @functools.cache
 def _bundled_plugin_names() -> frozenset[str]:
     from .shared_metrics_catalog import _REPO_ROOT
@@ -74,7 +90,8 @@ def _bundled_plugin_names() -> frozenset[str]:
     root = _REPO_ROOT / "plugins"
     try:
         return frozenset(
-            p.parent.name.lower() for p in [*root.glob("*/plugin.yaml"), *root.glob("*/*/plugin.yaml")]
+            p.parent.name.lower()
+            for p in [*root.glob("*/plugin.yaml"), *root.glob("*/*/plugin.yaml")]
         )
     except OSError:
         return frozenset()
@@ -84,7 +101,14 @@ def plugin_metric_name(raw: Any) -> str:
     from .shared_metrics_catalog import _norm, _safe, plugin_catalog_names
 
     name = _norm(raw).rsplit("/", 1)[-1]
-    return name if name and (name in _safe(_bundled_plugin_names) or name in _safe(plugin_catalog_names)) else CUSTOM
+    return (
+        name
+        if name
+        and (
+            name in _safe(_bundled_plugin_names) or name in _safe(plugin_catalog_names)
+        )
+        else CUSTOM
+    )
 
 
 def skill_metric_name(raw: Any) -> str:
@@ -98,7 +122,10 @@ def default_on_settings() -> frozenset[str]:
     """Dotted ``DEFAULT_CONFIG`` paths whose shipped value is ``True`` (the closed setting vocabulary)."""
     from clawk_cli.config import DEFAULT_CONFIG
 
-    from .shared_metrics_contract import FEATURE_DISABLED_NAME_MAX_LENGTH, _metric_identifier
+    from .shared_metrics_contract import (
+        FEATURE_DISABLED_NAME_MAX_LENGTH,
+        _metric_identifier,
+    )
 
     paths: set[str] = set()
 
@@ -109,7 +136,13 @@ def default_on_settings() -> frozenset[str]:
             path = f"{prefix}{key}"
             if isinstance(value, dict):
                 walk(value, f"{path}.")
-            elif value is True and _metric_identifier(path, max_length=FEATURE_DISABLED_NAME_MAX_LENGTH) == path:
+            elif (
+                value is True
+                and _metric_identifier(
+                    path, max_length=FEATURE_DISABLED_NAME_MAX_LENGTH
+                )
+                == path
+            ):
                 paths.add(path)
 
     walk(DEFAULT_CONFIG, "")
@@ -117,6 +150,7 @@ def default_on_settings() -> frozenset[str]:
 
 
 # ---- transitions -----------------------------------------------------------------------------
+
 
 def _get(config: Any, path: str) -> Any:
     node = config
@@ -140,10 +174,16 @@ def _setting_transitions(old: dict, new: dict) -> Iterable[tuple[str, str, str]]
             continue  # an unexpanded ``${VAR}`` template (the raw side): its value is unknown here
         before, after = _on(before), _on(after)
         if before != after:
-            yield _SETTING_KINDS.get(path.split(".", 1)[0], "setting"), path, "re_enabled" if after else "disabled"
+            yield (
+                _SETTING_KINDS.get(path.split(".", 1)[0], "setting"),
+                path,
+                "re_enabled" if after else "disabled",
+            )
 
 
-def _names(config: Any, section: str, key: str, *, per_platform: str | None = None) -> set[str]:
+def _names(
+    config: Any, section: str, key: str, *, per_platform: str | None = None
+) -> set[str]:
     from agent.skill_utils import parse_config_string_list
 
     block = config.get(section) if isinstance(config, dict) else None
@@ -159,14 +199,25 @@ def _names(config: Any, section: str, key: str, *, per_platform: str | None = No
 
 def _plugin_kind(name: str) -> str:
     """A messaging-platform plugin (bundled or catalog) reports as a platform, other plugins as plugins."""
-    from .shared_metrics_catalog import _safe, bundled_platform_names, catalog_platform_names
+    from .shared_metrics_catalog import (
+        _safe,
+        bundled_platform_names,
+        catalog_platform_names,
+    )
 
     platforms = _safe(bundled_platform_names) | _safe(catalog_platform_names)
-    return "platform" if name.strip().lower().rsplit("/", 1)[-1] in platforms else "plugin"
+    return (
+        "platform" if name.strip().lower().rsplit("/", 1)[-1] in platforms else "plugin"
+    )
 
 
-def _list_transitions(old_names: set[str], new_names: set[str], kind: str, namer) -> Iterable[tuple[str, str, str]]:
-    for names, event in ((new_names - old_names, "disabled"), (old_names - new_names, "re_enabled")):
+def _list_transitions(
+    old_names: set[str], new_names: set[str], kind: str, namer
+) -> Iterable[tuple[str, str, str]]:
+    for names, event in (
+        (new_names - old_names, "disabled"),
+        (old_names - new_names, "re_enabled"),
+    ):
         for name in sorted(names):
             yield (_plugin_kind(name) if kind == "plugin" else kind), namer(name), event
 
@@ -186,12 +237,19 @@ def _toolset_transitions(old: dict, new: dict) -> Iterable[tuple[str, str, str]]
             platforms |= {str(p) for p in config["platform_toolsets"]}
     shipped = _configurable_keys()
     for platform in sorted(platforms):
-        default = _get_platform_tools({}, platform, include_default_mcp_servers=False) & shipped
+        default = (
+            _get_platform_tools({}, platform, include_default_mcp_servers=False)
+            & shipped
+        )
         before = _get_platform_tools(old, platform, include_default_mcp_servers=False)
         after = _get_platform_tools(new, platform, include_default_mcp_servers=False)
         for toolset in sorted(default):
             if (toolset in before) != (toolset in after):
-                yield "toolset", toolset, "re_enabled" if toolset in after else "disabled"
+                yield (
+                    "toolset",
+                    toolset,
+                    "re_enabled" if toolset in after else "disabled",
+                )
 
 
 def config_transitions(old: Any, new: Any) -> list[tuple[str, str, str]]:
@@ -201,10 +259,18 @@ def config_transitions(old: Any, new: Any) -> list[tuple[str, str, str]]:
     found: list[tuple[str, str, str]] = []
     for batch in (
         _setting_transitions(old, new),
-        _list_transitions(_names(old, "skills", "disabled", per_platform="platform_disabled"),
-                          _names(new, "skills", "disabled", per_platform="platform_disabled"), "skill", skill_metric_name),
-        _list_transitions(_names(old, "plugins", "disabled"), _names(new, "plugins", "disabled"), "plugin",
-                          plugin_metric_name),
+        _list_transitions(
+            _names(old, "skills", "disabled", per_platform="platform_disabled"),
+            _names(new, "skills", "disabled", per_platform="platform_disabled"),
+            "skill",
+            skill_metric_name,
+        ),
+        _list_transitions(
+            _names(old, "plugins", "disabled"),
+            _names(new, "plugins", "disabled"),
+            "plugin",
+            plugin_metric_name,
+        ),
         _toolset_transitions(old, new),
     ):
         try:
@@ -216,12 +282,16 @@ def config_transitions(old: Any, new: Any) -> list[tuple[str, str, str]]:
 
 # ---- recording -------------------------------------------------------------------------------
 
+
 def _emit(transitions: Iterable[tuple[str, str, str]], surface: str) -> None:
     from .relay_shared_metrics import record_process_mark
     from .shared_metrics_contract import FEATURE_DISABLED_MARK
 
     for kind, name, event in transitions:
-        record_process_mark(FEATURE_DISABLED_MARK, {"event": event, "kind": kind, "name": name, "surface": surface})
+        record_process_mark(
+            FEATURE_DISABLED_MARK,
+            {"event": event, "kind": kind, "name": name, "surface": surface},
+        )
 
 
 @contextlib.contextmanager
@@ -237,7 +307,9 @@ def clawk_applied_write() -> Iterator[None]:
 def _record(old: Any, new: Any, surface: str, home: str) -> None:
     from clawk_constants import reset_clawk_home_override, set_clawk_home_override
 
-    token = set_clawk_home_override(home)  # a thread does not inherit the profile binding
+    token = set_clawk_home_override(
+        home
+    )  # a thread does not inherit the profile binding
     try:
         _emit(config_transitions(old, new), surface)
     except Exception:
@@ -259,7 +331,13 @@ def record_config_saved(old_raw: Any, new_config: Any) -> None:
             return
         # Not a daemon: a CLI command that exits right after its write still records.
         threading.Thread(
-            target=_record, args=(copy.deepcopy(old_raw), copy.deepcopy(new_config), surface, str(get_clawk_home())),
+            target=_record,
+            args=(
+                copy.deepcopy(old_raw),
+                copy.deepcopy(new_config),
+                surface,
+                str(get_clawk_home()),
+            ),
             name="clawk-feature-disabled",
         ).start()
     except Exception:

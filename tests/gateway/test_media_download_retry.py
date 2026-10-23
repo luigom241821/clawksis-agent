@@ -23,6 +23,7 @@ import httpx
 # Helpers for building httpx exceptions
 # ---------------------------------------------------------------------------
 
+
 def _make_timeout_error() -> httpx.TimeoutException:
     return httpx.TimeoutException("timed out")
 
@@ -88,39 +89,48 @@ class TestCacheImageFromBytes:
     def test_caches_valid_jpeg(self, tmp_path, monkeypatch):
         monkeypatch.setattr("gateway.platforms.base.IMAGE_CACHE_DIR", tmp_path / "img")
         from gateway.platforms.base import cache_image_from_bytes
+
         path = cache_image_from_bytes(b"\xff\xd8\xff fake jpeg data", ".jpg")
         assert path.endswith(".jpg")
-
 
     def test_rejects_html_content(self, tmp_path, monkeypatch):
         monkeypatch.setattr("gateway.platforms.base.IMAGE_CACHE_DIR", tmp_path / "img")
         from gateway.platforms.base import cache_image_from_bytes
+
         with pytest.raises(ValueError, match="non-image data"):
-            cache_image_from_bytes(b"<!DOCTYPE html><html><title>Slack</title></html>", ".png")
+            cache_image_from_bytes(
+                b"<!DOCTYPE html><html><title>Slack</title></html>", ".png"
+            )
 
 
 # ---------------------------------------------------------------------------
 # cache_image_from_url (base.py)
 # ---------------------------------------------------------------------------
 
+
 @patch("tools.url_safety.is_safe_url", return_value=True)
 class TestCacheImageFromUrl:
     """Tests for gateway.platforms.base.cache_image_from_url"""
-
 
     def test_retries_on_timeout_then_succeeds(self, _mock_safe, tmp_path, monkeypatch):
         """A timeout on the first attempt is retried; second attempt succeeds."""
         monkeypatch.setattr("gateway.platforms.base.IMAGE_CACHE_DIR", tmp_path / "img")
 
         mock_client = _make_stream_client(
-            responses=[_make_timeout_error(), _make_stream_response(b"\xff\xd8\xff image data")]
+            responses=[
+                _make_timeout_error(),
+                _make_stream_response(b"\xff\xd8\xff image data"),
+            ]
         )
         mock_sleep = AsyncMock()
 
         async def run():
-            with patch("httpx.AsyncClient", return_value=mock_client), \
-                 patch("asyncio.sleep", mock_sleep):
+            with (
+                patch("httpx.AsyncClient", return_value=mock_client),
+                patch("asyncio.sleep", mock_sleep),
+            ):
                 from gateway.platforms.base import cache_image_from_url
+
                 return await cache_image_from_url(
                     "http://example.com/img.jpg", ext=".jpg", retries=2
                 )
@@ -176,7 +186,10 @@ class TestCacheImageFromUrlConnectGuard:
 
         async def run():
             from gateway.platforms.base import cache_image_from_url
-            await cache_image_from_url("http://rebind.test/image.jpg", ext=".jpg", retries=0)
+
+            await cache_image_from_url(
+                "http://rebind.test/image.jpg", ext=".jpg", retries=0
+            )
 
         with pytest.raises(ValueError, match="during connect"):
             asyncio.run(run())
@@ -188,14 +201,16 @@ class TestCacheImageFromUrlConnectGuard:
 # cache_audio_from_url (base.py)
 # ---------------------------------------------------------------------------
 
+
 @patch("tools.url_safety.is_safe_url", return_value=True)
 class TestCacheAudioFromUrl:
     """Tests for gateway.platforms.base.cache_audio_from_url"""
 
-
     def test_retries_on_timeout_then_succeeds(self, _mock_safe, tmp_path, monkeypatch):
         """A timeout on the first attempt is retried; second attempt succeeds."""
-        monkeypatch.setattr("gateway.platforms.base.AUDIO_CACHE_DIR", tmp_path / "audio")
+        monkeypatch.setattr(
+            "gateway.platforms.base.AUDIO_CACHE_DIR", tmp_path / "audio"
+        )
 
         mock_client = _make_stream_client(
             responses=[_make_timeout_error(), _make_stream_response(b"audio data")]
@@ -203,9 +218,12 @@ class TestCacheAudioFromUrl:
         mock_sleep = AsyncMock()
 
         async def run():
-            with patch("httpx.AsyncClient", return_value=mock_client), \
-                 patch("asyncio.sleep", mock_sleep):
+            with (
+                patch("httpx.AsyncClient", return_value=mock_client),
+                patch("asyncio.sleep", mock_sleep),
+            ):
                 from gateway.platforms.base import cache_audio_from_url
+
                 return await cache_audio_from_url(
                     "http://example.com/voice.ogg", ext=".ogg", retries=2
                 )
@@ -261,6 +279,7 @@ class TestSSRFRedirectGuard:
                 for hook in captured["event_hooks"]["response"]:
                     await hook(redirect_resp)
                 return redirect_resp
+
             cm = AsyncMock()
             cm.__aenter__ = AsyncMock(side_effect=_aenter)
             cm.__aexit__ = AsyncMock(return_value=False)
@@ -272,9 +291,12 @@ class TestSSRFRedirectGuard:
             return url == "https://public.example.com/image.png"
 
         async def run():
-            with patch("tools.url_safety.is_safe_url", side_effect=fake_safe), \
-                 patch("httpx.AsyncClient", side_effect=factory):
+            with (
+                patch("tools.url_safety.is_safe_url", side_effect=fake_safe),
+                patch("httpx.AsyncClient", side_effect=factory),
+            ):
                 from gateway.platforms.base import cache_image_from_url
+
                 await cache_image_from_url(
                     "https://public.example.com/image.png", ext=".png"
                 )
@@ -286,6 +308,7 @@ class TestSSRFRedirectGuard:
 # ---------------------------------------------------------------------------
 # Slack mock setup (mirrors existing test_slack.py approach)
 # ---------------------------------------------------------------------------
+
 
 def _ensure_slack_mock():
     if "slack_bolt" in sys.modules and hasattr(sys.modules["slack_bolt"], "__file__"):
@@ -300,8 +323,10 @@ def _ensure_slack_mock():
         ("slack_bolt.async_app", slack_bolt.async_app),
         ("slack_bolt.adapter", slack_bolt.adapter),
         ("slack_bolt.adapter.socket_mode", slack_bolt.adapter.socket_mode),
-        ("slack_bolt.adapter.socket_mode.async_handler",
-         slack_bolt.adapter.socket_mode.async_handler),
+        (
+            "slack_bolt.adapter.socket_mode.async_handler",
+            slack_bolt.adapter.socket_mode.async_handler,
+        ),
         ("slack_sdk", slack_sdk),
         ("slack_sdk.web", slack_sdk.web),
         ("slack_sdk.web.async_client", slack_sdk.web.async_client),
@@ -312,6 +337,7 @@ def _ensure_slack_mock():
 _ensure_slack_mock()
 
 import plugins.platforms.slack.adapter as _slack_mod
+
 _slack_mod.SLACK_AVAILABLE = True
 
 from plugins.platforms.slack.adapter import SlackAdapter
@@ -333,10 +359,10 @@ def _make_slack_adapter():
 # ---------------------------------------------------------------------------
 
 
-
 # ---------------------------------------------------------------------------
 # SlackAdapter._download_slack_file
 # ---------------------------------------------------------------------------
+
 
 class TestSlackDownloadSlackFile:
     """Tests for SlackAdapter._download_slack_file"""
@@ -400,6 +426,7 @@ class TestSlackDownloadSlackFile:
 # SlackAdapter._download_slack_file_bytes
 # ---------------------------------------------------------------------------
 
+
 class TestSlackDownloadSlackFileBytes:
     """Tests for SlackAdapter._download_slack_file_bytes"""
 
@@ -431,11 +458,14 @@ class TestSlackDownloadSlackFileBytes:
 # MattermostAdapter._send_url_as_file
 # ---------------------------------------------------------------------------
 
+
 def _make_mm_adapter():
     """Build a minimal MattermostAdapter with mocked internals."""
     from plugins.platforms.mattermost.adapter import MattermostAdapter
+
     config = PlatformConfig(
-        enabled=True, token="mm-token-fake",
+        enabled=True,
+        token="mm-token-fake",
         extra={"url": "https://mm.example.com"},
     )
     adapter = MattermostAdapter(config)
@@ -446,8 +476,9 @@ def _make_mm_adapter():
     return adapter
 
 
-def _make_aiohttp_resp(status: int, content: bytes = b"file bytes",
-                       content_type: str = "image/jpeg"):
+def _make_aiohttp_resp(
+    status: int, content: bytes = b"file bytes", content_type: str = "image/jpeg"
+):
     """Build a context-manager mock for an aiohttp response."""
     resp = MagicMock()
     resp.status = status
@@ -461,7 +492,6 @@ def _make_aiohttp_resp(status: int, content: bytes = b"file bytes",
 @patch("tools.url_safety.is_safe_url", return_value=True)
 class TestMattermostSendUrlAsFile:
     """Tests for MattermostAdapter._send_url_as_file"""
-
 
     def test_retries_on_429_then_succeeds(self, _mock_safe):
         """429 on first attempt is retried; 200 on second attempt succeeds."""
@@ -483,7 +513,6 @@ class TestMattermostSendUrlAsFile:
         assert result.success
         assert adapter._session.get.call_count == 2
         mock_sleep.assert_called_once()
-
 
     def test_falls_back_on_client_error(self, _mock_safe):
         """aiohttp.ClientError on every attempt falls back to send() with URL."""
@@ -509,4 +538,3 @@ class TestMattermostSendUrlAsFile:
         adapter.send.assert_called_once()
         text_arg = adapter.send.call_args[0][1]
         assert "http://cdn.example.com/img.png" in text_arg
-

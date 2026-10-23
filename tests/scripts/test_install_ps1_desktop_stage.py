@@ -38,7 +38,7 @@ pytestmark = pytest.mark.platforms("windows")
 REPO_ROOT = Path(__file__).resolve().parents[2]
 INSTALL_PS1 = REPO_ROOT / "scripts" / "install.ps1"
 
-_FAKE_PY = r'''
+_FAKE_PY = r"""
 using System;
 using System.IO;
 
@@ -60,14 +60,14 @@ public static class FakePy {
         return 0;
     }
 }
-'''
+"""
 
 # The test boundary: stub the three external-effect primitives, then run the
 # REAL installer. Dot-sourcing binds -Stage desktop and exits this wrapper
 # with the installer's own exit code. Functions win over external commands in
 # PowerShell's name resolution, so `& icacls` / `& ie4uinit.exe` hit the
 # stubs; other New-Object callers go through the module-qualified real one.
-_WRAPPER = r'''
+_WRAPPER = r"""
 param(
     [Parameter(Mandatory = $true)][string]$InstallerPath,
     [Parameter(Mandatory = $true)][string]$ClawkHome,
@@ -132,7 +132,7 @@ function ie4uinit.exe {
 function Get-BootstrapPython { return $env:FAKE_BOOT_PY }
 Invoke-StageByName 'desktop'
 exit $LASTEXITCODE
-'''
+"""
 
 
 def _compile_fake_python(powershell: str, output: Path) -> None:
@@ -146,19 +146,45 @@ def _compile_fake_python(powershell: str, output: Path) -> None:
         encoding="utf-8",
     )
     subprocess.run(
-        [powershell, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
-         "-File", str(compile_script), "-Source", str(source), "-Output", str(output)],
-        check=True, capture_output=True, text=True, timeout=120,
+        [
+            powershell,
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(compile_script),
+            "-Source",
+            str(source),
+            "-Output",
+            str(output),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=120,
         stdin=subprocess.DEVNULL,
     )
 
 
-def _run(powershell: str, tmp_path: Path, args: list[str], env: dict[str, str] | None = None):
+def _run(
+    powershell: str, tmp_path: Path, args: list[str], env: dict[str, str] | None = None
+):
     return subprocess.run(
-        [powershell, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
-         "-File", str(INSTALL_PS1), *args,
-         "-ClawkHome", str(tmp_path / "clawk-home"),
-         "-InstallDir", str(tmp_path / "install")],
+        [
+            powershell,
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(INSTALL_PS1),
+            *args,
+            "-ClawkHome",
+            str(tmp_path / "clawk-home"),
+            "-InstallDir",
+            str(tmp_path / "install"),
+        ],
         cwd=tmp_path,
         env=env,
         stdin=subprocess.DEVNULL,
@@ -181,17 +207,23 @@ def test_manifest_without_flag_lists_no_desktop(tmp_path: Path) -> None:
     assert "desktop" not in _manifest_stages(_run(powershell, tmp_path, ["-Manifest"]))
 
 
-def test_manifest_with_include_desktop_selects_the_desktop_product(tmp_path: Path) -> None:
+def test_manifest_with_include_desktop_selects_the_desktop_product(
+    tmp_path: Path,
+) -> None:
     """-IncludeDesktop selects the desktop product inside the shared ``products`` stage
     (the bootstrap installer's manifest contract); it never adds a second build stage."""
     powershell = shutil.which("powershell")
     if not powershell:
         pytest.skip("Windows PowerShell is required")
-    stages = json.loads(_run(powershell, tmp_path, ["-Manifest", "-IncludeDesktop"]).stdout)["stages"]
+    stages = json.loads(
+        _run(powershell, tmp_path, ["-Manifest", "-IncludeDesktop"]).stdout
+    )["stages"]
     names = [s["name"] for s in stages]
     assert "desktop" not in names
     assert names.index("products") < names.index("complete") and names[-1] == "complete"
-    assert "desktop" in next(s for s in stages if s["name"] == "products")["title"].lower()
+    assert (
+        "desktop" in next(s for s in stages if s["name"] == "products")["title"].lower()
+    )
 
 
 def test_unknown_stage_is_rejected(tmp_path: Path) -> None:
@@ -214,7 +246,9 @@ def test_complete_stage_writes_pinned_install_marker(tmp_path: Path) -> None:
     run = _run(powershell, tmp_path, ["-Stage", "complete", "-Commit", commit, "-Json"])
     assert run.returncode == 0, run.stdout + run.stderr
     assert json.loads(run.stdout.splitlines()[-1])["ok"] is True
-    marker = json.loads((install / ".clawk-bootstrap-complete").read_text(encoding="utf-8-sig"))
+    marker = json.loads(
+        (install / ".clawk-bootstrap-complete").read_text(encoding="utf-8-sig")
+    )
     assert marker["pinnedCommit"] == commit
     assert marker["pinnedBranch"] == "main"
 
@@ -239,16 +273,23 @@ def test_desktop_stage_uses_pm_sync_and_product_cli(tmp_path: Path) -> None:
     fake_python = scripts / "python.exe"
     _compile_fake_python(powershell, fake_python)
 
-    publish_fixture_launcher(install_dir, "import os, subprocess, sys\ndef main():\n    return subprocess.call([os.environ['FAKE_BOOT_PY'], *sys.argv[1:]])\nif __name__ == '__main__': sys.exit(main())\n")
+    publish_fixture_launcher(
+        install_dir,
+        "import os, subprocess, sys\ndef main():\n    return subprocess.call([os.environ['FAKE_BOOT_PY'], *sys.argv[1:]])\nif __name__ == '__main__': sys.exit(main())\n",
+    )
     runtime_dir = install_dir / "scripts" / "desktop-update"
     runtime_dir.mkdir(parents=True)
-    shutil.copyfile(REPO_ROOT / "scripts/desktop-update/runtime.ps1", runtime_dir / "runtime.ps1")
+    shutil.copyfile(
+        REPO_ROOT / "scripts/desktop-update/runtime.ps1", runtime_dir / "runtime.ps1"
+    )
 
     wrapper = tmp_path / "boundary-wrapper.ps1"
     wrapper.write_text(_WRAPPER, encoding="utf-8-sig")
     env = {
         **os.environ,
-        "PATHEXT": ";".join(dict.fromkeys([*os.environ.get("PATHEXT", "").split(";"), ".EXE"])),
+        "PATHEXT": ";".join(
+            dict.fromkeys([*os.environ.get("PATHEXT", "").split(";"), ".EXE"])
+        ),
         "FAKE_PY_LOG": str(py_log),
         "FAKE_BOOT_PY": str(fake_python),
         "CLAWK_RUNTIME_DIR": str(tmp_path / "empty-store"),
@@ -257,16 +298,35 @@ def test_desktop_stage_uses_pm_sync_and_product_cli(tmp_path: Path) -> None:
         "ICACLS_LOG": str(icacls_log),
     }
     run = subprocess.run(
-        [powershell, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
-         "-File", str(wrapper),
-         "-InstallerPath", str(INSTALL_PS1),
-         "-ClawkHome", str(tmp_path / "clawk-home"),
-         "-InstallDir", str(install_dir)],
-        cwd=tmp_path, env=env, stdin=subprocess.DEVNULL,
-        capture_output=True, text=True, check=False, timeout=180,
+        [
+            powershell,
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(wrapper),
+            "-InstallerPath",
+            str(INSTALL_PS1),
+            "-ClawkHome",
+            str(tmp_path / "clawk-home"),
+            "-InstallDir",
+            str(install_dir),
+        ],
+        cwd=tmp_path,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=180,
     )
 
-    calls = [l.split("\u0001") for l in py_log.read_text().splitlines()] if py_log.exists() else "NO LOG"
+    calls = (
+        [l.split("\u0001") for l in py_log.read_text().splitlines()]
+        if py_log.exists()
+        else "NO LOG"
+    )
     assert run.returncode == 0, f"{run.stdout}{run.stderr}\nFAKE LOG:\n{calls}"
 
     assert isinstance(calls, list)
@@ -275,14 +335,18 @@ def test_desktop_stage_uses_pm_sync_and_product_cli(tmp_path: Path) -> None:
     #    wake/voice at first use, #70509).
     completion = [c for c in calls if "clawk_cli/source_completion.py" in c]
     assert len(completion) == 1 and "--desktop" in completion[0], calls
-    assert not any(c[-2:] == ["desktop", "--build-only"] or "sync_venv" in " ".join(c) for c in calls), calls
+    assert not any(
+        c[-2:] == ["desktop", "--build-only"] or "sync_venv" in " ".join(c)
+        for c in calls
+    ), calls
     # 3. the stage probed the artifact the fake build produced.
     exe = install_dir / "apps" / "desktop" / "release" / "win-unpacked" / "Clawksis.exe"
     assert exe.is_file(), calls
     # 4. ACL grant hit the intercepted icacls with the produced exe's dir.
     icacls_lines = icacls_log.read_text().splitlines()
     assert any(
-        line.startswith("icacls ") and str(exe.parent) in line
+        line.startswith("icacls ")
+        and str(exe.parent) in line
         and "*S-1-15-2-2:(OI)(CI)(RX)" in line
         for line in icacls_lines
     ), icacls_lines
@@ -295,5 +359,5 @@ def test_desktop_stage_uses_pm_sync_and_product_cli(tmp_path: Path) -> None:
     assert len(shortcuts) == 2, shortcuts
     for line in shortcuts:
         assert line.startswith("SAVED:"), shortcuts
-        target = line.split("|")[0][len("SAVED:"):]
+        target = line.split("|")[0][len("SAVED:") :]
         assert target == str(exe), shortcuts

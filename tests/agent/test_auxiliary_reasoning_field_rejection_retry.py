@@ -25,18 +25,36 @@ _RELAY_400 = (
 
 def _custom_route_patches(client):
     return (
-        patch("agent.auxiliary_client._resolve_task_provider_model",
-              return_value=("custom", "gpt-4.1-mini", "https://relay.example/v1", "sk-x", None)),
-        patch("agent.auxiliary_client._get_cached_client", return_value=(client, "gpt-4.1-mini")),
-        patch("agent.auxiliary_client._validate_llm_response", side_effect=lambda resp, _task, **_kw: resp),
+        patch(
+            "agent.auxiliary_client._resolve_task_provider_model",
+            return_value=(
+                "custom",
+                "gpt-4.1-mini",
+                "https://relay.example/v1",
+                "sk-x",
+                None,
+            ),
+        ),
+        patch(
+            "agent.auxiliary_client._get_cached_client",
+            return_value=(client, "gpt-4.1-mini"),
+        ),
+        patch(
+            "agent.auxiliary_client._validate_llm_response",
+            side_effect=lambda resp, _task, **_kw: resp,
+        ),
         patch("agent.auxiliary_client._try_payment_fallback", return_value=None),
     )
 
 
 def _call(async_mode, client, **kw):
-    common = dict(task="title_generation", messages=[{"role": "user", "content": "hi"}],
-                  extra_body={"response_format": {"type": "json_object"}},
-                  reasoning_config={"enabled": False}, **kw)
+    common = dict(
+        task="title_generation",
+        messages=[{"role": "user", "content": "hi"}],
+        extra_body={"response_format": {"type": "json_object"}},
+        reasoning_config={"enabled": False},
+        **kw,
+    )
     p1, p2, p3, p4 = _custom_route_patches(client)
     with p1, p2, p3, p4:
         if async_mode:
@@ -50,17 +68,25 @@ def test_reasoning_effort_rejection_retries_once_without_reasoning_fields(async_
     client = MagicMock()
     client.base_url = "https://relay.example/v1"
     side_effect = [RuntimeError(_RELAY_400), {"ok": True}]
-    client.chat.completions.create = AsyncMock(side_effect=side_effect) if async_mode else MagicMock(side_effect=side_effect)
+    client.chat.completions.create = (
+        AsyncMock(side_effect=side_effect)
+        if async_mode
+        else MagicMock(side_effect=side_effect)
+    )
 
     assert _call(async_mode, client) == {"ok": True}
 
     calls = client.chat.completions.create.call_args_list
     assert len(calls) == 2
     first, retry = calls[0].kwargs, calls[1].kwargs
-    assert first["reasoning_effort"] == "none"  # the deliberate thinking-off encoding still goes out first
+    assert (
+        first["reasoning_effort"] == "none"
+    )  # the deliberate thinking-off encoding still goes out first
     assert "reasoning_effort" not in retry
     assert "reasoning" not in (retry.get("extra_body") or {})
-    assert retry["extra_body"]["response_format"] == {"type": "json_object"}  # unrelated fields survive
+    assert retry["extra_body"]["response_format"] == {
+        "type": "json_object"
+    }  # unrelated fields survive
     assert retry["model"] == first["model"]
 
 
@@ -69,7 +95,8 @@ def test_unrelated_400_does_not_strip_reasoning_fields():
     client = MagicMock()
     client.base_url = "https://relay.example/v1"
     client.chat.completions.create.side_effect = RuntimeError(
-        "HTTP 400: Invalid value: 'tool'. Supported values are: 'assistant'")
+        "HTTP 400: Invalid value: 'tool'. Supported values are: 'assistant'"
+    )
 
     with pytest.raises(RuntimeError, match="Invalid value"):
         _call(False, client)
@@ -83,15 +110,28 @@ def test_model_gating_400_naming_a_thinking_model_still_reaches_the_fallback_cha
     client = MagicMock()
     client.base_url = "https://relay.example/v1"
     client.chat.completions.create.side_effect = RuntimeError(
-        "Error code: 400 - The model kimi-k2-thinking is not supported when using this account")
+        "Error code: 400 - The model kimi-k2-thinking is not supported when using this account"
+    )
     fb_client = MagicMock()
     fb_client.chat.completions.create.return_value = {"fb": True}
     p1, p2, p3, _p4 = _custom_route_patches(client)
-    with p1, p2, p3, patch("agent.auxiliary_client._try_configured_fallback_chain",
-                           return_value=(fb_client, "fallback-model", "fallback")) as fallback:
-        result = call_llm(task="title_generation", messages=[{"role": "user", "content": "hi"}],
-                          reasoning_config={"enabled": False})
+    with (
+        p1,
+        p2,
+        p3,
+        patch(
+            "agent.auxiliary_client._try_configured_fallback_chain",
+            return_value=(fb_client, "fallback-model", "fallback"),
+        ) as fallback,
+    ):
+        result = call_llm(
+            task="title_generation",
+            messages=[{"role": "user", "content": "hi"}],
+            reasoning_config={"enabled": False},
+        )
 
     assert result == {"fb": True}
-    assert client.chat.completions.create.call_count == 1  # no wasted reasoning-strip retry
+    assert (
+        client.chat.completions.create.call_count == 1
+    )  # no wasted reasoning-strip retry
     assert fallback.called

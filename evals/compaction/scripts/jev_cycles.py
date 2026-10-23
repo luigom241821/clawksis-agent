@@ -8,6 +8,7 @@ threshold, compact with the Jev arm and record the cycle. Stops when the
 transcript ends, Jev cannot fit its state (plugin fallback), or a compaction
 frees nothing.
 """
+
 import json
 import sys
 from pathlib import Path
@@ -27,11 +28,16 @@ def tokens(ms):
 
 
 def text_floor(ms):
-    return sum(estimate_tokens(m) for m in ms if m.get("role") != "tool" and not m.get("tool_calls"))
+    return sum(
+        estimate_tokens(m)
+        for m in ms
+        if m.get("role") != "tool" and not m.get("tool_calls")
+    )
 
 
 while i < len(msgs) and len(cycles) < max_cycles:
-    ctx.append(msgs[i]); i += 1
+    ctx.append(msgs[i])
+    i += 1
     if tokens(ctx) < threshold or msgs[i - 1].get("tool_calls"):
         continue  # only compact on a well-formed boundary (result rows present)
     jc = JevCompactor(options=JevOptions())
@@ -39,22 +45,51 @@ while i < len(msgs) and len(cycles) < max_cycles:
     try:
         out = jc.compress(ctx)
     except ValueError as e:
-        cycles.append({"cycle": len(cycles) + 1, "at_msg": i, "before": before, "fallback": str(e)[:90],
-                       "floor": text_floor(ctx),
-                       "calls": len(collect_tool_calls(ctx, jc.opt.preserve_recent_messages))})
+        cycles.append(
+            {
+                "cycle": len(cycles) + 1,
+                "at_msg": i,
+                "before": before,
+                "fallback": str(e)[:90],
+                "floor": text_floor(ctx),
+                "calls": len(collect_tool_calls(ctx, jc.opt.preserve_recent_messages)),
+            }
+        )
         break
     total_jev_usd += jc.usage.cost_usd
     after = tokens(out)
-    cycles.append({"cycle": len(cycles) + 1, "at_msg": i, "before": before, "after": after,
-                   "freed_pct": round(100 * (before - after) / before, 1), "floor": text_floor(out),
-                   "candidates": len(jc.decisions) - jc.stats["pinned"], "dropped": jc.stats["calls_dropped"],
-                   "stage": jc.stats["state_stage"], "state_tok": jc.stats["state_tokens"],
-                   "requests": jc.stats["requests"], "usd": round(jc.usage.cost_usd, 4)})
+    cycles.append(
+        {
+            "cycle": len(cycles) + 1,
+            "at_msg": i,
+            "before": before,
+            "after": after,
+            "freed_pct": round(100 * (before - after) / before, 1),
+            "floor": text_floor(out),
+            "candidates": len(jc.decisions) - jc.stats["pinned"],
+            "dropped": jc.stats["calls_dropped"],
+            "stage": jc.stats["state_stage"],
+            "state_tok": jc.stats["state_tokens"],
+            "requests": jc.stats["requests"],
+            "usd": round(jc.usage.cost_usd, 4),
+        }
+    )
     if after >= threshold:
         cycles[-1]["stuck"] = True
         break
     ctx = out
 
-print(json.dumps({"transcript": name, "threshold": threshold, "raw_tokens_consumed": tokens(msgs[:i]),
-                  "raw_total": tokens(msgs), "msgs_consumed": i, "cycles": cycles,
-                  "jev_usd_total": round(total_jev_usd, 4)}, indent=1))
+print(
+    json.dumps(
+        {
+            "transcript": name,
+            "threshold": threshold,
+            "raw_tokens_consumed": tokens(msgs[:i]),
+            "raw_total": tokens(msgs),
+            "msgs_consumed": i,
+            "cycles": cycles,
+            "jev_usd_total": round(total_jev_usd, 4),
+        },
+        indent=1,
+    )
+)

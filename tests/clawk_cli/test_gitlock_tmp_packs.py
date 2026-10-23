@@ -55,13 +55,13 @@ def test_spares_fresh_debris_and_real_packs(tmp_path, monkeypatch):
     monkeypatch.setattr("clawk_cli.gitlock._git_proc_running", lambda: False)
     pack = repo / ".git" / "objects" / "pack"
 
-    fresh = pack / "tmp_pack_fresh"           # a fetch may be writing this NOW
+    fresh = pack / "tmp_pack_fresh"  # a fetch may be writing this NOW
     fresh.write_bytes(b"y")
-    real_pack = pack / "pack-abc123.pack"      # real object data — never touch
+    real_pack = pack / "pack-abc123.pack"  # real object data — never touch
     real_pack.write_bytes(b"z" * 64)
     real_idx = pack / "pack-abc123.idx"
     real_idx.write_bytes(b"z")
-    _age(real_pack, 10 * 24 * 3600)            # even when ancient
+    _age(real_pack, 10 * 24 * 3600)  # even when ancient
     _age(real_idx, 10 * 24 * 3600)
 
     removed = clear_stale_tmp_packs(repo)
@@ -98,8 +98,6 @@ def test_bare_repo_pack_dir_is_swept(tmp_path, monkeypatch):
 
 def test_no_git_dir_is_a_noop(tmp_path):
     assert clear_stale_tmp_packs(tmp_path) == []
-
-
 
 
 @pytest.mark.platforms("windows")

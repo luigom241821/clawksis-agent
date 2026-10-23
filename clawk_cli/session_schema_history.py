@@ -119,158 +119,302 @@ def reachable_physical_layouts(
 SCHEMA_HISTORY: dict[str, _TableHistory] = {
     "sessions": _TableHistory(
         base=(
-            'id', 'source', 'user_id', 'model', 'model_config',
-            'system_prompt', 'parent_session_id', 'started_at', 'ended_at',
-            'end_reason', 'message_count', 'tool_call_count', 'input_tokens',
-            'output_tokens',
+            "id",
+            "source",
+            "user_id",
+            "model",
+            "model_config",
+            "system_prompt",
+            "parent_session_id",
+            "started_at",
+            "ended_at",
+            "end_reason",
+            "message_count",
+            "tool_call_count",
+            "input_tokens",
+            "output_tokens",
         ),
         events=(
-        ('01 2026-03-08T23:32Z c5e8166c8b', (('+', 'title', 'output_tokens'),)),
-        ('02 2026-03-17T10:44Z d417ba2a48', (
-            ('+', 'cache_read_tokens', 'output_tokens'),
-            ('+', 'cache_write_tokens', 'cache_read_tokens'),
-            ('+', 'reasoning_tokens', 'cache_write_tokens'),
-            ('+', 'billing_provider', 'reasoning_tokens'),
-            ('+', 'billing_base_url', 'billing_provider'),
-            ('+', 'billing_mode', 'billing_base_url'),
-            ('+', 'estimated_cost_usd', 'billing_mode'),
-            ('+', 'actual_cost_usd', 'estimated_cost_usd'),
-            ('+', 'cost_status', 'actual_cost_usd'),
-            ('+', 'cost_source', 'cost_status'),
-            ('+', 'pricing_version', 'cost_source'),
-        )),
-        ('03 2026-04-22T12:51Z 5fb143169b', (('+', 'api_call_count', 'title'),)),
-        ('04 2026-05-10T20:06Z 878611a79d', (
-            ('+', 'handoff_pending', 'api_call_count'),
-            ('+', 'handoff_platform', 'handoff_pending'),
-        )),
-        ('05 2026-05-10T20:06Z 00ce5f04d9', (
-            ('-', 'handoff_pending'),
-            ('+', 'handoff_state', 'api_call_count'),
-            ('+', 'handoff_error', 'handoff_platform'),
-        )),
-        ('06 2026-05-31T22:46Z 51c68d4ab1', (('+', 'cwd', 'reasoning_tokens'),)),
-        ('07 2026-06-01T08:22Z 3e59be0c41', (('+', 'rewind_count', 'handoff_error'),)),
-        ('08 2026-06-02T01:41Z 85b65e29f0', (('+', 'archived', 'rewind_count'),)),
-        ('09 2026-06-25T22:49Z ffa3d3c811', (
-            ('+', 'git_branch', 'cwd'),
-            ('+', 'git_repo_root', 'git_branch'),
-        )),
-        ('10 2026-06-28T22:10Z 86e64900b9', (
-            ('+', 'session_key', 'user_id'),
-            ('+', 'chat_id', 'session_key'),
-            ('+', 'chat_type', 'chat_id'),
-            ('+', 'thread_id', 'chat_type'),
-        )),
-        ('11 2026-06-30T08:06Z f2ccb2859f', (
-            ('+', 'compression_failure_cooldown_until', 'handoff_error'),
-            ('+', 'compression_failure_error', 'compression_failure_cooldown_until'),
-        )),
-        ('12 2026-07-05T21:01Z 747386ecfa', (
-            ('+', 'display_name', 'thread_id'),
-            ('+', 'origin_json', 'display_name'),
-            ('+', 'expiry_finalized', 'origin_json'),
-        )),
-        ('13 2026-07-13T20:49Z af7dceaf77', (
-            ('+', 'compression_fallback_streak', 'compression_failure_error'),
-        )),
-        ('14 2026-07-15T16:50Z e8b7ce8c19', (('+', 'profile_name', 'compression_fallback_streak'),)),
-        ('15 2026-07-23T15:08Z ec5835ab8b', (
-            ('+', 'compression_ineffective_count', 'compression_fallback_streak'),
-        )),
-        ('16 2026-07-24T16:15Z 951d606730', (('+', 'pinned', 'archived'),)),
-        ('17 2026-07-27T19:14Z cfb206fe2e', (
-            ('+', 'last_activity_at', 'title'),
-            ('+', 'last_activity_description', 'last_activity_at'),
-            ('+', 'last_activity_provenance', 'last_activity_description'),
-        )),
-        ('18 2026-07-27T19:22Z 5646fed97e', (
-            ('-', 'last_activity_at'),
-            ('-', 'last_activity_description'),
-            ('-', 'last_activity_provenance'),
-        )),
-        ('19 2026-08-02T23:16Z c2088efe9e', (
-            ('+', 'last_activity_at', 'title'),
-            ('+', 'last_activity_description', 'last_activity_at'),
-            ('+', 'last_activity_provenance', 'last_activity_description'),
-        )),
-        ('20 2026-08-03T15:07Z 7d066c3c56', (('+', 'system_prompt_hash', 'system_prompt'),)),
-        ('21 2026-08-04T19:20Z d98287fe3c', (('+', 'last_read_at', 'pinned'),)),
-        ('22 2026-08-08T22:17Z fe42097865', (('+', 'title_source', 'title'),)),
-        ('23 2026-08-15T07:31Z fbaea9bddc', (('+', 'hidden', 'pinned'),)),
-        ('24 2026-08-15T07:33Z e89532d97e', (('+', 'git_metadata_generation', 'git_repo_root'),)),
-        ('25 2026-09-02T11:14Z 238b6c1ab9', (
-            ('+', 'compression_recovery_deadline', 'compression_ineffective_count'),
-        )),
-        ('26 2026-09-02T14:22Z 8e4366d358', (('+', 'tool_names', 'last_read_at'),)),
-        ('27 2026-09-19T00:10Z 922a0c3c87', (('+', 'transport_profile', 'profile_name'),)),
-        ('28 2026-09-25T23:25Z 2941aadffa', (('+', 'compression_overload_streak', 'compression_recovery_deadline'),)),
-        ('29 2026-09-27T00:29Z d75f29934b', (('+', 'created_source', 'source'),)),
-        ('30 2026-09-28T00:00Z #117713', (('+', 'auto_archived', 'archived'),)),
-        # Runtime-authority columns (unified gateway runtime, PR #106742): appended after main's
-        # 27-30 because they ship after them on main.
-        ('31 2026-09-08T18:45Z 0695b12b4c', (
-            ('+', 'runtime_revision', 'id'),
-            ('+', 'runtime_generation', 'runtime_revision'),
-        )),
-        # GW-18 (package 10, #140968): write-side revision a transcript-derived cache keys on.
-        ('32 2026-10-18T10:11Z 1fc1999769', (('+', 'transcript_revision', 'tool_names'),)),
+            ("01 2026-03-08T23:32Z c5e8166c8b", (("+", "title", "output_tokens"),)),
+            (
+                "02 2026-03-17T10:44Z d417ba2a48",
+                (
+                    ("+", "cache_read_tokens", "output_tokens"),
+                    ("+", "cache_write_tokens", "cache_read_tokens"),
+                    ("+", "reasoning_tokens", "cache_write_tokens"),
+                    ("+", "billing_provider", "reasoning_tokens"),
+                    ("+", "billing_base_url", "billing_provider"),
+                    ("+", "billing_mode", "billing_base_url"),
+                    ("+", "estimated_cost_usd", "billing_mode"),
+                    ("+", "actual_cost_usd", "estimated_cost_usd"),
+                    ("+", "cost_status", "actual_cost_usd"),
+                    ("+", "cost_source", "cost_status"),
+                    ("+", "pricing_version", "cost_source"),
+                ),
+            ),
+            ("03 2026-04-22T12:51Z 5fb143169b", (("+", "api_call_count", "title"),)),
+            (
+                "04 2026-05-10T20:06Z 878611a79d",
+                (
+                    ("+", "handoff_pending", "api_call_count"),
+                    ("+", "handoff_platform", "handoff_pending"),
+                ),
+            ),
+            (
+                "05 2026-05-10T20:06Z 00ce5f04d9",
+                (
+                    ("-", "handoff_pending"),
+                    ("+", "handoff_state", "api_call_count"),
+                    ("+", "handoff_error", "handoff_platform"),
+                ),
+            ),
+            ("06 2026-05-31T22:46Z 51c68d4ab1", (("+", "cwd", "reasoning_tokens"),)),
+            (
+                "07 2026-06-01T08:22Z 3e59be0c41",
+                (("+", "rewind_count", "handoff_error"),),
+            ),
+            ("08 2026-06-02T01:41Z 85b65e29f0", (("+", "archived", "rewind_count"),)),
+            (
+                "09 2026-06-25T22:49Z ffa3d3c811",
+                (
+                    ("+", "git_branch", "cwd"),
+                    ("+", "git_repo_root", "git_branch"),
+                ),
+            ),
+            (
+                "10 2026-06-28T22:10Z 86e64900b9",
+                (
+                    ("+", "session_key", "user_id"),
+                    ("+", "chat_id", "session_key"),
+                    ("+", "chat_type", "chat_id"),
+                    ("+", "thread_id", "chat_type"),
+                ),
+            ),
+            (
+                "11 2026-06-30T08:06Z f2ccb2859f",
+                (
+                    ("+", "compression_failure_cooldown_until", "handoff_error"),
+                    (
+                        "+",
+                        "compression_failure_error",
+                        "compression_failure_cooldown_until",
+                    ),
+                ),
+            ),
+            (
+                "12 2026-07-05T21:01Z 747386ecfa",
+                (
+                    ("+", "display_name", "thread_id"),
+                    ("+", "origin_json", "display_name"),
+                    ("+", "expiry_finalized", "origin_json"),
+                ),
+            ),
+            (
+                "13 2026-07-13T20:49Z af7dceaf77",
+                (("+", "compression_fallback_streak", "compression_failure_error"),),
+            ),
+            (
+                "14 2026-07-15T16:50Z e8b7ce8c19",
+                (("+", "profile_name", "compression_fallback_streak"),),
+            ),
+            (
+                "15 2026-07-23T15:08Z ec5835ab8b",
+                (
+                    (
+                        "+",
+                        "compression_ineffective_count",
+                        "compression_fallback_streak",
+                    ),
+                ),
+            ),
+            ("16 2026-07-24T16:15Z 951d606730", (("+", "pinned", "archived"),)),
+            (
+                "17 2026-07-27T19:14Z cfb206fe2e",
+                (
+                    ("+", "last_activity_at", "title"),
+                    ("+", "last_activity_description", "last_activity_at"),
+                    ("+", "last_activity_provenance", "last_activity_description"),
+                ),
+            ),
+            (
+                "18 2026-07-27T19:22Z 5646fed97e",
+                (
+                    ("-", "last_activity_at"),
+                    ("-", "last_activity_description"),
+                    ("-", "last_activity_provenance"),
+                ),
+            ),
+            (
+                "19 2026-08-02T23:16Z c2088efe9e",
+                (
+                    ("+", "last_activity_at", "title"),
+                    ("+", "last_activity_description", "last_activity_at"),
+                    ("+", "last_activity_provenance", "last_activity_description"),
+                ),
+            ),
+            (
+                "20 2026-08-03T15:07Z 7d066c3c56",
+                (("+", "system_prompt_hash", "system_prompt"),),
+            ),
+            ("21 2026-08-04T19:20Z d98287fe3c", (("+", "last_read_at", "pinned"),)),
+            ("22 2026-08-08T22:17Z fe42097865", (("+", "title_source", "title"),)),
+            ("23 2026-08-15T07:31Z fbaea9bddc", (("+", "hidden", "pinned"),)),
+            (
+                "24 2026-08-15T07:33Z e89532d97e",
+                (("+", "git_metadata_generation", "git_repo_root"),),
+            ),
+            (
+                "25 2026-09-02T11:14Z 238b6c1ab9",
+                (
+                    (
+                        "+",
+                        "compression_recovery_deadline",
+                        "compression_ineffective_count",
+                    ),
+                ),
+            ),
+            ("26 2026-09-02T14:22Z 8e4366d358", (("+", "tool_names", "last_read_at"),)),
+            (
+                "27 2026-09-19T00:10Z 922a0c3c87",
+                (("+", "transport_profile", "profile_name"),),
+            ),
+            (
+                "28 2026-09-25T23:25Z 2941aadffa",
+                (
+                    (
+                        "+",
+                        "compression_overload_streak",
+                        "compression_recovery_deadline",
+                    ),
+                ),
+            ),
+            ("29 2026-09-27T00:29Z d75f29934b", (("+", "created_source", "source"),)),
+            ("30 2026-09-28T00:00Z #117713", (("+", "auto_archived", "archived"),)),
+            # Runtime-authority columns (unified gateway runtime, PR #106742): appended after main's
+            # 27-30 because they ship after them on main.
+            (
+                "31 2026-09-08T18:45Z 0695b12b4c",
+                (
+                    ("+", "runtime_revision", "id"),
+                    ("+", "runtime_generation", "runtime_revision"),
+                ),
+            ),
+            # GW-18 (package 10, #140968): write-side revision a transcript-derived cache keys on.
+            (
+                "32 2026-10-18T10:11Z 1fc1999769",
+                (("+", "transcript_revision", "tool_names"),),
+            ),
         ),
     ),
     "messages": _TableHistory(
         base=(
-            'id', 'session_id', 'role', 'content', 'tool_call_id',
-            'tool_calls', 'tool_name', 'timestamp', 'token_count',
+            "id",
+            "session_id",
+            "role",
+            "content",
+            "tool_call_id",
+            "tool_calls",
+            "tool_name",
+            "timestamp",
+            "token_count",
         ),
         events=(
-        ('01 2026-02-21T08:05Z b33ed9176f', (('+', 'finish_reason', 'token_count'),)),
-        ('02 2026-03-25T16:47Z 42fec19151', (
-            ('+', 'reasoning', 'finish_reason'),
-            ('+', 'reasoning_details', 'reasoning'),
-            ('+', 'codex_reasoning_items', 'reasoning_details'),
-        )),
-        ('03 2026-04-22T11:31Z a7d78d3bfd', (('+', 'reasoning_content', 'reasoning'),)),
-        ('04 2026-04-26T01:22Z 81e01f6ee9', (('+', 'codex_message_items', 'codex_reasoning_items'),)),
-        ('05 2026-05-20T20:00Z 31a0100104', (('+', 'platform_message_id', 'codex_message_items'),)),
-        ('06 2026-05-23T08:33Z 4a91e36495', (('+', 'observed', 'platform_message_id'),)),
-        ('07 2026-06-01T08:22Z 3e59be0c41', (('+', 'active', 'observed'),)),
-        ('08 2026-06-11T03:45Z aaccaada28', (('+', 'anthropic_content_blocks', 'reasoning_details'),)),
-        ('09 2026-06-11T03:45Z efcbbde48c', (('-', 'anthropic_content_blocks'),)),
-        ('10 2026-06-20T17:57Z 854d75723f', (('+', 'compacted', 'active'),)),
-        ('11 2026-07-11T12:41Z a0a6cd80f5', (('+', 'effect_disposition', 'tool_name'),)),
-        ('12 2026-07-19T02:55Z 7b3dcee928', (('+', 'api_content', 'compacted'),)),
-        ('13 2026-07-23T18:46Z a4bc1ca502', (
-            ('+', 'display_kind', 'api_content'),
-            ('+', 'display_metadata', 'display_kind'),
-        )),
-        ('14 2026-08-25T10:55Z 1104ffe0b9', (('+', '_compressed_summary', 'observed'),)),
-        ('15 2026-09-09T17:05Z 1c6683e8e0', (
-            ('+', 'display_identity', 'display_metadata'),
-            ('+', 'display_order', 'display_identity'),
-        )),
-        ('16 2026-09-28T08:42Z eed37d63ce', (
-            ('+', 'message_uid', 'display_order'),
-            ('+', 'absorbed_message_uids', 'message_uid'),
-            ('+', 'tool_call_uids', 'absorbed_message_uids'),
-            ('+', 'tool_call_uid', 'tool_call_uids'),
-        )),
+            (
+                "01 2026-02-21T08:05Z b33ed9176f",
+                (("+", "finish_reason", "token_count"),),
+            ),
+            (
+                "02 2026-03-25T16:47Z 42fec19151",
+                (
+                    ("+", "reasoning", "finish_reason"),
+                    ("+", "reasoning_details", "reasoning"),
+                    ("+", "codex_reasoning_items", "reasoning_details"),
+                ),
+            ),
+            (
+                "03 2026-04-22T11:31Z a7d78d3bfd",
+                (("+", "reasoning_content", "reasoning"),),
+            ),
+            (
+                "04 2026-04-26T01:22Z 81e01f6ee9",
+                (("+", "codex_message_items", "codex_reasoning_items"),),
+            ),
+            (
+                "05 2026-05-20T20:00Z 31a0100104",
+                (("+", "platform_message_id", "codex_message_items"),),
+            ),
+            (
+                "06 2026-05-23T08:33Z 4a91e36495",
+                (("+", "observed", "platform_message_id"),),
+            ),
+            ("07 2026-06-01T08:22Z 3e59be0c41", (("+", "active", "observed"),)),
+            (
+                "08 2026-06-11T03:45Z aaccaada28",
+                (("+", "anthropic_content_blocks", "reasoning_details"),),
+            ),
+            ("09 2026-06-11T03:45Z efcbbde48c", (("-", "anthropic_content_blocks"),)),
+            ("10 2026-06-20T17:57Z 854d75723f", (("+", "compacted", "active"),)),
+            (
+                "11 2026-07-11T12:41Z a0a6cd80f5",
+                (("+", "effect_disposition", "tool_name"),),
+            ),
+            ("12 2026-07-19T02:55Z 7b3dcee928", (("+", "api_content", "compacted"),)),
+            (
+                "13 2026-07-23T18:46Z a4bc1ca502",
+                (
+                    ("+", "display_kind", "api_content"),
+                    ("+", "display_metadata", "display_kind"),
+                ),
+            ),
+            (
+                "14 2026-08-25T10:55Z 1104ffe0b9",
+                (("+", "_compressed_summary", "observed"),),
+            ),
+            (
+                "15 2026-09-09T17:05Z 1c6683e8e0",
+                (
+                    ("+", "display_identity", "display_metadata"),
+                    ("+", "display_order", "display_identity"),
+                ),
+            ),
+            (
+                "16 2026-09-28T08:42Z eed37d63ce",
+                (
+                    ("+", "message_uid", "display_order"),
+                    ("+", "absorbed_message_uids", "message_uid"),
+                    ("+", "tool_call_uids", "absorbed_message_uids"),
+                    ("+", "tool_call_uid", "tool_call_uids"),
+                ),
+            ),
         ),
     ),
     "session_model_usage": _TableHistory(
         base=(
-            'session_id', 'model', 'billing_provider', 'billing_base_url',
-            'api_call_count', 'input_tokens', 'output_tokens',
-            'cache_read_tokens', 'cache_write_tokens', 'reasoning_tokens',
-            'estimated_cost_usd', 'first_seen', 'last_seen',
+            "session_id",
+            "model",
+            "billing_provider",
+            "billing_base_url",
+            "api_call_count",
+            "input_tokens",
+            "output_tokens",
+            "cache_read_tokens",
+            "cache_write_tokens",
+            "reasoning_tokens",
+            "estimated_cost_usd",
+            "first_seen",
+            "last_seen",
         ),
         events=(
-        ('01 2026-07-11T12:59Z 0d63c23f36', (
-            ('+', 'billing_mode', 'billing_base_url'),
-            ('+', 'actual_cost_usd', 'estimated_cost_usd'),
-            ('+', 'cost_status', 'actual_cost_usd'),
-            ('+', 'cost_source', 'cost_status'),
-        )),
-        ('02 2026-07-16T11:23Z eb6aa03609', (('+', 'task', 'billing_mode'),)),
+            (
+                "01 2026-07-11T12:59Z 0d63c23f36",
+                (
+                    ("+", "billing_mode", "billing_base_url"),
+                    ("+", "actual_cost_usd", "estimated_cost_usd"),
+                    ("+", "cost_status", "actual_cost_usd"),
+                    ("+", "cost_source", "cost_status"),
+                ),
+            ),
+            ("02 2026-07-16T11:23Z eb6aa03609", (("+", "task", "billing_mode"),)),
         ),
     ),
 }

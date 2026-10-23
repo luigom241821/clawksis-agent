@@ -35,13 +35,19 @@ def server():
     # Mocks are scoped to the initial import only — keeping them active for
     # the whole test would poison modules first imported inside test bodies
     # (see tests/tui_gateway/test_protocol.py for the full rationale).
-    with patch.dict("sys.modules", {
-        "clawk_constants": MagicMock(get_clawk_home=MagicMock(return_value="/tmp/clawk_test")),
-        "clawk_cli.env_loader": MagicMock(),
-        "clawk_cli.banner": MagicMock(),
-        "clawk_state": MagicMock(),
-    }):
+    with patch.dict(
+        "sys.modules",
+        {
+            "clawk_constants": MagicMock(
+                get_clawk_home=MagicMock(return_value="/tmp/clawk_test")
+            ),
+            "clawk_cli.env_loader": MagicMock(),
+            "clawk_cli.banner": MagicMock(),
+            "clawk_state": MagicMock(),
+        },
+    ):
         import importlib
+
         mod = importlib.import_module("tui_gateway.server")
 
     # Tests below stub handlers ("session.list", "prompt.submit", ...) in
@@ -72,13 +78,17 @@ def test_dispatch_inline_rpc_does_not_block_under_gil_pressure(server):
         released.wait(timeout=5)
         return server._ok(rid, {"sessions": []})
 
-    server._methods["session.list"] = server._methods["session.save"] = slow_session_list
+    server._methods["session.list"] = server._methods["session.save"] = (
+        slow_session_list
+    )
     server._methods["fast.check"] = lambda rid, params: server._ok(rid, {"ok": True})
 
     t0 = time.monotonic()
     # session.list / session.save (a full stored-session read) are in _LONG_HANDLERS → dispatch returns None immediately
-    assert [server.dispatch({"id": m, "method": m, "params": p})
-            for m, p in (("session.list", {}), ("session.save", {"session_id": "s"}))] == [None] * 2
+    assert [
+        server.dispatch({"id": m, "method": m, "params": p})
+        for m, p in (("session.list", {}), ("session.save", {"session_id": "s"}))
+    ] == [None] * 2
 
     # fast.check is inline → dispatch runs it synchronously and returns the result
     fast_resp = server.dispatch({"id": "fast", "method": "fast.check", "params": {}})

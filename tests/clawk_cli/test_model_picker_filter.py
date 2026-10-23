@@ -59,4 +59,6 @@ def test_filter_does_not_reorder_or_pick_a_default():
 
 
 def test_whitespace_query_is_treated_as_empty():
-    assert ClawksisCLI._filter_model_picker_entries(MODELS, "   ") == list(enumerate(MODELS))
+    assert ClawksisCLI._filter_model_picker_entries(MODELS, "   ") == list(
+        enumerate(MODELS)
+    )

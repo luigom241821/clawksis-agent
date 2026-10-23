@@ -1,4 +1,5 @@
 """Tests for the live-dashboard optional skill."""
+
 from pathlib import Path
 
 SKILL_PATH = (

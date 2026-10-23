@@ -1,4 +1,5 @@
 """Authenticated Slack downloads retain the token only on validated CDN hops."""
+
 import asyncio
 import socket
 import sys
@@ -11,9 +12,15 @@ import pytest
 
 if "slack_bolt" not in sys.modules:
     for name in (
-        "slack_bolt", "slack_bolt.adapter", "slack_bolt.adapter.socket_mode",
-        "slack_bolt.adapter.socket_mode.async_handler", "slack_bolt.async_app",
-        "slack_sdk", "slack_sdk.web", "slack_sdk.web.async_client", "slack_sdk.errors",
+        "slack_bolt",
+        "slack_bolt.adapter",
+        "slack_bolt.adapter.socket_mode",
+        "slack_bolt.adapter.socket_mode.async_handler",
+        "slack_bolt.async_app",
+        "slack_sdk",
+        "slack_sdk.web",
+        "slack_sdk.web.async_client",
+        "slack_sdk.errors",
     ):
         sys.modules.setdefault(name, MagicMock())
 if "aiohttp" not in sys.modules:
@@ -35,10 +42,22 @@ def adapter(monkeypatch):
     adapter.config = PlatformConfig(token="primary-test-token")
     adapter._team_clients = {"TSECOND": SimpleNamespace(token=TOKEN)}
     # Exercise the real URL validators without external DNS or network access.
-    monkeypatch.setattr(socket, "getaddrinfo", lambda host, *a, **kw: [
-        (socket.AF_INET, socket.SOCK_STREAM, 6, "", (
-            "169.254.169.254" if host == "169.254.169.254" else "93.184.216.34", 443)),
-    ])
+    monkeypatch.setattr(
+        socket,
+        "getaddrinfo",
+        lambda host, *a, **kw: [
+            (
+                socket.AF_INET,
+                socket.SOCK_STREAM,
+                6,
+                "",
+                (
+                    "169.254.169.254" if host == "169.254.169.254" else "93.184.216.34",
+                    443,
+                ),
+            ),
+        ],
+    )
     return adapter
 
 
@@ -46,10 +65,14 @@ def adapter(monkeypatch):
 def install_transport(monkeypatch):
     def install(handler):
         def client(**kwargs):
-            return httpx.AsyncClient(**kwargs, transport=httpx.MockTransport(handler), trust_env=False)
+            return httpx.AsyncClient(
+                **kwargs, transport=httpx.MockTransport(handler), trust_env=False
+            )
+
         # MockTransport has no TCP backend to DNS-pin. Replace only the factory;
         # httpx redirect/header handling and the production response hook stay real.
         monkeypatch.setattr("tools.url_safety.create_ssrf_safe_async_client", client)
+
     return install
 
 
@@ -63,27 +86,37 @@ def test_enterprise_grid_redirect_retains_bearer(adapter, install_transport, sta
             return httpx.Response(status, headers={"location": ORIGIN})
         assert str(request.url) == ORIGIN
         if request.headers.get("Authorization") != f"Bearer {TOKEN}":
-            return httpx.Response(200, headers={"content-type": "text/html"}, content=b"sign in")
+            return httpx.Response(
+                200, headers={"content-type": "text/html"}, content=b"sign in"
+            )
         return httpx.Response(200, headers={"content-type": "image/png"}, content=IMAGE)
 
     install_transport(serve)
     assert asyncio.run(adapter._download_slack_file_bytes(START)) == IMAGE
     assert [request.headers.get("Authorization") for request in requests] == [
-        f"Bearer {TOKEN}", f"Bearer {TOKEN}",
+        f"Bearer {TOKEN}",
+        f"Bearer {TOKEN}",
     ]
 
 
-@pytest.mark.parametrize("target", [
-    "https://evil.example.com/file", "https://files.slack.com.evil.example.com/file",
-    "http://files-origin.slack.com/file", "https://169.254.169.254/latest/meta-data/",
-])
+@pytest.mark.parametrize(
+    "target",
+    [
+        "https://evil.example.com/file",
+        "https://files.slack.com.evil.example.com/file",
+        "http://files-origin.slack.com/file",
+        "https://169.254.169.254/latest/meta-data/",
+    ],
+)
 def test_redirect_refuses_untrusted_target(adapter, install_transport, target):
     requests = []
 
     def serve(request):
         requests.append(request)
         if str(request.url) != START:
-            assert "Authorization" not in request.headers, "bearer reached an untrusted target"
+            assert "Authorization" not in request.headers, (
+                "bearer reached an untrusted target"
+            )
             return httpx.Response(200, content=b"not Slack")
         return httpx.Response(302, headers={"location": target})
 
@@ -93,7 +126,9 @@ def test_redirect_refuses_untrusted_target(adapter, install_transport, target):
     assert [str(request.url) for request in requests] == [START]
 
 
-def test_redirect_rejects_slack_host_resolving_private(adapter, install_transport, monkeypatch):
+def test_redirect_rejects_slack_host_resolving_private(
+    adapter, install_transport, monkeypatch
+):
     requests = []
 
     def resolve(host, *args, **kwargs):
@@ -118,7 +153,9 @@ def test_every_redirect_checks_cdn_allowlist(adapter, install_transport):
     def serve(request):
         requests.append(request)
         assert request.url.host in {"files.slack.com", "files-origin.slack.com"}
-        target = ORIGIN if str(request.url) == START else "https://evil.example.com/file"
+        target = (
+            ORIGIN if str(request.url) == START else "https://evil.example.com/file"
+        )
         return httpx.Response(302, headers={"location": target})
 
     install_transport(serve)
@@ -139,7 +176,11 @@ def test_relative_redirects_allow_three_hops(adapter, install_transport):
 
     install_transport(serve)
     assert asyncio.run(adapter._download_slack_file_bytes(START)) == IMAGE
-    assert [request.url.path for request in requests[1:]] == ["/hop-1", "/hop-2", "/hop-3"]
+    assert [request.url.path for request in requests[1:]] == [
+        "/hop-1",
+        "/hop-2",
+        "/hop-3",
+    ]
 
 
 def test_redirect_loop_is_bounded(adapter, install_transport):
@@ -156,7 +197,9 @@ def test_redirect_loop_is_bounded(adapter, install_transport):
 
 
 @pytest.mark.parametrize("failure", [429, 503, "timeout"])
-def test_redirected_download_retries_from_original_url(adapter, install_transport, monkeypatch, failure):
+def test_redirected_download_retries_from_original_url(
+    adapter, install_transport, monkeypatch, failure
+):
     requests = []
     sleep = AsyncMock()
     monkeypatch.setattr(asyncio, "sleep", sleep)
@@ -179,7 +222,10 @@ def test_redirected_download_retries_from_original_url(adapter, install_transpor
 
 
 def test_html_reject_explains_enterprise_grid_redirect(adapter, install_transport):
-    install_transport(lambda request: httpx.Response(
-        200, headers={"content-type": "text/html"}, content=b"sign in"))
+    install_transport(
+        lambda request: httpx.Response(
+            200, headers={"content-type": "text/html"}, content=b"sign in"
+        )
+    )
     with pytest.raises(ValueError):
         asyncio.run(adapter._download_slack_file_bytes(START))

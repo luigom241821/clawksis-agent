@@ -40,8 +40,6 @@ class TestTaskCardTransportFailure:
     @pytest.mark.asyncio
     async def test_stop_returns_failed_result(self):
         adapter = _adapter()
-        result = await adapter.stop_native_task_card_progress(
-            "C1", reply_to="1700.1"
-        )
+        result = await adapter.stop_native_task_card_progress("C1", reply_to="1700.1")
         assert result.success is False
         assert "transport error" in (result.error or "")

@@ -15,11 +15,18 @@ from tui_gateway import server
 
 def _register(sid: str, session_cwd: str) -> None:
     """A minimal session record: the handler needs ``session_key`` and its attached ``cwd``."""
-    server._sessions[sid] = {"agent": None, "cwd": session_cwd, "history": [], "session_key": sid}
+    server._sessions[sid] = {
+        "agent": None,
+        "cwd": session_cwd,
+        "history": [],
+        "session_key": sid,
+    }
 
 
 def _dispatch_init(sid: str) -> str:
-    envelope = server._methods["command.dispatch"](1, {"name": "init", "arg": "", "session_id": sid})
+    envelope = server._methods["command.dispatch"](
+        1, {"name": "init", "arg": "", "session_id": sid}
+    )
     return envelope["result"]["message"]
 
 
@@ -42,7 +49,9 @@ def test_init_targets_the_sessions_recorded_cwd(tmp_path, monkeypatch):
         server._sessions.pop(sid, None)
 
 
-def test_init_ignores_a_stale_record_in_favour_of_the_session_workspace(tmp_path, monkeypatch):
+def test_init_ignores_a_stale_record_in_favour_of_the_session_workspace(
+    tmp_path, monkeypatch
+):
     """A record for a deleted directory (removed worktree) falls through to the session cwd."""
     workspace = tmp_path / "proj"
     workspace.mkdir()

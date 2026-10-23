@@ -44,7 +44,6 @@ class TestDeepSeekThinkingWireShape:
         assert extra_body == {"thinking": {"type": "enabled"}}
         assert top_level == {}
 
-
     @pytest.mark.parametrize("effort", ["low", "medium", "high"])
     def test_standard_efforts_pass_through(self, deepseek_profile, effort):
         _, top_level = deepseek_profile.build_api_kwargs_extras(
@@ -149,11 +148,11 @@ class TestDeepSeekModelGating:
     @pytest.mark.parametrize(
         "model",
         [
-            "deepseek-v3-0324",      # explicit V3
-            "deepseek-v3.1",         # V3 minor revisions
-            "",                       # bare/unknown
-            None,                     # missing
-            "deepseek-unknown",      # unrecognized
+            "deepseek-v3-0324",  # explicit V3
+            "deepseek-v3.1",  # V3 minor revisions
+            "",  # bare/unknown
+            None,  # missing
+            "deepseek-unknown",  # unrecognized
         ],
     )
     def test_non_thinking_models_emit_nothing(self, deepseek_profile, model):
@@ -202,7 +201,9 @@ class TestDeepSeekFullKwargsIntegration:
             provider_name="deepseek",
         )
         assert "reasoning_effort" not in kwargs
-        assert "extra_body" not in kwargs or "thinking" not in kwargs.get("extra_body", {})
+        assert "extra_body" not in kwargs or "thinking" not in kwargs.get(
+            "extra_body", {}
+        )
 
     def test_unset_full_kwargs_still_enable_thinking(self, deepseek_profile):
         """CONTROL: rc=None on V4 must keep thinking=enabled (echo-trap / #106648)."""
@@ -265,14 +266,19 @@ class TestDeepSeekAuxModel:
     system.
     """
 
-
     def test_fallback_models_are_current_ids(self, deepseek_profile):
         from clawk_cli.model_normalize import _normalize_for_deepseek
+
         # Every advertised id must survive normalization unchanged (no retired alias in the picker).
-        assert all(_normalize_for_deepseek(m) == m for m in deepseek_profile.fallback_models)
+        assert all(
+            _normalize_for_deepseek(m) == m for m in deepseek_profile.fallback_models
+        )
 
     def test_consumer_api_matches_profile_aux_model(self, deepseek_profile):
         from agent.auxiliary_client import _get_aux_model_for_provider
-        assert deepseek_profile.default_aux_model
-        assert _get_aux_model_for_provider("deepseek") == deepseek_profile.default_aux_model
 
+        assert deepseek_profile.default_aux_model
+        assert (
+            _get_aux_model_for_provider("deepseek")
+            == deepseek_profile.default_aux_model
+        )

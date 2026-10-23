@@ -25,24 +25,43 @@ class NodeClient:
         try:
             from websockets.sync.client import connect  # type: ignore
         except ImportError as exc:
-            raise RuntimeError("NodeClient requires the 'websockets' package. "
-                               "Install it with: pip install websockets") from exc
+            raise RuntimeError(
+                "NodeClient requires the 'websockets' package. "
+                "Install it with: pip install websockets"
+            ) from exc
         req = _proto.make_request(type, self.token, payload)
-        with connect(self.url, open_timeout=self.timeout, close_timeout=self.timeout) as ws:
+        with connect(
+            self.url, open_timeout=self.timeout, close_timeout=self.timeout
+        ) as ws:
             ws.send(_proto.encode(req))
             resp = _proto.decode(ws.recv(timeout=self.timeout))
         if resp.get("type") == "error":
             raise RuntimeError(f"node error: {resp.get('error', '<unknown>')}")
         if resp.get("id") != req["id"]:
-            raise RuntimeError(f"response id mismatch: sent {req['id']}, got {resp.get('id')!r}")
+            raise RuntimeError(
+                f"response id mismatch: sent {req['id']}, got {resp.get('id')!r}"
+            )
         payload_out = resp.get("payload")
-        if not isinstance(payload_out, dict):  # pong envelopes also carry a dict payload
+        if not isinstance(
+            payload_out, dict
+        ):  # pong envelopes also carry a dict payload
             raise RuntimeError("response missing payload dict")
         return payload_out
 
-    def start_bot(self, url: str, guest_name: str = "Clawksis", duration: Optional[str] = None,
-                  headed: bool = False, mode: str = "transcribe") -> dict[str, Any]:
-        payload: dict[str, Any] = {"url": url, "guest_name": guest_name, "headed": bool(headed), "mode": mode}
+    def start_bot(
+        self,
+        url: str,
+        guest_name: str = "Clawksis",
+        duration: Optional[str] = None,
+        headed: bool = False,
+        mode: str = "transcribe",
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "url": url,
+            "guest_name": guest_name,
+            "headed": bool(headed),
+            "mode": mode,
+        }
         if duration is not None:
             payload["duration"] = duration
         return self._rpc("start_bot", payload)

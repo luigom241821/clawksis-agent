@@ -5,6 +5,7 @@ can enter a wedged state where ``bot.send_message()`` returns a valid Message
 but nothing reaches the recipient.  ``_send_path_degraded`` short-circuits
 ``send()`` so cron's live-adapter branch falls through to standalone HTTP.
 """
+
 import asyncio
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -182,9 +183,13 @@ def test_mid_session_polling_death_publishes_retrying_while_running():
             coro.close()
             return MagicMock(done=lambda: False)
 
-    with patch.object(adapter, "_write_runtime_status_safe") as write_status, \
-            patch("asyncio.get_running_loop", return_value=_Loop()):
-        adapter._schedule_polling_recovery(RuntimeError("boom"), reason="heartbeat probe")
+    with (
+        patch.object(adapter, "_write_runtime_status_safe") as write_status,
+        patch("asyncio.get_running_loop", return_value=_Loop()),
+    ):
+        adapter._schedule_polling_recovery(
+            RuntimeError("boom"), reason="heartbeat probe"
+        )
 
     assert adapter._send_path_degraded is True
     write_status.assert_called_once()
@@ -205,15 +210,21 @@ def test_polling_death_before_connect_does_not_publish():
             coro.close()
             return MagicMock(done=lambda: False)
 
-    with patch.object(adapter, "_write_runtime_status_safe") as write_status, \
-            patch("asyncio.get_running_loop", return_value=_Loop()):
-        adapter._schedule_polling_recovery(RuntimeError("boom"), reason="polling bootstrap")
+    with (
+        patch.object(adapter, "_write_runtime_status_safe") as write_status,
+        patch("asyncio.get_running_loop", return_value=_Loop()),
+    ):
+        adapter._schedule_polling_recovery(
+            RuntimeError("boom"), reason="polling bootstrap"
+        )
 
     write_status.assert_not_called()
 
 
 @pytest.mark.parametrize("running, fatal", [(False, False), (True, True)])
-def test_record_polling_progress_does_not_flip_when_not_running_or_fatal(running, fatal):
+def test_record_polling_progress_does_not_flip_when_not_running_or_fatal(
+    running, fatal
+):
     """Cold connect: progress arrives while _running is still False -- the
     connect path publishes, not the flip. Fatal: never overwrite "fatal"."""
     adapter = _make_adapter()

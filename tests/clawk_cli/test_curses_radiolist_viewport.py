@@ -1,4 +1,5 @@
 """Exercise radiolist rendering and navigation with a bounded terminal surface."""
+
 import sys
 from types import SimpleNamespace
 
@@ -38,20 +39,30 @@ def run_menu(monkeypatch):
         screen = Screen(keys, heights)
         curses = SimpleNamespace(
             error=type("CursesError", (Exception,), {}),
-            A_BOLD=1, A_DIM=2, A_NORMAL=0,
-            KEY_UP=259, KEY_DOWN=258, KEY_LEFT=260, KEY_ENTER=343,
+            A_BOLD=1,
+            A_DIM=2,
+            A_NORMAL=0,
+            KEY_UP=259,
+            KEY_DOWN=258,
+            KEY_LEFT=260,
+            KEY_ENTER=343,
             KEY_BACKSPACE=263,
-            has_colors=lambda: False, curs_set=lambda value: None,
+            has_colors=lambda: False,
+            curs_set=lambda value: None,
             wrapper=lambda draw: draw(screen),
         )
         monkeypatch.setitem(sys.modules, "curses", curses)
         monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
         monkeypatch.setattr(curses_ui, "flush_stdin", lambda: None)
         result = curses_ui.curses_radiolist(
-            "Select default model:", [f"model-{i:02}" for i in range(20)],
-            selected=selected, description=description, searchable=True,
+            "Select default model:",
+            [f"model-{i:02}" for i in range(20)],
+            selected=selected,
+            description=description,
+            searchable=True,
         )
         return result, screen.frames
+
     return run
 
 
@@ -81,12 +92,15 @@ def test_choice_scrolls_after_terminal_shrinks(run_menu):
     result, frames = run_menu([258] * 19 + [10], [50, 12], description=LONG_DESCRIPTION)
     assert result == 19
     for index, frame in enumerate(frames):
-        assert any(f"model-{index:02}" in row and "\u2192" in row for row in frame.values())
+        assert any(
+            f"model-{index:02}" in row and "\u2192" in row for row in frame.values()
+        )
 
 
 def test_search_result_stays_visible_with_long_description(run_menu):
     result, frames = run_menu(
-        [ord("/"), ord("1"), ord("9"), 10], [12], description=LONG_DESCRIPTION)
+        [ord("/"), ord("1"), ord("9"), 10], [12], description=LONG_DESCRIPTION
+    )
     assert result == 19
     assert any("Search: 19" in row for row in frames[-1].values())
     assert any("model-19" in row and "\u2192" in row for row in frames[-1].values())

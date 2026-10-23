@@ -42,9 +42,6 @@ def _mock_client(base_url="https://openrouter.ai/api/v1", api_key="fb-key"):
 
 
 class TestFallbackChainInit:
-
-
-
     def test_invalid_entries_filtered(self):
         fbs = [
             {"provider": "openai", "model": "gpt-4o"},
@@ -56,17 +53,12 @@ class TestFallbackChainInit:
         assert len(agent._fallback_chain) == 1
         assert agent._fallback_chain[0]["provider"] == "openai"
 
-
     def test_invalid_dict_no_provider(self):
         agent = _make_agent(fallback_model={"model": "gpt-4o"})
         assert agent._fallback_chain == []
 
 
 # ── Chain advancement ─────────────────────────────────────────────────────
-
-
-
-
 
 
 class TestFallbackChainAdvancement:
@@ -80,13 +72,14 @@ class TestFallbackChainAdvancement:
             {"provider": "zai", "model": "glm-4.7"},
         ]
         agent = _make_agent(fallback_model=fbs)
-        with patch("agent.auxiliary_client.resolve_provider_client",
-                    return_value=(_mock_client(), "gpt-4o")):
+        with patch(
+            "agent.auxiliary_client.resolve_provider_client",
+            return_value=(_mock_client(), "gpt-4o"),
+        ):
             assert agent._try_activate_fallback() is True
             assert agent._fallback_index == 1
             assert agent.model == "gpt-4o"
             assert agent._fallback_activated is True
-
 
     @patch("time.monotonic", return_value=1000.0)
     def test_records_sequential_switches_in_order(self, _clock):
@@ -125,8 +118,8 @@ class TestFallbackChainAdvancement:
         agent = _make_agent(fallback_model=fbs)
         with patch("agent.auxiliary_client.resolve_provider_client") as mock_rpc:
             mock_rpc.side_effect = [
-                (None, None),                    # broken provider
-                (_mock_client(), "gpt-4o"),       # fallback succeeds
+                (None, None),  # broken provider
+                (_mock_client(), "gpt-4o"),  # fallback succeeds
             ]
             assert agent._try_activate_fallback(FailoverReason.rate_limit) is True
             assert agent.model == "gpt-4o"
@@ -139,16 +132,28 @@ class TestFallbackChainAdvancement:
         from clawk_cli.observability.shared_metrics_fields import fallback_fields
 
         calls = []
-        monkeypatch.setattr(shared_metrics_events, "record_fallback", lambda **kw: calls.append(kw))
-        agent = _make_agent(fallback_model=[
-            {"provider": "broken", "model": "nope"}, {"provider": "zai", "model": "glm-5.2"},
-        ])
+        monkeypatch.setattr(
+            shared_metrics_events, "record_fallback", lambda **kw: calls.append(kw)
+        )
+        agent = _make_agent(
+            fallback_model=[
+                {"provider": "broken", "model": "nope"},
+                {"provider": "zai", "model": "glm-5.2"},
+            ]
+        )
         agent.provider = "nous"
-        with patch("agent.auxiliary_client.resolve_provider_client",
-                   side_effect=[(None, None), (_mock_client(base_url="https://api.z.ai/v1"), "glm-5.2")]):
+        with patch(
+            "agent.auxiliary_client.resolve_provider_client",
+            side_effect=[
+                (None, None),
+                (_mock_client(base_url="https://api.z.ai/v1"), "glm-5.2"),
+            ],
+        ):
             assert agent._try_activate_fallback(FailoverReason.rate_limit) is True
 
-        assert [(kw["from_provider"], kw["to_provider"]) for kw in calls] == [("nous", "zai")]
+        assert [(kw["from_provider"], kw["to_provider"]) for kw in calls] == [
+            ("nous", "zai")
+        ]
         assert fallback_fields(**calls[0])["error_class"] == "rate_limit"
 
     def test_skips_provider_that_raises_to_next(self):
@@ -192,7 +197,6 @@ class TestFallbackChainAdvancement:
             assert agent._try_activate_fallback() is True
             assert mock_rpc.call_args.kwargs["explicit_api_key"] == "env-secret"
 
-
     def test_nous_anthropic_fallback_uses_the_messages_wire(self, monkeypatch):
         """Portal Claude fallbacks must not stay on chat_completions when the native wire is selected.
 
@@ -202,6 +206,7 @@ class TestFallbackChainAdvancement:
         is opt-in since 2026-09-06 (``nous.anthropic_wire``, see ``nous_api_mode``).
         """
         from clawk_cli import providers as _providers
+
         monkeypatch.setattr(_providers, "_nous_anthropic_wire", lambda: "native")
         portal = "https://inference-api.nousresearch.com/v1"
         fbs = [
@@ -293,13 +298,6 @@ def _pool(n_entries: int, has_available: bool = True):
     return pool
 
 
-
-
-
-
-
-
-
 # ── Skip-self dedup (#22548) ───────────────────────────────────────────────
 
 
@@ -326,11 +324,18 @@ class TestFallbackChainDedup:
         # Stub out resolve_provider_client so we can assert which entry was
         # actually used — return a MagicMock client tagged with the provider.
         called = []
+
         def _resolve(provider, model=None, raw_codex=False, **kwargs):
             called.append((provider, model))
             return _mock_client(), model
-        with patch("agent.auxiliary_client.resolve_provider_client", side_effect=_resolve):
-            with patch("clawk_cli.model_normalize.normalize_model_for_provider", side_effect=lambda m, p: m):
+
+        with patch(
+            "agent.auxiliary_client.resolve_provider_client", side_effect=_resolve
+        ):
+            with patch(
+                "clawk_cli.model_normalize.normalize_model_for_provider",
+                side_effect=lambda m, p: m,
+            ):
                 ok = agent._try_activate_fallback()
 
         assert ok is True
@@ -338,7 +343,6 @@ class TestFallbackChainDedup:
         assert called == [("zai", "glm-4.7")], (
             f"expected fallback to skip same-state entry, got call order: {called}"
         )
-
 
     def test_returns_false_when_only_self_matching_entries(self):
         """A chain with only self-matching entries exhausts to False."""
@@ -381,7 +385,9 @@ class TestFallbackChainDedup:
             called.append((provider, model))
             return _mock_client(base_url="https://api.x.ai/v1"), model
 
-        with patch("agent.auxiliary_client.resolve_provider_client", side_effect=_resolve):
+        with patch(
+            "agent.auxiliary_client.resolve_provider_client", side_effect=_resolve
+        ):
             with patch(
                 "clawk_cli.model_normalize.normalize_model_for_provider",
                 side_effect=lambda m, p: m,
@@ -440,12 +446,15 @@ class TestFallbackExtraBodyReResolution:
         return agent
 
     def _activate(self, agent):
-        with patch(
-            "agent.auxiliary_client.resolve_provider_client",
-            return_value=(_mock_client(base_url=self.FB_URL), "fb-model"),
-        ), patch(
-            "agent.model_metadata.get_model_context_length",
-            return_value=128_000,
+        with (
+            patch(
+                "agent.auxiliary_client.resolve_provider_client",
+                return_value=(_mock_client(base_url=self.FB_URL), "fb-model"),
+            ),
+            patch(
+                "agent.model_metadata.get_model_context_length",
+                return_value=128_000,
+            ),
         ):
             assert agent._try_activate_fallback() is True
 
@@ -461,7 +470,10 @@ class TestFallbackExtraBodyReResolution:
 
     def test_caller_override_keys_survive_fallback(self):
         agent = self._agent_with_custom_providers(
-            caller_extra_body={"reasoning": {"effort": "high"}, "enable_thinking": False},
+            caller_extra_body={
+                "reasoning": {"effort": "high"},
+                "enable_thinking": False,
+            },
         )
         self._activate(agent)
         eb = agent.request_overrides.get("extra_body") or {}
@@ -491,13 +503,24 @@ def _write_moa_home(tmp_path, monkeypatch):
 
     home = tmp_path / ".clawk"
     home.mkdir(exist_ok=True)
-    (home / "config.yaml").write_text(yaml.safe_dump({
-        "moa": {"default_preset": "default", "presets": {"default": {
-            "enabled": True,
-            "reference_models": [{"provider": "xai", "model": "grok-4-fast"}],
-            "aggregator": {"provider": "xai", "model": "grok-4.6"},
-        }}},
-    }))
+    (home / "config.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "moa": {
+                    "default_preset": "default",
+                    "presets": {
+                        "default": {
+                            "enabled": True,
+                            "reference_models": [
+                                {"provider": "xai", "model": "grok-4-fast"}
+                            ],
+                            "aggregator": {"provider": "xai", "model": "grok-4.6"},
+                        }
+                    },
+                },
+            }
+        )
+    )
     monkeypatch.setenv("CLAWK_HOME", str(home))
     return home
 
@@ -505,43 +528,64 @@ def _write_moa_home(tmp_path, monkeypatch):
 def _assert_bound_to_moa_preset(agent, preset="default"):
     from agent.conversation_loop import _moa_client_consumes_prepared_request
 
-    assert (agent.provider, agent.requested_provider, agent.model) == ("moa", "moa", preset)
+    assert (agent.provider, agent.requested_provider, agent.model) == (
+        "moa",
+        "moa",
+        preset,
+    )
     assert (agent.base_url, agent.api_mode) == ("moa://local", "chat_completions")
     assert agent._client_kwargs == {}
     assert _moa_client_consumes_prepared_request(agent.client)
 
 
 class TestMoaPresetFallback:
-    def test_runtime_fallback_to_moa_preset_binds_the_facade(self, tmp_path, monkeypatch):
+    def test_runtime_fallback_to_moa_preset_binds_the_facade(
+        self, tmp_path, monkeypatch
+    ):
         """#112525 / #112623: a ``{provider: moa, model: <preset>}`` fallback entry activates the
         preset (facade, ``moa://local``), never the aggregator's HTTP client wearing the virtual
         identity (preset name on the aggregator wire → 404; ``provider == "moa"`` guards misfire)."""
         _write_moa_home(tmp_path, monkeypatch)
         agent = _make_agent(fallback_model={"provider": "moa", "model": "default"})
-        aggregator_client = _mock_client(base_url="https://api.x.ai/v1/", api_key="xai-key")
-        with patch("agent.auxiliary_client.resolve_provider_client",
-                   return_value=(aggregator_client, "grok-4.6")):
+        aggregator_client = _mock_client(
+            base_url="https://api.x.ai/v1/", api_key="xai-key"
+        )
+        with patch(
+            "agent.auxiliary_client.resolve_provider_client",
+            return_value=(aggregator_client, "grok-4.6"),
+        ):
             assert agent._try_activate_fallback() is True
         _assert_bound_to_moa_preset(agent)
         assert agent.client is not aggregator_client
         assert agent._provider_fallback_route == ("default", "moa")
 
-    def test_init_time_fallback_to_moa_preset_binds_the_facade(self, tmp_path, monkeypatch):
+    def test_init_time_fallback_to_moa_preset_binds_the_facade(
+        self, tmp_path, monkeypatch
+    ):
         """Primary without credentials at init walks the chain: a MoA entry lands on the preset
         with virtual pins, not on the aggregator slug with the aggregator's kwargs."""
         _write_moa_home(tmp_path, monkeypatch)
-        aggregator_client = _mock_client(base_url="https://api.x.ai/v1/", api_key="xai-key")
+        aggregator_client = _mock_client(
+            base_url="https://api.x.ai/v1/", api_key="xai-key"
+        )
 
         def _route(provider, model=None, **_kw):
-            return (aggregator_client, "grok-4.6") if provider == "moa" else (None, None)
+            return (
+                (aggregator_client, "grok-4.6") if provider == "moa" else (None, None)
+            )
 
         with (
             patch("model_tools.get_tool_definitions", return_value=[]),
             patch("model_tools.check_toolset_requirements", return_value={}),
             patch("agent.auxiliary_client.resolve_provider_client", side_effect=_route),
         ):
-            agent = AIAgent(model="anthropic/claude-sonnet-4.5", provider="openrouter",
-                            quiet_mode=True, skip_context_files=True, skip_memory=True,
-                            fallback_model={"provider": "moa", "model": "default"})
+            agent = AIAgent(
+                model="anthropic/claude-sonnet-4.5",
+                provider="openrouter",
+                quiet_mode=True,
+                skip_context_files=True,
+                skip_memory=True,
+                fallback_model={"provider": "moa", "model": "default"},
+            )
         _assert_bound_to_moa_preset(agent)
         assert agent._fallback_activated is True

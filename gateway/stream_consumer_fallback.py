@@ -17,16 +17,20 @@ logger = logging.getLogger("gateway.stream_consumer")
 class StreamFallbackMixin:
     """Non-streaming delivery paths used once progressive edits fail or the turn ends oddly."""
 
-    async def _send_new_chunk(self, text: str, reply_to_id: Optional[str], *,
-                              final: bool = False) -> Optional[str]:
+    async def _send_new_chunk(
+        self, text: str, reply_to_id: Optional[str], *, final: bool = False
+    ) -> Optional[str]:
         """Send a new chunk threaded to ``reply_to_id``; returns the new message_id."""
         text = self._clean_for_display(text)
         if not text.strip():
             return reply_to_id
         try:
             result = await self.adapter.send(
-                chat_id=self.chat_id, content=text, reply_to=reply_to_id,
-                metadata=self._metadata_for_send(final=final, expect_edits=not final))
+                chat_id=self.chat_id,
+                content=text,
+                reply_to=reply_to_id,
+                metadata=self._metadata_for_send(final=final, expect_edits=not final),
+            )
             if not (result.success and result.message_id):
                 self._edit_supported = False
                 return reply_to_id
@@ -44,7 +48,7 @@ class StreamFallbackMixin:
         """Return the visible text already shown in the streamed message."""
         prefix = self._last_sent_text or ""
         if self.cfg.cursor and prefix.endswith(self.cfg.cursor):
-            prefix = prefix[:-len(self.cfg.cursor)]
+            prefix = prefix[: -len(self.cfg.cursor)]
         return self._clean_for_display(prefix)
 
     def _continuation_text(self, final_text: str) -> str:
@@ -60,7 +64,11 @@ class StreamFallbackMixin:
             # token) keeps the original cut rather than re-sending the whole reply.
             # A prefix that already ends on a whole word needs no back-up: doing it
             # re-sent that word at the seam.
-            if cut < len(final_text) and not final_text[cut].isspace() and not final_text[cut - 1].isspace():
+            if (
+                cut < len(final_text)
+                and not final_text[cut].isspace()
+                and not final_text[cut - 1].isspace()
+            ):
                 boundary = max(
                     final_text.rfind(" ", 0, cut),
                     final_text.rfind("\n", 0, cut),
@@ -71,15 +79,24 @@ class StreamFallbackMixin:
         return final_text
 
     @staticmethod
-    def _split_text_chunks(text: str, limit: int, len_fn: Callable[[str], int] = len,
-                           ) -> list[str]:
+    def _split_text_chunks(
+        text: str,
+        limit: int,
+        len_fn: Callable[[str], int] = len,
+    ) -> list[str]:
         """Split text for fallback sends: newline-preferred, fence-balanced across chunks."""
         from gateway.platforms.helpers import split_text_fence_aware
-        return split_text_fence_aware(text, limit, len_fn, prefer_paragraphs=False,
-                                      balance_fences=True)
 
-    def _truncate_for_stream(self, text: str, limit: int, len_fn: Callable[[str], int],
-                             ) -> list[str]:
+        return split_text_fence_aware(
+            text, limit, len_fn, prefer_paragraphs=False, balance_fences=True
+        )
+
+    def _truncate_for_stream(
+        self,
+        text: str,
+        limit: int,
+        len_fn: Callable[[str], int],
+    ) -> list[str]:
         """Split via the adapter's canonical truncate_message (platform-specific rules);
         non-base test doubles / legacy adapters keep the two-argument call shape."""
         truncate = getattr(self.adapter, "truncate_message", None)
@@ -89,7 +106,9 @@ class StreamFallbackMixin:
             chunks = truncate(text, limit, len_fn=len_fn)
         else:
             chunks = truncate(text, limit)
-        if not isinstance(chunks, (list, tuple)) or not all(isinstance(c, str) for c in chunks):
+        if not isinstance(chunks, (list, tuple)) or not all(
+            isinstance(c, str) for c in chunks
+        ):
             return self._split_text_chunks(text, limit, len_fn)
         return list(chunks)
 
@@ -117,7 +136,9 @@ class StreamFallbackMixin:
                 return
 
         _len_fn, raw_limit = self._fallback_len_budget()
-        chunks = self._split_text_chunks(continuation, max(500, raw_limit - 100), len_fn=_len_fn)
+        chunks = self._split_text_chunks(
+            continuation, max(500, raw_limit - 100), len_fn=_len_fn
+        )
 
         stale_message_id = self._message_id  # partial message to clean up
         last_message_id: Optional[str] = None
@@ -128,8 +149,10 @@ class StreamFallbackMixin:
         anchor = self._initial_reply_to_id if continuation == final_text else None
         for chunk in chunks:
             result = await self._send_with_flood_retry(
-                content=chunk, reply_to=None if sent_any_chunk else anchor,
-                retry_log="Flood control on fallback send, retrying in %.1fs")
+                content=chunk,
+                reply_to=None if sent_any_chunk else anchor,
+                retry_log="Flood control on fallback send, retrying in %.1fs",
+            )
             if not result or not result.success:
                 # Partial continuation landed: do NOT set _final_response_sent (the
                 # gateway must still deliver the full answer); _already_sent only
@@ -148,10 +171,15 @@ class StreamFallbackMixin:
         # Best-effort delete of the frozen partial — ONLY when the FULL final was
         # re-sent.  If only the missing tail went out, the partial IS the head of
         # the answer ("sent only the second half" symptom).
-        if (stale_message_id and stale_message_id != last_message_id
-                and not self._fallback_preserve_partial_messages and continuation == final_text):
-            await self._delete_previews([stale_message_id], label="Fallback partial",
-                                        skip_sentinel=False)
+        if (
+            stale_message_id
+            and stale_message_id != last_message_id
+            and not self._fallback_preserve_partial_messages
+            and continuation == final_text
+        ):
+            await self._delete_previews(
+                [stale_message_id], label="Fallback partial", skip_sentinel=False
+            )
 
         self._message_id = last_message_id
         self._already_sent = True
@@ -168,8 +196,12 @@ class StreamFallbackMixin:
         visible = self._visible_prefix()
         # Telegram clients can lose (part of) a streamed preview after a failed
         # final edit, so opt-in adapters commit a fresh final send.
-        if (final_text.strip() and final_text == visible
-                and getattr(self.adapter, "RESEND_FINAL_ON_EMPTY_STREAM_FALLBACK", False) is True):
+        if (
+            final_text.strip()
+            and final_text == visible
+            and getattr(self.adapter, "RESEND_FINAL_ON_EMPTY_STREAM_FALLBACK", False)
+            is True
+        ):
             delivery = await self._send_empty_fallback_final(final_text)
             if delivery == "delivered":
                 return None
@@ -196,11 +228,17 @@ class StreamFallbackMixin:
         if final_text.strip() and final_text != visible:
             return final_text
         # Best-effort strip of a cursor left stuck by the edit failure.
-        if (self._message_id and self._last_sent_text and self.cfg.cursor
-                and self._last_sent_text.endswith(self.cfg.cursor)):
-            clean_text = self._last_sent_text[:-len(self.cfg.cursor)]
+        if (
+            self._message_id
+            and self._last_sent_text
+            and self.cfg.cursor
+            and self._last_sent_text.endswith(self.cfg.cursor)
+        ):
+            clean_text = self._last_sent_text[: -len(self.cfg.cursor)]
             with contextlib.suppress(Exception):
-                result = await self._edit_message(message_id=self._message_id, content=clean_text)
+                result = await self._edit_message(
+                    message_id=self._message_id, content=clean_text
+                )
                 if result.success:
                     self._last_sent_text = clean_text
         self._already_sent = True
@@ -221,11 +259,16 @@ class StreamFallbackMixin:
                 logger.debug("per-chat limit resolution failed: %s", e)
         return _len_fn, raw_limit
 
-    async def _send_with_flood_retry(self, *, content: str, retry_log: str, reply_to=None):
+    async def _send_with_flood_retry(
+        self, *, content: str, retry_log: str, reply_to=None
+    ):
         """adapter.send(final metadata) with ONE bounded flood retry; returns the last
         SendResult.  Exceptions propagate (callers decide whether a raise is "ambiguous")."""
-        kwargs = dict(chat_id=self.chat_id, content=content,
-                      metadata=self._metadata_for_send(final=True))
+        kwargs = dict(
+            chat_id=self.chat_id,
+            content=content,
+            metadata=self._metadata_for_send(final=True),
+        )
         if reply_to is not None:
             kwargs["reply_to"] = reply_to
         result = None
@@ -251,21 +294,30 @@ class StreamFallbackMixin:
         stale_ids = self._stale_preview_ids(segment_only=True)
         try:
             result = await self._send_with_flood_retry(
-                content=final_text, reply_to=self._initial_reply_to_id,
-                retry_log="Flood control on empty fallback final send; retrying in %.1fs")
+                content=final_text,
+                reply_to=self._initial_reply_to_id,
+                retry_log="Flood control on empty fallback final send; retrying in %.1fs",
+            )
         except Exception as exc:
             logger.debug("Empty fallback final send failed: %s", exc)
-            return "ambiguous" if self._send_failure_may_have_delivered(exc) else "failed"
+            return (
+                "ambiguous" if self._send_failure_may_have_delivered(exc) else "failed"
+            )
         if not getattr(result, "success", False):
             if self._is_flood_error(result):
                 return "preview"
-            return "ambiguous" if self._send_failure_may_have_delivered(result) else "failed"
+            return (
+                "ambiguous"
+                if self._send_failure_may_have_delivered(result)
+                else "failed"
+            )
 
         new_message_id = getattr(result, "message_id", None)
         # Telegram reports delete failure by returning False; the flood window that
         # broke the finalize can reject this too — one bounded retry.
-        await self._delete_previews(stale_ids, skip=new_message_id, label="Empty fallback",
-                                    retry_on_false=True)
+        await self._delete_previews(
+            stale_ids, skip=new_message_id, label="Empty fallback", retry_on_false=True
+        )
         self._segment_preview_message_ids = set()
         self._message_id = new_message_id or "__no_edit__"
         self._already_sent = True
@@ -298,8 +350,10 @@ class StreamFallbackMixin:
         except (TypeError, ValueError):
             delay = 3.0
         if delay > self._max_fallback_flood_retry_seconds:
-            logger.debug("Flood control requests %.1fs; leaving final delivery to the gateway",
-                         delay)
+            logger.debug(
+                "Flood control requests %.1fs; leaving final delivery to the gateway",
+                delay,
+            )
             return None
         return max(0.0, delay)
 
@@ -318,7 +372,7 @@ class StreamFallbackMixin:
         visible = self._fallback_prefix or self._visible_prefix()
         tail = self._accumulated
         if visible and tail.startswith(visible):
-            tail = tail[len(visible):].lstrip()
+            tail = tail[len(visible) :].lstrip()
         tail = self._clean_for_display(tail)
         if not tail.strip():
             return
@@ -326,7 +380,9 @@ class StreamFallbackMixin:
             # Interim: must never seal a native stream (see _send_commentary).
             _md = dict(self.metadata) if self.metadata else {}
             _md["_interim_send"] = True
-            result = await self.adapter.send(chat_id=self.chat_id, content=tail, metadata=_md)
+            result = await self.adapter.send(
+                chat_id=self.chat_id, content=tail, metadata=_md
+            )
             if result.success:
                 self._already_sent = True
         except Exception as e:
@@ -338,7 +394,9 @@ class StreamFallbackMixin:
         if not self._has_real_preview() or not prefix.strip():
             return
         with contextlib.suppress(Exception):  # never block the fallback path
-            result = await self._edit_message(message_id=self._message_id, content=prefix)
+            result = await self._edit_message(
+                message_id=self._message_id, content=prefix
+            )
             if getattr(result, "success", False):
                 self._last_sent_text = prefix
 
@@ -357,10 +415,18 @@ class StreamFallbackMixin:
             # thread_id metadata and reply_to on every commentary is spam.
             _plat = getattr(getattr(self.adapter, "platform", None), "value", None)
             _platform_name = str(_plat or getattr(self.adapter, "name", "")).lower()
-            _needs_reply_anchor = _platform_name in ("buzz", "slack", "mattermost", "feishu")
+            _needs_reply_anchor = _platform_name in (
+                "buzz",
+                "slack",
+                "mattermost",
+                "feishu",
+            )
             result = await self.adapter.send(
-                chat_id=self.chat_id, content=text,
-                reply_to=self._initial_reply_to_id if _needs_reply_anchor else None, metadata=_md)
+                chat_id=self.chat_id,
+                content=text,
+                reply_to=self._initial_reply_to_id if _needs_reply_anchor else None,
+                metadata=_md,
+            )
             # Do NOT set _already_sent: commentary is interim, and the flag would
             # suppress the real final after multiple tool calls.
             if result.success:
@@ -404,7 +470,9 @@ class StreamFallbackMixin:
         # A native-stream bubble isn't a deletable message — close an open one
         # (e.g. from an eager re-seed) with an empty finalize so it doesn't hang.
         if self._native_stream_opened:
-            await self._close_empty_native_bubble("Silence-marker native stream close failed: %s")
+            await self._close_empty_native_bubble(
+                "Silence-marker native stream close failed: %s"
+            )
 
         await self._delete_previews(self._stale_preview_ids(), label="Silence-marker")
         self._preview_message_ids = set()
@@ -412,4 +480,6 @@ class StreamFallbackMixin:
         self._accumulated = self._stream_ledger = self._last_sent_text = ""
         self._already_sent = False
         self._clear_turn_final_flags()
-        logger.info("Suppressed streamed intentional-silence marker (chat=%s)", self.chat_id)
+        logger.info(
+            "Suppressed streamed intentional-silence marker (chat=%s)", self.chat_id
+        )

@@ -24,7 +24,13 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-UPDATE_MECHANISMS = ("self", "app-installer", "electron-updater", "external", "microsoft-store")
+UPDATE_MECHANISMS = (
+    "self",
+    "app-installer",
+    "electron-updater",
+    "external",
+    "microsoft-store",
+)
 
 STEWARD_DESKTOP = "desktop-app"
 STEWARD_DOCKER = "docker"
@@ -81,9 +87,13 @@ _STEWARD_UPDATE_FALLBACK = (
 # tree. The steward put the code there; the steward removes it. The
 # desktop-app message is per-OS because each OS owns app removal
 # differently.
-_STEWARD_DELETE_DATA_PREAMBLE = "To delete your Clawksis data (chats, configuration, etc),\n"
+_STEWARD_DELETE_DATA_PREAMBLE = (
+    "To delete your Clawksis data (chats, configuration, etc),\n"
+)
 _STEWARD_DELETE_DATA_CLI = "run:\n$ clawk uninstall --data\n"
-_STEWARD_DELETE_DATA_DESKTOP = "Open Clawksis Desktop, go to Settings -> About, and delete your data from there.\n"
+_STEWARD_DELETE_DATA_DESKTOP = (
+    "Open Clawksis Desktop, go to Settings -> About, and delete your data from there.\n"
+)
 
 _STEWARD_UNINSTALL_MESSAGES = {
     STEWARD_DOCKER: (
@@ -91,18 +101,14 @@ _STEWARD_UNINSTALL_MESSAGES = {
         "\n"
         "There is no code to uninstall — remove the container and image:\n"
         "  docker rm <container> && docker rmi clawksis-agent\n"
-        "\n" +
-        _STEWARD_DELETE_DATA_PREAMBLE +
-        _STEWARD_DELETE_DATA_CLI
+        "\n" + _STEWARD_DELETE_DATA_PREAMBLE + _STEWARD_DELETE_DATA_CLI
     ),
     STEWARD_APT_TERMUX: (
         "✗ This Clawksis was installed by a Termux APT package.\n"
         "\n"
         "The package manager owns the code tree — uninstall it with:\n"
         "  pkg uninstall clawksis-agent\n"
-        "\n" +
-        _STEWARD_DELETE_DATA_PREAMBLE +
-        _STEWARD_DELETE_DATA_CLI
+        "\n" + _STEWARD_DELETE_DATA_PREAMBLE + _STEWARD_DELETE_DATA_CLI
     ),
     STEWARD_NIX: (
         "✗ This Clawksis was installed by Nix.\n"
@@ -110,9 +116,7 @@ _STEWARD_UNINSTALL_MESSAGES = {
         "The store path is immutable — uninstall it the same way you\n"
         "installed it: remove clawksis-agent from your flake / profile\n"
         "(e.g. `nix profile remove`), then rebuild.\n"
-        "\n" +
-        _STEWARD_DELETE_DATA_PREAMBLE +
-        _STEWARD_DELETE_DATA_CLI
+        "\n" + _STEWARD_DELETE_DATA_PREAMBLE + _STEWARD_DELETE_DATA_CLI
     ),
 }
 
@@ -120,28 +124,23 @@ _STEWARD_MANAGED_BY_DESKTOP = "✗ Clawksis is managed by the desktop app.\n"
 
 _STEWARD_DESKTOP_UNINSTALL_BY_PLATFORM = {
     "win32": (
-        _STEWARD_MANAGED_BY_DESKTOP +
-        "\n"
-        "Remove the app from Windows Settings → Apps → Installed apps.\n" +
-        _STEWARD_DELETE_DATA_PREAMBLE +
-        _STEWARD_DELETE_DATA_DESKTOP
+        _STEWARD_MANAGED_BY_DESKTOP + "\n"
+        "Remove the app from Windows Settings → Apps → Installed apps.\n"
+        + _STEWARD_DELETE_DATA_PREAMBLE
+        + _STEWARD_DELETE_DATA_DESKTOP
     ),
     "darwin": (
-        _STEWARD_MANAGED_BY_DESKTOP +
-        "\n"
-        "Quit the app and drag Clawksis.app from Applications to the Trash.\n" +
-        _STEWARD_DELETE_DATA_PREAMBLE +
-        _STEWARD_DELETE_DATA_DESKTOP
+        _STEWARD_MANAGED_BY_DESKTOP + "\n"
+        "Quit the app and drag Clawksis.app from Applications to the Trash.\n"
+        + _STEWARD_DELETE_DATA_PREAMBLE
+        + _STEWARD_DELETE_DATA_DESKTOP
     ),
 }
 
 _STEWARD_DESKTOP_UNINSTALL_DEFAULT = (
-    _STEWARD_MANAGED_BY_DESKTOP +
-    "\n"
+    _STEWARD_MANAGED_BY_DESKTOP + "\n"
     "Delete the Clawksis AppImage (or app directory) from wherever you\n"
-    "saved it.\n" +
-    _STEWARD_DELETE_DATA_PREAMBLE +
-    _STEWARD_DELETE_DATA_DESKTOP
+    "saved it.\n" + _STEWARD_DELETE_DATA_PREAMBLE + _STEWARD_DELETE_DATA_DESKTOP
 )
 
 _STEWARD_UNINSTALL_FALLBACK = (
@@ -152,8 +151,8 @@ _STEWARD_UNINSTALL_FALLBACK = (
     "\n" +
     # A generic package-manager steward has no desktop app, and this
     # refusal prints in a CLI context — point at the CLI data path.
-    _STEWARD_DELETE_DATA_PREAMBLE +
-    _STEWARD_DELETE_DATA_CLI
+    _STEWARD_DELETE_DATA_PREAMBLE
+    + _STEWARD_DELETE_DATA_CLI
 )
 
 
@@ -169,7 +168,9 @@ def steward_uninstall_message(steward: str, platform: str | None = None) -> str:
     """The uninstall refusal text for a sealed tree."""
     if steward == STEWARD_DESKTOP:
         key = platform if platform is not None else sys.platform
-        return _STEWARD_DESKTOP_UNINSTALL_BY_PLATFORM.get(key, _STEWARD_DESKTOP_UNINSTALL_DEFAULT)
+        return _STEWARD_DESKTOP_UNINSTALL_BY_PLATFORM.get(
+            key, _STEWARD_DESKTOP_UNINSTALL_DEFAULT
+        )
     message = _STEWARD_UNINSTALL_MESSAGES.get(steward)
     if message is not None:
         return message
@@ -186,7 +187,9 @@ def read_install_stamp(project_root: Path) -> dict:
     from pm.paths import install_stamp_path
 
     try:
-        data = json.loads(install_stamp_path(project_root).read_text(encoding="utf-8-sig"))
+        data = json.loads(
+            install_stamp_path(project_root).read_text(encoding="utf-8-sig")
+        )
     except (OSError, ValueError):
         return {}
     return data if isinstance(data, dict) else {}

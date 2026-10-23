@@ -32,12 +32,6 @@ def test_build_keepalive_http_client_forwards_verify_context(clean_tls_env):
     assert client._transport._pool._ssl_context is ctx
 
 
-
-
-
-
-
-
 def test_resolve_aux_verify_ssl_verify_false(clean_tls_env, monkeypatch):
     import clawk_cli.config as cfg
     from clawk_cli import config_providers
@@ -53,6 +47,6 @@ def test_resolve_aux_verify_ssl_verify_false(clean_tls_env, monkeypatch):
         "get_custom_provider_tls_settings",
         lambda *a, **k: {"ssl_verify": False},
     )
-    assert auxiliary_client._resolve_aux_verify("https://ollama.example.com/v1") is False
-
-
+    assert (
+        auxiliary_client._resolve_aux_verify("https://ollama.example.com/v1") is False
+    )

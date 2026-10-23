@@ -148,8 +148,6 @@ def test_gates_persist_and_reload():
     assert reloaded.state.gates[0].command == "echo persisted"
 
 
-
-
 # ──────────────────────────────────────────────────────────────────────
 # evaluate_after_turn integration
 # ──────────────────────────────────────────────────────────────────────
@@ -202,8 +200,12 @@ def test_gate_retry_exhaustion_pauses_goal():
 def test_failed_gate_reruns_when_untracked_file_content_changes(tmp_path, monkeypatch):
     """#110649: `git status --porcelain` reports the same `?? untracked/` for `before` and
     `after`, so a status-based cache replayed the stale failure; the gate must execute again."""
-    for argv in (["init", "-q"], ["config", "user.email", "t@example.com"], ["config", "user.name", "T"],
-                 ["commit", "-q", "--allow-empty", "-m", "baseline"]):
+    for argv in (
+        ["init", "-q"],
+        ["config", "user.email", "t@example.com"],
+        ["config", "user.name", "T"],
+        ["commit", "-q", "--allow-empty", "-m", "baseline"],
+    ):
         subprocess.run(["git", *argv], cwd=tmp_path, check=True, capture_output=True)
     result = tmp_path / "untracked" / "result.txt"
     result.parent.mkdir()
@@ -212,7 +214,9 @@ def test_failed_gate_reruns_when_untracked_file_content_changes(tmp_path, monkey
 
     mgr = _mgr_with_goal("gate-content-sid")
     mgr.add_gate(f"grep -q after {result}")
-    with patch("clawk_cli.goals.judge_goal", return_value=("done", "ok", False, None, False)) as judge:
+    with patch(
+        "clawk_cli.goals.judge_goal", return_value=("done", "ok", False, None, False)
+    ) as judge:
         d1 = mgr.evaluate_after_turn("turn 1")
         result.write_text("after", encoding="utf-8")
         d2 = mgr.evaluate_after_turn("turn 2")
@@ -270,11 +274,16 @@ def backend_and_session(tmp_path, monkeypatch):
 
 
 def _evaluate_with_done_judge(mgr):
-    with patch("clawk_cli.goals.judge_goal", return_value=("done", "all good", False, None, False)) as judge:
+    with patch(
+        "clawk_cli.goals.judge_goal",
+        return_value=("done", "all good", False, None, False),
+    ) as judge:
         return mgr.evaluate_after_turn("ready"), judge
 
 
-def test_gate_runs_in_the_session_workspace_not_the_backend_directory(backend_and_session):
+def test_gate_runs_in_the_session_workspace_not_the_backend_directory(
+    backend_and_session,
+):
     _backend, session, bind = backend_and_session
     mgr = _mgr_with_goal("gate-cwd-sid")
     mgr.add_gate("sh check.sh")
@@ -289,7 +298,9 @@ def test_gate_runs_in_the_session_workspace_not_the_backend_directory(backend_an
     assert str(session.resolve()) in mgr.state.gates[0].last_output_tail
 
 
-def test_missing_session_workspace_pauses_instead_of_running_elsewhere(backend_and_session, tmp_path):
+def test_missing_session_workspace_pauses_instead_of_running_elsewhere(
+    backend_and_session, tmp_path
+):
     # A deleted, remote or container workspace: the backend's passing check must not stand in for it,
     # and no retry can fix it, so the goal pauses on the first check with the reason and no attempt charged.
     _backend, _session, bind = backend_and_session
@@ -305,13 +316,18 @@ def test_missing_session_workspace_pauses_instead_of_running_elsewhere(backend_a
     run.assert_not_called()
     judge.assert_not_called()
     assert decision["status"] == "paused" and decision["should_continue"] is False
-    assert str(missing) in decision["message"] and "still failing" not in decision["message"]
+    assert (
+        str(missing) in decision["message"]
+        and "still failing" not in decision["message"]
+    )
     assert str(missing) in (mgr.state.paused_reason or "")
     gate = mgr.state.gates[0]
     assert (gate.attempts, gate.last_exit_code) == (0, None)
 
 
-def test_gate_without_a_session_workspace_keeps_the_launch_directory(backend_and_session):
+def test_gate_without_a_session_workspace_keeps_the_launch_directory(
+    backend_and_session,
+):
     from agent.runtime_cwd import clear_session_cwd
 
     backend, _session, _bind = backend_and_session

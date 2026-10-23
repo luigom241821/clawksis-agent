@@ -31,7 +31,6 @@ def _cfg(providers=None, custom_providers=None):
 
 
 class TestNamedCustomProviderCatalogs:
-
     def test_live_discovery_extends_declared_models(self, monkeypatch):
         monkeypatch.setenv("SOME_KEY", "k")
         cfg = _cfg(
@@ -44,9 +43,12 @@ class TestNamedCustomProviderCatalogs:
                 }
             }
         )
-        with patch("clawk_cli.config.load_config", return_value=cfg), patch(
-            "clawk_cli.model_switch_providers._fetch_picker_live_models",
-            return_value=["model-a", "model-b"],
+        with (
+            patch("clawk_cli.config.load_config", return_value=cfg),
+            patch(
+                "clawk_cli.model_switch_providers._fetch_picker_live_models",
+                return_value=["model-a", "model-b"],
+            ),
         ):
             catalogs = _named_custom_provider_catalogs()
 
@@ -54,7 +56,6 @@ class TestNamedCustomProviderCatalogs:
         slug, _label, models = catalogs[0]
         assert slug == "custom:relay"
         assert [m for m, _ in models] == ["model-a", "model-b"]
-
 
     def test_disabled_provider_skipped(self, monkeypatch):
         monkeypatch.setenv("SOME_KEY", "k")
@@ -69,8 +70,12 @@ class TestNamedCustomProviderCatalogs:
                 }
             }
         )
-        with patch("clawk_cli.config.load_config", return_value=cfg), patch(
-            "clawk_cli.model_switch_providers._fetch_picker_live_models", return_value=None
+        with (
+            patch("clawk_cli.config.load_config", return_value=cfg),
+            patch(
+                "clawk_cli.model_switch_providers._fetch_picker_live_models",
+                return_value=None,
+            ),
         ):
             assert _named_custom_provider_catalogs() == []
 
@@ -85,8 +90,12 @@ class TestNamedCustomProviderCatalogs:
                 }
             }
         )
-        with patch("clawk_cli.config.load_config", return_value=cfg), patch(
-            "clawk_cli.model_switch_providers._fetch_picker_live_models", return_value=None
+        with (
+            patch("clawk_cli.config.load_config", return_value=cfg),
+            patch(
+                "clawk_cli.model_switch_providers._fetch_picker_live_models",
+                return_value=None,
+            ),
         ):
             assert _named_custom_provider_catalogs() == []
 
@@ -102,14 +111,19 @@ class TestNamedCustomProviderCatalogs:
                 }
             ]
         )
-        with patch("clawk_cli.config.load_config", return_value=cfg), patch(
-            "clawk_cli.model_switch_providers._fetch_picker_live_models", return_value=None
+        with (
+            patch("clawk_cli.config.load_config", return_value=cfg),
+            patch(
+                "clawk_cli.model_switch_providers._fetch_picker_live_models",
+                return_value=None,
+            ),
         ):
             catalogs = _named_custom_provider_catalogs()
 
         assert catalogs == [
             ("custom:legacy-endpoint", "Legacy Endpoint", [("legacy-model", "")])
         ]
+
     def test_no_key_ollama_provider_discovers_native_catalog(self):
         cfg = _cfg(
             providers={
@@ -119,16 +133,21 @@ class TestNamedCustomProviderCatalogs:
                 }
             }
         )
-        with patch("clawk_cli.config.load_config", return_value=cfg), patch(
-            "clawk_cli.models_local.should_use_ollama_native_catalog",
-            return_value=True,
-        ), patch(
-            "clawk_cli.model_switch_providers._fetch_picker_live_models",
-            return_value=["qwen3:1.7b"],
+        with (
+            patch("clawk_cli.config.load_config", return_value=cfg),
+            patch(
+                "clawk_cli.models_local.should_use_ollama_native_catalog",
+                return_value=True,
+            ),
+            patch(
+                "clawk_cli.model_switch_providers._fetch_picker_live_models",
+                return_value=["qwen3:1.7b"],
+            ),
         ):
             catalogs = _named_custom_provider_catalogs()
 
         assert [m for m, _ in catalogs[0][2]] == ["qwen3:1.7b"]
+
     def test_legacy_credentialless_ollama_discovers_native_catalog(self):
         cfg = _cfg(
             custom_providers=[
@@ -138,13 +157,17 @@ class TestNamedCustomProviderCatalogs:
                 }
             ]
         )
-        with patch("clawk_cli.config.load_config", return_value=cfg), patch(
-            "clawk_cli.models_local.should_use_ollama_native_catalog",
-            return_value=True,
-        ), patch(
-            "clawk_cli.model_switch_providers._fetch_picker_live_models",
-            return_value=["qwen3:1.7b"],
-        ) as fetch:
+        with (
+            patch("clawk_cli.config.load_config", return_value=cfg),
+            patch(
+                "clawk_cli.models_local.should_use_ollama_native_catalog",
+                return_value=True,
+            ),
+            patch(
+                "clawk_cli.model_switch_providers._fetch_picker_live_models",
+                return_value=["qwen3:1.7b"],
+            ) as fetch,
+        ):
             catalogs = _named_custom_provider_catalogs()
 
         assert [m for m, _ in catalogs[0][2]] == ["qwen3:1.7b"]
@@ -162,12 +185,16 @@ class TestNamedCustomProviderCatalogs:
         )
         from clawk_cli.model_switch_providers import _NativePickerModelList
 
-        with patch("clawk_cli.config.load_config", return_value=cfg), patch(
-            "clawk_cli.models_local.should_use_ollama_native_catalog",
-            return_value=True,
-        ), patch(
-            "clawk_cli.model_switch_providers._fetch_picker_live_models",
-            return_value=_NativePickerModelList(),
+        with (
+            patch("clawk_cli.config.load_config", return_value=cfg),
+            patch(
+                "clawk_cli.models_local.should_use_ollama_native_catalog",
+                return_value=True,
+            ),
+            patch(
+                "clawk_cli.model_switch_providers._fetch_picker_live_models",
+                return_value=_NativePickerModelList(),
+            ),
         ):
             assert _named_custom_provider_catalogs() == [
                 ("custom:ollama", "Ollama", [])
@@ -176,7 +203,9 @@ class TestNamedCustomProviderCatalogs:
 
 class TestModelStateIncludesNamedProviders:
     @pytest.mark.asyncio
-    async def test_authoritative_empty_named_catalog_does_not_resurrect_current_model(self):
+    async def test_authoritative_empty_named_catalog_does_not_resurrect_current_model(
+        self,
+    ):
         manager = SessionManager(
             agent_factory=lambda: SimpleNamespace(
                 model="saved:model", provider="ollama"
@@ -248,14 +277,23 @@ class TestModelStateIncludesNamedProviders:
             }
         }
         inventory = {
-            "providers": [{"slug": "relay", "name": "Relay", "is_user_defined": True, "models": ["model-a"]}]
+            "providers": [
+                {
+                    "slug": "relay",
+                    "name": "Relay",
+                    "is_user_defined": True,
+                    "models": ["model-a"],
+                }
+            ]
         }
 
-        with patch("clawk_cli.config.load_config", return_value=cfg), patch(
-            "clawk_cli.inventory.build_models_payload", return_value=inventory
-        ), patch(
-            "acp_adapter.model_catalog._named_custom_provider_catalogs",
-            return_value=[("custom:relay", "Relay", [("model-a", "")])],
+        with (
+            patch("clawk_cli.config.load_config", return_value=cfg),
+            patch("clawk_cli.inventory.build_models_payload", return_value=inventory),
+            patch(
+                "acp_adapter.model_catalog._named_custom_provider_catalogs",
+                return_value=[("custom:relay", "Relay", [("model-a", "")])],
+            ),
         ):
             resp = await acp_agent.new_session(cwd="/tmp")
             choice_ids = [item.model_id for item in resp.models.available_models]
@@ -303,26 +341,49 @@ class TestModelStateIncludesNamedProviders:
         assert model == "qwen3:1.7b"
 
     @pytest.mark.asyncio
-    async def test_named_entry_shadowing_a_canonical_provider_keeps_the_canonical_session(self):
+    async def test_named_entry_shadowing_a_canonical_provider_keeps_the_canonical_session(
+        self,
+    ):
         """``providers.openrouter:`` (a proxy) must not swallow the canonical OpenRouter rows nor
         relabel a session running on openrouter.ai as ``custom:openrouter`` (that id resolves to
         the proxy base_url)."""
         manager = SessionManager(
             agent_factory=lambda: SimpleNamespace(
-                model="model-c", provider="openrouter", base_url="https://openrouter.ai/api/v1")
+                model="model-c",
+                provider="openrouter",
+                base_url="https://openrouter.ai/api/v1",
+            )
         )
         acp_agent = ClawksisACPAgent(session_manager=manager)
-        inventory = {"providers": [
-            {"slug": "openrouter", "name": "OpenRouter", "is_user_defined": False, "models": ["model-c"]},
-            {"slug": "custom:openrouter", "name": "openrouter", "is_user_defined": True,
-             "api_url": "https://or.example/api/v1", "models": ["model-a"]},
-        ]}
+        inventory = {
+            "providers": [
+                {
+                    "slug": "openrouter",
+                    "name": "OpenRouter",
+                    "is_user_defined": False,
+                    "models": ["model-c"],
+                },
+                {
+                    "slug": "custom:openrouter",
+                    "name": "openrouter",
+                    "is_user_defined": True,
+                    "api_url": "https://or.example/api/v1",
+                    "models": ["model-a"],
+                },
+            ]
+        }
 
-        with patch("clawk_cli.inventory.build_models_payload", return_value=inventory), patch(
-            "acp_adapter.model_catalog._named_custom_provider_catalogs",
-            return_value=[("custom:openrouter", "openrouter", [("model-a", "")])],
+        with (
+            patch("clawk_cli.inventory.build_models_payload", return_value=inventory),
+            patch(
+                "acp_adapter.model_catalog._named_custom_provider_catalogs",
+                return_value=[("custom:openrouter", "openrouter", [("model-a", "")])],
+            ),
         ):
             resp = await acp_agent.new_session(cwd="/tmp")
 
         assert resp.models.current_model_id == "openrouter:model-c"
-        assert [m.model_id for m in resp.models.available_models] == ["openrouter:model-c", "custom:openrouter:model-a"]
+        assert [m.model_id for m in resp.models.available_models] == [
+            "openrouter:model-c",
+            "custom:openrouter:model-a",
+        ]

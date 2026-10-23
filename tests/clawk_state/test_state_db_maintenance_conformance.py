@@ -51,8 +51,9 @@ def _make_state_db(tmp_path: Path) -> Path:
     handle = SessionDB(db_path=db)
     sid = handle.create_session(session_id=str(uuid.uuid4()), source="cli")
     for i in range(40):
-        handle.append_message(sid, role="user",
-                              content=f"needle-{i} " + "payload " * 40)
+        handle.append_message(
+            sid, role="user", content=f"needle-{i} " + "payload " * 40
+        )
     handle.close()
     return db
 

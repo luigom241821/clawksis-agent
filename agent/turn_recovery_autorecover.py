@@ -23,7 +23,9 @@ logger = logging.getLogger("agent.conversation_loop")
 # Transient transport verdicts: the provider is expected back. Everything else (auth, format,
 # content policy, billing, entitlement, overflow, model-not-found ...) is deterministic for this
 # request and stays out.
-_LADDER_REASONS = frozenset({FailoverReason.overloaded, FailoverReason.server_error, FailoverReason.timeout})
+_LADDER_REASONS = frozenset(
+    {FailoverReason.overloaded, FailoverReason.server_error, FailoverReason.timeout}
+)
 
 _LADDER_BASE_DELAY_S = 15.0
 _LADDER_CAP_S = 60.0
@@ -50,10 +52,16 @@ def ladder_wait_seconds(cycle: int, api_error: Any) -> float:
     """Wait before recovery ``cycle`` (1-based): jittered 15/30/60/60/60 s, or the provider's
     ``Retry-After`` when present (honoured past the 60 s cap, up to 120 s)."""
     from agent.retry_utils import jittered_backoff, provider_retry_after_seconds
+
     retry_after = provider_retry_after_seconds(api_error)
     if retry_after is not None:
         return min(retry_after, _RETRY_AFTER_CAP_S)
-    return jittered_backoff(cycle, base_delay=_LADDER_BASE_DELAY_S, max_delay=_LADDER_CAP_S, jitter_ratio=0.2)
+    return jittered_backoff(
+        cycle,
+        base_delay=_LADDER_BASE_DELAY_S,
+        max_delay=_LADDER_CAP_S,
+        jitter_ratio=0.2,
+    )
 
 
 def ladder_eligible(agent: Any, classified: Any) -> bool:
@@ -66,14 +74,22 @@ def ladder_eligible(agent: Any, classified: Any) -> bool:
 
 
 def ladder_notice(agent: Any, *, wait_s: float, cycle: int, total: int) -> str:
-    hint = _STOP_HINTS.get(str(getattr(agent, "platform", "") or "").lower(), _DEFAULT_STOP_HINT)
+    hint = _STOP_HINTS.get(
+        str(getattr(agent, "platform", "") or "").lower(), _DEFAULT_STOP_HINT
+    )
     text = f"⏳ Provider temporarily unavailable — retrying automatically in {wait_s:.0f}s (cycle {cycle}/{total})"
     return f"{text}; {hint}" if hint else text
 
 
 def auto_recover_after_exhaustion(
-    agent: Any, api_error: Any, classified: Any, _retry: Any, *, messages: Any,
-    conversation_history: Any, api_call_count: int,
+    agent: Any,
+    api_error: Any,
+    classified: Any,
+    _retry: Any,
+    *,
+    messages: Any,
+    conversation_history: Any,
+    api_call_count: int,
 ) -> Optional[dict[str, Any]]:
     """Run one recovery cycle after retries + fallback exhausted. Returns ``{"action": "continue"}``
     when the wait completed (caller zeroes ``retry_count`` and re-enters the retry loop),
@@ -100,10 +116,19 @@ def auto_recover_after_exhaustion(
     agent._emit_diagnostic_wait(notice)
     logger.warning(
         "%sProvider unavailable (%s) — auto-recovery cycle %d/%d, retrying in %.0fs %s",
-        agent.log_prefix, classified.reason.value, cycle, total, wait_s, agent._client_log_context(),
+        agent.log_prefix,
+        classified.reason.value,
+        cycle,
+        total,
+        wait_s,
+        agent._client_log_context(),
     )
     interrupted = interruptible_backoff_sleep(
-        agent, wait_s, _retry, messages=messages, conversation_history=conversation_history,
+        agent,
+        wait_s,
+        _retry,
+        messages=messages,
+        conversation_history=conversation_history,
         api_call_count=api_call_count,
         abort_message="Interrupt detected during automatic recovery wait, aborting.",
         interrupt_text=f"Operation interrupted: waiting for the provider to recover (cycle {cycle}/{total}).",

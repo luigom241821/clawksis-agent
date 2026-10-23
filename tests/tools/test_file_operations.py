@@ -24,11 +24,11 @@ from tools.file_operations import (
 # Write deny list
 # =========================================================================
 
+
 class TestIsWriteDenied:
     def test_ssh_authorized_keys_denied(self):
         path = os.path.join(str(Path.home()), ".ssh", "authorized_keys")
         assert _is_write_denied(path) is True
-
 
     def test_netrc_denied(self):
         path = os.path.join(str(Path.home()), ".netrc")
@@ -43,7 +43,6 @@ class TestIsWriteDenied:
         path = os.path.join(str(Path.home()), ".aws", "credentials")
         assert _is_write_denied(path) is True
 
-
     @pytest.mark.parametrize(
         "path",
         [
@@ -53,10 +52,10 @@ class TestIsWriteDenied:
     def test_oauth_traversal_denied(self, path):
         """Path traversal attempts to protected OAuth files must be blocked."""
         from clawk_constants import get_clawk_home
+
         clawk_home = get_clawk_home()
         full_path = str(clawk_home / path)
         assert _is_write_denied(full_path) is True
-
 
     def test_mcp_tokens_dir_protected_in_profile_mode(self, tmp_path, monkeypatch):
         """mcp-tokens/ under profile AND under root must both be denied."""
@@ -85,12 +84,19 @@ class TestIsWriteDenied:
         monkeypatch.setenv("CLAWK_HOME", str(profile))
 
         # Active profile pairing entries
-        assert _is_write_denied(str(profile / "pairing" / "telegram-approved.json")) is True
-        assert _is_write_denied(str(profile / "pairing" / "discord-pending.json")) is True
+        assert (
+            _is_write_denied(str(profile / "pairing" / "telegram-approved.json"))
+            is True
+        )
+        assert (
+            _is_write_denied(str(profile / "pairing" / "discord-pending.json")) is True
+        )
         # The directory itself
         assert _is_write_denied(str(profile / "pairing")) is True
         # Root pairing entries (profile mode — same shape as mcp-tokens gap)
-        assert _is_write_denied(str(root / "pairing" / "telegram-approved.json")) is True
+        assert (
+            _is_write_denied(str(root / "pairing" / "telegram-approved.json")) is True
+        )
         assert _is_write_denied(str(root / "pairing")) is True
 
 
@@ -98,23 +104,16 @@ class TestIsWriteDenied:
 # Result dataclasses
 # =========================================================================
 
+
 class TestReadResult:
     def test_to_dict_omits_defaults(self):
         r = ReadResult()
         d = r.to_dict()
-        assert "error" not in d    # None omitted
+        assert "error" not in d  # None omitted
         assert "similar_files" not in d  # empty list omitted
 
 
-
-
-
-
-
-
 class TestSearchResult:
-
-
     def test_truncated_flag_marks_total_as_lower_bound(self):
         r = SearchResult(total_count=100, truncated=True)
         d = r.to_dict()
@@ -141,13 +140,17 @@ class TestSearchResultDensify:
         for p in paths:
             for _ in range(per):
                 ln += 1
-                out.append(SearchMatch(path=p, line_number=ln,
-                                       content=f"line content {ln}"))
+                out.append(
+                    SearchMatch(path=p, line_number=ln, content=f"line content {ln}")
+                )
         # pad remainder onto the last path
         while len(out) < n:
             ln += 1
-            out.append(SearchMatch(path=paths[-1], line_number=ln,
-                                   content=f"line content {ln}"))
+            out.append(
+                SearchMatch(
+                    path=paths[-1], line_number=ln, content=f"line content {ln}"
+                )
+            )
         return out
 
     def test_densify_off_by_default(self):
@@ -166,20 +169,22 @@ class TestSearchResultDensify:
         assert "matches" in d
         assert "matches_text" not in d
 
-
     def test_densify_paths_with_spaces(self):
-        matches = [SearchMatch(path="my dir/a b.py", line_number=i + 1, content=f"x{i}")
-                   for i in range(6)]
-        text = SearchResult(matches=matches, total_count=6).to_dict(densify=True)["matches_text"]
+        matches = [
+            SearchMatch(path="my dir/a b.py", line_number=i + 1, content=f"x{i}")
+            for i in range(6)
+        ]
+        text = SearchResult(matches=matches, total_count=6).to_dict(densify=True)[
+            "matches_text"
+        ]
         # path with spaces survives as a header line verbatim
         assert "my dir/a b.py" in text.split("\n")[0]
-
-
 
 
 # =========================================================================
 # ShellFileOperations helpers
 # =========================================================================
+
 
 @pytest.fixture()
 def mock_env():
@@ -219,18 +224,23 @@ def make_real_subprocess_env(cwd: str, include_stderr: bool = False) -> MagicMoc
             shell=not is_windows,
             text=not is_windows,
             capture_output=True,
-            input=(stdin_data.encode("utf-8", "surrogateescape")
-                   if is_windows and stdin_data is not None else stdin_data),
-                   check=False,
+            input=(
+                stdin_data.encode("utf-8", "surrogateescape")
+                if is_windows and stdin_data is not None
+                else stdin_data
+            ),
+            check=False,
         )
         output = (
             completed.stdout.decode("utf-8", "replace")
-            if is_windows else completed.stdout
+            if is_windows
+            else completed.stdout
         )
         if include_stderr:
             output += (
                 completed.stderr.decode("utf-8", "replace")
-                if is_windows else completed.stderr
+                if is_windows
+                else completed.stderr
             )
         return {
             "output": output,
@@ -248,26 +258,21 @@ class TestShellFileOpsHelpers:
         assert normalize_read_pagination(offset="bad", limit="bad") == (1, 2000)
         assert normalize_read_pagination(offset=2, limit=999999) == (2, 2000)
 
-
-
-
     @pytest.mark.platforms("windows")
     def test_escape_shell_arg_rewrites_forward_slash_native_paths(self, file_ops):
         """Windows-only: ``_bash_safe_path`` only rewrites drive paths to the
         Git Bash form on Windows, where the MSYS path mangling it works around
         actually happens."""
-        assert file_ops._escape_shell_arg(
-            "C:/Users/alice/notes.txt"
-        ) == "'/c/Users/alice/notes.txt'"
-
+        assert (
+            file_ops._escape_shell_arg("C:/Users/alice/notes.txt")
+            == "'/c/Users/alice/notes.txt'"
+        )
 
     def test_is_likely_binary_by_extension(self, file_ops):
         assert file_ops._is_likely_binary("photo.png") is True
         assert file_ops._is_likely_binary("data.db") is True
         assert file_ops._is_likely_binary("code.py") is False
         assert file_ops._is_likely_binary("readme.md") is False
-
-
 
     def test_read_file_strips_leaked_terminal_fence_markers(self, mock_env):
         leaked = (
@@ -282,8 +287,11 @@ class TestShellFileOpsHelpers:
             if m:
                 return {
                     "output": compound_read_output(
-                        m.group(0), size=12, sample=b"print('ok')\n",
-                        content=leaked, total_lines=1,
+                        m.group(0),
+                        size=12,
+                        sample=b"print('ok')\n",
+                        content=leaked,
+                        total_lines=1,
                     ),
                     "returncode": 0,
                 }
@@ -333,22 +341,24 @@ class TestSearchPathValidation:
 
     def test_search_nonexistent_path_returns_error(self, mock_env):
         """search() should return an error when the path doesn't exist."""
+
         def side_effect(command, **kwargs):
             if "test -e" in command:
                 return {"output": "not_found", "returncode": 1}
             if "command -v" in command:
                 return {"output": "yes", "returncode": 0}
             return {"output": "", "returncode": 0}
+
         mock_env.execute.side_effect = side_effect
         ops = ShellFileOperations(mock_env)
         result = ops.search("pattern", path="/nonexistent/path")
         assert result.error is not None
         assert "not found" in result.error.lower() or "Path not found" in result.error
 
-
     def test_search_rg_error_exit_code(self, mock_env):
         """search() should report error when rg returns exit code 2."""
         call_count = {"n": 0}
+
         def side_effect(command, **kwargs):
             call_count["n"] += 1
             if "test -e" in command:
@@ -357,6 +367,7 @@ class TestSearchPathValidation:
                 return {"output": "yes", "returncode": 0}
             # rg returns exit 2 (error) with empty output
             return {"output": "", "returncode": 2}
+
         mock_env.execute.side_effect = side_effect
         ops = ShellFileOperations(mock_env)
         result = ops.search("pattern", path="/some/path")
@@ -423,7 +434,9 @@ class TestSearchFilesIncludesDirectories:
         assert result.files == [str(newer_dir)]
         assert result.truncated is True
 
-    def test_find_target_files_includes_matching_empty_directory(self, tmp_path, monkeypatch):
+    def test_find_target_files_includes_matching_empty_directory(
+        self, tmp_path, monkeypatch
+    ):
         root = tmp_path / "repo"
         empty_dir = root / "vault"
         regular_file = root / "vault.txt"
@@ -437,7 +450,9 @@ class TestSearchFilesIncludesDirectories:
         assert result.error is None
         assert {str(empty_dir), str(regular_file)}.issubset(set(result.files))
 
-    def test_target_files_still_excludes_hidden_matching_directories(self, tmp_path, monkeypatch):
+    def test_target_files_still_excludes_hidden_matching_directories(
+        self, tmp_path, monkeypatch
+    ):
         root = tmp_path / "repo"
         visible_dir = root / "visible" / "cache"
         hidden_dir = root / ".hidden" / "cache"
@@ -452,7 +467,9 @@ class TestSearchFilesIncludesDirectories:
         assert str(visible_dir) in result.files
         assert str(hidden_dir) not in result.files
 
-    def test_find_lane_never_returns_the_search_root_itself(self, tmp_path, monkeypatch):
+    def test_find_lane_never_returns_the_search_root_itself(
+        self, tmp_path, monkeypatch
+    ):
         """The root is excluded by path identity — not by ``-mindepth 1``, which
         would also exclude the depth-0 operand match a symlinked root depends on
         (#116270) — and a same-named descendant still matches (#54347)."""
@@ -468,7 +485,9 @@ class TestSearchFilesIncludesDirectories:
         assert str(child) in result.files
         assert str(root) not in result.files
 
-    def test_target_files_paginates_combined_files_and_directories(self, tmp_path, monkeypatch):
+    def test_target_files_paginates_combined_files_and_directories(
+        self, tmp_path, monkeypatch
+    ):
         """Files and directories share one ordering: page slices must compose."""
         root = tmp_path / "repo"
         empty_dir = root / "alpha"
@@ -494,7 +513,9 @@ class TestSearchFilesFallbackHiddenPaths:
     def _make_env(self):
         return LocalEnvironment("/")
 
-    def test_hidden_root_with_hidden_ancestor_includes_files(self, tmp_path, monkeypatch):
+    def test_hidden_root_with_hidden_ancestor_includes_files(
+        self, tmp_path, monkeypatch
+    ):
         """Fallback find should include visible files when path is inside hidden root."""
         root = tmp_path / ".clawk" / "logs"
         root.mkdir(parents=True)
@@ -503,7 +524,12 @@ class TestSearchFilesFallbackHiddenPaths:
         nested_hidden_file = root / "nested" / ".secret.log"
         visible_nested_file = root / "nested" / "visible.log"
 
-        for p in [visible_file, nested_hidden_file, visible_nested_file, hidden_dir_file]:
+        for p in [
+            visible_file,
+            nested_hidden_file,
+            visible_nested_file,
+            hidden_dir_file,
+        ]:
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text("x")
 
@@ -540,14 +566,15 @@ class TestShellFileOpsWriteDenied:
         assert result.error is not None
         assert "denied" in result.error.lower()
 
-
     def test_move_file_failure_path(self, mock_env):
-        mock_env.execute.return_value = {"output": "No such file or directory", "returncode": 1}
+        mock_env.execute.return_value = {
+            "output": "No such file or directory",
+            "returncode": 1,
+        }
         ops = ShellFileOperations(mock_env)
         result = ops.move_file("/tmp/nonexistent.txt", "/tmp/dest.txt")
         assert result.error is not None
         assert "Failed to move" in result.error
-
 
 
 def _fenced_base64_reply(command: str, payload: bytes, rc: int = 0) -> str:
@@ -557,10 +584,12 @@ def _fenced_base64_reply(command: str, payload: bytes, rc: int = 0) -> str:
     relies on."""
     import base64 as _b64
     import re as _re
+
     sentinel = _re.search(r"__CLAWK_RB_[0-9a-f]+__", command).group(0)
     body = _b64.b64encode(payload).decode() if rc == 0 else ""
     size = f"{len(payload)}\n{sentinel}\n" if "wc -c <" in command else ""
     return f"{sentinel}\n{body}\n{sentinel}\n{size}{rc}\n"
+
 
 class TestPatchReplacePostWriteVerification:
     """Tests for the post-write verification added in patch_replace.
@@ -580,8 +609,10 @@ class TestPatchReplacePostWriteVerification:
             if "base64 < " in command:
                 for path, contents in file_contents.items():
                     if path in command:
-                        return {"output": _fenced_base64_reply(command, contents.encode()),
-                                "returncode": 0}
+                        return {
+                            "output": _fenced_base64_reply(command, contents.encode()),
+                            "returncode": 0,
+                        }
                 return {"output": "", "returncode": 1}
             # mkdir for parent dir
             if command.startswith("mkdir "):
@@ -606,7 +637,6 @@ class TestPatchReplacePostWriteVerification:
         assert "verification failed" in result.error.lower()
         assert "did not persist" in result.error.lower()
 
-
     def test_patch_replace_fails_when_verify_read_errors(self, mock_env):
         """If the verify-read step itself fails (exit code != 0), return an error."""
         call_count = {"read": 0}
@@ -620,7 +650,12 @@ class TestPatchReplacePostWriteVerification:
                 call_count["read"] += 1
                 # First read (initial fetch) succeeds; second read (verify) fails
                 if call_count["read"] == 1:
-                    return {"output": _fenced_base64_reply(command, state["content"].encode()), "returncode": 0}
+                    return {
+                        "output": _fenced_base64_reply(
+                            command, state["content"].encode()
+                        ),
+                        "returncode": 0,
+                    }
                 return {"output": "", "returncode": 1}
             if command.startswith("mkdir "):
                 return {"output": "", "returncode": 0}
@@ -638,6 +673,7 @@ class TestPatchReplacePostWriteVerification:
 # =========================================================================
 # Atomic write: umask-default permissions for new files
 # =========================================================================
+
 
 class TestAtomicWriteNewFilePermissions:
     """_atomic_write should apply umask-default perms to new files (not 0600)."""
@@ -739,10 +775,12 @@ class TestReadNonUtf8IsBinary:
         # Proper UTF-8 (including non-ASCII) must still read as text.
         assert ops._is_likely_binary("notes.txt", "café résumé\nsecond\n") is False
 
+
 # =========================================================================
 # Byte-layer binary detection (#80308 class: CJK/multibyte text flagged
 # binary because the byte-boundary sample manufactured U+FFFD in transit)
 # =========================================================================
+
 
 class TestByteLayerBinaryDetection:
     """Regression suite for the misclassification class behind #80308.
@@ -762,7 +800,6 @@ class TestByteLayerBinaryDetection:
         assert sample[-1:] != b"a"  # the cut really is mid-character
         assert file_ops._is_likely_binary_bytes(sample) is False
 
-
     def test_emoji_cut_at_boundary_is_text(self, file_ops):
         # 4-byte sequence cut after 2 bytes.
         sample = (b"x" * 998 + "🎉".encode())[:1000]
@@ -774,37 +811,47 @@ class TestByteLayerBinaryDetection:
     def test_file_containing_real_replacement_char_is_text(self, file_ops):
         # A log file that legitimately stores U+FFFD is valid UTF-8. The old
         # text-layer check could not tell it from transport damage.
-        assert file_ops._is_likely_binary_bytes("log: \ufffd bad byte\n".encode("utf-8")) is False
+        assert (
+            file_ops._is_likely_binary_bytes("log: \ufffd bad byte\n".encode("utf-8"))
+            is False
+        )
 
     def test_nul_byte_is_binary(self, file_ops):
         assert file_ops._is_likely_binary_bytes(b"MZ\x00\x01text") is True
-
 
     def test_latin1_text_stays_read_only(self, file_ops):
         # Mid-stream invalid UTF-8 (0xE9 = latin-1 é). Reading it through the
         # replace-decoding transport would mojibake a read→edit→write
         # round-trip, so it must stay flagged (the old check's guarantee).
-        assert file_ops._is_likely_binary_bytes(b"caf\xe9 au lait, plus padding") is True
+        assert (
+            file_ops._is_likely_binary_bytes(b"caf\xe9 au lait, plus padding") is True
+        )
 
     def test_empty_sample_is_text(self, file_ops):
         assert file_ops._is_likely_binary_bytes(b"") is False
 
-
     def test_truncated_garbage_tail_after_invalid_prefix_is_binary(self, file_ops):
         # Error near the end but the prefix itself is not clean UTF-8.
-        assert file_ops._is_likely_binary_bytes(b"\xff\xfe" + b"a" * 10 + b"\xe4") is True
+        assert (
+            file_ops._is_likely_binary_bytes(b"\xff\xfe" + b"a" * 10 + b"\xe4") is True
+        )
 
     # --- transport: _sample_file_bytes ------------------------------------
 
     def test_sample_decodes_base64_transport(self, mock_env):
         payload = ("汉字" * 400).encode("utf-8")[:1000]
         mock_env.execute.side_effect = lambda command, **kwargs: {
-            "output": _fenced_base64_reply(command, payload), "returncode": 0}
+            "output": _fenced_base64_reply(command, payload),
+            "returncode": 0,
+        }
         ops = ShellFileOperations(mock_env)
         assert ops._sample_file_bytes("/tmp/x.txt") == payload
 
     def test_sample_falls_back_on_non_base64_output(self, mock_env):
-        mock_env.execute.return_value = {"output": "not base64 at all!!", "returncode": 0}
+        mock_env.execute.return_value = {
+            "output": "not base64 at all!!",
+            "returncode": 0,
+        }
         ops = ShellFileOperations(mock_env)
         assert ops._sample_file_bytes("/tmp/x.txt") is None
 
@@ -848,7 +895,6 @@ class TestByteLayerBinaryDetection:
         ops = ShellFileOperations(mock_env)
         result = ops.read_file("/tmp/a.out")
         assert result.is_binary is True
-
 
 
 class TestEscapeNativeToolArg:

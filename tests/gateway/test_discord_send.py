@@ -22,14 +22,24 @@ def _ensure_discord_mock():
     discord_mod.DMChannel = type("DMChannel", (), {})
     discord_mod.Thread = type("Thread", (), {})
     discord_mod.ForumChannel = type("ForumChannel", (), {})
-    discord_mod.ui = SimpleNamespace(View=object, button=lambda *a, **k: (lambda fn: fn), Button=object)
-    discord_mod.ButtonStyle = SimpleNamespace(success=1, primary=2, secondary=2, danger=3, green=1, grey=2, blurple=2, red=3)
-    discord_mod.Color = SimpleNamespace(orange=lambda: 1, green=lambda: 2, blue=lambda: 3, red=lambda: 4, purple=lambda: 5)
+    discord_mod.ui = SimpleNamespace(
+        View=object, button=lambda *a, **k: lambda fn: fn, Button=object
+    )
+    discord_mod.ButtonStyle = SimpleNamespace(
+        success=1, primary=2, secondary=2, danger=3, green=1, grey=2, blurple=2, red=3
+    )
+    discord_mod.Color = SimpleNamespace(
+        orange=lambda: 1,
+        green=lambda: 2,
+        blue=lambda: 3,
+        red=lambda: 4,
+        purple=lambda: 5,
+    )
     discord_mod.Interaction = object
     discord_mod.Embed = MagicMock
     discord_mod.app_commands = SimpleNamespace(
-        describe=lambda **kwargs: (lambda fn: fn),
-        choices=lambda **kwargs: (lambda fn: fn),
+        describe=lambda **kwargs: lambda fn: fn,
+        choices=lambda **kwargs: lambda fn: fn,
         Choice=lambda **kwargs: SimpleNamespace(**kwargs),
     )
 
@@ -120,9 +130,7 @@ async def test_send_retries_without_reference_when_reply_target_is_deleted():
     async def fake_send(*, content, reference=None):
         send_calls.append({"content": content, "reference": reference})
         if len(send_calls) == 1:
-            raise RuntimeError(
-                "400 Bad Request (error code: 10008): Unknown Message"
-            )
+            raise RuntimeError("400 Bad Request (error code: 10008): Unknown Message")
         return sent_msgs[len(send_calls) - 2]
 
     channel = SimpleNamespace(
@@ -145,8 +153,8 @@ async def test_send_retries_without_reference_when_reply_target_is_deleted():
     assert channel.send.await_count == 3
     # the reference is constructed from ids, not fetched + to_reference()
     _discord_mod.MessageReference.assert_any_call(
-        message_id=99, channel_id=None, guild_id=None,
-        fail_if_not_exists=False)
+        message_id=99, channel_id=None, guild_id=None, fail_if_not_exists=False
+    )
     assert send_calls[0]["reference"] is _discord_mod.MessageReference.return_value
     assert send_calls[1]["reference"] is None
     assert send_calls[2]["reference"] is None
@@ -157,8 +165,6 @@ async def test_send_retries_without_reference_when_reply_target_is_deleted():
 # ---------------------------------------------------------------------------
 
 import discord as _discord_mod
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -252,8 +258,9 @@ async def test_typing_restartable_after_error():
     adapter._client.http.request = AsyncMock()
     await adapter.send_typing("12345")
 
-    assert "12345" in adapter._typing_tasks, \
+    assert "12345" in adapter._typing_tasks, (
         "Should restart typing after previous failure"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -287,7 +294,9 @@ async def test_send_video_uses_path_based_files_kwarg(tmp_path, monkeypatch):
     adapter = DiscordAdapter(PlatformConfig(enabled=True, token="***"))
     sent_msg = SimpleNamespace(
         id=4242,
-        attachments=[SimpleNamespace(filename="clip.mp4", url="https://cdn.example/clip.mp4")],
+        attachments=[
+            SimpleNamespace(filename="clip.mp4", url="https://cdn.example/clip.mp4")
+        ],
     )
     channel = SimpleNamespace(
         send=AsyncMock(return_value=sent_msg),
@@ -312,7 +321,9 @@ async def test_send_video_uses_path_based_files_kwarg(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_send_video_fails_loud_when_message_has_no_attachments(tmp_path, monkeypatch):
+async def test_send_video_fails_loud_when_message_has_no_attachments(
+    tmp_path, monkeypatch
+):
     """If Discord accepts the message but attaches nothing, fail loud (#66797)."""
     import plugins.platforms.discord.adapter as discord_platform
 
@@ -350,11 +361,14 @@ async def test_send_video_missing_file_fails_fast_without_touching_channel():
     ``discord.File`` into an actionable ``File not found`` result, and must
     short-circuit before the channel is ever resolved.
     """
+
     def _boom(*_args, **_kwargs):
         raise AssertionError("channel must not be resolved for a missing file")
 
     adapter = DiscordAdapter(PlatformConfig(enabled=True, token="***"))
-    adapter._client = SimpleNamespace(get_channel=_boom, fetch_channel=AsyncMock(side_effect=_boom))
+    adapter._client = SimpleNamespace(
+        get_channel=_boom, fetch_channel=AsyncMock(side_effect=_boom)
+    )
 
     result = await adapter.send_video("555", "/no/such/clip.mp4")
 
@@ -402,7 +416,10 @@ async def test_send_file_attachment_forum_uses_files_kwarg(tmp_path, monkeypatch
     forum_channel.create_thread.assert_awaited_once()
     thread_kwargs = forum_channel.create_thread.await_args.kwargs
     assert thread_kwargs.get("file") is None
-    assert isinstance(thread_kwargs.get("files"), list) and len(thread_kwargs["files"]) == 1
+    assert (
+        isinstance(thread_kwargs.get("files"), list)
+        and len(thread_kwargs["files"]) == 1
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -413,14 +430,17 @@ async def test_send_file_attachment_forum_uses_files_kwarg(tmp_path, monkeypatch
 def _preflight_adapter(channel):
     adapter = DiscordAdapter(PlatformConfig(enabled=True, token="***"))
     adapter._is_forum_parent = lambda _ch: False  # type: ignore[method-assign]
-    adapter._client = SimpleNamespace(get_channel=lambda _cid: channel, fetch_channel=AsyncMock())
+    adapter._client = SimpleNamespace(
+        get_channel=lambda _cid: channel, fetch_channel=AsyncMock()
+    )
     return adapter
 
 
 def _fake_getsize(monkeypatch, oversized: Path, size: int):
     original = os.path.getsize
     monkeypatch.setattr(
-        os.path, "getsize",
+        os.path,
+        "getsize",
         lambda path: size if str(path) == str(oversized) else original(path),
     )
 
@@ -435,35 +455,53 @@ def test_discord_upload_limit_uses_guild_filesize_limit():
     boosted = SimpleNamespace(guild=SimpleNamespace(filesize_limit=50 * 1024 * 1024))
     # discord.py 2.7.1 still reports 10 MiB for unboosted guilds; the platform default is
     # 20 MiB since Sep 3 2026, so a stale library constant must never lower the preflight.
-    stale = SimpleNamespace(guild=SimpleNamespace(filesize_limit=_DISCORD_DEFAULT_UPLOAD_LIMIT_BYTES // 2))
+    stale = SimpleNamespace(
+        guild=SimpleNamespace(filesize_limit=_DISCORD_DEFAULT_UPLOAD_LIMIT_BYTES // 2)
+    )
 
     assert limit_for(boosted) == 50 * 1024 * 1024
     assert limit_for(stale) == _DISCORD_DEFAULT_UPLOAD_LIMIT_BYTES
     assert limit_for(SimpleNamespace(guild=None)) == _DISCORD_DEFAULT_UPLOAD_LIMIT_BYTES
-    assert limit_for(SimpleNamespace(guild=SimpleNamespace(filesize_limit=0))) == _DISCORD_DEFAULT_UPLOAD_LIMIT_BYTES
+    assert (
+        limit_for(SimpleNamespace(guild=SimpleNamespace(filesize_limit=0)))
+        == _DISCORD_DEFAULT_UPLOAD_LIMIT_BYTES
+    )
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("method, path_kw, name", [
-    ("send_video", "video_path", "clip.mp4"),
-    ("send_document", "file_path", "report.pdf"),
-    ("send_voice", "audio_path", "note.ogg"),
-])
-async def test_oversized_upload_rejected_before_send(tmp_path, monkeypatch, method, path_kw, name):
+@pytest.mark.parametrize(
+    "method, path_kw, name",
+    [
+        ("send_video", "video_path", "clip.mp4"),
+        ("send_document", "file_path", "report.pdf"),
+        ("send_voice", "audio_path", "note.ogg"),
+    ],
+)
+async def test_oversized_upload_rejected_before_send(
+    tmp_path, monkeypatch, method, path_kw, name
+):
     """Oversized local files never reach channel.send(file(s)=...) (#50846): the caller gets an
     actionable error (name, size, limit), the user a notice, and the base fallback never runs."""
-    from plugins.platforms.discord.adapter_media import _DISCORD_DEFAULT_UPLOAD_LIMIT_BYTES
+    from plugins.platforms.discord.adapter_media import (
+        _DISCORD_DEFAULT_UPLOAD_LIMIT_BYTES,
+    )
 
     big = tmp_path / name
     big.write_bytes(b"x")
     _fake_getsize(monkeypatch, big, _DISCORD_DEFAULT_UPLOAD_LIMIT_BYTES + 1)
 
     async def base_must_not_run(*_a, **_k):
-        raise AssertionError("base adapter fallback must not run for a preflight reject")
+        raise AssertionError(
+            "base adapter fallback must not run for a preflight reject"
+        )
 
-    monkeypatch.setattr(f"gateway.platforms.base.BasePlatformAdapter.{method}", base_must_not_run)
+    monkeypatch.setattr(
+        f"gateway.platforms.base.BasePlatformAdapter.{method}", base_must_not_run
+    )
     send = AsyncMock(return_value=SimpleNamespace(id=999))
-    http = SimpleNamespace(request=AsyncMock(side_effect=AssertionError("raw upload must not run")))
+    http = SimpleNamespace(
+        request=AsyncMock(side_effect=AssertionError("raw upload must not run"))
+    )
     adapter = _preflight_adapter(SimpleNamespace(id=555, guild=None, send=send))
     adapter._client.http = http
 
@@ -471,7 +509,11 @@ async def test_oversized_upload_rejected_before_send(tmp_path, monkeypatch, meth
 
     assert result.success is False
     assert "too large" in result.error.lower()
-    assert name in result.error and "20.0 MB" in result.error and "limit 20 MB" in result.error
+    assert (
+        name in result.error
+        and "20.0 MB" in result.error
+        and "limit 20 MB" in result.error
+    )
     assert send.await_count == 1
     kwargs = send.await_args.kwargs
     assert "file" not in kwargs and "files" not in kwargs
@@ -482,15 +524,23 @@ async def test_oversized_upload_rejected_before_send(tmp_path, monkeypatch, meth
 async def test_send_video_under_guild_boost_limit_uploads(tmp_path, monkeypatch):
     """A boosted guild's higher cap is honored: a file over the default but under the guild
     limit is uploaded, not rejected."""
-    from plugins.platforms.discord.adapter_media import _DISCORD_DEFAULT_UPLOAD_LIMIT_BYTES
+    from plugins.platforms.discord.adapter_media import (
+        _DISCORD_DEFAULT_UPLOAD_LIMIT_BYTES,
+    )
 
     video = tmp_path / "ok.mp4"
     video.write_bytes(b"fake-video-bytes")
     _fake_getsize(monkeypatch, video, _DISCORD_DEFAULT_UPLOAD_LIMIT_BYTES + 1)
-    sent_msg = SimpleNamespace(id=42, attachments=[SimpleNamespace(filename="ok.mp4", url="https://cdn/ok.mp4")])
+    sent_msg = SimpleNamespace(
+        id=42,
+        attachments=[SimpleNamespace(filename="ok.mp4", url="https://cdn/ok.mp4")],
+    )
     send = AsyncMock(return_value=sent_msg)
     adapter = _preflight_adapter(
-        SimpleNamespace(id=777, guild=SimpleNamespace(filesize_limit=50 * 1024 * 1024), send=send))
+        SimpleNamespace(
+            id=777, guild=SimpleNamespace(filesize_limit=50 * 1024 * 1024), send=send
+        )
+    )
 
     result = await adapter.send_video("777", str(video))
 
@@ -503,7 +553,9 @@ async def test_send_multiple_images_skips_oversized_local_file(tmp_path, monkeyp
     """Sibling site of #50846: an oversized local image used to 413 the whole chunk and dump
     its siblings into the per-image fallback. It is skipped up front, the rest of the chunk is
     delivered with a notice appended; an all-oversized chunk still sends the notice alone."""
-    from plugins.platforms.discord.adapter_media import _DISCORD_DEFAULT_UPLOAD_LIMIT_BYTES
+    from plugins.platforms.discord.adapter_media import (
+        _DISCORD_DEFAULT_UPLOAD_LIMIT_BYTES,
+    )
 
     small = tmp_path / "small.png"
     small.write_bytes(b"ok")
@@ -513,7 +565,9 @@ async def test_send_multiple_images_skips_oversized_local_file(tmp_path, monkeyp
     send = AsyncMock(return_value=SimpleNamespace(id=7))
     adapter = _preflight_adapter(SimpleNamespace(id=9, guild=None, send=send))
 
-    mixed = await adapter.send_multiple_images("9", [(f"file://{small}", ""), (f"file://{big}", "")])
+    mixed = await adapter.send_multiple_images(
+        "9", [(f"file://{small}", ""), (f"file://{big}", "")]
+    )
     assert mixed.success is True
     kwargs = send.await_args.kwargs
     assert len(kwargs["files"]) == 1  # only the small image made it

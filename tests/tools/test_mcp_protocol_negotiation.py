@@ -11,7 +11,10 @@ import asyncio
 import pytest
 
 from tools.mcp_tool import MCPServerTask
-from tools.mcp_tool_errors import _handshake_rejected_as_modern, _JSONRPC_UNSUPPORTED_PROTOCOL_VERSION
+from tools.mcp_tool_errors import (
+    _handshake_rejected_as_modern,
+    _JSONRPC_UNSUPPORTED_PROTOCOL_VERSION,
+)
 
 
 class _Err(Exception):
@@ -71,13 +74,17 @@ class TestAutoMode:
         assert s.calls == ["initialize"]
 
     def test_falls_back_to_discover_on_unsupported_protocol_version(self):
-        s = _Session(init=_Err(_JSONRPC_UNSUPPORTED_PROTOCOL_VERSION), disc="DISC_RESULT")
+        s = _Session(
+            init=_Err(_JSONRPC_UNSUPPORTED_PROTOCOL_VERSION), disc="DISC_RESULT"
+        )
         out = _run(_task()._negotiate_session(s, 5))
         assert out == "DISC_RESULT"
         assert s.calls == ["initialize", "discover"]
 
     def test_falls_back_on_method_not_found(self):
-        s = _Session(init=_Err(-32601, "Method not found: initialize"), disc="DISC_RESULT")
+        s = _Session(
+            init=_Err(-32601, "Method not found: initialize"), disc="DISC_RESULT"
+        )
         out = _run(_task()._negotiate_session(s, 5))
         assert out == "DISC_RESULT"
 
@@ -110,7 +117,9 @@ class TestExplicitModes:
         assert s.calls == ["discover", "initialize"]
 
     def test_legacy_never_discovers(self):
-        s = _Session(init=_Err(_JSONRPC_UNSUPPORTED_PROTOCOL_VERSION), disc="DISC_RESULT")
+        s = _Session(
+            init=_Err(_JSONRPC_UNSUPPORTED_PROTOCOL_VERSION), disc="DISC_RESULT"
+        )
         with pytest.raises(_Err):
             _run(_task("legacy")._negotiate_session(s, 5))
         assert s.calls == ["initialize"]
@@ -148,15 +157,23 @@ class _EchoingStatelessSession(_Session):
     surface (``send_request`` / ``adopt`` / ``send_notification``)."""
 
     def __init__(self, disc):
-        super().__init__(init=RuntimeError("Unsupported protocol version from the server: 2026-07-28"), disc=disc)
+        super().__init__(
+            init=RuntimeError(
+                "Unsupported protocol version from the server: 2026-07-28"
+            ),
+            disc=disc,
+        )
         self.adopted = None
 
     async def send_request(self, request, result_type):
         self.calls.append(("send_request", request.method))
         from mcp import types
+
         return types.InitializeResult(
-            protocolVersion="2026-07-28", capabilities=types.ServerCapabilities(tools=types.ToolsCapability()),
-            serverInfo=types.Implementation(name="StatelessServer", version="ESF"))
+            protocolVersion="2026-07-28",
+            capabilities=types.ServerCapabilities(tools=types.ToolsCapability()),
+            serverInfo=types.Implementation(name="StatelessServer", version="ESF"),
+        )
 
     def adopt(self, result):
         self.calls.append("adopt")
@@ -170,18 +187,34 @@ class TestModernVersionEchoedToLegacyHandshake:
     """#113359: a stateless server that accepts ``initialize`` but reports 2026-07-28 and 400s
     ``server/discover`` must still connect — the handshake succeeded on the wire."""
 
-    def test_auto_completes_the_handshake_at_the_offered_version_when_discover_fails(self):
+    def test_auto_completes_the_handshake_at_the_offered_version_when_discover_fails(
+        self,
+    ):
         from tools import mcp_tool as _core
-        s = _EchoingStatelessSession(disc=_Err(-32603, "Server returned an error response"))
+
+        s = _EchoingStatelessSession(
+            disc=_Err(-32603, "Server returned an error response")
+        )
         out = _run(_task()._negotiate_session(s, 5))
         assert out.capabilities.tools is not None
-        assert s.calls == ["initialize", "discover", ("send_request", "initialize"), "adopt",
-                           ("notify", "notifications/initialized")]
-        assert s.adopted.protocol_version == _core.LATEST_HANDSHAKE_VERSION  # later requests stay legacy-shaped
+        assert s.calls == [
+            "initialize",
+            "discover",
+            ("send_request", "initialize"),
+            "adopt",
+            ("notify", "notifications/initialized"),
+        ]
+        assert (
+            s.adopted.protocol_version == _core.LATEST_HANDSHAKE_VERSION
+        )  # later requests stay legacy-shaped
 
     def test_genuine_unsupported_version_error_never_re_handshakes(self):
-        s = _Session(init=_Err(_JSONRPC_UNSUPPORTED_PROTOCOL_VERSION, "unsupported protocol version"),
-                     disc=_Err(-32603, "Server returned an error response"))
+        s = _Session(
+            init=_Err(
+                _JSONRPC_UNSUPPORTED_PROTOCOL_VERSION, "unsupported protocol version"
+            ),
+            disc=_Err(-32603, "Server returned an error response"),
+        )
         with pytest.raises(_Err, match="Server returned an error response"):
             _run(_task()._negotiate_session(s, 5))
         assert s.calls == ["initialize", "discover"]

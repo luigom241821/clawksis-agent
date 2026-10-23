@@ -59,7 +59,10 @@ from tests.e2e.core.sqlite._helpers import (
 )
 
 pytestmark = [
-    pytest.mark.skipif(not sys.platform.startswith("linux"), reason="/proc fd scan and POSIX lock semantics"),
+    pytest.mark.skipif(
+        not sys.platform.startswith("linux"),
+        reason="/proc fd scan and POSIX lock semantics",
+    ),
 ]
 
 READER_FD_SLACK = 6
@@ -69,7 +72,9 @@ CHURN_FD_SLACK = 2
 @pytest.fixture(scope="module", params=JOURNAL_MODES)
 def chamber(request, tmp_path_factory):
     skip_unless_deployable(request.param)
-    ch = Chamber(tmp_path_factory.mktemp(f"chamber-{request.param}"), journal=request.param)
+    ch = Chamber(
+        tmp_path_factory.mktemp(f"chamber-{request.param}"), journal=request.param
+    )
     _ensure_reader(ch)
     yield ch
     ch.shutdown()
@@ -91,14 +96,26 @@ def _stop_reader(ch: Chamber) -> None:
 
 def _writers(ch: Chamber, ep: str, **kw) -> tuple[str, str]:
     gw, tui = f"{ep}-gw", f"{ep}-tui"
-    ch.spawn("writer", gw, tag="g", sessions=["gw-a", "gw-b", "gw-c"], source="telegram", batch_every=7, **kw)
-    ch.spawn("writer", tui, tag="t", sessions=["tui-a"], source="tui", batch_every=5, **kw)
+    ch.spawn(
+        "writer",
+        gw,
+        tag="g",
+        sessions=["gw-a", "gw-b", "gw-c"],
+        source="telegram",
+        batch_every=7,
+        **kw,
+    )
+    ch.spawn(
+        "writer", tui, tag="t", sessions=["tui-a"], source="tui", batch_every=5, **kw
+    )
     ch.wait_event(gw, "ready")
     ch.wait_event(tui, "ready")
     return gw, tui
 
 
-def _background(ch: Chamber, ep: str, *, openers: int = 4, churn: int = 40) -> list[str]:
+def _background(
+    ch: Chamber, ep: str, *, openers: int = 4, churn: int = 40
+) -> list[str]:
     names = []
     if churn:
         ch.spawn("churn", f"{ep}-churn", iterations=churn)
@@ -115,7 +132,11 @@ def _reap_all(ch: Chamber, names: list[str]) -> None:
         proc = ch.procs[name]
         if proc.returncode is None:
             rc = ch.reap(name)
-            errors = [f"{e.get('error')}\n{e.get('tb', '')}" for e in ch.events(name) if e.get("event") == "error"]
+            errors = [
+                f"{e.get('error')}\n{e.get('tb', '')}"
+                for e in ch.events(name)
+                if e.get("event") == "error"
+            ]
             assert rc == 0, f"{name} exited {rc}: {errors}\n{ch.stderr(name)}"
 
 
@@ -148,7 +169,14 @@ def ep_kill9_writer_midwrite(ch, ep, rng):
     ch.kill9(gw)  # gateway dies mid-append: the in-flight row is either whole or absent
     ch.kill9(f"{ep}-churn")  # and a CLI dies holding the file open
     gw2 = f"{ep}-gw2"
-    ch.spawn("writer", gw2, tag="g", sessions=["gw-a", "gw-b"], source="telegram", batch_every=3)
+    ch.spawn(
+        "writer",
+        gw2,
+        tag="g",
+        sessions=["gw-a", "gw-b"],
+        source="telegram",
+        batch_every=3,
+    )
     bg = _background(ch, ep, churn=0)
     ch.wait_acks(gw2, rng.randint(30, 60))
     ch.wait_acks(tui, 40)
@@ -162,10 +190,14 @@ def ep_sigterm_graceful_close(ch, ep, rng):
     bg = _background(ch, ep, openers=6, churn=60)
     ch.wait_acks(gw, rng.randint(30, 80))
     ch.sigterm(gw)
-    ch.sigterm(tui)  # both close (checkpoint-on-close) while the churner and openers are mid-cycle
+    ch.sigterm(
+        tui
+    )  # both close (checkpoint-on-close) while the churner and openers are mid-cycle
     for name in (gw, tui):
         assert ch.reap(name) == 0, ch.stderr(name)
-        assert any(e.get("event") == "closed" for e in ch.events(name)), f"{name} never closed cleanly"
+        assert any(e.get("event") == "closed" for e in ch.events(name)), (
+            f"{name} never closed cleanly"
+        )
     gw2 = f"{ep}-gw2"
     ch.spawn("writer", gw2, tag="g", sessions=["gw-a"], source="telegram")
     ch.wait_acks(gw2, 30)
@@ -192,8 +224,10 @@ def ep_lock_cancellation(ch, ep, rng):
         assert wave < 200, "writers made no progress"
         for w in (gw, tui):
             rc = ch.procs[w].poll()
-            assert rc is None, (f"{w} died (rc={rc}) after {len(ch.journal(w)[1])} acks: {ch.events(w)[-1:]}\n"
-                                f"deleted sidecars held: {ch.deleted_hits_snapshot()}\n{ch.stderr(w)}")
+            assert rc is None, (
+                f"{w} died (rc={rc}) after {len(ch.journal(w)[1])} acks: {ch.events(w)[-1:]}\n"
+                f"deleted sidecars held: {ch.deleted_hits_snapshot()}\n{ch.stderr(w)}"
+            )
     _stop_all(ch, [gw, tui])
     _ensure_reader(ch)
     return [gw, tui]
@@ -201,15 +235,25 @@ def ep_lock_cancellation(ch, ep, rng):
 
 def ep_chmod_flip(ch, ep, rng):
     gw, tui = _writers(ch, ep)
-    files = [ch.db, ch.db.with_name(ch.db.name + "-wal"), ch.db.with_name(ch.db.name + "-shm")]
+    files = [
+        ch.db,
+        ch.db.with_name(ch.db.name + "-wal"),
+        ch.db.with_name(ch.db.name + "-shm"),
+    ]
     try:
-        for i in range(rng.randint(3, 5)):  # each flip is the same fault; process start-up dominates
+        for i in range(
+            rng.randint(3, 5)
+        ):  # each flip is the same fault; process start-up dominates
             for f in files:
                 if f.exists():
-                    os.chmod(f, 0o644)  # a permissive mode the next SessionDB open tightens
+                    os.chmod(
+                        f, 0o644
+                    )  # a permissive mode the next SessionDB open tightens
             ch.spawn("opener", f"{ep}-tighten{i}")
             _reap_all(ch, [f"{ep}-tighten{i}"])
-            os.chmod(ch.db, 0o400)  # read-only main file: new openers may refuse, must not damage
+            os.chmod(
+                ch.db, 0o400
+            )  # read-only main file: new openers may refuse, must not damage
             ch.spawn("opener", f"{ep}-ro{i}", may_fail=True)
             ch.spawn("opener", f"{ep}-rorw{i}", may_fail=True, raw=True)
             _reap_all(ch, [f"{ep}-ro{i}", f"{ep}-rorw{i}"])
@@ -234,7 +278,12 @@ def ep_fts_rebuild_concurrent(ch, ep, rng):
     time.sleep(rng.uniform(0.0, 0.05))  # fault-injection jitter, not synchronization
     ch.kill9(f"{ep}-fts-killed")  # maintenance killed mid-rebuild
     _reap_all(ch, [f"{ep}-fts-a", f"{ep}-fts-b"])
-    rebuilt = [e for n in ("a", "b") for e in ch.events(f"{ep}-fts-{n}") if e.get("event") == "stats"]
+    rebuilt = [
+        e
+        for n in ("a", "b")
+        for e in ch.events(f"{ep}-fts-{n}")
+        if e.get("event") == "stats"
+    ]
     assert len(rebuilt) == 2, rebuilt
     ch.wait_acks(gw, len(ch.journal(gw)[1]) + 20)
     _stop_all(ch, [gw, tui])
@@ -254,7 +303,9 @@ def _repair(ch: Chamber, name: str) -> dict:
 def ep_repair_live_then_offline(ch, ep, rng):
     gw, tui = _writers(ch, ep)
     ch.wait_acks(gw, rng.randint(20, 50))
-    _repair(ch, f"{ep}-repair-live")  # must not cost an acked row (checked by the episode invariants)
+    _repair(
+        ch, f"{ep}-repair-live"
+    )  # must not cost an acked row (checked by the episode invariants)
     ch.wait_acks(gw, len(ch.journal(gw)[1]) + 20)
     _stop_all(ch, [gw, tui])
     _stop_reader(ch)
@@ -268,17 +319,23 @@ def ep_fts_corruption_fail_open(ch, ep, rng):
     _stop_reader(ch)
     conn = sqlite3.connect(str(ch.db), timeout=30.0)
     try:
-        conn.execute("UPDATE messages_fts_data SET block = X'DEADBEEFDEADBEEFDEADBEEFDEADBEEF'")
+        conn.execute(
+            "UPDATE messages_fts_data SET block = X'DEADBEEFDEADBEEFDEADBEEFDEADBEEF'"
+        )
         conn.commit()
     finally:
         conn.close()
     gw, tui = _writers(ch, ep)
     ch.wait_acks(gw, rng.randint(20, 50))
     ch.wait_acks(tui, 20)
-    _repair(ch, f"{ep}-repair-live")  # a repair racing live writers must not overwrite their acked rows
+    _repair(
+        ch, f"{ep}-repair-live"
+    )  # a repair racing live writers must not overwrite their acked rows
     _stop_all(ch, [gw, tui])
     _repair(ch, f"{ep}-repair-offline")
-    ch.spawn("opener", f"{ep}-reopen")  # the next SessionDB open finishes the stale-FTS recovery
+    ch.spawn(
+        "opener", f"{ep}-reopen"
+    )  # the next SessionDB open finishes the stale-FTS recovery
     _reap_all(ch, [f"{ep}-reopen"])
     _ensure_reader(ch)
     return [gw, tui]
@@ -294,7 +351,14 @@ def ep_kill9_everything(ch, ep, rng):
         if ch.procs[name].poll() is None:
             ch.kill9(name)
     gw2 = f"{ep}-gw2"
-    ch.spawn("writer", gw2, tag="g", sessions=["gw-a", "tui-a"], source="telegram", batch_every=4)
+    ch.spawn(
+        "writer",
+        gw2,
+        tag="g",
+        sessions=["gw-a", "tui-a"],
+        source="telegram",
+        batch_every=4,
+    )
     _ensure_reader(ch)
     ch.wait_acks(gw2, 30)
     _stop_all(ch, [gw2])
@@ -320,7 +384,9 @@ def _reader_fd_problems(ch: Chamber) -> list[str]:
         return []
     warm = max(fds[:3])  # after the first passes the read pool has settled
     if max(fds) > warm + READER_FD_SLACK:
-        return [f"{ch.reader_name} fd count grew {warm} -> {max(fds)} over {len(fds)} samples ({fds[-5:]})"]
+        return [
+            f"{ch.reader_name} fd count grew {warm} -> {max(fds)} over {len(fds)} samples ({fds[-5:]})"
+        ]
     return []
 
 
@@ -332,8 +398,10 @@ def _churn_fd_problems(ch: Chamber, ep: str) -> list[str]:
         for e in ch.events(name):
             if e.get("event") == "stats" and e.get("warm_fds") is not None:
                 if e["end_fds"] > e["warm_fds"] + CHURN_FD_SLACK:
-                    out.append(f"{name}: fds {e['warm_fds']} after warmup -> {e['end_fds']} after "
-                               f"{e['iterations']} open/close cycles")
+                    out.append(
+                        f"{name}: fds {e['warm_fds']} after warmup -> {e['end_fds']} after "
+                        f"{e['iterations']} open/close cycles"
+                    )
     return out
 
 
@@ -341,11 +409,15 @@ def _churn_fd_problems(ch: Chamber, ep: str) -> list[str]:
 def test_torture_episode(chamber, episode):
     seed = episode_seed(episode)
     rng = random.Random(seed)
-    ctx = (f"[journal={chamber.mode} episode={episode} seed={seed} base={base_seed()}; "
-           f"replay: {SEED_ENV}={base_seed()}]")
+    ctx = (
+        f"[journal={chamber.mode} episode={episode} seed={seed} base={base_seed()}; "
+        f"replay: {SEED_ENV}={base_seed()}]"
+    )
     _ensure_reader(chamber)
     before = counts(chamber.db) if chamber.db.exists() else {"__total__": 0}
-    hits_mark = chamber.deleted_hits_mark()  # the chamber is shared: an earlier episode's hit is not this one's
+    hits_mark = (
+        chamber.deleted_hits_mark()
+    )  # the chamber is shared: an earlier episode's hit is not this one's
     started = time.monotonic()
 
     try:
@@ -359,8 +431,13 @@ def test_torture_episode(chamber, episode):
                 chamber.stop(name, deadline=30.0)
     assert not stragglers, f"{ctx} roles still running: {stragglers}"
     problems: list[str] = []
-    problems += [f"{n}: {e.get('error')}\n{e.get('tb', '')}" for n, e in chamber.errors()]
-    problems += [f"{name} (pid {pid}) held {link}" for name, pid, link in chamber.deleted_hits_snapshot(hits_mark)]
+    problems += [
+        f"{n}: {e.get('error')}\n{e.get('tb', '')}" for n, e in chamber.errors()
+    ]
+    problems += [
+        f"{name} (pid {pid}) held {link}"
+        for name, pid, link in chamber.deleted_hits_snapshot(hits_mark)
+    ]
     rows = integrity_rows(chamber.db)
     if rows != ["ok"]:
         problems.append(f"integrity_check: {rows[:5]}")
@@ -369,7 +446,9 @@ def test_torture_episode(chamber, episode):
     after = counts(chamber.db)
     for sid, n in before.items():
         if after.get(sid, 0) < n:
-            problems.append(f"canonical rows went down for {sid}: {n} -> {after.get(sid, 0)}")
+            problems.append(
+                f"canonical rows went down for {sid}: {n} -> {after.get(sid, 0)}"
+            )
     episode_acks = acked_tokens(chamber, runs)
     if not episode_acks:
         problems.append("episode acknowledged no appends")
@@ -377,13 +456,20 @@ def test_torture_episode(chamber, episode):
     problems += _reader_fd_problems(chamber)
     problems += _churn_fd_problems(chamber, episode)
     busy = busy_summary(chamber, episode)
-    assert not problems, f"{ctx} ({time.monotonic() - started:.1f}s, busy waits {busy})\n" + "\n".join(problems)
+    assert not problems, (
+        f"{ctx} ({time.monotonic() - started:.1f}s, busy waits {busy})\n"
+        + "\n".join(problems)
+    )
 
 
 def test_long_lived_reader_saw_every_episode_grow_only(chamber):
     """The dashboard reader lives across episodes: it never saw a session shrink and never errored."""
-    wait_for(lambda: any(e.get("event") == "stats" for e in chamber.events(chamber.reader_name)),
-             what="reader stats")
+    wait_for(
+        lambda: any(
+            e.get("event") == "stats" for e in chamber.events(chamber.reader_name)
+        ),
+        what="reader stats",
+    )
     errors = [(n, e) for n, e in chamber.errors() if n.startswith("reader")]
     assert not errors, errors
     assert not _reader_fd_problems(chamber)

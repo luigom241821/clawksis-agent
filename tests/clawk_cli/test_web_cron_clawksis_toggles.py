@@ -44,25 +44,41 @@ def test_create_stores_toggles_and_update_keeps_them(client):
     )
     assert created.status_code == 200, created.text
     job = created.json()
-    assert (job["silent_notice"], job["use_soul"], job["use_user_md"], job["use_memory"]) == (
-        False, False, False, True)
+    assert (
+        job["silent_notice"],
+        job["use_soul"],
+        job["use_user_md"],
+        job["use_memory"],
+    ) == (False, False, False, True)
     assert job["fallback_models"]
 
-    updated = client.put(f"/api/cron/jobs/{job['id']}", json={"updates": {"name": "renamed"}})
+    updated = client.put(
+        f"/api/cron/jobs/{job['id']}", json={"updates": {"name": "renamed"}}
+    )
     assert updated.status_code == 200, updated.text
     after = updated.json()
     assert after["name"] == "renamed"
-    assert (after["silent_notice"], after["use_soul"], after["use_user_md"], after["use_memory"]) == (
-        False, False, False, True)
+    assert (
+        after["silent_notice"],
+        after["use_soul"],
+        after["use_user_md"],
+        after["use_memory"],
+    ) == (False, False, False, True)
     assert after["fallback_models"] == job["fallback_models"]
 
 
 def test_create_defaults_match_the_cron_store(client):
-    created = client.post("/api/cron/jobs", json={"prompt": "ping", "schedule": "every 1h"})
+    created = client.post(
+        "/api/cron/jobs", json={"prompt": "ping", "schedule": "every 1h"}
+    )
     assert created.status_code == 200, created.text
     job = created.json()
-    assert (job["silent_notice"], job["use_soul"], job["use_user_md"], job["use_memory"]) == (
-        True, True, True, False)
+    assert (
+        job["silent_notice"],
+        job["use_soul"],
+        job["use_user_md"],
+        job["use_memory"],
+    ) == (True, True, True, False)
 
 
 def test_delivery_targets_offer_origin(monkeypatch):
@@ -71,7 +87,9 @@ def test_delivery_targets_offer_origin(monkeypatch):
 
     monkeypatch.setattr(scheduler_delivery, "cron_delivery_targets", list)
 
-    ids = [t["id"] for t in asyncio.run(cron_router.get_cron_delivery_targets())["targets"]]
+    ids = [
+        t["id"] for t in asyncio.run(cron_router.get_cron_delivery_targets())["targets"]
+    ]
 
     assert ids[0] == "local"
     assert "origin" in ids

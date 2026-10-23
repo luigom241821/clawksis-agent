@@ -29,7 +29,9 @@ def test_execute_returns_when_wait_loop_never_returns(monkeypatch):
 
     monkeypatch.setattr(env, "_wait_for_process", _hang)
     killed: list = []
-    monkeypatch.setattr(env, "_kill_process", lambda proc: killed.append(("kill", proc)))
+    monkeypatch.setattr(
+        env, "_kill_process", lambda proc: killed.append(("kill", proc))
+    )
     monkeypatch.setattr(
         "agent.deadline.kill_process_tree",
         lambda pid, **_k: killed.append(("tree", pid)),
@@ -57,7 +59,14 @@ def test_execute_parent_interrupt_still_kills_wait_on_deadline_worker(monkeypatc
 
     seen = {"parent": False}
 
-    def _wait(_proc, timeout=120, *, bounded_capture=False, watch_interrupt_tid=None, output=None):
+    def _wait(
+        _proc,
+        timeout=120,
+        *,
+        bounded_capture=False,
+        watch_interrupt_tid=None,
+        output=None,
+    ):
         deadline = time.monotonic() + 2.0
         while time.monotonic() < deadline:
             from tools.interrupt import is_thread_interrupted

@@ -47,9 +47,13 @@ def test_context_local_session_with_live_agent(monkeypatch):
     monkeypatch.setattr(server, "_session_uses_compute_host", lambda *a, **k: False)
     monkeypatch.setattr(server, "_session_db", _no_db)
 
-    out = server._live_slash_command_output("sid-1", _live_session(object()), "context", "")
+    out = server._live_slash_command_output(
+        "sid-1", _live_session(object()), "context", ""
+    )
 
-    assert out is not None, "/context fell through to the CLI worker for a local session"
+    assert out is not None, (
+        "/context fell through to the CLI worker for a local session"
+    )
     assert "No active agent" not in out
     assert "Conversation:" in out
 
@@ -71,7 +75,9 @@ def test_context_compute_host_route_unchanged(monkeypatch):
     monkeypatch.setattr(server, "_session_uses_compute_host", lambda *a, **k: True)
     monkeypatch.setattr(server, "_session_db", _no_db)
 
-    out = server._live_slash_command_output("sid-1", _live_session(object()), "context", "")
+    out = server._live_slash_command_output(
+        "sid-1", _live_session(object()), "context", ""
+    )
 
     assert out is not None
     assert "Conversation:" in out
@@ -94,8 +100,18 @@ def test_context_breakdown_engine_used_with_live_agent(monkeypatch):
 
     payload = {
         "categories": [
-            {"id": "system_prompt", "label": "System prompt", "tokens": 8000, "color": "dim"},
-            {"id": "conversation", "label": "Conversation", "tokens": 82000, "color": "normal"},
+            {
+                "id": "system_prompt",
+                "label": "System prompt",
+                "tokens": 8000,
+                "color": "dim",
+            },
+            {
+                "id": "conversation",
+                "label": "Conversation",
+                "tokens": 82000,
+                "color": "normal",
+            },
         ],
         "context_max": 131072,
         "context_percent": 68,
@@ -105,8 +121,13 @@ def test_context_breakdown_engine_used_with_live_agent(monkeypatch):
         "estimated_total": 90000,
         "model": "test-model",
     }
-    with patch("agent.context_breakdown.compute_session_context_breakdown", return_value=payload):
-        out = server._live_slash_command_output("sid-1", _live_session(object()), "context", "")
+    with patch(
+        "agent.context_breakdown.compute_session_context_breakdown",
+        return_value=payload,
+    ):
+        out = server._live_slash_command_output(
+            "sid-1", _live_session(object()), "context", ""
+        )
 
     assert out is not None
     assert "Context window:" in out
@@ -119,7 +140,14 @@ def test_context_all_arg_reaches_details(monkeypatch):
     monkeypatch.setattr(server, "_session_db", _no_db)
 
     payload = {
-        "categories": [{"id": "conversation", "label": "Conversation", "tokens": 1000, "color": "normal"}],
+        "categories": [
+            {
+                "id": "conversation",
+                "label": "Conversation",
+                "tokens": 1000,
+                "color": "normal",
+            }
+        ],
         "context_max": 10000,
         "context_percent": 10,
         "context_used": 1000,
@@ -130,10 +158,17 @@ def test_context_all_arg_reaches_details(monkeypatch):
     }
     details = {"skills": [], "toolsets": []}
     with (
-        patch("agent.context_breakdown.compute_session_context_breakdown", return_value=payload) as m_breakdown,
-        patch("agent.context_breakdown.compute_context_details", return_value=details) as m_details,
+        patch(
+            "agent.context_breakdown.compute_session_context_breakdown",
+            return_value=payload,
+        ) as m_breakdown,
+        patch(
+            "agent.context_breakdown.compute_context_details", return_value=details
+        ) as m_details,
     ):
-        out = server._live_slash_command_output("sid-1", _live_session(object()), "context", "all")
+        out = server._live_slash_command_output(
+            "sid-1", _live_session(object()), "context", "all"
+        )
 
     assert out is not None
     m_breakdown.assert_called_once()

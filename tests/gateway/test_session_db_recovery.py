@@ -20,7 +20,9 @@ class _Clock:
 
 def test_failed_open_obeys_backoff_then_recovers() -> None:
     clock = _Clock()
-    cache = RecoverableHandleCache(clock=clock, initial_retry_delay=2, max_retry_delay=8)
+    cache = RecoverableHandleCache(
+        clock=clock, initial_retry_delay=2, max_retry_delay=8
+    )
     path = Path("profile/state.db")
     handle = object()
     calls = 0
@@ -45,7 +47,9 @@ def test_failed_open_obeys_backoff_then_recovers() -> None:
 
 def test_retry_is_single_flight_for_concurrent_callers() -> None:
     clock = _Clock()
-    cache = RecoverableHandleCache(clock=clock, initial_retry_delay=1, max_retry_delay=8)
+    cache = RecoverableHandleCache(
+        clock=clock, initial_retry_delay=1, max_retry_delay=8
+    )
     path = Path("profile/state.db")
     entered = threading.Event()
     release = threading.Event()
@@ -92,10 +96,15 @@ def test_runtime_health_is_sanitized_and_recovers() -> None:
         nonlocal calls
         calls += 1
         if calls == 1:
-            raise RuntimeError("database disk image is malformed at secret/profile/state.db")
+            raise RuntimeError(
+                "database disk image is malformed at secret/profile/state.db"
+            )
         return object()
 
-    with patch("gateway.status.publish_runtime_status", side_effect=lambda **kw: writes.append(kw)):
+    with patch(
+        "gateway.status.publish_runtime_status",
+        side_effect=lambda **kw: writes.append(kw),
+    ):
         assert cache.get(path, opener) is None
         clock.now = 1.0
         assert cache.get(path, opener) is not None
@@ -106,7 +115,9 @@ def test_runtime_health_is_sanitized_and_recovers() -> None:
     assert "malformed" not in serialized
 
 
-def test_session_store_and_runner_reopen_after_failed_construction(monkeypatch, tmp_path) -> None:
+def test_session_store_and_runner_reopen_after_failed_construction(
+    monkeypatch, tmp_path
+) -> None:
     import clawk_state
     import clawk_state_registry
     from gateway.run import GatewayRunner, _SESSION_DB_UNPINNED
@@ -259,7 +270,9 @@ def test_close_all_preserves_inflight_failure() -> None:
     assert cache.get(path, lambda: object()) is replacement
 
 
-def test_recovered_db_rows_survive_fallback_structural_save(monkeypatch, tmp_path) -> None:
+def test_recovered_db_rows_survive_fallback_structural_save(
+    monkeypatch, tmp_path
+) -> None:
     import clawk_state
     from gateway.config import GatewayConfig, Platform
     from gateway.session import SessionEntry, SessionSource, SessionStore
@@ -353,8 +366,7 @@ def test_recovered_db_rows_survive_fallback_structural_save(monkeypatch, tmp_pat
     assert set(rows) == {durable.session_key, changed.session_key, current.session_key}
     assert store._entries[durable.session_key].session_id == durable.session_id
     assert (
-        json.loads(rows[changed.session_key])["session_id"]
-        == "changed-during-fallback"
+        json.loads(rows[changed.session_key])["session_id"] == "changed-during-fallback"
     )
     assert store._entries[current.session_key].session_id == current.session_id
     store.close_all_db_handles()

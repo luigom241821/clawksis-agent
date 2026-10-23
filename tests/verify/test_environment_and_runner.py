@@ -57,7 +57,9 @@ class TestManifest:
     def test_bare_recipe_shape_accepted(self, tmp_path):
         path = manifest_path(tmp_path)
         path.parent.mkdir(parents=True)
-        path.write_text(json.dumps({"name": "Custom", "test": ["true"]}), encoding="utf-8")
+        path.write_text(
+            json.dumps({"name": "Custom", "test": ["true"]}), encoding="utf-8"
+        )
         recipe = load_manifest(tmp_path)
         assert recipe.name == "Custom"
         assert recipe.test == ["true"]
@@ -121,17 +123,30 @@ class TestComposeGuard:
 
     def _compose_recipe(self):
         return Recipe(
-            name="docker-compose project", kind="compose",
-            build=["docker compose build"], start="docker compose up",
+            name="docker-compose project",
+            kind="compose",
+            build=["docker compose build"],
+            start="docker compose up",
             evidence=["Detected docker-compose.yml"],
         )
 
     @pytest.mark.parametrize(
         "probe",
         [
-            pytest.param(MagicMock(returncode=0, stdout="myproject-db-1\nmyproject-web-1\n"), id="containers-running"),
-            pytest.param(subprocess.TimeoutExpired(cmd="docker", timeout=15), id="probe-timed-out"),
-            pytest.param(MagicMock(returncode=1, stdout="", stderr="permission denied on docker.sock"), id="probe-failed"),
+            pytest.param(
+                MagicMock(returncode=0, stdout="myproject-db-1\nmyproject-web-1\n"),
+                id="containers-running",
+            ),
+            pytest.param(
+                subprocess.TimeoutExpired(cmd="docker", timeout=15),
+                id="probe-timed-out",
+            ),
+            pytest.param(
+                MagicMock(
+                    returncode=1, stdout="", stderr="permission denied on docker.sock"
+                ),
+                id="probe-failed",
+            ),
         ],
     )
     def test_refuses_and_spawns_nothing_mutating_when_live_state_cannot_be_ruled_out(
@@ -162,10 +177,14 @@ class TestComposeGuard:
             pytest.param(FileNotFoundError("docker not found"), id="docker-absent"),
         ],
     )
-    def test_proceeds_when_no_live_containers_or_docker_is_absent(self, tmp_path, monkeypatch, probe):
+    def test_proceeds_when_no_live_containers_or_docker_is_absent(
+        self, tmp_path, monkeypatch, probe
+    ):
         monkeypatch.setattr(
             "subprocess.run",
-            MagicMock(side_effect=probe) if isinstance(probe, BaseException) else MagicMock(return_value=probe),
+            MagicMock(side_effect=probe)
+            if isinstance(probe, BaseException)
+            else MagicMock(return_value=probe),
         )
 
         with patch("agent.verify.runner._run_phase_command") as mock_phase:
@@ -180,7 +199,11 @@ class TestComposeGuard:
 
         with patch("agent.verify.runner._run_phase_command") as mock_phase:
             mock_phase.return_value = MagicMock(ok=True, phase="test")
-            run_verify(tmp_path, Recipe(name="x", kind="compose", test=["true"]), phases=("test",))
+            run_verify(
+                tmp_path,
+                Recipe(name="x", kind="compose", test=["true"]),
+                phases=("test",),
+            )
 
         probe.assert_not_called()
 
@@ -255,7 +278,11 @@ class TestReadiness:
         try:
             recipe = Recipe(name="x", start="sleep 30", port=1)
             result = run_verify(
-                tmp_path, recipe, phases=("start",), ready_timeout=10, port_override=port
+                tmp_path,
+                recipe,
+                phases=("start",),
+                ready_timeout=10,
+                port_override=port,
             )
             assert result.readiness.ready
             assert result.readiness.status_code == 204
@@ -280,7 +307,9 @@ class TestTerminateProcessGroupGuard:
         proc.poll.return_value = None
         monkeypatch.setattr(_os, "getpgid", lambda pid: 555)  # != pid: shared group
         killpg_calls = []
-        monkeypatch.setattr(_os, "killpg", lambda pgid, sig: killpg_calls.append((pgid, sig)))
+        monkeypatch.setattr(
+            _os, "killpg", lambda pgid, sig: killpg_calls.append((pgid, sig))
+        )
 
         _terminate_process_group(proc)
 
@@ -296,7 +325,9 @@ class TestTerminateProcessGroupGuard:
 
         proc = subprocess.Popen(
             ["sleep", "60"],
-            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
         try:
             assert _os.getpgid(proc.pid) == _os.getpgid(0)  # shared group precondition
@@ -316,7 +347,9 @@ class TestTerminateProcessGroupGuard:
 
         proc = subprocess.Popen(
             ["sleep", "60"],
-            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
             process_group=0,
         )
         try:

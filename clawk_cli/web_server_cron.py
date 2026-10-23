@@ -17,7 +17,9 @@ from clawk_cli.web_models import CronJobCreate
 _log = logging.getLogger("clawk_cli.web_server")
 
 
-def _cron_optional_text(value: Any, *, strip_trailing_slash: bool = False) -> Optional[str]:
+def _cron_optional_text(
+    value: Any, *, strip_trailing_slash: bool = False
+) -> Optional[str]:
     if value is None:
         return None
     text = str(value).strip()
@@ -44,15 +46,25 @@ def _normalize_dashboard_cron_script(value: Any, profile_home: Path) -> Optional
         return None
     scripts_root = (profile_home / "scripts").resolve()
     raw_path = Path(text).expanduser()
-    candidate = raw_path.resolve() if raw_path.is_absolute() else (scripts_root / raw_path).resolve()
+    candidate = (
+        raw_path.resolve()
+        if raw_path.is_absolute()
+        else (scripts_root / raw_path).resolve()
+    )
     try:
         relative = candidate.relative_to(scripts_root)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=f"script must be inside {scripts_root}") from exc
+        raise HTTPException(
+            status_code=400, detail=f"script must be inside {scripts_root}"
+        ) from exc
     if not candidate.exists():
-        raise HTTPException(status_code=400, detail=f"script does not exist: {candidate}")
+        raise HTTPException(
+            status_code=400, detail=f"script does not exist: {candidate}"
+        )
     if not candidate.is_file():
-        raise HTTPException(status_code=400, detail=f"script is not a file: {candidate}")
+        raise HTTPException(
+            status_code=400, detail=f"script is not a file: {candidate}"
+        )
     return str(relative)
 
 
@@ -62,13 +74,19 @@ def _validate_dashboard_cron_effective_job(job: dict[str, Any]) -> None:
     skills = _cron_string_list(job.get("skills")) or _cron_string_list(job.get("skill"))
     if job.get("no_agent"):
         if not script:
-            raise HTTPException(status_code=400, detail="no_agent=True requires a script")
+            raise HTTPException(
+                status_code=400, detail="no_agent=True requires a script"
+            )
         return
     if not (prompt or skills or script):
-        raise HTTPException(status_code=400, detail="agent cron jobs require a prompt, skill, or script")
+        raise HTTPException(
+            status_code=400, detail="agent cron jobs require a prompt, skill, or script"
+        )
 
 
-def _validate_dashboard_cron_context_from(refs: Optional[list[str]], profile_name: str) -> None:
+def _validate_dashboard_cron_context_from(
+    refs: Optional[list[str]], profile_name: str
+) -> None:
     for ref in refs or ():
         # "self" (the continuity toggle) resolves to the job's own id at run time — it can't be
         # validated against the store (create precedes the job's existence).
@@ -77,7 +95,8 @@ def _validate_dashboard_cron_context_from(refs: Optional[list[str]], profile_nam
         if not _call_cron_for_profile(profile_name, "get_job", ref):
             raise HTTPException(
                 status_code=400,
-                detail=f"context_from job '{ref}' not found in profile '{profile_name}'")
+                detail=f"context_from job '{ref}' not found in profile '{profile_name}'",
+            )
 
 
 def _cron_profile_dicts() -> list[dict[str, Any]]:
@@ -85,12 +104,18 @@ def _cron_profile_dicts() -> list[dict[str, Any]]:
     whose config parsing, gateway probes and skill counts are GIL pressure on large pools."""
     from clawk_cli.web_server_profiles import _fallback_profile_dicts
     from clawk_cli import profiles as profiles_mod
+
     try:
         return [
             {"name": name, "path": str(home), "is_default": name == "default"}
-            for name, home in profiles_mod.profiles_to_serve(multiplex=True, include_standalone=True, include_parked=True)]
+            for name, home in profiles_mod.profiles_to_serve(
+                multiplex=True, include_standalone=True, include_parked=True
+            )
+        ]
     except Exception:
-        _log.exception("Failed to list profiles for cron dashboard; falling back to directory scan")
+        _log.exception(
+            "Failed to list profiles for cron dashboard; falling back to directory scan"
+        )
         return _fallback_profile_dicts(profiles_mod)
 
 
@@ -104,6 +129,7 @@ def _cron_default_profile() -> str:
     """
     try:
         from clawk_cli.profiles import get_active_profile_name
+
         name = get_active_profile_name()
     except Exception:
         return "default"
@@ -113,6 +139,7 @@ def _cron_default_profile() -> str:
 def _cron_profile_home(profile: Optional[str]) -> tuple[str, Path]:
     """Resolve a profile query value to (profile_name, CLAWK_HOME)."""
     from clawk_cli import profiles as profiles_mod
+
     raw = (profile or _cron_default_profile()).strip() or "default"
     try:
         canon = profiles_mod.normalize_profile_name(raw)
@@ -120,12 +147,17 @@ def _cron_profile_home(profile: Optional[str]) -> tuple[str, Path]:
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if not profiles_mod.profile_exists(canon):
-        raise HTTPException(status_code=404, detail=f"Profile '{canon}' does not exist.")
+        raise HTTPException(
+            status_code=404, detail=f"Profile '{canon}' does not exist."
+        )
     return canon, profiles_mod.get_profile_dir(canon)
 
 
 def _annotate_cron_job(
-    job: dict[str, Any], profile: str, home: Path, heartbeat_age: Optional[float] = None,
+    job: dict[str, Any],
+    profile: str,
+    home: Path,
+    heartbeat_age: Optional[float] = None,
 ) -> dict[str, Any]:
     return {
         **job,
@@ -136,7 +168,8 @@ def _annotate_cron_job(
         # Seconds since this profile's ticker last iterated (None = never/unknown): a
         # `next_run_at` parked in the past is only explained by a scheduler that stopped
         # ticking, so the dashboard can date it (#114309).
-        "scheduler_heartbeat_age_s": heartbeat_age}
+        "scheduler_heartbeat_age_s": heartbeat_age,
+    }
 
 
 @contextlib.contextmanager
@@ -148,6 +181,7 @@ def _cron_store_scope(home: Path):
     """
     from cron import jobs as cron_jobs
     from clawk_constants import reset_clawk_home_override, set_clawk_home_override
+
     token = set_clawk_home_override(str(home))
     try:
         with cron_jobs.use_cron_store(home):
@@ -156,18 +190,23 @@ def _cron_store_scope(home: Path):
         reset_clawk_home_override(token)
 
 
-def _call_cron_for_profile(target_profile: Optional[str], func_name: str, *args, **kwargs):
+def _call_cron_for_profile(
+    target_profile: Optional[str], func_name: str, *args, **kwargs
+):
     """Run a cron.jobs helper against the selected profile's cron directory."""
     profile_name, home = _cron_profile_home(target_profile)
     with _cron_store_scope(home) as cron_jobs:
         if func_name == "create_job":
             from cron.scheduler import create_job_with_scheduler_registration
+
             result = create_job_with_scheduler_registration(*args, **kwargs)
         else:
             result = getattr(cron_jobs, func_name)(*args, **kwargs)
         heartbeat_age = cron_jobs.get_ticker_heartbeat_age()
     if isinstance(result, list):
-        return [_annotate_cron_job(j, profile_name, home, heartbeat_age) for j in result]
+        return [
+            _annotate_cron_job(j, profile_name, home, heartbeat_age) for j in result
+        ]
     if isinstance(result, dict):
         return _annotate_cron_job(result, profile_name, home, heartbeat_age)
     return result
@@ -185,7 +224,11 @@ def _notify_cron_provider_for_profile(target_profile: Optional[str]) -> None:
     """
     try:
         _profile_name, home = _cron_profile_home(target_profile)
-        from cron.scheduler_provider import InProcessCronScheduler, resolve_cron_scheduler
+        from cron.scheduler_provider import (
+            InProcessCronScheduler,
+            resolve_cron_scheduler,
+        )
+
         with _cron_store_scope(home):
             provider = resolve_cron_scheduler()
             external = not isinstance(provider, InProcessCronScheduler)
@@ -195,15 +238,23 @@ def _notify_cron_provider_for_profile(target_profile: Optional[str]) -> None:
                     "external provider '%s' reconcile is not "
                     "profile-scoped and would disarm other profiles' "
                     "armed one-shots. The mutated profile re-arms "
-                    "idempotently on its next fire/start.", target_profile, provider.name,
+                    "idempotently on its next fire/start.",
+                    target_profile,
+                    provider.name,
                 )
                 return
             provider.on_jobs_changed()
     except Exception:
-        _log.debug("Cron provider reconciliation failed for profile %s", target_profile, exc_info=True)
+        _log.debug(
+            "Cron provider reconciliation failed for profile %s",
+            target_profile,
+            exc_info=True,
+        )
 
 
-def _mutate_cron_for_profile(target_profile: Optional[str], func_name: str, *args, **kwargs):
+def _mutate_cron_for_profile(
+    target_profile: Optional[str], func_name: str, *args, **kwargs
+):
     """Apply a cron store mutation and reconcile its scheduler provider."""
     result = _call_cron_for_profile(target_profile, func_name, *args, **kwargs)
     if result:
@@ -225,6 +276,7 @@ def _find_cron_job_profile(job_id: str) -> Optional[str]:
 async def _run_cron_dashboard_io(func, *args, **kwargs):
     """Run cron dashboard profile/job I/O outside the FastAPI event loop."""
     from starlette.concurrency import run_in_threadpool
+
     if inspect.iscoroutinefunction(func):
         raise TypeError("_run_cron_dashboard_io only accepts sync callables")
     result = await run_in_threadpool(func, *args, **kwargs)
@@ -237,6 +289,7 @@ def _raise_if_cron_registration_error(e: Exception) -> None:
     """Re-raise a cron partial failure (job saved, external scheduler registration failed) as
     HTTP 424 with the structured envelope. Shared by every dashboard cron-create surface."""
     from cron.scheduler import CronSchedulerRegistrationError
+
     if isinstance(e, CronSchedulerRegistrationError):
         raise HTTPException(status_code=424, detail=e.to_dict()) from e
 
@@ -257,11 +310,19 @@ def _create_cron_job_sync(body: CronJobCreate, profile: Optional[str] = None):
         if repeat is not None:
             if isinstance(repeat, int) and not isinstance(repeat, bool) and repeat < 1:
                 raise HTTPException(
-                    status_code=400, detail="repeat must be a positive integer")
+                    status_code=400, detail="repeat must be a positive integer"
+                )
             from cron.jobs import normalize_repeat_value
+
             repeat = normalize_repeat_value(repeat)
         _validate_dashboard_cron_effective_job(
-            {"prompt": body.prompt, "skills": skills, "script": script, "no_agent": no_agent})
+            {
+                "prompt": body.prompt,
+                "skills": skills,
+                "script": script,
+                "no_agent": no_agent,
+            }
+        )
         return _mutate_cron_for_profile(
             profile_name,
             "create_job",
@@ -284,8 +345,12 @@ def _create_cron_job_sync(body: CronJobCreate, profile: Optional[str] = None):
             use_user_md=body.use_user_md,
             use_memory=body.use_memory,
             fallback_models=body.fallback_models or None,
-            **{key: getattr(body, key) for key in ("paused", "paused_reason")
-               if key in body.model_fields_set})
+            **{
+                key: getattr(body, key)
+                for key in ("paused", "paused_reason")
+                if key in body.model_fields_set
+            },
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -294,7 +359,9 @@ def _create_cron_job_sync(body: CronJobCreate, profile: Optional[str] = None):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-def _fire_cron_job_for_profile(profile: str, job_id: str, *, force: bool = False) -> bool:
+def _fire_cron_job_for_profile(
+    profile: str, job_id: str, *, force: bool = False
+) -> bool:
     """Run ONE due cron job for ``profile`` via the scheduler provider's ``fire_due``.
 
     DEPRECATED for NAS webhook fires — superseded by :func:`_forward_cron_fire_to_gateway`, since
@@ -303,7 +370,12 @@ def _fire_cron_job_for_profile(profile: str, job_id: str, *, force: bool = False
     and external callers on the web_deps late-binding seam; do not add new uses.
     """
     _profile_name, home = _cron_profile_home(profile)
-    from cron.scheduler_provider import provider_fire_due_accepts, provider_supports_force_fire, resolve_cron_scheduler
+    from cron.scheduler_provider import (
+        provider_fire_due_accepts,
+        provider_supports_force_fire,
+        resolve_cron_scheduler,
+    )
+
     with _cron_store_scope(home):
         provider = resolve_cron_scheduler()
         if force:
@@ -312,12 +384,16 @@ def _fire_cron_job_for_profile(profile: str, job_id: str, *, force: bool = False
                     status_code=409,
                     detail=(
                         f"Cron provider '{getattr(provider, 'name', 'custom')}' "
-                        "does not support atomic forced firing of paused jobs"))
+                        "does not support atomic forced firing of paused jobs"
+                    ),
+                )
             return bool(provider.fire_due(job_id, adapters=None, loop=None, force=True))
         # Off-tick run-now: never stamp next_run_at as the occurrence (#104790); third-party
         # providers without the kwarg keep the legacy call.
         if provider_fire_due_accepts(provider, "manual"):
-            return bool(provider.fire_due(job_id, adapters=None, loop=None, manual=True))
+            return bool(
+                provider.fire_due(job_id, adapters=None, loop=None, manual=True)
+            )
         return bool(provider.fire_due(job_id, adapters=None, loop=None))
 
 
@@ -342,22 +418,30 @@ def _gateway_fire_endpoint(profile: str, home: Path) -> str:
     """
     from clawk_cli.config import load_config
     import os as _os
+
     multiplex = False
     try:
         # The live default gateway's own record, else the explicit flag — never the merged default:
         # an unset gateway.multiplex_profiles is settled by the gateway at boot, not by this process.
         from clawk_cli.gateway_multiplex_mode import default_gateway_multiplexes
+
         multiplex = default_gateway_multiplexes()
     except Exception:
-        _log.debug("cron fire: multiplex detection failed; assuming single-profile", exc_info=True)
+        _log.debug(
+            "cron fire: multiplex detection failed; assuming single-profile",
+            exc_info=True,
+        )
 
     listener_profile, listener_home = profile, home
     if multiplex and profile != "default":
         from clawk_constants import get_default_clawk_root
+
         listener_profile, listener_home = "default", get_default_clawk_root()
         _log.info(
             "cron fire: multiplex gateway — resolving api_server port for %s "
-            "from the default profile's listener (%s)", profile, listener_home,
+            "from the default profile's listener (%s)",
+            profile,
+            listener_home,
         )
 
     port = 0
@@ -365,12 +449,15 @@ def _gateway_fire_endpoint(profile: str, home: Path) -> str:
         # Profile-scoped read through the CANONICAL loader (managed-scope overlay, ${ENV_VAR}
         # expansion) — never a raw yaml.safe_load (tests/clawk_cli/test_config_read_guard.py).
         from clawk_constants import reset_clawk_home_override, set_clawk_home_override
+
         token = set_clawk_home_override(str(listener_home))
         try:
             profile_cfg = load_config()
         finally:
             reset_clawk_home_override(token)
-        raw = cfg_get(profile_cfg, "platforms", "api_server", "extra", "port", default=None)
+        raw = cfg_get(
+            profile_cfg, "platforms", "api_server", "extra", "port", default=None
+        )
         if raw:
             port = int(raw)
     except Exception:
@@ -379,7 +466,8 @@ def _gateway_fire_endpoint(profile: str, home: Path) -> str:
         raw = (
             _os.getenv("API_SERVER_PORT", "")
             if listener_profile == _cron_default_profile()
-            else _profile_env_value(listener_home, "API_SERVER_PORT"))
+            else _profile_env_value(listener_home, "API_SERVER_PORT")
+        )
         try:
             port = int(raw) if raw else 0
         except ValueError:
@@ -391,7 +479,8 @@ def _gateway_fire_endpoint(profile: str, home: Path) -> str:
 
 
 async def _forward_cron_fire_to_gateway(
-    profile: str, job_id: str, authorization: str) -> Optional[tuple[int, dict[str, Any]]]:
+    profile: str, job_id: str, authorization: str
+) -> Optional[tuple[int, dict[str, Any]]]:
     """Forward a Chronos fire callback byte-preserved to the gateway api_server on loopback.
 
     The dashboard is the hosted deployment's only public HTTP door, but cron execution belongs to
@@ -406,11 +495,19 @@ async def _forward_cron_fire_to_gateway(
     _profile_name, home = _cron_profile_home(profile)
     url = await asyncio.to_thread(_gateway_fire_endpoint, _profile_name, home)
     import httpx
+
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(url, json={"job_id": job_id}, headers={"Authorization": authorization})
+            resp = await client.post(
+                url, json={"job_id": job_id}, headers={"Authorization": authorization}
+            )
     except Exception as exc:
-        _log.warning("cron fire forward to %s failed (%s: %s); returning 503 for NAS retry", url, type(exc).__name__, exc)
+        _log.warning(
+            "cron fire forward to %s failed (%s: %s); returning 503 for NAS retry",
+            url,
+            type(exc).__name__,
+            exc,
+        )
         return None
     try:
         body = resp.json()
@@ -432,8 +529,13 @@ def _gateway_intentionally_stopped(profile: Optional[str]) -> bool:
     Any resolution or parse failure returns False (fail open toward retry).
     """
     import json as _json
+
     try:
-        data = _json.loads((_cron_profile_home(profile)[1] / "gateway_state.json").read_text(encoding="utf-8-sig"))
+        data = _json.loads(
+            (_cron_profile_home(profile)[1] / "gateway_state.json").read_text(
+                encoding="utf-8-sig"
+            )
+        )
         return isinstance(data, dict) and data.get("desired_state") == "stopped"
     except Exception:
         return False

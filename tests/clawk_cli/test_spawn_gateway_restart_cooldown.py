@@ -7,6 +7,7 @@ its restart every few seconds therefore produced a fresh restart every time
 (the reporter measured 77, 17 of them inside one minute), killing the gateway
 often enough mid-FTS5-write to corrupt ``state.db``.
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -52,8 +53,9 @@ class TestRepeatRestartWithinCooldown:
         proc = _exited_proc()
         mock_spawn.return_value = proc
 
-        with patch("clawk_cli.gateway._reap_unsupervised_gateway_orphans"), patch(
-            "clawk_cli.web_server.time.monotonic", side_effect=[100.0, 103.5]
+        with (
+            patch("clawk_cli.gateway._reap_unsupervised_gateway_orphans"),
+            patch("clawk_cli.web_server.time.monotonic", side_effect=[100.0, 103.5]),
         ):
             first, first_reused = _spawn_gateway_restart()
             second, second_reused = _spawn_gateway_restart()
@@ -83,8 +85,9 @@ class TestRepeatRestartWithinCooldown:
         # walk the deadline forward forever and never restart at all.
         clock = [100.0, 103.5, 107.0]
 
-        with patch("clawk_cli.gateway._reap_unsupervised_gateway_orphans"), patch(
-            "clawk_cli.web_server.time.monotonic", side_effect=clock
+        with (
+            patch("clawk_cli.gateway._reap_unsupervised_gateway_orphans"),
+            patch("clawk_cli.web_server.time.monotonic", side_effect=clock),
         ):
             _spawn_gateway_restart()
             _spawn_gateway_restart()
@@ -111,8 +114,9 @@ class TestRepeatRestartWithinCooldown:
 
         mock_spawn.return_value = _exited_proc()
 
-        with patch("clawk_cli.gateway._reap_unsupervised_gateway_orphans"), patch(
-            "clawk_cli.web_server.time.monotonic", side_effect=[100.0, 102.0]
+        with (
+            patch("clawk_cli.gateway._reap_unsupervised_gateway_orphans"),
+            patch("clawk_cli.web_server.time.monotonic", side_effect=[100.0, 102.0]),
         ):
             _spawn_gateway_restart()
             _web_server_gateway._ACTION_PROCS.clear()
@@ -139,9 +143,12 @@ class TestCooldownReleases:
 
         mock_spawn.side_effect = [_exited_proc(1), _exited_proc(2)]
 
-        with patch("clawk_cli.gateway._reap_unsupervised_gateway_orphans"), patch(
-            "clawk_cli.web_server.time.monotonic",
-            side_effect=[100.0, 111.0, 111.0],
+        with (
+            patch("clawk_cli.gateway._reap_unsupervised_gateway_orphans"),
+            patch(
+                "clawk_cli.web_server.time.monotonic",
+                side_effect=[100.0, 111.0, 111.0],
+            ),
         ):
             _spawn_gateway_restart()
             second, reused = _spawn_gateway_restart()
@@ -158,12 +165,19 @@ class TestCooldownReleases:
 
         mock_spawn.side_effect = [_exited_proc(1), _exited_proc(2)]
 
-        with patch("clawk_cli.gateway._reap_unsupervised_gateway_orphans"), patch(
-            "clawk_cli.web_server.time.monotonic",
-            side_effect=[100.0, 101.0],
-        ), patch(
-            "clawk_cli.web_server_gateway._gateway_subcommand",
-            side_effect=[["gateway", "restart"], ["-p", "coder", "gateway", "restart"]],
+        with (
+            patch("clawk_cli.gateway._reap_unsupervised_gateway_orphans"),
+            patch(
+                "clawk_cli.web_server.time.monotonic",
+                side_effect=[100.0, 101.0],
+            ),
+            patch(
+                "clawk_cli.web_server_gateway._gateway_subcommand",
+                side_effect=[
+                    ["gateway", "restart"],
+                    ["-p", "coder", "gateway", "restart"],
+                ],
+            ),
         ):
             _spawn_gateway_restart()
             second, reused = _spawn_gateway_restart(profile="coder")
@@ -190,13 +204,15 @@ class TestExistingBehaviourIsPreserved:
         live.poll.return_value = None
         live.pid = 7
 
-        with patch(
-            "clawk_cli.web_server_gateway._ACTION_PROCS", {"gateway-restart": live}
-        ), patch(
-            "clawk_cli.web_server_gateway._ACTION_COMMANDS",
-            {"gateway-restart": ("gateway", "restart")},
-        ), patch(
-            "clawk_cli.gateway._reap_unsupervised_gateway_orphans"
+        with (
+            patch(
+                "clawk_cli.web_server_gateway._ACTION_PROCS", {"gateway-restart": live}
+            ),
+            patch(
+                "clawk_cli.web_server_gateway._ACTION_COMMANDS",
+                {"gateway-restart": ("gateway", "restart")},
+            ),
+            patch("clawk_cli.gateway._reap_unsupervised_gateway_orphans"),
         ):
             proc, reused = _spawn_gateway_restart()
 
@@ -215,13 +231,15 @@ class TestExistingBehaviourIsPreserved:
         live = MagicMock(spec=subprocess.Popen)
         live.poll.return_value = None
 
-        with patch(
-            "clawk_cli.web_server_gateway._ACTION_PROCS", {"gateway-restart": live}
-        ), patch(
-            "clawk_cli.web_server_gateway._ACTION_COMMANDS",
-            {"gateway-restart": ("-p", "coder", "gateway", "restart")},
-        ), patch(
-            "clawk_cli.gateway._reap_unsupervised_gateway_orphans"
+        with (
+            patch(
+                "clawk_cli.web_server_gateway._ACTION_PROCS", {"gateway-restart": live}
+            ),
+            patch(
+                "clawk_cli.web_server_gateway._ACTION_COMMANDS",
+                {"gateway-restart": ("-p", "coder", "gateway", "restart")},
+            ),
+            patch("clawk_cli.gateway._reap_unsupervised_gateway_orphans"),
         ):
             with pytest.raises(RuntimeError, match="another profile"):
                 _spawn_gateway_restart()

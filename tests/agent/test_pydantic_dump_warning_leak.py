@@ -55,13 +55,13 @@ def _accumulated_stop_event():
     snapshot = None
     for event in (start, cb_start, cb_delta):
         snapshot = accumulate_event(event=event, current_snapshot=snapshot)
-    return build(ParsedMessageStopEvent, type="message_stop", message=snapshot), snapshot
+    return build(
+        ParsedMessageStopEvent, type="message_stop", message=snapshot
+    ), snapshot
 
 
 def _pydantic_warnings(recorded):
     return [w for w in recorded if "Pydantic serializer warnings" in str(w.message)]
-
-
 
 
 def test_relay_llm_jsonable_no_warning_leak():

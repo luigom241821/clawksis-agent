@@ -20,10 +20,14 @@ def _dispatcher():
     return kwd._KanbanDispatcher(SimpleNamespace(DEFAULT_BOARD="default"), settings)
 
 
-def test_auto_decompose_tick_reads_launch_profile_secrets_under_multiplex(monkeypatch, tmp_path):
+def test_auto_decompose_tick_reads_launch_profile_secrets_under_multiplex(
+    monkeypatch, tmp_path
+):
     import clawk_cli
 
-    (tmp_path / ".env").write_text("ANTHROPIC_API_KEY=launch-profile-key\n", encoding="utf-8")
+    (tmp_path / ".env").write_text(
+        "ANTHROPIC_API_KEY=launch-profile-key\n", encoding="utf-8"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     monkeypatch.setattr(kwd, "_board_slugs", lambda kb: ["default"])
 
@@ -33,14 +37,18 @@ def test_auto_decompose_tick_reads_launch_profile_secrets_under_multiplex(monkey
         seen["value"] = ss.get_secret("ANTHROPIC_API_KEY")
         return SimpleNamespace(ok=True, fanout=False, child_ids=None, reason=None)
 
-    fake = SimpleNamespace(list_triage_ids=lambda: ["t1"], decompose_task=fake_decompose)
+    fake = SimpleNamespace(
+        list_triage_ids=lambda: ["t1"], decompose_task=fake_decompose
+    )
     monkeypatch.setitem(sys.modules, "clawk_cli.kanban_decompose", fake)
     monkeypatch.setattr(clawk_cli, "kanban_decompose", fake, raising=False)
 
     ss.set_multiplex_active(True)
     try:
         # Same hop the gateway uses: fresh Context, no inherited per-turn scope.
-        decomposed = asyncio.run(_to_thread_process_service(_dispatcher().auto_decompose_tick, 5))
+        decomposed = asyncio.run(
+            _to_thread_process_service(_dispatcher().auto_decompose_tick, 5)
+        )
     finally:
         ss.set_multiplex_active(False)
 

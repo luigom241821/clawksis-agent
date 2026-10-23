@@ -44,6 +44,7 @@ _NEEDS_UNIX_SOCKETS = pytest.mark.skipif(
     "(socket.AF_UNIX / asyncio.start_unix_server), unavailable on native Windows",
 )
 
+
 @pytest.fixture()
 def tmp_path():
     """Short-path override for this module (macOS AF_UNIX ~104-byte limit).
@@ -61,6 +62,7 @@ def tmp_path():
     finally:
         shutil.rmtree(path, ignore_errors=True)
 
+
 def _write_heartbeat(home, pid, age_s=0.0):
     """Write a heartbeat file for ``pid`` whose mtime is ``age_s`` old."""
     path = get_loop_heartbeat_path(home)
@@ -69,6 +71,7 @@ def _write_heartbeat(home, pid, age_s=0.0):
         stamp = time.time() - age_s
         os.utime(path, (stamp, stamp))
     return path
+
 
 def _mark_witness_flag(home, armed, age_s=0.0):
     """Set ``loop_tick_socket`` on the heartbeat payload; re-stamp mtime."""
@@ -80,6 +83,7 @@ def _mark_witness_flag(home, armed, age_s=0.0):
         stamp = time.time() - age_s
         os.utime(path, (stamp, stamp))
     return path
+
 
 def _silent_socket_node(path):
     """Create a socket node at ``path`` that never answers.
@@ -95,6 +99,7 @@ def _silent_socket_node(path):
         srv.listen(1)
     finally:
         srv.close()
+
 
 def _start_freezeable_producer(tmp_path, block_s, errors, write_stall_s=1.5):
     """Run the real heartbeat producer on a loop that can be frozen on demand.
@@ -165,6 +170,7 @@ def _start_freezeable_producer(tmp_path, block_s, errors, write_stall_s=1.5):
     state["thread"] = thread
     return state, ready
 
+
 def _wait_heartbeat_stale(tmp_path, stale_after, timeout_s=5.0):
     """Block until the heartbeat file is older than ``stale_after``."""
     hb_path = get_loop_heartbeat_path(tmp_path)
@@ -181,6 +187,7 @@ def _wait_heartbeat_stale(tmp_path, stale_after, timeout_s=5.0):
         assert time.monotonic() < deadline, "heartbeat never went stale"
         time.sleep(0.02)
 
+
 def _launchd_harness(monkeypatch, tmp_path, pid):
     """Patch the launchd_restart path so the REAL probe drives it.
 
@@ -195,9 +202,7 @@ def _launchd_harness(monkeypatch, tmp_path, pid):
     monkeypatch.setattr(gateway_cli, "_launchd_domain", lambda: "gui/501")
     monkeypatch.setattr(gateway_cli, "_get_restart_drain_timeout", lambda: 180.0)
     monkeypatch.setattr("gateway.status.get_running_pid", lambda *a, **k: pid)
-    monkeypatch.setattr(
-        gateway_cli, "_request_gateway_self_restart", lambda pid: False
-    )
+    monkeypatch.setattr(gateway_cli, "_request_gateway_self_restart", lambda pid: False)
     real_probe = gateway_cli.probe_gateway_loop_liveness
 
     def recording_probe(pid, **kw):
@@ -213,7 +218,9 @@ def _launchd_harness(monkeypatch, tmp_path, pid):
     monkeypatch.setattr(
         gateway_cli,
         "terminate_pid",
-        lambda pid, force=False, **kwargs: events.append(("kill" if force else "term", pid)),
+        lambda pid, force=False, **kwargs: events.append(
+            ("kill" if force else "term", pid)
+        ),
     )
     # Never let a real SIGUSR1 escape to the live test PID — the drain path
     # goes through _graceful_restart_via_sigusr1 (in-place restart) before
@@ -231,20 +238,24 @@ def _launchd_harness(monkeypatch, tmp_path, pid):
     monkeypatch.setattr(
         gateway_cli,
         "_wait_for_launchd_service_pid",
-        lambda label, old_pid, timeout=10.0, *, domain: events.append("observe")
-        or True,
+        lambda label, old_pid, timeout=10.0, *, domain: (
+            events.append("observe") or True
+        ),
     )
     monkeypatch.setattr(
         gateway_cli.subprocess,
         "run",
-        lambda *a, **k: events.append("kickstart")
-        or __import__("types").SimpleNamespace(returncode=0, stdout="", stderr=""),
+        lambda *a, **k: (
+            events.append("kickstart")
+            or __import__("types").SimpleNamespace(returncode=0, stdout="", stderr="")
+        ),
     )
     monkeypatch.setattr(gateway_cli, "_clear_launchd_unsupported_marker", lambda: None)
     monkeypatch.setattr(
         "gateway.shutdown_watchdog._process_clawk_home", lambda: tmp_path
     )
     return events
+
 
 class TestProbeGatewayLoopLiveness:
     def test_fresh_heartbeat_is_alive(self, tmp_path):
@@ -316,6 +327,7 @@ class TestProbeGatewayLoopLiveness:
             == gateway_cli.GATEWAY_LOOP_UNKNOWN
         )
 
+
 class TestEscalateWedgedGateway:
     def test_sigterm_grace_suffices_without_sigkill(self, monkeypatch):
         """If SIGTERM lands (signal-handler thread alive), no SIGKILL is sent."""
@@ -323,7 +335,9 @@ class TestEscalateWedgedGateway:
         monkeypatch.setattr(
             gateway_cli,
             "terminate_pid",
-            lambda pid, force=False, **kwargs: signals.append(("kill" if force else "term", pid)),
+            lambda pid, force=False, **kwargs: signals.append(
+                ("kill" if force else "term", pid)
+            ),
         )
         monkeypatch.setattr(
             gateway_cli, "_wait_for_pid_exit", lambda pid, timeout, **_: True
@@ -344,7 +358,9 @@ class TestEscalateWedgedGateway:
         monkeypatch.setattr(
             gateway_cli,
             "terminate_pid",
-            lambda pid, force=False, **kwargs: signals.append(("kill" if force else "term", pid)),
+            lambda pid, force=False, **kwargs: signals.append(
+                ("kill" if force else "term", pid)
+            ),
         )
         monkeypatch.setattr(gateway_cli, "_wait_for_pid_exit", fake_wait)
 
@@ -354,7 +370,9 @@ class TestEscalateWedgedGateway:
     def test_total_wait_budget_is_bounded_well_under_drain(self, monkeypatch):
         """Worst case must be seconds, never the 180s drain budget."""
         waits = []
-        monkeypatch.setattr(gateway_cli, "terminate_pid", lambda pid, force=False, **kwargs: None)
+        monkeypatch.setattr(
+            gateway_cli, "terminate_pid", lambda pid, force=False, **kwargs: None
+        )
         monkeypatch.setattr(
             gateway_cli,
             "_wait_for_pid_exit",
@@ -391,12 +409,15 @@ class TestEscalateWedgedGateway:
         assert gateway_cli._escalate_wedged_gateway(4242) is False
         assert calls == [False, True]
 
+
 class TestLaunchdRestartWedgedIntegration:
     """launchd_restart must skip the 180s drain only for a wedged loop."""
 
     def _setup(self, monkeypatch, liveness):
         events = []
-        monkeypatch.setattr(gateway_cli, "get_launchd_label", lambda: "ai.clawk.gateway")
+        monkeypatch.setattr(
+            gateway_cli, "get_launchd_label", lambda: "ai.clawk.gateway"
+        )
         monkeypatch.setattr(gateway_cli, "_launchd_domain", lambda: "gui/501")
         monkeypatch.setattr(gateway_cli, "_get_restart_drain_timeout", lambda: 180.0)
         # Wait budget covers after-turn deferral + drain + headroom (#77184).
@@ -416,8 +437,8 @@ class TestLaunchdRestartWedgedIntegration:
             lambda pid, **kw: events.append("escalate") or True,
         )
         monkeypatch.setattr(
-        gateway_cli,
-        "terminate_pid",
+            gateway_cli,
+            "terminate_pid",
             lambda pid, force=False, **kwargs: events.append("sigterm"),
         )
         # Never let a real SIGUSR1 escape to PID 4242 during tests.
@@ -432,14 +453,19 @@ class TestLaunchdRestartWedgedIntegration:
         monkeypatch.setattr(
             gateway_cli,
             "_wait_for_launchd_service_pid",
-            lambda label, old_pid, timeout=10.0, *, domain: events.append("observe")
-            or True,
+            lambda label, old_pid, timeout=10.0, *, domain: (
+                events.append("observe") or True
+            ),
         )
         monkeypatch.setattr(
             gateway_cli.subprocess,
             "run",
-            lambda *a, **k: events.append("kickstart")
-            or __import__("types").SimpleNamespace(returncode=0, stdout="", stderr=""),
+            lambda *a, **k: (
+                events.append("kickstart")
+                or __import__("types").SimpleNamespace(
+                    returncode=0, stdout="", stderr=""
+                )
+            ),
         )
         monkeypatch.setattr(
             gateway_cli, "_clear_launchd_unsupported_marker", lambda: None
@@ -467,6 +493,7 @@ class TestLaunchdRestartWedgedIntegration:
         gateway_cli.launchd_restart()
         assert "escalate" not in events
         assert ("drain", 4242, 195.0) in events
+
 
 class TestLoopTickWitness:
     """Two-witness liveness (#90502 review).
@@ -672,9 +699,7 @@ class TestLoopTickWitness:
                         break
                 await asyncio.sleep(0.05)
             else:
-                raise AssertionError(
-                    "witness never armed over the stale socket node"
-                )
+                raise AssertionError("witness never armed over the stale socket node")
             # And it actually answers: the node is live, not the leftover.
             reader, writer = await asyncio.open_unix_connection(str(sock_path))
             data = await asyncio.wait_for(reader.read(64), timeout=2)
@@ -707,7 +732,11 @@ class TestLoopTickWitness:
         tick_strikes = 3
         tick_gap_s = 0.05
         wedge_window = tick_strikes * tick_timeout + (tick_strikes - 1) * tick_gap_s
-        assert tick_timeout < block_s < wedge_window, (tick_timeout, block_s, wedge_window)
+        assert tick_timeout < block_s < wedge_window, (
+            tick_timeout,
+            block_s,
+            wedge_window,
+        )
 
         errors = []
         state, ready = _start_freezeable_producer(tmp_path, block_s, errors)
@@ -742,9 +771,7 @@ class TestLoopTickWitness:
             assert not errors, errors
 
     @_NEEDS_UNIX_SOCKETS
-    def test_sustained_stop_above_wedge_budget_still_escalates(
-        self, tmp_path
-    ):
+    def test_sustained_stop_above_wedge_budget_still_escalates(self, tmp_path):
         """Composed producer+consumer: sustained stop above the budget.
 
         The bounded-proof contract must not neuter the destructive path: a
@@ -787,6 +814,7 @@ class TestLoopTickWitness:
             state["stop"]()
             state["thread"].join(timeout=5.0)
             assert not errors, errors
+
 
 class TestLoopTickTcpWitness:
     """Non-POSIX arm: the producer publishes ``loop_tick_tcp_port`` and the

@@ -13,6 +13,7 @@ Each stored close carries its own operation id, and every delete is compare-and-
 record under the owner-epoch fence: a cancelled older close, a reattach or a stale owner can only
 remove the record it saw, never a newer close stored since.
 """
+
 import asyncio
 import json
 import logging
@@ -27,41 +28,49 @@ logger = logging.getLogger(__name__)
 
 CLOSE_PREFIX = VIEWER_CLOSE_PREFIX  # route retirement drops it too
 
-_BUSY_SQL = ("SELECT 1 FROM session_admissions WHERE target_session_id=? AND status IN ('queued','started','unknown') "
-             "UNION ALL SELECT 1 FROM worker_executions WHERE session_id IN (?,?) "
-             "AND status IN ('registered','running','unknown') LIMIT 1")
+_BUSY_SQL = (
+    "SELECT 1 FROM session_admissions WHERE target_session_id=? AND status IN ('queued','started','unknown') "
+    "UNION ALL SELECT 1 FROM worker_executions WHERE session_id IN (?,?) "
+    "AND status IN ('registered','running','unknown') LIMIT 1"
+)
 
 
 def _physical_target(authority, session_id):
     try:
-        return local_receipt(authority.db, session_id)['entry']['session_id']
+        return local_receipt(authority.db, session_id)["entry"]["session_id"]
     except (RuntimeStoreError, KeyError, TypeError):
         return authority.db.get_compression_tip(session_id) or session_id
 
 
 def _busy(authority, session_id, target):
     with authority.db._read_ctx() as conn:
-        return conn.execute(_BUSY_SQL, (session_id, session_id, target)).fetchone() is not None
+        return (
+            conn.execute(_BUSY_SQL, (session_id, session_id, target)).fetchone()
+            is not None
+        )
 
 
 # The viewer's /new: the classic CLI's ``new_session``; Ink's ``tui_close`` (/new or a resume switch,
 # both of which main's TUI followed with on_session_reset for the session it opened next).
-_RESET_REASONS = frozenset({'new_session', 'tui_close'})
+_RESET_REASONS = frozenset({"new_session", "tui_close"})
 
 
 class _PendingClose:
     """One viewer close; identity, not the reason, tells a settler its close is still the pending one.
     ``record`` is its ``state_meta`` value: a unique operation id plus the reason."""
-    __slots__ = ('reason', 'record')
+
+    __slots__ = ("reason", "record")
 
     def __init__(self, reason, record=None):
         self.reason = reason
-        self.record = record or json.dumps({'op': uuid.uuid4().hex, 'reason': reason}, sort_keys=True)
+        self.record = record or json.dumps(
+            {"op": uuid.uuid4().hex, "reason": reason}, sort_keys=True
+        )
 
     @classmethod
     def from_record(cls, record):
         try:
-            reason = json.loads(record)['reason']
+            reason = json.loads(record)["reason"]
         except (ValueError, TypeError, KeyError):
             reason = record  # a bare-reason record from before operation ids
         return cls(reason, record)
@@ -78,17 +87,28 @@ async def close_viewer_session(authority, session_id, reason):
     if live.superseded:
         return  # a read-only historic mount: its route's delegations and agent are the newer session's
     from tools.async_delegation import interrupt_for_session, refuse_for_session
+
     route = live.route
-    parents = tuple(dict.fromkeys((session_id, _physical_target(authority, session_id))))
-    refuse_for_session((authority.profile_id, session_id), session_key=route, parent_session_ids=parents)
+    parents = tuple(
+        dict.fromkeys((session_id, _physical_target(authority, session_id)))
+    )
+    refuse_for_session(
+        (authority.profile_id, session_id),
+        session_key=route,
+        parent_session_ids=parents,
+    )
     for parent in parents:
-        interrupt_for_session(session_key=route, parent_session_id=parent, reason=f'viewer_close:{reason}')
+        interrupt_for_session(
+            session_key=route, parent_session_id=parent, reason=f"viewer_close:{reason}"
+        )
     authority.pending_closes[session_id] = close = _PendingClose(reason)
     await asyncio.to_thread(_persist_close, authority, session_id, close.record)
     if not _still_pending(authority, session_id, live, close):
         # A viewer attached during the write: its own clear may have run before this commit. Only
         # this close's record goes; a newer close stored since keeps its own.
-        await asyncio.to_thread(forget_persisted_close, authority, session_id, close.record)
+        await asyncio.to_thread(
+            forget_persisted_close, authority, session_id, close.record
+        )
         return
     await settle_viewer_close(authority, session_id)
 
@@ -98,8 +118,11 @@ def _persist_close(authority, session_id, record):
 
     def write(conn):
         _epoch(conn, authority.epoch)
-        conn.execute('INSERT INTO state_meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',
-                     (CLOSE_PREFIX + session_id, record))
+        conn.execute(
+            "INSERT INTO state_meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (CLOSE_PREFIX + session_id, record),
+        )
+
     authority.db._execute_write(write)
 
 
@@ -111,12 +134,15 @@ def forget_persisted_close(authority, session_id, record):
 
     def write(conn):
         _epoch(conn, authority.epoch)
-        return conn.execute('DELETE FROM state_meta WHERE key=? AND value=?',
-                            (CLOSE_PREFIX + session_id, record)).rowcount
+        return conn.execute(
+            "DELETE FROM state_meta WHERE key=? AND value=?",
+            (CLOSE_PREFIX + session_id, record),
+        ).rowcount
+
     try:
         return bool(authority.db._execute_write(write))
     except RuntimeStoreError as exc:
-        logger.info('Stored close for %s left in place: %s', session_id, exc)
+        logger.info("Stored close for %s left in place: %s", session_id, exc)
         return False
 
 
@@ -137,17 +163,21 @@ def rearm_persisted_closes(authority):
     is mounted with no viewer goes back to ``pending_closes``. The caller schedules the drain, whose
     idle point (after any queued turn; never past an ``unknown`` one) completes it. Returns the ids."""
     with authority.db._read_ctx() as conn:
-        stored = conn.execute('SELECT key, value FROM state_meta WHERE key LIKE ?', (CLOSE_PREFIX + '%',)).fetchall()
+        stored = conn.execute(
+            "SELECT key, value FROM state_meta WHERE key LIKE ?", (CLOSE_PREFIX + "%",)
+        ).fetchall()
     armed = []
     for key, record in stored:
-        session_id = key[len(CLOSE_PREFIX):]
+        session_id = key[len(CLOSE_PREFIX) :]
         live = authority.sessions.get(session_id)
         if live is None or live.superseded:
             continue  # not restored (paused, retired): left stored for a later recovery
         if live.subscribers:
             forget_persisted_close(authority, session_id, record)
             continue
-        authority.pending_closes.setdefault(session_id, _PendingClose.from_record(record))
+        authority.pending_closes.setdefault(
+            session_id, _PendingClose.from_record(record)
+        )
         armed.append(session_id)
     return armed
 
@@ -174,17 +204,26 @@ async def settle_viewer_close(authority, session_id):
     # Claimed with no await since the check: exactly one settler stamps the row and runs the
     # lifecycle, and a close cancelled before its claim never wrote ``ended_at``.
     del authority.pending_closes[session_id]
-    from gateway.session_acp_lifecycle import end_idle_viewer_session, reopen_if_reattached
+    from gateway.session_acp_lifecycle import (
+        end_idle_viewer_session,
+        reopen_if_reattached,
+    )
     from gateway.session_runtime_workers import tracked_write
-    ended = await tracked_write(authority, partial(end_idle_viewer_session, authority, session_id, close.reason),
-                                then=partial(reopen_if_reattached, authority, session_id))
+
+    ended = await tracked_write(
+        authority,
+        partial(end_idle_viewer_session, authority, session_id, close.reason),
+        then=partial(reopen_if_reattached, authority, session_id),
+    )
     if not ended:
         await _requeue_if_busy(authority, session_id, live, target, close)
         return
     await asyncio.to_thread(forget_persisted_close, authority, session_id, close.record)
     if live.subscribers:
         return  # a viewer reattached during the stamp; reopen_if_reattached reopened the row
-    platform = (row or {}).get('source') or (live.source.platform.value if live.source else '')
+    platform = (row or {}).get("source") or (
+        live.source.platform.value if live.source else ""
+    )
     await _run_close_lifecycle(authority, live, target, platform, close.reason)
 
 
@@ -196,23 +235,36 @@ async def _resolve_abandoned_unknown(authority, session_id, live, close):
     close. A viewer back first cancels the close and keeps the decision. Returns whether the
     close may go on to its idle check (no ``unknown`` turn is left)."""
     from clawk_state_runtime import list_session_admissions
-    rows = await asyncio.to_thread(list_session_admissions, authority.db, session_id=session_id)
-    unknown = [row for row in rows if row['status'] == 'unknown']
+
+    rows = await asyncio.to_thread(
+        list_session_admissions, authority.db, session_id=session_id
+    )
+    unknown = [row for row in rows if row["status"] == "unknown"]
     if not unknown:
         return True
     from gateway.session_contract import SessionRef
+
     ref = SessionRef(authority.profile_id, session_id)
     for row in unknown:
         if not _still_pending(authority, session_id, live, close):
             return False
         try:
-            await authority.resolve_unknown_as_owner(ref, row['admission_id'], row['generation'])
+            await authority.resolve_unknown_as_owner(
+                ref, row["admission_id"], row["generation"]
+            )
         except RuntimeStoreError as exc:
-            logger.warning('Unknown turn %s on closed session %s left paused: %s',
-                           row['admission_id'], session_id, exc.reason)
+            logger.warning(
+                "Unknown turn %s on closed session %s left paused: %s",
+                row["admission_id"],
+                session_id,
+                exc.reason,
+            )
             return False
-        logger.info('Unknown turn %s resolved interrupted: its session %s was closed by its last viewer',
-                    row['admission_id'], session_id)
+        logger.info(
+            "Unknown turn %s resolved interrupted: its session %s was closed by its last viewer",
+            row["admission_id"],
+            session_id,
+        )
     # The resolution also rescheduled the drain; the idle check below and its next idle point
     # are both safe (the close is claimed exactly once).
     return _still_pending(authority, session_id, live, close)
@@ -227,7 +279,9 @@ async def _requeue_if_busy(authority, session_id, live, target, close):
     drain's next idle point; any other refusal (row already ended) leaves nothing to finish."""
     if not await asyncio.to_thread(_busy, authority, session_id, target):
         if session_id not in authority.pending_closes:
-            await asyncio.to_thread(forget_persisted_close, authority, session_id, close.record)  # already ended
+            await asyncio.to_thread(
+                forget_persisted_close, authority, session_id, close.record
+            )  # already ended
         return
     if live.subscribers or session_id in authority.pending_closes:
         return  # a reattach cancelled it, or a newer close replaced it
@@ -241,19 +295,27 @@ async def _run_close_lifecycle(authority, live, target, platform, reason):
     memory providers' end-of-session commit (the cached agent is evicted at a boundary, as a
     gateway ``/new`` does) and the finalize hooks under the owning profile's scope."""
     runner = authority.runner
-    evict = getattr(runner, '_evict_cached_agent_at_boundary', None)
+    evict = getattr(runner, "_evict_cached_agent_at_boundary", None)
     if evict is not None:
         evict(live.route)
-    finalize = getattr(runner, '_finalize_session_off_loop', None)
+    finalize = getattr(runner, "_finalize_session_off_loop", None)
     if finalize is None:
         return
-    messages = await finalize(session_id=target, platform=platform, reason=reason, session_key=live.route)
+    messages = await finalize(
+        session_id=target, platform=platform, reason=reason, session_key=live.route
+    )
     if messages:
         # No viewer is left to show them (session.detach carries no messages yet).
-        logger.info('Session-end plugin message(s) for %s dropped: no viewer', target)
-    reset = getattr(runner, '_reset_session_off_loop', None)
+        logger.info("Session-end plugin message(s) for %s dropped: no viewer", target)
+    reset = getattr(runner, "_reset_session_off_loop", None)
     if reason in _RESET_REASONS and reset is not None:
         # The gateway's own /new arguments. The viewer opens its next session only after this
         # detach, so the new id is not known here.
-        await reset(session_key=live.route, session_id=None, reason='new_session', platform=platform,
-                    old_session_id=target, new_session_id=None)
+        await reset(
+            session_key=live.route,
+            session_id=None,
+            reason="new_session",
+            platform=platform,
+            old_session_id=target,
+            new_session_id=None,
+        )

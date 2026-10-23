@@ -103,7 +103,9 @@ def _set_config(monkeypatch, config):
 
 
 class TestOptIn:
-    def test_no_send_when_nothing_is_configured(self, runtime, monkeypatch, capture_sender):
+    def test_no_send_when_nothing_is_configured(
+        self, runtime, monkeypatch, capture_sender
+    ):
         _set_config(monkeypatch, {})
         runtime._export()
         runtime._join_send_thread(timeout=1)
@@ -124,18 +126,20 @@ class TestOptIn:
         runtime._join_send_thread(timeout=2)
         assert capture_sender["endpoints"] == ["https://staging.test/v1"]
 
-    def test_export_still_runs_when_sending_is_off(self, runtime, monkeypatch, capture_sender):
+    def test_export_still_runs_when_sending_is_off(
+        self, runtime, monkeypatch, capture_sender
+    ):
         _set_config(monkeypatch, _config(enabled=True))
         runtime._export()
         runtime._join_send_thread(timeout=1)
         assert runtime.subscriber.store.exported == 1
-        assert capture_sender["passes"] == []  # the gate reads resolved.send, not enabled
+        assert (
+            capture_sender["passes"] == []
+        )  # the gate reads resolved.send, not enabled
 
 
 class TestInteractivePathIsNotBlocked:
-    def test_export_returns_before_the_send_finishes(
-        self, runtime, monkeypatch
-    ):
+    def test_export_returns_before_the_send_finishes(self, runtime, monkeypatch):
         started = threading.Event()
         release = threading.Event()
 
@@ -308,9 +312,7 @@ class TestConsentWindows:
         # constructing the store — the constructor creates directories), so
         # the probe and the store must agree the way they do in production.
         home = tmp_path / "home"
-        monkeypatch.setattr(
-            "clawk_constants.get_clawk_home", lambda: home
-        )
+        monkeypatch.setattr("clawk_constants.get_clawk_home", lambda: home)
         root = home / "telemetry" / "shared_metrics"
         store = SharedMetricsStore(
             database_path=root / "metrics.sqlite3",
@@ -340,7 +342,6 @@ class TestConsentWindows:
         )
 
 
-
 class TestFailureIsolation:
     def test_a_sender_crash_does_not_propagate(self, runtime, monkeypatch):
         class Exploding:
@@ -358,7 +359,9 @@ class TestFailureIsolation:
         runtime._export()  # must not raise
         runtime._join_send_thread(timeout=2)
 
-    def test_an_unreadable_config_does_not_break_export(self, runtime, monkeypatch, capture_sender):
+    def test_an_unreadable_config_does_not_break_export(
+        self, runtime, monkeypatch, capture_sender
+    ):
         def explode():
             raise OSError("config unreadable")
 

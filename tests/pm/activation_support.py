@@ -110,9 +110,9 @@ def fake_store(tmp_path: Path) -> tuple[Path, Path]:
     """A store laid out like pm's: facts.json marking the python package
     installed (identity matches pm/lock.json) with a canary env export, and
     an entry whose interpreter is a wrapper that runs the real python."""
-    lock = json.loads(
-        (REPO_ROOT / "pm" / "lock.json").read_text(encoding="utf-8-sig")
-    )["packages"]
+    lock = json.loads((REPO_ROOT / "pm" / "lock.json").read_text(encoding="utf-8-sig"))[
+        "packages"
+    ]
     target = current_target()
     python_pkg = lock["python"]
     sha = python_pkg["artifacts"][target]["sha256"]
@@ -129,7 +129,9 @@ def fake_store(tmp_path: Path) -> tuple[Path, Path]:
     # spawnable interpreter instead (see spawnable_python). The wrapper
     # works even named python.exe because activate execs it through
     # bash/MSYS, which honors #!-scripts regardless of suffix.
-    interpreter = entry / ("python.exe" if sys.platform.startswith("win") else "bin/python3")
+    interpreter = entry / (
+        "python.exe" if sys.platform.startswith("win") else "bin/python3"
+    )
     interpreter.parent.mkdir(parents=True, exist_ok=True)
     real = spawnable_python()
     wrapper = f"#!/bin/sh\nexec '{posix(real)}' \"$@\"\n"
@@ -159,12 +161,21 @@ def fake_store(tmp_path: Path) -> tuple[Path, Path]:
 def isolated_checkout(tmp_path: Path) -> Path:
     root = tmp_path / "checkout with spaces"
     root.mkdir()
-    shutil.copytree(REPO_ROOT / "pm", root / "pm", ignore=shutil.ignore_patterns("__pycache__"))
+    shutil.copytree(
+        REPO_ROOT / "pm", root / "pm", ignore=shutil.ignore_patterns("__pycache__")
+    )
     (root / "clawk_cli").mkdir()
     (root / "scripts").mkdir()
-    for relative in ("activate", "activate.fish", "activate.ps1", "scripts/_activation.sh",
-                     "clawk_constants.py", "clawk_cli/__init__.py",
-                     "pm/environments.py", "clawk_cli/runtime_state.py"):
+    for relative in (
+        "activate",
+        "activate.fish",
+        "activate.ps1",
+        "scripts/_activation.sh",
+        "clawk_constants.py",
+        "clawk_cli/__init__.py",
+        "pm/environments.py",
+        "clawk_cli/runtime_state.py",
+    ):
         shutil.copy2(REPO_ROOT / relative, root / relative)
     # Environment-only tests do not exercise provisioning; the runtime tests
     # replace these stubs with a publisher that records and applies each sync.
@@ -173,7 +184,8 @@ def isolated_checkout(tmp_path: Path) -> Path:
         encoding="utf-8",
     )
     (root / "setup-clawk.ps1").write_text(
-        "param([switch]$RuntimeOnly)\nif (-not $RuntimeOnly) { exit 2 }\n", encoding="utf-8",
+        "param([switch]$RuntimeOnly)\nif (-not $RuntimeOnly) { exit 2 }\n",
+        encoding="utf-8",
     )
     return root
 
@@ -182,8 +194,16 @@ def bash_env(store: Path) -> dict:
     env = child_env()
     home = store.parent / "home"
     home.mkdir(exist_ok=True)
-    env.update(HOME=posix(home), USERPROFILE=str(home), CLAWK_HOME=posix(home / "clawk"))
-    for key in ("PYTHONHOME", "PYTHONPATH", "VIRTUAL_ENV", "BASH_ENV", "__CLAWK_ACTIVATED"):
+    env.update(
+        HOME=posix(home), USERPROFILE=str(home), CLAWK_HOME=posix(home / "clawk")
+    )
+    for key in (
+        "PYTHONHOME",
+        "PYTHONPATH",
+        "VIRTUAL_ENV",
+        "BASH_ENV",
+        "__CLAWK_ACTIVATED",
+    ):
         env.pop(key, None)
     env["CLAWK_RUNTIME_DIR"] = posix(store)
     # Keep the real env out of the composed pm output so the canary export
@@ -203,7 +223,10 @@ def powershell() -> str | None:
     if sys.platform == "win32":
         cand = (
             Path(os.environ.get("SystemRoot", r"C:\Windows"))
-            / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
+            / "System32"
+            / "WindowsPowerShell"
+            / "v1.0"
+            / "powershell.exe"
         )
         if cand.exists():
             return str(cand)
@@ -217,7 +240,8 @@ def sync_checkout(tmp_path: Path):
     # The setup seam publishes a bootstrap and a selected generation. PM's
     # freshness algorithms have their own tests; here a warm setup call is a
     # no-op and activation must still call it, rather than cache its own answer.
-    (root / "sync.py").write_text(textwrap.dedent('''\
+    (root / "sync.py").write_text(
+        textwrap.dedent("""\
         import json, os, pathlib, shutil, sys
         from pm.environments import runtime_facts_path, site_packages
         root = pathlib.Path(__file__).parent
@@ -243,24 +267,38 @@ def sync_checkout(tmp_path: Path):
             facts.write_text(json.dumps({"packages": {"venv": {"environment": str(selected)}}}), encoding="utf-8")
             with (root / "builds").open("a", encoding="utf-8") as stream:
                 stream.write(generation + "\\n")
-    '''), encoding="utf-8")
+    """),
+        encoding="utf-8",
+    )
     (root / "input").write_text("first", encoding="utf-8")
     if os.name == "nt":
         subprocess.run(
-            [str(python), "-m", "venv", "--without-pip", str(root / "prepared-bootstrap")],
-            check=True, capture_output=True, env=env, timeout=60,
+            [
+                str(python),
+                "-m",
+                "venv",
+                "--without-pip",
+                str(root / "prepared-bootstrap"),
+            ],
+            check=True,
+            capture_output=True,
+            env=env,
+            timeout=60,
         )
     else:
         binary = root / "prepared-bootstrap" / "bin" / "python"
         binary.parent.mkdir(parents=True)
-        binary.write_text(f"#!/bin/sh\nexec {shlex.quote(str(python))} \"$@\"\n", encoding="utf-8")
+        binary.write_text(
+            f'#!/bin/sh\nexec {shlex.quote(str(python))} "$@"\n', encoding="utf-8"
+        )
         binary.chmod(0o755)
     # Activation's contract with setup is the runtime-only switch; setup
     # itself maps that to PM's --trust-recorded install.
     (root / "setup-clawk.sh").write_text(
         'test "$#" = 2 && test "$1" = --runtime-only && test "$2" = --test-environment || exit 2\n'
-        f'cd {shlex.quote(str(root))} || exit 3\n'
-        f'exec {shlex.quote(str(python))} sync.py runtime-only --trust-recorded --test-environment\n', encoding="utf-8",
+        f"cd {shlex.quote(str(root))} || exit 3\n"
+        f"exec {shlex.quote(str(python))} sync.py runtime-only --trust-recorded --test-environment\n",
+        encoding="utf-8",
     )
     (root / "setup-clawk.ps1").write_text(
         "param([switch]$RuntimeOnly)\n"
@@ -268,8 +306,9 @@ def sync_checkout(tmp_path: Path):
         "$ErrorActionPreference = 'Stop'\n"
         "$record = @{pid=$PID; executable=(Get-Process -Id $PID).Path; "
         "argv=[Environment]::GetCommandLineArgs()}\n"
-        "$record | ConvertTo-Json -Compress | Add-Content -LiteralPath \"$PSScriptRoot\\ps-calls.jsonl\"\n"
+        '$record | ConvertTo-Json -Compress | Add-Content -LiteralPath "$PSScriptRoot\\ps-calls.jsonl"\n'
         "Set-Location -LiteralPath $PSScriptRoot\n"
-        f"& '{python}' sync.py runtime-only --trust-recorded --test-environment\nexit $LASTEXITCODE\n", encoding="utf-8",
+        f"& '{python}' sync.py runtime-only --trust-recorded --test-environment\nexit $LASTEXITCODE\n",
+        encoding="utf-8",
     )
     return root, env

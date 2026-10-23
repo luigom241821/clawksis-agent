@@ -32,7 +32,12 @@ import sys
 from pathlib import Path
 
 
-_PATH = Path(__file__).resolve().parents[2] / "scripts" / "ci" / "assemble_review_comment.py"
+_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "scripts"
+    / "ci"
+    / "assemble_review_comment.py"
+)
 _spec = importlib.util.spec_from_file_location("assemble_review_comment", _PATH)
 if _spec is None or _spec.loader is None:
     raise ImportError("Failed to load assemble_review_comment.py")
@@ -65,11 +70,16 @@ def test_statuses_bad_json():
 
 
 def test_statuses_info():
-    statuses = _status("review-label-gate", [{
-        "kind": "info",
-        "title": "CI-sensitive file review",
-        "summary": "Label present.",
-    }])
+    statuses = _status(
+        "review-label-gate",
+        [
+            {
+                "kind": "info",
+                "title": "CI-sensitive file review",
+                "summary": "Label present.",
+            }
+        ],
+    )
     items, sources = _mod.collect_from_statuses(statuses)
     assert len(items) == 1
     assert items[0].severity == "info"
@@ -85,11 +95,15 @@ def test_failed_jobs_empty_needs():
 
 def test_failed_jobs_excluded_by_source():
     """Jobs whose name contains a declared source are excluded."""
-    needs = json.dumps({
-        "Review label gate / Review label gate": "failure",
-        "tests": "failure",
-    })
-    items = _mod.collect_failed_jobs(needs, "https://run", exclude_sources={"review-label-gate"})
+    needs = json.dumps(
+        {
+            "Review label gate / Review label gate": "failure",
+            "tests": "failure",
+        }
+    )
+    items = _mod.collect_failed_jobs(
+        needs, "https://run", exclude_sources={"review-label-gate"}
+    )
     assert len(items) == 1
     assert items[0].title == "tests"
 
@@ -128,13 +142,18 @@ def test_not_waiting_and_no_items_still_renders_all_good():
 
 def test_assemble_with_timings_status():
     """Timings status from the nested format renders as debug or warning."""
-    statuses = _status("ci-timings", [{
-        "kind": "debug",
-        "title": "CI timings",
-        "summary": "Wall time 3m (no baseline yet).",
-        "detail": "",
-        "link": "https://report",
-    }])
+    statuses = _status(
+        "ci-timings",
+        [
+            {
+                "kind": "debug",
+                "title": "CI timings",
+                "summary": "Wall time 3m (no baseline yet).",
+                "detail": "",
+                "link": "https://report",
+            }
+        ],
+    )
     body = _mod.assemble(review_statuses_json=statuses)
     assert "<details>" in body
     assert "### CI timings" in body
@@ -149,11 +168,19 @@ def test_assemble_with_timings_status():
 def test_attach_job_urls_fills_missing_links():
     """Items without a link get one from job_urls via source matching."""
     items = [
-        ReviewItem(severity="info", title="Supply chain scan",
-                   summary="No risks.", source="supply chain"),
-        ReviewItem(severity="warning", title="CI timings",
-                   summary="Slower.", source="ci timings",
-                   link="https://report"),  # already has a link
+        ReviewItem(
+            severity="info",
+            title="Supply chain scan",
+            summary="No risks.",
+            source="supply chain",
+        ),
+        ReviewItem(
+            severity="warning",
+            title="CI timings",
+            summary="Slower.",
+            source="ci timings",
+            link="https://report",
+        ),  # already has a link
     ]
     job_urls = {
         "Supply Chain Audit / Scan PR for critical supply chain risks": "https://run/1/job/2",

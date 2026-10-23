@@ -11,15 +11,29 @@ DINGTALK_TYPE_MAPPING = {"picture": "image", "voice": "audio"}
 # File extension → MIME type for DingTalk file/image messages. image/* MIMEs
 # make ``extract_media`` classify msgtype='image'/'file' payloads as PHOTO.
 EXT_MAP = {
-    "pdf": "application/pdf", "doc": "application/msword", "xls": "application/vnd.ms-excel",
+    "pdf": "application/pdf",
+    "doc": "application/msword",
+    "xls": "application/vnd.ms-excel",
     "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "gif": "image/gif", "webp": "image/webp",
-    "md": "text/markdown", "txt": "text/plain", "csv": "text/csv", "zip": "application/zip", "mp4": "video/mp4",
+    "png": "image/png",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "gif": "image/gif",
+    "webp": "image/webp",
+    "md": "text/markdown",
+    "txt": "text/plain",
+    "csv": "text/csv",
+    "zip": "application/zip",
+    "mp4": "video/mp4",
 }
 
 # rich-text runtime type → (media_types entry, MessageType promotion when still TEXT)
-_RICH_MEDIA = {"image": ("image", MessageType.PHOTO), "video": ("video", MessageType.VIDEO), "file": ("application/octet-stream", MessageType.DOCUMENT)}
+_RICH_MEDIA = {
+    "image": ("image", MessageType.PHOTO),
+    "video": ("video", MessageType.VIDEO),
+    "file": ("application/octet-stream", MessageType.DOCUMENT),
+}
 
 
 def _extensions(message: Any) -> Any:
@@ -34,7 +48,9 @@ def _ext_content(message: Any) -> Optional[dict]:
 
 def _rich_list(message: Any) -> Optional[list]:
     """Rich-text item list from either SDK shape (``rich_text_content.rich_text_list`` or legacy ``rich_text``)."""
-    rich_text = getattr(message, "rich_text_content", None) or getattr(message, "rich_text", None)
+    rich_text = getattr(message, "rich_text_content", None) or getattr(
+        message, "rich_text", None
+    )
     if not rich_text:
         return None
     rich_list = getattr(rich_text, "rich_text_list", None) or rich_text
@@ -42,7 +58,9 @@ def _rich_list(message: Any) -> Optional[list]:
 
 
 def _url_of(raw: Any) -> str:
-    return (raw.get("url", "") or raw.get("docUrl", "")) if isinstance(raw, dict) else ""
+    return (
+        (raw.get("url", "") or raw.get("docUrl", "")) if isinstance(raw, dict) else ""
+    )
 
 
 def _card_text(message: Any) -> str:
@@ -58,16 +76,32 @@ def _card_text(message: Any) -> str:
                 doc_url = _url_of(json.loads(raw_content.strip()))
             except (ValueError, TypeError):
                 doc_url = raw_content
-        content = " ".join(([f"[文档] {title}"] if title else []) + ([doc_url] if doc_url else []))
+        content = " ".join(
+            ([f"[文档] {title}"] if title else []) + ([doc_url] if doc_url else [])
+        )
     ext_text = extensions.get("text", {})  # last-resort: raw text field from extensions
-    return content or ((ext_text.get("content", "") or "").strip() if isinstance(ext_text, dict) else "")
+    return content or (
+        (ext_text.get("content", "") or "").strip()
+        if isinstance(ext_text, dict)
+        else ""
+    )
 
 
 def _interactive_card_text(message: Any) -> str:
     """msgtype='interactiveCard': ``extensions['content']`` carries title + biz_custom_action_url."""
     ext_content = _ext_content(message) or {}
-    doc_url, title = ext_content.get("biz_custom_action_url", ""), ext_content.get("title", "")
-    return " ".join([f"[文档卡片] {title}" if title else "[文档卡片]"] + ([doc_url] if doc_url else [])) if (doc_url or title) else ""
+    doc_url, title = (
+        ext_content.get("biz_custom_action_url", ""),
+        ext_content.get("title", ""),
+    )
+    return (
+        " ".join(
+            [f"[文档卡片] {title}" if title else "[文档卡片]"]
+            + ([doc_url] if doc_url else [])
+        )
+        if (doc_url or title)
+        else ""
+    )
 
 
 def _ext_field(message: Any, field: str) -> Any:
@@ -79,7 +113,9 @@ def _ext_field(message: Any, field: str) -> Any:
 # recognition text; file -> fileName; card / interactiveCard -> title + doc URL.
 _EMPTY_TEXT_FALLBACKS = {
     "audio": lambda m: (_ext_field(m, "recognition") or "").strip(),
-    "file": lambda m: f"[文件] {_ext_field(m, 'fileName')}" if _ext_field(m, "fileName") else "",
+    "file": lambda m: (
+        f"[文件] {_ext_field(m, 'fileName')}" if _ext_field(m, "fileName") else ""
+    ),
     "card": _card_text,
     "interactiveCard": _interactive_card_text,
 }
@@ -95,11 +131,21 @@ def extract_text(message: Any) -> str:
     """Extract plain text from a DingTalk chatbot message. Handles both SDK shapes: legacy ``message.text`` dict ``{"content": ...}`` and >= 0.20 ``TextContent``
     (whose ``__str__`` is ``"TextContent(content=...)"`` — always read ``.content`` first)."""
     text = getattr(message, "text", None) or ""
-    content = (text.content or "" if hasattr(text, "content") else text.get("content", "") if isinstance(text, dict) else str(text)).strip()
+    content = (
+        text.content or ""
+        if hasattr(text, "content")
+        else text.get("content", "")
+        if isinstance(text, dict)
+        else str(text)
+    ).strip()
     rich_list = _rich_list(message) if not content else None
     if rich_list is not None:
         content = " ".join(t for t in map(_rich_item_text, rich_list) if t).strip()
-    fallback = _EMPTY_TEXT_FALLBACKS.get(getattr(message, "message_type", "")) if not content else None
+    fallback = (
+        _EMPTY_TEXT_FALLBACKS.get(getattr(message, "message_type", ""))
+        if not content
+        else None
+    )
     # Do NOT strip "@bot": the mention is routed structurally (callback ``isInAtList``), and
     # regex-stripping @handles would damage e-mails, SSH URLs and literal "@openai" references.
     return fallback(message) if fallback else content
@@ -111,7 +157,9 @@ def extract_media(message: Any) -> tuple[MessageType, list[str], list[str]]:
     media_urls: list[str] = []
     media_types: list[str] = []
     image_content = getattr(message, "image_content", None)
-    if download_code := (getattr(image_content, "download_code", None) if image_content else None):
+    if download_code := (
+        getattr(image_content, "download_code", None) if image_content else None
+    ):
         media_urls.append(download_code)
         media_types.append("image")
         msg_type = MessageType.PHOTO
@@ -124,7 +172,11 @@ def extract_media(message: Any) -> tuple[MessageType, list[str], list[str]]:
         item_type = item.get("type", "")
         mapped = DINGTALK_TYPE_MAPPING.get(item_type, "file")
         # "voice" items are native voice notes → STT (VOICE); "audio" file uploads stay AUDIO.
-        mime, promoted = ("audio", MessageType.VOICE if item_type == "voice" else MessageType.AUDIO) if mapped == "audio" else _RICH_MEDIA[mapped]
+        mime, promoted = (
+            ("audio", MessageType.VOICE if item_type == "voice" else MessageType.AUDIO)
+            if mapped == "audio"
+            else _RICH_MEDIA[mapped]
+        )
         media_urls.append(dl_code)
         media_types.append(mime)
         if msg_type == MessageType.TEXT:
@@ -146,11 +198,20 @@ def extract_media(message: Any) -> tuple[MessageType, list[str], list[str]]:
         ext_content = _ext_content(message) or {}
         if dl_code := ext_content.get("downloadCode") or "":
             fname = ext_content.get("fileName", "")
-            mime = EXT_MAP.get(fname.rsplit(".", 1)[-1].lower() if fname and "." in fname else "", "application/octet-stream")
+            mime = EXT_MAP.get(
+                fname.rsplit(".", 1)[-1].lower() if fname and "." in fname else "",
+                "application/octet-stream",
+            )
             media_urls.append(dl_code)
             media_types.append(mime)
-            if msg_type == MessageType.TEXT:  # image messages, and files with image MIME (a .png attachment) → PHOTO
-                msg_type = MessageType.PHOTO if (msg_type_str == "image" or mime.startswith("image/")) else MessageType.DOCUMENT
+            if (
+                msg_type == MessageType.TEXT
+            ):  # image messages, and files with image MIME (a .png attachment) → PHOTO
+                msg_type = (
+                    MessageType.PHOTO
+                    if (msg_type_str == "image" or mime.startswith("image/"))
+                    else MessageType.DOCUMENT
+                )
     return msg_type, media_urls, media_types
 
 
@@ -163,7 +224,11 @@ def collect_download_codes(message: Any) -> list[tuple[Any, str]]:
     rich_text = getattr(message, "rich_text_content", None)
     for item in (getattr(rich_text, "rich_text_list", []) or []) if rich_text else []:
         if isinstance(item, dict):
-            codes.extend((item, key) for key in ("downloadCode", "pictureDownloadCode", "download_code") if item.get(key))
+            codes.extend(
+                (item, key)
+                for key in ("downloadCode", "pictureDownloadCode", "download_code")
+                if item.get(key)
+            )
     if (getattr(message, "message_type", "") or "") in ("file", "image"):
         ext_content = _ext_content(message)
         if ext_content and ext_content.get("downloadCode"):

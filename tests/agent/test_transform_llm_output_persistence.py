@@ -21,6 +21,7 @@ def _rewriting_hook(calls):
         if hook_name == "transform_llm_output":
             return ["REWRITTEN:" + kwargs["response_text"]]
         return []
+
     return invoke_hook
 
 
@@ -29,8 +30,12 @@ def _fake_completion(text):
         msg = SimpleNamespace(content=text, tool_calls=None, reasoning=None)
         return SimpleNamespace(
             choices=[SimpleNamespace(message=msg, finish_reason="stop")],
-            usage=SimpleNamespace(prompt_tokens=10, completion_tokens=5, total_tokens=15), model="fake/model",
+            usage=SimpleNamespace(
+                prompt_tokens=10, completion_tokens=5, total_tokens=15
+            ),
+            model="fake/model",
         )
+
     return create
 
 
@@ -45,9 +50,15 @@ def db_agent(tmp_path, monkeypatch):
         patch("agent.process_bootstrap.OpenAI"),
     ):
         agent = AIAgent(
-            api_key="test-key-1234567890", base_url="https://openrouter.ai/api/v1", model="fake/model",
-            quiet_mode=True, skip_context_files=True, skip_memory=True, platform="cli",
-            session_id="sess-44239", session_db=db,
+            api_key="test-key-1234567890",
+            base_url="https://openrouter.ai/api/v1",
+            model="fake/model",
+            quiet_mode=True,
+            skip_context_files=True,
+            skip_memory=True,
+            platform="cli",
+            session_id="sess-44239",
+            session_db=db,
         )
     agent.client = MagicMock()
     return agent, db
@@ -61,8 +72,12 @@ def test_transformed_reply_is_the_stored_and_replayed_text(db_agent, monkeypatch
 
     result = agent.run_conversation("hello")
 
-    last_assistant = next(m for m in reversed(result["messages"]) if m.get("role") == "assistant")
-    stored = [r["content"] for r in db.get_messages("sess-44239") if r["role"] == "assistant"]
+    last_assistant = next(
+        m for m in reversed(result["messages"]) if m.get("role") == "assistant"
+    )
+    stored = [
+        r["content"] for r in db.get_messages("sess-44239") if r["role"] == "assistant"
+    ]
     assert result["final_response"] == "REWRITTEN:RAW MODEL TEXT"
     assert last_assistant["content"] == result["final_response"]
     assert stored == [result["final_response"]]
@@ -84,14 +99,29 @@ def test_recovery_path_tail_row_carries_transformed_text(db_agent, monkeypatch):
     agent._current_turn_id = "turn-r"
     messages = [
         {"role": "user", "content": "do a thing"},
-        {"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "function": {"name": "read_file", "arguments": "{}"}}]},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {"id": "c1", "function": {"name": "read_file", "arguments": "{}"}}
+            ],
+        },
         {"role": "tool", "tool_call_id": "c1", "content": json.dumps({"ok": True})},
     ]
 
     result = finalize_turn(
-        agent, final_response="RECOVERED TEXT", api_call_count=1, interrupted=False, failed=False,
-        messages=messages, conversation_history=None, effective_task_id="task-1", turn_id="turn-r",
-        user_message="do a thing", original_user_message="do a thing", _should_review_memory=False,
+        agent,
+        final_response="RECOVERED TEXT",
+        api_call_count=1,
+        interrupted=False,
+        failed=False,
+        messages=messages,
+        conversation_history=None,
+        effective_task_id="task-1",
+        turn_id="turn-r",
+        user_message="do a thing",
+        original_user_message="do a thing",
+        _should_review_memory=False,
         _turn_exit_reason="partial_stream_recovery",
     )
 

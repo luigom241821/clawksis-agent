@@ -13,6 +13,7 @@ import pytest
 def _clear_jwt_cache():
     """Reset the module-level JWT + failure caches before each test."""
     import clawk_cli.copilot_auth as mod
+
     mod._jwt_cache.clear()
     mod._exchange_failure_cache.clear()
     yield
@@ -23,7 +24,9 @@ def _clear_jwt_cache():
 class TestExchangeCopilotToken:
     """Tests for exchange_copilot_token()."""
 
-    def _mock_urlopen(self, token="tid=abc;exp=123;sku=copilot_individual", expires_at=None):
+    def _mock_urlopen(
+        self, token="tid=abc;exp=123;sku=copilot_individual", expires_at=None
+    ):
         """Create a mock urlopen context manager returning a token response."""
         if expires_at is None:
             expires_at = time.time() + 1800
@@ -51,7 +54,6 @@ class TestExchangeCopilotToken:
         assert req.get_header("Authorization") == "token gho_test123"
         assert "GitHubCopilotChat" in req.get_header("User-agent")
 
-
     @patch("urllib.request.urlopen")
     def test_raises_on_empty_token(self, mock_urlopen):
         from clawk_cli.copilot_auth import exchange_copilot_token
@@ -70,8 +72,14 @@ class TestExchangeCopilotToken:
 class TestCallerIntegration:
     """Test that callers correctly use token exchange."""
 
-    @patch("clawk_cli.copilot_auth.resolve_copilot_token", return_value=("gho_raw", "GH_TOKEN"))
-    @patch("clawk_cli.copilot_auth.get_copilot_api_token", return_value=("exchanged_jwt", None))
+    @patch(
+        "clawk_cli.copilot_auth.resolve_copilot_token",
+        return_value=("gho_raw", "GH_TOKEN"),
+    )
+    @patch(
+        "clawk_cli.copilot_auth.get_copilot_api_token",
+        return_value=("exchanged_jwt", None),
+    )
     def test_auth_resolve_uses_exchange(self, mock_exchange, mock_resolve):
         from clawk_cli.auth import _resolve_api_key_provider_secret
 
@@ -90,7 +98,10 @@ class TestDeriveBaseUrlFromProxyEp:
         from clawk_cli.copilot_auth import _derive_base_url_from_proxy_ep
 
         token = "tid=abc;exp=999;proxy-ep=proxy.enterprise.githubcopilot.com;sku=copilot_enterprise"
-        assert _derive_base_url_from_proxy_ep(token) == "https://api.enterprise.githubcopilot.com"
+        assert (
+            _derive_base_url_from_proxy_ep(token)
+            == "https://api.enterprise.githubcopilot.com"
+        )
 
 
 class TestJwtDiskStoreBounds:
@@ -98,6 +109,7 @@ class TestJwtDiskStoreBounds:
 
     def _store_path(self, tmp_path, monkeypatch):
         import clawk_cli.copilot_auth as mod
+
         path = tmp_path / mod._JWT_DISK_FILENAME
         monkeypatch.setattr(mod, "_jwt_disk_path", lambda: path)
         return path
@@ -131,7 +143,9 @@ class TestJwtDiskStoreBounds:
         # Untouched — bounded read refused it before any rewrite.
         assert path.read_text() == blob
 
-    def test_save_discards_oversized_store_instead_of_merging(self, tmp_path, monkeypatch):
+    def test_save_discards_oversized_store_instead_of_merging(
+        self, tmp_path, monkeypatch
+    ):
         """Saving over a corrupt/oversized store starts fresh rather than
         re-serializing the oversized content back out."""
         import json as _json
@@ -156,9 +170,13 @@ class TestExchangeFailureFastPath:
 
     def _http_error(self, code):
         import urllib.error
+
         return urllib.error.HTTPError(
             url="https://api.github.com/copilot_internal/v2/token",
-            code=code, msg="err", hdrs=None, fp=None,
+            code=code,
+            msg="err",
+            hdrs=None,
+            fp=None,
         )
 
     @patch("time.sleep")
@@ -174,7 +192,9 @@ class TestExchangeFailureFastPath:
 
     @patch("time.sleep")
     @patch("urllib.request.urlopen")
-    def test_negative_cache_skips_network_on_second_call(self, mock_urlopen, mock_sleep):
+    def test_negative_cache_skips_network_on_second_call(
+        self, mock_urlopen, mock_sleep
+    ):
         from clawk_cli.copilot_auth import exchange_copilot_token
 
         mock_urlopen.side_effect = self._http_error(403)
@@ -186,7 +206,9 @@ class TestExchangeFailureFastPath:
 
     @patch("time.sleep")
     @patch("urllib.request.urlopen")
-    def test_transient_failure_still_retries_then_caches(self, mock_urlopen, mock_sleep):
+    def test_transient_failure_still_retries_then_caches(
+        self, mock_urlopen, mock_sleep
+    ):
         import clawk_cli.copilot_auth as mod
         from clawk_cli.copilot_auth import exchange_copilot_token, _token_fingerprint
 
@@ -197,7 +219,9 @@ class TestExchangeFailureFastPath:
         fp = _token_fingerprint("gho_flaky")
         until = mod._exchange_failure_cache.get(fp, 0)
         # Transient TTL, not the 30-min permanent one.
-        assert 0 < until - time.time() <= mod._EXCHANGE_FAILURE_TTL_TRANSIENT_SECONDS + 1
+        assert (
+            0 < until - time.time() <= mod._EXCHANGE_FAILURE_TTL_TRANSIENT_SECONDS + 1
+        )
 
     @patch("time.sleep")
     @patch("urllib.request.urlopen")
@@ -224,7 +248,10 @@ class TestExchangeFailureFastPath:
 
     def test_evict_clears_negative_cache(self):
         import clawk_cli.copilot_auth as mod
-        from clawk_cli.copilot_auth import evict_cached_exchanged_token, _token_fingerprint
+        from clawk_cli.copilot_auth import (
+            evict_cached_exchanged_token,
+            _token_fingerprint,
+        )
 
         fp = _token_fingerprint("gho_stale")
         mod._exchange_failure_cache[fp] = time.time() + 999

@@ -27,14 +27,17 @@ def _group(*excs) -> BaseExceptionGroup:
 
 # ── Unit coverage for the decision helper ────────────────────────────────────
 
+
 class TestReconnectOrReraiseGroup:
     def test_live_session_transient_drop_reconnects(self):
         task = MCPServerTask("t")
         task._ready.set()  # a live session was established this attempt
-        assert task._reconnect_or_reraise_group(
-            _group(ConnectionError("sse stream dropped"))
-        ) == "reconnect"
-
+        assert (
+            task._reconnect_or_reraise_group(
+                _group(ConnectionError("sse stream dropped"))
+            )
+            == "reconnect"
+        )
 
     def test_no_live_session_reraises_for_backoff(self):
         task = MCPServerTask("t")
@@ -45,6 +48,7 @@ class TestReconnectOrReraiseGroup:
 
 
 # ── Integration coverage: real _run_http new-HTTP branch ─────────────────────
+
 
 class _RaisingTransportCM:
     """Fake streamable-HTTP transport whose __aexit__ raises a group, mimicking
@@ -96,7 +100,9 @@ def _make_http_task(monkeypatch, transport_exc):
         return "reconnect"
 
     monkeypatch.setattr(MCPServerTask, "_discover_tools", _no_discover)
-    monkeypatch.setattr(MCPServerTask, "_wait_for_lifecycle_event", _reconnect_lifecycle)
+    monkeypatch.setattr(
+        MCPServerTask, "_wait_for_lifecycle_event", _reconnect_lifecycle
+    )
     return task
 
 

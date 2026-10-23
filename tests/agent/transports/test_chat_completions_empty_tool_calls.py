@@ -13,10 +13,13 @@ import pytest
 
 from agent.transports import get_transport
 
+
 @pytest.fixture
 def transport():
     import agent.transports.chat_completions
+
     return get_transport("chat_completions")
+
 
 class TestEmptyToolCallsStripping:
     """Assistant messages with empty/invalid tool_calls must be normalized."""
@@ -33,11 +36,13 @@ class TestEmptyToolCallsStripping:
         assert "tool_calls" not in out[0]
 
     def test_assistant_real_calls_preserved(self, transport):
-        real_tc = [{
-            "id": "call_abc",
-            "type": "function",
-            "function": {"name": "read_file", "arguments": "{}"},
-        }]
+        real_tc = [
+            {
+                "id": "call_abc",
+                "type": "function",
+                "function": {"name": "read_file", "arguments": "{}"},
+            }
+        ]
         msgs = [{"role": "assistant", "content": "c", "tool_calls": real_tc}]
         out = transport.convert_messages(msgs)
         assert out[0]["tool_calls"] == real_tc
@@ -49,11 +54,13 @@ class TestEmptyToolCallsStripping:
             {
                 "role": "assistant",
                 "content": "acting",
-                "tool_calls": [{
-                    "id": "call_x",
-                    "type": "function",
-                    "function": {"name": "f", "arguments": "{}"},
-                }],
+                "tool_calls": [
+                    {
+                        "id": "call_x",
+                        "type": "function",
+                        "function": {"name": "f", "arguments": "{}"},
+                    }
+                ],
             },
         ]
         out = transport.convert_messages(msgs)
@@ -76,17 +83,21 @@ class TestEmptyToolCallsStripping:
         # A non-empty tool_calls array carrying codex scaffolding markers
         # (call_id, response_item_id) must have those fields stripped while
         # the call itself is preserved.
-        msgs = [{
-            "role": "assistant",
-            "content": "ok",
-            "tool_calls": [{
-                "id": "fc_1",
-                "call_id": "call_1",
-                "response_item_id": "fc_1",
-                "type": "function",
-                "function": {"name": "f", "arguments": "{}"},
-            }],
-        }]
+        msgs = [
+            {
+                "role": "assistant",
+                "content": "ok",
+                "tool_calls": [
+                    {
+                        "id": "fc_1",
+                        "call_id": "call_1",
+                        "response_item_id": "fc_1",
+                        "type": "function",
+                        "function": {"name": "f", "arguments": "{}"},
+                    }
+                ],
+            }
+        ]
         out = transport.convert_messages(msgs, model="gpt-4o")
         # Non-empty array: codex fields stripped, call preserved.
         assert out[0]["tool_calls"]
@@ -100,11 +111,13 @@ class TestEmptyToolCallsStripping:
             {
                 "role": "assistant",
                 "content": "c",
-                "tool_calls": [{
-                    "id": "call_1",
-                    "type": "function",
-                    "function": {"name": "f", "arguments": "{}"},
-                }],
+                "tool_calls": [
+                    {
+                        "id": "call_1",
+                        "type": "function",
+                        "function": {"name": "f", "arguments": "{}"},
+                    }
+                ],
             },
         ]
         assert transport.convert_messages(msgs) is msgs

@@ -13,16 +13,21 @@ DEFAULT_MOA_PRESET_NAME = "default"
 
 DEFAULT_MOA_REFERENCE_MODELS: list[dict[str, str]] = [
     {"provider": "openai-codex", "model": "gpt-5.5"},
-    {"provider": "openrouter", "model": "deepseek/deepseek-v4-pro"}]
+    {"provider": "openrouter", "model": "deepseek/deepseek-v4-pro"},
+]
 
 DEFAULT_MOA_AGGREGATOR: dict[str, str] = {
-    "provider": "openrouter", "model": "anthropic/claude-opus-4.8"}
+    "provider": "openrouter",
+    "model": "anthropic/claude-opus-4.8",
+}
 
 DEFAULT_MOA_REFERENCE_TIMEOUT: float | None = None
 
 
 def _default_reference_models() -> list[dict[str, Any]]:
-    return [{**slot, "enabled": True} for slot in deepcopy(DEFAULT_MOA_REFERENCE_MODELS)]
+    return [
+        {**slot, "enabled": True} for slot in deepcopy(DEFAULT_MOA_REFERENCE_MODELS)
+    ]
 
 
 def _coerce_number(value: Any, cast, default=None, *, positive: bool = False):
@@ -64,8 +69,11 @@ def _coerce_fanout(value: Any) -> str:
     and normalizes it to the canonical string, so the rest of the pipeline (presets, flattened view,
     runtime) only ever sees one shape. See #67199.
     """
+
     def _every_n(n: int) -> str:
-        return f"every_n:{n}" if n >= 2 else ("per_iteration" if n == 1 else "user_turn")
+        return (
+            f"every_n:{n}" if n >= 2 else ("per_iteration" if n == 1 else "user_turn")
+        )
 
     if isinstance(value, dict):
         # Non-every_n mapping modes fall through to the string path (e.g. {mode: user_turn}).
@@ -99,12 +107,17 @@ def coerce_privacy_filter(value: Any) -> str:
     if value is None or value is False:
         return ""
     mode = str(value).strip().lower()
-    return mode if mode in {"display", "full"} else ("full" if mode in {"true", "on", "yes", "1"} else "")
+    return (
+        mode
+        if mode in {"display", "full"}
+        else ("full" if mode in {"true", "on", "yes", "1"} else "")
+    )
 
 
 def _clean_reasoning_effort(value: Any) -> str | None:
     """Canonical per-slot reasoning effort, or None when unset/invalid."""
     from clawk_constants import parse_reasoning_effort
+
     parsed = None if value is None or value is True else parse_reasoning_effort(value)
     if parsed is None:
         return None
@@ -118,7 +131,13 @@ def _coerce_bool(value: Any, default: bool = True) -> bool:
         return value
     if isinstance(value, str):
         text = value.strip().lower()
-        return True if text in {"1", "true", "yes", "on"} else False if text in {"0", "false", "no", "off"} else default
+        return (
+            True
+            if text in {"1", "true", "yes", "on"}
+            else False
+            if text in {"0", "false", "no", "off"}
+            else default
+        )
     return bool(value)
 
 
@@ -148,7 +167,10 @@ def _clean_slot(slot: Any, *, include_enabled: bool = False) -> dict[str, Any] |
     # Any slot ``_slot_problem`` rejects is dropped, falling back to the preset's defaults.
     if _slot_problem(slot) is not None:
         return None
-    clean: dict[str, Any] = {"provider": str(slot["provider"]).strip(), "model": str(slot["model"]).strip()}
+    clean: dict[str, Any] = {
+        "provider": str(slot["provider"]).strip(),
+        "model": str(slot["model"]).strip(),
+    }
     effort = _clean_reasoning_effort(slot.get("reasoning_effort"))
     if effort:
         clean["reasoning_effort"] = effort
@@ -186,7 +208,11 @@ def validate_moa_payload(raw: Any) -> list[str]:
 
     presets_raw = raw.get("presets")
     # Legacy flat payload: the top-level object is the default preset.
-    presets: dict[Any, Any] = presets_raw if isinstance(presets_raw, dict) and presets_raw else {DEFAULT_MOA_PRESET_NAME: raw}
+    presets: dict[Any, Any] = (
+        presets_raw
+        if isinstance(presets_raw, dict) and presets_raw
+        else {DEFAULT_MOA_PRESET_NAME: raw}
+    )
 
     problems: list[str] = []
     for name, preset in presets.items():
@@ -199,9 +225,15 @@ def validate_moa_payload(raw: Any) -> list[str]:
         if not isinstance(refs, list):
             refs = [refs] if isinstance(refs, dict) else []
         issues = [(index, _slot_problem(slot)) for index, slot in enumerate(refs)]
-        problems.extend(f"preset '{label}' reference {index + 1}: {issue}" for index, issue in issues if issue)
+        problems.extend(
+            f"preset '{label}' reference {index + 1}: {issue}"
+            for index, issue in issues
+            if issue
+        )
         if all(issue for _, issue in issues):
-            problems.append(f"preset '{label}': needs at least one complete reference model")
+            problems.append(
+                f"preset '{label}': needs at least one complete reference model"
+            )
 
         agg_issue = _slot_problem(preset.get("aggregator"))
         if agg_issue:
@@ -213,29 +245,43 @@ def _normalize_preset(raw: Any) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raw = {}
 
-    cleaned = (_clean_slot(item, include_enabled=True) for item in _reference_slots(raw.get("reference_models")))
+    cleaned = (
+        _clean_slot(item, include_enabled=True)
+        for item in _reference_slots(raw.get("reference_models"))
+    )
     refs = [item for item in cleaned if item is not None]
     policy = str(raw.get("degraded_reference_policy") or "loud").strip().lower()
     return {
         "enabled": _coerce_bool(raw.get("enabled"), True),
         "reference_models": refs or _default_reference_models(),
-        "aggregator": _clean_slot(raw.get("aggregator")) or deepcopy(DEFAULT_MOA_AGGREGATOR),
+        "aggregator": _clean_slot(raw.get("aggregator"))
+        or deepcopy(DEFAULT_MOA_AGGREGATOR),
         # None means 'don't send it — provider default applies'.
-        "reference_temperature": _coerce_number(raw.get("reference_temperature"), float),
-        "aggregator_temperature": _coerce_number(raw.get("aggregator_temperature"), float),
+        "reference_temperature": _coerce_number(
+            raw.get("reference_temperature"), float
+        ),
+        "aggregator_temperature": _coerce_number(
+            raw.get("aggregator_temperature"), float
+        ),
         "reference_timeout": _coerce_reference_timeout(raw.get("reference_timeout")),
         # Failed-advisor disclosure policy; unknown values fail loud.
         "degraded_reference_policy": policy if policy in {"loud", "silent"} else "loud",
-
         # "user_turn" (default, cheapest): advisors run ONCE per user turn; "per_iteration": every
         # tool iteration; "every_n:<N>": first iteration of each turn and every Nth after.
-        "fanout": _coerce_fanout(raw.get("fanout"))}
+        "fanout": _coerce_fanout(raw.get("fanout")),
+    }
 
 
 _FLAT_PRESET_KEYS = (
-    "reference_models", "aggregator", "reference_temperature", "aggregator_temperature",
-    "reference_timeout", "degraded_reference_policy",
-    "fanout", "enabled")
+    "reference_models",
+    "aggregator",
+    "reference_temperature",
+    "aggregator_temperature",
+    "reference_timeout",
+    "degraded_reference_policy",
+    "fanout",
+    "enabled",
+)
 
 
 # When the reference fan-out runs. "user_turn" (default) runs the advisors ONCE per user turn (the original
@@ -263,7 +309,9 @@ def normalize_moa_config(raw: Any) -> dict[str, Any]:
 
     default_name = str(raw.get("default_preset") or "").strip()
     if not default_name or default_name not in presets:
-        default_name = next(iter(presets))  # never empty: legacy flat config seeds the default
+        default_name = next(
+            iter(presets)
+        )  # never empty: legacy flat config seeds the default
 
     active_name = str(raw.get("active_preset") or "").strip()
     if active_name not in presets:
@@ -275,19 +323,24 @@ def normalize_moa_config(raw: Any) -> dict[str, Any]:
         # Compatibility/flattened view for existing dashboard/desktop callers.
         **{key: deepcopy(presets[default_name][key]) for key in _FLAT_PRESET_KEYS},
         # MoA-level (not per-preset) toggle; see coerce_privacy_filter for the modes.
-        "privacy_filter": coerce_privacy_filter(raw.get("privacy_filter"))}
+        "privacy_filter": coerce_privacy_filter(raw.get("privacy_filter")),
+    }
 
 
 def resolve_moa_preset(config: Any, name: str | None = None) -> dict[str, Any]:
     cfg = normalize_moa_config(config)
-    preset_name = str(name or cfg.get("default_preset") or DEFAULT_MOA_PRESET_NAME).strip()
+    preset_name = str(
+        name or cfg.get("default_preset") or DEFAULT_MOA_PRESET_NAME
+    ).strip()
     preset = cfg["presets"].get(preset_name)
     if preset is None:
         from agent.errors import MoAPresetNotFoundError
+
         available = ", ".join(cfg["presets"]) or "(none)"
         raise MoAPresetNotFoundError(
             f"MoA preset '{preset_name}' was not found. Available presets: "
-            f"{available}. Run `clawk moa list`.")
+            f"{available}. Run `clawk moa list`."
+        )
     return deepcopy(preset)
 
 
@@ -343,12 +396,16 @@ def decode_moa_turn(message: Any) -> tuple[str, dict[str, Any] | None]:
     """Decode a hidden /moa one-shot marker."""
     if not isinstance(message, str) or not message.startswith(MOA_MARKER_PREFIX):
         return message, None
-    encoded = message[len(MOA_MARKER_PREFIX):].strip()
+    encoded = message[len(MOA_MARKER_PREFIX) :].strip()
     try:
-        payload = json.loads(base64.urlsafe_b64decode(encoded.encode("ascii")).decode("utf-8"))
+        payload = json.loads(
+            base64.urlsafe_b64decode(encoded.encode("ascii")).decode("utf-8")
+        )
     except Exception:
         return message, None
-    return str(payload.get("prompt") or ""), _normalize_preset(payload.get("config") or {})
+    return str(payload.get("prompt") or ""), _normalize_preset(
+        payload.get("config") or {}
+    )
 
 
 def moa_usage() -> str:

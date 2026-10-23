@@ -22,6 +22,7 @@ from agent.i18n import t
 def _cp(*lines: str) -> None:
     """``_cprint`` each line (lazy import: cli.py imports this module)."""
     from cli import _cprint
+
     for line in lines:
         _cprint(line)
 
@@ -35,12 +36,14 @@ def _pr(*lines: str) -> None:
 def _save(key: str, value) -> bool:
     """cli.save_config_value, resolved lazily (cli.py imports this module)."""
     from cli import save_config_value
+
     return save_config_value(key, value)
 
 
 def _dim(text: str) -> str:
     """Wrap ``text`` in the dim ANSI escape."""
     from cli import _DIM, _RST
+
     return f"{_DIM}{text}{_RST}"
 
 
@@ -52,6 +55,7 @@ def _dim_line(text: str) -> str:
 def _accent(text: str) -> str:
     """Wrap ``text`` in the skin accent ANSI escape."""
     from cli import _ACCENT, _RST
+
     return f"{_ACCENT}{text}{_RST}"
 
 
@@ -83,6 +87,7 @@ def _lines(text: str, pad: str = "  ") -> list:
 def _rollback_kept(result: dict) -> None:
     """The kept / not-removed path lines of a restore result (in-process CLI and gateway client alike)."""
     from clawk_cli.cli_commands_mixin import _summarize_paths
+
     if skipped := result.get("skipped_user_edits"):
         _pr(*_lines(_gt("rollback.kept_user_edits", files=_summarize_paths(skipped))))
     if oversize := result.get("skipped_oversize"):
@@ -104,7 +109,6 @@ class CLICommandsSessionToolsMixin:
     """``/stop``, ``/agents``, ``/journey``, ``/paste``, ``/copy``, ``/image``, ``/tools``,
     ``/profile`` handlers (moved from ``CLICommandsMixin``)."""
 
-
     # ---- /stop, /agents -------------------------------------------------------------------
     def _handle_stop_command(self):
         """Handle /stop — kill all running background processes and background (async) delegations.
@@ -119,9 +123,11 @@ class CLICommandsSessionToolsMixin:
             return _stop_background_work()
         if getattr(self, "agent", None):
             from agent.interrupt_compat import request_hard_interrupt
+
             _cp(f"  {t('cli.tui.interrupting')}")
             request_hard_interrupt(self.agent)
         from agent.memory_provider import spawn_context_thread
+
         spawn_context_thread(_stop_background_work, name="cli-stop").start()
 
     def _handle_agents_command(self):
@@ -129,6 +135,7 @@ class CLICommandsSessionToolsMixin:
         the session's ``process.list`` and its usage's running-subagent count (no per-delegation rows)."""
         from clawk_cli.gateway_tools import process_registry as _registry, process_view
         from tools.process_registry import format_uptime_short
+
         process_registry, view = _registry(), process_view()
         if view is not None:
             view.refresh(force=True)
@@ -146,7 +153,9 @@ class CLICommandsSessionToolsMixin:
         elif n_async := view.active_delegations():
             _cp(f"  {_t('agents.background_delegations', count=n_async)}")
         agent_running = getattr(self, "_agent_running", False)
-        _cp(f"  {_t('agents.agent_running') if agent_running else _t('agents.agent_idle')}")
+        _cp(
+            f"  {_t('agents.agent_running') if agent_running else _t('agents.agent_idle')}"
+        )
 
     # ---- /journey, /paste, /copy, /image --------------------------------------------------
     def _handle_journey_command(self, cmd_original: str) -> None:
@@ -154,6 +163,7 @@ class CLICommandsSessionToolsMixin:
         Rich color that patch_stdout would swallow, so capture with forced ANSI and re-emit via
         ``_cprint``; ``delete``/``edit`` are interactive and keep real stdio."""
         from clawk_cli.journey import register_cli
+
         parser = argparse.ArgumentParser(prog="/journey", add_help=False)
         register_cli(parser)
         try:
@@ -180,6 +190,7 @@ class CLICommandsSessionToolsMixin:
         Windows Terminal with WSL2).
         """
         from clawk_cli.clipboard import has_clipboard_image
+
         if not has_clipboard_image():
             _cp(_dim_line(_t("paste.no_image")))
         elif self._try_attach_clipboard_image():
@@ -190,8 +201,11 @@ class CLICommandsSessionToolsMixin:
     def _handle_copy_command(self, cmd_original: str) -> None:
         """Handle /copy [number] — copy assistant output to clipboard."""
         from cli import _assistant_copy_text
+
         arg = _command_arg(cmd_original)
-        assistant = [m for m in self.conversation_history if m.get("role") == "assistant"]
+        assistant = [
+            m for m in self.conversation_history if m.get("role") == "assistant"
+        ]
         if not assistant:
             return _cp(f"  {_t('copy.nothing_yet')}")
         if arg:
@@ -202,15 +216,25 @@ class CLICommandsSessionToolsMixin:
             if idx < 0 or idx >= len(assistant):
                 return _cp(f"  {_t('copy.invalid_number', max=len(assistant))}")
         else:  # latest response that has copyable text
-            idx = next((i for i in range(len(assistant) - 1, -1, -1)
-                        if _assistant_copy_text(assistant[i].get("content"))), -1)
+            idx = next(
+                (
+                    i
+                    for i in range(len(assistant) - 1, -1, -1)
+                    if _assistant_copy_text(assistant[i].get("content"))
+                ),
+                -1,
+            )
             if idx < 0:
                 return _cp(f"  {_t('copy.nothing_in_responses')}")
         text = _assistant_copy_text(assistant[idx].get("content"))
         if not text:
             return _cp(f"  {_t('copy.nothing_in_response')}")
         try:
-            from clawk_cli.clipboard import is_remote_shell_session, write_clipboard_text
+            from clawk_cli.clipboard import (
+                is_remote_shell_session,
+                write_clipboard_text,
+            )
+
             # Over SSH native tools write the REMOTE clipboard; OSC 52 reaches the user's terminal.
             # Locally, OSC 52 is the fallback when native tools are unavailable/fail (SSH/tmux).
             if is_remote_shell_session() or not write_clipboard_text(text):
@@ -224,8 +248,16 @@ class CLICommandsSessionToolsMixin:
 
     def _handle_image_command(self, cmd_original: str):
         """Handle /image <path> — attach a local image file for the next prompt."""
-        from cli import _DIM, _IMAGE_EXTENSIONS, _RST, _cprint, _resolve_attachment_path, _split_path_input
-        raw_args = (cmd_original.split(None, 1)[1].strip() if " " in cmd_original else "")
+        from cli import (
+            _DIM,
+            _IMAGE_EXTENSIONS,
+            _RST,
+            _cprint,
+            _resolve_attachment_path,
+            _split_path_input,
+        )
+
+        raw_args = cmd_original.split(None, 1)[1].strip() if " " in cmd_original else ""
         if not raw_args:
             hint = "/path/to/image.png"
             _cprint(f"  {_DIM}{_t('image.usage', example=hint)}{_RST}")
@@ -255,16 +287,27 @@ class CLICommandsSessionToolsMixin:
             return self._run_tools_config(tools_action="list", platform="cli")
         names = parts[1:]
         if not names:
-            return _pr(_t("tools.usage", subcommand=subcommand),
-                       f"  {_t('tools.example_toolset', subcommand=subcommand)}",
-                       f"  {_t('tools.example_mcp', subcommand=subcommand)}")
+            return _pr(
+                _t("tools.usage", subcommand=subcommand),
+                f"  {_t('tools.example_toolset', subcommand=subcommand)}",
+                f"  {_t('tools.example_mcp', subcommand=subcommand)}",
+            )
         # Typing the command is consent. Do NOT use input() — it hangs in prompt_toolkit's loop.
-        _cp(_accent(_t("tools.disabling" if subcommand == "disable" else "tools.enabling",
-                       names=", ".join(names))))
+        _cp(
+            _accent(
+                _t(
+                    "tools.disabling" if subcommand == "disable" else "tools.enabling",
+                    names=", ".join(names),
+                )
+            )
+        )
         self._run_tools_config(tools_action=subcommand, names=names, platform="cli")
         from clawk_cli.tools_config import _get_platform_tools
         from clawk_cli.config import load_config
-        self.enabled_toolsets = sorted(_get_platform_tools(load_config(), "cli"))  # plain data for session.create
+
+        self.enabled_toolsets = sorted(
+            _get_platform_tools(load_config(), "cli")
+        )  # plain data for session.create
         self.new_session()
         _cp(_dim(_t("tools.session_reset")))
 
@@ -274,6 +317,7 @@ class CLICommandsSessionToolsMixin:
         patch_stdout's StdoutProxy doesn't garble the escapes; standalone/tests call straight through."""
         from argparse import Namespace
         from clawk_cli.tools_config import tools_disable_enable_command
+
         if getattr(self, "_app", None) is None:
             return tools_disable_enable_command(Namespace(**ns))
         buf = _TTYBuf()
@@ -284,14 +328,22 @@ class CLICommandsSessionToolsMixin:
     def _handle_autoprune_command(self, cmd: str):
         """/autoprune [on|off|later|status] — the low-disk auto-prune decision."""
         from clawk_cli.slash_exec import CommandContext, execute_command
-        _say_block(execute_command("autoprune", CommandContext(surface="cli", args=cmd.partition(" ")[2])).text)
+
+        _say_block(
+            execute_command(
+                "autoprune", CommandContext(surface="cli", args=cmd.partition(" ")[2])
+            ).text
+        )
 
     def _handle_profile_command(self):
         """Display active profile name and home directory."""
         from clawk_cli.slash_exec import CommandContext, execute_command
+
         reply = execute_command("profile", CommandContext(surface="cli"))
-        _say_block(f"  {_t('profile.profile', profile=reply.data['profile'])}",
-                   f"  {_t('profile.home', home=reply.data['home'])}")
+        _say_block(
+            f"  {_t('profile.profile', profile=reply.data['profile'])}",
+            f"  {_t('profile.home', home=reply.data['home'])}",
+        )
 
 
 def _stop_background_work() -> None:
@@ -299,23 +351,35 @@ def _stop_background_work() -> None:
     delegations. Mid-turn it runs on a worker thread, so it prints through ``_cprint``: a plain
     print() from off the input loop is buried by the prompt_toolkit redraw."""
     from clawk_cli.gateway_tools import process_registry as _registry, process_view
+
     process_registry, view = _registry(), process_view()
     if view is not None:
         view.refresh(force=True)
-    running = [p for p in process_registry.list_sessions() if p.get("status") == "running"]
+    running = [
+        p for p in process_registry.list_sessions() if p.get("status") == "running"
+    ]
     # Background subagents live in their own registry, not the process registry.
-    n_async = view.active_delegations() if view is not None else _probe("tools.async_delegation", "active_count", 0)
+    n_async = (
+        view.active_delegations()
+        if view is not None
+        else _probe("tools.async_delegation", "active_count", 0)
+    )
     if not running and not n_async:
         return _cp(f"  {_t('stop.none_running')}")
     if running:
         _cp(f"  {_t('stop.stopping', count=len(running))}")
-        _cp(f"  {_t('stop.stopped', count=process_registry.kill_all(source='cli.stop'))}")
+        _cp(
+            f"  {_t('stop.stopped', count=process_registry.kill_all(source='cli.stop'))}"
+        )
     if n_async:
         if view is not None:
-            interrupted = view.interrupt_delegations()  # the gateway interrupts this session's own
+            interrupted = (
+                view.interrupt_delegations()
+            )  # the gateway interrupts this session's own
         else:
             from tools.async_delegation import interrupt_all
-            interrupted = interrupt_all(reason='/stop')
+
+            interrupted = interrupt_all(reason="/stop")
         _cp(f"  {_t('stop.interrupted_delegations', count=interrupted)}")
 
 
@@ -329,8 +393,12 @@ def print_session_diff(cli, result: dict, stat_only: bool) -> None:
         return print(f"  {_t('diff.no_session_changes')}")
     if stat:
         cli._print_diff_text(f"\n{stat}")
-    if (diff or result.get("diff_lines")) and not stat_only:  # a body cut to nothing still names its lines
-        cli._print_diff_body(diff, _t("diff.stat_hint_session"), total=int(result.get("diff_lines") or 0))
+    if (
+        diff or result.get("diff_lines")
+    ) and not stat_only:  # a body cut to nothing still names its lines
+        cli._print_diff_body(
+            diff, _t("diff.stat_hint_session"), total=int(result.get("diff_lines") or 0)
+        )
 
 
 def _print_local_delegations() -> None:
@@ -358,9 +426,15 @@ def _print_local_delegations() -> None:
             if not isinstance(child, dict):
                 continue
             tool = child.get("current_tool")
-            doing = _t("agents.in_tool", tool=tool) if tool else _t("agents.between_turns")
-            part = "      " + _t("agents.child_line", index=i + 1,
-                                 api_calls=child.get("api_calls", "?"), doing=doing)
+            doing = (
+                _t("agents.in_tool", tool=tool) if tool else _t("agents.between_turns")
+            )
+            part = "      " + _t(
+                "agents.child_line",
+                index=i + 1,
+                api_calls=child.get("api_calls", "?"),
+                doing=doing,
+            )
             idle = child.get("seconds_since_activity")
             if idle is not None:
                 part += _t("agents.last_activity", seconds=f"{idle:.0f}")
@@ -369,6 +443,7 @@ def _print_local_delegations() -> None:
 
 class _TTYBuf(StringIO):
     """StringIO that claims to be a TTY so ``clawk_cli.colors.color()`` still emits ANSI escapes."""
+
     def isatty(self) -> bool:
         return True
 

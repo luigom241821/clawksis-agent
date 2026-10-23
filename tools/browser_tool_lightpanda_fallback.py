@@ -17,8 +17,21 @@ from tools import browser_tool_session as _session
 
 # Commands where Chrome can meaningfully produce a different result. Session-management
 # commands (close, record) are tied to the engine's daemon and can't be retried elsewhere.
-_FALLBACK_ELIGIBLE = frozenset({"open", "snapshot", "screenshot", "eval", "click",
-                                "fill", "scroll", "back", "press", "console", "errors"})
+_FALLBACK_ELIGIBLE = frozenset(
+    {
+        "open",
+        "snapshot",
+        "screenshot",
+        "eval",
+        "click",
+        "fill",
+        "scroll",
+        "back",
+        "press",
+        "console",
+        "errors",
+    }
+)
 
 
 def _using_lightpanda_engine() -> bool:
@@ -43,7 +56,10 @@ def lightpanda_engine_status() -> tuple[bool, str]:
     # Real-profile before cloud provider: browser_exec resolves real-profile before
     # the backend, so with both set the real-profile toggle claims the session.
     if _cloud._use_real_profile():
-        return False, "browser.use_real_profile is on (Lightpanda cannot load a Chromium profile)"
+        return (
+            False,
+            "browser.use_real_profile is on (Lightpanda cannot load a Chromium profile)",
+        )
     try:
         provider = _cloud._get_cloud_provider()
     except Exception:
@@ -53,11 +69,18 @@ def lightpanda_engine_status() -> tuple[bool, str]:
             name = provider.display_name
         except Exception:
             name = type(provider).__name__
-        return False, f"cloud provider {name} is selected (browser.cloud_provider, or auto-detected from credentials)"
+        return (
+            False,
+            f"cloud provider {name} is selected (browser.cloud_provider, or auto-detected from credentials)",
+        )
     if not _bt._is_browser_use_cli_mode():
         return True, "built-in browser tools: agent-browser --engine lightpanda"
     try:
-        from tools.browser_use_cli import _read_browser_cfg, is_legacy_browser_use_cloud_config
+        from tools.browser_use_cli import (
+            _read_browser_cfg,
+            is_legacy_browser_use_cloud_config,
+        )
+
         if is_legacy_browser_use_cloud_config(_read_browser_cfg()):
             return False, "Browser Use cloud (BROWSER_USE_API_KEY) is selected"
     except Exception as e:
@@ -65,14 +88,18 @@ def lightpanda_engine_status() -> tuple[bool, str]:
     return True, "Browser Use mode: Clawksis spawns `lightpanda serve` per session"
 
 
-def _lightpanda_fallback_reason(engine: str, command: str, result: dict[str, Any]) -> Optional[str]:
+def _lightpanda_fallback_reason(
+    engine: str, command: str, result: dict[str, Any]
+) -> Optional[str]:
     """User-visible reason a Lightpanda result needs the Chrome fallback (copied into the result), or None."""
     if engine != "lightpanda" or command not in _FALLBACK_ELIGIBLE:
         return None
     if not result.get("success"):
         return f"Lightpanda {command!r} failed ({str(result.get('error') or 'command failed').strip()}); retried with Chrome."
     data = result.get("data", {})
-    if command == "snapshot" and len((data.get("snapshot", "") or "").strip()) < 20:  # couldn't render
+    if (
+        command == "snapshot" and len((data.get("snapshot", "") or "").strip()) < 20
+    ):  # couldn't render
         return "Lightpanda returned an empty/too-short snapshot; retried with Chrome."
     if command == "screenshot" and data.get("path", ""):
         # Lightpanda returns a ~17 KB placeholder PNG (panda logo at 1920x1080); real Chromium is 100 KB+.
@@ -81,22 +108,41 @@ def _lightpanda_fallback_reason(engine: str, command: str, result: dict[str, Any
         except OSError:
             return "Lightpanda screenshot file was missing/unreadable; retried with Chrome."
         if size < 20480:
-            _origin().logger.debug("Lightpanda screenshot is suspiciously small (%d bytes), "
-                                   "triggering Chrome fallback", size)
-            return f"Lightpanda screenshot was suspiciously small ({size} bytes); " "retried with Chrome."
+            _origin().logger.debug(
+                "Lightpanda screenshot is suspiciously small (%d bytes), "
+                "triggering Chrome fallback",
+                size,
+            )
+            return (
+                f"Lightpanda screenshot was suspiciously small ({size} bytes); "
+                "retried with Chrome."
+            )
     return None
 
 
-def _needs_lightpanda_fallback(engine: str, command: str, result: dict[str, Any]) -> bool:
+def _needs_lightpanda_fallback(
+    engine: str, command: str, result: dict[str, Any]
+) -> bool:
     """Check if a Lightpanda result should trigger an automatic Chrome fallback."""
     return _lightpanda_fallback_reason(engine, command, result) is not None
 
 
-def _annotate_lightpanda_fallback(result: dict[str, Any], reason: str) -> dict[str, Any]:
+def _annotate_lightpanda_fallback(
+    result: dict[str, Any], reason: str
+) -> dict[str, Any]:
     """Add a user-visible Chrome fallback warning to a browser command result."""
-    warning = "⚠ Lightpanda fallback: Chrome was used for this browser action. " f"{reason}"
-    fields = {"fallback_warning": warning, "browser_engine": "chrome",
-              "browser_engine_fallback": {"from": "lightpanda", "to": "chrome", "reason": reason}}
+    warning = (
+        f"⚠ Lightpanda fallback: Chrome was used for this browser action. {reason}"
+    )
+    fields = {
+        "fallback_warning": warning,
+        "browser_engine": "chrome",
+        "browser_engine_fallback": {
+            "from": "lightpanda",
+            "to": "chrome",
+            "reason": reason,
+        },
+    }
     annotated = {**result, **fields}
     data = annotated.get("data")
     if isinstance(data, dict):
@@ -106,7 +152,9 @@ def _annotate_lightpanda_fallback(result: dict[str, Any], reason: str) -> dict[s
     return annotated
 
 
-def _copy_fallback_warning(target: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
+def _copy_fallback_warning(
+    target: dict[str, Any], result: dict[str, Any]
+) -> dict[str, Any]:
     """Copy browser fallback metadata from an internal result into a tool response."""
     if result.get("fallback_warning"):
         target["fallback_warning"] = result["fallback_warning"]
@@ -115,7 +163,9 @@ def _copy_fallback_warning(target: dict[str, Any], result: dict[str, Any]) -> di
     return target
 
 
-def _run_chrome_fallback_command(task_id: str, command: str, args: list[str], timeout: int) -> dict[str, Any]:
+def _run_chrome_fallback_command(
+    task_id: str, command: str, args: list[str], timeout: int
+) -> dict[str, Any]:
     """Run a browser command in a temporary Chrome session at the current URL.
 
     agent-browser locks the engine when a named daemon starts, so ``--engine chrome`` on the
@@ -123,13 +173,25 @@ def _run_chrome_fallback_command(task_id: str, command: str, args: list[str], ti
     """
     _bt = _origin()
     import uuid
+
     # 1. Current URL from the Lightpanda session. ``get url`` is not fallback-eligible,
     # so this can't recurse; the explicit override strips Chromium-only env flags.
-    url_result = _session._run_browser_command(task_id, "get", ["url"], timeout=10, _engine_override="lightpanda")
-    current_url = str(url_result.get("data", {}).get("url", "")).strip() if url_result.get("success") else None
+    url_result = _session._run_browser_command(
+        task_id, "get", ["url"], timeout=10, _engine_override="lightpanda"
+    )
+    current_url = (
+        str(url_result.get("data", {}).get("url", "")).strip()
+        if url_result.get("success")
+        else None
+    )
     if not current_url:
-        _bt.logger.warning("Chrome fallback: could not determine current URL from LP session")
-        return {"success": False, "error": "Chrome fallback failed: could not determine current URL"}
+        _bt.logger.warning(
+            "Chrome fallback: could not determine current URL from LP session"
+        )
+        return {
+            "success": False,
+            "error": "Chrome fallback failed: could not determine current URL",
+        }
 
     # 2. Temporary Chrome session (bypasses _get_session_info's cache).
     tmp_session = f"h_cfb_{uuid.uuid4().hex[:8]}"
@@ -140,15 +202,25 @@ def _run_chrome_fallback_command(task_id: str, command: str, args: list[str], ti
 
     if not _install._chromium_installed():
         if _install._running_in_docker():
-            hint = ("Chrome fallback requires Chromium, but it is missing. You're running in Docker — "
-                    "rebuild the image from your clawksis-agent checkout: "
-                    "git pull && docker compose build && docker compose up -d --force-recreate")
+            hint = (
+                "Chrome fallback requires Chromium, but it is missing. You're running in Docker — "
+                "rebuild the image from your clawksis-agent checkout: "
+                "git pull && docker compose build && docker compose up -d --force-recreate"
+            )
         else:
-            hint = ("Chrome fallback requires Chromium, but it is missing. Install it with: "
-                    "clawk pm install chromium")
+            hint = (
+                "Chrome fallback requires Chromium, but it is missing. Install it with: "
+                "clawk pm install chromium"
+            )
         return {"success": False, "error": hint}
 
-    base_args = _session._agent_browser_argv(browser_cmd) + ["--engine", "chrome", "--session", tmp_session, "--json"]
+    base_args = _session._agent_browser_argv(browser_cmd) + [
+        "--engine",
+        "chrome",
+        "--session",
+        tmp_session,
+        "--json",
+    ]
     task_socket_dir = _session._prepare_session_socket_dir(tmp_session)
     # Bypasses _run_browser_command, so apply the same Chromium sandbox/screen policy explicitly.
     _session._ensure_screen_for_headed_chromium()
@@ -160,7 +232,9 @@ def _run_chrome_fallback_command(task_id: str, command: str, args: list[str], ti
     browser_env = _session.windows_headless_browser_options(browser_env)
 
     def _run_tmp(cmd: str, cmd_args: list[str]) -> dict[str, Any]:
-        proc = _session._popen_agent_browser(base_args + [cmd] + cmd_args, browser_env, task_socket_dir, cmd)
+        proc = _session._popen_agent_browser(
+            base_args + [cmd] + cmd_args, browser_env, task_socket_dir, cmd
+        )
         stdout_path = os.path.join(task_socket_dir, f"_stdout_{cmd}")
         stderr_path = os.path.join(task_socket_dir, f"_stderr_{cmd}")
         try:
@@ -185,7 +259,10 @@ def _run_chrome_fallback_command(task_id: str, command: str, args: list[str], ti
         nav = _run_tmp("open", [current_url])
         if not nav.get("success"):
             _bt.logger.warning("Chrome fallback: navigate failed: %s", nav.get("error"))
-            return {"success": False, "error": f"Chrome fallback navigate failed: {nav.get('error')}"}
+            return {
+                "success": False,
+                "error": f"Chrome fallback navigate failed: {nav.get('error')}",
+            }
         return _run_tmp(command, args)
     finally:
         # 5. Tear down the temporary Chrome session and its socket directory.
@@ -196,6 +273,8 @@ def _run_chrome_fallback_command(task_id: str, command: str, args: list[str], ti
         shutil.rmtree(task_socket_dir, ignore_errors=True)
 
 
-def _chrome_fallback_screenshot(task_id: str, args: list[str], timeout: int) -> dict[str, Any]:
+def _chrome_fallback_screenshot(
+    task_id: str, args: list[str], timeout: int
+) -> dict[str, Any]:
     """Take a screenshot using a temporary Chrome session."""
     return _run_chrome_fallback_command(task_id, "screenshot", args, timeout)

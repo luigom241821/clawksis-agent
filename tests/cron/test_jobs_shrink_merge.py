@@ -121,8 +121,6 @@ def test_replace_flag_allows_wholesale_rewrite(clawk_env):
     assert load_jobs() == []
 
 
-
-
 def test_sibling_write_inside_section_is_merged(clawk_env):
     """A write that lands on disk after the section's load changes the stamp,
     so the save must re-merge instead of trusting its stale snapshot."""
@@ -211,7 +209,9 @@ def test_nested_create_survives_outer_stale_save(clawk_env):
     assert seed["id"] in ids
 
 
-def test_symlinked_store_saves_by_rename_not_in_place_copy(clawk_env, tmp_path, monkeypatch):
+def test_symlinked_store_saves_by_rename_not_in_place_copy(
+    clawk_env, tmp_path, monkeypatch
+):
     """jobs.json symlinked into another dir (treated as another filesystem) must still be
     published by an atomic rename — never the EXDEV in-place copy fallback, which tears the
     store on a crash mid-copy."""
@@ -226,7 +226,9 @@ def test_symlinked_store_saves_by_rename_not_in_place_copy(clawk_env, tmp_path, 
     real_replace = os.replace
 
     def replace_same_dir_only(src, dst):
-        if os.path.dirname(os.path.realpath(src)) != os.path.dirname(os.path.realpath(dst)):
+        if os.path.dirname(os.path.realpath(src)) != os.path.dirname(
+            os.path.realpath(dst)
+        ):
             raise OSError(errno.EXDEV, os.strerror(errno.EXDEV))
         return real_replace(src, dst)
 

@@ -98,7 +98,6 @@ def canary_tag_for_date(version: str, date_utc: str) -> str:
     return f"v{core}+canary.{date_utc}"
 
 
-
 def install_id(project_root: Optional[Path] = None) -> str:
     """The sha16 id of the install at ``project_root`` (default: this one).
 
@@ -133,9 +132,9 @@ def channel_record(config: Optional[dict], project_root: Optional[Path] = None) 
 
 
 def _package_channel(stamp: dict) -> bool:
-    return stamp.get("payload") in ("bundled", "light", "runtime") or stamp.get("updateMechanism") in (
-        "electron-updater", "app-installer", "microsoft-store"
-    )
+    return stamp.get("payload") in ("bundled", "light", "runtime") or stamp.get(
+        "updateMechanism"
+    ) in ("electron-updater", "app-installer", "microsoft-store")
 
 
 def default_channel(project_root: Optional[Path] = None) -> str:
@@ -179,7 +178,11 @@ def _tracks_official_origin(root: Path) -> bool:
 
     common = _git_common_dir(root)
     try:
-        lines = (common / "config").read_text(encoding="utf-8-sig").splitlines() if common else []
+        lines = (
+            (common / "config").read_text(encoding="utf-8-sig").splitlines()
+            if common
+            else []
+        )
     except OSError:
         return False
     in_origin = False
@@ -193,7 +196,9 @@ def _tracks_official_origin(root: Path) -> bool:
     return False
 
 
-def rides_default_channel(record: dict, channel: str, project_root: Optional[Path] = None) -> bool:
+def rides_default_channel(
+    record: dict, channel: str, project_root: Optional[Path] = None
+) -> bool:
     """True when no channel was ever persisted (``record``) and ``channel`` is the default.
 
     Such an install never consented to a release switch, so it only moves forward: a
@@ -262,9 +267,13 @@ def handle_metadata_args(args, project_root: Path) -> bool:
         raise SystemExit(2) from exc
     print(f"Update channel for {key}: {channel}")
     if channel == CHANNEL_CANARY:
-        print("Canary builds can write forward-incompatible state. Back up your data before switching.")
+        print(
+            "Canary builds can write forward-incompatible state. Back up your data before switching."
+        )
     elif channel == CHANNEL_STABLE:
-        print("Switching to an older stable release may not read state written by canary. Back up your data first.")
+        print(
+            "Switching to an older stable release may not read state written by canary. Back up your data first."
+        )
     return True
 
 
@@ -277,12 +286,14 @@ def _channel_write_lock(config_path: Path):
     with _CONFIG_LOCK, config_path.with_suffix(".channels.lock").open("a+b") as lock:
         if os.name == "nt":
             import msvcrt
+
             lock.write(b"\0")
             lock.flush()
             lock.seek(0)
             msvcrt.locking(lock.fileno(), msvcrt.LK_LOCK, 1)
         else:
             import fcntl
+
             fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
         try:
             yield
@@ -300,13 +311,22 @@ def adopt_retired_channel(request: dict) -> bool:
     if retirement is None:
         return False
     return _write_channel_record(
-        install_id(Path(request["source"])), request["source"],
+        install_id(Path(request["source"])),
+        request["source"],
         validate_name(retirement["destination"]),
-        expected=retirement["original"], config_path=Path(request["home"]) / "config.yaml")
+        expected=retirement["original"],
+        config_path=Path(request["home"]) / "config.yaml",
+    )
 
 
-def _write_channel_record(sha16: str, path: str, channel: str, *,
-                          expected: dict | None = None, config_path: Path | None = None) -> bool:
+def _write_channel_record(
+    sha16: str,
+    path: str,
+    channel: str,
+    *,
+    expected: dict | None = None,
+    config_path: Path | None = None,
+) -> bool:
     from clawk_cli.config import get_config_path
 
     config_path = config_path if config_path is not None else get_config_path()
@@ -314,8 +334,9 @@ def _write_channel_record(sha16: str, path: str, channel: str, *,
         return _write_channel_record_locked(sha16, path, channel, expected, config_path)
 
 
-def _write_channel_record_locked(sha16: str, path: str, channel: str,
-                                 expected: dict | None, config_path: Path) -> bool:
+def _write_channel_record_locked(
+    sha16: str, path: str, channel: str, expected: dict | None, config_path: Path
+) -> bool:
     """Write ``update.installs.<sha16>`` into config.yaml, preserving the rest.
 
     Persists through the shared comment-preserving atomic writer
@@ -329,6 +350,7 @@ def _write_channel_record_locked(sha16: str, path: str, channel: str,
     from utils import atomic_roundtrip_yaml_update
 
     from clawk_cli.config import require_readable_config_before_write
+
     existing = require_readable_config_before_write(config_path)
     update_cfg = existing.get("update")
     if update_cfg is not None and not isinstance(update_cfg, dict):

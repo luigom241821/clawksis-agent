@@ -96,7 +96,6 @@ class TestOpenCodeGoV1Strip:
 class TestOpenCodeZenV1Strip:
     """OpenCode Zen: ``/model claude-*`` must strip /v1."""
 
-
     def test_switch_to_gpt_uses_codex_responses_keeps_v1(self):
         """GPT on opencode-zen uses codex_responses api_mode — /v1 kept."""
         result = _run_opencode_switch(
@@ -151,11 +150,15 @@ class TestAgentSwitchModelDefenseInDepth:
             captured["base_url"] = base_url
             raise _Sentinel("strip verified")
 
-        with patch(
-            "agent.anthropic_adapter.build_anthropic_client",
-            side_effect=_raise_after_capture,
-        ), patch("agent.anthropic_credentials.resolve_anthropic_token", return_value=""), patch(
-            "agent.anthropic_credentials._is_oauth_token", return_value=False
+        with (
+            patch(
+                "agent.anthropic_adapter.build_anthropic_client",
+                side_effect=_raise_after_capture,
+            ),
+            patch(
+                "agent.anthropic_credentials.resolve_anthropic_token", return_value=""
+            ),
+            patch("agent.anthropic_credentials._is_oauth_token", return_value=False),
         ):
             with pytest.raises(_Sentinel):
                 agent.switch_model(
@@ -189,22 +192,34 @@ class TestStaleConfigDefaultDoesNotWedgeResolver:
     regression in the target_model plumbing surfaces immediately.
     """
 
-    def test_kimi_switch_keeps_v1_despite_claude_config_default(self, tmp_path, monkeypatch):
+    def test_kimi_switch_keeps_v1_despite_claude_config_default(
+        self, tmp_path, monkeypatch
+    ):
         import clawk_yaml as yaml
         import importlib
 
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         monkeypatch.setenv("OPENCODE_ZEN_API_KEY", "test-key")
-        (tmp_path / "config.yaml").write_text(yaml.safe_dump({
-            "model": {"provider": "opencode-zen", "default": "claude-sonnet-4-6"},
-        }))
+        (tmp_path / "config.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "model": {
+                        "provider": "opencode-zen",
+                        "default": "claude-sonnet-4-6",
+                    },
+                }
+            )
+        )
 
         # Re-import with the new CLAWK_HOME so config cache is fresh.
         import clawk_cli.config as _cfg_mod
+
         importlib.reload(_cfg_mod)
         import clawk_cli.runtime_provider as _rp_mod
+
         importlib.reload(_rp_mod)
         import clawk_cli.model_switch as _ms_mod
+
         importlib.reload(_ms_mod)
 
         result = _ms_mod.switch_model(
@@ -224,5 +239,3 @@ class TestStaleConfigDefaultDoesNotWedgeResolver:
             "and chat_completions override never re-added it."
         )
         assert result.api_mode == "chat_completions"
-
-

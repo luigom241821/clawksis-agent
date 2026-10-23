@@ -34,7 +34,9 @@ _WINDOWS_EXE_SUFFIX_RE = re.compile(r"\.(?:exe|bat|cmd)$", re.IGNORECASE)
 # the verify-on-stop nudge itself hands the agent, so a passing run left the workspace
 # "unverified" and the nudge returned every turn.
 _INTERPRETER_NAME_RE = re.compile(
-    r"^(?:" + "|".join(sorted(_INTERPRETERS, key=len, reverse=True)) + r")(?:[0-9]+(?:\.[0-9]+)*)?$"
+    r"^(?:"
+    + "|".join(sorted(_INTERPRETERS, key=len, reverse=True))
+    + r")(?:[0-9]+(?:\.[0-9]+)*)?$"
 )
 _TARGET_EXTENSIONS = (".py", ".js", ".jsx", ".ts", ".tsx", ".rs", ".go", ".java")
 _TARGET_PREFIXES = ("test_", "tests", "spec", "__tests__")
@@ -42,12 +44,16 @@ _TARGET_PREFIXES = ("test_", "tests", "spec", "__tests__")
 # command is not itself a test command; anything else is a test.
 _KIND_KEYWORDS = (
     (("lint", "eslint", "ruff"), "lint"),
-    (("typecheck", "tsc", "mypy", "pyright", "ty"), "typecheck"), (("build",), "build"),
+    (("typecheck", "tsc", "mypy", "pyright", "ty"), "typecheck"),
+    (("build",), "build"),
     (("fmt", "format"), "format"),
 )
 _PYTEST_SPELLINGS = (
-    ["python", "-m", "pytest"], ["python3", "-m", "pytest"],
-    ["uv", "run", "pytest"], ["poetry", "run", "pytest"], ["pipenv", "run", "pytest"],
+    ["python", "-m", "pytest"],
+    ["python3", "-m", "pytest"],
+    ["uv", "run", "pytest"],
+    ["poetry", "run", "pytest"],
+    ["pipenv", "run", "pytest"],
 )
 _SCHEMA_DDL = (
     """
@@ -130,7 +136,9 @@ def _ledger_enabled() -> bool:
 def _connect() -> sqlite3.Connection:
     from clawk_cli.sqlite_util import open_db
 
-    return open_db(_db_path(), db_label="verification_evidence.db", initialize=_ensure_schema)
+    return open_db(
+        _db_path(), db_label="verification_evidence.db", initialize=_ensure_schema
+    )
 
 
 def _transaction():
@@ -174,7 +182,7 @@ def _split_shell_segments(command: str, *, posix: bool = True) -> list[_ShellSeg
 
         operator = None
         if command.startswith(("&&", "||", "|&"), index):
-            operator = command[index:index + 2]
+            operator = command[index : index + 2]
         elif char == "\n":
             operator = ";"
         elif char in ";|" or (
@@ -204,23 +212,33 @@ def _split_shell_segments(command: str, *, posix: bool = True) -> list[_ShellSeg
         return []
 
     try:
-        segments = [_ShellSegment(shlex.split(raw, posix=posix), operator) for raw, operator in raw_segments]
+        segments = [
+            _ShellSegment(shlex.split(raw, posix=posix), operator)
+            for raw, operator in raw_segments
+        ]
     except ValueError:
         return []
     return segments if all(s.tokens for s in segments) else []
 
 
-def _exit_status_is_attributable(segments: list[_ShellSegment], match_index: int, exit_code: int) -> bool:
+def _exit_status_is_attributable(
+    segments: list[_ShellSegment], match_index: int, exit_code: int
+) -> bool:
     """Whether the shell's status proves the matched segment's own status.
 
     Only the last ``;``-separated sequence reports its status; backgrounding,
     pipes and ``||`` hide it; an ``&&`` chain proves each member only on success.
     """
-    if not segments or not 0 <= match_index < len(segments) or any(s.following_operator == "&" for s in segments):
+    if (
+        not segments
+        or not 0 <= match_index < len(segments)
+        or any(s.following_operator == "&" for s in segments)
+    ):
         return False
 
     sequence_start = max(
-        (i + 1 for i, s in enumerate(segments[:-1]) if s.following_operator == ";"), default=0
+        (i + 1 for i, s in enumerate(segments[:-1]) if s.following_operator == ";"),
+        default=0,
     )
     if match_index < sequence_start:
         return False
@@ -234,7 +252,9 @@ def _exit_status_is_attributable(segments: list[_ShellSegment], match_index: int
 def _canonical_tokens(canonical: str) -> list[str]:
     """Tokenize a canonical command, stripping leading ``./`` from each token."""
     try:
-        return [re.sub(r"^(?:\./)+", "", t.strip()) for t in shlex.split(canonical) if t]
+        return [
+            re.sub(r"^(?:\./)+", "", t.strip()) for t in shlex.split(canonical) if t
+        ]
     except ValueError:
         return []
 
@@ -252,7 +272,11 @@ def _strip_command_prefix(tokens: list[str]) -> list[str]:
 def _equivalent_needles(needle: list[str]) -> list[list[str]]:
     """Return command spellings equivalent to the detected canonical command."""
     candidates = [needle]
-    if len(needle) >= 3 and needle[1] == "run" and needle[0] in {"npm", "pnpm", "yarn", "bun"}:
+    if (
+        len(needle) >= 3
+        and needle[1] == "run"
+        and needle[0] in {"npm", "pnpm", "yarn", "bun"}
+    ):
         candidates.append([needle[0], needle[2]])
     if len(needle) == 1 and "/" in needle[0]:
         candidates += [["bash", needle[0]], ["sh", needle[0]]]
@@ -261,7 +285,9 @@ def _equivalent_needles(needle: list[str]) -> list[list[str]]:
     return candidates
 
 
-def _find_canonical_match(command: str, canonical_commands: list[str], exit_code: int) -> Optional[tuple[str, list[str]]]:
+def _find_canonical_match(
+    command: str, canonical_commands: list[str], exit_code: int
+) -> Optional[tuple[str, list[str]]]:
     """Return ``(canonical, trailing_args)`` for the first detected command."""
     segments = _split_shell_segments(command)
     for canonical in canonical_commands:
@@ -271,20 +297,33 @@ def _find_canonical_match(command: str, canonical_commands: list[str], exit_code
         for index, segment in enumerate(segments):
             candidate_tokens = _strip_command_prefix(segment.tokens)
             for candidate in _equivalent_needles(needle):
-                if candidate_tokens[:len(candidate)] == candidate and _exit_status_is_attributable(segments, index, exit_code):
-                    return canonical, candidate_tokens[len(candidate):]
+                if candidate_tokens[
+                    : len(candidate)
+                ] == candidate and _exit_status_is_attributable(
+                    segments, index, exit_code
+                ):
+                    return canonical, candidate_tokens[len(candidate) :]
     return None
 
 
 def _kind_for_command(canonical: str) -> str:
     lowered = canonical.lower()
-    kind = next((k for words, k in _KIND_KEYWORDS if any(w in lowered for w in words)), None)
+    kind = next(
+        (k for words, k in _KIND_KEYWORDS if any(w in lowered for w in words)), None
+    )
     return kind or ("check" if "check" in lowered and "test" not in lowered else "test")
 
 
 def _looks_like_target(arg: str) -> bool:
-    return bool(arg) and not arg.startswith("-") and "=" not in arg and (
-        any(m in arg for m in ("/", "\\", "::")) or arg.endswith(_TARGET_EXTENSIONS) or arg.startswith(_TARGET_PREFIXES)
+    return (
+        bool(arg)
+        and not arg.startswith("-")
+        and "=" not in arg
+        and (
+            any(m in arg for m in ("/", "\\", "::"))
+            or arg.endswith(_TARGET_EXTENSIONS)
+            or arg.startswith(_TARGET_PREFIXES)
+        )
     )
 
 
@@ -308,7 +347,11 @@ def _is_temp_script_path(token: str, root: str | Path | None) -> bool:
         name = Path(token).expanduser().name
     except Exception:
         return False
-    return name.startswith(_AD_HOC_SCRIPT_NAME_PREFIXES) and _is_under(token, tempfile.gettempdir()) and not _is_under(token, root)
+    return (
+        name.startswith(_AD_HOC_SCRIPT_NAME_PREFIXES)
+        and _is_under(token, tempfile.gettempdir())
+        and not _is_under(token, root)
+    )
 
 
 def _is_interpreter_token(token: str) -> bool:
@@ -323,33 +366,43 @@ def _is_interpreter_token(token: str) -> bool:
     return bool(_INTERPRETER_NAME_RE.match(_WINDOWS_EXE_SUFFIX_RE.sub("", name)))
 
 
-def _ad_hoc_script_args(tokens: list[str], root: str | Path | None) -> Optional[list[str]]:
+def _ad_hoc_script_args(
+    tokens: list[str], root: str | Path | None
+) -> Optional[list[str]]:
     candidate_tokens = _strip_command_prefix(tokens)
     if not candidate_tokens:
         return None
     command = candidate_tokens[0]
     if _is_temp_script_path(command, root):
         return candidate_tokens[1:]
-    if Path(command).name == "env" and len(candidate_tokens) > 1 and _is_interpreter_token(candidate_tokens[1]):
+    if (
+        Path(command).name == "env"
+        and len(candidate_tokens) > 1
+        and _is_interpreter_token(candidate_tokens[1])
+    ):
         # `/usr/bin/env python3 script` names the same interpreter as `python3 script`.
         candidate_tokens, command = candidate_tokens[1:], candidate_tokens[1]
     if _is_interpreter_token(command):
         # Skip interpreter flags; the first positional must be the script.
         for idx, token in enumerate(candidate_tokens[1:], start=1):
             if _is_temp_script_path(token, root):
-                return candidate_tokens[idx + 1:]
+                return candidate_tokens[idx + 1 :]
             if token != "--" and not token.startswith("-"):
                 return None
     return None
 
 
-def _find_ad_hoc_match(command: str, root: str | Path | None, exit_code: int = 0) -> Optional[list[str]]:
+def _find_ad_hoc_match(
+    command: str, root: str | Path | None, exit_code: int = 0
+) -> Optional[list[str]]:
     # posix=False is retried so Windows backslash script paths survive splitting.
     for posix in (True, False):
         segments = _split_shell_segments(command, posix=posix)
         for index, segment in enumerate(segments):
             trailing_args = _ad_hoc_script_args(segment.tokens, root)
-            if trailing_args is not None and _exit_status_is_attributable(segments, index, exit_code):
+            if trailing_args is not None and _exit_status_is_attributable(
+                segments, index, exit_code
+            ):
                 return trailing_args
     return None
 
@@ -361,7 +414,7 @@ def _summarize_output(output: str) -> str:
     head = _MAX_OUTPUT_SUMMARY_CHARS // 3
     return (
         f"{text[:head]}\n... [{len(text) - _MAX_OUTPUT_SUMMARY_CHARS} chars omitted] ...\n"
-        f"{text[head - _MAX_OUTPUT_SUMMARY_CHARS:]}"
+        f"{text[head - _MAX_OUTPUT_SUMMARY_CHARS :]}"
     )
 
 
@@ -422,7 +475,12 @@ def _load_changed_paths(raw: Any) -> list[Any]:
 
 
 def classify_verification_command(
-    command: str, *, cwd: str | Path | None = None, session_id: str | None = None, exit_code: int = 0, output: str = ""
+    command: str,
+    *,
+    cwd: str | Path | None = None,
+    session_id: str | None = None,
+    exit_code: int = 0,
+    output: str = "",
 ) -> Optional[VerificationEvidence]:
     """Classify a terminal command as verification evidence, if applicable.
 
@@ -442,30 +500,51 @@ def classify_verification_command(
         kind = _kind_for_command(canonical)
         scope = "targeted" if any(map(_looks_like_target, trailing_args)) else "full"
     else:
-        if verify_commands or _find_ad_hoc_match(command, facts.get("root"), int(exit_code)) is None:
+        if (
+            verify_commands
+            or _find_ad_hoc_match(command, facts.get("root"), int(exit_code)) is None
+        ):
             return None
         canonical, kind, scope = "ad-hoc verification script", "ad_hoc", "targeted"
     return VerificationEvidence(
-        command=command, canonical_command=canonical, kind=kind, scope=scope,
-        status="passed" if int(exit_code) == 0 else "failed", exit_code=int(exit_code),
-        cwd=str(Path(cwd or ".").resolve()), root=_root_for(facts, cwd),
-        session_id=str(session_id or "default"), output_summary=_summarize_output(output),
+        command=command,
+        canonical_command=canonical,
+        kind=kind,
+        scope=scope,
+        status="passed" if int(exit_code) == 0 else "failed",
+        exit_code=int(exit_code),
+        cwd=str(Path(cwd or ".").resolve()),
+        root=_root_for(facts, cwd),
+        session_id=str(session_id or "default"),
+        output_summary=_summarize_output(output),
     )
 
 
 def record_terminal_result(
-    *, command: str, cwd: str | Path | None, session_id: str | None, exit_code: int, output: str = ""
+    *,
+    command: str,
+    cwd: str | Path | None,
+    session_id: str | None,
+    exit_code: int,
+    output: str = "",
 ) -> Optional[dict[str, Any]]:
     """Record a foreground terminal result when it is verification evidence."""
     if not _ledger_enabled():
         return None
-    evidence = classify_verification_command(command, cwd=cwd, session_id=session_id, exit_code=exit_code, output=output)
+    evidence = classify_verification_command(
+        command, cwd=cwd, session_id=session_id, exit_code=exit_code, output=output
+    )
     return None if evidence is None else _insert_evidence(evidence)
 
 
 def record_verify_run(
-    *, root: str | Path, session_id: str | None = None, ok: bool, command: str = "clawk verify",
-    scope: str = "full", output: str = "",
+    *,
+    root: str | Path,
+    session_id: str | None = None,
+    ok: bool,
+    command: str = "clawk verify",
+    scope: str = "full",
+    output: str = "",
 ) -> Optional[dict[str, Any]]:
     """Record a completed ``clawk verify`` run as verification evidence.
 
@@ -476,13 +555,20 @@ def record_verify_run(
     if not _ledger_enabled():
         return None
     resolved = str(Path(root).resolve())
-    return _insert_evidence(VerificationEvidence(
-        command=command, canonical_command="clawk verify", kind="verify",
-        scope=scope if scope in {"full", "targeted"} else "full",
-        status="passed" if ok else "failed", exit_code=0 if ok else 1, cwd=resolved,
-        root=str((_project_facts(root) or {}).get("root") or resolved),
-        session_id=str(session_id or "default"), output_summary=_summarize_output(output),
-    ))
+    return _insert_evidence(
+        VerificationEvidence(
+            command=command,
+            canonical_command="clawk verify",
+            kind="verify",
+            scope=scope if scope in {"full", "targeted"} else "full",
+            status="passed" if ok else "failed",
+            exit_code=0 if ok else 1,
+            cwd=resolved,
+            root=str((_project_facts(root) or {}).get("root") or resolved),
+            session_id=str(session_id or "default"),
+            output_summary=_summarize_output(output),
+        )
+    )
 
 
 def _insert_evidence(evidence: VerificationEvidence) -> dict[str, Any]:
@@ -495,8 +581,19 @@ def _insert_evidence(evidence: VerificationEvidence) -> dict[str, Any]:
             " created_at, session_id, cwd, root, command, canonical_command,"
             " kind, scope, status, exit_code, output_summary"
             ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (created_at, e.session_id, e.cwd, e.root, e.command, e.canonical_command, e.kind, e.scope,
-             e.status, e.exit_code, e.output_summary),
+            (
+                created_at,
+                e.session_id,
+                e.cwd,
+                e.root,
+                e.command,
+                e.canonical_command,
+                e.kind,
+                e.scope,
+                e.status,
+                e.exit_code,
+                e.output_summary,
+            ),
         )
         if cur.lastrowid is None:
             raise RuntimeError("verification event insert did not return an id")
@@ -527,7 +624,10 @@ def _insert_evidence(evidence: VerificationEvidence) -> dict[str, Any]:
 
 
 def mark_workspace_edited(
-    *, session_id: str | None, cwd: str | Path | None, paths: list[str] | tuple[str, ...] | None = None
+    *,
+    session_id: str | None,
+    cwd: str | Path | None,
+    paths: list[str] | tuple[str, ...] | None = None,
 ) -> Optional[dict[str, Any]]:
     """Mark verification evidence stale after a successful file edit."""
     if not _ledger_enabled():
@@ -547,7 +647,9 @@ def mark_workspace_edited(
             (sid, root),
         ).fetchone()
         # Merge with what was already recorded, bounded to the last 200 paths.
-        existing = _load_changed_paths(row["changed_paths_json"]) if row is not None else []
+        existing = (
+            _load_changed_paths(row["changed_paths_json"]) if row is not None else []
+        )
         merged = sorted(set(existing) | set(changed_paths))[-200:]
         conn.execute(
             "INSERT INTO verification_state("
@@ -560,7 +662,12 @@ def mark_workspace_edited(
         )
         conn.commit()
 
-    return {"session_id": sid, "root": root, "last_edit_at": edited_at, "changed_paths": changed_paths}
+    return {
+        "session_id": sid,
+        "root": root,
+        "last_edit_at": edited_at,
+        "changed_paths": changed_paths,
+    }
 
 
 def _newest_workspace_verify(
@@ -583,7 +690,9 @@ def _newest_workspace_verify(
     ).fetchone()
 
 
-def verification_status(*, session_id: str | None, cwd: str | Path | None) -> dict[str, Any]:
+def verification_status(
+    *, session_id: str | None, cwd: str | Path | None
+) -> dict[str, Any]:
     """Return the best known verification state for a session/workspace.
 
     Evidence recorded before the latest edit is reported as ``stale``. A
@@ -605,12 +714,23 @@ def verification_status(*, session_id: str | None, cwd: str | Path | None) -> di
             (sid, root),
         ).fetchone()
         if state is None:
-            return {"status": "unverified", "evidence": None, "root": root, "session_id": sid, "changed_paths": []}
+            return {
+                "status": "unverified",
+                "evidence": None,
+                "root": root,
+                "session_id": sid,
+                "changed_paths": [],
+            }
         event = None
         if state["last_event_id"] is not None:
-            event = conn.execute("SELECT * FROM verification_events WHERE id = ?", (state["last_event_id"],)).fetchone()
+            event = conn.execute(
+                "SELECT * FROM verification_events WHERE id = ?",
+                (state["last_event_id"],),
+            ).fetchone()
         last_edit_at = state["last_edit_at"]
-        stale = bool(event is not None and last_edit_at and last_edit_at > event["created_at"])
+        stale = bool(
+            event is not None and last_edit_at and last_edit_at > event["created_at"]
+        )
         if event is None or stale:
             shared = _newest_workspace_verify(conn, root=root, since=last_edit_at)
             if shared is not None:
@@ -618,11 +738,17 @@ def verification_status(*, session_id: str | None, cwd: str | Path | None) -> di
                 stale = False
 
         result = {
-            "evidence": None, "root": root, "session_id": sid,
+            "evidence": None,
+            "root": root,
+            "session_id": sid,
             "changed_paths": _load_changed_paths(state["changed_paths_json"]),
         }
         if event is None:
             return {"status": "unverified", **result}
 
         evidence = dict(event)
-        return {"status": "stale" if stale else evidence["status"], **result, "evidence": evidence}
+        return {
+            "status": "stale" if stale else evidence["status"],
+            **result,
+            "evidence": evidence,
+        }

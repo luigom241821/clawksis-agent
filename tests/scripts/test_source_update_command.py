@@ -8,7 +8,9 @@ import sys
 import pytest
 
 
-HELPER = Path(__file__).resolve().parents[1] / "install/e2e-assets/source-update-command.sh"
+HELPER = (
+    Path(__file__).resolve().parents[1] / "install/e2e-assets/source-update-command.sh"
+)
 SOURCE_BUILD_ENV = HELPER.with_name("source-build-env.sh")
 REPO_ROOT = HELPER.parents[3]
 
@@ -23,9 +25,12 @@ REPO_ROOT = HELPER.parents[3]
         ("update", "update"),
     ],
 )
-def test_source_update_follows_staged_main_if_installed_cli_accepts_branch(tmp_path, help_text, expected):
+def test_source_update_follows_staged_main_if_installed_cli_accepts_branch(
+    tmp_path, help_text, expected
+):
     cli = tmp_path / "installed clawk"
-    cli.write_text('''#!/usr/bin/env bash
+    cli.write_text(
+        """#!/usr/bin/env bash
 if [[ "$*" == *"--branch main"* ]]; then
   printf 'selected staged main: %s\\n' "$*"
 elif [[ "$EXPECT_BRANCH" == 1 ]]; then
@@ -34,13 +39,26 @@ elif [[ "$EXPECT_BRANCH" == 1 ]]; then
 else
   printf 'legacy updater: %s\\n' "$*"
 fi
-''', encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
     cli.chmod(0o755)
     result = subprocess.run(
-        ["bash", "-euc", 'source "$HELPER"; build_source_update_command "$CLI" "$HELP_TEXT"; "${update_cmd[@]}"'],
-        env=dict(os.environ, HELPER=str(HELPER), CLI=str(cli), HELP_TEXT=help_text,
-                 EXPECT_BRANCH="1" if "--branch NAME" in help_text else "0"),
-        capture_output=True, text=True, timeout=30,
+        [
+            "bash",
+            "-euc",
+            'source "$HELPER"; build_source_update_command "$CLI" "$HELP_TEXT"; "${update_cmd[@]}"',
+        ],
+        env=dict(
+            os.environ,
+            HELPER=str(HELPER),
+            CLI=str(cli),
+            HELP_TEXT=help_text,
+            EXPECT_BRANCH="1" if "--branch NAME" in help_text else "0",
+        ),
+        capture_output=True,
+        text=True,
+        timeout=30,
         check=False,
     )
     assert result.returncode == 0, result.stderr
@@ -56,12 +74,17 @@ def test_installed_cli_help_drives_explicit_staged_branch(tmp_path):
     env = dict(os.environ, CLAWK_DISABLE_LAZY_INSTALLS="1", PYTHONDONTWRITEBYTECODE="1")
     help_result = subprocess.run(
         [sys.executable, "-m", "clawk_cli.main", "update", "--help"],
-        cwd=REPO_ROOT, env=env, capture_output=True, text=True, timeout=60,
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=60,
         check=False,
     )
     assert help_result.returncode == 0, help_result.stderr
     cli = tmp_path / "installed clawk"
-    cli.write_text('''#!/usr/bin/env bash
+    cli.write_text(
+        """#!/usr/bin/env bash
 [[ "$1" == update ]] || exit 2
 shift
 [[ " $* " == *" --yes "* && " $* " == *" --branch main "* ]] || {
@@ -69,14 +92,28 @@ shift
   exit 1
 }
 printf 'selected staged main: %s\\n' "$*"
-''', encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
     cli.chmod(0o755)
     result = subprocess.run(
-        ["bash", "-euc", 'source "$HELPER"; source "$SOURCE_BUILD_ENV"; '
-         'build_source_update_command "$CLI" "$HELP_TEXT"; source_build_env "${update_cmd[@]}"'],
-        env=dict(env, HELPER=str(HELPER), SOURCE_BUILD_ENV=str(SOURCE_BUILD_ENV),
-                 CLI=str(cli), HELP_TEXT=help_result.stdout),
-        cwd=REPO_ROOT, capture_output=True, text=True, timeout=30,
+        [
+            "bash",
+            "-euc",
+            'source "$HELPER"; source "$SOURCE_BUILD_ENV"; '
+            'build_source_update_command "$CLI" "$HELP_TEXT"; source_build_env "${update_cmd[@]}"',
+        ],
+        env=dict(
+            env,
+            HELPER=str(HELPER),
+            SOURCE_BUILD_ENV=str(SOURCE_BUILD_ENV),
+            CLI=str(cli),
+            HELP_TEXT=help_result.stdout,
+        ),
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=30,
         check=False,
     )
     assert result.returncode == 0, result.stderr

@@ -56,24 +56,37 @@ def quote_command_placeholder(value: str, quote_context: Optional[str]) -> str:
     if quote_context == "'":
         return value.replace("'", r"'\''")
     if quote_context == '"':
-        return value.replace("\\", "\\\\").replace('"', r'\"').replace("$", r"\$").replace("`", r"\`")
+        return (
+            value.replace("\\", "\\\\")
+            .replace('"', r"\"")
+            .replace("$", r"\$")
+            .replace("`", r"\`")
+        )
     return subprocess.list2cmdline([value]) if os.name == "nt" else shlex.quote(value)
 
 
 def render_command_template(command_template: str, placeholders: dict[str, str]) -> str:
     """Replace ``{name}`` placeholders (quote-aware) while preserving ``{{``/``}}``."""
     names = "|".join(re.escape(name) for name in placeholders)
-    pattern = re.compile(rf"(?<!\$)(?:\{{\{{(?P<double>{names})\}}\}}|\{{(?P<single>{names})\}})")
+    pattern = re.compile(
+        rf"(?<!\$)(?:\{{\{{(?P<double>{names})\}}\}}|\{{(?P<single>{names})\}})"
+    )
     replacements: list[tuple[str, str]] = []
 
     def replace_match(match: re.Match[str]) -> str:
         name = match.group("double") or match.group("single")
         token = f"__CLAWK_CMD_PLACEHOLDER_{len(replacements)}__"
-        quoted = quote_command_placeholder(placeholders[name], shell_quote_context(command_template, match.start()))
+        quoted = quote_command_placeholder(
+            placeholders[name], shell_quote_context(command_template, match.start())
+        )
         replacements.append((token, quoted))
         return token
 
-    rendered = pattern.sub(replace_match, command_template).replace("{{", "{").replace("}}", "}")
+    rendered = (
+        pattern.sub(replace_match, command_template)
+        .replace("{{", "{")
+        .replace("}}", "}")
+    )
     for token, value in replacements:
         rendered = rendered.replace(token, value)
     return rendered
@@ -104,9 +117,16 @@ def terminate_command_process_tree(proc: subprocess.Popen) -> None:
             # CREATE_NO_WINDOW: taskkill is a console-subprocess — the kill itself must not
             # flash a window on windowless hosts, same class of defect as the spawn above.
             from clawk_cli._subprocess_compat import windows_hide_flags
-            subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], stdout=subprocess.DEVNULL,
-                           stderr=subprocess.DEVNULL, timeout=5, stdin=subprocess.DEVNULL,
-                           creationflags=windows_hide_flags(), check=False)
+
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+                stdin=subprocess.DEVNULL,
+                creationflags=windows_hide_flags(),
+                check=False,
+            )
         except Exception:
             proc.kill()
         return
@@ -115,8 +135,11 @@ def terminate_command_process_tree(proc: subprocess.Popen) -> None:
     except ImportError:
         psutil = None
     # Without psutil only the shell itself is signalled (children may survive).
-    signal = ((lambda m: getattr(proc, m)()) if psutil is None
-              else (lambda m: _signal_process_tree(psutil, proc, m)))
+    signal = (
+        (lambda m: getattr(proc, m)())
+        if psutil is None
+        else (lambda m: _signal_process_tree(psutil, proc, m))
+    )
     signal("terminate")
     try:
         proc.wait(timeout=2)
@@ -127,12 +150,20 @@ def terminate_command_process_tree(proc: subprocess.Popen) -> None:
 def command_env_passthrough(config: dict[str, Any]) -> list:
     """``env_passthrough`` allowlist: parent env vars copied back into the secret-scrubbed child env."""
     raw = config.get("env_passthrough")
-    return [str(x).strip() for x in raw if str(x).strip()] if isinstance(raw, (list, tuple)) else []
+    return (
+        [str(x).strip() for x in raw if str(x).strip()]
+        if isinstance(raw, (list, tuple))
+        else []
+    )
 
 
 def command_failure_detail(exc: subprocess.CalledProcessError) -> str:
     """``stderr: ...; stdout: ...`` for a failed command provider, or ``no command output``."""
-    parts = [f"{stream}: {text.strip()}" for stream, text in (("stderr", exc.stderr), ("stdout", exc.stdout)) if text]
+    parts = [
+        f"{stream}: {text.strip()}"
+        for stream, text in (("stderr", exc.stderr), ("stdout", exc.stdout))
+        if text
+    ]
     return "; ".join(parts) or "no command output"
 
 
@@ -150,13 +181,16 @@ def provider_popen_group_kwargs(os_name: str) -> dict[str, Any]:
     session detach (setsid) so the tree can be signalled on idle timeout.
     """
     from clawk_cli._subprocess_compat import windows_detach_flags_without_breakaway
+
     if os_name == "nt":
         return {"creationflags": windows_detach_flags_without_breakaway()}
     return {"start_new_session": True}
 
 
 def run_command_provider(
-    command: str, timeout: float, env_passthrough: Optional[list] = None,
+    command: str,
+    timeout: float,
+    env_passthrough: Optional[list] = None,
 ) -> subprocess.CompletedProcess:
     """Run a command-provider shell command with process-tree idle cleanup.
     ``timeout`` is an IDLE timeout, reset whenever the command emits output — a slow-but-alive
@@ -165,6 +199,7 @@ def run_command_provider(
     from agent.delegation_context import delegated_child_subprocess_env
     from tools.env_passthrough import resolve_passthrough_value
     from tools.environments.local import clawk_subprocess_env
+
     scrubbed = clawk_subprocess_env(inherit_credentials=False)
     for key in env_passthrough or []:
         # Under the multiplexer os.environ is the LAUNCH profile's .env: resolve through the served
@@ -177,9 +212,18 @@ def run_command_provider(
     # flashes a window on windowless hosts). Lossy UTF-8 decode: locale-mismatched bytes
     # must not raise in the reader threads.
     group = provider_popen_group_kwargs(os.name)
-    proc = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            text=True, encoding="utf-8", errors="replace", env=delegated_child_subprocess_env(scrubbed),
-                            stdin=subprocess.DEVNULL, **group)
+    proc = subprocess.Popen(
+        command,
+        shell=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env=delegated_child_subprocess_env(scrubbed),
+        stdin=subprocess.DEVNULL,
+        **group,
+    )
     output_queue: queue.Queue[tuple[str, Optional[str]]] = queue.Queue()
     chunks: dict[str, list[str]] = {"stdout": [], "stderr": []}
     open_streams = {"stdout", "stderr"}
@@ -189,15 +233,21 @@ def run_command_provider(
         read1 = getattr(getattr(stream, "buffer", None), "read1", None)
         try:
             while True:
-                chunk = stream.read(65536) if read1 is None else read1(65536).decode(encoding, errors="replace")
+                chunk = (
+                    stream.read(65536)
+                    if read1 is None
+                    else read1(65536).decode(encoding, errors="replace")
+                )
                 if not chunk:
                     break
                 output_queue.put((name, chunk))
         finally:
             output_queue.put((name, None))
 
-    readers = [threading.Thread(target=read_stream, args=(name, stream), daemon=True)
-               for name, stream in (("stdout", proc.stdout), ("stderr", proc.stderr))]
+    readers = [
+        threading.Thread(target=read_stream, args=(name, stream), daemon=True)
+        for name, stream in (("stdout", proc.stdout), ("stderr", proc.stderr))
+    ]
     for reader in readers:
         reader.start()
     deadline = time.monotonic() + timeout
@@ -231,10 +281,13 @@ def run_command_provider(
                 chunks[name].append(chunk)
     stdout, stderr = "".join(chunks["stdout"]), "".join(chunks["stderr"])
     if timed_out:
-        raise subprocess.TimeoutExpired(command, timeout, output=stdout, stderr=stderr) from (
-            subprocess.TimeoutExpired(command, timeout))
+        raise subprocess.TimeoutExpired(
+            command, timeout, output=stdout, stderr=stderr
+        ) from (subprocess.TimeoutExpired(command, timeout))
     if proc.returncode:
-        raise subprocess.CalledProcessError(proc.returncode, command, output=stdout, stderr=stderr)
+        raise subprocess.CalledProcessError(
+            proc.returncode, command, output=stdout, stderr=stderr
+        )
     return subprocess.CompletedProcess(command, proc.returncode, stdout, stderr)
 
 
@@ -245,7 +298,9 @@ def _get_provider_section(config: dict[str, Any], name: str) -> dict[str, Any]:
     return section if isinstance(section, dict) else {}
 
 
-def _named_provider_config(config: dict[str, Any], name: str, builtins: frozenset[str]) -> dict[str, Any]:
+def _named_provider_config(
+    config: dict[str, Any], name: str, builtins: frozenset[str]
+) -> dict[str, Any]:
     """``<section>.providers.<name>`` (canonical), else ``<section>.<name>`` for non-built-in names
     only — refused for built-ins so a user's ``openai:`` block still means OpenAI, not a command."""
     section = _get_provider_section(config, "providers").get(name)
@@ -260,11 +315,14 @@ def _is_command_provider_config(config: dict[str, Any]) -> bool:
         return False
     ptype = str(config.get("type") or "").strip().lower()
     command = config.get("command")
-    return ptype in ("", "command") and isinstance(command, str) and bool(command.strip())
+    return (
+        ptype in ("", "command") and isinstance(command, str) and bool(command.strip())
+    )
 
 
 def _resolve_command_config(
-    provider: str, config: dict[str, Any], reserved: frozenset[str]) -> Optional[dict[str, Any]]:
+    provider: str, config: dict[str, Any], reserved: frozenset[str]
+) -> Optional[dict[str, Any]]:
     """Config of a user-declared command provider; None for *reserved* names, unknown or non-command."""
     key = (provider or "").lower().strip()
     if not key or key in reserved:
@@ -283,7 +341,9 @@ def _command_timeout(config: dict[str, Any], default: float) -> float:
     return value if value > 0 else float(default)
 
 
-def _command_output_format(config: dict[str, Any], formats: frozenset[str], default: str) -> str:
+def _command_output_format(
+    config: dict[str, Any], formats: frozenset[str], default: str
+) -> str:
     """Validated ``format``/``output_format`` from *config*, else *default*."""
     raw = config.get("format") or config.get("output_format") or default
     fmt = str(raw).lower().strip().lstrip(".")
@@ -293,34 +353,62 @@ def _command_output_format(config: dict[str, Any], formats: frozenset[str], defa
 # ---- TTS ``tts.providers.<name>`` layer -----------------------------------
 
 # Any ``tts.provider`` value NOT in this set refers to ``tts.providers.<name>``.
-BUILTIN_TTS_PROVIDERS = frozenset({
-    "edge", "elevenlabs", "openai", "minimax", "xai", "mistral", "gemini",
-    "neutts", "kittentts", "piper", "deepinfra"})
+BUILTIN_TTS_PROVIDERS = frozenset(
+    {
+        "edge",
+        "elevenlabs",
+        "openai",
+        "minimax",
+        "xai",
+        "mistral",
+        "gemini",
+        "neutts",
+        "kittentts",
+        "piper",
+        "deepinfra",
+    }
+)
 
 DEFAULT_COMMAND_TTS_TIMEOUT_SECONDS = 120
 DEFAULT_COMMAND_TTS_OUTPUT_FORMAT = "mp3"
-COMMAND_TTS_OUTPUT_FORMATS = frozenset({"mp3", "wav", "ogg", "flac", "m4a", "aac", "amr", "opus"})
+COMMAND_TTS_OUTPUT_FORMATS = frozenset(
+    {"mp3", "wav", "ogg", "flac", "m4a", "aac", "amr", "opus"}
+)
 DEFAULT_COMMAND_TTS_MAX_TEXT_LENGTH = 5000
 
 
-_get_named_provider_config = partial(_named_provider_config, builtins=BUILTIN_TTS_PROVIDERS)
-_resolve_command_provider_config = partial(_resolve_command_config, reserved=BUILTIN_TTS_PROVIDERS)
-_get_command_tts_timeout = partial(_command_timeout, default=DEFAULT_COMMAND_TTS_TIMEOUT_SECONDS)
+_get_named_provider_config = partial(
+    _named_provider_config, builtins=BUILTIN_TTS_PROVIDERS
+)
+_resolve_command_provider_config = partial(
+    _resolve_command_config, reserved=BUILTIN_TTS_PROVIDERS
+)
+_get_command_tts_timeout = partial(
+    _command_timeout, default=DEFAULT_COMMAND_TTS_TIMEOUT_SECONDS
+)
 
 
 def _iter_command_providers(tts_config: dict[str, Any]):
     """Yield (name, config) pairs for every declared command-type provider."""
     for name, cfg in _get_provider_section(tts_config, "providers").items():
-        if isinstance(name, str) and name.lower() not in BUILTIN_TTS_PROVIDERS and _is_command_provider_config(cfg):
+        if (
+            isinstance(name, str)
+            and name.lower() not in BUILTIN_TTS_PROVIDERS
+            and _is_command_provider_config(cfg)
+        ):
             yield name, cfg
 
 
-def _get_command_tts_output_format(config: dict[str, Any], output_path: Optional[str] = None) -> str:
+def _get_command_tts_output_format(
+    config: dict[str, Any], output_path: Optional[str] = None
+) -> str:
     """Validated output format: the output path's suffix wins, then ``format``/``output_format``."""
     suffix = Path(output_path).suffix.lower().strip().lstrip(".") if output_path else ""
     if suffix in COMMAND_TTS_OUTPUT_FORMATS:
         return suffix
-    return _command_output_format(config, COMMAND_TTS_OUTPUT_FORMATS, DEFAULT_COMMAND_TTS_OUTPUT_FORMAT)
+    return _command_output_format(
+        config, COMMAND_TTS_OUTPUT_FORMATS, DEFAULT_COMMAND_TTS_OUTPUT_FORMAT
+    )
 
 
 def _is_command_tts_voice_compatible(config: dict[str, Any]) -> bool:
@@ -334,7 +422,11 @@ def _configured_command_tts_output_path(path: Path, config: dict[str, Any]) -> P
 
 
 def _generate_command_tts(
-    text: str, output_path: str, provider_name: str, config: dict[str, Any], tts_config: dict[str, Any],
+    text: str,
+    output_path: str,
+    provider_name: str,
+    config: dict[str, Any],
+    tts_config: dict[str, Any],
 ) -> str:
     """Generate speech by running a user-configured shell command; returns the audio path it wrote.
     Raises ``ValueError`` for bad provider config, ``RuntimeError`` for timeouts / bad exits / no output."""
@@ -350,20 +442,29 @@ def _generate_command_tts(
         text_path = Path(tmpdir) / "input.txt"
         text_path.write_text(text, encoding="utf-8")
         placeholders = {
-            "input_path": str(text_path), "text_path": str(text_path), "output_path": str(output),
+            "input_path": str(text_path),
+            "text_path": str(text_path),
+            "output_path": str(output),
             "format": _get_command_tts_output_format(config, str(output)),
-            "voice": str(config.get("voice", "")), "model": str(config.get("model", "")),
+            "voice": str(config.get("voice", "")),
+            "model": str(config.get("model", "")),
             "speed": str(config.get("speed", tts_config.get("speed", ""))),
         }
         command = render_command_template(command_template, placeholders)
         try:
-            run_command_provider(command, timeout, env_passthrough=command_env_passthrough(config))
+            run_command_provider(
+                command, timeout, env_passthrough=command_env_passthrough(config)
+            )
         except subprocess.TimeoutExpired as exc:
-            raise RuntimeError(f"TTS provider '{provider_name}' timed out after {timeout:g}s") from exc
+            raise RuntimeError(
+                f"TTS provider '{provider_name}' timed out after {timeout:g}s"
+            ) from exc
         except subprocess.CalledProcessError as exc:
             raise RuntimeError(
                 f"TTS provider '{provider_name}' exited with code {exc.returncode}: {command_failure_detail(exc)}"
             ) from exc
     if not output.exists() or output.stat().st_size <= 0:
-        raise RuntimeError(f"TTS provider '{provider_name}' produced no output at {output}")
+        raise RuntimeError(
+            f"TTS provider '{provider_name}' produced no output at {output}"
+        )
     return str(output)

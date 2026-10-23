@@ -208,6 +208,7 @@ def _stat_changed(path: Path, recorded) -> bool:
 # Linux-only; the hazard itself is POSIX-only.
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.platforms("linux")
 def test_identity_probe_does_not_cancel_live_posix_locks(tmp_path):
     """The on-write header probe must not drop the writer's DMS lock."""
@@ -221,9 +222,7 @@ def test_identity_probe_does_not_cancel_live_posix_locks(tmp_path):
         # concurrent _raise_if_db_replaced probe (another thread, same
         # process) can destroy.
         db._conn.execute("BEGIN IMMEDIATE")
-        db._conn.execute(
-            "UPDATE sessions SET source = source WHERE id = 'probe-sess'"
-        )
+        db._conn.execute("UPDATE sessions SET source = source WHERE id = 'probe-sess'")
         before = own_posix_locks(live)
         assert before, "expected in-transaction WAL connection to lock state.db"
 

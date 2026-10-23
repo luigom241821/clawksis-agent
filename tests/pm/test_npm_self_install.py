@@ -20,19 +20,28 @@ def _fake_node(store: Store, target: str) -> None:
     node_bin = get_package("node").binary(store.entry("node-1"), target)
     node_bin.parent.mkdir(parents=True, exist_ok=True)
     node_bin.write_bytes(b"node")
-    cli_root = node_bin.parent if target.startswith("win32") else node_bin.parent.parent / "lib"
+    cli_root = (
+        node_bin.parent
+        if target.startswith("win32")
+        else node_bin.parent.parent / "lib"
+    )
     cli = cli_root / "node_modules" / "npm" / "bin" / "npm-cli.js"
     cli.parent.mkdir(parents=True)
     cli.write_text("", encoding="utf-8")
 
 
-def test_npm_self_install_leaves_download_entry_holding_only_the_archive(tmp_path, monkeypatch):
+def test_npm_self_install_leaves_download_entry_holding_only_the_archive(
+    tmp_path, monkeypatch
+):
     target = current_target()
     store = Store(tmp_path / "store")
     _fake_node(store, target)
     monkeypatch.setattr(pm.install, "_lockfile", lambda: None)
-    monkeypatch.setattr(pm.install, "_installed_location",
-                        lambda package, lockfile, target: ({"node": {"entry": "node-1"}}, store))
+    monkeypatch.setattr(
+        pm.install,
+        "_installed_location",
+        lambda package, lockfile, target: ({"node": {"entry": "node-1"}}, store),
+    )
 
     caches: list[Path] = []
 

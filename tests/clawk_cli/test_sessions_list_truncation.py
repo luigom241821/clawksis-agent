@@ -14,6 +14,7 @@ from clawk_cli import sessions_cmd
 @pytest.fixture
 def db(tmp_path):
     from clawk_state import SessionDB
+
     db = SessionDB(db_path=tmp_path / "state.db")
     for i in range(6):
         db.create_session(f"sess_{i}", "cli")

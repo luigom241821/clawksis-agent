@@ -14,6 +14,7 @@ These tests pin:
 - api_calls > 0 timeouts do NOT write a dump (the old "stuck on slow API
   call" explanation still applies)
 """
+
 from __future__ import annotations
 
 import threading
@@ -33,6 +34,7 @@ def clawk_home(tmp_path, monkeypatch):
 
 class _StubChild:
     """Minimal stand-in for an AIAgent subagent."""
+
     def __init__(
         self,
         *,
@@ -56,10 +58,14 @@ class _StubChild:
         self.ephemeral_system_prompt = "sys prompt"
         self.enabled_toolsets = ["web", "terminal"]
         self.valid_tool_names = {"web_search", "terminal"}
-        self.tools = tool_schema if tool_schema is not None else [
-            {"name": "web_search", "description": "search"},
-            {"name": "terminal", "description": "shell"},
-        ]
+        self.tools = (
+            tool_schema
+            if tool_schema is not None
+            else [
+                {"name": "web_search", "description": "search"},
+                {"name": "terminal", "description": "shell"},
+            ]
+        )
         self._api_call_count = api_call_count
         self._hang = threading.Event()
         self._hang_seconds = hang_seconds
@@ -74,7 +80,11 @@ class _StubChild:
 
     def run_conversation(self, user_message, task_id=None, stream_callback=None):
         self._hang.wait(self._hang_seconds)
-        return {"final_response": "", "completed": False, "api_calls": self._api_call_count}
+        return {
+            "final_response": "",
+            "completed": False,
+            "api_calls": self._api_call_count,
+        }
 
     def interrupt(self):
         self._hang.set()
@@ -82,14 +92,13 @@ class _StubChild:
 
 # ── _dump_subagent_timeout_diagnostic ──────────────────────────────────
 
+
 class TestDumpSubagentTimeoutDiagnostic:
-
-
-
     def test_returns_none_on_unwritable_logs_dir(self, tmp_path, monkeypatch):
         # Point CLAWK_HOME at an unwritable path so logs/ can't be created
         # (simulates permission-denied). Helper must not raise.
         from tools.delegate_tool import _dump_subagent_timeout_diagnostic
+
         bogus = tmp_path / "does-not-exist" / ".clawk"
         monkeypatch.setenv("CLAWK_HOME", str(bogus))
         child = _StubChild()
@@ -117,6 +126,7 @@ class TestDumpSubagentTimeoutDiagnostic:
         # never the bare "...[truncated]" the model could copy.
         from agent.compression_marker import _COMPRESSION_MARKER_RE
         from tools.delegate_tool import _dump_subagent_timeout_diagnostic
+
         child = _StubChild()
         path = _dump_subagent_timeout_diagnostic(
             child=child,
@@ -134,6 +144,7 @@ class TestDumpSubagentTimeoutDiagnostic:
 
 # ── _run_single_child timeout branch wiring ───────────────────────────
 
+
 class TestRunSingleChildTimeoutDump:
     """The timeout branch in _run_single_child must emit the diagnostic
     dump when api_calls == 0, and must NOT emit it when api_calls > 0."""
@@ -141,6 +152,7 @@ class TestRunSingleChildTimeoutDump:
     def _invoke_with_short_timeout(self, child, monkeypatch):
         """Run _run_single_child with a tiny timeout to force the timeout branch."""
         from tools import delegate_tool
+
         # Force a 0.3s timeout so the test is fast
         monkeypatch.setattr(delegate_tool, "_get_child_timeout", lambda: 0.3)
 
@@ -154,7 +166,9 @@ class TestRunSingleChildTimeoutDump:
             parent_agent=parent,
         )
 
-    def test_zero_api_calls_writes_dump_and_surfaces_path(self, clawk_home, monkeypatch):
+    def test_zero_api_calls_writes_dump_and_surfaces_path(
+        self, clawk_home, monkeypatch
+    ):
         child = _StubChild(api_call_count=0, hang_seconds=10.0)
         result = self._invoke_with_short_timeout(child, monkeypatch)
 
@@ -170,14 +184,13 @@ class TestRunSingleChildTimeoutDump:
         assert "Diagnostic:" in result["error"]
         assert str(dump_path) in result["error"]
 
-
     # ── explicit timeout metadata (#51690, salvaged from PR #60378) ────
-
 
     def test_non_timeout_error_has_null_timeout_metadata(self, clawk_home, monkeypatch):
         """The metadata fields are timeout-specific — a child that raises
         must report them as None so consumers can key on presence."""
         from tools import delegate_tool
+
         monkeypatch.setattr(delegate_tool, "_get_child_timeout", lambda: 30.0)
 
         child = _StubChild(api_call_count=1, hang_seconds=0.0)
@@ -190,7 +203,10 @@ class TestRunSingleChildTimeoutDump:
         parent._touch_activity = MagicMock()
         parent._current_task_id = None
         result = delegate_tool._run_single_child(
-            task_index=0, goal="test goal", child=child, parent_agent=parent,
+            task_index=0,
+            goal="test goal",
+            child=child,
+            parent_agent=parent,
         )
 
         assert result["status"] == "error"

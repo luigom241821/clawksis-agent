@@ -37,9 +37,7 @@ _CLAWK_EXECUTABLES = frozenset({"clawk", "clawksis-agent", "clawk-acp"})
 _CLAWK_PYTHON_MODULES = frozenset({"acp_adapter", "clawk_cli.main"})
 _CLAWK_PYTHON_SCRIPTS = frozenset({"clawk_cli/main.py", "run_agent.py"})
 _PYTHON_SHORT_OPTIONS_WITH_OPERANDS = frozenset({"Q", "W", "X"})
-_PYTHON_LONG_OPTIONS_WITH_OPERANDS = frozenset(
-    {"--check-hash-based-pycs", "--jit"}
-)
+_PYTHON_LONG_OPTIONS_WITH_OPERANDS = frozenset({"--check-hash-based-pycs", "--jit"})
 
 
 def _read_proc_argv(pid: int) -> Optional[list[str]]:
@@ -65,7 +63,11 @@ def describe_holder_pid(pid: int) -> str:
             argv = psutil.Process(pid).cmdline() or None
         except Exception:
             argv = None
-    who = " ".join(" ".join([os.path.basename(argv[0]), *argv[1:]]).split())[:80] if argv else "command line unavailable"
+    who = (
+        " ".join(" ".join([os.path.basename(argv[0]), *argv[1:]]).split())[:80]
+        if argv
+        else "command line unavailable"
+    )
     return f"PID {pid} ({who})"
 
 
@@ -162,13 +164,17 @@ def _argv_flag_value(argv: Sequence[str], flags: Sequence[str]) -> Optional[str]
     while index < count:
         token = argv[index]
         if isinstance(token, str):
-            if token in flags and index + 1 < count and isinstance(argv[index + 1], str):
+            if (
+                token in flags
+                and index + 1 < count
+                and isinstance(argv[index + 1], str)
+            ):
                 value = argv[index + 1]
                 index += 2
                 continue
             for flag in flags:
                 if token.startswith(flag + "="):
-                    value = token[len(flag) + 1:]
+                    value = token[len(flag) + 1 :]
                     break
         index += 1
     return value
@@ -178,7 +184,7 @@ def _argv_env_home(argv: Sequence[str]) -> Optional[str]:
     """``CLAWK_HOME=<path>`` env-style assignment on the argv (``env CLAWK_HOME=… clawk …``)."""
     for token in reversed(list(argv)):
         if isinstance(token, str) and token.startswith("CLAWK_HOME="):
-            return token[len("CLAWK_HOME="):]
+            return token[len("CLAWK_HOME=") :]
     return None
 
 
@@ -200,23 +206,32 @@ def _store_install_layout(this_home: str) -> tuple[Optional[str], Optional[str]]
         if os.path.basename(this_home) == ".clawk":
             return os.path.abspath(this_home), None
     except Exception:  # constants import/resolution must never break a holder scan
-        logger.debug("Could not classify the install layout of %s", this_home, exc_info=True)
+        logger.debug(
+            "Could not classify the install layout of %s", this_home, exc_info=True
+        )
     return None, None
 
 
-def _names_other_profile(normalized: str, install_root: Optional[str], our_profile: Optional[str]) -> bool:
+def _names_other_profile(
+    normalized: str, install_root: Optional[str], our_profile: Optional[str]
+) -> bool:
     """True when the token is under ``<install root>/profiles/<name>`` for a name that is not ours."""
     if install_root is None:
         return False
     prefix = _norm_path(os.path.join(install_root, "profiles")) + os.sep
     if not normalized.startswith(prefix):
         return False
-    name = normalized[len(prefix):].split(os.sep, 1)[0]
-    return bool(name) and name != (os.path.normcase(our_profile) if our_profile else None)
+    name = normalized[len(prefix) :].split(os.sep, 1)[0]
+    return bool(name) and name != (
+        os.path.normcase(our_profile) if our_profile else None
+    )
 
 
 def _argv_home_selection(
-    argv: Sequence[str], this_home: str, install_root: Optional[str], our_profile: Optional[str]
+    argv: Sequence[str],
+    this_home: str,
+    install_root: Optional[str],
+    our_profile: Optional[str],
 ) -> Optional[str]:
     """``"ours"``/``"other"``/``None`` from the process's OWN profile/home selection.
 
@@ -232,7 +247,11 @@ def _argv_home_selection(
         if our_profile is not None:
             return "ours" if profile_value == our_profile else "other"
         # Root/custom home: any explicit named profile selects a different home.
-        return "ours" if (install_root is not None and profile_value == "default") else "other"
+        return (
+            "ours"
+            if (install_root is not None and profile_value == "default")
+            else "other"
+        )
     return None
 
 
@@ -286,7 +305,9 @@ def _argv_scoped_to_other_home(argv: Sequence[str], db_path: Path) -> bool:
     db_path_str = os.path.abspath(os.fspath(db_path))
     this_home = os.path.dirname(db_path_str)
     install_root, our_profile = _store_install_layout(this_home)
-    sidecars = {os.path.normcase(candidate) for candidate in _sqlite_family(db_path_str)}
+    sidecars = {
+        os.path.normcase(candidate) for candidate in _sqlite_family(db_path_str)
+    }
     this_home_norm = os.path.normcase(this_home)
     root_norm = os.path.normcase(install_root) if install_root else None
     path_tokens = _argv_path_tokens(argv)
@@ -304,7 +325,9 @@ def _argv_scoped_to_other_home(argv: Sequence[str], db_path: Path) -> bool:
         if _names_other_profile(normalized, install_root, our_profile):
             other_home_seen = True
             continue
-        if normalized == this_home_norm or normalized.startswith(this_home_norm + os.sep):
+        if normalized == this_home_norm or normalized.startswith(
+            this_home_norm + os.sep
+        ):
             return False
         if root_norm is not None and (
             normalized == root_norm or normalized.startswith(root_norm + os.sep)
@@ -312,7 +335,11 @@ def _argv_scoped_to_other_home(argv: Sequence[str], db_path: Path) -> bool:
             continue  # shared install root: neutral, every served profile lives under it
         if index == 0 and not argv0_locates_home:
             continue
-        if "/.clawk" in normalized or normalized.endswith("/.clawk") or os.path.basename(normalized) in _STATE_DB_NAMES:
+        if (
+            "/.clawk" in normalized
+            or normalized.endswith("/.clawk")
+            or os.path.basename(normalized) in _STATE_DB_NAMES
+        ):
             other_home_seen = True
     return other_home_seen
 
@@ -347,14 +374,26 @@ def _rm_ctypes():
         ]
 
     argtypes = {
-        "RmStartSession": [ctypes.POINTER(wintypes.DWORD), wintypes.DWORD, wintypes.LPWSTR],
+        "RmStartSession": [
+            ctypes.POINTER(wintypes.DWORD),
+            wintypes.DWORD,
+            wintypes.LPWSTR,
+        ],
         "RmRegisterResources": [
-            wintypes.DWORD, wintypes.UINT, ctypes.POINTER(wintypes.LPCWSTR),
-            wintypes.UINT, ctypes.c_void_p, wintypes.UINT, ctypes.c_void_p,
+            wintypes.DWORD,
+            wintypes.UINT,
+            ctypes.POINTER(wintypes.LPCWSTR),
+            wintypes.UINT,
+            ctypes.c_void_p,
+            wintypes.UINT,
+            ctypes.c_void_p,
         ],
         "RmGetList": [
-            wintypes.DWORD, ctypes.POINTER(wintypes.UINT), ctypes.POINTER(wintypes.UINT),
-            ctypes.POINTER(_RmProcessInfo), ctypes.POINTER(wintypes.DWORD),
+            wintypes.DWORD,
+            ctypes.POINTER(wintypes.UINT),
+            ctypes.POINTER(wintypes.UINT),
+            ctypes.POINTER(_RmProcessInfo),
+            ctypes.POINTER(wintypes.DWORD),
         ],
         "RmEndSession": [wintypes.DWORD],
     }
@@ -379,7 +418,10 @@ def _windows_restart_manager_holders(db_path: Path) -> list[tuple[int, str]]:
         fn.argtypes = types
         fn.restype = wintypes.DWORD
     start, register, get_list, end = (
-        api.RmStartSession, api.RmRegisterResources, api.RmGetList, api.RmEndSession
+        api.RmStartSession,
+        api.RmRegisterResources,
+        api.RmGetList,
+        api.RmEndSession,
     )
 
     db_abspath = os.path.abspath(os.fspath(db_path))
@@ -405,8 +447,11 @@ def _windows_restart_manager_holders(db_path: Path) -> list[tuple[int, str]]:
             apps = (process_info * needed.value)()
             count = wintypes.UINT(needed.value)
             rc = get_list(
-                session, ctypes.byref(needed), ctypes.byref(count),
-                apps if needed.value else None, ctypes.byref(reasons),
+                session,
+                ctypes.byref(needed),
+                ctypes.byref(count),
+                apps if needed.value else None,
+                ctypes.byref(reasons),
             )
             if rc == 0:
                 own_pid = os.getpid()
@@ -442,7 +487,9 @@ def foreign_state_db_holders(db_path: Path) -> list[tuple[int, str]]:
     # realpath, not abspath: psutil/libproc report the kernel-resolved pathname, so a symlinked
     # CLAWK_HOME would otherwise make every holder invisible and let maintenance proceed.
     db_path_str = os.path.realpath(os.fspath(db_path))
-    watched = {canonical_sqlite_path(candidate) for candidate in _sqlite_family(db_path_str)}
+    watched = {
+        canonical_sqlite_path(candidate) for candidate in _sqlite_family(db_path_str)
+    }
     holders: list[tuple[int, str]] = []
     watched_ids: set[tuple[int, int]] = set()
     db_dev: Optional[int] = None
@@ -451,9 +498,7 @@ def foreign_state_db_holders(db_path: Path) -> list[tuple[int, str]]:
             stat_result = os.stat(candidate)
         except OSError as exc:
             if exc.errno not in (errno.ENOENT, errno.ESRCH):
-                holders.append(
-                    (-1, f"watched-file stat failed: {candidate}: {exc}")
-                )
+                holders.append((-1, f"watched-file stat failed: {candidate}: {exc}"))
             continue
         watched_ids.add((stat_result.st_dev, stat_result.st_ino))
         if candidate == db_path_str:
@@ -521,8 +566,7 @@ def foreign_state_db_holders(db_path: Path) -> list[tuple[int, str]]:
                                 holders.append(
                                     (
                                         pid,
-                                        "uninspectable descriptor: "
-                                        f"{target}: {exc}",
+                                        f"uninspectable descriptor: {target}: {exc}",
                                     )
                                 )
                         continue
@@ -582,7 +626,9 @@ def in_process_state_db_holders(
     ]
 
 
-def held_store_refusal(db_path: Path, *, command: str, force_hint: Optional[str] = "--force") -> Optional[str]:
+def held_store_refusal(
+    db_path: Path, *, command: str, force_hint: Optional[str] = "--force"
+) -> Optional[str]:
     """Operator-facing refusal for structural maintenance (VACUUM, index rebuild, bulk delete) while another
     process holds ``db_path`` or a WAL sidecar; ``None`` when the store is provably quiet.
 
@@ -602,11 +648,20 @@ def held_store_refusal(db_path: Path, *, command: str, force_hint: Optional[str]
         if pid <= 0 or target.startswith("uninspectable"):
             unknown.append(target)
         else:
-            by_pid.setdefault(pid, set()).add(Path(target.removesuffix(" (deleted)")).name)
-    lines = [f"Refusing `clawk sessions {command}`: another process is using {db_path}."]
-    lines += [f"  {describe_holder_pid(pid)}: {', '.join(sorted(by_pid[pid]))}" for pid in sorted(by_pid)]
+            by_pid.setdefault(pid, set()).add(
+                Path(target.removesuffix(" (deleted)")).name
+            )
+    lines = [
+        f"Refusing `clawk sessions {command}`: another process is using {db_path}."
+    ]
+    lines += [
+        f"  {describe_holder_pid(pid)}: {', '.join(sorted(by_pid[pid]))}"
+        for pid in sorted(by_pid)
+    ]
     if unknown:
-        lines.append(f"  cannot prove the database is quiet (holder scan incomplete: {unknown[0][:120]})")
+        lines.append(
+            f"  cannot prove the database is quiet (holder scan incomplete: {unknown[0][:120]})"
+        )
     profile_arg = profile_cli_selector()
     lines += [
         "Rewriting the database under a live writer is how every agent ends up refusing turns with the "

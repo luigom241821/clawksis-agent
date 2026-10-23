@@ -39,7 +39,9 @@ def test_transaction_closes_the_connection_even_when_the_body_raises(tmp_path):
         conn.execute("SELECT 1")
 
 
-def test_open_db_closes_the_half_open_connection_when_initialize_raises(monkeypatch, tmp_path):
+def test_open_db_closes_the_half_open_connection_when_initialize_raises(
+    monkeypatch, tmp_path
+):
     opened = []
     real_connect = sqlite3.connect
 
@@ -54,7 +56,9 @@ def test_open_db_closes_the_half_open_connection_when_initialize_raises(monkeypa
         raise sqlite3.OperationalError("boom")
 
     with pytest.raises(sqlite3.OperationalError):
-        sqlite_util.open_db(tmp_path / "x.db", db_label="x.db", wal=False, initialize=broken)
+        sqlite_util.open_db(
+            tmp_path / "x.db", db_label="x.db", wal=False, initialize=broken
+        )
     assert len(opened) == 1
     with pytest.raises(sqlite3.ProgrammingError):
         opened[0].execute("SELECT 1")
@@ -75,7 +79,9 @@ _STORE_OPENERS = (
 
 
 @pytest.mark.parametrize("module_name, attr", _STORE_OPENERS)
-def test_every_store_opens_through_the_canonical_open_db(monkeypatch, tmp_path, module_name, attr):
+def test_every_store_opens_through_the_canonical_open_db(
+    monkeypatch, tmp_path, module_name, attr
+):
     import importlib
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
@@ -84,7 +90,9 @@ def test_every_store_opens_through_the_canonical_open_db(monkeypatch, tmp_path, 
         if hasattr(module, name):
             monkeypatch.setattr(module, name, tmp_path / f"{name.lower()}.db")
     if module_name == "cron.incidents":
-        monkeypatch.setattr(module._executions, "EXECUTIONS_FILE", tmp_path / "executions.db")
+        monkeypatch.setattr(
+            module._executions, "EXECUTIONS_FILE", tmp_path / "executions.db"
+        )
     if module_name == "agent.verification_evidence":
         monkeypatch.setattr(module, "_db_path", lambda: tmp_path / "ve.db")
     if module_name in ("gateway.delivery_ledger", "tools.async_delegation"):
@@ -102,7 +110,11 @@ def test_every_store_opens_through_the_canonical_open_db(monkeypatch, tmp_path, 
     if getattr(module, "open_db", None) is real_open_db:
         monkeypatch.setattr(module, "open_db", spy)
     opener = getattr(module, attr)
-    args = (tmp_path / "opened.db",) if module_name == "gateway.hosted_rooms_common" else ()
+    args = (
+        (tmp_path / "opened.db",)
+        if module_name == "gateway.hosted_rooms_common"
+        else ()
+    )
     if module_name == "clawk_cli.projects_db":
         args = (tmp_path / "projects.db",)
     conn = opener(*args)

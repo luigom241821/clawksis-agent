@@ -25,6 +25,7 @@ logger = logging.getLogger("tools.wake_word")
 
 def _ww():
     from tools import wake_word
+
     return wake_word
 
 
@@ -67,7 +68,11 @@ class _Engine:
 
 
 def _looks_like_path(value: str) -> bool:
-    return os.sep in value or value.endswith((".onnx", ".tflite", ".ppn")) or os.path.exists(value)
+    return (
+        os.sep in value
+        or value.endswith((".onnx", ".tflite", ".ppn"))
+        or os.path.exists(value)
+    )
 
 
 def _sub(cfg: dict[str, Any], key: str) -> dict[str, Any]:
@@ -151,6 +156,7 @@ _SHERPA_KWS_MODEL_DIR = "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01"
 
 def _sherpa_model_root() -> Path:
     from clawk_constants import get_clawk_home
+
     return get_clawk_home() / "cache" / "wakewords"
 
 
@@ -162,6 +168,7 @@ def _ensure_sherpa_model(root: Optional[Path] = None) -> Path:
         return target
     import tarfile
     import urllib.request
+
     root.mkdir(parents=True, exist_ok=True)
     archive = root / f"{_SHERPA_KWS_MODEL_DIR}.tar.bz2"
     logger.info("wake word: downloading sherpa KWS model (one-time, ~13 MB)")
@@ -185,6 +192,7 @@ class _SherpaKwsEngine(_Engine):
         import sherpa_onnx
         import tempfile
         from sherpa_onnx import text2token
+
         model_dir = str(sub.get("model_dir") or "").strip()
         d = Path(model_dir) if model_dir else _ensure_sherpa_model()
         if not (d / "tokens.txt").exists():
@@ -198,13 +206,18 @@ class _SherpaKwsEngine(_Engine):
             for prof, p in ww.enrolled_profile_phrases().items():
                 phrase_map.setdefault(p.strip(), prof)
         phrases = list(phrase_map)
-        tokens = text2token([p.upper() for p in phrases], tokens=str(d / "tokens.txt"), tokens_type="bpe",
-                            bpe_model=str(d / "bpe.model"))
+        tokens = text2token(
+            [p.upper() for p in phrases],
+            tokens=str(d / "tokens.txt"),
+            tokens_type="bpe",
+            bpe_model=str(d / "bpe.model"),
+        )
         # sherpa keyword entries reject spaces in the @display-name; underscore them and
         # map display → profile for match routing.
         self._display_to_profile: dict[str, str] = {}
-        kw = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", prefix="clawk-kws-", delete=False,
-                                         encoding="utf-8")
+        kw = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".txt", prefix="clawk-kws-", delete=False, encoding="utf-8"
+        )
         for p, toks in zip(phrases, tokens):
             display = p.upper().replace(" ", "_")
             self._display_to_profile[display] = phrase_map[p]
@@ -220,28 +233,41 @@ class _SherpaKwsEngine(_Engine):
         def _model_file(part: str) -> str:
             hits = sorted(d.glob(f"{part}-*[!8].onnx"))
             if not hits:
-                raise RuntimeError(f"sherpa KWS model file missing: {d}/{part}-*[!8].onnx")
+                raise RuntimeError(
+                    f"sherpa KWS model file missing: {d}/{part}-*[!8].onnx"
+                )
             return str(hits[0])
 
         self._spotter = sherpa_onnx.KeywordSpotter(
-            tokens=str(d / "tokens.txt"), encoder=_model_file("encoder"), decoder=_model_file("decoder"),
-            joiner=_model_file("joiner"), keywords_file=self._keywords_file, keywords_threshold=threshold,
+            tokens=str(d / "tokens.txt"),
+            encoder=_model_file("encoder"),
+            decoder=_model_file("decoder"),
+            joiner=_model_file("joiner"),
+            keywords_file=self._keywords_file,
+            keywords_threshold=threshold,
             num_threads=1,
         )
         self._stream = self._spotter.create_stream()
 
     def process(self, frame) -> bool:
         import numpy as np
-        self._stream.accept_waveform(_ww().SAMPLE_RATE, np.asarray(frame, dtype=np.float32) / 32768.0)
+
+        self._stream.accept_waveform(
+            _ww().SAMPLE_RATE, np.asarray(frame, dtype=np.float32) / 32768.0
+        )
         fired = False
         while self._spotter.is_ready(self._stream):
             self._spotter.decode_stream(self._stream)
             result = self._spotter.get_result(self._stream)
             if result:
                 fired, display = True, str(result)
-                self.last_match = (display.replace("_", " ").lower(),
-                                   self._display_to_profile.get(display, ""))
-                self._spotter.reset_stream(self._stream)  # one utterance must not fire repeatedly
+                self.last_match = (
+                    display.replace("_", " ").lower(),
+                    self._display_to_profile.get(display, ""),
+                )
+                self._spotter.reset_stream(
+                    self._stream
+                )  # one utterance must not fire repeatedly
         return fired
 
     def reset(self) -> None:
@@ -261,20 +287,28 @@ class _PorcupineEngine(_Engine):
 
     def _build(self, cfg, sub, ww) -> None:
         import pvporcupine
+
         access_key = (os.getenv("PORCUPINE_ACCESS_KEY") or "").strip()
         if not access_key:
-            raise RuntimeError("Porcupine wake word requires PORCUPINE_ACCESS_KEY "
-                               "(get a free key at https://console.picovoice.ai).")
+            raise RuntimeError(
+                "Porcupine wake word requires PORCUPINE_ACCESS_KEY "
+                "(get a free key at https://console.picovoice.ai)."
+            )
         keyword = str(sub.get("keyword") or "jarvis").strip()
         # Porcupine's `sensitivities` runs the OPPOSITE way to our shared knob (higher =
         # looser); invert so "higher = stricter" holds for every engine.
-        kwargs: dict[str, Any] = {"access_key": access_key, "sensitivities": [1.0 - ww._sensitivity(cfg)]}
+        kwargs: dict[str, Any] = {
+            "access_key": access_key,
+            "sensitivities": [1.0 - ww._sensitivity(cfg)],
+        }
         kwargs["keyword_paths" if _looks_like_path(keyword) else "keywords"] = [keyword]
         self._porcupine = pvporcupine.create(**kwargs)
         self.frame_length = self._porcupine.frame_length
 
     def process(self, frame) -> bool:
-        return self._porcupine.process(frame) >= 0  # pvporcupine wants a plain sequence of int16
+        return (
+            self._porcupine.process(frame) >= 0
+        )  # pvporcupine wants a plain sequence of int16
 
     def close(self) -> None:
         with suppress(Exception):

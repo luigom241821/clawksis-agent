@@ -119,7 +119,9 @@ def test_foreground_patch_is_ledgered_as_agent(ledger_env):
     )
     assert patched["success"] is True
 
-    rows = [r for r in skill_ledger.list_entries(skill="my-skill") if r["action"] == "patch"]
+    rows = [
+        r for r in skill_ledger.list_entries(skill="my-skill") if r["action"] == "patch"
+    ]
     assert len(rows) == 1
     assert rows[0]["actor"] == "agent"
 
@@ -225,7 +227,11 @@ def test_archive_lands_in_ledger_with_curator_actor(ledger_env, monkeypatch):
         skill_ledger.reset_ledger_actor(tok)
     assert ok, msg
 
-    rows = [r for r in skill_ledger.list_entries(skill="my-skill") if r["action"] == "archive"]
+    rows = [
+        r
+        for r in skill_ledger.list_entries(skill="my-skill")
+        if r["action"] == "archive"
+    ]
     assert len(rows) == 1
     assert rows[0]["actor"] == "curator"
     assert rows[0]["before"] and rows[0]["after"]
@@ -262,9 +268,14 @@ def test_snapshot_paths_skips_transient_dirs(ledger_env):
 
     d = ledger_env["skills"] / "has-venv"
     d.mkdir()
-    for rel, body in (("SKILL.md", "# skill"), ("scripts/run.py", "print('hi')"),
-                      ("node_modules/pkg/index.js", "junk"), ("venv/bin/python", "junk"),
-                      ("__pycache__/run.cpython-311.pyc", "junk"), (".git/config", "junk")):
+    for rel, body in (
+        ("SKILL.md", "# skill"),
+        ("scripts/run.py", "print('hi')"),
+        ("node_modules/pkg/index.js", "junk"),
+        ("venv/bin/python", "junk"),
+        ("__pycache__/run.cpython-311.pyc", "junk"),
+        (".git/config", "junk"),
+    ):
         p = d / rel
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(body, encoding="utf-8")
@@ -311,7 +322,9 @@ def test_rollback_fails_closed_when_safety_capture_fails(ledger_env, monkeypatch
         )
     )
     assert patched["success"] is True
-    entry = next(r for r in skill_ledger.list_entries("my-skill") if r["action"] == "patch")
+    entry = next(
+        r for r in skill_ledger.list_entries("my-skill") if r["action"] == "patch"
+    )
     current = skill_md.read_bytes()
 
     monkeypatch.setattr(skill_ledger, "append_entry", lambda *a, **k: None)
@@ -338,7 +351,9 @@ def test_rollback_removes_files_created_by_the_mutation(ledger_env):
     extra = ledger_env["skills"] / "my-skill" / "references" / "extra.md"
     assert extra.exists()
 
-    entry = next(r for r in skill_ledger.list_entries("my-skill") if r["action"] == "write_file")
+    entry = next(
+        r for r in skill_ledger.list_entries("my-skill") if r["action"] == "write_file"
+    )
     ok, msg = skill_ledger.rollback_entry(entry["id"])
     assert ok is True, msg
     assert not extra.exists()  # created by the mutation → removed on rollback
@@ -444,12 +459,14 @@ def test_delete_after_rehome_ledgers_full_package_from_backup(ledger_env):
 
     assert _create()["success"] is True
     extra = ledger_env["skills"] / "my-skill" / "references" / "extra.md"
-    wrote = json.loads(skill_manage(
-        action="write_file",
-        name="my-skill",
-        file_path="references/extra.md",
-        file_content="roadmap body",
-    ))
+    wrote = json.loads(
+        skill_manage(
+            action="write_file",
+            name="my-skill",
+            file_path="references/extra.md",
+            file_content="roadmap body",
+        )
+    )
     assert wrote["success"] is True
 
     # The pre-curator-run snapshot, taken while the package was whole.
@@ -470,7 +487,8 @@ def test_delete_after_rehome_ledgers_full_package_from_backup(ledger_env):
     assert deleted["success"] is True
 
     delete_entry = next(
-        r for r in skill_ledger.list_entries(skill="my-skill")
+        r
+        for r in skill_ledger.list_entries(skill="my-skill")
         if r["action"] == "delete"
     )
     before_names = {Path(i["path"]).name for i in delete_entry["before"]}
@@ -510,9 +528,12 @@ def test_rollback_historical_hollow_entry_restores_full_package(ledger_env):
     entry_id = skill_ledger.append_entry(
         "delete",
         "my-skill",
-        before=[{"path": str(skill_md), "sha256": skill_ledger._store_blob(
-            VALID_SKILL_CONTENT.encode("utf-8")
-        )}],
+        before=[
+            {
+                "path": str(skill_md),
+                "sha256": skill_ledger._store_blob(VALID_SKILL_CONTENT.encode("utf-8")),
+            }
+        ],
         after=[],
     )
     assert entry_id is not None
@@ -537,7 +558,8 @@ def test_delete_rollback_without_backup_still_works(ledger_env):
     deleted = json.loads(skill_manage(action="delete", name="my-skill"))
     assert deleted["success"] is True
     delete_entry = next(
-        r for r in skill_ledger.list_entries(skill="my-skill")
+        r
+        for r in skill_ledger.list_entries(skill="my-skill")
         if r["action"] == "delete"
     )
     assert {Path(i["path"]).name for i in delete_entry["before"]} == {"SKILL.md"}
@@ -604,13 +626,16 @@ def test_backup_fill_ignores_tar_path_traversal(ledger_env):
     # Malicious members are not.
     assert not any(p.endswith("evil.md") or p.endswith("outside.md") for p in paths)
 
+
 import pytest
 
 
 def _append_padded(skill_ledger, action: str, pad: str, n: int = 1) -> None:
     """Append *n* entries padded with evidence text so the ledger file grows fast."""
     for _ in range(n):
-        skill_ledger.append_entry(action, "my-skill", before=[], after=[], evidence={"pad": pad})
+        skill_ledger.append_entry(
+            action, "my-skill", before=[], after=[], evidence={"pad": pad}
+        )
 
 
 def test_auto_compact_triggers_at_threshold(ledger_env, monkeypatch):
@@ -631,8 +656,12 @@ def test_auto_compact_triggers_at_threshold(ledger_env, monkeypatch):
     first_id = skill_ledger.append_entry("patch", "my-skill", before=[], after=[])
     template = json.loads(skill_ledger.ledger_path().read_text().splitlines()[0])
     with skill_ledger.ledger_path().open("a", encoding="utf-8") as fh:
-        for i in range(3):  # legacy pre-delta rows: identical fat manifests on both sides
-            fat = [{"path": f"my-skill/f{i}j{j}.md", "sha256": "a" * 64} for j in range(40)]
+        for i in range(
+            3
+        ):  # legacy pre-delta rows: identical fat manifests on both sides
+            fat = [
+                {"path": f"my-skill/f{i}j{j}.md", "sha256": "a" * 64} for j in range(40)
+            ]
             row = dict(template, id=f"legacy{i}", before=fat, after=list(fat))
             fh.write(json.dumps(row) + "\n")
     assert skill_ledger.ledger_path().stat().st_size > 8192
@@ -642,9 +671,13 @@ def test_auto_compact_triggers_at_threshold(ledger_env, monkeypatch):
     # the maintenance sweep fired on that append: the file is back under the cap
     assert skill_ledger.ledger_path().stat().st_size <= 8192
     rows = skill_ledger.list_entries()
-    assert {r["id"] for r in rows} == {first_id, last_id, "legacy0", "legacy1", "legacy2"}, (
-        "dedup alone must reach the cap — nothing trimmed, ids survive"
-    )
+    assert {r["id"] for r in rows} == {
+        first_id,
+        last_id,
+        "legacy0",
+        "legacy1",
+        "legacy2",
+    }, "dedup alone must reach the cap — nothing trimmed, ids survive"
     assert all(r["before"] == [] and r["after"] == [] for r in rows), (
         "identical manifests must be dropped by compaction"
     )
@@ -670,8 +703,8 @@ def test_trim_oldest_when_still_over_cap(ledger_env, monkeypatch):
         before = [{"path": f"my-skill/old{i}.md", "sha256": f"{i}" * 64}]
         after = [{"path": f"my-skill/new{i}.md", "sha256": f"{i + 1}" * 64}]
         newest_id = skill_ledger.append_entry(
-            "edit", "my-skill", before=before, after=after,
-            evidence={"pad": "y" * 2048})
+            "edit", "my-skill", before=before, after=after, evidence={"pad": "y" * 2048}
+        )
     with open(skill_ledger.ledger_path(), "a", encoding="utf-8") as fh:
         fh.write("{not json at all\n")
     assert skill_ledger.ledger_path().stat().st_size > 8192
@@ -689,22 +722,41 @@ def test_trim_oldest_when_still_over_cap(ledger_env, monkeypatch):
     assert skill_ledger.ledger_path().stat().st_size <= int(8192 * 0.8)
     # ... so the next append rides under the cap without paying compact+trim+gc again.
     compactions = []
-    monkeypatch.setattr(skill_ledger, "compact_ledger",
-                        lambda *a, **k: compactions.append(1) or (0, 0, 0))
+    monkeypatch.setattr(
+        skill_ledger,
+        "compact_ledger",
+        lambda *a, **k: compactions.append(1) or (0, 0, 0),
+    )
     skill_ledger.append_entry(
-        "edit", "my-skill", before=[{"path": "my-skill/z.md", "sha256": "a" * 64}],
-        after=[{"path": "my-skill/z2.md", "sha256": "b" * 64}], evidence={"pad": "z" * 1000})
+        "edit",
+        "my-skill",
+        before=[{"path": "my-skill/z.md", "sha256": "a" * 64}],
+        after=[{"path": "my-skill/z2.md", "sha256": "b" * 64}],
+        evidence={"pad": "z" * 1000},
+    )
     assert compactions == [], "an append under the cap must not re-run the sweep"
     assert skill_ledger.ledger_path().stat().st_size <= 8192
     assert "{not json at all" in skill_ledger.ledger_path().read_text(encoding="utf-8")
     # U+2028 inside a row (ensure_ascii=False leaves it unescaped) is not a row boundary for the
     # trim: a cap that fits only the newest row keeps that row byte-for-byte, not its second half.
-    u_row = (json.dumps({"id": "u2028", "skill": "my-skill", "action": "edit",
-                         "evidence": {"note": "line one\u2028line two"}}, ensure_ascii=False) + "\n").encode("utf-8")
+    u_row = (
+        json.dumps(
+            {
+                "id": "u2028",
+                "skill": "my-skill",
+                "action": "edit",
+                "evidence": {"note": "line one\u2028line two"},
+            },
+            ensure_ascii=False,
+        )
+        + "\n"
+    ).encode("utf-8")
     with open(skill_ledger.ledger_path(), "ab") as fh:
         fh.write(u_row)
     assert skill_ledger._trim_oldest(len(u_row) + 8) >= 1
-    assert skill_ledger.ledger_path().read_bytes() == u_row, "a retained row containing U+2028 survives intact"
+    assert skill_ledger.ledger_path().read_bytes() == u_row, (
+        "a retained row containing U+2028 survives intact"
+    )
 
 
 def test_concurrent_appends_never_lose_a_middle_row(ledger_env, monkeypatch):
@@ -722,7 +774,9 @@ def test_concurrent_appends_never_lose_a_middle_row(ledger_env, monkeypatch):
 
     import clawk_cli.config as _cfg
 
-    cap = {"skills": {"ledger_max_bytes": 4096}}  # padded rows ~600 B: a trim on nearly every append
+    cap = {
+        "skills": {"ledger_max_bytes": 4096}
+    }  # padded rows ~600 B: a trim on nearly every append
     monkeypatch.setattr(_cfg, "load_config", lambda *a, **k: cap)
     monkeypatch.setattr(_cfg, "load_config_readonly", lambda *a, **k: cap)
 
@@ -732,14 +786,17 @@ def test_concurrent_appends_never_lose_a_middle_row(ledger_env, monkeypatch):
 
     def paused_rewrite(path, lines, op):
         if threading.current_thread().name == "A" and not b_go.is_set():
-            b_go.set()             # A has read the ledger; let B append now ...
-            b_done.wait(1.0)       # ... and give it every chance to land before the replace
+            b_go.set()  # A has read the ledger; let B append now ...
+            b_done.wait(1.0)  # ... and give it every chance to land before the replace
         return real_rewrite(path, lines, op)
 
     monkeypatch.setattr(skill_ledger, "_rewrite_ledger", paused_rewrite)
     dropped, real_trim = [], skill_ledger._trim_oldest
-    monkeypatch.setattr(skill_ledger, "_trim_oldest",
-                        lambda max_bytes: dropped.append(real_trim(max_bytes)) or dropped[-1])
+    monkeypatch.setattr(
+        skill_ledger,
+        "_trim_oldest",
+        lambda max_bytes: dropped.append(real_trim(max_bytes)) or dropped[-1],
+    )
 
     def writer(k: str) -> None:
         if k == "B":
@@ -747,18 +804,33 @@ def test_concurrent_appends_never_lose_a_middle_row(ledger_env, monkeypatch):
         for i in range(n):
             before = [{"path": f"my-skill/{k}-{i}.md", "sha256": "a" * 64}]
             after = [{"path": f"my-skill/{k}-{i}.md", "sha256": f"{i % 10}" * 64}]
-            ids[k].append(skill_ledger.append_entry(
-                "edit", "my-skill", before=before, after=after, evidence={"pad": "x" * 500}))
+            ids[k].append(
+                skill_ledger.append_entry(
+                    "edit",
+                    "my-skill",
+                    before=before,
+                    after=after,
+                    evidence={"pad": "x" * 500},
+                )
+            )
             if k == "B":
                 b_done.set()
 
     seeds = 8  # seed over the cap so A's very first append sweeps
     for _ in range(seeds):
-        skill_ledger.append_entry("edit", "my-skill", before=[{"path": "s", "sha256": "0" * 64}],
-                                  after=[{"path": "s", "sha256": "1" * 64}], evidence={"pad": "x" * 500})
+        skill_ledger.append_entry(
+            "edit",
+            "my-skill",
+            before=[{"path": "s", "sha256": "0" * 64}],
+            after=[{"path": "s", "sha256": "1" * 64}],
+            evidence={"pad": "x" * 500},
+        )
     # Unreferenced blobs: a fresh one is another process's in-flight capture (row not appended yet)
     # and must survive every sweep's blob GC; one older than the grace window is garbage and goes.
-    fresh, aged = skill_ledger._store_blob(b"in-flight"), skill_ledger._store_blob(b"stale orphan")
+    fresh, aged = (
+        skill_ledger._store_blob(b"in-flight"),
+        skill_ledger._store_blob(b"stale orphan"),
+    )
     os.utime(skill_ledger.blobs_dir() / aged, (time.time() - 7200, time.time() - 7200))
     threads = [threading.Thread(target=writer, args=(k,), name=k) for k in ids]
     for t in threads:
@@ -767,16 +839,23 @@ def test_concurrent_appends_never_lose_a_middle_row(ledger_env, monkeypatch):
         t.join()
 
     assert b_go.is_set(), "writer A's first append must have swept (test precondition)"
-    assert all(ids["A"]) and all(ids["B"]) and len(ids["A"]) == len(ids["B"]) == n, "every append reported success"
-    present = [json.loads(line)["id"] for line in
-               skill_ledger.ledger_path().read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert all(ids["A"]) and all(ids["B"]) and len(ids["A"]) == len(ids["B"]) == n, (
+        "every append reported success"
+    )
+    present = [
+        json.loads(line)["id"]
+        for line in skill_ledger.ledger_path().read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
     assert present, "the newest row always survives a trim"
-    assert (skill_ledger.blobs_dir() / fresh).exists() and not (skill_ledger.blobs_dir() / aged).exists()
+    assert (skill_ledger.blobs_dir() / fresh).exists() and not (
+        skill_ledger.blobs_dir() / aged
+    ).exists()
     assert len(present) == seeds + 2 * n - sum(dropped), (
         "every row is either in the ledger or was counted as trimmed — none silently lost"
     )
     for k, seq in ids.items():
         survivors = [i for i in seq if i in set(present)]
-        assert survivors == seq[len(seq) - len(survivors):], (
+        assert survivors == seq[len(seq) - len(survivors) :], (
             f"writer {k}: rows missing from the middle — a concurrent sweep dropped an append"
         )

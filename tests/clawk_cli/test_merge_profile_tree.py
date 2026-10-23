@@ -111,8 +111,12 @@ class TestMergeProfileTree:
         from clawk_cli.web_routers.profiles import _merge_profile_tree
 
         merged = {}
-        auto = _make_project(path="/home/me/proj", pid="p_auto", is_auto=True, label="auto")
-        declared = _make_project(path="/home/me/proj", pid="p_decl", is_auto=False, label="My Proj")
+        auto = _make_project(
+            path="/home/me/proj", pid="p_auto", is_auto=True, label="auto"
+        )
+        declared = _make_project(
+            path="/home/me/proj", pid="p_decl", is_auto=False, label="My Proj"
+        )
 
         _merge_profile_tree(merged, [auto], "alpha", preview_limit=5)
         _merge_profile_tree(merged, [declared], "beta", preview_limit=5)

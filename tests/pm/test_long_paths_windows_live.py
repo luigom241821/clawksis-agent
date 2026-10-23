@@ -98,7 +98,9 @@ def _assert_tree(entry: Path, files: dict[str, bytes]) -> None:
     root = _verbatim(entry)
     for rel, data in files.items():
         assert (root / Path(rel)).read_bytes() == data, rel
-    found = sorted(p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file())
+    found = sorted(
+        p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()
+    )
     assert found == sorted(files)
 
 
@@ -107,7 +109,8 @@ def test_store_lifecycle_beyond_max_path_with_long_paths_disabled(tmp_path):
     assert sys.platform == "win32"
     assert not _long_paths_enabled(), (
         "LongPathsEnabled is on for this process; set HKLM\\SYSTEM\\CurrentControlSet\\"
-        "Control\\FileSystem LongPathsEnabled=0 before the interpreter starts")
+        "Control\\FileSystem LongPathsEnabled=0 before the interpreter starts"
+    )
     probe = _verbatim(tmp_path) / ("p" * 120) / ("q" * 120) / "probe.txt"
     probe.parent.mkdir(parents=True)
     probe.write_bytes(b"x")
@@ -134,25 +137,40 @@ def test_store_lifecycle_beyond_max_path_with_long_paths_disabled(tmp_path):
     lockfile = Lockfile(tmp_path / "lock.json")
     lockfile.set_pin(package.name, version, {target: {"sha256": pin}})
 
-    files = _build_tree(source_root / entry_name,
-                        len(_plain(tmp_path / "dst" / entry_name)))
+    files = _build_tree(
+        source_root / entry_name, len(_plain(tmp_path / "dst" / entry_name))
+    )
     expected = tree_digest(_verbatim(source_root / entry_name))
     # The bundled source as a sealed install records it: facts.json inside its store.
     source_facts = Facts(source_root / "facts.json")
-    source_facts.record(package.name, version, entry_name, package.env(source.entry(entry_name), target),
-                        source.root, target=target, artifacts=[pin], digest=expected)
+    source_facts.record(
+        package.name,
+        version,
+        entry_name,
+        package.env(source.entry(entry_name), target),
+        source.root,
+        target=target,
+        artifacts=[pin],
+        digest=expected,
+    )
 
     # The real bundled-copy install: _copy_verified_source, verification, publish, facts commit.
     facts = Facts(store_root / "facts.json")
-    published = _install(package, lockfile, facts, store, target, copy_from=(source_facts, source))
-    assert not [p for p in _verbatim(store_root).iterdir() if p.name.startswith(".staging-")]
+    published = _install(
+        package, lockfile, facts, store, target, copy_from=(source_facts, source)
+    )
+    assert not [
+        p for p in _verbatim(store_root).iterdir() if p.name.startswith(".staging-")
+    ]
     _assert_tree(store_root / entry_name, files)
     assert tree_digest(published) == expected
 
     # Bytes scratch() must clean up itself (an abandoned extraction).
     with store.scratch() as scratch:
         shutil.copytree(source.entry(entry_name), scratch / "abandoned", symlinks=True)
-    assert not _verbatim(scratch).exists(), "scratch() left bytes behind beyond MAX_PATH"
+    assert not _verbatim(scratch).exists(), (
+        "scratch() left bytes behind beyond MAX_PATH"
+    )
 
     # Records and child environments are exits: they carry the ordinary spelling.
     assert facts.installed(package.name, version, store.root, (target, (pin,)))
@@ -161,7 +179,10 @@ def test_store_lifecycle_beyond_max_path_with_long_paths_disabled(tmp_path):
     child_env = compose_env([facts.env_for(package.name, store.root)], base={})
     assert not [v for v in child_env.values() if VERBATIM in v], child_env
     assert ntpath.normcase(child_env["PATH"]) == ntpath.normcase(
-        _plain(store_root / entry_name / "bin"))
+        _plain(store_root / entry_name / "bin")
+    )
 
     _remove_entry(store, entry_name)
-    assert not _verbatim(store_root / entry_name).exists(), "removal left bytes beyond MAX_PATH"
+    assert not _verbatim(store_root / entry_name).exists(), (
+        "removal left bytes beyond MAX_PATH"
+    )

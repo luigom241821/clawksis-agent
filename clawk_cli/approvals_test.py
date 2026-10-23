@@ -20,7 +20,9 @@ EXIT_ASK = 2
 EXIT_DENY = 3
 
 _VERDICT_EXIT = {
-    "allow": EXIT_ALLOW, "ask-approval": EXIT_ASK, "hardline-deny": EXIT_DENY,
+    "allow": EXIT_ALLOW,
+    "ask-approval": EXIT_ASK,
+    "hardline-deny": EXIT_DENY,
     "user-deny": EXIT_DENY,
 }
 
@@ -34,6 +36,7 @@ def evaluate_command(command: str, env_type: str = "local") -> dict:
     """
     from tools import approval
     from tools import approval_context, approval_detection, approval_floors
+
     # Sync config-persisted "always" patterns so the allowlist check below sees what the runtime
     # would see (load is read-only).
     try:
@@ -45,8 +48,12 @@ def evaluate_command(command: str, env_type: str = "local") -> dict:
 
     def result(verdict: str, rule=None, detail: str = "") -> dict:
         return {
-            "command": command, "env_type": env_type, "verdict": verdict,
-            "exit_code": _VERDICT_EXIT[verdict], "rule": rule, "detail": detail,
+            "command": command,
+            "env_type": env_type,
+            "verdict": verdict,
+            "exit_code": _VERDICT_EXIT[verdict],
+            "rule": rule,
+            "detail": detail,
             "normalized_variants": variants,
         }
 
@@ -56,61 +63,78 @@ def evaluate_command(command: str, env_type: str = "local") -> dict:
         deny_pattern = approval_floors._match_user_deny_rule(command)
         if deny_pattern is not None:
             return result(
-                "user-deny", rule=deny_pattern,
+                "user-deny",
+                rule=deny_pattern,
                 detail="matches a user-defined approvals.deny rule in config.yaml "
-                       "(blocked even in an isolated container, under --yolo / mode=off)",
+                "(blocked even in an isolated container, under --yolo / mode=off)",
             )
         return result(
             "allow",
-            detail=(f"env_type '{env_type}' is an isolated container backend; "
-                    "the runtime skips all command guards for it except approvals.deny"),
+            detail=(
+                f"env_type '{env_type}' is an isolated container backend; "
+                "the runtime skips all command guards for it except approvals.deny"
+            ),
         )
 
     # 2. Hardline blocklist — never bypassable, even under yolo.
     is_hardline, hardline_desc = approval_detection.detect_hardline_command(command)
     if is_hardline:
         return result(
-            "hardline-deny", rule=hardline_desc,
+            "hardline-deny",
+            rule=hardline_desc,
             detail="matches the hardline blocklist (never bypassable, "
-                   "blocked even under --yolo / approvals.mode=off)",
+            "blocked even under --yolo / approvals.mode=off)",
         )
 
     # 3. Sudo stdin guard — unconditional, like the hardline floor.
     is_sudo_guess, sudo_desc = approval_detection._check_sudo_stdin_guard(command)
     if is_sudo_guess:
-        return result("hardline-deny", rule=sudo_desc, detail="sudo stdin guard (unconditional block)")
+        return result(
+            "hardline-deny",
+            rule=sudo_desc,
+            detail="sudo stdin guard (unconditional block)",
+        )
 
     # 4. User-defined approvals.deny rules — fire before yolo/off.
     deny_pattern = approval_floors._match_user_deny_rule(command)
     if deny_pattern is not None:
         return result(
-            "user-deny", rule=deny_pattern,
+            "user-deny",
+            rule=deny_pattern,
             detail="matches a user-defined approvals.deny rule in "
-                   "config.yaml (blocked even under --yolo / mode=off)",
+            "config.yaml (blocked even under --yolo / mode=off)",
         )
 
     # 5. Yolo / approvals.mode=off bypass.
-    if (approval._YOLO_MODE_FROZEN
-            or approval.is_current_session_yolo_enabled()
-            or approval_context._get_approval_mode() == "off"):
+    if (
+        approval._YOLO_MODE_FROZEN
+        or approval.is_current_session_yolo_enabled()
+        or approval_context._get_approval_mode() == "off"
+    ):
         return result(
             "allow",
             detail="approval bypass active (--yolo or approvals.mode: off); "
-                   "only hardline/deny rules would block",
+            "only hardline/deny rules would block",
         )
 
     # 6. Permanent command_allowlist.
     if approval_floors._command_matches_permanent_allowlist(command):
-        return result("allow", detail="matches command_allowlist in config.yaml (permanently approved)")
+        return result(
+            "allow",
+            detail="matches command_allowlist in config.yaml (permanently approved)",
+        )
 
     # 7. Dangerous-pattern detection → would prompt.
-    is_dangerous, pattern_key, description = approval_detection.detect_dangerous_command(command)
+    is_dangerous, pattern_key, description = (
+        approval_detection.detect_dangerous_command(command)
+    )
     if is_dangerous:
         return result(
-            "ask-approval", rule=description,
+            "ask-approval",
+            rule=description,
             detail="matches a dangerous-command pattern; the runtime would "
-                   f"raise an interactive approval prompt (pattern key: "
-                   f"{pattern_key!r})",
+            f"raise an interactive approval prompt (pattern key: "
+            f"{pattern_key!r})",
         )
 
     return result("allow", detail="no guard matched; would run without a prompt")
@@ -139,7 +163,9 @@ def approvals_test_command(args) -> int:
         print("usage: clawk approvals test [--env-type TYPE] [--json] -- <command...>")
         return EXIT_USAGE
 
-    verdict = evaluate_command(" ".join(words), env_type=getattr(args, "env_type", None) or "local")
+    verdict = evaluate_command(
+        " ".join(words), env_type=getattr(args, "env_type", None) or "local"
+    )
     if getattr(args, "json", False):
         print(json.dumps(verdict, indent=2))
     else:

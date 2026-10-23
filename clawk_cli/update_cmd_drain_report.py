@@ -56,18 +56,30 @@ def describe_active_work_unit(unit: dict, home: Optional[Path] = None) -> str:
         job_id = str(unit.get("job_id") or "?")
         name = _cron_job_name(job_id, home)
         label = f"cron job {job_id}" + (f" ({name})" if name else "")
-        where = f" in external worker{pid_part}" if unit.get("external") else f" in-process{pid_part}"
+        where = (
+            f" in external worker{pid_part}"
+            if unit.get("external")
+            else f" in-process{pid_part}"
+        )
         return f"{label}{where}{elapsed_part}"
     if kind == "chat":
         session = str(unit.get("session") or "?")
         model = unit.get("model")
         tool = unit.get("current_tool")
-        detail = ", ".join(p for p in (f"model {model}" if model else "", f"tool {tool}" if tool else "") if p)
-        return f"chat turn {session}{pid_part}{elapsed_part}" + (f" [{detail}]" if detail else "")
+        detail = ", ".join(
+            p
+            for p in (f"model {model}" if model else "", f"tool {tool}" if tool else "")
+            if p
+        )
+        return f"chat turn {session}{pid_part}{elapsed_part}" + (
+            f" [{detail}]" if detail else ""
+        )
     if kind == "delegation":
         goal = str(unit.get("goal") or "").strip()
-        return (f"background delegation {unit.get('delegation_id') or '?'}{pid_part}{elapsed_part}"
-                + (f" [{goal}]" if goal else ""))
+        return (
+            f"background delegation {unit.get('delegation_id') or '?'}{pid_part}{elapsed_part}"
+            + (f" [{goal}]" if goal else "")
+        )
     return f"{kind} run{pid_part}{elapsed_part}"
 
 
@@ -76,7 +88,9 @@ def read_active_work(home: Optional[Path] = None) -> Optional[list]:
     try:
         from gateway.status import read_runtime_status
 
-        record = read_runtime_status(home / "gateway_state.json" if home else None) or {}
+        record = (
+            read_runtime_status(home / "gateway_state.json" if home else None) or {}
+        )
         work = record.get("active_work")
         return list(work) if isinstance(work, list) else None
     except Exception:
@@ -91,29 +105,45 @@ def _tui_command(home: Optional[Path]) -> str:
     return f"clawk -p {name} --tui" if name and name != "default" else "clawk --tui"
 
 
-def format_drain_report(work: Optional[list], *, remaining_s: float, home: Optional[Path] = None) -> str:
+def format_drain_report(
+    work: Optional[list], *, remaining_s: float, home: Optional[Path] = None
+) -> str:
     """Multi-line progress block: what the gateway is waiting on plus how to stop waiting."""
-    lines = [f"  ⏳ still draining — {max(remaining_s, 0):.0f}s left before the forced restart"]
+    lines = [
+        f"  ⏳ still draining — {max(remaining_s, 0):.0f}s left before the forced restart"
+    ]
     if work is None:
-        lines.append("     (gateway did not report what it is waiting on — pre-update gateway or unreadable state file)")
+        lines.append(
+            "     (gateway did not report what it is waiting on — pre-update gateway or unreadable state file)"
+        )
     elif not work:
-        lines.append("     (no active work reported; the gateway should exit momentarily)")
+        lines.append(
+            "     (no active work reported; the gateway should exit momentarily)"
+        )
     else:
         lines.append(f"     waiting on {len(work)} active work unit(s):")
         lines.extend(f"       • {describe_active_work_unit(u, home)}" for u in work)
         if any(isinstance(u, dict) and u.get("kind") == "chat" for u in work):
             # The draining gateway stays reachable for this (#139041): a chat turn parked on an
             # approval/clarify is answered from a client, not waited out.
-            lines.append("     a chat turn waiting on an approval or clarify question can be answered now: "
-                         f"open it with `{_tui_command(home)}` (resume the session)")
-        lines.append("     finish or kill the work above to release the drain now; "
-                     "agent.restart_after_turn_timeout in config.yaml caps this wait")
+            lines.append(
+                "     a chat turn waiting on an approval or clarify question can be answered now: "
+                f"open it with `{_tui_command(home)}` (resume the session)"
+            )
+        lines.append(
+            "     finish or kill the work above to release the drain now; "
+            "agent.restart_after_turn_timeout in config.yaml caps this wait"
+        )
     return "\n".join(lines)
 
 
-def drain_progress_reporter(home: Optional[Path] = None, *, budget_s: float,
-                            interval_s: float = DRAIN_REPORT_INTERVAL_S,
-                            emit: Callable[[str], None] = print) -> Callable[[], None]:
+def drain_progress_reporter(
+    home: Optional[Path] = None,
+    *,
+    budget_s: float,
+    interval_s: float = DRAIN_REPORT_INTERVAL_S,
+    emit: Callable[[str], None] = print,
+) -> Callable[[], None]:
     """Return a zero-arg callback for ``_wait_for_pid_exit(on_progress=...)`` that prints the drain
     report every ``interval_s`` while the wait is in progress."""
     started = time.monotonic()
@@ -124,6 +154,12 @@ def drain_progress_reporter(home: Optional[Path] = None, *, budget_s: float,
         if now - state["last"] < interval_s:
             return
         state["last"] = now
-        emit(format_drain_report(read_active_work(home), remaining_s=budget_s - (now - started), home=home))
+        emit(
+            format_drain_report(
+                read_active_work(home),
+                remaining_s=budget_s - (now - started),
+                home=home,
+            )
+        )
 
     return _tick

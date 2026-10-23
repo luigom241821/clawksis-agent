@@ -5,6 +5,7 @@ A ``/p/<profile>/`` route's reply, deliver_only message, home-channel fallback a
 borrows a secondary's adapter. Real ``GatewayAuthorizationMixin`` resolver, real
 ``load_gateway_config`` against a temp CLAWK_HOME — no patched predicates.
 """
+
 import os
 from unittest.mock import AsyncMock, MagicMock
 
@@ -32,7 +33,11 @@ def _target():
 
 
 def _webhook(runner) -> WebhookAdapter:
-    adapter = WebhookAdapter(PlatformConfig(enabled=True, extra={"host": "127.0.0.1", "port": 0, "routes": {}}))
+    adapter = WebhookAdapter(
+        PlatformConfig(
+            enabled=True, extra={"host": "127.0.0.1", "port": 0, "routes": {}}
+        )
+    )
     adapter.gateway_runner = runner
     return adapter
 
@@ -45,25 +50,43 @@ def profile_homes(tmp_path, monkeypatch):
     sec.mkdir(parents=True)
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr("clawk_cli.profiles._get_default_clawk_home", lambda: home)
-    monkeypatch.setattr("clawk_cli.profiles._get_profiles_root", lambda: home / "profiles")
+    monkeypatch.setattr(
+        "clawk_cli.profiles._get_profiles_root", lambda: home / "profiles"
+    )
     (sec / "config.yaml").write_text(
         "gateway:\n  multiplex_profiles: true\nplatforms:\n  slack:\n    enabled: true\n"
-        "    home_channel:\n      platform: slack\n      chat_id: SEC-HOME\n")
+        "    home_channel:\n      platform: slack\n      chat_id: SEC-HOME\n"
+    )
     (sec / ".env").write_text("GH_TOKEN=sec-token\n")
-    monkeypatch.setenv("GH_TOKEN", "default-token")  # multiplex: os.environ == the default profile
+    monkeypatch.setenv(
+        "GH_TOKEN", "default-token"
+    )  # multiplex: os.environ == the default profile
     default_cfg = GatewayConfig()
     default_cfg.platforms[Platform.SLACK] = PlatformConfig(
-        enabled=True, home_channel=HomeChannel(platform=Platform.SLACK, chat_id="DEFAULT-HOME", name="Home"))
+        enabled=True,
+        home_channel=HomeChannel(
+            platform=Platform.SLACK, chat_id="DEFAULT-HOME", name="Home"
+        ),
+    )
     return default_cfg
 
 
 @pytest.mark.asyncio
-async def test_routed_profile_delivers_via_its_own_adapter_and_home_channel(profile_homes):
+async def test_routed_profile_delivers_via_its_own_adapter_and_home_channel(
+    profile_homes,
+):
     default, secondary = _target(), _target()
-    adapter = _webhook(_Runner({Platform.SLACK: default}, {"sec": {Platform.SLACK: secondary}}, profile_homes))
+    adapter = _webhook(
+        _Runner(
+            {Platform.SLACK: default},
+            {"sec": {Platform.SLACK: secondary}},
+            profile_homes,
+        )
+    )
 
     result = await adapter._deliver_cross_platform(
-        "slack", "hi", {"deliver": "slack", "deliver_extra": {}, "profile": "sec"})
+        "slack", "hi", {"deliver": "slack", "deliver_extra": {}, "profile": "sec"}
+    )
 
     assert result.success
     default.send.assert_not_awaited()
@@ -76,32 +99,54 @@ async def test_delivery_fails_closed_instead_of_crossing_profiles(profile_homes)
     bot, and a default-bound route must not use a platform parked only on a secondary."""
     default, secondary = _target(), _target()
 
-    sec_without_slack = _webhook(_Runner({Platform.SLACK: default}, {"sec": {}}, profile_homes))
+    sec_without_slack = _webhook(
+        _Runner({Platform.SLACK: default}, {"sec": {}}, profile_homes)
+    )
     res = await sec_without_slack._deliver_cross_platform(
-        "slack", "hi", {"deliver": "slack", "deliver_extra": {"chat_id": "C1"}, "profile": "sec"})
+        "slack",
+        "hi",
+        {"deliver": "slack", "deliver_extra": {"chat_id": "C1"}, "profile": "sec"},
+    )
     assert not res.success and "not connected" in res.error
     default.send.assert_not_awaited()
 
-    default_without_slack = _webhook(_Runner({}, {"sec": {Platform.SLACK: secondary}}, profile_homes))
+    default_without_slack = _webhook(
+        _Runner({}, {"sec": {Platform.SLACK: secondary}}, profile_homes)
+    )
     res = await default_without_slack._deliver_cross_platform(
-        "slack", "hi", {"deliver": "slack", "deliver_extra": {"chat_id": "C1"}, "profile": None})
+        "slack",
+        "hi",
+        {"deliver": "slack", "deliver_extra": {"chat_id": "C1"}, "profile": None},
+    )
     assert not res.success and "not connected" in res.error
     secondary.send.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_github_comment_authenticates_with_routed_profile_token(profile_homes, monkeypatch):
+async def test_github_comment_authenticates_with_routed_profile_token(
+    profile_homes, monkeypatch
+):
     seen = {}
 
     def fake_run(cmd, **kw):
-        seen["GH_TOKEN"] = kw["env"].get("GH_TOKEN") if kw.get("env") is not None else os.environ.get("GH_TOKEN")
+        seen["GH_TOKEN"] = (
+            kw["env"].get("GH_TOKEN")
+            if kw.get("env") is not None
+            else os.environ.get("GH_TOKEN")
+        )
         return MagicMock(returncode=0, stderr="")
 
     monkeypatch.setattr("gateway.platforms.webhook.subprocess.run", fake_run)
     adapter = _webhook(_Runner({}, {"sec": {}}, profile_homes))
 
     res = await adapter._deliver_github_comment(
-        "body", {"deliver": "github_comment", "profile": "sec", "deliver_extra": {"repo": "o/r", "pr_number": "7"}})
+        "body",
+        {
+            "deliver": "github_comment",
+            "profile": "sec",
+            "deliver_extra": {"repo": "o/r", "pr_number": "7"},
+        },
+    )
 
     assert res.success
     assert seen["GH_TOKEN"] == "sec-token"
@@ -113,7 +158,10 @@ def test_api_server_profile_callback_resolves_routed_profile_adapter_fail_closed
     request = MagicMock()
     request.app = {}
 
-    api.gateway_runner = _Runner({Platform("google_chat"): default}, {"sec": {Platform("google_chat"): secondary}})
+    api.gateway_runner = _Runner(
+        {Platform("google_chat"): default},
+        {"sec": {Platform("google_chat"): secondary}},
+    )
     token = _api_request_profile.set("sec")
     try:
         assert api._get_platform_callback_adapter(request, "google_chat") is secondary
@@ -130,12 +178,27 @@ async def test_retained_destination_keeps_profile_and_freezes_its_home(profile_h
     from gateway.platforms.webhook_delivery import snapshot_destination
 
     default, secondary = _target(), _target()
-    adapter = _webhook(_Runner({Platform.SLACK: default}, {"sec": {Platform.SLACK: secondary}}, profile_homes))
-    delivery = snapshot_destination(adapter, {"deliver": "slack", "deliver_extra": {}, "profile": "sec"})
-    assert delivery == {"deliver": "slack", "deliver_extra": {"chat_id": "SEC-HOME"}, "profile": "sec"}
+    adapter = _webhook(
+        _Runner(
+            {Platform.SLACK: default},
+            {"sec": {Platform.SLACK: secondary}},
+            profile_homes,
+        )
+    )
+    delivery = snapshot_destination(
+        adapter, {"deliver": "slack", "deliver_extra": {}, "profile": "sec"}
+    )
+    assert delivery == {
+        "deliver": "slack",
+        "deliver_extra": {"chat_id": "SEC-HOME"},
+        "profile": "sec",
+    }
     adapter._delivery_info["retained"] = delivery
     from clawk_constants import get_clawk_home
-    (get_clawk_home() / "profiles" / "sec" / "config.yaml").write_text("platforms: {}\n")
+
+    (get_clawk_home() / "profiles" / "sec" / "config.yaml").write_text(
+        "platforms: {}\n"
+    )
     result = await adapter.send("retained", "answer")
     assert result.success
     assert secondary.send.await_args.args[0] == "SEC-HOME"
@@ -148,12 +211,21 @@ async def test_retained_destination_keeps_profile_and_freezes_its_home(profile_h
 def test_destination_missing_profile_home_does_not_borrow_default(profile_homes):
     from clawk_constants import get_clawk_home
     from clawk_state_runtime import RuntimeStoreError
-    from gateway.platforms.webhook_delivery import snapshot_destination, validate_destination
+    from gateway.platforms.webhook_delivery import (
+        snapshot_destination,
+        validate_destination,
+    )
 
-    (get_clawk_home() / "profiles" / "sec" / "config.yaml").write_text("platforms: {}\n")
+    (get_clawk_home() / "profiles" / "sec" / "config.yaml").write_text(
+        "platforms: {}\n"
+    )
     adapter = _webhook(_Runner({}, {}, profile_homes))
     with pytest.raises(RuntimeStoreError):
-        snapshot_destination(adapter, {"deliver": "slack", "deliver_extra": {}, "profile": "sec"})
+        snapshot_destination(
+            adapter, {"deliver": "slack", "deliver_extra": {}, "profile": "sec"}
+        )
     for profile in ([], {}, 1):
         with pytest.raises(RuntimeStoreError):
-            validate_destination({"deliver": "log", "deliver_extra": {}, "profile": profile})
+            validate_destination(
+                {"deliver": "log", "deliver_extra": {}, "profile": profile}
+            )

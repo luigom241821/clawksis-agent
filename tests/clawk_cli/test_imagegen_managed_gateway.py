@@ -27,8 +27,12 @@ def _quiet(monkeypatch):
 
     monkeypatch.setattr(tc, "_print_success", lambda *a, **k: None)
     monkeypatch.setattr(tc, "_print_info", lambda *a, **k: None, raising=False)
-    monkeypatch.setattr(tc, "_configure_imagegen_model_for_plugin", lambda *a, **k: None)
-    monkeypatch.setattr(tc, "_configure_videogen_model_for_plugin", lambda *a, **k: None)
+    monkeypatch.setattr(
+        tc, "_configure_imagegen_model_for_plugin", lambda *a, **k: None
+    )
+    monkeypatch.setattr(
+        tc, "_configure_videogen_model_for_plugin", lambda *a, **k: None
+    )
 
 
 def test_image_gen_selector_preserves_managed_selection(monkeypatch):
@@ -89,7 +93,9 @@ def _quiet_reconfigure(monkeypatch):
     monkeypatch.setattr(tcp, "_configure_imagegen_model", lambda *a, **k: None)
     # _configure_provider resolves the post-setup hook lazily from tools_config.
     monkeypatch.setattr(tc, "_run_post_setup", lambda *a, **k: None, raising=False)
-    monkeypatch.setattr(tools_config_post_setup, "_run_post_setup", lambda *a, **k: None, raising=False)
+    monkeypatch.setattr(
+        tools_config_post_setup, "_run_post_setup", lambda *a, **k: None, raising=False
+    )
     # Managed rows gate on live Portal auth — stub it green.
     import clawk_cli.nous_subscription as ns
 

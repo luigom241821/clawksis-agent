@@ -1,4 +1,5 @@
 """Empty-response fallback hop refunds its API call (#77305)."""
+
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -18,13 +19,28 @@ def _agent():
 
 
 def _recover(agent):
-    msg = SimpleNamespace(reasoning=None, reasoning_content=None, reasoning_details=None)
-    with patch.object(ter, "_retry_empty", return_value=(None, None, False)), \
-            patch("agent.conversation_loop._sync_failover_system_message", return_value="sys"):
+    msg = SimpleNamespace(
+        reasoning=None, reasoning_content=None, reasoning_details=None
+    )
+    with (
+        patch.object(ter, "_retry_empty", return_value=(None, None, False)),
+        patch(
+            "agent.conversation_loop._sync_failover_system_message", return_value="sys"
+        ),
+    ):
         return ter.recover_empty_response(
-            agent, msg, None, "stop", final_response="", messages=[{"role": "user", "content": "hi"}],
-            api_messages=[], conversation_history=[], active_system_prompt="sys", api_call_count=5,
-            turn_exit_reason=None, preflight_compression_blocked=False,
+            agent,
+            msg,
+            None,
+            "stop",
+            final_response="",
+            messages=[{"role": "user", "content": "hi"}],
+            api_messages=[],
+            conversation_history=[],
+            active_system_prompt="sys",
+            api_call_count=5,
+            turn_exit_reason=None,
+            preflight_compression_blocked=False,
         )
 
 

@@ -32,7 +32,10 @@ def clawk_home(tmp_path, monkeypatch):
 
 @pytest.fixture()
 def server(clawk_home):
-    with patch.dict("sys.modules", {"clawk_cli.env_loader": MagicMock(), "clawk_cli.banner": MagicMock()}):
+    with patch.dict(
+        "sys.modules",
+        {"clawk_cli.env_loader": MagicMock(), "clawk_cli.banner": MagicMock()},
+    ):
         mod = importlib.import_module("tui_gateway.server")
         yield mod
         mod._sessions.clear()
@@ -41,8 +44,16 @@ def server(clawk_home):
 @pytest.fixture()
 def session(server):
     sid, key = "sid-hb-test", "tui-hb-session-1"
-    s = {"session_key": key, "history": [], "history_lock": threading.Lock(), "history_version": 0,
-         "running": False, "attached_images": [], "cols": 120, "agent": MagicMock()}
+    s = {
+        "session_key": key,
+        "history": [],
+        "history_lock": threading.Lock(),
+        "history_version": 0,
+        "running": False,
+        "attached_images": [],
+        "cols": 120,
+        "agent": MagicMock(),
+    }
     server._sessions[sid] = s
     return sid, key, s
 
@@ -58,7 +69,9 @@ def _arm_due(key: str):
 
 
 def _submits(server, submit):
-    return patch.object(server, "_run_prompt_submit", submit), patch.object(server, "_emit")
+    return patch.object(server, "_run_prompt_submit", submit), patch.object(
+        server, "_emit"
+    )
 
 
 def test_notification_poller_fires_due_heartbeat_when_idle(server, session):
@@ -77,7 +90,9 @@ def test_notification_poller_fires_due_heartbeat_when_idle(server, session):
     stop = threading.Event()
     p_submit, p_emit = _submits(server, submit)
     with p_submit, p_emit:
-        t = threading.Thread(target=server._notification_poller_loop, args=(stop, sid, s), daemon=True)
+        t = threading.Thread(
+            target=server._notification_poller_loop, args=(stop, sid, s), daemon=True
+        )
         t.start()
         deadline = time.monotonic() + 8
         while not dispatched and time.monotonic() < deadline:
@@ -92,7 +107,9 @@ def test_notification_poller_fires_due_heartbeat_when_idle(server, session):
     assert load_heartbeat(key).fire_count == 1 and not load_heartbeat(key).is_due()
 
 
-def test_desktop_poller_leaves_gateway_owned_heartbeat_for_gateway(server, session, clawk_home):
+def test_desktop_poller_leaves_gateway_owned_heartbeat_for_gateway(
+    server, session, clawk_home
+):
     """A Desktop viewer must not consume a messaging session's routed heartbeat, but ownership follows the
     gateway's live routing index, not the row's immutable ``source``: once /reset archives the row the gateway
     never registers a watch for it again, so the Desktop viewer must fire it (else nobody does)."""
@@ -103,7 +120,9 @@ def test_desktop_poller_leaves_gateway_owned_heartbeat_for_gateway(server, sessi
     sid, _, s = session
     s["source"] = "desktop"
     store = SessionStore(clawk_home / "sessions", GatewayConfig())
-    store._db = server._get_db()  # the routing index lives in the store the Desktop poller reads
+    store._db = (
+        server._get_db()
+    )  # the routing index lives in the store the Desktop poller reads
     src = SessionSource(platform=Platform.TELEGRAM, chat_id="42")
     archived_key = store.get_or_create_session(src).session_id
     current_key = store.get_or_create_session(src, force_new=True).session_id
@@ -136,11 +155,15 @@ def test_heartbeat_tick_defers_when_busy_or_not_due(server, session, running, du
     from clawk_cli.heartbeat import load_heartbeat
 
     assert s["running"] is running  # a busy session is never released by the poller
-    assert load_heartbeat(key).fire_count == 0  # tick not consumed — still due when the session frees up
+    assert (
+        load_heartbeat(key).fire_count == 0
+    )  # tick not consumed — still due when the session frees up
 
 
 @pytest.mark.parametrize("failure", ["refused", "raised"])
-def test_heartbeat_dispatch_that_never_starts_a_turn_stays_due(server, session, failure):
+def test_heartbeat_dispatch_that_never_starts_a_turn_stays_due(
+    server, session, failure
+):
     """A refused/failed submit must release the claim AND rewind the persisted fire, otherwise the tick is
     silently consumed (fire_count advanced, nothing ran) — the Desktop-side follow-up bug in #104011."""
     sid, key, s = session
@@ -150,7 +173,9 @@ def test_heartbeat_dispatch_that_never_starts_a_turn_stays_due(server, session, 
         if failure == "raised":
             raise RuntimeError("transport down")
         with s["history_lock"]:
-            s["running"] = False  # _admit_prompt_turn refusal releases itself and returns False
+            s["running"] = (
+                False  # _admit_prompt_turn refusal releases itself and returns False
+            )
         return False
 
     p_submit, p_emit = _submits(server, submit)
@@ -171,4 +196,6 @@ def test_abandon_fire_never_overwrites_a_concurrent_pause(clawk_home):
     assert driver.due_prompt() is not None
     HeartbeatManager(key).pause()  # lands between the claim and the failed dispatch
     assert driver.abandon_fire() is False
-    assert load_heartbeat(key).status == "paused" and load_heartbeat(key).fire_count == 1
+    assert (
+        load_heartbeat(key).status == "paused" and load_heartbeat(key).fire_count == 1
+    )

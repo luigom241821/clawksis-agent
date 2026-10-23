@@ -19,6 +19,7 @@ These tests use a synthetic Python script that mirrors the cli.py signal
 handler shape so we can exercise the exit-path contract without booting the
 full CLI (which needs a real provider config).
 """
+
 from __future__ import annotations
 
 import os
@@ -29,6 +30,7 @@ import textwrap
 import time
 
 import pytest
+
 
 def _synthetic_worker_script() -> str:
     """A standalone script that mirrors cli.py's single-query SIGTERM handler.
@@ -76,6 +78,7 @@ def _synthetic_worker_script() -> str:
         """
     )
 
+
 def _is_alive_like_dispatcher(pid: int) -> bool:
     """Mirrors clawk_cli/kanban_db.py:_pid_alive on Linux.
 
@@ -119,6 +122,7 @@ def _is_alive_like_dispatcher(pid: int) -> bool:
             pass
     return True
 
+
 def _spawn_synthetic(env_overrides: dict) -> subprocess.Popen:
     env = dict(os.environ)
     env.update(env_overrides)
@@ -139,6 +143,7 @@ def _spawn_synthetic(env_overrides: dict) -> subprocess.Popen:
     proc.kill()
     raise RuntimeError("synthetic worker never signalled READY")
 
+
 def _cleanup(proc: subprocess.Popen) -> None:
     try:
         os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
@@ -148,6 +153,7 @@ def _cleanup(proc: subprocess.Popen) -> None:
         proc.communicate(timeout=2)
     except subprocess.TimeoutExpired:
         proc.kill()
+
 
 @pytest.mark.skipif(
     sys.platform == "win32",

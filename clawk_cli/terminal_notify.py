@@ -22,7 +22,10 @@ _C0_AND_DEL = re.compile(r"[\x00-\x1f\x7f]")
 _WARP_PROTOCOL_VERSION = 1
 # Last Warp release per channel that set WARP_CLI_AGENT_PROTOCOL_VERSION but could not render
 # structured payloads (Warp's should-use-structured.sh). Bash compares lexicographically; so do we.
-_WARP_LAST_BROKEN = {"stable": "v0.2026.03.25.08.24.stable_05", "preview": "v0.2026.03.25.08.24.preview_05"}
+_WARP_LAST_BROKEN = {
+    "stable": "v0.2026.03.25.08.24.stable_05",
+    "preview": "v0.2026.03.25.08.24.preview_05",
+}
 
 
 def write_tty(seq: str) -> None:
@@ -49,9 +52,16 @@ def warp_supported(env=None) -> bool:
     """True when running in a Warp build that can render OSC 777 agent payloads."""
     env = os.environ if env is None else env
     client = env.get("WARP_CLIENT_VERSION", "")
-    if env.get("TERM_PROGRAM") != "WarpTerminal" or not env.get("WARP_CLI_AGENT_PROTOCOL_VERSION") or not client:
+    if (
+        env.get("TERM_PROGRAM") != "WarpTerminal"
+        or not env.get("WARP_CLI_AGENT_PROTOCOL_VERSION")
+        or not client
+    ):
         return False
-    return not any(channel in client and client <= last_broken for channel, last_broken in _WARP_LAST_BROKEN.items())
+    return not any(
+        channel in client and client <= last_broken
+        for channel, last_broken in _WARP_LAST_BROKEN.items()
+    )
 
 
 def warp_osc777(event: str, detail: str, session_id: str = "") -> str:
@@ -61,13 +71,21 @@ def warp_osc777(event: str, detail: str, session_id: str = "") -> str:
     except ValueError:
         advertised = 1
     cwd = os.getcwd()
-    payload = {"v": min(advertised, _WARP_PROTOCOL_VERSION), "agent": "clawk", "event": event,
-               "session_id": session_id, "cwd": cwd, "project": os.path.basename(cwd)}
+    payload = {
+        "v": min(advertised, _WARP_PROTOCOL_VERSION),
+        "agent": "clawk",
+        "event": event,
+        "session_id": session_id,
+        "cwd": cwd,
+        "project": os.path.basename(cwd),
+    }
     payload["summary" if event == "permission_request" else "response"] = detail[:200]
     return f"\x1b]777;notify;warp://cli-agent;{json.dumps(payload, separators=(',', ':'))}\x07"
 
 
-def notification_sequence(context: str, *, prompt: bool, session_id: str = "", detail: str = "") -> str:
+def notification_sequence(
+    context: str, *, prompt: bool, session_id: str = "", detail: str = ""
+) -> str:
     """OSC 9 (plus Warp OSC 777 when supported) for a blocking prompt or turn end."""
     seq = osc9(f"Clawksis: {context}")
     if warp_supported():

@@ -31,23 +31,12 @@ def test_route_url_normalization_preserves_path_slash_before_query():
     ) != normalize_route_base_url("https://example.com/v1?tenant=large")
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 def _make_direct_start_agent(
     cfg: dict, *, model: str, provider: str, base_url: str
 ) -> AIAgent:
     with (
-        patch("clawk_cli.config.load_config", return_value=cfg), patch("clawk_cli.config.load_config_readonly", return_value=cfg),
+        patch("clawk_cli.config.load_config", return_value=cfg),
+        patch("clawk_cli.config.load_config_readonly", return_value=cfg),
         patch("model_tools.get_tool_definitions", return_value=[]),
         patch("model_tools.check_toolset_requirements", return_value={}),
         patch("agent.process_bootstrap.OpenAI"),
@@ -107,7 +96,12 @@ def test_switch_model_clears_previous_config_context_length(mock_ctx_len):
     assert agent.context_compressor.context_length == 32_768  # From config override
 
     # Switch model
-    agent.switch_model("new-model", "openrouter", api_key="sk-new", base_url="https://openrouter.ai/api/v1")
+    agent.switch_model(
+        "new-model",
+        "openrouter",
+        api_key="sk-new",
+        base_url="https://openrouter.ai/api/v1",
+    )
 
     # Verify the old config override is not passed to the new model.
     mock_ctx_len.assert_called_once()
@@ -117,8 +111,6 @@ def test_switch_model_clears_previous_config_context_length(mock_ctx_len):
     # Verify compressor was updated from the newly resolved model metadata.
     assert agent.context_compressor.model == "new-model"
     assert agent.context_compressor.context_length == 131_072
-
-
 
 
 def test_switch_model_reapplies_checked_auxiliary_compression_limit():
@@ -165,17 +157,30 @@ def test_switch_model_reapplies_checked_auxiliary_compression_limit():
     assert agent._compression_feasibility_checked is True
     # A same-runtime window correction (overflow-reported limit) keeps the aux ceiling.
     agent.context_compressor.update_model(
-        model="larger-main-model", context_length=1_000_000, base_url="https://openrouter.ai/api/v1",
-        api_key="sk-new", provider="openrouter", api_mode="chat_completions",
+        model="larger-main-model",
+        context_length=1_000_000,
+        base_url="https://openrouter.ai/api/v1",
+        api_key="sk-new",
+        provider="openrouter",
+        api_mode="chat_completions",
     )
     assert agent.context_compressor.threshold_tokens == 80_000
     # Switching to a runtime whose aux fits restores the main-model trigger (no one-way ratchet).
     with (
-        patch("agent.model_metadata.get_model_context_length", side_effect=[400_000, 400_000]),
-        patch("agent.auxiliary_client.get_text_auxiliary_client", return_value=(aux_client, "auxiliary-model")),
+        patch(
+            "agent.model_metadata.get_model_context_length",
+            side_effect=[400_000, 400_000],
+        ),
+        patch(
+            "agent.auxiliary_client.get_text_auxiliary_client",
+            return_value=(aux_client, "auxiliary-model"),
+        ),
     ):
         agent.switch_model(
-            "other-main-model", "openrouter", api_key="sk-new", base_url="https://openrouter.ai/api/v1",
+            "other-main-model",
+            "openrouter",
+            api_key="sk-new",
+            base_url="https://openrouter.ai/api/v1",
         )
     assert agent.context_compressor.threshold_tokens == 300_000
 
@@ -261,68 +266,6 @@ def test_direct_start_preserves_context_for_normalized_default_model_alias():
     assert agent.context_compressor.context_length == 272_000
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def test_lmstudio_switch_uses_destination_context_and_verified_runtime(monkeypatch):
     agent = _make_agent_with_compressor(config_context_length=32_768)
     calls = []
@@ -345,11 +288,17 @@ def test_lmstudio_switch_uses_destination_context_and_verified_runtime(monkeypat
     monkeypatch.setattr("clawk_cli.config.load_config", fake_load_config)
 
     monkeypatch.setattr("clawk_cli.config.load_config_readonly", fake_load_config)
-    monkeypatch.setattr("clawk_cli.config.get_compatible_custom_providers", fake_compatible)
-    monkeypatch.setattr("clawk_cli.config.get_custom_provider_context_length", fake_provider_context)
+    monkeypatch.setattr(
+        "clawk_cli.config.get_compatible_custom_providers", fake_compatible
+    )
+    monkeypatch.setattr(
+        "clawk_cli.config.get_custom_provider_context_length", fake_provider_context
+    )
     monkeypatch.setattr(AIAgent, "_ensure_lmstudio_runtime_loaded", fake_lmstudio_load)
 
-    with patch("agent.model_metadata.get_model_context_length", return_value=100_000) as mock_ctx_len:
+    with patch(
+        "agent.model_metadata.get_model_context_length", return_value=100_000
+    ) as mock_ctx_len:
         agent.switch_model(
             "lmstudio/new-model",
             "lmstudio",

@@ -80,7 +80,10 @@ class TestClarifyBatchPanel:
         cli._clarify_batch_enter(state)
 
         thread.join(timeout=2)
-        assert result["value"] == {"answers": {"q0": "red", "q1": "large"}, "outcome": "submitted"}
+        assert result["value"] == {
+            "answers": {"q0": "red", "q1": "large"},
+            "outcome": "submitted",
+        }
         assert cli._clarify_state is None
 
     def test_any_order_answering_via_tab_cycle(self):
@@ -110,7 +113,8 @@ class TestClarifyBatchPanel:
 
         thread.join(timeout=2)
         assert result["value"] == {
-            "answers": {"q0": "b", "q1": "c", "q2": "e"}, "outcome": "submitted"
+            "answers": {"q0": "b", "q1": "c", "q2": "e"},
+            "outcome": "submitted",
         }
 
     def test_reanswer_overwrites_before_completion(self):
@@ -138,7 +142,8 @@ class TestClarifyBatchPanel:
 
         thread.join(timeout=2)
         assert result["value"] == {
-            "answers": {"q0": "thorough", "q1": "narrow"}, "outcome": "submitted"
+            "answers": {"q0": "thorough", "q1": "narrow"},
+            "outcome": "submitted",
         }
 
     def test_timeout_returns_partials_with_timed_out_outcome(self):
@@ -147,9 +152,7 @@ class TestClarifyBatchPanel:
             _q(0, "Answered?", ["yes", "no"]),
             _q(1, "Never answered?", ["x", "y"]),
         ]
-        with patch(
-            "tools.clarify_gateway.resolve_clarify_timeout", return_value=1
-        ):
+        with patch("tools.clarify_gateway.resolve_clarify_timeout", return_value=1):
             thread, result = _start_batch(cli, questions)
             state = cli._clarify_state
             cli._clarify_batch_enter(state)  # lock q0 only
@@ -196,7 +199,8 @@ class TestClarifyBatchPanel:
 
         thread.join(timeout=2)
         assert result["value"] == {
-            "answers": {"q0": "custom words", "q1": "a"}, "outcome": "submitted"
+            "answers": {"q0": "custom words", "q1": "a"},
+            "outcome": "submitted",
         }
 
     def test_locked_question_persists_scrollback_summary(self):
@@ -229,54 +233,90 @@ class TestClarifyBatchPanel:
         payload = {
             "op_id": "op",
             "seq": 1,
-            "targets": [{
-                "name": "asana",
-                "state": "pending",
-                "instructions": "Use an Asana app.",
-                "required_env": [
-                    {"name": "CLIENT_ID", "prompt": "Client ID", "required": True, "default": "default-id"},
-                    {"name": "CLIENT_SECRET", "prompt": "Client secret", "required": True, "secret": True},
-                ],
-            }],
+            "targets": [
+                {
+                    "name": "asana",
+                    "state": "pending",
+                    "instructions": "Use an Asana app.",
+                    "required_env": [
+                        {
+                            "name": "CLIENT_ID",
+                            "prompt": "Client ID",
+                            "required": True,
+                            "default": "default-id",
+                        },
+                        {
+                            "name": "CLIENT_SECRET",
+                            "prompt": "Client secret",
+                            "required": True,
+                            "secret": True,
+                        },
+                    ],
+                }
+            ],
         }
         cli._connection_callback(payload)
         state = cli._connection_state
         state["drafts"]["asana"]["CLIENT_SECRET"] = "never-render-this"
         assert "never-render-this" not in "\n".join(cli._connection_render_lines())
-        assert f"Client secret*: {t('cli.connect.secret_set')}" in cli._connection_render_lines()
+        assert (
+            f"Client secret*: {t('cli.connect.secret_set')}"
+            in cli._connection_render_lines()
+        )
         cli._connection_answer(approve=True)
         assert sent.wait(2)
 
         # The answer goes to the gateway's operation, not an in-process one.
-        assert cli.agent.connection_respond.call_args.args == ("op", {"targets": [{
-            "name": "asana",
-            "status": "approved",
-            "env": {"CLIENT_ID": "default-id", "CLIENT_SECRET": "never-render-this"},
-        }]})
+        assert cli.agent.connection_respond.call_args.args == (
+            "op",
+            {
+                "targets": [
+                    {
+                        "name": "asana",
+                        "status": "approved",
+                        "env": {
+                            "CLIENT_ID": "default-id",
+                            "CLIENT_SECRET": "never-render-this",
+                        },
+                    }
+                ]
+            },
+        )
         # The gateway's settling connection.update closes the card.
-        cli._connection_on_change({"op_id": "op", "seq": 2, "settled": True, "targets": []})
+        cli._connection_on_change(
+            {"op_id": "op", "seq": 2, "settled": True, "targets": []}
+        )
         assert cli._connection_state is None
 
-
-    def test_connection_card_opens_on_the_unfinished_app_and_a_reopen_keeps_its_draft(self):
+    def test_connection_card_opens_on_the_unfinished_app_and_a_reopen_keeps_its_draft(
+        self,
+    ):
         cli = _make_cli_stub()
         cli._connection_state = None
         cli._capture_modal_input_snapshot = MagicMock()
         cli._restore_modal_input_snapshot = MagicMock()
         cli._ring_bell = MagicMock()
         form = [{"name": "TOKEN", "prompt": "Token", "required": True}]
-        payload = {"op_id": "op", "seq": 4, "targets": [
-            {"name": "linear", "state": "connected"},
-            {"name": "asana", "state": "pending", "required_env": form},
-        ]}
+        payload = {
+            "op_id": "op",
+            "seq": 4,
+            "targets": [
+                {"name": "linear", "state": "connected"},
+                {"name": "asana", "state": "pending", "required_env": form},
+            ],
+        }
         cli._connection_callback(payload)
         assert cli._connection_state["target"]["name"] == "asana"
         cli._connection_state["drafts"]["asana"]["TOKEN"] = "typed-not-sent"
-        cli._connection_callback(dict(payload))  # a replay-gap recovery re-sends the same snapshot
+        cli._connection_callback(
+            dict(payload)
+        )  # a replay-gap recovery re-sends the same snapshot
         assert cli._connection_state["target"]["name"] == "asana"
         assert cli._connection_state["drafts"]["asana"]["TOKEN"] == "typed-not-sent"
         cli._connection_sync_input_buffer = MagicMock()
-        cli._connection_callback({**payload, "seq": 5})  # ...or a newer one, the form still open
+        cli._connection_callback(
+            {**payload, "seq": 5}
+        )  # ...or a newer one, the form still open
         assert cli._connection_state["phase"] == "form"
         assert cli._connection_state["drafts"]["asana"]["TOKEN"] == "typed-not-sent"
         cli._connection_sync_input_buffer.assert_not_called()
@@ -384,8 +424,10 @@ class TestClarifyBatchNavigation:
         cli._clarify_batch_set_active(state, 1)
         cli._clarify_batch_enter(state)
         thread.join(timeout=2)
-        assert result["value"] == {"answers": {"q0": "red", "q1": "small"}, "outcome": "submitted"}
-
+        assert result["value"] == {
+            "answers": {"q0": "red", "q1": "small"},
+            "outcome": "submitted",
+        }
 
 
 class TestClarifyBellOnPrompt:
@@ -398,11 +440,14 @@ class TestClarifyBellOnPrompt:
         cli = _make_cli_stub()
         cli.bell_on_prompt = bell_on_prompt
         out = io.StringIO()
-        with patch("cli.sys.stdout", out), patch(
-            "tools.clarify_gateway.resolve_clarify_timeout", return_value=60
+        with (
+            patch("cli.sys.stdout", out),
+            patch("tools.clarify_gateway.resolve_clarify_timeout", return_value=60),
         ):
             thread = threading.Thread(
-                target=cli._clarify_callback, args=([_q(0, "Color?", ["red", "blue"])],), daemon=True
+                target=cli._clarify_callback,
+                args=([_q(0, "Color?", ["red", "blue"])],),
+                daemon=True,
             )
             thread.start()
             deadline = time.time() + 2

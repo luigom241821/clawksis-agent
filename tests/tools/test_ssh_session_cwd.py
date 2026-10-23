@@ -30,7 +30,12 @@ class RecordingEnvironment:
 def isolated_session_state(monkeypatch):
     monkeypatch.setattr(clawk_constants, "get_subprocess_home", lambda: HOST_HOME)
     monkeypatch.setattr(clawk_constants, "get_real_home", lambda: "/srv/os-user")
-    for name in ("_session_cwd", "_task_env_overrides", "_active_environments", "_container_aliases"):
+    for name in (
+        "_session_cwd",
+        "_task_env_overrides",
+        "_active_environments",
+        "_container_aliases",
+    ):
         monkeypatch.setattr(terminal_tool, name, {})
 
 
@@ -70,16 +75,22 @@ def test_recorded_session_cwd_is_coerced_without_changing_explicit_remote_workdi
     task_id = "session-example"
     terminal_tool.record_session_cwd(task_id, raw_cwd)
 
-    assert terminal_tool._resolve_command_cwd(
-        workdir=None,
-        default_cwd="~/default",
-        session_key=task_id,
-        env_type=env_type,
-    ) == backend_cwd
+    assert (
+        terminal_tool._resolve_command_cwd(
+            workdir=None,
+            default_cwd="~/default",
+            session_key=task_id,
+            env_type=env_type,
+        )
+        == backend_cwd
+    )
     assert terminal_tool.get_session_cwd(task_id) == raw_cwd
-    assert terminal_tool._resolve_command_cwd(
-        workdir="/remote/explicit",
-        default_cwd="~/default",
-        session_key=task_id,
-        env_type=env_type,
-    ) == "/remote/explicit"
+    assert (
+        terminal_tool._resolve_command_cwd(
+            workdir="/remote/explicit",
+            default_cwd="~/default",
+            session_key=task_id,
+            env_type=env_type,
+        )
+        == "/remote/explicit"
+    )

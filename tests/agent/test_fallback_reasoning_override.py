@@ -51,7 +51,6 @@ class TestFallbackReasoningOverride:
         result = resolve_per_model_reasoning_effort("gpt-5", overrides)
         assert result is None  # caller falls back to global
 
-
     def test_fallback_recovery_restores_primary_reasoning(self):
         """After fallback + restore_primary_runtime, reasoning_config returns to primary's value.
 

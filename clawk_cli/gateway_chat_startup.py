@@ -1,4 +1,5 @@
 """Frontend startup checks shared by classic chat and top-level one-shot."""
+
 from __future__ import annotations
 
 import os
@@ -6,6 +7,7 @@ import os
 
 def ensure_launch_provider(args) -> bool:
     from clawk_cli.gateway_chat import bypass_launch
+
     if bypass_launch(args):
         # The owner freezes code defaults for this launch; the profile is the thing under
         # investigation, so the client must not probe or repair it either.

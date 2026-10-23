@@ -15,11 +15,15 @@ import re
 from types import SimpleNamespace
 from typing import Any, Iterable
 
-from openai.types.chat.chat_completion_message_tool_call import ChatCompletionMessageToolCall, Function
+from openai.types.chat.chat_completion_message_tool_call import (
+    ChatCompletionMessageToolCall,
+    Function,
+)
 
 TOOL_CALL_BLOCK_RE = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.DOTALL)
 TOOL_CALL_JSON_RE = re.compile(
-    r"\{\s*\"id\"\s*:\s*\"[^\"]+\"\s*,\s*\"type\"\s*:\s*\"function\"\s*,\s*\"function\"\s*:\s*\{.*?\}\s*\}", re.DOTALL
+    r"\{\s*\"id\"\s*:\s*\"[^\"]+\"\s*,\s*\"type\"\s*:\s*\"function\"\s*,\s*\"function\"\s*:\s*\{.*?\}\s*\}",
+    re.DOTALL,
 )
 
 TOOL_CALL_CONTRACT = (
@@ -55,21 +59,33 @@ def completion_to_stream_chunks(completion: SimpleNamespace) -> StreamChunks:
     if message.tool_calls:
         tool_call_deltas = [
             SimpleNamespace(
-                index=index, id=getattr(tool_call, "id", None), type=getattr(tool_call, "type", "function"),
-                function=SimpleNamespace(name=getattr(tool_call.function, "name", None),
-                                         arguments=getattr(tool_call.function, "arguments", None)),
+                index=index,
+                id=getattr(tool_call, "id", None),
+                type=getattr(tool_call, "type", "function"),
+                function=SimpleNamespace(
+                    name=getattr(tool_call.function, "name", None),
+                    arguments=getattr(tool_call.function, "arguments", None),
+                ),
             )
             for index, tool_call in enumerate(message.tool_calls)
         ]
     delta = SimpleNamespace(
-        role="assistant", content=message.content or None, tool_calls=tool_call_deltas,
-        reasoning_content=getattr(message, "reasoning_content", None), reasoning=getattr(message, "reasoning", None),
+        role="assistant",
+        content=message.content or None,
+        tool_calls=tool_call_deltas,
+        reasoning_content=getattr(message, "reasoning_content", None),
+        reasoning=getattr(message, "reasoning", None),
     )
     data_chunk = SimpleNamespace(
-        choices=[SimpleNamespace(index=0, delta=delta, finish_reason=choice.finish_reason)],
-        model=completion.model, usage=None,
+        choices=[
+            SimpleNamespace(index=0, delta=delta, finish_reason=choice.finish_reason)
+        ],
+        model=completion.model,
+        usage=None,
     )
-    usage_chunk = SimpleNamespace(choices=[], model=completion.model, usage=completion.usage)
+    usage_chunk = SimpleNamespace(
+        choices=[], model=completion.model, usage=completion.usage
+    )
     chunks = StreamChunks([data_chunk, usage_chunk])
     for key, value in vars(completion).items():
         if key not in ("choices", "usage", "model"):
@@ -77,10 +93,15 @@ def completion_to_stream_chunks(completion: SimpleNamespace) -> StreamChunks:
     return chunks
 
 
-def build_openai_tool_call(*, call_id: str, name: str, arguments: str) -> ChatCompletionMessageToolCall:
+def build_openai_tool_call(
+    *, call_id: str, name: str, arguments: str
+) -> ChatCompletionMessageToolCall:
     """Build an OpenAI-compatible tool-call object for downstream handling."""
     return ChatCompletionMessageToolCall(
-        id=call_id, call_id=call_id, response_item_id=None, type="function",
+        id=call_id,
+        call_id=call_id,
+        response_item_id=None,
+        type="function",
         function=Function(name=name, arguments=arguments),
     )
 
@@ -93,7 +114,9 @@ def _named_function(container: Any) -> tuple[dict[str, Any], str] | None:
 
 
 def tool_specs_from_openai_tools(
-    tools: list[dict[str, Any]] | None, *, allowlist: Iterable[str] | None = None,
+    tools: list[dict[str, Any]] | None,
+    *,
+    allowlist: Iterable[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Flatten OpenAI ``tools`` into ``{name, description, parameters}`` specs; malformed entries are skipped."""
     allowed = {str(n).strip() for n in allowlist} if allowlist is not None else None
@@ -103,24 +126,39 @@ def tool_specs_from_openai_tools(
         if named is None or (allowed is not None and named[1] not in allowed):
             continue
         fn, name = named
-        specs.append({"name": name, "description": fn.get("description", ""), "parameters": fn.get("parameters", {})})
+        specs.append(
+            {
+                "name": name,
+                "description": fn.get("description", ""),
+                "parameters": fn.get("parameters", {}),
+            }
+        )
     return specs
 
 
 def render_tool_bridge_sections(
-    tools: list[dict[str, Any]] | None, tool_choice: Any = None, *, allowlist: Iterable[str] | None = None,
+    tools: list[dict[str, Any]] | None,
+    tool_choice: Any = None,
+    *,
+    allowlist: Iterable[str] | None = None,
 ) -> list[str]:
     """Prompt sections carrying the forwarded tool schemas + choice hint (empty list when neither applies)."""
     specs = tool_specs_from_openai_tools(tools, allowlist=allowlist)
     sections: list[str] = []
     if specs:
-        sections.append(TOOL_CALL_CONTRACT + "\n" + json.dumps(specs, ensure_ascii=False))
+        sections.append(
+            TOOL_CALL_CONTRACT + "\n" + json.dumps(specs, ensure_ascii=False)
+        )
     if tool_choice is not None:
-        sections.append(f"Tool choice hint: {json.dumps(tool_choice, ensure_ascii=False)}")
+        sections.append(
+            f"Tool choice hint: {json.dumps(tool_choice, ensure_ascii=False)}"
+        )
     return sections
 
 
-def _parse_tool_call(raw_json: str, ordinal: int) -> ChatCompletionMessageToolCall | None:
+def _parse_tool_call(
+    raw_json: str, ordinal: int
+) -> ChatCompletionMessageToolCall | None:
     """One ``<tool_call>`` JSON body → tool call, or None when malformed. Missing id → ``acp_call_<ordinal>``."""
     try:
         obj = json.loads(raw_json)
@@ -139,7 +177,9 @@ def _parse_tool_call(raw_json: str, ordinal: int) -> ChatCompletionMessageToolCa
     return build_openai_tool_call(call_id=call_id, name=fn_name, arguments=fn_args)
 
 
-def extract_tool_calls_from_text(text: str) -> tuple[list[ChatCompletionMessageToolCall], str]:
+def extract_tool_calls_from_text(
+    text: str,
+) -> tuple[list[ChatCompletionMessageToolCall], str]:
     """Pull ``<tool_call>`` blocks out of an ACP response → ``(tool_calls, cleaned_text)`` with the consumed blocks
     removed so the assistant message doesn't show raw JSON. Bare-JSON fallback runs only when no XML block parsed."""
     if not isinstance(text, str) or not text.strip():

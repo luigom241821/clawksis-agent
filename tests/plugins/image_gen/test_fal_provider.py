@@ -23,8 +23,6 @@ from unittest.mock import MagicMock
 
 
 class TestFalImageGenProviderSurface:
-
-
     def test_default_model_matches_legacy(self):
         from plugins.image_gen.fal import FalImageGenProvider
         from tools.image_generation_catalog import DEFAULT_MODEL
@@ -44,9 +42,6 @@ class TestFalImageGenProviderSurface:
         for entry in models:
             for field in ("id", "display", "speed", "strengths", "price"):
                 assert field in entry
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -71,8 +66,9 @@ class TestFalImageGenProviderGenerate:
             return json.dumps({"success": True, "image": "https://fake/image.png"})
 
         monkeypatch.setattr(image_tool, "image_generate_tool", fake_image_generate_tool)
-        monkeypatch.setattr(image_tool, "_resolve_fal_model",
-                            lambda: ("fal-ai/flux-2/klein/9b", {}))
+        monkeypatch.setattr(
+            image_tool, "_resolve_fal_model", lambda: ("fal-ai/flux-2/klein/9b", {})
+        )
 
         result = FalImageGenProvider().generate(
             "a serene mountain landscape",

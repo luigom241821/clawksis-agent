@@ -20,14 +20,13 @@ from agent.turn_context import TurnContext, build_turn_context
 from run_agent import AIAgent
 from tests.agent.test_turn_context import _FakeAgent, _build
 
+
 class _FakeUncompressedAgent(_FakeAgent):
     """Agent stub with compression disabled, bound to the REAL warn methods."""
 
     # Production methods under test — bound from AIAgent so the dedup key
     # handling and message text cannot silently drift from what ships.
-    _warn_uncompressed_context_overflow = (
-        AIAgent._warn_uncompressed_context_overflow
-    )
+    _warn_uncompressed_context_overflow = AIAgent._warn_uncompressed_context_overflow
     _clear_context_overflow_warn = AIAgent._clear_context_overflow_warn
 
     def __init__(self, model="deepseek-v4-flash", context_length=10_000):
@@ -43,6 +42,7 @@ class _FakeUncompressedAgent(_FakeAgent):
             last_prompt_tokens=-1,
         )
 
+
 def _oversized_history(n_turns: int = 10) -> list:
     large_turn = "Large context content " * 500  # ~2,500 tokens each
     history = []
@@ -50,6 +50,7 @@ def _oversized_history(n_turns: int = 10) -> list:
         history.append({"role": "user", "content": f"Turn {i}: {large_turn}"})
         history.append({"role": "assistant", "content": f"Reply {i}: {large_turn}"})
     return history
+
 
 def test_production_warn_emits_once_and_dedups():
     """The real method warns once, then dedups identical overflows."""
@@ -64,6 +65,7 @@ def test_production_warn_emits_once_and_dedups():
     assert "compression.enabled: false" in msg
     assert "10,000 tokens" in msg
 
+
 def test_clear_rearms_the_warning():
     """After _clear_context_overflow_warn (session back under the window),
     a later re-overflow warns again."""
@@ -76,6 +78,7 @@ def test_clear_rearms_the_warning():
 
     assert agent._emit_warning.call_count == 2
 
+
 def test_uncompressed_session_within_limits_emits_no_warning():
     agent = _FakeUncompressedAgent(context_length=128_000)
     agent._emit_warning = MagicMock()
@@ -86,6 +89,7 @@ def test_uncompressed_session_within_limits_emits_no_warning():
     tctx = _build(agent, conversation_history=history)
     assert isinstance(tctx, TurnContext)
     agent._emit_warning.assert_not_called()
+
 
 def test_preflight_rearm_clears_dedup_when_back_under_window():
     """The turn-context preflight re-arms the dedup once the session fits
@@ -108,6 +112,7 @@ def test_preflight_rearm_clears_dedup_when_back_under_window():
     agent._warn_uncompressed_context_overflow(200_000, 128_000)
     agent._emit_warning.assert_called_once()
 
+
 def test_preflight_does_not_rearm_while_still_over_window():
     """While the session is still over the window, the dedup must survive
     the preflight (no per-turn warn spam)."""
@@ -120,6 +125,7 @@ def test_preflight_does_not_rearm_while_still_over_window():
 
     assert agent._last_ctx_overflow_warn == ("uncompressed_ctx_overflow", 10_000)
     agent._emit_warning.assert_not_called()
+
 
 def test_multimodal_content_forces_real_estimate_in_rearm_gate():
     """List (multimodal) content defeats a char count; the pre-check must
@@ -134,7 +140,10 @@ def test_multimodal_content_forces_real_estimate_in_rearm_gate():
             "role": "user",
             "content": [
                 {"type": "text", "text": "look at this"},
-                {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": "data:image/png;base64,AAAA"},
+                },
             ],
         },
         {"role": "assistant", "content": "looking"},

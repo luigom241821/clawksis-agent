@@ -77,7 +77,9 @@ def _preserve_file_owner(path: Path) -> tuple[int, int] | None:
     return (st.st_uid, st.st_gid) if st else None
 
 
-def _restore_file_metadata(path: Path, owner: tuple[int, int] | None, mode: int | None) -> None:
+def _restore_file_metadata(
+    path: Path, owner: tuple[int, int] | None, mode: int | None
+) -> None:
     """Best-effort re-apply of uid/gid and permission bits after an atomic replace.
 
     Docker/NAS installs often run some commands as root on a volume owned by the runtime user;
@@ -141,7 +143,10 @@ _CROSS_DEVICE_ERRNOS = (errno.EXDEV, errno.EBUSY)
 
 def _is_contended_windows_replace_error(exc: OSError) -> bool:
     """Candidate-only: winerror 5 also covers a genuine ACL denial."""
-    return _IS_WINDOWS and getattr(exc, "winerror", None) in _WINDOWS_CONTENDED_REPLACE_ERRORS
+    return (
+        _IS_WINDOWS
+        and getattr(exc, "winerror", None) in _WINDOWS_CONTENDED_REPLACE_ERRORS
+    )
 
 
 def _rewrite_in_place(tmp_str: str, real_path: str) -> None:
@@ -198,21 +203,35 @@ def atomic_replace(tmp_path: str | Path, target: str | Path) -> str:
         if contended:
             # Lazy: keeps ``utils`` free of a package-level dependency on ``agent``.
             from agent.retry_utils import jittered_backoff
+
             for attempt in range(1, _REPLACE_RETRY_ATTEMPTS + 1):
-                time.sleep(jittered_backoff(attempt, base_delay=_REPLACE_RETRY_BASE_DELAY_S, max_delay=_REPLACE_RETRY_MAX_DELAY_S))
+                time.sleep(
+                    jittered_backoff(
+                        attempt,
+                        base_delay=_REPLACE_RETRY_BASE_DELAY_S,
+                        max_delay=_REPLACE_RETRY_MAX_DELAY_S,
+                    )
+                )
                 try:
                     os.replace(tmp_str, real_path)
                     return real_path
                 except OSError as retry_exc:
                     exc = retry_exc
                     if retry_exc.errno in _CROSS_DEVICE_ERRNOS:
-                        contended = False  # not contention after all — stop burning the budget
+                        contended = (
+                            False  # not contention after all — stop burning the budget
+                        )
                         break
                     if not _is_contended_windows_replace_error(retry_exc):
                         raise
-        logger.debug("atomic_replace: %s -> %s failed with %s; falling back to %s", tmp_str, real_path,
-                     getattr(exc, "winerror", None) or errno.errorcode.get(exc.errno or 0, exc.errno),
-                     "in-place rewrite" if contended else "copy")
+        logger.debug(
+            "atomic_replace: %s -> %s failed with %s; falling back to %s",
+            tmp_str,
+            real_path,
+            getattr(exc, "winerror", None)
+            or errno.errorcode.get(exc.errno or 0, exc.errno),
+            "in-place rewrite" if contended else "copy",
+        )
         # The rewrite re-raises its own error, so an ACL denial is reported as such, not as contention.
         (_rewrite_in_place if contended else _copy_fallback)(tmp_str, real_path)
     return real_path
@@ -283,7 +302,10 @@ def rmtree_readonly(path: str | Path, *, ignore_errors: bool = False) -> None:
         for candidate in (os.path.dirname(fpath), fpath):
             if candidate:
                 with suppress(OSError):
-                    os.chmod(candidate, os.stat(candidate).st_mode | stat.S_IWUSR | stat.S_IXUSR)
+                    os.chmod(
+                        candidate,
+                        os.stat(candidate).st_mode | stat.S_IWUSR | stat.S_IXUSR,
+                    )
         func(fpath)
 
     try:
@@ -298,8 +320,17 @@ def rmtree_readonly(path: str | Path, *, ignore_errors: bool = False) -> None:
             raise
 
 
-def _atomic_write(path: Path, write, *, prefix: str, encoding: str = "utf-8", mode: int | None = None,
-                  preserve_owner: bool = True, binary: bool = False, fsync_dir: bool = False) -> None:
+def _atomic_write(
+    path: Path,
+    write,
+    *,
+    prefix: str,
+    encoding: str = "utf-8",
+    mode: int | None = None,
+    preserve_owner: bool = True,
+    binary: bool = False,
+    fsync_dir: bool = False,
+) -> None:
     """Temp file + fsync + :func:`atomic_replace`, then re-apply owner/mode.
 
     *write(f)* emits the payload into the open handle (text, or bytes when *binary*). The temp file
@@ -325,13 +356,17 @@ def _atomic_write(path: Path, write, *, prefix: str, encoding: str = "utf-8", mo
     original_owner = _preserve_file_owner(path) if preserve_owner else None
     fd, tmp_path = mkstemp_beside(path, prefix=prefix, suffix=".tmp")
     try:
-        with os.fdopen(fd, "wb" if binary else "w", encoding=None if binary else encoding) as f:
+        with os.fdopen(
+            fd, "wb" if binary else "w", encoding=None if binary else encoding
+        ) as f:
             if mode is not None and hasattr(os, "fchmod"):
                 os.fchmod(f.fileno(), mode)
             write(f)
             f.flush()
             os.fsync(f.fileno())
-        replaced = Path(atomic_replace(tmp_path, path))  # symlink-preserving actual destination
+        replaced = Path(
+            atomic_replace(tmp_path, path)
+        )  # symlink-preserving actual destination
         _restore_file_metadata(replaced, original_owner, mode)
         if fsync_dir:
             fsync_directory(replaced.parent)
@@ -341,15 +376,25 @@ def _atomic_write(path: Path, write, *, prefix: str, encoding: str = "utf-8", mo
         raise
 
 
-def _mode_for_write(path: Path, create_mode: int | None, preserve: bool = True) -> int | None:
+def _mode_for_write(
+    path: Path, create_mode: int | None, preserve: bool = True
+) -> int | None:
     """Existing permission bits of *path* (when *preserve*), else *create_mode* for a new file."""
     mode = _preserve_file_mode(path) if preserve else None
     return mode if mode is not None or path.exists() else create_mode
 
 
-def atomic_write_text(path: str | Path, content: str, *, encoding: str = "utf-8", tmp_prefix: str = ".tmp_",
-                      preserve_mode: bool = False, create_mode: int | None = None, mode: int | None = None,
-                      fsync_dir: bool = False) -> None:
+def atomic_write_text(
+    path: str | Path,
+    content: str,
+    *,
+    encoding: str = "utf-8",
+    tmp_prefix: str = ".tmp_",
+    preserve_mode: bool = False,
+    create_mode: int | None = None,
+    mode: int | None = None,
+    fsync_dir: bool = False,
+) -> None:
     """Write *content* to *path* via temp file + fsync + atomic rename.
 
     The target is never left partially written on crash/interrupt. Shared by every destructive
@@ -358,20 +403,43 @@ def atomic_write_text(path: str | Path, content: str, *, encoding: str = "utf-8"
     when the target is new and *preserve_mode* carries an existing file's bits and owner across.
     """
     path = Path(path)
-    _atomic_write(path, lambda f: f.write(content), prefix=tmp_prefix, encoding=encoding,
-                  mode=mode if mode is not None else _mode_for_write(path, create_mode, preserve=preserve_mode),
-                  preserve_owner=preserve_mode, fsync_dir=fsync_dir)
+    _atomic_write(
+        path,
+        lambda f: f.write(content),
+        prefix=tmp_prefix,
+        encoding=encoding,
+        mode=mode
+        if mode is not None
+        else _mode_for_write(path, create_mode, preserve=preserve_mode),
+        preserve_owner=preserve_mode,
+        fsync_dir=fsync_dir,
+    )
 
 
-def atomic_write_bytes(path: str | Path, content: bytes, *, tmp_prefix: str = ".tmp_",
-                       mode: int | None = None, fsync_dir: bool = False) -> None:
+def atomic_write_bytes(
+    path: str | Path,
+    content: bytes,
+    *,
+    tmp_prefix: str = ".tmp_",
+    mode: int | None = None,
+    fsync_dir: bool = False,
+) -> None:
     """Bytes variant of :func:`atomic_write_text` (encrypted blobs, key material)."""
     path = Path(path)
-    _atomic_write(path, lambda f: f.write(content), prefix=tmp_prefix, binary=True, preserve_owner=False,
-                  mode=mode if mode is not None else _preserve_file_mode(path), fsync_dir=fsync_dir)
+    _atomic_write(
+        path,
+        lambda f: f.write(content),
+        prefix=tmp_prefix,
+        binary=True,
+        preserve_owner=False,
+        mode=mode if mode is not None else _preserve_file_mode(path),
+        fsync_dir=fsync_dir,
+    )
 
 
-def _dump_json(data: Any, f, *, indent: int | None, ensure_ascii: bool, dump_kwargs: dict) -> None:
+def _dump_json(
+    data: Any, f, *, indent: int | None, ensure_ascii: bool, dump_kwargs: dict
+) -> None:
     """``json.dump`` that survives surrogate-escaped strings.
 
     ``os.fsdecode`` of a non-UTF-8 filename/argv yields lone surrogates (``'\\udcff'``); a utf-8
@@ -389,8 +457,14 @@ def _dump_json(data: Any, f, *, indent: int | None, ensure_ascii: bool, dump_kwa
 
 
 def atomic_json_write(
-    path: str | Path, data: Any, *, indent: int = 2, mode: int | None = None,
-    ensure_ascii: bool = False, fsync_dir: bool = False, **dump_kwargs: Any,
+    path: str | Path,
+    data: Any,
+    *,
+    indent: int = 2,
+    mode: int | None = None,
+    ensure_ascii: bool = False,
+    fsync_dir: bool = False,
+    **dump_kwargs: Any,
 ) -> None:
     """Write JSON to *path* atomically (temp file + fsync + replace).
 
@@ -400,9 +474,15 @@ def atomic_json_write(
     (mkstemp), so the payload is never umask-readable.
     """
     path = Path(path)
-    _atomic_write(path, lambda f: _dump_json(data, f, indent=indent, ensure_ascii=ensure_ascii, dump_kwargs=dump_kwargs),
-                  prefix=f".{path.stem}_", mode=mode if mode is not None else _preserve_file_mode(path),
-                  fsync_dir=fsync_dir)
+    _atomic_write(
+        path,
+        lambda f: _dump_json(
+            data, f, indent=indent, ensure_ascii=ensure_ascii, dump_kwargs=dump_kwargs
+        ),
+        prefix=f".{path.stem}_",
+        mode=mode if mode is not None else _preserve_file_mode(path),
+        fsync_dir=fsync_dir,
+    )
 
 
 def read_json_or_empty(path: str | Path) -> dict:
@@ -411,13 +491,17 @@ def read_json_or_empty(path: str | Path) -> dict:
     (memory-provider ``save_config``), so a corrupt sidecar degrades to defaults instead of
     taking the provider down."""
     try:
-        data = json.loads(Path(path).read_text(encoding="utf-8-sig"))  # utf-8-sig: a Windows-editor BOM must not wipe the config
+        data = json.loads(
+            Path(path).read_text(encoding="utf-8-sig")
+        )  # utf-8-sig: a Windows-editor BOM must not wipe the config
     except (OSError, ValueError):
         return {}
     return data if isinstance(data, dict) else {}
 
 
-def warn_if_credential_file_broadly_readable(path: str | Path, *, label: str = "", log: logging.Logger | None = None) -> bool:
+def warn_if_credential_file_broadly_readable(
+    path: str | Path, *, label: str = "", log: logging.Logger | None = None
+) -> bool:
     """Warn when a credential file is group/world-readable; True when a warning was emitted.
 
     Hand-made secret files (or ones older Clawksis wrote without an explicit mode) commonly end up
@@ -432,22 +516,38 @@ def warn_if_credential_file_broadly_readable(path: str | Path, *, label: str = "
         return False
     if os.name != "posix" or not (file_mode & (stat.S_IRGRP | stat.S_IROTH)):
         return False
-    (log or logger).warning("%s%s is group/world-readable (mode 0%o) and contains secrets. Run: chmod 600 %s",
-                            f"{label} " if label else "", p.name, stat.S_IMODE(file_mode), p)
+    (log or logger).warning(
+        "%s%s is group/world-readable (mode 0%o) and contains secrets. Run: chmod 600 %s",
+        f"{label} " if label else "",
+        p.name,
+        stat.S_IMODE(file_mode),
+        p,
+    )
     return True
 
 
-def atomic_yaml_write(path: str | Path, data: Any, *, default_flow_style: bool = False, sort_keys: bool = False,
-                      extra_content: str | None = None, create_mode: int | None = None) -> None:
+def atomic_yaml_write(
+    path: str | Path,
+    data: Any,
+    *,
+    default_flow_style: bool = False,
+    sort_keys: bool = False,
+    extra_content: str | None = None,
+    create_mode: int | None = None,
+) -> None:
     """Write YAML to *path* atomically (temp file + fsync + replace)."""
     path = Path(path)
 
     def _write(f) -> None:
-        yaml.safe_dump(data, f, default_flow_style=default_flow_style, sort_keys=sort_keys)
+        yaml.safe_dump(
+            data, f, default_flow_style=default_flow_style, sort_keys=sort_keys
+        )
         if extra_content:
             f.write(extra_content)
 
-    _atomic_write(path, _write, prefix=f".{path.stem}_", mode=_mode_for_write(path, create_mode))
+    _atomic_write(
+        path, _write, prefix=f".{path.stem}_", mode=_mode_for_write(path, create_mode)
+    )
 
 
 def _roundtrip_load(path: Path):
@@ -460,7 +560,9 @@ def _roundtrip_load(path: Path):
     return yaml_rt, data if isinstance(data, CommentedMap) else CommentedMap(data or {})
 
 
-def _roundtrip_dump(path: Path, yaml_rt, config, *, extra_content: str | None = None) -> None:
+def _roundtrip_dump(
+    path: Path, yaml_rt, config, *, extra_content: str | None = None
+) -> None:
     def _write(f) -> None:
         yaml_rt.dump(config, f)
         if extra_content:
@@ -478,6 +580,7 @@ def atomic_roundtrip_yaml_update(path: str | Path, key_path: str, value: Any) ->
     litters the file and diverges from whole-document writers that drop the key).
     """
     from ruamel.yaml.comments import CommentedMap
+
     # Honor escaped dots and prefer existing literal dotted keys (model IDs like ``glm-5.3``) over
     # blind splitting — same navigation as ``clawk config set``'s ``_set_nested``; otherwise
     # /model + TUI persistence wrote ``glm-5: {'3': ...}`` phantom siblings.
@@ -494,7 +597,10 @@ def atomic_roundtrip_yaml_update(path: str | Path, key_path: str, value: Any) ->
     i = 0
     while True:
         remaining = keys[i:]
-        seg, consumed = _greedy_literal_match(dict(current), remaining) or (remaining[0], 1)
+        seg, consumed = _greedy_literal_match(dict(current), remaining) or (
+            remaining[0],
+            1,
+        )
         if i + consumed == len(keys):
             if value is None:
                 current.pop(seg, None)
@@ -516,7 +622,9 @@ def atomic_roundtrip_yaml_update(path: str | Path, key_path: str, value: Any) ->
 # reserved — so a str like "off" or "yes" is emitted unquoted. Every other config reader here
 # (PyYAML, yaml.safe_load sites) parses under YAML 1.1, where on/off/yes/no are booleans: an
 # unquoted ``approvals.mode: off`` would silently round-trip back as ``False``.
-_YAML11_AMBIGUOUS_WORDS = frozenset({"y", "n", "yes", "no", "true", "false", "on", "off", "null", "~"})
+_YAML11_AMBIGUOUS_WORDS = frozenset(
+    {"y", "n", "yes", "no", "true", "false", "on", "off", "null", "~"}
+)
 
 
 def _rt_value(value: Any) -> Any:
@@ -537,8 +645,9 @@ def _rt_value(value: Any) -> Any:
     return value
 
 
-def atomic_roundtrip_yaml_save(path: str | Path, new_state: dict, *,
-                               extra_content_on_create: str | None = None) -> None:
+def atomic_roundtrip_yaml_save(
+    path: str | Path, new_state: dict, *, extra_content_on_create: str | None = None
+) -> None:
     """Persist a full config-state dict while preserving comments and ordering.
 
     THE on-disk primitive for ``config.yaml`` (production callers reach it through
@@ -573,7 +682,7 @@ def atomic_roundtrip_yaml_save(path: str | Path, new_state: dict, *,
                 _merge_item(dst, i, value)
             else:
                 dst.append(_rt_value(value))
-        del dst[len(src):]
+        del dst[len(src) :]
 
     def _merge_item(dst, key, value) -> None:
         current = dst[key]
@@ -595,7 +704,12 @@ def atomic_roundtrip_yaml_save(path: str | Path, new_state: dict, *,
             del dst[key]
 
     _merge(existing, new_state)
-    _roundtrip_dump(path, yaml_rt, existing, extra_content=extra_content_on_create if creating else None)
+    _roundtrip_dump(
+        path,
+        yaml_rt,
+        existing,
+        extra_content=extra_content_on_create if creating else None,
+    )
 
 
 def safe_json_loads(text: str, default: Any = None) -> Any:
@@ -657,7 +771,14 @@ def env_bool(key: str, default: bool = False) -> bool:
     return is_truthy_value(os.getenv(key, ""), default=default)
 
 
-_PROXY_ENV_KEYS = ("HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "https_proxy", "http_proxy", "all_proxy")
+_PROXY_ENV_KEYS = (
+    "HTTPS_PROXY",
+    "HTTP_PROXY",
+    "ALL_PROXY",
+    "https_proxy",
+    "http_proxy",
+    "all_proxy",
+)
 _NO_PROXY_ENV_KEYS = ("NO_PROXY", "no_proxy")
 
 
@@ -665,7 +786,7 @@ def normalize_proxy_url(proxy_url: str | None) -> str | None:
     """Normalize proxy URLs for httpx/aiohttp: WSL/Clash export ``socks://``, httpx needs ``socks5://``."""
     candidate = str(proxy_url or "").strip()
     if candidate.lower().startswith("socks://"):
-        return f"socks5://{candidate[len('socks://'):]}"
+        return f"socks5://{candidate[len('socks://') :]}"
     return candidate or None
 
 
@@ -684,8 +805,9 @@ def _bare_ipv6_literal(entry: str) -> str | None:
     import ipaddress
 
     candidate = str(entry or "").strip()
-    m = (re.fullmatch(r"\[([0-9A-Fa-f:.]+)\](?:[/:].*)?", candidate)
-         or re.fullmatch(r"([0-9A-Fa-f:.]+)/\d+", candidate))
+    m = re.fullmatch(r"\[([0-9A-Fa-f:.]+)\](?:[/:].*)?", candidate) or re.fullmatch(
+        r"([0-9A-Fa-f:.]+)/\d+", candidate
+    )
     if not m:
         return None
     try:
@@ -703,7 +825,9 @@ def sanitize_no_proxy_entries(no_proxy_value: str | None) -> str:
     """
     raw = str(no_proxy_value or "")
     entries = [part for part in re.split(r"[\s,]+", raw.strip()) if part]
-    if not entries or "*" in entries:  # a wildcard bypasses everything; httpx returns no mounts
+    if (
+        not entries or "*" in entries
+    ):  # a wildcard bypasses everything; httpx returns no mounts
         return raw
     rewritten: list[str] = []
     for entry in entries:
@@ -782,7 +906,11 @@ def base_url_origin(base_url: str) -> tuple[str, str, int]:
         port = parsed.port
     except ValueError:  # out-of-range or non-numeric port — not a usable origin
         return ("", "", 0)
-    return (scheme, hostname, {"https": 443, "http": 80}.get(scheme, 0) if port is None else port)
+    return (
+        scheme,
+        hostname,
+        {"https": 443, "http": 80}.get(scheme, 0) if port is None else port,
+    )
 
 
 def base_url_host_matches(base_url: str, domain: str) -> bool:
@@ -793,4 +921,6 @@ def base_url_host_matches(base_url: str, domain: str) -> bool:
     """
     hostname = base_url_hostname(base_url)
     domain = (domain or "").strip().lower().rstrip(".")
-    return bool(hostname and domain) and (hostname == domain or hostname.endswith("." + domain))
+    return bool(hostname and domain) and (
+        hostname == domain or hostname.endswith("." + domain)
+    )

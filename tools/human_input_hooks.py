@@ -29,6 +29,7 @@ class HumanInputRequest:
 def _redacted(text: str) -> str:
     try:
         from agent.redact import redact_sensitive_text
+
         return redact_sensitive_text(str(text or ""), force=True)
     except Exception:
         logger.debug("human-input hook prompt redaction failed", exc_info=True)
@@ -39,11 +40,21 @@ def _identity() -> dict:
     try:
         from gateway.session_context import get_session_env
         from tools import approval_context
-        session_id = approval_context._approval_session_id.get() or get_session_env("CLAWK_SESSION_ID")
-        platform = (os.getenv("CLAWK_PLATFORM") or get_session_env("CLAWK_SESSION_PLATFORM")
-                    or get_session_env("CLAWK_SESSION_SOURCE") or "cli")
-        return {"session_id": session_id, "session_key": approval_context.get_current_session_key(default=""),
-                "platform": platform}
+
+        session_id = approval_context._approval_session_id.get() or get_session_env(
+            "CLAWK_SESSION_ID"
+        )
+        platform = (
+            os.getenv("CLAWK_PLATFORM")
+            or get_session_env("CLAWK_SESSION_PLATFORM")
+            or get_session_env("CLAWK_SESSION_SOURCE")
+            or "cli"
+        )
+        return {
+            "session_id": session_id,
+            "session_key": approval_context.get_current_session_key(default=""),
+            "platform": platform,
+        }
     except Exception:  # a broken lookup must not take the human prompt down with it
         logger.debug("human-input hook identity lookup failed", exc_info=True)
         return {"session_id": "", "session_key": "", "platform": ""}
@@ -52,16 +63,25 @@ def _identity() -> dict:
 def _fire(hook_name: str, payload: dict) -> None:
     try:
         from clawk_cli.lifecycle import invoke_hook
+
         invoke_hook(hook_name, **payload)
     except Exception:  # observability must never break a human prompt
         logger.debug("%s dispatch failed", hook_name, exc_info=True)
 
 
 @contextlib.contextmanager
-def human_input_request(kind: str, *, prompt: str = "", session_key: str | None = None, **extra):
+def human_input_request(
+    kind: str, *, prompt: str = "", session_key: str | None = None, **extra
+):
     """Fire the request hook, run the block (the human wait), then fire the resolved hook.
     An exception escaping the block, or a block that never sets ``outcome``, resolves as ``error``."""
-    payload = {"kind": kind, "request_id": uuid.uuid4().hex, **_identity(), "prompt": _redacted(prompt), **extra}
+    payload = {
+        "kind": kind,
+        "request_id": uuid.uuid4().hex,
+        **_identity(),
+        "prompt": _redacted(prompt),
+        **extra,
+    }
     if session_key is not None:
         payload["session_key"] = session_key
     request = HumanInputRequest(payload["request_id"])
@@ -69,4 +89,7 @@ def human_input_request(kind: str, *, prompt: str = "", session_key: str | None 
     try:
         yield request
     finally:
-        _fire("on_human_input_resolved", {**payload, "outcome": str(request.outcome or "error")})
+        _fire(
+            "on_human_input_resolved",
+            {**payload, "outcome": str(request.outcome or "error")},
+        )

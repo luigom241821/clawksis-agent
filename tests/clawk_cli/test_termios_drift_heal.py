@@ -56,8 +56,13 @@ def test_heals_cooked_drift_back_to_raw(pty_fd):
     assert not (lflag & termios.ISIG)
     assert not (lflag & termios.IEXTEN)
     # iflag surgery matches prompt_toolkit raw_mode._patch_iflag
-    for flag in (termios.IXON, termios.IXOFF, termios.ICRNL,
-                 termios.INLCR, termios.IGNCR):
+    for flag in (
+        termios.IXON,
+        termios.IXOFF,
+        termios.ICRNL,
+        termios.INLCR,
+        termios.IGNCR,
+    ):
         assert not (iflag & flag)
     assert cc[termios.VMIN] == 1
 

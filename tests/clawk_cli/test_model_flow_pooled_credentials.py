@@ -29,10 +29,6 @@ class _ExhaustedPool:
         return None
 
 
-
-
-
-
 def test_generic_api_key_flow_passes_pool_key_to_existing_key_prompt(monkeypatch):
     from clawk_cli.model_setup_flows import _model_flow_api_key_provider
 
@@ -46,13 +42,13 @@ def test_generic_api_key_flow_passes_pool_key_to_existing_key_prompt(monkeypatch
     with (
         patch("clawk_cli.config.get_env_value", return_value=""),
         patch("agent.credential_pool.load_pool", return_value=_AvailablePool()),
-        patch("clawk_cli.main_provider_setup._prompt_api_key", side_effect=capture_prompt),
+        patch(
+            "clawk_cli.main_provider_setup._prompt_api_key", side_effect=capture_prompt
+        ),
     ):
         _model_flow_api_key_provider({}, "deepseek")
 
     assert captured["existing_key"] == "pool-secret"
-
-
 
 
 def test_bedrock_flow_sees_pool_key_when_no_env(monkeypatch, capsys):

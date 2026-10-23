@@ -24,6 +24,7 @@ class _MonitoringEvent:
 @dataclass(slots=True)
 class GatewayHealthEvent(_MonitoringEvent):
     """Content-free gateway health snapshot or lifecycle event."""
+
     EVENT: ClassVar[str] = "gateway_health"
     name: str
     gateway_state: Optional[str] = None
@@ -47,6 +48,7 @@ class GatewayHealthEvent(_MonitoringEvent):
 @dataclass(slots=True)
 class GatewayDiagnosticEvent(_MonitoringEvent):
     """Redacted gateway diagnostic event for operator-owned observability."""
+
     EVENT: ClassVar[str] = "gateway_diagnostic"
     name: str
     subsystem: str
@@ -65,6 +67,7 @@ class GatewayDiagnosticEvent(_MonitoringEvent):
 @dataclass(slots=True)
 class CronExecutionEvent(_MonitoringEvent):
     """Content-free durable cron execution lifecycle projection."""
+
     EVENT: ClassVar[str] = "cron_execution"
     status: str
     job_key: str

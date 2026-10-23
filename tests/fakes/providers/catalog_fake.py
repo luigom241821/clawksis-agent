@@ -89,7 +89,9 @@ class CatalogFake:
         server = ThreadingHTTPServer(("127.0.0.1", 0), _handler_for(self))
         server.daemon_threads = True
         self._server = server
-        threading.Thread(target=server.serve_forever, name="catalog-fake", daemon=True).start()
+        threading.Thread(
+            target=server.serve_forever, name="catalog-fake", daemon=True
+        ).start()
         return self
 
     def __exit__(self, *_exc: object) -> None:
@@ -105,9 +107,16 @@ class CatalogFake:
 
     def proxy_env(self) -> dict[str, str]:
         """Env that routes every non-loopback request of a child through the egress sentinel."""
-        return {"HTTPS_PROXY": self.origin, "HTTP_PROXY": self.origin, "https_proxy": self.origin,
-                "http_proxy": self.origin, "ALL_PROXY": "", "all_proxy": "",
-                "NO_PROXY": "127.0.0.1,localhost", "no_proxy": "127.0.0.1,localhost"}
+        return {
+            "HTTPS_PROXY": self.origin,
+            "HTTP_PROXY": self.origin,
+            "https_proxy": self.origin,
+            "http_proxy": self.origin,
+            "ALL_PROXY": "",
+            "all_proxy": "",
+            "NO_PROXY": "127.0.0.1,localhost",
+            "no_proxy": "127.0.0.1,localhost",
+        }
 
     def egress_hosts(self) -> list[str]:
         return sorted({r.path for r in self.egress})
@@ -131,14 +140,22 @@ def _has_tool_result(dialect: str, body: dict[str, Any]) -> bool:
         return any(m.get("role") == "tool" for m in body.get("messages") or [])
     if dialect == "anthropic":
         return any(
-            isinstance(m.get("content"), list) and any(
-                isinstance(b, dict) and b.get("type") == "tool_result" for b in m["content"])
-            for m in body.get("messages") or [])
+            isinstance(m.get("content"), list)
+            and any(
+                isinstance(b, dict) and b.get("type") == "tool_result"
+                for b in m["content"]
+            )
+            for m in body.get("messages") or []
+        )
     items = body.get("input") if isinstance(body.get("input"), list) else []
-    return any(isinstance(i, dict) and i.get("type") == "function_call_output" for i in items)
+    return any(
+        isinstance(i, dict) and i.get("type") == "function_call_output" for i in items
+    )
 
 
-def _plan(fake: CatalogFake, dialect: str, body: dict[str, Any]) -> tuple[str, str | None]:
+def _plan(
+    fake: CatalogFake, dialect: str, body: dict[str, Any]
+) -> tuple[str, str | None]:
     """(``text``, ``tool_call_id`` or None) for the next model turn."""
     if not body.get("tools"):
         return "Catalog aux answer", None
@@ -150,27 +167,65 @@ def _plan(fake: CatalogFake, dialect: str, body: dict[str, Any]) -> tuple[str, s
 # --- wire renderers -------------------------------------------------------------
 
 
-def _chat_payloads(fake: CatalogFake, text: str, call_id: str | None, stream: bool) -> list[dict[str, Any]] | dict:
-    usage = {"prompt_tokens": USAGE_IN, "completion_tokens": USAGE_OUT, "total_tokens": USAGE_IN + USAGE_OUT}
-    base = {"id": "chatcmpl-catalog", "created": int(time.time()), "model": "catalog-model-a"}
+def _chat_payloads(
+    fake: CatalogFake, text: str, call_id: str | None, stream: bool
+) -> list[dict[str, Any]] | dict:
+    usage = {
+        "prompt_tokens": USAGE_IN,
+        "completion_tokens": USAGE_OUT,
+        "total_tokens": USAGE_IN + USAGE_OUT,
+    }
+    base = {
+        "id": "chatcmpl-catalog",
+        "created": int(time.time()),
+        "model": "catalog-model-a",
+    }
     args = json.dumps(fake.tool_args)
-    tool_calls = [{"id": call_id, "type": "function", "function": {"name": fake.tool_name, "arguments": args}}]
+    tool_calls = [
+        {
+            "id": call_id,
+            "type": "function",
+            "function": {"name": fake.tool_name, "arguments": args},
+        }
+    ]
     finish = "tool_calls" if call_id else "stop"
     if not stream:
         msg: dict[str, Any] = {"role": "assistant", "content": text or None}
         if call_id:
             msg["tool_calls"] = tool_calls
-        return {**base, "object": "chat.completion", "usage": usage,
-                "choices": [{"index": 0, "message": msg, "finish_reason": finish}]}
+        return {
+            **base,
+            "object": "chat.completion",
+            "usage": usage,
+            "choices": [{"index": 0, "message": msg, "finish_reason": finish}],
+        }
 
     def chunk(delta: dict[str, Any], fin: str | None = None) -> dict[str, Any]:
-        return {**base, "object": "chat.completion.chunk", "choices": [{"index": 0, "delta": delta, "finish_reason": fin}]}
+        return {
+            **base,
+            "object": "chat.completion.chunk",
+            "choices": [{"index": 0, "delta": delta, "finish_reason": fin}],
+        }
 
     out = [chunk({"role": "assistant", "content": ""})]
     if call_id:
-        out.append(chunk({"tool_calls": [{"index": 0, "id": call_id, "type": "function",
-                                          "function": {"name": fake.tool_name, "arguments": ""}}]}))
-        out.append(chunk({"tool_calls": [{"index": 0, "function": {"arguments": args}}]}))
+        out.append(
+            chunk(
+                {
+                    "tool_calls": [
+                        {
+                            "index": 0,
+                            "id": call_id,
+                            "type": "function",
+                            "function": {"name": fake.tool_name, "arguments": ""},
+                        }
+                    ]
+                }
+            )
+        )
+        out.append(
+            chunk({"tool_calls": [{"index": 0, "function": {"arguments": args}}]})
+        )
     else:
         out.append(chunk({"content": text}))
     last = chunk({}, finish)
@@ -179,72 +234,184 @@ def _chat_payloads(fake: CatalogFake, text: str, call_id: str | None, stream: bo
     return out
 
 
-def _anthropic_events(fake: CatalogFake, text: str, call_id: str | None) -> list[tuple[str, dict[str, Any]]]:
-    msg = {"id": "msg_catalog", "type": "message", "role": "assistant", "model": "catalog-model-a",
-           "content": [], "stop_reason": None, "stop_sequence": None,
-           "usage": {"input_tokens": USAGE_IN, "output_tokens": 1}}
-    ev: list[tuple[str, dict[str, Any]]] = [("message_start", {"type": "message_start", "message": msg})]
+def _anthropic_events(
+    fake: CatalogFake, text: str, call_id: str | None
+) -> list[tuple[str, dict[str, Any]]]:
+    msg = {
+        "id": "msg_catalog",
+        "type": "message",
+        "role": "assistant",
+        "model": "catalog-model-a",
+        "content": [],
+        "stop_reason": None,
+        "stop_sequence": None,
+        "usage": {"input_tokens": USAGE_IN, "output_tokens": 1},
+    }
+    ev: list[tuple[str, dict[str, Any]]] = [
+        ("message_start", {"type": "message_start", "message": msg})
+    ]
     if call_id:
         ev += [
-            ("content_block_start", {"type": "content_block_start", "index": 0, "content_block": {
-                "type": "tool_use", "id": call_id.replace("call_", "toolu_"), "name": fake.tool_name, "input": {}}}),
-            ("content_block_delta", {"type": "content_block_delta", "index": 0, "delta": {
-                "type": "input_json_delta", "partial_json": json.dumps(fake.tool_args)}}),
+            (
+                "content_block_start",
+                {
+                    "type": "content_block_start",
+                    "index": 0,
+                    "content_block": {
+                        "type": "tool_use",
+                        "id": call_id.replace("call_", "toolu_"),
+                        "name": fake.tool_name,
+                        "input": {},
+                    },
+                },
+            ),
+            (
+                "content_block_delta",
+                {
+                    "type": "content_block_delta",
+                    "index": 0,
+                    "delta": {
+                        "type": "input_json_delta",
+                        "partial_json": json.dumps(fake.tool_args),
+                    },
+                },
+            ),
         ]
     else:
         ev += [
-            ("content_block_start", {"type": "content_block_start", "index": 0,
-                                     "content_block": {"type": "text", "text": ""}}),
-            ("content_block_delta", {"type": "content_block_delta", "index": 0,
-                                     "delta": {"type": "text_delta", "text": text}}),
+            (
+                "content_block_start",
+                {
+                    "type": "content_block_start",
+                    "index": 0,
+                    "content_block": {"type": "text", "text": ""},
+                },
+            ),
+            (
+                "content_block_delta",
+                {
+                    "type": "content_block_delta",
+                    "index": 0,
+                    "delta": {"type": "text_delta", "text": text},
+                },
+            ),
         ]
     ev += [
         ("content_block_stop", {"type": "content_block_stop", "index": 0}),
-        ("message_delta", {"type": "message_delta", "delta": {
-            "stop_reason": "tool_use" if call_id else "end_turn", "stop_sequence": None},
-            "usage": {"output_tokens": USAGE_OUT}}),
+        (
+            "message_delta",
+            {
+                "type": "message_delta",
+                "delta": {
+                    "stop_reason": "tool_use" if call_id else "end_turn",
+                    "stop_sequence": None,
+                },
+                "usage": {"output_tokens": USAGE_OUT},
+            },
+        ),
         ("message_stop", {"type": "message_stop"}),
     ]
     return ev
 
 
-def _anthropic_json(fake: CatalogFake, text: str, call_id: str | None) -> dict[str, Any]:
+def _anthropic_json(
+    fake: CatalogFake, text: str, call_id: str | None
+) -> dict[str, Any]:
     content: list[dict[str, Any]] = (
-        [{"type": "tool_use", "id": call_id.replace("call_", "toolu_"), "name": fake.tool_name, "input": fake.tool_args}]
-        if call_id else [{"type": "text", "text": text}])
-    return {"id": "msg_catalog", "type": "message", "role": "assistant", "model": "catalog-model-a",
-            "content": content, "stop_reason": "tool_use" if call_id else "end_turn", "stop_sequence": None,
-            "usage": {"input_tokens": USAGE_IN, "output_tokens": USAGE_OUT}}
+        [
+            {
+                "type": "tool_use",
+                "id": call_id.replace("call_", "toolu_"),
+                "name": fake.tool_name,
+                "input": fake.tool_args,
+            }
+        ]
+        if call_id
+        else [{"type": "text", "text": text}]
+    )
+    return {
+        "id": "msg_catalog",
+        "type": "message",
+        "role": "assistant",
+        "model": "catalog-model-a",
+        "content": content,
+        "stop_reason": "tool_use" if call_id else "end_turn",
+        "stop_sequence": None,
+        "usage": {"input_tokens": USAGE_IN, "output_tokens": USAGE_OUT},
+    }
 
 
-def _responses_events(fake: CatalogFake, text: str, call_id: str | None) -> list[dict[str, Any]]:
+def _responses_events(
+    fake: CatalogFake, text: str, call_id: str | None
+) -> list[dict[str, Any]]:
     rid = f"resp_{uuid.uuid4().hex[:10]}"
-    usage = {"input_tokens": USAGE_IN, "output_tokens": USAGE_OUT, "total_tokens": USAGE_IN + USAGE_OUT,
-             "input_tokens_details": {"cached_tokens": 0}, "output_tokens_details": {"reasoning_tokens": 0}}
-    shell = {"id": rid, "object": "response", "created_at": int(time.time()), "model": "catalog-model-a",
-             "status": "in_progress", "output": []}
+    usage = {
+        "input_tokens": USAGE_IN,
+        "output_tokens": USAGE_OUT,
+        "total_tokens": USAGE_IN + USAGE_OUT,
+        "input_tokens_details": {"cached_tokens": 0},
+        "output_tokens_details": {"reasoning_tokens": 0},
+    }
+    shell = {
+        "id": rid,
+        "object": "response",
+        "created_at": int(time.time()),
+        "model": "catalog-model-a",
+        "status": "in_progress",
+        "output": [],
+    }
     if call_id:
-        item = {"type": "function_call", "id": f"fc_{call_id}", "call_id": call_id, "name": fake.tool_name,
-                "arguments": json.dumps(fake.tool_args), "status": "completed"}
+        item = {
+            "type": "function_call",
+            "id": f"fc_{call_id}",
+            "call_id": call_id,
+            "name": fake.tool_name,
+            "arguments": json.dumps(fake.tool_args),
+            "status": "completed",
+        }
         middle = [
-            {"type": "response.output_item.added", "output_index": 0, "item": {**item, "arguments": "", "status": "in_progress"}},
-            {"type": "response.function_call_arguments.delta", "output_index": 0, "item_id": item["id"],
-             "delta": item["arguments"]},
+            {
+                "type": "response.output_item.added",
+                "output_index": 0,
+                "item": {**item, "arguments": "", "status": "in_progress"},
+            },
+            {
+                "type": "response.function_call_arguments.delta",
+                "output_index": 0,
+                "item_id": item["id"],
+                "delta": item["arguments"],
+            },
             {"type": "response.output_item.done", "output_index": 0, "item": item},
         ]
     else:
-        item = {"type": "message", "id": f"msg_{rid}", "role": "assistant", "status": "completed",
-                "content": [{"type": "output_text", "text": text, "annotations": []}]}
+        item = {
+            "type": "message",
+            "id": f"msg_{rid}",
+            "role": "assistant",
+            "status": "completed",
+            "content": [{"type": "output_text", "text": text, "annotations": []}],
+        }
         middle = [
-            {"type": "response.output_item.added", "output_index": 0,
-             "item": {**item, "content": [], "status": "in_progress"}},
-            {"type": "response.output_text.delta", "output_index": 0, "content_index": 0, "item_id": item["id"],
-             "delta": text},
+            {
+                "type": "response.output_item.added",
+                "output_index": 0,
+                "item": {**item, "content": [], "status": "in_progress"},
+            },
+            {
+                "type": "response.output_text.delta",
+                "output_index": 0,
+                "content_index": 0,
+                "item_id": item["id"],
+                "delta": text,
+            },
             {"type": "response.output_item.done", "output_index": 0, "item": item},
         ]
     done = {**shell, "status": "completed", "output": [item], "usage": usage}
-    events = [{"type": "response.created", "response": shell}, *middle,
-              {"type": "response.completed", "response": done}]
+    events = [
+        {"type": "response.created", "response": shell},
+        *middle,
+        {"type": "response.completed", "response": done},
+    ]
     for seq, e in enumerate(events):
         e["sequence_number"] = seq
     return events
@@ -283,12 +450,16 @@ def _handler_for(fake: CatalogFake) -> type[BaseHTTPRequestHandler]:
 
         def _refuse_egress(self, method: str) -> bool:
             """Proxy-form requests (CONNECT host:port, or an absolute-URI GET/POST) are egress."""
-            if method != "CONNECT" and not self.path.startswith(("http://", "https://")):
+            if method != "CONNECT" and not self.path.startswith(
+                ("http://", "https://")
+            ):
                 return False
             target = self.path.split("://", 1)[-1].split("/", 1)[0]
             with fake._lock:
                 fake.egress.append(Recorded(method, target, self._headers(), None))
-            self._json(403, {"error": {"message": f"catalog egress sentinel refused {target}"}})
+            self._json(
+                403, {"error": {"message": f"catalog egress sentinel refused {target}"}}
+            )
             self.close_connection = True
             return True
 
@@ -309,11 +480,23 @@ def _handler_for(fake: CatalogFake) -> type[BaseHTTPRequestHandler]:
                 self.close_connection = True
                 return
             if fake.models_status != 200:
-                self._json(fake.models_status, {"error": {"message": "no listing here"}})
+                self._json(
+                    fake.models_status, {"error": {"message": "no listing here"}}
+                )
                 return
-            rows = [{"id": m, "object": "model", "type": "model", "display_name": m, "created": 1,
-                     "created_at": "2026-01-01T00:00:00Z", "owned_by": "catalog", "context_length": 131072}
-                    for m in fake.models]
+            rows = [
+                {
+                    "id": m,
+                    "object": "model",
+                    "type": "model",
+                    "display_name": m,
+                    "created": 1,
+                    "created_at": "2026-01-01T00:00:00Z",
+                    "owned_by": "catalog",
+                    "context_length": 131072,
+                }
+                for m in fake.models
+            ]
             # ``models`` is LM Studio's native listing key; OpenAI-shaped readers ignore it.
             self._json(200, {"object": "list", "data": rows, "models": rows})
 
@@ -326,14 +509,23 @@ def _handler_for(fake: CatalogFake) -> type[BaseHTTPRequestHandler]:
             except json.JSONDecodeError:
                 body = {"_raw": raw.decode("utf-8", "replace")}
             dialect = fake.routes.get(bare_path(self.path), "unknown")
-            dialect = dialect if dialect in ("chat", "anthropic", "responses") else "unknown"
+            dialect = (
+                dialect if dialect in ("chat", "anthropic", "responses") else "unknown"
+            )
             fake._record(Recorded("POST", self.path, self._headers(), body, dialect))
             if dialect == "unknown":
                 self._json(404, {"error": {"message": f"unsupported path {self.path}"}})
                 return
             if fake.fail_status is not None:
-                self._json(fake.fail_status, {"error": {
-                    "message": "catalog fake: provider down", "type": "server_error"}})
+                self._json(
+                    fake.fail_status,
+                    {
+                        "error": {
+                            "message": "catalog fake: provider down",
+                            "type": "server_error",
+                        }
+                    },
+                )
                 return
             text, call_id = _plan(fake, dialect, body)
             stream = bool(body.get("stream"))

@@ -86,10 +86,17 @@ class _FakeInlineQuery:
         self.from_user = SimpleNamespace(id=user_id, username="alice")
         self.answer_calls = []
 
-    async def answer(self, articles, cache_time=None, is_personal=None, next_offset=None):
+    async def answer(
+        self, articles, cache_time=None, is_personal=None, next_offset=None
+    ):
         self.answer_calls.append(
-            {"articles": articles, "cache_time": cache_time,
-             "is_personal": is_personal, "next_offset": next_offset})
+            {
+                "articles": articles,
+                "cache_time": cache_time,
+                "is_personal": is_personal,
+                "next_offset": next_offset,
+            }
+        )
 
 
 def _adapter(monkeypatch, authorized=True):
@@ -106,7 +113,8 @@ def _adapter(monkeypatch, authorized=True):
     adapter = TelegramAdapter.__new__(TelegramAdapter)
     adapter.platform = Platform.TELEGRAM  # `name` is a property over self.platform
     monkeypatch.setattr(
-        adapter, "_is_callback_user_authorized", lambda *a, **kw: authorized)
+        adapter, "_is_callback_user_authorized", lambda *a, **kw: authorized
+    )
     return adapter
 
 

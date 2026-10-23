@@ -91,9 +91,7 @@ class TestDraftOp:
 
     def test_send_draft_requires_descriptor_op(self, loop):
         # supports_draft_streaming True but op NOT advertised: old connector.
-        adapter, stub = _connected_adapter(
-            supported_ops=("send", "edit", "typing")
-        )
+        adapter, stub = _connected_adapter(supported_ops=("send", "edit", "typing"))
         with pytest.raises(NotImplementedError):
             loop.run_until_complete(
                 adapter.send_draft(chat_id="C1", draft_id=1, content="x")
@@ -103,9 +101,7 @@ class TestDraftOp:
     def test_supports_draft_streaming_requires_both_flag_and_op(self):
         both, _ = _connected_adapter()
         assert both.supports_draft_streaming() is True
-        flag_only, _ = _connected_adapter(
-            supported_ops=("send", "edit", "typing")
-        )
+        flag_only, _ = _connected_adapter(supported_ops=("send", "edit", "typing"))
         assert flag_only.supports_draft_streaming() is False
         # Legacy connector with EMPTY supported_ops: fail-open elsewhere, but
         # draft must NOT fail open — the op did not exist pre-contract.
@@ -128,9 +124,7 @@ class TestDraftOp:
         # No regular send op — the final frame rides the draft stream.
         ops = [s["op"] for s in stub.sent]
         assert "send" not in ops, "final must seal the stream, not post anew"
-        finals = [
-            s for s in stub.sent if s.get("op") == "draft" and s.get("final")
-        ]
+        finals = [s for s in stub.sent if s.get("op") == "draft" and s.get("final")]
         assert len(finals) == 1
         assert finals[0]["content"] == "hello world"
         # Stream ts comes back as the message identity.

@@ -30,7 +30,6 @@ class TestImageCommand:
 
         assert cli_obj._attached_images == [img]
 
-
     def test_handle_image_command_bare_shows_usage(self):
         """Bare ``/image`` prints the usage hint through the CLI's real printing
         helpers — this branch raised NameError before the lazy import existed."""
@@ -40,7 +39,9 @@ class TestImageCommand:
             cli_obj._handle_image_command("/image")
 
         assert cli_obj._attached_images == []
-        rendered = " ".join(str(arg) for call in mock_print.call_args_list for arg in call.args)
+        rendered = " ".join(
+            str(arg) for call in mock_print.call_args_list for arg in call.args
+        )
         assert "Usage: /image <path>" in rendered
 
     def test_handle_image_command_rejects_non_image_file(self, tmp_path):
@@ -52,7 +53,9 @@ class TestImageCommand:
             cli_obj._handle_image_command(f"/image {file_path}")
 
         assert cli_obj._attached_images == []
-        rendered = " ".join(str(arg) for call in mock_print.call_args_list for arg in call.args)
+        rendered = " ".join(
+            str(arg) for call in mock_print.call_args_list for arg in call.args
+        )
         assert "Not a supported image file" in rendered
 
 
@@ -65,7 +68,6 @@ class TestCollectQueryImages:
         assert message == "describe this"
         assert images == [img]
 
-
     def test_collect_query_images_supports_tilde_paths(self, tmp_path, monkeypatch):
         home = tmp_path / "home"
         img = _make_image(home / "storage" / "shared" / "Pictures" / "cat.png")
@@ -73,7 +75,9 @@ class TestCollectQueryImages:
         # ntpath.expanduser ignores HOME (Python 3.8+) — it wants USERPROFILE.
         monkeypatch.setenv("USERPROFILE", str(home))
 
-        message, images = _collect_query_images("describe this", "~/storage/shared/Pictures/cat.png")
+        message, images = _collect_query_images(
+            "describe this", "~/storage/shared/Pictures/cat.png"
+        )
 
         assert message == "describe this"
         assert images == [img]
@@ -87,4 +91,3 @@ class TestImageBadgeFormatting:
 
         assert badges.startswith("[📎 ")
         assert "Image #1" not in badges
-

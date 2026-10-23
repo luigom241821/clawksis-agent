@@ -9,7 +9,9 @@ import pytest
 
 def _venv(path, version):
     (path / "Lib" / "site-packages").mkdir(parents=True)
-    (path / "pyvenv.cfg").write_text(f"home = C:\\Python\nversion_info = {version}\n", encoding="utf-8")
+    (path / "pyvenv.cfg").write_text(
+        f"home = C:\\Python\nversion_info = {version}\n", encoding="utf-8"
+    )
     return path
 
 
@@ -49,11 +51,19 @@ _OTHER_MINOR = 11 if sys.version_info.minor != 11 else 12
 
 
 @pytest.mark.platforms("windows")
-@pytest.mark.parametrize("version_line", [
-    pytest.param(f"version_info = {sys.version_info.major}.{_OTHER_MINOR}.9\n", id="foreign-abi"),
-    pytest.param(None, id="no-version-metadata"),
-])
-def test_legacy_venv_of_unknown_or_foreign_abi_is_never_overlaid(tmp_path, monkeypatch, caplog, version_line):
+@pytest.mark.parametrize(
+    "version_line",
+    [
+        pytest.param(
+            f"version_info = {sys.version_info.major}.{_OTHER_MINOR}.9\n",
+            id="foreign-abi",
+        ),
+        pytest.param(None, id="no-version-metadata"),
+    ],
+)
+def test_legacy_venv_of_unknown_or_foreign_abi_is_never_overlaid(
+    tmp_path, monkeypatch, caplog, version_line
+):
     """#139085: with nothing committed and VIRTUAL_ENV unset (PM launchers and
     ``activate_dependencies`` pop it), the overlay fell back to ``<root>/venv`` and
     ``addsitedir``-ed a cp311 tree into a 3.14 gateway, which then died importing
@@ -66,7 +76,9 @@ def test_legacy_venv_of_unknown_or_foreign_abi_is_never_overlaid(tmp_path, monke
     legacy = root / "venv"
     (legacy / "Lib" / "site-packages").mkdir(parents=True)
     if version_line is not None:
-        (legacy / "pyvenv.cfg").write_text("home = C:\\Python\n" + version_line, encoding="utf-8")
+        (legacy / "pyvenv.cfg").write_text(
+            "home = C:\\Python\n" + version_line, encoding="utf-8"
+        )
 
     monkeypatch.setattr("pm.environments.committed_venv", lambda _root: None)
     monkeypatch.setattr(gateway_run, "__file__", str(root / "gateway" / "run.py"))
@@ -77,8 +89,11 @@ def test_legacy_venv_of_unknown_or_foreign_abi_is_never_overlaid(tmp_path, monke
         gateway_run._ensure_windows_gateway_venv_imports()
 
     legacy_site = legacy / "Lib" / "site-packages"
-    assert not any(entry and os.path.samefile(entry, legacy_site)
-                   for entry in sys.path if os.path.isdir(entry))
+    assert not any(
+        entry and os.path.samefile(entry, legacy_site)
+        for entry in sys.path
+        if os.path.isdir(entry)
+    )
     assert "VIRTUAL_ENV" not in os.environ
     assert "Skipping venv overlay" in caplog.text
 
@@ -104,9 +119,7 @@ def test_same_abi_venv_is_still_overlaid(tmp_path, monkeypatch):
 
 
 @pytest.mark.platforms("windows")
-def test_venv_import_setup_scopes_to_sys_path_not_global_environ(
-    tmp_path, monkeypatch
-):
+def test_venv_import_setup_scopes_to_sys_path_not_global_environ(tmp_path, monkeypatch):
     """The venv import setup must not leak into the global environment (#57467).
 
     ``_ensure_windows_gateway_venv_imports`` patches the CURRENT process via

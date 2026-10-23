@@ -165,7 +165,9 @@ def main() -> int:
         f"agent build takes {args.build_seconds:.1f}s; "
         f"image is {args.kb} KB; {args.rounds} rounds\n"
     )
-    print(f"{'rpc':<22} {'in _LONG_HANDLERS':<19} {'mean':>8} {'max':>8}   blocks reader?")
+    print(
+        f"{'rpc':<22} {'in _LONG_HANDLERS':<19} {'mean':>8} {'max':>8}   blocks reader?"
+    )
 
     for method, build_params in calls:
         samples: list[float] = []
@@ -195,9 +197,7 @@ def main() -> int:
         worst = max(samples)
         verdict = "no (pooled)" if pooled else ("YES" if mean > 1.0 else "no")
 
-        print(
-            f"{method:<22} {pooled!s:<19} {mean:>7.2f}s {worst:>7.2f}s   {verdict}"
-        )
+        print(f"{method:<22} {pooled!s:<19} {mean:>7.2f}s {worst:>7.2f}s   {verdict}")
 
     print(
         "\ndispatch() returns immediately for pooled handlers, so a pooled timing\n"
@@ -219,12 +219,19 @@ def _report_surfaces() -> None:
     print("\n\n=== which surfaces reach the gateway attach RPCs ===\n")
 
     root = Path(__file__).resolve().parents[4]
-    attach_rpcs = ("image.attach", "image.attach_bytes", "file.attach", "clipboard.paste")
+    attach_rpcs = (
+        "image.attach",
+        "image.attach_bytes",
+        "file.attach",
+        "clipboard.paste",
+    )
 
     surfaces = {
         "CLI (cli.py)": [root / "cli.py"],
         "TUI (ui-tui)": sorted((root / "ui-tui" / "src").rglob("*.ts")),
-        "Desktop (apps/desktop)": sorted((root / "apps" / "desktop" / "src").rglob("*.ts")),
+        "Desktop (apps/desktop)": sorted(
+            (root / "apps" / "desktop" / "src").rglob("*.ts")
+        ),
     }
 
     for label, paths in surfaces.items():

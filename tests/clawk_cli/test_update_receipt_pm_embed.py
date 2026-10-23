@@ -23,8 +23,12 @@ def homed(tmp_path, monkeypatch):
     monkeypatch.setattr(clawk_constants, "get_clawk_home", lambda: tmp_path)
     import pm.receipt as pm_receipt_mod
 
-    monkeypatch.setattr(pm_receipt_mod, "_receipt_dir", lambda: tmp_path / "logs" / "update_receipts")
-    monkeypatch.setattr(ur, "_receipt_dir", lambda: tmp_path / "logs" / "update_receipts")
+    monkeypatch.setattr(
+        pm_receipt_mod, "_receipt_dir", lambda: tmp_path / "logs" / "update_receipts"
+    )
+    monkeypatch.setattr(
+        ur, "_receipt_dir", lambda: tmp_path / "logs" / "update_receipts"
+    )
     return tmp_path
 
 
@@ -70,7 +74,9 @@ def test_update_receipt_embeds_pm_sections(homed):
     ur.record_step("git-pull", True)
     path = ur.finalize_update_receipt("success")
 
-    data = json.loads((homed / "logs" / "update_receipts" / "latest.json").read_text(encoding="utf-8"))
+    data = json.loads(
+        (homed / "logs" / "update_receipts" / "latest.json").read_text(encoding="utf-8")
+    )
     assert json.loads(path.read_text(encoding="utf-8")) == data
     assert data["outcome"] == "success"
     assert data["pm_venv_rebuild"] == {"ok": True, "reason": ""}
@@ -84,13 +90,15 @@ def test_legacy_worker_receipt_fields_still_embed(homed):
 
     ur.begin_update_receipt()
     update_id = ur.current_correlation_id()
-    legacy = {"update_id": update_id, "outcome": "ok",
-              "plugin_bisect": [{"plugin": "old-plugin", "action": "disabled"}]}
+    legacy = {
+        "update_id": update_id,
+        "outcome": "ok",
+        "plugin_bisect": [{"plugin": "old-plugin", "action": "disabled"}],
+    }
     accept_worker_receipt(legacy, update_id)
     path = ur.finalize_update_receipt("success")
     data = json.loads(path.read_text(encoding="utf-8"))
     assert data["pm_plugin_bisect"] == legacy["plugin_bisect"]
-
 
 
 def test_stale_sync_from_before_the_update_is_never_embedded(homed):
@@ -159,7 +167,10 @@ def test_nested_update_ids_do_not_cross_embed(homed):
 
     inner_path = ur.finalize_update_receipt("success")
     assert inner_path is not None
-    assert json.loads(inner_path.read_text(encoding="utf-8"))["pm_venv_rebuild"]["reason"] == "inner rebuild"
+    assert (
+        json.loads(inner_path.read_text(encoding="utf-8"))["pm_venv_rebuild"]["reason"]
+        == "inner rebuild"
+    )
     assert pm_receipt_mod.last_for_update(inner_id) is None
     assert ur.current_correlation_id() == outer_id
     assert pm_receipt_mod.last_for_update(outer_id)["steps"][0]["name"] == "outer-sync"
@@ -180,12 +191,13 @@ def test_nested_update_ids_do_not_cross_embed(homed):
     assert inner_data["update_id"] == inner_id
     assert inner_data["pm_steps"][0]["name"] == "inner-sync"
     assert inner_data["pm_venv_rebuild"]["reason"] == "inner rebuild"
-    latest = json.loads((homed / "logs/update_receipts/latest.json").read_text(encoding="utf-8"))
+    latest = json.loads(
+        (homed / "logs/update_receipts/latest.json").read_text(encoding="utf-8")
+    )
     assert latest == outer_data
 
     # outermost finalize popped the last receipt: no correlation remains
     assert ur.current_correlation_id() is None
-
 
 
 def test_sync_after_nested_update_finalizes_embeds_into_outer(homed):

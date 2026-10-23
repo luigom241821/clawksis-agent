@@ -74,7 +74,9 @@ _TS_RE = re.compile(r"(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})")
 _LEVEL_RE = re.compile(r"\s(DEBUG|INFO|WARNING|ERROR|CRITICAL)\s")
 # Logger name: the token before ":" after the level and optional "[session]" tag,
 # e.g. "INFO gateway.run:" or "INFO [sess_abc] tools.terminal_tool:".
-_LOGGER_NAME_RE = re.compile(r"\s(?:DEBUG|INFO|WARNING|ERROR|CRITICAL)(?:\s+\[.*?\])?\s+(\S+):")
+_LOGGER_NAME_RE = re.compile(
+    r"\s(?:DEBUG|INFO|WARNING|ERROR|CRITICAL)(?:\s+\[.*?\])?\s+(\S+):"
+)
 _LEVEL_ORDER = {"DEBUG": 0, "INFO": 1, "WARNING": 2, "ERROR": 3, "CRITICAL": 4}
 
 
@@ -128,11 +130,15 @@ def _matches_filters(
             return False
     if min_level is not None:
         level = _extract_level(line)
-        if level is not None and _LEVEL_ORDER.get(level, 0) < _LEVEL_ORDER.get(min_level, 0):
+        if level is not None and _LEVEL_ORDER.get(level, 0) < _LEVEL_ORDER.get(
+            min_level, 0
+        ):
             return False
     if session_filter is not None and session_filter not in line:
         return False
-    return component_prefixes is None or _line_matches_component(line, component_prefixes)
+    return component_prefixes is None or _line_matches_component(
+        line, component_prefixes
+    )
 
 
 class _LineFilter:
@@ -148,7 +154,10 @@ class _LineFilter:
             self._carry = _matches_filters(line, **self._filters)
         elif self._carry is None:
             # Before the first stamp: this record's time and level are unknown.
-            timed = self._filters.get("since") is not None or self._filters.get("min_level") is not None
+            timed = (
+                self._filters.get("since") is not None
+                or self._filters.get("min_level") is not None
+            )
             return not timed and _matches_filters(line, **self._filters)
         return self._carry
 
@@ -198,17 +207,22 @@ def tail_log(
     if since:
         since_dt = _parse_since(since)
         if since_dt is None:
-            print(f"Invalid --since value: {since!r}. Use format like '1h', '30m', '2d'.")
+            print(
+                f"Invalid --since value: {since!r}. Use format like '1h', '30m', '2d'."
+            )
             sys.exit(1)
 
     min_level = level.upper() if level else None
     if min_level and min_level not in _LEVEL_ORDER:
-        print(f"Invalid --level: {level!r}. Use DEBUG, INFO, WARNING, ERROR, or CRITICAL.")
+        print(
+            f"Invalid --level: {level!r}. Use DEBUG, INFO, WARNING, ERROR, or CRITICAL."
+        )
         sys.exit(1)
 
     component_prefixes = None
     if component:
         from clawk_logging import COMPONENT_PREFIXES
+
         component_lower = component.lower()
         if component_lower not in COMPONENT_PREFIXES:
             available = ", ".join(sorted(COMPONENT_PREFIXES))
@@ -216,8 +230,12 @@ def tail_log(
             sys.exit(1)
         component_prefixes = COMPONENT_PREFIXES[component_lower]
 
-    filters = dict(min_level=min_level, session_filter=session,
-                   since=since_dt, component_prefixes=component_prefixes)
+    filters = dict(
+        min_level=min_level,
+        session_filter=session,
+        since=since_dt,
+        component_prefixes=component_prefixes,
+    )
     has_filters = any(v is not None for v in filters.values())
 
     try:
@@ -227,8 +245,13 @@ def tail_log(
         sys.exit(1)
 
     filter_parts = [
-        f"{label}={value}" for label, value in
-        (("level>", min_level), ("session", session), ("component", component), ("since", since))
+        f"{label}={value}"
+        for label, value in (
+            ("level>", min_level),
+            ("session", session),
+            ("component", component),
+            ("since", since),
+        )
         if value
     ]
     filter_desc = f" [{', '.join(filter_parts)}]" if filter_parts else ""
@@ -246,7 +269,9 @@ def tail_log(
         print("\n--- stopped ---")
 
 
-def _read_tail(path: Path, num_lines: int, *, has_filters: bool = False, **filters) -> list:
+def _read_tail(
+    path: Path, num_lines: int, *, has_filters: bool = False, **filters
+) -> list:
     """Read the last *num_lines* matching lines; ``filters`` are ``_matches_filters`` kwargs."""
     if not has_filters:
         return _read_last_n_lines(path, num_lines)
@@ -286,7 +311,11 @@ def _read_last_n_lines(path: Path, n: int) -> list:
                 else:
                     lines = chunk_lines
                 chunk_size = min(chunk_size * 2, 65536)
-            decoded = [raw.decode("utf-8", errors="replace") + "\n" for raw in lines if raw.strip()]
+            decoded = [
+                raw.decode("utf-8", errors="replace") + "\n"
+                for raw in lines
+                if raw.strip()
+            ]
             return decoded[-n:]
     except Exception:
         return _read_all_lines(path)[-n:]
@@ -329,8 +358,11 @@ def _age_label(mtime: datetime) -> str:
 def list_logs() -> None:
     """Print available log files with sizes (plus the root home's update logs under a profile)."""
     log_dir = get_clawk_home() / "logs"
-    root_logs = [path for name in sorted(ROOT_HOME_LOGS)
-                 if (path := log_file_path(name)).parent != log_dir and path.is_file()]
+    root_logs = [
+        path
+        for name in sorted(ROOT_HOME_LOGS)
+        if (path := log_file_path(name)).parent != log_dir and path.is_file()
+    ]
     if not log_dir.exists() and not root_logs:
         print(f"No logs directory at {display_clawk_home()}/logs/")
         return

@@ -1,4 +1,5 @@
 """Source-build entrypoint for the independently PM-owned DMG supplier."""
+
 from __future__ import annotations
 
 import argparse

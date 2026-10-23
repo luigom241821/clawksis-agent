@@ -9,6 +9,7 @@ Task 2.2/2.3. Two layers:
 Mocked tests are necessary-not-sufficient here (the HARD live-validation gate,
 Q-B, exercises a real `clawk gateway run`); these lock the unit contract.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -82,7 +83,6 @@ class TestInstantiationEpoch:
         body = dc.read_drain_request()
         assert body is not None and body["epoch"] == dc.current_instantiation_epoch()
 
-
     def test_marker_from_prior_instantiation_reads_as_absent(self, home, monkeypatch):
         # THE NS-570 REGRESSION. A begin-drain marker written by a PREVIOUS
         # container/VM instantiation survives on the durable CLAWK_HOME volume
@@ -98,7 +98,6 @@ class TestInstantiationEpoch:
         assert dc.drain_request_path().exists() is True
         # …but it is ignored because its epoch belongs to a prior instantiation.
         assert dc.drain_requested() is False
-
 
     def test_current_epoch_empty_when_proc_unreadable(self, monkeypatch):
         # When neither /proc identity source is readable, the epoch is "" so
@@ -126,7 +125,6 @@ class TestInstantiationEpoch:
 
 
 class TestMarkerMaxAge:
-
     def test_expired_marker_reads_as_absent(self, home):
         # THE #85433 REGRESSION. A drain-gated action completes WITHOUT a
         # machine restart, so the epoch still matches — but the writer never
@@ -137,8 +135,7 @@ class TestMarkerMaxAge:
         body = dc.read_drain_request()
         assert body is not None
         body["requested_at"] = (
-            datetime.now(UTC)
-            - timedelta(seconds=dc.DRAIN_REQUEST_MAX_AGE_SECONDS + 60)
+            datetime.now(UTC) - timedelta(seconds=dc.DRAIN_REQUEST_MAX_AGE_SECONDS + 60)
         ).isoformat()
         dc.drain_request_path().write_text(json.dumps(body), encoding="utf-8")
 
@@ -170,8 +167,7 @@ class TestMarkerMaxAge:
         from datetime import datetime, timedelta, timezone
 
         stale_naive = (
-            datetime.now(UTC)
-            - timedelta(seconds=dc.DRAIN_REQUEST_MAX_AGE_SECONDS + 60)
+            datetime.now(UTC) - timedelta(seconds=dc.DRAIN_REQUEST_MAX_AGE_SECONDS + 60)
         ).replace(tzinfo=None)
         payload = {
             "action": "drain",
@@ -203,14 +199,18 @@ class TestMarkerMaxAge:
             assert dc.drain_requested() is False
             assert dc.drain_requested() is False  # second poll tick
             assert dc.drain_requested() is False  # third poll tick
-        expired_logs = [r for r in caplog.records if "expired drain marker" in r.message]
+        expired_logs = [
+            r for r in caplog.records if "expired drain marker" in r.message
+        ]
         assert len(expired_logs) == 1
 
         caplog.clear()
         _write_expired(120)  # a DIFFERENT requested_at that is also expired
         with caplog.at_level(logging.WARNING, logger="gateway.drain_control"):
             assert dc.drain_requested() is False
-        expired_logs = [r for r in caplog.records if "expired drain marker" in r.message]
+        expired_logs = [
+            r for r in caplog.records if "expired drain marker" in r.message
+        ]
         assert len(expired_logs) == 1
 
     def test_rewrite_refreshes_the_clock(self, home):
@@ -222,8 +222,7 @@ class TestMarkerMaxAge:
         body = dc.read_drain_request()
         assert body is not None
         body["requested_at"] = (
-            datetime.now(UTC)
-            - timedelta(seconds=dc.DRAIN_REQUEST_MAX_AGE_SECONDS + 60)
+            datetime.now(UTC) - timedelta(seconds=dc.DRAIN_REQUEST_MAX_AGE_SECONDS + 60)
         ).isoformat()
         dc.drain_request_path().write_text(json.dumps(body), encoding="utf-8")
         assert dc.drain_requested() is False  # expired…
@@ -250,10 +249,6 @@ def _drain_runner():
 
 
 class TestDrainStateMachine:
-
-
-
-
     def test_exit_during_shutdown_does_not_revert_to_running(self):
         runner, _ = _drain_runner()
         runner._enter_external_drain()
@@ -271,7 +266,6 @@ class TestDrainStateMachine:
 
 
 class TestDrainWatcher:
-
     @pytest.mark.asyncio
     async def test_watcher_enters_then_exits_with_marker(self, home):
         runner, _ = _drain_runner()
@@ -314,4 +308,3 @@ class TestNewTurnGate:
         result = await runner._handle_message(event)
         assert result is not None
         assert "draining" in result.lower()
-

@@ -200,9 +200,7 @@ def test_abort_recovery_does_not_restart_manual_only_fleet(monkeypatch):
         "run",
         lambda *args, **kwargs: calls.append((args, kwargs)),
     )
-    monkeypatch.setattr(
-        abort_recovery, "_serve_unit_recovery_available", lambda: False
-    )
+    monkeypatch.setattr(abort_recovery, "_serve_unit_recovery_available", lambda: False)
     plan = SimpleNamespace(runtimes=[_runtime("manual-box", "manual")])
 
     result = update_cmd._recover_gateway_restart_after_abort(plan, gateway_mode=False)
@@ -243,9 +241,7 @@ def test_service_matching_is_exact_for_overlapping_profile_names():
     assert not update_cmd._gateway_service_matches_profile(
         "foo", "clawk-gateway-foobar.service"
     )
-    assert update_cmd._gateway_service_matches_profile(
-        "default", "ai.clawk.gateway"
-    )
+    assert update_cmd._gateway_service_matches_profile("default", "ai.clawk.gateway")
     assert not update_cmd._gateway_service_matches_profile(
         "default", "ai.clawk.gateway-foo"
     )
@@ -277,8 +273,28 @@ def test_recovery_child_restarts_each_profile_with_a_fresh_main(monkeypatch):
         "covered": {},
     }
     assert [call[0] for call in calls] == [
-        [sys.executable, "-m", "clawk_cli.main", "-p", "coder", "gateway", "restart", "--interrupt", "--detach"],
-        [sys.executable, "-m", "clawk_cli.main", "-p", "default", "gateway", "restart", "--interrupt", "--detach"],
+        [
+            sys.executable,
+            "-m",
+            "clawk_cli.main",
+            "-p",
+            "coder",
+            "gateway",
+            "restart",
+            "--interrupt",
+            "--detach",
+        ],
+        [
+            sys.executable,
+            "-m",
+            "clawk_cli.main",
+            "-p",
+            "default",
+            "gateway",
+            "restart",
+            "--interrupt",
+            "--detach",
+        ],
     ]
     for _, kwargs in calls:
         assert kwargs["stdin"] is subprocess.DEVNULL
@@ -299,7 +315,9 @@ def test_recovery_child_verifies_systemd_profiles_via_is_active(monkeypatch):
         if argv[0].endswith("systemctl"):
             unit = argv[-1]
             active = unit == "clawk-gateway.service"
-            return _Completed(0 if active else 3, stdout="active" if active else "inactive")
+            return _Completed(
+                0 if active else 3, stdout="active" if active else "inactive"
+            )
         return _Completed(0)
 
     result = recovery.restart_profiles(
@@ -379,8 +397,6 @@ def test_recovery_payload_rejects_malformed_supervisors_map():
         assert "supervisors" in str(exc)
     else:
         raise AssertionError("malformed supervisors map must be rejected")
-
-
 
 
 def test_recovery_module_end_to_end_in_a_real_fresh_process(tmp_path):

@@ -31,13 +31,17 @@ def pending_human_input() -> Optional[int]:
     except Exception:
         if not _input_probe_failure_logged:
             _input_probe_failure_logged = True
-            _log.warning("idle-proof input probe unavailable; this backend will report indeterminate",
-                         exc_info=True)
+            _log.warning(
+                "idle-proof input probe unavailable; this backend will report indeterminate",
+                exc_info=True,
+            )
         return None
 
 
-def idle_proof(turn_probe: Callable[[], bool | str | None] = busy_ledger,
-               input_probe: Callable[[], Optional[int]] = pending_human_input) -> dict:
+def idle_proof(
+    turn_probe: Callable[[], bool | str | None] = busy_ledger,
+    input_probe: Callable[[], Optional[int]] = pending_human_input,
+) -> dict:
     """``{"idle": True | False | None, "reason": str | None}`` plus ``"detail"`` naming the busy ledger.
 
     ``True`` only when no turn is in flight (session table AND cron ledger) and nothing is waiting
@@ -49,7 +53,11 @@ def idle_proof(turn_probe: Callable[[], bool | str | None] = busy_ledger,
     if turn is None:
         return {"idle": None, "reason": "turn_probe_unavailable"}
     if turn:
-        return {"idle": False, "reason": "turn_in_flight", "detail": turn if isinstance(turn, str) else None}
+        return {
+            "idle": False,
+            "reason": "turn_in_flight",
+            "detail": turn if isinstance(turn, str) else None,
+        }
     pending = input_probe()
     if pending is None:
         return {"idle": None, "reason": "input_probe_unavailable"}

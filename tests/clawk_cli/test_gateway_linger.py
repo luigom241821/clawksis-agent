@@ -25,7 +25,9 @@ def _stub_linger_file(monkeypatch, tmp_path, *, exists: bool) -> None:
 
     def redirected_path(path, *more):
         candidate = Path(path, *more)
-        return fake_dir / candidate.name if candidate.parent == linger_dir else candidate
+        return (
+            fake_dir / candidate.name if candidate.parent == linger_dir else candidate
+        )
 
     monkeypatch.setattr(gateway, "Path", redirected_path)
 
@@ -35,7 +37,11 @@ def _root_with_system_unit_pinned_home(monkeypatch, tmp_path) -> None:
     path that calls ``Path(...).expanduser()`` while rendering the restart hint."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk-home"))
     monkeypatch.setattr(gateway.os, "geteuid", lambda: 0)
-    monkeypatch.setattr(gateway, "_clawk_home_pinned_by_unit", lambda _unit_path: str(tmp_path / "system-home"))
+    monkeypatch.setattr(
+        gateway,
+        "_clawk_home_pinned_by_unit",
+        lambda _unit_path: str(tmp_path / "system-home"),
+    )
 
 
 class TestEnsureLingerEnabled:
@@ -45,18 +51,23 @@ class TestEnsureLingerEnabled:
         _stub_linger_file(monkeypatch, tmp_path, exists=True)
 
         calls = []
-        monkeypatch.setattr(gateway.subprocess, "run", lambda *args, **kwargs: calls.append((args, kwargs)))
+        monkeypatch.setattr(
+            gateway.subprocess,
+            "run",
+            lambda *args, **kwargs: calls.append((args, kwargs)),
+        )
 
         gateway._ensure_linger_enabled()
 
         assert calls == []
 
-
     def test_loginctl_success_enables_linger(self, monkeypatch, capsys, tmp_path):
         monkeypatch.setattr(gateway, "is_linux", lambda: True)
         monkeypatch.setattr("getpass.getuser", lambda: "testuser")
         _stub_linger_file(monkeypatch, tmp_path, exists=False)
-        monkeypatch.setattr(gateway, "get_systemd_linger_status", lambda username=None: (False, ""))
+        monkeypatch.setattr(
+            gateway, "get_systemd_linger_status", lambda username=None: (False, "")
+        )
         monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/loginctl")
 
         run_calls = []
@@ -69,20 +80,27 @@ class TestEnsureLingerEnabled:
 
         gateway._ensure_linger_enabled()
 
-        assert run_calls == [(["loginctl", "enable-linger", "testuser"], True, True, False)]
+        assert run_calls == [
+            (["loginctl", "enable-linger", "testuser"], True, True, False)
+        ]
 
-
-    def test_loginctl_failure_shows_manual_guidance(self, monkeypatch, capsys, tmp_path):
+    def test_loginctl_failure_shows_manual_guidance(
+        self, monkeypatch, capsys, tmp_path
+    ):
         monkeypatch.setattr(gateway, "is_linux", lambda: True)
         monkeypatch.setattr("getpass.getuser", lambda: "testuser")
         _stub_linger_file(monkeypatch, tmp_path, exists=False)
         _root_with_system_unit_pinned_home(monkeypatch, tmp_path)
-        monkeypatch.setattr(gateway, "get_systemd_linger_status", lambda username=None: (False, ""))
+        monkeypatch.setattr(
+            gateway, "get_systemd_linger_status", lambda username=None: (False, "")
+        )
         monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/loginctl")
         monkeypatch.setattr(
             gateway.subprocess,
             "run",
-            lambda *args, **kwargs: SimpleNamespace(returncode=1, stdout="", stderr="Permission denied"),
+            lambda *args, **kwargs: SimpleNamespace(
+                returncode=1, stdout="", stderr="Permission denied"
+            ),
         )
 
         gateway._ensure_linger_enabled()
@@ -91,11 +109,15 @@ class TestEnsureLingerEnabled:
         assert "sudo loginctl enable-linger testuser" in out
         assert "Permission denied" in out
 
-    def test_system_scope_enables_target_user_without_logout_messaging(self, monkeypatch, capsys, tmp_path):
+    def test_system_scope_enables_target_user_without_logout_messaging(
+        self, monkeypatch, capsys, tmp_path
+    ):
         monkeypatch.setattr(gateway, "is_linux", lambda: True)
         monkeypatch.setattr(gateway, "is_termux", lambda: False)
         _stub_linger_file(monkeypatch, tmp_path, exists=False)
-        monkeypatch.setattr(gateway, "get_systemd_linger_status", lambda username=None: (False, ""))
+        monkeypatch.setattr(
+            gateway, "get_systemd_linger_status", lambda username=None: (False, "")
+        )
         monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/loginctl")
         run_calls = []
 
@@ -111,16 +133,23 @@ class TestEnsureLingerEnabled:
         out = capsys.readouterr().out
         assert "alice" in out and "logout" not in out
 
-    def test_system_scope_warning_uses_system_restart(self, monkeypatch, capsys, tmp_path):
+    def test_system_scope_warning_uses_system_restart(
+        self, monkeypatch, capsys, tmp_path
+    ):
         monkeypatch.setattr(gateway, "is_linux", lambda: True)
         monkeypatch.setattr(gateway, "is_termux", lambda: False)
         _stub_linger_file(monkeypatch, tmp_path, exists=False)
         _root_with_system_unit_pinned_home(monkeypatch, tmp_path)
-        monkeypatch.setattr(gateway, "get_systemd_linger_status", lambda username=None: (False, ""))
+        monkeypatch.setattr(
+            gateway, "get_systemd_linger_status", lambda username=None: (False, "")
+        )
         monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/loginctl")
         monkeypatch.setattr(
-            gateway.subprocess, "run",
-            lambda *a, **k: SimpleNamespace(returncode=1, stdout="", stderr="Permission denied"),
+            gateway.subprocess,
+            "run",
+            lambda *a, **k: SimpleNamespace(
+                returncode=1, stdout="", stderr="Permission denied"
+            ),
         )
 
         assert gateway._ensure_linger_enabled("alice", system=True) is False
@@ -137,24 +166,46 @@ class TestEnsureSystemServiceLinger:
     ):
         """Root installing a system unit waits for the TARGET user's bus (never adopting its own env) and
         tells the operator to restart only when a bus-less gateway is already active."""
-        monkeypatch.setattr(gateway, "_ensure_linger_enabled", lambda username, system=False: True)
+        monkeypatch.setattr(
+            gateway, "_ensure_linger_enabled", lambda username, system=False: True
+        )
         monkeypatch.setattr("pwd.getpwnam", lambda name: SimpleNamespace(pw_uid=1001))
         waited = []
-        monkeypatch.setattr(gateway, "_wait_for_target_user_bus", lambda uid, timeout=5.0: waited.append(uid) or True)
+        monkeypatch.setattr(
+            gateway,
+            "_wait_for_target_user_bus",
+            lambda uid, timeout=5.0: waited.append(uid) or True,
+        )
         adopted = []
-        monkeypatch.setattr(gateway, "_ensure_user_systemd_env", lambda: adopted.append(True))
-        monkeypatch.setattr(gateway, "_systemd_unit_is_active", lambda system=False: running)
+        monkeypatch.setattr(
+            gateway, "_ensure_user_systemd_env", lambda: adopted.append(True)
+        )
+        monkeypatch.setattr(
+            gateway, "_systemd_unit_is_active", lambda system=False: running
+        )
 
         gateway._ensure_system_service_linger("alice")
 
         assert waited == [1001] and adopted == []
         out = capsys.readouterr().out
-        assert (f"sudo systemctl restart {gateway.get_service_name()}.service" in out) is running
+        assert (
+            f"sudo systemctl restart {gateway.get_service_name()}.service" in out
+        ) is running
 
     def test_already_enabled_skips_wait_and_activity_probe(self, monkeypatch):
-        monkeypatch.setattr(gateway, "_ensure_linger_enabled", lambda username, system=False: False)
-        monkeypatch.setattr(gateway, "_wait_for_target_user_bus", lambda uid, timeout=5.0: pytest.fail("waited"))
-        monkeypatch.setattr(gateway, "_systemd_unit_is_active", lambda system=False: pytest.fail("probed"))
+        monkeypatch.setattr(
+            gateway, "_ensure_linger_enabled", lambda username, system=False: False
+        )
+        monkeypatch.setattr(
+            gateway,
+            "_wait_for_target_user_bus",
+            lambda uid, timeout=5.0: pytest.fail("waited"),
+        )
+        monkeypatch.setattr(
+            gateway,
+            "_systemd_unit_is_active",
+            lambda system=False: pytest.fail("probed"),
+        )
 
         gateway._ensure_system_service_linger("alice")
 
@@ -162,7 +213,9 @@ class TestEnsureSystemServiceLinger:
 def test_systemd_install_calls_linger_helper(monkeypatch, tmp_path, capsys):
     unit_path = tmp_path / "systemd" / "user" / "clawk-gateway.service"
 
-    monkeypatch.setattr(gateway, "get_systemd_unit_path", lambda system=False: unit_path)
+    monkeypatch.setattr(
+        gateway, "get_systemd_unit_path", lambda system=False: unit_path
+    )
     # Non-temp home so the temp-home write guard (which trips on the
     # hermetic test CLAWK_HOME) stays out of the way.
     monkeypatch.setattr(
@@ -181,7 +234,9 @@ def test_systemd_install_calls_linger_helper(monkeypatch, tmp_path, capsys):
 
     helper_calls = []
     monkeypatch.setattr(gateway.subprocess, "run", fake_run)
-    monkeypatch.setattr(gateway, "_ensure_linger_enabled", lambda: helper_calls.append(True))
+    monkeypatch.setattr(
+        gateway, "_ensure_linger_enabled", lambda: helper_calls.append(True)
+    )
 
     gateway.systemd_install(force=False)
 
@@ -194,15 +249,21 @@ def test_systemd_install_calls_linger_helper(monkeypatch, tmp_path, capsys):
 
 
 @pytest.mark.parametrize("user", ["alice", "root"])
-def test_systemd_install_targets_linger_at_system_service_user(monkeypatch, tmp_path, user):
+def test_systemd_install_targets_linger_at_system_service_user(
+    monkeypatch, tmp_path, user
+):
     """Fresh --system install enables linger for the unit's User= — root too, since restart-safe
     workers always cross systemd-run --user."""
     unit_path = tmp_path / "systemd" / "clawk-gateway.service"
     helper_calls = []
 
-    monkeypatch.setattr(gateway, "_require_root_for_system_service", lambda action: None)
+    monkeypatch.setattr(
+        gateway, "_require_root_for_system_service", lambda action: None
+    )
     monkeypatch.setattr(gateway, "has_legacy_clawk_units", lambda: False)
-    monkeypatch.setattr(gateway, "get_systemd_unit_path", lambda system=False: unit_path)
+    monkeypatch.setattr(
+        gateway, "get_systemd_unit_path", lambda system=False: unit_path
+    )
     monkeypatch.setattr(gateway, "_prepare_service_launcher", lambda **kwargs: None)
     monkeypatch.setattr(
         gateway,
@@ -210,7 +271,11 @@ def test_systemd_install_targets_linger_at_system_service_user(monkeypatch, tmp_
         lambda system=False, run_as_user=None: f"[Service]\nUser={run_as_user}\n",
     )
     monkeypatch.setattr(gateway, "_run_systemctl", lambda *args, **kwargs: None)
-    monkeypatch.setattr(gateway, "_ensure_system_service_linger", lambda username: helper_calls.append(username))
+    monkeypatch.setattr(
+        gateway,
+        "_ensure_system_service_linger",
+        lambda username: helper_calls.append(username),
+    )
     monkeypatch.setattr(gateway, "print_systemd_scope_conflict_warning", lambda: None)
     monkeypatch.setattr(gateway, "print_legacy_unit_warning", lambda: None)
 
@@ -220,21 +285,37 @@ def test_systemd_install_targets_linger_at_system_service_user(monkeypatch, tmp_
 
 
 @pytest.mark.parametrize("unit_is_current", [True, False])
-def test_existing_system_install_repairs_linger_for_configured_user(monkeypatch, tmp_path, unit_is_current):
+def test_existing_system_install_repairs_linger_for_configured_user(
+    monkeypatch, tmp_path, unit_is_current
+):
     """Re-running install on an affected system service provisions linger for the unit's User=."""
     unit_path = tmp_path / "systemd" / "clawk-gateway.service"
     unit_path.parent.mkdir(parents=True)
     unit_path.write_text("[Service]\nUser=alice\n", encoding="utf-8")
     helper_calls = []
 
-    monkeypatch.setattr(gateway, "_require_root_for_system_service", lambda action: None)
+    monkeypatch.setattr(
+        gateway, "_require_root_for_system_service", lambda action: None
+    )
     monkeypatch.setattr(gateway, "has_legacy_clawk_units", lambda: False)
-    monkeypatch.setattr(gateway, "get_systemd_unit_path", lambda system=False: unit_path)
-    monkeypatch.setattr(gateway, "_sync_clawk_home_from_systemd_unit", lambda system=False: None)
-    monkeypatch.setattr(gateway, "systemd_unit_is_current", lambda system=False: unit_is_current)
-    monkeypatch.setattr(gateway, "refresh_systemd_unit_if_needed", lambda system=False: None)
+    monkeypatch.setattr(
+        gateway, "get_systemd_unit_path", lambda system=False: unit_path
+    )
+    monkeypatch.setattr(
+        gateway, "_sync_clawk_home_from_systemd_unit", lambda system=False: None
+    )
+    monkeypatch.setattr(
+        gateway, "systemd_unit_is_current", lambda system=False: unit_is_current
+    )
+    monkeypatch.setattr(
+        gateway, "refresh_systemd_unit_if_needed", lambda system=False: None
+    )
     monkeypatch.setattr(gateway, "_run_systemctl", lambda *args, **kwargs: None)
-    monkeypatch.setattr(gateway, "_ensure_system_service_linger", lambda username: helper_calls.append(username))
+    monkeypatch.setattr(
+        gateway,
+        "_ensure_system_service_linger",
+        lambda username: helper_calls.append(username),
+    )
 
     gateway.systemd_install(system=True, run_as_user="alice")
 
@@ -242,21 +323,33 @@ def test_existing_system_install_repairs_linger_for_configured_user(monkeypatch,
 
 
 @pytest.mark.parametrize("system", [False, True])
-def test_systemd_install_repair_path_keeps_linger_guarantee(monkeypatch, tmp_path, system):
+def test_systemd_install_repair_path_keeps_linger_guarantee(
+    monkeypatch, tmp_path, system
+):
     """Repairing a stale unit used to return before the linger step, so an upgraded headless
     user service died at logout (#12863). System scope never touches user linger."""
     unit_path = tmp_path / "clawk-gateway.service"
     unit_path.write_text("old unit\n", encoding="utf-8")
-    monkeypatch.setattr(gateway, "get_systemd_unit_path", lambda system=False: unit_path)
+    monkeypatch.setattr(
+        gateway, "get_systemd_unit_path", lambda system=False: unit_path
+    )
     monkeypatch.setattr(gateway, "systemd_unit_is_current", lambda system=False: False)
     monkeypatch.setattr(gateway, "has_legacy_clawk_units", lambda: False)
-    monkeypatch.setattr(gateway, "_require_root_for_system_service", lambda _action: None)
-    monkeypatch.setattr(gateway, "_sync_clawk_home_from_systemd_unit", lambda system=False: None)
+    monkeypatch.setattr(
+        gateway, "_require_root_for_system_service", lambda _action: None
+    )
+    monkeypatch.setattr(
+        gateway, "_sync_clawk_home_from_systemd_unit", lambda system=False: None
+    )
     monkeypatch.setattr(gateway, "_read_systemd_user_from_unit", lambda path: None)
-    monkeypatch.setattr(gateway, "refresh_systemd_unit_if_needed", lambda system=False: None)
+    monkeypatch.setattr(
+        gateway, "refresh_systemd_unit_if_needed", lambda system=False: None
+    )
     monkeypatch.setattr(gateway, "_run_systemctl", lambda *args, **kwargs: None)
     helper_calls = []
-    monkeypatch.setattr(gateway, "_ensure_linger_enabled", lambda: helper_calls.append(True))
+    monkeypatch.setattr(
+        gateway, "_ensure_linger_enabled", lambda: helper_calls.append(True)
+    )
 
     gateway.systemd_install(force=False, system=system)
 

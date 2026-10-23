@@ -29,20 +29,33 @@ DM = "disk status?"
 # Transient: the policy's own class (429 / rate limit).
 RATE_LIMIT = {
     "final_response": "Rate limited by the provider. API call failed after 3 retries: 429 Too Many Requests",
-    "failed": True, "completed": False, "error": "429 Too Many Requests",
-    "failure_reason": "rate_limit", "messages": [], "api_calls": 3,
+    "failed": True,
+    "completed": False,
+    "error": "429 Too Many Requests",
+    "failure_reason": "rate_limit",
+    "messages": [],
+    "api_calls": 3,
 }
 # Permanent: a wall no re-run can fix.
 AUTH_WALL = {
     "final_response": "Provider authentication failed: invalid api key",
-    "failed": True, "completed": False, "error": "Error code: 401 - invalid_api_key",
-    "failure_reason": "auth", "messages": [], "api_calls": 1,
+    "failed": True,
+    "completed": False,
+    "error": "Error code: 401 - invalid_api_key",
+    "failure_reason": "auth",
+    "messages": [],
+    "api_calls": 1,
 }
 
 
 def _ok(text: str) -> dict:
-    return {"final_response": text, "failed": False, "completed": True,
-            "messages": [], "api_calls": 1}
+    return {
+        "final_response": text,
+        "failed": False,
+        "completed": True,
+        "messages": [],
+        "api_calls": 1,
+    }
 
 
 def _app(adapter: APIServerAdapter) -> web.Application:
@@ -71,11 +84,13 @@ def _fake_agent(seen: list, outcome: dict) -> MagicMock:
     agent.session_total_tokens = 0
 
     def _run(user_message=None, conversation_history=None, task_id=None, **_kwargs):
-        seen.append({
-            "message": user_message,
-            "history": list(conversation_history or []),
-            "resumed": getattr(agent, "_pending_cli_user_message", None),
-        })
+        seen.append(
+            {
+                "message": user_message,
+                "history": list(conversation_history or []),
+                "resumed": getattr(agent, "_pending_cli_user_message", None),
+            }
+        )
         return dict(outcome)
 
     agent.run_conversation.side_effect = _run
@@ -83,7 +98,9 @@ def _fake_agent(seen: list, outcome: dict) -> MagicMock:
 
 
 @pytest.mark.asyncio
-async def test_peer_dm_retries_a_transient_turn_once_and_still_reports_a_permanent_one(tmp_path):
+async def test_peer_dm_retries_a_transient_turn_once_and_still_reports_a_permanent_one(
+    tmp_path,
+):
     adapter, sid = _adapter(tmp_path)
     app = _app(adapter)
 
@@ -91,7 +108,9 @@ async def test_peer_dm_retries_a_transient_turn_once_and_still_reports_a_permane
     #    what the peer client receives.
     seen: list = []
     agents = [_fake_agent(seen, RATE_LIMIT), _fake_agent(seen, _ok("2+2 is 4"))]
-    with patch.object(adapter, "_create_agent", side_effect=lambda **_kw: agents.pop(0)):
+    with patch.object(
+        adapter, "_create_agent", side_effect=lambda **_kw: agents.pop(0)
+    ):
         async with TestClient(TestServer(app)) as cli:
             resp = await cli.post(f"/api/sessions/{sid}/chat", json={"message": DM})
             body = await resp.json()
@@ -103,10 +122,14 @@ async def test_peer_dm_retries_a_transient_turn_once_and_still_reports_a_permane
     assert retry["message"] == DM, "the re-run replays the same DM"
     resumed = retry["resumed"]
     assert isinstance(resumed, dict) and resumed.get("content") == DM, (
-        "the re-run must resume the row the failed attempt persisted as the pending user message")
-    assert resumed.get("_db_persisted") is True, "the resumed row is the durable one, not a copy"
+        "the re-run must resume the row the failed attempt persisted as the pending user message"
+    )
+    assert resumed.get("_db_persisted") is True, (
+        "the resumed row is the durable one, not a copy"
+    )
     assert all(row.get("content") != DM for row in retry["history"]), (
-        "the resumed row leaves the history, so the turn appends no second copy of the DM")
+        "the resumed row leaves the history, so the turn appends no second copy of the DM"
+    )
 
     # ② Permanent failure -> reported exactly as before: one attempt, its error copy as the reply.
     seen2: list = []

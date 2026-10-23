@@ -50,8 +50,12 @@ class MediaListResult(Result):
     has_more: bool
 
 
-method("media.list", params=MediaListParams, result=MediaListResult,
-       doc="Generated media (newest first) with filters and pagination.")
+method(
+    "media.list",
+    params=MediaListParams,
+    result=MediaListResult,
+    doc="Generated media (newest first) with filters and pagination.",
+)
 
 
 class MediaDeleteParams(Params):
@@ -64,8 +68,12 @@ class MediaDeleteResult(Result):
     file_missing: bool
 
 
-method("media.delete", params=MediaDeleteParams, result=MediaDeleteResult,
-       doc="Delete one media entry: its row and its file on disk.")
+method(
+    "media.delete",
+    params=MediaDeleteParams,
+    result=MediaDeleteResult,
+    doc="Delete one media entry: its row and its file on disk.",
+)
 
 
 class MediaStatsParams(Params):
@@ -81,8 +89,12 @@ class MediaStatsResult(Result):
     ready_count: int
 
 
-method("media.stats", params=MediaStatsParams, result=MediaStatsResult,
-       doc="Aggregate counts and size for the media gallery header.")
+method(
+    "media.stats",
+    params=MediaStatsParams,
+    result=MediaStatsResult,
+    doc="Aggregate counts and size for the media gallery header.",
+)
 
 # ── usage.by_model ────────────────────────────────────────────────────────────────────────────
 
@@ -109,5 +121,9 @@ class UsageByModelResult(Result):
     total_cost_usd: float
 
 
-method("usage.by_model", params=UsageByModelParams, result=UsageByModelResult,
-       doc="Token usage and cost across every stored session, grouped by model.")
+method(
+    "usage.by_model",
+    params=UsageByModelParams,
+    result=UsageByModelResult,
+    doc="Token usage and cost across every stored session, grouped by model.",
+)

@@ -1,4 +1,5 @@
 """/save md (CLI and gateway) carries the display history; /save json (CLI, gateway, TUI/Desktop) every kept row."""
+
 import asyncio
 import contextlib
 import io
@@ -17,10 +18,15 @@ def _compacted_store(path):
     for i in range(1, 7):
         db.append_message("s1", "user", f"question {i}")
         db.append_message("s1", "assistant", f"answer {i}")
-    tail = [{"role": "user", "content": "question 6"}, {"role": "assistant", "content": "answer 6"}]
+    tail = [
+        {"role": "user", "content": "question 6"},
+        {"role": "assistant", "content": "answer 6"},
+    ]
     db.archive_and_compact(
-        "s1", [{"role": "user", "content": "[CONTEXT COMPACTION] summary"}, *tail],
-        watermark=db.get_active_message_watermark("s1"), tail_count=len(tail),
+        "s1",
+        [{"role": "user", "content": "[CONTEXT COMPACTION] summary"}, *tail],
+        watermark=db.get_active_message_watermark("s1"),
+        tail_count=len(tail),
     )
     return db
 
@@ -28,8 +34,13 @@ def _compacted_store(path):
 def _cli_save(db, fmt, out):
     import cli
 
-    stub = SimpleNamespace(_session_db=db, session_id="s1", conversation_history=[], model="m",
-                           session_start=datetime(2026, 1, 1))
+    stub = SimpleNamespace(
+        _session_db=db,
+        session_id="s1",
+        conversation_history=[],
+        model="m",
+        session_start=datetime(2026, 1, 1),
+    )
     printed = io.StringIO()
     with contextlib.redirect_stdout(printed):
         cli.ClawksisCLI.save_conversation(stub, f"/save {fmt} {out}")
@@ -43,17 +54,31 @@ def _gateway_save(db, fmt, out):
     from gateway.session import SessionEntry, SessionSource, build_session_key
     from clawk_state import AsyncSessionDB
 
-    source = SessionSource(platform=Platform.TELEGRAM, user_id="u1", chat_id="c1", user_name="t", chat_type="dm")
+    source = SessionSource(
+        platform=Platform.TELEGRAM,
+        user_id="u1",
+        chat_id="c1",
+        user_name="t",
+        chat_type="dm",
+    )
     runner = object.__new__(GatewayRunner)
     delivered = {}
     adapter = MagicMock()
-    adapter.send_document = AsyncMock(side_effect=lambda **kw: delivered.update(
-        text=open(kw["file_path"], encoding="utf-8").read()))
+    adapter.send_document = AsyncMock(
+        side_effect=lambda **kw: delivered.update(
+            text=open(kw["file_path"], encoding="utf-8").read()
+        )
+    )
     runner.adapters, runner._profile_adapters = {Platform.TELEGRAM: adapter}, {}
     runner.session_store = MagicMock()
     runner.session_store.get_or_create_session.return_value = SessionEntry(
-        session_key=build_session_key(source), session_id="s1", created_at=datetime.now(),
-        updated_at=datetime.now(), platform=Platform.TELEGRAM, chat_type="dm")
+        session_key=build_session_key(source),
+        session_id="s1",
+        created_at=datetime.now(),
+        updated_at=datetime.now(),
+        platform=Platform.TELEGRAM,
+        chat_type="dm",
+    )
     runner._session_db = AsyncSessionDB(db)
     event = MessageEvent(text=f"/save {fmt} {out.name}", source=source, message_id="m1")
     reply = asyncio.run(runner._handle_save_command(event))
@@ -75,24 +100,40 @@ def _tui_save(db, fmt, out, *, host=False, profile=False):
     assert fmt == "json"
 
     def session():
-        return {"agent": SimpleNamespace(model="m", session_id="s1"), "session_key": "s1", "history": [],
-                "profile_home": str(out.parent), "history_lock": threading.Lock()}
+        return {
+            "agent": SimpleNamespace(model="m", session_id="s1"),
+            "session_key": "s1",
+            "history": [],
+            "profile_home": str(out.parent),
+            "history_lock": threading.Lock(),
+        }
 
     parent, child = session(), session()
 
-    def control(sid, **frame):  # the host's own control handler, answered over its stdout wire
+    def control(
+        sid, **frame
+    ):  # the host's own control handler, answered over its stdout wire
         wire = io.StringIO()
         with mock.patch.dict(server._sessions, {sid: child}):
-            ComputeHost(stdout=wire, heartbeat_secs=0)._handle_control({"sid": sid, **frame})
+            ComputeHost(stdout=wire, heartbeat_secs=0)._handle_control(
+                {"sid": sid, **frame}
+            )
         return json.loads(wire.getvalue())
 
     launch = {"CLAWK_HOME": str(out.parent / "launch")} if profile else {}
-    with mock.patch.dict(server._sessions, {"tui-save": parent}), mock.patch.dict(os.environ, launch), \
-            mock.patch.object(server, "_session_uses_compute_host", lambda s: host and s is parent), \
-            mock.patch.object(server, "_send_compute_host_control", control):
+    with (
+        mock.patch.dict(server._sessions, {"tui-save": parent}),
+        mock.patch.dict(os.environ, launch),
+        mock.patch.object(
+            server, "_session_uses_compute_host", lambda s: host and s is parent
+        ),
+        mock.patch.object(server, "_send_compute_host_control", control),
+    ):
         resp = server._methods["session.save"]("1", {"session_id": "tui-save"})
     if "error" in resp:
-        assert resp["error"]["code"] == 4131  # the export-cap refusal, through the host too
+        assert (
+            resp["error"]["code"] == 4131
+        )  # the export-cap refusal, through the host too
         return resp["error"]["message"]
     return open(resp["result"]["file"], encoding="utf-8").read()
 
@@ -108,9 +149,17 @@ def test_save_transcript_holds_display_history(tmp_path, monkeypatch, save):
     assert [f"answer {i}" in text for i in range(1, 7)] == [True] * 6
 
 
-@pytest.mark.parametrize("save", [_cli_save, _gateway_save, _tui_save, lambda *a: _tui_save(*a, host=True),
-                                  lambda *a: _tui_save(*a, profile=True)],
-                         ids=["cli", "gateway", "tui", "tui-compute-host", "tui-profile"])
+@pytest.mark.parametrize(
+    "save",
+    [
+        _cli_save,
+        _gateway_save,
+        _tui_save,
+        lambda *a: _tui_save(*a, host=True),
+        lambda *a: _tui_save(*a, profile=True),
+    ],
+    ids=["cli", "gateway", "tui", "tui-compute-host", "tui-profile"],
+)
 def test_save_json_restores_compacted_history_as_archived(tmp_path, monkeypatch, save):
     """/save json is the snapshot the dashboard import restores: the turns compaction archived come back
     in the display history, and stay out of the live context."""
@@ -132,13 +181,27 @@ def test_save_json_restores_compacted_history_as_archived(tmp_path, monkeypatch,
     try:
         shown, live = shape(db, include_compacted=True), shape(db)
         snapshot = json.loads(save(db, "json", tmp_path / "saved.json"))
-        kept = [m["id"] for m in db.get_messages("s1", include_inactive=True) if m["active"] or m["compacted"]]
-        assert [m["id"] for m in snapshot["messages"]] == kept  # every kept row, not the deduped display read
-        assert sum(snapshot["timings"]["role_counts"].values()) == len(kept)  # timings name no undone row
-        assert {i[k] for i in snapshot["timings"]["intervals"] for k in ("from_message_id", "to_message_id")} <= set(kept)
+        kept = [
+            m["id"]
+            for m in db.get_messages("s1", include_inactive=True)
+            if m["active"] or m["compacted"]
+        ]
+        assert [
+            m["id"] for m in snapshot["messages"]
+        ] == kept  # every kept row, not the deduped display read
+        assert sum(snapshot["timings"]["role_counts"].values()) == len(
+            kept
+        )  # timings name no undone row
+        assert {
+            i[k]
+            for i in snapshot["timings"]["intervals"]
+            for k in ("from_message_id", "to_message_id")
+        } <= set(kept)
         # Like `clawk sessions export`, the in-memory backup is capped per session (the session profile's
         # sessions.max_export_messages).
-        (tmp_path / "config.yaml").write_text("sessions:\n  max_export_messages: 5\n", encoding="utf-8")
+        (tmp_path / "config.yaml").write_text(
+            "sessions:\n  max_export_messages: 5\n", encoding="utf-8"
+        )
         assert "max_export_messages" in save(db, "json", tmp_path / "capped.json")
     finally:
         db.close()

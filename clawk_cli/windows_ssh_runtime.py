@@ -31,7 +31,14 @@ def _win32() -> Any:
     win32security); import is deferred so the module imports on non-Windows hosts."""
     if sys.platform != "win32":
         raise RuntimeError("Windows SSH runtime is only available on Windows")
-    names = ("ntsecuritycon", "pywintypes", "win32api", "win32con", "win32file", "win32security")
+    names = (
+        "ntsecuritycon",
+        "pywintypes",
+        "win32api",
+        "win32con",
+        "win32file",
+        "win32security",
+    )
     return SimpleNamespace(**{name: importlib.import_module(name) for name in names})
 
 
@@ -74,7 +81,9 @@ def _lock_path(ownership_id: str) -> Path:
 
 def _current_sid():
     w = _win32()
-    token = w.win32security.OpenProcessToken(w.win32api.GetCurrentProcess(), w.win32con.TOKEN_QUERY)
+    token = w.win32security.OpenProcessToken(
+        w.win32api.GetCurrentProcess(), w.win32con.TOKEN_QUERY
+    )
     return w.win32security.GetTokenInformation(token, w.win32security.TokenUser)[0]
 
 
@@ -92,7 +101,8 @@ def _security_attributes():
     # D:P blocks inherited grants at creation. SDDL also avoids pywin32 311's
     # SetSecurityDescriptorControl argument-width bug on ARM64.
     descriptor = win32security.ConvertStringSecurityDescriptorToSecurityDescriptor(
-        f"O:{owner}D:P(A;;FA;;;{owner})(A;;FA;;;SY)", win32security.SDDL_REVISION_1)
+        f"O:{owner}D:P(A;;FA;;;{owner})(A;;FA;;;SY)", win32security.SDDL_REVISION_1
+    )
     attributes = win32security.SECURITY_ATTRIBUTES()
     attributes.SECURITY_DESCRIPTOR = descriptor
     return attributes
@@ -104,8 +114,13 @@ def _allowed_sids():
 
 def _verify_security(handle) -> None:
     win32security = _win32().win32security
-    info = win32security.OWNER_SECURITY_INFORMATION | win32security.DACL_SECURITY_INFORMATION
-    descriptor = win32security.GetSecurityInfo(handle, win32security.SE_FILE_OBJECT, info)
+    info = (
+        win32security.OWNER_SECURITY_INFORMATION
+        | win32security.DACL_SECURITY_INFORMATION
+    )
+    descriptor = win32security.GetSecurityInfo(
+        handle, win32security.SE_FILE_OBJECT, info
+    )
     allowed = _allowed_sids()
     if _sid_str(descriptor.GetSecurityDescriptorOwner()) not in allowed:
         raise OSError("Windows SSH runtime object has the wrong owner")
@@ -116,7 +131,8 @@ def _verify_security(handle) -> None:
         win32security.ACCESS_ALLOWED_ACE_TYPE,
         win32security.ACCESS_ALLOWED_OBJECT_ACE_TYPE,
         getattr(win32security, "ACCESS_ALLOWED_CALLBACK_ACE_TYPE", 9),
-        getattr(win32security, "ACCESS_ALLOWED_CALLBACK_OBJECT_ACE_TYPE", 11)}
+        getattr(win32security, "ACCESS_ALLOWED_CALLBACK_OBJECT_ACE_TYPE", 11),
+    }
     for index in range(dacl.GetAceCount()):
         ace = dacl.GetAce(index)
         if ace[0][0] in allow_types and ace[1] and _sid_str(ace[-1]) not in allowed:
@@ -125,12 +141,16 @@ def _verify_security(handle) -> None:
 
 def _open(path: Path, access: int, creation: int, flags: int, share: int = 0):
     win32file = _win32().win32file
-    handle = win32file.CreateFile(str(path), access, share, _security_attributes(), creation, flags, None)
+    handle = win32file.CreateFile(
+        str(path), access, share, _security_attributes(), creation, flags, None
+    )
     try:
         actual = win32file.GetFinalPathNameByHandle(handle, 0).removeprefix("\\\\?\\")
         if os.path.normcase(actual) != os.path.normcase(os.path.abspath(str(path))):
             raise OSError("Windows SSH runtime handle escaped its expected path")
-        if win32file.GetFileInformationByHandle(handle)[0] & 0x400:  # FILE_ATTRIBUTE_REPARSE_POINT
+        if (
+            win32file.GetFileInformationByHandle(handle)[0] & 0x400
+        ):  # FILE_ATTRIBUTE_REPARSE_POINT
             raise OSError("Windows SSH runtime path contains a reparse point")
         _verify_security(handle)
         return handle
@@ -143,8 +163,13 @@ def _open_existing(path: Path, access: int, extra_flags: int = 0, share: int = 0
     """``_open`` an existing file (FILE_ATTRIBUTE_NORMAL | reparse guard); None when it is missing."""
     w = _win32()
     try:
-        return _open(path, access, w.win32con.OPEN_EXISTING,
-                     w.win32con.FILE_ATTRIBUTE_NORMAL | _OPEN_REPARSE_POINT | extra_flags, share)
+        return _open(
+            path,
+            access,
+            w.win32con.OPEN_EXISTING,
+            w.win32con.FILE_ATTRIBUTE_NORMAL | _OPEN_REPARSE_POINT | extra_flags,
+            share,
+        )
     except w.pywintypes.error as exc:
         if exc.winerror in (2, 3):
             return None
@@ -154,7 +179,9 @@ def _open_existing(path: Path, access: int, extra_flags: int = 0, share: int = 0
 def _read_shared(path: Path, limit: int, share: int) -> bytes | None:
     """Read up to ``limit`` bytes of ``path`` opened read-only with ``share``; None when missing."""
     w = _win32()
-    handle = _open_existing(path, w.win32con.GENERIC_READ | w.win32con.READ_CONTROL, share=share)
+    handle = _open_existing(
+        path, w.win32con.GENERIC_READ | w.win32con.READ_CONTROL, share=share
+    )
     if handle is None:
         return None
     try:
@@ -167,8 +194,13 @@ def _write_new(path: Path, data: bytes, share: int = 0) -> None:
     """Create ``path`` (CREATE_NEW), write ``data`` and flush."""
     w = _win32()
     win32con, win32file = w.win32con, w.win32file
-    handle = _open(path, win32con.GENERIC_WRITE | win32con.READ_CONTROL, win32con.CREATE_NEW,
-                   win32con.FILE_ATTRIBUTE_NORMAL | _OPEN_REPARSE_POINT, share)
+    handle = _open(
+        path,
+        win32con.GENERIC_WRITE | win32con.READ_CONTROL,
+        win32con.CREATE_NEW,
+        win32con.FILE_ATTRIBUTE_NORMAL | _OPEN_REPARSE_POINT,
+        share,
+    )
     try:
         win32file.WriteFile(handle, data)
         win32file.FlushFileBuffers(handle)
@@ -201,9 +233,15 @@ def _ensure_directory(path: Path) -> None:
         except pywintypes.error as exc:
             if exc.winerror != 183:
                 raise
-    handle = _open(path, win32con.GENERIC_READ | win32con.READ_CONTROL, win32con.OPEN_EXISTING,
-                   win32con.FILE_FLAG_BACKUP_SEMANTICS | _OPEN_REPARSE_POINT,
-                   win32con.FILE_SHARE_READ | win32con.FILE_SHARE_WRITE | win32con.FILE_SHARE_DELETE)
+    handle = _open(
+        path,
+        win32con.GENERIC_READ | win32con.READ_CONTROL,
+        win32con.OPEN_EXISTING,
+        win32con.FILE_FLAG_BACKUP_SEMANTICS | _OPEN_REPARSE_POINT,
+        win32con.FILE_SHARE_READ
+        | win32con.FILE_SHARE_WRITE
+        | win32con.FILE_SHARE_DELETE,
+    )
     win32file.CloseHandle(handle)
 
 
@@ -234,13 +272,23 @@ def read_token(path_value: str) -> str:
     try:
         relative = path.relative_to(_root())
     except ValueError as exc:
-        raise SystemExit("--ssh-session-token-file must be under the desktop-ssh directory") from exc
-    if len(relative.parts) != 2 or not _HEX32.fullmatch(relative.parts[0]) or not re.fullmatch(r"[0-9a-f]{16}\.token", relative.parts[1]):
+        raise SystemExit(
+            "--ssh-session-token-file must be under the desktop-ssh directory"
+        ) from exc
+    if (
+        len(relative.parts) != 2
+        or not _HEX32.fullmatch(relative.parts[0])
+        or not re.fullmatch(r"[0-9a-f]{16}\.token", relative.parts[1])
+    ):
         raise SystemExit("--ssh-session-token-file has an invalid runtime path")
     flags = win32con.FILE_ATTRIBUTE_NORMAL | _OPEN_REPARSE_POINT | _DELETE_ON_CLOSE
     try:
-        handle = _open(path, win32con.GENERIC_READ | win32con.READ_CONTROL | win32con.DELETE,
-                       win32con.OPEN_EXISTING, flags)
+        handle = _open(
+            path,
+            win32con.GENERIC_READ | win32con.READ_CONTROL | win32con.DELETE,
+            win32con.OPEN_EXISTING,
+            flags,
+        )
     except Exception as exc:
         raise SystemExit("--ssh-session-token-file is not accessible") from exc
     try:
@@ -266,7 +314,9 @@ def _read_json_stdin() -> dict[str, Any]:
 def read_lock(ownership_id: str) -> dict[str, Any] | None:
     win32con = _win32().win32con
     _ensure_scope(ownership_id)
-    data = _read_shared(_lock_path(ownership_id), _MAX_JSON + 1, win32con.FILE_SHARE_READ)
+    data = _read_shared(
+        _lock_path(ownership_id), _MAX_JSON + 1, win32con.FILE_SHARE_READ
+    )
     if data is None or len(data) > _MAX_JSON:
         return None
     try:
@@ -279,7 +329,10 @@ def read_lock(ownership_id: str) -> dict[str, Any] | None:
 def _lock_record(ownership_id: str, payload: dict[str, Any]) -> bytes:
     # The backend's owner watchdog only trusts a lock whose logPath ends in /<ownershipId>/<nonce>.log
     # (dashboard_procs._valid_lockfile_payload); without it a superseded Windows backend never retires.
-    record = {**payload, "logPath": _log_path(ownership_id, str(payload.get("spawnNonce"))).as_posix()}
+    record = {
+        **payload,
+        "logPath": _log_path(ownership_id, str(payload.get("spawnNonce"))).as_posix(),
+    }
     data = json.dumps(record, separators=(",", ":")).encode()
     if len(data) > _MAX_JSON:
         raise ValueError("lock payload is too large")
@@ -292,61 +345,103 @@ def write_lock(ownership_id: str, payload: dict[str, Any]) -> None:
     data = _lock_record(ownership_id, payload)
     temporary = directory / f".{os.urandom(8).hex()}.lock.tmp"
     _write_new(temporary, data)
-    win32file.MoveFileEx(str(temporary), str(_lock_path(ownership_id)),
-                         _MOVE_REPLACE_EXISTING | _MOVE_WRITE_THROUGH)
+    win32file.MoveFileEx(
+        str(temporary),
+        str(_lock_path(ownership_id)),
+        _MOVE_REPLACE_EXISTING | _MOVE_WRITE_THROUGH,
+    )
 
 
 def remove_artifact(path: Path) -> bool:
     w = _win32()
-    handle = _open_existing(path, w.win32con.DELETE | w.win32con.READ_CONTROL, _DELETE_ON_CLOSE)
+    handle = _open_existing(
+        path, w.win32con.DELETE | w.win32con.READ_CONTROL, _DELETE_ON_CLOSE
+    )
     if handle is None:
         return False
     w.win32file.CloseHandle(handle)
     return True
 
 
-def process_state(pid: int, creation_time_ns: int, clawk_path: str, spawn_nonce: str) -> dict[str, Any]:
+def process_state(
+    pid: int, creation_time_ns: int, clawk_path: str, spawn_nonce: str
+) -> dict[str, Any]:
     import psutil
+
     _nonce(spawn_nonce)
     try:
         process = psutil.Process(pid)
         actual_creation = int(process.create_time() * 1_000_000_000)
         argv = process.cmdline()
     except psutil.NoSuchProcess as exc:
-        return {"alive": False, "owned": False, "indeterminate": False, "reason": type(exc).__name__}
+        return {
+            "alive": False,
+            "owned": False,
+            "indeterminate": False,
+            "reason": type(exc).__name__,
+        }
     except psutil.AccessDenied as exc:
-        return {"alive": True, "owned": False, "indeterminate": True, "reason": type(exc).__name__}
+        return {
+            "alive": True,
+            "owned": False,
+            "indeterminate": True,
+            "reason": type(exc).__name__,
+        }
     if actual_creation != creation_time_ns:
-        return {"alive": False, "owned": False, "indeterminate": False, "reason": "creation-time",
-                "actualCreationTimeNs": str(actual_creation), "expectedCreationTimeNs": str(creation_time_ns)}
+        return {
+            "alive": False,
+            "owned": False,
+            "indeterminate": False,
+            "reason": "creation-time",
+            "actualCreationTimeNs": str(actual_creation),
+            "expectedCreationTimeNs": str(creation_time_ns),
+        }
     if not argv:
-        return {"alive": True, "owned": False, "indeterminate": True, "reason": "argv-unavailable"}
+        return {
+            "alive": True,
+            "owned": False,
+            "indeterminate": True,
+            "reason": "argv-unavailable",
+        }
     expected = os.path.normcase(os.path.abspath(clawk_path))
     arg0 = os.path.normcase(os.path.abspath(argv[0]))
     # argv[0] is the clawk exe or (normally) the base Python, whose path varies by venv/uv
     # layout — so match "a python running our module" (`-c` bootstrap or plain `-m`). Identity
     # is anchored by the unforgeable creation-time + secret owner-nonce below.
     is_python = os.path.basename(arg0).startswith("python")
-    launches_module = (
-        argv[1:3] == ["-m", "clawk_cli.main"]
-        or (len(argv) > 2 and argv[1] == "-c" and "clawk_cli.main" in argv[2]))
+    launches_module = argv[1:3] == ["-m", "clawk_cli.main"] or (
+        len(argv) > 2 and argv[1] == "-c" and "clawk_cli.main" in argv[2]
+    )
     executable_match = arg0 == expected or (is_python and launches_module)
     try:
         serve = argv.index("serve")
         owner = argv.index("--ssh-owner-nonce", serve + 1)
-        owned = executable_match and "--isolated" in argv[serve + 1:] and argv[owner + 1] == spawn_nonce
+        owned = (
+            executable_match
+            and "--isolated" in argv[serve + 1 :]
+            and argv[owner + 1] == spawn_nonce
+        )
     except (ValueError, IndexError):
         owned = False
-    return {"alive": process.is_running(), "owned": owned, "indeterminate": False,
-            "creationTimeNs": str(actual_creation), "reason": "owned" if owned else "argv",
-            "argv": argv[:20], "expectedExecutable": expected}
+    return {
+        "alive": process.is_running(),
+        "owned": owned,
+        "indeterminate": False,
+        "creationTimeNs": str(actual_creation),
+        "reason": "owned" if owned else "argv",
+        "argv": argv[:20],
+        "expectedExecutable": expected,
+    }
 
 
-def terminate_owned(pid: int, creation_time_ns: int, clawk_path: str, spawn_nonce: str) -> bool:
+def terminate_owned(
+    pid: int, creation_time_ns: int, clawk_path: str, spawn_nonce: str
+) -> bool:
     state = process_state(pid, creation_time_ns, clawk_path, spawn_nonce)
     if not state["alive"] or not state["owned"]:
         return False
     import psutil
+
     process = psutil.Process(pid)
     if int(process.create_time() * 1_000_000_000) != creation_time_ns:
         return False
@@ -365,17 +460,30 @@ def _resolve_direct_command(clawk_path: str) -> list[str]:
     The port owner must be the process we lock, not a console-launcher child.
     No assumption about python.exe beside an external bin launcher is valid.
     """
-    out = subprocess.run([clawk_path, "--print-runtime-command"], capture_output=True,
-                         text=True, encoding="utf-8", errors="replace", timeout=30, check=False)
+    out = subprocess.run(
+        [clawk_path, "--print-runtime-command"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+        check=False,
+    )
     if out.returncode != 0:
-        raise ValueError("could not resolve Clawksis runtime; refresh this installation's launcher")
+        raise ValueError(
+            "could not resolve Clawksis runtime; refresh this installation's launcher"
+        )
     try:
         command = json.loads(out.stdout)
     except ValueError as exc:
         raise ValueError("Clawksis launcher did not report a runtime command") from exc
-    if (not isinstance(command, list) or not command
-            or not all(isinstance(part, str) and "\x00" not in part for part in command)
-            or not os.path.isabs(command[0]) or not os.path.isfile(command[0])):
+    if (
+        not isinstance(command, list)
+        or not command
+        or not all(isinstance(part, str) and "\x00" not in part for part in command)
+        or not os.path.isabs(command[0])
+        or not os.path.isfile(command[0])
+    ):
         raise ValueError("Clawksis launcher reported an invalid runtime command")
     return command
 
@@ -394,50 +502,109 @@ def spawn_backend(payload: dict[str, Any]) -> dict[str, Any]:
     args = _resolve_direct_command(clawk_path)
     if profile:
         args.extend(["--profile", profile])
-    args.extend(["serve", "--isolated", "--host", "127.0.0.1", "--port", "0",
-                 "--ssh-session-token-file", token_path, "--ssh-owner-nonce", spawn_nonce])
+    args.extend(
+        [
+            "serve",
+            "--isolated",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "0",
+            "--ssh-session-token-file",
+            token_path,
+            "--ssh-owner-nonce",
+            spawn_nonce,
+        ]
+    )
     env = dict(os.environ)
     env.pop("VIRTUAL_ENV", None)
     env.pop("PYTHONPATH", None)
     _ensure_scope(ownership_id)
     log_path = _log_path(ownership_id, spawn_nonce)
     win32con = _win32().win32con
-    log_handle = _open(log_path, win32con.GENERIC_WRITE | win32con.READ_CONTROL,
-                       win32con.CREATE_NEW, win32con.FILE_ATTRIBUTE_NORMAL | _OPEN_REPARSE_POINT,
-                       win32con.FILE_SHARE_READ | win32con.FILE_SHARE_WRITE)
+    log_handle = _open(
+        log_path,
+        win32con.GENERIC_WRITE | win32con.READ_CONTROL,
+        win32con.CREATE_NEW,
+        win32con.FILE_ATTRIBUTE_NORMAL | _OPEN_REPARSE_POINT,
+        win32con.FILE_SHARE_READ | win32con.FILE_SHARE_WRITE,
+    )
     import msvcrt
+
     log_fd = msvcrt.open_osfhandle(int(log_handle), os.O_WRONLY)
     with os.fdopen(log_fd, "wb", buffering=0) as log_stream:
         # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_BREAKAWAY_FROM_JOB
-        process = subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=log_stream, stderr=log_stream,
-                                   close_fds=True, creationflags=0x00000008 | 0x00000200 | 0x01000000, env=env)
-    creation_time_ns = int(__import__("psutil").Process(process.pid).create_time() * 1_000_000_000)
-    return {"pid": process.pid, "creationTimeNs": str(creation_time_ns),
-            "logPath": str(log_path), "tokenPath": token_path}
+        process = subprocess.Popen(
+            args,
+            stdin=subprocess.DEVNULL,
+            stdout=log_stream,
+            stderr=log_stream,
+            close_fds=True,
+            creationflags=0x00000008 | 0x00000200 | 0x01000000,
+            env=env,
+        )
+    creation_time_ns = int(
+        __import__("psutil").Process(process.pid).create_time() * 1_000_000_000
+    )
+    return {
+        "pid": process.pid,
+        "creationTimeNs": str(creation_time_ns),
+        "logPath": str(log_path),
+        "tokenPath": token_path,
+    }
 
 
 def inspect_clawk(clawk_path: str) -> dict[str, Any]:
     path = os.path.abspath(clawk_path)
     if not os.path.isabs(clawk_path) or not os.path.isfile(path):
         raise ValueError("Clawksis path is not an executable file")
-    version = subprocess.run([path, "--version"], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=20, check=False)
-    help_result = subprocess.run([path, "serve", "--help"], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=20, check=False)
+    version = subprocess.run(
+        [path, "--version"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=20,
+        check=False,
+    )
+    help_result = subprocess.run(
+        [path, "serve", "--help"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=20,
+        check=False,
+    )
     help_text = help_result.stdout + help_result.stderr
     return {
         "path": path,
-        "version": (version.stdout + version.stderr).splitlines()[0] if version.returncode == 0 else "",
-        "supported": "--ssh-session-token-file" in help_text and "--ssh-owner-nonce" in help_text}
+        "version": (version.stdout + version.stderr).splitlines()[0]
+        if version.returncode == 0
+        else "",
+        "supported": "--ssh-session-token-file" in help_text
+        and "--ssh-owner-nonce" in help_text,
+    }
 
 
 def _probe(*_: str) -> dict[str, Any]:
     import platform
-    return {"os": "Windows", "arch": platform.machine(), "clawkHome": str(get_default_clawk_root()), "python": sys.executable}
+
+    return {
+        "os": "Windows",
+        "arch": platform.machine(),
+        "clawkHome": str(get_default_clawk_root()),
+        "python": sys.executable,
+    }
 
 
 def _read_log(ownership_id: str, spawn_nonce: str) -> dict[str, Any]:
     win32con = _win32().win32con
-    data = _read_shared(_log_path(ownership_id, spawn_nonce), _MAX_LOG,
-                        win32con.FILE_SHARE_READ | win32con.FILE_SHARE_WRITE)
+    data = _read_shared(
+        _log_path(ownership_id, spawn_nonce),
+        _MAX_LOG,
+        win32con.FILE_SHARE_READ | win32con.FILE_SHARE_WRITE,
+    )
     return {"content": "" if data is None else data.decode(errors="replace")}
 
 
@@ -459,7 +626,11 @@ _OPERATIONS: dict[str, tuple[int | None, Any]] = {
     "spawn": (None, lambda *_: spawn_backend(_read_json_stdin())),
     "inspect": (1, inspect_clawk),
     "process-state": (4, lambda p, c, h, n: process_state(int(p), int(c), h, n)),
-    "terminate": (4, lambda p, c, h, n: {"terminated": terminate_owned(int(p), int(c), h, n)})}
+    "terminate": (
+        4,
+        lambda p, c, h, n: {"terminated": terminate_owned(int(p), int(c), h, n)},
+    ),
+}
 
 
 def dispatch(argv: list[str]) -> Any:

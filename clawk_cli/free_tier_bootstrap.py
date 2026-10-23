@@ -31,12 +31,16 @@ class SetupRecord:
     """What the bootstrap found. One shape for every reader; no version field (renderer and backend
     ship together)."""
 
-    provider_configured: bool      # some provider can carry inference (free tier included)
-    inference_provider: str        # ``resolve_provider("auto")``'s answer, "" when nothing resolves
-    free_tier_account: bool        # the identity that exists is a guest that carries inference here
-    has_identity: bool             # a Nous identity (free tier or account) is on disk
-    other_providers: bool          # the inventory found something usable BESIDES the free tier
-    error: str = ""                # why the last trial claim failed, when it did; "" otherwise
+    provider_configured: bool  # some provider can carry inference (free tier included)
+    inference_provider: (
+        str  # ``resolve_provider("auto")``'s answer, "" when nothing resolves
+    )
+    free_tier_account: (
+        bool  # the identity that exists is a guest that carries inference here
+    )
+    has_identity: bool  # a Nous identity (free tier or account) is on disk
+    other_providers: bool  # the inventory found something usable BESIDES the free tier
+    error: str = ""  # why the last trial claim failed, when it did; "" otherwise
     # The mint memo's verdict, verbatim (``anon_auth.MintFailure.as_payload``):
     # ``{error, error_code, retryable, retry_after}`` after a failed claim, else ``{}``.
     # One wire shape: every status RPC spreads it as is.
@@ -103,14 +107,25 @@ def reconcile_record() -> Optional[SetupRecord]:
     if record is None or record.provider_configured:
         return record
     from clawk_constants import get_process_clawk_home, clawk_home_key
-    if clawk_home_key() != clawk_home_key(get_process_clawk_home()) or _inventory_stamp == _config_stamp():
+
+    if (
+        clawk_home_key() != clawk_home_key(get_process_clawk_home())
+        or _inventory_stamp == _config_stamp()
+    ):
         return record
     if not _inventory_other_providers():
         return _record
-    refreshed = replace(record, provider_configured=True, other_providers=True,
-                        inference_provider=_resolve_inference(), finished_at=time.time())
+    refreshed = replace(
+        record,
+        provider_configured=True,
+        other_providers=True,
+        inference_provider=_resolve_inference(),
+        finished_at=time.time(),
+    )
     with _lock:
-        if _record is not record:  # a retry replaced it meanwhile; its inventory is newer
+        if (
+            _record is not record
+        ):  # a retry replaced it meanwhile; its inventory is newer
             return _record
         _record = refreshed
     _due_changed()
@@ -130,6 +145,7 @@ def reset_for_tests() -> None:
 
 def _config_stamp() -> tuple:
     from clawk_cli.config import get_clawk_home
+
     home = get_clawk_home()
     stamp = []
     for name in _INVENTORY_FILES:
@@ -154,6 +170,7 @@ def _inventory_other_providers() -> bool:
     """
     global _inventory_stamp
     from clawk_cli.auth import resolve_provider
+
     _inventory_stamp = _config_stamp()
     try:
         return resolve_provider("auto", skip_free_tier=True) != "nous"
@@ -164,6 +181,7 @@ def _inventory_other_providers() -> bool:
 
 def _resolve_inference() -> str:
     from clawk_cli.auth import resolve_provider
+
     try:
         return str(resolve_provider("auto") or "")
     except Exception:
@@ -178,7 +196,9 @@ def _build_record(*, other: bool) -> SetupRecord:
     failure: dict[str, Any] = {} if state else (anon_auth.last_mint_failure() or {})
     free_tier_account = anon_auth.free_inference_active(state) if state else False
     return SetupRecord(
-        provider_configured=other or free_tier_account or (bool(state) and not anon_auth.is_guest_state(state)),
+        provider_configured=other
+        or free_tier_account
+        or (bool(state) and not anon_auth.is_guest_state(state)),
         inference_provider=_resolve_inference(),
         free_tier_account=free_tier_account,
         has_identity=bool(state),
@@ -219,17 +239,23 @@ def _settle_install() -> bool:
     try:
         from clawk_cli import anon_auth
         from clawk_cli.onboarding_run import latch_first_install
+
         if anon_auth.on_local_desktop_backend():
             latch_first_install()
     except Exception:
         settled = False
-        logger.warning("onboarding: could not record the first-install decision", exc_info=True)
+        logger.warning(
+            "onboarding: could not record the first-install decision", exc_info=True
+        )
     try:
         from clawk_cli.welcome_trial import settle_interrupted_claim
+
         settle_interrupted_claim()
     except Exception:
         settled = False
-        logger.warning("free tier: could not settle an interrupted claim", exc_info=True)
+        logger.warning(
+            "free tier: could not settle an interrupted claim", exc_info=True
+        )
     return settled
 
 
@@ -240,7 +266,9 @@ def resettle_after_failed_boot() -> None:
     global _settled
     with _lock:
         unsettled = _record is not None and not _settled
-    if not unsettled or not _resettle_lock.acquire(blocking=False):  # one retry at a time
+    if not unsettled or not _resettle_lock.acquire(
+        blocking=False
+    ):  # one retry at a time
         return
     try:
         if _settle_install():
@@ -275,6 +303,7 @@ def _due_changed() -> None:
 def _broadcast(record: SetupRecord) -> None:
     try:
         from tui_gateway.server import _broadcast_global_event
+
         _broadcast_global_event(SETUP_READY_EVENT, record.as_payload())
     except Exception as exc:  # no serve process (plain CLI): nobody to tell
         logger.debug("setup.ready not broadcast: %s", exc)

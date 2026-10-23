@@ -11,12 +11,14 @@ from tools import mcp_tool
 from tools import mcp_tool_content as _mcp_content
 from tools import mcp_tool_handlers as _mcp_handlers
 
+
 class _FakeContentBlock:
     """Minimal content block with .text and .type attributes."""
 
     def __init__(self, text: str, block_type: str = "text"):
         self.text = text
         self.type = block_type
+
 
 class _FakeCallToolResult:
     """Minimal CallToolResult stand-in.
@@ -32,6 +34,7 @@ class _FakeCallToolResult:
         # Real SDK exposes the wire ``_meta`` field as ``.meta`` (Pydantic alias).
         self.meta = meta
 
+
 def _fake_run_on_mcp_loop(coro_or_factory, timeout=30):
     coro = coro_or_factory() if callable(coro_or_factory) else coro_or_factory
     """Run an MCP coroutine directly in a fresh event loop."""
@@ -45,9 +48,11 @@ def _fake_run_on_mcp_loop(coro_or_factory, timeout=30):
                 if getattr(srv, "_rpc_lock", None) is None:
                     srv._rpc_lock = asyncio.Lock()
             return await coro
+
         return loop.run_until_complete(_install_lock_and_run())
     finally:
         loop.close()
+
 
 @pytest.fixture
 def _patch_mcp_server():
@@ -57,9 +62,14 @@ def _patch_mcp_server():
     # ~L2008) to serialize JSON-RPC against the server — build it inside the
     # fresh loop that _fake_run_on_mcp_loop spins up, not at fixture import.
     fake_server = SimpleNamespace(session=fake_session, _rpc_lock=None)
-    with patch.dict(mcp_tool._servers, {"test-server": fake_server}), \
-         patch("tools.mcp_tool_loop._run_on_mcp_loop", side_effect=_fake_run_on_mcp_loop):
+    with (
+        patch.dict(mcp_tool._servers, {"test-server": fake_server}),
+        patch(
+            "tools.mcp_tool_loop._run_on_mcp_loop", side_effect=_fake_run_on_mcp_loop
+        ),
+    ):
         yield fake_session
+
 
 class TestStructuredContentPreservation:
     """Ensure structuredContent from CallToolResult is forwarded."""
@@ -105,6 +115,7 @@ class TestStructuredContentPreservation:
         raw = handler({})
         data = json.loads(raw)
         assert data["result"] == payload
+
 
 class TestMetaPassthrough:
     """Server ``_meta`` is surfaced, minus protocol-reserved keys.
@@ -199,6 +210,7 @@ class TestMetaPassthrough:
         data = json.loads(handler({}))
         assert data == {"result": "done"}
 
+
 class TestReservedMetaKeyPredicate:
     def test_reserved_prefixes(self):
         assert _mcp_content._is_reserved_mcp_meta_key("modelcontextprotocol.io/x")
@@ -206,10 +218,13 @@ class TestReservedMetaKeyPredicate:
         assert _mcp_content._is_reserved_mcp_meta_key("tools.mcp.com/x")
 
     def test_vendor_and_unprefixed_not_reserved(self):
-        assert not _mcp_content._is_reserved_mcp_meta_key("com.example.mcp/x")  # trailing label
+        assert not _mcp_content._is_reserved_mcp_meta_key(
+            "com.example.mcp/x"
+        )  # trailing label
         assert not _mcp_content._is_reserved_mcp_meta_key("com.example/x")
         assert not _mcp_content._is_reserved_mcp_meta_key("plain-key")
         assert not _mcp_content._is_reserved_mcp_meta_key("/leading-slash")
+
 
 class TestContentStructuredArbitration:
     """Only the spec's verbatim dual-emit is deduplicated (kimi-code#3234, narrowed).
@@ -243,7 +258,10 @@ class TestContentStructuredArbitration:
         payload = {"a": "héllo", "b": 2}
         session.call_tool = AsyncMock(
             return_value=_FakeCallToolResult(
-                content=[_FakeContentBlock(json.dumps({"b": 2, "a": "héllo"}, indent=2)), _FakeContentBlock("done")],
+                content=[
+                    _FakeContentBlock(json.dumps({"b": 2, "a": "héllo"}, indent=2)),
+                    _FakeContentBlock("done"),
+                ],
                 structuredContent=payload,
             )
         )
@@ -253,7 +271,9 @@ class TestContentStructuredArbitration:
         assert data["result"].endswith("done")
         big = {"k": "z" * (_mcp_content._MCP_HARD_RESULT_CAP_CHARS + 10)}
         session.call_tool = AsyncMock(
-            return_value=_FakeCallToolResult(content=[_FakeContentBlock("done")], structuredContent=big)
+            return_value=_FakeCallToolResult(
+                content=[_FakeContentBlock("done")], structuredContent=big
+            )
         )
         assert json.loads(handler({})) == {"result": "done"}
 
@@ -277,7 +297,9 @@ class TestContentStructuredArbitration:
         assert data["result"] == "Retrieved 1 chats (offset 0, limit 1)"
         assert data["structuredContent"] == structured
         assert data["structuredContent"]["data"][0]["jid"] == "12345@s.whatsapp.net"
-        session.call_tool = AsyncMock(return_value=_FakeCallToolResult(content=[_FakeContentBlock("just text")]))
+        session.call_tool = AsyncMock(
+            return_value=_FakeCallToolResult(content=[_FakeContentBlock("just text")])
+        )
         assert handler({}) == '{"result": "just text"}'
 
     def test_whitespace_only_content_falls_back(self, _patch_mcp_server):
@@ -308,6 +330,7 @@ class TestContentStructuredArbitration:
         data = json.loads(handler({}))
         assert data["result"] == payload
 
+
 class TestDroppedBlockNotice:
     """Unsupported content blocks surface a drop notice to the model.
 
@@ -323,9 +346,7 @@ class TestDroppedBlockNotice:
             mimeType="application/x-hologram",
             size=1234,
         )
-        session.call_tool = AsyncMock(
-            return_value=_FakeCallToolResult(content=[weird])
-        )
+        session.call_tool = AsyncMock(return_value=_FakeCallToolResult(content=[weird]))
         handler = _mcp_handlers._make_tool_handler("test-server", "my-tool", 30.0)
         data = json.loads(handler({}))
         assert "[MCP content dropped: unsupported block" in data["result"]
@@ -340,7 +361,8 @@ class TestDroppedBlockNotice:
         payload = {"real": "data"}
         session.call_tool = AsyncMock(
             return_value=_FakeCallToolResult(
-                content=[weird], structuredContent=payload,
+                content=[weird],
+                structuredContent=payload,
             )
         )
         handler = _mcp_handlers._make_tool_handler("test-server", "my-tool", 30.0)

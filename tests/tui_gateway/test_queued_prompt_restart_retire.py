@@ -19,7 +19,13 @@ def _desktop_session(monkeypatch, db):
     monkeypatch.setattr(server, "_schedule_session_cap_enforcement", lambda: None)
     monkeypatch.setattr(server, "_schedule_agent_build", lambda _sid: None)
     monkeypatch.setattr(server, "_register_session_cwd", lambda _session: None)
-    resp = server.handle_request({"id": "c", "method": "session.create", "params": {"cols": 96, "source": "desktop"}})
+    resp = server.handle_request(
+        {
+            "id": "c",
+            "method": "session.create",
+            "params": {"cols": 96, "source": "desktop"},
+        }
+    )
     assert "result" in resp, resp
     sid = resp["result"]["session_id"]
     server._sessions[sid]["agent"] = types.SimpleNamespace()
@@ -33,19 +39,27 @@ def _busy(session, in_flight="prompt A"):
 
 
 def _active_rows(db, key):
-    return db.get_messages_as_conversation(key, repair_alternation=True, include_row_ids=True)
+    return db.get_messages_as_conversation(
+        key, repair_alternation=True, include_row_ids=True
+    )
 
 
-def _accept_busy_prompt_a_concludes(db, sid, key, queued_text="queued prompt B RESTART-MARKER"):
+def _accept_busy_prompt_a_concludes(
+    db, sid, key, queued_text="queued prompt B RESTART-MARKER"
+):
     """Turn A runs, B is accepted busy (accept-time row written), turn A concludes — then the
     backend dies BEFORE the queue drains. Raw: [user A, user B(queued), assistant A]."""
     session = server._sessions[sid]
     server._ensure_session_db_row(session)
     db.append_message(key, "user", content="prompt A")
     _busy(session)
-    resp = server._handle_busy_submit("r1", sid, session, queued_text, "ws-1", queued=True, display_kind=None)
+    resp = server._handle_busy_submit(
+        "r1", sid, session, queued_text, "ws-1", queued=True, display_kind=None
+    )
     assert resp["result"]["status"] == "queued"
-    db.append_message(key, "assistant", content="reply A")  # turn A concludes; the drain never runs
+    db.append_message(
+        key, "assistant", content="reply A"
+    )  # turn A concludes; the drain never runs
 
 
 def test_restart_retires_the_never_drained_accept_row(monkeypatch, tmp_path):
@@ -60,9 +74,13 @@ def test_restart_retires_the_never_drained_accept_row(monkeypatch, tmp_path):
         fresh = SessionDB(db_path=tmp_path / "state.db")
         try:
             fresh.reopen_session(key)
-            repaired = fresh.get_messages_as_conversation(key, repair_alternation=True, include_row_ids=True)
+            repaired = fresh.get_messages_as_conversation(
+                key, repair_alternation=True, include_row_ids=True
+            )
             assert [(r["role"], r["content"]) for r in repaired] == [
-                ("user", "prompt A"), ("assistant", "reply A")]
+                ("user", "prompt A"),
+                ("assistant", "reply A"),
+            ]
         finally:
             fresh.close()
         # The never-run prompt is retired (inactive), never deleted: durable history keeps it.
@@ -70,10 +88,12 @@ def test_restart_retires_the_never_drained_accept_row(monkeypatch, tmp_path):
         # row sits between turn A's rows, exactly where the busy-queue accepted it, and only
         # it went inactive — the restart retired the never-drained prompt, nothing else.
         raw = db.get_messages(key, include_inactive=True)
-        assert [(r["role"], r["active"], "RESTART-MARKER" in str(r["content"])) for r in raw] == [
-            ("user", 1, False),          # prompt A
-            ("user", 0, True),            # queued prompt B — never drained, retired by reopen
-            ("assistant", 1, False),      # reply A
+        assert [
+            (r["role"], r["active"], "RESTART-MARKER" in str(r["content"])) for r in raw
+        ] == [
+            ("user", 1, False),  # prompt A
+            ("user", 0, True),  # queued prompt B — never drained, retired by reopen
+            ("assistant", 1, False),  # reply A
         ]
     finally:
         server._sessions.pop(sid, None)
@@ -91,7 +111,9 @@ def test_resume_does_not_retire_drained_or_plain_rows(monkeypatch, tmp_path):
         db.append_message(key, "assistant", content="plain reply")
         db.reopen_session(key)
         assert [(r["role"], r["content"]) for r in _active_rows(db, key)] == [
-            ("user", "plain prompt"), ("assistant", "plain reply")]
+            ("user", "plain prompt"),
+            ("assistant", "plain reply"),
+        ]
     finally:
         server._sessions.pop(sid, None)
         db.close()
@@ -108,19 +130,45 @@ def test_restart_between_drains_retires_only_the_later_prompt(monkeypatch, tmp_p
         server._ensure_session_db_row(session)
         db.append_message(key, "user", content="prompt A")
         _busy(session)
-        session["attached_images"] = ["/tmp/b.png"]  # non-mergeable: two separate envelopes
-        assert server._handle_busy_submit("r1", sid, session, "prompt B DRAIN-RESTART-B", "ws-1",
-                                          queued=True, display_kind=None)["result"]["status"] == "queued"
+        session["attached_images"] = [
+            "/tmp/b.png"
+        ]  # non-mergeable: two separate envelopes
+        assert (
+            server._handle_busy_submit(
+                "r1",
+                sid,
+                session,
+                "prompt B DRAIN-RESTART-B",
+                "ws-1",
+                queued=True,
+                display_kind=None,
+            )["result"]["status"]
+            == "queued"
+        )
         session["attached_images"] = ["/tmp/c.png"]
-        assert server._handle_busy_submit("r2", sid, session, "prompt C DRAIN-RESTART-C", "ws-1",
-                                          queued=True, display_kind=None)["result"]["status"] == "queued"
+        assert (
+            server._handle_busy_submit(
+                "r2",
+                sid,
+                session,
+                "prompt C DRAIN-RESTART-C",
+                "ws-1",
+                queued=True,
+                display_kind=None,
+            )["result"]["status"]
+            == "queued"
+        )
         db.append_message(key, "assistant", content="reply A")
         with session["history_lock"]:
             session["running"] = False
             server._clear_inflight_turn(session)
         from tests.tui_gateway.test_queued_prompt_persistence import _run_turn
-        monkeypatch.setattr(server, "_run_prompt_submit",
-                            lambda rid, s, sess, text, **kw: _run_turn(sess, db, key, text, "reply B"))
+
+        monkeypatch.setattr(
+            server,
+            "_run_prompt_submit",
+            lambda rid, s, sess, text, **kw: _run_turn(sess, db, key, text, "reply B"),
+        )
         assert server._drain_queued_prompt("r3", sid, session) is True  # drains B only
         # The restart: queue gone; C never drained. The cold reopen retires C's row, not B's turn.
         session["queued_prompt"] = None
@@ -128,16 +176,30 @@ def test_restart_between_drains_retires_only_the_later_prompt(monkeypatch, tmp_p
         fresh = SessionDB(db_path=tmp_path / "state.db")
         try:
             fresh.reopen_session(key)
-            repaired = fresh.get_messages_as_conversation(key, repair_alternation=True, include_row_ids=True)
+            repaired = fresh.get_messages_as_conversation(
+                key, repair_alternation=True, include_row_ids=True
+            )
             assert [(r["role"], r["content"]) for r in repaired] == [
-                ("user", "prompt A"), ("assistant", "reply A"),
-                ("user", "prompt B DRAIN-RESTART-B"), ("assistant", "reply B")]
-            every = fresh.get_messages_as_conversation(key, include_inactive=True, include_row_ids=True)
+                ("user", "prompt A"),
+                ("assistant", "reply A"),
+                ("user", "prompt B DRAIN-RESTART-B"),
+                ("assistant", "reply B"),
+            ]
+            every = fresh.get_messages_as_conversation(
+                key, include_inactive=True, include_row_ids=True
+            )
             # C never ran: no ACTIVE row carries it. Its copies survive inactive (durable history
             # never deletes — the drain's re-placement left one, the reopen retired the other).
-            assert not [r for r in _active_rows(fresh, key) if "DRAIN-RESTART-C" in str(r["content"])]
-            assert any("DRAIN-RESTART-C" in str(r["content"])
-                       for r in every if "DRAIN-RESTART-B" not in str(r["content"]))
+            assert not [
+                r
+                for r in _active_rows(fresh, key)
+                if "DRAIN-RESTART-C" in str(r["content"])
+            ]
+            assert any(
+                "DRAIN-RESTART-C" in str(r["content"])
+                for r in every
+                if "DRAIN-RESTART-B" not in str(r["content"])
+            )
         finally:
             fresh.close()
     finally:
@@ -146,7 +208,8 @@ def test_restart_between_drains_retires_only_the_later_prompt(monkeypatch, tmp_p
 
 
 def test_readonly_resume_after_restart_retires_marked_row_without_reopen(
-        monkeypatch, tmp_path):
+    monkeypatch, tmp_path
+):
     """RED on the #128508 head: with the reopen gone from the mount paths, a restart + bare
     resume (no submit) left the still-marked accept row ACTIVE — it stayed glued into the
     previous turn's user message by alternation repair until the next send. The mount must
@@ -170,7 +233,9 @@ def test_readonly_resume_after_restart_retires_marked_row_without_reopen(
 
         home = tmp_path / "home"
         home.mkdir(exist_ok=True)
-        monkeypatch.setattr("clawk_state_registry.acquire", lambda db_path=None, **kwargs: db)
+        monkeypatch.setattr(
+            "clawk_state_registry.acquire", lambda db_path=None, **kwargs: db
+        )
         monkeypatch.setattr(server, "_profile_home", lambda p: home if p else None)
         monkeypatch.setattr(server, "_profile_configured_cwd", lambda _: str(tmp_path))
         monkeypatch.setattr(server, "_default_session_cwd", lambda: str(tmp_path))
@@ -181,8 +246,17 @@ def test_readonly_resume_after_restart_retires_marked_row_without_reopen(
         monkeypatch.setattr(server, "_start_agent_build", lambda *args: None)
         for defer_history in (False, True):  # cold read + deferred hydration paths
             monkeypatch.setattr(server, "_schedule_agent_build", lambda *args: None)
-            response = server.handle_request({"id": "resume", "method": "session.resume", "params": {
-                "session_id": key, "source": "desktop", "defer_history": defer_history}})
+            response = server.handle_request(
+                {
+                    "id": "resume",
+                    "method": "session.resume",
+                    "params": {
+                        "session_id": key,
+                        "source": "desktop",
+                        "defer_history": defer_history,
+                    },
+                }
+            )
             assert response is not None and "error" not in response, response
             resumed_sid = response["result"]["session_id"]
             try:
@@ -190,17 +264,25 @@ def test_readonly_resume_after_restart_retires_marked_row_without_reopen(
                     assert server._sessions[resumed_sid]["resume_history_ready"].wait(5)
                 # Read-only mount kept (#85303): the row stays finalized.
                 row = db.get_session(key)
-                assert row["ended_at"] is not None, "resume must not reopen the finalized row (#85303)"
+                assert row["ended_at"] is not None, (
+                    "resume must not reopen the finalized row (#85303)"
+                )
                 assert row["end_reason"] == "agent_close"
                 # But the never-drained accept row is retired (#125577): the repaired projection
                 # no longer absorbs the queued prompt into turn A's user message.
-                repaired = db.get_messages_as_conversation(key, repair_alternation=True,
-                                                            include_row_ids=True)
+                repaired = db.get_messages_as_conversation(
+                    key, repair_alternation=True, include_row_ids=True
+                )
                 assert [(r["role"], r["content"]) for r in repaired] == [
-                    ("user", "prompt A"), ("assistant", "reply A")]
+                    ("user", "prompt A"),
+                    ("assistant", "reply A"),
+                ]
                 raw = db.get_messages(key, include_inactive=True)
                 assert [(r["role"], r["active"]) for r in raw] == [
-                    ("user", 1), ("user", 0), ("assistant", 1)]
+                    ("user", 1),
+                    ("user", 0),
+                    ("assistant", 1),
+                ]
             finally:
                 server._sessions.pop(resumed_sid, None)
     finally:

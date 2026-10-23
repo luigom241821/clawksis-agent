@@ -34,10 +34,13 @@ def client(tmp_path, monkeypatch):
     db = SessionDB(home / "state.db")
     try:
         db.create_session(session_id="img-chat", source="desktop")
-        db.append_messages_batch("img-chat", [
-            {"role": "user", "content": IMAGE_CONTENT},
-            {"role": "assistant", "content": "a chart"},
-        ])
+        db.append_messages_batch(
+            "img-chat",
+            [
+                {"role": "user", "content": IMAGE_CONTENT},
+                {"role": "assistant", "content": "a chart"},
+            ],
+        )
     finally:
         db.close()
 
@@ -57,7 +60,8 @@ def test_messages_default_inlines_images(client):
 
 def test_messages_inline_images_false_renders_placeholder(client):
     page = client.get(
-        "/api/sessions/img-chat/messages?limit=10&order=oldest&inline_images=false").json()
+        "/api/sessions/img-chat/messages?limit=10&order=oldest&inline_images=false"
+    ).json()
     user_row = next(m for m in page["messages"] if m["role"] == "user")
     assert "[image]" in user_row["content"]
     assert DATA_URI not in user_row["content"]

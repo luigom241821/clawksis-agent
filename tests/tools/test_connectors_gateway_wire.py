@@ -12,7 +12,8 @@ from tools.connectors.turn import CARD, LINK, SIDE, scoped_connection_surface
 def test_connections_result_carries_status_reason_under_either_spelling():
     for key in ("statusReason", "status_reason"):
         row = wire.ConnectorConnectionResult.model_validate(
-            {"connector": "gmail", "status": "failed", key: "vendor: bad scope"})
+            {"connector": "gmail", "status": "failed", key: "vendor: bad scope"}
+        )
         assert row.status_reason == "vendor: bad scope"
 
 
@@ -21,9 +22,16 @@ ITEM = {"connector": "gmail", "connected": False}
 
 def test_list_item_accepts_the_six_contract_states_and_absence():
     for value in ("pending", "active", "failed", "expired", "revoked", "inactive"):
-        item = wire.ConnectorListItem.model_validate({**ITEM, "connectionStatus": value})
+        item = wire.ConnectorListItem.model_validate(
+            {**ITEM, "connectionStatus": value}
+        )
         assert item.connection_status == value
-    assert wire.ConnectorListItem.model_validate({**ITEM, "connected": True}).connection_status is None
+    assert (
+        wire.ConnectorListItem.model_validate(
+            {**ITEM, "connected": True}
+        ).connection_status
+        is None
+    )
 
 
 def test_list_item_rejects_an_unknown_status_loudly():
@@ -33,9 +41,17 @@ def test_list_item_rejects_an_unknown_status_loudly():
 
 def _connection_required_entry():
     planned = partition_calls([{"name": "connectors__gmail__SEND_EMAIL"}]).remote
-    remote = [{"data": None, "error": {
-        "code": "CONNECTION_REQUIRED", "message": "connect gmail first",
-        "connect_url": "https://example.test/connect/abc", "hint": "then retry"}}]
+    remote = [
+        {
+            "data": None,
+            "error": {
+                "code": "CONNECTION_REQUIRED",
+                "message": "connect gmail first",
+                "connect_url": "https://example.test/connect/abc",
+                "hint": "then retry",
+            },
+        }
+    ]
     (entry,) = splice_remote_results(planned, remote)
     return entry["error"]
 

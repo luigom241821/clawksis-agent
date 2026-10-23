@@ -54,7 +54,12 @@ def test_legacy_events_since_dispatch_refuses_other_unknown_keys():
         {
             "id": "r0",
             "method": "session.events.since",
-            "params": {"session_id": "s1", "last_seen": 3, "replay_epoch": "proc-1", "bogus": 1},
+            "params": {
+                "session_id": "s1",
+                "last_seen": 3,
+                "replay_epoch": "proc-1",
+                "bogus": 1,
+            },
         }
     )
 

@@ -27,7 +27,9 @@ from tests.e2e.core._pending_fixes import known_gate
 REPO_ROOT = Path(__file__).resolve().parents[4]
 TURN_TIMEOUT = 150.0
 _SECRET_ENV_SUFFIXES = ("_API_KEY", "_TOKEN", "_SECRET", "_ACCESS_KEY")
-_PASSTHROUGH_ENV = frozenset({"PATH", "LANG", "LANGUAGE", "USER", "LOGNAME", "SHELL", "TMPDIR", "TZ"})
+_PASSTHROUGH_ENV = frozenset(
+    {"PATH", "LANG", "LANGUAGE", "USER", "LOGNAME", "SHELL", "TMPDIR", "TZ"}
+)
 
 
 # KNOWN-bug plumbing ------------------------------------------------------------------
@@ -88,7 +90,9 @@ def write_sitecustomize_shim(shim_dir: Path, body: str) -> Path:
     """Write ``body`` as ``shim_dir/sitecustomize.py`` after a prologue that chain-imports
     the interpreter's original ``sitecustomize`` (the shim must not shadow it)."""
     shim_dir.mkdir(parents=True, exist_ok=True)
-    (shim_dir / "sitecustomize.py").write_text(_CHAIN_ORIGINAL_SITECUSTOMIZE + "\n\n" + body, encoding="utf-8")
+    (shim_dir / "sitecustomize.py").write_text(
+        _CHAIN_ORIGINAL_SITECUSTOMIZE + "\n\n" + body, encoding="utf-8"
+    )
     return shim_dir
 
 
@@ -122,32 +126,59 @@ class Home:
         credential env would silently reroute the child."""
         import pwd  # the suite is Linux-gated
 
-        real_root = Path(pwd.getpwuid(os.getuid()).pw_dir, ".clawk").resolve()  # windows-footgun: ok — every file here is skipif(not linux)
+        real_root = Path(
+            pwd.getpwuid(os.getuid()).pw_dir, ".clawk"
+        ).resolve()  # windows-footgun: ok — every file here is skipif(not linux)
         fixture = self.clawk_home.resolve()
-        assert fixture != real_root and fixture.parent != real_root / "profiles", "fixture is a live home"
-        env = {k: v for k, v in os.environ.items()
-               if (k in _PASSTHROUGH_ENV or k.startswith("LC_")) and not k.endswith(_SECRET_ENV_SUFFIXES)}
-        env.update({
-            "HOME": str(self.home), "CLAWK_HOME": str(self.clawk_home), "PYTHONPATH": str(REPO_ROOT),
-            "PYTHONUNBUFFERED": "1", "NO_COLOR": "1", "TERM": "dumb",
-            # The child's state.db lives under tmp_path; the live-DB guard's documented child escape hatch.
-            "CLAWK_STATE_DB_GUARD_BYPASS": "1",
-        })
+        assert fixture != real_root and fixture.parent != real_root / "profiles", (
+            "fixture is a live home"
+        )
+        env = {
+            k: v
+            for k, v in os.environ.items()
+            if (k in _PASSTHROUGH_ENV or k.startswith("LC_"))
+            and not k.endswith(_SECRET_ENV_SUFFIXES)
+        }
+        env.update(
+            {
+                "HOME": str(self.home),
+                "CLAWK_HOME": str(self.clawk_home),
+                "PYTHONPATH": str(REPO_ROOT),
+                "PYTHONUNBUFFERED": "1",
+                "NO_COLOR": "1",
+                "TERM": "dumb",
+                # The child's state.db lives under tmp_path; the live-DB guard's documented child escape hatch.
+                "CLAWK_STATE_DB_GUARD_BYPASS": "1",
+            }
+        )
         env.update(extra or {})
         return env
 
-    def write(self, config: dict[str, Any], dotenv: dict[str, str] | None = None,
-              auth: dict[str, Any] | None = None) -> Home:
+    def write(
+        self,
+        config: dict[str, Any],
+        dotenv: dict[str, str] | None = None,
+        auth: dict[str, Any] | None = None,
+    ) -> Home:
         self.clawk_home.mkdir(parents=True, exist_ok=True)
         self.project.mkdir(parents=True, exist_ok=True)
-        base = {"updates": {"check": False}, "agent": {"api_max_retries": 2},
-                "terminal": {"cwd": str(self.project)}, "memory": {"memory_enabled": False}}
+        base = {
+            "updates": {"check": False},
+            "agent": {"api_max_retries": 2},
+            "terminal": {"cwd": str(self.project)},
+            "memory": {"memory_enabled": False},
+        }
         _deep_merge(base, config)
-        (self.clawk_home / "config.yaml").write_text(yaml.safe_dump(base, sort_keys=False), encoding="utf-8")
+        (self.clawk_home / "config.yaml").write_text(
+            yaml.safe_dump(base, sort_keys=False), encoding="utf-8"
+        )
         (self.clawk_home / ".env").write_text(
-            "".join(f"{k}={v}\n" for k, v in (dotenv or {}).items()), encoding="utf-8")
+            "".join(f"{k}={v}\n" for k, v in (dotenv or {}).items()), encoding="utf-8"
+        )
         if auth is not None:
-            (self.clawk_home / "auth.json").write_text(json.dumps(auth), encoding="utf-8")
+            (self.clawk_home / "auth.json").write_text(
+                json.dumps(auth), encoding="utf-8"
+            )
         return self
 
     def update_config(self, mutate: Callable[[dict], None]) -> None:
@@ -168,18 +199,34 @@ def _deep_merge(dst: dict, src: dict) -> None:
 # Provider configs ----------------------------------------------------------------
 
 
-def responses_provider_config(base_url: str, *, name: str = "resp-relay", model: str = "fake-responses-model") -> dict:
+def responses_provider_config(
+    base_url: str, *, name: str = "resp-relay", model: str = "fake-responses-model"
+) -> dict:
     """A config-defined provider that opts into the Responses transport (a Responses relay)."""
     return {
         "model": {"provider": name, "default": model, "context_length": 128000},
-        "providers": {name: {"name": name, "base_url": base_url, "api_key": "sk-fake-relay",
-                             "transport": "codex_responses", "default_model": model}},
+        "providers": {
+            name: {
+                "name": name,
+                "base_url": base_url,
+                "api_key": "sk-fake-relay",
+                "transport": "codex_responses",
+                "default_model": model,
+            }
+        },
     }
 
 
 def custom_chat_config(base_url: str, *, model: str = "fake-model") -> dict:
     """Plain ``provider: custom`` chat-completions endpoint (Ollama / vLLM / LiteLLM shape)."""
-    return {"model": {"provider": "custom", "base_url": base_url, "default": model, "context_length": 128000}}
+    return {
+        "model": {
+            "provider": "custom",
+            "base_url": base_url,
+            "default": model,
+            "context_length": 128000,
+        }
+    }
 
 
 # Processes -------------------------------------------------------------------------
@@ -199,24 +246,46 @@ class Run:
         return self.usage.get("session_id")
 
     def describe(self) -> str:
-        return (f"exit={self.proc.returncode}\nusage={json.dumps(self.usage)[:1500]}\n"
-                f"stdout={self.proc.stdout[-1500:]!r}\nstderr={self.proc.stderr[-4000:]}")
+        return (
+            f"exit={self.proc.returncode}\nusage={json.dumps(self.usage)[:1500]}\n"
+            f"stdout={self.proc.stdout[-1500:]!r}\nstderr={self.proc.stderr[-4000:]}"
+        )
 
 
 def clawk_argv(*args: str) -> list[str]:
     return [sys.executable, "-m", "clawk_cli.main", *args]
 
 
-def oneshot(h: Home, prompt: str, *args: str, resume: str | None = None, timeout: float = TURN_TIMEOUT,
-            env: dict[str, str] | None = None) -> Run:
+def oneshot(
+    h: Home,
+    prompt: str,
+    *args: str,
+    resume: str | None = None,
+    timeout: float = TURN_TIMEOUT,
+    env: dict[str, str] | None = None,
+) -> Run:
     """One real ``clawk -z`` turn; the usage file names the session for ``--resume``."""
     usage_file = h.root / f"usage-{time.monotonic_ns()}.json"
     argv = ["-z", prompt, "--usage-file", str(usage_file), *args]
     if resume:
         argv += ["--resume", resume]
-    proc = subprocess.run(clawk_argv(*argv), cwd=h.project, env=h.env(env), capture_output=True,
-                          text=True, encoding="utf-8", errors="replace", timeout=timeout, stdin=subprocess.DEVNULL, check=False)
-    usage = json.loads(usage_file.read_text(encoding="utf-8")) if usage_file.exists() else {}
+    proc = subprocess.run(
+        clawk_argv(*argv),
+        cwd=h.project,
+        env=h.env(env),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+        stdin=subprocess.DEVNULL,
+        check=False,
+    )
+    usage = (
+        json.loads(usage_file.read_text(encoding="utf-8"))
+        if usage_file.exists()
+        else {}
+    )
     return Run(proc, usage)
 
 
@@ -229,7 +298,9 @@ def bounded_turn(h: Home, prompt: str, budget: float, **kw: Any) -> Run:
         raise HarnessError(f"turn {prompt!r} still running after {budget}s") from exc
 
 
-def wait_until(pred: Callable[[], Any], timeout: float, what: str, interval: float = 0.05) -> Any:
+def wait_until(
+    pred: Callable[[], Any], timeout: float, what: str, interval: float = 0.05
+) -> Any:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         value = pred()
@@ -281,9 +352,15 @@ def tool_call_args(tc: dict[str, Any]) -> Any:
 
 
 def responses_input_items(body: dict[str, Any], item_type: str) -> list[dict[str, Any]]:
-    return [i for i in body.get("input") or [] if isinstance(i, dict) and i.get("type") == item_type]
+    return [
+        i
+        for i in body.get("input") or []
+        if isinstance(i, dict) and i.get("type") == item_type
+    ]
 
 
-def chat_messages(body: dict[str, Any], role: str | None = None) -> list[dict[str, Any]]:
+def chat_messages(
+    body: dict[str, Any], role: str | None = None
+) -> list[dict[str, Any]]:
     msgs = [m for m in body.get("messages") or [] if isinstance(m, dict)]
     return [m for m in msgs if role is None or m.get("role") == role]

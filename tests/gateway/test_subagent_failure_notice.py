@@ -82,7 +82,6 @@ class TestFormatSubagentFailureLine:
         assert "\n" not in line
 
 
-
 def _make_runner_and_captured(monkeypatch, run_still_current=True):
     """TurnRunner with a stub gateway runner; captures scheduled notices."""
     from gateway import run as run_mod
@@ -108,6 +107,7 @@ def _make_runner_and_captured(monkeypatch, run_still_current=True):
         _loop_for_step=None,
     )
     from gateway.run_turn_runner import TurnRunner
+
     return TurnRunner(_StubGatewayRunner(), ctx), captured
 
 

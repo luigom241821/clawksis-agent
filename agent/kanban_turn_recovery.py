@@ -65,11 +65,13 @@ RECOVERY_DELAYS_SECONDS: tuple[float, ...] = (15.0, 45.0, 90.0)
 #: neutral 75s AFTER in-place recovery has been exhausted). The two sets answer
 #: different questions: this one says who may re-enter the model here; main's
 #: says how the process exit is booked.
-_NON_RECOVERABLE_REASONS = frozenset({
-    FailoverReason.rate_limit.value,
-    FailoverReason.billing.value,
-    FailoverReason.upstream_rate_limit.value,
-})
+_NON_RECOVERABLE_REASONS = frozenset(
+    {
+        FailoverReason.rate_limit.value,
+        FailoverReason.billing.value,
+        FailoverReason.upstream_rate_limit.value,
+    }
+)
 
 #: ``turn_exit_reason`` prefixes that mean the turn already went through a
 #: durable terminal settlement (the run may be closed and its claim released):
@@ -137,7 +139,9 @@ def _turn_exit_is_terminal(result: dict) -> bool:
     return reason.startswith(_TERMINAL_TURN_EXIT_PREFIXES)
 
 
-def should_recover_turn(result: Any, *, attempt: int, task_id: Optional[str] = None) -> bool:
+def should_recover_turn(
+    result: Any, *, attempt: int, task_id: Optional[str] = None
+) -> bool:
     """True when a settled worker turn grants in-place retry authority.
 
     ``attempt`` is the number of recovery attempts ALREADY made. Authority is
@@ -228,10 +232,19 @@ def worker_claim_is_live(
         return False
     db_path = _kanban_db_path() if db_path is None else (db_path.strip() or None)
     if not db_path or not Path(db_path).exists():
-        logger.warning("kanban claim check: pinned board db %r not found — not retrying in place", db_path)
+        logger.warning(
+            "kanban claim check: pinned board db %r not found — not retrying in place",
+            db_path,
+        )
         return False
-    run_id_env = str(run_id if run_id is not None else os.environ.get("CLAWK_KANBAN_RUN_ID") or "").strip()
-    lock_env = str(claim_lock if claim_lock is not None else os.environ.get("CLAWK_KANBAN_CLAIM_LOCK") or "").strip()
+    run_id_env = str(
+        run_id if run_id is not None else os.environ.get("CLAWK_KANBAN_RUN_ID") or ""
+    ).strip()
+    lock_env = str(
+        claim_lock
+        if claim_lock is not None
+        else os.environ.get("CLAWK_KANBAN_CLAIM_LOCK") or ""
+    ).strip()
     if not run_id_env or not lock_env:
         logger.warning(
             "kanban claim check: missing dispatcher-pinned run-id/claim-lock carrier "
@@ -283,7 +296,9 @@ def worker_claim_is_live(
         finally:
             conn.close()
     except Exception:
-        logger.warning("kanban claim check failed — not retrying in place", exc_info=True)
+        logger.warning(
+            "kanban claim check failed — not retrying in place", exc_info=True
+        )
         return False
 
 
@@ -292,8 +307,9 @@ def _truncate(text: str, limit: int = 300) -> str:
     return text[: limit - 1] + "…" if len(text) > limit else text
 
 
-def build_recovery_nudge(result: Any, *, attempt: int, max_attempts: int,
-                         task_id: Optional[str] = None) -> str:
+def build_recovery_nudge(
+    result: Any, *, attempt: int, max_attempts: int, task_id: Optional[str] = None
+) -> str:
     """The synthetic user turn sent after a failed worker turn.
 
     Mirrors the stop-nudge contract (agent/kanban_stop.py): plain text is not a
@@ -303,7 +319,9 @@ def build_recovery_nudge(result: Any, *, attempt: int, max_attempts: int,
     """
     error = ""
     if isinstance(result, dict):
-        error = _truncate(str(result.get("error") or result.get("final_response") or ""))
+        error = _truncate(
+            str(result.get("error") or result.get("final_response") or "")
+        )
     task_id = _resolve_task_id(task_id) or "this task"
     return (
         "[System: the previous turn ended UNFINISHED — the API call failed after "
@@ -320,7 +338,9 @@ def build_recovery_nudge(result: Any, *, attempt: int, max_attempts: int,
     )
 
 
-def _emit_recovery_skipped(emit: Optional[Callable[[str], None]], task_id: Optional[str] = None) -> None:
+def _emit_recovery_skipped(
+    emit: Optional[Callable[[str], None]], task_id: Optional[str] = None
+) -> None:
     """The one "no proof, no retry" line — fail-closed is worth saying out loud."""
     message = (
         f"[kanban] in-place recovery skipped for {_resolve_task_id(task_id) or 'task'}: this worker no "
@@ -386,8 +406,14 @@ def recover_failed_kanban_turns(
         if not check():
             _emit_recovery_skipped(emit, task_id)
             return attempts
-        turn_fn(build_recovery_nudge(result, attempt=attempts, max_attempts=max_recovery_attempts(),
-                                     task_id=task_id))
+        turn_fn(
+            build_recovery_nudge(
+                result,
+                attempt=attempts,
+                max_attempts=max_recovery_attempts(),
+                task_id=task_id,
+            )
+        )
 
 
 __all__ = [

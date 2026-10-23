@@ -22,7 +22,9 @@ from tools.transcription_local import (
 
 
 def _seg(text, no_speech_prob=0.0, avg_logprob=-0.2):
-    return SimpleNamespace(text=text, no_speech_prob=no_speech_prob, avg_logprob=avg_logprob)
+    return SimpleNamespace(
+        text=text, no_speech_prob=no_speech_prob, avg_logprob=avg_logprob
+    )
 
 
 class TestBuildLocalTranscribeKwargs:
@@ -39,7 +41,6 @@ class TestBuildLocalTranscribeKwargs:
             ]
             is False
         )
-
 
     def test_confidence_thresholds_default_to_faster_whisper_values(self):
         kwargs = build_local_transcribe_kwargs({})
@@ -86,7 +87,6 @@ class TestConfidenceGate:
             seg, _NO_SPEECH_PROB_THRESHOLD_DEFAULT, _LOGPROB_THRESHOLD_DEFAULT
         )
 
-
     def test_garbage_thresholds_fall_back_to_defaults(self):
         seg = _seg(" ok", no_speech_prob=0.1, avg_logprob=-0.1)
         cfg = {"no_speech_prob_threshold": "high", "logprob_threshold": None}
@@ -123,7 +123,6 @@ class TestTranscribeLocalWiring:
         assert captured["condition_on_previous_text"] is False
         assert captured["no_speech_threshold"] == _NO_SPEECH_PROB_THRESHOLD_DEFAULT
         assert captured["log_prob_threshold"] == _LOGPROB_THRESHOLD_DEFAULT
-
 
     def test_hallucinated_segments_filtered_from_transcript(self, monkeypatch):
         segments = [

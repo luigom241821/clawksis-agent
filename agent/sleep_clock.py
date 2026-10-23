@@ -36,7 +36,8 @@ def _windows_unbiased_clock() -> Callable[[], float] | None:
 #: time, which excludes sleep and hibernation. Linux and macOS: ``time.monotonic``, which already
 #: stops during suspend there.
 awake_seconds: Callable[[], float] = (
-    (_windows_unbiased_clock() if sys.platform == "win32" else None) or time.monotonic)
+    _windows_unbiased_clock() if sys.platform == "win32" else None
+) or time.monotonic
 
 
 class SleepWatch:

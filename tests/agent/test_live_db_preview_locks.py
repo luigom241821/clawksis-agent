@@ -1,4 +1,5 @@
 """File previews may not cancel SQLite's live POSIX locks (including WAL sidecars)."""
+
 import asyncio
 import os
 from pathlib import Path
@@ -17,9 +18,15 @@ from tests.posix_lock_probe import own_posix_locks
 
 @pytest.mark.platforms("linux")
 @pytest.mark.requires_wal
-@pytest.mark.parametrize("route,target_kind", [
-    ("file", "main"), ("folder", "directory"), ("desktop", "main"), ("desktop", "shm"),
-])
+@pytest.mark.parametrize(
+    "route,target_kind",
+    [
+        ("file", "main"),
+        ("folder", "directory"),
+        ("desktop", "main"),
+        ("desktop", "shm"),
+    ],
+)
 def test_preview_preserves_live_database_locks(tmp_path, route, target_kind):
     path = tmp_path / "state.db"
     text = tmp_path / "normal.txt"
@@ -41,14 +48,22 @@ def test_preview_preserves_live_database_locks(tmp_path, route, target_kind):
         # Hold our own POSIX main-file lock to prove that preview close() does
         # not cancel any locks on that inode, regardless of SQLite's WAL timing.
         import fcntl
+
         lock_fd = os.open(path, os.O_RDONLY)
         fcntl.lockf(lock_fd, fcntl.LOCK_SH, 1, 4096)
 
         def rival_locked():
-            code = ("import sqlite3,sys; c=sqlite3.connect(sys.argv[1], timeout=0); "
-                    "c.execute('BEGIN IMMEDIATE'); c.rollback(); c.close()")
-            result = subprocess.run([sys.executable, "-c", code, str(path)],
-                                    capture_output=True, text=True, timeout=10, check=False)
+            code = (
+                "import sqlite3,sys; c=sqlite3.connect(sys.argv[1], timeout=0); "
+                "c.execute('BEGIN IMMEDIATE'); c.rollback(); c.close()"
+            )
+            result = subprocess.run(
+                [sys.executable, "-c", code, str(path)],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+            )
             return result.returncode != 0 and "database is locked" in result.stderr
 
         before = (own_posix_locks(path), own_posix_locks(shm))
@@ -64,7 +79,9 @@ def test_preview_preserves_live_database_locks(tmp_path, route, target_kind):
                 assert refused.value.status_code == 409
                 if target_kind == "shm":
                     assert "main database" in refused.value.detail
-            assert asyncio.run(fs_read_text(str(text)))["text"] == "ordinary readable text"
+            assert (
+                asyncio.run(fs_read_text(str(text)))["text"] == "ordinary readable text"
+            )
         else:
             ref = parse_context_references(f"@{route}:{target}")[0]
             warning, block = _expand_path_reference(ref, tmp_path.parent)
@@ -74,7 +91,11 @@ def test_preview_preserves_live_database_locks(tmp_path, route, target_kind):
                 assert "not previewed" in block
             ordinary = parse_context_references(f"@file:{text}")[0]
             warning, block = _expand_path_reference(ordinary, tmp_path.parent)
-            assert warning is None and block is not None and "ordinary readable text" in block
+            assert (
+                warning is None
+                and block is not None
+                and "ordinary readable text" in block
+            )
 
         assert (own_posix_locks(path), own_posix_locks(shm)) == before
         assert rival_locked(), "second process entered a still-open write transaction"
@@ -85,12 +106,18 @@ def test_preview_preserves_live_database_locks(tmp_path, route, target_kind):
             "c.execute(\"INSERT INTO preview_markers VALUES ('second process')\"); "
             "c.commit(); c.close()"
         )
-        rival = subprocess.run([sys.executable, "-c", code, str(path)],
-                               capture_output=True, text=True, timeout=10, check=False)
+        rival = subprocess.run(
+            [sys.executable, "-c", code, str(path)],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
         assert rival.returncode == 0, rival.stderr
-        assert [row[0] for row in conn.execute(
-            "SELECT value FROM preview_markers ORDER BY rowid"
-        )] == ["first process", "second process"]
+        assert [
+            row[0]
+            for row in conn.execute("SELECT value FROM preview_markers ORDER BY rowid")
+        ] == ["first process", "second process"]
         db.append_message("preview-test", "assistant", "after preview")
         assert len(db.get_messages("preview-test")) == 2
     finally:

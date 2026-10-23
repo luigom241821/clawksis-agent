@@ -34,14 +34,10 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-
-
-
-
-
-
 def test_serve_is_a_headless_backend_but_dashboard_is_not():
     # `headless_backend` is the flag cmd_dashboard reads to skip the web UI
     # build; only `serve` carries it.
     assert getattr(_parser().parse_args(["serve"]), "headless_backend", False) is True
-    assert getattr(_parser().parse_args(["dashboard"]), "headless_backend", False) is False
+    assert (
+        getattr(_parser().parse_args(["dashboard"]), "headless_backend", False) is False
+    )

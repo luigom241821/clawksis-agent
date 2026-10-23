@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import httpx
 else:
+
     class _LazyHttpx:
         __slots__ = ("_mod",)
 
@@ -67,11 +68,14 @@ NOUS_BILLING_MANAGE_SCOPE = "billing:manage"
 DEFAULT_NOUS_SCOPE = NOUS_INFERENCE_INVOKE_SCOPE
 NOUS_DEVICE_CODE_SOURCE = "device_code"
 NOUS_AUTH_PATH_INVOKE_JWT = "invoke_jwt"
-ACCESS_TOKEN_REFRESH_SKEW_SECONDS = 120       # refresh 2 min before expiry
+ACCESS_TOKEN_REFRESH_SKEW_SECONDS = 120  # refresh 2 min before expiry
 NOUS_INVOKE_JWT_MIN_TTL_SECONDS = ACCESS_TOKEN_REFRESH_SKEW_SECONDS
-DEVICE_AUTH_POLL_INTERVAL_CAP_SECONDS = 1     # poll at most every 1s
+DEVICE_AUTH_POLL_INTERVAL_CAP_SECONDS = 1  # poll at most every 1s
 DEVICE_CODE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code"
-_FORM_JSON_HEADERS = {"Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"}
+_FORM_JSON_HEADERS = {
+    "Content-Type": "application/x-www-form-urlencoded",
+    "Accept": "application/json",
+}
 DEFAULT_CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex"
 DEFAULT_XAI_OAUTH_BASE_URL = "https://api.x.ai/v1"
 MINIMAX_OAUTH_CLIENT_ID = "78257093-7e40-4613-99e0-527b14b39113"
@@ -112,7 +116,9 @@ OPENROUTER_AUTH_URL = "https://openrouter.ai/auth"
 OPENROUTER_AUTH_KEYS_URL = "https://openrouter.ai/api/v1/auth/keys"
 OPENROUTER_OAUTH_DOCS_URL = "https://openrouter.ai/docs/guides/overview/auth/oauth"
 
-OAUTH_OVER_SSH_DOCS_URL = "https://samuelgradientai-sys.github.io/clawksis-agent/guides/oauth-over-ssh"
+OAUTH_OVER_SSH_DOCS_URL = (
+    "https://samuelgradientai-sys.github.io/clawksis-agent/guides/oauth-over-ssh"
+)
 # LM Studio's default no-auth mode still needs *some* non-empty bearer for the API-key code paths to
 # treat the provider as configured. Sent only to LM Studio, never to a remote service.
 LMSTUDIO_NOAUTH_PLACEHOLDER = "dummy-lm-api-key"
@@ -127,8 +133,14 @@ class AuthError(RuntimeError):
     """Structured auth error with UX mapping hints."""
 
     def __init__(
-        self, message: str, *, provider: str = "", code: Optional[str] = None, relogin_required: bool = False,
-        retry_after: Optional[float] = None, retryable: Optional[bool] = None,
+        self,
+        message: str,
+        *,
+        provider: str = "",
+        code: Optional[str] = None,
+        relogin_required: bool = False,
+        retry_after: Optional[float] = None,
+        retryable: Optional[bool] = None,
     ) -> None:
         super().__init__(message)
         self.provider = provider
@@ -142,8 +154,12 @@ class AuthError(RuntimeError):
 
 
 def _provider_error_factory(provider: str) -> Callable[..., AuthError]:
-    def factory(message: str, code: Optional[str] = None, *, relogin: bool = False) -> AuthError:
-        return AuthError(message, provider=provider, code=code, relogin_required=relogin)
+    def factory(
+        message: str, code: Optional[str] = None, *, relogin: bool = False
+    ) -> AuthError:
+        return AuthError(
+            message, provider=provider, code=code, relogin_required=relogin
+        )
 
     return factory
 

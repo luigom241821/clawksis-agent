@@ -12,7 +12,9 @@ from clawk_cli import update_cmd_maint as update
 
 @pytest.fixture
 def refresh(monkeypatch):
-    monkeypatch.setattr(update, "_load_updates_cfg", lambda: {"refresh_cua_driver": True})
+    monkeypatch.setattr(
+        update, "_load_updates_cfg", lambda: {"refresh_cua_driver": True}
+    )
     monkeypatch.delenv("CLAWK_CUA_DRIVER_CMD", raising=False)
     monkeypatch.setenv("PATH", "")
     installed = Mock(return_value=SimpleNamespace())
@@ -22,16 +24,25 @@ def refresh(monkeypatch):
     return installed, ensure
 
 
-@pytest.mark.parametrize("disabled,installed,override", [
-    (True, True, ""),
-    (False, False, ""),
-    (False, True, "custom-cua"),
-])
+@pytest.mark.parametrize(
+    "disabled,installed,override",
+    [
+        (True, True, ""),
+        (False, False, ""),
+        (False, True, "custom-cua"),
+    ],
+)
 def test_cua_refresh_skips_disabled_missing_or_external_driver(
-    refresh, monkeypatch, disabled, installed, override,
+    refresh,
+    monkeypatch,
+    disabled,
+    installed,
+    override,
 ):
     lookup, ensure = refresh
-    monkeypatch.setattr(update, "_load_updates_cfg", lambda: {"refresh_cua_driver": not disabled})
+    monkeypatch.setattr(
+        update, "_load_updates_cfg", lambda: {"refresh_cua_driver": not disabled}
+    )
     monkeypatch.setenv("CLAWK_CUA_DRIVER_CMD", override)
     lookup.return_value = SimpleNamespace() if installed else None
     host_setup = Mock(side_effect=AssertionError("unexpected host setup"))
@@ -52,7 +63,9 @@ def test_linux_refresh_reconciles_installed_pin(refresh):
 
 
 @pytest.mark.platforms("windows")
-def test_windows_refresh_defers_pin_and_uac_to_explicit_setup(refresh, monkeypatch, capsys):
+def test_windows_refresh_defers_pin_and_uac_to_explicit_setup(
+    refresh, monkeypatch, capsys
+):
     """Keep the task's versioned executable selected until interactive re-registration."""
     _, ensure = refresh
     host_setup = Mock(side_effect=AssertionError("unattended UAC"))
@@ -71,7 +84,11 @@ def test_windows_refresh_defers_pin_and_uac_to_explicit_setup(refresh, monkeypat
 @pytest.mark.platforms("macos")
 @pytest.mark.parametrize("registration_exit", [0, 1])
 def test_macos_refresh_registers_post_ensure_signed_app(
-    refresh, monkeypatch, tmp_path, capsys, registration_exit,
+    refresh,
+    monkeypatch,
+    tmp_path,
+    capsys,
+    registration_exit,
 ):
     """Exercise native setup dispatch; no real LaunchServices or codesign writes."""
     from tools.computer_use import cua_backend_daemon as daemon
@@ -93,7 +110,9 @@ def test_macos_refresh_registers_post_ensure_signed_app(
     monkeypatch.setattr(setup, "_cua_driver_contract_status", contract)
     validate = Mock()
     monkeypatch.setattr(daemon, "_validate_cua_driver_app_signature", validate)
-    register = Mock(return_value=SimpleNamespace(returncode=registration_exit, stdout="", stderr=""))
+    register = Mock(
+        return_value=SimpleNamespace(returncode=registration_exit, stdout="", stderr="")
+    )
     monkeypatch.setattr(setup, "_run_text", register)
 
     update._refresh_cua_driver_after_update()
@@ -102,4 +121,6 @@ def test_macos_refresh_registers_post_ensure_signed_app(
     contract.assert_called_once_with(str(binary))
     validate.assert_called_once_with(str(app))
     assert register.call_args.args[0][-2:] == ["-f", str(app)]
-    assert ("app registration failed" in capsys.readouterr().out) == bool(registration_exit)
+    assert ("app registration failed" in capsys.readouterr().out) == bool(
+        registration_exit
+    )

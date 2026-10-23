@@ -35,7 +35,9 @@ SESSION_ID_RECOGNIZERS = (
     # gateway/platforms/api_server_runs.py: /v1/runs falls back to its f"run_{uuid4().hex}".
     re.compile(r"^run_[0-9a-f]{32}$"),
     # acp_adapter/session.py and /v1/responses: str(uuid4()).
-    re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"),
+    re.compile(
+        r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    ),
 )
 
 
@@ -47,13 +49,16 @@ def is_known_session_id(value: str) -> bool:
     """
     return any(pattern.match(value) for pattern in SESSION_ID_RECOGNIZERS)
 
+
 # Interactive surfaces (CLI, TUI, agent, branches, imports) share 6 hex chars — the Desktop's
 # session-id candidate regex is pinned to that width. Gateway keys are 8, portability imports 12
 # (many rows minted in the same second).
 DEFAULT_HEX_LEN = 6
 
 
-def new_session_id(now: Optional[datetime] = None, *, hex_len: int = DEFAULT_HEX_LEN) -> str:
+def new_session_id(
+    now: Optional[datetime] = None, *, hex_len: int = DEFAULT_HEX_LEN
+) -> str:
     """``<timestamp>_<random hex>`` for a fresh session; ``now`` pins the timestamp to a clock the
     caller already captured (``agent.session_start``) so the id and the row agree to the second."""
     stamp = (now or datetime.now()).strftime("%Y%m%d_%H%M%S")

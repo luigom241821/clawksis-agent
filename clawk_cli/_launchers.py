@@ -36,9 +36,15 @@ def _inline_string_literal(value: str) -> str:
     return "'" + escaped.replace("'", "\\x27").replace('"', "\\x22") + "'"
 
 
-def runtime_command(repo_root: Path, args=(), *, module: str = "clawk_cli.main",
-                    code: str | None = None, python: str | Path | None = None,
-                    home: str | Path | None = None) -> list[str]:
+def runtime_command(
+    repo_root: Path,
+    args=(),
+    *,
+    module: str = "clawk_cli.main",
+    code: str | None = None,
+    python: str | Path | None = None,
+    home: str | Path | None = None,
+) -> list[str]:
     """An installation-bound command, safe to persist across dependency GC.
 
     Store Python owns the ABI; bootstrap selects and leases dependencies at
@@ -47,18 +53,30 @@ def runtime_command(repo_root: Path, args=(), *, module: str = "clawk_cli.main",
     """
     root = Path(repo_root).resolve()
     python = python or resolve_store_python(root) or Path(sys.executable)
-    entry = f"exec({_inline_string_literal(code)})" if code is not None else (
-        f"runpy.run_module({_inline_string_literal(module)}, run_name='__main__', alter_sys=True)")
+    entry = (
+        f"exec({_inline_string_literal(code)})"
+        if code is not None
+        else (
+            f"runpy.run_module({_inline_string_literal(module)}, run_name='__main__', alter_sys=True)"
+        )
+    )
     # A literal home is pinned up front; the default one needs ``clawk_constants`` from the
     # checkout, so it is pinned only after ``clawk_bootstrap``'s launch-time repair (see
     # ``_launcher_script``), here again for a bootstrap that predates that hook.
     if home is not None:
-        pin, settle = (f"os.environ['CLAWK_HOME'] = os.environ.get('CLAWK_HOME') or "
-                       f"{_inline_string_literal(str(home))}; "), ""
+        pin, settle = (
+            (
+                f"os.environ['CLAWK_HOME'] = os.environ.get('CLAWK_HOME') or "
+                f"{_inline_string_literal(str(home))}; "
+            ),
+            "",
+        )
     else:
         pin = f"sys.{PIN_DEFAULT_HOME_FLAG} = True; "
-        settle = ("os.environ.get('CLAWK_HOME') or os.environ.__setitem__('CLAWK_HOME', "
-                  "str(__import__('clawk_constants').get_default_clawk_root())); ")
+        settle = (
+            "os.environ.get('CLAWK_HOME') or os.environ.__setitem__('CLAWK_HOME', "
+            "str(__import__('clawk_constants').get_default_clawk_root())); "
+        )
     bootstrap = (
         "import os, sys, runpy; "
         "os.environ.pop('PYTHONHOME', None); os.environ.pop('PYTHONPATH', None); "
@@ -76,7 +94,9 @@ def print_runtime_command(repo_root: Path, argv: list[str]) -> None:
     """Machine boundary for consumers holding the exact published launcher."""
     import argparse
 
-    parser = argparse.ArgumentParser(description="Resolve this installation's launch command.")
+    parser = argparse.ArgumentParser(
+        description="Resolve this installation's launch command."
+    )
     parser.add_argument("--module", default="clawk_cli.main")
     parser.add_argument("args", nargs=argparse.REMAINDER)
     options = parser.parse_args(argv)
@@ -84,8 +104,14 @@ def print_runtime_command(repo_root: Path, argv: list[str]) -> None:
     print(json.dumps(runtime_command(repo_root, args, module=options.module)))
 
 
-def installation_command(repo_root: Path, args=(), *, module: str = "clawk_cli.main",
-                         python: str | Path | None = None, home: str | Path | None = None) -> list[str]:
+def installation_command(
+    repo_root: Path,
+    args=(),
+    *,
+    module: str = "clawk_cli.main",
+    python: str | Path | None = None,
+    home: str | Path | None = None,
+) -> list[str]:
     """Persist a source launcher, never the versioned tool it currently uses.
 
     External/Nix installs retain their externally owned interpreter contract.
@@ -97,6 +123,7 @@ def installation_command(repo_root: Path, args=(), *, module: str = "clawk_cli.m
         return runtime_command(root, args, module=module, python=python, home=home)
     prefix = [] if module == "clawk_cli.main" else ["--run-module", module]
     return [str(root / ".clawk" / "bin" / "clawk"), *prefix, *args]
+
 
 #: Launcher command names — keep in lockstep with scripts/install.ps1
 #: Publish-UserCommand and clawk_cli/_install_repair.py.
@@ -177,7 +204,14 @@ def _store_script_maker(python_exe: Path):
     ships pip (the installer mints the first clawk.exe through it), and its
     vendored distlib is self-contained. It loads under a private name so the
     store's pip never answers an ``import pip`` in this process."""
-    package = Path(python_exe).parent / "Lib" / "site-packages" / "pip" / "_vendor" / "distlib"
+    package = (
+        Path(python_exe).parent
+        / "Lib"
+        / "site-packages"
+        / "pip"
+        / "_vendor"
+        / "distlib"
+    )
     if not (package / "scripts.py").is_file():
         return None
     import hashlib
@@ -185,17 +219,25 @@ def _store_script_maker(python_exe: Path):
     import importlib.util
 
     # One private package per store copy: a later repin's pip never reuses the first one's.
-    name = f"_clawk_store_distlib_{hashlib.sha256(str(package).encode()).hexdigest()[:12]}"
+    name = (
+        f"_clawk_store_distlib_{hashlib.sha256(str(package).encode()).hexdigest()[:12]}"
+    )
     try:
         if name not in sys.modules:
             spec = importlib.util.spec_from_file_location(
-                name, package / "__init__.py", submodule_search_locations=[str(package)])
+                name, package / "__init__.py", submodule_search_locations=[str(package)]
+            )
             if spec is None or spec.loader is None:
                 return None
             sys.modules[name] = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(sys.modules[name])
         return importlib.import_module(f"{name}.scripts").ScriptMaker
-    except (ImportError, OSError, SyntaxError, AttributeError):  # a torn or foreign pip: mint a .cmd
+    except (
+        ImportError,
+        OSError,
+        SyntaxError,
+        AttributeError,
+    ):  # a torn or foreign pip: mint a .cmd
         sys.modules.pop(name, None)
         return None
 
@@ -262,6 +304,7 @@ def mint_launcher(
 
     script_maker_cls = _load_script_maker() or _store_script_maker(python_exe)
     if script_maker_cls is not None:
+
         class _PathedScriptMaker(script_maker_cls):  # type: ignore[misc,valid-type]
             def _get_script_text(self, entry):
                 return script
@@ -281,18 +324,26 @@ def mint_launcher(
         # leave an active executable alone when only the ZIP timestamp changed.
         with tempfile.TemporaryDirectory(prefix=f".{name}-", dir=out_dir) as staging:
             try:
-                candidate = next((Path(p) for p in make(Path(staging))
-                                  if Path(p).suffix.lower() == ".exe"), None)
+                candidate = next(
+                    (
+                        Path(p)
+                        for p in make(Path(staging))
+                        if Path(p).suffix.lower() == ".exe"
+                    ),
+                    None,
+                )
             except Exception:
                 candidate = None
             if candidate is not None:
                 target = out_dir / candidate.name
                 try:
                     with ZipFile(target) as old, ZipFile(candidate) as new:
-                        if (old.namelist() == new.namelist() == ["__main__.py"]
-                                and target.read_bytes()[:old.infolist()[0].header_offset]
-                                == candidate.read_bytes()[:new.infolist()[0].header_offset]
-                                and old.read("__main__.py") == new.read("__main__.py")):
+                        if (
+                            old.namelist() == new.namelist() == ["__main__.py"]
+                            and target.read_bytes()[: old.infolist()[0].header_offset]
+                            == candidate.read_bytes()[: new.infolist()[0].header_offset]
+                            and old.read("__main__.py") == new.read("__main__.py")
+                        ):
                             return target
                 except (OSError, BadZipFile, KeyError):
                     pass
@@ -313,30 +364,34 @@ def mint_launcher(
     # would require unlinking the currently running exe on Windows.
     existing = out_dir / f"{name}.exe"
     from zipfile import BadZipFile, ZipFile
+
     try:
         with ZipFile(existing) as archive:
             if archive.namelist() == ["__main__.py"]:
-                prefix = existing.read_bytes()[:archive.infolist()[0].header_offset]
-                shebangs = (f"#!{python_exe} -I\n".encode(),
-                            f'#!"{python_exe}" -I\n'.encode())
+                prefix = existing.read_bytes()[: archive.infolist()[0].header_offset]
+                shebangs = (
+                    f"#!{python_exe} -I\n".encode(),
+                    f'#!"{python_exe}" -I\n'.encode(),
+                )
                 # Vendored distlib trails the shebang with an extra CRLF
                 # before the zip; compare the shebang line itself.
                 tail = prefix.rstrip(b"\r\n")
-                if (any(tail.endswith(shebang.rstrip(b"\r\n")) for shebang in shebangs)
-                        and archive.read("__main__.py") == script.encode("utf-8")):
+                if any(
+                    tail.endswith(shebang.rstrip(b"\r\n")) for shebang in shebangs
+                ) and archive.read("__main__.py") == script.encode("utf-8"):
                     return existing
     except (OSError, BadZipFile, KeyError):
         pass
 
     # The script is data to Python, not interpolated shell source.
     import base64
+
     encoded = base64.b64encode(script.encode("utf-8")).decode("ascii")
     code = f"import base64; exec(base64.b64decode('{encoded}'))"
-    body = (
-        "@echo off\r\n"
-        f'"{python_exe}" -I -c "{code}" %*\r\n'
+    body = f'@echo off\r\n"{python_exe}" -I -c "{code}" %*\r\n'
+    return _write_atomic(
+        out_dir / f"{name}.cmd", lambda p: p.write_text(body, encoding="utf-8")
     )
-    return _write_atomic(out_dir / f"{name}.cmd", lambda p: p.write_text(body, encoding="utf-8"))
 
 
 # A killed move can tear the repair's own code (``clawk_bootstrap``, ``clawk_cli``). With the
@@ -462,12 +517,14 @@ def _launcher_script(name: str, repo_root: Path, dependencies: Path | None) -> s
         RECOVERY_CLOSURE_MANIFEST,
     )
 
-    closure_repair = (_CLOSURE_REPAIR.replace("__MARKER__", repr(INTERRUPTED_PULL_MARKER))
-                      .replace("__CLOSURE_DIR__", repr(RECOVERY_CLOSURE_DIR))
-                      .replace("__MANIFEST__", repr(RECOVERY_CLOSURE_MANIFEST))
-                      .replace("__INIT__", repr(RECOVERY_CLOSURE_INIT))
-                      .replace("__CLOSURE__", repr(RECOVERY_CLOSURE))
-                      .replace("__ROOT__", repr(root)))  # last: a path is never re-substituted
+    closure_repair = (
+        _CLOSURE_REPAIR.replace("__MARKER__", repr(INTERRUPTED_PULL_MARKER))
+        .replace("__CLOSURE_DIR__", repr(RECOVERY_CLOSURE_DIR))
+        .replace("__MANIFEST__", repr(RECOVERY_CLOSURE_MANIFEST))
+        .replace("__INIT__", repr(RECOVERY_CLOSURE_INIT))
+        .replace("__CLOSURE__", repr(RECOVERY_CLOSURE))
+        .replace("__ROOT__", repr(root))
+    )  # last: a path is never re-substituted
     return (
         # The repair's own stdlib, bound before the checkout root goes on sys.path: a stdlib-named
         # file in the tree must not run in its place ahead of the closure's verification. The first
@@ -477,8 +534,8 @@ def _launcher_script(name: str, repo_root: Path, dependencies: Path | None) -> s
         "os.environ.pop('PYTHONHOME', None)\n"
         "os.environ.pop('PYTHONPATH', None)\n"
         f"sys.path.insert(0, {root!r})\n"
-        + closure_repair +
-        "if sys.argv[1:2] == ['--print-runtime-command']:\n"
+        + closure_repair
+        + "if sys.argv[1:2] == ['--print-runtime-command']:\n"
         "    sys.dont_write_bytecode = True\n"
         "    from pathlib import Path\n"
         "    try:\n"
@@ -532,7 +589,9 @@ def _write_shell(target: Path, command: list[str]) -> Path | None:
     return _write_atomic(target, write)
 
 
-def _mint_shell_launcher(name: str, out_dir: Path, python_exe: Path, script: str) -> Path | None:
+def _mint_shell_launcher(
+    name: str, out_dir: Path, python_exe: Path, script: str
+) -> Path | None:
     return _write_shell(out_dir / name, [str(python_exe), "-I", "-c", script])
 
 
@@ -544,11 +603,18 @@ def _owns_launcher(target: Path, root: Path) -> bool:
         tokens = shlex.split(target.read_text(encoding="utf-8-sig"), comments=True)
     except (OSError, UnicodeError, ValueError):
         return False
-    paths = {str(root / p) for p in (
-        "clawk", "run_agent.py", "venv/bin/python", "venv/bin/python3",
-        "venv/bin/clawk",
-        ".clawk/bin/clawk", ".clawk/bin/clawk-acp",
-    )}
+    paths = {
+        str(root / p)
+        for p in (
+            "clawk",
+            "run_agent.py",
+            "venv/bin/python",
+            "venv/bin/python3",
+            "venv/bin/clawk",
+            ".clawk/bin/clawk",
+            ".clawk/bin/clawk-acp",
+        )
+    }
     # Current store launchers pass this Python bootstrap as one shell argument.
     bootstrap = f"sys.path.insert(0, {str(root)!r})"
     if paths.intersection(tokens) or any(bootstrap in token for token in tokens):
@@ -557,12 +623,15 @@ def _owns_launcher(target: Path, root: Path) -> bool:
     # it only when that sibling demonstrably belongs to this installation.
     if target.name == "clawk-acp":
         sibling = target.with_name("clawk")
-        return (tokens == ["exec", str(sibling), "acp", "$@"]
-                and _owns_launcher(sibling, root))
+        return tokens == ["exec", str(sibling), "acp", "$@"] and _owns_launcher(
+            sibling, root
+        )
     return False
 
 
-def _publish_conveniences(root: Path, out_dir: Path, names, *, create: bool = True) -> dict[Path, bool]:
+def _publish_conveniences(
+    root: Path, out_dir: Path, names, *, create: bool = True
+) -> dict[Path, bool]:
     """User-bin commands forward to durable local launchers, not a Python pin."""
     if create:
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -571,11 +640,20 @@ def _publish_conveniences(root: Path, out_dir: Path, names, *, create: bool = Tr
     published = {}
     for name in names:
         target = out_dir / name
-        if (not create or target.exists() or target.is_symlink()) and not _owns_launcher(target, root):
+        if (
+            not create or target.exists() or target.is_symlink()
+        ) and not _owns_launcher(target, root):
             continue
-        before = target.lstat().st_mtime_ns if target.exists() or target.is_symlink() else None
-        command = ([str(root / ".clawk/bin/clawk"), "--run-module", "run_agent"]
-                   if name == "clawksis-agent" else [str(root / ".clawk/bin" / name)])
+        before = (
+            target.lstat().st_mtime_ns
+            if target.exists() or target.is_symlink()
+            else None
+        )
+        command = (
+            [str(root / ".clawk/bin/clawk"), "--run-module", "run_agent"]
+            if name == "clawksis-agent"
+            else [str(root / ".clawk/bin" / name)]
+        )
         if _write_shell(target, command) is None:
             raise OSError(f"could not publish launcher {target}")
         published[target] = before != target.lstat().st_mtime_ns
@@ -669,13 +747,14 @@ def _launcher_python(target: Path) -> Path | None:
         # ScriptMaker.executable unquoted, and a Windows path may hold a space
         # or "#!", so take the whole line up to " -I".
         from zipfile import BadZipFile, ZipFile
+
         try:
             with ZipFile(target) as archive:
-                prefix = data[:archive.infolist()[0].header_offset]
+                prefix = data[: archive.infolist()[0].header_offset]
         except (BadZipFile, IndexError, OSError):
             return None
         start = prefix.find(b"#!", prefix.rfind(b"\0") + 1)
-        shebang = prefix[start + 2:].rstrip(b"\r\n") if start != -1 else b""
+        shebang = prefix[start + 2 :].rstrip(b"\r\n") if start != -1 else b""
         if not shebang.endswith(b" -I") or b"\n" in shebang:
             return None
         try:
@@ -716,7 +795,9 @@ def _launcher_python(target: Path) -> Path | None:
         return None
 
 
-def _kept_shared_launcher(name: str, local: Path, store: Path, own: Path | None) -> Path | None:
+def _kept_shared_launcher(
+    name: str, local: Path, store: Path, own: Path | None
+) -> Path | None:
     """Existing checkout launcher already bound outside this root's store.
 
     Checkout launchers are shared by every CLAWK_HOME; a launch under one
@@ -731,7 +812,11 @@ def _kept_shared_launcher(name: str, local: Path, store: Path, own: Path | None)
         # launcher is ours, and callers read the returned count as success, so
         # a keep here would report a half-finished store as healthy.
         return None
-    candidates = [local / name] if not _is_windows() else [local / f"{name}.exe", local / f"{name}.cmd"]
+    candidates = (
+        [local / name]
+        if not _is_windows()
+        else [local / f"{name}.exe", local / f"{name}.cmd"]
+    )
     dead: list[Path] = []
     for target in candidates:
         try:
@@ -750,7 +835,9 @@ def _kept_shared_launcher(name: str, local: Path, store: Path, own: Path | None)
             # Resolve the store's directories, not the interpreter: a store
             # Python may link to one shared outside it.
             store_dir = store.resolve()
-            foreign = not any(parent.resolve() == store_dir for parent in python.parents)
+            foreign = not any(
+                parent.resolve() == store_dir for parent in python.parents
+            )
         except (OSError, RuntimeError, ValueError):
             continue
         if foreign:
@@ -774,14 +861,18 @@ def ensure_install_launchers(repo_root: Path, out_dir: Path) -> list[str]:
     store = store_root(root)
     own = resolve_store_python(root)
     from clawk_constants import get_default_clawk_root
+
     home = get_default_clawk_root().resolve()
     # The data root this checkout was installed into (<home>/clawksis-agent with
     # <home>/tools) always republishes, which also heals an install that an
     # earlier foreign launch already rebound. The layout alone is not proof: a
     # root that only borrows the checkout can match it through
     # CLAWK_RUNTIME_DIR=<home>/tools, so it must also own the checkout.
-    owner = (root.parent == home and store.resolve() == (home / "tools").resolve()
-             and owning_home_root(root) is None)
+    owner = (
+        root.parent == home
+        and store.resolve() == (home / "tools").resolve()
+        and owning_home_root(root) is None
+    )
     written = []
     for name in WINDOWS_BIN_LAUNCHERS:
         # ponytail: one guard here covers every caller (launch, sync, repair,
@@ -798,10 +889,18 @@ def ensure_install_launchers(repo_root: Path, out_dir: Path) -> list[str]:
     if len(written) != len(WINDOWS_BIN_LAUNCHERS):
         return []
     if not _is_windows():
-        return [str(path) for path in _publish_conveniences(root, Path(out_dir), WINDOWS_BIN_LAUNCHERS)]
+        return [
+            str(path)
+            for path in _publish_conveniences(
+                root, Path(out_dir), WINDOWS_BIN_LAUNCHERS
+            )
+        ]
     Path(out_dir).mkdir(parents=True, exist_ok=True)
-    return [str(path) for name in WINDOWS_BIN_LAUNCHERS
-            if (path := stage_launcher(name, root, Path(out_dir))) is not None]
+    return [
+        str(path)
+        for name in WINDOWS_BIN_LAUNCHERS
+        if (path := stage_launcher(name, root, Path(out_dir))) is not None
+    ]
 
 
 def expose_cli(project_root: Path | None = None, *, create: bool = True) -> dict:
@@ -853,12 +952,20 @@ def expose_cli(project_root: Path | None = None, *, create: bool = True) -> dict
         # Repair existing FHS/custom-home exposure, but never create new global
         # entries or reclaim a convenience that was repointed to another root.
         from clawk_constants import get_default_clawk_root
+
         for directory in (get_default_clawk_root() / "bin", Path("/usr/local/bin")):
-            if directory not in dirs and (not create or _owns_launcher(directory / "clawk", root)):
+            if directory not in dirs and (
+                not create or _owns_launcher(directory / "clawk", root)
+            ):
                 dirs.append(directory)
         written = []
         for directory in dirs:
-            published = _publish_conveniences(root, directory, (*WINDOWS_BIN_LAUNCHERS, "clawksis-agent"), create=create)
+            published = _publish_conveniences(
+                root,
+                directory,
+                (*WINDOWS_BIN_LAUNCHERS, "clawksis-agent"),
+                create=create,
+            )
             written.extend(path.name for path, changed in published.items() if changed)
         return {"ok": True, "written": written}
     except OSError as exc:
@@ -886,13 +993,24 @@ def _new_console_environment() -> dict[str, str] | None:
     userenv = ctypes.WinDLL("userenv", use_last_error=True)
     kernel32.GetCurrentProcess.restype = wintypes.HANDLE
     kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
-    advapi32.OpenProcessToken.argtypes = [wintypes.HANDLE, wintypes.DWORD, ctypes.POINTER(wintypes.HANDLE)]
-    userenv.CreateEnvironmentBlock.argtypes = [ctypes.POINTER(ctypes.c_void_p), wintypes.HANDLE, wintypes.BOOL]
+    advapi32.OpenProcessToken.argtypes = [
+        wintypes.HANDLE,
+        wintypes.DWORD,
+        ctypes.POINTER(wintypes.HANDLE),
+    ]
+    userenv.CreateEnvironmentBlock.argtypes = [
+        ctypes.POINTER(ctypes.c_void_p),
+        wintypes.HANDLE,
+        wintypes.BOOL,
+    ]
     userenv.DestroyEnvironmentBlock.argtypes = [ctypes.c_void_p]
 
     token = wintypes.HANDLE()
-    if not advapi32.OpenProcessToken(kernel32.GetCurrentProcess(), _TOKEN_QUERY | _TOKEN_DUPLICATE,
-                                     ctypes.byref(token)):
+    if not advapi32.OpenProcessToken(
+        kernel32.GetCurrentProcess(),
+        _TOKEN_QUERY | _TOKEN_DUPLICATE,
+        ctypes.byref(token),
+    ):
         return None
     block = ctypes.c_void_p()
     try:
@@ -920,7 +1038,9 @@ def _read_environment_block(address: int) -> dict[str, str]:
         name, _, value = entry.partition("=")
         if name:  # "=C:=C:\..." entries carry per-drive directories, not variables
             environ[name.upper()] = value
-        cursor += len(entry.encode("utf-16-le", "surrogatepass")) + ctypes.sizeof(ctypes.c_wchar)
+        cursor += len(entry.encode("utf-16-le", "surrogatepass")) + ctypes.sizeof(
+            ctypes.c_wchar
+        )
     return environ
 
 
@@ -944,14 +1064,17 @@ def owns_user_path(root: Path) -> bool:
     """
     console_root = new_console_clawk_root()
     if console_root is not None and (
-        os.path.normcase(os.path.realpath(root)) == os.path.normcase(os.path.realpath(console_root))
+        os.path.normcase(os.path.realpath(root))
+        == os.path.normcase(os.path.realpath(console_root))
     ):
         return True
     import logging
 
     logging.getLogger(__name__).info(
         "User PATH left unchanged: new consoles use %s, not %s",
-        console_root or "an unknown Clawksis home", root)
+        console_root or "an unknown Clawksis home",
+        root,
+    )
     return False
 
 
@@ -977,8 +1100,12 @@ def _register_windows_user_path(entry: Path) -> str:
     """
     import winreg  # type: ignore
 
-    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment", 0,
-                        winreg.KEY_QUERY_VALUE | winreg.KEY_SET_VALUE) as key:
+    with winreg.OpenKey(
+        winreg.HKEY_CURRENT_USER,
+        "Environment",
+        0,
+        winreg.KEY_QUERY_VALUE | winreg.KEY_SET_VALUE,
+    ) as key:
         try:
             current, kind = winreg.QueryValueEx(key, "Path")
         except FileNotFoundError:
@@ -998,7 +1125,9 @@ def _broadcast_environment_change() -> None:
     import ctypes
 
     try:
-        ctypes.windll.user32.SendMessageTimeoutW(0xFFFF, 0x1A, 0, "Environment", 0x0002, 5000, None)  # type: ignore[attr-defined]
+        ctypes.windll.user32.SendMessageTimeoutW(
+            0xFFFF, 0x1A, 0, "Environment", 0x0002, 5000, None
+        )  # type: ignore[attr-defined]
     except Exception:
         pass
 
@@ -1018,8 +1147,15 @@ def _expose_windows_user_bin(root: Path, *, create: bool) -> dict:
     try:
         if not create:
             # Bootstrap: repair only commands we already own, enable nothing new.
-            published = _publish_conveniences(root, directory, WINDOWS_BIN_LAUNCHERS, create=False)
-            return {"ok": True, "written": [path.name for path, changed in published.items() if changed]}
+            published = _publish_conveniences(
+                root, directory, WINDOWS_BIN_LAUNCHERS, create=False
+            )
+            return {
+                "ok": True,
+                "written": [
+                    path.name for path, changed in published.items() if changed
+                ],
+            }
         directory.mkdir(parents=True, exist_ok=True)
         written = ensure_install_launchers(root, directory)
         if len(written) != len(WINDOWS_BIN_LAUNCHERS):
@@ -1027,8 +1163,16 @@ def _expose_windows_user_bin(root: Path, *, create: bool) -> dict:
         names = [Path(path).name for path in written]
         if not owns_user_path(directory.parent):
             # New consoles resolve another home; its launchers stay in its own bin.
-            return {"ok": True, "skipped": "User PATH belongs to the home new consoles use", "written": names}
-        return {"ok": True, "path": _register_windows_user_path(directory), "written": names}
+            return {
+                "ok": True,
+                "skipped": "User PATH belongs to the home new consoles use",
+                "written": names,
+            }
+        return {
+            "ok": True,
+            "path": _register_windows_user_path(directory),
+            "written": names,
+        }
     except OSError as exc:
         return {"ok": False, "error": str(exc)}
 
@@ -1078,7 +1222,9 @@ def _symlink_sealed_launchers(payload_bin) -> dict:
                 # Ours if it points into this payload (stale app path from
                 # a previous version counts — resolve() of a dangling link
                 # still yields the old path text) — or dangling entirely.
-                points_into_payload = str(Path(current)).startswith(str(payload_root) + os.sep)
+                points_into_payload = str(Path(current)).startswith(
+                    str(payload_root) + os.sep
+                )
                 if not points_into_payload and target.exists():
                     continue  # a live foreign link — user's arrangement
             elif target.exists():
@@ -1103,7 +1249,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
     repo_root = Path(__file__).resolve().parents[1]
     if resolve_store_python(repo_root, publication=True) is None:
-        parser.exit(1, "clawk: store interpreter is missing; finish pm install before publishing launchers\n")
+        parser.exit(
+            1,
+            "clawk: store interpreter is missing; finish pm install before publishing launchers\n",
+        )
     args.out_dir.mkdir(parents=True, exist_ok=True)
     written = ensure_install_launchers(repo_root, args.out_dir)
     if len(written) != len(ENTRY_POINTS):

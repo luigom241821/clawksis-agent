@@ -21,13 +21,22 @@ from typing import Any, Callable
 
 import clawk_yaml as yaml
 
-from tests.fakes.providers.anthropic_messages import ApiError, AnthropicMessagesServer, Reply, Response, Text, ToolUse
+from tests.fakes.providers.anthropic_messages import (
+    ApiError,
+    AnthropicMessagesServer,
+    Reply,
+    Response,
+    Text,
+    ToolUse,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 TAG_VAR = "OAUTH_E2E_TAG"
 
 _SECRET_ENV_SUFFIXES = ("_API_KEY", "_TOKEN", "_SECRET", "_ACCESS_KEY")
-_PASSTHROUGH_ENV = frozenset({"PATH", "LANG", "LANGUAGE", "USER", "LOGNAME", "SHELL", "TMPDIR", "TZ"})
+_PASSTHROUGH_ENV = frozenset(
+    {"PATH", "LANG", "LANGUAGE", "USER", "LOGNAME", "SHELL", "TMPDIR", "TZ"}
+)
 
 
 @dataclass
@@ -47,25 +56,36 @@ class FakeHome:
         real_root = Path(pwd.getpwuid(os.getuid()).pw_dir, ".clawk").resolve()
         fixture = self.clawk_home.resolve()
         assert fixture != real_root and fixture.parent != real_root / "profiles", (
-            f"fixture CLAWK_HOME {fixture} is the real install's live home")
+            f"fixture CLAWK_HOME {fixture} is the real install's live home"
+        )
         env = {
-            k: v for k, v in os.environ.items()
-            if (k in _PASSTHROUGH_ENV or k.startswith("LC_")) and not k.endswith(_SECRET_ENV_SUFFIXES)
+            k: v
+            for k, v in os.environ.items()
+            if (k in _PASSTHROUGH_ENV or k.startswith("LC_"))
+            and not k.endswith(_SECRET_ENV_SUFFIXES)
         }
-        env.update({
-            "HOME": str(self.home), "CLAWK_HOME": str(self.clawk_home),
-            "PYTHONPATH": str(REPO_ROOT), "PYTHONUNBUFFERED": "1", "NO_COLOR": "1", "TERM": "dumb",
-            TAG_VAR: self.tag,
-            # The child's ~/.clawksis/state.db IS the tmp home's db; see parity/_helpers.py.
-            "CLAWK_STATE_DB_GUARD_BYPASS": "1",
-        })
+        env.update(
+            {
+                "HOME": str(self.home),
+                "CLAWK_HOME": str(self.clawk_home),
+                "PYTHONPATH": str(REPO_ROOT),
+                "PYTHONUNBUFFERED": "1",
+                "NO_COLOR": "1",
+                "TERM": "dumb",
+                TAG_VAR: self.tag,
+                # The child's ~/.clawksis/state.db IS the tmp home's db; see parity/_helpers.py.
+                "CLAWK_STATE_DB_GUARD_BYPASS": "1",
+            }
+        )
         env.update(extra or {})
         return env
 
     def write_config(self, cfg: dict[str, Any]) -> None:
         base = {"updates": {"check": False}, "display": {"compact": True}}
         base.update(cfg)
-        (self.clawk_home / "config.yaml").write_text(yaml.safe_dump(base, sort_keys=False), encoding="utf-8")
+        (self.clawk_home / "config.yaml").write_text(
+            yaml.safe_dump(base, sort_keys=False), encoding="utf-8"
+        )
 
     def write_auth(self, store: dict[str, Any]) -> None:
         self.auth_path.write_text(json.dumps(store, indent=2), encoding="utf-8")
@@ -87,18 +107,39 @@ def clawk_argv(*args: str) -> list[str]:
     return [sys.executable, "-m", "clawk_cli.main", *args]
 
 
-def run_clawk(fh: FakeHome, args: list[str], *, extra_env: dict[str, str] | None = None,
-               timeout: float = 120.0) -> subprocess.CompletedProcess:
-    return subprocess.run(clawk_argv(*args), env=fh.env(extra_env), cwd=str(fh.root), stdin=subprocess.DEVNULL,
-                          capture_output=True, text=True, timeout=timeout, check=False)
+def run_clawk(
+    fh: FakeHome,
+    args: list[str],
+    *,
+    extra_env: dict[str, str] | None = None,
+    timeout: float = 120.0,
+) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        clawk_argv(*args),
+        env=fh.env(extra_env),
+        cwd=str(fh.root),
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=False,
+    )
 
 
-def spawn_clawk(fh: FakeHome, args: list[str], *, extra_env: dict[str, str] | None = None,
-                 log: Path) -> subprocess.Popen:
+def spawn_clawk(
+    fh: FakeHome, args: list[str], *, extra_env: dict[str, str] | None = None, log: Path
+) -> subprocess.Popen:
     out = open(log, "w", encoding="utf-8")
     try:
-        return subprocess.Popen(clawk_argv(*args), env=fh.env(extra_env), cwd=str(fh.root),
-                                stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT, text=True)
+        return subprocess.Popen(
+            clawk_argv(*args),
+            env=fh.env(extra_env),
+            cwd=str(fh.root),
+            stdin=subprocess.DEVNULL,
+            stdout=out,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
     finally:
         out.close()
 
@@ -117,12 +158,16 @@ def kill_tagged(tag: str) -> None:
             continue
         if needle in env.split(b"\0"):
             try:
-                os.kill(int(entry), signal.SIGKILL)  # windows-footgun: ok — Linux-gated suite (/proc scan)
+                os.kill(
+                    int(entry), signal.SIGKILL
+                )  # windows-footgun: ok — Linux-gated suite (/proc scan)
             except OSError:
                 pass
 
 
-def wait_until(pred: Callable[[], Any], timeout: float, what: str, interval: float = 0.05) -> Any:
+def wait_until(
+    pred: Callable[[], Any], timeout: float, what: str, interval: float = 0.05
+) -> Any:
     deadline = time.monotonic() + timeout
     while True:
         value = pred()
@@ -205,13 +250,22 @@ class AnthropicOAuthRig:
         return next((r for r in rows if r.get("id") == entry_id), {})
 
 
-def start_anthropic_rig(root: Path, decide: Callable[[dict[str, Any]], Any], *,
-                        title_generation: bool, entries: int = 1,
-                        expires_at_ms: int | None = None) -> AnthropicOAuthRig:
+def start_anthropic_rig(
+    root: Path,
+    decide: Callable[[dict[str, Any]], Any],
+    *,
+    title_generation: bool,
+    entries: int = 1,
+    expires_at_ms: int | None = None,
+) -> AnthropicOAuthRig:
     """``expires_at_ms`` is the seeded row's clock expiry; default: an hour ahead, so only the
     vendor's 401 (early revocation/expiry) can trigger the refresh."""
     from tests.e2e.core.providers._anthropic_helpers import become_subreaper
-    from tests.fakes.providers.oauth_token_server import OAuthTokenServer, TLSInterceptProxy, make_test_ca
+    from tests.fakes.providers.oauth_token_server import (
+        OAuthTokenServer,
+        TLSInterceptProxy,
+        make_test_ca,
+    )
 
     # The child's first connect spawns the profile's gateway daemon (detached, reparented to init);
     # as subreaper it stays in this test's tree so ``kill_tagged`` passes the live-system guard.
@@ -219,25 +273,64 @@ def start_anthropic_rig(root: Path, decide: Callable[[dict[str, Any]], Any], *,
     ca = make_test_ca(root / "ca", ANTHROPIC_TOKEN_HOSTS)
     tokens = OAuthTokenServer().start()
     proxy = TLSInterceptProxy(tokens, ca, ANTHROPIC_TOKEN_HOSTS).start()
+
     def responder(record: dict[str, Any]) -> Response:
         return resolve(decide(record))
 
     messages = AnthropicMessagesServer(responder, aux=responder, models=[MODEL]).start()
     fh = make_home(root)
-    fh.write_config({
-        "model": {"provider": "anthropic", "default": MODEL, "base_url": messages.base_url},
-        "auxiliary": {"title_generation": {"enabled": title_generation}},
-    })
+    fh.write_config(
+        {
+            "model": {
+                "provider": "anthropic",
+                "default": MODEL,
+                "base_url": messages.base_url,
+            },
+            "auxiliary": {"title_generation": {"enabled": title_generation}},
+        }
+    )
     seed = tokens.seed_refresh_token()
-    rows = [{"id": "e1", "label": "acct-1", "auth_type": "oauth", "priority": 0, "source": "manual",
-             "access_token": OLD_ACCESS, "refresh_token": seed,
-             "expires_at_ms": expires_at_ms if expires_at_ms is not None else int(time.time() * 1000) + 3_600_000}]
+    rows = [
+        {
+            "id": "e1",
+            "label": "acct-1",
+            "auth_type": "oauth",
+            "priority": 0,
+            "source": "manual",
+            "access_token": OLD_ACCESS,
+            "refresh_token": seed,
+            "expires_at_ms": expires_at_ms
+            if expires_at_ms is not None
+            else int(time.time() * 1000) + 3_600_000,
+        }
+    ]
     for i in range(2, entries + 1):
-        rows.append({"id": f"e{i}", "label": f"acct-{i}", "auth_type": "oauth", "priority": i - 1,
-                     "source": "manual", "access_token": f"sk-ant-oat01-e2e-spare-{i}",
-                     "refresh_token": tokens.seed_refresh_token(), "expires_at_ms": int(time.time() * 1000) + 3_600_000})
+        rows.append(
+            {
+                "id": f"e{i}",
+                "label": f"acct-{i}",
+                "auth_type": "oauth",
+                "priority": i - 1,
+                "source": "manual",
+                "access_token": f"sk-ant-oat01-e2e-spare-{i}",
+                "refresh_token": tokens.seed_refresh_token(),
+                "expires_at_ms": int(time.time() * 1000) + 3_600_000,
+            }
+        )
     fh.write_auth({"version": 1, "credential_pool": {"anthropic": rows}})
     loopback = "127.0.0.1,localhost"
-    env = {"HTTPS_PROXY": proxy.url, "https_proxy": proxy.url, "NO_PROXY": loopback, "no_proxy": loopback,
-           "SSL_CERT_FILE": str(ca.ca_pem)}
-    return AnthropicOAuthRig(fh=fh, tokens=tokens, proxy=proxy, messages=messages, seed_refresh=seed, child_env=env)
+    env = {
+        "HTTPS_PROXY": proxy.url,
+        "https_proxy": proxy.url,
+        "NO_PROXY": loopback,
+        "no_proxy": loopback,
+        "SSL_CERT_FILE": str(ca.ca_pem),
+    }
+    return AnthropicOAuthRig(
+        fh=fh,
+        tokens=tokens,
+        proxy=proxy,
+        messages=messages,
+        seed_refresh=seed,
+        child_env=env,
+    )

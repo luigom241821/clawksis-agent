@@ -117,6 +117,7 @@ def _make_runner(*, compression_in_flight: bool):
     )
 
     import time
+
     agent_mock = MagicMock()
     agent_mock.get_activity_summary.return_value = {
         "seconds_since_activity": 0.0,
@@ -145,5 +146,3 @@ async def test_priority_path_does_not_interrupt_when_compression_in_flight():
     agent_mock.interrupt.assert_not_called()
     queued = runner.adapters[Platform.TELEGRAM]._pending_messages.get(sk)
     assert queued is not None and queued.text == "still there?"
-
-

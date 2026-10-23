@@ -41,43 +41,71 @@ def _timeout_fallback_prompt(agent, system_message: str) -> str:
     try:
         return agent._build_system_prompt(system_message)
     except Exception:
-        logger.debug("compress_context timeout fallback prompt rebuild failed; using raw system_message", exc_info=True)
+        logger.debug(
+            "compress_context timeout fallback prompt rebuild failed; using raw system_message",
+            exc_info=True,
+        )
         return system_message or ""
 
 
 def _report_compression_timeout(
-    agent, *, idle: float, waited: float, since_progress: float, total_ceiling: float, total_exhausted: bool,
+    agent,
+    *,
+    idle: float,
+    waited: float,
+    since_progress: float,
+    total_ceiling: float,
+    total_exhausted: bool,
     progress_observed: bool,
 ) -> None:
     """Host-side timeout bookkeeping: log, activity stamp, cooldown ladder, user warning."""
     from agent.conversation_compression import mark_context_compression_timed_out
+
     mark_context_compression_timed_out(agent)
     if total_exhausted:
         logger.warning(
             "Context compression reached its total ceiling after %.1fs (progress observed=%s); continuing without compression",
-            waited, progress_observed,
+            waited,
+            progress_observed,
         )
     else:
         logger.warning(
             "Context compression made no progress for %.1fs (total wait %.1fs, ceiling %.1fs); continuing without compression",
-            since_progress, waited, total_ceiling,
+            since_progress,
+            waited,
+            total_ceiling,
         )
     touch = getattr(agent, "_touch_activity", None)
     if callable(touch):
         try:
-            touch("context compression timed out", provenance=ActivityProvenance.AGENT_COMPRESSION_TIMEOUT)
+            touch(
+                "context compression timed out",
+                provenance=ActivityProvenance.AGENT_COMPRESSION_TIMEOUT,
+            )
         except Exception:
-            logger.debug("compress_context timeout activity touch failed", exc_info=True)
+            logger.debug(
+                "compress_context timeout activity touch failed", exc_info=True
+            )
     # Same timeout cooldown ladder as summary-LLM timeouts: avoid re-burning the full idle budget every turn.
-    record = getattr(getattr(agent, "context_compressor", None), "record_timeout_failure", None)
+    record = getattr(
+        getattr(agent, "context_compressor", None), "record_timeout_failure", None
+    )
     if callable(record):
         try:
             if total_exhausted:
-                record("host compress_context total ceiling exhausted", failure_kind="ceiling_exhausted")
+                record(
+                    "host compress_context total ceiling exhausted",
+                    failure_kind="ceiling_exhausted",
+                )
             else:
-                record("host compress_context timeout (no summary progress)", failure_kind="stalled")
+                record(
+                    "host compress_context timeout (no summary progress)",
+                    failure_kind="stalled",
+                )
         except Exception:
-            logger.debug("failed to record compress_context timeout cooldown", exc_info=True)
+            logger.debug(
+                "failed to record compress_context timeout cooldown", exc_info=True
+            )
     emit = getattr(agent, "_emit_warning", None)
     if not callable(emit):
         return
@@ -113,23 +141,37 @@ def _sync_persisted_markers(target_messages, source_messages) -> None:
     and resurrect the duplicate-row bug."""
     from agent.context_compressor import _DB_PERSISTED_MARKER
     from agent.conversation_compression import _stamp_scoped_twins
+
     if not isinstance(target_messages, list) or not isinstance(source_messages, list):
         return
     for source_message in source_messages:
-        if isinstance(source_message, dict) and source_message.get(_DB_PERSISTED_MARKER):
+        if isinstance(source_message, dict) and source_message.get(
+            _DB_PERSISTED_MARKER
+        ):
             _stamp_scoped_twins(target_messages, source_message)
 
 
 def _run_under_progress_timeout(
-    agent, run, messages, system_message, *, active_fence, registration, fence_registration_lock,
-    idle_timeout, total_ceiling, approx_tokens=None,
+    agent,
+    run,
+    messages,
+    system_message,
+    *,
+    active_fence,
+    registration,
+    fence_registration_lock,
+    idle_timeout,
+    total_ceiling,
+    approx_tokens=None,
 ):
     """Run ``run(fence, target_messages=snapshot)`` on the pool under the progress-aware timeout.
     The pooled worker must NEVER share the caller's live transcript — a late engine after a host timeout could
     rewrite it. It deep-snapshots on the worker and publishes only via an ADMITTED commit; a no-op/abort
     returns the snapshot unchanged, so the ORIGINAL list is handed back to keep identity semantics."""
     from agent.conversation_compression import (
-        CompressionCommitFence, request_exceeds_model_window, run_compress_context_with_progress_timeout,
+        CompressionCommitFence,
+        request_exceeds_model_window,
+        run_compress_context_with_progress_timeout,
     )
 
     def _snapshot_worker(fence=None, *, same_turn_fallback_recovery=False):
@@ -143,7 +185,9 @@ def _run_under_progress_timeout(
         # compress_context.
         snapshot = copy.deepcopy(messages)
         result_msgs, result_prompt = run(
-            fence, target_messages=snapshot, same_turn_fallback_recovery=same_turn_fallback_recovery
+            fence,
+            target_messages=snapshot,
+            same_turn_fallback_recovery=same_turn_fallback_recovery,
         )
         return (messages if result_msgs is snapshot else result_msgs), result_prompt
 
@@ -151,16 +195,25 @@ def _run_under_progress_timeout(
     # worker records its stall_interrupted cooldown while unwinding — racing the retry's automatic gate
     # (#112387). The retry therefore bypasses ONLY the summary-failure cooldown (never clears it; the
     # structural breakers stay in force), exactly like provider-proven overflow recovery.
-    _same_turn_fallback_worker = functools.partial(_snapshot_worker, same_turn_fallback_recovery=True)
+    _same_turn_fallback_worker = functools.partial(
+        _snapshot_worker, same_turn_fallback_recovery=True
+    )
 
     timeout_cause = {"total_exhausted": False, "progress_observed": False}
 
     def _on_timeout_cause(total_exhausted, progress_observed):
-        timeout_cause.update(total_exhausted=total_exhausted, progress_observed=progress_observed)
+        timeout_cause.update(
+            total_exhausted=total_exhausted, progress_observed=progress_observed
+        )
 
     def _on_timeout(idle, waited, since_progress):
         _report_compression_timeout(
-            agent, idle=idle, waited=waited, since_progress=since_progress, total_ceiling=total_ceiling, **timeout_cause
+            agent,
+            idle=idle,
+            waited=waited,
+            since_progress=since_progress,
+            total_ceiling=total_ceiling,
+            **timeout_cause,
         )
 
     def _publish_new_fence():
@@ -176,17 +229,28 @@ def _run_under_progress_timeout(
         return retry_fence
 
     return run_compress_context_with_progress_timeout(
-        worker=_snapshot_worker, messages=messages,
+        worker=_snapshot_worker,
+        messages=messages,
         system_prompt_fallback=lambda: _timeout_fallback_prompt(agent, system_message),
-        idle_timeout_seconds=idle_timeout, total_ceiling_seconds=total_ceiling, on_timeout=_on_timeout,
+        idle_timeout_seconds=idle_timeout,
+        total_ceiling_seconds=total_ceiling,
+        on_timeout=_on_timeout,
         on_timeout_cause=_on_timeout_cause,
-        on_commit_overrun=lambda waited, ceiling: _warn_commit_overrun(agent, waited, ceiling), fence=active_fence,
-        telemetry_agent=agent, new_fence=_publish_new_fence, fallback_worker=_same_turn_fallback_worker,
-        request_exceeds_window=request_exceeds_model_window(agent, approx_tokens) is True,
+        on_commit_overrun=lambda waited, ceiling: _warn_commit_overrun(
+            agent, waited, ceiling
+        ),
+        fence=active_fence,
+        telemetry_agent=agent,
+        new_fence=_publish_new_fence,
+        fallback_worker=_same_turn_fallback_worker,
+        request_exceeds_window=request_exceeds_model_window(agent, approx_tokens)
+        is True,
     )
 
 
-def _mirror_result_onto_live_lists(agent, result, messages, *, direct_path: bool) -> None:
+def _mirror_result_onto_live_lists(
+    agent, result, messages, *, direct_path: bool
+) -> None:
     """Mirror persisted-marker stamps from the result list onto the live list(s)."""
     if not (isinstance(result, tuple) and result and isinstance(result[0], list)):
         return
@@ -202,6 +266,7 @@ def _mirror_result_onto_live_lists(agent, result, messages, *, direct_path: bool
         # The token-estimate memo pins message strings; bodies the summary replaced can never hit again,
         # and close() only sees the compressed history.
         from agent.model_metadata_token_memo import forget_message_token_memo
+
         with contextlib.suppress(Exception):
             forget_message_token_memo(messages, keep=result_messages)
 
@@ -212,9 +277,11 @@ def _rebind_caller_session_context(agent) -> None:
     CLAWK_SESSION_ID to the child id."""
     with contextlib.suppress(Exception):
         from clawk_logging import set_session_context
+
         set_session_context(agent.session_id)
     try:
         from gateway.session_context import set_current_session_id
+
         if agent.session_id:
             set_current_session_id(agent.session_id)
     except Exception:
@@ -225,10 +292,21 @@ class CompressionFacadeMixin:
     """``_compress_context`` (see module docstring)."""
 
     def _compress_context(
-        self, messages: list, system_message: str, *, approx_tokens: int | None = None, task_id: str = "default",
-        focus_topic: str | None = None, force: bool = False, bypass_cooldown: bool = False,
-        defer_context_engine_notification: bool = False, commit_fence=None, verbatim_tail: list | None = None,
-        trigger: str | None = None, snapshot_is_current=None, overflow_reason: str | None = None,
+        self,
+        messages: list,
+        system_message: str,
+        *,
+        approx_tokens: int | None = None,
+        task_id: str = "default",
+        focus_topic: str | None = None,
+        force: bool = False,
+        bypass_cooldown: bool = False,
+        defer_context_engine_notification: bool = False,
+        commit_fence=None,
+        verbatim_tail: list | None = None,
+        trigger: str | None = None,
+        snapshot_is_current=None,
+        overflow_reason: str | None = None,
     ) -> tuple:
         """Forwarder — see ``agent.conversation_compression.compress_context``.
         ``force=True`` (manual /compress) bypasses the summary-failure cooldown; ``bypass_cooldown=True``
@@ -245,15 +323,23 @@ class CompressionFacadeMixin:
         # thread-local state guarded by a per-agent lock so overlapping automatic/manual entrypoints cannot
         # clobber each other's outcome (#98741).
         from agent.conversation_compression import (
-            CompressionCommitFence, compress_context, reset_context_compression_timeout_outcome,
+            CompressionCommitFence,
+            compress_context,
+            reset_context_compression_timeout_outcome,
             resolve_context_compression_timeouts,
         )
+
         reset_context_compression_timeout_outcome(self)
         from agent.portal_tags import (
-            get_affinity_scope, get_conversation_context, reset_affinity_scope, reset_conversation_context,
-            set_affinity_scope, set_conversation_context,
+            get_affinity_scope,
+            get_conversation_context,
+            reset_affinity_scope,
+            reset_conversation_context,
+            set_affinity_scope,
+            set_conversation_context,
         )
         from agent.prompt_cache_scope import declared_conversation_scope_safe
+
         # Out-of-turn compaction (/compact, gateway /compress, partial head compression) runs outside
         # run_conversation's ambient scope; publish the root as a fallback so the summarizer's call carries
         # the conversation tag. No-op for in-turn callers. Same for the ROUTING scope when declared.
@@ -274,21 +360,37 @@ class CompressionFacadeMixin:
         # admission against begin_commit(). Publication is serialized so overlapping automatic/manual
         # entrypoints cannot replace the fence of the attempt currently committing.
         active_fence = commit_fence or CompressionCommitFence()
-        fence_registration_lock = vars(self).setdefault("_compression_commit_fence_lock", threading.RLock())
+        fence_registration_lock = vars(self).setdefault(
+            "_compression_commit_fence_lock", threading.RLock()
+        )
         registration = _CommitFenceRegistration(active_fence)
         try:
             with fence_registration_lock:
-                fence_stack = vars(self).setdefault("_compression_commit_fence_stack", [])
+                fence_stack = vars(self).setdefault(
+                    "_compression_commit_fence_stack", []
+                )
                 fence_stack.append(registration)
                 self._active_compression_commit_fence = active_fence
 
-            def _run(fence=None, target_messages=None, same_turn_fallback_recovery=False):
+            def _run(
+                fence=None, target_messages=None, same_turn_fallback_recovery=False
+            ):
                 return compress_context(
-                    self, target_messages if target_messages is not None else messages, system_message,
-                    approx_tokens=approx_tokens, task_id=task_id, focus_topic=focus_topic, force=force,
+                    self,
+                    target_messages if target_messages is not None else messages,
+                    system_message,
+                    approx_tokens=approx_tokens,
+                    task_id=task_id,
+                    focus_topic=focus_topic,
+                    force=force,
                     bypass_cooldown=bypass_cooldown or same_turn_fallback_recovery,
-                    defer_context_engine_notification=(defer_context_engine_notification), commit_fence=fence,
-                    verbatim_tail=verbatim_tail, trigger=trigger, snapshot_is_current=snapshot_is_current,
+                    defer_context_engine_notification=(
+                        defer_context_engine_notification
+                    ),
+                    commit_fence=fence,
+                    verbatim_tail=verbatim_tail,
+                    trigger=trigger,
+                    snapshot_is_current=snapshot_is_current,
                     overflow_reason=overflow_reason,
                 )
 
@@ -302,12 +404,20 @@ class CompressionFacadeMixin:
                 result = _run(active_fence)
             else:
                 result = _run_under_progress_timeout(
-                    self, _run, messages, system_message,
-                    active_fence=active_fence, registration=registration,
+                    self,
+                    _run,
+                    messages,
+                    system_message,
+                    active_fence=active_fence,
+                    registration=registration,
                     fence_registration_lock=fence_registration_lock,
-                    idle_timeout=idle_timeout, total_ceiling=total_ceiling, approx_tokens=approx_tokens,
+                    idle_timeout=idle_timeout,
+                    total_ceiling=total_ceiling,
+                    approx_tokens=approx_tokens,
                 )
-            _mirror_result_onto_live_lists(self, result, messages, direct_path=direct_path)
+            _mirror_result_onto_live_lists(
+                self, result, messages, direct_path=direct_path
+            )
             _rebind_caller_session_context(self)
             return result
         finally:

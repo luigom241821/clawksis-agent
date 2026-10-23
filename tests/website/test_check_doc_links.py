@@ -24,14 +24,18 @@ def checker():
     return module
 
 
-
-
-def test_fix_rewrites_route_to_relative_path_keeping_anchor(checker, tmp_path, monkeypatch):
+def test_fix_rewrites_route_to_relative_path_keeping_anchor(
+    checker, tmp_path, monkeypatch
+):
     docs = tmp_path / "docs"
     (docs / "getting-started").mkdir(parents=True)
     (docs / "user-guide" / "features").mkdir(parents=True)
-    (docs / "user-guide" / "features" / "skills.md").write_text("# Skills\n", encoding="utf-8")
-    (docs / "user-guide" / "features" / "index.md").write_text("# Features\n", encoding="utf-8")
+    (docs / "user-guide" / "features" / "skills.md").write_text(
+        "# Skills\n", encoding="utf-8"
+    )
+    (docs / "user-guide" / "features" / "index.md").write_text(
+        "# Features\n", encoding="utf-8"
+    )
     src = docs / "getting-started" / "learning-path.md"
     src.write_text(
         "[Skills](/user-guide/features/skills#bundles) [Docs](/docs/user-guide/features)\n"

@@ -50,6 +50,7 @@ def _make_bare_runner():
     use this pattern (see AGENTS.md pitfall #17).
     """
     from gateway.run import GatewayRunner
+
     runner = object.__new__(GatewayRunner)
     # _is_user_authorized reads self.pairing_store.is_approved(...) before
     # any allowlist check succeeds; stub it to never approve so we exercise

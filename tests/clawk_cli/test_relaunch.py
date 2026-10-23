@@ -28,7 +28,9 @@ class TestResolveClawksisBin:
     def test_falls_back_to_path_which(self, monkeypatch):
         monkeypatch.setattr(sys, "argv", ["-c"])  # not a real path
         monkeypatch.setattr(
-            relaunch_mod.shutil, "which", lambda name: "/usr/bin/clawk" if name == "clawk" else None
+            relaunch_mod.shutil,
+            "which",
+            lambda name: "/usr/bin/clawk" if name == "clawk" else None,
         )
         assert relaunch_mod.resolve_clawk_bin() == "/usr/bin/clawk"
 
@@ -38,33 +40,44 @@ class TestExtractInheritedFlags:
         argv = ["--tui", "--dev", "chat"]
         assert relaunch_mod._extract_inherited_flags(argv) == ["--tui", "--dev"]
 
-
     def test_preserves_multiple_skills(self):
         argv = ["-s", "foo", "-s", "bar", "--tui"]
-        assert relaunch_mod._extract_inherited_flags(argv) == ["-s", "foo", "-s", "bar", "--tui"]
+        assert relaunch_mod._extract_inherited_flags(argv) == [
+            "-s",
+            "foo",
+            "-s",
+            "bar",
+            "--tui",
+        ]
 
 
 class TestInheritedFlagTable:
     """Sanity-check the argparse-introspected table that drives extraction."""
-
-
 
     def test_excluded_flags_are_not_inherited(self):
         table = dict(relaunch_mod._INHERITED_FLAGS_TABLE)
         # --worktree creates a new worktree per process; inheriting would
         # orphan the parent's. Chat-only flags (--quiet/-Q, --verbose/-v,
         # --source) can't be in argv at the existing relaunch callsites.
-        for flag in ["-w", "--worktree", "-Q", "--quiet", "-v", "--verbose", "--source"]:
+        for flag in [
+            "-w",
+            "--worktree",
+            "-Q",
+            "--quiet",
+            "-v",
+            "--verbose",
+            "--source",
+        ]:
             assert flag not in table, f"{flag} should not be inherited"
 
 
 class TestBuildRelaunchArgv:
-
-
     def test_preserves_inherited_flags(self, monkeypatch):
         monkeypatch.setattr(relaunch_mod, "resolve_clawk_bin", lambda: "/usr/bin/clawk")
         original = ["--tui", "--dev", "--profile", "work", "sessions", "browse"]
-        argv = relaunch_mod.build_relaunch_argv(["--resume", "abc"], original_argv=original)
+        argv = relaunch_mod.build_relaunch_argv(
+            ["--resume", "abc"], original_argv=original
+        )
         assert "--tui" in argv
         assert "--dev" in argv
         assert "--profile" in argv
@@ -113,7 +126,9 @@ class TestRelaunch:
         platform only re-asserted the branch we wrote, never the constraint
         that motivated it.
         """
-        monkeypatch.setattr(relaunch_mod, "resolve_clawk_bin", lambda: r"C:\Users\test\clawk.exe")
+        monkeypatch.setattr(
+            relaunch_mod, "resolve_clawk_bin", lambda: r"C:\Users\test\clawk.exe"
+        )
         # Pin sys.argv: relaunch() preserves inherited flags from the LIVE
         # argv, so under pytest it happily inherited the runner's own
         # "-m 'platforms and not integration'" and the assertion below saw
@@ -128,8 +143,10 @@ class TestRelaunch:
 
         def fake_subprocess_run(argv, **kwargs):
             captured_argv.append(list(argv))
+
             class _Result:
                 returncode = 0
+
             return _Result()
 
         monkeypatch.setattr(_subprocess, "run", fake_subprocess_run)
@@ -160,6 +177,7 @@ class TestRelaunch:
         def fake_run(argv, **kwargs):
             class _Result:
                 returncode = 42
+
             return _Result()
 
         monkeypatch.setattr(_subprocess, "run", fake_run)
@@ -183,7 +201,9 @@ class TestResolveClawksisBinWindowsPyGuard:
     """
 
     @pytest.mark.platforms("windows")
-    def test_windows_rejects_py_argv0_falls_through_to_path(self, monkeypatch, tmp_path):
+    def test_windows_rejects_py_argv0_falls_through_to_path(
+        self, monkeypatch, tmp_path
+    ):
         """On Windows, if sys.argv[0] is a .py file, we must skip the
         argv[0] fast-path and fall through to PATH / python -m."""
         # Build a fake .py script that "passes" the isfile + X_OK checks.
@@ -194,7 +214,8 @@ class TestResolveClawksisBinWindowsPyGuard:
         # Force PATH lookup to return a clawk.exe so the test doesn't
         # exercise the None-fallback path (that's a separate test).
         monkeypatch.setattr(
-            relaunch_mod.shutil, "which",
+            relaunch_mod.shutil,
+            "which",
             lambda name: r"C:\venv\Scripts\clawk.exe" if name == "clawk" else None,
         )
 
@@ -221,7 +242,8 @@ class TestResolveClawksisBinWindowsPyGuard:
         wrapper.chmod(0o755)
         monkeypatch.setattr(relaunch_mod.sys, "argv", [str(script), "chat"])
         monkeypatch.setattr(
-            relaunch_mod.shutil, "which",
+            relaunch_mod.shutil,
+            "which",
             lambda name: str(wrapper) if name == "clawk" else None,
         )
         assert relaunch_mod.resolve_clawk_bin() == str(wrapper)
@@ -253,7 +275,9 @@ class TestResolveClawksisBinWindowsPyGuard:
         assert relaunch_mod.resolve_clawk_bin() == str(pinned)
 
     @pytest.mark.platforms("windows")
-    def test_windows_py_argv0_with_no_clawk_on_path_returns_none(self, monkeypatch, tmp_path):
+    def test_windows_py_argv0_with_no_clawk_on_path_returns_none(
+        self, monkeypatch, tmp_path
+    ):
         """Bulletproof fallback: if argv0 is .py on Windows AND clawk.exe
         isn't on PATH, return None so the caller falls back to
         python -m clawk_cli.main."""

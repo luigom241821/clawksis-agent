@@ -38,22 +38,29 @@ def clawk_auth_only_env(tmp_path, monkeypatch):
     # Point CODEX_HOME to nonexistent dir to prove it's not needed
     monkeypatch.setenv("CODEX_HOME", str(tmp_path / "no_codex"))
 
-    (clawk_home / "auth.json").write_text(json.dumps({
-        "version": 2,
-        "providers": {
-            "openai-codex": {
-                "tokens": {
-                    "access_token": _make_fake_jwt(),
-                    "refresh_token": "fake-refresh",
+    (clawk_home / "auth.json").write_text(
+        json.dumps(
+            {
+                "version": 2,
+                "providers": {
+                    "openai-codex": {
+                        "tokens": {
+                            "access_token": _make_fake_jwt(),
+                            "refresh_token": "fake-refresh",
+                        },
+                        "last_refresh": "2026-04-12T00:00:00Z",
+                    }
                 },
-                "last_refresh": "2026-04-12T00:00:00Z",
             }
-        },
-    }))
+        )
+    )
 
     for var in [
-        "OPENROUTER_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY",
-        "NOUS_API_KEY", "DEEPSEEK_API_KEY",
+        "OPENROUTER_API_KEY",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "NOUS_API_KEY",
+        "DEEPSEEK_API_KEY",
     ]:
         monkeypatch.delenv(var, raising=False)
 
@@ -72,8 +79,6 @@ def test_normal_path_still_works(clawk_auth_only_env):
     assert "openai-codex" in slugs
 
 
-
-
 @pytest.fixture()
 def claude_code_only_env(tmp_path, monkeypatch):
     """Set up an environment where Anthropic credentials only exist in
@@ -86,28 +91,34 @@ def claude_code_only_env(tmp_path, monkeypatch):
     # No Codex CLI
     monkeypatch.setenv("CODEX_HOME", str(tmp_path / "no_codex"))
 
-    (clawk_home / "auth.json").write_text(
-        json.dumps({"version": 2, "providers": {}})
-    )
+    (clawk_home / "auth.json").write_text(json.dumps({"version": 2, "providers": {}}))
 
     # Claude Code credentials in the correct format
     claude_dir = tmp_path / ".claude"
     claude_dir.mkdir()
-    (claude_dir / ".credentials.json").write_text(json.dumps({
-        "claudeAiOauth": {
-            "accessToken": _make_fake_jwt(),
-            "refreshToken": "fake-refresh",
-            "expiresAt": int(time.time() * 1000) + 3_600_000,
-        }
-    }))
+    (claude_dir / ".credentials.json").write_text(
+        json.dumps(
+            {
+                "claudeAiOauth": {
+                    "accessToken": _make_fake_jwt(),
+                    "refreshToken": "fake-refresh",
+                    "expiresAt": int(time.time() * 1000) + 3_600_000,
+                }
+            }
+        )
+    )
 
     # Patch Path.home() so the adapter finds the file
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
 
     for var in [
-        "OPENROUTER_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY",
-        "ANTHROPIC_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN",
-        "NOUS_API_KEY", "DEEPSEEK_API_KEY",
+        "OPENROUTER_API_KEY",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_TOKEN",
+        "CLAUDE_CODE_OAUTH_TOKEN",
+        "NOUS_API_KEY",
+        "DEEPSEEK_API_KEY",
     ]:
         monkeypatch.delenv(var, raising=False)
 
@@ -140,14 +151,17 @@ def test_no_codex_when_no_credentials(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
     monkeypatch.setenv("CODEX_HOME", str(tmp_path / "no_codex"))
 
-    (clawk_home / "auth.json").write_text(
-        json.dumps({"version": 2, "providers": {}})
-    )
+    (clawk_home / "auth.json").write_text(json.dumps({"version": 2, "providers": {}}))
 
     for var in [
-        "OPENROUTER_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY",
-        "NOUS_API_KEY", "DEEPSEEK_API_KEY", "COPILOT_GITHUB_TOKEN",
-        "GH_TOKEN", "GEMINI_API_KEY",
+        "OPENROUTER_API_KEY",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "NOUS_API_KEY",
+        "DEEPSEEK_API_KEY",
+        "COPILOT_GITHUB_TOKEN",
+        "GH_TOKEN",
+        "GEMINI_API_KEY",
     ]:
         monkeypatch.delenv(var, raising=False)
 

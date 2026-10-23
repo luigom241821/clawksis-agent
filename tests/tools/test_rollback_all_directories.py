@@ -31,8 +31,15 @@ class TestListAllCheckpoints:
 
         mgr = CheckpointManager(enabled=True)
         fake_entries = [
-            {"hash": "a" * 40, "short_hash": "aaaaaaa", "timestamp": "2026-08-19T10:00:00",
-             "reason": "before write_file", "files_changed": 1, "insertions": 2, "deletions": 0},
+            {
+                "hash": "a" * 40,
+                "short_hash": "aaaaaaa",
+                "timestamp": "2026-08-19T10:00:00",
+                "reason": "before write_file",
+                "files_changed": 1,
+                "insertions": 2,
+                "deletions": 0,
+            },
         ]
         monkeypatch.setattr(
             CheckpointManager, "list_checkpoints", lambda self, wd: list(fake_entries)
@@ -50,21 +57,33 @@ class TestListAllCheckpoints:
 
 class TestFormatAllDirectories:
     def test_workdir_label_shown_in_all_directories_view(self):
-        cps = [{
-            "hash": "b" * 40, "short_hash": "bbbbbbb",
-            "timestamp": "2026-08-19T10:00:00", "reason": "before patch",
-            "files_changed": 0, "insertions": 0, "deletions": 0,
-            "workdir": "/tmp/qa-repo",
-        }]
+        cps = [
+            {
+                "hash": "b" * 40,
+                "short_hash": "bbbbbbb",
+                "timestamp": "2026-08-19T10:00:00",
+                "reason": "before patch",
+                "files_changed": 0,
+                "insertions": 0,
+                "deletions": 0,
+                "workdir": "/tmp/qa-repo",
+            }
+        ]
         out = format_checkpoint_list(cps, "all directories")
         assert "[qa-repo]" in out
 
     def test_single_directory_view_unchanged(self):
-        cps = [{
-            "hash": "c" * 40, "short_hash": "ccccccc",
-            "timestamp": "2026-08-19T10:00:00", "reason": "before patch",
-            "files_changed": 0, "insertions": 0, "deletions": 0,
-        }]
+        cps = [
+            {
+                "hash": "c" * 40,
+                "short_hash": "ccccccc",
+                "timestamp": "2026-08-19T10:00:00",
+                "reason": "before patch",
+                "files_changed": 0,
+                "insertions": 0,
+                "deletions": 0,
+            }
+        ]
         out = format_checkpoint_list(cps, "/tmp/qa-repo")
         assert "[qa-repo]" not in out
         assert "ccccccc" in out

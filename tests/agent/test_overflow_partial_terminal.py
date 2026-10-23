@@ -33,8 +33,9 @@ def _make_agent():
 
 
 def _make_stream_chunk(content=None, finish_reason=None):
-    delta = SimpleNamespace(content=content, tool_calls=None,
-                            reasoning_content=None, reasoning=None)
+    delta = SimpleNamespace(
+        content=content, tool_calls=None, reasoning_content=None, reasoning=None
+    )
     choice = SimpleNamespace(index=0, delta=delta, finish_reason=finish_reason)
     return SimpleNamespace(choices=[choice], model=None, usage=None)
 
@@ -43,11 +44,15 @@ class TestOverflowTerminalStub:
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
     def test_partial_stream_overflow_error_returns_terminal_stub(
-        self, _mock_close, mock_create, monkeypatch,
+        self,
+        _mock_close,
+        mock_create,
+        monkeypatch,
     ):
         """A stream that delivered text then hit the provider's
         maximum-context-length error must return an EMPTY stub marked terminal,
         not a continuation stub carrying the recovered text (#106260)."""
+
         def _overflowing_stream():
             yield _make_stream_chunk(content="Here's my long partial answer ...")
             raise RuntimeError(
@@ -56,7 +61,9 @@ class TestOverflowTerminalStub:
             )
 
         mock_client = MagicMock()
-        mock_client.chat.completions.create.side_effect = lambda *a, **kw: _overflowing_stream()
+        mock_client.chat.completions.create.side_effect = lambda *a, **kw: (
+            _overflowing_stream()
+        )
         mock_create.return_value = mock_client
 
         agent = _make_agent()
@@ -70,15 +77,18 @@ class TestOverflowTerminalStub:
         # The recovered text must not be seeded for continuation.
         assert response.choices[0].message.content is None
 
-
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
     def test_payload_too_large_partial_is_not_made_terminal(
-        self, _mock_close, mock_create, monkeypatch,
+        self,
+        _mock_close,
+        mock_create,
+        monkeypatch,
     ):
         """Review P1 (andrexibiza): payload_too_large (413) has its own byte-scored
         recovery owner and must NOT be collapsed into the context-overflow terminal
         contract — the partial keeps its normal continuation stub."""
+
         def _overflowing_stream():
             yield _make_stream_chunk(content="some media-heavy partial output ...")
             raise RuntimeError(
@@ -86,7 +96,9 @@ class TestOverflowTerminalStub:
             )
 
         mock_client = MagicMock()
-        mock_client.chat.completions.create.side_effect = lambda *a, **kw: _overflowing_stream()
+        mock_client.chat.completions.create.side_effect = lambda *a, **kw: (
+            _overflowing_stream()
+        )
         mock_create.return_value = mock_client
 
         agent = _make_agent()
@@ -98,7 +110,9 @@ class TestOverflowTerminalStub:
         assert response.id == PARTIAL_STREAM_STUB_ID
         assert getattr(response, "_overflow_terminal", False) is False
         # The recovered text is preserved for the normal continuation path.
-        assert response.choices[0].message.content == "some media-heavy partial output ..."
+        assert (
+            response.choices[0].message.content == "some media-heavy partial output ..."
+        )
 
 
 class TestRecoverFromTruncationOverflowTerminal:
@@ -115,12 +129,18 @@ class TestRecoverFromTruncationOverflowTerminal:
             id=PARTIAL_STREAM_STUB_ID,
             _overflow_terminal=overflow_terminal,
             _dropped_tool_names=None,
-            choices=[SimpleNamespace(
-                index=0,
-                message=SimpleNamespace(role="assistant", content=content,
-                                        tool_calls=None, reasoning_content=None),
-                finish_reason=FINISH_REASON_LENGTH,
-            )],
+            choices=[
+                SimpleNamespace(
+                    index=0,
+                    message=SimpleNamespace(
+                        role="assistant",
+                        content=content,
+                        tool_calls=None,
+                        reasoning_content=None,
+                    ),
+                    finish_reason=FINISH_REASON_LENGTH,
+                )
+            ],
         )
 
     def test_overflow_terminal_stub_ends_turn_without_continuation(self):
@@ -134,17 +154,35 @@ class TestRecoverFromTruncationOverflowTerminal:
         # raw tool result, which strict providers reject as tool -> user.
         messages = [
             {"role": "user", "content": "go"},
-            {"role": "assistant", "content": None,
-             "tool_calls": [{"id": "c1", "type": "function",
-                             "function": {"name": "read_file", "arguments": "{}"}}]},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "c1",
+                        "type": "function",
+                        "function": {"name": "read_file", "arguments": "{}"},
+                    }
+                ],
+            },
             {"role": "tool", "tool_call_id": "c1", "content": "big file"},
         ]
         verdict = recover_from_truncation(
-            agent, self._response(), FINISH_REASON_LENGTH, MagicMock(),
-            messages=messages, conversation_history=None, api_kwargs={},
-            api_call_count=0, effective_task_id=None, current_turn_user_idx=None,
-            length_continue_retries=0, truncated_response_parts=[],
-            truncated_tool_call_retries=0, retry_count=0, compression_attempts=0,
+            agent,
+            self._response(),
+            FINISH_REASON_LENGTH,
+            MagicMock(),
+            messages=messages,
+            conversation_history=None,
+            api_kwargs={},
+            api_call_count=0,
+            effective_task_id=None,
+            current_turn_user_idx=None,
+            length_continue_retries=0,
+            truncated_response_parts=[],
+            truncated_tool_call_retries=0,
+            retry_count=0,
+            compression_attempts=0,
         )
 
         assert verdict.action == "return"

@@ -10,6 +10,7 @@ The runner is set up the way ``run_bootstrap.start_gateway`` leaves it: the boot
 LIVE ``profiles/`` against that reservation and grow/shrink it — a reconcile that reads the snapshot
 back as "what exists" can never see a new profile (the regression these tests used to pass through).
 """
+
 import asyncio
 import json
 import threading
@@ -46,7 +47,9 @@ def _runner(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     runner = object.__new__(GatewayRunner)
     runner.config = GatewayConfig(multiplex_profiles=True)
-    runner.session_authorities = None  # adapters-only runner: no per-profile session authority
+    runner.session_authorities = (
+        None  # adapters-only runner: no per-profile session authority
+    )
     runner._running = True
     runner._primary_profile_name = "default"
     runner.adapters = {}
@@ -62,18 +65,30 @@ def _runner(tmp_path, monkeypatch):
 
     async def _start(profile_name, profile_home, claimed):
         started.append(profile_name)
-        token = (profile_home / ".env").read_text(encoding="utf-8") if (profile_home / ".env").exists() else ""
+        token = (
+            (profile_home / ".env").read_text(encoding="utf-8")
+            if (profile_home / ".env").exists()
+            else ""
+        )
         if "DISCORD_BOT_TOKEN" not in token:
             return 0
-        runner._profile_adapters.setdefault(profile_name, {})[Platform.DISCORD] = _Adapter(token)
+        runner._profile_adapters.setdefault(profile_name, {})[Platform.DISCORD] = (
+            _Adapter(token)
+        )
         return 1
 
     runner._start_one_profile_adapters = _start
-    runner._adapter_credential_fingerprint = lambda adapter: getattr(adapter, "token", None)
+    runner._adapter_credential_fingerprint = lambda adapter: getattr(
+        adapter, "token", None
+    )
     runner._started = started
     # The control socket's identify verb reads the runtime descriptor + ticket store that
     # initialize_gateway_runtime installs; this adapters-only runner never ran it.
-    runner.session_runtime_descriptor = {"state": "ready", "served_profiles": [], "capabilities": []}
+    runner.session_runtime_descriptor = {
+        "state": "ready",
+        "served_profiles": [],
+        "capabilities": [],
+    }
     runner.session_ticket_store = None
     return runner, home
 
@@ -83,6 +98,7 @@ def _boot(runner, home):
     freeze that set as the reservation the process owns."""
     from gateway.run import _multiplex_profile_homes
     from gateway.runtime_ownership import process_ownership
+
     boot_set = _multiplex_profile_homes(runner.config)
     process_ownership.reserve([h for _n, h in boot_set])
     runner.config._runtime_profile_homes = tuple(boot_set)
@@ -91,6 +107,7 @@ def _boot(runner, home):
 @pytest.fixture(autouse=True)
 def _release_reservations():
     from gateway.runtime_ownership import process_ownership
+
     yield
     for reserved in process_ownership.homes:
         process_ownership.release(reserved)
@@ -110,15 +127,21 @@ def _mkprofile(home, name, env=""):
 
 def _served_record(home):
     flush_runtime_status()
-    return json.loads((home / "gateway_state.json").read_text(encoding="utf-8")).get("served_profiles")
+    return json.loads((home / "gateway_state.json").read_text(encoding="utf-8")).get(
+        "served_profiles"
+    )
 
 
 @pytest.mark.asyncio
-async def test_opt_out_rescans_and_opt_in_waits_for_own_gateway_to_stop(tmp_path, monkeypatch, caplog):
+async def test_opt_out_rescans_and_opt_in_waits_for_own_gateway_to_stop(
+    tmp_path, monkeypatch, caplog
+):
     runner, home = _runner(tmp_path, monkeypatch)
     solo = _mkprofile(home, "solo", "DISCORD_BOT_TOKEN=solo-token\n")
     own_pids = {}
-    monkeypatch.setattr("gateway.status.live_gateway_pid_for_home", lambda h: own_pids.get(h))
+    monkeypatch.setattr(
+        "gateway.status.live_gateway_pid_for_home", lambda h: own_pids.get(h)
+    )
     with patch("clawk_cli.profiles.get_active_profile_name", return_value="default"):
         await runner._start_secondary_profile_adapters()
         adapter = runner._profile_adapters["solo"][Platform.DISCORD]
@@ -135,7 +158,12 @@ async def test_opt_out_rescans_and_opt_in_waits_for_own_gateway_to_stop(tmp_path
             assert result["added"] == []
             assert result["served_profiles"] == ["default"]
         assert runner._started.count("solo") == 1
-        assert len([r for r in caplog.records if "still runs its own gateway" in r.message]) == 1
+        assert (
+            len(
+                [r for r in caplog.records if "still runs its own gateway" in r.message]
+            )
+            == 1
+        )
 
         own_pids.clear()
         result = await runner.reconcile_served_profiles()
@@ -145,7 +173,9 @@ async def test_opt_out_rescans_and_opt_in_waits_for_own_gateway_to_stop(tmp_path
 
 
 @pytest.mark.asyncio
-async def test_stalled_own_gateway_probe_never_wedges_the_loop_or_serves(tmp_path, monkeypatch, caplog):
+async def test_stalled_own_gateway_probe_never_wedges_the_loop_or_serves(
+    tmp_path, monkeypatch, caplog
+):
     """#132547: the pre-serve own-gateway probe can end in a control-socket read that has no
     timeout of its own (a Windows named pipe stalls there until its peer answers); inline on
     the loop thread it parked shutdown_watchdog liveness probes until the multiplexer was
@@ -176,7 +206,9 @@ async def test_stalled_own_gateway_probe_never_wedges_the_loop_or_serves(tmp_pat
         heartbeat = asyncio.ensure_future(_liveness_probe())
         # On the unfixed code an inline probe parks the loop for the full ``released`` wait
         # and this wait_for times out instead of returning a reconcile result.
-        result = await asyncio.wait_for(runner.reconcile_served_profiles(reason="watcher"), timeout=2.0)
+        result = await asyncio.wait_for(
+            runner.reconcile_served_profiles(reason="watcher"), timeout=2.0
+        )
         assert result["added"] == []
         assert _served_record(home) == ["default", "alpha"]
         messages = [r.getMessage() for r in caplog.records]
@@ -188,8 +220,12 @@ async def test_stalled_own_gateway_probe_never_wedges_the_loop_or_serves(tmp_pat
         # A peer that stays wedged must not re-WARN on every 30 s watcher cycle.
         result = await runner.reconcile_served_profiles(reason="watcher")
         assert result["added"] == []
-        stalled_warnings = [r for r in caplog.records if r.levelname == "WARNING"
-                            and "probe for profile 'gamma' timed out" in r.getMessage()]
+        stalled_warnings = [
+            r
+            for r in caplog.records
+            if r.levelname == "WARNING"
+            and "probe for profile 'gamma' timed out" in r.getMessage()
+        ]
         assert len(stalled_warnings) == 1
 
         released.set()
@@ -211,7 +247,10 @@ async def test_parked_profile_boot_and_reconcile(tmp_path, monkeypatch, caplog):
     with patch("clawk_cli.profiles.get_active_profile_name", return_value="default"):
         await runner._start_secondary_profile_adapters()
         assert _served_record(home) == ["default"]
-        assert "profile 'worker' is parked (gateway.parked); not served by this gateway" in caplog.text
+        assert (
+            "profile 'worker' is parked (gateway.parked); not served by this gateway"
+            in caplog.text
+        )
         marker.unlink()
         assert (await runner.reconcile_served_profiles())["added"] == ["worker"]
         assert _served_record(home) == ["default", "worker"]
@@ -223,14 +262,20 @@ async def test_parked_profile_boot_and_reconcile(tmp_path, monkeypatch, caplog):
 @pytest.mark.asyncio
 async def test_profile_control_verbs_round_trip_and_refusals(tmp_path, monkeypatch):
     from gateway import run_profile_reconcile as verbs
+
     runner, home = _runner(tmp_path, monkeypatch)
     secondary = _mkprofile(home, "worker", "DISCORD_BOT_TOKEN=worker-token\n")
     with patch("clawk_cli.profiles.get_active_profile_name", return_value="default"):
         await runner._start_secondary_profile_adapters()
         stop = verbs.unserve_profile_verb(runner)
         start = verbs.serve_profile_verb(runner)
-        for handler, name in [(stop, "default"), (stop, "missing"), (start, "missing"),
-                              (start, "worker"), (start, "default")]:
+        for handler, name in [
+            (stop, "default"),
+            (stop, "missing"),
+            (start, "missing"),
+            (start, "worker"),
+            (start, "default"),
+        ]:
             assert (await asyncio.to_thread(handler, {"name": name}))["error"]
         old = runner._profile_adapters["worker"][Platform.DISCORD]
         answer = await asyncio.to_thread(stop, {"name": "worker"})
@@ -244,8 +289,12 @@ async def test_profile_control_verbs_round_trip_and_refusals(tmp_path, monkeypat
         (secondary / ".env").write_text("DISCORD_BOT_TOKEN=new-worker-token\n")
         answer = await asyncio.to_thread(start, {"name": "worker"})
         assert answer["served"] == "worker"
-        assert answer["served_profiles"] == _served_record(home) == ["default", "worker"]
-        assert runner._profile_adapters["worker"][Platform.DISCORD].token.endswith("new-worker-token\n")
+        assert (
+            answer["served_profiles"] == _served_record(home) == ["default", "worker"]
+        )
+        assert runner._profile_adapters["worker"][Platform.DISCORD].token.endswith(
+            "new-worker-token\n"
+        )
 
 
 @pytest.mark.platforms("linux")
@@ -253,6 +302,7 @@ async def test_profile_control_verbs_round_trip_and_refusals(tmp_path, monkeypat
 async def test_profile_lifecycle_over_real_control_socket(tmp_path, monkeypatch):
     from gateway.run_bootstrap import _start_gateway_start_control_socket
     from gateway import control_socket
+
     runner, home = _runner(tmp_path, monkeypatch)
     secondary = _mkprofile(home, "worker")
     with patch("clawk_cli.profiles.get_active_profile_name", return_value="default"):
@@ -261,13 +311,19 @@ async def test_profile_lifecycle_over_real_control_socket(tmp_path, monkeypatch)
         assert server is not None
         try:
             (secondary / "gateway.parked").touch()
-            stopped = await asyncio.to_thread(control_socket.request_unserve_profile, home, "worker")
+            stopped = await asyncio.to_thread(
+                control_socket.request_unserve_profile, home, "worker"
+            )
             assert stopped["unserved"] == "worker"
             assert _served_record(home) == ["default"]
-            refused = await asyncio.to_thread(control_socket.request_serve_profile_hot, home, "worker")
+            refused = await asyncio.to_thread(
+                control_socket.request_serve_profile_hot, home, "worker"
+            )
             assert "parked" in refused["error"]
             (secondary / "gateway.parked").unlink()
-            started = await asyncio.to_thread(control_socket.request_serve_profile_hot, home, "worker")
+            started = await asyncio.to_thread(
+                control_socket.request_serve_profile_hot, home, "worker"
+            )
             assert started["served"] == "worker"
             assert _served_record(home) == ["default", "worker"]
         finally:
@@ -275,7 +331,9 @@ async def test_profile_lifecycle_over_real_control_socket(tmp_path, monkeypatch)
 
 
 @pytest.mark.asyncio
-async def test_created_then_credentialed_profile_is_served_without_restart(tmp_path, monkeypatch):
+async def test_created_then_credentialed_profile_is_served_without_restart(
+    tmp_path, monkeypatch
+):
     runner, home = _runner(tmp_path, monkeypatch)
     alpha_dir = _mkprofile(home, "alpha", "DISCORD_BOT_TOKEN=alpha-token\n")
     with patch("clawk_cli.profiles.get_active_profile_name", return_value="default"):
@@ -292,29 +350,45 @@ async def test_created_then_credentialed_profile_is_served_without_restart(tmp_p
         assert _served_record(home) == ["default", "alpha", "gamma"]
         assert _reserved_names(runner) == ["alpha", "default", "gamma"]
         from gateway.runtime_ownership import process_ownership
+
         assert process_ownership.owns(gamma_dir)
         assert "gamma" in runner.pairing_stores
         assert Platform.DISCORD not in runner._profile_adapters.get("gamma", {})
 
         # 2. Token added afterwards: the rescan builds the adapter (never "adapter-less forever").
-        (gamma_dir / ".env").write_text("DISCORD_BOT_TOKEN=gamma-token\n", encoding="utf-8")
+        (gamma_dir / ".env").write_text(
+            "DISCORD_BOT_TOKEN=gamma-token\n", encoding="utf-8"
+        )
         result = await runner.reconcile_served_profiles()
         assert result["rescanned"] == ["gamma"]
-        assert runner._profile_adapters["gamma"][Platform.DISCORD].token.strip().endswith("gamma-token")
+        assert (
+            runner._profile_adapters["gamma"][Platform.DISCORD]
+            .token.strip()
+            .endswith("gamma-token")
+        )
 
         # 3. A no-op rescan and the whole sequence never touched alpha's live adapter.
         assert await runner.reconcile_served_profiles() == {
-            "added": [], "removed": [], "rescanned": [], "parked": [], "reason": "request",
+            "added": [],
+            "removed": [],
+            "rescanned": [],
+            "parked": [],
+            "reason": "request",
             "served_profiles": ["default", "alpha", "gamma"],
         }
         assert runner._profile_adapters["alpha"][Platform.DISCORD] is alpha_adapter
         assert alpha_adapter.disconnected is False
         assert runner._started.count("alpha") == 1
-        assert profile_serve_signature(alpha_dir) == runner._served_profile_signatures["alpha"]
+        assert (
+            profile_serve_signature(alpha_dir)
+            == runner._served_profile_signatures["alpha"]
+        )
 
 
 @pytest.mark.asyncio
-async def test_deleted_profile_is_torn_down_and_unrouted_others_untouched(tmp_path, monkeypatch):
+async def test_deleted_profile_is_torn_down_and_unrouted_others_untouched(
+    tmp_path, monkeypatch
+):
     runner, home = _runner(tmp_path, monkeypatch)
     _mkprofile(home, "alpha", "DISCORD_BOT_TOKEN=alpha-token\n")
     gamma_dir = _mkprofile(home, "gamma", "DISCORD_BOT_TOKEN=gamma-token\n")
@@ -323,14 +397,20 @@ async def test_deleted_profile_is_torn_down_and_unrouted_others_untouched(tmp_pa
         await runner._start_secondary_profile_adapters()
         alpha_adapter = runner._profile_adapters["alpha"][Platform.DISCORD]
         gamma_adapter = runner._profile_adapters["gamma"][Platform.DISCORD]
-        runner._agent_cache = {"agent:gamma:discord:dm:1": ("agent",), "agent:alpha:discord:dm:1": ("agent",)}
+        runner._agent_cache = {
+            "agent:gamma:discord:dm:1": ("agent",),
+            "agent:alpha:discord:dm:1": ("agent",),
+        }
         evicted = []
         runner._evict_cached_agent = evicted.append
         reconnect = asyncio.get_running_loop().create_task(asyncio.sleep(3600))
         runner._profile_failed_platforms = {"gamma": {Platform.TELEGRAM: reconnect}}
 
         from clawk_constants import mark_named_profile_deleted
-        mark_named_profile_deleted(gamma_dir)  # what ``delete_profile`` does before rmtree
+
+        mark_named_profile_deleted(
+            gamma_dir
+        )  # what ``delete_profile`` does before rmtree
         result = await runner.reconcile_served_profiles()
 
     assert result["removed"] == ["gamma"]
@@ -343,6 +423,7 @@ async def test_deleted_profile_is_torn_down_and_unrouted_others_untouched(tmp_pa
     # The reservation shrank with it: the next restart must not reserve a home that is gone.
     assert _reserved_names(runner) == ["alpha", "default"]
     from gateway.runtime_ownership import process_ownership
+
     assert not process_ownership.owns(gamma_dir)
     assert runner._profile_adapters["alpha"][Platform.DISCORD] is alpha_adapter
     assert alpha_adapter.disconnected is False
@@ -387,7 +468,10 @@ async def test_unserve_releases_gateway_held_log_and_mcp_handles(tmp_path, monke
     clawk_logging._reset_queued_handlers()  # a prior test's routers would route to stale homes
     try:
         clawk_logging.setup_logging(clawk_home=home)
-        assert clawk_logging.enable_profile_log_routing([home, alpha_dir, gamma_dir]) is True
+        assert (
+            clawk_logging.enable_profile_log_routing([home, alpha_dir, gamma_dir])
+            is True
+        )
         logger = _logging.getLogger("agent.unserve-handle-release")
         for profile_home in (alpha_dir, gamma_dir):
             token = set_clawk_home_override(profile_home)
@@ -397,20 +481,31 @@ async def test_unserve_releases_gateway_held_log_and_mcp_handles(tmp_path, monke
                 reset_clawk_home_override(token)
         clawk_logging.flush_log_queue()
         routers = [
-            handler for handler in clawk_logging._queued_file_handlers
+            handler
+            for handler in clawk_logging._queued_file_handlers
             if isinstance(handler, clawk_logging._ProfileRoutingFileHandler)
         ]
         assert len(routers) == 2  # agent.log and errors.log, as in test_clawk_logging
-        assert all(gamma_dir.resolve() in handler._profile_handlers for handler in routers)
-        gamma_handlers = [handler._profile_handlers[gamma_dir.resolve()] for handler in routers]
-        alpha_handlers = [handler._profile_handlers[alpha_dir.resolve()] for handler in routers]
+        assert all(
+            gamma_dir.resolve() in handler._profile_handlers for handler in routers
+        )
+        gamma_handlers = [
+            handler._profile_handlers[gamma_dir.resolve()] for handler in routers
+        ]
+        alpha_handlers = [
+            handler._profile_handlers[alpha_dir.resolve()] for handler in routers
+        ]
         # Before the reconcile the deleted profile's routed handlers each hold an open fd into
         # its home — the ``.__agent.lock`` lock handle on Windows, the log stream on POSIX.
         assert all(_holds_open_log_file(handler) for handler in gamma_handlers)
 
-        with patch("clawk_cli.profiles.get_active_profile_name", return_value="default"):
+        with patch(
+            "clawk_cli.profiles.get_active_profile_name", return_value="default"
+        ):
             await runner._start_secondary_profile_adapters()
-            mark_named_profile_deleted(gamma_dir)  # what ``delete_profile`` does before rmtree
+            mark_named_profile_deleted(
+                gamma_dir
+            )  # what ``delete_profile`` does before rmtree
             result = await runner.reconcile_served_profiles()
 
         assert result["removed"] == ["gamma"]
@@ -419,21 +514,32 @@ async def test_unserve_releases_gateway_held_log_and_mcp_handles(tmp_path, monke
         assert shutdowns == [clawk_home_key(gamma_dir)]
         # This process's routed log files for the deleted home are closed and forgotten while a
         # still-served sibling keeps its handles.
-        assert all(gamma_dir.resolve() not in handler._profile_handlers for handler in routers)
-        assert all(gamma_dir.resolve() not in handler._profile_homes for handler in routers)
-        assert all(alpha_dir.resolve() in handler._profile_handlers for handler in routers)
+        assert all(
+            gamma_dir.resolve() not in handler._profile_handlers for handler in routers
+        )
+        assert all(
+            gamma_dir.resolve() not in handler._profile_homes for handler in routers
+        )
+        assert all(
+            alpha_dir.resolve() in handler._profile_handlers for handler in routers
+        )
         # The popped handler's fd into the deleted home is actually closed — not just the
         # routing entry removed — while a still-served sibling keeps its handles open.
         assert not any(_holds_open_log_file(handler) for handler in gamma_handlers)
         assert all(_holds_open_log_file(handler) for handler in alpha_handlers)
-        assert "open routed handles for alpha" in (alpha_dir / "logs" / "agent.log").read_text()
+        assert (
+            "open routed handles for alpha"
+            in (alpha_dir / "logs" / "agent.log").read_text()
+        )
     finally:
         clawk_logging._reset_queued_handlers()
         clawk_logging._logging_initialized = False
 
 
 @pytest.mark.asyncio
-async def test_transient_start_failure_is_retried_on_next_reconcile(tmp_path, monkeypatch):
+async def test_transient_start_failure_is_retried_on_next_reconcile(
+    tmp_path, monkeypatch
+):
     """A hot-added profile whose adapter start raises a transient error (secret backend
     unreachable, a half-written config.yaml) must not be recorded as scanned: the next
     reconcile retries it. Only the deliberate MultiplexConfigError park is acknowledged."""
@@ -463,7 +569,11 @@ async def test_transient_start_failure_is_retried_on_next_reconcile(tmp_path, mo
         second = await runner.reconcile_served_profiles()
         assert attempts == ["gamma", "gamma"]
         assert second["rescanned"] == ["gamma"]
-        assert runner._profile_adapters["gamma"][Platform.DISCORD].token.strip().endswith("gamma-token")
+        assert (
+            runner._profile_adapters["gamma"][Platform.DISCORD]
+            .token.strip()
+            .endswith("gamma-token")
+        )
 
         # The deliberate park stays distinct: a MultiplexConfigError is acknowledged, not retried.
         from gateway.run import MultiplexConfigError
@@ -497,7 +607,9 @@ async def test_transient_start_failure_is_retried_on_next_reconcile(tmp_path, mo
 
 
 @pytest.mark.asyncio
-async def test_transient_secret_hydrate_failure_retries_through_real_start_path(tmp_path, monkeypatch):
+async def test_transient_secret_hydrate_failure_retries_through_real_start_path(
+    tmp_path, monkeypatch
+):
     """End to end through the real ``_start_one_profile_adapters``: the failure is raised inside
     it at ``hydrate_profile_secret_sources`` (the network-dependent step of
     ``_load_secondary_profile_config``), not at a mocked seam. The boot failure leaves the
@@ -506,7 +618,9 @@ async def test_transient_secret_hydrate_failure_retries_through_real_start_path(
     from types import SimpleNamespace
 
     runner, home = _runner(tmp_path, monkeypatch)
-    del runner._start_one_profile_adapters  # instance stub off: exercise the real method
+    del (
+        runner._start_one_profile_adapters
+    )  # instance stub off: exercise the real method
     runner._register_config_hooks = lambda *a, **kw: None
     runner._configure_profile_adapter = lambda *a: None
     runner._sync_voice_mode_state_to_adapter = lambda *a: None
@@ -529,6 +643,7 @@ async def test_transient_secret_hydrate_failure_retries_through_real_start_path(
     runner._after_profiles_added = _noop_added
 
     from clawk_cli import env_loader
+
     hydrate_calls = []
     real_hydrate = env_loader.hydrate_profile_secret_sources
 
@@ -550,12 +665,19 @@ async def test_transient_secret_hydrate_failure_retries_through_real_start_path(
         result = await runner.reconcile_served_profiles()
         assert result["rescanned"] == ["gamma"]
         assert connected == [Platform.DISCORD]
-        assert runner._profile_adapters["gamma"][Platform.DISCORD].platform == Platform.DISCORD
-        assert runner._served_profile_signatures["gamma"] == profile_serve_signature(gamma_dir)
+        assert (
+            runner._profile_adapters["gamma"][Platform.DISCORD].platform
+            == Platform.DISCORD
+        )
+        assert runner._served_profile_signatures["gamma"] == profile_serve_signature(
+            gamma_dir
+        )
 
 
 @pytest.mark.asyncio
-async def test_hot_added_profile_cannot_double_claim_a_live_secondary_token(tmp_path, monkeypatch):
+async def test_hot_added_profile_cannot_double_claim_a_live_secondary_token(
+    tmp_path, monkeypatch
+):
     """Boot's duplicate-credential guard sees every profile at once; a hot add must see the LIVE
     secondaries' claims too, or the new profile starts a second poller on alpha's bot."""
     runner, home = _runner(tmp_path, monkeypatch)
@@ -564,7 +686,9 @@ async def test_hot_added_profile_cannot_double_claim_a_live_secondary_token(tmp_
 
     async def _start(profile_name, profile_home, claimed):
         seen_claims[profile_name] = dict(claimed)
-        runner._profile_adapters.setdefault(profile_name, {})[Platform.DISCORD] = _Adapter("shared")
+        runner._profile_adapters.setdefault(profile_name, {})[Platform.DISCORD] = (
+            _Adapter("shared")
+        )
         return 1
 
     runner._start_one_profile_adapters = _start

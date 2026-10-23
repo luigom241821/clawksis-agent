@@ -10,9 +10,16 @@ DEFAULT_EDIT_APPROVAL_POLICY = "ask"
 EDIT_APPROVAL_POLICY_CONFIG_ID = "edit_approval_policy"
 MODES: dict[str, tuple[str, str, str]] = {
     "default": ("ask", "Default", "Ask before edits."),
-    "accept_edits": ("workspace_session", "Accept Edits",
-                     "Auto-allow workspace and temp-dir edits; still asks for sensitive paths."),
-    "dont_ask": ("session", "Don't Ask", "Auto-allow file edits for this session except sensitive paths."),
+    "accept_edits": (
+        "workspace_session",
+        "Accept Edits",
+        "Auto-allow workspace and temp-dir edits; still asks for sensitive paths.",
+    ),
+    "dont_ask": (
+        "session",
+        "Don't Ask",
+        "Auto-allow file edits for this session except sensitive paths.",
+    ),
 }
 MODE_TO_EDIT_APPROVAL_POLICY = {mode: spec[0] for mode, spec in MODES.items()}
 EDIT_APPROVAL_POLICY_TO_MODE = {spec[0]: mode for mode, spec in MODES.items()}

@@ -60,10 +60,6 @@ def _run_with_streams(monkeypatch, out, err):
     clawk_cli._ensure_utf8()
 
 
-
-
-
-
 def test_utf8_stream_left_untouched(monkeypatch):
     """Already-UTF-8 streams are a no-op: object identity preserved AND the
     process environment is left untouched (no PYTHONUTF8/PYTHONIOENCODING
@@ -79,10 +75,6 @@ def test_utf8_stream_left_untouched(monkeypatch):
     # Healthy UTF-8 host: no environment mutation (minimal footprint).
     assert "PYTHONUTF8" not in os.environ
     assert "PYTHONIOENCODING" not in os.environ
-
-
-
-
 
 
 def test_fallback_when_reconfigure_unavailable(monkeypatch, tmp_path):
@@ -110,7 +102,3 @@ def test_fallback_when_reconfigure_unavailable(monkeypatch, tmp_path):
     sys.stdout.flush()
     fh.close()
     assert "∇".encode() in real_path.read_bytes()
-
-
-
-

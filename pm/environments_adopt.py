@@ -15,7 +15,12 @@ import site
 import sys
 from pathlib import Path
 
-from pm.environments import install_state_dir, selected_venv, site_packages, venv_bin_dir
+from pm.environments import (
+    install_state_dir,
+    selected_venv,
+    site_packages,
+    venv_bin_dir,
+)
 
 
 def running_environment(project_root: Path) -> Path | None:
@@ -29,15 +34,22 @@ def running_environment(project_root: Path) -> Path | None:
         selected = selected_venv(project_root)
     except (OSError, RuntimeError, ValueError):
         return None
-    for environment in (selected, *sorted((install_state_dir(project_root) / "environments").glob("*/venv"))):
+    for environment in (
+        selected,
+        *sorted((install_state_dir(project_root) / "environments").glob("*/venv")),
+    ):
         if site_packages(environment).resolve() in entries:
             return environment
     return None
 
 
 def _distributions(environment: Path) -> dict[str, importlib.metadata.Distribution]:
-    return {re.sub(r"[-_.]+", "-", dist.metadata["Name"]).lower(): dist
-            for dist in importlib.metadata.distributions(path=[str(site_packages(environment))])}
+    return {
+        re.sub(r"[-_.]+", "-", dist.metadata["Name"]).lower(): dist
+        for dist in importlib.metadata.distributions(
+            path=[str(site_packages(environment))]
+        )
+    }
 
 
 def _loaded_from_changed(previous: Path, selected: Path) -> list[str]:
@@ -46,19 +58,27 @@ def _loaded_from_changed(previous: Path, selected: Path) -> list[str]:
     changed = set()
     for name, dist in _distributions(previous).items():
         if name not in new or new[name].version != dist.version:
-            changed.update(Path(str(dist.locate_file(file))).resolve() for file in dist.files or ())
+            changed.update(
+                Path(str(dist.locate_file(file))).resolve() for file in dist.files or ()
+            )
     roots = (str(site_packages(previous)), str(site_packages(previous).resolve()))
     loaded = []
     for name, module in list(sys.modules.items()):
         file = getattr(module, "__file__", None)
-        if isinstance(file, str) and file.startswith(roots) and Path(file).resolve() in changed:
+        if (
+            isinstance(file, str)
+            and file.startswith(roots)
+            and Path(file).resolve() in changed
+        ):
             loaded.append(name)
     return loaded
 
 
 def _replace(value: str, old: Path, new: Path) -> str:
-    return os.pathsep.join(str(new) if part and Path(part).resolve() == old.resolve() else part
-                           for part in value.split(os.pathsep))
+    return os.pathsep.join(
+        str(new) if part and Path(part).resolve() == old.resolve() else part
+        for part in value.split(os.pathsep)
+    )
 
 
 def adopt(previous: Path, selected: Path, running: Path) -> bool:
@@ -71,16 +91,23 @@ def adopt(previous: Path, selected: Path, running: Path) -> bool:
         return True
     if _loaded_from_changed(previous, selected):
         return False
-    lease_generation(selected)  # The old lease stays: loaded modules keep reading from it.
+    lease_generation(
+        selected
+    )  # The old lease stays: loaded modules keep reading from it.
     old, new = site_packages(previous), site_packages(selected)
-    sys.path[:] = [str(new) if entry and Path(entry).resolve() == old.resolve() else entry for entry in sys.path]
+    sys.path[:] = [
+        str(new) if entry and Path(entry).resolve() == old.resolve() else entry
+        for entry in sys.path
+    ]
     known = {pth.name for pth in old.glob("*.pth")}
     for pth in sorted(new.glob("*.pth")):
         if pth.name not in known:
             site.addpackage(str(new), pth.name, None)
     if os.environ.get("PYTHONPATH"):
         os.environ["PYTHONPATH"] = _replace(os.environ["PYTHONPATH"], old, new)
-    os.environ["PATH"] = _replace(os.environ.get("PATH", ""), venv_bin_dir(previous), venv_bin_dir(selected))
+    os.environ["PATH"] = _replace(
+        os.environ.get("PATH", ""), venv_bin_dir(previous), venv_bin_dir(selected)
+    )
     importlib.invalidate_caches()
     return True
 
@@ -106,8 +133,10 @@ def restart_needed(project_root: Path) -> str | None:
     if pair is None or pair[0].resolve() == pair[1].resolve():
         return None
     running, selected = pair
-    return (f"dependency generation {selected.parent.name} was published after this process "
-            f"loaded {running.parent.name}")
+    return (
+        f"dependency generation {selected.parent.name} was published after this process "
+        f"loaded {running.parent.name}"
+    )
 
 
 def adopt_selected(project_root: Path) -> bool:

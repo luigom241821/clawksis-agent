@@ -5,6 +5,7 @@ batches print ``[n/N]`` completion lines to the same console. Without a
 batch tag ``✓ [3/3]`` and ``✓ [3/9]`` are indistinguishable. Every progress
 surface carries a human-readable ``set N`` ordinal (not a raw id slice).
 """
+
 import types
 
 import pytest
@@ -42,8 +43,6 @@ def test_batch_ordinals_are_scoped_per_parent_conversation():
     assert format_batch_tag("deleg_a1", parent_a) == "set 1"  # stable
 
 
-
-
 class _Spinner:
     def __init__(self):
         self.lines = []
@@ -59,10 +58,14 @@ def test_child_tree_lines_and_relayed_events_carry_batch_tag():
     relayed = []
     parent = types.SimpleNamespace(
         _delegate_spinner=_Spinner(),
-        tool_progress_callback=lambda et, name=None, preview=None, args=None, **kw: relayed.append((et, kw)),
+        tool_progress_callback=lambda et, name=None, preview=None, args=None, **kw: (
+            relayed.append((et, kw))
+        ),
     )
     ref = {}
-    cb = _build_child_progress_callback(2, "triage cluster", parent, 9, subagent_id="sa-2", session_ref=ref)
+    cb = _build_child_progress_callback(
+        2, "triage cluster", parent, 9, subagent_id="sa-2", session_ref=ref
+    )
     # Stamped by delegate_task AFTER the callback is built — must be picked up lazily.
     ref["delegation_id"] = "deleg_6a664903"
     ref["session_id"] = "child-sess"
@@ -77,29 +80,48 @@ def test_child_tree_lines_and_relayed_events_carry_batch_tag():
     assert all(kw.get("child_session_id") == "child-sess" for _, kw in relayed)
 
 
-
-
-def test_batch_completion_lines_are_attributable_across_two_batches(monkeypatch, tmp_path):
+def test_batch_completion_lines_are_attributable_across_two_batches(
+    monkeypatch, tmp_path
+):
     """Two interleaved batches: every ✓ line names its own ``set N``."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
     (tmp_path / ".clawk").mkdir()
     lines = []
     parent = types.SimpleNamespace(
-        session_id="root", model="m", tool_progress_callback=None, _delegate_spinner=None,
+        session_id="root",
+        model="m",
+        tool_progress_callback=None,
+        _delegate_spinner=None,
         _safe_print=lambda line: lines.append(line),
     )
     monkeypatch.setattr(
-        dt, "_run_single_child",
+        dt,
+        "_run_single_child",
         lambda task_index, goal, child=None, parent_agent=None, **kw: {
-            "task_index": task_index, "status": "completed", "summary": "ok",
-            "error": None, "api_calls": 1, "duration_seconds": 1,
+            "task_index": task_index,
+            "status": "completed",
+            "summary": "ok",
+            "error": None,
+            "api_calls": 1,
+            "duration_seconds": 1,
         },
     )
-    monkeypatch.setattr(dt, "_build_child_preserving_parent_tools",
-                        lambda **kw: types.SimpleNamespace(tool_progress_callback=None))
-    monkeypatch.setattr(dt, "_resolve_delegation_credentials", lambda *a, **k: {
-        "model": "m", "provider": "openrouter", "base_url": "https://x/v1",
-        "api_key": "k", "api_mode": "chat_completions"})
+    monkeypatch.setattr(
+        dt,
+        "_build_child_preserving_parent_tools",
+        lambda **kw: types.SimpleNamespace(tool_progress_callback=None),
+    )
+    monkeypatch.setattr(
+        dt,
+        "_resolve_delegation_credentials",
+        lambda *a, **k: {
+            "model": "m",
+            "provider": "openrouter",
+            "base_url": "https://x/v1",
+            "api_key": "k",
+            "api_mode": "chat_completions",
+        },
+    )
 
     import re
 
@@ -109,9 +131,14 @@ def test_batch_completion_lines_are_attributable_across_two_batches(monkeypatch,
             parent_agent=parent,
         )
         assert "error" not in str(res)[:20], res
-    headers = [re.match(r"\s*🔀 \[(set \d+)\] delegating (\d+) tasks", l) for l in lines]
+    headers = [
+        re.match(r"\s*🔀 \[(set \d+)\] delegating (\d+) tasks", l) for l in lines
+    ]
     headers = [m for m in headers if m]
-    assert [(m.group(1), int(m.group(2))) for m in headers] == [("set 1", 3), ("set 2", 9)]
+    assert [(m.group(1), int(m.group(2))) for m in headers] == [
+        ("set 1", 3),
+        ("set 2", 9),
+    ]
 
     done = [l for l in lines if "✓ [" in l]
     assert len(done) == 12

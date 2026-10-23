@@ -105,9 +105,15 @@ def _run_gateway_import(
     return out
 
 
-def _write_config(home: Path, agent_cfg: dict | None = None, display_cfg: dict | None = None,
-                  timezone: str | None = None, gateway_cfg: dict | None = None) -> None:
+def _write_config(
+    home: Path,
+    agent_cfg: dict | None = None,
+    display_cfg: dict | None = None,
+    timezone: str | None = None,
+    gateway_cfg: dict | None = None,
+) -> None:
     import clawk_yaml as yaml
+
     cfg: dict = {}
     if agent_cfg:
         cfg["agent"] = agent_cfg
@@ -134,16 +140,22 @@ def clawk_home(tmp_path: Path) -> Path:
 
 def test_config_gateway_timeout_wins_over_stale_env(clawk_home: Path) -> None:
     """Every agent.* bridge key must be config-authoritative, not .env-authoritative."""
-    _write_config(clawk_home, agent_cfg={
-        "gateway_timeout": 1800,
-        "gateway_timeout_warning": 900,
-        "session_stall_timeout": 300,
-    })
-    _write_env(clawk_home, {
-        "CLAWK_AGENT_TIMEOUT": "60",
-        "CLAWK_AGENT_TIMEOUT_WARNING": "30",
-        "CLAWK_SESSION_STALL_TIMEOUT": "15",
-    })
+    _write_config(
+        clawk_home,
+        agent_cfg={
+            "gateway_timeout": 1800,
+            "gateway_timeout_warning": 900,
+            "session_stall_timeout": 300,
+        },
+    )
+    _write_env(
+        clawk_home,
+        {
+            "CLAWK_AGENT_TIMEOUT": "60",
+            "CLAWK_AGENT_TIMEOUT_WARNING": "30",
+            "CLAWK_SESSION_STALL_TIMEOUT": "15",
+        },
+    )
 
     env = _run_gateway_import(clawk_home, initial_env={})
 
@@ -201,7 +213,9 @@ def test_default_turn_lease_timeout_matches_the_runtime_fallback() -> None:
     )
 
 
-def test_config_platform_connect_timeout_supplies_env_when_unset(clawk_home: Path) -> None:
+def test_config_platform_connect_timeout_supplies_env_when_unset(
+    clawk_home: Path,
+) -> None:
     """config.yaml:gateway.platform_connect_timeout supplies the env var when
     it isn't already set (#19776 — config surface for the Discord connect
     timeout, replacing the undocumented env-var-only workaround)."""
@@ -227,7 +241,9 @@ def test_env_platform_connect_timeout_wins_over_config(clawk_home: Path) -> None
     assert env.get("CLAWK_GATEWAY_PLATFORM_CONNECT_TIMEOUT") == "120"
 
 
-def test_first_import_under_a_routed_override_bridges_the_process_home(tmp_path: Path) -> None:
+def test_first_import_under_a_routed_override_bridges_the_process_home(
+    tmp_path: Path,
+) -> None:
     """A multiplexed backend first imports gateway.run lazily inside a routed profile's session;
     the import-time bridge must still write the LAUNCH home's config into the process env."""
     from utils import atomic_yaml_write

@@ -31,8 +31,11 @@ class ProviderTransport(ABC):
 
     @abstractmethod
     def build_kwargs(
-        self, model: str, messages: list[dict[str, Any]],
-        tools: Optional[list[dict[str, Any]]] = None, **params,
+        self,
+        model: str,
+        messages: list[dict[str, Any]],
+        tools: Optional[list[dict[str, Any]]] = None,
+        **params,
     ) -> dict[str, Any]:
         """Primary entry point: convert messages/tools and return kwargs ready for the provider SDK."""
 
@@ -50,4 +53,8 @@ class ProviderTransport(ABC):
 
     def map_finish_reason(self, raw_reason: str) -> str:
         """Map a provider stop reason via ``_STOP_REASON_MAP`` (unknown -> 'stop'); passthrough when no map."""
-        return raw_reason if self._STOP_REASON_MAP is None else self._STOP_REASON_MAP.get(raw_reason, "stop")
+        return (
+            raw_reason
+            if self._STOP_REASON_MAP is None
+            else self._STOP_REASON_MAP.get(raw_reason, "stop")
+        )

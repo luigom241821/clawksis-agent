@@ -18,6 +18,7 @@ These tests verify the three load-bearing properties of that redirect:
 Every ``docker exec`` runs as ``clawk`` per the conftest module
 docstring; see ``tests/docker/conftest.py`` for rationale.
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -66,7 +67,9 @@ def _wait_for_gateway_or_exit(
     while time.monotonic() < end:
         r = subprocess.run(
             ["docker", "inspect", "-f", "{{.State.Status}}", container],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
             check=False,
         )
         status = r.stdout.strip()
@@ -76,7 +79,8 @@ def _wait_for_gateway_or_exit(
             # Check if the gateway process is actually running in the
             # foreground (the no-supervise path).  If it is, we're done.
             pgrep = docker_exec_sh(
-                container, "pgrep -f 'clawk.*gateway' >/dev/null 2>&1",
+                container,
+                "pgrep -f 'clawk.*gateway' >/dev/null 2>&1",
             )
             if pgrep.returncode == 0:
                 return "running"
@@ -85,7 +89,8 @@ def _wait_for_gateway_or_exit(
 
 
 def test_gateway_run_redirects_to_supervised(
-    built_image: str, container_name: str,
+    built_image: str,
+    container_name: str,
 ) -> None:
     """``docker run <image> gateway run`` (the historical invocation)
     should now register and start the ``gateway-default`` s6 slot.
@@ -115,7 +120,9 @@ def test_gateway_run_redirects_to_supervised(
     # 30s to import the codebase, load config, and reach the redirect
     # logic. 60s matches the deadline other boot-readiness polls use.
     logs = wait_for_docker_logs(
-        container_name, "s6 supervision", deadline_s=60.0,
+        container_name,
+        "s6 supervision",
+        deadline_s=60.0,
     )
     assert "s6 supervision" in logs, (
         f"expected loud breadcrumb in docker logs; got:\n{logs}"
@@ -126,12 +133,13 @@ def test_gateway_run_redirects_to_supervised(
     # would be in `Exited` state by now.
     r = subprocess.run(
         ["docker", "inspect", "-f", "{{.State.Status}}", container_name],
-        capture_output=True, text=True, timeout=10,
+        capture_output=True,
+        text=True,
+        timeout=10,
         check=False,
     )
     assert r.returncode == 0 and r.stdout.strip() == "running", (
-        f"container exited prematurely: {r.stdout!r}; "
-        f"docker logs:\n{logs}"
+        f"container exited prematurely: {r.stdout!r}; docker logs:\n{logs}"
     )
 
     # s6's intent for the default-profile gateway slot should be up.
@@ -153,7 +161,7 @@ def test_gateway_run_redirects_to_supervised(
         container_name,
         "ps -eo pid,ppid,cmd | grep -v grep | awk "
         "'/main-wrapper.sh|rc.init top/ { wrapper_pid=$1 } "
-        "$3==\"sleep\" && $4==\"infinity\" && $2==wrapper_pid { c++ } "
+        '$3=="sleep" && $4=="infinity" && $2==wrapper_pid { c++ } '
         "END { print c+0 }'",
     )
     assert r.returncode == 0
@@ -164,16 +172,14 @@ def test_gateway_run_redirects_to_supervised(
         f"ps:\n{docker_exec_sh(container_name, 'ps -eo pid,ppid,cmd').stdout}"
     )
 
-
     # If status == "exited" instead, the gateway exited (also valid
     # pre-s6 semantics). The breadcrumb-absence check above is
     # already enough to confirm the redirect didn't fire.
 
 
-
-
 def test_supervised_gateway_does_not_recurse(
-    built_image: str, container_name: str,
+    built_image: str,
+    container_name: str,
 ) -> None:
     """The CLAWK_S6_SUPERVISED_CHILD sentinel must prevent the
     supervised ``clawk gateway run`` from re-entering the redirect.
@@ -208,7 +214,10 @@ def test_supervised_gateway_does_not_recurse(
     # respawn fresh `gateway run` processes on every cycle, leaving
     # multiple Python-process descendants under the gateway-default
     # supervise tree.
-    r = docker_exec_sh(container_name, "ps -eo pid,cmd | grep -v grep | grep -E 'python.*clawk.*gateway run' | wc -l")
+    r = docker_exec_sh(
+        container_name,
+        "ps -eo pid,cmd | grep -v grep | grep -E 'python.*clawk.*gateway run' | wc -l",
+    )
     assert r.returncode == 0
     n = int(r.stdout.strip() or 0)
     assert n <= 1, (
@@ -228,7 +237,7 @@ def test_supervised_gateway_does_not_recurse(
         # Find PID of the CMD process (main-wrapper.sh or its sh
         # parent), then count `sleep infinity` children.
         "ps -eo pid,ppid,cmd | grep -v grep | awk '/main-wrapper.sh|rc.init top/ { wrapper_pid=$1 } "
-        "$3==\"sleep\" && $4==\"infinity\" && $2==wrapper_pid { c++ } END { print c+0 }'",
+        '$3=="sleep" && $4=="infinity" && $2==wrapper_pid { c++ } END { print c+0 }\'',
     )
     assert r.returncode == 0
     redirected = int(r.stdout.strip() or 0)
@@ -240,7 +249,8 @@ def test_supervised_gateway_does_not_recurse(
 
 
 def test_dashboard_supervised_when_env_set(
-    built_image: str, container_name: str,
+    built_image: str,
+    container_name: str,
 ) -> None:
     """When ``CLAWK_DASHBOARD=1`` is set, ``docker run <image> gateway
     run`` should result in BOTH the gateway and the dashboard being
@@ -250,7 +260,8 @@ def test_dashboard_supervised_when_env_set(
     dashboard, with zero extra user effort.
     """
     start_container(
-        built_image, container_name,
+        built_image,
+        container_name,
         "CLAWK_DASHBOARD=1",
         cmd="gateway run",
     )
@@ -262,7 +273,9 @@ def test_dashboard_supervised_when_env_set(
     # cont-init finishes, but the redirect (which creates the
     # gateway-default s6 slot) happens later in the CMD process.
     wait_for_docker_logs(
-        container_name, "s6 supervision", deadline_s=60.0,
+        container_name,
+        "s6 supervision",
+        deadline_s=60.0,
     )
 
     # Poll for both slots to report want-up, using the same
@@ -277,9 +290,7 @@ def test_dashboard_supervised_when_env_set(
             ok_gateway = True
             break
         time.sleep(0.5)
-    assert ok_gateway, (
-        f"gateway-default slot not want-up: {_svstat(container_name)!r}"
-    )
+    assert ok_gateway, f"gateway-default slot not want-up: {_svstat(container_name)!r}"
 
     ok_dash = False
     end = time.monotonic() + 30.0
@@ -291,5 +302,3 @@ def test_dashboard_supervised_when_env_set(
     assert ok_dash, (
         f"dashboard slot not want-up: {_svstat(container_name, 'dashboard')!r}"
     )
-
-

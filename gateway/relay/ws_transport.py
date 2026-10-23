@@ -72,6 +72,7 @@ def _env_disconnect_budget_s() -> float:
             budget = max(0.0, float(raw))
     return budget
 
+
 # Close REASON a connector attaches to a 4401 when the upgrade token merely
 # EXPIRED (vs. the secret being revoked). A 4401 with this reason is never a
 # revocation. Connectors predating the reason send plain "unauthorized".
@@ -87,9 +88,9 @@ def _ws_dial_url(url: str) -> str:
     """
     raw = (url or "").strip()
     if raw.startswith("https://"):
-        raw = "wss://" + raw[len("https://"):]
+        raw = "wss://" + raw[len("https://") :]
     elif raw.startswith("http://"):
-        raw = "ws://" + raw[len("http://"):]
+        raw = "ws://" + raw[len("http://") :]
     raw = raw.rstrip("/")
     if not raw.endswith("/relay"):
         raw = f"{raw}/relay"
@@ -114,14 +115,20 @@ def _render_relay_context(context: Any) -> Optional[str]:
         if not text:
             continue
         src = item.get("source") or {}
-        author = (src.get("user_name") or src.get("user_id") or "") if isinstance(src, dict) else ""
+        author = (
+            (src.get("user_name") or src.get("user_id") or "")
+            if isinstance(src, dict)
+            else ""
+        )
         lines.append(f"{author}: {text}" if author else str(text))
     if not lines:
         return None
     return "[Recent channel messages]\n" + "\n".join(lines)
 
 
-def _normalize_slack_parent_command(text: str, message_type: MessageType) -> tuple[str, MessageType]:
+def _normalize_slack_parent_command(
+    text: str, message_type: MessageType
+) -> tuple[str, MessageType]:
     """Mirror native Slack ``/clawk`` routing for authenticated relay text."""
     parent_parts = text.strip().split(maxsplit=1)
     if not parent_parts or parent_parts[0] != "/clawk":
@@ -140,7 +147,9 @@ def _normalize_slack_parent_command(text: str, message_type: MessageType) -> tup
     else:
         normalized = payload or "/help"
 
-    normalized_type = MessageType.COMMAND if normalized.startswith("/") else MessageType.TEXT
+    normalized_type = (
+        MessageType.COMMAND if normalized.startswith("/") else MessageType.TEXT
+    )
     return normalized, normalized_type
 
 
@@ -166,7 +175,9 @@ def _media_types_from_wire(raw: dict[str, Any]) -> list[str]:
     missing = sum(1 for t in types if not t)
     if missing and mime_by_url:
         logger.debug(
-            "relay inbound: %d/%d media_urls had no matching media[] mime", missing, len(types)
+            "relay inbound: %d/%d media_urls had no matching media[] mime",
+            missing,
+            len(types),
         )
     return types
 
@@ -190,7 +201,11 @@ def _event_from_wire(raw: dict[str, Any]) -> MessageEvent:
         user_id=src.get("user_id"),
         # Native adapters surface the DISPLAY name, so prefer it over the raw
         # username. Session keys derive from user_id, so this is presentation-only.
-        user_name=(src.get("user_display_name") or src.get("user_name") or src.get("user_handle")),
+        user_name=(
+            src.get("user_display_name")
+            or src.get("user_name")
+            or src.get("user_handle")
+        ),
         thread_id=src.get("thread_id"),
         chat_topic=src.get("chat_topic"),
         user_id_alt=src.get("user_id_alt"),
@@ -243,7 +258,9 @@ def _event_from_wire(raw: dict[str, Any]) -> MessageEvent:
         channel_context=_render_relay_context(raw.get("context")),
         # Structured interactive-prompt reply, verbatim off the wire; the adapter
         # consumes it to resolve pending approvals/confirms/clarifies.
-        prompt_response=dict(prompt_response) if isinstance(prompt_response, dict) else None,
+        prompt_response=dict(prompt_response)
+        if isinstance(prompt_response, dict)
+        else None,
     )
 
 
@@ -285,9 +302,13 @@ def _passthrough_from_wire(raw: dict[str, Any]) -> PassthroughForward:
         if isinstance(pair, (list, tuple)) and len(pair) == 2
     ]
     return PassthroughForward(
-        platform=str(raw.get("platform", "")), bot_id=str(raw.get("botId", "")),
-        method=str(raw.get("method", "")), path=str(raw.get("path", "")), headers=headers,
-        body=body, profile=raw.get("profile"),
+        platform=str(raw.get("platform", "")),
+        bot_id=str(raw.get("botId", "")),
+        method=str(raw.get("method", "")),
+        path=str(raw.get("path", "")),
+        headers=headers,
+        body=body,
+        profile=raw.get("profile"),
     )
 
 
@@ -365,7 +386,9 @@ class WebSocketRelayTransport:
         self._ws: Any = None
         self._reader: Optional[asyncio.Task[None]] = None
         self._inbound: Optional[InboundHandler] = None
-        self._inbound_acks: set[asyncio.Task[None]] = set()  # ACKs of off-reader admissions
+        self._inbound_acks: set[asyncio.Task[None]] = (
+            set()
+        )  # ACKs of off-reader admissions
         self._interrupt_inbound_handler: Any = None
         self._passthrough_handler: Any = None
         # `_descriptor` is the FIRST (primary-identity) descriptor; the map holds
@@ -429,7 +452,11 @@ class WebSocketRelayTransport:
         # happy_eyeballs_delay reaches loop.create_connection (default None = serial
         # walk over AAAA then A): race IPv6/IPv4 so a blackholed IPv6 route costs
         # 250 ms, not the connect timeout (#114265).
-        kwargs: dict[str, Any] = {"ping_interval": 30, "ping_timeout": 60, "happy_eyeballs_delay": 0.25}
+        kwargs: dict[str, Any] = {
+            "ping_interval": 30,
+            "ping_timeout": 60,
+            "happy_eyeballs_delay": 0.25,
+        }
         headers = self._upgrade_headers()
         if headers:
             kwargs["additional_headers"] = headers
@@ -446,14 +473,20 @@ class WebSocketRelayTransport:
         # One hello PER fronted identity; the connector accumulates them (first
         # sets the session default). The FIRST descriptor resolves handshake().
         for platform, bot_id in self._identities:
-            hello: dict[str, Any] = {"type": "hello", "platform": platform, "botId": bot_id}
+            hello: dict[str, Any] = {
+                "type": "hello",
+                "platform": platform,
+                "botId": bot_id,
+            }
             # Declare the slash-command set on the Discord hello so the connector
             # (which holds the bot token) reconciles Discord's registration.
             # Enrichment only — never blocks the handshake; a connector predating the
             # field ignores it. Only Discord has an app-command registry.
             if platform == "discord":
                 try:
-                    from gateway.relay.command_manifest import build_relay_command_manifest
+                    from gateway.relay.command_manifest import (
+                        build_relay_command_manifest,
+                    )
 
                     hello["command_manifest"] = build_relay_command_manifest()
                 except Exception:
@@ -473,7 +506,9 @@ class WebSocketRelayTransport:
             return {}
         from gateway.relay.auth import make_upgrade_token
 
-        return {"Authorization": f"Bearer {make_upgrade_token(self._gateway_id, self._upgrade_secret)}"}
+        return {
+            "Authorization": f"Bearer {make_upgrade_token(self._gateway_id, self._upgrade_secret)}"
+        }
 
     async def disconnect(self, *, budget_s: Optional[float] = None) -> None:
         """Tear down the socket, draining in-flight outbound frames first.
@@ -513,7 +548,9 @@ class WebSocketRelayTransport:
             if self._going_idle_ack is not None and not self._going_idle_ack.done():
                 self._going_idle_ack.set_exception(closed)
 
-    def _fail_pending(self, settle: Callable[[asyncio.Future[dict[str, Any]]], None]) -> None:
+    def _fail_pending(
+        self, settle: Callable[[asyncio.Future[dict[str, Any]]], None]
+    ) -> None:
         """Settle every unresolved pending future via ``settle`` and clear the map.
         list() snapshot: settling wakes waiters whose finally-pop mutates the dict."""
         for fut in list(self._pending.values()):
@@ -526,7 +563,9 @@ class WebSocketRelayTransport:
             return self._descriptor
         if self._descriptor_ready is None:
             raise RuntimeError("handshake() called before connect()")
-        return await asyncio.wait_for(self._descriptor_ready, timeout=self._connect_timeout_s)
+        return await asyncio.wait_for(
+            self._descriptor_ready, timeout=self._connect_timeout_s
+        )
 
     def descriptor_for_platform(self, platform: str) -> Optional[CapabilityDescriptor]:
         """The negotiated descriptor for one fronted platform (per-chat caps), or None."""
@@ -576,13 +615,19 @@ class WebSocketRelayTransport:
         return next((b for p, b in self._identities if p == platform), None)
 
     async def get_chat_info(self, chat_id: str) -> dict[str, Any]:
-        result = await self._request_response({"op": "get_chat_info", "chat_id": chat_id})
+        result = await self._request_response(
+            {"op": "get_chat_info", "chat_id": chat_id}
+        )
         # The connector answers chat-info inside the outbound_result envelope.
         info = result.get("chat_info") or result
         return {"name": info.get("name", chat_id), "type": info.get("type", "dm")}
 
-    async def send_interrupt(self, session_key: str, reason: Optional[str] = None) -> None:
-        await self._send({"type": "interrupt", "session_key": session_key, "reason": reason})
+    async def send_interrupt(
+        self, session_key: str, reason: Optional[str] = None
+    ) -> None:
+        await self._send(
+            {"type": "interrupt", "session_key": session_key, "reason": reason}
+        )
 
     # ── going-idle / buffered-flip (§5.3) ────────────────────────────────
     async def go_idle(self, timeout_s: float = 10.0) -> bool:
@@ -628,7 +673,9 @@ class WebSocketRelayTransport:
         try:
             await asyncio.wait_for(self._ws.close(), timeout=_TEARDOWN_AWAIT_TIMEOUT_S)
         except Exception:
-            logger.debug("relay go_dormant: ws.close() raised or timed out", exc_info=True)
+            logger.debug(
+                "relay go_dormant: ws.close() raised or timed out", exc_info=True
+            )
         return acked
 
     async def _send_inbound_ack(self, buffer_id: str) -> None:
@@ -651,7 +698,11 @@ class WebSocketRelayTransport:
         request_id = uuid.uuid4().hex
         fut: asyncio.Future[dict[str, Any]] = asyncio.get_running_loop().create_future()
         self._pending[request_id] = fut
-        frame: dict[str, Any] = {"type": "outbound", "requestId": request_id, "action": action}
+        frame: dict[str, Any] = {
+            "type": "outbound",
+            "requestId": request_id,
+            "action": action,
+        }
         # Tag the egress platform with its MATCHING advertised botId only when a
         # concrete platform was resolved, so a single-platform gateway emits the
         # exact frame shape as before (connector falls back to session default).
@@ -669,7 +720,11 @@ class WebSocketRelayTransport:
             # AMBIGUOUS by contract: the frame reached the wire and only the ack is
             # missing — the connector may have applied it. The fail-fast paths
             # above never sent anything (definite non-delivery) and stay unmarked.
-            return {"success": False, "error": "relay outbound timed out", "ambiguous": True}
+            return {
+                "success": False,
+                "error": "relay outbound timed out",
+                "ambiguous": True,
+            }
         except Exception as exc:
             # The socket can die between the liveness guard and the write, so _send
             # may raise into callers whose contract is a result dict. A raise from
@@ -677,7 +732,10 @@ class WebSocketRelayTransport:
             # FUTURE (disconnect failing pending mid-flight) = frame sent, outcome
             # unknown -> ambiguous. CancelledError still propagates (BaseException).
             logger.debug("relay outbound send failed", exc_info=True)
-            result: dict[str, Any] = {"success": False, "error": f"relay send failed: {exc}"}
+            result: dict[str, Any] = {
+                "success": False,
+                "error": f"relay send failed: {exc}",
+            }
             if frame_sent:
                 result["ambiguous"] = True
             return result
@@ -719,7 +777,10 @@ class WebSocketRelayTransport:
                 # mid-dial makes that routine), so the first one is provisional —
                 # re-dial once, now, with a fresh token. Reason "expired" is never a
                 # revocation.
-                if self._close_code_of(exc) == _RELAY_UNAUTHORIZED_CLOSE_CODE and self._handshake_succeeded:
+                if (
+                    self._close_code_of(exc) == _RELAY_UNAUTHORIZED_CLOSE_CODE
+                    and self._handshake_succeeded
+                ):
                     reason = self._close_reason_of(exc)
                     if reason == _RELAY_EXPIRED_CLOSE_REASON:
                         if not self._closing:
@@ -760,7 +821,9 @@ class WebSocketRelayTransport:
                     self._redial_with_fresh_token(), name="relay-ws-auth-retry"
                 )
             elif self._reconnect and not self._auth_revoked:
-                self._supervisor = asyncio.create_task(self._reconnect_loop(), name="relay-ws-reconnect")
+                self._supervisor = asyncio.create_task(
+                    self._reconnect_loop(), name="relay-ws-reconnect"
+                )
         finally:
             # Drop the dead handle (identity-guarded) so every `_ws is None`
             # liveness check reports "not connected" for the whole outage — on
@@ -773,7 +836,9 @@ class WebSocketRelayTransport:
             # exits every waiter would block the full outbound timeout. Fail them
             # NOW with the dict shape callers expect (never an exception).
             self._fail_pending(
-                lambda fut: fut.set_result({"success": False, "error": "relay transport connection lost"})
+                lambda fut: fut.set_result(
+                    {"success": False, "error": "relay transport connection lost"}
+                )
             )
 
     def _dialer_running(self) -> bool:
@@ -835,7 +900,9 @@ class WebSocketRelayTransport:
             if self._latch_if_fresh_token_refused(exc):
                 return
             logger.warning("relay ws fresh-token re-dial failed: %s", exc)
-            if self._reconnect and not (self._supervisor and not self._supervisor.done()):
+            if self._reconnect and not (
+                self._supervisor and not self._supervisor.done()
+            ):
                 self._supervisor = asyncio.create_task(
                     self._reconnect_loop(), name="relay-ws-reconnect"
                 )
@@ -847,7 +914,10 @@ class WebSocketRelayTransport:
         consumed, nothing latches); with any other reason the fresh token was
         refused, i.e. the second strike — latch revocation and report True. A
         non-auth failure leaves the marker in place for the next dial."""
-        if not self._auth_retry_pending or self._close_code_of(exc) != _RELAY_UNAUTHORIZED_CLOSE_CODE:
+        if (
+            not self._auth_retry_pending
+            or self._close_code_of(exc) != _RELAY_UNAUTHORIZED_CLOSE_CODE
+        ):
             return False
         self._auth_retry_pending = False
         if self._close_reason_of(exc) == _RELAY_EXPIRED_CLOSE_REASON:
@@ -920,7 +990,9 @@ class WebSocketRelayTransport:
             await handler(self, frame)
 
     async def _on_descriptor(self, frame: dict[str, Any]) -> None:
-        descriptor = CapabilityDescriptor.from_json(json.dumps(frame.get("descriptor", {})))
+        descriptor = CapabilityDescriptor.from_json(
+            json.dumps(frame.get("descriptor", {}))
+        )
         # One descriptor per hello'd identity, keyed by platform for per-chat caps.
         if descriptor.platform:
             self._descriptors_by_platform[descriptor.platform] = descriptor
@@ -937,6 +1009,7 @@ class WebSocketRelayTransport:
         if self._inbound is None:
             return
         from gateway.session_ingress_context import relay_callback
+
         event = _event_from_wire(frame.get("event", {}))
         try:
             with relay_callback(self, event):
@@ -951,7 +1024,9 @@ class WebSocketRelayTransport:
         buffer_id = frame.get("bufferId")
         if admitting is not None:
             # Admitted off this reader (plugin hooks may await a send only this reader answers).
-            admitting.add_done_callback(lambda done: self._ack_admitted(done, buffer_id))
+            admitting.add_done_callback(
+                lambda done: self._ack_admitted(done, buffer_id)
+            )
         elif buffer_id:
             await self._send_inbound_ack(str(buffer_id))
 
@@ -960,8 +1035,10 @@ class WebSocketRelayTransport:
         cancelled or failed one stays unacknowledged, as above, so the connector redelivers it."""
         if admission.cancelled() or admission.exception() is not None:
             if not admission.cancelled():
-                logger.error("relay: inbound handler failed; frame left unacknowledged",
-                             exc_info=admission.exception())
+                logger.error(
+                    "relay: inbound handler failed; frame left unacknowledged",
+                    exc_info=admission.exception(),
+                )
             return
         if buffer_id:
             ack = asyncio.create_task(self._send_inbound_ack(str(buffer_id)))
@@ -979,13 +1056,16 @@ class WebSocketRelayTransport:
 
     async def _on_interrupt_inbound(self, frame: dict[str, Any]) -> None:
         if self._interrupt_inbound_handler is not None:
-            await self._interrupt_inbound_handler(frame.get("session_key", ""), frame.get("chat_id", ""))
+            await self._interrupt_inbound_handler(
+                frame.get("session_key", ""), frame.get("chat_id", "")
+            )
 
     async def _on_passthrough_forward(self, frame: dict[str, Any]) -> None:
         # Edge-ACKed passthrough request riding the same WS (no public inbound
         # port needed); bufferId (§5.3) is passed through for ack.
         if self._passthrough_handler is not None:
             from gateway.session_ingress_context import relay_callback
+
             fwd = _passthrough_from_wire(frame.get("forward", {}))
             # Same authenticated-reader proof as _on_inbound, bound to the forward; the
             # adapter moves it onto the event it decodes from this forward.

@@ -15,6 +15,7 @@ escalated or shelled out to: the hint is for the user to run.
 POSIX only: without ``os.getuid`` (Windows) a PermissionError is usually a transient open
 handle, so the prune keeps retrying there exactly as before.
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -66,10 +67,12 @@ def _accessible(path: str) -> bool:
 def _still_stuck(root: Path, name: str, rec: dict, now: float) -> bool:
     blockers = rec.get("blockers")
     return (
-        rec.get("uid") == os.geteuid()  # windows-footgun: ok — only reached when tracking_supported()
+        rec.get("uid")
+        == os.geteuid()  # windows-footgun: ok — only reached when tracking_supported()
         and now - float(rec.get("since") or 0) < RECHECK_AFTER_SECONDS
         and rec.get("fp") == _fingerprint(root / name)
-        and isinstance(blockers, list) and bool(blockers)
+        and isinstance(blockers, list)
+        and bool(blockers)
         and not all(_accessible(b) for b in blockers if isinstance(b, str))
     )
 
@@ -80,7 +83,11 @@ def _read(root: Path) -> dict[str, dict]:
         data = json.loads((root / STUCK_STATE_NAME).read_text(encoding="utf-8-sig"))
     except (OSError, ValueError):
         return {}
-    return {k: v for k, v in data.items() if isinstance(v, dict)} if isinstance(data, dict) else {}
+    return (
+        {k: v for k, v in data.items() if isinstance(v, dict)}
+        if isinstance(data, dict)
+        else {}
+    )
 
 
 def _write(root: Path, state: dict[str, dict]) -> None:
@@ -91,7 +98,9 @@ def _write(root: Path, state: dict[str, dict]) -> None:
             path.unlink(missing_ok=True)
         return
     try:
-        fd, tmp = tempfile.mkstemp(dir=root, prefix=STUCK_STATE_NAME + ".", suffix=".tmp")
+        fd, tmp = tempfile.mkstemp(
+            dir=root, prefix=STUCK_STATE_NAME + ".", suffix=".tmp"
+        )
     except OSError:
         return
     try:
@@ -126,11 +135,15 @@ def load_skips(root: Path, *, persist: bool = True) -> frozenset[str]:
     now = time.time()
     if not persist:
         state = _read(root)
-        return frozenset(n for n, rec in state.items() if _still_stuck(root, n, rec, now))
+        return frozenset(
+            n for n, rec in state.items() if _still_stuck(root, n, rec, now)
+        )
     try:
         with _locked(root):
             state = _read(root)
-            live = {n: rec for n, rec in state.items() if _still_stuck(root, n, rec, now)}
+            live = {
+                n: rec for n, rec in state.items() if _still_stuck(root, n, rec, now)
+            }
             if live != state:
                 _write(root, live)
     except OSError:
@@ -146,7 +159,11 @@ def rmtree_collecting_permission_errors(entry: Path) -> list[str]:
     def _onexc(func, path, exc):
         if is_permission_error(exc):
             # scandir/open of a dir fails on the dir itself; unlink/rmdir on its parent's perms.
-            blocker = path if func in (os.scandir, os.open, os.lstat) else os.path.dirname(path)
+            blocker = (
+                path
+                if func in (os.scandir, os.open, os.lstat)
+                else os.path.dirname(path)
+            )
             if blocker not in blockers:
                 blockers.append(blocker)
 
@@ -174,16 +191,25 @@ def record(root: Path, entry: Path, blockers: list[str], audit) -> None:
     fp = _fingerprint(entry)
     if fp is None or not blockers:
         return
-    rec = {"fp": fp, "since": time.time(), "uid": os.geteuid(), "blockers": blockers[:_MAX_BLOCKERS]}  # windows-footgun: ok — only reached when tracking_supported()
+    rec = {
+        "fp": fp,
+        "since": time.time(),
+        "uid": os.geteuid(),
+        "blockers": blockers[:_MAX_BLOCKERS],
+    }  # windows-footgun: ok — only reached when tracking_supported()
     with contextlib.suppress(OSError), _locked(root):
-        state = _read(root)  # re-read under the lock: merge, never publish a stale snapshot
+        state = _read(
+            root
+        )  # re-read under the lock: merge, never publish a stale snapshot
         state[entry.name] = rec
         _write(root, state)
     audit.info(
         "scratch prune: cannot remove %r: it holds files this user (uid %d) may not read or "
         "delete, usually root-owned output of a Docker container; skipping it until that is "
         "fixed (re-checked weekly). Remove it with: %s",
-        os.fspath(entry), rec["uid"], removal_hint(entry),
+        os.fspath(entry),
+        rec["uid"],
+        removal_hint(entry),
     )
 
 

@@ -66,8 +66,11 @@ def _runner(adapter: _Adapter):
     runner = TurnRunner(SimpleNamespace(), ctx)
 
     class _Fut:
-        def __init__(self, result): self._r = result
-        def result(self, timeout=None): return self._r
+        def __init__(self, result):
+            self._r = result
+
+        def result(self, timeout=None):
+            return self._r
 
     runner._schedule = lambda coro, _label: _Fut(asyncio.run(coro))
     runner._close_native_stream_boundary = lambda _why: None
@@ -344,7 +347,9 @@ def test_queued_reconcile_ORDINARY_edit_failure_still_sends():
 def test_task_card_fallback_edit_decline_does_not_send_progress_text():
     """R6-4: R5-4 covered the native card, not the editable-text fallback."""
     adapter = _EditAdapter()
-    runner = object.__new__(__import__("gateway.run_turn_runner", fromlist=["x"]).TurnRunner)
+    runner = object.__new__(
+        __import__("gateway.run_turn_runner", fromlist=["x"]).TurnRunner
+    )
     runner._ctx = SimpleNamespace(
         source=SimpleNamespace(chat_id="C1", platform="slack"),
         _progress_metadata={},

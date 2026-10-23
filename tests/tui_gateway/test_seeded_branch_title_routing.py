@@ -7,7 +7,9 @@ import pytest
 from clawk_state import SessionDB
 
 
-def test_seeded_desktop_branch_title_is_derived_until_the_user_renames(monkeypatch, tmp_path):
+def test_seeded_desktop_branch_title_is_derived_until_the_user_renames(
+    monkeypatch, tmp_path
+):
     monkeypatch.setattr("clawk_cli.banner.prefetch_update_check", lambda: None)
     from tui_gateway import server
 
@@ -25,15 +27,22 @@ def test_seeded_desktop_branch_title_is_derived_until_the_user_renames(monkeypat
     monkeypatch.setattr(server, "_schedule_session_cap_enforcement", lambda: None)
     monkeypatch.setattr(server, "_register_session_cwd", lambda *a: None)
     monkeypatch.setattr(server, "_project_info_for_cwd", lambda *a: None)
-    history = [{"role": "user", "content": "Synthetic parent input"},
-               {"role": "assistant", "content": "Synthetic parent response"}]
+    history = [
+        {"role": "user", "content": "Synthetic parent input"},
+        {"role": "assistant", "content": "Synthetic parent response"},
+    ]
     try:
         db.create_session("parent", source="desktop", cwd=str(project))
         db.set_auto_title("parent", "Generated parent title", source="llm")
-        response = server._methods["session.create"]("create", {
-            "source": "desktop", "cwd": str(project),
-            "parent_session_id": "parent", "messages": history,
-        })
+        response = server._methods["session.create"](
+            "create",
+            {
+                "source": "desktop",
+                "cwd": str(project),
+                "parent_session_id": "parent",
+                "messages": history,
+            },
+        )
         assert "error" not in response, response
         child = response["result"]["stored_session_id"]
         # A DERIVED title is what memory providers skip when naming sessions (the provenance

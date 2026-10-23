@@ -47,14 +47,17 @@ class TopTool(FakeTool):
 
 class MultiTool(BinaryPackage):
     """A runtime split across two archives that must land in one entry."""
+
     name = "multitool"
     probe_version = False
     flatten = False
     binary_rel = {"win32": "bin/multitool", "posix": "bin/multitool"}
 
     def fetch_urls(self, version, target):
-        return [f"{MultiTool.base_url}/{self.name}-{version}-a.tar.gz",
-                f"{MultiTool.base_url}/{self.name}-{version}-b.tar.gz"]
+        return [
+            f"{MultiTool.base_url}/{self.name}-{version}-a.tar.gz",
+            f"{MultiTool.base_url}/{self.name}-{version}-b.tar.gz",
+        ]
 
     def fetch_url(self, version, target):
         return self.fetch_urls(version, target)[0]
@@ -92,7 +95,9 @@ def pm_env(tmp_path, served, monkeypatch):
     _name, digest = make_tar(docroot, "faketool-1.0.tar.gz", {"bin/faketool": "#!x"})
     lockfile = Lockfile(lockfile_path)
     lockfile.set_pin(
-        "faketool", "1.0", {"any": {"url": f"{base_url}/faketool-1.0.tar.gz", "sha256": digest}}
+        "faketool",
+        "1.0",
+        {"any": {"url": f"{base_url}/faketool-1.0.tar.gz", "sha256": digest}},
     )
     lockfile.save()
 
@@ -109,8 +114,6 @@ def _pin(lockfile_path: Path, name: str, version: str, digest: str) -> None:
     lockfile.save()
 
 
-
-
 def test_bad_hash_rejected(pm_env):
     from pm.install import ensure
 
@@ -120,7 +123,6 @@ def test_bad_hash_rejected(pm_env):
         ensure("faketool", base_env={})
 
 
-
 def test_multi_archive_merges_into_one_entry(pm_env, capsys):
     """A package split across two archives lands in ONE store entry: a
     second entry would put the DLLs where a loading executable can never
@@ -128,18 +130,29 @@ def test_multi_archive_merges_into_one_entry(pm_env, capsys):
     from pm.install import ensure, is_installed
 
     lockfile_path, runtime, docroot, _ = pm_env
-    _, digest_a = make_tar(docroot, "multitool-1.0-a.tar.gz",
-                           {"bin/multitool": "#!a"})
-    _, digest_b = make_tar(docroot, "multitool-1.0-b.tar.gz",
-                           {"lib/extra.so": "y"})
+    _, digest_a = make_tar(docroot, "multitool-1.0-a.tar.gz", {"bin/multitool": "#!a"})
+    _, digest_b = make_tar(docroot, "multitool-1.0-b.tar.gz", {"lib/extra.so": "y"})
     lockfile = Lockfile(lockfile_path)
-    lockfile.set_pin("multitool", "1.0", {"any": [
-        {"url": f"{FakeTool.base_url}/multitool-1.0-a.tar.gz", "sha256": digest_a},
-        {"url": f"{FakeTool.base_url}/multitool-1.0-b.tar.gz", "sha256": digest_b},
-    ]})
+    lockfile.set_pin(
+        "multitool",
+        "1.0",
+        {
+            "any": [
+                {
+                    "url": f"{FakeTool.base_url}/multitool-1.0-a.tar.gz",
+                    "sha256": digest_a,
+                },
+                {
+                    "url": f"{FakeTool.base_url}/multitool-1.0-b.tar.gz",
+                    "sha256": digest_b,
+                },
+            ]
+        },
+    )
     lockfile.save()
 
     from pm import cli
+
     assert cli._install_names(["multitool"]) == 0
     out = capsys.readouterr().out
     assert "✓ multitool" in out and "multitool: 100.0%" in out
@@ -157,10 +170,19 @@ def test_multi_archive_merges_into_one_entry(pm_env, capsys):
     _, good = make_tar(docroot, "multitool-2.0-a.tar.gz", {"bin/multitool": "#!new"})
     make_tar(docroot, "multitool-2.0-b.tar.gz", {"lib/extra.so": "z"})
     lockfile = Lockfile(lockfile_path)
-    lockfile.set_pin("multitool", "2.0", {"any": [
-        {"url": f"{FakeTool.base_url}/multitool-2.0-a.tar.gz", "sha256": good},
-        {"url": f"{FakeTool.base_url}/multitool-2.0-b.tar.gz", "sha256": "0" * 64},
-    ]})
+    lockfile.set_pin(
+        "multitool",
+        "2.0",
+        {
+            "any": [
+                {"url": f"{FakeTool.base_url}/multitool-2.0-a.tar.gz", "sha256": good},
+                {
+                    "url": f"{FakeTool.base_url}/multitool-2.0-b.tar.gz",
+                    "sha256": "0" * 64,
+                },
+            ]
+        },
+    )
     lockfile.save()
     with pytest.raises(InstallError, match="sha256 mismatch.*multitool-2.0-b"):
         ensure("multitool", base_env={})
@@ -168,9 +190,6 @@ def test_multi_archive_merges_into_one_entry(pm_env, capsys):
     assert (entry / "bin/multitool").read_bytes() == b"#!a"
     assert (entry / "lib/extra.so").read_bytes() == b"y"
     assert not list(runtime.glob("multitool-2.0*"))
-
-
-
 
 
 def test_deps_compose_dependents_win(pm_env):
@@ -186,6 +205,7 @@ def test_deps_compose_dependents_win(pm_env):
     assert runner.env["DEPTOOL_SEEN"] == "1"
     path = runner.env["PATH"]
     assert path.index("toptool-1.0") < path.index("deptool-1.0")
+
 
 def test_cli_env_reports_only_package_exports(pm_env, monkeypatch, capsys):
     import json
@@ -207,7 +227,9 @@ def test_cli_env_reports_only_package_exports(pm_env, monkeypatch, capsys):
     assert "deptool-1.0" in json.loads(output)["PATH"]
 
 
-def test_activation_trusts_a_recorded_entry_a_deliberate_install_repairs(pm_env, monkeypatch):
+def test_activation_trusts_a_recorded_entry_a_deliberate_install_repairs(
+    pm_env, monkeypatch
+):
     """Shell activation skips the byte re-hash; a deliberate install keeps it.
 
     Hashing every published tree costs seconds per shell, so activation trusts
@@ -301,7 +323,9 @@ def test_standalone_warm_ensure_does_not_wait_for_unrelated_writer(pm_env):
             assert "faketool-1.0" in runner.env["PATH"]
 
 
-def test_install_forgets_verification_when_state_operation_releases_lock(pm_env, monkeypatch):
+def test_install_forgets_verification_when_state_operation_releases_lock(
+    pm_env, monkeypatch
+):
     import importlib
     import os
     from pm.filesystem import lock_fd
@@ -377,7 +401,6 @@ def test_corrupt_facts_degrades_to_empty(pm_env):
     assert (runtime / "facts.corrupt").is_file()
 
 
-
 def test_concurrent_installs_do_not_clobber(pm_env):
     from pm.install import ensure, is_installed
 
@@ -415,7 +438,11 @@ def test_single_flight_one_store_entry(pm_env, monkeypatch):
     contenders = threading.Barrier(6)
     body_started, release_body = threading.Event(), threading.Event()
     bodies, stages = [], []
-    install_lock, do_get, stage = Store.install_lock, SimpleHTTPRequestHandler.do_GET, FakeTool.stage
+    install_lock, do_get, stage = (
+        Store.install_lock,
+        SimpleHTTPRequestHandler.do_GET,
+        FakeTool.stage,
+    )
 
     @contextmanager
     def contending(self):
@@ -488,7 +515,9 @@ def _hold(monkeypatch, *prefixes):
     return held
 
 
-def test_held_replaced_entry_does_not_fail_reinstall_and_is_reclaimed(pm_env, monkeypatch):
+def test_held_replaced_entry_does_not_fail_reinstall_and_is_reclaimed(
+    pm_env, monkeypatch
+):
     """#124807: the replaced entry is garbage once the new one is published and
     committed, so a hold on it must not fail the install, must not block the
     next publish of the same entry, and is reclaimed once released."""
@@ -514,8 +543,12 @@ def test_held_replaced_entry_does_not_fail_reinstall_and_is_reclaimed(pm_env, mo
 
 
 @pytest.mark.platforms("posix")
-@pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0, reason="root ignores directory modes")
-def test_unremovable_replaced_entry_on_posix_is_set_aside_without_touching_outside(pm_env, tmp_path):
+@pytest.mark.skipif(
+    hasattr(os, "geteuid") and os.geteuid() == 0, reason="root ignores directory modes"
+)
+def test_unremovable_replaced_entry_on_posix_is_set_aside_without_touching_outside(
+    pm_env, tmp_path
+):
     """A POSIX permission failure inside the replaced entry (an unreadable dir, an
     unwritable dir holding a symlink) sets the tree aside as before; cleanup never
     raises past that and never chmods the symlink's target outside the tree."""
@@ -543,7 +576,9 @@ def test_unremovable_replaced_entry_on_posix_is_set_aside_without_touching_outsi
             held.chmod(0o700)
 
 
-def test_held_displacement_does_not_fail_restore_and_gc_spares_interrupted_one(pm_env, monkeypatch):
+def test_held_displacement_does_not_fail_restore_and_gc_spares_interrupted_one(
+    pm_env, monkeypatch
+):
     """A restore that succeeded leaves the displaced tree as garbage; a held one
     must not fail the install. An interrupted restore's displacement is never
     set aside, so gc keeps it."""
@@ -591,10 +626,12 @@ def test_gc_removes_fetch_cache_archives(pm_env):
     assert fetches
 
     cmd_gc(None)
-    assert not [p for p in runtime.iterdir() if p.name.startswith("fetch-")], \
+    assert not [p for p in runtime.iterdir() if p.name.startswith("fetch-")], (
         "gc must remove the fetch-<sha> archive cache"
-    assert any(p.name.startswith("faketool-1.0") for p in runtime.iterdir()), \
+    )
+    assert any(p.name.startswith("faketool-1.0") for p in runtime.iterdir()), (
         "the live package entry survives gc"
+    )
 
 
 def test_env_for_never_installs(pm_env):
@@ -607,11 +644,9 @@ def test_env_for_never_installs(pm_env):
     assert not any(p.name.startswith("faketool-") for p in installed)
 
 
-
 def test_compose_env_dependents_win_non_path_too():
     env = compose_env([{"X": "dep"}, {"X": "dependent"}], base={})
     assert env["X"] == "dependent"
-
 
 
 # ── bundle payload pieces ─────────────────────────────────────────────
@@ -647,18 +682,41 @@ def test_python_package_stably_signs_macos_runtime(tmp_path):
     (staged / "python" / "lib").mkdir()
     shutil.copy2(Path(sys._base_executable).resolve(), binary)
     subprocess.run(
-        ["codesign", "--force", "--sign", "-", "--timestamp=none",
-         "--identifier", "test.clawk.downloaded", "--requirements",
-         '=designated => identifier "test.clawk.downloaded"', str(binary)],
-        check=True, capture_output=True, timeout=30,
+        [
+            "codesign",
+            "--force",
+            "--sign",
+            "-",
+            "--timestamp=none",
+            "--identifier",
+            "test.clawk.downloaded",
+            "--requirements",
+            '=designated => identifier "test.clawk.downloaded"',
+            str(binary),
+        ],
+        check=True,
+        capture_output=True,
+        timeout=30,
     )
     python.stage(Store(tmp_path / "store"), staged, "fixture", current_target())
     binary = python.binary(staged, current_target())
-    subprocess.run(["codesign", "--verify", "--deep", "--strict", str(binary)],
-                   check=True, capture_output=True, timeout=30)
-    identity = subprocess.run(["codesign", "-d", "-r-", str(binary)],
-                              check=True, capture_output=True, text=True, timeout=30)
-    assert 'designated => identifier "com.nousresearch.clawk.managed-python"' in identity.stdout + identity.stderr
+    subprocess.run(
+        ["codesign", "--verify", "--deep", "--strict", str(binary)],
+        check=True,
+        capture_output=True,
+        timeout=30,
+    )
+    identity = subprocess.run(
+        ["codesign", "-d", "-r-", str(binary)],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert (
+        'designated => identifier "com.nousresearch.clawk.managed-python"'
+        in identity.stdout + identity.stderr
+    )
 
 
 @pytest.mark.platforms("not macos")
@@ -741,8 +799,13 @@ def test_arch_guard_allows_emulated_x64_on_win32_arm64(monkeypatch, tmp_path):
     bin_dir.mkdir(parents=True)
     # A real x64 PE header (MZ + PE sig + machine 0x8664).
     x64_pe = (
-        b"MZ" + b"\0" * 58 + (0x80).to_bytes(4, "little") + b"\0" * 64
-        + b"PE\0\0" + (0x8664).to_bytes(2, "little") + b"\0" * 54
+        b"MZ"
+        + b"\0" * 58
+        + (0x80).to_bytes(4, "little")
+        + b"\0" * 64
+        + b"PE\0\0"
+        + (0x8664).to_bytes(2, "little")
+        + b"\0" * 54
     )
     binary = bin_dir / "agent-browser-win32-x64.exe"
     binary.write_bytes(x64_pe)
@@ -755,7 +818,9 @@ def test_arch_guard_allows_emulated_x64_on_win32_arm64(monkeypatch, tmp_path):
     lock.save()
     monkeypatch.setattr("scripts.bundles.native._lockfile", lambda: lock)
     monkeypatch.setattr("scripts.bundles.native.current_target", lambda: "win32-arm64")
-    monkeypatch.setattr("scripts.bundles.native.get_package", lambda name: get_package(name))
+    monkeypatch.setattr(
+        "scripts.bundles.native.get_package", lambda name: get_package(name)
+    )
 
     facts = Facts(store / "facts.json")
     facts.record("agent-browser", "0.35.1", entry.name, {}, store)
@@ -885,7 +950,6 @@ def test_install_verify_failure_reports_reason(pm_env):
     assert "missing" in msg
 
 
-
 def test_store_path_dirs_include_node_npm_when_installed(tmp_path, monkeypatch):
     """The settled tools-on-path claim, made true: once node/npm are
     installed store packages (non-internal), their dirs enter the
@@ -914,7 +978,9 @@ def test_store_path_dirs_include_node_npm_when_installed(tmp_path, monkeypatch):
     import json as _json
 
     if facts is None:
-        facts_path.write_text(_json.dumps({"schema": 1, "packages": {}}), encoding="utf-8")
+        facts_path.write_text(
+            _json.dumps({"schema": 1, "packages": {}}), encoding="utf-8"
+        )
         facts = Facts(facts_path)
     for name in ("node", "npm"):
         entry = f"{name}-1"
@@ -924,8 +990,11 @@ def test_store_path_dirs_include_node_npm_when_installed(tmp_path, monkeypatch):
         binary.parent.mkdir(parents=True, exist_ok=True)
         binary.write_bytes(b"installed tool")
         facts.record(
-            name, "1", entry,
-            {"PATH": ["{store}/" + entry]}, store_root=store,
+            name,
+            "1",
+            entry,
+            {"PATH": ["{store}/" + entry]},
+            store_root=store,
             target=current_target(),
             artifacts=["0" * 64],
         )
@@ -942,6 +1011,8 @@ def test_store_path_dirs_include_node_npm_when_installed(tmp_path, monkeypatch):
     # if a (fabricated) fact exists for it.
     uv_entry = "uv-1"
     (store / uv_entry).mkdir(parents=True, exist_ok=True)
-    facts.record("uv", "1", uv_entry, {"PATH": ["{store}/" + uv_entry]}, store_root=store)
+    facts.record(
+        "uv", "1", uv_entry, {"PATH": ["{store}/" + uv_entry]}, store_root=store
+    )
     dirs = _store_path_dirs()
     assert not any(d.endswith("uv-1") for d in dirs), dirs

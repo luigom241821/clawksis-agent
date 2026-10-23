@@ -5,6 +5,7 @@ clawk_cli.config.load_config, so the managed overlay has to be wired into each.
 This is the regression guard for the whole bug class (a managed display.skin was
 silently ignored by the TUI; the same gap existed in the gateway and cron).
 """
+
 import textwrap
 
 import pytest
@@ -38,18 +39,14 @@ def _seed(home, managed, *, user, mgd):
     managed_scope.invalidate_managed_cache()
 
 
-
-
-
-
-
-
 def test_timezone_honors_managed(homes, monkeypatch):
     home, managed = homes
     # clawk_time checks an env override first; ensure it's unset so config wins.
     monkeypatch.delenv("CLAWK_TIMEZONE", raising=False)
     monkeypatch.delenv("TZ", raising=False)
-    _seed(home, managed, user="timezone: America/New_York\n", mgd="timezone: Asia/Tokyo\n")
+    _seed(
+        home, managed, user="timezone: America/New_York\n", mgd="timezone: Asia/Tokyo\n"
+    )
     import clawk_time
 
     assert clawk_time._resolve_timezone_name() == "Asia/Tokyo"
@@ -71,7 +68,9 @@ def test_gateway_env_bridge_honors_managed(homes, monkeypatch):
     here proves the env var gets the managed value.
     """
     home, managed = homes
-    _seed(home, managed, user="timezone: America/New_York\n", mgd="timezone: Asia/Tokyo\n")
+    _seed(
+        home, managed, user="timezone: America/New_York\n", mgd="timezone: Asia/Tokyo\n"
+    )
     from clawk_cli import managed_scope
 
     managed_scope.invalidate_managed_cache()

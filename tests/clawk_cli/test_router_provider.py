@@ -59,30 +59,59 @@ class TestHostMandatedRouterResponses:
             assert host_mandated_api_mode(url) is None
 
     def test_determine_api_mode_router_via_named_custom(self):
-        assert determine_api_mode("router", "https://api.router.com/v1") == "codex_responses"
-        assert determine_api_mode("custom", "https://api.router.com/v1") == "codex_responses"
+        assert (
+            determine_api_mode("router", "https://api.router.com/v1")
+            == "codex_responses"
+        )
+        assert (
+            determine_api_mode("custom", "https://api.router.com/v1")
+            == "codex_responses"
+        )
 
     def test_runtime_detect_router(self):
-        assert rp._detect_api_mode_for_url("https://api.router.com/v1") == "codex_responses"
-        assert rp._detect_api_mode_for_url("https://api.router.com/v1/chat/completions") == "codex_responses"
-        assert rp._detect_api_mode_for_url("https://API.ROUTER.COM/v1") == "codex_responses"
+        assert (
+            rp._detect_api_mode_for_url("https://api.router.com/v1")
+            == "codex_responses"
+        )
+        assert (
+            rp._detect_api_mode_for_url("https://api.router.com/v1/chat/completions")
+            == "codex_responses"
+        )
+        assert (
+            rp._detect_api_mode_for_url("https://API.ROUTER.COM/v1")
+            == "codex_responses"
+        )
 
     def test_runtime_detect_router_rejects_spoofs(self):
-        assert rp._detect_api_mode_for_url("https://api.router.com.attacker.test/v1") is None
-        assert rp._detect_api_mode_for_url("https://proxy.test/api.router.com/v1") is None
+        assert (
+            rp._detect_api_mode_for_url("https://api.router.com.attacker.test/v1")
+            is None
+        )
+        assert (
+            rp._detect_api_mode_for_url("https://proxy.test/api.router.com/v1") is None
+        )
         assert rp._detect_api_mode_for_url("https://router.com/v1") is None
         assert rp._detect_api_mode_for_url("https://app.router.com/v1") is None
 
     def test_fallback_api_mode_router(self):
-        assert rp._fallback_api_mode("router", "https://api.router.com/v1", "gpt-5.4-mini") == "codex_responses"
-        assert rp._fallback_api_mode("custom", "https://api.router.com/v1", "gpt-5.4-mini") == "codex_responses"
+        assert (
+            rp._fallback_api_mode("router", "https://api.router.com/v1", "gpt-5.4-mini")
+            == "codex_responses"
+        )
+        assert (
+            rp._fallback_api_mode("custom", "https://api.router.com/v1", "gpt-5.4-mini")
+            == "codex_responses"
+        )
         # generic endpoints stay chat_completions
-        assert rp._fallback_api_mode("custom", "https://generic.example.com/v1", "gpt-5.4-mini") == "chat_completions"
+        assert (
+            rp._fallback_api_mode(
+                "custom", "https://generic.example.com/v1", "gpt-5.4-mini"
+            )
+            == "chat_completions"
+        )
 
 
 class TestRouterProfileRegistration:
-
-
     def test_auth_registry_autowired(self):
         from clawk_cli.auth import PROVIDER_REGISTRY
 

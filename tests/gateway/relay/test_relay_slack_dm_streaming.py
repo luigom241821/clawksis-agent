@@ -375,8 +375,6 @@ def test_relay_slack_flags_coerce_like_native(raw, expected):
     assert adapter._dm_top_level_threads_as_sessions() is expected
 
 
-
-
 # ---------------------------------------------------------------------------
 # The status clear targets the same thread the heartbeat set.
 # ---------------------------------------------------------------------------

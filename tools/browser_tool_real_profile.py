@@ -26,6 +26,7 @@ def _terminate_real_profile_chrome() -> None:
     """Terminate real-browser processes launched for real-profile sessions (idempotent, atexit-safe);
     agent-browser only ATTACHED to them, so its own session cleanup never kills them."""
     from tools.browser_lightpanda import _terminate
+
     _bt = _origin()
     while _bt._real_profile_chrome_procs:
         _terminate(_bt._real_profile_chrome_procs.pop(), what="real-profile chrome")
@@ -34,6 +35,7 @@ def _terminate_real_profile_chrome() -> None:
 def _cdp_http_ready(http_cdp: str) -> bool:
     """True when an ``http://host:port`` CDP discovery root answers."""
     from tools.browser_lightpanda import _cdp_ready
+
     return _cdp_ready(http_cdp, timeout=1.0)
 
 
@@ -49,7 +51,9 @@ def _real_profile_daemon_env() -> tuple:
     return env, socket_dir
 
 
-def _capture_agent_browser_cli(argv: list, timeout: float, tag: str) -> subprocess.CompletedProcess:
+def _capture_agent_browser_cli(
+    argv: list, timeout: float, tag: str
+) -> subprocess.CompletedProcess:
     """Run an agent-browser CLI argv once, capturing output through temp files (not pipes).
 
     The CLI forks a resident daemon that inherits its stdio and outlives the CLI, so with
@@ -73,10 +77,14 @@ def _capture_agent_browser_cli(argv: list, timeout: float, tag: str) -> subproce
     _session._unlink_command_output_files(stdout_path, stderr_path)
     if timed_out:
         raise subprocess.TimeoutExpired(argv, timeout)
-    return subprocess.CompletedProcess(argv, proc.returncode, stdout=stdout, stderr=stderr)
+    return subprocess.CompletedProcess(
+        argv, proc.returncode, stdout=stdout, stderr=stderr
+    )
 
 
-def _agent_browser_session_cmd(session_name: str, *cmd: str, log_label: str) -> Optional[subprocess.CompletedProcess]:
+def _agent_browser_session_cmd(
+    session_name: str, *cmd: str, log_label: str
+) -> Optional[subprocess.CompletedProcess]:
     """Run ``agent-browser --session <name> <cmd...>``; None when agent-browser is missing or the run fails."""
     _bt = _origin()
     try:
@@ -85,8 +93,14 @@ def _agent_browser_session_cmd(session_name: str, *cmd: str, log_label: str) -> 
         return None
     try:
         return _capture_agent_browser_cli(
-            [*_session._agent_browser_argv(browser_cmd), "--session", session_name, *cmd],
-            timeout=15, tag=f"rp-{log_label.replace(' ', '-')}",
+            [
+                *_session._agent_browser_argv(browser_cmd),
+                "--session",
+                session_name,
+                *cmd,
+            ],
+            timeout=15,
+            tag=f"rp-{log_label.replace(' ', '-')}",
         )
     except (subprocess.SubprocessError, OSError) as e:
         _bt.logger.debug("real-profile %s failed: %s", log_label, e)
@@ -95,15 +109,23 @@ def _agent_browser_session_cmd(session_name: str, *cmd: str, log_label: str) -> 
 
 def _agent_browser_get_cdp(session_name: str) -> Optional[str]:
     """HTTP CDP discovery root of an agent-browser session (from its ``ws://`` cdp-url), or None."""
-    proc = _agent_browser_session_cmd(session_name, "get", "cdp-url", log_label="get cdp-url")
-    m = re.search(r"ws://127\.0\.0\.1:(\d+)/", (proc.stdout or "").strip()) if proc is not None else None
+    proc = _agent_browser_session_cmd(
+        session_name, "get", "cdp-url", log_label="get cdp-url"
+    )
+    m = (
+        re.search(r"ws://127\.0\.0\.1:(\d+)/", (proc.stdout or "").strip())
+        if proc is not None
+        else None
+    )
     return f"http://127.0.0.1:{m.group(1)}" if m else None
 
 
 def _read_devtools_port(data_dir: str) -> Optional[str]:
     """First line of Chrome's ``DevToolsActivePort`` in ``data_dir`` (None when unreadable)."""
     try:
-        with open(os.path.join(data_dir, "DevToolsActivePort"), encoding="utf-8-sig") as fh:
+        with open(
+            os.path.join(data_dir, "DevToolsActivePort"), encoding="utf-8-sig"
+        ) as fh:
             return fh.readline().strip()
     except OSError:
         return None
@@ -114,7 +136,9 @@ def _surviving_chrome_cdp(data_dir: str) -> Optional[str]:
     outlives a crashed Chrome and its port can be recycled by another local CDP server, so the
     file's browser id (line 2) must match what ``/json/version`` reports before it is trusted."""
     try:
-        with open(os.path.join(data_dir, "DevToolsActivePort"), encoding="utf-8-sig") as fh:
+        with open(
+            os.path.join(data_dir, "DevToolsActivePort"), encoding="utf-8-sig"
+        ) as fh:
             port, browser_path = fh.readline().strip(), fh.readline().strip()
     except OSError:
         return None
@@ -123,8 +147,17 @@ def _surviving_chrome_cdp(data_dir: str) -> Optional[str]:
     http_cdp = f"http://127.0.0.1:{port}"
     try:
         import requests
-        ws_url = str(requests.get(f"{http_cdp}/json/version", timeout=2, **loopback_request_kwargs(http_cdp))
-                     .json().get("webSocketDebuggerUrl") or "")
+
+        ws_url = str(
+            requests.get(
+                f"{http_cdp}/json/version",
+                timeout=2,
+                **loopback_request_kwargs(http_cdp),
+            )
+            .json()
+            .get("webSocketDebuggerUrl")
+            or ""
+        )
     except Exception:
         return None
     return http_cdp if ws_url.endswith(browser_path) else None
@@ -143,10 +176,18 @@ def _agent_browser_close_session(session_name: str) -> None:
 
 
 _REAL_PROFILE_CHROME_FLAGS = (
-    "--remote-debugging-port=0", "--no-first-run", "--no-default-browser-check",
-    "--disable-background-networking", "--disable-component-update", "--disable-default-apps",
-    "--disable-hang-monitor", "--disable-popup-blocking", "--disable-prompt-on-repost",
-    "--disable-sync", "--disable-features=Translate", "--no-startup-window",
+    "--remote-debugging-port=0",
+    "--no-first-run",
+    "--no-default-browser-check",
+    "--disable-background-networking",
+    "--disable-component-update",
+    "--disable-default-apps",
+    "--disable-hang-monitor",
+    "--disable-popup-blocking",
+    "--disable-prompt-on-repost",
+    "--disable-sync",
+    "--disable-features=Translate",
+    "--no-startup-window",
 )
 
 
@@ -154,8 +195,10 @@ def real_profile_fallback_note(err: str) -> str:
     """Tool-result note when the real profile can't load and a fresh browser serves instead: the
     browser keeps working (a consented user is never left with no browser), and the model is told
     it is signed out so it can say so rather than act as if the user's accounts were there."""
-    return (f"{err} Using a fresh browser without the user's logins for this session instead; "
-            "tell the user if the task needs their accounts.")
+    return (
+        f"{err} Using a fresh browser without the user's logins for this session instead; "
+        "tell the user if the task needs their accounts."
+    )
 
 
 def _real_profile_unsupported_reason(browser) -> Optional[str]:
@@ -165,13 +208,20 @@ def _real_profile_unsupported_reason(browser) -> Optional[str]:
     family would drive a DIFFERENT profile/account (wrong-principal bug), so refuse rather than guess.
     """
     from clawk_cli.browser_connect import UNSUPPORTED_CHANNEL
+
     if browser is None:
-        return (_RP + "your default browser is not a supported Chromium browser (Chrome, Edge, Brave, "
-                "Brave Origin, Chromium). Real-profile browsing requires a Chromium default; set one or turn the toggle off.")
+        return (
+            _RP
+            + "your default browser is not a supported Chromium browser (Chrome, Edge, Brave, "
+            "Brave Origin, Chromium). Real-profile browsing requires a Chromium default; set one or turn the toggle off."
+        )
     if browser == UNSUPPORTED_CHANNEL:
-        return (_RP + "your default browser is a pre-release Chromium channel (Beta / Dev / Canary), which "
-                "real-profile browsing does not support. Set your default to a "
-                "stable Chrome / Edge / Brave / Brave Origin / Chromium, or turn the toggle off.")
+        return (
+            _RP
+            + "your default browser is a pre-release Chromium channel (Beta / Dev / Canary), which "
+            "real-profile browsing does not support. Set your default to a "
+            "stable Chrome / Edge / Brave / Brave Origin / Chromium, or turn the toggle off."
+        )
     return None
 
 
@@ -179,14 +229,20 @@ def _real_profile_snapshot_error(err: str) -> str:
     """User-facing message for a failed profile snapshot; a locked profile adds the approved-close
     command, which the agent must ASK the user about first (it quits their browser)."""
     from clawk_cli.browser_connect import _PROFILE_LOCKED_PREFIX
+
     if err and err.startswith(_PROFILE_LOCKED_PREFIX):
-        return (err[len(_PROFILE_LOCKED_PREFIX):] + " To close it (only after the user approves — it "
-                "quits their browser and loses unsaved tabs), run: `clawk browser close-profile`; the next "
-                "browser session then uses the profile.")
+        return (
+            err[len(_PROFILE_LOCKED_PREFIX) :]
+            + " To close it (only after the user approves — it "
+            "quits their browser and loses unsaved tabs), run: `clawk browser close-profile`; the next "
+            "browser session then uses the profile."
+        )
     return f"{_RP}{err}"
 
 
-def _launch_real_profile_chrome(real_binary: str, copy_dir: str) -> tuple[Optional[int], Optional[str]]:
+def _launch_real_profile_chrome(
+    real_binary: str, copy_dir: str
+) -> tuple[Optional[int], Optional[str]]:
     """Launch the user's REAL browser binary on the profile COPY; return (debug_port, error).
 
     agent-browser's own launch force-adds --use-mock-keychain / --password-store=basic, which makes
@@ -198,18 +254,37 @@ def _launch_real_profile_chrome(real_binary: str, copy_dir: str) -> tuple[Option
     """
     _bt = _origin()
     try:
-        os.unlink(os.path.join(copy_dir, "DevToolsActivePort"))  # stale port confuses reuse probes
+        os.unlink(
+            os.path.join(copy_dir, "DevToolsActivePort")
+        )  # stale port confuses reuse probes
     except OSError:
         pass
-    chrome_argv = [real_binary, f"--user-data-dir={copy_dir}", *_REAL_PROFILE_CHROME_FLAGS]
+    chrome_argv = [
+        real_binary,
+        f"--user-data-dir={copy_dir}",
+        *_REAL_PROFILE_CHROME_FLAGS,
+    ]
     _session._ensure_screen_for_headed_chromium()
-    browser_env = _bt._build_browser_env()  # carries the Bot Desktop DISPLAY when one is running
-    _has_display = bool(browser_env.get("DISPLAY") or browser_env.get("WAYLAND_DISPLAY"))
-    if not (_cloud._is_headed_mode() and (_has_display or not sys.platform.startswith("linux"))):
+    browser_env = (
+        _bt._build_browser_env()
+    )  # carries the Bot Desktop DISPLAY when one is running
+    _has_display = bool(
+        browser_env.get("DISPLAY") or browser_env.get("WAYLAND_DISPLAY")
+    )
+    if not (
+        _cloud._is_headed_mode()
+        and (_has_display or not sys.platform.startswith("linux"))
+    ):
         chrome_argv.append("--headless=new")
     try:
-        chrome_proc = subprocess.Popen(chrome_argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                       stdin=subprocess.DEVNULL, start_new_session=True, env=browser_env)
+        chrome_proc = subprocess.Popen(
+            chrome_argv,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True,
+            env=browser_env,
+        )
     except (subprocess.SubprocessError, OSError) as e:
         return None, f"{_RP}the launch failed: {e}"
     _bt._real_profile_chrome_procs.append(chrome_proc)
@@ -221,13 +296,23 @@ def _launch_real_profile_chrome(real_binary: str, copy_dir: str) -> tuple[Option
             return int(line), None
         if chrome_proc.poll() is not None:
             _terminate_real_profile_chrome()
-            return None, _RP + "Chrome exited during startup (another instance may hold the profile copy)."
+            return (
+                None,
+                _RP
+                + "Chrome exited during startup (another instance may hold the profile copy).",
+            )
         time.sleep(0.25)
     _terminate_real_profile_chrome()
-    return None, _RP + "the real-profile browser did not expose a debug port in time. Retry, or turn the toggle off."
+    return (
+        None,
+        _RP
+        + "the real-profile browser did not expose a debug port in time. Retry, or turn the toggle off.",
+    )
 
 
-def _attach_agent_browser_to_real_profile(port: int, copy_dir: str) -> tuple[Optional[str], Optional[str]]:
+def _attach_agent_browser_to_real_profile(
+    port: int, copy_dir: str
+) -> tuple[Optional[str], Optional[str]]:
     """Make agent-browser ATTACH to the running Chrome (never launch its own); returns ``(http_cdp, error)``.
 
     The daemon may answer with the endpoint of a browser IT spawned (throwaway temp profile);
@@ -237,26 +322,53 @@ def _attach_agent_browser_to_real_profile(port: int, copy_dir: str) -> tuple[Opt
     try:
         browser_cmd = _install._find_agent_browser()
     except FileNotFoundError as e:
-        return None, f"{_RP}the local browser engine (agent-browser) is not installed: {e}"
-    argv = [*_session._agent_browser_argv(browser_cmd), "--session", _bt._REAL_PROFILE_SESSION,
-            "--cdp", str(port), "open", "about:blank"]
+        return (
+            None,
+            f"{_RP}the local browser engine (agent-browser) is not installed: {e}",
+        )
+    argv = [
+        *_session._agent_browser_argv(browser_cmd),
+        "--session",
+        _bt._REAL_PROFILE_SESSION,
+        "--cdp",
+        str(port),
+        "open",
+        "about:blank",
+    ]
     try:
         proc = _capture_agent_browser_cli(
-            argv, timeout=_bt._get_open_command_timeout(first_open=True), tag="rp-open",
+            argv,
+            timeout=_bt._get_open_command_timeout(first_open=True),
+            tag="rp-open",
         )
     except subprocess.TimeoutExpired:
-        return None, _RP + "the real-profile browser took too long to start. Retry, or turn the toggle off."
+        return (
+            None,
+            _RP
+            + "the real-profile browser took too long to start. Retry, or turn the toggle off.",
+        )
     except (subprocess.SubprocessError, OSError) as e:
         return None, f"{_RP}the launch failed: {e}"
     if proc.returncode != 0:
         tail = (proc.stderr or proc.stdout or "").strip().splitlines()
-        return None, f"{_RP}the real-profile browser failed to start: {tail[-1] if tail else f'exit {proc.returncode}'}"
+        return (
+            None,
+            f"{_RP}the real-profile browser failed to start: {tail[-1] if tail else f'exit {proc.returncode}'}",
+        )
     cdp = _agent_browser_get_cdp(_bt._REAL_PROFILE_SESSION)
     our_port = _read_devtools_port(copy_dir)
-    if our_port is not None and (m := re.search(r":(\d+)", cdp or "")) and m.group(1) != our_port:
+    if (
+        our_port is not None
+        and (m := re.search(r":(\d+)", cdp or ""))
+        and m.group(1) != our_port
+    ):
         cdp = f"http://127.0.0.1:{our_port}"
     if not cdp:
-        return None, _RP + "the real-profile browser started without exposing a devtools endpoint. Retry, or turn the toggle off."
+        return (
+            None,
+            _RP
+            + "the real-profile browser started without exposing a devtools endpoint. Retry, or turn the toggle off.",
+        )
     return cdp, None
 
 
@@ -275,6 +387,7 @@ def _real_profile_cdp() -> tuple:
         # revoking consent actually removes the credential copies.
         try:
             from clawk_cli.browser_connect import cleanup_real_profile_snapshots
+
             cleanup_real_profile_snapshots()
         except Exception as e:
             _bt.logger.debug("real-profile cleanup-on-consent-off failed: %s", e)
@@ -284,11 +397,18 @@ def _real_profile_cdp() -> tuple:
     # Lightpanda rejects ``--profile``; check BEFORE default-browser detection so a
     # host with no Chromium default still reports the actionable engine conflict.
     if _lp._using_lightpanda_engine():
-        return None, (_RP + "browser.engine is set to 'lightpanda', which cannot load a real Chromium profile. "
-                      "Set browser.engine to 'auto' or 'chrome' to use real-profile browsing, or turn the toggle off.")
+        return None, (
+            _RP
+            + "browser.engine is set to 'lightpanda', which cannot load a real Chromium profile. "
+            "Set browser.engine to 'auto' or 'chrome' to use real-profile browsing, or turn the toggle off."
+        )
 
-    from clawk_cli.browser_connect import (chromium_executable, detect_default_chromium,
-                                            real_profile_copy_dir, snapshot_real_profile)
+    from clawk_cli.browser_connect import (
+        chromium_executable,
+        detect_default_chromium,
+        real_profile_copy_dir,
+        snapshot_real_profile,
+    )
 
     if not _bt._real_profile_cdp_lock.acquire(
         timeout=_bt._REAL_PROFILE_CDP_LOCK_TIMEOUT_S
@@ -317,7 +437,11 @@ def _real_profile_cdp() -> tuple:
         # clawk process) holds the user-data-dir open — that corrupts the databases.
         copy_dir = real_profile_copy_dir(browser)
         existing = _agent_browser_get_cdp(_bt._REAL_PROFILE_SESSION)
-        if existing and _cdp_http_ready(existing) and _cdp_on_data_dir(existing, copy_dir):
+        if (
+            existing
+            and _cdp_http_ready(existing)
+            and _cdp_on_data_dir(existing, copy_dir)
+        ):
             _bt._real_profile_cdp_cache["cdp"] = existing
             return existing, None
         if existing:  # stale/wrong-dir session: close it so nothing holds the dir open
@@ -328,11 +452,17 @@ def _real_profile_cdp() -> tuple:
         # to terminate (no Popen handle): it lives until the user closes it, by design.
         surviving = _surviving_chrome_cdp(copy_dir)
         if surviving:
-            cdp, err = _attach_agent_browser_to_real_profile(int(surviving.rsplit(":", 1)[1]), copy_dir)
+            cdp, err = _attach_agent_browser_to_real_profile(
+                int(surviving.rsplit(":", 1)[1]), copy_dir
+            )
             if not cdp:
                 return None, err
             _bt._real_profile_cdp_cache["cdp"] = cdp
-            _bt.logger.info("real-profile: re-attached to surviving Chrome at %s (%s)", cdp, copy_dir)
+            _bt.logger.info(
+                "real-profile: re-attached to surviving Chrome at %s (%s)",
+                cdp,
+                copy_dir,
+            )
             return cdp, None
 
         copy_dir, err = snapshot_real_profile(browser)
@@ -340,7 +470,10 @@ def _real_profile_cdp() -> tuple:
             return None, _real_profile_snapshot_error(err)
         real_binary = chromium_executable(browser)
         if real_binary is None:
-            return None, f"{_RP}the real browser binary for '{browser}' could not be found. Reinstall it or turn the toggle off."
+            return (
+                None,
+                f"{_RP}the real browser binary for '{browser}' could not be found. Reinstall it or turn the toggle off.",
+            )
         port, err = _launch_real_profile_chrome(real_binary, copy_dir)
         if port is None:
             return None, err
@@ -348,7 +481,9 @@ def _real_profile_cdp() -> tuple:
         if not cdp:
             return None, err
         _bt._real_profile_cdp_cache["cdp"] = cdp
-        _bt.logger.info("real-profile browser ready for %s at %s (%s)", browser, cdp, copy_dir)
+        _bt.logger.info(
+            "real-profile browser ready for %s at %s (%s)", browser, cdp, copy_dir
+        )
         return cdp, None
     finally:
         _bt._real_profile_cdp_lock.release()

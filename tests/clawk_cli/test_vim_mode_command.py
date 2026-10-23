@@ -4,7 +4,6 @@ import unittest
 from types import SimpleNamespace
 
 
-
 def _import_cli():
     import cli as cli_mod
 
@@ -19,9 +18,17 @@ class TestVimModeLabel(unittest.TestCase):
         from prompt_toolkit.key_binding.vi_state import InputMode
 
         self.assertEqual(
-            cli_mod.ClawksisCLI._vim_mode_label(SimpleNamespace(_vim_mode=False, _app=None)), "")
+            cli_mod.ClawksisCLI._vim_mode_label(
+                SimpleNamespace(_vim_mode=False, _app=None)
+            ),
+            "",
+        )
         self.assertEqual(
-            cli_mod.ClawksisCLI._vim_mode_label(SimpleNamespace(_vim_mode=True, _app=None)), "")
+            cli_mod.ClawksisCLI._vim_mode_label(
+                SimpleNamespace(_vim_mode=True, _app=None)
+            ),
+            "",
+        )
 
         app = SimpleNamespace(vi_state=SimpleNamespace(input_mode=InputMode.INSERT))
         stub = SimpleNamespace(_vim_mode=True, _app=app)
@@ -30,8 +37,6 @@ class TestVimModeLabel(unittest.TestCase):
         self.assertEqual(cli_mod.ClawksisCLI._vim_mode_label(stub), "NORMAL")
         app.vi_state.input_mode = InputMode.REPLACE
         self.assertEqual(cli_mod.ClawksisCLI._vim_mode_label(stub), "REPLACE")
-
-
 
 
 if __name__ == "__main__":

@@ -6,6 +6,7 @@ frees its version for attempt N+1. At most one attempt, of any version, is
 outstanding. A release that never starts is an error, not a warning the
 operator has to notice.
 """
+
 import json
 import subprocess
 import sys
@@ -21,7 +22,9 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def git(repo, *args):
-    return subprocess.check_output(["git", *args], cwd=repo, text=True, encoding="utf-8").strip()
+    return subprocess.check_output(
+        ["git", *args], cwd=repo, text=True, encoding="utf-8"
+    ).strip()
 
 
 @pytest.fixture
@@ -34,7 +37,9 @@ def source(tmp_path):
     git(repo, "init", "--initial-branch=main", "--quiet")
     git(repo, "config", "user.name", "Test")
     git(repo, "config", "user.email", "test@example.test")
-    (repo / "pyproject.toml").write_text('[project]\nname="fixture"\nversion="0.0.0"\n', encoding="utf-8")
+    (repo / "pyproject.toml").write_text(
+        '[project]\nname="fixture"\nversion="0.0.0"\n', encoding="utf-8"
+    )
     git(repo, "add", "pyproject.toml")
     git(repo, "commit", "--quiet", "-m", "Initial")
     git(repo, "remote", "add", "origin", str(origin))
@@ -49,10 +54,18 @@ def _advance(repo, message):
 
 
 def _claim(repo, version, commit, attempt=1):
-    metadata = json.dumps({
-        "schema": 1, "version": version, "attempt": attempt, "commit": commit,
-        "autopublish": False, "claimEpoch": 1_790_000_000,
-    }, sort_keys=True, separators=(",", ":"))
+    metadata = json.dumps(
+        {
+            "schema": 1,
+            "version": version,
+            "attempt": attempt,
+            "commit": commit,
+            "autopublish": False,
+            "claimEpoch": 1_790_000_000,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
     ref = f"rc.{attempt}-v{version}"
     git(repo, "tag", "-a", ref, commit, "-m", metadata)
     git(repo, "push", "--quiet", "origin", f"refs/tags/{ref}")
@@ -60,7 +73,9 @@ def _claim(repo, version, commit, attempt=1):
 
 def _mark(repo, version, attempt=1):
     ref = f"abandoned-rc.{attempt}-v{version}"
-    git(repo, "tag", "-a", ref, f"rc.{attempt}-v{version}^{{commit}}", "-m", "abandoned")
+    git(
+        repo, "tag", "-a", ref, f"rc.{attempt}-v{version}^{{commit}}", "-m", "abandoned"
+    )
     git(repo, "push", "--quiet", "origin", f"refs/tags/{ref}")
 
 
@@ -73,9 +88,14 @@ def _release(repo, commit, **overrides):
     from scripts.releases.entrypoint import release
 
     # Fixtures pin their own published head so they do not track the production seed.
-    arguments = {"bump": "patch", "repo": repo, "remote": "origin",
-                 "repository": "example/clawksis-agent", "execute": lambda _command: None,
-                 "published": ("0.21.4", None)}
+    arguments = {
+        "bump": "patch",
+        "repo": repo,
+        "remote": "origin",
+        "repository": "example/clawksis-agent",
+        "execute": lambda _command: None,
+        "published": ("0.21.4", None),
+    }
     return release(commit, **{**arguments, **overrides})
 
 
@@ -92,22 +112,41 @@ def test_release_claims_the_first_attempt_creates_a_draft_and_dispatches(source)
     def execute(command):
         calls.append(command)
         if command[:3] == ["gh", "run", "list"]:
-            return json.dumps([{"databaseId": 7, "url": "https://github.com/example/clawksis-agent/actions/runs/7",
-                                "headBranch": "main", "displayTitle": "Stable release rc.1-v0.21.5",
-                                "status": "queued"}])
+            return json.dumps(
+                [
+                    {
+                        "databaseId": 7,
+                        "url": "https://github.com/example/clawksis-agent/actions/runs/7",
+                        "headBranch": "main",
+                        "displayTitle": "Stable release rc.1-v0.21.5",
+                        "status": "queued",
+                    }
+                ]
+            )
         if command[:3] == ["gh", "release", "create"]:
             return "https://github.com/example/clawksis-agent/releases/tag/untagged-0123abcd\n"
         return ""
 
-    result = _release(source, commit, execute=execute, autopublish=True,
-                     lanes=lane_set.select(only=["docker", "ci"], with_=["windows"]))
+    result = _release(
+        source,
+        commit,
+        execute=execute,
+        autopublish=True,
+        lanes=lane_set.select(only=["docker", "ci"], with_=["windows"]),
+    )
 
     assert result["version"] == "0.21.5"
     assert result["tag"] == "rc.1-v0.21.5"
     assert result["commit"] == commit
     # A draft lives at the page gh reports, never at releases/tag/<claim>.
-    assert result["url"] == "https://github.com/example/clawksis-agent/releases/tag/untagged-0123abcd"
-    assert result["final_url"] == "https://github.com/example/clawksis-agent/releases/tag/v0.21.5"
+    assert (
+        result["url"]
+        == "https://github.com/example/clawksis-agent/releases/tag/untagged-0123abcd"
+    )
+    assert (
+        result["final_url"]
+        == "https://github.com/example/clawksis-agent/releases/tag/v0.21.5"
+    )
     assert git(source, "rev-parse", "rc.1-v0.21.5^{commit}") == commit
     claim = tag_record(git(source, "tag", "-l", "rc.1-v0.21.5", "--format=%(contents)"))
     assert isinstance(claim.pop("claimEpoch"), int)
@@ -130,12 +169,35 @@ def test_release_claims_the_first_attempt_creates_a_draft_and_dispatches(source)
     assert create[-2:] == ["--title", "Clawksis v0.21.5"]
     assert calls[1:] == [
         # Stable dispatches the default-branch workflow. The tag is an input.
-        ["gh", "workflow", "run", "stable-release.yml", "--ref", "main",
-         "--repo", "example/clawksis-agent", "--raw-field", "tag=rc.1-v0.21.5"],
-        ["gh", "run", "list", "--repo", "example/clawksis-agent", "--workflow", "stable-release.yml",
-         "--limit", "100", "--json", "databaseId,url,headBranch,headSha,displayTitle,status"],
+        [
+            "gh",
+            "workflow",
+            "run",
+            "stable-release.yml",
+            "--ref",
+            "main",
+            "--repo",
+            "example/clawksis-agent",
+            "--raw-field",
+            "tag=rc.1-v0.21.5",
+        ],
+        [
+            "gh",
+            "run",
+            "list",
+            "--repo",
+            "example/clawksis-agent",
+            "--workflow",
+            "stable-release.yml",
+            "--limit",
+            "100",
+            "--json",
+            "databaseId,url,headBranch,headSha,displayTitle,status",
+        ],
     ]
-    assert result["run_url"] == "https://github.com/example/clawksis-agent/actions/runs/7"
+    assert (
+        result["run_url"] == "https://github.com/example/clawksis-agent/actions/runs/7"
+    )
     # The claim push names the claim ref and nothing else.
     pushed = git(source, "ls-remote", "origin", "refs/tags/*")
     assert pushed.splitlines() == [
@@ -171,16 +233,24 @@ def test_a_commit_on_neither_main_nor_a_release_branch_is_refused(source):
 def test_release_output_names_the_ci_run_and_the_publish_step():
     from scripts.releases.entrypoint import next_steps
 
-    result = {"version": "0.21.5", "tag": "rc.1-v0.21.5", "autopublish": False,
-              "lanes": lane_set.DEFAULT, "repository": "example/clawksis-agent",
-              "run_url": "https://github.com/example/clawksis-agent/actions/runs/7",
-              "url": "https://github.com/example/clawksis-agent/releases/tag/untagged-0123abcd"}
+    result = {
+        "version": "0.21.5",
+        "tag": "rc.1-v0.21.5",
+        "autopublish": False,
+        "lanes": lane_set.DEFAULT,
+        "repository": "example/clawksis-agent",
+        "run_url": "https://github.com/example/clawksis-agent/actions/runs/7",
+        "url": "https://github.com/example/clawksis-agent/releases/tag/untagged-0123abcd",
+    }
     text = next_steps(result)
     assert "Attempting release rc.1-v0.21.5 for v0.21.5." in text
     assert "Release CI: " + result["run_url"] in text
     assert "Draft release: " + result["url"] in text
     # The publish command sits on its own line so it can be copied whole.
-    assert "\n    python scripts/release.py publish --version 0.21.5 --remote origin" in text
+    assert (
+        "\n    python scripts/release.py publish --version 0.21.5 --remote origin"
+        in text
+    )
     # The default set names what it leaves out, and warns about no test lane.
     assert "Not built: macos-intel, termux." in text
     assert "Not tested" not in text
@@ -190,34 +260,64 @@ def test_release_output_names_the_ci_run_and_the_publish_step():
     assert "publish --version" not in automatic
 
     # --only windows,docker: no tests, no macOS, and a partial desktop set never moves the channel.
-    windows = next_steps({**result, "lanes": lane_set.select(only=["windows", "docker"])})
+    windows = next_steps(
+        {**result, "lanes": lane_set.select(only=["windows", "docker"])}
+    )
     assert "Not built: windows-store, macos-arm64, macos-intel, termux." in windows
-    assert "Not tested: ci, nix, docker-tests, pm-bundle, windows-live, install-e2e, bootstrap-version, smoke, upgrade" in windows
+    assert (
+        "Not tested: ci, nix, docker-tests, pm-bundle, windows-live, install-e2e, bootstrap-version, smoke, upgrade"
+        in windows
+    )
     assert "partial desktop release" in windows
     assert "\033[" not in windows
-    assert "\033[1mNot tested" in next_steps({**result, "lanes": lane_set.select(without=["ci"])}, bold=True)
+    assert "\033[1mNot tested" in next_steps(
+        {**result, "lanes": lane_set.select(without=["ci"])}, bold=True
+    )
     assert "partial desktop release" not in text
 
 
 def test_an_unlisted_run_points_at_the_workflow_page():
     from scripts.releases.entrypoint import next_steps
 
-    text = next_steps({"version": "0.21.5", "tag": "rc.1-v0.21.5", "autopublish": False,
-                       "lanes": lane_set.DEFAULT,
-                       "repository": "example/clawksis-agent", "run_url": "",
-                       "url": "https://github.com/example/clawksis-agent/releases/tag/untagged-0123abcd"})
+    text = next_steps(
+        {
+            "version": "0.21.5",
+            "tag": "rc.1-v0.21.5",
+            "autopublish": False,
+            "lanes": lane_set.DEFAULT,
+            "repository": "example/clawksis-agent",
+            "run_url": "",
+            "url": "https://github.com/example/clawksis-agent/releases/tag/untagged-0123abcd",
+        }
+    )
     assert "the run is not listed yet" in text
-    assert "https://github.com/example/clawksis-agent/actions/workflows/stable-release.yml" in text
+    assert (
+        "https://github.com/example/clawksis-agent/actions/workflows/stable-release.yml"
+        in text
+    )
 
 
-@pytest.mark.parametrize(("lists_on", "wait", "run_url", "naps"), [
-    (3, 30, "https://github.com/example/clawksis-agent/actions/runs/7", 2),
-    (None, 4, "", 2),
-])
-def test_release_looks_for_the_dispatched_run_only_within_its_wait(source, lists_on, wait, run_url, naps):
-    listed = json.dumps([{"databaseId": 7, "url": "https://github.com/example/clawksis-agent/actions/runs/7",
-                          "headBranch": "main", "displayTitle": "Stable release rc.1-v0.21.5",
-                                "status": "queued"}])
+@pytest.mark.parametrize(
+    ("lists_on", "wait", "run_url", "naps"),
+    [
+        (3, 30, "https://github.com/example/clawksis-agent/actions/runs/7", 2),
+        (None, 4, "", 2),
+    ],
+)
+def test_release_looks_for_the_dispatched_run_only_within_its_wait(
+    source, lists_on, wait, run_url, naps
+):
+    listed = json.dumps(
+        [
+            {
+                "databaseId": 7,
+                "url": "https://github.com/example/clawksis-agent/actions/runs/7",
+                "headBranch": "main",
+                "displayTitle": "Stable release rc.1-v0.21.5",
+                "status": "queued",
+            }
+        ]
+    )
     lists, slept = [], []
 
     def execute(command):
@@ -226,8 +326,13 @@ def test_release_looks_for_the_dispatched_run_only_within_its_wait(source, lists
             return listed if len(lists) == lists_on else "[]"
         return ""
 
-    result = _release(source, git(source, "rev-parse", "HEAD"), execute=execute,
-                      run_wait=wait, sleep=slept.append)
+    result = _release(
+        source,
+        git(source, "rev-parse", "HEAD"),
+        execute=execute,
+        run_wait=wait,
+        sleep=slept.append,
+    )
 
     assert result["run_url"] == run_url
     assert len(slept) == naps and len(lists) == naps + 1
@@ -259,12 +364,19 @@ def test_a_confirmed_abandon_clears_the_blocking_attempt_and_cuts_the_next(sourc
             return "[]"
         raise ReleaseRefused("release not found")
 
-    result = _release(source, _advance(source, "fix"), execute=calls.append, inspect=inspect,
-                      confirm_abandon=lambda ref: asked.append(ref) or True)
+    result = _release(
+        source,
+        _advance(source, "fix"),
+        execute=calls.append,
+        inspect=inspect,
+        confirm_abandon=lambda ref: asked.append(ref) or True,
+    )
 
     assert asked == ["rc.1-v0.21.5"]
     assert result["tag"] == "rc.2-v0.21.5"
-    assert "refs/tags/abandoned-rc.1-v0.21.5" in git(source, "ls-remote", "origin", "refs/tags/*")
+    assert "refs/tags/abandoned-rc.1-v0.21.5" in git(
+        source, "ls-remote", "origin", "refs/tags/*"
+    )
 
 
 @pytest.mark.parametrize("confirm_abandon", [None, lambda ref: False])
@@ -274,8 +386,12 @@ def test_an_unconfirmed_abandon_refuses_as_before(source, confirm_abandon):
     _claim(source, "0.21.5", git(source, "rev-parse", "HEAD"))
 
     with pytest.raises(ReleaseRefused, match="publish or abandon it first"):
-        _release(source, _advance(source, "later"), execute=_must_not_execute,
-                 confirm_abandon=confirm_abandon)
+        _release(
+            source,
+            _advance(source, "later"),
+            execute=_must_not_execute,
+            confirm_abandon=confirm_abandon,
+        )
     assert git(source, "tag", "--list", "*rc.*") == "rc.1-v0.21.5"
 
 
@@ -287,9 +403,16 @@ def test_a_yes_never_clears_a_cut_that_would_be_refused_anyway(source):
     _claim(source, "0.21.5", published)
     asked = []
 
-    with pytest.raises(ReleaseRefused, match="does not descend from the published stable head"):
-        _release(source, earlier, published=("0.21.4", published), execute=_must_not_execute,
-                 confirm_abandon=lambda ref: asked.append(ref) or True)
+    with pytest.raises(
+        ReleaseRefused, match="does not descend from the published stable head"
+    ):
+        _release(
+            source,
+            earlier,
+            published=("0.21.4", published),
+            execute=_must_not_execute,
+            confirm_abandon=lambda ref: asked.append(ref) or True,
+        )
 
     assert asked == []
     assert "abandoned-rc" not in git(source, "ls-remote", "origin", "refs/tags/*")
@@ -307,19 +430,34 @@ def test_a_yes_abandons_only_the_attempt_it_was_asked_about(source):
         return True
 
     with pytest.raises(ReleaseRefused, match="changed while waiting"):
-        _release(source, _advance(source, "later"), execute=_must_not_execute,
-                 confirm_abandon=another_operator_replaces_the_attempt)
+        _release(
+            source,
+            _advance(source, "later"),
+            execute=_must_not_execute,
+            confirm_abandon=another_operator_replaces_the_attempt,
+        )
 
-    assert "abandoned-rc.2-v0.21.5" not in git(source, "ls-remote", "origin", "refs/tags/*")
+    assert "abandoned-rc.2-v0.21.5" not in git(
+        source, "ls-remote", "origin", "refs/tags/*"
+    )
 
 
-@pytest.mark.parametrize(("stdin_tty", "stdout_tty", "answer", "expected"), [
-    (True, True, "y", True), (True, True, "YES", True), (True, True, "", False),
-    (True, True, "n", False), (True, True, EOFError, False),
-    (False, True, "y", None), (True, False, "y", None), (False, False, "y", None),
-])
+@pytest.mark.parametrize(
+    ("stdin_tty", "stdout_tty", "answer", "expected"),
+    [
+        (True, True, "y", True),
+        (True, True, "YES", True),
+        (True, True, "", False),
+        (True, True, "n", False),
+        (True, True, EOFError, False),
+        (False, True, "y", None),
+        (True, False, "y", None),
+        (False, False, "y", None),
+    ],
+)
 def test_the_abandon_prompt_needs_both_streams_on_a_terminal_and_defaults_to_no(
-        monkeypatch, stdin_tty, stdout_tty, answer, expected):
+    monkeypatch, stdin_tty, stdout_tty, answer, expected
+):
     import sys
 
     from scripts.releases.entrypoint import _abandon_prompt
@@ -362,7 +500,9 @@ def test_an_outstanding_attempt_of_any_version_blocks_the_next_cut(source, bump)
     _claim(source, "0.21.5", git(source, "rev-parse", "HEAD"))
 
     with pytest.raises(ReleaseRefused, match="publish or abandon it first"):
-        _release(source, _advance(source, "later"), bump=bump, execute=_must_not_execute)
+        _release(
+            source, _advance(source, "later"), bump=bump, execute=_must_not_execute
+        )
     assert git(source, "tag", "--list", "rc.*") == "rc.1-v0.21.5"
 
 
@@ -382,8 +522,12 @@ def test_new_attempt_must_descend_from_the_published_head(source):
     earlier = git(source, "rev-parse", "HEAD")
     published = _advance(source, "published")
 
-    with pytest.raises(ReleaseRefused, match="does not descend from the published stable head"):
-        _release(source, earlier, published=("0.21.4", published), execute=_must_not_execute)
+    with pytest.raises(
+        ReleaseRefused, match="does not descend from the published stable head"
+    ):
+        _release(
+            source, earlier, published=("0.21.4", published), execute=_must_not_execute
+        )
     assert git(source, "tag", "--list", "rc.*") == ""
 
 
@@ -407,18 +551,40 @@ def test_refusal_names_the_run_and_both_ways_out(source, capsys):
     _claim(source, "0.21.5", blocked)
 
     def execute(command):
-        assert command == ["gh", "run", "list", "--repo", "example/clawksis-agent", "--workflow",
-                           "stable-release.yml", "--limit", "100",
-                           "--json", "databaseId,url,headBranch,headSha,displayTitle,status"]
+        assert command == [
+            "gh",
+            "run",
+            "list",
+            "--repo",
+            "example/clawksis-agent",
+            "--workflow",
+            "stable-release.yml",
+            "--limit",
+            "100",
+            "--json",
+            "databaseId,url,headBranch,headSha,displayTitle,status",
+        ]
         # Newest first. Run 98 belongs to another claim, so it must not be named.
-        return json.dumps([
-            {"databaseId": 99, "url": "https://github.com/example/clawksis-agent/actions/runs/99",
-             "headBranch": "main", "headSha": "f" * 40,
-             "displayTitle": "Stable release rc.1-v0.21.5", "status": "completed"},
-            {"databaseId": 98, "url": "https://github.com/example/clawksis-agent/actions/runs/98",
-             "headBranch": "main", "headSha": "f" * 40,
-             "displayTitle": "Stable release rc.1-v0.21.4", "status": "completed"},
-        ])
+        return json.dumps(
+            [
+                {
+                    "databaseId": 99,
+                    "url": "https://github.com/example/clawksis-agent/actions/runs/99",
+                    "headBranch": "main",
+                    "headSha": "f" * 40,
+                    "displayTitle": "Stable release rc.1-v0.21.5",
+                    "status": "completed",
+                },
+                {
+                    "databaseId": 98,
+                    "url": "https://github.com/example/clawksis-agent/actions/runs/98",
+                    "headBranch": "main",
+                    "headSha": "f" * 40,
+                    "displayTitle": "Stable release rc.1-v0.21.4",
+                    "status": "completed",
+                },
+            ]
+        )
 
     with pytest.raises(ReleaseRefused):
         _release(source, _advance(source, "later"), bump="minor", execute=execute)
@@ -448,20 +614,35 @@ def test_successive_attempts_reserve_increasing_native_epochs(source):
     _mark(source, "0.21.5")
     _release(source, _advance(source, "next"))
 
-    first_epoch = int(git(source, "for-each-ref", "refs/tags/rc.1-v0.21.5",
-                          "--format=%(taggerdate:unix)"))
-    second_epoch = int(git(source, "for-each-ref", "refs/tags/rc.2-v0.21.5",
-                           "--format=%(taggerdate:unix)"))
+    first_epoch = int(
+        git(
+            source,
+            "for-each-ref",
+            "refs/tags/rc.1-v0.21.5",
+            "--format=%(taggerdate:unix)",
+        )
+    )
+    second_epoch = int(
+        git(
+            source,
+            "for-each-ref",
+            "refs/tags/rc.2-v0.21.5",
+            "--format=%(taggerdate:unix)",
+        )
+    )
     assert second_epoch > first_epoch
 
 
 def test_draft_body_is_fenced_at_top_and_bottom():
     from scripts.releases.draft_warning import (
-        WARNING_CLOSE, WARNING_OPEN, draft_body,
+        WARNING_CLOSE,
+        WARNING_OPEN,
+        draft_body,
     )
 
-    body = draft_body(version="0.21.5", attempt_ref="rc.2-v0.21.5",
-                      notes="## What's changed\n- x")
+    body = draft_body(
+        version="0.21.5", attempt_ref="rc.2-v0.21.5", notes="## What's changed\n- x"
+    )
     assert body.startswith(WARNING_OPEN) and body.rstrip().endswith(WARNING_CLOSE)
     assert body.count(WARNING_OPEN) == 2 and body.count(WARNING_CLOSE) == 2
     assert "python scripts/release.py publish --version 0.21.5" in body
@@ -482,15 +663,27 @@ def test_release_draft_lists_the_commits_since_the_stable_base(source, published
     seen = {}
 
     def execute(command):
-        assert command[:3] != ["gh", "api", "repos/example/clawksis-agent/releases/generate-notes"]
+        assert command[:3] != [
+            "gh",
+            "api",
+            "repos/example/clawksis-agent/releases/generate-notes",
+        ]
         if command[:3] == ["gh", "release", "create"]:
             notes_path = command[command.index("--notes-file") + 1]
             with open(notes_path, encoding="utf-8") as file:
                 seen["body"] = file.read()
         if command[:3] == ["gh", "run", "list"]:
-            return json.dumps([{"databaseId": 7, "url": "https://github.com/example/clawksis-agent/actions/runs/7",
-                                "headBranch": "main", "displayTitle": "Stable release rc.1-v0.21.5",
-                                "status": "queued"}])
+            return json.dumps(
+                [
+                    {
+                        "databaseId": 7,
+                        "url": "https://github.com/example/clawksis-agent/actions/runs/7",
+                        "headBranch": "main",
+                        "displayTitle": "Stable release rc.1-v0.21.5",
+                        "status": "queued",
+                    }
+                ]
+            )
         return ""
 
     result = _release(source, commit, execute=execute, published=published)
@@ -541,12 +734,19 @@ def test_an_oversized_body_is_refused_before_the_claim(source, tmp_path, bump):
     commit = _oversized_commit(source, tmp_path)
 
     with pytest.raises(ReleaseRefused, match="--no-changelog") as refused:
-        _release(source, commit, bump=bump, execute=lambda command: pytest.fail(f"must not run {command}"))
+        _release(
+            source,
+            commit,
+            bump=bump,
+            execute=lambda command: pytest.fail(f"must not run {command}"),
+        )
     hint = str(refused.value)
     export = f"python scripts/release.py changelog --commit {commit} --bump {bump} --remote origin"
     # The export comes first: after the retry claims this attempt, changelog numbers the next one.
     assert export in hint
-    assert hint.index(export) < hint.index("Re-run the same release command with --no-changelog")
+    assert hint.index(export) < hint.index(
+        "Re-run the same release command with --no-changelog"
+    )
     assert "paste it into the draft release body" in hint
 
     # Nothing was claimed, so the attempt is not burned.
@@ -562,7 +762,9 @@ def test_no_changelog_releases_what_the_full_changelog_could_not(source, tmp_pat
 
     def execute(command):
         if command[:3] == ["gh", "release", "create"]:
-            with open(command[command.index("--notes-file") + 1], encoding="utf-8") as file:
+            with open(
+                command[command.index("--notes-file") + 1], encoding="utf-8"
+            ) as file:
                 seen["body"] = file.read()
         return ""
 
@@ -573,7 +775,9 @@ def test_no_changelog_releases_what_the_full_changelog_could_not(source, tmp_pat
     assert "<!-- CLAWK_BUILDS_TABLE -->" in seen["body"]
 
 
-def test_changelog_prints_the_notes_a_draft_would_carry_and_claims_nothing(source, monkeypatch, capsys):
+def test_changelog_prints_the_notes_a_draft_would_carry_and_claims_nothing(
+    source, monkeypatch, capsys
+):
     from scripts import release as release_script
     from scripts.releases import entrypoint
 
@@ -581,11 +785,18 @@ def test_changelog_prints_the_notes_a_draft_would_carry_and_claims_nothing(sourc
     git(source, "tag", "-a", "v0.21.4", shipped, "-m", "published")
     commit = _advance(source, "feat: new in this release (#123)")
     monkeypatch.setattr(release_script, "REPO_ROOT", source)
-    monkeypatch.setattr(release_script, "remote_github_repo", lambda _remote: "example/clawksis-agent")
-    monkeypatch.setattr("scripts.releases.versioning.published_stable_identity",
-                        lambda _repository: ("0.21.4", shipped))
-    monkeypatch.setattr(release_script.sys, "argv",
-                        ["release.py", "changelog", "--commit", commit, "--remote", "origin"])
+    monkeypatch.setattr(
+        release_script, "remote_github_repo", lambda _remote: "example/clawksis-agent"
+    )
+    monkeypatch.setattr(
+        "scripts.releases.versioning.published_stable_identity",
+        lambda _repository: ("0.21.4", shipped),
+    )
+    monkeypatch.setattr(
+        release_script.sys,
+        "argv",
+        ["release.py", "changelog", "--commit", commit, "--remote", "origin"],
+    )
 
     release_script.main()
 
@@ -600,16 +811,21 @@ def test_changelog_prints_the_notes_a_draft_would_carry_and_claims_nothing(sourc
     assert "compare/v0.21.4...rc.1-v0.21.5" in out
 
 
-@pytest.mark.parametrize("argv", [
-    ["release", "--commit", "HEAD", "--no-changelog"],
-    ["--no-changelog", "release", "--commit", "HEAD"],
-])
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["release", "--commit", "HEAD", "--no-changelog"],
+        ["--no-changelog", "release", "--commit", "HEAD"],
+    ],
+)
 def test_release_command_accepts_no_changelog(argv, monkeypatch):
     from scripts import release as release_script
     from scripts.releases import entrypoint
 
     seen = {}
-    monkeypatch.setattr(entrypoint, "cmd_release", lambda args: seen.setdefault("args", args))
+    monkeypatch.setattr(
+        entrypoint, "cmd_release", lambda args: seen.setdefault("args", args)
+    )
     monkeypatch.setattr(release_script.sys, "argv", ["release.py", *argv])
 
     release_script.main()
@@ -620,14 +836,29 @@ def test_release_command_accepts_no_changelog(argv, monkeypatch):
 def test_publish_and_abandon_output_name_the_result():
     from scripts.releases.entrypoint import abandon_steps, publish_steps
 
-    published = publish_steps({"version": "0.21.5", "repository": "example/clawksis-agent",
-                               "run_url": "https://github.com/example/clawksis-agent/actions/runs/9"})
+    published = publish_steps(
+        {
+            "version": "0.21.5",
+            "repository": "example/clawksis-agent",
+            "run_url": "https://github.com/example/clawksis-agent/actions/runs/9",
+        }
+    )
     assert "Requested publication of v0.21.5." in published
-    assert "Workflow: https://github.com/example/clawksis-agent/actions/runs/9" in published
+    assert (
+        "Workflow: https://github.com/example/clawksis-agent/actions/runs/9"
+        in published
+    )
     assert "moves the stable channel" in published
 
-    abandoned = abandon_steps([{"version": "0.21.5", "tag": "rc.1-v0.21.5",
-                                "marker": "abandoned-rc.1-v0.21.5"}])
+    abandoned = abandon_steps(
+        [
+            {
+                "version": "0.21.5",
+                "tag": "rc.1-v0.21.5",
+                "marker": "abandoned-rc.1-v0.21.5",
+            }
+        ]
+    )
     assert "Cleared rc.1-v0.21.5." in abandoned
     assert "abandoned-rc.1-v0.21.5" in abandoned
     assert "The next cut is rc.2-v0.21.5." in abandoned
@@ -638,20 +869,35 @@ def test_publish_dispatches_the_sequencer():
     from scripts.releases.entrypoint import ReleaseRefused, publish
 
     calls = []
-    published = publish("0.21.5", repository="example/clawksis-agent", dispatch=calls.append)
+    published = publish(
+        "0.21.5", repository="example/clawksis-agent", dispatch=calls.append
+    )
     assert published["requested"] == "v0.21.5"
     assert published["version"] == "0.21.5"
     assert published["repository"] == "example/clawksis-agent"
     assert calls == [
-        ["gh", "workflow", "run", "stable-release-publication.yml",
-         "--repo", "example/clawksis-agent", "--raw-field", "version=0.21.5"],
+        [
+            "gh",
+            "workflow",
+            "run",
+            "stable-release-publication.yml",
+            "--repo",
+            "example/clawksis-agent",
+            "--raw-field",
+            "version=0.21.5",
+        ],
     ]
 
     with pytest.raises(ReleaseRefused, match="burned or superseded by 0\\.21\\.6"):
         publish(
-            "0.21.5", repository="example/clawksis-agent",
-            dispatch=lambda _command: pytest.fail("superseded publish must not dispatch"),
-            inspect=lambda _command: pytest.fail("superseded publish must not inspect drafts"),
+            "0.21.5",
+            repository="example/clawksis-agent",
+            dispatch=lambda _command: pytest.fail(
+                "superseded publish must not dispatch"
+            ),
+            inspect=lambda _command: pytest.fail(
+                "superseded publish must not inspect drafts"
+            ),
             head_version=lambda: "0.21.6",
         )
 
@@ -668,9 +914,15 @@ def test_publish_preflight_finds_the_draft_on_the_outstanding_attempt(source):
             raise ReleaseRefused("release not found")
         return json.dumps({"tagName": tag, "isDraft": True, "isPrerelease": False})
 
-    publish("0.21.5", repository="example/clawksis-agent", dispatch=calls.append,
-            inspect=inspect, head_version=lambda: None,
-            repo=source, remote="origin")
+    publish(
+        "0.21.5",
+        repository="example/clawksis-agent",
+        dispatch=calls.append,
+        inspect=inspect,
+        head_version=lambda: None,
+        repo=source,
+        remote="origin",
+    )
     assert calls[-1][-1] == "version=0.21.5"
 
     # A draft left on the old v{version}-rc shape is not the publish draft.
@@ -681,10 +933,15 @@ def test_publish_preflight_finds_the_draft_on_the_outstanding_attempt(source):
         return json.dumps({"tagName": tag, "isDraft": True, "isPrerelease": False})
 
     with pytest.raises(ReleaseRefused, match="burned or has no release draft"):
-        publish("0.21.5", repository="example/clawksis-agent",
-                dispatch=lambda _command: pytest.fail("must not dispatch"),
-                inspect=old_shape, head_version=lambda: None,
-                repo=source, remote="origin")
+        publish(
+            "0.21.5",
+            repository="example/clawksis-agent",
+            dispatch=lambda _command: pytest.fail("must not dispatch"),
+            inspect=old_shape,
+            head_version=lambda: None,
+            repo=source,
+            remote="origin",
+        )
 
 
 def _abandon(repo, version, *, drafts=None, runs=None, calls=None, execute=None):
@@ -693,15 +950,26 @@ def _abandon(repo, version, *, drafts=None, runs=None, calls=None, execute=None)
 
     def inspect(command):
         if command[1] == "run":
-            return json.dumps([{**row, "displayTitle": f"Stable release {tag}"}
-                               for tag, rows in (runs or {}).items() for row in rows])
+            return json.dumps(
+                [
+                    {**row, "displayTitle": f"Stable release {tag}"}
+                    for tag, rows in (runs or {}).items()
+                    for row in rows
+                ]
+            )
         draft = (drafts or {}).get(command[3])
         if draft is None:
             raise ReleaseRefused("release not found")
         return json.dumps(draft)
 
-    return abandon(version, repo=repo, remote="origin", repository="example/clawksis-agent",
-                   execute=execute or (calls if calls is not None else []).append, inspect=inspect)
+    return abandon(
+        version,
+        repo=repo,
+        remote="origin",
+        repository="example/clawksis-agent",
+        execute=execute or (calls if calls is not None else []).append,
+        inspect=inspect,
+    )
 
 
 def _draft(tag):
@@ -712,38 +980,90 @@ def test_abandon_of_a_draft_deletes_it_writes_the_marker_and_frees_the_version(s
     _claim(source, "0.21.5", git(source, "rev-parse", "HEAD"))
     calls = []
 
-    results = _abandon(source, "0.21.5", calls=calls, drafts={"rc.1-v0.21.5": _draft("rc.1-v0.21.5")})
+    results = _abandon(
+        source, "0.21.5", calls=calls, drafts={"rc.1-v0.21.5": _draft("rc.1-v0.21.5")}
+    )
 
-    assert results == [{"version": "0.21.5", "tag": "rc.1-v0.21.5",
-                        "marker": "abandoned-rc.1-v0.21.5", "repository": "example/clawksis-agent",
-                        "cancelled": []}]
-    assert calls == [["gh", "release", "delete", "rc.1-v0.21.5", "--repo", "example/clawksis-agent", "--yes"]]
+    assert results == [
+        {
+            "version": "0.21.5",
+            "tag": "rc.1-v0.21.5",
+            "marker": "abandoned-rc.1-v0.21.5",
+            "repository": "example/clawksis-agent",
+            "cancelled": [],
+        }
+    ]
+    assert calls == [
+        [
+            "gh",
+            "release",
+            "delete",
+            "rc.1-v0.21.5",
+            "--repo",
+            "example/clawksis-agent",
+            "--yes",
+        ]
+    ]
     remote = git(source, "ls-remote", "origin", "refs/tags/*")
     assert "refs/tags/abandoned-rc.1-v0.21.5" in remote
     assert "refs/tags/rc.1-v0.21.5" in remote
-    marker = tag_record(git(source, "tag", "-l", "abandoned-rc.1-v0.21.5", "--format=%(contents)"))
-    assert marker == {"attempt": 1, "attemptRef": "rc.1-v0.21.5", "schema": 1, "version": "0.21.5"}
+    marker = tag_record(
+        git(source, "tag", "-l", "abandoned-rc.1-v0.21.5", "--format=%(contents)")
+    )
+    assert marker == {
+        "attempt": 1,
+        "attemptRef": "rc.1-v0.21.5",
+        "schema": 1,
+        "version": "0.21.5",
+    }
     assert git(source, "rev-parse", "abandoned-rc.1-v0.21.5^{commit}") == git(
-        source, "rev-parse", "rc.1-v0.21.5^{commit}")
+        source, "rev-parse", "rc.1-v0.21.5^{commit}"
+    )
     assert _release(source, _advance(source, "fix"))["tag"] == "rc.2-v0.21.5"
 
 
 def test_abandon_force_cancels_in_progress_runs_before_the_draft_and_the_marker(source):
     _claim(source, "0.21.5", git(source, "rev-parse", "HEAD"))
     calls = []
-    runs = [{"databaseId": 11, "url": "https://example.test/runs/11", "status": "in_progress"},
-            {"databaseId": 12, "url": "https://example.test/runs/12", "status": "completed"},
-            {"databaseId": 13, "url": "https://example.test/runs/13", "status": "queued"}]
+    runs = [
+        {
+            "databaseId": 11,
+            "url": "https://example.test/runs/11",
+            "status": "in_progress",
+        },
+        {
+            "databaseId": 12,
+            "url": "https://example.test/runs/12",
+            "status": "completed",
+        },
+        {"databaseId": 13, "url": "https://example.test/runs/13", "status": "queued"},
+    ]
 
-    results = _abandon(source, "0.21.5", calls=calls, runs={"rc.1-v0.21.5": runs},
-                       drafts={"rc.1-v0.21.5": _draft("rc.1-v0.21.5")})
+    results = _abandon(
+        source,
+        "0.21.5",
+        calls=calls,
+        runs={"rc.1-v0.21.5": runs},
+        drafts={"rc.1-v0.21.5": _draft("rc.1-v0.21.5")},
+    )
 
     assert calls == [
         ["gh", "run", "cancel", "11", "--repo", "example/clawksis-agent", "--force"],
         ["gh", "run", "cancel", "13", "--repo", "example/clawksis-agent", "--force"],
-        ["gh", "release", "delete", "rc.1-v0.21.5", "--repo", "example/clawksis-agent", "--yes"],
+        [
+            "gh",
+            "release",
+            "delete",
+            "rc.1-v0.21.5",
+            "--repo",
+            "example/clawksis-agent",
+            "--yes",
+        ],
     ]
-    assert results[0]["cancelled"] == ["https://example.test/runs/11", "https://example.test/runs/13"]
+    assert results[0]["cancelled"] == [
+        "https://example.test/runs/11",
+        "https://example.test/runs/13",
+    ]
     assert "abandoned-rc.1-v0.21.5" in git(source, "ls-remote", "origin", "refs/tags/*")
 
 
@@ -751,16 +1071,29 @@ def test_abandon_that_cannot_cancel_a_run_writes_no_marker_so_it_can_be_retried(
     from scripts.releases.entrypoint import ReleaseRefused, abandon
 
     _claim(source, "0.21.5", git(source, "rev-parse", "HEAD"))
-    run = {"databaseId": 11, "url": "https://example.test/runs/11", "status": "in_progress",
-           "displayTitle": "Stable release rc.1-v0.21.5"}
+    run = {
+        "databaseId": 11,
+        "url": "https://example.test/runs/11",
+        "status": "in_progress",
+        "displayTitle": "Stable release rc.1-v0.21.5",
+    }
 
     def refuse(_command):
         raise ReleaseRefused("HTTP 403")
 
     with pytest.raises(ReleaseRefused, match="HTTP 403"):
-        abandon("0.21.5", repo=source, remote="origin", repository="example/clawksis-agent",
-                execute=refuse, inspect=lambda command: json.dumps([run]) if command[1] == "run"
-                else (_ for _ in ()).throw(ReleaseRefused("release not found")))
+        abandon(
+            "0.21.5",
+            repo=source,
+            remote="origin",
+            repository="example/clawksis-agent",
+            execute=refuse,
+            inspect=lambda command: (
+                json.dumps([run])
+                if command[1] == "run"
+                else (_ for _ in ()).throw(ReleaseRefused("release not found"))
+            ),
+        )
     assert "abandoned-rc" not in git(source, "ls-remote", "origin", "refs/tags/*")
 
 
@@ -768,12 +1101,16 @@ def test_abandon_of_a_draftless_burned_attempt_writes_the_marker(source):
     _claim(source, "0.21.5", git(source, "rev-parse", "HEAD"))
     calls = []
 
-    assert [r["marker"] for r in _abandon(source, "0.21.5", calls=calls)] == ["abandoned-rc.1-v0.21.5"]
+    assert [r["marker"] for r in _abandon(source, "0.21.5", calls=calls)] == [
+        "abandoned-rc.1-v0.21.5"
+    ]
     assert calls == []
 
 
 @pytest.mark.parametrize("version", ["0.21.5", "0.22.0"])
-def test_abandon_refuses_without_an_outstanding_attempt_of_that_version(source, version):
+def test_abandon_refuses_without_an_outstanding_attempt_of_that_version(
+    source, version
+):
     from scripts.releases.entrypoint import ReleaseRefused
 
     _claim(source, "0.21.5", git(source, "rev-parse", "HEAD"))
@@ -790,11 +1127,27 @@ def test_abandon_refuses_a_release_that_was_published(source):
     _claim(source, "0.21.5", git(source, "rev-parse", "HEAD"))
     calls = []
     with pytest.raises(ReleaseRefused, match="published and cannot be abandoned"):
-        _abandon(source, "0.21.5", calls=calls,
-                 runs={"rc.1-v0.21.5": [{"databaseId": 11, "url": "https://example.test/runs/11",
-                                         "status": "in_progress"}]},
-                 drafts={"rc.1-v0.21.5": {"tagName": "rc.1-v0.21.5", "isDraft": False,
-                                          "isPrerelease": False}})
+        _abandon(
+            source,
+            "0.21.5",
+            calls=calls,
+            runs={
+                "rc.1-v0.21.5": [
+                    {
+                        "databaseId": 11,
+                        "url": "https://example.test/runs/11",
+                        "status": "in_progress",
+                    }
+                ]
+            },
+            drafts={
+                "rc.1-v0.21.5": {
+                    "tagName": "rc.1-v0.21.5",
+                    "isDraft": False,
+                    "isPrerelease": False,
+                }
+            },
+        )
     assert calls == []
     assert "abandoned-rc" not in git(source, "ls-remote", "origin", "refs/tags/*")
 
@@ -808,7 +1161,10 @@ def test_abandon_clears_every_outstanding_attempt_of_the_version(source):
 
     results = _abandon(source, "0.21.5")
 
-    assert [r["marker"] for r in results] == ["abandoned-rc.1-v0.21.5", "abandoned-rc.2-v0.21.5"]
+    assert [r["marker"] for r in results] == [
+        "abandoned-rc.1-v0.21.5",
+        "abandoned-rc.2-v0.21.5",
+    ]
     assert "rc.2-v0.21.5" in abandon_steps(results)
     assert "The next cut is rc.3-v0.21.5." in abandon_steps(results)
     assert _release(source, _advance(source, "later"))["tag"] == "rc.3-v0.21.5"
@@ -820,8 +1176,16 @@ def test_abandon_stops_at_a_failed_attempt_and_a_rerun_clears_only_the_rest(sour
     commit = git(source, "rev-parse", "HEAD")
     _claim(source, "0.21.5", commit, attempt=1)
     _claim(source, "0.21.5", commit, attempt=2)
-    runs = {f"rc.{n}-v0.21.5": [{"databaseId": n * 10 + 1, "url": f"https://example.test/runs/{n * 10 + 1}",
-                                 "status": "in_progress"}] for n in (1, 2)}
+    runs = {
+        f"rc.{n}-v0.21.5": [
+            {
+                "databaseId": n * 10 + 1,
+                "url": f"https://example.test/runs/{n * 10 + 1}",
+                "status": "in_progress",
+            }
+        ]
+        for n in (1, 2)
+    }
     drafts = {f"rc.{n}-v0.21.5": _draft(f"rc.{n}-v0.21.5") for n in (1, 2)}
     refused = {"21"}
     calls = []
@@ -837,7 +1201,15 @@ def test_abandon_stops_at_a_failed_attempt_and_a_rerun_clears_only_the_rest(sour
     # Attempt one was cleaned up with its own run and draft; attempt two got no marker.
     assert calls == [
         ["gh", "run", "cancel", "11", "--repo", "example/clawksis-agent", "--force"],
-        ["gh", "release", "delete", "rc.1-v0.21.5", "--repo", "example/clawksis-agent", "--yes"],
+        [
+            "gh",
+            "release",
+            "delete",
+            "rc.1-v0.21.5",
+            "--repo",
+            "example/clawksis-agent",
+            "--yes",
+        ],
     ]
     remote = git(source, "ls-remote", "origin", "refs/tags/*")
     assert "refs/tags/abandoned-rc.1-v0.21.5" in remote
@@ -852,9 +1224,19 @@ def test_abandon_stops_at_a_failed_attempt_and_a_rerun_clears_only_the_rest(sour
     assert results[0]["cancelled"] == ["https://example.test/runs/21"]
     assert calls == [
         ["gh", "run", "cancel", "21", "--repo", "example/clawksis-agent", "--force"],
-        ["gh", "release", "delete", "rc.2-v0.21.5", "--repo", "example/clawksis-agent", "--yes"],
+        [
+            "gh",
+            "release",
+            "delete",
+            "rc.2-v0.21.5",
+            "--repo",
+            "example/clawksis-agent",
+            "--yes",
+        ],
     ]
-    assert "refs/tags/abandoned-rc.2-v0.21.5" in git(source, "ls-remote", "origin", "refs/tags/*")
+    assert "refs/tags/abandoned-rc.2-v0.21.5" in git(
+        source, "ls-remote", "origin", "refs/tags/*"
+    )
 
 
 def test_a_local_only_marker_does_not_stop_a_multi_attempt_abandon(source):
@@ -865,11 +1247,16 @@ def test_a_local_only_marker_does_not_stop_a_multi_attempt_abandon(source):
 
     results = _abandon(source, "0.21.5")
 
-    assert [r["marker"] for r in results] == ["abandoned-rc.1-v0.21.5", "abandoned-rc.2-v0.21.5"]
+    assert [r["marker"] for r in results] == [
+        "abandoned-rc.1-v0.21.5",
+        "abandoned-rc.2-v0.21.5",
+    ]
     remote = git(source, "ls-remote", "origin", "refs/tags/*")
     assert "refs/tags/abandoned-rc.1-v0.21.5" in remote
     assert "refs/tags/abandoned-rc.2-v0.21.5" in remote
-    assert "stray" not in git(source, "tag", "-l", "abandoned-rc.2-v0.21.5", "--format=%(contents)")
+    assert "stray" not in git(
+        source, "tag", "-l", "abandoned-rc.2-v0.21.5", "--format=%(contents)"
+    )
 
 
 def test_abandon_clears_one_of_two_attempts_a_concurrent_cut_left(source):
@@ -879,7 +1266,9 @@ def test_abandon_clears_one_of_two_attempts_a_concurrent_cut_left(source):
     _claim(source, "0.21.5", commit)
     _claim(source, "0.22.0", commit)
 
-    assert [r["marker"] for r in _abandon(source, "0.22.0")] == ["abandoned-rc.1-v0.22.0"]
+    assert [r["marker"] for r in _abandon(source, "0.22.0")] == [
+        "abandoned-rc.1-v0.22.0"
+    ]
     with pytest.raises(ReleaseRefused, match="rc.1-v0.21.5 is outstanding"):
         _release(source, _advance(source, "later"), execute=_must_not_execute)
 
@@ -889,7 +1278,9 @@ def test_a_local_only_attempt_tag_is_not_a_claim(source):
     _claim(source, "0.21.5", commit)
     git(source, "tag", "-a", "rc.915-v0.21.5", commit, "-m", "claim")
 
-    assert [r["marker"] for r in _abandon(source, "0.21.5")] == ["abandoned-rc.1-v0.21.5"]
+    assert [r["marker"] for r in _abandon(source, "0.21.5")] == [
+        "abandoned-rc.1-v0.21.5"
+    ]
     result = _release(source, _advance(source, "later"))
     assert result["tag"] == "rc.2-v0.21.5"
 
@@ -914,10 +1305,14 @@ def test_a_local_only_marker_of_the_attempt_name_is_replaced_by_the_abandon(sour
     _claim(source, "0.21.5", commit)
     git(source, "tag", "-a", "abandoned-rc.1-v0.21.5", commit, "-m", "stray")
 
-    assert [r["marker"] for r in _abandon(source, "0.21.5")] == ["abandoned-rc.1-v0.21.5"]
+    assert [r["marker"] for r in _abandon(source, "0.21.5")] == [
+        "abandoned-rc.1-v0.21.5"
+    ]
 
     assert git(source, "ls-remote", "origin", "refs/tags/abandoned-rc.1-v0.21.5")
-    assert "stray" not in git(source, "tag", "-l", "abandoned-rc.1-v0.21.5", "--format=%(contents)")
+    assert "stray" not in git(
+        source, "tag", "-l", "abandoned-rc.1-v0.21.5", "--format=%(contents)"
+    )
 
 
 def _clones(source, tmp_path):
@@ -933,7 +1328,8 @@ def _clones(source, tmp_path):
 
 
 def test_concurrent_claim_loser_reports_the_remote_winner_and_the_version_stays_free(
-        source, tmp_path, monkeypatch):
+    source, tmp_path, monkeypatch
+):
     from scripts.releases import entrypoint
     from scripts.releases.versioning import derive_next_version, next_attempt
 
@@ -1011,37 +1407,61 @@ def _claim_pushed_after_the_fetch(monkeypatch, tmp_path, source, version, attemp
 
 
 def test_abandon_cleans_up_a_claim_pushed_between_its_fetch_and_its_claim_list(
-        source, tmp_path, monkeypatch):
-    pushed = _claim_pushed_after_the_fetch(monkeypatch, tmp_path, source, "0.21.5", attempt=1)
+    source, tmp_path, monkeypatch
+):
+    pushed = _claim_pushed_after_the_fetch(
+        monkeypatch, tmp_path, source, "0.21.5", attempt=1
+    )
     calls = []
 
-    results = _abandon(source, "0.21.5", calls=calls, drafts={"rc.1-v0.21.5": _draft("rc.1-v0.21.5")})
+    results = _abandon(
+        source, "0.21.5", calls=calls, drafts={"rc.1-v0.21.5": _draft("rc.1-v0.21.5")}
+    )
 
     # The attempt was listed after the fetch, so its tag object had to be fetched
     # before the draft was deleted: the marker is what clears the attempt.
     assert pushed
     assert [r["marker"] for r in results] == ["abandoned-rc.1-v0.21.5"]
-    assert calls == [["gh", "release", "delete", "rc.1-v0.21.5", "--repo", "example/clawksis-agent", "--yes"]]
-    assert "refs/tags/abandoned-rc.1-v0.21.5" in git(source, "ls-remote", "origin", "refs/tags/*")
+    assert calls == [
+        [
+            "gh",
+            "release",
+            "delete",
+            "rc.1-v0.21.5",
+            "--repo",
+            "example/clawksis-agent",
+            "--yes",
+        ]
+    ]
+    assert "refs/tags/abandoned-rc.1-v0.21.5" in git(
+        source, "ls-remote", "origin", "refs/tags/*"
+    )
 
 
-def test_a_local_tag_that_differs_from_the_remote_claim_of_that_name_is_refreshed(source):
+def test_a_local_tag_that_differs_from_the_remote_claim_of_that_name_is_refreshed(
+    source,
+):
     commit = git(source, "rev-parse", "HEAD")
     _claim(source, "0.21.5", commit)
     other = _advance(source, "other")
     git(source, "tag", "-f", "-a", "rc.1-v0.21.5", other, "-m", "stray")
 
-    assert [r["marker"] for r in _abandon(source, "0.21.5")] == ["abandoned-rc.1-v0.21.5"]
+    assert [r["marker"] for r in _abandon(source, "0.21.5")] == [
+        "abandoned-rc.1-v0.21.5"
+    ]
 
     # The marker records the remote claim's commit, not the stray local tag's.
     assert git(source, "rev-parse", "abandoned-rc.1-v0.21.5^{commit}") == commit
 
 
 def test_release_refuses_on_a_claim_pushed_between_its_fetch_and_its_claim_list(
-        source, tmp_path, monkeypatch):
+    source, tmp_path, monkeypatch
+):
     from scripts.releases.entrypoint import ReleaseRefused
 
-    pushed = _claim_pushed_after_the_fetch(monkeypatch, tmp_path, source, "0.21.5", attempt=1)
+    pushed = _claim_pushed_after_the_fetch(
+        monkeypatch, tmp_path, source, "0.21.5", attempt=1
+    )
 
     with pytest.raises(ReleaseRefused, match="rc.1-v0.21.5 is outstanding"):
         _release(source, git(source, "rev-parse", "HEAD"), execute=_must_not_execute)
@@ -1049,7 +1469,8 @@ def test_release_refuses_on_a_claim_pushed_between_its_fetch_and_its_claim_list(
 
 
 def test_a_concurrent_cut_of_another_version_is_stopped_before_dispatch(
-        source, tmp_path, monkeypatch):
+    source, tmp_path, monkeypatch
+):
     from scripts.releases import entrypoint
 
     commit = git(source, "rev-parse", "HEAD")
@@ -1058,27 +1479,71 @@ def test_a_concurrent_cut_of_another_version_is_stopped_before_dispatch(
 
     def interleaved_git(repo, *args):
         # The other maintainer cuts 0.22.0 after this cut passed its pre-check.
-        if repo == left and args[:2] == ("push", "origin") and args[-1] == "refs/tags/rc.1-v0.21.5":
+        if (
+            repo == left
+            and args[:2] == ("push", "origin")
+            and args[-1] == "refs/tags/rc.1-v0.21.5"
+        ):
             monkeypatch.setattr(entrypoint, "_git", original_git)
             _release(right, commit, bump="minor")
         return original_git(repo, *args)
 
     monkeypatch.setattr(entrypoint, "_git", interleaved_git)
-    with pytest.raises(entrypoint.ReleaseRefused, match="more than one outstanding attempt"):
-        _release(left, commit, execute=lambda command: pytest.fail(f"must not run {command}"))
-    assert {"rc.1-v0.21.5", "rc.1-v0.22.0"} <= set(git(left, "tag", "--list", "rc.*").splitlines())
+    with pytest.raises(
+        entrypoint.ReleaseRefused, match="more than one outstanding attempt"
+    ):
+        _release(
+            left, commit, execute=lambda command: pytest.fail(f"must not run {command}")
+        )
+    assert {"rc.1-v0.21.5", "rc.1-v0.22.0"} <= set(
+        git(left, "tag", "--list", "rc.*").splitlines()
+    )
 
 
 def test_release_refuses_an_unknown_lane_before_touching_git(tmp_path):
     ran = subprocess.run(
-        [sys.executable, "scripts/release.py", "release", "--commit", "HEAD", "--with", "macos-intell"],
-        cwd=ROOT, capture_output=True, text=True, encoding="utf-8", check=False)
+        [
+            sys.executable,
+            "scripts/release.py",
+            "release",
+            "--commit",
+            "HEAD",
+            "--with",
+            "macos-intell",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
     assert ran.returncode != 0
     assert "unknown lane macos-intell" in ran.stderr and "macos-intel" in ran.stderr
     both = subprocess.run(
-        [sys.executable, "scripts/release.py", "release", "--commit", "HEAD", "--with", "ci", "--without", "ci"],
-        cwd=ROOT, capture_output=True, text=True, encoding="utf-8", check=False)
+        [
+            sys.executable,
+            "scripts/release.py",
+            "release",
+            "--commit",
+            "HEAD",
+            "--with",
+            "ci",
+            "--without",
+            "ci",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
     assert "--with and --without both name ci" in both.stderr
-    helped = subprocess.run([sys.executable, "scripts/release.py", "release", "--help"], cwd=ROOT,
-                            capture_output=True, text=True, encoding="utf-8", check=False)
+    helped = subprocess.run(
+        [sys.executable, "scripts/release.py", "release", "--help"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
     assert "macos-intel (off)" in helped.stdout and "docker-tests" in helped.stdout

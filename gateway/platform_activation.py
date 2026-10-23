@@ -37,26 +37,40 @@ def _yaml_block_names(yaml_cfg: Any) -> set[str]:
     ``gateway.<name>``, ``gateway.platforms.<name>``."""
     if not isinstance(yaml_cfg, dict):
         return set()
-    gateway: dict = yaml_cfg["gateway"] if isinstance(yaml_cfg.get("gateway"), dict) else {}
+    gateway: dict = (
+        yaml_cfg["gateway"] if isinstance(yaml_cfg.get("gateway"), dict) else {}
+    )
     parents = (yaml_cfg, yaml_cfg.get("platforms"), gateway, gateway.get("platforms"))
-    return {str(k) for parent in parents if isinstance(parent, dict)
-            for k, v in parent.items() if isinstance(v, dict)}
+    return {
+        str(k)
+        for parent in parents
+        if isinstance(parent, dict)
+        for k, v in parent.items()
+        if isinstance(v, dict)
+    }
 
 
 def _env_names(home: Optional[Path]) -> set[str]:
     names = {k for k, v in os.environ.items() if str(v).strip()}
     try:
         from agent.secret_scope import current_secret_scope, load_env_file
+
         scope = current_secret_scope()
         if scope is not None:
             names.update(k for k, v in scope.items() if str(v).strip())
         if home is not None:
-            names.update(k for k, v in load_env_file(home / ".env").items() if str(v).strip())
+            names.update(
+                k for k, v in load_env_file(home / ".env").items() if str(v).strip()
+            )
             # Values an external secret source (Bitwarden, 1Password) resolved for this home, and
             # the administrator-managed .env: both feed the profile scope the adapters read.
             from clawk_cli.env_loader import get_secret_source_values
-            names.update(k for k, v in get_secret_source_values(home).items() if str(v).strip())
+
+            names.update(
+                k for k, v in get_secret_source_values(home).items() if str(v).strip()
+            )
         from clawk_cli.managed_scope import load_managed_env
+
         names.update(k for k, v in load_managed_env().items() if str(v).strip())
     except Exception:
         logger.debug("platform activation: env scan degraded", exc_info=True)
@@ -79,7 +93,9 @@ def _credential_pool_names(home: Optional[Path]) -> set[str]:
 
 def _matches(name: str, candidates: Iterable[str]) -> bool:
     lowered = name.lower()
-    return any(c.lower() == lowered or c.lower().startswith(lowered + "_") for c in candidates)
+    return any(
+        c.lower() == lowered or c.lower().startswith(lowered + "_") for c in candidates
+    )
 
 
 def _legacy_gateway_json_names(home: Path) -> set[str]:
@@ -96,7 +112,10 @@ def _legacy_gateway_json_names(home: Path) -> set[str]:
 
 
 def activation_predicate(
-    *, yaml_cfg: Any = None, platform_names: Iterable[str] = (), home: Optional[Path] = None,
+    *,
+    yaml_cfg: Any = None,
+    platform_names: Iterable[str] = (),
+    home: Optional[Path] = None,
     registry: Any = None,
 ) -> Callable[[str], bool]:
     """``name -> bool``: does this profile show evidence of configuring platform *name*?
@@ -107,14 +126,18 @@ def activation_predicate(
     """
     if home is None:
         from clawk_constants import get_clawk_home
+
         home = get_clawk_home()
     if yaml_cfg is None and home is not None:
         try:
             from gateway.config_loader import read_yaml_layers
+
             yaml_cfg = read_yaml_layers(home)
         except Exception:
             logger.debug("platform activation: config.yaml unreadable", exc_info=True)
-    blocks = _yaml_block_names(yaml_cfg) | {str(getattr(n, "value", n)) for n in platform_names}
+    blocks = _yaml_block_names(yaml_cfg) | {
+        str(getattr(n, "value", n)) for n in platform_names
+    }
     if home is not None:
         blocks |= _legacy_gateway_json_names(home)
     env = _env_names(home)
@@ -127,7 +150,9 @@ def activation_predicate(
         prefix = name.upper().replace("-", "_") + "_"
         if any(e.startswith(prefix) for e in upper_env):
             return True
-        declared = registry.activation_env(name) if registry is not None else frozenset()
+        declared = (
+            registry.activation_env(name) if registry is not None else frozenset()
+        )
         return any(d.upper() in upper_env for d in declared)
 
     return has_evidence

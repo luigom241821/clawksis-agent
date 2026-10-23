@@ -152,28 +152,32 @@ for label, model, chain in [
             before_count = getattr(agent, "_rate_limit_backoff_count", 0)
             switched = agent._try_activate_fallback(classified.reason)
             after = getattr(agent, "_rate_limited_until", 0)
-            transitions.append({
-                "reason": str(classified.reason),
-                "switched": switched,
-                "before_deadline": before,
-                "after_deadline": after,
-                "remaining_seconds": max(0, after - time.monotonic()),
-                "backoff_before": before_count,
-                "backoff_after": getattr(agent, "_rate_limit_backoff_count", 0),
-                "notice": getattr(agent, "_pending_fallback_notice", [])[:],
-                "active_model": agent.model,
-            })
+            transitions.append(
+                {
+                    "reason": str(classified.reason),
+                    "switched": switched,
+                    "before_deadline": before,
+                    "after_deadline": after,
+                    "remaining_seconds": max(0, after - time.monotonic()),
+                    "backoff_before": before_count,
+                    "backoff_after": getattr(agent, "_rate_limit_backoff_count", 0),
+                    "notice": getattr(agent, "_pending_fallback_notice", [])[:],
+                    "active_model": agent.model,
+                }
+            )
             if not switched:
                 raise
     agent._emit_pending_fallback_notice()
     restored = restore_primary_runtime(agent)
-    results.append({
-        "case": label,
-        "transitions": transitions,
-        "answer": answer,
-        "restore_before_expiry": restored,
-        "model_after_restore": agent.model,
-    })
+    results.append(
+        {
+            "case": label,
+            "transitions": transitions,
+            "answer": answer,
+            "restore_before_expiry": restored,
+            "model_after_restore": agent.model,
+        }
+    )
     agent.close()
 server.shutdown()
 print(

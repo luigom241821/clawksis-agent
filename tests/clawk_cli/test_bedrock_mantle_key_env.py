@@ -26,9 +26,7 @@ def _run_wizard(monkeypatch, selected="openai.gpt-5.6-terra"):
     import clawk_cli.auth as auth_mod
 
     monkeypatch.setenv("AWS_BEARER_TOKEN_BEDROCK", TOKEN)
-    monkeypatch.setattr(
-        auth_mod, "_prompt_model_selection", lambda *a, **k: selected
-    )
+    monkeypatch.setattr(auth_mod, "_prompt_model_selection", lambda *a, **k: selected)
     monkeypatch.setattr(auth_mod, "_save_model_choice", lambda *a, **k: None)
     monkeypatch.setattr(auth_mod, "deactivate_provider", lambda *a, **k: None)
 

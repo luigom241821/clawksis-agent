@@ -26,7 +26,9 @@ _USER_NAMESPACE = "_clawk_user_computer_use"
 def _is_computer_use_dir(path: Path) -> bool:
     """Cheap text heuristic: ``__init__.py`` mentions the computer-use provider contract."""
     try:
-        source = (path / "__init__.py").read_text(errors="replace", encoding="utf-8-sig")[:8192]
+        source = (path / "__init__.py").read_text(
+            errors="replace", encoding="utf-8-sig"
+        )[:8192]
     except OSError:
         return False
     return "register_computer_use_provider" in source or "ComputerUseProvider" in source
@@ -38,14 +40,20 @@ def _iter_provider_dirs() -> list[tuple[str, Path]]:
     seen = {name for name, _ in dirs}
     user_dir = _loader.user_plugins_dir()
     if user_dir:
-        dirs.extend((child.name, child) for child in _loader.iter_plugin_dirs(user_dir)
-                    if child.name not in seen and _is_computer_use_dir(child))
+        dirs.extend(
+            (child.name, child)
+            for child in _loader.iter_plugin_dirs(user_dir)
+            if child.name not in seen and _is_computer_use_dir(child)
+        )
     return dirs
 
 
 def discover_computer_use_providers() -> list[tuple[str, str]]:
     """``[(name, description), ...]`` from plugin.yaml only: listing never imports a provider."""
-    return [(name, _loader.read_plugin_description(child)) for name, child in _iter_provider_dirs()]
+    return [
+        (name, _loader.read_plugin_description(child))
+        for name, child in _iter_provider_dirs()
+    ]
 
 
 def find_provider_dir(name: str) -> Optional[Path]:
@@ -58,23 +66,38 @@ def load_computer_use_provider(name: str) -> Optional[ComputerUseProvider]:
     provider_dir = find_provider_dir(name)
     if provider_dir is None:
         return None
-    return _loader.load_named(name, provider_dir, _load_provider_from_dir, kind="Computer-use provider",
-                              noun="provider", logger=logger)
+    return _loader.load_named(
+        name,
+        provider_dir,
+        _load_provider_from_dir,
+        kind="Computer-use provider",
+        noun="provider",
+        logger=logger,
+    )
 
 
 def _load_provider_from_dir(provider_dir: Path) -> Optional[ComputerUseProvider]:
     # Providers hand back live driver sessions, so they load in-process only: load_plugin_module refuses user
     # code under ``plugins.isolation: host`` (warning + None), which surfaces as "could not be loaded".
     from tools.computer_use.backend import ComputerUseProvider
+
     name = provider_dir.name
     is_bundled = provider_dir.parent == _CU_PLUGINS_DIR
     mod = _loader.load_plugin_module(
-        f"plugins.computer_use.{name}" if is_bundled else f"{_USER_NAMESPACE}.{name}", provider_dir,
-        parents=("plugins", "plugins.computer_use"), logger=logger,
-        synthetic_namespace=None if is_bundled else _USER_NAMESPACE)
+        f"plugins.computer_use.{name}" if is_bundled else f"{_USER_NAMESPACE}.{name}",
+        provider_dir,
+        parents=("plugins", "plugins.computer_use"),
+        logger=logger,
+        synthetic_namespace=None if is_bundled else _USER_NAMESPACE,
+    )
     return mod and _loader.instance_from_module(
-        mod, collector=_ProviderCollector(), collected_attr="provider", base_cls=ComputerUseProvider,
-        name=name, logger=logger)
+        mod,
+        collector=_ProviderCollector(),
+        collected_attr="provider",
+        base_cls=ComputerUseProvider,
+        name=name,
+        logger=logger,
+    )
 
 
 class _ProviderCollector(_loader.NoopPluginContext):
@@ -101,8 +124,13 @@ def get_active_provider() -> ComputerUseProvider:
     provider = load_computer_use_provider(name)
     if provider is None:
         available = ", ".join(found for found, _ in discover_computer_use_providers())
-        state = "could not be loaded (see the log)" if find_provider_dir(name) else "is not installed"
+        state = (
+            "could not be loaded (see the log)"
+            if find_provider_dir(name)
+            else "is not installed"
+        )
         raise LookupError(
             f"computer_use.backend is {name!r}, but that computer-use provider {state} (available: {available}). "
-            "Install it under ~/.clawksis/plugins/<name>/ or pick a backend with `clawk tools`.")
+            "Install it under ~/.clawksis/plugins/<name>/ or pick a backend with `clawk tools`."
+        )
     return provider

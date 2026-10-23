@@ -3,6 +3,7 @@
 The pre-dispatch side effects (pre_command hook, pending-resume reset,
 unknown-command fallthrough) and return semantics must hold.
 """
+
 from unittest.mock import MagicMock, patch
 
 from cli import ClawksisCLI
@@ -18,8 +19,10 @@ def _cli():
 
 def test_dispatch_return_semantics_and_side_effects():
     c = _cli()
-    with patch.object(ClawksisCLI, "_toggle_yolo", return_value=None) as m, \
-            patch("clawk_cli.plugins.fire_pre_command_hook") as hook:
+    with (
+        patch.object(ClawksisCLI, "_toggle_yolo", return_value=None) as m,
+        patch("clawk_cli.plugins.fire_pre_command_hook") as hook,
+    ):
         assert c.process_command("/yolo") is True
         m.assert_called_once_with()
         hook.assert_called_once()
@@ -48,6 +51,10 @@ def test_dispatch_return_semantics_and_side_effects():
 def test_unknown_command_falls_through():
     c = _cli()
     c._console_print = MagicMock()
-    with patch.object(ClawksisCLI, "_process_unregistered_slash", return_value=True) as m:
+    with patch.object(
+        ClawksisCLI, "_process_unregistered_slash", return_value=True
+    ) as m:
         assert c.process_command("/definitely-not-a-command x") is True
-        m.assert_called_once_with("/definitely-not-a-command x", "/definitely-not-a-command x")
+        m.assert_called_once_with(
+            "/definitely-not-a-command x", "/definitely-not-a-command x"
+        )

@@ -26,7 +26,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from clawk_state_holders import canonical_sqlite_path, read_only_db_uri
 from clawk_state_common import (
-    FTS_REBUILD_DEFERRAL_KEY, stat_db_file_identity as _stat_db_file_identity
+    FTS_REBUILD_DEFERRAL_KEY,
+    stat_db_file_identity as _stat_db_file_identity,
 )
 
 # Log-record parity with the origin module (caplog tests pin "clawk_state").
@@ -79,6 +80,7 @@ def _pread_db_range(db_path: Path, offset: int, length: int) -> Optional[bytes]:
     never-closed fd (rebound when the path names a new inode); Windows reads plainly, since
     advisory-lock cancellation is a POSIX-only hazard."""
     from clawk_state import _IS_WINDOWS
+
     if _IS_WINDOWS:
         with contextlib.suppress(OSError), db_path.open("rb") as handle:
             handle.seek(offset)
@@ -119,6 +121,7 @@ def _pread_db_header(db_path: Path, length: int) -> Optional[bytes]:
 def _read_sqlite_application_id(db_path: Path) -> Optional[int]:
     """application_id from the SQLite header, via the lock-safe :func:`_pread_db_header`."""
     from clawk_state_errors import _STATE_DB_APPLICATION_ID_OFFSET
+
     end = _STATE_DB_APPLICATION_ID_OFFSET + 4
     header = _pread_db_header(db_path, end)
     if header is None or len(header) < end or header[:16] != b"SQLite format 3\x00":
@@ -129,7 +132,10 @@ def _read_sqlite_application_id(db_path: Path) -> Optional[int]:
 def _stat_sqlite_sidecar_identity(db_path: Path) -> dict[str, tuple]:
     """Snapshot ``(st_dev, st_ino)`` for existing WAL/SHM sidecars."""
     base = os.fspath(db_path)
-    idents = {suffix: _stat_db_file_identity(Path(base + suffix)) for suffix in ("-wal", "-shm")}
+    idents = {
+        suffix: _stat_db_file_identity(Path(base + suffix))
+        for suffix in ("-wal", "-shm")
+    }
     return {suffix: ident for suffix, ident in idents.items() if ident is not None}
 
 
@@ -146,8 +152,10 @@ def _watched_sqlite_sidecar_paths(db_path) -> dict[str, str]:
     # the realpath'd parent with the literal basename, which is where they land when SQLite
     # names the sidecars after the path it was opened through.
     resolved_bases = (
-        os.path.join(os.path.realpath(os.path.dirname(literal_base)),
-                     os.path.basename(literal_base)),
+        os.path.join(
+            os.path.realpath(os.path.dirname(literal_base)),
+            os.path.basename(literal_base),
+        ),
         os.path.realpath(literal_base),
     )
     for base in resolved_bases:
@@ -220,7 +228,9 @@ def _iter_proc_fd_targets():
 _DARWIN_ALL_PIDS = 1
 _DARWIN_PIDLISTFDS = 1
 _DARWIN_PIDFDVNODEPATHINFO = 2
-_DARWIN_PROC_FD_INFO_SIZE = 8  # struct proc_fdinfo { int32 proc_fd; uint32 proc_fdtype; }
+_DARWIN_PROC_FD_INFO_SIZE = (
+    8  # struct proc_fdinfo { int32 proc_fd; uint32 proc_fdtype; }
+)
 _DARWIN_FD_RECORD_SIZE = 1200  # PROC_PIDFDVNODEPATHINFO_SIZE
 # Field offsets inside that 1200-byte record.  libproc does not lay the header's structs out
 # verbatim (it pads ``vnode_info`` and sizes the record to 1200, not to ``sizeof``'s 1192), so
@@ -253,11 +263,28 @@ def _darwin_libproc():
 
     lib = ctypes.CDLL(None, use_errno=True)
     lib.proc_listpids.restype = ctypes.c_int
-    lib.proc_listpids.argtypes = (ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p, ctypes.c_uint32)
+    lib.proc_listpids.argtypes = (
+        ctypes.c_uint32,
+        ctypes.c_uint32,
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+    )
     lib.proc_pidinfo.restype = ctypes.c_int
-    lib.proc_pidinfo.argtypes = (ctypes.c_int, ctypes.c_int, ctypes.c_uint64, ctypes.c_void_p, ctypes.c_int)
+    lib.proc_pidinfo.argtypes = (
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_uint64,
+        ctypes.c_void_p,
+        ctypes.c_int,
+    )
     lib.proc_pidfdinfo.restype = ctypes.c_int
-    lib.proc_pidfdinfo.argtypes = (ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_int)
+    lib.proc_pidfdinfo.argtypes = (
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_void_p,
+        ctypes.c_int,
+    )
     _DARWIN_LIBPROC = lib
     return lib
 
@@ -273,7 +300,11 @@ def _darwin_all_pids(lib) -> list[int]:
         if used <= 0:
             return []
         if used < size:
-            return [pid for pid in struct.unpack_from(f"<{used // 4}i", buffer.raw) if pid > 0]
+            return [
+                pid
+                for pid in struct.unpack_from(f"<{used // 4}i", buffer.raw)
+                if pid > 0
+            ]
         size *= 2
 
 
@@ -298,16 +329,28 @@ def _iter_darwin_fd_targets():
             size *= 2
         else:
             continue
-        for offset in range(0, used - _DARWIN_PROC_FD_INFO_SIZE + 1, _DARWIN_PROC_FD_INFO_SIZE):
+        for offset in range(
+            0, used - _DARWIN_PROC_FD_INFO_SIZE + 1, _DARWIN_PROC_FD_INFO_SIZE
+        ):
             fd = struct.unpack_from("<i", listing.raw, offset)[0]
             record = ctypes.create_string_buffer(_DARWIN_FD_RECORD_SIZE)
-            if lib.proc_pidfdinfo(pid, fd, _DARWIN_PIDFDVNODEPATHINFO, record,
-                                  _DARWIN_FD_RECORD_SIZE) <= 0:
+            if (
+                lib.proc_pidfdinfo(
+                    pid, fd, _DARWIN_PIDFDVNODEPATHINFO, record, _DARWIN_FD_RECORD_SIZE
+                )
+                <= 0
+            ):
                 continue
             raw = record.raw
-            identity = (struct.unpack_from("<I", raw, _DARWIN_FD_DEV_OFFSET)[0],
-                        struct.unpack_from("<Q", raw, _DARWIN_FD_INO_OFFSET)[0])
-            target = raw[_DARWIN_FD_PATH_OFFSET:].split(b"\x00", 1)[0].decode("utf-8", "replace")
+            identity = (
+                struct.unpack_from("<I", raw, _DARWIN_FD_DEV_OFFSET)[0],
+                struct.unpack_from("<Q", raw, _DARWIN_FD_INO_OFFSET)[0],
+            )
+            target = (
+                raw[_DARWIN_FD_PATH_OFFSET:]
+                .split(b"\x00", 1)[0]
+                .decode("utf-8", "replace")
+            )
             yield pid, fd, target, identity
 
 
@@ -329,7 +372,9 @@ def _iter_darwin_sidecar_holders(db_path) -> list[tuple[int, str]]:
         try:
             for pid, _fd, target, identity in _iter_darwin_fd_targets():
                 literal = watched.get(target.casefold())
-                if literal is not None and _identity_is_truly_unlinked(identity, literal):
+                if literal is not None and _identity_is_truly_unlinked(
+                    identity, literal
+                ):
                     holders.append((pid, target))
         except BaseException as exc:
             errors.append(exc)
@@ -374,8 +419,11 @@ def iter_deleted_sqlite_sidecar_holders(db_path) -> list[tuple[int, str]]:
             watched = _watched_sqlite_sidecar_paths(db_path)
             for pid, target, fd_path in _iter_proc_fd_targets():
                 canonical = canonical_sqlite_path(target)
-                if (" (deleted)" in target and canonical in watched
-                        and _fd_is_truly_unlinked(fd_path, watched[canonical])):
+                if (
+                    " (deleted)" in target
+                    and canonical in watched
+                    and _fd_is_truly_unlinked(fd_path, watched[canonical])
+                ):
                     holders.append((pid, target))
     except Exception as exc:
         logger.debug("deleted-WAL holder scan failed for %s: %s", db_path, exc)
@@ -387,6 +435,7 @@ def refuse_deleted_wal_generation(db_path) -> None:
     *before* ``sqlite3.connect`` so a second opener cannot mint a replacement WAL inode."""
     from clawk_state import DeletedWalGenerationError
     from clawk_state_errors import _DELETED_WAL_GENERATION_MSG
+
     if not iter_deleted_sqlite_sidecar_holders(db_path):
         return
     logger.error(_DELETED_WAL_GENERATION_MSG)
@@ -423,6 +472,7 @@ def _fsync_path(path: Path) -> None:
     """fsync a file or directory we own. Never used on the live database: opening and closing a
     descriptor on a file SQLite has locked would cancel this process's POSIX advisory locks."""
     from clawk_state import _IS_WINDOWS
+
     if _IS_WINDOWS:
         return  # directories cannot be opened; file writes fsync their own handle
     fd = os.open(path, os.O_RDONLY)
@@ -458,7 +508,9 @@ def _own_descriptor_for_identity(identity) -> Optional[int]:
     return None
 
 
-def _copy_range(read: Callable[[int, int], Optional[bytes]], dest: Path, *, size: int) -> dict[str, Any]:
+def _copy_range(
+    read: Callable[[int, int], Optional[bytes]], dest: Path, *, size: int
+) -> dict[str, Any]:
     """Stream ``size`` bytes via ``read(offset, length)`` into ``dest`` (temp file, fsync, rename).
 
     A short read raises ``RetiredGenerationCaptureError``: a truncated copy with a valid-looking
@@ -492,12 +544,16 @@ def _copy_range(read: Callable[[int, int], Optional[bytes]], dest: Path, *, size
 
 def _copy_descriptor(fd: int, dest: Path, *, size: int) -> dict[str, Any]:
     """pread ``fd`` (a descriptor SQLite owns; never closed here) into ``dest``."""
-    return _copy_range(lambda offset, length: os.pread(fd, length, offset), dest, size=size)
+    return _copy_range(
+        lambda offset, length: os.pread(fd, length, offset), dest, size=size
+    )
 
 
 def _copy_main_image(db_path: Path, dest: Path, *, size: int) -> dict[str, Any]:
     """Copy the live main file through the lock-safe cached descriptor (see ``_pread_db_range``)."""
-    return _copy_range(lambda offset, length: _pread_db_range(db_path, offset, length), dest, size=size)
+    return _copy_range(
+        lambda offset, length: _pread_db_range(db_path, offset, length), dest, size=size
+    )
 
 
 def _parse_sqlite_header(header: bytes) -> dict[str, Any]:
@@ -505,14 +561,30 @@ def _parse_sqlite_header(header: bytes) -> dict[str, Any]:
         return {"valid": False}
     raw_page_size = struct.unpack(">H", header[16:18])[0]
     from clawk_state_errors import _STATE_DB_APPLICATION_ID_OFFSET
-    fields = {"change_counter": 24, "page_count": 28, "user_version": 60,
-              "application_id": _STATE_DB_APPLICATION_ID_OFFSET, "version_valid_for": 92}
-    parsed = {name: struct.unpack(">I", header[off:off + 4])[0] for name, off in fields.items()}
-    return {"valid": True, "page_size": 65536 if raw_page_size == 1 else raw_page_size, **parsed}
+
+    fields = {
+        "change_counter": 24,
+        "page_count": 28,
+        "user_version": 60,
+        "application_id": _STATE_DB_APPLICATION_ID_OFFSET,
+        "version_valid_for": 92,
+    }
+    parsed = {
+        name: struct.unpack(">I", header[off : off + 4])[0]
+        for name, off in fields.items()
+    }
+    return {
+        "valid": True,
+        "page_size": 65536 if raw_page_size == 1 else raw_page_size,
+        **parsed,
+    }
 
 
 def capture_retired_wal_generation(
-    db_path, *, sidecar_identity: dict[str, tuple], trigger: str,
+    db_path,
+    *,
+    sidecar_identity: dict[str, tuple],
+    trigger: str,
 ) -> Path:
     """Durably capture the lost WAL generation this process still holds open; return the artifact dir.
 
@@ -527,15 +599,19 @@ def capture_retired_wal_generation(
     wal_identity = tuple(sidecar_identity.get("-wal") or ())
     if not wal_identity:
         raise RetiredGenerationCaptureError(
-            f"no recorded WAL generation identity for {db_path}; refusing to guess it by pathname")
+            f"no recorded WAL generation identity for {db_path}; refusing to guess it by pathname"
+        )
     wal_fd = _own_descriptor_for_identity(wal_identity)
     if wal_fd is None:
         raise RetiredGenerationCaptureError(
-            f"this process no longer holds the retired WAL inode {wal_identity} of {db_path}")
+            f"this process no longer holds the retired WAL inode {wal_identity} of {db_path}"
+        )
     try:
         wal_size = os.fstat(wal_fd).st_size
     except OSError as exc:
-        raise RetiredGenerationCaptureError(f"cannot stat the retired WAL of {db_path}: {exc}") from exc
+        raise RetiredGenerationCaptureError(
+            f"cannot stat the retired WAL of {db_path}: {exc}"
+        ) from exc
 
     stem = f"{db_path.name}{RETIRED_GENERATION_DIR_SUFFIX}{time.strftime('%Y%m%d-%H%M%S', time.gmtime())}-{os.getpid()}"
     final = db_path.with_name(stem)
@@ -554,30 +630,54 @@ def capture_retired_wal_generation(
             "captured_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "python": sys.version.split()[0],
             "sqlite": sqlite3.sqlite_version,
-            "wal": {"identity": list(wal_identity),
-                    **_copy_descriptor(wal_fd, staging / (db_path.name + "-wal"), size=wal_size)},
+            "wal": {
+                "identity": list(wal_identity),
+                **_copy_descriptor(
+                    wal_fd, staging / (db_path.name + "-wal"), size=wal_size
+                ),
+            },
             "shm": None,
             # The generation living at the path when we captured: a newer writer's, if one was minted.
             "path_generation_at_capture": {
-                suffix: list(ident) for suffix, ident in _stat_sqlite_sidecar_identity(db_path).items()},
-            "note": ("Frames in the captured WAL were committed by the retired generation. Whether they "
-                     "belong on top of the main file now at the path is an operator decision; inspect "
-                     "the copied image with `clawk sessions recover --inspect-only` first."),
+                suffix: list(ident)
+                for suffix, ident in _stat_sqlite_sidecar_identity(db_path).items()
+            },
+            "note": (
+                "Frames in the captured WAL were committed by the retired generation. Whether they "
+                "belong on top of the main file now at the path is an operator decision; inspect "
+                "the copied image with `clawk sessions recover --inspect-only` first."
+            ),
         }
         shm_identity = tuple(sidecar_identity.get("-shm") or ())
         shm_fd = _own_descriptor_for_identity(shm_identity) if shm_identity else None
         if shm_fd is not None:
-            with contextlib.suppress(OSError):  # SQLite rebuilds the index; the WAL is what matters
-                manifest["shm"] = {"identity": list(shm_identity), **_copy_descriptor(
-                    shm_fd, staging / (db_path.name + "-shm"), size=os.fstat(shm_fd).st_size)}
+            with contextlib.suppress(
+                OSError
+            ):  # SQLite rebuilds the index; the WAL is what matters
+                manifest["shm"] = {
+                    "identity": list(shm_identity),
+                    **_copy_descriptor(
+                        shm_fd,
+                        staging / (db_path.name + "-shm"),
+                        size=os.fstat(shm_fd).st_size,
+                    ),
+                }
         header = _pread_db_range(db_path, 0, _SQLITE_HEADER_BYTES)
         if header is None:
-            raise RetiredGenerationCaptureError(f"cannot read the main image header of {db_path}")
+            raise RetiredGenerationCaptureError(
+                f"cannot read the main image header of {db_path}"
+            )
         main_size = os.stat(db_path).st_size
-        main: dict[str, Any] = {"identity": list(_stat_db_file_identity(db_path) or ()) or None,
-                                "size": main_size, "header": _parse_sqlite_header(header)}
+        main: dict[str, Any] = {
+            "identity": list(_stat_db_file_identity(db_path) or ()) or None,
+            "size": main_size,
+            "header": _parse_sqlite_header(header),
+        }
         if main_size <= RETIRED_GENERATION_MAIN_IMAGE_MAX_BYTES:
-            main.update(mode="copied", **_copy_main_image(db_path, staging / db_path.name, size=main_size))
+            main.update(
+                mode="copied",
+                **_copy_main_image(db_path, staging / db_path.name, size=main_size),
+            )
         else:
             header_file = staging / (db_path.name + ".header")
             header_file.write_bytes(header)
@@ -586,7 +686,10 @@ def capture_retired_wal_generation(
         manifest["main"] = main
         # Late import: utils pulls agent-side deps; the capture must stay dependency-light.
         from utils import atomic_json_write
-        atomic_json_write(staging / RETIRED_GENERATION_MANIFEST, manifest, sort_keys=True)
+
+        atomic_json_write(
+            staging / RETIRED_GENERATION_MANIFEST, manifest, sort_keys=True
+        )
         _fsync_path(staging)
         os.replace(staging, final)
         _fsync_path(final.parent)
@@ -596,7 +699,8 @@ def capture_retired_wal_generation(
     except OSError as exc:
         shutil.rmtree(staging, ignore_errors=True)
         raise RetiredGenerationCaptureError(
-            f"could not write the retired WAL generation of {db_path} under {staging}: {exc}") from exc
+            f"could not write the retired WAL generation of {db_path} under {staging}: {exc}"
+        ) from exc
     return final
 
 
@@ -609,11 +713,16 @@ def _connect_tracked_db(path, tracking_path=None, **kwargs):
     try:
         from clawk_cli.sqlite_safe_read import connect_tracked
     except ImportError:
-        logger.debug("clawk_cli.sqlite_safe_read unavailable; opening %s untracked "
-                     "(byte-probe guard inactive in this install)", path)
+        logger.debug(
+            "clawk_cli.sqlite_safe_read unavailable; opening %s untracked "
+            "(byte-probe guard inactive in this install)",
+            path,
+        )
         return sqlite3.connect(str(path), **kwargs)
     # Open through THIS module's sqlite3.connect so tests patching clawk_state.sqlite3.connect keep control.
-    return connect_tracked(path, tracking_path=tracking_path, connect_fn=sqlite3.connect, **kwargs)
+    return connect_tracked(
+        path, tracking_path=tracking_path, connect_fn=sqlite3.connect, **kwargs
+    )
 
 
 def _preopen_header(path: Path, probe_bytes: int, force: bool) -> Optional[bytes]:
@@ -625,7 +734,11 @@ def _preopen_header(path: Path, probe_bytes: int, force: bool) -> Optional[bytes
         if not path.is_file():
             return None
         path.stat()
-        from clawk_cli.sqlite_safe_read import has_live_connection, read_header_bytes_preopen
+        from clawk_cli.sqlite_safe_read import (
+            has_live_connection,
+            read_header_bytes_preopen,
+        )
+
         if not force and has_live_connection(path):
             return None
         return read_header_bytes_preopen(path, length=max(16, probe_bytes), force=force)
@@ -633,19 +746,28 @@ def _preopen_header(path: Path, probe_bytes: int, force: bool) -> Optional[bytes
         return None
 
 
-def is_zeroed_state_db(path: Path, *, probe_bytes: int = 100, force: bool = False) -> bool:
+def is_zeroed_state_db(
+    path: Path, *, probe_bytes: int = 100, force: bool = False
+) -> bool:
     """Detect the zeroed state.db signature (0-byte or NUL header).  Prefers
     ``clawk_cli.backup.is_zeroed_sqlite_file``; this copy keeps SessionDB openable without the CLI
     package in constrained embed paths."""
     with contextlib.suppress(Exception):
         from clawk_cli.backup import is_zeroed_sqlite_file
+
         return is_zeroed_sqlite_file(path, probe_bytes=probe_bytes, force=force)
     head = _preopen_header(path, probe_bytes, force)
     # b"" (0-byte file) is zeroed; all() over an empty header is True.
-    return head is not None and not head.startswith(b"SQLite format 3") and all(b == 0 for b in head)
+    return (
+        head is not None
+        and not head.startswith(b"SQLite format 3")
+        and all(b == 0 for b in head)
+    )
 
 
-def has_invalid_sqlite_header_preopen(path: Path, *, probe_bytes: int = 100, force: bool = False) -> bool:
+def has_invalid_sqlite_header_preopen(
+    path: Path, *, probe_bytes: int = 100, force: bool = False
+) -> bool:
     """A pre-existing state.db whose first page is not SQLite: 0-byte, NUL, or clobbered page 0
     (#102198).  Zeroed files are the subset :func:`is_zeroed_state_db` names."""
     head = _preopen_header(path, probe_bytes, force)
@@ -656,6 +778,7 @@ def has_invalid_sqlite_header_preopen(path: Path, *, probe_bytes: int = 100, for
 def quarantine_cross_process_lock(path: Path, timeout: float = 5.0):
     """Acquire the cross-process lock for path.quarantine.lock."""
     import platform
+
     lock_path = path.with_name(path.name + ".quarantine.lock")
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     handle = lock_path.open("a+b")
@@ -663,6 +786,7 @@ def quarantine_cross_process_lock(path: Path, timeout: float = 5.0):
     try:
         if platform.system() == "Windows":
             import msvcrt
+
             def _lock(mode):  # msvcrt locks a byte range from the current position
                 handle.seek(0)
                 msvcrt.locking(handle.fileno(), mode, 1)
@@ -671,7 +795,10 @@ def quarantine_cross_process_lock(path: Path, timeout: float = 5.0):
             _unlock = lambda: _lock(msvcrt.LK_UNLCK)
         else:
             import fcntl
-            _try_lock = lambda: fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+            _try_lock = lambda: fcntl.flock(
+                handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB
+            )
             _unlock = lambda: fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
         deadline = time.monotonic() + timeout
         while not acquired:
@@ -693,17 +820,25 @@ def quarantine_cross_process_lock(path: Path, timeout: float = 5.0):
             handle.close()
 
 
-def quarantine_invalid_state_db(path: Path, *, already_locked: bool = False) -> Optional[Path]:
+def quarantine_invalid_state_db(
+    path: Path, *, already_locked: bool = False
+) -> Optional[Path]:
     """Move a non-SQLite state.db (zeroed or clobbered page 0) aside with its -wal/-shm sidecars,
     preserving bytes; return the quarantine path.  A cross-process lock stops two concurrent
     startups racing: the second re-checks under the lock and finds the file gone (or fresh)."""
+
     def _do_quarantine():
         if not path.exists():
-            logger.info("quarantine_invalid_state_db: %s already moved by another process", path)
+            logger.info(
+                "quarantine_invalid_state_db: %s already moved by another process", path
+            )
             return None
         if not has_invalid_sqlite_header_preopen(path):
-            logger.info("quarantine_invalid_state_db: %s is no longer invalid (another "
-                        "process quarantined it and a fresh DB was created)", path)
+            logger.info(
+                "quarantine_invalid_state_db: %s is no longer invalid (another "
+                "process quarantined it and a fresh DB was created)",
+                path,
+            )
             return None
         kind = "zeroed" if is_zeroed_state_db(path) else "notadb"
         try:
@@ -732,12 +867,14 @@ def quarantine_invalid_state_db(path: Path, *, already_locked: bool = False) -> 
         return _do_quarantine()
     with quarantine_cross_process_lock(path) as acquired:
         if not acquired:
-            logger.error("quarantine lock for %s not acquired within 5s — refusing to "
-                         "quarantine without the cross-process lock. The invalid file "
-                         "is left in place. If sessions fail to load, run `clawk sessions recover "
-                         "--source <state.db> --inspect-only`, or restore a snapshot with "
-                         "`/snapshot list` / `/snapshot restore <id>` (terminal `clawk` chat only).",
-                         path)
+            logger.error(
+                "quarantine lock for %s not acquired within 5s — refusing to "
+                "quarantine without the cross-process lock. The invalid file "
+                "is left in place. If sessions fail to load, run `clawk sessions recover "
+                "--source <state.db> --inspect-only`, or restore a snapshot with "
+                "`/snapshot list` / `/snapshot restore <id>` (terminal `clawk` chat only).",
+                path,
+            )
             return None
         return _do_quarantine()
 
@@ -750,11 +887,27 @@ def collect_state_db_stats(db_path: Path) -> dict[str, Any]:
     ``wal_size_bytes`` is 0 when the sidecar is absent; ``fts_storage_version`` None means the
     legacy inline layout; ``fts_rebuild_deferral`` is the durable blocked-repair diagnostic."""
     from clawk_state import _connect_tracked_db
-    stats: dict[str, Any] = dict.fromkeys((
-        "page_count", "page_size", "freelist_count", "logical_size_bytes", "wal_size_bytes", "journal_mode",
-        "messages", "sessions", "fts_tables", "fts_storage_version", "fts_storage_upgrade_needed",
-        "fts_teardown_pending", "fts_rebuild_pending",
-        "fts_rebuild_high_water", "fts_rebuild_progress", "fts_rebuild_deferral"))
+
+    stats: dict[str, Any] = dict.fromkeys(
+        (
+            "page_count",
+            "page_size",
+            "freelist_count",
+            "logical_size_bytes",
+            "wal_size_bytes",
+            "journal_mode",
+            "messages",
+            "sessions",
+            "fts_tables",
+            "fts_storage_version",
+            "fts_storage_upgrade_needed",
+            "fts_teardown_pending",
+            "fts_rebuild_pending",
+            "fts_rebuild_high_water",
+            "fts_rebuild_progress",
+            "fts_rebuild_deferral",
+        )
+    )
     # WAL sidecar size needs no connection at all.
     with contextlib.suppress(OSError):
         wal_path = Path(str(db_path) + "-wal")
@@ -762,20 +915,29 @@ def collect_state_db_stats(db_path: Path) -> dict[str, Any]:
     try:
         # A short timeout keeps doctor snappy when a writer holds the lock.  The tracked connect
         # lets byte-probe helpers see this connection and refuse raw opens that would cancel locks.
-        conn = _connect_tracked_db(read_only_db_uri(db_path), tracking_path=Path(db_path),
-                                   uri=True, timeout=2.0)
+        conn = _connect_tracked_db(
+            read_only_db_uri(db_path),
+            tracking_path=Path(db_path),
+            uri=True,
+            timeout=2.0,
+        )
     except Exception as exc:
-        logger.debug("collect_state_db_stats: cannot open %s read-only: %s", db_path, exc)
+        logger.debug(
+            "collect_state_db_stats: cannot open %s read-only: %s", db_path, exc
+        )
         return stats
+
     def _scalar(sql: str, params=()) -> Any:
         try:
             row = conn.execute(sql, params).fetchone()
             return row[0] if row else None
         except Exception:
             return None
+
     def _int(sql: str, params=()) -> Optional[int]:
         value = _scalar(sql, params)
         return int(value) if value is not None else None
+
     def _meta_int(key: str) -> Optional[int]:
         try:  # a non-numeric meta value must yield None, not fail the snapshot
             return _int("SELECT value FROM state_meta WHERE key = ?", (key,))
@@ -795,26 +957,41 @@ def collect_state_db_stats(db_path: Path) -> dict[str, Any]:
         # FTS table presence via sqlite_master (never SELECTs from the
         # virtual tables themselves — a corrupt index must not fail stats).
         with contextlib.suppress(Exception):
-            names = {row[0] for row in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (?, ?, ?)",
-                _FTS_TABLE_NAMES).fetchall()}
+            names = {
+                row[0]
+                for row in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (?, ?, ?)",
+                    _FTS_TABLE_NAMES,
+                ).fetchall()
+            }
             stats["fts_tables"] = {t: (t in names) for t in _FTS_TABLE_NAMES}
         # Raw state_meta reads — cheap, and independent of SessionDB.
         stats["fts_storage_version"] = _meta_int("fts_storage_version")
         with contextlib.suppress(Exception):
             from clawk_state_fts import fts_layout_drift
+
             stats["fts_storage_upgrade_needed"] = bool(fts_layout_drift(conn.cursor()))
         with contextlib.suppress(Exception):
             # Demoted old-index tables still awaiting teardown: an optimize-storage run stopped after its backfill.
-            stats["fts_teardown_pending"] = conn.execute(
-                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name LIKE 'fts\\_v22\\_trash\\_%' ESCAPE '\\' "
-                "LIMIT 1").fetchone() is not None
-        stats["fts_rebuild_high_water"] = high_water = _meta_int("fts_rebuild_high_water")
+            stats["fts_teardown_pending"] = (
+                conn.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name LIKE 'fts\\_v22\\_trash\\_%' ESCAPE '\\' "
+                    "LIMIT 1"
+                ).fetchone()
+                is not None
+            )
+        stats["fts_rebuild_high_water"] = high_water = _meta_int(
+            "fts_rebuild_high_water"
+        )
         stats["fts_rebuild_progress"] = progress = _meta_int("fts_rebuild_progress")
-        stats["fts_rebuild_pending"] = False if high_water is None else (progress or 0) < high_water
+        stats["fts_rebuild_pending"] = (
+            False if high_water is None else (progress or 0) < high_water
+        )
         with contextlib.suppress(Exception):
-            row = conn.execute("SELECT value FROM state_meta WHERE key = ? LIMIT 1",
-                               (FTS_REBUILD_DEFERRAL_KEY,)).fetchone()
+            row = conn.execute(
+                "SELECT value FROM state_meta WHERE key = ? LIMIT 1",
+                (FTS_REBUILD_DEFERRAL_KEY,),
+            ).fetchone()
             parsed = json.loads(row[0]) if row else None
             if isinstance(parsed, dict):
                 stats["fts_rebuild_deferral"] = parsed
@@ -835,24 +1012,49 @@ def count_db_holders(db_path: Path) -> Optional[int]:
             # (case, symlinked prefix), which is exactly what the sidecar leg had to case-fold around.
             st = os.stat(target)
             identity = (st.st_dev, st.st_ino)
-            return len({pid for pid, _fd, _path, ident in _iter_darwin_fd_targets() if ident == identity})
+            return len(
+                {
+                    pid
+                    for pid, _fd, _path, ident in _iter_darwin_fd_targets()
+                    if ident == identity
+                }
+            )
         if not sys.platform.startswith("linux"):
             return None
-        return len({pid for pid, link, _fd_path in _iter_proc_fd_targets() if link == target})
+        return len(
+            {pid for pid, link, _fd_path in _iter_proc_fd_targets() if link == target}
+        )
     except Exception:
         return None
 
 
-def _is_inactive_orphan_desktop_holder(*, ppid: int, age_seconds: float, min_age_seconds: float,
-                                       ephemeral_backend: bool, connection_statuses: list[str]) -> bool:
+def _is_inactive_orphan_desktop_holder(
+    *,
+    ppid: int,
+    age_seconds: float,
+    min_age_seconds: float,
+    ephemeral_backend: bool,
+    connection_statuses: list[str],
+) -> bool:
     """Pure safety predicate for the narrow Desktop holder reap."""
-    return (ppid in (0, 1) and age_seconds >= min_age_seconds and ephemeral_backend
-            and "ESTABLISHED" not in connection_statuses)
+    return (
+        ppid in (0, 1)
+        and age_seconds >= min_age_seconds
+        and ephemeral_backend
+        and "ESTABLISHED" not in connection_statuses
+    )
 
 
-def _concrete_state_db_holder_pids(db_path: Path, holders: list[tuple[int, str]]) -> list[int]:
+def _concrete_state_db_holder_pids(
+    db_path: Path, holders: list[tuple[int, str]]
+) -> list[int]:
     """Return unique PIDs proven to hold this DB or one of its sidecars."""
     canonical_db = os.path.normcase(os.path.abspath(os.fspath(db_path)))
     watched = {canonical_db, canonical_db + "-wal", canonical_db + "-shm"}
-    return list(dict.fromkeys(
-        pid for pid, path in holders if pid > 0 and canonical_sqlite_path(path) in watched))
+    return list(
+        dict.fromkeys(
+            pid
+            for pid, path in holders
+            if pid > 0 and canonical_sqlite_path(path) in watched
+        )
+    )

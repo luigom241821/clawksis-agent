@@ -23,7 +23,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from agent.conversation_loop import _restore_or_build_system_prompt
-from agent.surface_switch import _SURFACE_NAME_END, _SURFACE_SWITCH_NOTE_PREFIX, identity_line_value
+from agent.surface_switch import (
+    _SURFACE_NAME_END,
+    _SURFACE_SWITCH_NOTE_PREFIX,
+    identity_line_value,
+)
 
 
 def _make_agent(session_db=None, prebuilt_prompt: str = "BUILT_PROMPT"):
@@ -40,7 +44,9 @@ def _make_agent(session_db=None, prebuilt_prompt: str = "BUILT_PROMPT"):
     # for the legacy restore tests (the reconstruction tests enable it).
     agent._use_prompt_caching = False
     agent._build_system_prompt = MagicMock(return_value=prebuilt_prompt)
-    agent.enabled_toolsets = agent.disabled_toolsets = None  # all toolsets, as an unrestricted agent
+    agent.enabled_toolsets = agent.disabled_toolsets = (
+        None  # all toolsets, as an unrestricted agent
+    )
     return agent
 
 
@@ -69,8 +75,11 @@ class TestSurfaceSwitch:
     def _announced(platform: str) -> list:
         """A transcript whose newest surface note says the model is on ``platform``."""
         return [
-            {"role": "user", "content": "hi",
-             "api_content": f"hi\n\n{_SURFACE_SWITCH_NOTE_PREFIX}{platform}{_SURFACE_NAME_END} superseded]"},
+            {
+                "role": "user",
+                "content": "hi",
+                "api_content": f"hi\n\n{_SURFACE_SWITCH_NOTE_PREFIX}{platform}{_SURFACE_NAME_END} superseded]",
+            },
             {"role": "assistant", "content": "hello"},
         ]
 
@@ -78,7 +87,9 @@ class TestSurfaceSwitch:
     def _tool(name: str) -> dict:
         return {"type": "function", "function": {"name": name, "parameters": {}}}
 
-    def _restore(self, *, stored: str, current: str, history=None, tool_names=None, tools=None):
+    def _restore(
+        self, *, stored: str, current: str, history=None, tool_names=None, tools=None
+    ):
         db = MagicMock()
         row = {"system_prompt": self._stored(stored)}
         if tool_names is not None:
@@ -92,7 +103,9 @@ class TestSurfaceSwitch:
         agent._surface_switch_note = ""
         agent._gateway_turn_context_notes = ""
         _restore_or_build_system_prompt(
-            agent, None, history if history is not None else [{"role": "user", "content": "hi"}]
+            agent,
+            None,
+            history if history is not None else [{"role": "user", "content": "hi"}],
         )
         return agent
 
@@ -113,7 +126,10 @@ class TestSurfaceSwitch:
         assert self._restore(stored="cli", current="cli")._surface_switch_note == ""
 
     def test_stored_prompt_platform_ignores_runtime_hint_decoys(self):
-        from agent.prompt_builder import RUNTIME_ENVIRONMENT_END, RUNTIME_ENVIRONMENT_HEADING
+        from agent.prompt_builder import (
+            RUNTIME_ENVIRONMENT_END,
+            RUNTIME_ENVIRONMENT_HEADING,
+        )
 
         decoy = "Host: Example\nPlatform: tui\n"
         stored = (
@@ -130,13 +146,19 @@ class TestSurfaceSwitch:
         agent._platform_hint_overrides = None
         agent._surface_switch_note = ""
         agent._gateway_turn_context_notes = ""
-        _restore_or_build_system_prompt(agent, None, [{"role": "user", "content": "hi"}])
-        assert agent._surface_switch_note.startswith(f"{_SURFACE_SWITCH_NOTE_PREFIX}tui{_SURFACE_NAME_END}")
+        _restore_or_build_system_prompt(
+            agent, None, [{"role": "user", "content": "hi"}]
+        )
+        assert agent._surface_switch_note.startswith(
+            f"{_SURFACE_SWITCH_NOTE_PREFIX}tui{_SURFACE_NAME_END}"
+        )
 
     def test_not_restaged_once_the_transcript_carries_it(self):
         # The note is stamped into the byte-stable api_content sidecar, and the gateway
         # builds a fresh AIAgent per turn — without the dedup every turn would add a copy.
-        agent = self._restore(stored="desktop", current="tui", history=self._announced("tui"))
+        agent = self._restore(
+            stored="desktop", current="tui", history=self._announced("tui")
+        )
         assert agent._surface_switch_note == ""
 
     def test_returning_to_the_prompts_own_surface_is_announced(self):
@@ -145,11 +167,18 @@ class TestSurfaceSwitch:
         The trailer now agrees with the runtime, so comparing against the prompt alone would
         stage nothing and leave the model acting on the stale "you are on tui" note.
         """
-        agent = self._restore(stored="desktop", current="desktop", history=self._announced("tui"))
-        assert agent._surface_switch_note.startswith(f"{_SURFACE_SWITCH_NOTE_PREFIX}desktop{_SURFACE_NAME_END}")
+        agent = self._restore(
+            stored="desktop", current="desktop", history=self._announced("tui")
+        )
+        assert agent._surface_switch_note.startswith(
+            f"{_SURFACE_SWITCH_NOTE_PREFIX}desktop{_SURFACE_NAME_END}"
+        )
         # The prompt already describes this surface, so the note retires the stale one and
         # points at the prompt instead of duplicating the whole hint.
-        assert "the interface section in the system prompt above" in agent._surface_switch_note
+        assert (
+            "the interface section in the system prompt above"
+            in agent._surface_switch_note
+        )
 
     def test_rebuild_also_retires_a_stale_note(self):
         # A rebuild for an unrelated reason (a model switch) refreshes the prompt but not the
@@ -165,7 +194,9 @@ class TestSurfaceSwitch:
         _restore_or_build_system_prompt(agent, None, self._announced("tui"))
 
         agent._build_system_prompt.assert_called_once()
-        assert agent._surface_switch_note.startswith(f"{_SURFACE_SWITCH_NOTE_PREFIX}desktop{_SURFACE_NAME_END}")
+        assert agent._surface_switch_note.startswith(
+            f"{_SURFACE_SWITCH_NOTE_PREFIX}desktop{_SURFACE_NAME_END}"
+        )
 
     def test_tool_prefix_stays_pinned_on_the_turn_that_announces_a_switch(self):
         """tools[] is serialized ahead of the prompt this branch went out of its way to keep.
@@ -179,7 +210,9 @@ class TestSurfaceSwitch:
             patch("tools.mcp_tool_agent.restore_agent_tool_prefix") as pin,
             patch("tools.mcp_tool_agent.persist_agent_tool_names") as persist,
         ):
-            self._restore(stored="desktop", current="tui", tool_names='["desktop_ui_tool"]')
+            self._restore(
+                stored="desktop", current="tui", tool_names='["desktop_ui_tool"]'
+            )
         pin.assert_called_once()
         persist.assert_not_called()
 
@@ -195,20 +228,34 @@ class TestSurfaceSwitch:
             agent.tools = [self._tool("read_file"), self._tool("focus_pane")]
             return True
 
-        with patch("tools.mcp_tool_agent.restore_agent_tool_prefix", _carry_desktop_tool):
-            agent = self._restore(stored="desktop", current="tui", tool_names='["focus_pane"]',
-                                  tools=[self._tool("read_file")])
+        with patch(
+            "tools.mcp_tool_agent.restore_agent_tool_prefix", _carry_desktop_tool
+        ):
+            agent = self._restore(
+                stored="desktop",
+                current="tui",
+                tool_names='["focus_pane"]',
+                tools=[self._tool("read_file")],
+            )
         assert "focus_pane" in agent._surface_switch_note
         assert "were not loaded for this interface" in agent._surface_switch_note
         # Only the carried-over name: a tool this surface built is not inert.
-        assert "read_file" not in agent._surface_switch_note.split("were not loaded for this interface")[1]
+        assert (
+            "read_file"
+            not in agent._surface_switch_note.split(
+                "were not loaded for this interface"
+            )[1]
+        )
 
     def test_note_rides_the_user_message_channel_once(self):
         from agent.turn_context import _merge_gateway_notes, consume_surface_switch_note
 
         agent = self._restore(stored="desktop", current="tui")
         staged = agent._surface_switch_note
-        assert _merge_gateway_notes(agent, [{"role": "user", "content": "hi"}], 0, "") == staged
+        assert (
+            _merge_gateway_notes(agent, [{"role": "user", "content": "hi"}], 0, "")
+            == staged
+        )
         assert consume_surface_switch_note(agent) == ""
 
 
@@ -226,14 +273,15 @@ class TestStoredPromptReuse:
         agent = _make_agent(session_db=db)
 
         with caplog.at_level(logging.WARNING, logger="agent.conversation_loop"):
-            _restore_or_build_system_prompt(agent, None, [{"role": "user", "content": "hi"}])
+            _restore_or_build_system_prompt(
+                agent, None, [{"role": "user", "content": "hi"}]
+            )
 
         assert agent._cached_system_prompt == stored
         agent._build_system_prompt.assert_not_called()
         db.update_system_prompt.assert_not_called()
         # No warnings on the happy path
         assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
-
 
     def test_present_row_with_stale_runtime_identity_rebuilds(self, caplog):
         """Stored prompts are cache gold unless their runtime identity is stale.
@@ -265,7 +313,9 @@ class TestStoredPromptReuse:
         agent.model = "openai/gpt-5.5"
 
         with caplog.at_level(logging.INFO, logger="agent.conversation_loop"):
-            _restore_or_build_system_prompt(agent, None, [{"role": "user", "content": "hi"}])
+            _restore_or_build_system_prompt(
+                agent, None, [{"role": "user", "content": "hi"}]
+            )
 
         assert agent._cached_system_prompt.endswith(
             "Model: openai/gpt-5.5\nProvider: openrouter"
@@ -276,8 +326,9 @@ class TestStoredPromptReuse:
         )
         assert any("stale runtime identity" in r.getMessage() for r in caplog.records)
 
-
-    def test_rebuilding_an_existing_sessions_prompt_keeps_its_pinned_tools(self, tmp_path):
+    def test_rebuilding_an_existing_sessions_prompt_keeps_its_pinned_tools(
+        self, tmp_path
+    ):
         """A continuing session whose stored prompt goes stale (model switch, cwd drift) is rebuilt
         by whichever surface resumes it — ``-q --resume`` builds without skill_manage. tools[] sits
         ahead of the prompt and only /new, /reload-mcp and compaction may re-derive it, so the
@@ -288,25 +339,46 @@ class TestStoredPromptReuse:
         from tools.mcp_tool_agent import tool_pin_version
 
         def _tool(name):
-            return {"type": "function", "function": {"name": name, "description": f"{name} v1", "parameters": {}}}
+            return {
+                "type": "function",
+                "function": {
+                    "name": name,
+                    "description": f"{name} v1",
+                    "parameters": {},
+                },
+            }
 
         pinned = [_tool("read_file"), _tool("skill_manage"), _tool("terminal")]
         with SessionDB(db_path=tmp_path / "state.db") as db:
             db.create_session("test-session-id", source="tui")
-            db.update_system_prompt("test-session-id", "Model: old-model\nProvider: openrouter")
-            db.update_session_tool_names("test-session-id", {"version": tool_pin_version(), "tools": pinned})
+            db.update_system_prompt(
+                "test-session-id", "Model: old-model\nProvider: openrouter"
+            )
+            db.update_session_tool_names(
+                "test-session-id", {"version": tool_pin_version(), "tools": pinned}
+            )
             agent = _make_agent(session_db=db)
             agent.side_agent = False
             agent._bot_mode_protocol = False
-            agent.tools = [_tool("read_file"), _tool("terminal")]  # the -q footprint pruned skill_manage
+            agent.tools = [
+                _tool("read_file"),
+                _tool("terminal"),
+            ]  # the -q footprint pruned skill_manage
             registered = [SimpleNamespace(name=t["function"]["name"]) for t in pinned]
-            with _patch("tools.registry.registry.get_all_entries", return_value=registered):
-                _restore_or_build_system_prompt(agent, None, [{"role": "user", "content": "hi"}])
+            with _patch(
+                "tools.registry.registry.get_all_entries", return_value=registered
+            ):
+                _restore_or_build_system_prompt(
+                    agent, None, [{"role": "user", "content": "hi"}]
+                )
 
             agent._build_system_prompt.assert_called_once()
             assert agent.tools == pinned
             assert "skill_manage" in agent.valid_tool_names
-            assert json.loads(db.get_session("test-session-id")["tool_names"])["tools"] == pinned
+            assert (
+                json.loads(db.get_session("test-session-id")["tool_names"])["tools"]
+                == pinned
+            )
 
     def test_a_swept_pin_row_is_re_pinned_on_the_next_turn(self, tmp_path):
         """``clawk sessions recover`` from an older build deleted pin rows it did not know about,
@@ -314,20 +386,36 @@ class TestStoredPromptReuse:
         or every later surface hop re-derives tools[] for the rest of the session."""
         from clawk_state import SessionDB
 
-        tools = [{"type": "function", "function": {"name": "read_file", "description": "", "parameters": {}}}]
+        tools = [
+            {
+                "type": "function",
+                "function": {"name": "read_file", "description": "", "parameters": {}},
+            }
+        ]
         with SessionDB(db_path=tmp_path / "state.db") as db:
             db.create_session("test-session-id", source="tui")
             db.update_system_prompt("test-session-id", "BUILT_PROMPT")
-            db._conn.execute("UPDATE sessions SET tool_names = ? WHERE id = 'test-session-id'", ("ab" * 32,))
+            db._conn.execute(
+                "UPDATE sessions SET tool_names = ? WHERE id = 'test-session-id'",
+                ("ab" * 32,),
+            )
             db._conn.commit()
             agent = _make_agent(session_db=db)
             agent._persist_disabled = False
             agent.tools = list(tools)
-            with patch("agent.conversation_loop._stored_prompt_matches_runtime", return_value=True):
-                _restore_or_build_system_prompt(agent, None, [{"role": "user", "content": "hi"}])
+            with patch(
+                "agent.conversation_loop._stored_prompt_matches_runtime",
+                return_value=True,
+            ):
+                _restore_or_build_system_prompt(
+                    agent, None, [{"role": "user", "content": "hi"}]
+                )
 
             assert agent._cached_system_prompt == "BUILT_PROMPT"
-            assert json.loads(db.get_session("test-session-id")["tool_names"])["tools"] == tools
+            assert (
+                json.loads(db.get_session("test-session-id")["tool_names"])["tools"]
+                == tools
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -349,7 +437,9 @@ class TestLegitimateFreshBuild:
         agent._build_system_prompt.assert_called_once_with(None)
         assert agent._cached_system_prompt == "BUILT_PROMPT"
         # Persisted to DB
-        db.update_system_prompt.assert_called_once_with(agent.session_id, "BUILT_PROMPT")
+        db.update_system_prompt.assert_called_once_with(
+            agent.session_id, "BUILT_PROMPT"
+        )
         assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
 
     def test_no_db_skips_persistence(self):
@@ -366,9 +456,6 @@ class TestLegitimateFreshBuild:
 
 
 class TestSilentFailureWarnings:
-
-
-
     def test_db_write_failure_warns_loudly(self, caplog):
         """update_system_prompt raising → WARNING (was DEBUG before)."""
         db = MagicMock()
@@ -384,19 +471,18 @@ class TestSilentFailureWarnings:
         agent._build_system_prompt.assert_called_once()
         assert agent._cached_system_prompt == "BUILT_PROMPT"
         # Warning surfaced
-        warnings = [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
+        warnings = [
+            r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING
+        ]
         assert any(
             "update_system_prompt failed" in m and "database is locked" in m
             for m in warnings
         ), f"Expected write-failure warning, got: {warnings}"
 
 
-
 # ---------------------------------------------------------------------------
 # Byte-stability invariant
 # ---------------------------------------------------------------------------
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -575,10 +661,7 @@ class TestPerResponseSessionWritePath:
         agent.session_id = session_id
         return agent
 
-
-    def test_warning_is_a_first_turn_artifact_not_a_lost_write(
-        self, tmp_path, caplog
-    ):
+    def test_warning_is_a_first_turn_artifact_not_a_lost_write(self, tmp_path, caplog):
         """Second turn of the SAME id restores — so nothing was dropped."""
         from clawk_state import SessionDB
 
@@ -588,9 +671,7 @@ class TestPerResponseSessionWritePath:
             db.create_session(session_id, source="studio")
             db.append_message(session_id=session_id, role="user", content="hi")
 
-            with caplog.at_level(
-                logging.WARNING, logger="agent.conversation_loop"
-            ):
+            with caplog.at_level(logging.WARNING, logger="agent.conversation_loop"):
                 _restore_or_build_system_prompt(
                     self._agent(db, session_id), None, history
                 )
@@ -598,9 +679,7 @@ class TestPerResponseSessionWritePath:
 
             caplog.clear()
             second = self._agent(db, session_id)
-            with caplog.at_level(
-                logging.WARNING, logger="agent.conversation_loop"
-            ):
+            with caplog.at_level(logging.WARNING, logger="agent.conversation_loop"):
                 _restore_or_build_system_prompt(second, None, history)
 
             assert second._cached_system_prompt == "GROUP_PROMPT"

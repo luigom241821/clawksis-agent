@@ -14,6 +14,7 @@ Refused, never stopped:
 - anything whose ``identify`` cannot be pinned to one live process (pid/start time disagree, our
   own process, not a gateway).
 """
+
 from __future__ import annotations
 
 import os
@@ -37,6 +38,7 @@ REFUSAL_DETAIL = {
 
 def _install_root() -> Path:
     from clawk_constants import get_default_clawk_root
+
     return Path(get_default_clawk_root()).resolve()
 
 
@@ -45,6 +47,7 @@ def _identify(home: Path, timeout: float) -> tuple[Path, dict] | None:
     the default multiplexer's for a served named profile (the same order discovery uses)."""
     from clawk_cli.gateway_runtime_discovery import query_identify
     from clawk_cli.gateway_runtime_multiplex import multiplexer_root_for
+
     for control in (home, multiplexer_root_for(home)):
         if control is None:
             continue
@@ -57,7 +60,9 @@ def _identify(home: Path, timeout: float) -> tuple[Path, dict] | None:
 
 def _same(a: Any, b: Path) -> bool:
     try:
-        return os.path.normcase(str(Path(a).resolve())) == os.path.normcase(str(b.resolve()))
+        return os.path.normcase(str(Path(a).resolve())) == os.path.normcase(
+            str(b.resolve())
+        )
     except (OSError, TypeError, ValueError):
         return False
 
@@ -68,15 +73,29 @@ def _within_install(home: Path, root: Path) -> bool:
 
 
 def _verified_owner(control: Path, payload: dict) -> tuple[int, Any] | str:
-    from gateway.status import _GATEWAY_KIND, _pid_exists, get_process_start_time, start_time_fingerprints_match
+    from gateway.status import (
+        _GATEWAY_KIND,
+        _pid_exists,
+        get_process_start_time,
+        start_time_fingerprints_match,
+    )
+
     protocol = payload.get("runtime_protocol")
     if type(protocol) is int and protocol > 1:
         return "owner_newer"
-    if not _within_install(control, _install_root()) or not _same(payload.get("clawk_home"), control):
+    if not _within_install(control, _install_root()) or not _same(
+        payload.get("clawk_home"), control
+    ):
         return "foreign_install"
     pid, recorded = payload.get("pid"), payload.get("start_time")
-    if (payload.get("kind") != _GATEWAY_KIND or type(pid) is not int or pid <= 1
-            or pid in {os.getpid(), os.getppid()} or recorded is None or not _pid_exists(pid)):
+    if (
+        payload.get("kind") != _GATEWAY_KIND
+        or type(pid) is not int
+        or pid <= 1
+        or pid in {os.getpid(), os.getppid()}
+        or recorded is None
+        or not _pid_exists(pid)
+    ):
         return "owner_unverified"
     current = get_process_start_time(pid)
     try:
@@ -90,15 +109,26 @@ def _verified_owner(control: Path, payload: dict) -> tuple[int, Any] | str:
 def _write_planned_stop(control: Path, pid: int, start_time: Any) -> None:
     """The marker ``clawk gateway stop`` writes, in the OWNER's home (it reads its own), so the old
     gateway exits as a planned stop: clean exit, ``stopped`` persisted, no supervisor revival."""
-    from gateway.status import _PLANNED_STOP_MARKER_FILENAME, _utc_now_iso, _write_marker
-    _write_marker(control / _PLANNED_STOP_MARKER_FILENAME, {
-        "target_pid": pid, "target_start_time": start_time,
-        "stopper_pid": os.getpid(), "written_at": _utc_now_iso(),
-    })
+    from gateway.status import (
+        _PLANNED_STOP_MARKER_FILENAME,
+        _utc_now_iso,
+        _write_marker,
+    )
+
+    _write_marker(
+        control / _PLANNED_STOP_MARKER_FILENAME,
+        {
+            "target_pid": pid,
+            "target_start_time": start_time,
+            "stopper_pid": os.getpid(),
+            "written_at": _utc_now_iso(),
+        },
+    )
 
 
 def _wait_gone(pid: int, seconds: float) -> bool:
     from gateway.status import _pid_exists
+
     end = time.monotonic() + max(seconds, 0.0)
     while _pid_exists(pid):
         if time.monotonic() >= end:
@@ -111,12 +141,17 @@ def replace_incompatible_owner(home: Path, *, deadline: float) -> str | None:
     """Stop the older-Clawksis gateway answering for *home*; None once it is gone, else a refusal code
     (see :data:`REFUSAL_DETAIL`). Never starts anything: the caller's ensure loop does that."""
     from gateway.status import terminate_pid
+
     budget = deadline - time.monotonic()
     if budget <= 0:
         return "owner_unreachable"
     try:
         found = _identify(home, timeout=min(2.0, budget))
-    except (OSError, ValueError, TypeError):  # timeout, refused/denied peer, malformed reply
+    except (
+        OSError,
+        ValueError,
+        TypeError,
+    ):  # timeout, refused/denied peer, malformed reply
         return "owner_unreachable"
     if found is None:
         return None  # it is already gone: nothing to replace
@@ -126,7 +161,10 @@ def replace_incompatible_owner(home: Path, *, deadline: float) -> str | None:
         return verdict
     pid, start_time = verdict
     _write_planned_stop(control, pid, start_time)
-    graceful = min(_GRACEFUL_STOP_SECONDS, max(deadline - time.monotonic() - _FORCED_STOP_SECONDS, 1.0))
+    graceful = min(
+        _GRACEFUL_STOP_SECONDS,
+        max(deadline - time.monotonic() - _FORCED_STOP_SECONDS, 1.0),
+    )
     try:
         if os.name != "nt":
             # Windows has no SIGTERM for an asyncio loop: the marker watcher IS its graceful stop.

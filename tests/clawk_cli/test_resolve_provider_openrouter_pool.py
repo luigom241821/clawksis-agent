@@ -63,5 +63,3 @@ def test_auto_detects_openrouter_from_pool(tmp_path, monkeypatch):
     from clawk_cli.auth import resolve_provider
 
     assert resolve_provider("auto") == "openrouter"
-
-

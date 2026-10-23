@@ -4,6 +4,7 @@
 project), but the current-diagnostics lookup keyed by the enclosing workspace root, so the delta
 baseline was refreshed from ``[]`` while the live client held diagnostics.
 """
+
 from __future__ import annotations
 
 import dataclasses
@@ -26,16 +27,28 @@ def test_nested_single_root_client_is_found_by_current_lookup(tmp_path, monkeypa
     monkeypatch.chdir(repo)
 
     original = next(s for s in servers.SERVERS if s.server_id == "typescript")
-    assert original.resolve_root(str(src), str(repo)) == str(nested) and not original.multi_root
+    assert (
+        original.resolve_root(str(src), str(repo)) == str(nested)
+        and not original.multi_root
+    )
 
     def spawn(root, ctx):
-        return servers.SpawnSpec(command=[sys.executable, MOCK_SERVER], workspace_root=root, cwd=root,
-                                 env={"MOCK_LSP_SCRIPT": "errors"}, initialization_options={})
+        return servers.SpawnSpec(
+            command=[sys.executable, MOCK_SERVER],
+            workspace_root=root,
+            cwd=root,
+            env={"MOCK_LSP_SCRIPT": "errors"},
+            initialization_options={},
+        )
 
     mocked = dataclasses.replace(original, build_spawn=spawn)
-    monkeypatch.setattr(servers, "SERVERS", [mocked if s is original else s for s in servers.SERVERS])
+    monkeypatch.setattr(
+        servers, "SERVERS", [mocked if s is original else s for s in servers.SERVERS]
+    )
 
-    svc = manager.LSPService(enabled=True, wait_mode="document", wait_timeout=5, install_strategy="manual")
+    svc = manager.LSPService(
+        enabled=True, wait_mode="document", wait_timeout=5, install_strategy="manual"
+    )
     try:
         svc.snapshot_baseline(str(src))
         live = svc.get_diagnostics_sync(str(src), delta=False)

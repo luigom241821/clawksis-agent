@@ -15,17 +15,26 @@ def _image_to_data_url(ref: str, cap: int):
     import base64
     import mimetypes
     import os
+
     try:
         if ref.startswith(("http://", "https://")):
             # Provider-result URLs are remote-party-controlled — same SSRF guard as
             # agent/provider_media.save_url (which may have fallen back to the bare URL).
             from tools.url_safety import create_ssrf_safe_client, is_safe_url
+
             if not is_safe_url(ref):
                 return None
-            with create_ssrf_safe_client(timeout=60, follow_redirects=True) as client, \
-                    client.stream("GET", ref, headers={"User-Agent": "clawksis-agent"}) as resp:
+            with (
+                create_ssrf_safe_client(timeout=60, follow_redirects=True) as client,
+                client.stream(
+                    "GET", ref, headers={"User-Agent": "clawksis-agent"}
+                ) as resp,
+            ):
                 resp.raise_for_status()
-                if resp.headers.get("content-length") and int(resp.headers["content-length"]) > cap:
+                if (
+                    resp.headers.get("content-length")
+                    and int(resp.headers["content-length"]) > cap
+                ):
                     return None
                 chunks, total = [], 0
                 for chunk in resp.iter_bytes():
@@ -34,7 +43,11 @@ def _image_to_data_url(ref: str, cap: int):
                         return None
                     chunks.append(chunk)
                 data = b"".join(chunks)
-                mime = (resp.headers.get("content-type") or "image/png").split(";", 1)[0].strip()
+                mime = (
+                    (resp.headers.get("content-type") or "image/png")
+                    .split(";", 1)[0]
+                    .strip()
+                )
         elif os.path.isfile(ref):
             if os.path.getsize(ref) > cap:
                 return None
@@ -60,15 +73,21 @@ def _(rid, params: dict) -> dict:
     callers fall back to ``image`` (the backend's URL/path)."""
     try:
         from tools.image_generation_tool import check_image_generation_requirements
+
         available = bool(check_image_generation_requirements())
     except Exception:
         available = False
     if is_truthy_value(params.get("probe", False)):
         return _ok(rid, {"available": available})
     if not available:
-        return _ok(rid, {
-            "available": False, "success": False,
-            "error": "No image generation backend configured (run `clawk tools` to enable one)."})
+        return _ok(
+            rid,
+            {
+                "available": False,
+                "success": False,
+                "error": "No image generation backend configured (run `clawk tools` to enable one).",
+            },
+        )
     prompt = str(params.get("prompt") or "").strip()
     if not prompt:
         return _err(rid, 4071, "prompt required")
@@ -81,16 +100,32 @@ def _(rid, params: dict) -> dict:
         # Full provider dispatcher — same path as the model tool (source-image confinement,
         # plugin providers, managed routing, FAL fallback); the FAL leaf bypassed providers.
         from tools.image_generation_tool import _handle_image_generate
-        result = json.loads(_handle_image_generate({"prompt": prompt, "aspect_ratio": aspect}))
+
+        result = json.loads(
+            _handle_image_generate({"prompt": prompt, "aspect_ratio": aspect})
+        )
     except Exception as e:
         return _err(rid, 5071, str(e))
     if not result.get("success"):
-        return _ok(rid, {"available": True, "success": False,
-                         "error": str(result.get("error") or "generation failed")})
+        return _ok(
+            rid,
+            {
+                "available": True,
+                "success": False,
+                "error": str(result.get("error") or "generation failed"),
+            },
+        )
     image_ref = str(result.get("image") or "")
     data_url = _image_to_data_url(image_ref, cap) if image_ref else None
-    return _ok(rid, {"available": True, "success": True, "image": image_ref,
-                     **({"image_data": data_url} if data_url else {})})
+    return _ok(
+        rid,
+        {
+            "available": True,
+            "success": True,
+            "image": image_ref,
+            **({"image_data": data_url} if data_url else {}),
+        },
+    )
 
 
 def register(server) -> None:

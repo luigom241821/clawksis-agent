@@ -33,7 +33,8 @@ def _fmt_pending_list(subsystem: str) -> str:
 
 
 def handle_pending_subcommand(
-    subsystem: str, args: list[str], *, memory_store=None, set_mode_fn=None) -> Optional[str]:
+    subsystem: str, args: list[str], *, memory_store=None, set_mode_fn=None
+) -> Optional[str]:
     """Dispatch a /memory or /skills write-approval subcommand.
 
     ``memory_store`` applies approved memory writes (CLI passes its live store; gateway a freshly
@@ -82,9 +83,16 @@ def _approve(subsystem: str, rest: list[str], memory_store) -> str:
         if ok:
             wa.discard_pending(subsystem, rec["id"])
             applied += 1
-            overwritten.extend(f"  {rec['id']}: {text}" for text in _changed_entries(result, "replaced"))
-            patched.extend(f"  {rec['id']}: {text}" for text in _changed_entries(result, "patched"))
-            removed.extend(f"  {rec['id']}: {text}" for text in _changed_entries(result, "removed"))
+            overwritten.extend(
+                f"  {rec['id']}: {text}"
+                for text in _changed_entries(result, "replaced")
+            )
+            patched.extend(
+                f"  {rec['id']}: {text}" for text in _changed_entries(result, "patched")
+            )
+            removed.extend(
+                f"  {rec['id']}: {text}" for text in _changed_entries(result, "removed")
+            )
         else:
             failed.append(f"{rec['id']}: {msg}")
 
@@ -120,9 +128,13 @@ def _matched_entries(payload) -> list[str]:
     """The full entry each staged memory replace/remove is pinned to: the summary shows only
     the old_text search string, and approval applies to this entry, not to that search."""
     from tools.memory_tool import destructive_ops
-    return [f"{op['action']}s entry: {op['matched_entry']}" if op.get("matched_entry")
-            else f"{op['action']}: unpinned legacy target \u2014 reject and recreate before approving"
-            for op in destructive_ops(payload)]
+
+    return [
+        f"{op['action']}s entry: {op['matched_entry']}"
+        if op.get("matched_entry")
+        else f"{op['action']}: unpinned legacy target \u2014 reject and recreate before approving"
+        for op in destructive_ops(payload)
+    ]
 
 
 def _apply_one(subsystem: str, rec, memory_store):
@@ -133,9 +145,11 @@ def _apply_one(subsystem: str, rec, memory_store):
             if memory_store is None:
                 return False, "memory store unavailable", {}
             from tools.memory_tool import apply_memory_pending
+
             result = apply_memory_pending(payload, memory_store)
         else:
             from tools.skill_manager_tool import apply_skill_pending
+
             result = json.loads(apply_skill_pending(payload))
         return bool(result.get("success")), result.get("error", ""), result
     except Exception as e:
@@ -147,7 +161,11 @@ def _reject(subsystem: str, rest: list[str]) -> str:
         return _usage(subsystem)
     target = rest[0]
     if target.lower() == "all":
-        n = sum(1 for rec in wa.list_pending(subsystem) if wa.discard_pending(subsystem, rec["id"]))
+        n = sum(
+            1
+            for rec in wa.list_pending(subsystem)
+            if wa.discard_pending(subsystem, rec["id"])
+        )
         return f"Rejected {n} pending {subsystem} write(s)."
     if wa.discard_pending(subsystem, target):
         return f"Rejected pending {subsystem} write '{target}'."
@@ -160,27 +178,32 @@ def _diff(rest: list[str]) -> str:
     rec = wa.get_pending(wa.SKILLS, rest[0])
     if not rec:
         return f"No pending skill write with id '{rest[0]}'."
-    return f"# Pending skill write {rec['id']}: {rec.get('summary', '')}\n\n" + wa.skill_pending_diff(rec)
+    return (
+        f"# Pending skill write {rec['id']}: {rec.get('summary', '')}\n\n"
+        + wa.skill_pending_diff(rec)
+    )
 
 
 _APPROVAL_VALUES = {
     **dict.fromkeys(("on", "true", "yes", "1", "enable", "enabled"), True),
-    **dict.fromkeys(("off", "false", "no", "0", "disable", "disabled"), False)}
+    **dict.fromkeys(("off", "false", "no", "0", "disable", "disabled"), False),
+}
 
 
 def _set_approval(subsystem: str, rest: list[str], set_mode_fn) -> str:
     """Turn the approval gate on/off for a subsystem."""
     if not rest:
-        return (f"{_fmt_state(subsystem)}\n"
-                f"Set with: /{subsystem} approval <on|off>")
+        return f"{_fmt_state(subsystem)}\nSet with: /{subsystem} approval <on|off>"
     arg = rest[0].strip().lower()
     enabled = _APPROVAL_VALUES.get(arg)
     if enabled is None:
         return f"Invalid value '{arg}'. Use: on or off."
     if set_mode_fn is None:
         val = "true" if enabled else "false"
-        return (f"To change the {subsystem} approval gate, run:\n"
-                f"  clawk config set {subsystem}.write_approval {val}")
+        return (
+            f"To change the {subsystem} approval gate, run:\n"
+            f"  clawk config set {subsystem}.write_approval {val}"
+        )
     try:
         set_mode_fn(enabled)
     except Exception as e:

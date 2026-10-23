@@ -48,11 +48,19 @@ class ConversationState:
     model_override: Optional[dict[str, Any]] = None  # /model per-session override
     one_turn_restore: Optional[dict[str, Any]] = None  # /model --once snapshot
     reasoning_override: Optional[dict[str, Any]] = None  # /reasoning override
-    service_tier_override: Any = _UNSET_TIER  # /fast: "priority" or None; _UNSET_TIER = absent
+    service_tier_override: Any = (
+        _UNSET_TIER  # /fast: "priority" or None; _UNSET_TIER = absent
+    )
     last_resolved_model: str = ""  # last successfully-resolved non-empty model
-    queued_events: list[Any] = field(default_factory=list)  # /queue overflow FIFO (head in adapter)
-    sidecar_notes: list[str] = field(default_factory=list)  # one-shot must-deliver notes
-    ephemeral_pin: Optional[tuple[Any, ...]] = None  # pinned session-context (change_key, text, redact_pii)
+    queued_events: list[Any] = field(
+        default_factory=list
+    )  # /queue overflow FIFO (head in adapter)
+    sidecar_notes: list[str] = field(
+        default_factory=list
+    )  # one-shot must-deliver notes
+    ephemeral_pin: Optional[tuple[Any, ...]] = (
+        None  # pinned session-context (change_key, text, redact_pii)
+    )
     # (channel_prompt, parent_chat_id) of the last non-internal turn; internal events reuse it
     channel_pin: Optional[tuple[Optional[str], Optional[str]]] = None
     vc_last: Optional[str] = None  # last voice-channel context delivered
@@ -72,7 +80,9 @@ class PersistentState:
     native_image_paths: list[str] = field(default_factory=list)  # consumed one-shot
     # Legacy runner-level pending text (flushed on shutdown); not the adapter-level one.
     pending_command_text: Optional[str] = None
-    run_generation: int = 0  # monotonic; NEVER reset (stale-run detection depends on it)
+    run_generation: int = (
+        0  # monotonic; NEVER reset (stale-run detection depends on it)
+    )
     # Consecutive hygiene compression failures (the in-agent ladder is unreachable: hygiene builds
     # a FRESH AIAgent per run).  Reset on success; process-local, mirrored to the DB by run.py.
     # Monotonic run-generation counter (#28686). NEVER reset: clearing it would break stale-run detection.
@@ -105,6 +115,7 @@ class SessionState:
 
 class _FieldSpec(NamedTuple):
     """One legacy dict: scope attr, field name, default factory, presence test."""
+
     scope: str
     name: str
     default: Callable[[], Any]
@@ -132,7 +143,9 @@ class _RunnerView(MutableMapping):
     def __len__(self) -> int:
         return sum(1 for _ in self)
 
-    def __eq__(self, other: object) -> bool:  # Mapping has no __eq__; tests compare to dicts
+    def __eq__(
+        self, other: object
+    ) -> bool:  # Mapping has no __eq__; tests compare to dicts
         if isinstance(other, (dict, MutableMapping)):
             return dict(self.items()) == dict(other)
         return NotImplemented
@@ -156,7 +169,11 @@ class SessionFieldView(_RunnerView):
     def _present(self, key: Any) -> Optional[SessionState]:
         """The session state for ``key`` if its field is present, else None."""
         state = self._sessions().get(key)
-        return state if state is not None and self._spec.is_present(self._value(state)) else None
+        return (
+            state
+            if state is not None and self._spec.is_present(self._value(state))
+            else None
+        )
 
     def _held(self, key: str) -> SessionState:
         state = self._present(key)
@@ -214,7 +231,11 @@ class TurnLeaseTokenView(_RunnerView):
         del self._held(key).lease_tokens[key[1]]
 
     def __iter__(self) -> Iterator[tuple[str, Any]]:
-        return ((k, gen) for k, s in list(self._sessions().items()) for gen in list(s.turn.lease_tokens))
+        return (
+            (k, gen)
+            for k, s in list(self._sessions().items())
+            for gen in list(s.turn.lease_tokens)
+        )
 
     def clear(self) -> None:  # avoid MutableMapping's popitem loop
         for key in list(self):
@@ -230,7 +251,9 @@ LEGACY_FIELD_SPECS: dict[str, _FieldSpec] = {
     "_session_model_overrides": _spec("conversation", "model_override", None),
     "_pending_one_turn_model_restores": _spec("conversation", "one_turn_restore", None),
     "_session_reasoning_overrides": _spec("conversation", "reasoning_override", None),
-    "_session_service_tier_overrides": _spec("conversation", "service_tier_override", _UNSET_TIER),
+    "_session_service_tier_overrides": _spec(
+        "conversation", "service_tier_override", _UNSET_TIER
+    ),
     "_last_resolved_model": _spec("conversation", "last_resolved_model", str),
     "_queued_events": _spec("conversation", "queued_events", list),
     "_pending_turn_sidecar_notes": _spec("conversation", "sidecar_notes", list),
@@ -238,7 +261,9 @@ LEGACY_FIELD_SPECS: dict[str, _FieldSpec] = {
     "_session_vc_last": _spec("conversation", "vc_last", None),
     "_pending_approvals": _spec("persistent", "approvals", None),
     "_update_prompt_pending": _spec("persistent", "update_prompt_pending", bool),
-    "_pending_native_image_paths_by_session": _spec("persistent", "native_image_paths", list),
+    "_pending_native_image_paths_by_session": _spec(
+        "persistent", "native_image_paths", list
+    ),
     "_pending_messages": _spec("persistent", "pending_command_text", None),
     "_session_run_generation": _spec("persistent", "run_generation", int),
 }
@@ -268,5 +293,6 @@ def legacy_dict_property(attr_name: str) -> property:
 def legacy_lease_token_property() -> property:
     """Legacy (session_key, generation)-keyed view of held turn-lease tokens."""
     return _legacy_property(
-        TurnLeaseTokenView, "Legacy (session_key, generation)-keyed turn-lease token view."
+        TurnLeaseTokenView,
+        "Legacy (session_key, generation)-keyed turn-lease token view.",
     )

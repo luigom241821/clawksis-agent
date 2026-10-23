@@ -1,4 +1,5 @@
 """Pinned tool acquisition for PM's private Python engine; never worker API."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -9,7 +10,9 @@ from pm.registry import get_package
 from pm.store import current_target
 
 
-def _toolchain(*, realize: bool = True, explicit: bool = False) -> tuple[Path, Path] | None:
+def _toolchain(
+    *, realize: bool = True, explicit: bool = False
+) -> tuple[Path, Path] | None:
     """Resolve uv and Python without host discovery or recursive worker dispatch.
 
     A read-only probe never installs. A sealed Windows payload builds on a verified writable
@@ -33,10 +36,16 @@ def _toolchain(*, realize: bool = True, explicit: bool = False) -> tuple[Path, P
         if location is None:
             if not realize:
                 return None
-            raise InstallError(name, "pinned tool is unavailable", "run `clawk pm install`")
+            raise InstallError(
+                name, "pinned tool is unavailable", "run `clawk pm install`"
+            )
         if name == "python" and target.startswith("win32") and sealed():
-            location = writable_copy(name, realize=realize, explicit=explicit,
-                                     why="a writable Python is required for bundled builds")
+            location = writable_copy(
+                name,
+                realize=realize,
+                explicit=explicit,
+                why="a writable Python is required for bundled builds",
+            )
             if location is None:
                 return None
         facts, store = location
@@ -44,7 +53,9 @@ def _toolchain(*, realize: bool = True, explicit: bool = False) -> tuple[Path, P
         if binary is None or not binary.is_file():
             if not realize:
                 return None
-            raise InstallError(name, "installed binary is missing", "run `clawk pm install`")
+            raise InstallError(
+                name, "installed binary is missing", "run `clawk pm install`"
+            )
         binaries[name] = binary
     # Callers execute and compare these outside PM's own file calls: the ordinary spelling, not the store's.
     return Path(native(binaries["uv"])), Path(native(binaries["python"]))

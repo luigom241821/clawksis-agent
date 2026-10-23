@@ -56,7 +56,12 @@ def _clip(text: str, limit: int) -> str:
 def _transcript_estimate(history) -> tuple[int, int]:
     """``(approx_tokens, message_count)`` over the user/assistant messages of a transcript."""
     from agent.model_metadata import estimate_messages_tokens_rough
-    msgs = [m for m in history if m.get("role") in {"user", "assistant"} and m.get("content")]
+
+    msgs = [
+        m
+        for m in history
+        if m.get("role") in {"user", "assistant"} and m.get("content")
+    ]
     return estimate_messages_tokens_rough(msgs), len(msgs)
 
 
@@ -70,9 +75,11 @@ async def _quiet(call, default=None):
 
 # English source for the transcript-read-failure reply; callers render ``history_unreadable()``
 # (``gateway.shared.history_unreadable``) so the active language applies.
-HISTORY_UNREADABLE = ("⚠️ I can't read this conversation's history right now (your earlier messages "
-                      "exist but cannot be loaded). Run `clawk doctor --fix` on the host, or use /new "
-                      "to start fresh.")
+HISTORY_UNREADABLE = (
+    "⚠️ I can't read this conversation's history right now (your earlier messages "
+    "exist but cannot be loaded). Run `clawk doctor --fix` on the host, or use /new "
+    "to start fresh."
+)
 
 
 def history_unreadable() -> str:
@@ -82,6 +89,7 @@ def history_unreadable() -> str:
 def _configured_provider() -> str:
     """``model.provider`` from the gateway config ("" when unset)."""
     from gateway.run import _load_gateway_config
+
     user_config = _load_gateway_config()
     model_cfg = user_config.get("model", {}) if isinstance(user_config, dict) else {}
     return _clean_str(model_cfg.get("provider")) if isinstance(model_cfg, dict) else ""
@@ -96,7 +104,11 @@ def _quiet_sync(call, default=None):
 
 
 def _status_model_route(
-    status_agent, active_override: dict, persisted_route: dict, session_row: dict, session_entry
+    status_agent,
+    active_override: dict,
+    persisted_route: dict,
+    session_row: dict,
+    session_entry,
 ):
     """``(model, provider, context_used, context_total, route)`` for /status.
 
@@ -106,28 +118,58 @@ def _status_model_route(
     lookup queries the endpoint that serves the displayed model (never a losing route's endpoint);
     a winner without a ``base_url`` leaves the lookup on the default runtime route.
     """
-    from gateway.run import _AGENT_PENDING_SENTINEL, _load_gateway_config, _resolve_gateway_model
+    from gateway.run import (
+        _AGENT_PENDING_SENTINEL,
+        _load_gateway_config,
+        _resolve_gateway_model,
+    )
+
     context_used = context_total = 0
     routes: list[tuple[str, str, dict]] = []
     if status_agent is not None and status_agent is not _AGENT_PENDING_SENTINEL:
-        routes.append((_clean_str(getattr(status_agent, "model", "")),
-                       _clean_str(getattr(status_agent, "provider", "")),
-                       {"base_url": _clean_str(getattr(status_agent, "base_url", "")),
-                        "api_key": _clean_str(getattr(status_agent, "api_key", ""))}))
+        routes.append(
+            (
+                _clean_str(getattr(status_agent, "model", "")),
+                _clean_str(getattr(status_agent, "provider", "")),
+                {
+                    "base_url": _clean_str(getattr(status_agent, "base_url", "")),
+                    "api_key": _clean_str(getattr(status_agent, "api_key", "")),
+                },
+            )
+        )
         ctx = getattr(status_agent, "context_compressor", None)
         if ctx is not None:
             context_used = max(0, _int_value(getattr(ctx, "last_prompt_tokens", 0)))
             context_total = _int_value(getattr(ctx, "context_length", 0))
-    routes.append((_clean_str(active_override.get("model")),
-                   _clean_str(active_override.get("provider")),
-                   {"base_url": _clean_str(active_override.get("base_url")),
-                    "api_key": _clean_str(active_override.get("api_key"))}))
-    routes.append((_clean_str(persisted_route.get("model")),
-                   _clean_str(persisted_route.get("billing_provider")), {}))
-    row_route = (_clean_str(session_row.get("model")), _clean_str(session_row.get("billing_provider")), {})
+    routes.append(
+        (
+            _clean_str(active_override.get("model")),
+            _clean_str(active_override.get("provider")),
+            {
+                "base_url": _clean_str(active_override.get("base_url")),
+                "api_key": _clean_str(active_override.get("api_key")),
+            },
+        )
+    )
+    routes.append(
+        (
+            _clean_str(persisted_route.get("model")),
+            _clean_str(persisted_route.get("billing_provider")),
+            {},
+        )
+    )
+    row_route = (
+        _clean_str(session_row.get("model")),
+        _clean_str(session_row.get("billing_provider")),
+        {},
+    )
     # First fully-resolved (model AND provider) route wins; the SessionDB row is used even if partial.
-    model_name, provider_name, route = next((r for r in routes if r[0] and r[1]), row_route)
-    context_used = context_used or _int_value(getattr(session_entry, "last_prompt_tokens", 0))
+    model_name, provider_name, route = next(
+        (r for r in routes if r[0] and r[1]), row_route
+    )
+    context_used = context_used or _int_value(
+        getattr(session_entry, "last_prompt_tokens", 0)
+    )
     user_config: dict[str, Any] = {}
     if not model_name or not provider_name:
         user_config = _quiet_sync(_load_gateway_config, {})
@@ -137,7 +179,13 @@ def _status_model_route(
     provider_name = provider_name or _clean_str(model_cfg.get("provider"))
     # No raw ``model.context_length`` pin here: the resolver applies it only while the displayed
     # route still matches the configured one (a session /model switch must not inherit it).
-    return model_name, provider_name, context_used, context_total, {"provider": provider_name, **route}
+    return (
+        model_name,
+        provider_name,
+        context_used,
+        context_total,
+        {"provider": provider_name, **route},
+    )
 
 
 def _context_compressor_lines(agent, ctx, used: int) -> list[str]:
@@ -145,29 +193,48 @@ def _context_compressor_lines(agent, ctx, used: int) -> list[str]:
     and cumulative throughput (labelled as throughput, NOT context size)."""
     lines: list[str] = []
     from agent.context_breakdown import context_display_source
+
     mark = "~" if context_display_source(ctx) != "provider_usage" else ""
     threshold = _n(ctx, "threshold_tokens")
     threshold_pct = f"{_n(ctx, 'threshold_percent') * 100:.0f}"
     if threshold > 0:
         if used >= threshold:
-            lines.append(t("gateway.context.over_threshold", threshold=_fmt(threshold),
-                           threshold_pct=threshold_pct))
+            lines.append(
+                t(
+                    "gateway.context.over_threshold",
+                    threshold=_fmt(threshold),
+                    threshold_pct=threshold_pct,
+                )
+            )
         else:
-            lines.append(t("gateway.context.threshold", threshold=_fmt(threshold),
-                           threshold_pct=threshold_pct, to_go=mark + _fmt(threshold - used)))
+            lines.append(
+                t(
+                    "gateway.context.threshold",
+                    threshold=_fmt(threshold),
+                    threshold_pct=threshold_pct,
+                    to_go=mark + _fmt(threshold - used),
+                )
+            )
     compressions = _n(ctx, "compression_count")
     lines.append(t("gateway.context.compressions", count=compressions))
-    savings = getattr(ctx, "_last_compression_savings_pct", None) if compressions else None
+    savings = (
+        getattr(ctx, "_last_compression_savings_pct", None) if compressions else None
+    )
     if savings is not None:
         lines.append(t("gateway.context.last_savings", savings=f"{savings:.0f}"))
     lines += [
         "",
         t("gateway.context.totals_header", calls=_n(agent, "session_api_calls")),
-        t("gateway.context.totals_line",
-          input=_fmt(_n(agent, "session_input_tokens")),
-          output=_fmt(_n(agent, "session_output_tokens")),
-          reasoning=_fmt(_n(agent, "session_reasoning_tokens"))),
-        t("gateway.context.total_billed", total=_fmt(_n(agent, "session_total_tokens"))),
+        t(
+            "gateway.context.totals_line",
+            input=_fmt(_n(agent, "session_input_tokens")),
+            output=_fmt(_n(agent, "session_output_tokens")),
+            reasoning=_fmt(_n(agent, "session_reasoning_tokens")),
+        ),
+        t(
+            "gateway.context.total_billed",
+            total=_fmt(_n(agent, "session_total_tokens")),
+        ),
         t("gateway.context.throughput_note"),
     ]
     return lines
@@ -183,7 +250,9 @@ def _agents_delegation_lines(d: dict) -> list[str]:
     if status == "stalling" and quiet is not None:
         row += t("gateway.agents.no_progress", seconds=f"{quiet:.0f}")
     elif status != "stalling" and d.get("seconds_since_progress", 0) >= 60:
-        row += t("gateway.agents.quiet_for", seconds=f"{d['seconds_since_progress']:.0f}")
+        row += t(
+            "gateway.agents.quiet_for", seconds=f"{d['seconds_since_progress']:.0f}"
+        )
     if goal:
         row += f" · {goal}"
     lines = [row]
@@ -192,9 +261,21 @@ def _agents_delegation_lines(d: dict) -> list[str]:
             continue
         tool = child.get("current_tool")
         doing = f"`{tool}`" if tool else t("gateway.agents.between_turns")
-        part = t("gateway.agents.child_row", index=i + 1, calls=child.get("api_calls", "?"), doing=doing)
+        part = t(
+            "gateway.agents.child_row",
+            index=i + 1,
+            calls=child.get("api_calls", "?"),
+            doing=doing,
+        )
         idle = child.get("seconds_since_activity")
-        lines.append(part + (t("gateway.agents.active_ago", seconds=f"{idle:.0f}") if idle is not None else ""))
+        lines.append(
+            part
+            + (
+                t("gateway.agents.active_ago", seconds=f"{idle:.0f}")
+                if idle is not None
+                else ""
+            )
+        )
     return lines
 
 
@@ -205,12 +286,22 @@ def _usage_agent_stats_lines(agent) -> list[str]:
     rl_state = agent.get_rate_limit_state()
     if rl_state and rl_state.has_data:
         from agent.rate_limit_tracker import format_rate_limit_compact
-        lines += [t("gateway.usage.rate_limits", state=format_rate_limit_compact(rl_state)), ""]
+
+        lines += [
+            t("gateway.usage.rate_limits", state=format_rate_limit_compact(rl_state)),
+            "",
+        ]
     lines += [
         t("gateway.usage.header_session"),
         t("gateway.usage.label_model", model=agent.model),
-        t("gateway.usage.label_input_tokens", count=_fmt(_n(agent, "session_input_tokens"))),
-        t("gateway.usage.label_output_tokens", count=_fmt(_n(agent, "session_output_tokens"))),
+        t(
+            "gateway.usage.label_input_tokens",
+            count=_fmt(_n(agent, "session_input_tokens")),
+        ),
+        t(
+            "gateway.usage.label_output_tokens",
+            count=_fmt(_n(agent, "session_output_tokens")),
+        ),
         t("gateway.usage.label_total", count=_fmt(agent.session_total_tokens)),
         t("gateway.usage.label_api_calls", count=agent.session_api_calls),
     ]
@@ -218,9 +309,16 @@ def _usage_agent_stats_lines(agent) -> list[str]:
     if ctx.last_prompt_tokens > 0:
         pct = _pct(ctx.last_prompt_tokens, ctx.context_length)
         from agent.context_breakdown import context_display_source
+
         mark = "~" if context_display_source(ctx) != "provider_usage" else ""
-        lines.append(t("gateway.usage.label_context", used=mark + _fmt(ctx.last_prompt_tokens),
-                       total=_fmt(ctx.context_length), pct=f"{mark}{pct:.0f}"))
+        lines.append(
+            t(
+                "gateway.usage.label_context",
+                used=mark + _fmt(ctx.last_prompt_tokens),
+                total=_fmt(ctx.context_length),
+                pct=f"{mark}{pct:.0f}",
+            )
+        )
     if ctx.compression_count:
         lines.append(t("gateway.usage.label_compressions", count=ctx.compression_count))
     return lines
@@ -242,6 +340,7 @@ class GatewayStatusCommandsMixin:
     async def _handle_status_command(self, event: MessageEvent) -> str:
         """Handle /status command."""
         from gateway.run import _AGENT_PENDING_SENTINEL
+
         source = event.source
         session_entry = await self.async_session_store.get_or_create_session(source)
         session_key = session_entry.session_key
@@ -252,17 +351,26 @@ class GatewayStatusCommandsMixin:
         # Pending /queue follow-ups (slot + overflow).
         adapter = self.adapters.get(source.platform) if source else None
         queue_depth = self._queue_depth(session_key, adapter=adapter)
-        title, session_row, db_total_tokens, persisted_route = await self._status_session_db_facts(
-            session_entry.session_id
-        )
+        (
+            title,
+            session_row,
+            db_total_tokens,
+            persisted_route,
+        ) = await self._status_session_db_facts(session_entry.session_id)
         # Prefer the live or cached agent (actual runtime route + context compressor); fall back
         # to an active /model override, then SessionDB metadata + last_prompt_tokens so /status
         # stays useful between turns. Rehydrate first so this precedence survives gateway restarts.
         status_agent = agent if is_running else self._cached_agent_for(session_key)
         self._rehydrate_session_model_override(session_key)
         active_override = self._session_model_override(session_key) or {}
-        model_name, provider_name, context_used, context_total, route = _status_model_route(
-            status_agent, active_override, persisted_route, session_row, session_entry
+        model_name, provider_name, context_used, context_total, route = (
+            _status_model_route(
+                status_agent,
+                active_override,
+                persisted_route,
+                session_row,
+                session_entry,
+            )
         )
         if not context_total and model_name:
             # Same resolver /context uses (off-loop: it can probe /models). A window the resolver only
@@ -273,47 +381,102 @@ class GatewayStatusCommandsMixin:
                 context_total = _int_value(resolved.context_length)
 
         fields = build_status_fields(
-            session_entry.session_id, None, session_row, title=title, model=model_name, provider=provider_name,
-            created=session_entry.created_at, last_activity=session_entry.updated_at,
-            tokens=db_total_tokens, agent_running=is_running,
+            session_entry.session_id,
+            None,
+            session_row,
+            title=title,
+            model=model_name,
+            provider=provider_name,
+            created=session_entry.created_at,
+            last_activity=session_entry.updated_at,
+            tokens=db_total_tokens,
+            agent_running=is_running,
         )
-        lines = [t("gateway.status.header"), "",
-                 t("gateway.status.session_id", session_id=fields["session_id"])]
+        lines = [
+            t("gateway.status.header"),
+            "",
+            t("gateway.status.session_id", session_id=fields["session_id"]),
+        ]
         if fields["title"]:
             lines.append(t("gateway.status.title", title=fields["title"]))
-        lines += [t("gateway.status.created", timestamp=fields["created"]),
-                  t("gateway.status.last_activity", timestamp=fields["last_activity"])]
+        lines += [
+            t("gateway.status.created", timestamp=fields["created"]),
+            t("gateway.status.last_activity", timestamp=fields["last_activity"]),
+        ]
         if fields["model"] and fields["provider"]:
-            lines.append(t("gateway.status.model_provider", model=fields["model"], provider=fields["provider"]))
+            lines.append(
+                t(
+                    "gateway.status.model_provider",
+                    model=fields["model"],
+                    provider=fields["provider"],
+                )
+            )
         elif fields["model"]:
             lines.append(t("gateway.status.model", model=fields["model"]))
         from agent.context_breakdown import context_display_source
-        mark = "~" if context_display_source(getattr(status_agent, "context_compressor", None)) != "provider_usage" else ""
+
+        mark = (
+            "~"
+            if context_display_source(getattr(status_agent, "context_compressor", None))
+            != "provider_usage"
+            else ""
+        )
         if context_total:
             pct = min(100, round((context_used / context_total) * 100))
-            lines.append(t("gateway.status.context", used=mark + _fmt(context_used), total=_fmt(context_total),
-                           pct=f"{mark}{pct}"))
+            lines.append(
+                t(
+                    "gateway.status.context",
+                    used=mark + _fmt(context_used),
+                    total=_fmt(context_total),
+                    pct=f"{mark}{pct}",
+                )
+            )
         elif context_used:
-            lines.append(t("gateway.status.context_used", used=mark + _fmt(context_used)))
-        state = t("gateway.status.state_yes") if fields["agent_running"] else t("gateway.status.state_no")
-        lines += [t("gateway.status.tokens", tokens=fields["tokens"]),
-                  t("gateway.status.agent_running", state=state)]
+            lines.append(
+                t("gateway.status.context_used", used=mark + _fmt(context_used))
+            )
+        state = (
+            t("gateway.status.state_yes")
+            if fields["agent_running"]
+            else t("gateway.status.state_no")
+        )
+        lines += [
+            t("gateway.status.tokens", tokens=fields["tokens"]),
+            t("gateway.status.agent_running", state=state),
+        ]
         if queue_depth:
             lines.append(t("gateway.status.queued", count=queue_depth))
         if source.platform == Platform.MATRIX:
-            scope = getattr(self.adapters.get(Platform.MATRIX), "_matrix_session_scope",
-                            os.getenv("MATRIX_SESSION_SCOPE", "auto"))
+            scope = getattr(
+                self.adapters.get(Platform.MATRIX),
+                "_matrix_session_scope",
+                os.getenv("MATRIX_SESSION_SCOPE", "auto"),
+            )
             lines += [
                 "",
                 t("gateway.status.matrix_scope_header"),
-                t("gateway.status.matrix_scope_room", room=source.chat_name or source.chat_id),
+                t(
+                    "gateway.status.matrix_scope_room",
+                    room=source.chat_name or source.chat_id,
+                ),
                 t("gateway.status.matrix_scope_room_id", room_id=source.chat_id),
-                t("gateway.status.matrix_scope_thread", thread_id=source.thread_id or t("gateway.shared.none_value")),
+                t(
+                    "gateway.status.matrix_scope_thread",
+                    thread_id=source.thread_id or t("gateway.shared.none_value"),
+                ),
                 t("gateway.status.matrix_scope_mode", scope=scope),
-                t("gateway.status.matrix_scope_key",
-                  session_key=self._redact_matrix_session_key(session_key)),
+                t(
+                    "gateway.status.matrix_scope_key",
+                    session_key=self._redact_matrix_session_key(session_key),
+                ),
             ]
-        lines += ["", t("gateway.status.platforms", platforms=', '.join(p.value for p in self.adapters))]
+        lines += [
+            "",
+            t(
+                "gateway.status.platforms",
+                platforms=", ".join(p.value for p in self.adapters),
+            ),
+        ]
         return "\n".join(lines)
 
     async def _status_session_db_facts(self, session_id: str):
@@ -330,10 +493,21 @@ class GatewayStatusCommandsMixin:
         session_row = row if isinstance(row, dict) else {}
         db_total_tokens = sum(
             _int_value(session_row.get(k))
-            for k in ("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens", "reasoning_tokens")
+            for k in (
+                "input_tokens",
+                "output_tokens",
+                "cache_read_tokens",
+                "cache_write_tokens",
+                "reasoning_tokens",
+            )
         )
         route = await _quiet(lambda: db.get_recent_session_model_route(session_id))
-        return title, session_row, db_total_tokens, route if isinstance(route, dict) else {}
+        return (
+            title,
+            session_row,
+            db_total_tokens,
+            route if isinstance(route, dict) else {},
+        )
 
     @staticmethod
     def _redact_matrix_session_key(session_key: str) -> str:
@@ -350,7 +524,11 @@ class GatewayStatusCommandsMixin:
         """
         source = event.source
         session_entry = await self.async_session_store.get_or_create_session(source)
-        expanded = event.get_command_args().strip().lower() in {"all", "full", "details"}
+        expanded = event.get_command_args().strip().lower() in {
+            "all",
+            "full",
+            "details",
+        }
         # Running agent first (mid-turn), then cached agent (between turns).
         agent = self._resident_agent_for(self._session_key_for_source(source)) or None
         ctx = getattr(agent, "context_compressor", None) if agent else None
@@ -358,51 +536,86 @@ class GatewayStatusCommandsMixin:
             agent, ctx, session_entry, source
         )
         from agent.context_breakdown import context_display_source
+
         mark = "~" if context_display_source(ctx) != "provider_usage" else ""
         # Gauge path: preserve the provenance of the selected occupancy figure.
         if used > 0 and context_length > 0:
             pct = _pct(used, context_length)
             filled = round(pct / 100 * 24)
             lines = [
-                t("gateway.context.header"), "",
+                t("gateway.context.header"),
+                "",
                 t("gateway.context.model", model=model_name or "?"),
                 t("gateway.context.window", total=_fmt(context_length)),
-                t("gateway.context.in_use", used=mark + _fmt(used), total=_fmt(context_length), pct=f"{mark}{pct:.0f}"),
-                t("gateway.context.bar", bar="█" * max(0, filled) + "░" * max(0, 24 - filled)),
-                t("gateway.context.headroom", headroom=mark + _fmt(max(0, context_length - used))),
+                t(
+                    "gateway.context.in_use",
+                    used=mark + _fmt(used),
+                    total=_fmt(context_length),
+                    pct=f"{mark}{pct:.0f}",
+                ),
+                t(
+                    "gateway.context.bar",
+                    bar="█" * max(0, filled) + "░" * max(0, 24 - filled),
+                ),
+                t(
+                    "gateway.context.headroom",
+                    headroom=mark + _fmt(max(0, context_length - used)),
+                ),
                 "",
             ]
             # Full view — compression / throughput need the live agent.
-            lines += _context_compressor_lines(agent, ctx, used) if ctx is not None else [
-                t("gateway.context.detail_after_first")]
+            lines += (
+                _context_compressor_lines(agent, ctx, used)
+                if ctx is not None
+                else [t("gateway.context.detail_after_first")]
+            )
             # Per-category estimated breakdown (+ optional expanded listings). Same chars/4 engine
             # the desktop popover and /usage use; plain text (monospace isn't guaranteed on
             # messaging platforms). Fail-open: rendering errors never break /context.
-            breakdown = await asyncio.to_thread(self._context_breakdown_block, agent, source, expanded) if agent else []
+            breakdown = (
+                await asyncio.to_thread(
+                    self._context_breakdown_block, agent, source, expanded
+                )
+                if agent
+                else []
+            )
             return "\n".join(lines + ([""] + breakdown if breakdown else []))
         # Last resort: rough estimate from transcript
         try:
-            history = await self.async_session_store.load_transcript(session_entry.session_id)
+            history = await self.async_session_store.load_transcript(
+                session_entry.session_id
+            )
         except TranscriptReadError:
             return history_unreadable()
         if not history:
             return t("gateway.context.no_data")
         approx, count = _transcript_estimate(history)
-        return "\n".join([
-            t("gateway.context.header"), "",
-            t("gateway.context.estimated", count=_fmt(approx), messages=count),
-            t("gateway.context.detail_after_first"),
-        ])
+        return "\n".join(
+            [
+                t("gateway.context.header"),
+                "",
+                t("gateway.context.estimated", count=_fmt(approx), messages=count),
+                t("gateway.context.detail_after_first"),
+            ]
+        )
 
     async def _resolve_context_figures(self, agent, ctx, session_entry, source):
         """``(used, context_length, model_name)`` for /context: used = compressor -> SessionStore;
         model = agent -> SessionDB row; window = compressor -> gateway model route -> model metadata."""
-        used = max(0, _n(ctx, "last_prompt_tokens")) or max(0, _int_value(getattr(session_entry, "last_prompt_tokens", 0)))
+        used = max(0, _n(ctx, "last_prompt_tokens")) or max(
+            0, _int_value(getattr(session_entry, "last_prompt_tokens", 0))
+        )
         context_length = _n(ctx, "context_length")
-        model_name = _clean_str(getattr(agent, "model", "")) if agent is not None else ""
+        model_name = (
+            _clean_str(getattr(agent, "model", "")) if agent is not None else ""
+        )
         if not model_name and self._session_db:
-            row = await _quiet(lambda: self._session_db.get_session(session_entry.session_id))
-            model_name = _clean_str(row.get("model", "")) if isinstance(row, dict) else ""
+            row = await _quiet(
+                lambda: self._session_db.get_session(session_entry.session_id)
+            )
+            model_name = (
+                _clean_str(row.get("model", "")) if isinstance(row, dict) else ""
+            )
         if not context_length:
             resolved = await self._resolve_route_context(source, model_name)
             if resolved is not None:
@@ -410,73 +623,115 @@ class GatewayStatusCommandsMixin:
                 context_length = _int_value(resolved.context_length)
         if not context_length and model_name:
             from agent.model_metadata import get_model_context_length
+
             context_length = _int_value(
-                await _quiet(lambda: asyncio.to_thread(get_model_context_length, model_name))
+                await _quiet(
+                    lambda: asyncio.to_thread(get_model_context_length, model_name)
+                )
             )
         return used, context_length, model_name
 
-    async def _resolve_route_context(self, source, model_name: str, route: dict | None = None):
+    async def _resolve_route_context(
+        self, source, model_name: str, route: dict | None = None
+    ):
         """``_resolve_gateway_model_context`` for a non-resident session, run off the event loop inside
         the profile serving ``source`` (multiplex). Fail-open: None on any error."""
         from gateway.run import _profile_runtime_scope, _resolve_gateway_model_context
 
         def _resolve():
             if getattr(getattr(self, "config", None), "multiplex_profiles", False):
-                with _profile_runtime_scope(self._resolve_profile_home_for_source(source)):
+                with _profile_runtime_scope(
+                    self._resolve_profile_home_for_source(source)
+                ):
                     return _resolve_gateway_model_context(model_name or None, route)
             return _resolve_gateway_model_context(model_name or None, route)
+
         return await _quiet(lambda: asyncio.to_thread(_resolve))
 
     async def _handle_agents_command(self, event: MessageEvent) -> str:
         """Handle /agents command - list active agents and running tasks."""
         from gateway.run import _AGENT_PENDING_SENTINEL
         from tools.process_registry import format_uptime_short, process_registry
+
         now = time.time()
         current_session_key = self._session_key_for_source(event.source)
         running_started: dict = getattr(self, "_running_agents_ts", {}) or {}
         agent_rows: list[dict] = []
         for session_key, agent in (getattr(self, "_running_agents", {}) or {}).items():
             pending = agent is _AGENT_PENDING_SENTINEL
-            agent_rows.append({
-                "session_key": session_key,
-                "elapsed": max(0, int(now - float(running_started.get(session_key, now)))),
-                "state": t("gateway.agents.state_starting") if pending else t("gateway.agents.state_running"),
-                "session_id": "" if pending else str(getattr(agent, "session_id", "") or ""),
-                "model": "" if pending else str(getattr(agent, "model", "") or ""),
-            })
+            agent_rows.append(
+                {
+                    "session_key": session_key,
+                    "elapsed": max(
+                        0, int(now - float(running_started.get(session_key, now)))
+                    ),
+                    "state": t("gateway.agents.state_starting")
+                    if pending
+                    else t("gateway.agents.state_running"),
+                    "session_id": ""
+                    if pending
+                    else str(getattr(agent, "session_id", "") or ""),
+                    "model": "" if pending else str(getattr(agent, "model", "") or ""),
+                }
+            )
         agent_rows.sort(key=lambda row: row["elapsed"], reverse=True)
         procs = _quiet_sync(process_registry.list_sessions, [])
         running_processes = [p for p in procs if p.get("status") == "running"]
-        background_tasks = [task for task in (getattr(self, "_background_tasks", set()) or set())
-                            if hasattr(task, "done") and not task.done()]
+        background_tasks = [
+            task
+            for task in (getattr(self, "_background_tasks", set()) or set())
+            if hasattr(task, "done") and not task.done()
+        ]
 
         # Background (async) delegations — delegate_task(background=true).
         # Live per-child activity comes from the registry's progress sampler (#51690): api calls, current
         # tool, seconds since last activity.
         from tools.async_delegation import list_async_delegations
-        delegations = [d for d in _quiet_sync(list_async_delegations, [])
-                       if d.get("status") in ("running", "stalling", "finalizing")]
+
+        delegations = [
+            d
+            for d in _quiet_sync(list_async_delegations, [])
+            if d.get("status") in ("running", "stalling", "finalizing")
+        ]
 
         def _agent_row(idx_row):
             idx, row = idx_row
-            current = t("gateway.agents.this_chat") if row["session_key"] == current_session_key else ""
+            current = (
+                t("gateway.agents.this_chat")
+                if row["session_key"] == current_session_key
+                else ""
+            )
             sid = f" · `{row['session_id']}`" if row["session_id"] else ""
             model = f" · `{row['model']}`" if row["model"] else ""
-            return [f"{idx}. `{row['session_key']}` · {row['state']} · "
-                    f"{format_uptime_short(row['elapsed'])}{sid}{model}{current}"]
+            return [
+                f"{idx}. `{row['session_key']}` · {row['state']} · "
+                f"{format_uptime_short(row['elapsed'])}{sid}{model}{current}"
+            ]
 
         def _proc_row(proc):
             cmd = _clip(" ".join(str(proc.get("command", "")).split()), 90)
-            return [f"- `{proc.get('session_id', '?')}` · "
-                    f"{format_uptime_short(int(proc.get('uptime_seconds', 0)))} · `{cmd}`"]
+            return [
+                f"- `{proc.get('session_id', '?')}` · "
+                f"{format_uptime_short(int(proc.get('uptime_seconds', 0)))} · `{cmd}`"
+            ]
 
-        lines = [t("gateway.agents.header"), "", t("gateway.agents.active_agents", count=len(agent_rows))]
+        lines = [
+            t("gateway.agents.header"),
+            "",
+            t("gateway.agents.active_agents", count=len(agent_rows)),
+        ]
         lines += _capped_rows(list(enumerate(agent_rows, 1)), _agent_row)
-        lines += ["", t("gateway.agents.running_processes", count=len(running_processes))]
+        lines += [
+            "",
+            t("gateway.agents.running_processes", count=len(running_processes)),
+        ]
         lines += _capped_rows(running_processes, _proc_row)
         lines += ["", t("gateway.agents.async_jobs", count=len(background_tasks))]
         if delegations:
-            lines += ["", t("gateway.agents.background_delegations", count=len(delegations))]
+            lines += [
+                "",
+                t("gateway.agents.background_delegations", count=len(delegations)),
+            ]
             lines += _capped_rows(delegations, _agents_delegation_lines)
         if not (agent_rows or running_processes or background_tasks or delegations):
             lines += ["", t("gateway.agents.none")]
@@ -486,32 +741,65 @@ class GatewayStatusCommandsMixin:
         """Handle /topup -- show the Nous balance and hand off to the portal. Does NOT charge, confirm,
         or track payment (that happens in the browser; the next /topup shows the new balance)."""
         from agent.account_usage import build_credits_view
-        view = await _quiet(lambda: asyncio.to_thread(build_credits_view, markdown=True))
+
+        view = await _quiet(
+            lambda: asyncio.to_thread(build_credits_view, markdown=True)
+        )
         if view is None or not view.logged_in:
             return t("gateway.credits.not_logged_in")
         # Drop the helper's 📈 header; we print our own.
-        lines = [t("gateway.topup.header")] + [ln for ln in view.balance_lines if not ln.lstrip().startswith("📈")]
+        lines = [t("gateway.topup.header")] + [
+            ln for ln in view.balance_lines if not ln.lstrip().startswith("📈")
+        ]
         if view.identity_line:
             lines += ["", view.identity_line]
         if view.topup_url:
-            lines += ["", t("gateway.topup.portal_link", url=view.topup_url), t("gateway.topup.hint")]
+            lines += [
+                "",
+                t("gateway.topup.portal_link", url=view.topup_url),
+                t("gateway.topup.hint"),
+            ]
         return "\n".join(lines)
 
     def _context_breakdown_block(self, agent, source, expanded: bool) -> list[str]:
         """/context per-category block (plain text, chars/4 estimate, same engine as /usage).
         Runs in a thread; returns [] and never raises."""
         try:
-            from agent.context_breakdown import compute_context_details, render_context_breakdown_lines
+            from agent.context_breakdown import (
+                compute_context_details,
+                render_context_breakdown_lines,
+            )
+
             try:
                 payload = self._session_context_breakdown(agent, source)
             except TranscriptReadError:
-                return [history_unreadable()]  # a read failure is not an empty transcript
+                return [
+                    history_unreadable()
+                ]  # a read failure is not an empty transcript
             if not (payload.get("categories") or []):
                 return []
-            details = _quiet_sync(lambda: compute_context_details(agent), {"skills": [], "toolsets": []}) if expanded else None
-            from agent.context_file_sources import context_file_sources_for_agent, render_context_file_lines
-            file_lines = _quiet_sync(lambda: render_context_file_lines(context_file_sources_for_agent(agent)), [])
-            return render_context_breakdown_lines(payload, details=details, grid=False) + ([""] + file_lines if file_lines else [])
+            details = (
+                _quiet_sync(
+                    lambda: compute_context_details(agent),
+                    {"skills": [], "toolsets": []},
+                )
+                if expanded
+                else None
+            )
+            from agent.context_file_sources import (
+                context_file_sources_for_agent,
+                render_context_file_lines,
+            )
+
+            file_lines = _quiet_sync(
+                lambda: render_context_file_lines(
+                    context_file_sources_for_agent(agent)
+                ),
+                [],
+            )
+            return render_context_breakdown_lines(
+                payload, details=details, grid=False
+            ) + ([""] + file_lines if file_lines else [])
         except Exception:
             return []
 
@@ -519,9 +807,13 @@ class GatewayStatusCommandsMixin:
         """Per-category context estimate (chars/4) for *agent* over the session transcript (sync).
         Raises ``TranscriptReadError`` (unreadable rows must not pass as an empty transcript)."""
         from agent.context_breakdown import compute_session_context_breakdown
+
         store = self.session_store
         try:
-            history = store.load_transcript(store.get_or_create_session(source).session_id) or []
+            history = (
+                store.load_transcript(store.get_or_create_session(source).session_id)
+                or []
+            )
         except TranscriptReadError:
             raise
         except Exception:
@@ -546,10 +838,19 @@ class GatewayStatusCommandsMixin:
                     continue
                 cat_id = str(cat.get("id") or "")
                 label = t(f"gateway.usage.breakdown_cat_{cat_id}")
-                if label.endswith(f"breakdown_cat_{cat_id}"):  # missing key: t() echoes it back
+                if label.endswith(
+                    f"breakdown_cat_{cat_id}"
+                ):  # missing key: t() echoes it back
                     label = str(cat.get("label") or cat_id)
                 pct = round(tokens / total * 100) if total else 0
-                out.append(t("gateway.usage.breakdown_line", label=label, count=_fmt(tokens), pct=f"~{pct}"))
+                out.append(
+                    t(
+                        "gateway.usage.breakdown_line",
+                        label=label,
+                        count=_fmt(tokens),
+                        pct=f"~{pct}",
+                    )
+                )
             return out if len(out) > 1 else []
         except Exception:
             return []
@@ -571,7 +872,8 @@ class GatewayStatusCommandsMixin:
         # Provider/base_url/api_key for the account-usage fetch: live agent first, else persisted
         # billing data on the SessionDB row so `/usage` still returns account info between turns.
         provider, base_url, api_key = (
-            getattr(agent, k, None) if agent else None for k in ("provider", "base_url", "api_key")
+            getattr(agent, k, None) if agent else None
+            for k in ("provider", "base_url", "api_key")
         )
         if not provider and getattr(self, "_session_db", None) is not None:
             provider, base_url = await self._persisted_billing_route(source)
@@ -579,36 +881,50 @@ class GatewayStatusCommandsMixin:
             # Fresh or evicted session with no persisted route (e.g. /usage right after login):
             # fall back to the configured provider, as /status does, so account limits such as
             # Codex subscription windows still render from on-disk credentials (#15167).
-            provider = await _quiet(lambda: asyncio.to_thread(_configured_provider)) or None
+            provider = (
+                await _quiet(lambda: asyncio.to_thread(_configured_provider)) or None
+            )
         if wants_reset:
             if str(provider or "").strip().lower() != "openai-codex":
                 return t("gateway.usage.reset_wrong_provider")
             from agent.account_usage import redeem_codex_reset_credit
+
             result = await asyncio.to_thread(
-                redeem_codex_reset_credit, base_url=base_url, api_key=api_key, force="--force" in args[1:],
+                redeem_codex_reset_credit,
+                base_url=base_url,
+                api_key=api_key,
+                force="--force" in args[1:],
             )
             return result.message
 
         # Account usage off the event loop so slow provider APIs don't block the gateway;
         # failures are non-fatal (account_lines stays []).
         account_snapshot = provider and await _quiet(
-            lambda: asyncio.to_thread(fetch_account_usage, provider, base_url=base_url, api_key=api_key)
+            lambda: asyncio.to_thread(
+                fetch_account_usage, provider, base_url=base_url, api_key=api_key
+            )
         )
         account_lines = (
-            render_account_usage_lines(account_snapshot, markdown=True) if account_snapshot else []
+            render_account_usage_lines(account_snapshot, markdown=True)
+            if account_snapshot
+            else []
         )
 
         # Nous credits + monthly-grant gauge (shared with CLI/TUI). Gates on "a Nous account is
         # logged in" — NOT the inference provider — so a Nous user inferring elsewhere still sees
         # a balance. Fail-open: never break /usage.
         from agent.account_usage import nous_credits_lines
+
         credits_state = getattr(agent, "_credits_state", None) if agent else None
         credits_lines = await _quiet(
-            lambda: asyncio.to_thread(nous_credits_lines, markdown=True, credits_state=credits_state),
+            lambda: asyncio.to_thread(
+                nous_credits_lines, markdown=True, credits_state=credits_state
+            ),
             [],
         )
         # Window plans: a chat's /topup has no Keep going control, so point the setting at the Portal.
         from agent.plan_limits import portal_wording
+
         credits_lines = [portal_wording(line) for line in credits_lines]
 
         def _with_account_blocks(lines: list[str]) -> str:
@@ -619,11 +935,18 @@ class GatewayStatusCommandsMixin:
                         lines.append("")
                     lines.extend(block)
             return "\n".join(lines)
-        if agent and hasattr(agent, "session_total_tokens") and agent.session_api_calls > 0:
+
+        if (
+            agent
+            and hasattr(agent, "session_total_tokens")
+            and agent.session_api_calls > 0
+        ):
             lines = _usage_agent_stats_lines(agent)
             # Per-category breakdown (chars/4 estimate, same engine as the desktop popover): prompt
             # / tools / skills / memory off the live agent, conversation from the transcript.
-            breakdown_lines = await asyncio.to_thread(self._context_breakdown_lines, agent, source)
+            breakdown_lines = await asyncio.to_thread(
+                self._context_breakdown_lines, agent, source
+            )
             if breakdown_lines:
                 lines += [""] + breakdown_lines
             return _with_account_blocks(lines)
@@ -631,28 +954,36 @@ class GatewayStatusCommandsMixin:
         # No agent at all -- rough count from session history
         session_entry = await self.async_session_store.get_or_create_session(source)
         try:
-            history = await self.async_session_store.load_transcript(session_entry.session_id)
+            history = await self.async_session_store.load_transcript(
+                session_entry.session_id
+            )
         except TranscriptReadError:
             return history_unreadable()
         if history:
             approx, count = _transcript_estimate(history)
-            return _with_account_blocks([
-                t("gateway.usage.header_session_info"),
-                t("gateway.usage.label_messages", count=count),
-                t("gateway.usage.label_estimated_context", count=_fmt(approx)),
-                t("gateway.usage.detailed_after_first"),
-            ])
+            return _with_account_blocks(
+                [
+                    t("gateway.usage.header_session_info"),
+                    t("gateway.usage.label_messages", count=count),
+                    t("gateway.usage.label_estimated_context", count=_fmt(approx)),
+                    t("gateway.usage.detailed_after_first"),
+                ]
+            )
         if account_lines or credits_lines:
             return _with_account_blocks([])
         return t("gateway.usage.no_data")
 
     async def _persisted_billing_route(self, source):
         """``(provider, base_url)`` from the SessionDB row / most recent route when no agent is resident."""
+
         async def _rows():
             entry = await self.async_session_store.get_or_create_session(source)
             persisted = await self._session_db.get_session(entry.session_id) or {}
-            route = await self._session_db.get_recent_session_model_route(entry.session_id)
+            route = await self._session_db.get_recent_session_model_route(
+                entry.session_id
+            )
             return persisted, route if isinstance(route, dict) else {}
+
         persisted, recent = await _quiet(_rows, ({}, {}))
         row = recent if recent.get("billing_provider") else persisted
         return row.get("billing_provider"), row.get("billing_base_url")
@@ -660,7 +991,11 @@ class GatewayStatusCommandsMixin:
     async def _handle_insights_command(self, event: MessageEvent) -> str:
         """Handle /insights [N | --days N] [--source S] -- usage insights and analytics."""
         # Normalize Unicode dashes (Telegram/iOS auto-converts -- to em/en dash)
-        args = re.sub(r'[\u2012\u2013\u2014\u2015](days|source)', r'--\1', event.get_command_args().strip())
+        args = re.sub(
+            r"[\u2012\u2013\u2014\u2015](days|source)",
+            r"--\1",
+            event.get_command_args().strip(),
+        )
         days, source = 30, None
         parts = args.split()
         i = 0
@@ -685,9 +1020,12 @@ class GatewayStatusCommandsMixin:
                 db = acquire()
                 try:
                     engine = InsightsEngine(db)
-                    return engine.format_gateway(engine.generate(days=days, source=source))
+                    return engine.format_gateway(
+                        engine.generate(days=days, source=source)
+                    )
                 finally:
                     from clawk_state_registry import release_or_close
+
                     release_or_close(db)
 
             # Not a bare hop: ``SessionDB()`` resolves ``get_clawk_home()`` at call time, a

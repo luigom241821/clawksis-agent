@@ -20,7 +20,11 @@ pytestmark = pytest.mark.platforms("posix")
 
 ROOT = Path(__file__).resolve().parents[3]
 MARKER_SH = ROOT / "scripts" / "desktop-update" / "marker.sh"
-CORPUS = json.loads((ROOT / "tests" / "fixtures" / "update_marker_corpus.json").read_text(encoding="utf-8-sig"))
+CORPUS = json.loads(
+    (ROOT / "tests" / "fixtures" / "update_marker_corpus.json").read_text(
+        encoding="utf-8-sig"
+    )
+)
 
 PRELUDE = f"""
 set -u
@@ -33,11 +37,19 @@ marker_now() {{ echo {CORPUS["now"]}; }}
 
 
 def _live(table: dict) -> str:
-    return " ".join(f"{pid}={'' if ct is None else repr(ct)}" for pid, ct in table.items())
+    return " ".join(
+        f"{pid}={'' if ct is None else repr(ct)}" for pid, ct in table.items()
+    )
 
 
 def _run(script: str) -> list[str]:
-    proc = subprocess.run(["bash", "-c", PRELUDE + script], capture_output=True, text=True, timeout=120, check=False)
+    proc = subprocess.run(
+        ["bash", "-c", PRELUDE + script],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
     assert proc.returncode == 0, proc.stderr
     return proc.stdout.splitlines()
 
@@ -58,7 +70,11 @@ def test_every_judge_case(tmp_path):
     wrong = []
     for case, line in zip(CORPUS["judge"], out):
         verdict, owner, run = line.split("|")
-        got = {"verdict": verdict, "owner": int(owner) if owner else None, "run": run or None}
+        got = {
+            "verdict": verdict,
+            "owner": int(owner) if owner else None,
+            "run": run or None,
+        }
         if got != case["expect"]:
             wrong.append((case["name"], got, case["expect"]))
     assert not wrong
@@ -87,5 +103,7 @@ def test_every_release_case(tmp_path):
             got = {"action": "rewrite", "text": marker.read_text(encoding="utf-8-sig")}
         if got != case["expect"]:
             wrong.append((case["name"], got, case["expect"]))
-        assert (marker.parent / ".clawk-update-in-progress.lock").exists()  # the sidecar is never deleted
+        assert (
+            marker.parent / ".clawk-update-in-progress.lock"
+        ).exists()  # the sidecar is never deleted
     assert not wrong

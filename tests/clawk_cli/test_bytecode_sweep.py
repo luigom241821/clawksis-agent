@@ -47,18 +47,16 @@ def test_sweep_clears_pycache_when_checkout_changed(monkeypatch, tmp_path):
 
     assert not cache.exists()
     # Stamp updated to the current fingerprint.
-    recorded = (repo / main_web_build._BYTECODE_FINGERPRINT_FILE).read_text(encoding="utf-8")
+    recorded = (repo / main_web_build._BYTECODE_FINGERPRINT_FILE).read_text(
+        encoding="utf-8"
+    )
     assert recorded.strip().endswith("b" * 40)
-
-
-
-
-
 
 
 # ---------------------------------------------------------------------------
 # Plugin-update sibling site: __pycache__ under ~/.clawksis/plugins/<name>
 # ---------------------------------------------------------------------------
+
 
 def test_clear_plugin_bytecode_removes_nested_caches(tmp_path):
     from clawk_cli import plugins_cmd
@@ -76,5 +74,3 @@ def test_clear_plugin_bytecode_removes_nested_caches(tmp_path):
     assert removed == 2
     assert not top.exists()
     assert not nested.exists()
-
-

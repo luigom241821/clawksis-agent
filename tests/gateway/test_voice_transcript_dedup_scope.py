@@ -4,6 +4,7 @@ The runner keeps one dedup store for every Discord bot it serves. Keyed by guild
 second bot (another profile) in the same guild dropped its own copy of an utterance because the first
 bot had just recorded it, and a rebind to another text channel inherited the old binding's history.
 """
+
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -24,11 +25,15 @@ class _Bot:
     def __init__(self, profile: str | None) -> None:
         self._owner_profile = profile
         self._voice_text_channels, self._voice_sources = {_GUILD: 700}, {}
-        self._client = SimpleNamespace(get_channel=lambda _id: None, get_guild=lambda _id: None)
+        self._client = SimpleNamespace(
+            get_channel=lambda _id: None, get_guild=lambda _id: None
+        )
         self.handle_message = AsyncMock()
 
     def build_source(self, **fields) -> SessionSource:
-        return SessionSource(platform=Platform.DISCORD, profile=self._owner_profile, **fields)
+        return SessionSource(
+            platform=Platform.DISCORD, profile=self._owner_profile, **fields
+        )
 
 
 @pytest.mark.asyncio
@@ -46,7 +51,10 @@ async def test_dedup_is_scoped_to_the_receiving_bot_and_its_binding() -> None:
     await say(bot_a)
     await say(bot_b)
     await say(bot_a)  # the same capture emitted twice: still suppressed
-    assert (bot_a.handle_message.await_count, bot_b.handle_message.await_count) == (1, 1)
+    assert (bot_a.handle_message.await_count, bot_b.handle_message.await_count) == (
+        1,
+        1,
+    )
     bot_a._voice_text_channels[_GUILD] = 800  # /voice join from another text channel
     await say(bot_a)
     assert bot_a.handle_message.await_count == 2

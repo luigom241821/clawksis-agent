@@ -75,7 +75,6 @@ class FileStateRegistryUnitTests(unittest.TestCase):
         self.assertIn("B", warn)
         self.assertIn("sibling", warn.lower())
 
-
     def test_lock_path_serializes_same_path(self):
         p = self._mk()
         events: list[tuple[str, int]] = []
@@ -183,7 +182,10 @@ class FileStateRegistryUnitTests(unittest.TestCase):
         self.assertIsNone(file_state.check_stale("cron:JOB:run2", p))
         # A sibling that has NOT ended still triggers the guard.
         file_state.note_write("subagent-1-live", p)
-        self.assertIn("sibling subagent 'subagent-1-live'", file_state.check_stale("cron:JOB:run2", p))
+        self.assertIn(
+            "sibling subagent 'subagent-1-live'",
+            file_state.check_stale("cron:JOB:run2", p),
+        )
 
     def test_agent_close_forgets_every_task_id_it_ran(self):
         """``AIAgent.close()`` receives the session_id, but file tools key the registry by
@@ -194,14 +196,18 @@ class FileStateRegistryUnitTests(unittest.TestCase):
         file_state.note_write("cron:JOB:run1", p)
         with patch("run_agent.AIAgent.__init__", return_value=None):
             from run_agent import AIAgent
+
             agent = AIAgent.__new__(AIAgent)
             agent.session_id = "cron_JOB_20260918_060000"
             agent._process_owner_task_ids = {"cron:JOB:run1"}
             agent._active_children = []
             agent._active_children_lock = threading.Lock()
             agent.client = None
-            with patch("run_agent.cleanup_vm"), patch("run_agent.cleanup_browser"), \
-                 patch("tools.computer_use.tool.release_computer_use_session"):
+            with (
+                patch("run_agent.cleanup_vm"),
+                patch("run_agent.cleanup_browser"),
+                patch("tools.computer_use.tool.release_computer_use_session"),
+            ):
                 agent.close()
 
         self.assertEqual(file_state.known_reads("cron:JOB:run1"), [])
@@ -236,6 +242,7 @@ class FileToolsIntegrationTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         import shutil
+
         shutil.rmtree(self._tmpdir, ignore_errors=True)
         file_state.get_registry().clear()
 
@@ -256,14 +263,14 @@ class FileToolsIntegrationTests(unittest.TestCase):
 
         w_a = json.loads(write_file_tool(path=p, content="A stale\n", task_id="agentA"))
         err = w_a.get("error", "")
-        self.assertTrue(w_a.get("stale_write_blocked"), f"expected stale write refusal, got: {w_a}")
+        self.assertTrue(
+            w_a.get("stale_write_blocked"), f"expected stale write refusal, got: {w_a}"
+        )
         # The cross-agent message names the sibling task_id; B's write survives.
         self.assertIn("agentB", err)
         self.assertIn("sibling", err.lower())
         with open(p) as f:
             self.assertEqual(f.read(), "B wrote\n")
-
-
 
 
 if __name__ == "__main__":

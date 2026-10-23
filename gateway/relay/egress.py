@@ -131,14 +131,13 @@ def log_decline(op: str, chat_id: Any, result: Any) -> None:
     security-relevant event, so it is logged at WARNING rather than vanishing
     into the lane's debug-level best-effort handling.
     """
-    logger.warning(
-        "relay %s DECLINED for %s: %s", op, chat_id, decline_error(result)
-    )
+    logger.warning("relay %s DECLINED for %s: %s", op, chat_id, decline_error(result))
 
 
 # ---------------------------------------------------------------------------
 # (a) target attestation
 # ---------------------------------------------------------------------------
+
 
 class RelayRouteUnknown(RuntimeError):
     """Relay routing could not be determined — callers must FAIL CLOSED.
@@ -253,9 +252,7 @@ def _relay_fronted() -> set[str]:
         # `ImportError.name = "gateway.relay.dependency"` and got an authorized
         # verdict, so `except ImportError` alone was not the fix it looked like.
         if not _is_missing_gateway_relay(exc):
-            raise RelayRouteUnknown(
-                f"relay module failed to import: {exc}"
-            ) from exc
+            raise RelayRouteUnknown(f"relay module failed to import: {exc}") from exc
         return set()
 
     # PREFER THE LIVE ADAPTER'S OWN ANSWER. `resolve_delivery_transport` asks
@@ -275,9 +272,7 @@ def _relay_fronted() -> set[str]:
         # attestation bypass on a string comparison.
         return {str(p).strip().lower() for p in relay_fronted_platforms()}
     except Exception as exc:
-        raise RelayRouteUnknown(
-            f"relay route discovery failed: {exc}"
-        ) from exc
+        raise RelayRouteUnknown(f"relay route discovery failed: {exc}") from exc
 
 
 def _has_live_native_adapter(platform_name: str) -> bool:
@@ -446,11 +441,15 @@ def _has_native_credential(platform_name: str) -> bool:
         pconfig = config.platforms.get(Platform(platform_name))
         return bool(pconfig and pconfig.enabled and getattr(pconfig, "token", None))
     except Exception:
-        logger.debug("native-credential probe failed; withdrawing the exemption", exc_info=True)
+        logger.debug(
+            "native-credential probe failed; withdrawing the exemption", exc_info=True
+        )
         return True
 
 
-def _is_unresolved_handle(platform_name: str, target: str, native_token: Any = _UNSET) -> bool:
+def _is_unresolved_handle(
+    platform_name: str, target: str, native_token: Any = _UNSET
+) -> bool:
     """Whether *target* is a NAME the gateway cannot compare against an id.
 
     Provenance records RESOLVED destinations (numeric chat ids). A Telegram
@@ -483,7 +482,11 @@ def _is_unresolved_handle(platform_name: str, target: str, native_token: Any = _
 
 
 def authorize_relay_target(
-    platform_name: str, chat_id: Any, thread_id: Any = None, *, native_token: Any = _UNSET
+    platform_name: str,
+    chat_id: Any,
+    thread_id: Any = None,
+    *,
+    native_token: Any = _UNSET,
 ) -> Optional[str]:
     """Return an error string when this relay destination may not be named.
 

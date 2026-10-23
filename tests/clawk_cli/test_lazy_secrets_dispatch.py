@@ -116,7 +116,6 @@ class TestSecretsDispatchE2E:
         assert "ImportError" not in result.stderr
 
 
-
 class TestUpdatePathE2E:
     """Update path — must not load cryptography.
 
@@ -130,14 +129,11 @@ class TestUpdatePathE2E:
         """`clawk update --check` must not load cryptography._rust."""
         result = _run_clawk(["update", "--check"])
         assert result.returncode in (0, 1, 2), (
-            f"update --check crashed:\n"
-            f"stdout: {result.stdout}\n"
-            f"stderr: {result.stderr}"
+            f"update --check crashed:\nstdout: {result.stdout}\nstderr: {result.stderr}"
         )
         # No import errors
         assert "ImportError" not in result.stderr
         assert "cannot import name" not in result.stderr
-
 
     @pytest.mark.live_system_guard_bypass
     def test_main_update_check_crypto_absent_in_sys_modules(self) -> None:

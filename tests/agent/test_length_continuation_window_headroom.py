@@ -20,6 +20,7 @@ from clawk_constants import FINISH_REASON_LENGTH
 @pytest.fixture()
 def loop_agent():
     from run_agent import AIAgent
+
     with (
         patch("model_tools.get_tool_definitions", return_value=[]),
         patch("model_tools.check_toolset_requirements", return_value={}),
@@ -43,14 +44,22 @@ def loop_agent():
 
 def _length_response(content: str, prompt_tokens: int):
     from tests.agent.test_run_agent import _mock_assistant_msg
+
     return SimpleNamespace(
         id="resp",
         model="test/model",
-        choices=[SimpleNamespace(
-            index=0, message=_mock_assistant_msg(content=content), finish_reason=FINISH_REASON_LENGTH,
-        )],
-        usage=SimpleNamespace(prompt_tokens=prompt_tokens, completion_tokens=40,
-                              total_tokens=prompt_tokens + 40),
+        choices=[
+            SimpleNamespace(
+                index=0,
+                message=_mock_assistant_msg(content=content),
+                finish_reason=FINISH_REASON_LENGTH,
+            )
+        ],
+        usage=SimpleNamespace(
+            prompt_tokens=prompt_tokens,
+            completion_tokens=40,
+            total_tokens=prompt_tokens + 40,
+        ),
     )
 
 
@@ -79,7 +88,8 @@ def test_prompt_filling_the_window_ends_the_turn_on_first_truncation(loop_agent)
     # No continuation trail is left behind for the next turn.
     assert not any(
         m.get("_length_continuation_fragment") or m.get("_length_continuation_nudge")
-        for m in result["messages"] if isinstance(m, dict)
+        for m in result["messages"]
+        if isinstance(m, dict)
     )
 
 

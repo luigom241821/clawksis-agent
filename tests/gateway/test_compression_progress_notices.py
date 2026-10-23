@@ -87,7 +87,9 @@ def test_compaction_completion_notice_respects_progress_notices_gate(
         "_load_gateway_config",
         lambda: {"compression": {"progress_notices": enabled}},
     )
-    result = _prepare_gateway_status_message(platform, "compacted", COMPACTION_DONE_STATUS)
+    result = _prepare_gateway_status_message(
+        platform, "compacted", COMPACTION_DONE_STATUS
+    )
     if enabled:
         assert result == COMPACTION_DONE_STATUS
     else:

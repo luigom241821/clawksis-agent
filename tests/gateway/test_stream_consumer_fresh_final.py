@@ -18,17 +18,24 @@ import pytest
 
 from gateway.stream_consumer import GatewayStreamConsumer, StreamConsumerConfig
 
+
 def _make_adapter(*, supports_delete: bool = True) -> MagicMock:
     """Build a minimal MagicMock adapter wired for send/edit/delete."""
     adapter = MagicMock()
     adapter.REQUIRES_EDIT_FINALIZE = False
     adapter.MAX_MESSAGE_LENGTH = 4096
-    adapter.send = AsyncMock(return_value=SimpleNamespace(
-        success=True, message_id="initial_preview",
-    ))
-    adapter.edit_message = AsyncMock(return_value=SimpleNamespace(
-        success=True, message_id="initial_preview",
-    ))
+    adapter.send = AsyncMock(
+        return_value=SimpleNamespace(
+            success=True,
+            message_id="initial_preview",
+        )
+    )
+    adapter.edit_message = AsyncMock(
+        return_value=SimpleNamespace(
+            success=True,
+            message_id="initial_preview",
+        )
+    )
     if supports_delete:
         adapter.delete_message = AsyncMock(return_value=True)
     else:
@@ -36,6 +43,7 @@ def _make_adapter(*, supports_delete: bool = True) -> MagicMock:
         # should still work, it just leaves the stale preview in place.
         del adapter.delete_message  # type: ignore[attr-defined]
     return adapter
+
 
 class TestFreshFinalForLongLivedPreviews:
     """openclaw#72038 port — send fresh final when preview is old."""
@@ -78,6 +86,7 @@ class TestFreshFinalForLongLivedPreviews:
         # No delete attempt — just the fresh send.
         assert consumer._message_id == "fresh_final"
 
+
 class TestSegmentBreakDoesNotMarkFinalSent:
     """Regression for #29346 — silent response loss after tool calls.
 
@@ -98,7 +107,9 @@ class TestSegmentBreakDoesNotMarkFinalSent:
     def _delivered_texts(adapter) -> list[str]:
         """Every text the adapter actually put on screen (sends + edits)."""
         texts = [c.kwargs.get("content", "") for c in adapter.send.call_args_list]
-        texts += [c.kwargs.get("content", "") for c in adapter.edit_message.call_args_list]
+        texts += [
+            c.kwargs.get("content", "") for c in adapter.edit_message.call_args_list
+        ]
         return texts
 
     @pytest.mark.asyncio
@@ -113,7 +124,9 @@ class TestSegmentBreakDoesNotMarkFinalSent:
             adapter=adapter,
             chat_id="chat",
             config=StreamConsumerConfig(
-                edit_interval=0.01, buffer_threshold=5, cursor=" ▉",
+                edit_interval=0.01,
+                buffer_threshold=5,
+                cursor=" ▉",
                 fresh_final_after_seconds=0.001,  # tiny → real aging fires
             ),
         )
@@ -142,7 +155,9 @@ class TestSegmentBreakDoesNotMarkFinalSent:
             adapter=adapter,
             chat_id="chat",
             config=StreamConsumerConfig(
-                edit_interval=0.01, buffer_threshold=5, cursor=" ▉",
+                edit_interval=0.01,
+                buffer_threshold=5,
+                cursor=" ▉",
                 fresh_final_after_seconds=0.001,
             ),
         )
@@ -159,11 +174,13 @@ class TestSegmentBreakDoesNotMarkFinalSent:
         assert consumer.final_response_sent is True
         # And it reached the user exactly once (no duplicate fresh send).
         final_sends = [
-            c for c in adapter.send.call_args_list
+            c
+            for c in adapter.send.call_args_list
             if "answer is 42" in c.kwargs.get("content", "")
         ]
         assert len(final_sends) <= 1
         assert any("answer is 42" in t for t in self._delivered_texts(adapter))
+
 
 class TestCancelledBestEffortDeliveryFinalizes:
     """Cancel-path best-effort delivery must go through the finalize path.
@@ -193,7 +210,9 @@ class TestCancelledBestEffortDeliveryFinalizes:
             adapter=adapter,
             chat_id="chat",
             config=StreamConsumerConfig(
-                edit_interval=0.01, buffer_threshold=5, cursor=" ▉",
+                edit_interval=0.01,
+                buffer_threshold=5,
+                cursor=" ▉",
                 fresh_final_after_seconds=0.001,
             ),
         )
@@ -210,6 +229,7 @@ class TestCancelledBestEffortDeliveryFinalizes:
         # Flags were set by the cancel handler after successful delivery.
         assert consumer.final_response_sent is True
         assert consumer.final_content_delivered is True
+
 
 class TestGotDoneOverflowSplitNotRefinalized:
     """A got_done finalize edit that split-and-delivered across continuation
@@ -229,7 +249,9 @@ class TestGotDoneOverflowSplitNotRefinalized:
             adapter=adapter,
             chat_id="chat",
             config=StreamConsumerConfig(
-                edit_interval=10.0, buffer_threshold=10_000, cursor=" ▉",
+                edit_interval=10.0,
+                buffer_threshold=10_000,
+                cursor=" ▉",
             ),
         )
 
@@ -240,9 +262,12 @@ class TestGotDoneOverflowSplitNotRefinalized:
         explicit finalize edit (#25010 semantics unchanged)."""
         adapter = _make_adapter()
         adapter.REQUIRES_EDIT_FINALIZE = True
-        adapter.edit_message = AsyncMock(return_value=SimpleNamespace(
-            success=True, message_id="initial_preview",
-        ))
+        adapter.edit_message = AsyncMock(
+            return_value=SimpleNamespace(
+                success=True,
+                message_id="initial_preview",
+            )
+        )
         consumer = self._consumer(adapter)
         consumer.on_delta("short final reply")
         task = asyncio.create_task(consumer.run())
@@ -251,11 +276,11 @@ class TestGotDoneOverflowSplitNotRefinalized:
         await task
 
         finalize_edits = [
-            c for c in adapter.edit_message.call_args_list
-            if c.kwargs.get("finalize")
+            c for c in adapter.edit_message.call_args_list if c.kwargs.get("finalize")
         ]
         assert len(finalize_edits) == 2
         assert consumer.final_response_sent is True
+
 
 class TestFinalCleanupEditFloodControl:
     """Regression for duplicate final sends when the cursor-strip edit fails."""
@@ -263,15 +288,19 @@ class TestFinalCleanupEditFloodControl:
     @pytest.mark.asyncio
     async def test_failed_final_cleanup_edit_marks_visible_content_delivered(self):
         adapter = _make_adapter()
-        adapter.edit_message = AsyncMock(return_value=SimpleNamespace(
-            success=False,
-            error="Flood control exceeded. Retry in 12 seconds",
-        ))
+        adapter.edit_message = AsyncMock(
+            return_value=SimpleNamespace(
+                success=False,
+                error="Flood control exceeded. Retry in 12 seconds",
+            )
+        )
         consumer = GatewayStreamConsumer(
             adapter=adapter,
             chat_id="chat",
             config=StreamConsumerConfig(
-                edit_interval=0.01, buffer_threshold=5, cursor=" ▉",
+                edit_interval=0.01,
+                buffer_threshold=5,
+                cursor=" ▉",
             ),
         )
 
@@ -292,13 +321,17 @@ class TestFinalCleanupEditFloodControl:
         assert adapter.send.call_count == 1
         assert adapter.edit_message.call_count >= 1
 
+
 class TestStreamingConfigFreshFinalField:
     """The gateway-level StreamingConfig carries the setting."""
 
     def test_from_dict_respects_explicit_zero(self):
         from gateway.config import StreamingConfig
-        cfg = StreamingConfig.from_dict({
-            "enabled": True,
-            "fresh_final_after_seconds": 0,
-        })
+
+        cfg = StreamingConfig.from_dict(
+            {
+                "enabled": True,
+                "fresh_final_after_seconds": 0,
+            }
+        )
         assert cfg.fresh_final_after_seconds == 0.0

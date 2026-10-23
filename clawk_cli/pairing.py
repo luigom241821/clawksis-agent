@@ -1,5 +1,6 @@
 """CLI commands for the DM pairing system."""
 
+
 def pairing_command(args):
     """Handle clawk pairing subcommands."""
     from gateway.pairing import PairingStore
@@ -29,8 +30,12 @@ def _cmd_list(store):
 
     if pending:
         print(f"\n  Pending Pairing Requests ({len(pending)}):")
-        print(f"  {'Platform':<12} {'Request ID':<18} {'User ID':<20} {'Name':<20} {'Age'}")
-        print(f"  {'--------':<12} {'----------':<18} {'-------':<20} {'----':<20} {'---'}")
+        print(
+            f"  {'Platform':<12} {'Request ID':<18} {'User ID':<20} {'Name':<20} {'Age'}"
+        )
+        print(
+            f"  {'--------':<12} {'----------':<18} {'-------':<20} {'----':<20} {'---'}"
+        )
         for p in pending:
             print(
                 f"  {p['platform']:<12} {(p.get('request_id') or '-'):<18} {p['user_id']:<20} "
@@ -46,7 +51,9 @@ def _cmd_list(store):
         print(f"  {'Platform':<12} {'User ID':<20} {'Name':<20}")
         print(f"  {'--------':<12} {'-------':<20} {'----':<20}")
         for a in approved:
-            print(f"  {a['platform']:<12} {a['user_id']:<20} {(a.get('user_name') or ''):<20}")
+            print(
+                f"  {a['platform']:<12} {a['user_id']:<20} {(a.get('user_name') or ''):<20}"
+            )
     else:
         print("\n  No approved users.")
 
@@ -71,13 +78,22 @@ def _cmd_approve(store, platform: str, code: str):
         # approve_code returns None for both invalid codes and lockout — say which.
         # Tell the operator it's lockout so they don't chase a "wrong code" rabbit hole (#10195).
         import time as _time
-        lockout_until = store._load_json(store._rate_limit_path()).get(f"_lockout:{platform}", 0)
+
+        lockout_until = store._load_json(store._rate_limit_path()).get(
+            f"_lockout:{platform}", 0
+        )
         mins = max(0, int(lockout_until - _time.time())) // 60
-        print(f"\n  Platform '{platform}' is locked out after too many failed approval attempts.")
+        print(
+            f"\n  Platform '{platform}' is locked out after too many failed approval attempts."
+        )
         print(f"  Lockout clears in ~{mins} minute(s).")
-        print(f"  To reset sooner, delete the '_lockout:{platform}' entry from ~/.clawksis/platforms/pairing/_rate_limits.json\n")
+        print(
+            f"  To reset sooner, delete the '_lockout:{platform}' entry from ~/.clawksis/platforms/pairing/_rate_limits.json\n"
+        )
     else:
-        print(f"\n  Pairing request or code '{code}' not found or expired for platform '{platform}'.")
+        print(
+            f"\n  Pairing request or code '{code}' not found or expired for platform '{platform}'."
+        )
         print("  Run 'clawk pairing list' to see pending requests.\n")
 
 

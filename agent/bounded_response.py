@@ -64,7 +64,8 @@ def read_streaming_error_body(
     if not done.wait(timeout=timeout_s):
         logger.debug(
             "bounded error-body read: hard timeout after %.1fs (%d bytes so far)",
-            timeout_s, sum(len(c) for c in chunks),
+            timeout_s,
+            sum(len(c) for c in chunks),
         )
     # Closing cancels any in-flight socket read so the worker unwinds. No join (daemon, may be blocked in C).
     try:
@@ -74,6 +75,8 @@ def read_streaming_error_body(
 
     if state["truncated"]:
         logger.debug(
-            "bounded error-body read: capped at %d bytes (max=%d)", sum(len(c) for c in chunks), max_bytes,
+            "bounded error-body read: capped at %d bytes (max=%d)",
+            sum(len(c) for c in chunks),
+            max_bytes,
         )
     return b"".join(chunks).decode("utf-8", errors="replace")

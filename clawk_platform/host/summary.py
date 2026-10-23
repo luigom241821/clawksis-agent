@@ -18,9 +18,19 @@ from clawk_platform.host import facts as host
 from clawk_platform.host import products, runtime
 
 # Generic account names that are not a person's name.
-_NON_NAMES = frozenset({
-    "admin", "administrator", "default", "guest", "me", "owner", "root", "test", "user",
-})
+_NON_NAMES = frozenset(
+    {
+        "admin",
+        "administrator",
+        "default",
+        "guest",
+        "me",
+        "owner",
+        "root",
+        "test",
+        "user",
+    }
+)
 _HANDLE_CHARS = re.compile(r"[\d_@/\\]")
 
 
@@ -31,7 +41,9 @@ def _posix_account() -> tuple[str, str]:
     """Return (login, full name) from the user database."""
     import pwd
 
-    entry = pwd.getpwuid(os.getuid())  # windows-footgun: ok — only called off Windows (_account)
+    entry = pwd.getpwuid(
+        os.getuid()
+    )  # windows-footgun: ok — only called off Windows (_account)
     return entry.pw_name, entry.pw_gecos.split(",", 1)[0].strip()
 
 
@@ -42,12 +54,20 @@ def _windows_account() -> tuple[str, str]:
 
     login_buf = ctypes.create_unicode_buffer(257)
     login_len = wintypes.DWORD(len(login_buf))
-    login = login_buf.value if ctypes.windll.advapi32.GetUserNameW(login_buf, ctypes.byref(login_len)) else ""
+    login = (
+        login_buf.value
+        if ctypes.windll.advapi32.GetUserNameW(login_buf, ctypes.byref(login_len))
+        else ""
+    )
 
     # EXTENDED_NAME_FORMAT NameDisplay = 3. Local accounts without a display name fail here.
     name_buf = ctypes.create_unicode_buffer(257)
     name_len = wintypes.ULONG(len(name_buf))
-    full = name_buf.value if ctypes.windll.secur32.GetUserNameExW(3, name_buf, ctypes.byref(name_len)) else ""
+    full = (
+        name_buf.value
+        if ctypes.windll.secur32.GetUserNameExW(3, name_buf, ctypes.byref(name_len))
+        else ""
+    )
     return login, full
 
 
@@ -61,7 +81,11 @@ def _account() -> tuple[str, str]:
 def full_name_from(login: str, full: str) -> str | None:
     """A real full name only; a login handle is never offered as the user's name."""
     name = " ".join(full.split())
-    if not (2 <= len(name) <= 40) or name.lower() in _NON_NAMES or name.lower() == login.lower():
+    if (
+        not (2 <= len(name) <= 40)
+        or name.lower() in _NON_NAMES
+        or name.lower() == login.lower()
+    ):
         return None
     # Digits or underscores ("p14", "CD_01.05") or an all-lowercase cased name mark a handle.
     if _HANDLE_CHARS.search(name) or name == name.lower() != name.upper():
@@ -80,7 +104,12 @@ def _darwin_locale() -> str:
     cf.CFArrayGetCount.restype = ctypes.c_long
     cf.CFArrayGetValueAtIndex.argtypes = [ctypes.c_void_p, ctypes.c_long]
     cf.CFArrayGetValueAtIndex.restype = ctypes.c_void_p
-    cf.CFStringGetCString.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_long, ctypes.c_uint32]
+    cf.CFStringGetCString.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_char_p,
+        ctypes.c_long,
+        ctypes.c_uint32,
+    ]
     cf.CFStringGetCString.restype = ctypes.c_bool
     cf.CFRelease.argtypes = [ctypes.c_void_p]
 
@@ -92,7 +121,9 @@ def _darwin_locale() -> str:
             return ""
         buffer = ctypes.create_string_buffer(64)
         # kCFStringEncodingUTF8
-        if not cf.CFStringGetCString(cf.CFArrayGetValueAtIndex(languages, 0), buffer, 64, 0x08000100):
+        if not cf.CFStringGetCString(
+            cf.CFArrayGetValueAtIndex(languages, 0), buffer, 64, 0x08000100
+        ):
             return ""
         return buffer.value.decode()
     finally:
@@ -103,7 +134,11 @@ def _windows_locale() -> str:
     import ctypes
 
     buffer = ctypes.create_unicode_buffer(85)
-    return buffer.value if ctypes.windll.kernel32.GetUserDefaultLocaleName(buffer, 85) else ""
+    return (
+        buffer.value
+        if ctypes.windll.kernel32.GetUserDefaultLocaleName(buffer, 85)
+        else ""
+    )
 
 
 def _linux_locale() -> str:
@@ -142,14 +177,21 @@ def _machine_kind(os_family: str, nvidia: str | None) -> str:
 
 def _os_release(os_family: str) -> str:
     # On a Mac platform.release() is the Darwin kernel version (25.x), not the macOS version (26.x).
-    return (platform.mac_ver()[0] if os_family == "darwin" else "") or platform.release()
+    return (
+        platform.mac_ver()[0] if os_family == "darwin" else ""
+    ) or platform.release()
 
 
 @functools.cache
 def summary() -> dict:
     """This machine and account as measured. ``machine`` leaves out a key that was not measured;
     ``locale`` and ``full_name`` are None when the OS has none to give."""
-    os_family, arch, gpu, cpu = host.os_family(), host.native_arch(), host.gpu_class(), host.cpu_model()
+    os_family, arch, gpu, cpu = (
+        host.os_family(),
+        host.native_arch(),
+        host.gpu_class(),
+        host.cpu_model(),
+    )
     ram = host.ram_total_bytes()
     nvidia = products.nvidia_platform()
     machine = {
@@ -164,7 +206,9 @@ def summary() -> dict:
         "container": runtime.is_container(),
     }
     return {
-        "machine": {key: value for key, value in machine.items() if value not in (None, "")},
+        "machine": {
+            key: value for key, value in machine.items() if value not in (None, "")
+        },
         "machine_kind": _machine_kind(os_family, nvidia),
         "has_nvidia_gpu": gpu == "nvidia",
         "nvidia_platform": nvidia,

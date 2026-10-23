@@ -31,6 +31,7 @@ from clawk_cli import gateway_windows
 # _resolve_detached_python: legacy pythonw normalization
 # ---------------------------------------------------------------------------
 
+
 def _make_venv(tmp_path: Path, *, with_console_python: bool) -> tuple[Path, Path]:
     scripts = tmp_path / "venv" / "Scripts"
     scripts.mkdir(parents=True)
@@ -41,6 +42,7 @@ def _make_venv(tmp_path: Path, *, with_console_python: bool) -> tuple[Path, Path
         python.write_text("", encoding="utf-8")
     return pythonw, python
 
+
 def test_resolve_detached_python_swaps_legacy_pythonw_for_console_sibling(tmp_path):
     pythonw, python = _make_venv(tmp_path, with_console_python=True)
 
@@ -49,6 +51,7 @@ def test_resolve_detached_python_swaps_legacy_pythonw_for_console_sibling(tmp_pa
     assert exe == str(python)
     assert venv_dir == tmp_path / "venv"
     assert extra == []
+
 
 @pytest.mark.platforms("windows")
 def test_restart_spec_normalizes_legacy_pythonw_argv(tmp_path):
@@ -63,15 +66,19 @@ def test_restart_spec_normalizes_legacy_pythonw_argv(tmp_path):
     pythonw, python = _make_venv(tmp_path, with_console_python=True)
 
     argv = [str(pythonw), "-m", "clawk_cli.main", "gateway", "run"]
-    with mock.patch.object(
-        gateway_windows, "_stable_gateway_working_dir", return_value=str(tmp_path)
-    ), mock.patch("clawk_cli.config.get_clawk_home", return_value=str(tmp_path)):
+    with (
+        mock.patch.object(
+            gateway_windows, "_stable_gateway_working_dir", return_value=str(tmp_path)
+        ),
+        mock.patch("clawk_cli.config.get_clawk_home", return_value=str(tmp_path)),
+    ):
         new_argv, cwd, env = gateway_windows.windowless_gateway_restart_spec(list(argv))
 
     assert new_argv[0] == str(python)
     assert new_argv[1:] == argv[1:]
     assert cwd == str(tmp_path)
     assert env["VIRTUAL_ENV"] == str(tmp_path / "venv")
+
 
 # ---------------------------------------------------------------------------
 # _refresh_windows_gateway_launchers: clawk update regenerates launchers

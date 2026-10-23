@@ -35,9 +35,11 @@ _CORR_PREFIX = _simplex._CORR_PREFIX
 # 1. Platform enum (plugin-discovered, not bundled)
 # ---------------------------------------------------------------------------
 
+
 def test_platform_enum_resolves_via_plugin_scan():
     """The plugin filesystem scan should expose Platform("simplex")."""
     from gateway.config import Platform
+
     p = Platform("simplex")
     assert p.value == "simplex"
     # Identity stability — repeated lookups return the same pseudo-member
@@ -63,6 +65,7 @@ def test_check_requirements_true_when_configured(monkeypatch):
 
 def test_validate_config_uses_env_or_extra():
     from gateway.config import PlatformConfig
+
     # Empty extra + no env → invalid
     cfg = PlatformConfig(enabled=True)
     assert validate_config(cfg) is False
@@ -73,6 +76,7 @@ def test_validate_config_uses_env_or_extra():
 
 def test_is_connected_mirrors_validate(monkeypatch):
     from gateway.config import PlatformConfig
+
     monkeypatch.delenv("SIMPLEX_WS_URL", raising=False)
     cfg = PlatformConfig(enabled=True, extra={"ws_url": "ws://x"})
     assert is_connected(cfg) is True
@@ -97,7 +101,6 @@ def test_env_enablement_seeds_home_channel(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-
 # ---------------------------------------------------------------------------
 # 6. Correlation IDs
 # ---------------------------------------------------------------------------
@@ -105,6 +108,7 @@ def test_env_enablement_seeds_home_channel(monkeypatch):
 
 def test_corr_id_pending_set_self_trims():
     from gateway.config import PlatformConfig
+
     cfg = PlatformConfig(enabled=True, extra={"ws_url": "ws://localhost:5225"})
     adapter = SimplexAdapter(cfg)
     adapter._max_pending_corr = 4
@@ -119,6 +123,7 @@ def test_corr_id_pending_set_self_trims():
 # 7. Outbound send (mocked WS)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_send_dm():
     """DMs use the structured ``/_send @<id> json [...]`` form.
@@ -130,6 +135,7 @@ async def test_send_dm():
     ``send_image`` and ``send_document`` already do.
     """
     from gateway.config import PlatformConfig
+
     cfg = PlatformConfig(enabled=True, extra={"ws_url": "ws://localhost:5225"})
     adapter = SimplexAdapter(cfg)
 
@@ -140,13 +146,10 @@ async def test_send_dm():
     mock_ws.send.assert_called_once()
     payload = json.loads(mock_ws.send.call_args[0][0])
     assert payload["cmd"].startswith("/_send @contact-42 json ")
-    msg_content = json.loads(payload["cmd"].split(" json ", 1)[1])[0][
-        "msgContent"
-    ]
+    msg_content = json.loads(payload["cmd"].split(" json ", 1)[1])[0]["msgContent"]
     assert msg_content == {"type": "text", "text": "Hello, SimpleX!"}
     assert payload["corrId"].startswith(_CORR_PREFIX)
     assert result.success is True
-
 
 
 @pytest.mark.asyncio
@@ -160,6 +163,7 @@ async def test_send_group():
     ID and survives newlines/quoting through ``json.dumps``.
     """
     from gateway.config import PlatformConfig
+
     cfg = PlatformConfig(enabled=True, extra={"ws_url": "ws://localhost:5225"})
     adapter = SimplexAdapter(cfg)
 
@@ -169,18 +173,19 @@ async def test_send_group():
     result = await adapter.send("group:grp-99", "Hello, group!")
     payload = json.loads(mock_ws.send.call_args[0][0])
     assert payload["cmd"].startswith("/_send #grp-99 json ")
-    msg_content = json.loads(payload["cmd"].split(" json ", 1)[1])[0][
-        "msgContent"
-    ]
+    msg_content = json.loads(payload["cmd"].split(" json ", 1)[1])[0]["msgContent"]
     assert msg_content == {"type": "text", "text": "Hello, group!"}
     assert result.success is True
 
 
-@pytest.mark.parametrize(("mode", "color"), [
-    ("RGBA", (255, 0, 0, 128)),
-    ("LA", (128, 128)),
-    ("P", 0),
-])
+@pytest.mark.parametrize(
+    ("mode", "color"),
+    [
+        ("RGBA", (255, 0, 0, 128)),
+        ("LA", (128, 128)),
+        ("P", 0),
+    ],
+)
 def test_prepare_image_flattens_jpeg_incompatible_modes(tmp_path, mode, color):
     from PIL import Image
 
@@ -205,7 +210,9 @@ async def test_send_image_reports_thumbnail_preparation_failure(tmp_path, monkey
     adapter = _adapter_with_ws()
     image_path = tmp_path / "broken.png"
     image_path.write_bytes(b"not an image")
-    monkeypatch.setattr(adapter, "_prepare_image", MagicMock(side_effect=OSError("bad image")))
+    monkeypatch.setattr(
+        adapter, "_prepare_image", MagicMock(side_effect=OSError("bad image"))
+    )
     adapter._send_items = AsyncMock()
 
     result = await adapter.send_image_file("contact-42", str(image_path))
@@ -222,6 +229,7 @@ async def test_send_image_reports_thumbnail_preparation_failure(tmp_path, monkey
 
 def _adapter_with_ws():
     from gateway.config import PlatformConfig
+
     cfg = PlatformConfig(enabled=True, extra={"ws_url": "ws://localhost:5225"})
     adapter = SimplexAdapter(cfg)
     adapter._ws = AsyncMock()
@@ -264,6 +272,7 @@ async def test_list_channels_contacts_and_groups():
 async def test_list_channels_returns_none_when_disconnected():
     """None (not []) so the directory falls back to session discovery."""
     from gateway.config import PlatformConfig
+
     cfg = PlatformConfig(enabled=True, extra={"ws_url": "ws://localhost:5225"})
     adapter = SimplexAdapter(cfg)
     assert adapter._ws is None
@@ -290,6 +299,7 @@ async def test_list_channels_returns_none_on_contacts_timeout():
 # 9. Standalone (out-of-process) send for cron
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_standalone_send_missing_websockets(monkeypatch):
     """When websockets is unimportable, return a clean error dict.
@@ -299,6 +309,7 @@ async def test_standalone_send_missing_websockets(monkeypatch):
     pulling it out of ``sys.modules`` and pointing the finder at None.
     """
     import sys
+
     saved_websockets = sys.modules.pop("websockets", None)
     saved_meta = list(sys.meta_path)
 
@@ -347,20 +358,22 @@ async def test_standalone_send_defaults_to_local_daemon(monkeypatch):
         return DummyWs()
 
     import websockets
+
     monkeypatch.setattr(websockets, "connect", fake_connect)
 
     result = await _standalone_send(pconfig, "contact-42", "hi")
     assert result == {"success": True, "platform": "simplex", "chat_id": "contact-42"}
     assert sent_payloads[0]["cmd"].startswith("/_send @contact-42 json ")
-    msg_content = json.loads(
-        sent_payloads[0]["cmd"].split(" json ", 1)[1]
-    )[0]["msgContent"]
+    msg_content = json.loads(sent_payloads[0]["cmd"].split(" json ", 1)[1])[0][
+        "msgContent"
+    ]
     assert msg_content == {"type": "text", "text": "hi"}
 
 
 @pytest.mark.asyncio
 async def test_health_monitor_does_not_reconnect_quiet_healthy_ws(monkeypatch):
     from gateway.config import PlatformConfig
+
     cfg = PlatformConfig(enabled=True, extra={"ws_url": "ws://localhost:5225"})
     adapter = SimplexAdapter(cfg)
     adapter._running = True
@@ -378,8 +391,6 @@ async def test_health_monitor_does_not_reconnect_quiet_healthy_ws(monkeypatch):
     adapter._ws.close.assert_not_called()
 
 
-
-
 # ---------------------------------------------------------------------------
 # 10. register() — plugin-side metadata
 # ---------------------------------------------------------------------------
@@ -388,6 +399,7 @@ async def test_health_monitor_does_not_reconnect_quiet_healthy_ws(monkeypatch):
 # ---------------------------------------------------------------------------
 # Inbound attachment message type classification
 # ---------------------------------------------------------------------------
+
 
 def _make_file_chat_item(file_path: str, file_name: str) -> dict:
     """Minimal direct-chat rcvMsgContent item carrying a completed file."""
@@ -410,8 +422,6 @@ def _make_file_chat_item(file_path: str, file_name: str) -> dict:
             },
         },
     }
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -478,14 +488,18 @@ def test_multiplex_scope_reads_profile_own_env_not_default(
 ):
     """A secondary profile's own .env (installed as the scope) is honored --
     the extra-only shape would have ignored it."""
-    multiplex_scope({"SIMPLEX_WS_URL": "ws://profile:5225", "SIMPLEX_GROUP_ALLOWED": "g1"})
+    multiplex_scope(
+        {"SIMPLEX_WS_URL": "ws://profile:5225", "SIMPLEX_GROUP_ALLOWED": "g1"}
+    )
     seeded = _env_enablement()
     assert seeded == {"ws_url": "ws://profile:5225", "group_allowed": "g1"}
     assert check_requirements() is True
 
 
 @pytest.mark.asyncio
-async def test_name_allowlist_warning_once_scoped_even_if_first_connect_fails(monkeypatch, caplog):
+async def test_name_allowlist_warning_once_scoped_even_if_first_connect_fails(
+    monkeypatch, caplog
+):
     """Name entries in SIMPLEX_ALLOWED_USERS are ignored by authz, so connect()
     warns -- exactly once per process for this profile/value, read the way authz
     reads it (the profile scope, not the default profile's os.environ), and even
@@ -494,10 +508,16 @@ async def test_name_allowlist_warning_once_scoped_even_if_first_connect_fails(mo
     import logging
 
     import websockets
-    from agent.secret_scope import reset_secret_scope, set_multiplex_active, set_secret_scope
+    from agent.secret_scope import (
+        reset_secret_scope,
+        set_multiplex_active,
+        set_secret_scope,
+    )
     from gateway.config import PlatformConfig
 
-    monkeypatch.setenv("SIMPLEX_ALLOWED_USERS", "bob")  # default profile's bridge output
+    monkeypatch.setenv(
+        "SIMPLEX_ALLOWED_USERS", "bob"
+    )  # default profile's bridge output
     monkeypatch.setattr(_simplex, "_NAME_ALLOWLIST_WARNED", set())
 
     class DummyWs:
@@ -519,7 +539,9 @@ async def test_name_allowlist_warning_once_scoped_even_if_first_connect_fails(mo
         return None
 
     def _fresh_adapter():
-        adapter = SimplexAdapter(PlatformConfig(enabled=True, extra={"ws_url": "ws://localhost:5225"}))
+        adapter = SimplexAdapter(
+            PlatformConfig(enabled=True, extra={"ws_url": "ws://localhost:5225"})
+        )
         monkeypatch.setattr(adapter, "_ws_listener", _idle)
         monkeypatch.setattr(adapter, "_health_monitor", _idle)
         return adapter
@@ -539,7 +561,11 @@ async def test_name_allowlist_warning_once_scoped_even_if_first_connect_fails(mo
         reset_secret_scope(token)
         set_multiplex_active(False)
 
-    warnings = [r.getMessage() for r in caplog.records if "not numeric contactIds" in r.getMessage()]
+    warnings = [
+        r.getMessage()
+        for r in caplog.records
+        if "not numeric contactIds" in r.getMessage()
+    ]
     assert len(warnings) == 1
     assert "['alice']" in warnings[0]
     assert "bob" not in warnings[0]

@@ -29,7 +29,11 @@ def _process_clawk_home() -> Path:
     from clawk_constants import get_clawk_home, get_process_clawk_home
 
     # get_process_clawk_home expands ``~``/``$VAR`` (python -m gateway.run skips the CLI normalizer).
-    return get_process_clawk_home() if os.environ.get("CLAWK_HOME", "").strip() else get_clawk_home()
+    return (
+        get_process_clawk_home()
+        if os.environ.get("CLAWK_HOME", "").strip()
+        else get_clawk_home()
+    )
 
 
 def _home_path(home: Optional[Path], *relative: str) -> Path:
@@ -65,8 +69,15 @@ def sample_memory() -> dict[str, Any]:
     """Cheap /proc snapshot (KiB): own RSS + MemTotal/MemAvailable + swap used.  Linux-only
     (``{}`` elsewhere), never raises; the 30s heartbeat embeds it so OOM cycles are classifiable."""
     sample = _proc_fields("/proc/self/status", {"VmRSS": "rss_kib"})
-    mem = _proc_fields("/proc/meminfo", {"MemTotal": "mem_total_kib", "MemAvailable": "mem_available_kib",
-                                         "SwapTotal": "SwapTotal", "SwapFree": "SwapFree"})
+    mem = _proc_fields(
+        "/proc/meminfo",
+        {
+            "MemTotal": "mem_total_kib",
+            "MemAvailable": "mem_available_kib",
+            "SwapTotal": "SwapTotal",
+            "SwapFree": "SwapFree",
+        },
+    )
     swap_total, swap_free = mem.pop("SwapTotal", None), mem.pop("SwapFree", None)
     sample.update(mem)
     if swap_total is not None and swap_free is not None:
@@ -143,13 +154,18 @@ def _pid_is_sentinel_owner(pid: Any, start_time: Any, create_time: Any) -> bool:
 def _suspected_oom(mem: dict[str, Any]) -> bool:
     """Heuristic only (classification stays with the reader); thresholds are
     memory_status' "critical" tier so a live warning and a post-mortem verdict agree."""
-    from gateway.memory_status import _CRITICAL_AVAILABLE_FRACTION, _CRITICAL_AVAILABLE_KIB
+    from gateway.memory_status import (
+        _CRITICAL_AVAILABLE_FRACTION,
+        _CRITICAL_AVAILABLE_KIB,
+    )
 
     total, avail = mem.get("mem_total_kib"), mem.get("mem_available_kib")
     if not isinstance(avail, int):
         return False
     return avail < _CRITICAL_AVAILABLE_KIB or (
-        isinstance(total, int) and total > 0 and avail / total < _CRITICAL_AVAILABLE_FRACTION
+        isinstance(total, int)
+        and total > 0
+        and avail / total < _CRITICAL_AVAILABLE_FRACTION
     )
 
 
@@ -158,10 +174,13 @@ def detect_unclean_exit(home: Optional[Path] = None) -> Optional[dict[str, Any]]
     sentinel = _read_json(get_lifecycle_sentinel_path(home))
     if not sentinel or sentinel.get("phase") != "running":
         return None
-    if _pid_is_sentinel_owner(sentinel.get("pid"), sentinel.get("start_time"), sentinel.get("create_time")):
+    if _pid_is_sentinel_owner(
+        sentinel.get("pid"), sentinel.get("start_time"), sentinel.get("create_time")
+    ):
         return None  # live owner — planned takeover in flight, not a death
     evidence: dict[str, Any] = {
-        "prior_pid": sentinel.get("pid"), "prior_started_at": sentinel.get("started_at"),
+        "prior_pid": sentinel.get("pid"),
+        "prior_started_at": sentinel.get("started_at"),
         "prior_start_time": sentinel.get("start_time"),
     }
     # Enrich with the last heartbeat: last proven liveness and memory at that moment.
@@ -201,7 +220,9 @@ _INTEGRITY_CHECK_LEASE_RENEW_S = 60.0
 STATE_DB_INTEGRITY_DEADLINE_S = 1800.0
 
 
-def _install_integrity_check_lease(conn: sqlite3.Connection, *, deadline_at: Optional[float] = None) -> None:
+def _install_integrity_check_lease(
+    conn: sqlite3.Connection, *, deadline_at: Optional[float] = None
+) -> None:
     """Claim the integrity-check lease and renew it from a SQLite progress handler.
 
     ``report_startup_progress`` is a no-op when no watchdog is armed and never raises.
@@ -213,7 +234,9 @@ def _install_integrity_check_lease(conn: sqlite3.Connection, *, deadline_at: Opt
     """
     from clawk_startup_watchdog import report_startup_progress
 
-    report_startup_progress(_INTEGRITY_CHECK_LEASE_S, phase=_INTEGRITY_CHECK_LEASE_PHASE)
+    report_startup_progress(
+        _INTEGRITY_CHECK_LEASE_S, phase=_INTEGRITY_CHECK_LEASE_PHASE
+    )
     last_renew = time.monotonic()
 
     def _on_progress() -> int:
@@ -221,7 +244,9 @@ def _install_integrity_check_lease(conn: sqlite3.Connection, *, deadline_at: Opt
         now = time.monotonic()
         if now - last_renew >= _INTEGRITY_CHECK_LEASE_RENEW_S:
             last_renew = now
-            report_startup_progress(_INTEGRITY_CHECK_LEASE_S, phase=_INTEGRITY_CHECK_LEASE_PHASE)
+            report_startup_progress(
+                _INTEGRITY_CHECK_LEASE_S, phase=_INTEGRITY_CHECK_LEASE_PHASE
+            )
         if deadline_at is not None and now >= deadline_at:
             return 1
         return 0
@@ -229,7 +254,9 @@ def _install_integrity_check_lease(conn: sqlite3.Connection, *, deadline_at: Opt
     conn.set_progress_handler(_on_progress, _INTEGRITY_CHECK_PROGRESS_OPS)
 
 
-def check_state_db_integrity(home: Optional[Path] = None, *, deadline_s: Optional[float] = None) -> str:
+def check_state_db_integrity(
+    home: Optional[Path] = None, *, deadline_s: Optional[float] = None
+) -> str:
     """``"ok"``, ``"absent"``, or the first ``quick_check`` complaint.  Never raises.
 
     Only after an unclean death — SIGKILL mid-WAL-checkpoint can leave half-written
@@ -259,8 +286,11 @@ def check_state_db_integrity(home: Optional[Path] = None, *, deadline_s: Optiona
             _install_integrity_check_lease(conn, deadline_at=deadline_at)
             row = conn.execute("PRAGMA quick_check(1)").fetchone()
     except Exception as exc:
-        if (deadline_at is not None and isinstance(exc, sqlite3.OperationalError)
-                and "interrupt" in str(exc).lower()):
+        if (
+            deadline_at is not None
+            and isinstance(exc, sqlite3.OperationalError)
+            and "interrupt" in str(exc).lower()
+        ):
             limit = max(0.0, float(deadline_s)) if deadline_s is not None else 0.0
             return f"check-incomplete: exceeded {limit:g}s"
         return f"check-failed: {exc}"
@@ -280,7 +310,12 @@ def _state_db_journal_mode(path: Path) -> Optional[str]:
         return None
 
 
-def _report_unclean_exit(evidence: dict[str, Any], home: Optional[Path], *, defer_integrity_check: bool = False) -> None:
+def _report_unclean_exit(
+    evidence: dict[str, Any],
+    home: Optional[Path],
+    *,
+    defer_integrity_check: bool = False,
+) -> None:
     """Persist the exit-diag record and log at WARNING.
 
     When ``defer_integrity_check`` is set, the forensic store scan is NOT run here (it would
@@ -298,17 +333,30 @@ def _report_unclean_exit(evidence: dict[str, Any], home: Optional[Path], *, defe
                 "missing until it is repaired. Run `clawk doctor`.",
                 verdict,
             )
-    _append_exit_diag({"ts": _now_iso(), "tag": "gateway.previous_unclean_exit", "pid": os.getpid(), **evidence}, home)
+    _append_exit_diag(
+        {
+            "ts": _now_iso(),
+            "tag": "gateway.previous_unclean_exit",
+            "pid": os.getpid(),
+            **evidence,
+        },
+        home,
+    )
     logger.warning(
         "Previous gateway life (pid=%s, started_at=%s) exited UNCLEANLY (no exit path ran — SIGKILL / OOM / "
         "VM death, or a process kill issued by the agent or one of its descendants, e.g. a pkill/taskkill of "
         "the host interpreter image; see #113667). last_heartbeat_at=%s last_mem=%s suspected_oom=%s",
-        evidence.get("prior_pid"), evidence.get("prior_started_at"), evidence.get("last_heartbeat_at"),
-        evidence.get("last_heartbeat_mem"), evidence.get("suspected_oom", False),
+        evidence.get("prior_pid"),
+        evidence.get("prior_started_at"),
+        evidence.get("last_heartbeat_at"),
+        evidence.get("last_heartbeat_mem"),
+        evidence.get("suspected_oom", False),
     )
 
 
-def record_startup(home: Optional[Path] = None, *, defer_integrity_check: bool = True) -> Optional[dict[str, Any]]:
+def record_startup(
+    home: Optional[Path] = None, *, defer_integrity_check: bool = True
+) -> Optional[dict[str, Any]]:
     """Boot entry point: report any unclean previous exit (evidence dict, also persisted
     to ``gateway-exit-diag.log`` and logged at WARNING) then claim the sentinel.  Never raises.
 
@@ -322,11 +370,18 @@ def record_startup(home: Optional[Path] = None, *, defer_integrity_check: bool =
     try:
         evidence = detect_unclean_exit(home)
         if evidence is not None:
-            _report_unclean_exit(evidence, home, defer_integrity_check=defer_integrity_check)
+            _report_unclean_exit(
+                evidence, home, defer_integrity_check=defer_integrity_check
+            )
     except Exception:
         logger.debug("Unclean-exit detection failed", exc_info=True)
     try:
-        claim: dict[str, Any] = {"phase": "running", "pid": os.getpid(), "start_time": time.time(), "started_at": _now_iso()}
+        claim: dict[str, Any] = {
+            "phase": "running",
+            "pid": os.getpid(),
+            "start_time": time.time(),
+            "started_at": _now_iso(),
+        }
         # Process birth (psutil), distinct from ``start_time`` (the ledger claim, seconds later once
         # imports finish): the Windows start attestation binds PIDs to birth time (#110020 review).
         from clawk_cli.process_identity import _process_create_time
@@ -348,7 +403,9 @@ def record_startup(home: Optional[Path] = None, *, defer_integrity_check: bool =
 
 
 def run_deferred_integrity_check(
-    evidence: Optional[dict[str, Any]], *, home: Optional[Path] = None,
+    evidence: Optional[dict[str, Any]],
+    *,
+    home: Optional[Path] = None,
     deadline_s: float = STATE_DB_INTEGRITY_DEADLINE_S,
 ) -> str:
     """Run the deferred post-connect state.db scan and append a second diag record.
@@ -373,13 +430,17 @@ def run_deferred_integrity_check(
         path = _home_path(home, "state.db")
         mode = _state_db_journal_mode(path) if path.exists() else "wal"
         if mode != "wal":
-            verdict = (f"skipped: rollback-journal store (journal_mode={mode or 'unknown'}), "
-                       "scan would block live writes")
+            verdict = (
+                f"skipped: rollback-journal store (journal_mode={mode or 'unknown'}), "
+                "scan would block live writes"
+            )
             logger.warning(
                 "Previous gateway exit was unclean, but the state.db integrity check was skipped: %s is a "
                 "rollback-journal store (journal_mode=%s) and a background scan would block live writes. "
                 "To check it, stop the gateway and run: sqlite3 %s 'PRAGMA quick_check'",
-                path, mode or "unknown", path,
+                path,
+                mode or "unknown",
+                path,
             )
         else:
             verdict = check_state_db_integrity(home=home, deadline_s=deadline_s)
@@ -406,7 +467,11 @@ def run_deferred_integrity_check(
         return "check-failed: deferred scan raised"
 
 
-def mark_exited(exit_code: Optional[int] = None, reason: str = "graceful_shutdown", home: Optional[Path] = None) -> None:
+def mark_exited(
+    exit_code: Optional[int] = None,
+    reason: str = "graceful_shutdown",
+    home: Optional[Path] = None,
+) -> None:
     """Mark the current life as cleanly exited.  Idempotent, never raises.
 
     Only rewrites a sentinel provably owned by this process: during ``--replace``
@@ -417,8 +482,13 @@ def mark_exited(exit_code: Optional[int] = None, reason: str = "graceful_shutdow
         sentinel = _read_json(get_lifecycle_sentinel_path(home))
         if sentinel is not None and sentinel.get("pid") != os.getpid():
             return
-        exited: dict[str, Any] = {"phase": "exited", "pid": os.getpid(), "exit_code": exit_code, "exit_reason": reason,
-                                  "exited_at": _now_iso()}
+        exited: dict[str, Any] = {
+            "phase": "exited",
+            "pid": os.getpid(),
+            "exit_code": exit_code,
+            "exit_reason": reason,
+            "exited_at": _now_iso(),
+        }
         # Carry the incarnation identity: the Windows start attestation matches a clean exit by
         # PID *and* start time so a reused PID's exit cannot vouch for a different life (#110020).
         for key in ("start_time", "create_time"):
@@ -433,7 +503,9 @@ def read_prior_exit_label(profile_home: Path) -> str:
     """``clean``/``unclean``/``unknown`` for the profile's last gateway life; annotates
     ``container-boot.log``.  ``running`` is unclean: the old PID namespace is gone at container boot."""
     try:
-        phase = (_read_json(get_lifecycle_sentinel_path(profile_home)) or {}).get("phase")
+        phase = (_read_json(get_lifecycle_sentinel_path(profile_home)) or {}).get(
+            "phase"
+        )
         return {"exited": "clean", "running": "unclean"}.get(phase, "unknown")
     except Exception:
         return "unknown"

@@ -6,6 +6,7 @@ integrity guard is too expensive to run every time. Steps still own their
 idempotence and rollback; failure is recorded until the next revision (or
 an explicit post-update run). PM owns runtime diagnosis, not this record.
 """
+
 from __future__ import annotations
 
 from pm.environments import install_state_dir
@@ -22,10 +23,10 @@ RECORD_SCHEMA_VERSION = 1
 LOCK_STALE_SECONDS = 600
 
 
-
 # ---------------------------------------------------------------------------
 # current identity
 # ---------------------------------------------------------------------------
+
 
 def read_git_head(root: Path) -> str | None:
     """The commit SHA of the checkout at ``root``.
@@ -46,7 +47,9 @@ def read_git_head(root: Path) -> str | None:
         out = subprocess.run(
             [git, "-C", str(root), "rev-parse", "HEAD"],
             capture_output=True,
-            text=True, encoding="utf-8", errors="replace",
+            text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=10,
             check=False,
         )
@@ -102,6 +105,7 @@ def current_install_identity(project_root: Path) -> str | None:
 # the per-install state folder: installs/<SHA16>/ under the DEFAULT home
 # ---------------------------------------------------------------------------
 
+
 def record_path(project_root: Path) -> Path:
     """Each profile completes its own home maintenance for this installation."""
     from clawk_cli.profiles import get_active_profile_name
@@ -147,6 +151,7 @@ def needs_bootstrap(project_root: Path) -> str | None:
 # single-flight lock
 # ---------------------------------------------------------------------------
 
+
 class _RecordLock:
     """O_CREAT|O_EXCL existence-as-mutex next to a record file.
 
@@ -170,7 +175,12 @@ class _RecordLock:
         except OSError:
             return False
         try:
-            os.write(fd, json.dumps({"pid": os.getpid(), "startedAt": time.time()}).encode("utf-8"))
+            os.write(
+                fd,
+                json.dumps({"pid": os.getpid(), "startedAt": time.time()}).encode(
+                    "utf-8"
+                ),
+            )
         finally:
             os.close(fd)
         return True
@@ -215,6 +225,7 @@ class _RecordLock:
 # the boot entry point
 # ---------------------------------------------------------------------------
 
+
 def run_boot_bootstrap(project_root: Path) -> dict:
     """Bound home maintenance to one attempt per installed revision."""
     from clawk_cli import post_update
@@ -230,7 +241,9 @@ def run_boot_bootstrap(project_root: Path) -> dict:
         # A previous holder may have finished after our first read.
         if read_last_known(record).get("identity") == identity:
             return {"home": "done-by-other"}
-        logger.info("home maintenance: code changed to %s, running steps", identity[:12])
+        logger.info(
+            "home maintenance: code changed to %s, running steps", identity[:12]
+        )
         results = post_update.run_steps(post_update.BOOT_HOME_STEPS)
         _write_record(record, identity, results)
         return {"home": results}

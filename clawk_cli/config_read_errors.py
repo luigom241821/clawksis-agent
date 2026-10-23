@@ -30,14 +30,17 @@ _CONFIG_PARSE_FAILURES: dict = {}
 _PARSE_FAILURE_FALLBACK_MSG = {
     "last-known-good": "Clawksis is running on the settings it loaded before the edit until it is fixed, so recent changes are not applied.",
     "last-known-good-backup": "Clawksis is running on your last good settings until it is fixed, so recent changes are not applied.",
-    "refuse-write": "Nothing was written, so the existing file is preserved."}
-_PARSE_FAILURE_DEFAULTS_MSG = (
-    "Clawksis is running on default settings until it is fixed, so none of your saved settings are applied.")
-_PARSE_FAILURE_REPAIR_MSG = "Open it with `clawk config edit`, fix {where}, then run `clawk config check`."
+    "refuse-write": "Nothing was written, so the existing file is preserved.",
+}
+_PARSE_FAILURE_DEFAULTS_MSG = "Clawksis is running on default settings until it is fixed, so none of your saved settings are applied."
+_PARSE_FAILURE_REPAIR_MSG = (
+    "Open it with `clawk config edit`, fix {where}, then run `clawk config check`."
+)
 _FIX_PERMS = "Fix the file permissions or move it aside first."
 _FIX_YAML = (
     "Fix it with `clawk config edit` and check with `clawk config check`, or copy the newest good "
-    "file from {backups} over config.yaml.")
+    "file from {backups} over config.yaml."
+)
 
 
 def _yaml_error_location(exc: Exception) -> str:
@@ -54,20 +57,27 @@ def _yaml_error_details(exc: Exception) -> str:
     return " ".join(text.split())
 
 
-def format_config_parse_failure(config_path: Path, exc: Exception, *, fallback: str = "defaults") -> str:
+def format_config_parse_failure(
+    config_path: Path, exc: Exception, *, fallback: str = "defaults"
+) -> str:
     """User copy for an unparseable config.yaml: what happened, what Clawksis is doing, how to fix.
     Only the problem line/column is printed; the raw PyYAML text goes to a ``Details:`` line."""
     where = _yaml_error_location(exc)
     at = f" at {where}" if where else ""
-    fallback_msg = _PARSE_FAILURE_FALLBACK_MSG.get(fallback, _PARSE_FAILURE_DEFAULTS_MSG)
-    if isinstance(exc, OSError):  # the file is intact; EMFILE/EIO/sharing violation, not a YAML problem
+    fallback_msg = _PARSE_FAILURE_FALLBACK_MSG.get(
+        fallback, _PARSE_FAILURE_DEFAULTS_MSG
+    )
+    if isinstance(
+        exc, OSError
+    ):  # the file is intact; EMFILE/EIO/sharing violation, not a YAML problem
         return f"Your settings file ({config_path}) could not be read. {fallback_msg} {_read_error_fix(exc)}"
     repair = _PARSE_FAILURE_REPAIR_MSG.format(where=where or "the problem")
     return f"Your settings file ({config_path}) has a formatting error{at}. {fallback_msg} {repair}"
 
 
 def _warn_config_parse_failure(
-    config_path: Path, exc: Exception, *, fallback: str = "defaults") -> None:
+    config_path: Path, exc: Exception, *, fallback: str = "defaults"
+) -> None:
     """Surface a config.yaml parse failure to log and stderr (once per file signature).
     Silent fallback to ``DEFAULT_CONFIG`` drops every user override, so this must be loud.
 
@@ -86,14 +96,19 @@ def _warn_config_parse_failure(
         return
     _CONFIG_PARSE_WARNED.add(key)
     from clawk_cli.config_backups import backup_config
+
     # A read error leaves an intact file behind: no "corrupt" copy of a good file.
-    backup_path = None if isinstance(exc, OSError) else backup_config(config_path, "corrupt")
+    backup_path = (
+        None if isinstance(exc, OSError) else backup_config(config_path, "corrupt")
+    )
     msg = format_config_parse_failure(config_path, exc, fallback=fallback)
     if backup_path is not None:
         msg += f" A copy of the broken file was saved to {backup_path}."
     logger.warning("%s Details: %s", msg, _yaml_error_details(exc))
     try:
-        sys.stderr.write(f"⚠️  clawk config: {msg}\n    Details: {_yaml_error_details(exc)}\n")
+        sys.stderr.write(
+            f"⚠️  clawk config: {msg}\n    Details: {_yaml_error_details(exc)}\n"
+        )
         sys.stderr.flush()
     except Exception:
         pass
@@ -103,6 +118,7 @@ def get_active_config_parse_failure() -> Optional[str]:
     """Return the recorded parse error while the ACTIVE config.yaml is still byte-identical
     (mtime_ns + size + ino + ctime_ns) to the file that failed to parse; else None."""
     from clawk_cli.config import get_config_path
+
     try:
         record = _CONFIG_PARSE_FAILURES[str(path := get_config_path())]
         st = path.stat()
@@ -124,8 +140,11 @@ class FailedConfigRead(dict):
 
 
 def _read_error_fix(exc: OSError) -> str:
-    return _FIX_PERMS if isinstance(exc, PermissionError) else (
-        "Try again; run `clawk config check` if it keeps failing.")
+    return (
+        _FIX_PERMS
+        if isinstance(exc, PermissionError)
+        else ("Try again; run `clawk config check` if it keeps failing.")
+    )
 
 
 def _refuse_failed_read(config_path: Path, data: Any) -> None:
@@ -134,20 +153,30 @@ def _refuse_failed_read(config_path: Path, data: Any) -> None:
         return
     exc = data.read_error
     if isinstance(exc, OSError):
-        raise _refuse_overwrite(config_path, "could not be read", exc, _read_error_fix(exc))
+        raise _refuse_overwrite(
+            config_path, "could not be read", exc, _read_error_fix(exc)
+        )
     raise _refuse_overwrite(
-        config_path, "has a formatting error", exc, _FIX_YAML.format(backups=_backups_dir_display()))
+        config_path,
+        "has a formatting error",
+        exc,
+        _FIX_YAML.format(backups=_backups_dir_display()),
+    )
 
 
-def _refuse_overwrite(config_path: Path, reason: str, exc: Exception, fix: str) -> RuntimeError:
+def _refuse_overwrite(
+    config_path: Path, reason: str, exc: Exception, fix: str
+) -> RuntimeError:
     """Error for a write that must not replace an existing config.yaml. Plain lead + ``Details:``."""
     where = _yaml_error_location(exc)
     at = f" ({where})" if where else ""
     return RuntimeError(
         f"Your settings file ({config_path}) {reason}{at}, so this change was not saved. {fix} "
-        f"Details: {_yaml_error_details(exc)}")
+        f"Details: {_yaml_error_details(exc)}"
+    )
 
 
 def _backups_dir_display() -> str:
     from clawk_constants import display_clawk_home
+
     return f"{display_clawk_home()}/backups/config/"

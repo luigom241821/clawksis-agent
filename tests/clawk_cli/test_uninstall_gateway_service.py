@@ -8,6 +8,7 @@ actual host — no OS faking — and all removers plus the standalone-process ki
 are stubbed, so no real service is stopped and no real gateway process is
 killed.
 """
+
 from __future__ import annotations
 
 import platform
@@ -23,8 +24,12 @@ def no_live_gateways(monkeypatch: pytest.MonkeyPatch) -> None:
     """The standalone-process sweep finds nothing (and must not kill)."""
     monkeypatch.setattr(gateway, "find_gateway_pids", lambda *a, **k: [])
     monkeypatch.setattr(
-        gateway, "kill_gateway_processes",
-        lambda *a, **k: pytest.fail("kill_gateway_processes must not run without live pids"))
+        gateway,
+        "kill_gateway_processes",
+        lambda *a, **k: pytest.fail(
+            "kill_gateway_processes must not run without live pids"
+        ),
+    )
     # Neutral env in case the CI runner exports Termux variables; this host
     # always reaches the dispatch table.
     monkeypatch.delenv("TERMUX_VERSION", raising=False)
@@ -33,11 +38,14 @@ def no_live_gateways(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _dispatch_table(calls: list) -> dict:
     """A remover table that records which platform's remover ran."""
+
     def remover(name):
         def run():
             calls.append(name)
             return True
+
         return run
+
     return {
         "Linux": (remover("Linux"), "linux label"),
         "Darwin": (remover("Darwin"), "darwin label"),
@@ -55,8 +63,10 @@ def test_current_platform_remover_runs_and_others_do_not(monkeypatch, no_live_ga
 
 def test_remover_failure_reports_the_table_label(monkeypatch, no_live_gateways, capsys):
     table = _dispatch_table([])
+
     def boom():
         raise RuntimeError("no service manager here")
+
     table[platform.system()] = (boom, "remover blew up")
     monkeypatch.setattr(uninstall, "_GATEWAY_SERVICE_REMOVERS", table)
 

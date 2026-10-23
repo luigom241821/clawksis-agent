@@ -37,5 +37,3 @@ def test_load_prefill_messages_prefers_top_level_over_legacy(monkeypatch, gatewa
     )
 
     assert gateway_run.GatewayRunner._load_prefill_messages() == top_level
-
-

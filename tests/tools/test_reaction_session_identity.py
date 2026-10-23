@@ -10,7 +10,9 @@ from tools import react_to_message_tool as reactions
 
 
 @pytest.mark.parametrize("routing_key", ["agent:main:local:dm:chat-a", "chat-b"])
-def test_reaction_uses_durable_session_with_routing_key(tmp_path, monkeypatch, routing_key):
+def test_reaction_uses_durable_session_with_routing_key(
+    tmp_path, monkeypatch, routing_key
+):
     path = tmp_path / "state.db"
     with SessionDB(db_path=path) as db:
         db.create_session("chat-a", "local")
@@ -23,10 +25,15 @@ def test_reaction_uses_durable_session_with_routing_key(tmp_path, monkeypatch, r
         foreign = db.latest_message_row_id("chat-b", role="user")
     emitted = []
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    monkeypatch.setattr("clawk_state.DEFAULT_DB_PATH", path)  # conftest pins this per test
-    monkeypatch.setattr(reactions.desktop_ui, "emit", lambda *args: emitted.append(args))
+    monkeypatch.setattr(
+        "clawk_state.DEFAULT_DB_PATH", path
+    )  # conftest pins this per test
+    monkeypatch.setattr(
+        reactions.desktop_ui, "emit", lambda *args: emitted.append(args)
+    )
     tokens = set_session_vars(session_key=routing_key, session_id="chat-a")
     try:
+
         def react(**args):
             return json.loads(reactions.registry.dispatch("react_to_message", args))
 
@@ -44,7 +51,12 @@ def test_reaction_uses_durable_session_with_routing_key(tmp_path, monkeypatch, r
         assert reopened.get_message_reactions("chat-a", latest)[0]["emoji"] == "👍"
         assert reopened.get_message_reactions("chat-a", earlier) == []
         assert reopened.get_message_reactions("chat-b", foreign) == []
-    assert [payload["row_id"] for _, payload in emitted] == [latest, earlier, earlier, earlier]
+    assert [payload["row_id"] for _, payload in emitted] == [
+        latest,
+        earlier,
+        earlier,
+        earlier,
+    ]
     assert all(name == "message.reaction" for name, _ in emitted)
     assert emitted[0][1]["reactions"][0]["emoji"] == "👍"
     assert emitted[-1][1]["reactions"] == []
@@ -57,12 +69,18 @@ def test_reaction_keeps_legacy_key_fallback_and_empty_session(tmp_path, monkeypa
         db.append_message("legacy", "user", "Legacy message")
         row = db.latest_message_row_id("legacy", role="user")
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    monkeypatch.setattr("clawk_state.DEFAULT_DB_PATH", path)  # conftest pins this per test
+    monkeypatch.setattr(
+        "clawk_state.DEFAULT_DB_PATH", path
+    )  # conftest pins this per test
     emitted = []
-    monkeypatch.setattr(reactions.desktop_ui, "emit", lambda *args: emitted.append(args))
+    monkeypatch.setattr(
+        reactions.desktop_ui, "emit", lambda *args: emitted.append(args)
+    )
     tokens = set_session_vars(session_key="legacy", session_id="missing")
     try:
-        result = json.loads(reactions.registry.dispatch("react_to_message", {"emoji": "👍"}))
+        result = json.loads(
+            reactions.registry.dispatch("react_to_message", {"emoji": "👍"})
+        )
         assert "No user message" in result["error"]
         assert emitted == []
     finally:
@@ -71,8 +89,12 @@ def test_reaction_keeps_legacy_key_fallback_and_empty_session(tmp_path, monkeypa
         assert db.get_message_reactions("legacy", row) == []
     tokens = set_session_vars(session_key="legacy", session_id="")
     try:
-        assert json.loads(reactions.registry.dispatch("react_to_message", {"emoji": "👍"}))["success"]
+        assert json.loads(
+            reactions.registry.dispatch("react_to_message", {"emoji": "👍"})
+        )["success"]
     finally:
         clear_session_vars(tokens)
-    result = json.loads(reactions.registry.dispatch("react_to_message", {"emoji": "👍"}))
+    result = json.loads(
+        reactions.registry.dispatch("react_to_message", {"emoji": "👍"})
+    )
     assert "No active session" in result["error"]

@@ -64,16 +64,12 @@ def _make_adapter():
 
 
 def _make_event(text="/stop", chat_id="12345"):
-    source = SessionSource(
-        platform=Platform.TELEGRAM, chat_id=chat_id, chat_type="dm"
-    )
+    source = SessionSource(platform=Platform.TELEGRAM, chat_id=chat_id, chat_type="dm")
     return MessageEvent(text=text, message_type=MessageType.TEXT, source=source)
 
 
 def _session_key(chat_id="12345"):
-    source = SessionSource(
-        platform=Platform.TELEGRAM, chat_id=chat_id, chat_type="dm"
-    )
+    source = SessionSource(platform=Platform.TELEGRAM, chat_id=chat_id, chat_type="dm")
     return build_session_key(source)
 
 
@@ -101,8 +97,6 @@ class TestCommandBypassActiveSession:
             "/stop response was not sent back to the user"
         )
 
-
-
     @pytest.mark.asyncio
     async def test_approve_bypasses_guard(self):
         """/approve must bypass (deadlock prevention)."""
@@ -127,11 +121,6 @@ class TestCommandBypassActiveSession:
         assert sk not in adapter._pending_messages
         assert any("handled:deny" in r for r in adapter.sent_responses)
 
-
-
-
-
-
     @pytest.mark.asyncio
     async def test_steer_bypasses_guard(self):
         """/steer must bypass the Level-1 active-session guard so it reaches
@@ -150,9 +139,6 @@ class TestCommandBypassActiveSession:
         assert any("handled:steer" in r for r in adapter.sent_responses), (
             "/steer response was not sent back to the user"
         )
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -197,7 +183,6 @@ class TestAllResolvableCommandsBypassGuard:
             f"{command_text} produced no response — it should be dispatched, "
             "not silently discarded"
         )
-
 
     def test_should_bypass_returns_false_for_unknown(self):
         """Unknown words don't bypass — they get queued as user text."""
@@ -265,8 +250,6 @@ class TestNoActiveSessionNormalDispatch:
 # ---------------------------------------------------------------------------
 
 
-
-
 # ---------------------------------------------------------------------------
 # Tests: bypass with @botname suffix (Telegram-style)
 # ---------------------------------------------------------------------------
@@ -288,4 +271,3 @@ class TestBypassWithBotnameSuffix:
             "/stop@MyClawksisBot was queued instead of bypassing"
         )
         assert any("handled:stop" in r for r in adapter.sent_responses)
-

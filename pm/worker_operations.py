@@ -3,6 +3,7 @@
 PM's own runtime is deliberately absent: its public staging entry point must
 run directly, before the worker's dependencies exist.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -34,6 +35,8 @@ OPERATIONS = {
     "ensure_python_tool": Operation("pm.operations", ("uv",), "policy"),
     "check_project_lock": Operation("pm.build_operations", ("uv",), "policy"),
     "export_requirements": Operation("pm.build_operations", ("uv",), "policy"),
-    "build_requirements_environment": Operation("pm.build_operations", ("uv",), "policy"),
+    "build_requirements_environment": Operation(
+        "pm.build_operations", ("uv",), "policy"
+    ),
     "prune_cache": Operation("pm.build_operations", ("uv",), "always"),
 }

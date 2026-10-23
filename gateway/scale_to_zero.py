@@ -22,7 +22,9 @@ from typing import Any, Iterable, Optional
 logger = logging.getLogger(__name__)
 
 SCALE_TO_ZERO_ENV = "CLAWK_SCALE_TO_ZERO"  # stamped by NAS when the Labs toggle is on
-FLY_APP_NAME_ENV = "FLY_APP_NAME"  # Fly-injected identity; both needed for self_suspend_available()
+FLY_APP_NAME_ENV = (
+    "FLY_APP_NAME"  # Fly-injected identity; both needed for self_suspend_available()
+)
 FLY_MACHINE_ID_ENV = "FLY_MACHINE_ID"
 # Local flaps (Fly Machines API) socket; POST .../suspend freezes THIS machine.
 FLY_API_SOCKET = "/.fly/api"
@@ -52,8 +54,9 @@ def scale_to_zero_enabled(environ: Optional[dict] = None) -> bool:
     return _env_str(environ, SCALE_TO_ZERO_ENV).lower() in _TRUTHY
 
 
-def parse_idle_timeout_seconds(cfg_value: Any,
-                               default_minutes: int = DEFAULT_IDLE_TIMEOUT_MINUTES) -> float:
+def parse_idle_timeout_seconds(
+    cfg_value: Any, default_minutes: int = DEFAULT_IDLE_TIMEOUT_MINUTES
+) -> float:
     """Coerce ``scale_to_zero.idle_timeout_minutes`` to seconds. Non-numeric / non-positive
     degrades to the default (never <= 0: instant dormancy)."""
     try:
@@ -72,27 +75,38 @@ def messaging_is_relay_only_or_absent(platforms: Iterable[Any]) -> bool:
     return not names
 
 
-def should_arm(*, enabled: bool, relay_only_or_absent: bool, wake_url: Optional[str]) -> bool:
+def should_arm(
+    *, enabled: bool, relay_only_or_absent: bool, wake_url: Optional[str]
+) -> bool:
     """Arm only if ALL hold: flag on, relay-only/absent messaging, wakeUrl registered
     (a suspended instance with no wake target is a black hole). Otherwise the watcher
     never starts, so a non-opted instance behaves exactly as before."""
     return bool(enabled) and bool(relay_only_or_absent) and bool(wake_url)
 
 
-def is_idle(*, active_work_count: int, seconds_since_last_inbound: float,
-            idle_timeout_seconds: float, has_live_background_work: bool) -> bool:
+def is_idle(
+    *,
+    active_work_count: int,
+    seconds_since_last_inbound: float,
+    idle_timeout_seconds: float,
+    has_live_background_work: bool,
+) -> bool:
     """Pure idle predicate: no active work, no inbound within the window, no live background work.
     ``active_work_count`` is the BROAD aggregate (agent turns + cron + API runs) — passing only
     ``len(_running_agents)`` reopens the mid-cron-job suspend hole. Callers that cannot read a
     work source must fail AWAKE (pass a positive sentinel), never fail to 0."""
-    return (active_work_count <= 0 and not has_live_background_work
-            and seconds_since_last_inbound >= idle_timeout_seconds)
+    return (
+        active_work_count <= 0
+        and not has_live_background_work
+        and seconds_since_last_inbound >= idle_timeout_seconds
+    )
 
 
 def dashboard_client_heartbeat_path(clawk_home: Optional[os.PathLike | str] = None):
     """Path of the dashboard-client liveness marker under CLAWK_HOME."""
     if clawk_home is None:
         from clawk_constants import get_clawk_home
+
         clawk_home = get_clawk_home()
     return Path(clawk_home) / DASHBOARD_CLIENT_HEARTBEAT_REL
 
@@ -110,8 +124,9 @@ def touch_dashboard_client_heartbeat(path: Optional[os.PathLike | str] = None) -
         return False
 
 
-def dashboard_client_last_seen(path: Optional[os.PathLike | str] = None, *,
-                               now: Optional[float] = None) -> Optional[float]:
+def dashboard_client_last_seen(
+    path: Optional[os.PathLike | str] = None, *, now: Optional[float] = None
+) -> Optional[float]:
     """Epoch seconds a dashboard client last sent a WS frame, or None if never. Missing marker ->
     None (steady state when nobody has the dashboard open — NOT fail-awake, or no instance would
     ever sleep). Unreadable marker -> ``now`` (fail-awake, as in ``is_idle``). Clamped to now: an
@@ -130,8 +145,11 @@ def self_suspend_available(environ: Optional[dict] = None) -> bool:
     """True iff Fly machine identity is present AND the local Machines API socket exists.
     Off-Fly this is False; see ``suspend_available`` for whether some OTHER lever exists
     before concluding the watcher must abstain."""
-    return bool(_env_str(environ, FLY_APP_NAME_ENV) and _env_str(environ, FLY_MACHINE_ID_ENV)
-                and os.path.exists(FLY_API_SOCKET))
+    return bool(
+        _env_str(environ, FLY_APP_NAME_ENV)
+        and _env_str(environ, FLY_MACHINE_ID_ENV)
+        and os.path.exists(FLY_API_SOCKET)
+    )
 
 
 def brokered_sleep_url(environ: Optional[dict] = None) -> Optional[str]:
@@ -232,19 +250,30 @@ def request_brokered_suspend(
     return ok
 
 
-def suspend_self(environ: Optional[dict] = None, *, socket_path: str = FLY_API_SOCKET,
-                 timeout: float = 10.0) -> bool:
+def suspend_self(
+    environ: Optional[dict] = None,
+    *,
+    socket_path: str = FLY_API_SOCKET,
+    timeout: float = 10.0,
+) -> bool:
     """POST /v1/apps/{app}/machines/{id}/suspend on the local flaps socket (the socket is the
     credential). Returns True when flaps accepted (2xx); the kernel then freezes this process
     shortly after, so treat as fire-and-forget. Never raises: a failed suspend leaves the machine
     running (fail-awake). stdlib-only on purpose — a plain unix-socket HTTP/1.1 request, no async
     plumbing to freeze mid-await."""
-    app, machine_id = _env_str(environ, FLY_APP_NAME_ENV), _env_str(environ, FLY_MACHINE_ID_ENV)
+    app, machine_id = (
+        _env_str(environ, FLY_APP_NAME_ENV),
+        _env_str(environ, FLY_MACHINE_ID_ENV),
+    )
     if not app or not machine_id:
-        logger.warning("scale-to-zero: suspend_self called without Fly machine identity")
+        logger.warning(
+            "scale-to-zero: suspend_self called without Fly machine identity"
+        )
         return False
-    request = (f"POST /v1/apps/{app}/machines/{machine_id}/suspend HTTP/1.1\r\n"
-               "Host: flaps\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+    request = (
+        f"POST /v1/apps/{app}/machines/{machine_id}/suspend HTTP/1.1\r\n"
+        "Host: flaps\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+    )
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
             sock.settimeout(timeout)
@@ -260,9 +289,14 @@ def suspend_self(environ: Optional[dict] = None, *, socket_path: str = FLY_API_S
     parts = status_line.split()
     ok = len(parts) >= 2 and parts[1].isdigit() and 200 <= int(parts[1]) < 300
     if ok:
-        logger.info("scale-to-zero: machine suspend accepted by flaps (%s)", status_line)
+        logger.info(
+            "scale-to-zero: machine suspend accepted by flaps (%s)", status_line
+        )
     else:
         body = response.split(b"\r\n\r\n", 1)[-1][:500].decode("utf-8", "replace")
-        logger.warning("scale-to-zero: flaps suspend rejected: %s %s", status_line,
-                       json.dumps(body)[:500])
+        logger.warning(
+            "scale-to-zero: flaps suspend rejected: %s %s",
+            status_line,
+            json.dumps(body)[:500],
+        )
     return ok

@@ -36,7 +36,9 @@ def homes(tmp_path, monkeypatch):
     root.mkdir(parents=True)
     profile.mkdir(parents=True)
     monkeypatch.setenv("CLAWK_HOME", str(root))
-    monkeypatch.setattr(clawk_state, "DEFAULT_DB_PATH", clawk_state._IMPORT_DEFAULT_DB_PATH)
+    monkeypatch.setattr(
+        clawk_state, "DEFAULT_DB_PATH", clawk_state._IMPORT_DEFAULT_DB_PATH
+    )
     return root, profile
 
 
@@ -125,7 +127,9 @@ def test_deferred_build_fails_closed_when_profile_store_unopenable(homes, monkey
     monkeypatch.setattr(server, "_set_session_context", lambda *a, **kw: [])
     monkeypatch.setattr(server, "_clear_session_context", lambda tokens: None)
     monkeypatch.setattr(
-        server, "_emit", lambda event, _sid, payload=None: events.append((event, _sid, payload))
+        server,
+        "_emit",
+        lambda event, _sid, payload=None: events.append((event, _sid, payload)),
     )
 
     def fake_make_agent(_sid, _key, **kw):
@@ -155,7 +159,8 @@ def test_deferred_build_fails_closed_when_profile_store_unopenable(homes, monkey
         assert session.get("agent") is None
         assert "profile session store unavailable" in str(session.get("agent_error"))
         assert any(
-            evt == "error" and "could not start the assistant" in str((payload or {}).get("message"))
+            evt == "error"
+            and "could not start the assistant" in str((payload or {}).get("message"))
             for evt, _s, payload in events
         )
         # And nothing bled into the launch store.
@@ -180,11 +185,15 @@ def test_init_session_skips_launch_db_when_profile_store_unopenable(homes, monke
     sid = "sid-worker-init"
 
     def tripwire():
-        raise AssertionError("launch _get_db() must not be touched for a named-profile session")
+        raise AssertionError(
+            "launch _get_db() must not be touched for a named-profile session"
+        )
 
     monkeypatch.setattr(server, "_get_db", tripwire)
     monkeypatch.setattr(server, "_wire_callbacks", lambda _sid: None)
-    monkeypatch.setattr(server, "_start_notification_poller", lambda _sid, _s: threading.Event())
+    monkeypatch.setattr(
+        server, "_start_notification_poller", lambda _sid, _s: threading.Event()
+    )
     monkeypatch.setattr(server, "_notify_session_boundary", lambda *a, **kw: None)
     monkeypatch.setattr(server, "_emit", lambda *a, **kw: None)
     monkeypatch.setattr(server, "_session_info", lambda _agent, _s=None: {})
@@ -247,10 +256,13 @@ def test_bot_capability_rebuild_stays_on_the_profile_store(homes, monkeypatch):
     homes_seen = _stub_rebuild_env(monkeypatch, server, launch)
     monkeypatch.setattr(server, "_session_cwd", lambda _s: str(root))
     monkeypatch.setattr(server, "_session_source", lambda _s: "desktop")
-    monkeypatch.setattr("tools.bot_mode_probe.capability_fingerprint", lambda _home: "caps-v2")
+    monkeypatch.setattr(
+        "tools.bot_mode_probe.capability_fingerprint", lambda _home: "caps-v2"
+    )
 
     old_agent = SimpleNamespace(
-        _session_db=profile_db, _owns_session_db=True, _session_title_hint="Bot Chat")
+        _session_db=profile_db, _owns_session_db=True, _session_title_hint="Bot Chat"
+    )
     session = {
         "session_key": "key-bot",
         "profile_home": str(profile),
@@ -261,7 +273,9 @@ def test_bot_capability_rebuild_stays_on_the_profile_store(homes, monkeypatch):
         server._sync_bot_capabilities("sid-bot", session)
 
         new_agent = session["agent"]
-        assert new_agent is not old_agent, "capability change must have rebuilt the agent"
+        assert new_agent is not old_agent, (
+            "capability change must have rebuilt the agent"
+        )
         # The rebuilt agent writes to the SAME store as the session it continues...
         assert new_agent._session_db is profile_db
         # ...and was built with that profile's home bound, not the launch home.
@@ -270,7 +284,9 @@ def test_bot_capability_rebuild_stays_on_the_profile_store(homes, monkeypatch):
         assert new_agent._owns_session_db is True
         assert old_agent._owns_session_db is False
 
-        new_agent._session_db.create_session("20260906_bot", "tui", profile_name="worker")
+        new_agent._session_db.create_session(
+            "20260906_bot", "tui", profile_name="worker"
+        )
         assert _ids(profile / "state.db") == {"20260906_bot"}
         assert _ids(root / "state.db") == set()
     finally:
@@ -313,7 +329,9 @@ def test_reset_session_agent_stays_on_the_profile_store(homes, monkeypatch):
         assert new_agent._owns_session_db is True
         assert old_agent._owns_session_db is False
 
-        new_agent._session_db.create_session("20260906_reset", "tui", profile_name="worker")
+        new_agent._session_db.create_session(
+            "20260906_reset", "tui", profile_name="worker"
+        )
         assert _ids(profile / "state.db") == {"20260906_reset"}
         assert _ids(root / "state.db") == set()
     finally:

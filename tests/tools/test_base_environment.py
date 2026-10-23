@@ -64,7 +64,9 @@ def test_nopasswd_probe_runs_sudo_n_inside_backend_only_when_supported(
     env._passwordless_sudo_probe_supported = supported
     run = MagicMock(return_value=object())
     monkeypatch.setattr(env, "_run_bash", run)
-    monkeypatch.setattr(env, "_wait_for_process", MagicMock(return_value={"returncode": returncode}))
+    monkeypatch.setattr(
+        env, "_wait_for_process", MagicMock(return_value={"returncode": returncode})
+    )
 
     assert env._sudo_nopasswd_works() is expected
     assert run.called is probed
@@ -89,7 +91,6 @@ class TestBoundedOutputCollector:
         assert rendered.endswith("TAIL-SENTINEL")
         assert "[OUTPUT TRUNCATED" in rendered
 
-
     def test_required_status_suffix_stays_inside_limit(self):
         collector = _BoundedOutputCollector(120)
         collector.append("A" * 10_000)
@@ -99,8 +100,6 @@ class TestBoundedOutputCollector:
         assert len(rendered) <= 120
         assert rendered.endswith("[Command timed out after 1s]")
         assert "[OUTPUT TRUNCATED" in rendered
-
-
 
 
 class TestAtomicSnapshotWrite:
@@ -144,7 +143,6 @@ class TestAtomicSnapshotWrite:
         # The bare $$ temp form must be gone.
         assert ".tmp.$$" not in wrapped
 
-
     def test_init_session_bootstrap_also_atomic_and_mktemp(self):
         """The init_session bootstrap (first snapshot write) is the same shared
         file a concurrent command could source — it must be atomic and use
@@ -153,7 +151,9 @@ class TestAtomicSnapshotWrite:
         captured = {}
 
         def fake_run_bash(cmd_string, *, login=False, timeout=120, stdin_data=None):
-            captured.setdefault("cmd", cmd_string)  # only the bootstrap; ignore the failure-path probe
+            captured.setdefault(
+                "cmd", cmd_string
+            )  # only the bootstrap; ignore the failure-path probe
             raise RuntimeError("stop after capture")
 
         env._run_bash = fake_run_bash  # type: ignore[assignment]
@@ -168,10 +168,6 @@ class TestAtomicSnapshotWrite:
         assert ".tmp.$$" not in boot
 
 
-
-
-
-
 class TestSnapshotFileModes:
     """Snapshot metadata files are private without changing user command umask."""
 
@@ -181,9 +177,11 @@ class TestSnapshotFileModes:
         import shutil
         import stat
         import subprocess
+
         bash = shutil.which("bash")
         if not bash:
             import pytest
+
             pytest.skip("bash required")
 
         class ExecutableEnv(BaseEnvironment):
@@ -194,7 +192,9 @@ class TestSnapshotFileModes:
             def get_temp_dir(self):
                 return self._temp_dir
 
-            def _run_bash(self, cmd_string, *, login=False, timeout=120, stdin_data=None):
+            def _run_bash(
+                self, cmd_string, *, login=False, timeout=120, stdin_data=None
+            ):
                 proc = subprocess.Popen(
                     [bash, "-lc", cmd_string],
                     stdout=subprocess.PIPE,
@@ -239,10 +239,7 @@ class TestExtractCwdFromOutput:
         assert marker not in result["output"]
 
 
-
-
 class TestEmbedStdinHeredoc:
-
     def test_unique_delimiter_each_call(self):
         r1 = BaseEnvironment._embed_stdin_heredoc("cat", "data")
         r2 = BaseEnvironment._embed_stdin_heredoc("cat", "data")
@@ -263,7 +260,7 @@ class TestEmbedStdinHeredoc:
             pytest.skip("bash required")
 
         command = BaseEnvironment._embed_stdin_heredoc(
-            'IFS= read -r first; IFS= read -r second; '
+            "IFS= read -r first; IFS= read -r second; "
             'printf \'<%s|%s>\' "$first" "$second"',
             "alpha\nbeta",
         )
@@ -289,7 +286,6 @@ class TestInitSessionFailure:
         env.init_session()
 
         assert env._snapshot_ready is False
-
 
     def test_prefer_nonlogin_when_login_bash_is_dead(self):
         """Login snapshot failure + working non-login probe → don't use bash -l."""
@@ -328,7 +324,6 @@ class TestInitSessionFailure:
 
 
 class TestCwdMarker:
-
     def test_unique_per_instance(self):
         env1 = _TestableEnv()
         env2 = _TestableEnv()
@@ -393,8 +388,10 @@ class TestSanitizeTaskIdForPath:
     def test_sanitized_dir_is_creatable(self, tmp_path):
         from tools.environments.path_utils import sanitize_task_id_for_path
 
-        target = tmp_path / "docker" / sanitize_task_id_for_path(
-            "session:agent:main:telegram:dm:12345"
+        target = (
+            tmp_path
+            / "docker"
+            / sanitize_task_id_for_path("session:agent:main:telegram:dm:12345")
         )
         target.mkdir(parents=True)
         assert target.is_dir()

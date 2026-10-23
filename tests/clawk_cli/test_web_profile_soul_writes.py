@@ -87,9 +87,7 @@ class TestSoulWriteDurability:
         # CLAWK_HOME patch the client/profile_dir fixtures installed.
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(os, "fsync", boom)
-            r = client.put(
-                "/api/profiles/demo/soul", json={"content": "# clobbered\n"}
-            )
+            r = client.put("/api/profiles/demo/soul", json={"content": "# clobbered\n"})
 
         assert r.status_code == 500
         # The persona the user already had must survive verbatim...

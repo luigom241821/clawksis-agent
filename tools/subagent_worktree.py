@@ -31,9 +31,18 @@ def _run_git(args, cwd: str, timeout: int = _GIT_TIMEOUT, env=None):
     repo the parent sits in and ``worktree add`` runs hooks, so a malicious ``.git/config`` must
     not execute.
     """
-    return subprocess.run(["git", *harden_git_argv(args)], cwd=cwd, capture_output=True,
-                          text=True, encoding="utf-8", errors="replace", timeout=timeout,
-                          stdin=subprocess.DEVNULL, env=env or noninteractive_git_env(), check=False)
+    return subprocess.run(
+        ["git", *harden_git_argv(args)],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+        stdin=subprocess.DEVNULL,
+        env=env or noninteractive_git_env(),
+        check=False,
+    )
 
 
 def local_backend_active() -> bool:
@@ -41,7 +50,9 @@ def local_backend_active() -> bool:
     try:
         from clawk_cli.config import load_config_readonly
 
-        backend = (load_config_readonly().get("terminal") or {}).get("backend") or "local"
+        backend = (load_config_readonly().get("terminal") or {}).get(
+            "backend"
+        ) or "local"
         return str(backend).strip().lower() in ("", "local")
     except Exception:
         # Legacy entry points without the shared loader default to local.
@@ -65,7 +76,11 @@ def _ensure_gitignore_entry(repo_root: str) -> None:
     """Best-effort: keep ``.worktrees/`` out of git status."""
     gitignore = Path(repo_root) / ".gitignore"
     try:
-        existing = gitignore.read_text(encoding="utf-8-sig", errors="replace") if gitignore.exists() else ""
+        existing = (
+            gitignore.read_text(encoding="utf-8-sig", errors="replace")
+            if gitignore.exists()
+            else ""
+        )
         if ".worktrees/" not in existing.splitlines():
             with open(gitignore, "a", encoding="utf-8") as f:
                 sep = "\n" if existing and not existing.endswith("\n") else ""
@@ -74,7 +89,9 @@ def _ensure_gitignore_entry(repo_root: str) -> None:
         logger.debug("subagent worktree: could not update .gitignore: %s", exc)
 
 
-def create_subagent_worktree(parent_cwd: Optional[str], subagent_id: Optional[str] = None) -> Optional[dict[str, str]]:
+def create_subagent_worktree(
+    parent_cwd: Optional[str], subagent_id: Optional[str] = None
+) -> Optional[dict[str, str]]:
     """Create an isolated worktree for one child; None (silent downgrade) outside git/on failure."""
     repo_root = resolve_repo_root(parent_cwd)
     if not repo_root:
@@ -89,32 +106,53 @@ def create_subagent_worktree(parent_cwd: Optional[str], subagent_id: Optional[st
         base_commit = base.stdout.strip() if base.returncode == 0 else ""
         # The checkout runs the repo-named smudge filter; skip isolation when it cannot be neutralized.
         from clawk_cli._subprocess_compat import noninteractive_repo_git_env
+
         add_env = noninteractive_repo_git_env(repo_root)
         if add_env is None:
-            logger.warning("subagent worktree: filter discovery failed; not creating a worktree")
+            logger.warning(
+                "subagent worktree: filter discovery failed; not creating a worktree"
+            )
             return None
-        result = _run_git(["worktree", "add", str(wt_path), "-b", branch, "HEAD"], cwd=repo_root, env=add_env)
+        result = _run_git(
+            ["worktree", "add", str(wt_path), "-b", branch, "HEAD"],
+            cwd=repo_root,
+            env=add_env,
+        )
     except Exception as exc:
         logger.warning("subagent worktree: creation failed: %s", exc)
         return None
     if result.returncode != 0:
         # Common on repos with zero commits (unborn HEAD) — degrade silently.
-        logger.warning("subagent worktree: git worktree add failed: %s", result.stderr.strip())
+        logger.warning(
+            "subagent worktree: git worktree add failed: %s", result.stderr.strip()
+        )
         return None
     logger.info("subagent worktree created: %s (branch %s)", wt_path, branch)
     from clawk_cli.worktree_registry import record_worktree_repo
+
     record_worktree_repo(repo_root)
-    return {"path": str(wt_path), "branch": branch, "repo_root": repo_root, "base_commit": base_commit}
+    return {
+        "path": str(wt_path),
+        "branch": branch,
+        "repo_root": repo_root,
+        "base_commit": base_commit,
+    }
 
 
 def _base_payload(info: dict[str, str]) -> dict[str, Any]:
     """Result-entry schema the parent expects (no creation-side internals)."""
-    return {"path": info.get("path", ""), "branch": info.get("branch", ""),
-            "commits": 0, "dirty": False, "pruned": False}
+    return {
+        "path": info.get("path", ""),
+        "branch": info.get("branch", ""),
+        "commits": 0,
+        "dirty": False,
+        "pruned": False,
+    }
 
 
-def mark_worktree_payload_unproven(payload: dict[str, Any], reason: str, *,
-                                   unmeasured: str = "commits/dirty") -> dict[str, Any]:
+def mark_worktree_payload_unproven(
+    payload: dict[str, Any], reason: str, *, unmeasured: str = "commits/dirty"
+) -> dict[str, Any]:
     """Flag a worktree result payload as un-inspected, in place.
 
     The parent only sees this dict, so the uncertainty must travel in it or "0 commits, clean"
@@ -125,11 +163,18 @@ def mark_worktree_payload_unproven(payload: dict[str, Any], reason: str, *,
     """
     path, branch = payload.get("path", ""), payload.get("branch", "")
     payload["inspection_failed"] = True
-    payload["note"] = (f"git inspection failed ({reason}): {unmeasured} UNKNOWN — not proven "
-                       f"zero/clean. The worktree and branch were preserved — inspect {path} "
-                       f"(branch {branch}) before assuming no work.")
-    logger.warning("subagent worktree: git inspection failed (%s) — keeping %s (branch %s) "
-                   "for manual review", reason, path, branch)
+    payload["note"] = (
+        f"git inspection failed ({reason}): {unmeasured} UNKNOWN — not proven "
+        f"zero/clean. The worktree and branch were preserved — inspect {path} "
+        f"(branch {branch}) before assuming no work."
+    )
+    logger.warning(
+        "subagent worktree: git inspection failed (%s) — keeping %s (branch %s) "
+        "for manual review",
+        reason,
+        path,
+        branch,
+    )
     return payload
 
 
@@ -138,7 +183,9 @@ def unproven_worktree_payload(info: dict[str, str], reason: str) -> dict[str, An
     return mark_worktree_payload_unproven(_base_payload(info), reason)
 
 
-def finalize_subagent_worktree(info: dict[str, str], *, prune: bool = True) -> dict[str, Any]:
+def finalize_subagent_worktree(
+    info: dict[str, str], *, prune: bool = True
+) -> dict[str, Any]:
     """Inspect (and possibly prune) a child worktree after the child finishes.
 
     Prunes only when *prune*, commits==0, clean tree AND both git probes succeeded; otherwise
@@ -155,23 +202,42 @@ def finalize_subagent_worktree(info: dict[str, str], *, prune: bool = True) -> d
     # See #88113.
     if not base_commit:
         return mark_worktree_payload_unproven(
-            payload, "no base_commit recorded — commit count unmeasurable", unmeasured="commits")
+            payload,
+            "no base_commit recorded — commit count unmeasurable",
+            unmeasured="commits",
+        )
     # The status probe re-hashes files the child touched, which runs repo-named clean filters.
     from clawk_cli._subprocess_compat import noninteractive_repo_git_env
+
     probe_env = noninteractive_repo_git_env(path)
     if probe_env is None:
-        return mark_worktree_payload_unproven(payload, "filter discovery failed", unmeasured="dirty")
+        return mark_worktree_payload_unproven(
+            payload, "filter discovery failed", unmeasured="dirty"
+        )
     failed, unmeasured = [], []
-    probes = (("commits", "rev-list", ["rev-list", "--count", f"{base_commit}..HEAD"],
-               lambda s: int(s or 0)),
-              ("dirty", "status", ["status", "--porcelain", "--untracked-files=normal"], bool))
+    probes = (
+        (
+            "commits",
+            "rev-list",
+            ["rev-list", "--count", f"{base_commit}..HEAD"],
+            lambda s: int(s or 0),
+        ),
+        (
+            "dirty",
+            "status",
+            ["status", "--porcelain", "--untracked-files=normal"],
+            bool,
+        ),
+    )
     try:
         for field, label, args, parse in probes:
             res = _run_git(args, cwd=path, env=probe_env)
             if res.returncode == 0:
                 payload[field] = parse(res.stdout.strip())
             else:
-                failed.append(f"{label} exit {res.returncode}: {res.stderr.strip()[:200]}")
+                failed.append(
+                    f"{label} exit {res.returncode}: {res.stderr.strip()[:200]}"
+                )
                 unmeasured.append(field)
     except Exception as exc:
         # Timeout, OSError or non-numeric rev-list stdout: which probe raised is
@@ -179,46 +245,65 @@ def finalize_subagent_worktree(info: dict[str, str], *, prune: bool = True) -> d
         return mark_worktree_payload_unproven(payload, f"inspection raised: {exc}")
     if failed:
         # Destructive cleanup requires affirmative proof; defaults prove nothing.
-        return mark_worktree_payload_unproven(payload, "; ".join(failed), unmeasured="/".join(unmeasured))
+        return mark_worktree_payload_unproven(
+            payload, "; ".join(failed), unmeasured="/".join(unmeasured)
+        )
     if not payload["dirty"]:
         # status trusts skip-worktree / assume-unchanged: edits behind them are invisible to it.
         from clawk_cli.worktree_archive import ArchiveError
         from clawk_cli.worktree_retention import hidden_index_edits
+
         try:
             payload["dirty"] = bool(hidden_index_edits(path))
         except (ArchiveError, OSError, subprocess.SubprocessError) as exc:
-            return mark_worktree_payload_unproven(payload, f"index flag probe failed: {exc}", unmeasured="dirty")
+            return mark_worktree_payload_unproven(
+                payload, f"index flag probe failed: {exc}", unmeasured="dirty"
+            )
     if prune and (payload["commits"] or payload["dirty"]):
         return _archive_finished_worktree(info, payload)
     if prune and payload["commits"] == 0 and not payload["dirty"]:
         cwd = info.get("repo_root", "") or path
         try:
             from clawk_cli.worktree_ops import release_lsp_clients, removal_blocked
-            blocked = removal_blocked(path)  # an embedded repo / private ref dies with the tree
+
+            blocked = removal_blocked(
+                path
+            )  # an embedded repo / private ref dies with the tree
             if blocked:
                 payload["note"] = f"Worktree kept at {path}: {blocked[1]}."
                 return payload
-            release_lsp_clients(path)  # the child ran in-process: its language servers are ours
+            release_lsp_clients(
+                path
+            )  # the child ran in-process: its language servers are ours
             removed = _run_git(["worktree", "remove", "--force", path], cwd=cwd)
             if removed.returncode == 0:
                 _run_git(["branch", "-D", branch], cwd=cwd)
                 payload["pruned"] = True
                 logger.info("subagent worktree pruned (no work): %s", path)
             else:
-                logger.debug("subagent worktree: prune failed: %s", removed.stderr.strip())
+                logger.debug(
+                    "subagent worktree: prune failed: %s", removed.stderr.strip()
+                )
         except Exception as exc:
             logger.debug("subagent worktree: prune failed: %s", exc)
     return payload
 
 
-def _archive_finished_worktree(info: dict[str, str], payload: dict[str, Any]) -> dict[str, Any]:
+def _archive_finished_worktree(
+    info: dict[str, str], payload: dict[str, Any]
+) -> dict[str, Any]:
     """A finished child left commits or edits: snapshot them, then remove the tree.
 
     The branch is kept (the parent reviews and merges it); the archive also covers uncommitted
     edits. ``worktrees.archive_dirty: false`` or a failed snapshot keeps the tree as before.
     """
     from clawk_cli.worktree_archive import ArchiveError
-    from clawk_cli.worktree_sweep import archive_then_remove, live_process_pids, sweep_settings
+    from clawk_cli.worktree_sweep import (
+        archive_then_remove,
+        live_process_pids,
+        sweep_settings,
+    )
+
     settings = sweep_settings()
     if not settings["archive_dirty"]:
         return payload
@@ -229,21 +314,30 @@ def _archive_finished_worktree(info: dict[str, str], payload: dict[str, Any]) ->
         return payload
     try:
         ref, _kept, removed, why = archive_then_remove(
-            info.get("repo_root", "") or path, path, reason="subagent finished",
-            max_untracked_mb=settings["archive_max_file_mb"], unlock=False, keep_branch=True,
-            exclude_pids=(os.getpid(),))
+            info.get("repo_root", "") or path,
+            path,
+            reason="subagent finished",
+            max_untracked_mb=settings["archive_max_file_mb"],
+            unlock=False,
+            keep_branch=True,
+            exclude_pids=(os.getpid(),),
+        )
     except (ArchiveError, OSError, subprocess.SubprocessError) as exc:
         logger.warning("subagent worktree: archive failed, keeping %s: %s", path, exc)
         return payload
     payload["archive"] = ref
     payload["pruned"] = removed
     if removed:
-        payload["note"] = (f"Worktree archived to {ref} and removed; branch {info.get('branch')} kept. "
-                           f"Restore the full tree (including uncommitted edits) with "
-                           f"`clawk worktree restore {ref.rsplit('/', 1)[-1]}`.")
+        payload["note"] = (
+            f"Worktree archived to {ref} and removed; branch {info.get('branch')} kept. "
+            f"Restore the full tree (including uncommitted edits) with "
+            f"`clawk worktree restore {ref.rsplit('/', 1)[-1]}`."
+        )
     else:
-        payload["note"] = (f"Worktree archived to {ref} but kept at {path} ({why}); "
-                           f"branch {info.get('branch')} kept.")
+        payload["note"] = (
+            f"Worktree archived to {ref} but kept at {path} ({why}); "
+            f"branch {info.get('branch')} kept."
+        )
     return payload
 
 

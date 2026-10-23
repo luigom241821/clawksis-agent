@@ -27,7 +27,9 @@ def test_prepare_freezes_admission_without_blocking_other_work_locks(monkeypatch
         try:
             assert probing.wait(10)
             arriving = pool.submit(admit)
-            assert attempted.wait(3), "admission must not wait on a ledger lock held by its own caller"
+            assert attempted.wait(3), (
+                "admission must not wait on a ledger lock held by its own caller"
+            )
             assert arriving.result(10) is False
         finally:
             release.set()

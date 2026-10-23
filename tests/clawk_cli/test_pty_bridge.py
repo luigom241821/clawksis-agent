@@ -25,6 +25,7 @@ skip_on_windows = pytest.mark.skipif(
     sys.platform.startswith("win"), reason="PTY bridge is POSIX-only"
 )
 
+
 def _read_until(bridge: PtyBridge, needle: bytes, timeout: float = 5.0) -> bytes:
     """Accumulate PTY output until we see `needle` or time out."""
     deadline = time.monotonic() + timeout
@@ -38,9 +39,9 @@ def _read_until(bridge: PtyBridge, needle: bytes, timeout: float = 5.0) -> bytes
             return bytes(buf)
     return bytes(buf)
 
+
 @skip_on_windows
 class TestPtyBridgeSpawn:
-
     def test_spawn_raises_on_missing_argv0(self, tmp_path):
         with pytest.raises((FileNotFoundError, OSError)):
             PtyBridge.spawn([str(tmp_path / "definitely-not-a-real-binary")])
@@ -50,16 +51,18 @@ class TestPtyBridgeSpawn:
         # xterm.js was a visible reload on every OS app-switch (#94337).
         from clawk_cli.pty_bridge import PTY_HOST_DASHBOARD, PTY_HOST_ENV
 
-        bridge = PtyBridge.spawn([shutil.which("sh") or "sh", "-c", f'printf "%s" "${PTY_HOST_ENV}"'])
+        bridge = PtyBridge.spawn(
+            [shutil.which("sh") or "sh", "-c", f'printf "%s" "${PTY_HOST_ENV}"']
+        )
         try:
             output = _read_until(bridge, PTY_HOST_DASHBOARD.encode())
             assert PTY_HOST_DASHBOARD.encode() in output
         finally:
             bridge.close()
 
+
 @skip_on_windows
 class TestPtyBridgeIO:
-
     @pytest.mark.asyncio
     async def test_write_sends_to_child_stdin(self):
         # `cat` with no args echoes stdin back to stdout.  We write a line,
@@ -167,6 +170,7 @@ class TestPtyBridgeIO:
         finally:
             bridge.close()
 
+
 @skip_on_windows
 class TestPtyBridgeResize:
     def test_resize_updates_child_winsize(self):
@@ -193,6 +197,7 @@ class TestPtyBridgeResize:
         finally:
             bridge.close()
 
+
 @skip_on_windows
 class TestClampDimension:
     def test_clamps_above_max(self):
@@ -218,6 +223,7 @@ class TestClampDimension:
         rows = _clamp_dimension(1, _MAX_ROWS)
         # Should not raise.
         _struct.pack("HHHH", rows, cols, 0, 0)
+
 
 @skip_on_windows
 class TestPtyBridgeClose:
@@ -326,7 +332,9 @@ class TestPtyBridgeClose:
     def test_close_ends_helpers_that_outlive_a_dead_leader(self):
         # #76759: the helper ignores SIGHUP and keeps the PTY slave open, so the leader's death
         # never produces EOF. close() must still end it.
-        bridge = PtyBridge.spawn(["/bin/sh", "-c", "trap '' HUP; sleep 60 & echo helper=$!; exec sleep 60"])
+        bridge = PtyBridge.spawn(
+            ["/bin/sh", "-c", "trap '' HUP; sleep 60 & echo helper=$!; exec sleep 60"]
+        )
         out = _read_until(bridge, b"\n", timeout=5.0)
         helper = int(out.split(b"helper=")[1].split()[0])
         os.kill(bridge.pid, signal.SIGKILL)
@@ -376,10 +384,12 @@ class TestPtyBridgeClose:
         # loop), so only the sweep's SIGKILL can end it. Both it and the leader loop
         # forever; the leader dies on the first SIGHUP close() sends it.
         script = (
-            '/bin/sh -c \'trap "" HUP; while :; do sleep 0.05; done\' & '
+            "/bin/sh -c 'trap \"\" HUP; while :; do sleep 0.05; done' & "
             "echo helper=$!; while :; do sleep 0.05; done"
         )
-        popen = subprocess.Popen(["/bin/sh", "-c", script], stdout=subprocess.PIPE, text=True)
+        popen = subprocess.Popen(
+            ["/bin/sh", "-c", script], stdout=subprocess.PIPE, text=True
+        )
         out = popen.stdout
         assert out is not None
         try:
@@ -432,6 +442,7 @@ class TestPtyBridgeClose:
         bridge.close()
 
         assert marker.read_text().strip() == "ok"
+
 
 @skip_on_windows
 class TestPtyBridgeEnv:

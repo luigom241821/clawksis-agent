@@ -58,12 +58,16 @@ def kanban_resume_refusal(db, session_id: str):
     except Exception:
         # Deliberate fail-open boundary: an ordinary session must never be blocked by a
         # broken probe, so classify as unknown and log the full traceback for diagnosis.
-        logger.warning("kanban resume probe failed for %s (proceeding unclassified)",
-                       session_id, exc_info=True)
+        logger.warning(
+            "kanban resume probe failed for %s (proceeding unclassified)",
+            session_id,
+            exc_info=True,
+        )
         return None
     # Strict True: SessionDB answers a real bool; anything else (a test double, an adaptor
     # quirk) is treated as unclassified, keeping the guard open for every non-worker store.
     if owned is not True:
         return None
     from agent.i18n import t
+
     return t("cli.resume.kanban_owned", session_id=session_id)

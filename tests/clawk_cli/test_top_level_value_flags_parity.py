@@ -17,7 +17,6 @@ derived from ``build_top_level_parser()`` (mirroring the
   2. the ``--reasoning`` misparse regression itself.
 """
 
-
 import pytest
 
 from clawk_cli._parser import build_top_level_parser, top_level_value_flag_sets
@@ -56,18 +55,19 @@ def test_helper_sets_match_top_level_parser():
     )
 
 
-
-
 def test_first_positional_skips_reasoning_value(monkeypatch):
     monkeypatch.setattr("sys.argv", ["clawk", "--reasoning", "high", "chat", "hello"])
     assert _first_positional_argv() == "chat"
     assert _plugin_cli_discovery_needed() is False
 
 
-@pytest.mark.parametrize("argv", [
-    ["clawk", "--reasoning", "ultra", "--provider", "openai", "-z", "prompt here"],
-    ["clawk", "-m", "x", "--reasoning=low", "chat"],
-])
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["clawk", "--reasoning", "ultra", "--provider", "openai", "-z", "prompt here"],
+        ["clawk", "-m", "x", "--reasoning=low", "chat"],
+    ],
+)
 def test_reasoning_forms_do_not_shadow_the_subcommand(monkeypatch, argv):
     monkeypatch.setattr("sys.argv", argv)
     first = _first_positional_argv()

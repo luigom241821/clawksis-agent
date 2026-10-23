@@ -4,6 +4,7 @@
 SessionDB in the client; the zero-writer client now sends the name and the owner
 applies the classic CLI rule (``clawk_cli.main._resolve_session_by_name_or_id``).
 """
+
 from __future__ import annotations
 
 from clawk_state_runtime import RuntimeStoreError
@@ -15,21 +16,22 @@ def resolve_titled_session(authority, actor, name, *, missing_ok=False):
     actor may read is returned; a foreign or non-local match is ``not_found`` so another
     principal's titles are never confirmed."""
     if not isinstance(name, str) or not name.strip():
-        raise RuntimeStoreError('invalid_params')
+        raise RuntimeStoreError("invalid_params")
     db = authority.db
     row = db.get_session(name)
-    sid = row['id'] if row else db.resolve_session_by_title(name)
+    sid = row["id"] if row else db.resolve_session_by_title(name)
     tip = db.get_session(db.get_compression_tip(sid) or sid) if sid else None
     if tip is None:
         if missing_ok:
             return None
-        raise RuntimeStoreError('not_found')
+        raise RuntimeStoreError("not_found")
     try:
         from gateway.session_local_migration import resolve_local_target
-        ref = resolve_local_target(authority, actor, tip['id'])
+
+        ref = resolve_local_target(authority, actor, tip["id"])
     except RuntimeStoreError as exc:
-        if exc.reason == 'permission_denied':
-            raise RuntimeStoreError('not_found') from None
+        if exc.reason == "permission_denied":
+            raise RuntimeStoreError("not_found") from None
         raise
     return ref
 
@@ -41,35 +43,49 @@ def resolve_latest_session(authority, actor, family, workspace=None):
     applied by the owner so the client opens no database. Only a local session the actor may read
     counts; another principal's sessions are skipped, never confirmed."""
     from agent.session_source import CLI_FAMILY_SOURCES
-    families = {'cli': sorted(CLI_FAMILY_SOURCES), 'tui': ['tui']}
-    if family not in families or (workspace is not None and (not isinstance(workspace, str) or not workspace)):
-        raise RuntimeStoreError('invalid_params')
+
+    families = {"cli": sorted(CLI_FAMILY_SOURCES), "tui": ["tui"]}
+    if family not in families or (
+        workspace is not None and (not isinstance(workspace, str) or not workspace)
+    ):
+        raise RuntimeStoreError("invalid_params")
     from gateway.session_local_migration import resolve_local_target
+
     # The owner's own rows are stored ``local``, with the family in ``created_source``.
-    sources = [*families[family], 'local']
+    sources = [*families[family], "local"]
     for scope in ([workspace] if workspace else []) + [None]:
         # A launch stub (the CLI crashed or a resume failed before the first turn) is the newest row
         # and carries the surface from its insert. It has no messages and no admission, so it is never
         # "latest"; a session whose first prompt is admitted but not yet written still is.
-        for row in authority.db.search_sessions(source=sources, local_created_sources=[family], limit=50,
-                                                workspace_key=scope, skip_launch_stubs=True):
-            tip = authority.db.get_compression_tip(row['id']) or row['id']
+        for row in authority.db.search_sessions(
+            source=sources,
+            local_created_sources=[family],
+            limit=50,
+            workspace_key=scope,
+            skip_launch_stubs=True,
+        ):
+            tip = authority.db.get_compression_tip(row["id"]) or row["id"]
             try:
                 return resolve_local_target(authority, actor, tip)
             except RuntimeStoreError as exc:
-                if exc.reason not in {'permission_denied', 'not_found', 'profile_mismatch'}:
+                if exc.reason not in {
+                    "permission_denied",
+                    "not_found",
+                    "profile_mismatch",
+                }:
                     raise
-    raise RuntimeStoreError('not_found')
+    raise RuntimeStoreError("not_found")
 
 
 def validate_title(title):
     from clawk_state import SessionDB
+
     try:
         cleaned = SessionDB.sanitize_title(title) if isinstance(title, str) else None
     except ValueError:
         cleaned = None
     if cleaned is None:
-        raise RuntimeStoreError('invalid_params')
+        raise RuntimeStoreError("invalid_params")
     return cleaned
 
 
@@ -79,4 +95,4 @@ def title_new_session(authority, ref, title):
     try:
         authority.db.set_session_title(ref.session_id, title)
     except ValueError:
-        raise RuntimeStoreError('admission_conflict') from None
+        raise RuntimeStoreError("admission_conflict") from None

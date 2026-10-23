@@ -1,4 +1,5 @@
 """Cold setup consumes lock values before executing any downloaded tool."""
+
 import json
 import os
 from pathlib import Path
@@ -20,19 +21,24 @@ def test_cold_setup_uses_exact_lock_values(tmp_path, missing_target, real_bash):
     (checkout / "pm").mkdir(parents=True)
     shutil.copy2(ROOT / "setup-clawk.sh", checkout / "setup-clawk.sh")
     # The bootstrap reads the artifact mirror beside the lock before selecting a pin.
-    shutil.copy2(ROOT / "pm" / "artifact-mirror.json", checkout / "pm" / "artifact-mirror.json")
+    shutil.copy2(
+        ROOT / "pm" / "artifact-mirror.json", checkout / "pm" / "artifact-mirror.json"
+    )
     lock = json.loads((ROOT / "pm" / "lock.json").read_text(encoding="utf-8"))
     target = current_target()
     uv_pin = lock["packages"]["uv"]
     artifact = uv_pin["artifacts"][target]
     if missing_target:
         del uv_pin["artifacts"][target]
-    (checkout / "pm" / "lock.json").write_text(json.dumps(lock, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    (checkout / "pm" / "lock.json").write_text(
+        json.dumps(lock, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     corrupt = tmp_path / "corrupt-download"
     corrupt.write_bytes(b"intentional digest mismatch; this must never be executed\n")
     args = tmp_path / "curl-args"
     hook = tmp_path / "transport.sh"
-    hook.write_text('''curl() {
+    hook.write_text(
+        """curl() {
     printf '%s\\n' "$@" > "$PROBE_ARGS"
     while [ "$#" -gt 0 ]; do
         if [ "$1" = -o ]; then
@@ -43,12 +49,28 @@ def test_cold_setup_uses_exact_lock_values(tmp_path, missing_target, real_bash):
     done
     return 37
 }
-''', encoding="utf-8")
-    env = dict(os.environ, HOME=tmp_path.as_posix(), CLAWK_HOME=(tmp_path / "home").as_posix(),
-               CLAWK_RUNTIME_DIR=(tmp_path / "tools").as_posix(), BASH_ENV=hook.as_posix(),
-               PROBE_ARGS=args.as_posix(), PROBE_DOWNLOAD=corrupt.as_posix())
-    result = subprocess.run([real_bash, str(checkout / "setup-clawk.sh")], cwd=tmp_path,
-                            env=env, capture_output=True, text=True, encoding="utf-8", timeout=30, check=False)
+""",
+        encoding="utf-8",
+    )
+    env = dict(
+        os.environ,
+        HOME=tmp_path.as_posix(),
+        CLAWK_HOME=(tmp_path / "home").as_posix(),
+        CLAWK_RUNTIME_DIR=(tmp_path / "tools").as_posix(),
+        BASH_ENV=hook.as_posix(),
+        PROBE_ARGS=args.as_posix(),
+        PROBE_DOWNLOAD=corrupt.as_posix(),
+    )
+    result = subprocess.run(
+        [real_bash, str(checkout / "setup-clawk.sh")],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=30,
+        check=False,
+    )
     assert result.returncode != 0, result.stdout + result.stderr
     if missing_target:
         assert not args.exists(), "a missing target must not select a sibling artifact"

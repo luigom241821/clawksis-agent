@@ -13,9 +13,18 @@ def test_resume_and_exit_read_without_writing(tmp_path, populated):
     repo = Path(__file__).resolve().parents[2]
     home = tmp_path / "profile"
     home.mkdir()
-    env = {k: os.environ[k] for k in ("PATH", "SYSTEMROOT", "LANG", "TZ") if k in os.environ}
-    env.update(HOME=str(tmp_path), USERPROFILE=str(tmp_path), CLAWK_HOME=str(home), PYTHONPATH=str(repo))
-    code = '''
+    env = {
+        k: os.environ[k]
+        for k in ("PATH", "SYSTEMROOT", "LANG", "TZ")
+        if k in os.environ
+    }
+    env.update(
+        HOME=str(tmp_path),
+        USERPROFILE=str(tmp_path),
+        CLAWK_HOME=str(home),
+        PYTHONPATH=str(repo),
+    )
+    code = """
 from pathlib import Path
 from clawk_state import SessionDB
 from clawk_cli.main import _resolve_last_session, _resolve_session_by_name_or_id
@@ -43,15 +52,23 @@ from clawk_cli.cli_info_mixin import CLIInfoMixin
 CLIInfoMixin._show_insights(object(), '/insights --days 30 --source tui')
 after = path.read_bytes() if path.exists() else None
 assert after == before, 'launch reader created or mutated state.db'
-'''.replace('POPULATED', repr(populated))
-    result = subprocess.run([sys.executable, "-c", code], cwd=repo, env=env,
-                            stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30, check=False)
+""".replace("POPULATED", repr(populated))
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=repo,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert 'Error generating insights:' not in result.stdout
+    assert "Error generating insights:" not in result.stdout
     if populated:
-        assert 'Clawksis Insights' in result.stdout
-        assert 'Resume this session with:' in result.stdout
-        assert 'Reader fixture' in result.stdout
+        assert "Clawksis Insights" in result.stdout
+        assert "Resume this session with:" in result.stdout
+        assert "Reader fixture" in result.stdout
     else:
         # No store yet: both entry points print main's localized empty notice and create nothing.
-        assert result.stdout.count('No session data yet.') == 2
+        assert result.stdout.count("No session data yet.") == 2

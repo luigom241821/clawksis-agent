@@ -9,7 +9,8 @@ from tools.feishu_lark import (
     build_request,
     get_client,
     raw_body,
-    set_client)
+    set_client,
+)
 from tools.registry import registry, tool_error, tool_result
 
 _RAW_CONTENT_URI = "/open-apis/docx/v1/documents/:document_id/raw_content"
@@ -39,9 +40,13 @@ def _handle_feishu_doc_read(args: dict, **kwargs) -> str:
         return tool_error("doc_token is required")
     client = get_client()
     if client is None:
-        return tool_error("Feishu client not available (not in a Feishu comment context)")
+        return tool_error(
+            "Feishu client not available (not in a Feishu comment context)"
+        )
     try:
-        request = build_request("GET", _RAW_CONTENT_URI, paths={"document_id": doc_token})
+        request = build_request(
+            "GET", _RAW_CONTENT_URI, paths={"document_id": doc_token}
+        )
     except ImportError:
         return tool_error("lark_oapi not installed")
 
@@ -49,22 +54,37 @@ def _handle_feishu_doc_read(args: dict, **kwargs) -> str:
     response = client.request(request)
     code = getattr(response, "code", None)
     if code != 0:
-        return tool_error(f"Failed to read document: code={code} msg={getattr(response, 'msg', 'unknown error')}")
+        return tool_error(
+            f"Failed to read document: code={code} msg={getattr(response, 'msg', 'unknown error')}"
+        )
 
     body = raw_body(response)
     if body is not None:
         try:
-            return tool_result(success=True, content=body.get("data", {}).get("content", ""))
+            return tool_result(
+                success=True, content=body.get("data", {}).get("content", "")
+            )
         except AttributeError:
             pass
     data = getattr(response, "data", None)  # fallback: the typed response.data
     if data:
-        content = data.get("content", "") if isinstance(data, dict) else getattr(data, "content", str(data))
+        content = (
+            data.get("content", "")
+            if isinstance(data, dict)
+            else getattr(data, "content", str(data))
+        )
         return tool_result(success=True, content=content)
     return tool_error("No content returned from document API")
 
 
 registry.register(
-    name="feishu_doc_read", toolset="feishu_doc", schema=FEISHU_DOC_READ_SCHEMA, handler=_handle_feishu_doc_read,
-    check_fn=_check_feishu, requires_env=[], is_async=False, description="Read Feishu document content",
-    emoji="\U0001f4c4")
+    name="feishu_doc_read",
+    toolset="feishu_doc",
+    schema=FEISHU_DOC_READ_SCHEMA,
+    handler=_handle_feishu_doc_read,
+    check_fn=_check_feishu,
+    requires_env=[],
+    is_async=False,
+    description="Read Feishu document content",
+    emoji="\U0001f4c4",
+)

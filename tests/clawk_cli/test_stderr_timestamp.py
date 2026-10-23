@@ -89,8 +89,17 @@ def test_wrapper_timestamps_child_stdout_into_its_own_stdout(tmp_path):
 
     with open(stdout_log, "ab") as out:
         rc = subprocess.run(
-            [sys.executable, "-m", "clawk_cli.stderr_timestamp", "--error-log", str(error_log), "--",
-             sys.executable, "-c", code],
+            [
+                sys.executable,
+                "-m",
+                "clawk_cli.stderr_timestamp",
+                "--error-log",
+                str(error_log),
+                "--",
+                sys.executable,
+                "-c",
+                code,
+            ],
             stdout=out,
             timeout=30,
             check=False,
@@ -100,10 +109,14 @@ def test_wrapper_timestamps_child_stdout_into_its_own_stdout(tmp_path):
     timestamp = r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}"
     lines = stdout_log.read_text(encoding="utf-8").splitlines()
     assert len(lines) == 3
-    assert re.fullmatch(f"{timestamp} \\[whatsapp\\] Bridge started on port 3000", lines[0])
+    assert re.fullmatch(
+        f"{timestamp} \\[whatsapp\\] Bridge started on port 3000", lines[0]
+    )
     assert lines[1] == "2026-07-15 12:34:56,789 INFO already timestamped"
     assert re.fullmatch(f"{timestamp} last line without newline", lines[2])
-    assert re.fullmatch(f"{timestamp} stderr line", error_log.read_text(encoding="utf-8").strip())
+    assert re.fullmatch(
+        f"{timestamp} stderr line", error_log.read_text(encoding="utf-8").strip()
+    )
 
 
 def test_prepare_upgrades_stale_gateway_argv_under_launchd():
@@ -115,9 +128,7 @@ def test_prepare_upgrades_stale_gateway_argv_under_launchd():
 
 def test_prepare_keeps_existing_external_supervisor_flag():
     already = [*_STALE_GATEWAY_ARGV, "--external-supervisor"]
-    assert (
-        stderr_timestamp._prepare_child_command(already, _LAUNCHD_ENV) == already
-    )
+    assert stderr_timestamp._prepare_child_command(already, _LAUNCHD_ENV) == already
 
 
 def test_prepare_skips_arbitrary_command_under_launchd():
@@ -134,23 +145,35 @@ def test_prepare_skips_interactive_xpc_zero_even_for_gateway_argv():
         == _STALE_GATEWAY_ARGV
     )
     assert (
-        stderr_timestamp._prepare_child_command(_STALE_GATEWAY_ARGV, {"PATH": "/usr/bin"})
+        stderr_timestamp._prepare_child_command(
+            _STALE_GATEWAY_ARGV, {"PATH": "/usr/bin"}
+        )
         == _STALE_GATEWAY_ARGV
     )
 
 
 def test_child_launchd_label_env_exports_only_clawk_job_labels():
-    assert stderr_timestamp._child_launchd_label_env(_LAUNCHD_ENV) == {LAUNCHD_LABEL_ENV: "ai.clawk.gateway-butler"}
+    assert stderr_timestamp._child_launchd_label_env(_LAUNCHD_ENV) == {
+        LAUNCHD_LABEL_ENV: "ai.clawk.gateway-butler"
+    }
     # Interactive shells and the grandchild itself read "0": nothing to export. App-coalition labels
     # (IDE integrated terminals) are not a Clawksis job identity either.
-    for env in ({"PATH": "/usr/bin", "XPC_SERVICE_NAME": "0"}, {"PATH": "/usr/bin"},
-                {"PATH": "/usr/bin", "XPC_SERVICE_NAME": "application.com.example.ide.123"}):
+    for env in (
+        {"PATH": "/usr/bin", "XPC_SERVICE_NAME": "0"},
+        {"PATH": "/usr/bin"},
+        {"PATH": "/usr/bin", "XPC_SERVICE_NAME": "application.com.example.ide.123"},
+    ):
         assert stderr_timestamp._child_launchd_label_env(env) == {}
 
 
-@pytest.mark.parametrize("xpc, expected", [("ai.clawk.gateway-butler", "ai.clawk.gateway-butler"), ("0", "unset")],
-                         ids=["launchd-job", "foreground-xpc-zero"])
-def test_main_forwards_launchd_label_to_child_only_under_launchd(tmp_path, monkeypatch, xpc, expected):
+@pytest.mark.parametrize(
+    "xpc, expected",
+    [("ai.clawk.gateway-butler", "ai.clawk.gateway-butler"), ("0", "unset")],
+    ids=["launchd-job", "foreground-xpc-zero"],
+)
+def test_main_forwards_launchd_label_to_child_only_under_launchd(
+    tmp_path, monkeypatch, xpc, expected
+):
     """The gateway grandchild must resolve its job (drain cap, restart route) from CLAWK_LAUNCHD_LABEL;
     a foreground/unsupervised start must not inherit a fabricated one."""
     monkeypatch.setenv("XPC_SERVICE_NAME", xpc)
@@ -161,7 +184,16 @@ def test_main_forwards_launchd_label_to_child_only_under_launchd(tmp_path, monke
         f"Path({str(marker_path)!r}).write_text(os.environ.get({LAUNCHD_LABEL_ENV!r}, 'unset'), encoding='utf-8')\n"
     )
 
-    rc = stderr_timestamp.main(["--error-log", str(tmp_path / "gateway.error.log"), "--", sys.executable, "-c", code])
+    rc = stderr_timestamp.main(
+        [
+            "--error-log",
+            str(tmp_path / "gateway.error.log"),
+            "--",
+            sys.executable,
+            "-c",
+            code,
+        ]
+    )
 
     assert rc == 0
     assert marker_path.read_text(encoding="utf-8") == expected
@@ -186,11 +218,17 @@ def test_main_injects_flag_into_stale_gateway_child(tmp_path, monkeypatch):
         f"Path({str(marker_path)!r}).write_text("
         "'\\n'.join(sys.argv[1:]), encoding='utf-8')\n",
     )
-    stale = [sys.executable, script, "-m", "clawk_cli.main", "gateway", "run", "--replace"]
+    stale = [
+        sys.executable,
+        script,
+        "-m",
+        "clawk_cli.main",
+        "gateway",
+        "run",
+        "--replace",
+    ]
 
-    rc = stderr_timestamp.main(
-        ["--error-log", str(log_path), "--", *stale]
-    )
+    rc = stderr_timestamp.main(["--error-log", str(log_path), "--", *stale])
 
     assert rc == 0
     recorded = marker_path.read_text(encoding="utf-8").splitlines()
@@ -260,8 +298,16 @@ def test_main_maps_gateway_ex_config_to_clean_stop(tmp_path):
     please-restart code (75) or a non-gateway child's 78."""
     log_path = tmp_path / "gateway.error.log"
     gateway_tail = ["-m", "clawk_cli.main", "gateway", "run"]
-    exit_config = _script(tmp_path, "exit_config.py", f"raise SystemExit({GATEWAY_FATAL_CONFIG_EXIT_CODE})\n")
-    exit_restart = _script(tmp_path, "exit_restart.py", f"raise SystemExit({GATEWAY_SERVICE_RESTART_EXIT_CODE})\n")
+    exit_config = _script(
+        tmp_path,
+        "exit_config.py",
+        f"raise SystemExit({GATEWAY_FATAL_CONFIG_EXIT_CODE})\n",
+    )
+    exit_restart = _script(
+        tmp_path,
+        "exit_restart.py",
+        f"raise SystemExit({GATEWAY_SERVICE_RESTART_EXIT_CODE})\n",
+    )
 
     rc_config = stderr_timestamp.main(
         [
@@ -298,7 +344,6 @@ def test_main_maps_gateway_ex_config_to_clean_stop(tmp_path):
     assert rc_other == GATEWAY_FATAL_CONFIG_EXIT_CODE
 
 
-
 @pytest.mark.platforms("posix")  # POSIX signals
 def test_wrapper_forwards_sigusr1_restart_request_to_child(tmp_path):
     """Regression for #101426: launchd owns the wrapper's PID, so ``clawk update`` sends its
@@ -315,8 +360,17 @@ def test_wrapper_forwards_sigusr1_restart_request_to_child(tmp_path):
         "sys.exit(1)\n"
     )
     wrapper = subprocess.Popen(
-        [sys.executable, "-m", "clawk_cli.stderr_timestamp", "--error-log", str(log_path), "--",
-         sys.executable, "-c", child],
+        [
+            sys.executable,
+            "-m",
+            "clawk_cli.stderr_timestamp",
+            "--error-log",
+            str(log_path),
+            "--",
+            sys.executable,
+            "-c",
+            child,
+        ],
         stderr=subprocess.DEVNULL,
         start_new_session=True,
     )

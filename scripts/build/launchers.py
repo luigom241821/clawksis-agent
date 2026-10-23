@@ -1,4 +1,5 @@
 """Shared payload launcher rendering; all paths are supplied by the assembler."""
+
 from __future__ import annotations
 
 import json
@@ -11,8 +12,15 @@ import tempfile
 
 def render_wrapper(entry: str, repo: str, site: str) -> str:
     module, func = entry.split(":", 1)
-    text = (Path(__file__).with_name("launcher_wrapper.py")).read_text(encoding="utf-8-sig")
-    for key, value in {"ENTRY_MODULE": module, "ENTRY_FUNC": func, "REPO_REL": repo, "SITE_REL": site}.items():
+    text = (Path(__file__).with_name("launcher_wrapper.py")).read_text(
+        encoding="utf-8-sig"
+    )
+    for key, value in {
+        "ENTRY_MODULE": module,
+        "ENTRY_FUNC": func,
+        "REPO_REL": repo,
+        "SITE_REL": site,
+    }.items():
         if '"' in value or "\n" in value or "__" in value:
             raise ValueError(f"invalid launcher value: {key}")
         text = text.replace(f"__CLAWK_{key}__", value)
@@ -22,18 +30,26 @@ def render_wrapper(entry: str, repo: str, site: str) -> str:
     return text
 
 
-def posix_launcher(name: str, entry: str, *, python: str, repo: str, site: str, target: str) -> str:
+def posix_launcher(
+    name: str, entry: str, *, python: str, repo: str, site: str, target: str
+) -> str:
     import shlex
 
     def shell_path(value: str) -> str:
-        return shlex.quote(value) if Path(value).is_absolute() else '"$root"/' + shlex.quote(value)
+        return (
+            shlex.quote(value)
+            if Path(value).is_absolute()
+            else '"$root"/' + shlex.quote(value)
+        )
 
     module, func = entry.split(":", 1)
     bionic = target.endswith("-bionic")
-    header = "#!/data/data/com.termux/files/usr/bin/sh" if bionic else "#!/usr/bin/env bash"
+    header = (
+        "#!/data/data/com.termux/files/usr/bin/sh" if bionic else "#!/usr/bin/env bash"
+    )
     extra = ""
     if bionic:
-        extra = '''PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
+        extra = """PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
 export PREFIX
 export LD_LIBRARY_PATH="$root/tools/python/data/data/com.termux/files/usr/lib:$root/tools/node/data/data/com.termux/files/usr/lib:$root/tools/ffmpeg/data/data/com.termux/files/usr/lib:$root/runtime-libs/lib:$PREFIX/lib"
 export CLAWK_PYTHON_SRC_ROOT="$REPO"
@@ -41,13 +57,13 @@ export CLAWK_PYTHON="$PYTHON"
 export CLAWK_NODE="$root/tools/node/data/data/com.termux/files/usr/bin/node"
 export CLAWK_RUNTIME_DIR="$root/tools"
 export PATH="$root/tools/npm/bin:$root/tools/node/data/data/com.termux/files/usr/bin:$root/tools/ffmpeg/data/data/com.termux/files/usr/bin:$root/tools/ripgrep:$PATH"
-'''
+"""
     code = (
         f"import os, site, sys; sys.argv[0]={name!r}; "
         "site.addsitedir(os.environ['CLAWK_SITE']); "
         f"from {module} import {func}; sys.exit({func}())"
     )
-    return f'''{header}
+    return f"""{header}
 set -eu
 self="$0"
 while [ -L "$self" ]; do
@@ -71,12 +87,20 @@ export PYTHONPATH="$REPO:$SITE"
 export CLAWK_SITE="$SITE"
 export PYTHONPYCACHEPREFIX="${{PYTHONPYCACHEPREFIX:-${{XDG_CACHE_HOME:-$HOME/.cache}}/clawk-pycache}}"
 {extra}exec "$PYTHON" -P -c {shlex.quote(code)} "$@"
-'''
+"""
 
 
-def write_launchers(root: Path, entries: dict[str, str], *, python: str,
-                    repo: str, site: str, target: str, bin_dir: str = "bin",
-                    run=subprocess.run) -> dict[str, str]:
+def write_launchers(
+    root: Path,
+    entries: dict[str, str],
+    *,
+    python: str,
+    repo: str,
+    site: str,
+    target: str,
+    bin_dir: str = "bin",
+    run=subprocess.run,
+) -> dict[str, str]:
     """Mint only declared commands; the caller owns completion publication."""
     bindir = root / bin_dir
     bindir.mkdir(parents=True, exist_ok=True)
@@ -85,19 +109,38 @@ def write_launchers(root: Path, entries: dict[str, str], *, python: str,
         if windows:
             with tempfile.TemporaryDirectory(prefix="clawk-mint-") as temp:
                 wrapper = Path(temp) / "wrapper.py"
-                wrapper.write_text(render_wrapper(entry, f"../{repo}", f"../{site}"), encoding="utf-8")
+                wrapper.write_text(
+                    render_wrapper(entry, f"../{repo}", f"../{site}"), encoding="utf-8"
+                )
                 module, func = entry.split(":", 1)
-                env = {**os.environ, "CLAWK_MINT_BIN_DIR": str(bindir),
-                       "CLAWK_MINT_SPECS": json.dumps([{"name": name, "module": module, "func": func}]),
-                       "CLAWK_MINT_WRAPPER": str(wrapper),
-                       "CLAWK_MINT_PYTHON": "<launcher_dir>\\..\\" + python.replace("/", "\\")}
-                run([str(root / python), str(Path(__file__).with_name("mint_launchers.py"))], env=env, check=True)
+                env = {
+                    **os.environ,
+                    "CLAWK_MINT_BIN_DIR": str(bindir),
+                    "CLAWK_MINT_SPECS": json.dumps(
+                        [{"name": name, "module": module, "func": func}]
+                    ),
+                    "CLAWK_MINT_WRAPPER": str(wrapper),
+                    "CLAWK_MINT_PYTHON": "<launcher_dir>\\..\\"
+                    + python.replace("/", "\\"),
+                }
+                run(
+                    [
+                        str(root / python),
+                        str(Path(__file__).with_name("mint_launchers.py")),
+                    ],
+                    env=env,
+                    check=True,
+                )
         else:
-            script = posix_launcher(name, entry, python=python, repo=repo, site=site, target=target)
+            script = posix_launcher(
+                name, entry, python=python, repo=repo, site=site, target=target
+            )
             output = bindir / name
             output.write_text(script, encoding="utf-8")
             output.chmod(0o755)
-    commands = {name: f"{bin_dir}/{name}{'.exe' if windows else ''}" for name in entries}
+    commands = {
+        name: f"{bin_dir}/{name}{'.exe' if windows else ''}" for name in entries
+    }
     for command in commands.values():
         if not (root / command).is_file():
             raise FileNotFoundError(f"payload launcher missing: {command}")

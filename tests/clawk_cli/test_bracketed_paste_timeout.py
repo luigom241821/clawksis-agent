@@ -4,6 +4,7 @@ Verifies the production helper in cli.py monkey-patches prompt_toolkit's
 Vt100Parser.feed() so the parser auto-escapes from bracketed-paste mode when
 the ESC[201~ end mark is never received.
 """
+
 import importlib
 import time
 from unittest.mock import MagicMock
@@ -55,7 +56,6 @@ class TestBracketedPasteTimeout:
         assert not parser._in_bracketed_paste
         assert callback.called
 
-
     def test_normal_keys_after_timeout_recovery(self):
         """After timeout recovery, normal key processing should resume."""
         parser, callback = self._make_parser()
@@ -67,7 +67,6 @@ class TestBracketedPasteTimeout:
         callback.reset_mock()
         parser.feed("a")
         assert not parser._in_bracketed_paste
-
 
     def test_subsequent_data_after_incomplete_paste(self):
         """Data arriving after a stuck paste should be processable."""

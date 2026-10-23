@@ -21,6 +21,7 @@ import textwrap
 
 import pytest
 
+
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch):
     """Ensure the two env-var gates start AND end each test in a known state.
@@ -35,6 +36,7 @@ def _clean_env(monkeypatch):
     yield
     for var in ("CLAWK_IGNORE_USER_CONFIG", "CLAWK_IGNORE_RULES"):
         os.environ.pop(var, None)
+
 
 class TestIgnoreUserConfigEnvGate:
     """``load_cli_config()`` must honour ``CLAWK_IGNORE_USER_CONFIG=1``.
@@ -65,6 +67,7 @@ class TestIgnoreUserConfigEnvGate:
     def _reload_cli(self, monkeypatch, tmp_path):
         """Point cli._clawk_home at tmp_path and return a fresh load_cli_config."""
         import cli
+
         monkeypatch.setattr(cli, "_clawk_home", tmp_path)
         return cli.load_cli_config
 
@@ -96,7 +99,9 @@ class TestIgnoreUserConfigEnvGate:
         # User-set model.default MUST NOT leak through — either the built-in
         # default ("" or unset) or a project-level fallback, but never the
         # user's value
-        assert cfg["model"].get("default", "") != "test-vendor/ignore-user-config-sentinel"
+        assert (
+            cfg["model"].get("default", "") != "test-vendor/ignore-user-config-sentinel"
+        )
 
     def test_flag_ignored_when_set_to_other_value(self, tmp_path, monkeypatch):
         """Only the literal value "1" activates the bypass, matching the yolo pattern."""

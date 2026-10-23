@@ -25,14 +25,6 @@ def valid_db(tmp_path):
     return path
 
 
-
-
-
-
-
-
-
-
 def test_oversized_db_probe_catches_malformed_schema(tmp_path):
     """Skipping the pragma must not mean skipping corruption detection.
 
@@ -55,10 +47,6 @@ def test_oversized_db_probe_catches_malformed_schema(tmp_path):
     res = verify_sqlite_integrity(path, max_bytes=1)
     assert res["valid"] is False
     assert "probe" in res["message"]
-
-
-
-
 
 
 def test_restore_flow_end_to_end(valid_db, tmp_path):
@@ -143,7 +131,9 @@ class TestPreUpdateBackupIntegrityGuard:
         assert "integrity check FAILED" in out
         assert "Snapshot copy is valid" in out
 
-    def test_failed_snapshot_is_loud_and_update_continues(self, clawk_home, capsys, monkeypatch):
+    def test_failed_snapshot_is_loud_and_update_continues(
+        self, clawk_home, capsys, monkeypatch
+    ):
         """Best-effort by design, but never silent: a snapshot helper that raises (or captures
         nothing) prints a stdout warning and returns None so the receipt records a failed step."""
         from argparse import Namespace

@@ -28,8 +28,12 @@ pytestmark = [
     pytest.mark.platforms("linux"),
     # Every `clawk update` here targets a throwaway sandboxed install, never the real checkout.
     pytest.mark.live_system_guard_bypass,
-    pytest.mark.skipif(H.sandbox_required_reason() is not None, reason=str(H.sandbox_required_reason())),
-    pytest.mark.skipif(N.netns_required_reason() is not None, reason=str(N.netns_required_reason())),
+    pytest.mark.skipif(
+        H.sandbox_required_reason() is not None, reason=str(H.sandbox_required_reason())
+    ),
+    pytest.mark.skipif(
+        N.netns_required_reason() is not None, reason=str(N.netns_required_reason())
+    ),
     pytest.mark.skipif(shutil.which("git") is None, reason="git required"),
     pytest.mark.skipif(I.real_uv() is None, reason="uv required"),
 ]
@@ -48,8 +52,12 @@ def inst(tmp_path_factory):
 def _release_and_main_tip(inst: S.Installed, tag: str) -> tuple[str, str]:
     """A release commit on top of the install, then a newer main tip on top of it."""
     release = inst.publish(f"{tag}-release")
-    tip = I.publish_commit(inst.origin, inst.root, f"e2e network: {tag} main tip",
-                           {f"E2E_NETWORK_{tag}_TIP.txt": "unreleased\n"})
+    tip = I.publish_commit(
+        inst.origin,
+        inst.root,
+        f"e2e network: {tag} main tip",
+        {f"E2E_NETWORK_{tag}_TIP.txt": "unreleased\n"},
+    )
     return release, tip
 
 
@@ -66,23 +74,35 @@ def test_published_release_lands_exactly_on_its_commit_without_reading_r2(inst):
     r = _update(inst, N.static_app(S.stable_release(inst, release)))
     assert r.rc == 0, "update to the published stable release failed\n" + r.report(inst)
     head = inst.head()
-    assert head != tip, "stable subscriber was moved to the unreleased main tip\n" + r.report(inst)
-    assert head == release, f"stable update landed on {head}, not the released {release}\n" + r.report(inst)
+    assert head != tip, (
+        "stable subscriber was moved to the unreleased main tip\n" + r.report(inst)
+    )
+    assert head == release, (
+        f"stable update landed on {head}, not the released {release}\n" + r.report(inst)
+    )
     reads = [h.path for h in r.edge.proxy.requests(S.GITHUB_API)] if r.edge else []
-    assert LATEST in reads, f"the latest release was not read through the proxy: {reads}\n" + r.report(inst)
+    assert LATEST in reads, (
+        f"the latest release was not read through the proxy: {reads}\n" + r.report(inst)
+    )
     r2 = [h.path for h in r.edge.proxy.requests(S.ASSETS)] if r.edge else []
-    assert not any("/releases/" in path for path in r2), f"stable read R2 release objects: {r2}\n" + r.report(inst)
+    assert not any("/releases/" in path for path in r2), (
+        f"stable read R2 release objects: {r2}\n" + r.report(inst)
+    )
 
 
 def _refused(inst: S.Installed, r: S.Result, before: dict, what: str) -> None:
     S.assert_nothing_changed(inst, before, r, what)
     assert "stable" in r.out and "No update was applied" in r.out, (
-        f"{what}: the refusal does not name the stable channel and say nothing was applied\n" + r.report(inst))
+        f"{what}: the refusal does not name the stable channel and say nothing was applied\n"
+        + r.report(inst)
+    )
 
 
 UNAVAILABLE = {
     "no-release-404": dict(api=N.static_app({})),
-    "outage-503": dict(api=N.static_app({}, always={LATEST: N.Response(503, b"down\n")})),
+    "outage-503": dict(
+        api=N.static_app({}, always={LATEST: N.Response(503, b"down\n")})
+    ),
     "tunnel-cut": dict(eof_hosts=[S.GITHUB_API]),
 }
 
@@ -103,7 +123,9 @@ def _unacceptable(inst: S.Installed, release: str, fault: str) -> dict[str, byte
     return S.stable_release(inst, release, **{fault: True})
 
 
-@pytest.mark.parametrize("fault", ["draft", "not-json", "origin-tag-mismatch", "prerelease"])
+@pytest.mark.parametrize(
+    "fault", ["draft", "not-json", "origin-tag-mismatch", "prerelease"]
+)
 def test_unacceptable_release_refuses(inst, fault):
     release, _ = _release_and_main_tip(inst, f"unacceptable-{fault}")
     before = inst.state()

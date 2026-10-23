@@ -44,7 +44,12 @@ from typing import Any, Callable, Dict, Optional, TypeVar
 from urllib.parse import urlparse
 
 from clawk_cli.anon_auth import (
-    ANON_CHALLENGE_REQUIRED, ANON_FAILURE_COPY, ANON_SIGNIN_REQUIRED, _anon_headers, _mint_memo_key)
+    ANON_CHALLENGE_REQUIRED,
+    ANON_FAILURE_COPY,
+    ANON_SIGNIN_REQUIRED,
+    _anon_headers,
+    _mint_memo_key,
+)
 from clawk_cli.auth_constants import AuthError, httpx
 
 logger = logging.getLogger("clawk_cli.auth")
@@ -58,7 +63,11 @@ CHALLENGE_EVENT = "free_tier.challenge"
 CHALLENGE_WAIT_SECONDS = 120.0
 _POLL_MIN_SECONDS, _POLL_MAX_SECONDS = 1.0, 5.0
 # ``expires_in`` is network input that ends up in timers on two runtimes: keep it finite and sane.
-_EXPIRES_MIN_SECONDS, _EXPIRES_MAX_SECONDS, _EXPIRES_DEFAULT_SECONDS = 30.0, 900.0, 600.0
+_EXPIRES_MIN_SECONDS, _EXPIRES_MAX_SECONDS, _EXPIRES_DEFAULT_SECONDS = (
+    30.0,
+    900.0,
+    600.0,
+)
 _MESSAGE_MAX_CHARS = 300
 # After one attempt ran out of patience, the callers queued behind it fail fast for this long
 # instead of each parking for another full wait (boot fires a burst of token reads).
@@ -79,17 +88,34 @@ class BrowserChallenge:
     attempt: int = 0
 
     def as_payload(self) -> dict[str, Any]:
-        return {"type": "browser", "url": self.url, "required": self.required,
-                "expires_in": int(self.expires_in), "message": self.message, "attempt": self.attempt}
+        return {
+            "type": "browser",
+            "url": self.url,
+            "required": self.required,
+            "expires_in": int(self.expires_in),
+            "message": self.message,
+            "attempt": self.attempt,
+        }
 
 
 class AnonChallengeRequired(AuthError):
     """The exchange needs a browser challenge first. Carries what :func:`run_with_challenge` needs
     to work it: the challenge, and the portal, credential and auth state (its ``tls`` block) to poll with."""
 
-    def __init__(self, challenge: BrowserChallenge, *, portal_base_url: str, anon_token: str,
-                 auth_state: dict[str, Any]) -> None:
-        super().__init__(challenge.message, provider="nous", code=ANON_CHALLENGE_REQUIRED, retryable=True)
+    def __init__(
+        self,
+        challenge: BrowserChallenge,
+        *,
+        portal_base_url: str,
+        anon_token: str,
+        auth_state: dict[str, Any],
+    ) -> None:
+        super().__init__(
+            challenge.message,
+            provider="nous",
+            code=ANON_CHALLENGE_REQUIRED,
+            retryable=True,
+        )
         self.challenge = challenge
         self.portal_base_url = portal_base_url
         self.anon_token = anon_token
@@ -99,8 +125,12 @@ class AnonChallengeRequired(AuthError):
 def signin_required_error(message: Any = None) -> AuthError:
     """The service will not serve this client without an account (or asked for something this
     version cannot do). Terminal for the process, like a closed gate."""
-    return AuthError(server_message(message) or ANON_FAILURE_COPY[ANON_SIGNIN_REQUIRED], provider="nous",
-                     code=ANON_SIGNIN_REQUIRED, retryable=False)
+    return AuthError(
+        server_message(message) or ANON_FAILURE_COPY[ANON_SIGNIN_REQUIRED],
+        provider="nous",
+        code=ANON_SIGNIN_REQUIRED,
+        retryable=False,
+    )
 
 
 def server_message(value: Any) -> str:
@@ -121,7 +151,11 @@ def client_surface() -> str:
     console) unless it is serving the local Desktop app, ``desktop`` for that and for the backend the
     desktop app spawned, else ``cli``. ``CLAWK_DESKTOP``
     alone is inherited by every terminal-pane shell, so desktop ownership needs the spawn credential."""
-    from clawk_cli.process_identity import is_desktop_owned_backend, serves_local_desktop_now
+    from clawk_cli.process_identity import (
+        is_desktop_owned_backend,
+        serves_local_desktop_now,
+    )
+
     if serves_local_desktop_now():
         return "desktop"
     status = sys.modules.get("gateway.status")
@@ -134,14 +168,23 @@ def client_info() -> dict[str, Any]:
     """The self-reported ``client`` block on a token exchange. It sorts honest clients (which
     surface, which challenge primitives) for the service's rules; it proves nothing, by design."""
     from clawk_cli.version_info import get_version_info
-    return {"name": "clawksis-agent", "version": get_version_info().base_version, "surface": client_surface(),
-            "platform": sys.platform, "capabilities": [BROWSER_CAPABILITY]}
+
+    return {
+        "name": "clawksis-agent",
+        "version": get_version_info().base_version,
+        "surface": client_surface(),
+        "platform": sys.platform,
+        "capabilities": [BROWSER_CAPABILITY],
+    }
 
 
 def user_agent() -> str:
     from clawk_cli.version_info import get_version_info
-    return (f"clawksis-agent/{get_version_info().base_version} "
-            f"({client_surface()}; {sys.platform}; {platform.machine() or 'unknown'})")
+
+    return (
+        f"clawksis-agent/{get_version_info().base_version} "
+        f"({client_surface()}; {sys.platform}; {platform.machine() or 'unknown'})"
+    )
 
 
 # --- Parsing ------------------------------------------------------------------------------------------
@@ -154,17 +197,27 @@ def _same_origin(url: str, portal_base_url: str) -> bool:
         target, portal = urlparse(url), urlparse(portal_base_url)
     except ValueError:
         return False
-    return (target.scheme in ("https", "http") and target.scheme == portal.scheme
-            and bool(target.netloc) and target.netloc.lower() == portal.netloc.lower())
+    return (
+        target.scheme in ("https", "http")
+        and target.scheme == portal.scheme
+        and bool(target.netloc)
+        and target.netloc.lower() == portal.netloc.lower()
+    )
 
 
 def _number(value: Any, default: float) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+    ):
         return default
     return float(value)
 
 
-def parse_browser_challenge(payload: dict[str, Any], portal_base_url: str) -> Optional[BrowserChallenge]:
+def parse_browser_challenge(
+    payload: dict[str, Any], portal_base_url: str
+) -> Optional[BrowserChallenge]:
     """The first challenge in ``payload["challenges"]`` this client can run, or None."""
     entries = payload.get("challenges")
     if not isinstance(entries, list):
@@ -174,28 +227,53 @@ def parse_browser_challenge(payload: dict[str, Any], portal_base_url: str) -> Op
         if not isinstance(entry, dict) or entry.get("type") != "browser":
             continue
         url = entry.get("url")
-        if not isinstance(url, str) or not url.isprintable() or not _same_origin(url, portal_base_url):
-            logger.info("Nous free tier: ignoring a challenge URL outside the portal origin")
+        if (
+            not isinstance(url, str)
+            or not url.isprintable()
+            or not _same_origin(url, portal_base_url)
+        ):
+            logger.info(
+                "Nous free tier: ignoring a challenge URL outside the portal origin"
+            )
             continue
         return BrowserChallenge(
-            url=url, required=entry.get("required") is not False,
-            expires_in=min(_EXPIRES_MAX_SECONDS, max(
-                _EXPIRES_MIN_SECONDS, _number(entry.get("expires_in"), _EXPIRES_DEFAULT_SECONDS))),
-            interval=min(_POLL_MAX_SECONDS, max(_POLL_MIN_SECONDS, _number(entry.get("interval"), 2.0))),
-            message=message)
+            url=url,
+            required=entry.get("required") is not False,
+            expires_in=min(
+                _EXPIRES_MAX_SECONDS,
+                max(
+                    _EXPIRES_MIN_SECONDS,
+                    _number(entry.get("expires_in"), _EXPIRES_DEFAULT_SECONDS),
+                ),
+            ),
+            interval=min(
+                _POLL_MAX_SECONDS,
+                max(_POLL_MIN_SECONDS, _number(entry.get("interval"), 2.0)),
+            ),
+            message=message,
+        )
     return None
 
 
-def challenge_error(payload: dict[str, Any], *, portal_base_url: str, anon_token: str,
-                    auth_state: dict[str, Any]) -> AuthError:
+def challenge_error(
+    payload: dict[str, Any],
+    *,
+    portal_base_url: str,
+    anon_token: str,
+    auth_state: dict[str, Any],
+) -> AuthError:
     """The error for a 428 ``challenge_required``: a challenge to work, or (nothing offered that
     this version can run) the sign-in fallback."""
     challenge = parse_browser_challenge(payload, portal_base_url)
     if challenge is None:
         # The payload's ``message`` describes the challenge, so it is not reused for the fallback.
         return signin_required_error()
-    return AnonChallengeRequired(challenge, portal_base_url=portal_base_url, anon_token=anon_token,
-                                 auth_state=auth_state)
+    return AnonChallengeRequired(
+        challenge,
+        portal_base_url=portal_base_url,
+        anon_token=anon_token,
+        auth_state=auth_state,
+    )
 
 
 # --- Per-profile state: what a status read shows, and who is working it ---------------------------------
@@ -205,19 +283,26 @@ def challenge_error(payload: dict[str, Any], *, portal_base_url: str, anon_token
 class _ProfileChallenge:
     """One profile's challenge state, behind ``_state_lock``. ``work_lock`` serialises waits PER
     PROFILE (a sibling profile's wait must not queue behind it)."""
+
     work_lock: threading.Lock = field(default_factory=threading.Lock)
     pending: Optional[BrowserChallenge] = None
     deadline: float = 0.0
-    outcome: Optional[str] = None      # how the host's window ended, for ``pending``'s attempt
+    outcome: Optional[str] = (
+        None  # how the host's window ended, for ``pending``'s attempt
+    )
     gave_up_until: float = 0.0
 
 
 _state_lock = threading.Lock()
 _profiles: dict[str, _ProfileChallenge] = {}
-_opened_urls: set[str] = set()      # challenge URLs whose browser tab was opened (one per ticket)
+_opened_urls: set[str] = (
+    set()
+)  # challenge URLs whose browser tab was opened (one per ticket)
 
 # Set by :func:`background_caller`: this caller has nobody waiting on it.
-_background: contextvars.ContextVar[bool] = contextvars.ContextVar("anon_challenge_background", default=False)
+_background: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "anon_challenge_background", default=False
+)
 
 
 @contextlib.contextmanager
@@ -252,7 +337,10 @@ def pending_challenge() -> Optional[dict[str, Any]]:
         challenge = _live(record)
         if challenge is None or record.outcome not in (None, "timeout", "error"):
             return None
-        return {**challenge.as_payload(), "expires_in": math.ceil(record.deadline - time.monotonic())}
+        return {
+            **challenge.as_payload(),
+            "expires_in": math.ceil(record.deadline - time.monotonic()),
+        }
 
 
 def _clear_pending() -> None:
@@ -270,10 +358,17 @@ def _record(challenge: BrowserChallenge, *, new_attempt: bool) -> BrowserChallen
         previous = _live(record)
         deadline = time.monotonic() + challenge.expires_in
         if previous is None or previous.url != challenge.url:
-            record.pending, record.deadline, record.outcome = replace(challenge, attempt=0), deadline, None
+            record.pending, record.deadline, record.outcome = (
+                replace(challenge, attempt=0),
+                deadline,
+                None,
+            )
         else:
             attempt = previous.attempt + 1 if new_attempt else previous.attempt
-            record.pending, record.deadline = replace(challenge, attempt=attempt), min(deadline, record.deadline)
+            record.pending, record.deadline = (
+                replace(challenge, attempt=attempt),
+                min(deadline, record.deadline),
+            )
             if new_attempt:
                 record.outcome = None
         return record.pending
@@ -295,7 +390,10 @@ def _host_outcome(challenge: BrowserChallenge) -> Optional[str]:
     record = _profile()
     with _state_lock:
         pending = record.pending
-        matches = pending is not None and (pending.url, pending.attempt) == (challenge.url, challenge.attempt)
+        matches = pending is not None and (pending.url, pending.attempt) == (
+            challenge.url,
+            challenge.attempt,
+        )
         return record.outcome if matches else None
 
 
@@ -338,14 +436,23 @@ def _announce(challenge: BrowserChallenge) -> bool:
 
 
 def _present_in_terminal(challenge: BrowserChallenge) -> None:
-    from clawk_cli.auth_device_flow import _can_open_graphical_browser, _is_remote_session
+    from clawk_cli.auth_device_flow import (
+        _can_open_graphical_browser,
+        _is_remote_session,
+    )
+
     opened = False
     # One tab per ticket, however many attempts resume it: a user who has not got to it yet is
     # not helped by a second copy. A gateway has no console of its own: it logs the link only.
     already_open = challenge.url in _opened_urls
-    if (not already_open and client_surface() != "gateway"
-            and not _is_remote_session() and _can_open_graphical_browser()):
+    if (
+        not already_open
+        and client_surface() != "gateway"
+        and not _is_remote_session()
+        and _can_open_graphical_browser()
+    ):
         import webbrowser
+
         try:
             opened = bool(webbrowser.open(challenge.url))
         except (webbrowser.Error, OSError) as exc:
@@ -354,8 +461,12 @@ def _present_in_terminal(challenge: BrowserChallenge) -> None:
             _opened_urls.add(challenge.url)
     print(f"\n{challenge.message}", file=sys.stderr)
     print(f"  Open: {challenge.url}", file=sys.stderr)
-    print("  (Opened in your browser.)\n" if opened or already_open
-          else "  (Open that link in any browser; this continues on its own.)\n", file=sys.stderr)
+    print(
+        "  (Opened in your browser.)\n"
+        if opened or already_open
+        else "  (Open that link in any browser; this continues on its own.)\n",
+        file=sys.stderr,
+    )
 
 
 def present(challenge: BrowserChallenge) -> None:
@@ -382,8 +493,11 @@ def _poll_status(client: httpx.Client, portal_base_url: str, anon_token: str) ->
     wait: the exchange that follows is the authority on whether the credential is cleared. (A
     passed challenge reads ``none``: passing detaches the ticket.)"""
     try:
-        response = client.post(f"{portal_base_url.rstrip('/')}/api/anonymous/challenge/status",
-                               headers=_anon_headers(), json={"token": anon_token})
+        response = client.post(
+            f"{portal_base_url.rstrip('/')}/api/anonymous/challenge/status",
+            headers=_anon_headers(),
+            json={"token": anon_token},
+        )
         if 400 <= response.status_code < 500 and response.status_code != 429:
             # The service will not answer this poll (credential reaped, surface off): waiting cannot
             # change that. End the wait; the exchange's own verdict says what happened.
@@ -399,7 +513,7 @@ def _poll_status(client: httpx.Client, portal_base_url: str, anon_token: str) ->
 
 
 _WAITING = ("pending", "needs_interaction")
-_sleep = time.sleep     # seam for tests (same idiom as ``free_tier_bootstrap._sleep``)
+_sleep = time.sleep  # seam for tests (same idiom as ``free_tier_bootstrap._sleep``)
 
 
 def wait_for_challenge(exc: AnonChallengeRequired) -> bool:
@@ -410,6 +524,7 @@ def wait_for_challenge(exc: AnonChallengeRequired) -> bool:
     already settled on its first status read and returns without presenting anything."""
     from clawk_cli.auth import _resolve_verify
     from clawk_cli.auth_nous import _nous_http_client
+
     if _gave_up_recently():
         return False
     challenge = exc.challenge
@@ -433,15 +548,23 @@ def wait_for_challenge(exc: AnonChallengeRequired) -> bool:
             if status == "needs_interaction" and not told_interactive:
                 told_interactive = True
                 if client_surface() != "desktop":
-                    print("  Finish the quick check in your browser to continue.", file=sys.stderr)
+                    print(
+                        "  Finish the quick check in your browser to continue.",
+                        file=sys.stderr,
+                    )
     _give_up()
     return False
 
 
 def _still_pending(cause: AnonChallengeRequired) -> AuthError:
-    message = ("The quick check couldn't finish. Try again." if _host_outcome(cause.challenge)
-               else ANON_FAILURE_COPY[ANON_CHALLENGE_REQUIRED])
-    error = AuthError(message, provider="nous", code=ANON_CHALLENGE_REQUIRED, retryable=True)
+    message = (
+        "The quick check couldn't finish. Try again."
+        if _host_outcome(cause.challenge)
+        else ANON_FAILURE_COPY[ANON_CHALLENGE_REQUIRED]
+    )
+    error = AuthError(
+        message, provider="nous", code=ANON_CHALLENGE_REQUIRED, retryable=True
+    )
     error.__cause__ = cause
     return error
 

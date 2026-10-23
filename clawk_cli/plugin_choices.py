@@ -14,6 +14,7 @@ mapped back here, so a surface never sees them. With no asker bound (a hook, a c
 on an event loop, where blocking would stall the loop that must deliver the answer) the call
 returns None and the handler falls back to its own text usage.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -48,10 +49,21 @@ def asker_bound() -> bool:
 def clarify_asker(callback: Callable[[list], dict]) -> Asker:
     """An asker over a clarify-tool callback (``questions -> {answers: {qid: raw}, outcome}``): the
     classic CLI's clarify panel, the legacy backend's ``clarify`` server request."""
+
     def ask(question: str, labels: list) -> Optional[str]:
-        reply = callback([{"qid": "q0", "question": question, "choices": labels, "multi_select": False}])
+        reply = callback(
+            [
+                {
+                    "qid": "q0",
+                    "question": question,
+                    "choices": labels,
+                    "multi_select": False,
+                }
+            ]
+        )
         answer = ((reply or {}).get("answers") or {}).get("q0")
         return answer if isinstance(answer, str) else None
+
     return ask
 
 
@@ -66,7 +78,9 @@ def _options(choices: list[Choice]) -> list[tuple[str, str, str]]:
         value = str(choice["value"])
         label = str(choice.get("label") or value)
         description = str(choice.get("description") or "").strip()
-        options.append((value, label, f"{label} — {description}" if description else label))
+        options.append(
+            (value, label, f"{label} — {description}" if description else label)
+        )
     return options
 
 
@@ -87,10 +101,18 @@ def ask_choice(question: str, choices: list[Choice]) -> Optional[str]:
     if asker is None or not options:
         return None
     if _running_on_loop():
-        logger.warning("ask_choice needs a sync slash-command handler: an async one would block the "
-                       "event loop that delivers the answer; returning None")
+        logger.warning(
+            "ask_choice needs a sync slash-command handler: an async one would block the "
+            "event loop that delivers the answer; returning None"
+        )
         return None
     picked = asker(str(question), [shown for _value, _label, shown in options])
     typed = (picked or "").strip().casefold()
-    return next((value for value, label, shown in options
-                 if typed and typed in (shown.casefold(), label.casefold(), value.casefold())), None)
+    return next(
+        (
+            value
+            for value, label, shown in options
+            if typed and typed in (shown.casefold(), label.casefold(), value.casefold())
+        ),
+        None,
+    )

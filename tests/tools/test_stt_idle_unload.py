@@ -49,13 +49,11 @@ class TestGetIdleUnloadSeconds:
     def test_explicit_value(self):
         assert _get_idle_unload_seconds({"unload_after_idle_seconds": 300}) == 300
 
-
     def test_negative_clamped_to_zero(self):
         assert _get_idle_unload_seconds({"unload_after_idle_seconds": -5}) == 0
 
     def test_garbage_falls_back_to_zero(self):
         assert _get_idle_unload_seconds({"unload_after_idle_seconds": "never"}) == 0
-
 
 
 # ============================================================================
@@ -66,26 +64,27 @@ class TestGetIdleUnloadSeconds:
 class TestUnloadLocalModel:
     def test_unloads_when_model_present(self):
         mock_model = MagicMock(name="whisper_model")
-        with patch.object(tt, "_local_model", mock_model), \
-             patch.object(tt, "_local_model_name", "base"):
+        with (
+            patch.object(tt, "_local_model", mock_model),
+            patch.object(tt, "_local_model_name", "base"),
+        ):
             _unload_local_model()
         assert tt._local_model is None
         assert tt._local_model_name is None
 
     def test_safe_when_already_none(self):
-        with patch.object(tt, "_local_model", None), \
-             patch.object(tt, "_local_model_name", None):
+        with (
+            patch.object(tt, "_local_model", None),
+            patch.object(tt, "_local_model_name", None),
+        ):
             # Must not raise
             _unload_local_model()
         assert tt._local_model is None
 
 
-
 # ============================================================================
 # _touch_transcription_time
 # ============================================================================
-
-
 
 
 # ============================================================================
@@ -94,19 +93,23 @@ class TestUnloadLocalModel:
 
 
 class TestIdleUnloadWatcher:
-
     def test_watcher_unloads_after_timeout(self):
         """The watcher unloads the model after the configured idle period."""
         mock_model = MagicMock(name="whisper_model")
         # Use a very short timeout and patch the check interval to 0.01s
         # so the test runs in < 1 second. The watcher re-reads config each
         # cycle, so patch _load_stt_config to keep the timeout active.
-        with patch.object(tt, "_local_model", mock_model), \
-             patch.object(tt, "_local_model_name", "base"), \
-             patch.object(tt, "_IDLE_UNLOAD_CHECK_INTERVAL", 0.01), \
-             patch.object(tt, "_load_stt_config",
-                          return_value={"local": {"unload_after_idle_seconds": 1}}), \
-             patch.object(tt, "_last_transcription_time", time.monotonic() - 100):
+        with (
+            patch.object(tt, "_local_model", mock_model),
+            patch.object(tt, "_local_model_name", "base"),
+            patch.object(tt, "_IDLE_UNLOAD_CHECK_INTERVAL", 0.01),
+            patch.object(
+                tt,
+                "_load_stt_config",
+                return_value={"local": {"unload_after_idle_seconds": 1}},
+            ),
+            patch.object(tt, "_last_transcription_time", time.monotonic() - 100),
+        ):
             _start_idle_unload_watcher(timeout_seconds=1)
             # Wait for the watcher to fire
             for _ in range(100):
@@ -127,8 +130,11 @@ class TestIdleUnloadWatcher:
             tt._local_model_name = "base"
             tt._IDLE_UNLOAD_CHECK_INTERVAL = 0.01
             tt._last_transcription_time = time.monotonic()
-            with patch.object(tt, "_load_stt_config",
-                              return_value={"local": {"unload_after_idle_seconds": 100}}):
+            with patch.object(
+                tt,
+                "_load_stt_config",
+                return_value={"local": {"unload_after_idle_seconds": 100}},
+            ):
                 _start_idle_unload_watcher(timeout_seconds=100)
                 # Give it a few check cycles — model must survive
                 time.sleep(0.1)
@@ -145,12 +151,17 @@ class TestIdleUnloadWatcher:
         """A second start while a watcher is alive is a no-op (single
         long-lived watcher — no stop/join/restart churn on the hot path)."""
         mock_model = MagicMock(name="whisper_model")
-        with patch.object(tt, "_local_model", mock_model), \
-             patch.object(tt, "_local_model_name", "base"), \
-             patch.object(tt, "_IDLE_UNLOAD_CHECK_INTERVAL", 0.5), \
-             patch.object(tt, "_load_stt_config",
-                          return_value={"local": {"unload_after_idle_seconds": 100}}), \
-             patch.object(tt, "_last_transcription_time", time.monotonic()):
+        with (
+            patch.object(tt, "_local_model", mock_model),
+            patch.object(tt, "_local_model_name", "base"),
+            patch.object(tt, "_IDLE_UNLOAD_CHECK_INTERVAL", 0.5),
+            patch.object(
+                tt,
+                "_load_stt_config",
+                return_value={"local": {"unload_after_idle_seconds": 100}},
+            ),
+            patch.object(tt, "_last_transcription_time", time.monotonic()),
+        ):
             _start_idle_unload_watcher(timeout_seconds=100)
             first_thread = tt._idle_unload_thread
             assert first_thread is not None and first_thread.is_alive()
@@ -172,8 +183,11 @@ class TestIdleUnloadWatcher:
             tt._local_model_name = "base"
             tt._IDLE_UNLOAD_CHECK_INTERVAL = 0.01
             tt._last_transcription_time = time.monotonic() - 1000  # long idle
-            with patch.object(tt, "_load_stt_config",
-                              return_value={"local": {"unload_after_idle_seconds": 0}}):
+            with patch.object(
+                tt,
+                "_load_stt_config",
+                return_value={"local": {"unload_after_idle_seconds": 0}},
+            ):
                 _start_idle_unload_watcher(timeout_seconds=1)
                 thread = tt._idle_unload_thread
                 assert thread is not None
@@ -228,13 +242,17 @@ class TestUnloadDuringTranscriptionRace:
             assert tt._local_model is None
             return out
 
-        with patch.object(tt, "_HAS_FASTER_WHISPER", True), \
-             patch.object(tt, "_load_stt_config", return_value={"local": {}}), \
-             patch.object(tt, "build_local_transcribe_kwargs",
-                          side_effect=kwargs_then_unload), \
-             patch.object(tt, "_local_model", mock_model), \
-             patch.object(tt, "_local_model_name", "base"):
+        with (
+            patch.object(tt, "_HAS_FASTER_WHISPER", True),
+            patch.object(tt, "_load_stt_config", return_value={"local": {}}),
+            patch.object(
+                tt, "build_local_transcribe_kwargs", side_effect=kwargs_then_unload
+            ),
+            patch.object(tt, "_local_model", mock_model),
+            patch.object(tt, "_local_model_name", "base"),
+        ):
             from tools.transcription_tools import _transcribe_local
+
             result = _transcribe_local(str(wav_path), "base")
 
         assert result["success"] is True, result.get("error")

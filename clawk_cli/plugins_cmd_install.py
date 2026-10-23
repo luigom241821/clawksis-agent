@@ -23,7 +23,9 @@ logger = logging.getLogger(__name__)
 
 # Answers to the dependency questions, reused while one plugin is installed into several profile
 # homes that share one environment (memory-provider migration on ``clawk update``, #125794).
-_shared_answers: ContextVar[Optional[dict]] = ContextVar("plugin_dependency_answers", default=None)
+_shared_answers: ContextVar[Optional[dict]] = ContextVar(
+    "plugin_dependency_answers", default=None
+)
 
 
 @contextmanager
@@ -39,7 +41,9 @@ def shared_dependency_answers():
 def _ask_yes_no(key: tuple, prompt: str, console) -> bool:
     answers = _shared_answers.get()
     if answers is not None and key in answers:
-        console.print(f"  [dim]Reusing your answer for the first profile: {'yes' if answers[key] else 'no'}[/dim]")
+        console.print(
+            f"  [dim]Reusing your answer for the first profile: {'yes' if answers[key] else 'no'}[/dim]"
+        )
         return answers[key]
     try:
         accepted = input(prompt).strip().lower() in {"y", "yes"}
@@ -53,6 +57,7 @@ def _ask_yes_no(key: tuple, prompt: str, console) -> bool:
 def _pc():
     """The facade, read at call time: tests patch ``plugins_cmd.<name>`` and sibling calls must see it."""
     from clawk_cli import plugins_cmd
+
     return plugins_cmd
 
 
@@ -89,7 +94,9 @@ def _install_plugin_python_deps(
         declaration = read_python_declaration(target)
         deps = declaration.install_requirements
     except Exception as exc:
-        return False, _ConsentRefusal(f"invalid Python dependency declaration: {exc}", "manifest_invalid")
+        return False, _ConsentRefusal(
+            f"invalid Python dependency declaration: {exc}", "manifest_invalid"
+        )
     has_python = declaration.installs_packages
     has_package_json = (target / "package.json").is_file()
     if not has_python and not has_package_json:
@@ -100,9 +107,18 @@ def _install_plugin_python_deps(
     # python path below.
     node_reason = None
     if has_package_json:
-        console.print(f"\n[bold]{manifest.get('name', 'this plugin')}[/bold] declares Node dependencies (package.json).")
-        node_ok = sys.stdin.isatty() and sys.stdout.isatty() and _ask_yes_no(
-            ("node", manifest.get("name")), "  Install them into the plugin's own node_modules now? [y/N]: ", console)
+        console.print(
+            f"\n[bold]{manifest.get('name', 'this plugin')}[/bold] declares Node dependencies (package.json)."
+        )
+        node_ok = (
+            sys.stdin.isatty()
+            and sys.stdout.isatty()
+            and _ask_yes_no(
+                ("node", manifest.get("name")),
+                "  Install them into the plugin's own node_modules now? [y/N]: ",
+                console,
+            )
+        )
         if node_ok:
             from pm.workspace import install_node_sidecar
 
@@ -110,11 +126,15 @@ def _install_plugin_python_deps(
             if node_reason:
                 console.print(f"[yellow]⚠[/yellow] Node deps: {node_reason}")
         else:
-            console.print("[dim]Skipped Node deps — run `clawk plugins install` again to retry.[/dim]\n")
+            console.print(
+                "[dim]Skipped Node deps — run `clawk plugins install` again to retry.[/dim]\n"
+            )
 
     if not has_python:
         return True, None
-    return _consent_python_deps(manifest.get("name", "this plugin"), deps, console, assume_yes=assume_yes)
+    return _consent_python_deps(
+        manifest.get("name", "this plugin"), deps, console, assume_yes=assume_yes
+    )
 
 
 def _consent_python_deps(
@@ -125,9 +145,7 @@ def _consent_python_deps(
     Returns (consented, reason); never raises. *assume_yes* (``--yes-deps``)
     answers the question on the user's behalf ONLY because the user passed the
     flag; the non-interactive default below stays a refusal."""
-    console.print(
-        f"\n[bold]{plugin_name}[/bold] declares Python dependencies:"
-    )
+    console.print(f"\n[bold]{plugin_name}[/bold] declares Python dependencies:")
     if deps:
         for dep in deps:
             console.print(f"  - {dep}")
@@ -147,8 +165,14 @@ def _consent_python_deps(
             "[dim]Non-interactive install — skipping dependency install. "
             "Run `clawk plugins enable` when ready to prepare them.[/dim]\n"
         )
-        return False, _ConsentRefusal("dependency install skipped (non-interactive)", "non_interactive")
-    if not _ask_yes_no(("python", plugin_name, deps), "  Prepare these with Clawksis through PM now? [y/N]: ", console):
+        return False, _ConsentRefusal(
+            "dependency install skipped (non-interactive)", "non_interactive"
+        )
+    if not _ask_yes_no(
+        ("python", plugin_name, deps),
+        "  Prepare these with Clawksis through PM now? [y/N]: ",
+        console,
+    ):
         console.print(
             "[dim]Skipped — run `clawk plugins enable` when ready "
             "to prepare them.[/dim]\n"
@@ -179,8 +203,11 @@ def _prompt_plugin_env_vars(manifest: dict, console) -> None:
         return
     from clawk_cli.config import save_env_value
     from clawk_constants import display_clawk_home
+
     plugin_name = manifest.get("name", "this plugin")
-    console.print(f"\n[bold]{plugin_name}[/bold] requires the following environment variables:\n")
+    console.print(
+        f"\n[bold]{plugin_name}[/bold] requires the following environment variables:\n"
+    )
     for spec in missing:
         name = spec["name"]
         desc = spec.get("description", "")
@@ -189,9 +216,13 @@ def _prompt_plugin_env_vars(manifest: dict, console) -> None:
         if url:
             console.print(f"  [dim]Get yours at: {url}[/dim]")
         try:
-            value = (_pc().masked_secret_prompt if spec.get("secret", False) else line_input)(f"  {name}: ").strip()
+            value = (
+                _pc().masked_secret_prompt if spec.get("secret", False) else line_input
+            )(f"  {name}: ").strip()
         except (EOFError, KeyboardInterrupt):
-            console.print(f"\n[dim]  Skipped (you can set these later in {display_clawk_home()}/.env)[/dim]")
+            console.print(
+                f"\n[dim]  Skipped (you can set these later in {display_clawk_home()}/.env)[/dim]"
+            )
             return
 
         if value:
@@ -199,15 +230,20 @@ def _prompt_plugin_env_vars(manifest: dict, console) -> None:
             os.environ[name] = value
             console.print(f"  [green]✓[/green] Saved to {display_clawk_home()}/.env")
         else:
-            console.print(f"  [dim]  Skipped (set {name} in {display_clawk_home()}/.env later)[/dim]")
+            console.print(
+                f"  [dim]  Skipped (set {name} in {display_clawk_home()}/.env later)[/dim]"
+            )
 
     console.print()
 
 
-def _display_after_install(plugin_dir: Path, identifier: str, *, brief: bool = False) -> None:
+def _display_after_install(
+    plugin_dir: Path, identifier: str, *, brief: bool = False
+) -> None:
     """Show after-install.md if it exists, otherwise a default message (skipped when *brief*)."""
     from rich.markdown import Markdown
     from rich.panel import Panel
+
     console = _pc()._console()
     after_install = plugin_dir / "after-install.md"
     if brief and not after_install.exists():
@@ -229,8 +265,11 @@ def _check_manifest_version(manifest: dict, plugin_name: str) -> None:
     reason = manifest_version_error(manifest, plugin_name)
     if reason:
         from clawk_cli.config import recommended_update_command
-        raise _pc().PluginOperationError(f"{reason} Run {recommended_update_command()} to update Clawksis.",
-                                         failure_class="incompatible")
+
+        raise _pc().PluginOperationError(
+            f"{reason} Run {recommended_update_command()} to update Clawksis.",
+            failure_class="incompatible",
+        )
 
 
 def _read_manifest_for_install(plugin_dir: Path) -> dict:
@@ -240,20 +279,27 @@ def _read_manifest_for_install(plugin_dir: Path) -> dict:
         try:
             manifest = _pc()._load_yaml_manifest(native)
         except Exception as exc:
-            raise _pc().PluginOperationError(f"Could not read plugin manifest {native}: {exc}",
-                                             failure_class="manifest_invalid") from exc
+            raise _pc().PluginOperationError(
+                f"Could not read plugin manifest {native}: {exc}",
+                failure_class="manifest_invalid",
+            ) from exc
         if not isinstance(manifest, dict):
-            raise _pc().PluginOperationError(f"Plugin manifest must be a mapping: {native}",
-                                             failure_class="manifest_invalid")
+            raise _pc().PluginOperationError(
+                f"Plugin manifest must be a mapping: {native}",
+                failure_class="manifest_invalid",
+            )
         return manifest
     if not _pc()._has_portable_manifest(plugin_dir):
         return {}
     try:
         from clawk_cli.agent_plugins import read_agent_plugin_manifest
+
         manifest, diagnostics = read_agent_plugin_manifest(plugin_dir)
     except Exception as exc:
-        raise _pc().PluginOperationError(f"Portable plugin manifest validation failed: {exc}",
-                                         failure_class="manifest_invalid") from exc
+        raise _pc().PluginOperationError(
+            f"Portable plugin manifest validation failed: {exc}",
+            failure_class="manifest_invalid",
+        ) from exc
     for diagnostic in diagnostics:
         logger.warning("Agent Plugin install: %s", diagnostic.message)
     return manifest
@@ -280,16 +326,24 @@ def _ensure_tree_readable(root: Path, plugins_dir: Path) -> None:
             _probe_readable(path)
             continue
         except OSError:
-            if os.name != "nt":  # chmod only toggles the read-only bit on Windows; ACLs need icacls
+            if (
+                os.name != "nt"
+            ):  # chmod only toggles the read-only bit on Windows; ACLs need icacls
                 try:
-                    os.chmod(path, os.stat(path).st_mode | (0o500 if path.is_dir() else 0o400))
+                    os.chmod(
+                        path,
+                        os.stat(path).st_mode | (0o500 if path.is_dir() else 0o400),
+                    )
                 except OSError:
                     pass
         try:
             _probe_readable(path)
         except OSError as exc:
-            fix = (f'icacls "{plugins_dir}" /grant:r "%USERNAME%":(OI)(CI)F /T' if os.name == "nt"
-                   else f"chmod -R u+rX {plugins_dir}")
+            fix = (
+                f'icacls "{plugins_dir}" /grant:r "%USERNAME%":(OI)(CI)F /T'
+                if os.name == "nt"
+                else f"chmod -R u+rX {plugins_dir}"
+            )
             raise _pc().PluginOperationError(
                 f"Installed file {path.relative_to(root)} is not readable ({exc.strerror or exc}); "
                 f"nothing was installed. Fix permissions on {plugins_dir} (e.g. `{fix}`) and retry.",
@@ -307,8 +361,10 @@ def _refuse_unavailable_portable_plugin(plugin_name: str, tree: Path) -> None:
     try:
         package = load_agent_plugin(tree, tree.parent / ".clawk-install-data")
     except ValueError as exc:
-        raise _pc().PluginOperationError(f"Plugin '{plugin_name}' is unavailable: {exc}.",
-                                         failure_class="manifest_invalid") from exc
+        raise _pc().PluginOperationError(
+            f"Plugin '{plugin_name}' is unavailable: {exc}.",
+            failure_class="manifest_invalid",
+        ) from exc
     for server_name, server_decl in package.server_declarations.items():
         result = availability(server_decl.declaration)
         if result.offerable:
@@ -332,12 +388,17 @@ def _known_issue_warnings(entry) -> list[str]:
 
 def interactive_scan_decision(console, verb: str) -> Callable[[Any], bool]:
     """The terminal ``[y/N]`` that accepts a caution verdict, shared by install and update (*verb*)."""
+
     def decide(scan_result) -> bool:
         from tools.plugin_guard import format_scan_report
+
         console.print()
         console.print("[yellow]⚠ Security scan flagged this plugin:[/yellow]")
         console.print(format_scan_report(scan_result))
-        return _pc()._is_tty() and _pc()._ask_yes(f"  {verb} anyway? Only continue if you trust the source. [y/N]: ")
+        return _pc()._is_tty() and _pc()._ask_yes(
+            f"  {verb} anyway? Only continue if you trust the source. [y/N]: "
+        )
+
     return decide
 
 
@@ -346,7 +407,9 @@ def scan_blocked_result(exc) -> dict[str, Any]:
     show them and, for a caution verdict, retry with ``force``."""
     fields = ("pattern_id", "severity", "category", "file", "line", "description")
     return {
-        "ok": False, "error": str(exc), "scan_blocked": True,
+        "ok": False,
+        "error": str(exc),
+        "scan_blocked": True,
         "scan_verdict": getattr(exc.scan_result, "verdict", "dangerous"),
         "scan_findings": [
             {k: getattr(f, k) for k in fields}
@@ -387,7 +450,9 @@ def _install_plugin_core(
     and may raise :class:`PluginOperationError` to abort (re-pin consent). *accept_caution* decides a
     caution scan verdict on its own when *force* only means "replace the existing tree" (an update's
     re-clone); None lets *force* decide both, as ``install --force`` does."""
-    requested_revision = _pc()._normalize_exact_revision(ref) if ref is not None else None
+    requested_revision = (
+        _pc()._normalize_exact_revision(ref) if ref is not None else None
+    )
     try:
         git_url, subdir = _pc()._resolve_git_url(identifier)
     except ValueError as e:
@@ -400,60 +465,94 @@ def _install_plugin_core(
     # Reinstalling the same pinned source retains its pin, even if its plugin
     # directory was manually removed. Moving a pin requires an explicit --ref.
     if requested_revision is None:
-        pins = [e for e in old_metadata.values() if e.get("source") == source and e.get("pinned") is True]
+        pins = [
+            e
+            for e in old_metadata.values()
+            if e.get("source") == source and e.get("pinned") is True
+        ]
         if len(pins) == 1 and isinstance(pins[0].get("revision"), str):
             requested_revision = _pc()._normalize_exact_revision(pins[0]["revision"])
 
     with tempfile.TemporaryDirectory(prefix=".install-", dir=plugins_dir) as tmp:
         tmp_clone = Path(tmp) / "plugin"
-        installed_revision = _pc()._clone_plugin_repo(tmp_clone, git_url, requested_revision, subdir)
+        installed_revision = _pc()._clone_plugin_repo(
+            tmp_clone, git_url, requested_revision, subdir
+        )
         git_exe = _pc()._resolve_git_executable()
         at_reviewed_pin = bool(reviewed_pin) and installed_revision == (
-            _pc()._git_resolve_commit(tmp_clone, git_exe, reviewed_pin) if git_exe and reviewed_pin else reviewed_pin)
-        tmp_target = _pc()._resolve_subdir_within(tmp_clone, subdir) if subdir else tmp_clone
+            _pc()._git_resolve_commit(tmp_clone, git_exe, reviewed_pin)
+            if git_exe and reviewed_pin
+            else reviewed_pin
+        )
+        tmp_target = (
+            _pc()._resolve_subdir_within(tmp_clone, subdir) if subdir else tmp_clone
+        )
         _ensure_tree_readable(tmp_target, plugins_dir)
         manifest = _read_manifest_for_install(tmp_target)
         plugin_name = manifest.get("name") or (
-            subdir.rstrip("/").rsplit("/", 1)[-1] if subdir else _pc()._repo_name_from_url(git_url))
+            subdir.rstrip("/").rsplit("/", 1)[-1]
+            if subdir
+            else _pc()._repo_name_from_url(git_url)
+        )
         link = plugins_dir / str(plugin_name)
         from pm.filesystem import is_junction
+
         if "/" not in str(plugin_name) and (link.is_symlink() or is_junction(link)):
             # A provider's own installer (e.g. `mnemosyne-clawk install`) links its package here; the
             # name is fine, the slot is taken. Say so instead of blaming the manifest.
             raise _pc().PluginOperationError(
                 f"Plugin '{plugin_name}' is already installed outside the catalog: {link} is a link to "
                 f"{os.path.realpath(link)}. Delete that link to install the catalog version.",
-                failure_class="already_installed")
+                failure_class="already_installed",
+            )
         try:
             target = _pc()._sanitize_plugin_name(plugin_name, plugins_dir)
         except ValueError as e:
-            raise _pc().PluginOperationError(str(e), failure_class="manifest_invalid") from e
+            raise _pc().PluginOperationError(
+                str(e), failure_class="manifest_invalid"
+            ) from e
         _check_manifest_version(manifest, plugin_name)
         prior = old_metadata.get(plugin_name)
         # `install --force --ref` is the documented way to move a pin, so a reinstall of the same
         # source is an update: it replaces the plugin's code, never the user's state.
         tracked_edits: list[str] = []
-        if (before_swap is None and force and target.is_dir() and not target.is_symlink()
-                and isinstance(prior, dict) and prior.get("source") == source):
+        if (
+            before_swap is None
+            and force
+            and target.is_dir()
+            and not target.is_symlink()
+            and isinstance(prior, dict)
+            and prior.get("source") == source
+        ):
             from clawk_cli.plugins_cmd_catalog import _carry_user_files, _local_changes
+
             local, tracked_edits = _local_changes(target)
 
             def _carry(_manifest, tree):
                 return _carry_user_files(target, tree, local)
+
             before_swap = _carry
         # A callback may merge user-owned state into the candidate tree; run it first so one scan
         # admits the final bytes.
         merged = before_swap(manifest, tmp_target) if before_swap is not None else None
         # Scan BEFORE anything is moved into place; raises PluginScanBlocked when blocked.
-        _pc()._scan_merged_tree(tmp_target, identifier, merged, force=force if accept_caution is None else accept_caution,
-                                scan_decision_cb=scan_decision_cb, reviewed_pin=at_reviewed_pin)
+        _pc()._scan_merged_tree(
+            tmp_target,
+            identifier,
+            merged,
+            force=force if accept_caution is None else accept_caution,
+            scan_decision_cb=scan_decision_cb,
+            reviewed_pin=at_reviewed_pin,
+        )
         if not python_deps:
             from pm.workspace import enabled_plugin_dirs
 
             if target.resolve() in enabled_plugin_dirs(installing=target):
                 raise _pc().PluginOperationError(
                     "--no-deps cannot replace an active plugin. Retry without --no-deps; "
-                    "PM must prepare its dependencies before publication.", failure_class="already_installed")
+                    "PM must prepare its dependencies before publication.",
+                    failure_class="already_installed",
+                )
         _refuse_unavailable_portable_plugin(plugin_name, tmp_target)
 
         if target.exists() and not force:
@@ -463,11 +562,19 @@ def _install_plugin_core(
             raise _pc().PluginOperationError(
                 f"Plugin '{plugin_name}' already exists. Use force reinstall "
                 f"or run `{cli_command_name(repo_root())} plugins update {plugin_name}`.",
-                failure_class="already_installed")
-        if target.exists() and requested_revision is None and isinstance(prior, dict) and prior.get("pinned") is True:
+                failure_class="already_installed",
+            )
+        if (
+            target.exists()
+            and requested_revision is None
+            and isinstance(prior, dict)
+            and prior.get("pinned") is True
+        ):
             raise _pc().PluginOperationError(
                 f"Plugin '{plugin_name}' is pinned. Reinstall it with an explicit "
-                "--ref <40-character commit SHA> to change its source or revision.", failure_class="already_installed")
+                "--ref <40-character commit SHA> to change its source or revision.",
+                failure_class="already_installed",
+            )
 
         record: dict[str, object] = {
             "pinned": requested_revision is not None,
@@ -480,10 +587,13 @@ def _install_plugin_core(
         # only `clawk plugins trust-update-url` moves the tag.
         if manifest.get("update_url"):
             from clawk_cli.plugins_updates import https_update_url
+
             try:
                 record["update_url"] = https_update_url(manifest["update_url"])
             except ValueError as exc:
-                raise _pc().PluginOperationError(f"Plugin '{plugin_name}' {exc}", failure_class="manifest_invalid") from exc
+                raise _pc().PluginOperationError(
+                    f"Plugin '{plugin_name}' {exc}", failure_class="manifest_invalid"
+                ) from exc
         if catalog:
             # ``sha`` = the commit checked out; ``pin`` = the reviewed catalog sha it satisfies (the
             # annotated-tag object for a tag pin), empty when installed off-pin via ``--ref``.
@@ -493,6 +603,7 @@ def _install_plugin_core(
                 "pin": reviewed_pin if at_reviewed_pin else "",
             }
             from clawk_cli.plugins_cmd_catalog import write_catalog_sidecar_record
+
             write_catalog_sidecar_record(tmp_target, catalog, installed_revision)
         if allow_removed:
             record["allow_removed"] = True
@@ -501,21 +612,38 @@ def _install_plugin_core(
 
         if tracked_edits:
             from clawk_cli.plugins_cmd_catalog import _stash_local_files
+
             # Outside the plugins dir: the discovery scanners recurse into every subdirectory there.
-            backup = plugins_dir.parent / "plugins-backup" / f"{target.name}-{str(prior.get('revision') or 'old')[:8]}"
+            backup = (
+                plugins_dir.parent
+                / "plugins-backup"
+                / f"{target.name}-{str(prior.get('revision') or 'old')[:8]}"
+            )
             _stash_local_files(target, tracked_edits, backup)
             _pc()._console().print(
                 f"[yellow]Local edits to {len(tracked_edits)} tracked file(s) were not carried over; "
-                f"copies are under {backup} (re-apply by hand).[/yellow]")
+                f"copies are under {backup} (re-apply by hand).[/yellow]"
+            )
         try:
-            publish_plugin(tmp_target, target, old_metadata, new_metadata, require_consent=True,
-                           assume_consent=assume_deps_consent)
+            publish_plugin(
+                tmp_target,
+                target,
+                old_metadata,
+                new_metadata,
+                require_consent=True,
+                assume_consent=assume_deps_consent,
+            )
         except Exception as exc:
-            raise _pc().PluginOperationError(f"Plugin '{plugin_name}' was not published: {exc}",
-                                             failure_class=_publish_failure_class(exc)) from exc
+            raise _pc().PluginOperationError(
+                f"Plugin '{plugin_name}' was not published: {exc}",
+                failure_class=_publish_failure_class(exc),
+            ) from exc
 
     if not _pc()._looks_like_plugin_dir(target):
-        logger.warning("%s has no plugin.yaml / __init__.py; may not be a valid plugin", plugin_name)
+        logger.warning(
+            "%s has no plugin.yaml / __init__.py; may not be a valid plugin",
+            plugin_name,
+        )
     _pc()._copy_example_files(target, _pc()._console())
     installed_manifest = _pc()._read_manifest(target)
     return target, installed_manifest, installed_manifest.get("name") or target.name
@@ -530,44 +658,69 @@ def _publish_failure_class(exc: BaseException) -> str:
     dependency failure."""
     from clawk_cli.observability.shared_metrics_fields import tagged_failure_class
 
-    tagged = tagged_failure_class(exc) if isinstance(exc, _pc().PluginOperationError) else None
+    tagged = (
+        tagged_failure_class(exc)
+        if isinstance(exc, _pc().PluginOperationError)
+        else None
+    )
     if tagged and tagged != "other":
         return tagged
     if isinstance(exc, PermissionError):
         return "permission"
-    if isinstance(exc, OSError) and not isinstance(exc, (ConnectionError, TimeoutError)):
+    if isinstance(exc, OSError) and not isinstance(
+        exc, (ConnectionError, TimeoutError)
+    ):
         return "filesystem_error"
     return "deps_failed"
+
+
 # ---- end iuf c1 ----
 
 
-def recorded_install(install: Callable[[], tuple], *, catalog_name: Optional[str], identifier: str) -> tuple:
+def recorded_install(
+    install: Callable[[], tuple], *, catalog_name: Optional[str], identifier: str
+) -> tuple:
     """Run one plugin install attempt (a core ``(target, manifest, installed_name)`` call) and record
     it as a shared-metrics extension install: failed when it raises, success unless it replaced an
     already-installed plugin (a reinstall is not an install)."""
     from clawk_cli.observability.shared_metrics_events import record_extension_install
 
-    source = "catalog" if catalog_name else ("local" if identifier.startswith("file://") else "url")
+    source = (
+        "catalog"
+        if catalog_name
+        else ("local" if identifier.startswith("file://") else "url")
+    )
     before = set(_pc()._read_install_metadata())
     try:
         result = install()
     except Exception as exc:
-        record_extension_install(kind="plugin", source=source, name=catalog_name, outcome="failed", error=exc)
+        record_extension_install(
+            kind="plugin", source=source, name=catalog_name, outcome="failed", error=exc
+        )
         raise
     if result[2] not in before:
-        record_extension_install(kind="plugin", source=source, name=catalog_name, outcome="success")
+        record_extension_install(
+            kind="plugin", source=source, name=catalog_name, outcome="success"
+        )
     return result
 
 
-def _announce_source(identifier: str, console, *, brief: bool) -> tuple[Optional[Any], str]:
+def _announce_source(
+    identifier: str, console, *, brief: bool
+) -> tuple[Optional[Any], str]:
     """``(catalog entry or None, install identifier)``, printing where the install comes from: the
     catalog pin (plus the entry's description unless *brief*) or the custom-source warning."""
     from clawk_cli import plugins_cmd_catalog as catalog
+
     if not catalog.looks_like_catalog_name(identifier):
-        console.print("[yellow]Warning:[/yellow] custom (unreviewed) source — not from the Clawksis catalog.")
+        console.print(
+            "[yellow]Warning:[/yellow] custom (unreviewed) source — not from the Clawksis catalog."
+        )
         return None, identifier
     entry = catalog.resolve_catalog_name(identifier, console)
-    console.print(f"[bold]{entry.name}[/bold] [cyan]\\[{entry.tier}][/cyan] [dim]pinned @ {entry.sha[:8]}[/dim]")
+    console.print(
+        f"[bold]{entry.name}[/bold] [cyan]\\[{entry.tier}][/cyan] [dim]pinned @ {entry.sha[:8]}[/dim]"
+    )
     if not brief:
         console.print(catalog.entry_capability_summary(entry))
     return entry, entry.install_identifier
@@ -599,46 +752,72 @@ def cmd_install(
     description, clone line and default "Installed" panel do not.
     """
     from clawk_cli import plugins_cmd_catalog as catalog
+
     console = _pc()._console()
     entry, identifier = _announce_source(identifier, console, brief=brief)
     if allow_removed:
         console.print(
             "[bold red]WARNING:[/bold red] [red]--allow-removed set — skipping the catalog kill-list check. "
-            "This plugin may have been removed for security reasons.[/red]")
+            "This plugin may have been removed for security reasons.[/red]"
+        )
 
     try:
         git_url, _subdir = _pc()._resolve_git_url(identifier)
         if not allow_removed:
-            catalog.raise_if_removed(identifier, git_url, *((entry.name,) if entry else ()))
+            catalog.raise_if_removed(
+                identifier, git_url, *((entry.name,) if entry else ())
+            )
     except (ValueError, _pc().PluginOperationError) as e:
         _pc()._fail(console, f"[red]Error:[/red] {e}")
     if git_url.startswith(("http://", "file://")):
         console.print(
             "[yellow]Warning:[/yellow] Using insecure/local URL scheme. "
-            "Consider using https:// or git@ for production installs.")
+            "Consider using https:// or git@ for production installs."
+        )
 
     if not brief:
-        console.print(f"[dim]Cloning {git_url}{f' (subdir: {_subdir})' if _subdir else ''}...[/dim]")
+        console.print(
+            f"[dim]Cloning {git_url}{f' (subdir: {_subdir})' if _subdir else ''}...[/dim]"
+        )
     _interactive_scan_decision = interactive_scan_decision(console, "Install")
 
     def _install() -> tuple:
         if entry is not None:
             return catalog.install_catalog_entry(
-                entry, force=force, ref=ref, allow_removed=allow_removed, scan_decision_cb=_interactive_scan_decision,
-                python_deps=not no_deps, assume_deps_consent=yes_deps)
+                entry,
+                force=force,
+                ref=ref,
+                allow_removed=allow_removed,
+                scan_decision_cb=_interactive_scan_decision,
+                python_deps=not no_deps,
+                assume_deps_consent=yes_deps,
+            )
         return _pc()._install_plugin_core(
-            identifier, force=force, ref=ref, scan_decision_cb=_interactive_scan_decision,
-            python_deps=not no_deps, allow_removed=allow_removed, assume_deps_consent=yes_deps)
+            identifier,
+            force=force,
+            ref=ref,
+            scan_decision_cb=_interactive_scan_decision,
+            python_deps=not no_deps,
+            allow_removed=allow_removed,
+            assume_deps_consent=yes_deps,
+        )
 
     try:
         target, installed_manifest, installed_name = recorded_install(
-            _install, catalog_name=entry.name if entry is not None else None, identifier=identifier)
+            _install,
+            catalog_name=entry.name if entry is not None else None,
+            identifier=identifier,
+        )
     except _pc().PluginOperationError as e:
-        _pc()._fail(console, f"[red]{'Blocked' if isinstance(e, _pc().PluginScanBlocked) else 'Error'}:[/red] {e}")
+        _pc()._fail(
+            console,
+            f"[red]{'Blocked' if isinstance(e, _pc().PluginScanBlocked) else 'Error'}:[/red] {e}",
+        )
     if not _pc()._looks_like_plugin_dir(target):
         console.print(
             f"[yellow]Warning:[/yellow] {installed_name} doesn't contain plugin.yaml, "
-            f"plugin.json, or __init__.py. It may not be a valid Clawksis plugin.")
+            f"plugin.json, or __init__.py. It may not be a valid Clawksis plugin."
+        )
     _prompt_plugin_env_vars(installed_manifest, console)
 
     from pm.workspace import enabled_plugin_dirs
@@ -648,20 +827,26 @@ def cmd_install(
     already_active = target.resolve() in enabled_plugin_dirs()
     should_enable = False if no_deps else enable
     if no_deps:
-        console.print("[dim]--no-deps: skipping dependency consent; the plugin stays disabled.[/dim]")
+        console.print(
+            "[dim]--no-deps: skipping dependency consent; the plugin stays disabled.[/dim]"
+        )
     # A memory provider activates through memory.provider alone; the loader never reads plugins.enabled.
     # Decide from the installed tree's code (not a text match): catalog category "memory" also holds hooks,
     # context engines and skills, and a hook's docstring may name MemoryProvider.
     from plugins.memory import _defines_memory_provider
+
     is_memory_provider = _defines_memory_provider(target)
     if should_enable is None and not already_active:
         should_enable = _pc()._is_tty() and _pc()._ask_yes(
-            f"  Use '{installed_name}' as the memory provider now? [y/N]: " if is_memory_provider
-            else f"  Enable '{installed_name}' now? [y/N]: ")
+            f"  Use '{installed_name}' as the memory provider now? [y/N]: "
+            if is_memory_provider
+            else f"  Enable '{installed_name}' now? [y/N]: "
+        )
     deps_ok, deps_reason = (True, None)
     if should_enable and not already_active:
-        deps_ok, deps_reason = _install_plugin_python_deps(installed_manifest, target, console,
-                                                           assume_yes=yes_deps)
+        deps_ok, deps_reason = _install_plugin_python_deps(
+            installed_manifest, target, console, assume_yes=yes_deps
+        )
 
     _pc()._display_after_install(target, identifier, brief=brief)
 
@@ -673,8 +858,7 @@ def cmd_install(
         # Consent declined/skipped: nothing was installed or changed, so
         # enabling is refused without touching config or environment.
         console.print(
-            f"[red]✗[/red] Cannot enable [bold]{installed_name}[/bold]: "
-            f"{deps_reason}"
+            f"[red]✗[/red] Cannot enable [bold]{installed_name}[/bold]: {deps_reason}"
         )
         console.print(
             "[dim]The plugin stays installed but disabled; re-enable "
@@ -685,7 +869,9 @@ def cmd_install(
     # already_active is PM's selection (plugins.enabled): it settles dependency consent, not memory.provider.
     # An explicit --enable still selects the provider, repairing installs that listed it in plugins.enabled.
     if already_active and not (is_memory_provider and enable):
-        console.print("[dim]Replacement installed; plugin selection was not changed.[/dim]")
+        console.print(
+            "[dim]Replacement installed; plugin selection was not changed.[/dim]"
+        )
     elif is_memory_provider:
         _select_memory_provider(target.name, console, select=should_enable)
     elif should_enable:
@@ -705,18 +891,25 @@ def cmd_install(
     else:
         console.print(
             f"[dim]Plugin installed but not enabled. "
-            f"Run `clawk plugins enable {installed_name}` to activate.[/dim]")
+            f"Run `clawk plugins enable {installed_name}` to activate.[/dim]"
+        )
 
     from clawk_cli.plugin_provider_requests import requires_auth_notice
+
     if notice := requires_auth_notice(installed_manifest):
         console.print(f"[yellow]{notice}[/yellow]")
     # Non-interactive installs and declines leave declared capabilities ungranted (fail closed).
-    declared_caps = _pc()._declared_capabilities_from_manifest(installed_manifest, installed_name)
+    declared_caps = _pc()._declared_capabilities_from_manifest(
+        installed_manifest, installed_name
+    )
     if declared_caps:
-        _pc()._run_capability_consent(console, installed_name, declared_caps, context="install")
+        _pc()._run_capability_consent(
+            console, installed_name, declared_caps, context="install"
+        )
     if enable and not is_memory_provider:
         # Loads it into the running gateway now (handlers live) or says what needs a restart (#87770).
         from clawk_cli.plugins_activation import report_activation
+
         report_activation(console, installed_name)
     console.print()
 
@@ -727,29 +920,44 @@ def _select_memory_provider(name: str, console, *, select: bool) -> None:
     if not select:
         console.print(
             f"[dim]Memory provider installed but not active. Run `clawk memory setup` "
-            f"(or set memory.provider: {name}) to use it.[/dim]")
+            f"(or set memory.provider: {name}) to use it.[/dim]"
+        )
         return
     from clawk_cli.memory_setup import prepare_memory_provider_dependencies
     from plugins.memory import find_provider_dir
-    if find_provider_dir(name) is None:  # never save a provider name the loader cannot resolve
-        console.print(f"[red]✗[/red] {name} does not resolve as a memory provider; memory.provider is unchanged.")
+
+    if (
+        find_provider_dir(name) is None
+    ):  # never save a provider name the loader cannot resolve
+        console.print(
+            f"[red]✗[/red] {name} does not resolve as a memory provider; memory.provider is unchanged."
+        )
         return
     try:
         prepare_memory_provider_dependencies(name)
     except Exception as exc:  # resolver conflict, network, PM refusal: report, leave the selection alone
-        logger.debug("memory provider %s dependency preparation failed", name, exc_info=True)
+        logger.debug(
+            "memory provider %s dependency preparation failed", name, exc_info=True
+        )
         console.print(f"[red]✗[/red] Could not prepare {name}'s dependencies: {exc}")
-        console.print("[dim]memory.provider is unchanged; run `clawk memory setup` after resolving it.[/dim]")
+        console.print(
+            "[dim]memory.provider is unchanged; run `clawk memory setup` after resolving it.[/dim]"
+        )
         return
     # The loader refuses a provider parked in plugins.disabled; lift that through the same admission transaction.
     from clawk_cli.plugins_admission import AdmissionRefused
+
     expected_config = _pc()._plugin_selection_version()
     disabled, aliases = _pc()._get_disabled_set(), _pc()._plugin_aliases(name)
     if disabled & aliases:
         try:
-            _pc()._admit_and_save_plugin_sets(_pc()._get_enabled_set(), disabled - aliases,
-                                              console=console, action=f"Re-enable '{name}'",
-                                              expected_config=expected_config)
+            _pc()._admit_and_save_plugin_sets(
+                _pc()._get_enabled_set(),
+                disabled - aliases,
+                console=console,
+                action=f"Re-enable '{name}'",
+                expected_config=expected_config,
+            )
         except AdmissionRefused:
             console.print("[dim]memory.provider is unchanged.[/dim]")
             return
@@ -758,7 +966,8 @@ def _select_memory_provider(name: str, console, *, select: bool) -> None:
     console.print(
         f"[green]✓[/green] [bold]{name}[/bold] set as memory.provider"
         f"{f' (replacing {previous})' if previous and previous != name else ''}. "
-        f"Run `clawk memory setup {name}` to configure it; new sessions use it.")
+        f"Run `clawk memory setup {name}` to configure it; new sessions use it."
+    )
 
 
 def _catalog_install_on_disk(catalog_name: str, ref: Optional[str]) -> Optional[tuple]:
@@ -769,6 +978,7 @@ def _catalog_install_on_disk(catalog_name: str, ref: Optional[str]) -> Optional[
     Like ``clawk plugins enable``, the tree is used at the commit it has; an explicit *ref* only
     matches a tree checked out at that commit."""
     from clawk_cli.plugins_cmd_catalog import catalog_install_record
+
     target = _pc()._catalog_installed_dir(catalog_name)
     if target is None:
         return None
@@ -776,19 +986,32 @@ def _catalog_install_on_disk(catalog_name: str, ref: Optional[str]) -> Optional[
         return None
     manifest = _pc()._read_manifest(target)
     installed_name = manifest.get("name") or target.name
-    return None if {installed_name, target.name} & _pc()._get_enabled_set() else (target, manifest, installed_name)
+    return (
+        None
+        if {installed_name, target.name} & _pc()._get_enabled_set()
+        else (target, manifest, installed_name)
+    )
 
 
 def _resolve_source(identifier: str, catalog_name: Optional[str]) -> tuple:
     """``(entry, identifier, warnings, error)``: the catalog entry (None for a custom source), the
     identifier to clone, the warnings so far, and the refusal result when there is one."""
     from clawk_cli import plugins_cmd_catalog as catalog
+
     warnings: list[str] = []
     entry = None
     if catalog_name:
         entry = catalog.get_live_catalog_entry(catalog_name)
         if entry is None:
-            return None, identifier, warnings, {"ok": False, "error": f"'{catalog_name}' is not in the Clawksis plugin catalog."}
+            return (
+                None,
+                identifier,
+                warnings,
+                {
+                    "ok": False,
+                    "error": f"'{catalog_name}' is not in the Clawksis plugin catalog.",
+                },
+            )
         warnings.extend(_known_issue_warnings(entry))
         identifier = entry.install_identifier
     else:
@@ -796,7 +1019,9 @@ def _resolve_source(identifier: str, catalog_name: Optional[str]) -> tuple:
     try:
         git_url = _pc()._resolve_git_url(identifier)[0]
         if git_url.startswith(("http://", "file://")):
-            warnings.append("Insecure URL scheme; prefer https:// or git@ for production installs.")
+            warnings.append(
+                "Insecure URL scheme; prefer https:// or git@ for production installs."
+            )
         catalog.raise_if_removed(identifier, git_url, *((entry.name,) if entry else ()))
     except ValueError:
         pass
@@ -805,34 +1030,58 @@ def _resolve_source(identifier: str, catalog_name: Optional[str]) -> tuple:
     return entry, identifier, warnings, None
 
 
-def _place_tree(entry, identifier: str, *, force: bool, ref: Optional[str], assume_deps_consent: bool,
-                step: Callable[[InstallPhase], None]) -> tuple | dict:
+def _place_tree(
+    entry,
+    identifier: str,
+    *,
+    force: bool,
+    ref: Optional[str],
+    assume_deps_consent: bool,
+    step: Callable[[InstallPhase], None],
+) -> tuple | dict:
     """``(target, manifest, installed_name)`` of the tree to enable, or the error result. A catalog
     entry already on disk and not enabled (an earlier enable was refused) is used as it is, unless
     an approved *ref* names another commit; a fresh install clones at *ref* when set, else the pin."""
     from clawk_cli import plugins_cmd_catalog as catalog
+
     ref = (ref or "").strip() or None
-    on_disk = _catalog_install_on_disk(entry.name, ref) if entry is not None and not force else None
+    on_disk = (
+        _catalog_install_on_disk(entry.name, ref)
+        if entry is not None and not force
+        else None
+    )
     if on_disk is not None:
         return on_disk
 
     def _install() -> tuple:
         if entry is not None:
-            return catalog.install_catalog_entry(entry, force=force, ref=ref, allow_removed=False,
-                                                 assume_deps_consent=assume_deps_consent)
-        return _pc()._install_plugin_core(identifier, force=force, ref=ref, assume_deps_consent=assume_deps_consent)
+            return catalog.install_catalog_entry(
+                entry,
+                force=force,
+                ref=ref,
+                allow_removed=False,
+                assume_deps_consent=assume_deps_consent,
+            )
+        return _pc()._install_plugin_core(
+            identifier, force=force, ref=ref, assume_deps_consent=assume_deps_consent
+        )
 
     step(InstallPhase.downloading)
     try:
-        return recorded_install(_install, catalog_name=entry.name if entry is not None else None,
-                                identifier=identifier)
+        return recorded_install(
+            _install,
+            catalog_name=entry.name if entry is not None else None,
+            identifier=identifier,
+        )
     except _pc().PluginScanBlocked as exc:
         return scan_blocked_result(exc)
     except _pc().PluginOperationError as exc:
         return {"ok": False, "error": str(exc)}
 
 
-def _enable_placed(installed_name: str, deps, step: Callable[[InstallPhase], None]) -> Optional[dict]:
+def _enable_placed(
+    installed_name: str, deps, step: Callable[[InstallPhase], None]
+) -> Optional[dict]:
     """None once enabled, else the refusal result. Enabling admits the plugin, and admission resolves
     its Python dependencies."""
     from clawk_cli.plugins_admission import AdmissionRefused
@@ -843,13 +1092,23 @@ def _enable_placed(installed_name: str, deps, step: Callable[[InstallPhase], Non
         # _set_plugin_enabled serializes per home itself (parallel install-card rows).
         _pc()._set_plugin_enabled(installed_name, enable=True)
     except AdmissionRefused as exc:
-        return {"ok": False, "error": f"enable refused: {exc}", "plugin_name": installed_name, "enabled": False}
+        return {
+            "ok": False,
+            "error": f"enable refused: {exc}",
+            "plugin_name": installed_name,
+            "enabled": False,
+        }
     return None
 
 
 def dashboard_install_plugin(
-    identifier: str, *, force: bool, enable: bool, catalog_name: Optional[str] = None,
-    ref: Optional[str] = None, assume_deps_consent: Optional[bool] = None,
+    identifier: str,
+    *,
+    force: bool,
+    enable: bool,
+    catalog_name: Optional[str] = None,
+    ref: Optional[str] = None,
+    assume_deps_consent: Optional[bool] = None,
     on_step: Optional[Callable[[InstallPhase], None]] = None,
 ) -> dict[str, Any]:
     """Non-interactive install for the dashboard/TUI. *catalog_name* installs a curated entry at its
@@ -866,7 +1125,14 @@ def dashboard_install_plugin(
     entry, identifier, warnings, error = _resolve_source(identifier, catalog_name)
     if error is not None:
         return error
-    placed = _place_tree(entry, identifier, force=force, ref=ref, assume_deps_consent=assume_deps_consent, step=step)
+    placed = _place_tree(
+        entry,
+        identifier,
+        force=force,
+        ref=ref,
+        assume_deps_consent=assume_deps_consent,
+        step=step,
+    )
     if isinstance(placed, dict):
         return placed
     target, installed_manifest, installed_name = placed
@@ -877,14 +1143,24 @@ def dashboard_install_plugin(
     # Deps first, then load: the plugin activates in this process (TUI/Desktop server subscribers see it)
     # and in the running gateway; ``activation`` says what is live now vs next session (#87770).
     from clawk_cli.plugins_activation import activate_plugin_now
+
     if enable:
         step(InstallPhase.loading_tools)
-    activated = activate_plugin_now(installed_name) if enable else {
-        "gateway_reloaded": False, "activation": None, "restart_required": False}
+    activated = (
+        activate_plugin_now(installed_name)
+        if enable
+        else {"gateway_reloaded": False, "activation": None, "restart_required": False}
+    )
     return {
-        "ok": True, "plugin_name": installed_name, "warnings": warnings,
+        "ok": True,
+        "plugin_name": installed_name,
+        "warnings": warnings,
         "python_dependencies": deps,
-        "missing_env": [s["name"] for s in _pc()._missing_env_specs(installed_manifest)],
-        "after_install_path": str(ap) if ap.exists() else None, "enabled": enable, **activated,
+        "missing_env": [
+            s["name"] for s in _pc()._missing_env_specs(installed_manifest)
+        ],
+        "after_install_path": str(ap) if ap.exists() else None,
+        "enabled": enable,
+        **activated,
         "known_issues": list(entry.known_issues) if entry else [],
     }

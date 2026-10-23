@@ -24,7 +24,11 @@ class ConnectorTool(_PortalWire):
     def _unknown_facet_is_unclassified(cls, value: object) -> object:
         if not isinstance(value, str):
             return value
-        return value if value in {"read", "write", "destructive", "unclassified"} else "unclassified"
+        return (
+            value
+            if value in {"read", "write", "destructive", "unclassified"}
+            else "unclassified"
+        )
 
     @field_validator("categories")
     @classmethod
@@ -82,7 +86,9 @@ class DenyPolicyBody(_PortalWire):
     tags: PolicyTags | None = None
 
 
-PolicyBody = UnrestrictedPolicyBody | DenyAllPolicyBody | AllowPolicyBody | DenyPolicyBody
+PolicyBody = (
+    UnrestrictedPolicyBody | DenyAllPolicyBody | AllowPolicyBody | DenyPolicyBody
+)
 
 
 class ConnectorPolicyEffectiveBase(_PortalWire):

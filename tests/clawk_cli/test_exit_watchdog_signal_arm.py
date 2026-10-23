@@ -33,17 +33,15 @@ def _reset_arm_flag(monkeypatch):
 
 
 class TestSignalArmLogic:
-
-
-
-
     def test_never_raises_even_if_arm_explodes(self, monkeypatch):
         monkeypatch.setenv("CLAWK_EXIT_WATCHDOG_S", "7")
         with patch.object(cli, "_arm_exit_watchdog", side_effect=RuntimeError("boom")):
             cli._arm_exit_watchdog_on_shutdown_signal()  # must not raise
 
 
-_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_REPO_ROOT = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
 
 # A minimal stand-in for the wedged-CLI shape: signal handlers mirror the
 # production wiring (arm-on-signal, then a graceful unwind that wedges), and
@@ -151,7 +149,9 @@ def test_signal_watchdog_is_skipped_once_cleanup_starts():
         assert rc == 0
         # Outer watchdog is at 2s, cleanup watchdog at 2.5s (1s delay + 1.5s
         # timeout). Without the overlap fix this would likely exit earlier at 2s.
-        assert elapsed >= 2.2, f"elapsed={elapsed:.2f}s; expected cleanup watchdog to fire"
+        assert elapsed >= 2.2, (
+            f"elapsed={elapsed:.2f}s; expected cleanup watchdog to fire"
+        )
         assert elapsed <= 5.0, f"elapsed={elapsed:.2f}s; expected bounded shutdown"
     finally:
         if p.poll() is None:

@@ -32,7 +32,9 @@ CHILD_DEADLINE = 60.0
 POLL_INTERVAL = 0.02
 
 
-def spawn_child(script_body: str, *, cwd: Path | None = None, env: dict | None = None) -> subprocess.Popen:
+def spawn_child(
+    script_body: str, *, cwd: Path | None = None, env: dict | None = None
+) -> subprocess.Popen:
     """Run ``script_body`` in a fresh interpreter with the repo importable."""
     child_env = dict(os.environ)
     # Prepend, don't clobber: CI images may rely on an inherited PYTHONPATH
@@ -92,7 +94,9 @@ def kill9_and_reap(proc: subprocess.Popen, *, deadline: float = CHILD_DEADLINE) 
     proc.wait(timeout=deadline)
 
 
-def reap(proc: subprocess.Popen, *, deadline: float = CHILD_DEADLINE) -> tuple[int, str, str]:
+def reap(
+    proc: subprocess.Popen, *, deadline: float = CHILD_DEADLINE
+) -> tuple[int, str, str]:
     """Wait for a child to exit on its own; kill + fail if it doesn't."""
     try:
         out, err = proc.communicate(timeout=deadline)

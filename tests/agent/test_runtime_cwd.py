@@ -24,10 +24,6 @@ class TestResolveAgentCwd:
         monkeypatch.chdir(os.path.expanduser("~"))
         assert resolve_agent_cwd() == tmp_path
 
-
-
-
-
     def test_propagates_oserror_from_getcwd(self, monkeypatch):
         # The fallback arm calls os.getcwd(), which can raise OSError (deleted cwd).
         # The resolver must NOT swallow it — build_environment_hints owns the
@@ -43,13 +39,9 @@ class TestResolveContextCwd:
         monkeypatch.setenv("TERMINAL_CWD", str(tmp_path))
         assert resolve_context_cwd() == tmp_path
 
-
-
-
     def test_expands_leading_tilde(self, monkeypatch):
         monkeypatch.setenv("TERMINAL_CWD", "~")
         assert resolve_context_cwd() == Path(os.path.expanduser("~"))
-
 
 
 class TestSessionCwdOverride:
@@ -68,7 +60,6 @@ class TestSessionCwdOverride:
         finally:
             rt._SESSION_CWD.reset(token)
 
-
     def test_clear_session_cwd_restores_terminal_cwd(self, monkeypatch, tmp_path):
         other = tmp_path / "other"
         other.mkdir()
@@ -79,4 +70,3 @@ class TestSessionCwdOverride:
             assert resolve_agent_cwd() == tmp_path
         finally:
             rt._SESSION_CWD.reset(token)
-

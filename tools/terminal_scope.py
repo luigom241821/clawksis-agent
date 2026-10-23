@@ -25,9 +25,16 @@ _terminal_scope_var: ContextVar = ContextVar("clawk_terminal_scope", default=Non
 # Keys whose default lives in terminal_tool.py, not DEFAULT_CONFIG (which wins on overlap);
 # without them the projection is not total.
 _TOOL_LEVEL_DEFAULTS: dict[str, Any] = {
-    "cwd": ".", "ssh_host": "", "ssh_user": "", "ssh_port": 22, "ssh_key": "",
-    "docker_orphan_reaper": True, "docker_persist_across_processes": True,
-    "sandbox_dir": "", "lifetime_seconds": 300, "docker_shared_container_key": "",
+    "cwd": ".",
+    "ssh_host": "",
+    "ssh_user": "",
+    "ssh_port": 22,
+    "ssh_key": "",
+    "docker_orphan_reaper": True,
+    "docker_persist_across_processes": True,
+    "sandbox_dir": "",
+    "lifetime_seconds": 300,
+    "docker_shared_container_key": "",
     "home_mode": "auto",
 }
 
@@ -69,7 +76,8 @@ def enforce_no_refusal() -> None:
     scope = _terminal_scope_var.get()
     if isinstance(scope, TerminalPolicyRefusal):
         raise TerminalPolicyUnavailable(
-            f"terminal policy unavailable for this profile: {scope.reason}")
+            f"terminal policy unavailable for this profile: {scope.reason}"
+        )
 
 
 def terminal_env(name: str, default: str = "") -> str:
@@ -91,7 +99,9 @@ def _apply_terminal_mapping(scope: dict[str, str], mapping: dict[str, Any]) -> N
 
     for cfg_key, value in mapping.items():
         # cwd placeholders are resolved per-surface later; not a policy value.
-        if value is None or (cfg_key == "cwd" and str(value).strip() in {".", "auto", "cwd"}):
+        if value is None or (
+            cfg_key == "cwd" and str(value).strip() in {".", "auto", "cwd"}
+        ):
             continue
         env_var = TERMINAL_CONFIG_ENV_MAP.get(cfg_key)
         if env_var:
@@ -107,12 +117,15 @@ def default_terminal_scope() -> dict[str, str]:
     from clawk_cli.config_defaults import DEFAULT_CONFIG
 
     scope: dict[str, str] = {}
-    _apply_terminal_mapping(scope, {**_TOOL_LEVEL_DEFAULTS, **(DEFAULT_CONFIG.get("terminal") or {})})
+    _apply_terminal_mapping(
+        scope, {**_TOOL_LEVEL_DEFAULTS, **(DEFAULT_CONFIG.get("terminal") or {})}
+    )
     return scope
 
 
 def build_profile_terminal_scope(
-    clawk_home: Any, *, env_overlay: Optional[dict[str, str]] = None) -> dict[str, str]:
+    clawk_home: Any, *, env_overlay: Optional[dict[str, str]] = None
+) -> dict[str, str]:
     """Build the COMPLETE effective ``TERMINAL_*`` policy for a profile home.
 
     Projection: ``DEFAULT_CONFIG['terminal']`` <- profile ``.env`` TERMINAL_* <- *env_overlay*
@@ -141,15 +154,20 @@ def build_profile_terminal_scope(
         from agent.secret_scope import load_env_file
 
         profile_env = load_env_file(env_path)
-        scope.update((k, str(v)) for k, v in profile_env.items() if k.startswith("TERMINAL_"))
+        scope.update(
+            (k, str(v)) for k, v in profile_env.items() if k.startswith("TERMINAL_")
+        )
         # Provenance, not value: an image WRITTEN in the profile's .env is the user's choice even when
         # it spells the default (same rule apply_terminal_config_to_env applies to a set env var).
         image_pinned = "TERMINAL_DOCKER_IMAGE" in profile_env
     else:
         image_pinned = False
     if env_overlay:
-        scope.update((k, str(v)) for k, v in env_overlay.items()
-                     if k.startswith("TERMINAL_") and k != "TERMINAL_DOCKER_IMAGE_PINNED")
+        scope.update(
+            (k, str(v))
+            for k, v in env_overlay.items()
+            if k.startswith("TERMINAL_") and k != "TERMINAL_DOCKER_IMAGE_PINNED"
+        )
         # The overlay is the LAUNCHER's environment: its pin verdict is about the launcher's profile and
         # is never inherited, and the bridge backfills TERMINAL_DOCKER_IMAGE for defaults too, so only a
         # value that differs from the default can prove a choice made there.
@@ -161,7 +179,9 @@ def build_profile_terminal_scope(
     try:
         config_exists = config_path.exists()
     except Exception as exc:
-        raise TerminalPolicyUnavailable(f"cannot resolve terminal config in {home}: {exc}") from exc
+        raise TerminalPolicyUnavailable(
+            f"cannot resolve terminal config in {home}: {exc}"
+        ) from exc
     if config_exists:
         from utils import load_yaml_file_readonly
 
@@ -169,7 +189,9 @@ def build_profile_terminal_scope(
             # Signature-cached: a scope is rebuilt per routed turn/poll, the file rarely changes.
             raw = load_yaml_file_readonly(config_path)
         except Exception as exc:
-            raise TerminalPolicyUnavailable(f"cannot parse {config_path}: {exc}") from exc
+            raise TerminalPolicyUnavailable(
+                f"cannot parse {config_path}: {exc}"
+            ) from exc
         raw_terminal = raw.get("terminal") if isinstance(raw, dict) else None
         if isinstance(raw_terminal, dict):
             _apply_terminal_mapping(scope, raw_terminal)
@@ -191,10 +213,15 @@ def _resolve_scope_cwd_placeholder(scope: dict[str, str]) -> None:
     from gateway.cwd_placeholder import resolve_placeholder_terminal_cwd
 
     resolved = resolve_placeholder_terminal_cwd(
-        configured_cwd="", terminal_backend=scope.get("TERMINAL_ENV", ""),
+        configured_cwd="",
+        terminal_backend=scope.get("TERMINAL_ENV", ""),
         messaging_cwd=None,
         docker_mount_cwd_to_workspace=scope.get(
-            "TERMINAL_DOCKER_MOUNT_CWD_TO_WORKSPACE", "false").strip().lower() in {"true", "1", "yes"},
+            "TERMINAL_DOCKER_MOUNT_CWD_TO_WORKSPACE", "false"
+        )
+        .strip()
+        .lower()
+        in {"true", "1", "yes"},
         home_fallback=str(Path.home()),
     )
     if resolved:
@@ -202,10 +229,13 @@ def _resolve_scope_cwd_placeholder(scope: dict[str, str]) -> None:
 
 
 def install_profile_terminal_scope(
-    clawk_home: Any, *, env_overlay: Optional[dict[str, str]] = None) -> Token:
+    clawk_home: Any, *, env_overlay: Optional[dict[str, str]] = None
+) -> Token:
     """Build AND install a profile's policy; on failure install the refusal scope. Never raises."""
     try:
-        return set_terminal_scope(build_profile_terminal_scope(clawk_home, env_overlay=env_overlay))
+        return set_terminal_scope(
+            build_profile_terminal_scope(clawk_home, env_overlay=env_overlay)
+        )
     except TerminalPolicyUnavailable as exc:
         logger.warning("terminal policy unavailable: %s", exc)
         return _terminal_scope_var.set(TerminalPolicyRefusal(str(exc)))

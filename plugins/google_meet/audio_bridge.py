@@ -17,8 +17,15 @@ _BLACKHOLE_DEVICE = "BlackHole 2ch"
 
 
 def _pactl(*args: str, check: bool) -> subprocess.CompletedProcess:
-    return subprocess.run(["pactl", *args], check=check, capture_output=True, text=True, encoding='utf-8',
-                          errors='replace', stdin=subprocess.DEVNULL)
+    return subprocess.run(
+        ["pactl", *args],
+        check=check,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        stdin=subprocess.DEVNULL,
+    )
 
 
 class AudioBridge:
@@ -44,58 +51,100 @@ class AudioBridge:
         system = platform.system()
         impl = {"Linux": self._setup_linux, "Darwin": self._setup_darwin}.get(system)
         if impl is None:
-            raise RuntimeError("windows not supported in v2" if system == "Windows"
-                               else f"unsupported platform: {system}")
+            raise RuntimeError(
+                "windows not supported in v2"
+                if system == "Windows"
+                else f"unsupported platform: {system}"
+            )
         return impl()
 
     def teardown(self) -> None:
         """Release the virtual audio device. Idempotent; never raises."""
-        for mod_id in reversed(self._module_ids):  # linux only; virtual-source before null-sink
+        for mod_id in reversed(
+            self._module_ids
+        ):  # linux only; virtual-source before null-sink
             with contextlib.suppress(Exception):
                 _pactl("unload-module", str(mod_id), check=False)
         self._module_ids = []
 
-    def _finish(self, tag: str, device: str, write_target: str, module_ids: list[int]) -> dict:
+    def _finish(
+        self, tag: str, device: str, write_target: str, module_ids: list[int]
+    ) -> dict:
         self._platform = tag
         self._device_name = device
         self._write_target = write_target
         self._module_ids = module_ids
-        return {"platform": tag, "device_name": device, "sample_rate": 48000, "channels": 2,
-                "module_ids": list(module_ids), "write_target": write_target}
+        return {
+            "platform": tag,
+            "device_name": device,
+            "sample_rate": 48000,
+            "channels": 2,
+            "module_ids": list(module_ids),
+            "write_target": write_target,
+        }
 
     def _setup_linux(self) -> dict:
         sink_name = f"{self._name_prefix}_sink"
         src_name = f"{self._name_prefix}_src"
         try:
             sink_out = _pactl(
-                "load-module", "module-null-sink", f"sink_name={sink_name}",
-                "sink_properties=device.description=ClawksisMeetSink", check=True)
+                "load-module",
+                "module-null-sink",
+                f"sink_name={sink_name}",
+                "sink_properties=device.description=ClawksisMeetSink",
+                check=True,
+            )
         except FileNotFoundError as exc:
-            raise RuntimeError("pactl not found — install PulseAudio/pipewire-pulse") from exc
+            raise RuntimeError(
+                "pactl not found — install PulseAudio/pipewire-pulse"
+            ) from exc
         except subprocess.CalledProcessError as exc:
-            raise RuntimeError(f"pactl load-module null-sink failed: {exc.stderr or exc}") from exc
+            raise RuntimeError(
+                f"pactl load-module null-sink failed: {exc.stderr or exc}"
+            ) from exc
         sink_mod_id = self._parse_module_id(sink_out.stdout)
         try:
             src_out = _pactl(
-                "load-module", "module-virtual-source", f"source_name={src_name}",
-                f"master={sink_name}.monitor", check=True)
+                "load-module",
+                "module-virtual-source",
+                f"source_name={src_name}",
+                f"master={sink_name}.monitor",
+                check=True,
+            )
         except subprocess.CalledProcessError as exc:
             # Roll back the null-sink we just created so we don't leak it.
             _pactl("unload-module", str(sink_mod_id), check=False)
-            raise RuntimeError(f"pactl load-module virtual-source failed: {exc.stderr or exc}") from exc
-        return self._finish("linux", src_name, sink_name, [sink_mod_id, self._parse_module_id(src_out.stdout)])
+            raise RuntimeError(
+                f"pactl load-module virtual-source failed: {exc.stderr or exc}"
+            ) from exc
+        return self._finish(
+            "linux",
+            src_name,
+            sink_name,
+            [sink_mod_id, self._parse_module_id(src_out.stdout)],
+        )
 
     def _setup_darwin(self) -> dict:
         try:
-            out = subprocess.check_output(["system_profiler", "SPAudioDataType"], text=True, encoding='utf-8',
-                                          errors='replace', stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
+            out = subprocess.check_output(
+                ["system_profiler", "SPAudioDataType"],
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                stderr=subprocess.STDOUT,
+                stdin=subprocess.DEVNULL,
+            )
         except FileNotFoundError as exc:
-            raise RuntimeError("system_profiler not found (macOS-only command)") from exc
+            raise RuntimeError(
+                "system_profiler not found (macOS-only command)"
+            ) from exc
         except subprocess.CalledProcessError as exc:
             raise RuntimeError(f"system_profiler failed: {exc.output}") from exc
         if "BlackHole" not in out:
-            raise RuntimeError("BlackHole virtual audio device not installed. "
-                               "Install via: brew install blackhole-2ch")
+            raise RuntimeError(
+                "BlackHole virtual audio device not installed. "
+                "Install via: brew install blackhole-2ch"
+            )
         return self._finish("darwin", _BLACKHOLE_DEVICE, _BLACKHOLE_DEVICE, [])
 
     @staticmethod
@@ -108,4 +157,6 @@ class AudioBridge:
         try:
             return int(token)
         except ValueError as exc:
-            raise RuntimeError(f"could not parse pactl module id from: {stdout!r}") from exc
+            raise RuntimeError(
+                f"could not parse pactl module id from: {stdout!r}"
+            ) from exc

@@ -4,6 +4,7 @@ The launchd/systemd unit and the s6 slot are named after the profile and start `
 <old>``. A rename that kept them left a service that the next login or container boot would
 start for a profile that no longer exists, while the renamed profile had none.
 """
+
 from __future__ import annotations
 
 import os
@@ -26,9 +27,20 @@ def profile_env(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
     real = pwd.getpwuid(os.getuid())
-    fake = pwd.struct_passwd((real.pw_name, real.pw_passwd, real.pw_uid, real.pw_gid,
-                              real.pw_gecos, str(tmp_path), real.pw_shell))
-    monkeypatch.setattr(pwd, "getpwuid", lambda uid: fake)  # launchd plists live under the account home
+    fake = pwd.struct_passwd(
+        (
+            real.pw_name,
+            real.pw_passwd,
+            real.pw_uid,
+            real.pw_gid,
+            real.pw_gecos,
+            str(tmp_path),
+            real.pw_shell,
+        )
+    )
+    monkeypatch.setattr(
+        pwd, "getpwuid", lambda uid: fake
+    )  # launchd plists live under the account home
     calls: list[list[str]] = []
 
     def _run(cmd, *args, **kwargs):
@@ -78,7 +90,9 @@ def test_rename_moves_the_s6_slot_to_the_new_name(profile_env, monkeypatch):
             self.slots.discard(name)
 
     s6 = _S6()
-    monkeypatch.setattr("clawk_cli.service_manager.detect_service_manager", lambda: "s6")
+    monkeypatch.setattr(
+        "clawk_cli.service_manager.detect_service_manager", lambda: "s6"
+    )
     monkeypatch.setattr("clawk_cli.service_manager.get_service_manager", lambda: s6)
     profiles.create_profile("coder", no_alias=True)
 

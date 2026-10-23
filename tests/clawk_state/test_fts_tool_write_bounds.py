@@ -46,12 +46,9 @@ def test_new_tool_rows_bound_fts_content_but_explicit_tool_search_is_complete(db
     ]
     assert db.search_messages("tool-tail-token") == []
     assert [
-        row["id"]
-        for row in db.search_messages("tool-tail-token", role_filter=["tool"])
+        row["id"] for row in db.search_messages("tool-tail-token", role_filter=["tool"])
     ] == [tool_id]
-    assert [row["id"] for row in db.search_messages("user-tail-token")] == [
-        user_id
-    ]
+    assert [row["id"] for row in db.search_messages("user-tail-token")] == [user_id]
 
 
 def test_reopen_keeps_bounded_rows_consistent_without_a_marker(tmp_path):
@@ -83,9 +80,7 @@ def test_reopen_keeps_bounded_rows_consistent_without_a_marker(tmp_path):
         assert reopened.search_messages("new-tail-token") == []
         assert [
             row["id"]
-            for row in reopened.search_messages(
-                "new-tail-token", role_filter=["tool"]
-            )
+            for row in reopened.search_messages("new-tail-token", role_filter=["tool"])
         ] == [new_id]
 
         # Redaction must remove the tail token from the index as well.
@@ -101,7 +96,9 @@ def test_reopen_keeps_bounded_rows_consistent_without_a_marker(tmp_path):
         reopened._execute_write(
             lambda conn: conn.execute("DELETE FROM messages WHERE id = ?", (new_id,))
         )
-        reopened.append_message("session", role="assistant", content="fts-still-healthy")
+        reopened.append_message(
+            "session", role="assistant", content="fts-still-healthy"
+        )
         assert reopened.search_messages("fts-still-healthy")
         reopened._conn.execute(
             "INSERT INTO messages_fts(messages_fts, rank) VALUES('integrity-check', 1)"
@@ -170,9 +167,7 @@ def test_role_changes_switch_between_bounded_and_full_indexing(db):
             "UPDATE messages SET role = 'assistant' WHERE id = ?", (message_id,)
         )
     )
-    assert [row["id"] for row in db.search_messages("role-tail-token")] == [
-        message_id
-    ]
+    assert [row["id"] for row in db.search_messages("role-tail-token")] == [message_id]
 
     db._execute_write(
         lambda conn: conn.execute(
@@ -209,9 +204,7 @@ def test_legacy_inline_fts_also_bounds_new_tool_rows(tmp_path):
         assert legacy.search_messages("legacy-tail-token") == []
         assert [
             row["id"]
-            for row in legacy.search_messages(
-                "legacy-tail-token", role_filter=["tool"]
-            )
+            for row in legacy.search_messages("legacy-tail-token", role_filter=["tool"])
         ] == [message_id]
     finally:
         legacy.close()

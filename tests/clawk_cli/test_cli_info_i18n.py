@@ -9,7 +9,10 @@ from agent import i18n
 from agent.i18n import t
 from clawk_cli.commands import COMMAND_REGISTRY, CommandDef
 from clawk_cli import cli_info_mixin
-from clawk_cli.cli_chat_error_copy import agent_init_failure_message, chat_error_response
+from clawk_cli.cli_chat_error_copy import (
+    agent_init_failure_message,
+    chat_error_response,
+)
 from clawk_cli.cli_unknown_command import unknown_command_lines
 
 
@@ -26,7 +29,9 @@ def test_describe_falls_back_to_english_field_when_no_catalog_entry():
 
 
 def test_describe_uses_catalog_entry_when_present(tmp_path, monkeypatch):
-    (tmp_path / "en.yaml").write_text("slash:\n  help:\n    description: 'Localized help'\n", encoding="utf-8")
+    (tmp_path / "en.yaml").write_text(
+        "slash:\n  help:\n    description: 'Localized help'\n", encoding="utf-8"
+    )
     monkeypatch.setattr(i18n, "_locales_dir", lambda: tmp_path)
     i18n.reset_language_cache()
     try:
@@ -51,16 +56,30 @@ def test_reload_mcp_choices_carry_stable_ids_and_catalog_labels():
 
 
 def test_help_section_titles_localize_known_categories_and_pass_unknown_through():
-    assert cli_info_mixin._help_section_title("Tools & Skills") == t("cli.help.section_tools_skills")
-    assert cli_info_mixin._help_section_title("Custom Plugin Category") == "Custom Plugin Category"
+    assert cli_info_mixin._help_section_title("Tools & Skills") == t(
+        "cli.help.section_tools_skills"
+    )
+    assert (
+        cli_info_mixin._help_section_title("Custom Plugin Category")
+        == "Custom Plugin Category"
+    )
 
 
 def test_chat_error_copy_uses_catalog_lead_and_details():
-    text = chat_error_response("upstream said no", provider="openrouter", model="m", failure_reason="rate_limit")
-    assert text == t("cli.error.with_details",
-                     lead=t("cli.error.rate_limit", provider="openrouter", model="m"),
-                     details="upstream said no")
-    assert agent_init_failure_message(RuntimeError("boom")) == t("cli.error.agent_init_failed", error="boom")
+    text = chat_error_response(
+        "upstream said no",
+        provider="openrouter",
+        model="m",
+        failure_reason="rate_limit",
+    )
+    assert text == t(
+        "cli.error.with_details",
+        lead=t("cli.error.rate_limit", provider="openrouter", model="m"),
+        details="upstream said no",
+    )
+    assert agent_init_failure_message(RuntimeError("boom")) == t(
+        "cli.error.agent_init_failed", error="boom"
+    )
 
 
 def test_unknown_command_lines_localize_lead_and_pointer():

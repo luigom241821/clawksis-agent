@@ -7,7 +7,9 @@ from utils import atomic_roundtrip_yaml_update, atomic_yaml_write
 
 
 def test_atomic_write_then_key_update_keeps_layout_and_values(tmp_path):
-    data = {"custom_providers": [{"name": "Tëst 🦀", "base_url": "https://example.com"}]}
+    data = {
+        "custom_providers": [{"name": "Tëst 🦀", "base_url": "https://example.com"}]
+    }
     path = tmp_path / "config.yaml"
     atomic_yaml_write(path, data)
     initial = path.read_text(encoding="utf-8")

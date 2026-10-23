@@ -32,7 +32,9 @@ def _all_backslash_runs_even(s: str) -> bool:
     return all(len(run) % 2 == 0 for run in _BACKSLASH_RUN_RE.findall(s))
 
 
-def maybe_correct_backslash_doubling(old_string: str, new_string: str, content: str) -> tuple[str, str]:
+def maybe_correct_backslash_doubling(
+    old_string: str, new_string: str, content: str
+) -> tuple[str, str]:
     """Halve a verified doubled anchor only when the replacement has no backslashes.
 
     Every old_string run must be even and its halved form must occur in the file.
@@ -84,7 +86,9 @@ def _quote_escapes_all_spurious(*strings: str) -> bool:
     return True
 
 
-def maybe_correct_quote_escaping(old_string: str, new_string: str, content: str) -> tuple[str, str]:
+def maybe_correct_quote_escaping(
+    old_string: str, new_string: str, content: str
+) -> tuple[str, str]:
     """Return a corrected ``(old_string, new_string)`` if a spurious backslash-before-quote wire
     artifact is detected AND verified against the file's actual content; otherwise unchanged.
 
@@ -97,9 +101,8 @@ def maybe_correct_quote_escaping(old_string: str, new_string: str, content: str)
     is left unchanged for the existing reject-and-ask guard. Raises ``AmbiguousEscapeDriftError``
     when new_string escapes a quote kind that old_string does not.
     """
-    has_quote_suspect = (
-        ("\\'" in old_string and "\\'" in new_string)
-        or ('\\"' in old_string and '\\"' in new_string)
+    has_quote_suspect = ("\\'" in old_string and "\\'" in new_string) or (
+        '\\"' in old_string and '\\"' in new_string
     )
     if not has_quote_suspect or old_string in content:
         return old_string, new_string
@@ -111,7 +114,9 @@ def maybe_correct_quote_escaping(old_string: str, new_string: str, content: str)
         return old_string, new_string
     # Only old_string is checked against the file, so only the quote kinds it escapes are
     # proven drift. A kind escaped only in new_string may be an escape the model meant.
-    unproven = [q for q in ("'", '"') if "\\" + q in new_string and "\\" + q not in old_string]
+    unproven = [
+        q for q in ("'", '"') if "\\" + q in new_string and "\\" + q not in old_string
+    ]
     if unproven:
         shown = " and ".join("\\" + q for q in unproven)
         raise AmbiguousEscapeDriftError(
@@ -123,7 +128,9 @@ def maybe_correct_quote_escaping(old_string: str, new_string: str, content: str)
     return stripped_old, _strip_spurious_quote_escapes(new_string)
 
 
-def maybe_correct_escape_drift(old_string: str, new_string: str, content: str) -> tuple[str, str, Optional[str]]:
+def maybe_correct_escape_drift(
+    old_string: str, new_string: str, content: str
+) -> tuple[str, str, Optional[str]]:
     """Apply whichever escape-drift auto-correction (if any) is verified against the file's
     actual content and report which one fired.
 
@@ -137,18 +144,30 @@ def maybe_correct_escape_drift(old_string: str, new_string: str, content: str) -
     ``note`` to the successful result (e.g. ``PatchResult.note``) so a corrected call stays
     distinguishable from one whose arguments never needed correction.
     """
-    corrected_old, corrected_new = maybe_correct_quote_escaping(old_string, new_string, content)
+    corrected_old, corrected_new = maybe_correct_quote_escaping(
+        old_string, new_string, content
+    )
     if corrected_old != old_string:
-        return corrected_old, corrected_new, (
-            "escape-drift auto-corrected: stripped a spurious backslash before a quote/apostrophe "
-            "in old_string/new_string (a JSON-double-escaping wire artifact) before matching."
+        return (
+            corrected_old,
+            corrected_new,
+            (
+                "escape-drift auto-corrected: stripped a spurious backslash before a quote/apostrophe "
+                "in old_string/new_string (a JSON-double-escaping wire artifact) before matching."
+            ),
         )
 
-    corrected_old, corrected_new = maybe_correct_backslash_doubling(old_string, new_string, content)
+    corrected_old, corrected_new = maybe_correct_backslash_doubling(
+        old_string, new_string, content
+    )
     if corrected_old != old_string:
-        return corrected_old, corrected_new, (
-            "escape-drift auto-corrected: halved doubled backslash runs in old_string "
-            "before matching; new_string has no backslashes and was left unchanged."
+        return (
+            corrected_old,
+            corrected_new,
+            (
+                "escape-drift auto-corrected: halved doubled backslash runs in old_string "
+                "before matching; new_string has no backslashes and was left unchanged."
+            ),
         )
 
     return old_string, new_string, None

@@ -22,7 +22,9 @@ class _InterimOnlyHarness(GatewayTurnMixin):
     """Mixin with the delivery-confirmation helper stubbed to False so the
     turn always reaches the duplicate-risk diagnostic branch."""
 
-    def _run_agent_stream_confirmed_final_delivery(self, _sc, _final, *, previewed=False):
+    def _run_agent_stream_confirmed_final_delivery(
+        self, _sc, _final, *, previewed=False
+    ):
         return False
 
 

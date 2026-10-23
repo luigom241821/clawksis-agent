@@ -55,12 +55,10 @@ KEY = "agent:main:telegram:private:123"
 # ---------------------------------------------------------------------------
 
 
-
-
-
 # ---------------------------------------------------------------------------
 # The ladder
 # ---------------------------------------------------------------------------
+
 
 class TestCooldownLadder:
     def test_first_failure_uses_the_configured_base(self):
@@ -70,9 +68,7 @@ class TestCooldownLadder:
 
     def test_consecutive_failures_escalate(self):
         runner = _Runner()
-        seen = [
-            _hygiene_cooldown_for_failure(runner, KEY, BASE) for _ in range(3)
-        ]
+        seen = [_hygiene_cooldown_for_failure(runner, KEY, BASE) for _ in range(3)]
         assert seen == [BASE * m for m in _HYGIENE_COOLDOWN_LADDER_MULTIPLIERS]
 
     def test_consecutive_failures_escalate_across_gateway_restart(self, tmp_path):
@@ -93,15 +89,18 @@ class TestCooldownLadder:
             )
             restarted_runner = _Runner()
             restarted_runner._session_db = db
-            assert _hygiene_cooldown_for_failure(
-                restarted_runner, KEY, BASE
-            ) == BASE * 3
+            assert (
+                _hygiene_cooldown_for_failure(restarted_runner, KEY, BASE) == BASE * 3
+            )
 
             other_chat_runner = _Runner()
             other_chat_runner._session_db = db
-            assert _hygiene_cooldown_for_failure(
-                other_chat_runner, "agent:main:telegram:private:999", BASE
-            ) == BASE
+            assert (
+                _hygiene_cooldown_for_failure(
+                    other_chat_runner, "agent:main:telegram:private:999", BASE
+                )
+                == BASE
+            )
         finally:
             db.close()
 
@@ -113,7 +112,6 @@ class TestCooldownLadder:
         top = BASE * _HYGIENE_COOLDOWN_LADDER_MULTIPLIERS[-1]
         for _ in range(10):
             assert _hygiene_cooldown_for_failure(runner, KEY, BASE) == top
-
 
     def test_reset_returns_to_the_first_rung(self):
         """A session that recovers must start over, not stay pinned at the top."""
@@ -136,9 +134,7 @@ class TestCooldownLadder:
 
             restarted_runner = _Runner()
             restarted_runner._session_db = db
-            assert _hygiene_cooldown_for_failure(
-                restarted_runner, KEY, BASE
-            ) == BASE
+            assert _hygiene_cooldown_for_failure(restarted_runner, KEY, BASE) == BASE
         finally:
             db.close()
 
@@ -150,16 +146,13 @@ class TestCooldownLadder:
             _hygiene_cooldown_for_failure(runner, KEY, BASE)
         assert _hygiene_cooldown_for_failure(runner, other, BASE) == BASE
 
-
     def test_absolute_cap_bounds_a_large_operator_base(self):
         """The multiplier ladder alone would reach 9h at base=3600, which is
         indistinguishable from 'compaction silently switched off'."""
         from gateway.run import _HYGIENE_COOLDOWN_MAX_SECONDS
 
         runner = _Runner()
-        seen = [
-            _hygiene_cooldown_for_failure(runner, KEY, 3600.0) for _ in range(4)
-        ]
+        seen = [_hygiene_cooldown_for_failure(runner, KEY, 3600.0) for _ in range(4)]
         assert max(seen) == _HYGIENE_COOLDOWN_MAX_SECONDS
         assert all(v <= _HYGIENE_COOLDOWN_MAX_SECONDS for v in seen)
 
@@ -185,9 +178,8 @@ class TestCooldownLadder:
 # Degraded runners (the gateway test-double pitfall)
 # ---------------------------------------------------------------------------
 
+
 class TestDegradedRunners:
-
-
     def test_runner_whose_session_state_raises_still_cools_down(self):
         """The real degraded case: a stand-in whose _session_state blows up.
 
@@ -195,6 +187,7 @@ class TestDegradedRunners:
         exception escape, because the caller uses the return value to record the
         cooldown — losing it would mean no cooldown at all and a hot retry loop.
         """
+
         class _Exploding:
             def _session_state(self, session_key):
                 raise RuntimeError("no sessions map")
@@ -204,10 +197,10 @@ class TestDegradedRunners:
         _reset_hygiene_failure_streak(gw, KEY)  # must not raise
 
 
-
 # ---------------------------------------------------------------------------
 # The failure reason reaches the state DB
 # ---------------------------------------------------------------------------
+
 
 class TestFailureReasonForwarded:
     """`record_compression_failure_cooldown` writes compression_failure_error
@@ -233,11 +226,10 @@ class TestFailureReasonForwarded:
         assert seen["error"] == "summary model timed out"
 
 
-
-
 # ---------------------------------------------------------------------------
 # The recovery predicate (extracted from _handle_message_with_agent)
 # ---------------------------------------------------------------------------
+
 
 class TestHygieneCompactionRecovered:
     """Direct unit tests for the recovery decision.
@@ -252,9 +244,13 @@ class TestHygieneCompactionRecovered:
     """
 
     BASE = dict(
-        aborted=False, rotated=True, in_place=False,
-        msg_count=220, new_count=100,
-        approx_tokens=50_000, new_tokens=30_000,
+        aborted=False,
+        rotated=True,
+        in_place=False,
+        msg_count=220,
+        new_count=100,
+        approx_tokens=50_000,
+        new_tokens=30_000,
     )
 
     def _call(self, **over):
@@ -292,50 +288,84 @@ class TestHygieneCompactionRecovered:
         """
         assert self._call(new_count=100, new_tokens=50_000) is True
 
-
     def test_size_only_win_is_recovery(self):
         """Equal rows, large token reduction (#39548)."""
-        assert self._call(
-            msg_count=220, new_count=220,
-            approx_tokens=288_000, new_tokens=183_000,
-        ) is True
+        assert (
+            self._call(
+                msg_count=220,
+                new_count=220,
+                approx_tokens=288_000,
+                new_tokens=183_000,
+            )
+            is True
+        )
 
     def test_sub_five_percent_wobble_is_not_recovery(self):
         """Noise must not clear the streak, or escalation is defeated again."""
-        assert self._call(
-            msg_count=220, new_count=220,
-            approx_tokens=50_000, new_tokens=49_900,
-        ) is False
+        assert (
+            self._call(
+                msg_count=220,
+                new_count=220,
+                approx_tokens=50_000,
+                new_tokens=49_900,
+            )
+            is False
+        )
 
 
 class TestHygieneWaitShouldExtend:
     """Host must not keep waiting after the commit fence is already cancelled."""
 
     def test_extends_while_idle_and_under_ceiling(self):
-        assert hygiene_wait_should_extend(
-            idle=1.0, timeout=30.0, waited=10.0, ceiling=600.0,
-        ) is True
+        assert (
+            hygiene_wait_should_extend(
+                idle=1.0,
+                timeout=30.0,
+                waited=10.0,
+                ceiling=600.0,
+            )
+            is True
+        )
 
     def test_stops_when_idle_budget_exhausted(self):
-        assert hygiene_wait_should_extend(
-            idle=30.0, timeout=30.0, waited=10.0, ceiling=600.0,
-        ) is False
+        assert (
+            hygiene_wait_should_extend(
+                idle=30.0,
+                timeout=30.0,
+                waited=10.0,
+                ceiling=600.0,
+            )
+            is False
+        )
 
     def test_stops_at_ceiling(self):
-        assert hygiene_wait_should_extend(
-            idle=1.0, timeout=30.0, waited=600.0, ceiling=600.0,
-        ) is False
+        assert (
+            hygiene_wait_should_extend(
+                idle=1.0,
+                timeout=30.0,
+                waited=600.0,
+                ceiling=600.0,
+            )
+            is False
+        )
 
     def test_fence_cancel_stops_even_with_fresh_progress(self):
-        assert hygiene_wait_should_extend(
-            idle=0.0, timeout=30.0, waited=0.1, ceiling=600.0,
-            fence_cancelled=True,
-        ) is False
+        assert (
+            hygiene_wait_should_extend(
+                idle=0.0,
+                timeout=30.0,
+                waited=0.1,
+                ceiling=600.0,
+                fence_cancelled=True,
+            )
+            is False
+        )
 
 
 # ---------------------------------------------------------------------------
 # Integration with the persist helper
 # ---------------------------------------------------------------------------
+
 
 class TestRecordedCooldownEscalates:
     """The escalated value must be what actually lands in the state DB."""

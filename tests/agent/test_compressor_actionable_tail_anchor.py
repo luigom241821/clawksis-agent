@@ -69,8 +69,6 @@ def _assert_no_adjacent_user_roles(messages: list[dict]) -> None:
         assert (previous.get("role"), current.get("role")) != ("user", "user")
 
 
-
-
 def test_leading_blank_without_actionable_user_is_not_removed(compressor):
     messages = [
         {"role": "user", "content": ""},
@@ -79,10 +77,6 @@ def test_leading_blank_without_actionable_user_is_not_removed(compressor):
 
     assert compressor._find_last_user_message_idx(messages, 0) == -1
     assert compressor._blank_echo_indices_after(messages, -1) == set()
-
-
-
-
 
 
 def test_completion_survives_compaction_verbatim_after_blank_echo(compressor):
@@ -110,7 +104,9 @@ def test_completion_survives_compaction_verbatim_after_blank_echo(compressor):
 
     result = _compress(compressor, messages)
 
-    completion_rows = [message for message in result if message.get("content") == completion]
+    completion_rows = [
+        message for message in result if message.get("content") == completion
+    ]
     assert len(completion_rows) == 1
     assert not completion_rows[0].get(COMPRESSED_SUMMARY_METADATA_KEY)
     summary_rows = [
@@ -160,12 +156,12 @@ def test_completion_at_compress_start_survives_when_blank_echo_is_compress_end(
     ):
         result = compressor.compress(messages, current_tokens=90_000)
 
-    completion_rows = [message for message in result if message.get("content") == completion]
+    completion_rows = [
+        message for message in result if message.get("content") == completion
+    ]
     assert len(completion_rows) == 1
     assert not completion_rows[0].get(COMPRESSED_SUMMARY_METADATA_KEY)
-    assert not any(
-        message.get(COMPRESSED_SUMMARY_METADATA_KEY) for message in result
-    )
+    assert not any(message.get(COMPRESSED_SUMMARY_METADATA_KEY) for message in result)
     assert len(result) == len(messages) - 1
     assert compressor.compression_count == 0
     assert compressor._last_compression_savings_pct == 0.0
@@ -182,5 +178,3 @@ def test_completion_at_compress_start_survives_when_blank_echo_is_compress_end(
         "assistant",
     ]
     _assert_no_adjacent_user_roles(result)
-
-

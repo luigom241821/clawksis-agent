@@ -8,6 +8,7 @@ Covers the three Phase 0 deliverables:
      on, without disturbing the positional key layout downstream parsers rely
      on.
 """
+
 import pytest
 from datetime import datetime
 from unittest.mock import patch
@@ -35,22 +36,23 @@ class TestSessionKeyByteIdenticalWhenOff:
         s = _src(chat_id="99", chat_type="dm")
         assert build_session_key(s, profile=profile) == "agent:main:telegram:dm:99"
 
-
     @pytest.mark.parametrize("profile", [None, "default"])
     def test_group_per_user(self, profile):
-        s = _src(platform=Platform.DISCORD, chat_id="g1", chat_type="group", user_id="alice")
+        s = _src(
+            platform=Platform.DISCORD, chat_id="g1", chat_type="group", user_id="alice"
+        )
         assert (
-            build_session_key(s, profile=profile)
-            == "agent:main:discord:group:g1:alice"
+            build_session_key(s, profile=profile) == "agent:main:discord:group:g1:alice"
         )
 
 
 class TestSessionKeyNamespacedWhenOn:
     """A named profile occupies the namespace slot, isolating its sessions."""
 
-
     def test_named_profile_group_per_user(self):
-        s = _src(platform=Platform.DISCORD, chat_id="g1", chat_type="group", user_id="alice")
+        s = _src(
+            platform=Platform.DISCORD, chat_id="g1", chat_type="group", user_id="alice"
+        )
         assert (
             build_session_key(s, profile="coder")
             == "agent:coder:discord:group:g1:alice"
@@ -67,7 +69,9 @@ class TestSessionKeyNamespacedWhenOn:
 class TestMultiplexConfigFlag:
     """gateway.multiplex_profiles defaults off and round-trips."""
 
-    def test_cron_shared_adapter_owner_is_the_launch_profile(self, monkeypatch, tmp_path):
+    def test_cron_shared_adapter_owner_is_the_launch_profile(
+        self, monkeypatch, tmp_path
+    ):
         """A ``--profile rex`` multiplexer owns ``runner.adapters``; its ticker must name rex (not the
         literal ``default``) as the shared-adapter owner or rex's own jobs fall to the fail-closed map."""
         import asyncio
@@ -82,12 +86,23 @@ class TestMultiplexConfigFlag:
             def start(self, stop_event, **kwargs):
                 captured.update(kwargs)
 
-        monkeypatch.setattr("cron.scheduler_provider.resolve_cron_scheduler", lambda: _Ticker())
-        monkeypatch.setattr(run_mod, "_cron_tick_profile_homes", lambda cfg: [("rex", tmp_path)])
-        monkeypatch.setattr(run_mod, "_start_gateway_housekeeping", lambda *a, **k: None)
+        monkeypatch.setattr(
+            "cron.scheduler_provider.resolve_cron_scheduler", lambda: _Ticker()
+        )
+        monkeypatch.setattr(
+            run_mod, "_cron_tick_profile_homes", lambda cfg: [("rex", tmp_path)]
+        )
+        monkeypatch.setattr(
+            run_mod, "_start_gateway_housekeeping", lambda *a, **k: None
+        )
         runner = SimpleNamespace(
-            config=GatewayConfig(multiplex_profiles=True), adapters={}, _profile_adapters={},
-            _primary_profile_name="rex", _draining=False, _external_drain_active=False)
+            config=GatewayConfig(multiplex_profiles=True),
+            adapters={},
+            _profile_adapters={},
+            _primary_profile_name="rex",
+            _draining=False,
+            _external_drain_active=False,
+        )
 
         async def _go():
             return run_bootstrap._start_gateway_start_cron_and_housekeeping(runner)
@@ -104,7 +119,6 @@ class TestMultiplexConfigFlag:
         assert GatewayConfig().multiplex_profiles is None
         assert not GatewayConfig().multiplex_profiles
         assert GatewayConfig.from_dict({}).multiplex_profiles is None
-
 
     def test_from_dict_top_level(self):
         cfg = GatewayConfig.from_dict({"multiplex_profiles": True})
@@ -152,7 +166,6 @@ class TestSessionStoreUnmultiplexedRecovery:
         store._db = _RecoveringDB(row)
         store._loaded = True
         return store
-
 
     def test_flag_off_allows_active_profile_peer_fallback(self, tmp_path):
         row = {

@@ -81,10 +81,6 @@ class FakeAgent:
         pass
 
 
-
-
-
-
 def test_final_response_closes_tool_tail_before_persistence(monkeypatch):
     """A recovered/previewed final response must be durable in session history.
 
@@ -130,9 +126,7 @@ def test_final_response_closes_tool_tail_before_persistence(monkeypatch):
     assert agent.persisted_messages[-1] == result["messages"][-1]
 
 
-def test_fallback_timestamp_survives_delayed_sqlite_persistence(
-    monkeypatch, tmp_path
-):
+def test_fallback_timestamp_survives_delayed_sqlite_persistence(monkeypatch, tmp_path):
     """The durable row records message creation, not the later DB flush."""
     from clawk_state import SessionDB
 
@@ -193,8 +187,11 @@ def test_final_response_fills_pure_tool_call_tail(monkeypatch):
             "role": "assistant",
             "content": "",
             "tool_calls": [
-                {"id": "t1", "type": "function",
-                 "function": {"name": "f", "arguments": "{}"}}
+                {
+                    "id": "t1",
+                    "type": "function",
+                    "function": {"name": "f", "arguments": "{}"},
+                }
             ],
         },
     ]
@@ -226,10 +223,6 @@ def test_final_response_fills_pure_tool_call_tail(monkeypatch):
     assert sum(1 for m in persisted if m.get("role") == "assistant") == 1
 
 
-
-
-
-
 def test_final_response_fill_invalidates_flush_scan_cursor():
     """The fill's marker pop must invalidate the bounded flush-scan cursor.
 
@@ -247,8 +240,11 @@ def test_final_response_fill_invalidates_flush_scan_cursor():
             "role": "assistant",
             "content": "",
             "tool_calls": [
-                {"id": "t1", "type": "function",
-                 "function": {"name": "f", "arguments": "{}"}}
+                {
+                    "id": "t1",
+                    "type": "function",
+                    "function": {"name": "f", "arguments": "{}"},
+                }
             ],
             "_db_persisted": True,
         },
@@ -303,8 +299,11 @@ def test_empty_final_response_recovers_stream_buffer_into_blank_assistant_row(
             "role": "assistant",
             "content": "",
             "tool_calls": [
-                {"id": "t1", "type": "function",
-                 "function": {"name": "terminal", "arguments": "{}"}}
+                {
+                    "id": "t1",
+                    "type": "function",
+                    "function": {"name": "terminal", "arguments": "{}"},
+                }
             ],
         },
         {"role": "tool", "tool_call_id": "t1", "name": "terminal", "content": "ok"},
@@ -448,13 +447,24 @@ def test_delivery_only_reasoning_excerpt_does_not_fill_blank_assistant(monkeypat
     )
 
 
-
 def _finalize(agent, *, exit_reason, final_response, failed=False, api_calls=3):
     return finalize_turn(
-        agent, final_response=final_response, api_call_count=api_calls, interrupted=False, failed=failed,
-        messages=[{"role": "user", "content": "q"}, {"role": "assistant", "content": final_response or ""}],
-        conversation_history=[], effective_task_id="task", turn_id="turn", user_message="q",
-        original_user_message="q", _should_review_memory=False, _turn_exit_reason=exit_reason,
+        agent,
+        final_response=final_response,
+        api_call_count=api_calls,
+        interrupted=False,
+        failed=failed,
+        messages=[
+            {"role": "user", "content": "q"},
+            {"role": "assistant", "content": final_response or ""},
+        ],
+        conversation_history=[],
+        effective_task_id="task",
+        turn_id="turn",
+        user_message="q",
+        original_user_message="q",
+        _should_review_memory=False,
+        _turn_exit_reason=exit_reason,
     )
 
 
@@ -464,18 +474,34 @@ def test_advisory_exit_reasons_keep_failed_false_but_carry_a_failure_code(monkey
     behave exactly as before the code was added."""
     monkeypatch.setattr("clawk_cli.plugins.invoke_hook", lambda *_a, **_kw: [])
     agent_max = FakeAgent().max_iterations
-    for exit_reason, code in (("empty_response_exhausted", "empty_response"),
-                              ("local_processing_error(TypeError: x)", "loop_error")):
-        result = _finalize(FakeAgent(), exit_reason=exit_reason, final_response="the model's last thoughts")
+    for exit_reason, code in (
+        ("empty_response_exhausted", "empty_response"),
+        ("local_processing_error(TypeError: x)", "loop_error"),
+    ):
+        result = _finalize(
+            FakeAgent(),
+            exit_reason=exit_reason,
+            final_response="the model's last thoughts",
+        )
         assert result["failed"] is False, exit_reason
         # ``completed`` follows the ordinary rule for a non-failed turn (not forced False here).
-        assert result["completed"] == (result["final_response"] is not None and 3 < agent_max), exit_reason
-        assert result["failure_reason"] == code and isinstance(result["failure_retryable"], bool)
-        assert "error" not in result  # not a failed turn: no error text for the gateway to append a notice to
+        assert result["completed"] == (
+            result["final_response"] is not None and 3 < agent_max
+        ), exit_reason
+        assert result["failure_reason"] == code and isinstance(
+            result["failure_retryable"], bool
+        )
+        assert (
+            "error" not in result
+        )  # not a failed turn: no error text for the gateway to append a notice to
 
 
 def test_hard_failure_exit_reasons_still_fail_the_turn(monkeypatch):
     monkeypatch.setattr("clawk_cli.plugins.invoke_hook", lambda *_a, **_kw: [])
-    result = _finalize(FakeAgent(), exit_reason="repeated_outer_errors(RuntimeError)", final_response="stopped")
+    result = _finalize(
+        FakeAgent(),
+        exit_reason="repeated_outer_errors(RuntimeError)",
+        final_response="stopped",
+    )
     assert result["failed"] is True and result["completed"] is False
     assert result["failure_reason"] == "loop_error" and result["error"] == "stopped"

@@ -21,7 +21,12 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 from tests.e2e.core.chaos import _gateway_fake_platform as fake_platform
-from tests.e2e.core.chaos._helpers import hermetic_env, kill_tagged, python_exe, write_chaos_home
+from tests.e2e.core.chaos._helpers import (
+    hermetic_env,
+    kill_tagged,
+    python_exe,
+    write_chaos_home,
+)
 
 BOOT_DEADLINE_S = 180.0
 SHUTDOWN_DEADLINE_S = 60.0
@@ -33,7 +38,9 @@ PLUGIN_MANIFEST = (
     "version: 0.0.1\n"
     "description: in-memory platform for the gateway chaos suite\n"
 )
-PLUGIN_INIT = "from tests.e2e.core.chaos._gateway_fake_platform import register  # noqa: F401\n"
+PLUGIN_INIT = (
+    "from tests.e2e.core.chaos._gateway_fake_platform import register  # noqa: F401\n"
+)
 
 
 def gateway_extra_config() -> str:
@@ -73,7 +80,11 @@ class GatewayProc:
 
     def __post_init__(self) -> None:
         self.home, self.clawk_home = write_chaos_home(
-            self.root, self.base_url, extra=gateway_extra_config() + self.extra_config, **self.cfg)
+            self.root,
+            self.base_url,
+            extra=gateway_extra_config() + self.extra_config,
+            **self.cfg,
+        )
         plugin_dir = self.clawk_home / "plugins" / fake_platform.PLUGIN_DIR_NAME
         plugin_dir.mkdir(parents=True, exist_ok=True)
         (plugin_dir / "plugin.yaml").write_text(PLUGIN_MANIFEST, encoding="utf-8")
@@ -98,25 +109,40 @@ class GatewayProc:
         listener.settimeout(1.0)
         self._listener = listener
         env = hermetic_env(self.home, self.clawk_home, self.tag)
-        for key in ("NOTIFY_SOCKET", "INVOCATION_ID", "WATCHDOG_USEC", "WATCHDOG_PID", "XDG_STATE_HOME",
-                    "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME"):
+        for key in (
+            "NOTIFY_SOCKET",
+            "INVOCATION_ID",
+            "WATCHDOG_USEC",
+            "WATCHDOG_PID",
+            "XDG_STATE_HOME",
+            "XDG_CONFIG_HOME",
+            "XDG_DATA_HOME",
+            "XDG_CACHE_HOME",
+        ):
             env.pop(key, None)
-        env.update({
-            fake_platform.PORT_ENV: str(listener.getsockname()[1]),
-            fake_platform.ALLOW_ALL_ENV: "true",
-            # Host rendezvous (one-gateway-per-user lock + record) must never see the live gateway.
-            "CLAWK_GATEWAY_LOCK_DIR": str(self.root / "locks"),
-            "CLAWK_GATEWAY_MAX_STARTS": "0",
-            # The child's HOME is the tmp root, so the live-DB guard (pytest ancestry) would take
-            # its tmp state.db for "production"; the documented child opt-out is safe here.
-            "CLAWK_STATE_DB_GUARD_BYPASS": "1",
-        })
+        env.update(
+            {
+                fake_platform.PORT_ENV: str(listener.getsockname()[1]),
+                fake_platform.ALLOW_ALL_ENV: "true",
+                # Host rendezvous (one-gateway-per-user lock + record) must never see the live gateway.
+                "CLAWK_GATEWAY_LOCK_DIR": str(self.root / "locks"),
+                "CLAWK_GATEWAY_MAX_STARTS": "0",
+                # The child's HOME is the tmp root, so the live-DB guard (pytest ancestry) would take
+                # its tmp state.db for "production"; the documented child opt-out is safe here.
+                "CLAWK_STATE_DB_GUARD_BYPASS": "1",
+            }
+        )
         log = open(self.log_path, "wb")
         # Same process group as pytest (no start_new_session): when the runner kills a timed-out
         # file's group, the gateway goes with it instead of outliving the run.
         self.proc = subprocess.Popen(
-            [python_exe(), "-m", "gateway.run"], cwd=str(self.home), env=env,
-            stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT)
+            [python_exe(), "-m", "gateway.run"],
+            cwd=str(self.home),
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+        )
         log.close()
         deadline = time.monotonic() + BOOT_DEADLINE_S
         while True:
@@ -125,13 +151,19 @@ class GatewayProc:
                 break
             except TimeoutError:
                 if self.proc.poll() is not None:
-                    raise AssertionError(f"gateway exited during boot rc={self.proc.returncode}\n{self.log_tail()}")
+                    raise AssertionError(
+                        f"gateway exited during boot rc={self.proc.returncode}\n{self.log_tail()}"
+                    )
                 if time.monotonic() >= deadline:
-                    raise AssertionError(f"gateway did not connect the fake platform in {BOOT_DEADLINE_S}s\n"
-                                         f"{self.log_tail()}")
+                    raise AssertionError(
+                        f"gateway did not connect the fake platform in {BOOT_DEADLINE_S}s\n"
+                        f"{self.log_tail()}"
+                    )
         conn.settimeout(None)
         self._conn = conn
-        threading.Thread(target=self._pump, name=f"chaos-gw-{self.tag}", daemon=True).start()
+        threading.Thread(
+            target=self._pump, name=f"chaos-gw-{self.tag}", daemon=True
+        ).start()
         self.wait_for(lambda e: e.ev == "ready", BOOT_DEADLINE_S, "adapter ready")
 
     def _pump(self) -> None:
@@ -144,7 +176,9 @@ class GatewayProc:
                 chunk = b""
             if not chunk:
                 with self._cond:
-                    self.events.append(Event("eof", {}, time.monotonic(), len(self.events)))
+                    self.events.append(
+                        Event("eof", {}, time.monotonic(), len(self.events))
+                    )
                     self._cond.notify_all()
                 return
             buf += chunk
@@ -155,7 +189,14 @@ class GatewayProc:
                 except json.JSONDecodeError:
                     continue
                 with self._cond:
-                    self.events.append(Event(str(data.get("ev")), data, time.monotonic(), len(self.events)))
+                    self.events.append(
+                        Event(
+                            str(data.get("ev")),
+                            data,
+                            time.monotonic(),
+                            len(self.events),
+                        )
+                    )
                     self._cond.notify_all()
 
     def stop(self) -> None:
@@ -187,15 +228,21 @@ class GatewayProc:
         assert self._conn is not None
         self._msg_seq += 1
         msg_id = f"in-{self._msg_seq}"
-        self._conn.sendall((json.dumps({"op": "msg", "text": text, "chat": chat, "id": msg_id}) + "\n").encode())
+        self._conn.sendall(
+            (
+                json.dumps({"op": "msg", "text": text, "chat": chat, "id": msg_id})
+                + "\n"
+            ).encode()
+        )
         return msg_id
 
     def mark(self) -> int:
         with self._cond:
             return len(self.events)
 
-    def wait_for(self, pred: Callable[[Event], bool], timeout: float, what: str,
-                 since: int = 0) -> Optional[Event]:
+    def wait_for(
+        self, pred: Callable[[Event], bool], timeout: float, what: str, since: int = 0
+    ) -> Optional[Event]:
         """First event at index >= ``since`` matching ``pred``; None at the deadline."""
         deadline = time.monotonic() + timeout
         with self._cond:
@@ -217,11 +264,20 @@ class GatewayProc:
 
     def sends_since(self, since: int) -> list[str]:
         with self._cond:
-            return [e.data.get("text") or "" for e in self.events[since:] if e.ev == "send"]
+            return [
+                e.data.get("text") or "" for e in self.events[since:] if e.ev == "send"
+            ]
 
     def max_heartbeat_gap(self) -> float:
         with self._cond:
-            return max((float(e.data.get("max_gap") or 0) for e in self.events if e.ev == "hb"), default=0.0)
+            return max(
+                (
+                    float(e.data.get("max_gap") or 0)
+                    for e in self.events
+                    if e.ev == "hb"
+                ),
+                default=0.0,
+            )
 
     def heartbeat_count(self) -> int:
         with self._cond:
@@ -229,7 +285,9 @@ class GatewayProc:
 
     def log_tail(self, n: int = 80) -> str:
         try:
-            lines = self.log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+            lines = self.log_path.read_text(
+                encoding="utf-8", errors="replace"
+            ).splitlines()
         except OSError:
             return "<no gateway log>"
         return "\n".join(lines[-n:])
@@ -240,4 +298,6 @@ class _suppress_oserror:
         return None
 
     def __exit__(self, exc_type, *_: object) -> bool:
-        return exc_type is not None and issubclass(exc_type, (OSError, ProcessLookupError))
+        return exc_type is not None and issubclass(
+            exc_type, (OSError, ProcessLookupError)
+        )

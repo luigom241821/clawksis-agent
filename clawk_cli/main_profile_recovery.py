@@ -23,10 +23,15 @@ def _uninstall_keeps_data(args: list[str]) -> bool:
     from clawk_cli.subcommands.uninstall import build_uninstall_parser
 
     parser = argparse.ArgumentParser(add_help=False)
-    build_uninstall_parser(parser.add_subparsers(dest="command"), cmd_uninstall=lambda _args: None)
+    build_uninstall_parser(
+        parser.add_subparsers(dest="command"), cmd_uninstall=lambda _args: None
+    )
     # The real parser prints help/usage errors once the handler runs; this probe stays silent.
     # --help exits 0 (harmless, let it through); an unparseable argv fails closed.
-    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+    with (
+        contextlib.redirect_stdout(io.StringIO()),
+        contextlib.redirect_stderr(io.StringIO()),
+    ):
         try:
             ns, _ = parser.parse_known_args(["uninstall", *args])
         except SystemExit as exit_:

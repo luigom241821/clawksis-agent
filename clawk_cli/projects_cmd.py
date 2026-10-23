@@ -9,7 +9,9 @@ import sys
 from clawk_cli import projects_db as pdb
 
 
-def build_parser(parent_subparsers: argparse._SubParsersAction) -> argparse.ArgumentParser:
+def build_parser(
+    parent_subparsers: argparse._SubParsersAction,
+) -> argparse.ArgumentParser:
     """Attach the ``project`` subcommand tree. Returns the top parser."""
     parser = parent_subparsers.add_parser(
         "project",
@@ -24,15 +26,28 @@ def build_parser(parent_subparsers: argparse._SubParsersAction) -> argparse.Argu
     sub = parser.add_subparsers(dest="project_action")
     p_create = sub.add_parser("create", help="Create a new project")
     p_create.add_argument("name", help="Human name, e.g. 'Clawksis'")
-    p_create.add_argument("folders", nargs="*", help="Folder paths to include (first = primary)")
+    p_create.add_argument(
+        "folders", nargs="*", help="Folder paths to include (first = primary)"
+    )
     p_create.add_argument("--slug", default=None, help="Explicit slug override")
-    p_create.add_argument("--primary", default=None, metavar="PATH", help="Primary repo path")
+    p_create.add_argument(
+        "--primary", default=None, metavar="PATH", help="Primary repo path"
+    )
     for opt in ("--description", "--icon", "--color"):
         p_create.add_argument(opt, default=None)
-    p_create.add_argument("--board", default=None, metavar="SLUG", help="Bind a kanban board")
-    p_create.add_argument("--use", action="store_true", help="Set as the active project")
+    p_create.add_argument(
+        "--board", default=None, metavar="SLUG", help="Bind a kanban board"
+    )
+    p_create.add_argument(
+        "--use", action="store_true", help="Set as the active project"
+    )
     p_list = sub.add_parser("list", aliases=["ls"], help="List projects")
-    p_list.add_argument("--all", action="store_true", dest="include_archived", help="Include archived projects")
+    p_list.add_argument(
+        "--all",
+        action="store_true",
+        dest="include_archived",
+        help="Include archived projects",
+    )
 
     def project_sub(name: str, help: str) -> argparse.ArgumentParser:
         sp = sub.add_parser(name, help=help)
@@ -44,11 +59,17 @@ def build_parser(parent_subparsers: argparse._SubParsersAction) -> argparse.Argu
     p_add.add_argument("path", help="Folder path")
     p_add.add_argument("--label", default=None)
     p_add.add_argument("--primary", action="store_true", help="Mark as primary repo")
-    project_sub("remove-folder", "Remove a folder from a project").add_argument("path", help="Folder path")
+    project_sub("remove-folder", "Remove a folder from a project").add_argument(
+        "path", help="Folder path"
+    )
     project_sub("rename", "Rename a project").add_argument("name", help="New name")
-    project_sub("set-primary", "Set the primary folder").add_argument("path", help="Folder path (must already be in project)")
+    project_sub("set-primary", "Set the primary folder").add_argument(
+        "path", help="Folder path (must already be in project)"
+    )
     p_use = sub.add_parser("use", help="Set the active project")
-    p_use.add_argument("project", nargs="?", default=None, help="Project id or slug (omit to clear)")
+    p_use.add_argument(
+        "project", nargs="?", default=None, help="Project id or slug (omit to clear)"
+    )
     project_sub("archive", "Archive a project")
     project_sub("restore", "Restore an archived project")
     project_sub("bind-board", "Bind a kanban board to a project").add_argument(
@@ -66,7 +87,10 @@ def projects_command(args: argparse.Namespace) -> int:
         if parser is not None:
             parser.print_help()
         else:
-            print("usage: clawk project <action> [options]\nRun 'clawk project --help' for the full list.", file=sys.stderr)
+            print(
+                "usage: clawk project <action> [options]\nRun 'clawk project --help' for the full list.",
+                file=sys.stderr,
+            )
         return 0
     handler = _HANDLERS.get(action)
     if handler is None:
@@ -121,20 +145,33 @@ def _with_project(fn):
 def _print_project(proj) -> None:
     print(f"{proj.slug}  [{proj.id}]{' (archived)' if proj.archived else ''}")
     print(f"  name:    {proj.name}")
-    for label, value in (("about", proj.description), ("board", proj.board_slug), ("primary", proj.primary_path)):
+    for label, value in (
+        ("about", proj.description),
+        ("board", proj.board_slug),
+        ("primary", proj.primary_path),
+    ):
         if value:
             print(f"  {label}:{' ' * (8 - len(label))}{value}")
     if proj.folders:
         print("  folders:")
         for f in proj.folders:
-            print(f"   {' *' if f.is_primary else '  '} {f.path}{f' ({f.label})' if f.label else ''}")
+            print(
+                f"   {' *' if f.is_primary else '  '} {f.path}{f' ({f.label})' if f.label else ''}"
+            )
 
 
 @_db_command
 def _cmd_create(args, conn) -> int:
     pid = pdb.create_project(
-        conn, name=args.name, slug=args.slug, folders=args.folders, primary_path=args.primary,
-        description=args.description, icon=args.icon, color=args.color, board_slug=args.board,
+        conn,
+        name=args.name,
+        slug=args.slug,
+        folders=args.folders,
+        primary_path=args.primary,
+        description=args.description,
+        icon=args.icon,
+        color=args.color,
+        board_slug=args.board,
     )
     if args.use:
         pdb.set_active(conn, pid)
@@ -150,12 +187,16 @@ def _cmd_create(args, conn) -> int:
 @_db_command
 def _cmd_list(args, conn):
     active = pdb.get_active_id(conn)
-    projs = pdb.list_projects(conn, include_archived=getattr(args, "include_archived", False))
+    projs = pdb.list_projects(
+        conn, include_archived=getattr(args, "include_archived", False)
+    )
     if not projs:
         return "No projects yet. Create one with `clawk project create <name>`."
     for p in projs:
         flags = " (archived)" if p.archived else ""
-        print(f"{'*' if p.id == active else ' '} {p.slug:<24} {p.name}{flags}  [{len(p.folders)} folder(s)]")
+        print(
+            f"{'*' if p.id == active else ' '} {p.slug:<24} {p.name}{flags}  [{len(p.folders)} folder(s)]"
+        )
     return 0
 
 
@@ -167,7 +208,9 @@ def _cmd_show(args, conn, proj) -> int:
 
 @_with_project
 def _cmd_add_folder(args, conn, proj) -> str:
-    path = pdb.add_folder(conn, proj.id, args.path, label=args.label, is_primary=args.primary)
+    path = pdb.add_folder(
+        conn, proj.id, args.path, label=args.label, is_primary=args.primary
+    )
     return f"Added {path} to {proj.slug}"
 
 
@@ -187,7 +230,9 @@ def _cmd_rename(args, conn, proj) -> str:
 @_with_project
 def _cmd_set_primary(args, conn, proj):
     if not pdb.set_primary(conn, proj.id, args.path):
-        return _err(f"'{args.path}' is not a folder of {proj.slug}; add it first with `clawk project add-folder`.")
+        return _err(
+            f"'{args.path}' is not a folder of {proj.slug}; add it first with `clawk project add-folder`."
+        )
     return f"Set primary of {proj.slug} -> {args.path}"
 
 
@@ -205,7 +250,12 @@ def _cmd_use(args, conn):
 
 def _flag_command(op: str, verb: str):
     """Handler for ``pdb.<op>(conn, proj.id)`` followed by ``"<verb> <slug>"``."""
-    return _with_project(lambda args, conn, proj: (getattr(pdb, op)(conn, proj.id), f"{verb} {proj.slug}")[1])
+    return _with_project(
+        lambda args, conn, proj: (
+            getattr(pdb, op)(conn, proj.id),
+            f"{verb} {proj.slug}",
+        )[1]
+    )
 
 
 @_with_project
@@ -213,7 +263,9 @@ def _cmd_bind_board(args, conn, proj) -> str:
     pdb.update_project(conn, proj.id, board_slug=args.board)
     if not args.board.strip():
         return f"Unbound board from {proj.slug}"
-    if proj.primary_path:  # best-effort: point the bound board's default_workdir at the primary repo
+    if (
+        proj.primary_path
+    ):  # best-effort: point the bound board's default_workdir at the primary repo
         try:
             from clawk_cli import kanban_db as kb
 

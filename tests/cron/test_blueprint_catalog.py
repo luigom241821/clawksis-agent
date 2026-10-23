@@ -24,8 +24,6 @@ import itertools
 
 
 class TestCatalog:
-
-
     def test_bad_slot_type_rejected(self):
         with pytest.raises(ValueError):
             BlueprintSlot(name="x", type="bogus", label="X")
@@ -53,10 +51,14 @@ class TestScheduleResolution:
     def test_weekday_preset_to_dow(self):
         spec = fill_blueprint(
             get_blueprint("custom-reminder"),
-            {"what": "stretch", "time": "14:00", "recurrence": "weekdays", "deliver": "origin"},
+            {
+                "what": "stretch",
+                "time": "14:00",
+                "recurrence": "weekdays",
+                "deliver": "origin",
+            },
         )
         assert spec["schedule"] == "0 14 * * 1-5"
-
 
 
 class TestValidation:
@@ -64,12 +66,13 @@ class TestValidation:
         with pytest.raises(BlueprintFillError, match="invalid time"):
             fill_blueprint(get_blueprint("morning-brief"), {"time": "25:99"})
 
-
     def test_deliver_slot_accepts_any_platform(self):
         # deliver is a non-strict enum: its options are suggestions, the real
         # set of valid platforms depends on the user's configured gateways and
         # is validated downstream by the cron scheduler.
-        spec = fill_blueprint(get_blueprint("morning-brief"), {"time": "08:00", "deliver": "slack"})
+        spec = fill_blueprint(
+            get_blueprint("morning-brief"), {"time": "08:00", "deliver": "slack"}
+        )
         assert spec["deliver"] == "slack"
 
     def test_unknown_slot_name_rejected(self):
@@ -86,11 +89,10 @@ class TestValidation:
         spec = fill_blueprint(get_blueprint("hydration-move"), {"interval_hours": "2"})
         it = croniter(spec["schedule"], datetime(2026, 6, 10, 8, 0))
         first_three = [it.get_next(datetime) for _ in range(3)]
-        gaps = {
-            (b - a).total_seconds()
-            for a, b in itertools.pairwise(first_three)
-        }
-        assert gaps == {7200.0}, f"expected 2h gaps, got {spec['schedule']} -> {first_three}"
+        gaps = {(b - a).total_seconds() for a, b in itertools.pairwise(first_three)}
+        assert gaps == {7200.0}, (
+            f"expected 2h gaps, got {spec['schedule']} -> {first_three}"
+        )
 
     def test_text_slot_renders_into_prompt(self):
         spec = fill_blueprint(
@@ -101,15 +103,14 @@ class TestValidation:
 
     def test_origin_threads_through(self):
         spec = fill_blueprint(
-            get_blueprint("morning-brief"), {"time": "08:00"}, origin={"platform": "telegram", "chat_id": "9"}
+            get_blueprint("morning-brief"),
+            {"time": "08:00"},
+            origin={"platform": "telegram", "chat_id": "9"},
         )
         assert spec["origin"] == {"platform": "telegram", "chat_id": "9"}
 
 
 class TestRenderers:
-
-
-
     def test_deeplink_shape(self):
         url = blueprint_deeplink(get_blueprint("morning-brief"), {"time": "07:15"})
         assert url.startswith("clawk://blueprint/morning-brief?")
@@ -122,16 +123,15 @@ def isolated_home(tmp_path, monkeypatch):
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     import clawk_constants
+
     importlib.reload(clawk_constants)
     from cron import jobs
+
     importlib.reload(jobs)
     return jobs
 
 
 class TestCommandHandler:
-
-
-
     def test_fill_creates_job(self, isolated_home):
         from clawk_cli.blueprint_cmd import handle_blueprint_command
 
@@ -140,7 +140,9 @@ class TestCommandHandler:
         assert res.agent_seed is None
         jobs = isolated_home.load_jobs()
         assert len(jobs) == 1
-        assert (jobs[0].get("schedule_display") or jobs[0].get("schedule")) == "30 7 * * *"
+        assert (
+            jobs[0].get("schedule_display") or jobs[0].get("schedule")
+        ) == "30 7 * * *"
         assert jobs[0].get("deliver") == "telegram"
 
 
@@ -151,7 +153,9 @@ class TestDocsGenerator:
 
         script = (
             Path(__file__).resolve().parents[2]
-            / "website" / "scripts" / "extract-automation-blueprints.py"
+            / "website"
+            / "scripts"
+            / "extract-automation-blueprints.py"
         )
         spec = importlib.util.spec_from_file_location("extract_cron_blueprints", script)
         assert spec is not None and spec.loader is not None

@@ -17,6 +17,7 @@ from unittest.mock import patch
 
 # ─── Fix 1: copilot_auth skips gh CLI when env var is set ──────────────
 
+
 class TestCopilotAuthSkipsGhCli:
     """resolve_copilot_token must not call _try_gh_cli_token when any
     Copilot env var is set, even if the token is an unsupported classic PAT.
@@ -66,6 +67,7 @@ class TestCopilotAuthSkipsGhCli:
         assert source == "gh auth token"
         mock_cli.assert_called_once()
 
+
 # ─── Fix 2: resolve_skin runs via to_thread in handle_ws ───────────────
 
 
@@ -90,7 +92,9 @@ def test_handle_ws_resolves_skin_off_the_loop_thread(monkeypatch):
     monkeypatch.setattr(server, "_ensure_skin_watcher", lambda: None)
     monkeypatch.setattr(server, "register_live_transport", lambda *_a, **_k: None)
     monkeypatch.setattr(server, "_start_backend_heartbeat_refresher", lambda: None)
-    monkeypatch.setattr(server, "_schedule_startup_orphan_sweep", lambda: None, raising=False)
+    monkeypatch.setattr(
+        server, "_schedule_startup_orphan_sweep", lambda: None, raising=False
+    )
     monkeypatch.setattr(server, "_WS_ORPHAN_REAP_GRACE_S", 0)
 
     class FakeWS:
@@ -109,7 +113,8 @@ def test_handle_ws_resolves_skin_off_the_loop_thread(monkeypatch):
     asyncio.run(ws_mod.handle_ws(FakeWS()))
 
     assert idents["skin"] != idents["loop"], (
-        "resolve_skin ran on the event loop thread — the #60800 cold-start stall is back")
+        "resolve_skin ran on the event loop thread — the #60800 cold-start stall is back"
+    )
     ready = [f for f in frames if f.get("params", {}).get("type") == "gateway.ready"]
     assert ready and ready[0]["params"]["payload"]["skin"] == {"palette": "wired"}
 

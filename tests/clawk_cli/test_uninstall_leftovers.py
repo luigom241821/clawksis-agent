@@ -2,6 +2,7 @@
 Library app-store entries and the XDG cache/data dirs outside CLAWK_HOME
 (#62209 — uninstalls reported success yet launchd respawned the gateway and
 Library/XDG dirs survived until manually removed)."""
+
 from __future__ import annotations
 
 import subprocess
@@ -29,12 +30,17 @@ def launch_agents(fake_home, monkeypatch):
     agents = fake_home / "Library" / "LaunchAgents"
     agents.mkdir(parents=True)
     monkeypatch.setattr(
-        uninstall, "get_launchd_plist_path",
-        lambda: agents / "ai.clawk.gateway.plist", raising=False,
+        uninstall,
+        "get_launchd_plist_path",
+        lambda: agents / "ai.clawk.gateway.plist",
+        raising=False,
     )
     # _remove_launchd_gateway imports it from clawk_cli.gateway at call time.
     from clawk_cli import gateway
-    monkeypatch.setattr(gateway, "get_launchd_plist_path", lambda: agents / "ai.clawk.gateway.plist")
+
+    monkeypatch.setattr(
+        gateway, "get_launchd_plist_path", lambda: agents / "ai.clawk.gateway.plist"
+    )
     return agents
 
 
@@ -42,6 +48,7 @@ def _fake_launchctl(monkeypatch, calls):
     def fake_run(cmd, **kwargs):
         calls.append(list(cmd))
         return subprocess.CompletedProcess(cmd, 0)
+
     monkeypatch.setattr(uninstall.subprocess, "run", fake_run)
 
 
@@ -60,12 +67,17 @@ def test_remove_launchd_gateway_sweeps_both_label_patterns(launch_agents, monkey
     assert not current.exists() and not profiled.exists() and not legacy.exists()
     assert unrelated.exists()  # never touch another app's agent
     labels = {c[-1].rsplit("/", 1)[-1] for c in calls if c[1] == "bootout"}
-    assert labels == {"ai.clawk.gateway", "ai.clawk.gateway-work",
-                      "io.nousresearch.clawksis-agent.gateway"}
+    assert labels == {
+        "ai.clawk.gateway",
+        "ai.clawk.gateway-work",
+        "io.nousresearch.clawksis-agent.gateway",
+    }
     assert all(c[1] == "unload" for c in calls if c[1] == "unload")
 
 
-def test_remove_launchd_gateway_returns_false_when_no_plists(launch_agents, monkeypatch):
+def test_remove_launchd_gateway_returns_false_when_no_plists(
+    launch_agents, monkeypatch
+):
     calls: list[list[str]] = []
     _fake_launchctl(monkeypatch, calls)
     assert uninstall._remove_launchd_gateway() is False

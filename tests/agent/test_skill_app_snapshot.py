@@ -5,7 +5,9 @@ import sys
 from clawk_platform import declaration
 
 
-def test_application_gate_rechecks_snapshot_without_losing_description(tmp_path, monkeypatch):
+def test_application_gate_rechecks_snapshot_without_losing_description(
+    tmp_path, monkeypatch
+):
     from agent import prompt_builder as pb
 
     monkeypatch.setattr(declaration, "_REGISTRY", {})
@@ -16,15 +18,22 @@ def test_application_gate_rechecks_snapshot_without_losing_description(tmp_path,
     skill.parent.mkdir(parents=True)
     skill.write_text(
         "---\nname: app-guide\ndescription: Application instructions.\n"
-        "requires_apps: [thing]\n---\nHelp with the application.\n", encoding="utf-8",
+        "requires_apps: [thing]\n---\nHelp with the application.\n",
+        encoding="utf-8",
     )
     app = tmp_path / "application.exe"
-    declaration.register("thing", declaration.parse_declaration(
-        "thing", {sys.platform: {"presence": "executable", "location": str(app)}},
-        {"app": True}, where="test-plugin/plugin.yaml",
-    ))
+    declaration.register(
+        "thing",
+        declaration.parse_declaration(
+            "thing",
+            {sys.platform: {"presence": "executable", "location": str(app)}},
+            {"app": True},
+            where="test-plugin/plugin.yaml",
+        ),
+    )
     pb.clear_skills_system_prompt_cache(clear_snapshot=True)
     try:
+
         def build():
             return pb._build_skills_system_prompt_inner(skills, [], None, None, None)
 

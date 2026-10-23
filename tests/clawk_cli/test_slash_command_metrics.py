@@ -6,7 +6,9 @@ from cli import ClawksisCLI
 def test_cli_counts_each_typed_slash_command_once(monkeypatch):
     calls = []
     monkeypatch.setattr(
-        "clawk_cli.observability.shared_metrics_events.record_slash_command", lambda **kw: calls.append(kw))
+        "clawk_cli.observability.shared_metrics_events.record_slash_command",
+        lambda **kw: calls.append(kw),
+    )
     ran = []
     monkeypatch.setattr(ClawksisCLI, "_cmd_new", lambda self, cmd: ran.append(cmd))
     cli = object.__new__(ClawksisCLI)
@@ -16,4 +18,7 @@ def test_cli_counts_each_typed_slash_command_once(monkeypatch):
     cli.process_command("/rs")  # a user alias re-dispatches /reset internally
 
     assert ran == ["/reset", "/reset"]
-    assert calls == [{"command": "new", "surface": "cli"}, {"command": "rs", "surface": "cli"}]
+    assert calls == [
+        {"command": "new", "surface": "cli"},
+        {"command": "rs", "surface": "cli"},
+    ]

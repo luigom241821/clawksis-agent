@@ -14,7 +14,12 @@ import clawk_yaml as yaml
 
 import gateway.run as gateway_run
 from gateway.config import GatewayConfig, Platform, PlatformConfig
-from gateway.platforms.base import BasePlatformAdapter, MessageEvent, MessageType, SendResult
+from gateway.platforms.base import (
+    BasePlatformAdapter,
+    MessageEvent,
+    MessageType,
+    SendResult,
+)
 from gateway.profile_routing import parse_profile_routes
 from gateway.run import GatewayRunner
 from clawk_cli.plugins import PluginContext, PluginManager, PluginManifest
@@ -24,7 +29,9 @@ PLUGIN = "desk"
 
 class _RecordingAdapter(BasePlatformAdapter):
     def __init__(self, label: str):
-        super().__init__(PlatformConfig(enabled=True, token=f"tok-{label}"), Platform.TELEGRAM)
+        super().__init__(
+            PlatformConfig(enabled=True, token=f"tok-{label}"), Platform.TELEGRAM
+        )
         self.label = label
         self.sent: list[tuple[str, str]] = []
         self.send_scopes: list[tuple] = []  # (home, PROBE_MARKER) each send ran under
@@ -39,6 +46,7 @@ class _RecordingAdapter(BasePlatformAdapter):
     async def send(self, chat_id, content, reply_to=None, metadata=None):
         from agent.secret_scope import get_secret
         from clawk_constants import get_clawk_home
+
         self.sent.append((str(chat_id), content))
         self.send_scopes.append((get_clawk_home(), get_secret("PROBE_MARKER")))
         return SendResult(success=True, message_id=str(len(self.sent)))
@@ -52,20 +60,36 @@ class _RecordingAdapter(BasePlatformAdapter):
 
 def _write_home(home, marker: str) -> None:
     home.mkdir(parents=True, exist_ok=True)
-    (home / "config.yaml").write_text(yaml.safe_dump({
-        "plugins": {"entries": {PLUGIN: {"allow_gateway_injection": True}}},
-    }), encoding="utf-8")
-    (home / ".env").write_text(f"TELEGRAM_ALLOWED_USERS=u1\nPROBE_MARKER={marker}\n", encoding="utf-8")
+    (home / "config.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "plugins": {"entries": {PLUGIN: {"allow_gateway_injection": True}}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (home / ".env").write_text(
+        f"TELEGRAM_ALLOWED_USERS=u1\nPROBE_MARKER={marker}\n", encoding="utf-8"
+    )
 
 
 def _context(home) -> tuple[PluginContext, PluginManager]:
     manager = PluginManager(scope_key=str(home))
-    return PluginContext(PluginManifest(name=PLUGIN, key=PLUGIN, source="user"), manager), manager
+    return PluginContext(
+        PluginManifest(name=PLUGIN, key=PLUGIN, source="user"), manager
+    ), manager
 
 
 def _origin(chat_id: str, **extra) -> dict:
-    return {"platform": "telegram", "chat_id": chat_id, "chat_type": "group", "thread_id": "7",
-            "user_id": "u1", "user_name": "Requester", **extra}
+    return {
+        "platform": "telegram",
+        "chat_id": chat_id,
+        "chat_type": "group",
+        "thread_id": "7",
+        "user_id": "u1",
+        "user_name": "Requester",
+        **extra,
+    }
 
 
 @pytest.fixture
@@ -73,20 +97,34 @@ def gateway(tmp_path, monkeypatch):
     """Multiplexed gateway serving ``default`` (bot P), ``alpha`` (its own bot A) and ``beta`` (its
     own bot B); a route sends chat 999 on bot A to ``beta``."""
     home = tmp_path / "hh"
-    homes = {"default": home, "alpha": home / "profiles" / "alpha", "beta": home / "profiles" / "beta"}
+    homes = {
+        "default": home,
+        "alpha": home / "profiles" / "alpha",
+        "beta": home / "profiles" / "beta",
+    }
     for name, profile_home in homes.items():
         _write_home(profile_home, marker=name)
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr(gateway_run, "_clawk_home", home)
 
     config = GatewayConfig(multiplex_profiles=True, sessions_dir=home / "sessions")
-    config.profile_routes = parse_profile_routes([
-        {"name": "beta-on-a", "platform": "telegram", "profile": "beta", "chat_id": "999", "bot_profile": "alpha"},
-    ])
+    config.profile_routes = parse_profile_routes(
+        [
+            {
+                "name": "beta-on-a",
+                "platform": "telegram",
+                "profile": "beta",
+                "chat_id": "999",
+                "bot_profile": "alpha",
+            },
+        ]
+    )
     runner = GatewayRunner(config)
     adapters = {name: _RecordingAdapter(name) for name in homes}
     runner.adapters = {Platform.TELEGRAM: adapters["default"]}
-    runner._profile_adapters = {name: {Platform.TELEGRAM: adapters[name]} for name in ("alpha", "beta")}
+    runner._profile_adapters = {
+        name: {Platform.TELEGRAM: adapters[name]} for name in ("alpha", "beta")
+    }
     for name, adapter in adapters.items():
         adapter.gateway_runner = runner
         if name != "default":
@@ -97,20 +135,39 @@ def gateway(tmp_path, monkeypatch):
 
     turns = []
 
-    async def _fake_turn(message, context_prompt, history, source, session_id, **_kwargs):
+    async def _fake_turn(
+        message, context_prompt, history, source, session_id, **_kwargs
+    ):
         from agent.secret_scope import get_secret
         from clawk_constants import get_clawk_home
-        turns.append(SimpleNamespace(message=message, history=list(history), session_id=session_id,
-                                     home=get_clawk_home(), marker=get_secret("PROBE_MARKER")))
-        return {"final_response": f"reply-{len(turns)}", "messages": [], "tools": [],
-                "history_offset": len(history), "last_prompt_tokens": 0}
+
+        turns.append(
+            SimpleNamespace(
+                message=message,
+                history=list(history),
+                session_id=session_id,
+                home=get_clawk_home(),
+                marker=get_secret("PROBE_MARKER"),
+            )
+        )
+        return {
+            "final_response": f"reply-{len(turns)}",
+            "messages": [],
+            "tools": [],
+            "history_offset": len(history),
+            "last_prompt_tokens": 0,
+        }
 
     runner._run_agent_inner = _fake_turn
     served = list(homes.items())
-    with patch("clawk_cli.profiles.profiles_to_serve", return_value=served), \
-            patch("clawk_cli.profiles.get_profile_dir", side_effect=lambda n: homes[n]), \
-            patch("clawk_cli.profiles.profile_exists", side_effect=lambda n: n in homes):
-        yield SimpleNamespace(runner=runner, homes=homes, adapters=adapters, turns=turns)
+    with (
+        patch("clawk_cli.profiles.profiles_to_serve", return_value=served),
+        patch("clawk_cli.profiles.get_profile_dir", side_effect=lambda n: homes[n]),
+        patch("clawk_cli.profiles.profile_exists", side_effect=lambda n: n in homes),
+    ):
+        yield SimpleNamespace(
+            runner=runner, homes=homes, adapters=adapters, turns=turns
+        )
 
 
 async def _publish(runner):
@@ -122,7 +179,11 @@ async def _publish(runner):
 async def _settle(runner, adapter, rounds: int = 200):
     for _ in range(rounds):
         await asyncio.sleep(0.01)
-        if not runner._background_tasks and not adapter._session_tasks and not adapter._active_sessions:
+        if (
+            not runner._background_tasks
+            and not adapter._session_tasks
+            and not adapter._active_sessions
+        ):
             return
 
 
@@ -131,12 +192,21 @@ async def test_origin_creates_session_in_own_profile_and_replies_to_origin(gatew
     """No session at the origin: the plugin's profile gets a fresh session, the turn runs under that
     profile's home and secrets, the reply goes back to the origin chat, and a human follow-up in the
     same chat continues the SAME session (A -> B -> A: beta in between, alpha's scope comes back)."""
-    runner, alpha, beta = gateway.runner, gateway.adapters["alpha"], gateway.adapters["beta"]
+    runner, alpha, beta = (
+        gateway.runner,
+        gateway.adapters["alpha"],
+        gateway.adapters["beta"],
+    )
     ctx_alpha, mgr_alpha = _context(gateway.homes["alpha"])
     ctx_beta, mgr_beta = _context(gateway.homes["beta"])
-    with patch("clawk_cli.plugins._known_plugin_managers", return_value=[mgr_alpha, mgr_beta]):
+    with patch(
+        "clawk_cli.plugins._known_plugin_managers", return_value=[mgr_alpha, mgr_beta]
+    ):
         await _publish(runner)
-        assert ctx_alpha.inject_message("Kick off the review", origin=_origin("100")) is True
+        assert (
+            ctx_alpha.inject_message("Kick off the review", origin=_origin("100"))
+            is True
+        )
         await _settle(runner, alpha)
         assert ctx_beta.inject_message("Beta's own post", origin=_origin("200")) is True
         await _settle(runner, beta)
@@ -157,14 +227,20 @@ async def test_origin_creates_session_in_own_profile_and_replies_to_origin(gatew
 
     entry = runner.session_store._entries["agent:alpha:telegram:group:100:7"]
     assert entry.session_id == first.session_id
-    assert not any(key.startswith(("agent:main:", "agent:beta:")) and ":100:" in key
-                   for key in runner.session_store._entries)
+    assert not any(
+        key.startswith(("agent:main:", "agent:beta:")) and ":100:" in key
+        for key in runner.session_store._entries
+    )
 
     # A human reply in the same chat keys into the plugin-created session. A secondary adapter's
     # intake task runs inside its profile scope (it is spawned from connect() under that scope).
-    reply = alpha.build_source(chat_id="100", chat_type="group", thread_id="7", user_id="u1")
+    reply = alpha.build_source(
+        chat_id="100", chat_type="group", thread_id="7", user_id="u1"
+    )
     async with gateway_run._async_profile_runtime_scope(gateway.homes["alpha"]):
-        await alpha.handle_message(MessageEvent(text="thanks", message_type=MessageType.TEXT, source=reply))
+        await alpha.handle_message(
+            MessageEvent(text="thanks", message_type=MessageType.TEXT, source=reply)
+        )
     await _settle(runner, alpha)
     assert gateway.turns[-1].session_id == first.session_id
     assert alpha.sent[-1] == ("100", "reply-4")
@@ -178,12 +254,21 @@ async def test_origin_cannot_reach_another_profile(gateway):
     ctx_alpha, mgr_alpha = _context(gateway.homes["alpha"])
     with patch("clawk_cli.plugins._known_plugin_managers", return_value=[mgr_alpha]):
         await _publish(runner)
-        assert ctx_alpha.inject_message("x", origin=_origin("100", profile="beta")) is False
-        assert ctx_alpha.inject_message("x", origin=_origin("999")) is False  # routed to beta
-        assert ctx_alpha.inject_message("x", origin={"platform": "telegram"}) is False  # malformed
+        assert (
+            ctx_alpha.inject_message("x", origin=_origin("100", profile="beta"))
+            is False
+        )
+        assert (
+            ctx_alpha.inject_message("x", origin=_origin("999")) is False
+        )  # routed to beta
+        assert (
+            ctx_alpha.inject_message("x", origin={"platform": "telegram"}) is False
+        )  # malformed
         await _settle(runner, alpha)
 
-    assert gateway.turns == [] and alpha.sent == [] and gateway.adapters["beta"].sent == []
+    assert (
+        gateway.turns == [] and alpha.sent == [] and gateway.adapters["beta"].sent == []
+    )
     assert runner.session_store._entries == {}
 
 
@@ -191,10 +276,17 @@ async def test_origin_cannot_reach_another_profile(gateway):
 async def test_origin_without_connected_adapter_returns_false(gateway):
     runner = gateway.runner
     ctx_alpha, mgr_alpha = _context(gateway.homes["alpha"])
-    runner._profile_adapters["alpha"] = {}  # alpha's bot is down; never borrow default's
+    runner._profile_adapters[
+        "alpha"
+    ] = {}  # alpha's bot is down; never borrow default's
     with patch("clawk_cli.plugins._known_plugin_managers", return_value=[mgr_alpha]):
         await _publish(runner)
         assert ctx_alpha.inject_message("x", origin=_origin("100")) is False
-        assert ctx_alpha.inject_message("x", origin={**_origin("100"), "platform": "discord"}) is False
+        assert (
+            ctx_alpha.inject_message(
+                "x", origin={**_origin("100"), "platform": "discord"}
+            )
+            is False
+        )
     assert runner._background_tasks == set()
     assert gateway.adapters["default"].sent == []

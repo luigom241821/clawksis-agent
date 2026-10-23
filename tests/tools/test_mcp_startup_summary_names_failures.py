@@ -31,7 +31,9 @@ def _summaries(caplog):
 
 
 @pytest.mark.no_isolate
-def test_register_summary_names_failed_server_with_reason(monkeypatch, tmp_path, caplog, _clean_registry):
+def test_register_summary_names_failed_server_with_reason(
+    monkeypatch, tmp_path, caplog, _clean_registry
+):
     """Production path: ``register_mcp_servers`` with a stdio command that cannot start. The
     summary line itself carries the server name and the recorded connect error."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
@@ -59,9 +61,13 @@ def test_summary_marks_candidate_skipped_for_cooldown(caplog, _clean_registry):
     from tools.mcp_tool_discovery import _log_summary
 
     with mcp_tool._lock:
-        mcp_tool._servers[_server_key("ok")] = SimpleNamespace(_registered_tool_names=["t1", "t2"])
+        mcp_tool._servers[_server_key("ok")] = SimpleNamespace(
+            _registered_tool_names=["t1", "t2"]
+        )
     with caplog.at_level(logging.INFO, logger="tools.mcp_tool"):
         _log_summary("  MCP:", ["ok", "cooled"])
 
     summaries = _summaries(caplog)
-    assert len(summaries) == 1 and "cooled" in summaries[0] and "cooldown" in summaries[0], summaries
+    assert (
+        len(summaries) == 1 and "cooled" in summaries[0] and "cooldown" in summaries[0]
+    ), summaries

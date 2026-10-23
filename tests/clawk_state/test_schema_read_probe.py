@@ -16,11 +16,13 @@ import pytest
 from clawk_state_common import DEFERRED_INDEX_SQL, SCHEMA_SQL
 from clawk_state_schema import SessionSchemaMixin, schema_read_probe_statements
 
+
 def _fresh_schema_conn() -> sqlite3.Connection:
     conn = sqlite3.connect(":memory:")
     conn.executescript(SCHEMA_SQL)
     conn.executescript(DEFERRED_INDEX_SQL)
     return conn
+
 
 class TestSchemaReadProbeStatements:
     def test_probes_cover_every_declared_column(self):
@@ -69,15 +71,11 @@ class TestSchemaReadProbeStatements:
             # probe-generation bug that misassigns columns to tables can't
             # sneak through.
             sessions_probe = next(
-                s
-                for s in schema_read_probe_statements()
-                if 'FROM "sessions"' in s
+                s for s in schema_read_probe_statements() if 'FROM "sessions"' in s
             )
             with pytest.raises(sqlite3.OperationalError) as excinfo:
                 conn.execute(sessions_probe)
-            assert "no such column: sessions.last_activity_at" in str(
-                excinfo.value
-            )
+            assert "no such column: sessions.last_activity_at" in str(excinfo.value)
         finally:
             conn.close()
 

@@ -16,6 +16,7 @@ from typing import Any
 def _pc():
     """The facade, read at call time: tests patch ``plugins_cmd.<name>`` and sibling calls must see it."""
     from clawk_cli import plugins_cmd
+
     return plugins_cmd
 
 
@@ -25,6 +26,7 @@ _PENDING_DELETE_DIR = "plugin-pending-delete"
 def _pending_delete_root() -> Path:
     """``<CLAWK_HOME>/cache/plugin-pending-delete``: trees a running process still held at removal."""
     from clawk_constants import get_clawk_home
+
     return get_clawk_home() / "cache" / _PENDING_DELETE_DIR
 
 
@@ -59,13 +61,17 @@ def _discard_tree(tree: Path) -> None:
     root.mkdir(parents=True, exist_ok=True)
     parked = Path(tempfile.mkdtemp(prefix=f"{tree.name}-", dir=root)) / "plugin"
     try:
-        os.replace(tree, parked)  # same volume (both under CLAWK_HOME): a rename, allowed on mapped DLLs
+        os.replace(
+            tree, parked
+        )  # same volume (both under CLAWK_HOME): a rename, allowed on mapped DLLs
     except OSError:
         # A held directory itself (a process's cwd, an open handle on it) cannot even be renamed. Strip
         # its manifests so the remnant no longer loads, and leave the files to the next start.
         for name in ("plugin.yaml", "plugin.yml", "plugin.json", "__init__.py"):
             (tree / name).unlink(missing_ok=True)
-        (root / f"{tree.parent.name}-{tree.name}.path").write_text(str(tree), encoding="utf-8")
+        (root / f"{tree.parent.name}-{tree.name}.path").write_text(
+            str(tree), encoding="utf-8"
+        )
 
 
 def _remove_plugin_core(target: Path) -> None:
@@ -73,7 +79,9 @@ def _remove_plugin_core(target: Path) -> None:
     if target.name not in _pc()._read_install_metadata():
         _discard_tree(target)
         return
-    staging = Path(tempfile.mkdtemp(prefix=f".{target.name}.remove-", dir=target.parent))
+    staging = Path(
+        tempfile.mkdtemp(prefix=f".{target.name}.remove-", dir=target.parent)
+    )
     backup = staging / "plugin"
     try:
         os.replace(target, backup)
@@ -109,12 +117,16 @@ def cmd_remove(name: str) -> None:
     try:
         result = _remove_user_plugin(plugins_dir, name, target)
     except (OSError, _pc().PluginOperationError) as exc:
-        _pc()._fail(console, f"[red]Error:[/red] Could not remove plugin '{name}': {exc}")
+        _pc()._fail(
+            console, f"[red]Error:[/red] Could not remove plugin '{name}': {exc}"
+        )
     console.print()
     console.print(f"[red]✗[/red] Plugin [bold]{name}[/bold] removed from {plugins_dir}")
     if result.get("cleared_memory_provider"):
-        console.print("[yellow]memory.provider pointed at this plugin and was reset; "
-                      "run `clawk memory setup` to pick another.[/yellow]")
+        console.print(
+            "[yellow]memory.provider pointed at this plugin and was reset; "
+            "run `clawk memory setup` to pick another.[/yellow]"
+        )
     console.print()
 
 
@@ -130,25 +142,41 @@ def _remove_user_plugin(plugins_dir: Path, name: str, target: Path) -> dict[str,
     if link.is_symlink():
         link.unlink()
         return {"ok": True, "name": name, **_pc()._forget_plugin_config({link.name})}
-    entry = next((e for e in _pc()._discover_all_plugins() if Path(str(e[4])) == target), None)
+    entry = next(
+        (e for e in _pc()._discover_all_plugins() if Path(str(e[4])) == target), None
+    )
     key = entry[5] if entry else target.name
     aliases = _pc()._plugin_aliases(key) | {target.name}
     from clawk_cli.plugin_oauth import forget_plugin_grants, plugin_key
-    grant_key = plugin_key(target)  # grants are stored by directory key, which the manifest name may not match
+
+    grant_key = plugin_key(
+        target
+    )  # grants are stored by directory key, which the manifest name may not match
     _pc()._toggle_plugin_toolset(key, enable=False)
     _remove_plugin_core(target)
-    forget_plugin_grants(grant_key)  # a later plugin installed under the same key must not inherit the sign-in
+    forget_plugin_grants(
+        grant_key
+    )  # a later plugin installed under the same key must not inherit the sign-in
     return {"ok": True, "name": name, **_pc()._forget_plugin_config(aliases)}
 
 
 def dashboard_remove_user_plugin(name: str) -> dict[str, Any]:
     """Delete a plugin tree under ``~/.clawksis/plugins/`` only."""
     plugins_dir = _pc()._plugins_dir()
-    if any(n == name and src == "bundled" for n, _ver, _d, src, _path, _key in _pc()._discover_all_plugins()):
-        return {"ok": False, "error": "Bundled plugins cannot be removed from the dashboard."}
+    if any(
+        n == name and src == "bundled"
+        for n, _ver, _d, src, _path, _key in _pc()._discover_all_plugins()
+    ):
+        return {
+            "ok": False,
+            "error": "Bundled plugins cannot be removed from the dashboard.",
+        }
     target = _pc()._user_installed_plugin_dir(name)
     if target is None:
-        return {"ok": False, "error": f"Plugin '{name}' was not found under {plugins_dir}."}
+        return {
+            "ok": False,
+            "error": f"Plugin '{name}' was not found under {plugins_dir}.",
+        }
     try:
         return _remove_user_plugin(plugins_dir, name, target)
     except (OSError, _pc().PluginOperationError) as exc:

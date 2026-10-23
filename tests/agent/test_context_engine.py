@@ -10,6 +10,7 @@ from agent.context_compressor import ContextCompressor
 # A minimal concrete engine for testing the ABC
 # ---------------------------------------------------------------------------
 
+
 class StubEngine(ContextEngine):
     """Minimal engine that satisfies the ABC without doing real work."""
 
@@ -23,8 +24,16 @@ class StubEngine(ContextEngine):
     def name(self) -> str:
         return "stub"
 
-    def update_model(self, model="", context_length=0, base_url="", api_key="",
-                     provider="", api_mode="", **kwargs) -> None:
+    def update_model(
+        self,
+        model="",
+        context_length=0,
+        base_url="",
+        api_key="",
+        provider="",
+        api_mode="",
+        **kwargs,
+    ) -> None:
         """Mirror ContextCompressor.update_model — recompute threshold from the
         new context_length. This is the mutation that corrupted the shared
         singleton in #42449."""
@@ -40,7 +49,9 @@ class StubEngine(ContextEngine):
         tokens = prompt_tokens if prompt_tokens is not None else self.last_prompt_tokens
         return tokens >= self.threshold_tokens
 
-    def compress(self, messages: list[dict[str, Any]], current_tokens: int | None = None) -> list[dict[str, Any]]:
+    def compress(
+        self, messages: list[dict[str, Any]], current_tokens: int | None = None
+    ) -> list[dict[str, Any]]:
         self._compress_called = True
         self.compression_count += 1
         # Trivial: just return as-is
@@ -59,6 +70,7 @@ class StubEngine(ContextEngine):
         self._tools_called.append(name)
         return json.dumps({"ok": True, "tool": name})
 
+
 # ---------------------------------------------------------------------------
 # ABC contract tests
 # ---------------------------------------------------------------------------
@@ -66,6 +78,7 @@ class StubEngine(ContextEngine):
 # ---------------------------------------------------------------------------
 # Default method behavior
 # ---------------------------------------------------------------------------
+
 
 class TestDefaults:
     """Verify ABC default implementations work correctly."""
@@ -87,6 +100,7 @@ class TestDefaults:
         assert engine.last_prompt_tokens == 0
         assert engine.compression_count == 0
 
+
 # ---------------------------------------------------------------------------
 # StubEngine behavior
 # ---------------------------------------------------------------------------
@@ -95,11 +109,14 @@ class TestDefaults:
 # ContextCompressor session reset via ABC
 # ---------------------------------------------------------------------------
 
+
 class TestCompressorSessionReset:
     """Verify ContextCompressor.on_session_reset() clears all state."""
 
     def test_reset_clears_state(self):
-        c = ContextCompressor(model="test", quiet_mode=True, config_context_length=200000)
+        c = ContextCompressor(
+            model="test", quiet_mode=True, config_context_length=200000
+        )
         c.last_prompt_tokens = 50000
         c.compression_count = 3
         c._previous_summary = "some old summary"
@@ -116,15 +133,18 @@ class TestCompressorSessionReset:
         assert c._context_probe_persistable is False
         assert c._previous_summary is None
 
+
 # ---------------------------------------------------------------------------
 # Plugin slot (PluginManager integration)
 # ---------------------------------------------------------------------------
+
 
 class TestPluginContextEngineSlot:
     """Test register_context_engine on PluginContext."""
 
     def test_register_engine(self):
         from clawk_cli.plugins import PluginManager, PluginContext, PluginManifest
+
         mgr = PluginManager()
         manifest = PluginManifest(name="test-lcm")
         ctx = PluginContext(manifest, mgr)

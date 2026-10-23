@@ -20,9 +20,18 @@ def local_gateway(monkeypatch):
             requests.append((self.path, dict(self.headers), body))
             if self.path == "/v2/search":
                 status = 200
-                payload = {"success": True, "data": {"web": [{
-                    "title": "Local fixture", "url": "https://example.test", "description": "fixture",
-                }]}}
+                payload = {
+                    "success": True,
+                    "data": {
+                        "web": [
+                            {
+                                "title": "Local fixture",
+                                "url": "https://example.test",
+                                "description": "fixture",
+                            }
+                        ]
+                    },
+                }
             else:
                 status, payload = 503, {"error": "local test outage"}
             content = json.dumps(payload).encode()
@@ -44,7 +53,9 @@ def local_gateway(monkeypatch):
     monkeypatch.setenv("FIRECRAWL_GATEWAY_URL", base)
     monkeypatch.setenv("PERPLEXITY_BASE_URL", base + "/direct")
     # Only entitlement is stubbed: route and credential resolution remain real.
-    monkeypatch.setattr(managed_tool_gateway, "managed_nous_tools_enabled", lambda **kw: True)
+    monkeypatch.setattr(
+        managed_tool_gateway, "managed_nous_tools_enabled", lambda **kw: True
+    )
 
     # CI omits the firecrawl extra; stand in for the SDK, still over real HTTP.
     class FirecrawlSDK:
@@ -53,7 +64,8 @@ def local_gateway(monkeypatch):
 
         def search(self, query, limit):
             response = httpx.post(
-                f"{self.api_url}/v2/search", json={"query": query, "limit": limit},
+                f"{self.api_url}/v2/search",
+                json={"query": query, "limit": limit},
                 headers={"Authorization": f"Bearer {self.api_key}"},
             )
             return response.json()
@@ -83,52 +95,79 @@ def local_gateway(monkeypatch):
     ],
 )
 def test_only_managed_search_may_use_billed_fallback(
-    monkeypatch, tmp_path, local_gateway, selection, direct_key, expected_paths,
+    monkeypatch,
+    tmp_path,
+    local_gateway,
+    selection,
+    direct_key,
+    expected_paths,
 ):
     from clawk_cli.config import atomic_config_write
     from tools import web_tools
     from tests.tools.conftest import register_all_web_providers
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    atomic_config_write(tmp_path / "config.yaml", {
-        "web": {**selection, "keyless_rescue": False, "cache_enabled": True},
-    })
+    atomic_config_write(
+        tmp_path / "config.yaml",
+        {
+            "web": {**selection, "keyless_rescue": False, "cache_enabled": True},
+        },
+    )
     if direct_key:
         monkeypatch.setenv("PERPLEXITY_API_KEY", "test-direct-key")
     else:
         monkeypatch.delenv("PERPLEXITY_API_KEY", raising=False)
     register_all_web_providers()
     expected = [
-        (path, "Bearer test-direct-key" if path == "/direct/search" else "Bearer test-nous-token")
+        (
+            path,
+            "Bearer test-direct-key"
+            if path == "/direct/search"
+            else "Bearer test-nous-token",
+        )
         for path in expected_paths
     ]
     for attempt in (1, 2):
         result = json.loads(web_tools.web_search_tool("local fixture", limit=3))
         # A fallback must not be cached: the identical query retries Perplexity.
-        assert [(path, headers["Authorization"]) for path, headers, _ in local_gateway] == expected * attempt
-        assert result["success"] == bool(expected_paths and expected_paths[-1] == "/v2/search")
+        assert [
+            (path, headers["Authorization"]) for path, headers, _ in local_gateway
+        ] == expected * attempt
+        assert result["success"] == bool(
+            expected_paths and expected_paths[-1] == "/v2/search"
+        )
         if result["success"]:
             assert result["data"]["fallback_from"] == "managed_primary"
             assert "local test outage" in result["data"]["backend_error"]
-            assert web_tools._get_extract_backend() == selection.get("extract_backend", "firecrawl")
+            assert web_tools._get_extract_backend() == selection.get(
+                "extract_backend", "firecrawl"
+            )
     for path, headers, body in local_gateway:
         if path != "/v2/search":
             managed = path == "/perplexity/search"
             assert body.get("search_type") == ("fast" if managed else None)
             assert body["search_context_size"] == "low"
-            assert headers.get("X-Pplx-Integration") == (None if managed else "clawksis-agent")
+            assert headers.get("X-Pplx-Integration") == (
+                None if managed else "clawksis-agent"
+            )
 
 
-def test_managed_search_without_identity_names_the_gateway(monkeypatch, tmp_path, local_gateway):
+def test_managed_search_without_identity_names_the_gateway(
+    monkeypatch, tmp_path, local_gateway
+):
     from clawk_cli.config import atomic_config_write
     from tools import managed_tool_gateway, web_tools
     from tests.tools.conftest import register_all_web_providers
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    atomic_config_write(tmp_path / "config.yaml", {"web": {"backend": "nous", "keyless_rescue": False}})
+    atomic_config_write(
+        tmp_path / "config.yaml", {"web": {"backend": "nous", "keyless_rescue": False}}
+    )
     monkeypatch.delenv("PERPLEXITY_API_KEY", raising=False)
     monkeypatch.delenv("TOOL_GATEWAY_USER_TOKEN", raising=False)
-    monkeypatch.setattr(managed_tool_gateway, "managed_nous_tools_enabled", lambda **kw: False)
+    monkeypatch.setattr(
+        managed_tool_gateway, "managed_nous_tools_enabled", lambda **kw: False
+    )
     register_all_web_providers()
 
     error = json.loads(web_tools.web_search_tool("local fixture", limit=3))["error"]
@@ -137,17 +176,28 @@ def test_managed_search_without_identity_names_the_gateway(monkeypatch, tmp_path
     assert local_gateway == []
 
 
-def test_unentitled_managed_search_gets_fast_search_but_no_billed_fallback(monkeypatch, tmp_path, local_gateway):
+def test_unentitled_managed_search_gets_fast_search_but_no_billed_fallback(
+    monkeypatch, tmp_path, local_gateway
+):
     from clawk_cli.config import atomic_config_write
     from tools import managed_tool_gateway, web_tools
     from tests.tools.conftest import register_all_web_providers
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    atomic_config_write(tmp_path / "config.yaml", {"web": {"backend": "nous", "keyless_rescue": False}})
+    atomic_config_write(
+        tmp_path / "config.yaml", {"web": {"backend": "nous", "keyless_rescue": False}}
+    )
     monkeypatch.delenv("PERPLEXITY_API_KEY", raising=False)
-    monkeypatch.setattr(managed_tool_gateway, "managed_nous_tools_enabled", lambda **kw: False)
+    monkeypatch.setattr(
+        managed_tool_gateway, "managed_nous_tools_enabled", lambda **kw: False
+    )
     register_all_web_providers()
 
     # The fixture 503s the Perplexity route; an entitled caller would then be served by /v2/search.
-    assert json.loads(web_tools.web_search_tool("local fixture", limit=3))["success"] is False
-    assert [(path, body.get("search_type")) for path, _, body in local_gateway] == [("/perplexity/search", "fast")]
+    assert (
+        json.loads(web_tools.web_search_tool("local fixture", limit=3))["success"]
+        is False
+    )
+    assert [(path, body.get("search_type")) for path, _, body in local_gateway] == [
+        ("/perplexity/search", "fast")
+    ]

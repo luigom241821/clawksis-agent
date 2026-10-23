@@ -46,7 +46,7 @@ def _store_full_snapshot(snapshot_text: str) -> Optional[str]:
         content = redact_sensitive_text(snapshot_text, force=True)
         if len(content) > _bt.MAX_STORED_SNAPSHOT_CHARS:
             content = (
-                content[:_bt.MAX_STORED_SNAPSHOT_CHARS]
+                content[: _bt.MAX_STORED_SNAPSHOT_CHARS]
                 + f"\n\n[... stored copy truncated at {_bt.MAX_STORED_SNAPSHOT_CHARS:,} chars "
                 f"of {len(content):,} ...]"
             )
@@ -82,9 +82,10 @@ def _truncate_snapshot(snapshot_text: str, max_chars: Optional[int] = None) -> s
     if stored_path:
         # Agent-visible path: read_file runs inside the active backend (#72389).
         from tools.credential_files import to_agent_visible_cache_path
+
         stored_path = to_agent_visible_cache_path(stored_path)
 
-    lines = snapshot_text.split('\n')
+    lines = snapshot_text.split("\n")
     result: list[str] = []
     chars = 0
     # Reserve space for the truncation note (the stored-path variant is the
@@ -100,12 +101,14 @@ def _truncate_snapshot(snapshot_text: str, max_chars: Optional[int] = None) -> s
         if stored_path:
             next_line = len(result) + 1
             result.append(
-                f'\n[... {remaining} more lines truncated — full snapshot: '
+                f"\n[... {remaining} more lines truncated — full snapshot: "
                 f'read_file path="{stored_path}" offset={next_line} limit=200]'
             )
         else:
-            result.append(f'\n[... {remaining} more lines truncated, use browser_snapshot for full content]')
-    return '\n'.join(result)
+            result.append(
+                f"\n[... {remaining} more lines truncated, use browser_snapshot for full content]"
+            )
+    return "\n".join(result)
 
 
 def _redact_browser_output(value: Any, *, _depth: int = 0) -> Any:
@@ -132,7 +135,9 @@ def _redact_browser_output(value: Any, *, _depth: int = 0) -> Any:
         return tuple(_redact_browser_output(item, _depth=_depth + 1) for item in value)
     if isinstance(value, dict):
         return {
-            _redact_browser_output(key, _depth=_depth + 1): _redact_browser_output(item, _depth=_depth + 1)
+            _redact_browser_output(key, _depth=_depth + 1): _redact_browser_output(
+                item, _depth=_depth + 1
+            )
             for key, item in value.items()
         }
     return value

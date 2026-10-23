@@ -17,7 +17,10 @@ def _accepts_keyword_argument(callable_obj: Any, name: str) -> bool:
         parameters = inspect.signature(callable_obj).parameters
     except (TypeError, ValueError):
         return False
-    if any(parameter.kind is inspect.Parameter.VAR_KEYWORD for parameter in parameters.values()):
+    if any(
+        parameter.kind is inspect.Parameter.VAR_KEYWORD
+        for parameter in parameters.values()
+    ):
         return True
     parameter = parameters.get(name)
     return parameter is not None and parameter.kind in (
@@ -27,7 +30,9 @@ def _accepts_keyword_argument(callable_obj: Any, name: str) -> bool:
 
 
 class SummaryDispatchMixin:
-    def _apply_summary_route(self, call_kwargs: dict, pinned: Optional[dict[str, Any]] = None) -> None:
+    def _apply_summary_route(
+        self, call_kwargs: dict, pinned: Optional[dict[str, Any]] = None
+    ) -> None:
         """Pin the summary route onto ``call_kwargs`` for both compression entry points.
 
         After a fallback, an omitted route is NOT "use the main model": ``call_llm`` re-resolves
@@ -51,7 +56,9 @@ class SummaryDispatchMixin:
             return
         from agent.auxiliary_task_config import authoritative_auxiliary_task
 
-        call_kwargs["task"] = authoritative_auxiliary_task(call_kwargs.get("task") or "compression")
+        call_kwargs["task"] = authoritative_auxiliary_task(
+            call_kwargs.get("task") or "compression"
+        )
         for key, value in (
             ("provider", self.provider),
             ("model", self.model),
@@ -63,13 +70,19 @@ class SummaryDispatchMixin:
                 call_kwargs[key] = value
 
     def _summarize_window(
-        self, messages: list[dict[str, Any]], turns_to_summarize: list[dict[str, Any]], scan: _HandoffScan,
-        focus_topic: Optional[str], memory_context: str, bypass_cooldown: bool,
+        self,
+        messages: list[dict[str, Any]],
+        turns_to_summarize: list[dict[str, Any]],
+        scan: _HandoffScan,
+        focus_topic: Optional[str],
+        memory_context: str,
+        bypass_cooldown: bool,
     ) -> Optional[str]:
         """Run the summary LLM; a cancellation rolls back the handoff scan's self-heal mutation first.
         A deterministic pin (repeated stall, #112420) skips the LLM: ``None`` lets Phase 3 insert the static
         fallback summary, or abort under ``abort_on_summary_failure`` exactly like a failed summary call."""
         from agent.context_compressor import take_deterministic_summary_pin
+
         if take_deterministic_summary_pin():
             # A detached stale attempt must not stamp error state or mutate the shared telemetry dict
             # the fallback owns; unwind as a cancellation before any write lands.
@@ -77,9 +90,7 @@ class SummaryDispatchMixin:
 
             _raise_if_stale_attempt(self)
             # Surfaces through the fallback summary's reason line and the host's one-shot user warning.
-            self._last_summary_error = (
-                "summary model stalled on every route; deterministic fallback summary inserted"
-            )
+            self._last_summary_error = "summary model stalled on every route; deterministic fallback summary inserted"
             telemetry = getattr(self, "_active_compression_telemetry", None)
             if isinstance(telemetry, dict):
                 telemetry["failure_class"] = "stall_deterministic_fallback"

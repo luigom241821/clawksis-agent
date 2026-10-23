@@ -13,7 +13,12 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Callable, Deque, Dict, Hashable, Tuple
 
-__all__ = ["BotLoopGuard", "BotLoopGuardSettings", "load_settings", "settings_from_config"]
+__all__ = [
+    "BotLoopGuard",
+    "BotLoopGuardSettings",
+    "load_settings",
+    "settings_from_config",
+]
 
 _TRUTHY = frozenset({"true", "1", "yes", "on"})
 _FALSY = frozenset({"false", "0", "no", "off"})
@@ -64,8 +69,12 @@ def settings_from_config(cfg) -> BotLoopGuardSettings:
     return BotLoopGuardSettings(
         enabled=_as_bool(block.get("enabled"), defaults.enabled),
         max_events=_as_positive_int(block.get("max_events"), defaults.max_events),
-        window_seconds=_as_positive(block.get("window_seconds"), defaults.window_seconds),
-        cooldown_seconds=_as_positive(block.get("cooldown_seconds"), defaults.cooldown_seconds),
+        window_seconds=_as_positive(
+            block.get("window_seconds"), defaults.window_seconds
+        ),
+        cooldown_seconds=_as_positive(
+            block.get("cooldown_seconds"), defaults.cooldown_seconds
+        ),
     )
 
 
@@ -135,7 +144,9 @@ class BotLoopGuard:
             return
         self._last_sweep = now
         idle_cutoff = now - settings.window_seconds
-        for key in [k for k, dq in self._events.items() if not dq or dq[-1] <= idle_cutoff]:
+        for key in [
+            k for k, dq in self._events.items() if not dq or dq[-1] <= idle_cutoff
+        ]:
             del self._events[key]
         for key in [k for k, until in self._cooldown_until.items() if until <= now]:
             del self._cooldown_until[key]

@@ -24,13 +24,19 @@ _MEMORY_CONTEXT_TAIL_CHARS = 1_500
 
 def sanitize_memory_context(memory_context: str) -> str:
     """Prepare provider context for a context-engine/LLM egress boundary."""
-    sanitized = redact_sensitive_text(memory_context.strip(), force=True, redact_url_credentials=True)
+    sanitized = redact_sensitive_text(
+        memory_context.strip(), force=True, redact_url_credentials=True
+    )
     if len(sanitized) <= MEMORY_CONTEXT_MAX_CHARS:
         return sanitized
-    return elide_middle(sanitized, _MEMORY_CONTEXT_HEAD_CHARS, _MEMORY_CONTEXT_TAIL_CHARS)
+    return elide_middle(
+        sanitized, _MEMORY_CONTEXT_HEAD_CHARS, _MEMORY_CONTEXT_TAIL_CHARS
+    )
 
 
-def automatic_compaction_status_message(engine: Any, *, phase: str, default_message: str, **context: Any) -> str | None:
+def automatic_compaction_status_message(
+    engine: Any, *, phase: str, default_message: str, **context: Any
+) -> str | None:
     """Host-visible status for an automatic compaction event; ``None`` = emit nothing.
 
     Engines suppress via ``emit_automatic_compaction_status = False`` or
@@ -39,7 +45,11 @@ def automatic_compaction_status_message(engine: Any, *, phase: str, default_mess
     if not getattr(engine, "emit_automatic_compaction_status", True):
         return None
     formatter = getattr(engine, "get_automatic_compaction_status_message", None)
-    message = formatter(phase=phase, default_message=default_message, **context) if callable(formatter) else default_message
+    message = (
+        formatter(phase=phase, default_message=default_message, **context)
+        if callable(formatter)
+        else default_message
+    )
     if message is None:
         return None
     return str(message).strip() or None
@@ -85,7 +95,9 @@ class ContextEngine(ABC):
     def should_compress(self, prompt_tokens: int | None = None) -> bool:
         """Return True if compaction should fire this turn."""
 
-    def should_compress_info(self, prompt_tokens: int | None = None) -> tuple[bool, str | None]:
+    def should_compress_info(
+        self, prompt_tokens: int | None = None
+    ) -> tuple[bool, str | None]:
         """Return ``(should_compress, reason)``.
 
         Engines with block reasons (summary-LLM cooldown, anti-thrashing guard) override
@@ -96,8 +108,12 @@ class ContextEngine(ABC):
 
     @abstractmethod
     def compress(
-        self, messages: list[dict[str, Any]], current_tokens: Optional[int] = None,
-        focus_topic: Optional[str] = None, force: bool = False, memory_context: str = "",
+        self,
+        messages: list[dict[str, Any]],
+        current_tokens: Optional[int] = None,
+        focus_topic: Optional[str] = None,
+        force: bool = False,
+        memory_context: str = "",
     ) -> list[dict[str, Any]]:
         """Compact ``messages`` into a valid OpenAI-format list that fits the budget.
 
@@ -108,7 +124,9 @@ class ContextEngine(ABC):
         """
 
     def prune_tool_results_only(
-        self, messages: list[dict[str, Any]], current_tokens: int | None = None,
+        self,
+        messages: list[dict[str, Any]],
+        current_tokens: int | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
         """Deterministically trim old tool-result payloads without an LLM call.
 
@@ -119,8 +137,12 @@ class ContextEngine(ABC):
         return messages, 0
 
     def select_context(
-        self, request_messages: list[dict[str, Any]], *, conversation_messages: list[dict[str, Any]] | None = None,
-        incoming_message: dict[str, Any] | None = None, budget_tokens: int = 0,
+        self,
+        request_messages: list[dict[str, Any]],
+        *,
+        conversation_messages: list[dict[str, Any]] | None = None,
+        incoming_message: dict[str, Any] | None = None,
+        budget_tokens: int = 0,
     ) -> list[dict[str, Any]]:
         """Optionally *select* (replace) the context for THIS request, pre-generation.
 
@@ -140,7 +162,12 @@ class ContextEngine(ABC):
         """
         return None
 
-    def on_turn_complete(self, messages: list[dict[str, Any]], usage: dict[str, Any] | None = None, **kwargs: Any) -> None:
+    def on_turn_complete(
+        self,
+        messages: list[dict[str, Any]],
+        usage: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> None:
         """Observe a finished turn (complement of ``select_context()``) to index/update
         routing state for the next request.
 
@@ -163,7 +190,11 @@ class ContextEngine(ABC):
         return False
 
     def get_automatic_compaction_status_message(
-        self, *, phase: str, default_message: str, **context: Any,
+        self,
+        *,
+        phase: str,
+        default_message: str,
+        **context: Any,
     ) -> str | None:
         """User-visible status for automatic compaction, or ``None`` to suppress it.
 
@@ -219,7 +250,9 @@ class ContextEngine(ABC):
             "last_prompt_tokens": last_prompt,
             "threshold_tokens": self.threshold_tokens,
             "context_length": self.context_length,
-            "usage_percent": min(100, last_prompt / self.context_length * 100) if self.context_length else 0,
+            "usage_percent": min(100, last_prompt / self.context_length * 100)
+            if self.context_length
+            else 0,
             "compression_count": self.compression_count,
         }
 
@@ -231,8 +264,13 @@ class ContextEngine(ABC):
         return copy.deepcopy(self)
 
     def update_model(
-        self, model: str, context_length: int, base_url: str = "", api_key: str = "",
-        provider: str = "", api_mode: str = "",
+        self,
+        model: str,
+        context_length: int,
+        base_url: str = "",
+        api_key: str = "",
+        provider: str = "",
+        api_mode: str = "",
     ) -> None:
         """Model switch / fallback: recompute threshold_tokens (override for more).
 
@@ -242,9 +280,14 @@ class ContextEngine(ABC):
         """
         self.context_length = context_length
         from agent.context_compressor import resolve_model_threshold
+
         if not hasattr(self, "_config_threshold_percent"):
             self._config_threshold_percent = self.threshold_percent
         self._base_threshold_percent = resolve_model_threshold(
-            model, getattr(self, "model_thresholds", {}), self._config_threshold_percent, provider)
+            model,
+            getattr(self, "model_thresholds", {}),
+            self._config_threshold_percent,
+            provider,
+        )
         self.threshold_percent = self._base_threshold_percent
         self.threshold_tokens = int(context_length * self.threshold_percent)

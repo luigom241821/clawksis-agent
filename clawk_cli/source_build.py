@@ -17,16 +17,32 @@ def source_product_current(project_root: Path, product: str, out: Path) -> bool:
     node, env = str(installed.binary), env_for("node")
     try:
         result = subprocess.run(
-            [node, str(project_root / "scripts/build/freshness.mjs"),
-             "--source", str(project_root), "--product", product, "--out", str(out)],
-            cwd=project_root, env=env, capture_output=True, text=True, encoding="utf-8", errors="replace", check=True,
+            [
+                node,
+                str(project_root / "scripts/build/freshness.mjs"),
+                "--source",
+                str(project_root),
+                "--product",
+                product,
+                "--out",
+                str(out),
+            ],
+            cwd=project_root,
+            env=env,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=True,
         )
         return result.stdout.strip() == "true"
     except (OSError, subprocess.SubprocessError):
         return False
 
 
-def source_build_env(base_env: dict | None = None, *, explicit: bool = False, verify: bool = True) -> dict[str, str]:
+def source_build_env(
+    base_env: dict | None = None, *, explicit: bool = False, verify: bool = True
+) -> dict[str, str]:
     from pm import ensure
     from pm.environments import project_python, running_from_selected_environment
     from pm.paths import repo_root
@@ -36,9 +52,18 @@ def source_build_env(base_env: dict | None = None, *, explicit: bool = False, ve
     # activated in-process. Icon generation starts an isolated child, which needs
     # the selected venv executable rather than the store interpreter.
     root = repo_root()
-    python = str(project_python(root)) if running_from_selected_environment(root) else sys.executable
-    env = {**os.environ, **(base_env or {}), "CI": "1", "CLAWK_PYTHON": python,
-           "PYTHON": python}
+    python = (
+        str(project_python(root))
+        if running_from_selected_environment(root)
+        else sys.executable
+    )
+    env = {
+        **os.environ,
+        **(base_env or {}),
+        "CI": "1",
+        "CLAWK_PYTHON": python,
+        "PYTHON": python,
+    }
     # Electron's installer unpacks its binary with a native module that imports
     # VCRUNTIME140.dll, which a fresh Windows lacks. Our Python ships one, and
     # scripts/build/electron-runtime.mjs copies it beside that module.
@@ -65,41 +90,74 @@ def run_in_custody(project_root: Path, command: list, label: str, **kwargs):
         return run_contained(argv, label, **kwargs, **custody)
 
 
-def run_source_script(project_root: Path, script: str, *args: str, env: dict, label: str) -> None:
-    command = [shutil.which("node", path=env["PATH"]), str(project_root / script), *args]
+def run_source_script(
+    project_root: Path, script: str, *args: str, env: dict, label: str
+) -> None:
+    command = [
+        shutil.which("node", path=env["PATH"]),
+        str(project_root / script),
+        *args,
+    ]
     # npm's deprecation warnings are the loudest lines and never actionable
     # here; they still land in the failure tail.
-    run_in_custody(project_root, command, label, hide=lambda line: line.lower().startswith("npm warn"),
-                   indent="  ", cwd=project_root, env=env)
+    run_in_custody(
+        project_root,
+        command,
+        label,
+        hide=lambda line: line.lower().startswith("npm warn"),
+        indent="  ",
+        cwd=project_root,
+        env=env,
+    )
 
 
-def prepare_source_dependencies(project_root: Path, workspaces: tuple[str, ...], *, env: dict,
-                                explicit: bool = False) -> None:
+def prepare_source_dependencies(
+    project_root: Path,
+    workspaces: tuple[str, ...],
+    *,
+    env: dict,
+    explicit: bool = False,
+) -> None:
     from pm import lazy_installs_allowed
 
     run_source_script(
-        project_root, "scripts/build/node-deps.mjs", "--source", str(project_root), "--reuse",
+        project_root,
+        "scripts/build/node-deps.mjs",
+        "--source",
+        str(project_root),
+        "--reuse",
         *(() if explicit or lazy_installs_allowed() else ("--no-install",)),
-        *(arg for workspace in workspaces for arg in ("--workspace", workspace)), env=env,
+        *(arg for workspace in workspaces for arg in ("--workspace", workspace)),
+        env=env,
         label="Preparing Node dependencies",
     )
 
 
 def prepare_launch_dependencies(project_root: Path, *, env: dict) -> None:
     """A launch rebuild must not prune another installed source frontend."""
-    from clawk_cli.main_desktop import _desktop_dist_exists, _desktop_packaged_executable
+    from clawk_cli.main_desktop import (
+        _desktop_dist_exists,
+        _desktop_packaged_executable,
+    )
 
     desktop_dir = project_root / "apps/desktop"
-    desktop = _desktop_dist_exists(desktop_dir) or _desktop_packaged_executable(desktop_dir) is not None
+    desktop = (
+        _desktop_dist_exists(desktop_dir)
+        or _desktop_packaged_executable(desktop_dir) is not None
+    )
     workspaces = ("ui-tui", "web") + (("apps/desktop",) if desktop else ())
     prepare_source_dependencies(project_root, workspaces, env=env)
 
 
 def build_source_tui(project_root: Path, *, env: dict) -> None:
-    run_source_script(project_root, "scripts/build/tui.mjs", env=env, label="Building the TUI")
+    run_source_script(
+        project_root, "scripts/build/tui.mjs", env=env, label="Building the TUI"
+    )
 
 
-def build_source_web(project_root: Path, *, env: dict, icons: Path | None = None) -> None:
+def build_source_web(
+    project_root: Path, *, env: dict, icons: Path | None = None
+) -> None:
     # Bounded build (#63338): the Vite/Rolldown dashboard build saturates small
     # hosts; cap the V8 heap and the native bundler's rayon thread pool.
     from clawk_cli.web_build_limits import apply_web_build_limits
@@ -107,16 +165,29 @@ def build_source_web(project_root: Path, *, env: dict, icons: Path | None = None
     apply_web_build_limits(env)
     # Default-brand icons are committed; installs never render them.
     icons = icons or project_root
-    run_source_script(project_root, "scripts/build/web.mjs", "--source", str(project_root),
-                      "--icons", str(icons), "--out", str(project_root / "clawk_cli/web_dist"), env=env,
-                      label="Building the web UI")
+    run_source_script(
+        project_root,
+        "scripts/build/web.mjs",
+        "--source",
+        str(project_root),
+        "--icons",
+        str(icons),
+        "--out",
+        str(project_root / "clawk_cli/web_dist"),
+        env=env,
+        label="Building the web UI",
+    )
 
 
 def source_frontends(project_root: Path) -> tuple[str, ...]:
     """The frontend workspaces this checkout carries. A source slice without them
     (python-only installs, the installer's acceptance fixture) has no products
     to build; it still publishes commands and runs the maintenance tail."""
-    return tuple(name for name in ("ui-tui", "web") if (project_root / name / "package.json").is_file())
+    return tuple(
+        name
+        for name in ("ui-tui", "web")
+        if (project_root / name / "package.json").is_file()
+    )
 
 
 class ProductBuildError(RuntimeError):
@@ -124,7 +195,9 @@ class ProductBuildError(RuntimeError):
 
     def __init__(self, failures: list[tuple[str, BaseException]]):
         self.failures = failures
-        super().__init__("; ".join(f"{name}: {_failure_text(exc)}" for name, exc in failures))
+        super().__init__(
+            "; ".join(f"{name}: {_failure_text(exc)}" for name, exc in failures)
+        )
 
 
 def _failure_text(exc: BaseException) -> str:
@@ -134,7 +207,9 @@ def _failure_text(exc: BaseException) -> str:
 
 
 def _headless_linux() -> bool:
-    return sys.platform.startswith("linux") and not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+    return sys.platform.startswith("linux") and not (
+        os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")
+    )
 
 
 def build_update_products(project_root: Path, *, desktop: bool) -> None:
@@ -159,7 +234,10 @@ def build_update_products(project_root: Path, *, desktop: bool) -> None:
             failures.append((name, exc))
             return False
 
-    attempt("feature dependencies", lambda: _install_configured_features_missing_deps(project_root))
+    attempt(
+        "feature dependencies",
+        lambda: _install_configured_features_missing_deps(project_root),
+    )
     frontends = source_frontends(project_root)
     if frontends:
         desktop_built = False
@@ -182,13 +260,17 @@ def build_update_products(project_root: Path, *, desktop: bool) -> None:
             # whose compiler cannot build them must still get the TUI and web UI it runs.
             print("  → Retrying Node dependencies without the desktop app")
             failed = failures.pop()
-            prepared = desktop_skipped = attempt("Node dependencies", lambda: node_dependencies(frontends))
+            prepared = desktop_skipped = attempt(
+                "Node dependencies", lambda: node_dependencies(frontends)
+            )
             if desktop_skipped:
                 failures.append(("desktop dependencies", failed[1]))
         desktop_reason = failures[-1][0] if failures else ""
         if desktop and (desktop_skipped or _headless_linux()):
-            print("  ⓘ If this host never runs the desktop app, `clawk uninstall --gui` removes it "
-                  "and future updates stop building it.")
+            print(
+                "  ⓘ If this host never runs the desktop app, `clawk uninstall --gui` removes it "
+                "and future updates stop building it."
+            )
         if prepared:
             # An update that changed no TUI/web input reuses the receipted output, as the
             # launch path already does; recompiling it produces the same bytes. Desktop
@@ -196,19 +278,30 @@ def build_update_products(project_root: Path, *, desktop: bool) -> None:
             # commit), so it is reused only when HEAD did not move: "Already up to date",
             # a retried tail, a takeover re-entry.
             if "ui-tui" in frontends:
-                if source_product_current(project_root, "tui", project_root / "ui-tui/dist"):
+                if source_product_current(
+                    project_root, "tui", project_root / "ui-tui/dist"
+                ):
                     print("  ✓ TUI is up to date")
                 else:
                     publish_stage("Building the TUI")
-                    attempt("TUI build", lambda: build_source_tui(project_root, env=env))
+                    attempt(
+                        "TUI build", lambda: build_source_tui(project_root, env=env)
+                    )
             if "web" in frontends:
-                if source_product_current(project_root, "web", project_root / "clawk_cli/web_dist"):
+                if source_product_current(
+                    project_root, "web", project_root / "clawk_cli/web_dist"
+                ):
                     print("  ✓ Web UI is up to date")
                 else:
                     publish_stage("Building the web UI")
-                    attempt("web UI build", lambda: build_source_web(project_root, env=env))
+                    attempt(
+                        "web UI build", lambda: build_source_web(project_root, env=env)
+                    )
             if desktop and not desktop_skipped:
-                desktop_built = attempt("desktop app build", lambda: _build_desktop_product(project_root, env, publish_stage))
+                desktop_built = attempt(
+                    "desktop app build",
+                    lambda: _build_desktop_product(project_root, env, publish_stage),
+                )
                 desktop_reason = failures[-1][0] if not desktop_built else ""
         if desktop and not desktop_built:
             # One whole line the Desktop hand-off scripts match: the follow-up text is truncated
@@ -237,7 +330,10 @@ def build_update_products(project_root: Path, *, desktop: bool) -> None:
 
 def _build_desktop_product(project_root: Path, env: dict, publish_stage) -> None:
     from clawk_cli.main_desktop import (
-        _packaged_desktop_current_for_head, _refresh_installed_desktop_apps, build_prepared_desktop)
+        _packaged_desktop_current_for_head,
+        _refresh_installed_desktop_apps,
+        build_prepared_desktop,
+    )
 
     desktop_dir = project_root / "apps/desktop"
     if _packaged_desktop_current_for_head(desktop_dir, project_root):
@@ -255,8 +351,11 @@ def _build_desktop_product(project_root: Path, env: dict, publish_stage) -> None
         build_lock.acquire(wait=True)
         try:
             build_prepared_desktop(
-                desktop_dir, source_mode=False,
-                npm=shutil.which("npm", path=env["PATH"]), env=env, icons=project_root,
+                desktop_dir,
+                source_mode=False,
+                npm=shutil.which("npm", path=env["PATH"]),
+                env=env,
+                icons=project_root,
             )
         finally:
             build_lock.release()

@@ -129,8 +129,7 @@ def test_rewind_matches_cold_sanitized_carrier_to_unchanged_warm_ask(
         [carrier, {"role": "assistant", "content": "failed"}]
     )
     db._conn.execute(
-        "UPDATE messages SET api_content = ? "
-        "WHERE session_id = ? AND role = 'user'",
+        "UPDATE messages SET api_content = ? WHERE session_id = ? AND role = 'user'",
         (carrier["content"], session_key),
     )
     db._conn.commit()
@@ -182,9 +181,7 @@ def test_retry_fails_closed_when_transcript_changes_after_snapshot(
 
 
 @pytest.mark.parametrize("command", ["retry", "undo"])
-def test_rewind_allows_database_only_reaction_metadata_change(
-    carrier_session, command
-):
+def test_rewind_allows_database_only_reaction_metadata_change(carrier_session, command):
     db, install = carrier_session
     sid, session_key, session = install(
         [
@@ -199,9 +196,7 @@ def test_rewind_allows_database_only_reaction_metadata_change(
         for row in db.get_messages(session_key)
         if row["role"] == "assistant" and row["content"] == "older answer"
     )
-    assert db.set_message_reaction(
-        session_key, older_answer["id"], "👍", author="user"
-    )
+    assert db.set_message_reaction(session_key, older_answer["id"], "👍", author="user")
 
     response = _dispatch(sid, command)
 
@@ -337,9 +332,7 @@ def test_undo_rewinds_media_placeholder_without_treating_it_as_retry(
 ):
     db, install = carrier_session
     carrier = _composite_carrier()
-    carrier["content"] = carrier["content"].replace(
-        "REAL ASK", "look\n[screenshot]"
-    )
+    carrier["content"] = carrier["content"].replace("REAL ASK", "look\n[screenshot]")
     sid, session_key, session = install(
         [carrier, {"role": "assistant", "content": "seen"}]
     )
@@ -447,6 +440,7 @@ def test_retry_rejects_pending_attachments_before_mutating_history(carrier_sessi
     assert session["history"] == before_memory
     assert len(db.get_messages_as_conversation(session_key)) == 2
 
+
 def test_prompt_row_id_rewind_preserves_scaffold_before_regeneration(
     carrier_session, monkeypatch
 ):
@@ -454,9 +448,9 @@ def test_prompt_row_id_rewind_preserves_scaffold_before_regeneration(
     sid, session_key, session = install(
         [_composite_carrier(), {"role": "assistant", "content": "failed"}]
     )
-    target_row_id = db.get_messages_as_conversation(
-        session_key, include_row_ids=True
-    )[0]["_row_id"]
+    target_row_id = db.get_messages_as_conversation(session_key, include_row_ids=True)[
+        0
+    ]["_row_id"]
     seen = {}
 
     class _Agent:

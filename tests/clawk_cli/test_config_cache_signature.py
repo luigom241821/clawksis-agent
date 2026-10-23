@@ -1,6 +1,7 @@
 """#111105: a config.yaml replacement that keeps mtime and size (``cp -p``, ``rsync -t``, a
 timestamp-pinning writer) must still invalidate the load_config() cache, while an unchanged
 file keeps serving the cached object."""
+
 import os
 import shutil
 from unittest.mock import patch
@@ -27,6 +28,8 @@ def test_load_config_sees_replacement_with_pinned_mtime_and_size(tmp_path):
         cfg = tmp_path / "config.yaml"
         cfg.write_text("model:\n  default: aaaa-route\n", encoding="utf-8")
         first = config_mod._load_config_impl(want_deepcopy=False)
-        assert config_mod._load_config_impl(want_deepcopy=False) is first  # unchanged file: cache hit
+        assert (
+            config_mod._load_config_impl(want_deepcopy=False) is first
+        )  # unchanged file: cache hit
         _replace_pinning_mtime(cfg, "model:\n  default: bbbb-route\n")
         assert config_mod.load_config()["model"]["default"] == "bbbb-route"

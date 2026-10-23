@@ -6,6 +6,7 @@ credential's standing for its sibling models. Such a 429 is recorded as a
 cooldown on the requested model only, beside the credential-wide status that
 auth, billing and payment failures keep benching the whole credential with.
 """
+
 from __future__ import annotations
 
 import time
@@ -22,19 +23,25 @@ MODEL_ENTITLEMENT_BENCH_SECONDS = 365 * 24 * 60 * 60
 FAILURE_REASON_USAGE_WINDOW = "usage_window"
 
 
-def pool_failure_reason(reason: Any, error_context: Optional[dict[str, Any]], billing_unverified: bool) -> str:
+def pool_failure_reason(
+    reason: Any, error_context: Optional[dict[str, Any]], billing_unverified: bool
+) -> str:
     """The pool's failure reason for a rotation (*reason* is a ``FailoverReason``). A usage-window 402
     benches only the refused model; an ambiguous billing body is sized as transient, not a 1-hour bench."""
     from agent.error_classifier import FailoverReason
+
     if reason == FailoverReason.billing and (error_context or {}).get("usage_window"):
         return FAILURE_REASON_USAGE_WINDOW
     if reason == FailoverReason.billing and billing_unverified:
         from agent.credential_pool import FAILURE_REASON_BILLING_UNVERIFIED
+
         return FAILURE_REASON_BILLING_UNVERIFIED
     return reason.value
 
 
-def model_cooldown_until(entry: PooledCredential, model: Optional[str]) -> Optional[float]:
+def model_cooldown_until(
+    entry: PooledCredential, model: Optional[str]
+) -> Optional[float]:
     """Active cooldown blocking *entry* for *model*, or ``None``.
 
     Callers that do not know the model stay conservative: any active model
@@ -43,7 +50,11 @@ def model_cooldown_until(entry: PooledCredential, model: Optional[str]) -> Optio
     cooldowns = entry.model_cooldowns or {}
     values = cooldowns.values() if not model else (cooldowns.get(model),)
     now = time.time()
-    active = [float(until) for until in values if isinstance(until, (int, float)) and until > now]
+    active = [
+        float(until)
+        for until in values
+        if isinstance(until, (int, float)) and until > now
+    ]
     return max(active) if active else None
 
 
@@ -69,28 +80,40 @@ class CredentialPoolModelCooldownMixin:
         """
         with self._lock:
             return any(
-                entry.runtime_api_key == token and model_cooldown_until(entry, model) is not None
+                entry.runtime_api_key == token
+                and model_cooldown_until(entry, model) is not None
                 for entry in self._entries
             )
 
     def _is_model_scoped_failure(
-        self, status_code: Optional[int], model: Optional[str], failure_reason: Optional[str],
+        self,
+        status_code: Optional[int],
+        model: Optional[str],
+        failure_reason: Optional[str],
     ) -> bool:
         """Anthropic per-model 429s, and a Codex ChatGPT-account model entitlement 400: the
         account cannot use *model*, but the credential stays valid for every other model (#71970)."""
-        from agent.credential_pool import FAILURE_REASON_BILLING, FAILURE_REASON_BILLING_UNVERIFIED
+        from agent.credential_pool import (
+            FAILURE_REASON_BILLING,
+            FAILURE_REASON_BILLING_UNVERIFIED,
+        )
 
         if not model:
             return False
         if failure_reason in ("model_entitlement", FAILURE_REASON_USAGE_WINDOW):
             return True
         return (
-            self.provider == "anthropic" and status_code == 429
-            and failure_reason not in (FAILURE_REASON_BILLING, FAILURE_REASON_BILLING_UNVERIFIED)
+            self.provider == "anthropic"
+            and status_code == 429
+            and failure_reason
+            not in (FAILURE_REASON_BILLING, FAILURE_REASON_BILLING_UNVERIFIED)
         )
 
     def _cool_down_model(
-        self, entry: PooledCredential, model: str, error_context: Optional[dict[str, Any]],
+        self,
+        entry: PooledCredential,
+        model: str,
+        error_context: Optional[dict[str, Any]],
         failure_reason: Optional[str] = None,
     ) -> None:
         """Record a cooldown for *model* on *entry* and every sibling sharing its key.
@@ -108,11 +131,14 @@ class CredentialPoolModelCooldownMixin:
             until = time.time() + MODEL_ENTITLEMENT_BENCH_SECONDS
         else:
             until = _normalize_error_context(error_context).get("reset_at") or (
-                time.time() + _exhausted_ttl(429, sole_credential=self._is_sole_credential())
+                time.time()
+                + _exhausted_ttl(429, sole_credential=self._is_sole_credential())
             )
         failed_key = entry.runtime_api_key
         for scoped in list(self._entries):
-            if scoped.id != entry.id and not (failed_key and scoped.runtime_api_key == failed_key):
+            if scoped.id != entry.id and not (
+                failed_key and scoped.runtime_api_key == failed_key
+            ):
                 continue
             cooldowns = merge_model_cooldowns(scoped.model_cooldowns, {model: until})
             self._adopt(scoped, persist=False, model_cooldowns=cooldowns)
@@ -131,16 +157,26 @@ class CredentialPoolModelCooldownMixin:
 
         now = time.time()
         with self._lock:
-            live = [entry for entry in self._entries if entry.last_status != STATUS_DEAD]
+            live = [
+                entry for entry in self._entries if entry.last_status != STATUS_DEAD
+            ]
             sole = len(live) <= 1
-            benched = {entry.id: until for entry in live
-                       if (until := _exhausted_until(entry, sole_credential=sole)) and until > now}
+            benched = {
+                entry.id: until
+                for entry in live
+                if (until := _exhausted_until(entry, sole_credential=sole))
+                and until > now
+            }
             if live and len(benched) == len(live):
                 return {"scope": "account", "resets_at": min(benched.values())}
             usable = [entry for entry in live if entry.id not in benched]
             cooled: dict[str, float] = {}
             for model in models:
                 waits = [model_cooldown_until(entry, model) for entry in usable]
-                if waits and all(waits) and min(waits) - now < MODEL_ENTITLEMENT_BENCH_SECONDS / 2:
+                if (
+                    waits
+                    and all(waits)
+                    and min(waits) - now < MODEL_ENTITLEMENT_BENCH_SECONDS / 2
+                ):
                     cooled[model] = min(waits)
         return {"scope": "models", "models": cooled} if cooled else None

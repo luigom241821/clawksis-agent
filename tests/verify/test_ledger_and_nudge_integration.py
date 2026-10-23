@@ -23,11 +23,11 @@ from agent.verification_evidence import (
 from agent.verification_stop import build_verify_on_stop_nudge
 from clawk_cli.verify_cmd import run_verify_command
 
+
 @pytest.fixture(autouse=True)
 def _ledger_on(monkeypatch):
     """The ledger is inert unless verify-on-stop is enabled; these tests exercise the ledger."""
     monkeypatch.setenv("CLAWK_VERIFY_ON_STOP", "1")
-
 
 
 def make_args(path, **overrides):
@@ -76,7 +76,9 @@ def _workspace(tmp_path, *, scripts=None, manifest_recipe=None):
 
 def test_record_verify_run_marks_workspace_passed(clawk_home):
     project = _workspace(clawk_home)
-    event = record_verify_run(root=project, session_id="s1", ok=True, output="all green")
+    event = record_verify_run(
+        root=project, session_id="s1", ok=True, output="all green"
+    )
     assert event is not None
     assert event["status"] == "passed"
     assert event["kind"] == "verify"
@@ -93,7 +95,9 @@ def test_record_verify_run_records_failure(clawk_home):
 
 
 def test_cli_passing_run_writes_ledger_evidence(clawk_home, capsys):
-    project = _workspace(clawk_home, manifest_recipe={"name": "Fake", "test": ["echo ok"]})
+    project = _workspace(
+        clawk_home, manifest_recipe={"name": "Fake", "test": ["echo ok"]}
+    )
     code = run_verify_command(make_args(project))
     assert code == 0
     assert json.loads(capsys.readouterr().out)["ok"] is True
@@ -103,7 +107,9 @@ def test_cli_passing_run_writes_ledger_evidence(clawk_home, capsys):
 
 
 def test_cli_failing_run_writes_failed_evidence(clawk_home, capsys):
-    project = _workspace(clawk_home, manifest_recipe={"name": "Fake", "test": ["false"]})
+    project = _workspace(
+        clawk_home, manifest_recipe={"name": "Fake", "test": ["false"]}
+    )
     code = run_verify_command(make_args(project))
     assert code == 1
     status = verification_status(session_id=None, cwd=project)
@@ -112,7 +118,9 @@ def test_cli_failing_run_writes_failed_evidence(clawk_home, capsys):
 
 def test_cli_partial_run_records_targeted_scope(clawk_home, capsys):
     # --skip-start / --phase subsets must never present as full workspace green.
-    project = _workspace(clawk_home, manifest_recipe={"name": "Fake", "test": ["echo ok"]})
+    project = _workspace(
+        clawk_home, manifest_recipe={"name": "Fake", "test": ["echo ok"]}
+    )
     code = run_verify_command(make_args(project, skip_start=True))
     assert code == 0
     status = verification_status(session_id=None, cwd=project)
@@ -121,7 +129,9 @@ def test_cli_partial_run_records_targeted_scope(clawk_home, capsys):
 
 def test_cli_run_uses_clawk_session_id_env(clawk_home, capsys, monkeypatch):
     monkeypatch.setenv("CLAWK_SESSION_ID", "sess-42")
-    project = _workspace(clawk_home, manifest_recipe={"name": "Fake", "test": ["echo ok"]})
+    project = _workspace(
+        clawk_home, manifest_recipe={"name": "Fake", "test": ["echo ok"]}
+    )
     run_verify_command(make_args(project))
     assert verification_status(session_id="sess-42", cwd=project)["status"] == "passed"
 
@@ -129,18 +139,31 @@ def test_cli_run_uses_clawk_session_id_env(clawk_home, capsys, monkeypatch):
 def test_cli_verify_clears_stale_on_editing_session(clawk_home, capsys):
     """Standalone ``clawk verify`` records under default; the editing session
     must still see a pass (#103271)."""
-    project = _workspace(clawk_home, manifest_recipe={"name": "Fake", "test": ["echo ok"]})
+    project = _workspace(
+        clawk_home, manifest_recipe={"name": "Fake", "test": ["echo ok"]}
+    )
     changed = str(project / "src" / "app.ts")
     edit_session = "20260717_230325_f2d00d"
     mark_workspace_edited(session_id=edit_session, cwd=project, paths=[changed])
-    assert verification_status(session_id=edit_session, cwd=project)["status"] == "unverified"
-    assert build_verify_on_stop_nudge(session_id=edit_session, changed_paths=[changed]) is not None
+    assert (
+        verification_status(session_id=edit_session, cwd=project)["status"]
+        == "unverified"
+    )
+    assert (
+        build_verify_on_stop_nudge(session_id=edit_session, changed_paths=[changed])
+        is not None
+    )
 
     assert run_verify_command(make_args(project)) == 0
 
-    assert verification_status(session_id=edit_session, cwd=project)["status"] == "passed"
+    assert (
+        verification_status(session_id=edit_session, cwd=project)["status"] == "passed"
+    )
     assert verification_status(session_id="default", cwd=project)["status"] == "passed"
-    assert build_verify_on_stop_nudge(session_id=edit_session, changed_paths=[changed]) is None
+    assert (
+        build_verify_on_stop_nudge(session_id=edit_session, changed_paths=[changed])
+        is None
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -149,14 +172,22 @@ def test_cli_verify_clears_stale_on_editing_session(clawk_home, capsys):
 
 
 def test_passing_verify_run_satisfies_stop_guard(clawk_home, capsys):
-    project = _workspace(clawk_home, manifest_recipe={"name": "Fake", "test": ["echo ok"]})
+    project = _workspace(
+        clawk_home, manifest_recipe={"name": "Fake", "test": ["echo ok"]}
+    )
     changed = str(project / "src" / "app.ts")
     mark_workspace_edited(session_id="default", cwd=project, paths=[changed])
-    assert build_verify_on_stop_nudge(session_id="default", changed_paths=[changed]) is not None
+    assert (
+        build_verify_on_stop_nudge(session_id="default", changed_paths=[changed])
+        is not None
+    )
 
     assert run_verify_command(make_args(project)) == 0
 
-    assert build_verify_on_stop_nudge(session_id="default", changed_paths=[changed]) is None
+    assert (
+        build_verify_on_stop_nudge(session_id="default", changed_paths=[changed])
+        is None
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -238,7 +269,9 @@ def test_detect_path_merges_project_facts_commands(clawk_home, capsys):
 
 def test_manifest_recipe_is_not_merged(clawk_home, capsys):
     # A saved manifest is the user-edited source of truth; leave it alone.
-    project = _workspace(clawk_home, manifest_recipe={"name": "Fake", "test": ["echo ok"]})
+    project = _workspace(
+        clawk_home, manifest_recipe={"name": "Fake", "test": ["echo ok"]}
+    )
     (project / "pytest.ini").write_text("[pytest]\n", encoding="utf-8")
     code = run_verify_command(make_args(project, detect_only=True))
     assert code == 0

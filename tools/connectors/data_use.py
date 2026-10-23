@@ -10,7 +10,9 @@ import contextlib
 import contextvars
 from typing import Iterable, Iterator, Optional
 
-_sink: contextvars.ContextVar[Optional[set[str]]] = contextvars.ContextVar("connector_data_use", default=None)
+_sink: contextvars.ContextVar[Optional[set[str]]] = contextvars.ContextVar(
+    "connector_data_use", default=None
+)
 
 
 @contextlib.contextmanager

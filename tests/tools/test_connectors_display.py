@@ -29,14 +29,22 @@ class ListFake:
         self.connected = set(connected)
 
     def list_connectors(self, *, timeout=None):
-        return [{"connector": s, "connected": s in self.connected} for s in ("gmail", "linear", "slack")]
+        return [
+            {"connector": s, "connected": s in self.connected}
+            for s in ("gmail", "linear", "slack")
+        ]
 
 
 def _display(gw, *, callback, card_surface):
-    return json.loads(manage_connections(
-        {"action": "display", "connectors": ["slack", "linear"]}, client_factory=lambda: gw,
-        connection_callback=callback, card_surface=card_surface, session_id="s1",
-    ))
+    return json.loads(
+        manage_connections(
+            {"action": "display", "connectors": ["slack", "linear"]},
+            client_factory=lambda: gw,
+            connection_callback=callback,
+            card_surface=card_surface,
+            session_id="s1",
+        )
+    )
 
 
 @pytest.mark.parametrize("ending", ["continue", "deadline", "said"])
@@ -49,23 +57,42 @@ def test_display_waits_for_the_user_and_reports_what_they_connected(ending):
         seen.append(payload)
         gw.connected.add("slack")
         if ending != "deadline":
-            answer = {"settled_by": "continue"} if ending == "continue" else {"said": " maybe later "}
+            answer = (
+                {"settled_by": "continue"}
+                if ending == "continue"
+                else {"said": " maybe later "}
+            )
             apply_answer(live.get("s1", payload["op_id"]), json.dumps(answer))
 
-    with patch("tools.connectors.operation.OPERATION_DEADLINE_SECONDS", 2 if ending == "deadline" else 60):
+    with patch(
+        "tools.connectors.operation.OPERATION_DEADLINE_SECONDS",
+        2 if ending == "deadline" else 60,
+    ):
         out = _display(gw, callback=card, card_surface=True)
 
     (payload,) = seen
-    assert payload["targets"] == [] and payload["display"] == {"suggested": ["slack", "linear"]}
-    expected = {"connected": ["gmail", "slack"], "newly_connected": ["slack"], "suggested": ["slack", "linear"]}
-    extra = {"deadline": {"timed_out": True}, "said": {"said": "maybe later"}}.get(ending, {})
+    assert payload["targets"] == [] and payload["display"] == {
+        "suggested": ["slack", "linear"]
+    }
+    expected = {
+        "connected": ["gmail", "slack"],
+        "newly_connected": ["slack"],
+        "suggested": ["slack", "linear"],
+    }
+    extra = {"deadline": {"timed_out": True}, "said": {"said": "maybe later"}}.get(
+        ending, {}
+    )
     assert out == {**expected, **extra}
     assert live.current("s1") is None
 
 
 def test_display_without_a_card_returns_the_status_list_at_once():
-    out = _display(ListFake({"gmail"}), callback=lambda _payload: None, card_surface=False)
+    out = _display(
+        ListFake({"gmail"}), callback=lambda _payload: None, card_surface=False
+    )
 
-    assert {row["connector"]: row["connected"] for row in out["connectors"]}["gmail"] is True
+    assert {row["connector"]: row["connected"] for row in out["connectors"]}[
+        "gmail"
+    ] is True
     assert "desktop app" in out["note"]
     assert live.current("s1") is None

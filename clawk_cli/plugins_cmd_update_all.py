@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 def _pc():
     from clawk_cli import plugins_cmd
+
     return plugins_cmd
 
 
@@ -46,7 +47,9 @@ def plan_update_all(results: list[Any]) -> UpdatePlan:
         elif row.update_available is True and row.klass in _UPDATE_KIND:
             plan.movable.append(row)
         elif row.update_available is True:
-            plan.skipped.append((row, f"{row.klass} distribution; Clawksis does not upgrade it"))
+            plan.skipped.append(
+                (row, f"{row.klass} distribution; Clawksis does not upgrade it")
+            )
         elif row.update_available is None:
             plan.skipped.append((row, row.reason or "update status unknown"))
         elif row.reason:  # up to date by construction but worth naming (pinned)
@@ -67,20 +70,25 @@ def _update_one(row, console, *, interactive: bool) -> tuple[str, str]:
     from rich.markup import escape
     from clawk_cli.plugins_cmd_catalog import RepinConsentRequired
     from clawk_cli.plugins_cmd_update import update_one
+
     target = _pc()._user_installed_plugin_dir(row.name)
     if target is None:
         return "failed", "no longer installed"
     try:
         moved = update_one(row.name, target, console, interactive=interactive)
     except RepinConsentRequired as exc:
-        console.print(f"[yellow]Update of {escape(row.name)} not applied:[/yellow] {escape(str(exc))}")
+        console.print(
+            f"[yellow]Update of {escape(row.name)} not applied:[/yellow] {escape(str(exc))}"
+        )
         return "failed", _short(f"not applied: {exc}")
     except _pc().PluginOperationError as exc:
         console.print(f"[red]Error:[/red] {escape(str(exc))}")
         return "failed", _short(str(exc))
     except Exception as exc:  # per-plugin batch boundary: a feed timeout or crash must not stop the rest
         logger.warning("update of plugin %s failed", row.name, exc_info=True)
-        console.print(f"[red]Error:[/red] {escape(type(exc).__name__)}: {escape(str(exc))}")
+        console.print(
+            f"[red]Error:[/red] {escape(type(exc).__name__)}: {escape(str(exc))}"
+        )
         return "failed", _short(f"{type(exc).__name__}: {exc}")
     if not moved:
         return "current", ""
@@ -89,14 +97,31 @@ def _update_one(row, console, *, interactive: bool) -> tuple[str, str]:
 
 def _print_plan(console, plan: UpdatePlan) -> None:
     from rich.markup import escape
-    table = _pc()._table([("#", "dim"), ("Plugin", "bold"), ("Current", ""), ("Latest", ""), ("Update", "")],
-                         title="Plugin updates available")
+
+    table = _pc()._table(
+        [
+            ("#", "dim"),
+            ("Plugin", "bold"),
+            ("Current", ""),
+            ("Latest", ""),
+            ("Update", ""),
+        ],
+        title="Plugin updates available",
+    )
     for i, row in enumerate(plan.movable, 1):
-        table.add_row(str(i), row.name, (row.current or "-")[:12], (row.latest or "-")[:12], _UPDATE_KIND[row.klass])
+        table.add_row(
+            str(i),
+            row.name,
+            (row.current or "-")[:12],
+            (row.latest or "-")[:12],
+            _UPDATE_KIND[row.klass],
+        )
     console.print()
     console.print(table)
     for row, reason in plan.skipped:
-        console.print(f"  [dim]skipped {escape(row.name)} ({row.klass}): {escape(reason)}[/dim]")
+        console.print(
+            f"  [dim]skipped {escape(row.name)} ({row.klass}): {escape(reason)}[/dim]"
+        )
 
 
 def cmd_update_all(*, yes: bool = False) -> None:
@@ -115,7 +140,9 @@ def cmd_update_all(*, yes: bool = False) -> None:
     plan = plan_update_all(run_checks(_pc()._plugins_dir()))
     if not plan.movable:
         for row, reason in plan.skipped:
-            console.print(f"  [dim]skipped {escape(row.name)} ({row.klass}): {escape(reason)}[/dim]")
+            console.print(
+                f"  [dim]skipped {escape(row.name)} ({row.klass}): {escape(reason)}[/dim]"
+            )
         console.print("[green]✓[/green] No plugin updates to apply.")
         return
     _print_plan(console, plan)
@@ -123,8 +150,11 @@ def cmd_update_all(*, yes: bool = False) -> None:
     tty = _pc()._is_tty()
     if not yes:
         if not tty:
-            _pc()._fail(console, f"[yellow]Not updating: no terminal to confirm. Re-run with --yes to update "
-                                 f"these {count} plugin(s).[/yellow]")
+            _pc()._fail(
+                console,
+                f"[yellow]Not updating: no terminal to confirm. Re-run with --yes to update "
+                f"these {count} plugin(s).[/yellow]",
+            )
         try:
             answer = input(f"\nUpdate all {count}? [Y/n]: ").strip().lower()
         except (EOFError, KeyboardInterrupt):
@@ -139,10 +169,16 @@ def cmd_update_all(*, yes: bool = False) -> None:
         outcomes.append((row.name, *_update_one(row, console, interactive=tty)))
 
     console.print("\n[bold]Summary[/bold]")
-    marks = {"updated": "[green]✓ updated[/green]", "current": "[dim]= already current[/dim]",
-             "failed": "[red]✗ failed[/red]"}
+    marks = {
+        "updated": "[green]✓ updated[/green]",
+        "current": "[dim]= already current[/dim]",
+        "failed": "[red]✗ failed[/red]",
+    }
     for name, status, detail in outcomes:
-        console.print(f"  {marks[status]}  {escape(name)}" + (f"  [dim]{escape(detail)}[/dim]" if detail else ""),
-                      highlight=False)
+        console.print(
+            f"  {marks[status]}  {escape(name)}"
+            + (f"  [dim]{escape(detail)}[/dim]" if detail else ""),
+            highlight=False,
+        )
     if any(status == "failed" for _, status, _ in outcomes):
         sys.exit(1)

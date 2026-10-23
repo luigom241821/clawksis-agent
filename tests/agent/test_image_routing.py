@@ -23,7 +23,6 @@ from agent.image_routing import (
 
 
 class TestCoerceMode:
-
     def test_case_insensitive(self):
         assert _coerce_mode("NATIVE") == "native"
         assert _coerce_mode("Auto") == "auto"
@@ -35,24 +34,13 @@ class TestCoerceMode:
         assert _coerce_mode(42) == "auto"
 
 
-
 # ─── _explicit_aux_vision_override ───────────────────────────────────────────
-
-
-
-
-
-
 
 
 # ─── decide_image_input_mode ─────────────────────────────────────────────────
 
 
 class TestDecideImageInputMode:
-
-
-
-
     def test_auto_with_unknown_model(self):
         with patch("agent.image_routing._lookup_supports_vision", return_value=None):
             assert decide_image_input_mode("openrouter", "brand-new-slug", {}) == "text"
@@ -62,31 +50,52 @@ class TestDecideImageInputMode:
         NAMED a dedicated vision backend wants it used — even when the
         main model has native vision. Config that only takes effect when
         the main model gets worse is a trap, not a setting."""
-        cfg = {"auxiliary": {"vision": {"provider": "openrouter", "model": "google/gemini-2.5-flash"}}}
+        cfg = {
+            "auxiliary": {
+                "vision": {"provider": "openrouter", "model": "google/gemini-2.5-flash"}
+            }
+        }
         with patch("agent.image_routing._lookup_supports_vision", return_value=True):
-            assert decide_image_input_mode("anthropic", "claude-sonnet-4", cfg) == "text"
+            assert (
+                decide_image_input_mode("anthropic", "claude-sonnet-4", cfg) == "text"
+            )
 
     def test_auto_unset_aux_backend_native_remains_default(self):
         """No configured aux backend -> native for vision-capable mains
         (the unconfigured-install default is unchanged)."""
-        for cfg in ({}, {"auxiliary": {}}, {"auxiliary": {"vision": {"provider": "auto"}}}):
-            with patch("agent.image_routing._lookup_supports_vision", return_value=True):
-                assert decide_image_input_mode("anthropic", "claude-sonnet-4", cfg) == "native"
+        for cfg in (
+            {},
+            {"auxiliary": {}},
+            {"auxiliary": {"vision": {"provider": "auto"}}},
+        ):
+            with patch(
+                "agent.image_routing._lookup_supports_vision", return_value=True
+            ):
+                assert (
+                    decide_image_input_mode("anthropic", "claude-sonnet-4", cfg)
+                    == "native"
+                )
 
     def test_image_input_mode_native_overrides_aux_backend(self):
         """agent.image_input_mode: native stays the absolute escape hatch —
         forces native attach even with an explicit aux backend."""
-        cfg = {"agent": {"image_input_mode": "native"},
-               "auxiliary": {"vision": {"provider": "openrouter", "model": "google/gemini-2.5-flash"}}}
+        cfg = {
+            "agent": {"image_input_mode": "native"},
+            "auxiliary": {
+                "vision": {"provider": "openrouter", "model": "google/gemini-2.5-flash"}
+            },
+        }
         with patch("agent.image_routing._lookup_supports_vision", return_value=True):
-            assert decide_image_input_mode("anthropic", "claude-sonnet-4", cfg) == "native"
-
+            assert (
+                decide_image_input_mode("anthropic", "claude-sonnet-4", cfg) == "native"
+            )
 
     def test_none_config_is_auto(self):
         with patch("agent.image_routing._lookup_supports_vision", return_value=True):
-            assert decide_image_input_mode("anthropic", "claude-sonnet-4", None) == "native"
-
-
+            assert (
+                decide_image_input_mode("anthropic", "claude-sonnet-4", None)
+                == "native"
+            )
 
 
 # ─── _coerce_capability_bool ─────────────────────────────────────────────────
@@ -100,11 +109,6 @@ class TestCoerceCapabilityBool:
     def test_int_0_and_1(self):
         assert _coerce_capability_bool(1) is True
         assert _coerce_capability_bool(0) is False
-
-
-
-
-
 
     def test_other_types_return_none(self):
         assert _coerce_capability_bool(None) is None
@@ -130,22 +134,10 @@ class TestSupportsVisionOverride:
         assert _supports_vision_override(cfg, "custom", "my-llava") is False
 
 
-
-
-
-
-
-
-
-
-
-
 # ─── _lookup_supports_vision (override-aware) ────────────────────────────────
 
 
 class TestLookupSupportsVisionOverride:
-
-
     def test_no_override_falls_back_to_models_dev(self):
         fake_caps = type("Caps", (), {"supports_vision": True})()
         with patch("agent.models_dev.get_model_capabilities", return_value=fake_caps):
@@ -154,16 +146,20 @@ class TestLookupSupportsVisionOverride:
     def test_models_dev_unknown_capability_stays_fail_open(self):
         fake_caps = type("Caps", (), {"supports_vision": None})()
         with patch("agent.models_dev.get_model_capabilities", return_value=fake_caps):
-            assert _lookup_supports_vision("custom-gateway", "upstream-model", {}) is None
-
+            assert (
+                _lookup_supports_vision("custom-gateway", "upstream-model", {}) is None
+            )
 
     def test_ollama_probe_when_models_dev_missing(self):
         cfg = {"model": {"base_url": "http://localhost:11434/v1"}}
-        with patch("agent.models_dev.get_model_capabilities", return_value=None), \
-             patch("agent.image_routing._should_probe_ollama_vision", return_value=True), \
-             patch("agent.model_metadata.query_ollama_supports_vision", return_value=True):
+        with (
+            patch("agent.models_dev.get_model_capabilities", return_value=None),
+            patch("agent.image_routing._should_probe_ollama_vision", return_value=True),
+            patch(
+                "agent.model_metadata.query_ollama_supports_vision", return_value=True
+            ),
+        ):
             assert _lookup_supports_vision("ollama", "gemma4:e2b", cfg) is True
-
 
     def test_cfg_none_falls_back_to_models_dev(self):
         # Caller didn't pass cfg at all — old call sites must still work.
@@ -189,23 +185,29 @@ class TestShouldProbeOllamaVision:
     def test_remote_endpoint_not_probed(self):
         # A remote sglang/vLLM endpoint must NEVER be fingerprinted — that's
         # the 401-spray bug from #89863.
-        assert _should_probe_ollama_vision(
-            "custom", "https://my-remote-host/v1"
-        ) is False
+        assert (
+            _should_probe_ollama_vision("custom", "https://my-remote-host/v1") is False
+        )
 
     def test_remote_endpoint_not_probed_without_key(self):
         # Same as above but explicit: no api_key is not a reason to probe.
-        assert _should_probe_ollama_vision(
-            "custom", "https://inference.example.com/v1", api_key=""
-        ) is False
+        assert (
+            _should_probe_ollama_vision(
+                "custom", "https://inference.example.com/v1", api_key=""
+            )
+            is False
+        )
 
     def test_remote_endpoint_not_probed_with_key(self):
         # Even WITH an api_key, remote endpoints are not local and must not be
         # fingerprinted — the key just prevents 401s, it doesn't make the
         # endpoint local.
-        assert _should_probe_ollama_vision(
-            "custom", "https://inference.example.com/v1", api_key="sk-xxxx"
-        ) is False
+        assert (
+            _should_probe_ollama_vision(
+                "custom", "https://inference.example.com/v1", api_key="sk-xxxx"
+            )
+            is False
+        )
 
     def test_local_endpoint_with_key_passes_key(self):
         # A local endpoint is still probed; the api_key must be forwarded so
@@ -228,9 +230,7 @@ class TestShouldProbeOllamaVision:
             "agent.model_metadata.detect_local_server_type",
             return_value="ollama",
         ) as mock_detect:
-            result = _should_probe_ollama_vision(
-                "custom", "http://127.0.0.1:11434/v1"
-            )
+            result = _should_probe_ollama_vision("custom", "http://127.0.0.1:11434/v1")
         assert result is True
         mock_detect.assert_called_once_with("http://127.0.0.1:11434/v1", api_key="")
 
@@ -239,8 +239,6 @@ class TestShouldProbeOllamaVision:
 
 
 class TestAutoModeRespectsOverride:
-
-
     def test_auto_text_for_custom_with_supports_vision_false(self):
         cfg = {"model": {"supports_vision": False}}
         with patch("agent.models_dev.get_model_capabilities", return_value=None):
@@ -250,8 +248,6 @@ class TestAutoModeRespectsOverride:
         # Unchanged baseline: unknown custom model → text.
         with patch("agent.models_dev.get_model_capabilities", return_value=None):
             assert decide_image_input_mode("custom", "unknown", {}) == "text"
-
-
 
 
 # ─── build_native_content_parts ──────────────────────────────────────────────
@@ -279,8 +275,6 @@ class TestBuildNativeContentParts:
         assert parts[1]["type"] == "image_url"
         assert parts[1]["image_url"]["url"].startswith("data:image/png;base64,")
 
-
-
     def test_path_hint_appended(self, tmp_path: Path):
         """The local path of each attached image is appended to the user
         text part so MCP/skill tools that take ``image_url: str`` can be
@@ -296,13 +290,14 @@ class TestBuildNativeContentParts:
         # User caption is preserved verbatim ahead of the hint.
         assert text_part["text"].startswith("attach this")
 
-
     def test_multiple_images(self, tmp_path: Path):
         img1 = tmp_path / "a.png"
         img2 = tmp_path / "b.png"
         img1.write_bytes(_png_bytes())
         img2.write_bytes(_png_bytes())
-        parts, skipped = build_native_content_parts("compare these", [str(img1), str(img2)])
+        parts, skipped = build_native_content_parts(
+            "compare these", [str(img1), str(img2)]
+        )
         assert skipped == []
         image_parts = [p for p in parts if p.get("type") == "image_url"]
         assert len(image_parts) == 2
@@ -311,9 +306,6 @@ class TestBuildNativeContentParts:
         assert text_part["text"].count("[Image attached at:") == 2
         assert str(img1) in text_part["text"]
         assert str(img2) in text_part["text"]
-
-
-
 
 
 # ─── Oversize handling ───────────────────────────────────────────────────────
@@ -340,9 +332,9 @@ class TestLargeImageHandling:
 
     def test_missing_file_returns_none(self, tmp_path: Path):
         from agent import image_routing as _ir
+
         missing = tmp_path / "does_not_exist.png"
         assert _ir._file_to_data_url(missing) is None
-
 
 
 # ─── extract_image_refs ──────────────────────────────────────────────────────
@@ -378,21 +370,11 @@ class TestExtractImageRefs:
         assert paths == [str(img)]
         assert urls == []
 
-
     def test_finds_http_image_url(self):
         body = "Check out https://example.com/photos/cat.png — cute right?"
         paths, urls = extract_image_refs(body)
         assert paths == []
         assert urls == ["https://example.com/photos/cat.png"]
-
-
-
-
-
-
-
-
-
 
 
 # ─── build_native_content_parts with URLs ────────────────────────────────────
@@ -437,9 +419,6 @@ class TestBuildNativeContentPartsURLs:
         assert "[Image attached: https://example.com/remote.jpg]" in text
 
 
-
-
-
 # ─── Format compatibility: transcode non-universal formats to PNG ────────────
 
 
@@ -454,20 +433,23 @@ class TestFormatCompatibility:
     'Could not process image' HTTP 400 (issue #25935).
     """
 
-
-
-
-
     def test_svg_sniffed_correctly(self):
         from agent.image_routing import _sniff_mime_from_bytes
-        assert _sniff_mime_from_bytes(b'<svg xmlns="http://www.w3.org/2000/svg"/>') == "image/svg+xml"
+
+        assert (
+            _sniff_mime_from_bytes(b'<svg xmlns="http://www.w3.org/2000/svg"/>')
+            == "image/svg+xml"
+        )
         assert _sniff_mime_from_bytes(b'<?xml version="1.0"?><svg/>') == "image/svg+xml"
 
     def test_bmp_transcoded_to_png(self, tmp_path: Path):
         """BMP file should land as image/png in the data URL, not image/bmp,
         because not every provider (Anthropic) accepts BMP."""
         import pytest
-        Image = pytest.importorskip("PIL.Image", reason="Pillow not installed; transcode is best-effort")
+
+        Image = pytest.importorskip(
+            "PIL.Image", reason="Pillow not installed; transcode is best-effort"
+        )
         from agent.image_routing import _file_to_data_url
 
         img_path = tmp_path / "scan.bmp"
@@ -477,7 +459,6 @@ class TestFormatCompatibility:
         assert url.startswith("data:image/png;base64,"), (
             f"BMP must be transcoded to PNG for cross-provider compatibility, got: {url[:60]}"
         )
-
 
     def test_png_passes_through_no_transcode(self, tmp_path: Path):
         """Universal-safe formats must NOT be re-encoded — preserves bytes."""
@@ -500,8 +481,9 @@ class TestFormatCompatibility:
 
         assert _file_to_data_url(img_path) is None
 
-
-    def test_native_content_parts_blocks_image_symlink_to_read_denied_file(self, tmp_path: Path):
+    def test_native_content_parts_blocks_image_symlink_to_read_denied_file(
+        self, tmp_path: Path
+    ):
         from agent.image_routing import build_native_content_parts
         import os
         import pytest
@@ -520,9 +502,6 @@ class TestFormatCompatibility:
         assert all(part.get("type") != "image_url" for part in parts)
 
 
-
-
-
 # ─── vision alias for custom providers ──────────────────────────────────────
 
 
@@ -539,15 +518,9 @@ class TestCustomProviderVisionAlias:
     resolver must be *extended* to accept the ``vision`` alias, not replaced.
     """
 
-
     def test_providers_dict_vision_alias_false(self):
-        cfg = {
-            "providers": {
-                "my-vllm": {"models": {"llama-3": {"vision": False}}}
-            }
-        }
+        cfg = {"providers": {"my-vllm": {"models": {"llama-3": {"vision": False}}}}}
         assert _supports_vision_override(cfg, "my-vllm", "llama-3") is False
-
 
     def test_named_custom_provider_bare_custom_runtime_vision_alias(self):
         """Teknium's requested regression case.
@@ -560,15 +533,11 @@ class TestCustomProviderVisionAlias:
         """
         cfg = {
             "model": {"provider": "my-vllm"},
-            "providers": {
-                "my-vllm": {"models": {"llava-v1.6": {"vision": True}}}
-            },
+            "providers": {"my-vllm": {"models": {"llava-v1.6": {"vision": True}}}},
         }
         # Runtime provider is the bare normalized value "custom".
         assert _supports_vision_override(cfg, "custom", "llava-v1.6") is True
         assert decide_image_input_mode("custom", "llava-v1.6", cfg) == "native"
-
-
 
     def test_vision_alias_none_when_model_absent(self):
         cfg = {
@@ -631,20 +600,22 @@ class TestProbeApiKeyForwarding:
         assert _resolve_inference_api_key({"model": {}}, "custom") == ""
         assert _resolve_inference_api_key(None, "custom") == ""
 
-
     def test_lookup_passes_resolved_key_to_probe(self):
         """The full lookup path resolves the key from cfg and hands it to the
         probe — the exact chain that sprayed 401s in #89863."""
         key = _fake_key("lookup")
         import agent.models_dev
-        with patch(
-            "agent.models_dev.get_model_capabilities", return_value=None
-        ), patch(
-            "agent.image_routing._resolve_inference_base_url",
-            return_value="https://remote/v1",
-        ), patch(
-            "agent.model_metadata.detect_local_server_type", return_value=None
-        ) as detect:
+
+        with (
+            patch("agent.models_dev.get_model_capabilities", return_value=None),
+            patch(
+                "agent.image_routing._resolve_inference_base_url",
+                return_value="https://remote/v1",
+            ),
+            patch(
+                "agent.model_metadata.detect_local_server_type", return_value=None
+            ) as detect,
+        ):
             _lookup_supports_vision("custom", "llava", {"model": {"api_key": key}})
         assert detect.call_args.kwargs.get("api_key") == key
 
@@ -662,11 +633,20 @@ class TestCodexContextVariantVisionLookup:
 
         def fake_caps(provider, model, allow_network=False):
             seen.append(model)
-            return SimpleNamespace(supports_vision=True) if model == "gpt-5.6-sol" else None
+            return (
+                SimpleNamespace(supports_vision=True)
+                if model == "gpt-5.6-sol"
+                else None
+            )
 
         monkeypatch.setattr(models_dev, "get_model_capabilities", fake_caps)
-        assert image_routing._probe_models_dev("openai-codex", "gpt-5.6-sol-900k", {}) is True
+        assert (
+            image_routing._probe_models_dev("openai-codex", "gpt-5.6-sol-900k", {})
+            is True
+        )
         assert seen == ["gpt-5.6-sol"]
         # Ineligible alias: looked up verbatim, no capability gained.
-        assert image_routing._probe_models_dev("openai-codex", "gpt-5.5-900k", {}) is None
+        assert (
+            image_routing._probe_models_dev("openai-codex", "gpt-5.5-900k", {}) is None
+        )
         assert seen[-1] == "gpt-5.5-900k"

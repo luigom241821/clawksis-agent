@@ -34,6 +34,7 @@ from gateway.platforms.base import (
 from gateway.platforms.event import MessageEvent, MessageType
 from gateway.run import GatewayRunner
 
+
 def _make_event(text: str = "hello", chat_id: str = "123") -> MessageEvent:
     source = SessionSource(
         platform=MagicMock(value="telegram"),
@@ -47,6 +48,7 @@ def _make_event(text: str = "hello", chat_id: str = "123") -> MessageEvent:
         source=source,
         message_id="msg1",
     )
+
 
 def _make_runner(*, session_id: str = "parent-session") -> GatewayRunner:
     runner = object.__new__(GatewayRunner)
@@ -77,6 +79,7 @@ def _make_runner(*, session_id: str = "parent-session") -> GatewayRunner:
     runner._session_db._db.get_compression_lock_holder.return_value = None
     return runner
 
+
 def _make_adapter() -> MagicMock:
     adapter = MagicMock()
     adapter._pending_messages = {}
@@ -85,6 +88,7 @@ def _make_adapter() -> MagicMock:
     adapter.config.extra = {}
     adapter.platform = MagicMock(value="telegram")
     return adapter
+
 
 def _make_parent_no_subagents() -> MagicMock:
     parent = MagicMock()
@@ -96,6 +100,7 @@ def _make_parent_no_subagents() -> MagicMock:
         "current_tool": "terminal",
     }
     return parent
+
 
 class TestBusyHandlerDemotesInterruptForCompression:
     @pytest.mark.asyncio

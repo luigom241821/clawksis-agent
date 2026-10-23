@@ -14,7 +14,10 @@ import sqlite3
 from clawk_cli.doctor_report import Finding
 from clawk_cli.doctor_state import _state_db_health
 from clawk_state import SessionDB
-from clawk_state_repair import integrity_damage_is_structural, state_db_has_structural_damage
+from clawk_state_repair import (
+    integrity_damage_is_structural,
+    state_db_has_structural_damage,
+)
 
 
 def test_integrity_damage_classifier_maps_tree_ids_through_rootpage():
@@ -25,16 +28,35 @@ def test_integrity_damage_classifier_maps_tree_ids_through_rootpage():
         "Tree 12 page 9: btreeInitPage() returns error code 11",
         "row 3 missing from index messages_fts_trigram_idx",
     ]
-    master = [(12, "table", "messages_fts_data"), (5, "table", "sessions"),
-              (15, "table", "gateway_routing"), (40, "table", "archive_fts_data")]
+    master = [
+        (12, "table", "messages_fts_data"),
+        (5, "table", "sessions"),
+        (15, "table", "gateway_routing"),
+        (40, "table", "archive_fts_data"),
+    ]
     assert integrity_damage_is_structural(fts_only, master) is False
-    assert integrity_damage_is_structural(["Tree 5  page 421385: btreeInitPage() returns error code 11"], master)
-    assert integrity_damage_is_structural(["Tree 15 page 15 cell 0: 2nd reference to page 5453"], master)
-    assert integrity_damage_is_structural(["Tree 40 page 40: btreeInitPage() returns error code 11"], master)
-    assert integrity_damage_is_structural(["row 1 missing from index sqlite_autoindex_delivery_obligations_1"], master)
-    assert integrity_damage_is_structural(["Freelist: invalid page number 167772160"], master)
+    assert integrity_damage_is_structural(
+        ["Tree 5  page 421385: btreeInitPage() returns error code 11"], master
+    )
+    assert integrity_damage_is_structural(
+        ["Tree 15 page 15 cell 0: 2nd reference to page 5453"], master
+    )
+    assert integrity_damage_is_structural(
+        ["Tree 40 page 40: btreeInitPage() returns error code 11"], master
+    )
+    assert integrity_damage_is_structural(
+        ["row 1 missing from index sqlite_autoindex_delivery_obligations_1"], master
+    )
+    assert integrity_damage_is_structural(
+        ["Freelist: invalid page number 167772160"], master
+    )
     # Unparseable / unknown-tree lines keep the FTS wording (incomplete, never wrong).
-    assert integrity_damage_is_structural(["Tree 999 page 1: garbage", "*** in database main ***"], master) is False
+    assert (
+        integrity_damage_is_structural(
+            ["Tree 999 page 1: garbage", "*** in database main ***"], master
+        )
+        is False
+    )
 
 
 def _seed(tmp_path, rows=120):
@@ -47,7 +69,9 @@ def _seed(tmp_path, rows=120):
     raw = sqlite3.connect(db_path)
     raw.execute("PRAGMA wal_checkpoint(TRUNCATE)")
     page_size = raw.execute("PRAGMA page_size").fetchone()[0]
-    root = raw.execute("SELECT rootpage FROM sqlite_master WHERE name='sessions'").fetchone()[0]
+    root = raw.execute(
+        "SELECT rootpage FROM sqlite_master WHERE name='sessions'"
+    ).fetchone()[0]
     raw.close()
     return db_path, page_size, root
 
@@ -59,7 +83,9 @@ def _run_doctor(db_path, should_fix):
     return finding
 
 
-def test_doctor_routes_structural_damage_to_recover_not_fts_rebuild(tmp_path, monkeypatch):
+def test_doctor_routes_structural_damage_to_recover_not_fts_rebuild(
+    tmp_path, monkeypatch
+):
     """Real torn ``sessions`` b-tree: doctor --fix must not run the FTS repair ladder (no
     .malformed-backup, nothing fixed) and must point at `clawk sessions recover` for THIS
     database with the profile pinned; a real FTS-only stomp still takes the FTS path."""
@@ -73,8 +99,12 @@ def test_doctor_routes_structural_damage_to_recover_not_fts_rebuild(tmp_path, mo
     finding = _run_doctor(db_path, should_fix=True)
     assert finding.fixed == 0 and finding.issues == []
     (issue,) = finding.manual_issues
-    assert "structural" in issue and "sessions recover" in issue and str(db_path) in issue
-    assert "FTS write corruption" not in issue and "restore from the backup" not in issue
+    assert (
+        "structural" in issue and "sessions recover" in issue and str(db_path) in issue
+    )
+    assert (
+        "FTS write corruption" not in issue and "restore from the backup" not in issue
+    )
     assert not list(tmp_path.glob("state.db.malformed-backup-*"))
 
     fts_path = tmp_path / "fts" / "state.db"
@@ -84,7 +114,9 @@ def test_doctor_routes_structural_damage_to_recover_not_fts_rebuild(tmp_path, mo
         fts_db.append_message("s1", "user", f"hello {i} alpha")
     fts_db.close()
     raw = sqlite3.connect(fts_path)
-    raw.execute("UPDATE messages_fts_data SET block = X'DEADBEEFDEADBEEFDEADBEEFDEADBEEF'")
+    raw.execute(
+        "UPDATE messages_fts_data SET block = X'DEADBEEFDEADBEEFDEADBEEFDEADBEEF'"
+    )
     raw.commit()
     raw.close()
     assert state_db_has_structural_damage(fts_path) is False

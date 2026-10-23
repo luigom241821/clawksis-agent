@@ -24,8 +24,10 @@ def _valid_alias(alias: str) -> str:
     from tools.connectors.targets import ALIAS_PATTERN
 
     if not re.match(ALIAS_PATTERN, alias):
-        _fail(f"Invalid name {alias!r}. Use 1 to 32 lowercase letters, digits or hyphens, "
-              "starting with a letter or digit.")
+        _fail(
+            f"Invalid name {alias!r}. Use 1 to 32 lowercase letters, digits or hyphens, "
+            "starting with a letter or digit."
+        )
     return alias
 
 
@@ -34,23 +36,36 @@ def _account_name(row: dict[str, Any]) -> str:
 
 
 def _display_name(row: dict[str, Any]) -> str:
-    return row["alias"] if row.get("alias") else f"{row.get('label') or row.get('connectionId')} (unnamed)"
+    return (
+        row["alias"]
+        if row.get("alias")
+        else f"{row.get('label') or row.get('connectionId')} (unnamed)"
+    )
 
 
 def _app_accounts(app: str) -> list[dict[str, Any]]:
     from tools.connectors.portal.client import PortalConnectorClient
 
-    return [r for r in PortalConnectorClient().list_accounts() if str(r.get("connector", "")).lower() == app]
+    return [
+        r
+        for r in PortalConnectorClient().list_accounts()
+        if str(r.get("connector", "")).lower() == app
+    ]
 
 
 def _names_hint(app: str, rows: list[dict[str, Any]]) -> str:
     names = sorted({_account_name(r) for r in rows})
-    return f"Its accounts are: {', '.join(names)}." if names else f"You have no {app} account."
+    return (
+        f"Its accounts are: {', '.join(names)}."
+        if names
+        else f"You have no {app} account."
+    )
 
 
 def _match_named(app: str, rows: list[dict[str, Any]], name: str) -> dict[str, Any]:
     matches = [r for r in rows if r.get("alias") == name] or [
-        r for r in rows if not r.get("alias") and r.get("label") == name]
+        r for r in rows if not r.get("alias") and r.get("label") == name
+    ]
     if len(matches) != 1:
         what = "No" if not matches else "More than one"
         _fail(f"{what} {app} account is called {name!r}. {_names_hint(app, rows)}")
@@ -75,15 +90,28 @@ def _accounts(args) -> int:
     from tools.connectors.portal.client import PortalConnectorClient
 
     app = (args.app or "").strip().lower()
-    rows = [r for r in PortalConnectorClient().list_accounts()
-            if not app or str(r.get("connector", "")).lower() == app]
+    rows = [
+        r
+        for r in PortalConnectorClient().list_accounts()
+        if not app or str(r.get("connector", "")).lower() == app
+    ]
     retired = [r for r in rows if r.get("disabled")]
     shown = rows if args.all else [r for r in rows if not r.get("disabled")]
     if not shown and not retired:
-        print(f"You have no {app} account." if app else "You have no connected accounts.")
+        print(
+            f"You have no {app} account." if app else "You have no connected accounts."
+        )
         return 0
-    table = [(str(r.get("connector", "")), _display_name(r), str(r.get("status", "")) + (" (retired)" if r.get("disabled") else ""))
-             for r in sorted(shown, key=lambda r: (str(r.get("connector", "")), _account_name(r)))]
+    table = [
+        (
+            str(r.get("connector", "")),
+            _display_name(r),
+            str(r.get("status", "")) + (" (retired)" if r.get("disabled") else ""),
+        )
+        for r in sorted(
+            shown, key=lambda r: (str(r.get("connector", "")), _account_name(r))
+        )
+    ]
     if table:
         app_width = max(len(row[0]) for row in table)
         name_width = max(len(row[1]) for row in table)
@@ -105,7 +133,10 @@ def _wait_for_link(start, app: str) -> dict[str, Any]:
             print(url, flush=True)
             print("Open this link in your browser to finish.", flush=True)
             printed_url = True
-        if target.get("state") in _DONE_STATES or snapshot.get("settled_at") is not None:
+        if (
+            target.get("state") in _DONE_STATES
+            or snapshot.get("settled_at") is not None
+        ):
             return target
         if time.time() >= start.operation.deadline_at:
             return target
@@ -118,8 +149,10 @@ def _report_connect(app: str, alias: str | None, target: dict[str, Any]) -> int:
     state = target.get("state")
     if state == "connected":
         if alias:
-            print(f"{app_title(app)} account {alias} is connected. "
-                  f"Rename it anytime: clawk connectors rename {app} {alias} --to <new-name>")
+            print(
+                f"{app_title(app)} account {alias} is connected. "
+                f"Rename it anytime: clawk connectors rename {app} {alias} --to <new-name>"
+            )
         else:
             print(f"{app_title(app)} is connected.")
         return 0
@@ -142,14 +175,19 @@ def _connect(args) -> int:
         alias, name = None, _account_name(row)
         if row.get("status") == "active" and not args.force:
             # A repair of a working account would only replace its sign-in.
-            print(f"{app} account {name} is connected. Nothing to repair; pass --force to sign in again.")
+            print(
+                f"{app} account {name} is connected. Nothing to repair; pass --force to sign in again."
+            )
             return 0
-        start = account.find_or_start_operation([app], action="reconnect", profile_home=None,
-                                                repair_id=row["connectionId"])
+        start = account.find_or_start_operation(
+            [app], action="reconnect", profile_home=None, repair_id=row["connectionId"]
+        )
     else:
         alias = _valid_alias(args.alias) if args.alias else None
         name = alias
-        start = account.find_or_start_operation([app], action="connect", profile_home=None, alias=alias)
+        start = account.find_or_start_operation(
+            [app], action="connect", profile_home=None, alias=alias
+        )
     try:
         account.wait_for_prepare(start)
         if start.failed:
@@ -165,7 +203,11 @@ def _connect(args) -> int:
 
 
 def _rename(args) -> int:
-    from tools.connectors.gateway.errors import GatewayUnavailable, IdempotencyConflict, ToolGatewayError
+    from tools.connectors.gateway.errors import (
+        GatewayUnavailable,
+        IdempotencyConflict,
+        ToolGatewayError,
+    )
     from tools.connectors.portal.client import PortalConnectorClient
 
     app = args.app.strip().lower()
@@ -187,17 +229,23 @@ def _rename(args) -> int:
     return 0
 
 
-def _pick_account(app: str, alias: str | None, *, retired: bool = False) -> dict[str, Any]:
+def _pick_account(
+    app: str, alias: str | None, *, retired: bool = False
+) -> dict[str, Any]:
     """``retired``: a retired account may be picked by name (removal); a repair never targets one."""
     rows = _app_accounts(app)
     if alias:
-        return _match_named(app, [r for r in rows if retired or not r.get("disabled")], alias)
+        return _match_named(
+            app, [r for r in rows if retired or not r.get("disabled")], alias
+        )
     live_rows = [r for r in rows if not r.get("disabled")]
     if len(live_rows) == 1:
         return live_rows[0]
     if not live_rows:
         _fail(f"You have no {app} account.")
-    _fail(f"You have more than one {app} account. Pass --alias to pick one. {_names_hint(app, live_rows)}")
+    _fail(
+        f"You have more than one {app} account. Pass --alias to pick one. {_names_hint(app, live_rows)}"
+    )
 
 
 def _disconnect(args) -> int:
@@ -208,8 +256,14 @@ def _disconnect(args) -> int:
     name = _account_name(row)
     if not args.yes:
         if not sys.stdin.isatty():
-            _fail("Refusing to remove an account without confirmation. Pass --yes to confirm.")
-        answer = input(f"Remove {app} account {name}? This signs Clawksis out of it. [y/N] ").strip().lower()
+            _fail(
+                "Refusing to remove an account without confirmation. Pass --yes to confirm."
+            )
+        answer = (
+            input(f"Remove {app} account {name}? This signs Clawksis out of it. [y/N] ")
+            .strip()
+            .lower()
+        )
         if answer not in ("y", "yes"):
             print("Nothing removed.")
             return 0

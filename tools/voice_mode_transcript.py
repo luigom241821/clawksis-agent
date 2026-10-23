@@ -12,6 +12,7 @@ def _voice_config() -> dict:
     config system can't be imported (broken config mid-install)."""
     with suppress(Exception):
         from clawk_cli.config import load_config
+
         voice_cfg = load_config().get("voice", {})
         return voice_cfg if isinstance(voice_cfg, dict) else {}
     return {}
@@ -20,24 +21,40 @@ def _voice_config() -> dict:
 # Whisper commonly hallucinates these phrases on silent/near-silent audio
 # (matched with trailing '.'/'!' stripped, so the bare form suffices).
 WHISPER_HALLUCINATIONS = {
-    "thank you", "thanks for watching", "subscribe to my channel", "like and subscribe",
-    "please subscribe", "thank you for watching", "bye", "you", "the end",
+    "thank you",
+    "thanks for watching",
+    "subscribe to my channel",
+    "like and subscribe",
+    "please subscribe",
+    "thank you for watching",
+    "bye",
+    "you",
+    "the end",
     # Non-English hallucinations (common on silence)
-    "продолжение следует", "sous-titres", "sous-titres réalisés par la communauté d'amara.org",
-    "sottotitoli creati dalla comunità amara.org", "untertitel von stephanie geiges",
-    "amara.org", "www.mooji.org", "ご視聴ありがとうございました",
+    "продолжение следует",
+    "sous-titres",
+    "sous-titres réalisés par la communauté d'amara.org",
+    "sottotitoli creati dalla comunità amara.org",
+    "untertitel von stephanie geiges",
+    "amara.org",
+    "www.mooji.org",
+    "ご視聴ありがとうございました",
 }
 
 # Repetitive hallucinations (e.g. "Thank you. Thank you. Thank you.")
-_HALLUCINATION_REPEAT_RE = re.compile(r'^(?:thank you|thanks|bye|you|ok|okay|the end|\.|\s|,|!)+$',
-                                      flags=re.IGNORECASE)
+_HALLUCINATION_REPEAT_RE = re.compile(
+    r"^(?:thank you|thanks|bye|you|ok|okay|the end|\.|\s|,|!)+$", flags=re.IGNORECASE
+)
 
 
 def is_whisper_hallucination(transcript: str) -> bool:
     """Check if a transcript is a known Whisper hallucination on silence."""
     cleaned = transcript.strip().lower()
-    return (not cleaned or cleaned.rstrip('.!') in WHISPER_HALLUCINATIONS
-            or bool(_HALLUCINATION_REPEAT_RE.match(cleaned)))
+    return (
+        not cleaned
+        or cleaned.rstrip(".!") in WHISPER_HALLUCINATIONS
+        or bool(_HALLUCINATION_REPEAT_RE.match(cleaned))
+    )
 
 
 DEFAULT_VOICE_STOP_PHRASES = ("stop",)
@@ -52,7 +69,11 @@ def _load_voice_stop_phrases() -> tuple:
         if isinstance(raw, str):
             raw = [raw]
         if isinstance(raw, (list, tuple)):
-            return tuple(str(p).strip().lower() for p in raw if isinstance(p, (str, int, float)) and str(p).strip())
+            return tuple(
+                str(p).strip().lower()
+                for p in raw
+                if isinstance(p, (str, int, float)) and str(p).strip()
+            )
     return DEFAULT_VOICE_STOP_PHRASES
 
 
@@ -61,7 +82,9 @@ def is_voice_stop_phrase(transcript: str, stop_phrases: Optional[tuple] = None) 
     utterance — lowercased, surrounding punctuation stripped — must equal a phrase, so "stop doing
     that and try again" still reaches the agent. ``voice.stop_phrases: []`` disables."""
     cleaned = transcript.strip().lower().strip(".,!?;: \t\n\"'") if transcript else ""
-    return bool(cleaned) and cleaned in (_load_voice_stop_phrases() if stop_phrases is None else stop_phrases)
+    return bool(cleaned) and cleaned in (
+        _load_voice_stop_phrases() if stop_phrases is None else stop_phrases
+    )
 
 
 # Similarity ratio (difflib.SequenceMatcher) above which a playback-phase barge transcript
@@ -80,15 +103,21 @@ def _normalize_for_echo_compare(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip().lower()
 
 
-def is_tts_echo(transcript: str, spoken_text: str,
-                threshold: float = DEFAULT_TTS_ECHO_SIMILARITY_THRESHOLD) -> bool:
+def is_tts_echo(
+    transcript: str,
+    spoken_text: str,
+    threshold: float = DEFAULT_TTS_ECHO_SIMILARITY_THRESHOLD,
+) -> bool:
     """True when *transcript* looks like a self-capture of *spoken_text*. Character-level similarity
     (language-agnostic): a genuine interjection rarely matches Clawksis' own words, so a high ratio signals
     speaker-bleed (fail-closed guard for the playback-phase listener). Playback capture spans only pre-roll
     plus time-to-silence, so for long replies the transcript is a FRAGMENT and the whole-string ratio dilutes
     toward 0; when it misses, a transcript-sized window slides across `spoken_text`. Transcripts shorter than
     `MIN_FRAGMENT_LENGTH_FOR_ECHO` skip the fallback (a short interjection trivially matches a short window)."""
-    a, b = _normalize_for_echo_compare(transcript or ""), _normalize_for_echo_compare(spoken_text or "")
+    a, b = (
+        _normalize_for_echo_compare(transcript or ""),
+        _normalize_for_echo_compare(spoken_text or ""),
+    )
     if not a or not b:
         return False
 
@@ -99,7 +128,9 @@ def is_tts_echo(transcript: str, spoken_text: str,
         return True
     if len(a) < MIN_FRAGMENT_LENGTH_FOR_ECHO or len(a) >= len(b):
         return False
-    return any(_similar(a, b[start : start + len(a)]) for start in range(len(b) - len(a) + 1))
+    return any(
+        _similar(a, b[start : start + len(a)]) for start in range(len(b) - len(a) + 1)
+    )
 
 
 def voice_stop_hint() -> str:

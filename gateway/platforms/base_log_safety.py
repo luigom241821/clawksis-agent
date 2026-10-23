@@ -1,4 +1,5 @@
 """Log-safe URL rendering for adapter logs (split from :mod:`gateway.platforms.base`)."""
+
 from urllib.parse import urlsplit
 
 
@@ -20,4 +21,4 @@ def safe_url_for_log(url: str, max_len: int = 80) -> str:
         safe = f"{parsed.scheme}://{parsed.netloc.rsplit('@', 1)[-1]}{tail}"
     if len(safe) <= max_len:
         return safe
-    return "." * max_len if max_len <= 3 else f"{safe[:max_len - 3]}..."
+    return "." * max_len if max_len <= 3 else f"{safe[: max_len - 3]}..."

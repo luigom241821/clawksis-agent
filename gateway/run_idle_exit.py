@@ -18,6 +18,7 @@ a supervisor (systemd/launchd/Desktop/external) or started without ``--idle-exit
 publishes ``draining`` with ``drain_reason: idle_exit`` before anything else, so a client that races it
 waits for the process to go and starts a fresh one instead of failing.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -41,15 +42,23 @@ _KANBAN_DUE_STATUSES = ("scheduled", "ready", "running", "review")
 def idle_exit_seconds(runner) -> float:
     """``gateway.unmanaged_idle_exit_seconds`` from the launch home; 0 disables, junk keeps the default."""
     from gateway.run import _load_gateway_config
+
     section = (_load_gateway_config() or {}).get("gateway")
-    value = section.get("unmanaged_idle_exit_seconds") if isinstance(section, dict) else None
+    value = (
+        section.get("unmanaged_idle_exit_seconds")
+        if isinstance(section, dict)
+        else None
+    )
     if value is None:
         return DEFAULT_IDLE_EXIT_SECONDS
     try:
         seconds = float(value)
     except (TypeError, ValueError):
-        logger.warning("gateway.unmanaged_idle_exit_seconds=%r is not a number; using %.0f", value,
-                       DEFAULT_IDLE_EXIT_SECONDS)
+        logger.warning(
+            "gateway.unmanaged_idle_exit_seconds=%r is not a number; using %.0f",
+            value,
+            DEFAULT_IDLE_EXIT_SECONDS,
+        )
         return DEFAULT_IDLE_EXIT_SECONDS
     return max(0.0, seconds)
 
@@ -72,6 +81,7 @@ def attached_client(runner):
 
 def _messaging_busy(runner) -> str | None:
     from gateway.config import Platform
+
     live = list(getattr(runner, "adapters", None) or {})
     for adapters in (getattr(runner, "_profile_adapters", None) or {}).values():
         live.extend(adapters)
@@ -80,14 +90,19 @@ def _messaging_busy(runner) -> str | None:
     live.extend(getattr(runner, "_failed_platforms", None) or {})
     config = getattr(runner, "config", None)
     if config is not None:
-        live.extend(p for p, cfg in config.platforms.items() if getattr(cfg, "enabled", False))
-    live = {getattr(p, 'value', str(p)) for p in live if p != Platform.LOCAL}  # LOCAL never holds the gateway
+        live.extend(
+            p for p, cfg in config.platforms.items() if getattr(cfg, "enabled", False)
+        )
+    live = {
+        getattr(p, "value", str(p)) for p in live if p != Platform.LOCAL
+    }  # LOCAL never holds the gateway
     return f"messaging {sorted(live)}" if live else None
 
 
 def _served_homes(runner) -> list[Path]:
     from gateway.run import _cron_tick_profile_homes
     from gateway.session_authorities import all_authorities
+
     homes = {Path(a.profile_id) for a in all_authorities(runner)}
     homes.update(Path(h) for _name, h in _cron_tick_profile_homes(runner.config))
     return sorted(homes)
@@ -96,6 +111,7 @@ def _served_homes(runner) -> list[Path]:
 def _cron_busy(homes) -> str | None:
     from cron.jobs import is_job_runnable, is_terminal_job, load_jobs, use_cron_store
     from cron.scheduler import get_running_job_ids
+
     if get_running_job_ids():
         return "cron job running"
     for home in homes:
@@ -110,25 +126,35 @@ def _cron_busy(homes) -> str | None:
 
 def _kanban_busy() -> str | None:
     from clawk_cli import kanban_db
+
     marks = ",".join("?" * len(_KANBAN_DUE_STATUSES))
     for meta in kanban_db.list_boards(include_archived=False):
         path = kanban_db.kanban_db_path(board=meta.get("slug"))
         if not path.exists():
             continue
-        with contextlib.closing(sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=2)) as conn:
-            if conn.execute(f"SELECT 1 FROM tasks WHERE status IN ({marks}) LIMIT 1",
-                            _KANBAN_DUE_STATUSES).fetchone():
+        with contextlib.closing(
+            sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=2)
+        ) as conn:
+            if conn.execute(
+                f"SELECT 1 FROM tasks WHERE status IN ({marks}) LIMIT 1",
+                _KANBAN_DUE_STATUSES,
+            ).fetchone():
                 return f"kanban work on board {meta.get('slug')}"
     return None
 
 
 def _ledger_busy(runner) -> str | None:
     from gateway.session_authorities import all_authorities
+
     for authority in all_authorities(runner):
         db = authority.db
-        if db._read_all("SELECT 1 FROM session_admissions WHERE status IN ('queued','started') LIMIT 1"):
+        if db._read_all(
+            "SELECT 1 FROM session_admissions WHERE status IN ('queued','started') LIMIT 1"
+        ):
             return f"admissions pending in {authority.profile_id}"
-        if db._read_all("SELECT 1 FROM worker_executions WHERE status != 'terminal' LIMIT 1"):
+        if db._read_all(
+            "SELECT 1 FROM worker_executions WHERE status != 'terminal' LIMIT 1"
+        ):
             return f"managed worker live in {authority.profile_id}"
         service = getattr(authority, "hosted_room_service", None)
         if service is not None:
@@ -140,10 +166,17 @@ def _ledger_busy(runner) -> str | None:
 
 def _store_gates_busy(homes) -> str | None:
     from gateway.run_idle_gates import (
-        profile_has_active_heartbeat, profile_has_active_loop, profile_has_pending_handoff)
+        profile_has_active_heartbeat,
+        profile_has_active_loop,
+        profile_has_pending_handoff,
+    )
+
     for home in homes:
-        for label, gate in (("heartbeat", profile_has_active_heartbeat), ("loop", profile_has_active_loop),
-                            ("handoff", profile_has_pending_handoff)):
+        for label, gate in (
+            ("heartbeat", profile_has_active_heartbeat),
+            ("loop", profile_has_active_loop),
+            ("handoff", profile_has_pending_handoff),
+        ):
             if gate(home):
                 return f"active {label} in {home}"
     return None
@@ -168,8 +201,13 @@ def busy_reason(runner, *, window: float) -> str | None:
         if runner._scale_to_zero_has_live_background_work():
             return "background work in flight"
         homes = _served_homes(runner)
-        return (_messaging_busy(runner) or _ledger_busy(runner) or _cron_busy(homes) or _kanban_busy()
-                or _store_gates_busy(homes))
+        return (
+            _messaging_busy(runner)
+            or _ledger_busy(runner)
+            or _cron_busy(homes)
+            or _kanban_busy()
+            or _store_gates_busy(homes)
+        )
     except Exception as exc:
         logger.debug("idle-exit probe failed; staying up", exc_info=True)
         return f"idle probe failed ({type(exc).__name__})"
@@ -178,19 +216,28 @@ def busy_reason(runner, *, window: float) -> str | None:
 def _begin_idle_exit(runner, window: float) -> None:
     """Withdraw admission synchronously (no await between the last idle check and here), then stop."""
     runner._draining = True
-    runner.session_runtime_descriptor.update(state="draining", capabilities=[], drain_reason=IDLE_EXIT_REASON)
+    runner.session_runtime_descriptor.update(
+        state="draining", capabilities=[], drain_reason=IDLE_EXIT_REASON
+    )
     runner._exit_reason = f"{IDLE_EXIT_STOP_PREFIX} for {window:.0f}s (gateway.unmanaged_idle_exit_seconds)"
-    logger.info("Exiting: %s; the next client starts a fresh gateway", runner._exit_reason)
+    logger.info(
+        "Exiting: %s; the next client starts a fresh gateway", runner._exit_reason
+    )
     runner._idle_exit_stop_task = asyncio.ensure_future(runner.stop())
 
 
 async def unmanaged_idle_exit_watcher(runner) -> None:
     window = idle_exit_seconds(runner)
     if window <= 0:
-        logger.info("Auto-started gateway idle exit disabled (gateway.unmanaged_idle_exit_seconds=0)")
+        logger.info(
+            "Auto-started gateway idle exit disabled (gateway.unmanaged_idle_exit_seconds=0)"
+        )
         return
-    logger.info("Auto-started gateway: exits after %.0fs with no clients, adapters, cron/kanban work or "
-                "admissions (gateway.unmanaged_idle_exit_seconds)", window)
+    logger.info(
+        "Auto-started gateway: exits after %.0fs with no clients, adapters, cron/kanban work or "
+        "admissions (gateway.unmanaged_idle_exit_seconds)",
+        window,
+    )
     interval = min(30.0, max(0.5, window / 4))
     idle_since = None
     while runner._running and not runner._draining:
@@ -216,10 +263,15 @@ async def unmanaged_idle_exit_watcher(runner) -> None:
 def arm_unmanaged_idle_exit(runner) -> bool:
     """Start the watcher for an ``--idle-exit`` launch that no supervisor owns. Returns whether it armed."""
     from gateway.control_socket import _detect_supervisor
+
     supervisor = _detect_supervisor()
     if supervisor != "manual":
-        logger.info("Auto-started gateway idle exit not armed: supervised by %s", supervisor)
+        logger.info(
+            "Auto-started gateway idle exit not armed: supervised by %s", supervisor
+        )
         return False
     note_client_activity(runner)
-    runner._spawn_supervised(lambda: unmanaged_idle_exit_watcher(runner), "unmanaged_idle_exit_watcher")
+    runner._spawn_supervised(
+        lambda: unmanaged_idle_exit_watcher(runner), "unmanaged_idle_exit_watcher"
+    )
     return True

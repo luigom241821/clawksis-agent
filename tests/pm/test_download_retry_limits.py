@@ -7,14 +7,28 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 from pm import network
-from pm.downloader import Download, DownloadPaused, DownloadTransportError, HashError, Source
+from pm.downloader import (
+    Download,
+    DownloadPaused,
+    DownloadTransportError,
+    HashError,
+    Source,
+)
 from tests.pm._range_server import RangeHandler, dl_server, url
 
 
-@pytest.mark.parametrize("failure,phase", [
-    (failure, phase) for failure in ("503", "404", "403") for phase in ("probe", "ranged", "single")
-] + [("hash", "ranged"), ("hash", "single"), ("disk", "probe")])
-def test_download_failure_never_publishes_partial_bytes(tmp_path, dl_server, monkeypatch, failure, phase):
+@pytest.mark.parametrize(
+    "failure,phase",
+    [
+        (failure, phase)
+        for failure in ("503", "404", "403")
+        for phase in ("probe", "ranged", "single")
+    ]
+    + [("hash", "ranged"), ("hash", "single"), ("disk", "probe")],
+)
+def test_download_failure_never_publishes_partial_bytes(
+    tmp_path, dl_server, monkeypatch, failure, phase
+):
     payload = b"verified bytes"
     RangeHandler.payloads["/tool"] = payload
     RangeHandler.no_range = phase == "single"
@@ -34,13 +48,18 @@ def test_download_failure_never_publishes_partial_bytes(tmp_path, dl_server, mon
     monkeypatch.setattr(RangeHandler, "do_GET", respond)
     dest = tmp_path / "tool"
     digest = "0" * 64 if failure == "hash" else hashlib.sha256(payload).hexdigest()
-    dl = Download([Source(url(dl_server, "/tool"), dest, digest)],
-                  partials_dir=tmp_path / "partials", connections=1)
+    dl = Download(
+        [Source(url(dl_server, "/tool"), dest, digest)],
+        partials_dir=tmp_path / "partials",
+        connections=1,
+    )
     monkeypatch.setattr(dl, "_wait_retry", waits.append)
     if failure == "disk":
         dest.mkdir()
         (dest / "occupied").write_bytes(b"keep")
-    expected_error = {"hash": HashError, "disk": OSError}.get(failure, DownloadTransportError)
+    expected_error = {"hash": HashError, "disk": OSError}.get(
+        failure, DownloadTransportError
+    )
 
     with pytest.raises(expected_error) as error:
         dl.run()
@@ -52,7 +71,11 @@ def test_download_failure_never_publishes_partial_bytes(tmp_path, dl_server, mon
         assert not requests and not waits
     else:
         assert not dest.exists()
-        error_requests = requests if phase == "probe" else [value for value in requests if value != "bytes=0-0"]
+        error_requests = (
+            requests
+            if phase == "probe"
+            else [value for value in requests if value != "bytes=0-0"]
+        )
         if failure == "503":
             assert len(error_requests) == network._ATTEMPTS
             assert len(waits) == network._ATTEMPTS - 1
@@ -63,7 +86,9 @@ def test_download_failure_never_publishes_partial_bytes(tmp_path, dl_server, mon
 
 
 @pytest.mark.parametrize("phase", ["probe", "ranged", "single"])
-def test_pause_interrupts_real_http_retry_backoff(tmp_path, dl_server, monkeypatch, phase):
+def test_pause_interrupts_real_http_retry_backoff(
+    tmp_path, dl_server, monkeypatch, phase
+):
     payload = b"keep these bytes"
     RangeHandler.payloads["/tool"] = payload
     RangeHandler.no_range = phase == "single"
@@ -85,8 +110,9 @@ def test_pause_interrupts_real_http_retry_backoff(tmp_path, dl_server, monkeypat
 
     monkeypatch.setattr(RangeHandler, "do_GET", respond)
     dest = tmp_path / "tool"
-    dl = Download([Source(url(dl_server, "/tool"), dest)],
-                  partials_dir=tmp_path / "partials")
+    dl = Download(
+        [Source(url(dl_server, "/tool"), dest)], partials_dir=tmp_path / "partials"
+    )
     original_wait = dl._wait_retry
 
     def wait(delay):
@@ -104,6 +130,15 @@ def test_pause_interrupts_real_http_retry_backoff(tmp_path, dl_server, monkeypat
                 task.result(timeout=5)
         finally:
             dl.pause()
-    assert len([value for value in requests if (value == "bytes=0-0") == (phase == "probe")]) == 1
+    assert (
+        len(
+            [
+                value
+                for value in requests
+                if (value == "bytes=0-0") == (phase == "probe")
+            ]
+        )
+        == 1
+    )
     assert waits == [network._MAX_DELAY]
     assert not dest.exists()

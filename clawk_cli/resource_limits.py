@@ -30,6 +30,7 @@ def configured_nofile_soft_limit(config: Mapping[str, Any] | None = None) -> int
         try:
             # Profile-aware loader (applies managed-scope overlays and defaults).
             from clawk_cli.config import load_config_readonly
+
             config = load_config_readonly()
         except Exception:
             logger.debug("Could not load config for RLIMIT_NOFILE", exc_info=True)
@@ -79,4 +80,8 @@ def apply_nofile_soft_limit(config: Mapping[str, Any] | None = None) -> bool:
         return False
 
 
-__all__ = ["DEFAULT_NOFILE_SOFT_LIMIT", "apply_nofile_soft_limit", "configured_nofile_soft_limit"]
+__all__ = [
+    "DEFAULT_NOFILE_SOFT_LIMIT",
+    "apply_nofile_soft_limit",
+    "configured_nofile_soft_limit",
+]

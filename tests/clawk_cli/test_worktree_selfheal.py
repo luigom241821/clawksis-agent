@@ -105,7 +105,11 @@ class TestMaintainPackHealth:
             # One pack per commit object: pipe the sha into pack-objects.
             subprocess.run(
                 ["git", "pack-objects", "-q", str(pack_dir / f"tpack{i}")],
-                input=f"{sha}\n", cwd=str(repo), capture_output=True, text=True, check=True,
+                input=f"{sha}\n",
+                cwd=str(repo),
+                capture_output=True,
+                text=True,
+                check=True,
             )
         return self._pack_count(repo)
 
@@ -124,7 +128,9 @@ class TestMaintainPackHealth:
         cli._maintain_pack_health(str(repo))
 
         after = self._pack_count(repo)
-        assert after < made, f"pack count must strictly decrease (made={made}, after={after})"
+        assert after < made, (
+            f"pack count must strictly decrease (made={made}, after={after})"
+        )
         assert (repo / ".git" / "objects" / "pack" / "multi-pack-index").exists()
 
     def test_noop_below_threshold(self, repo, monkeypatch):
@@ -153,11 +159,15 @@ class TestRepackStampede:
 
         monkeypatch.setattr(worktree_ops, "_PACK_SPRAWL_THRESHOLD", 0)
         runs: list = []
-        monkeypatch.setattr(worktree_ops, "_run_bounded_repack", lambda root: runs.append(root))
+        monkeypatch.setattr(
+            worktree_ops, "_run_bounded_repack", lambda root: runs.append(root)
+        )
 
         for _ in range(3):  # three concurrent-ish launches sharing the clone
             worktree_ops._maintain_pack_health(str(repo))
-        assert runs == [str(repo)], "N launches inside the interval must produce exactly one repack"
+        assert runs == [str(repo)], (
+            "N launches inside the interval must produce exactly one repack"
+        )
 
         # A stale stamp (older than the interval) hands the slot to the next launch.
         monkeypatch.setattr(worktree_ops, "_REPACK_MIN_INTERVAL", 0)

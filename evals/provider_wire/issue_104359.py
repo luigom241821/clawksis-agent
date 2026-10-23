@@ -51,12 +51,14 @@ class Handler(BaseHTTPRequestHandler):
             if k.startswith("_")
         ]
         status = 400 if leaks else 200
-        captures.append({
-            "path": self.path,
-            "status": status,
-            "leaks": leaks,
-            "body": body,
-        })
+        captures.append(
+            {
+                "path": self.path,
+                "status": status,
+                "leaks": leaks,
+                "body": body,
+            }
+        )
         response = (
             {
                 "error": {
@@ -123,7 +125,9 @@ config = {
 }
 import clawk_yaml as yaml
 
-Path(os.environ["CLAWK_HOME"], "config.yaml").write_text(yaml.safe_dump(config), encoding="utf-8")
+Path(os.environ["CLAWK_HOME"], "config.yaml").write_text(
+    yaml.safe_dump(config), encoding="utf-8"
+)
 from clawk_state import SessionDB
 from agent.moa_loop import MoAClient
 from agent.turn_request_assembly import _prepare_moa_request

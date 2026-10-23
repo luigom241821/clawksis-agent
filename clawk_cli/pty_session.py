@@ -4,6 +4,7 @@ A PTY process outlives the WebSocket that created it: a single drain task always
 a bounded RingBuffer and forwards to the attached socket when present. Reconnecting with the same
 opaque token replays the buffer and resumes live.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -49,7 +50,12 @@ def _process_ancestors(pid: int) -> set[int]:
 
     try:
         return {parent.pid for parent in psutil.Process(pid).parents()}
-    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, ValueError):
+    except (
+        psutil.NoSuchProcess,
+        psutil.AccessDenied,
+        psutil.ZombieProcess,
+        ValueError,
+    ):
         return set()
 
 
@@ -66,7 +72,15 @@ def _key_segments(key: str) -> tuple[str, str]:
 
 
 class PtySession:
-    def __init__(self, key: str, bridge, *, buffer_cap: int, read_timeout: float, active_session_file: Optional[Path] = None) -> None:
+    def __init__(
+        self,
+        key: str,
+        bridge,
+        *,
+        buffer_cap: int,
+        read_timeout: float,
+        active_session_file: Optional[Path] = None,
+    ) -> None:
         self.key = key
         self.bridge = bridge
         self.active_session_file = active_session_file
@@ -87,12 +101,14 @@ class PtySession:
     async def _drain(self) -> None:
         loop = asyncio.get_running_loop()
         while True:
-            chunk = await loop.run_in_executor(None, self.bridge.read, self._read_timeout)
-            if chunk is None:                       # EOF — the agent process exited
+            chunk = await loop.run_in_executor(
+                None, self.bridge.read, self._read_timeout
+            )
+            if chunk is None:  # EOF — the agent process exited
                 self.alive = False
                 await _close_ws(self._ws, WS_CLOSE_PROCESS_EXITED)
                 return
-            if not chunk:                            # idle tick
+            if not chunk:  # idle tick
                 await asyncio.sleep(0)
                 continue
             self.buffer.append(chunk)
@@ -204,7 +220,10 @@ class PtySession:
 class RegistryFull(Exception):
     """Every keep-alive slot holds a PTY that some tab is still attached to."""
 
-    def __init__(self, message: str = "Too many chat terminals are open in other tabs; close one and try again.") -> None:
+    def __init__(
+        self,
+        message: str = "Too many chat terminals are open in other tabs; close one and try again.",
+    ) -> None:
         super().__init__(message)
 
 
@@ -219,7 +238,9 @@ async def run_reaper(registry: PtySessionRegistry, *, interval: float = 60.0) ->
 
 
 class PtySessionRegistry:
-    def __init__(self, *, ttl: float, max_sessions: int, buffer_cap: int, read_timeout: float) -> None:
+    def __init__(
+        self, *, ttl: float, max_sessions: int, buffer_cap: int, read_timeout: float
+    ) -> None:
         self._ttl = ttl
         self._max = max_sessions
         self._buffer_cap = buffer_cap
@@ -239,13 +260,19 @@ class PtySessionRegistry:
         # awaits them too, and holding the tasks keeps them from being garbage-collected.
         self._background_closes: set[asyncio.Task] = set()
 
-    async def attach_or_spawn(self, key: str, *, spawn: Callable[[], object], active_session_file: Optional[Path] = None) -> tuple[PtySession, bool]:
+    async def attach_or_spawn(
+        self,
+        key: str,
+        *,
+        spawn: Callable[[], object],
+        active_session_file: Optional[Path] = None,
+    ) -> tuple[PtySession, bool]:
         await self.reap_idle()
         async with self._attach_lock:
             existing = self._sessions.get(key)
             if existing is not None and existing.alive:
                 return existing, False
-            if existing is not None:                       # dead remnant
+            if existing is not None:  # dead remnant
                 # Close in the background: ending a dead leader's helpers can take the helper
                 # grace, and this lock serializes every new chat.
                 self._sessions.pop(key, None)
@@ -276,7 +303,8 @@ class PtySessionRegistry:
         """
         async with self._attach_lock:
             keys = [
-                key for key in self._sessions
+                key
+                for key in self._sessions
                 if key != keep_key and (key == prefix or key.startswith(prefix + "\0"))
             ]
             for key in keys:
@@ -289,7 +317,11 @@ class PtySessionRegistry:
                     await session.close()
 
     async def close_orphaned_sessions(
-        self, resume: Optional[str], *, keep_key: str, holder_pid: Optional[int] = None,
+        self,
+        resume: Optional[str],
+        *,
+        keep_key: str,
+        holder_pid: Optional[int] = None,
     ) -> None:
         """Close a keep-alive PTY stranded under a superseded attach token.
 
@@ -310,8 +342,10 @@ class PtySessionRegistry:
         target = (_key_segments(keep_key)[0], resume)
         async with self._attach_lock:
             doomed = [
-                key for key, session in self._sessions.items()
-                if key != keep_key and not session.attached
+                key
+                for key, session in self._sessions.items()
+                if key != keep_key
+                and not session.attached
                 and (_key_segments(key) == target or session.hosts_pid(holder_pid))
             ]
             sessions = [self._sessions.pop(key) for key in doomed]
@@ -329,9 +363,14 @@ class PtySessionRegistry:
     async def reap_idle(self, now: Optional[float] = None) -> None:
         now = time.monotonic() if now is None else now
         doomed = [
-            key for key, s in self._sessions.items()
+            key
+            for key, s in self._sessions.items()
             if not s.alive
-            or (not s.attached and s.last_detached_at is not None and (now - s.last_detached_at) > self._ttl)
+            or (
+                not s.attached
+                and s.last_detached_at is not None
+                and (now - s.last_detached_at) > self._ttl
+            )
             # EOF never arrives if a helper still holds the PTY slave after the child died (#76759);
             # ask the process itself (a WNOHANG waitpid).
             or not s.bridge.is_alive()
@@ -345,7 +384,11 @@ class PtySessionRegistry:
                 await session.close()
 
     def _reap_one_idle_or_raise(self) -> None:
-        idle = [s for s in self._sessions.values() if not s.attached and s.last_detached_at is not None]
+        idle = [
+            s
+            for s in self._sessions.values()
+            if not s.attached and s.last_detached_at is not None
+        ]
         if not idle:
             raise RegistryFull()
         oldest = min(idle, key=lambda s: s.last_detached_at or 0.0)
@@ -361,4 +404,8 @@ class PtySessionRegistry:
         # Close concurrently: each close() may wait out its helpers' SIGHUP grace, and shutdown runs
         # under the backend's SIGTERM -> SIGKILL budget (dashboard_procs._POSIX_TERM_GRACE_SECONDS).
         sessions = [self._sessions.pop(key) for key in list(self._sessions)]
-        await asyncio.gather(*(s.close() for s in sessions), *self._background_closes, return_exceptions=True)
+        await asyncio.gather(
+            *(s.close() for s in sessions),
+            *self._background_closes,
+            return_exceptions=True,
+        )

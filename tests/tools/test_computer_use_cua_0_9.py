@@ -181,14 +181,18 @@ def test_release_seam_stops_exact_backend_and_clears_session_state():
 
     first = MagicMock()
     second = MagicMock()
-    computer_use._backends.update({
-        "conversation-a": first,
-        "conversation-b": second,
-    })
-    computer_use._backend_call_locks.update({
-        "conversation-a": computer_use.threading.RLock(),
-        "conversation-b": computer_use.threading.RLock(),
-    })
+    computer_use._backends.update(
+        {
+            "conversation-a": first,
+            "conversation-b": second,
+        }
+    )
+    computer_use._backend_call_locks.update(
+        {
+            "conversation-a": computer_use.threading.RLock(),
+            "conversation-b": computer_use.threading.RLock(),
+        }
+    )
 
     assert computer_use.release_computer_use_session("conversation-a") is True
     assert computer_use.release_computer_use_session("conversation-a") is False

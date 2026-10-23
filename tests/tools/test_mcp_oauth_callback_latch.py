@@ -6,6 +6,7 @@ between two polls, so the user saw "Authorization Successful" while ``clawk mcp 
 tests drive the production entry (``_make_callback_waiter`` → ``_start_callback_server`` → handler) with a
 browser stand-in that sends its requests back-to-back, well inside one poll interval.
 """
+
 import asyncio
 import io
 import socket
@@ -54,7 +55,9 @@ def _drive_waiter(monkeypatch, paths: list[str]):
     (``ConnectionRefusedError`` / ``ConnectionResetError``). The waiter's poll is held open until
     every request has been answered; the handler's own ``_result_taken`` reads are untouched, which
     is what the latch under test relies on."""
-    monkeypatch.setattr(mo.sys, "stdin", io.StringIO())  # paste reader sees EOF; the HTTP listener is under test
+    monkeypatch.setattr(
+        mo.sys, "stdin", io.StringIO()
+    )  # paste reader sees EOF; the HTTP listener is under test
     port = _free_port()
     out: dict = {}
     requests_sent = threading.Event()
@@ -64,6 +67,7 @@ def _drive_waiter(monkeypatch, paths: list[str]):
         async def main():
             with mo.force_interactive_oauth():
                 return await mo._make_callback_waiter(port, timeout=30)()
+
         try:
             out["result"] = asyncio.run(main())
         except Exception as exc:
@@ -91,17 +95,26 @@ def _drive_waiter(monkeypatch, paths: list[str]):
 
 def test_favicon_right_after_callback_does_not_clobber_the_code(monkeypatch):
     statuses, result = _drive_waiter(
-        monkeypatch, ["/callback?code=synthetic&state=s1&iss=https://as.example", "/favicon.ico"])
+        monkeypatch,
+        ["/callback?code=synthetic&state=s1&iss=https://as.example", "/favicon.ico"],
+    )
     assert statuses == [200, 404]
-    assert (result.code, result.state, result.iss) == ("synthetic", "s1", "https://as.example")
+    assert (result.code, result.state, result.iss) == (
+        "synthetic",
+        "s1",
+        "https://as.example",
+    )
 
 
 def test_first_terminal_callback_wins_over_later_ones(monkeypatch):
-    statuses, result = _drive_waiter(monkeypatch, [
-        "/favicon.ico",
-        "/callback?code=first&state=s1",
-        "/callback?code=second&state=s2",
-        "/callback?error=access_denied&state=s1",
-    ])
+    statuses, result = _drive_waiter(
+        monkeypatch,
+        [
+            "/favicon.ico",
+            "/callback?code=first&state=s1",
+            "/callback?code=second&state=s2",
+            "/callback?error=access_denied&state=s1",
+        ],
+    )
     assert statuses == [404, 200, 200, 200]
     assert (result.code, result.state) == ("first", "s1")

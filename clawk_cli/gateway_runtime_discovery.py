@@ -30,7 +30,7 @@ class DiscoveryError(ValueError):
             return self.detail
         notice = "; repair command omitted (path too long to print)" if self.fix else ""
         room, marker, cause = limit - len(notice), "… [truncated]", self.cause or ""
-        cause = cause if len(cause) <= room else cause[:room - len(marker)] + marker
+        cause = cause if len(cause) <= room else cause[: room - len(marker)] + marker
         return cause + notice
 
 
@@ -66,17 +66,26 @@ def home_mode_unsafe(node: os.stat_result, path: Path) -> bool:
     try:
         import grp
         import pwd
+
         user, group = pwd.getpwuid(node.st_uid), grp.getgrgid(node.st_gid)
         primary_members = {p.pw_uid for p in pwd.getpwall() if p.pw_gid == group.gr_gid}
     except (ImportError, KeyError, OSError):
         return True
-    return not (group.gr_gid == user.pw_gid and group.gr_name == user.pw_name
-                and set(group.gr_mem) <= {user.pw_name} and primary_members <= {node.st_uid})
+    return not (
+        group.gr_gid == user.pw_gid
+        and group.gr_name == user.pw_name
+        and set(group.gr_mem) <= {user.pw_name}
+        and primary_members <= {node.st_uid}
+    )
 
 
 def _private_node(path: Path, *, kind: str, home: bool = False) -> os.stat_result:
     node = path.lstat()
-    predicates = {"socket": stat.S_ISSOCK, "file": stat.S_ISREG, "directory": stat.S_ISDIR}
+    predicates = {
+        "socket": stat.S_ISSOCK,
+        "file": stat.S_ISREG,
+        "directory": stat.S_ISDIR,
+    }
     if not predicates[kind](node.st_mode):
         raise DiscoveryError(
             "unsafe_control_path",
@@ -91,16 +100,22 @@ def _private_node(path: Path, *, kind: str, home: bool = False) -> os.stat_resul
         )
     mode = stat.S_IMODE(node.st_mode)
     if home and home_mode_unsafe(node, path):
-        raise DiscoveryError("unsafe_control_permissions", f"{path} has mode {mode:04o}, writable by another user",
-                             f"chmod go-w {shlex.quote(str(path))}")
+        raise DiscoveryError(
+            "unsafe_control_permissions",
+            f"{path} has mode {mode:04o}, writable by another user",
+            f"chmod go-w {shlex.quote(str(path))}",
+        )
     if not home and mode & 0o077:
         raise _open_mode(path, mode, 0o700 if kind == "directory" else 0o600)
     return node
 
 
 def _open_mode(path: Path, mode: int, expected: int) -> DiscoveryError:
-    return DiscoveryError("unsafe_control_permissions", f"{path} has mode {mode:04o}, expected {expected:04o}",
-                          f"chmod {expected:o} {shlex.quote(str(path))}")
+    return DiscoveryError(
+        "unsafe_control_permissions",
+        f"{path} has mode {mode:04o}, expected {expected:04o}",
+        f"chmod {expected:o} {shlex.quote(str(path))}",
+    )
 
 
 def socket_peer_uid(sock: socket.socket) -> int | None:
@@ -108,13 +123,21 @@ def socket_peer_uid(sock: socket.socket) -> int | None:
     (SO_PEERCRED on Linux, getpeereid on macOS); None where neither exists."""
     if hasattr(socket, "SO_PEERCRED"):
         import struct
-        return struct.unpack("3i", sock.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))[1]
+
+        return struct.unpack(
+            "3i", sock.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12)
+        )[1]
     if sys.platform != "darwin":
         return None
     import ctypes
+
     uid, gid = ctypes.c_uint(), ctypes.c_uint()
     getpeereid = ctypes.CDLL(None, use_errno=True).getpeereid
-    getpeereid.argtypes = [ctypes.c_int, ctypes.POINTER(ctypes.c_uint), ctypes.POINTER(ctypes.c_uint)]
+    getpeereid.argtypes = [
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.c_uint),
+        ctypes.POINTER(ctypes.c_uint),
+    ]
     getpeereid.restype = ctypes.c_int
     if getpeereid(sock.fileno(), ctypes.byref(uid), ctypes.byref(gid)) != 0:
         raise OSError(ctypes.get_errno(), "getpeereid failed")
@@ -132,7 +155,9 @@ def connect_private(home: Path, timeout: float) -> socket.socket:
         peer.settimeout(timeout)
         peer.connect(str(path))
         uid = socket_peer_uid(peer)
-        if uid is not None and uid != os.getuid():  # windows-footgun: ok — POSIX socket peer only
+        if (
+            uid is not None and uid != os.getuid()
+        ):  # windows-footgun: ok — POSIX socket peer only
             raise DiscoveryError("unsafe_control_peer")
         return peer
     except BaseException:
@@ -148,11 +173,19 @@ def _socket_path(home: Path) -> Path:
         return direct
     pointer = home / "gateway.sock.path"
     # Reject non-regular metadata before a FIFO can wait for a writer.
-    flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK  # windows-footgun: ok — POSIX socket discovery only
-    with os.fdopen(os.open(pointer, flags), "rb") as stream:  # windows-footgun: ok — binary POSIX descriptor
+    flags = (
+        os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
+    )  # windows-footgun: ok — POSIX socket discovery only
+    with os.fdopen(
+        os.open(pointer, flags), "rb"
+    ) as stream:  # windows-footgun: ok — binary POSIX descriptor
         metadata = os.fstat(stream.fileno())
-        if (not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != os.getuid()  # windows-footgun: ok — POSIX pointer only
-                or stat.S_IMODE(metadata.st_mode) & 0o077):
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_uid
+            != os.getuid()  # windows-footgun: ok — POSIX pointer only
+            or stat.S_IMODE(metadata.st_mode) & 0o077
+        ):
             raise DiscoveryError("unsafe_control_pointer")
         data = stream.read(4097)
     if len(data) > 4096:
@@ -161,10 +194,14 @@ def _socket_path(home: Path) -> Path:
     if not target.is_absolute():
         raise DiscoveryError("invalid_control_pointer")
     from gateway.control_socket import _home_hash
+
     # The owner may have a different TMPDIR (notably launchd/native apps).
     # Authenticate its private pointer and profile-specific directory, not our
     # process-local temporary-root preference.
-    if target.name != "control.sock" or target.parent.name != f"clawk-gw-{_home_hash(home)}":
+    if (
+        target.name != "control.sock"
+        or target.parent.name != f"clawk-gw-{_home_hash(home)}"
+    ):
         raise DiscoveryError("invalid_control_pointer")
     _private_node(target.parent, kind="directory")
     _private_node(target, kind="socket")
@@ -175,8 +212,12 @@ def query_identify(home: Path, *, timeout: float) -> dict:
     """Unlike diagnostic queries, retain timeout/access/protocol failures."""
     if os.name == "nt":
         from gateway.runtime_bootstrap_windows import query_runtime_control
-        return _identify_response(query_runtime_control(
-            home, b'{"protocol":1,"verb":"identify","id":1}\n', timeout))
+
+        return _identify_response(
+            query_runtime_control(
+                home, b'{"protocol":1,"verb":"identify","id":1}\n', timeout
+            )
+        )
     deadline = time.monotonic() + timeout
     request = b'{"protocol":1,"verb":"identify","id":1}\n'
     with connect_private(home, timeout) as client:
@@ -202,9 +243,13 @@ def query_identify(home: Path, *, timeout: float) -> dict:
 
 def _identify_response(data: bytes) -> dict:
     response = json.loads(data.split(b"\n", 1)[0])
-    if (not isinstance(response, dict) or response.get("ok") is not True
-            or response.get("protocol") != 1 or response.get("id") != 1
-            or not isinstance(response.get("result"), dict)):
+    if (
+        not isinstance(response, dict)
+        or response.get("ok") is not True
+        or response.get("protocol") != 1
+        or response.get("id") != 1
+        or not isinstance(response.get("result"), dict)
+    ):
         raise DiscoveryError("invalid_control_response")
     return response["result"]
 
@@ -222,7 +267,10 @@ def _private_lock(lock: Path) -> None:
         if exc.reason != "unsafe_control_permissions":
             raise
         from gateway.runtime_ownership import tighten_lock_mode
-        fd = os.open(lock, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)  # windows-footgun: ok — POSIX lock only
+
+        fd = os.open(
+            lock, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
+        )  # windows-footgun: ok — POSIX lock only
         try:
             tighten_lock_mode(fd)
         finally:
@@ -233,6 +281,7 @@ def _private_lock(lock: Path) -> None:
 def missing_owner_state(home: Path) -> Literal["starting", "absent", "inaccessible"]:
     """A reservation before PID/control publication already excludes a new owner."""
     from gateway.status import _is_gateway_runtime_lock_active_strict
+
     lock = home / "gateway.lock"
     try:
         if os.name != "nt":

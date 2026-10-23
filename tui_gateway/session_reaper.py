@@ -24,7 +24,9 @@ def _session_has_pending_flush(session: dict | None) -> bool:
     """Would :func:`_flush_session_messages` write anything for this session? (The exit flush counts
     these to tell a complete flush from a budget overrun.)"""
     agent = session.get("agent") if isinstance(session, dict) else None
-    return bool(hasattr(agent, "_persist_session") and getattr(agent, "_session_messages", None))
+    return bool(
+        hasattr(agent, "_persist_session") and getattr(agent, "_session_messages", None)
+    )
 
 
 def _flush_session_messages(session: dict | None) -> bool:
@@ -34,7 +36,11 @@ def _flush_session_messages(session: dict | None) -> bool:
     See #13121.
     """
     agent = session.get("agent") if session else None
-    snapshot = getattr(agent, "_session_messages", None) if hasattr(agent, "_persist_session") else None
+    snapshot = (
+        getattr(agent, "_session_messages", None)
+        if hasattr(agent, "_persist_session")
+        else None
+    )
     if not snapshot:
         return False
     # config.yaml, the token ledger and the memory/provider lookups ``_persist_session`` touches are
@@ -109,7 +115,10 @@ def _flush_sessions_before_exit(budget_s: float | None = None) -> int:
         logger.warning(
             "Exit flush persisted %d of %d in-memory session transcript(s) within %.1fs; the rest "
             "may have been lost (CLAWK_TUI_EXIT_FLUSH_BUDGET_S)",
-            result["flushed"], flushable, budget)
+            result["flushed"],
+            flushable,
+            budget,
+        )
     return result["flushed"]
 
 
@@ -129,7 +138,9 @@ def _stop_turns_before_exit(budget_s: float | None = None) -> None:
     for sid, session in running:
         with contextlib.suppress(Exception):
             _interrupt_session_turn(sid, session)
-        if (t := session.get("_run_thread")) is not None and t is not threading.current_thread():
+        if (
+            t := session.get("_run_thread")
+        ) is not None and t is not threading.current_thread():
             threads.append(t)
     budget = _EXIT_TURN_SETTLE_S if budget_s is None else max(0.0, budget_s)
     deadline = time.monotonic() + budget
@@ -140,6 +151,7 @@ def _stop_turns_before_exit(budget_s: float | None = None) -> None:
 
     _join(deadline - budget / 2)
     from tools.environments.base import kill_live_foreground_processes
+
     kill_live_foreground_processes(now=True)
     _join(deadline)
 
@@ -152,6 +164,7 @@ def _handle_exit_flush_signal(signum, frame) -> None:
     """Flush in-memory sessions, then hand off to the prior handler (uvicorn's graceful shutdown, a supervisor's
     handler, or the default disposition) — this only *prepends* a bounded flush."""
     import signal as _signal
+
     prev = _exit_flush_prev_handlers.get(signum)
     if prev is _signal.SIG_IGN:
         # An inherited ignore (`cmd &` from a non-interactive shell) ends nothing: stopping turns here
@@ -186,6 +199,7 @@ def install_exit_flush_signal_handlers() -> bool:
     if threading.current_thread() is not threading.main_thread():
         return False
     import signal as _signal
+
     installed = False
     for signum in (_signal.SIGTERM, _signal.SIGINT):
         with contextlib.suppress(ValueError, OSError, RuntimeError):
@@ -219,7 +233,11 @@ def _session_is_lru_evictable(sid: str, session: dict) -> bool:
     it loses its client): never evict a session mid-turn, awaiting input, still building, owning live delegated
     work, or on a live transport. Lazy watch sessions never start a build, so their unset agent_ready must not
     make them immortal."""
-    if session.get("running") or _session_pending_kind(sid) or _session_has_active_delegations(sid, session):
+    if (
+        session.get("running")
+        or _session_pending_kind(sid)
+        or _session_has_active_delegations(sid, session)
+    ):
         return False
     ready = session.get("agent_ready")
     if ready is not None and not ready.is_set() and not session.get("lazy"):
@@ -244,8 +262,11 @@ def _session_is_reapable(sid: str, session: dict) -> bool:
     /heartbeat, or a running background process that will notify it (closing the session stops the notification
     poller that delivers both, and ``agent_close`` kills the process). Kept out of ``_sessions_quiescent``: an idle
     session waiting on a wake-up does not block a memory trim."""
-    return (_session_is_lru_evictable(sid, session) and not _session_owns_live_wakeup_schedule(session)
-            and not _session_owns_pending_process_notification(session))
+    return (
+        _session_is_lru_evictable(sid, session)
+        and not _session_owns_live_wakeup_schedule(session)
+        and not _session_owns_pending_process_notification(session)
+    )
 
 
 def _session_is_evictable(sid: str, session: dict, now: float) -> bool:
@@ -265,11 +286,17 @@ def _reap_idle_sessions() -> None:
     except Exception:
         logger.debug("periodic incremental session flush failed", exc_info=True)
     with _sessions_lock:
-        victims = [sid for sid, s in _sessions.items() if _session_is_evictable(sid, s, now)]
+        victims = [
+            sid for sid, s in _sessions.items() if _session_is_evictable(sid, s, now)
+        ]
     for sid in victims:
         _close_session_by_id(
-            sid, end_reason="idle_timeout",
-            predicate=lambda session, vs=sid: _session_is_evictable(vs, session, time.time()))
+            sid,
+            end_reason="idle_timeout",
+            predicate=lambda session, vs=sid: _session_is_evictable(
+                vs, session, time.time()
+            ),
+        )
     _repair_missing_ws_orphan_reaps()
     _enforce_session_cap()
     _reclaim_orphaned_leases()
@@ -277,12 +304,17 @@ def _reap_idle_sessions() -> None:
     # every quiescent scan to prevent unbounded RSS growth over days/weeks. Forced trims (agent close, cache
     # pressure) are unaffected.
     if not _sessions_quiescent():
-        logger.debug("idle reaper periodic trim deferred: a session is busy or attached")
+        logger.debug(
+            "idle reaper periodic trim deferred: a session is busy or attached"
+        )
         return
     try:
         from clawk_cli.mem_trim import trim_memory
+
         trim_memory(reason="idle reaper periodic trim")
-    except Exception as exc:  # debug, not warning — a persistent failure would repeat every scan.
+    except (
+        Exception
+    ) as exc:  # debug, not warning — a persistent failure would repeat every scan.
         logger.debug("idle reaper memory trim failed: %s: %s", type(exc).__name__, exc)
 
 
@@ -300,14 +332,18 @@ def _repair_missing_ws_orphan_reaps() -> None:
     # Reuse that cleanup (including surviving viewers), never revoke a fence from
     # a stale liveness snapshot.
     with _sessions_lock:
-        closed_transports = [session.get("transport") for session in _sessions.values()
-                             if session.get("transport") is not _detached_ws_transport
-                             and _transport_is_dead(session.get("transport"))]
+        closed_transports = [
+            session.get("transport")
+            for session in _sessions.values()
+            if session.get("transport") is not _detached_ws_transport
+            and _transport_is_dead(session.get("transport"))
+        ]
     for transport in closed_transports:
         _close_sessions_for_transport(transport)
     with _sessions_lock:
         missing = [
-            sid for sid, session in _sessions.items()
+            sid
+            for sid, session in _sessions.items()
             if _ws_session_is_detached(session) and sid not in _pending_ws_reaps
         ]
         for sid in missing:
@@ -324,6 +360,7 @@ def _reclaim_orphaned_leases() -> None:
         logger.debug("stale deferred lease sweep failed", exc_info=True)
     try:
         from clawk_cli.active_sessions import release_orphaned_leases
+
         if dropped := release_orphaned_leases(_own_live_lease_ids()):
             logger.info("Reclaimed %d orphaned active-session lease(s)", dropped)
     except Exception:
@@ -336,6 +373,7 @@ def _reclaim_orphaned_leases() -> None:
 def _max_live_sessions() -> int:
     try:
         from clawk_cli.active_sessions import coerce_max_concurrent_sessions
+
         cfg = _load_cfg() or {}
         raw = cfg.get("max_live_sessions")
         if raw is None and isinstance(gateway_cfg := cfg.get("gateway"), dict):
@@ -353,7 +391,9 @@ def _enforce_session_cap() -> None:
     with _sessions_lock:
         if len(_sessions) <= cap:
             return
-        evictable = [(sid, s) for sid, s in _sessions.items() if _session_is_reapable(sid, s)]
+        evictable = [
+            (sid, s) for sid, s in _sessions.items() if _session_is_reapable(sid, s)
+        ]
     # Oldest-touched first; evict only down to the cap (may stop short: live sessions are never eligible).
     evictable.sort(key=lambda kv: float(kv[1].get("last_active") or 0.0))
     for sid, _s in evictable:
@@ -361,11 +401,15 @@ def _enforce_session_cap() -> None:
             if len(_sessions) <= cap:
                 break
         _close_session_by_id(
-            sid, end_reason="lru_evict", predicate=lambda session, vs=sid: _session_is_reapable(vs, session))
+            sid,
+            end_reason="lru_evict",
+            predicate=lambda session, vs=sid: _session_is_reapable(vs, session),
+        )
 
 
 def _reaper_daemon_timer(delay: float, fn, fail_log: str, level: str = "debug") -> None:
     """Run ``fn`` once on a daemon Timer after ``delay``; log (never raise) on failure."""
+
     def _run() -> None:
         try:
             fn()
@@ -400,7 +444,9 @@ def _session_orphan_reaper_enabled() -> bool:
     try:
         dashboard_cfg = (_load_cfg() or {}).get("dashboard") or {}
         if isinstance(dashboard_cfg, dict) and "startup_orphan_sweep" in dashboard_cfg:
-            return is_truthy_value(dashboard_cfg.get("startup_orphan_sweep"), default=True)
+            return is_truthy_value(
+                dashboard_cfg.get("startup_orphan_sweep"), default=True
+            )
     except Exception:
         pass
     return True
@@ -415,20 +461,30 @@ def _sweep_orphaned_session_rows() -> list[str]:
     db = _get_db()
     if db is None or _SESSION_TTL_S <= 0:
         return []
-    live_ids: set[str] = set()  # every id this process holds in memory: live sid, agent session_id, session_key
+    live_ids: set[str] = (
+        set()
+    )  # every id this process holds in memory: live sid, agent session_id, session_key
     with _sessions_lock:
         for sid, session in _sessions.items():
             candidates = [sid]
             if isinstance(session, dict):
-                candidates += [getattr(session.get("agent"), "session_id", None), session.get("session_key")]
+                candidates += [
+                    getattr(session.get("agent"), "session_id", None),
+                    session.get("session_key"),
+                ]
             live_ids.update(str(c) for c in candidates if c)
     swept = db.sweep_orphaned_sessions(
-        max_idle_seconds=_SESSION_TTL_S, sources=_ORPHAN_SWEEP_SOURCES,
-        exclude_ids=tuple(sorted(live_ids)), exclude_pinned=True)
+        max_idle_seconds=_SESSION_TTL_S,
+        sources=_ORPHAN_SWEEP_SOURCES,
+        exclude_ids=tuple(sorted(live_ids)),
+        exclude_pinned=True,
+    )
     if swept:
         logger.info(
             "Closed %d orphaned session row(s) from a previous gateway process (startup_orphan_reap): %s",
-            len(swept), ", ".join(swept))
+            len(swept),
+            ", ".join(swept),
+        )
     return swept
 
 
@@ -450,7 +506,9 @@ def _reaper_hostname() -> str:
 def _backend_id_for_this_process() -> str:
     """Stable identity for this process's heartbeat row: pid (readability) AND a startup nonce so a PID-reuse
     respawn cannot inherit the dead predecessor's heartbeat."""
-    return f"{_current_profile_name()}@{_reaper_hostname()}:{os.getpid()}:{_BACKEND_NONCE}"
+    return (
+        f"{_current_profile_name()}@{_reaper_hostname()}:{os.getpid()}:{_BACKEND_NONCE}"
+    )
 
 
 def _gateway_started_at() -> float:
@@ -468,8 +526,12 @@ def _refresh_backend_heartbeat() -> None:
         return
     try:
         db.register_backend_heartbeat(
-            backend_id=_backend_id_for_this_process(), pid=os.getpid(), started_at=_gateway_started_at(),
-            profile=_current_profile_name(), host=_reaper_hostname())
+            backend_id=_backend_id_for_this_process(),
+            pid=os.getpid(),
+            started_at=_gateway_started_at(),
+            profile=_current_profile_name(),
+            host=_reaper_hostname(),
+        )
     except Exception:
         logger.debug("backend heartbeat refresh failed", exc_info=True)
 
@@ -517,14 +579,22 @@ def _schedule_startup_orphan_sweep() -> None:
     See #65194.
     """
     global _startup_orphan_sweep_ran
-    if _WS_ORPHAN_REAP_GRACE_S <= 0 or _SESSION_TTL_S <= 0 or not _session_orphan_reaper_enabled():
+    if (
+        _WS_ORPHAN_REAP_GRACE_S <= 0
+        or _SESSION_TTL_S <= 0
+        or not _session_orphan_reaper_enabled()
+    ):
         return
     with _startup_orphan_sweep_lock:
         if _startup_orphan_sweep_ran:
             return
         _startup_orphan_sweep_ran = True
     _reaper_daemon_timer(
-        _WS_ORPHAN_REAP_GRACE_S, _sweep_orphaned_session_rows, "startup orphan session sweep failed", level="warning")
+        _WS_ORPHAN_REAP_GRACE_S,
+        _sweep_orphaned_session_rows,
+        "startup orphan session sweep failed",
+        level="warning",
+    )
 
 
 def register(server) -> None:

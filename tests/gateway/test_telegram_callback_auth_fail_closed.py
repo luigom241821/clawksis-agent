@@ -30,13 +30,19 @@ _fake_telegram_constants = types.ModuleType("telegram.constants")
 _fake_telegram_constants.ParseMode = SimpleNamespace(HTML="HTML")
 
 _fake_telegram_request = types.ModuleType("telegram.request")
-_fake_telegram_request.HTTPXRequest = type("HTTPXRequest", (), {"__init__": lambda *a, **kw: None})
+_fake_telegram_request.HTTPXRequest = type(
+    "HTTPXRequest", (), {"__init__": lambda *a, **kw: None}
+)
 
 _fake_telegram_ext = types.ModuleType("telegram.ext")
-_fake_telegram_ext.ApplicationBuilder = type("ApplicationBuilder", (), {
-    "token": lambda self, *a: self,
-    "build": lambda self: None,
-})
+_fake_telegram_ext.ApplicationBuilder = type(
+    "ApplicationBuilder",
+    (),
+    {
+        "token": lambda self, *a: self,
+        "build": lambda self: None,
+    },
+)
 
 _fake_telegram = types.ModuleType("telegram")
 _fake_telegram.error = _fake_telegram_error
@@ -78,7 +84,6 @@ class TestCallbackAuthFailClosed:
         adapter._message_handler = None
         assert adapter._is_callback_user_authorized("12345") is False
 
-
     def test_allowlist_with_matching_user_permits(self, monkeypatch):
         """TELEGRAM_ALLOWED_USERS contains the user → allow."""
         monkeypatch.setenv("TELEGRAM_ALLOWED_USERS", "12345,67890")
@@ -116,9 +121,12 @@ class TestCallbackAuthPrefersInjectedCheck:
         adapter._authorization_check = _check
 
         # Env fallback would deny (empty allowlist); the injected check allows.
-        assert adapter._is_callback_user_authorized(
-            "999", chat_id="777", chat_type="supergroup"
-        ) is True
+        assert (
+            adapter._is_callback_user_authorized(
+                "999", chat_id="777", chat_type="supergroup"
+            )
+            is True
+        )
         assert seen == {"user_id": "999", "chat_type": "group", "chat_id": "777"}
 
     def test_injected_check_deny_wins_over_env_allowlist(self, monkeypatch):
@@ -127,6 +135,8 @@ class TestCallbackAuthPrefersInjectedCheck:
         monkeypatch.setenv("TELEGRAM_ALLOWED_USERS", "12345")
         adapter = _make_adapter()
         adapter._message_handler = lambda *a, **kw: None
-        adapter._authorization_check = lambda user_id, chat_type=None, chat_id=None: False
+        adapter._authorization_check = lambda user_id, chat_type=None, chat_id=None: (
+            False
+        )
 
         assert adapter._is_callback_user_authorized("12345") is False

@@ -22,7 +22,9 @@ def test_nested_plugin_load_runs_inline_on_deadline_worker(monkeypatch):
     def outer_load():
         observed_threads.append(threading.current_thread())
         plugins_loader.run_with_load_deadline(
-            "done", Context("done"), lambda: observed_threads.append(threading.current_thread()),
+            "done",
+            Context("done"),
+            lambda: observed_threads.append(threading.current_thread()),
         )
         plugins_loader.run_with_load_deadline("hung", Context("hung"), release.wait)
 

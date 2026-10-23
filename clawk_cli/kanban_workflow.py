@@ -83,7 +83,12 @@ class Workflow:
         column keys plus ``archived`` (restore source), which is never a column."""
         return {
             "columns": [
-                {"key": c.key, "label": c.label, "icon": c.icon, "drag_target": c.drag_target}
+                {
+                    "key": c.key,
+                    "label": c.label,
+                    "icon": c.icon,
+                    "drag_target": c.drag_target,
+                }
                 for c in self.columns
             ],
             "manual": {src: sorted(dsts) for src, dsts in self.manual.items()},
@@ -103,7 +108,9 @@ class Workflow:
                 raise ValueError(f"manual moves from {src!r} reference unknown columns")
 
 
-def _frozen_manual(table: Mapping[str, tuple[str, ...]]) -> Mapping[str, frozenset[str]]:
+def _frozen_manual(
+    table: Mapping[str, tuple[str, ...]],
+) -> Mapping[str, frozenset[str]]:
     return MappingProxyType({src: frozenset(dsts) for src, dsts in table.items()})
 
 
@@ -122,19 +129,29 @@ DEFAULT_WORKFLOW = Workflow(
         Column("review", "Review", "◎", drag_target=False),
         Column("done", "Done", "✓"),
     ),
-    manual=_frozen_manual({
-        "triage": ("todo", "ready"),
-        "todo": ("triage", "scheduled", "ready"),
-        "scheduled": ("triage", "todo", "ready"),
-        "ready": ("triage", "todo", "scheduled", "blocked", "review", "done"),
-        "running": ("triage", "todo", "scheduled", "ready", "blocked", "review", "done"),
-        "blocked": ("triage", "todo", "scheduled", "ready", "done"),
-        # Known quirk kept for zero behavior change: review -> todo lands in ``ready``
-        # (reopen_review_task ignores the requested target). Phase 1 fixes it.
-        "review": ("triage", "todo", "ready", "done"),
-        "done": ("triage", "todo", "ready"),
-        ARCHIVED: ("triage", "todo", "ready"),  # restore from the archive filter
-    }),
+    manual=_frozen_manual(
+        {
+            "triage": ("todo", "ready"),
+            "todo": ("triage", "scheduled", "ready"),
+            "scheduled": ("triage", "todo", "ready"),
+            "ready": ("triage", "todo", "scheduled", "blocked", "review", "done"),
+            "running": (
+                "triage",
+                "todo",
+                "scheduled",
+                "ready",
+                "blocked",
+                "review",
+                "done",
+            ),
+            "blocked": ("triage", "todo", "scheduled", "ready", "done"),
+            # Known quirk kept for zero behavior change: review -> todo lands in ``ready``
+            # (reopen_review_task ignores the requested target). Phase 1 fixes it.
+            "review": ("triage", "todo", "ready", "done"),
+            "done": ("triage", "todo", "ready"),
+            ARCHIVED: ("triage", "todo", "ready"),  # restore from the archive filter
+        }
+    ),
 )
 DEFAULT_WORKFLOW.validate()
 

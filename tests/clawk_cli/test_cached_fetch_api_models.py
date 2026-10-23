@@ -30,11 +30,17 @@ class TestCachedFetchApiModels:
     def test_fresh_entry_served_without_live_fetch(self):
         import clawk_cli.models as mod
 
-        cache = {"custom:https://gw.example.com/v1#fp": self._entry(["m1", "m2"], age_seconds=10)}
-        with patch.object(mod, "_load_provider_models_cache", return_value=cache), \
-             patch.object(mod, "_custom_endpoint_fingerprint", return_value="fp"), \
-             patch.object(mod, "_save_provider_models_cache") as save, \
-             patch.object(mod, "fetch_api_models") as live:
+        cache = {
+            "custom:https://gw.example.com/v1#fp": self._entry(
+                ["m1", "m2"], age_seconds=10
+            )
+        }
+        with (
+            patch.object(mod, "_load_provider_models_cache", return_value=cache),
+            patch.object(mod, "_custom_endpoint_fingerprint", return_value="fp"),
+            patch.object(mod, "_save_provider_models_cache") as save,
+            patch.object(mod, "fetch_api_models") as live,
+        ):
             out = mod.cached_fetch_api_models("sk-key", "https://gw.example.com/v1")
         assert out == ["m1", "m2"]
         live.assert_not_called()
@@ -46,10 +52,14 @@ class TestCachedFetchApiModels:
         slash — config.yaml entries are not guaranteed to be normalized."""
         import clawk_cli.models as mod
 
-        cache = {"custom:https://gw.example.com/v1#fp": self._entry(["m1"], age_seconds=10)}
-        with patch.object(mod, "_load_provider_models_cache", return_value=cache), \
-             patch.object(mod, "_custom_endpoint_fingerprint", return_value="fp"), \
-             patch.object(mod, "fetch_api_models") as live:
+        cache = {
+            "custom:https://gw.example.com/v1#fp": self._entry(["m1"], age_seconds=10)
+        }
+        with (
+            patch.object(mod, "_load_provider_models_cache", return_value=cache),
+            patch.object(mod, "_custom_endpoint_fingerprint", return_value="fp"),
+            patch.object(mod, "fetch_api_models") as live,
+        ):
             out = mod.cached_fetch_api_models("sk-key", "HTTPS://GW.example.com/v1/")
         assert out == ["m1"]
         live.assert_not_called()
@@ -61,18 +71,29 @@ class TestCachedFetchApiModels:
         # live fetch (within the window it stale-serves + refreshes off
         # thread — covered in TestSalvageFollowups).
         too_old = mod._PROVIDER_MODELS_STALE_SERVE_MAX + 60
-        cache = {"custom:https://gw.example.com/v1#fp": self._entry(["old"], age_seconds=too_old)}
+        cache = {
+            "custom:https://gw.example.com/v1#fp": self._entry(
+                ["old"], age_seconds=too_old
+            )
+        }
         saved = {}
-        with patch.object(mod, "_load_provider_models_cache", return_value=cache), \
-             patch.object(mod, "_custom_endpoint_fingerprint", return_value="fp"), \
-             patch.object(mod, "_save_provider_models_cache", side_effect=saved.update), \
-             patch.object(mod, "fetch_api_models", return_value=["fresh-a", "fresh-b"]) as live:
+        with (
+            patch.object(mod, "_load_provider_models_cache", return_value=cache),
+            patch.object(mod, "_custom_endpoint_fingerprint", return_value="fp"),
+            patch.object(mod, "_save_provider_models_cache", side_effect=saved.update),
+            patch.object(
+                mod, "fetch_api_models", return_value=["fresh-a", "fresh-b"]
+            ) as live,
+        ):
             out = mod.cached_fetch_api_models(
                 "sk-key", "https://gw.example.com/v1", ttl_seconds=3600
             )
         assert out == ["fresh-a", "fresh-b"]
         live.assert_called_once()
-        assert saved["custom:https://gw.example.com/v1#fp"]["models"] == ["fresh-a", "fresh-b"]
+        assert saved["custom:https://gw.example.com/v1#fp"]["models"] == [
+            "fresh-a",
+            "fresh-b",
+        ]
         assert saved["custom:https://gw.example.com/v1#fp"]["fp"] == "fp"
 
     def test_rotated_api_key_busts_cache_even_when_fresh(self):
@@ -81,11 +102,19 @@ class TestCachedFetchApiModels:
         credentials' catalog."""
         import clawk_cli.models as mod
 
-        cache = {"custom:https://gw.example.com/v1#old-fp": self._entry(["old-key-models"], 10, fp="old-fp")}
-        with patch.object(mod, "_load_provider_models_cache", return_value=cache), \
-             patch.object(mod, "_custom_endpoint_fingerprint", return_value="new-fp"), \
-             patch.object(mod, "_save_provider_models_cache"), \
-             patch.object(mod, "fetch_api_models", return_value=["new-key-models"]) as live:
+        cache = {
+            "custom:https://gw.example.com/v1#old-fp": self._entry(
+                ["old-key-models"], 10, fp="old-fp"
+            )
+        }
+        with (
+            patch.object(mod, "_load_provider_models_cache", return_value=cache),
+            patch.object(mod, "_custom_endpoint_fingerprint", return_value="new-fp"),
+            patch.object(mod, "_save_provider_models_cache"),
+            patch.object(
+                mod, "fetch_api_models", return_value=["new-key-models"]
+            ) as live,
+        ):
             out = mod.cached_fetch_api_models("sk-new-key", "https://gw.example.com/v1")
         assert out == ["new-key-models"]
         live.assert_called_once()
@@ -93,11 +122,17 @@ class TestCachedFetchApiModels:
     def test_force_refresh_bypasses_fresh_cache(self):
         import clawk_cli.models as mod
 
-        cache = {"custom:https://gw.example.com/v1#fp": self._entry(["stale-but-fresh"], age_seconds=5)}
-        with patch.object(mod, "_load_provider_models_cache", return_value=cache), \
-             patch.object(mod, "_custom_endpoint_fingerprint", return_value="fp"), \
-             patch.object(mod, "_save_provider_models_cache"), \
-             patch.object(mod, "fetch_api_models", return_value=["forced-live"]) as live:
+        cache = {
+            "custom:https://gw.example.com/v1#fp": self._entry(
+                ["stale-but-fresh"], age_seconds=5
+            )
+        }
+        with (
+            patch.object(mod, "_load_provider_models_cache", return_value=cache),
+            patch.object(mod, "_custom_endpoint_fingerprint", return_value="fp"),
+            patch.object(mod, "_save_provider_models_cache"),
+            patch.object(mod, "fetch_api_models", return_value=["forced-live"]) as live,
+        ):
             out = mod.cached_fetch_api_models(
                 "sk-key", "https://gw.example.com/v1", force_refresh=True
             )
@@ -110,11 +145,17 @@ class TestCachedFetchApiModels:
         cached_provider_model_ids')."""
         import clawk_cli.models as mod
 
-        cache = {"custom:https://gw.example.com/v1#fp": self._entry(["last-known-good"], age_seconds=99999, fp="fp")}
-        with patch.object(mod, "_load_provider_models_cache", return_value=cache), \
-             patch.object(mod, "_custom_endpoint_fingerprint", return_value="fp"), \
-             patch.object(mod, "_save_provider_models_cache") as save, \
-             patch.object(mod, "fetch_api_models", return_value=None):
+        cache = {
+            "custom:https://gw.example.com/v1#fp": self._entry(
+                ["last-known-good"], age_seconds=99999, fp="fp"
+            )
+        }
+        with (
+            patch.object(mod, "_load_provider_models_cache", return_value=cache),
+            patch.object(mod, "_custom_endpoint_fingerprint", return_value="fp"),
+            patch.object(mod, "_save_provider_models_cache") as save,
+            patch.object(mod, "fetch_api_models", return_value=None),
+        ):
             out = mod.cached_fetch_api_models("sk-key", "https://gw.example.com/v1")
         assert out == ["last-known-good"]
         save.assert_not_called()  # nothing new to persist
@@ -122,10 +163,12 @@ class TestCachedFetchApiModels:
     def test_live_failure_with_no_matching_entry_returns_live_value(self):
         import clawk_cli.models as mod
 
-        with patch.object(mod, "_load_provider_models_cache", return_value={}), \
-             patch.object(mod, "_custom_endpoint_fingerprint", return_value="fp"), \
-             patch.object(mod, "_save_provider_models_cache") as save, \
-             patch.object(mod, "fetch_api_models", return_value=None):
+        with (
+            patch.object(mod, "_load_provider_models_cache", return_value={}),
+            patch.object(mod, "_custom_endpoint_fingerprint", return_value="fp"),
+            patch.object(mod, "_save_provider_models_cache") as save,
+            patch.object(mod, "fetch_api_models", return_value=None),
+        ):
             out = mod.cached_fetch_api_models("sk-key", "https://gw.example.com/v1")
         assert out is None
         save.assert_not_called()
@@ -143,11 +186,13 @@ class TestCacheOnly:
     def _call(self, cache, *, fp="fp", expect_revalidate=False, **kwargs):
         import clawk_cli.models as mod
 
-        with patch.object(mod, "_load_provider_models_cache", return_value=cache), \
-             patch.object(mod, "_custom_endpoint_fingerprint", return_value=fp), \
-             patch.object(mod, "_save_provider_models_cache") as save, \
-             patch.object(mod, "_spawn_swr_refresh") as swr, \
-             patch.object(mod, "fetch_api_models") as live:
+        with (
+            patch.object(mod, "_load_provider_models_cache", return_value=cache),
+            patch.object(mod, "_custom_endpoint_fingerprint", return_value=fp),
+            patch.object(mod, "_save_provider_models_cache") as save,
+            patch.object(mod, "_spawn_swr_refresh") as swr,
+            patch.object(mod, "fetch_api_models") as live,
+        ):
             out = mod.cached_fetch_api_models(
                 "sk-key", "https://gw.example.com/v1", cache_only=True, **kwargs
             )
@@ -181,7 +226,11 @@ class TestCacheOnly:
         assert self._call({}) is None
 
     def test_rotated_credentials_are_a_miss(self):
-        cache = {"custom:https://gw.example.com/v1#old-fp": self._entry(["old"], 10, fp="old-fp")}
+        cache = {
+            "custom:https://gw.example.com/v1#old-fp": self._entry(
+                ["old"], 10, fp="old-fp"
+            )
+        }
         assert self._call(cache, fp="new-fp") is None
 
     def test_force_refresh_is_a_miss_rather_than_a_live_fetch(self):
@@ -203,10 +252,12 @@ class TestCacheOnly:
         cache entry over real data on the next open."""
         import clawk_cli.models as mod
 
-        with patch.object(mod, "_load_provider_models_cache", return_value={}), \
-             patch.object(mod, "_custom_endpoint_fingerprint", return_value="fp"), \
-             patch.object(mod, "_save_provider_models_cache") as save, \
-             patch.object(mod, "fetch_api_models", return_value=[]):
+        with (
+            patch.object(mod, "_load_provider_models_cache", return_value={}),
+            patch.object(mod, "_custom_endpoint_fingerprint", return_value="fp"),
+            patch.object(mod, "_save_provider_models_cache") as save,
+            patch.object(mod, "fetch_api_models", return_value=[]),
+        ):
             out = mod.cached_fetch_api_models("sk-key", "https://gw.example.com/v1")
         assert out == []
         save.assert_not_called()
@@ -216,8 +267,10 @@ class TestCacheOnly:
         through to fetch_api_models rather than caching under an empty key."""
         import clawk_cli.models as mod
 
-        with patch.object(mod, "_load_provider_models_cache") as load, \
-             patch.object(mod, "fetch_api_models", return_value=["x"]) as live:
+        with (
+            patch.object(mod, "_load_provider_models_cache") as load,
+            patch.object(mod, "fetch_api_models", return_value=["x"]) as live,
+        ):
             out = mod.cached_fetch_api_models("sk-key", "")
         assert out == ["x"]
         live.assert_called_once()
@@ -258,7 +311,9 @@ class TestCachedFetchApiModelsDiskRoundTrip:
 
         assert first == ["disk-cached-model"]
         assert second == ["disk-cached-model"]
-        assert len(calls) == 1, "second open must be served from disk, not a fresh live fetch"
+        assert len(calls) == 1, (
+            "second open must be served from disk, not a fresh live fetch"
+        )
 
     def test_custom_key_does_not_collide_with_provider_slug_cache(self, monkeypatch):
         """A custom endpoint literally named e.g. 'openrouter' in its
@@ -277,25 +332,39 @@ class TestCachedFetchApiModelsDiskRoundTrip:
         mod.cached_provider_model_ids("openrouter")
 
         cache = mod._load_provider_models_cache()
-        custom_rows = [v for k, v in cache.items() if k.startswith("custom:https://openrouter.ai/v1#")]
+        custom_rows = [
+            v
+            for k, v in cache.items()
+            if k.startswith("custom:https://openrouter.ai/v1#")
+        ]
         assert [row["models"] for row in custom_rows] == [["custom-endpoint-model"]]
         assert cache["openrouter"]["models"] == ["openrouter-curated-model"]
 
-    def test_same_url_distinct_credentials_keep_separate_rows(self, tmp_path, monkeypatch):
+    def test_same_url_distinct_credentials_keep_separate_rows(
+        self, tmp_path, monkeypatch
+    ):
         """N custom_providers rows sharing one proxy URL with different keys (#106184): a probe
         for key B must not evict key A's catalog, and a cache-only read for A must still hit."""
         import clawk_cli.models as mod
 
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-        monkeypatch.setattr(mod, "fetch_api_models", lambda key, *a, **k: [f"models-for-{key}"])
+        monkeypatch.setattr(
+            mod, "fetch_api_models", lambda key, *a, **k: [f"models-for-{key}"]
+        )
 
         url = "https://proxy.example.com/v1"
         assert mod.cached_fetch_api_models("sk-A", url) == ["models-for-sk-A"]
         assert mod.cached_fetch_api_models("sk-B", url) == ["models-for-sk-B"]
 
-        monkeypatch.setattr(mod, "fetch_api_models", lambda *a, **k: pytest.fail("cache miss"))
-        assert mod.cached_fetch_api_models("sk-A", url, cache_only=True) == ["models-for-sk-A"]
-        assert mod.cached_fetch_api_models("sk-B", url, cache_only=True) == ["models-for-sk-B"]
+        monkeypatch.setattr(
+            mod, "fetch_api_models", lambda *a, **k: pytest.fail("cache miss")
+        )
+        assert mod.cached_fetch_api_models("sk-A", url, cache_only=True) == [
+            "models-for-sk-A"
+        ]
+        assert mod.cached_fetch_api_models("sk-B", url, cache_only=True) == [
+            "models-for-sk-B"
+        ]
 
 
 class TestSalvageFollowups:
@@ -311,11 +380,17 @@ class TestSalvageFollowups:
         background refresh is spawned for the next open."""
         import clawk_cli.models as mod
 
-        cache = {"custom:https://gw.example.com/v1#fp": self._entry(["stale-ok"], age_seconds=7200)}
-        with patch.object(mod, "_load_provider_models_cache", return_value=cache), \
-             patch.object(mod, "_custom_endpoint_fingerprint", return_value="fp"), \
-             patch.object(mod, "_spawn_swr_refresh") as spawn, \
-             patch.object(mod, "fetch_api_models") as live:
+        cache = {
+            "custom:https://gw.example.com/v1#fp": self._entry(
+                ["stale-ok"], age_seconds=7200
+            )
+        }
+        with (
+            patch.object(mod, "_load_provider_models_cache", return_value=cache),
+            patch.object(mod, "_custom_endpoint_fingerprint", return_value="fp"),
+            patch.object(mod, "_spawn_swr_refresh") as spawn,
+            patch.object(mod, "fetch_api_models") as live,
+        ):
             out = mod.cached_fetch_api_models(
                 "sk-key", "https://gw.example.com/v1", ttl_seconds=3600
             )
@@ -328,12 +403,18 @@ class TestSalvageFollowups:
         import clawk_cli.models as mod
 
         too_old = mod._PROVIDER_MODELS_STALE_SERVE_MAX + 60
-        cache = {"custom:https://gw.example.com/v1#fp": self._entry(["ancient"], age_seconds=too_old)}
-        with patch.object(mod, "_load_provider_models_cache", return_value=cache), \
-             patch.object(mod, "_custom_endpoint_fingerprint", return_value="fp"), \
-             patch.object(mod, "_save_provider_models_cache"), \
-             patch.object(mod, "_spawn_swr_refresh") as spawn, \
-             patch.object(mod, "fetch_api_models", return_value=["fresh"]) as live:
+        cache = {
+            "custom:https://gw.example.com/v1#fp": self._entry(
+                ["ancient"], age_seconds=too_old
+            )
+        }
+        with (
+            patch.object(mod, "_load_provider_models_cache", return_value=cache),
+            patch.object(mod, "_custom_endpoint_fingerprint", return_value="fp"),
+            patch.object(mod, "_save_provider_models_cache"),
+            patch.object(mod, "_spawn_swr_refresh") as spawn,
+            patch.object(mod, "fetch_api_models", return_value=["fresh"]) as live,
+        ):
             out = mod.cached_fetch_api_models("sk-key", "https://gw.example.com/v1")
         assert out == ["fresh"]
         live.assert_called_once()
@@ -353,8 +434,10 @@ class TestSalvageFollowups:
             saved.update(data)
             done.set()
 
-        with patch.object(mod, "_load_provider_models_cache", return_value={}), \
-             patch.object(mod, "_save_provider_models_cache", side_effect=fake_save):
+        with (
+            patch.object(mod, "_load_provider_models_cache", return_value={}),
+            patch.object(mod, "_save_provider_models_cache", side_effect=fake_save),
+        ):
             mod._spawn_swr_refresh(
                 "custom:https://gw.example.com/v1#fp",
                 lambda: {"fp": "fp", "at": time.time(), "models": ["refreshed"]},
@@ -363,8 +446,12 @@ class TestSalvageFollowups:
         assert saved["custom:https://gw.example.com/v1#fp"]["models"] == ["refreshed"]
         # The save fires before the worker's finally drops the inflight key (and the cache lock
         # release sits between them): wait for the dedupe slot instead of racing the thread.
-        wait_until(lambda: "custom:https://gw.example.com/v1#fp" not in mod._swr_refresh_inflight,
-                   what="SWR inflight key released")
+        wait_until(
+            lambda: (
+                "custom:https://gw.example.com/v1#fp" not in mod._swr_refresh_inflight
+            ),
+            what="SWR inflight key released",
+        )
 
     def test_corrupt_at_field_degrades_to_live_fetch_instead_of_raising(self):
         """provider_models_cache.json is user-editable; a corrupted 'at' must
@@ -373,13 +460,17 @@ class TestSalvageFollowups:
 
         cache = {
             "custom:https://gw.example.com/v1#fp": {
-                "fp": "fp", "at": "yesterday", "models": ["corrupt-row"],
+                "fp": "fp",
+                "at": "yesterday",
+                "models": ["corrupt-row"],
             }
         }
-        with patch.object(mod, "_load_provider_models_cache", return_value=cache), \
-             patch.object(mod, "_custom_endpoint_fingerprint", return_value="fp"), \
-             patch.object(mod, "_save_provider_models_cache"), \
-             patch.object(mod, "fetch_api_models", return_value=["live-models"]) as live:
+        with (
+            patch.object(mod, "_load_provider_models_cache", return_value=cache),
+            patch.object(mod, "_custom_endpoint_fingerprint", return_value="fp"),
+            patch.object(mod, "_save_provider_models_cache"),
+            patch.object(mod, "fetch_api_models", return_value=["live-models"]) as live,
+        ):
             out = mod.cached_fetch_api_models("sk-key", "https://gw.example.com/v1")
         assert out == ["live-models"]
         live.assert_called_once()
@@ -407,7 +498,8 @@ class TestProbeApiModelsNegativeCache:
         r1 = mod.probe_api_models("", "https://blackhole.invalid/v1", timeout=1.0)
         calls = []
         monkeypatch.setattr(
-            mod, "_urlopen_model_catalog_request",
+            mod,
+            "_urlopen_model_catalog_request",
             lambda req, **kw: calls.append(req.full_url) or self._fail(req, **kw),
         )
         r2 = mod.probe_api_models("", "https://blackhole.invalid/v1/", timeout=1.0)
@@ -415,7 +507,9 @@ class TestProbeApiModelsNegativeCache:
         assert calls == []  # /v1 + root share one host:port entry
         assert r2["probed_url"] == "https://blackhole.invalid/v1/models"
 
-    def test_http_error_from_a_reachable_host_is_not_cached_as_unreachable(self, monkeypatch):
+    def test_http_error_from_a_reachable_host_is_not_cached_as_unreachable(
+        self, monkeypatch
+    ):
         import urllib.error
 
         import clawk_cli.models as mod
@@ -424,7 +518,12 @@ class TestProbeApiModelsNegativeCache:
             raise urllib.error.HTTPError(req.full_url, 401, "Unauthorized", {}, None)
 
         monkeypatch.setattr(mod, "_urlopen_model_catalog_request", _unauthorized)
-        assert mod.probe_api_models("bad-key", "https://reachable.invalid/v1", timeout=1.0)["models"] is None
+        assert (
+            mod.probe_api_models(
+                "bad-key", "https://reachable.invalid/v1", timeout=1.0
+            )["models"]
+            is None
+        )
         # The host answered; a corrected key must probe again immediately.
         assert "reachable.invalid:443" not in mod._probe_neg_cache
 
@@ -451,7 +550,11 @@ class TestProbeApiModelsNegativeCache:
             def read(self):
                 return b'{"data": [{"id": "m1"}]}'
 
-        monkeypatch.setattr(mod, "_urlopen_model_catalog_request", lambda req, **kw: _Resp())
+        monkeypatch.setattr(
+            mod, "_urlopen_model_catalog_request", lambda req, **kw: _Resp()
+        )
         ok = mod.probe_api_models("", "https://blackhole.invalid/v1", timeout=1.0)
         assert ok["models"] == ["m1"]
-        assert key not in mod._probe_neg_cache  # recovery is not masked by the stale entry
+        assert (
+            key not in mod._probe_neg_cache
+        )  # recovery is not masked by the stale entry

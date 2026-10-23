@@ -39,7 +39,9 @@ LEGACY_DESKTOP_ENTRY_NAME = "clawk.desktop"
 SHELL_LAUNCH_ENV_VAR = "DESKTOP_STARTUP_ID"
 # Write end of the reveal pipe handed to Electron; one byte means "main window is on screen".
 READY_FD_ENV_VAR = "CLAWK_DESKTOP_READY_FD"
-REVEAL_BYTE = b"r"  # what linux-launcher-ready.ts writes; anything else is finish()'s wake-up
+REVEAL_BYTE = (
+    b"r"  # what linux-launcher-ready.ts writes; anything else is finish()'s wake-up
+)
 
 _SHELL_NAMES = ("bash", "sh", "dash", "zsh", "ksh")
 
@@ -51,7 +53,11 @@ def is_supported() -> bool:
 
 def _xdg_data_home() -> Path:
     raw = os.environ.get("XDG_DATA_HOME")
-    return Path(raw).expanduser() if raw and raw.strip() else Path.home() / ".local" / "share"
+    return (
+        Path(raw).expanduser()
+        if raw and raw.strip()
+        else Path.home() / ".local" / "share"
+    )
 
 
 def desktop_entry_path() -> Path:
@@ -76,7 +82,9 @@ def _running_interpreter() -> str:
     """
     lexical = os.path.abspath(sys.executable)
     path = Path(lexical)
-    if any((base / "pyvenv.cfg").is_file() for base in (path.parent, *path.parent.parents)):
+    if any(
+        (base / "pyvenv.cfg").is_file() for base in (path.parent, *path.parent.parents)
+    ):
         return lexical
     return str(path.resolve())
 
@@ -99,7 +107,9 @@ def _can_import_clawk_cli(interpreter: Path) -> bool:
         return _probe_cache[key]
     ok = _run_quiet(
         [key, "-I", "-c", "import clawk_cli.main"],
-        cwd=os.path.abspath(os.sep), timeout=15, on_error=None,
+        cwd=os.path.abspath(os.sep),
+        timeout=15,
+        on_error=None,
     )
     if ok is None:
         return True
@@ -119,7 +129,9 @@ def resolve_exec_command(project_root: Optional[Path] = None) -> str:
     """
     from clawk_cli.relaunch import resolve_clawk_bin
 
-    bin_path = _resolve_clawk_bin_for_desktop_entry(resolve_clawk_bin, checkout_root=project_root)
+    bin_path = _resolve_clawk_bin_for_desktop_entry(
+        resolve_clawk_bin, checkout_root=project_root
+    )
     interpreter = _running_interpreter()
     if not _can_import_clawk_cli(Path(interpreter)):
         # Persisting an interpreter that can't import the CLI writes a dead entry (the DE spawns
@@ -173,9 +185,9 @@ def _is_interpreter(candidate: Path) -> bool:
     Regex approach proposed independently in 94051; kept here with the parent-dir guard so a script named
     ``python`` outside a bin/Scripts tree is not misclassified. See #94051.
     """
-    return bool(re.fullmatch(r"python[23]?(\d+)?(\.\d+)?", candidate.name.lower())) and (
-        candidate.parent.name in {"bin", "scripts"}
-    )
+    return bool(
+        re.fullmatch(r"python[23]?(\d+)?(\.\d+)?", candidate.name.lower())
+    ) and (candidate.parent.name in {"bin", "scripts"})
 
 
 def _inside_checkout(candidate: str, checkout_root: Path, original_argv0: str) -> bool:
@@ -219,7 +231,9 @@ def _is_this_checkout_managed_cli(candidate: str, checkout_root: Path) -> bool:
     try:
         from pm.environments import install_state_dir
 
-        generations = (install_state_dir(Path(checkout_root)) / "environments").resolve()
+        generations = (
+            install_state_dir(Path(checkout_root)) / "environments"
+        ).resolve()
     except (OSError, RuntimeError, ValueError):
         return False
     return path == generations or generations in path.parents
@@ -408,7 +422,10 @@ def _wrapper_targets_checkout(wrapper: Path, checkout_root: Path) -> bool:
 
 
 _CLAWK_CODE_MARKERS = ("clawk_cli", "workspace/clawk_cli")
-_DESKTOP_APP_ENTRIES = ("apps/desktop/package.json", "workspace/apps/desktop/package.json")
+_DESKTOP_APP_ENTRIES = (
+    "apps/desktop/package.json",
+    "workspace/apps/desktop/package.json",
+)
 
 
 def _launcher_tree(path: Path) -> Path:
@@ -444,7 +461,9 @@ def _embedded_launcher_target(wrapper: Path) -> Optional[Path]:
     head = _read_head(wrapper)
     if head is None:
         return None
-    for match in re.finditer(r"""["'\s](/[^\s"'$;)\\]+)""", head.decode("utf-8", errors="replace")):
+    for match in re.finditer(
+        r"""["'\s](/[^\s"'$;)\\]+)""", head.decode("utf-8", errors="replace")
+    ):
         if "/bin/" in match.group(1) and Path(match.group(1)).is_file():
             return Path(match.group(1))
     return None
@@ -466,7 +485,11 @@ def _can_serve_desktop(candidate: str, _depth: int = 2) -> Optional[bool]:
     if head is None or not head.startswith(b"#!"):
         return None
     tokens = _shebang_tokens(head.decode("utf-8", errors="replace").splitlines()[0])
-    if _depth and tokens and (Path(tokens[0]).name in _SHELL_NAMES or Path(tokens[0]).name == "env"):
+    if (
+        _depth
+        and tokens
+        and (Path(tokens[0]).name in _SHELL_NAMES or Path(tokens[0]).name == "env")
+    ):
         # The installer's shim (any shell launcher) execs its real target; judge THAT tree.
         target = _embedded_launcher_target(path)
         if target is not None:
@@ -618,7 +641,9 @@ def refresh_desktop_databases(applications_dir: Path) -> list[str]:
     return ran
 
 
-def _run_quiet(cmd: list[str], *, timeout: int = 60, on_error: Optional[bool] = False, **kwargs) -> Optional[bool]:
+def _run_quiet(
+    cmd: list[str], *, timeout: int = 60, on_error: Optional[bool] = False, **kwargs
+) -> Optional[bool]:
     """Exit-status success of a silenced subprocess; ``on_error`` when it could not be run at all."""
     try:
         result = subprocess.run(
@@ -702,7 +727,9 @@ def _resized_hicolor_pngs(raw: bytes) -> Optional[dict[str, bytes]]:
             out: dict[str, bytes] = {}
             for size in _HICOLOR_INSTALL_SIZES:
                 buf = io.BytesIO()
-                rgba.resize((size, size), Image.Resampling.LANCZOS).save(buf, format="PNG")
+                rgba.resize((size, size), Image.Resampling.LANCZOS).save(
+                    buf, format="PNG"
+                )
                 out[f"{size}x{size}"] = buf.getvalue()
             return out
     except (OSError, ValueError):
@@ -767,7 +794,9 @@ def _launcher_entry_management_enabled() -> bool:
         return True
 
 
-def _alias_legacy_desktop_entry(applications_dir: Path, exec_command: str, icon: str) -> bool:
+def _alias_legacy_desktop_entry(
+    applications_dir: Path, exec_command: str, icon: str
+) -> bool:
     """Keep the pre-rename ``clawk.desktop`` as a hidden alias of the app-id entry.
 
     Shells resolve a taskbar pin by the entry file name it was pinned against: deleting the
@@ -836,7 +865,10 @@ def install_desktop_entry(project_root: Path) -> Optional[Path]:
         entry_path.parent.mkdir(parents=True, exist_ok=True)
         # When nothing changed, skip the rewrite. Then a launch does not
         # churn the menu caches.
-        unchanged = entry_path.is_file() and entry_path.read_text(encoding="utf-8-sig") == contents
+        unchanged = (
+            entry_path.is_file()
+            and entry_path.read_text(encoding="utf-8-sig") == contents
+        )
         if not unchanged:
             # Atomic replace: an interrupted plain write leaves a zero-byte entry, which permanently
             # breaks the taskbar pin (nothing later rewrites a file that exists at the right path).
@@ -853,7 +885,9 @@ def install_desktop_entry(project_root: Path) -> Optional[Path]:
     # Converting the old entry is management too: with the opt-out set, an existing
     # launcher stays untouched even here, in the missing-entry path where the new
     # entry is still created.
-    aliased = manage_enabled and _alias_legacy_desktop_entry(entry_path.parent, exec_command, icon_value)
+    aliased = manage_enabled and _alias_legacy_desktop_entry(
+        entry_path.parent, exec_command, icon_value
+    )
     if aliased or not unchanged:
         refresh_desktop_databases(entry_path.parent)
     return entry_path
@@ -897,7 +931,9 @@ class DeferredDesktopEntryInstall:
         # after the condition, not a substitute for it.
         self._settle_seconds = settle_seconds
         self._read_fd, self.write_fd = os.pipe()
-        self._thread = threading.Thread(target=self._wait_for_reveal, name="desktop-entry-install", daemon=True)
+        self._thread = threading.Thread(
+            target=self._wait_for_reveal, name="desktop-entry-install", daemon=True
+        )
 
     def child_env(self, env: dict) -> dict:
         env[READY_FD_ENV_VAR] = str(self.write_fd)
@@ -915,7 +951,9 @@ class DeferredDesktopEntryInstall:
             data = os.read(self._read_fd, 1)
         except OSError:
             return
-        if data != REVEAL_BYTE:  # woken by finish(): the app exited without a reveal, skip the heal
+        if (
+            data != REVEAL_BYTE
+        ):  # woken by finish(): the app exited without a reveal, skip the heal
             return
         if self._settle_seconds:
             time.sleep(self._settle_seconds)
@@ -929,7 +967,9 @@ class DeferredDesktopEntryInstall:
     def finish(self) -> None:
         """Electron exited: let a heal already triggered by the reveal complete, never start one."""
         try:
-            os.write(self.write_fd, b"x")  # wake a still-waiting reader so join() returns promptly
+            os.write(
+                self.write_fd, b"x"
+            )  # wake a still-waiting reader so join() returns promptly
         except OSError:
             pass
         self._thread.join(timeout=15)

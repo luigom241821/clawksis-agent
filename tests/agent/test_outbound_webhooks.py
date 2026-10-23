@@ -44,7 +44,8 @@ def _strip_outbound_callbacks():
     manager = get_plugin_manager()
     for event, callbacks in list(manager._hooks.items()):
         manager._hooks[event] = [
-            cb for cb in callbacks
+            cb
+            for cb in callbacks
             if not getattr(cb, "__name__", "").startswith("outbound_webhook[")
         ]
 
@@ -72,8 +73,12 @@ class _CapturingHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         self.server.captured.append(  # type: ignore[attr-defined]
-            {"path": self.path, "method": "GET", "headers": dict(self.headers),
-             "body": b""}
+            {
+                "path": self.path,
+                "method": "GET",
+                "headers": dict(self.headers),
+                "body": b"",
+            }
         )
         self.send_response(200)
         self.end_headers()
@@ -109,14 +114,15 @@ class TestParseConfig:
         assert outbound_webhooks.iter_configured_targets({}) == []
         assert outbound_webhooks.iter_configured_targets(None) == []
         assert outbound_webhooks.iter_configured_targets({"hooks": {}}) == []
-        assert outbound_webhooks.iter_configured_targets(
-            {"hooks": "not-a-dict"}
-        ) == []
+        assert outbound_webhooks.iter_configured_targets({"hooks": "not-a-dict"}) == []
 
     def test_non_list_outbound_is_empty(self):
-        assert outbound_webhooks.iter_configured_targets(
-            {"hooks": {"outbound": {"url": "https://x"}}}
-        ) == []
+        assert (
+            outbound_webhooks.iter_configured_targets(
+                {"hooks": {"outbound": {"url": "https://x"}}}
+            )
+            == []
+        )
 
     def test_valid_entry_parses(self):
         targets = outbound_webhooks.iter_configured_targets(
@@ -137,17 +143,26 @@ class TestParseConfig:
         assert t.timeout == 5
 
     def test_missing_url_skipped(self):
-        assert outbound_webhooks.iter_configured_targets(
-            _cfg({"events": ["on_session_end"]})
-        ) == []
+        assert (
+            outbound_webhooks.iter_configured_targets(
+                _cfg({"events": ["on_session_end"]})
+            )
+            == []
+        )
 
     def test_non_http_url_skipped(self):
-        assert outbound_webhooks.iter_configured_targets(
-            _cfg({"url": "ftp://example.com", "events": ["on_session_end"]})
-        ) == []
-        assert outbound_webhooks.iter_configured_targets(
-            _cfg({"url": "file:///etc/passwd", "events": ["on_session_end"]})
-        ) == []
+        assert (
+            outbound_webhooks.iter_configured_targets(
+                _cfg({"url": "ftp://example.com", "events": ["on_session_end"]})
+            )
+            == []
+        )
+        assert (
+            outbound_webhooks.iter_configured_targets(
+                _cfg({"url": "file:///etc/passwd", "events": ["on_session_end"]})
+            )
+            == []
+        )
 
     def test_unknown_events_filtered_known_kept(self):
         targets = outbound_webhooks.iter_configured_targets(
@@ -162,14 +177,20 @@ class TestParseConfig:
         assert targets[0].events == ["on_session_end"]
 
     def test_all_unknown_events_skips_entry(self):
-        assert outbound_webhooks.iter_configured_targets(
-            _cfg({"url": "https://example.com", "events": ["bogus"]})
-        ) == []
+        assert (
+            outbound_webhooks.iter_configured_targets(
+                _cfg({"url": "https://example.com", "events": ["bogus"]})
+            )
+            == []
+        )
 
     def test_empty_events_skips_entry(self):
-        assert outbound_webhooks.iter_configured_targets(
-            _cfg({"url": "https://example.com", "events": []})
-        ) == []
+        assert (
+            outbound_webhooks.iter_configured_targets(
+                _cfg({"url": "https://example.com", "events": []})
+            )
+            == []
+        )
 
     def test_timeout_clamped(self):
         targets = outbound_webhooks.iter_configured_targets(
@@ -253,10 +274,21 @@ class TestParseConfig:
 
         monkeypatch.setenv("MY_HOOK_SECRET", "from-default-profile-env")
         secret_scope.set_multiplex_active(True)
-        token = secret_scope.set_secret_scope({"MY_HOOK_SECRET": "from-secondary-scope"})
+        token = secret_scope.set_secret_scope(
+            {"MY_HOOK_SECRET": "from-secondary-scope"}
+        )
         try:
-            raw = _cfg({"url": "https://example.com", "events": ["on_session_end"], "secret_env": "MY_HOOK_SECRET"})
-            assert outbound_webhooks.iter_configured_targets(raw)[0].secret == "from-secondary-scope"
+            raw = _cfg(
+                {
+                    "url": "https://example.com",
+                    "events": ["on_session_end"],
+                    "secret_env": "MY_HOOK_SECRET",
+                }
+            )
+            assert (
+                outbound_webhooks.iter_configured_targets(raw)[0].secret
+                == "from-secondary-scope"
+            )
             secret_scope.reset_secret_scope(token)
             token = secret_scope.set_secret_scope({})
             assert outbound_webhooks.iter_configured_targets(raw)[0].secret is None
@@ -349,9 +381,7 @@ class TestPayload:
 
 class TestRegistration:
     def test_registration_is_idempotent(self):
-        cfg = _cfg(
-            {"url": "https://example.com/hook", "events": ["on_session_end"]}
-        )
+        cfg = _cfg({"url": "https://example.com/hook", "events": ["on_session_end"]})
         first = outbound_webhooks.register_from_config(cfg)
         second = outbound_webhooks.register_from_config(cfg)
         assert len(first) == 1
@@ -359,9 +389,7 @@ class TestRegistration:
 
     def test_safe_mode_skips_registration(self, monkeypatch):
         monkeypatch.setenv("CLAWK_SAFE_MODE", "1")
-        cfg = _cfg(
-            {"url": "https://example.com/hook", "events": ["on_session_end"]}
-        )
+        cfg = _cfg({"url": "https://example.com/hook", "events": ["on_session_end"]})
         assert outbound_webhooks.register_from_config(cfg) == []
 
     def test_callbacks_never_return_directives(self, http_server):
@@ -372,7 +400,9 @@ class TestRegistration:
         from clawk_cli.plugins import get_plugin_manager
 
         results = get_plugin_manager().invoke_hook(
-            "pre_tool_call", tool_name="terminal", args={"command": "ls"},
+            "pre_tool_call",
+            tool_name="terminal",
+            args={"command": "ls"},
         )
         assert outbound_webhooks.flush()
         # No block/context directives from the webhook callback.
@@ -389,7 +419,9 @@ class TestForceReloadHomeScoping:
     """
 
     def test_force_reload_restores_webhook_and_fires_once(
-        self, monkeypatch, http_server,
+        self,
+        monkeypatch,
+        http_server,
     ):
         from clawk_cli import plugins
 
@@ -414,7 +446,8 @@ class TestForceReloadHomeScoping:
         assert len(mgr_b._hooks.get("on_session_end", [])) == 1
 
         plugins.get_plugin_manager().invoke_hook(
-            "on_session_end", session_id="s1",
+            "on_session_end",
+            session_id="s1",
         )
         assert outbound_webhooks.flush()
         assert len(http_server.captured) == 1
@@ -460,9 +493,7 @@ class TestDelivery:
 
         assert req["headers"]["X-Clawksis-Event"] == "on_session_end"
         assert req["headers"]["X-Clawksis-Delivery"]
-        expected = hmac.new(
-            secret.encode(), req["body"], hashlib.sha256
-        ).hexdigest()
+        expected = hmac.new(secret.encode(), req["body"], hashlib.sha256).hexdigest()
         assert req["headers"]["X-Clawksis-Signature-256"] == f"sha256={expected}"
 
     def test_unsigned_delivery_has_no_signature_header(self, http_server):
@@ -491,10 +522,16 @@ class TestDelivery:
 
         manager = get_plugin_manager()
         manager.invoke_hook(
-            "post_tool_call", tool_name="web_search", args={}, status="ok",
+            "post_tool_call",
+            tool_name="web_search",
+            args={},
+            status="ok",
         )
         manager.invoke_hook(
-            "post_tool_call", tool_name="terminal", args={}, status="ok",
+            "post_tool_call",
+            tool_name="terminal",
+            args={},
+            status="ok",
         )
         assert outbound_webhooks.flush()
 
@@ -505,10 +542,14 @@ class TestDelivery:
     def test_4xx_not_retried(self, http_server):
         http_server.respond_status = 400
         target = outbound_webhooks.WebhookTarget(
-            url=_url(http_server), events=["on_session_end"],
+            url=_url(http_server),
+            events=["on_session_end"],
         )
         delivery = outbound_webhooks._build_delivery(
-            "on_session_end", target, b"{}", "did_4xx",
+            "on_session_end",
+            target,
+            b"{}",
+            "did_4xx",
         )
         outbound_webhooks._deliver(delivery)
         assert len(http_server.captured) == 1
@@ -516,10 +557,14 @@ class TestDelivery:
     def test_5xx_retried_once(self, http_server):
         http_server.respond_status = 500
         target = outbound_webhooks.WebhookTarget(
-            url=_url(http_server), events=["on_session_end"],
+            url=_url(http_server),
+            events=["on_session_end"],
         )
         delivery = outbound_webhooks._build_delivery(
-            "on_session_end", target, b"{}", "did_5xx",
+            "on_session_end",
+            target,
+            b"{}",
+            "did_5xx",
         )
         outbound_webhooks._deliver(delivery)
         assert len(http_server.captured) == outbound_webhooks.MAX_DELIVERY_ATTEMPTS
@@ -530,10 +575,14 @@ class TestDelivery:
         http_server.respond_status = 302
         http_server.respond_location = _url(http_server, "/redirected")
         target = outbound_webhooks.WebhookTarget(
-            url=_url(http_server), events=["on_session_end"],
+            url=_url(http_server),
+            events=["on_session_end"],
         )
         delivery = outbound_webhooks._build_delivery(
-            "on_session_end", target, b"{}", "did_3xx",
+            "on_session_end",
+            target,
+            b"{}",
+            "did_3xx",
         )
         outbound_webhooks._deliver(delivery)
         # One POST hit the server (the redirect response), nothing followed
@@ -545,8 +594,7 @@ class TestDelivery:
         """The X-Clawksis-Delivery header and the signed body's delivery_id
         must be the same value, or receiver-side dedupe breaks."""
         cfg = _cfg(
-            {"url": _url(http_server), "events": ["on_session_end"],
-             "secret": "s"}
+            {"url": _url(http_server), "events": ["on_session_end"], "secret": "s"}
         )
         outbound_webhooks.register_from_config(cfg)
 
@@ -567,7 +615,10 @@ class TestDelivery:
             timeout=1,
         )
         delivery = outbound_webhooks._build_delivery(
-            "on_session_end", target, b"{}", "did_conn",
+            "on_session_end",
+            target,
+            b"{}",
+            "did_conn",
         )
         # Must swallow the failure (logged), never raise into the agent loop.
         outbound_webhooks._deliver(delivery)
@@ -579,9 +630,11 @@ class TestDelivery:
         import subprocess
         import sys as _sys
 
-        cfg = {"hooks": {"outbound": [
-            {"url": _url(http_server), "events": ["on_session_end"]}
-        ]}}
+        cfg = {
+            "hooks": {
+                "outbound": [{"url": _url(http_server), "events": ["on_session_end"]}]
+            }
+        }
         script = tmp_path / "fire_and_exit.py"
         script.write_text(
             "import sys\n"
@@ -594,7 +647,9 @@ class TestDelivery:
             "# exit immediately — no explicit flush\n"
         )
         proc = subprocess.run(
-            [_sys.executable, str(script)], capture_output=True, timeout=30,
+            [_sys.executable, str(script)],
+            capture_output=True,
+            timeout=30,
             check=False,
         )
         assert proc.returncode == 0, proc.stderr.decode()

@@ -20,7 +20,10 @@ from clawk_cli import gateway
 
 REPO = Path(__file__).resolve().parents[2]
 
-pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="POSIX shell wrapper stands in for the bare interpreter")
+pytestmark = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="POSIX shell wrapper stands in for the bare interpreter",
+)
 
 
 def _dead_pid() -> int:
@@ -29,13 +32,26 @@ def _dead_pid() -> int:
     return proc.pid
 
 
-def test_restart_watcher_relaunches_from_an_interpreter_without_site_packages(tmp_path, monkeypatch):
+def test_restart_watcher_relaunches_from_an_interpreter_without_site_packages(
+    tmp_path, monkeypatch
+):
     # A python that sees the checkout but no third-party packages, like the bare store Python.
     bare = tmp_path / "bare-python"
-    bare.write_text(f'#!/bin/sh\nunset PYTHONPATH\nexec "{sys.executable}" -S "$@"\n', encoding="utf-8")
+    bare.write_text(
+        f'#!/bin/sh\nunset PYTHONPATH\nexec "{sys.executable}" -S "$@"\n',
+        encoding="utf-8",
+    )
     bare.chmod(0o755)
-    probe = subprocess.run([str(bare), "-c", "import ruamel.yaml"], cwd=REPO, capture_output=True, text=True, check=False)
-    assert probe.returncode != 0, "premise: the stand-in interpreter must not see site-packages"
+    probe = subprocess.run(
+        [str(bare), "-c", "import ruamel.yaml"],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert probe.returncode != 0, (
+        "premise: the stand-in interpreter must not see site-packages"
+    )
 
     marker = tmp_path / "respawned"
     home = tmp_path / "home"
@@ -54,5 +70,10 @@ def test_restart_watcher_relaunches_from_an_interpreter_without_site_packages(tm
     stdio = home / "logs" / "gateway-stdio.log"
     assert marker.exists(), (
         "the restart watcher never relaunched the gateway command"
-        + (f"; stdio log:\n{stdio.read_text(errors='replace')}" if stdio.exists() else ""))
+        + (
+            f"; stdio log:\n{stdio.read_text(errors='replace')}"
+            if stdio.exists()
+            else ""
+        )
+    )
     assert os.path.getsize(marker) == 2

@@ -164,7 +164,6 @@ class TestNativePathRegion:
 
 
 class TestSchemaAndHandler:
-
     def test_handler_passes_region_to_native_path(self, tmp_path, monkeypatch):
         from tools import vision_tools
         from tools.vision_tools import _handle_vision_analyze

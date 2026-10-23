@@ -45,5 +45,3 @@ async def test_preprocess_includes_slack_author_mention_for_shared_thread():
     )
 
     assert result == "[Alice | Slack user <@U123>] mention me again"
-
-

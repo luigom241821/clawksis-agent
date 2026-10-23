@@ -6,6 +6,7 @@ Handing it to ``session_search`` made every recall inside a worker answer
 ``'RuntimeSessionStore' object has no attribute 'search_messages'``; recall now opens its own read-only
 handle on the profile's state DB, the same one the no-db path uses.
 """
+
 import json
 
 import pytest
@@ -34,7 +35,9 @@ def _seed(path, session_id, content):
 
 def _worker_store(home):
     """The real facade, with a no-op owner RPC: only the capability matters here."""
-    return RuntimeSessionStore(lambda method, **params: {}, {"session_id": "worker-s"}, home / "outbox")
+    return RuntimeSessionStore(
+        lambda method, **params: {}, {"session_id": "worker-s"}, home / "outbox"
+    )
 
 
 def test_worker_recall_reads_the_state_db_instead_of_the_store(home):
@@ -52,7 +55,9 @@ def test_worker_recall_reads_the_state_db_instead_of_the_store(home):
 
 def test_a_readable_handle_is_still_used_as_given(home, tmp_path):
     """A real SessionDB passed by a caller is not swapped for the home DB."""
-    home_db = _seed(home, "home-session", "zanzibar appears only in the home transcript")
+    home_db = _seed(
+        home, "home-session", "zanzibar appears only in the home transcript"
+    )
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
     passed = _seed(elsewhere, "passed-in", "zanzibar from the caller's handle")

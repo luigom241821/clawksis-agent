@@ -21,7 +21,9 @@ _TUI_INJECT_OWNER = object()
 _atexit_registered = False
 
 
-def inject_tui_session_message(*, session_key: str, content: str, plugin_id: str = "") -> bool:
+def inject_tui_session_message(
+    *, session_key: str, content: str, plugin_id: str = ""
+) -> bool:
     """Queue *content* on the live session whose ``session_key`` matches.
 
     Returns False when this process has no such session, so the caller can fall
@@ -39,7 +41,8 @@ def inject_tui_session_message(*, session_key: str, content: str, plugin_id: str
             (
                 (sid, session)
                 for sid, session in list(_sessions.items())
-                if isinstance(session, dict) and session.get("session_key") == session_key
+                if isinstance(session, dict)
+                and session.get("session_key") == session_key
             ),
             None,
         )
@@ -60,8 +63,10 @@ def inject_tui_session_message(*, session_key: str, content: str, plugin_id: str
             return True
     rid = f"inject-{uuid.uuid4().hex[:8]}"
     threading.Thread(
-        target=_drain_queued_prompt, args=(rid, sid, session),
-        daemon=True, name=f"tui-inject-{sid[:8]}",
+        target=_drain_queued_prompt,
+        args=(rid, sid, session),
+        daemon=True,
+        name=f"tui-inject-{sid[:8]}",
     ).start()
     return True
 

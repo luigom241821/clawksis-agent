@@ -22,8 +22,6 @@ import pytest
 # ---------------------------------------------------------------------------
 
 
-
-
 # ---------------------------------------------------------------------------
 # fire_pre_command_hook helper
 # ---------------------------------------------------------------------------
@@ -60,8 +58,6 @@ def test_fire_helper_is_observer_only_and_never_raises(monkeypatch):
     assert calls["kwargs"]["command"] == "model"
 
 
-
-
 def test_fire_helper_swallows_manager_errors(monkeypatch):
     from clawk_cli import plugins as plugins_mod
 
@@ -71,7 +67,10 @@ def test_fire_helper_swallows_manager_errors(monkeypatch):
     monkeypatch.setattr(plugins_mod, "get_plugin_manager", _boom)
     # Never raises.
     plugins_mod.fire_pre_command_hook(
-        surface="gateway", command="new", alias_used="reset", args_raw="",
+        surface="gateway",
+        command="new",
+        alias_used="reset",
+        args_raw="",
     )
 
 
@@ -116,7 +115,8 @@ def test_cli_reports_canonical_name_for_alias(monkeypatch):
 
     captured = {}
     monkeypatch.setattr(
-        plugins_mod, "fire_pre_command_hook",
+        plugins_mod,
+        "fire_pre_command_hook",
         lambda **kwargs: captured.update(kwargs),
     )
 
@@ -135,7 +135,8 @@ def test_cli_passes_raw_args(monkeypatch):
 
     captured = {}
     monkeypatch.setattr(
-        plugins_mod, "fire_pre_command_hook",
+        plugins_mod,
+        "fire_pre_command_hook",
         lambda **kwargs: captured.update(kwargs),
     )
 
@@ -152,7 +153,8 @@ def test_cli_hook_before_handler(monkeypatch):
 
     order = []
     monkeypatch.setattr(
-        plugins_mod, "fire_pre_command_hook",
+        plugins_mod,
+        "fire_pre_command_hook",
         lambda **kwargs: order.append("hook"),
     )
 
@@ -265,8 +267,8 @@ def _make_runner():
     runner._should_send_telegram_lobby_reminder = lambda _source: False
     runner._check_slash_access = lambda _source, _command: None
     runner._begin_session_run_generation = lambda _key: 1
-    runner._release_running_agent_state = (
-        lambda key, run_generation=None: runner._running_agents.pop(key, None)
+    runner._release_running_agent_state = lambda key, run_generation=None: (
+        runner._running_agents.pop(key, None)
     )
     return runner, adapter
 
@@ -277,7 +279,8 @@ async def test_gateway_fires_for_recognized_command(monkeypatch):
 
     captured = {}
     monkeypatch.setattr(
-        plugins_mod, "fire_pre_command_hook",
+        plugins_mod,
+        "fire_pre_command_hook",
         lambda **kwargs: captured.update(kwargs),
     )
 
@@ -305,7 +308,8 @@ async def test_gateway_reports_canonical_name_for_alias(monkeypatch):
 
     captured = {}
     monkeypatch.setattr(
-        plugins_mod, "fire_pre_command_hook",
+        plugins_mod,
+        "fire_pre_command_hook",
         lambda **kwargs: captured.update(kwargs),
     )
 
@@ -328,7 +332,8 @@ async def test_gateway_does_not_fire_for_plain_text(monkeypatch):
 
     fired = []
     monkeypatch.setattr(
-        plugins_mod, "fire_pre_command_hook",
+        plugins_mod,
+        "fire_pre_command_hook",
         lambda **kwargs: fired.append(kwargs),
     )
 
@@ -351,7 +356,8 @@ async def test_gateway_control_plane_intercept_excluded(monkeypatch):
 
     fired = []
     monkeypatch.setattr(
-        plugins_mod, "fire_pre_command_hook",
+        plugins_mod,
+        "fire_pre_command_hook",
         lambda **kwargs: fired.append(kwargs),
     )
 

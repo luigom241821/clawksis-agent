@@ -5,6 +5,7 @@ The sidebar calls ``list_sessions_rich`` with ``include_archived=False`` and
 inherit the archived constraint, and the stale-session sweep must not archive
 a pinned row.
 """
+
 import time
 
 import pytest
@@ -88,7 +89,9 @@ def test_stale_sweep_does_not_archive_pinned_session(db):
     db.create_session(session_id="drop", source="cli")
     db.append_message(session_id="drop", role="user", content="old")
     old = time.time() - 10 * 86400
-    db._conn.execute("UPDATE sessions SET started_at = ? WHERE id IN (?, ?)", (old, "keep", "drop"))
+    db._conn.execute(
+        "UPDATE sessions SET started_at = ? WHERE id IN (?, ?)", (old, "keep", "drop")
+    )
     db._conn.execute(
         "UPDATE messages SET timestamp = ? WHERE session_id IN (?, ?)",
         (old, "keep", "drop"),

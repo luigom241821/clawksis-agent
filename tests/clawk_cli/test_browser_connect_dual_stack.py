@@ -70,7 +70,6 @@ class TestDiscoverLocalCdpUrl:
         port = _free_port()
         assert discover_local_cdp_url(port, timeout=0.3) is None
 
-
     def test_finds_ipv6_only_endpoint(self, monkeypatch):
         """When only [::1] speaks CDP (IPv4 side squatted), discovery
         returns the IPv6 URL instead of giving up."""

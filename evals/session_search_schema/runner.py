@@ -17,6 +17,7 @@ Usage:
 Results append to results/<label>/<model-slug>.jsonl (resume-safe: completed
 (task, arm, rep) cells are skipped on re-run). Summarize with report.py.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -40,8 +41,15 @@ from agent.compression_marker import elide
 from tasks import SYSTEM, TASKS
 
 ALLOWED_KEYS = {
-    "query", "role_filter", "limit", "session_id", "around_message_id",
-    "window", "sort", "profile", "detail",
+    "query",
+    "role_filter",
+    "limit",
+    "session_id",
+    "around_message_id",
+    "window",
+    "sort",
+    "profile",
+    "detail",
 }
 
 
@@ -61,7 +69,9 @@ def extract_arm(ref: str, workdir: Path, name: str) -> Path:
     """Extract tools/session_search_tool.py from a git ref."""
     out = subprocess.run(
         ["git", "show", f"{ref}:tools/session_search_tool.py"],
-        cwd=REPO_ROOT, capture_output=True, text=True,
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
         check=False,
     )
     if out.returncode != 0:
@@ -93,14 +103,16 @@ def load_arm(path: Path, name: str, work_db_path: Path):
 
 def build_tools(arm_mod):
     s = arm_mod.SESSION_SEARCH_SCHEMA
-    return [{
-        "type": "function",
-        "function": {
-            "name": s["name"],
-            "description": s["description"],
-            "parameters": s["parameters"],
-        },
-    }]
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": s["name"],
+                "description": s["description"],
+                "parameters": s["parameters"],
+            },
+        }
+    ]
 
 
 def exec_tool(arm_mod, args, main_db_path: Path):
@@ -115,15 +127,20 @@ def exec_tool(arm_mod, args, main_db_path: Path):
             else:
                 bad.append(k)
         if bad:
-            return json.dumps({
-                "success": False,
-                "error": f"unexpected parameter(s): {', '.join(bad)}",
-            }), True
+            return json.dumps(
+                {
+                    "success": False,
+                    "error": f"unexpected parameter(s): {', '.join(bad)}",
+                }
+            ), True
         return arm_mod.session_search(db=db, **kwargs), False
     except Exception as e:
-        return json.dumps({
-            "success": False, "error": f"{type(e).__name__}: {e}",
-        }), True
+        return json.dumps(
+            {
+                "success": False,
+                "error": f"{type(e).__name__}: {e}",
+            }
+        ), True
     finally:
         try:
             db.close()
@@ -131,40 +148,61 @@ def exec_tool(arm_mod, args, main_db_path: Path):
             pass
 
 
-def run_one(client, model, arm_name, arm_mod, task_id, prompt, oracle,
-            main_db_path: Path, max_iters: int = 8):
+def run_one(
+    client,
+    model,
+    arm_name,
+    arm_mod,
+    task_id,
+    prompt,
+    oracle,
+    main_db_path: Path,
+    max_iters: int = 8,
+):
     tools = build_tools(arm_mod)
-    messages = [{"role": "system", "content": SYSTEM},
-                {"role": "user", "content": prompt}]
+    messages = [
+        {"role": "system", "content": SYSTEM},
+        {"role": "user", "content": prompt},
+    ]
     calls, bad_calls = [], 0
     first_prompt_tokens, total_tokens = None, 0
     final = ""
     t0 = time.time()
     for _ in range(max_iters):
         resp = client.chat.completions.create(
-            model=model, messages=messages, tools=tools,
-            temperature=0.2, max_tokens=2000,
+            model=model,
+            messages=messages,
+            tools=tools,
+            temperature=0.2,
+            max_tokens=2000,
         )
         u = getattr(resp, "usage", None)
         if u:
             if first_prompt_tokens is None:
                 first_prompt_tokens = u.prompt_tokens
-            total_tokens += (u.total_tokens or 0)
+            total_tokens += u.total_tokens or 0
         msg = resp.choices[0].message
         tcs = msg.tool_calls or []
         if not tcs:
             final = msg.content or ""
             break
-        messages.append({
-            "role": "assistant",
-            "content": msg.content or "",
-            "tool_calls": [
-                {"id": tc.id, "type": "function",
-                 "function": {"name": tc.function.name,
-                              "arguments": tc.function.arguments}}
-                for tc in tcs
-            ],
-        })
+        messages.append(
+            {
+                "role": "assistant",
+                "content": msg.content or "",
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments,
+                        },
+                    }
+                    for tc in tcs
+                ],
+            }
+        )
         for tc in tcs:
             try:
                 args = json.loads(tc.function.arguments or "{}")
@@ -172,23 +210,28 @@ def run_one(client, model, arm_name, arm_mod, task_id, prompt, oracle,
                 args, bad_calls = {}, bad_calls + 1
             calls.append(args)
             if tc.function.name != "session_search":
-                out, was_err = json.dumps(
-                    {"success": False, "error": "unknown tool"}), True
+                out, was_err = (
+                    json.dumps({"success": False, "error": "unknown tool"}),
+                    True,
+                )
             else:
                 out, was_err = exec_tool(arm_mod, args, main_db_path)
             if was_err:
                 bad_calls += 1
             out = elide(out, 30000)
-            messages.append(
-                {"role": "tool", "tool_call_id": tc.id, "content": out})
+            messages.append({"role": "tool", "tool_call_id": tc.id, "content": out})
     return {
-        "task": task_id, "arm": arm_name, "model": model,
+        "task": task_id,
+        "arm": arm_name,
+        "model": model,
         "ok": bool(oracle(final)) if final else False,
-        "n_tool_calls": len(calls), "bad_calls": bad_calls,
+        "n_tool_calls": len(calls),
+        "bad_calls": bad_calls,
         "first_prompt_tokens": first_prompt_tokens,
         "total_tokens": total_tokens,
         "wall_s": round(time.time() - t0, 1),
-        "calls": calls, "final": final[:2000],
+        "calls": calls,
+        "final": final[:2000],
     }
 
 
@@ -203,12 +246,13 @@ def main():
     args = ap.parse_args()
 
     from openai import OpenAI
-    client = OpenAI(base_url="https://openrouter.ai/api/v1",
-                    api_key=_load_api_key())
+
+    client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=_load_api_key())
 
     with tempfile.TemporaryDirectory(prefix="ss_abeval_") as td:
         tdir = Path(td)
         from fixtures import seed
+
         dbdir = tdir / "dbs"
         seed(dbdir)
         main_db = dbdir / "state.db"
@@ -241,26 +285,36 @@ def main():
                             continue
                         for attempt in range(3):
                             try:
-                                r = run_one(client, args.model, arm_name,
-                                            arm_mod, task_id, prompt, oracle,
-                                            main_db)
+                                r = run_one(
+                                    client,
+                                    args.model,
+                                    arm_name,
+                                    arm_mod,
+                                    task_id,
+                                    prompt,
+                                    oracle,
+                                    main_db,
+                                )
                                 # Provider noise: zero tool calls AND empty
                                 # final → one retry, identical on both arms.
-                                if (not r["final"].strip()
-                                        and r["n_tool_calls"] == 0
-                                        and attempt < 2):
-                                    print(f"NOISE-RETRY {task_id} {arm_name} "
-                                          f"rep{rep}")
+                                if (
+                                    not r["final"].strip()
+                                    and r["n_tool_calls"] == 0
+                                    and attempt < 2
+                                ):
+                                    print(f"NOISE-RETRY {task_id} {arm_name} rep{rep}")
                                     continue
                                 r["rep"] = rep
                                 r["base_ref"] = args.base
                                 r["cand_ref"] = args.cand
                                 f.write(json.dumps(r, ensure_ascii=False) + "\n")
                                 f.flush()
-                                print(f"{task_id} {arm_name} rep{rep}: "
-                                      f"ok={r['ok']} calls={r['n_tool_calls']} "
-                                      f"bad={r['bad_calls']} "
-                                      f"ptok={r['first_prompt_tokens']}")
+                                print(
+                                    f"{task_id} {arm_name} rep{rep}: "
+                                    f"ok={r['ok']} calls={r['n_tool_calls']} "
+                                    f"bad={r['bad_calls']} "
+                                    f"ptok={r['first_prompt_tokens']}"
+                                )
                                 break
                             except Exception as e:
                                 print(f"RETRY {task_id} {arm_name} rep{rep}: {e}")

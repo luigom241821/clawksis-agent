@@ -25,7 +25,6 @@ def _cache_file():
 
 
 class TestDiskHelpers:
-
     def test_expired_entry_is_miss(self):
         MM._local_probe_disk_put("server_type", "http://127.0.0.1:11434", "ollama")
         path = _cache_file()
@@ -43,7 +42,6 @@ class TestDiskHelpers:
         # And put() recovers by rewriting cleanly
         MM._local_probe_disk_put("server_type", "k", "vllm")
         assert MM._local_probe_disk_get("server_type", "k") == "vllm"
-
 
 
 class TestDetectLocalServerTypeDiskL2:
@@ -71,7 +69,9 @@ class TestDetectLocalServerTypeDiskL2:
         with patch("httpx.Client", return_value=client):
             result = MM.detect_local_server_type("http://127.0.0.1:8888/v1")
         assert result == "ollama"
-        assert MM._local_probe_disk_get("server_type", "http://127.0.0.1:8888") == "ollama"
+        assert (
+            MM._local_probe_disk_get("server_type", "http://127.0.0.1:8888") == "ollama"
+        )
 
     def test_failed_probe_not_persisted(self):
         _clear_in_proc()

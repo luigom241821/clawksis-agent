@@ -4,6 +4,7 @@ Git on POSIX is a declared gap ("uses system git by choice"). ``selected_git_env
 before every checkpoint git child, so a worker spawn per ask made each gateway /rollback or /diff
 pay seconds and timed those RPCs out on a loaded CI runner.
 """
+
 import pytest
 
 from clawk_cli._subprocess_compat import selected_git_env

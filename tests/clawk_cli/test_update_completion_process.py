@@ -27,7 +27,9 @@ def transition(tmp_path):
     (pm_package / "__init__.py").write_text("OLD_API = True\n")
 
     def git(*args):
-        return subprocess.run(["git", *args], cwd=root, text=True, capture_output=True, check=True).stdout.strip()
+        return subprocess.run(
+            ["git", *args], cwd=root, text=True, capture_output=True, check=True
+        ).stdout.strip()
 
     git("init", "-b", "main")
     git("config", "user.name", "Completion test")
@@ -61,7 +63,9 @@ def transition(tmp_path):
     )
     selected = tmp_path / "selected-python"
     venv.EnvBuilder(with_pip=False).create(selected)
-    selected_python = selected / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    selected_python = selected / (
+        "Scripts/python.exe" if os.name == "nt" else "bin/python"
+    )
     (pm_package / "environments.py").write_text(
         "import os, sys\n"
         "from pathlib import Path\n"
@@ -106,12 +110,18 @@ def transition(tmp_path):
     # modules its imports reach: update_lock (the tail claims the shared update lock) and
     # _subprocess_compat (it exposes PM's git for the builds) — neither exists in the OLD
     # tree, and a bare copy of source_completion.py would die on ModuleNotFoundError.
-    shutil.copy2(Path(update_completion.__file__).with_name("source_completion.py"),
-                 package / "source_completion.py")
-    shutil.copy2(Path(update_completion.__file__).with_name("update_lock.py"),
-                 package / "update_lock.py")
-    shutil.copy2(Path(update_completion.__file__).with_name("_subprocess_compat.py"),
-                 package / "_subprocess_compat.py")
+    shutil.copy2(
+        Path(update_completion.__file__).with_name("source_completion.py"),
+        package / "source_completion.py",
+    )
+    shutil.copy2(
+        Path(update_completion.__file__).with_name("update_lock.py"),
+        package / "update_lock.py",
+    )
+    shutil.copy2(
+        Path(update_completion.__file__).with_name("_subprocess_compat.py"),
+        package / "_subprocess_compat.py",
+    )
     (package / "gitlock.py").write_text(
         "from clawk_cli.probe import event\n"
         "convert_treeless_checkout_first = lambda root: event('convert')\n"
@@ -186,9 +196,15 @@ def transition(tmp_path):
     git("-c", "commit.gpgsign=false", "commit", "-m", "new incompatible runtime")
     new = git("rev-parse", "HEAD")
     request = {
-        "schema": 1, "source": str(root), "home": str(home), "branch": "main",
-        "desktop": True, "assume_yes": True, "gateway_mode": True,
-        "pre_update_version": "old", "snapshot_id": "active-before",
+        "schema": 1,
+        "source": str(root),
+        "home": str(home),
+        "branch": "main",
+        "desktop": True,
+        "assume_yes": True,
+        "gateway_mode": True,
+        "pre_update_version": "old",
+        "snapshot_id": "active-before",
         "sibling_snapshots": {"work": "work-before"},
         "plan": {"runtimes": [{"kind": "gateway", "profile": "work"}]},
         "receipt": {"update_id": "b" * 32, "outcome": "running", "steps": []},
@@ -198,7 +214,9 @@ def transition(tmp_path):
 
 
 @pytest.mark.parametrize("bom_boundary", [None, "request", "receipt"])
-def test_old_process_new_git_tree_completes_in_fresh_python(transition, tmp_path, bom_boundary):
+def test_old_process_new_git_tree_completes_in_fresh_python(
+    transition, tmp_path, bom_boundary
+):
     from clawk_cli import update_completion
 
     root, git, old, new, request = transition
@@ -224,9 +242,19 @@ def test_old_process_new_git_tree_completes_in_fresh_python(transition, tmp_path
         "print('RESULT=' + json.dumps(result))\n"
     )
     result = subprocess.run(
-        [sys.executable, "-c", driver, update_completion.__file__, new, json.dumps(request)],
-        cwd=root, env={**os.environ, "PYTHONPATH": str(root), "CLAWK_HOME": request["home"]},
-        capture_output=True, text=True, timeout=30,
+        [
+            sys.executable,
+            "-c",
+            driver,
+            update_completion.__file__,
+            new,
+            json.dumps(request),
+        ],
+        cwd=root,
+        env={**os.environ, "PYTHONPATH": str(root), "CLAWK_HOME": request["home"]},
+        capture_output=True,
+        text=True,
+        timeout=30,
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
@@ -235,21 +263,33 @@ def test_old_process_new_git_tree_completes_in_fresh_python(transition, tmp_path
     assert response["receipt"]["update_id"] == request["receipt"]["update_id"]
     assert response["windows_resume"]["resume_needed"] is False
     assert not (Path(request["home"]) / "completion-pending").exists()
-    events = [json.loads(line) for line in (root / "events.jsonl").read_text().splitlines()]
+    events = [
+        json.loads(line) for line in (root / "events.jsonl").read_text().splitlines()
+    ]
     by_name = {event["name"]: event for event in events}
     assert by_name["activate"]["pid"] == by_name["build"]["pid"]
     assert by_name["prepare"]["pid"] != by_name["build"]["pid"]
     # A treeless checkout converts before the dependency work, where a pre-fix Desktop's history
     # walks filled disks (#129514).
     names = [e["name"] for e in events]
-    assert by_name["convert"]["pid"] == by_name["prepare"]["pid"] and names.index("convert") < names.index("tools")
-    assert Path(by_name["build"]["python"]).is_relative_to(root.parent / "selected-python")
-    assert by_name["build"]["pid"] == by_name["maintenance"]["pid"] == by_name["restart"]["pid"]
+    assert by_name["convert"]["pid"] == by_name["prepare"]["pid"] and names.index(
+        "convert"
+    ) < names.index("tools")
+    assert Path(by_name["build"]["python"]).is_relative_to(
+        root.parent / "selected-python"
+    )
+    assert (
+        by_name["build"]["pid"]
+        == by_name["maintenance"]["pid"]
+        == by_name["restart"]["pid"]
+    )
     assert by_name["maintenance"]["snapshots"] == {"work": "work-before"}
     assert by_name["maintenance"]["pre_update_snapshot_id"] == "active-before"
     assert by_name["maintenance"]["pre_update_version"] == "日本 café"
     assert by_name["restart"]["profiles"] == ["work"]
-    assert [e["name"] for e in events].index("exit_marker") < [e["name"] for e in events].index("restart")
+    assert [e["name"] for e in events].index("exit_marker") < [
+        e["name"] for e in events
+    ].index("restart")
 
 
 def _run_cmd_update(monkeypatch, request, capsys):
@@ -277,7 +317,9 @@ def _run_cmd_update(monkeypatch, request, capsys):
 
 
 @pytest.mark.parametrize("code", [0, 23, -9])
-def test_missing_child_result_is_an_owed_completion_and_releases_lock(transition, monkeypatch, capsys, code):
+def test_missing_child_result_is_an_owed_completion_and_releases_lock(
+    transition, monkeypatch, capsys, code
+):
     """Review P2 (invariant 3): the tree already moved, so a completion that died without a result
     (exit 0/23 with no answer, SIGKILL/OOM) is an owed ``completion`` follow-up, never "Update failed".
 
@@ -288,7 +330,9 @@ def test_missing_child_result_is_an_owed_completion_and_releases_lock(transition
 
     root, _git, _old, _new, request = transition
     die = f"os._exit({code})" if code >= 0 else "os.kill(os.getpid(), 9)"
-    (root / "clawk_cli/update_completion.py").write_text(f"import os\n{die}\n", encoding="utf-8")
+    (root / "clawk_cli/update_completion.py").write_text(
+        f"import os\n{die}\n", encoding="utf-8"
+    )
     exit_code, receipt, out = _run_cmd_update(monkeypatch, request, capsys)
     assert exit_code == 0, out
     assert receipt["update_id"] == request["receipt"]["update_id"]
@@ -300,7 +344,9 @@ def test_missing_child_result_is_an_owed_completion_and_releases_lock(transition
     assert "Desktop app build owed: the update completion did not finish" in out
     # This process resumes what the lost child never did, and the gateway watcher hears success.
     assert request["windows_resume"]["resume_needed"] is False
-    assert (Path(request["home"]) / ".update_exit_code").read_text(encoding="utf-8-sig").strip() == "0"
+    assert (Path(request["home"]) / ".update_exit_code").read_text(
+        encoding="utf-8-sig"
+    ).strip() == "0"
     lock = update_lock.UpdateLock()
     assert lock.acquire()
     lock.release()
@@ -322,15 +368,21 @@ def test_completion_spawn_failure_after_commit_is_owed(transition, monkeypatch, 
     assert receipt["outcome"] == "success"
     assert [row["step"] for row in receipt["followups"]] == ["completion"]
     assert "No usable temporary directory" in receipt["followups"][0]["reason"]
-    assert (Path(request["home"]) / ".update_exit_code").read_text(encoding="utf-8-sig").strip() == "0"
+    assert (Path(request["home"]) / ".update_exit_code").read_text(
+        encoding="utf-8-sig"
+    ).strip() == "0"
 
 
-def test_lost_completion_with_parked_local_changes_stays_partial(transition, monkeypatch, capsys):
+def test_lost_completion_with_parked_local_changes_stays_partial(
+    transition, monkeypatch, capsys
+):
     """The one documented exception survives the owed path: parked user changes still exit 1."""
     from clawk_cli import update_cmd
 
     root, _git, _old, _new, request = transition
-    (root / "clawk_cli/update_completion.py").write_text("import os\nos._exit(0)\n", encoding="utf-8")
+    (root / "clawk_cli/update_completion.py").write_text(
+        "import os\nos._exit(0)\n", encoding="utf-8"
+    )
     notice = "⚠ Your local changes are parked in stash@{0}; re-apply them by hand."
     monkeypatch.setattr(update_cmd, "_unrestored_autostash_notice", lambda: notice)
     exit_code, receipt, out = _run_cmd_update(monkeypatch, request, capsys)
@@ -343,33 +395,49 @@ def test_lost_completion_with_parked_local_changes_stays_partial(transition, mon
 @pytest.mark.platforms("posix")
 @pytest.mark.parametrize("never_built", ["dependencies", "refused", "died"])
 @pytest.mark.parametrize("desktop", [True, False])
-def test_desktop_build_that_never_ran_is_named_for_the_handoff(transition, capsys, never_built, desktop):
+def test_desktop_build_that_never_ran_is_named_for_the_handoff(
+    transition, capsys, never_built, desktop
+):
     """Review P4 (F6): the hand-off scripts read ``Desktop app build owed:`` to tell the user the app is
     stale. The builder prints it only when the build fails; a run whose build never ran (dependency
     sync failed, the tail refused by the update lock, the prepared child died) must print it too."""
     scripts = Path(update_completion.__file__).parents[1] / "scripts/desktop-update"
-    for script in ("posix.sh", "windows.ps1"):  # the exact prefix the hand-off scripts match
-        assert "Desktop app build owed: " in (scripts / script).read_text(encoding="utf-8-sig")
+    for script in (
+        "posix.sh",
+        "windows.ps1",
+    ):  # the exact prefix the hand-off scripts match
+        assert "Desktop app build owed: " in (scripts / script).read_text(
+            encoding="utf-8-sig"
+        )
     assert update_completion.DESKTOP_BUILD_OWED == "Desktop app build owed:"
     root, _git, _old, _new, request = transition
     request["desktop"] = desktop
     shutil.copy2(update_completion.__file__, root / "clawk_cli/update_completion.py")
     if never_built == "dependencies":
-        (root / "pm/__init__.py").write_text("def sync_venv(**kw): raise RuntimeError('dependency refused')\n",
-                                            encoding="utf-8")
+        (root / "pm/__init__.py").write_text(
+            "def sync_venv(**kw): raise RuntimeError('dependency refused')\n",
+            encoding="utf-8",
+        )
     elif never_built == "refused":
         (root / "clawk_cli/source_completion.py").write_text(
             "def complete_source_checkout(*args, **kwargs):\n"
-            "    raise RuntimeError('an update is still running (pid 1); wait for it to exit')\n", encoding="utf-8")
+            "    raise RuntimeError('an update is still running (pid 1); wait for it to exit')\n",
+            encoding="utf-8",
+        )
     else:
         (root / "clawk_cli/source_completion.py").write_text(
             "import os\n"
             "def complete_source_checkout(*args, **kwargs): os.kill(os.getpid(), 9)  # posix-only test\n",
-            encoding="utf-8")
+            encoding="utf-8",
+        )
     result = update_completion.run_completion(request)
     out = capsys.readouterr().out
     assert result["exit_code"] == 0, out
-    owed = [line.strip() for line in out.splitlines() if line.strip().startswith("Desktop app build owed: ")]
+    owed = [
+        line.strip()
+        for line in out.splitlines()
+        if line.strip().startswith("Desktop app build owed: ")
+    ]
     assert len(owed) == (1 if desktop else 0), out
 
 
@@ -380,19 +448,33 @@ def test_unwritable_gateway_status_never_fails_a_settled_commit(tmp_path, monkey
 
     monkeypatch.setattr(venv_sync, "arm_completion", lambda root: None)
     receipt = {"update_id": "u1", "outcome": "success", "finished_at": "now"}
-    monkeypatch.setattr(update_completion, "_read_terminal_receipt", lambda request: receipt)
+    monkeypatch.setattr(
+        update_completion, "_read_terminal_receipt", lambda request: receipt
+    )
     home = tmp_path / "home-is-a-file"
     home.write_text("x", encoding="utf-8")
     result = tmp_path / "result.json"
-    request = {"source": str(tmp_path), "receipt": {"update_id": "u1"}, "gateway_mode": True,
-               "home": str(home), "pm_receipt": None}
-    assert update_completion._settle_after_commit(request, result, "dependencies", "pip failed") == 0
+    request = {
+        "source": str(tmp_path),
+        "receipt": {"update_id": "u1"},
+        "gateway_mode": True,
+        "home": str(home),
+        "pm_receipt": None,
+    }
+    assert (
+        update_completion._settle_after_commit(
+            request, result, "dependencies", "pip failed"
+        )
+        == 0
+    )
     answer = json.loads(result.read_text(encoding="utf-8-sig"))
     assert answer["exit_code"] == 0 and answer["receipt"] == receipt
 
 
 @pytest.mark.parametrize("cleanup_failure", [None, "kill", "wait"])
-def test_interrupt_after_child_success_demotes_gateway_marker_at_boundary(transition, monkeypatch, cleanup_failure):
+def test_interrupt_after_child_success_demotes_gateway_marker_at_boundary(
+    transition, monkeypatch, cleanup_failure
+):
     import io
     from types import SimpleNamespace
     from clawk_cli import main, update_cmd, update_lock, update_receipt
@@ -410,8 +492,11 @@ def test_interrupt_after_child_success_demotes_gateway_marker_at_boundary(transi
     monkeypatch.setattr(main, "_install_hangup_protection", lambda **kw: None)
     monkeypatch.setattr(main, "_finalize_update_output", lambda state: None)
     interrupted = False
-    cleanup_error = (OSError("retained-handle kill failed") if cleanup_failure == "kill"
-                     else subprocess.TimeoutExpired("completion", 5))
+    cleanup_error = (
+        OSError("retained-handle kill failed")
+        if cleanup_failure == "kill"
+        else subprocess.TimeoutExpired("completion", 5)
+    )
     waits = []
     children = []
     popen = subprocess.Popen
@@ -476,7 +561,9 @@ def test_interrupt_after_child_success_demotes_gateway_marker_at_boundary(transi
     assert "Interrupted after the code was updated" in stdout.getvalue()
     receipt = update_receipt.read_latest_receipt()
     assert receipt["update_id"] == request["receipt"]["update_id"]
-    assert receipt["outcome"] == "interrupted"  # the child was stopped before it closed the run
+    assert (
+        receipt["outcome"] == "interrupted"
+    )  # the child was stopped before it closed the run
     assert receipt["exit_code"] == 130
     assert receipt["stop_reason"].startswith("KeyboardInterrupt:")
     # The gateway watcher still hears the interrupt (a non-zero exit is fine for Ctrl-C).
@@ -524,7 +611,10 @@ def test_failed_build_after_commit_is_a_followup_and_later_steps_still_run(trans
     assert [f["step"] for f in result["receipt"]["followups"]] == ["build"]
     # The tail obligation stays armed so the next launch / `clawk update` rebuilds.
     assert (Path(request["home"]) / "completion-pending").read_text() == "owed"
-    events = [json.loads(line)["name"] for line in (root / "events.jsonl").read_text().splitlines()]
+    events = [
+        json.loads(line)["name"]
+        for line in (root / "events.jsonl").read_text().splitlines()
+    ]
     # Was "not in": the failed build no longer skips maintenance (config migration) ...
     assert "maintenance" in events
     # ... nor the gateway restart and its verification.
@@ -533,8 +623,10 @@ def test_failed_build_after_commit_is_a_followup_and_later_steps_still_run(trans
     assert "stamp" not in events
     # The gateway watcher hears success: the code it runs is the committed code.
     assert {"name": "exit_marker", "ok": True}.items() <= next(
-        json.loads(line) for line in (root / "events.jsonl").read_text().splitlines()
-        if json.loads(line)["name"] == "exit_marker").items()
+        json.loads(line)
+        for line in (root / "events.jsonl").read_text().splitlines()
+        if json.loads(line)["name"] == "exit_marker"
+    ).items()
 
 
 def test_prepare_failure_preserves_correlated_pm_receipt(transition):
@@ -546,7 +638,9 @@ def test_prepare_failure_preserves_correlated_pm_receipt(transition):
         "def sync_venv(**kw): raise RuntimeError('dependency refused')\n"
     )
     with (root / "pm/receipt.py").open("a") as stream:
-        stream.write("last_for_update = lambda update_id: {'update_id': update_id, 'outcome': 'refused', 'refusal': {'reason': 'dependency refused'}}\n")
+        stream.write(
+            "last_for_update = lambda update_id: {'update_id': update_id, 'outcome': 'refused', 'refusal': {'reason': 'dependency refused'}}\n"
+        )
     result = update_completion.run_completion(request)
     # Was exit 1 / no receipt: the dependency sync runs after the tree moved, so its failure is a
     # ``dependencies`` follow-up (A6) with the tail obligation armed — and the correlated pm
@@ -556,29 +650,45 @@ def test_prepare_failure_preserves_correlated_pm_receipt(transition):
     assert [f["step"] for f in result["receipt"]["followups"]] == ["dependencies"]
     assert "dependency refused" in result["receipt"]["followups"][0]["reason"]
     assert (Path(request["home"]) / "completion-pending").read_text() == "owed"
-    assert result["pm_receipt"] == {"update_id": request["receipt"]["update_id"], "outcome": "refused",
-                                    "refusal": {"reason": "dependency refused"}}
+    assert result["pm_receipt"] == {
+        "update_id": request["receipt"]["update_id"],
+        "outcome": "refused",
+        "refusal": {"reason": "dependency refused"},
+    }
 
 
-def test_bootstrap_does_not_initialize_old_site_packages(transition, tmp_path, monkeypatch):
+def test_bootstrap_does_not_initialize_old_site_packages(
+    transition, tmp_path, monkeypatch
+):
     from clawk_cli import update_completion
 
     root, _git, _old, _new, request = transition
     shutil.copy2(update_completion.__file__, root / "clawk_cli/update_completion.py")
     obsolete = tmp_path / "obsolete-python"
     venv.EnvBuilder(with_pip=False).create(obsolete)
-    site = obsolete / ("Lib/site-packages" if os.name == "nt" else
-                       f"lib/python{sys.version_info.major}.{sys.version_info.minor}/site-packages")
+    site = obsolete / (
+        "Lib/site-packages"
+        if os.name == "nt"
+        else f"lib/python{sys.version_info.major}.{sys.version_info.minor}/site-packages"
+    )
     trap = tmp_path / "old-site-loaded"
-    (site / "application.pth").write_text(f"import pathlib; pathlib.Path({str(trap)!r}).touch()\n")
-    monkeypatch.setattr(sys, "executable", str(obsolete / ("Scripts/python.exe" if os.name == "nt" else "bin/python")))
+    (site / "application.pth").write_text(
+        f"import pathlib; pathlib.Path({str(trap)!r}).touch()\n"
+    )
+    monkeypatch.setattr(
+        sys,
+        "executable",
+        str(obsolete / ("Scripts/python.exe" if os.name == "nt" else "bin/python")),
+    )
     result = update_completion.run_completion(request)
     assert result["exit_code"] == 0
     assert not trap.exists(), "preparation initialized the old application's .pth graph"
 
 
 @pytest.mark.parametrize("stage", ["prepare", "selected"])
-def test_progress_is_forwarded_before_held_stage_is_released(transition, monkeypatch, stage):
+def test_progress_is_forwarded_before_held_stage_is_released(
+    transition, monkeypatch, stage
+):
     import io
     import threading
     from clawk_cli import update_completion
@@ -596,10 +706,13 @@ def test_progress_is_forwarded_before_held_stage_is_released(transition, monkeyp
         "    Path('released').touch()\n"
     )
     module, definition = (
-        ("pm/__init__.py", "def sync_venv(**kw):\n") if stage == "prepare" else
-        ("clawk_cli/source_build.py", "def build_update_products(*a, **kw):\n")
+        ("pm/__init__.py", "def sync_venv(**kw):\n")
+        if stage == "prepare"
+        else ("clawk_cli/source_build.py", "def build_update_products(*a, **kw):\n")
     )
-    (root / module).write_text("import time\nfrom pathlib import Path\n" + definition + held_body)
+    (root / module).write_text(
+        "import time\nfrom pathlib import Path\n" + definition + held_body
+    )
     observed = threading.Event()
 
     class Output(io.StringIO):
@@ -622,9 +735,13 @@ def test_progress_is_forwarded_before_held_stage_is_released(transition, monkeyp
     worker = threading.Thread(target=run, daemon=True)
     worker.start()
     try:
-        assert observed.wait(10), f"{stage} progress remained buffered: {output.getvalue()}"
+        assert observed.wait(10), (
+            f"{stage} progress remained buffered: {output.getvalue()}"
+        )
         assert worker.is_alive(), "completion finished instead of waiting for release"
-        assert not released.exists(), "stage passed its gate before progress was observed"
+        assert not released.exists(), (
+            "stage passed its gate before progress was observed"
+        )
     finally:
         release.touch()
         worker.join(timeout=30)
@@ -653,8 +770,13 @@ def test_interactive_configuration_keeps_terminal_input(transition):
     )
     master, slave = pty.openpty()
     driver = "import json,runpy,sys; m=runpy.run_path(sys.argv[1]); raise SystemExit(m['run_completion'](json.loads(sys.argv[2]))['exit_code'])"
-    proc = subprocess.Popen([sys.executable, "-c", driver, update_completion.__file__, json.dumps(request)],
-                            cwd=root, stdin=slave, stdout=slave, stderr=slave)
+    proc = subprocess.Popen(
+        [sys.executable, "-c", driver, update_completion.__file__, json.dumps(request)],
+        cwd=root,
+        stdin=slave,
+        stdout=slave,
+        stderr=slave,
+    )
     os.close(slave)
     output = b""
     try:
@@ -665,7 +787,10 @@ def test_interactive_configuration_keeps_terminal_input(transition):
                 output += os.read(master, 8192)
         os.write(master, b"yes\n")
         assert proc.wait(timeout=20) == 0
-        events = [json.loads(line) for line in (root / "events.jsonl").read_text().splitlines()]
+        events = [
+            json.loads(line)
+            for line in (root / "events.jsonl").read_text().splitlines()
+        ]
         assert next(e for e in events if e["name"] == "answer")["value"] == "yes"
     finally:
         if proc.poll() is None:
@@ -693,8 +818,8 @@ def test_interrupt_reaps_completion_descendants_before_return(transition, monkey
 
     class Interrupt(io.StringIO):
         def write(self, value):
-            if 'READY ' in value:
-                pids.append(int(value.split('READY ')[1].strip()))
+            if "READY " in value:
+                pids.append(int(value.split("READY ")[1].strip()))
                 raise KeyboardInterrupt()
             return super().write(value)
 
@@ -705,7 +830,10 @@ def test_interrupt_reaps_completion_descendants_before_return(transition, monkey
         assert pids
         deadline = time.monotonic() + 3
         while time.monotonic() < deadline:
-            if not psutil.pid_exists(pids[0]) or psutil.Process(pids[0]).status() == psutil.STATUS_ZOMBIE:
+            if (
+                not psutil.pid_exists(pids[0])
+                or psutil.Process(pids[0]).status() == psutil.STATUS_ZOMBIE
+            ):
                 break
             time.sleep(0.02)
         else:
@@ -718,7 +846,9 @@ def test_interrupt_reaps_completion_descendants_before_return(transition, monkey
 
 @pytest.mark.platforms("windows")
 @pytest.mark.parametrize("failure", ["launch", "timeout", "nonzero"])
-def test_taskkill_failure_still_reaps_child_and_preserves_interrupt(tmp_path, monkeypatch, failure):
+def test_taskkill_failure_still_reaps_child_and_preserves_interrupt(
+    tmp_path, monkeypatch, failure
+):
     """Only native Windows exercises taskkill dispatch and retained-handle kill."""
     import io
     from clawk_cli import update_completion
@@ -728,7 +858,11 @@ def test_taskkill_failure_still_reaps_child_and_preserves_interrupt(tmp_path, mo
     (package / "update_completion.py").write_text(
         "import time\nprint('READY', flush=True)\ntime.sleep(60)\n"
     )
-    request = {"source": str(tmp_path), "home": str(tmp_path), "receipt": {"update_id": "test"}}
+    request = {
+        "source": str(tmp_path),
+        "home": str(tmp_path),
+        "receipt": {"update_id": "test"},
+    }
     interrupted = KeyboardInterrupt("cancel completion")
     child = None
     waits = []
@@ -773,11 +907,16 @@ def test_taskkill_failure_still_reaps_child_and_preserves_interrupt(tmp_path, mo
         with pytest.raises(KeyboardInterrupt) as error:
             update_completion.run_completion(request)
         assert error.value is interrupted
-        expected = {"launch": FileNotFoundError, "timeout": subprocess.TimeoutExpired,
-                    "nonzero": subprocess.CalledProcessError}[failure]
+        expected = {
+            "launch": FileNotFoundError,
+            "timeout": subprocess.TimeoutExpired,
+            "nonzero": subprocess.CalledProcessError,
+        }[failure]
         assert isinstance(error.value.__cause__, expected)
         assert child is not None
-        assert child.poll() is not None, "retained completion child survived failed taskkill"
+        assert child.poll() is not None, (
+            "retained completion child survived failed taskkill"
+        )
         assert child.stdout.closed
         assert waits and all(timeout is not None and timeout > 0 for timeout in waits)
     finally:
@@ -789,12 +928,18 @@ def test_taskkill_failure_still_reaps_child_and_preserves_interrupt(tmp_path, mo
 
 @pytest.mark.parametrize("encoding", ["utf-8", "utf-8-sig"])
 @pytest.mark.parametrize("correlated", [False, True])
-def test_only_correlated_terminal_receipt_can_acknowledge_success(transition, encoding, correlated):
+def test_only_correlated_terminal_receipt_can_acknowledge_success(
+    transition, encoding, correlated
+):
     from clawk_cli.update_completion import run_completion
 
     root, _git, _old, _new, request = transition
-    receipt = {"update_id": request["receipt"]["update_id"] if correlated else "wrong",
-               "outcome": "success", "finished_at": "now", "detail": "日本 café"}
+    receipt = {
+        "update_id": request["receipt"]["update_id"] if correlated else "wrong",
+        "outcome": "success",
+        "finished_at": "now",
+        "detail": "日本 café",
+    }
     (root / "clawk_cli/update_completion.py").write_text(
         "import json, pathlib, sys\n"
         "request = json.loads(pathlib.Path(sys.argv[1]).read_text())\n"

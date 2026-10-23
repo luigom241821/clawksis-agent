@@ -1,4 +1,5 @@
 """Diagnostic-only wakes execute while their unsolicited free-form reply stays private."""
+
 import asyncio
 from unittest.mock import AsyncMock
 
@@ -27,9 +28,13 @@ class Adapter(BasePlatformAdapter):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("suppressed", [False, True])
-async def test_diagnostic_wake_executes_without_final_or_error_echo(tmp_path, monkeypatch, suppressed):
+async def test_diagnostic_wake_executes_without_final_or_error_echo(
+    tmp_path, monkeypatch, suppressed
+):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    (tmp_path / "config.yaml").write_text(f"display: {{suppress_warning_notifications: {str(suppressed).lower()}}}")
+    (tmp_path / "config.yaml").write_text(
+        f"display: {{suppress_warning_notifications: {str(suppressed).lower()}}}"
+    )
     adapter = Adapter(PlatformConfig(enabled=True), Platform.TELEGRAM)
     adapter.sent = []
     adapter._start_typing_refresh = lambda *a: None
@@ -38,11 +43,19 @@ async def test_diagnostic_wake_executes_without_final_or_error_echo(tmp_path, mo
     adapter._fire_post_delivery_callback = AsyncMock()
     adapter._flush_text_debounce_now = AsyncMock()
     adapter._finish_session_task = lambda *a: None
-    adapter.send_final_ledgered = AsyncMock(return_value=(SendResult(success=True), adapter))
+    adapter.send_final_ledgered = AsyncMock(
+        return_value=(SendResult(success=True), adapter)
+    )
     source = SessionSource(platform=Platform.TELEGRAM, chat_id="chat")
-    event = MessageEvent(text="internal diagnostic", source=source, internal=True,
-                         metadata={"notification_category": "diagnostic"})
-    adapter._message_handler = AsyncMock(return_value="I repeat the technical diagnostic")
+    event = MessageEvent(
+        text="internal diagnostic",
+        source=source,
+        internal=True,
+        metadata={"notification_category": "diagnostic"},
+    )
+    adapter._message_handler = AsyncMock(
+        return_value="I repeat the technical diagnostic"
+    )
     await adapter._process_message_background(event, "session")
     assert adapter._message_handler.await_count == 1
     assert adapter.send_final_ledgered.await_count == (0 if suppressed else 1)

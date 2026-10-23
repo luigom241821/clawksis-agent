@@ -34,9 +34,7 @@ def test_plugins_manage_profile_reads_that_profiles_dir(tmp_path, monkeypatch):
     )
 
     assert "result" in resp, resp
-    user_rows = [
-        p for p in resp["result"]["plugins"] if p.get("source") == "user"
-    ]
+    user_rows = [p for p in resp["result"]["plugins"] if p.get("source") == "user"]
     assert "bota-only-plugin" in [p["name"] for p in user_rows]
 
     # The override must not leak: an unscoped call after this one resolves the

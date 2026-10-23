@@ -46,8 +46,10 @@ def two_profile_homes(tmp_path, monkeypatch):
     # Process home is the LAUNCH profile's.
     monkeypatch.setenv("CLAWK_HOME", str(home_a))
     monkeypatch.setattr(
-        wss, "_session_db_path_for_profile",
-        lambda profile: (home_b if profile == "b" else home_a) / "state.db")
+        wss,
+        "_session_db_path_for_profile",
+        lambda profile: (home_b if profile == "b" else home_a) / "state.db",
+    )
     monkeypatch.setattr(wss, "_last_auto_archive_check", {})
     return home_b
 
@@ -68,4 +70,5 @@ def test_auto_archive_uses_the_swept_profiles_own_retention_config(two_profile_h
     wss._maybe_auto_archive_for_profile("b")
 
     assert _archived(home_b / "state.db"), (
-        "profile b's store was swept with another profile's sessions.auto_archive_days")
+        "profile b's store was swept with another profile's sessions.auto_archive_days"
+    )

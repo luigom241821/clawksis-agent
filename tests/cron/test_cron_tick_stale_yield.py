@@ -45,8 +45,13 @@ def _wait_until(predicate, timeout=10.0, interval=0.005):
 
 
 def _gate_mocks(
-    monkeypatch, *, owns: bool, active: bool, skew=SKEW,
-    holder_sha: str | None = DISK_SHA, holder_status_stale: bool = False,
+    monkeypatch,
+    *,
+    owns: bool,
+    active: bool,
+    skew=SKEW,
+    holder_sha: str | None = DISK_SHA,
+    holder_status_stale: bool = False,
 ):
     """Point the yield gate's process and holder-status probes at fixed answers."""
     from gateway import status as gateway_status
@@ -149,7 +154,6 @@ class TestTickYieldGate:
         assert scheduler_mod.tick(verbose=False) == 0
 
 
-
 class TestYieldedTickIsAFailedTick:
     """(e) A yielded tick must not be recorded as a healthy tick."""
 
@@ -161,16 +165,21 @@ class TestYieldedTickIsAFailedTick:
         stop = threading.Event()
         prov = InProcessCronScheduler()
 
-        with patch(
-            "cron.scheduler.tick",
-            side_effect=scheduler_mod.CronTickYielded(SKEW[0], SKEW[1]),
-        ), patch(
-            "cron.jobs.record_ticker_heartbeat",
-            side_effect=lambda success=False: beats.append(success),
-        ), patch(
-            "cron.jobs.record_ticker_error",
-            side_effect=lambda msg: errors.append(msg),
-        ), patch("cron.jobs.clear_ticker_error") as clear:
+        with (
+            patch(
+                "cron.scheduler.tick",
+                side_effect=scheduler_mod.CronTickYielded(SKEW[0], SKEW[1]),
+            ),
+            patch(
+                "cron.jobs.record_ticker_heartbeat",
+                side_effect=lambda success=False: beats.append(success),
+            ),
+            patch(
+                "cron.jobs.record_ticker_error",
+                side_effect=lambda msg: errors.append(msg),
+            ),
+            patch("cron.jobs.clear_ticker_error") as clear,
+        ):
             t = threading.Thread(
                 target=prov.start, args=(stop,), kwargs={"interval": 0}, daemon=True
             )
@@ -201,10 +210,15 @@ class TestYieldedTickIsAFailedTick:
                 raise scheduler_mod.CronTickYielded(SKEW[0], SKEW[1])
             return 0
 
-        with patch("cron.scheduler.tick", side_effect=_tick), patch(
-            "cron.jobs.record_ticker_heartbeat",
-            side_effect=lambda success=False: beats.append(success),
-        ), patch("cron.jobs.record_ticker_error"), patch("cron.jobs.clear_ticker_error"):
+        with (
+            patch("cron.scheduler.tick", side_effect=_tick),
+            patch(
+                "cron.jobs.record_ticker_heartbeat",
+                side_effect=lambda success=False: beats.append(success),
+            ),
+            patch("cron.jobs.record_ticker_error"),
+            patch("cron.jobs.clear_ticker_error"),
+        ):
             t = threading.Thread(
                 target=prov.start, args=(stop,), kwargs={"interval": 0}, daemon=True
             )
@@ -216,7 +230,6 @@ class TestYieldedTickIsAFailedTick:
             t.join(timeout=5)
 
         assert not t.is_alive()
-
 
     def test_multiplex_yield_in_one_profile_does_not_cancel_siblings(self, tmp_path):
         """Multiplex loop: a yield for profile A (its fresh gateway owns the
@@ -258,10 +271,11 @@ class TestYieldedTickIsAFailedTick:
 
             per_home_errors[str(get_clawk_home())].append(msg)
 
-        with patch("cron.scheduler.tick", side_effect=_tick), patch(
-            "cron.jobs.record_ticker_heartbeat", side_effect=_beat
-        ), patch("cron.jobs.record_ticker_error", side_effect=_err), patch(
-            "cron.jobs.clear_ticker_error"
+        with (
+            patch("cron.scheduler.tick", side_effect=_tick),
+            patch("cron.jobs.record_ticker_heartbeat", side_effect=_beat),
+            patch("cron.jobs.record_ticker_error", side_effect=_err),
+            patch("cron.jobs.clear_ticker_error"),
         ):
             t = threading.Thread(
                 target=prov.start,

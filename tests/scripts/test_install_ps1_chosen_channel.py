@@ -3,6 +3,7 @@
 The Windows twin of test_install_sh_chosen_channel: the record comes from Clawksis's
 own writer, and the installer's pre-Python reader must find it by this install's id.
 """
+
 from pathlib import Path
 import shutil
 import subprocess
@@ -26,16 +27,33 @@ def test_installer_reads_the_channel_clawk_recorded(tmp_path, monkeypatch, chann
     install.mkdir(parents=True)
     monkeypatch.setenv("CLAWK_HOME", str(home))
     set_install_channel(channel, install)
-    script = (f". '{ROOT / 'scripts' / 'install.ps1'}' -InstallDir '{install}' -ClawkHome '{home}'\n"
-              "Write-Output \"channel=$(Get-ChosenChannel)\"\n")
+    script = (
+        f". '{ROOT / 'scripts' / 'install.ps1'}' -InstallDir '{install}' -ClawkHome '{home}'\n"
+        'Write-Output "channel=$(Get-ChosenChannel)"\n'
+    )
     wrapper = tmp_path / "read.ps1"
     wrapper.write_text(script, encoding="utf-8")
 
     result = subprocess.run(
-        [powershell, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(wrapper)],
-        check=False, capture_output=True, text=True, encoding="utf-8", errors="replace",
-        stdin=subprocess.DEVNULL, timeout=120,
+        [
+            powershell,
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(wrapper),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        stdin=subprocess.DEVNULL,
+        timeout=120,
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert f"channel={channel}" in result.stdout.splitlines(), result.stdout + result.stderr
+    assert f"channel={channel}" in result.stdout.splitlines(), (
+        result.stdout + result.stderr
+    )

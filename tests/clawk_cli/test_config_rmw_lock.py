@@ -27,7 +27,9 @@ def client(monkeypatch, _isolate_clawk_home):
     from clawk_cli.config import load_config, save_config
     from clawk_cli.web_server import _SESSION_HEADER_NAME, _SESSION_TOKEN, app
 
-    monkeypatch.setattr("clawk_cli.model_cost_guard.expensive_model_warning", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        "clawk_cli.model_cost_guard.expensive_model_warning", lambda *_a, **_k: None
+    )
     cfg = load_config()
     cfg["model"] = {"provider": "openrouter", "default": "openai/gpt-5.5"}
     save_config(cfg)
@@ -37,7 +39,9 @@ def client(monkeypatch, _isolate_clawk_home):
     return client
 
 
-def _race_second_writer_into_first_writers_save(monkeypatch, first, second, timeout: float = 1.5):
+def _race_second_writer_into_first_writers_save(
+    monkeypatch, first, second, timeout: float = 1.5
+):
     """Deterministic lost-write interleaving: ``first`` runs until it reaches ``save_config``,
     then ``second`` is started and ``first`` waits (up to ``timeout``) for ``second`` to
     ``load_config`` before saving. Unlocked, ``second`` loads the stale document and its save
@@ -70,8 +74,10 @@ def _race_second_writer_into_first_writers_save(monkeypatch, first, second, time
     monkeypatch.setattr(cfg_mod, "load_config", spied_load)
 
     results: list = [None, None]
-    threads = [threading.Thread(target=lambda: results.__setitem__(0, first())),
-               threading.Thread(target=lambda: results.__setitem__(1, second()))]
+    threads = [
+        threading.Thread(target=lambda: results.__setitem__(0, first())),
+        threading.Thread(target=lambda: results.__setitem__(1, second())),
+    ]
     threads[0].start()
     assert first_at_save.wait(30), "first writer never reached save_config"
     threads[1].start()
@@ -82,19 +88,31 @@ def _race_second_writer_into_first_writers_save(monkeypatch, first, second, time
 
 def _on_disk() -> dict:
     from clawk_constants import get_clawk_home
-    return yaml.safe_load((get_clawk_home() / "config.yaml").read_text(encoding="utf-8"))
+
+    return yaml.safe_load(
+        (get_clawk_home() / "config.yaml").read_text(encoding="utf-8")
+    )
 
 
-def test_custom_endpoint_upsert_racing_config_autosave_keeps_both_writes(client, monkeypatch):
+def test_custom_endpoint_upsert_racing_config_autosave_keeps_both_writes(
+    client, monkeypatch
+):
     """Saving a custom endpoint (sync-def handler on a worker thread) while the settings-page
     autosave (PUT /api/config) is in flight: the new ``providers`` entry AND the autosaved field
     both survive."""
     autosave = lambda: client.put(
-        "/api/config", json={"config": {"display": {"personality": "canary"}}})
+        "/api/config", json={"config": {"display": {"personality": "canary"}}}
+    )
     upsert = lambda: client.post(
         "/api/providers/custom-endpoints",
-        json={"id": "racebox", "name": "racebox", "base_url": "http://racebox:8000/v1", "model": "race-model",
-              "discover_models": False})
+        json={
+            "id": "racebox",
+            "name": "racebox",
+            "base_url": "http://racebox:8000/v1",
+            "model": "race-model",
+            "discover_models": False,
+        },
+    )
 
     r1, r2 = _race_second_writer_into_first_writers_save(monkeypatch, autosave, upsert)
     assert r1.status_code == 200, r1.text
@@ -105,20 +123,31 @@ def test_custom_endpoint_upsert_racing_config_autosave_keeps_both_writes(client,
     assert on_disk["display"]["personality"] == "canary"
 
 
-def test_custom_endpoint_activate_racing_moa_save_keeps_both_writes(client, monkeypatch):
+def test_custom_endpoint_activate_racing_moa_save_keeps_both_writes(
+    client, monkeypatch
+):
     """Two worker-thread writers (custom-endpoint activate vs MoA save) serialize through the
     same lock — the ``model`` switch and the ``moa`` section are both on disk afterwards."""
     from clawk_cli.config import load_config, save_config
 
     cfg = load_config()
-    cfg["providers"] = {"racebox": {"base_url": "http://racebox:8000/v1", "model": "race-model", "api_key": "k"}}
+    cfg["providers"] = {
+        "racebox": {
+            "base_url": "http://racebox:8000/v1",
+            "model": "race-model",
+            "api_key": "k",
+        }
+    }
     save_config(cfg)
 
     activate = lambda: client.post("/api/providers/custom-endpoints/racebox/activate")
     moa = lambda: client.put(
         "/api/model/moa",
-        json={"reference_models": [{"provider": "openrouter", "model": "openai/gpt-5.5"}],
-              "aggregator": {"provider": "openrouter", "model": "openai/gpt-5.5"}})
+        json={
+            "reference_models": [{"provider": "openrouter", "model": "openai/gpt-5.5"}],
+            "aggregator": {"provider": "openrouter", "model": "openai/gpt-5.5"},
+        },
+    )
 
     r1, r2 = _race_second_writer_into_first_writers_save(monkeypatch, activate, moa)
     assert r1.status_code == 200, r1.text

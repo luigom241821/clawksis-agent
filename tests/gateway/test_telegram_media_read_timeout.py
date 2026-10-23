@@ -61,7 +61,9 @@ def _stub_download(monkeypatch, size: int):
 
     from tools import url_safety
 
-    monkeypatch.setattr(url_safety, "create_ssrf_safe_async_client", lambda **kw: _Client())
+    monkeypatch.setattr(
+        url_safety, "create_ssrf_safe_async_client", lambda **kw: _Client()
+    )
 
 
 @pytest.mark.asyncio
@@ -76,7 +78,9 @@ async def test_send_image_url_path_uses_media_read_timeout(adapter):
 
     adapter._bot.send_photo = AsyncMock(side_effect=_photo)
 
-    result = await adapter.send_image("123", "https://example.com/pic.png", caption="hi")
+    result = await adapter.send_image(
+        "123", "https://example.com/pic.png", caption="hi"
+    )
 
     assert result.success
     assert calls[0]["read_timeout"] == tg._MEDIA_SEND_READ_TIMEOUT
@@ -98,7 +102,9 @@ async def test_send_image_upload_fallback_uses_media_read_timeout(adapter, monke
 
     adapter._bot.send_photo = AsyncMock(side_effect=_photo)
 
-    result = await adapter.send_image("123", "https://example.com/big.png", caption="hi")
+    result = await adapter.send_image(
+        "123", "https://example.com/big.png", caption="hi"
+    )
 
     assert result.success
     assert len(calls) == 2, "expected the byte-upload fallback to run"

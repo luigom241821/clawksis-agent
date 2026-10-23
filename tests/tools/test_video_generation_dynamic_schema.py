@@ -84,8 +84,6 @@ class _ImageOnlyProvider(VideoGenProvider):
 
 
 class TestDynamicSchemaBuilder:
-
-
     def test_builder_wired_into_registry(self):
         from tools.registry import discover_builtin_tools, registry
 
@@ -123,12 +121,14 @@ class TestDynamicSchemaBuilder:
                 return True
 
             def list_models(self):
-                return [{
-                    "id": "gemini-like",
-                    "modalities": ["image"],
-                    "min_duration": 3,
-                    "max_duration": 10,
-                }]
+                return [
+                    {
+                        "id": "gemini-like",
+                        "modalities": ["image"],
+                        "min_duration": 3,
+                        "max_duration": 10,
+                    }
+                ]
 
             def default_model(self):
                 return "gemini-like"

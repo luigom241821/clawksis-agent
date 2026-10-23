@@ -22,12 +22,23 @@ from tools.registry import tool_error
 logger = logging.getLogger("tools.code_execution_tool")
 
 # Terminal parameters that must not be used from ephemeral sandbox scripts.
-_TERMINAL_BLOCKED_PARAMS = {"background", "pty", "notify", "notify_on_complete", "watch_patterns", "heartbeat", "persist_on_release"}
+_TERMINAL_BLOCKED_PARAMS = {
+    "background",
+    "pty",
+    "notify",
+    "notify_on_complete",
+    "watch_patterns",
+    "heartbeat",
+    "persist_on_release",
+}
 
 
 def _default_dispatch(task_id):
     from model_tools import handle_function_call
-    return lambda tool_name, tool_args: handle_function_call(tool_name, tool_args, task_id=task_id)
+
+    return lambda tool_name, tool_args: handle_function_call(
+        tool_name, tool_args, task_id=task_id
+    )
 
 
 def _private_dirs_cmd(root: str, *subdirs: str) -> str:
@@ -53,8 +64,15 @@ def _execute_checked(env, cmd: str, what: str, *, timeout: int, **kwargs) -> dic
     return result
 
 
-def _remote_write(env, remote_path: str, content: str, *, atomic: bool = False,
-                  timeout: int = 30, check: bool = False):
+def _remote_write(
+    env,
+    remote_path: str,
+    content: str,
+    *,
+    atomic: bool = False,
+    timeout: int = 30,
+    check: bool = False,
+):
     """Write *content* owner-only to *remote_path*; returns the execute() result
     (``check=True`` raises on failure via _execute_checked).
 
@@ -67,12 +85,20 @@ def _remote_write(env, remote_path: str, content: str, *, atomic: bool = False,
     relies on."""
     encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
     target = shlex.quote(remote_path)
-    write = (f"base64 -d > {target}.tmp && mv -f {target}.tmp {target}"
-             if atomic else f"base64 -d > {target}")
+    write = (
+        f"base64 -d > {target}.tmp && mv -f {target}.tmp {target}"
+        if atomic
+        else f"base64 -d > {target}"
+    )
     cmd = f"umask 077 && {write}"
     if check:
-        return _execute_checked(env, cmd, f"remote file ship for {remote_path!r}",
-                                timeout=timeout, stdin_data=encoded)
+        return _execute_checked(
+            env,
+            cmd,
+            f"remote file ship for {remote_path!r}",
+            timeout=timeout,
+            stdin_data=encoded,
+        )
     return env.execute(cmd, cwd="/", timeout=timeout, stdin_data=encoded)
 
 
@@ -84,19 +110,31 @@ def _rpc_token_ok(request: dict, rpc_token: str) -> bool:
     )
 
 
-def _handle_rpc_request(request: dict, *, allowed_tools: frozenset, tool_call_counter: list,
-                        max_tool_calls: int, dispatch, tool_call_log: list, call_start: float,
-                        where: str) -> str:
+def _handle_rpc_request(
+    request: dict,
+    *,
+    allowed_tools: frozenset,
+    tool_call_counter: list,
+    max_tool_calls: int,
+    dispatch,
+    tool_call_log: list,
+    call_start: float,
+    where: str,
+) -> str:
     """Enforce allow-list + budget, then dispatch one authenticated request. Only a dispatched
     call consumes budget and is logged; refusals are free."""
     tool_name = request.get("tool", "")
     tool_args = request.get("args", {})
     if tool_name not in allowed_tools:
-        return tool_error(f"Tool '{tool_name}' is not available in execute_code. "
-                          f"Available: {', '.join(sorted(allowed_tools))}")
+        return tool_error(
+            f"Tool '{tool_name}' is not available in execute_code. "
+            f"Available: {', '.join(sorted(allowed_tools))}"
+        )
     if tool_call_counter[0] >= max_tool_calls:
-        return tool_error(f"Tool call limit reached ({max_tool_calls}). "
-                          "No more tool calls allowed in this execution.")
+        return tool_error(
+            f"Tool call limit reached ({max_tool_calls}). "
+            "No more tool calls allowed in this execution."
+        )
     if tool_name == "terminal" and isinstance(tool_args, dict):
         for param in _TERMINAL_BLOCKED_PARAMS:
             tool_args.pop(param, None)
@@ -108,8 +146,11 @@ def _handle_rpc_request(request: dict, *, allowed_tools: frozenset, tool_call_co
         logger.error("Tool call failed in %s: %s", where, exc, exc_info=True)
         result = tool_error(str(exc))
     tool_call_counter[0] += 1
-    entry = {"tool": tool_name, "args_preview": str(tool_args)[:80],
-             "duration": round(time.monotonic() - call_start, 2)}
+    entry = {
+        "tool": tool_name,
+        "args_preview": str(tool_args)[:80],
+        "duration": round(time.monotonic() - call_start, 2),
+    }
     error = _result_error(result)
     if error:
         entry["error"] = error
@@ -119,7 +160,11 @@ def _handle_rpc_request(request: dict, *, allowed_tools: frozenset, tool_call_co
 
 def _result_error(result) -> str:
     """The ``error`` text of a JSON-object tool result, else ``""``."""
-    if not isinstance(result, str) or not result.startswith("{") or '"error"' not in result:
+    if (
+        not isinstance(result, str)
+        or not result.startswith("{")
+        or '"error"' not in result
+    ):
         return ""
     try:
         body = json.loads(result)
@@ -133,12 +178,24 @@ def tool_errors_since(tool_call_log: list, start: int = 0) -> list:
     """Failed in-script tool calls since *start*, for the execute_code result: a script that
     ignores a helper's ``{"error": ...}`` return would otherwise report plain success while
     the write/patch it relied on never happened."""
-    return [{"tool": e["tool"], "error": e["error"]} for e in tool_call_log[start:] if e.get("error")][:5]
+    return [
+        {"tool": e["tool"], "error": e["error"]}
+        for e in tool_call_log[start:]
+        if e.get("error")
+    ][:5]
 
 
-def _rpc_server_loop(server_sock: socket.socket, task_id: str, tool_call_log: list,
-                     tool_call_counter: list, max_tool_calls: int, allowed_tools: frozenset,
-                     stop_event: threading.Event, rpc_token: str, dispatch=None):
+def _rpc_server_loop(
+    server_sock: socket.socket,
+    task_id: str,
+    tool_call_log: list,
+    tool_call_counter: list,
+    max_tool_calls: int,
+    allowed_tools: frozenset,
+    stop_event: threading.Event,
+    rpc_token: str,
+    dispatch=None,
+):
     """Accept one client and serve newline-delimited JSON requests until it disconnects, idles
     300s, or the call limit is reached. ``tool_call_counter`` is a mutable ``[int]``. ``dispatch``
     overrides how an allowed, budgeted call runs: per-call sandboxes use the default (the thread
@@ -178,11 +235,20 @@ def _rpc_server_loop(server_sock: socket.socket, task_id: str, tool_call_log: li
                 except (json.JSONDecodeError, UnicodeDecodeError) as exc:
                     resp = tool_error(f"Invalid RPC request: {exc}")
                 else:
-                    resp = _handle_rpc_request(
-                        request, allowed_tools=allowed_tools, tool_call_counter=tool_call_counter,
-                        max_tool_calls=max_tool_calls, dispatch=dispatch, tool_call_log=tool_call_log,
-                        call_start=call_start, where="sandbox",
-                    ) if _rpc_token_ok(request, rpc_token) else tool_error("Unauthorized RPC request")
+                    resp = (
+                        _handle_rpc_request(
+                            request,
+                            allowed_tools=allowed_tools,
+                            tool_call_counter=tool_call_counter,
+                            max_tool_calls=max_tool_calls,
+                            dispatch=dispatch,
+                            tool_call_log=tool_call_log,
+                            call_start=call_start,
+                            where="sandbox",
+                        )
+                        if _rpc_token_ok(request, rpc_token)
+                        else tool_error("Unauthorized RPC request")
+                    )
                 conn.sendall((resp + "\n").encode())
     except TimeoutError:
         logger.debug("RPC listener socket timeout")
@@ -196,9 +262,17 @@ def _rpc_server_loop(server_sock: socket.socket, task_id: str, tool_call_log: li
                 logger.debug("RPC conn close error: %s", e)
 
 
-def _rpc_poll_loop(env, rpc_dir: str, task_id: str, tool_call_log: list, tool_call_counter: list,
-                   max_tool_calls: int, allowed_tools: frozenset, stop_event: threading.Event,
-                   rpc_token: str):
+def _rpc_poll_loop(
+    env,
+    rpc_dir: str,
+    task_id: str,
+    tool_call_log: list,
+    tool_call_counter: list,
+    max_tool_calls: int,
+    allowed_tools: frozenset,
+    stop_event: threading.Event,
+    rpc_token: str,
+):
     """Poll the remote filesystem for request files and answer them. Background thread; each
     ``env.execute()`` is an independent process, so this is safe alongside the script-execution
     thread. Malformed or unauthorized requests are removed without a response."""
@@ -207,13 +281,18 @@ def _rpc_poll_loop(env, rpc_dir: str, task_id: str, tool_call_log: list, tool_ca
     quoted_rpc_dir = shlex.quote(rpc_dir)
     while not stop_event.is_set():
         try:
-            ls_result = env.execute(f"ls -1 {quoted_rpc_dir}/req_* 2>/dev/null || true", cwd="/", timeout=10)
+            ls_result = env.execute(
+                f"ls -1 {quoted_rpc_dir}/req_* 2>/dev/null || true", cwd="/", timeout=10
+            )
             output = ls_result.get("output", "").strip()
             if not output:
                 stop_event.wait(poll_interval)
                 continue
-            req_files = sorted(f for f in (line.strip() for line in output.split("\n"))
-                               if f and not f.endswith(".tmp") and "/req_" in f)
+            req_files = sorted(
+                f
+                for f in (line.strip() for line in output.split("\n"))
+                if f and not f.endswith(".tmp") and "/req_" in f
+            )
             for req_file in req_files:
                 if stop_event.is_set():
                     break
@@ -239,14 +318,24 @@ def _rpc_poll_loop(env, rpc_dir: str, task_id: str, tool_call_log: list, tool_ca
                     env.execute(f"rm -f {quoted_req_file}", cwd="/", timeout=5)
                     continue
                 tool_result = _handle_rpc_request(
-                    request, allowed_tools=allowed_tools, tool_call_counter=tool_call_counter,
-                    max_tool_calls=max_tool_calls, dispatch=dispatch, tool_call_log=tool_call_log,
-                    call_start=call_start, where="remote sandbox",
+                    request,
+                    allowed_tools=allowed_tools,
+                    tool_call_counter=tool_call_counter,
+                    max_tool_calls=max_tool_calls,
+                    dispatch=dispatch,
+                    tool_call_log=tool_call_log,
+                    call_start=call_start,
+                    where="remote sandbox",
                 )
                 # Atomic (tmp + rename) and owner-only; results carry tool output
                 # on a shared-host backend.
-                _remote_write(env, f"{rpc_dir}/res_{seq:06d}", tool_result,
-                              atomic=True, timeout=60)
+                _remote_write(
+                    env,
+                    f"{rpc_dir}/res_{seq:06d}",
+                    tool_result,
+                    atomic=True,
+                    timeout=60,
+                )
                 env.execute(f"rm -f {quoted_req_file}", cwd="/", timeout=5)
         except Exception as e:
             if not stop_event.is_set():

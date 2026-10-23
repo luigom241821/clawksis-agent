@@ -17,7 +17,9 @@ def _display_names(completions):
 
 def _display_metas(completions):
     """Extract plain-text display_meta from a list of Completion objects."""
-    return [to_plain_text(c.display_meta) if c.display_meta else "" for c in completions]
+    return [
+        to_plain_text(c.display_meta) if c.display_meta else "" for c in completions
+    ]
 
 
 @pytest.fixture
@@ -27,10 +29,10 @@ def completer():
 
 class TestExtractPathWord:
     def test_relative_path(self):
-        assert SlashCommandCompleter._extract_path_word("look at ./src/main.py") == "./src/main.py"
-
-
-
+        assert (
+            SlashCommandCompleter._extract_path_word("look at ./src/main.py")
+            == "./src/main.py"
+        )
 
 
 class TestPathCompletions:
@@ -50,7 +52,6 @@ class TestPathCompletions:
         finally:
             os.chdir(old_cwd)
 
-
     def test_directories_have_trailing_slash(self, tmp_path):
         (tmp_path / "mydir").mkdir()
         (tmp_path / "myfile.txt").touch()
@@ -61,10 +62,6 @@ class TestPathCompletions:
         assert "mydir/" in names
         idx = names.index("mydir/")
         assert metas[idx] == "dir"
-
-
-
-
 
 
 class TestIntegration:
@@ -90,7 +87,6 @@ class TestIntegration:
         finally:
             os.chdir(old_cwd)
 
-
     def test_url_does_not_touch_filesystem(self, completer, monkeypatch):
         # Regression for laggy typing: a URL token contains "/", so before the
         # scheme guard it reached _path_completions and called os.listdir on
@@ -110,7 +106,5 @@ class TestIntegration:
 
 
 class TestFileSizeLabel:
-
-
     def test_nonexistent(self):
         assert _file_size_label("/nonexistent_xyz") == ""

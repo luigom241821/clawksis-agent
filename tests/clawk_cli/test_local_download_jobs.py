@@ -58,7 +58,9 @@ def poll(client, job_id, until=("done", "error", "paused")):
     raise AssertionError(f"job did not settle: {job}")
 
 
-def test_browsed_download_can_pause_and_resume_pm_transfer(client, monkeypatch, dl_server):
+def test_browsed_download_can_pause_and_resume_pm_transfer(
+    client, monkeypatch, dl_server
+):
     from clawk_cli.web_routers import local_models as lm
 
     payload = bytes(range(256)) * (32 * 1024)
@@ -75,14 +77,20 @@ def test_browsed_download_can_pause_and_resume_pm_transfer(client, monkeypatch, 
                 if 0 < done < total and not flowing.is_set():
                     flowing.set()
                     assert release.wait(15)
+
             return super().run(progress=tick)
 
     monkeypatch.setattr(lm, "Download", ObservedDownload)
-    response = client.post("/api/local-models/download-browsed", json={"repo": "a/b", "paths": ["test.gguf"]})
+    response = client.post(
+        "/api/local-models/download-browsed",
+        json={"repo": "a/b", "paths": ["test.gguf"]},
+    )
     job_id = response.json()["job_id"]
     try:
         assert flowing.wait(5), "browsed download bypassed PM's downloader"
-        assert client.post("/api/local-models/download/pause", json={"job_id": job_id}).json()["paused"]
+        assert client.post(
+            "/api/local-models/download/pause", json={"job_id": job_id}
+        ).json()["paused"]
     finally:
         release.set()
     job = poll(client, job_id)
@@ -94,7 +102,9 @@ def test_browsed_download_can_pause_and_resume_pm_transfer(client, monkeypatch, 
     assert "bytes_per_sec" not in job and "eta_seconds" not in job
     before = job["done_bytes"]
     assert before > 0
-    assert client.post("/api/local-models/download/resume", json={"job_id": job_id}).json()["resumed"]
+    assert client.post(
+        "/api/local-models/download/resume", json={"job_id": job_id}
+    ).json()["resumed"]
     job = poll(client, job_id, until=("done", "error"))
     assert job["status"] == "done", job
     assert job["done_bytes"] == job["total_bytes"] == len(payload)
@@ -102,25 +112,37 @@ def test_browsed_download_can_pause_and_resume_pm_transfer(client, monkeypatch, 
     assert not job["can_pause"] and not job["can_resume"]
 
 
-def test_quickstart_plan_progress_uses_actual_whole_plan_bytes(client, monkeypatch, dl_server, tmp_path):
+def test_quickstart_plan_progress_uses_actual_whole_plan_bytes(
+    client, monkeypatch, dl_server, tmp_path
+):
     from clawk_cli.web_routers import local_models as lm
 
     bodies = {"first": b"first", "second": b"second"}
     RangeHandler.payloads = {"/" + name: body for name, body in bodies.items()}
-    plan = [(url(dl_server, "/" + name), tmp_path / (name + ".gguf"), 1000) for name in bodies]
+    plan = [
+        (url(dl_server, "/" + name), tmp_path / (name + ".gguf"), 1000)
+        for name in bodies
+    ]
     job = lm._job("quickstart", "test")
     lm._run_download_plan(job, plan, "test")
     expected = sum(map(len, bodies.values()))
     assert job["done_bytes"] == job["total_bytes"] == expected
-    assert sum(end - start for rows in job["ranges"].values() for start, end in rows) == expected
+    assert (
+        sum(end - start for rows in job["ranges"].values() for start, end in rows)
+        == expected
+    )
 
 
-def test_existing_weights_do_not_skip_missing_companion_download(client, monkeypatch, dl_server, tmp_path):
+def test_existing_weights_do_not_skip_missing_companion_download(
+    client, monkeypatch, dl_server, tmp_path
+):
     from dataclasses import replace
     from clawk_cli.local_runtime.catalog import AssetFile
     from clawk_cli.web_routers import local_models as lm
 
-    entry = replace(lm.catalog.CATALOG[0], mmproj=AssetFile("projector.gguf", 1000), draft=None)
+    entry = replace(
+        lm.catalog.CATALOG[0], mmproj=AssetFile("projector.gguf", 1000), draft=None
+    )
     variant = entry.variants[0]
     monkeypatch.setattr(lm, "_download_target", lambda model_id: (entry, variant))
     monkeypatch.setattr(lm.bootstrap, "staged_model_ids", lambda: [variant.model_id])
@@ -128,11 +150,15 @@ def test_existing_weights_do_not_skip_missing_companion_download(client, monkeyp
     weights.write_bytes(b"already downloaded")
     companion = tmp_path / "assets" / "projector.gguf"
     RangeHandler.payloads["/projector"] = b"projector bytes"
-    plan = [(url(dl_server, "/weights"), weights, 1000),
-            (url(dl_server, "/projector"), companion, 1000)]
+    plan = [
+        (url(dl_server, "/weights"), weights, 1000),
+        (url(dl_server, "/projector"), companion, 1000),
+    ]
     monkeypatch.setattr(lm, "_download_plan", lambda *args: plan)
     response = client.post("/api/local-models/download", json={"model_id": entry.id})
-    assert response.json().get("job_id"), "weights-only staging incorrectly skipped the projector"
+    assert response.json().get("job_id"), (
+        "weights-only staging incorrectly skipped the projector"
+    )
     job = poll(client, response.json()["job_id"])
     assert job["status"] == "done", job
     assert companion.read_bytes() == RangeHandler.payloads["/projector"]

@@ -17,10 +17,17 @@ from clawk_cli import models_pricing
 
 
 def _patch_pricing(monkeypatch, *, free_tier, pricing, unavailable=None):
-    monkeypatch.setattr(models_pricing, "get_pricing_for_provider", lambda slug, **kw: pricing.get(slug, {}))
-    monkeypatch.setattr(models_mod, "check_nous_free_tier", lambda *, force_fresh=False: free_tier)
     monkeypatch.setattr(
-        models_mod, "partition_nous_models_by_tier",
+        models_pricing,
+        "get_pricing_for_provider",
+        lambda slug, **kw: pricing.get(slug, {}),
+    )
+    monkeypatch.setattr(
+        models_mod, "check_nous_free_tier", lambda *, force_fresh=False: free_tier
+    )
+    monkeypatch.setattr(
+        models_mod,
+        "partition_nous_models_by_tier",
         lambda ids, pr, free_tier: (
             [m for m in ids if m not in (unavailable or [])],
             list(unavailable or []),
@@ -35,7 +42,11 @@ def test_apply_pricing_formats_per_model_prices(monkeypatch):
         free_tier=False,
         pricing={
             "openrouter": {
-                "a/paid": {"prompt": "0.000003", "completion": "0.000015", "input_cache_read": "0.0000003"},
+                "a/paid": {
+                    "prompt": "0.000003",
+                    "completion": "0.000015",
+                    "input_cache_read": "0.0000003",
+                },
                 "b/free": {"prompt": "0", "completion": "0"},
             }
         },
@@ -44,7 +55,12 @@ def test_apply_pricing_formats_per_model_prices(monkeypatch):
     inv._apply_pricing(rows)
 
     pricing = rows[0]["pricing"]
-    assert pricing["a/paid"] == {"input": "$3.00", "output": "$15.00", "cache": "$0.30", "free": False}
+    assert pricing["a/paid"] == {
+        "input": "$3.00",
+        "output": "$15.00",
+        "cache": "$0.30",
+        "free": False,
+    }
     assert pricing["b/free"]["free"] is True
     assert pricing["b/free"]["input"] == "free"
 
@@ -110,15 +126,34 @@ def test_apply_pricing_omits_sale_when_original_not_cheaper(monkeypatch):
 
 def test_apply_pricing_window_plan_drops_prices_and_stamps_plan_usage(monkeypatch):
     _patch_pricing(
-        monkeypatch, free_tier=False,
-        pricing={"nous": {"a/m": {"prompt": "0.000001", "completion": "0.000005", "usage_level": "medium"}}},
+        monkeypatch,
+        free_tier=False,
+        pricing={
+            "nous": {
+                "a/m": {
+                    "prompt": "0.000001",
+                    "completion": "0.000005",
+                    "usage_level": "medium",
+                }
+            }
+        },
     )
     monkeypatch.setattr(
         "clawk_cli.model_picker_usage.nous_picker_usage",
-        lambda **_kw: __import__("clawk_cli.model_picker_usage", fromlist=["picker_usage_from_account"]).picker_usage_from_account(
-            {"logged_in": True, "subscription": {"plan": "Window Plan"},
-             "usage_window": usage_window(day_used_bp=1000, week_used_bp=500, top_tier_used_bp=0,
-                                          day_resets_at_ms=1, week_resets_at_ms=2)}
+        lambda **_kw: __import__(
+            "clawk_cli.model_picker_usage", fromlist=["picker_usage_from_account"]
+        ).picker_usage_from_account(
+            {
+                "logged_in": True,
+                "subscription": {"plan": "Window Plan"},
+                "usage_window": usage_window(
+                    day_used_bp=1000,
+                    week_used_bp=500,
+                    top_tier_used_bp=0,
+                    day_resets_at_ms=1,
+                    week_resets_at_ms=2,
+                ),
+            }
         ),
     )
     rows = [{"slug": "nous", "models": ["a/m"]}]
@@ -133,15 +168,24 @@ def test_apply_pricing_window_plan_drops_prices_and_stamps_plan_usage(monkeypatc
 
 def test_apply_pricing_credit_grant_keeps_prices_and_stamps_plan_usage(monkeypatch):
     _patch_pricing(
-        monkeypatch, free_tier=False,
+        monkeypatch,
+        free_tier=False,
         pricing={"nous": {"a/m": {"prompt": "0.000001", "completion": "0.000005"}}},
     )
     monkeypatch.setattr(
         "clawk_cli.model_picker_usage.nous_picker_usage",
-        lambda **_kw: __import__("clawk_cli.model_picker_usage", fromlist=["picker_usage_from_account"]).picker_usage_from_account(
-            {"logged_in": True,
-             "subscription": {"plan": "Credit Plan", "monthly_credits": 20, "credits_remaining": 8},
-             "paid_service_access_info": {"subscription_credits_remaining": 8}}
+        lambda **_kw: __import__(
+            "clawk_cli.model_picker_usage", fromlist=["picker_usage_from_account"]
+        ).picker_usage_from_account(
+            {
+                "logged_in": True,
+                "subscription": {
+                    "plan": "Credit Plan",
+                    "monthly_credits": 20,
+                    "credits_remaining": 8,
+                },
+                "paid_service_access_info": {"subscription_credits_remaining": 8},
+            }
         ),
     )
     rows = [{"slug": "nous", "models": ["a/m"]}]
@@ -210,7 +254,8 @@ def test_model_options_cold_pricing_fetch_runs_off_the_request_path(monkeypatch)
 
 def test_cold_nous_entitlement_keeps_models_unselectable(monkeypatch):
     """A cold nonblocking response must not expose paid models fail-open."""
-    monkeypatch.setattr(models_pricing, "get_pricing_for_provider", lambda *_args, **_kwargs: {}
+    monkeypatch.setattr(
+        models_pricing, "get_pricing_for_provider", lambda *_args, **_kwargs: {}
     )
     monkeypatch.setattr(models_mod, "get_cached_nous_free_tier", lambda: None)
     rows = [{"slug": "nous", "models": ["free/model", "paid/model"]}]
@@ -223,7 +268,9 @@ def test_cold_nous_entitlement_keeps_models_unselectable(monkeypatch):
     # surface must say why, without clobbering an existing auth warning.
     assert "entitlement" in rows[0]["warning"]
 
-    rows = [{"slug": "nous", "models": ["m"], "warning": "paste NOUS_API_KEY to activate"}]
+    rows = [
+        {"slug": "nous", "models": ["m"], "warning": "paste NOUS_API_KEY to activate"}
+    ]
     inv._apply_pricing(rows, cached_only=True)
     assert rows[0]["warning"] == "paste NOUS_API_KEY to activate"
 
@@ -340,7 +387,9 @@ def test_prewarm_endpoint_rotation_starts_a_new_worker(tmp_path, monkeypatch):
     monkeypatch.setattr(models_pricing, "_pricing_cache", {})
     monkeypatch.setattr(models_pricing, "_pricing_cache_retry_after", {})
     monkeypatch.setattr(models_pricing, "_pricing_provider_cache_keys", {})
-    monkeypatch.setattr(models_pricing, "_resolve_nous_pricing_credentials",
+    monkeypatch.setattr(
+        models_pricing,
+        "_resolve_nous_pricing_credentials",
         lambda: ("", active_endpoint["value"]),
     )
 
@@ -382,9 +431,10 @@ def test_prewarm_endpoint_rotation_starts_a_new_worker(tmp_path, monkeypatch):
         assert started[endpoint_b].wait(timeout=1)
         threads[1].join(timeout=2)
         assert not threads[1].is_alive()
-        assert models_pricing.get_pricing_for_provider(
-            "nous", cached_only=True
-        ) == expected[endpoint_b]
+        assert (
+            models_pricing.get_pricing_for_provider("nous", cached_only=True)
+            == expected[endpoint_b]
+        )
     finally:
         release_a.set()
         for thread in threads:
@@ -413,10 +463,14 @@ def test_prewarm_nous_rotation_when_another_provider_is_current(tmp_path, monkey
     monkeypatch.setattr(models_pricing, "_pricing_cache", {})
     monkeypatch.setattr(models_pricing, "_pricing_cache_retry_after", {})
     monkeypatch.setattr(models_pricing, "_pricing_provider_cache_keys", {})
-    monkeypatch.setattr(models_pricing, "get_cached_nous_inference_base_url",
+    monkeypatch.setattr(
+        models_pricing,
+        "get_cached_nous_inference_base_url",
         lambda: active_endpoint["value"],
     )
-    monkeypatch.setattr(models_pricing, "_resolve_nous_pricing_credentials",
+    monkeypatch.setattr(
+        models_pricing,
+        "_resolve_nous_pricing_credentials",
         lambda: ("", active_endpoint["value"]),
     )
 
@@ -458,9 +512,10 @@ def test_prewarm_nous_rotation_when_another_provider_is_current(tmp_path, monkey
         assert started[endpoint_b].wait(timeout=1)
         threads[1].join(timeout=2)
         assert not threads[1].is_alive()
-        assert models_pricing.get_pricing_for_provider(
-            "nous", cached_only=True
-        ) == expected[endpoint_b]
+        assert (
+            models_pricing.get_pricing_for_provider("nous", cached_only=True)
+            == expected[endpoint_b]
+        )
     finally:
         release_a.set()
         for thread in threads:
@@ -476,16 +531,23 @@ def test_cached_only_pricing_returns_a_warm_value_without_fetching(monkeypatch):
     monkeypatch.setattr(models_pricing, "_pricing_cache", {cache_key: expected})
     monkeypatch.setattr(models_pricing, "_pricing_cache_retry_after", {})
     monkeypatch.setattr(models_pricing, "_pricing_provider_cache_keys", {})
-    monkeypatch.setattr(models_pricing, "fetch_models_with_pricing",
-        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("network fetch started")),
+    monkeypatch.setattr(
+        models_pricing,
+        "fetch_models_with_pricing",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("network fetch started")
+        ),
     )
 
-    assert models_pricing.get_pricing_for_provider(
-        "openrouter", cached_only=True
-    ) == expected
+    assert (
+        models_pricing.get_pricing_for_provider("openrouter", cached_only=True)
+        == expected
+    )
 
 
-def test_custom_provider_with_proven_upstream_reuses_canonical_pricing_source(monkeypatch):
+def test_custom_provider_with_proven_upstream_reuses_canonical_pricing_source(
+    monkeypatch,
+):
     """A custom row borrows a priced source only when its endpoint proves that source."""
     expected = {"vendor/model": {"prompt": "0.000001", "completion": "0.000002"}}
     fetch_calls = []
@@ -502,18 +564,25 @@ def test_custom_provider_with_proven_upstream_reuses_canonical_pricing_source(mo
         lambda provider: cached_calls.append(provider) or expected,
     )
 
-    assert models_pricing.get_pricing_for_provider(
-        "custom:openrouter", base_url="https://openrouter.ai/api/v1"
-    ) == expected
-    assert fetch_calls == [False]
-    assert models_pricing.get_pricing_for_provider(
-        "custom:unrelated-name", base_url="https://openrouter.ai/api/v1", cached_only=True
-    ) == expected
-    assert cached_calls == ["openrouter"]
     assert (
-        models_pricing.pricing_cache_scope("custom:unrelated-name", base_url="https://openrouter.ai/api/v1")
-        == models_pricing.pricing_cache_scope("openrouter")
+        models_pricing.get_pricing_for_provider(
+            "custom:openrouter", base_url="https://openrouter.ai/api/v1"
+        )
+        == expected
     )
+    assert fetch_calls == [False]
+    assert (
+        models_pricing.get_pricing_for_provider(
+            "custom:unrelated-name",
+            base_url="https://openrouter.ai/api/v1",
+            cached_only=True,
+        )
+        == expected
+    )
+    assert cached_calls == ["openrouter"]
+    assert models_pricing.pricing_cache_scope(
+        "custom:unrelated-name", base_url="https://openrouter.ai/api/v1"
+    ) == models_pricing.pricing_cache_scope("openrouter")
 
 
 def test_custom_provider_pricing_fails_closed_without_a_proven_upstream(monkeypatch):
@@ -521,49 +590,79 @@ def test_custom_provider_pricing_fails_closed_without_a_proven_upstream(monkeypa
     monkeypatch.setitem(
         models_pricing._PRICING_FETCHERS,
         "openrouter",
-        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("custom proxy fetched OpenRouter pricing")),
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("custom proxy fetched OpenRouter pricing")
+        ),
     )
-    monkeypatch.setattr(models_pricing, "_cached_only_pricing",
-        lambda _provider: (_ for _ in ()).throw(AssertionError("custom proxy read canonical cache")),
+    monkeypatch.setattr(
+        models_pricing,
+        "_cached_only_pricing",
+        lambda _provider: (_ for _ in ()).throw(
+            AssertionError("custom proxy read canonical cache")
+        ),
     )
 
-    assert models_pricing.get_pricing_for_provider(
-        "custom:openrouter", base_url="https://proxy.example/v1"
-    ) == {}
+    assert (
+        models_pricing.get_pricing_for_provider(
+            "custom:openrouter", base_url="https://proxy.example/v1"
+        )
+        == {}
+    )
     assert models_pricing.get_pricing_for_provider("custom:") == {}
-    assert models_pricing.pricing_cache_scope("custom:openrouter", base_url="https://proxy.example/v1") == ""
+    assert (
+        models_pricing.pricing_cache_scope(
+            "custom:openrouter", base_url="https://proxy.example/v1"
+        )
+        == ""
+    )
 
 
-@pytest.mark.parametrize("base_url", [
-    "https://openrouter.ai.attacker.invalid/v1",
-    "https://not-openrouter.ai/v1",
-    "https://ai-gateway.vercel.sh.attacker.invalid/v1",
-])
-def test_custom_provider_pricing_rejects_lookalike_upstream_hosts(monkeypatch, base_url):
+@pytest.mark.parametrize(
+    "base_url",
+    [
+        "https://openrouter.ai.attacker.invalid/v1",
+        "https://not-openrouter.ai/v1",
+        "https://ai-gateway.vercel.sh.attacker.invalid/v1",
+    ],
+)
+def test_custom_provider_pricing_rejects_lookalike_upstream_hosts(
+    monkeypatch, base_url
+):
     """A hostname merely containing a priced provider's hostname is still an untrusted proxy."""
     monkeypatch.setitem(
         models_pricing._PRICING_FETCHERS,
         "openrouter",
-        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("lookalike host fetched OpenRouter pricing")),
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("lookalike host fetched OpenRouter pricing")
+        ),
     )
 
-    assert models_pricing.get_pricing_for_provider(
-        "custom:any-name", base_url=base_url
-    ) == {}
+    assert (
+        models_pricing.get_pricing_for_provider("custom:any-name", base_url=base_url)
+        == {}
+    )
 
 
 def test_custom_provider_alias_uses_proven_canonical_upstream(monkeypatch):
     """A Vercel-named row on the real AI Gateway uses its canonical pricing cache."""
     expected = {"vendor/model": {"prompt": "0.000001", "completion": "0.000002"}}
-    monkeypatch.setattr(models_pricing, "_cached_only_pricing", lambda provider: expected if provider == "ai-gateway" else {})
-
-    assert models_pricing.get_pricing_for_provider(
-        "custom:vercel", base_url="https://ai-gateway.vercel.sh/v1", cached_only=True
-    ) == expected
-    assert (
-        models_pricing.pricing_cache_scope("custom:vercel", base_url="https://ai-gateway.vercel.sh/v1")
-        == models_pricing.pricing_cache_scope("ai-gateway")
+    monkeypatch.setattr(
+        models_pricing,
+        "_cached_only_pricing",
+        lambda provider: expected if provider == "ai-gateway" else {},
     )
+
+    assert (
+        models_pricing.get_pricing_for_provider(
+            "custom:vercel",
+            base_url="https://ai-gateway.vercel.sh/v1",
+            cached_only=True,
+        )
+        == expected
+    )
+    assert models_pricing.pricing_cache_scope(
+        "custom:vercel", base_url="https://ai-gateway.vercel.sh/v1"
+    ) == models_pricing.pricing_cache_scope("ai-gateway")
 
 
 def test_apply_pricing_uses_custom_row_endpoint_identity(monkeypatch):
@@ -573,23 +672,42 @@ def test_apply_pricing_uses_custom_row_endpoint_identity(monkeypatch):
 
     def pricing(provider, **kwargs):
         calls.append((provider, kwargs))
-        return expected if kwargs.get("base_url") == "https://openrouter.ai/api/v1" else {}
+        return (
+            expected if kwargs.get("base_url") == "https://openrouter.ai/api/v1" else {}
+        )
 
     monkeypatch.setattr(models_pricing, "get_pricing_for_provider", pricing)
     rows = [
-        {"slug": "custom:openrouter", "api_url": "https://openrouter.ai/api/v1", "models": ["vendor/model"]},
-        {"slug": "custom:openrouter", "api_url": "https://proxy.example/v1", "models": ["vendor/model"]},
+        {
+            "slug": "custom:openrouter",
+            "api_url": "https://openrouter.ai/api/v1",
+            "models": ["vendor/model"],
+        },
+        {
+            "slug": "custom:openrouter",
+            "api_url": "https://proxy.example/v1",
+            "models": ["vendor/model"],
+        },
     ]
 
     inv._apply_pricing(rows, cached_only=True)
 
     assert rows[0]["pricing"]["vendor/model"] == {
-        "input": "$3.00", "output": "$15.00", "cache": None, "free": False,
+        "input": "$3.00",
+        "output": "$15.00",
+        "cache": None,
+        "free": False,
     }
     assert "pricing" not in rows[1]
     assert calls == [
-        ("custom:openrouter", {"base_url": "https://openrouter.ai/api/v1", "cached_only": True}),
-        ("custom:openrouter", {"base_url": "https://proxy.example/v1", "cached_only": True}),
+        (
+            "custom:openrouter",
+            {"base_url": "https://openrouter.ai/api/v1", "cached_only": True},
+        ),
+        (
+            "custom:openrouter",
+            {"base_url": "https://proxy.example/v1", "cached_only": True},
+        ),
     ]
 
 
@@ -600,19 +718,33 @@ def test_prewarm_cache_scope_uses_custom_row_endpoint_identity(monkeypatch):
     monkeypatch.setattr(
         models_pricing,
         "pricing_cache_scope",
-        lambda provider, **kwargs: observed.append((provider, kwargs)) or "openrouter-scope",
+        lambda provider, **kwargs: (
+            observed.append((provider, kwargs)) or "openrouter-scope"
+        ),
     )
     monkeypatch.setattr(inv, "_apply_pricing", lambda _rows: None)
 
-    thread = inv._prewarm_pricing_async([
-        {"slug": "custom:unrelated-name", "api_url": "https://openrouter.ai/api/v1", "models": ["vendor/model"]},
-    ])
+    thread = inv._prewarm_pricing_async(
+        [
+            {
+                "slug": "custom:unrelated-name",
+                "api_url": "https://openrouter.ai/api/v1",
+                "models": ["vendor/model"],
+            },
+        ]
+    )
     thread.join(timeout=2)
 
-    assert observed == [(
-        "custom:unrelated-name",
-        {"base_url": "https://openrouter.ai/api/v1", "current_provider": "", "current_base_url": ""},
-    )]
+    assert observed == [
+        (
+            "custom:unrelated-name",
+            {
+                "base_url": "https://openrouter.ai/api/v1",
+                "current_provider": "",
+                "current_base_url": "",
+            },
+        )
+    ]
 
 
 def test_cached_only_dynamic_pricing_is_profile_scoped(tmp_path, monkeypatch):
@@ -626,16 +758,22 @@ def test_cached_only_dynamic_pricing_is_profile_scoped(tmp_path, monkeypatch):
     endpoint_b = "https://profile-b.example"
     expected_a = {"a/model": {"prompt": "1", "completion": "2"}}
     expected_b = {"b/model": {"prompt": "3", "completion": "4"}}
-    monkeypatch.setattr(models_pricing, "_pricing_cache",
+    monkeypatch.setattr(
+        models_pricing,
+        "_pricing_cache",
         {endpoint_a: expected_a, endpoint_b: expected_b},
     )
     monkeypatch.setattr(models_pricing, "_pricing_cache_retry_after", {})
     monkeypatch.setattr(models_pricing, "_pricing_provider_cache_keys", {})
     active_endpoint = {"value": endpoint_a}
-    monkeypatch.setattr(models_pricing, "_resolve_nous_pricing_credentials",
+    monkeypatch.setattr(
+        models_pricing,
+        "_resolve_nous_pricing_credentials",
         lambda: ("", active_endpoint["value"]),
     )
-    monkeypatch.setattr(models_pricing, "fetch_models_with_pricing",
+    monkeypatch.setattr(
+        models_pricing,
+        "fetch_models_with_pricing",
         lambda **kwargs: models_pricing._pricing_cache[kwargs["base_url"]],
     )
 
